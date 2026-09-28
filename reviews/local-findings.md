@@ -114,3 +114,130 @@ Full run: 6/10 suites passed, total 16m54s. After L-1 and L-2: 9/10. The one lef
   sees 2 MIDI inputs on the same machine. This may be an artefact of launching Electron from the agent's (possibly
   sandboxed) shell. Please confirm that the keyboard connects when `Worship Rig.app` is launched from Finder (README
   manual Mac checklist).
+
+# Merged tree 246f75c: full run + build (2026-09-28)
+
+- Run: 19:37–19:43Z. Same machine as above (macOS Darwin 25.4.0, arm64, Node 25.2.0, Electron 44.4.5).
+- Tree: `main` at `240e8d3`, which is merge `246f75c` plus a status line only. Full log:
+  `test/logs/full-run-20260928T153702.txt` (git-ignored).
+- Soak was skipped (`npm test` = `--skip soak`).
+
+## Suites
+
+| suite | full run @ 240e8d3 | wall | re-run after fix | wall |
+|---|---|---|---|---|
+| unit | PASS 275 pass, 0 fail | 6.4 s | n/a | |
+| engine | PASS 64/65, 1 soft warning (`offline.eqCpu`: absolute timings outside DECISION ±30 %, faster box), 0 console errors | 1m40s | n/a | |
+| instruments | PASS 143/143 | 23.6 s | n/a | |
+| synth-extra | PASS 153/153 | 37.7 s | n/a | |
+| shell | **FAIL** 165 pass, 1 fail (Electron boot: backup rotation) | 18.5 s | PASS 166/166, 3 of 3 runs (L-5) | 17.5–18.6 s |
+| ui-core | PASS 39 pass, 0 fail | 1m43s | n/a | |
+| edit-v2 | PASS 75 pass, 0 fail | 52.3 s | n/a | |
+| settings | PASS 26/26 (app + fixture) | 11.7 s | n/a | |
+| eq | PASS 22/22, 2 notes (engine has no `eqAudition()` / `slotAnalysers()` yet, so the component fallback is in use) | 9.4 s | n/a | |
+| chrome-fallback | PASS 15/15, 1 skipped | 5.4 s | n/a | |
+| electron-full | PASS 28/28 | 14.2 s | n/a | |
+| build-lint | PASS 23/23, 1 skipped (packaged boot is Linux only); asar 77.6 MB, 2125 entries | 5.9 s | n/a | |
+| soak | SKIP (`--skip soak`) | n/a | n/a | |
+
+Full run: 11/12 suites passed, total 6m28s. After L-5: 12/12. L-3 is gone on this tree: the retired ui-edit
+suite was replaced, and settings/edit-v2 pass here.
+
+## Findings
+
+### L-5: two library backups in the same millisecond overwrite each other
+
+- Severity: minor. Class: real bug (`main.js`). It showed up as a flaky test.
+- Suite: shell (Electron boot), `auto-backups land in userData/backups and only the newest 10 are kept`
+  (`test/phase1/shell/electron.boot.mjs:132`).
+- Where: `main.js:193-194` at `240e8d3`, in `backupNow()`.
+- Repro: `node test/phase1/shell/run.mjs --only electron` at `240e8d3`. It failed 3 of 4 runs here (the full run plus
+  2 of 3 re-runs).
+- Observed: `9 !== 10` backup files after the fixture's 13 back-to-back `rig.backupNow()` calls.
+- Expected: 10 files, with the newest (`n: 11`) kept.
+- Cause: when `rig-<stamp>.json` already exists (same second), the fallback name is
+  `rig-<stamp>-<Date.now() % 1000>.json`, and nothing checks whether that name is free. On an M-series Mac, two writes
+  land in the same millisecond and the second one silently replaces the first. A standalone replay of the
+  function lost a file in 37 of 50 runs. In real use this needs two backups within a millisecond (for example, the
+  quit-time backup racing an auto-backup), so it is rare, but the loss would be silent.
+- Fixed in `3a69692`: the suffix is now a counter (`-1`, `-2`, …) that is checked with `existsSync`. The names still
+  match `BACKUP_RE`. After the fix, the replay lost 0 of 50 and the shell suite passed 3 of 3 runs.
+
+### L-6: the top bar's "Sound OK" text runs into the latency readout at 1440 px (**NEEDS CLOUD**)
+
+- Severity: cosmetic. Class: real bug (CSS). The top bar is on screen the whole time you perform.
+- Where: `app/styles.css:181` (`.tb-item { min-width: 0 }`) together with `app/styles.css:186`
+  (`.audio-text { min-width: 5.5ch }`). This file is CLOUD-owned.
+- Repro: launch the app (built or source) on this Mac at its default window size (1440×887 CSS px, DPR 2) and look at
+  the top bar. Screenshot described under Build.
+- Observed: `#audio-text` is laid out 51 px wide but its content is 67 px (`scrollWidth`), so the "K" of "Sound OK"
+  is drawn over the "2" of "20 ms".
+- Expected: the two readouts sit side by side, as in the ≤ 1250 px rule, which sets `flex-shrink: 0` on
+  `.tb-item > *`.
+- Suspected cause: above 1250 px the flex children of `.tb-item` may still shrink, and `min-width: 5.5ch` lets
+  "Sound OK" (8 characters) shrink below its text width. Suggested fix: `.audio-text { flex-shrink: 0 }` (or
+  `min-width: 8.5ch`). This could go in the C1 polish pass.
+
+### L-7: the packaged app does not see the repo's `user-samples/` packs (by design; FYI)
+
+- Severity: minor (user-facing surprise). Class: expected behaviour. The docs could say it more plainly.
+- Where: `server.js:236` skips `<repo>/user-samples` when running inside `app.asar`.
+- Observed: `/api/user-samples` from `npm start` lists 2 packs (steinway-grand-piano, yamaha-grand-piano) from
+  `<repo>/user-samples`. The built app lists 0, because its only root is `~/Music/Worship Rig/Samples`, which doesn't
+  exist yet. `/api/health` is the same for both (`userSamples: true`).
+- Impact today: none of the library's songs use a `user:` instrument (checked in `rig.v1`), so nothing falls back.
+  The two converted Logic pianos are just missing from the picker in the built app.
+- Action: LOCAL can copy the two packs to `~/Music/Worship Rig/Samples/` when Ryan wants them in the built app (they
+  never leave the Mac). This was not done in this run.
+
+## Build (`npm run build:mac` @ 3a69692)
+
+- Result: OK, exit 0, **26 s** wall. electron-builder 26.15.3, Electron 44.4.5 (the zip came from the cache).
+- Warnings:
+  - `Specified application directory equals to project dir — superfluous or wrong configuration appDirectory=.`
+    (`package.json` `build.directories.app: "."`; harmless; package.json is frozen).
+  - `skipped macOS code signing reason=identity explicitly is set to null`. This is expected: afterPack ad-hoc signs
+    first, and `codesign --verify --deep --strict` passes.
+- Sizes:
+  - `Worship Rig.app`: **365 MB**
+  - `Worship Rig-0.1.0-arm64-mac.zip`: **193 MB** (199,270,236 B). `unzip -t` reports no errors.
+  - `app.asar`: 81.4 MB
+- asar contents:
+  - **2125** entries.
+  - `grep -c user-samples` = **0**, and nothing matches steinway/yamaha.
+  - `app/samples/**`: 2029 entries. 1999 of them are audio files, which is every file the manifest lists
+    (23 instruments). `app/samples/manifest.json` is present.
+  - `docs/*.md` and `main.js` are present.
+- Signing:
+  - `codesign -dv`: `Identifier=com.ryan.worshiprig`, `Format=app bundle with Mach-O thin (arm64)`,
+    `CodeDirectory v=20400 … flags=0x2(adhoc)`, `Signature=adhoc`.
+  - `spctl --assess --type execute`: `rejected` (exit 3). This is expected for ad-hoc signing. On first launch from
+    a downloaded zip, Gatekeeper needs right-click → Open, or System Settings → Privacy & Security → Open Anyway.
+  - `xattr -l`: only `com.apple.provenance` (empty value) and no `com.apple.quarantine`, because it was built locally.
+- The bundle ships `Resources/app-update.yml` (github provider ryanmye/worship-rig). It is inert: nothing in
+  `package.json` or `main.js` uses an updater.
+- Launch of the built app (`open "dist/mac-arm64/Worship Rig.app"`, health checked after about 8 s):
+  - `/api/health`:
+    `{"ok":true,"app":"worship-rig","version":"0.1.0","pid":20261,"clientSeenMsAgo":null,"userSamples":true,"features":["user-samples"]}`
+  - `~/Music/Worship Rig` was **not** created at launch. It is created on first recording or "Open … Folder". The
+    library is Ryan's existing one (userData from 02:54), so this was not a clean-profile first launch.
+  - `controller.status`: audio `running`, latency 19.8 ms, ready. MIDI is connected to **Keystation 49es Port 1**
+    (Port 2 is also listed). The library is read-write. Setlist memory is 417 MB decoded out of a 700 MB cap.
+  - `osascript quit` exits the app cleanly, and 8438 was free again afterwards.
+- Screenshot: `screencapture` failed with `could not create image from display`, because this shell has no Screen
+  Recording permission. I relaunched with `--remote-debugging-port` and took a page screenshot over CDP instead, with
+  no clicks. That captures only the web contents, so an OS-level MIDI or microphone permission dialog would not
+  show. None was reported by the app, and MIDI was already connected. What the screenshot shows:
+  - The Perform view is fully rendered: "Sunday Pad + Piano", key C, transpose 0.
+  - Space and Echo rows, with "Song's own" selected.
+  - The setlist strip: 1–6 visible, with "Next: Building Swell · C".
+  - KEYS (Grand Piano +1.7 dB) and PAD (Warm Pad −5.2 dB) on, and empty EXTRA/BASS.
+  - The Key & Drone panel (drone off), Notes, the keyboard strip C2–C7, and Revert / Fade out / PANIC / Lock.
+  - The top bar reads `MIDI Keystation 49…`, `Sound OK`, `20 ms` and `READY`, all with green LEDs.
+  - There is no error banner and no "Audio stopped". The only defect is L-6.
+- `npm start` from source, same checks:
+  - Health JSON is identical apart from the pid (`userSamples: true` in both).
+  - `/api/user-samples` differs (L-7): the source app reports 2 packs and 2 roots, the built app 0 packs and 1 root.
+  - Status and the screenshot are identical to the built app, MIDI included.
+  - This settles the open question in L-3's environment note: Electron started from this shell *does* reach
+    CoreMIDI. The earlier `Platform dependent initialization failed` did not recur in today's electron-full log.
