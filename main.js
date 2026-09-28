@@ -584,7 +584,8 @@ function createWindow(url) {
     title: 'Worship Rig',
     backgroundColor: '#0e1014',
     show: false,
-    ...(IS_MAC ? { titleBarStyle: 'hiddenInset' } : {}),
+    // L-12 (ux-round2 G8): standard title bar. 'hiddenInset' put the traffic lights on the top bar's logo and left no
+    // drag area; restore it only together with a CSS inset + -webkit-app-region: drag on the top bar.
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
