@@ -907,11 +907,13 @@ export function mountSettings(el, ctx) {
         setText(
           midiStatus,
           !m.available
-            ? m.reason === 'denied'
-              ? 'MIDI is blocked — allow MIDI in the address bar, then reload.'
-              : m.reason
-                ? 'MIDI isn’t available — allow MIDI in the address bar (or plug the keyboard in), then reload.'
-                : 'MIDI starting…'
+            ? m.pending || m.reason === 'pending' // polish-1 (local L-3): Chrome's prompt is open; no reload needed
+              ? 'Waiting for MIDI permission — if Chrome shows a prompt, click Allow.'
+              : m.reason === 'denied'
+                ? 'MIDI is blocked — allow MIDI in the address bar, then reload.'
+                : m.reason
+                  ? 'MIDI isn’t available — allow MIDI in the address bar (or plug the keyboard in), then reload.'
+                  : 'MIDI starting…'
             : m.connected
               ? `Connected: ${m.name}`
               : 'No keyboard connected — check the USB cable.',

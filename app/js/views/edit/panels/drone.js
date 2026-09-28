@@ -4,7 +4,7 @@
 // (switches + the explanatory note), then the change line.
 import { keyName } from '../../../shared/music.js';
 import { droneOnMode } from '../../../shared/song-diff.js';
-import { h, setText, createBinder, wordSlider, changedDot, changeText, droneKeyText } from '../lib.js';
+import { h, setText, createBinder, wordSlider, changedDot, changeText, editedSince, droneKeyText } from '../lib.js';
 
 const PREFIXES = ['drone'];
 const SOURCE_LABEL = { synth: 'Synth', files: 'My Pads' };
@@ -44,19 +44,24 @@ export default {
     const { C, editState } = ctx;
     const binder = createBinder(ctx);
     const color = 'var(--drone, #e8d9a8)';
-    // Last source this panel turned off, per song (perform.js lastDroneSource, round-3 fix 5): OFF → ON brings back
-    // what was playing, else the Revert snapshot's source (droneOnMode), else Synth.
-    const lastSource = new Map();
+    // Last source the ON tile turned off (perform.js lastDroneSource, round-3 fix 5): OFF → ON brings back what was
+    // playing, else the Revert snapshot's source (droneOnMode), else Synth. Kept by the shell (ctx.lastDroneSource)
+    // so a tab switch does not forget it (round3-edit m4); the per-mount map is the fallback for older shells.
+    const local = new Map();
+    const lastSource = ctx.lastDroneSource || {
+      get: () => local.get(ctx.songId()) || null,
+      set: (mode) => local.set(ctx.songId(), mode),
+    };
 
     // ---- ON STAGE: ON tile, source, level
     const setOn = (on) => {
       const s = ctx.song();
       if (!s) return;
       if (!on) {
-        if (s.drone.mode !== 'off') lastSource.set(s.id, s.drone.mode);
+        if (s.drone.mode !== 'off') lastSource.set(s.drone.mode);
         ctx.set('song.drone.mode', 'off');
       } else if (s.drone.mode === 'off') {
-        ctx.set('song.drone.mode', lastSource.get(s.id) || droneOnMode(editState.baseline));
+        ctx.set('song.drone.mode', lastSource.get() || droneOnMode(editState.baseline));
       }
       binder.refresh(['drone.mode']); // a refused write puts the tile back
     };
@@ -166,7 +171,9 @@ export default {
       // switch-row dots keep their space when hidden, so the three switches stay aligned
       for (const x of [follow, cont, minorPad]) x.dot.classList.toggle('ev2-drone-nodot', !editState.isChanged(x.rel));
       const n = editState.changeCount(PREFIXES);
-      setText(chg.lastChild, changeText(n));
+      // the drone's level and its ON tile (mode ↔ 'off') are playing moves, like a slot's fader and mute
+      const edited = n === 0 && editedSince(ctx.song(), editState.baseline, ['drone'], ['gain', 'mode']);
+      setText(chg.lastChild, changeText(n, edited));
       chg.classList.toggle('none', n === 0);
     };
     const renderTitle = (s) => {

@@ -28,7 +28,9 @@
 // current song and its library neighbours are pinned (≤ 3 songs), so the engine's LRU cap can evict the rest. A
 // setlist is pinned whole unless its decoded size would pass PIN_BUDGET_MB; then only the current ±2 songs are pinned
 // and the rest is warmed unpinned (status.memory.note).
-// status.memory = {mode, decodedMB, pinnedMB, capMB, setMB, note}.
+// status.memory = {mode, decodedMB, pinnedMB, capMB, budgetMB, setMB, windowMB, pinnedSongs, note}.
+// l8 (local soak L-8): the ±radius window is a byte budget too. Current song first, then neighbours by distance while
+// the pinned total stays ≤ PIN_BUDGET_MB; one {pin:'replace'} per switch; a warn if pinnedMB ever passes capMB.
 import { transposeSemisOf } from './store.js';
 import { transposeSemis, mod12 } from './shared/music.js';
 import { PARAMS, isValidPath, isLearnButton, faderTaper, inverseTaper, SLOT_COUNT } from './shared/params.js';
@@ -89,12 +91,17 @@ const same = (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b);
  * LRU cap is 700 MB; pinned buffers can't be evicted, integration-2 round 2 #3).
  */
 export const PIN_BUDGET_MB = 600;
-/** Songs either side of the current one that stay pinned: library browsing (≤ 3 songs) and a large setlist. */
+/**
+ * Songs either side of the current one that may stay pinned: library browsing (≤ 3 songs) and a large setlist. A
+ * count limit only: the window is also a byte budget (PIN_BUDGET_MB, L-8), so heavy neighbours are left out.
+ */
 export const LIBRARY_PIN_RADIUS = 1;
 export const LARGE_SET_PIN_RADIUS = 2;
 /** Unpinned warming of a large setlist stops at this share of the engine cache cap (it evicts down to 85 %). */
 const WARM_SHARE_OF_CAP = 0.8;
 export const LARGE_SET_NOTE = 'Large set: loading songs as you go';
+/** status.memory.note when the current song alone passes PIN_BUDGET_MB (L-8): it is pinned alone. */
+export const songAloneNote = (mb) => `This song alone is ${Math.round(mb)} MB`;
 const routingOf = (song) => {
   const p = song.patch;
   return { modWheel: p.modWheel, expression: p.expression, volume: p.volume, bend: p.bend, swell: p.swell };
@@ -158,6 +165,9 @@ function isButtonish(el) {
  * @param {LockManager|null} [o.locks]  navigator.locks (default); null disables the single-instance guard
  * @param {boolean} [o.heartbeat]  ping /api/heartbeat (default: Chrome on http://127.0.0.1 only)
  * @param {IDBFactory|null} [o.indexedDB]  for the Chrome pad-folder auto-restore
+ * @param {number} [o.midiInitTimeoutMs=5000]  L-3: after this long without an answer from requestMIDIAccess,
+ *   status.midi says {available:false, reason:'pending', pending:true}; the request keeps going and a late answer
+ *   still wires the inputs up. start() never waits for MIDI.
  */
 export function createController(o) {
   const { store, engine } = o;
@@ -182,6 +192,7 @@ export function createController(o) {
   const loc = globalThis.location || null;
   const heartbeatOn = o.heartbeat !== undefined ? !!o.heartbeat : !isElectron && !!loc && loc.protocol === 'http:' && typeof globalThis.fetch === 'function';
   const idbFactory = o.indexedDB !== undefined ? o.indexedDB : globalThis.indexedDB || null;
+  const midiInitTimeoutMs = o.midiInitTimeoutMs ?? 5000;
   let secondary = false; // H2: another window holds the instance lock
 
   const api = new EventTarget();
@@ -230,7 +241,11 @@ export function createController(o) {
   const status = {
     audio: 'running',
     latencyMs: 0,
-    midi: { available: false, connected: false, name: null, reason: null, inputs: [], hint: null, fallback: false, standIn: false },
+    // pending (L-3): requestMIDIAccess has not answered within midiInitTimeoutMs (reason is then 'pending' too)
+    midi: {
+      available: false, connected: false, name: null, reason: null, pending: false, inputs: [], hint: null,
+      fallback: false, standIn: false,
+    },
     loading: false,
     ready: false,
     recording: false,
@@ -510,21 +525,26 @@ export function createController(o) {
     return !!(sl && Array.isArray(sl.songIds) && sl.songIds.length);
   }
   /**
-   * The current song plus up to `radius` nav neighbours either side (unique ids, current first). In the setlist
+   * The current song plus up to `radius` nav neighbours either side (unique ids): current first, then by distance,
+   * the next song before the previous one at equal distance (L-8: the order the byte budget fills in). In the setlist
    * "gap" state (current entry removed) the window is centred on the gap.
+   * @returns {{ids: string[], cur: string|null}}
    */
-  function windowIds(radius) {
+  function windowCandidates(radius) {
     const ids = store.navIds();
     const n = store.neighbors();
     const cur = store.get().settings.currentSongId;
-    let lo;
-    let hi;
-    if (n.index >= 0) [lo, hi] = [n.index - radius, n.index + radius];
-    else if (Number.isInteger(n.gap)) [lo, hi] = [n.gap - radius, n.gap + radius - 1];
-    else [lo, hi] = [0, radius - 1]; // current song not in the list: its first songs are the next ones
-    const out = cur && store.getSong(cur) ? [cur] : [];
-    for (let j = Math.max(0, lo); j <= Math.min(ids.length - 1, hi); j++) if (!out.includes(ids[j])) out.push(ids[j]);
-    return out;
+    const pick = (d) => {
+      if (n.index >= 0) return [n.index + d, n.index - d];
+      if (Number.isInteger(n.gap)) return [n.gap + d - 1, n.gap - d];
+      return [d - 1]; // current song not in the list: its first songs are the next ones
+    };
+    const hasCur = !!(cur && store.getSong(cur));
+    const out = hasCur ? [cur] : [];
+    for (let d = 1; d <= radius; d++) {
+      for (const j of pick(d)) if (j >= 0 && j < ids.length && !out.includes(ids[j])) out.push(ids[j]);
+    }
+    return { ids: out, cur: hasCur ? cur : null };
   }
   async function engineCall(name, ...args) {
     const r = call(name, ...args);
@@ -538,7 +558,15 @@ export function createController(o) {
       return null;
     }
   }
-  /** Refresh status.memory from engine._debugStats() (called after preloads and from the watchdog tick). */
+  // L-8: the newest window applied with {pin:'replace'} ({ids, mb, oversizeMB}); null = none / count window
+  let pinPlan = null;
+  let overCap = false;
+  let aloneNoted = null; // song id the "This song alone is …" 'memory' event last fired for
+  /**
+   * Refresh status.memory from engine._debugStats() (called after every preload and from the watchdog tick). L-8:
+   * pinned bytes can't be evicted, so pinnedMB > capMB means the LRU cap is broken; warn (once per crossing, never
+   * throw) so the soak / diagnostics show it.
+   */
   function updateMemory() {
     let d = null;
     try {
@@ -548,14 +576,28 @@ export function createController(o) {
     }
     const num = (v) => (Number.isFinite(v) ? v : null);
     const round = (v) => (Number.isFinite(v) ? Math.round(v * 10) / 10 : null);
+    const windowed = memMode === 'library' || memMode === 'large-set';
+    const plan = windowed ? pinPlan : null;
+    const alone = plan && Number.isFinite(plan.oversizeMB) ? songAloneNote(plan.oversizeMB) : null;
+    const pinnedMB = num(d && d.pinnedMB);
+    const capMB = num(d && d.capMB);
+    const over = pinnedMB !== null && capMB !== null && pinnedMB > capMB;
+    if (over && !overCap) {
+      warn(`pinned samples ${pinnedMB.toFixed(1)} MB exceed the ${capMB} MB cache cap (${memMode}` +
+        `${plan ? `, ${plan.ids.length} songs pinned` : ''}${alone ? `; ${alone}` : ''}; L-8)`);
+    }
+    overCap = over;
     setStatus({
       memory: {
         mode: memMode,
         decodedMB: num(d && d.decodedMB),
-        pinnedMB: num(d && d.pinnedMB),
-        capMB: num(d && d.capMB),
+        pinnedMB,
+        capMB,
+        budgetMB: PIN_BUDGET_MB,
         setMB: round(memSetMB),
-        note: memMode === 'large-set' ? LARGE_SET_NOTE : null,
+        windowMB: plan ? round(plan.mb) : null,
+        pinnedSongs: plan ? plan.ids.length : null,
+        note: alone || (memMode === 'large-set' ? LARGE_SET_NOTE : null),
       },
     });
   }
@@ -576,16 +618,88 @@ export function createController(o) {
     if (my !== pinSeq && newest && newest !== ids) await engineCall('preload', patchesOf(newest), { pin: 'replace' });
   }
   /**
-   * Pin the window around the current song with {pin:'replace'}: the pinned set is exactly these ≤ 2·radius+1
-   * songs, so every other decoded buffer is evictable. (Not 'add': walking through the library with 'add' pins
-   * every song visited, which is the 1 GB the soak measured.)
+   * L-8: the byte-budget window. The current song is always in (even alone over the budget: it is playing, and its
+   * buffers are referenced anyway; `oversizeMB` is then set and nothing else is pinned). Then the candidates in
+   * distance order join while the running total (engine.estimatePreloadMB, shared samples counted once) stays
+   * ≤ PIN_BUDGET_MB; one that doesn't fit is skipped and a farther, lighter one may still join. With `onlyExact`, a
+   * candidate whose size is still a guess (never decoded: BufferCache.estimateBytes prices it at a folder mean or
+   * 1.75 MB a sample) is left out and listed in `guessed`, so an under-estimate can't pin past the budget.
+   * Returns null when the engine can't estimate (the pre-L-8 count window is used then).
+   * @returns {Promise<{ids: string[], mb: number, oversizeMB: number|null, guessed: string[]}|null>}
+   */
+  async function planWindow(radius, { onlyExact = false } = {}) {
+    const { ids: cand, cur } = windowCandidates(radius);
+    const out = [];
+    const guessed = [];
+    let mb = 0;
+    let oversizeMB = null;
+    if (cur) {
+      const e = await estimateMB([cur]);
+      if (!e) return null;
+      out.push(cur);
+      mb = e.mb;
+      if (e.mb > PIN_BUDGET_MB) return { ids: out, mb, oversizeMB: e.mb, guessed };
+    }
+    for (const id of cand) {
+      if (id === cur) continue;
+      if (onlyExact) {
+        const one = await estimateMB([id]);
+        if (!one) return null;
+        if (!one.exact) {
+          guessed.push(id);
+          continue;
+        }
+      }
+      const e = await estimateMB([...out, id]);
+      if (!e) return null;
+      if (e.mb <= PIN_BUDGET_MB) {
+        out.push(id);
+        mb = e.mb;
+      }
+    }
+    return { ids: out, mb, oversizeMB, guessed };
+  }
+  let winSeq = 0;
+  /**
+   * Pin the window around the current song with one {pin:'replace'} (engine.preload → BufferCache.setPins): the old
+   * window is unpinned in the same call that pins the new one, and every other decoded buffer is evictable. (Not
+   * 'add': walking through the library with 'add' pins every song visited, which is the 1 GB the soak measured.)
+   * L-8: the window is a byte budget (planWindow). Neighbours never decoded are first decoded unpinned
+   * ({pin:'none'}) and the window is planned again with their exact sizes. A newer switch supersedes an older
+   * window still being planned.
    */
   async function pinWindow(radius) {
+    const my = ++winSeq;
     try {
-      await pinSongs(windowIds(radius), 'replace');
+      let plan = await planWindow(radius, { onlyExact: true });
+      if (my !== winSeq) return;
+      if (!plan) {
+        pinPlan = null;
+        await pinSongs(windowCandidates(radius).ids, 'replace');
+        return;
+      }
+      pinPlan = plan;
+      await pinSongs(plan.ids, 'replace');
+      if (!plan.guessed.length || my !== winSeq) return;
+      await engineCall('preload', patchesOf(plan.guessed), { pin: 'none' });
+      if (my !== winSeq) return;
+      plan = await planWindow(radius);
+      if (!plan || my !== winSeq) return;
+      pinPlan = plan;
+      await pinSongs(plan.ids, 'replace');
     } catch (err) {
       warn(`preload failed: ${err && err.message}`);
+    } finally {
+      if (my === winSeq) noteAlone();
     }
+  }
+  /** One 'memory' event per song that alone passes the budget (for a toast; status.memory.note says it too). */
+  function noteAlone() {
+    const cur = store.get().settings.currentSongId;
+    if (!pinPlan || !Number.isFinite(pinPlan.oversizeMB)) return void (aloneNoted = null);
+    if (aloneNoted === cur) return;
+    aloneNoted = cur;
+    emit('memory', { mode: memMode, note: songAloneNote(pinPlan.oversizeMB), songMB: pinPlan.oversizeMB });
   }
 
   /** After a song switch: keep the pinned window around the new song (policy depends on the nav mode). */
@@ -626,6 +740,7 @@ export function createController(o) {
         if (est && est.mb > PIN_BUDGET_MB) await preloadLargeSet(my, ids);
         else {
           memMode = 'setlist';
+          pinPlan = null;
           updateMemory();
           await pinSongs(ids, 'replace'); // the setlist IS the pinned set
           // the first estimate guesses samples never decoded before; now every size is known
@@ -650,7 +765,8 @@ export function createController(o) {
     if (first) emit('memory', { mode: memMode, note: LARGE_SET_NOTE, setMB: memSetMB });
     await pinWindow(LARGE_SET_PIN_RADIUS);
     // warm the rest unpinned, nearest first; stop before the LRU would start evicting what was just warmed
-    const win = windowIds(LARGE_SET_PIN_RADIUS);
+    // the songs actually pinned (L-8: a byte-budget window may leave heavy neighbours out; they warm unpinned)
+    const win = pinPlan ? [...pinPlan.ids] : windowCandidates(LARGE_SET_PIN_RADIUS).ids;
     const pos = Math.max(0, store.currentIndex());
     const rest = ids
       .map((id, j) => ({ id, d: Math.abs(j - pos) }))
@@ -852,7 +968,9 @@ export function createController(o) {
           available: d.available,
           connected: sel.length > 0,
           name: d.activeName || sel.map((i) => i.name).join(', ') || null,
-          reason: status.midi.reason,
+          // L-3: access granted (possibly after the 'pending' soft timeout) → no reason left to report
+          reason: d.available ? null : status.midi.reason,
+          pending: d.available ? false : !!status.midi.pending,
           inputs: d.inputs,
           hint,
           fallback: !!d.fallback,
@@ -867,7 +985,8 @@ export function createController(o) {
       if (secondary || settings().midiInputId === e.detail.inputId) return;
       store.set('settings.midiInputId', e.detail.inputId);
     },
-    unavailable: (e) => setStatus({ midi: { ...status.midi, available: false, connected: false, reason: e.detail.reason } }),
+    unavailable: (e) =>
+      setStatus({ midi: { ...status.midi, available: false, connected: false, reason: e.detail.reason, pending: false } }),
     activity: (e) => {
       const t = now();
       if (t - lastActivity < 50) return;
@@ -1783,11 +1902,7 @@ export function createController(o) {
       const sr = call('setSinkId', s.outputDeviceId);
       if (sr && typeof sr.catch === 'function') sr.catch((err) => warn(`could not select the saved output: ${err && err.message}`));
     }
-    const midiReady = midi
-      ? (midi.access ? Promise.resolve(true) : midi.init())
-          .then(() => midi.select(settings().midiInputId, rememberMidiInputName(settings())))
-          .catch((err) => warn(`MIDI init failed: ${err && err.message}`))
-      : Promise.resolve();
+    startMidi();
     if (rig && typeof rig.listPads === 'function') await reloadPads().catch((err) => warn(`pad folder: ${err && err.message}`));
     else await restoreChromePads().catch(() => null);
     const cur = store.currentSong();
@@ -1802,7 +1917,53 @@ export function createController(o) {
       heartbeat();
       heartbeatTimer = timers.setInterval(heartbeat, HEARTBEAT_MS);
     }
-    await midiReady;
+    // L-3: MIDI is deliberately NOT awaited here. requestMIDIAccess can stay pending for as long as Chrome's
+    // permission prompt is unanswered (or CoreMIDI init stalls, local-findings L-3), and start() / __rig.ready must
+    // settle once audio + song are up. MIDI reports through status.midi and the 'status' event; see midiReady().
+  }
+
+  // ---- MIDI init (L-3): concurrent with start(), soft timeout, late answers still wire the inputs up
+  let midiPromise = Promise.resolve(false);
+  let midiTimer = null;
+  let midiGen = 0; // bumped by dispose(): a late answer from a disposed start must not re-attach inputs
+  function startMidi() {
+    if (!midi) return;
+    const gen = ++midiGen;
+    let settled = false;
+    const clearSoft = () => {
+      settled = true;
+      if (midiTimer !== null) timers.clearTimeout(midiTimer);
+      midiTimer = null;
+    };
+    midiPromise = (midi.access ? Promise.resolve(true) : midi.init())
+      .then((ok) => {
+        clearSoft();
+        if (gen !== midiGen) return false;
+        midi.select(settings().midiInputId, rememberMidiInputName(settings()));
+        return ok !== false && !!midi.available;
+      })
+      .catch((err) => {
+        clearSoft();
+        if (gen === midiGen) warn(`MIDI init failed: ${err && err.message}`);
+        return false;
+      });
+    if (midiInitTimeoutMs > 0 && !midi.access) {
+      midiTimer = timers.setTimeout(() => {
+        midiTimer = null;
+        if (settled || gen !== midiGen || midi.available) return;
+        // Still waiting (permission prompt open, CoreMIDI slow): say so and keep listening for the answer.
+        setStatus({ midi: { ...status.midi, available: false, connected: false, reason: 'pending', pending: true } });
+      }, midiInitTimeoutMs);
+    }
+  }
+
+  /**
+   * L-3: settles when the current MIDI init has an answer (true = access granted and inputs selected, false =
+   * unavailable / no MIDI). It may stay pending indefinitely (unanswered permission prompt), so bound any wait on it.
+   * @returns {Promise<boolean>}
+   */
+  function midiReady() {
+    return midiPromise;
   }
 
   function dispose() {
@@ -1819,6 +1980,9 @@ export function createController(o) {
     backupTimer = null;
     if (heartbeatTimer !== null) timers.clearInterval(heartbeatTimer);
     heartbeatTimer = null;
+    midiGen++;
+    if (midiTimer !== null) timers.clearTimeout(midiTimer);
+    midiTimer = null;
     if (wakeLock && !wakeLock.released) wakeLock.release?.().catch?.(() => {});
     if (releaseLock) releaseLock();
     releaseLock = null;
@@ -1847,6 +2011,7 @@ export function createController(o) {
   Object.assign(api, {
     start,
     dispose,
+    midiReady,
     selectSong,
     nextSong,
     prevSong,
@@ -1869,6 +2034,20 @@ export function createController(o) {
     rescanUserSamples,
     revertSong,
     learn,
+    /**
+     * One slot's level for the strip meters (polish-1): engine.slotLevel, null-safe and silent (it is read every
+     * frame while a meter shows). Views read levels here, never from the engine.
+     * @param {number} i slot 0..3
+     * @returns {{peak:number, rms:number}|null}
+     */
+    slotLevel: (i) => {
+      if (secondary || !engine || typeof engine.slotLevel !== 'function') return null;
+      try {
+        return engine.slotLevel(i);
+      } catch {
+        return null;
+      }
+    },
     cancelLearn: () => midi && midi.cancelLearn && midi.cancelLearn(),
     clearLearn: (controlId) => store.setMidiLearn(controlId, null),
     onMenu,

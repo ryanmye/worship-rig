@@ -140,6 +140,26 @@ test('song-header: song name — Enter commits, empty reverts, Esc cancels; roun
     t.assertNoConsoleErrors();
   });
 
+test('song-header: polish-1 text:"dirty" — the focused name follows an outside rename until typed in', async () => {
+  const name = `${t.host} .ev2-song-name`;
+  const s0 = await t.song();
+  const rename = (n) => t.ev(([i, x]) => window.__rig.store.set(`songs.${i}.name`, x), [s0.id, n]);
+  await t.click(name);
+  await rename('Renamed in the setlist');
+  await t.until((s) => document.querySelector(s).value === 'Renamed in the setlist', name);
+  await t.page.keyboard.press('End');
+  await t.page.keyboard.type('!');
+  await rename('Renamed again');
+  await t.sleep(60);
+  assert.equal(await t.page.inputValue(name), 'Renamed in the setlist!', 'a typed draft is not overwritten');
+  await t.page.keyboard.press('Escape'); // Esc cancels the draft → the stored name
+  await t.until((s) => document.querySelector(s).value === 'Renamed again', name);
+  assert.equal((await t.song()).name, 'Renamed again');
+  await rename(s0.name);
+  await t.until(([s, n]) => document.querySelector(s).value === n, [name, s0.name]);
+  t.assertNoConsoleErrors();
+});
+
 test('song-header: tap tempo (4 taps @ 500 ms) → ~120 BPM in store and engine', async () => {
   // first tap is a real click; the rest are timed in-page (Playwright's click latency would skew the BPM). The
   // expected BPM comes from the actual click times, so a loaded machine (late timers) can't fail the test.

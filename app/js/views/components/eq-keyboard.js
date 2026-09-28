@@ -87,6 +87,9 @@ export function eqKeyboard(o = {}) {
   let raf = 0;
   let slotAn = null; // {pre, post, release}
   let slotAnTried = -1;
+  let songId; // the song the editor shows (undefined until the first refresh); round3-eq M2
+  let resetting = false; // a focused cell is being reverted and blurred: its change event must not write
+  let resizes = 0;
 
   // ------------------------------------------------------------------------------------------------ DOM
   const presetBtns = Object.keys(M.EQ_PRESETS).map((name) =>
@@ -221,6 +224,12 @@ export function eqKeyboard(o = {}) {
    * @returns {boolean} something was written
    */
   function commit(target, why) {
+    // round3-eq M2: an edit started on one song (a drag, a typed cell) must never land on the next one. refresh()
+    // notices the switch and drops the gesture; this catches a write that arrives before the store notifies.
+    if ((song()?.id ?? null) !== songId) {
+      refresh();
+      return false;
+    }
     if (ab === 'b') setAB('a', { quiet: true });
     const slot = slotNow();
     if (!slot) return false;
@@ -255,11 +264,19 @@ export function eqKeyboard(o = {}) {
   }
   function removeBand(k) {
     if (!bandByK(k)) return;
+    const inTable = tbody.contains(document.activeElement);
     const rest = model.bands.filter((b) => b.k !== k);
-    commit(targetOf(rest), 'remove');
+    if (!commit(targetOf(rest), 'remove')) return;
     if (sel === k) sel = rest.length ? rest.reduce((a, b) => (Math.abs(b.k - k) < Math.abs(a.k - k) ? b : a)).k : null;
     say(`Band ${k} removed`);
     refresh(true);
+    // round3-eq m1: the row (and its focused ✕) is gone; keep a keyboard user in place: the neighbour's ✕, else
+    // the plot
+    if (inTable && !el.contains(document.activeElement)) {
+      const next = typeof sel === 'number' ? tbody.querySelector(`tr[data-k="${sel}"] .eqk-del`) : null;
+      if (next) next.focus();
+      else focusPlot();
+    }
   }
   function setType(k, type) {
     const b = bandByK(k);
@@ -333,6 +350,15 @@ export function eqKeyboard(o = {}) {
   /** Re-read the store; `force` re-syncs the DOM even when nothing changed. */
   function refresh(force = false) {
     if (destroyed) return;
+    const sid = song()?.id ?? null;
+    if (sid !== songId) {
+      const first = songId === undefined;
+      songId = sid; // first, so the store writes leaveAB makes (re-entering refresh) see the new song
+      if (!first) {
+        songReset();
+        force = true;
+      }
+    }
     const slot = slotNow();
     const eqSrc = ab === 'b' && abState ? abState.snapEq : slot?.eq;
     const sig = JSON.stringify(eqSrc ?? null) + (slot ? '' : '∅');
@@ -353,6 +379,36 @@ export function eqKeyboard(o = {}) {
     dirty = dirtyKeys = true;
     engineCurveUntil = performance.now() + ENGINE_WAIT_MS;
     recomputeCurve();
+  }
+
+  /**
+   * The current song changed under the editor (round3-eq M2; the host keeps it mounted across a same-instrument
+   * switch). Nothing from the old song carries over: the gesture in progress, a half-typed cell (reverted, not
+   * applied), the A/B compare (restored to the song it was taken from), the selection and the rows.
+   */
+  function songReset() {
+    cancelDrag();
+    pinch = null;
+    lastTap = null;
+    hoverHit = null;
+    readout.style.display = 'none';
+    const a = document.activeElement;
+    if (a && a !== plot && el.contains(a) && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' ||
+      a.tagName === 'SELECT')) {
+      resetting = true;
+      try {
+        if (a.tagName === 'INPUT') {
+          a.value = a.defaultValue;
+          a.classList.remove('bad');
+        }
+        a.blur();
+      } finally {
+        resetting = false;
+      }
+    }
+    leaveAB();
+    sel = null;
+    builtSig = null;
   }
 
   function syncSummary(slot) {
@@ -484,6 +540,7 @@ export function eqKeyboard(o = {}) {
   }
 
   function onCell(k, f, inp) {
+    if (resetting) return;
     const b = bandByK(k);
     if (!b) return;
     const v = inp.value;
@@ -525,6 +582,7 @@ export function eqKeyboard(o = {}) {
     hiCutOn.setAttribute('aria-pressed', String(hcOn));
   }
   function onCutCell(which, inp) {
+    if (resetting) return;
     const v = inp.value.trim().toLowerCase();
     let hz;
     if (v === 'off' || v === '') hz = which === 'lc' ? 20 : 20000;
@@ -649,6 +707,7 @@ export function eqKeyboard(o = {}) {
 
   function resize() {
     if (destroyed) return;
+    resizes += 1;
     const w = el.clientWidth;
     if (o.compact) el.dataset.compact = 'forced';
     else if (w && w < 1180) el.dataset.compact = 'auto';
@@ -670,6 +729,11 @@ export function eqKeyboard(o = {}) {
     recomputeCurve();
     syncTable();
     dirty = dirtyKeys = true;
+    kick();
+  }
+  /** (Re)start the frame loop; it stops itself while the editor has no size (round3-eq m2). */
+  function kick() {
+    if (!raf && !destroyed && G.w) raf = requestAnimationFrame(frame);
   }
 
   // ------------------------------------------------------------------------------------------------ curve
@@ -1522,6 +1586,10 @@ export function eqKeyboard(o = {}) {
 
   d.listen(plot, 'keydown', (e) => {
     const key = e.key;
+    // round3-eq m1: Ctrl/⌘ chords belong to the browser and the app (zoom reset, shortcuts), never to the EQ;
+    // the arrows are always ours while the plot has focus (they must not reach the app's song/wheel shortcuts)
+    if (e.metaKey || e.ctrlKey) return;
+    if (key.startsWith('Arrow')) e.preventDefault();
     if (/^[1-8]$/.test(key)) {
       const k = Number(key);
       if (bandByK(k)) {
@@ -1551,15 +1619,12 @@ export function eqKeyboard(o = {}) {
       } else if (key === 'Delete' || key === 'Backspace') {
         setCuts(sel === 'lc' ? { cutHz: 20 } : { hiCutHz: 20000 });
         e.preventDefault();
-      }
+      } // ↑/↓ on a cut: swallowed above (a cut has no gain), so they never reach the mod-wheel shortcut
       return;
     }
     const b = typeof sel === 'number' ? bandByK(sel) : null;
     if (!b) {
-      if (key.startsWith('Arrow') && model.bands.length) {
-        selectBand(model.bands[0].k);
-        e.preventDefault();
-      }
+      if (key.startsWith('Arrow') && model.bands.length) selectBand(model.bands[0].k);
       return;
     }
     const lim = M.eqRow('b1.db');
@@ -1697,12 +1762,19 @@ export function eqKeyboard(o = {}) {
 
   // ------------------------------------------------------------------------------------------------ lifecycle
   function frame() {
-    raf = requestAnimationFrame(frame);
-    if (!el.isConnected) return;
-    if (!G.w) {
-      resize(); // mounted hidden (a closed drawer): the ResizeObserver catches later changes
-      if (!G.w) return;
+    // round3-eq m2: hidden (Edit view hidden in Perform, a closed drawer) or detached, the loop stops instead of
+    // measuring every frame (getComputedStyle + canvas resize + actsOn for every band, 60×/s). The ResizeObserver
+    // calls resize() when the editor gets a size again, and resize() restarts it.
+    if (!el.isConnected || !G.w) {
+      raf = 0;
+      if (!ro) {
+        // no ResizeObserver to wake us: keep polling (the old behaviour)
+        raf = requestAnimationFrame(frame);
+        if (el.isConnected) resize();
+      }
+      return;
     }
+    raf = requestAnimationFrame(frame);
     const settling = enginePending;
     if (settling) recomputeCurve();
     const an = !!analysers();
@@ -1720,13 +1792,20 @@ export function eqKeyboard(o = {}) {
     for (const t of ['ready', 'instruments', 'loading', 'statechange']) d.listen(engine, t, () => refresh(true));
   }
   refresh(true);
-  raf = requestAnimationFrame(frame);
+  raf = requestAnimationFrame(firstFrame);
+  /** The first frame measures once (a host that mounts and appends in one task), then runs the normal loop. */
+  function firstFrame() {
+    raf = 0;
+    if (el.isConnected && !G.w) resize(); // kicks the loop when it finds a size
+    kick();
+  }
 
   return {
     el,
     /** Re-read store + engine and redraw (the component also follows the store on its own). */
     update() {
       refresh(true);
+      kick();
     },
     /** Show another slot (leaves B first, so the compare never outlives its slot). */
     setSlot(i) {
@@ -1766,7 +1845,7 @@ export function eqKeyboard(o = {}) {
           lo: zone.lo, hi: zone.hi, fLo: zone.fLo, fHi: zone.fHi, source: zone.source, stretched: zone.stretched,
         },
         curveSource: curve.source, curveMismatch, curve: { xs: curve.xs.slice(), db: Array.from(curve.db) },
-        copyText, destroyed, compact: isCompact(), rafActive: !!raf && !destroyed,
+        copyText, destroyed, compact: isCompact(), rafActive: !!raf && !destroyed, resizes, songId,
         nodes: model.bands.map((b) => ({ k: b.k, ...(() => {
           const p = nodePos(b);
           return { x: r.left + p.x, y: r.top + p.y };

@@ -3,6 +3,7 @@
 // additions. Pure DOM helpers only: no store/engine access (panels get those through their ctx).
 import { describe, faderTaper, inverseTaper, SLOT_COUNT } from '../../shared/params.js';
 import { keyName } from '../../shared/music.js';
+import { sameValue } from '../../shared/song-diff.js';
 
 // ---------------------------------------------------------------------------------------------------------------
 // DOM
@@ -294,9 +295,37 @@ export function blockOf(id) {
 /** Inline white dot placed before a changed value. @returns {HTMLElement} */
 export const changedDot = (title = 'Changed since the song was loaded') =>
   h('em.ev2-cdi', { title, 'aria-label': 'changed' });
-/** Footer copy: "1 change since the song was loaded". @param {number} n */
-export const changeText = (n) =>
-  (n === 0 ? 'No changes since the song was loaded' : `${n} change${n === 1 ? '' : 's'} since the song was loaded`);
+/**
+ * Footer copy: "1 change since the song was loaded". The count is switch-type moves only (song-diff DIFF_WATCH), so
+ * with none counted it never claims "no changes" (round3-edit m2): `edited` (editedSince) says the sound was still
+ * edited (EQ, tape, fine-tune, instrument params…).
+ * @param {number} n
+ * @param {boolean} [edited]
+ */
+export const changeText = (n, edited = false) => {
+  if (n > 0) return `${n} change${n === 1 ? '' : 's'} since the song was loaded`;
+  return edited ? 'Sound edited (no switch changes)' : 'No switch changes since the song was loaded';
+};
+/**
+ * True when any of `prefixes` (song-relative) differs from the baseline, levels and mutes aside: `omit` keys are
+ * dropped from the top level of each compared object (e.g. a slot's gain/muted; faders are playing moves).
+ * @param {object|null} song
+ * @param {object|null} base
+ * @param {string[]} prefixes
+ * @param {string[]} [omit]
+ */
+export function editedSince(song, base, prefixes, omit = []) {
+  if (!song || !base) return false;
+  const strip = (v) => {
+    if (!omit.length || !v || typeof v !== 'object' || Array.isArray(v)) return v;
+    const o = { ...v };
+    for (const k of omit) delete o[k];
+    return o;
+  };
+  return prefixes.some((p) => !sameValue(strip(getIn(song, p)), strip(getIn(base, p))));
+}
+/** Slot keys that never make a slot "edited": its level and mute (song-diff: playing moves). */
+export const LEVEL_KEYS = Object.freeze(['gain', 'muted', 'gainBeforeMute', 'mutedGain']);
 
 // ---------------------------------------------------------------------------------------------------------------
 // sentence titles
@@ -339,7 +368,9 @@ export function sentence(parts, { onToken } = {}) {
 /**
  * Create a binder for one panel instance. It subscribes through ctx.subscribe (auto-cleaned with the panel) and
  * refreshes only the bindings whose song-relative path overlaps a changed path; on a song switch every binding is
- * re-applied. Text-like bindings (`text:true`) never overwrite a focused field.
+ * re-applied. Text-like bindings (`text:true`) never overwrite a focused field; `text:'dirty'` ones (polish-1, the
+ * hv2-edit-song request) follow outside writes while focused until the user types in them, then keep the draft until
+ * the field commits (change) or loses focus, when the store value is applied again.
  * @param {object} ctx  the panel ctx (CONTRACT.md §3)
  * @returns {{ctl:Function, fn:Function, refresh:Function, track:Function, cancelDrags:Function, destroy:Function}}
  */
@@ -347,6 +378,8 @@ export function createBinder(ctx) {
   /** @type {Set<object>} */
   const binds = new Set();
   const comps = [];
+  /** listener removers of the text:'dirty' bindings */
+  const offs = [];
   const apply = (b, song, force) => {
     if (!song) return;
     if (b.fnBind) {
@@ -355,7 +388,7 @@ export function createBinder(ctx) {
     }
     const v = b.read(song);
     if (!force && sameVal(v, b.last)) return;
-    if (b.text && b.comp.el && b.comp.el.contains(document.activeElement)) return;
+    if (b.text && b.comp.el && b.comp.el.contains(document.activeElement) && (b.text !== 'dirty' || b.dirty)) return;
     b.last = v;
     if (v !== undefined) b.comp.set(v);
   };
@@ -365,9 +398,10 @@ export function createBinder(ctx) {
      * ctx.set(addr, v). Sets el.dataset.bind = addr.
      * @param {string} addr   §4 address or 'song.<field>'
      * @param {(onChange:(v:any)=>void) => {el:HTMLElement, set:Function}} make
-     * @param {{read?:(song)=>any, write?:(v)=>void, text?:boolean, rels?:string[]}} [o]  `rels`: song-relative
-     *        paths that refresh this binding (default: the address's own path; a custom `read` over a wider object,
-     *        e.g. the slot EQ shelves, passes ['patch.slots.<i>.eq'])
+     * @param {{read?:(song)=>any, write?:(v)=>void, text?:boolean|'dirty', rels?:string[]}} [o]  `rels`:
+     *        song-relative paths that refresh this binding (default: the address's own path; a custom `read` over a
+     *        wider object, e.g. the slot EQ shelves, passes ['patch.slots.<i>.eq']). `text`: true = never overwrite
+     *        the focused field; 'dirty' = only once the user has typed in it (input), until change / blur.
      */
     ctl(addr, make, { read, write, text, rels } = {}) {
       const rel = relOf(addr);
@@ -376,8 +410,31 @@ export function createBinder(ctx) {
       const def = hasParam(addr) ? describe(addr).default : undefined;
       const b = {
         rels: rels && rels.length ? rels : [rel], comp, read: read || ((s) => getIn(s, rel) ?? def), last: undefined,
-        text,
+        text, dirty: false,
       };
+      if (text === 'dirty' && comp.el) {
+        // capture: at the target these run before the panel's own change handler, so its commit (and the store
+        // notify it causes) already sees a clean field
+        const el = comp.el;
+        const on = (type, fn) => {
+          el.addEventListener(type, fn, true);
+          offs.push(() => el.removeEventListener(type, fn, true));
+        };
+        on('input', () => {
+          b.dirty = true;
+        });
+        on('focusin', () => {
+          b.dirty = false;
+        });
+        on('change', () => {
+          b.dirty = false;
+        });
+        on('focusout', () => {
+          if (!b.dirty) return;
+          b.dirty = false;
+          apply(b, ctx.song(), false); // an outside write held back while the draft was open
+        });
+      }
       binds.add(b);
       comps.push(comp);
       apply(b, ctx.song(), true);
@@ -419,6 +476,7 @@ export function createBinder(ctx) {
       offLeave?.();
       offStore = null;
       offLeave = null;
+      for (const f of offs.splice(0)) f();
       for (const c of comps.splice(0)) {
         try {
           c.destroy?.();

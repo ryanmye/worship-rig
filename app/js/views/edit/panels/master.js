@@ -9,7 +9,7 @@
 import { describe, formatValue } from '../../../shared/params.js';
 import { WHEEL_TARGETS, BEND_MODES } from '../../../presets.js';
 import {
-  h, setText, button, createBinder, section, wordSlider, hasParam, pct, blockOf, changeText, changedDot,
+  h, setText, button, createBinder, section, wordSlider, hasParam, pct, blockOf, changeText, editedSince, changedDot,
   TARGET_LABELS, BEND_LABELS,
 } from '../lib.js';
 
@@ -225,7 +225,9 @@ export default {
     );
     const renderChanges = () => {
       const n = ctx.editState.changeCount(prefixes);
-      setText(chgText, changeText(n));
+      // tape, glue, EQ and the wheels (the master level is not in these prefixes, so it never reads as "edited")
+      const edited = n === 0 && editedSince(ctx.song(), ctx.editState.baseline, prefixes);
+      setText(chgText, changeText(n, edited));
       chg.classList.toggle('none', n === 0);
       swellDot.hidden = !ctx.editState.isChanged('patch.swell');
     };
@@ -233,6 +235,7 @@ export default {
     const main = h('div.ev2-master-main', {}, top, tapeSec, eqSec, glueSec, wheelsSec);
     el.replaceChildren(h('div.ev2-master', {}, main, foot));
     ctx.listen(ctx.editState, 'changes', renderChanges);
+    ctx.subscribe(renderChanges); // "Sound edited" follows non-counted writes too (round3-edit m2)
     renderChanges();
 
     // ---- sentence title: "MASTER is at −6.0 dB, tape off, tone flat, glue off"

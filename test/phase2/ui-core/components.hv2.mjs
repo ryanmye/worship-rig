@@ -629,6 +629,125 @@ test('step panel fine slider: moves the value continuously and keeps the panel o
   assert.equal(r.chip, `${Math.round(r.last[1] * 100)}%`);
 });
 
+test('stepChip placement:auto (polish-1): below / above / cover from the room in the host; fine slider fills the body',
+  async () => {
+    await fresh();
+    const r = await page.evaluate(async () => {
+      const C = window.C;
+      const area = document.getElementById('area');
+      const mk = (hostH, chipTop) => {
+        const host = document.createElement('div');
+        host.style.cssText = `position:relative;width:200px;height:${hostH}px;background:#222;margin-bottom:10px`;
+        const chip = C.stepChip({ label: 'Echo', steps: C.AMOUNT_STEPS, value: 0.25, mount: host, placement: 'auto',
+          fine: { min: 0, max: 1 } });
+        chip.el.style.cssText = `position:absolute;left:10px;top:${chipTop}px;width:80px`;
+        host.append(chip.el);
+        area.append(host);
+        return { host, chip };
+      };
+      const geo = async ({ host, chip }) => {
+        chip.open();
+        await new Promise((res) => requestAnimationFrame(res));
+        const p = host.querySelector('.step-panel');
+        const pr = p.getBoundingClientRect();
+        const cr = chip.el.getBoundingClientRect();
+        const hr = host.getBoundingClientRect();
+        const fine = p.querySelector('.sp-fine .fader-input').getBoundingClientRect();
+        const body = p.querySelector('.sp-body').getBoundingClientRect();
+        const out = { dir: p.dataset.dir, below: pr.top >= cr.bottom - 1, above: pr.bottom <= cr.top + 1,
+          inHost: pr.top >= hr.top - 1 && pr.bottom <= hr.bottom + 1, fineFills: fine.height >= body.height - 2 };
+        chip.close();
+        return out;
+      };
+      const down = await geo(mk(420, 10));
+      const up = await geo(mk(420, 360));
+      const cover = await geo(mk(260, 110));
+      const legacy = C.stepChip({ label: 'Space', steps: C.AMOUNT_STEPS, value: 0 });
+      const lh = document.createElement('div');
+      lh.style.cssText = 'position:relative;height:400px;width:180px';
+      lh.append(legacy.el);
+      area.append(lh);
+      legacy.open();
+      const legacyDir = lh.querySelector('.step-panel')?.dataset.dir;
+      legacy.close();
+      return { down, up, cover, legacyDir };
+    });
+    assert.deepEqual(r.down, { dir: 'down', below: true, above: false, inHost: true, fineFills: true });
+    assert.deepEqual(r.up, { dir: 'up', below: false, above: true, inHost: true, fineFills: true });
+    assert.equal(r.cover.dir, 'cover');
+    assert.ok(r.cover.inHost && r.cover.fineFills, JSON.stringify(r.cover));
+    assert.equal(r.legacyDir, 'up', 'without placement the panel still opens above the chip (Perform)');
+  });
+
+test('overlay: an overlay inside a [hidden] view never eats Esc or a tap (round3-edit M1); closeOverlaysWithin', async () => {
+  await fresh();
+  await mountStrip();
+  await page.click('#chip-space');
+  // hide the strip the way a ⌘E / Ctrl+E view switch hides #view-edit (no outside tap closes the panel)
+  await page.evaluate(() => {
+    window.docKeys.length = 0;
+    document.getElementById('strips').hidden = true;
+  });
+  await page.keyboard.press('Escape');
+  const r = await page.evaluate(() => ({
+    keys: window.docKeys.slice(),
+    open: !!document.querySelector('.step-panel'),
+    overlays: window.C.openOverlayCount(),
+  }));
+  assert.deepEqual(r, { keys: [{ key: 'Escape', prevented: false }], open: false, overlays: 0 },
+    'Esc reaches the document (main.js: Panic) and the hidden panel is pruned');
+  // a tap is not swallowed by an invisible overlay either
+  await page.evaluate(() => (document.getElementById('strips').hidden = false));
+  await page.click('#chip-space');
+  await page.evaluate(() => {
+    document.getElementById('strips').hidden = true;
+    window.log.length = 0;
+  });
+  await page.click('#outside');
+  assert.deepEqual(await page.evaluate(() => window.log.slice()), ['outside-click']);
+  assert.equal(await page.evaluate(() => window.C.openOverlayCount()), 0);
+  // closeOverlaysWithin(root): the Edit shell's belt and braces on leaving the view
+  await page.evaluate(() => (document.getElementById('strips').hidden = false));
+  await page.click('#chip-space');
+  const n = await page.evaluate(async () => {
+    const m = await import('/js/views/components/overlay.js');
+    const why = [];
+    const other = document.createElement('div');
+    document.body.append(other);
+    m.openOverlay({ el: other, onClose: (r) => why.push(r) });
+    const closed = m.closeOverlaysWithin(document.getElementById('strips'));
+    const left = m.openOverlayCount();
+    m.closeOverlaysWithin(document.body);
+    return { closed, left, why, open: !!document.querySelector('.step-panel') };
+  });
+  assert.deepEqual(n, { closed: 1, left: 1, why: ['hidden'], open: false });
+});
+
+test('stepChip.cancelDrag(): abandons the fine drag and closes the panel (round3-edit M2)', async () => {
+  await fresh();
+  await mountStrip();
+  await page.click('#chip-space');
+  const box = await page.locator('.sp-fine input[type=range]').boundingBox();
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y - box.height * 0.15, { steps: 3 });
+  await page.waitForTimeout(60);
+  const n0 = await page.evaluate(() => {
+    window.chips.space.cancelDrag();
+    return window.log.length;
+  });
+  await page.mouse.move(x, y - box.height * 0.4, { steps: 4 });
+  await page.mouse.up();
+  await page.waitForTimeout(80);
+  const r = await page.evaluate(() => ({ n: window.log.length, open: window.chips.space.isOpen,
+    panel: !!document.querySelector('.step-panel'), overlays: window.C.openOverlayCount() }));
+  assert.deepEqual(r, { n: n0, open: false, panel: false, overlays: 0 });
+  // no panel open: a no-op
+  await page.evaluate(() => window.chips.space.cancelDrag());
+});
+
 test('headerChipRow: one-tap presets with hints, selected = steel + white outline, changed dot, "…" menu, Song’s own', async () => {
   await fresh();
   await page.evaluate(() => {

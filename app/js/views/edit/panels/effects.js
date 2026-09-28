@@ -5,7 +5,7 @@
 // Logic copied from views/edit.js (presetPicker, the delay sync note, fxSec) so the old view keeps working untouched.
 import {
   h, icon, setText, sentence, createBinder, section, wordSlider, getIn, relOf, hasParam, pct, BLOCKS, changedDot,
-  changeText, sameVal, chorusWord,
+  changeText, editedSince, sameVal, chorusWord,
 } from '../lib.js';
 import { SPACE_PRESETS, ECHO_PRESETS, VIBE_PRESETS, matchPreset, applyPreset } from '../../../shared/fx-presets.js';
 import { describe, formatValue, SLOT_COUNT } from '../../../shared/params.js';
@@ -32,6 +32,7 @@ const ECHO_CHIPS = [
 ];
 const OWN = 'the song’s own';
 const DELAY_KEYS = ['time', 'feedback', 'pingpong', 'tone', 'sync', 'returnGain'];
+const REVERB_KEYS = ['size', 'damp', 'predelay', 'returnGain'];
 const UNITS = [
   { unit: 'reverb', name: 'Space', icon: 'room', sec: 'fx-reverb' },
   { unit: 'delay', name: 'Echo', icon: 'echo', sec: 'fx-delay' },
@@ -137,17 +138,9 @@ export default {
 
     // ---- step-panel host: an overlay over the "who goes in" column of all three lines, so a chip's step panel
     // opens inside that column (implementation §2: "the step panel stays inside its column at 1024").
-    const sphost = h('div.ev2-fx-sphost', { dataset: { dir: 'up' } });
-    const placePanel = (chip) => {
-      const hr = sphost.getBoundingClientRect();
-      const cr = chip.el.getBoundingClientRect();
-      const need = globalThis.matchMedia?.('(max-width: 1250px)').matches ? 220 : 290;
-      const below = hr.bottom - cr.bottom;
-      const above = cr.top - hr.top;
-      sphost.dataset.dir = below >= need + 10 ? 'down' : above >= need + 10 ? 'up' : 'cover';
-      sphost.style.setProperty('--ev2-fx-sp-top', `${Math.round(cr.bottom - hr.top + 10)}px`);
-      return sphost;
-    };
+    // stepChip({placement:'auto'}) picks below / above / cover from the room around the chip (polish-1; the panel
+    // needs 290 px, 220 at ≤ 1250 px).
+    const sphost = h('div.ev2-fx-sphost');
 
     // ---- "How much of each sound goes in": the Perform strip's Space/Echo/Chorus chip, one per slot
     const who = { reverb: [], delay: [], chorus: [] };
@@ -169,15 +162,15 @@ export default {
       for (let i = 0; i < SLOT_COUNT; i++) {
         const role = BLOCKS[i].role;
         const rel = `patch.slots.${i}.sends.${u.unit}`;
-        let chip = null;
-        chip = binder.ctl(`slots.${i}.sends.${u.unit}`, (onChange) => makeChip({
+        const chip = binder.ctl(`slots.${i}.sends.${u.unit}`, (onChange) => makeChip({
           label: role,
           owner: u.name,
           color: `var(--slot-${i})`,
           hint: `how much of the ${role} goes into the ${u.name}`,
           testid: `fx-${u.unit}-${i}`,
           onChange,
-          mount: () => placePanel(chip),
+          mount: sphost,
+          placement: 'auto',
         }), { read: (s) => (s.patch.slots[i] ? Number(getIn(s, rel)) || 0 : 0) });
         chip.el.classList.add('ev2-fx-mod');
         chip.el.dataset.slot = String(i);
@@ -211,20 +204,35 @@ export default {
         current: () => [...btns.values()].find((b) => b.getAttribute('aria-pressed') === 'true') || null,
       };
     };
-    const space = chipRow('space', 'Space', SPACE_PRESETS.map((p) => ({
-      id: p.id, name: p.name, hint: SPACE_HINTS[p.id] || '', title: p.blurb, apply: () => applyPreset(p, set),
-    })));
-    const baseDelay = (k) => {
+    const baseFxv = (unit, k) => {
       const b = editState.baseline;
       if (!b) return undefined;
-      const v = getIn(b, relOf(`fx.delay.${k}`));
-      return v === undefined ? describe(`fx.delay.${k}`)?.default : v;
+      const v = getIn(b, relOf(`fx.${unit}.${k}`));
+      return v === undefined ? describe(`fx.${unit}.${k}`)?.default : v;
     };
-    // "Song's own" writes back only the baseline's fx.delay.* (CONTRACT §6 effects)
-    const applyOwn = () => {
-      if (!editState.baseline) return;
-      for (const k of DELAY_KEYS) set(`fx.delay.${k}`, baseDelay(k));
+    const baseDelay = (k) => baseFxv('delay', k);
+    const baseRev = (k) => baseFxv('reverb', k);
+    // "Song's own" writes back only the baseline's fx.<unit> (CONTRACT §6 effects), as one whole-object write like
+    // Perform's pickFx, so one tap is one store change; per key only when the baseline has no such object
+    const applyOwnUnit = (unit, keys) => {
+      const b = editState.baseline;
+      if (!b) return;
+      const own = b.patch?.fx?.[unit];
+      const id = ctx.songId();
+      if (own && typeof own === 'object' && id) set(`songs.${id}.patch.fx.${unit}`, JSON.parse(JSON.stringify(own)));
+      else for (const k of keys) set(`fx.${unit}.${k}`, baseFxv(unit, k));
     };
+    const applyOwn = () => applyOwnUnit('delay', DELAY_KEYS);
+    // round3-edit M3: Space gets "Song's own" too (shown only when the baseline's room is no preset), so an audition
+    // tap on a preset never loses a song's custom room once leaving Edit rebaselines
+    const space = chipRow('space', 'Space', [
+      ...SPACE_PRESETS.map((p) => ({
+        id: p.id, name: p.name, hint: SPACE_HINTS[p.id] || '', title: p.blurb, apply: () => applyPreset(p, set),
+      })),
+      { id: 'own', name: 'Song’s own', hint: 'as saved', title: 'The room this song was saved with',
+        apply: () => applyOwnUnit('reverb', REVERB_KEYS) },
+    ]);
+    const spaceOwnBtn = space.btns.get('own');
     const echo = chipRow('echo', 'Echo', [
       ...ECHO_CHIPS.map((c) => {
         const p = ECHO_PRESETS.find((x) => x.id === c.id);
@@ -389,7 +397,7 @@ export default {
     const foot = h('div.ev2-foot.ev2-fx-foot', {}, tapeBtn, chg);
     const renderChanges = () => {
       const n = editState.changeCount(FX_PREFIXES);
-      setText(chgText, changeText(n));
+      setText(chgText, changeText(n, n === 0 && editedSince(ctx.song(), editState.baseline, FX_PREFIXES)));
       chg.classList.toggle('none', n === 0);
     };
 
@@ -405,6 +413,12 @@ export default {
       });
     };
     const baseEchoCustom = () => !!editState.baseline && !matchPreset(ECHO_PRESETS, (p) => baseDelay(p.split('.')[2]));
+    const isOwnRoom = () => !!editState.baseline && REVERB_KEYS.every((k) => {
+      const a = val(`fx.reverb.${k}`);
+      const b = baseRev(k);
+      return typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) < 1e-6 : sameVal(a, b);
+    });
+    const baseRoomCustom = () => !!editState.baseline && !matchPreset(SPACE_PRESETS, (p) => baseRev(p.split('.')[2]));
     let headKey = '';
     const render = () => {
       const s = ctx.song();
@@ -422,7 +436,10 @@ export default {
       const delChanged = editState.isChanged('patch.fx.delay');
 
       // Space line
-      space.mark(sp ? sp.id : null);
+      const showOwnRoom = baseRoomCustom();
+      spaceOwnBtn.hidden = !showOwnRoom;
+      if (showOwnRoom) setText(spaceOwnBtn.querySelector('.ev2-fx-pc-hint'), sizeWord(baseRev('size')).toLowerCase());
+      space.mark(sp ? sp.id : showOwnRoom && isOwnRoom() ? 'own' : null);
       const roomWords = sp ? (sp.id === 'dry' ? ['', 'dry'] : [article(sp.name), sp.name]) : ['', OWN];
       lines.reverb.setTitle(['The room is ', roomWords[0],
         { text: roomWords[1], control: revSec, changed: revChanged }]);

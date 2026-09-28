@@ -2187,3 +2187,391 @@ capped (`.long`, set from scrollWidth > clientWidth + 2). The live hint also giv
 ## flaky-tolerances (orchestrator)
 - engine `offline.masterEqGlue`: identity/bypass diff limits 2e-6 → 1e-5 (Chromium run-to-run noise; CLAUDE.md caveat).
 - ui-core Quick sheet TAP: tolerance ±12 → ±20 BPM (Playwright click overhead under load measured 106 BPM for 500 ms taps).
+
+## round3-edit (reviews/round3-edit.md M1–M3, m1–m4; views/edit/** / components/{overlay,stepChip,stepPanel}.js / edit-v2 + ui-core component tests)
+
+**Fixed.**
+- **M1** `components/overlay.js`: `onKey` / `onPointerDown` first close (reason `'hidden'`) every entry whose element
+  is disconnected or inside a `[hidden]` ancestor, then act only on a visible top entry; nothing invisible eats Esc
+  (= Panic) or a tap. New export `closeOverlaysWithin(root, reason='hidden')` (not re-exported from
+  `components/index.js`; the shell imports overlay.js directly). `shell.js` watches `settings.view` leaving `'edit'`,
+  runs the new `ctx.onLeaveView(fn)` hooks and closes every overlay inside the view. slot.js closes its chips there.
+- **M2** `slot.js` `onLeaveSong` closes its step chips. `stepPanel.cancelDrag()` (forwards to the fine fader) and
+  `stepChip.cancelDrag()` (cancels the fine drag, then closes the panel) exist, so `binder.cancelDrags()` covers
+  every tracked chip on a song switch.
+- **M3** `effects.js`: Space gets a **Song’s own** chip (hint = the saved room's size word), shown when the
+  baseline's room matches no preset. Space and Echo "Song’s own" now write the baseline's whole `patch.fx.<unit>`
+  as one store change (per key only when the baseline lacks the object).
+- **m1** `slot.js` `shelfDb` reads 0 dB for a shelf the Tone editor switched off; the Tone hint says moving
+  Brightness/Warmth switches its shelf back on.
+- **m2** `lib.changeText(n, edited)`: `0` → "No switch changes since the song was loaded", or "Sound edited (no
+  switch changes)" when `lib.editedSince(song, baseline, prefixes, omit)` finds a non-counted edit (slot: levels and
+  mutes omitted; drone: gain and the ON tile's mode omitted). Slot, Effects, Drone and Master use it (Master now also
+  re-renders its line on store changes). The rig hint reads "…means a switch changed since the song was loaded."
+- **m3** `slot.js`: an instrument change shows an 8 s "Keys is now <name>." toast with Undo, restoring the captured
+  `instrument` + `params` through `songs.<id>.patch.slots.<i>` (refuses when the slot has moved on).
+- **m4** The shell core keeps the drone's last-off source (`ctx.lastDroneSource.get()/set(mode)`), cleared on a song
+  change; drone.js uses it (a per-mount map remains as a fallback), so a tab switch no longer forgets it.
+
+**Requests (outside this scope).**
+- eq-ui (`shared/eq-math.js`): one `shelfTarget(eq, which)` shared by read and write. `shelfWrites` still targets an
+  off shelf and silently sets `on:true`; Edit now displays it as 0 dB and says so in the Tone hint.
+- perform.js: `lastDroneSource` is still Perform's own; Edit's lives in the shell core. Sharing one memory needs a
+  controller field or a main.js ctx hook both views read (m4's second half).
+- perform.js (optional): close its chips/key popover when `settings.view` leaves `'perform'`; overlay.js's hidden
+  pruning already makes a left-open panel harmless. Perform's Space own-chip visibility already follows the
+  snapshot re-taken on leaving Edit (`renderSong` → `renderPresets`), so no change is needed there.
+
+**Tests.** edit-v2: `integration` (Edit chip open → Ctrl+E → first Esc panics, first Perform tap opens; the reverse
+direction; `[hidden]` pruning), `slot` (fine drag across `selectSong`; off-shelf 0 dB; "Sound edited"; instrument
+Undo), `effects` (Space own: one write, restores {.62, .5, .025, 1}, echo untouched; shown iff the baseline room is
+custom), `drone` (source kept across a remount, forgotten on a song change), `master` (copy). ui-core
+`components.hv2.mjs`: hidden-overlay Esc/tap + `closeOverlaysWithin`; `stepChip.cancelDrag()`.
+
+## round3-eq (reviews/round3-eq.md M1–M2, m1–m5; engine fx.js + audio.js EQ / shared/eq-math.js / components/eq-keyboard.js / eq tests)
+
+**Engine.**
+- M1: `fx.Coalescer.cancelAll(pred?)` drops pending (unflushed) writes; their armed timer callbacks find no entry.
+  `engine.commit()` calls it for song-state keys (`slots.*`, `fx.*`, `master.*`; `wheels`/`bend` read live state and
+  stay) before the slot loop, so `applyState`/`restart` are covered too; `_teardown()` drops everything. The slot EQ
+  closure also resolves the slot's cfg and channel when it fires, not when it was queued. Test `offline.eqCoalesceSongSwitch`
+  (two quick writes each to `eq.b2.*` and `gain`, then a same-instrument prepare+commit before the flush): the live
+  b2 is off and the fader is at 0.8, matching cfg and the store. Without the commit cancel, the fader stays at 0.05.
+- m4: `_teardown()` clears `_eqShadow`, so restart/dispose release the old context's shadow biquads and their sample
+  rate. Test `offline.eqShadowTeardown`.
+- m5 (engine half): **new `engine.eqAudition(slotIndex, 'bypass'|'on', {when}?) → boolean`** (DECISION §3). Bypass
+  plays the slot through a flat EQ (`strip.setEq({})`, click-free through SlotEq's crossfade). It is engine state
+  only and never persisted. EQ writes while bypassed update cfg but stay unheard, and `commit()` ends every bypass.
+  An invalid slot returns `false`. `eqKeyboard` feature-detects it, so A/B now runs in `'engine'` mode and the store
+  fallback (with its autosave risk) is no longer used with the real engine. Test `offline.eqAuditionBypass` renders
+  on +11.0 dB, bypass 0.0 dB (flat reference 0.0), back on +5.6 dB after a +6 write while bypassed. It detects 0
+  clicks, the stored value stays 6, and a commit ends the bypass.
+
+**eq-keyboard.**
+- M2: the editor tracks the song it shows (`debug().songId`). When `store.currentSong().id` changes (seen in
+  `refresh()`, which follows the store), it cancels the drag, pinch and double-tap, reverts and blurs a focused cell
+  (its change event is ignored), runs `leaveAB()` (restoring to the old song), and resets the selection and the rows.
+  `commit()` also refuses a write when the current song is not the one shown, which catches a write that lands
+  before the store's microtask notify. No host change is needed. `update()` still works as a nudge.
+- m1: plot keydown ignores Ctrl/⌘ chords (the browser and app keep zoom reset, ⌘O and so on). While the plot has
+  focus it always `preventDefault`s the arrows, including with no bands or with a cut selected (↑/↓ on a cut do
+  nothing). After a row ✕, focus moves to the neighbour's ✕, or to the plot if there is none.
+- m2: the frame loop stops while the editor is detached or has no size (`raf = 0`), and `resize()` from the
+  ResizeObserver restarts it through `kick()`, as does `update()`. With no ResizeObserver, it polls as before.
+  `debug()` adds `resizes`.
+
+**eq-math `parseForeign` (m3).**
+- Decimal commas become points (`63,5 Hz`, `Q 4,32`) unless the line already uses points. `1,000 Hz` and
+  `12,500 Hz` are read as thousands separators. Either reading adds a note to the line.
+- REW "Filter Settings file" header lines are dropped silently, and `Filter n: ON None` is recognised after the
+  on/off strip.
+- A skipped extra band gives its own rank ("a 9th band", "a 10th band").
+- A band needs a filter keyword, `Fc`, or a line that starts with its frequency. Prose that only mentions Hz or dB
+  is not a band. Non-filter lines collapse into one "not a filter line (and n more like it)" row.
+- Unit test: `paste (round3-eq m3)`.
+
+**Tests.** The eq suite has 3 new browser tests:
+- Same-instrument switch mid-drag on b8, mid-typing and in B. Song B is untouched, and A keeps its value from the
+  switch. Without the fix, "song B untouched by the drag" fails.
+- Plot keys.
+- Hidden editor.
+
+Each of these fails with its fix removed. Results: `node test/phase2/eq/run.mjs` 25/25, `npm run test:unit` 276/276,
+`node test/phase1/shell/run.mjs --only unit` all passed. In `node test/phase1/engine/run.mjs` at load average 11 on
+2 CPUs, 67/68 passed. The failure was `eqCpu`, a timing test: its plain-biquad reference was noisy, 550 against 510
+with none. It failed once more in isolation, then passed at load 13 (EQ with all ten filters 3.6 %). The fixes don't
+touch that path.
+
+**Requests for other owners.**
+- **controller.js** (m5, repeats eq-build): add null-safe pass-throughs `getEqResponse(i, freqs, opts)`,
+  `getSlotPlayRange(i)` and `eqAudition(i, mode)`, which calls `engine.eqAudition` when present. `eqKeyboard` picks
+  them up with no change, and then no view calls the engine for EQ except `engine.ctx` and `analyserL/R`.
+- **views/edit/panels/slot.js** (M2): optional. `ctx.onLeaveSong(() => toneEq?.update())` is harmless, but it isn't
+  needed, because the component is song-aware now.
+- **test/phase2/edit-v2/integration.test.mjs** (M2): add the real-app case with the same instrument in both songs,
+  Tone open, and `selectSong` mid-drag, then assert song B is unchanged. The eq suite covers the component with the
+  real store and controller.
+
+## l3 (controller.js: start() no longer waits for Web MIDI; reviews/local-findings.md L-3)
+- **Why.** `startPrimary()` ended with `await midiReady`, and `MidiInput.init()` awaits `navigator.requestMIDIAccess`
+  with no timeout. So `controller.start()`, and with it `window.__rig.ready`, never settled while Chrome's MIDI
+  permission prompt was unanswered, or when the first request stuck on a Mac with CoreMIDI inputs and a `midi-sysex`
+  grant (local measured 30 s+ pending while `status.ready` was already true).
+- **start() / `window.__rig.ready`** now resolve once audio and the current song are up: the same steps as before,
+  minus the final MIDI await. main.js is unchanged: `__rig.ready` is still the `controller.start()` promise, so it
+  picks up the new meaning. MIDI init still starts in the same place, before the pads and song load, and runs
+  concurrently.
+- **MIDI reports through `status.midi` and the `'status'` event.**
+  - New field `status.midi.pending` (boolean, default false).
+  - After `midiInitTimeoutMs` (new controller option, default 5000; `0` disables it) without an answer:
+    `{available:false, connected:false, reason:'pending', pending:true}`. The request is not cancelled.
+  - A late grant: `MidiInput.init()` attaches ports, and the controller then runs `midi.select(settings.midiInputId,
+    name)` exactly as before. The `'devices'` handler now clears `reason` (→ null) and `pending` whenever
+    `available` is true. Previously a successful init carried the old `reason` forward.
+  - A late denial: `'unavailable'` sets `reason` to 'denied', 'failed' or 'unsupported' and `pending:false`.
+- **New `controller.midiReady()`** returns `Promise<boolean>`: it settles when the current init has an answer
+  (true = access granted and the input selected). It can stay pending indefinitely, so bound any wait on it.
+- **dispose()** drops the soft timer and bumps a generation counter. A late answer to a disposed start no longer
+  calls `select()` and never reaches status or the engine; the controller's MIDI listeners were already removed.
+  `MidiInput.init()` itself still attaches its default ('first') pick on the MidiInput object.
+- **UI follow-up (cloud-owned files, not changed here).** Measured in the real app with a `requestMIDIAccess` that
+  never answers:
+  - `main.js` status handler (~line 548): `'pending'` falls into the else branch and toasts "MIDI could not start.
+    Unplug and replug the keyboard, then reload." at t≈6.4 s. It also sets `midiHintShown`, which suppresses a later
+    'denied' toast.
+  - `views/settings.js` (~line 910) shows "MIDI isn't available — allow MIDI in the address bar (or plug the keyboard
+    in), then reload." In Chrome the user only has to answer the prompt. A reload is wrong advice.
+  - Suggested fix: treat `m.pending` like "starting". In main.js, skip the toast and don't set `midiHintShown`
+    (optionally toast "Waiting for MIDI permission — click Allow in Chrome's prompt"). In settings.js, map `pending`
+    to "Waiting for MIDI…". The Electron app (which grants midiSysex itself) is unaffected unless CoreMIDI stalls.
+- **Tests.**
+  - `test/phase1/shell/midi-l3.test.mjs` (8 tests, node, fake navigator/timers): start() < 1 s with a
+    never-answering request; a single 5 s soft timer → pending; a late answer after the timeout selects the
+    explicitly chosen port (not the higher-ranked one), wires `onmidimessage` and a note reaches `engine.noteOn`; a
+    late answer before the timeout never shows pending; `_inject` plays while pending; pending → denied; unsupported;
+    dispose while pending; real timers at 40 ms.
+  - `browser.pw.mjs`, last test: the real app in Chromium with a never-answering `requestMIDIAccess`.
+    `__rig.ready` resolved after 14.3 s (song load on this 2-CPU box), status went `'pending'`, and a late fake
+    access with one port gave `connected:true`, `reason:null`, a wired `onmidimessage` and `midi-activity` from
+    `kb`.
+  - Shell: unit 148/148, browser 13/13, electron 14/14.
+
+## l3-l4-merge (tests: L-4 bounded waits + midi-only grants; local L-1/L-2 pulled into the cloud tree)
+- **L-4.** `test/integration/lib.mjs` gains two exports:
+  - `MIDI_PERMISSIONS = ['midi']`.
+  - `waitRigReady(page, {timeout = 30000, what})`: waits for `window.__rig` and then `__rig.ready` within the bound,
+    plus a Node-side guard against a hung renderer. It throws `"<what> did not resolve within N ms;
+    controller.status.midi={…} audio=… ready=… songId=…"`. Verified against a never-resolving page: it threw after
+    1507 ms (timeout 1500).
+
+  Suites that use them:
+  - `edit-v2/harness.mjs`: grants `midi` only. The 45 s race of `__rig.ready` against "song loaded" (a workaround
+    that hid a stuck start()) is replaced by `waitRigReady(30 s)`, and the unused `within()` helper is removed.
+  - `settings/run.mjs` and `eq/run.mjs`: grant `midi` only (eq keeps the clipboard grants) and use
+    `waitRigReady(30 s)`.
+  - `integration/electron-full.mjs`: the in-page probe bounds `__rig.ready` and `viewsReady` to 30 s each, and the
+    error carries `status.midi`.
+
+  Why sysex is not granted is documented in test/README.md ("Web MIDI in the browser suites"). Not changed here (other
+  owners): `edit-v2/integration.test.mjs:96` still grants `midi-sysex`; `soak.mjs:333` and
+  `smoke-chrome-fallback.mjs:88` still await `__rig.ready` without a bound.
+- **L-1 / L-2, from the public repo @ main (local commits db41087 and 7e2439d).**
+  - Each file was diffed against the cloud copy and patched hunk by hunk. The result is byte-identical to the local
+    versions of `lib.mjs` (`electronEnv()`), `electron-full.mjs`, `build-lint.mjs` (`--mac dir` on darwin, asar
+    under `<productName>.app/Contents/Resources`, `electronEnv()` for the build and the packaged boot) and
+    `phase1/shell/electron.boot.mjs`.
+  - The cloud integrator's earlier build-lint change was already on main, so the only differences were the L-1/L-2
+    hunks and nothing was lost.
+  - `test/README.md`: only the build-lint row. The ui-edit rows on main are stale; the cloud's edit-v2, settings and
+    eq rows stay.
+- **Linux results after the merge** (2 CPUs, load average 9–15 from a concurrent workflow):
+  - `node test/phase1/shell/run.mjs`: PASS. Unit 148, browser 13, electron 14.
+  - `ELECTRON_RUN_AS_NODE=1 node test/run-all.mjs --only build-lint,electron-full`: PASS 2/2. build-lint 26/26,
+    electron-full 28/28.
+  - After the probe bound was added, electron-full failed once at 26/28: "recording is not silent" (RMS −47.9 dBFS)
+    and "take ≈1 s" (1.779 s), at load average 14.9. It re-ran at 28/28. That is a timing flake under load, not the
+    change.
+  - `node test/run-all.mjs --only settings,eq,edit-v2`: PASS 3/3. edit-v2 79/0 (468 s), settings 26/26, eq 25/25.
+
+## polish-1 (hv2-edit-integrate leftovers; engine audio.js slotLevel / controller.js 1 pass-through / components levelMeter + stepChip / styles.css / styles-edit.css / views/edit/** / main.js + settings.js MIDI pending / tests)
+
+Store schema and PARAMS are unchanged. There are two new read-only APIs: `engine.slotLevel` and `controller.slotLevel`.
+
+**1. Wiring label.** The lane buttons now span the Effects and Master columns (`grid-column: 7 / 9`). "to Master"
+has a fixed width (`--ev2-wout-w: 88px`, `justify-self: end`), and the button is padded clear of it. Before,
+"Echo song’s own" got 141 px against the 145 px it needed at 1440, and at 1280 or narrower all three labels were
+ellipsized. Now none of them is clipped at 1440, 1280, 1100 or 1024. The integration "Show wiring" test asserts
+no ellipsis and no overlap with "to Master" at 1440 and 1024.
+
+**2. Per-slot level meters.**
+- New `engine.slotLevel(i)`, returning `{peak, rms}` (linear) for a slot. It returns zeros for an empty slot, and
+  null for a bad index or before start().
+  - The tap is one `AnalyserNode` per slot (fftSize 256, smoothing 0, stereo downmixed to mono), created on the
+    first read and fed from the strip's `pan` output (post fader/wheel/width/EQ/pan: what the slot sends to Master).
+  - A new strip (song switch) is tapped on its next read. An outgoing strip stays tapped until its dispose()
+    disconnects it.
+  - The tap is disconnected `SLOT_TAP_IDLE_SEC` = 2 s after the last read. The release runs on the engine's
+    `AudioTimer`, so there is no setTimeout.
+  - `_teardown()` drops the taps.
+  - `engine.slotTapCount()` is a test hook.
+  - A just-connected analyser reads zeros until it has run once, so a meter shows the level one frame later.
+- New `controller.slotLevel(i)` pass-through. It is null-safe and silent (no warning; it is read every frame).
+- New `components/levelMeter.js` `levelMeter({read, label})`: a 4 px bar placed in a vertical fader's `.fader-track`
+  (absolute, `pointer-events: none`), so the fader throw and hit area are unchanged.
+  - It uses a fast attack and about 20 dB/s release, as the top-bar meter does, and `.hot` above −3 dBFS.
+  - One shared rAF loop runs only the meters an IntersectionObserver reports as on screen, and it makes no DOM
+    writes while the level is steady.
+- Perform strips (`slot-level-<i>`) and Edit's ON STAGE fader (`ev2-slot-level-<i>`, at the right edge of the
+  64 px column, as the mockup's `.act`) read `controller.slotLevel(i)`.
+- **CPU:** hidden Perform strips (Edit or Settings showing), empty strips and unmounted Edit panels are never read,
+  so their taps are disconnected within 2 s.
+  - Measured in ui-core: 1 read per frame per filled strip in Perform, and 0 in Edit on Effects.
+  - `slotTapCount()` goes from ≥ 2 to 0 within 2 s, then back to ≥ 1 on return.
+- Tests:
+  - engine `offline.slotLevelTap`: lazy creation, no tap for an empty slot, a gain 0.1 slot reads 0.023 against 0.229,
+    released 2 s after the last read (not the first), a new strip tapped after a commit, taps cleared by teardown.
+  - ui-core "polish-1: strip level meters…" (geometry, reads per frame, idle release).
+  - edit-v2 slot "polish-1 — a level meter…" (in the column, it moves on a note, only the shown slot is read,
+    slot 1's tap idles out).
+
+**3. Dead `.ed-*` CSS.**
+- `styles-edit.css` went from 371 to 134 lines. 237 selectors were removed: every selector naming a class that no
+  app JS/HTML produces (the bare `.ed` and every `.ed-*` except `.ed-btn/.ed-danger/.ed-select`, which settings.js
+  uses), including the `:where(.ed …)` mini-keyboard rules and `@keyframes ed-flash`. Mixed selector lists kept
+  their live halves (`.ed-h2, .st-h2` → `.st-h2`).
+- `var(--ed-faint)` → `var(--faint)` (the same #8a93a0).
+- DOM audit over the real app, run before the prune:
+  - What was exercised: Perform + Quick + a step panel; Edit with every block, every `<details>` open and wiring on;
+    Settings with everything open at 1440 and 1024.
+  - What matched: only `.ed-btn`, `.ed-btn:hover/:active`, `.ed-select`, `.ed-select:focus`,
+    `.st-inline .ed-select` and `.st-learn-btns .ed-btn`. All of them are kept, and none of the removed selectors
+    matched.
+  - The unmatched `.st-*` rules (conditional: pedal test, learn, restore) and the `.fc-*` rules (fallback components)
+    stay.
+- Settings screenshots were checked. The settings suite asserts that the sheet names exactly those three `.ed-*`
+  classes and that a Settings `.ed-btn` keeps its styling.
+
+**4. Step-panel fine slider** (styles.css):
+- Rules: `.step-panel .sp-body { grid-template-rows: minmax(0, 1fr) }`,
+  `.sp-fine { --thumb-w: 26px; --thumb-l: 16px; height: 100%; overflow: hidden }` and
+  `.sp-fine .fader-input { height: 100% }`.
+- The thumb is 26 × 16, as in the mockup (perform-step `.fine`). The drag is relative, so the whole column is the
+  hit area.
+- Before, `.fader.compact .fader-input { height: 44px }` won, and the slider rendered 44 px tall with a 44 × 32
+  thumb.
+- Measured on the Perform Echo panel: 290 px at 1440 and 202 px at 1024, filling `.sp-body`. The chips stay 46 px
+  at 1440 and 44 px at 1024.
+- effects.css's `.ev2-fx-sphost` workaround is removed.
+- Tests: ui-core strip-chip test (spans the body, starts below the ×, chip ≥ 44 px) and components.hv2.
+
+**5. `stepChip({placement:'auto', placementNeed?})`.**
+- The panel opens `down` (below the chip, arrow on top, `--sp-top`) when the host has need + 10 px below the chip.
+  Otherwise it opens `up` when there is that much room above, else `cover`.
+- need defaults to 290 px, or 220 px at ≤ 1250 px.
+- The panel carries `data-dir`, and the CSS is in styles.css. The default placement is unchanged (`up`, Perform).
+- The decision logic is exported as `placementDir(hostRect, chipRect, need)`.
+- effects.js passes `mount: sphost, placement: 'auto'`; its `placePanel()` and the `[data-dir]` rules in
+  effects.css are gone.
+- Tests:
+  - components.hv2 "stepChip placement:auto": down, up and cover in hosts of 420 and 260 px; the legacy chip
+    stays `up`.
+  - The effects step-panel test asserts the panel is below or above its chip (never over it) or covers the column.
+
+**6. `createBinder` `text:'dirty'`.**
+- Behaviour: a focused field follows outside writes until an `input` event. The draft is then kept until `change`
+  or `focusout`; a `focusout` with a held-back write re-applies the store value.
+- The listeners are capture-phase, so the panel's own change handler (commit) already sees a clean field. They are
+  removed by `destroy()`.
+- Used by Song › tempo (song.js's private `tempoDirty` flag is gone), Song › notes, and the header song name. All
+  three were `text:true` or the local flag before.
+- `CONTRACT.md` §3.4 documents it.
+- Tests:
+  - song "polish-1 text:"dirty"": tempo follows 88 while focused, keeps a typed "13" over an outside 99, and Enter
+    commits 132; notes follow while focused and the draft stays.
+  - song-header: the name follows an outside rename, keeps "…!" over another, and Esc gives the stored name.
+
+**7. Local findings.**
+- `reviews/local-findings.md` (the Mac run): L-1, L-2 and L-4 are already merged, and the L-3 fix is in "## l3".
+  Its UI follow-up was the only small UI item and is done here:
+  - main.js: `status.midi.pending` (or `reason:'pending'`) shows an amber lamp and "Waiting…", with the title
+    "Waiting for MIDI permission" and one info toast (Chrome: "…click Allow in Chrome’s prompt…"; Electron: "MIDI is
+    taking a while to start…").
+  - main.js: there is no "could not start… reload" toast, and `midiHintShown` is not consumed, so a later denial
+    still toasts.
+  - Settings › MIDI now reads "Waiting for MIDI permission — if Chrome shows a prompt, click Allow." (no reload).
+  - Tests: ui-core "polish-1 (local L-3)" and settings "MIDI pending" (both modes).
+- `edit-v2/integration.test.mjs` grants `MIDI_PERMISSIONS` ('midi' only, L-4); it granted `midi-sysex` before.
+  `reviews/local-findings-cloud-response.md` has an "Update (polish-1)" section.
+- Also fixed: a garbled comment in `components/index.js` (the eqKeyboard line had swallowed the openOverlay line).
+
+**Results** (2 CPUs, load average 0.2–4):
+
+| Suite | Result |
+|---|---|
+| `node test/phase1/engine/run.mjs` | 69/69, 0 soft warnings, 0 console errors |
+| `node test/phase2/edit-v2/run.mjs` | 10/10 files, 82 tests (integration re-run 12/12 after the grant change) |
+| `node test/phase2/ui-core/run.mjs` | 41/41 |
+| `node --test test/phase2/ui-core/components.hv2.mjs` | all pass |
+| `node test/phase2/settings/run.mjs` | 29/29 |
+| `npm run test:unit` | 276/276 |
+| shell | unit + browser pass |
+
+Also `node test/phase2/eq/run.mjs`: 25/25. Not run: Electron, soak.
+
+## l8 (controller.js pin window; reviews/local-findings.md L-8)
+- **Why.** The Mac soak (tree 3a69692, `large-set` for the whole run) pinned 754.2 MB on `gospel-stab-b3` and
+  939.4 MB on `upright-pad` against the 700 MB cap. Pinned buffers can't be evicted, so decoded was 100 % pinned.
+  - The ±2 window was a song count. Around the two heavy sampled songs it summed past the budget: 754 = anthem
+    (Salamander) + upright, and 939 = that + clav-funk + music-box.
+  - The other suspect, an old window left pinned during a switch, doesn't hold. `engine.preload(…, {pin:'replace'})`
+    is already one `BufferCache.setPins` before and after the decode, and the stale-replace re-apply (morning-prep)
+    covers out-of-order completion. The byte budget is the fix. The atomicity is now pinned by a test.
+- **Window = byte budget** (`planWindow` / `pinWindow`, library ±1 and large-set ±2; `LIBRARY_PIN_RADIUS` and
+  `LARGE_SET_PIN_RADIUS` stay as count limits):
+  - Candidates are the current song, then neighbours by distance: +1, −1, +2, −2 (next before previous).
+  - The current song is always pinned.
+  - A neighbour joins only while `engine.estimatePreloadMB([...chosen, id]).mb ≤ PIN_BUDGET_MB` (600). Shared
+    samples are counted once. A neighbour that doesn't fit is skipped, and a farther, lighter one may still join.
+  - One `{pin:'replace'}` per switch applies the plan, so the old window is unpinned in the same `setPins` call.
+- **Guessed sizes.** A neighbour never decoded before is priced by `BufferCache.estimateBytes` at a folder mean or
+  1.75 MB per sample, so the estimate can be low.
+  - The first plan (`onlyExact`) pins the current song plus the neighbours whose size is exact. Songs with no
+    sampler are exact at 0 MB.
+  - The guessed neighbours are decoded with `{pin:'none'}`, and the window is planned again with exact sizes, then
+    replaced.
+  - So an under-estimate can't pin past the budget. `winSeq` drops an older plan once a newer switch has started.
+- **The current song alone over the budget.** It is pinned alone with a replace, which unpins everything else.
+  - `status.memory.note = songAloneNote(mb)` = `"This song alone is X MB"` (exported). It takes precedence over
+    `LARGE_SET_NOTE`.
+  - One `'memory'` event per song fires: `{mode, note, songMB}`.
+- **Cap assert.**
+  - `updateMemory()` runs after every preload and on the 1 s tick.
+  - It warns (the `'warn'` event plus `console.warn`, never a throw) when `_debugStats().pinnedMB > capMB`:
+    `pinned samples X MB exceed the 700 MB cache cap (<mode>, N songs pinned[; This song alone…]; L-8)`.
+  - It warns once per crossing, not every tick.
+- **Other changes.**
+  - Large-set warming now skips the songs actually pinned (`pinPlan.ids`) instead of the whole ±2 range. A heavy
+    neighbour left out of the window is warmed unpinned, nearest first, while the 80 % cap share allows.
+  - Setlist mode (a set ≤ 600 MB pinned whole, neighbours `'add'`) is unchanged. So is start()'s first neighbour
+    `'add'` from before `preloadSetlist()` picks the policy: `controller.test.mjs` pins it, and the replace that
+    follows drops it.
+- **`status.memory`** = `{mode, decodedMB, pinnedMB, capMB, budgetMB, setMB, windowMB, pinnedSongs, note}`.
+  - `budgetMB` = `PIN_BUDGET_MB`.
+  - `windowMB` is the plan's estimate. `pinnedSongs` is the window's song count. Both are null in setlist mode and
+    with no estimate.
+  - Engine without `estimatePreloadMB`: the pre-L-8 count window, as before.
+- **Engine/sampler.** No change. `setPins`/`pin`/`unpin` and `estimatePreloadMB` were enough.
+- **Soak** (`test/integration/soak.mjs`):
+  - New `budgetMB` column; the row also carries `memNote`.
+  - The check "decoded samples stay under the engine cache cap (pins limited)" now also requires
+    `pinnedMB ≤ budgetMB` in every row, unless the note says "alone". Its detail names the max pinned MB and the
+    song.
+- **Tests.** `test/phase1/shell/memory.test.mjs` goes from 9 to 14 tests.
+  - Fake engine `instrEngine`, priced per sampler instrument from the soak's numbers: Salamander 333, upright 421,
+    Rhodes 93, clav 48, Wurli 47, music box 45, celesta 45 MB.
+  - A 44-switch walk (bouncing through the 19-song My Set) in large-set and in library mode:
+    - pinned ≤ 600 at every step, and in every intermediate engine pin state;
+    - the current song is always pinned, and nothing outside ±radius is;
+    - no `'add'`;
+    - gospel-stab and upright-pad each pin 516 MB (upright + clav-funk; Salamander and music-box are left out).
+  - Against the previous controller the walk fails at "pinned 754 MB > 600" in both modes. That reproduces L-8.
+  - A jump sequence: every pin state during a switch is a subset of the new window.
+  - An oversized song (upright at 812 MB) is pinned alone, with the note, one 'memory' event and exactly one
+    cap warn. Moving away drops it from the pins, restores `LARGE_SET_NOTE` and doesn't warn again.
+  - Warm-then-pin order for never-decoded neighbours: clav-funk pins 185 MB, and upright is left out.
+  - Existing tests: the fake's `exact` is now true once a song was preloaded. The status deepEqual has the new
+    fields. The large-set warm-order test ignores the window's guessed-neighbour warm. The slow-replace race test
+    accepts that a superseded plan never reaches `engine.preload`.
+- **Results (Linux, 2 CPUs).**
+
+  | run | result |
+  |---|---|
+  | `node test/phase1/shell/run.mjs --only unit` | 153/153 |
+  | `node test/phase1/engine/run.mjs pins` | 2/2 (`offline.pinsUnion`, `offline.pinsLimitedEvict`) |
+  | `node test/integration/soak.mjs --minutes 3 --sample-sec 15` | 12/12 |
+
+  - In the soak, the max pinned was 568.9 MB, on anthem. On Linux, Salamander decodes to 332.9 MB.
+  - Decoded was ≤ 696.3 MB against the 700 MB cap. Every row had pinned ≤ 600.
+  - Here the anthem window was Salamander + upright, so upright decodes to ≈ 236 MB on Linux. The Mac numbers imply
+    ≈ 421 MB (754 − 333), but that is not verified: it may be a different context rate or a different sample set.
+    The fix doesn't depend on the sizes. The Mac soak is the real check.

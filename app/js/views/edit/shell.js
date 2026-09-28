@@ -19,6 +19,8 @@ import PANELS from './panels/index.js';
 import { h, setText, icon, getIn, relOf, pct, BLOCKS, blockOf, sentence, droneKeyText, chorusWord } from './lib.js';
 
 const C = await loadComponents();
+// overlay.js's stack is shared with Perform; the shell closes Edit's overlays when the view is hidden (round3-edit M1)
+const overlayMod = await import('../components/overlay.js').catch(() => null);
 
 // ---------------------------------------------------------------------------------------------------------------
 // registry
@@ -150,6 +152,14 @@ function createCore(root, appCtx) {
     escapes: [],
     /** @type {Set<Function>} */
     leaveHooks: new Set(),
+    /**
+     * The drone source (Synth / My Pads) the ON tile last turned off, for the shown song. It lives in the core, not a
+     * panel mount, so a tab switch keeps it (round3-edit m4); a song change clears it, as in Perform.
+     * @type {{songId:string, mode:string}|null}
+     */
+    lastDroneSource: null,
+    /** @type {Set<Function>} run when settings.view leaves 'edit' (round3-edit M1) */
+    viewHooks: new Set(),
     /** extra store listeners of the shell itself (tabs, wiring) */
     onStoreHooks: [],
     cleanups,
@@ -213,8 +223,28 @@ function createCore(root, appCtx) {
     if (a && a.dataset?.songField && root.contains(a)) a.blur(); // its change commits to the old song id
   }
 
+  // ---- leaving the view (⌘E / Ctrl+E switch without a tap): close every open chip panel / menu of Edit, so nothing
+  // stays in the shared overlay stack inside the hidden #view-edit to eat Perform's Esc (= Panic) or first tap
+  let lastView = store.get?.()?.settings?.view ?? null;
+  core.leaveView = () => {
+    for (const fn of [...core.viewHooks]) {
+      try {
+        fn();
+      } catch (err) {
+        console.warn('[edit] leave-view hook failed', err);
+      }
+    }
+    overlayMod?.closeOverlaysWithin?.(root, 'hidden');
+  };
+
   // ---- store fan-out
   core.onStore = (state, paths) => {
+    const view = state.settings ? state.settings.view : null;
+    if (view !== lastView) {
+      const was = lastView;
+      lastView = view;
+      if (was === 'edit') core.leaveView();
+    }
     const cur = state.settings.currentSongId;
     const next = cur ? state.songs[cur] || null : null;
     const rels = [];
@@ -228,7 +258,10 @@ function createCore(root, appCtx) {
       else rels.push(rest);
     }
     const songChanged = (next ? next.id : null) !== core.songId;
-    if (songChanged) leaveSong();
+    if (songChanged) {
+      leaveSong();
+      core.lastDroneSource = null;
+    }
     core.song = next;
     core.songId = next ? next.id : null;
     if (songChanged && next && !(ownBase && ownBase.id === next.id)) ownBase = { id: next.id, song: clone(next) };
@@ -370,6 +403,13 @@ function createCore(root, appCtx) {
         own.push(off);
         return off;
       },
+      /** Runs when the app leaves the Edit view (close chip panels / menus). @returns unsub */
+      onLeaveView(fn) {
+        core.viewHooks.add(fn);
+        const off = () => core.viewHooks.delete(fn);
+        own.push(off);
+        return off;
+      },
       /** Esc handler: return true when you closed something (newest first). @returns unsub */
       onEscape(fn) {
         core.escapes.push(fn);
@@ -391,6 +431,13 @@ function createCore(root, appCtx) {
       fieldSongId: (input) => core.fieldSongId(input),
       /** Sentence title of the panel host (block panels; a no-op for regions). */
       setTitle: setTitle || (() => {}),
+      /** The drone source last turned off by an ON tile, for the shown song (survives tab switches). */
+      lastDroneSource: {
+        get: () => (core.lastDroneSource && core.lastDroneSource.songId === core.songId ? core.lastDroneSource.mode : null),
+        set: (mode) => {
+          core.lastDroneSource = core.songId && mode && mode !== 'off' ? { songId: core.songId, mode } : null;
+        },
+      },
       instruments: () => core.instruments,
       findInstrument: (ref) => core.findInstrument(ref),
       held: () => core.held,
@@ -581,7 +628,7 @@ export function mountEdit(el, ctx) {
   const rigTop = h('div.ev2-rig-top', {},
     h('span.ev2-cap', { text: 'Your rig' }),
     h('span.ev2-rig-hint', {
-      text: 'Pick a part to edit it. The dot on a tab means something changed since the song was loaded.',
+      text: 'Pick a part to edit it. The dot on a tab means a switch changed since the song was loaded.',
     }),
     h('span.ev2-sp'), wheelsBtn, wireBtn);
   const tablist = h('div.ev2-tabs', { role: 'tablist', 'aria-label': 'Your rig' });
@@ -705,7 +752,7 @@ export function mountEdit(el, ctx) {
       if (lane.unit === 'reverb') what = matchPreset(SPACE_PRESETS, val)?.name || 'custom';
       else if (lane.unit === 'delay') what = matchPreset(ECHO_PRESETS, val)?.name || 'song’s own';
       else what = chorusWord(Number(val('fx.chorus.depth')) || 0);
-      grid.append(h('span.ev2-wend', { style: at(7) },
+      grid.append(h('span.ev2-wend', { style: at('7 / 9') },
         h('button.ev2-wn', { type: 'button', on: { click: () => editState.select('effects', { focus: lane.unit }) } },
           icon(lane.icon, 14), lane.name, h('span', { text: what }))));
     });

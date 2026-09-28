@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { MIDI_PERMISSIONS, waitRigReady } from '../../integration/lib.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -46,7 +47,8 @@ async function runMode(mode, browser) {
   const info = await server.listen();
   const origin = `http://127.0.0.1:${info.port}`;
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
-  await context.grantPermissions(['midi', 'midi-sysex'], { origin });
+  // L-4: 'midi' only (test/README.md "Web MIDI in the browser suites"); MIDI Learn etc. use midi._inject
+  await context.grantPermissions([...MIDI_PERMISSIONS], { origin });
   const page = await context.newPage();
   const errors = [];
   page.on('console', (m) => {
@@ -97,7 +99,7 @@ async function runMode(mode, browser) {
     await T('boot: app + views mounted, audio running', async () => {
       await page.goto(mode === 'app' ? `${origin}/` : `${origin}/test/phase2/settings/fixture.html`);
       await until(() => !!(window.__rig && window.__rig.views && window.__rig.views.settings), null, 20000);
-      await ev(() => window.__rig.ready);
+      await waitRigReady(page, { timeout: 30000, what: `[${mode}] window.__rig.ready` }); // L-4
       if (mode === 'app') {
         const overlay = await page.$('#overlay-start:not([hidden])');
         if (overlay) await overlay.click();
@@ -311,6 +313,50 @@ async function runMode(mode, browser) {
       assert.ok(await ev(() => window.__rig.controller._debug().held.some(([n]) => n === 62)), 'Esc must not panic while Settings is open');
       await ev(() => window.__rig.controller.perform.noteOff(62));
     });
+
+    await T('settings: MIDI "pending" says to answer the permission prompt, not to reload (local L-3 follow-up)', async () => {
+      await openSettings();
+      const text = await ev(async () => {
+        const c = window.__rig.controller;
+        const real = { ...c.status };
+        c.dispatchEvent(new CustomEvent('status', { detail: { ...real,
+          midi: { available: false, connected: false, reason: 'pending', pending: true, inputs: [] } } }));
+        await new Promise((res) => setTimeout(res, 50));
+        const t = document.querySelector('.st-midi-input').parentElement.querySelector('.st-status').textContent;
+        c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } }));
+        return t;
+      });
+      assert.match(text, /Waiting for MIDI permission/);
+      assert.doesNotMatch(text, /reload/i);
+      await page.click('.st-close');
+      await until(() => document.getElementById('view-settings').hidden);
+    });
+
+    // polish-1: the retired Edit's .ed-* rules are pruned; what remains is exactly what settings.js renders
+    if (mode === 'app') {
+      await T('settings: styles-edit.css keeps only the .ed-* classes Settings renders (polish-1 prune)', async () => {
+        await openSettings();
+        const r = await ev(() => {
+          const sheet = [...document.styleSheets].find((s) => /styles-edit\.css/.test(s.href || ''));
+          const cls = new Set();
+          const walk = (rules) => {
+            for (const x of rules) {
+              if (x.selectorText) for (const m of x.selectorText.matchAll(/\.(ed(?:-[\w-]+)?)\b/g)) cls.add(m[1]);
+              else if (x.cssRules) walk(x.cssRules);
+            }
+          };
+          walk(sheet.cssRules);
+          const btn = document.querySelector('#view-settings button.ed-btn');
+          return { cls: [...cls].sort(), btn: !!btn, btnH: btn ? parseFloat(getComputedStyle(btn).minHeight) : 0,
+            select: !!document.querySelector('#view-settings select.ed-select') };
+        });
+        assert.deepEqual(r.cls, ['ed-btn', 'ed-danger', 'ed-select'], 'only the classes settings.js uses');
+        assert.ok(r.btn && r.select, 'Settings renders .ed-btn and .ed-select');
+        assert.ok(r.btnH >= 30, `an .ed-btn keeps its styling (min-height ${r.btnH})`);
+        await page.click('.st-close');
+        await until(() => document.getElementById('view-settings').hidden);
+      });
+    }
 
   } finally {
     await T('zero console.error', async () => {

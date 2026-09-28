@@ -62,6 +62,25 @@ Times were measured on the 2-vCPU Linux container. On an M-series Mac, expect th
   A resource that fails *without* an HTTP response (connection refused, blocked by CSP) is still only visible if the
   page logs it.
 
+## Web MIDI in the browser suites (L-3 / L-4)
+
+- **Grant only `midi`.** Every Playwright suite grants `MIDI_PERMISSIONS` from `test/integration/lib.mjs`, which is
+  `['midi']`, never `midi-sysex`. With `midi` alone Chromium rejects `requestMIDIAccess` at once (`NotAllowedError`,
+  so `status.midi.reason` is `'denied'`), and the tests drive MIDI through `midi._inject`. `midi-sysex` lets the
+  request through to the host's real MIDI stack. On a Mac with keyboards attached (CoreMIDI) that first request
+  stayed pending for 30 s or more (reviews/local-findings.md L-3), which made the old ui-edit suite hang for 12
+  minutes. No test in edit-v2, settings or eq needs a real port. A test that does must grant `midi-sysex` in its own
+  context and say why in a comment. (Electron is different: it gates Web MIDI behind `midiSysex` even for
+  `{sysex:false}`, and main.js grants that to our origin, so the Electron suites see the real stack.)
+- **Bound every wait on `window.__rig.ready`.** Use `waitRigReady(page, {timeout: 30000})` from
+  `test/integration/lib.mjs`. It rejects with `controller.status.midi`, `audio` and `ready` in the message instead of
+  hanging until the suite's budget runs out. Since `## l3` (CONTRACT_CHANGES), `controller.start()`, and with it
+  `__rig.ready`, resolves once audio and the song are up and never waits for MIDI. The bound is still there as a
+  guard.
+- The shell suite covers L-3 directly: `midi-l3.test.mjs` (node, fake `requestMIDIAccess` that never answers:
+  `start()` < 1 s, 5 s soft timeout → `reason:'pending'`, a late answer attaches and selects the chosen input,
+  denial surfaces, dispose while pending), and a real-app Chromium test at the end of `browser.pw.mjs`.
+
 ## Environment caveats (Linux container)
 
 - **No MIDI device.** Headless Chromium reports MIDI as denied or pending even after `grantPermissions(['midi'])`.

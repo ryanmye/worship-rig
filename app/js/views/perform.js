@@ -16,6 +16,7 @@ import { SPACE_PRESETS, ECHO_PRESETS, VIBE_PRESETS, matchPreset } from '../share
 import { changedPaths, hasChange, droneOnMode, sameValue } from '../shared/song-diff.js';
 import { h, setText, disposer, blurAfterPointer, rafCoalesce } from './components/util.js';
 import { fader } from './components/fader.js';
+import { levelMeter } from './components/levelMeter.js';
 import { toggle, segmented } from './components/buttons.js';
 import { keyGrid, pianoKeyboard, keyLayout } from './components/keys.js';
 import { chordReadout, wheelStrip } from './components/readouts.js';
@@ -404,6 +405,10 @@ export function mountPerform(root, ctx) {
       }),
     );
     f.el.dataset.testid = `slot-fader-${i}`;
+    // polish-1: the slot's level beside the fader (read only while the strip is on screen; engine tap idles after 2 s)
+    const lvl = use(levelMeter({ read: () => controller.slotLevel?.(i) ?? null, label: `${role.name} level meter` }));
+    lvl.el.dataset.testid = `slot-level-${i}`;
+    f.el.querySelector('.fader-track')?.append(lvl.el);
     const chip = (o) => use(stepChip({ owner: ROLE, color, ...o }));
     const space = chip({
       label: 'Space',
@@ -464,7 +469,7 @@ export function mountPerform(root, ctx) {
       h('div.slot-mods', {}, space.el, echo.el, octave.el, sustain.el),
       empty,
     );
-    slots.push({ el: elSlot, tile, instIcon, inst, badge, chorusBadge, octBadge, susBadge, fader: f, space, echo, octave, sustain, empty, gain: null, muted: false });
+    slots.push({ el: elSlot, tile, instIcon, inst, badge, chorusBadge, octBadge, susBadge, fader: f, lvl, space, echo, octave, sustain, empty, gain: null, muted: false });
     slotsEl.append(elSlot);
   }
 

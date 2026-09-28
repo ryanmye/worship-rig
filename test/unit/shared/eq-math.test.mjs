@@ -302,3 +302,29 @@ test('PARAMS agreement: when the b-rows exist they carry AMENDMENT §4 ranges', 
   const type = describeParam('slots.0.eq.b3.type');
   for (const t of M.BAND_TYPES) assert.ok(type.enum.includes(t), `type enum has ${t}`);
 });
+
+test('paste (round3-eq m3): decimal commas, thousands, REW header + "ON None", own ordinal, prose is not a band', () => {
+  let r = M.parseForeign('Filter 1: ON PK Fc 63,5 Hz Gain -3,5 dB Q 4,32');
+  assert.deepEqual(r.bands, [{ k: 1, on: true, type: 'peak', hz: 63.5, db: -3.5, q: 4.32 }]);
+  assert.match(r.lines[0].notes.join(' '), /decimal comma/, 'the reinterpretation is said');
+  r = M.parseForeign('Filter 1: ON PK Fc 1,000 Hz Gain -3 dB Q 1');
+  assert.equal(r.bands[0].hz, 1000);
+  assert.match(r.lines[0].notes.join(' '), /thousands/);
+  // a line that already uses points keeps its commas as they are
+  assert.equal(M.parseForeign('PK 250.5 Hz -3 dB Q 1').bands[0].hz, 250.5);
+  const rew = ['Filter Settings file', '', 'Room EQ V5.20.13', 'Dated: Oct 1, 2023 1:23:45 PM', '', 'Notes:', '',
+    'Equaliser: Generic', 'Averages 1', 'Filter  1: ON  PK       Fc   63.5 Hz  Gain  -5.0 dB  Q  4.00',
+    'Filter  2: ON  None', 'Filter  3: ON  PK       Fc   1000 Hz  Gain  2.5 dB  BW Oct 0.333'].join('\n');
+  r = M.parseForeign(rew);
+  assert.equal(r.bands.length, 2);
+  assert.deepEqual(r.lines.filter((l) => l.status === 'skipped'), [], 'no boilerplate rows');
+  r = M.parseForeign(Array.from({ length: 10 }, (_, i) => `Filter ${i + 1}: ON PK Fc ${100 * (i + 1)} Hz Gain -1 dB Q 1`)
+    .join('\n'));
+  assert.deepEqual(r.lines.filter((l) => l.status === 'skipped').map((l) => l.why.split(':')[0]),
+    ['a 9th band', 'a 10th band']);
+  r = M.parseForeign('Target: Harman (bass +6 dB below 100 Hz)\nRoom size 5k\nPK 250 Hz -3 dB Q 1');
+  assert.deepEqual(r.bands.map((b) => b.hz), [250], 'prose never becomes a band');
+  const sk = r.lines.filter((l) => l.status === 'skipped');
+  assert.equal(sk.length, 1, 'non-filter lines collapse into one row');
+  assert.match(sk[0].why, /1 more/);
+});

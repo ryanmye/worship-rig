@@ -37,8 +37,14 @@ const failedLoads = () => performance.getEntriesByType('resource').filter((e) =>
 async function boot() {
   for (let i = 0; i < 400 && !window.__rig; i++) await sleep(50);
   if (!window.__rig) throw new Error('window.__rig never appeared');
-  await window.__rig.ready;
-  await window.__rig.viewsReady;
+  // L-4: bounded, and the failure names MIDI's state (L-3: start() no longer waits for MIDI, this is a guard)
+  const bounded = (p, ms, what) => Promise.race([p, sleep(ms).then(() => {
+    const st = (window.__rig.controller && window.__rig.controller.status) || {};
+    throw new Error(what + ' did not resolve within ' + ms + ' ms; controller.status.midi=' + JSON.stringify(st.midi) +
+      ' audio=' + st.audio);
+  })]);
+  await bounded(window.__rig.ready, 30000, 'window.__rig.ready');
+  await bounded(window.__rig.viewsReady, 30000, 'window.__rig.viewsReady');
   const { engine, controller } = window.__rig;
   if (!engine.ctx || engine.ctx.state !== 'running') await controller.resumeAudio();
   return window.__rig;

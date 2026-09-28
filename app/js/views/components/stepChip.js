@@ -25,12 +25,33 @@ import { openOverlay } from './overlay.js';
  * @param {string} [o.footnote]                    panel footnote
  * @param {{min:number,max:number,format?:(v:number)=>string}} [o.fine]  fine slider in the panel
  * @param {HTMLElement|(() => HTMLElement)} [o.mount]  where the panel goes (default: closest .strip, else the parent)
+ * @param {'up'|'auto'} [o.placement]  'up' (default, Perform's strip): the panel fills the host above the chip.
+ *        'auto' (polish-1, hv2-edit-effects request): 'down' (below the chip) when the host has `placementNeed` px
+ *        + 10 below it, else 'up' when it has that above, else 'cover' (the whole host). The panel carries
+ *        data-dir = up | down | cover.
+ * @param {number|(() => number)} [o.placementNeed]  panel height 'auto' needs (default 290; 220 at ≤ 1250 px)
  * @param {string} [o.title]
  * @param {string} [o.className]
  * @returns {{el:HTMLButtonElement, set(v:any):void, get():any, setLoaded(v:any):void, setChanged(b:boolean|null):void,
  *            setHint(s:string):void, setDisabled(b:boolean):void, open(opts?:{focus?:boolean}):void, close():void,
- *            readonly isOpen:boolean, destroy():void}}
+ *            cancelDrag():void, readonly isOpen:boolean, destroy():void}}
  */
+/**
+ * Where an 'auto' step panel goes (polish-1): 'down' when the host has room below the chip, else 'up' when it has
+ * room above, else 'cover'.
+ * @param {{top:number, bottom:number}} hr host rect
+ * @param {{top:number, bottom:number}} cr chip rect
+ * @param {number|(() => number)} [need] panel height needed (default 290; 220 at ≤ 1250 px)
+ * @returns {'down'|'up'|'cover'}
+ */
+export function placementDir(hr, cr, need) {
+  let n = typeof need === 'function' ? need() : need;
+  if (!Number.isFinite(n)) n = globalThis.matchMedia?.('(max-width: 1250px)').matches ? 220 : 290;
+  if (hr.bottom - cr.bottom >= n + 10) return 'down';
+  if (cr.top - hr.top >= n + 10) return 'up';
+  return 'cover';
+}
+
 export function stepChip(o = {}) {
   const d = disposer();
   const steps = Array.isArray(o.steps) ? o.steps : [];
@@ -125,12 +146,16 @@ export function stepChip(o = {}) {
         close();
       },
     });
-    // place it above the chip, inside the host, its arrow pointing at the chip (mockup .amt, --ax)
+    // place it above the chip, inside the host, its arrow pointing at the chip (mockup .amt, --ax); 'auto' may put it
+    // below the chip or over the whole host instead (placementDir)
     const hr = host.getBoundingClientRect();
     const cr = el.getBoundingClientRect();
+    const dir = o.placement === 'auto' ? placementDir(hr, cr, o.placementNeed) : 'up';
+    panel.el.dataset.dir = dir;
     if (hr.width > 0) {
       panel.el.style.setProperty('--ax', `${(((cr.left + cr.width / 2 - hr.left) / hr.width) * 100).toFixed(1)}%`);
       panel.el.style.setProperty('--sp-bottom', `${Math.max(0, hr.bottom - cr.top + 10).toFixed(0)}px`);
+      panel.el.style.setProperty('--sp-top', `${Math.max(0, cr.bottom - hr.top + 10).toFixed(0)}px`);
     }
     host.append(panel.el);
     el.classList.add('open');
@@ -223,6 +248,14 @@ export function stepChip(o = {}) {
     },
     open,
     close,
+    /**
+     * Abandon the panel's fine-slider drag and close the panel (round3-edit M2): the edit binder calls this on every
+     * tracked component before a song switch, so no panel writes into the next song.
+     */
+    cancelDrag() {
+      panel?.cancelDrag?.();
+      close();
+    },
     get isOpen() {
       return !!panel;
     },

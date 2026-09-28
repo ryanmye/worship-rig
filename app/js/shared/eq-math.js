@@ -780,18 +780,33 @@ export function parseForeign(text, fs = 48000) {
   let haveCut = false;
   let haveHiCut = false;
   const chunks = String(text ?? '').replace(/[−–]/g, '-').split(/\r?\n|;/).map((s) => s.trim()).filter(Boolean);
+  const junk = []; // non-filter lines, reported as one row (round3-eq m3)
   for (const raw of chunks) {
-    const s = raw.toLowerCase().replace(/\s+/g, ' ');
+    let s = raw.toLowerCase().replace(/\s+/g, ' ');
     const skip = (why) => lines.push({ raw, status: 'skipped', why });
     if (/^(#|\/\/)/.test(s)) continue; // comments (our own "Copy as text" header) are not lines
-    if (/^preamp\b/.test(s)) {
-      skip('preamp: use the slot level instead');
-      continue;
+    if (REW_HEADER.test(s)) continue; // REW "Filter Settings file" boilerplate (round3-eq m3)
+    // Decimal commas (REW / APO files from EU systems, round3-eq m3): "Fc 1,000 Hz" is a thousands separator,
+    // "63,5 Hz" / "Q 4,32" a decimal point, unless the line already uses points. Said in the line's notes.
+    const commaNotes = [];
+    const thousands = [];
+    s = s.replace(/(?<![\d.,])(\d{1,2}),(\d{3})(?=\s*(?:hz|k)\b)/g, (all, a, b) => {
+      thousands.push(`${a},${b} → ${a}${b}`);
+      return `${a}${b}`;
+    });
+    if (thousands.length) commaNotes.push(`thousands separator read: ${thousands.join(' · ')}`);
+    if (!/\d\.\d/.test(s)) {
+      const dec = [];
+      s = s.replace(/(?<![\d.,])(\d+),(\d+)\b/g, (all, a, b) => {
+        dec.push(`${a},${b} → ${a}.${b}`);
+        return `${a}.${b}`;
+      });
+      if (dec.length) commaNotes.push(`decimal comma read as a point: ${dec.join(' · ')}`);
     }
     const body = s.replace(/^filter\s*\d*\s*:\s*/, '');
-    if (/^none\b/.test(body)) continue; // REW's unused slots
     const on = !/^off\b/.test(body);
     const t = body.replace(/^(on|off)\s+/, '');
+    if (/^none\b/.test(t) || /^(on|off)$/.test(t)) continue; // REW's unused slots ("Filter 2: ON None")
     let type = null;
     let slope = null;
     let withQ = false;
@@ -810,9 +825,11 @@ export function parseForeign(text, fs = 48000) {
       withQ = m[1] === 'lpq';
     } else if (/^(no|notch)\b/.test(t)) type = 'notch';
     else if (/^(ap|all ?pass|bp|band ?pass|modal)\b/.test(t)) type = 'other';
-    else if (/^(pk|peq|peak(?:ing)?|bell|eq)\b/.test(t) || /^\d/.test(t) || /\bhz\b|\d\s*k\b/.test(t)) type = 'peak';
+    // a filter keyword, an Fc, or a line that starts with its frequency ("250 Hz -3 dB", "63: +2"); prose that
+    // merely mentions Hz or dB ("Target: bass +6 dB below 100 Hz", "Room size 5k") is not a band (round3-eq m3)
+    else if (/^(pk|peq|peak(?:ing)?|bell|eq)\b/.test(t) || /^\d/.test(t) || /^fc\b/.test(t)) type = 'peak';
     if (!type) {
-      skip('not a filter line');
+      junk.push(raw);
       continue;
     }
     if (type === 'other') {
@@ -843,7 +860,7 @@ export function parseForeign(text, fs = 48000) {
     else if ((m = /\bbw\s*(?:oct)?\s*[:=]?\s*(\d+(?:\.\d+)?)/.exec(t)) || (m = /(\d+(?:\.\d+)?)\s*oct/.exec(t))) {
       bw = Number(m[1]);
     }
-    const notes = [];
+    const notes = [...commaNotes];
     const cl = (key, v, what) => {
       const c = clampEqValue(key, v);
       const r = eqRow(key);
@@ -893,16 +910,23 @@ export function parseForeign(text, fs = 48000) {
   const hs = found.find((e) => e.band.type === 'highshelf');
   if (hs) take(hs, MAX_BANDS);
   const rest = found.filter((e) => !e.done).sort((a, b) => a.band.hz - b.band.hz);
+  let extra = MAX_BANDS;
   for (const e of rest) {
     let k = 1;
     while (used.has(k) && k <= MAX_BANDS) k++;
     if (k > MAX_BANDS) {
       e.line.status = 'skipped';
-      e.line.why = `a ${found.length}th band: the slot EQ has ${MAX_BANDS}`;
+      e.line.why = `a ${ordinal(++extra)} band: the slot EQ has ${MAX_BANDS}`; // this line's own rank (m3)
       delete e.line.band;
       continue;
     }
     take(e, k);
+  }
+  if (junk.length) {
+    lines.push({
+      raw: junk[0], status: 'skipped',
+      why: junk.length > 1 ? `not a filter line (and ${junk.length - 1} more like it)` : 'not a filter line',
+    });
   }
   bands.sort((a, b) => a.k - b.k);
   // the report keeps the input order
@@ -913,6 +937,16 @@ export function parseForeign(text, fs = 48000) {
   });
   all.sort((a, b) => (pos.get(a.raw) ?? 0) - (pos.get(b.raw) ?? 0));
   return { bands, cutHz, hiCutHz, lines: all };
+}
+
+/** REW "Filter Settings file" header / metadata lines (lower case, whitespace collapsed). */
+const REW_HEADER =
+  /^(filter settings file\b|room eq v?\d|dated\s*:|notes\s*:|equali[sz]er\s*:|averages\b|measurement\s*:)/;
+/** 9 → "9th", 21 → "21st", 12 → "12th". */
+function ordinal(n) {
+  const t = n % 100;
+  const suf = t >= 11 && t <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th';
+  return `${n}${suf}`;
 }
 
 // ------------------------------------------------------------------------------------------------ presets

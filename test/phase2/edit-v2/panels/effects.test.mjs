@@ -50,12 +50,15 @@ test('effects: sentence title, three lines, Song’s own echo, who-goes-in chips
       return { hidden: b.hidden, hint, on: b.getAttribute('aria-pressed') };
     });
     assert.deepEqual(own, { hidden: false, hint: '420 ms', on: 'true' });
-    assert.equal(await pressed(t, 'space'), null, 'no room preset matches → no chip');
-    // Space hints (concept §5 4a)
+    // no room preset matches → the Space row's "Song’s own" (round3-edit M3) is shown and pressed
+    assert.equal(await pressed(t, 'space'), 'own');
+    // Space hints (concept §5 4a); "Song’s own" names the saved room's size
     assert.deepEqual(await t.ev(() => [...document.querySelectorAll('[data-preset="space"] .ev2-fx-pc')]
+      .filter((b) => !b.hidden)
       .map((b) => [b.querySelector('.ev2-fx-pc-name').textContent, b.querySelector('.ev2-fx-pc-hint').textContent]
         .join('/'))),
-    ['Dry/none', 'Room/small', 'Stage/medium', 'Hall/big', 'Cathedral/huge', 'Ambient Wash/pad-only']);
+    ['Dry/none', 'Room/small', 'Stage/medium', 'Hall/big', 'Cathedral/huge', 'Ambient Wash/pad-only',
+      'Song’s own/large']);
 
     // who goes in: the same step chips as Perform, bound to slots.<i>.sends.<unit>; empty slots are a disabled "off"
     const chips = await t.ev(() => Object.fromEntries([...document.querySelectorAll('.ev2-fx-mod')].map((c) =>
@@ -69,7 +72,7 @@ test('effects: sentence title, three lines, Song’s own echo, who-goes-in chips
 
     // footer
     assert.match(await text(t, '.ev2-fx-tape'), /^Tape & finishTape off .*these live on the Master tab$/);
-    assert.equal(await text(t, '.ev2-fx-foot .ev2-chg'), 'No changes since the song was loaded');
+    assert.equal(await text(t, '.ev2-fx-foot .ev2-chg'), 'No switch changes since the song was loaded');
 
     // an echo preset: store + engine, the chip moves, the title word gets its changed dot, the count goes to 1
     await t.click('[data-preset="echo"] [data-id="dotted"]');
@@ -106,6 +109,32 @@ test('effects: sentence title, three lines, Song’s own echo, who-goes-in chips
     assert.equal(await t.readParam('fx.reverb.size'), 0.3, 'Song’s own never touches the reverb');
     assert.equal(await pressed(t, 'echo'), 'own');
     assert.match(await titleText(t), /the echo is the song’s own/);
+
+    // round3-edit M3: an audition tap on Hall no longer loses the custom room — Space's "Song’s own" writes the
+    // baseline's whole fx.reverb back in one store change, and never touches the echo
+    await t.click('[data-preset="space"] [data-id="hall"]');
+    await t.untilEngine('fx.reverb.size', 0.65, 1e-6);
+    assert.equal(await pressed(t, 'space'), 'hall');
+    const delayBefore = (await t.song()).patch.fx.delay;
+    const writes = await t.ev(() => {
+      window.__fxWrites = 0;
+      window.__fxOff = window.__rig.store.subscribe((st, paths) => {
+        if (paths.some((p) => p.includes('.patch.fx.reverb'))) window.__fxWrites += 1;
+      });
+      document.querySelector('[data-preset="space"] [data-id="own"]').click();
+      return new Promise((r) => setTimeout(() => {
+        window.__fxOff();
+        r(window.__fxWrites);
+      }, 50));
+    });
+    assert.equal(writes, 1, 'one store change');
+    await t.untilEngine('fx.reverb.size', 0.62, 1e-6);
+    const rv = (await t.song()).patch.fx.reverb;
+    assert.deepEqual({ size: rv.size, damp: rv.damp, predelay: rv.predelay, returnGain: rv.returnGain },
+      { size: 0.62, damp: 0.5, predelay: 0.025, returnGain: 1 });
+    assert.deepEqual((await t.song()).patch.fx.delay, delayBefore, 'Space’s own never touches the echo');
+    assert.equal(await pressed(t, 'space'), 'own');
+    assert.match(await titleText(t), /^The room is the song’s own/);
 
     // a title token focuses and flashes its control; a line token opens its Fine-tune
     await t.click('#view-edit .ev2-title .ev2-tok');
@@ -274,12 +303,21 @@ test('effects: 1024×700: opts.focus (mount + update), who-goes-in step panels i
             contained: kids.every((k) => k.top >= p.top - 1 && k.bottom <= p.bottom + 1
               && k.left >= p.left - 1 && k.right <= p.right + 1),
             expanded: document.querySelector(c).getAttribute('aria-expanded'),
+            // polish-1 stepChip({placement:'auto'}): below or above the chip (never over it), or covering the column
+            placed: (() => {
+              const el = document.querySelector('.ev2-fx-sphost .step-panel');
+              const ch = r(document.querySelector(c));
+              const dir = el.dataset.dir;
+              if (dir === 'down') return p.top >= ch.bottom - 1;
+              if (dir === 'up') return p.bottom <= ch.top + 1;
+              return dir === 'cover';
+            })(),
             steps: [...document.querySelectorAll('.ev2-fx-sphost .sp-step')]
               .map((b) => b.textContent.replace('as loaded', '')),
           };
         }, [chip, unit]);
         assert.deepEqual(geo, {
-          inCol: true, inBody: true, tall: true, contained: true, expanded: 'true',
+          inCol: true, inBody: true, tall: true, contained: true, expanded: 'true', placed: true,
           steps: ['100%', '75%', '50%', '25%', 'Off'],
         }, `${unit} step panel`);
         await t.click(`.ev2-fx-sphost .sp-step[data-value="${pick}"]`);
@@ -316,8 +354,18 @@ test('effects: 1024×700: opts.focus (mount + update), who-goes-in step panels i
       assert.deepEqual(r, {
         line: '1', chip: '1', own: 'dotted 8ths', ownOn: 'true',
         blurb: 'Dotted eighths saved with this song, so it follows the tempo.',
-        chg: 'No changes since the song was loaded',
+        chg: 'No switch changes since the song was loaded',
       });
+      // the Space "Song’s own" (round3-edit M3) is shown exactly when the new song's saved room is no preset
+      const so = await t.ev(async () => {
+        const { SPACE_PRESETS, matchPreset } = await import('/app/js/shared/fx-presets.js');
+        const { describe } = await import('/app/js/shared/params.js');
+        const b = window.__rig.view.editState.baseline;
+        const get = (p) => b.patch.fx.reverb?.[p.split('.')[2]] ?? describe(p).default;
+        return { custom: !matchPreset(SPACE_PRESETS, get),
+          hidden: document.querySelector('[data-preset="space"] [data-id="own"]').hidden };
+      });
+      assert.equal(so.hidden, !so.custom, JSON.stringify(so));
       t.assertNoConsoleErrors();
     } finally {
       await t.close();

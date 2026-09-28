@@ -25,7 +25,7 @@ export const sameStep = (a, b) => (typeof a === 'number' && typeof b === 'number
  * @param {(value:number) => void} [o.onFine]  the fine slider moved (continuous; the panel stays open)
  * @param {(how:{keyboard:boolean}) => void} [o.onClose]  the × button
  * @returns {{el:HTMLElement, set(v:any):void, setLoaded(v:any):void, setHint(s:string):void, focusCurrent():void,
- *            destroy():void}}
+ *            cancelDrag():void, destroy():void}}
  */
 export function stepPanel(o = {}) {
   const d = disposer();
@@ -136,6 +136,10 @@ export function stepPanel(o = {}) {
     },
     focusCurrent() {
       (current() || buttons[0])?.focus();
+    },
+    /** Abandon a fine-slider drag in progress (round3-edit M2). */
+    cancelDrag() {
+      fine?.cancelDrag();
     },
     destroy() {
       d.dispose();

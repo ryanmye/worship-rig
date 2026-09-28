@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { chromium } from 'playwright';
 import { ROOT, SHOTS } from './harness.mjs';
+import { MIDI_PERMISSIONS } from '../../integration/lib.mjs';
 
 const require = createRequire(import.meta.url);
 const { createServer } = require(path.join(ROOT, 'server.js'));
@@ -93,7 +94,7 @@ before(async () => {
   const origin = `http://127.0.0.1:${info.port}`;
   browser = await chromium.launch({ headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
   context = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
-  await context.grantPermissions(['midi', 'midi-sysex'], { origin });
+  await context.grantPermissions(MIDI_PERMISSIONS, { origin }); // L-4: 'midi' only (test/README.md, Web MIDI)
   page = await context.newPage();
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(`${m.text()} @ ${m.location()?.url || '?'}`);
@@ -233,6 +234,26 @@ test('integration: Show wiring toggles the strip, shows the sends, never writes 
   assert.ok(cells.length >= 6, `wiring cells: ${cells.length}`);
   for (const c of cells) assert.equal(c.shown, c.want);
   assert.deepEqual(await overflow(), []);
+  // polish-1: the lane labels ("Echo song’s own") are never ellipsized and never run into "to Master"
+  for (const [w, hgt] of [[1440, 900], [1024, 700]]) {
+    await page.setViewportSize({ width: w, height: hgt });
+    await sleep(250);
+    const labels = await ev(() => {
+      const out = document.querySelector('#view-edit .ev2-wout').getBoundingClientRect();
+      return [...document.querySelectorAll('#view-edit .ev2-wn')].map((b) => {
+        const s = b.querySelector('span');
+        return { text: b.textContent, clipped: s.scrollWidth > s.clientWidth + 0.5,
+          gap: Math.round(out.left - b.getBoundingClientRect().right) };
+      });
+    });
+    assert.equal(labels.length, 3);
+    for (const l of labels) {
+      assert.equal(l.clipped, false, `"${l.text}" is not ellipsized at ${w}`);
+      assert.ok(l.gap >= 0, `"${l.text}" ends before "to Master" at ${w} (gap ${l.gap})`);
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await sleep(250);
   await shot('edit-wiring');
   // a lane button selects Effects with its focus
   await page.click('#view-edit .ev2-wn >> nth=1');
@@ -412,6 +433,63 @@ test('integration: Perform ⇄ Edit keep one Revert baseline (same changed paths
   assert.deepEqual(c.edit, c.perform);
   noErrors();
 });
+
+test('integration: round3-edit M1 — a chip panel left open over a keyboard view switch never eats Esc (Panic) or a tap',
+  async () => {
+    await ev(() => {
+      if (!window.__panics) {
+        window.__panics = { n: 0 };
+        window.__rig.controller.addEventListener('action', (e) => {
+          if (e.detail && e.detail.type === 'panic') window.__panics.n += 1;
+        });
+      }
+    });
+    const panics = () => ev(() => window.__panics.n);
+    const overlays = () => ev(async () => (await import('/js/views/components/overlay.js')).openOverlayCount());
+    await page.click('#view-switch button[data-value="edit"]');
+    await until(() => !document.getElementById('view-edit').hidden);
+    await selectSong('factory:sunday-pad-piano');
+    await selectBlock('slot:0');
+    // Edit: open Keys › Space, then Ctrl+E (Chrome; ⌘E in the Mac app goes through the same toggleView)
+    await page.click('#view-edit [data-testid="ev2-slot-reverb-0"]');
+    await until(() => !!document.querySelector('#view-edit .step-panel'));
+    await ev(() => document.activeElement?.blur?.());
+    await page.keyboard.press('Control+e');
+    await until(() => !document.getElementById('view-perform').hidden);
+    assert.equal(await ev(() => !!document.querySelector('#view-edit .step-panel')), false, 'the Edit panel closed');
+    assert.equal(await overlays(), 0);
+    const p0 = await panics();
+    await page.keyboard.press('Escape');
+    await until((n) => window.__panics.n === n + 1, p0);
+    // the first tap on a Perform strip chip opens its panel (nothing invisible swallows it)
+    await page.click('[data-testid="slot-space-0"]');
+    await until(() => !!document.querySelector('#view-perform .step-panel'));
+    // reverse: a Perform panel open, Ctrl+E to Edit, back to Perform — Esc panics on the first press
+    await page.keyboard.press('Control+e');
+    await until(() => !document.getElementById('view-edit').hidden);
+    await page.keyboard.press('Escape'); // Edit: never Panic; the hidden Perform panel is pruned, not "closed by Esc"
+    assert.equal(await panics(), p0 + 1);
+    assert.equal(await ev(() => !!document.querySelector('#view-perform .step-panel')), false, 'hidden panel pruned');
+    await page.keyboard.press('Control+e');
+    await until(() => !document.getElementById('view-perform').hidden);
+    await page.keyboard.press('Escape');
+    await until((n) => window.__panics.n === n + 2, p0);
+    // the overlay stack itself: an overlay inside a [hidden] view is closed ('hidden') instead of eating Esc
+    const r = await ev(async () => {
+      const m = await import('/js/views/components/overlay.js');
+      const el = document.createElement('div');
+      document.getElementById('view-edit').append(el);
+      const log = [];
+      m.openOverlay({ el, onClose: (why) => log.push(why) });
+      const e = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      window.dispatchEvent(e);
+      el.remove();
+      return { log, prevented: e.defaultPrevented, n: m.openOverlayCount() };
+    });
+    assert.deepEqual(r, { log: ['hidden'], prevented: false, n: 0 });
+    await selectBlock('slot:0');
+    noErrors();
+  });
 
 test('integration: Perform’s empty-slot “+” opens Edit on that slot with the instrument menu open', async () => {
   await page.click('#view-switch button[data-value="perform"]');
