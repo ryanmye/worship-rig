@@ -121,6 +121,8 @@
 .ev2 .ev2-tab-cd { position: absolute; top: 9px; right: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--chg); box-shadow: 0 0 0 2px var(--ev2-rig-bg), 0 0 6px #fffa; }
 .ev2 .ev2-tab-cd[hidden] { display: none; }
 .ev2 .ev2-tab.sel .ev2-tab-cd { box-shadow: 0 0 0 2px var(--panel, #15181d), 0 0 6px #fffa; }
+/* polish-2B: a tab whose name + sub don't fit on one line drops the sub (shell.js fitTabs) */
+.ev2 .ev2-tab.nosub .ev2-tab-sub { display: none; }
 
 /* ------------------------------------------------------------------ Show wiring: lanes aligned to the tab columns */
 .ev2 .ev2-wire { flex: none; background: var(--panel, #15181d); border-bottom: 1px solid var(--line, #2d333d); padding: 6px 10px 8px; }
@@ -160,7 +162,12 @@
 .ev2 .ev2-title-main { min-width: 0; flex: 0 1 auto; }
 .ev2 .ev2-title-sub { display: block; font-size: 12.5px; color: var(--ev2-faint); margin-top: 3px; }
 .ev2 .ev2-title-actions { display: flex; gap: 8px; align-items: center; flex: none; }
-.ev2 .ev2-sent { display: block; font-size: 21px; font-weight: 500; color: #c9d0d9; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* polish-2B (ux-round2 L1): the sentence wraps to a second line instead of "…and the Pad has …" (Effects at 1280–1366);
+   2 lines of 21 px + the sub fit the 70 px title row, so nothing moves. The clamp is only a guard. */
+.ev2 .ev2-sent {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: 21px; font-weight: 500;
+  color: #c9d0d9; line-height: 1.25; white-space: normal; overflow: hidden; min-width: 0;
+}
 .ev2 .ev2-sent-role { color: var(--c); font-weight: 800; letter-spacing: .04em; }
 .ev2 .ev2-sent-val { color: var(--text, #f1f4f8); font-weight: 700; }
 .ev2 .ev2-tok {
@@ -216,6 +223,25 @@
 }
 .ev2 .ev2-ws-input:disabled { opacity: .4; cursor: default; }
 .ev2 .ev2-ws-ends { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ev2-faint); margin-top: 1px; }
+
+/* ------------------------------------------------------------------ between the breakpoints (polish-2B, ux-round2 L1)
+   1251–1480 px wide (1280×800, 1366×768, a 1440×860 Mac window): a slightly smaller sentence keeps it on one line. */
+@media (min-width: 1251px) and (max-width: 1480px) {
+  .ev2 .ev2-sent { font-size: 19px; }
+  .ev2 .ev2-title-icon { width: 42px; height: 42px; }
+}
+@media (min-width: 1251px) and (max-width: 1340px) {
+  .ev2 .ev2-sent { font-size: 17.5px; }
+}
+/* desktop width but a short window (1280×800, 1366×768): the rows the 1024 layout also trims, so a slot fits without
+   scrolling its body (1366×768: body 321 px for 390 before) */
+@media (min-width: 1251px) and (max-height: 820px) {
+  .ev2 { --ev2-head: 52px; --ev2-bottom: 88px; }
+  .ev2 .ev2-tab { height: 52px; padding-top: 6px; }
+  .ev2 .ev2-title { min-height: 58px; }
+  .ev2 .ev2-cols { padding: 10px 0 8px; }
+  .ev2 .ev2-col-sub { display: none; }
+}
 
 /* ------------------------------------------------------------------ narrow (≤ 1250 px, 1024×700): library → drawer */
 @media (max-width: 1250px) {

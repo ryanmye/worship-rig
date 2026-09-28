@@ -208,8 +208,11 @@ The easy path is `lib.createBinder(ctx)`, the edit.js `bindCtl/bindFn/refresh` p
 - It refreshes only the overlapping bindings, re-applies everything on `songChanged`/`full`, never overwrites a
   focused `text:true` field, and calls `cancelDrag()` on tracked components before a song switch (round2-ui #2).
 - `text:'dirty'` (polish-1): a focused field keeps following outside writes (Tap, the header, another view) until
-  the user types in it (`input`); the draft is then kept until `change` or `focusout`, when the store value is
-  applied again. Song name, tempo and notes use it; prefer it to `text:true` for any typed field.
+  the user types in it (`beforeinput` / `compositionstart` / `input`); the draft is then kept until `change` or
+  `focusout`, and every `focusout` applies the store value again (forced, so a debounced commit followed by
+  outside writes never leaves the stale draft). L-9: an outside write into a focused, untyped field
+  keeps a whole-field selection (a number field is always selected), so the first keystroke replaces it, never
+  appends. Song name, tempo and notes use it; prefer it to `text:true` for any typed field.
 - Step panels that must not open over their chip pass `stepChip({mount, placement:'auto'})` (below / above /
   cover from the room in the host; the Effects who-goes-in column). The slot fader carries a `levelMeter`
   (`controller.slotLevel(i)`), read only while on screen.
@@ -230,8 +233,9 @@ of these:
 - `{text:'Hall', changed?}`: a bold value with no control.
 
 `sub` is the small grey line under the sentence (hidden at ≤ 1250 px). `icon` is a `lib.ICON_PATHS` name or a Node.
-`actions` is a Node or Node[] for the right side of the title bar ("Change instrument ▾", "Vibe: Custom", …). Keep
-the sentence short enough to fit on one line at 1024 (16 px; it ellipsizes). `lib.sentence(parts, {onToken})`
+`actions` is a Node or Node[] for the right side of the title bar ("Change instrument ▾", "Vibe: your own mix", …).
+Keep the sentence short enough to fit on one line at 1024 (16 px). Since polish-2B it wraps (at most 2
+lines; 19 px at 1341–1480 px, 17.5 px at 1251–1340) instead of ellipsizing. `lib.sentence(parts, {onToken})`
 builds the same markup for in-body lines (the Effects tab's three lines).
 
 ### 3.6 The changed dot rule (concept §2, `shared/song-diff.js`, which exists)
@@ -425,8 +429,11 @@ builds the same markup for in-body lines (the Effects tab's three lines).
 ### effects: `panels/effects.js` (mockup `edit-effects.png`)
 
 **Title**
-- "The room is a **Hall**, the echo is **the song’s own**, and the **Pad** has a gentle **chorus**".
-- Action "Vibe: <name|Custom>" menu over `VIBE_PRESETS`, applied with `applyPreset` through `ctx.set`.
+- "The Space is a **Hall**, the echo is **the song’s own**, and the **Pad** has a gentle **chorus**".
+- Action "Vibe: <name|your own mix>" menu over `VIBE_PRESETS`, applied with `applyPreset` through `ctx.set`.
+- Vocabulary (polish-2B, ux-round2 #5): the effect is **Space** (never "Reverb" in a label), a room that matches no
+  preset is **the song’s own** (tab summary "Song’s own", wiring "Space song’s own", sentence "into the song’s own
+  Space" via `lib.spaceNoun`), never "Custom" / "the Space". Tested by `integration-widths.test.mjs` "naming".
 
 **Three lines** (`.ev2-fx-line`: title + blurb | choices | "How much of each sound goes in")
 - **Space.** Preset chips over `SPACE_PRESETS` with size hints (Dry *none*, Room *small*, Stage *medium*, Hall
@@ -446,9 +453,11 @@ builds the same markup for in-body lines (the Effects tab's three lines).
 - **"How much of each sound goes in"** is the **same stepChip** as Perform for each filled slot, bound to
   `slots.<i>.sends.<unit>` with `setLoaded`. Empty slots show a disabled "off". The step panel must stay inside its
   column at 1024 (implementation §2 test).
-- The preset chip shows `matchPreset(list, ctx.valueOf)`; a tweak → no chip selected / "Custom".
-- ui-edit "presets: Space / Echo / Vibe apply through the store; tweak → Custom": hall → size 0.65 in store and
-  engine; vibe 'set' → sync 1/8d + pingpong + space 'stage' + echo 'dotted'; size moved → Custom.
+- The preset chip shows `matchPreset(list, ctx.valueOf)`; a tweak → no chip selected / "Vibe: your own mix".
+- ui-edit "presets: Space / Echo / Vibe apply through the store; tweak → your own mix": hall → size 0.65 in store
+  and engine; vibe 'set' → sync 1/8d + pingpong + space 'stage' + echo 'dotted'; size moved → your own mix.
+- Chips never shrink below their words: the row wraps (`flex: 1 0 auto`; one row at ≥ 1366 px, two at 1280, the
+  3-column grid at ≤ 1250). Song’s own keeps its natural width.
 
 **Engine checks** (ui-edit "FX: reverb / delay (sync, pingpong) / chorus / …")
 - `fx.reverb.size` 0.8 reaches the engine; `fx.delay.feedback` 0.45; `fx.delay.sync` '1/4' → the time control is

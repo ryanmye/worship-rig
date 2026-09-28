@@ -25,6 +25,14 @@ import { h, disposer } from './util.js';
 import * as M from '../../shared/eq-math.js';
 import { ROLE_DEFAULTS } from '../../shared/params.js';
 
+/**
+ * "Flat" / "Shaped · 3 bands" (eq-math's eqSummary says "Custom · …"; Edit keeps "Custom" off screen so the only
+ * "own" thing is the song's own Space/Echo — polish-2B, ux-round2 #5).
+ * @param {object|undefined} eq
+ * @returns {string}
+ */
+export const toneSummary = (eq) => M.eqSummary(eq).replace(/^Custom\b/, 'Shaped');
+
 const SLOT_HEX = ['#ff8a3d', '#3ddc84', '#4aa8ff', '#b784ff'];
 const SLOT_INK = ['#1f0e00', '#002010', '#001a33', '#1a0a33'];
 const CUT_BLUE = '#7cc4ff';
@@ -33,6 +41,12 @@ const DEADZONE = 4;
 const LONG_PRESS_MS = 550;
 const DOUBLE_MS = 400;
 const CUT_Y_DB = -10;
+/**
+ * Below this component width the layout is compact (polish-2B re-tune; was 1180). The full table's fixed columns
+ * (42 + 118 + 150 + 82 + 72 + 66 + 54 + 40 = 624 px) + the 260 px side + 14 gap + 30 padding/border = 928 px, plus
+ * ≥ 150 px for "Acts on" ("FLAT set a boost or cut") = 1078. The compact table needs 476 + 218 + 10 + 22 = 726 + acts.
+ */
+export const COMPACT_BELOW_PX = 1080;
 /** How long the curve waits for engine.getEqResponse to catch up with an edit (see recomputeCurve). */
 const ENGINE_WAIT_MS = 3000;
 
@@ -45,7 +59,10 @@ const ENGINE_WAIT_MS = 3000;
  * @param {number} o.slotIndex     0..3
  * @param {(e:{slotIndex:number, writes:[string, any][], why:string}) => void} [o.onChange]
  * @param {object} [o.controller]  optional: eqAudition(i, mode) / auditionNote(i, midi) take precedence
- * @param {boolean} [o.compact]    force the compact layout (auto below 1180 px wide)
+ * @param {boolean} [o.compact]    force the compact layout (auto below COMPACT_BELOW_PX = 1080 px wide)
+ * @param {number} [o.compactBelowHeight]  also compact while the window is shorter than this (px; default 0 = off).
+ *                                 Edit passes 1000, so the table stays in view under the graph on a laptop.
+ *                                 A short window (window.innerHeight) makes it compact at any width.
  * @param {(msg:string) => void} [o.toast] app toast; default = the component's own
  * @param {boolean} [o.rta=true] draw the analyser behind the curve
  * @returns {{el:HTMLElement, update():void, setSlot(i:number):void, destroy():void, debug():object}}
@@ -90,6 +107,8 @@ export function eqKeyboard(o = {}) {
   let songId; // the song the editor shows (undefined until the first refresh); round3-eq M2
   let resetting = false; // a focused cell is being reverted and blurred: its change event must not write
   let resizes = 0;
+  /** the two captions last drawn in the key strip's air zone (debug / tests) */
+  let airLabels = [];
 
   // ------------------------------------------------------------------------------------------------ DOM
   const presetBtns = Object.keys(M.EQ_PRESETS).map((name) =>
@@ -422,7 +441,7 @@ export function eqKeyboard(o = {}) {
       h('span.eqk-big', {}, h('b', { text: slotName() }), ' plays ', h('b', { text: instLabel(slot) }), ' from ',
         h('b', { text: nm(zone.lo) }), ' to ', h('b', { text: nm(zone.hi) })),
       h('span.eqk-hz', { text: ` (${M.fmtHz(M.midiF(zone.lo))} – ${M.fmtHz(M.midiF(zone.hi))})` }),
-      h('span.eqk-state', { text: ` · ${M.eqSummary(ab === 'b' && abState ? abState.snapEq : slot.eq)}` }));
+      h('span.eqk-state', { text: ` · ${toneSummary(ab === 'b' && abState ? abState.snapEq : slot.eq)}` }));
   }
 
   // ------------------------------------------------------------------------------------------------ table
@@ -709,8 +728,9 @@ export function eqKeyboard(o = {}) {
     if (destroyed) return;
     resizes += 1;
     const w = el.clientWidth;
+    const short = Number(o.compactBelowHeight) > 0 && window.innerHeight < Number(o.compactBelowHeight);
     if (o.compact) el.dataset.compact = 'forced';
-    else if (w && w < 1180) el.dataset.compact = 'auto';
+    else if (w && (w < COMPACT_BELOW_PX || short)) el.dataset.compact = 'auto';
     else delete el.dataset.compact;
     G.dpr = window.devicePixelRatio || 1;
     const r = plot.getBoundingClientRect();
@@ -1238,13 +1258,19 @@ export function eqKeyboard(o = {}) {
     c.fillRect(xa, top, W - G.R - xa, kh);
     const airW = W - G.R - xa;
     if (airW > 70) {
+      // polish-2B: the second line was wider than the strip at ≤ 1440 ("ertones · 4.2–20 kHz", drawn under the
+      // keys): each line takes the longest wording that fits
+      const fit = (words) => words.find((t) => c.measureText(t).width <= airW - 8) || null;
       c.fillStyle = '#8a93a0';
       c.textAlign = 'center';
       c.font = font('700 11px');
-      c.fillText('no keys up here', xa + airW / 2, top + kh / 2 - 7);
+      const l1 = fit(['no keys up here', 'no keys']);
+      if (l1) c.fillText(l1, xa + airW / 2, top + kh / 2 - 7);
       c.font = font('500 11px');
-      c.fillText('overtones · 4.2–20 kHz', xa + airW / 2, top + kh / 2 + 8);
-    }
+      const l2 = fit(['overtones · 4.2–20 kHz', '4.2–20 kHz', 'overtones']);
+      if (l2) c.fillText(l2, xa + airW / 2, top + kh / 2 + 8);
+      airLabels = [l1, l2];
+    } else airLabels = [];
     const tint = (n) => (sb && sb.on ? M.bandDb(sb, M.midiF(n), fs()) : 0);
     const drawKey = (k) => {
       const x0 = xOfSemi(k.l);
@@ -1785,6 +1811,8 @@ export function eqKeyboard(o = {}) {
   const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => resize()) : null;
   ro?.observe(el);
   d.add(() => ro?.disconnect());
+  // a window-height change doesn't resize el; with compactBelowHeight the layout follows it too
+  if (Number(o.compactBelowHeight) > 0) d.listen(window, 'resize', () => resize());
   const unsub = typeof store.subscribe === 'function' ? store.subscribe(() => refresh()) : null;
   d.add(() => unsub?.());
   if (typeof engine?.addEventListener === 'function') {
@@ -1845,7 +1873,7 @@ export function eqKeyboard(o = {}) {
           lo: zone.lo, hi: zone.hi, fLo: zone.fLo, fHi: zone.fHi, source: zone.source, stretched: zone.stretched,
         },
         curveSource: curve.source, curveMismatch, curve: { xs: curve.xs.slice(), db: Array.from(curve.db) },
-        copyText, destroyed, compact: isCompact(), rafActive: !!raf && !destroyed, resizes, songId,
+        copyText, destroyed, compact: isCompact(), rafActive: !!raf && !destroyed, resizes, songId, airLabels,
         nodes: model.bands.map((b) => ({ k: b.k, ...(() => {
           const p = nodePos(b);
           return { x: r.left + p.x, y: r.top + p.y };
@@ -1900,7 +1928,7 @@ export function eqMiniCurve(o = {}) {
   function draw() {
     const song = store.currentSong?.();
     const slot = song?.patch?.slots?.[slotIndex] || null;
-    const summary = slot ? M.eqSummary(slot.eq) : 'Flat';
+    const summary = slot ? toneSummary(slot.eq) : 'Flat';
     let songT = 0;
     try {
       songT = song ? Number(store.transposeSemisOf?.(song)) || 0 : 0;

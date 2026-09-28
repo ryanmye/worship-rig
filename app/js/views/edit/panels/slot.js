@@ -22,13 +22,16 @@
 // only: listInstruments via ctx, and engine/audio.js curveVelocity for the sparkline, as views/edit.js does).
 import {
   h, setText, icon, getIn, relOf, hasParam, signed, pct, semitones, formatInstrumentParam, BLOCKS, changedDot,
-  changeText, editedSince, LEVEL_KEYS, createBinder, section, wordSlider,
+  changeText, editedSince, LEVEL_KEYS, createBinder, section, wordSlider, spaceNoun,
 } from '../lib.js';
 import { defaultSlot, describe, formatValue } from '../../../shared/params.js';
 import { noteName, parseNoteName } from '../../../shared/music.js';
 import { SPACE_PRESETS, matchPreset } from '../../../shared/fx-presets.js';
 import { smartSlidersFor, slotPath, wordFor, formatSmart, describeSlot } from '../../../shared/smart-controls.js';
-import { readEq, shelfWrites, eqSummary } from '../../../shared/eq-math.js';
+import { readEq, shelfWrites, eqSummary as mathSummary } from '../../../shared/eq-math.js';
+
+/** "Flat" / "Shaped · 3 bands": eq-math says "Custom · …", a word Edit keeps off screen (polish-2B, ux-round2 #5). */
+const eqSummary = (eq) => mathSummary(eq).replace(/^Custom\b/, 'Shaped');
 
 /** The engine's own velocity curve (engine/audio.js); a local copy only if that module cannot load (views/edit.js). */
 const curveVelocity = await import('../../../engine/audio.js').then(
@@ -461,7 +464,7 @@ function mountSlot(el, ctx, opts) {
     const amount = { steps: C.AMOUNT_STEPS || AMOUNT_FALLBACK, format: formatAmount, lit: (v) => Number(v) > 0.0005,
       amount: (v) => Number(v) || 0, fine: { min: 0, max: 1, format: (v) => `${Math.round(v * 100)}%` },
       footnote: 'Tap a step: done. Slide for in-between.' };
-    ctl.space = chip('sends.reverb', { label: 'Space', ...amount, hint: 'how much goes into the Space' });
+    ctl.space = chip('sends.reverb', { label: 'Space', ...amount, hint: 'how much goes into Space' });
     ctl.echo = chip('sends.delay', { label: 'Echo', ...amount, hint: 'how much goes into the Echo' });
     ctl.octave = chip('octave', {
       label: 'Octave', steps: C.OCTAVE_STEPS || OCTAVE_FALLBACK, format: formatOctave, lit: (v) => Number(v) !== 0,
@@ -477,7 +480,7 @@ function mountSlot(el, ctx, opts) {
     });
     binder.fn(['patch.fx.reverb'], () => {
       const sp = matchPreset(SPACE_PRESETS, ctx.valueOf);
-      ctl.space.setHint?.(`how much goes into the Space${sp ? ` (${sp.name})` : ''}`);
+      ctl.space.setHint?.(`how much goes into the ${spaceNoun(sp)}`);
     });
     binder.fn([rel], (s) => {
       const sl = slotOf(s);
@@ -754,6 +757,7 @@ function mountSlot(el, ctx, opts) {
       toneEq = C.eqKeyboard({
         store: ctx.store, engine: ctx.engine, controller: ctx.controller, slotIndex: i,
         toast: (msg) => ctx.toast(msg, 'info'),
+        compactBelowHeight: 1000, // polish-2B: full layout only where the table still fits under the graph
       });
     } catch (err) {
       console.warn('[edit] tone editor failed to mount', err);
@@ -959,7 +963,7 @@ function mountSlot(el, ctx, opts) {
     const meta = metaOf(slot);
     const sp = s ? matchPreset(SPACE_PRESETS, ctx.valueOf) : null;
     const parts = describeSlot(slot, meta, {
-      role: role(), name: slot ? displayName(slot, meta) : undefined, spaceName: sp ? sp.name : 'Space',
+      role: role(), name: slot ? displayName(slot, meta) : undefined, spaceName: spaceNoun(s ? sp : null),
       isChanged: (f) => ctx.editState.isChanged(`${REL()}.${f}`),
     });
     let sub;

@@ -218,6 +218,13 @@ export function droneKeyText(s) {
   const pc = Number(s?.hearIn) || 0;
   return s?.minor ? `${keyName(pc, true).replace(/m$/, '')} minor` : `${keyName(pc, false)} major`;
 }
+/**
+ * The Space as a noun after "into the …" (ux-round2 #5: one vocabulary; never a bare "the Space"): a preset's name
+ * ('Hall'), 'dry Space' for Dry, else "song’s own Space" (the room matches no preset).
+ * @param {{id:string, name:string}|null} sp  matchPreset(SPACE_PRESETS, …)
+ * @returns {string}
+ */
+export const spaceNoun = (sp) => (sp ? (sp.id === 'dry' ? 'dry Space' : sp.name) : 'song’s own Space');
 /** Chorus depth → 'gentle' / 'medium' / 'deep' (the wiring lane, the Effects title and its Chorus line). */
 export const chorusWord = (d) => (Number(d) < 0.34 ? 'gentle' : Number(d) < 0.67 ? 'medium' : 'deep');
 
@@ -228,10 +235,10 @@ export const TARGET_LABELS = Object.freeze({
   'slots.2.gain': 'Extra level',
   'slots.3.gain': 'Bass level',
   'drone.gain': 'Drone level',
-  'fx.reverb.returnGain': 'Reverb level',
+  'fx.reverb.returnGain': 'Space level', // polish-2B (ux-round2 #5): the room is "Space" everywhere
   'master.volume': 'Master volume',
-  'macro.intensity': 'Intensity (pad, filter and reverb together)',
-  'macro.wash': 'Wash (reverb size and echo together)',
+  'macro.intensity': 'Intensity (pad, filter and Space together)',
+  'macro.wash': 'Wash (Space size and echo together)',
   none: 'Nothing',
 });
 /** Pitch-bend wheel mode words (views/edit.js BEND_LABELS). */
@@ -388,9 +395,33 @@ export function createBinder(ctx) {
     }
     const v = b.read(song);
     if (!force && sameVal(v, b.last)) return;
-    if (b.text && b.comp.el && b.comp.el.contains(document.activeElement) && (b.text !== 'dirty' || b.dirty)) return;
+    const focused = b.text && b.comp.el && b.comp.el.contains(document.activeElement);
+    if (focused && (b.text !== 'dirty' || b.dirty)) return;
     b.last = v;
-    if (v !== undefined) b.comp.set(v);
+    if (v === undefined) return;
+    if (focused) setClean(b, v);
+    else b.comp.set(v);
+  };
+  /**
+   * L-9: an outside write into a focused field the user has not typed in yet replaces the value and keeps a whole-field
+   * selection, so the first keystroke replaces the new value. A plain `value =` drops the selection and leaves the
+   * caret at the end: select-all, then a Tap/rename, then "13" gave "7713". A number input has no selection API, so it
+   * is always selected (a caret there after an outside write would only ever append digits).
+   */
+  const setClean = (b, v) => {
+    const f = /** @type {HTMLInputElement|HTMLTextAreaElement} */ (document.activeElement);
+    const isNum = f.type === 'number';
+    let all = false;
+    if (!isNum) {
+      try {
+        const n = f.value?.length ?? 0;
+        all = n > 0 && f.selectionStart === 0 && f.selectionEnd === n;
+      } catch {
+        all = false; // an element without the selection API
+      }
+    }
+    b.comp.set(v);
+    if ((isNum || all) && document.activeElement === f) f.select?.();
   };
   const api = {
     /**
@@ -420,19 +451,29 @@ export function createBinder(ctx) {
           el.addEventListener(type, fn, true);
           offs.push(() => el.removeEventListener(type, fn, true));
         };
-        on('input', () => {
+        // L-9: beforeinput / compositionstart mark the draft before the DOM changes (input alone flips it after the
+        // keystroke has landed; an IME composition only fires input at its end)
+        const typed = () => {
           b.dirty = true;
-        });
+        };
+        on('beforeinput', typed);
+        on('compositionstart', typed);
+        on('input', typed);
         on('focusin', () => {
           b.dirty = false;
         });
         on('change', () => {
           b.dirty = false;
         });
+        // an outside write held back while the draft was open shows now. L-9: also after a change that cleared the
+        // flag without committing anything (notes: the debounced flush already ran, then an outside write came), which
+        // left the field on the stale draft while the store held the newer text. focusout comes after change and the
+        // panel's blur flush, so their commits are already in the store. Forced: while dirty, b.last is not updated
+        // (held-back writes and the panel's own debounced commits), so a store that came back to b.last (draft
+        // committed, then outside writes Y and the old value) compared equal and the field kept the stale draft.
         on('focusout', () => {
-          if (!b.dirty) return;
           b.dirty = false;
-          apply(b, ctx.song(), false); // an outside write held back while the draft was open
+          apply(b, ctx.song(), true);
         });
       }
       binds.add(b);

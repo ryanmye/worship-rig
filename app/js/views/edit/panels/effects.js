@@ -5,7 +5,7 @@
 // Logic copied from views/edit.js (presetPicker, the delay sync note, fxSec) so the old view keeps working untouched.
 import {
   h, icon, setText, sentence, createBinder, section, wordSlider, getIn, relOf, hasParam, pct, BLOCKS, changedDot,
-  changeText, editedSince, sameVal, chorusWord,
+  changeText, editedSince, sameVal, chorusWord, spaceNoun,
 } from '../lib.js';
 import { SPACE_PRESETS, ECHO_PRESETS, VIBE_PRESETS, matchPreset, applyPreset } from '../../../shared/fx-presets.js';
 import { describe, formatValue, SLOT_COUNT } from '../../../shared/params.js';
@@ -31,6 +31,8 @@ const ECHO_CHIPS = [
   { id: 'ambient-echo', name: 'Trails', hint: 'long, dark', words: ['', 'long trails'] },
 ];
 const OWN = 'the song’s own';
+/** The Vibe button when no vibe matches (ux-round2 #5: the mockup's words, never "Custom"). */
+const OWN_MIX = 'your own mix';
 const DELAY_KEYS = ['time', 'feedback', 'pingpong', 'tone', 'sync', 'returnGain'];
 const REVERB_KEYS = ['size', 'damp', 'predelay', 'returnGain'];
 const UNITS = [
@@ -141,6 +143,10 @@ export default {
     // stepChip({placement:'auto'}) picks below / above / cover from the room around the chip (polish-1; the panel
     // needs 290 px, 220 at ≤ 1250 px).
     const sphost = h('div.ev2-fx-sphost');
+    // polish-2B: what an open panel really needs (measured: head 38 + 5 × 44 px steps + gaps + padding = 287 at
+    // ≤ 1250 px; + hint and footnote ≈ 335 above). stepChip's defaults (220 / 290) let the chorus panel open 'down'
+    // into 224 px at 1024×700 once the body grew 3 px, and its last two steps hung out of the panel.
+    const panelNeed = () => (globalThis.matchMedia?.('(max-width: 1250px)').matches ? 290 : 340);
 
     // ---- "How much of each sound goes in": the Perform strip's Space/Echo/Chorus chip, one per slot
     const who = { reverb: [], delay: [], chorus: [] };
@@ -157,7 +163,7 @@ export default {
       : plainChip(o));
     const whoCol = (u) => {
       const mods = h('div.ev2-fx-mods', {
-        role: 'group', 'aria-label': `How much of each sound goes into the ${u.name}`,
+        role: 'group', 'aria-label': `How much of each sound goes into ${u.name}`,
       });
       for (let i = 0; i < SLOT_COUNT; i++) {
         const role = BLOCKS[i].role;
@@ -166,11 +172,12 @@ export default {
           label: role,
           owner: u.name,
           color: `var(--slot-${i})`,
-          hint: `how much of the ${role} goes into the ${u.name}`,
+          hint: `how much of the ${role} goes into ${u.name}`,
           testid: `fx-${u.unit}-${i}`,
           onChange,
           mount: sphost,
           placement: 'auto',
+          placementNeed: panelNeed,
         }), { read: (s) => (s.patch.slots[i] ? Number(getIn(s, rel)) || 0 : 0) });
         chip.el.classList.add('ev2-fx-mod');
         chip.el.dataset.slot = String(i);
@@ -229,7 +236,7 @@ export default {
       ...SPACE_PRESETS.map((p) => ({
         id: p.id, name: p.name, hint: SPACE_HINTS[p.id] || '', title: p.blurb, apply: () => applyPreset(p, set),
       })),
-      { id: 'own', name: 'Song’s own', hint: 'as saved', title: 'The room this song was saved with',
+      { id: 'own', name: 'Song’s own', hint: 'as saved', title: 'The Space (reverb) this song was saved with',
         apply: () => applyOwnUnit('reverb', REVERB_KEYS) },
     ]);
     const spaceOwnBtn = space.btns.get('own');
@@ -328,7 +335,7 @@ export default {
     const linesEl = h('div.ev2-fx-lines', {}, lines.reverb.node, lines.delay.node, lines.chorus.node, sphost);
 
     // ---- Vibe menu (title bar action; CONTRACT §5 menus)
-    const vibeLabel = h('span.ev2-fx-vibe-label', { text: 'Vibe: Custom' });
+    const vibeLabel = h('span.ev2-fx-vibe-label', { text: `Vibe: ${OWN_MIX}` });
     const vibeBtn = h('button.ev2-btn.sm.ev2-fx-vibe-btn', {
       type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', dataset: { vibe: '' },
     }, icon('dots', 16), vibeLabel);
@@ -440,10 +447,12 @@ export default {
       spaceOwnBtn.hidden = !showOwnRoom;
       if (showOwnRoom) setText(spaceOwnBtn.querySelector('.ev2-fx-pc-hint'), sizeWord(baseRev('size')).toLowerCase());
       space.mark(sp ? sp.id : showOwnRoom && isOwnRoom() ? 'own' : null);
+      // polish-2B (ux-round2 #5): one vocabulary — the effect is "Space", the saved one "the song’s own"
       const roomWords = sp ? (sp.id === 'dry' ? ['', 'dry'] : [article(sp.name), sp.name]) : ['', OWN];
-      lines.reverb.setTitle(['The room is ', roomWords[0],
+      lines.reverb.setTitle(['The Space is ', roomWords[0],
         { text: roomWords[1], control: revSec, changed: revChanged }]);
-      setText(lines.reverb.blurb, sp ? sp.blurb : 'A room saved with this song. Pick one above, or fine-tune it.');
+      setText(lines.reverb.blurb, sp ? sp.blurb
+        : 'The Space this song was saved with. Pick one above, or fine-tune it.');
 
       // Echo line ("Song's own" only when the baseline's echo matches no preset; concept §5 5b/5c)
       const showOwn = baseEchoCustom();
@@ -497,13 +506,13 @@ export default {
           const bs = b && b.patch && b.patch.slots ? b.patch.slots[i] : null;
           chip.setLoaded(bs ? Number(getIn(bs, `sends.${u.unit}`)) || 0 : undefined);
           if (u.unit === 'reverb') {
-            chip.setHint(`how much of the ${BLOCKS[i].role} goes into the Space${sp ? ` (${sp.name})` : ''}`);
+            chip.setHint(`how much of the ${BLOCKS[i].role} goes into the ${spaceNoun(sp)}`);
           }
         });
       }
 
       // Vibe + header sentence
-      setText(vibeLabel, `Vibe: ${vibe ? vibe.name : 'Custom'}`);
+      setText(vibeLabel, `Vibe: ${vibe ? vibe.name : OWN_MIX}`);
       for (const it of vibeItems) {
         const on = !!vibe && it.dataset.id === vibe.id;
         it.classList.toggle('on', on);
@@ -515,7 +524,7 @@ export default {
         if (s.patch.slots[i] && Number(getIn(s, `patch.slots.${i}.sends.chorus`)) > 0.0005) senders.push(i);
       }
       const parts = [
-        'The room is ', roomWords[0],
+        'The Space is ', roomWords[0],
         { text: roomWords[1], control: () => space.current() || space.row, changed: revChanged },
         ', the echo is ', echoWords[0],
         { text: echoWords[1], control: () => echo.current() || echo.row, changed: delChanged },

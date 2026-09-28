@@ -14,8 +14,11 @@
 .ev2 .ev2-kb-lrow i { width: 18px; height: 5px; border-radius: 3px; background: var(--c); flex: none; }
 .ev2 .ev2-kb-role { font-weight: 700; white-space: nowrap; }
 .ev2 .ev2-kb-rng { color: var(--ev2-faint); font-weight: 600; margin-left: auto; white-space: nowrap; }
-.ev2 .ev2-kb-lrow.dim { opacity: .45; }
-.ev2 .ev2-kb-lrow.muted { opacity: .4; }
+/* polish-2B (ux-round2 §5: "all" 2.17:1, "Pad" 4.19:1): a row that isn't the selected slot dims its bar and greys
+   its name instead of fading the whole row, so the words stay ≥ 4.5:1 */
+.ev2 .ev2-kb-lrow.dim i { opacity: .4; }
+.ev2 .ev2-kb-lrow.dim .ev2-kb-role { color: var(--muted, #a3acb8); font-weight: 600; }
+.ev2 .ev2-kb-lrow.muted i { opacity: .6; }
 .ev2 .ev2-kb-lrow.muted i { background: var(--led-off, #6b7380); }
 .ev2 .ev2-kb-lrow.muted .ev2-kb-role { text-decoration: line-through; color: var(--ev2-faint); }
 
@@ -50,11 +53,15 @@
   background: #d9363a; color: #fff; border: 0; font-size: 21px; letter-spacing: .06em; flex-direction: column; gap: 0;
   box-shadow: 0 0 20px #d9363a44;
 }
-.ev2 .ev2-kb-panic small { font-size: 11px; letter-spacing: .04em; opacity: .75; font-weight: 700; }
+/* polish-2B (ux-round2 §5): "⌘ ." was 11 px at opacity .75 = 3.19:1; full white at 13 px is 4.63:1 on #d9363a */
+.ev2 .ev2-kb-panic small { font-size: 13px; letter-spacing: .04em; color: #fff; font-weight: 700; opacity: 1; }
+/* polish-2A request: hover darkens (#c42f33, 5.52:1 for "⌘ ."), never lightens, as Perform's PANIC does */
+.ev2 .ev2-kb-panic:hover { background: #c42f33; }
 .ev2 .ev2-kb-big:active { filter: brightness(.9); }
 
 @media (max-width: 1250px) {
-  .ev2 .ev2-kb { grid-template-columns: minmax(0, 1fr) 70px 84px 92px; padding: 5px 10px 7px; gap: 8px; }
+  /* polish-2B: 4 / 5 px padding (was 5 / 7) gives the on-screen keys 44 px at 1024×700 (41 before) */
+  .ev2 .ev2-kb { grid-template-columns: minmax(0, 1fr) 70px 84px 92px; padding: 4px 10px 5px; gap: 8px; }
   .ev2 .ev2-kb-leg { display: none; }
   .ev2 .ev2-kb-meter .ev2-cap { display: none; }
   .ev2 .ev2-kb-bars { --kb-bar: 3px; --kb-step: 4px; margin-bottom: 4px; }

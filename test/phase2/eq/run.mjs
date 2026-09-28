@@ -610,6 +610,77 @@ async function runBrowser() {
       await sleep(100);
     });
 
+    // polish-2B: the compact threshold is COMPACT_BELOW_PX = 1080 (was 1180; column math in eq-keyboard.js), and
+    // compactBelowHeight (Edit passes 1000) makes a short window compact at any width. Around the threshold and at
+    // the review's in-between widths: the table and the graph stay inside the card, no cell is cut, and the key
+    // strip's captions fit (the second one was drawn under the keys at ≤ 1440: "ertones · 4.2–20 kHz").
+    await T('compact threshold 1080 px, compactBelowHeight; no overflow around it and at 1280–1512 (screenshots)', async () => {
+      const measure = () => ev(() => {
+        const el = window.__eq.comp.el;
+        const er = el.getBoundingClientRect();
+        const outside = [...el.querySelectorAll('*')].map((e) => [e, e.getBoundingClientRect()])
+          .filter(([, r]) => r.width > 0 && (r.left < er.left - 1 || r.right > er.right + 1)).map(([e]) => e.className);
+        const scrolls = [el, ...el.querySelectorAll('.eqk-table-wrap, .eqk-head, .eqk-lower, .eqk-graph')]
+          .filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.className);
+        const cut = [...el.querySelectorAll('.eqk-bands input, .eqk-bands select')]
+          .filter((e) => e.getBoundingClientRect().width > 0 && e.scrollWidth > e.clientWidth + 1).map((e) => e.value);
+        const d = window.__eq.comp.debug();
+        return { w: Math.round(el.clientWidth), compact: d.compact, air: d.airLabels, outside, scrolls, cut,
+          docW: document.documentElement.scrollWidth, vw: innerWidth };
+      });
+      const { COMPACT_BELOW_PX } = await ev(() => import('/app/js/views/components/eq-keyboard.js')
+        .then((m) => ({ COMPACT_BELOW_PX: m.COMPACT_BELOW_PX })));
+      assert.equal(COMPACT_BELOW_PX, 1080);
+      const rows = [];
+      for (const vw of [1100, 1112, 1124, 1280, 1366, 1440, 1512]) {
+        await page.setViewportSize({ width: vw, height: 900 });
+        await sleep(150);
+        await settle();
+        const m = await measure();
+        assert.equal(m.compact, m.w < 1080, `${vw}: compact iff the card is < 1080 px (${m.w})`);
+        assert.deepEqual(m.outside, [], `${vw}: nothing outside the card`);
+        assert.deepEqual(m.scrolls, [], `${vw}: nothing scrolls sideways`);
+        assert.deepEqual(m.cut, [], `${vw}: every band cell shows its whole value`);
+        assert.ok(m.docW <= m.vw, `${vw}: page fits`);
+        assert.ok(m.air.length === 0 || m.air.some(Boolean), `${vw}: a key-strip caption fits (${m.air})`);
+        rows.push(`${vw}→${m.w} px ${m.compact ? 'compact' : 'full'} ${JSON.stringify(m.air)}`);
+        if (vw === 1112 || vw === 1280) await shot(`eq-${vw}x900.png`);
+      }
+      console.log(`    info ${rows.join(' · ')}`);
+      // compactBelowHeight: a 1440×860 window is compact, 1440×1080 is full (width 1408 either way); window
+      // resizes are followed, and the extra window listener goes with destroy()
+      const h = await ev(async () => {
+        const { eqKeyboard } = window.__eq;
+        const { store, engine } = window.__rig;
+        const c = eqKeyboard({ store, engine, slotIndex: 0, compactBelowHeight: 1000, rta: false });
+        document.getElementById('host').append(c.el);
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const out = { at: innerHeight, compact: c.debug().compact };
+        c.destroy();
+        return out;
+      });
+      assert.deepEqual(h, { at: 900, compact: true }, 'compactBelowHeight 1000 at 900 px tall');
+      await page.setViewportSize({ width: 1440, height: 1080 });
+      await sleep(150);
+      const tall = await ev(async () => {
+        const { eqKeyboard } = window.__eq;
+        const { store, engine } = window.__rig;
+        const c = eqKeyboard({ store, engine, slotIndex: 0, compactBelowHeight: 1000, rta: false });
+        document.getElementById('host').append(c.el);
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const full = c.debug().compact;
+        window.dispatchEvent(new Event('resize')); // (still 1080 tall: stays full)
+        await new Promise((r) => requestAnimationFrame(r));
+        const after = c.debug().compact;
+        c.destroy();
+        return { full, after };
+      });
+      assert.deepEqual(tall, { full: false, after: false }, 'full at 1080 px tall');
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await sleep(100);
+      await settle();
+    });
+
     await T('eqMiniCurve: hidden while flat, a sparkline once shaped, click opens; follows the store', async () => {
       const r = await ev(async () => {
         const { eqMiniCurve, params: { defaultSlot } } = window.__eq;
@@ -638,7 +709,7 @@ async function runBrowser() {
       assert.equal(r.shaped, true, 'shown once a band does something');
       assert.ok(r.lit > 100, `drew something (${r.lit} px)`);
       assert.equal(r.opened, 1);
-      assert.match(r.label, /Custom · 1 band/);
+      assert.match(r.label, /Shaped · 1 band/);
       assert.equal(r.attached, false);
     });
 

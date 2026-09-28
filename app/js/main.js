@@ -7,7 +7,7 @@ import { MidiInput } from './midi.js';
 import { Recorder } from './recorder.js';
 import { createController, engineLatency } from './controller.js';
 import { mountPerform } from './views/perform.js';
-import { h, setText, segmented, fader, meter } from './views/components/index.js';
+import { h, setText, segmented, fader, meter, openOverlay } from './views/components/index.js';
 
 const $ = (id) => document.getElementById(id);
 const rig = globalThis.rig || null;
@@ -254,8 +254,57 @@ $('master-mount').append(master.el);
 $('meter-mount').append(meter({ engine, compact: true, label: 'Output level' }).el);
 
 // ------------------------------------------------------------------------------------------ banners
-// Full-width, persistent, under the top bar (UX B1): stalled sound, second window, library not saving, newer library.
+// Under the top bar (UX B1). Stalled sound keeps its full-width banner (index.html; brief, and it has the one action
+// that matters). The persistent ones (second window, library not saving, newer library) share ONE 32 px strip
+// (polish-2A, ux-round2 L2: 58–66 px each took the faders' throw for a whole service): the most urgent message on one
+// line with its buttons, "+N" when there are more, and a chevron that drops the full texts over the stage (never
+// taller in the layout). Esc or a tap outside folds it back.
 const bannersEl = $('banners');
+const BANNER_RANK = { danger: 0, warn: 1, info: 2 };
+const bstripList = h('div.bstrip-list');
+const bstripCount = h('span.bstrip-count');
+const bstripMore = h(
+  'button.bstrip-more',
+  {
+    type: 'button', 'aria-expanded': 'false', 'aria-label': 'Show the whole message', title: 'Show the whole message',
+    'data-testid': 'banner-expand',
+  },
+  bstripCount,
+  h('span.bstrip-chev', { 'aria-hidden': 'true', text: '▾' }),
+);
+const bstrip = h('div.bstrip', { hidden: true, 'data-testid': 'banner-strip' }, bstripList, bstripMore);
+bannersEl.append(bstrip);
+let closeBstrip = null;
+function setBstripOpen(open) {
+  if (!open) return closeBstrip?.('api');
+  if (closeBstrip) return;
+  bstrip.classList.add('open');
+  bstripMore.setAttribute('aria-expanded', 'true');
+  closeBstrip = openOverlay({
+    el: bstripList,
+    anchors: [bstripMore],
+    group: 'banners',
+    onClose: () => {
+      bstrip.classList.remove('open');
+      bstripMore.setAttribute('aria-expanded', 'false');
+      closeBstrip = null;
+    },
+  });
+}
+bstripMore.addEventListener('click', () => setBstripOpen(!closeBstrip));
+function layoutBstrip() {
+  const items = [...banners.values()].sort((a, b) => a.rank - b.rank || a.order - b.order);
+  items.forEach((b, i) => {
+    if (bstripList.children[i] !== b.el) bstripList.insertBefore(b.el, bstripList.children[i] || null);
+  });
+  const n = items.length;
+  bstrip.hidden = n === 0;
+  bstrip.dataset.kind = n ? items[0].kind : '';
+  setText(bstripCount, n > 1 ? `+${n - 1}` : '');
+  bstripMore.setAttribute('aria-label', n > 1 ? `Show all ${n} messages` : 'Show the whole message');
+  if (!n) setBstripOpen(false);
+}
+let bannerOrder = 0;
 const audioBanner = $('audio-banner');
 const restartBtn = $('btn-restart-audio');
 restartBtn.addEventListener('click', () => {
@@ -265,34 +314,48 @@ restartBtn.addEventListener('click', () => {
     restartBtn.disabled = false;
   });
 });
-const banners = new Map(); // id → {el, msg, btns}
+const banners = new Map(); // id → {el, sig, kind, rank, order}
 /**
- * Show / update / hide a banner.
+ * Show / update / hide a persistent banner (one line of the shared strip).
  * @param {string} id
- * @param {null|{text:string, kind?:'danger'|'warn'|'info', actions?:Array<{label:string, run:()=>void, testid?:string}>}} b
+ * @param {null|{text:string, short?:string, kind?:'danger'|'warn'|'info',
+ *   actions?:Array<{label:string, run:()=>void, testid?:string}>}} b
+ *   short: the words the folded strip shows (the full text shows when it is unfolded, and as the tooltip)
  */
 function setBanner(id, b) {
-  let cur = banners.get(id);
+  const cur = banners.get(id);
   if (!b) {
     if (cur) {
       cur.el.remove();
       banners.delete(id);
+      layoutBstrip();
       layoutBanners();
     }
     return;
   }
-  const sig = `${b.kind}|${b.text}|${(b.actions || []).map((a) => a.label).join(',')}`;
+  const kind = b.kind || 'warn';
+  const sig = `${kind}|${b.text}|${b.short || ''}|${(b.actions || []).map((a) => a.label).join(',')}`;
   if (cur && cur.sig === sig) return;
   const msg = h('span.banner-msg', { text: b.text });
-  const el = h(`div.banner.${b.kind || 'warn'}`, { role: b.kind === 'danger' ? 'alert' : 'status', 'data-testid': `banner-${id}` }, msg);
+  const short = b.short ? h('span.banner-short', { text: b.short, 'aria-hidden': 'true' }) : null;
+  const el = h(
+    `div.banner.${kind}`,
+    {
+      role: kind === 'danger' ? 'alert' : 'status', 'data-testid': `banner-${id}`, title: b.text,
+      class: short ? 'has-short' : '',
+    },
+    h('span.banner-dot', { 'aria-hidden': 'true' }),
+    short,
+    msg,
+  );
   for (const a of b.actions || []) {
     const btn = h('button.btn.banner-btn', { type: 'button', 'data-testid': a.testid || null }, a.label);
     btn.addEventListener('click', () => a.run(btn));
     el.append(btn);
   }
   if (cur) cur.el.replaceWith(el);
-  else bannersEl.append(el);
-  banners.set(id, { el, sig });
+  banners.set(id, { el, sig, kind, rank: BANNER_RANK[kind] ?? 1, order: cur ? cur.order : ++bannerOrder });
+  layoutBstrip();
   layoutBanners();
 }
 function layoutBanners() {
@@ -314,7 +377,10 @@ function renderStatusBanners(s) {
   setBanner(
     'instance',
     s.instance === 'secondary'
-      ? { kind: 'warn', text: s.instanceMessage || 'Worship Rig is already open in another window. This one is muted and read-only — close it and use the other window.' }
+      ? { kind: 'warn', short: 'Another Worship Rig window is open — this one is muted',
+        text: s.instanceMessage
+          || 'Worship Rig is already open in another window. This one is muted and read-only — '
+          + 'close it and use the other window.' }
       : null,
   );
   const lib = s.library || {};
@@ -322,12 +388,14 @@ function renderStatusBanners(s) {
   if (s.instance !== 'secondary' && lib.readOnly) {
     libBanner = {
       kind: 'danger',
+      short: 'Changes are NOT being saved',
       text: lib.readOnlyReason === 'backup-failed' ? 'Your saved library could not be read or backed up, so changes are NOT being saved. Export it from Settings before you edit.' : 'Changes are not being saved right now.',
       actions: locked() ? [] : [{ label: 'Open Settings', run: () => openSettings({ section: 'backups' }) }],
     };
   } else if (lib.persistError) {
     libBanner = {
       kind: 'warn',
+      short: 'Latest changes not saved yet — retrying',
       text: 'Your latest changes could not be saved yet — retrying. To be safe, export the library from Settings.',
       actions: locked() ? [] : [{ label: 'Open Settings', run: () => openSettings({ section: 'backups' }) }],
     };
@@ -362,7 +430,12 @@ function renderStatusBanners(s) {
         setBanner('other-library', null);
       },
     });
-    setBanner('other-library', { kind: 'info', text: `A newer song library (saved ${when}) is available from an earlier session.`, actions });
+    setBanner('other-library', {
+      kind: 'info',
+      short: 'A newer song library is available',
+      text: `A newer song library (saved ${when}) is available from an earlier session.`,
+      actions,
+    });
   } else setBanner('other-library', null);
 }
 
@@ -512,6 +585,9 @@ const setLed = (el, cls) => {
 let lastStatus = null;
 let midiHintShown = false;
 let midiPendingShown = false;
+// polish-2A ("## l3" UI follow-up): pending is info, never a failure, and a reload would not help
+const MIDI_PENDING_TEXT = 'MIDI starting… answer the browser’s permission prompt if it appears.';
+const MIDI_DENIED_TEXT = 'MIDI was blocked — allow it in the browser’s site settings.';
 controller.onStatus((s) => {
   const m = s.midi || {};
   if (m.connected) {
@@ -523,10 +599,10 @@ controller.onStatus((s) => {
     setText(midiName, 'No device');
     midiName.classList.add('off');
   } else if (m.pending || m.reason === 'pending') {
-    // polish-1 (local L-3 follow-up): Web MIDI has not answered yet (Chrome's permission prompt, a slow CoreMIDI);
-    // it attaches by itself when it does, so this is "waiting", not an error
+    // polish-1 / polish-2A (local L-3 follow-up): Web MIDI has not answered yet (Chrome's permission prompt, a slow
+    // CoreMIDI); it attaches by itself when it does, so this is "starting", not an error
     setLed(midiLed, 'warn');
-    setText(midiName, 'Waiting…');
+    setText(midiName, 'Starting…');
     midiName.classList.add('off');
   } else if (m.reason) {
     setLed(midiLed, 'bad');
@@ -537,8 +613,10 @@ controller.onStatus((s) => {
     setText(midiName, 'Waiting…');
   }
   const pending = !!(m.pending || m.reason === 'pending');
-  $('midi-status').title = m.connected ? `MIDI input: ${m.name}` : pending ? 'Waiting for MIDI permission'
-    : m.reason ? `MIDI unavailable (${m.reason})` : 'MIDI input';
+  $('midi-status').title = m.connected ? `MIDI input: ${m.name}` : pending ? MIDI_PENDING_TEXT
+    : m.reason === 'denied' && !isElectron ? MIDI_DENIED_TEXT
+      : m.reason === 'failed' ? 'MIDI could not start — unplug and replug the keyboard'
+        : m.reason ? `MIDI unavailable (${m.reason})` : 'MIDI input';
 
   const a = s.audio;
   const lat = Number(s.latencyMs) || 0;
@@ -558,11 +636,11 @@ controller.onStatus((s) => {
   if (pending && !midiPendingShown) {
     midiPendingShown = true;
     toast(isElectron ? 'MIDI is taking a while to start. The computer keys A–; play notes meanwhile.'
-      : 'Waiting for MIDI permission — click Allow in Chrome’s prompt to play your keyboard.', 'info', { ms: 10000 });
+      : MIDI_PENDING_TEXT, 'info', { ms: 10000 });
   }
   if (!midiHintShown && !pending && m.reason && m.reason !== lastStatus?.midi?.reason) {
     midiHintShown = true;
-    if (m.reason === 'denied') toast(isElectron ? 'MIDI access was denied.' : 'MIDI is blocked for this page. Click the icon at the left of the address bar, allow MIDI devices, then reload.', 'warn', { ms: 10000 });
+    if (m.reason === 'denied') toast(isElectron ? 'MIDI access was denied.' : MIDI_DENIED_TEXT, 'warn', { ms: 10000 });
     else if (m.reason === 'unsupported') toast('This browser has no Web MIDI. Use Chrome or the Worship Rig app to play a MIDI keyboard.', 'warn', { ms: 10000 });
     else toast('MIDI could not start. Unplug and replug the keyboard, then reload.', 'warn');
   }

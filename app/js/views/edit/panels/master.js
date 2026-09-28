@@ -218,7 +218,7 @@ export default {
     const chgText = h('span');
     const chg = h('span.ev2-chg', {}, changedDot(), chgText);
     const foot = h('div.ev2-foot.ev2-master-foot', {},
-      button('Room, echo and chorus are on the Effects tab', () => ctx.select('effects'), {
+      button('Space, Echo and Chorus are on the Effects tab', () => ctx.select('effects'), {
         class: 'ev2-linkbtn', dataset: { goto: 'effects' },
       }),
       chg,

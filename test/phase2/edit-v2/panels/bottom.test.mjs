@@ -111,6 +111,53 @@ test('bottom: legend + range bars follow the slots (range, muted, selected, empt
   t.assertNoConsoleErrors();
 });
 
+test('bottom: PANIC "⌘ ." ≥ 4.5:1 at rest and on hover, at 1440 and 1024 (polish-2A request, ux-round2 #6)',
+  async () => {
+    const t = await mountA();
+    const sel = `${t.host} [data-action="panic"] small`;
+    // WCAG 2.x: the label's colour × its cumulative opacity, over the button's own background (opaque #d9363a)
+    const ratio = () => t.ev((s) => {
+      const el = document.querySelector(s);
+      const rgb = (c) => (/rgba?\(([^)]+)\)/.exec(c)[1]).split(/[ ,/]+/).filter(Boolean).map(Number);
+      const lum = ([r, g, b]) => [r, g, b].map((v) => {
+        const u = v / 255;
+        return u <= 0.03928 ? u / 12.92 : ((u + 0.055) / 1.055) ** 2.4;
+      }).reduce((a, x, i) => a + x * [0.2126, 0.7152, 0.0722][i], 0);
+      const btn = el.closest('button');
+      const bg = rgb(getComputedStyle(btn).backgroundColor);
+      const fg = rgb(getComputedStyle(el).color);
+      let op = fg.length > 3 ? fg[3] : 1;
+      for (let e = el; e && e !== btn.parentElement; e = e.parentElement) op *= Number(getComputedStyle(e).opacity);
+      const mix = [0, 1, 2].map((i) => fg[i] * op + bg[i] * (1 - op));
+      const [a, b] = [lum(mix), lum(bg)].sort((x, y) => y - x);
+      return { ratio: (a + 0.05) / (b + 0.05), px: parseFloat(getComputedStyle(el).fontSize), bgA: bg[3] ?? 1,
+        text: el.textContent };
+    }, sel);
+    const vp0 = t.page.viewportSize();
+    try {
+      for (const w of [1440, 1024]) {
+        await t.page.setViewportSize({ width: w, height: w === 1024 ? 700 : 860 });
+        await t.page.mouse.move(2, 2);
+        const rest = await ratio();
+        assert.equal(rest.text, '⌘ .');
+        assert.equal(rest.bgA, 1, 'the button background is opaque (no ancestor compositing needed)');
+        assert.ok(rest.ratio >= 4.5, `"⌘ ." at rest ${rest.ratio.toFixed(2)}:1 at ${w}`);
+        assert.ok(rest.px >= 12, `"⌘ ." is ${rest.px}px at ${w}`);
+        await t.page.hover(`${t.host} [data-action="panic"]`);
+        const hov = await ratio();
+        await t.sleep(250); // past any background transition
+        const hov2 = await ratio();
+        assert.ok(hov2.ratio > rest.ratio + 0.5,
+          `hover darkens to #c42f33, never lightens (${hov2.ratio.toFixed(2)} vs ${rest.ratio.toFixed(2)})`);
+        assert.ok(hov.ratio >= 4.5 && hov2.ratio >= 4.5, `"⌘ ." on hover ${hov2.ratio.toFixed(2)}:1 at ${w}`);
+      }
+    } finally {
+      await t.page.mouse.move(2, 2);
+      if (vp0) await t.page.setViewportSize(vp0);
+    }
+    t.assertNoConsoleErrors();
+  });
+
 test('bottom: on-screen keyboard plays through controller.perform (ui-edit port) + releaseAll on destroy',
   async () => {
   const t = await mountA();

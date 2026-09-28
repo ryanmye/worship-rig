@@ -694,7 +694,7 @@ test('slot: Advanced — pan/transpose/voices/bend/pedal, width/EQ by hasParam, 
     await fresh(t, 'factory:sunday-pad-piano', 'slot:0');
     await openSec(t, 'slot0-adv');
     assert.match(await t.page.textContent(`${t.host} details[data-sec="slot0-adv"] .ev2-sec-sum`),
-      /^Pan Center · (Width \d+% · )?(Tone (Flat|Custom · \d+ bands?) · )?Transpose 0 · Voices All · Pitch bend (On|Off)$/);
+      /^Pan Center · (Width \d+% · )?(Tone (Flat|Shaped · \d+ bands?) · )?Transpose 0 · Voices All · Pitch bend (On|Off)$/);
     // ui-edit "pan / octave / transpose / sustain / mono reach the engine" (octave + sustain: see the chip test)
     await t.setRange(rangeOf(t, 'slots.0.pan'), 250);
     await t.until(() => Math.abs(window.__rig.engine.getParam('slots.0.pan') + 0.5) < 0.01).catch(async (err) => {
@@ -744,7 +744,7 @@ test('slot: Advanced — pan/transpose/voices/bend/pedal, width/EQ by hasParam, 
       await openSec(t, 'slot0-tone');
       await t.until((h) => !!document.querySelector(`${h} .ev2-slot-tone-host .eqk`), t.host);
       assert.match(await t.page.textContent(`${t.host} details[data-sec="slot0-tone"] .ev2-sec-sum`),
-        /^(Flat|Custom · \d+ bands?)$/);
+        /^(Flat|Shaped · \d+ bands?)$/);
       const d0 = await t.ev(() => window.__rig.view.instance._debug.tone());
       await t.ev(() => {
         document.querySelector('details[data-sec="slot0-tone"]').open = false;

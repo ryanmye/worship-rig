@@ -221,7 +221,9 @@ test('song: polish-1 text:"dirty" — tempo and notes follow outside writes whil
   await t.click(tempo);
   await outside('tempo', 88);
   await t.until((s) => document.querySelector(s).value === '88', tempo);
-  await t.page.keyboard.press('Control+A');
+  // L-9: ControlOrMeta, not Control. Playwright on macOS maps Control+A to moveToBeginningOfParagraph (caret to 0), so
+  // '13' landed before '88' = '1388' on the Mac (2/2); Linux Chromium has no Emacs bindings and selected all.
+  await t.page.keyboard.press('ControlOrMeta+A');
   await t.page.keyboard.type('13');
   await outside('tempo', 99);
   await t.sleep(80);
@@ -251,6 +253,87 @@ test('song: polish-1 text:"dirty" — tempo and notes follow outside writes whil
   await outside('tempo', null);
   t.assertNoConsoleErrors();
 });
+
+test('song: L-9 — tempo and notes drafts stay exactly as typed under an outside write storm (store.set / 20 ms)',
+  async (tc) => {
+    tc.after(() => t.ev(() => clearInterval(window.__l9))); // a failed assertion must not leave the storm running
+    const H = t.host;
+    const id = await t.ev(() => window.__rig.store.currentSong().id);
+    const storm = (rel, vals) => t.ev(([i, r, vs]) => {
+      window.__l9n = 0;
+      window.__l9 = setInterval(() => window.__rig.store.set(`songs.${i}.${r}`, vs[window.__l9n++ % vs.length]), 20);
+    }, [id, rel, vals]);
+    const outsideSet = (rel, v) => t.ev(([i, r, x]) => window.__rig.store.set(`songs.${i}.${r}`, x), [id, rel, v]);
+    const calm = () => t.ev(() => {
+      clearInterval(window.__l9);
+      return window.__l9n;
+    });
+    const typeSlow = async (text) => {
+      for (const ch of text) {
+        await t.page.keyboard.type(ch);
+        await t.sleep(25); // storm writes land between the keys
+      }
+    };
+    // tempo: follows while untyped; select-all, writes before the first key (still selected: replaced, never
+    // appended), then every key while writes keep coming; Enter commits exactly the typed text
+    const tempo = `${H} .ev2-song-tempo`;
+    const tempos = [61, 88, 99, 147, 203];
+    await t.click(tempo);
+    await storm('tempo', tempos);
+    await t.sleep(120);
+    assert.ok(tempos.map(String).includes(await t.page.inputValue(tempo)), 'the untyped field follows the storm');
+    await t.page.keyboard.press('ControlOrMeta+A');
+    await t.sleep(60);
+    await typeSlow('132');
+    await t.sleep(200);
+    assert.equal(await t.page.inputValue(tempo), '132', 'tempo draft is exactly the typed text');
+    assert.ok(await calm() > 10, 'the storm ran');
+    await t.page.keyboard.press('Enter');
+    await t.until((i) => window.__rig.store.getSong(i).tempo === 132, id);
+    assert.equal(await t.page.inputValue(tempo), '132');
+    // notes: > 500 ms of storm after typing, so the debounced commit fires mid-storm and must not re-apply a stale
+    // value; on blur the field shows what the store holds (the storm's last write came after that commit)
+    const area = `${H} textarea.ev2-song-notes`;
+    const notes = ['Storm one.', 'Storm two, longer.', 'S3'];
+    await t.click(area);
+    await storm('notes', notes);
+    await t.sleep(120);
+    assert.ok(notes.includes(await t.page.inputValue(area)), 'the untyped notes follow the storm');
+    await t.page.keyboard.press('ControlOrMeta+A');
+    await t.sleep(60);
+    await typeSlow('Typed under fire');
+    await t.sleep(700);
+    assert.equal(await t.page.inputValue(area), 'Typed under fire', 'notes draft is exactly the typed text');
+    assert.ok(await calm() > 10, 'the storm ran');
+    await t.ev(() => document.activeElement.blur());
+    await t.sleep(60);
+    const kept = await t.ev((i) => window.__rig.store.getSong(i).notes, id);
+    assert.ok(notes.includes(kept), 'the storm wrote after the debounced commit (last writer wins)');
+    assert.equal(await t.page.inputValue(area), kept, 'after blur the field shows the store, not the stale draft');
+    // and a draft typed after the storm is what blur commits
+    await t.click(area);
+    await t.page.keyboard.press('ControlOrMeta+A');
+    await t.page.keyboard.type('Mine.');
+    await t.ev(() => document.activeElement.blur());
+    await t.until((i) => window.__rig.store.getSong(i).notes === 'Mine.', id);
+    assert.equal(await t.page.inputValue(area), 'Mine.');
+    // the debounced commit, then outside writes that bring the store back to the value the field had before the
+    // draft: blur shows the store, never the committed-then-superseded draft (focusout re-applies forced)
+    await t.click(area);
+    await t.page.keyboard.press('ControlOrMeta+A');
+    await t.page.keyboard.type('Stale draft');
+    await t.until((i) => window.__rig.store.getSong(i).notes === 'Stale draft', id); // the 500 ms debounce
+    await outsideSet('notes', 'Elsewhere');
+    await outsideSet('notes', 'Mine.');
+    await t.ev(() => document.activeElement.blur());
+    await t.sleep(60);
+    assert.equal(await t.page.inputValue(area), 'Mine.', 'blur shows the store after a debounced commit');
+    await t.ev(([i]) => {
+      window.__rig.store.set(`songs.${i}.notes`, '');
+      window.__rig.store.set(`songs.${i}.tempo`, null);
+    }, [id]);
+    t.assertNoConsoleErrors();
+  });
 
 test('song: 1024×700 — focus on mount, fits with no horizontal (or vertical) scroll, change line', async () => {
   // the same page, resized and remounted with {focus:'tempo'} (a second boot doubles the cost on the loaded box)

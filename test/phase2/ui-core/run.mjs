@@ -1250,6 +1250,8 @@ test('no layout shift when values change (chord, key, transpose, fader values)',
       return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)].join(',');
     });
     const a = snap();
+    // polish-2A: the readout is live only while ≥ 2 keys are held, so the fake chord comes with a fake 'notes'
+    rig.controller.dispatchEvent(new CustomEvent('notes', { detail: { held: new Set([46, 63, 67, 70]) } }));
     rig.controller.dispatchEvent(new CustomEvent('chord', { detail: { chord: { name: 'Ebmaj9/Bb' } } }));
     const s = rig.store.currentSong();
     rig.store.set(`songs.${s.id}.hearIn`, 1);
@@ -1260,6 +1262,7 @@ test('no layout shift when values change (chord, key, transpose, fader values)',
     rig.store.set(`songs.${s.id}.hearIn`, s.hearIn);
     rig.store.set(`songs.${s.id}.minor`, s.minor);
     rig.store.set(`songs.${s.id}.patch.slots.0.gain`, s.patch.slots[0].gain);
+    rig.controller.dispatchEvent(new CustomEvent('notes', { detail: { held: new Set() } }));
     rig.controller.dispatchEvent(new CustomEvent('chord', { detail: { chord: null } }));
     await t.sleep(60);
     return { a, b, sels };
@@ -1998,32 +2001,431 @@ test('H-v2 screenshots: perform, perform-1024, perform-quick, perform-step, perf
   await selectIndex(0);
 });
 
-test('polish-1 (local L-3): MIDI "pending" reads as waiting — amber lamp, a waiting toast, never "could not start"',
+test('polish-1 / polish-2A (local L-3): MIDI "pending" = starting (info), "denied" → site settings, "failed" → replug',
   async () => {
     await clearToasts();
     const r = await page.evaluate(async () => {
       const c = window.__rig.controller;
       const real = { ...c.status };
       const fire = (midi) => c.dispatchEvent(new CustomEvent('status', { detail: { ...real, midi } }));
+      const read = () => {
+        const led = document.getElementById('midi-led');
+        return {
+          name: document.getElementById('midi-name').textContent,
+          warn: led.classList.contains('warn'),
+          bad: led.classList.contains('bad'),
+          title: document.getElementById('midi-status').title,
+          toasts: [...document.querySelectorAll('#toasts > *')].map((x) => ({ text: x.textContent, kind: x.dataset.kind })),
+        };
+      };
+      const out = {};
       fire({ available: false, connected: false, reason: 'pending', pending: true, inputs: [] });
       await new Promise((res) => setTimeout(res, 50));
-      const led = document.getElementById('midi-led');
-      const out = {
-        name: document.getElementById('midi-name').textContent,
-        warn: led.classList.contains('warn'),
-        bad: led.classList.contains('bad'),
-        title: document.getElementById('midi-status').title,
-        toasts: [...document.querySelectorAll('#toasts > *')].map((x) => x.textContent),
-      };
+      out.pending = read();
+      fire({ available: false, connected: false, reason: 'denied', pending: false, inputs: [] });
+      await new Promise((res) => setTimeout(res, 30));
+      out.denied = read();
+      fire({ available: false, connected: false, reason: 'failed', pending: false, inputs: [] });
+      await new Promise((res) => setTimeout(res, 30));
+      out.failed = read();
       c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } })); // back to the real status
       return out;
     });
-    assert.equal(r.name, 'Waiting…');
-    assert.ok(r.warn && !r.bad, 'amber, not red');
-    assert.equal(r.title, 'Waiting for MIDI permission');
-    assert.ok(r.toasts.some((x) => /Waiting for MIDI permission/.test(x)), `waiting toast (${r.toasts.join(' | ')})`);
-    assert.ok(!r.toasts.some((x) => /could not start/.test(x)), 'no "could not start" toast');
+    const P = 'MIDI starting… answer the browser’s permission prompt if it appears.';
+    assert.equal(r.pending.name, 'Starting…');
+    assert.ok(r.pending.warn && !r.pending.bad, 'amber, not red');
+    assert.equal(r.pending.title, P);
+    const pt = r.pending.toasts.find((x) => x.text.includes(P));
+    assert.ok(pt, `a "starting" toast (${r.pending.toasts.map((x) => x.text).join(' | ')})`);
+    assert.equal(pt.kind, 'info', 'pending is info, not a warning');
+    assert.ok(!r.pending.toasts.some((x) => /could not start|reload/i.test(x.text)), 'no failure / reload advice while pending');
+    // the lamp and its tooltip carry the advice (a toast only shows once per session: midiHintShown)
+    assert.equal(r.denied.name, 'Blocked');
+    assert.ok(r.denied.bad, 'denied is red');
+    assert.equal(r.denied.title, 'MIDI was blocked — allow it in the browser’s site settings.');
+    assert.equal(r.failed.name, 'Error');
+    assert.match(r.failed.title, /unplug and replug the keyboard/);
     await clearToasts();
+  });
+
+// ------------------------------------------------------------------------------------------ polish-2A (ux-round2)
+const VIEWPORTS = [[1280, 800], [1366, 768], [1440, 860], [1440, 900], [1512, 900], [1024, 700]];
+
+/**
+ * In-page: every Perform / top-bar element that clips (overflow ≠ visible, or an ellipsis) or must stay whole
+ * (chips, tiles, buttons, lamps, the song name) and whose content is wider or taller than its box.
+ */
+const OVERFLOW_PROBE = () => {
+  const vis = (el) => el.offsetParent !== null && getComputedStyle(el).visibility !== 'hidden';
+  // scrollers by design (setlist strip, notes), the inputs themselves, and overlays that are not open here
+  // (+ a connected keyboard's name: any length, so it ellipsizes by design; the MIDI *state* words must not)
+  const skip = '.setlist-strip, .notes-text, .piano, .fader-input, .wheel-input, .drone-readout, .step-panel, .qs, .keypop, .fx-more, '
+    + '.lvl-meter, .midi-name:not(.off)';
+  const FIT = '.fxc, .fxpill, .mchip, .ontile .ot-label, .seg, .key-btn, .btn, .toggle, .hold-btn, .tb-item, .tb-status, .nav-next-name, '
+    + '.wheel-target, .song-name, .song-sub, .transpose-row, .drone-head, .drone-toggles, .drone-row, .slot-mods, .slot-tag, .p-head > *, .p-main > *';
+  const name = (el) => `${el.tagName.toLowerCase()}.${[...el.classList].join('.')}${el.dataset.testid ? `[${el.dataset.testid}]` : ''} `
+    + `"${el.textContent.trim().replace(/\s+/g, ' ').slice(0, 28)}"`;
+  const bad = new Set();
+  for (const root of [document.getElementById('topbar'), document.getElementById('banners'), document.getElementById('view-perform')]) {
+    for (const el of root.querySelectorAll('*')) {
+      if (!vis(el) || el.closest(skip)) continue;
+      const cs = getComputedStyle(el);
+      const clipsX = cs.overflowX !== 'visible' || cs.textOverflow === 'ellipsis' || el.matches(FIT);
+      const clipsY = cs.overflowY !== 'visible' || el.matches(FIT);
+      if (clipsX && el.scrollWidth > el.clientWidth + 1) bad.add(`X ${name(el)} ${el.scrollWidth}>${el.clientWidth}`);
+      if (clipsY && el.scrollHeight > el.clientHeight + 1) bad.add(`Y ${name(el)} ${el.scrollHeight}>${el.clientHeight}`);
+    }
+  }
+  const r = (s) => document.querySelector(s).getBoundingClientRect();
+  const audio = r('#audio-text');
+  const lat = r('#audio-latency');
+  return {
+    bad: [...bad],
+    doc: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
+    throw: Math.round(r('[data-testid=slot-fader-0] input').height * 10) / 10,
+    title: parseFloat(getComputedStyle(document.querySelector('.song-name')).fontSize),
+    audioGap: Math.round((lat.left - audio.right) * 10) / 10,
+    audioWhole: document.getElementById('audio-text').scrollWidth <= document.getElementById('audio-text').clientWidth,
+  };
+};
+
+test('polish-2A responsive (ux-round2 L1 / #1, L-6): six windows — nothing clips, fader throw ≥ 200 at ≥ 800 tall, ≥ 140 at 700',
+  async () => {
+    await selectIndex(0);
+    // L-6: a long connected keyboard name squeezes the lamps the way SF Pro does on the Mac
+    const squeeze = () => page.evaluate(() => {
+      const c = window.__rig.controller;
+      c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status, latencyMs: 42,
+        midi: { available: true, connected: true, name: 'Keystation 49es MK3 USB MIDI Keyboard', inputs: [{ id: 'k' }], reason: null } } }));
+    });
+    const rows = [];
+    for (const [w, hgt] of VIEWPORTS) {
+      await page.setViewportSize({ width: w, height: hgt });
+      await page.waitForTimeout(250);
+      await squeeze();
+      await clearToasts();
+      await page.waitForTimeout(80);
+      const m = await page.evaluate(OVERFLOW_PROBE);
+      rows.push(`${w}×${hgt} throw ${m.throw} title ${m.title}px audio→latency gap ${m.audioGap}`);
+      await page.screenshot({ path: path.join(shots, `responsive-${w}x${hgt}.png`) });
+      assert.deepEqual(m.bad, [], `${w}×${hgt}: clipped / overflowing: ${m.bad.join(' · ')}`);
+      assert.ok(m.doc[0] <= w && m.doc[1] <= hgt, `${w}×${hgt}: no page scroll (${m.doc})`);
+      const min = hgt >= 800 ? 200 : 140;
+      assert.ok(m.throw >= min, `${w}×${hgt}: fader throw ${m.throw} px ≥ ${min}`);
+      assert.ok(m.title >= 32, `${w}×${hgt}: song name ${m.title}px`);
+      if ([1280, 1366, 1440].includes(w)) {
+        assert.ok(m.audioGap >= 0, `${w}×${hgt}: "Sound OK" ends before the latency (gap ${m.audioGap})`);
+        assert.ok(m.audioWhole, `${w}×${hgt}: "Sound OK" is not clipped`);
+      }
+    }
+    console.log(`# ${rows.join('\n# ')}`);
+    // four filled strips (no factory song has four): the narrowest strips keep their tiles, chips and badges whole
+    const saved = await page.evaluate(() => {
+      const r = window.__rig;
+      const s = r.store.currentSong();
+      const keep = JSON.stringify(s.patch.slots);
+      const filled = s.patch.slots.filter(Boolean);
+      for (let i = 0; i < 4; i++) if (!s.patch.slots[i]) r.store.set(`songs.${s.id}.patch.slots.${i}`, JSON.parse(JSON.stringify(filled[i % filled.length])));
+      return { id: s.id, keep };
+    });
+    await page.waitForFunction(() => window.__rig.engine.slots.filter(Boolean).length === 4 && !window.__rig.controller.status.loading, null, { timeout: 30000 });
+    try {
+      for (const [w, hgt] of [[1366, 768], [1440, 900], [1024, 700]]) {
+        await page.setViewportSize({ width: w, height: hgt });
+        await page.waitForTimeout(250);
+        await clearToasts();
+        const m = await page.evaluate(OVERFLOW_PROBE);
+        // an instrument's name may ellipsize (any length, full name in its tooltip); nothing else may
+        const bad = m.bad.filter((x) => !/span\.slot-inst /.test(x));
+        await page.screenshot({ path: path.join(shots, `responsive-4strips-${w}x${hgt}.png`) });
+        assert.deepEqual(bad, [], `4 strips at ${w}×${hgt}: ${bad.join(' · ')}`);
+      }
+    } finally {
+      await page.evaluate(({ id, keep }) => {
+        const slots = JSON.parse(keep);
+        slots.forEach((sl, i) => window.__rig.store.set(`songs.${id}.patch.slots.${i}`, sl));
+      }, saved);
+      await page.evaluate(() => window.__rig.controller.dispatchEvent(new CustomEvent('status', { detail: { ...window.__rig.controller.status } })));
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.waitForTimeout(150);
+    }
+  });
+
+test('polish-2A banners (ux-round2 L2 / #2): one 32 px strip with a chevron; unfolded over the stage; ≥ 130 px throw at 1024',
+  async () => {
+    await clearToasts();
+    const ui = (fn, arg) => page.evaluate(fn, arg);
+    await ui(() => {
+      const u = window.__rig.ui;
+      u.setBanner('t-warn', { kind: 'warn', short: 'Another Worship Rig window is open — this one is muted',
+        text: 'Worship Rig is already open in another window. This one is muted and read-only — close it and use the other window.' });
+      u.setBanner('t-danger', { kind: 'danger', short: 'Changes are NOT being saved',
+        text: 'Your saved library could not be read or backed up, so changes are NOT being saved. Export it from Settings before you edit.',
+        actions: [{ label: 'Open Settings', run: () => { window.__bannerRan = (window.__bannerRan || 0) + 1; } }] });
+      u.setBanner('t-info', { kind: 'info', text: 'A newer song library (saved yesterday) is available from an earlier session.',
+        actions: [{ label: 'Not now', run: () => {} }] });
+    });
+    const geo = () => ui(() => {
+      const r = (el) => el.getBoundingClientRect();
+      const strip = document.querySelector('[data-testid=banner-strip]');
+      const shown = [...strip.querySelectorAll('.banner')].filter((b) => b.offsetParent !== null);
+      return {
+        bannersH: document.getElementById('banners').offsetHeight,
+        stripH: Math.round(r(strip).height),
+        shown: shown.map((b) => b.dataset.testid),
+        count: strip.querySelector('.bstrip-count').textContent,
+        expanded: strip.querySelector('[data-testid=banner-expand]').getAttribute('aria-expanded'),
+        listBottom: r(strip.querySelector('.bstrip-list')).bottom,
+        throw: r(document.querySelector('[data-testid=slot-fader-0] input')).height,
+        doc: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
+        msgClipped: shown.map((b) => { const m = b.querySelector('.banner-msg'); return m.offsetParent !== null && m.scrollWidth > m.clientWidth + 1; }),
+      };
+    });
+    for (const [w, hgt] of [[1440, 900], [1024, 700]]) {
+      await page.setViewportSize({ width: w, height: hgt });
+      await page.waitForTimeout(250);
+      const g = await geo();
+      assert.equal(g.bannersH, 32, `${w}: three persistent banners take one 32 px strip (${g.bannersH})`);
+      assert.deepEqual(g.shown, ['banner-t-danger'], 'folded: the most urgent one shows');
+      assert.equal(g.count, '+2');
+      assert.ok(g.doc[0] <= w && g.doc[1] <= hgt, `${w}: fits (${g.doc})`);
+      if (w === 1024) assert.ok(g.throw >= 130, `1024×700 with a banner: fader throw ${g.throw} px ≥ 130`);
+      await clearToasts();
+      await page.screenshot({ path: path.join(shots, `banner-strip-${w}.png`) });
+    }
+    // the chevron unfolds every message in full over the stage; the layout keeps 32 px; Esc folds it without a panic
+    await page.click('[data-testid=banner-expand]');
+    const open = await geo();
+    assert.equal(open.expanded, 'true');
+    assert.deepEqual(open.shown, ['banner-t-danger', 'banner-t-warn', 'banner-t-info'], 'danger → warn → info');
+    assert.equal(open.bannersH, 32, 'unfolded, it still takes 32 px of layout');
+    assert.ok(open.listBottom > 32 + 56 * 2, 'the list drops over the stage');
+    assert.deepEqual(open.msgClipped, [false, false, false], 'full texts, not ellipsized');
+    const btn = await page.locator('[data-testid=banner-t-danger] .banner-btn').boundingBox();
+    assert.ok(btn.height >= 44, `unfolded buttons are 44 px (${btn.height})`);
+    await page.screenshot({ path: path.join(shots, 'banner-strip-open-1024.png') });
+    await page.evaluate(() => window.__rig.controller.perform.noteOn(64, 90));
+    await page.keyboard.press('Escape');
+    const afterEsc = await geo();
+    assert.equal(afterEsc.expanded, 'false', 'Esc folds the strip');
+    assert.ok(await page.evaluate(() => window.__rig.engine.activeNotes.has(64)), 'that Esc did not panic');
+    await page.evaluate(() => window.__rig.controller.perform.noteOff(64));
+    // one banner: no count; its action works from the folded strip
+    await ui(() => { window.__rig.ui.setBanner('t-warn', null); window.__rig.ui.setBanner('t-info', null); });
+    const one = await geo();
+    assert.equal(one.count, '');
+    await page.click('[data-testid=banner-t-danger] .banner-btn');
+    assert.equal(await page.evaluate(() => window.__bannerRan), 1);
+    await ui(() => window.__rig.ui.setBanner('t-danger', null));
+    const none = await geo();
+    assert.equal(none.bannersH, 0, 'no banners: no strip');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(150);
+  });
+
+test('polish-2A toasts (ux-round2 L3 / #3): bottom-right above the keyboard row, clear of the header chips; still click-through',
+  async () => {
+    for (const [w, hgt] of [[1440, 900], [1024, 700]]) {
+      await page.setViewportSize({ width: w, height: hgt });
+      await page.waitForTimeout(200);
+      await clearToasts();
+      const r = await page.evaluate(async () => {
+        const { toast } = window.__rig.ui;
+        const tag = Math.random().toString(36).slice(2, 6); // identical live toasts merge (×N), so each run is new
+        toast(`Your screen might dim during long songs. Keep the laptop plugged in. (${tag})`, 'info', { ms: 0 });
+        toast(`Sound restarted. (${tag})`, 'ok', { ms: 0 });
+        await new Promise((res) => setTimeout(res, 250));
+        const box = (el) => el.getBoundingClientRect();
+        const hit = (a, b) => !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+        const ts = [...document.querySelectorAll('#toasts .toast')].map(box);
+        const head = box(document.querySelector('.p-head'));
+        const nav = box(document.querySelector('.p-nav'));
+        const bottom = box(document.querySelector('.p-bottom'));
+        const t0 = ts[0];
+        const under = document.elementFromPoint(t0.left + t0.width / 2, t0.top + t0.height / 2);
+        return {
+          n: ts.length,
+          overHead: ts.some((t) => hit(t, head) || hit(t, nav)),
+          overBottom: ts.some((t) => hit(t, bottom)),
+          rightGap: innerWidth - Math.max(...ts.map((t) => t.right)),
+          lowest: Math.max(...ts.map((t) => t.bottom)),
+          bottomTop: bottom.top,
+          pe: getComputedStyle(document.querySelector('#toasts .toast')).pointerEvents,
+          clickThrough: !under.closest('#toasts'),
+        };
+      });
+      assert.equal(r.n, 2);
+      assert.equal(r.overHead, false, `${w}: no toast over the header chips or the setlist`);
+      assert.equal(r.overBottom, false, `${w}: no toast over the keyboard / PANIC row`);
+      assert.ok(r.lowest <= r.bottomTop && r.bottomTop - r.lowest <= 24, `${w}: just above the bottom row (${r.lowest} vs ${r.bottomTop})`);
+      assert.ok(r.rightGap >= 8 && r.rightGap <= 24, `${w}: at the right edge (${r.rightGap})`);
+      assert.equal(r.pe, 'none');
+      assert.equal(r.clickThrough, true, 'a tap on a toast reaches what is under it');
+      await page.screenshot({ path: path.join(shots, `toasts-${w}.png`) });
+      await clearToasts();
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(150);
+  });
+
+/** In-page WCAG contrast of an element's text against what it is painted on (opacity, alpha and grayscale composited). */
+const CONTRAST_PROBE = () => {
+  const rgba = (c) => { const m = (c.match(/[\d.]+/g) || []).map(Number); return [m[0] || 0, m[1] || 0, m[2] || 0, m.length > 3 ? m[3] : 1]; };
+  const lum = ([r, g, b]) => {
+    const f = (v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const mix = (a, b, t) => a.map((v, i) => v * t + b[i] * (1 - t));
+  window.__contrast = (el) => {
+    let op = 1;
+    let gray = false;
+    for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+      const cs = getComputedStyle(n);
+      op *= parseFloat(cs.opacity);
+      if (/grayscale\(1\)/.test(cs.filter)) gray = true;
+    }
+    let bg = null;
+    for (let n = el; n && n.nodeType === 1 && !bg; n = n.parentElement) {
+      const c = rgba(getComputedStyle(n).backgroundColor);
+      if (c[3] > 0.5) bg = c.slice(0, 3);
+    }
+    bg ||= rgba(getComputedStyle(document.body).backgroundColor).slice(0, 3);
+    const fgc = rgba(getComputedStyle(el).color);
+    let fg = mix(fgc.slice(0, 3), bg, fgc[3] * op);
+    if (gray) { const g = 0.2126 * fg[0] + 0.7152 * fg[1] + 0.0722 * fg[2]; fg = [g, g, g]; }
+    const [x, y] = [lum(fg), lum(bg)].sort((a, b) => b - a);
+    return Math.round(((x + 0.05) / (y + 0.05)) * 100) / 100;
+  };
+};
+
+test('polish-2A contrast + hit targets (ux-round2 #6, #7, #9): Restart, PANIC "Esc", 44 px live controls at 1024, OFF strips ≥ 3:1',
+  async () => {
+    await selectIndex(0);
+    await clearToasts();
+    await page.evaluate(CONTRAST_PROBE);
+    const c = await page.evaluate(async () => {
+      const ctl = window.__rig.controller;
+      ctl.dispatchEvent(new CustomEvent('status', { detail: { ...ctl.status, audio: 'stalled' } }));
+      await new Promise((res) => setTimeout(res, 50));
+      const out = {
+        restart: window.__contrast(document.getElementById('btn-restart-audio')),
+        panicEsc: window.__contrast(document.querySelector('[data-testid=panic] .panic-k')),
+        panic: window.__contrast(document.querySelector('[data-testid=panic] .panic-l')),
+      };
+      ctl.dispatchEvent(new CustomEvent('status', { detail: { ...ctl.status } }));
+      return out;
+    });
+    console.log(`# contrast polish-2A ${JSON.stringify(c)}`);
+    assert.ok(c.restart >= 4.5, `Restart sound ${c.restart}:1 ≥ 4.5`);
+    assert.ok(c.panicEsc >= 4.5, `PANIC "Esc" ${c.panicEsc}:1 ≥ 4.5`);
+    assert.ok(c.panic >= 4.5, `PANIC ${c.panic}:1 ≥ 4.5`);
+    // an OFF strip: its live controls stay readable (≥ 3:1); the fader is what dims
+    await page.evaluate(() => {
+      const s = window.__rig.store.currentSong();
+      window.__rig.store.set(`songs.${s.id}.patch.slots.1.muted`, true);
+    });
+    await page.waitForFunction(() => document.querySelector('[data-testid=slot-1]').classList.contains('muted'));
+    const off = await page.evaluate(() => {
+      const strip = document.querySelector('[data-testid=slot-1]');
+      const texts = [...strip.querySelectorAll('.mchip .mc-label, .mchip .mc-value, .slot-inst, .wb-val, .slot-badge, .fader-value')]
+        .filter((el) => el.offsetParent !== null && el.textContent.trim());
+      const eff = (el) => { let o = 1; for (let n = el; n && n.nodeType === 1; n = n.parentElement) o *= parseFloat(getComputedStyle(n).opacity); return o; };
+      return {
+        low: texts.map((el) => [el.textContent.trim(), window.__contrast(el)]).filter(([, r]) => r < 3),
+        all: texts.map((el) => `${el.textContent.trim()} ${window.__contrast(el)}`),
+        chipOpacity: Math.min(...[...strip.querySelectorAll('.mchip')].map(eff)),
+        trackOpacity: eff(strip.querySelector('.fader-track')),
+      };
+    });
+    console.log(`# OFF strip ${off.all.join(' · ')} · track opacity ${off.trackOpacity}`);
+    assert.deepEqual(off.low, [], 'OFF-strip text under 3:1');
+    assert.equal(off.chipOpacity, 1, 'the chips on an OFF strip are not dimmed (they stay live)');
+    assert.ok(off.trackOpacity <= 0.5, `the fader track is dimmed (${off.trackOpacity})`);
+    await page.screenshot({ path: path.join(shots, 'perform-off-strip.png') });
+    await page.evaluate(() => {
+      const s = window.__rig.store.currentSong();
+      window.__rig.store.set(`songs.${s.id}.patch.slots.1.muted`, false);
+    });
+    // 1024: the live compact controls are 44 px targets
+    await page.setViewportSize({ width: 1024, height: 700 });
+    await page.waitForTimeout(250);
+    const small = await page.evaluate(() => {
+      const sels = ['.swell-btn', '[data-testid=key-button]', '[data-testid=space-row] .fxpill', '[data-testid=echo-row] .fxpill',
+        '[data-testid=transpose-up]', '[data-testid=transpose-down]', '.ontile', '.mchip', '[data-testid=panic]', '[data-testid=perform-lock]'];
+      const bad = [];
+      const sizes = {};
+      for (const s of sels) for (const el of document.querySelectorAll(s)) {
+        if (!el.offsetParent) continue;
+        const r = el.getBoundingClientRect();
+        sizes[s] = `${Math.round(r.width)}×${Math.round(r.height)}`;
+        if (r.height < 43.5 || r.width < 43.5) bad.push(`${s} ${sizes[s]}`);
+      }
+      return { bad, sizes };
+    });
+    console.log(`# 1024 targets ${JSON.stringify(small.sizes)}`);
+    assert.deepEqual(small.bad, [], `1024 targets under 44 px: ${small.bad.join(', ')}`);
+    for (const chip of ['slot-space-0', 'slot-octave-1']) {
+      await page.click(`[data-testid=${chip}]`);
+      await page.waitForSelector('.step-panel');
+      const p = await page.evaluate(() => {
+        const panel = document.querySelector('.step-panel');
+        const pr = panel.getBoundingClientRect();
+        const strip = panel.parentElement.getBoundingClientRect();
+        const tile = panel.parentElement.querySelector('.ontile').getBoundingClientRect();
+        return {
+          steps: [...panel.querySelectorAll('.sp-step')].map((b) => Math.round(b.getBoundingClientRect().height)),
+          inside: pr.top >= strip.top - 0.5 && pr.bottom <= strip.bottom + 0.5,
+          tileFree: pr.top >= tile.bottom - 0.5,
+          stepsInside: [...panel.querySelectorAll('.sp-step')].every((b) => b.getBoundingClientRect().bottom <= pr.bottom),
+        };
+      });
+      assert.ok(p.steps.every((x) => x >= 44), `${chip} step panel steps ${p.steps} ≥ 44 at 1024`);
+      assert.ok(p.inside && p.stepsInside, `${chip}: the panel and its steps stay inside the strip`);
+      assert.ok(p.tileFree, `${chip}: the ON tile stays tappable above the panel`);
+      if (chip === 'slot-space-0') await page.screenshot({ path: path.join(shots, 'perform-step-1024.png') });
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('.step-panel', { state: 'detached' });
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(150);
+  });
+
+test('polish-2A chord readout (ux-round2 G1 / #8): released note by note it idles on the chord, never on a leftover note',
+  async () => {
+    await selectIndex(0);
+    const r = await page.evaluate(async () => {
+      const p = window.__rig.controller.perform;
+      const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+      p.releaseAll(); // nothing left held by an earlier test
+      p.sustain(false);
+      await sleep(40);
+      const read = () => {
+        const el = document.querySelector('.chord-readout');
+        return `${el.querySelector('.chord-name').textContent}${el.classList.contains('live') ? '*' : ''}`;
+      };
+      const out = [];
+      for (const n of [50, 62, 66, 69]) { p.noteOn(n, 90); await sleep(40); }
+      out.push(read());
+      for (const n of [50, 62, 66, 69]) { p.noteOff(n); await sleep(40); out.push(read()); }
+      // a lone key never becomes the readout
+      p.noteOn(69, 90); await sleep(40); out.push(read());
+      p.noteOff(69); await sleep(40);
+      // the pedal: keys released while it's down leave the readout idle (it holds the sound, not the hands)
+      p.sustain(true);
+      for (const n of [52, 55, 59]) { p.noteOn(n, 90); await sleep(30); }
+      out.push(read());
+      for (const n of [52, 55, 59]) { p.noteOff(n); await sleep(30); }
+      out.push(read());
+      p.sustain(false);
+      await sleep(40);
+      return out;
+    });
+    console.log(`# chord readout: ${r.join(' | ')}`);
+    assert.equal(r[0], 'D*', 'D major held → live "D"');
+    assert.deepEqual(r.slice(1, 5), ['D*', 'D*', 'D', 'D'], 'with < 2 keys left it idles on "D" (dimmed), never "A"');
+    assert.equal(r[5], 'D', 'a lone A does not replace the chord');
+    assert.equal(r[6], 'Em*');
+    assert.equal(r[7], 'Em', 'pedal-held notes do not keep the readout live');
   });
 
 test('no console errors on the main page', () => {

@@ -132,6 +132,9 @@ async function runMode(mode, browser) {
       assert.ok((await page.locator('select.st-output option').count()) >= 1);
       assert.equal(await page.textContent('.st-learn-table tbody tr:first-child th'), 'Keys level');
       assert.ok(await page.$('tr[data-control="swell"]'), 'swell row present');
+      // polish-2B naming (ux-round2 #5): the reverb return is "Space level", as in Edit's Wheels & pedal
+      assert.equal(await page.textContent('tr[data-control="fx.reverb.returnGain"] th'), 'Space level');
+      assert.equal(await ev(() => /Reverb level/.test(document.querySelector('.st-learn-table').textContent)), false);
       assert.equal(await ev(() => document.body.dataset.dialogOpen), '1', 'dialog flag while Settings is open');
       for (const [w, hgt] of SIZES) {
         await page.setViewportSize({ width: w, height: hgt });
@@ -314,20 +317,28 @@ async function runMode(mode, browser) {
       await ev(() => window.__rig.controller.perform.noteOff(62));
     });
 
-    await T('settings: MIDI "pending" says to answer the permission prompt, not to reload (local L-3 follow-up)', async () => {
+    await T('settings: MIDI "pending" = starting (answer the prompt, no reload); "denied" → site settings; "failed" → replug (polish-2A)', async () => {
       await openSettings();
-      const text = await ev(async () => {
+      const texts = await ev(async () => {
         const c = window.__rig.controller;
         const real = { ...c.status };
-        c.dispatchEvent(new CustomEvent('status', { detail: { ...real,
-          midi: { available: false, connected: false, reason: 'pending', pending: true, inputs: [] } } }));
-        await new Promise((res) => setTimeout(res, 50));
-        const t = document.querySelector('.st-midi-input').parentElement.querySelector('.st-status').textContent;
+        const read = async (midi) => {
+          c.dispatchEvent(new CustomEvent('status', { detail: { ...real, midi: { available: false, connected: false, inputs: [], ...midi } } }));
+          await new Promise((res) => setTimeout(res, 50));
+          return document.querySelector('.st-midi-input').parentElement.querySelector('.st-status').textContent;
+        };
+        const out = {
+          pending: await read({ reason: 'pending', pending: true }),
+          denied: await read({ reason: 'denied', pending: false }),
+          failed: await read({ reason: 'failed', pending: false }),
+        };
         c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } }));
-        return t;
+        return out;
       });
-      assert.match(text, /Waiting for MIDI permission/);
-      assert.doesNotMatch(text, /reload/i);
+      assert.equal(texts.pending, 'MIDI starting… answer the browser’s permission prompt if it appears.');
+      assert.doesNotMatch(texts.pending, /reload|blocked|isn’t available/i);
+      assert.equal(texts.denied, 'MIDI was blocked — allow it in the browser’s site settings.');
+      assert.match(texts.failed, /unplug and replug the keyboard/);
       await page.click('.st-close');
       await until(() => document.getElementById('view-settings').hidden);
     });

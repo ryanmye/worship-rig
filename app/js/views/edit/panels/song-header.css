@@ -113,6 +113,12 @@
 .ev2 .ev2-song-clear:disabled { opacity: .45; cursor: default; }
 .ev2 .ev2-song-foothint { color: var(--ev2-faint); font-size: 12.5px; }
 
+/* polish-2B (ux-round2 L1): at 1280 px the hint was squeezed to 56 px and clipped to "The song / that’s / playing. /
+   Changes are…". Below 1341 px it goes (as ≤ 1250); the LIVE pill's title carries the same text. */
+@media (max-width: 1340px) {
+  .ev2 .ev2-song-livehint { display: none; }
+}
+
 /* ------------------------------------------------------------------ ≤ 1250 px (1024×700): compact, drawer button */
 @media (max-width: 1250px) {
   .ev2 .ev2-song-head { gap: 8px; }
