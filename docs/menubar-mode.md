@@ -77,10 +77,22 @@ IPC channels: `rig:busPublish`, `rig:miniCommand`, `rig:miniLastState`, `rig:set
 `rig:setLoginItem` (invoke; our origin only, like every `rig:*` handler) and `rig:busCommand`, `rig:miniState`,
 `rig:menuBarState` (main → renderer). Invalid payloads resolve to `{error}` and never replace the last state.
 
+**Window events (Rig menu channel).** While menu-bar mode is on, main.js sends `onMenu` ids `windowShown` /
+`windowHidden` to the main renderer whenever its window is shown or hidden (hide-on-close, `openMain`, dock click,
+minimise/restore, ⌘H), because with `backgroundThrottling:false` `visibilitychange` may never fire. Opening the
+popover does not count as shown. `setMenuBarMode(true)` answers with the current one right away (the renderer is
+listening by then); `setMenuBarMode(false)` sends `windowFollowDocument` (back to the document's own visibility).
+
+**`setMenuBarMode(on)` is the source of truth.** The renderer calls it at start and on every change. It creates or
+destroys the tray (the tray exists only while on), hides the dock icon while on with the window hidden and shows it
+otherwise, and shows a hidden window when turned off. The `rig-shell.json` copy only lets the tray appear before the
+renderer boots. `openMain` commands are handled by main.js (show, focus, dock icon) and never forwarded.
+
 **Tray** (macOS only in v1). Left click toggles the popover; right click or ⌃/⌘-click opens the menu: "Now: <name>
-(<key>)" (disabled), the modes as radio items (≤ 12), Previous, Next, Panic (all notes off), Low-resource mode
-(checkbox), Open Worship Rig, Quit Worship Rig. The menu is rebuilt only when `current`, `modes` or `lowResource`
-change; the tooltip shows the current mode. Menu clicks send the same commands as the popover.
+(<key>)" (disabled), "Memory: N MB" (disabled; RSS of the main process + renderers from `app.getAppMetrics()`,
+rounded to 5 MB, refreshed on each state publish), the modes as radio items (≤ 12), Previous, Next, Panic (all notes off), Low-resource mode
+(checkbox), Open Worship Rig, Quit Worship Rig. The menu is rebuilt only when `current`, `modes`, `lowResource` or
+the rounded memory change; the tooltip shows the current mode. Menu clicks send the same commands as the popover.
 
 **Popover.** Frameless, transparent, 320×440, always on top (`pop-up-menu` level), on every Space; created on the
 first tray click and then kept (hidden). Centred under the tray icon, 4 px below it, clamped to the display's work area
@@ -97,7 +109,8 @@ those flags) starts with the window hidden. Turning menu-bar mode off shows a hi
 
 **Placeholder `app/mini.html`.** The server's CSP forbids inline scripts and LOCAL may not add files under `app/js`,
 so the placeholder has no script. main.js `drivePlaceholder()` injects a small driver (miniSubscribe → text, three
-buttons → miniCommand, `hello` on load) only into pages marked `<html data-rig-mini-placeholder>`. **Cloud: replace
+buttons → miniCommand, `hello` on load) only into a page with `<meta name="rig-mini-placeholder">`, so the cloud's
+real mini.html is never touched. The driver creates no bus; it only calls the preload methods. **Cloud: replace
 the file with the real popover and delete `drivePlaceholder()`.** The self-test does not depend on the placeholder:
 it calls `window.rig.miniSubscribe` / `miniCommand` in whatever `/mini.html` is served.
 
@@ -105,8 +118,9 @@ it calls `window.rig.miniSubscribe` / `miniCommand` in whatever `/mini.html` is 
 the `RIG_SELFTEST` line: `tray`; the menu (labels, radio/checkbox state) after a fake state is published through
 `window.rig.busPublish`; six rejected payloads; tray-menu clicks arriving through `onBusCommand`; the popover opened
 through the tray-click path (URL, 320×440, state received, a command relayed, Esc, toggle: transitions
-`show,hide,show,hide`); and on macOS hide-on-close (hidden, not destroyed, dock hidden, library backup written) +
-`openMain`. It runs on the shell fixture page only: a page with `window.__rig` (the real app, e.g. electron-full's
+`show,hide,show,hide`); the window events (`windowShown` on enable, none while the popover opens, `windowHidden` on
+hide, `windowShown` on `openMain`, `windowFollowDocument` on disable, tray gone after disable); and on macOS
+hide-on-close (hidden, not destroyed, dock hidden, library backup written) + `openMain`. It runs on the shell fixture page only: a page with `window.__rig` (the real app, e.g. electron-full's
 probe) gets `menubar: {skipped}`, so no fake state or command reaches a real controller. The boot test copies
 `app/mini.*` into its fixture app dir and asserts all of it; the popover's console counts toward the zero-errors check.
 

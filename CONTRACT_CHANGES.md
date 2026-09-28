@@ -2940,3 +2940,15 @@ pending / denied / failed). Screenshots: `test/phase2/ui-core/screenshots/respon
   "visible" window was occluded too and the two are about the same. The 30 % renderer and 9 % GPU while hidden are
   what the cloud's low-resource mode has to remove (rAF/meter loops keep running with `backgroundThrottling:false`).
   The popover adds one renderer process once it has been opened (it is kept, hidden, afterwards).
+- **Follow-up (cloud renderer alignment):**
+  - Rig menu channel (`rig:menu` / `onMenu`) ids `windowShown` / `windowHidden` while menu-bar mode is on (popover
+    opening excluded), and `windowFollowDocument` when it is turned off. `setMenuBarMode(true)` answers with the
+    current state at once.
+  - `setMenuBarMode` is the single source of truth: tray only while on, dock icon hidden while on and the window
+    is hidden. `setDock()` only acts on a change: a redundant `dock.show()` promise resolved after a later `hide()`
+    (screen locked) and brought the icon back.
+  - Tray gains a disabled "Memory: N MB" line (main + renderers, `app.getAppMetrics()`, 5 MB steps).
+  - The placeholder driver is gated by `<meta name="rig-mini-placeholder">` and creates no bus.
+  - Self-test adds the event sequence
+    `[windowShown] / [] (popover) / [windowHidden] / [windowShown] (openMain) / [windowFollowDocument]` and
+    `tray: false` after disable; the menu reads `Memory: 280 MB` on the fixture. 2/2 runs on 8452 pass.
