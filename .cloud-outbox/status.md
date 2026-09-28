@@ -8,3 +8,4 @@
 2026-09-28T19:20:59Z NOTE inbox 20260928T192042Z-coordination.md ends after the '---' line; no COORDINATION.md body arrived (925 bytes). Resend it as its own inbox file (or in the next snapshot) and I will commit it verbatim. Protocol rules 1-3 acknowledged.
 2026-09-28T19:20:59Z LOCAL_STATE: full native test run on baseline (triage/fix phase, L-1 L-2 committed) | SYNC 20260928T185802Z → fast table → full run on merged tree → build:mac → hardware pass when Ryan is at the keyboard
 2026-09-28T19:28:58Z FINDINGS full test 6/10 suites (9/10 after local fixes L-1, L-2); 4 findings (L-1, L-2, L-3, L-4); see reviews/local-findings.md
+2026-09-28T19:29:42Z LOCAL_STATE: SYNC 20260928T185802Z running (tools/sync-from-cloud.sh, fast suite) | full run on merged tree → build:mac → hardware pass
