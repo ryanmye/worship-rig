@@ -8,14 +8,26 @@
 # cloud made win cleanly, local commits on main that the cloud didn't touch survive, and a real clash is a normal
 # git conflict instead of a silent overwrite. Tracked files follow the cloud (it is the source of truth for them).
 #
+# Conflicts (rule approved by Ryan): each conflicted file is auto-resolved when
+#   (a) it is CLOUD-owned per the ownership table in COORDINATION.md (the cloud's copy; COORDINATION.md itself is
+#       always cloud-owned, also on add/add): take the cloud's version;
+#   (b) every conflict hunk is one side inserting lines while the other side inserted nothing and neither side
+#       changed an original line there: keep both. Under test/ and docs/ also when both sides inserted at the same
+#       spot and share no (non-blank) line: ours, then theirs.
+#   Delete/modify conflicts, overlapping edits and anything unclear stop the script (merge left in progress). A
+#   resolved file must keep no marker line, .js/.mjs/.cjs must pass `node --check` and .json must parse, or it stops
+#   too. Each auto-resolution is one line in the merge commit message and in the summary's `conflicts` row.
+#
 # Usage: tools/sync-from-cloud.sh [<stamp>|<path-to-drop-dir>] [--no-test] [--dry-run]
 #   (no drop)   newest drop under ~/Projects/worship-rig-transfer/incoming/ (stamp-like names by name sort,
 #               otherwise the newest by mtime). Override the transfer root with WORSHIP_RIG_TRANSFER=/path.
 #   --dry-run   unpack and show what rsync would change in the current tree; no checkout, commit or merge.
 #   --no-test   skip `npm test -- --fast`.
 # A drop holds code.tgz.partNN (from `split -b`) or a whole code.tgz, plus optionally samples.tgz[.partNN].
-# Exit: 0 ok, 1 error, 2 merge conflicts (merge left in progress for you), 3 synced fine but tests failed.
+# Exit: 0 ok, 1 error, 2 conflicts the rule above could not resolve (merge left in progress for you),
+#       3 synced fine but tests failed.
 set -euo pipefail
+shopt -s extglob   # the ownership globs become extglob patterns (see glob_to_pattern)
 
 TRANSFER_ROOT="${WORSHIP_RIG_TRANSFER:-$HOME/Projects/worship-rig-transfer}"
 INCOMING="$TRANSFER_ROOT/incoming"
@@ -35,6 +47,7 @@ SAMPLES_NOTE="no samples archive in this drop" PROTECTED=""
 OLD_MAIN="" NEW_MAIN="" OLD_CLOUD="" NEW_CLOUD="" CLOUD_CREATED=0 DEST=. DEST_DESC="working tree"
 CHANGE_NOTE="" BY_DIR="" MERGE_NOTE="" GITIGNORE_NOTE="" NPM_NOTE="not needed (package*.json unchanged)"
 TEST_NOTE="skipped (--no-test)" TEST_RC=0
+CLOUD_PATTERNS="" AUTO_LINES="" STOP_LINES="" NOTE="" WHY=""
 
 log()  { printf '==> %s\n' "$*"; }
 warn() { printf 'warning: %s\n' "$*" >&2; }
@@ -329,25 +342,186 @@ commit_cloud() {
   NEW_CLOUD=$(git rev-parse HEAD)
 }
 
-conflict_banner() {
-  local conflicts=$1 core bar
-  bar=$(printf '#%.0s' {1..88})
-  core=$(printf '%s\n' "$conflicts" | grep -E '^(app|test)/' || true)
-  printf '\n%s\n' "$bar"
-  if [[ -n "$core" ]]; then
-    echo "#  CONFLICTS in app/ or test/ — resolve manually, then: git add -A && git commit; then run npm test"
-  else
-    echo "#  CONFLICTS (none in app/ or test/) — resolve manually, then: git add -A && git commit"
+# ---------------------------------------------------------------- conflicts
+
+# Backtick-quoted globs in the "Area / files" column of COORDINATION.md rows whose Owner starts with CLOUD. Read from
+# the cloud branch: the cloud writes that file, so its copy is the current one (main's may be a cycle old).
+cloud_globs() {
+  { git show "$CLOUD_BRANCH:COORDINATION.md" || git show "$MAIN_BRANCH:COORDINATION.md"; } 2> /dev/null | awk -F'|' '
+    /^\|/ { owner = $3; sub(/^[ \t]+/, "", owner); if (owner !~ /^CLOUD/) next
+            s = $2
+            while (match(s, /`[^`]+`/)) { print substr(s, RSTART + 1, RLENGTH - 2); s = substr(s, RSTART + RLENGTH) } }
+  ' || true
+}
+
+# components/{onTile,stepChip}.js -> one line per alternative (recursive, so several brace groups work too).
+expand_braces() {
+  local g=$1 pre rest body post alts=() a
+  if [[ "$g" != *\{*\}* ]]; then printf '%s\n' "$g"; return 0; fi
+  pre=${g%%\{*} rest=${g#*\{}
+  body=${rest%%\}*} post=${rest#*\}}
+  IFS=, read -r -a alts <<< "$body"
+  for a in "${alts[@]}"; do expand_braces "$pre$a$post"; done
+}
+
+# Glob -> extglob pattern for [[ == ]], where a bare * would also match "/": * stays inside one path segment,
+# **/ matches zero or more directories, any other ** matches anything.
+glob_to_pattern() {
+  printf '%s\n' "$1" \
+    | sed -e 's#\*\*/#@DS@#g' -e 's#\*\*#@DD@#g' -e 's#\*#*([!/])#g' -e 's#@DS@#?(*/)#g' -e 's#@DD@#*#g'
+}
+
+# The table writes components/..., shared/... for app/js/components/..., so every glob also matches under app/js/.
+load_cloud_patterns() {
+  local g e
+  CLOUD_PATTERNS=COORDINATION.md
+  while IFS= read -r g; do
+    while IFS= read -r e; do
+      CLOUD_PATTERNS+=$'\n'"$(glob_to_pattern "$e")"
+      [[ "$e" == app/js/* ]] || CLOUD_PATTERNS+=$'\n'"$(glob_to_pattern "app/js/$e")"
+    done < <(expand_braces "$g")
+  done < <(cloud_globs)
+}
+
+is_cloud_owned() {
+  local pat
+  while IFS= read -r pat; do [[ -n "$pat" && "$1" == $pat ]] && return 0; done <<< "$CLOUD_PATTERNS"
+  return 1
+}
+
+# "<stages present> <mode ours> <mode theirs>", e.g. "123 100644 100644". Without stage 2 or 3 one side deleted
+# (or renamed away) the file; without stage 1 both sides added it.
+stage_info() {
+  git ls-files -u -z -- "$1" | tr '\0' '\n' | awk '{ s = s $3; m[$3] = $1 } END { print s, m["2"] "-", m["3"] "-" }'
+}
+
+# Re-merge one file from its index stages with zdiff3 markers: unlike git's default style they show the base (so
+# "one side only inserted" is provable, not guessed) while still trimming lines common to both sides. Classifies
+# every hunk; writes the resolution to $TMP/resolve/resolved and prints "one-sided" or "disjoint", else prints why
+# not and fails.
+merge_both() {
+  local p=$1 d="$TMP/resolve" disjoint=0 rc=0
+  mkdir -p "$d"
+  git show ":1:$p" > "$d/base" && git show ":2:$p" > "$d/ours" && git show ":3:$p" > "$d/theirs" \
+    || { echo "could not read the index stages"; return 1; }
+  git merge-file -p --zdiff3 -L ours -L base -L theirs "$d/ours" "$d/base" "$d/theirs" > "$d/merged" || rc=$?
+  (( rc > 0 && rc < 128 )) \
+    || { echo "git merge-file found no text conflict (binary, or not a content conflict)"; return 1; }
+  case "$p" in test/* | docs/*) disjoint=1 ;; esac
+  awk -v disjoint="$disjoint" -v out="$d/resolved" '
+    function blank(s) { return s ~ /^[ \t\r]*$/ }
+    function fail(why) { print why " (hunk at merged line " start ")"; bad = 1; exit 1 }
+    function resolve(   i, seen) {
+      if (nb) fail("both sides changed or deleted the same original lines")
+      if (no && nt) {
+        if (!disjoint) fail("both sides inserted different lines at the same spot (outside test/ and docs/)")
+        for (i = 1; i <= no; i++) if (!blank(o[i])) seen[o[i]] = 1
+        for (i = 1; i <= nt; i++) if (!blank(t[i]) && (t[i] in seen)) fail("both sides inserted the line \"" t[i] "\"")
+        kind = "disjoint"
+      }
+      for (i = 1; i <= no; i++) print o[i] > out
+      for (i = 1; i <= nt; i++) print t[i] > out
+    }
+    state == 0 && /^<<<<<<<( |$)/ { state = 1; no = nb = nt = 0; start = FNR; hunks++; next }
+    state == 1 && /^\|\|\|\|\|\|\|( |$)/ { state = 2; next }
+    (state == 1 || state == 2) && /^=======$/ { state = 3; next }
+    state == 3 && /^>>>>>>>( |$)/ { resolve(); state = 0; next }
+    state == 0 { print > out; next }
+    state == 1 { o[++no] = $0; next }
+    state == 2 { nb++; next }
+    state == 3 { t[++nt] = $0; next }
+    END { if (bad) exit 1
+          if (state || !hunks) { print "could not parse the conflict hunks"; exit 1 }
+          print (kind == "" ? "one-sided" : kind) }
+  ' "$d/merged" || return 1
+  # awk ends every line with a newline; keep a missing one at EOF missing.
+  [[ -z "$(tail -c 1 "$d/merged")" ]] || perl -pi -e 'chomp if eof' "$d/resolved"
+}
+
+# A resolution may not keep a marker line and must still parse (node --check reads ESM too).
+check_resolved() {
+  local p=$1 err
+  if grep -qE '^(<<<<<<<|>>>>>>>|\|\|\|\|\|\|\|)( |$)|^=======$' "$p"; then
+    echo "a conflict marker line remains"; return 1
   fi
+  case "$p" in
+    *.js | *.mjs | *.cjs)
+      err=$(node --check "$p" 2>&1) || { echo "node --check fails: $(grep -m 1 'Error' <<< "$err")"; return 1; } ;;
+    *.json)
+      node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' "$p" 2> /dev/null \
+        || { echo "not valid JSON"; return 1; } ;;
+  esac
+}
+
+# Apply the rule (see the header) to one conflicted path and stage it. Sets NOTE, or WHY when it must stay manual.
+resolve_one() {
+  local p=$1 st m2 m3 kind
+  NOTE="" WHY=""
+  read -r st m2 m3 <<< "$(stage_info "$p")"
+  if [[ "$st" != 123 && "$st" != 23 ]]; then
+    WHY="delete/modify (one side deleted or renamed it): never auto-resolved"; return 1
+  elif is_cloud_owned "$p"; then
+    git checkout -q --theirs -- "$p"
+    NOTE="theirs (cloud-owned per COORDINATION.md)"
+  elif [[ "$st" == 23 ]]; then
+    WHY="added on both sides and not cloud-owned"; return 1
+  elif [[ "$m2" != "$m3" || ( "$m2" != 100644- && "$m2" != 100755- ) ]]; then
+    WHY="not a plain file on both sides, or its mode changed (${m2%-} vs ${m3%-})"; return 1
+  else
+    kind=$(merge_both "$p") || { WHY=$kind; return 1; }
+    cat "$TMP/resolve/resolved" > "$p"
+    NOTE="kept both (one-sided hunks)"
+    [[ "$kind" == disjoint ]] && NOTE="kept both (disjoint hunks under ${p%%/*}/)"
+  fi
+  if ! WHY=$(check_resolved "$p"); then
+    WHY="$WHY after auto-resolving as $NOTE; conflict restored" NOTE=""
+    git checkout -q -m -- "$p"
+    return 1
+  fi
+  git add -- "$p"
+}
+
+# Runs after `git merge` reported conflicts. Commits the merge when every conflicted path was auto-resolved;
+# otherwise fails with the merge still in progress, the resolved paths staged and listed in MERGE_MSG.
+resolve_conflicts() {
+  local p msg
+  msg=$(git rev-parse --git-path MERGE_MSG)
+  load_cloud_patterns
+  # Listed up front: `git add` in the loop must not race a git process still reading the index.
+  git diff --name-only --diff-filter=U -z > "$TMP/conflicts.z"
+  while IFS= read -r -d '' p; do
+    if resolve_one "$p"; then AUTO_LINES+="auto-resolved $p: $NOTE"$'\n'
+    else STOP_LINES+="$p: $WHY"$'\n'; fi
+  done < "$TMP/conflicts.z"
+  AUTO_LINES=${AUTO_LINES%$'\n'} STOP_LINES=${STOP_LINES%$'\n'}
+  if [[ -n "$STOP_LINES" ]]; then
+    [[ -z "$AUTO_LINES" ]] || printf '\n%s\n' "$AUTO_LINES" >> "$msg"
+    return 1
+  fi
+  { head -n 1 "$msg"; echo; printf '%s\n' "$AUTO_LINES"; } > "$TMP/merge-msg"
+  git commit -q -F "$TMP/merge-msg"
+}
+
+conflict_banner() {
+  local bar n
+  bar=$(printf '#%.0s' {1..88})
+  n=$(printf '%s\n' "$STOP_LINES" | wc -l | tr -d ' ')
+  printf '\n%s\n' "$bar"
+  echo "#  CONFLICTS in $n file(s) that could not be auto-resolved (listed below with the reason). Resolve them by"
+  echo "#  hand, then: git add <those files> && git commit && npm test -- --fast"
   echo "#  The merge of '$CLOUD_BRANCH' into '$MAIN_BRANCH' is left IN PROGRESS. To back out: git merge --abort"
-  printf '%s\n\nConflicted paths:\n' "$bar"
-  printf '%s\n' "$conflicts" | sed 's/^/  /'
+  printf '%s\n\nNot auto-resolved:\n' "$bar"
+  printf '%s\n' "$STOP_LINES" | sed 's/^/  /'
+  if [[ -n "$AUTO_LINES" ]]; then
+    echo "Auto-resolved and staged (also added to the merge message):"
+    printf '%s\n' "$AUTO_LINES" | sed 's/^/  /'
+  fi
   echo
   echo "cloud snapshot commit: $(git rev-parse --short "$CLOUD_BRANCH") (\"cloud snapshot $STAMP\")"
 }
 
 merge_into_main() {
-  local conflicts
+  local n
   git checkout -q "$MAIN_BRANCH"
   if git merge --no-edit "$CLOUD_BRANCH" > "$TMP/merge.out" 2>&1; then
     NEW_MAIN=$(git rev-parse HEAD)
@@ -359,9 +533,16 @@ merge_into_main() {
     log "merge: $MERGE_NOTE"
     return 0
   fi
-  conflicts=$(git diff --name-only --diff-filter=U)
-  [[ -n "$conflicts" ]] || { cat "$TMP/merge.out" >&2; die "git merge failed (no conflicted paths; see above)"; }
-  conflict_banner "$conflicts"
+  n=$(git diff --name-only --diff-filter=U | wc -l | tr -d ' ')
+  (( n )) || { cat "$TMP/merge.out" >&2; die "git merge failed (no conflicted paths; see above)"; }
+  log "merge: conflicts in $n file(s); applying the auto-resolve rule"
+  if resolve_conflicts; then
+    NEW_MAIN=$(git rev-parse HEAD)
+    MERGE_NOTE="merge commit $(git rev-parse --short HEAD) ($n conflicted file(s) auto-resolved, see below)"
+    log "merge: $MERGE_NOTE"
+    return 0
+  fi
+  conflict_banner
   exit 2
 }
 
@@ -405,7 +586,10 @@ print_summary() {
     printf '  %-13s %s\n' changes "$CHANGE_NOTE"
     [[ -z "$BY_DIR" ]] || printf '  %-13s %s\n' "  by dir" "$BY_DIR"
     [[ -z "$GITIGNORE_NOTE" ]] || printf '  %-13s %s\n' .gitignore "$GITIGNORE_NOTE"
-    printf '  %-13s %s\n' merge "$MERGE_NOTE" "npm install" "$NPM_NOTE" tests "$TEST_NOTE"
+    printf '  %-13s %s\n' merge "$MERGE_NOTE"
+    [[ -z "$AUTO_LINES" ]] \
+      || printf '%s\n' "$AUTO_LINES" | awk '{ printf "  %-13s %s\n", (NR == 1 ? "conflicts" : ""), $0 }'
+    printf '  %-13s %s\n' "npm install" "$NPM_NOTE" tests "$TEST_NOTE"
   fi
   printf '  %-13s %s\n%s\n' branch "$(git branch --show-current)" "$line"
   if (( CLOUD_CREATED )); then
