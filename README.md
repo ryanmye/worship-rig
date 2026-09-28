@@ -30,12 +30,8 @@ You need an Apple Silicon Mac (M1 or newer) and **Node.js** from <https://nodejs
    (A zipped copy, `dist/Worship Rig-<version>-arm64-mac.zip`, is made too, for moving it to another Mac.)
 
 **First launch:** double-click the app. It isn't from the App Store, but the build signs it for this Mac,
-so it should just open. If macOS still says it "can't be opened" or is "damaged" (this can happen after copying
-the zip to another Mac), right-click the app, choose **Open**, then click **Open** again. If that doesn't work,
-run this once in Terminal:
-```
-xattr -cr "/Applications/Worship Rig.app"
-```
+so it just opens. A copy moved to *another* Mac through a browser, AirDrop or Messages needs one extra step the
+first time: see [Running on your Mac](#running-on-your-mac).
 
 Want to try it without building? From the same Terminal folder run `npm start`.
 
@@ -273,6 +269,54 @@ past the value on screen, so the sound never jumps.
 - **"Your changes could not be saved".** The browser's storage is full or blocked. Worship Rig keeps retrying;
   export the library (Settings) to be safe. If your saved library can't be read at all, it is kept untouched (and,
   in the Mac app, copied to the backups folder) and nothing overwrites it.
+
+## Running on your Mac
+
+**Building.** After `npm install`, `npm run build:mac` takes about half a minute on an M-series Mac. It makes
+`dist/mac-arm64/Worship Rig.app` (about 365 MB) and `dist/Worship Rig-<version>-arm64-mac.zip` (about 193 MB).
+The app has to stay under 500 MB on disk (around 400 MB is fine). The build check (`build-lint`) fails above
+480 MB and prints what takes the space.
+
+**First open on another Mac.** The app isn't notarized by Apple. A copy that came through a browser, AirDrop or
+Messages makes macOS say *"Apple could not verify 'Worship Rig' is free of malware"*. On macOS 15 and later,
+right-click → Open no longer gets past this. Instead:
+1. Click **Done**.
+2. Open **System Settings → Privacy & Security**, scroll down to *"Worship Rig" was blocked*, and click
+   **Open Anyway**.
+
+Or run this once in Terminal: `xattr -dr com.apple.quarantine "/Applications/Worship Rig.app"`. If macOS says
+*"damaged"*, the copy itself is broken. Copy the zip again and double-click it to unpack.
+
+**Where things are kept.**
+- **Songs and setlists** live in the app's own browser storage, which is kept separately for each address. The
+  Mac app (`127.0.0.1:8438`) and Chrome (`127.0.0.1:8437`) therefore have separate libraries. `npm start` and the
+  built app share one.
+- **App folder**: `~/Library/Application Support/Worship Rig/`. It holds that storage, plus `rig-shell.json` (your
+  pad folder, once chosen).
+- **Backups**: `backups/rig-YYYYMMDD-HHMMSS.json` in that folder. One is written every time you close the window
+  or quit, as long as you've changed anything since the factory songs. More are written now and then while you
+  play. The newest 10 are kept. Open them with **Help → Open Backups Folder**.
+- **Recordings**: `~/Music/Worship Rig/Rig 2026-10-04 1030.wav` (`… 2.wav` if that name is taken). The folder is
+  created at your first recording.
+- **My Samples**: the built app only looks in `~/Music/Worship Rig/Samples/`. The `user-samples/` folder in the
+  repo is only scanned when you run from source (`npm start` or the Chrome launcher). To use a pack in the app,
+  put it in `~/Music/Worship Rig/Samples/`.
+
+**MIDI and privacy prompts.** macOS doesn't ask anything for a USB MIDI keyboard. The Mac app allows MIDI for its
+own page, so you won't see a prompt; Chrome asks once. Worship Rig never opens the microphone, so there's no
+microphone prompt either.
+
+**Sleep.** While the app is open the screen stays on, so the Mac won't doze off mid-service. Closing the lid still
+puts it to sleep. After waking, play a note; if the top bar says *Audio stopped*, press **Restart audio**.
+
+**One window at a time.**
+- Opening the app again just brings its window to the front.
+- Closing the window quits Worship Rig, like **⌘Q**. Both ask first if you're recording. **⌘W** does nothing on
+  purpose, so a stray keystroke can't end your set.
+- Don't run the Chrome version and the app at the same time: both would play every note. The app warns you if a
+  Chrome window of Worship Rig is open, and the Chrome launcher's Terminal warns you if the app is open.
+- A second Chrome window on the same address is read-only and muted (see [Run it in Chrome
+  instead](#run-it-in-chrome-instead)).
 
 ## Manual check on your Mac (5 minutes, after each build)
 
