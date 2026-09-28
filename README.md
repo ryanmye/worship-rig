@@ -318,6 +318,12 @@ puts it to sleep. After waking, play a note; if the top bar says *Audio stopped*
 - A second Chrome window on the same address is read-only and muted (see [Run it in Chrome
   instead](#run-it-in-chrome-instead)).
 
+**Updating.** Double-click **`tools/update.command`** in the `worship-rig` folder to pull the latest code, rebuild
+the app and open it, all in one step. A Terminal window shows progress and closes itself when it's done; if
+something goes wrong (no internet, local changes in the way, a build error) it prints a plain-English explanation
+and waits for a key press so you can read it. It refuses to run over local changes, so it's safe to double-click
+any time.
+
 ## Manual check on your Mac (5 minutes, after each build)
 
 1. `npm run build:mac` finishes; the app opens from Applications.
