@@ -12,6 +12,20 @@ const toArrayBuffer = (data) => {
   return data;
 };
 
+/** ipcRenderer.on wrapper: cb(payload); a throwing handler is logged, never kills the channel. Returns unsubscribe. */
+const listen = (channel, cb) => {
+  if (typeof cb !== 'function') return () => {};
+  const listener = (_e, payload) => {
+    try {
+      cb(payload);
+    } catch (err) {
+      console.warn(`[rig] ${channel} handler failed`, err);
+    }
+  };
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.removeListener(channel, listener);
+};
+
 contextBridge.exposeInMainWorld('rig', {
   isElectron: true,
   platform: process.platform,
@@ -68,4 +82,45 @@ contextBridge.exposeInMainWorld('rig', {
     ipcRenderer.on('rig:menu', listener);
     return () => ipcRenderer.removeListener('rig:menu', listener);
   },
+
+  // ---- menu-bar mode bus (docs/menubar-mode.md; main.js relays). Messages are JSON strings: {"v":1, …}. ----
+  /** Main renderer: publish the bus `state` (≤ 64 KB). @returns {Promise<{ok, seq}|{error}>} */
+  busPublish: (stateJson) => call('rig:busPublish', stateJson),
+  /** Main renderer: cb(commandJson) for every popover/tray command (never `openMain`). Returns an unsubscribe. */
+  onBusCommand: (cb) => listen('rig:busCommand', cb),
+  /**
+   * Popover: cb(stateJson) for every published state, starting with the last one (if any) right away.
+   * States arrive in order; a stale "last state" reply never overwrites a newer push. Returns an unsubscribe.
+   */
+  miniSubscribe: (cb) => {
+    if (typeof cb !== 'function') return () => {};
+    let seen = 0;
+    let live = true;
+    const deliver = (json, seq) => {
+      if (!live || typeof json !== 'string' || !(seq > seen)) return;
+      seen = seq;
+      try {
+        cb(json);
+      } catch (err) {
+        console.warn('[rig] miniSubscribe handler failed', err);
+      }
+    };
+    const listener = (_e, json, seq) => deliver(json, seq);
+    ipcRenderer.on('rig:miniState', listener);
+    call('rig:miniLastState').then((r) => r && !r.error && deliver(r.json, r.seq));
+    return () => {
+      live = false;
+      ipcRenderer.removeListener('rig:miniState', listener);
+    };
+  },
+  /** Popover (or any page of ours): send a bus `command` (≤ 4 KB, validated). @returns {Promise<{ok}|{error}>} */
+  miniCommand: (commandJson) => call('rig:miniCommand', commandJson),
+  /** Mirror settings.menuBarMode to main (tray, hide-on-close, dock). @returns {Promise<MenuBarState|{error}>} */
+  setMenuBarMode: (on) => call('rig:setMenuBarMode', on),
+  /** @returns {Promise<{on, popoverOpen, loginItem, windowVisible, tray}>} */
+  getMenuBarState: () => call('rig:getMenuBarState'),
+  /** "Open at login" (packaged app only; opens hidden). @returns {Promise<MenuBarState|{error}>} */
+  setLoginItem: (on) => call('rig:setLoginItem', on),
+  /** cb({on, popoverOpen, loginItem, windowVisible, tray}) whenever one of them changes. Returns an unsubscribe. */
+  onMenuBarState: (cb) => listen('rig:menuBarState', cb),
 });
