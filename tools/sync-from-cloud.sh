@@ -259,7 +259,7 @@ print_dry_run_changes() {
   cp "$TMP/rsync.out" "$list"
   n=$(wc -l < "$list" | tr -d ' ')
   log "would change: $(rsync_counts)"
-  if (( n == 0 )); then echo "    (nothing: the working tree already matches the snapshot)"; return; fi
+  if (( n == 0 )); then echo "    (nothing: $DEST_DESC already matches the snapshot)"; return; fi
   head -n "$max" "$list" | sed 's/^/    /'
   if (( n > max )); then
     KEEP_TMP=1
