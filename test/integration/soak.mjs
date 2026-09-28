@@ -431,10 +431,22 @@ try {
   // while the current song alone is bigger (it is then pinned alone, note "This song alone is … MB")
   const pinPeak = rows.reduce((m, r) => (Number(r.pinnedMB) > m.pinnedMB ? r : m), { pinnedMB: -1 });
   const pinsOk = (r) => !(r.budgetMB > 0) || !(r.pinnedMB > r.budgetMB) || /alone/.test(r.memNote || '');
-  check('decoded samples stay under the engine cache cap (pins limited)',
-    rows.every((r) => (!(r.capMB > 0) || r.decodedMB <= r.capMB) && pinsOk(r)),
+  // L-10: the cap is SOFT while a retired song is still fading: its buffers can't be freed without cutting held
+  // notes (gapless rule). Rule: decoded ≤ cap whenever retiring == 0; while retiring > 0 and within 90 s of the last
+  // song switch, decoded ≤ cap + 25 %. (Rows are 30 s apart, so a switch is dated by the row where `switches` grew.)
+  const SOFT_CAP = 1.25, SOFT_WINDOW_S = 90;
+  let lastSwitchT = -Infinity, lastSwitches = -1;
+  const capOk = (r) => {
+    if (Number(r.switches) > lastSwitches) { lastSwitches = Number(r.switches); lastSwitchT = Number(r.t_s); }
+    if (!(r.capMB > 0) || r.decodedMB <= r.capMB) return true;
+    return Number(r.retiring) > 0 && Number(r.t_s) - lastSwitchT <= SOFT_WINDOW_S && r.decodedMB <= r.capMB * SOFT_CAP;
+  };
+  const capFails = rows.filter((r) => !capOk(r) || !pinsOk(r));
+  check('decoded samples stay under the engine cache cap (soft +25 % ≤ 90 s after a switch while retiring; pins limited)',
+    capFails.length === 0,
     `max ${peak.decodedMB} MB (pinned ${peak.pinnedMB} MB, ${peak.memMode}) of ${peak.capMB} MB cap; max pinned ` +
-    `${pinPeak.pinnedMB} MB on ${pinPeak.song} (budget ${pinPeak.budgetMB} MB)`);
+    `${pinPeak.pinnedMB} MB on ${pinPeak.song} (budget ${pinPeak.budgetMB} MB)` +
+    (capFails.length ? `; over: ${capFails.slice(0, 5).map((r) => `${r.t_s}s ${r.song} ${r.decodedMB}/${r.pinnedMB}`).join(', ')}` : ''));
   check('zero console.error', consoleErrors.length === 0, consoleErrors.slice(0, 10).join(' | '));
   exitCode = finish();
   console.log(`# CSV: ${path.relative(repoRoot, CSV)} (${rows.length} rows)`);
