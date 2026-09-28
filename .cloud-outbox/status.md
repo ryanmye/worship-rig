@@ -9,3 +9,5 @@
 2026-09-28T19:20:59Z LOCAL_STATE: full native test run on baseline (triage/fix phase, L-1 L-2 committed) | SYNC 20260928T185802Z → fast table → full run on merged tree → build:mac → hardware pass when Ryan is at the keyboard
 2026-09-28T19:28:58Z FINDINGS full test 6/10 suites (9/10 after local fixes L-1, L-2); 4 findings (L-1, L-2, L-3, L-4); see reviews/local-findings.md
 2026-09-28T19:29:42Z LOCAL_STATE: SYNC 20260928T185802Z running (tools/sync-from-cloud.sh, fast suite) | full run on merged tree → build:mac → hardware pass
+2026-09-28T19:36:15Z SYNC_OK 20260928T185802Z: cloud commit bc4f11f, merge 246f75c (clean, 66 files), fast suite 10/10 (unit 275, engine 64/65+1 soft warn, instruments 143, synth-extra 153, shell 152, ui-core 39, edit-v2 75, settings 26, eq 22, chrome-fallback 15) in 5m59s
+2026-09-28T19:36:15Z LOCAL_STATE: full npm test + build:mac on merged tree 246f75c | hardware pass when Ryan is at the keyboard
