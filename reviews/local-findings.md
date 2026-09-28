@@ -285,3 +285,68 @@ test/integration/lib.mjs one-sided) resolved by hand with Ryan's approval.
   that clears it. Could also be a Playwright `type` vs `fill` difference: `page.type` on macOS Chromium leaves the caret at
   the end and a subsequent programmatic `value = '88'`... would replace, not append, so append suggests the binder
   concatenates. Cloud's own run reportedly saw this as a flake; here it is not.
+
+## Merged tree 05ec36f: bounded waits, soak L-8 verification, full run (2026-09-28, native macOS)
+
+Tree: `05ec36f` plus `c889fd9` (L-4, local): `soak.mjs` and `smoke-chrome-fallback.mjs` now wait on `__rig.ready`
+through `lib.waitRigReady` (30 s, throws with `controller.status.midi`). `soak.mjs` also bounds its
+`__rig.viewsReady` wait to 30 s. Both files already granted only `'midi'`, so no grant changed. chrome-fallback
+15/15 after the change.
+
+### Soak, 20 min (L-8 verification)
+
+`node test/run-all.mjs --only soak --soak-minutes 20`: **11/12**, 20m47s. 18109 events, 4134 notes, 38 song
+switches (15 lofi), 15 panics, 30 key changes, 185 sweeps. Voices back to 0 in 1.12 s, nodes 226 → 226, heap
+10.67 → 11.35 MB (+0.68 MB), audio running throughout, 0 NaN, 0 console errors.
+
+- CSV (`test/logs/soak.csv`, 44 rows): `memMode` = `large-set` in every row. `budgetMB` = 600 and `capMB` = 700 in
+  every row. `memNote` is sampled but is not a CSV column (it is missing from `COLS`), so the CSV can't show it.
+- Max `pinnedMB` **568.9** (factory:anthem, t = 877 s). Max `decodedMB` **754.2** (factory:upright-pad,
+  t = 1147 s).
+- Rows with `pinnedMB > 600`: **none**. The pin budget holds.
+- `factory:upright-pad`: 1147 s, decoded 754.2, pinned 421.2, retiring 1. 1177 s, decoded 591.1, pinned 421.2,
+  retiring 0. On 3a69692 it pinned 939.4 MB.
+- `factory:gospel-stab-b3` was not visited: the soak's random walk covered 15 factory songs this run, so the
+  754 MB pin from 3a69692 could not recur here. The cloud's 44-song walk is not reproduced by this suite.
+- Verdict: **L8_FAIL** under the agreed rule, because the cap check failed. The pinned part of L-8 is fixed: no row
+  is over the budget, and the peak is 568.9 MB. The failure has a different cause, filed below as L-10.
+
+### L-10: decoded samples briefly exceed the 700 MB cap during a song switch (minor; design question, NEEDS CLOUD/Ryan)
+
+- Suite: soak, "decoded samples stay under the engine cache cap (pins limited)" (`test/integration/soak.mjs:434`).
+- Observed: one row of 44 is over the cap. At t = 1147 s, on factory:upright-pad just after the switch from
+  factory:dusty-piano, decoded was 754.2 MB, pinned 421.2 MB and `retiring` 1. By the next sample (1177 s,
+  retiring 0) it had dropped to 591.1 MB, which is under the 595 MB low-water mark. Every other row was ≤ 696.2 MB.
+- Cause (suspected, not instrumented): `BufferCache._evict` (`app/js/engine/sampler.js:403`) runs on every acquire,
+  so at 754 MB nothing else was evictable. That means about 333 MB was unpinned but still referenced, which fits
+  the retiring dusty-piano instruments (dusty-piano had been the pinned 332.9 MB before the switch). When they were
+  released, 163 MB was freed. The cache's JSDoc says referenced buffers are never evicted, so the cap is soft by
+  design during a switch overlap. The soak check treats it as a hard cap in every row.
+- Decision needed:
+  - (a) Accept it as a soft cap. LOCAL would then relax the check to require `decoded ≤ cap` only in rows with
+    `retiring === 0`, or up to a stated margin.
+  - (b) Treat the overlap as a real risk (old and new sampled songs both resident) and have the engine expose
+    `referencedMB` in `status` so the check can require `pinned + referenced`-only overshoot.
+- Also: add `memNote` to the soak `COLS` so the "alone" exemption is visible in the CSV. This is a LOCAL change,
+  not made yet.
+
+### Full run (`npm test`, soak skipped)
+
+**11/12** suites passed, 6m56s.
+
+| suite | result | detail |
+|---|---|---|
+| unit | PASS | 276 pass |
+| engine | PASS | 68/69, 1 soft warn (`offline.eqCpu` absolute timings, as before) |
+| instruments | PASS | 143/143 |
+| synth-extra | PASS | 153/153 |
+| shell | PASS | 180 pass |
+| ui-core | PASS | 41 pass |
+| edit-v2 | FAIL | 81/82, L-9 (`song.test.mjs`, '1388' !== '13'), unchanged |
+| settings | PASS | 29/29 |
+| eq | PASS | 25/25, 2 notes |
+| chrome-fallback | PASS | 15/15, 1 skipped |
+| electron-full | PASS | 28/28 |
+| build-lint | PASS | 23/23, 1 skipped (packaged boot needs Linux + xvfb) |
+
+No new failures in the full run. L-9 is still open (NEEDS CLOUD).
