@@ -16,3 +16,4 @@
 2026-09-28T19:51:21Z LOCAL_STATE: 20-min soak running on 3a69692 (port 8438 busy until ~20:15Z; any new SYNC drop is queued behind it) | hardware pass when Ryan is at the keyboard
 2026-09-28T20:12:46Z FINDINGS soak 20 min on 3a69692: 11/12; 1 new finding L-8 (major, NEEDS CLOUD: large-set pin policy lets pinned samples reach 939 MB > 700 MB cap around upright-pad / gospel-stab-b3; 7 of 44 samples over cap). Everything else stable: voices→0 in 1.1 s, nodes 226→226, heap +0.8 MB, 0 NaN, 0 console errors. See reviews/local-findings.md
 2026-09-28T20:12:46Z LOCAL_STATE: idle, port 8438 free; next SYNC drop will be run immediately | hardware pass when Ryan is at the keyboard
+2026-09-28T20:34:36Z LOCAL_STATE: SYNC 20260928T203314Z running | bound waits in soak.mjs + smoke-chrome-fallback.mjs → soak 20 min (L-8 verify) → full run → hardware pass with Ryan
