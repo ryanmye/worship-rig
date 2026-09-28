@@ -160,6 +160,40 @@ test('song-header: polish-1 text:"dirty" — the focused name follows an outside
   t.assertNoConsoleErrors();
 });
 
+test('song-header: L-9 — the name draft stays exactly as typed under an outside rename storm (store.set / 20 ms)',
+  async (tc) => {
+    tc.after(() => t.ev(() => clearInterval(window.__l9))); // a failed assertion must not leave the storm running
+    const name = `${t.host} .ev2-song-name`;
+    const s0 = await t.song();
+    const names = ['Storm A', 'Storm B, longer', 'SC'];
+    await t.click(name);
+    await t.ev(([i, vs]) => {
+      window.__l9n = 0;
+      window.__l9 = setInterval(() => window.__rig.store.set(`songs.${i}.name`, vs[window.__l9n++ % vs.length]), 20);
+    }, [s0.id, names]);
+    await t.sleep(120);
+    assert.ok(names.includes(await t.page.inputValue(name)), 'the untyped name follows the storm');
+    await t.page.keyboard.press('ControlOrMeta+A');
+    await t.sleep(60); // renames before the first key keep the whole name selected: replaced, never appended
+    for (const ch of 'Kept name') {
+      await t.page.keyboard.type(ch);
+      await t.sleep(25);
+    }
+    await t.sleep(200);
+    assert.equal(await t.page.inputValue(name), 'Kept name', 'the name draft is exactly the typed text');
+    const n = await t.ev(() => {
+      clearInterval(window.__l9);
+      return window.__l9n;
+    });
+    assert.ok(n > 10, 'the storm ran');
+    await t.page.keyboard.press('Enter');
+    await t.until((i) => window.__rig.store.getSong(i).name === 'Kept name', s0.id);
+    assert.equal(await t.page.inputValue(name), 'Kept name');
+    await t.ev(([i, x]) => window.__rig.store.set(`songs.${i}.name`, x), [s0.id, s0.name]);
+    await t.until(([s, x]) => document.querySelector(s).value === x, [name, s0.name]);
+    t.assertNoConsoleErrors();
+  });
+
 test('song-header: tap tempo (4 taps @ 500 ms) → ~120 BPM in store and engine', async () => {
   // first tap is a real click; the rest are timed in-page (Playwright's click latency would skew the BPM). The
   // expected BPM comes from the actual click times, so a loaded machine (late timers) can't fail the test.

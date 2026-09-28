@@ -15,7 +15,7 @@ export const LEARN_NAMES = Object.freeze({
   'slots.2.gain': `${ROLE_DEFAULTS[2].name} level`,
   'slots.3.gain': `${ROLE_DEFAULTS[3].name} level`,
   'drone.gain': 'Drone level',
-  'fx.reverb.returnGain': 'Reverb level',
+  'fx.reverb.returnGain': 'Space level', // polish-2B: the name Edit's Wheels & pedal uses (lib.TARGET_LABELS)
   'master.volume': 'Master volume',
   nextSong: 'Next song',
   prevSong: 'Previous song',
@@ -47,6 +47,26 @@ export const LEARN_MESSAGES = Object.freeze({
   'sustain-pedal-reserved': 'That’s the sustain pedal — it always sustains and can’t be mapped. Use another knob, fader, pedal or pad.',
 });
 export const GARAGEBAND_DOC = 'docs/garageband-import.md';
+
+/**
+ * Settings › MIDI line while Web MIDI is not available (polish-2A, "## l3" UI follow-up). 'pending' is Chrome's
+ * permission prompt (or a slow CoreMIDI) and attaches by itself, so it is info with no reload advice; 'denied' points
+ * at the site settings; 'failed' keeps the unplug / replug advice.
+ * @param {{reason?:string|null, pending?:boolean}} m  controller.status.midi
+ * @param {boolean} [electron]
+ * @returns {string}
+ */
+export function midiStatusText(m, electron = false) {
+  const reason = m && (m.pending ? 'pending' : m.reason);
+  if (reason === 'pending') return 'MIDI starting… answer the browser’s permission prompt if it appears.';
+  if (reason === 'denied') {
+    // the app grants MIDI itself (main.js permission handler), so there is no site setting to point at there
+    return electron ? 'MIDI access was denied.' : 'MIDI was blocked — allow it in the browser’s site settings.';
+  }
+  if (reason === 'unsupported') return 'This browser has no Web MIDI — use Chrome or the Worship Rig app.';
+  if (reason) return 'MIDI could not start — unplug and replug the keyboard, then reload.';
+  return 'MIDI starting…';
+}
 const AUDIO_EXT = /\.(mp3|wav|ogg|oga|m4a|aac|aif|aiff|flac|webm)$/i;
 
 /** "CC 20 · ch 1" / "Note C4 · any ch" / "—" */
@@ -907,13 +927,7 @@ export function mountSettings(el, ctx) {
         setText(
           midiStatus,
           !m.available
-            ? m.pending || m.reason === 'pending' // polish-1 (local L-3): Chrome's prompt is open; no reload needed
-              ? 'Waiting for MIDI permission — if Chrome shows a prompt, click Allow.'
-              : m.reason === 'denied'
-                ? 'MIDI is blocked — allow MIDI in the address bar, then reload.'
-                : m.reason
-                  ? 'MIDI isn’t available — allow MIDI in the address bar (or plug the keyboard in), then reload.'
-                  : 'MIDI starting…'
+            ? midiStatusText(m, isElectron)
             : m.connected
               ? `Connected: ${m.name}`
               : 'No keyboard connected — check the USB cable.',

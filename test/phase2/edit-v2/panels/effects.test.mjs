@@ -38,8 +38,9 @@ test('effects: sentence title, three lines, Song’s own echo, who-goes-in chips
   {
     // Sunday Pad + Piano: reverb size .62 (no preset), a fixed 420 ms echo, the Pad sends .35 into the chorus
     assert.equal(await titleText(t),
-      'The room is the song’s own, the echo is the song’s own, and the Pad has a medium chorus');
-    assert.equal(await text(t, '#view-edit .ev2-title-actions .ev2-fx-vibe-btn'), 'Vibe: Custom');
+      'The Space is the song’s own, the echo is the song’s own, and the Pad has a medium chorus');
+    // polish-2B (ux-round2 #5): no "Custom" anywhere; the mockup's "your own mix" for a vibe that matches none
+    assert.equal(await text(t, '#view-edit .ev2-title-actions .ev2-fx-vibe-btn'), 'Vibe: your own mix');
     assert.deepEqual(await t.ev(() => [...document.querySelectorAll('.ev2-fx-line')].map((l) => l.dataset.line)),
       ['reverb', 'delay', 'chorus']);
     assert.match(await text(t, '[data-line="delay"] .ev2-fx-blurb'),
@@ -134,7 +135,7 @@ test('effects: sentence title, three lines, Song’s own echo, who-goes-in chips
       { size: 0.62, damp: 0.5, predelay: 0.025, returnGain: 1 });
     assert.deepEqual((await t.song()).patch.fx.delay, delayBefore, 'Space’s own never touches the echo');
     assert.equal(await pressed(t, 'space'), 'own');
-    assert.match(await titleText(t), /^The room is the song’s own/);
+    assert.match(await titleText(t), /^The Space is the song’s own/);
 
     // a title token focuses and flashes its control; a line token opens its Fine-tune
     await t.click('#view-edit .ev2-title .ev2-tok');
@@ -151,7 +152,7 @@ test('effects: sentence title, three lines, Song’s own echo, who-goes-in chips
   }
 });
 
-test('effects: presets: Space / Echo / Vibe apply through the store; tweak → Custom (ui-edit port)', async () => {
+test('effects: presets: Space / Echo / Vibe apply through the store; tweak → your own mix (ui-edit port)', async () => {
   const t = await wideMount();
   {
     await t.click('[data-preset="space"] [data-id="hall"]');
@@ -159,7 +160,7 @@ test('effects: presets: Space / Echo / Vibe apply through the store; tweak → C
       && Math.abs(window.__rig.engine.getParam('fx.reverb.size') - 0.65) < 1e-6);
     assert.equal(await pressed(t, 'space'), 'hall');
     assert.match(await text(t, '[data-line="reverb"] .ev2-fx-blurb'), /concert hall/i);
-    assert.match(await titleText(t), /^The room is a Hall,/);
+    assert.match(await titleText(t), /^The Space is a Hall,/);
 
     // Vibe menu (CONTRACT §5): opens with focus on an item, arrows move, Esc closes and returns focus, never panics
     const panics = await t.ev(() => {
@@ -205,9 +206,9 @@ test('effects: presets: Space / Echo / Vibe apply through the store; tweak → C
     await openSec(t, 'fx-reverb');
     await t.setRange(rangeOf('fx.reverb.size'), 300);
     await t.until(() => !document.querySelector('[data-preset="space"] [aria-pressed="true"]'));
-    assert.equal(await text(t, '.ev2-fx-vibe-btn'), 'Vibe: Custom');
+    assert.equal(await text(t, '.ev2-fx-vibe-btn'), 'Vibe: your own mix');
     assert.equal(await pressed(t, 'echo'), 'dotted');
-    assert.match(await titleText(t), /^The room is the song’s own, the echo is dotted 8ths/);
+    assert.match(await titleText(t), /^The Space is the song’s own, the echo is dotted 8ths/);
 
     await t.click('.ev2-fx-vibe-btn');
     await t.click('.ev2-fx-vibe-menu [data-id="sunday"]');
@@ -330,7 +331,7 @@ test('effects: 1024×700: opts.focus (mount + update), who-goes-in step panels i
       // the Space hint names the room (concept §5 4b)
       await t.click('[data-preset="space"] [data-id="stage"]');
       await t.click('[data-line="reverb"] [data-bind="slots.0.sends.reverb"]');
-      assert.equal(await text(t, '.ev2-fx-sphost .sp-hint'), 'how much of the Keys goes into the Space (Stage)');
+      assert.equal(await text(t, '.ev2-fx-sphost .sp-hint'), 'how much of the Keys goes into the Stage');
       await t.page.keyboard.press('Escape');
       await t.until(() => !document.querySelector('.ev2-fx-sphost .step-panel'));
       // empty slot: disabled, opens nothing

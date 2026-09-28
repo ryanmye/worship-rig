@@ -53,6 +53,17 @@ export const LOCK = Object.freeze({
   ]),
 });
 
+/**
+ * Room a strip's step panel needs above its chip (polish-2A): five 44 px steps, their gaps, the title row with the
+ * 44 px ×, padding and border (299 px), plus the ON tile it opens below (≈ 52 px incl. the strip padding), so the
+ * tile stays a one-tap mute while the panel is open. The hint and footnote drop out of a short panel
+ * (styles.css @container sp).
+ * @returns {number}
+ */
+export function stepPanelNeed() {
+  return 5 * 44 + 4 * 5 + 38 + 17 + 4 + 52;
+}
+
 /** Wheel target → short label. */
 export function wheelTargetLabel(target) {
   const m = /^slots\.(\d)\.gain$/.exec(target || '');
@@ -389,7 +400,9 @@ export function mountPerform(root, ctx) {
     const tile = use(onTile({ label: ROLE, color, testid: `slot-on-${i}`, onToggle: (on) => setMuted(i, !on) }));
     const instIcon = h('span.slot-icon', {}, icon('wave', 20));
     const inst = h('span.slot-inst', { text: '—' });
-    const badge = h('span.wheel-badge', { text: '' });
+    // "↻ wheel 60%": the word is its own span so a narrow strip can drop it (polish-2A, styles.css @container slot)
+    const badgeVal = h('span.wb-val', { text: '' });
+    const badge = h('span.wheel-badge', { hidden: true }, '↻ ', h('span.wb-word', { text: 'wheel ' }), badgeVal);
     const chorusBadge = h('span.slot-badge.chorus-badge', { hidden: true });
     const octBadge = h('span.slot-badge.oct-badge', { hidden: true }, h('em.cdi', { hidden: true }), h('span', {}));
     const susBadge = h('span.slot-badge.sus-badge', { hidden: true, text: 'Sus. off' });
@@ -409,7 +422,9 @@ export function mountPerform(root, ctx) {
     const lvl = use(levelMeter({ read: () => controller.slotLevel?.(i) ?? null, label: `${role.name} level meter` }));
     lvl.el.dataset.testid = `slot-level-${i}`;
     f.el.querySelector('.fader-track')?.append(lvl.el);
-    const chip = (o) => use(stepChip({ owner: ROLE, color, ...o }));
+    // polish-2A (ux-round2 #7): the steps keep 44 px at every size, so a strip without room above its chips (1024×700,
+    // 1366×768, a banner up) opens the panel over the strip below the ON tile ('cover') instead of squeezing them
+    const chip = (o) => use(stepChip({ owner: ROLE, color, placement: 'auto', placementNeed: stepPanelNeed, ...o }));
     const space = chip({
       label: 'Space',
       steps: AMOUNT_STEPS,
@@ -469,7 +484,10 @@ export function mountPerform(root, ctx) {
       h('div.slot-mods', {}, space.el, echo.el, octave.el, sustain.el),
       empty,
     );
-    slots.push({ el: elSlot, tile, instIcon, inst, badge, chorusBadge, octBadge, susBadge, fader: f, lvl, space, echo, octave, sustain, empty, gain: null, muted: false });
+    slots.push({
+      el: elSlot, tile, instIcon, inst, badge, badgeVal, chorusBadge, octBadge, susBadge, fader: f, lvl, space, echo,
+      octave, sustain, empty, gain: null, muted: false,
+    });
     slotsEl.append(elSlot);
   }
 
@@ -923,6 +941,7 @@ export function mountPerform(root, ctx) {
     // head
     setText(songName, song ? song.name : 'No song');
     songName.title = song ? song.name : '';
+    fitName.push();
     if (song) {
       setText(songKey, keyName(song.hearIn, song.minor));
       const semis = transposeSemisOf(song);
@@ -1071,6 +1090,29 @@ export function mountPerform(root, ctx) {
   function checkNotesOverflow() {
     notesRaf.push();
   }
+  function setWheelBadge(S, f) {
+    S.badge.hidden = f === null;
+    if (f !== null) setText(S.badgeVal, `${Math.round(f * 100)}%`);
+  }
+  // polish-2A (ux-round2 L1): the CSS size (clamp by row height) is the cap; a name wider than its column steps down to
+  // 70 % of it before it ellipsizes, so "Sunday Pad + Piano" stays whole at 1280 wide. Runs on a rename and a resize.
+  const fitName = rafCoalesce(() => {
+    if (!songName.isConnected || songName.closest('[hidden]')) return;
+    songName.style.fontSize = '';
+    const max = parseFloat(getComputedStyle(songName).fontSize) || 40;
+    const min = Math.round(max * 0.7);
+    let fs = max;
+    while (songName.scrollWidth > songName.clientWidth + 1 && fs > min) {
+      fs -= 1;
+      songName.style.fontSize = `${fs}px`;
+    }
+  });
+  d.add(() => fitName.cancel());
+  if (typeof ResizeObserver === 'function') {
+    const ro = new ResizeObserver(() => fitName.push());
+    ro.observe(songBlock);
+    d.add(() => ro.disconnect());
+  }
 
   function renderSlots(song) {
     const w = wheelNow();
@@ -1090,7 +1132,7 @@ export function mountPerform(root, ctx) {
       if (empty) {
         setText(S.inst, 'Empty');
         S.inst.title = 'Empty slot (add an instrument in Edit)';
-        setText(S.badge, '');
+        setWheelBadge(S, null);
         S.el.classList.remove('muted');
         S.tile.set(true);
         S.gain = null;
@@ -1115,7 +1157,7 @@ export function mountPerform(root, ctx) {
       S.tile.set(!muted);
       const f = slotWheelFactor(song.patch, i, w);
       S.fader.setIndicator(f === null || muted ? null : level * f);
-      setText(S.badge, f === null ? '' : `↻ wheel ${Math.round(f * 100)}%`);
+      setWheelBadge(S, f);
       // chips (+ the white dot = changed since loaded; "as loaded" in the step panel)
       const P = `patch.slots.${i}`;
       const sends = slot.sends || {};
@@ -1170,7 +1212,7 @@ export function mountPerform(root, ctx) {
         if (S.gain === null) continue;
         const f = slotWheelFactor(song.patch, i, w);
         S.fader.setIndicator(f === null || S.muted ? null : S.gain * f);
-        setText(S.badge, f === null ? '' : `↻ wheel ${Math.round(f * 100)}%`);
+        setWheelBadge(S, f);
       }
     }
   }
@@ -1335,14 +1377,29 @@ export function mountPerform(root, ctx) {
     takeSnapshot(store.currentSong());
     renderSong(store.get());
   });
+  // polish-2A (ux-round2 G1 / #8): the engine re-names the chord on every note-off, so a D chord released key by key
+  // ended on "A". The readout is live only while ≥ 2 keys are physically held (the engine's `held` set, which the
+  // 'notes' event carries; notes the pedal holds don't count); below that it idles, dimmed, on the last chord it showed
+  // live, so a lone key never shows. The engine names only on a change (a lone D and D major are both "D"), so the
+  // last name it sent is kept and re-read after each 'notes' event (the engine sends 'chord' right after 'notes').
+  let physHeld = 0;
+  let engineChord = null;
+  const refreshChord = () => {
+    const live = physHeld >= 2 && !!(engineChord && engineChord.name);
+    if (live) {
+      chord.set(engineChord);
+      const n = String(engineChord.name).length;
+      chord.el.dataset.len = n > 4 ? 'xl' : n > 2 ? 'l' : ''; // the chord column is narrow (H-v2: 116 px)
+    } else if (chord.el.classList.contains('live')) chord.set(null); // keeps the last live name, dimmed
+  };
   d.listen(controller, 'chord', (e) => {
-    const c = e.detail ? e.detail.chord : null;
-    chord.set(c);
-    const n = String(c?.name || '').length;
-    chord.el.dataset.len = n > 4 ? 'xl' : n > 2 ? 'l' : ''; // the chord column is narrow (H-v2: 116 px)
+    engineChord = e.detail ? e.detail.chord : null;
+    refreshChord();
   });
   d.listen(controller, 'notes', (e) => {
     const held = e.detail ? e.detail.held : [];
+    physHeld = held ? (held.size ?? held.length ?? 0) : 0;
+    queueMicrotask(refreshChord);
     piano.set(held);
     if (faded && held && (held.size || held.length)) queueMicrotask(readRuntime);
   });

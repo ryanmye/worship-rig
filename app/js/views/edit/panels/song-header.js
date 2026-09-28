@@ -36,7 +36,7 @@ export default {
     songsBtn.addEventListener('click', () => editState.setDrawer(!editState.drawer));
     ctx.listen(editState, 'drawer', (e) => songsBtn.setAttribute('aria-expanded', String(!!e.detail.open)));
 
-    const live = h('span.ev2-song-live', { title: 'This is the song that’s playing' },
+    const live = h('span.ev2-song-live', { title: LIVE_HINT }, // the hint text itself hides < 1341 px (polish-2B)
       h('i', { 'aria-hidden': 'true' }), 'LIVE');
 
     // ---- song name: inline input, song-bound (round2-ui #3); Enter blurs (commits), empty reverts, Esc cancels

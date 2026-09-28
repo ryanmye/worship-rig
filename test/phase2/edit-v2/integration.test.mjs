@@ -313,7 +313,7 @@ test('integration: Keys › Advanced › Tone mounts the EQ; a band writes b-row
   assert.ok(Math.abs((await ev(() => window.__rig.engine.getParam('slots.0.eq.b3.db'))) - 6) < 1e-6, 'engine b3 +6 dB');
   // the header sparkline shows once the EQ is not flat; the Tone summary counts bands
   await until(() => !document.querySelector('#view-edit .ev2-slot-eqmini').hidden);
-  assert.match(await page.textContent('#view-edit details[data-sec="slot0-tone"] .ev2-sec-sum'), /^Custom · \d+ bands?$/);
+  assert.match(await page.textContent('#view-edit details[data-sec="slot0-tone"] .ev2-sec-sum'), /^Shaped · \d+ bands?$/);
   // Warmth (the smart slider) now moves b1, the migrated low shelf — not the dead legacy row
   await ev(() => {
     const input = document.querySelector('#view-edit [data-bind="slots.0.eq.low"] input[type=range]');

@@ -194,8 +194,13 @@ button:disabled { opacity: .45; }
 .tb-val { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .midi-name { max-width: 190px; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
 .midi-name.off { color: var(--warn); }
-.audio-text { min-width: 5.5ch; }
-.latency { min-width: 6ch; color: var(--muted); }
+/* L-6 (local, SF Pro on the Mac): "Sound OK" never shrinks under the latency beside it; the status words (MIDI state,
+   READY / LOADING n/19) never shrink either. Only a connected device's name may ellipsize (it can be any length). */
+.audio-text { min-width: 8.5ch; flex-shrink: 0; }
+.latency { min-width: 6ch; color: var(--muted); flex-shrink: 0; }
+.midi-name.off, .ready-text, .tb-item > .led, .tb-item > .tb-cap { flex-shrink: 0; }
+.tb-item { flex-shrink: 0; }
+#midi-status { flex-shrink: 1; } /* the lamp whose device name may give way */
 .latency.warn { color: var(--warn); }
 .warn-btn { background: #4a2a00; border-color: var(--warn); color: #ffd899; min-height: 44px; }
 .led { width: 12px; height: 12px; border-radius: 50%; background: var(--led-off); flex: none; box-shadow: inset 0 0 0 1px #0007; }
@@ -241,8 +246,42 @@ body.recording::before { content: ''; position: fixed; top: 0; left: 0; right: 0
 .banner.info { background: #10263d; border-bottom-color: var(--slot-2); color: #e3f1ff; font-size: 17px; }
 .banner-msg { min-width: 0; }
 .banner-btn { min-height: 48px; font-size: 17px; font-weight: 800; padding: 0 18px; flex: none; }
-.banner .btn-restart { min-height: 48px; font-size: 18px; background: var(--danger); color: #fff; border-color: #ff8586; }
-.banner .btn-restart:hover:not(:disabled) { background: #ff6668; }
+/* ux-round2 #6: white on --danger #ff4d4f was 3.27:1 for the one emergency button; --panic #d9363a is 4.63:1 */
+.banner .btn-restart { min-height: 48px; font-size: 18px; background: var(--panic, #d9363a); color: #fff; border-color: #ff8586; }
+.banner .btn-restart:hover:not(:disabled) { background: #c42f33; }
+
+/* the persistent banners' strip (polish-2A, ux-round2 L2): 32 px in the layout whatever it holds; main.js setBanner */
+.bstrip { position: relative; height: 32px; flex: none; display: flex; align-items: stretch; background: #3a2a06;
+  border-bottom: 1px solid var(--warn); color: #fff1d0; }
+.bstrip[data-kind="danger"] { background: #4a1216; border-bottom-color: var(--danger); color: #fff; }
+.bstrip[data-kind="info"] { background: #10263d; border-bottom-color: var(--slot-2); color: #e3f1ff; }
+.bstrip-list { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.bstrip .banner { height: 31px; min-height: 0; padding: 0 12px; gap: 10px; border: 0; background: transparent; color: inherit;
+  font: 700 14px/1.2 var(--font); justify-content: center; }
+.bstrip:not(.open) .banner:not(:first-child) { display: none; }
+.bstrip .banner-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--warn); flex: none; }
+.bstrip .banner.danger .banner-dot { background: var(--danger); }
+.bstrip .banner.info .banner-dot { background: var(--slot-2); }
+.bstrip .banner-msg, .bstrip .banner-short { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.bstrip:not(.open) .banner.has-short .banner-msg { display: none; }
+.bstrip.open .banner-short { display: none; }
+.bstrip .banner-btn { min-height: 26px; height: 26px; padding: 0 10px; font-size: 13px; font-weight: 800; }
+.bstrip-more { flex: none; min-width: 48px; height: 31px; padding: 0 12px; border: 0; border-left: 1px solid #ffffff26;
+  background: #0000001f; color: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font: 800 13px/1 var(--font); position: relative; z-index: 61; margin-left: auto; }
+.bstrip-more:hover { background: #ffffff14; }
+.bstrip-chev { font-size: 13px; transition: transform .12s; }
+.bstrip.open .bstrip-chev { transform: rotate(180deg); }
+/* unfolded: every message in full, over the stage (absolute), each with 44 px buttons */
+.bstrip.open .bstrip-list { position: absolute; z-index: 60; left: 0; right: 0; top: 0; background: #1b1f26;
+  border: 1px solid #555e6c; border-top: 0; box-shadow: 0 18px 50px #000c; }
+.bstrip.open .banner { height: auto; min-height: 56px; padding: 8px 64px 8px 16px; justify-content: flex-start; font-size: 16px;
+  border-bottom: 1px solid var(--line); }
+.bstrip.open .banner.warn { background: #3a2a06; color: #fff1d0; }
+.bstrip.open .banner.danger { background: #4a1216; color: #fff; }
+.bstrip.open .banner.info { background: #10263d; color: #e3f1ff; }
+.bstrip.open .banner-msg { white-space: normal; flex: 1 1 auto; }
+.bstrip.open .banner-btn { min-height: 44px; height: 44px; font-size: 15px; }
 
 /* ------------------------------------------------------------------ views */
 .views { flex: 1 1 auto; min-height: 0; position: relative; }
@@ -265,8 +304,11 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
 .settings-placeholder h2 { margin: 0; font-size: 22px; }
 
 /* ------------------------------------------------------------------ toasts */
-/* top-right under the top bar (and any banner); click-through; at most 2 visible */
-.toasts { position: fixed; right: 16px; top: calc(var(--topbar-h) + var(--banner-h, 0px) + 8px); z-index: 80; display: flex; flex-direction: column; gap: 6px; width: min(440px, 40vw); min-width: 320px; pointer-events: none; }
+/* bottom-right, just above Perform's keyboard / Revert · Fade · PANIC · Lock row; click-through; at most 2 visible.
+   ux-round2 L3 / #3: top-right they covered the header Space / Echo chips and the Faded chip, and a tap went through to
+   a chip the player could not see. Down here they sit over the Notes column / the drone card's bottom edge. */
+.toasts { position: fixed; right: 16px; bottom: calc(var(--p-bot-h) + var(--p-pad-b) + 10px); z-index: 80; display: flex;
+  flex-direction: column; justify-content: flex-end; gap: 6px; width: min(400px, 34vw); min-width: 300px; pointer-events: none; }
 .toast {
   display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 9px; font-size: 14px; font-weight: 600; line-height: 1.3;
   background: #1f242cf2; border: 1px solid var(--line-2); border-left: 5px solid var(--slot-2); box-shadow: 0 6px 24px #000b;
@@ -280,7 +322,7 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
 .toast-msg { flex: 1 1 auto; }
 .toast-count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .toast-action { min-height: 44px; padding: 0 12px; font-size: 14px; pointer-events: auto; }
-@keyframes toast-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
 /* ------------------------------------------------------------------ start overlay */
 .overlay-start { position: fixed; inset: 0; z-index: 100; background: #05070acc; display: grid; place-items: center; cursor: pointer; backdrop-filter: blur(3px); }
@@ -289,15 +331,25 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
 .overlay-sub { color: var(--muted); font-size: 17px; }
 
 /* ------------------------------------------------------------------ responsive (top bar; Perform's own are at the end) */
-@media (max-width: 1340px) {
+/* ux-round2 L1 / G5: between the two designed widths the status lamps got squeezed ("Bl…", "Sound OK42 ms"). The
+   meter and the view switch narrow first, then the brand name goes (the logo stays), then the master fader narrows. */
+@media (max-width: 1500px) {
+  .topbar { gap: 12px; }
+  .tb-meter { width: 72px; }
+  .tb-views .seg { min-width: 72px; }
+}
+@media (max-width: 1400px) {
+  .tb-name { display: none; }
   .tb-master { width: 180px; }
   .midi-name { max-width: 130px; }
 }
 @media (max-width: 1250px) {
   .tb-name { display: none; }
-  .topbar { gap: 8px; padding: 0 10px; }
-  .tb-status { gap: 10px; }
-  .tb-views .seg { min-width: 64px; padding: 0 10px; }
+  /* polish-2A (G5): at 1024 the lamps need ≈ 350 px; the view switch, gaps and master give it back */
+  .topbar { gap: 6px; padding: 0 8px; }
+  .tb-status { gap: 8px; }
+  .tb-item { gap: 5px; }
+  .tb-views .seg { min-width: 56px; padding: 0 9px; }
   .tb-master .fader-label { display: none; }
   /* the device name and the delay only when they need attention (mockup perform-1024.png); a long warning
      ellipsizes instead of running into the next lamp */
@@ -305,8 +357,9 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
   .tb-status { overflow: hidden; }
   .tb-item > * { flex-shrink: 0; }
   .tb-item > .midi-name { flex-shrink: 1; min-width: 0; max-width: 70px; overflow: hidden; text-overflow: ellipsis; }
+  .tb-item > .midi-name.off { flex-shrink: 0; max-width: 104px; } /* "Blocked", "Starting…": a state, not a name */
   .audio-text, .latency, .ready-text { min-width: 0; }
-  .tb-master { width: 124px; }
+  .tb-master { width: 110px; }
   .tb-meter { width: 44px; }
   .rec-time { min-width: 0; font-size: 14px; }
   .quick-btn { padding: 0 10px 0 8px; }
@@ -387,6 +440,13 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
 .step-panel[data-dir="down"]::after { bottom: auto; top: -9px; transform: rotate(225deg); }
 .step-panel[data-dir="cover"] { top: 5px; bottom: 5px; }
 .step-panel[data-dir="cover"]::after { display: none; }
+/* a Perform strip's panel opens below the ON tile, so the tile stays a one-tap mute (polish-2A) */
+.slot > .step-panel, .slot > .step-panel[data-dir="cover"] { top: 57px; }
+/* a short panel (a 768 px window, 'up' at its limit) drops the hint and footnote before the steps shrink */
+.slot > .step-panel { container: sp / size; }
+@container sp (max-height: 360px) {
+  .step-panel .sp-hint, .step-panel .sp-foot { display: none; }
+}
 .step-panel .sp-head { display: flex; align-items: flex-start; gap: 6px; }
 .step-panel .sp-title { font-size: 15px; line-height: 1.15; }
 .step-panel .sp-owner { color: var(--c); font-size: 11px; letter-spacing: .1em; display: block; }
@@ -522,7 +582,10 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
   .qs .segmented .seg { padding: 0 6px; font-size: 13px; }
   /* compact strips: steps shrink below 44 px only here (mockup .amt at 1024: 24 px); hint/footnote hidden */
   .step-panel { padding: 7px 6px 6px; } .step-panel .sp-foot, .step-panel .sp-hint { display: none; }
-  .step-panel .sp-steps { gap: 4px; } .step-panel .sp-step { font-size: 13.5px; min-height: 30px; }
+  .slot > .step-panel, .slot > .step-panel[data-dir="cover"] { top: 55px; }
+  /* ux-round2 #7: the steps are live under lock, so they keep 44 px here too (perform.js opens the panel over the
+     whole strip when there isn't room above the chip) */
+  .step-panel .sp-steps { gap: 4px; } .step-panel .sp-step { font-size: 13.5px; min-height: 44px; }
   .ontile { height: 44px; padding: 0 5px 0 8px; gap: 6px; } .ontile .ot-name { font-size: 13px; letter-spacing: .07em; }
   .ontile .ot-state { font-size: 11.5px; padding: 2px 5px; } .ontile .ot-led { width: 10px; height: 10px; }
   .mchip { min-height: 44px; } .mchip .mc-label, .mchip .mc-value { font-size: 12.5px; }
@@ -535,10 +598,21 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
    Rows: header 112 · setlist 54 · stage 1fr · keyboard/actions 94 (1440×900). Colour contract (concept §1.2): an ON
    tile is the loudest thing in its strip; chips in use are a quieter tint; white dot = changed since loaded; amber
    (--warn) only for lock / HOLD; PANIC is the brightest control. */
-:root { --panic: #d9363a; }
+:root {
+  --panic: #d9363a;
+  /* polish-2A (ux-round2 L1): the rows follow the height left under the top bar and any banner, from 112 · 54 · 1fr · 94
+     at 900 px tall (the mockup) down to 102 · 48 · 1fr · 80 at 768–800, so a 1280×800 or 1440×860 window keeps its
+     fader throw. The toasts sit above the bottom row, so they read the same variables. */
+  --avail-h: calc(100vh - var(--banner-h, 0px));
+  --p-gap: clamp(10px, calc(var(--avail-h) * .0134), 12px);
+  --p-head-h: clamp(102px, calc(var(--avail-h) * .1245), 112px);
+  --p-nav-h: clamp(48px, calc(var(--avail-h) * .06), 54px);
+  --p-bot-h: clamp(76px, calc(var(--avail-h) * .1045), 94px);
+  --p-pad-b: clamp(10px, calc(var(--avail-h) * .0156), 14px);
+}
 .perform {
-  height: 100%; display: grid; gap: var(--gap); padding: var(--gap) 14px 14px; position: relative;
-  grid-template-rows: 112px 54px minmax(0, 1fr) 94px; grid-template-columns: 100%;
+  height: 100%; display: grid; gap: var(--p-gap); padding: var(--p-gap) 14px var(--p-pad-b); position: relative;
+  grid-template-rows: var(--p-head-h) var(--p-nav-h) minmax(0, 1fr) var(--p-bot-h); grid-template-columns: 100%;
 }
 .perform.locked { box-shadow: inset 0 0 0 2px #8a6d1f; border-radius: var(--radius); }
 .perform .ic { display: block; flex: none; }
@@ -555,17 +629,24 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
 body[data-view="edit"] .quick-btn { display: none; }
 
 /* ---- head: song + key, transpose, shared effects, chord */
-.p-head { display: grid; grid-template-columns: minmax(0, 1fr) 168px 640px 116px; gap: var(--gap); min-width: 0; min-height: 0; }
-.song-block { padding: 10px 20px; display: flex; flex-direction: column; justify-content: center; min-width: 0; position: relative; }
-.song-name { font: 800 40px/1.05 var(--font-display); letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.song-sub { display: flex; align-items: center; gap: 10px; margin-top: 6px; height: 44px; min-width: 0; } /* fixed: no shift */
+/* polish-2A (ux-round2 L1): the columns share the width instead of the shared-effects box keeping 640 px; the chips
+   tighten through a container query on .p-fx, and the song name keeps what is left (≥ 400 px at 1280). */
+.p-head { display: grid; gap: var(--p-gap); min-width: 0; min-height: 0;
+  grid-template-columns: minmax(0, 1fr) clamp(156px, 11.67vw, 168px) clamp(520px, calc(100vw - 800px), 640px) clamp(100px, 8.06vw, 116px); }
+.song-block { padding: clamp(4px, calc((var(--p-head-h) - 92px) / 2), 10px) 20px; display: flex; flex-direction: column;
+  justify-content: center; min-width: 0; position: relative; }
+/* the height the row leaves for the name (the KEY row is 44 px) caps it; perform.js (fitSongName) steps a long name
+   down to 70 % before it ellipsizes */
+.song-name { font: 800 clamp(28px, calc(var(--p-head-h) - 64px), 40px)/1.05 var(--font-display); letter-spacing: -.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
+.song-sub { display: flex; align-items: center; gap: 10px; margin-top: 4px; height: 44px; min-width: 0; flex: none; } /* fixed: no shift */
 .song-key-cap { font-size: 11.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
 .hold-btn.key-open { height: 44px; min-width: 76px; padding: 0 10px 0 12px; gap: 6px; border-radius: 9px; flex: none;
   border-color: color-mix(in srgb, var(--accent) 45%, var(--line-2)); background: color-mix(in srgb, var(--accent) 8%, var(--panel-2)); }
 .hold-btn.key-open .hb-body { flex-direction: row; align-items: center; gap: 6px; }
 .key-open .ic { color: var(--accent); }
 .key-open.open { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
-.song-key { font: 800 32px/1 var(--font-display); color: var(--accent); min-width: 1.1ch; }
+.song-key { font: 800 clamp(26px, 2.23vw, 32px)/1 var(--font-display); color: var(--accent); min-width: 1.1ch; }
 .song-bpm { font-size: 14px; color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .song-playin { font-size: 15px; font-weight: 700; color: var(--text); padding: 4px 10px; border-radius: 8px; background: #2e2716; white-space: nowrap; }
 .song-playin .pl-cap { color: var(--muted); font-weight: 600; }
@@ -578,15 +659,27 @@ body[data-view="edit"] .quick-btn { display: none; }
 .notes-btn, .notes-close { display: none !important; align-items: center; gap: 6px; min-height: 36px !important; font-size: 13px; margin-left: auto; padding: 0 10px; }
 .notes-btn.has-notes::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-left: 4px; }
 
-.transpose { padding: 10px 14px; display: flex; flex-direction: column; justify-content: center; gap: 6px; position: relative; min-width: 0; }
+/* −  0  + stay whole down to the 156 px column at 1280 (44 px buttons, the side padding gives way) */
+.transpose { padding: 10px clamp(6px, calc((100vw - 1280px) * .05 + 6px), 14px); display: flex; flex-direction: column; justify-content: center; gap: 6px; position: relative; min-width: 0; }
 .transpose-head { display: flex; justify-content: space-between; align-items: center; min-height: 18px; }
-.transpose-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.transpose .hold-btn { width: 46px; height: 48px; padding: 0; font-size: 26px; font-weight: 700; }
+.transpose-row { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.transpose .hold-btn { width: clamp(44px, 3.2vw, 46px); height: 48px; padding: 0; font-size: 26px; font-weight: 700; }
 .transpose-val { min-width: 2.2ch; text-align: center; font: 800 30px/1 var(--font-display); font-variant-numeric: tabular-nums; }
 .transpose-val.shift { color: var(--accent); }
 .perform .hold-btn .hb-cap { bottom: -30px; }
 
-.p-fx { padding: 7px 12px; display: grid; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); gap: 7px; min-width: 0; }
+/* the chip rows keep 44 px at a 102 px header row: padding and gap give way first */
+.p-fx { --pfx-pad: clamp(4px, calc((var(--p-head-h) - 91px) / 3), 7px); padding: var(--pfx-pad) 12px; display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); gap: var(--pfx-pad); min-width: 0; container: pfx / inline-size; }
+/* narrower than the mockup's 640 px (1251–1439 px windows): icon-only row captions, tighter chips; nothing ellipsizes */
+@container pfx (max-width: 600px) {
+  .fx-chiprow .fx-lab { width: 22px; gap: 0; }
+  .fx-chiprow .fx-lab span { display: none; }
+  .fxrow { gap: 5px; }
+  .fxc { padding: 0 7px; font-size: 13.5px; }
+  .fxc small { font-size: 10.5px; }
+  .fxc.own { padding: 0 8px; }
+}
 .p-fx .fx-chiprow { min-height: 0; align-items: stretch; }
 .p-fx .fxrow { align-items: stretch; }
 .p-fx .fx-lab .ic { color: var(--fx); }
@@ -603,7 +696,8 @@ body[data-view="edit"] .quick-btn { display: none; }
   font: 800 15px/1.2 var(--font); color: #1a1400; background: var(--warn); border-radius: 8px; }
 
 /* ---- setlist row */
-.p-nav { display: grid; grid-template-columns: 110px minmax(0, 1fr) 250px; gap: var(--gap); min-height: 0; }
+.p-nav { display: grid; grid-template-columns: clamp(90px, 7.64vw, 110px) minmax(0, 1fr) clamp(200px, 17.4vw, 250px); gap: var(--p-gap);
+  min-height: 0; }
 .perform .nav-btn { min-height: 0; height: 100%; font-size: 17px; font-weight: 700; border-radius: var(--radius); background: var(--panel); border-color: var(--line); }
 .perform .nav-btn.prev { color: var(--muted); }
 .perform .nav-btn.next { display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 14px; text-align: left; min-width: 0; }
@@ -636,8 +730,12 @@ body[data-view="edit"] .quick-btn { display: none; }
 
 /* ---- stage row */
 .p-main {
-  display: grid; gap: var(--gap); min-height: 0; grid-template-rows: minmax(0, 1fr);
-  grid-template-columns: 92px minmax(0, 1fr) 400px 270px; grid-template-areas: "wheel slots drone notes";
+  display: grid; gap: var(--p-gap); min-height: 0; grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: clamp(76px, 6.4vw, 92px) minmax(0, 1fr) clamp(360px, 27.8vw, 400px) clamp(240px, 18.75vw, 270px);
+  grid-template-areas: "wheel slots drone notes";
+  /* polish-2A: a size container, so the strips and the drone card compact by the height they actually get (window
+     height, banner) rather than by viewport breakpoints */
+  container: pmain / size;
 }
 .p-wheel { grid-area: wheel; }
 .p-slots { grid-area: slots; }
@@ -657,7 +755,7 @@ body[data-view="edit"] .quick-btn { display: none; }
   bottom: calc((100% - 8px) * var(--ghost, 0) + 2px); box-shadow: 0 0 6px var(--warn); pointer-events: none; }
 .wheel-value { font: 800 22px/1 var(--font-display); font-variant-numeric: tabular-nums; min-width: 4.2ch; text-align: center; }
 .wheel-strip.pickup .wheel-value { color: var(--warn); }
-.wheel-target { font-size: 11.5px; color: var(--muted); font-weight: 600; text-align: center; min-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.wheel-target { font-size: clamp(10.5px, .8vw, 11.5px); color: var(--muted); font-weight: 600; text-align: center; min-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .swell-btn { width: 100%; min-height: 44px; padding: 0 4px; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 3px; font-size: 13px; }
 .swell-btn.on { background: #173a26; border-color: var(--ok); color: #b8ffd6; }
 .swell-icon { font-size: 13px; line-height: 1; }
@@ -678,9 +776,9 @@ body[data-view="edit"] .quick-btn { display: none; }
 .drone-swell.down .drone-swell-led { background: var(--slot-2); box-shadow: 0 0 calc(4px + 10px * var(--bend, 0)) var(--slot-2); }
 
 /* strips: ON tile (= the mute) · name · tag line · fader · chips */
-.p-slots { display: flex; gap: var(--gap); min-width: 0; min-height: 0; }
+.p-slots { display: flex; gap: var(--p-gap); min-width: 0; min-height: 0; }
 .slot { --c: var(--slot-0); flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: stretch;
-  gap: 7px; padding: 9px 9px 10px; position: relative; }
+  gap: 7px; padding: 9px 9px 10px; position: relative; container: slot / inline-size; }
 .slot-who { display: flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; min-height: 22px; }
 .slot-icon { color: var(--c); display: flex; flex: none; }
 .slot-inst { font-weight: 700; font-size: 17px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -698,18 +796,47 @@ body[data-view="edit"] .quick-btn { display: none; }
 .slot .fader.vertical .fader-value { font-size: 18px; }
 .slot-mods { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex: none; }
 .perform.chips-2 .slot-mods .x4 { display: none; }
-/* OFF: grey struck-through tile (onTile), the rest of the strip grey and dim; the range bar goes grey too */
-.slot.muted > :not(.ontile):not(.step-panel) { opacity: .36; filter: grayscale(1); }
+/* OFF: grey struck-through tile (onTile). ux-round2 #9: the chips stay live on an OFF strip (set Space before you
+   unmute), so they lose the slot colour but stay readable (≥ 3:1); what dims is the fader (track, thumb, level) over a
+   hatched body, with the dB value struck through. The range bar goes grey too. */
+.slot.muted .slot-who, .slot.muted .slot-tag { opacity: .7; filter: grayscale(1); }
+.slot.muted .slot-body { border-radius: 8px; background: repeating-linear-gradient(135deg, transparent 0 9px, #ffffff0b 9px 18px); }
+.slot.muted .slot-body .fader-track { opacity: .32; }
+.slot.muted .mchip.on { background: #23272e; border-color: #555e6c; color: #dfe4ea; }
+.slot.muted .mchip.on > .mc-label { color: var(--muted); }
+.slot.muted .mchip .mc-bar { background: #7a8391; }
+.slot.muted .mchip.cycle.on .mc-led { background: #a3acb8; box-shadow: none; }
 /* empty slot: a narrow dashed column (neutral grey, not a fifth colour) */
 .slot.empty { flex: 0 0 60px; padding: 8px 4px; align-items: center; justify-content: center; background: transparent; border: 1.5px dashed var(--line-2); }
 .slot.empty > :not(.slot-empty) { display: none; }
 .slot-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+/* polish-2A: four filled strips are ≈ 136–165 px wide at 1024, 1366, 1440 and 1512; the tile, the tag line and the
+   chips take the compact type there (by the strip's own width), so "KEYS ON", "Sustain" and the badges stay whole */
+@container slot (max-width: 165px) {
+  .ontile { padding: 0 5px 0 8px; gap: 6px; }
+  .ontile .ot-name { font-size: 13px; letter-spacing: .07em; }
+  .ontile .ot-state { font-size: 11.5px; padding: 2px 5px; }
+  .ontile .ot-led { width: 10px; height: 10px; }
+  .slot-icon { display: none; }
+  .slot-inst { font-size: 15px; }
+  .wb-word { display: none; }
+  .wheel-badge, .slot-badge { font-size: 10.5px; }
+  .slot-badge { padding: 0 5px; }
+  .mchip .mc-label, .mchip .mc-value { font-size: 12.5px; }
+  .mchip.cycle { flex-direction: column; gap: 3px; }
+  .mchip.cycle .mc-led { width: 9px; height: 9px; }
+}
+@container slot (max-width: 145px) {
+  .mchip { padding: 0 1px 3px; }
+  .mchip .mc-label, .mchip .mc-value { font-size: 12px; letter-spacing: -.01em; }
+}
 .perform .slot-add { width: 34px; min-height: 34px; height: 34px; padding: 0; display: grid; place-items: center; color: var(--muted); }
 .slot-vt { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 12px; font-weight: 800; letter-spacing: .14em; color: var(--faint); white-space: nowrap; }
 .slot-vt span { font-weight: 600; letter-spacing: .04em; }
 
 /* key & drone */
-.p-drone { --c: var(--drone); padding: 9px 14px 12px; display: flex; flex-direction: column; gap: 10px; overflow: hidden auto; }
+.p-drone { --c: var(--drone); padding: 9px 14px 12px; display: flex; flex-direction: column; gap: 10px; overflow: hidden auto;
+  container: drone / inline-size; }
 .drone-title { display: flex; align-items: baseline; gap: 8px; min-height: 16px; }
 .drone-title .section-title { font-size: 11.5px; color: var(--muted); letter-spacing: .1em; }
 .drone-readout { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } /* spoken; the tile shows it */
@@ -772,7 +899,7 @@ body[data-view="edit"] .quick-btn { display: none; }
 .notes-text.overflowing { -webkit-mask-image: linear-gradient(#000 85%, transparent); mask-image: linear-gradient(#000 85%, transparent); }
 
 /* ---- bottom row: keyboard with range bars · Revert · Fade out · PANIC · Lock */
-.p-bottom { display: grid; grid-template-columns: minmax(0, 1fr) 132px 118px 150px 124px; gap: var(--gap); min-height: 0; }
+.p-bottom { display: grid; grid-template-columns: minmax(0, 1fr) 132px 118px 150px 124px; gap: var(--p-gap); min-height: 0; }
 .p-actions { display: contents; }
 .p-keys { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
 .rbars { position: relative; height: 23px; flex: none; }
@@ -801,8 +928,10 @@ body[data-view="edit"] .quick-btn { display: none; }
 .btn-panic { display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--panic); color: #fff;
   border: 0 !important; box-shadow: 0 0 22px #d9363a55; }
 .btn-panic .panic-l { font-size: 24px; font-weight: 800; letter-spacing: .06em; line-height: 1.1; }
-.btn-panic .panic-k { font-size: 11px; font-weight: 700; letter-spacing: .06em; opacity: .85; }
-.btn-panic:hover:not(:disabled), .btn-panic:active:not(:disabled) { background: #e8484c !important; }
+/* ux-round2 #6: "Esc" was 11 px at 85 % white (3.72:1); full white on --panic is 4.63:1, and hover goes darker, not
+   lighter, so the label never drops under 4.5:1 */
+.btn-panic .panic-k { font-size: 12px; font-weight: 800; letter-spacing: .06em; color: #fff; }
+.btn-panic:hover:not(:disabled), .btn-panic:active:not(:disabled) { background: #c42f33 !important; }
 .hold-btn.lock-toggle { background: var(--panel); }
 .lock-toggle .hb-body { gap: 3px; }
 .lock-l { display: inline-flex; align-items: center; gap: 7px; }
@@ -837,42 +966,81 @@ body[data-view="edit"] .quick-btn { display: none; }
 
 /* ---- 1250 < width ≤ 1340: notes share the drone column; the "Notes" button in the song block flips between them */
 @media (max-width: 1340px) {
-  .p-main { grid-template-columns: 92px minmax(0, 1fr) 380px; grid-template-areas: "wheel slots drone"; }
+  .p-main { grid-template-columns: clamp(76px, 6.4vw, 92px) minmax(0, 1fr) clamp(340px, 29.7vw, 380px); grid-template-areas: "wheel slots drone"; }
   .p-notes { grid-area: drone; display: none; z-index: 2; box-shadow: 0 10px 40px #000c; border-color: var(--line-2); }
   .perform.show-notes .p-notes { display: flex; }
   .perform.show-notes .p-drone { visibility: hidden; }
   .notes-btn, .notes-close { display: inline-flex !important; }
-  .p-head { grid-template-columns: minmax(0, 1fr) 160px 540px 110px; }
+}
+/* ---- short stages (polish-2A, ux-round2 L1): by the height the stage row really gets (window height, banner) */
+@container pmain (max-height: 500px) {
+  .slot { gap: 5px; }
+  .slot .ontile { height: 44px; }
+  .slot .mchip { min-height: 44px; }
+  .p-drone { gap: 8px; }
+  /* one row of toggles: the title and Edit still say "experimental" */
+  .drone-toggles { flex-wrap: nowrap; gap: 6px; }
+  .drone-toggles .tag { display: none; }
+  .perform .drone-toggles .toggle { font-size: 13px; padding: 0 10px; gap: 7px; min-width: 0; }
+}
+@container pmain (max-height: 450px) {
+  .key-btn { min-height: 42px; }
+  .drone-head .segmented .seg { min-height: 44px; }
+  .drone-char .fader.horizontal .fader-input { height: 30px; }
+  .p-drone { padding-top: 7px; padding-bottom: 9px; }
+  .pad-status { padding-top: 6px; }
+  .pad-status .btn { min-height: 40px; }
+}
+@container pmain (max-height: 410px) {
+  .pad-status { display: none; } /* Settings › My Pads has it (as at 1024, perform-1024.png) */
+  .key-btn { min-height: 40px; }
+}
+/* ---- the drone card narrower than the mockup's 400 px: the ON tile keeps "DRONE C major ON" whole */
+@container drone (max-width: 390px) {
+  .drone-head { gap: 8px; }
+  .drone-head .segmented .seg { padding: 0 9px; font-size: 13.5px; }
+  .drone-head .ontile { gap: 6px; padding-left: 9px; }
+  .drone-head .ontile .ot-name { letter-spacing: .03em; font-size: 14px; }
+  .drone-head .ontile .ot-sub { font-size: 14px; }
+  .drone-head .ontile .ot-label { gap: 5px; }
+  .drone-head .ontile .ot-state { padding: 2px 6px; }
 }
 /* ---- 1024-wide (perform-1024.png): shared-effect rows collapse to Space / Echo pills */
 @media (max-width: 1250px) {
-  .perform { grid-template-rows: 94px 50px minmax(0, 1fr) 74px; gap: 10px; padding: 10px 12px 12px; }
-  .p-head { grid-template-columns: minmax(0, 1fr) 150px 262px 96px; gap: 10px; }
-  .song-block { padding: 8px 14px; }
+  :root { --p-head-h: 94px; --p-nav-h: 50px; --p-bot-h: 74px; --p-gap: 10px; --p-pad-b: 12px; }
+  .perform { padding: var(--p-gap) 12px var(--p-pad-b); }
+  .p-head { grid-template-columns: minmax(0, 1fr) 150px 262px 96px; }
+  .song-block { padding: 6px 14px; }
   .song-name { font-size: 32px; }
-  .song-sub { height: 38px; margin-top: 4px; gap: 8px; }
-  .hold-btn.key-open { height: 38px; min-height: 38px; min-width: 64px; }
+  /* ux-round2 #7: KEY ▾ is a 44 px target here too (94 = 6 + 33.6 + 2 + 44 + 6 + borders) */
+  .song-sub { height: 44px; margin-top: 2px; gap: 8px; }
+  .hold-btn.key-open { height: 44px; min-height: 44px; min-width: 64px; }
   .song-key { font-size: 26px; }
   .song-bpm { display: none; }
   .transpose { padding: 8px 10px; }
   .transpose .hold-btn { width: 40px; height: 42px; font-size: 22px; }
   .transpose-val { font-size: 24px; }
-  .p-fx { padding: 7px 8px; gap: 6px; }
-  .p-fx .fxpill { min-height: 0; }
-  .p-fx .fxpill .fxpill-v { font-size: 14.5px; }
+  /* ux-round2 #7: Space and Echo side by side, each the full row height (≈ 76 px) instead of two 36 px pills */
+  .p-fx { padding: 6px 8px; gap: 6px; grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .p-fx .fxpill { min-height: 44px; height: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto;
+    align-content: center; row-gap: 3px; padding: 0 10px; }
+  .p-fx .fxpill .fxpill-v { grid-column: 1 / -1; grid-row: 2; font-size: 15px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+  .p-fx .fxpill .fxpill-caret { grid-column: 2; grid-row: 1; }
+  /* both popovers open leftwards from their pill's right edge, so they stay on screen */
+  .p-fx .fx-chiprow.fx-open > .fxrow { left: auto; right: 0; }
+  .p-fx .fx-chiprow.fx-open > .fx-more { top: calc(100% + 72px); }
   .chord-readout { padding: 8px 12px; }
   .chord-name { font-size: 38px; }
   .chord-readout[data-len="l"] .chord-name { font-size: 26px; }
   .chord-readout[data-len="xl"] .chord-name { font-size: 18px; }
-  .p-nav { grid-template-columns: 90px minmax(0, 1fr) 200px; gap: 10px; }
+  .p-nav { grid-template-columns: 90px minmax(0, 1fr) 200px; }
   .setlist-strip { padding: 2px 6px; }
   .chip-name { font-size: 15px; }
   .nav-next-name { font-size: 16px; }
-  .p-main { grid-template-columns: 76px minmax(0, 1fr) 330px; gap: 10px; }
-  .p-slots { gap: 10px; }
+  .p-main { grid-template-columns: 76px minmax(0, 1fr) 330px; }
   .wheel-strip { padding: 8px 6px; gap: 5px; }
   .wheel-value { font-size: 18px; }
-  .swell-btn { min-height: 38px; font-size: 12.5px; }
+  .swell-btn { min-height: 44px; font-size: 12.5px; } /* ux-round2 #7: live under lock */
   .slot { padding: 7px 6px; gap: 5px; }
   .slot-icon { display: none; }
   .slot-inst { font-size: 14.5px; }
@@ -901,7 +1069,7 @@ body[data-view="edit"] .quick-btn { display: none; }
   .drone-toggles { gap: 6px; flex-wrap: nowrap; }
   .drone-toggles .tag { display: none; } /* the title still says "experimental" */
   .pad-status { display: none; } /* Settings › My Pads has it (perform-1024.png) */
-  .p-bottom { grid-template-columns: minmax(0, 1fr) 104px 96px 118px 100px; gap: 10px; }
+  .p-bottom { grid-template-columns: minmax(0, 1fr) 104px 96px 118px 100px; }
   .p-keys { padding: 5px 8px 7px; }
   .rbars { height: 19px; }
   .rbar { top: calc(var(--row, 0) * 5px); height: 4px; }
@@ -922,10 +1090,11 @@ body[data-view="edit"] .quick-btn { display: none; }
   .perform .qs-restart { min-height: 38px; height: 38px; }
   .keypop .key-btn { min-height: 44px; }
 }
-/* short windows (a browser window on a 900 px screen) */
-@media (max-height: 820px) and (min-width: 1251px) {
-  .perform { grid-template-rows: 104px 52px minmax(0, 1fr) 84px; gap: 10px; padding-top: 10px; padding-bottom: 10px; }
-  .song-sub { height: 40px; margin-top: 4px; }
+/* a persistent banner strip (32 px) at 1024-wide takes its height from the setlist and bottom rows and the gaps, not
+   from the faders (ux-round2 L2: 141 → 83 px of throw before; ≥ 130 now) */
+@media (max-width: 1250px) {
+  :root:has(#banners > :not([hidden])) { --p-nav-h: 46px; --p-bot-h: 66px; --p-gap: 8px; --p-pad-b: 8px; }
+  :root:has(#banners > :not([hidden])) .setlist-strip { padding-top: 0; padding-bottom: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .drone-lockline.hint { animation: none; }

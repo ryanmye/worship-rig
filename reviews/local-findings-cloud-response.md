@@ -90,3 +90,22 @@ the next drop / SYNC. Details and measurements are in CONTRACT_CHANGES "## l3" a
     console warning.
 - Note: `soak.mjs` is LOCAL-owned. The only edit is the check expression plus 2 fields in the page snapshot and
   1 CSV column. Merge it with the L-4 bounded-wait change.
+
+## Update (l9)
+
+- **L-9 (`text:'dirty'`: '13' typed → '1388' on the Mac): root cause is the test's key, plus binder hardening.**
+  Details in CONTRACT_CHANGES "## l9".
+  - `song.test.mjs:215` pressed `Control+A`. Playwright on macOS maps it to `moveToBeginningOfParagraph:`
+    (`macEditingCommands.js:58`), so the caret went to 0 and `13` was typed in front of the `88`. The binder had
+    held back the outside `99`. Reproduced on Linux 1/1 by sending the same key with that CDP command (`"1388"`);
+    without it (or with `selectAll`) the field is `"13"`. The test now uses `ControlOrMeta+A`.
+  - Binder (`views/edit/lib.js`): an outside write before the first keystroke keeps a whole-field selection (number
+    fields are always re-selected), so a key replaces it instead of appending; the draft flag is set on
+    `beforeinput` / `compositionstart` too; `focusout` re-applies the store value forced, so a debounced notes
+    commit followed by outside writes can't leave a stale draft on screen.
+  - New regression tests under a `store.set` storm every 20 ms: song tempo + notes, song-header name. Each asserts
+    the field is exactly the typed text. Mutation-checked on Linux (each binder change reverted → the test fails).
+  - Linux: edit-v2 11/11 files (90 tests), settings 29/29, ui-core 46/46.
+- **Mac, verify after the next drop:** `node test/run-all.mjs --only edit-v2` passes, in particular
+  `song: polish-1 text:"dirty"`, `song: L-9 — …storm…` and `song-header: L-9 — …rename storm…`. If a storm test
+  fails on the Mac, report the actual value (it names whether a write was appended or a draft overwritten).

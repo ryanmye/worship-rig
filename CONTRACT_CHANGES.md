@@ -2575,3 +2575,320 @@ Also `node test/phase2/eq/run.mjs`: 25/25. Not run: Electron, soak.
   - Here the anthem window was Salamander + upright, so upright decodes to ≈ 236 MB on Linux. The Mac numbers imply
     ≈ 421 MB (754 − 333), but that is not verified: it may be a different context rate or a different sample set.
     The fix doesn't depend on the sizes. The Mac soak is the real check.
+
+## polish-2B (reviews/ux-round2.md #4, #5, L1, §5 Edit rows; views/edit/** / components/eq-keyboard.{js,css} / edit-v2 + eq tests)
+
+Store schema, PARAMS and the controller API are unchanged. New exports: `lib.spaceNoun(sp)`,
+`eq-keyboard.COMPACT_BELOW_PX` (1080) and `toneSummary(eq)`, and an `eqKeyboard({compactBelowHeight})` option.
+`debug().airLabels` is a test hook.
+
+**1. Effects preset chips (#4).**
+- `.ev2-fx-pc` is `flex: 1 0 auto`, so a chip never shrinks below its words. The row wraps instead of ellipsizing.
+  "Song’s own" keeps its natural width (`flex-grow: 0`), so on its own row it stays a chip, not a banner.
+- At 1251–1480 px the columns narrow: title 262 → 214, who-goes-in 250 → 228, gap 24 → 18. Chip padding is 8 px.
+- At 1251–1480 px × ≤ 820 px tall, chips are 40 px (Edit is desk use).
+- effects.js passes `placementNeed` to the who-goes-in stepChips: 290 at ≤ 1250 px, else 340. The measured panel
+  minimum is 38 head + 5 × 44 steps + gaps + padding = 287 at 1024. With stepChip's default of 220, the chorus panel
+  opened 'down' into 224 px at 1024×700 and its last two steps hung out of the panel. That was latent: it showed up
+  once the bottom-bar change below gave the body 3 px more.
+
+| Size | Before (the review; measured) | After |
+|---|---|---|
+| 1024×700 | 3-column grid, fine | 3 rows (Space) / 2 rows (Echo), whole words |
+| 1280×800 | every chip ellipsized (Dry 24>14 … Ambient Wash 97>52, Song’s own 78>42) | 2 rows in 472 px, whole words, narrowest chip 51 px |
+| 1366×768 | 13 chips ellipsized (Room 40>30, Song’s own 78>60 …) | 1 row in 558 px |
+| 1440×860 | 4 ellipsized (Room 40>38, Cathedral 65>62, Ambient Wash 97>93, Song’s own 78>75) | 1 row in 632 px |
+| 1512×900 | fit | 1 row in 622 px |
+
+**2. One vocabulary (#5).** The effect is **Space**, and a room that matches no preset is **the song’s own**.
+
+| Where | Before | After |
+|---|---|---|
+| Effects tab summary | Custom · echo: own | Song’s own · echo: song’s own |
+| Wiring lane | Space custom | Space song’s own |
+| Vibe button (no match) | Vibe: Custom | Vibe: your own mix (the mockup's words) |
+| Effects sentence and Space line | The room is … | The Space is … |
+| Space blurb | A room saved with this song… | The Space this song was saved with… |
+| Slot sentence, custom room | a little into the Space | a little into the song’s own Space |
+| Slot sentence, Dry | a little into the Dry | a little into the dry Space |
+| Space chip / step-panel hint | goes into the Space (Hall) | goes into the Hall / the song’s own Space |
+| Master footer link | Room, echo and chorus are on the Effects tab | Space, Echo and Chorus are on the Effects tab |
+| Wheels & pedal targets | Reverb level; Intensity (… reverb …); Wash (reverb size …) | Space level; Intensity (… Space …); Wash (Space size …) |
+| Tone summary (slot Advanced, EQ header, mini-curve label) | Custom · n bands | Shaped · n bands |
+
+- `lib.spaceNoun(sp)` builds the Space word used after "into the": the preset name, "dry Space", or "song’s own
+  Space".
+- "Custom · n bands" comes from `eq-math.eqSummary`. slot.js and `eq-keyboard.toneSummary` map it to "Shaped", and
+  eq-math itself is unchanged (see the requests below).
+- Audit: a grep over my files, plus a DOM audit of every visible string in `#view-edit` (text, `<option>`, `title`,
+  `aria-label`, `placeholder`). The audit covers every tab with every section open (Tone mounted, a shaped EQ), a
+  tweaked room, the Vibe menu, a Space step panel, wiring, and Master › Wheels & pedal.
+- "Room" remains only as the Space preset's name.
+
+**3. Intermediate widths (L1).** Measured on every tab (8 blocks) plus wiring, the Tone EQ and the chip rows.
+
+| Size | Before: ellipsized / clipped (examples) | After |
+|---|---|---|
+| 1280×800 | tab "Custom · echo: own" 129>97; "−6.0 dB · Tape off" 113>97; Effects sentence 880>739; header hint 4 lines in 56 px (114>56); "Response · how it answers …" 247>191; Fine-tune summaries | 0 |
+| 1366×768 | tabs 129>109 and 113>109; sentence 880>825; Response hint | 0 |
+| 1440×860 | tab 129>119; Response hint | 0 |
+| 1512×900 | Response hint | 0 |
+| 1024×700 | 0 | 0 |
+
+The fixes:
+- **Tab summaries.** A tab whose name and sub don't fit on one line drops the sub (`.nosub`), and its `title` keeps
+  the full text. The shell's `fitTabs()` runs once per frame, only after a text change or a tablist resize (a
+  ResizeObserver), never per store event.
+  - Measured: Effects and Master drop the sub at 1280 and 1366; Effects alone at 1440 and 1512.
+- **Header live hint.** Hidden below 1341 px. The LIVE pill's title carries the same text.
+- **Sentence title.** It now wraps, clamped at 2 lines, instead of ellipsizing.
+  - Sizes: 21 px default, 19 px at 1341–1480 px, 17.5 px at 1251–1340 px.
+  - Every slot, drone and master sentence is 1 line at every size. The Effects sentence is 2 lines at 1280–1366.
+- **Wrapping text.** The Response hint and the Effects Fine-tune summaries wrap.
+- **Short desktop windows** (≥ 1251 px wide, ≤ 820 px tall) get the rows the 1024 layout also trims:
+  - head 52 px, bottom 88 px, tabs 52 px, title 58 px;
+  - `.ev2-cols` padding 10/8;
+  - column subs hidden.
+
+Body scroll height / visible height after the fixes (equal means no scrolling):
+
+| Size | Slots, drone, master, song | Effects |
+|---|---|---|
+| 1024×700 | 364/364 | 437/364 (unchanged) |
+| 1280×800 | 392–408, fits | 443/392 |
+| 1366×768 | 376/376 (before: Keys 390/321) | 394/360 |
+| 1440×860 | 422/422 | 422/422 (before: 432/413) |
+| 1512×900 | 462/462 | 462/462 |
+
+Effects still scrolls at 1280 and 1366. That is by design (body `overflow: auto`), and nothing is clipped.
+
+**4. Contrast and hit targets (§5).** Measured with the review's method:
+
+| Item | Before | After |
+|---|---|---|
+| Edit PANIC "⌘ ." | 11 px at opacity .75, 3.19:1 | 13 px full white, 4.63:1 |
+| Legend "all" (dimmed rows) | 2.17:1 | ≥ 4.63:1 |
+| Legend "Pad" (dimmed rows) | 4.19:1 | ≥ 4.63:1 |
+| On-screen keys at 1024 | 41 px tall | 44 px tall |
+
+- The legend rows dim the colour bar and grey the name instead of fading the whole row. Muted rows no longer fade
+  either (grey bar and struck name).
+- The keys gained their 3 px from `.ev2-kb` padding at ≤ 1250 px: 5/7 → 4/5.
+- The lowest text run in the tabs and bottom bar is 4.63:1 at every size, with a muted Pad next to the selected
+  Keys.
+
+Fade out / PANIC and tabs, measured:
+
+| Size | Fade out | PANIC | Tabs | White keys |
+|---|---|---|---|---|
+| 1024×700 | 84×55 | 92×55 | 48 | 44 |
+| 1280×800, 1366×768 | 104×67 | 112×67 | 52 | 46 |
+| 1440×860, 1512×900 | 104×87 | 112×87 | 60 | 66 |
+
+**5. The EQ component.** No table or graph overflow before or after, at any width.
+
+The Edit Tone editor at each size:
+
+| Size | Width | Layout | Plot |
+|---|---|---|---|
+| 1024×700 | 944 | compact | 176 |
+| 1280×800 | 928 | compact | 176 |
+| 1366×768 | 1014 | compact | 176 |
+| 1440×860 | 1088 | compact | 176 |
+| 1512×900 | 1160 | compact | 176 |
+| 1920×1080 | 1568 | full | 230 |
+
+- **Re-tuned threshold.** Compact now applies when `width < COMPACT_BELOW_PX = 1080` (was 1180). The number comes
+  from the column sums: 624 fixed + 260 side + 14 gap + 30 padding = 928, plus ≥ 150 for "Acts on" = 1078.
+- **Height rule.** Compact also applies when `window.innerHeight < compactBelowHeight`. slot.js passes 1000, so on a
+  laptop the band table stays in view under the graph. The component follows window resizes, and that listener is
+  added only with the option. As a result, Edit's layout is unchanged at ≤ 1512×900, and a 1920×1080 window gets the
+  full layout.
+- In the fixture (1100 → 1512 wide), the card is compact at 1066 and 1078 and full from 1090 up. Nothing is outside
+  the card at any of those widths.
+- **Key-strip captions.** The key strip's air-zone caption "overtones · 4.2–20 kHz" was wider than the zone at every
+  Edit width and was drawn under the keys ("ertones…", e29/e30). Each line now takes the longest wording that fits
+  (`measureText`): "4.2–20 kHz" at ≤ 1512, the full wording at 1920.
+
+**6. SUSPECTED minors.** round3-edit has none. round3-eq's only one is m4 ("shadow cache answers at the old rate
+after a restart onto another device rate"). It lives in engine/audio.js, outside these files, and the round3-eq fix
+(`_teardown()` clears `_eqShadow`) already removes the cache it suspected. No action.
+
+**Tests.**
+- **New file: `test/phase2/edit-v2/integration-widths.test.mjs`** (real app, 5 tests, about 50 s):
+  - every tab plus wiring at 1024 / 1280 / 1366 / 1440×860 / 1512: no overflow, ellipsis or clipped text; tabs fit;
+    the live hint rule;
+  - the chip rows keep whole words, with ≤ 3 rows, 1 row at ≥ 1366, and a chorus step panel that holds its steps at
+    every size;
+  - naming: no visible string matches `/\bCustom\b|Reverb level|the Space\b/`;
+  - contrast of the tabs and bottom bar ≥ AA; Fade out / PANIC / tabs / white keys ≥ 44 px;
+  - the Tone EQ at 6 sizes: nothing outside the card, no sideways scroll, no cut cells, the compact rule, the
+    captions.
+  - Screenshots: `screenshots/widths-<w>-{slot0,effects,tone-eq}.png`, `widths-1280-{wiring,effects-chips}.png`,
+    `widths-{1280,1366}-keys-pad-off.png`.
+- **eq suite:** a new test, "compact threshold 1080 px, compactBelowHeight; no overflow around it and at
+  1280–1512". Screenshots `eq-1112x900.png` and `eq-1280x900.png`.
+- **Updated strings:** effects.test (The Space is…, Vibe: your own mix, "goes into the Stage"), slot.test and
+  integration.test (Shaped · n bands), eq run.mjs (mini-curve label "Shaped · 1 band").
+
+**Results** (2 CPUs, load average 2–3):
+
+| Suite | Result |
+|---|---|
+| `node test/phase2/edit-v2/run.mjs` | 11/11 files, 87 tests (integration-widths 64 s) |
+| `node test/phase2/eq/run.mjs` | 26/26 |
+
+**Requests for other owners (polish-2B).**
+- **views/settings.js** (MIDI learn row names):
+  - `LEARN_NAMES['fx.reverb.returnGain']: 'Reverb level'` → `'Space level'`. This is the exact label Edit's
+    Wheels & pedal now uses (`lib.TARGET_LABELS`).
+  - If a hint is wanted, use `title: 'Space (reverb) level'`, never the label.
+  - Nothing else in settings.js says Reverb or Custom.
+- **shared/params.js** (optional): the row label `'Reverb level'` → `'Space level'`. Edit never shows it (audited),
+  but any view that prints `describe().label` would.
+- **shared/eq-math.js** (optional): `eqSummary` → "Shaped · n bands" instead of "Custom · n bands". The unit test
+  `eq-math.test.mjs:159-160` would change with it. The view-side mapping (`toneSummary`, slot.js) then becomes a
+  no-op and can stay.
+- **components/stepChip.js**: the `placementDir` defaults (220 at ≤ 1250, 290 above) are below a real panel's
+  minimum (287 at 1024: 38 head + 5 × 44 steps + gaps + padding; about 335 above, with hint and foot). effects.js
+  now passes its own `placementNeed`. Raising the defaults to 290 / 340 would cover any other `'auto'` user.
+
+## polish-2A (reviews/ux-round2.md #1–#3, #6–#9, L-6, "## l3" UI follow-up; styles.css / perform.js / main.js / settings.js MIDI copy / ui-core + settings tests)
+
+Store schema, PARAMS, the controller and the engine are unchanged. New exports: `perform.js` `stepPanelNeed()`,
+`settings.js` `midiStatusText(midi, electron)`. `index.html` is untouched.
+
+**1. Fluid Perform, 1024–1512+ wide, 700–900+ tall (ux-round2 L1 / #1).**
+- Rows come from `:root` variables on the height left under the top bar and any banner
+  (`--avail-h = 100vh − --banner-h`): `--p-head-h` clamp(102, 12.45 %, 112), `--p-nav-h` clamp(48, 6 %, 54),
+  `--p-bot-h` clamp(76, 10.45 %, 94), `--p-gap` / `--p-pad-b`. 900 px tall gives the mockup's 112 · 54 · 94 exactly;
+  ≤ 1250 px wide sets 94 · 50 · 74 as before. The old `max-height: 820px` override is gone.
+- Head columns: song `1fr` · Transpose clamp(156, 11.67vw, 168) · shared effects clamp(520, 100vw − 800, 640) · Chord
+  clamp(100, 8.06vw, 116). `.p-fx` is a container: under 600 px the row captions go icon-only and the chips tighten
+  (nothing ellipsizes). The chip rows keep 44 px at a 102 px header (padding/gap give way). The song name is
+  clamp(28, head − 64, 40) px and `fitName` (perform.js, ResizeObserver) steps a long name down to 70 % before it
+  ellipsizes; KEY letter clamp(26, 2.23vw, 32).
+- Stage: wheel clamp(76, 6.4vw, 92), drone clamp(360, 27.8vw, 400) (≤ 1340: clamp(340, 29.7vw, 380), notes share it),
+  notes clamp(240, 18.75vw, 270). `.p-main` is a size container (`pmain`): ≤ 500 px tall the strips use 44 px tiles/chips
+  and 5 px gaps and the drone toggles go one row (EXPERIMENTAL tag hidden on stage); ≤ 450 / ≤ 410 px the key grid,
+  sliders and pad-folder row compact. `.p-drone` (inline container) ≤ 390 px tightens the drone tile. `.slot` (inline
+  container) ≤ 165 / 145 px: compact tile type, "↻ 100%" (the word "wheel" is its own span, `.wb-word`), Sustain LED
+  stacked over its label.
+- Top bar: ≤ 1500 px the meter is 72 px and the view switch 72 px; ≤ 1400 px the brand name goes (logo stays);
+  ≤ 1250 px tighter gaps and a 110 px master. Only the MIDI lamp may shrink (a connected device's name ellipsizes;
+  the state words never do).
+- Measured (Linux Chromium, factory "Sunday Pad + Piano", ui-core `polish-2A responsive`):
+
+  | Viewport | Fader throw before → now | Title | Clipped before (ux-round2) → now |
+  |---|---|---|---|
+  | 1280×800 | 189 → **203.8** | 38 px, whole | title, 4 chips, drone card 36 px, "Sound OK"/latency → none |
+  | 1366×768 | 157 → **177.4** | 38 px, whole | title, chips, drone 68 px, "Bl…" → none |
+  | 1440×860 | 217 → **244.7** | 40 px | drone 8 px → none |
+  | 1440×900 | 257 → **256.7** | 40 px | none |
+  | 1512×900 | 257 → **256.7** | 40 px | none |
+  | 1024×700 | 141 → **140.8** | 32 px | top-bar lamps 16 px over → none |
+
+  Also with four filled strips (no factory song has four) at 1366×768, 1440×900 and 1024×700: nothing clips
+  except an instrument name may ellipsize (full name in its tooltip).
+
+**2. Banners (#2, L2).** The persistent banners (second window, library not saving / retrying, newer library) share
+one `div.bstrip` (`data-testid=banner-strip`) that is exactly 32 px in the layout: the most urgent message (danger →
+warn → info) on one line with its buttons (26 px), "+N" for the others, and a chevron (`banner-expand`) that unfolds
+every message in full with 44 px buttons **over** the stage (absolute; the layout stays 32 px). Esc / an outside tap
+folds it (`openOverlay`, group `banners`), so that Esc never panics. `setBanner(id, {text, short?, kind, actions})`
+gains `short` (the folded wording; the full text is the tooltip). The stalled-sound banner keeps its full-width
+48 px Restart. With a banner up at ≤ 1250 px the setlist/bottom rows and gaps give the height back
+(`:root:has(#banners > :not([hidden]))`: 46 / 66 / 8 / 8). Fader throw with a banner: 1024×700 83 → **132.8**,
+1280×800 131 → **177.4**, 1440×900 191 → **235.8**.
+
+**3. Toasts (#3, L3).** `#toasts` is bottom-right, `bottom: --p-bot-h + --p-pad-b + 10px`, `width: min(400px, 34vw)`,
+newest at the bottom; `pointer-events: none` kept. Tested at 1440 and 1024: no toast over `.p-head`/`.p-nav` or the
+bottom row, ≤ 24 px above the bottom row, a tap on a toast reaches what is under it. In Edit they sit over the
+footer line (not a control).
+
+**4. MIDI 'pending' / 'denied' / 'failed' copy ("## l3").** main.js: pending → lamp "Starting…" (amber), title and one
+**info** toast "MIDI starting… answer the browser’s permission prompt if it appears." (Electron keeps "MIDI is taking a
+while to start…"), no reload advice, `midiHintShown` untouched. denied → toast/title "MIDI was blocked — allow it in the
+browser’s site settings." (Electron: "MIDI access was denied."). failed → unchanged unplug/replug toast; title "MIDI
+could not start — unplug and replug the keyboard". settings.js › MIDI uses `midiStatusText()`: pending → the same
+sentence; denied → the site-settings sentence; unsupported → "use Chrome or the Worship Rig app"; failed → "unplug and
+replug the keyboard, then reload".
+
+**5. L-6.** `.audio-text { min-width: 8.5ch; flex-shrink: 0 }`, `.latency`, the ready text, the MIDI state word, lamps
+and captions don't shrink; `.tb-item { flex-shrink: 0 }` except `#midi-status`. With a 37-character connected
+device name injected: "Sound OK" → latency gap **7 px** at 1280, 1366 and 1440 (5 px at 1024), "Sound OK" unclipped.
+
+**6. Contrast and hit targets (#6, #7).** Restart sound on `--panic` #d9363a: 3.27 → **4.63:1** (hover #c42f33).
+PANIC "Esc" full white 12 px/800: 3.72 → **4.63:1** (hover now darkens to #c42f33, so it never drops under 4.5).
+At 1024: Swell 62×38 → **62×44**, KEY ▾ 67×38 → **67×44** (song block padding 6 px), Space/Echo pills 244×36 → side by
+side **119×80**, step-panel steps 37 → **48**. Step panels in a Perform strip open below the ON tile
+(`top: 57px` / 55 px compact), so the tile stays a one-tap mute; strips pass `placement:'auto'` and
+`placementNeed: stepPanelNeed` (351 px), so a strip without room above its chips (1024×700, 1366×768, 1280×800,
+banners) opens the panel over the strip below the tile ('cover') instead of shrinking the steps. A short panel
+(`@container sp`, ≤ 360 px) drops its hint and footnote first.
+**Not mine (request below):** the Edit bottom bar's "⌘ ." (3.19:1) lives in `views/edit/panels/bottom.css`.
+
+**7. OFF strips (#9).** The chips on an OFF strip stay live, so they keep full opacity in grey (slot colour removed,
+`.mchip.on` #23272e / #555e6c); name and tag line at 70 % grey; what dims is the fader track (opacity 0.32) over a
+hatched body, with the dB value struck through. Measured on the Pad strip OFF: every text ≥ **4.43:1** (was 1.82–3.26),
+chips opacity 1, track 0.32.
+
+**8. Chord readout (#8, G1).** perform.js keeps the engine's last chord and the physically-held count from `'notes'`
+(the engine's `held`, which excludes pedal-held notes). The readout is live only with ≥ 2 keys held; below that it
+idles, dimmed, on the last chord it showed live, so a lone key never shows. D2-D4-F#4-A4 released one by one:
+`D* D* D* D D` (was "A" left over); a lone A afterwards stays "D"; E-G-B under the pedal, keys released: "Em" dimmed.
+Note: the engine names only on a change, so a lone D followed by D major is one "D" event; perform.js re-reads the
+kept chord after each `'notes'` (microtask), since the engine sends `'chord'` right after `'notes'`.
+
+**Tests** (2 CPUs, load 3–8 from the parallel agent): `node test/phase2/ui-core/run.mjs` **46/46** (41 kept; the
+L-3 test and the no-layout-shift test updated; 5 new: responsive 6 viewports + 4 strips, banners, toasts,
+contrast/targets/OFF strip/step panels at 1024, chord readout). One earlier run failed "polish-1: strip level
+meters… reads once a frame (0.00)" at load 7.6 and passed on the re-run. `node --test
+test/phase2/ui-core/components.hv2.mjs` 18/18. `node test/phase2/settings/run.mjs` **29/29** (MIDI test now covers
+pending / denied / failed). Screenshots: `test/phase2/ui-core/screenshots/responsive-*.png`,
+`responsive-4strips-*.png`, `banner-strip-{1440,1024,open-1024}.png`, `toasts-{1440,1024}.png`,
+`perform-off-strip.png`, `perform-step-1024.png`.
+
+## polish-2-polish-2A (requests from polish-2A to the other polish-2 agent)
+- `views/edit/panels/bottom.css` / `bottom.js`: the Edit PANIC "⌘ ." sub-label is 11 px at opacity .75 on #d9363a,
+  **3.19:1** (ux-round2 #6). Full white (no opacity) at ≥ 12 px gives 4.63:1; keep the hover darker (#c42f33), not
+  lighter, as Perform now does.
+- FYI: toasts now sit bottom-right above a `--p-bot-h + --p-pad-b + 10px` offset in every view. In Edit at 1440 they
+  cover the footer line ("No switch changes since…") while shown; nothing interactive. If Edit wants them elsewhere,
+  override `#toasts { bottom }` under `body[data-view="edit"]` in an Edit stylesheet.
+
+## l9 (views/edit/lib.js createBinder text:'dirty'; song + song-header tests; reviews/local-findings.md L-9)
+- **Root cause of the Mac failure (2/2): the test, not a binder append.** `song.test.mjs:215` pressed
+  `Control+A` before typing `13`. Playwright on macOS sends its `macEditingCommands` with every key, and
+  `Control+KeyA` is `moveToBeginningOfParagraph:` (`playwright-core/lib/server/macEditingCommands.js:58`), so the
+  caret went to 0 and `13` landed in front of `88` = `1388`. The outside `99` write was correctly held back (the
+  field would read `99` otherwise). Linux Chromium has no Emacs bindings, so `Control+A` selected all there.
+- **Reproduced on Linux**: a CDP `Input.dispatchKeyEvent` Control+A carrying `commands:['moveToBeginningOfParagraph']`
+  (what Playwright sends on the Mac) gives `"1388"` on the song panel, 1/1; the same key with no commands, or with
+  `['selectAll']` (Meta+A), gives `"13"`.
+- **Binder hardening (real bugs the storm test found on Linux, independent of the Mac key):**
+  - Before the first keystroke an outside write into the focused field used a plain `value =`, which drops a
+    whole-field selection and leaves the caret at the end, so the next key appended (`61` + `132` = `61132`;
+    name `Storm B, longer` + `Kept name`). `setClean` now keeps a whole-field selection across the write, and a
+    number field (no selection API) is always re-selected: the first key replaces, never appends.
+  - The draft flag is set on `beforeinput` / `compositionstart` as well as `input`, so it is up before the DOM
+    changes (IME compositions only fire `input` at their end).
+  - `focusout` re-applies the store value **forced**. While dirty, `b.last` is not updated (held-back writes, the
+    panel's own debounced commit), so a store that came back to `b.last` (draft committed by the 500 ms notes
+    debounce, then outside writes `Y` and the old value) compared equal and the field kept the stale draft.
+- **Tests** (edit-v2):
+  - `song.test.mjs` polish-1 dirty test: `ControlOrMeta+A` (Meta+A = `selectAll:` on the Mac).
+  - New `song: L-9 — …storm…`: `store.set` every 20 ms (tempo 61/88/99/147/203; notes 3 strings), select-all,
+    60 ms of writes before the first key, then keys 25 ms apart. Asserts the field equals exactly `132` / `Typed under
+    fire`, the storm ran (> 10 writes), Enter commits 132, a debounced notes commit mid-storm does not come back on
+    blur (the field shows the store), and the debounced-commit-then-store-returns case above.
+  - New `song-header: L-9 — …rename storm…`: the same for the name (`Kept name`, Enter commits it).
+  - Mutation checks on Linux: plain `comp.set` instead of `setClean` fails both storm tests (`'61132'`,
+    `'Storm B, longerKept name'`); an unforced `focusout` fails the notes storm test (`'Typed under fire'` vs the
+    store's `'Storm two, longer.'`).
+- **Also verified here (polish-2 requests, already in the tree):** Edit PANIC "⌘ ." 13 px full white on `#d9363a`
+  = 4.63:1, hover `#c42f33` = 5.52:1 (bottom test "PANIC ≥ 4.5:1 at rest and on hover, at 1440 and 1024");
+  settings `LEARN_NAMES['fx.reverb.returnGain']` = `'Space level'` (settings run.mjs asserts it and that
+  "Reverb level" is gone from the learn table). `shared/params.js` still labels the row 'Reverb level' (frozen).
+- **Runs (Linux, one at a time, no re-runs needed):** `node test/phase2/edit-v2/run.mjs` 11/11 files, 90 tests,
+  0 fail; `node test/phase2/settings/run.mjs` 29/29; `node test/phase2/ui-core/run.mjs` 46/46.

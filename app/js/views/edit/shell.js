@@ -583,8 +583,9 @@ function defaultTab(block, song, core) {
   if (block.id === 'effects') {
     const sp = matchPreset(SPACE_PRESETS, val);
     const ec = matchPreset(ECHO_PRESETS, val);
-    const echo = ec ? (ec.id === 'none' ? 'off' : ec.name.toLowerCase()) : 'own';
-    return { name: sp ? sp.name : 'Custom', sub: `· echo: ${echo}` };
+    const echo = ec ? (ec.id === 'none' ? 'off' : ec.name.toLowerCase()) : 'song’s own';
+    // polish-2B (ux-round2 #5): a room that matches no preset is the song's own, as on Perform's chip
+    return { name: sp ? sp.name : 'Song’s own', sub: `· echo: ${echo}` };
   }
   if (block.id === 'master') {
     const lofi = Number(val('fx.lofi.amount')) || 0;
@@ -659,6 +660,7 @@ export function mountEdit(el, ctx) {
   // ---- tab row rendering
   function renderTabs() {
     const song = core.song;
+    let textChanged = false;
     for (const [id, t] of tabs) {
       const def = registry.get(t.block.panel);
       let s;
@@ -672,6 +674,12 @@ export function mountEdit(el, ctx) {
       }
       setText(t.name, s.name);
       setText(t.sub, s.sub ? ` ${s.sub}` : '');
+      const full = `${s.name}${s.sub ? ` ${s.sub}` : ''}`;
+      if (t.full !== full) {
+        t.full = full;
+        t.el.title = full;
+        textChanged = true;
+      }
       t.el.classList.toggle('empty', !!s.empty);
       t.el.classList.toggle('off', !!s.off);
       t.cd.hidden = !editState.isChanged(t.block.prefixes);
@@ -683,7 +691,30 @@ export function mountEdit(el, ctx) {
     const cur = tabs.get(editState.selected) || tabs.get(lastTab) || tabs.get('slot:0');
     for (const t of tabs.values()) t.el.tabIndex = t === cur ? 0 : -1;
     renderLeds();
+    if (textChanged) fitTabs();
   }
+  // polish-2B (ux-round2 L1): between the breakpoints (1280–1440 px) a summary's sub ("· echo: song’s own",
+  // "· Tape off") ellipsized the tab's name ("Custom · ec…", "−6.0 dB · Ta…"). A tab whose one line doesn't fit drops
+  // its sub (.nosub; the full summary stays in its title). Checked once per frame after a text change or a resize,
+  // never per store event.
+  let fitRaf = 0;
+  let tabsDead = false;
+  function fitTabs() {
+    if (fitRaf || tabsDead) return;
+    fitRaf = requestAnimationFrame(() => {
+      fitRaf = 0;
+      if (tabsDead || !tablist.isConnected) return;
+      const list = [...tabs.values()];
+      for (const t of list) t.el.classList.remove('nosub');
+      const tight = list.filter((t) => {
+        const line = t.name.parentElement;
+        return line.clientWidth > 0 && line.scrollWidth > line.clientWidth + 1;
+      });
+      for (const t of tight) t.el.classList.add('nosub');
+    });
+  }
+  const tabsRo = typeof ResizeObserver === 'function' ? new ResizeObserver(() => fitTabs()) : null;
+  tabsRo?.observe(tablist);
   let lastTab = 'slot:0';
   function renderLeds() {
     const song = core.song;
@@ -749,7 +780,7 @@ export function mountEdit(el, ctx) {
       }
       grid.append(dr);
       let what = '';
-      if (lane.unit === 'reverb') what = matchPreset(SPACE_PRESETS, val)?.name || 'custom';
+      if (lane.unit === 'reverb') what = matchPreset(SPACE_PRESETS, val)?.name || 'song’s own';
       else if (lane.unit === 'delay') what = matchPreset(ECHO_PRESETS, val)?.name || 'song’s own';
       else what = chorusWord(Number(val('fx.chorus.depth')) || 0);
       grid.append(h('span.ev2-wend', { style: at('7 / 9') },
@@ -823,6 +854,9 @@ export function mountEdit(el, ctx) {
     el: root,
     editState,
     destroy() {
+      tabsDead = true;
+      tabsRo?.disconnect();
+      cancelAnimationFrame(fitRaf);
       cur?.destroy();
       cur = null;
       for (const r of regions.splice(0)) r.destroy();
