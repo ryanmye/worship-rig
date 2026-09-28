@@ -1,3 +1,50 @@
 /* OWNER: drone+bottom agent. Drone panel (panels/drone.js).
    Scope rule (views/edit/CONTRACT.md §4): every selector starts with .ev2 and uses only the .ev2-drone-* classes you
    create (plus the shared .ev2-* widgets from styles-edit-v2.css). No element/global selectors, no :root. */
+.ev2 .ev2-drone { flex: 1; min-height: 0; display: flex; flex-direction: column; --c: var(--drone, #e8d9a8); }
+.ev2 .ev2-drone-cols { grid-template-columns: minmax(220px, 250px) minmax(0, 1.25fr) minmax(0, 1fr); }
+.ev2 .ev2-drone .ev2-col > .ev2-cap { margin-bottom: 2px; }
+.ev2 .ev2-drone .ev2-cdi[hidden] { display: none; }
+
+/* ON STAGE */
+.ev2 .ev2-drone .ev2-drone-tile { margin: 6px 0 14px; }
+.ev2 .ev2-drone-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.ev2 .ev2-drone-lbl { font-size: 14px; font-weight: 700; white-space: nowrap; }
+.ev2 .ev2-drone-src { display: flex; width: 100%; }
+.ev2 .ev2-drone-src button { flex: 1 1 0; min-height: 34px; white-space: nowrap; padding: 0 8px; }
+.ev2 .ev2-drone-src .on { background: var(--drone, #e8d9a8); color: #111; }
+.ev2 .ev2-drone-level { width: 100%; }
+
+/* THE SOUND ITSELF: four word sliders in a 2×2 grid */
+.ev2 .ev2-drone-sliders { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 22px; }
+.ev2 .ev2-drone-sliders .ev2-ws { min-width: 0; }
+.ev2 .ev2-drone.off .ev2-drone-sliders, .ev2 .ev2-drone.off .ev2-drone-level { opacity: .55; }
+
+/* OPTIONS */
+.ev2 .ev2-drone-opt { display: flex; align-items: center; gap: 4px; margin: 6px 0 4px; min-width: 0; }
+.ev2 .ev2-drone-opt .ev2-cdi { flex: none; }
+.ev2 .ev2-drone-opt .ev2-cdi.ev2-drone-nodot { visibility: hidden; } /* keeps the switches aligned */
+/* ON = the drone colour, as in the mockup's .tog.on (the ui-core default is the accent, which reads as "lock") */
+.ev2 .ev2-drone-opt .toggle.on .toggle-led {
+  background: var(--drone, #e8d9a8); box-shadow: 0 0 8px var(--drone, #e8d9a8);
+}
+.ev2 .ev2-drone-opt .toggle.on { border-color: color-mix(in srgb, var(--drone, #e8d9a8) 55%, var(--line-2, #3a414d)); }
+.ev2 .ev2-drone-opt .toggle, .ev2 .ev2-drone-opt .fc-toggle { max-width: 100%; }
+.ev2 .ev2-drone-opt .disabled { opacity: .45; }
+.ev2 .ev2-drone-note { margin-top: 12px; line-height: 1.45; max-width: 44ch; }
+
+/* footer */
+.ev2 .ev2-drone-foothint {
+  font-size: 12.5px; color: var(--ev2-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0;
+}
+
+@media (max-width: 1250px) {
+  .ev2 .ev2-drone-cols { grid-template-columns: minmax(190px, 210px) minmax(0, 1.25fr) minmax(0, 1fr); }
+  .ev2 .ev2-drone .ev2-drone-tile { margin: 4px 0 10px; }
+  .ev2 .ev2-drone-row { margin-bottom: 10px; }
+  .ev2 .ev2-drone-lbl { font-size: 13px; }
+  .ev2 .ev2-drone-sliders { gap: 10px 16px; }
+  .ev2 .ev2-drone-note { font-size: 11.5px; margin-top: 8px; }
+  .ev2 .ev2-drone-foothint { display: none; }
+}

@@ -15,12 +15,20 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
 const opt = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : null);
 const ONLY = new Set((opt('--only') || '').split(',').map((s) => s.trim()).filter(Boolean));
-const TIMEOUT_MS = Number(process.env.EDITV2_TIMEOUT_MS || 8 * 60 * 1000);
+// Budgets (views/edit/CONTRACT.md §7). Under `node --test`, --test-timeout also bounds the FILE: node:test runs each
+// file as one test, so the old 240 s "per test" value killed whole files with 4–6 mounts on a loaded box
+// (hv2-edit-song / -drone / -effects / -slot reports). Without --test the flag has no effect at all (checked on node
+// 22.22). So it is now the per-file budget, 900 s; single tests are bounded by the harness's page waits (goto 30 s,
+// controller start 45 s, song load 60 s, t.until 15 s by default). The outer kill below is a backstop for a process
+// that ignores its own timeout (a hung Chromium): the budget + 60 s.
+const FILE_BUDGET_MS = Number(process.env.EDITV2_FILE_BUDGET_MS || process.env.EDITV2_TEST_TIMEOUT_MS || 900 * 1000);
+const TIMEOUT_MS = Number(process.env.EDITV2_TIMEOUT_MS || FILE_BUDGET_MS + 60 * 1000); // outer kill, per file
 
 const nameOf = (f) => path.basename(f).replace(/\.test\.mjs$/, '');
 const files = [
   ...(fs.existsSync(path.join(HERE, 'shell.test.mjs')) ? [path.join(HERE, 'shell.test.mjs')] : []),
-  ...fs.readdirSync(path.join(HERE, 'panels')).filter((f) => f.endsWith('.test.mjs')).sort().map((f) => path.join(HERE, 'panels', f)),
+  ...fs.readdirSync(path.join(HERE, 'panels')).filter((f) => f.endsWith('.test.mjs')).sort()
+    .map((f) => path.join(HERE, 'panels', f)),
   ...fs.readdirSync(HERE).filter((f) => /^integration.*\.test\.mjs$/.test(f)).sort().map((f) => path.join(HERE, f)),
 ].filter((f) => !ONLY.size || ONLY.has(nameOf(f)) || (ONLY.has('integration') && nameOf(f).startsWith('integration')));
 
@@ -37,10 +45,16 @@ if (!files.length) {
 function runFile(file) {
   const t0 = Date.now();
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, ['--test-reporter=spec', file], { stdio: 'inherit', env: process.env });
+    const args = ['--test', '--test-reporter=spec', `--test-timeout=${FILE_BUDGET_MS}`, file];
+    // own process group, so a timeout also kills the file's Chromium (no orphaned renderers holding ~1 GB)
+    const child = spawn(process.execPath, args, { stdio: 'inherit', env: process.env, detached: true });
     const timer = setTimeout(() => {
       console.error(`\n[edit-v2] ${nameOf(file)} timed out after ${TIMEOUT_MS / 1000} s`);
-      child.kill('SIGKILL');
+      try {
+        process.kill(-child.pid, 'SIGKILL');
+      } catch {
+        child.kill('SIGKILL');
+      }
     }, TIMEOUT_MS);
     child.on('exit', (code, signal) => {
       clearTimeout(timer);

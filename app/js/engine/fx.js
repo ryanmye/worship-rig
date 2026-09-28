@@ -1345,10 +1345,10 @@ export function measureCompMakeup() {
 //   input (wOut) → [lowCut] → [b1 … b8 that are on] → [highCut] → sideGain → output (pan)
 //
 // Only engaged filters are wired, so a slot costs what it uses (bench, 4 slots × 30 s stereo noise @ 48 kHz: a
-// GainNode ≈ 4 ms, a static biquad ≈ 27 ms; a dry/wet pair per band would cost 30 GainNodes per slot, ≈ 4 biquads).
+// GainNode ≈ 4 ms, a static biquad ≈ 27 ms; a dry/wet pair per band would cost 30 GainNodes per slot ≈ 4 biquads).
 // Two ways a change reaches the audio, both click-free:
-//   • in place: Hz glides, Q and gain ramp (TAU), every biquad param k-rate (DECISION §3: ramping a-rate coefficients
-//     cost 5×). A band switched off, or to 'off', within the peak/shelf family ramps to 0 dB and stays in place: a
+//   • in place: Hz glides, Q and gain ramp (TAU), every biquad param k-rate (DECISION §3: ramping a-rate
+//     coefficients cost 5×). A band switched off, or to 'off', within the peak/shelf family ramps to 0 dB and stays in place: a
 //     0 dB peaking/shelving biquad is bit-exact identity. A type change within that family fades the band to 0 dB
 //     over 30 ms, swaps the type at identity, fades back in (AMENDMENT §2).
 //   • chain switch: the set of wired filters must change (a band added, a cut engaged or bypassed, a notch/cut type
@@ -1369,13 +1369,16 @@ export const EQ_WARM = 0.05;
 export const EQ_XFADE = 0.03;
 const EQ_FIELDS = ['on', 'type', 'hz', 'db', 'q'];
 /** Stored band type → BiquadFilterNode type. */
-const EQ_WEB = Object.freeze({ lowshelf: 'lowshelf', peak: 'peaking', highshelf: 'highshelf', notch: 'notch', lowcut: 'highpass', highcut: 'lowpass' });
+const EQ_WEB = Object.freeze({
+  lowshelf: 'lowshelf', peak: 'peaking', highshelf: 'highshelf', notch: 'notch', lowcut: 'highpass', highcut: 'lowpass',
+});
 /** Types that are the identity at 0 dB (they can stay wired while off). */
 const EQ_IDENTITY = new Set(['lowshelf', 'peaking', 'highshelf']);
 const eqUsesQ = (web) => web === 'peaking' || web === 'notch' || web === 'highpass' || web === 'lowpass';
 /**
- * Pre-AMENDMENT rows read as a band while that band has no stored b-rows: eq.low / eq.lowHz = b1 (the 120 Hz low
- * shelf), eq.high / eq.highHz = b8 (6 kHz high shelf) — AMENDMENT §4 — and DECISION's mid1* / mid2* bells = b2 / b3.
+ * Pre-AMENDMENT rows read as a band while that band has no stored b-rows: eq.low / eq.lowHz = b1 (the 120 Hz
+ * low shelf), eq.high / eq.highHz = b8 (6 kHz high shelf) — AMENDMENT §4 — and DECISION's mid1* / mid2* bells =
+ * b2 / b3.
  */
 const EQ_LEGACY = Object.freeze({
   1: { type: 'lowshelf', db: 'low', hz: 'lowHz' },
@@ -1548,7 +1551,8 @@ export class SlotEq {
         p.automationRate = 'k-rate'; // DECISION §3 CPU table: a ramping a-rate biquad recomputes per sample
       } catch {}
     }
-    Object.assign(n, { _id: id, _web: web, _webTarget: web, _hz: s.hz, _Q: s.Q, _db: s.db ?? 0, _fading: false, _fadeSeq: 0, _dead: false });
+    Object.assign(n, { _id: id, _web: web, _webTarget: web, _hz: s.hz, _Q: s.Q, _db: s.db ?? 0 });
+    Object.assign(n, { _fading: false, _fadeSeq: 0, _dead: false });
     return n;
   }
 
@@ -1603,7 +1607,8 @@ export class SlotEq {
   _reconcile(when, step) {
     const members = slotEqMembers(this.want);
     if (step) {
-      const same = !this.incoming && members.length === this.active.ids.length && members.every((id, i) => id === this.active.ids[i]);
+      const ids = this.active.ids;
+      const same = !this.incoming && members.length === ids.length && members.every((id, i) => id === ids[i]);
       if (!same || [...this.active.nodes.values()].some((n) => n._web !== eqSpec(this.want, n._id).web)) {
         ++this._seq; // cancels a pending switch / fade
         this._drop(this.incoming);
@@ -1753,7 +1758,7 @@ export class Channel {
     this.wIn.connect(this.wMid).connect(this.wNeg).connect(this.wSide);
     this.wSide.connect(this.wNarrow).connect(this.wOut);
     this.wSide.connect(this.wHp).connect(this.wWide).connect(this.wOut);
-    // EQ (wOut → … → pan): at the defaults a 120 Hz low shelf + 6 kHz high shelf at 0 dB, i.e. the old strip exactly
+    // EQ (wOut → … → pan): at the defaults a 120 Hz low + 6 kHz high shelf at 0 dB, i.e. the old strip exactly
     this.eq = new SlotEq(ctx, this.wOut, this.pan, fx.env?.timer ?? null);
     this.pan.connect(fx.sum);
     this.pan.connect(this.sends.reverb).connect(fx.reverb.input);

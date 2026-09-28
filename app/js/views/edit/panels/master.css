@@ -1,3 +1,52 @@
 /* OWNER: master agent. Master tab (panels/master.js).
-   Scope rule (views/edit/CONTRACT.md §4): every selector starts with .ev2 and uses only the .ev2-master-* classes you
-   create (plus the shared .ev2-* widgets from styles-edit-v2.css). No element/global selectors, no :root. */
+   Scope rule (views/edit/CONTRACT.md §4): every selector starts with .ev2 and uses only the .ev2-master-* classes
+   (plus the shared .ev2-* widgets from styles-edit-v2.css). No element/global selectors, no :root. */
+.ev2 .ev2-master { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.ev2 .ev2-master-main { flex: 1; display: flex; flex-direction: column; padding: 14px 0 10px; min-width: 0; }
+
+/* master volume: one wide word slider, capped so it doesn't stretch across 1440 */
+.ev2 .ev2-master-top { display: flex; align-items: flex-end; gap: 12px 28px; flex-wrap: wrap; padding-bottom: 14px; }
+.ev2 .ev2-master-top .ev2-master-vol { flex: 0 1 520px; min-width: 260px; }
+.ev2 .ev2-master-vol .ev2-ws-label { font-size: 16px; }
+.ev2 .ev2-master-vol .ev2-ws-val { font-size: 16px; }
+.ev2 .ev2-master-vol-hint { flex: 1 1 220px; max-width: 360px; padding-bottom: 20px; }
+
+/* section bodies: sliders flow in rows; notes and sub-sections take a full row */
+.ev2 .ev2-master-note { flex-basis: 100%; }
+.ev2 .ev2-sec.ev2-master-sub { flex-basis: 100%; border-top: 1px dashed var(--line, #2d333d); }
+.ev2 .ev2-sec.ev2-master-sub > .ev2-sec-head { min-height: 34px; font-size: 13px; }
+.ev2 .ev2-sec[data-sec="master-eq"] .ev2-ws,
+.ev2 .ev2-sec[data-sec="master-tape"] > .ev2-sec-body > .ev2-ws,
+.ev2 .ev2-sec[data-sec="master-glue"] .ev2-ws { flex: 0 1 300px; }
+
+/* Wheels & pedal: one row per control (target select | From | To) */
+.ev2 .ev2-master-route { flex-basis: 100%; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ev2 .ev2-master-row {
+  display: grid; grid-template-columns: minmax(200px, 1.25fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px 22px;
+  align-items: end; min-width: 0;
+}
+.ev2 .ev2-master-row .ev2-ws { min-width: 0; }
+.ev2 .ev2-master-sel { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ev2 .ev2-master-sel .select-label { font-size: 13px; font-weight: 700; color: var(--muted, #a3acb8); }
+.ev2 .ev2-master-sel .select-input {
+  min-height: 36px; width: 100%; min-width: 0; padding: 0 8px; border-radius: 8px; font-size: 14px;
+  background: var(--panel-2, #1c2027); color: var(--text, #f1f4f8); border: 1px solid var(--line-2, #3a414c);
+}
+.ev2 .ev2-master-step { display: flex; align-items: center; gap: 6px; min-height: 36px; flex-wrap: wrap; }
+.ev2 .ev2-master-step .stepper-label {
+  flex-basis: 100%; font-size: 13px; font-weight: 700; color: var(--muted, #a3acb8);
+}
+.ev2 .ev2-master-step .step-btn { min-width: 32px; min-height: 32px; }
+.ev2 .ev2-master-step .step-value { min-width: 96px; text-align: center; font-weight: 700; }
+.ev2 .ev2-master-swell .ev2-cdi[hidden] { display: none; }
+.ev2 .ev2-master-swell .ev2-cdi { margin-right: 6px; }
+
+.ev2 .ev2-master-foot .ev2-linkbtn { font-size: 13px; }
+
+@media (max-width: 1250px) {
+  .ev2 .ev2-master-main { padding: 8px 0 6px; }
+  .ev2 .ev2-master-top { padding-bottom: 8px; }
+  .ev2 .ev2-master-vol-hint { display: none; }
+  .ev2 .ev2-master-row { grid-template-columns: minmax(170px, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px 14px; }
+  .ev2 .ev2-master-step .step-value { min-width: 80px; }
+}

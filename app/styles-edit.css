@@ -1,5 +1,9 @@
-/* Worship Rig — Edit view + Settings modal (ui-edit). Uses the tokens from styles.css; every var() has a fallback
-   so the view also renders on its own (test fixture). Fallback component styles (.fc-*) are at the end. */
+/* Worship Rig — Settings modal (.st-*) + fallback components (.fc-*), and the retired Edit view's rules (.ed-*).
+   Uses the tokens from styles.css; every var() has a fallback so Settings also renders on its own (test fixture).
+   hv2-edit-integrate: views/edit.js was replaced by the H-v2 Edit (views/edit/, styles in views/edit/*.css), so the
+   .ed-* layout rules below style nothing any more EXCEPT .ed-btn / .ed-danger / .ed-select, which settings.js still
+   uses. They are left in place (this file is still linked for Settings); prune the dead .ed-* rules in a later pass
+   with the settings screenshots as the check. */
 
 /* ------------------------------------------------------------------ layout */
 .ed-host { --ed-left: 272px; --ed-right: 312px; --ed-faint: #8a93a0; --ed-neutral: #c9d1db; }

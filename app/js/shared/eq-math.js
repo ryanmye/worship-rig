@@ -5,8 +5,9 @@
 //   • RBJ biquad coefficients exactly as Web Audio's BiquadFilterNode implements them (peaking/notch: linear Q;
 //     shelves: S = 1, Q ignored; highpass/lowpass: Q in dB) and their magnitude response at any sample rate
 //   • the slot EQ model (AMENDMENT §4): `slots.<i>.eq.b<k>.{on,type,hz,db,q}` for k = 1..8, `eq.cutHz` (20 = off),
-//     `eq.hiCutHz` (20000 = off); legacy `eq.low` / `eq.high` read as b1 (120 Hz low shelf) / b8 (6 kHz high shelf)
-//     while those bands have no stored fields. readEq() turns a stored slot.eq into the editor's band list;
+//     `eq.hiCutHz` (20000 = off); legacy `eq.low`/`lowHz` / `eq.high`/`highHz` / `mid1*` / `mid2*` read as b1 / b8 /
+//     b2 / b3 while those bands have no stored fields (as the engine's fx.js resolveSlotEq).
+//     readEq() turns a stored slot.eq into the editor's band list;
 //     writesFor() turns a target state back into the minimal list of store.set() writes.
 //   • band reach vs the slot's sounding range ("Boost notes F#3–C5", "overtones only", "no effect on notes")
 //   • Hz / note / Q / bandwidth parsers, the EqualizerAPO/REW paste parser, "Copy as text", presets
@@ -112,14 +113,31 @@ const FALLBACK_ROWS = {
   hz: { min: 20, max: 20000, default: 1000 },
   db: { min: -15, max: 15, default: 0 },
   q: { min: 0.1, max: 10, default: 1 },
-  cutHz: { min: 20, max: 20000, default: 20 },
-  hiCutHz: { min: 20, max: 20000, default: 20000 },
+  cutHz: { min: 20, max: 400, default: 20 },
+  hiCutHz: { min: 200, max: 20000, default: 20000 },
   low: { min: -12, max: 12, default: 0 },
   high: { min: -12, max: 12, default: 0 },
+  mid1: { min: -12, max: 12, default: 0 },
+  mid2: { min: -12, max: 12, default: 0 },
+  lowHz: { min: 40, max: 500, default: 120 },
+  highHz: { min: 1000, max: 16000, default: 6000 },
+  mid1Hz: { min: 20, max: 20000, default: 400 },
+  mid2Hz: { min: 20, max: 20000, default: 2500 },
+  mid1Q: { min: 0.3, max: 10, default: 1 },
+  mid2Q: { min: 0.3, max: 10, default: 1 },
 };
-/** Legacy shelves (today's fixed fx.js eqLow / eqHigh), shown as b1 / b8 while those bands have no stored fields. */
-export const LEGACY_LOW = Object.freeze({ k: 1, type: 'lowshelf', hz: 120, key: 'low' });
-export const LEGACY_HIGH = Object.freeze({ k: MAX_BANDS, type: 'highshelf', hz: 6000, key: 'high' });
+/**
+ * Pre-AMENDMENT rows, read as a band while that band has no stored b-rows (the engine's fx.js EQ_LEGACY does the
+ * same): eq.low / eq.lowHz = b1 (today's 120 Hz low shelf), eq.high / eq.highHz = b8 (6 kHz high shelf), and
+ * DECISION's mid1* / mid2* bells = b2 / b3. b1 and b8 always show (they are on by default); b2 / b3 only when one of
+ * their legacy rows is stored.
+ */
+export const LEGACY = Object.freeze({
+  1: Object.freeze({ type: 'lowshelf', db: 'low', hz: 'lowHz', q: null, hz0: 120, always: true }),
+  2: Object.freeze({ type: 'peak', db: 'mid1', hz: 'mid1Hz', q: 'mid1Q', hz0: 400, always: false }),
+  3: Object.freeze({ type: 'peak', db: 'mid2', hz: 'mid2Hz', q: 'mid2Q', hz0: 2500, always: false }),
+  8: Object.freeze({ type: 'highshelf', db: 'high', hz: 'highHz', q: null, hz0: 6000, always: true }),
+});
 /** cutHz at or below this is "off" (a 20 Hz Butterworth is −1.07 dB at A0, so the engine bypasses it; DECISION §3). */
 export const CUT_OFF_HZ = 20.5;
 /** hiCutHz at or above this is "off". */
@@ -195,12 +213,18 @@ export function readEq(eq) {
   const bands = [];
   let legacy = false;
   for (let k = 1; k <= MAX_BANDS; k++) {
-    const L = k === LEGACY_LOW.k ? LEGACY_LOW : k === LEGACY_HIGH.k ? LEGACY_HIGH : null;
+    const L = LEGACY[k];
     if (!bandStored(eq, k)) {
       if (!L) continue;
+      const has = (key) => key && pick(eq, key) !== undefined;
+      if (!L.always && !has(L.db) && !has(L.hz) && !has(L.q)) continue;
       legacy = true;
-      const db = clampEqValue(L.key, pick(eq, L.key) ?? 0);
-      bands.push({ k, on: true, type: L.type, hz: L.hz, db, q: Math.SQRT1_2, legacy: true });
+      const lv = (key, dflt) => (has(key) ? clampEqValue(key, pick(eq, key)) : (eqRow(key).default ?? dflt));
+      bands.push({
+        k, on: true, type: L.type, hz: clampEqValue(bandKey(k, 'hz'), lv(L.hz, L.hz0)),
+        db: clampEqValue(bandKey(k, 'db'), has(L.db) ? clampEqValue(L.db, pick(eq, L.db)) : 0),
+        q: L.q ? clampEqValue(bandKey(k, 'q'), lv(L.q, 1)) : Math.SQRT1_2, legacy: true,
+      });
       continue;
     }
     const g = (f) => {
@@ -278,18 +302,16 @@ export function writesFor(eq, target) {
     out.push(['hiCutHz', clampEqValue('hiCutHz', target.hiCutHz)]);
   }
   if (cur.legacy && out.length) {
-    // migrate the untouched legacy shelf too, so both b-rows exist from here on
-    for (const L of [LEGACY_LOW, LEGACY_HIGH]) {
-      if (touched.includes(L.k) || bandStored(eq, L.k)) continue;
-      const c = has.get(L.k);
-      const t = want.get(L.k);
-      if (!c || !t) continue;
-      if (out.some(([key]) => key.startsWith(`b${L.k}.`))) continue;
-      for (const f of BAND_FIELDS) out.push([bandKey(L.k, f), clampEqValue(bandKey(L.k, f), t[f])]);
+    // migrate every legacy band still on screen, so the b-rows are the only source from here on
+    for (const c of cur.bands) {
+      if (!c.legacy || touched.includes(c.k) || out.some(([key]) => key.startsWith(`b${c.k}.`))) continue;
+      const t = want.get(c.k);
+      if (!t) continue;
+      for (const f of BAND_FIELDS) out.push([bandKey(c.k, f), clampEqValue(bandKey(c.k, f), t[f])]);
     }
-    for (const L of [LEGACY_LOW, LEGACY_HIGH]) {
-      const v = pick(eq, L.key);
-      if (v !== undefined && v !== 0) out.push([L.key, 0]);
+    for (const L of Object.values(LEGACY)) {
+      const v = pick(eq, L.db);
+      if (v !== undefined && v !== 0) out.push([L.db, 0]);
     }
   }
   return out;
@@ -308,10 +330,11 @@ export function bypassWrites(eq) {
   const restore = [];
   for (const b of m.bands) {
     if (b.legacy) {
-      const L = b.k === LEGACY_LOW.k ? LEGACY_LOW : LEGACY_HIGH;
-      if (b.db !== 0) {
-        off.push([L.key, 0]);
-        restore.push([L.key, b.db]);
+      const L = LEGACY[b.k];
+      const v = pick(eq, L.db);
+      if (v !== undefined && v !== 0) {
+        off.push([L.db, 0]);
+        restore.push([L.db, v]);
       }
     } else if (b.on) {
       off.push([bandKey(b.k, 'on'), false]);
@@ -327,6 +350,31 @@ export function bypassWrites(eq) {
     restore.push(['hiCutHz', m.hiCutHz]);
   }
   return { off, restore };
+}
+
+/**
+ * Brightness / Warmth word sliders (DECISION §1 "simple mode", AMENDMENT: they drive the two shelves): the writes
+ * that set the high (or low) shelf's gain. The shelf is the highest-k visible high shelf (lowest-k low shelf); a
+ * legacy slot migrates like any first edit; with no such shelf left (the user removed it) one is added at b8 / b1
+ * (or the nearest free slot) at 6 kHz / 120 Hz.
+ * @param {object} [eq] stored slot.eq
+ * @param {'high'|'low'} which
+ * @param {number} db
+ * @returns {[string, any][]}
+ */
+export function shelfWrites(eq, which, db) {
+  const m = readEq(eq);
+  const type = which === 'high' ? 'highshelf' : 'lowshelf';
+  const shelves = m.bands.filter((b) => b.type === type);
+  const target = which === 'high' ? shelves[shelves.length - 1] : shelves[0];
+  if (target) return writesFor(eq, { bands: m.bands.map((b) => (b === target ? { ...b, db, on: true } : b)) });
+  const L = LEGACY[which === 'high' ? MAX_BANDS : 1];
+  const used = new Set(m.bands.map((b) => b.k));
+  let k = which === 'high' ? MAX_BANDS : 1;
+  const step = which === 'high' ? -1 : 1;
+  while (used.has(k) && k >= 1 && k <= MAX_BANDS) k += step;
+  if (k < 1 || k > MAX_BANDS) return [];
+  return writesFor(eq, { bands: [...m.bands, { k, on: true, type, hz: L.hz0, db, q: Math.SQRT1_2 }] });
 }
 
 /** Number of bands that do something (on, and |gain| ≥ 0.05 or a gainless type), plus cuts that are on. */
@@ -522,7 +570,8 @@ export function zoneOf(lo, hi, o = {}) {
 }
 
 /** 401 log-spaced points, 20 Hz … 20 kHz (band reach, DECISION §5). */
-export const REACH_FREQS = Object.freeze(Array.from({ length: 401 }, (_, i) => F_MIN * Math.pow(F_MAX / F_MIN, i / 400)));
+export const REACH_FREQS = Object.freeze(Array.from({ length: 401 },
+  (_, i) => F_MIN * Math.pow(F_MAX / F_MIN, i / 400)));
 
 /**
  * Where a filter acts, relative to the sounding range.
@@ -568,8 +617,10 @@ export function bandReach(spec, zone, fs = 48000) {
 export function actsOn(b, zone, fs = 48000) {
   if (!b.on) return { kind: 'flat', pill: 'Off', text: 'band switched off' };
   const r = bandReach(bandFilter(b), zone, fs);
-  const verb = b.type === 'notch' ? 'Notch' : b.type === 'lowcut' || b.type === 'highcut' ? 'Cut' : r.boost ? 'Boost' : 'Cut';
-  if (r.kind === 'flat') return { kind: 'flat', pill: 'Flat', text: hasGain(b.type) ? 'set a boost or cut' : 'no effect' };
+  const verb = b.type === 'notch' ? 'Notch' : r.boost ? 'Boost' : 'Cut';
+  if (r.kind === 'flat') {
+    return { kind: 'flat', pill: 'Flat', text: hasGain(b.type) ? 'set a boost or cut' : 'no effect' };
+  }
   if (r.kind === 'none') return { kind: 'none', pill: 'No effect', text: `below lowest note ${noteName(zone.lo)}` };
   if (r.kind === 'over') {
     return { kind: 'over', pill: 'Overtones', text: `above top note ${noteName(zone.hi)}: tone colour, not notes` };
@@ -601,7 +652,8 @@ export function noteLabel(f) {
   if (s < S_LO) return `below A0 · ${fmtHz(f)}`;
   const n = Math.round(s);
   const c = Math.round((s - n) * 100);
-  return Math.abs(c) < 3 ? `${noteName(n)} · ${fmtHz(f)}` : `≈${noteName(n)} ${c > 0 ? '+' : '−'}${Math.abs(c)}¢ · ${fmtHz(f)}`;
+  if (Math.abs(c) < 3) return `${noteName(n)} · ${fmtHz(f)}`;
+  return `≈${noteName(n)} ${c > 0 ? '+' : '−'}${Math.abs(c)}¢ · ${fmtHz(f)}`;
 }
 
 // ------------------------------------------------------------------------------------------------ parsers
@@ -803,7 +855,9 @@ export function parseForeign(text, fs = 48000) {
         skip('filter is off');
         continue;
       }
-      if (q !== null && Math.abs(q - Math.SQRT1_2) > 0.02) notes.push(`Q ${q} ignored: the ${type === 'hp' ? 'low' : 'high'} cut is a fixed Butterworth`);
+      if (q !== null && Math.abs(q - Math.SQRT1_2) > 0.02) {
+        notes.push(`Q ${q} ignored: the ${type === 'hp' ? 'low' : 'high'} cut is a fixed Butterworth`);
+      }
       if (type === 'hp') {
         haveCut = true;
         cutHz = cl('cutHz', f, 'Hz');
@@ -868,14 +922,15 @@ const hs = (hz, db) => ({ k: MAX_BANDS, on: true, type: 'highshelf', hz, db, q: 
 /**
  * "Start from" presets (curve prototype + AMENDMENT §6): name → target state for writesFor(). Each preset replaces
  * the whole slot EQ, cuts off. 'Wing channel' is the WING channel layout (L shelf, 4 PEQs, H shelf, all 0 dB); its
- * PEQ frequencies are ours (log-spaced), not verified against the console's factory values.
+ * PEQ frequencies are ours (roughly log-spaced, kept clear of the 6 kHz shelf node in the compressed air zone),
+ * not verified against the console's factory values.
  */
 export const EQ_PRESETS = Object.freeze({
   Flat: { bands: [ls(120, 0), hs(6000, 0)] },
   Warm: { bands: [ls(midiF(50), 3), pk(2, 3000, -3, 0.9), hs(8000, -2)] },
   Air: { bands: [ls(120, 0), pk(2, 250, -1.5, 1.2), pk(3, 4700, 1.5, 0.7), hs(10000, 4.5)] },
   'Cut mud': { bands: [ls(midiF(40), 2), pk(2, 250, -5, 1.3), pk(3, 880, 2, 1.4), hs(4200, -6)] },
-  'Wing channel': { bands: [ls(120, 0), pk(2, 250, 0, 1), pk(3, 700, 0, 1), pk(4, 2000, 0, 1), pk(5, 4500, 0, 1),
+  'Wing channel': { bands: [ls(120, 0), pk(2, 200, 0, 1), pk(3, 600, 0, 1), pk(4, 1500, 0, 1), pk(5, 3000, 0, 1),
     hs(6000, 0)] },
 });
 for (const p of Object.values(EQ_PRESETS)) {

@@ -1,4 +1,5 @@
-// Minimal stand-ins for ui-core's component library (SPEC §13), used by edit.js / settings.js ONLY when
+// Minimal stand-ins for ui-core's component library (SPEC §13), used by settings.js and the H-v2 Edit
+// (views/edit/shell.js, ctx.C) ONLY when
 // ./components/index.js cannot be imported. Same call shapes: every factory takes an options object with an
 // onChange-style callback and returns { el, set(value), destroy() } (+ a few extras ui-core also exposes:
 // input, get(), setDisabled()). Plain native inputs; styled by styles-edit.css (.fc-*).
@@ -14,7 +15,8 @@ let loading = null;
  */
 export function loadComponents() {
   if (!loading) {
-    // test hook: the ui-edit fixture sets this to exercise the fallback set even when ui-core's exists
+    // test hook: the settings fixture (test/phase2/settings) and the edit-v2 harness (?components=fallback) set this to
+    // exercise the fallback set even when ui-core's exists
     if (globalThis.__RIG_FORCE_FALLBACK_COMPONENTS === true) return (loading = Promise.resolve({ ...FALLBACK, __source: 'fallback' }));
     loading = import('./components/index.js').then(
       (m) => ({ ...FALLBACK, ...m, __source: 'ui-core' }),

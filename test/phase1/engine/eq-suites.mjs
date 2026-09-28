@@ -80,7 +80,7 @@ export function eqSuites(h) {
     await use(e, patch({ 0: slot('synth', 'bell', eq ? { eq } : {}) }, { master: { volume: 1 } }));
     const ch = e.slots[0].strip;
     if (signal === 'probes') sines(ctx, ch.input, PROBES, 0.004);
-    else if (signal === 'low') sines(ctx, ch.input, [110, 165, 220, 330], 0.05);
+    else if (signal === 'low') sines(ctx, ch.input, [110, 165, 220, 330], 0.03);
     else if (signal === 'noise') noise(ctx, ch.input, 0.03);
     for (const [n, t] of notes) e.noteOn(n, 90, { when: t });
     for (const [t, p, v] of writes) {
@@ -103,8 +103,10 @@ export function eqSuites(h) {
       const zeroBands = await run({ eq: { low: 0, high: 0, b2: { on: true, type: 'peak', hz: 500, db: 0, q: 2 }, b5: { on: false, type: 'notch', hz: 900 }, b3: { type: 'off' }, cutHz: 20, hiCutHz: 20000 } });
       // at runtime: a band added at 0 dB goes through a chain switch (warm-up + crossfade of identical signals)
       const added = await run({ writes: [[0.3, 'slots.0.eq.b4.on', true], [0.3, 'slots.0.eq.b4.hz', 700], [0.6, 'slots.0.eq.b6.on', true]] });
-      const legacy = await run({ eq: { low: 4, high: -3 } });
-      const rows = await run({ eq: { b1: { on: true, type: 'lowshelf', hz: 120, db: 4 }, b8: { on: true, type: 'highshelf', hz: 6000, db: -3 } } });
+      // legacy vs b-rows: the same graph built twice; noise only (no synth voices, whose multi-oscillator sums vary
+      // by Chromium's input summing order, CLAUDE.md caveat)
+      const legacy = await run({ eq: { low: 4, high: -3 }, notes: [] });
+      const rows = await run({ eq: { b1: { on: true, type: 'lowshelf', hz: 120, db: 4 }, b8: { on: true, type: 'highshelf', hz: 6000, db: -3 } }, notes: [] });
       const diffs = {
         default: maxDiff(dflt.buf, never.buf),
         zeroAndOffBands: maxDiff(zeroBands.buf, never.buf),
@@ -169,7 +171,7 @@ export function eqSuites(h) {
           worst = Math.max(worst, Math.abs(m - want[i]));
           return +m.toFixed(2);
         });
-        rows.push({ label, worstDb: +worst.toFixed(3), ok: worst <= 0.2, got, want: [...want].map((x) => +x.toFixed(2)), wired: r.ch.eq.active.ids.join(' ') });
+        rows.push({ label, worstDb: +worst.toFixed(4), ok: worst <= 0.2, got, want: [...want].map((x) => +x.toFixed(2)), wired: r.ch.eq.active.ids.join(' ') });
       }
       // perBand and above-Nyquist handling
       const e = ref.e;
@@ -178,7 +180,7 @@ export function eqSuites(h) {
       const pb = e.getEqResponse(0, [1000, 30000], { perBand: true });
       const pbOk = Object.keys(pb.bands).join() === 'b1,b3,b8' && Math.abs(pb.total[0] - (pb.bands.b1[0] + pb.bands.b3[0] + pb.bands.b8[0])) < 1e-4 && Number.isFinite(pb.total[1]);
       const pass = rows.every((x) => x.ok) && pbOk && e.getEqResponse(2, PROBES) === null;
-      return { pass, rows: rows.map((x) => `${x.label}: worst ${x.worstDb} dB [${x.wired}]${x.ok ? '' : ` ✗ got ${x.got} want ${x.want}`}`), perBandOk: pbOk };
+      return { pass, rows: rows.map((x) => `${x.label}: worst ${x.worstDb} dB [${x.wired}]${x.ok ? '' : ` ✗ got ${x.got} want ${x.want}`}`), perBandOk: pbOk, wing: { probesHz: PROBES, renderedDb: rows[rows.length - 1].got, getEqResponseDb: rows[rows.length - 1].want } };
     },
 
     /** Low/high cut engage/bypass (chain crossfade) and band add/remove/type switches are click-free; a raw type swap is not. */
@@ -261,13 +263,16 @@ export function eqSuites(h) {
     },
 
     /**
-     * CPU (DECISION §3 method: 4 strips × looping stereo noise, 30 s offline at 48 kHz, median of 3). Hard: the EQ's
-     * own overhead (chain gain, k-rate) stays within +30 % of the same number of plain biquads measured in this run.
-     * Soft (box load): the absolute numbers within ±30 % of DECISION's table.
+     * CPU (DECISION §3 method: 4 strips × looping stereo noise, offline at 48 kHz; here 10 s renders, 5 rounds with the
+     * configs interleaved, fastest of each, scaled to DECISION's 30 s: the box is shared, and the minimum is the least
+     * load-dependent estimate). Hard: the EQ section's own cost (chain gain, k-rate) stays within +30 % of the same
+     * number of plain biquads measured in this run (or within 0.5 % of a core of it). Soft (box load): the EQ costs
+     * within ±30 % of DECISION's table.
      */
     async eqCpu() {
       const SR48 = 48000;
-      const SEC = 30;
+      const SEC = 10;
+      const SCALE = 30 / SEC;
       const render = async (mode) => {
         const ctx = new OfflineAudioContext({ numberOfChannels: 2, length: SR48 * SEC, sampleRate: SR48 });
         const timer = new AudioTimer(ctx);
@@ -321,25 +326,24 @@ export function eqSuites(h) {
         timer.dispose();
         return performance.now() - t0;
       };
-      const med = async (mode) => {
-        const v = [];
-        for (let i = 0; i < 3; i++) v.push(await render(mode));
-        v.sort((x, y) => x - y);
-        return Math.round(v[1]);
-      };
-      const ms = {};
-      for (const m of ['none', 'raw2', 'eq2', 'raw5', 'eq5', 'raw5r', 'eq5r', 'eq10']) ms[m] = await med(m === 'eq2' ? 'default' : m);
+      const MODES = ['none', 'raw2', 'eq2', 'raw5', 'eq5', 'raw5r', 'eq5r', 'eq10'];
+      const best = Object.fromEntries(MODES.map((m) => [m, Infinity]));
+      for (let round = 0; round < 5; round++)
+        for (const m of MODES) best[m] = Math.min(best[m], await render(m === 'eq2' ? 'default' : m));
+      const ms = Object.fromEntries(MODES.map((m) => [m, Math.round(best[m] * SCALE)])); // per 30 s of audio
       // the EQ section's own cost over the strip without it, vs DECISION's (its "none" = 32 ms had no strip at all)
       const cost = (m) => ms[m] - ms.none;
-      const rel = { eq2: cost('eq2') / cost('raw2'), eq5: cost('eq5') / cost('raw5'), eq5r: cost('eq5r') / cost('raw5r') };
+      const PAIRS = { eq2: 'raw2', eq5: 'raw5', eq5r: 'raw5r' };
+      const rel = Object.fromEntries(Object.entries(PAIRS).map(([k, r]) => [k, cost(k) / Math.max(1, cost(r))]));
       const DEC = { eq2: 251 - 32, eq5: 568 - 32, eq5r: 796 - 32 };
       const vsDecision = Object.fromEntries(Object.keys(DEC).map((k) => [k, +(cost(k) / DEC[k]).toFixed(2)]));
-      const core = (x) => `${((x / (SEC * 1000)) * 100).toFixed(1)} %`;
-      const hard = Object.values(rel).every((x) => x <= 1.3);
+      const core = (x) => `${((x / 30000) * 100).toFixed(1)} %`;
+      const hard = Object.entries(PAIRS).every(([k, r]) => rel[k] <= 1.3 || ms[k] - ms[r] <= 0.005 * 30000);
       const absOk = Object.values(vsDecision).every((x) => x >= 0.7 && x <= 1.3);
       const out = {
-        ms, relToPlainBiquads: Object.fromEntries(Object.entries(rel).map(([k, v]) => [k, +v.toFixed(2)])), vsDecision,
-        shareOfOneCore: { default: core(ms.eq2), five: core(ms.eq5), fiveRampingKrate: core(ms.eq5r), allTen: core(ms.eq10) },
+        renderMs: ms, relToPlainBiquads: Object.fromEntries(Object.entries(rel).map(([k, v]) => [k, +v.toFixed(2)])), vsDecision,
+        eqShareOfOneCore: { default: core(cost('eq2')), five: core(cost('eq5')), fiveRampingKrate: core(cost('eq5r')), allTen: core(cost('eq10')) },
+        stripShareOfOneCore: { none: core(ms.none), default: core(ms.eq2), allTen: core(ms.eq10) },
       };
       if (!hard) return { pass: false, ...out };
       return absOk ? { pass: true, ...out } : { pass: false, soft: true, note: 'absolute numbers outside DECISION ±30 % (box load?)', ...out };

@@ -9,7 +9,7 @@ npm test                               # every suite except the 20-min soak  (= 
 node test/run-all.mjs                  # everything, including the 20-min soak
 node test/run-all.mjs --fast           # no soak, no Electron (skips shell's Electron boot, electron-full, build-lint)
 node test/run-all.mjs --only phase1    # suite names or groups: unit, phase1, phase2, integration, electron, soak
-node test/run-all.mjs --skip engine,ui-edit
+node test/run-all.mjs --skip engine,edit-v2
 node test/run-all.mjs --only soak --soak-minutes 5
 node test/run-all.mjs --list           # show the suites and their commands
 npm test -- --fast                     # extra flags pass through npm
@@ -36,7 +36,9 @@ Times were measured on the 2-vCPU Linux container. On an M-series Mac, expect th
 | synth-extra | `node test/phase1/synth-extra/run.mjs` | the extra synth patches (`engine/synth-extra.js`): per-patch checks and trims. Skipped when the runner does not exist. | ~1–2 min |
 | shell | `node test/phase1/shell/run.mjs [--only unit\|browser\|electron] [--skip …]` | node:test for store, controller (fake engine), midi `_inject`, presets and the WAV header. Playwright: server Range/MIME/traversal, recorder to OPFS/mock rig. Electron boot on a fixture app. `--fast` passes `--skip electron`. | ~1 min (+~30 s Electron) |
 | ui-core | `node test/phase2/ui-core/run.mjs` | the real app in Chromium: Perform view, top bar, overlay, sound and release per song, screenshots in `test/phase2/ui-core/screenshots/` | ~2–3 min |
-| ui-edit | `node test/phase2/ui-edit/run.mjs` (`UIEDIT_MODES=app\|fixture`) | Edit view and Settings modal against the real store/engine/controller, plus the fallback component set. Screenshots. | ~2–3 min |
+| edit-v2 | `node test/phase2/edit-v2/run.mjs [--only slot,integration] [--list]` | the H-v2 Edit (`app/js/views/edit/`, CONTRACT.md §7): `shell.test.mjs`, one `panels/<id>.test.mjs` per panel on the edit-v2 harness (server.js on a free port, real store/engine/controller, one panel or the whole view), and `integration.test.mjs` on the real app (boot at 1440/1024, header chips, Tone EQ, Perform ⇄ Edit baseline, "nothing lost"). One process per file; each file has a 900 s budget. Screenshots in `test/phase2/edit-v2/screenshots/`. | ~4 min |
+| settings | `node test/phase2/settings/run.mjs` (`SETTINGS_MODES=app\|fixture`) | the Settings modal (moved out of the retired ui-edit suite): the real app, and a settings-only fixture on the fallback component set. Zero console.error. Screenshots. | ~1 min |
+| eq | `node test/phase2/eq/run.mjs` | the keyboard EQ component (`components/eq-keyboard.js`, `shared/eq-math.js`) on its own fixture with the real store/engine/controller | ~30 s |
 | chrome-fallback | `node test/integration/smoke-chrome-fallback.mjs` | `node serve.mjs --port <free>`, then Chromium **without** the autoplay flag: the start overlay appears, a click starts audio, and computer key A makes sound. `/api/health` from Node and from the page. A second `serve.mjs` on the same port reuses the server, exits 0 and opens nothing. `--open` while a window heartbeats opens nothing; `--open` on a server nobody has visited opens exactly one app window. A fake `google-chrome`/`chromium`/`xdg-open` on `PATH` records launches, so nothing real opens. SIGINT stops the server cleanly. | ~40 s |
 | electron-full | `node test/integration/electron-full.mjs [--keep]` | the **real** app in Electron, run with `xvfb-run -a npx electron . --no-sandbox`. Run 1 (`RIG_SELFTEST=1`): loads from `127.0.0.1:8438` (or a free port if 8438 is busy), zero console.error, no failed resource loads, `window.__rig` exists, 3 songs (grand piano, pad + drone, lofi) selected through the controller all sound on the analysers with no NaN, and a 2 s recording through `controller.record()` lands in the recordings folder as a valid 16-bit stereo WAV of about 2 s. Exit 0, port released, no leftover process. Run 2 (normal quit path): record 1 s, `window.close()`, then the app exits 0 on its own and the take is finalized. | ~35 s |
 | build-lint | `node test/integration/build-lint.mjs [--keep] [--no-boot]` | `electron-builder --linux dir` with the repo's own `build` config into a temp dir, using Electron from `node_modules`, so nothing is downloaded. Asserts the asar contains `main.js`, `preload.js`, `server.js`, `README.md`, `LICENSES.md`, `app/index.html`, `app/samples/manifest.json`, every sample file the manifest lists and every `app/` file on disk. It must not contain `app/js/engine/test.html`, test, tools, audition, reviews or dev deps. Then boots the packaged binary under xvfb and checks for zero console.error. The temp dir (~300 MB) is deleted afterwards. | ~40 s |
@@ -87,7 +89,7 @@ test/run-all.mjs                 orchestrator (this README)
 test/logs/                       <suite>.log, summary.txt, soak.csv (git-ignored)
 test/unit/**                     phase0 node:test files
 test/phase1/{engine,instruments,synth-extra,shell}/run.mjs
-test/phase2/{ui-core,ui-edit}/run.mjs
+test/phase2/{ui-core,settings,eq,edit-v2}/run.mjs
 test/integration/lib.mjs         shared helpers: free ports, app wrapper with probe injection, WAV inspection, checker
 test/integration/electron-full.mjs
 test/integration/soak.mjs

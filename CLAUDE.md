@@ -59,6 +59,30 @@ run them one at a time; `run-all` does that for you.
 - Style: 2 spaces, single quotes, semicolons, lines ≤ 120 characters, JSDoc on exported functions. Comments should
   explain why, and cite the review/finding id (for example `M5`, `engine-core #18`).
 
+## Edit view (H-v2, `app/js/views/edit/`)
+
+- `views/edit/CONTRACT.md` is the reference: module map, the selection model (`ctx.editState`), the panel API and
+  ctx, DOM/CSS rules and the test harness. main.js mounts `edit/shell.js` (`mountEdit`); the old `views/edit.js`
+  is gone.
+- **Shell** (`shell.js`): the layout, 7 block tabs (Keys · Pad · Extra · Bass · Drone | Effects · Master) with
+  summaries and changed dots, Show wiring, and one ctx per mounted panel. Everything a panel registers through its
+  ctx (subscriptions, listeners, Esc handlers, leave-song hooks) is released when it unmounts.
+- **Panels** (`panels/*.js`, one CSS file each): `slot` (Keys/Pad/Extra/Bass), `drone`, `effects`, `master` (incl.
+  Wheels & pedal), `song` (Easy Transpose, tempo, notes; opened by the header chips), and the regions
+  `song-header`, `setlist`, `bottom`. Panels write through `ctx.set` / store helpers / `controller.*` only.
+- **Shared** (`lib.js`): `createBinder` (targeted store → view refresh; `destroy()` also unsubscribes), `section`
+  (open state in `localStorage['worship-rig.edit2.sections']`), `wordSlider`, `sentence`, icons, labels.
+- **CSS**: `styles-edit-v2.css` imports `base.css` first, then the panel files, so panel rules win ties. Every
+  selector is scoped under `.ev2`.
+- **Changed dots** count against Perform's Revert snapshot (`ctx.getBaseline()` from main.js), so both views agree.
+- **Slot EQ**: Advanced › Tone mounts `components/eq-keyboard.js` `eqKeyboard` only while Advanced and Tone are
+  open, and destroys it on close, rebuild and unmount; `eqMiniCurve` sits in the title bar. The Brightness/Warmth
+  sliders on the strip's shelves read `readEq` and write `shelfWrites` (`shared/eq-math.js`): the legacy
+  `eq.low`/`eq.high` rows stop acting once a band has b-rows.
+- **Tests**: `node test/phase2/edit-v2/run.mjs [--only slot,integration]`. Panel files use the harness
+  (`harness.mjs`: one panel or the whole view, real store/engine/controller); `integration.test.mjs` runs the real
+  app. One process per file, 900 s budget per file. Settings has its own suite (`test/phase2/settings/run.mjs`).
+
 ## Where things live
 
 - Levels and calibration:

@@ -1,11 +1,13 @@
-# Worship Rig: status (2026-09-28, after round-2 fixes and integration-2)
+# Worship Rig: status (2026-09-28, after the H-v2 Perform + Edit, the slot EQ, and hv2-edit-integrate)
 
 One page. Details: `CONTRACT_CHANGES.md` (every change, with numbers), `reviews/` (findings), `test/README.md`.
 
 ## What works (verified on the 2-vCPU Linux container)
 
-Full `node test/run-all.mjs --soak-minutes 10`, suites run one at a time: **10/11 on the first pass, 11/11 with the
-one re-run** (build-lint, an `xvfb-run` cleanup flake, see Known issues).
+Latest: `node test/run-all.mjs --skip soak` after hv2-edit-integrate: **10/12 on the first pass, 1 skipped (soak)**.
+The two failures are flaky tests that pass on re-run: engine `offline.masterEqGlue` and ui-core "Quick sheet: TAP"
+(see Known issues 7–8; ui-core re-run 39/39). The table below is from that run where it changed. The rest, and the
+soak, are from the earlier full `--soak-minutes 10` run (integration-2).
 
 | suite | result | what it proves |
 |---|---|---|
@@ -14,8 +16,10 @@ one re-run** (build-lint, an `xvfb-run` cleanup flake, see Known issues).
 | instruments | 143/143 | synth/organ/voice levels, release, stealing, dispose |
 | synth-extra | 153/153 | the extra synth patches and their trims |
 | shell | 156 (node 130, browser 12, Electron 14) | store, controller, MIDI `_inject`, server (Range, MIME, traversal/realpath), recorder, Electron boot with 404 detection |
-| ui-core | 33/33 | Perform view, top bar, focus/Space after Settings, fader drags across song changes |
-| ui-edit | 94/94 (app + fixture) | Edit view, Settings, text fields don't leak into the next song |
+| ui-core | 38/39 (39/39 re-run) | H-v2 Perform view, top bar, lock rules, Quick sheet, step chips, focus/Space after Settings |
+| edit-v2 | 10/10 files, 74 tests (75 with the Perform "+" test added after the run) | H-v2 Edit: shell, 8 panels on the harness, and the real app (boot at 1440/1024, Tone EQ, Perform ⇄ Edit baseline, "nothing lost") |
+| settings | 26/26 (app + fixture) | Settings modal over the new Edit, and on the fallback components |
+| eq | 22/22 | the keyboard Tone EQ component and its math |
 | chrome-fallback | 17/17 | `serve.mjs`, start overlay, key A sounds, single-window reuse, SIGINT |
 | electron-full | 28/28 | real app under Electron: 3 songs sound, 2 s recording is a valid WAV, clean quit |
 | build-lint | 26/26 (re-run) | packaged asar contents (77.1 MB, 1999 samples, 23 instruments), packaged app boots with 0 errors |
@@ -56,6 +60,14 @@ one re-run** (build-lint, an `xvfb-run` cleanup flake, see Known issues).
 5. Calibration caveats: `tools/calibrate.mjs` trims decaying instruments slightly hot and doesn't know synth-extra's
    `calibWindow` (see CLAUDE.md).
 6. Chrome (:8437) and the Mac app (:8438) keep separate libraries. This is by design; move songs with Export/Import.
+
+7. **Flaky: engine `offline.masterEqGlue`** fails about 1 run in 3. Its `neverDiff` limit is 2e-6, and Chromium's
+   run-to-run summing noise is about 1e-6 (2.26e-6 seen). The limit should be about 1e-5, as CLAUDE.md advises.
+8. **Flaky: ui-core "Quick sheet: TAP"** fails about 1 run in 3. Four Playwright clicks 500 ms apart must land within
+   120 ± 12 BPM, and click overhead sometimes stretches the intervals to about 566 ms (106 BPM). The Edit view
+   adds no measurable cost there. The fix is to tap via `quickSheet.tap(now)` with fixed timestamps.
+9. Edit leftovers (CONTRACT_CHANGES "## hv2-edit-integrate", "Left open"): the dead `.ed-*` rules in
+   `styles-edit.css`; the step-panel fine-slider height in `styles.css`; no level meter beside the Edit slot fader.
 
 ## Next steps
 

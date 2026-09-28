@@ -17,8 +17,10 @@
 //   switches the bands off and restores them (M.bypassWrites), restored on A, on any edit, on setSlot and on destroy.
 // • Every write goes through store.set('slots.<i>.eq.<key>', v) with the AMENDMENT keys (b<k>.on/type/hz/db/q,
 //   cutHz, hiCutHz); M.writesFor() computes the minimal set, and migrates legacy eq.low/eq.high on the first edit.
-// Views never touch the engine except through the three read-only/feature-detected calls above plus the analyser
-// taps (engine.slotAnalysers(i) if present, else the master engine.analyserL/R) — see CONTRACT_CHANGES "## eq-ui".
+// Engine calls (getEqResponse, getSlotPlayRange, slotAnalysers, eqAudition, auditionNote) go through the
+// controller's pass-through when it has one, else the engine (CLAUDE.md: views never call the engine), all
+// feature-detected; the master analyser engine.analyserL/R and engine.ctx are read directly.
+// See CONTRACT_CHANGES "## eq-ui".
 import { h, disposer } from './util.js';
 import * as M from '../../shared/eq-math.js';
 import { ROLE_DEFAULTS } from '../../shared/params.js';
@@ -29,8 +31,10 @@ const CUT_BLUE = '#7cc4ff';
 const DB_RANGE = 15;
 const DEADZONE = 4;
 const LONG_PRESS_MS = 550;
-const DOUBLE_MS = 350;
+const DOUBLE_MS = 400;
 const CUT_Y_DB = -10;
+/** How long the curve waits for engine.getEqResponse to catch up with an edit (see recomputeCurve). */
+const ENGINE_WAIT_MS = 3000;
 
 /**
  * Mount the keyboard EQ for one slot of the current song.
@@ -43,6 +47,7 @@ const CUT_Y_DB = -10;
  * @param {object} [o.controller]  optional: eqAudition(i, mode) / auditionNote(i, midi) take precedence
  * @param {boolean} [o.compact]    force the compact layout (auto below 1180 px wide)
  * @param {(msg:string) => void} [o.toast] app toast; default = the component's own
+ * @param {boolean} [o.rta=true] draw the analyser behind the curve
  * @returns {{el:HTMLElement, update():void, setSlot(i:number):void, destroy():void, debug():object}}
  */
 export function eqKeyboard(o = {}) {
@@ -60,18 +65,22 @@ export function eqKeyboard(o = {}) {
   let zoneSig = '';
   let ab = 'a';
   let abState = null; // store-mode compare: {songId, slot, restore:[key, v][], snapEq}
-  const abMode = typeof controller?.eqAudition === 'function' ? 'controller'
-    : typeof engine?.eqAudition === 'function' ? 'engine' : 'store';
+  /** controller pass-through when it has one (views never call the engine, CLAUDE.md), else the engine, else null */
+  const via = (name) => (typeof controller?.[name] === 'function' ? controller
+    : typeof engine?.[name] === 'function' ? engine : null);
+  const abMode = via('eqAudition') === controller && controller ? 'controller' : via('eqAudition') ? 'engine' : 'store';
   let drag = null;
   let pinch = null;
   const pointers = new Map();
   let lastTap = null;
+  let lastDouble = 0; // when the pointer path last handled a double tap (the native dblclick then stands down)
   let hover = null;
   let hoverHit = null;
   let pressedKey = null;
   let dirty = true;
   let dirtyKeys = true;
   let engineCurveUntil = 0;
+  let enginePending = false;
   let curve = { xs: [], db: new Float64Array(0), source: 'local' };
   let curveMismatch = 0;
   let warnedMismatch = false;
@@ -100,11 +109,14 @@ export function eqKeyboard(o = {}) {
   const addHint = h('span.eqk-hint', { text: 'or double-tap the graph' });
   const table = h('table.eqk-bands', {},
     h('colgroup', {}, ...['n', 't', 'note', 'hz', 'db', 'q', 'acts', 'on', 'x'].map((c) => h(`col.c-${c}`))),
-    h('thead', {}, h('tr', {}, ...['', 'Band', 'Note', 'Hz', 'dB', 'Q', 'Acts on', 'On', ''].map((t) => h('th', { text: t })))),
+    h('thead', {}, h('tr', {},
+      ...['', 'Band', 'Note', 'Hz', 'dB', 'Q', 'Acts on', 'On', ''].map((t) => h('th', { text: t })))),
     tbody,
     h('tfoot', {}, h('tr', {}, h('td', { colspan: '9' }, addBtn, addHint))));
   const cutIn = h('input', { type: 'text', class: 'eqk-cut-hz', 'aria-label': 'Low cut Hz', dataset: { cut: 'lc' } });
-  const hiCutIn = h('input', { type: 'text', class: 'eqk-hicut-hz', 'aria-label': 'High cut Hz', dataset: { cut: 'hc' } });
+  const hiCutIn = h('input', {
+    type: 'text', class: 'eqk-hicut-hz', 'aria-label': 'High cut Hz', dataset: { cut: 'hc' },
+  });
   const cutOn = h('button', { type: 'button', class: 'eqk-onoff eqk-cut-on', 'aria-label': 'Low cut on' });
   const hiCutOn = h('button', { type: 'button', class: 'eqk-onoff eqk-hicut-on', 'aria-label': 'High cut on' });
   const copyBtn = h('button', { type: 'button', class: 'eqk-btn eqk-copy', text: 'Copy as text',
@@ -176,10 +188,11 @@ export function eqKeyboard(o = {}) {
       songT = 0;
     }
     const fb = M.soundingRange(slot || {}, { songTranspose: songT });
-    if (typeof engine?.getSlotPlayRange !== 'function' || !slot) return { ...fb, source: 'slot' };
+    const pr = via('getSlotPlayRange');
+    if (!pr || !slot) return { ...fb, source: 'slot' };
     let r = null;
     try {
-      r = engine.getSlotPlayRange(slotIndex);
+      r = pr.getSlotPlayRange(slotIndex);
     } catch {
       r = null;
     }
@@ -188,7 +201,9 @@ export function eqKeyboard(o = {}) {
     // the engine knows the split and the instrument; the 88-key controller clamp is ours (DECISION §5 `ctrl`)
     const lo = Math.max(r.lowNote, M.MIDI_LO + shift);
     const hi = Math.max(lo, Math.min(r.highNote, M.MIDI_HI + shift));
-    const instRange = Number.isFinite(r.sampledLow) && Number.isFinite(r.sampledHigh) ? [r.sampledLow, r.sampledHigh] : null;
+    // "stretched" = sounding but outside the real samples (the sampler repitches its nearest one, DECISION §7)
+    const instRange = Array.isArray(r.instrumentRange) ? r.instrumentRange
+      : Number.isFinite(r.sampledLow) && Number.isFinite(r.sampledHigh) ? [r.sampledLow, r.sampledHigh] : null;
     const z = M.zoneOf(lo, hi, { shift, instRange, why: fb.why });
     if (instRange && lo === instRange[0] && lo > fb.lo) z.why = { ...z.why, lo: 'instrument' };
     if (instRange && hi === instRange[1] && hi < fb.hi) z.why = { ...z.why, hi: 'instrument' };
@@ -294,7 +309,8 @@ export function eqKeyboard(o = {}) {
     if (!st) return;
     const s = song();
     for (const [key, v] of st.restore) {
-      const path = s && s.id === st.songId ? `slots.${st.slot}.eq.${key}` : `songs.${st.songId}.patch.slots.${st.slot}.eq.${key}`;
+      const path = s && s.id === st.songId ? `slots.${st.slot}.eq.${key}`
+        : `songs.${st.songId}.patch.slots.${st.slot}.eq.${key}`;
       store.set(path, v);
     }
   }
@@ -335,7 +351,7 @@ export function eqKeyboard(o = {}) {
     syncTable();
     syncCuts();
     dirty = dirtyKeys = true;
-    engineCurveUntil = performance.now() + 450;
+    engineCurveUntil = performance.now() + ENGINE_WAIT_MS;
     recomputeCurve();
   }
 
@@ -364,7 +380,8 @@ export function eqKeyboard(o = {}) {
     if (sigNow !== builtSig) buildRows();
     for (const tr of tbody.rows) syncRow(tr);
     addBtn.disabled = model.bands.length >= M.MAX_BANDS || ab === 'b';
-    addHint.textContent = model.bands.length >= M.MAX_BANDS ? `${M.MAX_BANDS} bands: remove one to add` : 'or double-tap the graph';
+    addHint.textContent = model.bands.length >= M.MAX_BANDS ? `${M.MAX_BANDS} bands: remove one to add`
+      : 'or double-tap the graph';
   }
 
   function buildRows() {
@@ -378,7 +395,9 @@ export function eqKeyboard(o = {}) {
 
   function makeRow(k) {
     const cell = (f, label, title) => {
-      const inp = h('input', { type: 'text', class: `eqk-${f}`, dataset: { f }, 'aria-label': `Band ${k} ${label}`, title });
+      const inp = h('input', {
+        type: 'text', class: `eqk-${f}`, dataset: { f }, 'aria-label': `Band ${k} ${label}`, title,
+      });
       d.listen(inp, 'focus', () => {
         selectBand(k, { focus: false });
         inp.select();
@@ -403,12 +422,16 @@ export function eqKeyboard(o = {}) {
     d.listen(typeSel, 'focus', () => selectBand(k, { focus: false }));
     const num = h('button', { type: 'button', class: 'eqk-num', text: String(k), 'aria-label': `Select band ${k}` });
     d.listen(num, 'click', () => selectBand(k));
-    const onoff = h('button', { type: 'button', class: 'eqk-onoff', dataset: { f: 'on' }, 'aria-label': `Band ${k} on` });
+    const onoff = h('button', {
+      type: 'button', class: 'eqk-onoff', dataset: { f: 'on' }, 'aria-label': `Band ${k} on`,
+    });
     d.listen(onoff, 'click', () => {
       const b = bandByK(k);
       if (b) setBand(k, { on: !b.on }, 'on');
     });
-    const del = h('button', { type: 'button', class: 'eqk-del', dataset: { f: 'del' }, text: '✕', 'aria-label': `Remove band ${k}` });
+    const del = h('button', {
+      type: 'button', class: 'eqk-del', dataset: { f: 'del' }, text: '✕', 'aria-label': `Remove band ${k}`,
+    });
     d.listen(del, 'click', () => removeBand(k));
     const tr = h('tr', { dataset: { k: String(k) } },
       h('td', {}, num), h('td', {}, typeSel),
@@ -487,7 +510,8 @@ export function eqKeyboard(o = {}) {
     // re-sync this cell too (it has focus, so syncRow skipped it)
     const nb = bandByK(k);
     if (nb) {
-      const text = f === 'note' ? noteCell(nb.hz) : f === 'hz' ? M.fmtHzNum(nb.hz) : f === 'db' ? M.fmtDb(nb.db) : nb.q.toFixed(2);
+      const text = f === 'note' ? noteCell(nb.hz) : f === 'hz' ? M.fmtHzNum(nb.hz)
+        : f === 'db' ? M.fmtDb(nb.db) : nb.q.toFixed(2);
       inp.value = inp.defaultValue = text;
     }
   }
@@ -649,6 +673,12 @@ export function eqKeyboard(o = {}) {
   }
 
   // ------------------------------------------------------------------------------------------------ curve
+  /**
+   * Curve = what you hear, without ever drawing a stale one: the store reaches the engine a hop later (store notify
+   * → controller → engine.setParam), so right after an edit the engine still answers with the old EQ. The local
+   * RBJ curve (the target) is drawn until the engine agrees within 0.5 dB, polled every frame for up to
+   * ENGINE_WAIT_MS; if it still disagrees then, the engine's curve wins (it is the sound) and a warning says so once.
+   */
   function recomputeCurve() {
     if (!G.w) return;
     const xs = [];
@@ -657,24 +687,33 @@ export function eqKeyboard(o = {}) {
     const local = M.eqResponseDb(model, freqs, fs());
     let db = local;
     let source = 'local';
-    if (ab !== 'b' && typeof engine?.getEqResponse === 'function') {
+    enginePending = false;
+    const er = via('getEqResponse');
+    if (ab !== 'b' && er) {
       let r = null;
       try {
-        r = engine.getEqResponse(slotIndex, freqs);
+        r = er.getEqResponse(slotIndex, freqs);
       } catch {
         r = null;
       }
       if (r && r.length === freqs.length && Array.prototype.every.call(r, Number.isFinite)) {
-        db = r;
-        source = 'engine';
-        // settled and still different → the engine and the stored model disagree: say so once (not an error)
-        if (performance.now() > engineCurveUntil - 50) {
-          let mx = 0;
-          for (let i = 0; i < local.length; i++) mx = Math.max(mx, Math.abs(M.clamp(local[i], -40, 40) - M.clamp(r[i], -40, 40)));
-          curveMismatch = mx;
-          if (mx > 0.5 && !warnedMismatch) {
+        let mx = 0;
+        for (let i = 0; i < local.length; i++) {
+          mx = Math.max(mx, Math.abs(M.clamp(local[i], -40, 40) - M.clamp(r[i], -40, 40)));
+        }
+        curveMismatch = mx;
+        if (mx <= 0.5) {
+          db = r;
+          source = 'engine';
+        } else if (performance.now() < engineCurveUntil) {
+          enginePending = true; // not caught up yet: keep the target on screen and ask again next frame
+        } else {
+          db = r;
+          source = 'engine';
+          if (!warnedMismatch) {
             warnedMismatch = true;
-            console.warn(`[eq] engine.getEqResponse differs from the stored EQ by ${mx.toFixed(2)} dB (slot ${slotIndex})`);
+            console.warn(`[eq] engine.getEqResponse differs from the stored EQ by ${mx.toFixed(2)} dB ` +
+              `(slot ${slotIndex})`);
           }
         }
       }
@@ -687,13 +726,15 @@ export function eqKeyboard(o = {}) {
   let anBuf = null;
   let anBuf2 = null;
   function analysers() {
+    if (o.rta === false) return null;
     const ctx = engine?.ctx;
     if (!ctx || ctx.state !== 'running') return null;
-    if (typeof engine.slotAnalysers === 'function' && slotAnTried !== slotIndex) {
+    const sa = via('slotAnalysers');
+    if (sa && slotAnTried !== slotIndex) {
       slotAnTried = slotIndex;
       try {
         slotAn?.release?.();
-        const r = engine.slotAnalysers(slotIndex);
+        const r = sa.slotAnalysers(slotIndex);
         slotAn = r ? { pre: r.pre ?? r[0] ?? null, post: r.post ?? r[1] ?? null, release: r.release ?? null } : null;
       } catch {
         slotAn = null;
@@ -708,7 +749,9 @@ export function eqKeyboard(o = {}) {
     if (anCols && anCols.fft === an.fftSize) return anCols;
     const binHz = fs() / an.fftSize;
     const cols = [];
-    for (let x = Math.floor(G.L); x <= G.w - G.R; x += 2) cols.push({ x, b0: fOfX(x - 1) / binHz, b1: fOfX(x + 1) / binHz });
+    for (let x = Math.floor(G.L); x <= G.w - G.R; x += 2) {
+      cols.push({ x, b0: fOfX(x - 1) / binHz, b1: fOfX(x + 1) / binHz });
+    }
     anCols = { fft: an.fftSize, cols };
     return anCols;
   }
@@ -839,9 +882,13 @@ export function eqKeyboard(o = {}) {
     if (xs - G.L > 70) {
       const why = zone.why.lo === 'split' ? `below the split (${nm(zone.lo)})`
         : zone.why.lo === 'instrument' ? 'below the lowest sample' : 'below your keyboard';
-      zoneLabel(Math.max(G.L, xk0), xs, [`${slotName()} doesn't play here`, why, 'no notes to shape, only rumble'], '#8a93a0');
+      zoneLabel(Math.max(G.L, xk0), xs, [`${slotName()} doesn't play here`, why, 'no notes to shape, only rumble'],
+        '#8a93a0');
     }
-    if (xo < xk1 - 4) zoneLabel(xo, W - G.R, [`Tone (overtones) of ${nm(zone.lo)}–${nm(zone.hi)}`, `no ${slotName()} notes above ${nm(zone.hi)}`], '#9aa3ae');
+    if (xo < xk1 - 4) {
+      zoneLabel(xo, W - G.R, [`Tone (overtones) of ${nm(zone.lo)}–${nm(zone.hi)}`,
+        `no ${slotName()} notes above ${nm(zone.hi)}`], '#9aa3ae');
+    }
     else zoneLabel(xk1, W - G.R, ['Air', 'overtones only'], '#6b7380');
 
     // analyser behind the curve (WING: RTA behind)
@@ -894,10 +941,13 @@ export function eqKeyboard(o = {}) {
     if (sb && !byp && M.bandFilter(sb)) {
       c.beginPath();
       c.moveTo(G.L, yOfDb(0));
-      for (let x = G.L; x <= W - G.R; x += 2) c.lineTo(x, yOfDb(M.clamp(M.bandDb(sb, fOfX(x), fs()), -DB_RANGE, DB_RANGE)));
+      for (let x = G.L; x <= W - G.R; x += 2) {
+        c.lineTo(x, yOfDb(M.clamp(M.bandDb(sb, fOfX(x), fs()), -DB_RANGE, DB_RANGE)));
+      }
       c.lineTo(W - G.R, yOfDb(0));
       c.closePath();
-      c.fillStyle = hexA(M.hasGain(sb.type) && sb.db > 0 ? col : sb.type === 'peak' || M.hasGain(sb.type) ? col : CUT_BLUE, 0.16);
+      // lift in the slot colour, anything that takes away (cut, notch, low/high cut) in blue, as on the keys
+      c.fillStyle = hexA(M.hasGain(sb.type) && sb.db > 0 ? col : CUT_BLUE, 0.16);
       c.fill();
     }
     // composite curve
@@ -984,10 +1034,11 @@ export function eqKeyboard(o = {}) {
       const inGrey = r.kind === 'over' || r.kind === 'none';
       const R = G.r + (hot ? 2 : 0);
       if (isSel) {
+        const cue = drag?.k === b.k && drag.lpCue;
         c.beginPath();
         c.arc(p.x, p.y, R + 6, 0, Math.PI * 2);
-        c.strokeStyle = hexA(doomed ? '#ff4d4f' : col, 0.35);
-        c.lineWidth = 3;
+        c.strokeStyle = cue ? '#ffffff' : hexA(doomed ? '#ff4d4f' : col, 0.35);
+        c.lineWidth = cue ? 4 : 3;
         c.stroke();
       }
       c.beginPath();
@@ -999,7 +1050,8 @@ export function eqKeyboard(o = {}) {
       if (inGrey || !b.on) c.setLineDash([3, 2.5]);
       c.stroke();
       c.setLineDash([]);
-      c.fillStyle = doomed ? '#fff' : isSel && b.on && !byp ? ink() : !b.on || byp ? '#8a93a0' : inGrey ? '#c9d0d8' : col;
+      c.fillStyle = doomed ? '#fff' : isSel && b.on && !byp ? ink()
+        : !b.on || byp ? '#8a93a0' : inGrey ? '#c9d0d8' : col;
       c.font = font(`800 ${G.r >= 17 ? 15 : 13}px`);
       c.textAlign = 'center';
       c.textBaseline = 'middle';
@@ -1012,7 +1064,8 @@ export function eqKeyboard(o = {}) {
       }
       let tag = null;
       if (doomed) tag = ['release to remove', '#5a0d10', '#ffc9ca'];
-      else if (inGrey) tag = r.kind === 'over' ? ['overtones only', '#3a3f48', '#e6e9ee'] : ['no effect', '#4a2326', '#ffc9ca'];
+      else if (inGrey && r.kind === 'over') tag = ['overtones only', '#3a3f48', '#e6e9ee'];
+      else if (inGrey) tag = ['no effect', '#4a2326', '#ffc9ca'];
       else if (!b.on) tag = ['off', '#2a2f37', '#a3acb8'];
       if (tag) {
         c.font = font('700 11px');
@@ -1211,7 +1264,11 @@ export function eqKeyboard(o = {}) {
   function hitTest(x, y) {
     const sb = typeof sel === 'number' ? bandByK(sel) : null;
     const ws = sb && ab !== 'b' ? wings(sb) : null;
-    if (ws) for (const [i, w] of ws.entries()) if (Math.abs(w.x - x) <= 10 && Math.abs(w.y - y) <= 16) return { wing: i, k: sb.k };
+    if (ws) {
+      for (const [i, w] of ws.entries()) {
+        if (Math.abs(w.x - x) <= 10 && Math.abs(w.y - y) <= 16) return { wing: i, k: sb.k };
+      }
+    }
     let best = null;
     let bd = G.hit * G.hit;
     for (const b of model.bands) {
@@ -1243,6 +1300,21 @@ export function eqKeyboard(o = {}) {
     }
   }
 
+  /** Double tap / double click: on a node → 0 dB, on a cut → off, on empty graph → add a PEQ there. */
+  function onDouble(hit, x, y, alt) {
+    if (hit?.k !== undefined && hit.wing === undefined) {
+      const b = bandByK(hit.k);
+      if (b && M.hasGain(b.type)) {
+        setBand(b.k, { db: 0 }, 'zero');
+        say(`Band ${b.k} back to 0 dB`);
+      }
+    } else if (hit?.cut) {
+      setCuts(hit.cut === 'lc' ? { cutHz: 20 } : { hiCutHz: 20000 });
+      say(`${hit.cut === 'lc' ? 'Low' : 'High'} cut off`);
+    } else if (!hit && y < plotB() && x > G.L) {
+      addBand(M.snapF(fOfX(x), alt));
+    }
+  }
   d.listen(plot, 'pointerdown', (e) => {
     if (e.button !== undefined && e.button > 0) return;
     const { x, y } = localXY(e, plot);
@@ -1263,23 +1335,14 @@ export function eqKeyboard(o = {}) {
       return;
     }
     const hit = hitTest(x, y);
-    const now = performance.now();
+    // input time, not handling time: on a loaded machine two quick presses can be handled far apart
+    const now = e.timeStamp || performance.now();
     const dbl = lastTap && now - lastTap.t < DOUBLE_MS && Math.hypot(x - lastTap.x, y - lastTap.y) < 16 &&
       (lastTap.hit?.k ?? lastTap.hit?.cut ?? null) === (hit?.k ?? hit?.cut ?? null);
     lastTap = dbl ? null : { t: now, x, y, hit };
     if (dbl) {
-      if (hit?.k !== undefined && hit.wing === undefined) {
-        const b = bandByK(hit.k);
-        if (b && M.hasGain(b.type)) {
-          setBand(b.k, { db: 0 }, 'zero');
-          say(`Band ${b.k} back to 0 dB`);
-        }
-      } else if (hit?.cut) {
-        setCuts(hit.cut === 'lc' ? { cutHz: 20 } : { hiCutHz: 20000 });
-        say(`${hit.cut === 'lc' ? 'Low' : 'High'} cut off`);
-      } else if (!hit && y < plotB() && x > G.L) {
-        addBand(M.snapF(fOfX(x), e.altKey));
-      }
+      lastDouble = now;
+      onDouble(hit, x, y, e.altKey);
       return;
     }
     if (!hit) return;
@@ -1301,20 +1364,29 @@ export function eqKeyboard(o = {}) {
     const p = nodePos(b);
     drag = {
       k: b.k, dx: x - p.x, dy: y - p.y, x0: x, y0: y, u0: M.uOfF(b.hz), db0: b.db, hz0: b.hz,
-      moveF: false, moveG: false, remove: false, lp: 0,
+      moveF: false, moveG: false, remove: false, lp: 0, t0: e.timeStamp || performance.now(), lpCue: false,
     };
-    // long-press = on/off (AMENDMENT §3)
+    // long-press = on/off (AMENDMENT §3). Decided on release from input timestamps (a busy main thread can't turn a
+    // quick drag into a toggle); the timer only shows the cue that releasing now will switch the band.
     drag.lp = setTimeout(() => {
       if (!drag || drag.k !== b.k || drag.moveF || drag.moveG) return;
+      drag.lpCue = true;
+      dirty = true;
       const cur = bandByK(b.k);
-      if (cur) {
-        setBand(b.k, { on: !cur.on }, 'on');
-        say(`Band ${b.k} ${cur.on ? 'off' : 'on'}`);
-      }
-      drag = null;
+      if (cur) say(`Release to switch band ${b.k} ${cur.on ? 'off' : 'on'}`, { toast: true });
     }, LONG_PRESS_MS);
   });
 
+  // Fallback for a double click whose two presses arrived > DOUBLE_MS apart (a loaded machine, a slow mouse setting):
+  // the browser's own dblclick still comes; the pointer path above stands down when it already acted.
+  d.listen(plot, 'dblclick', (e) => {
+    if (Math.abs((e.timeStamp || performance.now()) - lastDouble) < 800) return;
+    const { x, y } = localXY(e, plot);
+    cancelDrag();
+    lastTap = null;
+    lastDouble = e.timeStamp || performance.now();
+    onDouble(hitTest(x, y), x, y, e.altKey);
+  });
   d.listen(plot, 'pointermove', (e) => {
     const { x, y } = localXY(e, plot);
     if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x, y });
@@ -1368,7 +1440,10 @@ export function eqKeyboard(o = {}) {
     // per-axis deadzone: a vertical nudge must not re-snap a typed frequency, nor a sideways one the gain
     if (Math.abs(x - drag.x0) > DEADZONE) drag.moveF = true;
     if (Math.abs(y - drag.y0) > DEADZONE) drag.moveG = true;
-    if (drag.moveF || drag.moveG) clearTimeout(drag.lp);
+    if (drag.moveF || drag.moveG) {
+      clearTimeout(drag.lp);
+      drag.lpCue = false;
+    }
     const remove = y > plotB() + 14;
     if (remove !== drag.remove) {
       drag.remove = remove;
@@ -1404,6 +1479,14 @@ export function eqKeyboard(o = {}) {
     const dr = drag;
     cancelDrag();
     if (dr.remove && dr.k !== undefined) removeBand(dr.k);
+    else if (e.type === 'pointerup' && dr.t0 !== undefined && !dr.moveF && !dr.moveG &&
+      (e.timeStamp || performance.now()) - dr.t0 >= LONG_PRESS_MS) {
+      const cur = bandByK(dr.k);
+      if (cur) {
+        setBand(dr.k, { on: !cur.on }, 'on');
+        say(`Band ${dr.k} ${cur.on ? 'off' : 'on'}`);
+      }
+    }
     dirty = dirtyKeys = true;
     syncTable();
   };
@@ -1485,9 +1568,10 @@ export function eqKeyboard(o = {}) {
       if (e.shiftKey || e.altKey) return M.clamp(b.hz * Math.pow(2, dir / 120), M.F_MIN, M.F_MAX); // 10 cents
       const s = M.semiOf(b.hz);
       if (s >= M.S_LO && s <= M.S_HI) return M.snapF(M.midiF(Math.round(s) + dir));
+      // outside the keys: the next ISO third-octave up / down
       const iso = M.ISO_THIRDS;
-      const i = iso.findIndex((v) => v >= b.hz * 0.999);
-      return iso[M.clamp((i < 0 ? iso.length - 1 : i) + (dir > 0 && iso[i] <= b.hz * 1.001 ? 1 : dir > 0 ? 0 : -1), 0, iso.length - 1)];
+      if (dir > 0) return iso.find((v) => v > b.hz * 1.001) ?? iso[iso.length - 1];
+      return [...iso].reverse().find((v) => v < b.hz / 1.001) ?? iso[0];
     };
     const acts = {
       ArrowLeft: () => ({ hz: step(-1) }),
@@ -1517,7 +1601,8 @@ export function eqKeyboard(o = {}) {
 
   function bandText(b) {
     if (!b) return '';
-    return `Band ${b.k} ${M.TYPE_LABEL[b.type]} · ${M.noteLabel(b.hz)}${M.hasGain(b.type) ? ` · ${M.fmtDb(b.db)} dB` : ''}` +
+    return `Band ${b.k} ${M.TYPE_LABEL[b.type]} · ${M.noteLabel(b.hz)}` +
+      `${M.hasGain(b.type) ? ` · ${M.fmtDb(b.db)} dB` : ''}` +
       `${M.hasQ(b.type) ? ` · Q ${b.q.toFixed(2)}` : ''}${b.on ? '' : ' · off'}`;
   }
 
@@ -1572,14 +1657,15 @@ export function eqKeyboard(o = {}) {
     if (n === null) return;
     const nm = M.noteName;
     if (n < zone.lo || n > zone.hi) {
-      say(`${slotName()} doesn't play ${nm(n)} (${M.fmtHz(M.midiF(n))}) · its notes are ${nm(zone.lo)}–${nm(zone.hi)}`, { toast: true });
+      say(`${slotName()} doesn't play ${nm(n)} (${M.fmtHz(M.midiF(n))}) · its notes are ${nm(zone.lo)}–${nm(zone.hi)}`,
+        { toast: true });
       return;
     }
     pressedKey = n;
     dirtyKeys = true;
     const i = M.clamp(Math.round((xOfSemi(n) - G.L) / 1.5), 0, curve.db.length - 1);
     say(`${nm(n)} · ${M.fmtHz(M.midiF(n))} · EQ at this note ${M.fmtDb(curve.db[i] ?? 0)} dB`, { toast: true });
-    const aud = typeof controller?.auditionNote === 'function' ? controller : typeof engine?.auditionNote === 'function' ? engine : null;
+    const aud = via('auditionNote');
     if (aud) {
       try {
         aud.auditionNote(slotIndex, n, {});
@@ -1617,9 +1703,8 @@ export function eqKeyboard(o = {}) {
       resize(); // mounted hidden (a closed drawer): the ResizeObserver catches later changes
       if (!G.w) return;
     }
-    const now = performance.now();
-    const settling = now < engineCurveUntil + 60;
-    if (settling && typeof engine?.getEqResponse === 'function') recomputeCurve();
+    const settling = enginePending;
+    if (settling) recomputeCurve();
     const an = !!analysers();
     if (dirty || an || settling) drawGraph();
     if (dirtyKeys) drawKeys();
@@ -1672,11 +1757,14 @@ export function eqKeyboard(o = {}) {
     },
     /** Test/inspection hook: the component's current state (read-only copies) and a few geometry helpers. */
     debug() {
+      if (!G.w && el.isConnected) resize(); // geometry before the first frame (a test right after mount)
       const r = plot.getBoundingClientRect();
       const kr = kb.getBoundingClientRect();
       return {
         slotIndex, sel, ab, abMode, model: JSON.parse(JSON.stringify(model)),
-        zone: { lo: zone.lo, hi: zone.hi, fLo: zone.fLo, fHi: zone.fHi, source: zone.source, stretched: zone.stretched },
+        zone: {
+          lo: zone.lo, hi: zone.hi, fLo: zone.fLo, fHi: zone.fHi, source: zone.source, stretched: zone.stretched,
+        },
         curveSource: curve.source, curveMismatch, curve: { xs: curve.xs.slice(), db: Array.from(curve.db) },
         copyText, destroyed, compact: isCompact(), rafActive: !!raf && !destroyed,
         nodes: model.bands.map((b) => ({ k: b.k, ...(() => {
@@ -1692,7 +1780,9 @@ export function eqKeyboard(o = {}) {
           const ws = b ? wings(b) : null;
           return ws ? ws.map((w) => ({ x: r.left + w.x, y: r.top + w.y })) : null;
         })(),
-        plot: { left: r.left, top: r.top, width: r.width, height: r.height, bottom: r.top + plotB(), plotL: r.left + G.L },
+        plot: {
+          left: r.left, top: r.top, width: r.width, height: r.height, bottom: r.top + plotB(), plotL: r.left + G.L,
+        },
         kb: { left: kr.left, top: kr.top, width: kr.width, height: kr.height },
         xOfF: (f) => r.left + xOfF(f),
         xOfMidi: (n) => r.left + xOfSemi(n),
@@ -1703,6 +1793,99 @@ export function eqKeyboard(o = {}) {
           return curve.db[i];
         },
       };
+    },
+  };
+}
+
+/**
+ * Mini read-only curve for the Sound panel header (DECISION §4): a 120 × 28 px sparkline of the summed response on
+ * the same key axis, the no-notes zone greyed. Hidden (`el.hidden`) while the EQ is flat; a click calls onOpen
+ * (open Advanced → Tone). Computed locally (eq-math), so it never touches the engine.
+ * @param {object} o
+ * @param {object} o.store
+ * @param {number} o.slotIndex
+ * @param {() => void} [o.onOpen]
+ * @param {number} [o.width=120]
+ * @param {number} [o.height=28]
+ * @returns {{el:HTMLButtonElement, update():void, setSlot(i:number):void, destroy():void}}
+ */
+export function eqMiniCurve(o = {}) {
+  const { store, onOpen = null } = o;
+  const W = o.width || 120;
+  const H = o.height || 28;
+  let slotIndex = Number(o.slotIndex) || 0;
+  const d = disposer();
+  const cv = h('canvas', { width: String(W), height: String(H), style: { width: `${W}px`, height: `${H}px` } });
+  const el = h('button', { type: 'button', class: 'eqk-mini' }, cv);
+  let sig = '';
+  function draw() {
+    const song = store.currentSong?.();
+    const slot = song?.patch?.slots?.[slotIndex] || null;
+    const summary = slot ? M.eqSummary(slot.eq) : 'Flat';
+    let songT = 0;
+    try {
+      songT = song ? Number(store.transposeSemisOf?.(song)) || 0 : 0;
+    } catch {
+      songT = 0;
+    }
+    const s = JSON.stringify([slot?.eq ?? null, slot?.lowNote, slot?.highNote, slot?.octave, slot?.transpose, songT]);
+    if (s === sig) return;
+    sig = s;
+    el.hidden = !slot || summary === 'Flat';
+    el.setAttribute('aria-label', `Tone EQ: ${summary}. Open the Tone panel`);
+    el.title = `Tone EQ: ${summary}`;
+    if (el.hidden) return;
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(W * dpr);
+    cv.height = Math.round(H * dpr);
+    const c = cv.getContext('2d');
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, W, H);
+    const xOfF = (f) => (M.uOfF(f) / M.TOTAL_U) * W;
+    const zone = M.soundingRange(slot, { songTranspose: songT });
+    const xs = M.clamp(xOfF(zone.fLo), 0, W);
+    if (xs > 0) {
+      c.fillStyle = 'rgba(58,63,71,.55)';
+      c.fillRect(0, 0, xs, H);
+    }
+    c.strokeStyle = 'rgba(163,172,184,.35)';
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(0, H / 2 + 0.5);
+    c.lineTo(W, H / 2 + 0.5);
+    c.stroke();
+    const freqs = Array.from({ length: W + 1 }, (_, x) => M.fOfU((x / W) * M.TOTAL_U));
+    const r = M.eqResponseDb(M.readEq(slot.eq), freqs);
+    c.beginPath();
+    r.forEach((v, x) => {
+      const y = H / 2 - (M.clamp(v, -15, 15) / 15) * (H / 2 - 2);
+      if (x) c.lineTo(x, y);
+      else c.moveTo(x, y);
+    });
+    c.strokeStyle = SLOT_HEX[slotIndex] || SLOT_HEX[0];
+    c.lineWidth = 1.6;
+    c.stroke();
+  }
+  d.listen(el, 'click', () => {
+    if (typeof onOpen === 'function') onOpen();
+  });
+  const unsub = store.subscribe?.(() => draw());
+  d.add(() => unsub?.());
+  draw();
+  return {
+    el,
+    update() {
+      sig = '';
+      draw();
+    },
+    setSlot(i) {
+      slotIndex = Number(i) || 0;
+      sig = '';
+      draw();
+    },
+    destroy() {
+      d.dispose();
+      el.remove();
     },
   };
 }

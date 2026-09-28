@@ -150,7 +150,12 @@ test('shell: Esc in Edit never panics; a held note survives', async () => {
 test('shell: song switch reaches every mounted module; layout fits at 1440×900 and 1024×700 (drawer)', async () => {
   const other = await t.ev(() => window.__rig.store.get().songOrder.find((x) => x !== window.__rig.store.currentSong().id));
   await t.selectSong(other);
-  await t.until((id) => [...document.querySelectorAll('#view-edit .ev2-stub')].every((x) => x.dataset.songId === id), other);
+  // the header, the setlist column and the tab row all show the new song (the stubs' songId check before integration)
+  await t.until((id) => {
+    const s = window.__rig.store.getSong(id);
+    return document.querySelector('#view-edit .ev2-song-name')?.value === s.name
+      && document.querySelector('#view-edit .ev2-list-row[aria-current="true"]')?.dataset.id === id;
+  }, other);
   for (const [w, h] of [[1440, 900], [1024, 700]]) {
     await t.page.setViewportSize({ width: w, height: h });
     await t.sleep(200);
@@ -187,3 +192,83 @@ test('shell: destroy() cleans up and a remount works', async () => {
   assert.equal(r.tabs, 7);
   t.assertNoConsoleErrors();
 });
+
+test('shell/lib: integrator fixes — wordSlider cancelDrag, binder destroy, toast opts, stepChip off-step arrows, --c',
+  async () => {
+    const r = await t.ev(async () => {
+      const { lib, C, toasts } = window.__rig;
+      const out = {};
+      // wordSlider: cancelDrag() with no drag running leaves the slider live (hv2-edit-slot request #1)
+      const got = [];
+      const ws = lib.wordSlider({ label: 'x', min: 0, max: 1, onChange: (v) => got.push(v) });
+      document.body.append(ws.el);
+      ws.cancelDrag();
+      ws.input.value = '600';
+      ws.input.dispatchEvent(new Event('input', { bubbles: true }));
+      out.liveAfterCancel = got.length === 1 && Math.abs(got[0] - 0.6) < 1e-9;
+      // …and during a drag it still swallows the rest of that drag until the pointer goes up
+      ws.input.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      ws.cancelDrag();
+      ws.input.value = '900';
+      ws.input.dispatchEvent(new Event('input', { bubbles: true }));
+      out.deadDuringDrag = got.length === 1;
+      window.dispatchEvent(new PointerEvent('pointerup'));
+      await new Promise((res) => setTimeout(res, 10));
+      ws.input.value = '100';
+      ws.input.dispatchEvent(new Event('input', { bubbles: true }));
+      out.liveAfterRelease = got.length === 2;
+      ws.destroy();
+      // createBinder.destroy() drops its store subscription and leave-song hook (request #2)
+      let subs = 0;
+      let hooks = 0;
+      const fake = {
+        song: () => window.__rig.store.currentSong(),
+        subscribe: () => { subs += 1; return () => { subs -= 1; }; },
+        onLeaveSong: () => { hooks += 1; return () => { hooks -= 1; }; },
+        set: () => true,
+      };
+      const b = lib.createBinder(fake);
+      const during = [subs, hooks];
+      b.destroy();
+      b.destroy();
+      out.binder = { during, after: [subs, hooks] };
+      // the panel ctx toast passes {action, ms} through to the app toast (request #3)
+      const n = toasts.length;
+      window.__rig.view._debug.ctx('bottom').toast('probe', 'info', { ms: 50, action: { label: 'Undo', run: () => {} } });
+      out.toast = toasts.length === n + 1 && toasts[n].action === 'Undo';
+      // stepChip: an arrow from an off-step value goes to the nearest step that way (request #6)
+      const picks = [];
+      const chip = C.stepChip({ label: 'Space', steps: C.AMOUNT_STEPS, value: 0.3, onChange: (v) => picks.push(v) });
+      document.body.append(chip.el);
+      chip.el.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+      chip.set(0.3);
+      chip.el.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+      out.steps = { values: C.AMOUNT_STEPS.map((s) => s.value), picks };
+      chip.destroy();
+      chip.el.remove();
+      // drone tab spelling = the KEY chip's (lib.droneKeyText): C# minor, not Db minor
+      out.drone = lib.droneKeyText({ hearIn: 1, minor: true });
+      return out;
+    });
+    assert.equal(r.liveAfterCancel, true, 'cancelDrag without a drag leaves the slider live');
+    assert.equal(r.deadDuringDrag, true, 'cancelDrag during a drag ignores the rest of it');
+    assert.equal(r.liveAfterRelease, true, 'live again after the pointer goes up');
+    assert.deepEqual(r.binder, { during: [1, 1], after: [0, 0] });
+    assert.equal(r.toast, true, 'toast opts reach the app toast');
+    const above = r.steps.values.filter((v) => v > 0.3).sort((a, b) => a - b)[0];
+    const below = r.steps.values.filter((v) => v < 0.3).sort((a, b) => b - a)[0];
+    assert.deepEqual(r.steps.picks, [above, below], `from 0.3: ↑ → ${above}, ↓ → ${below}`);
+    assert.equal(r.drone, 'C# minor');
+    // mountSinglePanel: the block colour follows update() (request #4)
+    const t2 = await mountPanelForTest('slot', { panelOpts: { slot: 0 } });
+    try {
+      const c = () => t2.ev(() => document.querySelector('#view-edit .ev2-rig').style.getPropertyValue('--c'));
+      assert.equal(await c(), 'var(--slot-0)');
+      await t2.select('slot:2');
+      assert.equal(await c(), 'var(--slot-2)');
+      t2.assertNoConsoleErrors();
+    } finally {
+      await t2.close();
+    }
+    t.assertNoConsoleErrors();
+  });

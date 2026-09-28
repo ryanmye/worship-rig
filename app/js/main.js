@@ -125,7 +125,11 @@ let lastFocusKb = false; // was the opener keyboard-focused (:focus-visible) whe
 
 const locked = () => !!store.get().settings.performLock;
 
-function setView(name) {
+/**
+ * Switch view. `opts.block` (+ `opts.focus`) selects an Edit block when switching to Edit, e.g. Perform's empty-slot
+ * "+" → {block: 'slot:2', focus: 'instrument'} (H-v2 Edit selection model, views/edit/CONTRACT.md §2).
+ */
+function setView(name, opts = {}) {
   if (name === 'settings') return openSettings();
   if (name !== 'perform' && name !== 'edit') return false;
   if (name === 'edit' && locked()) {
@@ -134,6 +138,10 @@ function setView(name) {
   }
   store.set('settings.view', name);
   applyView(name);
+  if (name === 'edit' && opts && opts.block) {
+    const { block, ...rest } = opts;
+    editView?.editState?.select?.(block, rest);
+  }
   return true;
 }
 
@@ -198,8 +206,20 @@ function closeSettings() {
   else if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur?.();
 }
 
-// quickButton: the top-bar Quick button; Perform owns the sheet it opens (H-v2 quick.png)
-const ctx = { store, controller, engine, midi, recorder, rig, isElectron, toast, openSettings, closeSettings, setView, quickButton: $('btn-quick') };
+// quickButton: the top-bar Quick button; Perform owns the sheet it opens (H-v2 quick.png).
+// getBaseline: Perform's Revert snapshot (perform.js savedSnapshot), so Edit's changed dots count against the same
+// song state as Perform's Revert (views/edit/CONTRACT.md §3.6). performView is assigned below; Edit mounts later.
+const ctx = {
+  store, controller, engine, midi, recorder, rig, isElectron, toast, openSettings, closeSettings, setView,
+  quickButton: $('btn-quick'),
+  getBaseline: () => {
+    try {
+      return performView?.savedSnapshot ?? null;
+    } catch {
+      return null; // before mountPerform ran
+    }
+  },
+};
 
 // ------------------------------------------------------------------------------------------ top bar
 const viewSwitch = segmented({
@@ -656,7 +676,8 @@ els.settings.setAttribute('role', 'dialog');
 els.settings.setAttribute('aria-modal', 'true');
 els.settings.setAttribute('aria-label', 'Settings');
 const viewsReady = Promise.all([
-  loadModule('./views/edit.js', 'mountEdit').then((mountEdit) => {
+  // H-v2 Edit (views/edit/shell.js; hv2-edit-integrate). The old views/edit.js is retired.
+  loadModule('./views/edit/shell.js', 'mountEdit').then((mountEdit) => {
     if (!mountEdit) return;
     try {
       editView = mountEdit(els.edit, ctx) || null;

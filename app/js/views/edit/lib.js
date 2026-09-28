@@ -2,6 +2,7 @@
 // Owned by the shell (hv2-edit-setup). Panel agents import from here and never edit it; ask the integrator for
 // additions. Pure DOM helpers only: no store/engine access (panels get those through their ctx).
 import { describe, faderTaper, inverseTaper, SLOT_COUNT } from '../../shared/params.js';
+import { keyName } from '../../shared/music.js';
 
 // ---------------------------------------------------------------------------------------------------------------
 // DOM
@@ -75,6 +76,9 @@ export const ICON_PATHS = Object.freeze({
   right: ['M9 6l6 6-6 6'],
   close: ['M6 6l12 12M18 6L6 18'],
   plus: ['M12 5v14M5 12h14'],
+  // hv2-edit-integrate: lifted from setlist.js LOCAL_ICONS (row actions: rename, duplicate)
+  edit: ['M4 20h4L19 9l-4-4L4 16z', 'M13.5 6.5l4 4'],
+  copy: ['M9 9h11v11H9z', 'M5 15H4V4h11v1'],
 });
 /**
  * An inline stroke icon.
@@ -95,6 +99,23 @@ export function icon(name, size = 18) {
     s.append(p);
   }
   return s;
+}
+/**
+ * An icon-only (or icon + text) `<button type=button>` with an accessible name (hv2-edit-setlist request:
+ * lib.button takes no child nodes).
+ * @param {string} label  aria-label and title
+ * @param {string|Node} ic  lib.ICON_PATHS name or a ready node
+ * @param {(e:Event) => void} [onClick]
+ * @param {object} [attrs]  lib.h attributes (class, dataset, …); `text` adds a visible label after the icon
+ * @returns {HTMLButtonElement}
+ */
+export function iconButton(label, ic, onClick, attrs = {}) {
+  const { text, ...rest } = attrs;
+  const b = h('button', {
+    type: 'button', 'aria-label': label, title: label, ...rest,
+    on: { ...(rest.on || {}), ...(onClick ? { click: onClick } : {}) },
+  }, ic instanceof Node ? ic : icon(ic, 15), text ? h('span', { text }) : null);
+  return b;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -185,6 +206,41 @@ export function download(filename, text) {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 export const today = () => new Date().toISOString().slice(0, 10);
+
+/**
+ * "D major" / "C# minor": the drone's key in the KEY chip's spelling (C#m, not Dbm). Lifted from panels/drone.js
+ * (hv2-edit-drone) so the shell's default drone tab and the panel agree.
+ * @param {object} s song
+ * @returns {string}
+ */
+export function droneKeyText(s) {
+  const pc = Number(s?.hearIn) || 0;
+  return s?.minor ? `${keyName(pc, true).replace(/m$/, '')} minor` : `${keyName(pc, false)} major`;
+}
+/** Chorus depth → 'gentle' / 'medium' / 'deep' (the wiring lane, the Effects title and its Chorus line). */
+export const chorusWord = (d) => (Number(d) < 0.34 ? 'gentle' : Number(d) < 0.67 ? 'medium' : 'deep');
+
+/** Mod wheel / expression / volume-knob target words (views/edit.js TARGET_LABELS; Master › Wheels & pedal). */
+export const TARGET_LABELS = Object.freeze({
+  'slots.0.gain': 'Keys level',
+  'slots.1.gain': 'Pad level',
+  'slots.2.gain': 'Extra level',
+  'slots.3.gain': 'Bass level',
+  'drone.gain': 'Drone level',
+  'fx.reverb.returnGain': 'Reverb level',
+  'master.volume': 'Master volume',
+  'macro.intensity': 'Intensity (pad, filter and reverb together)',
+  'macro.wash': 'Wash (reverb size and echo together)',
+  none: 'Nothing',
+});
+/** Pitch-bend wheel mode words (views/edit.js BEND_LABELS). */
+export const BEND_LABELS = Object.freeze({
+  pitch: 'Bends the pitch',
+  morph: 'Changes the instrument’s character',
+  'drone-swell': 'Swells the drone',
+  tape: 'Tape stop / filter sweep',
+  none: 'Does nothing',
+});
 export const safeName = (s) => String(s || 'song').replace(/[\\/:*?"<>|]+/g, '-').slice(0, 80);
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -309,14 +365,19 @@ export function createBinder(ctx) {
      * ctx.set(addr, v). Sets el.dataset.bind = addr.
      * @param {string} addr   §4 address or 'song.<field>'
      * @param {(onChange:(v:any)=>void) => {el:HTMLElement, set:Function}} make
-     * @param {{read?:(song)=>any, write?:(v)=>void, text?:boolean}} [o]
+     * @param {{read?:(song)=>any, write?:(v)=>void, text?:boolean, rels?:string[]}} [o]  `rels`: song-relative
+     *        paths that refresh this binding (default: the address's own path; a custom `read` over a wider object,
+     *        e.g. the slot EQ shelves, passes ['patch.slots.<i>.eq'])
      */
-    ctl(addr, make, { read, write, text } = {}) {
+    ctl(addr, make, { read, write, text, rels } = {}) {
       const rel = relOf(addr);
       const comp = make((v) => (write ? write(v) : ctx.set(addr, v)));
       if (comp.el) comp.el.dataset.bind = addr;
       const def = hasParam(addr) ? describe(addr).default : undefined;
-      const b = { rels: [rel], comp, read: read || ((s) => getIn(s, rel) ?? def), last: undefined, text };
+      const b = {
+        rels: rels && rels.length ? rels : [rel], comp, read: read || ((s) => getIn(s, rel) ?? def), last: undefined,
+        text,
+      };
       binds.add(b);
       comps.push(comp);
       apply(b, ctx.song(), true);
@@ -348,7 +409,16 @@ export function createBinder(ctx) {
     cancelDrags() {
       for (const c of comps) c.cancelDrag?.();
     },
+    /**
+     * Destroy the tracked components and drop the store subscription and leave-song hook. A panel that rebuilds a
+     * sub-tree with a fresh binder (slot.js on an instrument change) no longer leaks one subscriber per rebuild
+     * (hv2-edit-slot request). Idempotent.
+     */
     destroy() {
+      offStore?.();
+      offLeave?.();
+      offStore = null;
+      offLeave = null;
       for (const c of comps.splice(0)) {
         try {
           c.destroy?.();
@@ -359,11 +429,11 @@ export function createBinder(ctx) {
       binds.clear();
     },
   };
-  ctx.subscribe((e) => {
+  let offStore = ctx.subscribe((e) => {
     if (e.songChanged || e.full) api.refresh(null);
     else if (e.rels.length) api.refresh(e.rels);
   });
-  ctx.onLeaveSong(() => api.cancelDrags());
+  let offLeave = ctx.onLeaveSong(() => api.cancelDrags());
   return api;
 }
 
@@ -469,7 +539,11 @@ export function wordSlider(o = {}) {
     ends ? h('div.ev2-ws-ends', {}, h('span', { text: ends[0] }), h('span', { text: ends[1] })) : null,
   );
   let value = Number.isFinite(o.value) ? o.value : def;
-  let dead = false; // cancelDrag(): ignore this pointer's movement until it goes up
+  // cancelDrag() (round2-ui #2) ignores the running drag's movement until its pointer goes up. It only applies while
+  // a drag is running: the binder calls it before every song switch, and a slider marked dead with no drag running
+  // used to ignore keyboard and programmatic input until the next click on it (hv2-edit-slot request).
+  let dead = false;
+  let dragging = false;
   const quant = (v) => (step ? Math.round(v / step) * step : v);
   const paint = () => {
     const p = scale.toPos(value);
@@ -490,11 +564,21 @@ export function wordSlider(o = {}) {
   };
   input.addEventListener('input', commit);
   input.addEventListener('change', commit);
+  // The release can land outside the input (a drag off its end), so it is watched on window while a drag runs.
+  // It clears after the release's own input/change events have run, so a cancelled drag writes nothing.
+  const onRelease = () => {
+    window.removeEventListener('pointerup', onRelease, true);
+    window.removeEventListener('pointercancel', onRelease, true);
+    dragging = false;
+    setTimeout(() => {
+      if (!dragging) dead = false;
+    }, 0);
+  };
   input.addEventListener('pointerdown', () => {
     dead = false;
-  });
-  input.addEventListener('pointerup', () => {
-    dead = false;
+    dragging = true;
+    window.addEventListener('pointerup', onRelease, true);
+    window.addEventListener('pointercancel', onRelease, true);
   });
   input.addEventListener('dblclick', () => {
     value = def;
@@ -519,9 +603,11 @@ export function wordSlider(o = {}) {
       el.classList.toggle('disabled', !!b);
     },
     cancelDrag() {
-      dead = true;
+      if (dragging) dead = true;
     },
     destroy() {
+      window.removeEventListener('pointerup', onRelease, true);
+      window.removeEventListener('pointercancel', onRelease, true);
       el.remove();
     },
   };

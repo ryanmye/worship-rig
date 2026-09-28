@@ -50,7 +50,7 @@
   // Minimal bootstrap (store → engine → midi/recorder → controller) mirroring app/js/main.js, then the component.
   const q = new URLSearchParams(location.search);
   const [{ createStore }, { FACTORY_SONGS }, { AudioEngine }, { MidiInput }, { Recorder }, { createController, engineLatency },
-    { eqKeyboard }] = await Promise.all([
+    { eqKeyboard, eqMiniCurve }, params] = await Promise.all([
     import('/app/js/store.js'),
     import('/app/js/presets.js'),
     import('/app/js/engine/index.js'),
@@ -58,6 +58,7 @@
     import('/app/js/recorder.js'),
     import('/app/js/controller.js'),
     import('/app/js/views/components/eq-keyboard.js'),
+    import('/app/js/shared/params.js'),
   ]);
   const store = createStore({ key: q.get('key') || 'rig.eqtest' });
   store.seedFactory(FACTORY_SONGS);
@@ -81,15 +82,15 @@
   const host = document.getElementById('host');
   const changes = [];
   let comp = null;
-  function mount({ slot = 0, compact = false } = {}) {
+  function mount({ slot = 0, compact = false, rta = true } = {}) {
     if (comp) comp.destroy();
-    comp = eqKeyboard({ store, engine, slotIndex: slot, compact, onChange: (e) => changes.push(e) });
+    comp = eqKeyboard({ store, engine, slotIndex: slot, compact, rta, onChange: (e) => changes.push(e) });
     host.append(comp.el);
     return comp;
   }
   globalThis.__rig = { store, engine, controller, midi, recorder, ready };
   globalThis.__eq = {
-    mount, changes, get comp() { return comp; }, subs: () => subs,
+    mount, changes, get comp() { return comp; }, subs: () => subs, eqKeyboard, eqMiniCurve, params,
     slot: (i = 0) => store.currentSong()?.patch?.slots?.[i] ?? null,
     eq: (i = 0) => store.currentSong()?.patch?.slots?.[i]?.eq ?? null,
   };

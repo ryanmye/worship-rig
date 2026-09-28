@@ -90,6 +90,19 @@ test('readEq: legacy low/high show as b1/b8; b-rows (nested or flat) win; type o
   assert.equal(c.q, M.eqRow('b2.q').max);
 });
 
+test('readEq: DECISION rows (lowHz, mid1*, mid2*, highHz) read as b1/b2/b3/b8 like the engine', () => {
+  const m = M.readEq({ lowHz: 90, low: 2, mid1: -3, mid1Hz: 300, mid1Q: 2, highHz: 8000 });
+  assert.deepEqual(m.bands.map((b) => [b.k, b.type, Math.round(b.hz), b.db, b.legacy]),
+    [[1, 'lowshelf', 90, 2, true], [2, 'peak', 300, -3, true], [8, 'highshelf', 8000, 0, true]]);
+  assert.equal(m.bands[1].q, 2);
+  const w = toMap(M.writesFor({ mid1: -3, mid1Hz: 300 }, { bands: M.readEq({ mid1: -3, mid1Hz: 300 }).bands.map((b) =>
+    (b.k === 2 ? { ...b, db: -4 } : b)) }));
+  assert.deepEqual([w['b2.type'], w['b2.hz'], w['b2.db']], ['peak', 300, -4]);
+  assert.equal(w.mid1, 0, 'legacy bell gain zeroed');
+  assert.equal(w['b1.type'], 'lowshelf', 'b1 migrated alongside');
+  assert.deepEqual(toMap(M.bypassWrites({ mid2: 3 }).off), { mid2: 0 });
+});
+
 test('writesFor: first edit migrates both legacy shelves and zeroes eq.low/high; later edits are minimal', () => {
   const eq = { low: 3 };
   const m = M.readEq(eq);
@@ -115,6 +128,16 @@ test('writesFor: first edit migrates both legacy shelves and zeroes eq.low/high;
   const r = toMap(M.writesFor({}, { bands: M.readEq({}).bands.filter((b) => b.k !== 1) }));
   assert.equal(r['b1.type'], 'off');
   assert.equal(r['b8.type'], 'highshelf');
+});
+
+test('shelfWrites: Brightness/Warmth move the shelves before and after migration, re-add a removed one', () => {
+  assert.deepEqual(toMap(M.shelfWrites({}, 'high', 3))['b8.db'], 3, 'legacy: migrates and sets b8');
+  const stored = { b1: { on: true, type: 'lowshelf', hz: 120, db: 0, q: 0.71 }, b8: { on: false, type: 'highshelf', hz: 7000, db: 0, q: 0.71 } };
+  assert.deepEqual(M.shelfWrites(stored, 'high', -2), [['b8.on', true], ['b8.db', -2]]);
+  assert.deepEqual(M.shelfWrites(stored, 'low', 4), [['b1.db', 4]]);
+  const noHigh = { b1: stored.b1, b8: { on: false, type: 'off' } };
+  const w = toMap(M.shelfWrites(noHigh, 'high', 2));
+  assert.deepEqual([w['b8.type'], w['b8.hz'], w['b8.db'], w['b8.on']], ['highshelf', 6000, 2, true]);
 });
 
 test('bypassWrites: switches audible bands off and opens cuts; restore puts them back', () => {
@@ -246,6 +269,9 @@ test('presets: Warm values; Wing channel = L shelf, 4 PEQs, H shelf at 0 dB; all
     [[1, 'lowshelf', 147, 3], [2, 'peak', 3000, -3], [8, 'highshelf', 8000, -2]]);
   const wing = M.EQ_PRESETS['Wing channel'];
   assert.deepEqual(wing.bands.map((b) => b.type), ['lowshelf', 'peak', 'peak', 'peak', 'peak', 'highshelf']);
+  // nodes stay apart on the axis (the air zone is compressed): ≥ 5 axis units between neighbours
+  const us = wing.bands.map((b) => M.uOfF(b.hz));
+  for (let i = 1; i < us.length; i++) assert.ok(us[i] - us[i - 1] >= 5, `Wing nodes ${i - 1}/${i} too close`);
   assert.ok(wing.bands.every((b) => b.db === 0));
   for (const name of ['Flat', 'Warm', 'Air', 'Cut mud', 'Wing channel']) {
     const p = M.EQ_PRESETS[name];

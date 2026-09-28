@@ -1,3 +1,196 @@
-/* OWNER: slot agent. Sound panel (panels/slot.js).
-   Scope rule (views/edit/CONTRACT.md §4): every selector starts with .ev2 and uses only the .ev2-slot-* classes you
-   create (plus the shared .ev2-* widgets from styles-edit-v2.css). No element/global selectors, no :root. */
+/* OWNER: slot agent. Sound panel (panels/slot.js), mockup design/H-v2/edit.png + edit-1024.png (edit.html CSS).
+   Scope rule (views/edit/CONTRACT.md §4): every selector starts with .ev2 and uses only the .ev2-slot-* classes
+   (plus the shared .ev2-* widgets and, under our prefix, the ui-core component internals). */
+
+/* grow to fill the panel body, never shrink below the content (an open Advanced scrolls the body instead) */
+.ev2 .ev2-slot, .ev2 .ev2-slot-bodyhost, .ev2 .ev2-slot-filled {
+  flex: 1 0 auto; display: flex; flex-direction: column;
+}
+.ev2 .ev2-slot-cols { flex: 1 0 auto; grid-template-columns: 262px minmax(0, 1fr) 300px; min-height: 250px; }
+.ev2 .ev2-slot .ev2-col > .ev2-cap { margin-bottom: 2px; }
+.ev2 .ev2-slot .ev2-col-sub { display: block; }
+
+/* ---------------------------------------------------------------- title actions: Change instrument ▾ menu */
+.ev2 .ev2-slot-actions { position: relative; display: flex; align-items: center; gap: 8px; }
+.ev2 .ev2-slot-chg.open { border-color: var(--c); box-shadow: 0 0 0 2px var(--c); }
+.ev2 .ev2-slot-menu {
+  position: absolute; z-index: 30; right: 0; top: calc(100% + 6px); width: 330px; max-height: min(440px, 52vh);
+  overflow: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  background: #1f242c; border: 1px solid #555e6c; border-radius: 12px; box-shadow: 0 20px 56px #000d;
+  padding: 6px 8px 8px;
+}
+.ev2 .ev2-slot-menu[hidden] { display: none; }
+.ev2 .ev2-slot-mg { display: flex; flex-direction: column; }
+.ev2 .ev2-slot-mg-head {
+  font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted, #a3acb8); font-weight: 700;
+  padding: 8px 8px 3px;
+}
+.ev2 .ev2-slot-mi {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 0 8px; border: 0;
+  border-radius: 6px; background: transparent; text-align: left; font-size: 14px; font-weight: 550;
+}
+.ev2 .ev2-slot-mi:hover, .ev2 .ev2-slot-mi:focus { background: #2d333d; outline: none; }
+.ev2 .ev2-slot-mi:focus-visible { box-shadow: inset 0 0 0 2px var(--focus, #7cc4ff); }
+.ev2 .ev2-slot-mi-check { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.ev2 .ev2-slot-mi[aria-checked="true"] { font-weight: 800; }
+.ev2 .ev2-slot-mi[aria-checked="true"] .ev2-slot-mi-check { background: var(--c); box-shadow: 0 0 6px var(--c); }
+.ev2 .ev2-slot-msep { height: 1px; background: var(--line-2, #3a414d); margin: 6px 4px; }
+.ev2 .ev2-slot-mi-remove { color: #ff9a9b; }
+.ev2 .ev2-slot-mi-none { padding: 8px; }
+
+/* ---------------------------------------------------------------- inline confirm (Remove this sound…) */
+.ev2 .ev2-slot-confirm {
+  flex: none; display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 8px 10px 8px 14px;
+  border: 1px solid color-mix(in srgb, var(--danger, #ff4d4f) 70%, transparent); border-radius: 8px;
+  background: color-mix(in srgb, var(--danger, #ff4d4f) 10%, var(--panel, #15181d)); font-size: 14px; font-weight: 600;
+}
+.ev2 .ev2-slot-confirm[hidden] { display: none; }
+
+/* ---------------------------------------------------------------- empty slot */
+.ev2 .ev2-slot-empty {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 32px 4px 24px; max-width: 520px;
+}
+.ev2 .ev2-slot-empty-q { margin: 0; font-size: 18px; font-weight: 700; }
+.ev2 .ev2-slot-undo {
+  margin: 4px 0 0; font-size: 13px; color: var(--muted, #a3acb8); display: flex; align-items: center; gap: 6px;
+}
+.ev2 .ev2-slot-undo[hidden] { display: none; }
+
+/* ---------------------------------------------------------------- ON STAGE: the Perform strip widgets */
+.ev2 .ev2-slot-os { position: relative; align-items: stretch; min-height: 0; }
+.ev2 .ev2-slot-os > .ev2-cap { margin-bottom: 8px; }
+.ev2 .ev2-slot-os .ontile { height: 44px; min-height: 44px; }
+.ev2 .ev2-slot-osb {
+  flex: 1 1 auto; min-height: 190px; display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px;
+  margin-top: 12px;
+}
+.ev2 .ev2-slot-os.off .ev2-slot-osb { opacity: .36; }
+/* the fader fills whatever height the column has but never adds to it (a vertical range's intrinsic height is big) */
+.ev2 .ev2-slot-fz { position: relative; min-height: 0; }
+.ev2 .ev2-slot-fz > .fader { position: absolute; inset: 0; gap: 4px; }
+.ev2 .ev2-slot-fz .fader-label { display: none; }
+.ev2 .ev2-slot-fz .fader.vertical .fader-track { min-height: 0; }
+.ev2 .ev2-slot-fz .fader.vertical .fader-input { width: 56px; min-height: 60px; }
+.ev2 .ev2-slot-fz .fader.vertical .fader-value { font-size: 14px; }
+.ev2 .ev2-slot-mods { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-content: start; }
+.ev2 .ev2-slot-mods .mchip { min-height: 46px; min-width: 0; }
+.ev2 .ev2-slot-mods .mchip.ev2-slot-wide { grid-column: 1 / 3; min-height: 36px; flex-direction: row; gap: 8px; }
+.ev2 .ev2-slot-same { margin: 8px 0 0; font-size: 11.5px; color: var(--ev2-faint); text-align: center; }
+/* the step panel covers the whole On-stage column (the chips sit high here, unlike Perform's strip) */
+.ev2 .ev2-slot-os > .step-panel { top: 0; bottom: 0; left: -6px; right: -6px; }
+.ev2 .ev2-slot-os > .step-panel::after { display: none; }
+
+/* ---------------------------------------------------------------- THE SOUND ITSELF */
+.ev2 .ev2-slot-wsl { display: flex; flex-direction: column; gap: 18px; }
+.ev2 .ev2-slot-wsl > .ev2-ws { flex: none; min-width: 0; }
+
+/* ---------------------------------------------------------------- WHERE IT PLAYS */
+.ev2 .ev2-slot-play { gap: 14px; }
+.ev2 .ev2-slot-play > .ev2-col-sub { margin-bottom: 0; }
+.ev2 .ev2-slot-row { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ev2 .ev2-slot-rh { font-size: 13.5px; }
+.ev2 .ev2-slot-rh em, .ev2 .ev2-slot-rnote { font-style: normal; font-weight: 600; color: var(--ev2-faint); }
+.ev2 .ev2-slot-range .mini-keyboard { display: flex; flex-direction: column; margin: 4px 6px 2px; }
+.ev2 .ev2-slot-range .mini-wrap { position: relative; height: 36px; }
+.ev2 .ev2-slot-range .mini-board { position: absolute; inset: 0; border-radius: 5px; overflow: hidden; opacity: .55; }
+.ev2 .ev2-slot-range .mkey { position: absolute; top: 0; }
+.ev2 .ev2-slot-range .mkey.white { height: 100%; background: #b9c0c9; border-right: 1px solid #0b0d10; }
+.ev2 .ev2-slot-range .mkey.black { height: 60%; background: #111418; z-index: 1; }
+.ev2 .ev2-slot-range .mini-range {
+  position: absolute; top: -3px; bottom: -3px; z-index: 2; pointer-events: none; border-radius: 5px;
+  border: 2.5px solid var(--c); background: color-mix(in srgb, var(--c) 22%, transparent);
+}
+.ev2 .ev2-slot-range .mini-handle {
+  position: absolute; top: -6px; bottom: -6px; width: 12px; margin-left: -6px; z-index: 3; border-radius: 4px;
+  background: #eef1f5; box-shadow: 0 1px 5px #000b; cursor: ew-resize;
+}
+.ev2 .ev2-slot-range .mini-labels { display: none; }
+.ev2 .ev2-slot-fields { display: flex; align-items: center; gap: 6px; }
+.ev2 .ev2-slot-note {
+  width: 4.6em; height: 30px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--line-2, #3a414d);
+  background: var(--panel-2, #1c2027); color: var(--text, #f1f4f8); font: inherit; font-weight: 700; font-size: 13px;
+}
+.ev2 .ev2-slot-rhead { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ev2 .ev2-slot-rhead > .ev2-slot-rh {
+  flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ev2 .ev2-slot-whole { flex: none; height: 28px; font-size: 12.5px; }
+.ev2 .ev2-slot-to { font-size: 12.5px; color: var(--ev2-faint); font-weight: 600; }
+.ev2 .ev2-slot-rbtns { display: flex; gap: 6px; }
+.ev2 .ev2-slot-rbtns .ev2-btn { flex: 1; justify-content: center; font-size: 12.5px; padding: 0 6px; }
+.ev2 .ev2-slot-arm.armed {
+  border-color: var(--c); box-shadow: 0 0 0 2px var(--c);
+  background: color-mix(in srgb, var(--c) 18%, var(--panel-2, #1c2027));
+}
+.ev2 .ev2-slot-rhint { font-size: 11.5px; color: var(--ev2-faint); }
+.ev2 .ev2-slot-respctl { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ev2 .ev2-slot-respctl .segmented { flex: 1 1 auto; min-width: 0; display: flex; }
+.ev2 .ev2-slot-respctl .segmented .seg {
+  flex: 1 1 0; min-width: 0; min-height: 34px; padding: 0 6px; font-size: 13.5px;
+}
+.ev2 .ev2-slot-respctl .segmented .seg.on { background: var(--c); color: #111; }
+.ev2 .ev2-slot-spark {
+  flex: none; width: 56px; height: 24px; background: var(--panel-2, #1c2027); border: 1px solid var(--line, #2d333d);
+  border-radius: 5px;
+}
+
+/* ---------------------------------------------------------------- footer: Advanced + change line */
+.ev2 .ev2-slot-foot { position: relative; display: block; min-height: 46px; }
+.ev2 .ev2-slot-foot > .ev2-sec { border-top: 0; }
+.ev2 .ev2-slot-foot .ev2-sec-head { min-height: 46px; padding-right: 290px; }
+.ev2 .ev2-slot-foot > .ev2-chg { position: absolute; right: 0; top: 0; height: 46px; }
+.ev2 .ev2-slot-adv > .ev2-sec-body { flex-direction: column; flex-wrap: nowrap; gap: 14px; padding-bottom: 14px; }
+.ev2 .ev2-slot-adv-row { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; width: 100%; }
+.ev2 .ev2-slot-adv-row > .ev2-ws { flex: 1 1 180px; max-width: 320px; }
+.ev2 .ev2-slot-adv-misc { align-items: center; }
+.ev2 .ev2-slot-adv-misc .select, .ev2 .ev2-slot-params .select {
+  display: inline-flex; flex-direction: row; align-items: center; gap: 8px;
+}
+.ev2 .ev2-slot-adv .select-label, .ev2 .ev2-slot-adv .stepper-label {
+  font-size: 14px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--text, #f1f4f8);
+}
+.ev2 .ev2-slot-adv .step-value { font-size: 14px; min-width: 7.5em; }
+.ev2 .ev2-slot-adv .stepper .step-btn { width: 36px; min-height: 34px; font-size: 18px; }
+.ev2 .ev2-slot-adv-misc .select-input { min-height: 36px; }
+.ev2 .ev2-slot-inst { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.ev2 .ev2-slot-inst-head { display: flex; align-items: center; gap: 12px; }
+.ev2 .ev2-slot-adv-h { font-size: 14px; }
+/* Advanced › Tone: the keyboard EQ across the full panel width (eq-ui integration step 3; hv2-edit-integrate) */
+.ev2 .ev2-slot-tone { width: 100%; }
+.ev2 .ev2-slot-tone > .ev2-sec-body { display: block; padding: 2px 0 6px; }
+.ev2 .ev2-slot-tone-hint { margin: 0 0 8px 22px; }
+.ev2 .ev2-slot-tone-host { width: 100%; min-width: 0; }
+/* title bar: the EQ sparkline before "Change instrument" (hidden while flat) */
+.ev2 .ev2-slot-eqmini { display: inline-grid; place-items: center; height: 32px; padding: 0 4px; border-radius: 7px;
+  border: 1px solid var(--line-2, #3a414d); background: transparent; }
+.ev2 .ev2-slot-eqmini[hidden] { display: none; }
+.ev2 .ev2-slot-params { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; }
+.ev2 .ev2-slot-params > .ev2-ws { flex: 1 1 180px; max-width: 280px; }
+
+/* ---------------------------------------------------------------- fallback components (no onTile / stepChip) */
+.ev2 .ev2-slot-tile-fb { min-height: 44px; }
+.ev2 .ev2-slot-chip-fb { min-height: 40px; justify-content: center; }
+
+/* ---------------------------------------------------------------- ≤ 1250 px (1024×700, edit-1024.png) */
+@media (max-width: 1250px) {
+  .ev2 .ev2-slot-cols { grid-template-columns: 250px minmax(0, 1fr) 290px; min-height: 230px; }
+  .ev2 .ev2-slot .ev2-col-sub { display: none; }
+  .ev2 .ev2-slot .ev2-col > .ev2-cap { margin-bottom: 6px; }
+  .ev2 .ev2-slot-os .ontile { height: 36px; min-height: 36px; }
+  .ev2 .ev2-slot-osb { margin-top: 8px; min-height: 160px; }
+  .ev2 .ev2-slot-same { display: none; }
+  .ev2 .ev2-slot-mods { gap: 4px; }
+  .ev2 .ev2-slot-mods .mchip { min-height: 36px; }
+  .ev2 .ev2-slot-mods .mchip .mc-label, .ev2 .ev2-slot-mods .mchip .mc-value { font-size: 11.5px; }
+  .ev2 .ev2-slot-mods .mchip.ev2-slot-wide { min-height: 28px; }
+  .ev2 .ev2-slot-wsl { gap: 6px; }
+  .ev2 .ev2-slot-play { gap: 8px; }
+  .ev2 .ev2-slot-rhint { display: none; }
+  .ev2 .ev2-slot-resp .ev2-slot-rh em { display: none; }
+  .ev2 .ev2-slot-range .mini-wrap { height: 26px; }
+  .ev2 .ev2-slot-note { height: 28px; }
+  .ev2 .ev2-slot-respctl .segmented .seg { min-height: 28px; font-size: 12.5px; }
+  .ev2 .ev2-slot-foot { min-height: 36px; }
+  .ev2 .ev2-slot-foot .ev2-sec-head { min-height: 36px; padding-right: 260px; }
+  .ev2 .ev2-slot-foot > .ev2-chg { height: 36px; }
+}

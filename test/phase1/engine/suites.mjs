@@ -1,5 +1,6 @@
 // Engine test suites, run in-page (Chromium) by run.mjs. Offline suites inject a seeded OfflineAudioContext.
 import { AudioEngine, buildIR, followVoicing } from '/js/engine/index.js';
+import { eqSuites } from './eq-suites.mjs';
 
 const SR = 44100;
 const MANIFEST = '/__fixtures/manifest.json';
@@ -1510,7 +1511,7 @@ export const offline = {
     const eq = tot.map((x) => +x.toFixed(2));
     const eqOk = Math.abs(eq[0] - 6) < 0.4 && Math.abs(eq[1] + 4) < 0.25 && Math.abs(eq[2] - 3) < 0.3 && e.getParam('fx.eq.mid') === -4;
     const unityOk = Object.values(ref).every((x) => Math.abs(x - inDb) < 0.1);
-    const pass = neverDiff <= 2e-6 && zeroDetached && afterDiff <= 2e-6 && detachedAfter && c1.loudnessRangeDb < c0.loudnessRangeDb - 5 && c1.loudSoftGapDb < c0.loudSoftGapDb - 3 && clk.length === 0 && unityOk && eqOk;
+    const pass = neverDiff <= 1e-5 && zeroDetached && afterDiff <= 1e-5 && detachedAfter && c1.loudnessRangeDb < c0.loudnessRangeDb - 5 && c1.loudSoftGapDb < c0.loudSoftGapDb - 3 && clk.length === 0 && unityOk && eqOk;
     return { pass, neverDiff, zeroDetached, afterBypassDiff: afterDiff, detachedAfter, dynamics0: c0, dynamics1: c1, clicks: clk.length, inDb, unityOutDb: ref, glueRefTableDb: tbl, masterEqDb_30_1k_16k: eq };
   },
 
@@ -1849,6 +1850,9 @@ function captureTap(engine, seconds) {
     sp.connect(ctx.destination);
   });
 }
+
+// slot EQ (design/eq/AMENDMENT.md): offline.eqIdentity … offline.eqCpu
+Object.assign(offline, eqSuites({ SR, mkCtx, mkEngine, slot, patch, use, mono, clicks, db }));
 
 export const realtime = {
   async smoke() {

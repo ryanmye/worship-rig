@@ -42,7 +42,11 @@ const SUITES = [
   { name: 'synth-extra', groups: ['phase1'], cmd: synthExtra ? [node, synthExtra] : null, timeout: 15 * MIN, absent: 'no synth-extra runner yet' },
   { name: 'shell', groups: ['phase1'], cmd: [node, 'test/phase1/shell/run.mjs', ...(FAST ? ['--skip', 'electron'] : [])], timeout: 12 * MIN },
   { name: 'ui-core', groups: ['phase2'], cmd: [node, 'test/phase2/ui-core/run.mjs'], timeout: 12 * MIN },
-  { name: 'ui-edit', groups: ['phase2'], cmd: [node, 'test/phase2/ui-edit/run.mjs'], timeout: 12 * MIN },
+  // H-v2 Edit (views/edit/**): shell + one file per panel + integration, one process per file (each file has a
+  // 900 s budget, CONTRACT §7), so the suite's own limit is well above the sum of typical files (~4–6 min idle).
+  { name: 'edit-v2', groups: ['phase2'], cmd: [node, 'test/phase2/edit-v2/run.mjs'], timeout: 30 * MIN },
+  { name: 'settings', groups: ['phase2'], cmd: [node, 'test/phase2/settings/run.mjs'], timeout: 10 * MIN },
+  { name: 'eq', groups: ['phase2'], cmd: [node, 'test/phase2/eq/run.mjs'], timeout: 10 * MIN },
   { name: 'chrome-fallback', groups: ['integration'], cmd: [node, 'test/integration/smoke-chrome-fallback.mjs'], timeout: 5 * MIN },
   { name: 'electron-full', groups: ['integration', 'electron'], cmd: [node, 'test/integration/electron-full.mjs'], timeout: 8 * MIN },
   { name: 'build-lint', groups: ['integration', 'electron'], cmd: [node, 'test/integration/build-lint.mjs'], timeout: 15 * MIN },

@@ -1,3 +1,126 @@
-/* OWNER: setlist agent. Setlist column (panels/setlist.js).
-   Scope rule (views/edit/CONTRACT.md §4): every selector starts with .ev2 and uses only the .ev2-list-* classes you
-   create (plus the shared .ev2-* widgets from styles-edit-v2.css). No element/global selectors, no :root. */
+/* OWNER: setlist agent. Setlist column (panels/setlist.js); mockup design/H-v2/edit.html `.lib` / `.song-row`.
+   Scope rule (views/edit/CONTRACT.md §4): every selector starts with .ev2 and uses only the .ev2-list-* classes
+   (plus the shared .ev2-* widgets from styles-edit-v2.css). No element/global selectors, no :root. */
+
+.ev2 .ev2-list {
+  display: flex; flex-direction: column; gap: 10px; padding: 12px; height: 100%; min-height: 0; min-width: 0;
+}
+
+/* ---- setlist picker */
+.ev2 .ev2-list-sets { display: flex; flex-direction: column; gap: 8px; flex: none; }
+.ev2 .ev2-list-sethead { display: flex; align-items: center; gap: 2px; min-height: 28px; }
+.ev2 .ev2-list-setbtn {
+  border: 0; background: transparent; color: var(--ev2-faint); font-size: 12px; font-weight: 650;
+  min-height: 28px; min-width: 28px; padding: 0 6px; border-radius: 6px;
+}
+.ev2 .ev2-list-setbtn:hover:not(:disabled) { color: var(--text, #f1f4f8); background: var(--panel-2, #1c2027); }
+.ev2 .ev2-list-setbtn:disabled { opacity: .4; cursor: default; }
+.ev2 .ev2-list-selwrap { position: relative; }
+.ev2 .ev2-list-selwrap > .ev2-ic { position: absolute; right: 12px; top: 11px; pointer-events: none; color: var(--muted, #a3acb8); }
+.ev2 .ev2-list-select, .ev2 .ev2-list-setname {
+  width: 100%; height: 38px; border-radius: var(--radius-sm, 7px); border: 1px solid var(--line-2, #3a414d);
+  background: var(--panel-2, #1c2027); color: var(--text, #f1f4f8); font: inherit; font-weight: 600; font-size: 15px;
+  padding: 0 34px 0 12px;
+}
+.ev2 .ev2-list-select { appearance: none; -webkit-appearance: none; cursor: pointer; text-overflow: ellipsis; }
+.ev2 .ev2-list-setname { padding-right: 12px; }
+.ev2 .ev2-list-select[hidden] + .ev2-ic { display: none; }
+.ev2 .ev2-list-setname[hidden], .ev2 .ev2-list-select[hidden] { display: none; }
+
+/* ---- confirms (setlist + row) */
+.ev2 .ev2-list-confirm {
+  display: flex; flex-direction: column; gap: 8px; padding: 10px; font-size: 13px; line-height: 1.3;
+  border: 1px solid var(--danger, #ff4d4f); background: #2a0f12; border-radius: var(--radius-sm, 7px);
+}
+.ev2 .ev2-list-confirm[hidden] { display: none; }
+.ev2 .ev2-list-qbtns { display: flex; flex-wrap: wrap; gap: 6px; }
+.ev2 .ev2-list-qbtns .ev2-btn { padding: 0 9px; }
+
+/* ---- search, gap note */
+.ev2 .ev2-list-search {
+  flex: none; height: 34px; border-radius: var(--radius-sm, 7px); border: 1px solid var(--line-2, #3a414d);
+  background: var(--panel-2, #1c2027); color: var(--text, #f1f4f8); font: inherit; font-size: 14px; padding: 0 10px;
+}
+.ev2 .ev2-list-search[hidden] { display: none; }
+.ev2 .ev2-list-gapnote { color: var(--warn, #ffb020); flex: none; }
+.ev2 .ev2-list-gapnote[hidden] { display: none; }
+
+/* ---- song list (mockup .songs / .song-row) */
+.ev2 .ev2-list-songs {
+  list-style: none; margin: 0; padding: 0 2px 2px 0; display: flex; flex-direction: column; gap: 4px;
+  flex: 1 1 auto; min-height: 80px; overflow-y: auto; overflow-x: hidden;
+}
+.ev2 .ev2-list-row {
+  flex: none; display: flex; align-items: center; gap: 9px; min-height: 38px; padding: 0 6px 0 10px;
+  border-radius: var(--radius-sm, 7px); font-weight: 600; font-size: 14.5px; color: #d9dee5; cursor: pointer;
+  position: relative; min-width: 0;
+}
+.ev2 .ev2-list-row:hover { background: var(--panel-2, #1c2027); }
+.ev2 .ev2-list-row.on { background: var(--panel-3, #252a33); color: var(--text, #f1f4f8); box-shadow: inset 3px 0 0 var(--accent, #ffc94d); }
+.ev2 .ev2-list-row:focus-visible { outline: 2px solid var(--focus, #7cc4ff); outline-offset: -2px; }
+.ev2 .ev2-list-row[hidden] { display: none; }
+.ev2 .ev2-list-row.missing { color: var(--ev2-faint); font-style: italic; cursor: default; }
+.ev2 .ev2-list-num { color: var(--ev2-faint); width: 18px; text-align: right; font-size: 12px; flex: none; font-variant-numeric: tabular-nums; }
+.ev2 .ev2-list-name { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev2 .ev2-list-key { margin-left: auto; font-style: normal; color: var(--ev2-faint); font-size: 12.5px; font-weight: 700; flex: none; }
+.ev2 .ev2-list-row.on .ev2-list-key { color: var(--accent, #ffc94d); }
+.ev2 .ev2-list-rename {
+  flex: 1 1 auto; min-width: 0; height: 30px; border-radius: 6px; border: 1px solid var(--focus, #7cc4ff);
+  background: var(--bg, #0b0d10); color: var(--text, #f1f4f8); font: inherit; font-size: 14px; padding: 0 8px;
+}
+/* hover / focus actions replace the key letter (the row keeps its height) */
+.ev2 .ev2-list-acts { display: none; gap: 0; flex: none; margin-left: auto; }
+.ev2 .ev2-list-row:hover .ev2-list-acts, .ev2 .ev2-list-row:focus-within .ev2-list-acts { display: flex; }
+.ev2 .ev2-list-row:hover .ev2-list-key, .ev2 .ev2-list-row:focus-within .ev2-list-key { display: none; }
+.ev2 .ev2-list-iconbtn {
+  width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; flex: none;
+  border: 0; border-radius: 6px; background: transparent; color: var(--muted, #a3acb8); padding: 0;
+}
+.ev2 .ev2-list-iconbtn:hover { background: var(--line-2, #3a414d); color: var(--text, #f1f4f8); }
+.ev2 .ev2-list-iconbtn[data-act="del"]:hover { color: var(--danger, #ff4d4f); }
+/* drag reorder */
+.ev2 .ev2-list-row.dragging { opacity: .45; }
+.ev2 .ev2-list-row.drop-before { box-shadow: 0 -3px 0 var(--focus, #7cc4ff); }
+.ev2 .ev2-list-row.drop-after { box-shadow: 0 3px 0 var(--focus, #7cc4ff); }
+/* inline row states */
+.ev2 .ev2-list-row.renaming { cursor: default; }
+.ev2 .ev2-list-row.confirming {
+  flex-wrap: wrap; padding: 8px 8px 8px 10px; cursor: default; row-gap: 6px;
+  border: 1px solid var(--danger, #ff4d4f); background: #2a0f12; box-shadow: none;
+}
+.ev2 .ev2-list-rowconfirm { display: flex; flex-direction: column; gap: 6px; width: 100%; font-size: 13px; font-weight: 500; line-height: 1.3; }
+.ev2 .ev2-list-gap {
+  flex: none; list-style: none; font-size: 12px; color: var(--warn, #ffb020); border: 1px dashed var(--warn, #ffb020);
+  border-radius: var(--radius-sm, 7px); padding: 4px 8px;
+}
+.ev2 .ev2-list-empty { list-style: none; font-size: 13px; color: var(--ev2-faint); padding: 8px 10px; }
+
+/* ---- adding songs (mockup .actions) */
+.ev2 .ev2-list-add { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; flex: none; }
+.ev2 .ev2-list-add .ev2-btn { justify-content: center; padding: 0 6px; font-size: 13px; min-width: 0; }
+.ev2 .ev2-list-add .ev2-btn[aria-expanded="true"] { border-color: var(--accent, #ffc94d); color: var(--accent, #ffc94d); }
+.ev2 .ev2-list-browser {
+  display: flex; flex-direction: column; min-height: 0; flex: 0 1 auto; max-height: 46%;
+  border: 1px solid var(--line-2, #3a414d); border-radius: var(--radius-sm, 7px); background: var(--panel-2, #1c2027);
+}
+.ev2 .ev2-list-browser[hidden] { display: none; }
+.ev2 .ev2-list-bhead { display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 10px; border-bottom: 1px solid var(--line, #2d333d); flex: none; }
+.ev2 .ev2-list-bbody { overflow-y: auto; padding: 4px 8px 8px; display: flex; flex-direction: column; gap: 2px; min-height: 0; }
+.ev2 .ev2-list-bcat { margin: 8px 0 2px; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted, #a3acb8); font-weight: 700; }
+.ev2 .ev2-list-bitem { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.ev2 .ev2-list-btext { flex: 1 1 auto; min-width: 0; }
+.ev2 .ev2-list-bname { font-weight: 700; font-size: 13.5px; }
+.ev2 .ev2-list-bdesc { font-size: 12px; color: var(--muted, #a3acb8); line-height: 1.3; }
+
+/* ---- library file (mockup .file) */
+.ev2 .ev2-list-file { flex: none; font-size: 13px; }
+.ev2 .ev2-list-file .ev2-sec-head { min-height: 34px; padding-top: 4px; color: var(--muted, #a3acb8); font-size: 13px; font-weight: 500; }
+.ev2 .ev2-list-file .ev2-sec-sum { margin-left: auto; font-size: 13px; }
+.ev2 .ev2-list-file .ev2-sec-body { display: block; padding: 2px 0 2px; }
+.ev2 .ev2-list-filerow { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+
+/* ---- narrow (≤ 1250 px): the column is a 280 px drawer; keep it tight */
+@media (max-width: 1250px) {
+  .ev2 .ev2-list { padding: 10px; gap: 8px; }
+  .ev2 .ev2-list-row { min-height: 36px; font-size: 14px; }
+}

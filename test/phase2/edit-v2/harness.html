@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="/app/styles.css">
 <link rel="stylesheet" href="/app/styles-edit.css">
 <link rel="stylesheet" href="/app/js/views/edit/styles-edit-v2.css">
+<link rel="stylesheet" href="/app/js/views/components/eq-keyboard.css">
 <style>
   html, body { height: 100%; margin: 0; background: #0b0d10; }
   #views { height: 100vh; }
@@ -37,13 +38,25 @@
     import('/app/js/controller.js'),
   ]);
   const toasts = [];
-  function toast(msg, kind = 'info') {
-    toasts.push({ msg, kind });
+  // same call shape as main.js toast(msg, kind, {ms, action:{label, run}})
+  function toast(msg, kind = 'info', opts = {}) {
+    toasts.push({ msg, kind, action: opts && opts.action ? opts.action.label : null });
     const el = document.createElement('div');
     el.className = `toast ${kind}`;
     el.textContent = msg;
+    if (opts && opts.action) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn toast-action';
+      b.textContent = opts.action.label || 'OK';
+      b.addEventListener('click', () => {
+        el.remove();
+        opts.action.run?.();
+      });
+      el.append(b);
+    }
     document.getElementById('toasts').append(el);
-    setTimeout(() => el.remove(), 3000);
+    setTimeout(() => el.remove(), (opts && opts.ms) || 3000);
   }
   const store = createStore({ key: q.get('key') || 'rig.v1' });
   store.seedFactory(FACTORY_SONGS);
@@ -64,18 +77,21 @@
     getBaseline: () => baseline,
   };
   const shell = await import('/app/js/views/edit/shell.js');
+  // lib + the component set on the handle, so tests never import() inside page.evaluate (flaky under load)
+  const lib = await import('/app/js/views/edit/lib.js');
+  const C = await import('/app/js/views/_fallback-components.js').then((m) => m.loadComponents());
   const ready = controller.start();
   const host = document.getElementById('view-edit');
   const panel = q.get('panel');
   const opts = JSON.parse(q.get('opts') || '{}');
   const view = q.get('full') ? shell.mountEdit(host, ctx) : shell.mountSinglePanel(host, ctx, panel, opts);
   globalThis.__rig = {
-    store, engine, controller, midi, recorder, ctx, toasts, shell, view, ready,
+    store, engine, controller, midi, recorder, ctx, toasts, shell, lib, C, view, ready,
     setBaseline: (s) => { baseline = s; },
     /** the mounted panel's ctx (single-panel mode) */
     get panelCtx() { return view.ctx || null; },
   };
-  globalThis.__ev2 = { ready: true, panel, full: !!q.get('full'), components: (await import('/app/js/views/_fallback-components.js').then((m) => m.loadComponents())).__source };
+  globalThis.__ev2 = { ready: true, panel, full: !!q.get('full'), components: C.__source };
 </script>
 </body>
 </html>

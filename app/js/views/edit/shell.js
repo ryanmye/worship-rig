@@ -13,11 +13,10 @@
 // everything inside their host element. See views/edit/CONTRACT.md.
 import { loadComponents, markDialog } from '../_fallback-components.js';
 import { describe, formatValue } from '../../shared/params.js';
-import { PC_NAMES_MAJOR, mod12 } from '../../shared/music.js';
 import { SPACE_PRESETS, ECHO_PRESETS, matchPreset } from '../../shared/fx-presets.js';
 import { changedPaths, hasChange } from '../../shared/song-diff.js';
 import PANELS from './panels/index.js';
-import { h, setText, icon, getIn, relOf, pct, BLOCKS, blockOf, sentence } from './lib.js';
+import { h, setText, icon, getIn, relOf, pct, BLOCKS, blockOf, sentence, droneKeyText, chorusWord } from './lib.js';
 
 const C = await loadComponents();
 
@@ -133,8 +132,9 @@ function createCore(root, appCtx) {
     target.addEventListener(type, fn, opts);
     cleanups.push(() => target.removeEventListener(type, fn, opts));
   };
-  const toast = (msg, kind = 'info') => {
-    if (typeof appCtx.toast === 'function') appCtx.toast(msg, kind);
+  // opts ({ms, action:{label, run}}) pass through to main.js's toast (the slot panel's "Undo"; hv2-edit-slot request)
+  const toast = (msg, kind = 'info', opts) => {
+    if (typeof appCtx.toast === 'function') appCtx.toast(msg, kind, opts);
     else if (kind === 'error') console.warn(`[edit] ${msg}`);
   };
 
@@ -529,7 +529,7 @@ function defaultTab(block, song, core) {
   };
   if (block.id === 'drone') {
     const d = song.drone || {};
-    const key = `${PC_NAMES_MAJOR[mod12(song.hearIn || 0)]} ${song.minor ? 'minor' : 'major'}`;
+    const key = droneKeyText(song); // "C# minor", as the KEY chip and the drone panel spell it
     if (d.mode === 'off') return { name: key, sub: '· off', off: true };
     return { name: key, sub: `· ${d.mode === 'files' ? 'My Pads' : 'Synth'}` };
   }
@@ -547,7 +547,6 @@ function defaultTab(block, song, core) {
   return { name: block.role };
 }
 
-const chorusWord = (d) => (d < 0.34 ? 'gentle' : d < 0.67 ? 'medium' : 'deep');
 const tabId = (id) => `ev2-tab-${id.replace(':', '-')}`;
 const LANES = Object.freeze([
   { unit: 'reverb', name: 'Space', icon: 'room' },
@@ -796,6 +795,8 @@ export function mountEdit(el, ctx) {
       registry: registeredPanels,
       mounted: () => [...regions.map((r) => r.id), cur?.id].filter(Boolean),
       instance: (id) => [...regions, cur].find((r) => r && r.id === id)?.inst || null,
+      /** the panel ctx a mounted module received (tests: ctx.toast / ctx.set as the panel sees them) */
+      ctx: (id) => [...regions, cur].find((r) => r && r.id === id)?.pctx || null,
       components: C.__source,
       baseline: () => editState.baseline,
       changes: () => [...editState.changes],
@@ -850,6 +851,8 @@ export function mountSinglePanel(el, ctx, id, opts = {}) {
     const b = blockOf(e.detail.id);
     if (!b || b.panel !== id) return;
     const o = { ...b.opts, ...e.detail.opts };
+    // the block colour follows an update() too (slot:0 → slot:2 keeps the panel; hv2-edit-slot request)
+    root.querySelector('.ev2-rig')?.style.setProperty('--c', b.color);
     if (!mounted || !mounted.update(o)) mount(o);
   });
   mount({ ...(blockFor(opts) ? blockOf(blockFor(opts)).opts : {}), ...opts });
