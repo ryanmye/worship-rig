@@ -303,7 +303,7 @@ const browser = await chromium.launch({
 });
 const consoleErrors = [];
 const rows = [];
-const COLS = ['t_s', 'phase', 'song', 'voices', 'kbVoices', 'droneVoices', 'nodes', 'retiring', 'sounding', 'pedaled', 'timers', 'decodedMB', 'pinnedMB', 'capMB', 'budgetMB', 'memMode', 'heapMB', 'ctxTime', 'ctxState', 'audio', 'events', 'switches', 'panics', 'keyChanges', 'nan', 'maxDb'];
+const COLS = ['t_s', 'phase', 'song', 'voices', 'kbVoices', 'droneVoices', 'nodes', 'retiring', 'sounding', 'pedaled', 'timers', 'decodedMB', 'pinnedMB', 'capMB', 'budgetMB', 'memMode', 'memNote', 'heapMB', 'ctxTime', 'ctxState', 'audio', 'events', 'switches', 'panics', 'keyChanges', 'nan', 'maxDb'];
 const tStart = Date.now();
 let exitCode = 1;
 
