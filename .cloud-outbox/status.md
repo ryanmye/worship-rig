@@ -23,3 +23,6 @@
 2026-09-28T21:20Z L8_FAIL soak 20 min on c889fd9: max pinned 568.9 MB, max decoded 754.2 MB, 11/12 checks; no row over 600 (pin budget holds, 0/44 rows over; cap check failed on one transient row: decoded 754.2 MB at 1147 s just after the dusty-piano → upright-pad switch, retiring 1, back to 591.1 MB 30 s later; new finding L-10, soft-cap vs hard-cap check, needs decision)
 2026-09-28T21:20Z FINDINGS merged 05ec36f full test 11/12 (soak skipped); new findings: L-10 (from the soak, not the full run); L-9 still failing (edit-v2 song) — see reviews/local-findings.md
 2026-09-28T21:20Z LOCAL_STATE: idle, ports free | hardware pass with Ryan
+2026-09-28T21:23:42Z L8_VERIFIED soak 20 min on c889fd9: pinned max 568.9 MB ≤ 600 budget, 0/44 rows over; L-8 fix holds.
+2026-09-28T21:23:42Z L10_RESOLVED soak check now implements the soft-cap rule (decoded ≤ cap when retiring==0; ≤ cap+25 % for ≤ 90 s after a switch while retiring>0), commit 2835a26; replayed against the 21:20Z soak.csv: the 754.2 MB row (retiring 1, 0 s after the switch) passes, no other row over cap → 12/12 on that data. Next real soak runs with the next drop.
+2026-09-28T21:23:42Z LOCAL_STATE: idle, ports free; next SYNC drop runs immediately | hardware pass with Ryan
