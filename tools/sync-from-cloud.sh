@@ -228,7 +228,7 @@ sync_tree() {
   local dry=() out="$TMP/rsync.out"
   (( DRY_RUN )) && dry=(-n)
   write_excludes
-  log "rsync ${dry[*]:-} snapshot -> $(pwd) (--delete, $(wc -l < "$TMP/rsync-excludes" | tr -d ' ') excludes)"
+  log "rsync ${dry[*]:+${dry[*]} }snapshot -> $(pwd) (--delete, $(wc -l < "$TMP/rsync-excludes" | tr -d ' ') excludes)"
   rsync -rlp -c --delete --itemize-changes ${dry[@]+"${dry[@]}"} --exclude-from="$TMP/rsync-excludes" \
     "$SNAP_ROOT/" ./ > "$out.raw" 2> "$TMP/rsync.err" || { cat "$TMP/rsync.err" >&2; die "rsync failed"; }
   grep -v -e 'not empty, cannot delete' -e '^\.[fdL]\.\.[tT]\.\.\.\. ' "$out.raw" > "$out" || true
@@ -298,8 +298,8 @@ unstage_foreign() {
   done < <(git diff --cached --name-only --diff-filter=A --no-renames -z)
   (( n )) || return 0
   GIT_LITERAL_PATHSPECS=1 git reset -q --pathspec-from-file="$TMP/foreign.z" --pathspec-file-nul
-  warn "$n new file(s) not in the snapshot were left out of the commit (still on disk), e.g.:"
-  tr '\0' '\n' < "$TMP/foreign.z" | head -n 5 | sed 's/^/    /' >&2
+  log "kept $n local file(s) that are not in the snapshot out of the commit (untouched on disk), e.g.:"
+  tr '\0' '\n' < "$TMP/foreign.z" | head -n 5 | sed 's/^/    /'
 }
 
 commit_cloud() {
