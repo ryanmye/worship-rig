@@ -156,6 +156,7 @@ its folder atomically. To remove one, delete its folder and rescan.
 - **Levels:** Logic's group volume + zone volume (dB) is baked into each file, relative to the loudest zone kept, so
   nothing is boosted and soft layers stay softer than loud ones (Yamaha: soft −2 dB, medium −1 dB, loud 0 dB).
   `--no-levels` turns this off. The instrument's overall level is still `gainTrim` (0; `tools/calibrate.mjs` sets it).
+- **DC offset:** the ffmpeg encode chain runs every file through a 10 Hz high-pass, the same fix `tools/samples/process-musyngkite.mjs` uses (S2), so files pass the importer's own `--validate` DC check (`|dc|/peak ≤ 5e-4`).
 - **Headroom:** mp3 and m4a output is lowered by a further 1 dB (`LOSSY_HEADROOM_DB`), uniformly, so layers keep
   their relative levels. Lossy encoders overshoot the source peak: Yamaha's `107_B6KM56_H.wav` peaks at 0.00 dBFS
   and came out of libmp3lame 160k at +0.22 dBFS (clipped). WAV output gets no headroom. With afconvert this means
