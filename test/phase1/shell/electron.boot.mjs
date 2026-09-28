@@ -198,7 +198,9 @@ test('menu-bar mode (L14): tray, menu from the bus state, IPC relay both ways, p
   assert.equal(m.menuBeforeState[0], 'Worship Rig is starting…');
   // a state published through window.rig.busPublish rebuilds the menu
   assert.equal(m.publish.ok, true);
-  assert.deepEqual(m.menu.map((i) => i.label), [
+  assert.match(m.menu[1].label, /^Memory: \d+ MB$/, 'main + renderer RSS line');
+  assert.equal(m.menu[1].enabled, false);
+  assert.deepEqual(m.menu.map((i) => i.label).filter((l) => !l.startsWith('Memory: ')), [
     'Now: Selftest Pad + Piano  (D)', 'Selftest Opener  (G)', 'Selftest Pad + Piano  (D)', 'Selftest Closer  (E)',
     'Previous', 'Next', 'Panic (all notes off)', 'Low-resource mode', 'Open Worship Rig', 'Quit Worship Rig',
   ]);
@@ -228,9 +230,18 @@ test('menu-bar mode (L14): tray, menu from the bus state, IPC relay both ways, p
   assert.equal(m.popoverToggled, true);
   assert.deepEqual(m.popoverTransitions, ['show', 'hide', 'show', 'hide']);
   assert.equal(m.after.popoverOpen, false);
+  // window events on the Rig menu channel (onMenu ids): the popover opening is not "shown"
+  assert.deepEqual(m.eventsOnEnable, ['windowShown'], 'setMenuBarMode(true) reports the current window state');
+  assert.deepEqual(m.eventsDuringPopover, []);
+  // setMenuBarMode(false) is the source of truth too: tray gone, renderer back to the document's visibility
+  assert.equal(m.setMenuBarModeOff.on, false);
+  assert.equal(m.trayAfterOff, false);
+  assert.deepEqual(m.eventsOnDisable, ['windowFollowDocument']);
   if (isMac) {
     assert.deepEqual(m.hideOnClose, { destroyed: false, visible: false, dock: false }, 'close hides, dock icon hidden');
     assert.equal(m.hideBackup, true, 'hiding still writes the library backup (M5)');
+    assert.deepEqual(m.eventsOnHide, ['windowHidden']);
+    assert.deepEqual(m.eventsOnOpenMain, ['windowShown']);
     assert.equal(m.openMain.ok, true);
     assert.deepEqual(m.afterOpenMain, { visible: true, dock: true }, 'openMain shows the window and the dock icon');
   }

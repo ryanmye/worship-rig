@@ -4,12 +4,13 @@
   Tray popover has something to load. The CLOUD builds the real app/mini.html + app/mini.css + app/js/views/mini.js
   (C7 "B"): replace this whole file with it, then delete drivePlaceholder() in main.js.
   The server's CSP forbids inline scripts and this session may not add files under app/js, so this page carries no
-  script: main.js injects a tiny driver (window.rig.miniSubscribe / miniCommand) into pages that have the
-  data-rig-mini-placeholder attribute below.
+  script: main.js injects a tiny driver (window.rig.miniSubscribe / miniCommand) only into pages with the
+  <meta name="rig-mini-placeholder"> marker below.
 -->
-<html lang="en" data-rig-mini-placeholder>
+<html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="rig-mini-placeholder" content="main.js drivePlaceholder() drives this page">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>Worship Rig</title>

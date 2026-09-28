@@ -705,6 +705,7 @@ function trayMenuTemplate(s) {
   const nowLabel = !s ? 'Worship Rig is starting…' : cur ? `Now: ${modeLabel(cur)}` : 'No song selected';
   return [
     { id: 'current', label: nowLabel, enabled: false },
+    ...(appMemoryMB ? [{ id: 'memory', label: `Memory: ${appMemoryMB} MB`, enabled: false }] : []),
     { type: 'separator' },
     ...modes.map((m) => ({
       id: `mode:${m.id}`,
@@ -737,13 +738,28 @@ function refreshTrayMenu(force = false) {
   if (!menuBarMode) return;
   const s = busState;
   const brief = (m) => m && [m.id, m.name, m.key];
-  const key = JSON.stringify(s ? [brief(s.current), s.modes.slice(0, TRAY_MODES_MAX).map(brief), !!s.lowResource] : null);
+  appMemoryMB = appMemory();
+  const modes = s && s.modes.slice(0, TRAY_MODES_MAX).map(brief);
+  const key = JSON.stringify(s ? [brief(s.current), modes, !!s.lowResource, appMemoryMB] : null);
   if (!force && trayMenu && key === trayMenuKey) return;
   trayMenuKey = key;
   trayMenu = Menu.buildFromTemplate(trayMenuTemplate(s));
   if (tray && !tray.isDestroyed()) {
     const cur = s && s.current;
     tray.setToolTip(cur ? `Worship Rig: ${modeLabel(cur)}` : 'Worship Rig');
+  }
+}
+
+let appMemoryMB = 0;
+/** RSS of the main process + renderers (app.getAppMetrics, KB → MB), rounded to 5 MB so the menu rebuilds rarely. */
+function appMemory() {
+  try {
+    const kb = app.getAppMetrics()
+      .filter((m) => m.type === 'Browser' || m.type === 'Tab')
+      .reduce((sum, m) => sum + ((m.memory && m.memory.workingSetSize) || 0), 0);
+    return Math.round(kb / 1024 / 5) * 5;
+  } catch {
+    return 0;
   }
 }
 
@@ -873,12 +889,13 @@ function togglePopover() {
 
 /**
  * TEMPORARY (until the cloud's app/mini.html + views/mini.js land): the placeholder page can't carry a script (the CSP
- * forbids inline scripts and only app/mini.html is ours to add), so main.js drives it. Only runs on a page whose
- * <html> has data-rig-mini-placeholder; delete this function once the real popover UI is in the tree.
+ * forbids inline scripts and only app/mini.html is ours to add), so main.js drives it. Only runs on a page with
+ * <meta name="rig-mini-placeholder"> (the cloud's mini.html has none, so it is never touched); it creates no bus,
+ * it only calls window.rig.miniSubscribe / miniCommand. Delete this function once the real popover UI is in the tree.
  */
 function drivePlaceholder(wc) {
   const code = `(() => {
-    if (!document.documentElement.hasAttribute('data-rig-mini-placeholder') || window.__rigMiniDriven) return false;
+    if (!document.querySelector('meta[name="rig-mini-placeholder"]') || window.__rigMiniDriven) return false;
     window.__rigMiniDriven = true;
     const $ = (id) => document.getElementById(id);
     window.rig.miniSubscribe((json) => {
@@ -920,6 +937,34 @@ function notifyMenuBarState() {
   for (const w of [win, popover]) if (w && !w.isDestroyed()) w.webContents.send('rig:menuBarState', snap);
 }
 
+/**
+ * Dock icon on/off (macOS). Only acts on a change: a redundant dock.show() leaves a promise that can resolve after a
+ * later hide() (seen while the screen is locked) and bring the icon back.
+ */
+function setDock(visible) {
+  if (!IS_MAC || !app.dock || app.dock.isVisible() === visible) return;
+  if (visible) app.dock.show().catch(() => {});
+  else app.dock.hide();
+}
+
+let lastWindowEvent = null;
+/**
+ * Menu-bar mode: tell the main renderer when its window is shown/hidden, on the Rig menu channel (onMenu ids
+ * `windowShown` / `windowHidden`). With backgroundThrottling off, visibilitychange may never fire. The popover opening
+ * does not count as "shown". `windowFollowDocument` (mode turned off) hands the decision back to the document.
+ * @param {'windowShown'|'windowHidden'|'windowFollowDocument'} id
+ */
+function sendWindowEvent(id, force = false) {
+  if (!force && (id === lastWindowEvent || (!menuBarMode && id !== 'windowFollowDocument'))) return;
+  lastWindowEvent = id;
+  sendMenu(id);
+}
+const windowShownNow = () => !!(win && !win.isDestroyed() && win.isVisible() && !win.isMinimized());
+
+/**
+ * The renderer calls setMenuBarMode(on) at start and on every change: the single source of truth for the tray
+ * (only while on), the dock icon (hidden while on and the window is hidden) and the window events above.
+ */
 function applyMenuBarMode(on) {
   const next = !!on;
   if (next !== menuBarMode) writeShellConfig({ menuBarMode: next });
@@ -927,11 +972,14 @@ function applyMenuBarMode(on) {
   if (next) {
     ensureTray();
     refreshTrayMenu(true);
+    setDock(windowShownNow());
+    sendWindowEvent(windowShownNow() ? 'windowShown' : 'windowHidden', true); // the renderer is listening now
   } else {
     destroyTray();
     if (popover && !popover.isDestroyed()) popover.destroy();
     if (win && !win.isDestroyed() && !win.isVisible()) showMain(); // never leave a hidden window without a way back
-    else if (IS_MAC && app.dock) app.dock.show();
+    else setDock(true);
+    sendWindowEvent('windowFollowDocument', true);
   }
   notifyMenuBarState();
   return menuBarStateSnapshot();
@@ -941,10 +989,11 @@ function applyMenuBarMode(on) {
 function showMain() {
   hidePopover();
   if (!win || win.isDestroyed()) return;
-  if (IS_MAC && app.dock) app.dock.show();
+  setDock(true);
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
+  sendWindowEvent('windowShown');
   notifyMenuBarState();
 }
 
@@ -953,7 +1002,8 @@ function hideMainToMenuBar() {
   if (!win || win.isDestroyed()) return;
   const wc = win.webContents;
   win.hide();
-  if (IS_MAC && app.dock) app.dock.hide();
+  setDock(false);
+  sendWindowEvent('windowHidden');
   notifyMenuBarState();
   const q = '(() => { try { const s = window.__rigShell; return s ? s.library() : null; } catch (e) { return null; } })()';
   withTimeout(wc.executeJavaScript(q, true).catch(() => null), 1500)
@@ -1050,8 +1100,17 @@ function createWindow(url) {
   const wc = win.webContents;
   // menu-bar mode launched hidden (login item / --hidden): the page loads and plays, the window stays in the menu bar
   win.once('ready-to-show', () => win && !startHidden && win.show());
-  win.on('show', () => notifyMenuBarState());
-  win.on('hide', () => notifyMenuBarState());
+  // also covers ⌘H / minimise; on macOS show/hide follow occlusion, so showMain/hideMainToMenuBar send them as well
+  win.on('show', () => {
+    sendWindowEvent('windowShown');
+    notifyMenuBarState();
+  });
+  win.on('hide', () => {
+    sendWindowEvent('windowHidden');
+    notifyMenuBarState();
+  });
+  win.on('minimize', () => sendWindowEvent('windowHidden'));
+  win.on('restore', () => sendWindowEvent('windowShown'));
   wc.setWindowOpenHandler(({ url: target }) => {
     if (/^https?:\/\//.test(target) && !originOk(target)) shell.openExternal(target);
     return { action: 'deny' };
@@ -1285,7 +1344,13 @@ async function menubarSelftest(wc) {
   // only the shell fixture page (no window.__rig) runs this part
   if (await js(wc, '!!window.__rig')) return { skipped: 'real app page (window.__rig): runs on the shell fixture only' };
   out.before = await js(wc, 'window.rig.getMenuBarState()');
+  await js(wc, 'window.__mbMenu = []; window.rig.onMenu((id) => window.__mbMenu.push(id)); true');
+  const menuEvents = async () => {
+    await settle(150);
+    return js(wc, 'window.__mbMenu.splice(0)');
+  };
   out.setMenuBarMode = await js(wc, 'window.rig.setMenuBarMode(true)');
+  out.eventsOnEnable = await menuEvents();
   out.tray = !!(tray && !tray.isDestroyed());
   out.shellConfig = readShellConfig().menuBarMode === true;
   out.menuBeforeState = trayMenu ? trayMenu.items.filter((i) => i.type !== 'separator').map((i) => i.label) : null;
@@ -1349,6 +1414,7 @@ async function menubarSelftest(wc) {
   togglePopover();
   out.popoverToggled = reopened && (await waitFor(() => !popover.isVisible()));
   out.popoverTransitions = popoverLog.slice();
+  out.eventsDuringPopover = await menuEvents(); // opening the popover is not "shown"
   // hide-on-close (macOS): the window hides instead of closing, the dock icon goes away, a library backup is written;
   // openMain brings window and dock icon back
   if (IS_MAC) {
@@ -1362,13 +1428,18 @@ async function menubarSelftest(wc) {
     await waitFor(() => !win.isVisible());
     out.hideOnClose = { destroyed: win.isDestroyed(), visible: win.isVisible(), dock: app.dock.isVisible() };
     out.hideBackup = await waitFor(() => backups().some(isHideBackup));
+    out.eventsOnHide = await menuEvents();
     out.openMain = await cmd(pw, { v: 1, type: 'openMain' });
     await waitFor(() => win.isVisible());
     out.afterOpenMain = { visible: win.isVisible(), dock: app.dock.isVisible() };
+    out.eventsOnOpenMain = await menuEvents();
   } else {
     out.hideOnClose = 'macOS only';
   }
   out.after = await js(wc, 'window.rig.getMenuBarState()');
+  out.setMenuBarModeOff = await js(wc, 'window.rig.setMenuBarMode(false)');
+  out.trayAfterOff = !!(tray && !tray.isDestroyed());
+  out.eventsOnDisable = await menuEvents();
   return out;
 }
 
@@ -1420,7 +1491,7 @@ app.whenReady().then(async () => {
   if (menuBarMode) {
     ensureTray();
     refreshTrayMenu(true);
-    if (startHidden && IS_MAC && app.dock) app.dock.hide();
+    if (startHidden) setDock(false);
   }
   powerBlockId = powerSaveBlocker.start('prevent-display-sleep');
   createWindow(`http://127.0.0.1:${serverInfo.port}/`);
