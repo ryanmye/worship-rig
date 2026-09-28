@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Perform — A v2</title>
+<style>:root {
+  --bg: #0b0d10; --panel: #15181d; --panel-2: #1c2027; --panel-3: #252a33;
+  --line: #2d333d; --line-2: #3a414d; --text: #f1f4f8; --muted: #a3acb8; --faint: #8a93a0;
+  --accent: #ffc94d; --accent-ink: #1a1400;
+  --slot-0: #ff8a3d; --slot-1: #3ddc84; --slot-2: #4aa8ff; --slot-3: #b784ff;
+  --fx: #9fb3c8;           /* shared effects: neutral steel, never a slot colour (research P7) */
+  --drone: #e8d9a8;        /* drone: warm neutral, distinct from the four slots and from accent */
+  --danger: #ff4d4f; --ok: #3ddc84; --warn: #ffb020;
+  --track: #3a414d; --track-edge: #666f7d; --thumb: #eef1f5; --led-off: #6b7380;
+  --panic-bg: #5a0d10; --panic-text: #ffc9ca; --rec-idle: #c4474a;
+  --radius: 10px; --radius-sm: 7px;
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 15px/1.35 var(--font); -webkit-font-smoothing: antialiased;
+  overflow: hidden; min-width: 1024px; min-height: 700px; display: flex; flex-direction: column; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.ic { display: block; flex: none; }
+.cap { font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+.btn { border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text); border-radius: var(--radius-sm);
+  min-height: 36px; padding: 0 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.btn.ghost { background: transparent; }
+.btn.sm { min-height: 30px; font-size: 13px; padding: 0 10px; }
+.muted { color: var(--muted); } .faint { color: var(--faint); }
+
+/* ---------------------------------------------------------------- top bar */
+.topbar { height: 56px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 14px;
+  border-bottom: 1px solid var(--line); background: #0e1014; }
+.topbar > * { flex: none; } .topbar > .status { flex: 1 1 auto; min-width: 0; }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 17px; margin-right: 4px; }
+.brand .ic { color: var(--slot-2); }
+.tabs { display: flex; border: 1px solid var(--line-2); border-radius: var(--radius-sm); overflow: hidden; }
+.tabs button { border: 0; background: var(--panel-2); padding: 0 16px; height: 40px; font-weight: 700; font-size: 15px; }
+.tabs button.on { background: var(--accent); color: var(--accent-ink); }
+.iconbtn { width: 42px; height: 42px; border: 1px solid var(--line-2); background: var(--panel-2); border-radius: var(--radius-sm);
+  display: grid; place-items: center; }
+.quickbtn { height: 42px; border: 1px solid var(--line-2); background: var(--panel-2); border-radius: var(--radius-sm);
+  display: flex; align-items: center; gap: 8px; padding: 0 14px 0 11px; font-weight: 700; }
+.quickbtn.on { background: #2b2f38; border-color: var(--text); box-shadow: inset 0 -3px 0 var(--text); }
+.status { flex: 1; display: flex; justify-content: center; gap: 18px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.status span { display: flex; align-items: center; gap: 7px; }
+.led { width: 10px; height: 10px; border-radius: 50%; background: var(--led-off); flex: none; }
+.led.ok { background: var(--ok); box-shadow: 0 0 8px #3ddc8488; } .led.warn { background: var(--warn); }
+.status .dim { color: var(--muted); font-weight: 500; }
+.rec { height: 42px; border: 1px solid var(--line-2); background: var(--panel-2); border-radius: var(--radius-sm);
+  display: flex; align-items: center; gap: 8px; padding: 0 14px; font-weight: 800; letter-spacing: .04em; }
+.rec i { width: 13px; height: 13px; border-radius: 50%; background: var(--rec-idle); }
+.timer { font: 600 16px var(--mono); color: var(--muted); }
+.hmeter { width: 118px; display: grid; gap: 3px; }
+.hmeter div { height: 6px; border-radius: 3px; background: linear-gradient(90deg, #2bbf6a 0 62%, #e2c23c 62% 80%, #e4573d 80%) left/var(--l) 100% no-repeat, #262b33; }
+.master { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+.master b { color: var(--text); font-size: 15px; letter-spacing: 0; min-width: 52px; text-align: right; }
+.master .hfader { width: 92px; }
+
+/* ---------------------------------------------------------------- faders */
+.vfader { position: relative; width: 46px; height: 100%; margin: 0 auto; }
+.vf-track { position: absolute; left: 19px; width: 8px; top: 4px; bottom: 4px; background: var(--track);
+  border-radius: 5px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--track-edge); }
+.vf-fill { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 5px; }
+.vf-thumb { position: absolute; left: 1px; width: 44px; height: 26px; border-radius: 5px;
+  background: linear-gradient(#fbfcfd, #d5dae1); box-shadow: 0 2px 6px #0009, inset 0 -1px 0 #aab1bb; }
+.vf-thumb::after { content: ''; position: absolute; left: 8px; right: 8px; top: 12px; height: 2px; background: #8b939e; }
+.vfader.is-muted .vf-fill { background: var(--led-off) !important; }
+.hfader { position: relative; height: 24px; }
+.hf-track { position: absolute; left: 0; right: 0; top: 9px; height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; }
+.hf-fill { height: 100%; border-radius: 3px; }
+.hf-thumb { position: absolute; top: 1px; width: 22px; height: 22px; border-radius: 6px; background: linear-gradient(#fbfcfd, #d5dae1); box-shadow: 0 1px 4px #0009; }
+
+/* ---------------------------------------------------------------- keyboard */
+.kbd { position: relative; height: 100%; display: flex; flex-direction: column; }
+.rbars { position: relative; flex: none; margin-bottom: 4px; }
+.rbar { position: absolute; height: 5px; border-radius: 3px; background: var(--c); }
+.rbar.dim { opacity: .35; }
+.rbar.open-l { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.rbar.open-r { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.rbar em { display: none; }
+.keys { position: relative; flex: 1; }
+.wk { position: absolute; top: 0; bottom: 0; background: #b9c0c9; border-right: 1px solid #0b0d10; border-radius: 0 0 4px 4px; }
+.wk span { position: absolute; bottom: 3px; left: 0; right: 0; text-align: center; font-size: 9.5px; font-weight: 700; color: #3a404a; }
+.wk.held { background: var(--accent); }
+.bk { position: absolute; top: 0; height: 60%; background: #111418; border-radius: 0 0 3px 3px; box-shadow: 0 2px 0 #000; z-index: 2; }
+.bk.held { background: #d9a52c; }
+
+/* ---------------------------------------------------------------- toggles / segmented */
+.tog { display: inline-flex; align-items: center; gap: 9px; height: 38px; padding: 0 13px; border-radius: var(--radius-sm);
+  border: 1px solid var(--line-2); background: var(--panel-2); font-weight: 650; font-size: 14px; white-space: nowrap; }
+.tog i { width: 10px; height: 10px; border-radius: 50%; background: var(--led-off); flex: none; }
+.tog.on i { background: var(--c, var(--accent)); box-shadow: 0 0 8px var(--c, var(--accent)); }
+.tog.on { border-color: color-mix(in srgb, var(--c, var(--accent)) 55%, var(--line-2)); }
+.switch { width: 44px; height: 26px; border-radius: 13px; background: #3a414d; position: relative; flex: none; }
+.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #c9cfd7; }
+.switch.on { background: var(--c, var(--ok)); } .switch.on::after { left: 21px; background: #fff; }
+.seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: var(--radius-sm); overflow: hidden; background: var(--panel-2); }
+.seg button { border: 0; background: transparent; height: 36px; padding: 0 12px; font-weight: 650; font-size: 14px; border-left: 1px solid var(--line-2); }
+.seg button:first-child { border-left: 0; }
+.seg button.on { background: var(--c, var(--accent)); color: #111; }
+
+@media (max-width: 1250px) {
+  .topbar { gap: 8px; padding: 0 10px; } .brand span.bt, .master > span.ml { display: none; }
+  .brand { font-size: 0; gap: 0; } .brand .ic { width: 22px; }
+  .status { gap: 12px; font-size: 13px; } .status .dim { display: none; }
+  .hmeter { width: 56px; } .master .hfader { width: 70px; } .master { font-size: 0; gap: 6px; } .master b { font-size: 13px; min-width: 0; }
+  .timer { font-size: 14px; } .tabs button { padding: 0 12px; }
+}
+
+.perform { flex: 1; display: grid; gap: 12px; padding: 12px 14px 14px;
+  grid-template-columns: 96px 1fr 1fr 1fr 1fr 404px 296px;
+  grid-template-rows: 112px 54px 1fr 94px; min-height: 0; position: relative; }
+.r1 { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 210px 392px 196px; gap: 12px; min-width: 0; }
+.r2 { grid-column: 1 / -1; display: grid; grid-template-columns: 110px 1fr 260px; gap: 12px; min-width: 0; }
+.song { padding: 10px 20px; min-width: 0; display: flex; flex-direction: column; justify-content: center; position: relative; }
+.song h1 { margin: 0; font-size: 44px; line-height: 1.05; letter-spacing: -.01em; white-space: nowrap; }
+.song .key { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.keybtn { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 10px 0 12px; border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line-2)); background: color-mix(in srgb, var(--accent) 8%, var(--panel-2)); }
+.keybtn b { color: var(--accent); font-size: 28px; line-height: 1; }
+.keybtn .ic { color: var(--accent); }
+.keybtn.open { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.song .playin { font-size: 15px; font-weight: 700; color: var(--text); padding: 4px 10px; border-radius: 8px; background: #2e2716; }
+.song .playin span { color: var(--muted); font-weight: 600; }
+.song .notesbtn { display: none; }
+.transpose { padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+.transpose .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.transpose .row button { width: 52px; height: 48px; font-size: 26px; font-weight: 700; border: 1px solid var(--line-2); background: var(--panel-2); border-radius: var(--radius-sm); }
+.transpose .row b { font-size: 30px; } .transpose .row b.shift { color: var(--accent); }
+.soundcard { padding: 10px 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: stretch; }
+.fxpill { border: 1px solid var(--line-2); background: var(--panel-2); border-radius: var(--radius); padding: 8px 12px;
+  display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto auto; column-gap: 10px; align-items: center; text-align: left; }
+.fxpill .ic { grid-row: 1 / 3; color: var(--fx); }
+.fxpill .cap { font-size: 11px; }
+.fxpill b { font-size: 20px; font-weight: 700; white-space: nowrap; }
+.fxpill b small { font-size: 13px; color: var(--muted); font-weight: 600; margin-left: 4px; }
+.fxpill > .ic:last-child { grid-row: 1 / 3; grid-column: 3; color: var(--faint); }
+.chord { padding: 12px 18px; }
+.chord b { display: block; font-size: 46px; line-height: 1.1; margin-top: 4px; }
+.prev { display: grid; place-items: center; font-weight: 700; color: var(--muted); border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line); font-size: 17px; }
+.setlist { display: flex; gap: 8px; overflow: hidden; padding: 6px; }
+.chip { display: flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: var(--radius-sm); background: var(--panel-2); border: 1px solid var(--line-2); font-weight: 700; font-size: 17px; white-space: nowrap; }
+.chip small { color: var(--faint); font-size: 12px; } .chip em { font-style: normal; color: var(--faint); font-size: 13px; }
+.chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); } .chip.on small, .chip.on em { color: #5a4600; }
+.next { padding: 7px 14px; }
+.next .cap { font-size: 11px; } .next b { display: block; font-size: 18px; }
+
+.wheel { grid-column: 1; padding: 12px 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.wheel .bar { width: 34px; flex: 1; border-radius: 8px; background: #252a33; position: relative; overflow: hidden; }
+.wheel .bar div { position: absolute; left: 0; right: 0; bottom: 0; height: 100%; background: #8d9bb0; border-radius: 8px; }
+.wheel .val { font-size: 22px; font-weight: 700; }
+.wheel .to { font-size: 11.5px; color: var(--muted); text-align: center; }
+.wheel .swell { width: 100%; height: 44px; border-radius: var(--radius-sm); border: 1px solid var(--line-2); background: var(--panel-2); font-weight: 700; font-size: 13px; }
+.wheel .ind { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--muted); }
+.wheel .ind.on { color: var(--text); } .wheel .ind.on i { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+
+/* ---- strips */
+.strip { --c: var(--slot-0); display: flex; flex-direction: column; align-items: stretch; padding: 10px 9px 9px; gap: 7px;
+  border-top: 3px solid var(--c); min-width: 0; position: relative; }
+.strip.s1 { --c: var(--slot-1); } .strip.s2 { --c: var(--slot-2); } .strip.s3 { --c: var(--slot-3); }
+.strip .head { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.strip .role { display: flex; align-items: center; gap: 6px; color: var(--c); font-weight: 800; font-size: 13px; letter-spacing: .1em; }
+.strip .role i { width: 8px; height: 8px; border-radius: 50%; background: var(--led-off); }
+.strip.playing .role i { background: var(--c); box-shadow: 0 0 8px var(--c); }
+.strip .ico { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; color: var(--c);
+  background: color-mix(in srgb, var(--c) 13%, transparent); }
+.strip .name { font-weight: 700; font-size: 17px; line-height: 1.15; }
+.strip .tag { font-size: 11.5px; color: var(--muted); font-weight: 600; height: 15px; }
+/* read-only status line: Chorus / Octave only appear when not at default */
+.strip .badges { height: 20px; display: flex; justify-content: center; gap: 4px; }
+.strip .badges span { font-size: 11.5px; font-weight: 700; padding: 1px 7px; border-radius: 10px; color: var(--c);
+  border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); white-space: nowrap; line-height: 16px; }
+.strip .fz { flex: 1; min-height: 80px; }
+.strip .db { text-align: center; font-weight: 700; font-size: 18px; }
+.mods { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+.mod { position: relative; overflow: hidden; height: 46px; border-radius: 8px; border: 1.5px solid var(--line-2); background: transparent;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; padding: 0 2px 3px; color: var(--muted); }
+.mod span { font-size: 13px; font-weight: 800; }
+.mod b { font-size: 13px; font-weight: 600; }
+.mod.on { background: var(--c); border-color: var(--c); color: #0d0f12; }
+.mod.on b { font-weight: 800; }
+.mod i { position: absolute; left: 0; bottom: 0; height: 4px; background: #0d0f1266; }
+.mod.open { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--c); }
+.strip .mute { height: 42px; border-radius: var(--radius-sm); border: 1px solid var(--line-2); background: var(--panel-2); font-weight: 800; letter-spacing: .08em; font-size: 14px; }
+.strip.empty .fz { display: grid; place-items: center; color: var(--faint); font-weight: 600; text-align: center; font-size: 14px; }
+.strip.empty .ico { background: transparent; color: var(--faint); }
+.strip.empty .name { color: var(--faint); }
+/* muted: everything that says "sounding" goes grey; the MUTE button becomes the loud thing */
+.strip.muted { border-top-color: #4a5260; }
+.strip.muted .head, .strip.muted .badges { opacity: .45; }
+.strip.muted .role i { background: var(--led-off) !important; box-shadow: none !important; }
+.strip.muted .vf-fill { background: #4d5562 !important; }
+.strip.muted .db { color: var(--faint); text-decoration: line-through; text-decoration-thickness: 2px; }
+.strip.muted .mod, .strip.muted .mod.on { background: transparent; border-color: #3a414d; color: #6b7380; }
+.strip.muted .mod i { display: none; }
+.strip.muted .mute { background: var(--warn); border-color: var(--warn); color: #1d1400; font-size: 15px; }
+
+/* ---- in-strip amount panel (chip → steps), never wider than its own strip */
+.amt { position: absolute; z-index: 20; left: 5px; right: 5px; top: 5px; bottom: 124px; border-radius: 10px; background: #1f242c;
+  border: 2px solid var(--c); box-shadow: 0 14px 40px #000c; display: flex; flex-direction: column; padding: 9px 8px 8px; }
+.amt::after { content: ''; position: absolute; bottom: -9px; left: 22%; width: 14px; height: 14px; background: #1f242c;
+  border-right: 2px solid var(--c); border-bottom: 2px solid var(--c); transform: rotate(45deg); }
+.amt .ah { display: flex; align-items: center; gap: 6px; }
+.amt .ah b { font-size: 15px; } .amt .ah .x { margin-left: auto; width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--line-2); background: var(--panel-2); display: grid; place-items: center; }
+.amt .to { font-size: 12px; color: var(--muted); margin: 1px 0 8px; } .amt .to em { font-style: normal; color: var(--fx); font-weight: 700; }
+.amt .ab { flex: 1; display: grid; grid-template-columns: 1fr 26px; gap: 8px; min-height: 0; }
+.steps { display: flex; flex-direction: column; gap: 5px; }
+.steps button { flex: 1; min-height: 34px; border-radius: 7px; border: 1px solid var(--line-2); background: var(--panel-2); font-weight: 800; font-size: 15px; }
+.steps button.on { background: var(--c); color: #0d0f12; border-color: var(--c); }
+.fine { position: relative; }
+.fine .t { position: absolute; left: 10px; width: 6px; top: 4px; bottom: 4px; border-radius: 3px; background: var(--track); overflow: hidden; }
+.fine .t em { position: absolute; left: 0; right: 0; bottom: 0; background: var(--c); }
+.fine .th { position: absolute; left: 0; width: 26px; height: 16px; border-radius: 4px; background: linear-gradient(#fbfcfd, #d5dae1); box-shadow: 0 1px 4px #0009; }
+.amt .af { font-size: 11px; color: var(--faint); margin-top: 7px; text-align: center; line-height: 1.3; }
+
+/* ---- key & drone */
+.drone { grid-column: 6; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; border-top: 3px solid var(--drone); }
+.drone .hd { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.drone .hd .t { display: flex; align-items: center; gap: 9px; color: var(--drone); }
+.drone .hd .t b { display: block; color: var(--text); font-size: 17px; }
+.drone .seg button { height: 38px; white-space: nowrap; } .drone .seg button.on { --c: var(--drone); }
+.keygrid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.keygrid button { height: 42px; border-radius: var(--radius-sm); border: 1px solid var(--line-2); background: var(--panel-2); font-weight: 700; font-size: 17px; }
+.keygrid button.on { background: var(--drone); color: #1c1606; border-color: var(--drone); }
+.drone .lv { display: flex; align-items: center; gap: 10px; }
+.drone .lv .hfader { flex: 1; } .drone .lv b { font-size: 14px; min-width: 58px; text-align: right; }
+.drone .char { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.drone .char > div { display: grid; grid-template-columns: 1fr auto; row-gap: 0; align-items: center; }
+.drone .char b { font-size: 13.5px; } .drone .char small { color: var(--muted); font-size: 12px; text-align: right; }
+.drone .char .hfader { grid-column: 1 / 3; }
+.drone .tg { display: flex; gap: 8px; flex-wrap: wrap; } .drone .tg .tog { --c: var(--drone); height: 36px; font-size: 13.5px; }
+.padsrow { margin-top: auto; display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 9px; }
+.padsrow b { color: var(--text); font-weight: 600; } .padsrow .btn { margin-left: auto; }
+.notes { grid-column: 7; padding: 14px 16px; }
+.notes p { margin: 10px 0 0; font-size: 16.5px; line-height: 1.5; color: #dfe4ea; }
+.bottom { grid-column: 1 / 8; display: grid; grid-template-columns: 1fr 120px 118px 132px 112px; gap: 12px; }
+.kb-card { padding: 8px 10px 10px; }
+.bigbtn { border-radius: var(--radius); border: 1px solid var(--line-2); background: var(--panel); font-weight: 700; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.bigbtn.fade { background: #182231; }
+.bigbtn.panic { background: var(--panic-bg); color: var(--panic-text); border: 2px solid var(--danger); font-size: 21px; letter-spacing: .04em; flex-direction: column; gap: 0; }
+.bigbtn.panic small { font-size: 11px; letter-spacing: .06em; opacity: .7; font-weight: 700; }
+.bigbtn.revert { color: var(--faint); background: transparent; border-color: var(--line); }
+
+/* ---- "Sing it in…" popover (from the KEY button) */
+.keypop { position: absolute; z-index: 25; left: 34px; top: 118px; width: 452px; padding: 14px 16px 14px; border-radius: 12px; background: #1f242c;
+  border: 2px solid var(--accent); box-shadow: 0 20px 56px #000d; }
+.keypop::before { content: ''; position: absolute; top: -9px; left: 34px; width: 14px; height: 14px; background: #1f242c;
+  border-left: 2px solid var(--accent); border-top: 2px solid var(--accent); transform: rotate(45deg); }
+.keypop h3 { margin: 0; font-size: 19px; } .keypop p { margin: 3px 0 12px; font-size: 13.5px; color: var(--muted); line-height: 1.4; }
+.keypop p b { color: var(--text); }
+.keypop .keygrid button { height: 48px; font-size: 18px; position: relative; }
+.keypop .keygrid button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.keypop .keygrid button.hands::after { content: 'you play'; position: absolute; left: 0; right: 0; bottom: 3px; font-size: 9.5px; font-weight: 700; color: var(--muted); letter-spacing: .02em; }
+.keypop .kf { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line); font-size: 13.5px; }
+.keypop .kf b { color: var(--accent); } .keypop .kf .btn { margin-left: auto; }
+.keypop .kn { font-size: 12px; color: var(--faint); margin-top: 9px; line-height: 1.4; }
+
+/* 1024-wide: Notes collapse into a button (as the app does today), strips narrow */
+@media (max-width: 1250px) {
+  .perform { grid-template-columns: 82px 1fr 1fr 1fr 1fr 352px; grid-template-rows: 94px 50px 1fr 74px; gap: 10px; padding: 10px 12px 12px; }
+  .r1 { grid-template-columns: 1fr 168px 210px 120px; gap: 10px; } .r2 { grid-template-columns: 92px 1fr 200px; gap: 10px; }
+  .song { padding: 8px 14px; } .song h1 { font-size: 34px; } .keybtn { height: 34px; } .keybtn b { font-size: 24px; }
+  .song .notesbtn { display: flex; position: absolute; right: 12px; bottom: 10px; }
+  .transpose { padding: 8px 10px; } .transpose .row button { width: 40px; height: 42px; font-size: 22px; } .transpose .row b { font-size: 24px; }
+  .soundcard { grid-template-columns: 1fr; gap: 6px; padding: 7px 8px; }
+  .fxpill { padding: 2px 8px; } .fxpill b { font-size: 15px; } .fxpill .cap { font-size: 10px; } .fxpill b small { display: none; }
+  .fxpill .ic { width: 16px; }
+  .chord { padding: 8px 14px; } .chord b { font-size: 38px; }
+  .chip { font-size: 15px; } .next b { font-size: 16px; }
+  .notes { display: none; } .padsrow { display: none; }
+  .drone { grid-column: 6; padding: 9px 10px; gap: 7px; } .keygrid button { height: 34px; font-size: 15px; }
+  .drone .tg .tog { height: 32px; font-size: 12.5px; padding: 0 9px; }
+  .drone .hd .t b { font-size: 15px; } .drone .seg button { height: 32px; padding: 0 9px; font-size: 13px; }
+  .drone .char { gap: 10px; } .drone .char b { font-size: 12.5px; } .drone .char .hfader { height: 20px; } .drone .char .hf-thumb { width: 18px; height: 18px; } .drone .char .hf-track { top: 7px; }
+  .strip { padding: 7px 6px 6px; gap: 5px; } .strip .ico { display: none; }
+  .strip .name { font-size: 14.5px; } .strip .db { font-size: 15px; } .strip .fz { min-height: 60px; }
+  .strip .tag { font-size: 10.5px; height: 13px; } .strip .badges span { font-size: 10.5px; padding: 0 5px; }
+  .mods { gap: 4px; margin-bottom: 8px; } .mod { height: 44px; } .mod span, .mod b { font-size: 12.5px; }
+  .strip .mute { height: 36px; font-size: 12.5px; }
+  .wheel { padding: 8px 6px; gap: 5px; } .wheel .val { font-size: 18px; } .wheel .swell { height: 36px; }
+  .bottom { grid-column: 1 / 7; grid-template-columns: 1fr 96px 96px 112px 92px; gap: 10px; }
+  .bigbtn { font-size: 14px; } .bigbtn.panic { font-size: 18px; }
+  .kb-card { padding: 5px 8px 7px; }
+  .amt { bottom: 106px; padding: 7px 6px 6px; } .amt .af { display: none; } .amt .to { margin-bottom: 5px; } .steps { gap: 4px; } .steps button { font-size: 13.5px; min-height: 26px; } .amt .ah .x { width: 26px; height: 26px; }
+}
+</style></head>
+<body class=""><svg width="0" height="0" style="position:absolute"><defs>
+  <radialGradient id="capgrad" cx="45%" cy="35%" r="70%"><stop offset="0" stop-color="#343a45"/><stop offset="1" stop-color="#1c2027"/></radialGradient>
+</defs></svg><header class="topbar">
+    <div class="brand"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ><path d="M5 20V11M10 20V5M15 20v-7M20 20V8"/></svg>Worship Rig</div>
+    <div class="tabs"><button class="on">Perform</button><button class="">Edit</button></div>
+    <button class="quickbtn"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg>Quick</button>
+    <button class="iconbtn" title="All settings"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    <div class="status">
+      <span><i class="led ok"></i>MIDI <span class="dim">Nord Stage 3</span></span>
+      <span><i class="led ok"></i>Sound OK <span class="dim">12 ms</span></span>
+      <span><i class="led ok"></i><span style="color:var(--ok);letter-spacing:.06em">READY</span></span>
+    </div>
+    <button class="rec"><i></i>REC</button>
+    <span class="timer">00:00</span>
+    <div class="hmeter"><div style="--l:58%"></div><div style="--l:54%"></div></div>
+    <div class="master">MASTER <div class="hfader "><div class="hf-track"><div class="hf-fill" style="width:55.0%;background:#eef1f5"></div></div><div class="hf-thumb" style="left:calc(55.0% - 11px)"></div></div><b>−6.0 dB</b></div>
+  </header>
+  <main class="perform">
+    <div class="r1"><section class="card song"><h1>Sunday Pad + Piano</h1>
+      <div class="key"><span class="cap">Key</span><button class="keybtn" title="Sing it in a different key"><b>D</b><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ><path d="M6 9l6 6 6-6"/></svg></button>
+        </div>
+      <button class="btn sm notesbtn"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h4"/></svg>Notes</button></section>
+    <section class="card transpose"><span class="cap">Transpose</span><div class="row"><button>−</button><b class="">0</b><button>+</button></div></section>
+    <section class="card soundcard">
+      <button class="fxpill"><svg class="ic" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ><path d="M3.5 20V11a8.5 8.5 0 0 1 17 0v9"/><path d="M8 20v-8a4 4 0 0 1 8 0v8"/><path d="M2 20h20"/></svg><span class="cap">Space</span><b>Hall</b><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ><path d="M6 9l6 6 6-6"/></svg></button>
+      <button class="fxpill"><svg class="ic" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ><circle cx="5.5" cy="12" r="3"/><circle cx="12.5" cy="12" r="2.2" opacity=".72"/><circle cx="18.5" cy="12" r="1.5" opacity=".45"/></svg><span class="cap">Echo</span><b>Custom<small>≈ Quarter</small></b><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ><path d="M6 9l6 6 6-6"/></svg></button>
+    </section>
+    <section class="card chord"><span class="cap">Chord</span><b>D</b></section></div>
+
+    <div class="r2"><div class="prev">◀ Prev</div>
+    <div class="card setlist">
+      <div class="chip on"><small>1</small>Sunday Pad + Piano<em>D</em></div>
+      <div class="chip"><small>2</small>Building Swell<em>G</em></div>
+      <div class="chip"><small>3</small>Prayer Wash<em>E</em></div>
+      <div class="chip"><small>4</small>Organ Swell<em>A</em></div>
+      <div class="chip"><small>5</small>Grand Piano<em>C</em></div>
+    </div>
+    <div class="card next"><span class="cap">Next ▶</span><b>Building Swell · G</b></div></div>
+
+    <section class="card wheel"><span class="cap">Wheel</span><div class="bar"><div></div></div><div class="val">100%</div>
+      <div class="to">→ Pad level</div><button class="swell">◢ Swell</button>
+      <div class="ind on"><i class="led"></i>PEDAL</div><div class="ind"><i class="led"></i>BEND</div></section>
+    <div class="card strip s0 playing">
+    <div class="head"><div class="role"><i></i>KEYS</div>
+      <div class="ico"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 21V5.5A2.5 2.5 0 0 1 5.5 3H12c3.6 0 5 3.2 6.6 6 1.4 2.4 2.4 4.2 2.4 7v5H3z"/><path d="M3 16.5h18"/><path d="M7 16.5V21M11 16.5V21M15 16.5V21"/></svg></div><div class="name">Grand Piano</div><div class="tag"></div></div>
+    <div class="badges" title="Changed in Edit"></div>
+    <div class="fz"><div class="vfader">
+    <div class="vf-track"><div class="vf-fill" style="height:72.0%;background:var(--c)"></div></div>
+    <div class="vf-thumb" style="bottom:calc(72.0% - 13px)"></div>
+  </div></div>
+    <div class="db">−1.9 dB</div>
+    <div class="mods"><button class="mod on"><span>Space</span><b>25%</b><i style="width:25%"></i></button><button class="mod on"><span>Echo</span><b>10%</b><i style="width:10%"></i></button></div>
+    <button class="mute">MUTE</button>
+    
+  </div><div class="card strip s1 playing">
+    <div class="head"><div class="role"><i></i>PAD</div>
+      <div class="ico"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ><path d="M2 10c2.7-4.5 5.3-4.5 8 0s5.3 4.5 8 0c1.3-2.2 2.7-3 4-3"/><path d="M2 16c2.7-4.5 5.3-4.5 8 0s5.3 4.5 8 0c1.3-2.2 2.7-3 4-3" opacity=".55"/></svg></div><div class="name">Warm Pad</div><div class="tag">↻ wheel 100%</div></div>
+    <div class="badges" title="Changed in Edit"><span>Chorus 35%</span></div>
+    <div class="fz"><div class="vfader">
+    <div class="vf-track"><div class="vf-fill" style="height:60.0%;background:var(--c)"></div></div>
+    <div class="vf-thumb" style="bottom:calc(60.0% - 13px)"></div>
+  </div></div>
+    <div class="db">−5.2 dB</div>
+    <div class="mods"><button class="mod on"><span>Space</span><b>50%</b><i style="width:50%"></i></button><button class="mod on"><span>Echo</span><b>10%</b><i style="width:10%"></i></button></div>
+    <button class="mute">MUTE</button>
+    
+  </div><div class="card strip s2 empty"><div class="head"><div class="role"><i></i>EXTRA</div>
+      <div class="ico"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ><rect x="3.5" y="3.5" width="17" height="17" rx="4" stroke-dasharray="3 3"/><path d="M12 8.5v7M8.5 12h7"/></svg></div><div class="name">Empty</div></div>
+      <div class="fz">Nothing here.<br><span style="font-size:12.5px">Add a sound in Edit</span></div></div><div class="card strip s3 playing">
+    <div class="head"><div class="role"><i></i>BASS</div>
+      <div class="ico"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ><path d="M2 12c2.4-8 5.6-8 8 0s5.6 8 8 0" stroke-width="2.6"/><path d="M19 12h3"/></svg></div><div class="name">Sub Bass</div><div class="tag"></div></div>
+    <div class="badges" title="Changed in Edit"><span>Octave −1</span></div>
+    <div class="fz"><div class="vfader">
+    <div class="vf-track"><div class="vf-fill" style="height:66.0%;background:var(--c)"></div></div>
+    <div class="vf-thumb" style="bottom:calc(66.0% - 13px)"></div>
+  </div></div>
+    <div class="db">−3.1 dB</div>
+    <div class="mods"><button class="mod"><span>Space</span><b>off</b></button><button class="mod"><span>Echo</span><b>off</b></button></div>
+    <button class="mute">MUTE</button>
+    
+  </div>
+    <section class="card drone">
+      <div class="hd"><div class="t"><svg class="ic" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="2.6"/><circle cx="12" cy="12" r="6.2" opacity=".7"/><circle cx="12" cy="12" r="9.8" opacity=".38"/></svg><div><span class="cap" style="color:var(--drone)">Key &amp; drone</span><b>D major</b></div></div>
+        <div class="seg"><button>Off</button><button class="on">Synth</button><button>My Pads</button></div></div>
+      <div class="keygrid"><button class="">C</button><button class="">Db</button><button class="on">D</button><button class="">Eb</button><button class="">E</button><button class="">F</button><button class="">F#</button><button class="">G</button><button class="">Ab</button><button class="">A</button><button class="">Bb</button><button class="">B</button></div>
+      <div class="lv"><div class="seg" style="--c:var(--drone)"><button class="on">Major</button><button>Minor</button></div>
+        <div class="hfader "><div class="hf-track"><div class="hf-fill" style="width:68.0%;background:var(--drone)"></div></div><div class="hf-thumb" style="left:calc(68.0% - 11px)"></div></div><b>+1.6 dB</b></div>
+      <div class="char">
+        <div><b>Brightness</b><small>Soft · 40%</small><div class="hfader "><div class="hf-track"><div class="hf-fill" style="width:40.0%;background:var(--drone)"></div></div><div class="hf-thumb" style="left:calc(40.0% - 11px)"></div></div></div>
+        <div><b>Movement</b><small>Gentle · 30%</small><div class="hfader "><div class="hf-track"><div class="hf-fill" style="width:30.0%;background:var(--drone)"></div></div><div class="hf-thumb" style="left:calc(30.0% - 11px)"></div></div></div>
+      </div>
+      <div class="tg"><span class="tog"><i></i>Follow chords</span><span class="tog on"><i></i>Continue across songs</span></div>
+      <div class="padsrow">My Pads folder: <b>Worship Pads</b> · 12 keys found<button class="btn sm ghost">Change…</button></div>
+    </section>
+    <section class="card notes"><span class="cap">Notes</span>
+      <p>The everyday worship sound: grand piano on top of a warm pad, with a soft key drone underneath. Mod wheel (and an expression pedal) brings the pad in and out, so you can start with piano alone and swell the pad for the chorus. Push the pitch-bend wheel up to lift the drone; pull it down to tuck it away.</p></section>
+
+    <div class="bottom">
+      <div class="card kb-card"><div class="kbd"><div class="rbars" style="height:21px"><div class="rbar open-l open-r" style="top:0px;left:0.00%;width:100.00%;--c:var(--slot-0)"></div><div class="rbar open-l open-r" style="top:7px;left:0.00%;width:100.00%;--c:var(--slot-1)"></div><div class="rbar open-l" style="top:14px;left:0.00%;width:38.89%;--c:var(--slot-3)"></div></div><div class="keys"><div class="wk" style="left:0.000%;width:2.778%"><span>C2</span></div><div class="wk held" style="left:2.778%;width:2.778%"></div><div class="wk" style="left:5.556%;width:2.778%"></div><div class="wk" style="left:8.333%;width:2.778%"></div><div class="wk" style="left:11.111%;width:2.778%"></div><div class="wk" style="left:13.889%;width:2.778%"></div><div class="wk" style="left:16.667%;width:2.778%"></div><div class="wk" style="left:19.444%;width:2.778%"><span>C3</span></div><div class="wk" style="left:22.222%;width:2.778%"></div><div class="wk" style="left:25.000%;width:2.778%"></div><div class="wk" style="left:27.778%;width:2.778%"></div><div class="wk" style="left:30.556%;width:2.778%"></div><div class="wk" style="left:33.333%;width:2.778%"></div><div class="wk" style="left:36.111%;width:2.778%"></div><div class="wk" style="left:38.889%;width:2.778%"><span>C4</span></div><div class="wk held" style="left:41.667%;width:2.778%"></div><div class="wk" style="left:44.444%;width:2.778%"></div><div class="wk" style="left:47.222%;width:2.778%"></div><div class="wk" style="left:50.000%;width:2.778%"></div><div class="wk held" style="left:52.778%;width:2.778%"></div><div class="wk" style="left:55.556%;width:2.778%"></div><div class="wk" style="left:58.333%;width:2.778%"><span>C5</span></div><div class="wk" style="left:61.111%;width:2.778%"></div><div class="wk" style="left:63.889%;width:2.778%"></div><div class="wk" style="left:66.667%;width:2.778%"></div><div class="wk" style="left:69.444%;width:2.778%"></div><div class="wk" style="left:72.222%;width:2.778%"></div><div class="wk" style="left:75.000%;width:2.778%"></div><div class="wk" style="left:77.778%;width:2.778%"><span>C6</span></div><div class="wk" style="left:80.556%;width:2.778%"></div><div class="wk" style="left:83.333%;width:2.778%"></div><div class="wk" style="left:86.111%;width:2.778%"></div><div class="wk" style="left:88.889%;width:2.778%"></div><div class="wk" style="left:91.667%;width:2.778%"></div><div class="wk" style="left:94.444%;width:2.778%"></div><div class="wk" style="left:97.222%;width:2.778%"><span>C7</span></div><div class="bk" style="left:1.917%;width:1.722%"></div><div class="bk" style="left:4.694%;width:1.722%"></div><div class="bk" style="left:10.250%;width:1.722%"></div><div class="bk" style="left:13.028%;width:1.722%"></div><div class="bk" style="left:15.806%;width:1.722%"></div><div class="bk" style="left:21.361%;width:1.722%"></div><div class="bk" style="left:24.139%;width:1.722%"></div><div class="bk" style="left:29.694%;width:1.722%"></div><div class="bk" style="left:32.472%;width:1.722%"></div><div class="bk" style="left:35.250%;width:1.722%"></div><div class="bk" style="left:40.806%;width:1.722%"></div><div class="bk" style="left:43.583%;width:1.722%"></div><div class="bk held" style="left:49.139%;width:1.722%"></div><div class="bk" style="left:51.917%;width:1.722%"></div><div class="bk" style="left:54.694%;width:1.722%"></div><div class="bk" style="left:60.250%;width:1.722%"></div><div class="bk" style="left:63.028%;width:1.722%"></div><div class="bk" style="left:68.583%;width:1.722%"></div><div class="bk" style="left:71.361%;width:1.722%"></div><div class="bk" style="left:74.139%;width:1.722%"></div><div class="bk" style="left:79.694%;width:1.722%"></div><div class="bk" style="left:82.472%;width:1.722%"></div><div class="bk" style="left:88.028%;width:1.722%"></div><div class="bk" style="left:90.806%;width:1.722%"></div><div class="bk" style="left:93.583%;width:1.722%"></div></div></div></div>
+      <button class="bigbtn revert">↺ Revert</button>
+      <button class="bigbtn fade">Fade out</button>
+      <button class="bigbtn panic">PANIC<small>Esc</small></button>
+      <button class="bigbtn"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Lock</button>
+    </div>
+    
+    
+  </main></body></html>

@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Perform — angle D</title>
+<style>
+/* Angle D mockups — shares the app's tokens (app/styles.css) so it reads as the same product. */
+:root {
+  --bg: #0b0d10; --panel: #15181d; --panel-2: #1c2027; --panel-3: #252a33;
+  --line: #2d333d; --line-2: #3a414d; --text: #f1f4f8; --muted: #a3acb8; --faint: #8a93a0;
+  --accent: #ffc94d; --accent-ink: #1a1400;
+  --slot-0: #ff8a3d; --slot-1: #3ddc84; --slot-2: #4aa8ff; --slot-3: #b784ff;
+  --drone: #efd9a6;           /* D: drone gets its own warm cream, not the selection yellow */
+  --fx: #cfd8e3;              /* D: shared effects + master are neutral (never a slot colour) */
+  --danger: #ff4d4f; --warn: #ffb020; --ok: #3ddc84; --track: #3a414d; --track-edge: #666f7d;
+  --led-off: #6b7380; --panic-bg: #5a0d10; --panic-text: #ffc9ca; --rec-idle: #c4474a; --thumb: #eef1f5;
+  --radius: 10px; --radius-sm: 7px;
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 15px/1.35 var(--font); -webkit-font-smoothing: antialiased;
+  overflow: hidden; display: flex; flex-direction: column; min-width: 1024px; min-height: 700px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+.cap { font-size: 11.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+.faint { color: var(--faint); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line-2);
+  background: var(--panel-2); color: var(--text); border-radius: var(--radius-sm); min-height: 40px; padding: 0 14px;
+  font-weight: 600; font-size: 15px; white-space: nowrap; }
+.btn.sm { min-height: 32px; font-size: 13px; padding: 0 10px; }
+.btn.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.ghost { background: transparent; }
+.seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: var(--radius-sm); overflow: hidden; }
+.seg > span { display: flex; align-items: center; justify-content: center; padding: 0 12px; min-height: 38px;
+  font-weight: 600; background: var(--panel-2); border-right: 1px solid var(--line-2); }
+.seg > span:last-child { border-right: 0; }
+.seg > span.on { background: var(--accent); color: var(--accent-ink); }
+.led { width: 10px; height: 10px; border-radius: 50%; display: inline-block; background: var(--led-off); flex: none; }
+.led.ok { background: var(--ok); box-shadow: 0 0 8px rgba(61,220,132,.6); }
+.led.warn { background: var(--warn); box-shadow: 0 0 8px rgba(255,176,32,.5); }
+.led.acc { background: var(--accent); box-shadow: 0 0 8px rgba(255,201,77,.6); }
+
+/* ---------------------------------------------------------------- top bar */
+.topbar { height: 56px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 14px;
+  border-bottom: 1px solid var(--line); background: #0e1014; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 17px; margin-right: 4px; white-space: nowrap; }
+.brand i { display: inline-flex; gap: 2px; align-items: flex-end; height: 16px; }
+.brand i b { width: 3px; background: var(--slot-2); border-radius: 1px; }
+.viewtabs { display: flex; border: 1px solid var(--line-2); border-radius: var(--radius-sm); overflow: hidden; }
+.viewtabs span { padding: 0 16px; min-height: 42px; display: flex; align-items: center; font-weight: 700; background: var(--panel-2); }
+.viewtabs span.on { background: var(--accent); color: var(--accent-ink); }
+.gear { width: 44px; height: 44px; padding: 0; }
+.status { flex: 1; display: flex; justify-content: center; gap: 18px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.status span { display: inline-flex; align-items: center; gap: 7px; }
+.status em { font-style: normal; color: var(--muted); font-weight: 500; }
+.rec { gap: 8px; }
+.rec .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--rec-idle); }
+.timer { font-family: var(--mono); font-size: 17px; color: var(--muted); }
+.hmeter { width: 120px; display: grid; gap: 4px; }
+.hmeter b { display: block; height: 6px; border-radius: 3px;
+  background: linear-gradient(90deg, #2bd46f 0 62%, #f6c343 62% 80%, #ff5a4f 80% 84%, var(--track) 84%); }
+.hmeter b:last-child { background: linear-gradient(90deg, #2bd46f 0 55%, #f6c343 55% 74%, var(--track) 74%); }
+.master-grp { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line-2); border-radius: var(--radius-sm);
+  padding: 0 6px 0 12px; min-height: 44px; background: var(--panel); }
+.master-grp.open { border-color: var(--fx); box-shadow: 0 0 0 1px var(--fx); }
+.hslider { position: relative; width: 92px; height: 8px; border-radius: 4px; background: var(--track); }
+.hslider::before { content: ''; position: absolute; inset: 0 auto 0 0; width: var(--v); border-radius: 4px; background: var(--c, var(--thumb)); }
+.hslider::after { content: ''; position: absolute; top: 50%; left: var(--v); width: 22px; height: 28px; transform: translate(-50%,-50%);
+  border-radius: 5px; background: var(--thumb); box-shadow: 0 1px 3px rgba(0,0,0,.6); }
+.master-grp .val { font-weight: 700; min-width: 58px; text-align: right; }
+.chev { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center;
+  background: var(--panel-3); color: var(--muted); font-size: 12px; }
+
+/* ---------------------------------------------------------------- vertical fader + meter */
+.vf { position: relative; width: 44px; height: 100%; min-height: 60px; }
+.vf .tr { position: absolute; left: 50%; top: 14px; bottom: 14px; width: 8px; margin-left: -4px; border-radius: 4px;
+  background: var(--track); box-shadow: inset 0 0 0 1px var(--track-edge); overflow: hidden; }
+.vf .tr i { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--v) * 100%); background: var(--c); }
+.vf .th { position: absolute; left: 50%; width: 40px; height: 26px; margin-left: -20px;
+  bottom: calc(var(--v) * (100% - 28px) + 14px - 13px); border-radius: 5px;
+  background: linear-gradient(#fbfcfd, #dde2e8); box-shadow: 0 2px 5px rgba(0,0,0,.6), inset 0 -1px 0 rgba(0,0,0,.15); }
+.vf .th::after { content: ''; position: absolute; left: 7px; right: 7px; top: 12px; height: 2px; background: #9aa3ae; }
+.vm { display: flex; gap: 3px; height: 100%; padding: 14px 0; }
+.vm b { width: 5px; height: 100%; border-radius: 2px; background: var(--track); position: relative; overflow: hidden; }
+.vm b::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: var(--m, 0%);
+  background: linear-gradient(to top, #2bd46f 0 70%, #f6c343 70% 88%, #ff5a4f 88%); background-size: 100% calc(100% / var(--mf, 1)); background-position: bottom; }
+
+/* ---------------------------------------------------------------- knob (ring) */
+.knob { --s: 64px; width: var(--s); height: var(--s); border-radius: 50%; position: relative; flex: none;
+  background: conic-gradient(from 225deg, var(--c) 0 calc(var(--v) * 270deg), var(--track) calc(var(--v) * 270deg) 270deg, transparent 270deg); }
+.knob::before { content: ''; position: absolute; inset: 6px; border-radius: 50%; background: radial-gradient(circle at 50% 35%, #2c323c, #1a1e24); box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+.knob::after { content: ''; position: absolute; left: 50%; top: 50%; width: 3px; height: calc(var(--s) / 2 - 12px); margin-left: -1.5px;
+  transform-origin: 50% 0; transform: rotate(calc(-135deg + var(--v) * 270deg + 180deg)); background: var(--text); border-radius: 2px; }
+.knob span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 1; font-weight: 700; font-size: 14px; }
+
+/* ---------------------------------------------------------------- switch */
+.sw { width: 44px; height: 26px; border-radius: 13px; background: var(--panel-3); border: 1px solid var(--line-2); position: relative; flex: none; }
+.sw::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--muted); }
+.sw.on { background: var(--c, var(--accent)); border-color: var(--c, var(--accent)); }
+.sw.on::after { left: 21px; background: #fff; }
+
+/* ---------------------------------------------------------------- piano keyboard */
+.kb { position: relative; display: flex; height: 100%; min-height: 60px; }
+.kb .w { flex: 1; background: linear-gradient(#e9edf1, #cfd6de); border-right: 1px solid #8e97a2; border-radius: 0 0 4px 4px; position: relative; }
+.kb .w.h { background: linear-gradient(#ffd976, #ffc94d); }
+.kb .w em { position: absolute; bottom: 3px; left: 3px; font-size: 10px; font-style: normal; color: #4b5563; font-weight: 700; }
+.kb .b { position: absolute; top: 0; height: 60%; background: linear-gradient(#20242a, #0c0e11); border-radius: 0 0 3px 3px; z-index: 2; }
+.kb .b.h { background: linear-gradient(#ffd976, #d9a52e); }
+
+@media (max-width: 1180px) {
+  .topbar { gap: 8px; padding: 0 10px; }
+  .brand span.t { display: none; }
+  .status { gap: 12px; font-size: 13px; }
+  .status em { display: none; }
+  .hmeter { width: 70px; }
+  .master-grp { gap: 6px; padding-left: 8px; }
+  .master-grp .cap { display: none; }
+  .master-grp .hslider { width: 64px; }
+  .master-grp .val { min-width: 50px; font-size: 14px; }
+  .viewtabs span { padding: 0 12px; }
+}
+/* Perform — the current layout, plus D's per-strip quick row + in-strip quick panel, and the Output popover. */
+.pf { flex: 1; min-height: 0; display: grid; gap: 12px; padding: 12px 14px 14px;
+  grid-template-rows: 116px 58px minmax(0, 1fr) 96px; grid-template-columns: minmax(0, 1fr); }
+.row { display: flex; gap: 12px; min-height: 0; }
+.song { flex: 1; padding: 12px 20px; display: flex; flex-direction: column; justify-content: center; min-width: 0; position: relative; }
+.song h1 { margin: 0; font-size: 46px; line-height: 1.05; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.song .key { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; }
+.song .key b { font-size: 36px; color: var(--accent); line-height: 1; }
+.song .notesbtn { display: none; position: absolute; right: 16px; bottom: 14px; }
+.tp { width: 218px; padding: 12px 14px; }
+.tp .ctl { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+.tp .ctl .btn { width: 60px; height: 58px; font-size: 30px; }
+.tp .ctl b { font-size: 30px; }
+.sv { width: 236px; padding: 10px 12px; display: grid; gap: 8px; align-content: center; }
+.sv div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sv .sel { flex: 1; max-width: 148px; min-height: 42px; border: 1px solid var(--line-2); background: var(--panel-2); border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: space-between; padding: 0 12px; font-weight: 700; }
+.sv .sel::after { content: '▾'; color: var(--muted); font-size: 12px; }
+.chord { width: 220px; padding: 14px 16px; display: flex; flex-direction: column; justify-content: center; }
+.chord b { font-size: 36px; line-height: 1.1; }
+.prev { width: 110px; justify-content: center; color: var(--faint); font-size: 18px; font-weight: 700; display: flex; align-items: center; }
+.strip { flex: 1; display: flex; align-items: center; gap: 8px; padding: 0 6px; overflow: hidden; min-width: 0; }
+.chip { flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px; min-height: 44px; border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm); background: var(--panel-2); font-weight: 700; font-size: 17px; white-space: nowrap; }
+.chip small { font-size: 12px; color: var(--faint); font-weight: 600; }
+.chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.chip.on small { color: rgba(26,20,0,.7); }
+.next { width: 200px; padding: 8px 14px; display: flex; flex-direction: column; justify-content: center; }
+.next b { font-size: 18px; white-space: nowrap; }
+
+.wheel { width: 104px; padding: 12px 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.wheel .bar { flex: 1; width: 34px; border-radius: 10px; background: var(--track); position: relative; overflow: hidden; }
+.wheel .bar i { position: absolute; left: 0; right: 0; bottom: 0; height: 64%; background: #aebdcd; }
+.wheel big { font-size: 24px; font-weight: 700; }
+.wheel .small { font-size: 12px; color: var(--muted); text-align: center; line-height: 1.3; }
+.wheel .btn { width: 100%; flex-direction: column; min-height: 50px; gap: 0; font-size: 14px; }
+
+.slot { width: 128px; flex: none; padding: 10px 8px 8px; display: flex; flex-direction: column; align-items: stretch;
+  border-top: 4px solid var(--c); position: relative; }
+.slot .role { color: var(--c); font-size: 14px; font-weight: 800; letter-spacing: .09em; text-align: center; }
+.slot .inst { font-size: 19px; font-weight: 700; text-align: center; line-height: 1.15; margin-top: 2px; min-height: 44px; }
+.slot .sub { font-size: 12px; color: var(--muted); text-align: center; font-weight: 600; min-height: 16px; }
+.slot .fz { flex: 1; min-height: 0; display: flex; justify-content: center; gap: 4px; padding: 4px 0; }
+.slot .db { text-align: center; font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+.slot .mute { min-height: 42px; font-weight: 800; letter-spacing: .08em; }
+.slot.empty { justify-content: flex-start; }
+.slot.empty .inst { color: var(--faint); min-height: 0; }
+.slot.empty .emptytxt { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--faint); font-weight: 600; }
+
+/* D: the quick row — three glanceable states, one button, opens the quick panel */
+.quick { display: grid; grid-template-columns: repeat(3, 1fr); margin-bottom: 6px; border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm); background: #101318; min-height: 44px; overflow: hidden; position: relative; }
+.quick > span { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border-right: 1px solid var(--line); }
+.quick > span:last-child { border-right: 0; }
+.quick small { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; color: var(--faint); }
+.quick b { font-size: 13.5px; display: flex; align-items: center; gap: 4px; }
+.quick b.lit { color: var(--c); }
+.quick .pip { width: 7px; height: 7px; border-radius: 50%; background: var(--c); box-shadow: 0 0 6px var(--c); }
+.quick .pip.off { background: var(--led-off); box-shadow: none; }
+.quick .ring { width: 13px; height: 13px; border-radius: 50%;
+  background: conic-gradient(var(--c) 0 calc(var(--v) * 360deg), var(--track) 0); -webkit-mask: radial-gradient(circle, transparent 3px, #000 3.5px); }
+.quick.open { border-color: var(--c); box-shadow: 0 0 0 1px var(--c); background: color-mix(in srgb, var(--c) 12%, #101318); }
+
+/* D: in-strip quick panel — covers only its own strip's fader area, never a neighbour */
+.qp { position: absolute; left: -5px; right: -5px; top: -4px; bottom: 104px; z-index: 5; background: #1a1f26;
+  border: 1.5px solid var(--c); border-radius: 12px; box-shadow: 0 18px 40px rgba(0,0,0,.65), 0 0 0 4px rgba(11,13,16,.8);
+  display: flex; flex-direction: column; padding: 10px 10px 8px; gap: 10px; }
+.qp::after { content: ''; position: absolute; bottom: -8px; left: 50%; margin-left: -7px; width: 14px; height: 14px; background: #1a1f26;
+  border-right: 1.5px solid var(--c); border-bottom: 1.5px solid var(--c); transform: rotate(45deg); }
+.qp .qh { display: flex; justify-content: space-between; align-items: baseline; }
+.qp .qh b { color: var(--c); font-size: 12.5px; letter-spacing: .08em; }
+.qp .qh span { font-size: 10.5px; color: var(--faint); font-weight: 700; letter-spacing: .04em; }
+.qp .qr { display: flex; flex-direction: column; gap: 5px; }
+.qp .ql { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--muted); text-transform: uppercase; }
+.qp .qline { display: flex; align-items: center; justify-content: space-between; }
+.qp .qline strong { font-size: 15px; }
+.qp .qs { font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--faint); }
+.qp .step { display: grid; grid-template-columns: 34px 1fr 34px; align-items: center; border: 1px solid var(--line-2); border-radius: var(--radius-sm); overflow: hidden; }
+.qp .step span { height: 36px; display: flex; align-items: center; justify-content: center; font-weight: 700; background: var(--panel-2); font-size: 18px; }
+.qp .step b { text-align: center; font-size: 17px; }
+.qp .kn { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.qp .kn .knob { --s: 84px; }
+.qp .kn strong { font-size: 20px; line-height: 1; }
+.qp { justify-content: space-between; }
+.qp .kn em { font-style: normal; font-size: 12px; color: var(--muted); text-align: center; line-height: 1.25; }
+.qp .kn em b { color: var(--text); }
+.qp .more { margin-top: auto; font-size: 12.5px; font-weight: 700; color: var(--c); text-align: center; padding: 6px 0 2px; border-top: 1px solid var(--line); }
+
+.drone { width: 400px; flex: none; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.drone .hd { display: flex; justify-content: space-between; align-items: flex-start; }
+.drone .hd b { display: block; font-size: 17px; margin-top: 2px; }
+.drone .seg > span { min-height: 42px; }
+.keys { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; }
+.keys span { min-height: 42px; border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: var(--panel-2);
+  display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 17px; }
+.keys span.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.drone .lvl { display: flex; align-items: center; gap: 12px; }
+.drone .lvl .hslider { flex: 1; width: auto; }
+.pill { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line-2); border-radius: var(--radius-sm);
+  min-height: 40px; padding: 0 12px; font-weight: 700; font-size: 14px; background: var(--panel-2); }
+.pill.lit { border-color: #7a6320; }
+.tag { font-size: 10px; background: var(--accent); color: var(--accent-ink); padding: 1px 5px; border-radius: 3px; font-weight: 800; letter-spacing: .05em; }
+.drone .foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--muted); }
+.notes { flex: 1; min-width: 0; padding: 12px 16px; }
+.notes p { margin: 8px 0 0; font-size: 16.5px; line-height: 1.5; color: #dfe4ea; }
+
+.kbwrap { flex: 1; padding: 8px 10px; min-width: 0; }
+.bigbtn { width: 118px; flex: none; font-size: 17px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.bigbtn.dim { color: var(--faint); width: 134px; }
+.bigbtn.fade { background: #1b2433; border-color: #2d3a4f; }
+.bigbtn.panic { background: var(--panic-bg); border: 2px solid var(--danger); color: var(--panic-text); font-size: 21px; letter-spacing: .05em; }
+
+/* D: Output popover (master) — the "live settings" for the whole rig */
+.op { position: absolute; top: 60px; right: 14px; width: 404px; z-index: 20; background: #1a1f26; border: 1.5px solid var(--fx);
+  border-radius: 14px; box-shadow: 0 24px 60px rgba(0,0,0,.7), 0 0 0 4px rgba(11,13,16,.85); padding: 14px 16px 12px; }
+.op::before { content: ''; position: absolute; top: -8px; right: 56px; width: 14px; height: 14px; background: #1a1f26;
+  border-left: 1.5px solid var(--fx); border-top: 1.5px solid var(--fx); transform: rotate(45deg); }
+.op .oh { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.op .oh b { font-size: 16px; }
+.op .scope { font-size: 11px; font-weight: 800; letter-spacing: .06em; color: var(--fx); border: 1px solid #4a5361; padding: 2px 7px; border-radius: 10px; }
+.op .orow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.op .orow > div:first-child b { display: block; font-size: 14.5px; }
+.op .orow > div:first-child span { font-size: 12px; color: var(--faint); }
+.op .orow > div:first-child { min-width: 0; flex: 1; }
+.op .orow > :last-child { flex: none; }
+.op .seg > span { min-height: 34px; padding: 0 9px; font-size: 13.5px; }
+.op .ofoot { display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; }
+.op .ofoot a { color: var(--fx); font-weight: 700; text-decoration: none; }
+
+@media (max-width: 1180px) {
+  .pf { grid-template-rows: 104px 54px minmax(0, 1fr) 84px; padding: 10px 12px 12px; gap: 10px; }
+  .song h1 { font-size: 38px; }
+  .song .notesbtn { display: inline-flex; }
+  .tp { width: 180px; } .tp .ctl .btn { width: 50px; height: 50px; }
+  .sv { width: 190px; } .sv .sel { max-width: 118px; }
+  .chord { width: 110px; }
+  .next { width: 170px; } .next b { font-size: 16px; }
+  .chip { font-size: 16px; }
+  .notes { display: none; }
+  .wheel { width: 90px; }
+  .slot { width: 106px; }
+  .slot .inst { font-size: 17px; min-height: 40px; }
+  .slot .db { font-size: 17px; margin-bottom: 4px; }
+  .slot .mute { min-height: 36px; }
+  .quick { min-height: 38px; margin-bottom: 5px; }
+  .quick small { font-size: 8.5px; }
+  .quick b { font-size: 12.5px; }
+  .drone { width: auto; flex: 1; min-width: 0; padding: 10px 12px; gap: 8px; }
+  .keys span, .drone .seg > span { min-height: 38px; }
+  .pill { min-height: 36px; }
+  .bigbtn { width: 92px; } .bigbtn.dim { width: 118px; }
+  .qp { bottom: 128px; padding: 8px 8px 6px; }
+  .qp .qh span, .qp .qs { display: none; }
+  .qp .more { display: none; }
+  .qp .kn em { display: none; }
+  .qp .step span { height: 32px; }
+  .qp .kn .knob { --s: 50px; } .qp .kn strong { font-size: 16px; } .qp { gap: 6px; }
+}
+
+</style></head>
+<body>
+<header class="topbar">
+  <div class="brand"><i><b style="height:6px"></b><b style="height:11px"></b><b style="height:16px"></b><b style="height:9px"></b></i><span class="t">Worship Rig</span></div>
+  <div class="viewtabs"><span class="on">Perform</span><span class="">Edit</span></div>
+  <span class="btn gear" aria-label="Settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg></span>
+  <div class="status">
+    <span><i class="led ok"></i>MIDI <em>Nord Stage 3</em></span>
+    <span><i class="led ok"></i>Sound OK <em>12 ms</em></span>
+    <span style="color:var(--ok)"><i class="led ok"></i>READY</span>
+  </div>
+  <span class="btn rec"><i class="dot"></i>REC</span>
+  <span class="timer">00:00</span>
+  <div class="hmeter"><b></b><b></b></div>
+  <div class="master-grp open"><span class="cap">Master</span>
+    <div class="hslider" style="--v:62%"></div><span class="val">−6.0 dB</span><span class="chev">▴</span></div>
+</header>
+<main class="pf">
+  <div class="row">
+    <div class="panel song"><h1>Sunday Pad + Piano</h1><div class="key"><span class="cap">Key</span><b>D</b></div>
+      <span class="btn sm notesbtn">Notes <i class="led acc" style="width:7px;height:7px"></i></span></div>
+    <div class="panel tp"><span class="cap">Transpose</span><div class="ctl"><span class="btn">−</span><b>0</b><span class="btn">+</span></div></div>
+    <div class="panel sv"><div><span class="cap">Space</span><span class="sel">Stage</span></div><div><span class="cap">Vibe</span><span class="sel">Full Set</span></div></div>
+    <div class="panel chord"><span class="cap">Chord</span><b>D</b></div>
+  </div>
+  <div class="row">
+    <div class="panel prev">◀ Prev</div>
+    <div class="panel strip">
+      <span class="chip on"><small>1</small>Sunday Pad + Piano<small>D</small></span>
+      <span class="chip"><small>2</small>Building Swell<small>G</small></span>
+      <span class="chip"><small>3</small>Prayer Wash<small>E</small></span>
+      <span class="chip"><small>4</small>Organ Swell<small>A</small></span>
+      <span class="chip"><small>5</small>Grand Piano<small>C</small></span>
+      <span class="chip"><small>6</small>Rhodes<small>F</small></span>
+    </div>
+    <div class="panel next"><span class="cap">Next ▸</span><b>Building Swell · G</b></div>
+  </div>
+  <div class="row">
+    <div class="panel wheel"><span class="cap">Wheel</span><div class="bar"><i></i></div><big>64%</big>
+      <div class="small">→ Pad level<br>Expr 100%</div><span class="btn">◢<br>Swell</span>
+      <div class="small" style="display:flex;gap:6px;align-items:center"><i class="led ok" style="width:8px;height:8px"></i>PEDAL</div></div>
+    <div class="panel slot" style="--c:var(--slot-0)">
+    
+    <div class="role">KEYS</div><div class="inst">Grand<br>Piano</div><div class="sub"></div>
+    <div class="fz"><div class="vf" style="--v:0.74;--c:var(--slot-0)"><div class="tr"><i></i></div><div class="th"></div></div></div>
+    <div class="db">−1.9 dB</div>
+    <div class="quick" title="Quick settings for keys">
+    <span><small>PEDAL</small><b class="lit"><i class="pip"></i>On</b></span>
+    <span><small>OCT</small><b class="">0</b></span>
+    <span><small>SPACE</small><b class="lit"><i class="ring" style="--v:0.25"></i>25</b></span>
+  </div>
+    <span class="btn mute">MUTE</span>
+  </div>
+    <div class="panel slot" style="--c:var(--slot-1)">
+    
+    <div class="role">PAD</div><div class="inst">Warm Pad</div><div class="sub">wheel 64%</div>
+    <div class="fz"><div class="vf" style="--v:0.65;--c:var(--slot-1)"><div class="tr"><i></i></div><div class="th"></div></div></div>
+    <div class="db">−5.2 dB</div>
+    <div class="quick" title="Quick settings for pad">
+    <span><small>PEDAL</small><b class="lit"><i class="pip"></i>On</b></span>
+    <span><small>OCT</small><b class="">0</b></span>
+    <span><small>SPACE</small><b class="lit"><i class="ring" style="--v:0.5"></i>50</b></span>
+  </div>
+    <span class="btn mute">MUTE</span>
+  </div>
+    <div class="panel slot empty" style="--c:var(--slot-2)"><div class="role">EXTRA</div>
+      <div class="emptytxt">Empty</div></div>
+    <div class="panel slot" style="--c:var(--slot-3)">
+    
+    <div class="role">BASS</div><div class="inst">Sub Bass</div><div class="sub"></div>
+    <div class="fz"><div class="vf" style="--v:0.7;--c:var(--slot-3)"><div class="tr"><i></i></div><div class="th"></div></div></div>
+    <div class="db">−3.1 dB</div>
+    <div class="quick" title="Quick settings for bass">
+    <span><small>PEDAL</small><b class=""><i class="pip off"></i>Off</b></span>
+    <span><small>OCT</small><b class="lit">−1</b></span>
+    <span><small>SPACE</small><b class="">—</b></span>
+  </div>
+    <span class="btn mute">MUTE</span>
+  </div>
+    <div class="panel drone">
+      <div class="hd"><div><span class="cap">Key &amp; drone</span><b>D major · +1.6 dB</b></div>
+        <div class="seg"><span>Off</span><span class="on">Synth</span><span>My Pads</span></div></div>
+      <div class="keys"><span class="">C</span><span class="">Db</span><span class="on">D</span><span class="">Eb</span><span class="">E</span><span class="">F</span><span class="">F#</span><span class="">G</span><span class="">Ab</span><span class="">A</span><span class="">Bb</span><span class="">B</span></div>
+      <div class="lvl"><div class="seg"><span class="on">Major</span><span>Minor</span></div><span class="cap">Level</span>
+        <div class="hslider" style="--v:72%;--c:var(--accent)"></div><b>+1.6 dB</b></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="pill"><i class="led" style="width:8px;height:8px"></i>Follow chords <span class="tag">EXPERIMENTAL</span></span>
+        <span class="pill lit"><i class="led acc" style="width:8px;height:8px"></i>Continue across songs</span></div>
+      <div class="foot"><span>My Pads: no folder chosen</span><span class="btn sm">Choose folder…</span></div>
+    </div>
+    <div class="panel notes"><span class="cap">Notes</span>
+      <p>The everyday worship sound: grand piano on top of a warm pad, with a soft key drone underneath. Mod wheel (and an
+      expression pedal) brings the pad in and out, so you can start with piano alone and swell the pad for the chorus.
+      Push the pitch-bend wheel up to lift the drone; pull it down to tuck it away.</p></div>
+  </div>
+  <div class="row">
+    <div class="panel kbwrap"><div class="kb"><div class="w"><em>C2</em></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"><em>C3</em></div><div class="w h"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"><em>C4</em></div><div class="w h"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w h"></div><div class="w"></div><div class="w"><em>C5</em></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"><em>C6</em></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"><em>C7</em></div><div class="b" style="left:1.9444444444444444%;width:1.6666666666666665%"></div><div class="b" style="left:4.722222222222222%;width:1.6666666666666665%"></div><div class="b" style="left:10.277777777777777%;width:1.6666666666666665%"></div><div class="b" style="left:13.055555555555555%;width:1.6666666666666665%"></div><div class="b" style="left:15.83333333333333%;width:1.6666666666666665%"></div><div class="b" style="left:21.38888888888889%;width:1.6666666666666665%"></div><div class="b" style="left:24.166666666666668%;width:1.6666666666666665%"></div><div class="b" style="left:29.72222222222222%;width:1.6666666666666665%"></div><div class="b" style="left:32.49999999999999%;width:1.6666666666666665%"></div><div class="b" style="left:35.27777777777777%;width:1.6666666666666665%"></div><div class="b" style="left:40.83333333333333%;width:1.6666666666666665%"></div><div class="b" style="left:43.61111111111111%;width:1.6666666666666665%"></div><div class="b h" style="left:49.166666666666664%;width:1.6666666666666665%"></div><div class="b" style="left:51.94444444444444%;width:1.6666666666666665%"></div><div class="b" style="left:54.72222222222222%;width:1.6666666666666665%"></div><div class="b" style="left:60.27777777777777%;width:1.6666666666666665%"></div><div class="b" style="left:63.05555555555555%;width:1.6666666666666665%"></div><div class="b" style="left:68.61111111111111%;width:1.6666666666666665%"></div><div class="b" style="left:71.38888888888889%;width:1.6666666666666665%"></div><div class="b" style="left:74.16666666666667%;width:1.6666666666666665%"></div><div class="b" style="left:79.72222222222223%;width:1.6666666666666665%"></div><div class="b" style="left:82.5%;width:1.6666666666666665%"></div><div class="b" style="left:88.05555555555556%;width:1.6666666666666665%"></div><div class="b" style="left:90.83333333333333%;width:1.6666666666666665%"></div><div class="b" style="left:93.61111111111111%;width:1.6666666666666665%"></div></div></div>
+    <div class="panel bigbtn dim">↺ Revert song</div>
+    <div class="panel bigbtn fade">Fade out</div>
+    <div class="panel bigbtn panic">PANIC</div>
+    <div class="panel bigbtn"><i class="led" style="margin-right:8px"></i>Lock</div>
+  </div>
+</main>
+<div class="op">
+    <div class="oh"><b>Output &amp; playing</b><span class="scope">ALL SONGS</span></div>
+    <div class="orow" style="border-top:0;padding-top:2px"><div><b>Master</b><span>Everything you send to the PA</span></div>
+      <div style="display:flex;align-items:center;gap:10px"><div class="hslider" style="--v:62%;width:110px"></div><b style="white-space:nowrap">−6.0 dB</b></div></div>
+    <div class="orow"><div><b>Mono</b><span>One speaker or a mono PA</span></div><i class="sw"></i></div>
+    <div class="orow"><div><b>Touch</b><span>How hard you play for full volume</span></div>
+      <div class="seg"><span>Light</span><span class="on">Normal</span><span>Heavy</span><span>Fixed</span></div></div>
+    <div class="orow"><div><b>Sustain pedal</b><span>Pedal: <span style="color:var(--ok)">● up</span></span></div>
+      <div style="display:flex;gap:8px;align-items:center"><span class="btn sm">Test</span><span class="btn sm ghost"><i class="sw" style="transform:scale(.7);margin:-4px"></i>Reversed</span></div></div>
+    <div class="orow"><div><b>Keyboard picks songs</b><span>Patch buttons 1, 2, 3… = songs</span></div><i class="sw"></i></div>
+    <div class="orow"><div><b>Sound stopped?</b><span>Latency 12 ms · Lowest</span></div><span class="btn sm">Restart audio</span></div>
+    <div class="ofoot"><span class="faint">Locked while Lock is on</span><a>All settings ›</a></div>
+  </div>
+</body></html>

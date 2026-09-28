@@ -1,0 +1,144 @@
+{
+ "name": "Test Strings Ensemble",
+ "endian": "big",
+ "zones": [
+  {
+   "name": "Str 43",
+   "root": 43,
+   "keyLow": 40,
+   "keyHigh": 45,
+   "loopOn": true,
+   "loopStart": 22050,
+   "loopEnd": 80000,
+   "sample": 0
+  },
+  {
+   "name": "Str 49",
+   "root": 49,
+   "keyLow": 46,
+   "keyHigh": 51,
+   "loopOn": true,
+   "loopStart": 22050,
+   "loopEnd": 80000,
+   "sample": 1,
+   "coarseTune": -1
+  },
+  {
+   "name": "Str 55",
+   "root": 55,
+   "keyLow": 52,
+   "keyHigh": 57,
+   "loopOn": true,
+   "loopStart": 22050,
+   "loopEnd": 80000,
+   "sample": 2,
+   "sampleStart": 4410,
+   "sampleEnd": 48510
+  },
+  {
+   "name": "Str 61",
+   "root": 61,
+   "keyLow": 58,
+   "keyHigh": 63,
+   "loopOn": true,
+   "loopStart": 22050,
+   "loopEnd": 80000,
+   "sample": 3
+  },
+  {
+   "name": "Str 67",
+   "root": 67,
+   "keyLow": 64,
+   "keyHigh": 69,
+   "loopOn": true,
+   "loopStart": 22050,
+   "loopEnd": 80000,
+   "sample": 4
+  },
+  {
+   "name": "Str 73",
+   "root": 73,
+   "keyLow": 70,
+   "keyHigh": 75,
+   "loopOn": true,
+   "loopStart": 22050,
+   "loopEnd": 80000,
+   "sample": 5
+  },
+  {
+   "name": "Str 79",
+   "root": 79,
+   "keyLow": 76,
+   "keyHigh": 81,
+   "loopOn": true,
+   "loopStart": 22050,
+   "loopEnd": 80000,
+   "sample": 6
+  }
+ ],
+ "samples": [
+  {
+   "fileName": "Str 43.aif",
+   "path": "Macintosh HD:Library:Application Support:Logic:EXS Factory Samples:Test Strings",
+   "length": 88200,
+   "sampleRate": 44100,
+   "bitDepth": 16,
+   "channels": 2,
+   "type": "AIFF"
+  },
+  {
+   "fileName": "Str 49.aif",
+   "path": "Macintosh HD:Library:Application Support:Logic:EXS Factory Samples:Test Strings",
+   "length": 88200,
+   "sampleRate": 44100,
+   "bitDepth": 16,
+   "channels": 2,
+   "type": "AIFF"
+  },
+  {
+   "fileName": "Str 55.aif",
+   "path": "Macintosh HD:Library:Application Support:Logic:EXS Factory Samples:Test Strings",
+   "length": 88200,
+   "sampleRate": 44100,
+   "bitDepth": 16,
+   "channels": 2,
+   "type": "AIFF"
+  },
+  {
+   "fileName": "Str 61.aif",
+   "path": "Macintosh HD:Library:Application Support:Logic:EXS Factory Samples:Test Strings",
+   "length": 88200,
+   "sampleRate": 44100,
+   "bitDepth": 16,
+   "channels": 2,
+   "type": "AIFF"
+  },
+  {
+   "fileName": "Str 67.aif",
+   "path": "Macintosh HD:Library:Application Support:Logic:EXS Factory Samples:Test Strings",
+   "length": 88200,
+   "sampleRate": 44100,
+   "bitDepth": 16,
+   "channels": 2,
+   "type": "AIFF"
+  },
+  {
+   "fileName": "Str 73.aif",
+   "path": "Macintosh HD:Library:Application Support:Logic:EXS Factory Samples:Test Strings",
+   "length": 88200,
+   "sampleRate": 44100,
+   "bitDepth": 16,
+   "channels": 2,
+   "type": "AIFF"
+  },
+  {
+   "fileName": "Str 79.aif",
+   "path": "Macintosh HD:Library:Application Support:Logic:EXS Factory Samples:Test Strings",
+   "length": 88200,
+   "sampleRate": 44100,
+   "bitDepth": 16,
+   "channels": 2,
+   "type": "AIFF"
+  }
+ ]
+}

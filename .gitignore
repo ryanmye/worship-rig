@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.DS_Store
+# audition renders (tools/audition.mjs, ~90 MB); report.json / index.html may be committed
+audition/*.wav
+test/logs/
+test/**/screenshots/
+# "My Samples": personal GarageBand/Logic conversions and your own packs. Apple-licensed content —
+# never commit or package it (also excluded from electron-builder's files in package.json)
+user-samples/
+
+# local-only scratch (old sample trees moved aside on the Mac)
+_to_delete/

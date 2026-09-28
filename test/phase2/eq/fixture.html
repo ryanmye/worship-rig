@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>eq-keyboard fixture</title>
+<link rel="icon" href="data:,">
+<!-- served with the repo root as appDir: /app/... is the real app -->
+<link rel="stylesheet" href="/app/styles.css">
+<link rel="stylesheet" href="/app/js/views/components/eq-keyboard.css">
+<style>
+  html, body { height: auto; overflow: auto; }
+  body { margin: 0; background: var(--bg, #0b0d10); color: var(--text, #f1f4f8); display: block; min-width: 0; }
+  #host { padding: 12px 16px; }
+</style>
+</head>
+<body>
+<div id="host"></div>
+<script>
+  // Listener bookkeeping for the destroy() test: every add/remove on any EventTarget, keyed by (target, type, fn).
+  (() => {
+    const live = new Map();
+    let n = 0;
+    const ids = new WeakMap();
+    const idOf = (o) => {
+      if (!ids.has(o)) ids.set(o, ++n);
+      return ids.get(o);
+    };
+    const add = EventTarget.prototype.addEventListener;
+    const rem = EventTarget.prototype.removeEventListener;
+    const cap = (o) => (typeof o === 'boolean' ? o : !!(o && o.capture));
+    EventTarget.prototype.addEventListener = function (type, fn, opts) {
+      if (fn) live.set(`${idOf(this)}|${type}|${idOf(fn)}|${cap(opts)}`, { target: this, type });
+      return add.call(this, type, fn, opts);
+    };
+    EventTarget.prototype.removeEventListener = function (type, fn, opts) {
+      if (fn) live.delete(`${idOf(this)}|${type}|${idOf(fn)}|${cap(opts)}`);
+      return rem.call(this, type, fn, opts);
+    };
+    globalThis.__listeners = {
+      /** live listeners on window/document/engine (element listeners die with the element) */
+      global: () => [...live.values()].filter((v) => v.target === window || v.target === document ||
+        v.target === globalThis.__rig?.engine).length,
+      total: () => live.size,
+      on: (el) => [...live.values()].filter((v) => v.target instanceof Node && el.contains(v.target)).length,
+    };
+  })();
+</script>
+<script type="module">
+  // Minimal bootstrap (store → engine → midi/recorder → controller) mirroring app/js/main.js, then the component.
+  const q = new URLSearchParams(location.search);
+  const [{ createStore }, { FACTORY_SONGS }, { AudioEngine }, { MidiInput }, { Recorder }, { createController, engineLatency },
+    { eqKeyboard }] = await Promise.all([
+    import('/app/js/store.js'),
+    import('/app/js/presets.js'),
+    import('/app/js/engine/index.js'),
+    import('/app/js/midi.js'),
+    import('/app/js/recorder.js'),
+    import('/app/js/controller.js'),
+    import('/app/js/views/components/eq-keyboard.js'),
+  ]);
+  const store = createStore({ key: q.get('key') || 'rig.eqtest' });
+  store.seedFactory(FACTORY_SONGS);
+  if (!store.currentSong()) store.set('settings.currentSongId', store.get().songOrder[0]);
+  // subscription bookkeeping for the destroy() test
+  let subs = 0;
+  const sub0 = store.subscribe.bind(store);
+  store.subscribe = (fn) => {
+    subs += 1;
+    const un = sub0(fn);
+    return () => {
+      subs -= 1;
+      un();
+    };
+  };
+  const engine = new AudioEngine({ latency: engineLatency(store.get().settings) });
+  const midi = new MidiInput();
+  const recorder = new Recorder({ engine });
+  const controller = createController({ store, engine, midi, recorder });
+  const ready = controller.start();
+  const host = document.getElementById('host');
+  const changes = [];
+  let comp = null;
+  function mount({ slot = 0, compact = false } = {}) {
+    if (comp) comp.destroy();
+    comp = eqKeyboard({ store, engine, slotIndex: slot, compact, onChange: (e) => changes.push(e) });
+    host.append(comp.el);
+    return comp;
+  }
+  globalThis.__rig = { store, engine, controller, midi, recorder, ready };
+  globalThis.__eq = {
+    mount, changes, get comp() { return comp; }, subs: () => subs,
+    slot: (i = 0) => store.currentSong()?.patch?.slots?.[i] ?? null,
+    eq: (i = 0) => store.currentSong()?.patch?.slots?.[i]?.eq ?? null,
+  };
+  globalThis.__fixture = true;
+</script>
+</body>
+</html>

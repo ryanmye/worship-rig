@@ -1,0 +1,456 @@
+{
+  "bitrate": "160k",
+  "totalMB": 22.12533,
+  "files": [
+    {
+      "file": "salamander-piano/v4/A0.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A0v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/C1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C1v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/Eb1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%231v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/Gb1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%231v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/A1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A1v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/C2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C2v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/Eb2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%232v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/Gb2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%232v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/A2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A2v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/C3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C3v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/Eb3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%233v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/Gb3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%233v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/A3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A3v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/C4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C4v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/Eb4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%234v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/Gb4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%234v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/A4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A4v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/C5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C5v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/Eb5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%235v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/Gb5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%235v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/A5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A5v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/C6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C6v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/Eb6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%236v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/Gb6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%236v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/A6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A6v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/C7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C7v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/Eb7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%237v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/Gb7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%237v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/A7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A7v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v4/C8.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C8v4.flac",
+      "velocityLayer": 4
+    },
+    {
+      "file": "salamander-piano/v9/A0.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A0v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/C1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C1v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/Eb1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%231v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/Gb1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%231v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/A1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A1v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/C2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C2v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/Eb2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%232v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/Gb2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%232v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/A2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A2v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/C3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C3v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/Eb3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%233v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/Gb3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%233v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/A3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A3v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/C4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C4v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/Eb4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%234v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/Gb4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%234v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/A4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A4v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/C5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C5v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/Eb5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%235v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/Gb5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%235v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/A5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A5v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/C6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C6v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/Eb6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%236v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/Gb6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%236v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/A6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A6v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/C7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C7v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/Eb7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%237v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/Gb7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%237v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/A7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A7v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v9/C8.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C8v9.flac",
+      "velocityLayer": 9
+    },
+    {
+      "file": "salamander-piano/v14/A0.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A0v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/C1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C1v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/Eb1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%231v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/Gb1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%231v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/A1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A1v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/C2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C2v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/Eb2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%232v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/Gb2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%232v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/A2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A2v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/C3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C3v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/Eb3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%233v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/Gb3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%233v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/A3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A3v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/C4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C4v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/Eb4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%234v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/Gb4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%234v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/A4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A4v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/C5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C5v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/Eb5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%235v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/Gb5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%235v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/A5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A5v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/C6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C6v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/Eb6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%236v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/Gb6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%236v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/A6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A6v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/C7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C7v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/Eb7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/D%237v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/Gb7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/F%237v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/A7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/A7v14.flac",
+      "velocityLayer": 14
+    },
+    {
+      "file": "salamander-piano/v14/C8.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples/C8v14.flac",
+      "velocityLayer": 14
+    }
+  ]
+}

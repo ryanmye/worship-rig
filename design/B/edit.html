@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Edit — proposal B</title>
+<style>
+/* Proposal B — "Sunday Keys–style performance panel". Tokens copied from app/styles.css so it reads as the
+   same product; B adds only --fx-on (neutral lit state for shared/global switches) and --drone. */
+:root {
+  --bg: #0b0d10; --panel: #15181d; --panel-2: #1c2027; --panel-3: #252a33;
+  --line: #2d333d; --line-2: #3a414d;
+  --text: #f1f4f8; --muted: #a3acb8; --faint: #8a93a0;
+  --accent: #ffc94d; --accent-ink: #1a1400;
+  --slot-0: #ff8a3d; --slot-1: #3ddc84; --slot-2: #4aa8ff; --slot-3: #b784ff;
+  --drone: #ffc94d;
+  --fx-on: #e4ebf4; --fx-on-ink: #0b0d10;
+  --danger: #ff4d4f; --ok: #3ddc84; --warn: #ffb020;
+  --track: #3a414d; --track-edge: #666f7d; --led-off: #6b7380; --thumb: #eef1f5;
+  --panic-bg: #5a0d10; --panic-text: #ffc9ca; --rec-idle: #c4474a;
+  --radius: 10px; --radius-sm: 7px; --gap: 12px;
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 15px/1.35 var(--font); -webkit-font-smoothing: antialiased;
+  overflow: hidden; min-width: 1024px; min-height: 700px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+.cap { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.mono { font-family: var(--mono); }
+.led { width: 10px; height: 10px; border-radius: 50%; background: var(--led-off); flex: none; display: inline-block; }
+.led.lit { background: var(--c, var(--ok)); box-shadow: 0 0 10px var(--c, var(--ok)); }
+
+/* ------------------------------------------------------------ top bar (unchanged from the app) */
+.topbar { height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 14px; border-bottom: 1px solid var(--line);
+  background: #0e1115; }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 17px; margin-right: 4px; }
+.brand svg { width: 20px; height: 20px; }
+.tabs { display: flex; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; }
+.tabs button { border: 0; background: var(--panel-2); padding: 0 16px; height: 42px; font-weight: 700; font-size: 15px; }
+.tabs button.on { background: var(--accent); color: var(--accent-ink); }
+.status { display: flex; gap: 16px; align-items: center; margin: 0 auto; font-size: 13px; font-weight: 600; }
+.status span { display: inline-flex; gap: 7px; align-items: center; }
+.status .k { color: var(--muted); font-weight: 700; letter-spacing: .06em; font-size: 12px; }
+.rec { display: flex; align-items: center; gap: 10px; }
+.btn { border: 1px solid var(--line-2); background: var(--panel-2); border-radius: var(--radius-sm); height: 42px; padding: 0 14px;
+  font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.recdot { width: 12px; height: 12px; border-radius: 50%; background: var(--rec-idle); }
+.timer { font-family: var(--mono); font-size: 16px; color: var(--muted); }
+.meter { display: grid; gap: 3px; width: 110px; }
+.meter i { display: block; height: 5px; border-radius: 3px; background: linear-gradient(90deg, #2dcf78 0 62%, #ffc94d 62% 78%, #2a2f37 78%); }
+.meter i + i { background: linear-gradient(90deg, #2dcf78 0 58%, #ffc94d 58% 72%, #2a2f37 72%); }
+.hf { position: relative; height: 8px; width: 90px; border-radius: 4px; background: var(--track); }
+.hf b { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--fx-on); }
+.hf em { position: absolute; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 6px; background: var(--thumb);
+  box-shadow: 0 1px 3px #000a; }
+.iconbtn { width: 44px; padding: 0; }
+.iconbtn svg { width: 20px; height: 20px; }
+
+/* ------------------------------------------------------------ keyboard (static render) */
+.kbd { position: relative; height: 100%; min-height: 56px; display: flex; padding: 6px; background: #0f1216; border-radius: 8px; }
+.kbd .w { flex: 1; margin: 0 1px; background: #c7ced8; border-radius: 0 0 4px 4px; position: relative; }
+.kbd .w.held { background: var(--accent); }
+.kbd .w small { position: absolute; bottom: 3px; left: 3px; font-size: 9px; font-weight: 700; color: #3b424d; }
+.kbd .b { position: absolute; top: 6px; height: 58%; background: #111; border-radius: 0 0 3px 3px; z-index: 2; }
+.kbd .b.held { background: #d99f1c; }
+
+/* horizontal fader (shared) */
+.hbar { position: relative; height: 10px; border-radius: 5px; background: var(--track); box-shadow: inset 0 0 0 1px var(--track-edge); }
+.hbar b { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: var(--c, var(--drone)); }
+.hbar em { position: absolute; top: 50%; width: 22px; height: 26px; margin: -13px 0 0 -11px; border-radius: 6px;
+  background: linear-gradient(#fff, #d9dee6); box-shadow: 0 2px 4px #000b; }
+.hbar.thin em { width: 18px; height: 22px; margin: -11px 0 0 -9px; }
+
+/* ------------------------------------------------------------ Edit = the song sheet */
+body.edit { display: grid; grid-template-rows: 56px minmax(0, 1fr) 128px; }
+.wrap { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 14px; padding: 12px 14px; min-height: 0; }
+
+/* library rail */
+.rail { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.rail .panel { padding: 12px; }
+.rail .sel { display: flex; justify-content: space-between; align-items: center; height: 40px; padding: 0 12px; border-radius: 8px;
+  border: 1px solid var(--line-2); background: var(--panel-2); font-weight: 700; margin-top: 8px; }
+.songs { flex: 1; display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow: hidden; }
+.songs .s { display: flex; align-items: center; gap: 10px; height: 40px; white-space: nowrap; overflow: hidden; padding: 0 10px; border-radius: 8px; font-weight: 600; color: #d7dde5; }
+.songs .s i { font-style: normal; color: var(--faint); font-size: 12px; width: 14px; }
+.songs .s u { text-decoration: none; margin-left: auto; color: var(--faint); font-size: 12px; font-weight: 700; }
+.songs .s.cur { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); box-shadow: inset 3px 0 0 var(--accent); color: var(--text); }
+.railbtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.railbtns .btn { height: 36px; padding: 0 4px; font-size: 13px; white-space: nowrap; }
+.lib { font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; font-weight: 600; }
+
+/* the sheet */
+.sheet { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.shead { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 16px; padding: 10px 18px; }
+.shead .name { font-size: 28px; font-weight: 800; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; }
+.shead .name small { font-size: 12px; font-weight: 700; color: var(--faint); border: 1px solid var(--line-2); border-radius: 5px; padding: 2px 6px; letter-spacing: .06em; }
+.shead .acts { display: flex; gap: 8px; }
+.shead .acts .btn { height: 38px; font-size: 14px; }
+.say { font-size: 16px; color: var(--muted); line-height: 1.5; }
+.tok { color: var(--text); font-weight: 700; border-bottom: 2px dotted var(--tc, #7d8794); padding-bottom: 1px; cursor: pointer; white-space: nowrap; }
+.shead .say { grid-column: 1 / -1; font-size: 16px; }
+.shead .say .tok { --tc: var(--accent); }
+.shead .note { grid-column: 1 / -1; font-size: 14px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shead .note b { color: var(--muted); font-weight: 700; margin-right: 6px; }
+
+.cols { display: grid; grid-template-columns: minmax(0, 1.36fr) minmax(0, 1fr); gap: 14px; min-height: 0; flex: 1; }
+.col { display: flex; flex-direction: column; gap: 7px; min-height: 0; overflow: hidden; }
+.colhd { display: flex; align-items: baseline; gap: 10px; padding: 2px 4px 2px; }
+.colhd h2 { margin: 0; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--text); }
+.colhd span { font-size: 13px; color: var(--faint); font-weight: 600; }
+
+/* a sentence line */
+.line { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px 8px 18px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 14px; }
+.line::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 4px; border-radius: 0 3px 3px 0; background: var(--c, var(--line-2)); }
+.line .say .who { color: var(--c, var(--text)); font-weight: 800; letter-spacing: .02em; }
+.line .say .tok { --tc: color-mix(in srgb, var(--c, #9aa3af) 80%, transparent); }
+.line .ctl { display: flex; align-items: center; gap: 10px; }
+.line .lvl { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 800; }
+.line .lvl .hbar { width: 84px; height: 8px; }
+.line .lvl .hbar em { width: 16px; height: 20px; margin: -10px 0 0 -8px; border-radius: 5px; }
+.line .lvl span { display: none; }
+.line.open .lvl span { display: inline; min-width: 46px; text-align: right; font-size: 12px; color: var(--muted); }
+.onoff { width: 46px; height: 26px; border-radius: 13px; background: var(--panel-3); border: 1px solid var(--line-2); position: relative; flex: none; }
+.onoff::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #8a93a0; }
+.onoff.on { background: color-mix(in srgb, var(--c, var(--ok)) 70%, #000); border-color: var(--c, var(--ok)); }
+.onoff.on::after { left: 23px; background: #fff; }
+.more { color: var(--faint); display: flex; align-items: center; }
+.line.empty { background: transparent; border-style: dashed; }
+.line.empty .say { color: var(--faint); }
+.line.off .say { opacity: .6; }
+
+/* open (expanded) line */
+.line.open { border-color: color-mix(in srgb, var(--c) 55%, var(--line)); background: color-mix(in srgb, var(--c) 5%, var(--panel)); }
+.line.open .more svg { transform: rotate(90deg); }
+.det { grid-column: 1 / -1; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 2px; display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 0 12px; }
+.det > .k { font-size: 13px; font-weight: 700; color: var(--muted); padding-top: 15px; }
+.det > .v { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 5px 0; min-height: 44px; }
+.det > .k.sub, .det > .v.sub { border-top: 1px solid #22272f; }
+.pick { display: inline-flex; align-items: center; gap: 10px; height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line-2);
+  background: var(--panel-2); font-weight: 700; font-size: 14px; }
+.pick small { color: var(--faint); font-weight: 600; }
+.sg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; }
+.sg span { height: 34px; padding: 0 10px; white-space: nowrap; display: grid; place-items: center; font-size: 13px; font-weight: 700; color: var(--muted); background: var(--panel-2); }
+.sg span + span { border-left: 1px solid var(--line); }
+.sg span.on { background: color-mix(in srgb, var(--c, var(--fx-on)) 85%, #000); color: #111; }
+.tg { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--line-2);
+  background: var(--panel-2); font-size: 13px; font-weight: 700; color: var(--muted); }
+.tg.on { color: var(--text); border-color: color-mix(in srgb, var(--c) 60%, transparent); }
+.tg.on .led { background: var(--c); box-shadow: 0 0 8px var(--c); }
+.hint { font-size: 12px; color: var(--faint); font-weight: 600; }
+.pp { display: inline-grid; grid-template-columns: auto 72px; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.pp .hbar { height: 8px; --c: var(--c); }
+.pp .hbar em { width: 16px; height: 20px; margin: -10px 0 0 -8px; border-radius: 5px; }
+.pp b { color: var(--text); min-width: 34px; }
+.fold { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.fold i { font-style: normal; color: var(--faint); font-weight: 600; }
+
+/* shared FX cards (neutral) */
+.fxc { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px 12px 18px; position: relative; }
+.fxc::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 4px; border-radius: 0 3px 3px 0; background: #6d7888; }
+.fxc .top { display: flex; align-items: center; gap: 12px; }
+.fxc .top .say { flex: 1; }
+.fxc .top .say .tok { --tc: #aab4c2; }
+.fxc .chips2 { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.fxc .chips2 span { height: 34px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel-2); font-size: 13px;
+  font-weight: 700; display: grid; place-items: center; color: #d7dde5; }
+.fxc .chips2 span.on { background: var(--fx-on); color: var(--fx-on-ink); border-color: var(--fx-on); }
+.fxc .chips2 span.near { border: 2px dashed var(--faint); }
+.fxc .blurb { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.feeds { margin-top: 10px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 18px; align-items: center; }
+.feeds .fr { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 13px; font-weight: 700; }
+.feeds .fr .hbar { height: 8px; }
+.feeds .fr .hbar em { width: 14px; height: 18px; margin: -9px 0 0 -7px; border-radius: 5px; }
+.feeds .fh { grid-column: 1 / -1; font-size: 12px; font-weight: 700; color: var(--faint); letter-spacing: .04em; }
+.feeds .r { font-size: 13px; font-weight: 800; color: var(--c); }
+.feeds .bar { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 10px; align-items: center; font-size: 13px; font-weight: 700; }
+.feeds .bar .hbar { height: 8px; }
+.feeds .bar .hbar em { width: 14px; height: 18px; margin: -9px 0 0 -7px; border-radius: 5px; }
+.feeds .x { color: var(--faint); font-size: 13px; font-weight: 600; }
+.dots { display: inline-flex; gap: 5px; align-items: center; margin-left: 4px; vertical-align: 1px; }
+.dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); display: inline-block; }
+.dots i.o { background: transparent; box-shadow: inset 0 0 0 2px var(--c); opacity: .6; }
+.fxc.slim { padding-top: 9px; padding-bottom: 9px; }
+.fxc .fold { margin-top: 10px; }
+
+/* keyboard dock with slot range bars */
+.dock { border-top: 1px solid var(--line); background: #0e1115; padding: 8px 14px 12px; display: grid; grid-template-columns: 64px minmax(0, 1fr) 150px;
+  grid-template-rows: auto minmax(0, 1fr); gap: 6px 12px; }
+.lanes-l { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 800; letter-spacing: .08em; justify-content: flex-end; }
+.lanes-l span { height: 12px; line-height: 12px; color: var(--c); }
+.lanes { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 0 6px; }
+.lane { position: relative; height: 12px; }
+.lane b { position: absolute; top: 2px; height: 8px; border-radius: 4px; background: var(--c); }
+.lane b::before, .lane b::after { content: ''; position: absolute; top: -3px; width: 6px; height: 14px; border-radius: 3px; background: #fff; box-shadow: 0 0 0 1px var(--c); }
+.lane b::before { left: -3px; } .lane b::after { right: -3px; }
+.lane.dimmed b { opacity: .35; }
+.dock .kbdwrap { grid-column: 2; }
+.dock .kl { grid-row: 2; font-size: 11px; color: var(--faint); font-weight: 700; align-self: center; line-height: 1.3; }
+.dock .mt { grid-row: 1 / 3; grid-column: 3; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+.dock .mt .meter { width: 100%; }
+.dock .mt .cap { font-size: 10px; }
+
+body.edit .songs-btn { display: none; }
+@media (max-width: 1180px) {
+  body.edit { grid-template-rows: 52px minmax(0, 1fr) 118px; }
+  .topbar { height: 52px; gap: 10px; padding: 0 10px; }
+  .brand span, .status .k, .status .hide-sm, .rec .meter, .rec .mlab { display: none; }
+  .wrap { grid-template-columns: minmax(0, 1fr); padding: 8px 10px; }
+  .rail { display: none; }
+  body.edit .songs-btn { display: inline-flex; }
+  .cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+  .shead { padding: 8px 14px; }
+  .shead .name { font-size: 22px; }
+  .shead .note { display: none; }
+  .say { font-size: 15px; }
+  .line .lvl .hbar { width: 70px; }
+  .line .lvl span { display: none; }
+  .det { grid-template-columns: 74px minmax(0, 1fr); }
+  .pp { grid-template-columns: auto 70px auto; }
+  .dock { grid-template-columns: 54px minmax(0, 1fr); }
+  .dock .mt { display: none; }
+}
+
+.kbd .kin{position:relative;display:flex;flex:1}.kbd .b{top:0}
+</style></head>
+<body class="edit">
+
+
+<header class="topbar">
+  <div class="brand"><svg viewBox="0 0 20 20" fill="#7cc4ff"><rect x="1" y="9" width="3" height="10" rx="1"/><rect x="6" y="4" width="3" height="15" rx="1"/><rect x="11" y="7" width="3" height="12" rx="1"/><rect x="16" y="11" width="3" height="8" rx="1"/></svg><span>Worship Rig</span></div>
+  <div class="tabs"><button class="">Perform</button><button class="on">Edit</button></div>
+  <div class="status">
+    <span><i class="led lit" style="--c:var(--ok)"></i><span class="k">MIDI</span> Keystation 61</span>
+    <span><i class="led lit" style="--c:var(--ok)"></i>Sound OK <span class="mono hide-sm" style="color:var(--muted)">12 ms</span></span>
+    <span style="color:var(--ok);letter-spacing:.08em"><i class="led lit" style="--c:var(--ok)"></i>READY</span>
+  </div>
+  <div class="rec">
+    <button class="btn"><i class="recdot"></i>REC</button><span class="timer">00:00</span>
+    <div class="meter"><i></i><i></i></div>
+    <span class="cap mlab" style="font-size:10px">Master</span><div class="hf"><b style="width:63%"></b><em style="left:63%"></em></div>
+    <span style="font-weight:800;font-size:14px;min-width:54px">−6.0 dB</span>
+    <button class="btn iconbtn" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg></button>
+  </div>
+</header>
+<div class="wrap">
+  <aside class="rail">
+    <div class="panel"><span class="cap">Setlist</span><div class="sel">Sunday 9am — Oct 5 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></div></div>
+    <div class="panel songs">
+      <span class="cap" style="margin-bottom:6px">Songs in this set</span>
+      <div class="s cur"><i>1</i>Sunday Pad + Piano<u>D</u></div>
+      <div class="s"><i>2</i>Building Swell<u>G</u></div>
+      <div class="s"><i>3</i>Way Maker<u>E</u></div>
+      <div class="s"><i>4</i>Goodness of God<u>Ab</u></div>
+      <div class="s"><i>5</i>Prayer Wash<u>D</u></div>
+      <div class="s"><i>6</i>Graves Into Gardens<u>B</u></div>
+      <div class="s"><i>7</i>King of Kings<u>D</u></div>
+      <div class="s"><i>8</i>Build My Life<u>E</u></div>
+      <div style="flex:1"></div>
+      <div class="railbtns"><button class="btn">New</button><button class="btn">Factory</button><button class="btn">Library</button></div>
+    </div>
+    <div class="panel lib"><span>Library file</span><span style="color:var(--text)">Export / import <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></span></div>
+  </aside>
+
+  <section class="sheet">
+    <div class="panel shead">
+      <div class="name">Sunday Pad + Piano <small>FROM FACTORY</small></div>
+      <div class="acts"><button class="btn songs-btn">Songs <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></button><button class="btn">Notes</button><button class="btn">Reset to factory</button></div>
+      <div class="say">In the key of <span class="tok">D major</span> — you play in <span class="tok">D</span>, no transpose · tempo <span class="tok">72 BPM</span> <span class="hint" style="margin-left:6px">tap to set</span></div>
+          </div>
+
+    <div class="cols">
+      <div class="col">
+        <div class="colhd"><h2>What plays</h2><span>your four sounds, the drone, and what your hands do</span></div>
+
+        <div class="line open" style="--c:var(--slot-0)">
+          <div class="say"><span class="who">KEYS</span> plays <span class="tok">Grand Piano</span> on <span class="tok">every key</span>, sustain <span class="tok">on</span></div>
+          <div class="ctl"><div class="lvl"><div class="hbar" style="--c:var(--slot-0)"><b style="width:72%"></b><em style="left:72%"></em></div><span>−1.9 dB</span></div><span class="onoff on"></span><span class="more"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></span></div>
+          <div class="det">
+            <div class="k">Sound</div>
+            <div class="v"><span class="pick">Grand Piano <small>Pianos</small><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></span>
+              <span class="pp">Release <div class="hbar" style="--c:var(--slot-0)"><b style="width:35%"></b><em style="left:35%"></em></div></span><span class="pp">Tone <div class="hbar" style="--c:var(--slot-0)"><b style="width:80%"></b><em style="left:80%"></em></div></span></div>
+            <div class="k sub">Where</div>
+            <div class="v sub"><span class="sg"><span class="on">Every key</span><span>Split…</span></span>
+              <span class="sg"><span>−2</span><span>−1</span><span class="on">Oct 0</span><span>+1</span><span>+2</span></span>
+              <span class="sg"><span>−</span><span style="color:var(--text)">0 st</span><span>+</span></span></div>
+            <div class="k sub">Feel</div>
+            <div class="v sub"><span class="tg on"><i class="led"></i>Sustain pedal</span><span class="tg"><i class="led"></i>Pitch bend</span>
+              <span class="sg"><span>Soft</span><span class="on">Normal</span><span>Hard</span><span>Fixed</span></span></div>
+            <div class="k sub">Voices</div>
+            <div class="v sub"><span class="sg"><span class="on">All notes</span><span>Lowest only</span><span>Highest only</span></span>
+              <span class="fold" style="margin-left:auto"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg> Placement &amp; tone <i>centre · full · flat</i></span></div>
+          </div>
+        </div>
+
+        <div class="line" style="--c:var(--slot-1)">
+          <div class="say"><span class="who">PAD</span> plays <span class="tok">Warm Pad</span>, <span class="tok">swells with the mod wheel</span></div>
+          <div class="ctl"><div class="lvl"><div class="hbar" style="--c:var(--slot-1)"><b style="width:60%"></b><em style="left:60%"></em></div><span>−5.2 dB</span></div><span class="onoff on"></span><span class="more"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></span></div>
+        </div>
+        <div class="line empty" style="--c:var(--slot-2)">
+          <div class="say"><span class="who">EXTRA</span> is empty — <span class="tok">choose a sound</span> to layer or split</div>
+          <div class="ctl"><span class="more"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></span></div>
+        </div>
+        <div class="line off" style="--c:var(--slot-3)">
+          <div class="say"><span class="who">BASS</span> plays <span class="tok">Sub Bass</span> <span class="tok">below middle C</span>, <span class="tok">an octave down</span></div>
+          <div class="ctl"><div class="lvl"><div class="hbar" style="--c:var(--slot-3)"><b style="width:66%"></b><em style="left:66%"></em></div><span>−3.4 dB</span></div><span class="onoff"></span><span class="more"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></span></div>
+        </div>
+        <div class="line" style="--c:var(--drone)">
+          <div class="say"><span class="who">DRONE</span> hums <span class="tok">synth</span> in <span class="tok">the song key</span>, <span class="tok">carries over</span></div>
+          <div class="ctl"><div class="lvl"><div class="hbar" style="--c:var(--drone)"><b style="width:58%"></b><em style="left:58%"></em></div><span>−9.1 dB</span></div><span class="onoff on" style="--c:var(--drone)"></span><span class="more"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></span></div>
+        </div>
+        <div class="line" style="--c:#9aa3af">
+          <div class="say"><span class="who" style="color:var(--text)">HANDS</span> wheel <span class="tok">brings in the Pad</span>, bend <span class="tok">lifts the drone</span>, Swell <span class="tok">8 s</span></div>
+          <div class="ctl"><span class="more"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></span></div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="colhd"><h2>How it sounds</h2><span>the shared room and effects every sound can feed</span></div>
+
+        <div class="fxc slim">
+          <div class="top"><div class="say">Vibe: <span class="tok">your own mix</span></div><span class="hint">tap one to start from it</span></div>
+          <div class="chips2"><span>Sunday</span><span>Full Set</span><span>Prayer</span><span>Jam</span><span>Lofi Tape</span><span>Ambient</span></div>
+        </div>
+
+        <div class="fxc">
+          <div class="top"><div class="say">The room is a <span class="tok">Hall</span></div><span class="more" style="transform:rotate(90deg)"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></span></div>
+          <div class="chips2"><span>Dry</span><span>Room</span><span>Stage</span><span class="on">Hall</span><span>Cathedral</span><span>Ambient Wash</span></div>
+          <div class="blurb">Big concert hall. Pads bloom, piano gets lush; back the level off if it muddies.</div>
+          <div class="feeds">
+            <div class="fh">SENT INTO THE ROOM</div>
+            <div class="fr"><span class="r" style="--c:var(--slot-0)">Keys</span><div class="hbar" style="--c:var(--slot-0)"><b style="width:25%"></b><em style="left:25%"></em></div><span>25%</span></div>
+            <div class="fr"><span class="r" style="--c:var(--slot-1)">Pad</span><div class="hbar" style="--c:var(--slot-1)"><b style="width:50%"></b><em style="left:50%"></em></div><span>50%</span></div>
+            <div class="fr"><span class="r" style="--c:var(--slot-3)">Bass</span><div class="hbar" style="--c:var(--slot-3)"><b style="width:0%"></b><em style="left:0%"></em></div><span>dry</span></div>
+          </div>
+          <div class="fold"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg> Fine-tune <i>size 65% · darkness 45% · pre-delay 35 ms · level +1.2 dB</i></div>
+        </div>
+
+        <div class="fxc slim">
+          <div class="top"><div class="say">Echo: <span class="tok">custom 420 ms</span> — fed by
+            <span class="dots" style="--c:var(--slot-0)"><i></i></span> 10%
+            <span class="dots" style="--c:var(--slot-1)"><i></i></span> 10%</div><span class="more"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></span></div>
+        </div>
+        <div class="fxc slim">
+          <div class="top"><div class="say">Chorus: <span class="tok">gentle shimmer</span> on
+            <span class="dots" style="--c:var(--slot-1)"><i></i></span> Pad 35%</div><span class="more"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></span></div>
+        </div>
+        <div class="fxc slim">
+          <div class="top"><div class="say">Lofi tape: <span class="tok">off</span></div><span class="onoff"></span><span class="more"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></span></div>
+        </div>
+        <div class="fxc slim">
+          <div class="top"><div class="say">Finish: tone <span class="tok">flat</span>, glue <span class="tok">off</span>, master <span class="tok">−6 dB</span></div><span class="more"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<footer class="dock">
+  <div class="lanes-l"><span style="--c:var(--slot-0)">KEYS</span><span style="--c:var(--slot-1)">PAD</span><span style="--c:var(--slot-3);opacity:.55">BASS</span></div>
+  <div class="lanes">
+    <div class="lane" style="--c:var(--slot-0)"><b style="left:0;right:0"></b></div>
+    <div class="lane" style="--c:var(--slot-1)"><b style="left:0;right:0"></b></div>
+    <div class="lane dimmed" style="--c:var(--slot-3)"><b style="left:0;width:38.9%"></b></div>
+  </div>
+  <div class="mt"><span class="cap">Output</span><div class="meter"><i></i><i></i></div><span class="hint">Click keys to audition</span></div>
+  <div class="kl">play<br>here</div>
+  <div class="kbdwrap"><div class="kbd"><div class="kin"><div class="w"><small>C2</small></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"><small>C3</small></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"><small>C4</small></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"><small>C5</small></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"><small>C6</small></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"><small>C7</small></div><div class="b" style="left:1.944%;width:1.667%"></div><div class="b" style="left:4.722%;width:1.667%"></div><div class="b" style="left:10.278%;width:1.667%"></div><div class="b" style="left:13.056%;width:1.667%"></div><div class="b" style="left:15.833%;width:1.667%"></div><div class="b" style="left:21.389%;width:1.667%"></div><div class="b" style="left:24.167%;width:1.667%"></div><div class="b" style="left:29.722%;width:1.667%"></div><div class="b" style="left:32.500%;width:1.667%"></div><div class="b" style="left:35.278%;width:1.667%"></div><div class="b" style="left:40.833%;width:1.667%"></div><div class="b" style="left:43.611%;width:1.667%"></div><div class="b" style="left:49.167%;width:1.667%"></div><div class="b" style="left:51.944%;width:1.667%"></div><div class="b" style="left:54.722%;width:1.667%"></div><div class="b" style="left:60.278%;width:1.667%"></div><div class="b" style="left:63.056%;width:1.667%"></div><div class="b" style="left:68.611%;width:1.667%"></div><div class="b" style="left:71.389%;width:1.667%"></div><div class="b" style="left:74.167%;width:1.667%"></div><div class="b" style="left:79.722%;width:1.667%"></div><div class="b" style="left:82.500%;width:1.667%"></div><div class="b" style="left:88.056%;width:1.667%"></div><div class="b" style="left:90.833%;width:1.667%"></div><div class="b" style="left:93.611%;width:1.667%"></div></div></div></div>
+</footer>
+</body></html>

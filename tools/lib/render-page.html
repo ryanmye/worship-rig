@@ -1,0 +1,9 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="icon" href="data:,"><title>Offline render</title></head>
+<body><pre id="log">offline render page (tools/lib)</pre>
+<script type="module">
+  import { renderJob, listInstruments } from './render-page.js';
+  window.__render = renderJob;
+  window.__list = listInstruments;
+  window.__ready = true;
+</script></body></html>

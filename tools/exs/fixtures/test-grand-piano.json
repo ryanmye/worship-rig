@@ -1,0 +1,569 @@
+{
+ "name": "Test Grand Piano",
+ "endian": "little",
+ "groups": [
+  {
+   "name": "Main",
+   "polyphony": 64
+  },
+  {
+   "name": "Key Off",
+   "trigger": 1
+  }
+ ],
+ "zones": [
+  {
+   "name": "TP 48 v1",
+   "root": 48,
+   "keyLow": 36,
+   "keyHigh": 49,
+   "velLow": 1,
+   "velHigh": 50,
+   "group": 0,
+   "sample": 0
+  },
+  {
+   "name": "TP 51 v1",
+   "root": 51,
+   "keyLow": 50,
+   "keyHigh": 52,
+   "velLow": 1,
+   "velHigh": 50,
+   "group": 0,
+   "sample": 1
+  },
+  {
+   "name": "TP 54 v1",
+   "root": 54,
+   "keyLow": 53,
+   "keyHigh": 55,
+   "velLow": 1,
+   "velHigh": 50,
+   "group": 0,
+   "sample": 2
+  },
+  {
+   "name": "TP 57 v1",
+   "root": 57,
+   "keyLow": 56,
+   "keyHigh": 58,
+   "velLow": 1,
+   "velHigh": 50,
+   "group": 0,
+   "sample": 3
+  },
+  {
+   "name": "TP 60 v1",
+   "root": 60,
+   "keyLow": 59,
+   "keyHigh": 61,
+   "velLow": 1,
+   "velHigh": 50,
+   "group": 0,
+   "sample": 4
+  },
+  {
+   "name": "TP 63 v1",
+   "root": 63,
+   "keyLow": 62,
+   "keyHigh": 64,
+   "velLow": 1,
+   "velHigh": 50,
+   "group": 0,
+   "sample": 5
+  },
+  {
+   "name": "TP 66 v1",
+   "root": 66,
+   "keyLow": 65,
+   "keyHigh": 67,
+   "velLow": 1,
+   "velHigh": 50,
+   "group": 0,
+   "sample": 6
+  },
+  {
+   "name": "TP 69 v1",
+   "root": 69,
+   "keyLow": 68,
+   "keyHigh": 70,
+   "velLow": 1,
+   "velHigh": 50,
+   "group": 0,
+   "sample": 7
+  },
+  {
+   "name": "TP 72 v1",
+   "root": 72,
+   "keyLow": 71,
+   "keyHigh": 84,
+   "velLow": 1,
+   "velHigh": 50,
+   "group": 0,
+   "sample": 8
+  },
+  {
+   "name": "TP 48 v2",
+   "root": 48,
+   "keyLow": 36,
+   "keyHigh": 49,
+   "velLow": 51,
+   "velHigh": 100,
+   "group": 0,
+   "sample": 9
+  },
+  {
+   "name": "TP 51 v2",
+   "root": 51,
+   "keyLow": 50,
+   "keyHigh": 52,
+   "velLow": 51,
+   "velHigh": 100,
+   "group": 0,
+   "sample": 10
+  },
+  {
+   "name": "TP 54 v2",
+   "root": 54,
+   "keyLow": 53,
+   "keyHigh": 55,
+   "velLow": 51,
+   "velHigh": 100,
+   "group": 0,
+   "sample": 11
+  },
+  {
+   "name": "TP 57 v2",
+   "root": 57,
+   "keyLow": 56,
+   "keyHigh": 58,
+   "velLow": 51,
+   "velHigh": 100,
+   "group": 0,
+   "sample": 12
+  },
+  {
+   "name": "TP 60 v2",
+   "root": 60,
+   "keyLow": 59,
+   "keyHigh": 61,
+   "velLow": 51,
+   "velHigh": 100,
+   "group": 0,
+   "sample": 13
+  },
+  {
+   "name": "TP 63 v2",
+   "root": 63,
+   "keyLow": 62,
+   "keyHigh": 64,
+   "velLow": 51,
+   "velHigh": 100,
+   "group": 0,
+   "sample": 14
+  },
+  {
+   "name": "TP 66 v2",
+   "root": 66,
+   "keyLow": 65,
+   "keyHigh": 67,
+   "velLow": 51,
+   "velHigh": 100,
+   "group": 0,
+   "sample": 15
+  },
+  {
+   "name": "TP 69 v2",
+   "root": 69,
+   "keyLow": 68,
+   "keyHigh": 70,
+   "velLow": 51,
+   "velHigh": 100,
+   "group": 0,
+   "sample": 16
+  },
+  {
+   "name": "TP 72 v2",
+   "root": 72,
+   "keyLow": 71,
+   "keyHigh": 84,
+   "velLow": 51,
+   "velHigh": 100,
+   "group": 0,
+   "sample": 17
+  },
+  {
+   "name": "TP 48 v3",
+   "root": 48,
+   "keyLow": 36,
+   "keyHigh": 49,
+   "velLow": 101,
+   "velHigh": 127,
+   "group": 0,
+   "sample": 18
+  },
+  {
+   "name": "TP 51 v3",
+   "root": 51,
+   "keyLow": 50,
+   "keyHigh": 52,
+   "velLow": 101,
+   "velHigh": 127,
+   "group": 0,
+   "sample": 19
+  },
+  {
+   "name": "TP 54 v3",
+   "root": 54,
+   "keyLow": 53,
+   "keyHigh": 55,
+   "velLow": 101,
+   "velHigh": 127,
+   "group": 0,
+   "sample": 20
+  },
+  {
+   "name": "TP 57 v3",
+   "root": 57,
+   "keyLow": 56,
+   "keyHigh": 58,
+   "velLow": 101,
+   "velHigh": 127,
+   "group": 0,
+   "sample": 21
+  },
+  {
+   "name": "TP 60 v3",
+   "root": 60,
+   "keyLow": 59,
+   "keyHigh": 61,
+   "velLow": 101,
+   "velHigh": 127,
+   "group": 0,
+   "sample": 22
+  },
+  {
+   "name": "TP 63 v3",
+   "root": 63,
+   "keyLow": 62,
+   "keyHigh": 64,
+   "velLow": 101,
+   "velHigh": 127,
+   "group": 0,
+   "sample": 23
+  },
+  {
+   "name": "TP 66 v3",
+   "root": 66,
+   "keyLow": 65,
+   "keyHigh": 67,
+   "velLow": 101,
+   "velHigh": 127,
+   "group": 0,
+   "sample": 24
+  },
+  {
+   "name": "TP 69 v3",
+   "root": 69,
+   "keyLow": 68,
+   "keyHigh": 70,
+   "velLow": 101,
+   "velHigh": 127,
+   "group": 0,
+   "sample": 25
+  },
+  {
+   "name": "TP 72 v3",
+   "root": 72,
+   "keyLow": 71,
+   "keyHigh": 84,
+   "velLow": 101,
+   "velHigh": 127,
+   "group": 0,
+   "sample": 26
+  },
+  {
+   "name": "TP 60 v2 rr2",
+   "root": 60,
+   "keyLow": 59,
+   "keyHigh": 61,
+   "velLow": 51,
+   "velHigh": 100,
+   "group": 0,
+   "sample": 27
+  },
+  {
+   "name": "rel 48",
+   "root": 48,
+   "keyLow": 47,
+   "keyHigh": 49,
+   "group": 1,
+   "sample": 28
+  },
+  {
+   "name": "rel 60",
+   "root": 60,
+   "keyLow": 59,
+   "keyHigh": 61,
+   "group": 1,
+   "sample": 29
+  },
+  {
+   "name": "rel 72",
+   "root": 72,
+   "keyLow": 71,
+   "keyHigh": 73,
+   "group": 1,
+   "sample": 30
+  }
+ ],
+ "samples": [
+  {
+   "fileName": "TP 48 v1.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 51 v1.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 54 v1.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 57 v1.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 60 v1.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 63 v1.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 66 v1.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 69 v1.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 72 v1.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 48 v2.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 51 v2.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 54 v2.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 57 v2.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 60 v2.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 63 v2.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 66 v2.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 69 v2.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 72 v2.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 48 v3.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 51 v3.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 54 v3.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 57 v3.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 60 v3.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 63 v3.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 66 v3.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 69 v3.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 72 v3.wav",
+   "path": "/Library/Application Support/Logic/EXS Factory Samples/Test Piano",
+   "length": 44100,
+   "sampleRate": 44100,
+   "bitDepth": 24,
+   "channels": 2
+  },
+  {
+   "fileName": "TP 60 v2 rr2.wav",
+   "path": "",
+   "length": 44100,
+   "sampleRate": 44100
+  },
+  {
+   "fileName": "TP rel 48.wav",
+   "path": "",
+   "length": 22050,
+   "sampleRate": 44100
+  },
+  {
+   "fileName": "TP rel 60.wav",
+   "path": "",
+   "length": 22050,
+   "sampleRate": 44100
+  },
+  {
+   "fileName": "TP rel 72.wav",
+   "path": "",
+   "length": 22050,
+   "sampleRate": 44100
+  }
+ ],
+ "extraChunks": [
+  {
+   "type": 4,
+   "size": 32,
+   "name": "params"
+  }
+ ]
+}

@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Engine Harness</title>
+<style>
+  :root { color-scheme: dark; --bg:#15171c; --panel:#1f232b; --line:#2e333d; --fg:#e7e9ee; --dim:#9aa1ad; --acc:#6fb3ff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 12px 0; }
+  button, select { background: #2a2f39; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font: inherit; cursor: pointer; }
+  button.on { border-color: var(--acc); color: var(--acc); }
+  label { display: flex; gap: 6px; align-items: center; color: var(--dim); }
+  input[type=range] { width: 140px; }
+  #kbd { position: relative; height: 120px; user-select: none; touch-action: none; overflow-x: auto; }
+  .k { position: absolute; top: 0; border: 1px solid #000; border-radius: 0 0 4px 4px; }
+  .w { background: #f2f2f2; height: 120px; width: 32px; z-index: 1; }
+  .b { background: #222; height: 74px; width: 22px; z-index: 2; }
+  .k.down { background: var(--acc); }
+  #status { color: var(--dim); font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; }
+  #chord { font-size: 28px; min-height: 36px; }
+</style>
+</head>
+<body>
+<h1>Worship Rig — engine harness</h1>
+<div class="row"><button id="start">Start audio</button><span id="state">not started</span></div>
+<div class="panel">
+  <div class="row" id="presets"></div>
+  <div class="row">
+    <label>Master <input type="range" id="master" min="0" max="1" step="0.01" value="0.63"></label>
+    <label>Pad (slot 2) <input type="range" id="pad" min="0" max="1" step="0.01" value="0.74"></label>
+    <label>Reverb size <input type="range" id="rsize" min="0" max="1" step="0.01" value="0.5"></label>
+    <label>Reverb level <input type="range" id="rret" min="0" max="1" step="0.01" value="0.79"></label>
+    <label>Lofi <input type="range" id="lofi" min="0" max="1" step="0.01" value="0"></label>
+    <label>Mod wheel <input type="range" id="wheel" min="0" max="1" step="0.01" value="1"></label>
+    <label>Bend <input type="range" id="bend" min="-1" max="1" step="0.01" value="0"></label>
+  </div>
+  <div class="row">
+    <button id="swell">Swell</button>
+    <button id="sus">Sustain (space)</button>
+    <button id="tdown">Transpose −</button><span id="tr">0</span><button id="tup">Transpose +</button>
+    <button id="panic">Panic (Esc)</button>
+    <button id="fade">Fade out all</button>
+    <label><input type="checkbox" id="mono"> Mono out</label>
+  </div>
+  <div class="row">
+    <label>Drone <select id="dmode"><option>off</option><option>synth</option></select></label>
+    <label>Key <select id="dkey"></select></label>
+    <label><input type="checkbox" id="dminor"> minor</label>
+    <label><input type="checkbox" id="dfollow"> chord-follow (experimental)</label>
+    <label>Drone level <input type="range" id="dgain" min="0" max="1" step="0.01" value="0.5"></label>
+  </div>
+</div>
+<div id="chord"></div>
+<div class="panel"><div id="kbd"></div>
+  <div class="row" style="color:var(--dim)">Computer keys: A W S E D F T G Y H U J K (C4–C5) · Z / X octave · space = sustain · Esc = panic</div>
+</div>
+<div id="status"></div>
+<script type="module">
+import { AudioEngine, KEYS } from './index.js';
+
+const $ = (id) => document.getElementById(id);
+const engine = new AudioEngine({ seed: 1 });
+window.engine = engine;
+let started = false;
+let octave = 0;
+let transpose = 0;
+let pedal = false;
+
+const S = (type, id, extra = {}) => ({ instrument: { type, id }, ...extra });
+const PRESETS = {
+  'Piano + Pad': { slots: [S('sampler', 'salamander-piano'), S('synth', 'warm-pad', { gain: 0.5 }), null, null] },
+  'Warm Pad': { slots: [null, S('synth', 'warm-pad'), null, null], fx: { reverb: { size: 0.8, returnGain: 1.2 } } },
+  Rhodes: { slots: [S('sampler', 'ep-rhodes'), null, null, null], fx: { chorus: { depth: 0.5 } } },
+  'Organ Swell': { slots: [S('organ', 'gospel'), S('synth', 'warm-pad', { gain: 0.4 }), null, null], bend: { mode: 'morph', range: 2 } },
+  'Glass + Bell': { slots: [null, S('synth', 'glass-pad'), S('synth', 'bell', { gain: 0.5 }), null], fx: { delay: { sync: '1/8d' } } },
+  'Lofi Keys': { slots: [S('synth', 'soft-keys'), null, null, null], fx: { lofi: { amount: 0.6 } } },
+  'Sub + Shimmer': { slots: [null, S('synth', 'glass-pad'), null, S('synth', 'sub-bass')] },
+};
+
+async function ensureStarted() {
+  if (started) return;
+  started = true;
+  $('state').textContent = 'starting…';
+  await engine.start();
+  engine.setTempo(72);
+  await select('Piano + Pad');
+  $('state').textContent = `running · ${engine.ctx.sampleRate} Hz · latency ${engine.latencyMs.toFixed(1)} ms`;
+  $('start').classList.add('on');
+}
+
+let current = null;
+async function select(name) {
+  await ensureStarted();
+  $('state').textContent = `loading ${name}…`;
+  const tok = await engine.prepare(PRESETS[name]);
+  if (engine.commit(tok)) current = name;
+  for (const b of $('presets').children) b.classList.toggle('on', b.textContent === current);
+  $('state').textContent = `running · ${current} · latency ${engine.latencyMs.toFixed(1)} ms`;
+}
+
+for (const name of Object.keys(PRESETS)) {
+  const b = document.createElement('button');
+  b.textContent = name;
+  b.onclick = () => { select(name); b.blur(); };
+  $('presets').appendChild(b);
+}
+for (const k of KEYS) {
+  const o = document.createElement('option');
+  o.value = k.pc;
+  o.textContent = k.major;
+  $('dkey').appendChild(o);
+}
+
+$('start').onclick = () => ensureStarted();
+const slider = (id, fn) => $(id).addEventListener('input', async (e) => { await ensureStarted(); fn(Number(e.target.value)); });
+slider('master', (v) => engine.setParam('master.volume', 2 * v ** 3));
+slider('pad', (v) => engine.setParam('slots.1.gain', 2 * v ** 3));
+slider('rsize', (v) => engine.setParam('fx.reverb.size', v));
+slider('rret', (v) => engine.setParam('fx.reverb.returnGain', 2 * v ** 3));
+slider('lofi', (v) => engine.setParam('fx.lofi.amount', v));
+slider('wheel', (v) => engine.setWheel('virtual', v));
+slider('bend', (v) => engine.pitchBend(v));
+$('bend').addEventListener('change', (e) => { e.target.value = 0; engine.pitchBend(0); });
+$('swell').onclick = async () => { await ensureStarted(); engine.swell(); $('swell').blur(); };
+engine.addEventListener('wheel', (e) => { if (e.detail.source === 'virtual') $('wheel').value = e.detail.value; });
+$('panic').onclick = () => engine.allNotesOff();
+$('fade').onclick = () => engine.fadeOutAll(6);
+$('mono').onchange = (e) => engine.setMono(e.target.checked);
+$('sus').onclick = () => setPedal(!pedal);
+$('tup').onclick = () => setTr(transpose + 1);
+$('tdown').onclick = () => setTr(transpose - 1);
+function setTr(v) { transpose = Math.max(-12, Math.min(12, v)); engine.setTranspose(transpose); $('tr').textContent = transpose; }
+function setPedal(v) { pedal = v; engine.sustain(v); $('sus').classList.toggle('on', v); }
+
+async function droneUpdate() {
+  await ensureStarted();
+  const pc = Number($('dkey').value);
+  const minor = $('dminor').checked;
+  engine.setKeyContext(pc, minor);
+  engine.drone.configure({ mode: $('dmode').value, chordFollow: $('dfollow').checked, gain: Number($('dgain').value) });
+  engine.drone.setKey(pc, { minor });
+}
+for (const id of ['dmode', 'dkey', 'dminor', 'dfollow']) $(id).addEventListener('change', droneUpdate);
+slider('dgain', (v) => engine.setParam('drone.gain', v));
+
+// on-screen keyboard C3..B5
+const kbd = $('kbd');
+const keyEls = new Map();
+const LOW = 48, HIGH = 83;
+let x = 0;
+for (let n = LOW; n <= HIGH; n++) {
+  const black = [1, 3, 6, 8, 10].includes(n % 12);
+  const el = document.createElement('div');
+  el.className = `k ${black ? 'b' : 'w'}`;
+  el.style.left = `${black ? x - 11 : x}px`;
+  if (!black) x += 32;
+  el.dataset.note = n;
+  kbd.appendChild(el);
+  keyEls.set(n, el);
+}
+kbd.style.width = `${x}px`;
+const mouseHeld = new Set();
+async function on(n, vel = 100) { await ensureStarted(); engine.noteOn(n, vel); keyEls.get(n)?.classList.add('down'); }
+function off(n) { engine.noteOff(n); keyEls.get(n)?.classList.remove('down'); }
+kbd.addEventListener('pointerdown', (e) => {
+  const n = Number(e.target.dataset.note);
+  if (!n) return;
+  const rect = e.target.getBoundingClientRect();
+  const vel = Math.round(40 + 87 * Math.min(1, (e.clientY - rect.top) / rect.height));
+  mouseHeld.add(n);
+  on(n, vel);
+});
+window.addEventListener('pointerup', () => { for (const n of mouseHeld) off(n); mouseHeld.clear(); });
+
+const MAP = { a: 0, w: 1, s: 2, e: 3, d: 4, f: 5, t: 6, g: 7, y: 8, h: 9, u: 10, j: 11, k: 12 };
+const down = new Map();
+window.addEventListener('keydown', (e) => {
+  if (e.repeat || e.target.closest('input,select,textarea')) return;
+  if (e.key === ' ') { e.preventDefault(); setPedal(true); return; }
+  if (e.key === 'Escape') { engine.allNotesOff(); return; }
+  if (e.key === 'z') { octave = Math.max(-2, octave - 1); return; }
+  if (e.key === 'x') { octave = Math.min(2, octave + 1); return; }
+  const k = MAP[e.key.toLowerCase()];
+  if (k === undefined) return;
+  const n = 60 + 12 * octave + k;
+  down.set(e.key.toLowerCase(), n);
+  on(n, 100);
+});
+window.addEventListener('keyup', (e) => {
+  if (e.key === ' ') { setPedal(false); return; }
+  const n = down.get(e.key.toLowerCase());
+  if (n !== undefined) { down.delete(e.key.toLowerCase()); off(n); }
+});
+
+engine.addEventListener('chord', (e) => { $('chord').textContent = e.detail.chord ? e.detail.chord.name : ''; });
+engine.addEventListener('loading', (e) => { $('state').textContent = `loading slot ${e.detail.slot + 1}: ${Math.round(e.detail.progress * 100)}%`; });
+engine.addEventListener('warn', (e) => { $('status').textContent = `warn: ${e.detail.message}\n` + $('status').textContent.slice(0, 2000); });
+setInterval(() => {
+  if (!started || !engine.fx) return;
+  const s = engine._debugStats();
+  const buf = new Float32Array(1024);
+  engine.analyserL.getFloatTimeDomainData(buf);
+  let pk = 0;
+  for (const v of buf) pk = Math.max(pk, Math.abs(v));
+  document.title = `Engine Harness · ${s.voices} voices`;
+  $('status').dataset.stats = JSON.stringify(s);
+  $('state').title = `voices ${s.voices} · nodes ${s.nodes} · retiring ${s.retiring} · ${s.decodedMB} MB · peak ${(20 * Math.log10(pk || 1e-9)).toFixed(1)} dBFS`;
+}, 500);
+window.__harnessReady = true;
+</script>
+</body>
+</html>

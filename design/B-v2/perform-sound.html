@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sound picker — B-v2</title>
+<style>
+/* Proposal B-v2. Tokens copied from app/styles.css so it reads as the same product. v2 adds --sel-bg/--sel-line
+   (neutral "selected" state for shared chips: mid-grey + white border, never brighter than PANIC) and a solid
+   --panic fill (critique: PANIC must be the brightest, most saturated thing on screen). */
+:root {
+  --bg: #0b0d10; --panel: #15181d; --panel-2: #1c2027; --panel-3: #252a33;
+  --line: #2d333d; --line-2: #3a414d;
+  --text: #f1f4f8; --muted: #a3acb8; --faint: #8a93a0;
+  --accent: #ffc94d; --accent-ink: #1a1400;
+  --slot-0: #ff8a3d; --slot-1: #3ddc84; --slot-2: #4aa8ff; --slot-3: #b784ff;
+  --drone: #ffc94d;
+  --fx-on: #e4ebf4; --fx-on-ink: #0b0d10;
+  --sel-bg: #3a4250; --sel-line: #ffffff;
+  --panic: #e5383b; --panic-ink: #ffffff; --lockc: #ffb020;
+  --danger: #ff4d4f; --ok: #3ddc84; --warn: #ffb020;
+  --track: #3a414d; --track-edge: #666f7d; --led-off: #6b7380; --thumb: #eef1f5;
+  --panic-bg: #5a0d10; --panic-text: #ffc9ca; --rec-idle: #c4474a;
+  --radius: 10px; --radius-sm: 7px; --gap: 12px;
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 15px/1.35 var(--font); -webkit-font-smoothing: antialiased;
+  overflow: hidden; min-width: 1024px; min-height: 700px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+.cap { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.mono { font-family: var(--mono); }
+.led { width: 10px; height: 10px; border-radius: 50%; background: var(--led-off); flex: none; display: inline-block; }
+.led.lit { background: var(--c, var(--ok)); box-shadow: 0 0 10px var(--c, var(--ok)); }
+
+/* ------------------------------------------------------------ top bar (unchanged from the app) */
+.topbar { height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 14px; border-bottom: 1px solid var(--line);
+  background: #0e1115; }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 17px; margin-right: 4px; }
+.brand svg { width: 20px; height: 20px; }
+.tabs { display: flex; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; }
+.tabs button { border: 0; background: var(--panel-2); padding: 0 16px; height: 42px; font-weight: 700; font-size: 15px; }
+.tabs button.on { background: var(--accent); color: var(--accent-ink); }
+.status { display: flex; gap: 16px; align-items: center; margin: 0 auto; font-size: 13px; font-weight: 600; }
+.status span { display: inline-flex; gap: 7px; align-items: center; }
+.status .k { color: var(--muted); font-weight: 700; letter-spacing: .06em; font-size: 12px; }
+.rec { display: flex; align-items: center; gap: 10px; }
+.btn { border: 1px solid var(--line-2); background: var(--panel-2); border-radius: var(--radius-sm); height: 42px; padding: 0 14px;
+  font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.recdot { width: 12px; height: 12px; border-radius: 50%; background: var(--rec-idle); }
+.timer { font-family: var(--mono); font-size: 16px; color: var(--muted); }
+.meter { display: grid; gap: 3px; width: 110px; }
+.meter i { display: block; height: 5px; border-radius: 3px; background: linear-gradient(90deg, #2dcf78 0 62%, #ffc94d 62% 78%, #2a2f37 78%); }
+.meter i + i { background: linear-gradient(90deg, #2dcf78 0 58%, #ffc94d 58% 72%, #2a2f37 72%); }
+.hf { position: relative; height: 8px; width: 90px; border-radius: 4px; background: var(--track); }
+.hf b { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--fx-on); }
+.hf em { position: absolute; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 6px; background: var(--thumb);
+  box-shadow: 0 1px 3px #000a; }
+.iconbtn { width: 44px; padding: 0; }
+.iconbtn svg { width: 20px; height: 20px; }
+
+/* ------------------------------------------------------------ keyboard (static render) */
+.kbd { position: relative; height: 100%; min-height: 56px; display: flex; padding: 6px; background: #0f1216; border-radius: 8px; }
+.kbd .w { flex: 1; margin: 0 1px; background: #c7ced8; border-radius: 0 0 4px 4px; position: relative; }
+.kbd .w.held { background: var(--accent); }
+.kbd .w small { position: absolute; bottom: 3px; left: 3px; font-size: 9px; font-weight: 700; color: #3b424d; }
+.kbd .b { position: absolute; top: 6px; height: 58%; background: #111; border-radius: 0 0 3px 3px; z-index: 2; }
+.kbd .b.held { background: #d99f1c; }
+
+/* horizontal fader (shared) */
+.hbar { position: relative; height: 10px; border-radius: 5px; background: var(--track); box-shadow: inset 0 0 0 1px var(--track-edge); }
+.hbar b { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: var(--c, var(--drone)); }
+.hbar em { position: absolute; top: 50%; width: 22px; height: 26px; margin: -13px 0 0 -11px; border-radius: 6px;
+  background: linear-gradient(#fff, #d9dee6); box-shadow: 0 2px 4px #000b; }
+.hbar.thin em { width: 18px; height: 22px; margin: -11px 0 0 -9px; }
+
+/* ------------------------------------------------------------ Perform layout (B-v2)
+   rows: topbar | song row | setlist (Prev · chips · Next) | stage | switch bar | Fade/PANIC/Lock */
+body.perform { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 56px 92px 52px minmax(0, 1fr) auto 88px;
+  row-gap: 10px; padding-bottom: 12px; }
+body.perform > :not(.topbar):not(.pop) { margin: 0 14px; }
+
+/* song row: name + key | Transpose | Chord  (Next moved to the setlist row, next to Prev) */
+.songrow { display: grid; grid-template-columns: minmax(0, 1fr) 250px 170px; gap: 12px; }
+.songcard { padding: 8px 20px; display: flex; flex-direction: column; justify-content: center; }
+.songcard h1 { margin: 0; font-size: 42px; line-height: 1.05; letter-spacing: -.01em; }
+.songmeta { display: flex; align-items: baseline; gap: 12px; margin-top: 2px; }
+.songmeta .key { font-size: 32px; font-weight: 800; color: var(--accent); line-height: 1; }
+.songmeta .faint { color: var(--faint); font-size: 14px; font-weight: 600; }
+.notes-btn { display: none; }
+.tcard { padding: 8px 14px; display: flex; flex-direction: column; gap: 4px; justify-content: center; position: relative; }
+.tcard .cap { display: flex; justify-content: space-between; }
+.tpose { display: flex; align-items: center; gap: 10px; }
+.tpose .btn { width: 56px; height: 48px; font-size: 26px; }
+.tpose b { flex: 1; text-align: center; font-size: 30px; }
+.chordcard { padding: 8px 16px; display: flex; flex-direction: column; justify-content: center; }
+.chordcard b { font-size: 38px; line-height: 1.1; }
+
+/* setlist row: ◀ Prev | chips | Next ▸ — both song buttons in one predictable place */
+.setrow { display: grid; grid-template-columns: 104px minmax(0, 1fr) 250px; gap: 12px; height: 52px; }
+.setrow .prev { height: 52px; font-size: 18px; color: var(--muted); }
+.setrow .next { height: 52px; justify-content: space-between; padding: 0 14px; text-align: left; }
+.setrow .next .nl { display: flex; flex-direction: column; line-height: 1.1; min-width: 0; }
+.setrow .next .nl small { font-size: 10px; letter-spacing: .12em; color: var(--muted); font-weight: 800; }
+.setrow .next .nl span { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.setrow .next .k2 { color: var(--accent); }
+.setrow .next .arr { font-size: 20px; color: var(--muted); }
+.chips { display: flex; gap: 8px; overflow: hidden; padding: 5px; }
+.chip { flex: none; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line-2);
+  background: var(--panel-2); font-weight: 700; font-size: 17px; }
+.chip i { font-style: normal; color: var(--faint); font-size: 12px; }
+.chip u { text-decoration: none; color: var(--muted); font-size: 13px; }
+.chip.cur { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.chip.cur i, .chip.cur u { color: #5a4300; }
+
+/* stage: wheel | KEYS | PAD | EXTRA (empty → narrow) | BASS | DRONE | Notes */
+.stage { display: grid; grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1fr) 64px minmax(0, 1fr) 330px 250px; gap: 12px; min-height: 0; }
+.wheel { padding: 10px 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.wheel .cap { font-size: 10px; }
+.wcap { flex: 1; width: 40px; border-radius: 12px; background: var(--track); position: relative; overflow: hidden; min-height: 60px; }
+.wcap b { position: absolute; left: 0; right: 0; bottom: 0; height: 100%; background: #b9c6d6; }
+.wheel .big { font-size: 22px; font-weight: 800; }
+.wheel .to { font-size: 12px; color: var(--muted); font-weight: 600; }
+.wheel .btn { width: 100%; height: 48px; flex-direction: column; gap: 0; font-size: 13px; }
+.wheel .mini { font-size: 11px; font-weight: 700; color: var(--muted); display: flex; gap: 6px; align-items: center; letter-spacing: .05em; }
+
+/* a slot strip: ON switch (mute) · sound picker · fader · Sustain + Octave */
+.strip { display: flex; flex-direction: column; gap: 8px; padding: 8px; border-radius: 12px; background: var(--panel);
+  border: 1px solid var(--line); min-height: 0; min-width: 0; position: relative; }
+/* target 1: the ON switch — only role + state live here, nothing that looks like "pick a sound" */
+.ontile { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 10px; height: 52px;
+  padding: 0 12px; border-radius: 10px; border: 2px solid var(--line-2); background: var(--panel-2); }
+.ontile .led { width: 14px; height: 14px; }
+.ontile .role { font-size: 15px; font-weight: 900; letter-spacing: .1em; color: var(--c); flex: 1; }
+.ontile .st { font-size: 14px; font-weight: 900; letter-spacing: .1em; padding: 3px 8px; border-radius: 6px; }
+.ontile.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 24%, var(--panel)); }
+.ontile.on .led { background: var(--c); box-shadow: 0 0 12px var(--c); }
+.ontile.on .st { color: #0b0d10; background: var(--c); }
+.ontile.off .st { color: #e2e6ec; background: #4a5260; }
+.ontile.off .role { color: color-mix(in srgb, var(--c) 70%, #777); }
+/* target 2: the sound picker — looks like a select, opens a popover (frozen under lock) */
+.pick { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 6px; height: 38px; padding: 0 8px 0 10px;
+  border-radius: 8px; border: 1px solid var(--line-2); background: #111419; font-size: 16px; font-weight: 800; min-width: 0; }
+.pick .nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick svg { flex: none; color: var(--muted); }
+.pick .lk { display: none; color: var(--faint); }
+.pick.open { border-color: #7cc4ff; box-shadow: 0 0 0 2px #7cc4ff55; }
+
+.fbody { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 0; }
+.fbody .tag { font-size: 12px; color: var(--muted); font-weight: 700; height: 15px; }
+.vf { position: relative; flex: 1; width: 56px; min-height: 60px; }
+.vf .tr { position: absolute; left: 50%; top: 4px; bottom: 4px; width: 10px; margin-left: -5px; border-radius: 5px; background: var(--track);
+  box-shadow: inset 0 0 0 1px var(--track-edge); }
+.vf .fl { position: absolute; left: 50%; bottom: 4px; width: 10px; margin-left: -5px; border-radius: 5px; background: var(--c); }
+.vf .th { position: absolute; left: 50%; width: 46px; height: 26px; margin: 0 0 -13px -23px; border-radius: 6px;
+  background: linear-gradient(#ffffff, #d9dee6); box-shadow: 0 2px 5px #000b; }
+.vf .th::after { content: ''; position: absolute; left: 8px; right: 8px; top: 12px; height: 2px; background: #9aa3af; }
+.vf .wm { position: absolute; left: calc(50% + 12px); width: 0; height: 0; border: 6px solid transparent; border-left-color: #b9c6d6;
+  transform: rotate(180deg); margin-bottom: -6px; }
+.fbody .db { font-size: 19px; font-weight: 800; }
+
+.foot { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 6px; }
+.mod { display: flex; align-items: center; justify-content: space-between; gap: 6px; height: 40px; border-radius: 8px;
+  border: 1px solid var(--line-2); background: var(--panel-2); padding: 0 9px; font-size: 14px; font-weight: 700; white-space: nowrap; min-width: 0; }
+.mod.on { border-color: color-mix(in srgb, var(--c) 70%, transparent); color: var(--text); }
+.mod.on .led { background: var(--c); box-shadow: 0 0 8px var(--c); }
+.oct { display: grid; grid-template-columns: 30px 1fr 30px; align-items: center; height: 40px; border-radius: 8px;
+  border: 1px solid var(--line-2); background: var(--panel-2); font-weight: 700; font-size: 14px; text-align: center; overflow: hidden; min-width: 0; }
+.oct span { font-size: 19px; color: var(--muted); line-height: 38px; }
+.oct span:first-child { border-right: 1px solid var(--line); } .oct span:last-child { border-left: 1px solid var(--line); }
+.oct b { white-space: nowrap; }
+.oct.on { border-color: color-mix(in srgb, var(--c) 70%, transparent); }
+.oct.on b { color: var(--c); }
+.strip.dim .fbody, .strip.dim .foot, .strip.dim .pick { opacity: .45; }
+
+/* empty slot collapses to a narrow column instead of eating a full strip */
+.slim { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; border-radius: 12px;
+  border: 2px dashed color-mix(in srgb, var(--c) 45%, var(--line-2)); color: var(--faint); min-width: 0; }
+.slim .vt { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 12px; font-weight: 800; letter-spacing: .14em; }
+.slim .vt b { color: var(--c); }
+.slim .plus { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line-2); display: grid; place-items: center; font-size: 20px; color: var(--muted); }
+
+/* drone (Tonic-style): the same ON switch as the slots, then key + level. Set-and-forget options live in Quick. */
+.drone { display: flex; flex-direction: column; gap: 8px; padding: 8px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line);
+  min-height: 0; --c: var(--drone); }
+.drone .drow1 { display: flex; gap: 8px; align-items: center; }
+.drone .drow1 .keyname { flex: 1; font-size: 18px; font-weight: 800; }
+.seg2 { display: flex; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; flex: none; }
+.seg2 span { padding: 0 12px; height: 36px; display: grid; place-items: center; font-weight: 700; font-size: 14px; background: var(--panel-2); color: var(--muted); white-space: nowrap; }
+.seg2 span + span { border-left: 1px solid var(--line); }
+.seg2 span.on { background: var(--drone); color: var(--accent-ink); }
+.keys12 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; position: relative; }
+.keys12 span { height: 46px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel-2);
+  font-weight: 800; font-size: 17px; }
+.keys12 span.on { background: var(--drone); color: var(--accent-ink); border-color: var(--drone); }
+.drow { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; font-size: 13px; font-weight: 700; color: var(--muted); }
+.drow .v { color: var(--text); min-width: 58px; text-align: right; }
+.dmore { all: unset; cursor: pointer; margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 38px;
+  padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); color: var(--muted); font-size: 13px; font-weight: 700; }
+.dmore i { font-style: normal; color: var(--faint); font-weight: 600; }
+
+.notes { padding: 12px 14px; overflow: hidden; }
+.notes p { margin: 8px 0 0; font-size: 16px; line-height: 1.45; color: #dfe4ea; }
+
+/* ------------------------------------------------------------ the switch bar: song-wide sound only (no rig settings) */
+.switchbar { display: flex; align-items: stretch; padding: 8px 10px; }
+.grp { display: flex; flex-direction: column; gap: 5px; padding: 0 12px; white-space: nowrap; border-left: 1px solid var(--line); }
+.grp:first-child { border-left: 0; padding-left: 4px; }
+.grp .gl { display: flex; align-items: baseline; gap: 8px; min-height: 16px; }
+.grp .gl .cap { font-size: 11px; }
+.grp .gl .val { font-size: 13px; font-weight: 700; color: var(--text); }
+.row { display: flex; gap: 6px; }
+.sw { white-space: nowrap; height: 48px; min-width: 52px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--panel-2);
+  font-size: 16px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 8px; color: #d7dde5; }
+/* selected shared chip: mid-grey + white 2px border + bold white — reads "selected" without out-glowing PANIC */
+.sw.on { background: var(--sel-bg); color: #fff; border: 2px solid var(--sel-line); font-weight: 800; }
+.sw.own { flex-direction: column; gap: 0; line-height: 1.05; padding: 0 10px; }
+.sw.own small { font-size: 11px; font-weight: 700; color: var(--muted); }
+.sw.own.on small { color: #d9dee6; }
+.sw .led { width: 9px; height: 9px; }
+.sw.lit .led { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.sw.quick { background: var(--panel-3); border-color: #566070; }
+.sw.quick svg { width: 20px; height: 20px; }
+.sw.revert { color: var(--text); }
+.sw.revert[disabled], .sw.revert.dis { color: var(--faint); border-style: dashed; }
+.spacer { flex: 1; }
+
+/* bottom row — PANIC is the brightest, most saturated control on screen */
+.bottom { display: grid; grid-template-columns: minmax(0, 1fr) 150px 190px 150px; gap: 12px; }
+.bottom .btn { height: 100%; font-size: 18px; }
+.fade { background: #16273a; border-color: #2a4a6b; }
+.panic { background: var(--panic) !important; border: 0 !important; color: var(--panic-ink); font-size: 26px !important; font-weight: 900 !important;
+  letter-spacing: .08em; box-shadow: 0 0 0 1px #ff8a8c inset, 0 0 22px #e5383b55; }
+.lockbtn { flex-direction: column; gap: 2px !important; }
+.lockbtn small { font-size: 11px; color: var(--faint); font-weight: 700; letter-spacing: .04em; }
+
+/* ------------------------------------------------------------ Perform lock (v2 rule: lock protects the song file and
+   the rig, not your playing). .frz = frozen, .hold = press-and-hold to change while locked. */
+body.locked .lockbtn { background: #2a2210; border-color: var(--lockc); color: var(--lockc); }
+body.locked .lockbtn small { color: #d9b56b; }
+body.locked .frz { opacity: .38; filter: saturate(.4); }
+body.locked .pick .lk { display: inline-flex; }
+body.locked .pick svg.dn { display: none; }
+body.locked .tabs button:last-child { opacity: .35; }
+.holdtag { display: none; font-size: 10px; font-weight: 800; letter-spacing: .08em; color: var(--lockc); border: 1px solid #ffb02088;
+  border-radius: 4px; padding: 0 5px; line-height: 16px; }
+body.locked .holdtag { display: inline-block; }
+body.locked .hold { box-shadow: inset 0 0 0 1px #ffb02066; }
+.lockbanner { display: none; }
+body.locked .lockbanner { display: flex; }
+
+/* ------------------------------------------------------------ popovers (sound picker) */
+.pop { position: fixed; z-index: 20; background: #171b21; border: 1px solid #4a5361; border-radius: 12px; box-shadow: 0 16px 60px #000d;
+  display: flex; flex-direction: column; overflow: hidden; }
+.pop .ph { padding: 10px 14px 8px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 8px; }
+.pop .ph b { font-size: 15px; }
+.pop .ph span { color: var(--faint); font-size: 12px; font-weight: 600; }
+.pop .pl { flex: 1; overflow: hidden; padding: 6px; }
+.pop .gh { font-size: 10px; font-weight: 800; letter-spacing: .12em; color: var(--faint); padding: 8px 8px 4px; text-transform: uppercase; }
+.pop .it { display: flex; align-items: center; justify-content: space-between; height: 38px; padding: 0 10px; border-radius: 7px; font-size: 15px; font-weight: 700; color: #dfe4ea; }
+.pop .it.cur { background: color-mix(in srgb, var(--c) 22%, transparent); color: #fff; box-shadow: inset 3px 0 0 var(--c); }
+.pop .it.hover { background: #252b34; }
+.pop .it small { color: var(--faint); font-weight: 600; font-size: 12px; }
+.pop .pf { border-top: 1px solid var(--line); padding: 8px 14px; font-size: 12px; color: var(--faint); font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+.pop .pf .btn { height: 34px; font-size: 13px; }
+.pop .caret { position: absolute; }
+
+/* ------------------------------------------------------------ Quick settings: a right-side drawer that PUSHES the
+   stage (faders, ON tiles, Wheel stay usable; PANIC row never covered). */
+body.qs .stage { grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1fr) 56px minmax(0, 1fr) 132px 520px; grid-row: 4 / 6; }
+body.qs .switchbar { display: none; }
+body.qs .notes, body.qs .drone .full { display: none; }
+body:not(.qs) .drone .mini { display: none; }
+.drone .mini { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; min-height: 0; }
+.drone .mini .kn { font-size: 20px; font-weight: 900; color: var(--drone); }
+.drone .mini .kn small { font-size: 12px; color: var(--muted); font-weight: 700; }
+.drawer { display: none; }
+body.qs .drawer { display: flex; flex-direction: column; background: #14171c; border: 1px solid #4a5361; border-radius: 14px;
+  box-shadow: -8px 0 40px #0009; min-height: 0; overflow: hidden; }
+.dhead { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--line); }
+.dhead h2 { margin: 0; font-size: 18px; white-space: nowrap; }
+.dhead .sp { flex: 1; }
+.dhead .done { background: var(--fx-on); color: var(--fx-on-ink); border-color: var(--fx-on); min-width: 84px; height: 40px; }
+.dtabs { display: grid; grid-template-columns: 1fr 1fr; margin: 10px 14px 0; border: 1px solid var(--line-2); border-radius: 9px; overflow: hidden; }
+.dtabs span { height: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 800; font-size: 14px;
+  color: var(--muted); background: var(--panel-2); line-height: 1.1; }
+.dtabs span small { font-size: 11px; font-weight: 600; color: var(--faint); }
+.dtabs span.on { background: var(--sel-bg); color: #fff; box-shadow: inset 0 0 0 2px #fff; }
+.dtabs span + span { border-left: 1px solid var(--line); }
+.dscope { margin: 8px 16px 0; font-size: 12px; color: var(--faint); font-weight: 600; display: flex; gap: 8px; align-items: center; }
+.dscope b { color: var(--muted); }
+.dbody { flex: 1; overflow: hidden; padding: 2px 16px 10px; min-height: 0; }
+.qrow { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: start; padding: 8px 0; }
+.qrow + .qrow { border-top: 1px solid #20252c; }
+.qrow > .lab { font-size: 14px; font-weight: 800; padding-top: 9px; }
+.qrow > .lab small { display: block; font-size: 11px; color: var(--faint); font-weight: 600; margin-top: 1px; }
+.qchips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.qchips .sw { height: 38px; font-size: 14px; padding: 0 11px; min-width: 0; }
+.qchips .sw.own { height: 38px; }
+.blurb { font-size: 12px; color: var(--muted); margin-top: 5px; line-height: 1.35; }
+.blurb b { color: var(--text); }
+.qsl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.qsl .lab2 { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
+.qsl .lab2 b { color: var(--text); }
+.qsl .mod { height: 36px; font-size: 13px; }
+.qsl .mod small { font-size: 9px; color: var(--faint); letter-spacing: .06em; text-transform: uppercase; }
+.frzrow { position: relative; }
+.frznote { font-size: 11px; font-weight: 700; color: var(--faint); display: inline-flex; align-items: center; gap: 4px; }
+.sw.opened { outline: 3px solid #7cc4ff; outline-offset: 2px; }
+
+/* ------------------------------------------------------------ 1024 × 700 */
+@media (max-width: 1180px) {
+  body.perform { grid-template-rows: 50px 74px 44px minmax(0, 1fr) auto 60px; row-gap: 7px; padding-bottom: 8px; }
+  body.perform > :not(.topbar):not(.pop) { margin: 0 10px; }
+  .topbar { height: 50px; gap: 10px; padding: 0 10px; }
+  .tabs button { height: 38px; }
+  .btn { height: 38px; }
+  .brand span, .status .k, .status .hide-sm, .rec .meter, .rec .mlab { display: none; }
+  .status { gap: 10px; }
+  .songrow { grid-template-columns: minmax(0, 1fr) 196px 110px; gap: 8px; }
+  .songcard { padding: 6px 14px; }
+  .songcard h1 { font-size: 32px; }
+  .songmeta .key { font-size: 26px; }
+  .notes-btn { display: inline-flex; height: 30px !important; margin-left: auto; font-size: 13px; }
+  .tcard { padding: 6px 10px; }
+  .tpose .btn { width: 46px; height: 40px; }
+  .tpose b { font-size: 24px; }
+  .chordcard b { font-size: 30px; }
+  .setrow { height: 44px; grid-template-columns: 80px minmax(0, 1fr) 190px; gap: 8px; }
+  .setrow .prev, .setrow .next { height: 44px; font-size: 15px; }
+  .setrow .next .nl span { font-size: 14px; }
+  .chips { padding: 4px; }
+  .chip { font-size: 14px; padding: 0 10px; }
+  .stage { grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr) 40px minmax(0, 1fr) 292px; gap: 8px; }
+  .notes { display: none; }
+  .strip, .drone { padding: 6px; gap: 6px; }
+  .ontile { height: 44px; padding: 0 9px; gap: 7px; }
+  .ontile .role { font-size: 13px; }
+  .ontile .st { font-size: 12px; padding: 2px 6px; }
+  .ontile .led { width: 11px; height: 11px; }
+  .pick { height: 32px; font-size: 14px; }
+  .fbody .db { font-size: 16px; }
+  .fbody .tag { font-size: 11px; height: 13px; }
+  .mod, .oct { height: 34px; font-size: 13px; }
+  .oct { grid-template-columns: 24px 1fr 24px; }
+  .oct span { line-height: 32px; font-size: 16px; }
+  .foot { gap: 5px; }
+  .slim .plus { width: 28px; height: 28px; font-size: 17px; }
+  .keys12 { gap: 4px; }
+  .keys12 span { height: 36px; font-size: 15px; }
+  .seg2 span { height: 32px; padding: 0 9px; font-size: 13px; }
+  .drone .drow1 .keyname { font-size: 16px; }
+  .dmore { height: 32px; }
+  .wheel { padding: 8px 5px; }
+  .wheel .btn { height: 40px; }
+  .wheel .big { font-size: 17px; }
+  .wheel .hide-sm { display: none; }
+  .wcap { width: 32px; }
+  .switchbar { padding: 6px 8px; }
+  .grp { padding: 0 9px; gap: 3px; }
+  .grp .gl { min-height: 14px; }
+  .grp .gl .cap { font-size: 10px; }
+  .grp .gl .val { font-size: 12px; }
+  .sw { height: 42px; min-width: 44px; padding: 0 10px; font-size: 14px; }
+  .sw.own small { font-size: 10px; }
+  .wide-only { display: none !important; }
+  .bottom { grid-template-columns: minmax(0, 1fr) 106px 146px 108px; gap: 8px; }
+  .bottom .btn { font-size: 15px; }
+  .panic { font-size: 20px !important; }
+  body.qs .stage { grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr) 36px minmax(0, 1fr) 96px 392px; }
+  body.qs .foot { grid-template-columns: 1fr; }
+  body.qs .mod, body.qs .oct { height: 30px; }
+  body.qs .oct span { line-height: 28px; }
+  .dhead { padding: 7px 10px 7px 12px; }
+  .dhead h2 { font-size: 16px; }
+  .dhead .btn { height: 34px; font-size: 13px; padding: 0 10px; }
+  .dhead .done { min-width: 64px; height: 34px; }
+  .dtabs { margin: 7px 10px 0; }
+  .dtabs span { height: 34px; font-size: 13px; }
+  .dtabs span small { display: none; }
+  .dscope { margin: 6px 12px 0; font-size: 11px; }
+  .dbody { padding: 0 12px 6px; }
+  .qrow { grid-template-columns: 70px minmax(0, 1fr); gap: 6px; padding: 5px 0; }
+  .qrow > .lab { font-size: 13px; padding-top: 7px; }
+  .qrow > .lab small, .blurb { display: none; }
+  .qchips { gap: 4px; }
+  .qchips .sw { height: 32px; font-size: 12px; padding: 0 8px; }
+  .qchips .sw.own small { display: none; }
+  .qsl { gap: 6px 10px; }
+  .qsl .lab2 { margin-bottom: 6px; font-size: 11px; }
+  .qsl .mod { height: 30px; font-size: 12px; }
+}
+@media (min-width: 1181px) { .narrow-only { display: none !important; } }
+
+/* drone full/mini bodies */
+.drone .full { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
+body.qs .drone .ontile { padding: 0 8px; gap: 6px; }
+body.qs .drone .ontile .role { font-size: 13px; letter-spacing: .06em; }
+body.qs .slim .vt { font-size: 11px; }
+@media (max-width: 1180px) {
+  body.qs .drone .ontile .led { display: none; }
+  body.qs .drone .ontile { justify-content: space-between; }
+  body.qs .drone .ontile .role { flex: none; font-size: 12px; }
+  body.qs .ontile .role { letter-spacing: .04em; }
+}
+
+/* ---- v2 polish pass */
+body.perform { grid-template-rows: 56px 86px 52px minmax(0, 1fr) auto 88px; }
+.fbody { position: relative; }
+.fbody .tag { position: absolute; top: 0; right: 2px; height: auto; font-size: 11px; writing-mode: vertical-rl; transform: rotate(180deg); }
+.dmore { justify-content: flex-start; white-space: nowrap; overflow: hidden; }
+.dmore span { color: var(--text); }
+.dmore i { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.drone .full .keys12 { flex: 0 1 auto; grid-auto-rows: minmax(40px, 56px); }
+.drone .full .keys12 span { height: auto; }
+body.qs .foot { grid-template-columns: 1fr; gap: 5px; }
+body.qs .mod, body.qs .oct { height: 34px; }
+body.qs .oct span { line-height: 32px; }
+body.qs .drone .ontile .led { display: none; }
+body.qs .drone .ontile { justify-content: space-between; }
+body.qs .drone .ontile .role { flex: none; }
+/* hold-to-change controls under lock: each button gets an amber edge, not the container */
+body.locked .hold { box-shadow: none; }
+body.locked .hold span:not(.holdtag), body.locked .tcard.hold .btn, body.locked .sw.hold { border-color: #ffb020aa !important; }
+body.locked .tcard.hold { border-color: #ffb02066; }
+/* drawer rows: a header line (label + what the current choice means), then the chips at full width */
+.qrow { display: block; padding: 9px 0 10px; }
+.qh { display: flex; align-items: baseline; gap: 8px; margin-bottom: 7px; white-space: nowrap; overflow: hidden; }
+.qh b { font-size: 14px; font-weight: 800; }
+.qh svg { flex: none; color: var(--faint); align-self: center; }
+.qh span { font-size: 12px; color: var(--faint); font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.qh span em { font-style: normal; color: var(--text); font-weight: 800; }
+.qsl { width: 100%; }
+.qchips .sw.test { margin-left: 8px; }
+.dscope { display: block; line-height: 1.35; }
+.dscope svg { vertical-align: -2px; }
+.dbody { -webkit-mask-image: linear-gradient(#000 calc(100% - 28px), transparent); mask-image: linear-gradient(#000 calc(100% - 28px), transparent); }
+.pop .pf .btn { white-space: nowrap; }
+.pop .pf span { display: flex; gap: 6px; align-items: center; }
+@media (max-width: 1180px) {
+  body.perform { grid-template-rows: 50px 70px 44px minmax(0, 1fr) auto 60px; }
+  .qh { margin-bottom: 5px; }
+  .qh span { display: inline; font-size: 11px; }
+  .qrow { padding: 6px 0 7px; }
+  .dmore i { display: none; }
+}
+
+/* ---- v2 polish pass 2 */
+.fbody .tag { writing-mode: horizontal-tb; transform: none; top: 2px; right: 4px; width: 50px; text-align: right; line-height: 1.2; white-space: normal; }
+.foot { grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); }
+.oct { grid-template-columns: 26px 1fr 26px; font-size: 13px; }
+.drone .full .keys12 { flex: 1 1 auto; max-height: 190px; grid-auto-rows: minmax(40px, 1fr); }
+.dlvl { display: none; }
+@media (max-width: 1180px) {
+  body.qs .pick svg { display: none; }
+  .fbody .tag { width: 40px; font-size: 10px; }
+}
+.drone .full .keys12 { flex: none; grid-auto-rows: 54px; max-height: none; }
+@media (max-width: 1180px) { .drone .full .keys12 { grid-auto-rows: 42px; } }
+
+.kbd .kin{position:relative;display:flex;flex:1}.kbd .b{top:0}
+</style></head>
+<body class="perform">
+
+
+<header class="topbar">
+  <div class="brand"><svg viewBox="0 0 20 20" fill="#7cc4ff"><rect x="1" y="9" width="3" height="10" rx="1"/><rect x="6" y="4" width="3" height="15" rx="1"/><rect x="11" y="7" width="3" height="12" rx="1"/><rect x="16" y="11" width="3" height="8" rx="1"/></svg><span>Worship Rig</span></div>
+  <div class="tabs"><button class="on">Perform</button><button class="">Edit</button></div>
+  <div class="status">
+    <span><i class="led lit" style="--c:var(--ok)"></i><span class="k">MIDI</span> Keystation 61</span>
+    <span><i class="led lit" style="--c:var(--ok)"></i>Sound OK <span class="mono hide-sm" style="color:var(--muted)">12 ms</span></span>
+    <span style="color:var(--ok);letter-spacing:.08em"><i class="led lit" style="--c:var(--ok)"></i>READY</span>
+  </div>
+  <div class="rec">
+    <button class="btn"><i class="recdot"></i>REC</button><span class="timer">00:00</span>
+    <div class="meter"><i></i><i></i></div>
+    <span class="cap mlab" style="font-size:10px">Master</span><div class="hf"><b style="width:63%"></b><em style="left:63%"></em></div>
+    <span style="font-weight:800;font-size:14px;min-width:54px">−6.0 dB</span>
+    <button class="btn iconbtn frz" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg></button>
+  </div>
+</header>
+<section class="songrow">
+  <div class="panel songcard"><h1>Sunday Pad + Piano</h1>
+    <div class="songmeta"><span class="cap">Key</span><span class="key">D</span><span class="faint">you play in D · 72 BPM</span>
+      <button class="btn notes-btn">Notes</button></div></div>
+  <div class="panel tcard hold"><span class="cap">Transpose <span class="holdtag">HOLD</span></span>
+    <div class="tpose"><button class="btn">−</button><b>0</b><button class="btn">+</button></div></div>
+  <div class="panel chordcard"><span class="cap">Chord</span><b>D</b></div>
+</section>
+<nav class="setrow">
+  <button class="btn prev">◀ Prev</button>
+  <div class="panel chips">
+    <span class="chip cur"><i>1</i>Sunday Pad + Piano<u>D</u></span>
+    <span class="chip"><i>2</i>Building Swell<u>G</u></span>
+    <span class="chip"><i>3</i>Way Maker<u>E</u></span>
+    <span class="chip"><i>4</i>Goodness of God<u>Ab</u></span>
+    <span class="chip"><i>5</i>Prayer Wash<u>D</u></span>
+    <span class="chip"><i>6</i>Graves Into Gardens<u>B</u></span>
+  </div>
+  <button class="btn next"><span class="nl"><small>NEXT</small><span>Building Swell · <span class="k2">G</span></span></span><span class="arr">▶</span></button>
+</nav>
+<main class="stage">
+  <section class="panel wheel">
+    <span class="cap">Wheel</span>
+    <div class="wcap"><b style="height:100%"></b></div>
+    <span class="big">100%</span><span class="to">→ Pad level</span>
+    <span class="mini hide-sm">EXPR 100%</span>
+    <button class="btn"><span>◢</span>Swell</button>
+    <span class="mini"><i class="led lit" style="--c:var(--ok)"></i>PEDAL</span>
+  </section>
+  <section class="strip" style="--c:var(--slot-0)">
+    <button class="ontile on" aria-pressed="true"><i class="led"></i><span class="role">KEYS</span><span class="st">ON</span></button>
+    <button class="pick frz open" data-pick="0"><span class="nm">Grand Piano</span><svg class="dn" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg><span class="lk"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span></button>
+    <div class="fbody"><div class="tag"></div><div class="vf"><div class="tr"></div><div class="fl" style="height:calc(72% - 8px)"></div><div class="th" style="bottom:72%"></div></div><div class="db">−1.9 dB</div></div>
+    <div class="foot">
+      <div class="mod on"><span>Sustain</span><i class="led"></i></div>
+      <div class="oct"><span>−</span><b>Oct 0</b><span>+</span></div>
+    </div></section>
+  <section class="strip" style="--c:var(--slot-1)">
+    <button class="ontile on" aria-pressed="true"><i class="led"></i><span class="role">PAD</span><span class="st">ON</span></button>
+    <button class="pick frz" data-pick="1"><span class="nm">Warm Pad</span><svg class="dn" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg><span class="lk"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span></button>
+    <div class="fbody"><div class="tag">wheel<br>100%</div><div class="vf"><div class="tr"></div><div class="fl" style="height:calc(60% - 8px)"></div><div class="wm" style="bottom:60%"></div><div class="th" style="bottom:60%"></div></div><div class="db">−5.2 dB</div></div>
+    <div class="foot">
+      <div class="mod on"><span>Sustain</span><i class="led"></i></div>
+      <div class="oct"><span>−</span><b>Oct 0</b><span>+</span></div>
+    </div></section>
+  <section class="slim" style="--c:var(--slot-2)" title="EXTRA is empty — tap to choose a sound">
+      <span class="plus">+</span><span class="vt"><b>EXTRA</b> · EMPTY</span></section>
+  <section class="strip dim" style="--c:var(--slot-3)">
+    <button class="ontile off" aria-pressed="false"><i class="led"></i><span class="role">BASS</span><span class="st">OFF</span></button>
+    <button class="pick frz" data-pick="3"><span class="nm">Sub Bass</span><svg class="dn" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg><span class="lk"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span></button>
+    <div class="fbody"><div class="tag"></div><div class="vf"><div class="tr"></div><div class="fl" style="height:calc(66% - 8px)"></div><div class="th" style="bottom:66%"></div></div><div class="db">−3.4 dB</div></div>
+    <div class="foot">
+      <div class="mod"><span>Sustain</span><i class="led"></i></div>
+      <div class="oct on"><span>−</span><b>Oct −1</b><span>+</span></div>
+    </div></section>
+  
+  <section class="drone">
+    <button class="ontile on" aria-pressed="true"><i class="led"></i><span class="role">DRONE</span><span class="st">ON</span></button>
+    <div class="full">
+      <div class="drow1"><span class="keyname">D major</span><div class="seg2 frz"><span class="on">Synth</span><span>My Pads</span></div></div>
+      <div class="keys12 hold"><span class="">C</span><span class="">Db</span><span class="on">D</span><span class="">Eb</span><span class="">E</span><span class="">F</span><span class="">F#</span><span class="">G</span><span class="">Ab</span><span class="">A</span><span class="">Bb</span><span class="">B</span></div>
+      <div class="drow"><div class="seg2 hold"><span class="on">Major</span><span>Minor</span></div>
+        <div class="hbar"><b style="width:58%"></b><em style="left:58%"></em></div><span class="v">−9.1 dB</span></div>
+      <div class="drow" style="grid-template-columns:1fr;margin-top:-2px"><span class="holdtag" style="justify-self:start">HOLD A KEY TO CHANGE IT WHILE LOCKED</span></div>
+      <button class="dmore"><span>Drone options</span><i>brightness, movement, carry over</i><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></button>
+    </div>
+    <div class="mini">
+      <span class="kn">D <small>maj</small></span>
+      <div class="vf"><div class="tr"></div><div class="fl" style="height:calc(58% - 8px)"></div><div class="th" style="bottom:58%"></div></div>
+      <span class="db" style="font-weight:800;font-size:15px">−9.1</span>
+    </div>
+  </section>
+  <section class="panel notes"><span class="cap">Notes</span>
+    <p>The everyday worship sound: grand piano on top of a warm pad, with a soft key drone underneath.</p>
+    <p>Mod wheel brings the pad in and out — start with piano alone and swell the pad for the chorus.</p>
+    <p>Push the bend wheel up to lift the drone; pull it down to tuck it away.</p></section>
+  
+</main>
+<section class="panel switchbar">
+  <div class="grp">
+    <div class="gl"><span class="cap">Space</span><span class="val">Hall</span></div>
+    <div class="row"><span class="sw">Room</span><span class="sw">Stage</span><span class="sw on">Hall</span>
+      <span class="sw wide-only">Cathedral</span><span class="sw more">More <svg class="dn" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></span></div>
+  </div>
+  <div class="grp">
+    <div class="gl"><span class="cap">Echo</span><span class="val">Song's own</span></div>
+    <div class="row"><span class="sw">Off</span><span class="sw wide-only">Slap</span><span class="sw">¼</span>
+      <span class="sw">Dotted ⅛</span><span class="sw wide-only">Trails</span><span class="sw own on">Song's own<small>420 ms</small></span></div>
+  </div>
+  <div class="grp">
+    <div class="gl"><span class="cap">Lofi</span></div>
+    <div class="row"><span class="sw"><i class="led"></i>Tape</span></div>
+  </div>
+  <div class="grp">
+    <div class="gl"><span class="cap">Undo</span><span class="holdtag">HOLD</span></div>
+    <div class="row"><span class="sw revert hold"><span>↺ Revert<span class="wide-only"> song</span></span></span></div>
+  </div>
+  <div class="spacer"></div>
+  <div class="grp" style="border-left:0;padding-right:0;justify-content:flex-end">
+    <div class="row"><span class="sw quick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Quick settings</span></div>
+  </div>
+</section>
+<footer class="bottom">
+  <div class="kbd"><div class="kin"><div class="w"><small>C2</small></div><div class="w held"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"><small>C3</small></div><div class="w held"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w held"></div><div class="w"></div><div class="w"><small>C4</small></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"><small>C5</small></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"><small>C6</small></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"><small>C7</small></div><div class="b" style="left:1.944%;width:1.667%"></div><div class="b" style="left:4.722%;width:1.667%"></div><div class="b" style="left:10.278%;width:1.667%"></div><div class="b" style="left:13.056%;width:1.667%"></div><div class="b" style="left:15.833%;width:1.667%"></div><div class="b" style="left:21.389%;width:1.667%"></div><div class="b" style="left:24.167%;width:1.667%"></div><div class="b held" style="left:29.722%;width:1.667%"></div><div class="b" style="left:32.500%;width:1.667%"></div><div class="b" style="left:35.278%;width:1.667%"></div><div class="b" style="left:40.833%;width:1.667%"></div><div class="b" style="left:43.611%;width:1.667%"></div><div class="b" style="left:49.167%;width:1.667%"></div><div class="b" style="left:51.944%;width:1.667%"></div><div class="b" style="left:54.722%;width:1.667%"></div><div class="b" style="left:60.278%;width:1.667%"></div><div class="b" style="left:63.056%;width:1.667%"></div><div class="b" style="left:68.611%;width:1.667%"></div><div class="b" style="left:71.389%;width:1.667%"></div><div class="b" style="left:74.167%;width:1.667%"></div><div class="b" style="left:79.722%;width:1.667%"></div><div class="b" style="left:82.500%;width:1.667%"></div><div class="b" style="left:88.056%;width:1.667%"></div><div class="b" style="left:90.833%;width:1.667%"></div><div class="b" style="left:93.611%;width:1.667%"></div></div></div>
+  <button class="btn fade">Fade out</button>
+  <button class="btn panic">PANIC</button>
+  <button class="btn lockbtn"><span style="display:flex;gap:6px;align-items:center"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span class="lt">Lock</span></span><small class="ls"></small></button>
+</footer>
+<div class="pop" id="pickpop" style="--c:var(--slot-0);width:330px">
+  <div class="ph"><b>Sound for KEYS</b><span>saved with this song</span></div>
+  <div class="pl">
+    <div class="gh">Piano</div>
+    <div class="it cur">Grand Piano <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="m5 12 5 5 9-10"/></svg></div>
+    <div class="it">Upright Piano</div>
+    <div class="it hover">Bright Piano</div>
+    <div class="gh">Electric Piano</div>
+    <div class="it">Rhodes</div>
+    <div class="it">Wurlitzer</div>
+    <div class="it">Electric Grand</div>
+    <div class="gh">Organ · Synth Pads · Synth Keys · Mallets · Guitar · Bass · My Samples</div>
+    <div class="it"><span>Show all sounds</span><small>9 groups <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></small></div>
+  </div>
+  <div class="pf"><span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg> Frozen while locked</span><button class="btn">Edit Keys…</button></div>
+</div>
+<script>
+  // anchor the popover under the KEYS picker (mockup only)
+  const a = document.querySelector('.pick.open').getBoundingClientRect();
+  const p = document.getElementById('pickpop');
+  p.style.left = a.left + 'px'; p.style.top = (a.bottom + 6) + 'px';
+  p.style.maxHeight = (document.querySelector('.bottom').getBoundingClientRect().top - a.bottom - 16) + 'px';
+</script>
+</body></html>

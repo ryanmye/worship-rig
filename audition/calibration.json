@@ -1,0 +1,214 @@
+{
+  "generated": "2026-09-28T04:42:51.630Z",
+  "sr": 48000,
+  "master": 1,
+  "window": [
+    0,
+    3
+  ],
+  "band": [
+    100,
+    5000
+  ],
+  "bassBand": [
+    40,
+    5000
+  ],
+  "target": -18,
+  "droneTarget": -24,
+  "clamp": 12,
+  "samplerClamp": 30,
+  "droneClamp": 18,
+  "rows": [
+    {
+      "instrument": "sampler:salamander-piano",
+      "group": "Piano",
+      "before dB": -18,
+      "trim before": 8.3,
+      "trim after": 8.3,
+      "clamped": "",
+      "after dB": -18,
+      "peak dBFS": -2.1
+    },
+    {
+      "instrument": "sampler:ep-rhodes",
+      "group": "Electric Piano",
+      "before dB": -18,
+      "trim before": 15.9,
+      "trim after": 15.9,
+      "clamped": "",
+      "after dB": -18,
+      "peak dBFS": -3.5
+    },
+    {
+      "instrument": "sampler:ep-wurli",
+      "group": "Electric Piano",
+      "before dB": -18,
+      "trim before": 22.1,
+      "trim after": 22.1,
+      "clamped": "",
+      "after dB": -18,
+      "peak dBFS": -4
+    },
+    {
+      "instrument": "sampler:vibes",
+      "group": "Mallets & Bells",
+      "before dB": -18,
+      "trim before": 27.2,
+      "trim after": 27.2,
+      "clamped": "",
+      "after dB": -18,
+      "peak dBFS": -2.8
+    },
+    {
+      "instrument": "sampler:celesta",
+      "group": "Mallets & Bells",
+      "before dB": -18,
+      "trim before": 24.1,
+      "trim after": 24.1,
+      "clamped": "",
+      "after dB": -18,
+      "peak dBFS": -1.7
+    },
+    {
+      "instrument": "sampler:music-box",
+      "group": "Mallets & Bells",
+      "before dB": -18.6,
+      "trim before": 30,
+      "trim after": 30,
+      "clamped": "CLAMPED (wants 30.6)",
+      "after dB": -18.6,
+      "peak dBFS": -1.2
+    },
+    {
+      "instrument": "sampler:nylon-guitar",
+      "group": "Guitar",
+      "before dB": -18,
+      "trim before": 24,
+      "trim after": 24,
+      "clamped": "",
+      "after dB": -18,
+      "peak dBFS": -2.2
+    },
+    {
+      "instrument": "synth:warm-pad",
+      "group": "Synth Pads",
+      "before dB": -18,
+      "trim before": -0.2,
+      "trim after": -0.2,
+      "clamped": "",
+      "after dB": -18,
+      "peak dBFS": -2.8
+    },
+    {
+      "instrument": "synth:glass-pad",
+      "group": "Synth Pads",
+      "before dB": -18,
+      "trim before": -0.3,
+      "trim after": -0.3,
+      "clamped": "",
+      "after dB": -18,
+      "peak dBFS": -5.9
+    },
+    {
+      "instrument": "synth:strings",
+      "group": "Synth Pads",
+      "before dB": -18,
+      "trim before": -0.1,
+      "trim after": -0.1,
+      "clamped": "",
+      "after dB": -18,
+      "peak dBFS": -2.9
+    },
+    {
+      "instrument": "synth:sub-bass",
+      "group": "Bass",
+      "before dB": -18,
+      "trim before": 4.5,
+      "trim after": 4.5,
+      "clamped": "",
+      "after dB": -18,
+      "peak dBFS": -14.6
+    },
+    {
+      "instrument": "synth:soft-keys",
+      "group": "Synth Keys",
+      "before dB": -18,
+      "trim before": 0.6,
+      "trim after": 0.6,
+      "clamped": "",
+      "after dB": -18,
+      "peak dBFS": -7.8
+    },
+    {
+      "instrument": "synth:bell",
+      "group": "Synth Keys",
+      "before dB": -18,
+      "trim before": 2.1,
+      "trim after": 2.1,
+      "clamped": "",
+      "after dB": -18,
+      "peak dBFS": -5.3
+    },
+    {
+      "instrument": "synth:drone-osc",
+      "group": "Synth Pads",
+      "before dB": -18,
+      "trim before": 2.8,
+      "trim after": 2.8,
+      "clamped": "",
+      "after dB": -18,
+      "peak dBFS": -2.5
+    },
+    {
+      "instrument": "organ:gospel",
+      "group": "Organ",
+      "before dB": -18,
+      "trim before": 3.2,
+      "trim after": 3.2,
+      "clamped": "",
+      "after dB": -18,
+      "peak dBFS": -6
+    },
+    {
+      "instrument": "organ:soft-pad",
+      "group": "Organ",
+      "before dB": -18,
+      "trim before": 1.8,
+      "trim after": 1.8,
+      "clamped": "",
+      "after dB": -18,
+      "peak dBFS": -7
+    },
+    {
+      "instrument": "organ:full",
+      "group": "Organ",
+      "before dB": -18,
+      "trim before": -0.5,
+      "trim after": -0.5,
+      "clamped": "",
+      "after dB": -18,
+      "peak dBFS": -6
+    },
+    {
+      "instrument": "organ:church",
+      "group": "Organ",
+      "before dB": -18,
+      "trim before": 5.1,
+      "trim after": 5.1,
+      "clamped": "",
+      "after dB": -18,
+      "peak dBFS": -4.5
+    },
+    {
+      "instrument": "drone (synth, key C)",
+      "group": "-",
+      "before dB": -23.7,
+      "trim before": -12,
+      "trim after": -12.3,
+      "clamped": "",
+      "after dB": -24,
+      "peak dBFS": -8.2
+    }
+  ]
+}

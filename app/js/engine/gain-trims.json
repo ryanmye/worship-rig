@@ -1,0 +1,55 @@
+{
+  "_doc": "Output trims in dB written by tools/calibrate.mjs (SPEC §12; method in CONTRACT_CHANGES.md \"## audition\"). synth/organ: a GainNode of 10^(dB/20) right after instrument.output. droneTrim: 10^(dB/20) on the drone synth bus (synth drone only, on top of drone-osc's own trim). Sampler trims live in app/samples/manifest.json gainTrim.",
+  "reference": {
+    "sampleRate": 48000,
+    "velocity": 96,
+    "chord": "C3-E3-G3 (Bass group: C2)",
+    "slotGain": 1,
+    "sends": 0,
+    "master": 1,
+    "window": [
+      0,
+      3
+    ],
+    "preRoll": 0.5,
+    "band": [
+      100,
+      5000
+    ],
+    "bassBand": [
+      40,
+      5000
+    ],
+    "target": -18,
+    "droneTarget": -24,
+    "clampDb": 12,
+    "samplerClampDb": 30,
+    "droneClampDb": 18
+  },
+  "synth": {
+    "warm-pad": 3.5,
+    "glass-pad": 3.3,
+    "strings": 3.4,
+    "sub-bass": 5.8,
+    "soft-keys": 1.3,
+    "bell": 2.8,
+    "drone-osc": 2.8,
+    "supersaw-pad": 0,
+    "juno-pad": 0,
+    "shimmer-pad": 0,
+    "dx-epiano": 0,
+    "pluck": 0,
+    "poly-stab": 0,
+    "analog-brass": 0,
+    "square-lead": 0,
+    "808-sub": 0,
+    "synth-bass": 0
+  },
+  "organ": {
+    "gospel": 4.4,
+    "soft-pad": 3.6,
+    "full": 2.3,
+    "church": 6.1
+  },
+  "droneTrim": -8.5
+}

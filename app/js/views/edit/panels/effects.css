@@ -1,0 +1,3 @@
+/* OWNER: effects agent. Effects tab (panels/effects.js).
+   Scope rule (views/edit/CONTRACT.md §4): every selector starts with .ev2 and uses only the .ev2-fx-* classes you
+   create (plus the shared .ev2-* widgets from styles-edit-v2.css). No element/global selectors, no :root. */

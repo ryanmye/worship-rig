@@ -1,0 +1,1089 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slot EQ · Curve</title>
+<!--
+  Worship Rig: per-slot EQ prototype "curve". Self-contained; fetches real samples from the served repo.
+  Run:  python3 -m http.server 8460 --directory /home/claude/worship-rig
+  Open: http://127.0.0.1:8460/design/eq/curve/index.html
+-->
+<style>
+:root {
+  --bg: #0b0d10; --panel: #15181d; --panel-2: #1c2027; --panel-3: #252a33;
+  --line: #2d333d; --line-2: #3a414d; --text: #f1f4f8; --muted: #a3acb8; --faint: #8a93a0;
+  --accent: #ffc94d; --accent-ink: #1a1400; --focus: #7cc4ff;
+  --slot: #ff8a3d; --slot-ink: #1f0e00;
+  --radius: 10px; --radius-sm: 7px;
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; min-width: 1024px; background: var(--bg); color: var(--text);
+  font: 14px/1.35 var(--font); -webkit-font-smoothing: antialiased; user-select: none;
+  display: flex; flex-direction: column;
+}
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* top bar (echoes the app's) */
+.top { height: 48px; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 18px;
+  border-bottom: 1px solid var(--line); background: #0e1014; }
+.brand { font-weight: 800; font-size: 16px; letter-spacing: .01em; }
+.crumbs { color: var(--muted); font-weight: 600; }
+.crumbs b { color: var(--text); }
+.top .sp { flex: 1; }
+.status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-weight: 600; font-size: 13px; }
+.led { width: 9px; height: 9px; border-radius: 50%; background: #6b7380; }
+.led.ok { background: #3ddc84; box-shadow: 0 0 8px #3ddc8488; }
+.led.busy { background: var(--accent); }
+
+main { flex: 1; padding: 14px 16px 16px; min-height: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 14px;
+  display: flex; flex-direction: column; gap: 10px; height: 100%; }
+
+/* header */
+.head { display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; }
+.title { white-space: nowrap; font-size: 12px; font-weight: 800; letter-spacing: .12em; color: var(--muted); text-transform: uppercase; }
+.tabs { display: flex; gap: 6px; }
+.tab { white-space: nowrap; border: 1px solid var(--line-2); background: var(--panel-2); border-radius: var(--radius-sm); min-height: 38px;
+  padding: 0 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; color: var(--muted); }
+.tab .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+.tab[aria-selected="true"] { color: var(--text); border-color: var(--c); box-shadow: inset 0 -3px 0 var(--c); background: var(--panel-3); }
+.tab small { font-weight: 600; color: var(--faint); }
+.head .sp { flex: 1; }
+.seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: var(--radius-sm); overflow: hidden; }
+.seg button { border: 0; background: var(--panel-2); min-height: 36px; padding: 0 11px; font-weight: 650; color: var(--text);
+  border-right: 1px solid var(--line-2); white-space: nowrap; }
+.seg button:last-child { border-right: 0; }
+.seg button:hover { background: var(--panel-3); }
+.seg button[aria-pressed="true"] { background: var(--slot); color: var(--slot-ink); }
+.seg-label { white-space: nowrap; font-size: 11px; font-weight: 800; letter-spacing: .1em; color: var(--faint); text-transform: uppercase; margin-right: 2px; }
+.ab button[aria-pressed="true"].byp { background: #d7dce3; color: #111; }
+
+.summary { display: flex; align-items: baseline; gap: 10px; color: var(--muted); font-size: 14px; }
+.summary .big { font-size: 17px; color: var(--text); font-weight: 600; }
+.summary .big b { color: var(--slot); }
+.summary .note { font-size: 12.5px; color: var(--faint); }
+.swatch { display: inline-block; width: 22px; height: 11px; border-radius: 3px; vertical-align: -1px; margin: 0 3px 0 0; }
+.sw-silent { background: repeating-linear-gradient(135deg, #2a2f38 0 3px, #1a1d23 3px 6px); border: 1px solid #3a414d; }
+.sw-over { background: #2c3139; border: 1px solid #454c58; }
+
+/* graph + keyboard */
+.graph-wrap { position: relative; flex: 1 1 auto; min-height: 250px; display: flex; flex-direction: column;
+  background: #0f1216; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+#graph { display: block; width: 100%; flex: 1 1 auto; min-height: 150px; touch-action: none; cursor: crosshair; }
+#graph.grab { cursor: grab; } #graph.grabbing { cursor: grabbing; } #graph.ew { cursor: ew-resize; }
+#kb { display: block; width: 100%; height: 92px; flex: none; touch-action: none; cursor: pointer; }
+.readout { position: absolute; top: 8px; pointer-events: none; background: #0b0d10ee; border: 1px solid var(--line-2);
+  border-radius: 6px; padding: 4px 8px; font: 600 12.5px/1.3 var(--font); white-space: nowrap; color: var(--text);
+  transform: translateX(-50%); display: none; z-index: 3; }
+.readout .m { color: var(--faint); font-weight: 500; }
+.toast { position: absolute; left: 50%; bottom: 104px; transform: translateX(-50%); background: #0b0d10f2;
+  border: 1px solid var(--slot); color: var(--text); padding: 6px 12px; border-radius: 8px; font-weight: 650;
+  opacity: 0; transition: opacity .18s; pointer-events: none; z-index: 4; white-space: nowrap; }
+.toast.on { opacity: 1; }
+.gesture { margin-left: auto; color: var(--faint); font-size: 12px; white-space: nowrap; }
+.gesture kbd { font: 600 11px var(--mono); border: 1px solid var(--line-2); border-radius: 4px; padding: 0 4px; color: var(--muted); background: #15181d; }
+
+/* lower */
+.lower { display: grid; grid-template-columns: 1fr 300px; gap: 14px; flex: none; }
+table.bands { width: 100%; border-collapse: separate; border-spacing: 0; }
+.bands th { text-align: left; font-size: 11px; font-weight: 800; letter-spacing: .1em; color: var(--faint); text-transform: uppercase;
+  padding: 0 6px 5px; white-space: nowrap; }
+.bands td { padding: 3px 6px; border-top: 1px solid var(--line); vertical-align: middle; height: 42px; }
+.bands tr.sel td { background: #1f232b; }
+.bands tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--slot); }
+.bands tr.off td:not(:first-child):not(:last-child) { opacity: .45; }
+.num { width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; font-weight: 800; font-size: 13px;
+  border: 2px solid var(--slot); color: var(--slot); background: #15181d; }
+tr.sel .num { background: var(--slot); color: var(--slot-ink); }
+.bands select, .bands input[type=text] { background: #0f1216; border: 1px solid var(--line-2); border-radius: 6px; height: 32px;
+  padding: 0 8px; font-weight: 600; font-size: 13.5px; }
+.bands select { width: 118px; }
+.bands input[type=text] { width: 100%; min-width: 0; }
+.bands input.hz, .bands input.db, .bands input.q { font-family: var(--mono); font-size: 13px; text-align: right; }
+.bands input.note { font-weight: 650; }
+.bands input:focus { border-color: var(--focus); outline: none; }
+.bands input.bad { border-color: #ff4d4f; }
+.bands input:disabled { color: var(--faint); background: transparent; border-style: dashed; }
+.acts { font-size: 12.5px; color: var(--muted); line-height: 1.25; }
+.acts b { color: var(--text); font-weight: 650; }
+.pill { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .04em; border-radius: 999px; padding: 1px 8px;
+  margin-right: 6px; vertical-align: 1px; text-transform: uppercase; }
+.pill.over { background: #3a3f48; color: #e6e9ee; }
+.pill.none { background: #4a2326; color: #ffc9ca; }
+.pill.flat { background: transparent; border: 1px solid var(--line-2); color: var(--faint); }
+.pill.ok { background: color-mix(in srgb, var(--slot) 22%, transparent); color: var(--slot); }
+.onoff { width: 40px; height: 24px; border-radius: 999px; border: 1px solid var(--line-2); background: #2a2f37; position: relative; padding: 0; }
+.onoff::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #6b7380; transition: left .1s; }
+.onoff[aria-pressed="true"] { background: color-mix(in srgb, var(--slot) 35%, #1c2027); border-color: var(--slot); }
+.onoff[aria-pressed="true"]::after { left: 19px; background: var(--slot); }
+col.c-n { width: 40px; } col.c-t { width: 132px; } col.c-note { width: 150px; } col.c-hz { width: 100px; }
+col.c-db { width: 86px; } col.c-q { width: 74px; } col.c-on { width: 56px; }
+
+.listen { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex;
+  flex-direction: column; gap: 9px; }
+.listen h3 { margin: 0; font-size: 11px; font-weight: 800; letter-spacing: .1em; color: var(--faint); text-transform: uppercase; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.btn { border: 1px solid var(--line-2); background: var(--panel-3); border-radius: var(--radius-sm); min-height: 38px; padding: 0 12px;
+  font-weight: 700; }
+.btn:hover { border-color: #4a5260; background: #2c323c; }
+.btn.primary { background: var(--slot); color: var(--slot-ink); border-color: var(--slot); }
+.btn.small { min-height: 30px; padding: 0 10px; font-size: 12.5px; font-weight: 650; }
+.legend { font-size: 12.5px; color: var(--muted); display: grid; gap: 3px; }
+.legend i { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: 3px; margin-right: 6px; }
+.hint { font-size: 12.5px; color: var(--faint); }
+.copied { color: var(--slot); font-weight: 650; font-size: 12.5px; }
+
+@media (max-height: 760px), (max-width: 1200px) {
+  main { padding: 10px 12px 12px; }
+  .card { padding: 10px 12px; gap: 8px; }
+  .tab { min-height: 34px; padding: 0 9px; }
+  .tab small { display: none; }
+  .seg button { min-height: 32px; padding: 0 9px; }
+  .summary .big { font-size: 15px; }
+  .summary .note { display: none; }
+  #kb { height: 76px; }
+  .bands td { height: 36px; padding: 2px 5px; }
+  .bands select, .bands input[type=text] { height: 28px; }
+  .lower { grid-template-columns: 1fr 250px; gap: 10px; }
+  col.c-t { width: 116px; } .bands select { width: 108px; } col.c-note { width: 128px; } col.c-hz { width: 84px; }
+  col.c-db { width: 76px; } col.c-q { width: 64px; }
+  .listen { padding: 10px 12px; gap: 7px; }
+  .legend { font-size: 12px; }
+  .gesture { display: none; }
+  .toast { bottom: 88px; }
+}
+@media (max-width: 1200px) {
+  .acts .lg { display: none; }
+  .title { display: none; }
+  .seg-label { display: none; }
+  .acts { font-size: 12px; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="brand">Worship Rig</span>
+  <span class="crumbs">Edit › Sunday Pad + Piano › <b id="crumbSlot">Keys</b> › <b>Tone EQ</b></span>
+  <span class="sp"></span>
+  <span class="status"><span class="led" id="led"></span><span id="status">Click anything to start sound</span></span>
+</header>
+<main>
+<section class="card" id="card">
+  <div class="head">
+    <span class="title">Tone EQ</span>
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <span class="sp"></span>
+    <span class="seg-label">Start from</span>
+    <div class="seg" id="presets"></div>
+    <div class="seg ab" id="ab" title="A/B: press B to flip">
+      <button type="button" data-ab="a" aria-pressed="true">A · EQ on</button>
+      <button type="button" data-ab="b" class="byp" aria-pressed="false">B · Bypass</button>
+    </div>
+  </div>
+  <div class="summary" id="summary"></div>
+  <div class="graph-wrap" id="gw">
+    <canvas id="graph" tabindex="0" aria-label="EQ curve over a piano keyboard. Arrow keys move the selected band, [ and ] change its width."></canvas>
+    <canvas id="kb" aria-label="Piano keyboard: click a lit key to hear it through the EQ"></canvas>
+    <div class="readout" id="readout"></div>
+    <div class="toast" id="toast"></div>
+  </div>
+  <div class="lower">
+    <table class="bands" id="bands">
+      <colgroup><col class="c-n"><col class="c-t"><col class="c-note"><col class="c-hz"><col class="c-db"><col class="c-q"><col><col class="c-on"></colgroup>
+      <thead><tr><th></th><th>Band</th><th>Note</th><th>Hz</th><th>Gain dB</th><th>Q</th><th>Acts on</th><th>On</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <aside class="listen">
+      <h3>Listen</h3>
+      <div class="row">
+        <button class="btn primary" id="play" type="button">▶ Play loop</button>
+        <button class="btn" id="stop" type="button">■ Stop</button>
+      </div>
+      <div class="hint" id="kbHint">…or click any lit key. Keys show the pitch you <b>hear</b>.</div>
+      <div class="legend">
+        <span><i style="background:#d7dce3;height:2px"></i>Spectrum before the EQ (outline)</span>
+        <span><i style="background:linear-gradient(90deg,var(--slot) 50%,#7cc4ff 50%);height:6px;vertical-align:1px"></i>What the EQ lifted / cut</span>
+        <span><i id="lgAfter" style="background:var(--slot);height:8px;vertical-align:0;opacity:.8"></i>After the EQ: what you hear</span>
+        <span><i style="background:#fff"></i>EQ curve (±15 dB scale)</span>
+      </div>
+      <div class="row">
+        <button class="btn small" id="copy" type="button" title="Copy the four bands as text, for notes or another EQ">Copy as text</button>
+        <span class="copied" id="copied"></span>
+      </div>
+    </aside>
+  </div>
+</section>
+</main>
+
+<script type="module">
+// ============================================================================ constants & axis
+const SAMPLE_BASE = '/app/samples/';
+const MIDI_LO = 21, MIDI_HI = 108;               // A0 … C8: the axis keyboard (88 keys)
+const CONTROLLER = [21, 108];                     // the keyboard you play (88 keys assumed; see README)
+const F_MIN = 20, F_MAX = 20000;
+const SUB_K = 0.5, AIR_K = 0.42;                  // compression of the sub (<A0) and air (>C8) zones, units per semitone
+const S_LO = MIDI_LO - 0.5, S_HI = MIDI_HI + 0.5; // key-zone edges in semitones
+const semiOf = (f) => 69 + 12 * Math.log2(f / 440);
+const fOfSemi = (s) => 440 * Math.pow(2, (s - 69) / 12);
+const SUB_U = (S_LO - semiOf(F_MIN)) * SUB_K;
+const KEY_U = S_HI - S_LO;
+const AIR_U = (semiOf(F_MAX) - S_HI) * AIR_K;
+const TOTAL_U = SUB_U + KEY_U + AIR_U;
+function uOfF(f) {
+  const s = semiOf(f);
+  if (s < S_LO) return SUB_U - (S_LO - s) * SUB_K;
+  if (s > S_HI) return SUB_U + KEY_U + (s - S_HI) * AIR_K;
+  return SUB_U + (s - S_LO);
+}
+function fOfU(u) {
+  if (u < SUB_U) return fOfSemi(S_LO - (SUB_U - u) / SUB_K);
+  if (u > SUB_U + KEY_U) return fOfSemi(S_HI + (u - SUB_U - KEY_U) / AIR_K);
+  return fOfSemi(S_LO + (u - SUB_U));
+}
+const NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+const BLACK = new Set([1, 3, 6, 8, 10]);
+const isBlack = (n) => BLACK.has(((n % 12) + 12) % 12);
+const noteName = (n) => NAMES[((n % 12) + 12) % 12] + (Math.floor(n / 12) - 1);
+const midiF = (n) => 440 * Math.pow(2, (n - 69) / 12);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fmtHz = (f) => f >= 10000 ? (f / 1000).toFixed(1).replace(/\.0$/, '') + ' kHz'
+  : f >= 1000 ? (f / 1000).toFixed(2).replace(/0$/, '').replace(/\.0$/, '') + ' kHz' : (f < 100 ? f.toFixed(1).replace(/\.0$/, '') : Math.round(f)) + ' Hz';
+const fmtHzNum = (f) => f >= 1000 ? (f / 1000).toFixed(f >= 10000 ? 1 : 2).replace(/\.?0+$/, '') + 'k' : (f < 100 ? f.toFixed(1).replace(/\.0$/, '') : String(Math.round(f)));
+const fmtDb = (g) => (g > 0.04 ? '+' : g < -0.04 ? '−' : '') + Math.abs(g).toFixed(1);
+/** "A3 · 220 Hz", "≈A3 +23¢ · 223 Hz", "above C8 · 8 kHz". */
+function noteLabel(f) {
+  const s = semiOf(f);
+  if (s > S_HI) return `above C8 · ${fmtHz(f)}`;
+  if (s < S_LO) return `below A0 · ${fmtHz(f)}`;
+  const n = Math.round(s), c = Math.round((s - n) * 100);
+  return Math.abs(c) < 3 ? `${noteName(n)} · ${fmtHz(f)}` : `≈${noteName(n)} ${c > 0 ? '+' : '−'}${Math.abs(c)}¢ · ${fmtHz(f)}`;
+}
+/** Table cell: the full label when there is room, the note alone when narrow (the Hz column is beside it). */
+const noteCell = (f) => (window.innerWidth >= 1200 ? noteLabel(f) : noteLabel(f).split(' · ')[0]);
+// ISO third-octave centres: snap targets outside the keys (sub / air)
+const ISO = [20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500,
+  3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000];
+
+// ============================================================================ filter math (RBJ, as Web Audio implements it)
+const FS = 48000;
+function coeffs(b, fs = FS) {
+  const w0 = 2 * Math.PI * clamp(b.f, 10, fs / 2 - 10) / fs, cs = Math.cos(w0), sn = Math.sin(w0);
+  const A = Math.pow(10, b.g / 40);
+  if (b.type === 'peaking') {
+    const al = sn / (2 * b.q);
+    return [1 + al * A, -2 * cs, 1 - al * A, 1 + al / A, -2 * cs, 1 - al / A];
+  }
+  const al = sn / 2 * Math.SQRT2, sA = 2 * Math.sqrt(A) * al; // shelves: slope S = 1 (Web Audio ignores Q)
+  if (b.type === 'lowshelf') return [A * ((A + 1) - (A - 1) * cs + sA), 2 * A * ((A - 1) - (A + 1) * cs), A * ((A + 1) - (A - 1) * cs - sA),
+    (A + 1) + (A - 1) * cs + sA, -2 * ((A - 1) + (A + 1) * cs), (A + 1) + (A - 1) * cs - sA];
+  return [A * ((A + 1) + (A - 1) * cs + sA), -2 * A * ((A - 1) + (A + 1) * cs), A * ((A + 1) + (A - 1) * cs - sA),
+    (A + 1) - (A - 1) * cs + sA, 2 * ((A - 1) - (A + 1) * cs), (A + 1) - (A - 1) * cs - sA];
+}
+function magDb(c, f, fs = FS) {
+  const w = 2 * Math.PI * f / fs, c1 = Math.cos(w), s1 = Math.sin(w), c2 = Math.cos(2 * w), s2 = Math.sin(2 * w);
+  const nr = c[0] + c[1] * c1 + c[2] * c2, ni = -(c[1] * s1 + c[2] * s2);
+  const dr = c[3] + c[4] * c1 + c[5] * c2, di = -(c[4] * s1 + c[5] * s2);
+  return 10 * Math.log10((nr * nr + ni * ni) / (dr * dr + di * di));
+}
+const bandDb = (b, f) => (b.on && Math.abs(b.g) > 0.001 ? magDb(coeffs(b), f) : 0);
+const bwOct = (q) => 2 * Math.asinh(1 / (2 * q)) / Math.LN2;           // peaking Q → bandwidth (octaves)
+const qOfBw = (bw) => 1 / (2 * Math.sinh(Math.LN2 / 2 * bw));
+
+// ============================================================================ slots (mock song) & presets
+const SLOTS = [
+  { name: 'Keys', color: '#ff8a3d', ink: '#1f0e00', inst: { kind: 'sampler', id: 'salamander-piano', layer: 1, label: 'Grand Piano' },
+    lowNote: 48, highNote: 127, octave: 0, why: 'split at C3 (Bass takes the notes below)',
+    chords: [[50, 57, 62, 66, 69], [59, 62, 66, 71], [55, 59, 62, 67, 74], [57, 61, 64, 69, 76]] },
+  { name: 'Pad', color: '#3ddc84', ink: '#002010', inst: { kind: 'pad', label: 'Warm Pad', range: [0, 127] },
+    lowNote: 0, highNote: 127, octave: 0, why: 'every key',
+    chords: [[38, 50, 57, 62, 66], [35, 47, 54, 62, 66], [31, 43, 55, 59, 62], [33, 45, 52, 57, 61]] },
+  { name: 'Extra', color: '#4aa8ff', ink: '#001a33', inst: { kind: 'sampler', id: 'ep-rhodes', layer: 0, label: 'Rhodes' },
+    lowNote: 60, highNote: 127, octave: 0, why: 'split at C4 · Rhodes samples stop at G7',
+    chords: [[66, 69, 74, 78], [66, 71, 74, 78], [67, 71, 74, 79], [69, 73, 76, 81]] },
+  { name: 'Bass', color: '#b784ff', ink: '#1a0a33', inst: { kind: 'sampler', id: 'salamander-piano', layer: 1, label: 'Grand Piano' },
+    lowNote: 0, highNote: 59, octave: -1, why: 'left hand up to B3, played an octave down',
+    chords: [[26, 38], [23, 35], [31, 43], [33, 45]] },
+];
+const band = (type, f, g = 0, q = 1) => ({ type, f, g, q: type === 'peaking' ? q : Math.SQRT1_2, on: true });
+const FLAT = () => [band('lowshelf', 120), band('peaking', 400), band('peaking', 2500), band('highshelf', 6000)];
+const PRESETS = {
+  Flat: FLAT,
+  Warm: () => [band('lowshelf', midiF(50), 3), band('peaking', 330, 0, 1), band('peaking', 3000, -3, 0.9), band('highshelf', 8000, -2)],
+  Air: () => [band('lowshelf', 120, 0), band('peaking', 250, -1.5, 1.2), band('peaking', 4700, 1.5, 0.7), band('highshelf', 10000, 4.5)],
+  'Cut mud (Bass)': () => [band('lowshelf', midiF(40), 2), band('peaking', 250, -5, 1.3), band('peaking', 880, 2, 1.4), band('highshelf', 4200, -6)],
+};
+const eqOf = [
+  [band('lowshelf', midiF(47), 2), band('peaking', midiF(52), -3, 1.2), band('peaking', 2500, 2, 0.8), band('highshelf', 6000, -1)],
+  FLAT(), FLAT(), PRESETS['Cut mud (Bass)'](),
+];
+let cur = 0, sel = 2, bypass = false;
+const bands = () => eqOf[cur];
+
+/** Sounding fundamental range of a slot: (controller ∩ split) shifted by octave, ∩ the instrument's range. */
+function sounding(slot) {
+  const shift = 12 * slot.octave + (slot.transpose || 0);
+  const pLo = Math.max(CONTROLLER[0], slot.lowNote), pHi = Math.min(CONTROLLER[1], slot.highNote);
+  const ir = instRange(slot);
+  const lo = Math.max(pLo + shift, ir[0]), hi = Math.min(pHi + shift, ir[1]);
+  const why = { lo: pLo + shift >= ir[0] ? (slot.lowNote > CONTROLLER[0] ? 'split' : 'keyboard') : 'instrument',
+    hi: pHi + shift <= ir[1] ? (slot.highNote < CONTROLLER[1] ? 'split' : 'keyboard') : 'instrument' };
+  return { lo, hi, why, ir };
+}
+const instRanges = {};
+function instRange(slot) {
+  if (slot.inst.kind === 'pad') return slot.inst.range;
+  return instRanges[slot.inst.id] || [21, 108];
+}
+
+// ============================================================================ audio
+let ctx = null, anPre, anPost, eqNodes = [], wet, dry, master, input, manifest = null;
+const bufCache = new Map();
+function ensureAudio() {
+  if (ctx) { if (ctx.state !== 'running') ctx.resume(); return ctx; }
+  ctx = new AudioContext({ latencyHint: 'interactive', sampleRate: FS });
+  input = new GainNode(ctx, { gain: 1 });
+  anPre = new AnalyserNode(ctx, { fftSize: 16384, smoothingTimeConstant: 0.8, minDecibels: -110, maxDecibels: -10 });
+  anPost = new AnalyserNode(ctx, { fftSize: 16384, smoothingTimeConstant: 0.8, minDecibels: -110, maxDecibels: -10 });
+  eqNodes = [0, 1, 2, 3].map(() => new BiquadFilterNode(ctx));
+  wet = new GainNode(ctx, { gain: 1 }); dry = new GainNode(ctx, { gain: 0 });
+  const out = new GainNode(ctx, { gain: 1 });
+  master = new GainNode(ctx, { gain: 0.7 });
+  input.connect(anPre);
+  let n = input; for (const e of eqNodes) n = n.connect(e);
+  n.connect(wet).connect(out); input.connect(dry).connect(out);
+  out.connect(anPost); out.connect(master).connect(ctx.destination);
+  applyEq(true); applyAB(true);
+  ctx.resume();
+  setStatus('busy', 'Loading samples…');
+  return ctx;
+}
+function applyEq(now = false) {
+  if (!ctx) return;
+  const t = ctx.currentTime, tau = now ? 0.001 : 0.015;
+  bands().forEach((b, i) => {
+    const e = eqNodes[i];
+    if (e.type !== b.type) e.type = b.type;
+    e.frequency.setTargetAtTime(b.f, t, tau);
+    e.gain.setTargetAtTime(b.on ? b.g : 0, t, tau);
+    e.Q.setTargetAtTime(b.type === 'peaking' ? b.q : Math.SQRT1_2, t, tau);
+  });
+}
+function applyAB(now = false) {
+  if (!ctx) return;
+  const t = ctx.currentTime, tau = now ? 0.001 : 0.012;
+  wet.gain.setTargetAtTime(bypass ? 0 : 1, t, tau); dry.gain.setTargetAtTime(bypass ? 1 : 0, t, tau);
+}
+async function loadManifest() {
+  const r = await fetch(SAMPLE_BASE + 'manifest.json');
+  manifest = await r.json();
+  const toMidi = (nm) => { const m = /^([A-G])(b|#)?(-?\d)$/.exec(nm); const pc = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[m[1]] + (m[2] === 'b' ? -1 : m[2] === '#' ? 1 : 0); return pc + 12 * (Number(m[3]) + 1); };
+  for (const ins of manifest.instruments) {
+    let lo = 127, hi = 0;
+    for (const L of ins.layers) { L.midis = L.notes.map(toMidi); lo = Math.min(lo, ...L.midis); hi = Math.max(hi, ...L.midis); }
+    instRanges[ins.id] = [lo, hi];
+  }
+  renderAll();
+}
+const instDef = (id) => manifest?.instruments.find((i) => i.id === id);
+function sampleFor(slot, n) {
+  const d = instDef(slot.inst.id); if (!d) return null;
+  const L = d.layers[Math.min(slot.inst.layer, d.layers.length - 1)];
+  let bi = 0; L.midis.forEach((m, i) => { if (Math.abs(m - n) < Math.abs(L.midis[bi] - n)) bi = i; });
+  return { url: `${SAMPLE_BASE}${L.dir}/${L.notes[bi]}.${d.ext}`, midi: L.midis[bi], trim: d.gainTrim || 0, release: d.release || 0.12 };
+}
+function loadBuf(url) {
+  if (!bufCache.has(url)) bufCache.set(url, fetch(url).then((r) => r.arrayBuffer()).then((a) => ctx.decodeAudioData(a)));
+  return bufCache.get(url);
+}
+async function preload(slot) {
+  if (slot.inst.kind !== 'sampler' || !manifest) { setStatus('ok', 'Sound ready'); return; }
+  const sr = sounding(slot);
+  const notes = new Set(slot.chords.flat().filter((n) => n >= sr.lo && n <= sr.hi));
+  const urls = [...new Set([...notes].map((n) => sampleFor(slot, n).url))];
+  setStatus('busy', `Loading ${slot.inst.label}…`);
+  await Promise.all(urls.map(loadBuf));
+  setStatus('ok', `${slot.inst.label} ready`);
+}
+const voices = new Set();
+const sounding$ = new Map(); // midi → last-on time (for key lights / markers)
+async function noteOn(n, vel = 0.7, when = 0, dur = 1.6) {
+  ensureAudio();
+  const slot = SLOTS[cur];
+  const t0 = Math.max(when || 0, ctx.currentTime + 0.01);
+  const env = new GainNode(ctx, { gain: 0 });
+  env.connect(input);
+  let stop;
+  if (slot.inst.kind === 'pad') {
+    const f = midiF(n), lp = new BiquadFilterNode(ctx, { type: 'lowpass', frequency: Math.min(6500, f * 9), Q: 0.5 });
+    const oscs = [-7, 7].map((c) => new OscillatorNode(ctx, { type: 'sawtooth', frequency: f, detune: c }));
+    const sub = new OscillatorNode(ctx, { type: 'triangle', frequency: f });
+    oscs.forEach((o) => o.connect(lp)); sub.connect(lp); lp.connect(env);
+    const g = 0.055 * vel;
+    env.gain.setValueAtTime(0, t0); env.gain.linearRampToValueAtTime(g, t0 + 0.45);
+    env.gain.setTargetAtTime(0, t0 + dur, 0.5);
+    [...oscs, sub].forEach((o) => { o.start(t0); o.stop(t0 + dur + 3); });
+    stop = t0 + dur + 3;
+  } else {
+    const s = sampleFor(slot, n); if (!s) return;
+    const buf = await loadBuf(s.url);
+    const t = Math.max(t0, ctx.currentTime + 0.005);
+    const src = new AudioBufferSourceNode(ctx, { buffer: buf, playbackRate: Math.pow(2, (n - s.midi) / 12) });
+    src.connect(env);
+    const g = Math.pow(10, (s.trim - 14 - 10 * (1 - vel)) / 20);
+    env.gain.setValueAtTime(g, t);
+    env.gain.setTargetAtTime(0, t + dur, s.release * 2.5);
+    src.start(t); src.stop(t + dur + 2);
+    stop = t + dur + 2;
+  }
+  const v = { n, env, stop };
+  voices.add(v);
+  const onAt = (t0 - ctx.currentTime) * 1000;
+  setTimeout(() => { sounding$.set(n, performance.now() + dur * 1000); }, Math.max(0, onAt));
+  setTimeout(() => { voices.delete(v); try { env.disconnect(); } catch {} }, (stop - ctx.currentTime) * 1000 + 50);
+}
+let loopTimer = null, loopIdx = 0, loopT0 = 0;
+function playLoop(fixed = null) {
+  ensureAudio();
+  stopAll();
+  const slot = SLOTS[cur];
+  const s = sounding(slot);
+  const step = () => {
+    const ch = slot.chords[fixed ?? loopIdx++ % slot.chords.length].filter((n) => n >= s.lo && n <= s.hi);
+    ch.forEach((n, i) => noteOn(n, 0.62 + 0.08 * (i === ch.length - 1), ctx.currentTime + 0.02 + i * 0.012, 1.9));
+  };
+  step();
+  loopT0 = performance.now();
+  loopTimer = setInterval(step, 2000);
+  document.getElementById('play').textContent = '↻ Looping';
+}
+function stopAll() {
+  if (loopTimer) clearInterval(loopTimer); loopTimer = null;
+  document.getElementById('play').textContent = '▶ Play loop';
+  if (!ctx) return;
+  for (const v of voices) v.env.gain.setTargetAtTime(0, ctx.currentTime, 0.08);
+}
+
+// ============================================================================ status / toast
+function setStatus(kind, text) {
+  document.getElementById('led').className = 'led ' + (kind || '');
+  document.getElementById('status').textContent = text;
+}
+let toastT = 0;
+function toast(msg) {
+  const el = document.getElementById('toast'); el.innerHTML = msg; el.classList.add('on');
+  clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 1600);
+}
+
+// ============================================================================ geometry
+const G = { L: 46, R: 14, T: 12, RULER: 24, w: 0, h: 0, dpr: 1 };
+const gc = document.getElementById('graph'), kc = document.getElementById('kb');
+const g2 = gc.getContext('2d'), k2 = kc.getContext('2d');
+const plotW = () => G.w - G.L - G.R;
+const xOfU = (u) => G.L + (u / TOTAL_U) * plotW();
+const xOfF = (f) => xOfU(uOfF(f));
+const fOfX = (x) => fOfU(clamp((x - G.L) / plotW(), 0, 1) * TOTAL_U);
+const xOfSemi = (s) => xOfU(SUB_U + (s - S_LO));
+const DB_RANGE = 15;
+const plotB = () => G.h - G.RULER;
+const yOfDb = (d) => G.T + (1 - (d + DB_RANGE) / (2 * DB_RANGE)) * (plotB() - G.T);
+const dbOfY = (y) => (1 - (y - G.T) / (plotB() - G.T)) * 2 * DB_RANGE - DB_RANGE;
+const yOfSpec = (d) => plotB() - clamp((d + 105) / 85, 0, 1) * (plotB() - G.T); // −105 … −20 dBFS → bottom … top
+function resize() {
+  G.dpr = window.devicePixelRatio || 1;
+  const r = gc.getBoundingClientRect(), kr = kc.getBoundingClientRect();
+  G.w = r.width; G.h = r.height; G.kh = kr.height;
+  gc.width = Math.round(r.width * G.dpr); gc.height = Math.round(r.height * G.dpr);
+  kc.width = Math.round(kr.width * G.dpr); kc.height = Math.round(kr.height * G.dpr);
+  buildColumns();
+  renderAll();
+}
+// per-pixel-column analyser bins (fractional), precomputed on resize
+let cols = [];
+function buildColumns() {
+  cols = [];
+  const binHz = FS / 16384;
+  for (let x = Math.floor(G.L); x <= G.w - G.R; x += 2) {
+    const f0 = fOfX(x - 1), f1 = fOfX(x + 1);
+    cols.push({ x, b0: f0 / binHz, b1: f1 / binHz });
+  }
+}
+/** Key rectangles on the pitch-true keyboard: each key is centred on its own fundamental. */
+function keyRects() {
+  const out = [];
+  for (let n = MIDI_LO; n <= MIDI_HI; n++) {
+    if (isBlack(n)) { out.push({ n, black: true, l: n - 0.46, r: n + 0.46 }); continue; }
+    const l = n === MIDI_LO ? n - 0.5 : n - (isBlack(n - 1) ? 1 : 0.5);
+    const r = n === MIDI_HI ? n + 0.5 : n + (isBlack(n + 1) ? 1 : 0.5);
+    out.push({ n, black: false, l, r });
+  }
+  return out;
+}
+const KEYS = keyRects();
+
+// ============================================================================ zones
+/** Frequency zones for the current slot: silent below the lowest fundamental, overtones-only above the highest. */
+function zones() {
+  const slot = SLOTS[cur], s = sounding(slot);
+  return { s, fLo: midiF(s.lo - 0.5), fHi: midiF(s.hi + 0.5) };
+}
+/** Where a band actually does something, and what that is. */
+function bandReach(b) {
+  const { s, fLo, fHi } = zones();
+  if (!b.on) return { kind: 'flat', text: 'Off' };
+  if (Math.abs(b.g) < 0.25) return { kind: 'flat', text: 'Flat: set a boost or cut' };
+  const thr = Math.max(0.5, Math.abs(b.g) * 0.3);
+  let a = null, z = null;
+  for (let i = 0; i <= 400; i++) {
+    const f = F_MIN * Math.pow(F_MAX / F_MIN, i / 400);
+    if (Math.abs(bandDb(b, f)) >= thr) { if (a === null) a = f; z = f; }
+  }
+  if (a === null) return { kind: 'flat', text: 'Flat' };
+    if (z < fLo) return { kind: 'none', text: `<span class="pill none">No effect</span>below <span class="lg">lowest note </span><b>${noteName(s.lo)}</b><span class="lg">: nothing to shape</span>` };
+  if (a > fHi) return { kind: 'over', text: `<span class="pill over">Overtones only</span>above <span class="lg">top note </span><b>${noteName(s.hi)}</b><span class="lg">: tone colour, not notes</span>` };
+  const n0 = Math.max(s.lo, Math.ceil(semiOf(a) - 0.001)), n1 = Math.min(s.hi, Math.floor(semiOf(z) + 0.001));
+  const lo = a <= F_MIN * 1.01 || n0 <= s.lo ? `${noteName(s.lo)}` : noteName(n0);
+  const hi = z >= F_MAX * 0.99 || n1 >= s.hi ? `${noteName(s.hi)}` : noteName(n1);
+  const tail = a <= fLo && b.type !== 'lowshelf' ? '' : z >= fHi ? ' + overtones' : '';
+  return { kind: 'ok', text: `<span class="pill ok">${b.g > 0 ? 'Boost' : 'Cut'}</span>notes <b>${n0 > n1 ? noteName(n0) : lo}–${hi}</b>${tail}` };
+}
+
+// ============================================================================ drawing: graph
+let hover = null; // {x, y}
+let dragging = null;
+const HANDLE_R = 11;
+function handlePos(b) { return { x: xOfF(b.f), y: yOfDb(b.on ? b.g : 0) }; }
+function earPos(b) {
+  if (b.type !== 'peaking') return null;
+  const half = bwOct(b.q) / 2, f1 = b.f / Math.pow(2, half), f2 = b.f * Math.pow(2, half);
+  const y = yOfDb((b.on ? b.g : 0) / 2);
+  return [{ x: xOfF(f1), y, f: f1 }, { x: xOfF(f2), y, f: f2 }];
+}
+const specPre = new Float32Array(8192), specPost = new Float32Array(8192);
+function sampleSpec(arr, c) {
+  const i0 = Math.floor(c.b0), i1 = Math.ceil(c.b1);
+  if (i1 - i0 <= 1) { // interpolate (low end: several pixels per bin)
+    const m = (c.b0 + c.b1) / 2, i = Math.floor(m), t = m - i;
+    return arr[i] * (1 - t) + arr[Math.min(i + 1, arr.length - 1)] * t;
+  }
+  let mx = -200; for (let i = i0; i <= Math.min(i1, arr.length - 1); i++) if (arr[i] > mx) mx = arr[i];
+  return mx;
+}
+function drawGraph() {
+  const c = g2, W = G.w, H = G.h, slot = SLOTS[cur], col = slot.color;
+  c.setTransform(G.dpr, 0, 0, G.dpr, 0, 0);
+  c.clearRect(0, 0, W, H);
+  c.fillStyle = '#0f1216'; c.fillRect(0, 0, W, H);
+  const pB = plotB(), pT = G.T;
+  const { s, fLo, fHi } = zones();
+  const xk0 = xOfSemi(S_LO), xk1 = xOfSemi(S_HI);
+  // --- sub & air zone backgrounds (no keys)
+  c.fillStyle = '#12151a'; c.fillRect(G.L, pT, xk0 - G.L, pB - pT); c.fillRect(xk1, pT, W - G.R - xk1, pB - pT);
+  // --- grey zones: silent (hatched) and overtones-only (veil)
+  const xs = xOfF(fLo), xo = xOfF(fHi);
+  if (xs > G.L + 1) {
+    c.save(); c.beginPath(); c.rect(G.L, pT, xs - G.L, pB - pT); c.clip();
+    c.fillStyle = '#1a1d22'; c.fillRect(G.L, pT, xs - G.L, pB - pT);
+    c.strokeStyle = '#262a31'; c.lineWidth = 1;
+    for (let x = G.L - (pB - pT); x < xs; x += 7) { c.beginPath(); c.moveTo(x, pB); c.lineTo(x + (pB - pT), pT); c.stroke(); }
+    c.restore();
+  }
+  if (xo < W - G.R - 1) { c.fillStyle = '#1b1f25'; c.fillRect(xo, pT, W - G.R - xo, pB - pT); }
+  // --- grid: C octaves, Hz decades, dB
+  c.lineWidth = 1;
+  for (let n = 24; n <= 108; n += 12) { const x = Math.round(xOfSemi(n)) + 0.5; c.strokeStyle = '#1f242b'; c.beginPath(); c.moveTo(x, pT); c.lineTo(x, pB); c.stroke(); }
+  for (const f of [100, 1000, 10000]) { const x = Math.round(xOfF(f)) + 0.5; c.strokeStyle = '#2a3038'; c.setLineDash([2, 3]); c.beginPath(); c.moveTo(x, pT); c.lineTo(x, pB); c.stroke(); c.setLineDash([]); }
+  c.font = '600 11px ' + getComputedStyle(document.body).fontFamily; c.textBaseline = 'middle';
+  for (let d = -12; d <= 12; d += 6) {
+    const y = Math.round(yOfDb(d)) + 0.5;
+    c.strokeStyle = d === 0 ? '#3a414d' : '#1f242b'; c.beginPath(); c.moveTo(G.L, y); c.lineTo(W - G.R, y); c.stroke();
+    c.fillStyle = d === 0 ? '#a3acb8' : '#6b7380'; c.textAlign = 'right';
+    c.fillText((d > 0 ? '+' : d < 0 ? '−' : '') + Math.abs(d) + (d === 0 ? ' dB' : ''), G.L - 6, y);
+  }
+  // key-zone edge lines
+  c.strokeStyle = '#3a414d'; [xk0, xk1].forEach((x) => { c.beginPath(); c.moveTo(Math.round(x) + 0.5, pT); c.lineTo(Math.round(x) + 0.5, H); c.stroke(); });
+  // --- zone labels (top of plot)
+  c.textBaseline = 'top'; c.textAlign = 'left';
+  const zoneLabel = (x0, x1, lines, colr) => {
+    const w = x1 - x0; if (w < 60) return;
+    c.save(); c.beginPath(); c.rect(x0, pT, w, pB - pT); c.clip();
+    c.fillStyle = colr;
+    lines.forEach((t, i) => { c.font = (i ? '500 11.5px ' : '700 12px ') + getComputedStyle(document.body).fontFamily; c.fillText(t, x0 + 8, pT + 6 + i * 15); });
+    c.restore();
+  };
+  if (xs - G.L > 60) {
+    const lowWhy = s.why.lo === 'split' ? `below the split (${noteName(s.lo)})` : s.why.lo === 'instrument' ? `below ${slot.inst.label}'s lowest sample` : 'below your keyboard';
+    zoneLabel(Math.max(G.L, xk0), xs, [`${slot.name} doesn't play here`, lowWhy, 'no notes to shape, only rumble'], '#8a93a0');
+  }
+  if (xo < xk1 - 4) { // the overtone zone runs on through the air, so one label covers both
+    const hiWhy = s.why.hi === 'instrument' ? `${slot.inst.label} samples stop at ${noteName(s.hi)}` : '';
+    zoneLabel(xo, W - G.R, ['Overtones only', `no ${slot.name} notes above ${noteName(s.hi)}`, ...(hiWhy ? [hiWhy] : [])], '#8a93a0');
+  } else zoneLabel(xk1, W - G.R, ['Air', 'overtones only'], '#6b7380');
+
+  // --- analyser
+  if (ctx && anPre) {
+    anPre.getFloatFrequencyData(specPre); anPost.getFloatFrequencyData(specPost);
+    const path = (arr) => { c.beginPath(); cols.forEach((cl, i) => { const y = yOfSpec(sampleSpec(arr, cl)); i ? c.lineTo(cl.x, y) : c.moveTo(cl.x, y); }); };
+    const close = () => { c.lineTo(cols[cols.length - 1].x, pB); c.lineTo(cols[0].x, pB); c.closePath(); };
+    // before: neutral silhouette
+    path(specPre); close(); c.fillStyle = 'rgba(138,147,160,.26)'; c.fill();
+    // after (what you hear): tinted fill + line on top; a boost pokes out above the grey, a cut sinks into it
+    path(specPost); close();
+    const gr = c.createLinearGradient(0, pT, 0, pB); gr.addColorStop(0, hexA(bypass ? '#a3acb8' : col, 0.30)); gr.addColorStop(1, hexA(bypass ? '#a3acb8' : col, 0.04));
+    c.fillStyle = gr; c.fill();
+    path(specPost); c.strokeStyle = hexA(bypass ? '#c9d0d8' : col, 0.9); c.lineWidth = 1.4; c.stroke();
+    // what the EQ did, per column: brighter colour where it lifted the sound, cool blue where it cut it
+    if (!bypass) {
+      c.lineWidth = 2;
+      cols.forEach((cl) => {
+        const a0 = sampleSpec(specPre, cl), a1 = sampleSpec(specPost, cl);
+        if (a0 < -100 && a1 < -100) return;
+        const d = a1 - a0; if (Math.abs(d) < 1) return;
+        c.strokeStyle = d > 0 ? hexA(col, 0.95) : 'rgba(124,196,255,.9)';
+        c.beginPath(); c.moveTo(cl.x, yOfSpec(a0)); c.lineTo(cl.x, yOfSpec(a1)); c.stroke();
+      });
+    }
+    // the dry outline on top, so a boost shows as colour above it and a cut as grey above the colour
+    path(specPre); c.strokeStyle = 'rgba(215,220,227,.7)'; c.lineWidth = 1; c.stroke();
+  }
+  // --- fundamentals of sounding notes (small ticks along the bottom)
+  const now = performance.now();
+  for (const [n, until] of sounding$) {
+    if (until < now) { sounding$.delete(n); continue; }
+    const x = xOfSemi(n); c.fillStyle = col; c.beginPath(); c.moveTo(x, pB - 1); c.lineTo(x - 4, pB - 8); c.lineTo(x + 4, pB - 8); c.fill();
+  }
+
+  // --- selected band fill
+  const bs = bands(), sb = bs[sel];
+  if (sb && sb.on && Math.abs(sb.g) > 0.05) {
+    c.beginPath(); c.moveTo(G.L, yOfDb(0));
+    for (let x = G.L; x <= W - G.R; x += 2) c.lineTo(x, yOfDb(clamp(bandDb(sb, fOfX(x)), -DB_RANGE, DB_RANGE)));
+    c.lineTo(W - G.R, yOfDb(0)); c.closePath(); c.fillStyle = hexA(col, 0.16); c.fill();
+  }
+  // --- composite curve
+  c.beginPath();
+  for (let x = G.L; x <= W - G.R; x += 1.5) {
+    const f = fOfX(x); let d = 0; for (const b of bs) d += bandDb(b, f);
+    const y = yOfDb(clamp(d, -DB_RANGE, DB_RANGE)); x === G.L ? c.moveTo(x, y) : c.lineTo(x, y);
+  }
+  c.lineWidth = 2.6; c.strokeStyle = bypass ? '#6b7380' : '#ffffff'; if (bypass) c.setLineDash([6, 5]); c.stroke(); c.setLineDash([]);
+  // --- Q ears for the selected peak
+  const ears = sb && earPos(sb);
+  if (ears && sb.on) {
+    c.strokeStyle = hexA(col, 0.8); c.lineWidth = 1.5; c.setLineDash([3, 3]);
+    c.beginPath(); c.moveTo(ears[0].x, ears[0].y); c.lineTo(ears[1].x, ears[1].y); c.stroke(); c.setLineDash([]);
+    for (const e of ears) {
+      c.fillStyle = '#0f1216'; c.strokeStyle = col; c.lineWidth = 2;
+      roundRect(c, e.x - 4, e.y - 9, 8, 18, 3); c.fill(); c.stroke();
+    }
+  }
+  // --- handles
+  bs.forEach((b, i) => {
+    const p = handlePos(b), r = bandReach(b), isSel = i === sel, hot = dragging?.i === i || hoverHandle === i;
+    const inGrey = r.kind === 'over' || r.kind === 'none';
+    c.lineWidth = 2.5;
+    c.beginPath(); c.arc(p.x, p.y, HANDLE_R + (hot ? 2 : 0), 0, Math.PI * 2);
+    c.fillStyle = !b.on ? '#15181d' : isSel ? col : '#15181d'; c.fill();
+    c.strokeStyle = !b.on ? '#6b7380' : inGrey ? '#a3acb8' : col;
+    if (inGrey || !b.on) c.setLineDash([3, 2.5]); c.stroke(); c.setLineDash([]);
+    if (isSel) { c.beginPath(); c.arc(p.x, p.y, HANDLE_R + 5, 0, Math.PI * 2); c.strokeStyle = hexA(col, 0.35); c.lineWidth = 2; c.stroke(); }
+    c.fillStyle = isSel && b.on ? slot.ink : !b.on ? '#8a93a0' : inGrey ? '#c9d0d8' : col;
+    c.font = '800 12px ' + getComputedStyle(document.body).fontFamily; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(String(i + 1), p.x, p.y + 0.5);
+    if (inGrey) {
+      const t = r.kind === 'over' ? 'overtones only' : 'no effect';
+      c.font = '700 11px ' + getComputedStyle(document.body).fontFamily;
+      const eY = isSel && b.type === 'peaking' && b.on ? Math.max(p.y, yOfDb(b.g / 2) + 10) : p.y;
+      const tw = c.measureText(t).width + 12, ty = eY + 20 > pB - 20 ? p.y - 32 : eY + 18;
+      c.fillStyle = r.kind === 'over' ? '#3a3f48' : '#4a2326'; roundRect(c, p.x - tw / 2, ty, tw, 17, 8); c.fill();
+      c.fillStyle = r.kind === 'over' ? '#e6e9ee' : '#ffc9ca'; c.fillText(t, p.x, ty + 9);
+    }
+  });
+  // --- ruler (Hz) at the bottom
+  c.fillStyle = '#0b0d10'; c.fillRect(0, pB, W, G.RULER);
+  c.strokeStyle = '#2d333d'; c.beginPath(); c.moveTo(0, pB + 0.5); c.lineTo(W, pB + 0.5); c.stroke();
+  const minor = [30, 40, 50, 60, 70, 80, 90, 150, 300, 400, 600, 700, 800, 900, 1500, 3000, 4000, 7000, 9000, 15000];
+  c.strokeStyle = '#3a414d';
+  for (const f of minor) { const x = Math.round(xOfF(f)) + 0.5; c.beginPath(); c.moveTo(x, pB); c.lineTo(x, pB + 4); c.stroke(); }
+  c.font = '600 11px ' + getComputedStyle(document.body).fontFamily; c.textBaseline = 'middle';
+  const major = [[20, '20'], [50, '50'], [100, '100 Hz'], [200, '200'], [500, '500'], [1000, '1 kHz'], [2000, '2k'], [5000, '5k'], [10000, '10k'], [20000, '20k']];
+  for (const [f, t] of major) {
+    const x = Math.round(xOfF(f)) + 0.5; c.strokeStyle = '#6b7380'; c.beginPath(); c.moveTo(x, pB); c.lineTo(x, pB + 7); c.stroke();
+    c.fillStyle = '#c9d0d8'; c.textAlign = f === 20 ? 'left' : f === 20000 ? 'right' : 'center';
+    c.fillText(t, f === 20 ? x + 2 : f === 20000 ? x - 2 : x, pB + 15);
+  }
+  // A4 = 440 reference
+  { const x = Math.round(xOfF(440)) + 0.5; c.strokeStyle = hexA('#ffc94d', 0.7); c.beginPath(); c.moveTo(x, pB); c.lineTo(x, pB + 6); c.stroke();
+    c.fillStyle = '#ffc94d'; c.textAlign = 'center'; c.fillText('440', x, pB + 15); }
+  c.textAlign = 'left'; c.fillStyle = '#6b7380'; c.fillText('Hz', 8, pB + 13);
+  // --- hover hairline
+  if (hover && !dragging && hover.y < pB && hover.x > G.L) {
+    c.strokeStyle = 'rgba(241,244,248,.35)'; c.lineWidth = 1; const x = Math.round(hover.x) + 0.5;
+    c.beginPath(); c.moveTo(x, pT); c.lineTo(x, H); c.stroke();
+  }
+}
+function roundRect(c, x, y, w, h, r) { c.beginPath(); c.roundRect ? c.roundRect(x, y, w, h, r) : c.rect(x, y, w, h); }
+function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
+
+// ============================================================================ drawing: keyboard
+let pressedKey = null;
+function drawKeys() {
+  const c = k2, W = G.w, H = G.kh, slot = SLOTS[cur], col = slot.color;
+  c.setTransform(G.dpr, 0, 0, G.dpr, 0, 0);
+  c.clearRect(0, 0, W, H); c.fillStyle = '#0b0d10'; c.fillRect(0, 0, W, H);
+  const { s } = zones();
+  const bar = 12, top = bar + 2, kh = H - top - 1;
+  const inR = (n) => n >= s.lo && n <= s.hi;
+  const sb = bands()[sel];
+  const now = performance.now();
+  const lit = (n) => (sounding$.get(n) || 0) > now || pressedKey === n;
+  // range bar
+  c.fillStyle = '#1c2027'; c.fillRect(xOfSemi(S_LO), 3, xOfSemi(S_HI) - xOfSemi(S_LO), 6);
+  c.fillStyle = col; roundRect(c, xOfSemi(Math.max(S_LO, s.lo - 0.5)), 3, xOfSemi(Math.min(S_HI, s.hi + 0.5)) - xOfSemi(Math.max(S_LO, s.lo - 0.5)), 6, 3); c.fill();
+  c.font = '700 11px ' + getComputedStyle(document.body).fontFamily; c.textBaseline = 'middle';
+  c.fillStyle = '#a3acb8'; c.textAlign = 'right'; c.fillText(slot.name, G.L - 6, 6);
+  // sub & air
+  c.fillStyle = '#12151a'; c.fillRect(G.L, top, xOfSemi(S_LO) - G.L - 1, kh);
+  const xa = xOfSemi(S_HI) + 1;
+  const ag = c.createLinearGradient(xa, 0, W - G.R, 0); ag.addColorStop(0, '#1b1f25'); ag.addColorStop(1, '#101317');
+  c.fillStyle = ag; c.fillRect(xa, top, W - G.R - xa, kh);
+  c.fillStyle = '#8a93a0'; c.textAlign = 'center'; c.font = '700 11px ' + getComputedStyle(document.body).fontFamily;
+  const airW = W - G.R - xa;
+  if (airW > 70) {
+    c.fillText('no keys up here', xa + airW / 2, top + kh / 2 - 8);
+    c.font = '500 11px ' + getComputedStyle(document.body).fontFamily;
+    const t2 = c.measureText('overtones · 4.2–20 kHz').width < airW - 8 ? 'overtones · 4.2–20 kHz' : '4.2–20 kHz';
+    c.fillText(t2, xa + airW / 2, top + kh / 2 + 8);
+  }
+  c.textAlign = 'right'; c.fillStyle = '#6b7380'; c.font = '600 10.5px ' + getComputedStyle(document.body).fontFamily;
+  c.save(); c.translate(xOfSemi(S_LO) - 6, top + kh / 2); c.rotate(-Math.PI / 2); c.textAlign = 'center'; c.fillText('sub', 0, 0); c.restore();
+  // tint per key: the selected band's gain at that key's fundamental
+  const tint = (n) => { if (!sb || !sb.on) return 0; return bandDb(sb, midiF(n)); };
+  const drawKey = (k) => {
+    const x0 = xOfSemi(k.l), x1 = xOfSemi(k.r), w = x1 - x0, on = inR(k.n);
+    const h = k.black ? kh * 0.6 : kh;
+    let fill;
+    if (k.black) fill = on ? '#1b1e23' : '#23272e'; else fill = on ? '#b4bcc6' : '#3a3f47';
+    if (lit(k.n) && on) fill = k.black ? '#c79a1c' : '#ffc94d';
+    c.fillStyle = fill; roundRect(c, x0 + 0.5, top, w - 1, h, [0, 0, 3, 3]); c.fill();
+    if (!on) { // hatch greyed keys
+      c.save(); roundRect(c, x0 + 0.5, top, w - 1, h, [0, 0, 3, 3]); c.clip();
+      c.strokeStyle = k.black ? '#2c3139' : '#454b54'; c.lineWidth = 1;
+      for (let y = top - w; y < top + h; y += 6) { c.beginPath(); c.moveTo(x0, y + w); c.lineTo(x1, y); c.stroke(); }
+      c.restore();
+    }
+    const d = tint(k.n);
+    if (Math.abs(d) >= 0.4 && !(lit(k.n) && on)) {
+      const a = clamp(Math.abs(d) / 9, 0.12, 0.85) * (on ? 1 : 0.45);
+      c.fillStyle = d > 0 ? hexA(col, a) : `rgba(124,196,255,${a})`;
+      roundRect(c, x0 + 0.5, top + (k.black ? 0 : kh * 0.62), w - 1, k.black ? h : kh * 0.38, [0, 0, 3, 3]); c.fill();
+    }
+    if (!k.black) { c.strokeStyle = '#0b0d10'; c.lineWidth = 1; c.beginPath(); c.moveTo(Math.round(x1) + 0.5, top); c.lineTo(Math.round(x1) + 0.5, top + kh); c.stroke(); }
+    if (!k.black && k.n % 12 === 0) {
+      c.fillStyle = on ? '#23272e' : '#8a93a0'; c.font = '800 10px ' + getComputedStyle(document.body).fontFamily; c.textAlign = 'center';
+      c.fillText(noteName(k.n), (x0 + x1) / 2, top + kh - 8);
+    }
+  };
+  KEYS.filter((k) => !k.black).forEach(drawKey);
+  KEYS.filter((k) => k.black).forEach(drawKey);
+  // bracket for the selected band's span (where it's ≥ half its gain)
+  if (sb && sb.on && Math.abs(sb.g) >= 0.5) {
+    let a = null, z = null;
+    for (let x = G.L; x <= W - G.R; x += 1) { const d = bandDb(sb, fOfX(x)); if (Math.abs(d) >= Math.abs(sb.g) / 2) { if (a === null) a = x; z = x; } }
+    if (a !== null) {
+      c.strokeStyle = '#fff'; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(a, top + 7); c.lineTo(a, top + 1); c.lineTo(z, top + 1); c.lineTo(z, top + 7); c.stroke();
+    }
+  }
+}
+
+// ============================================================================ UI: header, summary, table
+const $ = (id) => document.getElementById(id);
+function renderTabs() {
+  const el = $('tabs'); el.innerHTML = '';
+  SLOTS.forEach((sl, i) => {
+    const s = sounding(sl);
+    const b = document.createElement('button');
+    b.className = 'tab'; b.type = 'button'; b.role = 'tab'; b.style.setProperty('--c', sl.color);
+    b.setAttribute('aria-selected', String(i === cur));
+    b.innerHTML = `<span class="dot"></span>${sl.name} <small>${noteName(s.lo)}–${noteName(s.hi)}</small>`;
+    b.title = `${sl.inst.label} · ${sl.why}`;
+    b.onclick = () => selectSlot(i);
+    el.append(b);
+  });
+}
+function renderPresets() {
+  const el = $('presets'); el.innerHTML = '';
+  for (const name of Object.keys(PRESETS)) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = name; b.setAttribute('aria-pressed', 'false');
+    b.onclick = () => { eqOf[cur] = PRESETS[name](); sel = Math.min(sel, 3); commit(); toast(`${name} applied to ${SLOTS[cur].name}`); };
+    el.append(b);
+  }
+}
+function renderSummary() {
+  const slot = SLOTS[cur], s = sounding(slot);
+  $('summary').innerHTML = `<span class="big"><b>${slot.name}</b> plays <b>${slot.inst.label}</b> from <b>${noteName(s.lo)}</b> to <b>${noteName(s.hi)}</b>
+    <span style="color:var(--muted);font-weight:500">(${fmtHz(midiF(s.lo))} – ${fmtHz(midiF(s.hi))})</span></span>
+    <span class="note"><span class="swatch sw-silent"></span>no notes · <span class="swatch sw-over"></span>overtones only</span>
+    <span class="gesture">drag a dot: ↔ note, ↕ boost/cut · <kbd>wheel</kbd>/pinch or side tabs: width · <kbd>⌥</kbd> no snap · double-click: 0 dB</span>`;
+  document.documentElement.style.setProperty('--slot', slot.color);
+  document.documentElement.style.setProperty('--slot-ink', slot.ink);
+  $('crumbSlot').textContent = slot.name;
+}
+const TYPES = [['lowshelf', 'Low shelf'], ['peaking', 'Bell'], ['highshelf', 'High shelf']];
+function renderTable() {
+  const tb = $('bands').tBodies[0]; tb.innerHTML = '';
+  bands().forEach((b, i) => {
+    const tr = document.createElement('tr'); tr.className = (i === sel ? 'sel ' : '') + (b.on ? '' : 'off');
+    tr.dataset.i = i;
+    const r = bandReach(b);
+    tr.innerHTML = `<td><span class="num">${i + 1}</span></td>
+      <td><select aria-label="Band ${i + 1} type">${TYPES.map(([v, t]) => `<option value="${v}"${v === b.type ? ' selected' : ''}>${t}</option>`).join('')}</select></td>
+      <td><input type="text" class="note" aria-label="Band ${i + 1} note" value="${noteCell(b.f)}" title="Type a note (A3, F#2) or Hz"></td>
+      <td><input type="text" class="hz" aria-label="Band ${i + 1} Hz" value="${fmtHzNum(b.f)}" title="Hz: 220, 1.2k, 3500"></td>
+      <td><input type="text" class="db" aria-label="Band ${i + 1} gain dB" value="${fmtDb(b.g)}"></td>
+      <td><input type="text" class="q" aria-label="Band ${i + 1} Q" value="${b.type === 'peaking' ? b.q.toFixed(2) : '—'}" ${b.type === 'peaking' ? '' : 'disabled title="Shelves use a fixed slope (Q 0.71) in Web Audio"'} ></td>
+      <td class="acts">${r.text}</td>
+      <td><button type="button" class="onoff" aria-label="Band ${i + 1} on" aria-pressed="${b.on}"></button></td>`;
+    tr.addEventListener('pointerdown', () => { if (sel !== i) { sel = i; renderTableSel(); } });
+    const [selT] = tr.getElementsByTagName('select');
+    selT.onchange = () => { b.type = selT.value; if (b.type === 'peaking' && !(b.q > 0.2)) b.q = 1; commit(); };
+    const inp = (cls, parse) => {
+      const el = tr.querySelector('input.' + cls);
+      const go = () => { const v = parse(el.value); if (v == null) { el.classList.add('bad'); return; } el.classList.remove('bad'); commit(); };
+      el.addEventListener('change', go);
+      // Enter on an unchanged cell must not re-parse its display text (review: "≈B3 +21¢ · 250 Hz" re-snapped to B3)
+      el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { if (el.value !== el.defaultValue) go(); el.blur(); } if (e.key === 'Escape') { el.value = el.defaultValue; el.blur(); } });
+      el.addEventListener('focus', () => el.select());
+    };
+    inp('note', (v) => { const f = parseFreq(v); if (f == null) return null; b.f = f; return f; });
+    inp('hz', (v) => { const f = parseFreq(v); if (f == null) return null; b.f = f; return f; });
+    inp('db', (v) => { const m = /^\s*([+\-−]?\s*\d*\.?\d+)/.exec(v); if (!m) return null; b.g = clamp(Number(m[1].replace('−', '-').replace(/\s/g, '')), -12, 12); return b.g; });
+    inp('q', (v) => { const q = parseQ(v); if (q == null) return null; b.q = q; return q; });
+    tr.querySelector('.onoff').onclick = () => { b.on = !b.on; commit(); };
+    tb.append(tr);
+  });
+}
+function renderTableSel() { [...$('bands').tBodies[0].rows].forEach((tr, i) => tr.classList.toggle('sel', i === sel)); drawAll(); }
+/** Accepts "220", "220 Hz", "1.2k", "1k2", "3.5 kHz", or a note "A3", "F#2", "Bb4". */
+function parseFreq(v) {
+  v = String(v).trim().replace(/^≈/, '');
+  let m = /^([A-Ga-g])\s*([#♯b♭]?)\s*(-?\d)\b/.exec(v);
+  if (m) {
+    const pc = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[m[1].toUpperCase()] + (/[#♯]/.test(m[2]) ? 1 : /[b♭]/.test(m[2]) ? -1 : 0);
+    return midiF(pc + 12 * (Number(m[3]) + 1));
+  }
+  m = /^(\d+)k(\d+)$/i.exec(v); if (m) return clamp(Number(m[1] + '.' + m[2]) * 1000, F_MIN, F_MAX);
+  m = /^(\d*\.?\d+)\s*(k)?\s*(hz)?$/i.exec(v.replace(/,/g, ''));
+  if (m) return clamp(Number(m[1]) * (m[2] ? 1000 : 1), F_MIN, F_MAX);
+  return null;
+}
+/** Q, or a bandwidth in octaves ("1 oct", "0.5oct") as other EQs show it. */
+function parseQ(v) {
+  const m = /^\s*(\d*\.?\d+)\s*(oct)?/i.exec(v); if (!m) return null;
+  const x = Number(m[1]); if (!(x > 0)) return null;
+  return clamp(m[2] ? qOfBw(x) : x, 0.3, 10);
+}
+function commit() { applyEq(); renderTable(); renderTabs(); drawAll(); }
+function renderAll() { renderTabs(); renderSummary(); renderTable(); drawAll(); }
+function drawAll() { if (G.w) { drawGraph(); drawKeys(); } }
+function selectSlot(i) {
+  if (i === cur) return;
+  stopAll(); cur = i; sel = Math.min(sel, 3);
+  applyEq(true); renderAll();
+  if (ctx) preload(SLOTS[cur]);
+}
+
+// ============================================================================ interaction: graph
+let hoverHandle = null;
+function hitHandle(x, y) {
+  let best = null, bd = 18 * 18;
+  bands().forEach((b, i) => { const p = handlePos(b), d = (p.x - x) ** 2 + (p.y - y) ** 2; if (d < bd) { bd = d; best = i; } });
+  return best;
+}
+function hitEar(x, y) {
+  const sb = bands()[sel]; const e = sb && sb.on && earPos(sb); if (!e) return null;
+  for (let k = 0; k < 2; k++) if (Math.abs(e[k].x - x) < 8 && Math.abs(e[k].y - y) < 13) return k;
+  return null;
+}
+function snapF(f, free) {
+  if (free) return clamp(f, F_MIN, F_MAX);
+  const s = semiOf(f);
+  if (s >= S_LO && s <= S_HI) return midiF(Math.round(s));
+  let best = ISO[0]; for (const v of ISO) if (Math.abs(Math.log(v / f)) < Math.abs(Math.log(best / f))) best = v; return best;
+}
+function localXY(e, el) { const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+gc.addEventListener('pointerdown', (e) => {
+  ensureAudio(); if (!bufCache.size) preload(SLOTS[cur]);
+  const { x, y } = localXY(e, gc);
+  const ear = hitEar(x, y);
+  if (ear !== null) { dragging = { ear, i: sel }; gc.setPointerCapture(e.pointerId); gc.className = 'ew'; return; }
+  const h = hitHandle(x, y);
+  if (h === null) return;
+  sel = h; const b = bands()[h], p = handlePos(b);
+  // per-axis deadzone (review): a vertical nudge must not re-snap a typed frequency, nor a sideways one the gain
+  dragging = { i: h, dx: x - p.x, dy: y - p.y, x0: x, y0: y, moveF: false, moveG: false };
+  gc.setPointerCapture(e.pointerId); gc.className = 'grabbing';
+  renderTableSel(); gc.focus({ preventScroll: true });
+});
+gc.addEventListener('pointermove', (e) => {
+  const { x, y } = localXY(e, gc);
+  hover = { x, y };
+  if (dragging) {
+    const b = bands()[dragging.i];
+    if (dragging.ear !== undefined) {
+      const f = fOfX(x), bw = clamp(2 * Math.abs(Math.log2(f / b.f)), 0.05, 4);
+      b.q = clamp(qOfBw(bw), 0.3, 10);
+    } else {
+      const free = e.altKey || e.shiftKey;
+      if (Math.abs(x - dragging.x0) > 4) dragging.moveF = true;
+      if (Math.abs(y - dragging.y0) > 4) dragging.moveG = true;
+      if (dragging.moveF) b.f = snapF(fOfX(x - dragging.dx), free);
+      if (dragging.moveG) {
+        const g = clamp(dbOfY(y - dragging.dy), -12, 12);
+        b.g = free ? Math.round(g * 10) / 10 : Math.round(g * 2) / 2;
+      }
+      if (!b.on) b.on = true;
+    }
+    applyEq(); updateRow(dragging.i); showReadout(x, y, dragging.i);
+    return;
+  }
+  const hh = hitHandle(x, y), ear = hitEar(x, y);
+  hoverHandle = hh;
+  gc.className = ear !== null ? 'ew' : hh !== null ? 'grab' : '';
+  showReadout(x, y, hh);
+});
+gc.addEventListener('pointerleave', () => { hover = null; hoverHandle = null; if (!dragging) $('readout').style.display = 'none'; });
+const endDrag = () => { if (!dragging) return; dragging = null; gc.className = 'grab'; renderTable(); renderTabs(); };
+gc.addEventListener('pointerup', endDrag); gc.addEventListener('pointercancel', endDrag);
+gc.addEventListener('dblclick', (e) => {
+  const { x, y } = localXY(e, gc); const h = hitHandle(x, y);
+  if (h !== null) { bands()[h].g = 0; commit(); toast(`Band ${h + 1} back to 0 dB`); }
+});
+gc.addEventListener('wheel', (e) => {
+  const { x, y } = localXY(e, gc);
+  const h = hitHandle(x, y) ?? sel;
+  const b = bands()[h]; if (!b) return;
+  e.preventDefault();
+  sel = h;
+  if (b.type !== 'peaking') { toast('Shelves have a fixed slope here · switch the band to Bell for a width'); renderTableSel(); return; }
+  // wheel up = narrower; pinch-out (ctrl+wheel, deltaY < 0) = wider
+  const k = e.ctrlKey ? 0.01 : -0.0025;
+  b.q = clamp(b.q * Math.exp(k * e.deltaY), 0.3, 10);
+  applyEq(); updateRow(h); drawAll();
+  toast(`Band ${h + 1} width: Q ${b.q.toFixed(2)} · ${bwOct(b.q).toFixed(2)} oct · ${spanText(b)}`);
+}, { passive: false });
+gc.addEventListener('keydown', (e) => {
+  const b = bands()[sel]; if (!b) return;
+  const map = { ArrowLeft: () => { b.f = snapF(midiF(Math.round(semiOf(b.f)) - 1), false); }, ArrowRight: () => { b.f = snapF(midiF(Math.round(semiOf(b.f)) + 1), false); },
+    ArrowUp: () => { b.g = clamp(b.g + 0.5, -12, 12); }, ArrowDown: () => { b.g = clamp(b.g - 0.5, -12, 12); },
+    '[': () => { if (b.type === 'peaking') b.q = clamp(b.q / 1.12, 0.3, 10); }, ']': () => { if (b.type === 'peaking') b.q = clamp(b.q * 1.12, 0.3, 10); },
+    Tab: null };
+  if (/^[1-4]$/.test(e.key)) { sel = Number(e.key) - 1; renderTableSel(); return; }
+  const fn = map[e.key]; if (!fn) return; e.preventDefault(); fn(); commit();
+});
+function spanText(b) {
+  const half = bwOct(b.q) / 2;
+  const a = Math.max(S_LO, semiOf(b.f / Math.pow(2, half))), z = Math.min(S_HI, semiOf(b.f * Math.pow(2, half)));
+  if (a > S_HI - 0.5) return 'all above C8';
+  return `spans ${noteName(Math.round(a))}–${noteName(Math.round(z))}`;
+}
+function updateRow(i) {
+  const tr = $('bands').tBodies[0].rows[i]; if (!tr) return;
+  const b = bands()[i];
+  tr.querySelector('input.note').value = noteCell(b.f);
+  tr.querySelector('input.hz').value = fmtHzNum(b.f);
+  tr.querySelector('input.db').value = fmtDb(b.g);
+  const q = tr.querySelector('input.q'); if (b.type === 'peaking') q.value = b.q.toFixed(2);
+  tr.querySelector('.acts').innerHTML = bandReach(b).text;
+  tr.classList.toggle('off', !b.on);
+  tr.querySelector('.onoff').setAttribute('aria-pressed', String(b.on));
+}
+function showReadout(x, y, hi) {
+  const el = $('readout');
+  if (y > plotB() || x < G.L) { el.style.display = 'none'; return; }
+  const bs = bands();
+  let html;
+  if (hi !== null && hi !== undefined) {
+    const b = bs[hi];
+    html = `<b>${hi + 1}</b> ${TYPES.find((t) => t[0] === b.type)[1]} · ${noteLabel(b.f)} · <b>${fmtDb(b.g)} dB</b>${b.type === 'peaking' ? ` · Q ${b.q.toFixed(2)}` : ''}`;
+    x = handlePos(b).x;
+  } else {
+    const f = fOfX(x); let d = 0; for (const b of bs) d += bandDb(b, f);
+    const { fLo, fHi } = zones();
+    const z = f < fLo ? ` <span class="m">· ${SLOTS[cur].name} doesn't play here</span>` : f > fHi ? ' <span class="m">· overtones only</span>' : '';
+    html = `${noteLabel(f)} · EQ <b>${fmtDb(d)} dB</b>${z}`;
+  }
+  el.innerHTML = html; el.style.display = 'block';
+  const w = el.offsetWidth; el.style.left = clamp(x, w / 2 + 4, G.w - w / 2 - 4) + 'px';
+}
+
+// ============================================================================ interaction: keyboard
+function keyAt(x, y) {
+  const top = 14, kh = G.kh - top - 1;
+  const u = (x - G.L) / plotW() * TOTAL_U - SUB_U + S_LO; // semitone coordinate
+  if (y < top + kh * 0.6) { const n = Math.round(u); if (isBlack(n) && Math.abs(u - n) <= 0.46) return n; }
+  return KEYS.find((k) => !k.black && u >= k.l && u < k.r)?.n ?? null;
+}
+kc.addEventListener('pointerdown', (e) => {
+  ensureAudio();
+  const { x, y } = localXY(e, kc); const n = keyAt(x, y);
+  if (n === null) return;
+  const s = sounding(SLOTS[cur]);
+  if (n < s.lo || n > s.hi) {
+    toast(`${SLOTS[cur].name} doesn't play ${noteName(n)} (${fmtHz(midiF(n))}) · its notes are ${noteName(s.lo)}–${noteName(s.hi)}`);
+    return;
+  }
+  pressedKey = n; noteOn(n, 0.75, 0, 2.2);
+  const b = bands(); let d = 0; for (const x of b) d += bandDb(x, midiF(n));
+  toast(`${noteName(n)} · ${fmtHz(midiF(n))} · EQ at this note ${fmtDb(d)} dB`);
+});
+addEventListener('pointerup', () => { pressedKey = null; });
+
+// ============================================================================ header controls
+$('ab').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  bypass = b.dataset.ab === 'b'; syncAB();
+});
+function syncAB() {
+  for (const b of $('ab').children) b.setAttribute('aria-pressed', String((b.dataset.ab === 'b') === bypass));
+  applyAB(); drawAll();
+}
+addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'b' || e.key === 'B') { bypass = !bypass; syncAB(); toast(bypass ? 'B · bypass: dry sound' : 'A · EQ on'); }
+  if (e.key === ' ') { e.preventDefault(); loopTimer ? stopAll() : playLoop(); }
+});
+$('play').onclick = () => { ensureAudio(); preload(SLOTS[cur]).then(playLoop); };
+$('stop').onclick = stopAll;
+$('copy').onclick = async () => {
+  const t = bands().map((b, i) => `${i + 1} ${TYPES.find((x) => x[0] === b.type)[1]} ${fmtHzNum(b.f)} Hz (${noteLabel(b.f).split(' · ')[0]}) ${fmtDb(b.g)} dB${b.type === 'peaking' ? ` Q ${b.q.toFixed(2)}` : ''}${b.on ? '' : ' [off]'}`).join('\n');
+  try { await navigator.clipboard.writeText(`${SLOTS[cur].name} EQ\n${t}`); $('copied').textContent = 'Copied'; } catch { $('copied').textContent = 'Copy blocked'; }
+  setTimeout(() => { $('copied').textContent = ''; }, 1500);
+};
+document.addEventListener('pointerdown', () => { if (!ctx) { ensureAudio(); preload(SLOTS[cur]); } }, { once: true });
+
+// ============================================================================ loop
+function frame() { drawAll(); requestAnimationFrame(frame); }
+renderPresets();
+new ResizeObserver(resize).observe($('gw'));
+resize();
+loadManifest().catch((err) => setStatus('', 'Serve the repo root to hear samples (see README)'));
+requestAnimationFrame(frame);
+
+// test hooks (Playwright storyboard)
+window.__eq = { bands, SLOTS, get cur() { return cur; }, selectSlot, playLoop: (f) => playLoop(f), stopAll, preload: () => preload(SLOTS[cur]),
+  handlePos: (i) => handlePos(bands()[i]), xOfF, yOfDb, ensureAudio, coeffs, magDb, get ctx() { return ctx; }, eqNodes: () => eqNodes,
+  select: (i) => { sel = i; renderTableSel(); },
+  /** Resolves at a fixed phase of the 2 s loop, so storyboard frames compare like with like. */
+  atPhase: (ms) => new Promise((r) => setTimeout(r, (ms - ((performance.now() - loopT0) % 2000) + 4000) % 2000)) };
+</script>
+</body>
+</html>

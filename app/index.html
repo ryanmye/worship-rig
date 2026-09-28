@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src 'self' blob: data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<title>Worship Rig</title>
+<link rel="icon" type="image/svg+xml" href="./icons/icon.svg">
+<link rel="stylesheet" href="./styles.css">
+<link rel="stylesheet" href="./styles-edit.css">
+</head>
+<body>
+<header id="topbar" class="topbar">
+  <div class="tb-brand">
+    <img class="tb-logo" src="./icons/icon.svg" alt="" width="28" height="28">
+    <span class="tb-name">Worship Rig</span>
+  </div>
+  <div id="view-switch" class="tb-views"></div>
+  <button id="btn-quick" class="tb-btn quick-btn" type="button" title="Quick settings: tempo, swell time, touch, pedal, restart audio" aria-haspopup="true" aria-expanded="false" data-testid="quick-button">
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg>
+    <span>Quick</span>
+  </button>
+  <button id="btn-settings" class="tb-btn icon-btn" type="button" title="Settings" aria-label="Settings">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.7 7.7 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.5 7.5 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.5 7.5 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.7 7.7 0 0 0 0 2l-2.2 1.6 2 3.5 2.5-1a7.5 7.5 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.5 7.5 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
+  </button>
+  <div class="tb-status">
+    <div id="midi-status" class="tb-item" title="MIDI input">
+      <span id="midi-led" class="led" aria-hidden="true"></span>
+      <span class="tb-cap">MIDI</span>
+      <span id="midi-name" class="tb-val midi-name">—</span>
+    </div>
+    <div id="audio-status" class="tb-item" title="Sound output">
+      <span id="audio-led" class="led" aria-hidden="true"></span>
+      <span id="audio-text" class="tb-val audio-text">Sound</span>
+      <span id="audio-latency" class="tb-val latency">— ms</span>
+    </div>
+    <div id="ready-status" class="tb-item" title="Every song in the set is loaded and switches instantly">
+      <span id="ready-led" class="led" aria-hidden="true"></span>
+      <span id="ready-text" class="tb-cap ready-text">Loading…</span>
+    </div>
+  </div>
+  <div class="tb-rec">
+    <button id="btn-rec" class="rec-btn" type="button" aria-pressed="false" title="Record to WAV (⌘R)">
+      <span class="rec-dot" aria-hidden="true"></span><span class="rec-label">REC</span>
+    </button>
+    <span id="rec-time" class="rec-time" aria-live="off">00:00</span>
+    <div id="meter-mount" class="tb-meter"></div>
+  </div>
+  <div id="master-mount" class="tb-master"></div>
+</header>
+
+<div id="banners" class="banners">
+  <div id="audio-banner" class="banner danger" role="alert" hidden data-testid="audio-banner">
+    <span class="banner-msg">Sound has stopped.</span>
+    <button id="btn-restart-audio" class="btn banner-btn btn-restart" type="button">Restart sound</button>
+  </div>
+</div>
+
+<main id="views" class="views">
+  <div id="view-perform" class="view view-perform"></div>
+  <div id="view-edit" class="view view-edit" hidden></div>
+</main>
+
+<div id="view-settings" class="settings-modal" hidden></div>
+<div id="toasts" class="toasts" aria-live="polite" aria-relevant="additions"></div>
+<div id="overlay-start" class="overlay-start" hidden>
+  <div class="overlay-card">
+    <img src="./icons/icon.svg" alt="" width="72" height="72">
+    <div class="overlay-title">Click anywhere to start audio</div>
+    <div class="overlay-sub">Your browser needs one click before it can play sound.</div>
+  </div>
+</div>
+<noscript><p class="noscript">Worship Rig needs JavaScript.</p></noscript>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>

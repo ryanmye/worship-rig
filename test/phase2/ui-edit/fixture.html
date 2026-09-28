@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ui-edit fixture</title>
+<link rel="icon" href="data:,">
+<!-- served with the repo root as appDir: /app/... is the real app -->
+<link rel="stylesheet" href="/app/styles.css">
+<link rel="stylesheet" href="/app/styles-edit.css">
+</head>
+<body>
+<main id="views" class="views">
+  <div id="view-edit" class="view view-edit"></div>
+</main>
+<div id="view-settings" class="settings-modal" hidden></div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<script type="module">
+  // Minimal bootstrap (store → engine → midi/recorder → controller → edit + settings) mirroring app/js/main.js,
+  // without ui-core's top bar/perform view. ?components=ui-core uses ui-core's components; default = fallback set.
+  const q = new URLSearchParams(location.search);
+  if (q.get('components') !== 'ui-core') globalThis.__RIG_FORCE_FALLBACK_COMPONENTS = true;
+  const [{ createStore }, { FACTORY_SONGS }, { AudioEngine }, { MidiInput }, { Recorder }, { createController, engineLatency }] = await Promise.all([
+    import('/app/js/store.js'),
+    import('/app/js/presets.js'),
+    import('/app/js/engine/index.js'),
+    import('/app/js/midi.js'),
+    import('/app/js/recorder.js'),
+    import('/app/js/controller.js'),
+  ]);
+  const toasts = [];
+  function toast(msg, kind = 'info') {
+    toasts.push({ msg, kind });
+    const el = document.createElement('div');
+    el.className = `toast ${kind}`;
+    el.textContent = msg;
+    document.getElementById('toasts').append(el);
+    setTimeout(() => el.remove(), 3000);
+  }
+  const store = createStore({ key: q.get('key') || 'rig.v1' });
+  store.seedFactory(FACTORY_SONGS);
+  const engine = new AudioEngine({ latency: engineLatency(store.get().settings) });
+  const midi = new MidiInput();
+  const recorder = new Recorder({ engine });
+  const controller = createController({ store, engine, midi, recorder });
+  let settingsView = null;
+  const settingsEl = document.getElementById('view-settings');
+  const ctx = {
+    store, controller, engine, midi, recorder, toast,
+    openSettings: () => settingsView && settingsView.open(),
+    closeSettings: () => settingsView && settingsView.close(),
+    setView: () => true,
+  };
+  const [{ mountEdit }, { mountSettings }] = await Promise.all([import('/app/js/views/edit.js'), import('/app/js/views/settings.js')]);
+  const ready = controller.start();
+  const editView = mountEdit(document.getElementById('view-edit'), ctx);
+  settingsView = mountSettings(settingsEl, ctx);
+  globalThis.__rig = { store, engine, controller, midi, recorder, ctx, toasts, views: { edit: editView, settings: settingsView }, ready, viewsReady: Promise.resolve() };
+  globalThis.__fixture = true;
+</script>
+</body>
+</html>

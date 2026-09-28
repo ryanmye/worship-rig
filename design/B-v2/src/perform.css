@@ -1,0 +1,383 @@
+/* ------------------------------------------------------------ Perform layout (B-v2)
+   rows: topbar | song row | setlist (Prev · chips · Next) | stage | switch bar | Fade/PANIC/Lock */
+body.perform { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 56px 92px 52px minmax(0, 1fr) auto 88px;
+  row-gap: 10px; padding-bottom: 12px; }
+body.perform > :not(.topbar):not(.pop) { margin: 0 14px; }
+
+/* song row: name + key | Transpose | Chord  (Next moved to the setlist row, next to Prev) */
+.songrow { display: grid; grid-template-columns: minmax(0, 1fr) 250px 170px; gap: 12px; }
+.songcard { padding: 8px 20px; display: flex; flex-direction: column; justify-content: center; }
+.songcard h1 { margin: 0; font-size: 42px; line-height: 1.05; letter-spacing: -.01em; }
+.songmeta { display: flex; align-items: baseline; gap: 12px; margin-top: 2px; }
+.songmeta .key { font-size: 32px; font-weight: 800; color: var(--accent); line-height: 1; }
+.songmeta .faint { color: var(--faint); font-size: 14px; font-weight: 600; }
+.notes-btn { display: none; }
+.tcard { padding: 8px 14px; display: flex; flex-direction: column; gap: 4px; justify-content: center; position: relative; }
+.tcard .cap { display: flex; justify-content: space-between; }
+.tpose { display: flex; align-items: center; gap: 10px; }
+.tpose .btn { width: 56px; height: 48px; font-size: 26px; }
+.tpose b { flex: 1; text-align: center; font-size: 30px; }
+.chordcard { padding: 8px 16px; display: flex; flex-direction: column; justify-content: center; }
+.chordcard b { font-size: 38px; line-height: 1.1; }
+
+/* setlist row: ◀ Prev | chips | Next ▸ — both song buttons in one predictable place */
+.setrow { display: grid; grid-template-columns: 104px minmax(0, 1fr) 250px; gap: 12px; height: 52px; }
+.setrow .prev { height: 52px; font-size: 18px; color: var(--muted); }
+.setrow .next { height: 52px; justify-content: space-between; padding: 0 14px; text-align: left; }
+.setrow .next .nl { display: flex; flex-direction: column; line-height: 1.1; min-width: 0; }
+.setrow .next .nl small { font-size: 10px; letter-spacing: .12em; color: var(--muted); font-weight: 800; }
+.setrow .next .nl span { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.setrow .next .k2 { color: var(--accent); }
+.setrow .next .arr { font-size: 20px; color: var(--muted); }
+.chips { display: flex; gap: 8px; overflow: hidden; padding: 5px; }
+.chip { flex: none; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line-2);
+  background: var(--panel-2); font-weight: 700; font-size: 17px; }
+.chip i { font-style: normal; color: var(--faint); font-size: 12px; }
+.chip u { text-decoration: none; color: var(--muted); font-size: 13px; }
+.chip.cur { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.chip.cur i, .chip.cur u { color: #5a4300; }
+
+/* stage: wheel | KEYS | PAD | EXTRA (empty → narrow) | BASS | DRONE | Notes */
+.stage { display: grid; grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1fr) 64px minmax(0, 1fr) 330px 250px; gap: 12px; min-height: 0; }
+.wheel { padding: 10px 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.wheel .cap { font-size: 10px; }
+.wcap { flex: 1; width: 40px; border-radius: 12px; background: var(--track); position: relative; overflow: hidden; min-height: 60px; }
+.wcap b { position: absolute; left: 0; right: 0; bottom: 0; height: 100%; background: #b9c6d6; }
+.wheel .big { font-size: 22px; font-weight: 800; }
+.wheel .to { font-size: 12px; color: var(--muted); font-weight: 600; }
+.wheel .btn { width: 100%; height: 48px; flex-direction: column; gap: 0; font-size: 13px; }
+.wheel .mini { font-size: 11px; font-weight: 700; color: var(--muted); display: flex; gap: 6px; align-items: center; letter-spacing: .05em; }
+
+/* a slot strip: ON switch (mute) · sound picker · fader · Sustain + Octave */
+.strip { display: flex; flex-direction: column; gap: 8px; padding: 8px; border-radius: 12px; background: var(--panel);
+  border: 1px solid var(--line); min-height: 0; min-width: 0; position: relative; }
+/* target 1: the ON switch — only role + state live here, nothing that looks like "pick a sound" */
+.ontile { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 10px; height: 52px;
+  padding: 0 12px; border-radius: 10px; border: 2px solid var(--line-2); background: var(--panel-2); }
+.ontile .led { width: 14px; height: 14px; }
+.ontile .role { font-size: 15px; font-weight: 900; letter-spacing: .1em; color: var(--c); flex: 1; }
+.ontile .st { font-size: 14px; font-weight: 900; letter-spacing: .1em; padding: 3px 8px; border-radius: 6px; }
+.ontile.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 24%, var(--panel)); }
+.ontile.on .led { background: var(--c); box-shadow: 0 0 12px var(--c); }
+.ontile.on .st { color: #0b0d10; background: var(--c); }
+.ontile.off .st { color: #e2e6ec; background: #4a5260; }
+.ontile.off .role { color: color-mix(in srgb, var(--c) 70%, #777); }
+/* target 2: the sound picker — looks like a select, opens a popover (frozen under lock) */
+.pick { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 6px; height: 38px; padding: 0 8px 0 10px;
+  border-radius: 8px; border: 1px solid var(--line-2); background: #111419; font-size: 16px; font-weight: 800; min-width: 0; }
+.pick .nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick svg { flex: none; color: var(--muted); }
+.pick .lk { display: none; color: var(--faint); }
+.pick.open { border-color: #7cc4ff; box-shadow: 0 0 0 2px #7cc4ff55; }
+
+.fbody { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 0; }
+.fbody .tag { font-size: 12px; color: var(--muted); font-weight: 700; height: 15px; }
+.vf { position: relative; flex: 1; width: 56px; min-height: 60px; }
+.vf .tr { position: absolute; left: 50%; top: 4px; bottom: 4px; width: 10px; margin-left: -5px; border-radius: 5px; background: var(--track);
+  box-shadow: inset 0 0 0 1px var(--track-edge); }
+.vf .fl { position: absolute; left: 50%; bottom: 4px; width: 10px; margin-left: -5px; border-radius: 5px; background: var(--c); }
+.vf .th { position: absolute; left: 50%; width: 46px; height: 26px; margin: 0 0 -13px -23px; border-radius: 6px;
+  background: linear-gradient(#ffffff, #d9dee6); box-shadow: 0 2px 5px #000b; }
+.vf .th::after { content: ''; position: absolute; left: 8px; right: 8px; top: 12px; height: 2px; background: #9aa3af; }
+.vf .wm { position: absolute; left: calc(50% + 12px); width: 0; height: 0; border: 6px solid transparent; border-left-color: #b9c6d6;
+  transform: rotate(180deg); margin-bottom: -6px; }
+.fbody .db { font-size: 19px; font-weight: 800; }
+
+.foot { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 6px; }
+.mod { display: flex; align-items: center; justify-content: space-between; gap: 6px; height: 40px; border-radius: 8px;
+  border: 1px solid var(--line-2); background: var(--panel-2); padding: 0 9px; font-size: 14px; font-weight: 700; white-space: nowrap; min-width: 0; }
+.mod.on { border-color: color-mix(in srgb, var(--c) 70%, transparent); color: var(--text); }
+.mod.on .led { background: var(--c); box-shadow: 0 0 8px var(--c); }
+.oct { display: grid; grid-template-columns: 30px 1fr 30px; align-items: center; height: 40px; border-radius: 8px;
+  border: 1px solid var(--line-2); background: var(--panel-2); font-weight: 700; font-size: 14px; text-align: center; overflow: hidden; min-width: 0; }
+.oct span { font-size: 19px; color: var(--muted); line-height: 38px; }
+.oct span:first-child { border-right: 1px solid var(--line); } .oct span:last-child { border-left: 1px solid var(--line); }
+.oct b { white-space: nowrap; }
+.oct.on { border-color: color-mix(in srgb, var(--c) 70%, transparent); }
+.oct.on b { color: var(--c); }
+.strip.dim .fbody, .strip.dim .foot, .strip.dim .pick { opacity: .45; }
+
+/* empty slot collapses to a narrow column instead of eating a full strip */
+.slim { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; border-radius: 12px;
+  border: 2px dashed color-mix(in srgb, var(--c) 45%, var(--line-2)); color: var(--faint); min-width: 0; }
+.slim .vt { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 12px; font-weight: 800; letter-spacing: .14em; }
+.slim .vt b { color: var(--c); }
+.slim .plus { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line-2); display: grid; place-items: center; font-size: 20px; color: var(--muted); }
+
+/* drone (Tonic-style): the same ON switch as the slots, then key + level. Set-and-forget options live in Quick. */
+.drone { display: flex; flex-direction: column; gap: 8px; padding: 8px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line);
+  min-height: 0; --c: var(--drone); }
+.drone .drow1 { display: flex; gap: 8px; align-items: center; }
+.drone .drow1 .keyname { flex: 1; font-size: 18px; font-weight: 800; }
+.seg2 { display: flex; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; flex: none; }
+.seg2 span { padding: 0 12px; height: 36px; display: grid; place-items: center; font-weight: 700; font-size: 14px; background: var(--panel-2); color: var(--muted); white-space: nowrap; }
+.seg2 span + span { border-left: 1px solid var(--line); }
+.seg2 span.on { background: var(--drone); color: var(--accent-ink); }
+.keys12 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; position: relative; }
+.keys12 span { height: 46px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel-2);
+  font-weight: 800; font-size: 17px; }
+.keys12 span.on { background: var(--drone); color: var(--accent-ink); border-color: var(--drone); }
+.drow { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; font-size: 13px; font-weight: 700; color: var(--muted); }
+.drow .v { color: var(--text); min-width: 58px; text-align: right; }
+.dmore { all: unset; cursor: pointer; margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 38px;
+  padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); color: var(--muted); font-size: 13px; font-weight: 700; }
+.dmore i { font-style: normal; color: var(--faint); font-weight: 600; }
+
+.notes { padding: 12px 14px; overflow: hidden; }
+.notes p { margin: 8px 0 0; font-size: 16px; line-height: 1.45; color: #dfe4ea; }
+
+/* ------------------------------------------------------------ the switch bar: song-wide sound only (no rig settings) */
+.switchbar { display: flex; align-items: stretch; padding: 8px 10px; }
+.grp { display: flex; flex-direction: column; gap: 5px; padding: 0 12px; white-space: nowrap; border-left: 1px solid var(--line); }
+.grp:first-child { border-left: 0; padding-left: 4px; }
+.grp .gl { display: flex; align-items: baseline; gap: 8px; min-height: 16px; }
+.grp .gl .cap { font-size: 11px; }
+.grp .gl .val { font-size: 13px; font-weight: 700; color: var(--text); }
+.row { display: flex; gap: 6px; }
+.sw { white-space: nowrap; height: 48px; min-width: 52px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--panel-2);
+  font-size: 16px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 8px; color: #d7dde5; }
+/* selected shared chip: mid-grey + white 2px border + bold white — reads "selected" without out-glowing PANIC */
+.sw.on { background: var(--sel-bg); color: #fff; border: 2px solid var(--sel-line); font-weight: 800; }
+.sw.own { flex-direction: column; gap: 0; line-height: 1.05; padding: 0 10px; }
+.sw.own small { font-size: 11px; font-weight: 700; color: var(--muted); }
+.sw.own.on small { color: #d9dee6; }
+.sw .led { width: 9px; height: 9px; }
+.sw.lit .led { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.sw.quick { background: var(--panel-3); border-color: #566070; }
+.sw.quick svg { width: 20px; height: 20px; }
+.sw.revert { color: var(--text); }
+.sw.revert[disabled], .sw.revert.dis { color: var(--faint); border-style: dashed; }
+.spacer { flex: 1; }
+
+/* bottom row — PANIC is the brightest, most saturated control on screen */
+.bottom { display: grid; grid-template-columns: minmax(0, 1fr) 150px 190px 150px; gap: 12px; }
+.bottom .btn { height: 100%; font-size: 18px; }
+.fade { background: #16273a; border-color: #2a4a6b; }
+.panic { background: var(--panic) !important; border: 0 !important; color: var(--panic-ink); font-size: 26px !important; font-weight: 900 !important;
+  letter-spacing: .08em; box-shadow: 0 0 0 1px #ff8a8c inset, 0 0 22px #e5383b55; }
+.lockbtn { flex-direction: column; gap: 2px !important; }
+.lockbtn small { font-size: 11px; color: var(--faint); font-weight: 700; letter-spacing: .04em; }
+
+/* ------------------------------------------------------------ Perform lock (v2 rule: lock protects the song file and
+   the rig, not your playing). .frz = frozen, .hold = press-and-hold to change while locked. */
+body.locked .lockbtn { background: #2a2210; border-color: var(--lockc); color: var(--lockc); }
+body.locked .lockbtn small { color: #d9b56b; }
+body.locked .frz { opacity: .38; filter: saturate(.4); }
+body.locked .pick .lk { display: inline-flex; }
+body.locked .pick svg.dn { display: none; }
+body.locked .tabs button:last-child { opacity: .35; }
+.holdtag { display: none; font-size: 10px; font-weight: 800; letter-spacing: .08em; color: var(--lockc); border: 1px solid #ffb02088;
+  border-radius: 4px; padding: 0 5px; line-height: 16px; }
+body.locked .holdtag { display: inline-block; }
+body.locked .hold { box-shadow: inset 0 0 0 1px #ffb02066; }
+.lockbanner { display: none; }
+body.locked .lockbanner { display: flex; }
+
+/* ------------------------------------------------------------ popovers (sound picker) */
+.pop { position: fixed; z-index: 20; background: #171b21; border: 1px solid #4a5361; border-radius: 12px; box-shadow: 0 16px 60px #000d;
+  display: flex; flex-direction: column; overflow: hidden; }
+.pop .ph { padding: 10px 14px 8px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 8px; }
+.pop .ph b { font-size: 15px; }
+.pop .ph span { color: var(--faint); font-size: 12px; font-weight: 600; }
+.pop .pl { flex: 1; overflow: hidden; padding: 6px; }
+.pop .gh { font-size: 10px; font-weight: 800; letter-spacing: .12em; color: var(--faint); padding: 8px 8px 4px; text-transform: uppercase; }
+.pop .it { display: flex; align-items: center; justify-content: space-between; height: 38px; padding: 0 10px; border-radius: 7px; font-size: 15px; font-weight: 700; color: #dfe4ea; }
+.pop .it.cur { background: color-mix(in srgb, var(--c) 22%, transparent); color: #fff; box-shadow: inset 3px 0 0 var(--c); }
+.pop .it.hover { background: #252b34; }
+.pop .it small { color: var(--faint); font-weight: 600; font-size: 12px; }
+.pop .pf { border-top: 1px solid var(--line); padding: 8px 14px; font-size: 12px; color: var(--faint); font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+.pop .pf .btn { height: 34px; font-size: 13px; }
+.pop .caret { position: absolute; }
+
+/* ------------------------------------------------------------ Quick settings: a right-side drawer that PUSHES the
+   stage (faders, ON tiles, Wheel stay usable; PANIC row never covered). */
+body.qs .stage { grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1fr) 56px minmax(0, 1fr) 132px 520px; grid-row: 4 / 6; }
+body.qs .switchbar { display: none; }
+body.qs .notes, body.qs .drone .full { display: none; }
+body:not(.qs) .drone .mini { display: none; }
+.drone .mini { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; min-height: 0; }
+.drone .mini .kn { font-size: 20px; font-weight: 900; color: var(--drone); }
+.drone .mini .kn small { font-size: 12px; color: var(--muted); font-weight: 700; }
+.drawer { display: none; }
+body.qs .drawer { display: flex; flex-direction: column; background: #14171c; border: 1px solid #4a5361; border-radius: 14px;
+  box-shadow: -8px 0 40px #0009; min-height: 0; overflow: hidden; }
+.dhead { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--line); }
+.dhead h2 { margin: 0; font-size: 18px; white-space: nowrap; }
+.dhead .sp { flex: 1; }
+.dhead .done { background: var(--fx-on); color: var(--fx-on-ink); border-color: var(--fx-on); min-width: 84px; height: 40px; }
+.dtabs { display: grid; grid-template-columns: 1fr 1fr; margin: 10px 14px 0; border: 1px solid var(--line-2); border-radius: 9px; overflow: hidden; }
+.dtabs span { height: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 800; font-size: 14px;
+  color: var(--muted); background: var(--panel-2); line-height: 1.1; }
+.dtabs span small { font-size: 11px; font-weight: 600; color: var(--faint); }
+.dtabs span.on { background: var(--sel-bg); color: #fff; box-shadow: inset 0 0 0 2px #fff; }
+.dtabs span + span { border-left: 1px solid var(--line); }
+.dscope { margin: 8px 16px 0; font-size: 12px; color: var(--faint); font-weight: 600; display: flex; gap: 8px; align-items: center; }
+.dscope b { color: var(--muted); }
+.dbody { flex: 1; overflow: hidden; padding: 2px 16px 10px; min-height: 0; }
+.qrow { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: start; padding: 8px 0; }
+.qrow + .qrow { border-top: 1px solid #20252c; }
+.qrow > .lab { font-size: 14px; font-weight: 800; padding-top: 9px; }
+.qrow > .lab small { display: block; font-size: 11px; color: var(--faint); font-weight: 600; margin-top: 1px; }
+.qchips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.qchips .sw { height: 38px; font-size: 14px; padding: 0 11px; min-width: 0; }
+.qchips .sw.own { height: 38px; }
+.blurb { font-size: 12px; color: var(--muted); margin-top: 5px; line-height: 1.35; }
+.blurb b { color: var(--text); }
+.qsl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.qsl .lab2 { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
+.qsl .lab2 b { color: var(--text); }
+.qsl .mod { height: 36px; font-size: 13px; }
+.qsl .mod small { font-size: 9px; color: var(--faint); letter-spacing: .06em; text-transform: uppercase; }
+.frzrow { position: relative; }
+.frznote { font-size: 11px; font-weight: 700; color: var(--faint); display: inline-flex; align-items: center; gap: 4px; }
+.sw.opened { outline: 3px solid #7cc4ff; outline-offset: 2px; }
+
+/* ------------------------------------------------------------ 1024 × 700 */
+@media (max-width: 1180px) {
+  body.perform { grid-template-rows: 50px 74px 44px minmax(0, 1fr) auto 60px; row-gap: 7px; padding-bottom: 8px; }
+  body.perform > :not(.topbar):not(.pop) { margin: 0 10px; }
+  .topbar { height: 50px; gap: 10px; padding: 0 10px; }
+  .tabs button { height: 38px; }
+  .btn { height: 38px; }
+  .brand span, .status .k, .status .hide-sm, .rec .meter, .rec .mlab { display: none; }
+  .status { gap: 10px; }
+  .songrow { grid-template-columns: minmax(0, 1fr) 196px 110px; gap: 8px; }
+  .songcard { padding: 6px 14px; }
+  .songcard h1 { font-size: 32px; }
+  .songmeta .key { font-size: 26px; }
+  .notes-btn { display: inline-flex; height: 30px !important; margin-left: auto; font-size: 13px; }
+  .tcard { padding: 6px 10px; }
+  .tpose .btn { width: 46px; height: 40px; }
+  .tpose b { font-size: 24px; }
+  .chordcard b { font-size: 30px; }
+  .setrow { height: 44px; grid-template-columns: 80px minmax(0, 1fr) 190px; gap: 8px; }
+  .setrow .prev, .setrow .next { height: 44px; font-size: 15px; }
+  .setrow .next .nl span { font-size: 14px; }
+  .chips { padding: 4px; }
+  .chip { font-size: 14px; padding: 0 10px; }
+  .stage { grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr) 40px minmax(0, 1fr) 292px; gap: 8px; }
+  .notes { display: none; }
+  .strip, .drone { padding: 6px; gap: 6px; }
+  .ontile { height: 44px; padding: 0 9px; gap: 7px; }
+  .ontile .role { font-size: 13px; }
+  .ontile .st { font-size: 12px; padding: 2px 6px; }
+  .ontile .led { width: 11px; height: 11px; }
+  .pick { height: 32px; font-size: 14px; }
+  .fbody .db { font-size: 16px; }
+  .fbody .tag { font-size: 11px; height: 13px; }
+  .mod, .oct { height: 34px; font-size: 13px; }
+  .oct { grid-template-columns: 24px 1fr 24px; }
+  .oct span { line-height: 32px; font-size: 16px; }
+  .foot { gap: 5px; }
+  .slim .plus { width: 28px; height: 28px; font-size: 17px; }
+  .keys12 { gap: 4px; }
+  .keys12 span { height: 36px; font-size: 15px; }
+  .seg2 span { height: 32px; padding: 0 9px; font-size: 13px; }
+  .drone .drow1 .keyname { font-size: 16px; }
+  .dmore { height: 32px; }
+  .wheel { padding: 8px 5px; }
+  .wheel .btn { height: 40px; }
+  .wheel .big { font-size: 17px; }
+  .wheel .hide-sm { display: none; }
+  .wcap { width: 32px; }
+  .switchbar { padding: 6px 8px; }
+  .grp { padding: 0 9px; gap: 3px; }
+  .grp .gl { min-height: 14px; }
+  .grp .gl .cap { font-size: 10px; }
+  .grp .gl .val { font-size: 12px; }
+  .sw { height: 42px; min-width: 44px; padding: 0 10px; font-size: 14px; }
+  .sw.own small { font-size: 10px; }
+  .wide-only { display: none !important; }
+  .bottom { grid-template-columns: minmax(0, 1fr) 106px 146px 108px; gap: 8px; }
+  .bottom .btn { font-size: 15px; }
+  .panic { font-size: 20px !important; }
+  body.qs .stage { grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr) 36px minmax(0, 1fr) 96px 392px; }
+  body.qs .foot { grid-template-columns: 1fr; }
+  body.qs .mod, body.qs .oct { height: 30px; }
+  body.qs .oct span { line-height: 28px; }
+  .dhead { padding: 7px 10px 7px 12px; }
+  .dhead h2 { font-size: 16px; }
+  .dhead .btn { height: 34px; font-size: 13px; padding: 0 10px; }
+  .dhead .done { min-width: 64px; height: 34px; }
+  .dtabs { margin: 7px 10px 0; }
+  .dtabs span { height: 34px; font-size: 13px; }
+  .dtabs span small { display: none; }
+  .dscope { margin: 6px 12px 0; font-size: 11px; }
+  .dbody { padding: 0 12px 6px; }
+  .qrow { grid-template-columns: 70px minmax(0, 1fr); gap: 6px; padding: 5px 0; }
+  .qrow > .lab { font-size: 13px; padding-top: 7px; }
+  .qrow > .lab small, .blurb { display: none; }
+  .qchips { gap: 4px; }
+  .qchips .sw { height: 32px; font-size: 12px; padding: 0 8px; }
+  .qchips .sw.own small { display: none; }
+  .qsl { gap: 6px 10px; }
+  .qsl .lab2 { margin-bottom: 6px; font-size: 11px; }
+  .qsl .mod { height: 30px; font-size: 12px; }
+}
+@media (min-width: 1181px) { .narrow-only { display: none !important; } }
+
+/* drone full/mini bodies */
+.drone .full { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
+body.qs .drone .ontile { padding: 0 8px; gap: 6px; }
+body.qs .drone .ontile .role { font-size: 13px; letter-spacing: .06em; }
+body.qs .slim .vt { font-size: 11px; }
+@media (max-width: 1180px) {
+  body.qs .drone .ontile .led { display: none; }
+  body.qs .drone .ontile { justify-content: space-between; }
+  body.qs .drone .ontile .role { flex: none; font-size: 12px; }
+  body.qs .ontile .role { letter-spacing: .04em; }
+}
+
+/* ---- v2 polish pass */
+body.perform { grid-template-rows: 56px 86px 52px minmax(0, 1fr) auto 88px; }
+.fbody { position: relative; }
+.fbody .tag { position: absolute; top: 0; right: 2px; height: auto; font-size: 11px; writing-mode: vertical-rl; transform: rotate(180deg); }
+.dmore { justify-content: flex-start; white-space: nowrap; overflow: hidden; }
+.dmore span { color: var(--text); }
+.dmore i { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.drone .full .keys12 { flex: 0 1 auto; grid-auto-rows: minmax(40px, 56px); }
+.drone .full .keys12 span { height: auto; }
+body.qs .foot { grid-template-columns: 1fr; gap: 5px; }
+body.qs .mod, body.qs .oct { height: 34px; }
+body.qs .oct span { line-height: 32px; }
+body.qs .drone .ontile .led { display: none; }
+body.qs .drone .ontile { justify-content: space-between; }
+body.qs .drone .ontile .role { flex: none; }
+/* hold-to-change controls under lock: each button gets an amber edge, not the container */
+body.locked .hold { box-shadow: none; }
+body.locked .hold span:not(.holdtag), body.locked .tcard.hold .btn, body.locked .sw.hold { border-color: #ffb020aa !important; }
+body.locked .tcard.hold { border-color: #ffb02066; }
+/* drawer rows: a header line (label + what the current choice means), then the chips at full width */
+.qrow { display: block; padding: 9px 0 10px; }
+.qh { display: flex; align-items: baseline; gap: 8px; margin-bottom: 7px; white-space: nowrap; overflow: hidden; }
+.qh b { font-size: 14px; font-weight: 800; }
+.qh svg { flex: none; color: var(--faint); align-self: center; }
+.qh span { font-size: 12px; color: var(--faint); font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.qh span em { font-style: normal; color: var(--text); font-weight: 800; }
+.qsl { width: 100%; }
+.qchips .sw.test { margin-left: 8px; }
+.dscope { display: block; line-height: 1.35; }
+.dscope svg { vertical-align: -2px; }
+.dbody { -webkit-mask-image: linear-gradient(#000 calc(100% - 28px), transparent); mask-image: linear-gradient(#000 calc(100% - 28px), transparent); }
+.pop .pf .btn { white-space: nowrap; }
+.pop .pf span { display: flex; gap: 6px; align-items: center; }
+@media (max-width: 1180px) {
+  body.perform { grid-template-rows: 50px 70px 44px minmax(0, 1fr) auto 60px; }
+  .qh { margin-bottom: 5px; }
+  .qh span { display: inline; font-size: 11px; }
+  .qrow { padding: 6px 0 7px; }
+  .dmore i { display: none; }
+}
+
+/* ---- v2 polish pass 2 */
+.fbody .tag { writing-mode: horizontal-tb; transform: none; top: 2px; right: 4px; width: 50px; text-align: right; line-height: 1.2; white-space: normal; }
+.foot { grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); }
+.oct { grid-template-columns: 26px 1fr 26px; font-size: 13px; }
+.drone .full .keys12 { flex: 1 1 auto; max-height: 190px; grid-auto-rows: minmax(40px, 1fr); }
+.dlvl { display: none; }
+@media (max-width: 1180px) {
+  body.qs .pick svg { display: none; }
+  .fbody .tag { width: 40px; font-size: 10px; }
+}
+.drone .full .keys12 { flex: none; grid-auto-rows: 54px; max-height: none; }
+@media (max-width: 1180px) { .drone .full .keys12 { grid-auto-rows: 42px; } }

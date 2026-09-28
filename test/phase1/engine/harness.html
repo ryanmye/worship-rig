@@ -1,0 +1,17 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="icon" href="data:,"><title>Engine tests</title></head>
+<body><pre id="log">engine test harness</pre>
+<script type="module">
+  import * as S from './suites.mjs';
+  window.__suites = S;
+  window.__run = async (group, name) => {
+    const t0 = performance.now();
+    try {
+      const r = await S[group][name]();
+      return { ...r, ms: Math.round(performance.now() - t0) };
+    } catch (e) {
+      return { pass: false, error: String(e && e.stack || e), ms: Math.round(performance.now() - t0) };
+    }
+  };
+  window.__ready = true;
+</script></body></html>

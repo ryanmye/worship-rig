@@ -1,0 +1,387 @@
+{
+  "source": "https://github.com/sgossner/VSCO-2-CE (SFZ/UprightPiano.sfz, master/Keys/Upright Piano/)",
+  "license": "CC0-1.0",
+  "bitrate": "160k",
+  "sampleRate": 48000,
+  "layers": [
+    {
+      "dir": "dyn1",
+      "vel": [
+        0,
+        60
+      ],
+      "sfzVolumeDb": 23,
+      "targetOffsetDb": -9,
+      "notes": 23
+    },
+    {
+      "dir": "dyn2",
+      "vel": [
+        61,
+        110
+      ],
+      "sfzVolumeDb": 10,
+      "targetOffsetDb": -4.5,
+      "notes": 23
+    },
+    {
+      "dir": "dyn3",
+      "vel": [
+        111,
+        127
+      ],
+      "sfzVolumeDb": 2,
+      "targetOffsetDb": 0,
+      "notes": 23
+    }
+  ],
+  "instrumentGainDb": 5.8,
+  "totalMB": 15.35,
+  "files": [
+    {
+      "file": "upright-piano/dyn1/A0.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_000.wav",
+      "gainDb": 8
+    },
+    {
+      "file": "upright-piano/dyn1/A1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_006.wav",
+      "gainDb": 19.2
+    },
+    {
+      "file": "upright-piano/dyn1/A2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_012.wav",
+      "gainDb": 16.8
+    },
+    {
+      "file": "upright-piano/dyn1/A3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_018.wav",
+      "gainDb": 22.3
+    },
+    {
+      "file": "upright-piano/dyn1/A4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_024.wav",
+      "gainDb": 16.8
+    },
+    {
+      "file": "upright-piano/dyn1/A5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_030.wav",
+      "gainDb": 19.9
+    },
+    {
+      "file": "upright-piano/dyn1/A6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_036.wav",
+      "gainDb": 26.7
+    },
+    {
+      "file": "upright-piano/dyn1/A7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_042.wav",
+      "gainDb": 6.9
+    },
+    {
+      "file": "upright-piano/dyn1/C8.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_044.wav",
+      "gainDb": 5.6
+    },
+    {
+      "file": "upright-piano/dyn1/Db1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_002.wav",
+      "gainDb": 13.1
+    },
+    {
+      "file": "upright-piano/dyn1/Db2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_008.wav",
+      "gainDb": 10.8
+    },
+    {
+      "file": "upright-piano/dyn1/Db3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_014.wav",
+      "gainDb": 12.8
+    },
+    {
+      "file": "upright-piano/dyn1/Db4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_020.wav",
+      "gainDb": 20.5
+    },
+    {
+      "file": "upright-piano/dyn1/Db5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_026.wav",
+      "gainDb": 13.1
+    },
+    {
+      "file": "upright-piano/dyn1/Db6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_032.wav",
+      "gainDb": 29.2
+    },
+    {
+      "file": "upright-piano/dyn1/Db7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_038.wav",
+      "gainDb": 16.7
+    },
+    {
+      "file": "upright-piano/dyn1/F1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_004.wav",
+      "gainDb": 14.5
+    },
+    {
+      "file": "upright-piano/dyn1/F2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_010.wav",
+      "gainDb": 15.5
+    },
+    {
+      "file": "upright-piano/dyn1/F3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_016.wav",
+      "gainDb": 18.5
+    },
+    {
+      "file": "upright-piano/dyn1/F4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_022.wav",
+      "gainDb": 12.4
+    },
+    {
+      "file": "upright-piano/dyn1/F5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_028.wav",
+      "gainDb": 24.9
+    },
+    {
+      "file": "upright-piano/dyn1/F6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_034.wav",
+      "gainDb": 25.6
+    },
+    {
+      "file": "upright-piano/dyn1/F7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn1_rr1_040.wav",
+      "gainDb": 12.3
+    },
+    {
+      "file": "upright-piano/dyn2/A0.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_000.wav",
+      "gainDb": 5.9
+    },
+    {
+      "file": "upright-piano/dyn2/A1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_006.wav",
+      "gainDb": 7.9
+    },
+    {
+      "file": "upright-piano/dyn2/A2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_012.wav",
+      "gainDb": 8.1
+    },
+    {
+      "file": "upright-piano/dyn2/A3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_018.wav",
+      "gainDb": 12.9
+    },
+    {
+      "file": "upright-piano/dyn2/A4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_024.wav",
+      "gainDb": 7.8
+    },
+    {
+      "file": "upright-piano/dyn2/A5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_030.wav",
+      "gainDb": 16.2
+    },
+    {
+      "file": "upright-piano/dyn2/A6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_036.wav",
+      "gainDb": 8.6
+    },
+    {
+      "file": "upright-piano/dyn2/A7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_042.wav",
+      "gainDb": 5.1
+    },
+    {
+      "file": "upright-piano/dyn2/C8.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_044.wav",
+      "gainDb": 0.9
+    },
+    {
+      "file": "upright-piano/dyn2/Db1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_002.wav",
+      "gainDb": 6.7
+    },
+    {
+      "file": "upright-piano/dyn2/Db2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_008.wav",
+      "gainDb": 4.2
+    },
+    {
+      "file": "upright-piano/dyn2/Db3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_014.wav",
+      "gainDb": 8.7
+    },
+    {
+      "file": "upright-piano/dyn2/Db4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_020.wav",
+      "gainDb": 13.6
+    },
+    {
+      "file": "upright-piano/dyn2/Db5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_026.wav",
+      "gainDb": 9.6
+    },
+    {
+      "file": "upright-piano/dyn2/Db6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_032.wav",
+      "gainDb": 12.2
+    },
+    {
+      "file": "upright-piano/dyn2/Db7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_038.wav",
+      "gainDb": 5.8
+    },
+    {
+      "file": "upright-piano/dyn2/F1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_004.wav",
+      "gainDb": 8.6
+    },
+    {
+      "file": "upright-piano/dyn2/F2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_010.wav",
+      "gainDb": 7.1
+    },
+    {
+      "file": "upright-piano/dyn2/F3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_016.wav",
+      "gainDb": 13.2
+    },
+    {
+      "file": "upright-piano/dyn2/F4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_022.wav",
+      "gainDb": 9.2
+    },
+    {
+      "file": "upright-piano/dyn2/F5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_028.wav",
+      "gainDb": 12.8
+    },
+    {
+      "file": "upright-piano/dyn2/F6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_034.wav",
+      "gainDb": 13.7
+    },
+    {
+      "file": "upright-piano/dyn2/F7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn2_rr1_040.wav",
+      "gainDb": 10.5
+    },
+    {
+      "file": "upright-piano/dyn3/A0.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_000.wav",
+      "gainDb": 4.3
+    },
+    {
+      "file": "upright-piano/dyn3/A1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_006.wav",
+      "gainDb": 6.5
+    },
+    {
+      "file": "upright-piano/dyn3/A2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_012.wav",
+      "gainDb": 5.4
+    },
+    {
+      "file": "upright-piano/dyn3/A3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_018.wav",
+      "gainDb": 7.5
+    },
+    {
+      "file": "upright-piano/dyn3/A4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_024.wav",
+      "gainDb": 1.8
+    },
+    {
+      "file": "upright-piano/dyn3/A5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_030.wav",
+      "gainDb": 6
+    },
+    {
+      "file": "upright-piano/dyn3/A6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_036.wav",
+      "gainDb": 4.5
+    },
+    {
+      "file": "upright-piano/dyn3/A7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_042.wav",
+      "gainDb": 5.7
+    },
+    {
+      "file": "upright-piano/dyn3/C8.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_044.wav",
+      "gainDb": 2.7
+    },
+    {
+      "file": "upright-piano/dyn3/Db1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_002.wav",
+      "gainDb": 6.1
+    },
+    {
+      "file": "upright-piano/dyn3/Db2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_008.wav",
+      "gainDb": 4.4
+    },
+    {
+      "file": "upright-piano/dyn3/Db3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_014.wav",
+      "gainDb": 5.8
+    },
+    {
+      "file": "upright-piano/dyn3/Db4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_020.wav",
+      "gainDb": 7.4
+    },
+    {
+      "file": "upright-piano/dyn3/Db5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_026.wav",
+      "gainDb": 6
+    },
+    {
+      "file": "upright-piano/dyn3/Db6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_032.wav",
+      "gainDb": 4.7
+    },
+    {
+      "file": "upright-piano/dyn3/Db7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_038.wav",
+      "gainDb": 6.7
+    },
+    {
+      "file": "upright-piano/dyn3/F1.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_004.wav",
+      "gainDb": 6.8
+    },
+    {
+      "file": "upright-piano/dyn3/F2.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_010.wav",
+      "gainDb": 6.5
+    },
+    {
+      "file": "upright-piano/dyn3/F3.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_016.wav",
+      "gainDb": 8.1
+    },
+    {
+      "file": "upright-piano/dyn3/F4.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_022.wav",
+      "gainDb": 3.2
+    },
+    {
+      "file": "upright-piano/dyn3/F5.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_028.wav",
+      "gainDb": 7.9
+    },
+    {
+      "file": "upright-piano/dyn3/F6.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_034.wav",
+      "gainDb": 3.1
+    },
+    {
+      "file": "upright-piano/dyn3/F7.mp3",
+      "sourceUrl": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Keys/Upright%20Piano/Player_dyn3_rr1_040.wav",
+      "gainDb": 12.3
+    }
+  ]
+}

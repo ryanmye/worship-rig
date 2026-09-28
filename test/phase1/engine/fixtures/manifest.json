@@ -1,0 +1,79 @@
+{
+  "instruments": [
+    {
+      "id": "test-keys",
+      "name": "Test Keys",
+      "category": "piano",
+      "ext": "wav",
+      "release": 0.12,
+      "gainTrim": 0,
+      "license": "test",
+      "layers": [
+        {
+          "vel": [
+            0,
+            63
+          ],
+          "dir": "test-keys/soft",
+          "notes": [
+            "C4",
+            "A4"
+          ]
+        },
+        {
+          "vel": [
+            64,
+            127
+          ],
+          "dir": "test-keys/loud",
+          "notes": [
+            "C4",
+            "A4"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-mp3",
+      "name": "Test MP3",
+      "category": "mallet",
+      "ext": "mp3",
+      "release": 0.12,
+      "gainTrim": 0,
+      "license": "test",
+      "layers": [
+        {
+          "vel": [
+            0,
+            127
+          ],
+          "dir": "test-mp3",
+          "notes": [
+            "C4"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-missing",
+      "name": "Test Missing",
+      "category": "guitar",
+      "ext": "wav",
+      "release": 0.12,
+      "gainTrim": 0,
+      "layers": [
+        {
+          "vel": [
+            0,
+            127
+          ],
+          "dir": "test-keys/soft",
+          "notes": [
+            "C4",
+            "D4"
+          ]
+        }
+      ]
+    }
+  ]
+}

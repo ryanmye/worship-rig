@@ -1,0 +1,3071 @@
+{
+  "generated": "2026-09-28T09:06:50.394Z",
+  "sampleRate": 44100,
+  "seconds": 12,
+  "limits": {
+    "rmsLo": -26,
+    "rmsHi": -16,
+    "peak": -0.3,
+    "dc": 0.001,
+    "monoLoss": 3,
+    "silence": -60,
+    "layerInaudible": -15
+  },
+  "windows": {
+    "rms": [
+      0.5,
+      8
+    ],
+    "tail": [
+      8,
+      12
+    ]
+  },
+  "clickDetectorSelfTest": {
+    "pass": true,
+    "clean": 0,
+    "sawPad": 0,
+    "jump": 1,
+    "hitAtJump": true
+  },
+  "totals": {
+    "clips": 62,
+    "pass": 62,
+    "warn": 0,
+    "fail": 0,
+    "sizeMB": 190.8
+  },
+  "clips": [
+    {
+      "slug": "sunday-pad-piano",
+      "name": "Sunday Pad + Piano",
+      "kind": "song",
+      "category": "worship",
+      "setup": "Key C (Hear-In) · mod wheel 0.7 → pad · drone synth gain 1.2 · LH root C3–B3",
+      "listen": "Piano clearly on top; the warm pad (wheel 0.7) swells in slowly (~1 s) and sits underneath without masking it. A soft C drone (root-5th-octave, no 3rd) fades in over ~5 s. No pitch wobble, no beating between drone and chords, no smear of the previous chord after each pedal change.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -22.2,
+        "bandRmsDb": -22.2,
+        "tailRmsDb": -29.3,
+        "peakDb": -2.82,
+        "peakAt": 4.024,
+        "dc": -0.0000519,
+        "monoLossDb": 1.19,
+        "nonFinite": 0,
+        "centroidHz": 488,
+        "below120Hz": 1,
+        "segmentsDb": [
+          -26,
+          -23.7,
+          -24.3,
+          -23.6
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -20.4,
+          "peakDb": -2.21,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [
+        {
+          "part": "slot 0 salamander-piano",
+          "rmsDb": -23.7,
+          "relDb": -1.5
+        },
+        {
+          "part": "slot 1 warm-pad",
+          "rmsDb": -29.7,
+          "relDb": -7.5
+        },
+        {
+          "part": "drone",
+          "rmsDb": -31.6,
+          "relDb": -9.4
+        }
+      ],
+      "renderMs": 13439,
+      "trimMode": "native"
+    },
+    {
+      "slug": "building-swell",
+      "name": "Building Swell",
+      "kind": "song",
+      "category": "worship",
+      "setup": "Key C (Hear-In) · mod wheel 0.7 → pad · drone off · LH root C3–B3",
+      "listen": "Strings speak in ~0.4 s; their vibrato should start late (~0.5 s after each chord), gentle, not seasick. The glass pad (wheel 0.7) adds shimmer on top. No buzzy/raspy saw edge, no chorus wobble on pitch.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -22.5,
+        "bandRmsDb": -22.5,
+        "tailRmsDb": -34,
+        "peakDb": -7.55,
+        "peakAt": 7.196,
+        "dc": -3.46e-9,
+        "monoLossDb": 0.88,
+        "nonFinite": 0,
+        "centroidHz": 610,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -23.5,
+          -22,
+          -22.4,
+          -21.8
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -20.4,
+          "peakDb": -5.86,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [
+        {
+          "part": "slot 0 strings",
+          "rmsDb": -25,
+          "relDb": -2.5
+        },
+        {
+          "part": "slot 1 glass-pad",
+          "rmsDb": -26.1,
+          "relDb": -3.6
+        }
+      ],
+      "renderMs": 7436,
+      "trimMode": "native"
+    },
+    {
+      "slug": "prayer-wash",
+      "name": "Prayer Wash",
+      "kind": "song",
+      "category": "worship",
+      "setup": "Key C (Hear-In) · mod wheel 0.7 → pad · drone synth gain 0.9 · LH root C3–B3",
+      "listen": "A single warm pad in a huge room plus the key drone. Each chord swells slowly; the last 4 s are a long, smooth reverb tail (no metallic ring, no flutter). Chord changes must be seamless: no click when the pedal lifts.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -24.2,
+        "bandRmsDb": -24.2,
+        "tailRmsDb": -29.6,
+        "peakDb": -10.71,
+        "peakAt": 4.015,
+        "dc": 0.00000182,
+        "monoLossDb": 1.38,
+        "nonFinite": 0,
+        "centroidHz": 511,
+        "below120Hz": 1.1,
+        "segmentsDb": [
+          -25.8,
+          -23.9,
+          -24.1,
+          -23.6
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -22.5,
+          "peakDb": -8.49,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [
+        {
+          "part": "slot 1 warm-pad",
+          "rmsDb": -24.6,
+          "relDb": -0.4
+        },
+        {
+          "part": "drone",
+          "rmsDb": -33.7,
+          "relDb": -9.5
+        }
+      ],
+      "renderMs": 7702,
+      "trimMode": "native"
+    },
+    {
+      "slug": "organ-swell",
+      "name": "Organ Swell",
+      "kind": "song",
+      "category": "worship",
+      "setup": "Key C (Hear-In) · mod wheel 0.7 → pad · drone off · LH root C3–B3",
+      "listen": "Gospel drawbar organ with fast rotary (shimmering Leslie) and a pad behind it (wheel 0.7). The sustain pedal holds the pad but NOT the organ, so the organ stops briefly before each change (keys lift at 1.9 s) while the pad carries on. Key click subtle; no harsh distortion.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -21.3,
+        "bandRmsDb": -21.4,
+        "tailRmsDb": -35.6,
+        "peakDb": -7.56,
+        "peakAt": 2.051,
+        "dc": -0.0000799,
+        "monoLossDb": 0.59,
+        "nonFinite": 0,
+        "centroidHz": 502,
+        "below120Hz": 3.1,
+        "segmentsDb": [
+          -20.8,
+          -21,
+          -21.9,
+          -21.2
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -18.9,
+          "peakDb": -5.5,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [
+        {
+          "part": "slot 0 gospel",
+          "rmsDb": -24.6,
+          "relDb": -3.3
+        },
+        {
+          "part": "slot 1 warm-pad",
+          "rmsDb": -23.7,
+          "relDb": -2.4
+        }
+      ],
+      "renderMs": 6449,
+      "trimMode": "native"
+    },
+    {
+      "slug": "grand-piano",
+      "name": "Grand Piano",
+      "kind": "song",
+      "category": "keys",
+      "setup": "Key C (Hear-In) · mod wheel 1.0 → fx.reverb.returnGain · drone off · LH root C3–B3",
+      "listen": "Clean concert grand in a medium hall. Natural attack and decay, no doubled attacks, no click when the pedal lifts at each chord change, stable stereo image.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -23,
+        "bandRmsDb": -23,
+        "tailRmsDb": -48.8,
+        "peakDb": -2.86,
+        "peakAt": 6.04,
+        "dc": -0.0000518,
+        "monoLossDb": 1.68,
+        "nonFinite": 0,
+        "centroidHz": 499,
+        "below120Hz": 0.5,
+        "segmentsDb": [
+          -27.1,
+          -26.1,
+          -28.7,
+          -24.6
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -21.7,
+          "peakDb": -2.35,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [],
+      "renderMs": 9249,
+      "trimMode": "native"
+    },
+    {
+      "slug": "rhodes",
+      "name": "Rhodes",
+      "kind": "song",
+      "category": "keys",
+      "setup": "Key C (Hear-In) · mod wheel 1.0 → fx.reverb.returnGain · drone off · LH root C3–B3",
+      "listen": "Sampled Rhodes with a soft chorus: bell-like tine on the attack, round warm body, gentle stereo movement from the chorus (not seasick).",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -21.8,
+        "bandRmsDb": -21.8,
+        "tailRmsDb": -43.2,
+        "peakDb": -8.82,
+        "peakAt": 2.016,
+        "dc": -0.00000504,
+        "monoLossDb": 0.51,
+        "nonFinite": 0,
+        "centroidHz": 381,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -21.5,
+          -22.2,
+          -23.1,
+          -22.2
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -19.3,
+          "peakDb": -6.5,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [],
+      "renderMs": 3780,
+      "trimMode": "native"
+    },
+    {
+      "slug": "felt-piano",
+      "name": "Felt Piano",
+      "kind": "song",
+      "category": "keys",
+      "setup": "Key C (Hear-In) · mod wheel 1.0 → fx.reverb.returnGain · drone off · LH root C3–B3",
+      "listen": "Dark, soft \"felt\" piano (tone rolled off, soft velocity) in a big room: muffled hammer, no bright top end, the room carries the sustain.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -20.8,
+        "bandRmsDb": -20.8,
+        "tailRmsDb": -42.6,
+        "peakDb": -3.19,
+        "peakAt": 6.04,
+        "dc": -0.0000553,
+        "monoLossDb": 1.83,
+        "nonFinite": 0,
+        "centroidHz": 433,
+        "below120Hz": 0.4,
+        "segmentsDb": [
+          -23.3,
+          -21.1,
+          -25,
+          -21.3
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -19.6,
+          "peakDb": -2.38,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [],
+      "renderMs": 10679,
+      "trimMode": "native"
+    },
+    {
+      "slug": "lofi-rhodes",
+      "name": "Lofi Rhodes",
+      "kind": "song",
+      "category": "lofi",
+      "setup": "Key C (Hear-In) · mod wheel 1.0 → fx.reverb.returnGain · drone off · 80 bpm · lofi 0.6 · LH root C3–B3",
+      "listen": "Soft FM electric piano through a worn tape: gentle wow/flutter pitch wobble IS expected here, soft crackle, dusty top end, dotted-eighth echoes at 80 bpm. Wobble should feel nostalgic, not out of tune.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -24,
+        "bandRmsDb": -24.1,
+        "tailRmsDb": -45.7,
+        "peakDb": -13.84,
+        "peakAt": 4.027,
+        "dc": -0.00000645,
+        "monoLossDb": 0.26,
+        "nonFinite": 0,
+        "centroidHz": 385,
+        "below120Hz": 0.2,
+        "segmentsDb": [
+          -23.9,
+          -24.1,
+          -24.5,
+          -24.1
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": null,
+        "mono": {
+          "rmsDb": -21.3,
+          "peakDb": -11.3,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [],
+      "renderMs": 3541,
+      "trimMode": "native"
+    },
+    {
+      "slug": "dusty-piano",
+      "name": "Dusty Piano",
+      "kind": "song",
+      "category": "lofi",
+      "setup": "Key C (Hear-In) · mod wheel 1.0 → fx.reverb.returnGain · drone off · 75 bpm · lofi 0.5 · LH root C3–B3",
+      "listen": "Piano \"sampled from an old record\": vinyl crackle clearly audible (crackle 0.6), slight tape wobble, narrow warm tone, quarter-note echo at 75 bpm. The piano must stay intelligible under the crackle.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -24.1,
+        "bandRmsDb": -24.1,
+        "tailRmsDb": -51.9,
+        "peakDb": -9.61,
+        "peakAt": 6.05,
+        "dc": 5.56e-7,
+        "monoLossDb": 1.65,
+        "nonFinite": 0,
+        "centroidHz": 500,
+        "below120Hz": 0.3,
+        "segmentsDb": [
+          -27.9,
+          -26,
+          -26.9,
+          -25
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": null,
+        "mono": {
+          "rmsDb": -22.7,
+          "peakDb": -7.05,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [],
+      "renderMs": 11285,
+      "trimMode": "native"
+    },
+    {
+      "slug": "glass-ocean",
+      "name": "Glass Ocean",
+      "kind": "song",
+      "category": "ambient",
+      "setup": "Key C (Hear-In) · mod wheel 0.7 → pad · drone off · 72 bpm · LH root C3–B3",
+      "listen": "Glassy pad (wheel 0.7) plus soft FM bells bouncing left/right in a dotted-eighth ping-pong delay at 72 bpm. Bells should ring clearly without harsh 2–5 kHz edge; echoes rhythmic, not a smear.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -24.9,
+        "bandRmsDb": -25,
+        "tailRmsDb": -36.7,
+        "peakDb": -11.38,
+        "peakAt": 2.1,
+        "dc": 0.00000495,
+        "monoLossDb": 0.93,
+        "nonFinite": 0,
+        "centroidHz": 644,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -24.6,
+          -25.4,
+          -25,
+          -26.1
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -22.9,
+          "peakDb": -9.71,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [
+        {
+          "part": "slot 1 glass-pad",
+          "rmsDb": -27.2,
+          "relDb": -2.3
+        },
+        {
+          "part": "slot 2 bell",
+          "rmsDb": -28,
+          "relDb": -3.1
+        }
+      ],
+      "renderMs": 6865,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sub-shimmer",
+      "name": "Sub + Shimmer",
+      "kind": "song",
+      "category": "ambient",
+      "setup": "Key C (Hear-In) · mod wheel 0.7 → pad · drone synth gain 0.9 · bass note in C2 range → Bass slot",
+      "listen": "Split: the left-hand root (C2 range) plays the mono sub-bass, one note at a time (never a chord); the glass pad plays everything and the key drone sits underneath. Use headphones or real speakers: laptop speakers will hide the sub. Low end deep but not boomy or muddy.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -23.7,
+        "bandRmsDb": -25.4,
+        "tailRmsDb": -31.1,
+        "peakDb": -11.37,
+        "peakAt": 3.471,
+        "dc": 0.00000402,
+        "monoLossDb": 0.35,
+        "nonFinite": 0,
+        "centroidHz": 253,
+        "below120Hz": 56,
+        "segmentsDb": [
+          -24.5,
+          -23.2,
+          -23.5,
+          -23.5
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -21,
+          "peakDb": -8.85,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [
+        {
+          "part": "slot 1 glass-pad",
+          "rmsDb": -28.2,
+          "relDb": -4.5
+        },
+        {
+          "part": "slot 3 sub-bass",
+          "rmsDb": -26.5,
+          "relDb": -2.8
+        },
+        {
+          "part": "drone",
+          "rmsDb": -32.7,
+          "relDb": -9
+        }
+      ],
+      "renderMs": 6355,
+      "trimMode": "native"
+    },
+    {
+      "slug": "anthem",
+      "name": "Anthem",
+      "kind": "song",
+      "category": "worship",
+      "setup": "Key C (Hear-In) · mod wheel 1.0 → macro.intensity · drone off · 72 bpm · LH root C3–B3",
+      "listen": "The big modern-worship chorus: grand piano over a wide supersaw pad, with dotted-eighth echoes. The mod wheel is an intensity macro: roll it down for a verse (piano with a soft, dark pad) and up for the chorus (the pad gets louder and brighter). Set the song tempo so the echoes lock to the band.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -20.8,
+        "bandRmsDb": -20.9,
+        "tailRmsDb": -35.7,
+        "peakDb": -3.03,
+        "peakAt": 4.024,
+        "dc": -0.0000475,
+        "monoLossDb": 1.56,
+        "nonFinite": 0,
+        "centroidHz": 544,
+        "below120Hz": 3.5,
+        "segmentsDb": [
+          -22.2,
+          -22,
+          -22.8,
+          -22.2
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -19.4,
+          "peakDb": -2.17,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [
+        {
+          "part": "slot 0 salamander-piano",
+          "rmsDb": -23.4,
+          "relDb": -2.6
+        },
+        {
+          "part": "slot 1 supersaw-pad",
+          "rmsDb": -24.4,
+          "relDb": -3.6
+        }
+      ],
+      "renderMs": 13121,
+      "trimMode": "native"
+    },
+    {
+      "slug": "gospel-stab-b3",
+      "name": "Gospel Stab + B3",
+      "kind": "song",
+      "category": "worship",
+      "setup": "Key C (Hear-In) · mod wheel 0.7 → pad · drone off · 96 bpm · bass note in C2 range → Bass slot",
+      "listen": "Drawbar organ with a punchy synth stab layered on the right hand and a mono synth bass on the left (below middle C, lowest note only). The mod wheel is the stab level, so you can play pure organ and bring the stabs in for hits. Push the pitch-bend wheel to switch the rotary speaker between slow and fast (it also opens up the stab and bass).",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -21.8,
+        "bandRmsDb": -22.9,
+        "tailRmsDb": -50.7,
+        "peakDb": -8.28,
+        "peakAt": 6.069,
+        "dc": -0.0000686,
+        "monoLossDb": 0.24,
+        "nonFinite": 0,
+        "centroidHz": 346,
+        "below120Hz": 34.4,
+        "segmentsDb": [
+          -20.6,
+          -23.4,
+          -21.9,
+          -21.4
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -19,
+          "peakDb": -6.52,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [
+        {
+          "part": "slot 0 gospel",
+          "rmsDb": -24.7,
+          "relDb": -2.9
+        },
+        {
+          "part": "slot 1 poly-stab",
+          "rmsDb": -30.2,
+          "relDb": -8.4
+        },
+        {
+          "part": "slot 3 synth-bass",
+          "rmsDb": -27,
+          "relDb": -5.2
+        }
+      ],
+      "renderMs": 3738,
+      "trimMode": "native"
+    },
+    {
+      "slug": "upright-pad",
+      "name": "Upright + Pad",
+      "kind": "song",
+      "category": "worship",
+      "setup": "Key C (Hear-In) · mod wheel 0.7 → pad · drone synth gain 1 · LH root C3–B3",
+      "listen": "A warm, close upright piano with a soft pad and the key drone underneath: acoustic sets, communion and quiet songs. The mod wheel (and an expression pedal) brings the pad in and out. Push the pitch-bend wheel up to lift the drone.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -22.1,
+        "bandRmsDb": -22.1,
+        "tailRmsDb": -30.8,
+        "peakDb": -4.73,
+        "peakAt": 6.151,
+        "dc": -0.00000368,
+        "monoLossDb": 0.78,
+        "nonFinite": 0,
+        "centroidHz": 415,
+        "below120Hz": 0.4,
+        "segmentsDb": [
+          -25.4,
+          -24.3,
+          -23.7,
+          -23.9
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -19.9,
+          "peakDb": -2.7,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [
+        {
+          "part": "slot 0 upright-piano",
+          "rmsDb": -23.4,
+          "relDb": -1.3
+        },
+        {
+          "part": "slot 1 warm-pad",
+          "rmsDb": -30.6,
+          "relDb": -8.5
+        },
+        {
+          "part": "drone",
+          "rmsDb": -32.1,
+          "relDb": -10
+        }
+      ],
+      "renderMs": 11632,
+      "trimMode": "native"
+    },
+    {
+      "slug": "clav-funk",
+      "name": "Clav Funk",
+      "kind": "song",
+      "category": "keys",
+      "setup": "Key C (Hear-In) · mod wheel 0.7 → pad · drone off · 96 bpm · LH root C3–B3",
+      "listen": "Clavinet with a Wurlitzer layered underneath, a quick slapback and very little room: funk, gospel grooves and tight band playing. The mod wheel is the Wurlitzer level (wheel down = clav alone); an expression pedal is a volume pedal. Pitch bend is off.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -21.3,
+        "bandRmsDb": -21.3,
+        "tailRmsDb": -56.9,
+        "peakDb": -2.87,
+        "peakAt": 6.022,
+        "dc": -0.00000833,
+        "monoLossDb": 0.04,
+        "nonFinite": 0,
+        "centroidHz": 988,
+        "below120Hz": 0.1,
+        "segmentsDb": [
+          -23.5,
+          -22.4,
+          -23.1,
+          -24.1
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -18.5,
+          "peakDb": -1.86,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [
+        {
+          "part": "slot 0 clavinet",
+          "rmsDb": -21.7,
+          "relDb": -0.4
+        },
+        {
+          "part": "slot 1 ep-wurli",
+          "rmsDb": -31.5,
+          "relDb": -10.2
+        }
+      ],
+      "renderMs": 5440,
+      "trimMode": "native"
+    },
+    {
+      "slug": "music-box-lullaby",
+      "name": "Music Box Lullaby",
+      "kind": "song",
+      "category": "ambient",
+      "setup": "Key C (Hear-In) · mod wheel 0.7 → pad · drone off · LH root C3–B3",
+      "listen": "Music box over a glassy pad in a cathedral, with celesta taking over from C5 up: lullabies, Christmas and gentle intros. The mod wheel is the pad level. Push the pitch-bend wheel to bloom the pad an octave up.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -20.7,
+        "bandRmsDb": -20.9,
+        "tailRmsDb": -36.5,
+        "peakDb": -1.42,
+        "peakAt": 4.014,
+        "dc": -0.000004,
+        "monoLossDb": 0.9,
+        "nonFinite": 0,
+        "centroidHz": 1086,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -22.2,
+          -22.6,
+          -22.4,
+          -21.2
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -19.1,
+          "peakDb": -1.07,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [
+        {
+          "part": "slot 0 music-box",
+          "rmsDb": -21.7,
+          "relDb": -1
+        },
+        {
+          "part": "slot 1 glass-pad",
+          "rmsDb": -30.1,
+          "relDb": -9.4
+        },
+        {
+          "part": "slot 2 celesta",
+          "rmsDb": -28.6,
+          "relDb": -7.9
+        }
+      ],
+      "renderMs": 8675,
+      "trimMode": "native"
+    },
+    {
+      "slug": "dream-juno",
+      "name": "Dream Juno",
+      "kind": "song",
+      "category": "ambient",
+      "setup": "Key C (Hear-In) · mod wheel 1.0 → macro.intensity · drone off · 70 bpm · LH root C3–B3",
+      "listen": "A chorused Juno-style pad with a shimmer pad an octave-bloom above it, in a huge wash with long echo trails: ambient sets and prayer. The mod wheel is an intensity macro: rolling it up brings the Juno pad up and opens both pads. Set the song tempo so the echo trails follow the band.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -17.8,
+        "bandRmsDb": -17.8,
+        "tailRmsDb": -23.5,
+        "peakDb": -4.37,
+        "peakAt": 7.506,
+        "dc": -4.93e-7,
+        "monoLossDb": 2.18,
+        "nonFinite": 0,
+        "centroidHz": 515,
+        "below120Hz": 0.1,
+        "segmentsDb": [
+          -19.7,
+          -18.1,
+          -17.8,
+          -16.5
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -16.9,
+          "peakDb": -4.22,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [
+        {
+          "part": "slot 1 juno-pad",
+          "rmsDb": -20.3,
+          "relDb": -2.5
+        },
+        {
+          "part": "slot 2 shimmer-pad",
+          "rmsDb": -22.3,
+          "relDb": -4.5
+        }
+      ],
+      "renderMs": 8334,
+      "trimMode": "native"
+    },
+    {
+      "slug": "80s-ballad",
+      "name": "80s Ballad",
+      "kind": "song",
+      "category": "synth",
+      "setup": "Key C (Hear-In) · mod wheel 0.7 → pad · drone off · LH root C3–B3",
+      "listen": "The classic FM electric piano over a Juno-style pad in a big hall, with the chorus turned up. The mod wheel is the pad level (wheel down = electric piano alone); an expression pedal also rides the pad. Pitch bend bends the pad only.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -23.2,
+        "bandRmsDb": -23.3,
+        "tailRmsDb": -38.9,
+        "peakDb": -7.82,
+        "peakAt": 2.064,
+        "dc": 4.69e-8,
+        "monoLossDb": 1.19,
+        "nonFinite": 0,
+        "centroidHz": 422,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -22.7,
+          -24.7,
+          -25.2,
+          -23.4
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -21.4,
+          "peakDb": -6.14,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [
+        {
+          "part": "slot 0 dx-epiano",
+          "rmsDb": -24.9,
+          "relDb": -1.7
+        },
+        {
+          "part": "slot 1 juno-pad",
+          "rmsDb": -29.2,
+          "relDb": -6
+        }
+      ],
+      "renderMs": 6011,
+      "trimMode": "native"
+    },
+    {
+      "slug": "synthwave",
+      "name": "Synthwave",
+      "kind": "song",
+      "category": "synth",
+      "setup": "Key C (Hear-In) · mod wheel 1.0 → macro.wash · drone off · 100 bpm · bass note in C2 range → Bass slot",
+      "listen": "A three-way split: 808 sub on the lowest left-hand note (below middle C), analog brass in the middle and a square lead from C5 up, with quarter-note echoes. The mod wheel is a wash macro (more reverb and echo); the pitch-bend wheel bends the lead. Set the song tempo so the echoes lock to the track.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -22.9,
+        "bandRmsDb": -24.4,
+        "tailRmsDb": -37.6,
+        "peakDb": -10.54,
+        "peakAt": 4.125,
+        "dc": 0.0000614,
+        "monoLossDb": 0.35,
+        "nonFinite": 0,
+        "centroidHz": 309,
+        "below120Hz": 57.4,
+        "segmentsDb": [
+          -24,
+          -23.7,
+          -24.1,
+          -23.9
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -20.2,
+          "peakDb": -8.24,
+          "nonFinite": 0
+        },
+        "rmsLo": -26
+      },
+      "layers": [
+        {
+          "part": "slot 0 analog-brass",
+          "rmsDb": -27.7,
+          "relDb": -4.8
+        },
+        {
+          "part": "slot 2 square-lead",
+          "rmsDb": -30.8,
+          "relDb": -7.9
+        },
+        {
+          "part": "slot 3 808-sub",
+          "rmsDb": -25.6,
+          "relDb": -2.7
+        }
+      ],
+      "renderMs": 4563,
+      "trimMode": "native"
+    },
+    {
+      "slug": "synth-warm-pad",
+      "name": "Warm Pad",
+      "kind": "instrument",
+      "category": "synth · Synth Pads",
+      "setup": "Key C · slot role Pad defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Warm analog-style pad: ~1.2 s swell, slow filter movement, wide stereo. No pitch wobble, no zipper noise, low end tight (mono below 150 Hz).",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -23,
+        "bandRmsDb": -23.1,
+        "tailRmsDb": -33.7,
+        "peakDb": -9.67,
+        "peakAt": 7.02,
+        "dc": -2.63e-8,
+        "monoLossDb": 0.91,
+        "nonFinite": 0,
+        "centroidHz": 526,
+        "below120Hz": 1.3,
+        "segmentsDb": [
+          -23.3,
+          -23.2,
+          -22.9,
+          -23.1
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -20.9,
+          "peakDb": -7.84,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 5144,
+      "trimMode": "native"
+    },
+    {
+      "slug": "synth-glass-pad",
+      "name": "Glass Pad",
+      "kind": "instrument",
+      "category": "synth · Synth Pads",
+      "setup": "Key C · slot role Pad defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Glassy, bright-but-soft pad with chorus shimmer; attack ~0.8 s. No harsh top, no seasick chorus.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -23,
+        "bandRmsDb": -23,
+        "tailRmsDb": -31.8,
+        "peakDb": -11.45,
+        "peakAt": 1.293,
+        "dc": -9.55e-9,
+        "monoLossDb": 0.8,
+        "nonFinite": 0,
+        "centroidHz": 419,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -23.5,
+          -22.7,
+          -24.1,
+          -21.9
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -20.8,
+          "peakDb": -9.5,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3357,
+      "trimMode": "native"
+    },
+    {
+      "slug": "synth-strings",
+      "name": "Strings",
+      "kind": "instrument",
+      "category": "synth · Synth Pads",
+      "setup": "Key C · slot role Pad defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Synth strings: ~0.4 s attack, 1.8 s release, delayed vibrato (starts ~0.5 s into each chord). Should not buzz.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -23,
+        "bandRmsDb": -23,
+        "tailRmsDb": -35.2,
+        "peakDb": -9.05,
+        "peakAt": 7.371,
+        "dc": 6.34e-9,
+        "monoLossDb": 1,
+        "nonFinite": 0,
+        "centroidHz": 694,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -23.1,
+          -23.2,
+          -22.4,
+          -22.6
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -21,
+          "peakDb": -7.77,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3424,
+      "trimMode": "native"
+    },
+    {
+      "slug": "synth-sub-bass",
+      "name": "Sub Bass",
+      "kind": "instrument",
+      "category": "synth · Bass",
+      "setup": "Key C · slot role Bass defaults (gain 0.8, role sends) · default FX, master −6 dB · roots only, C2 range",
+      "listen": "Roots only (C2 range), mono: one clean, round sub note at a time with a little 2nd-harmonic warmth. No chords, no click at note changes (30 ms legato).",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -25.9,
+        "bandRmsDb": -30.1,
+        "tailRmsDb": -47.7,
+        "peakDb": -19.54,
+        "peakAt": 6.016,
+        "dc": -0.0000104,
+        "monoLossDb": 0,
+        "nonFinite": 0,
+        "centroidHz": 93,
+        "below120Hz": 98.7,
+        "segmentsDb": [
+          -25.9,
+          -26,
+          -26,
+          -25.9
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -22.9,
+          "peakDb": -16.53,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 1454,
+      "trimMode": "native"
+    },
+    {
+      "slug": "synth-soft-keys",
+      "name": "Soft Keys",
+      "kind": "instrument",
+      "category": "synth · Synth Keys",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "FM electric piano: tine \"ping\" on the attack, warm body, stereo tremolo; decays like a real EP.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -24.9,
+        "bandRmsDb": -25,
+        "tailRmsDb": -47.4,
+        "peakDb": -13.78,
+        "peakAt": 4.081,
+        "dc": -0.000608,
+        "monoLossDb": 0.24,
+        "nonFinite": 0,
+        "centroidHz": 390,
+        "below120Hz": 0.3,
+        "segmentsDb": [
+          -25,
+          -25.5,
+          -25.3,
+          -24.9
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -22.1,
+          "peakDb": -12.26,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 2186,
+      "trimMode": "native"
+    },
+    {
+      "slug": "synth-bell",
+      "name": "Bell",
+      "kind": "instrument",
+      "category": "synth · Synth Keys",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "FM bell: clear inharmonic strike, long decay. Should not be piercing.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -25.6,
+        "bandRmsDb": -25.7,
+        "tailRmsDb": -46.1,
+        "peakDb": -10.27,
+        "peakAt": 2.03,
+        "dc": 5.51e-7,
+        "monoLossDb": 0.13,
+        "nonFinite": 0,
+        "centroidHz": 856,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -26,
+          -26.7,
+          -26.7,
+          -26.5
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -22.7,
+          "peakDb": -7.28,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 2626,
+      "trimMode": "native"
+    },
+    {
+      "slug": "synth-supersaw-pad",
+      "name": "Supersaw Pad",
+      "kind": "instrument",
+      "category": "synth · Synth Pads",
+      "setup": "Key C · slot role Pad defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Synth Pads instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -22.7,
+        "bandRmsDb": -22.8,
+        "tailRmsDb": -34.1,
+        "peakDb": -8.67,
+        "peakAt": 4.752,
+        "dc": -5.48e-8,
+        "monoLossDb": 1.08,
+        "nonFinite": 0,
+        "centroidHz": 493,
+        "below120Hz": 7.1,
+        "segmentsDb": [
+          -22.5,
+          -22.3,
+          -22.4,
+          -23.1
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -20.7,
+          "peakDb": -7.32,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 4249,
+      "trimMode": "native"
+    },
+    {
+      "slug": "synth-juno-pad",
+      "name": "Juno Pad",
+      "kind": "instrument",
+      "category": "synth · Synth Pads",
+      "setup": "Key C · slot role Pad defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Synth Pads instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -22.2,
+        "bandRmsDb": -22.2,
+        "tailRmsDb": -35.5,
+        "peakDb": -9.81,
+        "peakAt": 6.499,
+        "dc": -1.18e-7,
+        "monoLossDb": 1.04,
+        "nonFinite": 0,
+        "centroidHz": 553,
+        "below120Hz": 0.1,
+        "segmentsDb": [
+          -22.3,
+          -23.1,
+          -21.2,
+          -21.6
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -20.2,
+          "peakDb": -7.2,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 2847,
+      "trimMode": "native"
+    },
+    {
+      "slug": "synth-shimmer-pad",
+      "name": "Shimmer Pad",
+      "kind": "instrument",
+      "category": "synth · Synth Pads",
+      "setup": "Key C · slot role Pad defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Synth Pads instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -22.5,
+        "bandRmsDb": -22.5,
+        "tailRmsDb": -30,
+        "peakDb": -9.31,
+        "peakAt": 7.619,
+        "dc": 1.4e-8,
+        "monoLossDb": 0.96,
+        "nonFinite": 0,
+        "centroidHz": 408,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -23.6,
+          -23.2,
+          -23.7,
+          -21.7
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -20.5,
+          "peakDb": -8.34,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 4179,
+      "trimMode": "native"
+    },
+    {
+      "slug": "synth-dx-epiano",
+      "name": "DX E-Piano",
+      "kind": "instrument",
+      "category": "synth · Synth Keys",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Synth Keys instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -26.6,
+        "bandRmsDb": -26.6,
+        "tailRmsDb": -49,
+        "peakDb": -9.73,
+        "peakAt": 6.019,
+        "dc": -1.72e-7,
+        "monoLossDb": 0.33,
+        "nonFinite": 0,
+        "centroidHz": 368,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -26.9,
+          -28.4,
+          -29.4,
+          -28
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -23.9,
+          "peakDb": -7.01,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 2578,
+      "trimMode": "native"
+    },
+    {
+      "slug": "synth-pluck",
+      "name": "Pluck",
+      "kind": "instrument",
+      "category": "synth · Synth Keys",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB · RMS judged over 0–1 s of each chord (calibWindow)",
+      "listen": "Synth Keys instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -27.3,
+        "rmsWindows": "0–1, 2–3, 4–5, 6–7",
+        "bandRmsDb": -30.9,
+        "tailRmsDb": -68.1,
+        "peakDb": -9.42,
+        "peakAt": 4.044,
+        "dc": 0.00000244,
+        "monoLossDb": 0.15,
+        "nonFinite": 0,
+        "centroidHz": 526,
+        "below120Hz": 0.1,
+        "segmentsDb": [
+          -36.4,
+          -37,
+          -38.3,
+          -40
+        ],
+        "dropout": {
+          "seconds": 0.04,
+          "at": 1.96
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -28,
+          "peakDb": -6.46,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 2375,
+      "trimMode": "native"
+    },
+    {
+      "slug": "synth-poly-stab",
+      "name": "Poly Stab",
+      "kind": "instrument",
+      "category": "synth · Synth Keys",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Synth Keys instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -25,
+        "bandRmsDb": -25,
+        "tailRmsDb": -45.3,
+        "peakDb": -9.59,
+        "peakAt": 6.024,
+        "dc": 0.00000237,
+        "monoLossDb": 0.31,
+        "nonFinite": 0,
+        "centroidHz": 475,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -25.5,
+          -25.3,
+          -24.9,
+          -25.6
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -22.3,
+          "peakDb": -7.71,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 2678,
+      "trimMode": "native"
+    },
+    {
+      "slug": "synth-analog-brass",
+      "name": "Analog Brass",
+      "kind": "instrument",
+      "category": "synth · Brass & Leads",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Brass & Leads instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -25.2,
+        "bandRmsDb": -25.2,
+        "tailRmsDb": -44.5,
+        "peakDb": -12.03,
+        "peakAt": 0.566,
+        "dc": -9.79e-7,
+        "monoLossDb": 0.45,
+        "nonFinite": 0,
+        "centroidHz": 426,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -24.9,
+          -25.2,
+          -25.5,
+          -25.7
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -22.7,
+          "peakDb": -10.12,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 2906,
+      "trimMode": "native"
+    },
+    {
+      "slug": "synth-square-lead",
+      "name": "Square Lead",
+      "kind": "instrument",
+      "category": "synth · Brass & Leads",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Brass & Leads instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -25,
+        "bandRmsDb": -25.1,
+        "tailRmsDb": -44.3,
+        "peakDb": -14.58,
+        "peakAt": 2.025,
+        "dc": -0.00000115,
+        "monoLossDb": 0.16,
+        "nonFinite": 0,
+        "centroidHz": 530,
+        "below120Hz": 0.6,
+        "segmentsDb": [
+          -24.6,
+          -24.9,
+          -25.2,
+          -25.4
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -22.2,
+          "peakDb": -11.88,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 2492,
+      "trimMode": "native"
+    },
+    {
+      "slug": "synth-808-sub",
+      "name": "808 Sub",
+      "kind": "instrument",
+      "category": "synth · Bass",
+      "setup": "Key C · slot role Bass defaults (gain 0.8, role sends) · default FX, master −6 dB · roots only, C2 range",
+      "listen": "Bass instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -25,
+        "bandRmsDb": -28.5,
+        "tailRmsDb": -68.4,
+        "peakDb": -14.6,
+        "peakAt": 2.01,
+        "dc": 0.000065,
+        "monoLossDb": 0,
+        "nonFinite": 0,
+        "centroidHz": 98,
+        "below120Hz": 98.4,
+        "segmentsDb": [
+          -27.2,
+          -27.2,
+          -27.2,
+          -27.2
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -22,
+          "peakDb": -11.59,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 1578,
+      "trimMode": "native"
+    },
+    {
+      "slug": "synth-synth-bass",
+      "name": "Synth Bass",
+      "kind": "instrument",
+      "category": "synth · Bass",
+      "setup": "Key C · slot role Bass defaults (gain 0.8, role sends) · default FX, master −6 dB · roots only, C2 range",
+      "listen": "Bass instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -25.8,
+        "bandRmsDb": -28.7,
+        "tailRmsDb": -50.2,
+        "peakDb": -15.5,
+        "peakAt": 2.037,
+        "dc": 6.43e-7,
+        "monoLossDb": 0,
+        "nonFinite": 0,
+        "centroidHz": 133,
+        "below120Hz": 78.7,
+        "segmentsDb": [
+          -26.1,
+          -26.2,
+          -26.1,
+          -26.2
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -22.8,
+          "peakDb": -12.49,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 1723,
+      "trimMode": "native"
+    },
+    {
+      "slug": "organ-gospel",
+      "name": "Gospel Organ",
+      "kind": "instrument",
+      "category": "organ · Organ",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Gospel drawbars 888800000 with percussion and fast rotary: bright, punchy, shimmering. Key click subtle.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -23.5,
+        "bandRmsDb": -23.7,
+        "tailRmsDb": -42.2,
+        "peakDb": -11.25,
+        "peakAt": 7.823,
+        "dc": -0.0000811,
+        "monoLossDb": 0.45,
+        "nonFinite": 0,
+        "centroidHz": 451,
+        "below120Hz": 5.5,
+        "segmentsDb": [
+          -24,
+          -23.8,
+          -23.5,
+          -23
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -21,
+          "peakDb": -8.51,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 2238,
+      "trimMode": "native"
+    },
+    {
+      "slug": "organ-soft-pad",
+      "name": "Soft Organ",
+      "kind": "instrument",
+      "category": "organ · Organ",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Soft organ 008800000 with slow rotary: mellow, flute-like.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -23.2,
+        "bandRmsDb": -23.2,
+        "tailRmsDb": -41.4,
+        "peakDb": -11.1,
+        "peakAt": 7.757,
+        "dc": 0.00000492,
+        "monoLossDb": 0.58,
+        "nonFinite": 0,
+        "centroidHz": 475,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -23.5,
+          -22.5,
+          -25.5,
+          -21.8
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -20.8,
+          "peakDb": -8.66,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 2228,
+      "trimMode": "native"
+    },
+    {
+      "slug": "organ-full",
+      "name": "Full Organ",
+      "kind": "instrument",
+      "category": "organ · Organ",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Full organ, all drawbars: loud, bright, slight overdrive; slow rotary. Should not distort harshly.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -24.6,
+        "bandRmsDb": -24.7,
+        "tailRmsDb": -44.1,
+        "peakDb": -11.11,
+        "peakAt": 7.738,
+        "dc": 0.0000108,
+        "monoLossDb": 1.46,
+        "nonFinite": 0,
+        "centroidHz": 954,
+        "below120Hz": 3.8,
+        "segmentsDb": [
+          -24.5,
+          -24.6,
+          -24.8,
+          -24.2
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -23,
+          "peakDb": -9.27,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 2164,
+      "trimMode": "native"
+    },
+    {
+      "slug": "organ-church",
+      "name": "Church Organ",
+      "kind": "instrument",
+      "category": "organ · Organ",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Church organ 806000000, no rotary, long release: stately, still; long tail after each chord.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -19.8,
+        "bandRmsDb": -20.3,
+        "tailRmsDb": -33.6,
+        "peakDb": -8.15,
+        "peakAt": 4.021,
+        "dc": -0.00000634,
+        "monoLossDb": 0.08,
+        "nonFinite": 0,
+        "centroidHz": 218,
+        "below120Hz": 17.5,
+        "segmentsDb": [
+          -20,
+          -20.9,
+          -19.9,
+          -19.1
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -16.8,
+          "peakDb": -5.24,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 2164,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-salamander-piano",
+      "name": "Grand Piano (Salamander)",
+      "kind": "instrument",
+      "category": "sampler · Piano",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Salamander grand: three velocity layers; natural decay, no mismatched note levels across the chord.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -23.3,
+        "bandRmsDb": -23.3,
+        "tailRmsDb": -50.6,
+        "peakDb": -3.38,
+        "peakAt": 6.04,
+        "dc": -0.0000521,
+        "monoLossDb": 1.51,
+        "nonFinite": 0,
+        "centroidHz": 484,
+        "below120Hz": 0.5,
+        "segmentsDb": [
+          -26.8,
+          -26.5,
+          -28.4,
+          -25
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -21.8,
+          "peakDb": -2.49,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 10056,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-upright-piano",
+      "name": "Upright Piano (VSCO)",
+      "kind": "instrument",
+      "category": "sampler · Piano",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Piano instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -24.7,
+        "bandRmsDb": -24.7,
+        "tailRmsDb": -53.8,
+        "peakDb": -6.06,
+        "peakAt": 4.034,
+        "dc": -0.00000274,
+        "monoLossDb": 0.71,
+        "nonFinite": 0,
+        "centroidHz": 398,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -27.9,
+          -27.5,
+          -28.3,
+          -28.7
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -22.4,
+          "peakDb": -3.7,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 7306,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-bright-piano",
+      "name": "Bright Piano",
+      "kind": "instrument",
+      "category": "sampler · Piano",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Piano instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -24.9,
+        "bandRmsDb": -24.9,
+        "tailRmsDb": -47.5,
+        "peakDb": -6.46,
+        "peakAt": 4.045,
+        "dc": -0.0000048,
+        "monoLossDb": 0.59,
+        "nonFinite": 0,
+        "centroidHz": 492,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -26.9,
+          -25.2,
+          -27.7,
+          -26.4
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -22.5,
+          "peakDb": -3.95,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3414,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-honky-tonk",
+      "name": "Honky-Tonk Piano",
+      "kind": "instrument",
+      "category": "sampler · Piano",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Piano instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -21,
+        "bandRmsDb": -21,
+        "tailRmsDb": -49.4,
+        "peakDb": -1.76,
+        "peakAt": 4.024,
+        "dc": 0.00000512,
+        "monoLossDb": 0.21,
+        "nonFinite": 0,
+        "centroidHz": 645,
+        "below120Hz": 0.1,
+        "segmentsDb": [
+          -26.9,
+          -24.3,
+          -24.6,
+          -25.3
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -19.3,
+          "peakDb": -1.32,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3269,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-harpsichord",
+      "name": "Harpsichord",
+      "kind": "instrument",
+      "category": "sampler · Piano",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Piano instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -21.1,
+        "bandRmsDb": -21.1,
+        "tailRmsDb": -46,
+        "peakDb": -5.04,
+        "peakAt": 2.119,
+        "dc": -0.00000157,
+        "monoLossDb": 0.17,
+        "nonFinite": 0,
+        "centroidHz": 762,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -22.3,
+          -21.4,
+          -21.4,
+          -21.5
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -18.2,
+          "peakDb": -2.78,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3514,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-ep-rhodes",
+      "name": "Rhodes (MusyngKite)",
+      "kind": "instrument",
+      "category": "sampler · Electric Piano",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "MusyngKite Rhodes: tine attack, warm body; single velocity layer (brightness follows velocity via a filter).",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -22.5,
+        "bandRmsDb": -22.6,
+        "tailRmsDb": -42.5,
+        "peakDb": -9.15,
+        "peakAt": 2.016,
+        "dc": -0.00000367,
+        "monoLossDb": 0.19,
+        "nonFinite": 0,
+        "centroidHz": 366,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -22.5,
+          -22.6,
+          -23.4,
+          -23.5
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -19.7,
+          "peakDb": -6.55,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3248,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-ep-wurli",
+      "name": "Wurlitzer (MusyngKite)",
+      "kind": "instrument",
+      "category": "sampler · Electric Piano",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "MusyngKite Wurlitzer: reedy bark, shorter sustain than the Rhodes.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -24.2,
+        "bandRmsDb": -24.2,
+        "tailRmsDb": -47.8,
+        "peakDb": -8.87,
+        "peakAt": 6.129,
+        "dc": -9.56e-7,
+        "monoLossDb": 0.39,
+        "nonFinite": 0,
+        "centroidHz": 578,
+        "below120Hz": 0.1,
+        "segmentsDb": [
+          -25,
+          -26.3,
+          -25,
+          -24.6
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -21.6,
+          "peakDb": -6.48,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3364,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-electric-grand",
+      "name": "Electric Grand",
+      "kind": "instrument",
+      "category": "sampler · Electric Piano",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Electric Piano instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -24.1,
+        "bandRmsDb": -24.2,
+        "tailRmsDb": -49.5,
+        "peakDb": -5.67,
+        "peakAt": 6.052,
+        "dc": 0.00000155,
+        "monoLossDb": 0.97,
+        "nonFinite": 0,
+        "centroidHz": 590,
+        "below120Hz": 0.1,
+        "segmentsDb": [
+          -24.4,
+          -26.1,
+          -26.3,
+          -26.7
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -22.1,
+          "peakDb": -5.07,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3335,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-clavinet",
+      "name": "Clavinet",
+      "kind": "instrument",
+      "category": "sampler · Electric Piano",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Electric Piano instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -21.4,
+        "bandRmsDb": -21.4,
+        "tailRmsDb": -53.4,
+        "peakDb": -3.19,
+        "peakAt": 4.057,
+        "dc": -0.00000815,
+        "monoLossDb": 0.24,
+        "nonFinite": 0,
+        "centroidHz": 1008,
+        "below120Hz": 0.1,
+        "segmentsDb": [
+          -23.8,
+          -22.4,
+          -23.4,
+          -24.5
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -18.8,
+          "peakDb": -1.98,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3252,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-vibes",
+      "name": "Vibraphone",
+      "kind": "instrument",
+      "category": "sampler · Mallets & Bells",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Vibraphone: soft mallet attack, long ring.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -18.9,
+        "bandRmsDb": -18.9,
+        "tailRmsDb": -39.3,
+        "peakDb": -2.02,
+        "peakAt": 6.081,
+        "dc": 0.00000684,
+        "monoLossDb": 0.25,
+        "nonFinite": 0,
+        "centroidHz": 498,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -21.7,
+          -22.2,
+          -20.7,
+          -20.4
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -16.6,
+          "peakDb": -1.61,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3609,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-celesta",
+      "name": "Celesta",
+      "kind": "instrument",
+      "category": "sampler · Mallets & Bells",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Celesta: small bell-like tone, quick decay.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -21.7,
+        "bandRmsDb": -21.8,
+        "tailRmsDb": -49.5,
+        "peakDb": -3.93,
+        "peakAt": 2.013,
+        "dc": 0.00000406,
+        "monoLossDb": 0.2,
+        "nonFinite": 0,
+        "centroidHz": 621,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -22.9,
+          -22.6,
+          -22.8,
+          -22.7
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -18.9,
+          "peakDb": -2.11,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3080,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-music-box",
+      "name": "Music Box",
+      "kind": "instrument",
+      "category": "sampler · Mallets & Bells",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Music box: tiny plucked tines, high and delicate.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -21.2,
+        "bandRmsDb": -21.4,
+        "tailRmsDb": -46.4,
+        "peakDb": -1.35,
+        "peakAt": 4.014,
+        "dc": -0.00000324,
+        "monoLossDb": 0.19,
+        "nonFinite": 0,
+        "centroidHz": 1080,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -23,
+          -23.1,
+          -23.8,
+          -23.1
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -19,
+          "peakDb": -1.02,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3376,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-marimba",
+      "name": "Marimba",
+      "kind": "instrument",
+      "category": "sampler · Mallets & Bells",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Mallets & Bells instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -22,
+        "bandRmsDb": -22,
+        "tailRmsDb": -55.6,
+        "peakDb": -2.28,
+        "peakAt": 2.081,
+        "dc": -5.31e-7,
+        "monoLossDb": 0.2,
+        "nonFinite": 0,
+        "centroidHz": 420,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -30.8,
+          -29.5,
+          -31.7,
+          -29.2
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -20.5,
+          "peakDb": -1.64,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3636,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-xylophone",
+      "name": "Xylophone",
+      "kind": "instrument",
+      "category": "sampler · Mallets & Bells",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Mallets & Bells instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -21.9,
+        "bandRmsDb": -21.9,
+        "tailRmsDb": -41.7,
+        "peakDb": -6.15,
+        "peakAt": 2.071,
+        "dc": -0.00000321,
+        "monoLossDb": 0.18,
+        "nonFinite": 0,
+        "centroidHz": 569,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -23.1,
+          -22.7,
+          -22.4,
+          -23
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -19,
+          "peakDb": -3.59,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3752,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-glockenspiel",
+      "name": "Glockenspiel",
+      "kind": "instrument",
+      "category": "sampler · Mallets & Bells",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Mallets & Bells instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -23.6,
+        "bandRmsDb": -24.2,
+        "tailRmsDb": -45.3,
+        "peakDb": -1.77,
+        "peakAt": 4.046,
+        "dc": -0.00000551,
+        "monoLossDb": 0.14,
+        "nonFinite": 0,
+        "centroidHz": 2118,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -26.3,
+          -26.4,
+          -27.1,
+          -27.1
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -21.5,
+          "peakDb": -1.39,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3419,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-tubular-bells",
+      "name": "Tubular Bells",
+      "kind": "instrument",
+      "category": "sampler · Mallets & Bells",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Mallets & Bells instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -25.4,
+        "bandRmsDb": -25.5,
+        "tailRmsDb": -46.7,
+        "peakDb": -6.03,
+        "peakAt": 6.04,
+        "dc": 7.09e-8,
+        "monoLossDb": 0.15,
+        "nonFinite": 0,
+        "centroidHz": 1410,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -27.2,
+          -26.3,
+          -28.4,
+          -27.7
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -22.6,
+          "peakDb": -3.26,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3262,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-steel-drums",
+      "name": "Steel Drums",
+      "kind": "instrument",
+      "category": "sampler · Mallets & Bells",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Mallets & Bells instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -23.6,
+        "bandRmsDb": -23.6,
+        "tailRmsDb": -45.7,
+        "peakDb": -2.2,
+        "peakAt": 6.063,
+        "dc": -0.00000346,
+        "monoLossDb": 0.2,
+        "nonFinite": 0,
+        "centroidHz": 918,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -26.5,
+          -27.6,
+          -28,
+          -27.8
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -21.1,
+          "peakDb": -1.63,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3231,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-nylon-guitar",
+      "name": "Nylon Guitar",
+      "kind": "instrument",
+      "category": "sampler · Guitar",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Nylon guitar: plucked, warm; the chord is struck as a block (no strum).",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -25.4,
+        "bandRmsDb": -25.4,
+        "tailRmsDb": -47.6,
+        "peakDb": -5.55,
+        "peakAt": 4.02,
+        "dc": -0.0000033,
+        "monoLossDb": 0.17,
+        "nonFinite": 0,
+        "centroidHz": 435,
+        "below120Hz": 2.9,
+        "segmentsDb": [
+          -27.6,
+          -30.3,
+          -31.7,
+          -25.9
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -22.5,
+          "peakDb": -2.82,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3606,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-steel-guitar",
+      "name": "Steel-String Guitar",
+      "kind": "instrument",
+      "category": "sampler · Guitar",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Guitar instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -24.9,
+        "bandRmsDb": -25,
+        "tailRmsDb": -56.3,
+        "peakDb": -3.92,
+        "peakAt": 2.035,
+        "dc": 0.00000112,
+        "monoLossDb": 0.12,
+        "nonFinite": 0,
+        "centroidHz": 420,
+        "below120Hz": 4.1,
+        "segmentsDb": [
+          -26.4,
+          -28.1,
+          -25.6,
+          -29.1
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -22.1,
+          "peakDb": -2.14,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3372,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-clean-guitar",
+      "name": "Clean Electric Guitar",
+      "kind": "instrument",
+      "category": "sampler · Guitar",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Guitar instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -24.7,
+        "bandRmsDb": -24.8,
+        "tailRmsDb": -52.4,
+        "peakDb": -4.48,
+        "peakAt": 6.026,
+        "dc": 0.00000343,
+        "monoLossDb": 0.88,
+        "nonFinite": 0,
+        "centroidHz": 1039,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -25.9,
+          -25.1,
+          -25.4,
+          -26
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -22.6,
+          "peakDb": -2.29,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3222,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-harp",
+      "name": "Harp",
+      "kind": "instrument",
+      "category": "sampler · Guitar",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Guitar instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -24.7,
+        "bandRmsDb": -24.7,
+        "tailRmsDb": -55.8,
+        "peakDb": -5.94,
+        "peakAt": 2.039,
+        "dc": -0.00000206,
+        "monoLossDb": 0.15,
+        "nonFinite": 0,
+        "centroidHz": 382,
+        "below120Hz": 0,
+        "segmentsDb": [
+          -25.2,
+          -27,
+          -29.4,
+          -29.4
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -21.9,
+          "peakDb": -3.1,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3413,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-dulcimer",
+      "name": "Dulcimer",
+      "kind": "instrument",
+      "category": "sampler · Guitar",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Guitar instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -22,
+        "bandRmsDb": -22.1,
+        "tailRmsDb": -39,
+        "peakDb": -2.19,
+        "peakAt": 6.025,
+        "dc": -0.00000335,
+        "monoLossDb": 0.14,
+        "nonFinite": 0,
+        "centroidHz": 990,
+        "below120Hz": 0.1,
+        "segmentsDb": [
+          -24.4,
+          -25.4,
+          -24.6,
+          -24.5
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -19.6,
+          "peakDb": -1.63,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3555,
+      "trimMode": "native"
+    },
+    {
+      "slug": "sampler-kalimba",
+      "name": "Kalimba",
+      "kind": "instrument",
+      "category": "sampler · Mallets & Bells",
+      "setup": "Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB",
+      "listen": "Mallets & Bells instrument in its default settings.",
+      "status": "PASS",
+      "hard": [],
+      "soft": [],
+      "metrics": {
+        "rmsDb": -18.1,
+        "bandRmsDb": -18.1,
+        "tailRmsDb": -50.9,
+        "peakDb": -0.67,
+        "peakAt": 6.011,
+        "dc": -0.0000241,
+        "monoLossDb": 0.28,
+        "nonFinite": 0,
+        "centroidHz": 463,
+        "below120Hz": 0.2,
+        "segmentsDb": [
+          -20.9,
+          -21.8,
+          -20.8,
+          -20.9
+        ],
+        "dropout": {
+          "seconds": 0,
+          "at": null
+        },
+        "clicks": {
+          "count": 0,
+          "events": []
+        },
+        "mono": {
+          "rmsDb": -16.8,
+          "peakDb": -0.51,
+          "nonFinite": 0
+        },
+        "rmsLo": -27.9
+      },
+      "layers": [],
+      "renderMs": 3573,
+      "trimMode": "native"
+    }
+  ]
+}

@@ -1,0 +1,1219 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Worship Rig Audition</title>
+<style>
+  :root { --bg:#111418; --panel:#1b2027; --text:#e8ecf1; --muted:#9aa5b1; --pass:#3fb950; --warn:#d29922; --fail:#f85149; --line:#2b323c; }
+  @media (prefers-color-scheme: light) { :root { --bg:#f6f7f9; --panel:#fff; --text:#1c2128; --muted:#57606a; --line:#d8dee4; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 -apple-system, system-ui, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; } h2 { margin: 32px 0 12px; font-size: 19px; }
+  .sub { color: var(--muted); margin: 0 0 16px; }
+  .totals { display:flex; gap:12px; flex-wrap:wrap; margin: 12px 0 20px; }
+  .totals div { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 14px; }
+  .toc { display:flex; flex-wrap:wrap; gap:6px 14px; } .toc a { color:var(--text); text-decoration:none; white-space:nowrap; }
+  .clip { background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--pass); border-radius:8px; padding:14px 16px; margin: 14px 0; }
+  .clip.warn { border-left-color: var(--warn); } .clip.fail { border-left-color: var(--fail); }
+  .clip header { display:flex; align-items:center; gap:10px; flex-wrap:wrap; } .clip h3 { margin:0; font-size:17px; }
+  .cat { color:var(--muted); font-size:13px; }
+  .badge { font-size:11px; font-weight:700; letter-spacing:.04em; padding:2px 7px; border-radius:4px; color:#fff; background:var(--pass); }
+  .badge.warn { background:var(--warn); } .badge.fail { background:var(--fail); }
+  .setup { color:var(--muted); font-size:13px; margin:6px 0; } .listen { margin:6px 0 10px; }
+  .players { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:10px; } .players label { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px; }
+  audio { height: 34px; max-width: 100%; }
+  table.nums { border-collapse: collapse; font-size:13px; width:100%; font-variant-numeric: tabular-nums; }
+  .nums th { text-align:left; color:var(--muted); font-weight:500; padding:3px 8px 3px 0; white-space:nowrap; } .nums td { padding:3px 18px 3px 0; }
+  .bad { color: var(--fail); font-weight:600; }
+  .layers { font-size:13px; margin-top:8px; }
+  .issues { font-size:13px; margin:8px 0 0; padding-left:18px; } .issues .hard { color:var(--fail); } .issues .soft { color:var(--warn); }
+  .limits { font-size:13px; color:var(--muted); }
+  @media (max-width: 640px) { .nums th, .nums td { display:block; padding:0; } .nums td { margin-bottom:6px; } }
+</style></head>
+<body><main>
+<h1>Worship Rig — audition pack</h1>
+<p class="sub">Generated 2026-09-28T09:06:50.394Z · 44100 Hz 16-bit · 12 s clips: I–V–vi–IV, 2 s per chord (sustain pedal re-pressed per chord), then a 4 s tail. Seeded offline renders of the real engine.</p>
+<div class="totals"><div>62 clips</div><div><span class="badge pass">PASS</span> 62</div><div><span class="badge warn">WARN</span> 0</div><div><span class="badge fail">FAIL</span> 0</div><div>190.8 MB audio</div></div>
+<p class="limits">Hard checks: RMS (0.5–8 s) -26…-16 dBFS (instrument clips: floor = nominal level − 2 dB, −27.9 for Keys) · peak ≤ -0.3 dBFS · |DC| &lt; 0.001 · mono-sum loss &lt; 3 dB · no NaN · no silent chord. Soft (WARN): HF-burst click detector (self-test passed), drop-outs, mono render peak, layer balance (a layer more than 15 dB under the mix), preset lint.</p>
+<h2>Factory songs</h2><div class="toc"><a href="#sunday-pad-piano"><span class="badge pass">PASS</span> Sunday Pad + Piano</a><a href="#building-swell"><span class="badge pass">PASS</span> Building Swell</a><a href="#prayer-wash"><span class="badge pass">PASS</span> Prayer Wash</a><a href="#organ-swell"><span class="badge pass">PASS</span> Organ Swell</a><a href="#grand-piano"><span class="badge pass">PASS</span> Grand Piano</a><a href="#rhodes"><span class="badge pass">PASS</span> Rhodes</a><a href="#felt-piano"><span class="badge pass">PASS</span> Felt Piano</a><a href="#lofi-rhodes"><span class="badge pass">PASS</span> Lofi Rhodes</a><a href="#dusty-piano"><span class="badge pass">PASS</span> Dusty Piano</a><a href="#glass-ocean"><span class="badge pass">PASS</span> Glass Ocean</a><a href="#sub-shimmer"><span class="badge pass">PASS</span> Sub + Shimmer</a><a href="#anthem"><span class="badge pass">PASS</span> Anthem</a><a href="#gospel-stab-b3"><span class="badge pass">PASS</span> Gospel Stab + B3</a><a href="#upright-pad"><span class="badge pass">PASS</span> Upright + Pad</a><a href="#clav-funk"><span class="badge pass">PASS</span> Clav Funk</a><a href="#music-box-lullaby"><span class="badge pass">PASS</span> Music Box Lullaby</a><a href="#dream-juno"><span class="badge pass">PASS</span> Dream Juno</a><a href="#80s-ballad"><span class="badge pass">PASS</span> 80s Ballad</a><a href="#synthwave"><span class="badge pass">PASS</span> Synthwave</a></div>
+
+    <section class="clip pass" id="sunday-pad-piano">
+      <header><h3>Sunday Pad + Piano</h3><span class="badge pass">PASS</span><span class="cat">worship</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 0.7 → pad · drone synth gain 1.2 · LH root C3–B3</p>
+      <p class="listen"><b>Listen for:</b> Piano clearly on top; the warm pad (wheel 0.7) swells in slowly (~1 s) and sits underneath without masking it. A soft C drone (root-5th-octave, no 3rd) fades in over ~5 s. No pitch wobble, no beating between drone and chords, no smear of the previous chord after each pedal change.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sunday-pad-piano.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sunday-pad-piano.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-22.2 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-22.2 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-2.82 dBFS @ 4.024 s</td><th>tail RMS (8–12 s)</th><td class="">-29.3 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">1.19 dB</td><th>DC</th><td class="">-0.0000519</td></tr>
+        <tr><th>spectral centroid</th><td class="">488 Hz</td><th>power &lt; 120 Hz</th><td class="">1 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-26 / -23.7 / -24.3 / -23.6 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -20.4 · peak -2.21 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table><div class="layers"><b>Layers (solo RMS vs mix):</b> <span class="">slot 0 salamander-piano -1.5 dB</span> · <span class="">slot 1 warm-pad -7.5 dB</span> · <span class="">drone -9.4 dB</span></div>
+      
+    </section>
+    <section class="clip pass" id="building-swell">
+      <header><h3>Building Swell</h3><span class="badge pass">PASS</span><span class="cat">worship</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 0.7 → pad · drone off · LH root C3–B3</p>
+      <p class="listen"><b>Listen for:</b> Strings speak in ~0.4 s; their vibrato should start late (~0.5 s after each chord), gentle, not seasick. The glass pad (wheel 0.7) adds shimmer on top. No buzzy/raspy saw edge, no chorus wobble on pitch.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="building-swell.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="building-swell.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-22.5 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-22.5 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-7.55 dBFS @ 7.196 s</td><th>tail RMS (8–12 s)</th><td class="">-34 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.88 dB</td><th>DC</th><td class="">-3.46e-9</td></tr>
+        <tr><th>spectral centroid</th><td class="">610 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-23.5 / -22 / -22.4 / -21.8 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -20.4 · peak -5.86 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table><div class="layers"><b>Layers (solo RMS vs mix):</b> <span class="">slot 0 strings -2.5 dB</span> · <span class="">slot 1 glass-pad -3.6 dB</span></div>
+      
+    </section>
+    <section class="clip pass" id="prayer-wash">
+      <header><h3>Prayer Wash</h3><span class="badge pass">PASS</span><span class="cat">worship</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 0.7 → pad · drone synth gain 0.9 · LH root C3–B3</p>
+      <p class="listen"><b>Listen for:</b> A single warm pad in a huge room plus the key drone. Each chord swells slowly; the last 4 s are a long, smooth reverb tail (no metallic ring, no flutter). Chord changes must be seamless: no click when the pedal lifts.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="prayer-wash.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="prayer-wash.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-24.2 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-24.2 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-10.71 dBFS @ 4.015 s</td><th>tail RMS (8–12 s)</th><td class="">-29.6 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">1.38 dB</td><th>DC</th><td class="">0.00000182</td></tr>
+        <tr><th>spectral centroid</th><td class="">511 Hz</td><th>power &lt; 120 Hz</th><td class="">1.1 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-25.8 / -23.9 / -24.1 / -23.6 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -22.5 · peak -8.49 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table><div class="layers"><b>Layers (solo RMS vs mix):</b> <span class="">slot 1 warm-pad -0.4 dB</span> · <span class="">drone -9.5 dB</span></div>
+      
+    </section>
+    <section class="clip pass" id="organ-swell">
+      <header><h3>Organ Swell</h3><span class="badge pass">PASS</span><span class="cat">worship</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 0.7 → pad · drone off · LH root C3–B3</p>
+      <p class="listen"><b>Listen for:</b> Gospel drawbar organ with fast rotary (shimmering Leslie) and a pad behind it (wheel 0.7). The sustain pedal holds the pad but NOT the organ, so the organ stops briefly before each change (keys lift at 1.9 s) while the pad carries on. Key click subtle; no harsh distortion.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="organ-swell.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="organ-swell.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-21.3 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-21.4 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-7.56 dBFS @ 2.051 s</td><th>tail RMS (8–12 s)</th><td class="">-35.6 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.59 dB</td><th>DC</th><td class="">-0.0000799</td></tr>
+        <tr><th>spectral centroid</th><td class="">502 Hz</td><th>power &lt; 120 Hz</th><td class="">3.1 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-20.8 / -21 / -21.9 / -21.2 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -18.9 · peak -5.5 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table><div class="layers"><b>Layers (solo RMS vs mix):</b> <span class="">slot 0 gospel -3.3 dB</span> · <span class="">slot 1 warm-pad -2.4 dB</span></div>
+      
+    </section>
+    <section class="clip pass" id="grand-piano">
+      <header><h3>Grand Piano</h3><span class="badge pass">PASS</span><span class="cat">keys</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 1.0 → fx.reverb.returnGain · drone off · LH root C3–B3</p>
+      <p class="listen"><b>Listen for:</b> Clean concert grand in a medium hall. Natural attack and decay, no doubled attacks, no click when the pedal lifts at each chord change, stable stereo image.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="grand-piano.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="grand-piano.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-23 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-23 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-2.86 dBFS @ 6.04 s</td><th>tail RMS (8–12 s)</th><td class="">-48.8 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">1.68 dB</td><th>DC</th><td class="">-0.0000518</td></tr>
+        <tr><th>spectral centroid</th><td class="">499 Hz</td><th>power &lt; 120 Hz</th><td class="">0.5 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-27.1 / -26.1 / -28.7 / -24.6 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -21.7 · peak -2.35 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="rhodes">
+      <header><h3>Rhodes</h3><span class="badge pass">PASS</span><span class="cat">keys</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 1.0 → fx.reverb.returnGain · drone off · LH root C3–B3</p>
+      <p class="listen"><b>Listen for:</b> Sampled Rhodes with a soft chorus: bell-like tine on the attack, round warm body, gentle stereo movement from the chorus (not seasick).</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="rhodes.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="rhodes.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-21.8 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-21.8 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-8.82 dBFS @ 2.016 s</td><th>tail RMS (8–12 s)</th><td class="">-43.2 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.51 dB</td><th>DC</th><td class="">-0.00000504</td></tr>
+        <tr><th>spectral centroid</th><td class="">381 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-21.5 / -22.2 / -23.1 / -22.2 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -19.3 · peak -6.5 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="felt-piano">
+      <header><h3>Felt Piano</h3><span class="badge pass">PASS</span><span class="cat">keys</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 1.0 → fx.reverb.returnGain · drone off · LH root C3–B3</p>
+      <p class="listen"><b>Listen for:</b> Dark, soft &quot;felt&quot; piano (tone rolled off, soft velocity) in a big room: muffled hammer, no bright top end, the room carries the sustain.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="felt-piano.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="felt-piano.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-20.8 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-20.8 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-3.19 dBFS @ 6.04 s</td><th>tail RMS (8–12 s)</th><td class="">-42.6 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">1.83 dB</td><th>DC</th><td class="">-0.0000553</td></tr>
+        <tr><th>spectral centroid</th><td class="">433 Hz</td><th>power &lt; 120 Hz</th><td class="">0.4 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-23.3 / -21.1 / -25 / -21.3 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -19.6 · peak -2.38 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="lofi-rhodes">
+      <header><h3>Lofi Rhodes</h3><span class="badge pass">PASS</span><span class="cat">lofi</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 1.0 → fx.reverb.returnGain · drone off · 80 bpm · lofi 0.6 · LH root C3–B3</p>
+      <p class="listen"><b>Listen for:</b> Soft FM electric piano through a worn tape: gentle wow/flutter pitch wobble IS expected here, soft crackle, dusty top end, dotted-eighth echoes at 80 bpm. Wobble should feel nostalgic, not out of tune.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="lofi-rhodes.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="lofi-rhodes.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-24 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-24.1 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-13.84 dBFS @ 4.027 s</td><th>tail RMS (8–12 s)</th><td class="">-45.7 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.26 dB</td><th>DC</th><td class="">-0.00000645</td></tr>
+        <tr><th>spectral centroid</th><td class="">385 Hz</td><th>power &lt; 120 Hz</th><td class="">0.2 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-23.9 / -24.1 / -24.5 / -24.1 dBFS</td><th>clicks</th><td class="">n/a (crackle)</td></tr>
+        <tr><th>mono render</th><td class="">RMS -21.3 · peak -11.3 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="dusty-piano">
+      <header><h3>Dusty Piano</h3><span class="badge pass">PASS</span><span class="cat">lofi</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 1.0 → fx.reverb.returnGain · drone off · 75 bpm · lofi 0.5 · LH root C3–B3</p>
+      <p class="listen"><b>Listen for:</b> Piano &quot;sampled from an old record&quot;: vinyl crackle clearly audible (crackle 0.6), slight tape wobble, narrow warm tone, quarter-note echo at 75 bpm. The piano must stay intelligible under the crackle.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="dusty-piano.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="dusty-piano.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-24.1 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-24.1 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-9.61 dBFS @ 6.05 s</td><th>tail RMS (8–12 s)</th><td class="">-51.9 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">1.65 dB</td><th>DC</th><td class="">5.56e-7</td></tr>
+        <tr><th>spectral centroid</th><td class="">500 Hz</td><th>power &lt; 120 Hz</th><td class="">0.3 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-27.9 / -26 / -26.9 / -25 dBFS</td><th>clicks</th><td class="">n/a (crackle)</td></tr>
+        <tr><th>mono render</th><td class="">RMS -22.7 · peak -7.05 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="glass-ocean">
+      <header><h3>Glass Ocean</h3><span class="badge pass">PASS</span><span class="cat">ambient</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 0.7 → pad · drone off · 72 bpm · LH root C3–B3</p>
+      <p class="listen"><b>Listen for:</b> Glassy pad (wheel 0.7) plus soft FM bells bouncing left/right in a dotted-eighth ping-pong delay at 72 bpm. Bells should ring clearly without harsh 2–5 kHz edge; echoes rhythmic, not a smear.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="glass-ocean.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="glass-ocean.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-24.9 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-25 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-11.38 dBFS @ 2.1 s</td><th>tail RMS (8–12 s)</th><td class="">-36.7 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.93 dB</td><th>DC</th><td class="">0.00000495</td></tr>
+        <tr><th>spectral centroid</th><td class="">644 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-24.6 / -25.4 / -25 / -26.1 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -22.9 · peak -9.71 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table><div class="layers"><b>Layers (solo RMS vs mix):</b> <span class="">slot 1 glass-pad -2.3 dB</span> · <span class="">slot 2 bell -3.1 dB</span></div>
+      
+    </section>
+    <section class="clip pass" id="sub-shimmer">
+      <header><h3>Sub + Shimmer</h3><span class="badge pass">PASS</span><span class="cat">ambient</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 0.7 → pad · drone synth gain 0.9 · bass note in C2 range → Bass slot</p>
+      <p class="listen"><b>Listen for:</b> Split: the left-hand root (C2 range) plays the mono sub-bass, one note at a time (never a chord); the glass pad plays everything and the key drone sits underneath. Use headphones or real speakers: laptop speakers will hide the sub. Low end deep but not boomy or muddy.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sub-shimmer.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sub-shimmer.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-23.7 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-25.4 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-11.37 dBFS @ 3.471 s</td><th>tail RMS (8–12 s)</th><td class="">-31.1 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.35 dB</td><th>DC</th><td class="">0.00000402</td></tr>
+        <tr><th>spectral centroid</th><td class="">253 Hz</td><th>power &lt; 120 Hz</th><td class="">56 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-24.5 / -23.2 / -23.5 / -23.5 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -21 · peak -8.85 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table><div class="layers"><b>Layers (solo RMS vs mix):</b> <span class="">slot 1 glass-pad -4.5 dB</span> · <span class="">slot 3 sub-bass -2.8 dB</span> · <span class="">drone -9 dB</span></div>
+      
+    </section>
+    <section class="clip pass" id="anthem">
+      <header><h3>Anthem</h3><span class="badge pass">PASS</span><span class="cat">worship</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 1.0 → macro.intensity · drone off · 72 bpm · LH root C3–B3</p>
+      <p class="listen"><b>Listen for:</b> The big modern-worship chorus: grand piano over a wide supersaw pad, with dotted-eighth echoes. The mod wheel is an intensity macro: roll it down for a verse (piano with a soft, dark pad) and up for the chorus (the pad gets louder and brighter). Set the song tempo so the echoes lock to the band.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="anthem.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="anthem.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-20.8 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-20.9 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-3.03 dBFS @ 4.024 s</td><th>tail RMS (8–12 s)</th><td class="">-35.7 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">1.56 dB</td><th>DC</th><td class="">-0.0000475</td></tr>
+        <tr><th>spectral centroid</th><td class="">544 Hz</td><th>power &lt; 120 Hz</th><td class="">3.5 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-22.2 / -22 / -22.8 / -22.2 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -19.4 · peak -2.17 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table><div class="layers"><b>Layers (solo RMS vs mix):</b> <span class="">slot 0 salamander-piano -2.6 dB</span> · <span class="">slot 1 supersaw-pad -3.6 dB</span></div>
+      
+    </section>
+    <section class="clip pass" id="gospel-stab-b3">
+      <header><h3>Gospel Stab + B3</h3><span class="badge pass">PASS</span><span class="cat">worship</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 0.7 → pad · drone off · 96 bpm · bass note in C2 range → Bass slot</p>
+      <p class="listen"><b>Listen for:</b> Drawbar organ with a punchy synth stab layered on the right hand and a mono synth bass on the left (below middle C, lowest note only). The mod wheel is the stab level, so you can play pure organ and bring the stabs in for hits. Push the pitch-bend wheel to switch the rotary speaker between slow and fast (it also opens up the stab and bass).</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="gospel-stab-b3.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="gospel-stab-b3.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-21.8 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-22.9 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-8.28 dBFS @ 6.069 s</td><th>tail RMS (8–12 s)</th><td class="">-50.7 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.24 dB</td><th>DC</th><td class="">-0.0000686</td></tr>
+        <tr><th>spectral centroid</th><td class="">346 Hz</td><th>power &lt; 120 Hz</th><td class="">34.4 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-20.6 / -23.4 / -21.9 / -21.4 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -19 · peak -6.52 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table><div class="layers"><b>Layers (solo RMS vs mix):</b> <span class="">slot 0 gospel -2.9 dB</span> · <span class="">slot 1 poly-stab -8.4 dB</span> · <span class="">slot 3 synth-bass -5.2 dB</span></div>
+      
+    </section>
+    <section class="clip pass" id="upright-pad">
+      <header><h3>Upright + Pad</h3><span class="badge pass">PASS</span><span class="cat">worship</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 0.7 → pad · drone synth gain 1 · LH root C3–B3</p>
+      <p class="listen"><b>Listen for:</b> A warm, close upright piano with a soft pad and the key drone underneath: acoustic sets, communion and quiet songs. The mod wheel (and an expression pedal) brings the pad in and out. Push the pitch-bend wheel up to lift the drone.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="upright-pad.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="upright-pad.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-22.1 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-22.1 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-4.73 dBFS @ 6.151 s</td><th>tail RMS (8–12 s)</th><td class="">-30.8 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.78 dB</td><th>DC</th><td class="">-0.00000368</td></tr>
+        <tr><th>spectral centroid</th><td class="">415 Hz</td><th>power &lt; 120 Hz</th><td class="">0.4 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-25.4 / -24.3 / -23.7 / -23.9 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -19.9 · peak -2.7 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table><div class="layers"><b>Layers (solo RMS vs mix):</b> <span class="">slot 0 upright-piano -1.3 dB</span> · <span class="">slot 1 warm-pad -8.5 dB</span> · <span class="">drone -10 dB</span></div>
+      
+    </section>
+    <section class="clip pass" id="clav-funk">
+      <header><h3>Clav Funk</h3><span class="badge pass">PASS</span><span class="cat">keys</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 0.7 → pad · drone off · 96 bpm · LH root C3–B3</p>
+      <p class="listen"><b>Listen for:</b> Clavinet with a Wurlitzer layered underneath, a quick slapback and very little room: funk, gospel grooves and tight band playing. The mod wheel is the Wurlitzer level (wheel down = clav alone); an expression pedal is a volume pedal. Pitch bend is off.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="clav-funk.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="clav-funk.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-21.3 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-21.3 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-2.87 dBFS @ 6.022 s</td><th>tail RMS (8–12 s)</th><td class="">-56.9 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.04 dB</td><th>DC</th><td class="">-0.00000833</td></tr>
+        <tr><th>spectral centroid</th><td class="">988 Hz</td><th>power &lt; 120 Hz</th><td class="">0.1 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-23.5 / -22.4 / -23.1 / -24.1 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -18.5 · peak -1.86 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table><div class="layers"><b>Layers (solo RMS vs mix):</b> <span class="">slot 0 clavinet -0.4 dB</span> · <span class="">slot 1 ep-wurli -10.2 dB</span></div>
+      
+    </section>
+    <section class="clip pass" id="music-box-lullaby">
+      <header><h3>Music Box Lullaby</h3><span class="badge pass">PASS</span><span class="cat">ambient</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 0.7 → pad · drone off · LH root C3–B3</p>
+      <p class="listen"><b>Listen for:</b> Music box over a glassy pad in a cathedral, with celesta taking over from C5 up: lullabies, Christmas and gentle intros. The mod wheel is the pad level. Push the pitch-bend wheel to bloom the pad an octave up.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="music-box-lullaby.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="music-box-lullaby.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-20.7 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-20.9 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-1.42 dBFS @ 4.014 s</td><th>tail RMS (8–12 s)</th><td class="">-36.5 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.9 dB</td><th>DC</th><td class="">-0.000004</td></tr>
+        <tr><th>spectral centroid</th><td class="">1086 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-22.2 / -22.6 / -22.4 / -21.2 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -19.1 · peak -1.07 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table><div class="layers"><b>Layers (solo RMS vs mix):</b> <span class="">slot 0 music-box -1 dB</span> · <span class="">slot 1 glass-pad -9.4 dB</span> · <span class="">slot 2 celesta -7.9 dB</span></div>
+      
+    </section>
+    <section class="clip pass" id="dream-juno">
+      <header><h3>Dream Juno</h3><span class="badge pass">PASS</span><span class="cat">ambient</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 1.0 → macro.intensity · drone off · 70 bpm · LH root C3–B3</p>
+      <p class="listen"><b>Listen for:</b> A chorused Juno-style pad with a shimmer pad an octave-bloom above it, in a huge wash with long echo trails: ambient sets and prayer. The mod wheel is an intensity macro: rolling it up brings the Juno pad up and opens both pads. Set the song tempo so the echo trails follow the band.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="dream-juno.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="dream-juno.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-17.8 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-17.8 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-4.37 dBFS @ 7.506 s</td><th>tail RMS (8–12 s)</th><td class="">-23.5 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">2.18 dB</td><th>DC</th><td class="">-4.93e-7</td></tr>
+        <tr><th>spectral centroid</th><td class="">515 Hz</td><th>power &lt; 120 Hz</th><td class="">0.1 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-19.7 / -18.1 / -17.8 / -16.5 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -16.9 · peak -4.22 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table><div class="layers"><b>Layers (solo RMS vs mix):</b> <span class="">slot 1 juno-pad -2.5 dB</span> · <span class="">slot 2 shimmer-pad -4.5 dB</span></div>
+      
+    </section>
+    <section class="clip pass" id="80s-ballad">
+      <header><h3>80s Ballad</h3><span class="badge pass">PASS</span><span class="cat">synth</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 0.7 → pad · drone off · LH root C3–B3</p>
+      <p class="listen"><b>Listen for:</b> The classic FM electric piano over a Juno-style pad in a big hall, with the chorus turned up. The mod wheel is the pad level (wheel down = electric piano alone); an expression pedal also rides the pad. Pitch bend bends the pad only.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="80s-ballad.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="80s-ballad.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-23.2 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-23.3 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-7.82 dBFS @ 2.064 s</td><th>tail RMS (8–12 s)</th><td class="">-38.9 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">1.19 dB</td><th>DC</th><td class="">4.69e-8</td></tr>
+        <tr><th>spectral centroid</th><td class="">422 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-22.7 / -24.7 / -25.2 / -23.4 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -21.4 · peak -6.14 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table><div class="layers"><b>Layers (solo RMS vs mix):</b> <span class="">slot 0 dx-epiano -1.7 dB</span> · <span class="">slot 1 juno-pad -6 dB</span></div>
+      
+    </section>
+    <section class="clip pass" id="synthwave">
+      <header><h3>Synthwave</h3><span class="badge pass">PASS</span><span class="cat">synth</span></header>
+      <p class="setup">Key C (Hear-In) · mod wheel 1.0 → macro.wash · drone off · 100 bpm · bass note in C2 range → Bass slot</p>
+      <p class="listen"><b>Listen for:</b> A three-way split: 808 sub on the lowest left-hand note (below middle C), analog brass in the middle and a square lead from C5 up, with quarter-note echoes. The mod wheel is a wash macro (more reverb and echo); the pitch-bend wheel bends the lead. Set the song tempo so the echoes lock to the track.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="synthwave.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="synthwave.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-22.9 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-24.4 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-10.54 dBFS @ 4.125 s</td><th>tail RMS (8–12 s)</th><td class="">-37.6 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.35 dB</td><th>DC</th><td class="">0.0000614</td></tr>
+        <tr><th>spectral centroid</th><td class="">309 Hz</td><th>power &lt; 120 Hz</th><td class="">57.4 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-24 / -23.7 / -24.1 / -23.9 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -20.2 · peak -8.24 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table><div class="layers"><b>Layers (solo RMS vs mix):</b> <span class="">slot 0 analog-brass -4.8 dB</span> · <span class="">slot 2 square-lead -7.9 dB</span> · <span class="">slot 3 808-sub -2.7 dB</span></div>
+      
+    </section>
+<h2>Instruments (default settings)</h2><div class="toc"><a href="#synth-warm-pad"><span class="badge pass">PASS</span> Warm Pad</a><a href="#synth-glass-pad"><span class="badge pass">PASS</span> Glass Pad</a><a href="#synth-strings"><span class="badge pass">PASS</span> Strings</a><a href="#synth-sub-bass"><span class="badge pass">PASS</span> Sub Bass</a><a href="#synth-soft-keys"><span class="badge pass">PASS</span> Soft Keys</a><a href="#synth-bell"><span class="badge pass">PASS</span> Bell</a><a href="#synth-supersaw-pad"><span class="badge pass">PASS</span> Supersaw Pad</a><a href="#synth-juno-pad"><span class="badge pass">PASS</span> Juno Pad</a><a href="#synth-shimmer-pad"><span class="badge pass">PASS</span> Shimmer Pad</a><a href="#synth-dx-epiano"><span class="badge pass">PASS</span> DX E-Piano</a><a href="#synth-pluck"><span class="badge pass">PASS</span> Pluck</a><a href="#synth-poly-stab"><span class="badge pass">PASS</span> Poly Stab</a><a href="#synth-analog-brass"><span class="badge pass">PASS</span> Analog Brass</a><a href="#synth-square-lead"><span class="badge pass">PASS</span> Square Lead</a><a href="#synth-808-sub"><span class="badge pass">PASS</span> 808 Sub</a><a href="#synth-synth-bass"><span class="badge pass">PASS</span> Synth Bass</a><a href="#organ-gospel"><span class="badge pass">PASS</span> Gospel Organ</a><a href="#organ-soft-pad"><span class="badge pass">PASS</span> Soft Organ</a><a href="#organ-full"><span class="badge pass">PASS</span> Full Organ</a><a href="#organ-church"><span class="badge pass">PASS</span> Church Organ</a><a href="#sampler-salamander-piano"><span class="badge pass">PASS</span> Grand Piano (Salamander)</a><a href="#sampler-upright-piano"><span class="badge pass">PASS</span> Upright Piano (VSCO)</a><a href="#sampler-bright-piano"><span class="badge pass">PASS</span> Bright Piano</a><a href="#sampler-honky-tonk"><span class="badge pass">PASS</span> Honky-Tonk Piano</a><a href="#sampler-harpsichord"><span class="badge pass">PASS</span> Harpsichord</a><a href="#sampler-ep-rhodes"><span class="badge pass">PASS</span> Rhodes (MusyngKite)</a><a href="#sampler-ep-wurli"><span class="badge pass">PASS</span> Wurlitzer (MusyngKite)</a><a href="#sampler-electric-grand"><span class="badge pass">PASS</span> Electric Grand</a><a href="#sampler-clavinet"><span class="badge pass">PASS</span> Clavinet</a><a href="#sampler-vibes"><span class="badge pass">PASS</span> Vibraphone</a><a href="#sampler-celesta"><span class="badge pass">PASS</span> Celesta</a><a href="#sampler-music-box"><span class="badge pass">PASS</span> Music Box</a><a href="#sampler-marimba"><span class="badge pass">PASS</span> Marimba</a><a href="#sampler-xylophone"><span class="badge pass">PASS</span> Xylophone</a><a href="#sampler-glockenspiel"><span class="badge pass">PASS</span> Glockenspiel</a><a href="#sampler-tubular-bells"><span class="badge pass">PASS</span> Tubular Bells</a><a href="#sampler-steel-drums"><span class="badge pass">PASS</span> Steel Drums</a><a href="#sampler-nylon-guitar"><span class="badge pass">PASS</span> Nylon Guitar</a><a href="#sampler-steel-guitar"><span class="badge pass">PASS</span> Steel-String Guitar</a><a href="#sampler-clean-guitar"><span class="badge pass">PASS</span> Clean Electric Guitar</a><a href="#sampler-harp"><span class="badge pass">PASS</span> Harp</a><a href="#sampler-dulcimer"><span class="badge pass">PASS</span> Dulcimer</a><a href="#sampler-kalimba"><span class="badge pass">PASS</span> Kalimba</a></div>
+
+    <section class="clip pass" id="synth-warm-pad">
+      <header><h3>Warm Pad</h3><span class="badge pass">PASS</span><span class="cat">synth · Synth Pads</span></header>
+      <p class="setup">Key C · slot role Pad defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Warm analog-style pad: ~1.2 s swell, slow filter movement, wide stereo. No pitch wobble, no zipper noise, low end tight (mono below 150 Hz).</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="synth-warm-pad.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="synth-warm-pad.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-23 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-23.1 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-9.67 dBFS @ 7.02 s</td><th>tail RMS (8–12 s)</th><td class="">-33.7 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.91 dB</td><th>DC</th><td class="">-2.63e-8</td></tr>
+        <tr><th>spectral centroid</th><td class="">526 Hz</td><th>power &lt; 120 Hz</th><td class="">1.3 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-23.3 / -23.2 / -22.9 / -23.1 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -20.9 · peak -7.84 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="synth-glass-pad">
+      <header><h3>Glass Pad</h3><span class="badge pass">PASS</span><span class="cat">synth · Synth Pads</span></header>
+      <p class="setup">Key C · slot role Pad defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Glassy, bright-but-soft pad with chorus shimmer; attack ~0.8 s. No harsh top, no seasick chorus.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="synth-glass-pad.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="synth-glass-pad.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-23 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-23 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-11.45 dBFS @ 1.293 s</td><th>tail RMS (8–12 s)</th><td class="">-31.8 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.8 dB</td><th>DC</th><td class="">-9.55e-9</td></tr>
+        <tr><th>spectral centroid</th><td class="">419 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-23.5 / -22.7 / -24.1 / -21.9 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -20.8 · peak -9.5 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="synth-strings">
+      <header><h3>Strings</h3><span class="badge pass">PASS</span><span class="cat">synth · Synth Pads</span></header>
+      <p class="setup">Key C · slot role Pad defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Synth strings: ~0.4 s attack, 1.8 s release, delayed vibrato (starts ~0.5 s into each chord). Should not buzz.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="synth-strings.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="synth-strings.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-23 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-23 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-9.05 dBFS @ 7.371 s</td><th>tail RMS (8–12 s)</th><td class="">-35.2 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">1 dB</td><th>DC</th><td class="">6.34e-9</td></tr>
+        <tr><th>spectral centroid</th><td class="">694 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-23.1 / -23.2 / -22.4 / -22.6 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -21 · peak -7.77 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="synth-sub-bass">
+      <header><h3>Sub Bass</h3><span class="badge pass">PASS</span><span class="cat">synth · Bass</span></header>
+      <p class="setup">Key C · slot role Bass defaults (gain 0.8, role sends) · default FX, master −6 dB · roots only, C2 range</p>
+      <p class="listen"><b>Listen for:</b> Roots only (C2 range), mono: one clean, round sub note at a time with a little 2nd-harmonic warmth. No chords, no click at note changes (30 ms legato).</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="synth-sub-bass.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="synth-sub-bass.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-25.9 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-30.1 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-19.54 dBFS @ 6.016 s</td><th>tail RMS (8–12 s)</th><td class="">-47.7 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0 dB</td><th>DC</th><td class="">-0.0000104</td></tr>
+        <tr><th>spectral centroid</th><td class="">93 Hz</td><th>power &lt; 120 Hz</th><td class="">98.7 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-25.9 / -26 / -26 / -25.9 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -22.9 · peak -16.53 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="synth-soft-keys">
+      <header><h3>Soft Keys</h3><span class="badge pass">PASS</span><span class="cat">synth · Synth Keys</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> FM electric piano: tine &quot;ping&quot; on the attack, warm body, stereo tremolo; decays like a real EP.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="synth-soft-keys.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="synth-soft-keys.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-24.9 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-25 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-13.78 dBFS @ 4.081 s</td><th>tail RMS (8–12 s)</th><td class="">-47.4 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.24 dB</td><th>DC</th><td class="">-0.000608</td></tr>
+        <tr><th>spectral centroid</th><td class="">390 Hz</td><th>power &lt; 120 Hz</th><td class="">0.3 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-25 / -25.5 / -25.3 / -24.9 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -22.1 · peak -12.26 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="synth-bell">
+      <header><h3>Bell</h3><span class="badge pass">PASS</span><span class="cat">synth · Synth Keys</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> FM bell: clear inharmonic strike, long decay. Should not be piercing.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="synth-bell.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="synth-bell.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-25.6 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-25.7 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-10.27 dBFS @ 2.03 s</td><th>tail RMS (8–12 s)</th><td class="">-46.1 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.13 dB</td><th>DC</th><td class="">5.51e-7</td></tr>
+        <tr><th>spectral centroid</th><td class="">856 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-26 / -26.7 / -26.7 / -26.5 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -22.7 · peak -7.28 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="synth-supersaw-pad">
+      <header><h3>Supersaw Pad</h3><span class="badge pass">PASS</span><span class="cat">synth · Synth Pads</span></header>
+      <p class="setup">Key C · slot role Pad defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Synth Pads instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="synth-supersaw-pad.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="synth-supersaw-pad.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-22.7 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-22.8 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-8.67 dBFS @ 4.752 s</td><th>tail RMS (8–12 s)</th><td class="">-34.1 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">1.08 dB</td><th>DC</th><td class="">-5.48e-8</td></tr>
+        <tr><th>spectral centroid</th><td class="">493 Hz</td><th>power &lt; 120 Hz</th><td class="">7.1 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-22.5 / -22.3 / -22.4 / -23.1 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -20.7 · peak -7.32 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="synth-juno-pad">
+      <header><h3>Juno Pad</h3><span class="badge pass">PASS</span><span class="cat">synth · Synth Pads</span></header>
+      <p class="setup">Key C · slot role Pad defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Synth Pads instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="synth-juno-pad.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="synth-juno-pad.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-22.2 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-22.2 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-9.81 dBFS @ 6.499 s</td><th>tail RMS (8–12 s)</th><td class="">-35.5 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">1.04 dB</td><th>DC</th><td class="">-1.18e-7</td></tr>
+        <tr><th>spectral centroid</th><td class="">553 Hz</td><th>power &lt; 120 Hz</th><td class="">0.1 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-22.3 / -23.1 / -21.2 / -21.6 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -20.2 · peak -7.2 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="synth-shimmer-pad">
+      <header><h3>Shimmer Pad</h3><span class="badge pass">PASS</span><span class="cat">synth · Synth Pads</span></header>
+      <p class="setup">Key C · slot role Pad defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Synth Pads instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="synth-shimmer-pad.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="synth-shimmer-pad.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-22.5 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-22.5 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-9.31 dBFS @ 7.619 s</td><th>tail RMS (8–12 s)</th><td class="">-30 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.96 dB</td><th>DC</th><td class="">1.4e-8</td></tr>
+        <tr><th>spectral centroid</th><td class="">408 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-23.6 / -23.2 / -23.7 / -21.7 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -20.5 · peak -8.34 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="synth-dx-epiano">
+      <header><h3>DX E-Piano</h3><span class="badge pass">PASS</span><span class="cat">synth · Synth Keys</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Synth Keys instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="synth-dx-epiano.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="synth-dx-epiano.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-26.6 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-26.6 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-9.73 dBFS @ 6.019 s</td><th>tail RMS (8–12 s)</th><td class="">-49 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.33 dB</td><th>DC</th><td class="">-1.72e-7</td></tr>
+        <tr><th>spectral centroid</th><td class="">368 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-26.9 / -28.4 / -29.4 / -28 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -23.9 · peak -7.01 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="synth-pluck">
+      <header><h3>Pluck</h3><span class="badge pass">PASS</span><span class="cat">synth · Synth Keys</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB · RMS judged over 0–1 s of each chord (calibWindow)</p>
+      <p class="listen"><b>Listen for:</b> Synth Keys instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="synth-pluck.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="synth-pluck.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-27.3 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-30.9 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-9.42 dBFS @ 4.044 s</td><th>tail RMS (8–12 s)</th><td class="">-68.1 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.15 dB</td><th>DC</th><td class="">0.00000244</td></tr>
+        <tr><th>spectral centroid</th><td class="">526 Hz</td><th>power &lt; 120 Hz</th><td class="">0.1 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-36.4 / -37 / -38.3 / -40 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -28 · peak -6.46 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="synth-poly-stab">
+      <header><h3>Poly Stab</h3><span class="badge pass">PASS</span><span class="cat">synth · Synth Keys</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Synth Keys instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="synth-poly-stab.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="synth-poly-stab.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-25 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-25 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-9.59 dBFS @ 6.024 s</td><th>tail RMS (8–12 s)</th><td class="">-45.3 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.31 dB</td><th>DC</th><td class="">0.00000237</td></tr>
+        <tr><th>spectral centroid</th><td class="">475 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-25.5 / -25.3 / -24.9 / -25.6 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -22.3 · peak -7.71 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="synth-analog-brass">
+      <header><h3>Analog Brass</h3><span class="badge pass">PASS</span><span class="cat">synth · Brass &amp; Leads</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Brass &amp; Leads instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="synth-analog-brass.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="synth-analog-brass.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-25.2 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-25.2 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-12.03 dBFS @ 0.566 s</td><th>tail RMS (8–12 s)</th><td class="">-44.5 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.45 dB</td><th>DC</th><td class="">-9.79e-7</td></tr>
+        <tr><th>spectral centroid</th><td class="">426 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-24.9 / -25.2 / -25.5 / -25.7 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -22.7 · peak -10.12 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="synth-square-lead">
+      <header><h3>Square Lead</h3><span class="badge pass">PASS</span><span class="cat">synth · Brass &amp; Leads</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Brass &amp; Leads instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="synth-square-lead.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="synth-square-lead.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-25 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-25.1 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-14.58 dBFS @ 2.025 s</td><th>tail RMS (8–12 s)</th><td class="">-44.3 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.16 dB</td><th>DC</th><td class="">-0.00000115</td></tr>
+        <tr><th>spectral centroid</th><td class="">530 Hz</td><th>power &lt; 120 Hz</th><td class="">0.6 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-24.6 / -24.9 / -25.2 / -25.4 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -22.2 · peak -11.88 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="synth-808-sub">
+      <header><h3>808 Sub</h3><span class="badge pass">PASS</span><span class="cat">synth · Bass</span></header>
+      <p class="setup">Key C · slot role Bass defaults (gain 0.8, role sends) · default FX, master −6 dB · roots only, C2 range</p>
+      <p class="listen"><b>Listen for:</b> Bass instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="synth-808-sub.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="synth-808-sub.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-25 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-28.5 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-14.6 dBFS @ 2.01 s</td><th>tail RMS (8–12 s)</th><td class="">-68.4 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0 dB</td><th>DC</th><td class="">0.000065</td></tr>
+        <tr><th>spectral centroid</th><td class="">98 Hz</td><th>power &lt; 120 Hz</th><td class="">98.4 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-27.2 / -27.2 / -27.2 / -27.2 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -22 · peak -11.59 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="synth-synth-bass">
+      <header><h3>Synth Bass</h3><span class="badge pass">PASS</span><span class="cat">synth · Bass</span></header>
+      <p class="setup">Key C · slot role Bass defaults (gain 0.8, role sends) · default FX, master −6 dB · roots only, C2 range</p>
+      <p class="listen"><b>Listen for:</b> Bass instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="synth-synth-bass.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="synth-synth-bass.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-25.8 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-28.7 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-15.5 dBFS @ 2.037 s</td><th>tail RMS (8–12 s)</th><td class="">-50.2 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0 dB</td><th>DC</th><td class="">6.43e-7</td></tr>
+        <tr><th>spectral centroid</th><td class="">133 Hz</td><th>power &lt; 120 Hz</th><td class="">78.7 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-26.1 / -26.2 / -26.1 / -26.2 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -22.8 · peak -12.49 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="organ-gospel">
+      <header><h3>Gospel Organ</h3><span class="badge pass">PASS</span><span class="cat">organ · Organ</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Gospel drawbars 888800000 with percussion and fast rotary: bright, punchy, shimmering. Key click subtle.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="organ-gospel.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="organ-gospel.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-23.5 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-23.7 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-11.25 dBFS @ 7.823 s</td><th>tail RMS (8–12 s)</th><td class="">-42.2 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.45 dB</td><th>DC</th><td class="">-0.0000811</td></tr>
+        <tr><th>spectral centroid</th><td class="">451 Hz</td><th>power &lt; 120 Hz</th><td class="">5.5 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-24 / -23.8 / -23.5 / -23 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -21 · peak -8.51 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="organ-soft-pad">
+      <header><h3>Soft Organ</h3><span class="badge pass">PASS</span><span class="cat">organ · Organ</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Soft organ 008800000 with slow rotary: mellow, flute-like.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="organ-soft-pad.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="organ-soft-pad.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-23.2 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-23.2 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-11.1 dBFS @ 7.757 s</td><th>tail RMS (8–12 s)</th><td class="">-41.4 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.58 dB</td><th>DC</th><td class="">0.00000492</td></tr>
+        <tr><th>spectral centroid</th><td class="">475 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-23.5 / -22.5 / -25.5 / -21.8 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -20.8 · peak -8.66 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="organ-full">
+      <header><h3>Full Organ</h3><span class="badge pass">PASS</span><span class="cat">organ · Organ</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Full organ, all drawbars: loud, bright, slight overdrive; slow rotary. Should not distort harshly.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="organ-full.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="organ-full.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-24.6 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-24.7 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-11.11 dBFS @ 7.738 s</td><th>tail RMS (8–12 s)</th><td class="">-44.1 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">1.46 dB</td><th>DC</th><td class="">0.0000108</td></tr>
+        <tr><th>spectral centroid</th><td class="">954 Hz</td><th>power &lt; 120 Hz</th><td class="">3.8 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-24.5 / -24.6 / -24.8 / -24.2 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -23 · peak -9.27 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="organ-church">
+      <header><h3>Church Organ</h3><span class="badge pass">PASS</span><span class="cat">organ · Organ</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Church organ 806000000, no rotary, long release: stately, still; long tail after each chord.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="organ-church.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="organ-church.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-19.8 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-20.3 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-8.15 dBFS @ 4.021 s</td><th>tail RMS (8–12 s)</th><td class="">-33.6 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.08 dB</td><th>DC</th><td class="">-0.00000634</td></tr>
+        <tr><th>spectral centroid</th><td class="">218 Hz</td><th>power &lt; 120 Hz</th><td class="">17.5 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-20 / -20.9 / -19.9 / -19.1 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -16.8 · peak -5.24 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-salamander-piano">
+      <header><h3>Grand Piano (Salamander)</h3><span class="badge pass">PASS</span><span class="cat">sampler · Piano</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Salamander grand: three velocity layers; natural decay, no mismatched note levels across the chord.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-salamander-piano.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-salamander-piano.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-23.3 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-23.3 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-3.38 dBFS @ 6.04 s</td><th>tail RMS (8–12 s)</th><td class="">-50.6 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">1.51 dB</td><th>DC</th><td class="">-0.0000521</td></tr>
+        <tr><th>spectral centroid</th><td class="">484 Hz</td><th>power &lt; 120 Hz</th><td class="">0.5 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-26.8 / -26.5 / -28.4 / -25 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -21.8 · peak -2.49 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-upright-piano">
+      <header><h3>Upright Piano (VSCO)</h3><span class="badge pass">PASS</span><span class="cat">sampler · Piano</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Piano instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-upright-piano.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-upright-piano.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-24.7 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-24.7 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-6.06 dBFS @ 4.034 s</td><th>tail RMS (8–12 s)</th><td class="">-53.8 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.71 dB</td><th>DC</th><td class="">-0.00000274</td></tr>
+        <tr><th>spectral centroid</th><td class="">398 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-27.9 / -27.5 / -28.3 / -28.7 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -22.4 · peak -3.7 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-bright-piano">
+      <header><h3>Bright Piano</h3><span class="badge pass">PASS</span><span class="cat">sampler · Piano</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Piano instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-bright-piano.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-bright-piano.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-24.9 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-24.9 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-6.46 dBFS @ 4.045 s</td><th>tail RMS (8–12 s)</th><td class="">-47.5 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.59 dB</td><th>DC</th><td class="">-0.0000048</td></tr>
+        <tr><th>spectral centroid</th><td class="">492 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-26.9 / -25.2 / -27.7 / -26.4 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -22.5 · peak -3.95 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-honky-tonk">
+      <header><h3>Honky-Tonk Piano</h3><span class="badge pass">PASS</span><span class="cat">sampler · Piano</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Piano instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-honky-tonk.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-honky-tonk.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-21 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-21 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-1.76 dBFS @ 4.024 s</td><th>tail RMS (8–12 s)</th><td class="">-49.4 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.21 dB</td><th>DC</th><td class="">0.00000512</td></tr>
+        <tr><th>spectral centroid</th><td class="">645 Hz</td><th>power &lt; 120 Hz</th><td class="">0.1 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-26.9 / -24.3 / -24.6 / -25.3 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -19.3 · peak -1.32 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-harpsichord">
+      <header><h3>Harpsichord</h3><span class="badge pass">PASS</span><span class="cat">sampler · Piano</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Piano instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-harpsichord.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-harpsichord.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-21.1 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-21.1 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-5.04 dBFS @ 2.119 s</td><th>tail RMS (8–12 s)</th><td class="">-46 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.17 dB</td><th>DC</th><td class="">-0.00000157</td></tr>
+        <tr><th>spectral centroid</th><td class="">762 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-22.3 / -21.4 / -21.4 / -21.5 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -18.2 · peak -2.78 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-ep-rhodes">
+      <header><h3>Rhodes (MusyngKite)</h3><span class="badge pass">PASS</span><span class="cat">sampler · Electric Piano</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> MusyngKite Rhodes: tine attack, warm body; single velocity layer (brightness follows velocity via a filter).</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-ep-rhodes.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-ep-rhodes.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-22.5 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-22.6 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-9.15 dBFS @ 2.016 s</td><th>tail RMS (8–12 s)</th><td class="">-42.5 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.19 dB</td><th>DC</th><td class="">-0.00000367</td></tr>
+        <tr><th>spectral centroid</th><td class="">366 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-22.5 / -22.6 / -23.4 / -23.5 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -19.7 · peak -6.55 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-ep-wurli">
+      <header><h3>Wurlitzer (MusyngKite)</h3><span class="badge pass">PASS</span><span class="cat">sampler · Electric Piano</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> MusyngKite Wurlitzer: reedy bark, shorter sustain than the Rhodes.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-ep-wurli.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-ep-wurli.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-24.2 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-24.2 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-8.87 dBFS @ 6.129 s</td><th>tail RMS (8–12 s)</th><td class="">-47.8 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.39 dB</td><th>DC</th><td class="">-9.56e-7</td></tr>
+        <tr><th>spectral centroid</th><td class="">578 Hz</td><th>power &lt; 120 Hz</th><td class="">0.1 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-25 / -26.3 / -25 / -24.6 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -21.6 · peak -6.48 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-electric-grand">
+      <header><h3>Electric Grand</h3><span class="badge pass">PASS</span><span class="cat">sampler · Electric Piano</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Electric Piano instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-electric-grand.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-electric-grand.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-24.1 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-24.2 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-5.67 dBFS @ 6.052 s</td><th>tail RMS (8–12 s)</th><td class="">-49.5 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.97 dB</td><th>DC</th><td class="">0.00000155</td></tr>
+        <tr><th>spectral centroid</th><td class="">590 Hz</td><th>power &lt; 120 Hz</th><td class="">0.1 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-24.4 / -26.1 / -26.3 / -26.7 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -22.1 · peak -5.07 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-clavinet">
+      <header><h3>Clavinet</h3><span class="badge pass">PASS</span><span class="cat">sampler · Electric Piano</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Electric Piano instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-clavinet.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-clavinet.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-21.4 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-21.4 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-3.19 dBFS @ 4.057 s</td><th>tail RMS (8–12 s)</th><td class="">-53.4 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.24 dB</td><th>DC</th><td class="">-0.00000815</td></tr>
+        <tr><th>spectral centroid</th><td class="">1008 Hz</td><th>power &lt; 120 Hz</th><td class="">0.1 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-23.8 / -22.4 / -23.4 / -24.5 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -18.8 · peak -1.98 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-vibes">
+      <header><h3>Vibraphone</h3><span class="badge pass">PASS</span><span class="cat">sampler · Mallets &amp; Bells</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Vibraphone: soft mallet attack, long ring.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-vibes.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-vibes.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-18.9 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-18.9 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-2.02 dBFS @ 6.081 s</td><th>tail RMS (8–12 s)</th><td class="">-39.3 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.25 dB</td><th>DC</th><td class="">0.00000684</td></tr>
+        <tr><th>spectral centroid</th><td class="">498 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-21.7 / -22.2 / -20.7 / -20.4 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -16.6 · peak -1.61 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-celesta">
+      <header><h3>Celesta</h3><span class="badge pass">PASS</span><span class="cat">sampler · Mallets &amp; Bells</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Celesta: small bell-like tone, quick decay.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-celesta.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-celesta.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-21.7 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-21.8 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-3.93 dBFS @ 2.013 s</td><th>tail RMS (8–12 s)</th><td class="">-49.5 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.2 dB</td><th>DC</th><td class="">0.00000406</td></tr>
+        <tr><th>spectral centroid</th><td class="">621 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-22.9 / -22.6 / -22.8 / -22.7 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -18.9 · peak -2.11 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-music-box">
+      <header><h3>Music Box</h3><span class="badge pass">PASS</span><span class="cat">sampler · Mallets &amp; Bells</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Music box: tiny plucked tines, high and delicate.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-music-box.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-music-box.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-21.2 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-21.4 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-1.35 dBFS @ 4.014 s</td><th>tail RMS (8–12 s)</th><td class="">-46.4 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.19 dB</td><th>DC</th><td class="">-0.00000324</td></tr>
+        <tr><th>spectral centroid</th><td class="">1080 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-23 / -23.1 / -23.8 / -23.1 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -19 · peak -1.02 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-marimba">
+      <header><h3>Marimba</h3><span class="badge pass">PASS</span><span class="cat">sampler · Mallets &amp; Bells</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Mallets &amp; Bells instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-marimba.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-marimba.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-22 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-22 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-2.28 dBFS @ 2.081 s</td><th>tail RMS (8–12 s)</th><td class="">-55.6 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.2 dB</td><th>DC</th><td class="">-5.31e-7</td></tr>
+        <tr><th>spectral centroid</th><td class="">420 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-30.8 / -29.5 / -31.7 / -29.2 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -20.5 · peak -1.64 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-xylophone">
+      <header><h3>Xylophone</h3><span class="badge pass">PASS</span><span class="cat">sampler · Mallets &amp; Bells</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Mallets &amp; Bells instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-xylophone.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-xylophone.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-21.9 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-21.9 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-6.15 dBFS @ 2.071 s</td><th>tail RMS (8–12 s)</th><td class="">-41.7 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.18 dB</td><th>DC</th><td class="">-0.00000321</td></tr>
+        <tr><th>spectral centroid</th><td class="">569 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-23.1 / -22.7 / -22.4 / -23 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -19 · peak -3.59 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-glockenspiel">
+      <header><h3>Glockenspiel</h3><span class="badge pass">PASS</span><span class="cat">sampler · Mallets &amp; Bells</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Mallets &amp; Bells instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-glockenspiel.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-glockenspiel.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-23.6 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-24.2 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-1.77 dBFS @ 4.046 s</td><th>tail RMS (8–12 s)</th><td class="">-45.3 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.14 dB</td><th>DC</th><td class="">-0.00000551</td></tr>
+        <tr><th>spectral centroid</th><td class="">2118 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-26.3 / -26.4 / -27.1 / -27.1 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -21.5 · peak -1.39 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-tubular-bells">
+      <header><h3>Tubular Bells</h3><span class="badge pass">PASS</span><span class="cat">sampler · Mallets &amp; Bells</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Mallets &amp; Bells instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-tubular-bells.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-tubular-bells.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-25.4 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-25.5 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-6.03 dBFS @ 6.04 s</td><th>tail RMS (8–12 s)</th><td class="">-46.7 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.15 dB</td><th>DC</th><td class="">7.09e-8</td></tr>
+        <tr><th>spectral centroid</th><td class="">1410 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-27.2 / -26.3 / -28.4 / -27.7 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -22.6 · peak -3.26 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-steel-drums">
+      <header><h3>Steel Drums</h3><span class="badge pass">PASS</span><span class="cat">sampler · Mallets &amp; Bells</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Mallets &amp; Bells instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-steel-drums.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-steel-drums.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-23.6 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-23.6 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-2.2 dBFS @ 6.063 s</td><th>tail RMS (8–12 s)</th><td class="">-45.7 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.2 dB</td><th>DC</th><td class="">-0.00000346</td></tr>
+        <tr><th>spectral centroid</th><td class="">918 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-26.5 / -27.6 / -28 / -27.8 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -21.1 · peak -1.63 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-nylon-guitar">
+      <header><h3>Nylon Guitar</h3><span class="badge pass">PASS</span><span class="cat">sampler · Guitar</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Nylon guitar: plucked, warm; the chord is struck as a block (no strum).</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-nylon-guitar.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-nylon-guitar.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-25.4 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-25.4 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-5.55 dBFS @ 4.02 s</td><th>tail RMS (8–12 s)</th><td class="">-47.6 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.17 dB</td><th>DC</th><td class="">-0.0000033</td></tr>
+        <tr><th>spectral centroid</th><td class="">435 Hz</td><th>power &lt; 120 Hz</th><td class="">2.9 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-27.6 / -30.3 / -31.7 / -25.9 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -22.5 · peak -2.82 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-steel-guitar">
+      <header><h3>Steel-String Guitar</h3><span class="badge pass">PASS</span><span class="cat">sampler · Guitar</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Guitar instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-steel-guitar.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-steel-guitar.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-24.9 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-25 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-3.92 dBFS @ 2.035 s</td><th>tail RMS (8–12 s)</th><td class="">-56.3 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.12 dB</td><th>DC</th><td class="">0.00000112</td></tr>
+        <tr><th>spectral centroid</th><td class="">420 Hz</td><th>power &lt; 120 Hz</th><td class="">4.1 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-26.4 / -28.1 / -25.6 / -29.1 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -22.1 · peak -2.14 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-clean-guitar">
+      <header><h3>Clean Electric Guitar</h3><span class="badge pass">PASS</span><span class="cat">sampler · Guitar</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Guitar instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-clean-guitar.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-clean-guitar.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-24.7 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-24.8 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-4.48 dBFS @ 6.026 s</td><th>tail RMS (8–12 s)</th><td class="">-52.4 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.88 dB</td><th>DC</th><td class="">0.00000343</td></tr>
+        <tr><th>spectral centroid</th><td class="">1039 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-25.9 / -25.1 / -25.4 / -26 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -22.6 · peak -2.29 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-harp">
+      <header><h3>Harp</h3><span class="badge pass">PASS</span><span class="cat">sampler · Guitar</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Guitar instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-harp.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-harp.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-24.7 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-24.7 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-5.94 dBFS @ 2.039 s</td><th>tail RMS (8–12 s)</th><td class="">-55.8 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.15 dB</td><th>DC</th><td class="">-0.00000206</td></tr>
+        <tr><th>spectral centroid</th><td class="">382 Hz</td><th>power &lt; 120 Hz</th><td class="">0 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-25.2 / -27 / -29.4 / -29.4 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -21.9 · peak -3.1 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-dulcimer">
+      <header><h3>Dulcimer</h3><span class="badge pass">PASS</span><span class="cat">sampler · Guitar</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Guitar instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-dulcimer.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-dulcimer.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-22 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-22.1 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-2.19 dBFS @ 6.025 s</td><th>tail RMS (8–12 s)</th><td class="">-39 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.14 dB</td><th>DC</th><td class="">-0.00000335</td></tr>
+        <tr><th>spectral centroid</th><td class="">990 Hz</td><th>power &lt; 120 Hz</th><td class="">0.1 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-24.4 / -25.4 / -24.6 / -24.5 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -19.6 · peak -1.63 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+    <section class="clip pass" id="sampler-kalimba">
+      <header><h3>Kalimba</h3><span class="badge pass">PASS</span><span class="cat">sampler · Mallets &amp; Bells</span></header>
+      <p class="setup">Key C · slot role Keys defaults (gain 0.8, role sends) · default FX, master −6 dB</p>
+      <p class="listen"><b>Listen for:</b> Mallets &amp; Bells instrument in its default settings.</p>
+      <div class="players">
+        <label>Stereo <audio controls preload="none" src="sampler-kalimba.wav"></audio></label>
+        <label>Mono <audio controls preload="none" src="sampler-kalimba.mono.wav"></audio></label>
+      </div>
+      
+      <table class="nums"><tbody>
+        <tr><th>RMS (0.5–8 s)</th><td class="">-18.1 dBFS</td><th>band 100 Hz–5 kHz</th><td class="">-18.1 dBFS</td></tr>
+        <tr><th>peak</th><td class="">-0.67 dBFS @ 6.011 s</td><th>tail RMS (8–12 s)</th><td class="">-50.9 dBFS</td></tr>
+        <tr><th>mono-sum loss</th><td class="">0.28 dB</td><th>DC</th><td class="">-0.0000241</td></tr>
+        <tr><th>spectral centroid</th><td class="">463 Hz</td><th>power &lt; 120 Hz</th><td class="">0.2 %</td></tr>
+        <tr><th>per chord (I V vi IV)</th><td class="">-20.9 / -21.8 / -20.8 / -20.9 dBFS</td><th>clicks</th><td class="">0</td></tr>
+        <tr><th>mono render</th><td class="">RMS -16.8 · peak -0.51 dBFS</td><th>NaN/Inf</th><td class="">0</td></tr>
+      </tbody></table>
+      
+    </section>
+</main></body></html>
