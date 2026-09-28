@@ -15,12 +15,18 @@
 // L10: closing/quitting (or reloading) while recording asks first.
 // My Samples (shell-3): the server scans <repo>/user-samples and ~/Music/Worship Rig/Samples (RIG_USER_SAMPLES
 //   overrides) for GarageBand/user sample packs; Rig menu → Open My Samples Folder / Rescan My Samples.
+// Menu-bar mode (L14, docs/menubar-mode.md "Electron side: as built"): a Tray icon whose menu is rebuilt from the bus
+//   `state`, a frameless popover window (app/mini.html) under it, hide-on-close + dock hide on macOS while
+//   `settings.menuBarMode` is on (mirrored here via setMenuBarMode and kept in rig-shell.json), an optional login item,
+//   and the IPC relay for the bus (main renderer publishes state / receives commands; the popover subscribes / sends).
+//   Launch with --hidden (or at login) to start with the main window hidden when menu-bar mode is on.
 //
 // Test/dev env overrides: RIG_APP_DIR, RIG_PORT, RIG_PADS_DIR, RIG_USER_DATA, RIG_RECORDINGS_DIR, RIG_USER_SAMPLES,
 // RIG_SELFTEST=1 (collect console output + HTTP responses ≥ 400, read window.__RIG_SELFTEST__, print one JSON line, quit),
 // RIG_SELFTEST_TIMEOUT_MS, RIG_DEBUG_PERMS=1 (log every permission request/check).
 
-const { app, BrowserWindow, Menu, dialog, ipcMain, powerSaveBlocker, session, shell } = require('electron');
+const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, powerSaveBlocker, screen, session, shell } =
+  require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
@@ -65,12 +71,7 @@ function log(...a) {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (!win) return;
-    if (win.isMinimized()) win.restore();
-    win.show();
-    win.focus();
-  });
+  app.on('second-instance', () => showMain());
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -399,6 +400,8 @@ function registerIpc() {
     shell.showItemInFolder(target);
     return { ok: true };
   });
+
+  registerMenuBarIpc();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -546,6 +549,455 @@ function buildMenu() {
 }
 
 // ---------------------------------------------------------------------------------------------
+// menu-bar mode (L14, docs/menubar-mode.md): Tray + popover + bus relay + hide-on-close
+//
+//   main renderer ──rig:busPublish(stateJson)──▶ main.js ──rig:miniState──▶ popover   (+ Tray menu rebuild)
+//   popover       ──rig:miniCommand(cmdJson)───▶ main.js ──rig:busCommand─▶ main renderer (openMain: main.js itself)
+//
+// Payloads are JSON strings (the bus validates them again in the renderer); main.js checks type, size, JSON shape
+// and the sender's origin (handle() → isOurFrame) and relays the validated object re-serialised.
+const BUS_STATE_MAX = 64 * 1024;
+const BUS_COMMAND_MAX = 4 * 1024;
+const BUS_COMMANDS = new Set([
+  'hello', 'selectMode', 'nextMode', 'prevMode', 'panic', 'fadeOutAll', 'master', 'droneToggle', 'droneKey',
+  'lowResource', 'openMain', 'record',
+]);
+const POPOVER_W = 320;
+const POPOVER_H = 440;
+const TRAY_MODES_MAX = 12; // the popover shows ≤ 6; the menu can afford a few more
+// build/trayTemplate{,@2x}.png (node build/make-tray-icon.mjs prints these): electron-builder `files` does not ship
+// build/, so the packaged app uses the embedded copies.
+const TRAY_ICON_1X =
+  'iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAeklEQVR42mNgGAUkgN1A/BqIVaht8H8oTqC1wQZALENtg12g7OfUNjgB' +
+  'iU8y0ADifihNVYM3QzVuprbB+6Ea9xNhcAoQf4fSVDUYXe0wMxg98n5D+RFQ/B8qhk0tSckNZFg7EHNAcTtUDJta+oPzSGFIKj4/IAaP' +
+  'YAAAtKNvB/KDagIAAAAASUVORK5CYII=';
+const TRAY_ICON_2X =
+  'iVBORw0KGgoAAAANSUhEUgAAACwAAAAsCAYAAAAehFoBAAAA50lEQVR42u2YMRKCMBBFU1BacASOYJkj5AAUlpQU3sQDWFJQWHgAS45h' +
+  'wRFyAAoLXGdSZHZWAWeii/4/86rPbF4RIGAMgiBI6ljiStyIM7HRLtwTY8RBu/DI6CAM4dfCjjgSeyLTLrxj3Um78EXoVQt3EF6QIrAK' +
+  '4TZasNUu7IRFnWbhSli0+lfhmvCBWruwFTqrWXhqLoQhDGEIJxKeejV71jVR17DOL5ib7PBTEkPoenaiK6LfAEO4du7cZMfLR3Ji++Sb' +
+  'LQtd/sZcRFVK4Yb6BF7Y67PyDVnpafK7wqvbEgiCIMbcAZDot5DEtCgGAAAAAElFTkSuQmCC';
+
+let menuBarMode = false; // settings.menuBarMode, mirrored by the renderer (setMenuBarMode) and kept in rig-shell.json
+let startHidden = false; // --hidden / opened at login, with menu-bar mode on: the main window starts hidden
+/** @type {Tray|null} */
+let tray = null;
+/** @type {Menu|null} the Tray menu (built even where there is no Tray, so the self-test can read it) */
+let trayMenu = null;
+let trayMenuKey = '';
+/** @type {BrowserWindow|null} */
+let popover = null;
+let popoverHiddenAt = 0;
+let popoverSentSeq = 0;
+const popoverLog = []; // 'show' | 'hide' transitions (self-test)
+let busState = null; // last published state (parsed)
+let busStateJson = null;
+let busSeq = 0;
+/** @type {((wc: Electron.WebContents, source: string) => void)|null} set by installSelftest */
+let selftestWatch = null;
+
+const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), Math.max(lo, hi));
+
+/**
+ * Popover position: centred under the tray icon, 4 px below it, clamped to the display's work area.
+ * @param {{x:number,y:number,width:number,height:number}|null} trayBounds  null/empty → top-right of the work area
+ * @param {{x:number,y:number,width:number,height:number}} workArea
+ * @returns {{x:number, y:number, width:number, height:number}}
+ */
+function popoverBounds(trayBounds, workArea, w = POPOVER_W, h = POPOVER_H) {
+  const wa = workArea;
+  const b = trayBounds && trayBounds.width > 0 ? trayBounds : null;
+  const x = b ? Math.round(b.x + b.width / 2 - w / 2) : wa.x + wa.width - w - 8;
+  const y = b ? Math.round(b.y + b.height + 4) : wa.y + 4;
+  return { x: clamp(x, wa.x, wa.x + wa.width - w), y: clamp(y, wa.y, wa.y + wa.height - h), width: w, height: h };
+}
+
+/**
+ * Parse and validate a bus message (state or command) sent as a JSON string.
+ * @returns {object} the parsed message; throws with a short reason otherwise
+ */
+function parseBusJson(json, max) {
+  if (typeof json !== 'string') throw new Error('expected a JSON string');
+  if (json.length > max) throw new Error(`message too large (${json.length} > ${max})`);
+  let o;
+  try {
+    o = JSON.parse(json);
+  } catch {
+    throw new Error('invalid JSON');
+  }
+  if (!o || typeof o !== 'object' || Array.isArray(o) || o.v !== 1) throw new Error('expected an object with v:1');
+  return o;
+}
+
+const isStr = (s, max = 200) => typeof s === 'string' && s.length > 0 && s.length <= max;
+
+/** docs/menubar-mode.md `state`: checks the parts main.js reads (current, modes, lowResource). @returns {object} */
+function validateBusState(o) {
+  const c = o.current;
+  if (c != null && (typeof c !== 'object' || !isStr(c.id) || typeof c.name !== 'string')) {
+    throw new Error('state.current must be null or {id, name, key}');
+  }
+  if (!Array.isArray(o.modes) || o.modes.some((m) => !m || !isStr(m.id) || typeof m.name !== 'string')) {
+    throw new Error('state.modes must be an array of {id, name, key, index}');
+  }
+  return o;
+}
+
+/** docs/menubar-mode.md `command`. @returns {object} */
+function validateBusCommand(o) {
+  if (!BUS_COMMANDS.has(o.type)) throw new Error(`unknown command type ${JSON.stringify(String(o.type)).slice(0, 40)}`);
+  const bool = (k) => {
+    if (typeof o[k] !== 'boolean') throw new Error(`${o.type}.${k} must be a boolean`);
+  };
+  if (o.type === 'selectMode' && !isStr(o.id)) throw new Error('selectMode.id must be a non-empty string');
+  if (o.type === 'master' && !(typeof o.value === 'number' && o.value >= 0 && o.value <= 2)) {
+    throw new Error('master.value must be a number 0..2');
+  }
+  if (o.type === 'droneKey' && !(Number.isInteger(o.pc) && o.pc >= 0 && o.pc <= 11)) {
+    throw new Error('droneKey.pc must be an integer 0..11');
+  }
+  if (o.type === 'lowResource' || o.type === 'record') bool('on');
+  return o;
+}
+
+/** Relay a validated command to the main renderer; `openMain` is handled here. @returns {{ok:true}|{error}} */
+function sendBusCommand(cmd) {
+  if (cmd.type === 'openMain') {
+    showMain();
+    return { ok: true };
+  }
+  if (!win || win.isDestroyed()) return { error: 'main window not ready' };
+  win.webContents.send('rig:busCommand', JSON.stringify(cmd));
+  return { ok: true };
+}
+
+function sendToPopover() {
+  if (!popover || popover.isDestroyed() || !busStateJson || popoverSentSeq >= busSeq) return;
+  popoverSentSeq = busSeq;
+  popover.webContents.send('rig:miniState', busStateJson, busSeq);
+}
+
+function publishBusState(json, state) {
+  busState = state;
+  busStateJson = json;
+  busSeq += 1;
+  // a hidden popover gets the newest state when it is shown (fewer wake-ups while idle)
+  if (popover && !popover.isDestroyed() && popover.isVisible()) sendToPopover();
+  refreshTrayMenu();
+}
+
+const oneLine = (s, max = 80) => String(s == null ? '' : s).replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, max);
+const modeLabel = (m) => {
+  const name = oneLine(m.name) || 'Untitled';
+  return m.key ? `${name}  (${oneLine(m.key, 8)})` : name;
+};
+
+function trayCommand(cmd) {
+  const r = sendBusCommand(cmd);
+  if (r.error) log('tray command', cmd.type, r.error);
+  refreshTrayMenu(true); // a radio/checkbox flips locally on click: show the real state until the next publish
+}
+
+/** Tray menu template from the bus state (null → the renderer has not published yet). */
+function trayMenuTemplate(s) {
+  const cur = s && s.current;
+  const modes = s ? s.modes.slice(0, TRAY_MODES_MAX) : [];
+  const ready = !!s;
+  const nowLabel = !s ? 'Worship Rig is starting…' : cur ? `Now: ${modeLabel(cur)}` : 'No song selected';
+  return [
+    { id: 'current', label: nowLabel, enabled: false },
+    { type: 'separator' },
+    ...modes.map((m) => ({
+      id: `mode:${m.id}`,
+      label: modeLabel(m),
+      type: 'radio',
+      checked: !!cur && m.id === cur.id,
+      click: () => trayCommand({ v: 1, type: 'selectMode', id: m.id }),
+    })),
+    ...(modes.length ? [{ type: 'separator' }] : []),
+    { id: 'prev', label: 'Previous', enabled: ready, click: () => trayCommand({ v: 1, type: 'prevMode' }) },
+    { id: 'next', label: 'Next', enabled: ready, click: () => trayCommand({ v: 1, type: 'nextMode' }) },
+    { id: 'panic', label: 'Panic (all notes off)', enabled: ready, click: () => trayCommand({ v: 1, type: 'panic' }) },
+    { type: 'separator' },
+    {
+      id: 'lowResource',
+      label: 'Low-resource mode',
+      type: 'checkbox',
+      checked: !!(s && s.lowResource),
+      enabled: ready,
+      click: (item) => trayCommand({ v: 1, type: 'lowResource', on: !!item.checked }),
+    },
+    { type: 'separator' },
+    { id: 'openMain', label: 'Open Worship Rig', click: () => showMain() },
+    { id: 'quit', label: 'Quit Worship Rig', click: () => app.quit() },
+  ];
+}
+
+/** Rebuild the Tray menu when the parts it shows changed (state is published up to 4×/s). */
+function refreshTrayMenu(force = false) {
+  if (!menuBarMode) return;
+  const s = busState;
+  const brief = (m) => m && [m.id, m.name, m.key];
+  const key = JSON.stringify(s ? [brief(s.current), s.modes.slice(0, TRAY_MODES_MAX).map(brief), !!s.lowResource] : null);
+  if (!force && trayMenu && key === trayMenuKey) return;
+  trayMenuKey = key;
+  trayMenu = Menu.buildFromTemplate(trayMenuTemplate(s));
+  if (tray && !tray.isDestroyed()) {
+    const cur = s && s.current;
+    tray.setToolTip(cur ? `Worship Rig: ${modeLabel(cur)}` : 'Worship Rig');
+  }
+}
+
+function trayImage() {
+  // createFromPath picks up @2x and marks *Template files as template images; the embedded copy is the fallback
+  const file = path.join(__dirname, 'build', 'trayTemplate.png');
+  let img = fs.existsSync(file) ? nativeImage.createFromPath(file) : nativeImage.createEmpty();
+  if (img.isEmpty()) {
+    img = nativeImage.createFromBuffer(Buffer.from(TRAY_ICON_1X, 'base64'), { scaleFactor: 1 });
+    img.addRepresentation({ scaleFactor: 2, buffer: Buffer.from(TRAY_ICON_2X, 'base64') });
+  }
+  img.setTemplateImage(true);
+  return img;
+}
+
+// v1 is macOS only (docs/menubar-mode.md "Not in v1": the Windows/Linux tray); the menu and popover work everywhere
+function ensureTray() {
+  if (!IS_MAC || (tray && !tray.isDestroyed())) return;
+  tray = new Tray(trayImage());
+  tray.setToolTip('Worship Rig');
+  tray.on('click', (e) => {
+    if (e && (e.ctrlKey || e.metaKey)) popUpTrayMenu();
+    else togglePopover();
+  });
+  tray.on('right-click', () => popUpTrayMenu());
+}
+
+function popUpTrayMenu() {
+  refreshTrayMenu();
+  if (tray && !tray.isDestroyed() && trayMenu) {
+    hidePopover();
+    tray.popUpContextMenu(trayMenu);
+  }
+}
+
+function destroyTray() {
+  if (tray && !tray.isDestroyed()) tray.destroy();
+  tray = null;
+  trayMenu = null;
+  trayMenuKey = '';
+}
+
+function createPopover() {
+  popover = new BrowserWindow({
+    width: POPOVER_W,
+    height: POPOVER_H,
+    show: false,
+    frame: false,
+    transparent: true, // rounded corners come from mini.css
+    backgroundColor: '#00000000',
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    hasShadow: true,
+    title: 'Worship Rig',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false,
+      // no audio in the popover: let Chromium throttle it while hidden
+    },
+  });
+  const p = popover;
+  const wc = p.webContents;
+  p.setAlwaysOnTop(true, 'pop-up-menu');
+  // show on the current Space (and over full-screen apps) instead of switching back to the Space it was last shown on
+  if (IS_MAC) p.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+  wc.setWindowOpenHandler(({ url: target }) => {
+    if (/^https?:\/\//.test(target) && !originOk(target)) shell.openExternal(target);
+    return { action: 'deny' };
+  });
+  wc.on('will-navigate', (e, target) => {
+    if (!originOk(target)) e.preventDefault();
+  });
+  wc.on('before-input-event', (_e, input) => {
+    if (input.type === 'keyDown' && input.key === 'Escape') hidePopover();
+  });
+  wc.on('did-finish-load', () => drivePlaceholder(wc));
+  // show/hide bookkeeping lives in showPopover/hidePopover: on macOS the window 'show'/'hide' events follow the
+  // occlusion state, so they don't fire while the screen is locked or the window is covered
+  p.on('blur', () => hidePopover());
+  p.on('closed', () => {
+    if (popover === p) popover = null;
+    popoverSentSeq = 0;
+  });
+  if (selftestWatch) selftestWatch(wc, 'popover');
+  wc.loadURL(`${ourOrigin()}/mini.html`);
+  return p;
+}
+
+function showPopover() {
+  if (!popover || popover.isDestroyed()) createPopover();
+  const b = tray && !tray.isDestroyed() ? tray.getBounds() : null;
+  const display =
+    b && b.width ? screen.getDisplayMatching(b) : screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  popover.setBounds(popoverBounds(b, display.workArea));
+  popover.show();
+  popover.focus();
+  popoverLog.push('show');
+  sendToPopover();
+  notifyMenuBarState();
+}
+
+function hidePopover() {
+  if (!popover || popover.isDestroyed() || !popover.isVisible()) return;
+  popover.hide();
+  popoverLog.push('hide');
+  popoverHiddenAt = Date.now();
+  notifyMenuBarState();
+}
+
+function togglePopover() {
+  if (popover && !popover.isDestroyed() && popover.isVisible()) {
+    hidePopover();
+    return;
+  }
+  // the click on the tray icon blurred (and so hid) the popover a moment ago: that click meant "close"
+  if (Date.now() - popoverHiddenAt < 300) return;
+  showPopover();
+}
+
+/**
+ * TEMPORARY (until the cloud's app/mini.html + views/mini.js land): the placeholder page can't carry a script (the CSP
+ * forbids inline scripts and only app/mini.html is ours to add), so main.js drives it. Only runs on a page whose
+ * <html> has data-rig-mini-placeholder; delete this function once the real popover UI is in the tree.
+ */
+function drivePlaceholder(wc) {
+  const code = `(() => {
+    if (!document.documentElement.hasAttribute('data-rig-mini-placeholder') || window.__rigMiniDriven) return false;
+    window.__rigMiniDriven = true;
+    const $ = (id) => document.getElementById(id);
+    window.rig.miniSubscribe((json) => {
+      let s;
+      try { s = JSON.parse(json); } catch { return; }
+      const c = s.current;
+      $('now').textContent = c ? c.name + (c.key ? ' · ' + c.key : '') : 'No song selected';
+      $('modes').textContent = (s.modes || []).map((m) => (c && m.id === c.id ? '▸ ' : '  ') + m.name).join('\\n');
+      $('raw').textContent = JSON.stringify(s, null, 1);
+    });
+    for (const b of document.querySelectorAll('button[data-cmd]')) {
+      b.addEventListener('click', () => window.rig.miniCommand(JSON.stringify({ v: 1, type: b.dataset.cmd })));
+    }
+    window.rig.miniCommand(JSON.stringify({ v: 1, type: 'hello' }));
+    return true;
+  })()`;
+  wc.executeJavaScript(code, true).catch(() => {});
+}
+
+function menuBarStateSnapshot() {
+  let loginItem = false;
+  try {
+    loginItem = !!app.getLoginItemSettings().openAtLogin;
+  } catch {
+    /* unsupported platform */
+  }
+  return {
+    on: menuBarMode,
+    popoverOpen: !!(popover && !popover.isDestroyed() && popover.isVisible()),
+    loginItem,
+    windowVisible: !!(win && !win.isDestroyed() && win.isVisible()),
+    tray: !!(tray && !tray.isDestroyed()),
+  };
+}
+
+/** Push {on, popoverOpen, loginItem, windowVisible, tray} to both renderers (window.rig.onMenuBarState). */
+function notifyMenuBarState() {
+  const snap = menuBarStateSnapshot();
+  for (const w of [win, popover]) if (w && !w.isDestroyed()) w.webContents.send('rig:menuBarState', snap);
+}
+
+function applyMenuBarMode(on) {
+  const next = !!on;
+  if (next !== menuBarMode) writeShellConfig({ menuBarMode: next });
+  menuBarMode = next;
+  if (next) {
+    ensureTray();
+    refreshTrayMenu(true);
+  } else {
+    destroyTray();
+    if (popover && !popover.isDestroyed()) popover.destroy();
+    if (win && !win.isDestroyed() && !win.isVisible()) showMain(); // never leave a hidden window without a way back
+    else if (IS_MAC && app.dock) app.dock.show();
+  }
+  notifyMenuBarState();
+  return menuBarStateSnapshot();
+}
+
+/** Show + focus the main window (tray "Open Worship Rig", openMain, dock click, second launch). */
+function showMain() {
+  hidePopover();
+  if (!win || win.isDestroyed()) return;
+  if (IS_MAC && app.dock) app.dock.show();
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+  notifyMenuBarState();
+}
+
+/** macOS + menu-bar mode: closing the window hides it; audio keeps running and the library is backed up (M5). */
+function hideMainToMenuBar() {
+  if (!win || win.isDestroyed()) return;
+  const wc = win.webContents;
+  win.hide();
+  if (IS_MAC && app.dock) app.dock.hide();
+  notifyMenuBarState();
+  const q = '(() => { try { const s = window.__rigShell; return s ? s.library() : null; } catch (e) { return null; } })()';
+  withTimeout(wc.executeJavaScript(q, true).catch(() => null), 1500)
+    .then((lib) => (typeof lib === 'string' && lib.length > 2 ? backupNow(lib) : null))
+    .catch((err) => log('backup on hide:', err && err.message));
+}
+
+function registerMenuBarIpc() {
+  handle('rig:busPublish', async (event, json) => {
+    if (!win || win.isDestroyed() || event.sender !== win.webContents) return { error: 'only the main window publishes' };
+    const state = validateBusState(parseBusJson(json, BUS_STATE_MAX));
+    publishBusState(json, state);
+    return { ok: true, seq: busSeq };
+  });
+  handle('rig:miniCommand', async (_e, json) => sendBusCommand(validateBusCommand(parseBusJson(json, BUS_COMMAND_MAX))));
+  handle('rig:miniLastState', async () => (busStateJson ? { json: busStateJson, seq: busSeq } : null));
+  handle('rig:setMenuBarMode', async (_e, on) => {
+    if (typeof on !== 'boolean') return { error: 'expected a boolean' };
+    return applyMenuBarMode(on);
+  });
+  handle('rig:getMenuBarState', async () => menuBarStateSnapshot());
+  handle('rig:setLoginItem', async (_e, on) => {
+    if (typeof on !== 'boolean') return { error: 'expected a boolean' };
+    // from source, the login item would be the bare Electron binary (it opens Electron's default app, not the rig)
+    if (!app.isPackaged) return { error: 'Open at login needs the packaged app (npm run build:mac)' };
+    if (!IS_MAC && process.platform !== 'win32') return { error: 'not supported on this platform' };
+    app.setLoginItemSettings({ openAtLogin: on, openAsHidden: true });
+    notifyMenuBarState();
+    return menuBarStateSnapshot();
+  });
+}
+
+/** Started from the login item (openAsHidden) or with --hidden. Best effort: macOS 13+ deprecates the login flags. */
+function launchedHidden() {
+  if (process.argv.includes('--hidden')) return true;
+  try {
+    const s = app.getLoginItemSettings();
+    return !!(s.wasOpenedAsHidden || s.wasOpenedAtLogin);
+  } catch {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
 // permissions: MIDI + output-device selection; everything else denied.
 // NOTE (verified on Electron 44.4.5): Chromium now gates ALL Web MIDI behind the sysex permission, so
 // requestMIDIAccess({sysex:false}) arrives here as 'midiSysex'. Denying it blocks MIDI entirely. The renderer still
@@ -596,7 +1048,10 @@ function createWindow(url) {
     },
   });
   const wc = win.webContents;
-  win.once('ready-to-show', () => win && win.show());
+  // menu-bar mode launched hidden (login item / --hidden): the page loads and plays, the window stays in the menu bar
+  win.once('ready-to-show', () => win && !startHidden && win.show());
+  win.on('show', () => notifyMenuBarState());
+  win.on('hide', () => notifyMenuBarState());
   wc.setWindowOpenHandler(({ url: target }) => {
     if (/^https?:\/\//.test(target) && !originOk(target)) shell.openExternal(target);
     return { action: 'deny' };
@@ -640,6 +1095,13 @@ function createWindow(url) {
     else quitting = false;
   });
   win.on('close', (e) => {
+    // L14: menu-bar mode on macOS: the close button / ⌘W hide the window (audio keeps running); only an explicit
+    // Quit (tray, app menu, ⌘Q → before-quit sets `quitting`) goes on to the recording check + backup below
+    if (IS_MAC && menuBarMode && !quitting && closeStage === 'open') {
+      e.preventDefault();
+      hideMainToMenuBar();
+      return;
+    }
     if (closeStage === 'done' || SELFTEST) return;
     e.preventDefault();
     if (closeStage === 'finishing') return;
@@ -661,6 +1123,8 @@ function createWindow(url) {
   });
   win.on('closed', () => {
     win = null;
+    // the popover alone must not keep the app alive (window-all-closed → quit)
+    if (popover && !popover.isDestroyed()) popover.destroy();
   });
   if (serverInfo && serverInfo.port !== PORT && !SELFTEST) wc.once('did-finish-load', () => portChangedDialog());
   if (SELFTEST) installSelftest(wc);
@@ -680,6 +1144,7 @@ async function finishClose(wc) {
   const info = wc.isDestroyed() ? null : await withTimeout(wc.executeJavaScript(q, true).catch(() => null), 1500);
   const recording = !!(info && info.recording) || [...streams.values()].some((s) => s.owner === wc.id);
   if (recording && win && !win.isDestroyed()) {
+    if (!win.isVisible()) showMain(); // quitting from the tray while hidden: the sheet needs a visible window
     const r = await dialog.showMessageBox(win, {
       type: 'warning',
       buttons: ['Stop Recording and Quit', 'Cancel'],
@@ -798,6 +1263,9 @@ app.on('before-quit', () => {
   quitting = true;
 });
 
+// dock icon click / Finder re-open while the window is hidden in the menu bar
+app.on('activate', () => showMain());
+
 app.on('will-quit', (e) => {
   if (powerBlockId !== null && powerSaveBlocker.isStarted(powerBlockId)) powerSaveBlocker.stop(powerBlockId);
   if (streams.size || server) {
@@ -830,8 +1298,19 @@ app.whenReady().then(async () => {
   installPermissions(session.defaultSession);
   registerIpc();
   buildMenu();
+  // L14: known before the renderer boots (it mirrors settings.menuBarMode via setMenuBarMode on start)
+  menuBarMode = !!cfg.menuBarMode && !SELFTEST;
+  startHidden = menuBarMode && launchedHidden();
+  if (menuBarMode) {
+    ensureTray();
+    refreshTrayMenu(true);
+    if (startHidden && IS_MAC && app.dock) app.dock.hide();
+  }
   powerBlockId = powerSaveBlocker.start('prevent-display-sleep');
   createWindow(`http://127.0.0.1:${serverInfo.port}/`);
 });
 
-module.exports = { sanitizeFileName, stamp, openExclusive, fixWavSizes };
+module.exports = {
+  sanitizeFileName, stamp, openExclusive, fixWavSizes,
+  popoverBounds, parseBusJson, validateBusState, validateBusCommand,
+};
