@@ -81,7 +81,7 @@ const INSTALL = () => {
     const st = engine._debugStats();
     return {
       ...st, droneVoices: droneVoices(), kbVoices: st.voices - droneVoices(), heap: S.heap(), ctxTime: engine.ctx ? +engine.ctx.currentTime.toFixed(2) : null,
-      ctxState: engine.ctx ? engine.ctx.state : 'none', audio: controller.status.audio, memMode: controller.status.memory?.mode, song: store.currentSong()?.factoryId || store.currentSong()?.id,
+      ctxState: engine.ctx ? engine.ctx.state : 'none', audio: controller.status.audio, memMode: controller.status.memory?.mode, budgetMB: controller.status.memory?.budgetMB, memNote: controller.status.memory?.note, song: store.currentSong()?.factoryId || store.currentSong()?.id,
       events: S.events, switches: S.switches, panics: S.panics, keyChanges: S.keyChanges, nan: S.nan, maxDb: +S.maxDb.toFixed(1),
     };
   };
@@ -303,7 +303,7 @@ const browser = await chromium.launch({
 });
 const consoleErrors = [];
 const rows = [];
-const COLS = ['t_s', 'phase', 'song', 'voices', 'kbVoices', 'droneVoices', 'nodes', 'retiring', 'sounding', 'pedaled', 'timers', 'decodedMB', 'pinnedMB', 'capMB', 'memMode', 'heapMB', 'ctxTime', 'ctxState', 'audio', 'events', 'switches', 'panics', 'keyChanges', 'nan', 'maxDb'];
+const COLS = ['t_s', 'phase', 'song', 'voices', 'kbVoices', 'droneVoices', 'nodes', 'retiring', 'sounding', 'pedaled', 'timers', 'decodedMB', 'pinnedMB', 'capMB', 'budgetMB', 'memMode', 'heapMB', 'ctxTime', 'ctxState', 'audio', 'events', 'switches', 'panics', 'keyChanges', 'nan', 'maxDb'];
 const tStart = Date.now();
 let exitCode = 1;
 
@@ -424,8 +424,14 @@ try {
   check('no NaN on the analysers during the whole run', summary.nan === 0 && end.nan === 0, summary.nan ? JSON.stringify(summary.nanAt) : '');
   // morning-prep (integration-2 round 2 #3): pins are limited, so the LRU keeps the decoded cache under its cap
   const peak = rows.reduce((m, r) => (Number(r.decodedMB) > m.decodedMB ? r : m), { decodedMB: -1 });
-  check('decoded samples stay under the engine cache cap (pins limited)', rows.every((r) => !(r.capMB > 0) || r.decodedMB <= r.capMB),
-    `max ${peak.decodedMB} MB (pinned ${peak.pinnedMB} MB, ${peak.memMode}) of ${peak.capMB} MB cap`);
+  // L-8: and the pinned window is a byte budget (status.memory.budgetMB, 600): pinnedMB ≤ budget in every row, except
+  // while the current song alone is bigger (it is then pinned alone, note "This song alone is … MB")
+  const pinPeak = rows.reduce((m, r) => (Number(r.pinnedMB) > m.pinnedMB ? r : m), { pinnedMB: -1 });
+  const pinsOk = (r) => !(r.budgetMB > 0) || !(r.pinnedMB > r.budgetMB) || /alone/.test(r.memNote || '');
+  check('decoded samples stay under the engine cache cap (pins limited)',
+    rows.every((r) => (!(r.capMB > 0) || r.decodedMB <= r.capMB) && pinsOk(r)),
+    `max ${peak.decodedMB} MB (pinned ${peak.pinnedMB} MB, ${peak.memMode}) of ${peak.capMB} MB cap; max pinned ` +
+    `${pinPeak.pinnedMB} MB on ${pinPeak.song} (budget ${pinPeak.budgetMB} MB)`);
   check('zero console.error', consoleErrors.length === 0, consoleErrors.slice(0, 10).join(' | '));
   exitCode = finish();
   console.log(`# CSV: ${path.relative(repoRoot, CSV)} (${rows.length} rows)`);

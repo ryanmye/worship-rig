@@ -138,6 +138,8 @@ export default {
 | `subscribe(fn)` | store changes, pre-digested (§3.4) → unsub |
 | `listen(target, type, fn, opts)` | addEventListener, auto-removed → unsub |
 | `onLeaveSong(fn)` | runs **before** the shown song changes: flush debounced text, cancel drags, close song-specific menus |
+| `onLeaveView(fn)` | runs when `settings.view` leaves `'edit'` (⌘E / Ctrl+E, no outside tap): close chip panels and menus. The shell also closes every overlay.js overlay inside the view (round3-edit M1) |
+| `lastDroneSource` | `{get(), set(mode)}`: the drone source the ON tile last turned off, for the shown song; kept by the shell so a tab switch keeps it, cleared on a song change (round3-edit m4) |
 | `onEscape(fn)` | Esc handler; return `true` when you closed something. Handlers run newest first; the first `true` stops the rest (§5) |
 | `markDialog(open, token)` | `body[data-dialog-open]` while your inline confirm/menu is open (ux.md M1) |
 | `songField(input, rel)` | arms a song-bound text field and returns `commit(v)`, which writes `songs.<id focused on>.<rel>` (round2-ui #3) |
@@ -205,6 +207,12 @@ The easy path is `lib.createBinder(ctx)`, the edit.js `bindCtl/bindFn/refresh` p
   hook, so a panel that rebuilds a sub-tree with a fresh binder does not leak (idempotent).
 - It refreshes only the overlapping bindings, re-applies everything on `songChanged`/`full`, never overwrites a
   focused `text:true` field, and calls `cancelDrag()` on tracked components before a song switch (round2-ui #2).
+- `text:'dirty'` (polish-1): a focused field keeps following outside writes (Tap, the header, another view) until
+  the user types in it (`input`); the draft is then kept until `change` or `focusout`, when the store value is
+  applied again. Song name, tempo and notes use it; prefer it to `text:true` for any typed field.
+- Step panels that must not open over their chip pass `stepChip({mount, placement:'auto'})` (below / above /
+  cover from the room in the host; the Effects who-goes-in column). The slot fader carries a `levelMeter`
+  (`controller.slotLevel(i)`), read only while on screen.
 - **Rebuild** a sub-tree only when its structure changes (for example the slot panel when
   `patch.slots.<i>.instrument` or `patch.slots.<i>` itself changes). Values update in place: ui-edit "store → view
   updates in place" is a contract, and tests mark elements to prove it.
@@ -241,8 +249,10 @@ builds the same markup for in-body lines (the Effects tab's three lines).
   `ctx.listen(ctx.editState, 'changes', render)`.
 - For a stepChip, `chip.setLoaded(getIn(ctx.editState.baseline, 'patch.slots.0.octave'))` draws the dot and the
   "as loaded" step.
-- A panel's footer line is `lib.changeText(ctx.editState.changeCount(<your block prefixes>))` inside
-  `.ev2-chg` with a `lib.changedDot()`, and gets `.none` when the count is 0.
+- A panel's footer line is `lib.changeText(n, edited)` with `n = ctx.editState.changeCount(<your block prefixes>)`
+  inside `.ev2-chg` with a `lib.changedDot()`, and gets `.none` when the count is 0. The count is switch moves only,
+  so with `n === 0` pass `edited = lib.editedSince(song, baseline, prefixes, omitKeys)`: "Sound edited (no switch
+  changes)" vs "No switch changes since the song was loaded" (round3-edit m2). Levels and mutes are omitted.
 - The shell draws the tab dots. Do not draw your own.
 
 ---
@@ -420,12 +430,13 @@ builds the same markup for in-body lines (the Effects tab's three lines).
 
 **Three lines** (`.ev2-fx-line`: title + blurb | choices | "How much of each sound goes in")
 - **Space.** Preset chips over `SPACE_PRESETS` with size hints (Dry *none*, Room *small*, Stage *medium*, Hall
-  *big*, Cathedral *huge*, Ambient Wash *pad-only*). The blurb is the preset's. Fine-tune `lib.section('fx-reverb')`
+  *big*, Cathedral *huge*, Ambient Wash *pad-only*) · **Song’s own** *<size word>*, shown when the baseline's room
+  matches no preset; it writes the baseline's whole `patch.fx.reverb` back in one store change (round3-edit M3). The blurb is the preset's. Fine-tune `lib.section('fx-reverb')`
   holds word sliders for size, darkness (`damp`), pre-delay and level (`returnGain`, taper).
 - **Echo.** Chips Off *no echo* · Slapback *1 repeat* · Quarter *on the beat* · Dotted 8th *worship echo* · Trails
   *long, dark* · **Song’s own** *as saved*.
   - Song's own is shown when the baseline's delay matches no preset. Tapping it writes back the baseline's
-    `fx.delay.*` only.
+    `patch.fx.delay` only, as one whole-object write (like Perform's `pickFx`).
   - Fine-tune `fx-delay` holds: Timing select (Free time / Quarter notes / Dotted eighths / Eighth notes =
     `fx.delay.sync`), Time (disabled while synced), Repeats (`feedback`), Tone, Level, Ping-pong toggle.
   - The note reads "<sync> need the song’s tempo — set one…" or "<sync> at 72 BPM = 625 ms"; ms appear only in Edit.

@@ -511,6 +511,7 @@ const setLed = (el, cls) => {
 };
 let lastStatus = null;
 let midiHintShown = false;
+let midiPendingShown = false;
 controller.onStatus((s) => {
   const m = s.midi || {};
   if (m.connected) {
@@ -521,6 +522,12 @@ controller.onStatus((s) => {
     setLed(midiLed, 'warn');
     setText(midiName, 'No device');
     midiName.classList.add('off');
+  } else if (m.pending || m.reason === 'pending') {
+    // polish-1 (local L-3 follow-up): Web MIDI has not answered yet (Chrome's permission prompt, a slow CoreMIDI);
+    // it attaches by itself when it does, so this is "waiting", not an error
+    setLed(midiLed, 'warn');
+    setText(midiName, 'Waiting…');
+    midiName.classList.add('off');
   } else if (m.reason) {
     setLed(midiLed, 'bad');
     setText(midiName, { denied: 'Blocked', unsupported: 'Not supported', failed: 'Error' }[m.reason] || 'Off');
@@ -529,7 +536,9 @@ controller.onStatus((s) => {
     setLed(midiLed, null);
     setText(midiName, 'Waiting…');
   }
-  $('midi-status').title = m.connected ? `MIDI input: ${m.name}` : m.reason ? `MIDI unavailable (${m.reason})` : 'MIDI input';
+  const pending = !!(m.pending || m.reason === 'pending');
+  $('midi-status').title = m.connected ? `MIDI input: ${m.name}` : pending ? 'Waiting for MIDI permission'
+    : m.reason ? `MIDI unavailable (${m.reason})` : 'MIDI input';
 
   const a = s.audio;
   const lat = Number(s.latencyMs) || 0;
@@ -545,7 +554,13 @@ controller.onStatus((s) => {
     midiHintShown = true;
     toast('No MIDI keyboard found. Plug it in any time — it connects automatically. Meanwhile the computer keys A–; play notes.', 'info', { ms: 8000 });
   }
-  if (!midiHintShown && m.reason && m.reason !== lastStatus?.midi?.reason) {
+  // pending is not a failure: no "could not start" toast, and midiHintShown stays free for a later denial
+  if (pending && !midiPendingShown) {
+    midiPendingShown = true;
+    toast(isElectron ? 'MIDI is taking a while to start. The computer keys A–; play notes meanwhile.'
+      : 'Waiting for MIDI permission — click Allow in Chrome’s prompt to play your keyboard.', 'info', { ms: 10000 });
+  }
+  if (!midiHintShown && !pending && m.reason && m.reason !== lastStatus?.midi?.reason) {
     midiHintShown = true;
     if (m.reason === 'denied') toast(isElectron ? 'MIDI access was denied.' : 'MIDI is blocked for this page. Click the icon at the left of the address bar, allow MIDI devices, then reload.', 'warn', { ms: 10000 });
     else if (m.reason === 'unsupported') toast('This browser has no Web MIDI. Use Chrome or the Worship Rig app to play a MIDI keyboard.', 'warn', { ms: 10000 });

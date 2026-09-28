@@ -139,14 +139,17 @@
 .ev2 .ev2-wv.zero { background: var(--panel, #15181d); border: 1.5px dashed #4a515d; color: var(--ev2-faint); font-weight: 600; }
 .ev2 .ev2-wv.fixed { background: var(--panel, #15181d); color: var(--muted, #a3acb8); font-weight: 600; }
 .ev2 .ev2-wdrop.dim .ev2-wv { opacity: .55; }
-.ev2 .ev2-wend { position: relative; z-index: 1; display: flex; align-items: center; padding-left: 6px; min-width: 0; }
+/* polish-1: the effect names span the Effects AND Master columns, with "to Master" (fixed --ev2-wout-w) at the right
+   end of the Master column. On the Effects column alone "Echo song’s own" ellipsized at 1440 (141 px for 145). */
+.ev2 .ev2-wire-grid { --ev2-wout-w: 88px; }
+.ev2 .ev2-wend { position: relative; z-index: 1; display: flex; align-items: center; padding-left: 6px; min-width: 0; padding-right: calc(var(--ev2-wout-w) + 4px); }
 .ev2 .ev2-wn {
   display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px 0 8px; border-radius: 12px; min-width: 0;
   border: 1px solid color-mix(in srgb, var(--fx) 55%, var(--line-2, #3a414d)); background: #1b2029; font-size: 12.5px; font-weight: 700; white-space: nowrap; overflow: hidden;
 }
 .ev2 .ev2-wn .ev2-ic { color: var(--fx); }
 .ev2 .ev2-wn span { color: var(--muted, #a3acb8); font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
-.ev2 .ev2-wout { display: flex; align-items: center; gap: 8px; padding-left: 4px; font-size: 12.5px; font-weight: 700; color: var(--muted, #a3acb8); }
+.ev2 .ev2-wout { display: flex; align-items: center; gap: 8px; padding-left: 4px; font-size: 12.5px; font-weight: 700; color: var(--muted, #a3acb8); justify-self: end; width: var(--ev2-wout-w); white-space: nowrap; }
 .ev2 .ev2-wout-br { width: 12px; align-self: stretch; margin: 8px 0; border: 2px solid #4a5260; border-left: 0; border-radius: 0 8px 8px 0; }
 
 /* ------------------------------------------------------------------ panel frame: sentence title + body */

@@ -61,6 +61,62 @@ export async function waitFor(fn, { timeout = 10000, interval = 100, what = 'con
 export const hasXvfb = () => process.platform === 'linux' && spawnSync('which', ['xvfb-run']).status === 0;
 
 /**
+ * Environment for launching Electron from a test: the caller's env plus `extra`, minus ELECTRON_RUN_AS_NODE.
+ * L-1: a shell started from an Electron host (VS Code's terminal, the Claude desktop app) inherits
+ * ELECTRON_RUN_AS_NODE=1, and then `npx electron .` runs main.js as plain Node: require('electron').app is
+ * undefined and main.js dies at its first app.setPath() before any self-test report.
+ * @param {Record<string, string>} [extra]
+ * @returns {Record<string, string>}
+ */
+export function electronEnv(extra = {}) {
+  const env = { ...process.env, ...extra };
+  delete env.ELECTRON_RUN_AS_NODE;
+  return env;
+}
+
+/**
+ * Browser permissions the Playwright suites grant for Web MIDI (L-4). Only 'midi': Chromium then rejects
+ * requestMIDIAccess at once (NotAllowedError → status.midi.reason 'denied') and the suites drive MIDI through
+ * `midi._inject`. Granting 'midi-sysex' lets the request reach the host's real MIDI stack (CoreMIDI on a Mac with
+ * keyboards attached), where it can stay pending (L-3). Grant sysex only in a test that needs real ports, and say why.
+ */
+export const MIDI_PERMISSIONS = Object.freeze(['midi']);
+
+/**
+ * L-4: wait for `window.__rig.ready` (controller.start(): audio + song up; MIDI is not awaited since l3) with a
+ * bound. Rejects after `timeout` ms with controller.status.midi / audio / ready in the message, so a hang names its
+ * cause instead of burning the suite's whole budget. Waits for `window.__rig` itself within the same bound.
+ * @param {import('playwright').Page} page
+ * @param {{timeout?: number, what?: string}} [o]
+ * @returns {Promise<void>}
+ */
+export async function waitRigReady(page, { timeout = 30000, what = 'window.__rig.ready' } = {}) {
+  const t0 = Date.now();
+  await page.waitForFunction(() => !!(window.__rig && window.__rig.ready), null, { timeout, polling: 50 });
+  const left = Math.max(1000, timeout - (Date.now() - t0));
+  const probe = page.evaluate(async (ms) => {
+    const c = window.__rig.controller;
+    const ok = await Promise.race([
+      Promise.resolve(window.__rig.ready).then(() => true, () => true),
+      new Promise((res) => setTimeout(() => res(false), ms)),
+    ]);
+    const st = (c && c.status) || {};
+    return { ok, midi: st.midi || null, audio: st.audio ?? null, ready: st.ready ?? null, songId: st.songId ?? null };
+  }, left);
+  // Node-side guard too: a page.evaluate on a hung renderer has no timeout of its own.
+  let timer = null;
+  const guard = new Promise((res) => {
+    timer = setTimeout(() => res({ ok: false, midi: '(renderer did not answer)', audio: null, ready: null }), left + 5000);
+  });
+  const r = await Promise.race([probe, guard]).finally(() => clearTimeout(timer));
+  if (!r.ok) {
+    const midi = r.midi && typeof r.midi === 'object' ? { ...r.midi, inputs: (r.midi.inputs || []).length } : r.midi;
+    throw new Error(`${what} did not resolve within ${timeout} ms; controller.status.midi=${JSON.stringify(midi)} ` +
+      `audio=${r.audio} ready=${r.ready} songId=${r.songId}`);
+  }
+}
+
+/**
  * Real app/ exposed through a throw-away directory: every entry of app/ is a symlink to the real one, only
  * index.html is a copy with one extra `<script type="module" src="./__it/probe.js">` after the app's own
  * bootstrap. The CSP (script-src 'self') allows it because the probe is served from the same origin.

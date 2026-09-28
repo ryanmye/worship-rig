@@ -84,16 +84,6 @@
   position: absolute; top: 0; bottom: 0; right: 0; width: var(--ev2-fx-who-w); pointer-events: none; z-index: 20;
 }
 .ev2 .ev2-fx-sphost .step-panel { pointer-events: auto; left: 0; right: 0; }
-.ev2 .ev2-fx-sphost[data-dir="down"] .step-panel { top: var(--ev2-fx-sp-top, 60px); bottom: 5px; }
-.ev2 .ev2-fx-sphost[data-dir="down"] .step-panel::after { bottom: auto; top: -9px; transform: rotate(225deg); }
-.ev2 .ev2-fx-sphost[data-dir="cover"] .step-panel { top: 5px; bottom: 5px; }
-.ev2 .ev2-fx-sphost[data-dir="cover"] .step-panel::after { display: none; }
-/* ui-core's `.fader.compact .fader-input { height: 44px }` out-ranks the step panel's vertical fine slider, so it
-   rendered 44 px tall with a 44 px thumb over the × button; fill the column here (reported to the integrator) */
-.ev2 .ev2-fx-sphost .sp-body { grid-template-rows: minmax(0, 1fr); }
-.ev2 .ev2-fx-sphost .sp-fine { --thumb-w: 26px; --thumb-l: 24px; height: 100%; min-height: 0; overflow: hidden; }
-.ev2 .ev2-fx-sphost .sp-fine .fader-input { height: 100%; min-height: 0; width: 30px; }
-
 /* title bar: Vibe menu */
 .ev2 .ev2-fx-vibe { position: relative; }
 .ev2 .ev2-fx-vibe-menu {

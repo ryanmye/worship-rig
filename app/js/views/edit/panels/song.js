@@ -109,25 +109,16 @@ export default {
     const tempoInput = h('input.ev2-song-tempo', {
       type: 'number', min: 30, max: 300, step: 1, placeholder: '—', 'aria-label': 'Tempo (beats per minute)',
     });
-    // Not `text:true`: a focused field still follows outside writes (Tap, the header, a song switch) until the user
-    // types in it; only then is their draft protected (binder.text would freeze it for the whole focus).
-    let tempoDirty = false;
-    tempoInput.addEventListener('input', () => {
-      tempoDirty = true;
-    });
-    tempoInput.addEventListener('focus', () => {
-      tempoDirty = false;
-    });
+    // text:'dirty' (polish-1): a focused field still follows outside writes (Tap, the header, a song switch) until the
+    // user types in it; only then is their draft protected (text:true would freeze it for the whole focus).
     binder.ctl('song.tempo', () => ({
       el: tempoInput,
       set: (v) => {
-        if (tempoDirty && document.activeElement === tempoInput) return;
         tempoInput.value = v === null || v === undefined ? '' : String(Math.round(v));
       },
-    }), { read: (s) => (s.tempo === null || s.tempo === undefined ? null : s.tempo) });
+    }), { read: (s) => (s.tempo === null || s.tempo === undefined ? null : s.tempo), text: 'dirty' });
     const commitTempo = ctx.songField(tempoInput, 'tempo');
     tempoInput.addEventListener('change', () => {
-      tempoDirty = false;
       const raw = tempoInput.value.trim();
       if (raw === '') commitTempo(null);
       else if (Number.isFinite(Number(raw))) commitTempo(Math.round(Number(raw)));
@@ -165,7 +156,7 @@ export default {
     const notesArea = h('textarea.ev2-song-notes', {
       rows: 6, maxlength: 10000, 'aria-label': 'Song notes', placeholder: 'Notes for this song (shown in Perform)',
     });
-    binder.ctl('song.notes', () => ({ el: notesArea, set: (v) => (notesArea.value = v ?? '') }), { text: true });
+    binder.ctl('song.notes', () => ({ el: notesArea, set: (v) => (notesArea.value = v ?? '') }), { text: 'dirty' });
     const commitNotes = ctx.songField(notesArea, 'notes');
     let notesTimer = null;
     const flushNotes = () => {

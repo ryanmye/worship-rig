@@ -1818,6 +1818,51 @@ export const offline = {
       Object.values(cache).every(Boolean) && refKept && clamped.release === 1.5 && clamped.releaseParamDefault === 1.5 && clamped.gainTrimDb === 30 && clamped.warnings === 2;
     return { pass, before, after503, afterNet, marksKeptOnFailure: marksKept, userInstrumentNotFallback: notFallback, failWarned, afterNotServed: afterOff, afterOk, cache, refKept, clamped };
   },
+
+  /**
+   * polish-1: engine.slotLevel(i), the strip meters' tap. Created on the first read (not for an empty slot), reads
+   * the slot's own level (a quiet slot 1 next to a loud slot 0), disconnected SLOT_TAP_IDLE_SEC after the last read
+   * (not after the first), recreated by the next read, and a song switch taps the new strip. A just-connected
+   * analyser has not run yet, so the first read of a fresh tap is zeros (a meter shows it one frame later).
+   */
+  async slotLevelTap() {
+    const ctx = mkCtx(4.2);
+    const e = await mkEngine(ctx);
+    const A = patch({ 0: slot('synth', 'warm-pad'), 2: slot('synth', 'warm-pad', { gain: 0.1 }) });
+    await use(e, A);
+    const tokB = await e.prepare(A); // the same song again: a fresh strip (gapless commit at 3.2)
+    const out = { bad: e.slotLevel(9), empty: e.slotLevel(1), tapsEmpty: e.slotTapCount() };
+    out.first = e.slotLevel(0); // t = 0: tap created, silent
+    out.tapsFirst = e.slotTapCount();
+    e.noteOn(60, 110, { when: 0.1 });
+    e.at(0.5, () => e.slotLevel(2)); // connects slot 2's tap (a fresh analyser reads zeros until it has run)
+    e.at(0.8, () => {
+      out.loud = e.slotLevel(0);
+      out.quiet = e.slotLevel(2);
+      out.taps08 = e.slotTapCount();
+    });
+    e.at(2.3, () => (out.taps23 = e.slotTapCount())); // last read 0.8 → still connected at 2.3 (first read + 2 s passed)
+    e.at(3.0, () => (out.taps30 = e.slotTapCount())); // 0.8 + 2 s idle → released
+    e.at(3.2, (t) => (out.committed = e.commit(tokB, { when: t })));
+    e.noteOn(64, 110, { when: 3.3 });
+    e.at(3.5, () => e.slotLevel(0)); // a fresh tap on the new strip
+    e.at(3.8, () => {
+      out.again = e.slotLevel(0);
+      out.tapsAgain = e.slotTapCount();
+      out.newStripTapped = !!e._slotTaps[0]?.strips.has(e.slots[0].strip);
+    });
+    await ctx.startRendering();
+    await settle();
+    e._teardown();
+    out.tapsAfterTeardown = e._slotTaps.filter(Boolean).length;
+    const r = (x) => x && { peak: +x.peak.toFixed(4), rms: +x.rms.toFixed(4) };
+    const pass = out.bad === null && out.empty?.peak === 0 && out.tapsEmpty === 0 && out.first?.peak === 0 &&
+      out.tapsFirst === 1 && out.loud?.peak > 0.01 && out.loud.rms > 0 && out.loud.rms <= out.loud.peak &&
+      out.quiet?.peak > 0 && out.quiet.peak < out.loud.peak / 5 && out.taps08 === 2 && out.taps23 === 2 &&
+      out.taps30 === 0 && out.committed === true && out.again?.peak > 0.01 && out.tapsAgain === 1 &&
+      out.newStripTapped && out.tapsAfterTeardown === 0;
+    return { pass, ...out, first: r(out.first), loud: r(out.loud), quiet: r(out.quiet), again: r(out.again) };
+  },
 };
 
 // ----- real-time suites ------------------------------------------------------------------------------------------

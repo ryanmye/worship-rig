@@ -165,6 +165,17 @@ button:disabled { opacity: .45; }
   top: calc(50% - 12px); height: 24px; width: 3px;
   left: calc(11px + (100% - 22px) * var(--ind, 0) - 1.5px);
 }
+/* polish-1: the slot level bar (components/levelMeter.js) sits in a vertical fader's track, right of the input, over
+   the thumb's travel. Absolute and pointer-events: none, so it changes neither the fader throw nor its hit area. */
+.lvl-meter {
+  position: absolute; width: 4px; border-radius: 2px; overflow: hidden; pointer-events: none;
+  background: linear-gradient(to top, var(--ok) 0 80%, #e2c23c 80% 95%, #e4573d 95%);
+}
+.lvl-cover { position: absolute; inset: 0; background: var(--track); transform-origin: top; transform: scaleY(1); }
+.fader.vertical .fader-track > .lvl-meter {
+  top: calc(var(--thumb-l) / 2); bottom: calc(var(--thumb-l) / 2); left: calc(50% + 31px);
+}
+.fader.muted .lvl-meter { opacity: .5; }
 .fader.compact .fader-input { height: 44px; }
 .fader-input.dragging { cursor: grabbing; }
 .fader.compact .fader-value { font-size: 14px; }
@@ -371,6 +382,11 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
   flex-direction: column; padding: 9px 8px 8px; min-height: 0; }
 .step-panel::after { content: ''; position: absolute; bottom: -9px; left: calc(var(--ax, 22%) - 7px); width: 14px; height: 14px;
   background: #1f242c; border-right: 2px solid var(--c); border-bottom: 2px solid var(--c); transform: rotate(45deg); }
+/* stepChip({placement:'auto'}) (polish-1): below the chip (arrow on top) or over the whole host (no arrow) */
+.step-panel[data-dir="down"] { top: var(--sp-top, 60px); bottom: 5px; }
+.step-panel[data-dir="down"]::after { bottom: auto; top: -9px; transform: rotate(225deg); }
+.step-panel[data-dir="cover"] { top: 5px; bottom: 5px; }
+.step-panel[data-dir="cover"]::after { display: none; }
 .step-panel .sp-head { display: flex; align-items: flex-start; gap: 6px; }
 .step-panel .sp-title { font-size: 15px; line-height: 1.15; }
 .step-panel .sp-owner { color: var(--c); font-size: 11px; letter-spacing: .1em; display: block; }
@@ -387,9 +403,15 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
 .step-panel .sp-step.on { background: var(--c); color: #0d0f12; border-color: var(--c); }
 .step-panel .sp-was { font-size: 10.5px; font-weight: 700; color: var(--faint); }
 .step-panel .sp-was[hidden] { display: none; }
-.step-panel .sp-fine { height: 100%; }
+/* polish-1 (hv2-edit-effects request): the vertical fine slider fills the panel body, as in the mockup (perform-step
+   `.fine`: 26 px column, 26 × 16 thumb). `.fader.compact .fader-input { height: 44px }` used to win, so it rendered
+   44 px tall with a 44 px thumb. The drag is relative, so the whole column is the hit area; the chip that opens the
+   panel keeps its ≥ 44 px target. */
+.step-panel .sp-body { grid-template-rows: minmax(0, 1fr); }
+.step-panel .sp-fine { --thumb-w: 26px; --thumb-l: 16px; height: 100%; min-height: 0; overflow: hidden; }
+.step-panel .sp-fine .fader-track { min-height: 0; }
 .step-panel .sp-fine .fader-label, .step-panel .sp-fine .fader-value { display: none; }
-.step-panel .sp-fine .fader-input { width: 30px; min-height: 0; }
+.step-panel .sp-fine .fader-input { width: 30px; height: 100%; min-height: 0; }
 .step-panel .sp-fine { --fader-color: var(--c); }
 .step-panel .sp-foot { font-size: 11px; color: var(--faint); margin-top: 7px; text-align: center; line-height: 1.3; }
 

@@ -212,6 +212,46 @@ test('song: opts.focus key / notes in update() (same instance); title tokens jum
   t.assertNoConsoleErrors();
 });
 
+test('song: polish-1 text:"dirty" — tempo and notes follow outside writes while focused until typed in', async () => {
+  const H = t.host;
+  const id = await t.ev(() => window.__rig.store.currentSong().id);
+  const outside = (rel, v) => t.ev(([i, r, x]) => window.__rig.store.set(`songs.${i}.${r}`, x), [id, rel, v]);
+  // tempo: focused and untouched → follows; typed → keeps the draft; Enter commits the draft
+  const tempo = `${H} .ev2-song-tempo`;
+  await t.click(tempo);
+  await outside('tempo', 88);
+  await t.until((s) => document.querySelector(s).value === '88', tempo);
+  await t.page.keyboard.press('Control+A');
+  await t.page.keyboard.type('13');
+  await outside('tempo', 99);
+  await t.sleep(80);
+  assert.equal(await t.page.inputValue(tempo), '13', 'a typed draft is not overwritten');
+  await t.page.keyboard.type('2');
+  await t.page.keyboard.press('Enter');
+  await t.until((i) => window.__rig.store.getSong(i).tempo === 132, id);
+  assert.equal(await t.page.inputValue(tempo), '132');
+  // focused again (fresh focus = clean): an outside write shows at once
+  await t.click(tempo);
+  await outside('tempo', 76);
+  await t.until((s) => document.querySelector(s).value === '76', tempo);
+  await t.ev(() => document.activeElement.blur());
+  // notes: focused and untouched → follows; typed → draft kept while focused
+  const area = `${H} textarea.ev2-song-notes`;
+  await t.click(area);
+  await outside('notes', 'From the header.');
+  await t.until((s) => document.querySelector(s).value === 'From the header.', area);
+  await t.page.keyboard.press('Control+End');
+  await t.page.keyboard.type(' Mine');
+  await outside('notes', 'Someone else.');
+  await t.sleep(60);
+  assert.equal(await t.page.inputValue(area), 'From the header. Mine', 'the notes draft stays');
+  await t.ev(() => document.activeElement.blur()); // flushes the draft (last writer wins, as before)
+  await t.until((i) => window.__rig.store.getSong(i).notes === 'From the header. Mine', id);
+  await outside('notes', '');
+  await outside('tempo', null);
+  t.assertNoConsoleErrors();
+});
+
 test('song: 1024×700 — focus on mount, fits with no horizontal (or vertical) scroll, change line', async () => {
   // the same page, resized and remounted with {focus:'tempo'} (a second boot doubles the cost on the loaded box)
   const u = t;

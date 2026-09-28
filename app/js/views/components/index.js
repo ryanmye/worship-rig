@@ -35,7 +35,9 @@
 //       .set({ songName, tempo, swell, touch, pedal, pedalReversed, sound, latencyMs, locked, echoSynced })
 //       + open({focus}), close(), isOpen, tap(now?)
 //   eqKeyboard({ store, engine, slotIndex, controller?, toast?, compact?, rta? }) / eqMiniCurve({ store, slotIndex,
-//       onOpen? })   the keyboard Tone EQ and its sparkline (CONTRACT_CHANGES ", onClose, swallow, closeOnOutside, passThrough, group }) → close(reason)
+//       onOpen? })   the keyboard Tone EQ and its sparkline (CONTRACT_CHANGES "## eq-ui")
+//   levelMeter({ read: () => ({peak, rms})|null, label? })   thin slot level bar (rAF only while on screen; polish-1)
+//   openOverlay({ el, onClose, swallow, closeOnOutside, passThrough, group }) → close(reason)
 //       Esc / outside-tap rules shared by the step panels, the "…" menu and the Quick sheet
 //
 // Helpers: h(tag, attrs, ...children), setText, disposer(), rafCoalesce(fn), blurAfterPointer(el), posToValue/valueToPos.
@@ -43,6 +45,7 @@ export { fader, knob, posToValue, valueToPos } from './fader.js';
 export { toggle, segmented, select, stepper } from './buttons.js';
 export { keyGrid, miniKeyboard, pianoKeyboard, keyLayout, isBlack } from './keys.js';
 export { meter, dbToMeter } from './meter.js';
+export { levelMeter } from './levelMeter.js';
 export { chordReadout, wheelStrip } from './readouts.js';
 export { setlistStrip } from './setlist.js';
 export { h, setText, setAttr, disposer, rafCoalesce, blurAfterPointer, nextId, relativeDrag } from './util.js';

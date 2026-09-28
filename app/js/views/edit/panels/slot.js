@@ -22,7 +22,7 @@
 // only: listInstruments via ctx, and engine/audio.js curveVelocity for the sparkline, as views/edit.js does).
 import {
   h, setText, icon, getIn, relOf, hasParam, signed, pct, semitones, formatInstrumentParam, BLOCKS, changedDot,
-  changeText, createBinder, section, wordSlider,
+  changeText, editedSince, LEVEL_KEYS, createBinder, section, wordSlider,
 } from '../lib.js';
 import { defaultSlot, describe, formatValue } from '../../../shared/params.js';
 import { noteName, parseNoteName } from '../../../shared/music.js';
@@ -281,7 +281,30 @@ function mountSlot(el, ctx, opts) {
     const slot = slotOf(s);
     undo = null;
     if (!slot) ctx.set(`slots.${i}`, defaultSlot(i, ref));
-    else if (refKey(slot.instrument) !== value) ctx.set(P('instrument'), ref);
+    else if (refKey(slot.instrument) !== value) {
+      // round3-edit m3: the store resets params on an instrument change; a mis-pick gets the same 8 s Undo as Remove
+      const captured = {
+        songId: s.id, i, to: value, name: displayName(slot, metaOf(slot)),
+        instrument: JSON.parse(JSON.stringify(slot.instrument)), params: JSON.parse(JSON.stringify(slot.params || {})),
+      };
+      if (!ctx.set(P('instrument'), ref)) return;
+      const next = slotOf(ctx.store.getSong?.(s.id) || ctx.song());
+      const toName = next ? displayName(next, metaOf(next)) : ref.id;
+      ctx.toast(`${role()} is now ${toName}.`, 'info', {
+        ms: 8000, action: { label: 'Undo', run: () => undoInstrument(captured) },
+      });
+    }
+  }
+  /** Put the captured instrument and its params back (songs.<id>.patch.slots.<i>), unless the slot moved on. */
+  function undoInstrument(u) {
+    const song = u && ctx.store.get().songs[u.songId];
+    const cur = song && song.patch.slots[u.i];
+    if (!cur || refKey(cur.instrument) !== u.to) {
+      ctx.toast(`${BLOCKS[u.i].role} has changed since, so there is nothing to undo.`, 'info');
+      return false;
+    }
+    const restored = { ...JSON.parse(JSON.stringify(cur)), instrument: u.instrument, params: u.params };
+    return ctx.set(`songs.${u.songId}.patch.slots.${u.i}`, restored);
   }
 
   // ---- Remove this sound… (confirm → Undo; H implementation §4) ----------------------------------------------
@@ -421,6 +444,13 @@ function mountSlot(el, ctx, opts) {
     ctl.fader = binder.ctl(P('gain'), (onChange) => C.fader({
       path: P('gain'), label: `${role()} level`, vertical: true, color, onChange,
     }));
+    // polish-1: the level bar beside the fader (mockup `.act`); controller.slotLevel, read only while on screen
+    if (typeof C.levelMeter === 'function') {
+      ctl.level = binder.track(C.levelMeter({ read: () => ctx.controller?.slotLevel?.(i) ?? null,
+        label: `${role()} level meter` }));
+      ctl.level.el.dataset.testid = `ev2-slot-level-${i}`;
+      ctl.fader.el.querySelector('.fader-track')?.append(ctl.level.el);
+    }
     const chip = (f, o) => {
       const c = binder.ctl(P(f), (onChange) => makeChip(C, {
         owner: ROLE(), color, mount: () => os, testid: `ev2-slot-${f.replace('sends.', '')}-${i}`, ...o, onChange,
@@ -661,7 +691,8 @@ function mountSlot(el, ctx, opts) {
         binder, rels: [`${rel}.eq`], cls: 'ev2-slot-tone', summary: (s) => eqSummary(slotOf(s)?.eq),
       }, h('p.ev2-hint.ev2-slot-tone-hint', {
         text: 'Double-tap the curve to add a band, drag it to shape the sound.'
-          + (shelfNames.length ? ` ${shelfNames.join(', ')} (The sound itself, above).` : ''),
+          + (shelfNames.length ? ` ${shelfNames.join(', ')} (The sound itself, above).` : '')
+          + (shelfNames.length ? ' Moving one of those sliders switches its shelf back on.' : ''),
       }), toneHost);
       tone.addEventListener('toggle', syncTone);
       ctl.tone = tone;
@@ -689,12 +720,15 @@ function mountSlot(el, ctx, opts) {
   }
 
   // ---- the strip EQ's shelves (Brightness / Warmth) and the Tone editor -------------------------------------------
-  /** dB of the EQ's highest high shelf / lowest low shelf (0 when there is none). */
+  /**
+   * dB of the EQ's highest high shelf / lowest low shelf (the band shelfWrites targets); 0 when there is none or the
+   * Tone editor switched it off (round3-edit m1: the engine hears it flat, so the slider must not say "+6 dB").
+   */
   function shelfDb(eq, which) {
     const type = which === 'high' ? 'highshelf' : 'lowshelf';
     const list = readEq(eq).bands.filter((b) => b.type === type);
     const b = which === 'high' ? list[list.length - 1] : list[0];
-    return b ? b.db : 0;
+    return b && b.on !== false ? b.db : 0;
   }
   function writeShelf(which, db) {
     const sl = curSlot();
@@ -962,7 +996,8 @@ function mountSlot(el, ctx, opts) {
     const c = body && body.ctl;
     if (!c || !c.chg) return;
     const n = ctx.editState.changeCount([REL()]);
-    setText(c.chg.querySelector('.ev2-slot-chgtext'), changeText(n));
+    const edited = n === 0 && editedSince(ctx.song(), ctx.editState.baseline, [REL()], LEVEL_KEYS);
+    setText(c.chg.querySelector('.ev2-slot-chgtext'), changeText(n, edited));
     c.chg.classList.toggle('none', n === 0);
   }
 
@@ -1014,6 +1049,12 @@ function mountSlot(el, ctx, opts) {
     closeMenu(false);
     cancelConfirm(false);
     disarm();
+    // round3-edit M2: a step panel (and its fine-slider drag) must not survive into the next song
+    for (const { chip } of body?.chips || []) chip.close?.();
+  });
+  ctx.onLeaveView?.(() => {
+    closeMenu(false);
+    for (const { chip } of body?.chips || []) chip.close?.();
   });
   ctx.onEscape(() => {
     if (cancelConfirm(true)) return true;

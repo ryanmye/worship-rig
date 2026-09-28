@@ -54,7 +54,7 @@ export default {
         nameInput.value = v ?? '';
         requestAnimationFrame(fitName);
       },
-    }), { text: true });
+    }), { text: 'dirty' }); // polish-1: follows a rename from elsewhere until the user types here
     nameInput.addEventListener('input', fitName);
     ctx.listen(window, 'resize', fitName);
     const commitName = ctx.songField(nameInput, 'name');

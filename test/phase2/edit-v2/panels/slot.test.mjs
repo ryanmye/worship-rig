@@ -86,7 +86,7 @@ test('slot: sentence title (tokens jump, changed dots), sub-line, THE SOUND ITSE
       /sampled.* · click an underlined word to jump to its control$/);
     assert.equal(await t.page.textContent('#view-edit .ev2-title .ev2-slot-chg'), 'Change instrument');
     assert.equal(await t.ev(() => document.querySelectorAll('#view-edit .ev2-title .ev2-cdi').length), 0);
-    assert.match(await t.page.textContent(`${t.host} .ev2-slot-chgline`), /^No changes since the song was loaded$/);
+    assert.match(await t.page.textContent(`${t.host} .ev2-slot-chgline`), /^No switch changes since the song was loaded$/);
     assert.ok(await t.page.$(`${t.host} .ev2-slot-chgline.none`));
 
     // a watched change: the word appears with a dot, the Octave chip gets its dot, the footer counts it
@@ -470,6 +470,49 @@ test('slot: ON STAGE — ON tile mute, fader, Space/Echo/Octave/Sustain/Chorus c
   }
 });
 
+test('slot: polish-1 — a level meter beside the fader follows the slot; a slot no longer shown stops reading',
+  async () => {
+  const t = await page();
+  await fresh(t, 'factory:sunday-pad-piano', 'slot:1');
+  const meter = (i) => `${t.host} [data-testid="ev2-slot-level-${i}"]`;
+  const g = await t.ev(([sel]) => {
+    const m = document.querySelector(sel);
+    const r = m.getBoundingClientRect();
+    const col = m.closest('.ev2-slot-fz').getBoundingClientRect();
+    const inp = m.parentElement.querySelector('.fader-input').getBoundingClientRect();
+    return { w: r.width, h: r.height, left: r.left, right: r.right, colL: col.left, colR: col.right, inpH: inp.height,
+      pe: getComputedStyle(m).pointerEvents, track: m.parentElement.classList.contains('fader-track') };
+  }, [meter(1)]);
+  assert.equal(g.w, 4, 'a 4 px bar');
+  assert.ok(g.left >= g.colL && g.right <= g.colR + 0.5, `inside the 64 px fader column (${JSON.stringify(g)})`);
+  assert.ok(g.track && g.pe === 'none' && g.h > g.inpH * 0.6, JSON.stringify(g));
+  await t.ev(() => window.__rig.controller.perform.noteOn(60, 110));
+  await t.until((sel) => {
+    const c = document.querySelector(`${sel} .lvl-cover`);
+    return c && Number(c.style.transform.replace(/[^0-9.]/g, '') || 1) < 0.9;
+  }, meter(1));
+  await t.ev(() => window.__rig.controller.perform.noteOff(60));
+  // Keys selected: slot 1's meter is gone with its body; only slot 0 is read; slot 1's engine tap idles out
+  await t.select('slot:0');
+  await t.until((sel) => !!document.querySelector(sel), meter(0));
+  assert.equal(await t.page.$(meter(1)), null);
+  const per = await t.ev(async () => {
+    const c = window.__rig.controller;
+    const orig = c.slotLevel;
+    const n = [0, 0, 0, 0];
+    c.slotLevel = (i) => {
+      n[i] += 1;
+      return orig(i);
+    };
+    await new Promise((r) => setTimeout(r, 400));
+    c.slotLevel = orig;
+    return n;
+  });
+  assert.ok(per[0] > 3 && per[1] === 0 && per[2] === 0 && per[3] === 0, `reads per slot ${per}`);
+  await t.until(() => !window.__rig.engine._slotTaps[1], null, 6000);
+  t.assertNoConsoleErrors();
+});
+
 test('slot: round2-ui #2 — a fader drag still going at a song switch never writes into the new song', async () => {
   const t = await page();
   {
@@ -766,6 +809,133 @@ test('slot: Advanced — pan/transpose/voices/bend/pedal, width/EQ by hasParam, 
     await t.setParam('slots.1.gain', 1);
     await t.until((sel) => Math.abs(Number(document.querySelector(sel).value) - Math.round(Math.cbrt(0.5) * 1000)) <= 1,
       rangeOf(t, 'slots.1.gain'));
+    t.assertNoConsoleErrors();
+  }
+});
+
+test('slot: round3-edit M2 — a step panel closes on a song switch; its fine drag never writes into the new song', async () => {
+  const t = await page();
+  {
+    await fresh(t, 'factory:sunday-pad-piano', 'slot:0');
+    const [a, b] = await sameInstrumentPair(t);
+    await t.ev(([x, y]) => {
+      window.__rig.store.set(`songs.${x}.patch.slots.0.sends.reverb`, 0.5);
+      window.__rig.store.set(`songs.${y}.patch.slots.0.sends.reverb`, 0.3);
+    }, [a, b]);
+    await t.selectSong(a);
+    await t.ev(() => document.activeElement?.blur?.());
+    // a plain switch closes an open step panel (MIDI Next / ⌘→ reach selectSong without an outside tap)
+    await t.click(bindSel(t, 'slots.0.sends.reverb'));
+    await t.until((h) => !!document.querySelector(`${h} .step-panel`), t.host);
+    await t.ev((y) => window.__rig.controller.selectSong(y), b);
+    await t.until((h) => !document.querySelector(`${h} .step-panel`), t.host);
+    await t.selectSong(a);
+    await t.ev(() => document.activeElement?.blur?.());
+    // a fine-slider drag running across the switch: B's send stays 0.3
+    await t.click(bindSel(t, 'slots.0.sends.reverb'));
+    await t.until((h) => !!document.querySelector(`${h} .step-panel .sp-fine input[type=range]`), t.host);
+    const loc = t.page.locator(`${t.host} .step-panel .sp-fine input[type=range]`).first();
+    const box = await loc.boundingBox();
+    const x = box.x + box.width / 2;
+    const y0 = box.y + box.height * 0.5;
+    await t.page.mouse.move(x, y0);
+    await t.page.mouse.down();
+    await t.page.mouse.move(x, y0 - box.height * 0.15, { steps: 4 });
+    await t.sleep(80);
+    const midA = await t.ev((id) => window.__rig.store.getSong(id).patch.slots[0].sends.reverb, a);
+    assert.notEqual(midA, 0.5, 'the fine drag moves A');
+    await t.ev((y) => window.__rig.controller.selectSong(y), b);
+    await t.until((y) => window.__rig.store.currentSong().id === y, b);
+    await t.sleep(60);
+    await t.page.mouse.move(x, y0 - box.height * 0.45, { steps: 6 });
+    await t.page.mouse.move(x, y0 - box.height * 0.6, { steps: 4 });
+    await t.page.mouse.up();
+    await t.sleep(150);
+    const r = await t.ev(([x1, y1]) => [window.__rig.store.getSong(x1).patch.slots[0].sends.reverb,
+      window.__rig.store.getSong(y1).patch.slots[0].sends.reverb], [a, b]);
+    assert.equal(r[1], 0.3, `B untouched (got ${r[1]})`);
+    assert.equal(r[0], midA, 'A keeps what the drag wrote before the switch');
+    assert.equal(await t.page.$(`${t.host} .step-panel`), null, 'the panel is closed');
+    t.assertNoConsoleErrors();
+  }
+});
+
+test('slot: round3-edit m1/m2/m3 — off shelf reads 0 dB, "Sound edited" copy, instrument change has Undo', async () => {
+  const t = await page();
+  {
+    await fresh(t, 'factory:sunday-pad-piano', 'slot:0');
+    const line = () => t.page.textContent(`${t.host} .ev2-slot-chgline`);
+    assert.equal(await line(), 'No switch changes since the song was loaded');
+    // m2: a Warmth move is a real edit that the switch count leaves out → the line says so
+    await t.setRange(rangeOf(t, 'slots.0.eq.low'), 750);
+    await untilLowShelf(t, '> 5.95');
+    await t.until((h) => /Sound edited \(no switch changes\)/.test(
+      document.querySelector(`${h} .ev2-slot-chgline`).textContent), t.host);
+    // a fader move alone is a level, not an edit
+    await t.page.dblclick(rangeOf(t, 'slots.0.eq.low'));
+    await untilLowShelf(t, '=== 0');
+    await fresh(t, 'factory:sunday-pad-piano', 'slot:0');
+    await t.setParam('slots.0.gain', 0.33);
+    await t.sleep(80);
+    assert.equal(await line(), 'No switch changes since the song was loaded');
+
+    // m1: the Tone editor switched the low shelf off → Warmth shows 0 dB (the engine hears it flat), not +6
+    await t.ev(() => {
+      const { store } = window.__rig;
+      store.set('slots.0.eq.b1.type', 'lowshelf');
+      store.set('slots.0.eq.b1.db', 6);
+      store.set('slots.0.eq.b1.on', false);
+    });
+    await t.until(() => window.__rig.store.currentSong().patch.slots[0].eq.b1.on === false);
+    await t.sleep(80);
+    const warm = await t.page.textContent(`${bindSel(t, 'slots.0.eq.low')} .ev2-ws-val`);
+    assert.doesNotMatch(warm, /\+6\.0/, `Warmth of an off shelf: ${warm}`);
+    assert.equal(warm, 'Neutral0 dB');
+    await t.ev(() => window.__rig.store.set('slots.0.eq.b1.on', true));
+    await t.until((s) => /\+6\.0 dB/.test(document.querySelector(s).textContent),
+      `${bindSel(t, 'slots.0.eq.low')} .ev2-ws-val`);
+    assert.match(await t.ev(() => document.querySelector('#view-edit .ev2-slot-tone-hint')?.textContent || ''),
+      /switches its shelf back on/);
+
+    // m3: an instrument change drops params → an 8 s Undo toast brings back the instrument and its params
+    await fresh(t, 'factory:sunday-pad-piano', 'slot:0');
+    await t.setParam('slots.0.params.tremolo', 0.9);
+    const before = (await t.song()).patch.slots[0];
+    await t.ev(() => {
+      const c = window.__rig.ctx;
+      // (an earlier test may have wrapped toast already: record in our own array, call through whatever is there)
+      if (!c.__origToast) c.__origToast = c.toast;
+      window.__r3Toasts = [];
+      c.toast = (msg, kind, opts) => {
+        window.__r3Toasts.push({ msg, kind, action: opts && opts.action ? opts.action.label : null, ms: opts?.ms });
+        window.__r3Undo = opts && opts.action ? opts.action.run : null;
+        return c.__origToast(msg, kind, opts);
+      };
+    });
+    await t.click('#view-edit .ev2-slot-chg');
+    await t.until(() => !document.querySelector('#view-edit .ev2-slot-menu').hidden);
+    const other = await t.ev((cur) => [...document.querySelectorAll('#view-edit .ev2-slot-mi[data-value^="sampler:"]')]
+      .map((b) => b.dataset.value).find((v) => v !== cur), `${before.instrument.type}:${before.instrument.id}`);
+    assert.ok(other, 'another sampler instrument to pick');
+    await t.click(`#view-edit .ev2-slot-mi[data-value="${other}"]`);
+    await t.until((o) => `${window.__rig.store.currentSong().patch.slots[0].instrument.type}:${
+      window.__rig.store.currentSong().patch.slots[0].instrument.id}` === o, other);
+    assert.deepEqual((await t.song()).patch.slots[0].params, {}, 'the store resets params on a change');
+    const calls = await t.ev(() => window.__r3Toasts);
+    assert.equal(calls.length, 1, JSON.stringify(calls));
+    assert.equal(calls[0].action, 'Undo');
+    assert.equal(calls[0].ms, 8000);
+    assert.match(calls[0].msg, /^Keys is now /);
+    assert.equal(await t.ev(() => window.__r3Undo()), true);
+    await t.until(() => window.__rig.store.currentSong().patch.slots[0].params.tremolo === 0.9);
+    const after = (await t.song()).patch.slots[0];
+    assert.deepEqual(after.instrument, before.instrument);
+    assert.deepEqual(after.params, before.params);
+    assert.equal(await t.ev(() => window.__r3Undo()), false, 'a second Undo finds the slot moved on');
+    await t.ev(() => {
+      const c = window.__rig.ctx;
+      c.toast = c.__origToast;
+    });
     t.assertNoConsoleErrors();
   }
 });

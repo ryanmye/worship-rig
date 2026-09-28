@@ -240,6 +240,90 @@ export function eqSuites(h) {
     },
 
     /** getSlotPlayRange: split ∩ sampled range, octave + slot transpose + song transpose. */
+    /**
+     * round3-eq M1: a coalesced slot write still pending at a same-instrument song switch must not land on the next
+     * song's reused channel (it captured song A's channel + values). EQ and fader, both before the fix: B played A's.
+     */
+    async eqCoalesceSongSwitch() {
+      const ctx = mkCtx(0.25);
+      const e = await mkEngine(ctx);
+      await use(e, patch({ 0: slot('synth', 'bell', { gain: 0.8 }) }, { master: { volume: 1 } }));
+      const chA = e.slots[0];
+      // first write of each key applies now; the second within 10 ms is pending (timer at 0.01 s)
+      e.setParam('slots.0.eq.b2.on', true, { when: 0 });
+      e.setParam('slots.0.eq.b2.type', 'peak', { when: 0.002 });
+      e.setParam('slots.0.eq.b2.hz', 440, { when: 0.002 });
+      e.setParam('slots.0.eq.b2.db', 12, { when: 0.002 });
+      e.setParam('slots.0.gain', 0.5, { when: 0 });
+      e.setParam('slots.0.gain', 0.05, { when: 0.002 });
+      const pendingBefore = e.coalesce.pending.size;
+      // song B: same instrument (the channel is reused), no EQ, fader 0.8; committed before the flush
+      await use(e, patch({ 0: slot('synth', 'bell', { gain: 0.8 }) }, { master: { volume: 1 } }), 0.004);
+      const reused = e.slots[0] === chA;
+      await ctx.startRendering();
+      await new Promise((r) => setTimeout(r, 20));
+      const want = e.slots[0].strip.eq.want.bands[1];
+      const live = {
+        b2: { on: want.on, type: want.type, db: want.db },
+        fader: +e.slots[0].strip.fader.gain.value.toFixed(4),
+        cfgGain: e.getParam('slots.0.gain'),
+        cfgB2on: e.getParam('slots.0.eq.b2.on'),
+      };
+      const eqOk = !(want.on && want.type !== 'off' && want.db !== 0);
+      const gainOk = Math.abs(live.fader - 0.8) < 1e-3;
+      return { pass: reused && pendingBefore >= 2 && eqOk && gainOk, reused, pendingBefore, ...live };
+    },
+
+    /**
+     * round3-eq m5: engine.eqAudition — 'bypass' is heard flat (click-free), 'on' restores, the stored EQ never
+     * changes, writes while bypassed stay unheard, and a commit (song switch) ends the compare.
+     */
+    async eqAuditionBypass() {
+      const eq = { b2: { on: true, type: 'peak', hz: 1200, db: 12, q: 1 } };
+      const r = await renderSlot({
+        eq, sec: 1.6, signal: 'probes',
+        before: (e) => {
+          e.at(0.4, (tt) => e.eqAudition(0, 'bypass', { when: tt }));
+          e.at(0.6, (tt) => e.setParam('slots.0.eq.b2.db', 6, { when: tt })); // stored, unheard while bypassed
+          e.at(0.9, (tt) => e.eqAudition(0, 'on', { when: tt }));
+        },
+      });
+      const m = (a) => db(toneMag(r.d, a, 0.2, 1200) / toneMag(r.d, a, 0.2, 300));
+      const lv = { eqOn: m(0.15), bypass: m(0.65), backOn: m(1.3) };
+      const flat = await renderSlot({ sec: 0.5, signal: 'probes' });
+      const ref = db(toneMag(flat.d, 0.15, 0.2, 1200) / toneMag(flat.d, 0.15, 0.2, 300));
+      const cl = clicks(r.d, SR, 0.2, 1.5);
+      // a commit ends it: bypass, then the same song again → its EQ plays
+      const ctx = mkCtx(0.2);
+      const e = await mkEngine(ctx);
+      const p = patch({ 0: slot('synth', 'bell', { eq }) });
+      await use(e, p);
+      e.eqAudition(0, 'bypass');
+      const inB = e.slots[0].strip.eq.want.bands[1].db;
+      await use(e, p);
+      const afterCommit = e.slots[0].strip.eq.want.bands[1].db;
+      const bad = e.eqAudition(7, 'bypass');
+      const out = {
+        levelsDb: Object.fromEntries(Object.entries(lv).map(([k, v]) => [k, +v.toFixed(2)])), flatRefDb: +ref.toFixed(2),
+        storedDb: r.e.getParam('slots.0.eq.b2.db'), clicks: cl.length, inB, afterCommit, bad,
+      };
+      const pass = lv.eqOn - ref > 10 && Math.abs(lv.bypass - ref) < 0.5 && Math.abs(lv.backOn - ref - 6) < 0.8 &&
+        out.storedDb === 6 && cl.length === 0 && inB === 0 && afterCommit === 12 && bad === false;
+      return { pass, ...out };
+    },
+
+    /** round3-eq m4: getEqResponse's shadow biquads belong to one context; teardown (restart/dispose) drops them. */
+    async eqShadowTeardown() {
+      const ctx = mkCtx(0.05);
+      const e = await mkEngine(ctx);
+      await use(e, patch({ 0: slot('synth', 'bell', { eq: { b2: { on: true, type: 'peak', hz: 1000, db: 6 } } }) }));
+      const before = e.getEqResponse(0, [1000])[0];
+      const cached = e._eqShadow?.[0]?.size > 0 && [...e._eqShadow[0].values()][0]?.node?.context === ctx;
+      e._teardown();
+      const cleared = e._eqShadow == null;
+      return { pass: Math.abs(before - 6) < 0.05 && cached && cleared, before: +before.toFixed(3), cached, cleared };
+    },
+
     async eqPlayRange() {
       const ctx = mkCtx(0.1);
       const e = await mkEngine(ctx);

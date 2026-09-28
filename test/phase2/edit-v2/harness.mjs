@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { MIDI_PERMISSIONS, waitRigReady } from '../../integration/lib.mjs';
 
 const require = createRequire(import.meta.url);
 export const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -85,24 +86,12 @@ export async function mountPanelForTest(panelId, o = {}) {
   throw lastErr;
 }
 
-/** Reject after `ms` with a message naming the step (page promises have no timeout of their own). */
-// The timer is cleared once `p` settles: a pending 45 s timer kept every test process alive for ~40 s after its last
-// test (hv2-edit-integrate: each file took 45–60 s on an idle box for ~6 s of tests).
-const within = (p, ms, what) => {
-  let timer = null;
-  return Promise.race([
-    p,
-    new Promise((_, rej) => {
-      timer = setTimeout(() => rej(new Error(`harness: ${what} took longer than ${ms} ms`)), ms);
-    }),
-  ]).finally(() => clearTimeout(timer));
-};
-
 async function mountOnce(panelId, o) {
   const { origin, browser } = await boot();
   const viewport = o.viewport || { width: 1440, height: 900 };
   const context = await browser.newContext({ viewport, acceptDownloads: true });
-  await context.grantPermissions(['midi', 'midi-sysex'], { origin });
+  // L-4: 'midi' only (test/README.md "Web MIDI in the browser suites"); MIDI is driven through midi._inject
+  await context.grantPermissions([...MIDI_PERMISSIONS], { origin });
   const page = await context.newPage();
   const errors = [];
   page.on('console', (m) => {
@@ -122,21 +111,9 @@ async function mountOnce(panelId, o) {
   try {
     await page.goto(`${origin}/test/phase2/edit-v2/harness.html?${q}`, { timeout: 30000 });
     await until(() => !!(window.__ev2 && window.__ev2.ready), null, 30000);
-    // controller.start() also awaits MIDI init, which headless Chromium sometimes stalls on; a controller that is
-    // running with its song loaded is started for every purpose here, so either condition ends the wait.
-    await within(ev(() => Promise.race([
-      window.__rig.ready.then(() => 'ready'),
-      new Promise((res) => {
-        const c = window.__rig.controller;
-        const id = setInterval(() => {
-          const cur = window.__rig.store.get().settings.currentSongId;
-          if (c.status.audio === 'running' && (!cur || (c.status.songId === cur && !c.status.loading))) {
-            clearInterval(id);
-            res('loaded');
-          }
-        }, 100);
-      }),
-    ])), 45000, 'controller.start()');
+    // L-3/L-4: controller.start() no longer waits for MIDI; bound the wait anyway (30 s) and name MIDI's state if
+    // it hangs, instead of the old race against "song loaded" that hid a stuck start().
+    await waitRigReady(page, { timeout: 30000, what: 'harness: controller.start() (window.__rig.ready)' });
     await until(() => window.__rig.engine.ctx && window.__rig.engine.ctx.state === 'running', null, 30000);
     if (o.waitLoaded !== false) {
       await until(() => {

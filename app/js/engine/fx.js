@@ -230,6 +230,16 @@ export class Coalescer {
       });
     }
   }
+  /**
+   * Drop pending (not yet flushed) writes, all of them or those whose key passes `pred`. The armed timer callbacks
+   * find no entry and do nothing. round3-eq M1: a pending closure captured the old song's channel/value, and it fired
+   * after commit() had applied the next song to the reused channel.
+   * @param {(key:string) => boolean} [pred]
+   */
+  cancelAll(pred) {
+    if (!pred) this.pending.clear();
+    else for (const k of [...this.pending.keys()]) if (pred(k)) this.pending.delete(k);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------

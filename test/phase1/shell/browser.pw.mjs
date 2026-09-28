@@ -3,7 +3,9 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
-import { buildFixture } from './fixture.mjs';
+import path from 'node:path';
+import { buildFixture, repoRoot } from './fixture.mjs';
+import { MIDI_PERMISSIONS, waitRigReady } from '../../integration/lib.mjs';
 
 const require = createRequire(import.meta.url);
 const { createServer } = require('../../../server.js');
@@ -186,4 +188,65 @@ test('L7: the server sends CSP + X-Frame-Options on the fixture HTML and the pag
   assert.match(r.csp, /default-src 'self'/);
   assert.match(r.csp, /frame-ancestors 'none'/);
   assert.equal(r.xfo, 'DENY');
+});
+
+test('L-3: real app — __rig.ready resolves while requestMIDIAccess never answers; "pending" after 5 s; a late answer connects', async () => {
+  const srv = createServer({ appDir: path.join(repoRoot, 'app'), port: 0 });
+  const info = await srv.listen();
+  const origin = `http://127.0.0.1:${info.port}`;
+  const ctx = await browser.newContext();
+  await ctx.grantPermissions([...MIDI_PERMISSIONS], { origin });
+  // requestMIDIAccess that stays pending until the test answers it (an unanswered Chrome prompt / stalled CoreMIDI)
+  await ctx.addInitScript(() => {
+    const calls = [];
+    window.__midiReq = calls;
+    Object.defineProperty(Navigator.prototype, 'requestMIDIAccess', {
+      configurable: true,
+      value: () => new Promise((resolve, reject) => calls.push({ resolve, reject })),
+    });
+  });
+  const p = await ctx.newPage();
+  try {
+    await p.goto(`${origin}/`);
+    const t0 = Date.now();
+    await waitRigReady(p, { timeout: 30000, what: 'real app: window.__rig.ready with MIDI pending' });
+    const boot = await p.evaluate(() => ({
+      calls: window.__midiReq.length, audio: window.__rig.controller.status.audio, midi: window.__rig.controller.status.midi,
+    }));
+    console.log(`# __rig.ready after ${Date.now() - t0} ms with MIDI pending; audio=${boot.audio}`);
+    assert.equal(boot.calls, 1, 'the app asked for MIDI once');
+    assert.equal(boot.midi.available, false);
+    await p.waitForFunction(() => window.__rig.controller.status.midi.reason === 'pending', null, { timeout: 15000 });
+    assert.equal(await p.evaluate(() => window.__rig.controller.status.midi.pending), true);
+    const toasts = await p.evaluate(() => document.getElementById('toasts')?.textContent || '');
+    if (toasts.trim()) console.log(`# toasts while pending: ${toasts.trim().slice(0, 200)}`);
+    // the user finally answers the prompt: one hardware keyboard
+    const got = await p.evaluate(async () => {
+      const port = { id: 'kb', name: 'Roland Digital Piano', manufacturer: 'Roland', type: 'input', state: 'connected' };
+      port.onmidimessage = null;
+      const access = new EventTarget();
+      access.inputs = new Map([['kb', port]]);
+      window.__fakePort = port;
+      window.__midiReq[0].resolve(access);
+      const c = window.__rig.controller;
+      for (let i = 0; i < 100 && !c.status.midi.connected; i++) await new Promise((r) => setTimeout(r, 20));
+      const activity = new Promise((res) => c.addEventListener('midi-activity', (e) => res(e.detail), { once: true }));
+      port.onmidimessage?.({ data: new Uint8Array([0x90, 60, 100]), timeStamp: performance.now() });
+      const act = await Promise.race([activity, new Promise((r) => setTimeout(() => r(null), 2000))]);
+      port.onmidimessage?.({ data: new Uint8Array([0x80, 60, 0]), timeStamp: performance.now() });
+      const m = c.status.midi;
+      return {
+        connected: m.connected, available: m.available, name: m.name, reason: m.reason, pending: m.pending,
+        wired: typeof port.onmidimessage === 'function', selection: window.__rig.midi.selection, act,
+      };
+    });
+    assert.deepEqual(
+      [got.available, got.connected, got.name, got.reason, got.pending, got.wired],
+      [true, true, 'Roland Digital Piano', null, false, true],
+    );
+    assert.equal(got.act && got.act.inputId, 'kb', 'a note from the late-attached port reaches the controller');
+  } finally {
+    await ctx.close();
+    await srv.close();
+  }
 });

@@ -72,6 +72,8 @@
 .ev2 .ev2-slot-fz .fader.vertical .fader-track { min-height: 0; }
 .ev2 .ev2-slot-fz .fader.vertical .fader-input { width: 56px; min-height: 60px; }
 .ev2 .ev2-slot-fz .fader.vertical .fader-value { font-size: 14px; }
+/* polish-1: the level bar at the column's right edge (mockup .act: beside the fader inside the 64 px column) */
+.ev2 .ev2-slot-fz .fader.vertical .fader-track > .lvl-meter { left: auto; right: 0; }
 .ev2 .ev2-slot-mods { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-content: start; }
 .ev2 .ev2-slot-mods .mchip { min-height: 46px; min-width: 0; }
 .ev2 .ev2-slot-mods .mchip.ev2-slot-wide { grid-column: 1 / 3; min-height: 36px; flex-direction: row; gap: 8px; }

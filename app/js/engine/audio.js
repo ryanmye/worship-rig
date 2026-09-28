@@ -25,6 +25,8 @@ const MB = 1024 * 1024;
 const lerp = (a, b, x) => a + (b - a) * x;
 const clamp01 = (x) => Math.min(1, Math.max(0, Number(x) || 0));
 const clone = (o) => (o == null ? o : JSON.parse(JSON.stringify(o)));
+/** Coalescer keys that carry song (patch) state; commit() drops their pending writes (round3-eq M1). */
+const isSongKey = (k) => k.startsWith('slots.') || k.startsWith('fx.') || k.startsWith('master.');
 // macro.intensity → morph() of these (type:id). organ soft-pad: morph ≥ .5 switches its rotary speed.
 const PAD_LIKE = new Set(['synth:warm-pad', 'synth:glass-pad', 'synth:strings', 'synth:supersaw-pad', 'synth:juno-pad', 'synth:shimmer-pad', 'organ:soft-pad']);
 /** Default sample manifests, relative to the app root: factory + the optional "My Samples" one. */
@@ -149,6 +151,9 @@ export function curveVelocity(vel127, curve) {
   return v;
 }
 
+/** Seconds without a slotLevel() read before a slot's level tap is disconnected (polish-1). */
+export const SLOT_TAP_IDLE_SEC = 2;
+
 export class AudioEngine extends EventTarget {
   /**
    * @param {{context?:BaseAudioContext, seed?:number|string, latency?:'interactive'|number, manifestUrl?:string,
@@ -212,6 +217,10 @@ export class AudioEngine extends EventTarget {
     this._morphBend = 0;
     this._tapeX = 0;
     this._tapeSegs = []; // scheduled delay-time segments {t0, dur, from, to}, ascending t0
+    this._eqBypass = new Set(); // slots whose EQ is auditioned flat (eqAudition 'bypass'; never persisted)
+    // polish-1: per-slot level taps (slotLevel), created on the first read, disconnected after SLOT_TAP_IDLE_SEC
+    // without one. They belong to the context, so a teardown (restart/dispose) drops them with it.
+    this._slotTaps = [null, null, null, null];
   }
 
   // ----- lifecycle -----------------------------------------------------------------------------------------------
@@ -353,6 +362,8 @@ export class AudioEngine extends EventTarget {
   }
 
   _teardown() {
+    this.coalesce?.cancelAll(); // round3-eq M1
+    this._eqShadow = null; // round3-eq m4: shadow biquads belong to the old context (and its sample rate)
     for (const sc of [...this.slots, ...this.retiring]) if (sc) this._disposeChannel(sc);
     if (this._plan) this._discardPlan(this._plan);
     this._plan = null;
@@ -518,6 +529,10 @@ export class AudioEngine extends EventTarget {
     this._plan = null;
     const t = this._t(when);
     const p = plan.patch;
+    // round3-eq M1: pending coalesced song-state writes (slots.*, fx.*, master.*) captured the old song's values and
+    // channels; this commit applies the whole new state, so drop them. 'wheels' / 'bend' read live state and stay.
+    this.coalesce?.cancelAll(isSongKey);
+    this._eqBypass.clear(); // an EQ A/B compare never outlives its song: the new song's EQ plays
     // the new routing first (state only), so fresh strips start at their real wheel factor (REVIEW #11)
     const oldBend = this._routing.bend.mode;
     this._setRoutingState({ modWheel: p.modWheel, expression: p.expression, volume: p.volume, bend: p.bend, swell: p.swell });
@@ -811,7 +826,14 @@ export class AudioEngine extends EventTarget {
       const eq = (cfg.eq = { ...(cfg.eq || {}) });
       if (rest.length === 3) eq[rest[1]] = { ...(eq[rest[1]] && typeof eq[rest[1]] === 'object' ? eq[rest[1]] : {}), [rest[2]]: v };
       else eq[rest[1]] = v;
-      if (sc) this.coalesce.push(`slots.${d.slot}.eq`, t, (tt) => sc.strip.setEq(cfg.eq, tt));
+      // Resolved when it fires (round3-eq M1): the slot's channel and cfg then, not the ones captured now.
+      if (sc) {
+        this.coalesce.push(`slots.${d.slot}.eq`, t, (tt) => {
+          const c = this._patch.slots[d.slot];
+          const s = this.slots[d.slot];
+          if (c && s) s.strip.setEq(this._eqBypass.has(d.slot) ? {} : c.eq, tt);
+        });
+      }
       return true;
     }
     const key = rest[0];
@@ -865,6 +887,29 @@ export class AudioEngine extends EventTarget {
   }
 
   /**
+   * EQ A/B for the Tone editor (DECISION §3; round3-eq m5): 'bypass' plays slot `i` with a flat EQ (all bands and
+   * cuts out, click-free through SlotEq's crossfade), 'on' puts its stored EQ back. Engine state only, never
+   * persisted (the store fallback wrote the bypass into the song, where autosave could keep it); a commit (song
+   * switch, applyState, restart) ends it. EQ writes while bypassed update the stored EQ but stay unheard.
+   * @param {number} slotIndex 0..3
+   * @param {'bypass'|'on'} mode
+   * @param {{when?:number}} [opts]
+   * @returns {boolean} false for a bad slot index
+   */
+  eqAudition(slotIndex, mode = 'on', { when } = {}) {
+    const i = Number(slotIndex);
+    if (!Number.isInteger(i) || i < 0 || i >= SLOT_COUNT) return false;
+    const bypass = mode === 'bypass';
+    if (bypass === this._eqBypass.has(i)) return true;
+    if (bypass) this._eqBypass.add(i);
+    else this._eqBypass.delete(i);
+    const sc = this.slots[i];
+    const cfg = this._patch.slots[i];
+    if (sc && cfg && this.ctx) sc.strip.setEq(bypass ? {} : cfg.eq || {}, this._t(when));
+    return true;
+  }
+
+  /**
    * Where a slot plays, in sounding MIDI notes (DECISION §5 greying): the split (on the physical key) shifted by
    * 12·octave + slot transpose + song transpose, clipped to 0..127 (noteOn skips notes outside); and the part of that
    * the instrument has real samples for (sampler manifest layers; synth/organ: all of it). Outside
@@ -903,6 +948,72 @@ export class AudioEngine extends EventTarget {
       out.sampledHigh = sh;
     }
     return out;
+  }
+
+  /**
+   * Level of one slot's strip (post fader, wheel, width, EQ and pan: what the slot sends to Master), for the Edit and
+   * Perform strip meters (polish-1). The first call creates an AnalyserNode (fftSize 256, the stereo pair downmixed
+   * to mono) on that slot; it follows the strip across song switches (a new strip is tapped on its first read; an
+   * outgoing strip stays tapped until it is disposed). When nothing calls this for SLOT_TAP_IDLE_SEC the analyser
+   * is disconnected, so a meter that is not on screen costs nothing on the audio thread.
+   * @param {number} slotIndex 0..3
+   * @returns {{peak:number, rms:number}|null} linear amplitude (1 = 0 dBFS); zeros for an empty slot; null for a bad
+   *   index or before start()
+   */
+  slotLevel(slotIndex) {
+    const i = Number(slotIndex);
+    if (!Number.isInteger(i) || i < 0 || i >= SLOT_COUNT || !this.ctx || !this.fx || !this.timer) return null;
+    const sc = this.slots[i];
+    let tap = this._slotTaps[i];
+    if (!sc && !tap) return { peak: 0, rms: 0 };
+    if (!tap) {
+      const an = new AnalyserNode(this.ctx, { fftSize: 256, smoothingTimeConstant: 0 });
+      tap = this._slotTaps[i] = { an, strips: new Set(), buf: new Float32Array(an.fftSize), last: 0, cancel: null };
+    }
+    if (sc && !tap.strips.has(sc.strip)) {
+      sc.strip.pan.connect(tap.an);
+      tap.strips.add(sc.strip);
+      // forget strips that were disposed since (dispose() already disconnected their pan)
+      const live = new Set([...this.slots, ...this.retiring].filter(Boolean).map((x) => x.strip));
+      for (const st of tap.strips) if (!live.has(st)) tap.strips.delete(st);
+    }
+    tap.last = this.ctx.currentTime;
+    if (!tap.cancel) this._armSlotTapRelease(i, tap);
+    if (!tap.strips.size) return { peak: 0, rms: 0 };
+    const b = tap.buf;
+    tap.an.getFloatTimeDomainData(b);
+    let peak = 0;
+    let sum = 0;
+    for (let k = 0; k < b.length; k++) {
+      const x = b[k];
+      const a = x < 0 ? -x : x;
+      if (a > peak) peak = a;
+      sum += x * x;
+    }
+    return { peak, rms: Math.sqrt(sum / b.length) };
+  }
+
+  /** Number of slots whose level tap is connected right now (tests: the idle release). */
+  slotTapCount() {
+    return this._slotTaps.filter((t) => t && t.strips.size).length;
+  }
+
+  _armSlotTapRelease(i, tap) {
+    tap.cancel = this.timer.at(tap.last + SLOT_TAP_IDLE_SEC, (t) => {
+      tap.cancel = null;
+      if (this._slotTaps[i] !== tap) return;
+      if (t - tap.last < SLOT_TAP_IDLE_SEC - 0.02) {
+        this._armSlotTapRelease(i, tap);
+        return;
+      }
+      for (const st of tap.strips) {
+        try {
+          st.pan.disconnect(tap.an);
+        } catch {}
+      }
+      tap.strips.clear();
+      this._slotTaps[i] = null; // the next read makes a fresh one
+    });
   }
 
   setTranspose(semis) {

@@ -155,7 +155,8 @@ test('master: Wheels & pedal write the song and the engine routing; swell counts
 
     // swell 1–60 s, log: the midpoint is √60 ≈ 7.7 s; the only watched path here → change line + dot
     const foot = `${t.host} .ev2-foot .ev2-chg`;
-    assert.equal(await t.page.textContent(foot), 'No changes since the song was loaded');
+    // the wheel / pedal / bend writes above are real edits the switch count leaves out (round3-edit m2)
+    assert.equal(await t.page.textContent(foot), 'Sound edited (no switch changes)');
     const s0 = (await t.song()).patch.swell.seconds;
     await t.setRange(rangeOf(t, 'song.patch.swell.seconds'), 500);
     await t.until(() => Math.abs(window.__rig.store.currentSong().patch.swell.seconds - Math.sqrt(60)) < 0.01);

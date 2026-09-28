@@ -61,7 +61,9 @@ async function runBrowser() {
   const origin = `http://127.0.0.1:${info.port}`;
   const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  await context.grantPermissions(['midi', 'midi-sysex', 'clipboard-read', 'clipboard-write'], { origin });
+  // L-4: 'midi' only (test/README.md "Web MIDI in the browser suites"); nothing here uses real MIDI ports
+  const { MIDI_PERMISSIONS, waitRigReady } = await import('../../integration/lib.mjs');
+  await context.grantPermissions([...MIDI_PERMISSIONS, 'clipboard-read', 'clipboard-write'], { origin });
   const page = await context.newPage();
   const errors = [];
   const warns = [];
@@ -157,7 +159,7 @@ async function runBrowser() {
   try {
     await page.goto(`${origin}/test/phase2/eq/fixture.html?key=eqtest-${Date.now()}`);
     await page.waitForFunction(() => window.__fixture && window.__rig, null, { timeout: 30000 });
-    await ev(() => window.__rig.ready);
+    await waitRigReady(page, { timeout: 30000, what: 'eq fixture: window.__rig.ready' }); // L-4
     loaded = true;
     origin0 = await ev(() => performance.timeOrigin);
     const caps = await ev(() => {
@@ -638,6 +640,168 @@ async function runBrowser() {
       assert.equal(r.opened, 1);
       assert.match(r.label, /Custom · 1 band/);
       assert.equal(r.attached, false);
+    });
+
+    // round3-eq M2: the editor stays mounted across a same-instrument song switch (panels/slot.js keys its rebuild on
+    // the instrument); nothing started on song A may land on song B.
+    await T('song switch (same instrument) mid-drag / mid-typing / in B: song B untouched, A keeps its edit', async () => {
+      // b8 (the high shelf) exists on both songs (B's is its legacy default), as in the review's repro
+      await ensureB2();
+      await typeCell(8, 'db', '0');
+      const ids = await ev(() => {
+        const { store } = window.__rig;
+        const { defaultSlot } = window.__eq.params;
+        const a = store.currentSong().id;
+        const b = store.get().songOrder.find((id) => id !== a);
+        store.set(`songs.${b}.patch.slots.0`, { ...defaultSlot(0, { type: 'sampler', id: 'salamander-piano' }),
+          lowNote: 48, highNote: 127, octave: 0, transpose: 0 });
+        store.flush();
+        return { a, b };
+      });
+      const eqOf = (id) => ev((id) => {
+        const e = window.__rig.store.getSong(id)?.patch?.slots?.[0]?.eq;
+        return e ? JSON.parse(JSON.stringify(e)) : null;
+      }, id);
+      const select = (id) => ev((id) => {
+        window.__rig.controller.selectSong(id); // not awaited: the gesture goes on while it loads
+        return true;
+      }, id);
+      const bEq0 = await eqOf(ids.b);
+      // 1. mid-drag
+      const n = await node(8);
+      await page.mouse.move(n.x, n.y);
+      await page.mouse.down();
+      await page.mouse.move(n.x, n.y + 30, { steps: 4 });
+      await settle();
+      const aMid = (await eqOf(ids.a)).b8.db;
+      assert.ok(aMid < -1, `drag lowered b8 on A (${aMid})`);
+      await select(ids.b);
+      await page.mouse.move(n.x, n.y + 90, { steps: 6 });
+      await page.mouse.up();
+      await ev(() => window.__rig.controller.selectSong(window.__rig.store.currentSong().id)); // settle the load
+      await settle();
+      assert.deepEqual(await eqOf(ids.b), bEq0, 'song B untouched by the drag');
+      assert.equal((await eqOf(ids.a)).b8.db, aMid, 'song A keeps the value it had at the switch');
+      let d = await dbg();
+      assert.equal(d.songId, ids.b);
+      assert.equal(d.sel, null, 'selection reset');
+      // 2. a half-typed cell: reverted and blurred at the switch; Enter afterwards writes nothing
+      await ev(async (id) => window.__rig.controller.selectSong(id), ids.a);
+      await settle();
+      const inp = row(8).locator('input[data-f="db"]');
+      await inp.click();
+      await inp.fill('-9');
+      await select(ids.b);
+      await settle();
+      await page.keyboard.press('Enter');
+      await settle();
+      assert.deepEqual(await eqOf(ids.b), bEq0, 'song B untouched by the typed value');
+      assert.equal((await eqOf(ids.a)).b8.db, aMid, 'song A not written either');
+      assert.equal(await ev(() => document.activeElement?.dataset?.f ?? null), null, 'cell blurred');
+      // 3. A/B: B on song A, switch → back to A (the compare never outlives its song)
+      await ev(async (id) => window.__rig.controller.selectSong(id), ids.a);
+      await settle();
+      await page.locator('.eqk-ab-b').click();
+      await settle();
+      assert.equal((await dbg()).ab, 'b');
+      await ev(async (id) => window.__rig.controller.selectSong(id), ids.b);
+      await settle();
+      d = await dbg();
+      assert.equal(d.ab, 'a', 'A/B left at the switch');
+      assert.equal(await page.locator('.eqk-ab-b').getAttribute('aria-pressed'), 'false');
+      assert.equal((await eqOf(ids.a)).b2.on, true, 'song A restored');
+      assert.deepEqual(await eqOf(ids.b), bEq0, 'song B untouched');
+      if (d.abMode === 'engine') {
+        assert.equal(await ev(() => window.__rig.engine._eqBypass.size), 0, 'engine bypass ended');
+      }
+      await ev(async (id) => window.__rig.controller.selectSong(id), ids.a);
+      await settle();
+    });
+
+    // round3-eq m1: keys on the focused plot never reach the app's shortcuts; Ctrl/⌘ chords are never the EQ's
+    await T('plot keys: arrows always swallowed (no bands, a cut selected), Ctrl/⌘ chords ignored, ✕ keeps focus', async () => {
+      await setupSlot(0, { lowNote: 48, highNote: 127, rta: false });
+      await ensureB2();
+      await typeCell(2, 'db', '3');
+      await ev(() => {
+        window.__keyLog = [];
+        window.addEventListener('keydown', (e) => window.__keyLog.push([e.key, e.ctrlKey, e.defaultPrevented]));
+      });
+      const songId = await ev(() => window.__rig.store.currentSong().id);
+      await page.locator('.eqk-plot').focus();
+      await page.keyboard.press('Control+0');
+      await page.keyboard.press('Control+n');
+      await settle();
+      assert.equal((await band(2)).db, 3, 'Ctrl+0 did not zero b2');
+      assert.equal((await dbg()).model.bands.length, 3, 'Ctrl+N added nothing');
+      // a cut selected: ↑/↓ swallowed (no mod-wheel nudge), cutHz unchanged
+      const lc = (await dbg()).cuts.find((c) => c.cut === 'lc');
+      await page.mouse.click(lc.x, lc.y);
+      assert.equal((await dbg()).sel, 'lc');
+      await page.keyboard.press('ArrowDown');
+      await page.keyboard.press('ArrowUp');
+      // no bands left: → must not change the song
+      await page.locator('.eqk-preset[data-preset="Flat"]').click();
+      await ev(() => {
+        const st = window.__rig.store;
+        for (const k of [1, 8]) {
+          st.set(`slots.0.eq.b${k}.on`, false);
+          st.set(`slots.0.eq.b${k}.type`, 'off');
+        }
+        st.flush();
+      });
+      await settle();
+      assert.equal((await dbg()).model.bands.length, 0);
+      await page.locator('.eqk-plot').focus();
+      await ev(() => window.__eq.comp.debug()); // sel is null now
+      await page.keyboard.press('ArrowRight');
+      await page.keyboard.press('ArrowLeft');
+      await settle();
+      assert.equal(await ev(() => window.__rig.store.currentSong().id), songId, 'the song did not change');
+      const log = await ev(() => window.__keyLog);
+      const arrows = log.filter(([k]) => k.startsWith('Arrow'));
+      assert.equal(arrows.length, 4);
+      assert.ok(arrows.every(([, , p]) => p), `every arrow prevented (${JSON.stringify(arrows)})`);
+      assert.ok(log.filter(([, c]) => c).every(([, , p]) => !p), 'Ctrl chords left to the browser/app');
+      // row ✕: focus stays in the editor
+      await page.locator('.eqk-preset[data-preset="Warm"]').click();
+      await settle();
+      const ks = (await dbg()).model.bands.map((b) => b.k);
+      assert.ok(ks.length >= 2);
+      await row(ks[0]).locator('.eqk-del').focus();
+      await page.keyboard.press('Enter');
+      await settle();
+      assert.ok(await ev(() => document.querySelector('.eqk').contains(document.activeElement)),
+        'focus stays in the editor after a row removal');
+    });
+
+    // round3-eq m2: hidden (Edit hidden in Perform, a closed drawer), the frame loop stops instead of measuring 60×/s
+    await T('hidden editor: frame loop stops (no per-frame resize), resumes when shown', async () => {
+      await setupSlot(0, { lowNote: 48, highNote: 127, rta: false });
+      await settle();
+      assert.equal((await dbg()).rafActive, true);
+      await ev(() => {
+        document.getElementById('host').hidden = true;
+      });
+      await settle();
+      await settle();
+      const r1 = await dbg();
+      await ev(() => new Promise((r) => {
+        let n = 0;
+        const f = () => (++n >= 20 ? r() : requestAnimationFrame(f));
+        requestAnimationFrame(f);
+      }));
+      const r2 = await dbg();
+      assert.equal(r2.rafActive, false, 'loop stopped while hidden');
+      assert.ok(r2.resizes - r1.resizes <= 1, `no per-frame resize while hidden (${r2.resizes - r1.resizes} in 20 frames)`);
+      await ev(() => {
+        document.getElementById('host').hidden = false;
+      });
+      await settle();
+      await settle();
+      const r3 = await dbg();
+      assert.equal(r3.rafActive, true, 'loop back when shown');
+      assert.ok(r3.plot.width > 100);
     });
 
     await T('destroy() removes listeners, the store subscription and the frame loop; B is restored', async () => {

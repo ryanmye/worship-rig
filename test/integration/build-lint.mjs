@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// electron-builder config sanity WITHOUT a mac build (SPEC §7/§1 package.json "build"):
+// electron-builder config sanity for the host platform (SPEC §7/§1 package.json "build"):
 //   node test/integration/build-lint.mjs [--keep] [--no-boot]
-// Runs `npx electron-builder --linux dir` with the repo's own "build" config into a temp output dir (Electron taken
-// from node_modules/electron/dist, so nothing is downloaded), then inspects resources/app.asar:
+// Runs `npx electron-builder --linux dir` (`--mac dir` on macOS, L-2) with the repo's own "build" config into a
+// temp output dir (Electron taken from node_modules/electron/dist, so nothing is downloaded), then inspects
+// app.asar (resources/ on linux, <productName>.app/Contents/Resources/ on mac):
 //   • present: package.json, main.js, preload.js, server.js, README.md, LICENSES.md, app/index.html,
 //     app/samples/manifest.json and EVERY sample file the manifest lists
 //   • excluded: app/js/engine/test.html, test/, tools/, audition/, reviews/, dist/, node_modules/electron*, *.md specs
@@ -16,7 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { checker, freePort, hasXvfb, repoRoot, sleep } from './lib.mjs';
+import { checker, electronEnv, freePort, hasXvfb, repoRoot, sleep } from './lib.mjs';
 
 const require = createRequire(import.meta.url);
 const asar = require('@electron/asar');
@@ -42,16 +43,20 @@ try {
   require(path.join(repoRoot, 'node_modules', 'electron'));
   const electronDist = path.join(repoRoot, 'node_modules', 'electron', 'dist');
   const electronVersion = JSON.parse(fs.readFileSync(path.join(repoRoot, 'node_modules', 'electron', 'package.json'), 'utf8')).version;
-  const args = ['electron-builder', '--linux', 'dir', '--publish', 'never', `-c.directories.output=${out}`, `-c.electronDist=${electronDist}`, `-c.electronVersion=${electronVersion}`];
+  // L-2: electronDist is the host's own Electron (Electron.app on macOS), so build for the host platform: a
+  // `--linux dir` build from a Mac dist fails renaming the missing linux `electron` binary.
+  const platform = process.platform === 'darwin' ? 'mac' : 'linux';
+  const args = ['electron-builder', `--${platform}`, 'dir', '--publish', 'never', `-c.directories.output=${out}`, `-c.electronDist=${electronDist}`, `-c.electronVersion=${electronVersion}`];
   console.log(`# npx ${args.join(' ')}`);
   const t0 = Date.now();
-  const r = spawnSync('npx', args, { cwd: repoRoot, encoding: 'utf8', timeout: 600000, env: { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' } });
+  const r = spawnSync('npx', args, { cwd: repoRoot, encoding: 'utf8', timeout: 600000, env: electronEnv({ CSC_IDENTITY_AUTO_DISCOVERY: 'false' }) });
   const log = `${r.stdout || ''}${r.stderr || ''}`;
-  const built = check(`electron-builder --linux dir succeeds (${((Date.now() - t0) / 1000).toFixed(0)} s)`, r.status === 0, r.status === 0 ? '' : log.slice(-2500));
+  const built = check(`electron-builder --${platform} dir succeeds (${((Date.now() - t0) / 1000).toFixed(0)} s)`, r.status === 0, r.status === 0 ? '' : log.slice(-2500));
   if (!built) throw new Error('build failed');
-  const unpacked = fs.readdirSync(out).map((d) => path.join(out, d)).find((d) => fs.existsSync(path.join(d, 'resources')));
-  const asarPath = unpacked && path.join(unpacked, 'resources', 'app.asar');
-  check('resources/app.asar produced', asarPath && fs.existsSync(asarPath), unpacked);
+  const unpacked = fs.readdirSync(out).map((d) => path.join(out, d)).find((d) => fs.existsSync(path.join(d, 'resources')) || fs.existsSync(path.join(d, `${pkg.build.productName}.app`)));
+  // linux: <out>/linux-*-unpacked/resources/app.asar; mac: <out>/mac-*/<productName>.app/Contents/Resources/app.asar
+  const asarPath = unpacked && (platform === 'mac' ? path.join(unpacked, `${pkg.build.productName}.app`, 'Contents', 'Resources', 'app.asar') : path.join(unpacked, 'resources', 'app.asar'));
+  check('app.asar produced', asarPath && fs.existsSync(asarPath), asarPath || fs.readdirSync(out).join(', '));
 
   // ---- contents
   const list = new Set(asar.listPackage(asarPath).map((p) => p.replace(/\\/g, '/').replace(/^\//, '')));
@@ -96,7 +101,7 @@ try {
       const userData = path.join(out, 'userData');
       const res = await new Promise((resolve) => {
         const child = spawn('xvfb-run', ['-a', bin, '--no-sandbox'], {
-          env: { ...process.env, RIG_SELFTEST: '1', RIG_SELFTEST_TIMEOUT_MS: '12000', RIG_PORT: String(port), RIG_USER_DATA: userData, RIG_RECORDINGS_DIR: path.join(out, 'rec'), RIG_APP_DIR: '', ELECTRON_ENABLE_LOGGING: '0' },
+          env: electronEnv({ RIG_SELFTEST: '1', RIG_SELFTEST_TIMEOUT_MS: '12000', RIG_PORT: String(port), RIG_USER_DATA: userData, RIG_RECORDINGS_DIR: path.join(out, 'rec'), RIG_APP_DIR: '', ELECTRON_ENABLE_LOGGING: '0' }),
           stdio: ['ignore', 'pipe', 'pipe'],
           detached: true,
         });

@@ -1600,6 +1600,74 @@ test('round2-ui #10: hidden views do not animate or poll (meters, runtime lamps)
   assert.equal(edit.rt, 0, 'no runtime polling while Perform is hidden');
 });
 
+test('polish-1: strip level meters follow the slot, sit beside the fader, stop reading when hidden (tap idles)',
+  async () => {
+  await selectIndex(await richSongIndex());
+  await page.evaluate(() => window.__rig.ctx.setView('perform'));
+  await page.waitForFunction(() => !document.getElementById('view-perform').hidden);
+  // geometry: inside the fader track, right of the input, no hit area (the fader throw is unchanged)
+  const geo = await page.evaluate(() => [0, 1, 2, 3].map((i) => {
+    const m = document.querySelector(`[data-testid="slot-level-${i}"]`);
+    const inp = document.querySelector(`[data-testid="slot-fader-${i}"] .fader-input`);
+    if (!m || !m.getClientRects().length) return null;
+    const r = m.getBoundingClientRect();
+    const ri = inp.getBoundingClientRect();
+    const strip = m.closest('.slot').getBoundingClientRect();
+    return { w: r.width, h: r.height, gap: r.left - ri.right, inStrip: r.right <= strip.right, inputH: ri.height,
+      pe: getComputedStyle(m).pointerEvents, inTrack: m.parentElement.classList.contains('fader-track') };
+  }));
+  const shown = geo.filter(Boolean);
+  assert.ok(shown.length >= 3, `a meter on every filled strip (${shown.length})`);
+  for (const g of shown) {
+    assert.equal(g.w, 4, 'a 4 px bar');
+    assert.ok(g.gap >= 0 && g.gap <= 8, `beside the fader (gap ${g.gap})`);
+    assert.ok(g.inStrip && g.inTrack && g.pe === 'none', JSON.stringify(g));
+    assert.ok(g.h > g.inputH * 0.7, `spans the thumb travel (${g.h} of ${g.inputH})`);
+  }
+  // count controller.slotLevel reads per frame: Perform reads each filled strip; Edit on Effects reads none
+  const measure = (view, block) => page.evaluate(async ([v, b]) => {
+    const { controller, ctx } = window.__rig;
+    ctx.setView(v);
+    if (b) window.__rig.views.edit.editState.select(b);
+    await new Promise((res) => setTimeout(res, 250));
+    const orig = controller.slotLevel;
+    const per = [0, 0, 0, 0];
+    controller.slotLevel = (i) => {
+      per[i] += 1;
+      return orig(i);
+    };
+    let frames = 0;
+    let run = true;
+    const tick = () => {
+      frames += 1;
+      if (run) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    await new Promise((res) => setTimeout(res, 600));
+    run = false;
+    controller.slotLevel = orig;
+    return { per: per.map((n) => n / Math.max(1, frames)), frames };
+  }, [view, block]);
+  await page.evaluate(() => window.__rig.controller.perform.noteOn(60, 110));
+  const perf = await measure('perform');
+  const filled = await page.evaluate(() => window.__rig.store.currentSong().patch.slots.map((s) => !!s));
+  perf.per.forEach((n, i) => {
+    if (filled[i]) assert.ok(n > 0.5 && n < 1.5, `Perform reads slot ${i} once a frame (${n.toFixed(2)})`);
+    else assert.equal(n, 0, `an empty strip's meter is hidden and never reads (slot ${i})`);
+  });
+  const lv = await page.evaluate(() => [0, 1, 2, 3].map((i) => Number(document
+    .querySelector(`[data-testid="slot-level-${i}"] .lvl-cover`)?.style.transform.replace(/[^0-9.]/g, '') || 1)));
+  assert.ok(lv.some((c) => c < 0.9), `a sounding slot lifts its bar (covers ${lv.join(', ')})`);
+  await page.evaluate(() => window.__rig.controller.perform.noteOff(60));
+  assert.ok(await page.evaluate(() => window.__rig.engine.slotTapCount()) >= 2, 'the engine tapped the read slots');
+  const edit = await measure('edit', 'effects');
+  assert.deepEqual(edit.per, [0, 0, 0, 0], 'no slot meter reads while Perform is hidden and Edit shows no slot');
+  await page.waitForFunction(() => window.__rig.engine.slotTapCount() === 0, null, { timeout: 5000 });
+  await page.evaluate(() => window.__rig.ctx.setView('perform'));
+  await page.waitForFunction(() => !document.getElementById('view-perform').hidden);
+  await page.waitForFunction(() => window.__rig.engine.slotTapCount() >= 1, null, { timeout: 3000 });
+});
+
 test('round2-ui #12: arrows on the focused notes panel scroll it and never reach the mod wheel / song nav', async () => {
   const r = await page.evaluate(async () => {
     const { store, engine } = window.__rig;
@@ -1741,6 +1809,13 @@ test('H-v2 strip chips write sends.reverb / sends.delay / octave / sustain; "as 
   // fine slider: a relative drag between the steps
   await page.click('[data-testid=slot-echo-1]');
   const fine = await page.locator('.step-panel .sp-fine input').boundingBox();
+  // polish-1: the fine slider fills the panel body (it was 44 px tall under `.fader.compact`); the chip stays ≥ 44 px
+  const body = await page.locator('.step-panel .sp-body').boundingBox();
+  const chipBox = await page.locator('[data-testid=slot-echo-1]').boundingBox();
+  const xBox = await page.locator('.step-panel .sp-x').boundingBox();
+  assert.ok(fine.height >= body.height - 2, `fine slider spans the body (${fine.height} of ${body.height})`);
+  assert.ok(fine.y >= xBox.y + xBox.height - 1, 'the fine slider starts below the × button');
+  assert.ok(chipBox.height >= 44, `the chip keeps a 44 px target (${chipBox.height})`);
   const e0 = await page.evaluate(() => window.__rig.store.currentSong().patch.slots[1].sends.delay);
   await page.mouse.move(fine.x + fine.width / 2, fine.y + fine.height * 0.7);
   await page.mouse.down();
@@ -1922,6 +1997,34 @@ test('H-v2 screenshots: perform, perform-1024, perform-quick, perform-step, perf
   assert.equal(await page.isDisabled('[data-testid=revert-song]'), true);
   await selectIndex(0);
 });
+
+test('polish-1 (local L-3): MIDI "pending" reads as waiting — amber lamp, a waiting toast, never "could not start"',
+  async () => {
+    await clearToasts();
+    const r = await page.evaluate(async () => {
+      const c = window.__rig.controller;
+      const real = { ...c.status };
+      const fire = (midi) => c.dispatchEvent(new CustomEvent('status', { detail: { ...real, midi } }));
+      fire({ available: false, connected: false, reason: 'pending', pending: true, inputs: [] });
+      await new Promise((res) => setTimeout(res, 50));
+      const led = document.getElementById('midi-led');
+      const out = {
+        name: document.getElementById('midi-name').textContent,
+        warn: led.classList.contains('warn'),
+        bad: led.classList.contains('bad'),
+        title: document.getElementById('midi-status').title,
+        toasts: [...document.querySelectorAll('#toasts > *')].map((x) => x.textContent),
+      };
+      c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } })); // back to the real status
+      return out;
+    });
+    assert.equal(r.name, 'Waiting…');
+    assert.ok(r.warn && !r.bad, 'amber, not red');
+    assert.equal(r.title, 'Waiting for MIDI permission');
+    assert.ok(r.toasts.some((x) => /Waiting for MIDI permission/.test(x)), `waiting toast (${r.toasts.join(' | ')})`);
+    assert.ok(!r.toasts.some((x) => /could not start/.test(x)), 'no "could not start" toast');
+    await clearToasts();
+  });
 
 test('no console errors on the main page', () => {
   assert.deepEqual(consoleErrors, [], consoleErrors.join('\n'));

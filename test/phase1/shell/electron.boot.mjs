@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { buildFixture, repoRoot } from './fixture.mjs';
+import { electronEnv } from '../../integration/lib.mjs';
 import { parseWavHeader } from '../../../app/js/shared/wav.js';
 
 const require = createRequire(import.meta.url);
@@ -24,8 +25,7 @@ function boot(fx) {
     const args = isLinux && hasXvfb ? ['-a', 'npx', 'electron', '.', '--no-sandbox'] : ['electron', '.', ...(isLinux ? ['--no-sandbox'] : [])];
     const child = spawn(cmd, args, {
       cwd: repoRoot,
-      env: {
-        ...process.env,
+      env: electronEnv({
         RIG_SELFTEST: '1',
         RIG_APP_DIR: fx.app,
         RIG_PADS_DIR: fx.pads,
@@ -34,7 +34,7 @@ function boot(fx) {
         RIG_RECORDINGS_DIR: fx.recordings,
         RIG_SELFTEST_TIMEOUT_MS: '40000',
         ELECTRON_ENABLE_LOGGING: '0',
-      },
+      }),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let out = '';

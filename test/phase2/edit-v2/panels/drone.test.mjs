@@ -58,6 +58,39 @@ test('drone: ON tile turns on with droneOnMode(baseline) when this panel has no 
   t.assertNoConsoleErrors();
 });
 
+test('drone: round3-edit m4 — the ON tile remembers its source across a tab switch (remount), not a song change',
+  async () => {
+    const t = await mountA();
+    const tile = `${t.host} [data-drone-on]`;
+    const song = await t.ev(() => window.__rig.store.currentSong().id);
+    await t.ev(() => {
+      const s = window.__rig.store.currentSong();
+      window.__rig.setBaseline({ ...s, drone: { ...s.drone, mode: 'synth' } });
+    });
+    assert.equal(await t.setParam('song.drone.mode', 'files'), true);
+    await t.until((sel) => document.querySelector(sel).getAttribute('aria-pressed') === 'true', tile);
+    await t.click(tile);
+    await t.until(() => window.__rig.store.currentSong().drone.mode === 'off');
+    // a tab switch unmounts the panel; coming back mounts a fresh one
+    await t.ev(() => window.__rig.view.remount());
+    await t.until((sel) => document.querySelector(sel)?.getAttribute('aria-pressed') === 'false', tile);
+    await t.click(tile);
+    await t.until(() => window.__rig.store.currentSong().drone.mode === 'files');
+    // a song change forgets it (as in Perform): off → other song → back → ON gives the baseline's source
+    await t.click(tile);
+    await t.until(() => window.__rig.store.currentSong().drone.mode === 'off');
+    await t.selectSong('Organ Swell');
+    await t.selectSong(song);
+    await t.ev(() => {
+      const s = window.__rig.store.currentSong();
+      window.__rig.setBaseline({ ...s, drone: { ...s.drone, mode: 'synth' } });
+    });
+    await t.until((sel) => document.querySelector(sel)?.getAttribute('aria-pressed') === 'false', tile);
+    await t.click(tile);
+    await t.until(() => window.__rig.store.currentSong().drone.mode === 'synth');
+    t.assertNoConsoleErrors();
+  });
+
 test('drone: routing + drone controls write the song (ui-edit port: synth, brightness → engine, files, off)',
   async () => {
     const t = await mountA();
@@ -149,7 +182,7 @@ test('drone: sentence title, key token → song {focus:key}, changed dots + chan
       && window.__rig.view.editState.opts.focus === 'key');
     // no source change yet → no dots, "No changes"
     const chg = `${t.host} .ev2-chg`;
-    assert.match(await t.page.textContent(chg), /No changes since the song was loaded/);
+    assert.match(await t.page.textContent(chg), /No switch changes since the song was loaded/);
     assert.equal(await t.page.locator(`${TITLE} .ev2-cdi`).count(), 0);
     // Synth → My Pads is a change (source); the title word gets the dot, the footer counts it
     await t.click(`${t.host} [data-bind="song.drone.mode"] button[data-value="files"]`);

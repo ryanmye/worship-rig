@@ -16,16 +16,28 @@ let listening = false;
 const inside = (entry, node) =>
   node instanceof Node && (entry.el.contains(node) || entry.anchors.some((a) => a && a.contains(node)));
 
+/**
+ * An overlay that can't be seen (its element left the DOM, or sits inside a `[hidden]` ancestor such as the view a
+ * ⌘E / Ctrl+E switch just hid) must never eat an Esc (= Panic) or a tap (round3-edit M1). Close every such entry
+ * (reason 'hidden') before acting on the top one. Returns the visible top entry, if any.
+ */
+const unseen = (entry) => !entry.el || !entry.el.isConnected || !!entry.el.closest('[hidden]');
+function pruneHidden() {
+  for (const entry of stack.slice()) if (unseen(entry)) entry.close('hidden');
+  return stack[stack.length - 1] || null;
+}
 function onKey(e) {
   if (e.key !== 'Escape' || !stack.length || e.metaKey || e.ctrlKey || e.altKey) return;
+  const top = pruneHidden();
+  if (!top) return;
   e.preventDefault();
   e.stopPropagation();
-  stack[stack.length - 1].close('escape');
+  top.close('escape');
 }
 function onPointerDown(e) {
   if (!stack.length) return;
-  const top = stack[stack.length - 1];
-  if (!top.outside || inside(top, e.target)) return;
+  const top = pruneHidden();
+  if (!top || !top.outside || inside(top, e.target)) return;
   const pass = e.target instanceof Element && e.target.closest(top.passThrough);
   top.close('outside');
   if (top.swallow && !pass) {
@@ -60,7 +72,7 @@ function listen(on) {
  * @param {object} o
  * @param {HTMLElement} o.el
  * @param {HTMLElement[]} [o.anchors]   taps on these count as inside (the chip that opened the panel)
- * @param {(reason:'escape'|'outside'|'replaced'|'api') => void} [o.onClose]
+ * @param {(reason:'escape'|'outside'|'replaced'|'api'|'hidden') => void} [o.onClose]
  * @param {boolean} [o.swallow=false]
  * @param {boolean} [o.closeOnOutside=true]  false: only Esc / the caller closes it (the Quick sheet: keep playing)
  * @param {string} [o.passThrough=PASS_THROUGH]
@@ -93,3 +105,16 @@ export function openOverlay(o) {
 
 /** Number of open overlays (tests). */
 export const openOverlayCount = () => stack.length;
+
+/** Close every open overlay whose element sits inside `root` (a view being hidden). Returns how many closed. */
+export function closeOverlaysWithin(root, reason = 'hidden') {
+  if (!root) return 0;
+  let n = 0;
+  for (const entry of stack.slice()) {
+    if (entry.el && (root === entry.el || root.contains(entry.el))) {
+      entry.close(reason);
+      n++;
+    }
+  }
+  return n;
+}

@@ -15,7 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { buildAppWrapper, checker, freePort, portIsFree, hasXvfb, inspectWav, repoRoot, PAGE_METER_SRC, sleep } from './lib.mjs';
+import { buildAppWrapper, checker, electronEnv, freePort, portIsFree, hasXvfb, inspectWav, repoRoot, PAGE_METER_SRC, sleep } from './lib.mjs';
 
 const KEEP = process.argv.includes('--keep');
 const { check, skip, finish } = checker('electron-full');
@@ -37,8 +37,14 @@ const failedLoads = () => performance.getEntriesByType('resource').filter((e) =>
 async function boot() {
   for (let i = 0; i < 400 && !window.__rig; i++) await sleep(50);
   if (!window.__rig) throw new Error('window.__rig never appeared');
-  await window.__rig.ready;
-  await window.__rig.viewsReady;
+  // L-4: bounded, and the failure names MIDI's state (L-3: start() no longer waits for MIDI, this is a guard)
+  const bounded = (p, ms, what) => Promise.race([p, sleep(ms).then(() => {
+    const st = (window.__rig.controller && window.__rig.controller.status) || {};
+    throw new Error(what + ' did not resolve within ' + ms + ' ms; controller.status.midi=' + JSON.stringify(st.midi) +
+      ' audio=' + st.audio);
+  })]);
+  await bounded(window.__rig.ready, 30000, 'window.__rig.ready');
+  await bounded(window.__rig.viewsReady, 30000, 'window.__rig.viewsReady');
   const { engine, controller } = window.__rig;
   if (!engine.ctx || engine.ctx.state !== 'running') await controller.resumeAudio();
   return window.__rig;
@@ -134,7 +140,7 @@ function launch(env, timeoutMs) {
   const [cmd, args] = electronCmd();
   return new Promise((resolve) => {
     const t0 = Date.now();
-    const child = spawn(cmd, args, { cwd: repoRoot, env: { ...process.env, ELECTRON_ENABLE_LOGGING: '0', ...env }, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+    const child = spawn(cmd, args, { cwd: repoRoot, env: electronEnv({ ELECTRON_ENABLE_LOGGING: '0', ...env }), stdio: ['ignore', 'pipe', 'pipe'], detached: true });
     let out = '';
     let err = '';
     child.stdout.on('data', (d) => (out += d));
