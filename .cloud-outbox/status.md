@@ -26,3 +26,4 @@
 2026-09-28T21:23:42Z L8_VERIFIED soak 20 min on c889fd9: pinned max 568.9 MB ≤ 600 budget, 0/44 rows over; L-8 fix holds.
 2026-09-28T21:23:42Z L10_RESOLVED soak check now implements the soft-cap rule (decoded ≤ cap when retiring==0; ≤ cap+25 % for ≤ 90 s after a switch while retiring>0), commit 2835a26; replayed against the 21:20Z soak.csv: the 754.2 MB row (retiring 1, 0 s after the switch) passes, no other row over cap → 12/12 on that data. Next real soak runs with the next drop.
 2026-09-28T21:23:42Z LOCAL_STATE: idle, ports free; next SYNC drop runs immediately | hardware pass with Ryan
+2026-09-28T21:55:58Z LOCAL_STATE: SYNC 20260928T215342Z running; IMPORTS (GarageBand) and MAC-REVIEW+README agents started in parallel | full+soak → build → PACKS → PERF after the sync
