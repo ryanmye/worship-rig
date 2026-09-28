@@ -61,6 +61,20 @@ export async function waitFor(fn, { timeout = 10000, interval = 100, what = 'con
 export const hasXvfb = () => process.platform === 'linux' && spawnSync('which', ['xvfb-run']).status === 0;
 
 /**
+ * Environment for launching Electron from a test: the caller's env plus `extra`, minus ELECTRON_RUN_AS_NODE.
+ * L-1: a shell started from an Electron host (VS Code's terminal, the Claude desktop app) inherits
+ * ELECTRON_RUN_AS_NODE=1, and then `npx electron .` runs main.js as plain Node: require('electron').app is
+ * undefined and main.js dies at its first app.setPath() before any self-test report.
+ * @param {Record<string, string>} [extra]
+ * @returns {Record<string, string>}
+ */
+export function electronEnv(extra = {}) {
+  const env = { ...process.env, ...extra };
+  delete env.ELECTRON_RUN_AS_NODE;
+  return env;
+}
+
+/**
  * Real app/ exposed through a throw-away directory: every entry of app/ is a symlink to the real one, only
  * index.html is a copy with one extra `<script type="module" src="./__it/probe.js">` after the app's own
  * bootstrap. The CSP (script-src 'self') allows it because the probe is served from the same origin.

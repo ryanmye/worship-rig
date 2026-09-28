@@ -16,7 +16,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { checker, freePort, hasXvfb, repoRoot, sleep } from './lib.mjs';
+import { checker, electronEnv, freePort, hasXvfb, repoRoot, sleep } from './lib.mjs';
 
 const require = createRequire(import.meta.url);
 const asar = require('@electron/asar');
@@ -45,7 +45,7 @@ try {
   const args = ['electron-builder', '--linux', 'dir', '--publish', 'never', `-c.directories.output=${out}`, `-c.electronDist=${electronDist}`, `-c.electronVersion=${electronVersion}`];
   console.log(`# npx ${args.join(' ')}`);
   const t0 = Date.now();
-  const r = spawnSync('npx', args, { cwd: repoRoot, encoding: 'utf8', timeout: 600000, env: { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' } });
+  const r = spawnSync('npx', args, { cwd: repoRoot, encoding: 'utf8', timeout: 600000, env: electronEnv({ CSC_IDENTITY_AUTO_DISCOVERY: 'false' }) });
   const log = `${r.stdout || ''}${r.stderr || ''}`;
   const built = check(`electron-builder --linux dir succeeds (${((Date.now() - t0) / 1000).toFixed(0)} s)`, r.status === 0, r.status === 0 ? '' : log.slice(-2500));
   if (!built) throw new Error('build failed');
@@ -96,7 +96,7 @@ try {
       const userData = path.join(out, 'userData');
       const res = await new Promise((resolve) => {
         const child = spawn('xvfb-run', ['-a', bin, '--no-sandbox'], {
-          env: { ...process.env, RIG_SELFTEST: '1', RIG_SELFTEST_TIMEOUT_MS: '12000', RIG_PORT: String(port), RIG_USER_DATA: userData, RIG_RECORDINGS_DIR: path.join(out, 'rec'), RIG_APP_DIR: '', ELECTRON_ENABLE_LOGGING: '0' },
+          env: electronEnv({ RIG_SELFTEST: '1', RIG_SELFTEST_TIMEOUT_MS: '12000', RIG_PORT: String(port), RIG_USER_DATA: userData, RIG_RECORDINGS_DIR: path.join(out, 'rec'), RIG_APP_DIR: '', ELECTRON_ENABLE_LOGGING: '0' }),
           stdio: ['ignore', 'pipe', 'pipe'],
           detached: true,
         });

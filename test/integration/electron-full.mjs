@@ -15,7 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { buildAppWrapper, checker, freePort, portIsFree, hasXvfb, inspectWav, repoRoot, PAGE_METER_SRC, sleep } from './lib.mjs';
+import { buildAppWrapper, checker, electronEnv, freePort, portIsFree, hasXvfb, inspectWav, repoRoot, PAGE_METER_SRC, sleep } from './lib.mjs';
 
 const KEEP = process.argv.includes('--keep');
 const { check, skip, finish } = checker('electron-full');
@@ -134,7 +134,7 @@ function launch(env, timeoutMs) {
   const [cmd, args] = electronCmd();
   return new Promise((resolve) => {
     const t0 = Date.now();
-    const child = spawn(cmd, args, { cwd: repoRoot, env: { ...process.env, ELECTRON_ENABLE_LOGGING: '0', ...env }, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+    const child = spawn(cmd, args, { cwd: repoRoot, env: electronEnv({ ELECTRON_ENABLE_LOGGING: '0', ...env }), stdio: ['ignore', 'pipe', 'pipe'], detached: true });
     let out = '';
     let err = '';
     child.stdout.on('data', (d) => (out += d));
