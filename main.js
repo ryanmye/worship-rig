@@ -190,8 +190,10 @@ async function backupNow(json, kind = 'library') {
     for (const f of old.slice(0, Math.max(0, old.length - UNREADABLE_KEEP))) await fsp.unlink(path.join(dir, f)).catch(() => {});
     return { path: file };
   }
-  let file = path.join(dir, `rig-${stamp()}.json`);
-  if (fs.existsSync(file)) file = path.join(dir, `rig-${stamp()}-${Date.now() % 1000}.json`);
+  // L-5: a counter, not Date.now() % 1000, so two backups in the same millisecond never overwrite each other
+  const s = stamp();
+  let file = path.join(dir, `rig-${s}.json`);
+  for (let i = 1; fs.existsSync(file); i++) file = path.join(dir, `rig-${s}-${i}.json`);
   await fsp.writeFile(file, text);
   const names = (await fsp.readdir(dir)).filter((f) => BACKUP_RE.test(f));
   const all = await Promise.all(names.map(async (f) => ({ f, t: (await fsp.stat(path.join(dir, f)).catch(() => ({ mtimeMs: 0 }))).mtimeMs })));
