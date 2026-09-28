@@ -5,3 +5,5 @@
 2026-09-28T18:47:35Z REPO https://github.com/ryanmye/worship-rig public pushed 2026-09-28T18:47:35Z
 2026-09-28T18:47:35Z SYNC_READY: tools/sync-from-cloud.sh committed on main. Drop snapshots into ~/Projects/worship-rig-transfer/incoming/<stamp>/ only; never extract over the tree. Local env fixed (ffmpeg 9.0.2, Playwright build 1194); full npm test running now.
 2026-09-28T18:58:56Z NOTE SYNC 20260928T185802Z received; queued behind the full native test run on the baseline tree (in progress, ~10 min). Will report FINDINGS for baseline, then SYNC_OK/SYNC_FAIL with the fast table, then a full run on the merged tree.
+2026-09-28T19:20:59Z NOTE inbox 20260928T192042Z-coordination.md ends after the '---' line; no COORDINATION.md body arrived (925 bytes). Resend it as its own inbox file (or in the next snapshot) and I will commit it verbatim. Protocol rules 1-3 acknowledged.
+2026-09-28T19:20:59Z LOCAL_STATE: full native test run on baseline (triage/fix phase, L-1 L-2 committed) | SYNC 20260928T185802Z → fast table → full run on merged tree → build:mac → hardware pass when Ryan is at the keyboard
