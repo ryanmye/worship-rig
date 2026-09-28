@@ -32,7 +32,7 @@ SEPARATE_TREES=(app/samples audition/mp3)
 DROP_ARG="" DRY_RUN=0 RUN_TESTS=1 TMP="" KEEP_TMP=0
 DROP_DIR="" STAMP="" SNAP_ROOT="" CODE_TGZ="" CODE_INFO="" SAMPLES_TGZ="" SAMPLES_INFO="none"
 SAMPLES_NOTE="no samples archive in this drop" PROTECTED=""
-OLD_MAIN="" NEW_MAIN="" OLD_CLOUD="" NEW_CLOUD="" CLOUD_CREATED=0
+OLD_MAIN="" NEW_MAIN="" OLD_CLOUD="" NEW_CLOUD="" CLOUD_CREATED=0 DEST=. DEST_DESC="working tree"
 CHANGE_NOTE="" BY_DIR="" MERGE_NOTE="" GITIGNORE_NOTE="" NPM_NOTE="not needed (package*.json unchanged)"
 TEST_NOTE="skipped (--no-test)" TEST_RC=0
 
@@ -225,14 +225,27 @@ write_excludes() {
 # excluded files. Expected, and the dir is kept; those lines are dropped from the itemized list, as are ".f..T"
 # lines (only the mtime differs, which we deliberately don't copy).
 sync_tree() {
-  local dry=() out="$TMP/rsync.out"
+  local dry=() out="$TMP/rsync.out" n
   (( DRY_RUN )) && dry=(-n)
   write_excludes
-  log "rsync ${dry[*]:+${dry[*]} }snapshot -> $(pwd) (--delete, $(wc -l < "$TMP/rsync-excludes" | tr -d ' ') excludes)"
+  n=$(wc -l < "$TMP/rsync-excludes" | tr -d ' ')
+  log "rsync ${dry[*]:+${dry[*]} }snapshot -> $DEST_DESC (--delete, $n excludes)"
   rsync -rlp -c --delete --itemize-changes ${dry[@]+"${dry[@]}"} --exclude-from="$TMP/rsync-excludes" \
-    "$SNAP_ROOT/" ./ > "$out.raw" 2> "$TMP/rsync.err" || { cat "$TMP/rsync.err" >&2; die "rsync failed"; }
+    "$SNAP_ROOT/" "$DEST/" > "$out.raw" 2> "$TMP/rsync.err" || { cat "$TMP/rsync.err" >&2; die "rsync failed"; }
   grep -v -e 'not empty, cannot delete' -e '^\.[fdL]\.\.[tT]\.\.\.\. ' "$out.raw" > "$out" || true
   grep -v 'not empty, cannot delete' "$TMP/rsync.err" >&2 || true
+}
+
+# A dry run may not check out `cloud`, yet the real rsync lands on cloud's tree, not main's: against main, every
+# main-only commit would show up as a deletion. So compare against an export of `cloud` when the branch exists.
+choose_dry_run_target() {
+  if git show-ref --verify --quiet "refs/heads/$CLOUD_BRANCH"; then
+    mkdir -p "$TMP/cloud-tree"
+    git archive "$CLOUD_BRANCH" | tar xf - -C "$TMP/cloud-tree"
+    DEST="$TMP/cloud-tree" DEST_DESC="branch '$CLOUD_BRANCH' (exported to temp)"
+  else
+    DEST=. DEST_DESC="current tree on $MAIN_BRANCH (no '$CLOUD_BRANCH' branch yet; the first run starts it from here)"
+  fi
 }
 
 # File counts from rsync's itemized output: >f+++ new, >f changed, *deleting (not dirs/) removed, .f mode only.
@@ -385,7 +398,7 @@ print_summary() {
     samples "$SAMPLES_NOTE"
   [[ -z "$PROTECTED" ]] || printf '  %-13s %s\n' protected "${PROTECTED# } (not in snapshot: left untouched)"
   if (( DRY_RUN )); then
-    printf '  %-13s %s\n' "would change" "$(rsync_counts) (vs. current tree on $(git branch --show-current))"
+    printf '  %-13s %s\n' "would change" "$(rsync_counts)" "  compared to" "$DEST_DESC"
   else
     printf '  %-13s %s\n' "cloud commit" "$(git rev-parse --short "$NEW_CLOUD")$( (( CLOUD_CREATED )) \
       && echo " (branch '$CLOUD_BRANCH' newly created from $MAIN_BRANCH $(git rev-parse --short "$OLD_CLOUD"))")"
@@ -410,12 +423,14 @@ main() {
   unpack_code
   unpack_samples
   if (( DRY_RUN )); then
+    choose_dry_run_target
     sync_tree
     print_dry_run_changes
     print_summary
     return 0
   fi
   checkout_cloud
+  DEST_DESC="branch '$CLOUD_BRANCH' in $(pwd)"
   sync_tree
   commit_cloud
   merge_into_main
