@@ -11,3 +11,6 @@ user-samples/
 
 # local-only scratch (old sample trees moved aside on the Mac)
 _to_delete/
+
+# cloud → local task inbox (transient; the outbox and reviews/ are tracked on purpose)
+.cloud-inbox/
