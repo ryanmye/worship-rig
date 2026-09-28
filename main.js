@@ -663,6 +663,7 @@ function createWindow(url) {
     win = null;
   });
   if (serverInfo && serverInfo.port !== PORT && !SELFTEST) wc.once('did-finish-load', () => portChangedDialog());
+  if (!SELFTEST) wc.once('did-finish-load', () => chromeWindowCheck().catch(() => {}));
   if (SELFTEST) installSelftest(wc);
   wc.loadURL(url);
 }
@@ -739,6 +740,24 @@ async function portChangedDialog() {
       `Quit whatever uses port ${PORT} and restart Worship Rig to get back to your usual library.`,
   });
   if (b && r.response === 0) sendMenu('importLatestBackup');
+}
+
+/**
+ * L-11: the Chrome version (serve.mjs, :8437) is another origin in another browser, so the page's Web Lock can't see
+ * it and both windows would play every note. Its page pings /api/heartbeat every 15 s; warn if one did recently.
+ */
+async function chromeWindowCheck() {
+  const chromePort = Number(process.env.RIG_CHROME_PORT) || 8437;
+  if (!server || !serverInfo || serverInfo.port === chromePort) return;
+  const h = await server.checkHealth(chromePort);
+  if (!h || !(typeof h.clientSeenMsAgo === 'number' && h.clientSeenMsAgo < 45000) || !win || win.isDestroyed()) return;
+  log(`a Worship Rig window is open in Chrome (port ${chromePort}): both would play every note; warning shown`);
+  await dialog.showMessageBox(win, {
+    type: 'warning',
+    buttons: ['OK'],
+    message: 'Worship Rig is also open in Google Chrome.',
+    detail: 'Both windows play every note you play. Close the Chrome window of Worship Rig (and its Terminal window) before you play.',
+  });
 }
 
 // ---------------------------------------------------------------------------------------------

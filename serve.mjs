@@ -17,7 +17,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 
 const require = createRequire(import.meta.url);
-const { createServer, defaultUserSampleRoots } = require('./server.js');
+const { createServer, defaultUserSampleRoots, probeHealth } = require('./server.js');
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 function parseArgs(argv) {
@@ -120,6 +120,11 @@ async function main() {
     const mine = await server.rescanUserSamples().catch(() => null);
     if (mine && mine.count) console.log(`My Samples: ${mine.count} instrument(s) from ${mine.packs.map((p) => p.dir).join(', ')}`);
     console.log('Keep this window open while you play. Press Ctrl+C to stop.');
+  }
+  // L-11: the Mac app (its own server on 8438) is another origin: its window and this one would both play every note
+  const appPort = Number(process.env.RIG_PORT) || 8438;
+  if (info.port !== appPort && (await probeHealth(appPort).catch(() => false))) {
+    console.log('Note: the Worship Rig Mac app is open too. Both windows play every note you play; quit one of them.');
   }
   if (shouldOpenWindow(info, args.open)) openChrome(url);
   else if (args.open && info.reused) {
