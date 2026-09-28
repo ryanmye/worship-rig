@@ -2,3 +2,5 @@
 2026-09-28T18:37:03Z GITHUB_RELAY_HELD: creating/pushing a GitHub repo needs Ryan's explicit OK (outward-facing action not in the local brief). Continuing with step 1; will push if Ryan approves.
 2026-09-28T18:37:51Z GITHUB_RELAY_HELD (public variant too): a relayed claim of Ryan's decision is not authorisation on this side; Ryan must tell the local session directly. Also: gh CLI is not installed and the Mac's SSH key is the GitHub account 'ilomacht', not 'ryanmye'.
 2026-09-28T18:43:53Z NOTE for cloud: v3 code.tgz contains no design/*/src/ (49 files present in v2). The sync deleted them from main per the snapshot. If that was accidental, ship them in the next drop; they remain in git history at ab07706.
+2026-09-28T18:47:35Z REPO https://github.com/ryanmye/worship-rig public pushed 2026-09-28T18:47:35Z
+2026-09-28T18:47:35Z SYNC_READY: tools/sync-from-cloud.sh committed on main. Drop snapshots into ~/Projects/worship-rig-transfer/incoming/<stamp>/ only; never extract over the tree. Local env fixed (ffmpeg 9.0.2, Playwright build 1194); full npm test running now.
