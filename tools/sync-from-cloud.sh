@@ -1,0 +1,429 @@
+#!/usr/bin/env bash
+# sync-from-cloud.sh: bring a cloud-session code snapshot into this repo.
+#
+# Flow: drop dir (split tar parts) -> temp dir -> rsync onto branch `cloud` -> commit -> merge `cloud` into `main`
+#       -> npm install if package*.json changed -> npm test -- --fast -> one-screen summary.
+#
+# Why a `cloud` branch: it only ever holds verbatim snapshots, so `git merge cloud` has a real merge base. Edits the
+# cloud made win cleanly, local commits on main that the cloud didn't touch survive, and a real clash is a normal
+# git conflict instead of a silent overwrite. Tracked files follow the cloud (it is the source of truth for them).
+#
+# Usage: tools/sync-from-cloud.sh [<stamp>|<path-to-drop-dir>] [--no-test] [--dry-run]
+#   (no drop)   newest drop under ~/Projects/worship-rig-transfer/incoming/ (stamp-like names by name sort,
+#               otherwise the newest by mtime). Override the transfer root with WORSHIP_RIG_TRANSFER=/path.
+#   --dry-run   unpack and show what rsync would change in the current tree; no checkout, commit or merge.
+#   --no-test   skip `npm test -- --fast`.
+# A drop holds code.tgz.partNN (from `split -b`) or a whole code.tgz, plus optionally samples.tgz[.partNN].
+# Exit: 0 ok, 1 error, 2 merge conflicts (merge left in progress for you), 3 synced fine but tests failed.
+set -euo pipefail
+
+TRANSFER_ROOT="${WORSHIP_RIG_TRANSFER:-$HOME/Projects/worship-rig-transfer}"
+INCOMING="$TRANSFER_ROOT/incoming"
+MAIN_BRANCH=main
+CLOUD_BRANCH=cloud
+
+# Never touched or deleted by the rsync. Every .gitignore entry (local and snapshot) is added on top of these.
+ALWAYS_EXCLUDE=(.git/ .DS_Store node_modules/ dist/ user-samples/ _to_delete/ test/logs/)
+# Trees that arrive in a separate archive or not in every snapshot (v3's code.tgz has no app/samples at all).
+# When the snapshot lacks one it is excluded; otherwise --delete would wipe e.g. the 2000 tracked sample files.
+SEPARATE_TREES=(app/samples audition/mp3)
+
+# State, filled in as we go and printed at the end.
+DROP_ARG="" DRY_RUN=0 RUN_TESTS=1 TMP="" KEEP_TMP=0
+DROP_DIR="" STAMP="" SNAP_ROOT="" CODE_TGZ="" CODE_INFO="" SAMPLES_TGZ="" SAMPLES_INFO="none"
+SAMPLES_NOTE="no samples archive in this drop" PROTECTED=""
+OLD_MAIN="" NEW_MAIN="" OLD_CLOUD="" NEW_CLOUD="" CLOUD_CREATED=0
+CHANGE_NOTE="" BY_DIR="" MERGE_NOTE="" GITIGNORE_NOTE="" NPM_NOTE="not needed (package*.json unchanged)"
+TEST_NOTE="skipped (--no-test)" TEST_RC=0
+
+log()  { printf '==> %s\n' "$*"; }
+warn() { printf 'warning: %s\n' "$*" >&2; }
+die()  { printf '\nERROR: %s\n' "$*" >&2; exit 1; }
+mb()   { awk -v b="$(wc -c < "$1")" 'BEGIN { printf "%.1f MB", b / 1048576 }'; }
+usage() { sed -n '2,/^set -euo/p' "$0" | sed -e '$d' -e 's/^# \{0,1\}//'; }
+
+# Keep the temp dir when it holds something the user needs (unplaced samples) or when we died half-way.
+on_exit() {
+  local rc=$?
+  if [[ -n "$TMP" && -d "$TMP" ]]; then
+    if (( KEEP_TMP )) || (( rc != 0 && rc != 3 )); then printf '\n(temp dir kept: %s)\n' "$TMP" >&2
+    else rm -rf "$TMP"; fi
+  fi
+  if (( rc != 0 && rc != 3 )) && git rev-parse --git-dir > /dev/null 2>&1; then
+    printf '(current branch: %s)\n' "$(git branch --show-current)" >&2
+  fi
+}
+trap on_exit EXIT
+
+parse_args() {
+  while (( $# )); do
+    case "$1" in
+      --dry-run) DRY_RUN=1 ;;
+      --no-test) RUN_TESTS=0 ;;
+      -h|--help) usage; exit 0 ;;
+      -*) die "unknown option: $1 (see --help)" ;;
+      *) [[ -z "$DROP_ARG" ]] || die "only one drop may be given"; DROP_ARG=$1 ;;
+    esac
+    shift
+  done
+}
+
+# ---------------------------------------------------------------- preconditions
+
+check_repo() {
+  local top branch dirty
+  top=$(git rev-parse --show-toplevel 2> /dev/null) || die "not inside a git repository (run from the worship-rig repo)"
+  grep -q '"name": "worship-rig"' "$top/package.json" 2> /dev/null || die "$top is not the worship-rig repo"
+  cd "$top"
+  [[ ! -e "$(git rev-parse --git-path MERGE_HEAD)" ]] || die "a merge is in progress; finish or abort it first"
+  branch=$(git branch --show-current)
+  [[ "$branch" == "$MAIN_BRANCH" ]] || die "start on '$MAIN_BRANCH' (currently on '${branch:-detached HEAD}')"
+  # Untracked files are allowed: they are excluded from the rsync and never committed (see write_excludes).
+  dirty=$(git status --porcelain --untracked-files=no)
+  [[ -z "$dirty" ]] || die "working tree has uncommitted changes (commit or stash them first):"$'\n'"$dirty"
+}
+
+# Real stamps start with a date, so a name sort finds the newest. Hand-named drops (e.g. selftest-noop) are only
+# picked, by mtime, when there is no stamp-named drop at all.
+newest_drop() {
+  local d stamped=() all=()
+  for d in "$INCOMING"/*/; do
+    [[ -d "$d" ]] || continue
+    all+=("${d%/}")
+    case "$(basename "$d")" in [0-9]*) stamped+=("${d%/}") ;; esac
+  done
+  (( ${#all[@]} )) || return 1
+  if (( ${#stamped[@]} )); then printf '%s\n' "${stamped[@]}" | sort | tail -n 1
+  else ls -1dt "${all[@]}" | head -n 1; fi
+}
+
+resolve_drop() {
+  mkdir -p "$INCOMING"
+  if [[ -z "$DROP_ARG" ]]; then
+    DROP_DIR=$(newest_drop) || die "no drops under $INCOMING"
+  elif [[ -d "$DROP_ARG" ]]; then
+    DROP_DIR=$(cd "$DROP_ARG" && pwd)
+  else
+    [[ -d "$INCOMING/$DROP_ARG" ]] || die "no such drop: '$DROP_ARG' (not a directory, not a stamp in $INCOMING)"
+    DROP_DIR="$INCOMING/$DROP_ARG"
+  fi
+  STAMP=$(basename "$DROP_DIR")
+  log "drop: $DROP_DIR"
+}
+
+# ---------------------------------------------------------------- unpacking
+
+# Rebuild <name>.tgz from its split parts, or take a whole <name>.tgz. Parts win because they are the transfer
+# format; a whole .tgz beside them may be an older manual rebuild. Then prove the gzip+tar stream reads end to end.
+# Sets the variables named by $2 (archive path, empty if absent) and $3 (human description).
+assemble_archive() {
+  local name=$1 out="$TMP/$1.tgz" parts=() p info
+  for p in "$DROP_DIR/$name.tgz.part"*; do [[ -f "$p" ]] && parts+=("$p"); done
+  if (( ${#parts[@]} )); then
+    cat "${parts[@]}" > "$out"   # glob order is lexical = part00, part01, ... as written by split
+    info="$(mb "$out") (rebuilt from ${#parts[@]} parts)"
+  elif [[ -f "$DROP_DIR/$name.tgz" ]]; then
+    out="$DROP_DIR/$name.tgz"
+    info="$(mb "$out") (whole file)"
+  else
+    printf -v "$2" '%s' ""; return 0
+  fi
+  log "checking $name.tgz: $info"
+  tar tzf "$out" > "$TMP/$name.list" 2> "$TMP/$name.err" \
+    || die "$name.tgz is CORRUPT or truncated (tar tzf failed): $(head -n 3 "$TMP/$name.err")"
+  [[ -s "$TMP/$name.list" ]] || die "$name.tgz is empty"
+  printf -v "$2" '%s' "$out"
+  printf -v "$3" '%s' "$info"
+}
+
+# The cloud wraps everything in worship-rig/. Detect it instead of assuming: package.json at the top means no
+# wrapper; a single top-level dir holding package.json is the wrapper.
+unpack_code() {
+  local dir="$TMP/code" tops
+  assemble_archive code CODE_TGZ CODE_INFO
+  [[ -n "$CODE_TGZ" ]] || die "no code.tgz or code.tgz.part* in $DROP_DIR"
+  mkdir -p "$dir"
+  tar xzf "$CODE_TGZ" -C "$dir" || die "extracting code.tgz failed"
+  tops=$(ls -A "$dir")
+  if [[ -f "$dir/package.json" ]]; then SNAP_ROOT=$dir
+  elif [[ $(printf '%s\n' "$tops" | wc -l) -eq 1 && -f "$dir/$tops/package.json" ]]; then SNAP_ROOT="$dir/$tops"
+  else die "code.tgz has no package.json at its top or inside a single wrapper dir (top level: $(echo $tops))"
+  fi
+  log "snapshot tree: $SNAP_ROOT ($(find "$SNAP_ROOT" -type f | wc -l | tr -d ' ') files)"
+}
+
+# samples.tgz is placed automatically only when it is exactly app/samples/... (optionally inside worship-rig/),
+# which is part of the tracked tree. Anything else is left in the temp dir for a human: no guessing.
+unpack_samples() {
+  local dir="$TMP/samples" root n
+  assemble_archive samples SAMPLES_TGZ SAMPLES_INFO
+  [[ -n "$SAMPLES_TGZ" ]] || { SAMPLES_INFO=none; return 0; }
+  mkdir -p "$dir"
+  tar xzf "$SAMPLES_TGZ" -C "$dir" || die "extracting samples.tgz failed"
+  root=$dir
+  [[ "$(ls -A "$dir")" == worship-rig && -d "$dir/worship-rig" ]] && root="$dir/worship-rig"
+  if [[ "$(ls -A "$root")" == app && "$(ls -A "$root/app")" == samples && -d "$root/app/samples" ]]; then
+    mkdir -p "$SNAP_ROOT/app"
+    rsync -rlpt "$root/app/samples/" "$SNAP_ROOT/app/samples/"
+    n=$(find "$root/app/samples" -type f | wc -l | tr -d ' ')
+    SAMPLES_NOTE="app/samples/ layout ($n files): merged into the snapshot and synced (mirrored) with the code"
+    log "samples: $SAMPLES_NOTE"
+  else
+    KEEP_TMP=1
+    SAMPLES_NOTE="NOT placed (not an app/samples/ layout); extracted to $root; place it manually"
+    log "samples.tgz is not an app/samples/ tree, so it was left alone. It is extracted at:"
+    printf '      %s\n    top level:\n' "$root"
+    ls -la "$root" | sed 's/^/      /'
+    log "place it manually (it will not be synced or committed by this script)"
+  fi
+}
+
+# ---------------------------------------------------------------- rsync
+
+# .gitignore -> rsync exclude. A pattern with an inner slash is anchored to the repo root in git, so anchor it with
+# a leading "/" for rsync too; slash-free patterns match at any depth in both. Both tools read "**" and a trailing
+# "/" (directory only) the same way. Negations (!) have no exclude-only equivalent and are skipped with a warning.
+gitignore_to_rsync() {
+  local line
+  sed -e 's/[[:space:]]*$//' | while IFS= read -r line; do
+    case "$line" in
+      '' | '#'*) continue ;;
+      '!'*) warn "ignoring .gitignore negation '$line' (no rsync equivalent)"; continue ;;
+    esac
+    [[ "${line%/}" == */* && "$line" != /* ]] && line="/$line"
+    printf '%s\n' "$line"
+  done
+}
+
+# Untracked (not ignored) files are the user's local work: exclude them from rsync so --delete can't remove them;
+# unstage_foreign keeps them out of the commit. If the snapshot ships the same path, stop, as
+# `git merge` would ("untracked working tree file would be overwritten").
+write_excludes() {
+  local f="$TMP/rsync-excludes" t path clash=""
+  printf '%s\n' "${ALWAYS_EXCLUDE[@]}" | gitignore_to_rsync > "$f"
+  { cat .gitignore 2> /dev/null; cat "$SNAP_ROOT/.gitignore" 2> /dev/null; } | gitignore_to_rsync >> "$f"
+  PROTECTED=""
+  for t in "${SEPARATE_TREES[@]}"; do
+    if [[ ! -d "$SNAP_ROOT/$t" ]]; then
+      printf '/%s/\n' "$t" >> "$f"
+      [[ -e "$t" ]] && PROTECTED="$PROTECTED $t/"
+    fi
+  done
+  # --directory: a wholly untracked dir is listed once as "dir/", so the dir itself is excluded too.
+  git ls-files --others --exclude-standard --directory -z > "$TMP/untracked.z"
+  while IFS= read -r -d '' path; do
+    [[ -e "$SNAP_ROOT/${path%/}" ]] && clash="$clash"$'\n'"  $path"
+    printf '/%s\n' "$path" | sed 's/[[*?]/\\&/g' >> "$f"   # escape wildcards: these are literal names
+  done < "$TMP/untracked.z"
+  [[ -z "$clash" ]] || die "untracked local files also exist in the snapshot; move or commit them first:$clash"
+  sort -u -o "$f" "$f"
+}
+
+# -c compares content, so no -t: unchanged files keep their local mtime and only real differences are itemized.
+# -rlp, not -a: owner/group are meaningless here; -p keeps the exec bit, which git tracks.
+# openrsync (macOS) prints "not empty, cannot delete" (to stdout) for a dir the snapshot dropped that still holds
+# excluded files. Expected, and the dir is kept; those lines are dropped from the itemized list, as are ".f..T"
+# lines (only the mtime differs, which we deliberately don't copy).
+sync_tree() {
+  local dry=() out="$TMP/rsync.out"
+  (( DRY_RUN )) && dry=(-n)
+  write_excludes
+  log "rsync ${dry[*]:-} snapshot -> $(pwd) (--delete, $(wc -l < "$TMP/rsync-excludes" | tr -d ' ') excludes)"
+  rsync -rlp -c --delete --itemize-changes ${dry[@]+"${dry[@]}"} --exclude-from="$TMP/rsync-excludes" \
+    "$SNAP_ROOT/" ./ > "$out.raw" 2> "$TMP/rsync.err" || { cat "$TMP/rsync.err" >&2; die "rsync failed"; }
+  grep -v -e 'not empty, cannot delete' -e '^\.[fdL]\.\.[tT]\.\.\.\. ' "$out.raw" > "$out" || true
+  grep -v 'not empty, cannot delete' "$TMP/rsync.err" >&2 || true
+}
+
+# File counts from rsync's itemized output: >f+++ new, >f changed, *deleting (not dirs/) removed, .f mode only.
+rsync_counts() {
+  awk '/^>f\+\+\+/ {a++; next} /^>f/ {m++; next} /^\*deleting .*[^\/]$/ {d++; next} /^\.f/ {t++}
+       END { printf "%d new, %d changed, %d deleted, %d mode-only (files)", a, m, d, t }' "$TMP/rsync.out"
+}
+
+print_dry_run_changes() {
+  local list="$TMP/rsync.changes" n max=300
+  cp "$TMP/rsync.out" "$list"
+  n=$(wc -l < "$list" | tr -d ' ')
+  log "would change: $(rsync_counts)"
+  if (( n == 0 )); then echo "    (nothing: the working tree already matches the snapshot)"; return; fi
+  head -n "$max" "$list" | sed 's/^/    /'
+  if (( n > max )); then
+    KEEP_TMP=1
+    echo "    ... $((n - max)) more lines; full list: $list"
+  fi
+}
+
+# ---------------------------------------------------------------- git
+
+# The snapshot's .gitignore replaces main's on `cloud`. If it lacks a local-only line (e.g. _to_delete/), that tree
+# becomes un-ignored and `git add -A` would commit it. So stage with main's ignore rules + ALWAYS_EXCLUDE on top,
+# via core.excludesFile (an extra ignore source; it only ever hides more). Captured before leaving main.
+save_local_ignores() {
+  { printf '%s\n' "${ALWAYS_EXCLUDE[@]}"; cat .gitignore 2> /dev/null; } > "$TMP/git-excludes"
+}
+
+checkout_cloud() {
+  OLD_MAIN=$(git rev-parse HEAD)
+  save_local_ignores
+  if git show-ref --verify --quiet "refs/heads/$CLOUD_BRANCH"; then
+    git checkout -q "$CLOUD_BRANCH"
+  else
+    log "creating branch '$CLOUD_BRANCH' from $MAIN_BRANCH $(git rev-parse --short HEAD)"
+    git checkout -q -b "$CLOUD_BRANCH"
+    CLOUD_CREATED=1
+  fi
+  OLD_CLOUD=$(git rev-parse HEAD)
+}
+
+# "A added, M modified, D deleted" plus a per-top-level-directory breakdown.
+summarize_diff() {
+  CHANGE_NOTE=$(git diff --name-status --no-renames "$1" "$2" | awk '
+    { k = substr($1, 1, 1); if (k == "A") a++; else if (k == "D") d++; else m++ }
+    END { printf "%d added, %d modified, %d deleted", a, m, d }')
+  CHANGE_NOTE="$CHANGE_NOTE ($(git diff --shortstat "$1" "$2" | sed 's/^ *//'))"
+  BY_DIR=$(git diff --name-only --no-renames "$1" "$2" | awk -F/ '{ print (NF > 1 ? $1 "/" : $1) }' \
+    | sort | uniq -c | sort -rn | awk '{ printf "%s%s %d", (NR > 1 ? ", " : ""), $2, $1 }')
+}
+
+# Belt and braces: a snapshot commit may only add files that are in the snapshot. Anything else staged as new
+# (the user's untracked files, a tree some ignore rule no longer covers) is unstaged again and left on disk.
+unstage_foreign() {
+  local path n=0
+  : > "$TMP/foreign.z"
+  while IFS= read -r -d '' path; do
+    [[ -e "$SNAP_ROOT/$path" ]] && continue
+    printf '%s\0' "$path" >> "$TMP/foreign.z"
+    n=$((n + 1))
+  done < <(git diff --cached --name-only --diff-filter=A --no-renames -z)
+  (( n )) || return 0
+  GIT_LITERAL_PATHSPECS=1 git reset -q --pathspec-from-file="$TMP/foreign.z" --pathspec-file-nul
+  warn "$n new file(s) not in the snapshot were left out of the commit (still on disk), e.g.:"
+  tr '\0' '\n' < "$TMP/foreign.z" | head -n 5 | sed 's/^/    /' >&2
+}
+
+commit_cloud() {
+  git -c core.excludesFile="$TMP/git-excludes" add -A
+  unstage_foreign
+  if git diff --cached --quiet; then
+    log "snapshot identical to cloud branch"
+    CHANGE_NOTE="none: snapshot identical to cloud branch"
+  else
+    git commit -q -m "cloud snapshot $STAMP"
+    summarize_diff "$OLD_CLOUD" HEAD
+    log "committed $(git rev-parse --short HEAD) on $CLOUD_BRANCH: $CHANGE_NOTE"
+  fi
+  NEW_CLOUD=$(git rev-parse HEAD)
+}
+
+conflict_banner() {
+  local conflicts=$1 core bar
+  bar=$(printf '#%.0s' {1..88})
+  core=$(printf '%s\n' "$conflicts" | grep -E '^(app|test)/' || true)
+  printf '\n%s\n' "$bar"
+  if [[ -n "$core" ]]; then
+    echo "#  CONFLICTS in app/ or test/ — resolve manually, then: git add -A && git commit; then run npm test"
+  else
+    echo "#  CONFLICTS (none in app/ or test/) — resolve manually, then: git add -A && git commit"
+  fi
+  echo "#  The merge of '$CLOUD_BRANCH' into '$MAIN_BRANCH' is left IN PROGRESS. To back out: git merge --abort"
+  printf '%s\n\nConflicted paths:\n' "$bar"
+  printf '%s\n' "$conflicts" | sed 's/^/  /'
+  echo
+  echo "cloud snapshot commit: $(git rev-parse --short "$CLOUD_BRANCH") (\"cloud snapshot $STAMP\")"
+}
+
+merge_into_main() {
+  local conflicts
+  git checkout -q "$MAIN_BRANCH"
+  if git merge --no-edit "$CLOUD_BRANCH" > "$TMP/merge.out" 2>&1; then
+    NEW_MAIN=$(git rev-parse HEAD)
+    if [[ "$NEW_MAIN" == "$OLD_MAIN" ]]; then MERGE_NOTE="already up to date (main unchanged)"
+    elif git rev-parse -q --verify HEAD^2 > /dev/null; then
+      MERGE_NOTE="clean merge commit $(git rev-parse --short HEAD)"
+    else MERGE_NOTE="fast-forward to $(git rev-parse --short HEAD)"
+    fi
+    log "merge: $MERGE_NOTE"
+    return 0
+  fi
+  conflicts=$(git diff --name-only --diff-filter=U)
+  [[ -n "$conflicts" ]] || { cat "$TMP/merge.out" >&2; die "git merge failed (no conflicted paths; see above)"; }
+  conflict_banner "$conflicts"
+  exit 2
+}
+
+# Lines main lost from .gitignore: local-only ignores the cloud never had. Worth a warning; they now leave main.
+check_gitignore() {
+  local lost
+  lost=$(git diff "$OLD_MAIN" "$NEW_MAIN" -- .gitignore | sed -n 's/^-\([^-].*\)$/\1/p' | grep -v '^#' || true)
+  [[ -n "$lost" ]] || return 0
+  GITIGNORE_NOTE="cloud removed: $(printf '%s' "$lost" | tr '\n' ' ')(re-add on main if still wanted)"
+}
+
+maybe_npm_install() {
+  git diff --quiet "$OLD_MAIN" "$NEW_MAIN" -- package.json package-lock.json && return 0
+  log "package.json / package-lock.json changed: running npm install"
+  if npm install; then NPM_NOTE="ran (ok)"; else NPM_NOTE="ran and FAILED (exit $?)"; fi
+}
+
+run_tests() {
+  (( RUN_TESTS )) || return 0
+  log "running npm test -- --fast (takes a few minutes)"
+  npm test -- --fast || TEST_RC=$?
+  if (( TEST_RC == 0 )); then TEST_NOTE="PASS (exit 0)"; else TEST_NOTE="FAIL (exit $TEST_RC)"; fi
+  TEST_NOTE="$TEST_NOTE; logs: $(pwd)/test/logs/ (summary.txt)"
+}
+
+# ---------------------------------------------------------------- summary
+
+print_summary() {
+  local line title="sync-from-cloud summary"
+  line=$(printf '=%.0s' {1..92})
+  (( DRY_RUN )) && title="$title (DRY RUN: nothing committed, checked out or merged)"
+  printf '\n%s\n  %s\n%s\n' "$line" "$title" "$line"
+  printf '  %-13s %s\n' stamp "$STAMP" drop "$DROP_DIR" code.tgz "$CODE_INFO" samples.tgz "$SAMPLES_INFO" \
+    samples "$SAMPLES_NOTE"
+  [[ -z "$PROTECTED" ]] || printf '  %-13s %s\n' protected "${PROTECTED# } (not in snapshot: left untouched)"
+  if (( DRY_RUN )); then
+    printf '  %-13s %s\n' "would change" "$(rsync_counts) (vs. current tree on $(git branch --show-current))"
+  else
+    printf '  %-13s %s\n' "cloud commit" "$(git rev-parse --short "$NEW_CLOUD")$( (( CLOUD_CREATED )) \
+      && echo " (branch '$CLOUD_BRANCH' newly created from $MAIN_BRANCH $(git rev-parse --short "$OLD_CLOUD"))")"
+    printf '  %-13s %s\n' changes "$CHANGE_NOTE"
+    [[ -z "$BY_DIR" ]] || printf '  %-13s %s\n' "  by dir" "$BY_DIR"
+    [[ -z "$GITIGNORE_NOTE" ]] || printf '  %-13s %s\n' .gitignore "$GITIGNORE_NOTE"
+    printf '  %-13s %s\n' merge "$MERGE_NOTE" "npm install" "$NPM_NOTE" tests "$TEST_NOTE"
+  fi
+  printf '  %-13s %s\n%s\n' branch "$(git branch --show-current)" "$line"
+  if (( CLOUD_CREATED )); then
+    echo "  note: first run. '$CLOUD_BRANCH' started at main, so main-only edits to tracked files were reverted by"
+    echo "  the snapshot and that reversion was merged into main (see .gitignore above). Later runs merge normally."
+  fi
+  return 0
+}
+
+main() {
+  parse_args "$@"
+  check_repo
+  resolve_drop
+  TMP=$(mktemp -d "${TMPDIR:-/tmp}/sync-from-cloud.XXXXXX")
+  unpack_code
+  unpack_samples
+  if (( DRY_RUN )); then
+    sync_tree
+    print_dry_run_changes
+    print_summary
+    return 0
+  fi
+  checkout_cloud
+  sync_tree
+  commit_cloud
+  merge_into_main
+  check_gitignore
+  maybe_npm_install
+  run_tests
+  print_summary
+  (( TEST_RC == 0 )) || exit 3
+}
+
+main "$@"
