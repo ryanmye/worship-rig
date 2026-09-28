@@ -52,3 +52,64 @@ Low-resource must be observable: `engine._debugStats()` gains `lowResource:true`
 ## Not in v1
 Global hotkeys (later, via `globalShortcut`), Touch Bar, a Windows/Linux tray (Electron supports it; test later), multiple
 menu-bar sets.
+
+## Electron side: as built (LOCAL, branch `menubar-local`)
+
+**Files.** `main.js` (section "menu-bar mode"), `preload.js` (bus methods on `window.rig`), `build/trayTemplate.png`
+(22×22) + `build/trayTemplate@2x.png` (44×44) from `build/trayTemplate.svg` via `node build/make-tray-icon.mjs`
+(no deps; main.js also embeds the PNGs, because electron-builder `files` does not ship `build/`), `app/mini.html`
+(**placeholder**, see below), `test/phase1/shell/electron.boot.mjs` (menu-bar self-test assertions).
+
+**`window.rig` (preload.js).** All messages are JSON **strings** (`{"v":1,…}`), exactly as in "Messages" above.
+
+| method | who | what |
+|---|---|---|
+| `busPublish(stateJson)` → `Promise<{ok, seq}\|{error}>` | main renderer only | ≤ 64 KB; `v:1`, `modes` array of `{id, name}`, `current` null or `{id, name}` |
+| `onBusCommand(cb)` → unsubscribe | main renderer | `cb(commandJson)`; never `openMain` (main.js handles it) |
+| `miniSubscribe(cb)` → unsubscribe | popover | `cb(stateJson)` for every publish, plus the last one right away; in order (a stale "last state" reply never overwrites a newer push) |
+| `miniCommand(commandJson)` → `Promise<{ok}\|{error}>` | popover (any page of ours) | ≤ 4 KB; type from the command list; `selectMode.id` string, `master.value` 0..2, `droneKey.pc` int 0..11, `lowResource.on` / `record.on` boolean |
+| `setMenuBarMode(on)` → `Promise<MenuBarState>` | both | mirror of `settings.menuBarMode`; persisted in `<userData>/rig-shell.json`, so the tray exists before the renderer boots |
+| `getMenuBarState()` → `Promise<MenuBarState>` | both | `{on, popoverOpen, loginItem, windowVisible, tray}` |
+| `setLoginItem(on)` → `Promise<MenuBarState\|{error}>` | both | `app.setLoginItemSettings({openAtLogin, openAsHidden:true})`; packaged app only (from source it would register the bare Electron binary) |
+| `onMenuBarState(cb)` → unsubscribe | both | pushes `MenuBarState` on every change (popover shown/hidden, window shown/hidden, mode, login item): the renderer's "window hidden and popover closed" low-resource trigger |
+
+IPC channels: `rig:busPublish`, `rig:miniCommand`, `rig:miniLastState`, `rig:setMenuBarMode`, `rig:getMenuBarState`,
+`rig:setLoginItem` (invoke; our origin only, like every `rig:*` handler) and `rig:busCommand`, `rig:miniState`,
+`rig:menuBarState` (main → renderer). Invalid payloads resolve to `{error}` and never replace the last state.
+
+**Tray** (macOS only in v1). Left click toggles the popover; right click or ⌃/⌘-click opens the menu: "Now: <name>
+(<key>)" (disabled), the modes as radio items (≤ 12), Previous, Next, Panic (all notes off), Low-resource mode
+(checkbox), Open Worship Rig, Quit Worship Rig. The menu is rebuilt only when `current`, `modes` or `lowResource`
+change; the tooltip shows the current mode. Menu clicks send the same commands as the popover.
+
+**Popover.** Frameless, transparent, 320×440, always on top (`pop-up-menu` level), on every Space; created on the
+first tray click and then kept (hidden). Centred under the tray icon, 4 px below it, clamped to the display's work area
+(`popoverBounds()`, exported). Hidden on blur, Esc, a second tray click and `openMain`. Loads
+`http://127.0.0.1:<port>/mini.html` (same origin: localStorage and BroadcastChannel are shared). While hidden it gets
+no state pushes; the newest state is sent when it is shown.
+
+**Hide-on-close (macOS, menu-bar mode on).** Closing the window (red button, ⌘W) hides it, audio keeps running, the
+dock icon goes away, and a library backup is still written (same `__rigShell.library()` path as a real close). The app
+quits only from the tray, the app menu or ⌘Q (`before-quit` → `quitting`); quitting while hidden and recording shows
+the window first, so the "recording in progress" sheet is visible. Dock click, second launch and `openMain` show and
+focus the window and bring the dock icon back. `--hidden` (or a login-item launch; best effort, macOS 13+ deprecates
+those flags) starts with the window hidden. Turning menu-bar mode off shows a hidden window again and removes the tray.
+
+**Placeholder `app/mini.html`.** The server's CSP forbids inline scripts and LOCAL may not add files under `app/js`,
+so the placeholder has no script. main.js `drivePlaceholder()` injects a small driver (miniSubscribe → text, three
+buttons → miniCommand, `hello` on load) only into pages marked `<html data-rig-mini-placeholder>`. **Cloud: replace
+the file with the real popover and delete `drivePlaceholder()`.** The self-test does not depend on the placeholder:
+it calls `window.rig.miniSubscribe` / `miniCommand` in whatever `/mini.html` is served.
+
+**Self-test (`RIG_SELFTEST=1`).** After the page's own checks, main.js runs `menubarSelftest()` and adds `menubar` to
+the `RIG_SELFTEST` line: `tray`; the menu (labels, radio/checkbox state) after a fake state is published through
+`window.rig.busPublish`; six rejected payloads; tray-menu clicks arriving through `onBusCommand`; the popover opened
+through the tray-click path (URL, 320×440, state received, a command relayed, Esc, toggle: transitions
+`show,hide,show,hide`); and on macOS hide-on-close (hidden, not destroyed, dock hidden, library backup written) +
+`openMain`. It runs on the shell fixture page only: a page with `window.__rig` (the real app, e.g. electron-full's
+probe) gets `menubar: {skipped}`, so no fake state or command reaches a real controller. The boot test copies
+`app/mini.*` into its fixture app dir and asserts all of it; the popover's console counts toward the zero-errors check.
+
+**macOS caveat.** Window `show`/`hide`/`blur` events follow the occlusion state, so they don't fire while the screen is
+locked; main.js does its popover bookkeeping in `showPopover`/`hidePopover` instead. Blur-to-hide and the real tray
+click can only be checked by hand at an unlocked Mac.

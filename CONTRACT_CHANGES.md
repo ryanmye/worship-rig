@@ -2892,3 +2892,51 @@ pending / denied / failed). Screenshots: `test/phase2/ui-core/screenshots/respon
   "Reverb level" is gone from the learn table). `shared/params.js` still labels the row 'Reverb level' (frozen).
 - **Runs (Linux, one at a time, no re-runs needed):** `node test/phase2/edit-v2/run.mjs` 11/11 files, 90 tests,
   0 fail; `node test/phase2/settings/run.mjs` 29/29; `node test/phase2/ui-core/run.mjs` 46/46.
+
+## menubar-electron (L14; main.js, preload.js, build/trayTemplate*, app/mini.html placeholder, electron.boot.mjs)
+- **What:** the Electron side of `docs/menubar-mode.md`: Tray (macOS) with a menu rebuilt from the bus `state`, a
+  320×440 frameless popover loading `/mini.html`, hide-on-close + dock hide while menu-bar mode is on, "Open at
+  login", and the bus relay. Details and the full method table: docs/menubar-mode.md "Electron side: as built".
+- **New `window.rig` methods:** `busPublish(stateJson)`, `onBusCommand(cb)`, `miniSubscribe(cb)`,
+  `miniCommand(commandJson)`, `setMenuBarMode(on)`, `getMenuBarState()` (the contract's six), plus
+  `setLoginItem(on)` and `onMenuBarState(cb)` (additions: the Settings "open at login" switch needs a setter, and the
+  renderer's auto low-resource trigger, "window hidden and popover closed", needs a push instead of polling).
+  Payloads and callback arguments are JSON **strings**; `MenuBarState` = `{on, popoverOpen, loginItem, windowVisible,
+  tray}`.
+- **Validation:** state ≤ 64 KB, commands ≤ 4 KB; `v:1`; `modes` array of `{id, name}`; command type from the contract
+  list, plus field checks (`selectMode.id`, `master.value` 0..2, `droneKey.pc` 0..11, `lowResource.on`/`record.on`
+  boolean). Only the main window may publish. Every channel goes through `handle()` (our origin only).
+- **`rig-shell.json` gains `menuBarMode`** (written on change only), so the tray exists before the renderer boots.
+  `setLoginItem` refuses from source (`app.isPackaged` false), because it would register the bare Electron binary.
+- **Packaging note:** electron-builder `files` doesn't include `build/`, so main.js embeds the two tray PNGs (base64,
+  about 700 bytes) and prefers `build/trayTemplate.png` when it exists (from source).
+- **Placeholder popover:** `app/mini.html` has no script (CSP: no inline scripts; `app/js/**` belongs to the cloud),
+  so main.js injects a driver into pages marked `data-rig-mini-placeholder`. Replace the file and delete
+  `drivePlaceholder()` when the cloud's mini UI lands.
+- **Self-test (Mac, RIG_PORT=8452, fixture app + `app/mini.html`):** exit 0; `menubar.tray` true; the menu after a
+  fake publish reads `Now: Selftest Pad + Piano  (D)` / 3 radio modes (2nd checked) / Previous / Next / Panic (all notes
+  off) / Low-resource mode ☑ / Open Worship Rig / Quit Worship Rig; 6/6 bad payloads refused, state kept; tray clicks
+  → `selectMode st-3`, `nextMode`, `lowResource on:false` in the main renderer; popover `/mini.html` 320×440, got the
+  state, `prevMode` relayed, transitions `show,hide,show,hide` (Esc, then toggle); hide-on-close `{destroyed:false,
+  visible:false, dock:false}` with the library backup written (`hideBackup: true`; the rotation test still sees 10
+  files incl. n=11), `openMain` → `{visible:true, dock:true}`. Skipped on real-app pages (`window.__rig`), so
+  electron-full's probe gets no fake state or commands. Console errors: only the deliberate
+  `__selftest-404.json`; no HTTP ≥ 400 from `/mini.html` (curl: 200). The boot file itself pins port 8438 (asserts and
+  the M5 test), so it was not run here; its new test body was checked against this report.
+- **Idle baseline (Mac, real app from source, fresh userData, menu-bar mode on, `--hidden`, popover never opened,
+  30 s after a 30 s boot; CPU = Δ cpu-time / 30 s; the renderer-side low-resource mode is not in this tree yet):**
+
+  | process | CPU % | RSS MB first → last |
+  |---|---|---|
+  | browser (main) | 0.2 | 136 → 134 |
+  | GPU | 8.7 | 70 → 70 |
+  | renderer (main window, audio) | 30.4 | 288 → 192 |
+  | audio service | 0.5 | 37 → 37 |
+  | network service | 0.0 | 42 → 43 |
+  | video utility | 0.0 | 46 → 45 |
+  | **total** | **39.9** | **619 → 520** |
+
+  Same run with the window "visible": 44.0 % / 767 → 510 MB. The screen was locked during both runs, so the
+  "visible" window was occluded too and the two are about the same. The 30 % renderer and 9 % GPU while hidden are
+  what the cloud's low-resource mode has to remove (rAF/meter loops keep running with `backgroundThrottling:false`).
+  The popover adds one renderer process once it has been opened (it is kept, hidden, afterwards).
