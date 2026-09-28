@@ -1222,13 +1222,17 @@ function installSelftest(wc) {
     }
   });
   const LEVELS = ['verbose', 'info', 'warning', 'error'];
-  wc.on('console-message', (e, lvl, msg) => {
-    const level = typeof e.level === 'string' ? e.level : LEVELS[e.level ?? lvl] || String(lvl);
-    const message = e.message ?? msg;
-    if (level === 'error') counts.error += 1;
-    if (level === 'warning') counts.warning += 1;
-    consoleLog.push({ level, message: String(message).slice(0, 500) });
-  });
+  // L14: the popover's console counts too (selftestWatch is called from createPopover)
+  selftestWatch = (w, source) => {
+    w.on('console-message', (e, lvl, msg) => {
+      const level = typeof e.level === 'string' ? e.level : LEVELS[e.level ?? lvl] || String(lvl);
+      const message = e.message ?? msg;
+      if (level === 'error') counts.error += 1;
+      if (level === 'warning') counts.warning += 1;
+      consoleLog.push({ level, message: String(message).slice(0, 500), ...(source ? { source } : {}) });
+    });
+  };
+  selftestWatch(wc, null);
   const timeoutMs = Number(process.env.RIG_SELFTEST_TIMEOUT_MS) || 25000;
   const started = Date.now();
   let finished = false;
@@ -1245,7 +1249,11 @@ function installSelftest(wc) {
     if (finished || wc.isDestroyed()) return;
     try {
       const r = await wc.executeJavaScript('window.__RIG_SELFTEST__ ? JSON.stringify(window.__RIG_SELFTEST__) : null', true);
-      if (r) return finish({ result: JSON.parse(r) }, 0);
+      if (r) {
+        const menubar = await withTimeout(menubarSelftest(wc), 20000, { error: 'menubar self-test timed out' })
+          .catch((err) => ({ error: (err && err.message) || String(err) }));
+        return finish({ result: JSON.parse(r), menubar }, 0);
+      }
     } catch {
       /* page not ready yet */
     }
@@ -1254,6 +1262,103 @@ function installSelftest(wc) {
   };
   wc.on('did-fail-load', (_e, code, desc) => finish({ result: null, loadError: `${code} ${desc}` }, 3));
   wc.once('did-finish-load', () => setTimeout(poll, 100));
+}
+
+/**
+ * L14 self-test (RIG_SELFTEST=1): menu-bar mode end to end through the real IPC paths. The fixture page calls the
+ * bridge (setMenuBarMode, onBusCommand, busPublish) via executeJavaScript; the popover loads /mini.html and uses
+ * miniSubscribe / miniCommand; tray menu items are clicked like a user would. Reported as `menubar` in the JSON line.
+ */
+async function menubarSelftest(wc) {
+  const out = { platform: process.platform };
+  const js = (w, code) => withTimeout(w.executeJavaScript(code, true), 5000, { error: 'executeJavaScript timeout' });
+  const settle = (ms) => new Promise((r) => setTimeout(r, ms));
+  const waitFor = async (fn, ms = 5000) => {
+    const t0 = Date.now();
+    while (Date.now() - t0 < ms) {
+      if (await fn()) return true;
+      await settle(50);
+    }
+    return false;
+  };
+  out.before = await js(wc, 'window.rig.getMenuBarState()');
+  out.setMenuBarMode = await js(wc, 'window.rig.setMenuBarMode(true)');
+  out.tray = !!(tray && !tray.isDestroyed());
+  out.shellConfig = readShellConfig().menuBarMode === true;
+  out.menuBeforeState = trayMenu ? trayMenu.items.filter((i) => i.type !== 'separator').map((i) => i.label) : null;
+  await js(wc, "window.__mbCmds = []; window.rig.onBusCommand((j) => window.__mbCmds.push(JSON.parse(j))); true");
+  const fake = {
+    v: 1,
+    current: { id: 'st-2', name: 'Selftest Pad + Piano', key: 'D' },
+    modes: [
+      { id: 'st-1', name: 'Selftest Opener', key: 'G', index: 0 },
+      { id: 'st-2', name: 'Selftest Pad + Piano', key: 'D', index: 1 },
+      { id: 'st-3', name: 'Selftest Closer', key: 'E', index: 2 },
+    ],
+    master: 0.5, masterDb: -6, droneOn: true, droneKey: 'D', audio: 'running', latencyMs: 12,
+    midi: { connected: false, name: null }, lowResource: true, recording: false, windowVisible: true, memoryMB: 100,
+  };
+  const pub = (o) => js(wc, `window.rig.busPublish(${JSON.stringify(typeof o === 'string' ? o : JSON.stringify(o))})`);
+  out.publish = await pub(fake);
+  out.menu = trayMenu.items.filter((i) => i.type !== 'separator').map((i) => ({
+    label: i.label, type: i.type, checked: i.checked, enabled: i.enabled,
+  }));
+  // invalid payloads are refused and do not replace the state
+  const big = JSON.stringify({ ...fake, pad: 'x'.repeat(70 * 1024) });
+  const cmd = (w, o) => js(w, `window.rig.miniCommand(${JSON.stringify(typeof o === 'string' ? o : JSON.stringify(o))})`);
+  out.rejects = {
+    publishTooBig: (await pub(big)).error,
+    publishNotJson: (await pub('{nope')).error,
+    publishNoModes: (await pub({ v: 1, current: null })).error,
+    commandUnknown: (await cmd(wc, { v: 1, type: 'formatDisk' })).error,
+    commandBadMaster: (await cmd(wc, { v: 1, type: 'master', value: 9 })).error,
+    commandWrongVersion: (await cmd(wc, { v: 2, type: 'panic' })).error,
+  };
+  out.stateKept = JSON.parse(busStateJson).current.id === 'st-2';
+  // tray menu clicks → commands in the main renderer
+  trayMenu.getMenuItemById('mode:st-3').click();
+  trayMenu.getMenuItemById('next').click();
+  trayMenu.getMenuItemById('lowResource').click(); // MenuItem.click() flips a checkbox first, like a user click
+  await waitFor(async () => (await js(wc, 'window.__mbCmds.length')) >= 3);
+  out.trayCommands = await js(wc, 'window.__mbCmds.splice(0)');
+  // popover: open (the tray-click path), receive the state, send a command, Esc closes, toggle again
+  togglePopover();
+  out.popoverShown = await waitFor(() => !!(popover && popover.isVisible()));
+  const pw = popover.webContents;
+  await waitFor(() => !pw.isLoading(), 8000);
+  out.popoverUrl = pw.getURL();
+  out.popoverState = await js(pw, `new Promise((res) => {
+    const off = window.rig.miniSubscribe((j) => { off(); res(JSON.parse(j).current.name); });
+    setTimeout(() => res(null), 3000);
+  })`);
+  out.popoverBridgeState = await js(pw, 'window.rig.getMenuBarState()');
+  out.popoverCommand = await cmd(pw, { v: 1, type: 'prevMode' });
+  await waitFor(async () => js(wc, "window.__mbCmds.some((c) => c.type === 'prevMode')"));
+  out.popoverCommands = await js(wc, 'window.__mbCmds.splice(0)');
+  out.placeholderText = await js(pw, "(document.getElementById('now') || {}).textContent || null");
+  const b = popover.getBounds();
+  out.popoverSize = [b.width, b.height];
+  pw.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+  out.popoverHiddenByEsc = await waitFor(() => !popover.isVisible());
+  await settle(350); // past the blur/click debounce
+  togglePopover();
+  const reopened = await waitFor(() => popover.isVisible());
+  togglePopover();
+  out.popoverToggled = reopened && (await waitFor(() => !popover.isVisible()));
+  out.popoverTransitions = popoverLog.slice();
+  // hide-on-close (macOS): the window hides instead of closing, the dock icon goes away; openMain brings both back
+  if (IS_MAC) {
+    win.close();
+    await waitFor(() => !win.isVisible());
+    out.hideOnClose = { destroyed: win.isDestroyed(), visible: win.isVisible(), dock: app.dock.isVisible() };
+    out.openMain = await cmd(pw, { v: 1, type: 'openMain' });
+    await waitFor(() => win.isVisible());
+    out.afterOpenMain = { visible: win.isVisible(), dock: app.dock.isVisible() };
+  } else {
+    out.hideOnClose = 'macOS only';
+  }
+  out.after = await js(wc, 'window.rig.getMenuBarState()');
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------
