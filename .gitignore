@@ -14,3 +14,6 @@ _to_delete/
 
 # cloud → local task inbox (transient; the outbox and reviews/ are tracked on purpose)
 .cloud-inbox/
+
+# Claude Code agent worktrees (local tooling)
+.claude/worktrees/
