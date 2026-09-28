@@ -18,7 +18,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
-import { checker, freePort, logsDir, repoRoot, sleep } from './lib.mjs';
+import { checker, freePort, logsDir, repoRoot, sleep, waitRigReady } from './lib.mjs';
 
 const require = createRequire(import.meta.url);
 const { createServer } = require('../../server.js');
@@ -330,7 +330,10 @@ try {
   page.on('crash', () => consoleErrors.push('page crashed'));
   await page.goto(`${base}/`);
   await page.waitForFunction(() => !!window.__rig, null, { timeout: 30000 });
-  await page.evaluate(() => Promise.all([window.__rig.ready, window.__rig.viewsReady]));
+  // L-4: bounded; a hang throws with controller.status.midi instead of eating the soak's budget.
+  await waitRigReady(page, { timeout: 30000, what: 'soak: window.__rig.ready' });
+  await page.evaluate((ms) => Promise.race([window.__rig.viewsReady, new Promise((_, rej) =>
+    setTimeout(() => rej(new Error(`soak: window.__rig.viewsReady did not resolve within ${ms} ms`)), ms))]), 30000);
   if (await page.isVisible('#overlay-start')) await page.click('#overlay-start');
   await page.waitForFunction(() => window.__rig.engine.ctx && window.__rig.engine.ctx.state === 'running', null, { timeout: 10000 });
   await page.evaluate(INSTALL);

@@ -16,7 +16,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
-import { checker, freePort, httpGet, portIsFree, repoRoot, sleep, waitFor } from './lib.mjs';
+import { checker, freePort, httpGet, portIsFree, repoRoot, sleep, waitFor, waitRigReady } from './lib.mjs';
 
 const { check, skip, finish } = checker('chrome-fallback');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'rig-it-serve-'));
@@ -85,7 +85,7 @@ try {
   if (overlayShown) await page.click('#overlay-start');
   const running = await page.waitForFunction(() => window.__rig.engine.ctx && window.__rig.engine.ctx.state === 'running' && document.getElementById('overlay-start').hidden, null, { timeout: 10000 }).then(() => true, () => false);
   check('click → AudioContext running, overlay hidden', running, JSON.stringify(await page.evaluate(() => ({ ctx: window.__rig.engine.ctx && window.__rig.engine.ctx.state, overlayHidden: document.getElementById('overlay-start').hidden }))));
-  await page.evaluate(() => window.__rig.ready);
+  await waitRigReady(page, { timeout: 30000, what: 'chrome-fallback: window.__rig.ready' }); // L-4: bounded
   const songReady = await page.waitForFunction(() => !window.__rig.controller.status.loading && window.__rig.engine.slots.some(Boolean), null, { timeout: 30000 }).then(() => true, () => false);
   check('current song loaded after the click', songReady, JSON.stringify(await page.evaluate(() => ({ status: window.__rig.controller.status, slots: window.__rig.engine.slots.map((s) => !!s) }))));
   await page.evaluate(() => document.activeElement && document.activeElement.blur && document.activeElement.blur());
