@@ -1,3 +1,136 @@
 /* OWNER: song agent. Song header + Song panel (panels/song-header.js, panels/song.js).
    Scope rule (views/edit/CONTRACT.md §4): every selector starts with .ev2 and uses only the .ev2-song-* classes you
    create (plus the shared .ev2-* widgets from styles-edit-v2.css). No element/global selectors, no :root. */
+
+/* ------------------------------------------------------------------ header row (edit.html .shead / .hchip / .live) */
+.ev2 .ev2-song-head { flex: 1 1 auto; min-width: 0; height: 100%; display: flex; align-items: center; gap: 10px; }
+/* (0,4,0) out-ranks the shared .ev2 .ev2-btn rules (written when they loaded after this file; base.css now loads
+   first, so equal specificity would also do) */
+.ev2 .ev2-song-head .ev2-btn.ev2-song-songsbtn { display: none; flex: none; }
+.ev2 .ev2-song-live {
+  display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 12px; flex: none;
+  background: #16301f; color: #8fe0b1; font-size: 12px; font-weight: 800; letter-spacing: .06em;
+}
+.ev2 .ev2-song-live i {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--ok, #3ddc84); box-shadow: 0 0 7px var(--ok, #3ddc84);
+}
+.ev2 .ev2-song-name {
+  field-sizing: content; min-width: 6ch; max-width: 380px; flex: 0 1 auto; height: 40px; margin: 0 6px 0 0;
+  padding: 0 6px; border: 1px solid transparent; border-radius: 7px; background: transparent;
+  color: var(--text, #f1f4f8); font: inherit; font-size: 25px; font-weight: 700; text-overflow: clip;
+}
+.ev2 .ev2-song-name.long:not(:focus) { text-overflow: ellipsis; }
+.ev2 .ev2-song-name:hover { border-color: var(--line-2, #3a414d); }
+.ev2 .ev2-song-name:focus { border-color: var(--line-2, #3a414d); background: var(--panel-2, #1c2027); outline: none; }
+.ev2 .ev2-song-name:focus-visible { outline: 2px solid var(--focus, #7cc4ff); outline-offset: 1px; }
+
+.ev2 .ev2-song-chip {
+  display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; border-radius: 19px; flex: none;
+  border: 1px solid var(--line-2, #3a414d); background: var(--panel-2, #1c2027); color: var(--text, #f1f4f8);
+  font-size: 14px; font-weight: 600; white-space: nowrap;
+}
+.ev2 button.ev2-song-chip:hover, .ev2 .ev2-song-bpmnum:hover { border-color: #4a5260; }
+.ev2 .ev2-song-chip .ev2-ic { color: var(--muted, #a3acb8); }
+.ev2 .ev2-song-chip b { font-size: 15px; }
+.ev2 .ev2-song-chip .ev2-cdi { margin: 0 -3px 0 0; }
+.ev2 .ev2-song-chip .ev2-cdi[hidden] { display: none; }
+.ev2 .ev2-song-chipcap {
+  font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted, #a3acb8); font-weight: 700;
+}
+.ev2 .ev2-song-muted { color: var(--muted, #a3acb8); font-weight: 600; }
+.ev2 .ev2-song-bpmchip { padding: 0 4px 0 0; gap: 2px; }
+.ev2 .ev2-song-bpmnum {
+  display: inline-flex; align-items: center; gap: 8px; height: 100%; padding: 0 8px 0 12px; border: 0;
+  border-radius: 19px 0 0 19px; background: transparent; font-weight: 600;
+}
+.ev2 .ev2-song-bpmchip .ev2-song-tap {
+  margin-left: 2px; min-height: 28px; padding: 3px 10px; border: 0; border-radius: 12px;
+  background: var(--panel-3, #252a33); color: var(--text, #f1f4f8); font-size: 12px; font-weight: 700;
+}
+.ev2 .ev2-song-bpmchip .ev2-song-tap:hover { background: #2f3540; }
+.ev2 .ev2-song-noteschip.has .ev2-ic { color: var(--text, #f1f4f8); }
+.ev2 .ev2-song-flash { animation: ev2-song-tap .25s ease-out; }
+@keyframes ev2-song-tap {
+  from { background: var(--accent, #ffc94d); color: var(--accent-ink, #1a1300); }
+}
+
+.ev2 .ev2-song-loading {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border-radius: 12px; flex: none;
+  background: var(--panel-3, #252a33); color: var(--muted, #a3acb8); font-size: 12px; font-weight: 700;
+}
+.ev2 .ev2-song-loading[hidden] { display: none; }
+.ev2 .ev2-song-livehint {
+  font-size: 12.5px; color: var(--ev2-faint); line-height: 1.3; max-width: 250px; text-align: right;
+  /* the hint gives up its width before the song name does (integrator: the name was ellipsized at 1440) */
+  flex: 0 100 auto; min-width: 0; max-height: 100%; overflow: hidden;
+}
+.ev2 .ev2-song-head .ev2-btn.ev2-song-menubtn { flex: none; }
+
+/* menu + confirm popovers: fixed, so the clipped header region doesn't cut them off */
+.ev2 .ev2-song-pop {
+  position: fixed; z-index: 60; min-width: 210px; max-width: min(420px, calc(100vw - 16px)); padding: 6px;
+  background: var(--panel-2, #1c2027); border: 1px solid var(--line-2, #3a414d); border-radius: 10px;
+  box-shadow: 0 18px 48px #000c; display: flex; flex-direction: column;
+}
+.ev2 .ev2-song-pop[hidden] { display: none; }
+.ev2 .ev2-song-mi {
+  display: flex; align-items: center; min-height: 36px; padding: 0 12px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--text, #f1f4f8); font-size: 14px; font-weight: 600; text-align: left;
+}
+.ev2 .ev2-song-mi:hover, .ev2 .ev2-song-mi:focus { background: var(--panel-3, #252a33); outline: none; }
+.ev2 .ev2-song-mi:focus-visible { box-shadow: inset 0 0 0 2px var(--focus, #7cc4ff); }
+.ev2 .ev2-song-mi.danger { color: #ff8a8c; }
+.ev2 .ev2-song-sep { width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--line, #2d333d); }
+.ev2 .ev2-song-pop[role="alertdialog"] { padding: 12px 14px; gap: 10px; width: 340px; }
+.ev2 .ev2-song-q { margin: 0; font-size: 14px; line-height: 1.4; }
+.ev2 .ev2-song-qbtns { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* ------------------------------------------------------------------ Song panel (block 'song') */
+.ev2 .ev2-song-cols { grid-template-columns: minmax(0, 1.25fr) minmax(0, .85fr) minmax(0, 1.3fr); }
+.ev2 .ev2-song-col h3 { margin: 0; }
+.ev2 .ev2-song-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; margin-bottom: 14px; }
+.ev2 .ev2-song-row.mid { align-items: center; }
+.ev2 .ev2-song-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ev2 .ev2-song-flabel { font-size: 12px; font-weight: 700; color: var(--muted, #a3acb8); }
+.ev2 .ev2-song-select, .ev2 .ev2-song-tempo {
+  height: 38px; min-width: 88px; padding: 0 10px; border: 1px solid var(--line-2, #3a414d); border-radius: 7px;
+  background: var(--panel-2, #1c2027); color: var(--text, #f1f4f8); font: inherit; font-size: 16px; font-weight: 700;
+}
+.ev2 .ev2-song-tempo { width: 88px; min-width: 0; }
+.ev2 .ev2-song-tempowrap { display: inline-flex; align-items: center; gap: 8px; }
+.ev2 .ev2-song-unit { font-size: 13px; color: var(--muted, #a3acb8); font-weight: 600; }
+.ev2 .ev2-song-seg .seg { min-width: 52px; min-height: 36px; }
+.ev2 .ev2-song-readout {
+  margin: 2px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--panel-2, #1c2027);
+  font-size: 14px; color: #dfe4ea; line-height: 1.35;
+}
+.ev2 .ev2-song-notescol { min-height: 0; }
+.ev2 .ev2-song-notes {
+  flex: 1 1 auto; width: 100%; min-height: 120px; resize: vertical; padding: 10px 12px;
+  border: 1px solid var(--line-2, #3a414d); border-radius: 8px; background: var(--panel-2, #1c2027);
+  color: var(--text, #f1f4f8); font: inherit; font-size: 14px; line-height: 1.45;
+}
+.ev2 .ev2-song-clear:disabled { opacity: .45; cursor: default; }
+.ev2 .ev2-song-foothint { color: var(--ev2-faint); font-size: 12.5px; }
+
+/* ------------------------------------------------------------------ ≤ 1250 px (1024×700): compact, drawer button */
+@media (max-width: 1250px) {
+  .ev2 .ev2-song-head { gap: 8px; }
+  .ev2 .ev2-song-head .ev2-btn.ev2-song-songsbtn { display: inline-flex; }
+  .ev2 .ev2-song-name { font-size: 19px; height: 34px; max-width: 260px; margin-right: 2px; }
+  .ev2 .ev2-song-chip { height: 32px; padding: 0 10px; font-size: 13px; }
+  .ev2 .ev2-song-chip b { font-size: 14px; }
+  .ev2 .ev2-song-bpmchip { padding: 0 3px 0 0; }
+  .ev2 .ev2-song-bpmnum { padding: 0 6px 0 10px; }
+  .ev2 .ev2-song-bpmchip .ev2-song-tap { min-height: 24px; padding: 2px 8px; }
+  .ev2 .ev2-song-livehint { display: none; }
+  /* the mockup hides "⋯ Song" at 1024; it stays as an icon button so Reset to factory… is reachable */
+  .ev2 .ev2-song-menutext { display: none; }
+  .ev2 .ev2-song-head .ev2-btn.ev2-song-menubtn { padding: 0 8px; }
+  .ev2 .ev2-song-cols { grid-template-columns: minmax(0, 1.2fr) minmax(0, .9fr) minmax(0, 1.2fr); }
+  .ev2 .ev2-song-row { margin-bottom: 10px; gap: 10px 12px; }
+  .ev2 .ev2-song-select, .ev2 .ev2-song-tempo { height: 34px; font-size: 15px; min-width: 76px; }
+  .ev2 .ev2-song-tempo { width: 76px; min-width: 0; }
+  .ev2 .ev2-song-seg .seg { min-width: 44px; min-height: 32px; }
+  .ev2 .ev2-song-readout { font-size: 13px; padding: 8px 10px; }
+}

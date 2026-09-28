@@ -173,9 +173,26 @@ export function stepChip(o = {}) {
     e.preventDefault();
     e.stopPropagation();
     const i = steps.findIndex((s) => sameStep(s.value, value));
-    const j = i < 0 ? (dir > 0 ? 0 : steps.length - 1) : Math.min(steps.length - 1, Math.max(0, i + dir));
-    if (j !== i) emit(steps[j].value);
+    const j = i < 0 ? offStepTarget(dir) : Math.min(steps.length - 1, Math.max(0, i + dir));
+    if (j >= 0 && j !== i) emit(steps[j].value);
   });
+  /**
+   * An arrow from a value between steps (a fine-slider 30 %) goes to the nearest step in the arrow's direction
+   * (↑ → 50 %, ↓ → 25 %), not to an end of the list (hv2-edit-slot request). Non-numeric off-step values keep the
+   * old rule (first / last step). @returns {number} step index, or -1 when nothing lies that way
+   */
+  function offStepTarget(dir) {
+    const nums = steps.every((s) => typeof s.value === 'number') && typeof value === 'number' && Number.isFinite(value);
+    if (!nums || steps.length < 2) return dir > 0 ? 0 : steps.length - 1;
+    // index order ↔ value order: +1 in index moves the value up when the list ascends, down when it descends
+    const up = (steps[steps.length - 1].value > steps[0].value ? 1 : -1) * dir > 0;
+    let best = -1;
+    steps.forEach((s, k) => {
+      const beyond = up ? s.value > value : s.value < value;
+      if (beyond && (best < 0 || Math.abs(s.value - value) < Math.abs(steps[best].value - value))) best = k;
+    });
+    return best;
+  }
   blurAfterPointer(el, d);
   d.add(() => close());
   render();

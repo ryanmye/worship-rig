@@ -38,7 +38,7 @@ Mac app (Electron)                                   Chrome fallback
 ## Renderer layers
 
 ```
-views (perform.js, edit.js, settings.js, components/)
+views (perform.js, edit/ (H-v2 Edit), settings.js, components/)
    │  store.set(...) for anything persisted        controller.* for actions (next song, panic, record, learn…)
    ▼                                                 ▼
 store.js ──── subscribe(state, changedPaths) ────► controller.js ────► engine (app/js/engine/index.js)
@@ -62,6 +62,27 @@ shared/ (params grammar, fx-presets, music, automation, keydetect, chords, wav, 
 - **Parameter grammar** (`shared/params.js`): examples are `slots.1.gain`, `slots.0.params.tone`,
   `fx.reverb.size`, `master.volume` and `drone.gain`. The PARAMS table is the single source for ranges and
   defaults. The store, controller, UI and engine all read it, so adding a row there makes a param flow end to end.
+
+## Views
+
+- **main.js** owns the top bar, view switching (`setView(name, {block, focus})`), the Settings modal, toasts
+  (`toast(msg, kind, {ms, action})`) and the start overlay. It mounts `perform.js`, `edit/shell.js` and `settings.js`
+  with one ctx; `ctx.getBaseline()` returns Perform's Revert snapshot so Edit's changed dots count against it.
+- **Perform** (`views/perform.js`) is the playing surface (H-v2 perform.png): strips of `components/` pieces
+  (`onTile`, `stepChip`, `fader`, `holdButton`, …).
+- **Edit** (`views/edit/`, H-v2 edit.png; the contract is `views/edit/CONTRACT.md`):
+  ```
+  edit/shell.js   mountEdit(el, ctx): layout (setlist | song header over the rig card | keyboard row), 7 block tabs
+                  (Keys · Pad · Extra · Bass · Drone | Effects · Master), Show wiring, EditState (selection,
+                  baseline, changes), a per-panel ctx (store fan-out, Esc stack, song-bound fields, cleanup)
+  edit/lib.js     shared helpers: h, icon/iconButton, sentence, createBinder, section, wordSlider, BLOCKS, labels
+  edit/panels/    one module per block/region: slot (Keys/Pad/Extra/Bass, incl. Advanced › Tone = the keyboard EQ),
+                  drone, effects, master (incl. Wheels & pedal), song (+ song-header), setlist, bottom
+  edit/base.css + panels/*.css, pulled in by edit/styles-edit-v2.css (base first, so panel rules win ties)
+  ```
+  A panel reads and writes only through its ctx (`ctx.set`, `ctx.subscribe`, `controller.*`), never the engine.
+  The slot EQ editor is `components/eq-keyboard.js` (`eqKeyboard`, `eqMiniCurve`) over `shared/eq-math.js`.
+- **Settings** (`views/settings.js`, styles in `styles-edit.css` `.st-*`) is a modal over either view.
 
 ## Engine
 
@@ -117,5 +138,7 @@ shared/ (params grammar, fx-presets, music, automation, keydetect, chords, wav, 
 
 `npm test` runs `test/run-all.mjs` (everything but the soak). The suites are: `unit` (shared modules), `engine`,
 `instruments` and `synth-extra` (offline Chromium renders), `shell` (store/controller/midi/presets/server with fakes,
-Playwright, Electron boot), `ui-core` and `ui-edit` (real app in Chromium), and `chrome-fallback`, `electron-full`,
-`build-lint` and `soak` (integration). Details are in `test/README.md`.
+Playwright, Electron boot), `ui-core` (Perform, real app in Chromium), `edit-v2` (the Edit shell, one file per
+panel on a test harness, and an integration file on the real app), `settings` (real app + a settings-only fixture),
+`eq` (the keyboard EQ component), and `chrome-fallback`, `electron-full`, `build-lint` and `soak` (integration).
+Details are in `test/README.md`.

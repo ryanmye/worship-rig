@@ -1,5 +1,11 @@
 # H-v2 Edit: module contract (hv2-edit-setup)
 
+> **Status (hv2-edit-integrate, 2026-09-28):** integrated. `main.js` mounts `views/edit/shell.js`; `views/edit.js`
+> and the ui-edit suite are gone (Settings' tests moved to `test/phase2/settings/`). The build rules below were for
+> the parallel panel build and no longer restrict anyone (CLAUDE.md "File ownership no longer applies"); the API,
+> selection model, DOM/CSS conventions and the harness still hold. Integration changes: §1 map, §3.2 `toast` opts,
+> §3.4 binder `rels` + `destroy()`, §4 CSS order, §7 budgets, §8.
+
 This is the build contract for the new Edit view (design/H-v2: `concept.md` §1(1), §3; `implementation.md` "Edit
 half"; mockups `edit.png`, `edit-1024.png`, `edit-wiring.png`, `edit-effects.png`, and `edit.html` for CSS). Six
 agents build the panels in parallel. The shell, the shared lib, the harness and this file are already in place and
@@ -23,12 +29,13 @@ tested (`node test/phase2/edit-v2/run.mjs`: 9 files / 25 tests pass with the stu
 ```
 app/js/views/edit/
   shell.js              mountEdit(el, ctx), mountSinglePanel(el, ctx, id, opts), registerPanel(id, def), EditState
-  lib.js                shared helpers: h, icon, sentence, createBinder, section, wordSlider, BLOCKS, relOf, …
-  styles-edit-v2.css    tokens, layout, tabs, wiring, panel frame, shared widgets; @imports panels/*.css
+  lib.js                shared helpers: h, icon, iconButton, sentence, createBinder, section, wordSlider, BLOCKS,
+                        relOf, droneKeyText, chorusWord, TARGET_LABELS, BEND_LABELS, …
+  styles-edit-v2.css    linked from index.html; only @imports: base.css first, then panels/*.css (§4)
+  base.css              tokens, layout, tabs, wiring, panel frame, shared widgets
   CONTRACT.md           this file
   panels/index.js       the registered list (integrator-owned)
-  panels/_stub.js       placeholder mount (delete when no panel imports it)
-  panels/slot.js   + slot.css          block 'slot:0'..'slot:3'   (sound panel)
+  panels/slot.js   + slot.css          block 'slot:0'..'slot:3'   (sound panel; Advanced › Tone = ctx.C.eqKeyboard)
   panels/drone.js  + drone.css         block 'drone'
   panels/effects.js + effects.css      block 'effects'
   panels/master.js + master.css        block 'master'             (incl. Wheels & pedal)
@@ -122,7 +129,7 @@ export default {
 
 | Field | What |
 |---|---|
-| `store`, `controller`, `engine`, `midi`, `recorder`, `toast(msg, kind)`, `openSettings`, `app` | app services; `app` = the raw app ctx |
+| `store`, `controller`, `engine`, `midi`, `recorder`, `toast(msg, kind, opts?)`, `openSettings`, `app` | app services; `app` = the raw app ctx. `toast` passes `opts` (`{ms, action:{label, run}}`) to main.js's toast (hv2-edit-integrate) |
 | `C` | component set: `views/components/index.js` (ui-core, incl. `onTile`, `stepChip`, `stepPanel`, `holdButton`, `fader`, `segmented`, `select`, `stepper`, `toggle`, `miniKeyboard`, `pianoKeyboard`, `meter`, `keyGrid`, `stageName`, `AMOUNT_STEPS`, `OCTAVE_STEPS`) merged over `_fallback-components.js`. **Use `ctx.C`; never import `components/*` directly** (another agent owns them). Feature-detect H-v2 pieces (`if (ctx.C.stepChip)`) because the fallback set lacks them |
 | `editState` | §2 |
 | `song()` / `songId()` | current song (frozen) / id |
@@ -191,7 +198,11 @@ ev = { state,            // store.get()
 The easy path is `lib.createBinder(ctx)`, the edit.js `bindCtl/bindFn/refresh` pattern for one panel:
 - `binder.ctl(addr, (onChange) => comp, {read?, write?, text?})` binds a component `{el, set(v)}` to an address,
   sets `el.dataset.bind = addr`, and writes `ctx.set(addr, v)` by default.
+- `binder.ctl(…, {rels})` overrides the song-relative paths that refresh a binding (default: the address's own path).
+  The slot panel's Brightness/Warmth read the EQ's shelves, so they pass `rels: ['patch.slots.<i>.eq']`.
 - `binder.fn(rels, (song) => …)` binds labels, summaries and enable states to song-relative paths.
+- `binder.destroy()` destroys the tracked components **and** drops the binder's store subscription and leave-song
+  hook, so a panel that rebuilds a sub-tree with a fresh binder does not leak (idempotent).
 - It refreshes only the overlapping bindings, re-applies everything on `songChanged`/`full`, never overwrites a
   focused `text:true` field, and calls `cancelDrag()` on tracked components before a song switch (round2-ui #2).
 - **Rebuild** a sub-tree only when its structure changes (for example the slot panel when
@@ -249,6 +260,10 @@ builds the same markup for in-body lines (the Effects tab's three lines).
   - bottom `.ev2-kb-*`
 - **CSS lives in your `panels/<file>.css`**, which `styles-edit-v2.css` already imports. Every selector starts with
   `.ev2 ` and targets only your prefix or the shared widgets.
+  - Order: `base.css` (the shared rules) loads **before** the panel files, so a panel rule beats a shared rule of
+    equal specificity by source order. (An `@layer` for the shared rules was rejected: every unlayered `styles.css`
+    rule, e.g. on `button`, would then beat them.)
+  - `.ev2-head` does not clip (`overflow: visible`, z-index 5 above the rig card), so header menus may drop over it.
   - No element-only or global selectors, no `:root`, no `!important`, and no restyling of another panel or of
     ui-core component internals except under your own prefix (`.ev2 .ev2-slot-os .fader { … }`).
   - Tokens come from styles.css (`--panel`, `--line-2`, `--slot-0..3`, `--fx`, `--drone`, `--chg`, `--off-tile`,
@@ -664,18 +679,35 @@ test('slot: …', async () => {
 | `close()` | closes the context |
 
 - In the page:
-  - `window.__rig` = `{store, engine, controller, ctx, view, shell, toasts, panelCtx, setBaseline(song)}`
+  - `window.__rig` = `{store, engine, controller, ctx, view, shell, lib, C, toasts, panelCtx, setBaseline(song)}`
+    (`lib` and `C` so tests never `import()` inside `page.evaluate`; in full mode `view._debug.ctx(id)` is a
+    mounted module's panel ctx)
   - `window.__ev2` = `{ready, panel, full, components}`
 - Run commands:
   - `node test/phase2/edit-v2/run.mjs` runs shell + every `panels/*.test.mjs` + `integration*.test.mjs`,
     sequentially.
   - `--only slot,drone` runs just those files. `--list` lists them.
-  - A single file: `node --test-reporter=spec test/phase2/edit-v2/panels/slot.test.mjs`.
-  - About 12 s per file with 2 mounts on the 2-CPU box. Free ports mean agents can run their files concurrently.
+  - A single file: `node --test --test-reporter=spec test/phase2/edit-v2/panels/slot.test.mjs`.
+  - Each file runs under `node --test --test-timeout=900000`. Under `--test`, node:test runs each file as one test,
+    so this flag is the **per-file budget (900 s)**, not a per-test limit: the old 240 s value killed whole files with
+    4–6 mounts on a loaded box. (Without `--test` the flag does nothing, checked on node 22.22.) Single tests are
+    bounded by the harness's page waits instead. `run.mjs` also kills a file's whole process group at 900 + 60 s, so
+    a hung Chromium cannot stall the run. Override with `EDITV2_FILE_BUDGET_MS` / `EDITV2_TIMEOUT_MS`.
+  - `within()` clears its timer (a pending 45 s timer used to keep every file's process alive ~40 s after its last
+    test), and the harness treats "audio running + song loaded" as started when `controller.start()` is still
+    waiting on MIDI init (headless Chromium sometimes stalls there, which cost a 45 s retry).
+  - Timing on the 2-CPU box: 12–25 s per file idle (after the fixes above; the whole suite ≈ 3–4 min).
+  - Free ports mean agents can run their files concurrently.
+  - `mountPanelForTest` retries a failed boot once and relaunches a dead Chromium. Every page wait has a timeout
+    (goto 30 s, `controller.start()` 45 s, song load 60 s), so a boot that is merely slow is not a failure.
 
 ---
 
-## 8. Integration (integrator only, after the six panels land)
+## 8. Integration (integrator only, after the six panels land) — done in hv2-edit-integrate
+
+All steps below are done (CONTRACT_CHANGES "## hv2-edit-integrate"). Deviations: `styles-edit.css` stays linked
+(Settings' `.st-*`, the fallback `.fc-*`, and `.ed-btn/.ed-danger/.ed-select` used by settings.js); its dead `.ed-*`
+rules are left for a later prune. `integration.test.mjs` runs on the real app (its own server, appDir = app/).
 
 1. `app/index.html`: add after the `styles-edit.css` line:
    `<link rel="stylesheet" href="./js/views/edit/styles-edit-v2.css">`

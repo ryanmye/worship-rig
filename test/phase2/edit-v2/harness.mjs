@@ -32,6 +32,10 @@ export const REGIONS = Object.freeze({ setlist: 'left', 'song-header': 'head', b
 
 let shared = null; // { server, origin, browser, samplesDir }
 async function boot() {
+  if (shared && !shared.browser.isConnected()) {
+    // Chromium died (OOM on a loaded CI box): relaunch, keep the server
+    shared.browser = await chromium.launch({ headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
+  }
   if (shared) return shared;
   // My Samples on with an empty scan root: the real /api paths without 404s (same as the ui-edit suite)
   const samplesDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rig-edit-v2-samples-'));
@@ -68,6 +72,33 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * @returns {Promise<object>} the test handle (see CONTRACT.md §7)
  */
 export async function mountPanelForTest(panelId, o = {}) {
+  // One retry: on the shared 2-CPU box other suites run Chromium too, and a renderer can die or stall during boot.
+  let lastErr = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      return await mountOnce(panelId, o);
+    } catch (err) {
+      lastErr = err;
+      console.warn(`[edit-v2 harness] mount ${panelId ?? 'full'} attempt ${attempt} failed: ${err && err.message}`);
+    }
+  }
+  throw lastErr;
+}
+
+/** Reject after `ms` with a message naming the step (page promises have no timeout of their own). */
+// The timer is cleared once `p` settles: a pending 45 s timer kept every test process alive for ~40 s after its last
+// test (hv2-edit-integrate: each file took 45–60 s on an idle box for ~6 s of tests).
+const within = (p, ms, what) => {
+  let timer = null;
+  return Promise.race([
+    p,
+    new Promise((_, rej) => {
+      timer = setTimeout(() => rej(new Error(`harness: ${what} took longer than ${ms} ms`)), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+};
+
+async function mountOnce(panelId, o) {
   const { origin, browser } = await boot();
   const viewport = o.viewport || { width: 1440, height: 900 };
   const context = await browser.newContext({ viewport, acceptDownloads: true });
@@ -88,16 +119,36 @@ export async function mountPanelForTest(panelId, o = {}) {
 
   const ev = (fn, arg) => page.evaluate(fn, arg);
   const until = (fn, arg, timeout = 15000) => page.waitForFunction(fn, arg, { timeout, polling: 50 });
-  await page.goto(`${origin}/test/phase2/edit-v2/harness.html?${q}`);
-  await until(() => !!(window.__ev2 && window.__ev2.ready), null, 20000);
-  await ev(() => window.__rig.ready);
-  await until(() => window.__rig.engine.ctx && window.__rig.engine.ctx.state === 'running', null, 20000);
-  if (o.waitLoaded !== false) {
-    await until(() => {
-      const r = window.__rig;
-      const id = r.store.get().settings.currentSongId;
-      return !id || (r.controller.status.songId === id && !r.controller.status.loading);
-    }, null, 30000);
+  try {
+    await page.goto(`${origin}/test/phase2/edit-v2/harness.html?${q}`, { timeout: 30000 });
+    await until(() => !!(window.__ev2 && window.__ev2.ready), null, 30000);
+    // controller.start() also awaits MIDI init, which headless Chromium sometimes stalls on; a controller that is
+    // running with its song loaded is started for every purpose here, so either condition ends the wait.
+    await within(ev(() => Promise.race([
+      window.__rig.ready.then(() => 'ready'),
+      new Promise((res) => {
+        const c = window.__rig.controller;
+        const id = setInterval(() => {
+          const cur = window.__rig.store.get().settings.currentSongId;
+          if (c.status.audio === 'running' && (!cur || (c.status.songId === cur && !c.status.loading))) {
+            clearInterval(id);
+            res('loaded');
+          }
+        }, 100);
+      }),
+    ])), 45000, 'controller.start()');
+    await until(() => window.__rig.engine.ctx && window.__rig.engine.ctx.state === 'running', null, 30000);
+    if (o.waitLoaded !== false) {
+      await until(() => {
+        const r = window.__rig;
+        const id = r.store.get().settings.currentSongId;
+        return !id || (r.controller.status.songId === id && !r.controller.status.loading);
+      }, null, 60000);
+    }
+  } catch (err) {
+    await context.close().catch(() => {});
+    if (errors.length) err.message += `\nconsole errors:\n${errors.join('\n')}`;
+    throw err;
   }
 
   const t = {

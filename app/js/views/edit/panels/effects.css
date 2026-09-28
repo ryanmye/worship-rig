@@ -1,3 +1,149 @@
-/* OWNER: effects agent. Effects tab (panels/effects.js).
-   Scope rule (views/edit/CONTRACT.md §4): every selector starts with .ev2 and uses only the .ev2-fx-* classes you
-   create (plus the shared .ev2-* widgets from styles-edit-v2.css). No element/global selectors, no :root. */
+/* OWNER: effects agent. Effects tab (panels/effects.js; design/H-v2/edit-effects.html ".fxl" rules).
+   Scope rule (views/edit/CONTRACT.md §4): every selector starts with .ev2 and uses only the .ev2-fx-* classes
+   (plus the shared .ev2-* widgets and ui-core internals under our own prefix). */
+
+.ev2 .ev2-fx {
+  --ev2-fx-left: 262px;
+  --ev2-fx-who-w: 250px;
+  --ev2-fx-gap: 24px;
+  flex: 1; display: flex; flex-direction: column; min-height: 0;
+}
+.ev2 .ev2-fx-lines { position: relative; flex: 1 0 auto; padding: 8px 0 6px; }
+
+/* one line: title + blurb | choices | how much of each sound goes in */
+.ev2 .ev2-fx-line {
+  display: grid; grid-template-columns: var(--ev2-fx-left) minmax(0, 1fr) var(--ev2-fx-who-w);
+  column-gap: var(--ev2-fx-gap); align-items: start; padding: 14px 0; border-top: 1px solid var(--line, #2d333d);
+}
+.ev2 .ev2-fx-line:first-child { border-top: 0; padding-top: 6px; }
+.ev2 .ev2-fx-line.ev2-flash { outline-offset: 2px; }
+.ev2 .ev2-fx-lt { display: flex; gap: 10px; min-width: 0; }
+.ev2 .ev2-fx-lt > .ev2-ic { color: var(--fx); margin-top: 2px; }
+.ev2 .ev2-fx-lt-text { min-width: 0; }
+.ev2 .ev2-fx-lt-title .ev2-sent { font-size: 16px; font-weight: 600; white-space: normal; line-height: 1.3; }
+.ev2 .ev2-fx-lt-title .ev2-tok { font-weight: 800; }
+.ev2 .ev2-fx-blurb { font-size: 12.5px; color: var(--ev2-faint); line-height: 1.35; margin: 4px 0 0; }
+.ev2 .ev2-fx-choices { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+
+/* preset chips (Space / Echo): a word + a small hint; the chosen one is outlined white */
+.ev2 .ev2-fx-pchips { display: flex; flex-wrap: nowrap; gap: 6px; min-width: 0; }
+.ev2 .ev2-fx-pc {
+  height: 44px; padding: 0 10px; flex: 1 1 auto; min-width: 0; border-radius: 8px;
+  border: 1px solid var(--line-2, #3a414d);
+  background: var(--panel-2, #1c2027); font-weight: 700; font-size: 14px; display: inline-flex; flex-direction: column;
+  justify-content: center; align-items: flex-start; line-height: 1.1; text-align: left;
+  white-space: nowrap; overflow: hidden;
+}
+.ev2 .ev2-fx-pc[hidden] { display: none; }
+.ev2 .ev2-fx-pc-name, .ev2 .ev2-fx-pc-hint { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.ev2 .ev2-fx-pc-hint { font-size: 11px; color: var(--ev2-faint); font-weight: 600; margin-top: 2px; }
+.ev2 .ev2-fx-pc:hover { border-color: #555e6c; }
+.ev2 .ev2-fx-pc[aria-pressed="true"] { background: #3a4250; border: 2px solid #f1f4f8; padding: 0 9px; }
+.ev2 .ev2-fx-pc[aria-pressed="true"] .ev2-fx-pc-hint { color: #c9d1db; }
+
+/* Fine-tune (lib.section) sits under the chips, in the choices column */
+.ev2 .ev2-fx-fine { border-top: 0; }
+.ev2 .ev2-fx-fine > .ev2-sec-head { min-height: 32px; font-size: 13px; color: var(--muted, #a3acb8); gap: 6px; }
+.ev2 .ev2-fx-fine > .ev2-sec-head .ev2-sec-sum { color: var(--ev2-faint); }
+.ev2 .ev2-fx-fine > .ev2-sec-body { padding: 4px 0 6px 20px; gap: 10px 20px; }
+.ev2 .ev2-fx-fine .ev2-ws { flex: 1 1 180px; min-width: 150px; }
+.ev2 .ev2-fx-timecol { flex: 1 1 180px; min-width: 150px; display: flex; flex-direction: column; gap: 4px; }
+.ev2 .ev2-fx-timing { display: flex; flex-direction: column; gap: 3px; }
+.ev2 .ev2-fx-timing .select-label {
+  font-size: 15px; font-weight: 700; text-transform: none; letter-spacing: normal; color: var(--text, #f1f4f8);
+}
+.ev2 .ev2-fx-timing .select-input { min-height: 32px; }
+.ev2 .ev2-fx-delay-note { line-height: 1.35; }
+.ev2 .ev2-fx-delay-note[hidden] { display: none; }
+.ev2 .ev2-fx-link {
+  border: 0; background: transparent; padding: 0; font: inherit; color: var(--text, #f1f4f8); font-weight: 700;
+  text-decoration: underline dotted; text-underline-offset: 3px;
+}
+.ev2 .ev2-fx-fine .toggle { align-self: flex-end; min-height: 36px; }
+
+/* chorus: two word sliders side by side */
+.ev2 .ev2-fx-sl2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+.ev2 .ev2-fx-sl2 .ev2-ws { min-width: 0; }
+
+/* how much of each sound goes in: the Perform strip's chips, one per slot */
+.ev2 .ev2-fx-who { min-width: 0; }
+.ev2 .ev2-fx-who-cap {
+  display: block; font-size: 10.5px; letter-spacing: .05em; margin-bottom: 6px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ev2 .ev2-fx-mods { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.ev2 .ev2-fx-mods .ev2-fx-mod { min-height: 44px; height: 44px; }
+.ev2 .ev2-fx-mods .ev2-fx-mod.ev2-fx-empty { border-style: dashed; }
+.ev2 .ev2-fx-plainchip {
+  min-height: 44px; border-radius: 8px; border: 1.5px solid var(--line-2, #3a414d); background: transparent;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12.5px;
+}
+
+/* step-panel host: covers the who-goes-in column of all three lines; the panel opens inside it */
+.ev2 .ev2-fx-sphost {
+  position: absolute; top: 0; bottom: 0; right: 0; width: var(--ev2-fx-who-w); pointer-events: none; z-index: 20;
+}
+.ev2 .ev2-fx-sphost .step-panel { pointer-events: auto; left: 0; right: 0; }
+.ev2 .ev2-fx-sphost[data-dir="down"] .step-panel { top: var(--ev2-fx-sp-top, 60px); bottom: 5px; }
+.ev2 .ev2-fx-sphost[data-dir="down"] .step-panel::after { bottom: auto; top: -9px; transform: rotate(225deg); }
+.ev2 .ev2-fx-sphost[data-dir="cover"] .step-panel { top: 5px; bottom: 5px; }
+.ev2 .ev2-fx-sphost[data-dir="cover"] .step-panel::after { display: none; }
+/* ui-core's `.fader.compact .fader-input { height: 44px }` out-ranks the step panel's vertical fine slider, so it
+   rendered 44 px tall with a 44 px thumb over the × button; fill the column here (reported to the integrator) */
+.ev2 .ev2-fx-sphost .sp-body { grid-template-rows: minmax(0, 1fr); }
+.ev2 .ev2-fx-sphost .sp-fine { --thumb-w: 26px; --thumb-l: 24px; height: 100%; min-height: 0; overflow: hidden; }
+.ev2 .ev2-fx-sphost .sp-fine .fader-input { height: 100%; min-height: 0; width: 30px; }
+
+/* title bar: Vibe menu */
+.ev2 .ev2-fx-vibe { position: relative; }
+.ev2 .ev2-fx-vibe-menu {
+  position: absolute; z-index: 30; top: calc(100% + 6px); right: 0; width: 320px; padding: 6px; border-radius: 12px;
+  background: #1f242c; border: 1px solid #555e6c; box-shadow: 0 20px 56px #000d;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.ev2 .ev2-fx-vibe-menu[hidden] { display: none; }
+.ev2 .ev2-fx-vibe-item {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left;
+  padding: 7px 10px 7px 26px;
+  border: 0; border-radius: 8px; background: transparent; min-height: 36px; position: relative;
+}
+.ev2 .ev2-fx-vibe-item b { font-size: 14px; }
+.ev2 .ev2-fx-vibe-item small { font-size: 12px; color: var(--ev2-faint); line-height: 1.3; }
+.ev2 .ev2-fx-vibe-item:hover, .ev2 .ev2-fx-vibe-item:focus-visible { background: #2a303a; }
+.ev2 .ev2-fx-vibe-item.on::before {
+  content: '✓'; position: absolute; left: 9px; top: 7px; font-weight: 800; color: var(--fx);
+}
+
+/* footer: Tape & finish link + change line */
+.ev2 .ev2-fx-foot { margin-top: auto; }
+.ev2 .ev2-fx-tape {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 36px; min-width: 0; padding: 0 6px 0 0; border: 0;
+  background: transparent; color: var(--muted, #a3acb8); font-size: 13px; white-space: nowrap; overflow: hidden;
+}
+.ev2 .ev2-fx-tape b { color: var(--text, #f1f4f8); font-size: 14px; }
+.ev2 .ev2-fx-tape-sum { overflow: hidden; text-overflow: ellipsis; }
+.ev2 .ev2-fx-tape:hover b { text-decoration: underline; }
+
+/* ≤ 1250 px (1024×700): narrower columns, chips in a 3 × 2 grid, the 4 who-chips in a 2 × 2 grid */
+@media (max-width: 1250px) {
+  .ev2 .ev2-fx { --ev2-fx-left: 188px; --ev2-fx-who-w: 200px; --ev2-fx-gap: 14px; }
+  .ev2 .ev2-fx-lines { padding: 2px 0 2px; }
+  .ev2 .ev2-fx-line { padding: 8px 0; }
+  .ev2 .ev2-fx-line:first-child { padding-top: 4px; }
+  .ev2 .ev2-fx-lt > .ev2-ic { display: none; }
+  .ev2 .ev2-fx-lt-title .ev2-sent { font-size: 14.5px; }
+  .ev2 .ev2-fx-blurb {
+    font-size: 11.5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .ev2 .ev2-fx-pchips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+  .ev2 .ev2-fx-pc { height: 36px; font-size: 13px; padding: 0 8px; }
+  .ev2 .ev2-fx-pc[aria-pressed="true"] { padding: 0 7px; }
+  .ev2 .ev2-fx-pc-hint { font-size: 10.5px; margin-top: 1px; }
+  .ev2 .ev2-fx-fine > .ev2-sec-head { min-height: 28px; }
+  .ev2 .ev2-fx-who-cap { font-size: 10px; margin-bottom: 4px; }
+  .ev2 .ev2-fx-who-x { display: none; } /* "How much goes in" fits the 200 px column */
+  .ev2 .ev2-fx-mods { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+  .ev2 .ev2-fx-mods .ev2-fx-mod { min-height: 36px; height: 36px; flex-direction: row; gap: 6px; }
+  .ev2 .ev2-fx-sl2 { gap: 14px; }
+  .ev2 .ev2-fx-vibe-menu { width: 280px; }
+}

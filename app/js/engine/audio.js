@@ -891,7 +891,8 @@ export class AudioEngine extends EventTarget {
       }
       if (a <= b) range = [a, b];
     }
-    const out = { lowNote: null, highNote: null, sampledLow: null, sampledHigh: null, transpose: shift, physLow: cfg.lowNote, physHigh: cfg.highNote, instrumentRange: range };
+    const out = { lowNote: null, highNote: null, sampledLow: null, sampledHigh: null, transpose: shift };
+    Object.assign(out, { physLow: cfg.lowNote, physHigh: cfg.highNote, instrumentRange: range });
     if (lo > hi) return out;
     out.lowNote = lo;
     out.highNote = hi;

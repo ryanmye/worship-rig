@@ -451,7 +451,8 @@ export function mountPerform(root, ctx) {
       onChange: (v) => setSlot(i, 'sustain', !!v),
     });
     const addBtn = btn('.slot-add', icon('plus', 18), { 'aria-label': `${role.name} is empty: add a sound in Edit`, title: 'Empty slot: add a sound in Edit', 'data-testid': `slot-add-${i}` });
-    d.listen(addBtn, 'click', () => ctx.setView?.('edit'));
+    // opens Edit on this slot's tab with the instrument picker open (H-v2 Edit: focus 'instrument')
+    d.listen(addBtn, 'click', () => ctx.setView?.('edit', { block: `slot:${i}`, focus: 'instrument' }));
     const empty = h('div.slot-empty', { hidden: true }, addBtn, h('div.slot-vt', {}, ROLE, h('span', { text: ' · empty' })));
     const elSlot = h(
       'div.panel.slot.strip',

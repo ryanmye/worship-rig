@@ -34,7 +34,8 @@
 //   quickSheet({ anchor?, onTempo, onSwell, onTouch, onPedalReversed, onRestartAudio, onAllSettings, onClose, state })
 //       .set({ songName, tempo, swell, touch, pedal, pedalReversed, sound, latencyMs, locked, echoSynced })
 //       + open({focus}), close(), isOpen, tap(now?)
-//   openOverlay({ el, anchors, onClose, swallow, closeOnOutside, passThrough, group }) → close(reason)
+//   eqKeyboard({ store, engine, slotIndex, controller?, toast?, compact?, rta? }) / eqMiniCurve({ store, slotIndex,
+//       onOpen? })   the keyboard Tone EQ and its sparkline (CONTRACT_CHANGES ", onClose, swallow, closeOnOutside, passThrough, group }) → close(reason)
 //       Esc / outside-tap rules shared by the step panels, the "…" menu and the Quick sheet
 //
 // Helpers: h(tag, attrs, ...children), setText, disposer(), rafCoalesce(fn), blurAfterPointer(el), posToValue/valueToPos.
@@ -53,3 +54,4 @@ export { headerChipRow, SPACE_CHIPS, SPACE_MORE, ECHO_CHIPS, SONG_OWN } from './
 export { holdButton } from './holdButton.js';
 export { quickSheet, TOUCH_OPTIONS, tapBpm } from './quickSheet.js';
 export { openOverlay, openOverlayCount, PASS_THROUGH } from './overlay.js';
+export { eqKeyboard, eqMiniCurve } from './eq-keyboard.js';

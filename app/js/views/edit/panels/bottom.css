@@ -1,3 +1,63 @@
-/* OWNER: drone+bottom agent. Keyboard row (panels/bottom.js).
+/* OWNER: drone+bottom agent. Keyboard row (panels/bottom.js); design/H-v2 edit.html .kbrow/.kleg/.rbars/.kmeter.
    Scope rule (views/edit/CONTRACT.md §4): every selector starts with .ev2 and uses only the .ev2-kb-* classes you
    create (plus the shared .ev2-* widgets from styles-edit-v2.css). No element/global selectors, no :root. */
+.ev2 .ev2-kb {
+  height: 100%; display: grid; grid-template-columns: 150px minmax(0, 1fr) 120px 104px 112px; gap: 12px;
+  padding: 9px 12px 10px;
+}
+
+/* legend */
+.ev2 .ev2-kb-leg {
+  display: flex; flex-direction: column; justify-content: center; gap: 5px; font-size: 12px; min-width: 0;
+}
+.ev2 .ev2-kb-lrow { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.ev2 .ev2-kb-lrow i { width: 18px; height: 5px; border-radius: 3px; background: var(--c); flex: none; }
+.ev2 .ev2-kb-role { font-weight: 700; white-space: nowrap; }
+.ev2 .ev2-kb-rng { color: var(--ev2-faint); font-weight: 600; margin-left: auto; white-space: nowrap; }
+.ev2 .ev2-kb-lrow.dim { opacity: .45; }
+.ev2 .ev2-kb-lrow.muted { opacity: .4; }
+.ev2 .ev2-kb-lrow.muted i { background: var(--led-off, #6b7380); }
+.ev2 .ev2-kb-lrow.muted .ev2-kb-role { text-decoration: line-through; color: var(--ev2-faint); }
+
+/* keyboard + range bars */
+.ev2 .ev2-kb-kbd { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+/* one row per filled slot: 5 px bar + 2 px gap (edit.html .rbars); 3 + 1 px at ≤ 1250 */
+.ev2 .ev2-kb-bars { --kb-bar: 5px; --kb-step: 7px; position: relative; flex: none; margin-bottom: 9px;
+  height: max(0px, calc(var(--rows, 0) * var(--kb-step) - var(--kb-step) + var(--kb-bar))); }
+.ev2 .ev2-kb-bar {
+  position: absolute; top: calc(var(--row, 0) * var(--kb-step)); height: var(--kb-bar); border-radius: 3px;
+  background: var(--c);
+}
+.ev2 .ev2-kb-bar.dim { opacity: .35; }
+.ev2 .ev2-kb-bar.muted { background: var(--led-off, #6b7380); opacity: .35; }
+.ev2 .ev2-kb-bar.open-l { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.ev2 .ev2-kb-bar.open-r { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.ev2 .ev2-kb-keys { position: relative; flex: 1 1 auto; min-height: 0; display: flex; }
+.ev2 .ev2-kb-keys .piano, .ev2 .ev2-kb-keys .fc-piano { flex: 1 1 auto; height: auto; min-height: 0; }
+
+/* meter */
+.ev2 .ev2-kb-meter { display: flex; flex-direction: column; justify-content: center; gap: 6px; min-width: 0; }
+.ev2 .ev2-kb-meter .ev2-cap { font-size: 10.5px; }
+
+/* Fade out / PANIC */
+.ev2 .ev2-kb-big {
+  border-radius: var(--radius, 10px); border: 1px solid var(--line-2, #3a414d); background: var(--panel-2, #1c2027);
+  font-weight: 700; font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 36px; padding: 0 6px;
+}
+.ev2 .ev2-kb-fade { background: #182231; }
+.ev2 .ev2-kb-panic {
+  background: #d9363a; color: #fff; border: 0; font-size: 21px; letter-spacing: .06em; flex-direction: column; gap: 0;
+  box-shadow: 0 0 20px #d9363a44;
+}
+.ev2 .ev2-kb-panic small { font-size: 11px; letter-spacing: .04em; opacity: .75; font-weight: 700; }
+.ev2 .ev2-kb-big:active { filter: brightness(.9); }
+
+@media (max-width: 1250px) {
+  .ev2 .ev2-kb { grid-template-columns: minmax(0, 1fr) 70px 84px 92px; padding: 5px 10px 7px; gap: 8px; }
+  .ev2 .ev2-kb-leg { display: none; }
+  .ev2 .ev2-kb-meter .ev2-cap { display: none; }
+  .ev2 .ev2-kb-bars { --kb-bar: 3px; --kb-step: 4px; margin-bottom: 4px; }
+  .ev2 .ev2-kb-fade { font-size: 14px; }
+  .ev2 .ev2-kb-panic { font-size: 18px; }
+}

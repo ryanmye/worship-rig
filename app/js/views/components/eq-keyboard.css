@@ -152,3 +152,13 @@
 .eqk[data-compact] .eqk-legend { display: none; }
 .eqk[data-compact] .eqk-side { padding: 8px 10px; gap: 7px; }
 .eqk[data-compact] .eqk-hint { font-size: 12px; }
+.eqk[data-compact] .eqk-paste textarea { height: 58px; }
+.eqk[data-compact] .eqk-paste-body .eqk-hint { display: none; }
+.eqk[data-compact] .eqk-paste-out { max-height: 66px; }
+
+/* eqMiniCurve(): the Sound panel header sparkline */
+.eqk-mini { display: inline-flex; align-items: center; padding: 2px; border: 1px solid var(--line-2, #3a414d);
+  border-radius: 6px; background: #0f1216; cursor: pointer; vertical-align: middle; }
+.eqk-mini:hover { border-color: var(--muted, #a3acb8); }
+.eqk-mini[hidden] { display: none; }
+.eqk-mini canvas { display: block; }
