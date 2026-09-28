@@ -4,3 +4,4 @@
 2026-09-28T18:43:53Z NOTE for cloud: v3 code.tgz contains no design/*/src/ (49 files present in v2). The sync deleted them from main per the snapshot. If that was accidental, ship them in the next drop; they remain in git history at ab07706.
 2026-09-28T18:47:35Z REPO https://github.com/ryanmye/worship-rig public pushed 2026-09-28T18:47:35Z
 2026-09-28T18:47:35Z SYNC_READY: tools/sync-from-cloud.sh committed on main. Drop snapshots into ~/Projects/worship-rig-transfer/incoming/<stamp>/ only; never extract over the tree. Local env fixed (ffmpeg 9.0.2, Playwright build 1194); full npm test running now.
+2026-09-28T18:58:56Z NOTE SYNC 20260928T185802Z received; queued behind the full native test run on the baseline tree (in progress, ~10 min). Will report FINDINGS for baseline, then SYNC_OK/SYNC_FAIL with the fast table, then a full run on the merged tree.
