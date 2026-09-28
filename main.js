@@ -1281,6 +1281,9 @@ async function menubarSelftest(wc) {
     }
     return false;
   };
+  // the fake state and the commands below would reach a real controller (electron-full's probe runs the real app):
+  // only the shell fixture page (no window.__rig) runs this part
+  if (await js(wc, '!!window.__rig')) return { skipped: 'real app page (window.__rig): runs on the shell fixture only' };
   out.before = await js(wc, 'window.rig.getMenuBarState()');
   out.setMenuBarMode = await js(wc, 'window.rig.setMenuBarMode(true)');
   out.tray = !!(tray && !tray.isDestroyed());
@@ -1346,11 +1349,19 @@ async function menubarSelftest(wc) {
   togglePopover();
   out.popoverToggled = reopened && (await waitFor(() => !popover.isVisible()));
   out.popoverTransitions = popoverLog.slice();
-  // hide-on-close (macOS): the window hides instead of closing, the dock icon goes away; openMain brings both back
+  // hide-on-close (macOS): the window hides instead of closing, the dock icon goes away, a library backup is written;
+  // openMain brings window and dock icon back
   if (IS_MAC) {
+    // the fixture page has no controller: stand in for its __rigShell so backup-on-hide has a library to save
+    await js(wc, `window.__rigShell = window.__rigShell || { recording: () => false, library: () => '{"hideBackup":1}' };
+      true`);
+    const backups = () => fs.readdirSync(backupsDir()).map((f) => path.join(backupsDir(), f));
+    const before = new Set(backups());
+    const isHideBackup = (f) => !before.has(f) && fs.readFileSync(f, 'utf8') === '{"hideBackup":1}';
     win.close();
     await waitFor(() => !win.isVisible());
     out.hideOnClose = { destroyed: win.isDestroyed(), visible: win.isVisible(), dock: app.dock.isVisible() };
+    out.hideBackup = await waitFor(() => backups().some(isHideBackup));
     out.openMain = await cmd(pw, { v: 1, type: 'openMain' });
     await waitFor(() => win.isVisible());
     out.afterOpenMain = { visible: win.isVisible(), dock: app.dock.isVisible() };

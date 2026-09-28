@@ -230,6 +230,7 @@ test('menu-bar mode (L14): tray, menu from the bus state, IPC relay both ways, p
   assert.equal(m.after.popoverOpen, false);
   if (isMac) {
     assert.deepEqual(m.hideOnClose, { destroyed: false, visible: false, dock: false }, 'close hides, dock icon hidden');
+    assert.equal(m.hideBackup, true, 'hiding still writes the library backup (M5)');
     assert.equal(m.openMain.ok, true);
     assert.deepEqual(m.afterOpenMain, { visible: true, dock: true }, 'openMain shows the window and the dock icon');
   }
