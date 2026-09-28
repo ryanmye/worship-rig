@@ -241,3 +241,28 @@ suite was replaced, and settings/edit-v2 pass here.
   - Status and the screenshot are identical to the built app, MIDI included.
   - This settles the open question in L-3's environment note: Electron started from this shell *does* reach
     CoreMIDI. The earlier `Platform dependent initialization failed` did not recur in today's electron-full log.
+
+## Soak, 20 min, tree 3a69692 (2026-09-28, native macOS)
+
+`node test/run-all.mjs --only soak --soak-minutes 20`: **11/12**, 20m47s. 17494 events, 4012 notes, 38 song switches
+(14 lofi), 13 panics, 30 key changes, 183 sweeps. Voices back to 0 in 1.1 s, nodes 226 → 226, heap +0.83 MB, audio
+running throughout, 0 NaN, 0 console errors. Log: `test/logs/soak.log`, CSV: `test/logs/soak.csv`.
+
+### L-8 — pinned decoded samples exceed the cache cap under the large-set policy (major, real bug, NEEDS CLOUD)
+
+- Suite: soak, check "decoded samples stay under the engine cache cap (pins limited)".
+- Where: `app/js/controller.js:29-31, 91-93` (morning-prep pin policy, `PIN_BUDGET_MB = 600`, mode `large-set`).
+- Repro: the soak above; the CSV column `pinnedMB` versus `capMB` (700).
+- Observed: mode was `large-set` for the whole run (the soak drives the full factory library as a set). Pinned bytes
+  went over the 700 MB cap in 7 of 44 samples: 754.2 MB while on `factory:gospel-stab-b3` (4 samples) and 939.4 MB
+  while on `factory:upright-pad` (2 samples; decoded == pinned, so nothing was evictable). Typical values elsewhere
+  were 185–420 MB pinned.
+- Expected: in `large-set` mode only the current ±2 songs are pinned, so pinned bytes should stay well under the cap
+  and decoded bytes should never be 100 % pinned.
+- Suspected cause: the ±2 window is computed on library order, and the neighbours of the heavy sampled songs
+  (upright-pad, gospel-stab-b3 sit next to other multi-sampled pianos/organs) sum past the budget, i.e. the window
+  is a count, not a byte budget. Alternatively the previous window is not unpinned before the next is pinned during
+  a switch (the overshoot lasts several 30 s samples, so it is not a transient). Suggest making the window a byte
+  budget (drop the farthest neighbour until ≤ PIN_BUDGET_MB) or asserting pinned ≤ cap after each preload.
+- Note: the same check passed on the 2-vCPU Linux container with the old library-pin policy (STATUS.md reported
+  1023.6 MB decoded, flat). On the Mac the new policy holds most of the time but not around the heaviest songs.
