@@ -266,3 +266,22 @@ running throughout, 0 NaN, 0 console errors. Log: `test/logs/soak.log`, CSV: `te
   budget (drop the farthest neighbour until ≤ PIN_BUDGET_MB) or asserting pinned ≤ cap after each preload.
 - Note: the same check passed on the 2-vCPU Linux container with the old library-pin policy (STATUS.md reported
   1023.6 MB decoded, flat). On the Mac the new policy holds most of the time but not around the heaviest songs.
+
+## Sync 20260928T203314Z (cloud 7bf3382 → merge 05ec36f), fast suite on macOS
+
+`npm test -- --fast`: **9/10** (unit 276, engine 68/69 + 1 soft warn, instruments 143, synth-extra 153, shell 166,
+ui-core 41, edit-v2 81/82, settings 29, eq 25, chrome-fallback 15), 6m23s. Merge conflicts (COORDINATION.md add/add,
+test/integration/lib.mjs one-sided) resolved by hand with Ryan's approval.
+
+### L-9 — polish-1 `text:'dirty'` binder: an outside write is appended to a typed draft (major, real bug, NEEDS CLOUD)
+
+- Suite: edit-v2 · song, `test/phase2/edit-v2/panels/song.test.mjs:215` ("tempo and notes follow outside writes
+  while focused until typed in"). Deterministic on this Mac: failed 2 of 2 runs (full fast run, then `--only edit-v2`).
+- Observed: after typing `13` into the focused tempo field, an outside store write of `88` leaves the field showing
+  `1388`. Expected `13` (a typed draft must not be overwritten or appended to).
+- Where: the polish-1 text `dirty` binder in the cloud-owned Edit panels (song panel / shared binder; cloud to locate).
+- Suspected cause: the binder applies the outside value with `value +=` / insertion at the caret instead of
+  skipping the write while `dirty` is set, or `dirty` is set on `input` but the assertion fires after a `change`
+  that clears it. Could also be a Playwright `type` vs `fill` difference: `page.type` on macOS Chromium leaves the caret at
+  the end and a subsequent programmatic `value = '88'`... would replace, not append, so append suggests the binder
+  concatenates. Cloud's own run reportedly saw this as a flake; here it is not.
