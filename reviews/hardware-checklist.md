@@ -299,3 +299,20 @@ GarageBand-derived content must never ship.
   Expected: the `grep` prints nothing.
   Actual grep output: _______________________________________________________________________________
 - [ ] Bundle size: `du -sh "dist/mac-arm64/Worship Rig.app"` → record the number: ___________
+
+---
+
+# Results log — Electron (built app from main, 2026-09-29, Ryan at the Keystation 49es)
+
+## 1. MIDI auto-select
+- Connected line: "Keystation 49es Port 1" ✔ (GarageBand not open at the time, so its virtual port was not in the list).
+- Dropdown lists both Keystation ports ✔. Automatic input plays normally ✔.
+
+## 2. Pedal polarity
+- "Test my pedal": raw CC64 = 127, reported normal ✔. Chord + pedal + hands off: notes hold ✔.
+
+## 3. Latency (Settings → Audio, "Lowest")
+| Output | Electron (ms) |
+|---|---|
+| ThinkPad USB-C dock | 20 |
+| Bluetooth (JBL / AirPods — see note) | 176; sound followed the device change without a restart ✔ |
