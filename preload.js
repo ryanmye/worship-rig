@@ -34,6 +34,22 @@ ipcRenderer.on('rig:window-visible', (_e, visible) => {
   window.dispatchEvent(new CustomEvent('rig:window-visible', { detail: { visible } }));
 });
 
+// L-14: a page's own window.close() makes Electron destroy the window without a BrowserWindow 'close' event, which
+// skipped hide-on-close (menu-bar mode) and the recording check + backup and quit the app. Route it through main's
+// win.close() so it takes the same path as the close button / ⌘W.
+try {
+  contextBridge.executeInMainWorld({
+    func: (requestClose) => {
+      window.close = () => {
+        requestClose();
+      };
+    },
+    args: [() => ipcRenderer.invoke('rig:closeWindow').catch(() => {})],
+  });
+} catch (err) {
+  console.warn('[rig] window.close could not be routed through main', err);
+}
+
 contextBridge.exposeInMainWorld('rig', {
   isElectron: true,
   platform: process.platform,

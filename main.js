@@ -928,6 +928,9 @@ function menuBarStateSnapshot() {
     loginItem,
     windowVisible: !!(win && !win.isDestroyed() && win.isVisible()),
     tray: !!(tray && !tray.isDestroyed()),
+    // reviews/for-local.md L-14 hook 1 names these two as well
+    menuBarMode,
+    windowDestroyed: !win || win.isDestroyed(),
   };
 }
 
@@ -1039,6 +1042,12 @@ function registerMenuBarIpc() {
     return applyMenuBarMode(on);
   });
   handle('rig:getMenuBarState', async () => menuBarStateSnapshot());
+  // preload routes a page's window.close() here (L-14), so it emits 'close' like the close button does
+  handle('rig:closeWindow', async (event) => {
+    const w = BrowserWindow.fromWebContents(event.sender);
+    if (w && !w.isDestroyed()) w.close();
+    return { ok: true };
+  });
   handle('rig:setLoginItem', async (_e, on) => {
     if (typeof on !== 'boolean') return { error: 'expected a boolean' };
     // from source, the login item would be the bare Electron binary (it opens Electron's default app, not the rig)
@@ -1382,6 +1391,14 @@ async function menubarSelftest(wc) {
   // the fake state and the commands below would reach a real controller (electron-full's probe runs the real app):
   // only the shell fixture page (no window.__rig) runs this part
   if (await js(wc, '!!window.__rig')) return { skipped: 'real app page (window.__rig): runs on the shell fixture only' };
+  // the page's own L-14 step (hideOnClose, last in the fixture) leaves menu-bar mode on and the window hidden: start
+  // from mode off + window shown, as a fresh launch would
+  out.pageLeft = menuBarStateSnapshot();
+  if (menuBarMode || !win.isVisible()) {
+    applyMenuBarMode(false);
+    await waitFor(() => win.isVisible());
+    await settle(300);
+  }
   out.before = await js(wc, 'window.rig.getMenuBarState()');
   await js(wc, `window.__mbMenu = []; window.rig.onMenu((id) => window.__mbMenu.push(id));
     window.__mbVisible = [];

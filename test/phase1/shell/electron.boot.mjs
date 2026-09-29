@@ -24,6 +24,14 @@ function addMiniPage(fx) {
   for (const f of fs.readdirSync(appDir).filter((n) => /^mini\./.test(n))) {
     fs.copyFileSync(path.join(appDir, f), path.join(fx.app, f));
   }
+  // the cloud's mini.html also loads themes/boot.js and assets/mark.svg (absent from the fixture: they would 404)
+  for (const f of ['themes/boot.js', 'assets/mark.svg']) {
+    const src = path.join(appDir, f);
+    const dst = path.join(fx.app, f);
+    if (!fs.existsSync(src) || fs.existsSync(dst)) continue;
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.copyFileSync(src, dst);
+  }
 }
 
 function boot(fx) {
