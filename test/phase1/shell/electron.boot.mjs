@@ -17,7 +17,17 @@ const { createServer } = require('../../../server.js');
 const fx = buildFixture();
 let run;
 
+// L14: the popover loads /mini.html from the app dir; the fixture app has none, so bring the real one (and its
+// mini.* siblings; the cloud's views/mini.js comes through the js → app/js symlink)
+function addMiniPage(fx) {
+  const appDir = path.join(repoRoot, 'app');
+  for (const f of fs.readdirSync(appDir).filter((n) => /^mini\./.test(n))) {
+    fs.copyFileSync(path.join(appDir, f), path.join(fx.app, f));
+  }
+}
+
 function boot(fx) {
+  addMiniPage(fx);
   return new Promise((resolve) => {
     const hasXvfb = spawnSync('which', ['xvfb-run']).status === 0;
     const isLinux = process.platform === 'linux';
@@ -174,6 +184,77 @@ test('M6: a reload finishes the page\'s open recording stream, with sizes fixed 
 
 test('M5 (backups): latestBackup returns the newest rotation file', () => {
   assert.equal(run.report.result.steps.latestBackup.n, 11);
+});
+
+test('menu-bar mode (L14): tray, menu from the bus state, IPC relay both ways, popover, hide-on-close', () => {
+  const m = run.report.menubar;
+  assert.ok(m && !m.error, JSON.stringify(m && m.error));
+  const isMac = process.platform === 'darwin';
+  // setMenuBarMode(true) from the page: tray (macOS only in v1), persisted in rig-shell.json
+  assert.equal(m.before.on, false);
+  assert.equal(m.setMenuBarMode.on, true);
+  assert.equal(m.tray, isMac);
+  assert.equal(m.shellConfig, true);
+  assert.equal(m.menuBeforeState[0], 'Worship Rig is starting…');
+  // a state published through window.rig.busPublish rebuilds the menu
+  assert.equal(m.publish.ok, true);
+  assert.match(m.menu[1].label, /^Memory: \d+ MB$/, 'main + renderer RSS line');
+  assert.equal(m.menu[1].enabled, false);
+  assert.deepEqual(m.menu.map((i) => i.label).filter((l) => !l.startsWith('Memory: ')), [
+    'Now: Selftest Pad + Piano  (D)', 'Selftest Opener  (G)', 'Selftest Pad + Piano  (D)', 'Selftest Closer  (E)',
+    'Previous', 'Next', 'Panic (all notes off)', 'Low-resource mode', 'Open Worship Rig', 'Quit Worship Rig',
+  ]);
+  assert.equal(m.menu[0].enabled, false, 'the current-mode line is a label');
+  assert.deepEqual(m.menu.filter((i) => i.type === 'radio').map((i) => i.checked), [false, true, false]);
+  assert.deepEqual(m.menu.filter((i) => i.type === 'checkbox').map((i) => [i.label, i.checked]), [['Low-resource mode', true]]);
+  // payload validation: size cap, JSON, shape, command types/fields, version; the good state survives
+  for (const [k, re] of Object.entries({
+    publishTooBig: /too large/, publishNotJson: /invalid JSON/, publishNoModes: /modes/, commandUnknown: /unknown command/,
+    commandBadMaster: /master\.value/, commandWrongVersion: /v:1/,
+  })) assert.match(String(m.rejects[k]), re, k);
+  assert.equal(m.stateKept, true);
+  // tray menu clicks → commands in the main renderer (window.rig.onBusCommand)
+  assert.deepEqual(m.trayCommands, [
+    { v: 1, type: 'selectMode', id: 'st-3' }, { v: 1, type: 'nextMode' }, { v: 1, type: 'lowResource', on: false },
+  ]);
+  // popover: 320×440 from the same origin, gets the last state on subscribe, its commands reach the main renderer
+  assert.equal(m.popoverShown, true);
+  assert.equal(new URL(m.popoverUrl).pathname, '/mini.html');
+  assert.equal(new URL(m.popoverUrl).origin, run.report.result.origin);
+  assert.deepEqual(m.popoverSize, [320, 440]);
+  assert.equal(m.popoverState, 'Selftest Pad + Piano');
+  assert.equal(m.popoverBridgeState.popoverOpen, true);
+  assert.equal(m.popoverCommand.ok, true);
+  assert.ok(m.popoverCommands.some((c) => c.type === 'prevMode'), JSON.stringify(m.popoverCommands));
+  assert.equal(m.popoverHiddenByEsc, true);
+  assert.equal(m.popoverToggled, true);
+  assert.deepEqual(m.popoverTransitions, ['show', 'hide', 'show', 'hide']);
+  assert.equal(m.after.popoverOpen, false);
+  // window events on the Rig menu channel (onMenu ids): the popover opening is not "shown"
+  assert.deepEqual(m.eventsOnEnable, ['windowShown'], 'setMenuBarMode(true) reports the current window state');
+  assert.deepEqual(m.eventsDuringPopover, []);
+  // setMenuBarMode(false) is the source of truth too: tray gone, renderer back to the document's visibility
+  assert.equal(m.setMenuBarModeOff.on, false);
+  assert.equal(m.trayAfterOff, false);
+  assert.deepEqual(m.eventsOnDisable, ['windowFollowDocument']);
+  // rig:window-visible fires on every visibility change whatever the mode: minimise → restore with the mode off
+  // (no rig:menu events then). Guarded: a minimise may not happen on some headless/CI displays.
+  if (m.minimizeObserved) assert.deepEqual(m.windowVisibleMinimize, [false, true]);
+  else console.log('# minimise not observed on this display; windowVisibleMinimize not asserted');
+  assert.deepEqual(m.eventsOnMinimize, []);
+  if (isMac) {
+    assert.deepEqual(m.hideOnClose, { destroyed: false, visible: false, dock: false }, 'close hides, dock icon hidden');
+    assert.equal(m.hideBackup, true, 'hiding still writes the library backup (M5)');
+    assert.deepEqual(m.eventsOnHide, ['windowHidden']);
+    assert.deepEqual(m.eventsOnOpenMain, ['windowShown']);
+    // the same transitions as DOM CustomEvents 'rig:window-visible' {detail:{visible}} (preload), seen by the page
+    assert.deepEqual(m.windowVisible, [false, true]);
+    assert.equal(m.openMain.ok, true);
+    assert.deepEqual(m.afterOpenMain, { visible: true, dock: true }, 'openMain shows the window and the dock icon');
+  }
+  // the popover page adds no console errors and no HTTP ≥ 400 (checked by the zero-errors test above, which also
+  // counts the popover's console)
+  assert.ok(!run.report.httpErrors.some((h) => /mini/.test(h.url)));
 });
 
 test('M5: with 8438 held by another Worship Rig server, Electron runs its own server on 8439 and pads still work', async () => {
