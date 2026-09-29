@@ -237,6 +237,11 @@ test('menu-bar mode (L14): tray, menu from the bus state, IPC relay both ways, p
   assert.equal(m.setMenuBarModeOff.on, false);
   assert.equal(m.trayAfterOff, false);
   assert.deepEqual(m.eventsOnDisable, ['windowFollowDocument']);
+  // rig:window-visible fires on every visibility change whatever the mode: minimise → restore with the mode off
+  // (no rig:menu events then). Guarded: a minimise may not happen on some headless/CI displays.
+  if (m.minimizeObserved) assert.deepEqual(m.windowVisibleMinimize, [false, true]);
+  else console.log('# minimise not observed on this display; windowVisibleMinimize not asserted');
+  assert.deepEqual(m.eventsOnMinimize, []);
   if (isMac) {
     assert.deepEqual(m.hideOnClose, { destroyed: false, visible: false, dock: false }, 'close hides, dock icon hidden');
     assert.equal(m.hideBackup, true, 'hiding still writes the library backup (M5)');

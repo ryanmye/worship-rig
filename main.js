@@ -950,19 +950,27 @@ function setDock(visible) {
 let lastWindowEvent = null;
 /**
  * Menu-bar mode: tell the main renderer when its window is shown/hidden, on the Rig menu channel (onMenu ids
- * `windowShown` / `windowHidden`; also `rig:window-visible` true/false → preload's DOM event). With
+ * `windowShown` / `windowHidden`; `rig:window-visible` goes out at the same moments, even with the mode off). With
  * backgroundThrottling off, visibilitychange may never fire. The popover opening
  * does not count as "shown". `windowFollowDocument` (mode turned off) hands the decision back to the document.
  * @param {'windowShown'|'windowHidden'|'windowFollowDocument'} id
  */
 function sendWindowEvent(id, force = false) {
+  if (id !== 'windowFollowDocument') sendWindowVisible(id === 'windowShown', force);
   if (!force && (id === lastWindowEvent || (!menuBarMode && id !== 'windowFollowDocument'))) return;
   lastWindowEvent = id;
   sendMenu(id);
-  // same moment, second form: preload turns it into a DOM CustomEvent 'rig:window-visible' {detail:{visible}}
-  if (id !== 'windowFollowDocument' && win && !win.isDestroyed()) {
-    win.webContents.send('rig:window-visible', id === 'windowShown');
-  }
+}
+
+let lastVisibleSent = null;
+/**
+ * IPC `rig:window-visible` (preload → DOM CustomEvent 'rig:window-visible' {detail:{visible}}) on every visibility
+ * change of the main window, whatever menuBarMode is (the renderer ignores it when it doesn't need it). Deduped.
+ */
+function sendWindowVisible(visible, force = false) {
+  if ((!force && visible === lastVisibleSent) || !win || win.isDestroyed()) return;
+  lastVisibleSent = visible;
+  win.webContents.send('rig:window-visible', visible);
 }
 const windowShownNow = () => !!(win && !win.isDestroyed() && win.isVisible() && !win.isMinimized());
 
@@ -985,6 +993,7 @@ function applyMenuBarMode(on) {
     if (win && !win.isDestroyed() && !win.isVisible()) showMain(); // never leave a hidden window without a way back
     else setDock(true);
     sendWindowEvent('windowFollowDocument', true);
+    sendWindowVisible(windowShownNow(), true); // the renderer is listening: give it the current state either way
   }
   notifyMenuBarState();
   return menuBarStateSnapshot();
@@ -1116,6 +1125,10 @@ function createWindow(url) {
     notifyMenuBarState();
   });
   win.on('focus', () => sendWindowEvent('windowShown'));
+  // a reloaded page starts without our last state: send the next change even if it repeats
+  wc.on('did-navigate', () => {
+    lastVisibleSent = null;
+  });
   win.on('minimize', () => sendWindowEvent('windowHidden'));
   win.on('restore', () => sendWindowEvent('windowShown'));
   wc.setWindowOpenHandler(({ url: target }) => {
@@ -1471,6 +1484,15 @@ async function menubarSelftest(wc) {
   out.setMenuBarModeOff = await js(wc, 'window.rig.setMenuBarMode(false)');
   out.trayAfterOff = !!(tray && !tray.isDestroyed());
   out.eventsOnDisable = await menuEvents();
+  // minimise → restore with menu-bar mode OFF: rig:window-visible still fires (rig:menu events don't). The
+  // minimise may not happen on a locked screen / headless CI: `minimizeObserved` says whether it did.
+  await js(wc, 'window.__mbVisible.length = 0; true');
+  win.minimize();
+  out.minimizeObserved = await waitFor(() => win.isMinimized(), 3000);
+  win.restore();
+  await waitFor(() => !win.isMinimized(), 3000);
+  out.windowVisibleMinimize = await js(wc, 'new Promise((r) => setTimeout(() => r(window.__mbVisible.slice()), 300))');
+  out.eventsOnMinimize = await menuEvents();
   return out;
 }
 
