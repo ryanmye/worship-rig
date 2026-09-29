@@ -8,6 +8,10 @@
 //     app/samples/manifest.json and EVERY sample file the manifest lists
 //   • excluded: app/js/engine/test.html, test/, tools/, audition/, reviews/, dist/, node_modules/electron*, *.md specs
 //   • every file under app/ that exists on disk (minus the exclusions) is packaged
+//   • security S8: no Apple instrument/sample formats (.exs .caf .aif .aiff), no app/samples/<dir> the manifest doesn't
+//     list, and no "personal-use" manifest entry in the asar; in git (`git ls-files`, before the build) no tracked
+//     .exs / .caf, nothing under user-samples/ or tools/exs/fixtures/real/, no file named *personal-use*, and no tracked
+//     manifest.json declaring "personal-use"
 // Then (unless --no-boot, Linux + xvfb) boots the packaged binary with RIG_SELFTEST=1: the real app has no probe, so
 // main.js times out waiting for window.__RIG_SELFTEST__ and reports (exit 2) — the report still proves the packaged
 // app served index.html from the asar on 127.0.0.1 with zero console.error.
@@ -36,6 +40,23 @@ try {
   check('mac target is arm64 dir+zip, identity null (ad-hoc), afterPack hook exists', JSON.stringify(b.mac?.target || []).includes('arm64') && b.mac?.identity === null && fs.existsSync(path.join(repoRoot, b.afterPack || '')), `${JSON.stringify(b.mac?.target)} afterPack ${b.afterPack}`);
   check('mac icon exists', !!b.mac?.icon && fs.existsSync(path.join(repoRoot, b.mac.icon)), b.mac?.icon);
   check('main entry exists', fs.existsSync(path.join(repoRoot, pkg.main || 'index.js')), pkg.main);
+
+  // ---- S8: personal / Apple content must never be tracked (the repo is public)
+  const gl = spawnSync('git', ['ls-files', '-z'], { cwd: repoRoot, encoding: 'utf8' });
+  if (gl.status !== 0) skip('git: no Apple / personal-use content tracked', 'not a git checkout');
+  else {
+    const tracked = gl.stdout.split('\0').filter(Boolean);
+    const bad = tracked.filter((f) => /\.(exs|caf)$/i.test(f) || /^(user-samples|tools\/exs\/fixtures\/real)\//.test(f) || /personal-use/i.test(path.posix.basename(f)));
+    check('git: no .exs / .caf, user-samples/, tools/exs/fixtures/real/ or *personal-use* file is tracked', bad.length === 0, bad.slice(0, 10).join(', '));
+    const personal = tracked.filter((f) => /(^|\/)manifest\.json$/.test(f)).filter((f) => {
+      try {
+        return /"license"\s*:\s*"[^"]*personal-use/i.test(fs.readFileSync(path.join(repoRoot, f), 'utf8'));
+      } catch {
+        return false;
+      }
+    });
+    check('git: no tracked manifest.json declares a "personal-use" license', personal.length === 0, personal.join(', '));
+  }
 
   // ---- build
   // integration-2: Electron 44's npm package has no postinstall; the binary is fetched on the first
@@ -73,6 +94,27 @@ try {
 
   // manifest (as packaged) → every listed sample present
   const manifest = JSON.parse(asar.extractFile(asarPath, 'app/samples/manifest.json').toString('utf8'));
+  // S8: Apple formats, personal-use packs and unlisted sample folders never ship
+  const appleFiles = [...list].filter((p) => /\.(exs|caf|aif|aiff)$/i.test(p) || /personal-use/i.test(path.posix.basename(p)));
+  check('packaged: no .exs / .caf / .aif / .aiff or *personal-use* file', appleFiles.length === 0, appleFiles.slice(0, 10).join(', '));
+  const personalInAsar = [...list].filter((p) => /(^|\/)manifest\.json$/.test(p) && !/^node_modules\//.test(p)).filter((p) => {
+    try {
+      return /"license"\s*:\s*"[^"]*personal-use/i.test(asar.extractFile(asarPath, p).toString('utf8'));
+    } catch {
+      return false;
+    }
+  });
+  check('packaged: no manifest.json with a "personal-use" license', personalInAsar.length === 0, personalInAsar.join(', '));
+  const listedDirs = new Set();
+  for (const inst of manifest.instruments || []) {
+    for (const L of inst.layers || []) {
+      if (L.files && typeof L.files === 'object') for (const rel of Object.values(L.files)) listedDirs.add(path.posix.normalize(String(rel)).split('/')[0]);
+      else listedDirs.add(String(L.dir ?? inst.dir ?? inst.id).split('/')[0]);
+    }
+  }
+  const sampleDirs = [...new Set([...list].filter((p) => /^app\/samples\/[^/]+\/./.test(p)).map((p) => p.split('/')[2]))];
+  const unlisted = sampleDirs.filter((d) => !listedDirs.has(d));
+  check(`packaged: every app/samples/<dir> is listed in the manifest (${sampleDirs.length} dirs)`, unlisted.length === 0, unlisted.join(', '));
   const wanted = [];
   for (const inst of manifest.instruments || []) {
     const ext = inst.ext || inst.format || 'mp3';
