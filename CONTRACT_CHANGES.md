@@ -2956,3 +2956,8 @@ pending / denied / failed). Screenshots: `test/phase2/ui-core/screenshots/respon
     sent at the same moments as `windowShown` / `windowHidden` (and on window focus); both forms are kept. Self-test:
     the fixture page sees `windowVisible: [false, true]` for hide-on-close → `openMain` (the detail crosses from the
     preload's isolated world intact).
+  - `rig:window-visible` is now sent on every main-window visibility change regardless of menu-bar mode (show/hide
+    incl. ⌘H, focus, minimise/restore, hide-on-close, `openMain`, dock click), deduped, plus the current state on
+    each `setMenuBarMode` call; `rig:menu` `windowShown`/`windowHidden` stay gated on the mode. Self-test with the mode
+    OFF: minimise → restore gives `windowVisibleMinimize: [false, true]` and no `rig:menu` events (minimise fired
+    even with the Mac's screen locked; the assertion is guarded by `minimizeObserved` for headless displays).
