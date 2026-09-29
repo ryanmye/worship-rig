@@ -565,8 +565,8 @@ const BUS_COMMANDS = new Set([
 const POPOVER_W = 320;
 const POPOVER_H = 440;
 const TRAY_MODES_MAX = 12; // the popover shows ≤ 6; the menu can afford a few more
-// build/trayTemplate{,@2x}.png (node build/make-tray-icon.mjs prints these): electron-builder `files` does not ship
-// build/, so the packaged app uses the embedded copies.
+// build/trayTemplate{,@2x}.png (node build/make-tray-icon.mjs prints these). The two PNGs ship in the package
+// (package.json build.files); these embedded copies are the fallback if they are ever missing.
 const TRAY_ICON_1X =
   'iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAeklEQVR42mNgGAUkgN1A/BqIVaht8H8oTqC1wQZALENtg12g7OfUNjgB' +
   'iU8y0ADifihNVYM3QzVuprbB+6Ea9xNhcAoQf4fSVDUYXe0wMxg98n5D+RFQ/B8qhk0tSckNZFg7EHNAcTtUDJta+oPzSGFIKj4/IAaP' +
