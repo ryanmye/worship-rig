@@ -233,3 +233,68 @@ The main thread was idle for 92.4 % of the 10 s. JS plus native work was 7.6 %.
 - **RSS:** all Electron processes together were 477–532 MB (`ps` RSS, which understates because of compressed
   pages; see PERF). Low-resource and hide-to-menu-bar moved it by only about −30 to −50 MB within a minute,
   because the current song stays pinned.
+
+## Build d582e68: ⌘H detection (2026-09-29, 04:28–04:40 UTC)
+
+- Build: `dist/mac-arm64/Worship Rig.app`, built 00:27 local from d582e68, which includes b74defa (`app.on('hide')`
+  and `app.on('show')` → `rig:window-visible`, and `windowShownNow` checks `app.isHidden()`).
+- A Worship Rig started at 00:24, before this build, was still running on 8438. I quit it and relaunched with
+  `--remote-debugging-port=9333`.
+- The screen was unlocked. Method as above: Sunday Pad + Piano with the drone on (`synth`), 10 s settle, 20 s
+  window. I hid the app with ⌘H via System Events after `activate`, and showed it again with `open -a` (activate).
+- Settings started as `lowResource:false` and `menuBarMode:false`. At the end they are back to that, the drone is
+  back to `off`, and the app was reopened with a plain `open`.
+
+| config | renderer cputime (ps) | GPU | Task ms/s | style recalcs/s | page got `rig:window-visible` | `data-low-resource` / `data-window-hidden` | status lowResource / windowVisible | `getMenuBarState().windowVisible` | RSS MB |
+|---|---|---|---|---|---|---|---|---|---|
+| (1) visible, menu-bar off | **41.4** (41.0) | 12.5 | 79.8 | 120 | – | – / – | false / true | true | 713 (just launched) |
+| (2) ⌘H, menu-bar **off** | **39.2** (38.9) | 11.9 | 73.4 | 120 | **yes**, `false` | – / – | false / **true** | **false** | 550 |
+| (2r) shown again, menu-bar off | **41.6** (42.0) | 12.6 | 79.9 | 120 | yes, `true` | – / – | false / true | true | 485 |
+| (3) ⌘H, menu-bar **on** | **29.3** (28.8) | 0.0 | 3.3 | 0 | yes, `false`, plus `windowHidden` and `lowResource {on:true, auto:true}` | yes / yes | true / false | false | 474 |
+| (3b) same, 33 s later | **29.5** (29.1) | 0.0 | 3.5 | 0 | – | yes / yes | true / false | false | 468 |
+| (4) unhidden, menu-bar on | **40.9** (40.6) | 12.4 | 77.8 | 120 | yes, `true`, plus `windowShown` and `lowResource {on:false}` | – / – | false / true | true | 492 |
+
+- **With menu-bar mode on, ⌘H now works (HIDE_OK).** Main detects the hide, and the page switches to automatic
+  low-resource. The meters stop (0 recalcs/s), GPU goes to 0, and the renderer drops from about 41 % to
+  29 %, the same as the close-button path in the previous section (26–29 %). Unhiding brings everything back
+  within one window, including low-resource switching off automatically.
+- **With menu-bar mode off, ⌘H is only half done.** Main now sends `rig:window-visible false`, and
+  `getMenuBarState().windowVisible` reads `false`. But the page ignores the event: `app/js/main.js` acts only on
+  the `windowHidden` / `windowShown` menu ids, and `sendWindowEvent` sends those only in menu-bar mode.
+  - So the meters keep running at 120 Hz while the app is hidden (39 %, GPU 12 %), even though the idle-cpu R4
+    comment intends that "a hidden window hides the meters the way low-resource does".
+  - Suggestion (small, needs cloud): in `app/js/main.js`, listen to the DOM event `rig:window-visible` and toggle
+    `data-window-hidden` from it, whatever the menu-bar mode. That hides the meters only; no low-resource.
+  - This would save about 12 GPU points and about 10 renderer points (main thread plus compositor) while the
+    app is hidden with menu-bar mode off.
+
+### Energy
+
+- **A (`powermetrics`): unavailable.** `sudo -n` needs a password, so I skipped it and did not prompt.
+- **B (battery): not meaningful.** The Mac is on AC (`ExternalConnected = Yes`, `FullyCharged`,
+  `InstantAmperage = 0`), so the battery current says nothing about the app.
+  - `PowerTelemetryData.SystemLoad` (whole-system mW on AC) refreshes only about once a minute. It read 14.4,
+    23.0, 20.3, 17.7 and 16.1 W across the run. That is whole-system power, including both displays and every
+    other app, too coarse and too noisy to attribute 20 s states.
+  - **An energy measurement of the app needs the Mac unplugged, or `sudo powermetrics`.**
+- **Used instead (no root needed):** macOS "Energy Impact", which is `top -stats power`, the same figure Activity
+  Monitor shows. For each state I summed it over all Worship Rig processes and averaged 4 × 5 s samples (20 s).
+  I also give the CPU seconds the app used per 20 s, summed over all its processes from `ps -o time`. This was a
+  separate pass right after the table above.
+
+| state (drone on) | Energy Impact, all app processes | of which renderer / GPU / audio service | app CPU seconds per 20 s (renderer / GPU / audio) | Energy Impact sum over all processes on the Mac |
+|---|---|---|---|---|
+| visible, menu-bar off | **50.0** | 38.0 / 11.6 / 0.3 | 10.99 (8.35 / 2.54 / 0.10) | 298.6 |
+| ⌘H, menu-bar off | **54.2** | 41.0 / 12.9 / 0.3 | 11.85 (9.00 / 2.75 / 0.10) | 261.5 |
+| ⌘H, menu-bar on (auto low-resource) | **29.7** | 29.3 / 0.0 / 0.3 | 6.51 (6.38 / 0.01 / 0.10) | 238.7 |
+| closed to menu bar, close button (auto low-resource) | **29.6** | 29.2 / 0.0 / 0.3 | 6.50 (6.38 / 0.01 / 0.10) | 233.7 |
+| app quit | **0** | – | 0 | 225.8 |
+
+- Hidden in menu-bar mode, the app uses about 40 % less energy than visible (Energy Impact 50 → 30, CPU seconds
+  11.0 → 6.5). All of what remains is the renderer's audio: the drone synth and reverb convolution. The main
+  process, the audio service and the network process are all near 0.
+- The whole-machine sum (last column) moves with everything else running on the Mac, such as Chrome and
+  Claude. Use it only as a rough check: quitting the app lowers it by about 8–73 points.
+- `pmset -g therm`: no thermal warning, no performance warning, and no CPU power status recorded.
+- Idle wakeups: `powermetrics` was unavailable, and my `top IDLEW` parse did not come through, so they are not
+  reported.
