@@ -1039,7 +1039,7 @@ test('quickSheet: hidden until opened; tempo/TAP, swell, touch, pedal lamp, rest
     expanded: 'true',
     bpm: '72BPM',
     scope: 'saved with “Sunday Pad + Piano” · Revert undoes',
-    hint: 'Tap along 4×.This song’s echo is fixed.',
+    hint: 'Tap along 4×.This song’s echo keeps its own time.',
     ok: 'Sound OK · 12 ms',
     hold: true,
     restart: false,

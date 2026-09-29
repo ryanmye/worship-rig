@@ -1,0 +1,692 @@
+/* Worship Rig: "Daylight v2" theme (design/warmth/daylight-v2/concept.md; v1 is app/themes/daylight/).
+   One planner, two lights. By day (rehearsal, planning, Edit at the kitchen table) the rig is warm paper: oat desk,
+   ink text, the four sounds as coloured planner tabs. By night (and on a dark stage) the same page turns over: warm
+   walnut under a music-stand lamp, and the paper colour becomes the text. Same H-v2 layout and components.
+   v2 changes (after critique): what you read is printed on the desk (song, chord, setlist rail) or on songbook stock
+   (Notes); only what you operate is a card; no dashed boxes; a calmer top bar and a friendlier voice (a CSS bridge,
+   see the status block); warmer Stage neutrals; a framed EQ display; the Today card/sheet styles for today.js.
+
+   How it switches on:
+   - Every rule sits inside ONE block whose selector is :where(body[data-theme="daylight-v2"], body:not([data-theme])).
+     :where() adds no specificity, so each nested rule weighs exactly what the app rule it replaces weighs and wins on
+     source order (this file loads last). The app's more specific state rules still win where they should.
+     · Linked from index.html later: applies with <body data-theme="daylight-v2">, and stops when data-theme names another
+       theme (a Settings › Appearance picker).
+     · Injected with no attribute (page.addStyleTag, a quick <link> test): the body:not([data-theme]) branch is the
+       unguarded path, so the same rules apply as they are. That branch IS the "second block without the guard"; it is
+       spelled inside the same :where() so the two can never drift apart.
+   - Day or stage: every colour token is light-dark(day, dusk), so ONE property picks the light:
+       body (no data-mode)     color-scheme: light dark → follows the Mac's appearance (Auto switches at sunset)
+       body[data-mode="day"]   color-scheme: light
+       body[data-mode="dusk"]  color-scheme: dark
+     design/warmth/daylight-v2/today.js sets data-mode (the Today sheet's Day · Stage · Auto; Lock → Stage, sticky).
+   Assets are root-absolute (/themes/daylight-v2/…) so they resolve the same linked and inlined into a <style>.
+   Fonts: Instrument Sans (OFL; wdth 75–100, wght 400–700, tnum; 61 KB woff2, Latin subset) for everything you
+   operate; Fraunces (OFL; instanced SOFT 100, WONK 0; opsz + wght 500–800; 55 KB) only for what you read from across
+   the room: song title, chord, the Edit sentence, the wordmark. Fraunces has no tnum, so --font-display stays the sans
+   (transpose and wheel numbers use it) and titles use --dl-title.
+   Performance: no backdrop-filter, no filter, no background-attachment: fixed, no infinite animation. The desk is two
+   static gradients on the body; shadows are static; the Notes ruling is painted with its content (attachment: local);
+   the setlist fade is a static mask on the scroller's own box; the only motion is a 160 ms unfold on popovers. */
+
+@font-face {
+  font-family: 'Instrument Sans';
+  src: url('/fonts/InstrumentSans-var.woff2') format('woff2');
+  font-weight: 400 700; font-stretch: 75% 100%; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Fraunces Soft';
+  src: url('/fonts/Fraunces-soft.woff2') format('woff2');
+  font-weight: 500 800; font-style: normal; font-display: swap;
+}
+
+:where(body[data-theme="daylight-v2"], body:not([data-theme])) {
+  color-scheme: light dark;
+  &[data-mode="day"] { color-scheme: light; }
+  &[data-mode="dusk"] { color-scheme: dark; }
+
+  /* ================================================================ tokens: light-dark(day, dusk)
+     Day neutrals: OKLCH hue 70–85 (oat paper), chroma ≤ 0.02. Dusk: hue 60–70 graphite, chroma ≤ 0.008.
+     Every text pair is in concept.md §3 (palette.py); the rendered audit is audit-*.json. */
+  --bg:        light-dark(#f3efe7, #1b1611);   /* the desk */
+  --panel:     light-dark(#fdfbf7, #261f19);   /* a card */
+  --panel-2:   light-dark(#f6f2eb, #2f2720);   /* inset controls */
+  --panel-3:   light-dark(#ece6dc, #3a3129);   /* hover / selected row */
+  --line:      light-dark(#e5ded2, #3a3029);
+  --line-2:    light-dark(#d2c8b9, #52463b);
+  --dl-line-hover: light-dark(#b9ad9c, #6e6052);
+  --text:      light-dark(#27211b, #f5ede0);   /* ink by day; by night the paper colour becomes the text */
+  --muted:     light-dark(#5e554b, #cfc3b2);   /* 7.1:1 panel (day) · 9.4:1 (dusk) */
+  --faint:     light-dark(#6f665b, #ada08e);   /* ≥ 4.5:1 on panel-3 in both */
+  --accent:    light-dark(#f4b73f, #f6c35a);   /* highlighter amber: current song, key, selection (a fill) */
+  --accent-ink: #2a1d05;                        /* on the amber: 9.2:1 / 10.1:1 */
+  --dl-accent-text: light-dark(#8a5300, #f6c35a); /* amber AS TEXT on paper: 6.1:1 */
+  --warn:      light-dark(#eea43a, #f7ad4a);   /* lock / hold (a fill) */
+  --dl-warn-text: light-dark(#8f4a00, #f7ad4a);
+  --ok:        light-dark(#287547, #79d28d);   /* "Ready" as text on the top bar: 5.3:1 by day */
+  --danger:    light-dark(#cf3b2c, #ec5a47);
+  --danger-ink: #fff;
+  /* planner tabs by day, lamps by night. Extra is the lightest and Bass the darkest in both, so deutan viewers tell them
+     apart by lightness (min OKLab ΔE×100: day deutan 7.8 / protan 6.3 / tritan 4.3; dusk 6.1 / 8.3 / 5.4; today's
+     palette is 0.6 deutan, Extra ≈ Bass) */
+  --slot-0:    light-dark(#f28a4c, #f39a62);   /* Keys  · tangerine */
+  --slot-1:    light-dark(#79c68f, #7fcb92);   /* Pad   · sage */
+  --slot-2:    light-dark(#7cc4ee, #8fd0f5);   /* Extra · sky */
+  --slot-3:    light-dark(#a883d4, #b98bdc);   /* Bass  · plum */
+  --drone:     light-dark(#e4d3a8, #eddcae);   /* linen / candle */
+  --dl-drone-ink: light-dark(#6c5728, #eddcae);/* drone colour as text or outline: 6.4:1 on paper */
+  --dl-ink-on-lamp: light-dark(#241a10, #1d1712); /* on any lamp: ≥ 5.6:1 (Bass is the lowest) */
+  --fx:        light-dark(#7a7064, #bfb3a3);   /* shared effects: pencil grey, never a slot colour */
+  --chg:       light-dark(#27211b, #ffffff);   /* the "changed" dot: a pencil mark by day */
+  --off-tile:  light-dark(#efe9df, #2f2720);
+  --sel-fx:    light-dark(#ffffff, #41372e);
+  --track:     light-dark(#e7e0d4, #140f0b);
+  --track-edge: light-dark(#958b7e, #877a6b);  /* 3.2:1 / 3.9:1 on panel */
+  --led-off:   light-dark(#958b7e, #877a6b);
+  --muted-fader: light-dark(#948a7d, #877a6b);
+  --thumb:     light-dark(#fffdf8, #efe8dc);
+  --panic:     light-dark(#d23f2f, #c9372a);   /* white on it 4.7:1 / 5.2:1 */
+  --panic-bg:  light-dark(#fde3df, #4d1811);
+  --panic-text: light-dark(#7a1b12, #ffd2c8);
+  --rec-idle:  light-dark(#c8503e, #b9574b);
+  --focus:     light-dark(#2f6fb0, #7cc4ff);
+  --radius: 12px;
+  --radius-sm: 9px;
+  /* new tokens (the promotion pass research.md §5.4 asks for; the app can adopt them later) */
+  --dl-title: 'Fraunces Soft', 'Iowan Old Style', Georgia, serif;
+  --dl-topbar: light-dark(#fbf8f2, #211a15);
+  --dl-well:   light-dark(#ebe5db, #140f0b);   /* recesses: meter bars, the wheel slot, pedal box */
+  --dl-lit:    light-dark(#27211b, #ffffff);   /* a "white LED" (pedal, bend, fader indicator): ink on paper */
+  --dl-key-white: light-dark(#fffdf8, #cfc6b6);/* dimmed ivory at night: no glare (UX H3) */
+  --dl-key-black: light-dark(#2c2621, #17110d);
+  --dl-key-edge:  light-dark(#cfc5b6, #0d0b09);
+  --dl-key-label: light-dark(#6f665b, #4a4238);
+  --dl-wheel:  light-dark(#d9c7a5, #b9ad9b);   /* the throw: linen by day, dimmed ivory at night (no glare) */
+  --dl-wheel-edge: light-dark(#27211b, #f3eee4); /* a pencil line at the level: 12:1 on the well */
+  --dl-pop:    light-dark(#fffdf9, #2c241d);   /* popovers, sheets, toasts */
+  --dl-shadow: light-dark(rgb(74 52 28 / .10), rgb(0 0 0 / .45));
+  --dl-shadow-2: light-dark(rgb(74 52 28 / .18), rgb(0 0 0 / .7));
+  --dl-card-shadow: 0 1px 0 light-dark(rgb(255 255 255 / .9), rgb(255 246 230 / .04)) inset,
+    0 1px 2px var(--dl-shadow), 0 6px 18px -10px var(--dl-shadow-2);
+  --dl-btn-shadow: 0 1px 0 light-dark(rgb(255 255 255 / 1), rgb(255 246 230 / .05)) inset, 0 1px 1.5px var(--dl-shadow);
+  --dl-pop-shadow: 0 18px 44px -12px var(--dl-shadow-2), 0 2px 6px var(--dl-shadow);
+  --dl-tint-amt: 14%;                          /* a chip in use: slot tint on the card */
+  --font: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* ================================================================ the room */
+  /* the desk. v2: the paper-tooth PNG is gone (invisible at 1x in every v1 shot, critique #10). Two static gradient
+     layers, painted once:
+     1. the music-stand lamp: a small warm pool centred on the song title, which now prints straight onto the desk
+        (no card). Day: a soft butter light. Stage: amber at 12 % alpha, fading out by ~40 % of the width, so the
+        title sits in lamplight and the rest of the desk stays dark (glare in concept.md §6).
+     2. window light from the top left (day) / a wide, faint warm wash (stage). */
+  background:
+    radial-gradient(34% 26% at 15% 11%, light-dark(rgb(255 236 196 / .55), rgb(246 176 84 / .12)), transparent 100%),
+    radial-gradient(90% 70% at 18% -10%, light-dark(rgb(255 251 240 / .95), rgb(150 96 44 / .10)), transparent 70%),
+    var(--bg);
+  font-feature-settings: 'ss04', 'ss07';       /* Instrument's friendlier K and G */
+  transition: background-color .3s;
+
+  /* ================================================================ labels: sentence case, no tracking
+     Caps stay only where they are physical labels: the lamp names (KEYS / PAD), PANIC, REC, MIDI. */
+  & :is(.select-label, .stepper-label, .fader-label, .wheel-caption, .chord-caption, .section-title, .tb-cap,
+    .song-key-cap, .nav-next-cap, .qs-st .cap, .fxpill-l, .fx-chiprow .fx-lab span, .pedal-lamp, .drone-swell,
+    .st-h2, .st-h3, .fc-label, .ev2-cap, .ev2-song-chipcap, .ev2-slot-mg-head, .ev2-list-bcat, .eqk-title,
+    .eqk-seg-label, .eqk-bands th, .st-learn-table thead th, .ev2-fx-who-cap) {
+    text-transform: none; letter-spacing: 0; font-weight: 650;
+  }
+  & :is(.section-title, .ev2-cap, .qs-st .cap, .st-h2) { font-size: 13px; color: var(--muted); }
+  & .tb-cap { font-size: 13px; }
+  & #midi-status .tb-cap { letter-spacing: .04em; } /* MIDI is an acronym */
+  /* headerChipRow writes its captions upper-cased in JS (label.toUpperCase()): lower-case them, then capitalise */
+  & :is(.fx-chiprow .fx-lab span, .fxpill .fxpill-l) { display: inline-block; text-transform: lowercase; }
+  & :is(.fx-chiprow .fx-lab span, .fxpill .fxpill-l)::first-letter { text-transform: uppercase; }
+  /* the inline-block above would otherwise undo the app's icon-only captions in a narrow effects box (1251–1439) */
+  @container pfx (max-width: 600px) { & .fx-chiprow .fx-lab span { display: none; } }
+  & .tag { text-transform: none; letter-spacing: 0; font-weight: 700; font-size: 11px; }
+
+  /* ================================================================ buttons: paper keys with a printed edge */
+  & :is(.btn, .tb-btn, .toggle, .seg, .step-btn, .key-btn, .setlist-chip, .swell-btn, .rec-btn) {
+    background: var(--panel); border-color: var(--line-2); box-shadow: var(--dl-btn-shadow); font-weight: 650;
+  }
+  /* :where() keeps this at the app's hover weight, and the exclusions keep a hovered current song / ON key amber */
+  & :is(.btn, .tb-btn, .toggle, .seg, .step-btn, .key-btn, .setlist-chip, .swell-btn):hover:where(:not(:disabled, .current, .on)) {
+    background: var(--panel-3); border-color: var(--dl-line-hover);
+  }
+  & .segmented { background: var(--panel); border-color: var(--line-2); box-shadow: var(--dl-btn-shadow); }
+  & .segmented .seg { box-shadow: none; }
+  & .segmented .seg.on:hover { background: color-mix(in oklab, var(--accent) 88%, #fff); }
+  & .toggle.on { border-color: color-mix(in oklab, var(--accent) 60%, var(--line-2)); }
+  & .toggle-led { box-shadow: inset 0 0 0 1px rgb(0 0 0 / .18); }
+  & .select-input { background: var(--panel); border-color: var(--line-2); }
+  & .hold-btn { background: var(--panel); border-color: var(--line-2); box-shadow: var(--dl-btn-shadow); }
+  & .hold-btn .hb-ring { background: conic-gradient(var(--hb-c) calc(var(--hold, 0) * 360deg), var(--line-2) 0); }
+  & .hold-btn .hb-cap { color: var(--accent-ink); box-shadow: 0 6px 18px var(--dl-shadow-2); }
+  & .hold-btn.holding, & .perform .hold-btn.holding { border-color: var(--warn); color: var(--dl-warn-text); }
+  & :is(.btn, .toggle, .seg, .key-btn, .setlist-chip, .ontile, .mchip, .fxc, .hold-btn):active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  & .btn-panic { background: var(--panic); }
+  & .warn-btn { background: light-dark(#fdf0d2, #4a2a00); border-color: var(--warn); color: light-dark(#6b4000, #ffd899); }
+
+  /* ================================================================ top bar */
+  & .topbar { background: var(--dl-topbar); border-bottom-color: var(--line); box-shadow: 0 1px 0 var(--dl-shadow); }
+  & .tb-name { font: 650 19px/1 var(--dl-title); letter-spacing: -.01em; }
+  & .tb-logo { content: url('/themes/daylight-v2/mark.svg'); border-radius: 8px; }
+  & .led { box-shadow: inset 0 0 0 1px rgb(0 0 0 / .2); }
+  & .led.ok { box-shadow: 0 0 0 3px color-mix(in oklab, var(--ok) 22%, transparent); }
+  & .led.warn { box-shadow: 0 0 0 3px color-mix(in oklab, var(--warn) 28%, transparent); }
+  & .led.bad { box-shadow: 0 0 0 3px color-mix(in oklab, var(--danger) 25%, transparent); }
+  & .led.flash { background: var(--ok); box-shadow: 0 0 0 5px color-mix(in oklab, var(--ok) 30%, transparent); }
+  & .midi-name.off, & .latency.warn { color: var(--dl-warn-text); }
+  & .rec-btn.recording { background: var(--panic-bg); border-color: var(--danger); color: var(--panic-text); }
+  & .rec-time { font-family: var(--font); font-variant-numeric: tabular-nums; }
+  & .meter-bar { background: var(--dl-well); }
+  & .meter-fill { background: linear-gradient(to right, var(--ok) 0 72%, #e2b23c 86%, var(--danger) 100%); }
+  & .meter.vertical .meter-fill { background: linear-gradient(to top, var(--ok) 0 72%, #e2b23c 86%, var(--danger) 100%); }
+  & .meter-hold { background: var(--dl-lit); }
+  /* v2 status: one lamp and one phrase when all is well; a light only appears when it needs you (critique: "the
+     status cluster is a server monitor"). All state comes from the classes main.js already sets:
+     · Sound hides while its lamp is ok (running, latency < 40 ms). Paused / Stopped / Muted / a slow delay still show.
+     · Ready reads "Ready to play" (.on) or "Warming up…" (lamp warn); the per-song spinners in the setlist
+       already show which songs are still loading, so the n/19 count is dropped here.
+     · MIDI's caption reads "Keyboard".
+     These text swaps are a CSS bridge: the visible words change, the DOM text (and tests) do not. concept.md §7 lists
+     the JS edits that replace this block. */
+  & #audio-status:has(#audio-led.ok) { display: none; }
+  & #midi-status .tb-cap { font-size: 0; letter-spacing: 0; }
+  & #midi-status .tb-cap::after { content: 'Keyboard'; font-size: 13px; color: var(--muted); }
+  & #ready-status:is(.on, :has(#ready-led.warn)) .ready-text { font-size: 0; }
+  & #ready-status.on .ready-text::after { content: 'Ready to play'; font-size: 13px; }
+  & #ready-status:not(.on):has(#ready-led.warn) .ready-text::after { content: 'Warming up…'; font-size: 13px; color: var(--muted); }
+  & #ready-status.on .ready-text { color: var(--ok); }
+  & .overlay-title { font-size: 0 !important; }
+  & .overlay-title::after { content: 'Tap anywhere to wake the sound.'; font: 650 34px/1.15 var(--dl-title); }
+  & .overlay-sub { font-size: 0; }
+  & .overlay-sub::after { content: 'Your browser needs one tap before it can play.'; font-size: 15px; }
+  & .quick-btn[aria-expanded="true"] { background: var(--panel-3); border-color: var(--text); box-shadow: inset 0 -3px 0 var(--text); }
+
+  /* ================================================================ banners, toasts, overlay, settings */
+  & :is(.banner, .bstrip, .bstrip.open .banner.warn) { background: light-dark(#fdf0d2, #3a2a06); color: light-dark(#5a3600, #fff1d0); }
+  & :is(.banner.danger, .bstrip[data-kind="danger"], .bstrip.open .banner.danger) { background: light-dark(#fde3df, #4a1216); color: light-dark(#7a1b12, #fff); }
+  & :is(.banner.info, .bstrip[data-kind="info"], .bstrip.open .banner.info) { background: light-dark(#e2eff9, #10263d); color: light-dark(#153c5e, #e3f1ff); }
+  & .bstrip .banner { background: transparent; color: inherit; }
+  & .bstrip-more { border-left-color: color-mix(in oklab, currentColor 18%, transparent); background: color-mix(in oklab, currentColor 6%, transparent); }
+  & .bstrip.open .bstrip-list { background: var(--dl-pop); border-color: var(--line-2); box-shadow: var(--dl-pop-shadow); }
+  & .toast { background: var(--dl-pop); border-color: var(--line-2); box-shadow: var(--dl-pop-shadow); color: var(--text); }
+  & .overlay-start { background: light-dark(rgb(243 239 231 / .88), rgb(14 12 10 / .82)); backdrop-filter: none; }
+  & .overlay-card { background: var(--dl-pop); border-color: var(--line-2); box-shadow: var(--dl-pop-shadow); border-radius: 20px; }
+  & .overlay-card img { content: url('/themes/daylight-v2/mark.svg'); }
+  & .overlay-title { font: 650 34px/1.15 var(--dl-title); }
+  & .settings-modal, & .st-backdrop { background: light-dark(rgb(60 44 26 / .28), rgb(0 0 0 / .66)); }
+  & .st-dialog { background: var(--panel); box-shadow: var(--dl-pop-shadow); border-radius: 18px; }
+  & .st-title { font: 650 24px/1.1 var(--dl-title); }
+  & .st-section { background: var(--panel-2); }
+  & .ed-danger { background: var(--panic-bg); color: var(--panic-text); }
+  & .ed-danger:hover:not(:disabled) { background: color-mix(in oklab, var(--panic-bg) 85%, var(--danger)) !important; }
+  & :is(.st-status.warn, .st-map-note) { color: var(--dl-warn-text) !important; }
+  & :is(.st-pedal-prompt, .ed-btn.on) { color: var(--dl-accent-text); }
+  & .st-doc-link { color: var(--focus); }
+
+  /* ================================================================ cards */
+  & .panel { background: var(--panel); border-color: var(--line); box-shadow: var(--dl-card-shadow); }
+  & :is(.step-panel, .qs, .keypop, .fx-more, .ev2-slot-menu, .ev2-fx-vibe-menu, .ev2-song-pop, .toast) {
+    animation: dl-unfold .16s cubic-bezier(.2, .8, .2, 1);
+  }
+
+  /* the changed dot: a pencil mark on paper, a white spark at night */
+  & .cd { box-shadow: 0 0 0 2px var(--panel), 0 0 6px light-dark(transparent, #ffffffaa); }
+  & .cdi, & .rv-dot, & .ev2 .ev2-cdi { box-shadow: 0 0 0 1.5px light-dark(var(--panel), transparent), 0 0 6px light-dark(transparent, #fffc); }
+
+  /* ================================================================ onTile: a planner tab by day, a lamp by night */
+  & .ontile {
+    color: var(--dl-ink-on-lamp);
+    border-color: color-mix(in oklab, var(--c) 72%, var(--text));
+    box-shadow:
+      inset 0 -2.5px 0 light-dark(color-mix(in oklab, var(--c) 62%, var(--text)), color-mix(in oklab, var(--c) 70%, #000)),
+      inset 0 1px 0 rgb(255 255 255 / .35),
+      0 6px 16px -9px light-dark(color-mix(in oklab, var(--c) 80%, var(--text)), transparent),
+      0 0 18px light-dark(transparent, color-mix(in oklab, var(--c) 26%, transparent));
+  }
+  & .ontile :is(.ot-name, .ot-sub, .ot-state) { color: var(--dl-ink-on-lamp); }
+  & .ontile .ot-state { background: color-mix(in oklab, var(--dl-ink-on-lamp) 14%, transparent); }
+  & .ontile .ot-led {
+    background: #fffdf8;
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--c) 45%, var(--dl-ink-on-lamp)), 0 0 8px light-dark(transparent, #fff);
+  }
+  & .ontile.off { background: var(--off-tile); border-color: var(--line-2); box-shadow: var(--dl-btn-shadow); }
+  & .ontile.off .ot-led { background: transparent; box-shadow: inset 0 0 0 2px var(--led-off); }
+  & .ontile.off :is(.ot-name, .ot-sub) { color: var(--faint); }
+  & .ontile.off .ot-state { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1.5px var(--led-off); }
+
+  /* ================================================================ stepChip: a tinted tab while in use */
+  & .mchip { color: var(--muted); border-color: var(--line-2); background: var(--panel); box-shadow: var(--dl-btn-shadow); }
+  & .mchip.on {
+    background: color-mix(in oklab, var(--c) var(--dl-tint-amt), var(--panel));
+    border-color: light-dark(color-mix(in oklab, var(--c) 70%, var(--text)), color-mix(in oklab, var(--c) 70%, transparent));
+    color: var(--text);
+  }
+  & .mchip.on > .mc-label { color: color-mix(in oklab, var(--c) 40%, var(--text)); }
+  & .mchip .mc-bar { background: light-dark(color-mix(in oklab, var(--c) 80%, var(--text)), var(--c)); }
+  & .mchip.open { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px light-dark(color-mix(in oklab, var(--c) 70%, var(--text)), var(--c)); }
+  & .mchip.cycle.on .mc-led { box-shadow: 0 0 0 2px color-mix(in oklab, var(--c) 30%, transparent); }
+
+  /* stepPanel: a card that unfolds from its chip */
+  & .step-panel { background: var(--dl-pop); box-shadow: var(--dl-pop-shadow); border-radius: 12px; }
+  & .step-panel::after { background: var(--dl-pop); }
+  & .step-panel .sp-owner { color: color-mix(in oklab, var(--c) 45%, var(--text)); letter-spacing: .04em; }
+  & .step-panel .sp-x, & .step-panel .sp-step { background: var(--panel); border-color: var(--line-2); }
+  & .step-panel .sp-step.on { background: var(--c); color: var(--dl-ink-on-lamp); border-color: color-mix(in oklab, var(--c) 70%, var(--text)); }
+
+  /* ================================================================ shared effects: pencil grey, a circled choice */
+  & .fxc { color: var(--text); background: var(--panel); border-color: var(--line-2); box-shadow: var(--dl-btn-shadow); }
+  & .fxc small { color: var(--faint); }
+  & .fxc.on { background: var(--sel-fx); border: 2px solid var(--text); color: var(--text); box-shadow: 0 2px 8px -3px var(--dl-shadow-2); }
+  & .fxc.on small { color: var(--muted); }
+  & .fxc.more.on { color: var(--text); }
+  & :is(.fx-more, .fx-chiprow.fx-open > .fxrow) { background: var(--dl-pop); border-color: var(--line-2); box-shadow: var(--dl-pop-shadow); }
+  & .fxpill { background: var(--panel); border-color: var(--line-2); box-shadow: var(--dl-btn-shadow); }
+
+  /* ================================================================ Quick sheet */
+  & .qs { background: var(--dl-pop); border-color: var(--line-2); box-shadow: var(--dl-pop-shadow); border-radius: 16px; }
+  & .qs::before { background: var(--dl-pop); border-color: var(--line-2); }
+  & .qs-h h2 { font: 650 19px/1.1 var(--dl-title); }
+  & .qs-bpm { font-variant-numeric: tabular-nums; }
+  & .qs-tap { background: var(--panel); border-color: var(--text); letter-spacing: .02em; }
+  & .qs-tap.flash { animation-name: dl-qs-flash; }
+  & .qs-pedal { background: var(--dl-well); letter-spacing: .02em; color: var(--muted); }
+  & .qs-pedal.on i { background: var(--dl-lit); box-shadow: 0 0 0 3px color-mix(in oklab, var(--dl-lit) 22%, transparent); }
+  & .qs-ok.bad { color: var(--dl-warn-text); }
+  & .qs-restart { color: var(--accent-ink); }
+
+  /* ================================================================ Perform: head */
+  /* v2 (critique: "every region is the same white card"): what you READ is printed on the desk or on its own paper
+     stock; only what you OPERATE is a card. The song block, the chord readout and the setlist rail lose their card;
+     Notes gets a cream, ruled songbook stock. Layout boxes, padding and hit areas are unchanged. */
+  & :is(.song-block, .perform .chord-readout, .perform .setlist-strip) {
+    background: transparent; border-color: transparent; box-shadow: none;
+  }
+  & .perform .chord-readout { box-shadow: inset 1px 0 0 var(--line-2); border-radius: 0; }
+  & .song-name { font-family: var(--dl-title); font-weight: 650; letter-spacing: -.015em; font-optical-sizing: auto; }
+  & .song-key { color: var(--dl-accent-text); }
+  & .key-open .ic { color: var(--dl-accent-text); }
+  & .hold-btn.key-open {
+    border-color: color-mix(in oklab, var(--accent) 55%, var(--line-2));
+    background: color-mix(in oklab, var(--accent) 12%, var(--panel));
+  }
+  & .song-playin { background: light-dark(#fbefd2, #2e2716); }
+  & .song-loading { color: var(--dl-accent-text); background: var(--panel); }
+  & .song-loading-spin { border-color: var(--dl-accent-text); border-top-color: transparent; }
+  & .transpose-val.shift { color: var(--dl-accent-text); }
+  & .chord-name { font-family: var(--dl-title); font-weight: 650; letter-spacing: -.01em; }
+  & .faded-chip { color: var(--accent-ink); }
+  & .hold-tag { color: var(--dl-warn-text); }
+
+  /* setlist: index cards; the current one is highlighted */
+  & .perform .nav-btn { background: var(--panel); border-color: var(--line); box-shadow: var(--dl-card-shadow); }
+  & .nav-next-name { font-weight: 700; }
+  /* Instrument Sans' bold word space is narrow (~0.19 em): "Sunday Pad + Piano" read as one word in v1 (critique) */
+  & :is(.chip-name, .nav-next-name, .slot-inst, .ot-name, .ev2-list-name, .fxc) { word-spacing: .09em; }
+  /* the rail runs off the right edge instead of hard-clipping the last chip ("Rhoc"): a static 36 px fade on the
+     scroller's own box (not its content), so it never repaints on scroll */
+  & .perform .setlist-strip {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+  }
+  & .nav-next-name em { color: var(--dl-accent-text); }
+  & .setlist-chip { background: var(--panel); border-color: var(--line-2); }
+  & .setlist-chip.current {
+    background: var(--accent); color: var(--accent-ink); border-color: color-mix(in oklab, var(--accent) 70%, var(--text));
+    box-shadow: inset 0 -2.5px 0 color-mix(in oklab, var(--accent) 65%, var(--text)), 0 6px 14px -8px color-mix(in oklab, var(--accent) 80%, var(--text));
+  }
+  & .setlist-chip.current :is(.chip-num, .chip-key) { color: color-mix(in oklab, var(--accent-ink) 78%, var(--accent)); }
+  & .chip-spinner { border-color: var(--accent-ink); border-top-color: transparent; }
+  & .setlist-chip.loading:not(.current) .chip-spinner { border-color: var(--dl-accent-text); border-top-color: transparent; }
+
+  /* ================================================================ Perform: stage */
+  /* wheel: a sand-coloured throw in a recessed slot */
+  & .wheel-input::-webkit-slider-runnable-track {
+    background: linear-gradient(to top, var(--dl-wheel) 0 calc(var(--pos, 0%) - 3px), var(--dl-wheel-edge) calc(var(--pos, 0%) - 3px) var(--pos, 0%),
+      var(--dl-well) var(--pos, 0%));
+  }
+  & .wheel-strip.pickup .wheel-value { color: var(--dl-warn-text); }
+  & .swell-btn.on { background: light-dark(#e3f2e6, #173a26); border-color: var(--ok); color: light-dark(#1d5530, #b8ffd6); }
+  & .pedal-lamp.down .pedal-led, & .drone-swell.up .drone-swell-led { background: var(--dl-lit); box-shadow: 0 0 0 3px color-mix(in oklab, var(--dl-lit) 20%, transparent); }
+  & .pedal-lamp.stuck { color: var(--accent-ink); }
+
+  /* strips */
+  & .slot-inst { font-weight: 650; }
+  & .slot-icon { color: light-dark(color-mix(in oklab, var(--c) 70%, var(--text)), var(--c)); }
+  & .wheel-badge { color: var(--muted); }
+  & .slot-badge { color: var(--text); border-color: var(--line-2); background: var(--panel-2); }
+  & .slot.muted .slot-body { background: repeating-linear-gradient(135deg, transparent 0 9px, light-dark(rgb(60 40 20 / .045), #ffffff0b) 9px 18px); }
+  & .slot.muted .mchip.on { background: var(--panel-2); border-color: var(--line-2); color: var(--text); }
+  & .slot.muted .mchip .mc-bar { background: var(--muted-fader); }
+  & .slot.muted .mchip.cycle.on .mc-led { background: var(--muted-fader); box-shadow: none; }
+  & .slot.empty { background: transparent; border-color: var(--line-2); box-shadow: none; }
+  & .slot-vt { letter-spacing: .08em; }
+
+  /* faders: a paper cap with a coloured grip line, a slightly deeper fill by day so it reads on the pale track */
+  & .fader.vertical .fader-input::-webkit-slider-runnable-track {
+    background: linear-gradient(to top,
+      light-dark(color-mix(in oklab, var(--fader-color) 88%, var(--text)), var(--fader-color)) var(--pos, 0%),
+      var(--track) var(--pos, 0%));
+  }
+  & .fader.horizontal .fader-input::-webkit-slider-runnable-track {
+    background: linear-gradient(to right,
+      light-dark(color-mix(in oklab, var(--fader-color) 88%, var(--text)), var(--fader-color)) var(--pos, 0%),
+      var(--track) var(--pos, 0%));
+  }
+  & .fader.vertical .fader-input::-webkit-slider-thumb {
+    background:
+      linear-gradient(transparent calc(50% - 1.5px), light-dark(color-mix(in oklab, var(--fader-color) 75%, var(--text)), var(--fader-color)) calc(50% - 1.5px) calc(50% + 1.5px), transparent calc(50% + 1.5px)),
+      linear-gradient(light-dark(#fffefb, #f7f1e6), light-dark(#eee7db, #d8cfc0));
+    border: 1px solid light-dark(#b3a898, #0d0b09); border-radius: 8px;
+    box-shadow: inset 0 1px 0 #fff, 0 2px 5px var(--dl-shadow-2);
+  }
+  & .fader.horizontal .fader-input::-webkit-slider-thumb {
+    background: linear-gradient(light-dark(#fffefb, #f7f1e6), light-dark(#eee7db, #d8cfc0));
+    border: 1px solid light-dark(#b3a898, #0d0b09); border-radius: 8px;
+    box-shadow: inset 0 1px 0 #fff, 0 2px 5px var(--dl-shadow-2);
+  }
+  & .fader-indicator { background: var(--dl-lit); box-shadow: 0 0 0 1px light-dark(#fff, transparent), 0 0 6px light-dark(transparent, #fff9); }
+  & .lvl-meter { background: linear-gradient(to top, var(--ok) 0 80%, #e2b23c 80% 95%, var(--danger) 95%); }
+
+  /* key & drone */
+  & .p-drone { --c: var(--drone); }
+  /* v2: the Drone ON tab read as disabled next to Keys/Pad (critique). Linen stays (it is the slot colour furthest
+     from amber and keeps deutan ΔE 7.8); the ON state now carries the drone's own ink as a 1.5 px edge and a 3 px
+     printed bottom, and its LED is filled. */
+  & .p-drone .ontile:not(.off) {
+    --dl-drone-edge: light-dark(var(--dl-drone-ink), color-mix(in oklab, var(--drone) 55%, #3a2a12));
+    border: 1.5px solid var(--dl-drone-edge);
+    box-shadow: inset 0 -3px 0 var(--dl-drone-edge), inset 0 1px 0 rgb(255 255 255 / .45),
+      0 6px 16px -9px light-dark(color-mix(in oklab, var(--dl-drone-ink) 80%, transparent), transparent),
+      0 0 18px light-dark(transparent, color-mix(in oklab, var(--drone) 24%, transparent));
+  }
+  & .p-drone .ontile:not(.off) .ot-led { box-shadow: 0 0 0 2px var(--dl-drone-edge), 0 0 8px light-dark(transparent, #fff); }
+  & .p-drone .ontile:not(.off) .ot-state { background: light-dark(var(--dl-drone-ink), #3a2c16); color: light-dark(#fbf5e8, #f3e4bd); }
+  & .key-btn.accidental { background: light-dark(#f1ebe1, #211a15); }
+  & .drone-block .key-btn.on { border-color: var(--dl-drone-ink); color: var(--dl-drone-ink); background: color-mix(in oklab, var(--drone) 22%, var(--panel)); }
+  & .drone-block .segmented .seg.on {
+    background: color-mix(in oklab, var(--drone) 22%, transparent); color: var(--dl-drone-ink); box-shadow: inset 0 0 0 2px var(--dl-drone-ink);
+  }
+  & .drone-block .holding { border-color: var(--warn) !important; color: var(--dl-warn-text) !important; }
+  & .drone-lockline.hint { color: var(--dl-warn-text); }
+  & .drone-toggles .toggle.on { border-color: color-mix(in oklab, var(--dl-drone-ink) 55%, var(--line-2)); }
+  & .drone-toggles .tag { color: var(--muted); border-color: var(--line-2); }
+  & .kp-note .kp-drone { color: var(--dl-drone-ink); }
+
+  /* notes: a songbook page. Cream stock, a pencil margin rule, faint ruled lines that scroll with the text
+     (background-attachment: local on the scroller, so it is painted with the content, not per frame), and the body in
+     the text cut of Fraunces. Lines sit every 27 px = the line-height, so the words stand on them. */
+  & .p-notes {
+    --dl-notes-rule: light-dark(rgb(196 98 70 / .38), rgb(232 150 110 / .30));
+    --dl-notes-line: light-dark(rgb(120 150 190 / .16), rgb(255 230 190 / .06));
+    background:
+      linear-gradient(to right, transparent 9px, var(--dl-notes-rule) 9px 10px, transparent 10px),
+      light-dark(#fbf5e8, #2a221b);
+    border-color: light-dark(#e8dcc6, #3a3029);
+    box-shadow: 0 1px 2px var(--dl-shadow), 0 10px 22px -16px var(--dl-shadow-2);
+    padding-left: 22px;
+  }
+  & .notes-text {
+    color: var(--text); font: 500 16.5px/27px var(--dl-title); letter-spacing: 0; font-optical-sizing: auto;
+    background: repeating-linear-gradient(to bottom, transparent 0 26px, var(--dl-notes-line) 26px 27px);
+    background-attachment: local; padding-top: 1px;
+  }
+  & .notes-text.empty { font-style: normal; color: var(--faint); }
+  & .notes-head .section-title { font: 600 15px/1 var(--dl-title); color: var(--muted); }
+
+  /* ---------------------------------------------------------------- no dashed boxes (critique: they read as
+     wireframe placeholders). Empty and "nothing to do" states are flat labels or soft inset wells instead. */
+  & .perform .nav-btn:disabled {
+    opacity: 1; background: transparent; border-color: transparent; box-shadow: none; color: var(--faint);
+  }
+  & .perform .nav-btn.prev:disabled { font-size: 0; }
+  & .perform .nav-btn.prev:disabled::after { content: 'Start of set'; font: 500 15px/1.2 var(--dl-title); white-space: nowrap; }
+  @media (max-width: 1439px) { & .perform .nav-btn.prev:disabled::after { content: 'Start'; } }
+  & .slot.empty {
+    background: light-dark(#ece6db, #1f1914); border: 1px solid transparent;
+    box-shadow: inset 0 2px 5px light-dark(rgb(74 52 28 / .12), rgb(0 0 0 / .45)), inset 0 0 0 1px light-dark(rgb(74 52 28 / .06), rgb(255 240 220 / .03));
+  }
+  & .perform .slot-add { border-radius: 50%; background: var(--panel); color: var(--muted); }
+  & .slot-vt { font: 500 15px/1 var(--dl-title); letter-spacing: 0; color: var(--muted); text-transform: lowercase; }
+  & .slot-vt::first-letter { text-transform: uppercase; }
+  & .slot-vt span { font-size: 0; }
+  & .slot-vt span::after { content: ' · add a sound'; font-size: 15px; letter-spacing: 0; }
+  & .ev2 .ev2-tab.empty::before { background: color-mix(in oklab, var(--line-2) 55%, transparent); }
+
+  /* ================================================================ Perform: bottom row */
+  & .rbar.off { background: var(--muted-fader); }
+  & .pkey.white { background: var(--dl-key-white); border-color: var(--dl-key-edge); }
+  & .pkey.black { background: var(--dl-key-black); border-color: light-dark(#1a1511, #000); }
+  & .pkey.black.held { background: color-mix(in oklab, var(--accent) 80%, var(--text)); }
+  & .pkey-label { color: var(--dl-key-label); }
+  & .pkey.held .pkey-label { color: var(--accent-ink); }
+  & .hold-btn.btn-revert, & .hold-btn.lock-toggle { background: var(--panel); }
+  & .rv-cnt { color: var(--text); }
+  /* disabled by colour, not by opacity: on paper .45 opacity took "nothing changed" to 1.9:1. v2: no dashed edge
+     either; a flat printed label "↺ Revert / As saved" on the desk (4.9:1 day, 7.0:1 stage) */
+  & .hold-btn.btn-revert:disabled { opacity: 1; background: transparent; box-shadow: none; color: var(--faint); border-color: transparent; }
+  & .btn-revert.none .rv-cnt { color: var(--faint); }
+  & .btn-revert:disabled .rv-cnt-t { font-size: 0; }
+  & .btn-revert:disabled .rv-cnt-t::after { content: 'As saved'; font: 500 14px/1.2 var(--dl-title); }
+  & .btn-fade { background: var(--panel); border-color: var(--line-2); }
+  & .btn-fade.faded { color: light-dark(#6b4000, #ffd899); background: light-dark(#fdf0d2, #2e2408); }
+  & .btn-panic { box-shadow: inset 0 -3px 0 light-dark(#a82d20, #8d2519), 0 6px 18px -8px light-dark(#d23f2f, #c9372a); }
+  & .lock-sub { color: light-dark(#6e5214, #e8cf98); }
+  & .lock-toggle.on { color: var(--dl-warn-text); background: light-dark(#fdf0d2, #231c0c); }
+  & .lock-toggle.on .ic { color: var(--dl-warn-text); }
+
+  /* KEY ▾ popover */
+  & .keypop { background: var(--dl-pop); box-shadow: var(--dl-pop-shadow); border-radius: 14px; }
+  & .keypop::before { background: var(--dl-pop); }
+  & .keypop h3 { font: 650 21px/1.15 var(--dl-title); }
+  & .kp-foot b { color: var(--dl-accent-text); }
+
+  /* 1024: the width axis gives long names room instead of an ellipsis */
+  @media (max-width: 1250px) {
+    & :is(.chip-name, .slot-inst, .nav-next-name, .mchip .mc-label, .mchip .mc-value, .fxpill-v) { font-stretch: 92%; }
+  }
+
+  /* ================================================================ Edit (H-v2) */
+  & .ev2 {
+    --ev2-rig-bg: light-dark(#f8f5ef, #211a15);
+    --fx: light-dark(#7a7064, #bfb3a3);
+    --drone: light-dark(#e4d3a8, #eddcae);
+    --chg: light-dark(#27211b, #ffffff);
+    --ev2-flash: var(--focus);
+    background: transparent;
+  }
+  & .ev2 :is(.ev2-left, .ev2-head, .ev2-rig, .ev2-bottom) { box-shadow: var(--dl-card-shadow); }
+  & .ev2 .ev2-btn { background: var(--panel); border-color: var(--line-2); box-shadow: var(--dl-btn-shadow); }
+  & .ev2 .ev2-btn.danger { background: var(--danger); }
+  & .ev2 .ev2-btn.ghost { box-shadow: none; }
+  & .ev2 .ev2-switch { background: var(--line-2); }
+  & .ev2 .ev2-switch::after { background: var(--panel); box-shadow: 0 1px 2px var(--dl-shadow-2); }
+  & .ev2 .ev2-wiretog.on .ev2-switch::after { background: #fff; }
+
+  /* tabs: coloured planner tabs on the card's top edge */
+  & .ev2 .ev2-tab-role { color: light-dark(color-mix(in oklab, var(--tc) 45%, var(--text)), var(--tc)); letter-spacing: .06em; }
+  & .ev2 .ev2-tab:hover { background: var(--panel-3); }
+  & .ev2 .ev2-tab.sel { background: var(--panel); }
+  & .ev2 .ev2-tab.sel::after { background: var(--panel); }
+  & .ev2 .ev2-tab::before { height: 4px; }
+  & .ev2 .ev2-tab.sel::before { height: 6px; }
+  & .ev2 .ev2-tab-cd { box-shadow: 0 0 0 2px var(--ev2-rig-bg), 0 0 6px light-dark(transparent, #fffa); }
+  & .ev2 .ev2-tab.sel .ev2-tab-cd { box-shadow: 0 0 0 2px var(--panel), 0 0 6px light-dark(transparent, #fffa); }
+
+  /* Show wiring */
+  & .ev2 .ev2-wlane::before { background: var(--line-2); }
+  & .ev2 .ev2-wv { color: var(--text); background: color-mix(in oklab, var(--c) 18%, var(--panel)); border-color: light-dark(color-mix(in oklab, var(--c) 70%, var(--text)), var(--c)); }
+  & .ev2 .ev2-wv.zero { background: var(--panel); border-color: var(--line-2); }
+  & .ev2 .ev2-wn { background: var(--panel-2); }
+  & .ev2 .ev2-wout-br { border-color: var(--line-2); }
+
+  /* the sentence: the Edit view's voice, set in the soft serif */
+  & .ev2 .ev2-sent { font-family: var(--dl-title); font-weight: 500; color: light-dark(#4a4238, #d9d1c4); letter-spacing: -.005em; }
+  & .ev2 .ev2-sent-role { color: light-dark(color-mix(in oklab, var(--c) 48%, var(--text)), var(--c)); font-weight: 750; letter-spacing: .02em; }
+  & .ev2 :is(.ev2-sent-val, .ev2-tok) { color: var(--text); font-weight: 650; }
+  & .ev2 .ev2-tok { border-bottom-color: light-dark(color-mix(in oklab, var(--c) 75%, var(--text)), color-mix(in oklab, var(--c) 80%, transparent)); }
+  & .ev2 .ev2-fx-lt-title .ev2-sent { font-weight: 500; }
+  & .ev2 .ev2-title-icon { color: light-dark(color-mix(in oklab, var(--c) 60%, var(--text)), var(--c)); background: color-mix(in oklab, var(--c) 20%, var(--panel)); }
+  & .ev2 .ev2-chg { color: var(--text); }
+
+  /* word sliders */
+  & .ev2 .ev2-ws-input::-webkit-slider-runnable-track {
+    background: linear-gradient(90deg, light-dark(color-mix(in oklab, var(--c) 85%, var(--text)), var(--c)) 0 calc(var(--p) * 100%), var(--track) calc(var(--p) * 100%));
+  }
+  & .ev2 .ev2-ws.bipolar .ev2-ws-input::-webkit-slider-runnable-track {
+    background: linear-gradient(90deg,
+      var(--track) 0 min(50%, calc(var(--p) * 100%)),
+      light-dark(color-mix(in oklab, var(--c) 85%, var(--text)), var(--c)) min(50%, calc(var(--p) * 100%)) max(50%, calc(var(--p) * 100%)),
+      var(--track) max(50%, calc(var(--p) * 100%)));
+  }
+  & .ev2 .ev2-ws-input::-webkit-slider-thumb {
+    background: linear-gradient(light-dark(#fffefb, #f7f1e6), light-dark(#eee7db, #d8cfc0));
+    border: 1px solid light-dark(#b3a898, #0d0b09); border-radius: 50%; box-shadow: inset 0 1px 0 #fff, 0 2px 5px var(--dl-shadow-2);
+  }
+
+  /* song header */
+  & .ev2 .ev2-song-name { font-family: var(--dl-title); font-weight: 650; letter-spacing: -.01em; }
+  & .ev2 .ev2-song-live { background: light-dark(#e3f2e6, #16301f); color: light-dark(#1d5530, #8fe0b1); }
+  & .ev2 .ev2-song-chip { background: var(--panel); box-shadow: var(--dl-btn-shadow); }
+  & .ev2 :is(button.ev2-song-chip, .ev2-song-bpmnum):hover { border-color: var(--dl-line-hover); }
+  & .ev2 .ev2-song-bpmchip .ev2-song-tap:hover { background: var(--line-2); }
+  & .ev2 .ev2-song-pop { background: var(--dl-pop); box-shadow: var(--dl-pop-shadow); }
+  & .ev2 .ev2-song-mi.danger { color: var(--danger); }
+  & .ev2 .ev2-song-readout { color: var(--text); }
+  & .ev2 :is(.ev2-song-select, .ev2-song-tempo, .ev2-song-notes) { background: var(--panel); }
+
+  /* setlist column */
+  & .ev2 .ev2-list-row { color: var(--text); }
+  & .ev2 .ev2-list-row.on { background: color-mix(in oklab, var(--accent) 18%, var(--panel)); box-shadow: inset 3px 0 0 var(--accent); }
+  & .ev2 .ev2-list-row.on .ev2-list-key { color: var(--dl-accent-text); }
+  & .ev2 .ev2-list-row.on .ev2-list-num { color: var(--muted); }
+  & .ev2 .ev2-list-select, & .ev2 .ev2-list-search { background: var(--panel); }
+  & .ev2 :is(.ev2-list-confirm, .ev2-list-row.confirming) { background: var(--panic-bg); }
+  & .ev2 :is(.ev2-list-gapnote, .ev2-list-gap) { color: var(--dl-warn-text); }
+  & .ev2 .ev2-list-add .ev2-btn[aria-expanded="true"] { color: var(--dl-accent-text); }
+
+  /* slot panel */
+  & .ev2 :is(.ev2-slot-menu, .ev2-fx-vibe-menu) { background: var(--dl-pop); border-color: var(--line-2); box-shadow: var(--dl-pop-shadow); }
+  & .ev2 :is(.ev2-slot-mi, .ev2-fx-vibe-item):is(:hover, :focus) { background: var(--panel-3); }
+  & .ev2 .ev2-slot-mi-remove { color: var(--danger); }
+  & .ev2 .ev2-slot-range .mkey.white { background: var(--dl-key-white); border-right-color: var(--dl-key-edge); }
+  & .ev2 .ev2-slot-range .mkey.black { background: var(--dl-key-black); }
+  & .ev2 .ev2-slot-range .mini-board { opacity: .7; }
+  & .ev2 .ev2-slot-range .mini-handle { background: var(--thumb); border: 1px solid light-dark(#b3a898, #0d0b09); box-shadow: 0 1px 4px var(--dl-shadow-2); }
+  & .ev2 .ev2-slot-respctl .segmented .seg.on { background: var(--c); color: var(--dl-ink-on-lamp); }
+  & .ev2 .ev2-slot-note { background: var(--panel); }
+  & .ev2 .ev2-drone-src .on { background: var(--drone); color: var(--dl-ink-on-lamp); }
+  & .ev2 .ev2-drone-opt .toggle.on { border-color: color-mix(in oklab, var(--dl-drone-ink) 55%, var(--line-2)); }
+
+  /* effects panel: the chosen preset is circled in ink, as in Perform */
+  & .ev2 .ev2-fx-pc { background: var(--panel); box-shadow: var(--dl-btn-shadow); }
+  & .ev2 .ev2-fx-pc:hover { border-color: var(--dl-line-hover); }
+  & .ev2 .ev2-fx-pc[aria-pressed="true"] { background: var(--sel-fx); border-color: var(--text); box-shadow: 0 2px 8px -3px var(--dl-shadow-2); }
+  & .ev2 .ev2-fx-pc[aria-pressed="true"] .ev2-fx-pc-hint { color: var(--muted); }
+
+  /* keyboard row */
+  & .ev2 .ev2-kb-big { background: var(--panel); box-shadow: var(--dl-btn-shadow); }
+  & .ev2 .ev2-kb-fade { background: var(--panel); }
+  & .ev2 .ev2-kb-panic { background: var(--panic); box-shadow: inset 0 -3px 0 light-dark(#a82d20, #8d2519); }
+  & .ev2 .ev2-kb-panic:hover { background: color-mix(in oklab, var(--panic) 88%, #000); }
+
+  /* the EQ keyboard stays a dark display window in both lights (its canvas paints its own colours): it reads as a
+     screen set into the page, like the display on a keyboard */
+  & .eqk { --eqk-bg: #15120f; }
+  /* v2: frame the dark graph (plot + keyboard canvases) as ONE instrument display (critique: "it will look like a
+     theming bug"): a warm walnut bezel with a 1 px highlight, so the dark reads as a screen set into the page on
+     purpose. A static shadow on the container; the canvases' own painting is untouched. Everything AROUND the display
+     (band table, cut fields, paste box) is paper: in v1 its inputs kept the app's dark fields with ink text. */
+  & .eqk-graph {
+    border-radius: 10px; overflow: hidden;
+    box-shadow: 0 0 0 4px light-dark(#3b2e24, #120d0a), 0 0 0 5px light-dark(#8c7663, #4a3d31), 0 10px 20px -12px var(--dl-shadow-2);
+    margin: 5px 5px 7px;
+  }
+  & .eqk-summary b { color: light-dark(color-mix(in oklab, var(--eqk-c) 45%, var(--text)), var(--eqk-c)); }
+  & :is(.eqk-bands select, .eqk-bands input[type=text], .eqk-cut input, .eqk-paste textarea) {
+    background: var(--panel-2); border-color: var(--line-2); color: var(--text);
+  }
+  & .eqk-onoff[aria-pressed="true"] { background: color-mix(in oklab, var(--eqk-c) 35%, var(--panel)); }
+  & .eqk-cut .eqk-onoff[aria-pressed="true"] { background: color-mix(in oklab, var(--focus) 30%, var(--panel)); border-color: var(--focus); }
+  & .eqk-side { background: var(--panel-2); }
+  & .eqk-seg button { background: var(--panel); }
+  & .eqk-mini canvas { background: #15120f; }
+  & .eqk-bands tr.sel td { background: var(--panel-3); }
+  & .eqk-pill.over { background: var(--panel-3); color: var(--text); }
+  & .eqk-pill.none { background: var(--panic-bg); color: var(--panic-text); }
+  & .eqk-ab button.eqk-ab-b[aria-pressed="true"] { background: var(--text); color: var(--panel); }
+
+  /* ================================================================ Today (design/warmth/daylight-v2/today.js)
+     Rendered only once today.js is mounted; without it none of these elements exist. */
+  & .dl-ic { display: inline-block; flex: none; width: 18px; height: 18px; background: currentColor;
+    -webkit-mask: var(--m) center / contain no-repeat; mask: var(--m) center / contain no-repeat; }
+  /* the Today card: top of the Notes column, on the notes' own stock */
+  & .dl-today { flex: none; border-radius: 12px; padding: 10px 12px 11px; margin: 0 -2px 4px -8px;
+    background: color-mix(in oklab, var(--accent) 13%, var(--panel)); border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--line)); }
+  & .dl-today-h { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 650; color: var(--dl-accent-text); }
+  & .dl-today-d { font: 650 21px/1.1 var(--dl-title); margin: 5px 0 3px; }
+  & .dl-today-s { font-size: 13.5px; color: var(--muted); line-height: 1.4; }
+  & .dl-today-s b { color: var(--text); font-weight: 650; }
+  & .dl-today-bar { display: flex; gap: 3px; margin-top: 9px; }
+  & .dl-today-bar i { flex: 1; height: 5px; border-radius: 3px; background: var(--line-2); }
+  & .dl-today-bar i.done { background: var(--dl-accent-text); }
+  & .dl-today-bar i.now { background: var(--accent); box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 60%, var(--text)); }
+  /* the before-service sheet replaces the overlay card inside #overlay-start (main.js still owns the tap) */
+  & .overlay-start.dl-has-today .overlay-card { display: none; }
+  & .overlay-start.dl-has-today { display: grid; place-items: center; }
+  & .overlay-start.dl-has-today[hidden] { display: none; }
+  & .dl-sheet { width: min(820px, calc(100vw - 32px)); display: grid; grid-template-columns: 1.2fr 1fr; border-radius: 22px;
+    overflow: hidden; background: var(--dl-pop); border: 1px solid var(--line-2); box-shadow: var(--dl-pop-shadow);
+    text-align: left; cursor: default; animation: dl-unfold .2s cubic-bezier(.2, .8, .2, 1); }
+  & .dl-sheet-l { padding: 30px 32px 28px; }
+  & .dl-sheet-r { padding: 30px 28px 28px; background: var(--panel-2); border-left: 1px solid var(--line); display: flex;
+    flex-direction: column; gap: 14px; }
+  & .dl-kick { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 650; color: var(--muted); }
+  & .dl-kick img { width: 26px; height: 26px; }
+  & .dl-day { font: 650 46px/1.05 var(--dl-title); letter-spacing: -.02em; margin: 14px 0 4px; }
+  & .dl-date { font-size: 16px; color: var(--muted); font-weight: 550; }
+  & .dl-set { margin-top: 22px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  & .dl-set b { font-size: 17px; }
+  & .dl-set span { font-size: 14px; color: var(--muted); }
+  & .dl-songs { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  & .dl-songs li { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 8px; min-height: 36px;
+    padding: 0 10px; border-radius: 9px; font-size: 16px; font-weight: 600; word-spacing: .09em; }
+  & .dl-songs li.first { background: color-mix(in oklab, var(--accent) 22%, var(--panel)); box-shadow: inset 3px 0 0 var(--accent); }
+  & .dl-songs .n { color: var(--faint); font-size: 13px; font-variant-numeric: tabular-nums; }
+  & .dl-songs .k { font-size: 13px; font-weight: 700; color: var(--muted); padding: 1px 8px; border-radius: 10px; background: var(--panel-3); }
+  & .dl-songs li.first .n { color: var(--muted); }
+  & .dl-songs li.first .k { color: var(--accent-ink); background: var(--accent); }
+  & .dl-songs .more { color: var(--muted); font-weight: 550; font-size: 14px; }
+  & .dl-card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 13px 16px; box-shadow: var(--dl-card-shadow); }
+  & .dl-card h4 { margin: 0 0 6px; font-size: 13px; font-weight: 650; color: var(--muted); }
+  & .dl-card p { margin: 0; font: 500 15.5px/1.45 var(--dl-title); }
+  & .dl-card p b { font-weight: 700; }
+  & .dl-light { display: flex; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; background: var(--panel); }
+  & .dl-light button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px;
+    font: 650 14px/1 var(--font); color: var(--muted); background: transparent; border: 0; cursor: pointer; }
+  & .dl-light button + button { border-left: 1px solid var(--line-2); }
+  & .dl-light button.on { background: var(--accent); color: var(--accent-ink); }
+  & .dl-go { margin-top: auto; min-height: 58px; border-radius: 14px; border: 1px solid color-mix(in oklab, var(--accent) 70%, var(--text));
+    background: var(--accent); color: var(--accent-ink); font: 700 19px/1 var(--font); cursor: pointer;
+    box-shadow: inset 0 -3px 0 color-mix(in oklab, var(--accent) 65%, var(--text)), 0 10px 22px -12px color-mix(in oklab, var(--accent) 80%, var(--text)); }
+  & .dl-small { font-size: 12.5px; color: var(--muted); text-align: center; }
+  @media (max-width: 900px) { & .dl-sheet { grid-template-columns: 1fr; } }
+
+  /* ================================================================ reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    & :is(.step-panel, .qs, .keypop, .fx-more, .ev2-slot-menu, .ev2-fx-vibe-menu, .ev2-song-pop, .toast, .dl-sheet) { animation: none; }
+    & :is(.btn, .toggle, .seg, .key-btn, .setlist-chip, .ontile, .mchip, .fxc, .hold-btn):active:not(:disabled) { transform: none; }
+  }
+}
+
+@keyframes dl-unfold { from { opacity: 0; transform: translateY(4px) scale(.985); } }
+@keyframes dl-qs-flash { from { background: var(--text); color: var(--panel); } }
+
+/* switching the light: main.js (later) wraps the data-mode change in document.startViewTransition(), so the page
+   crossfades once on the compositor instead of every element transitioning (concept.md §5). */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .45s; animation-timing-function: ease; }

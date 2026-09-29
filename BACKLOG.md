@@ -39,11 +39,16 @@ Legend: **S/M/L** effort · **who** = which side is the natural owner (cloud = i
 - Practice/warm-up mode: a loop of pads in a chosen key with a metronome and a timer; part of the "daily" idea. **M**
 
 ## B. Known quality items deferred (from reviews/audition/local findings)
+- From the hardware pass (2026-09-29, Ryan at the Keystation): **L-23** hold-to-unlock hint clipped at the window bottom
+  (cosmetic, cloud, perform.js/styles.css); pedal-polarity wording — say "plug in with the pedal UP" or sample both
+  states at connect; Bluetooth output measured 176 ms vs 20 ms on the dock — show a one-line latency warning when the
+  output device's latency > 60 ms (Settings/Quick "This Mac"); MIDI Learn untested on hardware (no spare CC control on
+  the 49es — retest with the second keyboard). **S, cloud**
 - Salamander piano has anti-correlated L/R on ~27 notes (spaced-pair recording, esp. C5); mitigated with
   `maxMonoLossDb`, but a per-note mid/side correction or a mono-safe sample set would be cleaner. **M, cloud**
-- Four GarageBand packs trip the DC-offset check just above 5e-4 on one note each (claverotor D6, learner's piano
-  C5/Gb3, record-collection-grand D3, rise-above-piano D3): add a 10 Hz high-pass in the importer's encode step
-  (as the bundled sets got). **S, local**
+- ~~Four GarageBand packs trip the DC-offset check~~ DONE 2026-09-28 (local 334334c: 10 Hz high-pass wrapper in
+  `import-garageband.mjs`; DC now ≤ 2.8e-5). Follow-up: move the high-pass into `tools/exs/convert.mjs` `ffmpegArgs` as
+  a `highpassHz` option instead of the wrapper. **S, local**
 - Calibration by ear: `gainTrim`s are machine-calibrated; Ryan's listening notes should drive a manual pass, and the
   drone level target (−24 dBFS) is a guess. **S, cloud after LISTENING**
 - Kalimba +23.6 dB trim: attacks may clip the limiter in the top register; consider a per-instrument ceiling. **S**
@@ -61,9 +66,12 @@ Legend: **S/M/L** effort · **who** = which side is the natural owner (cloud = i
 - Test flakiness under load: tap-tempo tolerance and identity-diff limits were widened; a proper fix is a
   fake-timer path for the tap tempo test and a seeded determinism mode that pins Chromium's input summation order (not
   possible) — accept tolerances. **–**
-- `shared/params.js` still names the learnable control 'Reverb level' (frozen file at the time) → rename to 'Space
-  level' and migrate stored MIDI-learn maps. **S, cloud**
 - `styles-edit.css` remaining `.ed-*` rules serve only Settings; move them into a settings stylesheet. **S, cloud**
+
+## Size budget (Ryan, 2026-09-28): the packaged app must stay under 500 MB on disk; ~400 MB is fine.
+- Today: 365 MB app / 193 MB zip (Electron ≈ 285 MB, our asar ≈ 81 MB of which samples 79 MB).
+- Headroom ≈ 135 MB. Anything that adds bundled samples or media must be weighed against it; user-samples never count
+  (they live outside the app). build-lint should fail the build above 480 MB (guard to add, local). **S, local**
 
 ## C. Process / tooling
 - Replace the tarball drop with git: once the cloud can push (GitHub connector attached to the session), deliver as

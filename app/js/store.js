@@ -27,6 +27,7 @@
 // subscribe((state, changedPaths) => …) is batched per microtask; changedPaths are canonical entity paths
 // ('songs.<id>.patch.slots.1.gain', 'songs.<id>.drone.gain', 'settings.view', …).
 import { mod12, transposeSemis } from './shared/music.js';
+import { isValidId as isThemeId, DEFAULT_THEME_ID } from './shared/themes.js';
 import { PARAMS, clamp, describe, isValidPath, parsePath, defaultSlot, SLOT_COUNT } from './shared/params.js';
 import {
   FACTORY_SONGS, FACTORY_VERSION, FACTORY_SINCE, CATEGORIES, WHEEL_TARGETS, BEND_MODES, DRONE_MODES, defaultFx, defaultDrone, defaultRouting,
@@ -42,15 +43,20 @@ export const VIEWS = Object.freeze(['perform', 'edit']);
 /** Song categories the UI groups by (factory categories incl. 'synth', plus 'user'). Unknown strings are kept. */
 export const SONG_CATEGORIES = Object.freeze([...CATEGORIES, 'user']);
 /** Settings that belong to this machine and survive a replace-import. */
-export const DEVICE_LOCAL_SETTINGS = Object.freeze(['outputDeviceId', 'padFolder', 'midiInputId', 'midiInputName']);
+// menubar-A (C7): menu-bar mode and low-resource are how this machine runs the app, not library content.
+export const DEVICE_LOCAL_SETTINGS = Object.freeze([
+  'outputDeviceId', 'padFolder', 'midiInputId', 'midiInputName', 'menuBarMode', 'lowResource',
+]);
 /** Settings that only move around the library (not an edit of it; round2-shell #2). */
 const NAV_SETTINGS = new Set(['currentSongId', 'setlistIndex', 'currentSetlistId']);
+/** Settings that change how the app looks, not the library (themes-setup): they don't mark it edited. */
+const LOOK_SETTINGS = new Set(['theme']);
 /** @param {string} p changed path @returns {boolean} the change edits library content (songs, setlists, settings) */
 function isEditPath(p) {
   if (p.startsWith('meta.') || p === 'meta' || p === 'schema') return false;
   if (p.startsWith('settings.')) {
     const k = p.split('.')[1];
-    return !NAV_SETTINGS.has(k) && !DEVICE_LOCAL_SETTINGS.includes(k);
+    return !NAV_SETTINGS.has(k) && !DEVICE_LOCAL_SETTINGS.includes(k) && !LOOK_SETTINGS.has(k);
   }
   return true;
 }
@@ -75,6 +81,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   view: 'perform',
   performLock: false,
   computerKeyboard: true,
+  // menu-bar mode (docs/menubar-mode.md; C7 menubar-A)
+  /** Setlist whose songs are the menu-bar modes (null = the first 3 songs of the current setlist). */
+  menuBarSetlistId: null,
+  /** Low-resource mode, on by choice (it also turns on by itself while hidden in menu-bar mode). */
+  lowResource: false,
+  /** Live in the menu bar (Electron: tray, hide-on-close, no Dock icon). */
+  menuBarMode: false,
 });
 
 export class FutureSchemaError extends Error {
@@ -96,6 +109,26 @@ export const isReservedKey = (k) => typeof k !== 'string' || RESERVED_KEYS.has(k
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 /** How many `rig.v1.backup-<ts>` keys are kept in localStorage. */
 export const BACKUPS_KEEP = 3;
+/**
+ * security S2: the largest library (compact JSON characters) an import may leave behind. Chromium's localStorage holds
+ * ~5.2 M characters per origin (measured), shared with the backup copies; a bigger library makes every later save
+ * fail (QuotaExceededError) until the offending song is deleted. A real library is ~2 KB per song.
+ */
+export const LIBRARY_MAX_CHARS = 2000000;
+/** security S2: deepest nesting an import may have (real exports reach ~8: songs.<id>.patch.slots.<i>.eq.b3.hz). */
+export const IMPORT_MAX_DEPTH = 64;
+
+/** Iterative (no recursion, so a hostile file can't blow the stack): does `v` nest deeper than `max`? */
+function nestsDeeperThan(v, max) {
+  const stack = [[v, 0]];
+  while (stack.length) {
+    const [o, d] = stack.pop();
+    if (o === null || typeof o !== 'object') continue;
+    if (d >= max) return true;
+    for (const k of Object.keys(o)) stack.push([o[k], d + 1]);
+  }
+  return false;
+}
 /** Retry delays after a failed save (the last one repeats). */
 export const PERSIST_RETRY_MS = Object.freeze([1000, 5000, 30000]);
 
@@ -363,6 +396,9 @@ const SETTINGS_VALIDATORS = {
   view: (v) => oneOf(v, VIEWS, INVALID),
   performLock: (v) => bool(v, INVALID),
   computerKeyboard: (v) => bool(v, INVALID),
+  menuBarSetlistId: (v) => (v === null || (typeof v === 'string' && v) ? v : INVALID),
+  lowResource: (v) => bool(v, INVALID),
+  menuBarMode: (v) => bool(v, INVALID),
 };
 
 function normalizeSettings(raw, songs, setlists) {
@@ -374,7 +410,11 @@ function normalizeSettings(raw, songs, setlists) {
     out[k] = v === INVALID ? clone(DEFAULT_SETTINGS[k]) : v;
   }
   if (out.currentSetlistId !== null && !setlists[out.currentSetlistId]) out.currentSetlistId = null;
+  if (out.menuBarSetlistId !== null && !setlists[out.menuBarSetlistId]) out.menuBarSetlistId = null; // menubar-A
   if (out.currentSongId !== null && !songs[out.currentSongId]) out.currentSongId = null;
+  // themes-setup: settings.theme is optional (absent = DEFAULT_THEME_ID, so no SCHEMA bump); an id that is no longer
+  // registered falls back to the default instead of throwing or keeping a dead value
+  if (hasOwn(out, 'theme') && out.theme !== undefined && !isThemeId(out.theme)) out.theme = DEFAULT_THEME_ID;
   return out;
 }
 
@@ -804,14 +844,17 @@ export function createStore(opts = {}) {
           else next[cid] = value;
           return { segs: ['settings', 'midiLearn'], value: normalizeMidiLearn(next) };
         }
-        return hasOwn(SETTINGS_VALIDATORS, k) ? null : { segs, value: clone(value) };
+        return hasOwn(SETTINGS_VALIDATORS, k) || k === 'theme' ? null : { segs, value: clone(value) };
       }
+      // themes-setup: an unknown theme id is stored as the default (never an error, never a dead id)
+      if (k === 'theme') return { segs, value: isThemeId(value) ? value : DEFAULT_THEME_ID };
       const fn = hasOwn(SETTINGS_VALIDATORS, k) ? SETTINGS_VALIDATORS[k] : null;
       if (!fn) return { segs, value: clone(value) }; // unknown settings are allowed (preserved)
       const v = fn(value);
       if (v === INVALID) return null;
       if (k === 'currentSongId' && v !== null && !state.songs[v]) return null;
       if (k === 'currentSetlistId' && v !== null && !state.setlists[v]) return null;
+      if (k === 'menuBarSetlistId' && v !== null && !state.setlists[v]) return null; // menubar-A
       return { segs, value: v };
     }
     if ((root === 'songOrder' || root === 'setlistOrder') && segs.length === 1) {
@@ -1048,6 +1091,9 @@ export function createStore(opts = {}) {
      * setReadOnly(false) writes pending changes (unless the load-time 'backup-failed' lock is still on).
      */
     setReadOnly(on, reason = 'second-window') {
+      // round4-controller C4: another reason never replaces the H1 lock, or the matching setReadOnly(false) (second
+      // window taking over) would clear it and the next persist would overwrite the only copy of the library
+      if (on && readOnlyReason === 'backup-failed') return false;
       const next = on ? String(reason || 'read-only') : readOnlyReason === 'backup-failed' ? 'backup-failed' : null;
       if (next === readOnlyReason) return false;
       readOnlyReason = next;
@@ -1264,6 +1310,8 @@ export function createStore(opts = {}) {
         paths.push(put(['settings', 'currentSetlistId'], order[0] || null));
         paths.push(...putPos(-1, false));
       }
+      // menubar-A: the menu-bar set falls back to the current setlist's first songs
+      if (state.settings.menuBarSetlistId === id) paths.push(put(['settings', 'menuBarSetlistId'], null));
       changed(paths);
       return true;
     },
@@ -1404,7 +1452,13 @@ export function createStore(opts = {}) {
 
     /** Whole library as JSON (for export files and Electron auto-backups). */
     exportJSON({ pretty = true } = {}) {
-      const { songs, songOrder, setlists, setlistOrder, settings, meta } = state;
+      const { songs, songOrder, setlists, setlistOrder, meta } = state;
+      // security S3: device-local settings stay on this machine. The pad folder's absolute path carries the account
+      // name (/Users/<name>/…), and the MIDI/audio device names/ids identify the hardware. Nothing reads them back:
+      // a replace-import keeps this machine's values, a merge ignores settings.
+      const settings = Object.fromEntries(
+        Object.entries(state.settings).filter(([k]) => !DEVICE_LOCAL_SETTINGS.includes(k)),
+      );
       const doc = { app: 'worship-rig', kind: 'library', schema: SCHEMA, exportedAt: new Date(now()).toISOString(), songs, songOrder, setlists, setlistOrder, settings, meta };
       return JSON.stringify(doc, null, pretty ? 2 : 0);
     },
@@ -1422,12 +1476,20 @@ export function createStore(opts = {}) {
      * @returns {{ok:true, songIds:string[], setlistIds:string[]} | {ok:false, error:string}}
      */
     importJSON(text, { replace = false } = {}) {
+      const tooBig = { ok: false, error: 'That file is too large to import: the library can hold about 2 MB of songs.' };
+      // security S2: a pretty-printed export is ~2–3× its compact size; anything far beyond the cap isn't even parsed
+      if (typeof text === 'string' && text.length > 4 * LIBRARY_MAX_CHARS) return tooBig;
+      // security S2: deep nesting made clone/deepFreeze throw RangeError out of importJSON (uncaught in the UI), and a
+      // merge could leave earlier songs half-written into the state with no change event
+      const notOurs = { ok: false, error: 'That file is not a Worship Rig library or song.' };
+      if (typeof text !== 'string' && nestsDeeperThan(text, IMPORT_MAX_DEPTH)) return notOurs;
       let doc;
       try {
         doc = typeof text === 'string' ? JSON.parse(text) : clone(text);
       } catch {
         return { ok: false, error: 'That file is not valid JSON.' };
       }
+      if (nestsDeeperThan(doc, IMPORT_MAX_DEPTH)) return notOurs;
       let lib;
       try {
         if (Array.isArray(doc)) lib = migrate({ songs: doc.map((s, i) => ({ ...s, id: s?.id || `import${i}` })) });
@@ -1442,6 +1504,9 @@ export function createStore(opts = {}) {
         return { ok: false, error: 'That file is not a Worship Rig library or song.' };
       }
       if (!lib.songOrder.length && !replace) return { ok: false, error: 'No songs found in that file.' };
+      // security S2: the library after the import must still fit localStorage (unknown fields are kept, uncapped)
+      const after = JSON.stringify(lib).length + (replace ? 0 : JSON.stringify(state).length);
+      if (after > LIBRARY_MAX_CHARS) return tooBig;
       if (replace) {
         const keep = Object.fromEntries(DEVICE_LOCAL_SETTINGS.map((k) => [k, state.settings[k]]));
         // an imported library is the user's data, whatever it says (round2-shell #2)

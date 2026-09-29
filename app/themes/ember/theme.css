@@ -1,0 +1,398 @@
+/* Worship Rig: "Ember" theme (design/warmth/ember/concept.md).
+   A warm, dark room. It keeps the H-v2 layout and components and changes only colour, type, light and a little motion.
+
+   How it switches on:
+   - Every rule sits under ONE guard, :where(body[data-theme="ember"], body:not([data-theme])).
+     :where() adds no specificity, so each rule weighs the same as the app rule it replaces. It wins on source order
+     (this file loads after styles.css and the edit CSS), and the app's state rules (.slot.muted .mchip.on…) still win
+     where they are more specific.
+   - Linked, it applies when <body data-theme="ember">. It stops applying when data-theme is set to anything else, which
+     is how a Settings › Appearance toggle turns it off.
+   - Injected with no attribute at all (page.addStyleTag, a quick <link> test), it applies as it is. So the file works
+     injected and attribute-toggled from the same block, with no duplicated rules.
+   Asset URLs are root-absolute (/themes/ember/…) so they resolve the same when linked and when inlined into a <style>.
+   Fonts: Nunito Sans (UI, OFL; digits tabular by default) + Young Serif (title, key, chord, transpose, wheel, wordmark;
+   OFL; has tnum). Both are Latin subsets, 30 KB + 27 KB woff2. */
+
+@font-face {
+  font-family: 'Nunito Sans';
+  src: url('/fonts/NunitoSans-var.woff2') format('woff2');
+  font-weight: 200 1000; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Young Serif';
+  src: url('/fonts/YoungSerif-Regular.woff2') format('woff2');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+
+:where(body[data-theme="ember"], body:not([data-theme])) {
+  /* ---- neutrals: OKLCH hue 50 (ember), chroma 0.013–0.016. Charcoal with a brown heart, never slate. */
+  --bg: #150e0b;
+  --bg-deep: #0d0806;
+  --panel: #1e1713;
+  --panel-2: #28201c;
+  --panel-3: #342b26;
+  --line: #352d29;
+  --line-2: #4c433d;
+  --line-hover: #62564e;
+  --text: #f7efe3;        /* ivory, not blue-white: 15.5:1 on --panel */
+  --muted: #c9bbac;       /* 9.4:1 on --panel */
+  --faint: #ac9b8d;       /* 5.2:1 on --panel-3, the lightest surface it sits on */
+  --accent: #f7b755;      /* amber coal: selection, current song, key */
+  --accent-ink: #1e130e;
+  --warn: #f5a33a;        /* lock / hold only, as before */
+  /* ---- lamps: terracotta, sage, dusty blue, plum. Lightness is staggered, so deutan/protan viewers can still tell
+     Extra from Bass (min OKLab ΔE 8.5 deutan, 10.0 protan, 9.2 tritan; today's palette: 0.6 deutan) */
+  --slot-0: #e68867;      /* Keys: terracotta */
+  --slot-1: #a9daa4;      /* Pad: sage */
+  --slot-2: #80b9de;      /* Extra: dusty blue */
+  --slot-3: #bb79b5;      /* Bass: plum */
+  --ink-on-lamp: #1e130e; /* ≥ 5.6:1 on every lamp (plum is the lowest) */
+  --drone: #edd9aa;       /* candle wax */
+  --fx: #cbbba5;          /* shared effects: parchment, never a slot colour */
+  --ok: #83d494;
+  --danger: #e95145;
+  --danger-ink: #fff;
+  --panic: #cf4232;       /* white on it 4.69:1 */
+  --panic-bg: #4a1a12;
+  --panic-text: #ffd0c4;
+  --rec-idle: #c65a4a;
+  --track: #473d38;
+  --track-edge: #7c6e67;  /* 3.6:1 on --panel */
+  --led-off: #766962;     /* 3.6:1 on --bg */
+  --muted-fader: #82746d;
+  --thumb: #f6ecdd;
+  --focus: #ffd28a;
+  --sel-fx: #43372f;
+  --chg: #fff4dc;
+  --off-tile: #2d2420;
+  /* ---- things styles.css hard-codes today (research §5.4): named here so a later token pass can adopt them */
+  --key-white: #cdbfad;   /* bone, dimmed like today's #b9c0c9 (relative luminance .52 vs .52): no glare */
+  --key-black: #140d0a;
+  --key-label: #5b4a3e;
+  --wheel-fill: #c4a77c;   /* brass; relative luminance .40, below today's steel (.47) */
+  --wheel-track: #2b221d;
+  --pop-bg: #261d18;      /* step panel, Quick sheet, menus */
+  --pop-line: #5d4f46;
+  --toast-bg: #2a201bf2;
+  --btn-fade-bg: #2c2019;
+  --btn-fade-line: #54402f;
+  --accidental-bg: #150e0b;
+  --ember-glow: #f28a3c;
+  /* ---- type */
+  --font: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* --font-display drives the song title, key, chord AND the transpose / wheel numbers (tabular-nums). Young Serif has
+     a real tnum feature (unlike Fraunces, research §5.5), so all six can take the serif without jitter. */
+  --font-display: 'Young Serif', Georgia, 'Times New Roman', serif;
+  --font-title: var(--font-display);
+  --radius: 12px;
+  --radius-sm: 8px;
+  color-scheme: dark;
+
+  /* ---- the room: a hearth glow rising behind the keyboard, a soft vignette and a 2 % grain tile. It's one static
+     paint (no background-attachment: fixed, no filter). */
+  background:
+    url('/themes/ember/grain.png') repeat,
+    radial-gradient(ellipse 75% 55% at 50% 108%, #4a2414 0%, #2a150c 38%, transparent 72%),
+    radial-gradient(ellipse 140% 110% at 50% 45%, transparent 55%, #07040399 100%),
+    var(--bg);
+  color: var(--text);
+  font-synthesis: style; /* never a faux-bold serif: Young Serif has one weight and is already heavy */
+
+  /* ================================================================ surfaces */
+  /* planes, not boxes: a 93 % panel lets the hearth warm it a little; a hairline warm rim and a lit top edge */
+  & .panel {
+    background-color: color-mix(in srgb, var(--panel) 93%, transparent);
+    border-color: #ffe6c80f;
+    box-shadow: inset 0 1px 0 #ffe6c80c, 0 12px 28px -18px #000;
+  }
+  & .slot.empty { box-shadow: none; border-color: #4c433d; }
+  & .btn, & .tb-btn, & .toggle, & .seg, & .step-btn, & .key-btn, & .setlist-chip, & .swell-btn, & .rec-btn {
+    border-color: var(--line-2);
+    box-shadow: inset 0 1px 0 #ffe6c80a;
+  }
+  & .btn:hover:not(:disabled), & .tb-btn:hover:not(:disabled), & .toggle:hover:not(:disabled),
+  & .seg:hover:not(:disabled), & .step-btn:hover:not(:disabled), & .key-btn:hover:not(:disabled),
+  & .setlist-chip:hover, & .swell-btn:hover:not(:disabled) { border-color: var(--line-hover); }
+  & .segmented { border-color: var(--line-2); }
+  & .segmented .seg { border-right-color: var(--line-2); box-shadow: none; }
+  & .segmented .seg.on:hover { background: #ffc873; }
+  & .toggle.on { border-color: #7a5a2a; }
+
+  /* ================================================================ type: sentence case, one voice */
+  & .select-label, & .stepper-label, & .fader-label, & .wheel-caption, & .chord-caption, & .section-title, & .tb-cap,
+  & .song-key-cap, & .nav-next-cap, & .qs-st .cap, & .fxpill .fxpill-l, & .fx-chiprow .fx-lab span {
+    text-transform: none; letter-spacing: .005em; font-weight: 700; font-size: 13px; color: var(--muted);
+  }
+  & .drone-title .section-title, & .notes-head .section-title { font-size: 13.5px; letter-spacing: 0; }
+  & .pedal-lamp, & .drone-swell { text-transform: none; letter-spacing: 0; font-size: 12.5px; }
+  & .drone-swell-text::after { font-size: 12.5px; }
+  & .slot-vt { letter-spacing: .06em; font-size: 13px; color: var(--faint); }
+  /* headerChipRow upper-cases 'Space' / 'Echo' in JS; turn it back into a word */
+  & .fx-chiprow .fx-lab span, & .fxpill .fxpill-l { display: inline-block; text-transform: lowercase; }
+  & .fx-chiprow .fx-lab span::first-letter, & .fxpill .fxpill-l::first-letter { text-transform: uppercase; }
+  & .tag, & .drone-toggles .tag { text-transform: none; letter-spacing: .01em; font-size: 11.5px; font-weight: 700; }
+
+  /* the serif is for what you read from across the stage: song title, chord, wordmark, welcome */
+  & .song-name { font-weight: 400; letter-spacing: -.005em; }
+  & .song-key, & .chord-name, & .transpose-val, & .wheel-value { font-weight: 400; }
+  & .chord-readout:not(.live) .chord-name { color: var(--faint); }
+  & .overlay-title { font-weight: 400; letter-spacing: -.005em; }
+  & .ev2 .ev2-song-name { font-family: var(--font-title); font-weight: 400; letter-spacing: -.005em; }
+
+  /* ================================================================ top bar: a quiet shelf, not telemetry */
+  & .topbar {
+    background: linear-gradient(#1a120e, #140d0a);
+    border-bottom: 1px solid #2e241f;
+    box-shadow: 0 1px 0 #0000008c;
+  }
+  & .tb-logo { content: url('/themes/ember/mark.svg'); border-radius: 7px; }
+  & .tb-name { font-family: var(--font-title); font-weight: 400; font-size: 18.5px; letter-spacing: 0; }
+  & .tb-val { font-weight: 700; }
+  & .led.ok { box-shadow: 0 0 8px color-mix(in srgb, var(--ok) 60%, transparent); }
+  & .led.warn { box-shadow: 0 0 8px color-mix(in srgb, var(--warn) 60%, transparent); }
+  & .led.bad { box-shadow: 0 0 8px color-mix(in srgb, var(--danger) 60%, transparent); }
+  & .led.flash { background: #eaf6d8; box-shadow: 0 0 12px #eaf6d8; }
+  & .rec-btn.recording { background: #4a1a12; }
+  & .rec-time { font-family: var(--font); font-weight: 700; }
+  & .quick-btn[aria-expanded="true"] { background: #33291f; border-color: var(--text); }
+  /* meters: the same green / amber / red meaning, pulled warm */
+  & .meter-bar { background: var(--wheel-track); }
+  & .meter-fill { background: linear-gradient(to right, #7cc98a 0%, #7cc98a 72%, #f2b24a 86%, #e95145 100%); }
+  & .meter.vertical .meter-fill { background: linear-gradient(to top, #7cc98a 0%, #7cc98a 72%, #f2b24a 86%, #e95145 100%); }
+  & .meter-hold { background: var(--text); }
+
+  /* ================================================================ lamps (onTile) */
+  /* ON = a lit lamp: slot colour with light pooled at the top and a warm halo; OFF = an unlit lamp, recessed */
+  & .ontile {
+    color: var(--ink-on-lamp);
+    box-shadow: 0 0 22px -2px color-mix(in srgb, var(--c) 34%, transparent), inset 0 -2px 0 #0000001f;
+  }
+  & .ontile:not(.off) { background-image: linear-gradient(180deg, #fff6ea40 0%, #fff6ea00 58%); }
+  & .ontile .ot-name, & .ontile .ot-sub { color: var(--ink-on-lamp); }
+  & .ontile .ot-state { background: #fff6ea52; color: var(--ink-on-lamp); } /* a lit label window, not a dark pill */
+  & .ontile .ot-led {
+    background: radial-gradient(circle at 40% 35%, #fff 0 30%, #fff4dc 55%, #ffe3b8 100%);
+    box-shadow: 0 0 0 2px #1e130e30, 0 0 9px #fff4dc;
+  }
+  & .ontile.off {
+    background: var(--off-tile); border-color: #52463e; box-shadow: inset 0 2px 5px #0000006b;
+  }
+  & .ontile.off .ot-led { background: transparent; box-shadow: inset 0 0 0 2px var(--led-off); }
+  & .ontile.off .ot-name, & .ontile.off .ot-sub { color: var(--faint); }
+  & .ontile.off .ot-state { background: transparent; color: #dccfbf; box-shadow: inset 0 0 0 1.5px var(--led-off); }
+
+  /* the drone is a pilot light: its lamp breathes (opacity only, 7 s) while it's on and the stage is unlocked */
+  & .drone-head .ontile:not(.off)::after {
+    content: ''; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--drone) 55%, transparent),
+                0 0 28px 2px color-mix(in srgb, var(--drone) 40%, transparent);
+    opacity: .3; animation: ember-breathe 7s ease-in-out infinite; will-change: opacity;
+  }
+  & .perform.locked .drone-head .ontile::after { animation: none; opacity: .45; }
+
+  /* ================================================================ step chips, header chips */
+  & .mchip { color: #b3a395; border-color: var(--line-2); }
+  & .mchip.on { color: var(--text); }
+  & .mchip.on > .mc-label { color: color-mix(in srgb, var(--c) 62%, #fff6ea); }
+  & .slot.muted .mchip.on { background: #29211c; border-color: #5d5048; color: #e8dccd; }
+  & .slot.muted .mchip .mc-bar { background: #8a7a70; }
+  & .slot.muted .mchip.cycle.on .mc-led { background: #c9bbac; }
+  & .slot.muted .slot-body { background: repeating-linear-gradient(135deg, transparent 0 9px, #ffe6c80a 9px 18px); }
+  & .fxc { color: #e6dbcc; }
+  & .fxc small { color: #ab9a8b; }
+  & .fxc.on { background: var(--sel-fx); color: #fffaf2; }
+  & .fxc.on small { color: #dccdbb; }
+  & .fx-more, & .fx-chiprow.fx-open > .fxrow { background: var(--pop-bg); border-color: var(--pop-line); }
+  & .slot-badge { color: #e8dccd; border-color: #574b43; }
+  & .step-panel { background: var(--pop-bg); }
+  & .step-panel::after { background: var(--pop-bg); }
+  & .step-panel .sp-step.on { color: var(--ink-on-lamp); }
+  & .keypop { background: var(--pop-bg); }
+  & .keypop::before { background: var(--pop-bg); }
+  & .keypop .key-btn.on.hands::after { color: #5a3f10; }
+  & .setlist-chip.current .chip-num, & .setlist-chip.current .chip-key { color: #5a3f10; }
+  & .cd { box-shadow: 0 0 0 2px var(--bg-deep), 0 0 6px #fff4dcaa; }
+  & .cdi, & .rv-dot { box-shadow: 0 0 6px #fff4dccc; }
+
+  /* ================================================================ faders: warm caps with a centre groove */
+  & .fader.vertical .fader-input::-webkit-slider-thumb {
+    background: linear-gradient(transparent 44%, #6b574a 44% 56%, transparent 56%), linear-gradient(#fffaf1, #e2d4c1);
+    border-color: var(--bg-deep); box-shadow: 0 2px 7px #000000c0, inset 0 1px 0 #fff;
+  }
+  & .fader.horizontal .fader-input::-webkit-slider-thumb {
+    background: linear-gradient(90deg, transparent 44%, #6b574a 44% 56%, transparent 56%), linear-gradient(#fffaf1, #e2d4c1);
+    border-color: var(--bg-deep);
+  }
+  & .fader-indicator { background: #fff4dc; box-shadow: 0 0 6px #fff4dc99; }
+
+  /* level-reactive glow: the slot's level bar becomes a column of its own light rising behind the fader.
+     Pure CSS on the existing levelMeter DOM: the bar (.lvl-meter) widens to the track and paints behind the input; its
+     cover (.lvl-cover, scaleY driven by levelMeter.js) turns transparent and draws, from its bottom edge down, the glow
+     plus the thin bar. The cover is its own compositor layer (will-change), so a level change re-composites and
+     doesn't repaint. At ≥ −3 dB (.hot) the whole column is lit and the bar turns amber. */
+  & .perform .slot .fader.vertical .fader-track { isolation: isolate; }
+  & .perform .slot .fader.vertical .fader-track > .lvl-meter {
+    left: 0; right: 0; width: auto; z-index: -1; background: none; border-radius: 12px;
+    /* two mask layers: the thin bar stays whole; the glow fades out over its bottom 48 px (no hard floor) */
+    -webkit-mask-image: linear-gradient(to right, transparent calc(50% + 30px), #000 calc(50% + 30px) calc(50% + 36px),
+      transparent calc(50% + 36px)), linear-gradient(to top, transparent 0, #000 48px);
+    mask-image: linear-gradient(to right, transparent calc(50% + 30px), #000 calc(50% + 30px) calc(50% + 36px),
+      transparent calc(50% + 36px)), linear-gradient(to top, transparent 0, #000 48px);
+  }
+  & .perform .slot .lvl-meter > .lvl-cover { background: none; will-change: transform; }
+  & .perform .slot .lvl-meter > .lvl-cover::after,
+  & .perform .slot .lvl-meter.hot {
+    --lvl-bar: color-mix(in srgb, var(--c) 72%, #fff);
+    background:
+      linear-gradient(to right, transparent calc(50% + 31px), var(--lvl-bar) calc(50% + 31px) calc(50% + 35px),
+        transparent calc(50% + 35px)),
+      linear-gradient(to right, transparent 12%, color-mix(in srgb, var(--c) 9%, transparent) 30%,
+        color-mix(in srgb, var(--c) 24%, transparent) 50%, color-mix(in srgb, var(--c) 9%, transparent) 70%, transparent 88%);
+  }
+  /* the cover's pseudo is scaled with it, so this 36 px fade reads as 36 × (1 − level) px: soft at low levels, crisp
+     near the top, like light pooling */
+  & .perform .slot .lvl-meter > .lvl-cover::after {
+    -webkit-mask-image: linear-gradient(transparent 0, #000 36px); mask-image: linear-gradient(transparent 0, #000 36px);
+  }
+  & .perform .slot .lvl-meter > .lvl-cover::after {
+    content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 5000%;
+  }
+  & .perform .slot .lvl-meter.hot { --lvl-bar: var(--warn); }
+
+  /* ================================================================ wheel column */
+  & .wheel-input::-webkit-slider-runnable-track {
+    background: linear-gradient(to top, var(--wheel-fill) var(--pos, 0%), var(--wheel-track) var(--pos, 0%));
+  }
+  & .swell-btn.on { background: color-mix(in srgb, var(--slot-1) 16%, var(--panel)); border-color: var(--slot-1); color: #e4f5df; }
+  & .pedal-lamp.down .pedal-led, & .drone-swell.up .drone-swell-led { background: #fff4dc; }
+  & .pedal-lamp.down .pedal-led { box-shadow: 0 0 8px #fff4dc; }
+
+  /* ================================================================ key & drone */
+  & .key-btn.accidental { background: var(--accidental-bg); }
+  & .drone-toggles .toggle.on { border-color: color-mix(in srgb, var(--drone) 50%, var(--line-2)); }
+
+  /* ================================================================ notes: read like a page */
+  & .notes-text { color: #eadfce; line-height: 1.55; }
+
+  /* ================================================================ bottom row */
+  & .pkey.white { background: linear-gradient(#c2b4a2, var(--key-white) 18%); border-color: var(--bg-deep); }
+  & .pkey.black { background: linear-gradient(#241915, var(--key-black) 30%); border-color: #000; }
+  & .pkey.white.held { background: var(--accent); }
+  & .pkey.black.held { background: #d99a3a; }
+  & .pkey-label { color: var(--key-label); }
+  & .rbar.off { background: #5a4d45; }
+  & .rv-cnt { color: #e8dccd; }
+  & .btn-fade { background: var(--btn-fade-bg); border-color: var(--btn-fade-line); }
+  & .btn-fade.faded { background: #2e2108; color: #ffdca6; }
+  & .btn-panic { box-shadow: 0 0 24px color-mix(in srgb, var(--panic) 35%, transparent), inset 0 1px 0 #ffffff2e; }
+  & .btn-panic:hover:not(:disabled), & .btn-panic:active:not(:disabled) { background: #b8392b !important; }
+  & .lock-toggle.on { background: #261b0c; }
+
+  /* ================================================================ popovers, toasts, banners, overlay */
+  & .qs, & .qs::before { background: var(--pop-bg); border-color: var(--pop-line); }
+  & .qs { box-shadow: 0 22px 60px #000c, 0 0 0 1px #000, inset 0 1px 0 #ffe6c80d; }
+  & .qs-tap { background: #33291f; }
+  & .qs-pedal { background: var(--bg-deep); }
+  & .qs-pedal.on i { background: #fff4dc; box-shadow: 0 0 10px #fff4dc; }
+  & .toast { background: var(--toast-bg); border-color: var(--line-2); box-shadow: 0 8px 26px #000b; }
+  & .banner.info, & .bstrip[data-kind="info"], & .bstrip.open .banner.info { background: #1f2327; color: #eef3f6; }
+  & .bstrip.open .bstrip-list { background: var(--pop-bg); border-color: var(--pop-line); }
+  & .overlay-start { background: #0b0605d9; backdrop-filter: none; }
+  & .overlay-card { background: var(--panel); border-color: var(--line-2); box-shadow: 0 30px 80px #000; }
+  & .overlay-card img { content: url('/themes/ember/mark.svg'); border-radius: 16px; }
+  & .settings-placeholder { border-color: var(--line-2); }
+
+  /* ================================================================ Edit (H-v2): its own token block + cold one-offs */
+  & .ev2 {
+    --ev2-rig-bg: #181210; --fx: #cbbba5; --drone: #edd9aa; --chg: #fff4dc; --ev2-flash: var(--focus);
+    background: transparent;
+  }
+  & .ev2 .ev2-left, & .ev2 .ev2-head, & .ev2 .ev2-bottom {
+    background-color: color-mix(in srgb, var(--panel) 93%, transparent);
+    border-color: #ffe6c80f; box-shadow: inset 0 1px 0 #ffe6c80c, 0 12px 28px -18px #000;
+  }
+  & .ev2 .ev2-rig { border-color: #ffe6c80f; box-shadow: inset 0 1px 0 #ffe6c80a; }
+  & .ev2 .ev2-cap { text-transform: none; letter-spacing: .005em; font-size: 13px; }
+  & .ev2 .ev2-sent { color: #dccfbf; }
+  & .ev2 .ev2-switch { background: var(--line-2); }
+  & .ev2 .ev2-switch::after { background: #d8ccbd; }
+  & .ev2 .ev2-tab:hover { background: #1d1612; }
+  & .ev2 .ev2-tab.empty::before { background: repeating-linear-gradient(90deg, #5a4d45 0 6px, transparent 6px 10px); }
+  & .ev2 .ev2-tab-cd { box-shadow: 0 0 0 2px var(--ev2-rig-bg), 0 0 6px #fff4dcaa; }
+  & .ev2 .ev2-wlane::before { background: var(--line-2); }
+  & .ev2 .ev2-wout-br { border-color: #5a4d45; }
+  & .ev2 .ev2-wn { background: #221a15; }
+  & .ev2 .ev2-chg { color: #e8dccd; }
+  & .ev2 .ev2-ws-input::-webkit-slider-thumb {
+    background: linear-gradient(90deg, transparent 44%, #6b574a 44% 56%, transparent 56%), linear-gradient(#fffaf1, #e2d4c1);
+  }
+  & .ev2 .ev2-fx-pc:hover { border-color: var(--line-hover); }
+  & .ev2 .ev2-fx-pc[aria-pressed="true"] { background: var(--sel-fx); border-color: var(--text); }
+  & .ev2 .ev2-fx-pc[aria-pressed="true"] .ev2-fx-pc-hint { color: #dccdbb; }
+  & .ev2 .ev2-fx-vibe, & .ev2 .ev2-slot-menu { background: var(--pop-bg); border-color: var(--pop-line); }
+  & .ev2 .ev2-fx-vibe-item:hover, & .ev2 .ev2-fx-vibe-item:focus-visible, & .ev2 .ev2-slot-mi:hover,
+  & .ev2 .ev2-slot-mi:focus { background: #33291f; }
+  & .ev2 .ev2-slot-range .mkey.white { background: var(--key-white); border-right-color: var(--bg-deep); }
+  & .ev2 .ev2-slot-range .mkey.black { background: var(--key-black); }
+  & .ev2 .ev2-song-live { background: #1f2e1d; color: #b9e3b3; }
+  & .ev2 button.ev2-song-chip:hover, & .ev2 .ev2-song-bpmnum:hover { border-color: var(--line-hover); }
+  & .ev2 .ev2-song-bpmchip .ev2-song-tap:hover { background: #3a2f27; }
+  & .ev2 .ev2-kb-fade { background: var(--btn-fade-bg); }
+  & .ev2 .ev2-kb-panic { background: var(--panic); }
+  & .ev2 .ev2-kb-panic:hover { background: #b8392b; }
+  & .ev2 .ev2-list-row.on { box-shadow: inset 3px 0 0 var(--accent); }
+
+  /* ================================================================ welcome (the daily hook; not wired yet)
+     Markup the start overlay would carry (design/warmth/ember/concept.md §6). Only styles here: nothing in the app
+     renders .ember-welcome until main.js is changed. */
+  & .ember-welcome {
+    position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; cursor: pointer;
+    background: radial-gradient(ellipse 60% 55% at 50% 62%, #3a1d10e6 0%, #140c09f2 60%, #0b0605fa 100%);
+  }
+  & .ew-card { width: min(760px, calc(100vw - 64px)); display: grid; grid-template-columns: 1fr 1fr; gap: 36px; align-items: center; }
+  & .ew-hello { display: flex; flex-direction: column; gap: 14px; }
+  & .ew-mark { width: 64px; height: 64px; }
+  & .ew-day { font: 400 46px/1.02 var(--font-title); letter-spacing: -.01em; color: var(--text); }
+  & .ew-sub { font-size: 17px; line-height: 1.45; color: var(--muted); max-width: 30ch; }
+  & .ew-go {
+    align-self: flex-start; margin-top: 6px; min-height: 52px; padding: 0 22px 0 18px; border-radius: 26px; border: 0;
+    display: inline-flex; align-items: center; gap: 10px; font: 800 17px/1 var(--font); color: var(--accent-ink);
+    background: linear-gradient(#ffd183, var(--accent)); box-shadow: 0 0 34px -4px #f7b75599, inset 0 1px 0 #fff8;
+  }
+  & .ew-go i { width: 12px; height: 12px; border-radius: 50%; background: #fff4dc; box-shadow: 0 0 10px #fff4dc; }
+  & .ew-small { font-size: 13px; color: var(--faint); }
+  & .ew-today {
+    background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid #ffe6c814; border-radius: 16px;
+    padding: 18px 20px 16px; box-shadow: 0 24px 60px -20px #000, inset 0 1px 0 #ffe6c80f;
+  }
+  & .ew-today h3 { margin: 0 0 2px; font: 700 13px/1.3 var(--font); color: var(--muted); }
+  & .ew-today h4 { margin: 0 0 12px; font: 400 22px/1.2 var(--font-title); color: var(--text); }
+  & .ew-songs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  & .ew-songs li { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: baseline; padding: 6px 8px;
+    border-radius: 8px; font-size: 16px; font-weight: 700; }
+  & .ew-songs li:first-child { background: #f7b7551f; box-shadow: inset 3px 0 0 var(--accent); }
+  & .ew-songs .n { color: var(--faint); font-size: 13px; font-variant-numeric: tabular-nums; }
+  & .ew-songs .k { color: var(--accent); font: 400 17px/1 var(--font-title); }
+  & .ew-songs .more { color: var(--faint); font-weight: 600; font-size: 14px; }
+  & .ew-last { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--muted); line-height: 1.45; }
+  & .ew-last b { color: var(--text); font-weight: 700; }
+  & .ew-lamps { display: flex; gap: 14px; margin-top: 12px; font-size: 13px; font-weight: 700; color: var(--muted); }
+  & .ew-lamps span { display: inline-flex; align-items: center; gap: 6px; }
+  & .ew-lamps span::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: var(--c);
+    box-shadow: 0 0 8px var(--c); }
+  & .ew-lamps span.cold::before { background: transparent; box-shadow: inset 0 0 0 2px var(--led-off); }
+}
+
+@keyframes ember-breathe { 50% { opacity: .85; } }
+
+/* motion only at rest, and never when asked not to */
+@media (prefers-reduced-motion: reduce) {
+  :where(body[data-theme="ember"], body:not([data-theme])) .drone-head .ontile::after { animation: none; opacity: .5; }
+}
+:root[data-low-resource] :where(body[data-theme="ember"], body:not([data-theme])) .drone-head .ontile::after {
+  animation: none; opacity: .5;
+}
+:root[data-low-resource] :where(body[data-theme="ember"], body:not([data-theme])) {
+  background: var(--bg); /* menu-bar mode: no grain, no wash */
+}

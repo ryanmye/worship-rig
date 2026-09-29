@@ -37,10 +37,16 @@ export function h(tag, attrs = {}, ...children) {
   return el;
 }
 
-/** Set text only when it changed (no layout work for identical updates). */
+/**
+ * Set text only when it changed (no layout work for identical updates). An element holding one Text node gets that
+ * node's data changed in place (performance #3d: `textContent =` replaces the node, a remove + insert for layout).
+ */
 export function setText(el, text) {
   const s = String(text);
-  if (el.textContent !== s) el.textContent = s;
+  const t = el.firstChild;
+  if (t && t === el.lastChild && t.nodeType === 3) {
+    if (t.data !== s) t.data = s;
+  } else if (el.textContent !== s) el.textContent = s;
 }
 
 /** Toggle an attribute. */

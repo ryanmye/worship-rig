@@ -43,8 +43,9 @@ const DOUBLE_MS = 400;
 const CUT_Y_DB = -10;
 /**
  * Below this component width the layout is compact (polish-2B re-tune; was 1180). The full table's fixed columns
- * (42 + 118 + 150 + 82 + 72 + 66 + 54 + 40 = 624 px) + the 260 px side + 14 gap + 30 padding/border = 928 px, plus
- * ≥ 150 px for "Acts on" ("FLAT set a boost or cut") = 1078. The compact table needs 476 + 218 + 10 + 22 = 726 + acts.
+ * (42 + 118 + 172 + 82 + 72 + 66 + 54 + 40 = 646 px; the note column was 150 before L-21) + the 260 px side + 14 gap +
+ * 30 padding/border = 950 px, plus ≥ 130 px for "Acts on" (its text ellipsizes) = 1080. The compact table needs
+ * 500 (note 100, was 84; dB 62 and Q 58, were 58 and 54: L-21) + 218 + 10 + 22 = 750 + acts.
  */
 export const COMPACT_BELOW_PX = 1080;
 /** How long the curve waits for engine.getEqResponse to catch up with an edit (see recomputeCurve). */

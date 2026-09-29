@@ -778,6 +778,7 @@ class Reverb {
     }
     this._setUnitPd(u, this.predelayV); // u is disconnected → silent
     this._connect(u);
+    this.asleep = false; // idle-cpu #2: the incoming unit is fed (the sleeping one fades out with no input anyway)
     u.state = 'active';
     equalPowerFade(u.out.gain, 0, 1, when, this.fade);
     const out = this.active;
@@ -861,6 +862,27 @@ class Reverb {
   setPredelay(v, when) {
     this.predelayV = clampPd(v);
     this._pdTo(this.active, this.predelayV, when);
+  }
+
+  /**
+   * idle-cpu #2 (FxGraph.idleTick): unfeed the active convolver. Its tail rings out untouched (Chromium keeps a
+   * ConvolverNode whose input went away running for its tail time, then stops it: reverb thread → 0). Only while
+   * no crossfade runs. The predelay lines are empty by then (input silent ≥ 1 s > 0.5 s max predelay), so a
+   * predelay set while asleep (_pdTo → _setUnitPd on the unconnected unit) is still inaudible.
+   * @returns {boolean} asleep
+   */
+  sleep() {
+    if (this.asleep) return true;
+    if (!this.active || [...this.units.values()].some((u) => u.state === 'fading')) return false;
+    this._disconnect(this.active);
+    this.asleep = true;
+    return true;
+  }
+  /** Feed the active unit again (takes effect on the next render quantum). */
+  wake() {
+    if (!this.asleep) return;
+    this.asleep = false;
+    if (this.active) this._connect(this.active);
   }
 
   dispose() {
@@ -972,6 +994,14 @@ class Delay {
     this.washFb = null; // macro.wash override target
     this._pendingSwitch = null;
     this.nodeCount = 2 + 2 * 17;
+  }
+  /** idle-cpu #2: no line is ringing out or flushing (a line switch relies on its loop running in real time). */
+  canSleep() {
+    return this.lines.every((l) => l === this.active || l.state === 'idle');
+  }
+  /** Longest period of a line that can still hold content (the idle one is flushed). */
+  loopPeriod() {
+    return Math.max(...this.lines.map((l) => (l === this.active || l.state !== 'idle' ? l.time : 0)));
   }
   effectiveTime() {
     const s = this.p.sync;
@@ -1836,6 +1866,11 @@ export class Channel {
 // (interpolated in dB between the grid points): that tone passes at unity for every amount.
 /** Seconds between connecting the glue compressor and its dry→wet crossfade (detector settle, round2-engine M3). */
 export const GLUE_ENGAGE_DELAY = 0.3;
+/** idle-cpu #2: send-effect idle sleep (FxGraph.idleTick): poll period, quiet hold and silence threshold. */
+export const FX_IDLE_POLL_SEC = 0.25;
+export const FX_IDLE_HOLD_SEC = 1;
+export const FX_IDLE_THRESHOLD = 1e-5; // −100 dBFS
+const FX_SLEEPERS = ['reverb', 'delay', 'chorus'];
 export const GLUE = Object.freeze({ thrDb: -24, ratio: 4, knee: 6, attack: 0.01, release: 0.25, refAmp: 0.1, grid: 10 });
 export function glueSettings(a) {
   const x = Math.min(1, Math.max(0, Number(a) || 0));
@@ -2052,6 +2087,132 @@ export class FxGraph {
       this._glueConnected = false;
     });
     return true;
+  }
+  /**
+   * idle-cpu #2 (reviews/idle-cpu.md): let the send effects sleep while nothing feeds them. Chromium never lets
+   * the delay's feedback loop or the chorus's LFO-modulated lines go idle, and it keeps a convolver running for as
+   * long as its input is *connected to something active*, even when that is only unflagged zeros (idle-cpu #1's
+   * warm-pad leak). Realtime only: offline renders keep the always-on graph (deterministic, and the tests inject
+   * into the effect inputs directly). Each effect gets one AnalyserNode tap (an automatic-pull node: it pulls only
+   * the effect's input gain / the delay's loop LPFs, never the effect itself) that idleTick reads every
+   * FX_IDLE_POLL_SEC; its window (≥ 1.25 × the poll period) makes consecutive reads cover the time without gaps.
+   * @returns {boolean} whether idle sleep is on
+   */
+  enableIdleSleep() {
+    if (this._sleep) return true;
+    if (this.env.offline) return false;
+    const sr = this.ctx.sampleRate;
+    let n = 2048;
+    while (n < sr * FX_IDLE_POLL_SEC * 1.25 && n < 32768) n *= 2;
+    const S = { buf: new Float32Array(n), window: n / sr, lastT: null, fx: {} };
+    for (const name of FX_SLEEPERS) {
+      const tap = new AnalyserNode(this.ctx, { fftSize: n, smoothingTimeConstant: 0 });
+      this[name].input.connect(tap);
+      S.fx[name] = { tap, asleep: false, quietSince: null, sleeps: 0, wakes: 0 };
+    }
+    // the delay's loop content, before each line's out gain and the return gain (returnGain 0 must not hide echoes
+    // that would replay once it is raised again)
+    for (const l of this.delay.lines) l.lp.connect(S.fx.delay.tap);
+    this._sleep = S;
+    return true;
+  }
+  /** Names of the send effects asleep now (debug / tests). */
+  get fxAsleep() {
+    const S = this._sleep;
+    if (!S) return [];
+    this._syncReverb();
+    return FX_SLEEPERS.filter((k) => S.fx[k].asleep);
+  }
+  /** A reverb commit to a new IR connects the incoming unit (Reverb._swapUnit): that wakes it without wakeAll. */
+  _syncReverb() {
+    const e = this._sleep.fx.reverb;
+    if (e.asleep && !this.reverb.asleep) {
+      e.asleep = false;
+      e.quietSince = null;
+    }
+  }
+  _tapPeak(tap) {
+    const b = this._sleep.buf;
+    tap.getFloatTimeDomainData(b);
+    let m = 0;
+    for (let i = 0; i < b.length; i++) {
+      const v = b[i] < 0 ? -b[i] : b[i];
+      if (v > m) m = v;
+    }
+    return m;
+  }
+  _sleepFx(name) {
+    const e = this._sleep.fx[name];
+    if (name === 'reverb') {
+      if (!this.reverb.sleep()) return false;
+    } else {
+      try {
+        this[name].output.disconnect(this.sum);
+      } catch {}
+      if (name === 'delay') {
+        for (const l of this.delay.lines) {
+          try {
+            l.lp.disconnect(e.tap);
+          } catch {}
+        }
+      }
+    }
+    e.asleep = true;
+    e.sleeps++;
+    return true;
+  }
+  _wakeFx(name) {
+    const e = this._sleep.fx[name];
+    if (!e.asleep) return;
+    e.asleep = false;
+    e.quietSince = null;
+    e.wakes++;
+    if (name === 'reverb') this.reverb.wake();
+    else {
+      this[name].output.connect(this.sum);
+      if (name === 'delay') for (const l of this.delay.lines) l.lp.connect(e.tap);
+    }
+  }
+  /**
+   * Wake every sleeping send effect now (a source is about to play: AudioEngine._armSlot, a drone layer). The
+   * graph change lands on the next render quantum, i.e. before a note scheduled at ≥ currentTime + the engine's
+   * minimum lead, so no reverb / echo onset is lost.
+   */
+  wakeAll() {
+    const S = this._sleep;
+    if (!S) return;
+    for (const name of FX_SLEEPERS) if (S.fx[name].asleep) this._wakeFx(name);
+  }
+  /**
+   * One idle poll (AudioEngine._pollFx, every FX_IDLE_POLL_SEC). `busy` = a slot instrument is connected (it may
+   * sound without a new note: expression / volume swells), which keeps every effect awake. Otherwise an effect
+   * sleeps once its tap has read below FX_IDLE_THRESHOLD (−100 dBFS) continuously for FX_IDLE_HOLD_SEC (the delay:
+   * its loop period + FX_IDLE_HOLD_SEC, so a whole round trip of the loop was seen empty). A sleeping effect whose
+   * tap reads signal wakes (the backstop for a source that did not call wakeAll).
+   * @param {boolean} busy
+   */
+  idleTick(busy) {
+    const S = this._sleep;
+    if (!S) return;
+    const t = this.ctx.currentTime;
+    const covered = S.lastT !== null && t - S.lastT <= S.window; // a late poll leaves a hole: start over
+    S.lastT = t;
+    this._syncReverb();
+    for (const name of FX_SLEEPERS) {
+      const e = S.fx[name];
+      const loud = this._tapPeak(e.tap) >= FX_IDLE_THRESHOLD;
+      if (e.asleep) {
+        if (loud) this._wakeFx(name);
+        continue;
+      }
+      if (busy || loud || !covered || (name === 'delay' && !this.delay.canSleep())) {
+        e.quietSince = null;
+        continue;
+      }
+      if (e.quietSince === null) e.quietSince = t;
+      const hold = FX_IDLE_HOLD_SEC + (name === 'delay' ? this.delay.loopPeriod() : 0);
+      if (t - e.quietSince >= hold) this._sleepFx(name);
+    }
   }
   /** Cancel the compressor's automatic makeup gain (linear factor, measured once per engine). */
   setCompMakeup(m) {

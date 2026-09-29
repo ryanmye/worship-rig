@@ -623,7 +623,9 @@ async function runBrowser() {
         const scrolls = [el, ...el.querySelectorAll('.eqk-table-wrap, .eqk-head, .eqk-lower, .eqk-graph')]
           .filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.className);
         const cut = [...el.querySelectorAll('.eqk-bands input, .eqk-bands select')]
-          .filter((e) => e.getBoundingClientRect().width > 0 && e.scrollWidth > e.clientWidth + 1).map((e) => e.value);
+          // L-21: +2 (was +1): scrollWidth rounds per device pixel, and on the Mac (DPR 2) a select/input's inner
+          // editor can report 1 px more than its box even when the text fits. A real overflow is ≥ 3 px.
+          .filter((e) => e.getBoundingClientRect().width > 0 && e.scrollWidth > e.clientWidth + 2).map((e) => e.value);
         const d = window.__eq.comp.debug();
         return { w: Math.round(el.clientWidth), compact: d.compact, air: d.airLabels, outside, scrolls, cut,
           docW: document.documentElement.scrollWidth, vw: innerWidth };
@@ -679,6 +681,74 @@ async function runBrowser() {
       await page.setViewportSize({ width: 1440, height: 900 });
       await sleep(100);
       await settle();
+    });
+
+    // L-21 (local, SF Pro on the Mac): the note cell's text is the widest proportional-font content in a fixed column.
+    // The Linux suite renders with Liberation Sans (Arial metrics), narrower than SF Pro, so the old 150 / 84 px
+    // columns passed here and failed there. This emulates SF Pro with an @font-face over FreeSans (size-adjust 105 %
+    // and 112 % for margin; SF's ascent .95 / descent .24, divided by the size-adjust) and mounts the worst-case labels: "≈Db6 −50¢ · 1.08 kHz",
+    // "≈Db1 −48¢", "above C8 · 12.5 kHz". Every text must fit its cell's content box (canvas-measured in the cell's own
+    // font, so it does not lean on scrollWidth), in the full and the compact layout.
+    await T('L-21: worst-case note labels fit their cells under emulated SF Pro metrics (full 1124–1440, compact 1100)', async () => {
+      const face = (adj) => `@font-face{font-family:SFsim;src:local("FreeSans");size-adjust:${adj}%;` +
+        `ascent-override:${Math.round(95 / adj * 100)}%;descent-override:${Math.round(24 / adj * 100)}%;` +
+        'line-gap-override:0%} :root{--font:SFsim,sans-serif;--font-display:SFsim,sans-serif}';
+      const probe = () => ev(async () => {
+        const { store } = window.__rig;
+        const { defaultSlot } = window.__eq.params;
+        store.set('slots.0', { ...defaultSlot(0, { type: 'sampler', id: 'salamander-piano' }), lowNote: 0, highNote: 127,
+          octave: 0, transpose: 0 });
+        [33.7, 155.5, 1077.3, 466.9, 1244, 2489.9, 4978, 12543].forEach((f, i) => {
+          const k = i + 1;
+          for (const [key, v] of Object.entries({ on: true, type: 'peak', hz: f, db: -12.5, q: 1.41 })) {
+            store.set(`slots.0.eq.b${k}.${key}`, v);
+          }
+        });
+        store.flush();
+        window.__eq.mount({ slot: 0, compact: false, rta: false });
+        await document.fonts.ready;
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const el = window.__eq.comp.el;
+        const c = document.createElement('canvas').getContext('2d');
+        const over = [...el.querySelectorAll('.eqk-bands input[type=text]')].filter((e) => e.getBoundingClientRect().width > 0)
+          .map((e) => {
+            const cs = getComputedStyle(e);
+            c.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+            c.fontVariantNumeric = cs.fontVariantNumeric;
+            const avail = e.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+            const w = c.measureText(e.value).width;
+            return w > avail - 1 ? `${e.dataset.f} "${e.value}" ${w.toFixed(1)} > ${avail.toFixed(1)}` : null;
+          }).filter(Boolean);
+        const cut = [...el.querySelectorAll('.eqk-bands input, .eqk-bands select')]
+          .filter((e) => e.getBoundingClientRect().width > 0 && e.scrollWidth > e.clientWidth + 2)
+          .map((e) => `${e.dataset.f} "${e.value}" ${e.scrollWidth}/${e.clientWidth}`);
+        return { compact: !!el.dataset.compact, w: el.clientWidth, over, cut, font: document.fonts.check('13px SFsim') };
+      });
+      try {
+        for (const adj of [105, 112]) {
+          await ev((css) => {
+            document.getElementById('sfsim')?.remove();
+            const st = document.createElement('style');
+            st.id = 'sfsim';
+            st.textContent = css;
+            document.head.append(st);
+          }, face(adj));
+          for (const [vw, compact] of [[1100, true], [1124, false], [1280, false], [1440, false]]) {
+            await page.setViewportSize({ width: vw, height: 900 });
+            await sleep(120);
+            const m = await probe();
+            assert.ok(m.font, 'the SF Pro stand-in face loaded (FreeSans present)');
+            assert.equal(m.compact, compact, `${vw}: layout (card ${m.w})`);
+            assert.deepEqual(m.over, [], `${vw} @${adj}%: every cell's text fits`);
+            assert.deepEqual(m.cut, [], `${vw} @${adj}%: no cell reports overflow`);
+          }
+        }
+      } finally {
+        await ev(() => document.getElementById('sfsim')?.remove());
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await sleep(100);
+        await setupSlot(0, { lowNote: 48, highNote: 127 });
+      }
     });
 
     await T('eqMiniCurve: hidden while flat, a sparkline once shaped, click opens; follows the store', async () => {

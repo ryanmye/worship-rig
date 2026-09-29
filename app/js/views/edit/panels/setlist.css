@@ -11,7 +11,7 @@
 .ev2 .ev2-list-sethead { display: flex; align-items: center; gap: 2px; min-height: 28px; }
 .ev2 .ev2-list-setbtn {
   border: 0; background: transparent; color: var(--ev2-faint); font-size: 12px; font-weight: 650;
-  min-height: 28px; min-width: 28px; padding: 0 6px; border-radius: 6px;
+  min-height: 28px; min-width: 28px; padding: 0 6px; border-radius: 6px; white-space: nowrap; /* "+ Setlist" (O12) */
 }
 .ev2 .ev2-list-setbtn:hover:not(:disabled) { color: var(--text, #f1f4f8); background: var(--panel-2, #1c2027); }
 .ev2 .ev2-list-setbtn:disabled { opacity: .4; cursor: default; }

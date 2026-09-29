@@ -1,0 +1,244 @@
+{
+ "label": "perform-1440",
+ "count": 152,
+ "fails": [],
+ "disabledFails": [
+  {
+   "id": 50,
+   "text": "◀ Prev",
+   "color": "rgb(163, 172, 184)",
+   "size": 17,
+   "weight": 700,
+   "op": 0.45,
+   "disabled": true,
+   "cls": "btn nav-btn prev",
+   "tag": "button",
+   "rect": {
+    "x": 41.1875,
+    "y": 208.53125,
+    "w": 55.609375,
+    "h": 19
+   },
+   "bg": "rgb(15,17,21)",
+   "cr": 2.59,
+   "need": 4.5,
+   "pass": false
+  },
+  {
+   "id": 146,
+   "text": "↺ Revert",
+   "color": "rgb(241, 244, 248)",
+   "size": 16,
+   "weight": 700,
+   "op": 0.45,
+   "disabled": true,
+   "cls": "rv-l",
+   "tag": "span",
+   "rect": {
+    "x": 898.375,
+    "y": 820.609375,
+    "w": 67.25,
+    "h": 17
+   },
+   "bg": "rgb(15,17,21)",
+   "cr": 4.22,
+   "need": 4.5,
+   "pass": false
+  },
+  {
+   "id": 147,
+   "text": "nothing changed",
+   "color": "rgb(138, 147, 160)",
+   "size": 12.5,
+   "weight": 700,
+   "op": 0.45,
+   "disabled": true,
+   "cls": "rv-cnt-t",
+   "tag": "span",
+   "rect": {
+    "x": 881.65625,
+    "y": 843,
+    "w": 100.6875,
+    "h": 14
+   },
+   "bg": "rgb(15,17,21)",
+   "cr": 2.17,
+   "need": 4.5,
+   "pass": false
+  }
+ ],
+ "lowest": [
+  {
+   "id": 149,
+   "text": "PANIC",
+   "color": "rgb(255, 255, 255)",
+   "size": 24,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "panic-l",
+   "tag": "span",
+   "rect": {
+    "x": 1174.953125,
+    "y": 816.703125,
+    "w": 80.09375,
+    "h": 27
+   },
+   "bg": "rgb(217,54,58)",
+   "cr": 4.63,
+   "need": 3,
+   "pass": true
+  },
+  {
+   "id": 150,
+   "text": "Esc",
+   "color": "rgb(255, 255, 255)",
+   "size": 12,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "panic-k",
+   "tag": "small",
+   "rect": {
+    "x": 1203.234375,
+    "y": 845.09375,
+    "w": 23.515625,
+    "h": 14
+   },
+   "bg": "rgb(217,54,58)",
+   "cr": 4.63,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 54,
+   "text": "2",
+   "color": "rgb(138, 147, 160)",
+   "size": 13,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "chip-num",
+   "tag": "span",
+   "rect": {
+    "x": 394.609375,
+    "y": 211.21875,
+    "w": 7.390625,
+    "h": 15
+   },
+   "bg": "rgb(28,32,39)",
+   "cr": 5.26,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 57,
+   "text": "3",
+   "color": "rgb(138, 147, 160)",
+   "size": 13,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "chip-num",
+   "tag": "span",
+   "rect": {
+    "x": 583.828125,
+    "y": 211.21875,
+    "w": 7.390625,
+    "h": 15
+   },
+   "bg": "rgb(28,32,39)",
+   "cr": 5.26,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 60,
+   "text": "4",
+   "color": "rgb(138, 147, 160)",
+   "size": 13,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "chip-num",
+   "tag": "span",
+   "rect": {
+    "x": 758.78125,
+    "y": 211.21875,
+    "w": 7.390625,
+    "h": 15
+   },
+   "bg": "rgb(28,32,39)",
+   "cr": 5.26,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 63,
+   "text": "5",
+   "color": "rgb(138, 147, 160)",
+   "size": 13,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "chip-num",
+   "tag": "span",
+   "rect": {
+    "x": 929.625,
+    "y": 211.21875,
+    "w": 7.390625,
+    "h": 15
+   },
+   "bg": "rgb(28,32,39)",
+   "cr": 5.26,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 66,
+   "text": "6",
+   "color": "rgb(138, 147, 160)",
+   "size": 13,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "chip-num",
+   "tag": "span",
+   "rect": {
+    "x": 1103.296875,
+    "y": 211.21875,
+    "w": 7.390625,
+    "h": 15
+   },
+   "bg": "rgb(28,32,39)",
+   "cr": 5.26,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 23,
+   "text": "none",
+   "color": "rgb(143, 153, 166)",
+   "size": 11,
+   "weight": 600,
+   "op": 1,
+   "disabled": false,
+   "cls": "",
+   "tag": "small",
+   "rect": {
+    "x": 762,
+    "y": 100.078125,
+    "w": 26.28125,
+    "h": 12
+   },
+   "bg": "rgb(28,32,39)",
+   "cr": 5.66,
+   "need": 4.5,
+   "pass": true
+  }
+ ],
+ "glare": {
+  "meanLum": 0.0726,
+  "brightShare": 0.0793
+ }
+}

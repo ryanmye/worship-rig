@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 320" preserveAspectRatio="xMidYMid meet">
+  <!-- The light behind the glass. Only this layer breathes (opacity, compositor-only): the pad, breathing. -->
+  <defs>
+    <clipPath id="o"><path d="M12 320V150A176 176 0 0 1 100 8a176 176 0 0 1 88 142v170z"/></clipPath>
+    <radialGradient id="g" cx="100" cy="120" r="170" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffecc0" stop-opacity=".6"/>
+      <stop offset=".45" stop-color="#f3cf86" stop-opacity=".2"/>
+      <stop offset="1" stop-color="#ffe9b8" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g clip-path="url(#o)"><rect width="200" height="320" fill="url(#g)"/></g>
+</svg>

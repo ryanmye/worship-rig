@@ -68,12 +68,19 @@ export function wheelStrip(o = {}) {
   );
   let dragging = false;
   let v = 1;
+  let shownIv = -1; // performance #3b: the --pos / text last written (render runs every frame while the wheel moves)
+  let shownTxt = '';
+  let ghostShown = false;
   const render = (force) => {
     const pos = clamp(v, 0, 1);
     const iv = Math.round(pos * 1000);
     if ((force || !dragging) && Number(input.value) !== iv) input.value = String(iv);
-    input.style.setProperty('--pos', `${(pos * 100).toFixed(1)}%`);
+    if (iv === shownIv) return;
+    shownIv = iv;
+    input.style.setProperty('--pos', `${(iv / 10).toFixed(1)}%`);
     const txt = `${Math.round(pos * 100)}%`;
+    if (txt === shownTxt) return;
+    shownTxt = txt;
     setText(value, txt);
     input.setAttribute('aria-valuetext', txt);
   };
@@ -127,25 +134,29 @@ export function wheelStrip(o = {}) {
         v = s.value;
         render();
       }
-      if ('swelling' in s) {
+      if ('swelling' in s && swellBtn.getAttribute('aria-pressed') !== String(!!s.swelling)) {
+        // performance #3: renderWheel passes this every frame while the wheel moves; write only a change
         swellBtn.setAttribute('aria-pressed', String(!!s.swelling));
         swellBtn.classList.toggle('on', !!s.swelling);
       }
       if ('target' in s) setText(target, s.target ? `→ ${s.target}` : '');
       if ('pickup' in s) {
         const show = !!s.pickup && Number.isFinite(s.hardware);
-        ghost.hidden = !show;
         if (show) el.style.setProperty('--ghost', String(clamp(s.hardware, 0, 1)));
-        el.classList.toggle('pickup', show);
+        if (show !== ghostShown) {
+          ghostShown = show;
+          ghost.hidden = !show;
+          el.classList.toggle('pickup', show);
+        }
       }
       if ('bendMode' in s) droneLamp.hidden = s.bendMode !== 'drone-swell';
       const pct = (x) => `${Math.round(clamp(Number(x) || 0, 0, 1) * 100)}%`;
       if ('expr' in s) {
-        exprRow.hidden = !Number.isFinite(s.expr);
+        if (exprRow.hidden !== !Number.isFinite(s.expr)) exprRow.hidden = !Number.isFinite(s.expr);
         if (Number.isFinite(s.expr)) setText(exprVal, pct(s.expr));
       }
       if ('vol' in s) {
-        volRow.hidden = !Number.isFinite(s.vol);
+        if (volRow.hidden !== !Number.isFinite(s.vol)) volRow.hidden = !Number.isFinite(s.vol);
         if (Number.isFinite(s.vol)) setText(volVal, pct(s.vol));
       }
       if ('pedal' in s || 'pedalStuck' in s) {
@@ -153,7 +164,9 @@ export function wheelStrip(o = {}) {
         const stuck = !!s.pedalStuck && pedalLamp.classList.contains('down');
         pedalLamp.classList.toggle('stuck', stuck);
         setText(pedalText, stuck ? 'Pedal held' : 'Pedal');
-        pedalLamp.setAttribute('aria-label', pedalLamp.classList.contains('down') ? (stuck ? 'Sustain pedal held a long time' : 'Sustain pedal down') : 'Sustain pedal up');
+        // idle-cpu R3: set by the 150 ms runtime tick; only a change is a DOM mutation
+        const lab = pedalLamp.classList.contains('down') ? (stuck ? 'Sustain pedal held a long time' : 'Sustain pedal down') : 'Sustain pedal up';
+        if (pedalLamp.getAttribute('aria-label') !== lab) pedalLamp.setAttribute('aria-label', lab);
       }
       if ('bend' in s) {
         const b = Number(s.bend) || 0;

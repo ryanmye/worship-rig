@@ -7,7 +7,8 @@ import { MidiInput } from './midi.js';
 import { Recorder } from './recorder.js';
 import { createController, engineLatency } from './controller.js';
 import { mountPerform } from './views/perform.js';
-import { h, setText, segmented, fader, meter, openOverlay } from './views/components/index.js';
+import { h, setText, segmented, fader, meter, openOverlay, wakeLevelMeters } from './views/components/index.js';
+import { resolveThemeId, themeAttrs, THEME_MIRROR_KEY } from './shared/themes.js';
 
 const $ = (id) => document.getElementById(id);
 const rig = globalThis.rig || null;
@@ -16,7 +17,9 @@ const isElectron = !!(rig && rig.isElectron);
 // ------------------------------------------------------------------------------------------ toasts
 const TOAST_MS = { info: 4500, ok: 4000, warn: 7000, error: 10000 };
 const toastsEl = $('toasts');
-const liveToasts = new Map(); // message → {el, timer, count}
+const liveToasts = new Map(); // message → {el, timer, count, kind}
+// round4-perform P8: when the stack is trimmed, the lowest severity goes first (an error outlives later infos)
+const TOAST_RANK = { info: 0, ok: 0, warn: 1, error: 2 };
 
 /**
  * Show a toast. Identical messages that are still visible are merged (×N).
@@ -49,11 +52,19 @@ function toast(msg, kind = 'info', opts = {}) {
     });
     el.insertBefore(b, countEl);
   }
-  const entry = { el, countEl, count: 1, timer: arm(() => dismiss(text)) };
+  const entry = { el, countEl, count: 1, kind: k, timer: arm(() => dismiss(text)) };
   liveToasts.set(text, entry);
   toastsEl.append(el);
-  // keep the stack short on stage
-  while (liveToasts.size > 2) dismiss(liveToasts.keys().next().value);
+  // keep the stack short on stage: drop the oldest of the lowest severity (Map order = oldest first)
+  while (liveToasts.size > 2) {
+    let victim = null;
+    let rank = Infinity;
+    for (const [t, e] of liveToasts) {
+      const r = TOAST_RANK[e.kind] ?? 0;
+      if (r < rank) [victim, rank] = [t, r];
+    }
+    dismiss(victim);
+  }
 }
 function dismiss(text) {
   const e = liveToasts.get(text);
@@ -72,7 +83,8 @@ const shownOnce = new Set();
 function plainMessage(raw) {
   const m = String(raw ?? '').trim();
   if (!m) return null;
-  if (/wake ?lock/i.test(m)) return { text: 'Your screen might dim during long songs. Keep the laptop plugged in.', kind: 'info', once: true };
+  // onboarding O7: plugging in doesn't stop the display sleeping; say what does
+  if (/wake ?lock/i.test(m)) return { text: 'The screen may dim or sleep during long songs. For the service, set the display to stay on.', kind: 'info', once: true };
   if (/AudioContext|audio ?context/i.test(m) && /suspend|interrupt|closed|not allowed/i.test(m)) return { text: 'Audio stopped — click “Restart sound”.', kind: 'warn' };
   if (/CC ?64/i.test(m)) return { text: m.replace(/CC ?64/gi, 'the sustain pedal') };
   if (/CC ?7\b/i.test(m)) return { text: m.replace(/CC ?7\b/gi, 'the volume knob') };
@@ -110,6 +122,127 @@ const midi = new MidiInput();
 const recorder = new Recorder({ engine, rig });
 const controller = createController({ store, engine, midi, recorder, rig });
 
+// ------------------------------------------------------------------------------------------ theme (themes-setup)
+// app/themes/boot.js already set html/body[data-theme|data-mode] and linked #theme-css from the localStorage mirror
+// before first paint. Here the store wins: settings.theme (absent = default) is applied at boot and on every change,
+// and the mirror follows it. A switch loads the new sheet disabled (media="not all") at the end of <head>, warms its
+// fonts, then enables it, drops the old one and flips the attributes in one task: the page shows the old theme or the
+// new one, never an unstyled frame (test/phase2/themes).
+let themeSeq = 0;
+let themeApplied = null;
+let themePending = Promise.resolve();
+const warmedFonts = new Set();
+function setThemeAttrs(a) {
+  const html = document.documentElement;
+  html.dataset.theme = a.html.theme;
+  html.dataset.mode = a.html.mode;
+  html.style.colorScheme = a.colorScheme;
+  if (document.body) {
+    document.body.dataset.theme = a.body.theme;
+    document.body.dataset.mode = a.body.mode;
+  }
+}
+/** Load a theme sheet's @font-face files into document.fonts first, so a font-display:block face can't blank text. */
+async function warmThemeFonts(sheet) {
+  const loads = [];
+  let rules = [];
+  try {
+    rules = [...(sheet?.cssRules || [])];
+  } catch {
+    return;
+  }
+  for (const r of rules) {
+    if (typeof CSSFontFaceRule === 'undefined' || !(r instanceof CSSFontFaceRule)) continue;
+    const fam = r.style.getPropertyValue('font-family').replace(/^["']|["']$/g, '');
+    const src = r.style.getPropertyValue('src');
+    const url = /url\(\s*["']?([^"')]+)/.exec(src)?.[1];
+    if (!fam || !url || warmedFonts.has(`${fam}|${url}`)) continue;
+    warmedFonts.add(`${fam}|${url}`);
+    const desc = {};
+    for (const [k, p] of [['weight', 'font-weight'], ['style', 'font-style'], ['stretch', 'font-stretch']]) {
+      const v = r.style.getPropertyValue(p);
+      if (v) desc[k] = v;
+    }
+    try {
+      const face = new FontFace(fam, `url(${url})`, desc);
+      document.fonts.add(face);
+      loads.push(face.load().catch(() => {}));
+    } catch {
+      /* descriptor the browser rejects: the sheet's own @font-face still loads it */
+    }
+  }
+  if (loads.length) await Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 1500))]);
+}
+/**
+ * Switch the page to theme `id` (unknown → default). Resolves once the new look is showing.
+ * @param {string} id
+ * @returns {Promise<string>} the applied id
+ */
+async function applyTheme(id) {
+  const tid = resolveThemeId(id);
+  const a = themeAttrs(tid);
+  const seq = ++themeSeq;
+  try {
+    localStorage.setItem(THEME_MIRROR_KEY, tid);
+  } catch {
+    /* storage blocked: boot falls back to the default, then this corrects it */
+  }
+  themeApplied = tid;
+  const cur = document.getElementById('theme-css');
+  const curHref = cur ? cur.getAttribute('href') : null;
+  if (curHref === a.css || (!a.css && !cur)) {
+    setThemeAttrs(a); // same file (Daylight Stage ↔ Day) or Classic → Classic: attributes only
+    return tid;
+  }
+  if (!a.css) {
+    cur.remove();
+    setThemeAttrs(a);
+    return tid;
+  }
+  for (const n of document.head.querySelectorAll('link[data-theme-next]')) n.remove(); // an earlier, overtaken switch
+  const next = document.createElement('link');
+  next.rel = 'stylesheet';
+  next.media = 'not all';
+  next.dataset.themeNext = tid;
+  const loaded = new Promise((res) => {
+    next.addEventListener('load', () => res(true), { once: true });
+    next.addEventListener('error', () => res(false), { once: true });
+  });
+  next.href = a.css;
+  document.head.append(next);
+  const ok = await loaded;
+  if (ok) await warmThemeFonts(next.sheet);
+  if (seq !== themeSeq || !ok) {
+    next.remove();
+    if (!ok) console.warn('[ui] theme stylesheet failed to load:', a.css);
+    return themeApplied;
+  }
+  next.removeAttribute('media');
+  delete next.dataset.themeNext;
+  cur?.remove();
+  next.id = 'theme-css';
+  setThemeAttrs(a);
+  return tid;
+}
+function onThemeSetting(state) {
+  const tid = resolveThemeId(state.settings.theme);
+  if (tid === themeApplied) return;
+  themePending = applyTheme(tid);
+}
+store.subscribe(onThemeSetting);
+// boot reconcile: the store wins over the mirror boot.js read (e.g. a library imported in another window)
+if (document.documentElement.dataset.theme === resolveThemeId(store.get().settings.theme)) {
+  themeApplied = document.documentElement.dataset.theme;
+  try {
+    localStorage.setItem(THEME_MIRROR_KEY, themeApplied);
+  } catch {
+    /* storage blocked */
+  }
+}
+onThemeSetting(store.get());
+// Quick › This Mac › Theme asks for Settings › Appearance with a DOM event (quickSheet has no ctx)
+document.addEventListener('rig-open-settings', (e) => openSettings({ section: e.detail?.section }));
+
 // ------------------------------------------------------------------------------------------ views
 const els = {
   perform: $('view-perform'),
@@ -124,6 +257,14 @@ let lastFocus = null;
 let lastFocusKb = false; // was the opener keyboard-focused (:focus-visible) when Settings opened
 
 const locked = () => !!store.get().settings.performLock;
+// onboarding O13: Edit and ⚙ are disabled under Perform lock, and a disabled button gets no click; Chromium still
+// sends pointerdown, so a tap on one says why instead of doing nothing
+const LOCKED_TAP_TEXT = 'Perform lock is on — hold Lock to unlock, then edit.';
+document.addEventListener('pointerdown', (e) => {
+  if (!locked()) return;
+  const b = e.target?.closest?.('button:disabled');
+  if (b && (b.id === 'btn-settings' || b.closest('#view-switch'))) toast(LOCKED_TAP_TEXT, 'info', { ms: 3000 });
+}, true);
 
 /**
  * Switch view. `opts.block` (+ `opts.focus`) selects an Edit block when switching to Edit, e.g. Perform's empty-slot
@@ -154,6 +295,8 @@ function applyView(name) {
 }
 
 function openSettings(opts = {}) {
+  // round4-perform P4: an unfolded banner strip ("Open Settings" is one of its actions) must not stay over the modal
+  setBstripOpen(false);
   if (locked()) {
     toast('Perform lock is on — unlock it to open Settings.', 'warn');
     return false;
@@ -405,7 +548,9 @@ function renderStatusBanners(s) {
   if (other && other.path && !libraryOfferDismissed) {
     const when = other.savedAt ? new Date(other.savedAt).toLocaleString() : 'recently';
     const actions = [];
-    if (typeof controller.importLatestBackup === 'function') {
+    // round4-perform P6: replacing the whole library is withheld under Perform lock (as "Open Settings" is); the offer
+    // keeps "Not now", and the button comes back on the next status tick after unlocking
+    if (typeof controller.importLatestBackup === 'function' && !locked()) {
       actions.push({
         label: 'Use that library',
         testid: 'import-latest-backup',
@@ -466,7 +611,14 @@ recorder.addEventListener('state', (e) => {
   recBtn.classList.toggle('busy', st === 'starting' || st === 'stopping');
   recBtn.classList.toggle('unavailable', st === 'unavailable');
   recBtn.setAttribute('aria-pressed', String(st === 'recording'));
-  recTime.classList.toggle('on', st === 'recording');
+  // onboarding O11: stopping can take a while (the file is finished and written); say so where the time was
+  recTime.classList.toggle('on', st === 'recording' || st === 'stopping');
+  recTime.classList.toggle('saving', st === 'stopping');
+  if (st === 'stopping') {
+    clearInterval(recTimer);
+    recTimer = null;
+    setText(recTime, 'Saving…');
+  }
   if (st === 'recording') {
     clearInterval(recTimer);
     setText(recTime, '00:00');
@@ -490,6 +642,7 @@ recorder.addEventListener('state', (e) => {
 recorder.addEventListener('warn', (e) => plainToast(e.detail?.message, 'warn'));
 
 // Ready light (UX state table): "Loading 3/11" → "Ready". Counted from the engine's decoded-sample cache.
+const READY_TITLE = 'Every song in the set is loaded and switches instantly';
 let readyTimer = null;
 function songsLoaded() {
   const ids = store.navIds();
@@ -520,6 +673,7 @@ function renderReady(s) {
   setLed(readyLed, ready ? 'ok' : s.instance === 'secondary' ? null : 'warn');
   $('ready-status').classList.toggle('on', ready);
   if (ready || s.instance === 'secondary') {
+    $('ready-status').title = READY_TITLE;
     setText(readyText, ready ? 'Ready' : 'Not loaded');
     clearInterval(readyTimer);
     readyTimer = null;
@@ -528,6 +682,10 @@ function renderReady(s) {
   const upd = () => {
     const c = songsLoaded();
     setText(readyText, c && c.total ? `Loading ${Math.min(c.done, c.total)}/${c.total}` : 'Loading…');
+    // onboarding O3: the count is the rest of the set loading behind the current song, which can be played now
+    $('ready-status').title = c && c.total
+      ? `Loading the songs in the set (${Math.min(c.done, c.total)} of ${c.total} ready). You can play now.`
+      : 'Loading sounds. You can play once the song name stops saying “Loading…”.';
   };
   upd();
   if (!readyTimer) readyTimer = setInterval(upd, 500);
@@ -548,6 +706,11 @@ function onSettings(state) {
     viewSwitch.setDisabled(!!st.performLock, 'edit');
     $('btn-settings').disabled = !!st.performLock;
     if (st.performLock && settingsOpen) closeSettings();
+    // round4-perform P6: the banners' lock-gated actions follow the lock at once, not on the next status tick
+    // (a microtask: the first call runs before `lastStatus` is declared below)
+    queueMicrotask(() => {
+      if (lastStatus) renderStatusBanners(lastStatus);
+    });
   }
   if (st.view !== lastView) {
     if (st.view === 'edit' && st.performLock) {
@@ -585,8 +748,10 @@ const setLed = (el, cls) => {
 let lastStatus = null;
 let midiHintShown = false;
 let midiPendingShown = false;
+let midiPromptHintShown = false; // round4-perform P7: firstRunHints already told Chrome users about the prompt
 // polish-2A ("## l3" UI follow-up): pending is info, never a failure, and a reload would not help
 const MIDI_PENDING_TEXT = 'MIDI starting… answer the browser’s permission prompt if it appears.';
+const MIDI_PENDING_TEXT_ELECTRON = 'MIDI is taking a while to start. The computer keys A–; play notes meanwhile.';
 const MIDI_DENIED_TEXT = 'MIDI was blocked — allow it in the browser’s site settings.';
 controller.onStatus((s) => {
   const m = s.midi || {};
@@ -618,7 +783,10 @@ controller.onStatus((s) => {
       : m.reason === 'failed' ? 'MIDI could not start — unplug and replug the keyboard'
         : m.reason ? `MIDI unavailable (${m.reason})` : 'MIDI input';
 
-  const a = s.audio;
+  // onboarding O14: the controller starts out 'running' and only corrects itself on its 1 s tick, so a plain Chrome
+  // tab said "Sound OK" under the "Click anywhere to start audio" overlay; the context's own state wins here
+  const ctxState = engine.ctx?.state;
+  const a = s.audio === 'running' && ctxState && ctxState !== 'running' ? 'suspended' : s.audio;
   const lat = Number(s.latencyMs) || 0;
   const secondary = s.instance === 'secondary';
   setLed(audioLed, secondary ? 'warn' : a === 'running' ? (lat >= 40 ? 'warn' : 'ok') : a === 'stalled' ? 'bad' : 'warn');
@@ -635,8 +803,13 @@ controller.onStatus((s) => {
   // pending is not a failure: no "could not start" toast, and midiHintShown stays free for a later denial
   if (pending && !midiPendingShown) {
     midiPendingShown = true;
-    toast(isElectron ? 'MIDI is taking a while to start. The computer keys A–; play notes meanwhile.'
-      : MIDI_PENDING_TEXT, 'info', { ms: 10000 });
+    if (isElectron) toast(MIDI_PENDING_TEXT_ELECTRON, 'info', { ms: 10000 });
+    else if (!midiPromptHintShown) toast(MIDI_PENDING_TEXT, 'info', { ms: 10000 });
+  }
+  // round4-perform P7: the "starting" toast goes as soon as MIDI has answered (the lamp says the rest)
+  if (!pending) {
+    dismiss(MIDI_PENDING_TEXT);
+    dismiss(MIDI_PENDING_TEXT_ELECTRON);
   }
   if (!midiHintShown && !pending && m.reason && m.reason !== lastStatus?.midi?.reason) {
     midiHintShown = true;
@@ -834,7 +1007,9 @@ async function firstRunHints() {
   if (isElectron || !navigator.permissions?.query) return;
   try {
     const p = await navigator.permissions.query({ name: 'midi' });
-    if (p.state === 'prompt') toast('Chrome will ask to use your MIDI devices — click “Allow”.', 'info', { ms: 10000 });
+    if (p.state !== 'prompt') return;
+    midiPromptHintShown = true;
+    toast('Chrome will ask to use your MIDI devices — click “Allow”.', 'info', { ms: 10000 });
   } catch {
     /* permission name unsupported */
   }
@@ -851,5 +1026,58 @@ started.then(() => {
 });
 applyView(store.get().settings.view === 'edit' && !locked() ? 'edit' : 'perform');
 
+// ------------------------------------------------------------------------------------------ menu-bar mode
+// docs/menubar-mode.md (C7 menubar-B). The main bus is created by the controller (menubar-A defaultBus(): the Electron
+// relay or BroadcastChannel 'rig-bus'), so this renderer does not open a second one. Here: window visibility →
+// controller, low-resource → <html data-low-resource> (styles.css hides the meters, which stops their rAF loops via
+// their IntersectionObservers), settings.menuBarMode → Electron main.
+const WINDOW_MENU_IDS = { windowShown: true, windowHidden: false, windowFollowDocument: null };
+const setWindowVisible = (v) => {
+  // idle-cpu R4: a hidden window (Electron keeps rendering: backgroundThrottling is off) hides the meters the way
+  // low-resource does, which takes them out of their IntersectionObservers and stops their loops
+  document.documentElement.toggleAttribute('data-window-hidden', v === false);
+  try {
+    controller.setWindowVisible?.(v);
+  } catch (err) {
+    console.warn('[ui] setWindowVisible failed', err);
+  }
+};
+// Electron keeps backgroundThrottling off (audio), so a hidden window may never fire visibilitychange there; the
+// Electron main process reports show/hide as rig menu ids instead (controller re-emits unknown ids as 'menu').
+document.addEventListener('visibilitychange', () => setWindowVisible(document.visibilityState !== 'hidden'));
+controller.addEventListener('menu', (e) => {
+  const id = e.detail?.id;
+  if (id in WINDOW_MENU_IDS) setWindowVisible(WINDOW_MENU_IDS[id]);
+});
+controller.addEventListener('openMain', () => {
+  if (isElectron) return; // Electron main shows + focuses the window
+  try {
+    window.focus();
+  } catch {
+    /* best effort in a browser tab */
+  }
+});
+// idle-cpu R1: sleeping slot level meters wake on the next note (a slot only sounds after one)
+controller.addEventListener('notes', () => wakeLevelMeters());
+let lastLowRes = null;
+controller.onStatus((s) => {
+  const low = !!s.lowResource;
+  if (low === lastLowRes) return;
+  lastLowRes = low;
+  document.documentElement.toggleAttribute('data-low-resource', low);
+});
+let lastMenuBarMode = null;
+function mirrorMenuBarMode(state) {
+  const on = !!state.settings.menuBarMode;
+  if (on === lastMenuBarMode) return;
+  lastMenuBarMode = on;
+  if (typeof rig?.setMenuBarMode === 'function') {
+    Promise.resolve(rig.setMenuBarMode(on)).then((r) => r && r.error && console.warn('[ui] setMenuBarMode:', r.error), () => {});
+  }
+}
+store.subscribe(mirrorMenuBarMode);
+mirrorMenuBarMode(store.get());
+
 // test / debugging handle (not an API)
 globalThis.__rig = { store, engine, controller, midi, recorder, ctx, views: { perform: performView, get edit() { return editView; }, get settings() { return settingsView; } }, ready: started, viewsReady, ui: { setBanner, plainMessage, toast } };
+globalThis.__rig.theme = { apply: applyTheme, get current() { return themeApplied; }, get pending() { return themePending; } };

@@ -18,6 +18,14 @@ const POOL_MIN = 4; // <audio> elements created up front
 const POOL_MAX = 6; // grown on demand (a loop crossfade holds 2 elements; key changes during fades need more)
 const STEAL_FADE = 0.15; // an element taken from a full pool fades out over this before reuse (never a hard cut)
 const IDLE_INST = 2; // reusable drone-osc instruments kept between key changes (A/B)
+/**
+ * idle-cpu #2 (reviews/idle-cpu.md): a drone left at drone.gain 0 this long is parked: its layers fade out and
+ * their voices end (a silent synth drone still ran ≈ 5 points of a core of voices on the 2-CPU box: gain 0 does
+ * not stop Chromium pulling what feeds it). Raising the gain again restarts it in the same key (with the voice's
+ * own attack). Short dips (a fader pulled down for a verse) never park.
+ */
+export const DRONE_PARK_SEC = 10;
+const PARK_RESUME_FADE = 0.05;
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 
 /** Level at time t of an equal-power fade {t, dur, from, to} (see fx.equalPowerFade). */
@@ -99,7 +107,7 @@ export function followVoicing(held, prevUpper) {
 
 export class Drone {
   /**
-   * @param {object} o {ctx, registry, rng, timer, sum, reverbIn, warn}
+   * @param {object} o {ctx, registry, rng, timer, sum, reverbIn, warn, wake?} (wake: idle-cpu #2, before a layer sounds)
    */
   constructor(o) {
     const { ctx } = o;
@@ -137,6 +145,7 @@ export class Drone {
     this.cfg = { mode: 'off', chordFollow: false, continueAcrossSongs: true, minorUsesRelativeMajorFile: true };
     this.key = null; // {pc, minor}
     this.sounding = false;
+    this.parked = false;
     this.layers = [];
     this.files = new Map(); // 'pc|minor' -> {name, url}
     this.pool = null;
@@ -175,11 +184,18 @@ export class Drone {
   _buildInst() {
     const inst = this.o.registry.create(this.ctx, this.o.rng.fork(), DRONE_REF, this._instParams());
     const gain = new GainNode(this.ctx, { gain: 0 });
-    inst.output.connect(gain).connect(this.synthBus);
-    return { inst, gain };
+    gain.connect(this.synthBus);
+    // idle-cpu #1: inst.output → gain is connected only while the instrument plays a layer (_takeInst connects,
+    // _returnInst disconnects). An idle drone-osc (monoBelow inside) is not reliably flagged silent by Chromium, so
+    // a waiting instrument kept its bus / HPF / mono-low chain running (see AudioEngine._armSlot, reviews/idle-cpu.md).
+    return { inst, gain, armed: false };
   }
   _takeInst(t) {
     const e = this._idle.shift() || this._buildInst();
+    if (!e.armed) {
+      e.armed = true;
+      e.inst.output.connect(e.gain);
+    }
     this._applyInstParams(e.inst, t);
     this.warm();
     return e;
@@ -187,6 +203,13 @@ export class Drone {
   _returnInst(e) {
     const cap = this.cfg.chordFollow ? 4 : IDLE_INST;
     if (!this._disposed && this._idle.length < cap && !e.inst.disposed) {
+      // idle-cpu #1: an idle instrument waits disconnected (its layer faded to 0 and its voices ended ≥ 0.25 s ago)
+      if (e.armed) {
+        e.armed = false;
+        try {
+          e.inst.output.disconnect(e.gain);
+        } catch {}
+      }
       this._idle.push(e);
       return;
     }
@@ -205,7 +228,10 @@ export class Drone {
     if (!Number.isFinite(v) || !(key in this.p)) return false;
     const prevBright = this.p.brightness;
     this.p[key] = v;
-    if (key === 'gain') rampTo(this.level.gain, clamp(v, 0, 2), t, 0.015);
+    if (key === 'gain') {
+      rampTo(this.level.gain, clamp(v, 0, 2), t, 0.015);
+      this._gainChanged(t);
+    }
     else if (key === 'width') this._applyWidth(t);
     else if (key === 'brightness' || key === 'movement') {
       for (const L of this.layers) this._applyInstParams(L.inst, t);
@@ -216,6 +242,24 @@ export class Drone {
   }
   getParam(key) {
     return this.p[key];
+  }
+  /** idle-cpu #2: park after DRONE_PARK_SEC at gain 0; resume when the gain comes back (DRONE_PARK_SEC). */
+  _gainChanged(t) {
+    const seq = (this._parkSeq = (this._parkSeq || 0) + 1); // any gain change cancels a pending park
+    if (this.p.gain > 0) {
+      if (this.parked) {
+        this.parked = false;
+        if (this.cfg.mode !== 'off' && this.key) this._start(this.key, PARK_RESUME_FADE, t, true);
+      }
+      return;
+    }
+    if (this.parked || !this.sounding) return;
+    this.o.timer.at(t + DRONE_PARK_SEC, (tt) => {
+      if (seq !== this._parkSeq || this._disposed || this.p.gain > 0 || !this.sounding || this.cfg.mode === 'off') return;
+      this._fadeOutAll(tt, PARK_RESUME_FADE);
+      this.sounding = false;
+      this.parked = true;
+    });
   }
   _applyWidth(t) {
     // L' = aL + bR, R' = aR + bL; width 1 → a=1,b=0 (full stereo), width 0 → mono
@@ -276,6 +320,11 @@ export class Drone {
     const m = ['off', 'synth', 'files'].includes(mode) ? mode : 'off';
     if (m === this.cfg.mode && (m === 'off' || this.sounding)) return;
     this.cfg.mode = m;
+    if (this.parked) {
+      // idle-cpu #2: parked at gain 0: remember the mode; the gain coming back starts it (off un-parks)
+      if (m === 'off') this.parked = false;
+      return;
+    }
     if (m === 'off') {
       this._fadeOutAll(t, this.p.fade);
       this.sounding = false;
@@ -294,7 +343,7 @@ export class Drone {
     const same = this.key && this.key.pc === key.pc && this.key.minor === key.minor;
     this.key = key;
     if (same && this.sounding) return false; // same key → no-op (no restarted crossfade)
-    if (this.cfg.mode === 'off') return true;
+    if (this.cfg.mode === 'off' || this.parked) return true; // parked (idle-cpu #2): the new key sounds on resume
     this._start(key, Number.isFinite(fade) ? fade : this.p.fade, t, false);
     return true;
   }
@@ -323,6 +372,7 @@ export class Drone {
     if (mode === 'files') this._filesTo(file, fade, t);
     else this._synthTo(key, fade, t);
     this.sounding = true;
+    if (!(this.p.gain > 0)) this._gainChanged(t); // started at gain 0: park it too (idle-cpu #2)
   }
 
   _fadeOutAll(t, fade) {
@@ -340,6 +390,7 @@ export class Drone {
   _newLayer(notes, t, fade, vel = 0.8) {
     // a reused instrument (no construction on the key-change path); its params/morph are re-applied on take
     const pe = this._takeInst(t);
+    this.o.wake?.(); // idle-cpu #2: the engine's sleeping send effects (the reverb) wake before the layer sounds
     const { inst, gain } = pe;
     const L = { inst, gain, pe, voices: [], fade: { t, dur: fade, from: 0, to: 1 }, dead: false };
     for (const n of notes) L.voices.push({ note: n, voice: inst.noteOn(n, vel, t) });
@@ -688,6 +739,7 @@ export class Drone {
     });
   }
   _filesTo(file, fade, t) {
+    this.o.wake?.(); // idle-cpu #2 (files mode sends 0 to the reverb today; cheap and future-proof)
     this._play(file, fade, t);
   }
 

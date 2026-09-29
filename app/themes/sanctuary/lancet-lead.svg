@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 320" preserveAspectRatio="xMidYMid meet" fill="none">
+  <!-- Static lead came and the brass frame, over lancet-glass.svg and lancet-light.svg -->
+  <g stroke="#0a0c1e" stroke-linejoin="round" stroke-width="2.6">
+    <path d="M22 156l37-4 37 4M22 216l37-6 37 6M22 274l37-4 37 4M59 152v168"/>
+    <path d="M104 156l37-4 37 4M104 216l37-6 37 6M104 274l37-4 37 4M141 152v168"/>
+    <path d="M22 320V150A74 74 0 0 1 59 86a74 74 0 0 1 37 64v170M104 320V150a74 74 0 0 1 37-64 74 74 0 0 1 37 64v170" stroke-width="4"/>
+    <circle cx="100" cy="50" r="22" stroke-width="4"/>
+  </g>
+  <path d="M12 320V150A176 176 0 0 1 100 8a176 176 0 0 1 88 142v170" stroke="#e6ba65" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M4 320V148A184 184 0 0 1 100 0M196 320V148A184 184 0 0 0 100 0" stroke="#e6ba6540" stroke-width="1.5"/>
+  <path d="M6 320h188" stroke="#e6ba65" stroke-width="3"/>
+</svg>

@@ -5,6 +5,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mountPanelForTest, smoke, shutdown } from '../harness.mjs';
+import { noteName } from '../../../../app/js/shared/music.js';
 
 // One page for every single-panel test (a boot costs 20–60 s on the shared 2-CPU box, and run.mjs's
 // --test-timeout also caps the whole file); each test starts from a freshly selected song (fresh()), which also
@@ -687,6 +688,145 @@ test('slot: round2-ui #3 — a note typed before a non-pointer song switch goes 
     t.assertNoConsoleErrors();
   }
 });
+
+test('slot: round4-edit-lib m1 — a focused Lowest field shows an outside write (MIDI Set lowest…, mini keyboard drag)',
+  async () => {
+    const t = await page();
+    await fresh(t, 'factory:sunday-pad-piano', 'slot:0');
+    const low = bindSel(t, 'slots.0.lowNote');
+    const stored = () => t.ev(() => window.__rig.store.currentSong().patch.slots[0].lowNote);
+    const focused = () => t.ev((s) => document.activeElement === document.querySelector(s), low);
+    // (a) keyboard flow: Set lowest… armed with Enter, focus moves to the field without a pointer, a MIDI key answers
+    await t.setParam('slots.0.lowNote', 36);
+    await t.until(([s, v]) => document.querySelector(s).value === v, [low, noteName(36)]);
+    await t.ev((h) => document.querySelector(`${h} .ev2-slot-arm[data-arm="low"]`).focus(), t.host);
+    await t.page.keyboard.press('Enter');
+    assert.equal(await t.page.getAttribute(`${t.host} .ev2-slot-arm[data-arm="low"]`, 'aria-pressed'), 'true');
+    await t.ev((s) => document.querySelector(s).focus(), low);
+    await t.ev(() => window.__rig.controller.perform.noteOn(50, 100));
+    await t.until(() => window.__rig.store.currentSong().patch.slots[0].lowNote === 50);
+    await t.ev(() => window.__rig.controller.perform.noteOff(50));
+    assert.ok(await focused(), 'the field kept focus');
+    assert.equal(await t.page.inputValue(low), noteName(50), 'focused, untouched field follows the write');
+    await t.ev(() => document.activeElement.blur());
+    assert.equal(await t.page.inputValue(low), noteName(50), 'after blur (was the stale C2)');
+    // (b) pointer flow: click the field, then drag the mini keyboard (its pointerdown keeps focus in the field)
+    await t.setParam('slots.0.lowNote', 36);
+    await t.click(low);
+    const box = await t.page.locator(bindSel(t, 'slots.0.split')).boundingBox();
+    const y = box.y + box.height / 2;
+    await t.page.mouse.move(box.x + 4, y);
+    await t.page.mouse.down();
+    await t.page.mouse.move(box.x + box.width * 0.3, y, { steps: 4 });
+    await t.page.mouse.up();
+    await t.until(() => window.__rig.store.currentSong().patch.slots[0].lowNote !== 36);
+    const n = await stored();
+    assert.ok(await focused(), 'the drag kept focus in the field');
+    assert.equal(await t.page.inputValue(low), noteName(n), `focused field shows the dragged key (${n})`);
+    await t.ev(() => document.activeElement.blur());
+    await t.sleep(80);
+    assert.equal(await t.page.inputValue(low), noteName(n));
+    assert.equal(await stored(), n, 'blur without typing writes nothing');
+    // a typed draft is still protected from an outside write until Enter
+    await t.click(low);
+    await t.page.keyboard.press('ControlOrMeta+A');
+    await t.page.keyboard.type('D3');
+    await t.setParam('slots.0.lowNote', 40);
+    await t.sleep(80);
+    assert.equal(await t.page.inputValue(low), 'D3', 'draft kept');
+    await t.page.keyboard.press('Enter');
+    await t.until(() => window.__rig.store.currentSong().patch.slots[0].lowNote === 50);
+    assert.equal(await t.page.inputValue(low), 'D3');
+    await t.click(`${t.host} .ev2-slot-whole`);
+    await t.untilEngine('slots.0.lowNote', 0);
+    t.assertNoConsoleErrors();
+  });
+
+test('slot: round4-edit-lib n1/n2/n3/m2 — rebuild bookkeeping, no toast on a switch, menu focus, IME Enter',
+  async () => {
+    const t = await page();
+    await fresh(t, 'factory:sunday-pad-piano', 'slot:0');
+    // n2: a half-typed note name blurred by a (non-pointer) song switch reverts without the warn toast
+    const [a, b] = await sameInstrumentPair(t);
+    await t.selectSong(a);
+    const low = bindSel(t, 'slots.0.lowNote');
+    const aLow = await t.ev((x) => window.__rig.store.getSong(x).patch.slots[0].lowNote, a);
+    const toasts0 = await t.ev(() => window.__rig.toasts.length);
+    await t.page.focus(low);
+    await t.page.fill(low, 'C');
+    await t.selectSong(b);
+    await t.sleep(150);
+    const bad = await t.ev((k) => window.__rig.toasts.slice(k).filter((x) => /not a key name/.test(x.msg)), toasts0);
+    assert.deepEqual(bad, [], 'no "not a key name" toast on the switch');
+    assert.equal(await t.ev((x) => window.__rig.store.getSong(x).patch.slots[0].lowNote, a), aLow, 'A untouched');
+    // …and a typed bad name + Enter still warns
+    await t.page.fill(low, 'H9');
+    await t.page.press(low, 'Enter');
+    await t.until(() => window.__rig.toasts.some((x) => x.msg === '“H9” is not a key name — try C4 or F#2'));
+
+    // m2: the IME's candidate-confirm Enter (keydown isComposing / keyCode 229) neither blurs nor commits
+    const low0 = await t.ev(() => window.__rig.store.currentSong().patch.slots[0].lowNote);
+    await t.click(low);
+    await t.page.keyboard.press('ControlOrMeta+A');
+    const cdp = await t.context.newCDPSession(t.page);
+    try {
+      await cdp.send('Input.imeSetComposition', { text: 'd3', selectionStart: 2, selectionEnd: 2 });
+      await cdp.send('Input.dispatchKeyEvent', {
+        type: 'rawKeyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 229, nativeVirtualKeyCode: 229,
+      });
+      await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+    } finally {
+      await cdp.detach().catch(() => {});
+    }
+    await t.sleep(100);
+    assert.ok(await t.ev((s) => document.activeElement === document.querySelector(s), low), 'IME Enter kept focus');
+    assert.equal(await t.ev(() => window.__rig.store.currentSong().patch.slots[0].lowNote), low0, 'nothing committed');
+    await t.ev(() => document.activeElement.blur());
+
+    // n3: an 'instruments' event while the menu is open keeps keyboard focus on the same item
+    // the Change button and its menu sit in the panel's title bar, outside t.host
+    const M = '#view-edit .ev2-slot-menu';
+    await t.ev(() => document.querySelector('#view-edit .ev2-slot-chg').focus());
+    await t.page.keyboard.press('Enter');
+    await t.until((m) => !document.querySelector(m).hidden && document.querySelector(m).contains(document.activeElement),
+      M);
+    await t.page.keyboard.press('ArrowDown');
+    await t.page.keyboard.press('ArrowDown');
+    const before = await t.ev(() => document.activeElement.dataset.value || document.activeElement.dataset.action);
+    const oldNode = await t.ev(() => {
+      window.__n3old = document.activeElement;
+      window.__rig.view.editState.dispatchEvent(new CustomEvent('instruments', { detail: { list: [] } }));
+      return !window.__n3old.isConnected;
+    });
+    assert.ok(oldNode, 'the menu was rebuilt (old item gone)');
+    const after = await t.ev((m) => {
+      const x = document.activeElement;
+      return document.querySelector(m).contains(x) ? x.dataset.value || x.dataset.action : null;
+    }, M);
+    assert.equal(after, before, 'focus stays on the same menu item');
+    await t.page.keyboard.press('Escape');
+    await t.until((m) => document.querySelector(m).hidden, M);
+
+    // n1: a slot rebuild (instrument change) leaves no release function behind in the panel ctx
+    const [x1, x2, orig] = await t.ev(() => {
+      const cur = window.__rig.store.currentSong().patch.slots[0].instrument;
+      const l = window.__rig.engine.listInstruments().filter((i) => i.ref.type === 'synth' && i.ref.id !== cur.id);
+      return [l[0].ref, l[1].ref, cur];
+    });
+    const rebuildTo = async (ref) => {
+      const k0 = await t.ev(() => window.__rig.view.instance._debug.bodyKey());
+      await t.ev((r) => window.__rig.store.set('slots.0.instrument', r), ref);
+      await t.until((k) => window.__rig.view.instance._debug.bodyKey() !== k, k0);
+      return t.ev(() => window.__rig.panelCtx._ownCount());
+    };
+    const c1 = await rebuildTo(x1);
+    await rebuildTo(x2);
+    await rebuildTo(x1);
+    const c4 = await rebuildTo(x2);
+    assert.equal(c4, c1, `panel ctx release list stable across rebuilds (${c1} → ${c4})`);
+    await t.ev((r) => window.__rig.store.set('slots.0.instrument', r), orig);
+    t.assertNoConsoleErrors();
+  });
 
 test('slot: Advanced — pan/transpose/voices/bend/pedal, width/EQ by hasParam, instrument settings', async () => {
   const t = await page();

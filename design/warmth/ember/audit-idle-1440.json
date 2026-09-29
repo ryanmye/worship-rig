@@ -1,0 +1,176 @@
+{
+ "label": "idle-1440",
+ "count": 30,
+ "fails": [],
+ "disabledFails": [],
+ "lowest": [
+  {
+   "id": 7,
+   "text": "1",
+   "color": "rgb(172, 155, 141)",
+   "size": 13,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "n",
+   "tag": "span",
+   "rect": {
+    "x": 767,
+    "y": 354.671875,
+    "w": 8,
+    "h": 18
+   },
+   "bg": "rgb(56,41,25)",
+   "cr": 5.22,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 4,
+   "text": "Your browser needs one tap before it can",
+   "color": "rgb(172, 155, 141)",
+   "size": 13,
+   "weight": 400,
+   "op": 1,
+   "disabled": false,
+   "cls": "ew-small",
+   "tag": "div",
+   "rect": {
+    "x": 340,
+    "y": 600.765625,
+    "w": 314,
+    "h": 18
+   },
+   "bg": "rgb(43,22,14)",
+   "cr": 6.4,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 13,
+   "text": "3",
+   "color": "rgb(172, 155, 141)",
+   "size": 13,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "n",
+   "tag": "span",
+   "rect": {
+    "x": 767,
+    "y": 425.859375,
+    "w": 8,
+    "h": 18
+   },
+   "bg": "rgb(31,22,18)",
+   "cr": 6.62,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 16,
+   "text": "4",
+   "color": "rgb(172, 155, 141)",
+   "size": 13,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "n",
+   "tag": "span",
+   "rect": {
+    "x": 767,
+    "y": 461.453125,
+    "w": 8,
+    "h": 18
+   },
+   "bg": "rgb(31,22,19)",
+   "cr": 6.62,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 19,
+   "text": "and 7 more",
+   "color": "rgb(172, 155, 141)",
+   "size": 14,
+   "weight": 600,
+   "op": 1,
+   "disabled": false,
+   "cls": "more",
+   "tag": "span",
+   "rect": {
+    "x": 797,
+    "y": 494.046875,
+    "w": 73,
+    "h": 19
+   },
+   "bg": "rgb(31,22,19)",
+   "cr": 6.62,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 10,
+   "text": "2",
+   "color": "rgb(172, 155, 141)",
+   "size": 13,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "n",
+   "tag": "span",
+   "rect": {
+    "x": 767,
+    "y": 390.265625,
+    "w": 8,
+    "h": 18
+   },
+   "bg": "rgb(30,22,18)",
+   "cr": 6.64,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 9,
+   "text": "C",
+   "color": "rgb(247, 183, 85)",
+   "size": 17,
+   "weight": 400,
+   "op": 1,
+   "disabled": false,
+   "cls": "k",
+   "tag": "span",
+   "rect": {
+    "x": 1058,
+    "y": 349.671875,
+    "w": 13,
+    "h": 24
+   },
+   "bg": "rgb(55,40,25)",
+   "cr": 8.01,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 20,
+   "text": "Last time:",
+   "color": "rgb(201, 187, 172)",
+   "size": 13.5,
+   "weight": 400,
+   "op": 1,
+   "disabled": false,
+   "cls": "ew-last",
+   "tag": "div",
+   "rect": {
+    "x": 759,
+    "y": 543.9375,
+    "w": 62,
+    "h": 19
+   },
+   "bg": "rgb(32,23,19)",
+   "cr": 9.37,
+   "need": 4.5,
+   "pass": true
+  }
+ ]
+}

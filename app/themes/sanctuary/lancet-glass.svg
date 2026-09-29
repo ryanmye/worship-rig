@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 320" preserveAspectRatio="xMidYMid meet">
+  <!-- "Before the service" window, glass layer (static). Two lancets under an oculus (Y-tracery), in the slot
+       lamp colours, deepened. The breathing light and the lead are separate layers (lancet-light.svg, lancet-lead.svg). -->
+  <defs>
+    <clipPath id="o"><path d="M12 320V150A176 176 0 0 1 100 8a176 176 0 0 1 88 142v170z"/></clipPath>
+    <clipPath id="l"><path d="M22 320V150A74 74 0 0 1 59 86a74 74 0 0 1 37 64v170z"/></clipPath>
+    <clipPath id="r"><path d="M104 320V150a74 74 0 0 1 37-64 74 74 0 0 1 37 64v170z"/></clipPath>
+  </defs>
+  <g clip-path="url(#o)"><rect width="200" height="320" fill="#171b46"/></g>
+  <circle cx="100" cy="50" r="22" fill="#edd9a6"/>
+  <path d="M100 28v44M78 50h44" stroke="#c89a4a" stroke-width="2"/>
+  <g clip-path="url(#l)">
+    <path d="M0 0h59v156H0z" fill="#7a55b8"/><path d="M59 0h60v152H59z" fill="#4f86c9"/>
+    <path d="M0 156l59-4v58L0 216z" fill="#4f86c9"/><path d="M59 152l60 4v60l-60-6z" fill="#d9a857"/>
+    <path d="M0 216l59-6v60L0 274z" fill="#c9694a"/><path d="M59 210l60 6v58l-60-4z" fill="#7a55b8"/>
+    <path d="M0 274l59-4v50H0z" fill="#4aa874"/><path d="M59 270l60 4v46H59z" fill="#4f86c9"/>
+  </g>
+  <g clip-path="url(#r)">
+    <path d="M100 0h41v152h-41z" fill="#4aa874"/><path d="M141 0h59v156h-59z" fill="#c9694a"/>
+    <path d="M100 156l41-4v58l-41 6z" fill="#d9a857"/><path d="M141 152l59 4v60l-59-6z" fill="#4aa874"/>
+    <path d="M100 216l41-6v60l-41 4z" fill="#4f86c9"/><path d="M141 210l59 6v58l-59-4z" fill="#d9a857"/>
+    <path d="M100 274l41-4v50h-41z" fill="#7a55b8"/><path d="M141 270l59 4v46h-59z" fill="#c9694a"/>
+  </g>
+</svg>

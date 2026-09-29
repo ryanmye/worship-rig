@@ -140,3 +140,12 @@
   .ev2 .ev2-song-seg .seg { min-width: 44px; min-height: 32px; }
   .ev2 .ev2-song-readout { font-size: 13px; padding: 8px 10px; }
 }
+
+/* onboarding O12: a pencil after the song name says it can be renamed (the input itself looks like a title) */
+.ev2 .ev2-song-pencil {
+  display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none;
+  margin: 0 8px 0 -4px; padding: 0; border: 0; border-radius: 6px; background: transparent;
+  color: var(--faint, #7d8594); cursor: pointer; opacity: .7;
+}
+.ev2 .ev2-song-pencil:hover, .ev2 .ev2-song-name:hover + .ev2-song-pencil { opacity: 1; color: var(--text, #f1f4f8); }
+.ev2 .ev2-song-name:focus + .ev2-song-pencil { visibility: hidden; }

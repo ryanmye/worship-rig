@@ -16,7 +16,7 @@ import { hashSeed } from '../shared/prng.js';
 import { PARAMS, parsePath, clamp as clampParam, defaultSlot, SLOT_COUNT } from '../shared/params.js';
 import { spellingPreference, clampMidi, mod12 } from '../shared/music.js';
 import { chordName } from '../shared/chords.js';
-import { FxGraph, Channel, AudioTimer, Coalescer, rngFor, isOfflineContext, linFrom, glideFrom, measureCompMakeup, measureGlueRef, resolveSlotEq, slotEqResponse } from './fx.js';
+import { FxGraph, Channel, AudioTimer, Coalescer, rngFor, isOfflineContext, linFrom, glideFrom, measureCompMakeup, measureGlueRef, resolveSlotEq, slotEqResponse, FX_IDLE_POLL_SEC } from './fx.js';
 import { InstrumentRegistry } from './instruments.js';
 import { BufferCache } from './sampler.js';
 import { Drone } from './drone.js';
@@ -153,6 +153,8 @@ export function curveVelocity(vel127, curve) {
 
 /** Seconds without a slotLevel() read before a slot's level tap is disconnected (polish-1). */
 export const SLOT_TAP_IDLE_SEC = 2;
+/** idle-cpu #1: a slot instrument with no live voice for this long is disconnected from its strip (realtime only). */
+export const SLOT_IDLE_DISARM_SEC = 2;
 
 export class AudioEngine extends EventTarget {
   /**
@@ -197,6 +199,9 @@ export class AudioEngine extends EventTarget {
     this._plan = null;
     this._instSeq = 0;
     this._monoOut = false;
+    // menubar-A (C7): low-resource mode (setLowResource); survives restart() like the other engine settings
+    this._lowRes = false;
+    this._lowResSavedPins = null; // pin set held when low-resource turned on (restored when it turns off)
   }
 
   _resetState() {
@@ -221,6 +226,8 @@ export class AudioEngine extends EventTarget {
     // polish-1: per-slot level taps (slotLevel), created on the first read, disconnected after SLOT_TAP_IDLE_SEC
     // without one. They belong to the context, so a teardown (restart/dispose) drops them with it.
     this._slotTaps = [null, null, null, null];
+    this._idlePollArmed = false; // idle-cpu #1: _pollIdleSlots scheduled
+    this._fxPollArmed = false; // idle-cpu #2: _pollFx scheduled
   }
 
   // ----- lifecycle -----------------------------------------------------------------------------------------------
@@ -287,7 +294,10 @@ export class AudioEngine extends EventTarget {
       sum: this.fx.sum,
       reverbIn: this.fx.reverb.input,
       warn: (m) => this._warn(m),
+      wake: () => this.fx?.wakeAll(), // idle-cpu #2: a new drone layer / pad file feeds the reverb
     });
+    // idle-cpu #2: send effects sleep while nothing feeds them (realtime only; FxGraph.enableIdleSleep)
+    if (this.fx.enableIdleSleep()) this._pollFx(this.ctx.currentTime);
     if (this._monoOut) this.fx.setMono(true, 0);
     if (this.tempo) this.fx.delay.tempo = this.tempo;
   }
@@ -471,7 +481,7 @@ export class AudioEngine extends EventTarget {
           continue;
         }
         const strip = new Channel(ctx, this.fx, i);
-        inst.output.connect(strip.input);
+        // idle-cpu #1: inst.output → strip.input is connected on the slot's first note (_armSlot), not here
         const sc = this._newSlotChannel(i, ref, inst, strip, s);
         plan.created.push(sc);
         plan.slots.push({ fresh: sc, cfg: s });
@@ -518,7 +528,85 @@ export class AudioEngine extends EventTarget {
       mono: { notes: new Map(), cur: null, pedalHold: false },
       retiring: false,
       zeroSince: null,
+      armed: false, // inst.output connected to the strip (idle-cpu #1, _armSlot / _disarmSlot)
+      idleSince: null, // audio time the armed instrument was first seen with no live voice
     };
+  }
+
+  /**
+   * Connect a slot's instrument to its strip just before a note (reviews/idle-cpu.md #1). An instrument is only
+   * connected while it has live voices (plus SLOT_IDLE_DISARM_SEC): Chromium does not reliably flag an idle
+   * warm-pad's output as silent (voice.js monoBelow's mid/side fan-out behind a bus with no voices; reproduced in
+   * plain Web Audio), so a loaded-but-idle pad kept its strip, EQ, sends, the reverb convolver (+ its background
+   * thread), delay and chorus processing zeros for as long as the song stayed loaded: Sunday Pad + Piano with the
+   * drone off went 31 → 14 % of a core on the 2-CPU box, 35 % on the Mac (reviews/idle-cpu-mac.md (b)). A
+   * disconnected instrument is not pulled at all, so an idle slot also costs nothing inside the instrument. The
+   * connection takes effect on the next render quantum, before the note's start time.
+   * @param {object} sc slot channel
+   */
+  _armSlot(sc) {
+    sc.idleSince = null;
+    this.fx?.wakeAll(); // idle-cpu #2: before the note, so no reverb / echo onset is lost
+    if (!sc.armed) {
+      sc.armed = true;
+      try {
+        sc.inst.output.connect(sc.strip.input);
+      } catch (e) {
+        this._warn(`${sc.ref.id} could not be connected: ${e.message || e}`);
+      }
+    }
+    if (!this.offline && this.timer) this._pollIdleSlots(this.ctx.currentTime); // offline renders stay as they were
+  }
+
+  /** Disconnect an armed slot instrument from its strip (it has had no live voice for SLOT_IDLE_DISARM_SEC). */
+  _disarmSlot(sc) {
+    if (!sc.armed) return;
+    sc.armed = false;
+    sc.idleSince = null;
+    try {
+      sc.inst.output.disconnect(sc.strip.input);
+    } catch {}
+  }
+
+  /** While any slot is armed: every 0.5 s (audio clock), disarm the ones idle for SLOT_IDLE_DISARM_SEC. */
+  _pollIdleSlots(t) {
+    if (this._idlePollArmed) return;
+    this._idlePollArmed = true;
+    this.timer.at(t + 0.5, (tt) => {
+      this._idlePollArmed = false;
+      let more = false;
+      for (const sc of this.slots) {
+        if (!sc || !sc.armed) continue;
+        // an instrument without liveVoiceCount is never disarmed (no way to know it is quiet)
+        const live = typeof sc.inst.liveVoiceCount === 'function' ? sc.inst.liveVoiceCount() : 1;
+        if (live > 0 || sc.mono.cur) {
+          sc.idleSince = null;
+          more = true;
+          continue;
+        }
+        if (sc.idleSince === null) sc.idleSince = tt;
+        if (tt - sc.idleSince >= SLOT_IDLE_DISARM_SEC) this._disarmSlot(sc);
+        else more = true;
+      }
+      if (more) this._pollIdleSlots(tt);
+    });
+  }
+
+  /**
+   * idle-cpu #2: every FX_IDLE_POLL_SEC (audio clock, realtime only, for the engine's life) let the FX graph put
+   * its send effects to sleep or wake them (FxGraph.idleTick). A connected slot instrument (armed, including a
+   * retiring one) keeps them all awake. One timer node per poll; the three analyser reads are ~50 µs.
+   */
+  _pollFx(t) {
+    if (this._fxPollArmed || !this.timer) return;
+    this._fxPollArmed = true;
+    this.timer.at(t + FX_IDLE_POLL_SEC, (tt) => {
+      this._fxPollArmed = false;
+      if (!this.fx?._sleep) return;
+      const busy = [...this.slots, ...this.retiring].some((sc) => sc && sc.armed);
+      this.fx.idleTick(busy);
+      this._pollFx(tt);
+    });
   }
 
   /** Gapless swap (§0.3). Returns false for a stale/superseded/already-committed token. Cheap: gains only. */
@@ -569,6 +657,7 @@ export class AudioEngine extends EventTarget {
     if (oldBend !== this._routing.bend.mode) this._neutralBend(oldBend, t);
     this._applyWheels(t, 0.03);
     this.drone.songChanged({ when: t });
+    if (this._lowRes) this._pinCurrentOnly(); // menubar-A: the pins follow the song that is playing
     this._emit('stats', this._debugStats());
     return true;
   }
@@ -583,9 +672,11 @@ export class AudioEngine extends EventTarget {
     await this.start();
     if (pin === 'auto') pin = patchStates.length > 2 ? 'replace' : 'add';
     const { urls, jobs, patches } = this._sampleJobs(patchStates);
-    for (const p of patches) this.fx.reverb.warm(p.fx.reverb.size, p.fx.reverb.damp); // off-thread IR, idle-time buffer
+    // off-thread IR, idle-time buffer; menubar-A: never in low-resource mode (only the reverb in use is built)
+    if (!this._lowRes) for (const p of patches) this.fx.reverb.warm(p.fx.reverb.size, p.fx.reverb.damp);
     const doPin = () => {
-      if (pin === 'replace') this.cache.setPins(urls);
+      if (this._lowRes) this._pinCurrentOnly(); // menubar-A: pin policy 'current-only'
+      else if (pin === 'replace') this.cache.setPins(urls);
       else if (pin !== 'none') this.cache.pin(urls);
     };
     doPin();
@@ -963,6 +1054,7 @@ export class AudioEngine extends EventTarget {
   slotLevel(slotIndex) {
     const i = Number(slotIndex);
     if (!Number.isInteger(i) || i < 0 || i >= SLOT_COUNT || !this.ctx || !this.fx || !this.timer) return null;
+    if (this._lowRes) return { peak: 0, rms: 0 }; // menubar-A: taps paused (no analyser on the audio thread)
     const sc = this.slots[i];
     let tap = this._slotTaps[i];
     if (!sc && !tap) return { peak: 0, rms: 0 };
@@ -1014,6 +1106,90 @@ export class AudioEngine extends EventTarget {
       tap.strips.clear();
       this._slotTaps[i] = null; // the next read makes a fresh one
     });
+  }
+
+  // ----- low-resource mode (menu-bar mode; docs/menubar-mode.md, C7 menubar-A) --------------------------------------
+  /**
+   * Low-resource mode, for running hidden in the menu bar. On: the decoded-sample pins become the current song's
+   * samples only (pin policy 'current-only'; the pins held before are remembered), preload() stops warming reverb
+   * units in idle time and idle units are dropped (only the reverb in use stays built), and slotLevel() taps are
+   * disconnected and stay paused (reads return zeros). Off: the remembered pins come back (plus the current
+   * song's), and warming and taps work again. Audio quality, the drone and playing are unchanged. Idempotent.
+   * @param {boolean} on
+   * @returns {boolean} the new state
+   */
+  setLowResource(on) {
+    const v = !!on;
+    if (v === this._lowRes) return v;
+    this._lowRes = v;
+    if (v) {
+      this._lowResSavedPins = [...this.cache.pinned];
+      this._pinCurrentOnly();
+      this._releaseSlotTaps();
+      this._trimReverbUnits();
+    } else {
+      const cur = this._currentSampleUrls();
+      this.cache.setPins([...(this._lowResSavedPins || []), ...cur]);
+      this._lowResSavedPins = null;
+    }
+    this._emit('stats', this._debugStats());
+    return v;
+  }
+
+  /** True while low-resource mode is on (setLowResource). */
+  get lowResource() {
+    return this._lowRes;
+  }
+
+  /** Sample URLs of the song that is playing (the committed patch's sampler slots). */
+  _currentSampleUrls() {
+    try {
+      return this._sampleJobs([this._patch]).urls;
+    } catch {
+      return [];
+    }
+  }
+
+  _pinCurrentOnly() {
+    this.cache.setPins(this._currentSampleUrls());
+  }
+
+  /** Disconnect every slotLevel tap now (the idle release, without waiting SLOT_TAP_IDLE_SEC). */
+  _releaseSlotTaps() {
+    for (let i = 0; i < this._slotTaps.length; i++) {
+      const tap = this._slotTaps[i];
+      if (!tap) continue;
+      if (typeof tap.cancel === 'function') tap.cancel();
+      tap.cancel = null;
+      for (const st of tap.strips) {
+        try {
+          st.pan.disconnect(tap.an);
+        } catch {}
+      }
+      tap.strips.clear();
+      this._slotTaps[i] = null;
+    }
+  }
+
+  /**
+   * Drop the reverb units nothing uses (not active, not fading, not staged for a commit) and the cached IRs no
+   * remaining unit uses. Same rules as the pool's own LRU eviction (fx.js Reverb._evict), applied down to zero.
+   */
+  _trimReverbUnits() {
+    const R = this.fx && this.fx.reverb;
+    if (!R || !R.units) return;
+    for (const u of [...R.units.values()]) {
+      if (u === R.active || u.state !== 'idle' || u.connected || R._keep.has(u.key)) continue;
+      R.units.delete(u.key);
+      for (const n of [...u.pd, ...u.pg, u.conv, u.out]) {
+        try {
+          n.disconnect();
+        } catch {}
+      }
+    }
+    for (const key of [...this._irCache.keys()]) {
+      if (!R.units.has(key) && !R._inflight.has(key)) this._irCache.delete(key);
+    }
   }
 
   setTranspose(semis) {
@@ -1352,6 +1528,7 @@ export class AudioEngine extends EventTarget {
         return;
       }
       const v01 = curveVelocity(vel, c.velocityCurve);
+      this._armSlot(sc);
       if (c.mono && c.mono !== 'off') {
         try {
           this._monoOn(sc, n, sn, v01, t);
@@ -1447,6 +1624,7 @@ export class AudioEngine extends EventTarget {
       return;
     }
     if (cur && cur.voice) this._fadeVoice(sc.inst, cur.voice, t, 0.03); // legato retrigger: 30 ms crossfade
+    this._armSlot(sc);
     const voice = sc.inst.noteOn(target.sn, target.v, t);
     m.cur = { phys: target.phys, sn: target.sn, voice };
   }
@@ -1621,6 +1799,11 @@ export class AudioEngine extends EventTarget {
       sounding: this.sounding.size,
       pedaled: this.pedaled.size,
       timers: this.timer ? this.timer.pendingCount() : 0,
+      // menubar-A (C7): low-resource mode is observable (docs/menubar-mode.md)
+      lowResource: this._lowRes,
+      slotLevelTaps: this.slotTapCount(),
+      reverbUnits: this.fx && this.fx.reverb && this.fx.reverb.units ? this.fx.reverb.units.size : 0,
+      fxAsleep: this.fx ? this.fx.fxAsleep : [], // idle-cpu #2: send effects asleep now
     };
   }
 }

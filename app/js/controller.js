@@ -32,9 +32,15 @@
 // l8 (local soak L-8): the ±radius window is a byte budget too. Current song first, then neighbours by distance while
 // the pinned total stays ≤ PIN_BUDGET_MB; one {pin:'replace'} per switch; a warn if pinnedMB ever passes capMB.
 import { transposeSemisOf } from './store.js';
-import { transposeSemis, mod12 } from './shared/music.js';
+import { transposeSemis, mod12, keyName } from './shared/music.js';
 import { PARAMS, isValidPath, isLearnButton, faderTaper, inverseTaper, SLOT_COUNT } from './shared/params.js';
 import { detectKeyFromName } from './shared/keydetect.js';
+import { createBus, commandError } from './shared/bus.js';
+
+/** Menu-bar modes (docs/menubar-mode.md): the popover shows at most this many. */
+export const MENU_BAR_MAX_MODES = 6;
+/** Menu-bar modes when no menu-bar setlist is chosen: the first songs of the current setlist. */
+export const MENU_BAR_FALLBACK_MODES = 3;
 
 /** Settings.latency → engine latency option (REVIEW 4.8). */
 export const LATENCY_MAP = Object.freeze({ lowest: 'interactive', balanced: 0.01, safe: 0.025 });
@@ -102,6 +108,10 @@ const WARM_SHARE_OF_CAP = 0.8;
 export const LARGE_SET_NOTE = 'Large set: loading songs as you go';
 /** status.memory.note when the current song alone passes PIN_BUDGET_MB (L-8): it is pinned alone. */
 export const songAloneNote = (mb) => `This song alone is ${Math.round(mb)} MB`;
+/** A learned CC button held at ≥ 64 fires again after this long (press-only footswitches; round4-controller C9). */
+const CC_RETRIGGER_MS = 150;
+/** 'memory' event note when pinned samples pass the cache cap (round4-controller C5: plain copy, never toasted). */
+export const OVER_CAP_NOTE = 'This set is using a lot of memory; songs load as you go.';
 const routingOf = (song) => {
   const p = song.patch;
   return { modWheel: p.modWheel, expression: p.expression, volume: p.volume, bend: p.bend, swell: p.swell };
@@ -259,6 +269,8 @@ export function createController(o) {
     // morning-prep: 'library' | 'setlist' | 'large-set' (null before the first preload); MB values from
     // engine._debugStats() (null when the engine has none); setMB = decoded size of the whole setlist (estimate)
     memory: { mode: null, decodedMB: null, pinnedMB: null, capMB: null, setMB: null, note: null },
+    lowResource: false, // menubar-A: effective low-resource mode (settings.lowResource, or auto while hidden)
+    windowVisible: true, // menubar-A: main window shown (setWindowVisible() override, else document visibility)
   };
   function setStatus(patch) {
     let changed = false;
@@ -279,12 +291,12 @@ export function createController(o) {
   let lastDroneKey = null;
   let appliedIndex = -1; // nav position of the applied song at commit (M4)
 
-  function applySongLevel(song, prev, force) {
+  function applySongLevel(song, prev, force, { drone = true } = {}) {
     const semis = transposeSemisOf(song);
     if (force || !prev || semis !== transposeSemisOf(prev)) call('setTranspose', semis);
     const r = routingOf(song);
     if (force || !prev || !same(r, routingOf(prev))) call('setRouting', r);
-    applyDrone(song, prev, force);
+    if (drone) applyDrone(song, prev, force);
     if (force || !prev || song.tempo !== prev.tempo) call('setTempo', song.tempo ?? null);
   }
 
@@ -443,6 +455,7 @@ export function createController(o) {
     const my = ++seq;
     targetId = id;
     repreparing = null;
+    winSeq++; // round4-controller C3: an older window (e.g. its phase-2 re-plan) must not re-plan while this one loads
     store.selectSongId(id, opts.index);
     setStatus({ loading: true, songId: id });
     emit('song-loading', { id });
@@ -516,6 +529,7 @@ export function createController(o) {
 
   // ---- decoded-sample memory policy (morning-prep; integration-2 round 2 #3)
   let memMode = null; // 'library' | 'setlist' | 'large-set'
+  let probing = false; // round4-controller C2: a setlist being sized (memMode 'large-set', reported as 'setlist')
   let memSetMB = null;
   const hasPreload = () => !secondary && !!engine && typeof engine.preload === 'function';
   const patchesOf = (ids) => ids.map((id) => store.getSong(id)).filter(Boolean).map((s) => s.patch);
@@ -583,13 +597,16 @@ export function createController(o) {
     const capMB = num(d && d.capMB);
     const over = pinnedMB !== null && capMB !== null && pinnedMB > capMB;
     if (over && !overCap) {
-      warn(`pinned samples ${pinnedMB.toFixed(1)} MB exceed the ${capMB} MB cache cap (${memMode}` +
-        `${plan ? `, ${plan.ids.length} songs pinned` : ''}${alone ? `; ${alone}` : ''}; L-8)`);
+      // round4-controller C5: diagnostics, not a stage toast ('warn' is toasted verbatim by main.js). The console
+      // line keeps the L-8 text; the 'memory' event carries the numbers and plain copy for any UI that wants it.
+      console.warn(`[controller] pinned samples ${pinnedMB.toFixed(1)} MB exceed the ${capMB} MB cache cap ` +
+        `(${memMode}${plan ? `, ${plan.ids.length} songs pinned` : ''}${alone ? `; ${alone}` : ''}; L-8)`);
+      emit('memory', { mode: memMode, overCap: true, pinnedMB, capMB, note: OVER_CAP_NOTE });
     }
     overCap = over;
     setStatus({
       memory: {
-        mode: memMode,
+        mode: probing && memMode === 'large-set' ? 'setlist' : memMode,
         decodedMB: num(d && d.decodedMB),
         pinnedMB,
         capMB,
@@ -597,7 +614,7 @@ export function createController(o) {
         setMB: round(memSetMB),
         windowMB: plan ? round(plan.mb) : null,
         pinnedSongs: plan ? plan.ids.length : null,
-        note: alone || (memMode === 'large-set' ? LARGE_SET_NOTE : null),
+        note: alone || (memMode === 'large-set' && !probing ? LARGE_SET_NOTE : null),
       },
     });
   }
@@ -638,6 +655,11 @@ export function createController(o) {
       if (!e) return null;
       out.push(cur);
       mb = e.mb;
+      // round4-controller C3: a current song still loading (a plan made during a switch, or a preloadSetlist() from
+      // a nav edit) is priced at its guess too: pin it alone, and treat every neighbour as guessed
+      if (onlyExact && e.exact === false) {
+        return { ids: out, mb, oversizeMB: null, guessed: cand.filter((id) => id !== cur) };
+      }
       if (e.mb > PIN_BUDGET_MB) return { ids: out, mb, oversizeMB: e.mb, guessed };
     }
     for (const id of cand) {
@@ -683,7 +705,8 @@ export function createController(o) {
       if (!plan.guessed.length || my !== winSeq) return;
       await engineCall('preload', patchesOf(plan.guessed), { pin: 'none' });
       if (my !== winSeq) return;
-      plan = await planWindow(radius);
+      // round4-controller C3: exact sizes only here too; a neighbour whose decode didn't stick stays out
+      plan = await planWindow(radius, { onlyExact: true });
       if (!plan || my !== winSeq) return;
       pinPlan = plan;
       await pinSongs(plan.ids, 'replace');
@@ -705,7 +728,9 @@ export function createController(o) {
   /** After a song switch: keep the pinned window around the new song (policy depends on the nav mode). */
   function preloadNeighbors() {
     if (!hasPreload()) return;
+    if (lowResEff) return void pinCurrentOnly().then(updateMemory); // menubar-A: no neighbour preload
     if (!inSetlist()) return void pinWindow(LIBRARY_PIN_RADIUS).then(updateMemory);
+    // (a setlist still being sized, round4-controller C2, keeps the large-set window meanwhile: memMode is 'large-set')
     if (memMode === 'large-set') return void pinWindow(LARGE_SET_PIN_RADIUS).then(updateMemory);
     // a setlist that fits is pinned whole already: the neighbours join it (engine-core #10), never replace it
     const n = store.neighbors();
@@ -724,10 +749,14 @@ export function createController(o) {
    */
   async function preloadSetlist() {
     const my = ++preloadSeq;
+    const wasLarge = memMode === 'large-set' && !probing; // the large-set 'memory' event already fired
+    probing = false;
     setStatus({ ready: false });
     try {
       if (!hasPreload()) {
         /* nothing to warm */
+      } else if (lowResEff) {
+        await pinCurrentOnly(); // menubar-A: low-resource pin policy
       } else if (!inSetlist()) {
         memMode = 'library';
         memSetMB = null;
@@ -738,9 +767,11 @@ export function createController(o) {
         if (my !== preloadSeq) return;
         memSetMB = est ? est.mb : null;
         if (est && est.mb > PIN_BUDGET_MB) await preloadLargeSet(my, ids);
+        else if (est && est.exact === false) await probeSetlist(my, ids, wasLarge);
         else {
           memMode = 'setlist';
           pinPlan = null;
+          winSeq++; // a window still being planned must not replace the whole-set pin
           updateMemory();
           await pinSongs(ids, 'replace'); // the setlist IS the pinned set
           // the first estimate guesses samples never decoded before; now every size is known
@@ -758,13 +789,47 @@ export function createController(o) {
     }
   }
 
-  async function preloadLargeSet(my, ids) {
-    const first = memMode !== 'large-set';
+  /**
+   * round4-controller C2: a setlist whose estimate fits the budget but is partly a guess (samples never decoded,
+   * priced by BufferCache.estimateBytes) is not pinned whole on that guess. It gets the large-set treatment first
+   * (an exact-only window, the rest warmed unpinned while the running estimate stays ≤ PIN_BUDGET_MB, so nothing
+   * warmed is evicted), and is pinned whole only when the estimate is then exact and fits. status.memory reports
+   * 'setlist' with no note meanwhile; the large-set 'memory' event fires only if it doesn't fit.
+   */
+  async function probeSetlist(my, ids, wasLarge) {
+    memMode = 'large-set';
+    probing = true;
+    updateMemory();
+    await pinWindow(LARGE_SET_PIN_RADIUS);
+    if (my !== preloadSeq) return;
+    await warmRest(my, ids, PIN_BUDGET_MB);
+    if (my !== preloadSeq) return;
+    const exact = await estimateMB(ids);
+    if (my !== preloadSeq) return;
+    probing = false;
+    if (exact) memSetMB = exact.mb;
+    if (exact && exact.exact !== false && exact.mb <= PIN_BUDGET_MB) {
+      memMode = 'setlist';
+      pinPlan = null;
+      winSeq++; // a window still being planned (a switch during the probe) must not replace the whole-set pin
+      updateMemory();
+      await pinSongs(ids, 'replace'); // the setlist IS the pinned set
+    } else await preloadLargeSet(my, ids, !wasLarge);
+  }
+
+  async function preloadLargeSet(my, ids, announce = memMode !== 'large-set') {
     memMode = 'large-set';
     updateMemory();
-    if (first) emit('memory', { mode: memMode, note: LARGE_SET_NOTE, setMB: memSetMB });
+    if (announce) emit('memory', { mode: memMode, note: LARGE_SET_NOTE, setMB: memSetMB });
     await pinWindow(LARGE_SET_PIN_RADIUS);
-    // warm the rest unpinned, nearest first; stop before the LRU would start evicting what was just warmed
+    await warmRest(my, ids);
+  }
+
+  /**
+   * Warm the set's songs outside the pinned window unpinned, nearest first, while the running estimate stays
+   * ≤ `limitMB` (default: WARM_SHARE_OF_CAP of the cache cap, so the LRU doesn't evict what was just warmed).
+   */
+  async function warmRest(my, ids, limitMB = null) {
     // the songs actually pinned (L-8: a byte-budget window may leave heavy neighbours out; they warm unpinned)
     const win = pinPlan ? [...pinPlan.ids] : windowCandidates(LARGE_SET_PIN_RADIUS).ids;
     const pos = Math.max(0, store.currentIndex());
@@ -778,7 +843,9 @@ export function createController(o) {
     for (const id of rest) {
       if (my !== preloadSeq) return;
       const est = await estimateMB([...warmed, id]);
-      if (!est || !Number.isFinite(est.capMB) || est.mb > est.capMB * WARM_SHARE_OF_CAP) break;
+      if (!est || !Number.isFinite(est.capMB)) break;
+      const limit = limitMB !== null ? Math.min(limitMB, est.capMB) : est.capMB * WARM_SHARE_OF_CAP;
+      if (est.mb > limit) break;
       await engineCall('preload', patchesOf([id]), { pin: 'none' });
       warmed.push(id);
     }
@@ -879,6 +946,21 @@ export function createController(o) {
     else if (id === 'fadeOutAll') fadeOutAll();
   }
 
+  /**
+   * round4-controller C9: a learned CC button. A press-only ("trigger") footswitch sends 127 on every press and
+   * never 0, so a value ≥ 64 while already pressed counts as a new press once CC_RETRIGGER_MS has passed since the
+   * last one (contact bounce and a held momentary switch stay one press). < 64 is a release. Swell stays level-based.
+   * A toggle-mode switch (127 / 0 on alternate presses) still acts on every other press: set it to momentary.
+   */
+  const ccFired = new Map(); // controlId → now() of the last press
+  function ccButton(id, pressed) {
+    if (pressed && id !== 'swell' && buttonState.get(id) && now() - (ccFired.get(id) ?? -Infinity) >= CC_RETRIGGER_MS) {
+      buttonState.set(id, false);
+    }
+    if (pressed && !buttonState.get(id)) ccFired.set(id, now());
+    triggerButton(id, pressed);
+  }
+
   /** Hardware fader with pickup: ignored until it crosses the stored value (REVIEW 2.1). */
   function learnedFader(id, value01) {
     if (!isValidPath(id)) return;
@@ -914,7 +996,7 @@ export function createController(o) {
       const d = e.detail;
       const learned = learnedFor('cc', d.cc, d.channel);
       if (learned) {
-        if (isButtonControl(learned)) triggerButton(learned, d.value >= 64);
+        if (isButtonControl(learned)) ccButton(learned, d.value >= 64);
         else learnedFader(learned, d.value01);
         return;
       }
@@ -1184,6 +1266,7 @@ export function createController(o) {
     pedalDown = false;
     setStatus({ pedal: false });
     buttonState.clear();
+    swellActive = false; // round4-controller C8: engine.allNotesOff() drops the swell, so the next toggle starts one
     emit('action', { type: 'panic' });
   }
   function fadeOutAll(seconds = 6) {
@@ -1343,22 +1426,35 @@ export function createController(o) {
       else if (wheelState.mod !== null) call('modWheel', wheelState.mod);
     }
     if (settings().monoOutput) call('setMono', true);
-    restorePads();
+    const droneReapplied = restorePads();
+    // round4-controller C1: engine.restart() re-applies the song level it captured (transpose, routing, tempo, key,
+    // drone) even when its own commit was refused because a song switch committed meanwhile, so it can write the
+    // old song's values over the new one. Re-send the applied song's level (the drone only if restorePads didn't);
+    // a switch still loading applies its own on commit.
+    if (applied) {
+      if (!droneReapplied) lastDroneKey = null;
+      applySongLevel(applied, null, true, { drone: !droneReapplied });
+    }
     setAudio(engine && engine.ctx && engine.ctx.state === 'running' ? 'running' : 'suspended');
   }
 
-  /** Re-attach pad files after a restart, and re-apply a files-mode drone that fell back to the synth. */
+  /**
+   * Re-attach pad files after a restart, and re-apply a files-mode drone that fell back to the synth.
+   * @returns {boolean} true when it re-applied the applied song's drone (key + configure)
+   */
   function restorePads() {
-    if (!padList.length) return;
+    if (!padList.length) return false;
     const d = engine && engine.drone;
     const kept = d && d.files instanceof Map && d.files.size > 0;
-    if (kept) return;
+    if (kept) return false;
     droneCall('attachFiles', padList);
     if (applied && applied.drone && applied.drone.mode === 'files') {
       lastDroneKey = null;
       droneCall('configure', { ...applied.drone, mode: 'off' });
       applyDrone(applied, null, true);
+      return true;
     }
+    return false;
   }
 
   /** New AudioContext + graph (engine re-applies its state). A running take is split into a new file. */
@@ -1816,9 +1912,27 @@ export function createController(o) {
     warn(SECONDARY_MESSAGE);
     // take over when the other window goes away
     requestInstanceLock(true).then((granted) => {
-      if (!granted || !started) return;
+      if (!granted) return;
+      if (!started) {
+        // round4-controller C13: disposed while waiting; hold nothing, or no other window could ever take over
+        if (releaseLock) releaseLock();
+        releaseLock = null;
+        return;
+      }
       secondary = false;
+      // round4-controller C7: songs tapped while muted recorded what the (never started) engine "has"; forget it so
+      // the first selectSong sends the key, drone and song level to the fresh engine
+      applied = null;
+      appliedId = null;
+      targetId = null;
+      lastDroneKey = null;
       if (typeof store.reload === 'function') store.reload(); // pick up what the other window saved
+      // round4-controller C6: deliver the reload diff now, before startPrimary() subscribes onStore. Otherwise it
+      // arrives while engine.start() is pending ('latency' → engine.restart() on a context still initialising, and
+      // a second selectSong). startPrimary applies the current settings itself; the latency the engine was built
+      // with is only read when it starts, so set it here (the engine has never started in this window).
+      if (typeof store.flush === 'function') store.flush();
+      if (engine && typeof engine.latency !== 'undefined') engine.latency = engineLatency(settings());
       if (typeof store.setReadOnly === 'function') store.setReadOnly(false);
       setStatus({ instance: 'primary', instanceMessage: null });
       emit('instance', { instance: 'primary', message: null });
@@ -1905,6 +2019,7 @@ export function createController(o) {
     startMidi();
     if (rig && typeof rig.listPads === 'function') await reloadPads().catch((err) => warn(`pad folder: ${err && err.message}`));
     else await restoreChromePads().catch(() => null);
+    startMenubar(); // menubar-A: bus + low-resource state before the first song and preload
     const cur = store.currentSong();
     if (cur) await selectSong(cur.id, { index: s.setlistIndex });
     preloadSetlist();
@@ -2008,6 +2123,290 @@ export function createController(o) {
     return mapping;
   }
 
+  // ---- menu-bar mode (docs/menubar-mode.md, contract v1; C7 menubar-A)
+  // The main renderer publishes a small `state` on the bus (shared/bus.js: Electron relay or BroadcastChannel) and
+  // runs the popover's / Tray's `command`s. Modes are songs: the menu-bar setlist, else the first songs of the
+  // current setlist. Low-resource mode = settings.lowResource, or automatically while hidden in menu-bar mode.
+  let bus = null;
+  let ownBus = false; // created here (closed on dispose), not passed in via o.bus
+  let menubarStarted = false;
+  let lowResEff = false; // effective low-resource state the engine and memory policy follow
+  let windowVisibleOverride = null; // setWindowVisible(): wins over document visibility; null = follow the document
+  let lastDroneOnMode = null; // droneToggle: the drone mode before the bus turned it off
+  let lastPublished = null; // JSON of the last published state (unchanged states are not re-sent)
+
+  function defaultBus() {
+    const g = globalThis;
+    if (!doc || doc !== g.document) return null; // tests / headless controllers: no bus unless o.bus is given
+    const rigBus = !!(rig && (typeof rig.busPublish === 'function' || typeof rig.onBusCommand === 'function'));
+    if (!rigBus && typeof g.BroadcastChannel !== 'function') return null;
+    return createBus({ role: 'main', rig });
+  }
+
+  const docHidden = () => !!(doc && doc.visibilityState === 'hidden');
+  const isWindowVisible = () => (windowVisibleOverride !== null ? windowVisibleOverride : !docHidden());
+  /** settings.lowResource, or automatic while the main window is hidden in menu-bar mode. */
+  function lowResourceWanted() {
+    const s = settings();
+    return !!s.lowResource || (!!s.menuBarMode && !isWindowVisible());
+  }
+
+  /** Low-resource pin policy: the current song only (engine preload {pin:'replace'}), no neighbours, no warming. */
+  async function pinCurrentOnly() {
+    memMode = 'current-only';
+    memSetMB = null;
+    pinPlan = null;
+    const cur = store.get().settings.currentSongId;
+    if (!hasPreload() || !cur || !store.getSong(cur)) return;
+    try {
+      await pinSongs([cur], 'replace');
+    } catch (err) {
+      warn(`preload failed: ${err && err.message}`);
+    }
+  }
+
+  /**
+   * Bring the engine and the memory policy in line with lowResourceWanted(). Turning on pins the current song only;
+   * turning off preloads the nav list again (its songs are still decoded unless the LRU needed the room).
+   * @returns {boolean} effective state
+   */
+  function applyLowResource({ preload = true } = {}) {
+    const want = lowResourceWanted();
+    setStatus({ windowVisible: isWindowVisible() });
+    if (want === lowResEff) return want;
+    lowResEff = want;
+    optional('setLowResource', want);
+    setStatus({ lowResource: want });
+    emit('lowResource', { on: want, auto: want && !settings().lowResource });
+    if (preload && started && !secondary) preloadSetlist();
+    return want;
+  }
+
+  /**
+   * Low-resource mode on/off by choice (persists settings.lowResource). While menu-bar mode hides the window it
+   * stays on regardless (see lowResourceWanted).
+   * @param {boolean} on
+   * @returns {boolean} the effective state
+   */
+  function setLowResource(on) {
+    store.set('settings.lowResource', !!on);
+    return applyLowResource();
+  }
+
+  /**
+   * Tell the controller whether the main window counts as visible (Electron main / main.js: the popover is open,
+   * the window was hidden to the menu bar, …). null = follow document.visibilityState again.
+   * @param {boolean|null} v
+   * @returns {boolean} effective low-resource state
+   */
+  function setWindowVisible(v) {
+    windowVisibleOverride = v === null || v === undefined ? null : !!v;
+    const r = applyLowResource();
+    publishState();
+    return r;
+  }
+
+  // ---- modes
+  const modeOf = (song, index) => ({ id: song.id, name: song.name, key: keyName(song.hearIn, song.minor), index });
+  /** Song ids of the menu-bar set: settings.menuBarSetlistId (≤ 6), else the first 3 of the current nav list. */
+  function modeIds() {
+    const st = store.get();
+    const sl = st.settings.menuBarSetlistId ? st.setlists[st.settings.menuBarSetlistId] : null;
+    const uniq = (ids) => [...new Set(ids)].filter((id) => store.getSong(id));
+    const chosen = sl ? uniq(sl.songIds) : [];
+    if (chosen.length) return chosen.slice(0, MENU_BAR_MAX_MODES);
+    return uniq(store.navIds()).slice(0, MENU_BAR_FALLBACK_MODES);
+  }
+  const listModes = () => modeIds().map((id, i) => modeOf(store.getSong(id), i));
+  function currentMode() {
+    const cur = store.get().settings.currentSongId;
+    return listModes().find((m) => m.id === cur) || null;
+  }
+  function selectMode(id) {
+    if (typeof id !== 'string' || !store.getSong(id)) return Promise.resolve(false);
+    if (id === store.get().settings.currentSongId && appliedId === id) return Promise.resolve(false); // already on
+    return selectSong(id);
+  }
+  function stepMode(d) {
+    const list = listModes();
+    if (!list.length) return Promise.resolve(false);
+    const cur = currentMode();
+    const i = cur ? (cur.index + d + list.length) % list.length : d > 0 ? 0 : list.length - 1;
+    return selectMode(list[i].id);
+  }
+  const modes = Object.freeze({
+    /** @returns {{id:string, name:string, key:string, index:number}[]} the menu-bar modes */
+    list: listModes,
+    /** @returns {{id:string, name:string, key:string, index:number}|null} the current song's mode (null: not a mode) */
+    current: currentMode,
+    /** @param {string} id @returns {Promise<boolean>} true when the song switched */
+    select: selectMode,
+    /** Next mode, wrapping (from a song outside the set: the first). @returns {Promise<boolean>} */
+    next: () => stepMode(1),
+    /** Previous mode, wrapping (from a song outside the set: the last). @returns {Promise<boolean>} */
+    prev: () => stepMode(-1),
+  });
+
+  // ---- state
+  function memoryMB() {
+    const pm = globalThis.performance && globalThis.performance.memory; // Chromium only
+    const heap = pm && pm.usedJSHeapSize;
+    const dec = status.memory && status.memory.decodedMB;
+    if (!Number.isFinite(heap) && !Number.isFinite(dec)) return null;
+    return Math.round((Number.isFinite(heap) ? heap / 1048576 : 0) + (Number.isFinite(dec) ? dec : 0));
+  }
+  /**
+   * The contract's `state` message for the current moment (published by publishState; handy for tests and views).
+   * @returns {object}
+   */
+  function menuBarState() {
+    const song = store.currentSong();
+    const mv = song ? Number(songParam(song, 'master.volume')) : 0;
+    const master = Number.isFinite(mv) ? Math.min(2, Math.max(0, mv)) : 0;
+    const key = song ? keyName(song.hearIn, song.minor) : '';
+    const lat = Number(status.latencyMs);
+    return {
+      v: 1,
+      current: song ? { id: song.id, name: song.name, key } : null,
+      modes: listModes(),
+      master,
+      masterDb: master > 0 ? Math.round(20 * Math.log10(master) * 10) / 10 : null,
+      droneOn: !!(song && song.drone && song.drone.mode !== 'off'),
+      droneKey: key,
+      audio: ['running', 'stalled', 'suspended'].includes(status.audio) ? status.audio : 'stalled', // restarting
+      latencyMs: Number.isFinite(lat) ? Math.round(lat * 10) / 10 : 0,
+      midi: { connected: !!(status.midi && status.midi.connected), name: (status.midi && status.midi.name) || null },
+      lowResource: lowResEff,
+      recording: !!status.recording,
+      windowVisible: isWindowVisible(),
+      memoryMB: memoryMB(),
+    };
+  }
+  /**
+   * Publish the state on the bus (throttled there to ≤ 4/s; an unchanged state is skipped unless `force`).
+   * @param {{force?:boolean, immediate?:boolean}} [opts] immediate: send a throttled state now
+   * @returns {object} the state
+   */
+  function publishState(opts = {}) {
+    const st = menuBarState();
+    if (!bus || secondary) return st;
+    const json = JSON.stringify(st);
+    if (!opts.force && json === lastPublished) return st;
+    lastPublished = json;
+    bus.publish(st);
+    if (opts.immediate) bus.flush();
+    return st;
+  }
+
+  // ---- commands
+  /**
+   * Run one contract command (from the bus, or directly). Invalid commands are ignored with a console.warn.
+   * 'openMain' only emits an 'openMain' event here (Electron main shows the window).
+   * @param {object} cmd
+   * @returns {boolean} true when the command was valid and handled
+   */
+  function handleCommand(cmd) {
+    const err = commandError(cmd);
+    if (err) {
+      console.warn(`[controller] ignored a bus command (${err})`);
+      return false;
+    }
+    if (secondary) return false;
+    const song = store.currentSong();
+    switch (cmd.type) {
+      case 'hello':
+        publishState({ force: !(bus && bus.lastState), immediate: true });
+        break;
+      case 'selectMode':
+        selectMode(cmd.id);
+        break;
+      case 'nextMode':
+        modes.next();
+        break;
+      case 'prevMode':
+        modes.prev();
+        break;
+      case 'panic':
+        panic();
+        break;
+      case 'fadeOutAll':
+        fadeOutAll();
+        break;
+      case 'master':
+        if (song) store.set(`songs.${song.id}.patch.fx.master.volume`, Math.min(2, Math.max(0, cmd.value)));
+        break;
+      case 'droneToggle':
+        if (!song) break;
+        if (song.drone.mode !== 'off') {
+          lastDroneOnMode = song.drone.mode;
+          store.set(`songs.${song.id}.drone.mode`, 'off');
+        } else {
+          const snapMode = selected && selected.id === song.id ? selected.song.drone && selected.song.drone.mode : null;
+          store.set(`songs.${song.id}.drone.mode`, lastDroneOnMode || (snapMode === 'files' ? 'files' : 'synth'));
+        }
+        break;
+      case 'droneKey': {
+        // the key the band hears; the transpose amount is kept (Perform's key grid, setSongKey)
+        if (!song || song.hearIn === cmd.pc) break;
+        const semis = transposeSemis(song.playIn, song.hearIn);
+        store.set(`songs.${song.id}.hearIn`, mod12(cmd.pc));
+        store.set(`songs.${song.id}.playIn`, mod12(cmd.pc - semis));
+        break;
+      }
+      case 'lowResource':
+        setLowResource(cmd.on);
+        break;
+      case 'record':
+        if (cmd.on !== !!(recorder && recorder.isRecording)) record();
+        break;
+      case 'openMain':
+        emit('openMain', {});
+        break;
+      default:
+        break;
+    }
+    emit('bus-command', cmd);
+    return true;
+  }
+
+  function onMenubarStore(state, paths) {
+    if (paths.some((p) => p === 'settings.lowResource' || p === 'settings.menuBarMode')) applyLowResource();
+    publishState();
+  }
+
+  /** Called by startPrimary (before the first song): bus, listeners, low-resource state, first publish. */
+  function startMenubar() {
+    if (menubarStarted) return;
+    menubarStarted = true;
+    if (!bus) {
+      bus = o.bus !== undefined ? o.bus : defaultBus();
+      ownBus = o.bus === undefined && !!bus;
+    }
+    applyLowResource({ preload: false }); // startPrimary preloads next, under the right policy
+    listen(doc, 'visibilitychange', () => {
+      applyLowResource();
+      publishState();
+    });
+    cleanups.push(store.subscribe(onMenubarStore));
+    listen(api, 'status', () => publishState());
+    if (bus) {
+      const off = bus.onCommand(handleCommand);
+      cleanups.push(() => {
+        if (typeof off === 'function') off();
+        if (ownBus) bus.close();
+        bus = ownBus ? null : bus;
+        ownBus = false;
+        menubarStarted = false;
+        lastPublished = null;
+      });
+      publishState({ force: true });
+    } else {
+      cleanups.push(() => {
+        menubarStarted = false;
+      });
+    }
+  }
+
   Object.assign(api, {
     start,
     dispose,
@@ -2098,6 +2497,9 @@ export function createController(o) {
       secondary,
     }),
   });
+  // menubar-A (C7): menu-bar mode API (docs/menubar-mode.md)
+  Object.assign(api, { modes, setLowResource, setWindowVisible, publishState, menuBarState, handleCommand });
+  Object.defineProperty(api, 'bus', { get: () => bus });
   Object.defineProperty(api, 'status', { get: () => ({ ...status }) });
   Object.defineProperty(api, 'isElectron', { value: isElectron });
   Object.defineProperty(api, 'kbOctave', { get: () => kbOctave });

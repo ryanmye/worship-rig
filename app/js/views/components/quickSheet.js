@@ -9,6 +9,7 @@ import { h, setText, disposer } from './util.js';
 import { stepper, segmented, toggle } from './buttons.js';
 import { holdButton } from './holdButton.js';
 import { openOverlay } from './overlay.js';
+import { byId, resolveThemeId } from '../../shared/themes.js';
 
 /** Touch options = settings.velocitySens (same words as Settings). */
 export const TOUCH_OPTIONS = Object.freeze(
@@ -33,6 +34,15 @@ export function tapBpm(taps) {
   return iv > 0 ? 60000 / iv : null;
 }
 
+/** "If something's wrong" headline per `sound` state (round4-perform P3). */
+const SOUND_TEXT = {
+  ok: 'Sound OK',
+  stalled: 'Sound stalled',
+  restarting: 'Restarting…',
+  paused: 'Sound paused',
+  muted: 'Muted (another window is open)',
+};
+
 /**
  * Quick settings sheet (hidden until open()).
  * @param {object} o
@@ -42,7 +52,9 @@ export function tapBpm(taps) {
  * @param {(v:'soft'|'normal'|'hard'|'fixed') => void} [o.onTouch]
  * @param {(b:boolean) => void} [o.onPedalReversed]
  * @param {() => void} [o.onRestartAudio]       after the 1 s hold (or one click while the sound is stalled)
+ * @param {() => void} [o.onResumeAudio]        one click while the sound is paused (falls back to onRestartAudio)
  * @param {() => void} [o.onAllSettings]
+ * @param {() => void} [o.onTheme]           Theme row (default: event 'rig-open-settings' {section:'appearance'})
  * @param {(reason:string) => void} [o.onClose]
  * @param {object} [o.state]                    initial state, see set()
  * @returns {{el:HTMLElement, set(state:object):void, open(opts?:{focus?:boolean}):void, close():void,
@@ -70,11 +82,12 @@ export function quickSheet(o = {}) {
   const lockNote = h(
     'span.qs-lock',
     {},
-    'When locked: ',
+    // onboarding O8: "frozen" read as a fault; say what the lock does to each half
+    'Under Lock: ',
     h('b', { text: 'This song' }),
-    ' stays live, ',
+    ' still works, ',
     h('b', { text: 'This Mac' }),
-    ' is frozen',
+    ' can’t be changed',
   );
   const allBtn = h('button.btn.qs-all', { type: 'button', text: 'All settings' });
   const xBtn = h('button.qs-x', { type: 'button', 'aria-label': 'Close Quick settings', title: 'Close' }, '×');
@@ -142,6 +155,11 @@ export function quickSheet(o = {}) {
     h('i', { 'aria-hidden': 'true' }),
     h('span', { text: 'PEDAL DOWN' }),
   );
+  // themes-setup: a compact "Theme: <name> ▸" in This Mac's caption row (no extra row: the sheet's height is fixed).
+  // It opens Settings › Appearance (o.onTheme overrides; else a DOM event main.js answers, since this sheet has no
+  // ctx). The name comes from html[data-theme], which boot.js / applyTheme set.
+  const themeBtn = h('button.qs-theme', { type: 'button', 'data-testid': 'quick-theme',
+    title: 'Choose a theme in Settings › Appearance' });
   const secMac = h(
     'section.qs-sec',
     { 'aria-label': 'This Mac' },
@@ -150,6 +168,7 @@ export function quickSheet(o = {}) {
       {},
       h('span.cap', { text: 'This Mac' }),
       h('span.qs-scope', { text: 'every song · soundcheck settings' }),
+      themeBtn,
     ),
     h(
       'div.qs-row',
@@ -160,7 +179,10 @@ export function quickSheet(o = {}) {
     h(
       'div.qs-row',
       {},
-      h('div.qs-lbl', {}, h('b', { text: 'Sustain pedal' }), h('small', { text: 'press it: light on?' })),
+      h('div.qs-lbl', {}, h('b', { text: 'Sustain pedal' }), h('small', {
+        text: 'press it: the light comes on',
+        title: 'Press your pedal: the light should come on. If it is on while your foot is up, turn on Reversed.',
+      })),
       h('div.qs-pedalrow', {}, pedalLamp, reversed.el),
     ),
   );
@@ -225,8 +247,14 @@ export function quickSheet(o = {}) {
     return r;
   };
   d.listen(tapBtn, 'click', () => tap());
-  d.listen(restartNow, 'click', () => call(o.onRestartAudio));
+  d.listen(restartNow, 'click', () =>
+    call(st.sound === 'paused' && o.onResumeAudio ? o.onResumeAudio : o.onRestartAudio));
   d.listen(allBtn, 'click', () => call(o.onAllSettings));
+  d.listen(themeBtn, 'click', () => {
+    if (typeof o.onTheme === 'function') return o.onTheme();
+    closeOverlay?.('api');
+    document.dispatchEvent(new CustomEvent('rig-open-settings', { detail: { section: 'appearance' } }));
+  });
   let closeOverlay = null;
   d.listen(xBtn, 'click', () => closeOverlay?.('api'));
 
@@ -242,7 +270,7 @@ export function quickSheet(o = {}) {
       st.echoSynced === true
         ? 'The echo follows the tempo.'
         : st.echoSynced === false
-          ? 'This song’s echo is fixed.'
+          ? 'This song’s echo keeps its own time.' // onboarding O8: "fixed" read as "repaired"
           : '',
     );
     swell.set(st.swell);
@@ -250,25 +278,32 @@ export function quickSheet(o = {}) {
     reversed.set(st.pedalReversed);
     pedalLamp.classList.toggle('on', !!st.pedal);
     pedalLamp.setAttribute('aria-label', st.pedal ? 'Sustain pedal: down' : 'Sustain pedal: up');
-    const bad = st.sound === 'stalled' || st.sound === 'restarting';
+    // round4-perform P3: the sheet says what the top bar says. 'paused' (context suspended) and 'muted' (a second
+    // window) are not OK; paused offers one click to resume, muted has nothing to restart here.
+    const sound = SOUND_TEXT[st.sound] ? st.sound : 'ok';
+    const bad = sound !== 'ok';
+    const oneClick = sound === 'stalled' || sound === 'restarting' || sound === 'paused';
     okLine.classList.toggle('bad', bad);
+    okLine.dataset.sound = sound;
     okLine.querySelector('.led').className = `led ${bad ? 'warn' : 'ok'}`;
-    setText(
-      okLine.querySelector('.qs-ok-t'),
-      st.sound === 'restarting' ? 'Restarting…' : bad ? 'Sound stalled' : 'Sound OK',
-    );
+    setText(okLine.querySelector('.qs-ok-t'), SOUND_TEXT[sound]);
     setText(
       okLine.querySelector('small'),
       !bad && Number.isFinite(st.latencyMs) ? ` · ${Math.round(st.latencyMs)} ms` : '',
     );
-    // stalled: Restart is a normal one-click primary button (quick.png problem state); OK: hold, so a stray tap can't
-    restartHold.el.hidden = bad;
-    restartNow.hidden = !bad;
-    restartNow.disabled = st.sound === 'restarting';
+    // stalled / paused: Restart is a normal one-click primary button (quick.png problem state); OK: hold, so a stray
+    // tap can't
+    restartHold.el.hidden = oneClick;
+    restartNow.hidden = !oneClick;
+    restartNow.disabled = sound === 'restarting';
+    setText(restartNow, sound === 'paused' ? 'Resume sound' : 'Restart audio');
     // lock: This Mac + All settings are frozen; This song and restart stay live (concept §1.3)
     touch.setDisabled(st.locked);
     reversed.setDisabled(st.locked);
     allBtn.disabled = !!st.locked;
+    const theme = byId(resolveThemeId(document.documentElement.dataset.theme));
+    setText(themeBtn, `Theme: ${theme.name} ▸`);
+    themeBtn.disabled = !!st.locked;
     secMac.classList.toggle('frozen', !!st.locked);
     el.classList.toggle('locked', !!st.locked);
   };

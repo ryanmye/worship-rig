@@ -122,3 +122,8 @@ run them one at a time; `run-all` does that for you.
   checked on the Mac (see `docs/garageband-import.md`).
 - The Linux CI container has no MIDI device and only 2 slow CPUs. Timing-heavy engine suites are slower there, and
   MIDI init degrades to a warning.
+
+## Size budget
+Ryan's rule (2026-09-28): the packaged `Worship Rig.app` stays under **500 MB** on disk (~400 MB is the comfort zone).
+Today it is 365 MB, of which Electron is ~285 MB and bundled samples ~79 MB. Anything that adds bundled media must fit
+the remaining headroom; `user-samples/` is outside the app and doesn't count. build-lint guards this (fail > 480 MB).

@@ -119,6 +119,13 @@ export default {
     }), { read: (s) => (s.tempo === null || s.tempo === undefined ? null : s.tempo), text: 'dirty' });
     const commitTempo = ctx.songField(tempoInput, 'tempo');
     tempoInput.addEventListener('change', () => {
+      // round4-edit-lib m3: a number input with bad input ("1e", "-") reads value '', which would clear the tempo.
+      // Show the stored tempo again instead; '' means Clear only when the field really is empty.
+      if (tempoInput.validity?.badInput) {
+        const cur = ctx.fieldSongId(tempoInput) === ctx.songId() ? ctx.song() : null;
+        tempoInput.value = cur && cur.tempo !== null && cur.tempo !== undefined ? String(Math.round(cur.tempo)) : '';
+        return;
+      }
       const raw = tempoInput.value.trim();
       if (raw === '') commitTempo(null);
       else if (Number.isFinite(Number(raw))) commitTempo(Math.round(Number(raw)));
@@ -128,6 +135,7 @@ export default {
       tempoInput.value = cur && cur.tempo !== null && cur.tempo !== undefined ? String(Math.round(cur.tempo)) : '';
     });
     tempoInput.addEventListener('keydown', (e) => {
+      if (e.isComposing || e.keyCode === 229) return; // round4-edit-lib m2: the IME's own Enter / Esc
       if (e.key === 'Enter') tempoInput.blur(); // blur commits (change)
     });
     const tapBtn = h('button.ev2-btn.ev2-song-tap', {
@@ -164,9 +172,26 @@ export default {
       notesTimer = null;
       commitNotes(notesArea.value);
     };
-    notesArea.addEventListener('input', () => {
+    const armNotes = () => {
       clearTimeout(notesTimer);
       notesTimer = setTimeout(flushNotes, NOTES_DEBOUNCE_MS);
+    };
+    notesArea.addEventListener('input', (e) => {
+      // round4-edit-lib M1: Chromium keeps one undo stack per frame, so ⌘Z anywhere (Perform included, via Edit ▸
+      // Undo) can apply an undo/redo to this textarea while it is not focused, after the binder painted another
+      // song's notes into it. Such an edit is never the user's typing here: show the store's text, commit nothing.
+      if (document.activeElement !== notesArea) {
+        clearTimeout(notesTimer);
+        notesTimer = null;
+        notesArea.value = ctx.song()?.notes ?? '';
+        return;
+      }
+      // m2 (optional part): no commits of half-converted IME text; compositionend arms the debounce instead
+      if (e.isComposing) return;
+      armNotes();
+    });
+    notesArea.addEventListener('compositionend', () => {
+      if (document.activeElement === notesArea) armNotes();
     });
     notesArea.addEventListener('blur', () => {
       if (notesTimer) flushNotes();

@@ -56,6 +56,15 @@ export default {
       },
     }), { text: 'dirty' }); // polish-1: follows a rename from elsewhere until the user types here
     nameInput.addEventListener('input', fitName);
+    // onboarding O12: the name is an input with no visible affordance; a pencil after it (and the tooltip) says
+    // "click to rename"
+    nameInput.title = 'Song name: click to rename';
+    const pencil = h('button.ev2-song-pencil', { type: 'button', 'aria-label': 'Rename song', title: 'Rename song',
+      tabindex: -1 }, icon('edit', 16));
+    pencil.addEventListener('click', () => {
+      nameInput.focus();
+      nameInput.select();
+    });
     ctx.listen(window, 'resize', fitName);
     const commitName = ctx.songField(nameInput, 'name');
     const fieldName = () => store.getSong?.(ctx.fieldSongId(nameInput))?.name ?? song()?.name ?? '';
@@ -65,6 +74,9 @@ export default {
       else if (ctx.fieldSongId(nameInput) === ctx.songId()) nameInput.value = song()?.name ?? '';
     });
     nameInput.addEventListener('keydown', (e) => {
+      // round4-edit-lib m2: Enter / Esc inside an IME composition confirm / cancel the candidate (macOS Chrome sends
+      // keydown isComposing, keyCode 229); acting on them committed half-converted text and blurred mid-edit
+      if (e.isComposing || e.keyCode === 229) return;
       if (e.key === 'Enter') {
         e.preventDefault();
         nameInput.blur();
@@ -302,7 +314,7 @@ export default {
     ctx.onLeaveSong(() => close(false)); // the menu and its question belong to the song they were opened on
 
     const head = h('div.ev2-song-head', {},
-      songsBtn, live, nameInput, keyChip, bpmChip, notesChip, loading,
+      songsBtn, live, nameInput, pencil, keyChip, bpmChip, notesChip, loading,
       h('span.ev2-sp'),
       h('span.ev2-song-livehint', { text: LIVE_HINT }),
       menuBtn, pop,

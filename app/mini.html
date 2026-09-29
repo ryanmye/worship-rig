@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<script src="./themes/boot.js"></script>
+<title>Worship Rig</title>
+<link rel="icon" type="image/svg+xml" href="./assets/mark.svg">
+<link rel="stylesheet" href="./mini.css">
+<script src="./themes/boot.js"></script>
+</head>
+<!-- Menu-bar popover (docs/menubar-mode.md). No audio here: views/mini.js talks to the main window over the bus
+     (Electron: preload relay; browser: BroadcastChannel 'rig-bus'). Fits 320×440 with no scroll. -->
+<body class="mini-body">
+<main id="mini" class="mini" data-state="waiting" aria-label="Worship Rig controls"></main>
+<script type="module" src="./js/views/mini.js"></script>
+</body>
+</html>

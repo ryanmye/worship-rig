@@ -83,6 +83,30 @@ export function electronEnv(extra = {}) {
 export const MIDI_PERMISSIONS = Object.freeze(['midi']);
 
 /**
+ * themes-setup: pin a theme for a whole Playwright context before any page script runs. Suites that assert the
+ * base (Classic) look call `await pinTheme(context, 'classic')`; the app's default is Sanctuary since themes-setup.
+ * Writes the boot mirror and settings.theme in the stored library (a fresh one when none exists yet; the store
+ * migrates it and seeds the factory songs as usual), so boot.js and main.js agree and nothing switches at runtime.
+ * @param {import('playwright').BrowserContext} context
+ * @param {string} id a registered theme id (app/js/shared/themes.js)
+ */
+export async function pinTheme(context, id) {
+  await context.addInitScript((tid) => {
+    try {
+      localStorage.setItem('worship-rig.theme', tid);
+      const raw = localStorage.getItem('rig.v1');
+      const lib = raw ? JSON.parse(raw) : { schema: 1, songs: {}, setlists: {}, settings: {}, meta: {} };
+      if (!lib.settings || lib.settings.theme !== tid) {
+        lib.settings = { ...(lib.settings || {}), theme: tid };
+        localStorage.setItem('rig.v1', JSON.stringify(lib));
+      }
+    } catch {
+      /* storage blocked: the default theme applies */
+    }
+  }, id);
+}
+
+/**
  * L-4: wait for `window.__rig.ready` (controller.start(): audio + song up; MIDI is not awaited since l3) with a
  * bound. Rejects after `timeout` ms with controller.status.midi / audio / ready in the message, so a hang names its
  * cause instead of burning the suite's whole budget. Waits for `window.__rig` itself within the same bound.

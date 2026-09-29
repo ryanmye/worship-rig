@@ -132,3 +132,21 @@
 .st-diag > summary::before { content: '▸ '; }
 .st-diag[open] > summary::before { content: '▾ '; }
 .st-diag[open] > .st-stats { margin-top: 8px; }
+
+/* Settings › Appearance › Theme (themes-setup): swatch cards. Theme files may recolour these through the tokens. */
+.st-row-themes { grid-template-columns: 1fr; align-items: start; }
+.st-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; width: 100%; }
+.st-theme {
+  display: grid; grid-template-columns: 1fr auto; gap: 6px 8px; align-items: center; min-width: 0;
+  padding: 8px; border: 1px solid var(--line, #2d333d); border-radius: var(--radius, 10px);
+  background: var(--panel, #15181d); color: var(--text, #f1f4f8); font: inherit; text-align: left; cursor: pointer;
+}
+.st-theme:hover { border-color: var(--line-2, #3b4350); }
+.st-theme.on { border-color: var(--accent, #ffc94d); box-shadow: inset 0 0 0 1px var(--accent, #ffc94d); }
+.st-theme:focus-visible { outline: 2px solid var(--accent, #ffc94d); outline-offset: 2px; }
+.st-theme-strip { grid-column: 1 / -1; display: flex; height: 22px; border-radius: 6px; overflow: hidden;
+  border: 1px solid var(--line, #2d333d); }
+.st-theme-strip > i { flex: 1; }
+.st-theme-name { font-weight: 700; font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.st-theme-tag { font-size: 11px; color: var(--muted, #aab3c0); }
