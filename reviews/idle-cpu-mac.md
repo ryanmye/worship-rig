@@ -41,7 +41,10 @@
 | (e) `html[data-low-resource="1"]` (no `engine.setLowResource`) | **45.1** | 45.3 | 13.1 | 12.1 | 91.5 | 10.6 | 0.5 | 10.5 (122) | 5.1 | 120.7 | 21.0 / 9.5 / 5.8 / 3.9+3.7 |
 | (f) Glass Ocean (synth only, drone off) | **24.4** | 24.5 | 2.4 | 2.3 | 55.8 | 11.0 | 0.0 | 8.3 (121) | 5.4 | 121.6 | 11.3 / 5.9 / 3.4 / 1.9+1.8 |
 | (g) Grand Piano (sampler only, drone off) | **19.3** | 17.5 | 2.3 | 2.0 | 60.3 | 9.7 | 0.0 | 8.6 (121) | 5.6 | 121.4 | 9.0 / 6.3 / 3.2 / – |
-| (h) "hidden", Sunday Pad, drone on (see note) | **44.8** | 45.5 | 13.3 | 13.3 | 91.0 | 10.5 | 0.6 | 10.2 (121) | 5.3 | 122.3 | 20.7 / 9.5 / 5.8 / 3.9+3.8 |
+| (h) "hidden" (locked screen), Sunday Pad, drone on (see note) | **44.8** | 45.5 | 13.3 | 13.3 | 91.0 | 10.5 | 0.6 | 10.2 (121) | 5.3 | 122.3 | 20.7 / 9.5 / 5.8 / 3.9+3.8 |
+| (h) hidden, **unlocked screen**, System Events `visible=false` (run 4, see below) | **49.3** | 48.3 | 13.9 | 13.7 | 109.9 | 13.4 | 0.6 | 13.0 (120) | 6.5 | 120.4 | 23.2 / 11.2 / 6.5 / 3.6+3.5 |
+| (h) hidden, unlocked, ⌘H (`app.hide`) (run 3) | **48.6** | 48.6 | 13.7 | 13.4 | 108.3 | 13.2 | 0.6 | 12.9 (120) | 5.6 | 120.4 | 22.9 / 11.0 / 6.6 / 3.6+3.5 |
+| (h) minimised, unlocked, `AXMinimized` (run 3) | **49.3** | 49.0 | 13.9 | 13.6 | 108.0 | 13.3 | 0.5 | 12.7 (120) | 5.5 | 120.4 | 23.3 / 11.1 / 6.6 / 3.7+3.6 |
 | (i) (a) after 5 min idle, last 20 s | **45.4** | 45.1 | 13.9 | 13.4 | 94.1 | 10.5 | 0.6 | 10.3 (121) | 5.1 | 120.5 | 20.6 / 9.9 / 5.9 / 3.9+3.8 |
 
 - Thread names:
@@ -114,3 +117,43 @@ The main thread was idle for 92.4 % of the 10 s. JS plus native work was 7.6 %.
   3. The 150 ms `readRuntime` / `renderDroneReadout` interval. It is small, but it causes the layouts.
 - The hidden-window behaviour is **not measured** because the screen was locked (see the note on (h)). Because of
   `backgroundThrottling: false`, a hidden window probably keeps the full load; check on an unlocked screen.
+
+## (h) re-measured on an unlocked screen (2026-09-29, about 02:40–03:00 UTC)
+
+- Build: `dist/mac-arm64/Worship Rig.app` rebuilt 21:36 local. `app/`, `main.js` and `preload.js` are the same as
+  in the run above. The screen was unlocked (`IOConsoleLocked` = false) and Ryan was at the Mac.
+- Method: same as above. Before each window: Sunday Pad + Piano with the drone set to `synth`, then 10 s of
+  settling. The window is 20 s, and the rAF counter runs while the app is still hidden. Afterwards the drone was
+  restored to `off`.
+- Visible references in the same session: 48.1 (run 4), and 49.3 / 50.2 / 49.1 (run 3) renderer %, all with
+  GPU 13–14 %. These are 4–5 points above the locked-screen baseline (44.4). Nothing measurable changes when the
+  app is hidden.
+
+| state (unlocked) | renderer cputime | GPU | rAF/s | `visibilityState` | `document.hasFocus()` | Task ms/s |
+|---|---|---|---|---|---|---|
+| visible (run 4) | 48.1 | 13.5 | 120.4 | visible | true | 111.2 |
+| hidden, System Events `set visible … to false` (run 4) | 49.3 | 13.9 | 120.4 | **visible** | true | 109.9 |
+| hidden, ⌘H after `activate` (run 3) | 48.6 | 13.7 | 120.4 | **visible** | true | 108.3 |
+| minimised, `AXMinimized` = true (run 3) | 49.3 | 13.9 | 120.4 | **visible** | true | 108.0 |
+
+- In all three hidden or minimised states, `get visible of process` read `false` (or `AXMinimized` read `true`),
+  so the OS did hide the window. The page never saw it: `visibilityState` stayed `visible`, no
+  `visibilitychange` fired, rAF kept running at 120 /s, and CPU is unchanged, both in the renderer and in the
+  GPU process.
+- After unhiding or restoring, rAF was 120–121 /s and the page was visible, so it came back fine.
+- The cause is the shell config: `backgroundThrottling: false` plus the `disable-renderer-backgrounding` and
+  `disable-background-timer-throttling` switches in `main.js` also turn off Chromium's occlusion and hidden
+  handling. A hidden Worship Rig therefore costs exactly as much as a visible one: about 49 % renderer and 14 %
+  GPU with the drone on.
+- Suggestion for C7 / L-22: in the shell, forward BrowserWindow `hide` / `minimize` / `show` / `restore`
+  (and possibly `occluded`) to the renderer over IPC, and have the UI stop its rAF loops (meters, readout) while
+  hidden. Audio must keep running, which is why `backgroundThrottling` is off. This would save the main-thread,
+  compositor and GPU share (about 17 + 14 points) without touching audio.
+- Other runs:
+  - Run 2 is discarded. In it, the h1 System Events window read 58.9 % and ended with the drone `off`.
+  - In run 3's h1, the drone also went from `synth` to `off` in both the store and the engine partway through
+    the window, so run 3's h1 figure (45.5 %) is not used.
+  - Two traced probes (18 s and 42 s hidden, hooking `store.set` and `store.subscribe`) and the clean run 4 did
+    not reproduce the flip. The only events were one blur/focus pair on the drone segment button.
+  - Most likely something outside my script changed the drone while Ryan was using the Mac, for example the menu
+    bar mini window. This is not a confirmed bug. It is only worth a look if it shows up again.
