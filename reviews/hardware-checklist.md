@@ -316,3 +316,16 @@ GarageBand-derived content must never ship.
 |---|---|
 | ThinkPad USB-C dock | 20 |
 | Bluetooth (JBL / AirPods — see note) | 176; sound followed the device change without a restart ✔ |
+
+## 4. Wheels
+- Sunday Pad + Piano, Grand Piano, Building Swell, Lofi Rhodes, Anthem: mod and pitch wheels behave as in the mapping table ("I think the wheels work"; no mismatch noticed). No expression/volume pedal available on the Keystation 49es.
+
+## 5. MIDI Learn
+- Steps 1–3 (learn Next song to a spare control): DEFERRED — the Keystation 49es has no spare buttons that send CC; retry with a footswitch or a pad controller.
+- Step 4 (CC64 refused as reserved, pedal still sustains): ✔.
+
+## 6. Hot-unplug / replug
+- Unplug mid-chord: no stuck notes ✔. Replug: "Now using Keystation 49es Port 1" toast, plays again ✔. With pedal held: no stuck sustain ✔.
+
+## 2 (addendum). Pedal polarity, second try
+- On a second "Test my pedal" the app reported reversed polarity and offered Invert; after inverting, sustain works. First try had reported 127 / normal. Note for the cloud: the result depends on whether the pedal is pressed at plug-in time (expected by the heuristic), so the wording should tell the user to plug in with the pedal UP, or the test should sample both states.
