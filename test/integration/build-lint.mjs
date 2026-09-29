@@ -92,6 +92,18 @@ try {
   const size = fs.statSync(asarPath).size / 1048576;
   console.log(`# app.asar ${size.toFixed(1)} MB, ${list.size} entries`);
 
+  // ---- app bundle size budget (Ryan's rule): mac dir build only, linux has no .app to weigh
+  if (platform === 'mac') {
+    const appPath = path.join(unpacked, `${pkg.build.productName}.app`);
+    const kb = (p) => parseInt(spawnSync('du', ['-sk', p], { encoding: 'utf8' }).stdout.split('\t')[0], 10);
+    const mb = (k) => Math.round(k / 1024);
+    const totalKB = kb(appPath);
+    const fwKB = kb(path.join(appPath, 'Contents', 'Frameworks'));
+    const asarKB = kb(asarPath);
+    console.log(`# app size: ${mb(totalKB)} MB (frameworks ${mb(fwKB)}, asar ${mb(asarKB)}, other ${mb(totalKB - fwKB - asarKB)})`);
+    check('app bundle ≤ 480 MB', totalKB <= 480 * 1024, `${mb(totalKB)} MB`);
+  } else skip('app bundle ≤ 480 MB', 'dir build has no .app on Linux');
+
   // ---- boot the packaged app (Linux + xvfb)
   if (BOOT && process.platform === 'linux' && hasXvfb()) {
     const bin = fs.readdirSync(unpacked).map((f) => path.join(unpacked, f)).find((f) => fs.statSync(f).isFile() && (fs.statSync(f).mode & 0o111) && /worship/i.test(path.basename(f)) && !/\.so/.test(f));

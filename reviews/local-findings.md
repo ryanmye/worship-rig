@@ -350,3 +350,148 @@ switches (15 lofi), 15 panics, 30 key changes, 185 sweeps. Voices back to 0 in 1
 | build-lint | PASS | 23/23, 1 skipped (packaged boot needs Linux + xvfb) |
 
 No new failures in the full run. L-9 is still open (NEEDS CLOUD).
+
+## Merged tree d921d4d: full run + soak, build, packs, perf (2026-09-28, native macOS)
+
+Tests ran on d921d4d (app/ and test/ are unchanged through e6da619). The build is from e6da619, which is d921d4d
+plus the local shell fixes L-11 and L-12 in main.js. Log: `test/logs/full-soak-20260928T180427.txt`.
+
+### Full run + 20-min soak: 11/13 suites, 28m18s
+
+| suite | result | detail |
+|---|---|---|
+| unit | PASS | 276 pass |
+| engine | PASS | 68/69, 1 soft warn (`offline.eqCpu` absolute timings, as before) |
+| instruments | PASS | 143/143 |
+| synth-extra | PASS | 153/153 |
+| shell | PASS | 180 pass (unit, browser, electron) |
+| ui-core | FAIL | 45/46, L-20 |
+| edit-v2 | PASS | 90/90 (L-9 is green) |
+| settings | PASS | 29/29 |
+| eq | FAIL | 25/26, L-21 |
+| chrome-fallback | PASS | 15/15, 1 skipped |
+| electron-full | PASS | 28/28 |
+| build-lint | PASS | 23/23, 1 skipped |
+| soak | PASS | 12/12 |
+
+Both failures reproduce on every run so far: they failed in the fast run and failed again here. No other suite
+failed, so no flake re-runs were needed.
+
+### Soak (SOAK_OK)
+
+- Activity: 16964 events, 4027 notes, 927 chords, 38 song switches (14 lofi), 14 panics, 31 key changes and
+  172 sweeps across 15 factory songs.
+- Recovery: after release, voices were back to 0 in 1.11 s. Nodes went 226 → 226. Heap went 10.75 → 11.39 MB
+  (+0.64 MB). Audio kept running. There were 0 NaN and 0 console errors.
+- Memory, from `test/logs/soak.csv` (44 rows, `memMode` = large-set in every row):
+  - Max `pinnedMB` was 568.9 (factory:anthem, t = 158 s), within the 600 MB budget.
+  - Max `decodedMB` was 695.2 (factory:lofi-rhodes, t = 578 s, retiring 0), within the 700 MB cap.
+  - 0 of 44 rows were over the cap and 0 of 44 were over the budget, so the L-10 soft-cap exemption was never needed.
+
+### L-20: `.song-name` is 2 px taller than its box at 1280×800 (minor, cosmetic plus test sensitivity, NEEDS CLOUD)
+
+- Where it fails: `test/phase2/ui-core/run.mjs:2092` ("polish-2A responsive"), at the first viewport, 1280×800.
+  The assertion message is `Y div.song-name[song-name] "Sunday Pad + Piano" 42>40`.
+- Overflow: `scrollHeight` 42 against `clientHeight` 40, which is 2 px.
+- The loop stops at that first viewport, so the other five viewports (1366×768 … 1024×700) were not checked.
+- Screenshot: `test/phase2/ui-core/screenshots/responsive-1280x800.png`. Nothing is visibly cut. The title reads
+  whole.
+- Cause: `.song-name` is set as `font: 800 clamp(…, 40px)/1.05 var(--font-display)` (`app/styles.css:640`) with
+  `overflow: hidden`. With `-apple-system` / SF Pro Display at weight 800, the glyph box is taller than a 1.05 line
+  box. The Linux fallback font fits.
+- Suggestion: allow for macOS system-font metrics, in either of two ways:
+  - CSS: `line-height: 1.1`, or 1–2 px of `padding-block` inside the fixed row.
+  - Test: tolerate ≤ 2 px of Y overflow on `.song-name` only, since it ellipsizes on X anyway, and let the loop
+    report every viewport before it asserts.
+
+### L-21: EQ band note cells cut their text on macOS at every width tested (minor, real and visible, NEEDS CLOUD)
+
+- Where it fails: eq, "compact threshold 1080 px" (`test/phase2/eq/run.mjs:617`). At 1100 px the cells
+  `≈F#6 +23¢` and `≈F#7 +23¢` fail the "every band cell shows its whole value" check.
+- To measure it, I ran a scratch copy of the runner with the `cut` assertion turned into a log line. The copy lives
+  outside the repo. The runner was not edited.
+
+| viewport | card | layout | cut cells (`scrollWidth > clientWidth`) |
+|---|---|---|---|
+| 1100 | 1066 | compact | `≈F#6 +23¢` 78>74, `≈F#7 +23¢` 77>74 |
+| 1112 | 1078 | compact | same as 1100 |
+| 1124–1512 | 1090–1478 | full | `≈F#6 +23¢ · 1.5 kHz` 145>138 |
+
+- So the full layout also cuts band 4, by 7 px, at 1124, 1280, 1366, 1440 and 1512. The test never reaches those
+  widths because it fails first at 1100. The 1280 screenshot shows `≈F#6 +23¢ · 1.5 kH`. The font is
+  `-apple-system` / SF Pro Text.
+- Screenshots:
+  - `test/phase2/eq/screenshots/FAIL-compact-threshold-1080-px-compactBelowHeight-no-overflow-aro.png`
+  - `test/logs/l21-probe/eq-probe-{1100,1112,1124,1280,1366,1440,1512}x900.png`
+  - All of these are git-ignored and exist only on the Mac.
+- Suggestion: size the NOTE column for macOS metrics. SF Pro Text is about 5 % wider than the Linux fallback, so
+  add roughly 6–8 px (compact) and 8–10 px (full) to the column, or size it in `ch` with headroom. Or drop the
+  ` · 1.5 kHz` suffix when it doesn't fit, since the HZ column already shows it. A test tolerance would hide a cut
+  that users can see here, so prefer the CSS change.
+
+### Build and packs
+
+- BUILD: `npm run build:mac` succeeded in 24 s. The app is 365M and the zip 190M. `app.asar` has 2127 entries,
+  with 0 `user-samples` entries.
+- PACKS_OK, 28 packs. The built app's `/api/health` returned
+  `{"ok":true,…,"userSamples":true,"features":["user-samples"]}`. `/api/user-samples` returned enabled, root
+  `~/Music/Worship Rig/Samples`, count 28, 0 errors, one instrument per pack. The packs:
+  - Pianos: amplified-piano, below-the-surface-piano, boogie-man-piano, classical-grand, grand-piano,
+    learner-s-piano, mellow-vibe-piano, more-modulation-piano, parallel-earth-piano, perfect-mix-piano,
+    powered-tube-piano, pure-digital-piano, record-collection-grand, rise-above-piano, rusty-piano,
+    simple-physics-piano, small-amped-acoustic-piano, steinway-grand-piano, subtle-dynamics-piano,
+    supporting-cast-piano, worn-tape-piano, yamaha-grand-piano.
+  - Keys: 80s-chime-vibe, claverotor, different-phases-clav, double-tracked-wurli, flea-market-wurli, lullaby-vibes.
+- `clientSeenMsAgo` is null in the Mac app. That is expected: the heartbeat is Chrome-only. After quitting, port
+  8438 was free.
+
+### PERF: built app, M-series Mac, 120 Hz display
+
+Method:
+- Numbers are `ps` RSS and %CPU, averaged over 5 s samples. The utility row sums the Audio, Network and
+  VideoCapture services.
+- Idle: the app launched with `open` and was left untouched for 30 s on its startup song, Sunday Pad + Piano, with
+  0 voices sounding.
+- Play: the app launched with `--remote-debugging-port=9223` and Playwright attached over CDP. On each song, a
+  4-note chord was played through `controller.perform.noteOn/noteOff` every 500 ms for 20 s. Songs were selected
+  by `factoryId`, because the library's songs have their own ids (`song_…`), and `selectSong('factory:…')` warns
+  and does nothing.
+
+| phase | main | GPU | renderer | utility ×3 | total | max voices |
+|---|---|---|---|---|---|---|
+| idle (plain `open`) | 141 MB / 0.2 % | 71 / 2.7 | 536 / 47.5 | 132 / 0.2 | 880 MB / 50.6 % | 0 |
+| idle (CDP) | 147 / 0.0 | 74 / 2.6 | 536 / 46.0 | 134 / 0.1 | 890 / 48.7 | 0 |
+| idle, AudioContext suspended | 137 / 0.0 | 75 / 2.7 | 215 / 27.1 | 130 / 0.1 | 557 / 29.9 | 0 |
+| play Sunday Pad + Piano | 130 / 0.0 | 78 / 16.4 | 217 / 49.7 | 127 / 0.0 | 552 / 66.1 | 36 |
+| play Anthem | 129 / 0.1 | 74 / 15.4 | 257 / 51.3 | 128 / 0.0 | 588 / 66.8 | 36 |
+| play Organ Swell | 127 / 0.0 | 76 / 16.5 | 255 / 51.0 | 126 / 0.0 | 583 / 67.5 | 28 |
+
+- RSS understates the renderer. After the suspend, renderer RSS fell from 536 to 215 MB while the engine still
+  held 417 MB of decoded samples, because macOS compresses pages. `footprint` on the renderer after the play runs
+  showed `phys_footprint` 1099 MB (peak 1122 MB), and that is the real figure.
+- `decodedMB` stayed at 417.1 on all three songs, because large-set pinning had already loaded them.
+- For comparison, GarageBand 20 s after launch, idle: RSS 321 MB, `phys_footprint` 609 MB, 2.3 % CPU.
+- About the GarageBand quit: an AppleScript `get name of windows` hung, probably on the project chooser's modal. I
+  sent `quit app`, with SIGTERM as a fallback, and GarageBand exited. I clicked no dialogs.
+
+### L-22: the renderer uses about 46 % of a core while idle and silent (major for battery and low-resource mode, real, NEEDS CLOUD)
+
+- Observed: on the built app with 0 voices, the renderer averaged 46–48 % CPU (`ps`) over 30 s. `top` read 44 %
+  at the same time.
+- The breakdown:
+  - `requestAnimationFrame` runs at 120.5 /s while idle (ProMotion).
+  - Suspending the AudioContext drops the renderer to 27 %. That puts about 19 points on the silent audio graph
+    (174 nodes: shared FX, convolvers and taps processing silence) and about 27 points on the UI, which redraws at
+    120 Hz while nothing changes (meters, analyser, strips).
+- Expected: near-zero CPU when silent. That means stopping the rAF loops when levels are 0 or unchanged, capping
+  meters at 30–60 fps, and letting idle FX sleep.
+- This bears directly on C7 `lowResource` and on the C6 performance critic.
+- Uncertainty: `ps` %CPU is a decaying average. `top` read 19 % after the play runs (after a suspend/resume
+  cycle), so part of the idle load may depend on state. That needs a CPU profile.
+
+### Notes
+
+- The built app starts a VideoCaptureService utility process (45 MB). It probably comes from device enumeration.
+  This is FYI only.
+- A leftover Google Chrome process with Worship Rig switches (pid 66929, from an earlier `serve.mjs` session) was
+  running throughout. I left it alone.

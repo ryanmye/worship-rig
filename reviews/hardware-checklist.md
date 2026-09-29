@@ -299,3 +299,44 @@ GarageBand-derived content must never ship.
   Expected: the `grep` prints nothing.
   Actual grep output: _______________________________________________________________________________
 - [ ] Bundle size: `du -sh "dist/mac-arm64/Worship Rig.app"` → record the number: ___________
+
+---
+
+# Results log — Electron (built app from main, 2026-09-29, Ryan at the Keystation 49es)
+
+## 1. MIDI auto-select
+- Connected line: "Keystation 49es Port 1" ✔ (GarageBand not open at the time, so its virtual port was not in the list).
+- Dropdown lists both Keystation ports ✔. Automatic input plays normally ✔.
+
+## 2. Pedal polarity
+- "Test my pedal": raw CC64 = 127, reported normal ✔. Chord + pedal + hands off: notes hold ✔.
+
+## 3. Latency (Settings → Audio, "Lowest")
+| Output | Electron (ms) |
+|---|---|
+| ThinkPad USB-C dock | 20 |
+| Bluetooth (JBL / AirPods — see note) | 176; sound followed the device change without a restart ✔ |
+
+## 4. Wheels
+- Sunday Pad + Piano, Grand Piano, Building Swell, Lofi Rhodes, Anthem: mod and pitch wheels behave as in the mapping table ("I think the wheels work"; no mismatch noticed). No expression/volume pedal available on the Keystation 49es.
+
+## 5. MIDI Learn
+- Steps 1–3 (learn Next song to a spare control): DEFERRED — the Keystation 49es has no spare buttons that send CC; retry with a footswitch or a pad controller.
+- Step 4 (CC64 refused as reserved, pedal still sustains): ✔.
+
+## 6. Hot-unplug / replug
+- Unplug mid-chord: no stuck notes ✔. Replug: "Now using Keystation 49es Port 1" toast, plays again ✔. With pedal held: no stuck sustain ✔.
+
+## 2 (addendum). Pedal polarity, second try
+- On a second "Test my pedal" the app reported reversed polarity and offered Invert; after inverting, sustain works. First try had reported 127 / normal. Note for the cloud: the result depends on whether the pedal is pressed at plug-in time (expected by the heuristic), so the wording should tell the user to plug in with the pedal UP, or the test should sample both states.
+
+## 7. Sleep/wake, output change, restart
+- Sleep ≥10 s and wake: sound back ✔. Dock unplugged while selected: handled, sound continues/moves ✔. Quick-sheet hold-to-restart: "Audio restarted", sound resumes ✔.
+
+## 8. Recording
+- 30 s recording → `~/Music/Worship Rig/Rig <date> <HHmm>.wav` ✔; opens and plays cleanly in QuickTime ✔.
+- Split-on-restart mid-recording: NOT TESTED.
+
+## 9. Perform lock
+- Live tier works with no hold ✔; KEY/Transpose need the 600 ms hold ✔; Edit/Settings frozen ✔; hold-to-unlock ✔.
+- **L-23 (cosmetic, NEEDS CLOUD):** the amber hint text under the Lock button (the "hold to unlock" line, `lockLine` in `app/js/views/perform.js`) is cut off by the bottom edge of the window on the MacBook Pro's built-in display. It should render above the button or inside the viewport when the button sits on the bottom row.
