@@ -950,7 +950,8 @@ function setDock(visible) {
 let lastWindowEvent = null;
 /**
  * Menu-bar mode: tell the main renderer when its window is shown/hidden, on the Rig menu channel (onMenu ids
- * `windowShown` / `windowHidden`). With backgroundThrottling off, visibilitychange may never fire. The popover opening
+ * `windowShown` / `windowHidden`; also `rig:window-visible` true/false → preload's DOM event). With
+ * backgroundThrottling off, visibilitychange may never fire. The popover opening
  * does not count as "shown". `windowFollowDocument` (mode turned off) hands the decision back to the document.
  * @param {'windowShown'|'windowHidden'|'windowFollowDocument'} id
  */
@@ -958,6 +959,10 @@ function sendWindowEvent(id, force = false) {
   if (!force && (id === lastWindowEvent || (!menuBarMode && id !== 'windowFollowDocument'))) return;
   lastWindowEvent = id;
   sendMenu(id);
+  // same moment, second form: preload turns it into a DOM CustomEvent 'rig:window-visible' {detail:{visible}}
+  if (id !== 'windowFollowDocument' && win && !win.isDestroyed()) {
+    win.webContents.send('rig:window-visible', id === 'windowShown');
+  }
 }
 const windowShownNow = () => !!(win && !win.isDestroyed() && win.isVisible() && !win.isMinimized());
 
@@ -1109,6 +1114,7 @@ function createWindow(url) {
     sendWindowEvent('windowHidden');
     notifyMenuBarState();
   });
+  win.on('focus', () => sendWindowEvent('windowShown'));
   win.on('minimize', () => sendWindowEvent('windowHidden'));
   win.on('restore', () => sendWindowEvent('windowShown'));
   wc.setWindowOpenHandler(({ url: target }) => {
@@ -1344,7 +1350,10 @@ async function menubarSelftest(wc) {
   // only the shell fixture page (no window.__rig) runs this part
   if (await js(wc, '!!window.__rig')) return { skipped: 'real app page (window.__rig): runs on the shell fixture only' };
   out.before = await js(wc, 'window.rig.getMenuBarState()');
-  await js(wc, 'window.__mbMenu = []; window.rig.onMenu((id) => window.__mbMenu.push(id)); true');
+  await js(wc, `window.__mbMenu = []; window.rig.onMenu((id) => window.__mbMenu.push(id));
+    window.__mbVisible = [];
+    window.addEventListener('rig:window-visible', (e) => window.__mbVisible.push(e.detail && e.detail.visible));
+    true`);
   const menuEvents = async () => {
     await settle(150);
     return js(wc, 'window.__mbMenu.splice(0)');
@@ -1423,6 +1432,7 @@ async function menubarSelftest(wc) {
       true`);
     const backups = () => fs.readdirSync(backupsDir()).map((f) => path.join(backupsDir(), f));
     const before = new Set(backups());
+    await js(wc, 'window.__mbVisible.length = 0; true');
     const isHideBackup = (f) => !before.has(f) && fs.readFileSync(f, 'utf8') === '{"hideBackup":1}';
     win.close();
     await waitFor(() => !win.isVisible());
@@ -1433,6 +1443,7 @@ async function menubarSelftest(wc) {
     await waitFor(() => win.isVisible());
     out.afterOpenMain = { visible: win.isVisible(), dock: app.dock.isVisible() };
     out.eventsOnOpenMain = await menuEvents();
+    out.windowVisible = await js(wc, 'window.__mbVisible.slice()'); // DOM CustomEvent details, hide → openMain
   } else {
     out.hideOnClose = 'macOS only';
   }

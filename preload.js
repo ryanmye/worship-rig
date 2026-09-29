@@ -26,6 +26,14 @@ const listen = (channel, cb) => {
   return () => ipcRenderer.removeListener(channel, listener);
 };
 
+// Menu-bar mode: main.js reports main-window visibility (hide-on-close, openMain, dock click, focus…) as a DOM event,
+// since with backgroundThrottling off `visibilitychange` may never fire. The controller listens for
+// 'rig:window-visible' {detail:{visible}}. Non-boolean payloads are ignored.
+ipcRenderer.on('rig:window-visible', (_e, visible) => {
+  if (typeof visible !== 'boolean') return;
+  window.dispatchEvent(new CustomEvent('rig:window-visible', { detail: { visible } }));
+});
+
 contextBridge.exposeInMainWorld('rig', {
   isElectron: true,
   platform: process.platform,

@@ -242,6 +242,8 @@ test('menu-bar mode (L14): tray, menu from the bus state, IPC relay both ways, p
     assert.equal(m.hideBackup, true, 'hiding still writes the library backup (M5)');
     assert.deepEqual(m.eventsOnHide, ['windowHidden']);
     assert.deepEqual(m.eventsOnOpenMain, ['windowShown']);
+    // the same transitions as DOM CustomEvents 'rig:window-visible' {detail:{visible}} (preload), seen by the page
+    assert.deepEqual(m.windowVisible, [false, true]);
     assert.equal(m.openMain.ok, true);
     assert.deepEqual(m.afterOpenMain, { visible: true, dock: true }, 'openMain shows the window and the dock icon');
   }
