@@ -3,7 +3,26 @@ name: test
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '.cloud-outbox/**'
+      - 'reviews/**'
+      - 'docs/**'
+      - '**/*.md'
+      - 'COORDINATION.md'
+      - 'BACKLOG.md'
+      - 'design/**'
+      - 'audition/**'
   pull_request:
+    paths-ignore:
+      - '.cloud-outbox/**'
+      - 'reviews/**'
+      - 'docs/**'
+      - '**/*.md'
+      - 'COORDINATION.md'
+      - 'BACKLOG.md'
+      - 'design/**'
+      - 'audition/**'
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
