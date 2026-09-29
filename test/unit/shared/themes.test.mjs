@@ -52,7 +52,7 @@ test('registry: shape, unique ids, default registered and not coming, css files 
   assert.equal(new Set(ids).size, ids.length);
   assert.deepEqual(ids, ['classic', 'sanctuary', 'sanctuary-day', 'daylight-stage', 'daylight-day', 'studio', 'ember', 'nave']);
   assert.ok(isValidId(DEFAULT_THEME_ID) && !byId(DEFAULT_THEME_ID).coming);
-  assert.equal(DEFAULT_THEME_ID, 'sanctuary');
+  assert.equal(DEFAULT_THEME_ID, 'classic'); // TEMP
   for (const t of THEMES) {
     assert.match(t.id, /^[a-z][a-z0-9-]*$/);
     assert.ok(t.name && typeof t.name === 'string');

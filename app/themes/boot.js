@@ -20,7 +20,7 @@
     return;
   }
   var KEY = 'worship-rig.theme';
-  var DEF = 'sanctuary';
+  var DEF = 'classic'; // TEMP, mirrors themes.js; final default sanctuary
   var MAP = {
     'classic': { css: null, mode: 'dark' },
     'sanctuary': { css: '/themes/sanctuary-v2/theme.css', mode: 'dark', body: ['sanctuary-v2', 'dark'] },

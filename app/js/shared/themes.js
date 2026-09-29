@@ -72,7 +72,7 @@ export const THEMES = Object.freeze([
 ].map((t) => Object.freeze({ ...t, swatch: Object.freeze(t.swatch), ...(t.body ? { body: Object.freeze(t.body) } : {}) })));
 
 /** Theme used when settings.theme is absent or unknown. */
-export const DEFAULT_THEME_ID = 'sanctuary';
+export const DEFAULT_THEME_ID = 'classic'; // TEMP until themes-final (final default: sanctuary)
 /** localStorage key of the boot mirror of settings.theme (boot.js reads it before first paint). */
 export const THEME_MIRROR_KEY = 'worship-rig.theme';
 
