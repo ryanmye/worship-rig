@@ -130,13 +130,34 @@ function best(all, storedParts, exsDir) {
   return scored[0].c;
 }
 
+/** security S7: `p` resolves (realpath) inside one of `roots`. */
+export function underRoots(p, roots) {
+  let real;
+  try {
+    real = fs.realpathSync(p);
+  } catch {
+    return false;
+  }
+  return roots.some((r) => {
+    try {
+      const rr = fs.realpathSync(r);
+      return real === rr || real.startsWith(rr.endsWith(path.sep) ? rr : rr + path.sep);
+    } catch {
+      return false;
+    }
+  });
+}
+
 /**
  * @param {{ fileName:string, path:string }} sample
  * @param {string} exsPath
  * @param {object} index
+ * @param {{ roots?: string[] }} [opts]  S7: when given, an absolute sample path stored in the .exs is used only if it
+ *   lies inside one of these roots (a third-party .exs could otherwise name any readable file, e.g. ~/.ssh keys);
+ *   a stored path must always have an audio extension
  * @returns {{ path:string, how:string } | null}
  */
-export function resolveSample(sample, exsPath, index) {
+export function resolveSample(sample, exsPath, index, { roots } = {}) {
   const fileName = path.basename(String(sample.fileName || sample.name || '').replace(/:/g, '/'));
   if (!fileName) return null;
   const exsDir = path.dirname(exsPath);
@@ -144,7 +165,8 @@ export function resolveSample(sample, exsPath, index) {
   if (exists(local)) return { path: local, how: 'next to .exs' };
   if (sample.path) {
     const stored = path.join(sample.path.includes('/') ? sample.path : '/' + sample.path.replace(/:/g, '/'), fileName);
-    if (path.isAbsolute(stored) && exists(stored)) return { path: stored, how: 'stored path' };
+    const allowed = isAudio(stored) && (!roots || underRoots(stored, roots));
+    if (path.isAbsolute(stored) && allowed && exists(stored)) return { path: stored, how: 'stored path' };
   }
   const parts = storedDirParts(sample.path);
   const files = index?.files || {};

@@ -59,7 +59,7 @@ When the library is not in the default place (for example a copy mounted elsewhe
 | `--import "<text>"` | Import every instrument whose name contains the text (case-insensitive); an exact name match wins over substring matches. Repeatable. |
 | `--pianos` | Import every name matching `piano\|grand\|upright\|keys`. |
 | `--dry` | Print the plan (layers, notes, size), write nothing. |
-| `--out <dir>` | Output root (default `~/Music/Worship Rig/Samples`; `<repo>/user-samples` also works). |
+| `--out <dir>` | Output root (default `~/Music/Worship Rig/Samples`; `<repo>/user-samples` also works). A folder inside `<repo>/app` is refused, since it would be packaged. |
 | `--format mp3\|m4a\|wav` | `mp3` (default with ffmpeg) = 160 kb/s, 48 kHz, like the bundled library. `m4a` (default with afconvert only) = AAC 192 kb/s. `wav` = 16-bit PCM. |
 | `--bitrate 160k` / `--rate 48000` | Encoder bitrate / output sample rate (rate: ffmpeg only). |
 | `--encoder auto\|ffmpeg\|afconvert` | Default: ffmpeg if installed. |

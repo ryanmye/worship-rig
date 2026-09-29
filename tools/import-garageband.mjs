@@ -23,6 +23,40 @@ import { HEADER_SIZE } from './exs/layout.mjs';
 
 export const DEFAULT_OUT = path.join(os.homedir(), 'Music', 'Worship Rig', 'Samples');
 export const EXIT_INCOMPLETE = 3;
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+/** realpath of the longest existing prefix of `p`, plus the rest (so a not-yet-created --out still compares right). */
+function realish(p) {
+  let head = path.resolve(p);
+  const tail = [];
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync(head), ...tail);
+    } catch {
+      const up = path.dirname(head);
+      if (up === head) return path.resolve(p);
+      tail.unshift(path.basename(head));
+      head = up;
+    }
+  }
+}
+
+/**
+ * security S7: --out must not be inside <repo>/app (electron-builder would package personal Apple content).
+ * @returns {{ error?: string, warn?: string }}
+ */
+export function checkOutDir(out, repoRoot = REPO_ROOT) {
+  const o = realish(out);
+  const repo = realish(repoRoot);
+  const inside = (dir) => o === dir || o.startsWith(dir + path.sep);
+  if (inside(path.join(repo, 'app'))) {
+    return { error: `--out ${out} is inside the app folder (${path.join(repo, 'app')}), which is packaged into Worship Rig.app. Imported Apple sounds are personal-use only: use the default (${DEFAULT_OUT}) or <repo>/user-samples.` };
+  }
+  if (inside(repo) && !inside(path.join(repo, 'user-samples'))) {
+    return { warn: `warning: --out ${out} is inside the repo but not under user-samples/ (the only git-ignored place for imports); do not commit it.` };
+  }
+  return {};
+}
 
 const USAGE = `Import GarageBand / Logic sampler instruments into Worship Rig (personal use only).
 
@@ -34,7 +68,7 @@ const USAGE = `Import GarageBand / Logic sampler instruments into Worship Rig (p
 
 Options
   --dry                     show what would be imported, write nothing
-  --out <dir>               output folder (default: ${DEFAULT_OUT})
+  --out <dir>               output folder (default: ${DEFAULT_OUT}; never inside <repo>/app)
   --format mp3|m4a|wav      mp3 (default with ffmpeg) = 160 kb/s 48 kHz; m4a = AAC 192 kb/s (default without ffmpeg);
                             wav = 16-bit PCM
   --bitrate <n>k            mp3/m4a bitrate (default 160k for mp3, 192k for m4a)
@@ -162,12 +196,12 @@ export function discover(roots, { maxNotes } = {}) {
 }
 
 /** Resolve every sample the plan needs. Returns Map(sampleIndex → {path,how}|null). */
-function resolvePlan(entry, index) {
+function resolvePlan(entry, index, roots) {
   const res = new Map();
   for (const L of entry.plan.layers) {
     for (const p of L.picks) {
       const si = p.zone.sampleIndex;
-      if (!res.has(si)) res.set(si, resolveSample(entry.parsed.samples[si], entry.exsPath, index));
+      if (!res.has(si)) res.set(si, resolveSample(entry.parsed.samples[si], entry.exsPath, index, { roots }));
     }
   }
   return res;
@@ -578,6 +612,13 @@ export async function main(argv, log = console.log, err = console.error) {
   }
   const instRoots = o.roots.length ? o.roots : DEFAULT_INSTRUMENT_ROOTS;
   const sampleRoots = o.roots.length ? o.roots : DEFAULT_SAMPLE_ROOTS;
+  const allowedRoots = [...new Set([...sampleRoots, ...instRoots])]; // S7: stored absolute sample paths must be in here
+  const outCheck = checkOutDir(o.out);
+  if (outCheck.error) {
+    err(outCheck.error);
+    return 2;
+  }
+  if (outCheck.warn) err(outCheck.warn);
   const present = instRoots.filter((r) => fs.existsSync(r));
   if (!present.length) {
     err(`No instrument folders found. Looked in:\n${instRoots.map((r) => `  ${r}`).join('\n')}\nOpen GarageBand once (and let it download its sound library), or pass --root <folder>.`);
@@ -596,7 +637,7 @@ export async function main(argv, log = console.log, err = console.error) {
   let { index, rebuilt } = loadOrBuildIndex(sampleRoots.filter((r) => fs.existsSync(r)), o.cache, { rebuild: o.reindex, log });
   const withRes = (entries) => {
     for (const e of entries) {
-      e.resolved = resolvePlan(e, index);
+      e.resolved = resolvePlan(e, index, allowedRoots);
       const c = counts(e.resolved);
       e.resolvedCount = c.ok;
       e.neededCount = c.total;
@@ -631,7 +672,7 @@ export async function main(argv, log = console.log, err = console.error) {
     try {
       if (!o.maxNotes) {
         fitToBudget(e, st, log);
-        e.resolved = resolvePlan(e, index);
+        e.resolved = resolvePlan(e, index, allowedRoots);
       }
       const r = await importOne(e, o, st, log);
       if (r.incomplete) incomplete++;
