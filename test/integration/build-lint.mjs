@@ -65,7 +65,10 @@ try {
     check(`packaged: ${f}`, has(f));
   }
   check('excluded: app/js/engine/test.html', !has('app/js/engine/test.html'));
-  const leaked = [...list].filter((p) => /^(test|tools|audition|reviews|dist|build)(\/|$)/.test(p) || /^node_modules\/(electron|electron-builder|playwright)(\/|$)/.test(p) || /^(SPEC|REVIEW|VERIFY|CONTRACT_CHANGES)\.md$/.test(p));
+  // L14: the tray template icons are the one thing from build/ that ships (package.json build.files)
+  const shippedFromBuild = new Set(['build', 'build/trayTemplate.png', 'build/trayTemplate@2x.png']);
+  for (const f of shippedFromBuild) if (f !== 'build') check(`packaged: ${f}`, has(f));
+  const leaked = [...list].filter((p) => !shippedFromBuild.has(p)).filter((p) => /^(test|tools|audition|reviews|dist|build)(\/|$)/.test(p) || /^node_modules\/(electron|electron-builder|playwright)(\/|$)/.test(p) || /^(SPEC|REVIEW|VERIFY|CONTRACT_CHANGES)\.md$/.test(p));
   check('nothing from test/, tools/, audition/, reviews/, build/, dev deps or spec docs is packaged', leaked.length === 0, leaked.slice(0, 10).join(', '));
 
   // manifest (as packaged) → every listed sample present
