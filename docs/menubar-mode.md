@@ -82,6 +82,9 @@ IPC channels: `rig:busPublish`, `rig:miniCommand`, `rig:miniLastState`, `rig:set
 minimise/restore, ⌘H), because with `backgroundThrottling:false` `visibilitychange` may never fire. Opening the
 popover does not count as shown. `setMenuBarMode(true)` answers with the current one right away (the renderer is
 listening by then); `setMenuBarMode(false)` sends `windowFollowDocument` (back to the document's own visibility).
+Each `windowShown` / `windowHidden` (plus window focus) is also sent as IPC `rig:window-visible` (boolean); preload
+turns it into a DOM `CustomEvent('rig:window-visible', {detail: {visible}})` on `window` (non-booleans ignored), which
+the controller maps to `setWindowVisible`. `backgroundThrottling` stays `false`.
 
 **`setMenuBarMode(on)` is the source of truth.** The renderer calls it at start and on every change. It creates or
 destroys the tray (the tray exists only while on), hides the dock icon while on with the window hidden and shows it

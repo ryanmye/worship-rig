@@ -2952,3 +2952,7 @@ pending / denied / failed). Screenshots: `test/phase2/ui-core/screenshots/respon
   - Self-test adds the event sequence
     `[windowShown] / [] (popover) / [windowHidden] / [windowShown] (openMain) / [windowFollowDocument]` and
     `tray: false` after disable; the menu reads `Memory: 280 MB` on the fixture. 2/2 runs on 8452 pass.
+  - DOM event `rig:window-visible` `{detail: {visible}}` (preload, from IPC `rig:window-visible`, booleans only),
+    sent at the same moments as `windowShown` / `windowHidden` (and on window focus); both forms are kept. Self-test:
+    the fixture page sees `windowVisible: [false, true]` for hide-on-close → `openMain` (the detail crosses from the
+    preload's isolated world intact).
