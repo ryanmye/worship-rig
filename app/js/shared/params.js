@@ -94,7 +94,7 @@ export const PARAMS = Object.freeze([
   num('fx.reverb.size', 0, 1, 0.5, 'lin', 'lin', 'Reverb size'),
   num('fx.reverb.damp', 0, 1, 0.5, 'lin', 'lin', 'Reverb damping'),
   num('fx.reverb.predelay', 0, 0.2, 0.02, 's', 'lin', 'Pre-delay'),
-  num('fx.reverb.returnGain', 0, 2, 1, 'dB-display', 'lin', 'Reverb level'),
+  num('fx.reverb.returnGain', 0, 2, 1, 'dB-display', 'lin', 'Space level'),
   // delay
   num('fx.delay.time', 0.05, 1.5, 0.375, 's', 'log', 'Delay time'),
   num('fx.delay.feedback', 0, 0.9, 0.35, 'lin', 'lin', 'Feedback'),

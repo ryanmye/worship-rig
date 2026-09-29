@@ -204,6 +204,11 @@ function createCore(root, appCtx) {
     input.addEventListener('focus', () => {
       if (core.songId) fieldIds.set(input, core.songId);
     });
+    // round4-edit-lib M1: forget the id once focus leaves. Chromium orders change → blur → focusout (element blur,
+    // script blur(), window deactivation), so the change commit and song.js's blur flush still use the focused id;
+    // afterwards commit() falls back to the shown song. Kept forever, a frame-level undo (⌘Z, Edit ▸ Undo) applied to
+    // the unfocused notes after a song switch committed the new song's text into the song last focused on.
+    input.addEventListener('focusout', () => fieldIds.delete(input));
     return (v) => {
       const id = fieldIds.get(input) || core.songId;
       return id ? store.set(`songs.${id}.${rel}`, v) : false;
@@ -244,6 +249,7 @@ function createCore(root, appCtx) {
       const was = lastView;
       lastView = view;
       if (was === 'edit') core.leaveView();
+      if (view === 'edit') core.catchUpNotes?.();
     }
     const cur = state.settings.currentSongId;
     const next = cur ? state.songs[cur] || null : null;
@@ -314,12 +320,23 @@ function createCore(root, appCtx) {
     (ref ? core.instruments.find((x) => x.ref.type === ref.type && x.ref.id === ref.id) || null : null);
 
   // ---- held notes (tab LEDs, keyboard row, "Set lowest…")
+  // performance #5b: while Edit is hidden (Perform shows) the held set is only recorded; the tab LEDs, the keyboard
+  // row and "Set lowest…" catch up when Edit shows again (core.onStore, view → 'edit')
+  let heldStale = false;
+  const fanNotes = () => {
+    heldStale = false;
+    editState.dispatchEvent(new CustomEvent('notes', { detail: { held: core.held } }));
+  };
   listen(controller, 'notes', (e) => {
     const held = e && e.detail && e.detail.held;
     if (!held) return;
     core.held = new Set(held);
-    editState.dispatchEvent(new CustomEvent('notes', { detail: { held: core.held } }));
+    if (!visible()) heldStale = true;
+    else fanNotes();
   });
+  core.catchUpNotes = () => {
+    if (heldStale) fanNotes();
+  };
 
   // ---- pointer clicks don't leave focus on buttons/selects: Space = sustain and ←/→ = songs work unfocused
   let lastPointer = 0;
@@ -366,6 +383,18 @@ function createCore(root, appCtx) {
   core.panelCtx = ({ setTitle, host }) => {
     const subs = new Set();
     const own = [];
+    /**
+     * round4-edit-lib n1: remember `off` for dispose(), and return an unsub that also drops it from `own`, so a
+     * binder destroyed on every slot rebuild does not leave its (closed-over) leave hook behind until unmount.
+     */
+    const keep = (off) => {
+      own.push(off);
+      return () => {
+        const k = own.lastIndexOf(off);
+        if (k >= 0) own.splice(k, 1);
+        off();
+      };
+    };
     core.subSets.add(subs);
     const pctx = {
       // app services
@@ -392,33 +421,25 @@ function createCore(root, appCtx) {
       listen(target, type, fn, opts) {
         if (!target || typeof target.addEventListener !== 'function') return () => {};
         target.addEventListener(type, fn, opts);
-        const off = () => target.removeEventListener(type, fn, opts);
-        own.push(off);
-        return off;
+        return keep(() => target.removeEventListener(type, fn, opts));
       },
       /** Runs before the shown song changes (flush debounced text, cancel drags). @returns unsub */
       onLeaveSong(fn) {
         core.leaveHooks.add(fn);
-        const off = () => core.leaveHooks.delete(fn);
-        own.push(off);
-        return off;
+        return keep(() => core.leaveHooks.delete(fn));
       },
       /** Runs when the app leaves the Edit view (close chip panels / menus). @returns unsub */
       onLeaveView(fn) {
         core.viewHooks.add(fn);
-        const off = () => core.viewHooks.delete(fn);
-        own.push(off);
-        return off;
+        return keep(() => core.viewHooks.delete(fn));
       },
       /** Esc handler: return true when you closed something (newest first). @returns unsub */
       onEscape(fn) {
         core.escapes.push(fn);
-        const off = () => {
+        return keep(() => {
           const k = core.escapes.lastIndexOf(fn);
           if (k >= 0) core.escapes.splice(k, 1);
-        };
-        own.push(off);
-        return off;
+        });
       },
       /** body[data-dialog-open] while an inline confirm/menu of yours is open (ux.md M1). */
       markDialog(open, token = 'panel') {
@@ -447,6 +468,8 @@ function createCore(root, appCtx) {
         own.push(fn);
       },
       host,
+      /** Test hook (round4-edit-lib n1): how many release functions this panel ctx holds. */
+      _ownCount: () => own.length,
     };
     return {
       pctx,

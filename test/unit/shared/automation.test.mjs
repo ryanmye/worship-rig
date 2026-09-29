@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  EXP_FLOOR, DEFAULT_TC, cancelAndHold, rampTo, glideTo, linearTo, setNow, releaseTau, stopAfterRelease,
+  EXP_FLOOR, DEFAULT_TC, RAMP_SETTLE_TC, cancelAndHold, rampTo, glideTo, linearTo, setNow, releaseTau, stopAfterRelease,
   equalPowerCurve, fadeCurveEqualPower, holdAndFade,
 } from '../../../app/js/shared/automation.js';
 
@@ -166,13 +166,13 @@ test('rampTo releases correctly during an attack ramp (cancel-and-hold)', () => 
   assert.ok(p.valueAt(1.3) <= atRelease * 0.00101, '−60 dB at release time');
   // no discontinuity at the release point
   assert.ok(Math.abs(p.valueAt(0.2999) - p.valueAt(0.3)) < 1e-3);
-  assert.deepEqual(p.calls.slice(-2), [['cancelAndHoldAtTime', 0.3], ['setTargetAtTime', 0, 0.3, tau]]);
+  assert.deepEqual(p.calls.slice(-3), [['cancelAndHoldAtTime', 0.3], ['setTargetAtTime', 0, 0.3, tau], ['setValueAtTime', 0, 0.3 + RAMP_SETTLE_TC * tau]]);
 });
 
 test('rampTo: default tc, instant for tc <= 0, rejects non-finite', () => {
   const p = new FakeParam(0.5);
   rampTo(p, 1, 2);
-  assert.deepEqual(p.calls, [['cancelAndHoldAtTime', 2], ['setTargetAtTime', 1, 2, DEFAULT_TC]]);
+  assert.deepEqual(p.calls, [['cancelAndHoldAtTime', 2], ['setTargetAtTime', 1, 2, DEFAULT_TC], ['setValueAtTime', 1, 2 + RAMP_SETTLE_TC * DEFAULT_TC]]);
   assert.equal(DEFAULT_TC, 0.015);
   const q = new FakeParam(0.5);
   rampTo(q, 0.2, 1, 0);
@@ -204,6 +204,7 @@ test('fallback without cancelAndHoldAtTime: cancelScheduledValues + setValueAtTi
     ['cancelScheduledValues', 1],
     ['setValueAtTime', 0.7, 1],
     ['setTargetAtTime', 0, 1, 0.1],
+    ['setValueAtTime', 0, 1 + RAMP_SETTLE_TC * 0.1],
   ]);
   assert.ok(near(p.valueAt(1.1), 0.7 * Math.exp(-1)));
   const q = new FakeParam(0.3, { withCancelAndHold: false });
@@ -352,7 +353,8 @@ test('un-anchored ramp after an earlier setValueAtTime / completed ramp starts t
 
 test('un-anchored ramp after setTarget drops to 0 at `when` (bug, a click) — fixed', () => {
   const bug = new FakeParam(1);
-  rampTo(bug, 0.5, 0.2, 0.05);
+  bug.cancelAndHoldAtTime(0.2);
+  bug.setTargetAtTime(0.5, 0.2, 0.05); // a raw SetTarget (rampTo now pins it, idle-cpu #3: see below)
   rawRamp(bug, 'linear', 1, 1.5, 0.5);
   assert.ok(near(bug.valueAt(1.49), 0.5, 1e-3), 'follows the target until t');
   assert.ok(bug.valueAt(1.51) < 0.05, `bug: drops to 0 at t (${bug.valueAt(1.51)})`);
@@ -459,7 +461,7 @@ test('holdAndFade: target 0 with τ = fade/4 from the held value', () => {
   const p = new FakeParam(0.8);
   p.setValueAtTime(0.8, 0);
   holdAndFade(p, 1, 2);
-  assert.deepEqual(p.calls.slice(1), [['cancelAndHoldAtTime', 1], ['setTargetAtTime', 0, 1, 0.5]]);
+  assert.deepEqual(p.calls.slice(1), [['cancelAndHoldAtTime', 1], ['setTargetAtTime', 0, 1, 0.5], ['setValueAtTime', 0, 1 + RAMP_SETTLE_TC * 0.5]]);
   assert.ok(near(p.valueAt(3), 0.8 * Math.exp(-4)));
   const q = new FakeParam(0.8);
   holdAndFade(q, 1, 0);
@@ -475,7 +477,29 @@ test('works on a param-like object with only the required methods', () => {
     value: 1,
     cancelAndHoldAtTime: (t) => log.push(['hold', t]),
     setTargetAtTime: (v, t, tc) => log.push(['target', v, t, tc]),
+    setValueAtTime: (v, t) => log.push(['set', v, t]),
   };
   rampTo(param, 0, 5, 0.2);
-  assert.deepEqual(log, [['hold', 5], ['target', 0, 5, 0.2]]);
+  assert.deepEqual(log, [['hold', 5], ['target', 0, 5, 0.2], ['set', 0, 5 + RAMP_SETTLE_TC * 0.2]]);
+});
+
+test('rampTo pins its target after RAMP_SETTLE_TC time constants (idle-cpu #3: SetTarget never ends in Chromium)', () => {
+  assert.equal(RAMP_SETTLE_TC, 12);
+  const p = new FakeParam(1);
+  rampTo(p, 0, 1, 0.1);
+  const pin = 1 + RAMP_SETTLE_TC * 0.1;
+  // the step at the pin is e^-12 of the move (inaudible), and the value is exact afterwards
+  assert.ok(Math.abs(p.valueAt(pin - 1e-9) - p.valueAt(pin)) < 1e-5);
+  assert.equal(p.valueAt(pin + 0.5), 0);
+  // a later rampTo before the pin cancels it (cancel-and-hold) and pins its own target
+  const q = new FakeParam(1);
+  rampTo(q, 0, 1, 0.1);
+  rampTo(q, 0.5, 1.5, 0.05);
+  assert.ok(q.valueAt(1.5 + 0.3) > 0.49 && q.valueAt(2.2) === 0.5, `${q.valueAt(2.2)}`);
+  assert.ok(!q.events.some((e) => e.type === 'set' && e.value === 0), 'the first pin was cancelled');
+  // after the pin, a raw un-anchored ramp starts from the pinned value (no Chromium drop to 0 after a SetTarget)
+  const r = new FakeParam(1);
+  rampTo(r, 0.5, 0.2, 0.05);
+  rawRamp(r, 'linear', 1, 1.5, 0.5);
+  assert.ok(r.valueAt(1.51) > 0.5);
 });

@@ -1655,7 +1655,8 @@ test('polish-1: strip level meters follow the slot, sit beside the fader, stop r
   const perf = await measure('perform');
   const filled = await page.evaluate(() => window.__rig.store.currentSong().patch.slots.map((s) => !!s));
   perf.per.forEach((n, i) => {
-    if (filled[i]) assert.ok(n > 0.5 && n < 1.5, `Perform reads slot ${i} once a frame (${n.toFixed(2)})`);
+    // critics-fix (performance #2): the shared loop runs at ≤ ~30 updates/s, so every 2nd frame at 60 Hz
+    if (filled[i]) assert.ok(n > 0.3 && n < 1.1, `Perform reads slot ${i} about every other frame (${n.toFixed(2)})`);
     else assert.equal(n, 0, `an empty strip's meter is hidden and never reads (slot ${i})`);
   });
   const lv = await page.evaluate(() => [0, 1, 2, 3].map((i) => Number(document
@@ -2049,7 +2050,8 @@ test('polish-1 / polish-2A (local L-3): MIDI "pending" = starting (info), "denie
   });
 
 // ------------------------------------------------------------------------------------------ polish-2A (ux-round2)
-const VIEWPORTS = [[1280, 800], [1366, 768], [1440, 860], [1440, 900], [1512, 900], [1024, 700]];
+// round4-perform P9: + short-and-wide windows (1366×700, 1280×720), which must get the 1024×700 throw (≥ 140)
+const VIEWPORTS = [[1280, 800], [1366, 768], [1440, 860], [1440, 900], [1512, 900], [1024, 700], [1366, 700], [1280, 720]];
 
 /**
  * In-page: every Perform / top-bar element that clips (overflow ≠ visible, or an ellipsis) or must stay whole
@@ -2428,6 +2430,717 @@ test('polish-2A chord readout (ux-round2 G1 / #8): released note by note it idle
     assert.equal(r[7], 'Em', 'pedal-held notes do not keep the readout live');
   });
 
+// ------------------------------------------------------------------------------------------ round4-perform
+// reviews/round4-perform.md P1–P13 (each test names its finding)
+
+test('round4-perform P1: the bottom-row hold captions (Revert, unlock) are drawn inside the view', async () => {
+  await selectIndex(0);
+  const capIn = (sel) => page.evaluate((s) => {
+    const cap = document.querySelector(`${s} .hb-cap`);
+    const c = cap.getBoundingClientRect();
+    const v = document.getElementById('view-perform').getBoundingClientRect();
+    return { shown: !cap.hidden, top: c.top, bottom: c.bottom, vTop: v.top, vBottom: v.bottom, h: c.height };
+  }, sel);
+  try {
+    for (const [w, hgt] of [[1440, 900], [1024, 700], [1280, 800]]) {
+      await page.setViewportSize({ width: w, height: hgt });
+      await page.waitForTimeout(200);
+      await page.click('[data-testid=drone-on]'); // arms Revert
+      await page.waitForFunction(() => !document.querySelector('[data-testid=revert-song]').disabled);
+      await page.click('[data-testid=revert-song]'); // a tap: the hint
+      let m = await capIn('[data-testid=revert-song]');
+      assert.ok(m.shown && m.h > 10, `${w}×${hgt}: Revert hint shown`);
+      assert.ok(m.top >= m.vTop && m.bottom <= m.vBottom, `${w}×${hgt}: Revert caption ${m.top}–${m.bottom} inside the view ${m.vTop}–${m.vBottom}`);
+      await hold('[data-testid=revert-song]');
+      await page.waitForFunction(() => document.querySelector('[data-testid=revert-song]').disabled);
+      await page.click('[data-testid=perform-lock]');
+      await page.waitForFunction(() => window.__rig.store.get().settings.performLock === true);
+      await page.waitForTimeout(700); // the click that locked leaves no hint behind
+      await page.click('[data-testid=perform-lock]'); // a tap while locked: the "press and hold" hint
+      m = await capIn('[data-testid=perform-lock]');
+      assert.ok(m.shown, `${w}×${hgt}: unlock hint shown`);
+      assert.ok(m.top >= m.vTop && m.bottom <= m.vBottom, `${w}×${hgt}: Lock caption ${m.top}–${m.bottom} inside the view ${m.vTop}–${m.vBottom}`);
+      if (w === 1024) {
+        await clearToasts();
+        await page.screenshot({ path: path.join(shots, 'round4-holdcap-1024.png') });
+      }
+      await hold('[data-testid=perform-lock]');
+      await page.waitForFunction(() => window.__rig.store.get().settings.performLock === false);
+    }
+  } finally {
+    await page.evaluate(() => window.__rig.store.set('settings.performLock', false));
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(150);
+  }
+});
+
+test('round4-perform P2 (local L-20): the song name\'s line box holds tall-metric fonts (no +1 slack); the KEY row still fits',
+  async () => {
+    await selectIndex(0);
+    const rows = [];
+    try {
+      // L-20 (Mac, SF Pro): "SFsim" / "SFstress" stand in for SF Pro Display, which Linux CI does not have: FreeSans widths
+      // with SF's vertical metrics (ascent .95 + descent .24 = 1.19 em; the overrides are divided by size-adjust, which scales
+      // them) and a stress face at 1.23 em, just inside the 1.25 em line box. The CSS rule is what makes this
+      // font-independent, so this proves it rather than pinning a pixel value.
+      await page.evaluate(() => {
+        const st = document.createElement('style');
+        st.id = 'sfsim-l20';
+        st.textContent = '@font-face{font-family:SFsim;src:local("FreeSans");size-adjust:105%;ascent-override:90%;'
+          + 'descent-override:23%;line-gap-override:0%}@font-face{font-family:SFstress;src:local("FreeSans");size-adjust:112%;'
+          + 'ascent-override:89%;descent-override:21%;line-gap-override:0%}';
+        document.head.append(st);
+      });
+      for (const font of ['Carlito', 'DejaVu Sans', 'SFsim', 'SFstress']) {
+        for (const [w, hgt] of [[1280, 800], [1440, 900], [1024, 700], [1366, 700]]) {
+          await page.setViewportSize({ width: w, height: hgt });
+          await page.waitForTimeout(200);
+          const m = await page.evaluate(async (f) => {
+            const n = document.querySelector('.song-name');
+            n.style.fontFamily = `"${f}", var(--font-display)`;
+            await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+            const block = document.querySelector('.song-block').getBoundingClientRect();
+            const sub = document.querySelector('.song-sub').getBoundingClientRect();
+            return { sh: n.scrollHeight, ch: n.clientHeight, subBottom: sub.bottom, blockBottom: block.bottom, fs: getComputedStyle(n).fontSize,
+              lh: parseFloat(getComputedStyle(n).lineHeight), ff: getComputedStyle(n).fontFamily.slice(0, 24) };
+          }, font);
+          rows.push(`${font} ${w}×${hgt} ${m.sh}/${m.ch} (${m.fs})`);
+          assert.ok(m.sh <= m.ch, `${font} ${w}×${hgt}: .song-name scrollHeight ${m.sh} ≤ clientHeight ${m.ch}`);
+          // L-20: the box is line-height × 1 line whatever the font (a metric-tolerant bound, not a 40 px pixel value)
+          assert.ok(Math.abs(m.ch - m.lh) <= 1, `${font} ${w}×${hgt}: .song-name box ${m.ch} = line-height ${m.lh} × 1 line`);
+          assert.ok(m.subBottom <= m.blockBottom + 0.5, `${font} ${w}×${hgt}: the KEY row ends inside the song block (${m.subBottom} ≤ ${m.blockBottom})`);
+        }
+      }
+      console.log(`# ${rows.join(' · ')}`);
+    } finally {
+      await page.evaluate(() => {
+        document.querySelector('.song-name').style.fontFamily = '';
+        document.getElementById('sfsim-l20')?.remove();
+      });
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.waitForTimeout(150);
+    }
+  });
+
+test('round4-perform P3: Quick › "If something\'s wrong" says Paused / Muted like the top bar; Paused resumes in one click',
+  async () => {
+    await selectIndex(0);
+    await page.click('#btn-quick');
+    await page.waitForSelector('[data-testid=quick-sheet]', { state: 'visible' });
+    try {
+      const r = await page.evaluate(async () => {
+        const c = window.__rig.controller;
+        const real = { ...c.status };
+        const read = () => {
+          const ok = document.querySelector('[data-testid=quick-sheet] .qs-ok');
+          const now = document.querySelector('[data-testid=quick-restart]');
+          return {
+            text: ok.querySelector('.qs-ok-t').textContent,
+            led: ok.querySelector('.led').className,
+            top: document.getElementById('audio-text').textContent,
+            oneClick: !now.hidden,
+            label: now.textContent.trim(),
+            holdShown: !document.querySelector('[data-testid=quick-sheet] .qs-restart-hold').hidden,
+          };
+        };
+        const out = {};
+        // the controller's 1 s tick re-emits the real status; each read happens in the same task as its dispatch
+        c.dispatchEvent(new CustomEvent('status', { detail: { ...real, audio: 'suspended' } }));
+        out.paused = read();
+        window.__resumed = 0;
+        const orig = c.resumeAudio;
+        c.resumeAudio = async () => { window.__resumed += 1; };
+        document.querySelector('[data-testid=quick-restart]').click();
+        c.resumeAudio = orig;
+        out.resumed = window.__resumed;
+        c.dispatchEvent(new CustomEvent('status', { detail: { ...real, instance: 'secondary' } }));
+        out.muted = read();
+        c.dispatchEvent(new CustomEvent('status', { detail: { ...real, audio: 'running', instance: 'primary' } }));
+        out.ok = read();
+        c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } }));
+        return out;
+      });
+      assert.deepEqual(r.paused, { text: 'Sound paused', led: 'led warn', top: 'Paused', oneClick: true, label: 'Resume sound', holdShown: false });
+      assert.equal(r.resumed, 1, 'Resume sound → controller.resumeAudio()');
+      assert.equal(r.muted.text, 'Muted (another window is open)');
+      assert.equal(r.muted.led, 'led warn');
+      assert.equal(r.muted.top, 'Muted');
+      assert.equal(r.ok.text, 'Sound OK');
+      assert.equal(r.ok.led, 'led ok');
+      assert.equal(r.ok.holdShown, true, 'OK: restart stays a 1 s hold');
+    } finally {
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('[data-testid=quick-sheet]', { state: 'hidden' });
+    }
+  });
+
+test('round4-perform P4: "Open Settings" from the unfolded banner strip folds it; the Settings close button is the hit target',
+  async () => {
+    await clearToasts();
+    await page.evaluate(() => {
+      const u = window.__rig.ui;
+      u.setBanner('t-lib', { kind: 'danger', short: 'Changes are NOT being saved', text: 'Changes are not being saved right now.',
+        actions: [{ label: 'Open Settings', testid: 't-open-settings', run: () => window.__rig.ctx.openSettings({ section: 'backups' }) }] });
+      u.setBanner('t-warn', { kind: 'warn', short: 'Another window is open', text: 'Another Worship Rig window is open.' });
+    });
+    try {
+      await page.click('[data-testid=banner-expand]');
+      await page.waitForFunction(() => document.querySelector('[data-testid=banner-strip]').classList.contains('open'));
+      await page.click('[data-testid=t-open-settings]');
+      await page.waitForSelector('#view-settings', { state: 'visible' });
+      const m = await page.evaluate(() => {
+        const x = document.querySelector('#view-settings .st-close');
+        const b = x.getBoundingClientRect();
+        const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+        return { open: document.querySelector('[data-testid=banner-strip]').classList.contains('open'), hit: !!hit && x.contains(hit) };
+      });
+      assert.deepEqual(m, { open: false, hit: true });
+      await page.click('#view-settings .st-close');
+      await page.waitForSelector('#view-settings', { state: 'hidden' });
+    } finally {
+      await page.evaluate(() => {
+        window.__rig.ui.setBanner('t-lib', null);
+        window.__rig.ui.setBanner('t-warn', null);
+      });
+      await page.waitForTimeout(100);
+    }
+  });
+
+test('round4-perform P5: opening and closing "Sing it in…" does not leak its DOM (CDP DOM counters after GC)', async () => {
+  await selectIndex(0);
+  const cdp = await context.newCDPSession(page);
+  const counters = async () => {
+    await cdp.send('HeapProfiler.collectGarbage');
+    await page.waitForTimeout(50);
+    await cdp.send('HeapProfiler.collectGarbage');
+    return cdp.send('Memory.getDOMCounters');
+  };
+  // in-page clicks + Esc with two frames between (the popover is laid out and painted): Playwright's own
+  // click / waitForSelector keep element references of their own and would show as a leak here
+  const cycle = (n) => page.evaluate(async (count) => {
+    const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const b = document.querySelector('[data-testid=key-button]');
+    let opened = 0;
+    for (let k = 0; k < count; k++) {
+      b.click();
+      await frames();
+      opened += document.querySelectorAll('[data-testid=sing-it-in]').length;
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      await frames();
+    }
+    return { opened, left: document.querySelectorAll('[data-testid=sing-it-in]').length };
+  }, n);
+  try {
+    await cycle(3); // warm-up
+    await clearToasts();
+    const a = await counters();
+    const c = await cycle(40);
+    assert.deepEqual(c, { opened: 40, left: 0 });
+    await page.waitForTimeout(300);
+    const b = await counters();
+    const dn = b.nodes - a.nodes;
+    const dl = b.jsEventListeners - a.jsEventListeners;
+    console.log(`# Sing it in… ×40: Δnodes ${dn}, Δlisteners ${dl}`);
+    assert.ok(dn < 20, `Δnodes ${dn} < 20 after 40 open/close cycles (was ≈ +52 per open)`);
+    assert.ok(dl < 20, `Δlisteners ${dl} < 20 (was ≈ +26 per open)`);
+  } finally {
+    await cdp.detach();
+  }
+});
+
+test('round4-perform P6: under lock the newer-library offer has only "Not now"; unlocking brings "Use that library" back at once',
+  async () => {
+    await clearToasts();
+    const r = await page.evaluate(async () => {
+      const { controller: c, store } = window.__rig;
+      const buttons = () => [...document.querySelectorAll('[data-testid=banner-other-library] .banner-btn')].map((b) => b.textContent);
+      const other = { origin: 'http://127.0.0.1:8439', savedAt: Date.now() - 3600e3, path: '/tmp/b.json' };
+      const out = {};
+      store.set('settings.performLock', true);
+      for (let k = 0; k < 5; k++) await Promise.resolve();
+      c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status, otherLibrary: other } }));
+      out.locked = buttons();
+      // no status tick in between: the lock change itself re-renders the banners (microtasks only)
+      store.set('settings.performLock', false);
+      for (let k = 0; k < 8; k++) await Promise.resolve();
+      out.unlocked = buttons();
+      c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } }));
+      return out;
+    });
+    assert.deepEqual(r.locked, ['Not now'], 'no one-tap library replacement under lock');
+    assert.deepEqual(r.unlocked, ['Use that library', 'Not now']);
+    const lock = await page.evaluate(async () => (await import('/js/views/perform.js')).LOCK);
+    for (const item of ['banner: Open Settings / Use that library', 'pad folder choose / change']) {
+      assert.ok(lock.frozen.includes(item), `LOCK.frozen has "${item}"`);
+    }
+    for (const item of ['pad folder Rescan (Mac app, pads loaded)', 'top bar: master volume / REC / Quick', 'Notes toggle']) {
+      assert.ok(lock.live.includes(item), `LOCK.live has "${item}"`);
+    }
+    // the top-bar items the table calls live really are live under lock
+    await page.evaluate(() => window.__rig.store.set('settings.performLock', true));
+    await page.waitForTimeout(80);
+    const tb = await page.evaluate(() => ({
+      master: document.querySelector('[data-testid=master-fader] input').disabled,
+      rec: document.getElementById('btn-rec').disabled,
+      quick: document.getElementById('btn-quick').disabled,
+    }));
+    await page.evaluate(() => window.__rig.store.set('settings.performLock', false));
+    assert.deepEqual(tb, { master: false, rec: false, quick: false });
+  });
+
+test('round4-perform P7 / P8: the MIDI "starting" toast goes when MIDI answers; an error toast outlives later infos', async () => {
+  await clearToasts();
+  const r = await page.evaluate(async () => {
+    const { controller: c, ui } = window.__rig;
+    const P = 'MIDI starting… answer the browser’s permission prompt if it appears.';
+    const live = () => [...document.querySelectorAll('#toasts > .toast:not(.leaving)')].map((t) => t.querySelector('.toast-msg').textContent);
+    const out = {};
+    // P7: the once-per-session pending toast (shown by the polish-1 test) is re-created here
+    ui.toast(P, 'info', { ms: 10000 });
+    c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status, midi: { available: false, connected: false, reason: 'pending', pending: true, inputs: [] } } }));
+    out.pending = live().includes(P);
+    await new Promise((res) => setTimeout(res, 50));
+    c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status, midi: { available: true, connected: true, name: 'Keystation', inputs: [{ id: 'k' }], reason: null } } }));
+    await new Promise((res) => setTimeout(res, 300));
+    out.connected = live().includes(P);
+    out.lamp = document.getElementById('midi-name').textContent;
+    c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } }));
+    document.querySelectorAll('#toasts .toast').forEach((t) => t.remove());
+    // P8
+    ui.toast('round4 P8 error', 'error');
+    ui.toast('round4 P8 info one');
+    ui.toast('round4 P8 info two');
+    out.stack = live();
+    ui.toast('round4 P8 warn');
+    out.stack2 = live();
+    return out;
+  });
+  assert.equal(r.pending, true);
+  assert.equal(r.connected, false, 'the "starting" toast is dismissed once MIDI is connected');
+  assert.equal(r.lamp, 'Keystation');
+  assert.deepEqual(r.stack, ['round4 P8 error', 'round4 P8 info two'], 'the oldest info goes first, not the error');
+  assert.deepEqual(r.stack2, ['round4 P8 error', 'round4 P8 warn']);
+  await page.waitForTimeout(250);
+  await clearToasts();
+});
+
+test('round4-perform P10: "Sing it in…" and "Back to" keep a saved octave; +7 (octave flip) then Back still returns to 0',
+  async () => {
+    await selectIndex(0);
+    const rebaseline = async () => {
+      await page.evaluate(() => window.__rig.store.set('settings.view', 'edit'));
+      await page.waitForFunction(() => !document.getElementById('view-edit').hidden);
+      await page.evaluate(() => window.__rig.store.set('settings.view', 'perform'));
+      await page.waitForFunction(() => !document.getElementById('view-perform').hidden);
+    };
+    const song = () => page.evaluate(() => {
+      const s = window.__rig.store.currentSong();
+      return { hearIn: s.hearIn, playIn: s.playIn, oct: s.transposeOctave || 0,
+        revert: document.querySelector('[data-testid=revert-song]').disabled, back: document.querySelector('[data-testid=sing-back]')?.disabled };
+    });
+    const set = (h, p, o) => page.evaluate(([a, b, c]) => {
+      const { store } = window.__rig;
+      const s = store.currentSong();
+      store.set(`songs.${s.id}.hearIn`, a);
+      store.set(`songs.${s.id}.playIn`, b);
+      store.set(`songs.${s.id}.transposeOctave`, c);
+    }, [h, p, o]);
+    const orig = await page.evaluate(() => {
+      const s = window.__rig.store.currentSong();
+      return [s.hearIn, s.playIn, s.transposeOctave || 0];
+    });
+    try {
+      await set(2, 2, 1); // D, one octave up, saved
+      await rebaseline();
+      assert.equal((await page.textContent('[data-testid=transpose-val]')).trim(), '+12');
+      await page.click('[data-testid=key-button]');
+      await page.waitForSelector('[data-testid=sing-it-in]');
+      let s = await song();
+      assert.equal(s.back, true, '"Back to D" is disabled at the saved +12');
+      await page.click('[data-testid=sing-grid] [data-pc="7"]'); // G
+      await page.waitForFunction(() => window.__rig.store.currentSong().hearIn === 7);
+      s = await song();
+      assert.deepEqual([s.hearIn, s.playIn, s.oct], [7, 2, 1], 'D → G keeps the octave (+17)');
+      assert.equal((await page.textContent('[data-testid=transpose-val]')).trim(), '+17');
+      await page.click('[data-testid=sing-back]');
+      await page.waitForFunction(() => window.__rig.store.currentSong().hearIn === 2);
+      s = await song();
+      assert.deepEqual([s.hearIn, s.oct, s.revert, s.back], [2, 1, true, true], 'Back returns to the saved +12: nothing to revert');
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('[data-testid=sing-it-in]', { state: 'detached' });
+      // the ordinary path with no saved octave: +7 flips transposeOctave to 1; Back still goes to 0
+      await set(2, 2, 0);
+      await rebaseline();
+      await page.evaluate(() => window.__rig.controller.transposeBy(7));
+      await page.waitForFunction(() => window.__rig.store.currentSong().transposeOctave === 1);
+      await page.click('[data-testid=key-button]');
+      await page.waitForSelector('[data-testid=sing-it-in]');
+      await page.click('[data-testid=sing-back]');
+      await page.waitForFunction(() => window.__rig.engine.transpose === 0);
+      s = await song();
+      assert.deepEqual([s.hearIn, s.oct, s.revert], [2, 0, true]);
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('[data-testid=sing-it-in]', { state: 'detached' });
+    } finally {
+      await set(...orig);
+      await rebaseline();
+    }
+  });
+
+test('round4-perform P11 / P12 / P13: Quick sheet clears the strips below 900 px; "Space level" on the wheel; no re-fit per write',
+  async () => {
+    await selectIndex(0);
+    try {
+      for (const [w, hgt] of [[1280, 800], [1366, 768], [1366, 700], [1440, 900], [1024, 700]]) {
+        await page.setViewportSize({ width: w, height: hgt });
+        await page.waitForTimeout(200);
+        await page.click('#btn-quick');
+        await page.waitForSelector('[data-testid=quick-sheet]', { state: 'visible' });
+        const m = await page.evaluate(() => ({
+          qs: document.querySelector('[data-testid=quick-sheet]').getBoundingClientRect().bottom,
+          strips: Math.min(...[...document.querySelectorAll('.slot, .p-drone, .p-wheel')].map((e) => e.getBoundingClientRect().top)),
+        }));
+        assert.ok(m.qs <= m.strips + 0.5, `${w}×${hgt}: Quick ends at ${m.qs}, the strips start at ${m.strips}`);
+        await page.keyboard.press('Escape');
+        await page.waitForSelector('[data-testid=quick-sheet]', { state: 'hidden' });
+      }
+    } finally {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.waitForTimeout(150);
+    }
+    assert.equal(await page.evaluate(async () => (await import('/js/views/perform.js')).wheelTargetLabel('fx.reverb.returnGain')), 'Space level');
+    // P13: fader writes don't re-run the name fit (it reads the name's computed style and forces a layout)
+    const calls = await page.evaluate(async () => {
+      const { store } = window.__rig;
+      const n = document.querySelector('.song-name');
+      const s = store.currentSong();
+      const i = s.patch.slots.findIndex(Boolean);
+      const g0 = s.patch.slots[i].gain;
+      let c = 0;
+      const orig = window.getComputedStyle;
+      window.getComputedStyle = function (el, ...a) {
+        if (el === n) c += 1;
+        return orig.call(this, el, ...a);
+      };
+      try {
+        for (let k = 0; k < 20; k++) {
+          store.set(`songs.${s.id}.patch.slots.${i}.gain`, g0 * (k % 2 ? 0.9 : 1));
+          await new Promise((r) => requestAnimationFrame(r));
+        }
+      } finally {
+        window.getComputedStyle = orig;
+        store.set(`songs.${s.id}.patch.slots.${i}.gain`, g0);
+      }
+      return c;
+    });
+    assert.equal(calls, 0, `the song name was re-fitted ${calls}× during 20 fader writes`);
+  });
+
+// ---------------------------------------------------------------------------------------------- critics-fix (C6)
+// reviews/onboarding.md O1–O3, O11, O13, O14, "first 60 seconds"; reviews/performance.md #2, #3; idle-cpu R1, R4
+
+test('critics-fix O1: holding Lock 1.3 s or 2 s unlocks and stays unlocked; the next plain click still locks', async () => {
+  await selectIndex(0);
+  const isLocked = () => page.evaluate(() => window.__rig.store.get().settings.performLock);
+  const lb = await page.locator('[data-testid=perform-lock]').boundingBox();
+  const holdFor = async (ms) => {
+    await page.mouse.move(lb.x + lb.width / 2, lb.y + lb.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(ms);
+    await page.mouse.up();
+  };
+  try {
+    for (const ms of [2000, 1300]) {
+      await page.click('[data-testid=perform-lock]');
+      await page.waitForFunction(() => window.__rig.store.get().settings.performLock === true);
+      await page.waitForTimeout(700);
+      await holdFor(ms);
+      await page.waitForTimeout(900); // the old 600 ms window has long passed
+      assert.equal(await isLocked(), false, `a ${ms} ms hold leaves the view unlocked (was re-locked by the release click)`);
+    }
+    // the swallowed click is only the one that ended the hold: the next tap locks again at once
+    await page.click('[data-testid=perform-lock]');
+    await page.waitForFunction(() => window.__rig.store.get().settings.performLock === true, null, { timeout: 2000 });
+    // keyboard: a 2 s Enter hold still unlocks (round2-ui #5), and nothing is left swallowed for the next Enter
+    await page.focus('[data-testid=perform-lock]');
+    await page.keyboard.down('Enter');
+    await page.waitForTimeout(2000);
+    await page.keyboard.up('Enter');
+    await page.waitForTimeout(200);
+    assert.equal(await isLocked(), false, 'a 2 s Enter hold unlocks and stays unlocked');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.__rig.store.get().settings.performLock === true, null, { timeout: 2000 });
+  } finally {
+    await page.evaluate(() => {
+      window.__rig.store.set('settings.performLock', false);
+      document.activeElement?.blur?.();
+    });
+  }
+});
+
+test('critics-fix O2: "Loading…" sits in the KEY row and never over the song title (1440 / 1280 / 1024)', async () => {
+  await selectIndex(0);
+  try {
+    for (const [w, hgt] of [[1440, 900], [1280, 800], [1024, 700]]) {
+      await page.setViewportSize({ width: w, height: hgt });
+      await page.waitForTimeout(200);
+      const g = await page.evaluate(() => {
+        const block = document.querySelector('.song-block');
+        block.classList.add('loading');
+        const r = (el) => el.getBoundingClientRect();
+        const chip = document.querySelector('.song-loading');
+        const name = document.querySelector('.song-name');
+        const sub = document.querySelector('.song-sub');
+        const notes = document.querySelector('.song-sub .notes-btn');
+        const c = r(chip);
+        const n = r(name);
+        const out = {
+          shown: getComputedStyle(chip).display !== 'none' && c.width > 10,
+          overlapName: !(c.bottom <= n.top || c.top >= n.bottom || c.right <= n.left || c.left >= n.right),
+          inSub: chip.parentElement === sub && c.top >= r(sub).top - 1 && c.bottom <= r(sub).bottom + 1,
+          clearOfNotes: !notes || !notes.offsetParent || c.right <= r(notes).left + 0.5,
+          inBlock: c.right <= r(block).right,
+          bpmHidden: getComputedStyle(document.querySelector('.song-bpm')).display === 'none',
+        };
+        block.classList.remove('loading');
+        out.hiddenAfter = getComputedStyle(chip).display === 'none';
+        return out;
+      });
+      assert.deepEqual(g, { shown: true, overlapName: false, inSub: true, clearOfNotes: true, inBlock: true, bpmHidden: true,
+        hiddenAfter: true }, `${w}×${hgt}: ${JSON.stringify(g)}`);
+    }
+  } finally {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(150);
+  }
+});
+
+test('critics-fix O3 / O14 / O11 / O13: loading tooltip says "play now"; a suspended context never shows "Sound OK"; '
+  + 'REC says Saving…; a tap on locked Edit / ⚙ says why', async () => {
+  await selectIndex(0);
+  const r = await page.evaluate(async () => {
+    const { controller: c, engine: e, recorder } = window.__rig;
+    const real = { ...c.status };
+    const out = {};
+    c.dispatchEvent(new CustomEvent('status', { detail: { ...real, ready: false } }));
+    out.loadingTitle = document.getElementById('ready-status').title;
+    // O14: the controller says running, the context is still gesture-blocked
+    Object.defineProperty(e.ctx, 'state', { get: () => 'suspended', configurable: true });
+    c.dispatchEvent(new CustomEvent('status', { detail: { ...real, audio: 'running' } }));
+    out.blocked = document.getElementById('audio-text').textContent;
+    delete e.ctx.state;
+    c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } }));
+    out.readyTitle = document.getElementById('ready-status').title;
+    out.ok = document.getElementById('audio-text').textContent;
+    // O11
+    recorder.dispatchEvent(new CustomEvent('state', { detail: { state: 'stopping' } }));
+    const t = document.getElementById('rec-time');
+    out.saving = { text: t.textContent, cls: t.className, w: t.getBoundingClientRect().width };
+    recorder.dispatchEvent(new CustomEvent('state', { detail: { state: 'idle' } }));
+    out.after = t.className;
+    return out;
+  });
+  assert.match(r.loadingTitle, /You can play now/);
+  assert.equal(r.blocked, 'Paused', 'a gesture-blocked context reads Paused, not Sound OK');
+  assert.equal(r.ok, 'Sound OK');
+  assert.match(r.readyTitle, /loaded and switches instantly/);
+  assert.equal(r.saving.text, 'Saving…');
+  assert.match(r.saving.cls, /\bon\b/);
+  assert.match(r.saving.cls, /\bsaving\b/);
+  assert.doesNotMatch(r.after, /\bsaving\b/);
+  // O13
+  await clearToasts();
+  await page.click('[data-testid=perform-lock]');
+  await page.waitForFunction(() => window.__rig.store.get().settings.performLock === true);
+  try {
+    for (const sel of ['[data-testid=view-switch] [data-value="edit"]', '#btn-settings']) {
+      await clearToasts();
+      assert.equal(await page.isDisabled(sel), true, `${sel} disabled under lock`);
+      const b = await page.locator(sel).boundingBox();
+      await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+      await page.waitForFunction(() => [...document.querySelectorAll('#toasts .toast')].some((x) => /hold Lock to unlock/.test(x.textContent)),
+        null, { timeout: 3000 });
+    }
+    assert.equal(await page.evaluate(() => window.__rig.store.get().settings.view), 'perform');
+  } finally {
+    await page.evaluate(() => window.__rig.store.set('settings.performLock', false));
+    await clearToasts();
+  }
+  // a tap on them unlocked shows nothing of the kind
+  await page.mouse.move(5, 895);
+  await page.mouse.down();
+  await page.mouse.up();
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll('#toasts .toast')].some((x) => /hold Lock/.test(x.textContent))), false);
+});
+
+test('critics-fix "first 60 seconds": Start here card (once, closes on × or the next song) and key letters on the piano',
+  async () => {
+    const card = '[data-testid=start-card]';
+    await selectIndex(1);
+    await selectIndex(0);
+    // a song change (here, or earlier in the suite) closed the card for good, and localStorage says so
+    assert.equal(await page.evaluate(() => localStorage.getItem('worship-rig.start-card')), 'done');
+    assert.equal(await page.isVisible(card), false);
+    await page.evaluate(() => window.__rig.views.perform.startCard.reset());
+    await page.waitForSelector(card, { state: 'visible' });
+    const g = await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      const n = document.querySelector('.p-notes').getBoundingClientRect();
+      const r = el.getBoundingClientRect();
+      return { text: el.textContent, inNotes: el.parentElement.classList.contains('p-notes'), fits: r.left >= n.left && r.right <= n.right + 0.5,
+        overflowX: el.scrollWidth > el.clientWidth + 1 };
+    }, card);
+    assert.ok(g.inNotes && g.fits && !g.overflowX, JSON.stringify(g));
+    assert.match(g.text, /No keyboard yet\? Play A S D F G H J K/);
+    assert.match(g.text, /next song/);
+    assert.match(g.text, /tap Lock\. To unlock, hold it/);
+    await clearToasts();
+    await page.screenshot({ path: path.join(shots, 'critics-start-card.png') });
+    // a connected keyboard changes the first line
+    const connected = await page.evaluate((sel) => {
+      const c = window.__rig.controller;
+      const real = { ...c.status };
+      c.dispatchEvent(new CustomEvent('status', { detail: { ...real, midi: { ...real.midi, connected: true, available: true, name: 'Test Keys' } } }));
+      const t = document.querySelector(sel).textContent;
+      const letters = document.querySelectorAll('.piano .pkey-letter').length;
+      c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } }));
+      return { t, letters };
+    }, card);
+    assert.match(connected.t, /Your keyboard is connected/);
+    assert.equal(connected.letters, 0, 'no key letters while a MIDI keyboard is connected');
+    // the next song closes it for good
+    await selectIndex(1);
+    assert.equal(await page.isVisible(card), false, 'closed by the first song change');
+    assert.equal(await page.evaluate(() => localStorage.getItem('worship-rig.start-card')), 'done');
+    await selectIndex(0);
+    assert.equal(await page.isVisible(card), false, 'and it stays closed');
+    // × closes it too
+    await page.evaluate(() => window.__rig.views.perform.startCard.reset());
+    await page.click(`${card} .sc-x`);
+    assert.equal(await page.isVisible(card), false);
+    assert.equal(await page.evaluate(() => localStorage.getItem('worship-rig.start-card')), 'done');
+    // key letters: A…; over C4…E5 while no MIDI keyboard is connected; Z/X move them an octave
+    const letters = () => page.evaluate(() => [...document.querySelectorAll('.piano .pkey-letter')]
+      .map((s) => `${s.parentElement.dataset.note}:${s.textContent}`));
+    const connectedNow = await page.evaluate(() => !!window.__rig.controller.status.midi?.connected);
+    if (connectedNow) console.log('# a MIDI keyboard is connected here: key-letter checks skipped');
+    else {
+      let l = await letters();
+      assert.equal(l.length, 17);
+      assert.ok(l.includes('60:A') && l.includes('61:W') && l.includes('76:;'), l.join(' '));
+      await page.evaluate(() => document.activeElement?.blur?.());
+      await page.keyboard.press('KeyX');
+      await page.waitForFunction(() => !!document.querySelector('.piano .pkey[data-note="72"] .pkey-letter'));
+      l = await letters();
+      assert.ok(l.includes('72:A') && l.includes('88:;') && !l.includes('60:A'), l.join(' '));
+      await page.keyboard.press('KeyZ');
+      await page.waitForFunction(() => document.querySelector('.piano .pkey[data-note="60"] .pkey-letter')?.textContent === 'A');
+      await page.evaluate(() => window.__rig.store.set('settings.computerKeyboard', false));
+      assert.equal((await letters()).length, 0, 'none with the computer keyboard off');
+      await page.evaluate(() => window.__rig.store.set('settings.computerKeyboard', true));
+      assert.equal((await letters()).length, 17);
+    }
+  });
+
+test('critics-fix performance #2 / idle-cpu R1, R4: meters update ≤ ~30×/s, stop their frame loops when silent, wake on a '
+  + 'note, hide while the window is hidden', async () => {
+  await selectIndex(4); // Grand Piano: no drone, so silence is reachable
+  const r = await page.evaluate(async () => {
+    const { controller: c } = window.__rig;
+    const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+    const counts = { frame: 0, loop: 0 };
+    const orig = window.requestAnimationFrame;
+    window.requestAnimationFrame = (cb) => {
+      if (cb && (cb.name === 'frame' || cb.name === 'loop')) counts[cb.name] += 1;
+      return orig.call(window, cb);
+    };
+    let fillWrites = 0;
+    const mo = new MutationObserver((ms) => {
+      for (const m of ms) if (m.target.classList.contains('meter-fill')) fillWrites += 1;
+    });
+    mo.observe(document.getElementById('meter-mount'), { attributes: true, subtree: true, attributeFilter: ['style'] });
+    const window1 = async (ms) => {
+      counts.frame = 0;
+      counts.loop = 0;
+      fillWrites = 0;
+      await sleep(ms);
+      return { frame: counts.frame, loop: counts.loop, fillWrites };
+    };
+    try {
+      // quiet: wait for the tail to die and the meters to go to sleep
+      const t0 = performance.now();
+      while (performance.now() - t0 < 15000) {
+        const w = await window1(500);
+        if (w.frame === 0 && w.loop === 0) break;
+      }
+      const silent = await window1(1000);
+      c.perform.noteOn(60, 110);
+      c.perform.noteOn(64, 110);
+      await sleep(150);
+      const playing = await window1(1000);
+      const bars = [...document.querySelectorAll('.p-slots .lvl-cover')].map((x) => x.style.transform);
+      c.perform.noteOff(60);
+      c.perform.noteOff(64);
+      // R4: a hidden window hides the meters (their IntersectionObservers stop the loops)
+      c.dispatchEvent(new CustomEvent('menu', { detail: { id: 'windowHidden' } }));
+      await sleep(50);
+      const hidden = { attr: document.documentElement.hasAttribute('data-window-hidden'),
+        meter: getComputedStyle(document.querySelector('#meter-mount .meter')).display };
+      c.dispatchEvent(new CustomEvent('menu', { detail: { id: 'windowShown' } }));
+      await sleep(50);
+      hidden.after = document.documentElement.hasAttribute('data-window-hidden');
+      return { silent, playing, bars, hidden };
+    } finally {
+      mo.disconnect();
+      window.requestAnimationFrame = orig;
+    }
+  });
+  assert.deepEqual(r.silent, { frame: 0, loop: 0, fillWrites: 0 }, `silent: no meter frames, no writes (${JSON.stringify(r.silent)})`);
+  assert.ok(r.playing.frame > 10, `a note wakes the top-bar meter (${r.playing.frame} frames/s)`);
+  assert.ok(r.playing.loop > 10, `a note wakes the slot meters (${r.playing.loop} frames/s)`);
+  // two bars (L, R) at ≤ ~30 updates a second each, plus scheduling slack
+  assert.ok(r.playing.fillWrites > 5 && r.playing.fillWrites <= 2 * 36, `top-bar fill writes in 1 s: ${r.playing.fillWrites}`);
+  assert.ok(r.bars.some((t) => Number(t.replace(/[^0-9.]/g, '') || 1) < 0.9), `a slot bar lifts (${r.bars.join(', ')})`);
+  assert.deepEqual(r.hidden, { attr: true, meter: 'none', after: false });
+});
+
+test('critics-fix performance #3: a wheel held still writes nothing; a moving wheel touches only the indicator', async () => {
+  await selectIndex(1); // Building Swell: the wheel drives a slot fader
+  const r = await page.evaluate(async () => {
+    const { controller: c } = window.__rig;
+    const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+    c.perform.wheel(0.5);
+    await sleep(200);
+    const muts = [];
+    const mo = new MutationObserver((ms) => {
+      for (const m of ms) muts.push(`${m.type}:${m.target.className || m.target.nodeName}:${m.attributeName || ''}`);
+    });
+    const opts = { attributes: true, childList: true, characterData: true, subtree: true };
+    mo.observe(document.querySelector('.p-wheel'), opts);
+    mo.observe(document.querySelector('.p-slots'), opts);
+    for (let i = 0; i < 20; i++) {
+      c.perform.wheel(0.5);
+      await new Promise((res) => requestAnimationFrame(res));
+    }
+    const still = muts.splice(0);
+    for (let i = 0; i < 20; i++) {
+      c.perform.wheel(0.5 + i / 50);
+      await new Promise((res) => requestAnimationFrame(res));
+    }
+    await sleep(50);
+    const moving = muts.splice(0);
+    mo.disconnect();
+    c.perform.wheel(1);
+    const ind = document.querySelector('.p-slots .fader-indicator:not([hidden])');
+    return { still, moving, indOnSelf: !!ind && ind.style.getPropertyValue('--ind') !== '',
+      rootInd: [...document.querySelectorAll('.p-slots .fader')].some((f) => f.style.getPropertyValue('--ind') !== '') };
+  });
+  assert.deepEqual(r.still, [], `a still wheel: no DOM writes (${r.still.slice(0, 6).join(' ')})`);
+  assert.ok(r.moving.length > 0, 'a moving wheel is drawn');
+  assert.ok(r.moving.every((m) => !/childList/.test(m)), `text changes in place, no node swaps (${r.moving.filter((m) => /childList/.test(m)).slice(0, 4)})`);
+  assert.ok(r.indOnSelf && !r.rootInd, '--ind lives on the indicator, not the fader root');
+});
+
 test('no console errors on the main page', () => {
   assert.deepEqual(consoleErrors, [], consoleErrors.join('\n'));
 });
@@ -2449,6 +3162,8 @@ test('first run without autoplay permission: "Click anywhere to start audio" ove
       console.log('# this headless build allows autoplay without a gesture; overlay correctly stayed hidden');
     } else {
       assert.equal(overlay, true, `overlay shown while the context is ${state}`);
+      // critics-fix O14: the top bar agrees with the overlay (it said "Sound OK" under "Click anywhere to start audio")
+      assert.notEqual((await p2.textContent('#audio-text')).trim(), 'Sound OK', 'no "Sound OK" while audio waits for a click');
       await p2.screenshot({ path: path.join(shots, 'start-overlay.png') });
       await p2.mouse.click(700, 450);
       await p2.waitForFunction(() => window.__rig.engine.ctx.state === 'running', null, { timeout: 10000 });

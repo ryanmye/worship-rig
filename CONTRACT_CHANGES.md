@@ -2892,3 +2892,635 @@ pending / denied / failed). Screenshots: `test/phase2/ui-core/screenshots/respon
   "Reverb level" is gone from the learn table). `shared/params.js` still labels the row 'Reverb level' (frozen).
 - **Runs (Linux, one at a time, no re-runs needed):** `node test/phase2/edit-v2/run.mjs` 11/11 files, 90 tests,
   0 fail; `node test/phase2/settings/run.mjs` 29/29; `node test/phase2/ui-core/run.mjs` 46/46.
+
+## menubar-A (C7: shared/bus.js, controller modes / low-resource / publish, engine low-resource, store settings)
+Implements the CLOUD A half of `docs/menubar-mode.md` (contract v1). Message shapes are exactly the contract's.
+- **`app/js/shared/bus.js` (new, pure).** `createBus({role:'main'|'mini', rig?, BroadcastChannel?, timers?, now?,
+  hello?, warn?, throttleMs?})` → `{role, transport, publish(state), flush(), onCommand(cb), subscribe(cb),
+  command(cmd), lastState, sent, close()}`. Transport per direction, each preload method feature-detected on its
+  own: main `rig.busPublish(json)` / `rig.onBusCommand(cb)`, mini `rig.miniSubscribe(cb)` / `rig.miniCommand(json)`,
+  else `BroadcastChannel('rig-bus')` (`transport` reports `'rig' | 'broadcast' | 'none'` per direction). The rig
+  transport sends JSON strings (contract `json`) and accepts strings or objects back; BroadcastChannel carries plain
+  objects. On one channel a command is told from a state by its `type` field (states have none).
+  - Validation: `stateError(m)` / `commandError(m)` (→ null or the first problem), `isValidState` / `isValidCommand`,
+    `COMMAND_TYPES` (12), `AUDIO_STATES`. Invalid messages are dropped with `console.warn` in both directions; main
+    refuses to publish an invalid state, mini refuses to send an invalid command (`command()` fills in `v:1`).
+    Nullable by design: `current` (no song), `masterDb` (master 0 = −∞ dB, not JSON-able), `memoryMB` (unknown),
+    `midi.name`. Payload rules: `selectMode.id` non-empty string, `master.value` 0..2 (out of range is dropped, not
+    clamped), `droneKey.pc` integer 0..11, `lowResource.on` / `record.on` boolean.
+  - Throttle: ≤ 1 send per `BUS_THROTTLE_MS` = 250 ms (≤ 4/s), leading + trailing edge (the newest state always goes
+    out). Measured: 10 publishes in 100 ms → 2 sends (first + newest); 200 publishes over 2 s → ≤ 9.
+  - `hello`: main answers at once with `lastState` (bypasses the throttle, folds a pending trailing send into it) and
+    still passes the command to `onCommand`. A mini's first `subscribe()` sends `hello` itself (`hello:false` opts out;
+    a second hello from mini.js is harmless).
+- **controller** (additive; section "menu-bar mode" + small hooks in `preloadSetlist` / `preloadNeighbors` /
+  `startPrimary` and two `status` fields):
+  - `controller.modes = {list(), current(), select(id), next(), prev()}`. Mode = `{id, name, key, index}` (key =
+    `keyName(hearIn, minor)`). Set = `settings.menuBarSetlistId`'s songs, repeats dropped, ≤ `MENU_BAR_MAX_MODES` = 6;
+    unset **or empty** → first `MENU_BAR_FALLBACK_MODES` = 3 of `store.navIds()` (current setlist, else library
+    order). `next`/`prev` wrap; from a song outside the set `next` → first, `prev` → last. `select` of the song that
+    is already playing resolves false (no re-prepare). All return `Promise<boolean>`.
+  - `controller.setLowResource(on)` persists `settings.lowResource` and returns the effective state.
+    `controller.setWindowVisible(true|false|null)` overrides document visibility (null = follow
+    `document.visibilityState`). Effective low-resource = `settings.lowResource || (settings.menuBarMode &&
+    !windowVisible)`. **Deviation from the brief:** the automatic part is gated on `settings.menuBarMode` — a hidden
+    Chrome tab or a minimized window outside menu-bar mode keeps the normal policy, so a MIDI song switch while
+    another app is in front never waits on a decode the neighbour preload would have done.
+  - Low-resource on → `engine.setLowResource(true)` (optional call), `status.memory.mode = 'current-only'`, every
+    preload is `preload([current], {pin:'replace'})` (setlist and neighbour preloads skipped), event
+    `'lowResource' {on, auto}`. Off → `engine.setLowResource(false)` and `preloadSetlist()` (the normal policy; the
+    songs are usually still decoded, so it is quick). A persisted `lowResource` applies before the first song/preload.
+    New `status.lowResource`, `status.windowVisible` (status.memory is unchanged apart from the new mode value).
+  - `controller.menuBarState()` → the contract `state`; `controller.publishState({force?, immediate?})` publishes it
+    (unchanged JSON is skipped unless `force`). Published at start and on every `status` event, store change and
+    visibility change (song, master, drone, key, audio/MIDI/latency, recording, memory, modes, low-resource).
+    `audio` maps `restarting` → `'stalled'`; `memoryMB` = `performance.memory.usedJSHeapSize` (Chromium) + decoded
+    sample MB, rounded (renderer-side; Electron main can add process RSS for the Tray if it wants).
+  - `controller.handleCommand(cmd)` → boolean; every contract type: `hello` (immediate state), `selectMode`,
+    `nextMode`, `prevMode`, `panic`, `fadeOutAll`, `master` (writes the current song's `patch.fx.master.volume`, as
+    Perform's fader does), `droneToggle` (off ↔ the mode it had, else the song's committed mode, else synth — Perform's
+    ON tile rule), `droneKey` (the key the band hears; the transpose amount is kept — Perform's key grid),
+    `lowResource`, `record` (toggles only when `on` differs from the recorder's state; no user gesture here, so
+    Chrome records via its fallback sink), `openMain` (renderer no-op: emits `'openMain'`). Every handled command
+    also emits `'bus-command'`. `controller.bus` = the bus (null in tests/headless).
+  - The bus: `o.bus` if given (the caller owns and closes it), else created only in a real page
+    (`doc === globalThis.document`) with a rig bus method or BroadcastChannel; a secondary (muted) window never
+    starts it. `dispose()` closes a bus it created.
+- **engine** (`audio.js`, additive): `engine.setLowResource(on)` → boolean, `engine.lowResource` getter. On: pins =
+  the current (committed) patch's sampler URLs only (the pin set held before is remembered), `preload()` pins
+  current-only and does no idle reverb warming, every `commit` re-pins the new song, `slotLevel()` taps are
+  disconnected at once and reads return `{peak:0, rms:0}` without tapping, idle reverb units (not active / fading /
+  staged) are disconnected and their IRs dropped from the IR cache. Off: remembered pins ∪ current song's come back;
+  warming and taps work again. `_debugStats()` gains `lowResource`, `slotLevelTaps` (= `slotTapCount()`),
+  `reverbUnits`. Survives `restart()`. sampler.js unchanged (BufferCache `setPins` / `pinned` suffice).
+- **store**: `settings.menuBarSetlistId` (null | existing setlist id; a dangling id normalizes to null; deleting that
+  setlist sets it null), `settings.lowResource` (bool, false), `settings.menuBarMode` (bool, false). `menuBarMode`
+  and `lowResource` joined `DEVICE_LOCAL_SETTINGS` (machine behaviour: kept across a replace-import, not an edit).
+- **Tests.** `test/phase1/shell/menubar.test.mjs` (19): bus validation, throttle, hello, invalid drops, Electron
+  relay transport + per-method detection, a real Node BroadcastChannel round trip; store settings; modes (fallback,
+  chosen set ≤ 6, empty set, wrap, outside-the-set); every command (fake engine + fake recorder); commands over a
+  mini bus; state validity; controller publish throttling (41 fader changes in 1 s → 2–6 sends, newest last); hello
+  before any change; low-resource pins / memory.mode / neighbour skip / restore; persisted low-resource before the
+  first preload; auto low-resource and setWindowVisible. Engine `realtime.lowResource` (38 s on this box): pins =
+  current only (5 setlist pins → song A's), taps 2 → 0 at once and 0 after 2 s and over the whole 30 s window
+  (119 reads), 0 IR builds and 0 unit builds with neighbour preloads on two new reverb sizes, reverb units 3 → 1, a
+  commit moves the pins to song B, off restores setlist ∪ B pins, 1 tap on the next read, warming builds 1 IR.
+- **Runs (Linux):** `node test/phase1/shell/run.mjs --only unit` 13/13 files PASS; engine `lowResource`,
+  `slotLevelTap`, `irOffMainThread`, `preloadAndLRU`, `pinsUnion`, `pinsLimitedEvict` PASS, 0 console errors. Real app
+  smoke (server.js + Chromium, a second page with a mini bus): hello → state (3 modes, audio running), `nextMode`
+  switched the song, `lowResource` → engine stats `lowResource:true, slotLevelTaps:0, reverbUnits:1`,
+  memory.mode `current-only`, 0 console errors.
+
+## menubar-B (C7: app/mini.html + mini.css + views/mini.js, Settings "Menu bar", renderer low-resource, mini suite)
+Implements the CLOUD B half of `docs/menubar-mode.md` (contract v1) on top of menubar-A's `shared/bus.js` and
+controller. Message shapes are exactly the contract's; the popover never talks to the engine or the store.
+- **`app/mini.html` + `app/mini.css` + `app/js/views/mini.js` (new).** A separate renderer, no audio, CSP as
+  index.html minus blob/media. `mini.js` imports `createBus` statically (`role:'mini', hello:false`) and exports
+  `mountMini(el, {bus:{send, onState}, helloMs?})` (plus pure helpers `keyToPc`, `taper`/`untaper`, `formatDb`,
+  `statusLine`); the page self-mounts on `#mini` and sets `globalThis.__mini = {state, sent, bus, destroy}` (test
+  handle). Layout for 320×440, no scroll, every target ≥ 44 px (sheet "Done" 36 px): header `‹ name / Key X · n of N
+  ›` (Prev/Next = `prevMode`/`nextMode`) · 2–6 mode buttons (number, name, key; current highlighted +
+  `aria-pressed`; 1 column for 2–4, 2 columns at 5–6; flex-filled, ≥ 44 px) · master fader · `Drone ● key` pill
+  (`droneToggle`) + ▾ opens a 12-key sheet over the mode area (`droneKey {pc}`; the current drone key is lit; Esc /
+  Done close it) · Fade (`fadeOutAll`) · PANIC (hold 600 ms, progress fill; a short press says "keep holding";
+  Enter/Space hold works too) · Open Worship Rig (`openMain`) · Rec (`record {on:!recording}`) · Eco switch
+  (`lowResource {on:!lowResource}`) · status line `Sound OK · 42 ms · Keystation 49es` with an LED (ok / warn ≥ 40 ms /
+  bad = stalled). Keys `1`–`6` select a mode. System fonts only; warm-neutral dark palette; the only animation (Rec
+  pulse) stops in low-resource and under reduced motion.
+  - Waiting: "Waiting for Worship Rig…" (+ Open Worship Rig) until the first valid `state`; `hello` is sent on load
+    and every 2 s until then, never after.
+  - Master: relative drag (a tap never jumps, as the top-bar fader, UX S7/B2), position = the app's dB-display taper
+    (`2·p³`, `shared/params.js` faderTaper, inlined to keep the popover light), sent ≤ 20/s with a final send on
+    release; while dragging and for 400 ms after its own send the mini ignores `state.master` (no echo jitter),
+    otherwise the app is the source of truth. Arrow keys ±0.02 position (Shift ±0.005). Label `−6.0 dB` / `−∞ dB`.
+- **Settings "Menu bar" section** (`views/settings.js`, additive block + `settings-open`/`settings-close` listeners;
+  existing classes only, so the styles-edit prune test still holds): *Menu-bar mode* switch (`settings.menuBarMode`);
+  *Modes from* select (`''` = "Current setlist (first 3 songs)", else each setlist with its capped count →
+  `settings.menuBarSetlistId`, rebuilt when setlists / song names change) + a `Modes: A · B · C` line from
+  `controller.modes.list()` (fallback: the contract rule computed locally); *Low-resource* switch
+  (`controller.setLowResource`, else `store.set`); *Open at login* switch only when `window.rig.setLoginItem` exists
+  (initial value from `rig.getLoginItem()` or `rig.getMenuBarState()` → `{openAtLogin}` / boolean; an `{error}`
+  reverts the switch), else the hint "Open at login is available in the Mac app."; Chrome only: *Open mini panel*
+  (`window.open('mini.html', 'worship-rig-mini', 'popup,width=320,height=440')`); a live resource line every 1 s
+  while Settings is open: `Low-resource: on · current song kept loaded · 41.2 MB kept loaded · level taps 0 ·
+  voices 0` (engine `_debugStats()` + `controller.status.memory.mode`).
+- **Renderer `main.js`** (additive section "menu-bar mode" at the end):
+  - **No second bus.** The brief said main.js creates the main bus; menubar-A's controller already creates it
+    (`defaultBus()`, closed on dispose), so main.js does not open another one (two `role:'main'` endpoints would
+    answer every hello twice).
+  - `visibilitychange` → `controller.setWindowVisible(visible)`. Electron runs with `backgroundThrottling:false`, so
+    a hidden window may never fire it: **rig menu ids `windowShown` → `setWindowVisible(true)`, `windowHidden` →
+    `false`, `windowFollowDocument` → `null`** (sent by Electron main over the existing `rig:menu` channel; the
+    controller re-emits unknown ids as `'menu'`). **LOCAL: please send these from the window's show/hide.**
+  - `status.lowResource` → `<html data-low-resource>`; `styles.css` (appended rule) sets `.meter` and `.lvl-meter`
+    to `display:none` under it, which takes them out of their IntersectionObservers and stops their rAF loops (the
+    top-bar mount keeps its width; nothing moves). Measured (mini suite, loaded box): analyser reads 1.00/frame +
+    `controller.slotLevel` 2.00/frame normally → 0 / 0 in low-resource (the page kept animating: 50 frames/s of our
+    own tick), `slotLevelTaps` 0.
+  - `settings.menuBarMode` → `rig.setMenuBarMode(bool)` at start and on change (when the preload has it).
+  - `controller` `'openMain'` in a browser → `window.focus()` (best effort; Electron main handles it there).
+- **Not done / requests.**
+  - `views/perform.js`: no change. Perform has no meter loop of its own (its strip meters are `levelMeter`s, stopped
+    by the CSS rule above); the one loop left is the 150 ms `runtimeTimer` (pedal / faded lamps). Request for the
+    perform owner: skip `readRuntime()` while `document.documentElement.hasAttribute('data-low-resource') &&
+    !controller.status.windowVisible` (a one-line guard, but it changes lamp behaviour in a visible window if keyed
+    on low-resource alone, so it was left out).
+  - Contract §Definitions says auto low-resource applies "while the main window is hidden **and the popover is
+    closed**"; the controller ignores the popover. Harmless for meters (the popover has none) but a mode switch from
+    the open popover decodes on demand. If that matters, LOCAL can send `windowShown` while the popover is open.
+  - The popover shows at most 6 modes; the contract `modes` array is already capped by the controller.
+- **Tests.**
+  - `test/phase2/mini/run.mjs` (new; also `mini` in `test/run-all.mjs`, group phase2): two pages in one context,
+    same origin (page B = mini.html at 320×440 opened FIRST, page A = the real app). 14 tests: waiting + hello every
+    2 s (≥ 2 in 2.3 s, transport `broadcast`) → live with the controller's modes (names equal, no hellos after);
+    click mode 2 → app `currentSongId` + mini highlight/name/key; keys 1–3; Prev/Next; master (tap = no change, 50 px
+    drag = taper-exact within 0.02, engine param follows, dB label ±0.1, app → mini sync, → key nudges); panic (200 ms
+    press = 0 panics + note still held + "keep holding"; 750 ms hold = exactly 1 panic, held note released); drone
+    sheet key → `hearIn`, lit key, Esc closes; pill toggles `drone.mode` both ways; Eco → `status.lowResource`,
+    `_debugStats().lowResource`, `settings.lowResource`, `data-low-resource`, taps 0, 0 meter reads/frame, and back;
+    status line format; 320×440 layout (nothing outside the viewport, no overflow, targets ≥ 44); 6-mode setlist →
+    2 columns, still fits, click 5 / key 6 select; Fade → `fadeOutAll`; zero console.error on both pages.
+    Screenshots: `test/phase2/mini/screenshots/{mini-waiting,mini,mini-6-modes,mini-drone-keys}.png`.
+  - `test/phase2/settings/run.mjs` (+1 test per mode): Menu bar section — menu-bar mode on/off, a new setlist appears
+    in the picker, choosing it sets `menuBarSetlistId` and the `Modes:` line equals `controller.modes.list()` (4),
+    back to `''` → null; Low-resource → controller + engine + resource line (`level taps 0`) + `data-low-resource`
+    (app) and back; login hint without `rig.setLoginItem`; app mode: Open mini panel → popup `/mini.html` goes live.
+    Screenshot `test/phase2/settings/screenshots/{app,fixture}-menubar.png`.
+- **Runs (Linux, load 5–13 from the parallel agents):** `node test/phase2/mini/run.mjs` 14/14 (first run: boot hit
+  the 30 s `waitRigReady` bound at load 5.7 → raised to 90 s; 14/14 on the next two runs). `node
+  test/phase2/settings/run.mjs` fixture 15/15; app 15/16 at load 12.8 (the pre-existing 30 s `waitRigReady` bound in
+  boot) → re-run `SETTINGS_MODES=app` 16/16.
+  `node test/phase2/ui-core/run.mjs` (main.js / styles.css touched) at load 17–34: 36/46 then 40/46, different tests
+  each run, all timing (boot `waitForFunction` 90 s, 30 s waits, TAP BPM, panic level fall); the meter tests
+  (round2-ui #10, polish-1 strip meters) failed on run 1 by one stray read each and passed on run 2. A probe in Edit
+  confirmed `data-low-resource` is absent and both `.meter`s display normally outside low-resource. Needs a quiet-box
+  re-run before sign-off.
+
+## round4-controller (reviews/round4-controller.md C1–C9, C13; controller.js / store.js / shell tests)
+- **C1 (major), restart + switch overlap.** `afterRestart()` (restartAudio and engine-initiated restarts) now re-sends
+  the applied song's level: `setTranspose`, `setRouting`, `setTempo`, and the drone key + configure (`lastDroneKey`
+  reset). If `restorePads()` already re-applied a files-mode drone (it now returns `true` then), the drone is not sent
+  twice (the M1 order `off → files` is kept). Cause: `engine.restart()` → `applyState()` runs its routing /
+  transpose / tempo / key / drone tail even when its commit is refused as stale. **Engine owner (frozen, report
+  only):** applyState should skip that tail when `commit(tok) === false`.
+  `applySongLevel(song, prev, force, {drone = true})` gained the option.
+- **C2 (major), setlist pinned whole on a guess.** `preloadSetlist()`: a setlist whose estimate is ≤ `PIN_BUDGET_MB`
+  but `exact === false` is sized first (`probeSetlist`): the large-set exact-only window, then the rest warmed
+  unpinned while the running estimate stays ≤ `PIN_BUDGET_MB` (≤ cap, so nothing warmed is evicted). Then, if the
+  estimate is exact and ≤ budget, the whole set is pinned (`{pin:'replace'}`) and the mode is `'setlist'`;
+  otherwise the large-set policy, with its one `'memory'` event. While sizing, `status.memory.mode` reads
+  `'setlist'` and `note` is null (internally the large-set window policy applies, so a switch meanwhile replaces a
+  budgeted window, never `'add'`s guessed neighbours). An estimate without `exact` (older engines) keeps the old
+  path. `warmRest(my, ids, limitMB)` is the large-set warm loop, factored out.
+  E1d (the reviewer's launch set [Grand Piano, Prayer Wash, Upright Pad, Building Swell], Mac sizes): max pinned
+  754 → 333 MB, ends large-set with `setMB` 754.
+- **C3 (major), window planned around a loading song.** `planWindow({onlyExact:true})` treats an inexact current
+  song like a guessed neighbour: it is pinned alone and every neighbour goes to `guessed`. The phase-2 re-plan
+  also runs with `onlyExact`. `selectSong()` bumps `winSeq` first, so an older window stops re-planning while the
+  switch loads (the song still playing stays pinned). E1a 606 → ≤ 600, E1b 849 → ≤ 600, E1c 849 → ≤ 600 MB.
+- **C4 (major), H1 lock.** `store.setReadOnly(true, reason)` returns false and keeps `'backup-failed'` when that
+  lock is on, so the takeover's `setReadOnly(false)` can't clear it. `allowOverwrite()` still unlocks it.
+- **C5 (minor), cap crossing off the toast path.** `updateMemory()` no longer emits `'warn'` (main.js toasts those
+  verbatim). Once per crossing it logs the L-8 text with `console.warn('[controller] pinned samples …')` and emits
+  `'memory'` `{mode, overCap:true, pinnedMB, capMB, note: OVER_CAP_NOTE}`. New export `OVER_CAP_NOTE` =
+  "This set is using a lot of memory; songs load as you go." No UI reads it yet (nothing is toasted).
+  The soak reads `status.memory` only, so it is unaffected.
+- **C6 (minor), takeover into a half-started controller.** In the secondary → primary path: `store.reload()`, then
+  `store.flush()` **before** `startPrimary()` subscribes, so views get the reload diff and the controller doesn't
+  (no `restart()` while `engine.start()` is pending, no second `selectSong`). The engine never started in that
+  window, so `engine.latency` is set from the reloaded settings before `start()` (the field `_newContext()` reads).
+  Sink, mono, MIDI input and the menu-bar settings are already applied by `startPrimary()` itself.
+- **C7 (minor).** Leaving secondary resets `applied`, `appliedId`, `targetId` and `lastDroneKey`, so the fresh
+  engine gets the song's drone key even when a song was tapped in the muted window.
+- **C8 (minor).** `panic()` clears `swellActive` (the engine's allNotesOff drops the swell), so the next toggle
+  starts one.
+- **C9 (minor), learned CC buttons.** `ccButton()`: a value ≥ 64 while already pressed counts as a new press once
+  `CC_RETRIGGER_MS` (150 ms) has passed since the last press, so press-only ("trigger") footswitches that send
+  127 on every press work; contact bounce and a held momentary switch stay one press; < 64 is a release. Swell
+  stays level-triggered. Not fixed: a **toggle-mode** switch (127 / 0 on alternate presses) still acts on every
+  other press; it can't be told apart from a momentary one by its values. Set such a pedal to momentary.
+- **C13 (nit).** A controller disposed while secondary releases the instance lock when it is granted.
+- **Not done:** C10 (pads walked before the first song; SUSPECTED), C11 (revertSong during a switch; SUSPECTED),
+  C12 (large-set warm loop not restarted on a switch; nit).
+- **Tests.**
+  - New `test/phase1/shell/round4-controller.test.mjs` (12 tests, ported from the reviewer's E1/E2/E4/E5/E6):
+    C1 (token model of restart/applyState), C2 ×2 (the E1d set ends large-set with max pin ≤ 600; a Rhodes set that
+    really fits is pinned whole and never reports large-set), C3 ×3 (E1a + "playing song stays pinned", E1b, E1c),
+    C4, C6, C7, C13, C8, C9. Mutation check: reverting each fix alone fails its test (C1, C2, C3 winSeq, C3
+    planWindow, C4, C6, C7, C8, C9, C13).
+  - `memory.test.mjs`: `instrEngine`'s prepare now decodes the song (like the real engine, whose sampler loads
+    through the same BufferCache), so a committed current song is exact. "an estimate that turns out low …" now
+    asserts the set is **never** pinned whole on the guess (was: pinned whole first, then downgraded), with one
+    large-set event. "a song that alone passes the budget …" counts the `overCap` 'memory' event instead of a warn.
+  - `fixes.test.mjs` M1 unchanged and green (the drone is re-applied once, `off → files`).
+- **Runs (Linux, 2 CPUs, load 15–34 from parallel agents):** `node test/phase1/shell/run.mjs`: unit 184/184,
+  electron 14/14; browser 12/13 twice at load 27–34 (the L-3 real-app test's 30 s `__rig.ready` bound; the same
+  test fails identically on a scratch copy with this section's boot-path changes reverted, so it is load), then
+  13/13 at load 17 (`__rig.ready` after 26.7 s; the reviewer's baseline run had 9.4 s). The reviewer's experiments
+  E1a–d, E2, E4, E5a–b, E6 all pass now (they all failed before).
+
+## round4-perform (reviews/round4-perform.md P1–P13; styles.css / perform.js / main.js (renderer) / components/quickSheet.js / ui-core tests)
+
+All thirteen findings are addressed. P2 uses a larger line box than the review proposed, and P10 uses a different
+octave rule, because the review's numbers and rule failed when measured (both explained below). The runs are at
+the end.
+
+- **P1 (major), bottom-row hold captions.** `.perform .p-bottom .hold-btn .hb-cap { bottom: auto; top: -30px }`.
+  Revert's "press and hold (0.6 s)" and the locked Lock's hint now sit above their buttons, over the stage's
+  bottom edge. Before, they were 5–7 px visible below the window. Header captions (KEY, Transpose) are unchanged.
+- **P2 (major, local L-20), song-name line box.**
+  - `.song-name` line-height 1.05 → **1.25**, not the 1.12 the review proposed. With Carlito forced at 1.12 the
+    ui-core check still read 44/43 at 1280×800. Carlito's ascent + descent is ≈ 1.22 em, SF ≈ 1.19 and DejaVu
+    Sans ≈ 1.16, so 1.25 holds all three with no slack.
+  - `.song-block` padding `clamp(2px, (head − 102px) / 2, 6px)` (was `clamp(4px, (head − 92px) / 2, 10px)`).
+    `.song-sub` margin-top 4 → 2 px. At ≤ 1250 px, `.song-block` padding is 2px 14px.
+  - Budget (inside the borders):
+
+    | Head row | Padding + name + gap + KEY row + padding | Available |
+    |---|---|---|
+    | 102 | 2 + 47.5 + 2 + 44 + 2 = 97.5 | 100 |
+    | 112 | 6 + 50 + 2 + 44 + 6 = 108 | 110 |
+    | 94 (≤ 1250) | 2 + 40 + 2 + 44 + 2 = 90 | 92 |
+
+  - Font sizes are unchanged.
+  - **Measured** as `.song-name` scrollHeight/clientHeight:
+    - Carlito: 1280×800 48/48, 1440×900 50/50, 1024×700 40/40, 1366×700 48/48.
+    - DejaVu Sans: 1280×800 48/48, 1440×900 46/46, 1024×700 40/40.
+    - The KEY row ends inside the song block at each size.
+- **P3 (major), Quick sheet sound state.**
+  - perform.js `renderQuick` passes `sound`: `'muted'` when `status.instance === 'secondary'`, `'paused'` for
+    `audio: 'suspended'`, `'stalled'` / `'restarting'` as before, otherwise `'ok'`.
+  - quickSheet renders "Sound paused" and "Muted (another window is open)" with a warn LED. `.qs-ok` carries
+    `data-sound`.
+  - Paused gets the one-click button labelled "Resume sound". It calls the new optional `o.onResumeAudio` and falls
+    back to `onRestartAudio`. Perform wires that to `controller.resumeAudio()`.
+  - Muted keeps the 1 s hold, since there is nothing to restart in a muted window.
+- **P4 (minor), banner strip over Settings.** `openSettings()` folds the strip first (`setBstripOpen(false)`), so
+  every "Open Settings" path does. The open list's z-index is 60 → 45 and the chevron's 61 → 46, both under
+  `.settings-modal` (50). Toasts (80) are unaffected.
+- **P5 (minor), "Sing it in…" leak.** The popover's Back listeners (`click`, `blurAfterPointer`) now sit on a
+  per-popover `disposer()`, disposed in the overlay's `onClose`.
+  - Measured over 40 open/close cycles (in-page clicks + Esc, two frames apart), after GC: **Δnodes −4 / 0,
+    Δlisteners 0 / 2**. The unfixed perform.js gave **+2076 / +1041** on the same probe.
+  - Driving the cycles with Playwright's `page.click` + `waitForSelector` shows ≈ +34 nodes per cycle even with the
+    fix: Playwright's injected script keeps references of its own. The regression test therefore cycles in-page.
+- **P6 (minor), lock gaps.**
+  - Under Perform lock the newer-library offer shows only "Not now". "Use that library" is withheld like "Open
+    Settings".
+  - main.js re-renders the status banners on a lock change (queued as a microtask, because the first
+    `onSettings` call runs before `lastStatus` is declared). The lock-gated actions follow the lock at once
+    instead of on the next 1 s tick.
+  - `LOCK` table:
+    - `live` gains `'pad folder Rescan (Mac app, pads loaded)'` (behaviour unchanged: a rescan re-reads the pads and
+      changes no song), `'Notes toggle'`, `'top bar: master volume / REC / Quick'` and
+      `'banner: Restart sound / Not now'`.
+    - `frozen` gains `'banner: Open Settings / Use that library'`, and `'pad folder'` is renamed
+      `'pad folder choose / change'`.
+  - `lockBtn.title` mentions master volume, REC, Quick and library changes.
+- **P7 (minor), MIDI toasts.**
+  - Once `status.midi` is no longer pending, main.js dismisses the pending toast (Chrome or Electron text; new
+    const `MIDI_PENDING_TEXT_ELECTRON`).
+  - `firstRunHints()` sets `midiPromptHintShown` when Chrome's permission state is `'prompt'`. The Chrome pending
+    toast is then skipped, so the advice isn't shown twice.
+- **P8 (minor), toast eviction.** Each toast entry records its `kind`. Trimming to 2 drops the oldest toast of the
+  lowest severity: info/ok, then warn, then error. So error + info + info keeps error + the newest info.
+- **P9 (minor), short and wide windows.**
+  - `@media (max-height: 740px) and (min-width: 1251px) { --p-bot-h: 72px; --p-gap: 8px; --p-pad-b: 8px }`. The
+    header stays 102 px, so the shared-effect chips keep 44 px: the review's 94 px header would have made them 40 px.
+  - `@container pmain (max-height: 410px)` compacts the strip the way the 1024 layout does: `.slot` padding
+    7px 6px and gap 5, `.slot-who` 18, `.slot-tag` 17, `.slot-mods` gap 4.
+  - Throw, px:
+
+    | Window | Before | After |
+    |---|---|---|
+    | 1366×700 | 115.8 | **144.7** |
+    | 1280×720 | 135.5 | **164.7** |
+    | 1024×700 | 140.8 | 140.8 |
+    | 1440×900 | 256.7 | 256.7 |
+    | 1280×800 | 203.8 | 203.8 |
+
+  - ui-core `VIEWPORTS` gains [1366, 700] and [1280, 720], held to the ≥ 140 rule.
+- **P10 (minor), octave in "Sing it in…".**
+  - The octave kept is the **Revert snapshot's** `transposeOctave` (`singOctave(s)`, in semitones). The target is
+    `singItInShift(playIn, pc) + singOctave`, and Back is disabled at `semis === singOctave`.
+  - The review's "keep the current octave" would have broken the ordinary path. Transpose +7 stores
+    `transposeOctave: 1` (hear −5 plus one octave), so Back would have gone to +12 instead of 0.
+  - Tested both ways: a song saved at +12 keeps +12 through G (+17) and Back; +7 then Back gives 0 with nothing to
+    revert.
+- **P11 (minor), Quick sheet height.** `.perform .qs { height: calc(var(--p-head-h) + var(--p-gap) + var(--p-nav-h)) }`
+  at every width, replacing the fixed 178 / 154 px. Its bottom now meets the strips' top at 1280×800, 1366×768,
+  1366×700, 1440×900 and 1024×700.
+- **P12 (minor), wheel caption.** `wheelTargetLabel('fx.reverb.returnGain')` is `'Space level'` (polish-2B's name).
+- **P13 (optional), name re-fit.** `renderSong` re-fits the name only when its text changes. The ResizeObserver
+  still covers resizes and the Edit → Perform return. Measured: 0 `getComputedStyle(.song-name)` calls over 20
+  fader writes.
+- **Tests**: `test/phase2/ui-core/run.mjs` has 9 new tests, `round4-perform P1` … `P11 / P12 / P13`, plus the two
+  viewports.
+  - P2 forces Carlito and DejaVu Sans at 4 sizes with no +1 slack.
+  - P3 dispatches each status and reads it in the same task, so the 1 s tick can't overwrite it.
+  - P5 uses CDP `HeapProfiler.collectGarbage` + `Memory.getDOMCounters`.
+  - P6 checks the table and that the top-bar items really stay live under lock.
+
+## idle-cpu-mac (ground truth from the Mac, 2026-09-28 23:57Z; full report: reviews/idle-cpu-mac.md)
+Measured on the built app (M2 Pro, 120 Hz ProMotion, screen locked), Perform, *Sunday Pad + Piano*, no notes played.
+Renderer 44.4 % of one core = Web Audio render thread **21 %** + two reverb convolution background threads **~8 %** +
+main thread 9 % + compositor 6 %; GPU process 13 %. Page JS is ~1 % of a core; `(program)` (rAF dispatch/style/paint)
+is 86 % of the busy main thread. Drone on→off: renderer −9 pts, GPU −11 pts (only ~4 pts of that is DSP; the rest is
+the meters + "· −9.1 dB" readout re-laying out 6×/s and rastering at 120 Hz). Sampler-only song (Grand Piano) 19 %,
+synth-only (Glass Ocean) 24 %, Sunday Pad drone-off 35 %. `meter.js`/`levelMeter.js` re-arm rAF every frame at level 0
+(121 style recalcs/s in every config); `html[data-low-resource]` is inert (nothing reads it); `main.js` sets
+`backgroundThrottling:false` so a hidden window probably keeps the full load (unmeasured: screen was locked).
+Implications for the fixers: **engine side (this workflow)** — silent-graph cost is the biggest lever: convolvers on
+silence (~8 pts), idle synth/FX graph on the audio thread (17 pts with the drone off, 9 pts sampler-only), drone voices
+(~4 pts). **UI side (next workflow, `idle-cpu-ui`)** — stop the meter rAF loops when peak stays 0 and cap at 30 fps
+otherwise; make the 150 ms `readRuntime`/`renderDroneReadout` tick write text without layout (fixed-width number cell);
+actually honour `data-low-resource` (no rAF, no analyser reads). **LOCAL** — decide `backgroundThrottling` (probably
+keep it off for audio but call `controller.setWindowVisible(false)` from the hide path so low-resource kicks in).
+- **Runs** (Linux, 2 CPUs; load 8–34 from parallel agents): `node test/phase2/ui-core/run.mjs`, 55 tests.
+
+  | Run | Passed | Failed |
+  |---|---|---|
+  | 1 | 52/55 | boots, next/prev, fader drag |
+  | 3 | 51/55 | boots, next/prev, fader drag, Quick TAP |
+  | 4 | **53/55** | next/prev, Quick TAP |
+
+  Run 2 was cut off by my own 590 s timeout. The failures are load timeouts, as follows:
+  - The 9 round4-perform tests and the polish-2A responsive test (with the 2 new viewports) passed in every
+    completed run.
+  - **Quick TAP** got 49–71 BPM. Its clicks land 500 ms + Playwright overhead apart under load, so the ±20
+    tolerance fails.
+  - **`next / prev`** failed in all 4 runs, at its first `waitSong`, which has a 30 s bound. **It is not from this
+    section.** It reproduces with perform.js, main.js, styles.css and quickSheet.js reverted, on a symlinked copy
+    of `app/`. After walking all 19 factory songs (the large-set window), selecting song 0 again keeps
+    `status.loading` true for **≈ 58 s** at load 18. It then settles, with `memory.mode` `large-set`. The
+    reviewer's baseline passed at load 1–4, before `## round4-controller` landed. This is for the controller
+    owner, whether it is load or the C2/C3 window.
+
+## round4-edit-lib (reviews/round4-edit-lib.md M1, m1–m3, n1–n3; views/edit/shell.js, panels/{song,song-header,slot}.js, edit-v2 tests)
+- **M1 (major), ⌘Z after a song switch wrote the shown song's notes into the previous song.** Two guards:
+  - `shell.js` `core.songField`: the focused song id is forgotten on `focusout` (Chromium: change → blur → focusout,
+    so the change commit and song.js's blur flush still use the focused id; afterwards `commit()` falls back to
+    `core.songId`). `core.fieldSongId()` therefore reads the shown song once focus has left.
+  - `song.js` notes `input`: when the textarea is not `document.activeElement` (a frame-level undo/redo from
+    Perform, Edit ▸ Undo, or another field), the store's notes are painted back and nothing is committed.
+  - Measured (reviewer's E6c/E6d, rerun): A stays "Song A notes. Typed in A" (was B's notes) with focus in B's tempo,
+    with nothing focused, and in the real app from Perform (Ctrl+Z). Undo while typing in the notes still commits
+    (E6a). Same-song undo from the visible Edit view (E6b) still moves focus to the notes and reverts, as before.
+- **m1, slot Lowest/Highest note fields** are `text:'dirty'` (was `true`): a focused, untouched field follows an
+  outside write (Set lowest… answered by a MIDI key; a mini-keyboard drag keeps focus in the field) and the forced
+  focusout re-apply fixes a held-back one. E2a: field D3 (was C2) for lowNote 50; E2b: B2 for 47 (was C2).
+- **m2, IME.** Enter / Esc keydowns with `isComposing || keyCode === 229` are ignored in the song name, tempo and
+  note fields (the candidate-confirm Enter blurred and committed "Prayer Wash さんび" mid-edit). Notes: `input`
+  during a composition no longer arms the 500 ms debounce; `compositionend` arms it. Setlist rename (outside scope)
+  still lacks the guard.
+- **m3, tempo bad input.** `validity.badInput` ("1e", "-") paints the stored tempo back and commits nothing (was
+  `commitTempo(null)`, clearing the tempo). An empty field + Enter still clears.
+- **n1.** `pctx.listen / onLeaveSong / onLeaveView / onEscape` return an unsub that also drops its entry from the
+  panel ctx's `own` list (`keep()`), so each slot rebuild no longer leaves one closure (holding the destroyed binder)
+  until unmount. New test hook `pctx._ownCount()`.
+- **n2.** slot.js sets `leavingSong` in its leave-song hook (cleared in a microtask; the shell blurs the song field
+  in the same task), and a note field's `change` with an unparsable name then reverts without the warn toast.
+- **n3 (was SUSPECTED; confirmed by the new test: the old item is detached).** `buildMenu()` re-focuses the item with
+  the same `data-value` / `data-action` (else the checked one, else the first) when focus was inside the menu.
+- **Tests (edit-v2):**
+  - `song.test.mjs`: "round4-edit-lib M1" (E6c, focus in tempo and nothing focused; asserts the undo really reached the
+    field as `input:historyUndo`, A and B unchanged, field repainted; E6a still commits) and "m3/m2" (1e / - keep 88;
+    empty clears; CDP IME composition commits nothing for 800 ms, then `insertText` commits "Base. 賛美").
+  - `song-header.test.mjs`: "round4-edit-lib m2" (CDP composition + keyCode-229 Enter keeps focus and the name;
+    the real Enter then commits the composed name).
+  - `slot.test.mjs`: "round4-edit-lib m1" (E2a, E2b, typed draft still protected) and "n1/n2/n3/m2" (no toast on the
+    switch, H9 + Enter still toasts, IME Enter, menu focus kept across an `'instruments'` rebuild, `_ownCount`
+    stable over 4 rebuilds).
+  - `integration.test.mjs`: "round4-edit-lib M1" (E6d, real app, Ctrl+Z in Perform after a switch).
+  - Mutation check (song/song-header on a prayer-wash copy of the files): M1, m2 and m3 reverted → the three new
+    tests fail (M1: "A keeps its own notes"; m3: tempo null; m2: "still editing").
+- **Runs (Linux, 2 CPUs, load 5–37 from other agents):** each file passed in some run: song 10/10, song-header
+  11/11, shell 10/10, slot 14/14, integration 13/13, setlist 13/13, effects 5/5, bottom 5/5; drone 5/6 twice (a
+  different test each time, both `__rig.ready` 30 s boot timeouts); master 2/4, 1/4, 2/4 (every test passed in one
+  of the runs; the rest were boot timeouts); integration-widths 0/5 in 4 runs, every failure its own 30 s
+  `__rig.ready` bound (TO DO: re-run on a quiet box). Measured on the harness at load 11: `__rig.ready` resolves 26–34 s after load on the
+  default song (Sunday Pad + Piano), right at the 30 s bound.
+- **Not a round4 finding, unverified:** in headless Linux Chromium, an `a[download]` blob name with non-ASCII
+  characters ("Café.rig-song.json") arrives as `download`. Asked LOCAL to check an Export song on the Mac
+  (reviews/for-local.md).
+
+## l20-l21 (local L-20 song name, L-21 EQ note cells; SF Pro on the Mac; eq-keyboard.css / .js comment, styles.css `.song-name`, ui-core + eq tests)
+
+Both failures are font-metric findings: the Linux suites render with Liberation Sans (Arial metrics), and SF Pro is wider
+and has its own ascent/descent. `reviews/local-findings.md` is not in the cloud tree; the details come from
+`reviews/round4-perform.md` and `reviews/for-local.md`. Neither fix can be run on macOS from here; they were proven with an
+`@font-face` stand-in (below).
+
+- **L-20 (song name 42 > 40 at 1280×800).** The line-height fix (1.05 → 1.25, "## round4-perform" P2) was already in the tree.
+  This adds a pin: `.song-name { height: 1.25em; max-height: 1.25em }` in styles.css (additive, after the `.song-name`
+  rule). It is the same value as the natural one-line box, so nothing moves on Linux, but a fallback font with a taller
+  content area (CJK, emoji) can no longer grow the row. Test: the P2 test now also runs `SFsim` (FreeSans widths, SF
+  ascent .95 + descent .24 = 1.19 em) and `SFstress` (1.23 em, just inside the 1.25 em box), and asserts the box equals the
+  computed line-height × 1 line (±1 px) instead of a font-specific height. The exact `scrollHeight ≤ clientHeight`
+  assertion stays: at 1.25 em it holds for every font up to that content height, which is the contract.
+- **L-21 (EQ note cells overflow at 1100 px).** Cause: the note cell ("≈Db6 −49¢ · 1.08 kHz", the widest proportional-font
+  text in a fixed column) had 124 px (full) / 64 px (compact) of room. Measured worst labels: Arial-like 12.5 px compact 55–63 px,
+  full 108–133 px. Under a 105–112 % wide stand-in the old columns overflow (full at ≥ 1124 px, compact at 1100 px with 112 %). Even
+  on Linux the full layout overflowed for "above C8 · 12.5 kHz" (126 > 124), which the test's bands never showed.
+  - `col.c-note` 150 → 172 px (full), 84 → 100 px (compact). Compact dB 58 → 62 and Q 54 → 58 (the mono "−12.5" had 0.5 px to spare).
+  - `.eqk-bands input.eqk-note`: `font-variant-numeric: tabular-nums`, `min-width: 0`, `text-overflow: ellipsis`. Selects get
+    `min-width: 0` + ellipsis, and `.eqk-acts` tabular-nums.
+  - The extra width comes from "Acts on", which is flexible and already ellipsizes: full 152 → 130 px at the 1080 px threshold. `COMPACT_BELOW_PX`
+    stays 1080 (comment recomputed: 950 + ≥ 130). The compact table now needs 750 + acts.
+  - Tests (eq): the "compact threshold" test tolerates `scrollWidth ≤ clientWidth + 2` (was +1; Retina rounding). New test "L-21: worst-case
+    note labels fit their cells under emulated SF Pro metrics" mounts eight worst-case bands at 1100 (compact) and 1124 / 1280 /
+    1440 (full) under 105 % and 112 % stand-ins and canvas-measures every cell's text against its content box.
+- **Suites (Linux, box load 12–38, serial):** eq 27/27 (26 + the new one; several runs died at the 30 s `waitRigReady` bound
+  before any test, and the pass came on a re-run). ui-core: the last three full runs were 52–54/55 with the failures in
+  unrelated timing tests (setlist next/prev `waitSong`, Quick tap-tempo, hold-Enter lock, boot; the first two also fail
+  on the untouched tree at load 25). "polish-2A responsive" and "round4-perform P2" pass in each of those runs. No fully green
+  ui-core run was obtained on this box.
+- **Mac, please verify after the drop:** `node test/run-all.mjs --only ui-core,eq`, and report the note-cell text widths if eq still fails
+  (`L21_MAC pass/fail card=<w> compact=<y/n>`). Not verifiable here: SF Pro's real advance widths (the stand-in is FreeSans × 1.05–1.12).
+
+## idle-cpu (engine audio.js + drone.js: instruments connected only while they play; tools/idle-cpu.mjs; reviews/idle-cpu.md)
+- **Cause.** An idle `warm-pad` (and the drone's `drone-osc`, same `voice.js` `monoBelow` stage) was never flagged
+  silent by Chromium, whether it had never been played or had been played and released. Its strip, EQ, sends, the
+  reverb convolver (+ its background thread), chorus and delay then processed zeros for as long as the song stayed
+  loaded. Reproduced in plain Web Audio (a GainNode with no inputs → highpass → the monoBelow topology →
+  ConvolverNode keeps the convolver busy). Of the 19 synth/organ patches and the first 5 samplers, only warm-pad
+  leaks. The Chromium mechanism itself is unverified.
+- **Engine change (additive; no param or schema change).**
+  - `prepare()` no longer connects a fresh instrument to its strip. `_armSlot(sc)` connects `inst.output →
+    strip.input` just before a note (`noteOn` poly path and `_monoSwitch`).
+  - In realtime only, `_pollIdleSlots` (AudioTimer, every 0.5 s while any slot is armed) disconnects an instrument
+    that has had no live voice (`liveVoiceCount() === 0`, no mono voice) for `SLOT_IDLE_DISARM_SEC` = 2 s (new
+    export). An instrument without `liveVoiceCount` is never disarmed. Offline renders keep the old timing apart from
+    the connect-on-first-note.
+  - Slot channels gain `armed` and `idleSince`. A reused instance keeps its connection.
+  - `drone.js`: a drone-osc instrument's output is connected to its layer gain when `_takeInst` takes it and
+    disconnected when `_returnInst` puts it back in the idle pool (its layer had faded to 0 and its voices ended).
+- **Numbers (2-CPU Linux box, renderer % of one core, `tools/idle-cpu.mjs`).** *Sunday Pad + Piano*, drone off:
+  31.3 → 15.6. The audio thread went 18.4 → 8.3 and the reverb thread 6.2 → 0. After one note: 30.2 → 14.2. With the
+  drone on the saving is the pad chain only (≈ 3–4 points, inside noise). Glass Ocean 16.4 → 15.0, Grand Piano
+  17.1 → 15.9. In-app bisect after the fix: after a note 8.2 audio / 0 reverb, drone on→off→on→off back to 8.8 / 0.
+  The Mac's drone-off row (35.1 %, reviews/idle-cpu-mac.md (b)) is this leak.
+- **Tests.** Engine `offline.idleArm`:
+  - not armed after commit;
+  - the split poly note arms slot 0 only, and the mono note arms slot 1;
+  - a same-song re-prepare reuses the armed instance;
+  - both notes sound.
+
+  Engine `realtime.idleDisarm`:
+  - a held note stays connected;
+  - disarmed 2.0–3.0 s after the last voice ended (measured 2.4 s);
+  - the next note re-arms, and the slot meter reads > 0.01.
+
+  Full engine suite at load 20–30: 68/72. The 4 failures were load:
+  - `stuckNoteFuzz` and `realInstrumentsSmoke` timed out at 120 s. Alone, both pass; `stuckNoteFuzz` takes 36.1 s
+    against 38.2 s on a pre-fix copy.
+  - `droneFiles` passes at load 3.
+  - `eqCpu` gives its soft load warning.
+- **Tool.** `tools/idle-cpu.mjs` (LOCAL-owned dir, new file, written by this workflow). It profiles configurations A
+  … K: per-thread renderer CPU from /proc, CDP metrics, rAF / timer / analyser / DOM-mutation rates with call sites,
+  running animations, live sources, reverb units, an offline DSP estimate, and `--emulate-prefix`. On Linux only for
+  the per-thread numbers.
+- **Requests (UI side; details and the evidence are in reviews/idle-cpu.md).**
+  - **R1 meters:** `meter.js` writes only on change, and moves the hold with `transform`, not `left` (layout). Both
+    `meter.js` and `levelMeter.js` cap at 30 fps and stop re-arming rAF while the level stays 0. Worth ≈ 8–10 main
+    + 3–4 compositor points here, and up to 11 GPU points on the Mac with the drone on.
+  - **R2 spinner (styles.css, one rule):** `.song-loading-spin` animates only under `.song-block.loading`. Today it
+    spins forever at `opacity: 0`, the only running animation in Perform. Compositor 1.6 → 0 and GPU 0.9 → 0 with
+    the meters still.
+  - **R3** `perform.js` `readRuntime`: don't rewrite an unchanged `.pedal-lamp` `aria-label` (6.6 mutations/s), and
+    give the drone dB readout a fixed-width cell.
+  - **R4 hidden window:** pause the meter loops on `status.windowVisible === false` even outside menu-bar mode.
+    Measured: `setWindowVisible(false)` without menu-bar mode changes nothing. LOCAL should send `windowHidden` /
+    `windowShown`.
+
+## security (C6 critics: reviews/security.md S2, S3; app/js/store.js, test/phase1/shell/security.test.mjs)
+- **S2: imports are bounded.**
+  - `store.importJSON` refuses input nested deeper than `IMPORT_MAX_DEPTH` = 64 (exported). The check is an iterative
+    walk, run before any clone. The deepest real path is about 8.
+  - It also refuses an import whose resulting library is over `LIBRARY_MAX_CHARS` = 2,000,000 compact JSON characters
+    (exported). A merge counts the current library too. Text over 4 × the cap is refused unparsed.
+  - All of these return `{ok:false, error}` and never throw.
+  - Before: a song nested 5,000 deep threw `RangeError` out of importJSON (unhandled in Settings › Import). A 6 MB
+    song imported, and then every save failed with `QuotaExceededError`: Chromium localStorage is about 5,234,375
+    characters per origin (measured).
+- **S3: `exportJSON` omits `DEVICE_LOCAL_SETTINGS`** (padFolder, with its `/Users/<account>/…` path; outputDeviceId;
+  midiInputId; midiInputName; menuBarMode; lowResource). Nothing read them back: a replace-import keeps this machine's
+  values, and a merge ignores settings. The Electron auto-backups use the same export, so they no longer carry them
+  either. `midiLearn` is still exported.
+- **Tests:** `security.test.mjs` has 4 tests: S1 prototype keys, S2 depth, S2 size, S3 export. S2 and S3 fail on the
+  previous store.js. The shell unit suite is 188/188.
+- Server, main, preload and tools findings (S1 public Apple `.exs`, S4–S8) are requested in `reviews/for-local.md`.
+
+## small-fixes
+- **Task B: `shared/params.js` label `Reverb level` → `Space level`** (row `fx.reverb.returnGain`; also the raw-engine
+  harness label in `engine/test.html`). Edit, Settings and Perform already said "Space level"; only `describe().label`
+  consumers see the change. Key/path unchanged.
+  - Why no key rename or `migrate()` entry: the MIDI-learn map is keyed by controlId (`settings.midiLearn[controlId]`),
+    and stores `{cc|note, channel}` only, never a label, so a label rename cannot invalidate a stored map. The key
+    `fx.reverb.returnGain` is also the data-model path of every song (`patch.fx.reverb.returnGain`), wheel targets and
+    fx-presets; renaming it needs a song migration and is out of scope (BACKLOG item closed by the label change).
+  - Unit: shell `--only unit` 188/188.
+- **Task C: L-14 test gap (hide-on-close), test-only.**
+  - New test in `test/phase1/shell/electron.boot.mjs`: `window.close()` with menu-bar mode on must hide (not destroy)
+    the window and send `windowHidden` over `rig:menu`. The page step `hideOnClose` is in
+    `test/phase1/shell/fixtures/app/electron-selftest.js` and runs last.
+  - The hooks it needs are not in `main.js`/`preload.js` yet (LOCAL-owned; the SELFTEST branch of `win.on('close')`
+    also bypasses any hide). The exact request (`rig.getMenuBarState()` payload with `windowVisible` /
+    `windowDestroyed`, `rig.setMenuBarMode`, no SELFTEST bypass while `menuBarMode`) is in `reviews/for-local.md`
+    "## L-14". Until then the test skips: "L-14 hook absent: window.rig.getMenuBarState / setMenuBarMode absent…".
+  - No production code changed.
+- **Task A: CI flake in `song: L-9` ("the storm ran"), test-only** (`test/phase2/edit-v2/panels/song.test.mjs`). The
+  storm was a 20 ms `setInterval` stopped after a wall-clock window and asserted `count > 10`; on the macos-14 runner
+  (suite ~3x slower) too few ticks fired. It is now a promise loop that drives a fixed number of `store.set` writes,
+  each awaiting a >= 20 ms tick (30 for tempo, 70 for notes), and asserts `count === n`. The drafts-unchanged
+  assertions are untouched. `--only song` 10/10 green. No production code changed.
+
+## themes-setup (Ryan 2026-09-28: every warmth direction ships as a selectable theme; app/themes/README.md)
+- **Registry** `app/js/shared/themes.js` (pure). `THEMES` is a list of `{id, name, mode:'light'|'dark', css, family,
+  swatch:{bg,panel,text,accent}, body?:{theme,mode}, coming?}`. It also exports `DEFAULT_THEME_ID = 'sanctuary'`,
+  `THEME_MIRROR_KEY = 'worship-rig.theme'`, `byId()`, `isValidId()`, `resolveThemeId()`, `pickableThemes()` and
+  `themeAttrs()`.
+  - The themes: `classic` (no file), `sanctuary` (sanctuary-v2, default), `sanctuary-day` (sanctuary-v2, light,
+    **coming**: hidden until its light-dark() sibling lands), `daylight-stage` / `daylight-day` (daylight-v2, dusk /
+    day), `studio`, `ember`, `nave` (sanctuary v1).
+  - Entries are keyed by css path, so renaming a folder changes one string here and one in boot.js.
+  - `body` is a transition shim: the legacy `<body>` attributes today's files still guard on.
+- **Store**: `settings.theme` is optional. When absent, the default applies. `store.set('settings.theme', unknown)`
+  stores the default and never throws. A loaded library with an unknown or non-string id gets the default. Nested
+  writes (`settings.theme.x`) are refused.
+  - There is no SCHEMA bump.
+  - A theme change doesn't flip `meta.edited` (new `LOOK_SETTINGS`). It is not device-local, so it is exported with
+    the library.
+- **Boot** `app/themes/boot.js` is a classic script with no imports, so it runs synchronously in `<head>`.
+  `index.html` and `mini.html` include it twice: first in `<head>` (after the CSP meta), and again as the last element
+  of `<head>`.
+  - The first include reads the mirror and validates it against its own copy of the id → `{css, mode, body}` map. It
+    sets `html[data-theme|data-mode]` and `html.style.colorScheme`, preloads the sheet, and writes
+    `body[data-theme|data-mode]` from a MutationObserver as soon as `<body>` exists.
+  - The second include appends `<link rel=stylesheet id=theme-css blocking=render>`. It must come after the app's CSS
+    because theme rules win on source order, and a script can only add render-blocking sheets before `<body>` exists.
+  - With a single include, the sheet is linked at DOMContentLoaded instead.
+  - `window.__rigThemeBoot = {key, def, map, id, link}` is exposed for tests.
+- **Runtime**: `applyTheme(id)` in `app/js/main.js` is driven by a store subscription on `settings.theme`. At boot it
+  reconciles the store against the mirror, and the store wins.
+  - It writes the mirror, then loads the new sheet at the end of `<head>` with `media="not all"`. It adds that sheet's
+    `@font-face` files to `document.fonts` and waits up to 1.5 s for them. Then, in one task, it enables the new sheet,
+    removes the old one and flips html/body attributes.
+  - Siblings in the same file only flip attributes. A newer switch cancels an older one.
+  - `globalThis.__rig.theme = {apply, current, pending}` is exposed for tests.
+  - `mini.html` follows the mirror through its own boot.js. The bus doesn't carry the theme yet.
+- **Picker**: Settings › Appearance › Theme (`settings.js`) is a radiogroup of swatch cards
+  (`[data-testid=setting-theme]`, `theme-card-<id>`) with a roving tabindex. Arrow keys, Home and End select, and
+  `coming` themes are hidden. It sits before "Perform view". The CSS is at the end of `styles-edit.css` (`.st-theme*`).
+  - `settingsView.open({section})` now scrolls to `[data-section=<name>]` and focuses its checked radio or first
+    control. Only `appearance` has a data-section today.
+- **Quick › This Mac**: the caption row has a compact `Theme: <name> ▸` button (`[data-testid=quick-theme]`,
+  `.qs-theme` CSS at the end of `styles.css`). It is not an extra row, because the sheet height is fixed; the first
+  try as a row overflowed it.
+  - The button closes the sheet and dispatches `document` event `rig-open-settings` `{section:'appearance'}`, which
+    main.js answers with `openSettings`. `o.onTheme` overrides this. The button is frozen under Lock like the rest of
+    This Mac.
+- **One mark**: `app/themes/sanctuary-v2/mark.svg` → `app/assets/mark.svg`. It is used by `.tb-logo`, the start
+  overlay, the mini "waiting" logo and both favicons, and replaces `icons/icon.svg` in those places. The packaged app
+  icon (`build/`) is unchanged.
+  - Themes still override it with `content: url(...)` today. Their agents remove that; README rule 8.
+- **Fonts**: the 7 woff2 files and 7 OFL texts moved from `app/themes/*/fonts/` to `app/fonts/`. Files with the same
+  name were byte-identical (sha256), so there are 7 unique fonts. Total 274 KB of woff2 (280,248 B), plus 30 KB of
+  OFL text.
+  - Each theme.css `@font-face src` now points at `/fonts/…`; that is the only edit made in the theme files.
+  - The fonts are listed in LICENSES.md "Theme fonts".
+- **Per-theme size** (folder plus the /fonts it names; the limit is 250 KB, unit-tested): Sanctuary 119, Daylight v2
+  165, Studio 90, Ember 98 and Nave 122 KB. boot.js is 3.7 KB.
+- **Tests**
+  - `test/unit/shared/themes.test.mjs` (9, in the `unit` suite): registry shape; boot.js map ↔ registry sync (runs
+    boot.js in a vm); boot behaviour; both HTML heads; store validation; `meta.edited`; the size budget and `/fonts`.
+  - `test/phase2/themes/run.mjs` (new `themes` suite in run-all, phase2 / fast tier; `--only`, `--theme`).
+    - Per theme: boot with the link inserted while `readyState=loading`, before `<body>`, `blocking=render`, and loaded
+      before first-paint; attributes; 0 console errors and 0 HTTP ≥ 400.
+    - Store-wins and unknown-id fallback.
+    - A runtime switch with per-frame sheet/attribute consistency, the UA-default background never showing, and a
+      one-frame screenshot.
+    - The picker, Quick, and mini.
+    - Selector coverage (`css-selectors.mjs`) → `coverage-<id>.json`.
+  - `tools/themes/shoot.mjs --theme <id> [--out] [--only] [--size]` takes perform, quick, edit and edit-tone-eq
+    screenshots plus the contrast audit JSON. It applies the theme the app's way, and is moved and generalised from
+    `design/warmth/daylight-v2/shoot.mjs`, which was deleted; Today-sheet mocking was dropped.
+    - Checked on daylight-stage: 0 contrast fails in all 4 shots (lowest 5.17, PANIC) and 0 errors.
+- **Coverage as found today**, before the theme agents' fixes. The walk covers 21 states: Perform idle / held (incl.
+  black keys and pedal) / toast / info banner / low-resource / muted Pad / Sing-it-in / step panel / faded / Quick /
+  locked, Edit held + all 7 block tabs + Advanced › Tone EQ, and Settings. **All 5 files FAIL**:
+
+  | theme(s) | selectors | unmatched | % | dead-class selectors |
+  |---|---|---|---|---|
+  | sanctuary (sanctuary-v2) | 274 | 61 | 22.3 | 31 (`.sanct-before*`, `.sanct-breath`, `.sb-*`) |
+  | daylight-stage + daylight-day | 340 | 85 | 25.0 | 43 (`.dl-today*`, `.dl-ic`, …) |
+  | studio | 345 | 52 | 15.1 | 27 (`.studio-session`, `.ss-*`) |
+  | ember | 219 | 41 | 18.7 | 24 (`.ember-welcome`, `.ew-*`) |
+  | nave (sanctuary v1) | 276 | 61 | 22.1 | 31 (`.sanct-before*`, `.sanct-breath`, `.sb-*`) |
+
+  The dead ones are the start-screen mock hooks, and they count as unmatched too. Without them the rates are Sanctuary 12.3 %,
+  Daylight 14.1 %, Studio 7.9 %, Ember 8.7 % and Nave 12.2 %. The rest is mostly states the walk can't reach cheaply: `.rec-btn.recording`, `.led.flash`,
+  `.swell-btn.on`, `.drone-swell.up`, `.bstrip.open`, `.settings-placeholder`, `.meter.vertical` and the Edit wheel
+  lanes.
+- **Also run**: settings 31/31; mini 14/14 (a first run failed low-resource "frames still run (4)" at load avg 10;
+  the rerun was green); shell unit green.

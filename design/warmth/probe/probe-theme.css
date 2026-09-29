@@ -1,0 +1,58 @@
+/* RESEARCH PREVIEW ONLY: "Sanctuary" warm theme probe. Injected via Playwright; not linked from index.html.
+   Tests how far tokens + a few surface rules go before hardcoded hexes in styles.css / edit CSS leak cold grey. */
+@font-face { font-family: 'Figtree'; src: url('/themes/warm-preview/fonts/Figtree.ttf') format('truetype');
+  font-weight: 300 900; font-display: block; }
+@font-face { font-family: 'Fraunces'; src: url('/themes/warm-preview/fonts/Fraunces.ttf') format('truetype');
+  font-weight: 100 900; font-display: block; }
+
+:root {
+  /* neutrals: OKLCH hue 55 (ember), chroma 0.010-0.014: warm charcoal, not brown */
+  --bg: #140f0c; --panel: #1e1814; --panel-2: #28211d; --panel-3: #342c27;
+  --line: #37302b; --line-2: #49413b;
+  --text: #f4f0e6; --muted: #c3b9ab; --faint: #a89c90;
+  --accent: #fcc35d; --accent-ink: #1c140c; --warn: #f6b042;
+  --slot-0: #f78955; /* Keys: ember */
+  --slot-1: #6ed889; /* Pad: sage-mint */
+  --slot-2: #7ad1f7; /* Extra: sky, lighter than bass for deutan separation */
+  --slot-3: #b073da; /* Bass: plum, darker */
+  --ok: #6ed889; --danger: #e24942;
+  --track: #49413b; --track-edge: #796f69; --led-off: #756d67; --muted-fader: #817873;
+  --panic: #d8412f; --panic-bg: #521613; --panic-text: #fdcac0; --thumb: #f2eee6; --focus: #ffd48a;
+  --fx: #d3c2a8; --drone: #efd9a4; --sel-fx: #4a3f36; --chg: #fff4dc; --off-tile: #2c2520;
+  --font: 'Figtree', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Fraunces', Georgia, serif;
+  --radius: 14px; --radius-sm: 10px;
+}
+
+/* the room: one static warm wash from above (a stage light), a vignette, and a 2% grain tile. Painted once. */
+body {
+  background:
+    url('/themes/warm-preview/grain.png') repeat,
+    radial-gradient(120% 70% at 50% -10%, #3a2618 0%, #1d1510 45%, transparent 75%),
+    var(--bg);
+  font-feature-settings: 'tnum' 0;
+}
+.topbar { background: color-mix(in srgb, var(--bg) 70%, transparent); border-bottom-color: #2a221d; }
+
+/* surfaces: softer rim instead of hard grey outline; a faint warm top light (edge lighting) */
+.panel { border-color: #2e2621; box-shadow: inset 0 1px 0 #ffecd20a, 0 1px 0 #0006; }
+
+/* labels: sentence case, not tracked caps (dashboard cue) */
+.select-label, .stepper-label, .fader-label, .wheel-caption, .chord-caption, .section-title, .tb-cap {
+  text-transform: none; letter-spacing: .01em; font-weight: 650; font-size: 13px; color: var(--muted);
+}
+
+/* display type only where it is read from 1.5 m and not a control: the song title and the chord */
+.song-name { font-family: var(--font-display); font-weight: 600; font-variation-settings: 'SOFT' 100, 'WONK' 0, 'opsz' 72;
+  letter-spacing: -.005em; }
+.chord-name { font-family: var(--font-display); font-weight: 600; font-variation-settings: 'SOFT' 100, 'opsz' 96; }
+
+/* ON tiles: warm ink, a soft inner light so it reads as a lit lamp, not a flat sticker */
+.ontile .ot-name, .ontile .ot-sub { color: #1c140c; }
+.ontile:not(.off) { background-image: linear-gradient(#ffffff26, #ffffff00 60%); }
+.ontile.off { border-color: #4a403a; }
+.ontile.off .ot-state { color: #d7cdc1; }
+.slot.muted .mchip.on { background: #2c2520; border-color: #5a4f48; color: #e8dfd3; }
+
+/* Edit token block redeclares cold defaults on .ev2 */
+.ev2 { --ev2-rig-bg: #18120e; --fx: #d3c2a8; --drone: #efd9a4; --chg: #fff4dc; --ev2-flash: #ffd48a; }

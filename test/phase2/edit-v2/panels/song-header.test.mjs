@@ -140,6 +140,36 @@ test('song-header: song name — Enter commits, empty reverts, Esc cancels; roun
     t.assertNoConsoleErrors();
   });
 
+test('song-header: round4-edit-lib m2 — the IME candidate-confirm Enter neither blurs nor commits the name',
+  async () => {
+    const name = `${t.host} .ev2-song-name`;
+    const id = await t.ev(() => window.__rig.store.currentSong().id);
+    const before = await t.ev((i) => window.__rig.store.getSong(i).name, id);
+    await t.click(name);
+    await t.page.keyboard.press('End');
+    const cdp = await t.context.newCDPSession(t.page);
+    try {
+      await cdp.send('Input.imeSetComposition', { text: ' さんび', selectionStart: 4, selectionEnd: 4 });
+      // Chrome on macOS: the Enter that picks the candidate is keydown key 'Enter', isComposing, keyCode 229
+      await cdp.send('Input.dispatchKeyEvent', {
+        type: 'rawKeyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 229, nativeVirtualKeyCode: 229,
+      });
+      await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+      await t.sleep(150);
+      assert.ok(await t.ev((s) => document.activeElement === document.querySelector(s), name), 'still editing');
+      assert.equal(await t.ev((i) => window.__rig.store.getSong(i).name, id), before, 'nothing committed mid-edit');
+      await cdp.send('Input.insertText', { text: ' 賛美' });
+    } finally {
+      await cdp.detach().catch(() => {});
+    }
+    // the real Enter afterwards commits the composed name
+    await t.page.keyboard.press('Enter');
+    await t.until(([i, v]) => window.__rig.store.getSong(i).name === v, [id, `${before} 賛美`]);
+    assert.equal(await t.ev(() => document.activeElement?.classList.contains('ev2-song-name')), false, 'Enter blurs');
+    await t.ev(([i, n]) => window.__rig.store.set(`songs.${i}.name`, n), [id, before]);
+    t.assertNoConsoleErrors();
+  });
+
 test('song-header: polish-1 text:"dirty" — the focused name follows an outside rename until typed in', async () => {
   const name = `${t.host} .ev2-song-name`;
   const s0 = await t.song();
@@ -338,6 +368,29 @@ test('song-header: Delete song… (confirm; Cancel keeps it) and no Reset for a 
     && document.querySelector('.ev2-song-name').value === window.__rig.store.currentSong().name, id);
   t.assertNoConsoleErrors();
 });
+
+test('song-header: critics-fix (onboarding O12) — a pencil after the name says "rename"; clicking it edits the name',
+  async () => {
+    const H = t.host;
+    const r0 = await t.ev((h) => {
+      const name = document.querySelector(`${h} .ev2-song-name`);
+      const pen = document.querySelector(`${h} .ev2-song-pencil`);
+      const a = name.getBoundingClientRect();
+      const b = pen.getBoundingClientRect();
+      return { title: name.title, label: pen.getAttribute('aria-label'), after: b.left >= a.right - 1 && b.left - a.right < 16,
+        visible: pen.checkVisibility() };
+    }, H);
+    assert.deepEqual(r0, { title: 'Song name: click to rename', label: 'Rename song', after: true, visible: true });
+    await t.click(`${H} .ev2-song-pencil`);
+    await t.until((h) => document.activeElement === document.querySelector(`${h} .ev2-song-name`), H);
+    const sel = await t.ev(() => {
+      const a = document.activeElement;
+      return a.selectionStart === 0 && a.selectionEnd === a.value.length;
+    });
+    assert.ok(sel, 'the whole name is selected, ready to type over');
+    await t.page.keyboard.press('Escape');
+    await t.until((h) => document.activeElement !== document.querySelector(`${h} .ev2-song-name`), H);
+  });
 
 test('song-header: 1024×700 — ☰ Songs toggles the drawer, compact row fits, menu stays on screen', async () => {
   // the same page, resized: a second mount doubles the boot cost on the loaded box, and the ≤ 1250 rules are CSS

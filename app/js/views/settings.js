@@ -5,6 +5,7 @@
 import { loadComponents, markDialog } from './_fallback-components.js';
 import { LEARNABLE, ROLE_DEFAULTS } from '../shared/params.js';
 import { noteName } from '../shared/music.js';
+import { pickableThemes, resolveThemeId } from '../shared/themes.js';
 
 const C = await loadComponents();
 
@@ -395,8 +396,11 @@ export function mountSettings(el, ctx) {
     pedalBox.replaceChildren(...kids.filter(Boolean));
     if (hadFocus) pedalBox.querySelector('button')?.focus();
   }
+  // hardware pass (local, 2026-09-29): many keyboards read the pedal's direction when they power up or the pedal is
+  // plugged in, so a pedal held down then reads backwards; the test says so before and after
+  const PEDAL_TIP = 'Plug in the pedal and the keyboard with your foot off the pedal: many keyboards read its direction then.';
   function pedalIdle(msg) {
-    pedalShow(btn('Test my pedal', startPedalTest, { class: 'st-pedal-test' }), msg ? h('span.st-hint', { text: msg }) : null);
+    pedalShow(btn('Test my pedal', startPedalTest, { class: 'st-pedal-test' }), h('span.st-hint', { text: msg || PEDAL_TIP }));
   }
   function startPedalTest() {
     if (!midi) {
@@ -415,7 +419,8 @@ export function mountSettings(el, ctx) {
       const invert = inferPedalInvert(d.value);
       const cur = !!S().pedalInvert;
       const msg = invert
-        ? `Your pedal sent ${d.value} when pressed — it is wired the other way round.`
+        ? `Your pedal sent ${d.value} when pressed — it works the other way round. If it was held down when the `
+          + 'keyboard was switched on or plugged in, let go, unplug and replug the keyboard, and test again first.'
         : `Your pedal sent ${d.value} when pressed — normal polarity.`;
       const kids = [h('span.st-pedal-result', { dataset: { invert: String(invert) }, text: msg })];
       if (invert !== cur) {
@@ -728,7 +733,10 @@ export function mountSettings(el, ctx) {
   restoreIdle();
 
   // ---- My Samples (user sample instruments; shell: /api/user-samples, rig.openUserSamplesFolder/rescanUserSamples)
+  // onboarding O9: the raw folder path sits inside the "Bringing GarageBand instruments over" disclosure with the
+  // Terminal steps; outside it only a plain sentence (samplesNote)
   const samplesPath = h('p.st-hint.st-samples-path');
+  const samplesNote = h('p.st-hint.st-samples-note');
   const samplesStatus = h('p.st-samples-status', { 'aria-live': 'polite' });
   const samplesBtns = h('div.st-inline');
   const docLink = h('a.st-doc-link', { href: GARAGEBAND_DOC, target: '_blank', rel: 'noopener', text: 'Open the GarageBand guide' });
@@ -779,8 +787,10 @@ export function mountSettings(el, ctx) {
     const r = globalThis.rig;
     const { dir, supported } = await userSamplesInfo();
     const n = userSampleCount();
-    setText(samplesPath, dir ? `Folder: ${dir}` : supported ? 'Your My Samples folder is ready.' : 'My Samples isn’t turned on here — start Worship Rig with its normal launcher to use it.');
+    setText(samplesPath, dir ? `Folder: ${dir}` : supported ? 'Your My Samples folder is ready.' : 'My Samples isn’t turned on here.');
     samplesPath.title = dir || '';
+    setText(samplesNote, supported ? '' : 'My Samples isn’t turned on here — start Worship Rig with its normal launcher to use it.');
+    samplesNote.hidden = supported;
     setText(
       samplesStatus,
       samplesNeedReload
@@ -879,11 +889,12 @@ export function mountSettings(el, ctx) {
     h('section.st-section.st-samples', { 'aria-label': 'My Samples' },
       h('h2.st-h2', { text: 'My Samples' }),
       h('p.st-hint', { text: 'Extra sampled instruments on this Mac (for example GarageBand’s pianos). They appear in the instrument picker under “My Samples”.' }),
-      samplesPath,
+      samplesNote,
       samplesBtns,
       samplesStatus,
       h('details.st-howto', {},
         h('summary', { text: 'Bringing GarageBand instruments over' }),
+        samplesPath,
         h('ol.st-howto-steps', {},
           h('li', {}, 'On the Mac, open Terminal in the Worship Rig folder and run ', h('code', { text: 'node tools/import-garageband.mjs --list' }), ' to see what GarageBand has installed.'),
           h('li', {}, 'Import one, e.g. ', h('code', { text: 'node tools/import-garageband.mjs --import "Steinway"' }), '. It is copied into the My Samples folder.'),
@@ -899,7 +910,9 @@ export function mountSettings(el, ctx) {
     ),
     h('section.st-section', { 'aria-label': 'Computer keyboard' },
       h('h2.st-h2', { text: 'Computer keyboard' }),
-      row('Play notes', tog('computerKeyboard', 'Enabled').el, 'A W S E D F T G Y H U J K = notes, Z/X = octave, Space = sustain, ↑/↓ = mod wheel.'),
+      // onboarding O5: the whole map (controller KEY_MAP runs to K O L P ;), and where the notes start
+      row('Play notes', tog('computerKeyboard', 'Enabled').el, 'A W S E D F T G Y H U J K O L P ; = notes from middle C (A = C), '
+        + 'Z/X = octave, Space = sustain, ↑/↓ = mod wheel, ←/→ = previous / next song.'),
     ),
     h('section.st-section', { 'aria-label': 'Library' },
       h('h2.st-h2', { text: 'Library & backups' }),
@@ -916,6 +929,216 @@ export function mountSettings(el, ctx) {
     h('section.st-section', { 'aria-label': 'About' }, h('h2.st-h2', { text: 'About' }), aboutBox),
   );
 
+  // =============================================================================================================
+  // Menu bar (docs/menubar-mode.md; C7 menubar-B): menu-bar mode, which set the popover's modes come from,
+  // low-resource mode, open at login (Mac app only) and a live resource line (engine._debugStats, 1 s while open)
+  // =============================================================================================================
+  const mbSetSelect = h('select.ed-select.st-mb-set', { 'aria-label': 'Menu-bar set',
+    'data-testid': 'setting-mb-set' });
+  const mbModes = h('p.st-hint.st-mb-modes', { 'data-testid': 'setting-mb-modes' });
+  const mbResource = h('p.st-status.st-mb-resource', { 'data-testid': 'setting-mb-resource' });
+  const mbMode = tog('menuBarMode', 'Keep in the menu bar');
+  mbMode.el.dataset.testid = 'setting-mb-mode';
+  // low-resource: controller.setLowResource when it exists (it also tells the engine), else the setting alone
+  const mbLow = C.toggle({
+    label: 'Low-resource',
+    onChange: (v) => {
+      if (typeof controller.setLowResource === 'function') controller.setLowResource(!!v);
+      else store.set('settings.lowResource', !!v);
+    },
+  });
+  mbLow.el.dataset.bind = 'settings.lowResource';
+  mbLow.el.dataset.testid = 'setting-mb-lowres';
+  comps.push(mbLow);
+  settingBinds.push({ key: 'lowResource', apply: (s) => mbLow.set(!!s.lowResource) });
+  mbLow.set(!!S().lowResource);
+  let mbLogin = null;
+  if (rig && typeof rig.setLoginItem === 'function') {
+    mbLogin = C.toggle({
+      label: 'Open at login',
+      onChange: async (v) => {
+        const r = await rig.setLoginItem(!!v);
+        if (r && r.error) {
+          console.warn('[settings] setLoginItem', r.error);
+          toast('Open at login could not be changed.', 'error');
+          mbLogin.set(!v);
+        }
+      },
+    });
+    mbLogin.el.dataset.testid = 'setting-mb-login';
+    comps.push(mbLogin);
+  }
+  /** The popover's modes, as the controller will list them (fallback: the contract's rule, computed here). */
+  function mbModeNames(state) {
+    try {
+      const list = controller.modes && typeof controller.modes.list === 'function' ? controller.modes.list() : null;
+      if (Array.isArray(list)) return list.map((m) => m.name);
+    } catch {
+      /* fall through */
+    }
+    const st = state.settings;
+    const own = st.menuBarSetlistId && state.setlists[st.menuBarSetlistId];
+    const cur = st.currentSetlistId && state.setlists[st.currentSetlistId];
+    const nav = cur && cur.songIds.length ? cur.songIds : state.songOrder || [];
+    const ids = own ? own.songIds.slice(0, 6) : nav.slice(0, 3);
+    return ids.map((id) => state.songs[id]?.name).filter(Boolean);
+  }
+  function renderMbSets(state = store.get()) {
+    const cur = state.settings.menuBarSetlistId || '';
+    const opts = [h('option', { value: '', text: 'Current setlist (first 3 songs)' })];
+    for (const id of state.setlistOrder || []) {
+      const sl = state.setlists[id];
+      if (!sl) continue;
+      opts.push(h('option', { value: id, text: `${sl.name || 'Setlist'} (${Math.min(6, sl.songIds.length)})` }));
+    }
+    mbSetSelect.replaceChildren(...opts);
+    mbSetSelect.value = cur && state.setlists[cur] ? cur : '';
+    const names = mbModeNames(state);
+    setText(mbModes, names.length ? `Modes: ${names.join(' · ')}` : 'No modes yet: add songs to the setlist.');
+  }
+  listen(mbSetSelect, 'change', () => store.set('settings.menuBarSetlistId', mbSetSelect.value || null));
+  settingBinds.push({ key: 'menuBarSetlistId', apply: () => renderMbSets() });
+  settingBinds.push({ key: 'currentSetlistId', apply: () => renderMbSets() });
+  cleanups.push(
+    store.subscribe((state, paths) => {
+      const hit = (p) => p === 'setlistOrder' || p.startsWith('setlists') || p === 'songOrder'
+        || /^songs\.[^.]+(\.name)?$/.test(p);
+      if (paths.some(hit)) renderMbSets(state);
+    }),
+  );
+  function renderMbResource() {
+    let d = null;
+    try {
+      d = engine && typeof engine._debugStats === 'function' ? engine._debugStats() : null;
+    } catch {
+      d = null;
+    }
+    const st = controller.status || {};
+    const low = d && typeof d.lowResource === 'boolean' ? d.lowResource : !!st.lowResource;
+    const parts = [low ? 'Low-resource: on' : 'Low-resource: off'];
+    const mm = st.memory && st.memory.mode;
+    if (mm) parts.push(mm === 'current-only' ? 'current song kept loaded' : `keeps ${mm}`);
+    if (d) {
+      if (Number.isFinite(d.pinnedMB)) parts.push(`${d.pinnedMB.toFixed(1)} MB kept loaded`);
+      if (Number.isFinite(d.slotLevelTaps)) parts.push(`level taps ${d.slotLevelTaps}`);
+      if (Number.isFinite(d.voices)) parts.push(`voices ${d.voices}`);
+    }
+    setText(mbResource, parts.join(' · '));
+    mbResource.dataset.low = String(low);
+  }
+  let mbTimer = null;
+  listen(el, 'settings-open', () => {
+    renderMbSets();
+    renderMbResource();
+    clearInterval(mbTimer);
+    mbTimer = setInterval(renderMbResource, 1000);
+    const readLogin = mbLogin && (typeof rig.getLoginItem === 'function' ? rig.getLoginItem
+      : typeof rig.getMenuBarState === 'function' ? rig.getMenuBarState : null);
+    if (readLogin) {
+      Promise.resolve(readLogin()).then((r) => {
+        if (r && typeof r === 'object' && typeof r.openAtLogin === 'boolean') mbLogin.set(r.openAtLogin);
+        else if (typeof r === 'boolean') mbLogin.set(r);
+      }, () => {});
+    }
+  });
+  listen(el, 'settings-close', () => {
+    clearInterval(mbTimer);
+    mbTimer = null;
+  });
+  cleanups.push(() => clearInterval(mbTimer));
+  // Chrome: the popover runs as a small window over BroadcastChannel (same origin); the Mac app uses the tray icon
+  const mbOpenMini = isElectron ? null : btn('Open mini panel', () => {
+    window.open('mini.html', 'worship-rig-mini', 'popup,width=320,height=440');
+  }, { class: 'st-mb-open-mini', 'data-testid': 'setting-mb-open-mini' });
+  colB.append(
+    h('section.st-section.st-menubar', { 'aria-label': 'Menu bar', 'data-testid': 'settings-menubar' },
+      h('h2.st-h2', { text: 'Menu bar' }),
+      row('Menu-bar mode', mbMode.el, isElectron
+        ? 'Closing the window keeps the sound running; switch modes from the menu-bar icon. Quit from its menu.'
+        : 'Used by the Mac app. In Chrome, keep this tab open and use the mini panel.'),
+      // onboarding O9: "Modes" defined where it first appears
+      row('Menu-bar songs', h('div.st-inline', {}, mbSetSelect),
+        'The songs (“modes”) the menu-bar icon lets you switch between, up to 6.'),
+      mbModes,
+      row('Low-resource', mbLow.el, 'Only the current song stays loaded and the meters stop. Sound is unchanged. '
+        + 'In menu-bar mode it is on by itself while the window is hidden.'),
+      mbLogin
+        ? row('Open at login', mbLogin.el, 'Start Worship Rig in the menu bar when you log in.')
+        : h('p.st-hint.st-mb-login-hint', { text: 'Open at login is available in the Mac app.' }),
+      mbOpenMini ? row('Mini panel', mbOpenMini, 'Mode buttons, master, drone and panic in a 320×440 window.') : null,
+    ),
+  );
+  // onboarding O9: the live resource line is a diagnostic, not a setting
+  (colA.querySelector('.st-diag') || colB).append(mbResource);
+  renderMbSets();
+
+  // =============================================================================================================
+  // Appearance › Theme (themes-setup; shared/themes.js). One card per pickable theme: name, Light/Dark, a 4-colour
+  // strip (bg, panel, text, accent, hand-copied from the theme file). A radiogroup with a roving tabindex: arrows move
+  // and select, like native radios. Selecting writes settings.theme; main.js applyTheme() does the rest.
+  // =============================================================================================================
+  const themeCards = pickableThemes().map((t) => h('button.st-theme', {
+    type: 'button', role: 'radio', 'aria-checked': 'false', tabindex: -1, 'data-theme-id': t.id,
+    'data-testid': `theme-card-${t.id}`, title: `${t.name} (${t.mode === 'light' ? 'light' : 'dark'})`,
+    on: { click: () => store.set('settings.theme', t.id) },
+  },
+  h('span.st-theme-strip', { 'aria-hidden': 'true' },
+    ...['bg', 'panel', 'text', 'accent'].map((k) => {
+      const sw = h('i');
+      sw.style.background = t.swatch[k];
+      return sw;
+    })),
+  h('span.st-theme-name', { text: t.name }),
+  h('span.st-theme-tag', { text: t.mode === 'light' ? 'Light' : 'Dark' })));
+  const themeGrid = h('div.st-themes', { role: 'radiogroup', 'aria-label': 'Theme', 'data-testid': 'setting-theme' },
+    ...themeCards);
+  const renderThemes = (s = S()) => {
+    const cur = resolveThemeId(s.theme);
+    let any = false;
+    for (const c of themeCards) {
+      const on = c.dataset.themeId === cur;
+      any = any || on;
+      c.setAttribute('aria-checked', String(on));
+      c.classList.toggle('on', on);
+      c.tabIndex = on ? 0 : -1;
+    }
+    if (!any && themeCards[0]) themeCards[0].tabIndex = 0; // current is a hidden ("coming") theme
+  };
+  settingBinds.push({ key: 'theme', apply: renderThemes });
+  renderThemes();
+  listen(themeGrid, 'keydown', (e) => {
+    const i = themeCards.indexOf(e.target);
+    if (i < 0) return;
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    const to = step ? (i + step + themeCards.length) % themeCards.length
+      : e.key === 'Home' ? 0 : e.key === 'End' ? themeCards.length - 1 : -1;
+    if (to < 0) return;
+    e.preventDefault();
+    e.stopPropagation(); // ↑/↓ are the mod wheel on the computer keyboard
+    themeCards[to].focus();
+    themeCards[to].click();
+  });
+  const appearance = h('section.st-section.st-appearance', { 'aria-label': 'Appearance', 'data-section': 'appearance',
+    'data-testid': 'settings-appearance' },
+  h('h2.st-h2', { text: 'Appearance' }),
+  h('div.st-row.st-row-themes', {},
+    h('div.st-label', {}, h('span', { text: 'Theme' }),
+      h('span.st-hint', { text: 'How the whole app looks. The sound doesn’t change.' })),
+    h('div.st-control', {}, themeGrid)));
+  colA.insertBefore(appearance, colA.querySelector('.st-section[aria-label="Perform view"]'));
+  /** open({section}): bring that section into view and focus its first control (Quick › This Mac › Theme). */
+  function revealSection(name) {
+    if (!name) return;
+    const sec = dialog.querySelector(`[data-section="${name}"]`);
+    if (!sec) return;
+    setTimeout(() => {
+      if (!isOpen) return;
+      sec.scrollIntoView({ block: 'start' });
+      const f = sec.querySelector('[role=radio][tabindex="0"]') || sec.querySelector('button, select, input');
+      f?.focus({ preventScroll: true });
+    }, 0);
+  }
+
   // ---- status (latency, MIDI)
   if (typeof controller.onStatus === 'function') {
     cleanups.push(
@@ -930,7 +1153,7 @@ export function mountSettings(el, ctx) {
             ? midiStatusText(m, isElectron)
             : m.connected
               ? `Connected: ${m.name}`
-              : 'No keyboard connected — check the USB cable.',
+              : 'No keyboard connected — plug one in (it connects by itself), or play the computer keys A–;.',
         );
         midiStatus.classList.toggle('warn', !m.connected);
       }),
@@ -951,8 +1174,8 @@ export function mountSettings(el, ctx) {
   );
 
   // ---- open / close
-  function open() {
-    if (isOpen) return;
+  function open(opts = {}) {
+    if (isOpen) return revealSection(opts && opts.section);
     isOpen = true;
     prevFocus = document.activeElement;
     el.hidden = false;
@@ -968,6 +1191,7 @@ export function mountSettings(el, ctx) {
     statsTimer = setInterval(renderStats, 1000);
     queueMicrotask(() => closeBtn.focus());
     el.dispatchEvent(new CustomEvent('settings-open'));
+    revealSection(opts && opts.section);
   }
   function close() {
     if (!isOpen) return;

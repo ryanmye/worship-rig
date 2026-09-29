@@ -343,6 +343,102 @@ async function runMode(mode, browser) {
       await until(() => document.getElementById('view-settings').hidden);
     });
 
+    // critics-fix (reviews/onboarding.md O5, O9; local hardware pass "pedal wording")
+    await T('settings: critics-fix O5/O9 — no-keyboard line names the computer keys; full key map; raw path and the '
+      + 'resource line tucked away; "modes" defined; pedal tip', async () => {
+      await openSettings();
+      const r = await ev(async () => {
+        const c = window.__rig.controller;
+        const real = { ...c.status };
+        c.dispatchEvent(new CustomEvent('status', { detail: { ...real, midi: { available: true, connected: false, inputs: [] } } }));
+        await new Promise((res) => setTimeout(res, 50));
+        const midiLine = document.querySelector('.st-midi-input').parentElement.querySelector('.st-status').textContent;
+        c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } }));
+        const kb = [...document.querySelectorAll('#view-settings section[aria-label="Computer keyboard"] *')]
+          .map((x) => x.textContent).join(' ');
+        const path = document.querySelector('.st-samples-path');
+        const res = document.querySelector('[data-testid="setting-mb-resource"]');
+        const mb = document.querySelector('[data-testid="settings-menubar"]');
+        return {
+          midiLine, kb,
+          pathInHowto: !path || !!path.closest('details.st-howto'),
+          resInDiag: !!res && !!res.closest('details.st-diag') && !mb.contains(res),
+          mbText: mb.textContent,
+          pedal: document.querySelector('.st-pedal').textContent,
+        };
+      });
+      assert.equal(r.midiLine, 'No keyboard connected — plug one in (it connects by itself), or play the computer keys A–;.');
+      assert.match(r.kb, /A W S E D F T G Y H U J K O L P ; = notes from middle C/);
+      assert.match(r.kb, /←\/→ = previous \/ next song/);
+      assert.ok(r.pathInHowto, 'the raw My Samples folder path sits inside the GarageBand disclosure');
+      assert.ok(r.resInDiag, 'the low-resource debug line is under Diagnostics, not in the Menu bar section');
+      assert.match(r.mbText, /Menu-bar songs/);
+      assert.match(r.mbText, /“modes”/);
+      assert.doesNotMatch(r.mbText, /Low-resource: (on|off) ·/);
+      assert.match(r.pedal, /with your foot off the pedal/);
+      await page.click('.st-close');
+      await until(() => document.getElementById('view-settings').hidden);
+    });
+
+    // C7 menubar-B (docs/menubar-mode.md): the "Menu bar" section
+    await T('settings: Menu bar — mode toggle, set picker → modes, low-resource → controller + engine, resource line', async () => {
+      await openSettings();
+      const sec = page.locator('[data-testid="settings-menubar"]');
+      await sec.scrollIntoViewIfNeeded();
+      assert.equal(await sec.locator('h2').textContent(), 'Menu bar');
+      // menu-bar mode (persisted; Electron main gets it via rig.setMenuBarMode from main.js)
+      await page.click('[data-testid="setting-mb-mode"]');
+      await until(() => window.__rig.store.get().settings.menuBarMode === true);
+      await page.click('[data-testid="setting-mb-mode"]');
+      await until(() => window.__rig.store.get().settings.menuBarMode === false);
+      // set picker: a new setlist shows up at once; choosing it sets settings.menuBarSetlistId and the modes line
+      const setId = await ev(() => window.__rig.store.addSetlist('Menu bar set', window.__rig.store.get().songOrder.slice(0, 4)));
+      await until((id) => !!document.querySelector(`[data-testid="setting-mb-set"] option[value="${id}"]`), setId);
+      await page.selectOption('[data-testid="setting-mb-set"]', setId);
+      await until((id) => window.__rig.store.get().settings.menuBarSetlistId === id, setId);
+      const names = await ev(() => (window.__rig.controller.modes?.list?.() || []).map((m) => m.name));
+      if (names.length) {
+        assert.equal(names.length, 4, 'controller lists the 4 songs of the set');
+        await until((t) => document.querySelector('[data-testid="setting-mb-modes"]').textContent === t, `Modes: ${names.join(' · ')}`);
+      } else note(mode, 'controller.modes.list missing — modes line computed in settings.js');
+      await page.selectOption('[data-testid="setting-mb-set"]', '');
+      await until(() => window.__rig.store.get().settings.menuBarSetlistId === null);
+      // low-resource: the controller and engine follow; the resource line reads the engine's stats every second
+      await page.click('[data-testid="setting-mb-lowres"]');
+      await until(() => window.__rig.store.get().settings.lowResource === true && window.__rig.controller.status.lowResource === true);
+      await until(() => window.__rig.engine._debugStats().lowResource === true);
+      await until(() => /^Low-resource: on/.test(document.querySelector('[data-testid="setting-mb-resource"]').textContent)
+        && /level taps 0/.test(document.querySelector('[data-testid="setting-mb-resource"]').textContent), null, 8000);
+      if (mode === 'app') await until(() => document.documentElement.hasAttribute('data-low-resource'));
+      await sec.scrollIntoViewIfNeeded();
+      await ev(() => {
+        for (const t of document.querySelectorAll('#toasts > *')) t.remove();
+        document.activeElement?.blur?.();
+      });
+      await sleep(200);
+      await sec.screenshot({ path: path.join(SHOTS, `${mode}-menubar.png`) });
+      await page.click('[data-testid="setting-mb-lowres"]');
+      await until(() => window.__rig.controller.status.lowResource === false && window.__rig.engine._debugStats().lowResource === false);
+      await until(() => /^Low-resource: off/.test(document.querySelector('[data-testid="setting-mb-resource"]').textContent), null, 3000);
+      if (mode === 'app') await until(() => !document.documentElement.hasAttribute('data-low-resource'));
+      // open at login: Mac app only (window.rig.setLoginItem); in Chrome a hint instead of the switch
+      const hasLogin = await ev(() => typeof window.rig?.setLoginItem === 'function');
+      assert.equal(await page.$('[data-testid="setting-mb-login"]') !== null, hasLogin);
+      if (!hasLogin) assert.match(await page.textContent('.st-mb-login-hint'), /Mac app/);
+      // Chrome: "Open mini panel" opens app/mini.html in a 320×440 popup (the BroadcastChannel transport)
+      assert.ok(await page.$('[data-testid="setting-mb-open-mini"]'), 'mini panel button in Chrome');
+      if (mode === 'app') {
+        const [popup] = await Promise.all([page.waitForEvent('popup'), page.click('[data-testid="setting-mb-open-mini"]')]);
+        await popup.waitForLoadState();
+        assert.match(popup.url(), /\/mini\.html$/);
+        await popup.waitForFunction(() => document.getElementById('mini')?.dataset.state === 'live', null, { timeout: 10000 });
+        await popup.close();
+      }
+      await ev((id) => window.__rig.store.deleteSetlist(id), setId);
+      await page.click('.st-close');
+      await until(() => document.getElementById('view-settings').hidden);
+    });
+
     // polish-1: the retired Edit's .ed-* rules are pruned; what remains is exactly what settings.js renders
     if (mode === 'app') {
       await T('settings: styles-edit.css keeps only the .ed-* classes Settings renders (polish-1 prune)', async () => {

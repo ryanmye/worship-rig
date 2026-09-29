@@ -27,6 +27,8 @@ import { stepChip, AMOUNT_STEPS, OCTAVE_STEPS, SUSTAIN_STEPS, formatAmount, form
 import { headerChipRow, SPACE_CHIPS, SPACE_MORE, ECHO_CHIPS, SONG_OWN } from './components/headerChipRow.js';
 import { holdButton } from './components/holdButton.js';
 import { quickSheet } from './components/quickSheet.js';
+import { startCard } from './components/startCard.js';
+import { KEY_MAP } from '../controller.js';
 import { openOverlay } from './components/overlay.js';
 
 const lerp = (a, b, x) => a + (b - a) * x;
@@ -41,15 +43,18 @@ const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `${MINUS}${-n}` : '0');
  * live: works as unlocked · hold: needs a 600 ms press-and-hold (amber HOLD tag) · frozen: disabled.
  * Revert needs the hold whether locked or not (OPTIONS.md round-3 fix 2).
  */
+// round4-perform P6: the table also covers the top bar and the banners, and says which pad-folder button is which.
 export const LOCK = Object.freeze({
   live: Object.freeze([
     'slot faders', 'ON tiles', 'drone ON tile', 'drone level', 'wheel', 'Swell', 'strip chips', 'header Space / Echo',
     'Quick › This song', 'Quick › restart audio', 'Prev / Next / setlist tap', 'Fade out', 'PANIC',
+    'pad folder Rescan (Mac app, pads loaded)', 'Notes toggle', 'top bar: master volume / REC / Quick',
+    'banner: Restart sound / Not now',
   ]),
   hold: Object.freeze(['KEY ▾ Sing it in…', 'Transpose −/+', 'drone key grid', 'Major / Minor', 'Revert']),
   frozen: Object.freeze([
     'Edit', 'Settings', 'drone Synth / My Pads', 'Brightness', 'Movement', 'Follow chords', 'Continue across songs',
-    'pad folder', 'setlist reorder', 'Quick › This Mac',
+    'pad folder choose / change', 'setlist reorder', 'Quick › This Mac', 'banner: Open Settings / Use that library',
   ]),
 });
 
@@ -71,7 +76,7 @@ export function wheelTargetLabel(target) {
   return (
     {
       'drone.gain': 'Drone',
-      'fx.reverb.returnGain': 'Reverb',
+      'fx.reverb.returnGain': 'Space level', // round4-perform P12: polish-2B's one name (Edit, Settings learn table)
       'master.volume': 'Master',
       'macro.intensity': 'Intensity',
       'macro.wash': 'Wash',
@@ -314,9 +319,10 @@ export function mountPerform(root, ctx) {
   const songBlock = h(
     'section.panel.song-block',
     { 'aria-label': 'Current song' },
-    h('div.song-flags', {}, songLoading),
     songName,
-    h('div.song-sub', {}, h('span.song-key-cap', { text: 'Key' }), keyBtn.el, songPlayIn, songBpm, holdTag(), notesBtn),
+    // onboarding O2: "Loading…" sits in the KEY row (it takes the BPM's place while it shows), never over the title
+    h('div.song-sub', {}, h('span.song-key-cap', { text: 'Key' }), keyBtn.el, songPlayIn, songBpm, songLoading, holdTag(),
+      notesBtn),
   );
 
   const tDown = use(holdButton({ label: MINUS, ms: HOLD_MS, requireHold: isLocked, className: 't-down', ariaLabel: 'Transpose down a semitone', testid: 'transpose-down', onActivate: () => controller.transposeDown() }));
@@ -604,7 +610,9 @@ export function mountPerform(root, ctx) {
     e.stopPropagation();
   });
   const notesClose = btn('.notes-close', 'Close', { 'aria-label': 'Close notes' });
-  const notesEl = h('section.panel.p-notes', { id: 'perform-notes', 'aria-label': 'Song notes' }, h('div.notes-head', {}, h('span.section-title', { text: 'Notes' }), notesClose), notesText);
+  // onboarding "first 60 seconds": a one-time Start here card at the top of the Notes panel (components/startCard.js)
+  const start = use(startCard());
+  const notesEl = h('section.panel.p-notes', { id: 'perform-notes', 'aria-label': 'Song notes' }, h('div.notes-head', {}, h('span.section-title', { text: 'Notes' }), notesClose), start.el, notesText);
 
   const main = h('div.p-main', {}, wheelPanel, slotsEl, droneEl, notesEl);
 
@@ -633,7 +641,9 @@ export function mountPerform(root, ctx) {
       ms: HOLD_MS,
       requireHold: true, // always a hold: it also un-parks mutes and snaps every fader (OPTIONS.md round-3 fix 2)
       className: 'btn-revert',
-      title: 'Press and hold: put this song back the way it was when you selected it (levels, key, drone, effects)',
+      // onboarding O12: changes are kept with the song; say so, and where a factory song's original is
+      title: 'Press and hold: put this song back the way it was when you selected it (levels, key, drone, effects). '
+        + 'Changes are saved with the song until then; Edit › ⋯ Song › Reset to factory restores a factory song.',
       testid: 'revert-song',
       onActivate: () => revertSong(),
     }),
@@ -653,7 +663,9 @@ export function mountPerform(root, ctx) {
       className: 'lock-toggle',
       testid: 'perform-lock',
       holdText: 'keep holding… (0.6 s)',
-      title: 'Perform lock: playing stays live (faders, ON tiles, chips, Space/Echo, wheel, Prev/Next, Fade out, PANIC); the key, transpose and Revert need a hold; Edit, Settings and the drone sound are frozen. Hold to unlock.',
+      title: 'Perform lock: playing stays live (faders, ON tiles, chips, Space/Echo, wheel, Prev/Next, Fade out, '
+        + 'PANIC, master volume, REC, Quick); the key, transpose and Revert need a hold; Edit, Settings, the drone '
+        + 'sound and library changes are frozen. Hold to unlock.',
       onActivate: () => store.set('settings.performLock', !isLocked()),
     }),
   );
@@ -687,6 +699,8 @@ export function mountPerform(root, ctx) {
       onTouch: (v) => !isLocked() && store.set('settings.velocitySens', v),
       onPedalReversed: (b) => !isLocked() && store.set('settings.pedalInvert', !!b),
       onRestartAudio: () => controller.restartAudio(),
+      onResumeAudio: () =>
+        (typeof controller.resumeAudio === 'function' ? controller.resumeAudio() : controller.restartAudio()),
       onAllSettings: () => {
         quick.close();
         ctx.openSettings?.();
@@ -738,11 +752,14 @@ export function mountPerform(root, ctx) {
       h('div.kp-foot', {}, 'Band hears ', hears, ' · ', plays, ' · ', shift, back),
       h('div.kp-note', {}, 'Want to play in the new key yourself too? Use the key grid in ', h('b.kp-drone', { text: 'Key & drone' }), '.'),
     );
-    d.listen(back, 'click', () => {
+    // round4-perform P5: the popover's listeners live on their own disposer (released on close), not Perform's, which
+    // kept every closed popover (≈52 nodes, 26 listeners) alive until the view unmounted
+    const pd = disposer();
+    pd.listen(back, 'click', () => {
       const s = store.currentSong();
       if (s) singItIn(s.playIn);
     });
-    blurAfterPointer(back, d);
+    blurAfterPointer(back, pd);
     const render = () => {
       const s = store.currentSong();
       if (!s) return;
@@ -754,7 +771,7 @@ export function mountPerform(root, ctx) {
       setText(plays, `you play ${keyName(s.playIn, s.minor)}`);
       setText(shift, signed(semis));
       setText(back, `Back to ${keyName(s.playIn, s.minor)}`);
-      back.disabled = semis === 0;
+      back.disabled = semis === singOctave(s);
     };
     render();
     const kb = keyBtn.el.getBoundingClientRect();
@@ -771,6 +788,7 @@ export function mountPerform(root, ctx) {
       swallow: true,
       group: 'key-pop',
       onClose: () => {
+        pd.dispose();
         sing.destroy();
         el.remove();
         keyPop = null;
@@ -785,8 +803,17 @@ export function mountPerform(root, ctx) {
   function singItIn(pc) {
     const s = store.currentSong();
     if (!s) return;
-    const delta = singItInShift(s.playIn, pc) - transposeSemisOf(s);
+    const delta = singItInShift(s.playIn, pc) + singOctave(s) - transposeSemisOf(s);
     if (delta) controller.transposeBy(delta);
+  }
+  /**
+   * round4-perform P10: the octave the song was loaded with (the Revert snapshot's transposeOctave, in semitones),
+   * kept by "Sing it in…" and "Back to". Not the live song's octave: Transpose +7 flips transposeOctave to 1
+   * (hear −5, one octave up), and Back must still return to 0 there.
+   */
+  function singOctave(s) {
+    const base = snap && snap.id === s.id ? snap.song : null;
+    return 12 * (Number(base?.transposeOctave) || 0);
   }
 
   // ---------------------------------------------------------------- lock hint (key grid / Major-Minor)
@@ -939,9 +966,14 @@ export function mountPerform(root, ctx) {
     if (st.view !== 'perform') quick.close();
     changed = song && snap && snap.id === song.id ? changedPaths(song, snap.song) : new Set();
     // head
-    setText(songName, song ? song.name : 'No song');
+    // round4-perform P13: re-fit only when the name changes (and from the ResizeObserver), not on every store write:
+    // fitName forces a layout, and renderSong runs on each fader tick
+    const nameText = song ? song.name : 'No song';
+    if (songName.textContent !== nameText) {
+      setText(songName, nameText);
+      fitName.push();
+    }
     songName.title = song ? song.name : '';
-    fitName.push();
     if (song) {
       setText(songKey, keyName(song.hearIn, song.minor));
       const semis = transposeSemisOf(song);
@@ -1091,7 +1123,7 @@ export function mountPerform(root, ctx) {
     notesRaf.push();
   }
   function setWheelBadge(S, f) {
-    S.badge.hidden = f === null;
+    if (S.badge.hidden !== (f === null)) S.badge.hidden = f === null; // performance #3: per frame; write a change only
     if (f !== null) setText(S.badgeVal, `${Math.round(f * 100)}%`);
   }
   // polish-2A (ux-round2 L1): the CSS size (clamp by row height) is the cap; a name wider than its column steps down to
@@ -1278,7 +1310,9 @@ export function mountPerform(root, ctx) {
       touch: st.velocitySens,
       pedalReversed: !!st.pedalInvert,
       pedal: pedalDown,
-      sound: a === 'stalled' ? 'stalled' : a === 'restarting' ? 'restarting' : 'ok',
+      // round4-perform P3: the same state the top bar shows (Paused / Muted are not "Sound OK")
+      sound: status.instance === 'secondary' ? 'muted' : a === 'suspended' ? 'paused'
+        : a === 'stalled' || a === 'restarting' ? a : 'ok',
       latencyMs: Number(status.latencyMs) || null,
       locked: !!st.performLock,
       echoSynced: !dl || !(Number(dl.returnGain) > 0) ? null : dl.sync && dl.sync !== 'off',
@@ -1323,11 +1357,39 @@ export function mountPerform(root, ctx) {
 
   // ---------------------------------------------------------------- subscriptions
   d.add(store.subscribe((state) => renderSong(state)));
+  // ---------------------------------------------------------------- first run: Start card + computer-key letters
+  // The card goes after the first song change (it said how); letters sit on the on-screen piano while no MIDI
+  // keyboard is connected and the computer keyboard plays (Settings › Computer keyboard), following Z/X octaves.
+  let cardSong = store.get().settings.currentSongId;
+  d.add(store.subscribe((state) => {
+    const id = state.settings.currentSongId;
+    if (id === cardSong) return;
+    if (cardSong && start.shown) start.dismiss('next');
+    cardSong = id;
+  }));
+  const KEY_LABELS = Object.entries(KEY_MAP).map(([code, off]) => [off, code === 'Semicolon' ? ';' : code.slice(3)]);
+  let lettersKey = '';
+  function renderKeyLetters() {
+    const st = store.get().settings;
+    const on = st.computerKeyboard !== false && !status.midi?.connected;
+    const oct = Number(controller.kbOctave) || 0;
+    const key = on ? `on:${oct}` : 'off';
+    if (key === lettersKey) return;
+    lettersKey = key;
+    piano.setKeyLetters(on ? new Map(KEY_LABELS.map(([off, l]) => [60 + 12 * oct + off, l])) : null);
+  }
+  d.add(store.subscribe((state, paths) => {
+    if (!paths || paths.some((p) => p === 'settings' || p === 'settings.computerKeyboard')) renderKeyLetters();
+  }));
+  d.listen(controller, 'kb-octave', () => renderKeyLetters());
+  renderKeyLetters();
   d.add(
     controller.onStatus((s) => {
       const prevLoading = status.loading;
       const prevSong = status.songId;
       status = s;
+      start.setMidi(!!s.midi?.connected);
+      renderKeyLetters();
       songBlock.classList.toggle('loading', !!s.loading);
       if (prevLoading !== s.loading || prevSong !== s.songId) {
         const st = store.get();
@@ -1336,11 +1398,18 @@ export function mountPerform(root, ctx) {
       if (quick.isOpen) renderQuick();
     }),
   );
+  // performance #3a: this runs per MIDI CC; the pickup ghost is only touched while it shows or when it changes
+  let pickupShown = false;
   d.listen(controller, 'wheel', (e) => {
     const det = e.detail || {};
     if (det.source === 'mod' || det.source === 'virtual') {
-      if (det.pickup) wheel.set({ pickup: true, hardware: det.hardware });
-      else wheel.set({ pickup: false });
+      if (det.pickup) {
+        pickupShown = true;
+        wheel.set({ pickup: true, hardware: det.hardware });
+      } else if (pickupShown) {
+        pickupShown = false;
+        wheel.set({ pickup: false });
+      }
     }
     if (det.source === 'expr') seen.expr = true;
     if (det.source === 'vol') seen.vol = true;
@@ -1453,6 +1522,10 @@ export function mountPerform(root, ctx) {
     /** Test/debug: the paths that carry a "changed" dot (shared/song-diff.js). */
     get changedPaths() {
       return [...changed];
+    },
+    /** Test/debug: the first-run Start here card (components/startCard.js). */
+    get startCard() {
+      return start;
     },
     /** The top-bar Quick button. */
     toggleQuick() {

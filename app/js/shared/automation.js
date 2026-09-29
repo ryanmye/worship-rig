@@ -34,7 +34,19 @@ export function cancelAndHold(param, when) {
 }
 
 /**
- * Smooth exponential approach (setTargetAtTime) from whatever the param is doing at `when`.
+ * rampTo pins the param at its target this many time constants after the start (idle-cpu #3). The step left is
+ * e^−12 ≈ 6.1e-6 of the move: −104 dB of a gain change, 0.007 ¢ of a 12-semitone detune move.
+ */
+export const RAMP_SETTLE_TC = 12;
+
+/**
+ * Smooth exponential approach (setTargetAtTime) from whatever the param is doing at `when`, then
+ * setValueAtTime(value) at `when + RAMP_SETTLE_TC × timeConstant` (idle-cpu #3, reviews/idle-cpu.md). A SetTarget
+ * event never ends in Chromium: long after it has converged the param still counts as automated, so a
+ * BiquadFilter keeps recomputing its coefficients every sample (measured: 60 converged peaking biquads cost 1.6×
+ * their static cost; k-rate does not help) and a GainNode at 0 never flags its output silent, which keeps
+ * everything downstream running (a converged gain 0 in front of a convolver kept it busy forever, 13 % of a core
+ * against 2.5 % with the pin). The pin ends the automation; any later helper call cancels it (cancelAndHold).
  * @param {AudioParam} param
  * @param {number} value
  * @param {number} when
@@ -45,8 +57,10 @@ export function rampTo(param, value, when, timeConstant = DEFAULT_TC) {
   if (!Number.isFinite(value)) return false;
   const t = t0(when);
   cancelAndHold(param, t);
-  if (Number.isFinite(timeConstant) && timeConstant > 0) param.setTargetAtTime(value, t, timeConstant);
-  else param.setValueAtTime(value, t);
+  if (Number.isFinite(timeConstant) && timeConstant > 0) {
+    param.setTargetAtTime(value, t, timeConstant);
+    param.setValueAtTime(value, t + RAMP_SETTLE_TC * timeConstant);
+  } else param.setValueAtTime(value, t);
   return true;
 }
 

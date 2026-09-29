@@ -1,0 +1,240 @@
+{
+ "label": "perform-1440",
+ "count": 152,
+ "fails": [],
+ "disabledFails": [
+  {
+   "id": 50,
+   "text": "◀ Prev",
+   "color": "rgb(201, 187, 172)",
+   "size": 17,
+   "weight": 700,
+   "op": 0.45,
+   "disabled": true,
+   "cls": "btn nav-btn prev",
+   "tag": "button",
+   "rect": {
+    "x": 41.484375,
+    "y": 206.53125,
+    "w": 55.03125,
+    "h": 23
+   },
+   "bg": "rgb(24,17,14)",
+   "cr": 2.93,
+   "need": 4.5,
+   "pass": false
+  },
+  {
+   "id": 146,
+   "text": "↺ Revert",
+   "color": "rgb(247, 239, 227)",
+   "size": 16,
+   "weight": 700,
+   "op": 0.45,
+   "disabled": true,
+   "cls": "rv-l",
+   "tag": "span",
+   "rect": {
+    "x": 899,
+    "y": 818.609375,
+    "w": 66,
+    "h": 22
+   },
+   "bg": "rgb(24,17,14)",
+   "cr": 4.11,
+   "need": 4.5,
+   "pass": false
+  },
+  {
+   "id": 147,
+   "text": "nothing changed",
+   "color": "rgb(172, 155, 141)",
+   "size": 12.5,
+   "weight": 700,
+   "op": 0.45,
+   "disabled": true,
+   "cls": "rv-cnt-t",
+   "tag": "span",
+   "rect": {
+    "x": 883.5,
+    "y": 841,
+    "w": 97,
+    "h": 17
+   },
+   "bg": "rgb(24,17,14)",
+   "cr": 2.36,
+   "need": 4.5,
+   "pass": false
+  }
+ ],
+ "lowest": [
+  {
+   "id": 140,
+   "text": "C2",
+   "color": "rgb(91, 74, 62)",
+   "size": 9.5,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "pkey-label",
+   "tag": "span",
+   "rect": {
+    "x": 30.359375,
+    "y": 857.1875,
+    "w": 12,
+    "h": 13
+   },
+   "bg": "rgb(205,191,173)",
+   "cr": 4.67,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 143,
+   "text": "C5",
+   "color": "rgb(91, 74, 62)",
+   "size": 9.5,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "pkey-label",
+   "tag": "span",
+   "rect": {
+    "x": 507.515625,
+    "y": 857.1875,
+    "w": 12,
+    "h": 13
+   },
+   "bg": "rgb(205,191,173)",
+   "cr": 4.67,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 144,
+   "text": "C6",
+   "color": "rgb(91, 74, 62)",
+   "size": 9.5,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "pkey-label",
+   "tag": "span",
+   "rect": {
+    "x": 666.578125,
+    "y": 857.1875,
+    "w": 12,
+    "h": 13
+   },
+   "bg": "rgb(205,191,173)",
+   "cr": 4.67,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 145,
+   "text": "C7",
+   "color": "rgb(91, 74, 62)",
+   "size": 9.5,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "pkey-label",
+   "tag": "span",
+   "rect": {
+    "x": 825.625,
+    "y": 857.1875,
+    "w": 12,
+    "h": 13
+   },
+   "bg": "rgb(205,191,173)",
+   "cr": 4.67,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 149,
+   "text": "PANIC",
+   "color": "rgb(255, 255, 255)",
+   "size": 24,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "panic-l",
+   "tag": "span",
+   "rect": {
+    "x": 1174.890625,
+    "y": 814.703125,
+    "w": 80.203125,
+    "h": 32
+   },
+   "bg": "rgb(207,66,50)",
+   "cr": 4.69,
+   "need": 3,
+   "pass": true
+  },
+  {
+   "id": 150,
+   "text": "Esc",
+   "color": "rgb(255, 255, 255)",
+   "size": 12,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "panic-k",
+   "tag": "small",
+   "rect": {
+    "x": 1204.40625,
+    "y": 844.09375,
+    "w": 21.171875,
+    "h": 16
+   },
+   "bg": "rgb(207,66,50)",
+   "cr": 4.69,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 141,
+   "text": "C3",
+   "color": "rgb(91, 74, 62)",
+   "size": 9.5,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "pkey-label",
+   "tag": "span",
+   "rect": {
+    "x": 189.40625,
+    "y": 857.1875,
+    "w": 12,
+    "h": 13
+   },
+   "bg": "rgb(247,183,85)",
+   "cr": 4.76,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 142,
+   "text": "C4",
+   "color": "rgb(91, 74, 62)",
+   "size": 9.5,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "pkey-label",
+   "tag": "span",
+   "rect": {
+    "x": 348.46875,
+    "y": 857.1875,
+    "w": 12,
+    "h": 13
+   },
+   "bg": "rgb(247,183,85)",
+   "cr": 4.76,
+   "need": 4.5,
+   "pass": true
+  }
+ ]
+}

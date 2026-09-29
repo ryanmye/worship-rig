@@ -1,0 +1,244 @@
+{
+ "label": "perform-1440",
+ "count": 152,
+ "fails": [],
+ "disabledFails": [
+  {
+   "id": 50,
+   "text": "◀ Prev",
+   "color": "rgb(205, 198, 188)",
+   "size": 17,
+   "weight": 700,
+   "op": 0.45,
+   "disabled": true,
+   "cls": "btn nav-btn prev",
+   "tag": "button",
+   "rect": {
+    "x": 40.484375,
+    "y": 208.53125,
+    "w": 57.03125,
+    "h": 20
+   },
+   "bg": "rgb(36,33,29)",
+   "cr": 3.04,
+   "need": 4.5,
+   "pass": false
+  },
+  {
+   "id": 146,
+   "text": "↺ Revert",
+   "color": "rgb(244, 240, 230)",
+   "size": 16,
+   "weight": 700,
+   "op": 0.45,
+   "disabled": true,
+   "cls": "rv-l",
+   "tag": "span",
+   "rect": {
+    "x": 896.5,
+    "y": 819.609375,
+    "w": 71,
+    "h": 19
+   },
+   "bg": "rgb(41,38,34)",
+   "cr": 3.87,
+   "need": 4.5,
+   "pass": false
+  },
+  {
+   "id": 147,
+   "text": "nothing changed",
+   "color": "rgb(178, 171, 162)",
+   "size": 12.5,
+   "weight": 700,
+   "op": 0.45,
+   "disabled": true,
+   "cls": "rv-cnt-t",
+   "tag": "span",
+   "rect": {
+    "x": 879,
+    "y": 842,
+    "w": 106,
+    "h": 15
+   },
+   "bg": "rgb(40,37,33)",
+   "cr": 2.5,
+   "need": 4.5,
+   "pass": false
+  }
+ ],
+ "lowest": [
+  {
+   "id": 51,
+   "text": "1",
+   "color": "rgb(91, 81, 71)",
+   "size": 13,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "chip-num",
+   "tag": "span",
+   "rect": {
+    "x": 158,
+    "y": 211.21875,
+    "w": 9.15625,
+    "h": 15
+   },
+   "bg": "rgb(207,200,186)",
+   "cr": 4.65,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 53,
+   "text": "C",
+   "color": "rgb(91, 81, 71)",
+   "size": 13,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "chip-key",
+   "tag": "span",
+   "rect": {
+    "x": 350.859375,
+    "y": 211.21875,
+    "w": 9.15625,
+    "h": 15
+   },
+   "bg": "rgb(207,201,185)",
+   "cr": 4.68,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 84,
+   "text": "Echo",
+   "color": "color(srgb 0.971961 0.762549 0.617647)",
+   "size": 13,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "mc-label",
+   "tag": "span",
+   "rect": {
+    "x": 269.75,
+    "y": 676.953125,
+    "w": 33,
+    "h": 15
+   },
+   "bg": "rgb(106,78,58)",
+   "cr": 4.79,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 82,
+   "text": "Space",
+   "color": "color(srgb 0.971961 0.762549 0.617647)",
+   "size": 13,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "mc-label",
+   "tag": "span",
+   "rect": {
+    "x": 158.25,
+    "y": 676.953125,
+    "w": 41,
+    "h": 15
+   },
+   "bg": "rgb(105,77,58)",
+   "cr": 4.86,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 99,
+   "text": "Echo",
+   "color": "color(srgb 0.726078 0.883333 0.723333)",
+   "size": 13,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "mc-label",
+   "tag": "span",
+   "rect": {
+    "x": 510.75,
+    "y": 676.953125,
+    "w": 33,
+    "h": 15
+   },
+   "bg": "rgb(75,93,72)",
+   "cr": 4.92,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 97,
+   "text": "Space",
+   "color": "color(srgb 0.726078 0.883333 0.723333)",
+   "size": 13,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "mc-label",
+   "tag": "span",
+   "rect": {
+    "x": 399.25,
+    "y": 676.953125,
+    "w": 41,
+    "h": 15
+   },
+   "bg": "rgb(75,93,71)",
+   "cr": 4.93,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 88,
+   "text": "Sustain",
+   "color": "color(srgb 0.971961 0.762549 0.617647)",
+   "size": 13,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "mc-value",
+   "tag": "b",
+   "rect": {
+    "x": 268.25,
+    "y": 736.34375,
+    "w": 53,
+    "h": 15
+   },
+   "bg": "rgb(101,74,56)",
+   "cr": 5.11,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 149,
+   "text": "PANIC",
+   "color": "rgb(255, 255, 255)",
+   "size": 24,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "panic-l",
+   "tag": "span",
+   "rect": {
+    "x": 1172.890625,
+    "y": 816.703125,
+    "w": 84.203125,
+    "h": 28
+   },
+   "bg": "rgb(202,56,43)",
+   "cr": 5.11,
+   "need": 3,
+   "pass": true
+  }
+ ],
+ "glare": {
+  "meanLum": 0.0862,
+  "brightShare": 0.0856
+ }
+}

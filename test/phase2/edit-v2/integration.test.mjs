@@ -491,6 +491,52 @@ test('integration: round3-edit M1 — a chip panel left open over a keyboard vie
     noErrors();
   });
 
+test('integration: round4-edit-lib M1 — ⌘Z in Perform after a song switch leaves the previous song’s notes alone',
+  async () => {
+    // E6d: Electron's Edit ▸ Undo (role editMenu, main.js) is webContents.undo(), a frame-level undo like Ctrl+Z here
+    await page.click('#view-switch button[data-value="edit"]');
+    await until(() => !document.getElementById('view-edit').hidden);
+    const a = await selectSong('factory:sunday-pad-piano');
+    const b = await ev(() => {
+      const st = window.__rig.store.get();
+      return st.songOrder.find((x) => st.songs[x].factoryId === 'factory:organ-swell');
+    });
+    assert.ok(b, 'organ-swell');
+    await ev(([x, y]) => {
+      window.__rig.store.set(`songs.${x}.notes`, 'Song A notes.');
+      window.__rig.store.set(`songs.${y}.notes`, 'Song B notes, not A.');
+    }, [a, b]);
+    await selectBlock('song', { focus: 'notes' });
+    const area = '#view-edit textarea.ev2-song-notes';
+    await page.waitForSelector(area);
+    await page.click(area);
+    await page.keyboard.press('Control+End');
+    await page.keyboard.type(' Typed in A.');
+    await ev(() => document.activeElement.blur()); // blur flushes
+    const typed = 'Song A notes. Typed in A.';
+    assert.equal(await ev((x) => window.__rig.store.getSong(x).notes, a), typed);
+    await selectSong(b); // MIDI Next / a setlist tap
+    await until((s) => document.querySelector(s).value === 'Song B notes, not A.', area);
+    await page.click('#view-switch button[data-value="perform"]');
+    await until(() => !document.getElementById('view-perform').hidden);
+    await ev((s) => {
+      window.__m1ev = [];
+      document.querySelector(s).addEventListener('input', (e) => window.__m1ev.push(e.inputType), { once: true });
+    }, area);
+    await ev(() => document.activeElement?.blur?.());
+    await page.keyboard.press('Control+z');
+    await sleep(1000); // > the 500 ms notes debounce
+    assert.deepEqual(await ev(() => window.__m1ev), ['historyUndo'], 'the undo reached the hidden notes field');
+    assert.equal(await ev((x) => window.__rig.store.getSong(x).notes, a), typed, 'A keeps its notes (was B’s)');
+    assert.equal(await ev((y) => window.__rig.store.getSong(y).notes, b), 'Song B notes, not A.', 'B unchanged');
+    await ev(([x, y]) => {
+      window.__rig.store.set(`songs.${x}.notes`, '');
+      window.__rig.store.set(`songs.${y}.notes`, '');
+    }, [a, b]);
+    await selectSong(a);
+    noErrors();
+  });
+
 test('integration: Perform’s empty-slot “+” opens Edit on that slot with the instrument menu open', async () => {
   await page.click('#view-switch button[data-value="perform"]');
   await until(() => !document.getElementById('view-perform').hidden);

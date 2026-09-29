@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Daylight mark: a sun rising over four lamp tabs (Keys, Pad, Extra, Bass). Colours are fixed (the SVG is loaded as an image). -->
+  <rect x="1" y="1" width="30" height="30" rx="8.5" fill="#2a231c"/>
+  <path d="M8.5 18.5a7.5 7.5 0 0 1 15 0z" fill="#f6c35a"/>
+  <g stroke="#f6c35a" stroke-width="1.8" stroke-linecap="round">
+    <path d="M16 5.6v2.1M7.9 9.2l1.5 1.5M24.1 9.2l-1.5 1.5"/>
+  </g>
+  <g>
+    <rect x="6" y="21.2" width="4.4" height="5" rx="1.4" fill="#f28a4c"/>
+    <rect x="11.4" y="21.2" width="4.4" height="5" rx="1.4" fill="#79c68f"/>
+    <rect x="16.8" y="21.2" width="4.4" height="5" rx="1.4" fill="#7cc4ee"/>
+    <rect x="22.2" y="21.2" width="4.4" height="5" rx="1.4" fill="#a883d4"/>
+  </g>
+</svg>

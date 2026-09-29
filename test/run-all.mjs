@@ -47,6 +47,11 @@ const SUITES = [
   { name: 'edit-v2', groups: ['phase2'], cmd: [node, 'test/phase2/edit-v2/run.mjs'], timeout: 30 * MIN },
   { name: 'settings', groups: ['phase2'], cmd: [node, 'test/phase2/settings/run.mjs'], timeout: 10 * MIN },
   { name: 'eq', groups: ['phase2'], cmd: [node, 'test/phase2/eq/run.mjs'], timeout: 10 * MIN },
+  // menu-bar popover (app/mini.html) + the real app, two pages over BroadcastChannel (C7 menubar-B)
+  { name: 'mini', groups: ['phase2'], cmd: [node, 'test/phase2/mini/run.mjs'], timeout: 6 * MIN },
+  // themes-setup: every registered theme boots flash-free, switches at runtime, picker/Quick, selector coverage
+  // (writes test/phase2/themes/coverage-<id>.json for the theme agents)
+  { name: 'themes', groups: ['phase2'], cmd: [node, 'test/phase2/themes/run.mjs'], timeout: 25 * MIN },
   { name: 'chrome-fallback', groups: ['integration'], cmd: [node, 'test/integration/smoke-chrome-fallback.mjs'], timeout: 5 * MIN },
   { name: 'electron-full', groups: ['integration', 'electron'], cmd: [node, 'test/integration/electron-full.mjs'], timeout: 8 * MIN },
   { name: 'build-lint', groups: ['integration', 'electron'], cmd: [node, 'test/integration/build-lint.mjs'], timeout: 15 * MIN },

@@ -142,8 +142,8 @@ export default {
 | `lastDroneSource` | `{get(), set(mode)}`: the drone source the ON tile last turned off, for the shown song; kept by the shell so a tab switch keeps it, cleared on a song change (round3-edit m4) |
 | `onEscape(fn)` | Esc handler; return `true` when you closed something. Handlers run newest first; the first `true` stops the rest (§5) |
 | `markDialog(open, token)` | `body[data-dialog-open]` while your inline confirm/menu is open (ux.md M1) |
-| `songField(input, rel)` | arms a song-bound text field and returns `commit(v)`, which writes `songs.<id focused on>.<rel>` (round2-ui #3) |
-| `fieldSongId(input)` | the song id that field writes to |
+| `songField(input, rel)` | arms a song-bound text field and returns `commit(v)`, which writes `songs.<id focused on>.<rel>` (round2-ui #3); the id is forgotten on `focusout` (round4-edit-lib M1), then it writes the shown song |
+| `fieldSongId(input)` | the song id that field writes to (the shown song once focus has left it) |
 | `setTitle(parts, {sub?, icon?, actions?})` | the sentence title (§3.5); a no-op in region modules |
 | `instruments()` / `findInstrument(ref)` | `engine.listInstruments()` cache (refreshed on engine `ready`/`instruments`, controller `instruments`/`user-samples`, window `rig-instruments-changed`) |
 | `held()` | `Set` of held notes |

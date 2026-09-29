@@ -63,7 +63,8 @@ export default {
     const sets = h('div.ev2-list-sets', {},
       h('div.ev2-list-sethead', {},
         h('span.ev2-cap', { text: 'Setlist' }), h('span.ev2-sp'),
-        setBtn('New', 'New setlist', 'new', newSetlist),
+        // onboarding O12: two "New" buttons did different things; each now says what it makes
+        setBtn('+ Setlist', 'New setlist', 'new', newSetlist),
         setBtn('Rename', 'Rename setlist', 'rename', renameSetlist),
         btnSetDelete,
       ),
@@ -102,7 +103,7 @@ export default {
     const btnLibrary = btn('Library…', () => togglePanel(library), {
       'aria-expanded': 'false', title: 'Add a song from your library to this setlist', dataset: { add: 'library' },
     });
-    const btnNew = btn('+ New', () => store.addSong(null, { select: true, name: 'New Song' }), {
+    const btnNew = btn('+ New song', () => store.addSong(null, { select: true, name: 'New Song' }), {
       title: 'New blank song (piano + pad)', dataset: { add: 'new' },
     });
     const addRow = h('div.ev2-list-add', {}, btnNew, btnFactory, btnLibrary);

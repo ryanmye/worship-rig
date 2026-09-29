@@ -147,6 +147,50 @@ test('shell: Esc in Edit never panics; a held note survives', async () => {
   await t.ev(() => window.__rig.controller.perform.noteOff(62));
 });
 
+test('shell: critics-fix (performance #5b) — held notes are not fanned out while Edit is hidden; they catch up on show',
+  async () => {
+    const r = await t.ev(async () => {
+      const { store, controller, view } = window.__rig;
+      const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+      const edit = document.getElementById('view-edit');
+      const keysTab = () => document.querySelector('#view-edit .ev2-tab[data-block="slot:0"]').classList.contains('playing');
+      let n = 0;
+      let last = null;
+      const on = (e) => {
+        n += 1;
+        last = [...e.detail.held];
+      };
+      view.editState.addEventListener('notes', on);
+      const view0 = store.get().settings.view;
+      try {
+        store.set('settings.view', 'perform');
+        edit.hidden = true;
+        controller.perform.noteOn(60, 100);
+        controller.perform.noteOff(60);
+        controller.perform.noteOn(62, 100);
+        await sleep(50);
+        const hidden = { n, tab: keysTab() };
+        edit.hidden = false;
+        store.set('settings.view', 'edit');
+        await sleep(50);
+        const shown = { n, last, tab: keysTab() };
+        controller.perform.noteOff(62);
+        await sleep(50);
+        return { hidden, shown, after: { n, last, tab: keysTab() } };
+      } finally {
+        view.editState.removeEventListener('notes', on);
+        edit.hidden = false;
+        store.set('settings.view', view0 || 'edit');
+        controller.perform.releaseAll();
+      }
+    });
+    assert.deepEqual(r.hidden, { n: 0, tab: false }, 'nothing fanned out while hidden');
+    assert.deepEqual(r.shown, { n: 1, last: [62], tab: true }, 'one catch-up with the notes still held');
+    assert.equal(r.after.n, 2);
+    assert.deepEqual(r.after.last, []);
+    assert.equal(r.after.tab, false);
+  });
+
 test('shell: song switch reaches every mounted module; layout fits at 1440×900 and 1024×700 (drawer)', async () => {
   const other = await t.ev(() => window.__rig.store.get().songOrder.find((x) => x !== window.__rig.store.currentSong().id));
   await t.selectSong(other);

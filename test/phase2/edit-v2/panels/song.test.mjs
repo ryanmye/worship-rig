@@ -256,18 +256,25 @@ test('song: polish-1 text:"dirty" — tempo and notes follow outside writes whil
 
 test('song: L-9 — tempo and notes drafts stay exactly as typed under an outside write storm (store.set / 20 ms)',
   async (tc) => {
-    tc.after(() => t.ev(() => clearInterval(window.__l9))); // a failed assertion must not leave the storm running
+    tc.after(() => t.ev(() => { window.__l9stop = true; })); // a failed assertion must not leave the storm running
     const H = t.host;
     const id = await t.ev(() => window.__rig.store.currentSong().id);
-    const storm = (rel, vals) => t.ev(([i, r, vs]) => {
+    // A fixed NUMBER of writes (not a wall-clock window: a 3x slower CI runner fires fewer interval ticks in the
+    // same time and the count assertion flaked). Each write awaits a >= 20 ms tick, so the spacing holds however
+    // slow the box is; the loop resolves with the count it drove.
+    const storm = (rel, vals, n) => t.ev(([i, r, vs, cnt]) => {
       window.__l9n = 0;
-      window.__l9 = setInterval(() => window.__rig.store.set(`songs.${i}.${r}`, vs[window.__l9n++ % vs.length]), 20);
-    }, [id, rel, vals]);
+      window.__l9stop = false;
+      window.__l9p = (async () => {
+        while (window.__l9n < cnt && !window.__l9stop) {
+          window.__rig.store.set(`songs.${i}.${r}`, vs[window.__l9n++ % vs.length]);
+          await new Promise((res) => setTimeout(res, 20));
+        }
+        return window.__l9n;
+      })();
+    }, [id, rel, vals, n]);
     const outsideSet = (rel, v) => t.ev(([i, r, x]) => window.__rig.store.set(`songs.${i}.${r}`, x), [id, rel, v]);
-    const calm = () => t.ev(() => {
-      clearInterval(window.__l9);
-      return window.__l9n;
-    });
+    const calm = () => t.ev(() => window.__l9p); // waits for the storm to finish; resolves with the writes driven
     const typeSlow = async (text) => {
       for (const ch of text) {
         await t.page.keyboard.type(ch);
@@ -279,7 +286,7 @@ test('song: L-9 — tempo and notes drafts stay exactly as typed under an outsid
     const tempo = `${H} .ev2-song-tempo`;
     const tempos = [61, 88, 99, 147, 203];
     await t.click(tempo);
-    await storm('tempo', tempos);
+    await storm('tempo', tempos, 30);
     await t.sleep(120);
     assert.ok(tempos.map(String).includes(await t.page.inputValue(tempo)), 'the untyped field follows the storm');
     await t.page.keyboard.press('ControlOrMeta+A');
@@ -287,7 +294,7 @@ test('song: L-9 — tempo and notes drafts stay exactly as typed under an outsid
     await typeSlow('132');
     await t.sleep(200);
     assert.equal(await t.page.inputValue(tempo), '132', 'tempo draft is exactly the typed text');
-    assert.ok(await calm() > 10, 'the storm ran');
+    assert.equal(await calm(), 30, 'the storm ran (30 writes driven)');
     await t.page.keyboard.press('Enter');
     await t.until((i) => window.__rig.store.getSong(i).tempo === 132, id);
     assert.equal(await t.page.inputValue(tempo), '132');
@@ -296,7 +303,7 @@ test('song: L-9 — tempo and notes drafts stay exactly as typed under an outsid
     const area = `${H} textarea.ev2-song-notes`;
     const notes = ['Storm one.', 'Storm two, longer.', 'S3'];
     await t.click(area);
-    await storm('notes', notes);
+    await storm('notes', notes, 70);
     await t.sleep(120);
     assert.ok(notes.includes(await t.page.inputValue(area)), 'the untyped notes follow the storm');
     await t.page.keyboard.press('ControlOrMeta+A');
@@ -304,7 +311,7 @@ test('song: L-9 — tempo and notes drafts stay exactly as typed under an outsid
     await typeSlow('Typed under fire');
     await t.sleep(700);
     assert.equal(await t.page.inputValue(area), 'Typed under fire', 'notes draft is exactly the typed text');
-    assert.ok(await calm() > 10, 'the storm ran');
+    assert.equal(await calm(), 70, 'the storm ran (70 writes driven)');
     await t.ev(() => document.activeElement.blur());
     await t.sleep(60);
     const kept = await t.ev((i) => window.__rig.store.getSong(i).notes, id);
@@ -332,6 +339,118 @@ test('song: L-9 — tempo and notes drafts stay exactly as typed under an outsid
       window.__rig.store.set(`songs.${i}.notes`, '');
       window.__rig.store.set(`songs.${i}.tempo`, null);
     }, [id]);
+    t.assertNoConsoleErrors();
+  });
+
+test('song: round4-edit-lib M1 — ⌘Z after a song switch never writes the shown song’s notes into the previous song',
+  async () => {
+    const H = t.host;
+    const area = `${H} textarea.ev2-song-notes`;
+    const tempo = `${H} .ev2-song-tempo`;
+    const [a, b] = await t.ev(() => {
+      const st = window.__rig.store;
+      const cur = st.currentSong().id;
+      return [cur, st.navIds().find((x) => x !== cur && st.getSong(x).name !== st.getSong(cur).name)];
+    });
+    const A0 = 'Song A notes.';
+    const B0 = 'Song B has different, longer notes here.';
+    const notes = (x) => t.ev((i) => window.__rig.store.getSong(i).notes, x);
+    await t.ev(([x, y, na, nb]) => {
+      window.__rig.store.set(`songs.${x}.notes`, na);
+      window.__rig.store.set(`songs.${y}.notes`, nb);
+    }, [a, b, A0, B0]);
+    // E6c: type in A (committed on blur), switch to B the MIDI way, then undo with focus elsewhere / nowhere
+    for (const where of ['tempo', 'nothing']) {
+      await t.selectSong(a);
+      await t.until(([s, v]) => document.querySelector(s).value === v, [area, A0]);
+      await t.click(area);
+      await t.page.keyboard.press('ControlOrMeta+End');
+      await t.page.keyboard.type(' Typed in A');
+      await t.ev(() => document.activeElement.blur());
+      assert.equal(await notes(a), `${A0} Typed in A`, `${where}: typed text committed to A`);
+      await t.selectSong(b);
+      await t.until(([s, v]) => document.querySelector(s).value === v, [area, B0]);
+      await t.ev((s) => {
+        window.__undoEvents = [];
+        const el = document.querySelector(s);
+        const rec = (e) => window.__undoEvents.push(`${e.type}:${e.inputType}`);
+        el.addEventListener('input', rec);
+        window.__undoOff = () => el.removeEventListener('input', rec);
+      }, area);
+      if (where === 'tempo') await t.click(tempo);
+      else await t.ev(() => document.activeElement?.blur?.());
+      await t.page.keyboard.press('ControlOrMeta+Z');
+      await t.sleep(800); // > the 500 ms notes debounce
+      const ev = await t.ev(() => {
+        window.__undoOff();
+        return window.__undoEvents;
+      });
+      assert.ok(ev.includes('input:historyUndo'), `${where}: the frame undo reached the unfocused notes (${ev})`);
+      assert.equal(await notes(a), `${A0} Typed in A`, `${where}: A keeps its own notes (was B’s)`);
+      assert.equal(await notes(b), B0, `${where}: B unchanged`);
+      assert.equal(await t.page.inputValue(area), B0, `${where}: the field shows B again`);
+      await t.ev(([x, na]) => window.__rig.store.set(`songs.${x}.notes`, na), [a, A0]);
+    }
+    // an undo while typing in the notes still works and commits (E6a)
+    await t.click(area);
+    await t.page.keyboard.press('ControlOrMeta+End');
+    await t.page.keyboard.type(' More');
+    await t.until(([i, v]) => window.__rig.store.getSong(i).notes === v, [b, `${B0} More`]);
+    await t.page.keyboard.press('ControlOrMeta+Z');
+    await t.until(([i, v]) => window.__rig.store.getSong(i).notes === v, [b, B0]);
+    await t.ev(() => document.activeElement.blur());
+    await t.ev(([x, y]) => {
+      window.__rig.store.set(`songs.${x}.notes`, '');
+      window.__rig.store.set(`songs.${y}.notes`, '');
+    }, [a, b]);
+    await t.selectSong(a);
+    t.assertNoConsoleErrors();
+  });
+
+test('song: round4-edit-lib m3/m2 — a bad number keeps the tempo; IME text in the notes commits once composed',
+  async () => {
+    const H = t.host;
+    const tempo = `${H} .ev2-song-tempo`;
+    const id = await t.ev(() => window.__rig.store.currentSong().id);
+    const tempoOf = () => t.ev((i) => window.__rig.store.getSong(i).tempo, id);
+    for (const typed of ['1e', '-']) {
+      await t.ev((i) => window.__rig.store.set(`songs.${i}.tempo`, 88), id);
+      await t.click(tempo);
+      await t.page.keyboard.press('ControlOrMeta+A');
+      await t.page.keyboard.type(typed);
+      assert.equal(await t.ev((s) => document.querySelector(s).validity.badInput, tempo), true, `${typed} is bad`);
+      await t.page.keyboard.press('Enter');
+      await t.sleep(100);
+      assert.equal(await tempoOf(), 88, `"${typed}" + Enter keeps 88 (was null)`);
+      assert.equal(await t.page.inputValue(tempo), '88', `"${typed}": the field shows the stored tempo`);
+    }
+    // a really empty field still clears
+    await t.click(tempo);
+    await t.page.keyboard.press('ControlOrMeta+A');
+    await t.page.keyboard.press('Backspace');
+    await t.page.keyboard.press('Enter');
+    await t.until((i) => window.__rig.store.getSong(i).tempo === null, id);
+
+    // m2: no debounced commit of half-converted IME text; the composed text commits once the composition ends
+    const area = `${H} textarea.ev2-song-notes`;
+    await t.ev((i) => window.__rig.store.set(`songs.${i}.notes`, 'Base.'), id);
+    await t.click(area);
+    await t.page.keyboard.press('ControlOrMeta+End');
+    const cdp = await t.context.newCDPSession(t.page);
+    try {
+      await cdp.send('Input.imeSetComposition', { text: ' さんび', selectionStart: 4, selectionEnd: 4 });
+      await t.sleep(800);
+      assert.equal(await t.ev((i) => window.__rig.store.getSong(i).notes, id), 'Base.', 'nothing during composition');
+      await cdp.send('Input.insertText', { text: ' 賛美' });
+    } finally {
+      await cdp.detach().catch(() => {});
+    }
+    await t.until(([i]) => window.__rig.store.getSong(i).notes === 'Base. 賛美', [id]);
+    await t.ev(() => document.activeElement.blur());
+    await t.ev((i) => {
+      window.__rig.store.set(`songs.${i}.notes`, '');
+      window.__rig.store.set(`songs.${i}.tempo`, null);
+    }, id);
     t.assertNoConsoleErrors();
   });
 

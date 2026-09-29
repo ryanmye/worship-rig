@@ -1,0 +1,682 @@
+{
+ "css": "/themes/sanctuary/theme.css",
+ "themes": [
+  "nave"
+ ],
+ "generated": "2026-09-29T03:00:52.967Z",
+ "states": [
+  "nave:perform",
+  "nave:perform-held",
+  "nave:toast",
+  "nave:banner",
+  "nave:low-resource",
+  "nave:slot-muted",
+  "nave:key-pop",
+  "nave:step-panel",
+  "nave:faded",
+  "nave:quick",
+  "nave:perform-locked",
+  "nave:edit-held",
+  "nave:edit-ev2-tab-slot-0",
+  "nave:edit-ev2-tab-slot-1",
+  "nave:edit-ev2-tab-slot-2",
+  "nave:edit-ev2-tab-slot-3",
+  "nave:edit-ev2-tab-drone",
+  "nave:edit-ev2-tab-effects",
+  "nave:edit-ev2-tab-master",
+  "nave:edit-tone-eq",
+  "nave:settings"
+ ],
+ "total": 276,
+ "matched": 215,
+ "unmatched": 61,
+ "unmatchedPct": 22.1,
+ "limitPct": 5,
+ "deadClasses": [
+  {
+   "selector": "& .perform.locked .sanct-breath",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-breath"
+   ],
+   "line": 384
+  },
+  {
+   "selector": "& .sanct-before *",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before"
+   ],
+   "line": 389
+  },
+  {
+   "selector": "& .sanct-before",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before"
+   ],
+   "line": 389
+  },
+  {
+   "selector": "& .sanct-before",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before"
+   ],
+   "line": 413
+  },
+  {
+   "selector": "& .sanct-before .sb-wrap",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-wrap"
+   ],
+   "line": 419
+  },
+  {
+   "selector": "& .sanct-before .sb-window",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-window"
+   ],
+   "line": 421
+  },
+  {
+   "selector": "& .sanct-before .sb-window > i",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-window"
+   ],
+   "line": 422
+  },
+  {
+   "selector": "& .sanct-before .sb-glass",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-glass"
+   ],
+   "line": 424
+  },
+  {
+   "selector": "& .sanct-before .sb-light",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-light"
+   ],
+   "line": 425
+  },
+  {
+   "selector": "& .sanct-before .sb-lead",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-lead"
+   ],
+   "line": 426
+  },
+  {
+   "selector": "& .sanct-before .sb-halo",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-halo"
+   ],
+   "line": 427
+  },
+  {
+   "selector": "& .sanct-before .sanct-breath",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sanct-breath"
+   ],
+   "line": 430
+  },
+  {
+   "selector": "& .sanct-before .sb-pad",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-pad"
+   ],
+   "line": 431
+  },
+  {
+   "selector": "& .sanct-before .sb-pad b",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-pad"
+   ],
+   "line": 433
+  },
+  {
+   "selector": "& .sanct-before .sb-day",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-day"
+   ],
+   "line": 434
+  },
+  {
+   "selector": "& .sanct-before .sb-title",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-title"
+   ],
+   "line": 436
+  },
+  {
+   "selector": "& .sanct-before .sb-sub",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-sub"
+   ],
+   "line": 437
+  },
+  {
+   "selector": "& .sanct-before .sb-sub b",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-sub"
+   ],
+   "line": 438
+  },
+  {
+   "selector": "& .sanct-before .sb-set",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-set"
+   ],
+   "line": 439
+  },
+  {
+   "selector": "& .sanct-before .sb-set li",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-set"
+   ],
+   "line": 441
+  },
+  {
+   "selector": "& .sanct-before .sb-set li::before",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-set"
+   ],
+   "line": 443
+  },
+  {
+   "selector": "& .sanct-before .sb-set li span",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-set"
+   ],
+   "line": 445
+  },
+  {
+   "selector": "& .sanct-before .sb-set li em",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-set"
+   ],
+   "line": 446
+  },
+  {
+   "selector": "& .sanct-before .sb-set li.first",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-set"
+   ],
+   "line": 447
+  },
+  {
+   "selector": "& .sanct-before .sb-set li.more",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-set"
+   ],
+   "line": 448
+  },
+  {
+   "selector": "& .sanct-before .sb-set li.more::before",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-set"
+   ],
+   "line": 449
+  },
+  {
+   "selector": "& .sanct-before .sb-foot",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-foot"
+   ],
+   "line": 450
+  },
+  {
+   "selector": "& .sanct-before .sb-go",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-go"
+   ],
+   "line": 451
+  },
+  {
+   "selector": "& .sanct-before .sb-last",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-last"
+   ],
+   "line": 454
+  },
+  {
+   "selector": "& .sanct-before .sb-last b",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-last"
+   ],
+   "line": 455
+  },
+  {
+   "selector": "& .sanct-before .sb-small",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "classes": [
+    "sanct-before",
+    "sb-small"
+   ],
+   "line": 456
+  }
+ ],
+ "unmatchedSelectors": [
+  {
+   "selector": "& .ev2-slot-mg-head",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 116,
+   "dead": false
+  },
+  {
+   "selector": "& .warn-btn",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 138,
+   "dead": false
+  },
+  {
+   "selector": "& .meter.vertical .meter-fill",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 151,
+   "dead": false
+  },
+  {
+   "selector": "& .led.flash",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 157,
+   "dead": false
+  },
+  {
+   "selector": "& .rec-btn.recording",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 158,
+   "dead": false
+  },
+  {
+   "selector": "& .bstrip.open .bstrip-list",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 162,
+   "dead": false
+  },
+  {
+   "selector": "& .bstrip.open .banner.info",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 163,
+   "dead": false
+  },
+  {
+   "selector": "& .toast.error",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 167,
+   "dead": false
+  },
+  {
+   "selector": "& .toast.ok",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 168,
+   "dead": false
+  },
+  {
+   "selector": "& .fx-more",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 173,
+   "dead": false
+  },
+  {
+   "selector": "& .fx-more",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 174,
+   "dead": false
+  },
+  {
+   "selector": "& .settings-placeholder",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 188,
+   "dead": false
+  },
+  {
+   "selector": "& .fxc.more.on",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 233,
+   "dead": false
+  },
+  {
+   "selector": "& .song-block.loading .song-name",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 245,
+   "dead": false
+  },
+  {
+   "selector": "& .swell-btn.on",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 264,
+   "dead": false
+  },
+  {
+   "selector": "& .drone-swell.up .drone-swell-led",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 265,
+   "dead": false
+  },
+  {
+   "selector": "& .pedal-lamp.stuck",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 267,
+   "dead": false
+  },
+  {
+   "selector": "& .pedal-lamp.stuck .pedal-led",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 267,
+   "dead": false
+  },
+  {
+   "selector": "& .notes-text.empty",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 270,
+   "dead": false
+  },
+  {
+   "selector": "& .p-drone.off::before",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 295,
+   "dead": false
+  },
+  {
+   "selector": "& .ev2 .ev2-wiretog.on .ev2-switch::after",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 329,
+   "dead": false
+  },
+  {
+   "selector": "& .ev2 .ev2-wlane::before",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 335,
+   "dead": false
+  },
+  {
+   "selector": "& .ev2 .ev2-wout-br",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 336,
+   "dead": false
+  },
+  {
+   "selector": "& .ev2 .ev2-wn",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 337,
+   "dead": false
+  },
+  {
+   "selector": "& .ev2 .ev2-wv",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 338,
+   "dead": false
+  },
+  {
+   "selector": "& .ev2 .ev2-wv.zero",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 339,
+   "dead": false
+  },
+  {
+   "selector": "& .ev2 .ev2-sent-val",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 343,
+   "dead": false
+  },
+  {
+   "selector": "& .ev2 .ev2-list-rename",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 355,
+   "dead": false
+  },
+  {
+   "selector": "& .ev2 .ev2-slot-mi:hover",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 357,
+   "dead": false
+  },
+  {
+   "selector": "& .ev2 .ev2-slot-mi:focus",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 357,
+   "dead": false
+  },
+  {
+   "selector": "& .perform.locked .sanct-breath",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 384,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before *",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 389,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 389,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 413,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-wrap",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 419,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-window",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 421,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-window > i",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 422,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-glass",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 424,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-light",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 425,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-lead",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 426,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-halo",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 427,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sanct-breath",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 430,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-pad",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 431,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-pad b",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 433,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-day",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 434,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-title",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 436,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-sub",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 437,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-sub b",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 438,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-set",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 439,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-set li",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 441,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-set li::before",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 443,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-set li span",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 445,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-set li em",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 446,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-set li.first",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 447,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-set li.more",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 448,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-set li.more::before",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 449,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-foot",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 450,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-go",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 451,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-last",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 454,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-last b",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 455,
+   "dead": true
+  },
+  {
+   "selector": "& .sanct-before .sb-small",
+   "context": "body:is([data-theme=\"sanctuary\"], :not([data-theme]))",
+   "line": 456,
+   "dead": true
+  }
+ ],
+ "invalid": [],
+ "skipped": []
+}

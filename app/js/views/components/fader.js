@@ -77,6 +77,7 @@ export function fader(o = {}) {
     'aria-label': o.label || o.path || 'Level',
   });
   const indicator = h('div.fader-indicator', { 'aria-hidden': 'true', hidden: true });
+  let indPos = NaN; // last --ind written (thousandths)
   const label = h('label.fader-label', { for: id, text: o.label || '' });
   const out = h('output.fader-value', { for: id, 'aria-hidden': 'true' });
   const el = h(
@@ -229,12 +230,17 @@ export function fader(o = {}) {
     get: () => value,
     /** Show a secondary marker (e.g. the effective level after the mod wheel), in value units; null hides it. */
     setIndicator(v) {
+      // performance #3c: called every frame while the wheel moves; write only what changed, and put --ind on the
+      // indicator itself so a change restyles one element, not the whole fader subtree
       if (v === null || v === undefined || !Number.isFinite(Number(v))) {
-        indicator.hidden = true;
+        if (!indicator.hidden) indicator.hidden = true;
         return;
       }
-      indicator.hidden = false;
-      el.style.setProperty('--ind', String(valueToPos(Number(v), shape)));
+      if (indicator.hidden) indicator.hidden = false;
+      const pos = Math.round(valueToPos(Number(v), shape) * 1000) / 1000;
+      if (pos === indPos) return;
+      indPos = pos;
+      indicator.style.setProperty('--ind', String(pos));
     },
     setDisabled(b) {
       input.disabled = !!b;

@@ -333,6 +333,9 @@ test('setlist: add song from the factory browser (ui-edit port) + round2-ui #7 h
 
 test('setlist: "+ New" and the Library… browser (songs not in this set → addToSetlist)', async () => {
   const n0 = (await setIds()).length;
+  // critics-fix (onboarding O12): each "New" says what it makes
+  assert.equal((await t.page.textContent(`${H} [data-add="new"]`)).trim(), '+ New song');
+  assert.equal((await t.page.textContent(`${H} button[title="New setlist"]`)).trim(), '+ Setlist');
   await t.click(`${H} [data-add="new"]`);
   await t.until((n) => window.__rig.store.currentSetlist().songIds.length === n + 1, n0);
   const newId = await t.ev(() => window.__rig.store.get().settings.currentSongId);

@@ -206,3 +206,15 @@ test('M5: with 8438 held by another Worship Rig server, Electron runs its own se
     fx2.cleanup();
   }
 });
+
+test('L-14: window.close hides the window (menu-bar mode) instead of quitting, and sends windowHidden', (t) => {
+  const h = run.report.result.steps.hideOnClose;
+  assert.ok(h, 'selftest page ran the hideOnClose step');
+  if (h.skipped) return t.skip(`L-14 hook absent: ${h.skipped}; request is in reviews/for-local.md "## L-14"`);
+  assert.equal(h.thrown, undefined, h.thrown);
+  assert.equal(h.before.windowVisible, true, 'window visible before close');
+  assert.equal(h.alive, true, 'the page kept running after window.close()');
+  assert.ok(h.ids.includes('windowHidden'), `windowHidden sent over rig:menu, got ${JSON.stringify(h.ids)}`);
+  assert.equal(h.after.windowVisible, false, 'window hidden');
+  assert.equal(h.after.windowDestroyed, false, 'window hidden, not destroyed');
+});

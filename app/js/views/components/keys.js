@@ -107,6 +107,7 @@ export function pianoKeyboard(o = {}) {
   }
   const active = new Map(); // pointerId → note
   let held = new Set();
+  const letterEls = new Map(); // note → span.pkey-letter
 
   const noteAt = (x, y) => {
     const t = document.elementFromPoint(x, y);
@@ -165,6 +166,27 @@ export function pianoKeyboard(o = {}) {
     },
     releaseAll() {
       for (const pid of [...active.keys()]) release(pid);
+    },
+    /**
+     * onboarding "first 60 seconds": print the computer key that plays each note (null clears them all).
+     * @param {Map<number,string>|null} map  MIDI note → key label
+     */
+    setKeyLetters(map) {
+      const next = map instanceof Map ? map : new Map();
+      for (const [n, span] of letterEls) {
+        if (next.get(n) === span.textContent) continue;
+        span.remove();
+        letterEls.delete(n);
+      }
+      for (const [n, txt] of next) {
+        if (letterEls.has(n)) continue;
+        const k = keys.get(n);
+        if (!k) continue;
+        const span = h('span.pkey-letter', { text: txt, 'aria-hidden': 'true' });
+        k.append(span);
+        letterEls.set(n, span);
+      }
+      el.classList.toggle('with-letters', letterEls.size > 0);
     },
     destroy() {
       for (const pid of [...active.keys()]) release(pid);

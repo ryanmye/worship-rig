@@ -6,6 +6,8 @@
 // requireHold false: a plain click activates (so Lock can lock with one press and need a hold to unlock).
 // Keyboard: Enter / Space held = the same hold. round2-ui #5: the key that started a hold owns the button until it is
 // released, so its auto-repeats after the hold completes never click (a held Enter used to re-lock ~0.6 s later).
+// onboarding O1: a pointer hold swallows exactly the one click that ends its own press, however long the press lasts
+// (a 600 ms window after activation re-locked Lock when a novice kept holding for 1.2 s or more).
 import { h, setText, disposer } from './util.js';
 
 /**
@@ -61,7 +63,10 @@ export function holdButton(o = {}) {
   let raf = 0;
   let t0 = 0;
   let progress = 0;
-  let suppressClickUntil = 0;
+  // onboarding O1: set when a pointer hold activates; the click that ends that press is swallowed. Cleared by that
+  // click, or by the next pointerdown / keydown (the press ended without a click: pointercancel, released outside).
+  let swallowClick = false;
+  let holdByPointer = false;
   let holdKey = null;
   let hintTimer = null;
 
@@ -116,7 +121,7 @@ export function holdButton(o = {}) {
     setProgress(0);
     timer = setTimeout(() => {
       stop();
-      suppressClickUntil = performance.now() + 600; // the click that follows the pointerup is not a second press
+      swallowClick = holdByPointer; // the click that ends this press is not a second press
       el.classList.add('done');
       setTimeout(() => el.classList.remove('done'), 300);
       activate();
@@ -134,6 +139,7 @@ export function holdButton(o = {}) {
   };
 
   d.listen(el, 'pointerdown', (e) => {
+    swallowClick = false;
     if (el.disabled || !needsHold() || (e.pointerType === 'mouse' && e.button !== 0)) return;
     e.preventDefault(); // keep focus off the button (Space stays the sustain pedal)
     try {
@@ -141,6 +147,7 @@ export function holdButton(o = {}) {
     } catch {
       /* synthetic events */
     }
+    holdByPointer = true;
     startHold();
   });
   d.listen(el, 'pointerup', () => cancelHold(true));
@@ -148,6 +155,7 @@ export function holdButton(o = {}) {
   d.listen(el, 'lostpointercapture', () => cancelHold(false));
   d.listen(el, 'keydown', (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
+    swallowClick = false;
     if (holdKey === e.key) {
       e.preventDefault(); // auto-repeat of the key that owns the button
       return;
@@ -156,6 +164,7 @@ export function holdButton(o = {}) {
       e.preventDefault();
       if (!e.repeat) {
         holdKey = e.key;
+        holdByPointer = false;
         startHold();
       }
     }
@@ -172,7 +181,10 @@ export function holdButton(o = {}) {
   });
   d.listen(el, 'click', (e) => {
     if (e.detail > 0) queueMicrotask(() => el.blur());
-    if (performance.now() < suppressClickUntil) return;
+    if (swallowClick) {
+      swallowClick = false;
+      return;
+    }
     if (!needsHold()) activate();
     else if (!timer) hint();
   });

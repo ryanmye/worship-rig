@@ -1,0 +1,180 @@
+{
+ "label": "idle-1440",
+ "count": 31,
+ "fails": [],
+ "disabledFails": [],
+ "lowest": [
+  {
+   "id": 3,
+   "text": "1",
+   "color": "rgb(178, 171, 162)",
+   "size": 13,
+   "weight": 600,
+   "op": 1,
+   "disabled": false,
+   "cls": "n",
+   "tag": "span",
+   "rect": {
+    "x": 309,
+    "y": 403.15625,
+    "w": 8,
+    "h": 15
+   },
+   "bg": "rgb(46,42,38)",
+   "cr": 6.26,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 6,
+   "text": "2",
+   "color": "rgb(178, 171, 162)",
+   "size": 13,
+   "weight": 600,
+   "op": 1,
+   "disabled": false,
+   "cls": "n",
+   "tag": "span",
+   "rect": {
+    "x": 309,
+    "y": 437.15625,
+    "w": 8,
+    "h": 15
+   },
+   "bg": "rgb(45,41,37)",
+   "cr": 6.35,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 9,
+   "text": "3",
+   "color": "rgb(178, 171, 162)",
+   "size": 13,
+   "weight": 600,
+   "op": 1,
+   "disabled": false,
+   "cls": "n",
+   "tag": "span",
+   "rect": {
+    "x": 309,
+    "y": 471.15625,
+    "w": 8,
+    "h": 15
+   },
+   "bg": "rgb(44,41,37)",
+   "cr": 6.37,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 12,
+   "text": "4",
+   "color": "rgb(178, 171, 162)",
+   "size": 13,
+   "weight": 600,
+   "op": 1,
+   "disabled": false,
+   "cls": "n",
+   "tag": "span",
+   "rect": {
+    "x": 309,
+    "y": 505.15625,
+    "w": 8,
+    "h": 15
+   },
+   "bg": "rgb(44,40,36)",
+   "cr": 6.43,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 15,
+   "text": "and 7 more",
+   "color": "rgb(178, 171, 162)",
+   "size": 14,
+   "weight": 500,
+   "op": 1,
+   "disabled": false,
+   "cls": "more",
+   "tag": "span",
+   "rect": {
+    "x": 341,
+    "y": 537.484375,
+    "w": 75,
+    "h": 17
+   },
+   "bg": "rgb(43,40,36)",
+   "cr": 6.45,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 30,
+   "text": "Your browser needs one tap before it can",
+   "color": "rgb(178, 171, 162)",
+   "size": 12.5,
+   "weight": 400,
+   "op": 1,
+   "disabled": false,
+   "cls": "ss-small",
+   "tag": "div",
+   "rect": {
+    "x": 792.4375,
+    "y": 610.5625,
+    "w": 315,
+    "h": 15
+   },
+   "bg": "rgb(39,35,29)",
+   "cr": 6.87,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 1,
+   "text": "28 September · session 38",
+   "color": "rgb(205, 198, 188)",
+   "size": 14,
+   "weight": 400,
+   "op": 1,
+   "disabled": false,
+   "cls": "ss-sub",
+   "tag": "div",
+   "rect": {
+    "x": 365,
+    "y": 311.046875,
+    "w": 170,
+    "h": 17
+   },
+   "bg": "rgb(47,43,39)",
+   "cr": 8.29,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 16,
+   "text": "Last session:",
+   "color": "rgb(205, 198, 188)",
+   "size": 13.5,
+   "weight": 400,
+   "op": 1,
+   "disabled": false,
+   "cls": "ss-last",
+   "tag": "div",
+   "rect": {
+    "x": 309,
+    "y": 588.9375,
+    "w": 84,
+    "h": 16
+   },
+   "bg": "rgb(43,40,36)",
+   "cr": 8.66,
+   "need": 4.5,
+   "pass": true
+  }
+ ],
+ "glare": {
+  "meanLum": 0.0275,
+  "brightShare": 0.0248
+ }
+}

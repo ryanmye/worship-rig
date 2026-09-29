@@ -102,7 +102,27 @@ async function phase2(rig, saved) {
     await new Promise((r) => setTimeout(r, 300));
     return { write: await rig.streamWrite(out.steps.abandoned.id, new Uint8Array(4).buffer) };
   });
+  // L-14: hide-on-close (menu-bar mode). Must run last: it hides this window. Needs LOCAL's hooks (see
+  // reviews/for-local.md "## L-14"); without them the step reports {skipped} and the test skips with that message.
+  await step('hideOnClose', () => hideOnClose(rig));
   window.__RIG_SELFTEST__ = out;
+}
+
+async function hideOnClose(rig) {
+  const missing = ['getMenuBarState', 'setMenuBarMode'].filter((m) => typeof rig[m] !== 'function');
+  if (missing.length) return { skipped: `window.rig.${missing.join(' / ')} absent (L-14 menu-bar hooks not landed)` };
+  const ids = [];
+  rig.onMenu((id) => ids.push(id));
+  const before = await rig.getMenuBarState();
+  if (!before || before.error || !('windowVisible' in before)) {
+    return { skipped: `rig.getMenuBarState() has no windowVisible field: ${JSON.stringify(before)}` };
+  }
+  await rig.setMenuBarMode(true);
+  window.close(); // main's 'close' handler must hide (not destroy) the window while menuBarMode is on
+  const until = Date.now() + 3000;
+  while (Date.now() < until && !ids.includes('windowHidden')) await new Promise((r) => setTimeout(r, 50));
+  const after = await rig.getMenuBarState();
+  return { before, after, ids, alive: true };
 }
 
 (async () => {

@@ -1,0 +1,240 @@
+{
+ "label": "perform-1024",
+ "count": 119,
+ "fails": [],
+ "disabledFails": [
+  {
+   "id": 27,
+   "text": "◀ Prev",
+   "color": "rgb(201, 187, 172)",
+   "size": 17,
+   "weight": 700,
+   "op": 0.45,
+   "disabled": true,
+   "cls": "btn nav-btn prev",
+   "tag": "button",
+   "rect": {
+    "x": 29.484375,
+    "y": 182.53125,
+    "w": 55.03125,
+    "h": 23
+   },
+   "bg": "rgb(24,17,14)",
+   "cr": 2.93,
+   "need": 4.5,
+   "pass": false
+  },
+  {
+   "id": 113,
+   "text": "↺ Revert",
+   "color": "rgb(247, 239, 227)",
+   "size": 14,
+   "weight": 700,
+   "op": 0.45,
+   "disabled": true,
+   "cls": "rv-l",
+   "tag": "span",
+   "rect": {
+    "x": 586.5,
+    "y": 625.734375,
+    "w": 59,
+    "h": 19
+   },
+   "bg": "rgb(24,17,14)",
+   "cr": 4.11,
+   "need": 4.5,
+   "pass": false
+  },
+  {
+   "id": 114,
+   "text": "nothing changed",
+   "color": "rgb(172, 155, 141)",
+   "size": 11.5,
+   "weight": 700,
+   "op": 0.45,
+   "disabled": true,
+   "cls": "rv-cnt-t",
+   "tag": "span",
+   "rect": {
+    "x": 595,
+    "y": 645.828125,
+    "w": 42,
+    "h": 16
+   },
+   "bg": "rgb(24,17,14)",
+   "cr": 2.36,
+   "need": 4.5,
+   "pass": false
+  }
+ ],
+ "lowest": [
+  {
+   "id": 107,
+   "text": "C2",
+   "color": "rgb(91, 74, 62)",
+   "size": 9.5,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "pkey-label",
+   "tag": "span",
+   "rect": {
+    "x": 22.265625,
+    "y": 662.1875,
+    "w": 12,
+    "h": 13
+   },
+   "bg": "rgb(205,191,173)",
+   "cr": 4.67,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 110,
+   "text": "C5",
+   "color": "rgb(91, 74, 62)",
+   "size": 9.5,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "pkey-label",
+   "tag": "span",
+   "rect": {
+    "x": 327.921875,
+    "y": 662.1875,
+    "w": 12,
+    "h": 13
+   },
+   "bg": "rgb(205,191,173)",
+   "cr": 4.67,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 111,
+   "text": "C6",
+   "color": "rgb(91, 74, 62)",
+   "size": 9.5,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "pkey-label",
+   "tag": "span",
+   "rect": {
+    "x": 429.8125,
+    "y": 662.1875,
+    "w": 12,
+    "h": 13
+   },
+   "bg": "rgb(205,191,173)",
+   "cr": 4.67,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 112,
+   "text": "C7",
+   "color": "rgb(91, 74, 62)",
+   "size": 9.5,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "pkey-label",
+   "tag": "span",
+   "rect": {
+    "x": 531.703125,
+    "y": 662.1875,
+    "w": 12,
+    "h": 13
+   },
+   "bg": "rgb(205,191,173)",
+   "cr": 4.67,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 116,
+   "text": "PANIC",
+   "color": "rgb(255, 255, 255)",
+   "size": 20,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "panic-l",
+   "tag": "span",
+   "rect": {
+    "x": 809,
+    "y": 628.90625,
+    "w": 68,
+    "h": 27
+   },
+   "bg": "rgb(207,66,50)",
+   "cr": 4.69,
+   "need": 3,
+   "pass": true
+  },
+  {
+   "id": 117,
+   "text": "Esc",
+   "color": "rgb(255, 255, 255)",
+   "size": 12,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "panic-k",
+   "tag": "small",
+   "rect": {
+    "x": 832.40625,
+    "y": 653.90625,
+    "w": 21.171875,
+    "h": 16
+   },
+   "bg": "rgb(207,66,50)",
+   "cr": 4.69,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 108,
+   "text": "C3",
+   "color": "rgb(91, 74, 62)",
+   "size": 9.5,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "pkey-label",
+   "tag": "span",
+   "rect": {
+    "x": 124.140625,
+    "y": 662.1875,
+    "w": 12,
+    "h": 13
+   },
+   "bg": "rgb(247,183,85)",
+   "cr": 4.76,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 109,
+   "text": "C4",
+   "color": "rgb(91, 74, 62)",
+   "size": 9.5,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "pkey-label",
+   "tag": "span",
+   "rect": {
+    "x": 226.03125,
+    "y": 662.1875,
+    "w": 12,
+    "h": 13
+   },
+   "bg": "rgb(247,183,85)",
+   "cr": 4.76,
+   "need": 4.5,
+   "pass": true
+  }
+ ]
+}

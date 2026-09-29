@@ -3,7 +3,7 @@
 // (1023.6 MB in the soak). These tests model the engine's pin set from the controller's preload calls.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createController, PIN_BUDGET_MB, LARGE_SET_NOTE, songAloneNote } from '../../../app/js/controller.js';
+import { createController, PIN_BUDGET_MB, LARGE_SET_NOTE, OVER_CAP_NOTE, songAloneNote } from '../../../app/js/controller.js';
 import { MidiInput } from '../../../app/js/midi.js';
 import { FACTORY_SONGS } from '../../../app/js/presets.js';
 import { makeStore, fakeEngine, fakeTimers, fakeDoc, tick } from './helpers.mjs';
@@ -152,9 +152,13 @@ test(`memory: a setlist over ${PIN_BUDGET_MB} MB pins current ±2 and warms the 
 
 test('memory: an estimate that turns out low after decoding downgrades to the large-set policy', async () => {
   // first estimate 8 × 50 = 400 MB (pinned whole), exact sizes after the preload 8 × 90 = 720 MB
-  const { store, engine, ctl } = await setup({ setlist: 8, engineOpts: { mbPerSong: 50, exactMB: 90 } });
-  assert.ok(preloads(engine).some((c) => c[2].pin === 'replace' && c[1].length === 8), 'pinned whole first');
+  const { store, engine, ctl, events } = await setup({ setlist: 8, engineOpts: { mbPerSong: 50, exactMB: 90 } });
+  // round4-controller C2: a guessed estimate is never pinned whole; the set is sized first (exact-only window, the
+  // rest warmed unpinned), and turns out to be 720 MB, so it stays on the large-set policy
+  assert.ok(!preloads(engine).some((c) => c[2].pin === 'replace' && c[1].length > 5), 'never pinned whole on a guess');
   assert.equal(ctl.status.memory.mode, 'large-set');
+  assert.equal(ctl.status.memory.note, LARGE_SET_NOTE);
+  assert.deepEqual(events.map((e) => e.note), [LARGE_SET_NOTE], "one 'memory' event, after the sizing");
   assert.ok(engine.pinned.size <= 5, `pins shrank to the window (${engine.pinned.size})`);
   assert.ok(engine.pinned.has(store.get().settings.currentSongId));
 });
@@ -239,6 +243,14 @@ function instrEngine(store, { sizes = L8_MB, capMB = 700 } = {}) {
     const ids = [...new Set(patches.map(idOf))];
     const exact = ids.flatMap(instrOf).every((k) => engine.decoded.has(k)); // no samplers → exact (0 MB)
     return Promise.resolve({ mb: mbOf(ids), exact, samples: 0, capMB });
+  };
+  // the real engine's prepare decodes the song's samples through the same BufferCache (sampler inst.ready), so the
+  // current song's size is exact once it is committed (round4-controller C3 prices a still-loading one as a guess)
+  const basePrepare = engine.prepare;
+  engine.prepare = (patch) => {
+    const id = idOf(patch);
+    if (id) for (const k of instrOf(id)) engine.decoded.add(k);
+    return basePrepare(patch);
   };
   engine.pinnedMB = () => mbOf([...engine.pinned]);
   engine._debugStats = () => {
@@ -345,8 +357,12 @@ test('memory L-8: a song that alone passes the budget is pinned alone, with a no
   assert.equal(ctl.status.memory.note, 'This song alone is 812 MB');
   assert.equal(ctl.status.memory.pinnedSongs, 1);
   assert.ok(events.some((e) => e.note === 'This song alone is 812 MB' && e.songMB === 812), "a 'memory' event");
-  // 812 > 700: the post-preload check warns (once per crossing), never throws
-  assert.equal(warns.filter((w) => /exceed the 700 MB cache cap/.test(w)).length, 1, warns.join(' | '));
+  // 812 > 700: the post-preload check reports it once per crossing, never throws. round4-controller C5: as a
+  // 'memory' event (plain copy) + console.warn, not a 'warn' (main.js toasts those verbatim on stage)
+  assert.equal(events.filter((e) => e.overCap).length, 1, JSON.stringify(events));
+  assert.deepEqual(events.find((e) => e.overCap), { mode: 'large-set', overCap: true, pinnedMB: 812, capMB: 700,
+    note: OVER_CAP_NOTE });
+  assert.deepEqual(warns.filter((w) => /cache cap/.test(w)), [], 'no developer text on the toast path');
   const tickWarns = warns.length;
   // neighbours that include the oversized song are left out by the budget; the note goes with it
   await ctl.selectSong(store.navIds()[12]); // gospel-stab: upright (812) doesn't fit, clav-funk does
@@ -355,6 +371,7 @@ test('memory L-8: a song that alone passes the budget is pinned alone, with a no
   assert.ok(engine.pinnedMB() <= PIN_BUDGET_MB);
   assert.equal(ctl.status.memory.note, LARGE_SET_NOTE);
   assert.equal(warns.length, tickWarns, 'no further warn once back under the cap');
+  assert.equal(events.filter((e) => e.overCap).length, 1, 'no further over-cap event once back under the cap');
 });
 
 test('memory L-8: never-decoded neighbours are decoded unpinned first, then pinned with exact sizes', async () => {

@@ -222,6 +222,7 @@ body.recording::before { content: ''; position: fixed; top: 0; left: 0; right: 0
 @keyframes blink { to { visibility: hidden; } }
 .rec-time { font: 700 16px/1 var(--mono); min-width: 6ch; color: var(--muted); font-variant-numeric: tabular-nums; }
 .rec-time.on { color: var(--danger); }
+.tb-rec .rec-time.saving { color: var(--muted); font-size: 12px; } /* onboarding O11: "Saving…" fits the 6ch time cell */
 .tb-meter { width: 120px; }
 .tb-master { width: 220px; flex: none; }
 .tb-master .fader-label { min-width: 0; }
@@ -268,12 +269,13 @@ body.recording::before { content: ''; position: fixed; top: 0; left: 0; right: 0
 .bstrip .banner-btn { min-height: 26px; height: 26px; padding: 0 10px; font-size: 13px; font-weight: 800; }
 .bstrip-more { flex: none; min-width: 48px; height: 31px; padding: 0 12px; border: 0; border-left: 1px solid #ffffff26;
   background: #0000001f; color: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  font: 800 13px/1 var(--font); position: relative; z-index: 61; margin-left: auto; }
+  font: 800 13px/1 var(--font); position: relative; z-index: 46; margin-left: auto; }
 .bstrip-more:hover { background: #ffffff14; }
 .bstrip-chev { font-size: 13px; transition: transform .12s; }
 .bstrip.open .bstrip-chev { transform: rotate(180deg); }
 /* unfolded: every message in full, over the stage (absolute), each with 44 px buttons */
-.bstrip.open .bstrip-list { position: absolute; z-index: 60; left: 0; right: 0; top: 0; background: #1b1f26;
+/* round4-perform P4: z-index 45/46, under .settings-modal (50): over the stage, never over Settings */
+.bstrip.open .bstrip-list { position: absolute; z-index: 45; left: 0; right: 0; top: 0; background: #1b1f26;
   border: 1px solid #555e6c; border-top: 0; box-shadow: 0 18px 50px #000c; }
 .bstrip.open .banner { height: auto; min-height: 56px; padding: 8px 64px 8px 16px; justify-content: flex-start; font-size: 16px;
   border-bottom: 1px solid var(--line); }
@@ -633,13 +635,18 @@ body[data-view="edit"] .quick-btn { display: none; }
    tighten through a container query on .p-fx, and the song name keeps what is left (≥ 400 px at 1280). */
 .p-head { display: grid; gap: var(--p-gap); min-width: 0; min-height: 0;
   grid-template-columns: minmax(0, 1fr) clamp(156px, 11.67vw, 168px) clamp(520px, calc(100vw - 800px), 640px) clamp(100px, 8.06vw, 116px); }
-.song-block { padding: clamp(4px, calc((var(--p-head-h) - 92px) / 2), 10px) 20px; display: flex; flex-direction: column;
+.song-block { padding: clamp(2px, calc((var(--p-head-h) - 102px) / 2), 6px) 20px; display: flex; flex-direction: column;
   justify-content: center; min-width: 0; position: relative; }
 /* the height the row leaves for the name (the KEY row is 44 px) caps it; perform.js (fitSongName) steps a long name
-   down to 70 % before it ellipsizes */
-.song-name { font: 800 clamp(28px, calc(var(--p-head-h) - 64px), 40px)/1.05 var(--font-display); letter-spacing: -.01em;
+   down to 70 % before it ellipsizes. round4-perform P2 (local L-20): the line box is 1.25 em, so a font whose ascent +
+   descent is up to 1.25 em (Carlito 1.22, SF 1.19, DejaVu 1.16) fits it with no overflow; the padding gives way
+   (102 px row: 2 + 47.5 + 2 + 44 + 2 ≤ 100 inside the borders; 112: 6 + 50 + 2 + 44 + 6 = 108). */
+.song-name { font: 800 clamp(28px, calc(var(--p-head-h) - 64px), 40px)/1.25 var(--font-display); letter-spacing: -.01em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
-.song-sub { display: flex; align-items: center; gap: 10px; margin-top: 4px; height: 44px; min-width: 0; flex: none; } /* fixed: no shift */
+/* L-20: pin the box to exactly one line box, so a fallback font (CJK, emoji) with a taller content area can neither grow the
+   row nor be measured against a font-specific height; same value as the natural height, so nothing moves on Linux. */
+.song-name { height: 1.25em; max-height: 1.25em; }
+.song-sub { display: flex; align-items: center; gap: 10px; margin-top: 2px; height: 44px; min-width: 0; flex: none; } /* fixed: no shift */
 .song-key-cap { font-size: 11.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
 .hold-btn.key-open { height: 44px; min-width: 76px; padding: 0 10px 0 12px; gap: 6px; border-radius: 9px; flex: none;
   border-color: color-mix(in srgb, var(--accent) 45%, var(--line-2)); background: color-mix(in srgb, var(--accent) 8%, var(--panel-2)); }
@@ -650,11 +657,14 @@ body[data-view="edit"] .quick-btn { display: none; }
 .song-bpm { font-size: 14px; color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .song-playin { font-size: 15px; font-weight: 700; color: var(--text); padding: 4px 10px; border-radius: 8px; background: #2e2716; white-space: nowrap; }
 .song-playin .pl-cap { color: var(--muted); font-weight: 600; }
-.song-flags { position: absolute; top: 8px; right: 12px; display: flex; gap: 8px; align-items: center; pointer-events: none; }
-.song-loading { display: inline-flex; align-items: center; gap: 6px; font-size: 17px; font-weight: 800; color: var(--accent); opacity: 0;
-  transition: opacity .15s; background: var(--panel); padding: 2px 8px; border-radius: 6px; }
-.song-loading-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--accent); border-top-color: transparent; animation: spin .8s linear infinite; }
-.song-block.loading .song-loading { opacity: 1; }
+/* onboarding O2: "Loading…" is a flex item of the KEY row (it takes the BPM's place), never drawn over the title.
+   idle-cpu R2: display:none while not loading, so the spinner's animation only runs while it shows. */
+.song-loading { display: none; align-items: center; gap: 6px; font-size: 14px; font-weight: 800; color: var(--accent);
+  white-space: nowrap; overflow: hidden; min-width: 0; flex: 0 1 auto; }
+.song-loading > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.song-loading-spin { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--accent); border-top-color: transparent; animation: spin .8s linear infinite; }
+.song-block.loading .song-loading { display: inline-flex; }
+.song-block.loading .song-bpm { display: none; }
 .song-block.loading .song-name { color: var(--muted); }
 .notes-btn, .notes-close { display: none !important; align-items: center; gap: 6px; min-height: 36px !important; font-size: 13px; margin-left: auto; padding: 0 10px; }
 .notes-btn.has-notes::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-left: 4px; }
@@ -667,6 +677,8 @@ body[data-view="edit"] .quick-btn { display: none; }
 .transpose-val { min-width: 2.2ch; text-align: center; font: 800 30px/1 var(--font-display); font-variant-numeric: tabular-nums; }
 .transpose-val.shift { color: var(--accent); }
 .perform .hold-btn .hb-cap { bottom: -30px; }
+/* round4-perform P1: the bottom row ends ~10 px above the window edge, so its captions (Revert, unlock) go above */
+.perform .p-bottom .hold-btn .hb-cap { bottom: auto; top: -30px; }
 
 /* the chip rows keep 44 px at a 102 px header row: padding and gap give way first */
 .p-fx { --pfx-pad: clamp(4px, calc((var(--p-head-h) - 91px) / 3), 7px); padding: var(--pfx-pad) 12px; display: grid;
@@ -894,6 +906,24 @@ body[data-view="edit"] .quick-btn { display: none; }
 .notes-head { display: flex; align-items: center; gap: 8px; }
 .notes-head .section-title { font-size: 11.5px; color: var(--muted); letter-spacing: .1em; }
 .p-notes { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+/* onboarding "first 60 seconds": the one-time Start here card at the top of the Notes panel (components/startCard.js) */
+.start-card { flex: none; border: 1px solid var(--accent); border-radius: 10px; padding: 10px 12px 10px 14px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+.start-card[hidden] { display: none; }
+.start-card .sc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.start-card .sc-title { font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+.start-card .sc-x { width: 32px; height: 32px; margin: -6px -6px -6px 0; border: 0; border-radius: 8px; background: transparent;
+  color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
+.start-card .sc-x:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+.start-card .sc-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; font-size: 13.5px;
+  line-height: 1.35; color: var(--text); }
+.start-card b { color: var(--accent); font-weight: 800; }
+/* computer-key letters on the on-screen piano while no MIDI keyboard is connected (keys.js setKeyLetters) */
+.pkey-letter { position: absolute; left: 0; right: 0; text-align: center; pointer-events: none; font-size: 10px;
+  font-weight: 800; line-height: 1; }
+.pkey.white .pkey-letter { bottom: 3px; color: #2b3240; }
+.pkey.black .pkey-letter { bottom: 4px; color: #cfd6df; font-size: 9px; }
+.pkey:has(.pkey-letter) .pkey-label { display: none; } /* the letter takes the C4 / C5 label's place */
 .notes-text { flex: 1 1 auto; overflow: auto; white-space: pre-wrap; font-size: 16px; line-height: 1.5; color: #dfe4ea; user-select: text; -webkit-user-select: text; }
 .notes-text.empty { color: var(--faint); font-style: italic; }
 .notes-text.overflowing { -webkit-mask-image: linear-gradient(#000 85%, transparent); mask-image: linear-gradient(#000 85%, transparent); }
@@ -959,8 +989,9 @@ body[data-view="edit"] .quick-btn { display: none; }
 .kp-note { font-size: 12px; color: var(--faint); margin-top: 9px; line-height: 1.4; }
 .kp-note .kp-drone { color: var(--drone); }
 
-/* Quick sheet: exactly over the header + setlist rows (112 + 12 + 54), never over a strip */
-.perform .qs { height: 178px; min-height: 0; }
+/* Quick sheet: exactly over the header + setlist rows (112 + 12 + 54), never over a strip (round4-perform P11: from
+   the row variables, so it follows them below 900 px tall) */
+.perform .qs { height: calc(var(--p-head-h) + var(--p-gap) + var(--p-nav-h)); min-height: 0; }
 .perform .qs-h { min-height: 44px; }
 .perform .qs-sec { padding: 6px 18px 8px; gap: 6px; }
 
@@ -994,6 +1025,16 @@ body[data-view="edit"] .quick-btn { display: none; }
 @container pmain (max-height: 410px) {
   .pad-status { display: none; } /* Settings › My Pads has it (as at 1024, perform-1024.png) */
   .key-btn { min-height: 40px; }
+  /* round4-perform P9: the strips' name / tag / chip spacing as at 1024, so the fader keeps the throw */
+  .slot { padding: 7px 6px; gap: 5px; }
+  .slot-who { min-height: 18px; }
+  .slot-tag { height: 17px; }
+  .slot-mods { gap: 4px; }
+}
+/* round4-perform P9: short and wide (> 1250 px, ≤ 740 px tall): the bottom row, gaps and bottom padding as at 1024
+   (the header keeps 102 px so the shared-effect chips stay 44 px), so 1366×700 gets the 1024×700 throw */
+@media (max-height: 740px) and (min-width: 1251px) {
+  :root { --p-bot-h: 72px; --p-gap: 8px; --p-pad-b: 8px; }
 }
 /* ---- the drone card narrower than the mockup's 400 px: the ON tile keeps "DRONE C major ON" whole */
 @container drone (max-width: 390px) {
@@ -1010,9 +1051,9 @@ body[data-view="edit"] .quick-btn { display: none; }
   :root { --p-head-h: 94px; --p-nav-h: 50px; --p-bot-h: 74px; --p-gap: 10px; --p-pad-b: 12px; }
   .perform { padding: var(--p-gap) 12px var(--p-pad-b); }
   .p-head { grid-template-columns: minmax(0, 1fr) 150px 262px 96px; }
-  .song-block { padding: 6px 14px; }
+  .song-block { padding: 2px 14px; }
   .song-name { font-size: 32px; }
-  /* ux-round2 #7: KEY ▾ is a 44 px target here too (94 = 6 + 33.6 + 2 + 44 + 6 + borders) */
+  /* ux-round2 #7: KEY ▾ is a 44 px target here too (94 = 2 + 40 + 2 + 44 + 2 + borders; round4-perform P2) */
   .song-sub { height: 44px; margin-top: 2px; gap: 8px; }
   .hold-btn.key-open { height: 44px; min-height: 44px; min-width: 64px; }
   .song-key { font-size: 26px; }
@@ -1079,7 +1120,7 @@ body[data-view="edit"] .quick-btn { display: none; }
   .lock-sub { font-size: 10px; }
   .keypop { width: 420px; }
   /* Quick over 94 + 10 + 50: its controls drop to 38 px here, as in the mockup (quick-1024) */
-  .perform .qs { height: 154px; }
+  .perform .qs { height: calc(var(--p-head-h) + var(--p-gap) + var(--p-nav-h)); }
   .perform .qs-h { min-height: 38px; }
   .perform .qs-h .qs-x, .perform .qs-h .btn { min-height: 32px; height: 32px; }
   .perform .qs-h .qs-x { width: 36px; }
@@ -1099,3 +1140,22 @@ body[data-view="edit"] .quick-btn { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .drone-lockline.hint { animation: none; }
 }
+
+/* menu-bar mode, low-resource (docs/menubar-mode.md; C7 menubar-B): main.js sets <html data-low-resource> from
+   controller.status.lowResource. Hiding the meters takes them out of their IntersectionObservers, which stops their
+   requestAnimationFrame loops (components/meter.js, levelMeter.js); the engine pauses the slot level taps itself.
+   The top-bar mount keeps its width, so nothing moves. */
+:root[data-low-resource] .meter,
+:root[data-low-resource] .lvl-meter,
+:root[data-window-hidden] .meter,
+:root[data-window-hidden] .lvl-meter { display: none !important; } /* idle-cpu R4: the same while the window is hidden */
+
+/* themes-setup: Quick › This Mac caption row "Theme: <name> ▸" (quickSheet.js), a small link-like button */
+.qs-theme {
+  margin-left: auto; flex: none; align-self: center; padding: 3px 9px; border: 1px solid var(--line-2, var(--line));
+  border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: 12px;
+  font-weight: 700; white-space: nowrap; cursor: pointer;
+}
+.qs-theme:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+.qs-theme:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.qs-theme:disabled { opacity: .5; cursor: default; }

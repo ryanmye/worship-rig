@@ -178,6 +178,8 @@ function mountSlot(el, ctx, opts) {
   if (miniEq) miniEq.el.classList.add('ev2-slot-eqmini');
   const actions = h('div.ev2-slot-actions', {}, miniEq ? miniEq.el : null, chgBtn, menuEl);
   let menuOpen = false;
+  /** round4-edit-lib n2: true while the shell runs leave-song (hooks, then the blur of the focused song field) */
+  let leavingSong = false;
   const menuItems = () => [...menuEl.querySelectorAll('[role^="menuitem"]:not([disabled])')];
   function buildMenu() {
     const slot = curSlot();
@@ -211,7 +213,17 @@ function mountSlot(el, ctx, opts) {
         }, h('i.ev2-slot-mi-check', { 'aria-hidden': 'true' }), h('span', { text: 'Remove this sound…' })));
     }
     menuEl.setAttribute('aria-label', `${role()} instrument`);
+    // round4-edit-lib n3: a rebuild while the menu is open (an 'instruments' event) keeps keyboard focus on the same
+    // item instead of dropping it to <body>
+    const a = document.activeElement;
+    const had = a && menuEl.contains(a) ? { value: a.dataset.value, action: a.dataset.action } : null;
     menuEl.replaceChildren(...nodes);
+    if (had) {
+      const items = [...menuEl.querySelectorAll('.ev2-slot-mi')];
+      const next = items.find((x) => (had.value !== undefined ? x.dataset.value === had.value
+        : x.dataset.action === had.action)) || items.find((x) => x.getAttribute('aria-checked') === 'true') || items[0];
+      next?.focus();
+    }
   }
   function openMenu({ focus = true } = {}) {
     cancelConfirm();
@@ -806,15 +818,20 @@ function mountSlot(el, ctx, opts) {
       const raw = input.value.trim();
       const n = parseKey(raw);
       if (n !== null) commit(n);
-      else ctx.toast(`“${raw}” is not a key name — try C4 or F#2`, 'warn');
+      // round4-edit-lib n2: a half-typed name blurred by a song switch just reverts (no toast as the song changes)
+      else if (!leavingSong) ctx.toast(`“${raw}” is not a key name — try C4 or F#2`, 'warn');
       if (ctx.fieldSongId(input) !== ctx.songId()) return; // written to the song we just left
       const cur = getIn(ctx.song(), relOf(addr));
       if (cur !== undefined) comp.set(cur);
     });
     input.addEventListener('keydown', (e) => {
+      if (e.isComposing || e.keyCode === 229) return; // round4-edit-lib m2: the IME's own Enter
       if (e.key === 'Enter') input.blur();
     });
-    binder.ctl(addr, () => comp, { text: true });
+    // round4-edit-lib m1: 'dirty', like the other song-bound fields. text:true held back every write while focused
+    // (Set lowest… answered by a MIDI key, a mini-keyboard drag, which keeps focus here) and never re-applied it, so
+    // the field showed a stale key after blur.
+    binder.ctl(addr, () => comp, { text: 'dirty' });
     return input;
   }
 
@@ -1050,6 +1067,11 @@ function mountSlot(el, ctx, opts) {
   });
   ctx.listen(ctx.editState, 'notes', onNotes);
   ctx.onLeaveSong(() => {
+    // n2: the shell blurs the focused song field right after these hooks, in the same task
+    leavingSong = true;
+    queueMicrotask(() => {
+      leavingSong = false;
+    });
     closeMenu(false);
     cancelConfirm(false);
     disarm();

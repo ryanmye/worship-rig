@@ -3,20 +3,47 @@
 // shared requestAnimationFrame loop serves every visible meter, and an IntersectionObserver takes a meter out of the
 // loop when its view is hidden (Perform while Edit shows, an empty slot, a closed panel). A meter that is not read
 // lets the engine disconnect its analyser tap after 2 s (engine.slotLevel), so a hidden meter costs no CPU on
-// either thread. With nothing sounding the bar makes no DOM writes.
+// either thread. With nothing sounding the bar makes no DOM writes, and after IDLE_MS of silence it is not read at
+// all until the next note (wakeLevelMeters; idle-cpu R1). The loop runs at ≤ ~30 updates/s (performance #2).
 import { h, disposer } from './util.js';
-import { dbToMeter } from './meter.js';
+import { dbToMeter, MIN_FRAME_MS, IDLE_MS } from './meter.js';
 
-/** @type {Set<{frame:(now:number)=>void}>} meters on screen */
+const RELEASE_PER_MS = 0.012 / 16.7; // ~20 dB/s, as the top-bar meter
+const FLOOR_AMP = 1e-3; // −60 dBFS, the bottom of the bar
+
+/** @type {Set<{frame:(now:number, dt:number)=>void}>} meters on screen and awake */
 const active = new Set();
+/** @type {Set<object>} meters on screen but asleep: silent for IDLE_MS, not read until wakeLevelMeters() */
+const dormant = new Set();
 let raf = 0;
+let lastRun = 0;
 function loop(now) {
   raf = 0;
-  for (const m of active) m.frame(now);
+  if (!active.size) return;
+  // performance #2: ≤ ~30 reads + writes a second on any display
+  if (now - lastRun >= MIN_FRAME_MS) {
+    const dt = lastRun ? Math.min(100, now - lastRun) : 16.7;
+    lastRun = now;
+    for (const m of active) m.frame(now, dt);
+  }
   if (active.size) raf = requestAnimationFrame(loop);
+  else lastRun = 0;
 }
 function wake() {
   if (!raf && active.size) raf = requestAnimationFrame(loop);
+}
+/**
+ * idle-cpu R1: wake every sleeping level meter (main.js calls this on each controller 'notes' event: a slot only
+ * sounds after a note-on). A sleeping meter isn't read, so the engine can drop its analyser tap.
+ */
+export function wakeLevelMeters() {
+  if (!dormant.size) return;
+  for (const m of dormant) {
+    m.quietSince = 0;
+    active.add(m);
+  }
+  dormant.clear();
+  wake();
 }
 
 /**
@@ -34,7 +61,8 @@ export function levelMeter(o = {}) {
   let hot = false;
   let reads = 0;
   const self = {
-    frame() {
+    quietSince: 0,
+    frame(now, dt = 16.7) {
       let r = null;
       try {
         r = typeof o.read === 'function' ? o.read() : null;
@@ -44,9 +72,17 @@ export function levelMeter(o = {}) {
       reads++;
       const p = r && Number.isFinite(r.peak) ? r.peak : 0;
       const target = p > 0 ? dbToMeter(20 * Math.log10(p)) : 0;
-      // fast attack, ~20 dB/s release at 60 fps (as the top-bar meter)
-      level = target > level ? target : Math.max(target, level - 0.012);
+      // fast attack, ~20 dB/s release (as the top-bar meter)
+      level = target > level ? target : Math.max(target, level - RELEASE_PER_MS * dt);
       const q = Math.round(level * 1000);
+      // idle-cpu R1: at the floor for IDLE_MS → sleep until the next note (wakeLevelMeters)
+      if (q === 0 && p <= FLOOR_AMP) {
+        if (!self.quietSince) self.quietSince = now;
+        else if (now - self.quietSince > IDLE_MS) {
+          active.delete(self);
+          dormant.add(self);
+        }
+      } else self.quietSince = 0;
       if (q === shown) return;
       shown = q;
       cover.style.transform = `scaleY(${(1 - q / 1000).toFixed(3)})`;
@@ -55,11 +91,14 @@ export function levelMeter(o = {}) {
     },
   };
   const start = () => {
+    if (dormant.has(self)) return;
+    self.quietSince = 0;
     active.add(self);
     wake();
   };
   const stop = () => {
     active.delete(self);
+    dormant.delete(self);
   };
   d.add(stop);
   if (typeof IntersectionObserver === 'function') {
@@ -74,9 +113,13 @@ export function levelMeter(o = {}) {
   return {
     el,
     set() {},
-    /** True while this meter is in the frame loop (test hook). */
+    /** True while this meter is on screen: in the frame loop or asleep until the next note (test hook). */
     get running() {
-      return active.has(self);
+      return active.has(self) || dormant.has(self);
+    },
+    /** True while asleep (silent; not read until a note wakes it; test hook). */
+    get sleeping() {
+      return dormant.has(self);
     },
     /** Current bar position 0..1 (test hook). */
     get level() {

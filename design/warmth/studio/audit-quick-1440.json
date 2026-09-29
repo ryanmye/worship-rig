@@ -1,0 +1,223 @@
+{
+ "label": "quick-1440",
+ "count": 133,
+ "fails": [],
+ "disabledFails": [
+  {
+   "id": 88,
+   "text": "↺ Revert",
+   "color": "rgb(244, 240, 230)",
+   "size": 16,
+   "weight": 700,
+   "op": 0.45,
+   "disabled": true,
+   "cls": "rv-l",
+   "tag": "span",
+   "rect": {
+    "x": 896.5,
+    "y": 819.609375,
+    "w": 71,
+    "h": 19
+   },
+   "bg": "rgb(41,38,34)",
+   "cr": 3.87,
+   "need": 4.5,
+   "pass": false
+  },
+  {
+   "id": 89,
+   "text": "nothing changed",
+   "color": "rgb(178, 171, 162)",
+   "size": 12.5,
+   "weight": 700,
+   "op": 0.45,
+   "disabled": true,
+   "cls": "rv-cnt-t",
+   "tag": "span",
+   "rect": {
+    "x": 879,
+    "y": 842,
+    "w": 106,
+    "h": 15
+   },
+   "bg": "rgb(40,37,33)",
+   "cr": 2.5,
+   "need": 4.5,
+   "pass": false
+  }
+ ],
+ "lowest": [
+  {
+   "id": 26,
+   "text": "Echo",
+   "color": "color(srgb 0.971961 0.762549 0.617647)",
+   "size": 13,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "mc-label",
+   "tag": "span",
+   "rect": {
+    "x": 269.75,
+    "y": 676.953125,
+    "w": 33,
+    "h": 15
+   },
+   "bg": "rgb(106,78,58)",
+   "cr": 4.79,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 24,
+   "text": "Space",
+   "color": "color(srgb 0.971961 0.762549 0.617647)",
+   "size": 13,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "mc-label",
+   "tag": "span",
+   "rect": {
+    "x": 158.25,
+    "y": 676.953125,
+    "w": 41,
+    "h": 15
+   },
+   "bg": "rgb(105,77,58)",
+   "cr": 4.86,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 41,
+   "text": "Echo",
+   "color": "color(srgb 0.726078 0.883333 0.723333)",
+   "size": 13,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "mc-label",
+   "tag": "span",
+   "rect": {
+    "x": 510.75,
+    "y": 676.953125,
+    "w": 33,
+    "h": 15
+   },
+   "bg": "rgb(75,93,72)",
+   "cr": 4.92,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 39,
+   "text": "Space",
+   "color": "color(srgb 0.726078 0.883333 0.723333)",
+   "size": 13,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "mc-label",
+   "tag": "span",
+   "rect": {
+    "x": 399.25,
+    "y": 676.953125,
+    "w": 41,
+    "h": 15
+   },
+   "bg": "rgb(75,93,71)",
+   "cr": 4.93,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 30,
+   "text": "Sustain",
+   "color": "color(srgb 0.971961 0.762549 0.617647)",
+   "size": 13,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "mc-value",
+   "tag": "b",
+   "rect": {
+    "x": 268.25,
+    "y": 736.34375,
+    "w": 53,
+    "h": 15
+   },
+   "bg": "rgb(101,74,56)",
+   "cr": 5.11,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 91,
+   "text": "PANIC",
+   "color": "rgb(255, 255, 255)",
+   "size": 24,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "panic-l",
+   "tag": "span",
+   "rect": {
+    "x": 1172.890625,
+    "y": 816.703125,
+    "w": 84.203125,
+    "h": 28
+   },
+   "bg": "rgb(202,56,43)",
+   "cr": 5.11,
+   "need": 3,
+   "pass": true
+  },
+  {
+   "id": 45,
+   "text": "Sustain",
+   "color": "color(srgb 0.726078 0.883333 0.723333)",
+   "size": 13,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "mc-value",
+   "tag": "b",
+   "rect": {
+    "x": 509.25,
+    "y": 736.34375,
+    "w": 53,
+    "h": 15
+   },
+   "bg": "rgb(72,88,68)",
+   "cr": 5.28,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 92,
+   "text": "Esc",
+   "color": "rgb(255, 255, 255)",
+   "size": 12,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "panic-k",
+   "tag": "small",
+   "rect": {
+    "x": 1202.90625,
+    "y": 845.09375,
+    "w": 24.171875,
+    "h": 14
+   },
+   "bg": "rgb(196,53,39)",
+   "cr": 5.4,
+   "need": 4.5,
+   "pass": true
+  }
+ ],
+ "glare": {
+  "meanLum": 0.0772,
+  "brightShare": 0.0689
+ }
+}

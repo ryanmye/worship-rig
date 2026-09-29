@@ -1863,6 +1863,69 @@ export const offline = {
       out.newStripTapped && out.tapsAfterTeardown === 0;
     return { pass, ...out, first: r(out.first), loud: r(out.loud), quiet: r(out.quiet), again: r(out.again) };
   },
+
+  // idle-cpu #1 (reviews/idle-cpu.md): a fresh slot's instrument is connected to its strip on its first note (poly
+  // and mono paths), never at prepare/commit, and that first note sounds. A reused instance keeps its connection.
+  // idle-cpu #2 (2): a synth drone held at drone.gain 0 for DRONE_PARK_SEC is parked (its voices end: a silent
+  // drone still costs its voices), a short dip is not, and raising the gain restarts it in the latest key.
+  async droneParkGain0() {
+    const { DRONE_PARK_SEC } = await import('/js/engine/drone.js');
+    const P = DRONE_PARK_SEC;
+    const ctx = mkCtx(P + 8, 22050);
+    const e = await mkEngine(ctx);
+    const D = e.drone;
+    D.configure({ mode: 'synth', gain: 0.8, fade: 0.2 }, { when: 0 });
+    D.setKey(0, { when: 0 });
+    const out = {};
+    const snap = (k) => e.at(k === 'dip' ? 1.2 : k, () => (out[k] = { voices: D.liveVoiceCount(), parked: !!D.parked, layers: D.layers.length }));
+    e.at(0.5, (t) => D.setParam('gain', 0, t)); // a dip…
+    e.at(1.0, (t) => D.setParam('gain', 0.8, t)); // …back up after 0.5 s: never parks
+    e.at(1.5, (t) => D.setParam('gain', 0, t));
+    snap('dip');
+    snap(1.5 + P - 0.3); // still sounding just before the park
+    e.at(1.5 + P + 0.1, (t) => D.setKey(7, { when: t })); // parked: the key is remembered, nothing starts
+    snap(1.5 + P + 1.0); // parked, voices ended
+    e.at(1.5 + P + 1.5, (t) => D.setParam('gain', 0.8, t)); // resume in G
+    snap(1.5 + P + 3.0);
+    const d = mono(await ctx.startRendering());
+    await settle();
+    const sr = 22050;
+    const late = rms(d, sr, 1.5 + P + 4.5, 1.5 + P + 6.5);
+    const g = bandMag(d, sr, 1.5 + P + 4.5, 1.5 + P + 6.5, 98); // G2: root of the new key's voicing (G2 D3 G3)
+    const c = bandMag(d, sr, 1.5 + P + 4.5, 1.5 + P + 6.5, 130.81); // C3: the old key's root, absent from G's
+    out.lateDb = +db(late).toFixed(1);
+    out.gOverCDb = +db(g / c).toFixed(1);
+    out.hasG = g > 4 * c;
+    const k1 = 1.5 + P - 0.3;
+    const k2 = 1.5 + P + 1.0;
+    const k3 = 1.5 + P + 3.0;
+    const pass = out.dip.voices > 0 && !out.dip.parked && out[k1].voices > 0 && !out[k1].parked && out[k2].parked &&
+      out[k2].voices === 0 && out[k2].layers === 0 && !out[k3].parked && out[k3].voices > 0 && D.key.pc === 7 &&
+      out.lateDb > -50 && out.hasG;
+    return { pass, park: P, ...out };
+  },
+
+  async idleArm() {
+    const ctx = mkCtx(1.4);
+    const e = await mkEngine(ctx);
+    const A = patch({ 0: slot('synth', 'warm-pad', { highNote: 59 }), 1: slot('synth', 'warm-pad', { lowNote: 60, mono: 'lowest' }) });
+    await use(e, A);
+    const armed = () => e.slots.slice(0, 2).map((s) => !!s?.armed);
+    const out = { afterCommit: armed() };
+    e.noteOn(48, 110, { when: 0.1 }); // slot 0 only (split), poly path
+    out.afterLow = armed();
+    e.noteOn(72, 110, { when: 0.6 }); // slot 1 only, mono path
+    out.afterHigh = armed();
+    const s0 = e.slots[0];
+    await use(e, A, 0); // same song again: both instances reused, still connected
+    out.reused = e.slots[0] === s0 && armed().every(Boolean);
+    const d = mono(await ctx.startRendering());
+    out.lowPeak = +peakAbs(d, SR, 0.3, 0.55).toFixed(4);
+    out.bothPeak = +peakAbs(d, SR, 0.9, 1.35).toFixed(4);
+    const pass = out.afterCommit.join() === 'false,false' && out.afterLow.join() === 'true,false' &&
+      out.afterHigh.join() === 'true,true' && out.reused && out.lowPeak > 0.01 && out.bothPeak > out.lowPeak;
+    return { pass, ...out };
+  },
 };
 
 // ----- real-time suites ------------------------------------------------------------------------------------------
@@ -2153,5 +2216,253 @@ export const realtime = {
     const loops = e.drone.pool ? e.drone.pool.reduce((a, x) => a + x.seq, 0) : 0;
     e.dispose();
     return { pass: n === 2 && w.min > -60 && !warns.some((x) => /unavailable|failed/.test(x)), attached: n, minWindowDb: w.min, at: w.at, busyElements: els, elementStarts: loops, warns };
+  },
+
+  /**
+   * menubar-A (C7, docs/menubar-mode.md): engine.setLowResource. On: the pins become the current song's samples only
+   * (the setlist pins are remembered), slotLevel taps are disconnected and stay at 0 while a meter keeps reading, and
+   * a 30 s real-time window with neighbour preloads of songs on new reverb sizes builds no IR and no reverb unit (idle
+   * warming off); idle units are dropped. A commit moves the pins to the new song. Off: the remembered pins (plus the
+   * current song's) come back, taps and warming work again.
+   */
+  async lowResource() {
+    const { irStats } = await import('/js/engine/fx.js');
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const e = new AudioEngine({ seed: 21, manifestUrl: MANIFEST, instrumentModules: false });
+    await e.start();
+    const R = e.fx.reverb;
+    const A = patch({ 0: slot('sampler', 'test-keys'), 1: slot('synth', 'warm-pad', { gain: 0.3 }) }, { reverb: { size: 0.4 } });
+    const B = patch({ 0: slot('sampler', 'test-mp3') }, { reverb: { size: 0.8, damp: 0.2 } });
+    const C = patch({ 0: slot('sampler', 'test-keys') }, { reverb: { size: 0.95, damp: 0.7 } });
+    const D = patch({ 1: slot('synth', 'warm-pad') }, { reverb: { size: 0.15, damp: 0.9 } });
+    const urls = (p) => new Set(e._sampleJobs([p]).urls);
+    const sameSet = (a, b) => a.size === b.size && [...a].every((u) => b.has(u));
+    await use(e, A);
+    await e.preload([A, B], { pin: 'replace' }); // the setlist
+    await R.settled();
+    // the engine-start unit is still crossfading out of A's commit for 0.85 s: an in-flight fade is (rightly) not
+    // trimmed, so a fast preload made unitsAtOn 2 (a race in this test, pre-dating idle-cpu; seen 2 in 3 runs)
+    for (let i = 0; i < 60 && [...R.units.values()].some((u) => u.state === 'fading'); i++) await wait(50);
+    const setPins = new Set(e.cache.pinned);
+    const uA = urls(A);
+    const uB = urls(B);
+    e.slotLevel(0);
+    e.slotLevel(1);
+    const out = { setPinned: setPins.size, tapsBefore: e.slotTapCount(), unitsBefore: R.units.size };
+    let newUnits = 0;
+    const onu = R._newUnit.bind(R);
+    R._newUnit = (...a) => (newUnits++, onu(...a));
+    // ---- on
+    const w0 = { ...irStats };
+    out.returned = e.setLowResource(true);
+    out.pinsCurrentOnly = sameSet(new Set(e.cache.pinned), uA);
+    out.tapsAtOn = e.slotTapCount();
+    out.unitsAtOn = R.units.size;
+    out.unitStatesAtOn = [...R.units.values()].map((u) => `${u.key}:${u.state}${u.connected ? '+conn' : ''}${u === R.active ? '*' : ''}${R._keep.has(u.key) ? '+keep' : ''}`);
+    out.readOn = e.slotLevel(0);
+    await e.preload([C, D], { pin: 'add' }); // a neighbour preload in low-resource mode
+    out.pinsAfterPreload = sameSet(new Set(e.cache.pinned), uA);
+    const t0 = performance.now();
+    let maxTaps = 0;
+    let reads = 0;
+    let taps2s = null;
+    while (performance.now() - t0 < 30000) {
+      e.slotLevel(0); // a meter that kept reading
+      e.slotLevel(1);
+      reads++;
+      maxTaps = Math.max(maxTaps, e.slotTapCount());
+      if (taps2s === null && performance.now() - t0 > 2000) taps2s = e.slotTapCount();
+      await wait(250);
+    }
+    Object.assign(out, { windowReads: reads, maxTaps, taps2s });
+    out.idleIRBuilds = irStats.worker - w0.worker + irStats.sync - w0.sync + irStats.chunked - w0.chunked;
+    out.idleUnitBuilds = newUnits;
+    out.statsOn = (({ lowResource, slotLevelTaps, reverbUnits, pinnedMB }) => ({ lowResource, slotLevelTaps, reverbUnits, pinnedMB }))(e._debugStats());
+    // a song switch in low-resource mode: the pins follow the song that plays (its own reverb is built: in use)
+    await use(e, B);
+    out.pinsFollowCommit = sameSet(new Set(e.cache.pinned), uB);
+    // ---- off
+    out.returnedOff = e.setLowResource(false);
+    const pinsOff = new Set(e.cache.pinned);
+    out.pinsRestored = [...setPins].every((u) => pinsOff.has(u)) && [...uB].every((u) => pinsOff.has(u));
+    e.slotLevel(0);
+    out.tapsAfterOff = e.slotTapCount();
+    const w1 = { ...irStats };
+    await e.preload([C], { pin: 'none' });
+    await R.settled();
+    out.warmAfterOff = irStats.worker - w1.worker;
+    out.statsOff = e._debugStats().lowResource;
+    e.dispose();
+    const pass = out.returned === true && out.setPinned > uA.size && out.pinsCurrentOnly && out.tapsBefore === 2 &&
+      out.tapsAtOn === 0 && out.readOn?.peak === 0 && out.pinsAfterPreload && out.maxTaps === 0 && out.taps2s === 0 &&
+      out.windowReads >= 60 && out.idleIRBuilds === 0 && out.idleUnitBuilds === 0 && out.unitsAtOn <= 1 &&
+      out.unitsAtOn < out.unitsBefore && out.statsOn.lowResource === true && out.statsOn.slotLevelTaps === 0 &&
+      out.pinsFollowCommit && out.returnedOff === false && out.pinsRestored && out.tapsAfterOff === 1 &&
+      out.warmAfterOff === 1 && out.statsOff === false;
+    return { pass, ...out };
+  },
+
+  // idle-cpu #1 (reviews/idle-cpu.md): a slot instrument is connected to its strip only while it plays: armed by a
+  // note, disarmed SLOT_IDLE_DISARM_SEC (2 s) after its last voice ended, re-armed (and audible) by the next note;
+  // a held note keeps it connected.
+  async idleDisarm() {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const e = new AudioEngine({ seed: 23, manifestUrl: MANIFEST, instrumentModules: false });
+    await e.start();
+    await use(e, patch({ 0: slot('synth', 'warm-pad') })); // sustaining (fallback synth: release 3 s)
+    const sc = e.slots[0];
+    const out = { fresh: sc.armed };
+    const level = async () => {
+      e.slotLevel(0);
+      await wait(250);
+      return +e.slotLevel(0).peak.toFixed(4);
+    };
+    e.noteOn(60, 110);
+    out.armedOnNote = sc.armed;
+    out.peak1 = await level();
+    await wait(3000); // held 3.25 s: stays connected
+    out.armedWhileHeld = sc.armed;
+    e.noteOff(60);
+    const tOff = performance.now();
+    let lastLive = tOff;
+    while (sc.armed && performance.now() - tOff < 15000) {
+      if (sc.inst.liveVoiceCount() > 0) lastLive = performance.now();
+      await wait(50);
+    }
+    out.disarmedAfterMs = Math.round(performance.now() - tOff);
+    out.afterLastVoiceMs = Math.round(performance.now() - lastLive); // ≥ SLOT_IDLE_DISARM_SEC (2 s) − one poll
+    out.disarmed = !sc.armed;
+    e.noteOn(62, 110);
+    out.rearmed = sc.armed;
+    out.peak2 = await level();
+    e.noteOff(62);
+    e.dispose();
+    const pass = out.fresh === false && out.armedOnNote && out.peak1 > 0.01 && out.armedWhileHeld && out.disarmed &&
+      out.afterLastVoiceMs >= 1500 && out.afterLastVoiceMs <= 4000 && out.rearmed && out.peak2 > 0.01;
+    return { pass, ...out };
+  },
+  // idle-cpu #2 (reviews/idle-cpu.md): with no slot connected and the send effects' taps below −100 dBFS, the reverb
+  // (active convolver unfed), the delay (loop unreachable) and the chorus sleep; a note wakes all three before it
+  // sounds. Against a reference engine whose effects never sleep, the reverb and echo onsets land at the same time
+  // (a lost onset would be late by ≥ one poll, 250 ms) and the output has no extra click; 0 live voices at idle.
+  async fxIdleSleep() {
+    const { FX_IDLE_HOLD_SEC } = await import('/js/engine/fx.js');
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    // one ScriptProcessor for all three signals (dry mix, reverb return, delay return), so their onsets compare to
+    // the sample (separate processors' playbackTime differ by whole render quanta)
+    const grab = (ctx, nodes, sec) => {
+      const sr = ctx.sampleRate;
+      const k = nodes.length;
+      const merge = new ChannelMergerNode(ctx, { numberOfInputs: k });
+      nodes.forEach((n, i) => n.connect(merge, 0, i));
+      const sp = ctx.createScriptProcessor(2048, k, 1);
+      const need = Math.ceil(sec * sr);
+      const chunks = [];
+      let n = 0;
+      return new Promise((res) => {
+        sp.onaudioprocess = (ev) => {
+          chunks.push([...Array(k).keys()].map((c) => new Float32Array(ev.inputBuffer.getChannelData(c))));
+          n += 2048;
+          if (n >= need) {
+            sp.onaudioprocess = null;
+            nodes.forEach((x) => x.disconnect(merge));
+            merge.disconnect();
+            sp.disconnect();
+            res([...Array(k).keys()].map((c) => {
+              const d = new Float32Array(n);
+              chunks.forEach((ch, j) => d.set(ch[c], j * 2048));
+              return d;
+            }));
+          }
+        };
+        merge.connect(sp);
+        sp.connect(ctx.destination);
+      });
+    };
+    const run = async (sleepOn) => {
+      const e = new AudioEngine({ seed: 29, manifestUrl: MANIFEST, instrumentModules: false });
+      await e.start();
+      if (!sleepOn) {
+        e.fx.wakeAll();
+        e.fx._sleep = null; // reference: the always-on graph (as offline renders keep it)
+      }
+      const ctx = e.ctx;
+      const sr = ctx.sampleRate;
+      const sends = { reverb: 0.6, delay: 0.5, chorus: 0.5 };
+      await use(e, patch({ 0: slot('sampler', 'test-keys', { sends }) }, { reverb: { size: 0.1 }, delay: { time: 0.25, feedback: 0.3, sync: 'off' } }));
+      const r = {};
+      const asleep = () => e._debugStats().fxAsleep.slice().sort().join(',');
+      e.noteOn(60, 100);
+      await wait(300);
+      r.whilePlaying = asleep();
+      e.noteOff(60);
+      const t0 = performance.now();
+      if (sleepOn) while (asleep() !== 'chorus,delay,reverb' && performance.now() - t0 < 25000) await wait(50);
+      r.sleptAfterMs = Math.round(performance.now() - t0);
+      r.asleep = asleep();
+      r.unitConnected = e.fx.reverb.active.connected;
+      r.idleVoices = e._debugStats().voices;
+      r.idleVoiceNodes = e.slots[0].inst.alloc.liveNodes(); // voice-owned nodes (not the instrument's own 2)
+      r.armed = e.slots[0].armed;
+      await wait(sleepOn ? 2500 : 7500); // the first note's reverb tail (1.5 s IR) and echoes have rung out
+      const cap = grab(ctx, [e.recordTap, e.fx.reverb.output, e.fx.delay.output], 2.5);
+      await wait(300);
+      const tOn = ctx.currentTime + 0.1;
+      e.noteOn(64, 100, { when: tOn });
+      r.awakeAfterNoteOn = asleep() === '';
+      r.unitConnectedAfterNoteOn = e.fx.reverb.active.connected;
+      e.noteOff(64, { when: tOn + 0.4 });
+      const [dry, rev, del] = await cap;
+      const onset = (d) => {
+        for (let i = 0; i < d.length; i++) if (Math.abs(d[i]) > 1e-4) return i;
+        return null;
+      };
+      const lag = (d) => (onset(d) === null || onset(dry) === null ? null : +(((onset(d) - onset(dry)) / sr) * 1000).toFixed(2));
+      r.reverbLagMs = lag(rev); // after the dry onset (predelay + the IR's first tap, minus the catcher's lookahead)
+      r.delayLagMs = lag(del);
+      const cl = clicks(dry, sr, 0.02, Math.min(2.4, dry.length / sr));
+      r.clicks = cl.length;
+      r.clickAt = cl.map((c) => +((c.t - onset(dry) / sr) * 1000).toFixed(1)); // ms after the dry onset
+      e.dispose();
+      return r;
+    };
+    const sl = await run(true);
+    const ref = await run(false);
+    const near = (a, b, tol) => a !== null && b !== null && Math.abs(a - b) <= tol;
+    const pass = sl.whilePlaying === '' && sl.asleep === 'chorus,delay,reverb' && sl.unitConnected === false &&
+      sl.idleVoices === 0 && sl.idleVoiceNodes === 0 && sl.armed === false && sl.awakeAfterNoteOn &&
+      sl.unitConnectedAfterNoteOn && ref.asleep === '' && near(sl.reverbLagMs, ref.reverbLagMs, 0.5) &&
+      near(sl.delayLagMs, ref.delayLagMs, 0.5) && sl.clicks <= ref.clicks;
+    return { pass, holdSec: FX_IDLE_HOLD_SEC, sleep: sl, reference: ref };
+  },
+
+  // idle-cpu #2 (3): drone mode 'off' ends every drone voice (layers faded, voices stopped and disconnected, the
+  // drone-osc instruments back in the idle pool, disconnected); the reverb then sleeps too.
+  async droneOffNoVoices() {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const e = new AudioEngine({ seed: 31, manifestUrl: MANIFEST, instrumentModules: false });
+    await e.start();
+    await use(e, patch({}));
+    e.drone.configure({ mode: 'synth', gain: 0.5, fade: 0.3 });
+    e.drone.setKey(2);
+    await wait(1200);
+    const out = { voicesOn: e._debugStats().voices, reverbAsleepOn: e._debugStats().fxAsleep.includes('reverb') };
+    e.drone.setMode('off');
+    const t0 = performance.now();
+    while (performance.now() - t0 < 8000 && (e._debugStats().voices > 0 || e.drone.layers.length)) await wait(50);
+    await wait(400);
+    const idle = e.drone._idle;
+    out.voicesOff = e._debugStats().voices;
+    out.layers = e.drone.layers.length;
+    out.idleInstVoices = idle.reduce((n, x) => n + (x.inst.liveVoiceCount?.() || 0), 0);
+    out.idleInstNodes = idle.reduce((n, x) => n + (x.inst.alloc?.liveNodes() || 0), 0); // voice-owned nodes
+    out.idleInstArmed = idle.some((x) => x.armed);
+    const t1 = performance.now();
+    while (performance.now() - t1 < 6000 && !e._debugStats().fxAsleep.includes('reverb')) await wait(50);
+    out.reverbAsleepOff = e._debugStats().fxAsleep.includes('reverb');
+    e.dispose();
+    const pass = out.voicesOn > 0 && !out.reverbAsleepOn && out.voicesOff === 0 && out.layers === 0 &&
+      out.idleInstVoices === 0 && out.idleInstNodes === 0 && !out.idleInstArmed && out.reverbAsleepOff;
+    return { pass, ...out };
   },
 };

@@ -141,6 +141,29 @@ redistributed by the app** — they stay wherever the user put them on their own
 
 ---
 
+## Theme fonts (SIL Open Font License 1.1)
+
+The themes (`app/themes/*/theme.css`, see `app/themes/README.md`) load these fonts from `app/fonts/`. Each file is a
+Latin-subset woff2, and its OFL text sits next to it. Subsetting and instancing (for example Fraunces SOFT 100 /
+WONK 0) are modifications the OFL permits. None of the bundled OFL texts declares a Reserved Font Name. The fonts
+are only bundled with the app and are never sold on their own.
+
+| File | Font | Copyright | License text |
+|---|---|---|---|
+| `Alegreya-wght.woff2` | Alegreya (variable wght) | 2011 The Alegreya Project Authors (github.com/huertatipografica/Alegreya) | `OFL-Alegreya.txt` |
+| `Figtree-wght.woff2` | Figtree (variable wght) | 2022 The Figtree Project Authors (github.com/erikdkennedy/figtree) | `OFL-Figtree.txt` |
+| `Fraunces-soft.woff2` | Fraunces (instanced) | 2018 The Fraunces Project Authors (github.com/undercasetype/Fraunces) | `OFL-Fraunces.txt` |
+| `InstrumentSans-var.woff2` | Instrument Sans (variable) | 2022 The Instrument Sans Project Authors (github.com/Instrument/instrument-sans) | `OFL-InstrumentSans.txt` |
+| `NunitoSans-var.woff2` | Nunito Sans (variable) | 2016 The Nunito Sans Project Authors (github.com/Fonthausen/NunitoSans) | `OFL-NunitoSans.txt` |
+| `Rubik-var.woff2` | Rubik (variable) | 2015 The Rubik Project Authors (github.com/googlefonts/rubik) | `OFL-Rubik.txt` |
+| `YoungSerif-Regular.woff2` | Young Serif | 2023 The Young Serif Project Authors (github.com/noirblancrouge/YoungSerif) | `OFL-YoungSerif.txt` |
+
+License: SIL Open Font License, Version 1.1 (https://openfontlicense.org). Total: 7 woff2 files, 274 KB
+(280,248 bytes), plus 7 OFL texts (30 KB). They were deduplicated from the per-theme `fonts/` folders: files with the
+same name had the same SHA-256.
+
+---
+
 ## Bundled sample size
 
 Total size of `app/samples/` (all instrument audio + manifest): **79.2 MB** (1,999 files, 23 instruments;

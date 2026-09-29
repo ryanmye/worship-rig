@@ -1,0 +1,670 @@
+/* Worship Rig: "Studio" theme (design/warmth/studio/concept.md).
+   The rig as a small analog console on a warm-grey desk: modules with a lit top edge, caps you can press, machined
+   fader caps, LED lenses that bloom, LED-ladder meters, walnut only as thin trim, and the song's name on a strip of
+   label tape. Same H-v2 layout and components; only colour, type, material and a little motion change.
+
+   How it switches on (one block, two ways in):
+   - Every rule sits under :where(body[data-theme="studio"], body:not([data-theme])). :where() adds no specificity, so
+     each rule weighs exactly what the app rule it replaces weighs, wins on source order (this file loads last), and
+     the app's more specific state rules (.slot.muted .mchip.on, .key-btn.on…) still win where they should.
+   - Linked from index.html later: applies with <body data-theme="studio">, and stops when data-theme names another
+     theme (a Settings › Appearance toggle).
+   - Injected with no attribute (page.addStyleTag, a quick <link> test): the body:not([data-theme]) branch is the
+     "unguarded" path, so the same rules apply as they are. No duplicated second copy of every rule to drift.
+   Asset URLs are root-absolute (/themes/studio/…) so they resolve the same linked and inlined into a <style>.
+   Fonts: Rubik (OFL, Hubert & Fischer et al.), one variable file, wght 300–900, Latin subset, 35 KB woff2, has tnum.
+   Performance: no backdrop-filter, no filter, no background-attachment: fixed, no infinite animation except REC's own
+   pulse. Grain is one 12 KB bitmap tile; meter segments are a static mask over the existing scaleY cover. */
+
+@font-face {
+  font-family: 'Rubik';
+  src: url('/fonts/Rubik-var.woff2') format('woff2');
+  font-weight: 300 900; font-style: normal; font-display: swap;
+}
+
+:where(body[data-theme="studio"], body:not([data-theme])) {
+  /* ---- the desk: warm grey, OKLCH hue 70, chroma 0.006–0.010. Lighter than the old near-black (L .235 vs .158), so
+     it reads as a surface you work on, not a void; still dark enough that the lamps carry. */
+  --bg: #201e1b;
+  --bg-deep: #161311;     /* recesses: fader slots, meter windows, the chord window */
+  --panel: #2a2723;       /* module face */
+  --panel-2: #35312d;     /* caps */
+  --panel-3: #3f3b36;     /* caps, hover */
+  --line: #3a3632;
+  --line-2: #534f4a;
+  --line-hover: #68625c;
+  --text: #f4f0e6;        /* ivory: 13.1:1 on --panel */
+  --muted: #cdc6bc;       /* 8.8:1 on --panel */
+  --faint: #b2aba2;       /* 4.9:1 on --panel-3, the lightest surface it sits on */
+  --accent: #f7c367;      /* incandescent amber: current song, key, selection */
+  --accent-ink: #1f1915;
+  --warn: #faaa49;        /* lock / hold only */
+  /* ---- lamp caps: amber-orange, sage, sky, lilac. Extra is the lightest and Bass the darkest, so deutan / protan /
+     tritan viewers still tell them apart (min OKLab ΔE×100: deutan 5.8, protan 4.7, tritan 8.0; today 0.6 deutan) */
+  --slot-0: #f2955a;      /* Keys */
+  --slot-1: #80cd8b;      /* Pad */
+  --slot-2: #9edaff;      /* Extra */
+  --slot-3: #b37fd2;      /* Bass */
+  --ink-on-lamp: #1f1915; /* ≥ 5.7:1 on every lamp (Bass is the lowest) */
+  --drone: #ebd9ae;
+  --fx: #c9bba9;
+  --ok: #79d28d;
+  --danger: #e5533f;
+  --danger-ink: #fff;
+  --panic: #c9372a;       /* white on it 5.2:1 */
+  --panic-bg: #4d1811;
+  --panic-text: #ffd2c8;
+  --rec-idle: #b9574b;
+  --track: #141210;       /* a fader slot is a cut in the panel */
+  --track-edge: #79736d;  /* 3.2:1 on --panel: the unfilled throw stays visible */
+  --led-off: #79736d;     /* 3.2:1 on --panel, 3.9:1 on the meter bridge */
+  --muted-fader: #857e77;
+  --thumb: #e1ddd7;
+  --focus: #ffd48a;
+  --sel-fx: #4a443d;
+  --chg: #fff6e2;
+  --off-tile: #302c28;
+  /* ---- Studio's own materials */
+  --walnut: linear-gradient(90deg, #5a3a24, #7d5236 18%, #6a452c 36%, #8a5c3a 57%, #5e3d26 78%, #7a5034);
+  --walnut-v: linear-gradient(180deg, #5a3a24, #7d5236 22%, #6a452c 45%, #8a5c3a 70%, #5e3d26);
+  --tape: #d0cabb;        /* label tape, dimmed: relative luminance .59, the same as the old amber setlist chip */
+  --tape-ink: #2a221d;    /* 9.6:1 on the tape */
+  --tape-ink-soft: #5b5147;
+  --cap-top: #3b3732;     /* a raised cap: light from above */
+  --cap-bot: #312d29;
+  --cap-edge: #13110f;
+  --bridge: #1a1815;      /* the meter bridge (top bar) */
+  --pop-bg: #34302b;
+  --pop-line: #625b53;
+  --toast-bg: #37322df2;
+  --key-white: #c8c0b2;   /* bone keys: luminance .53, same as today's #b9c0c9 (.52), no glare */
+  --key-black: #171411;
+  --key-label: #4d463e;   /* 5.2:1 on the key face, 4.5:1 at its shaded lip */
+  --wheel-fill: #bdb4a4;
+  --wheel-track: #171512;
+  --meter-on-g: #79d28d; --meter-on-y: #f2c14a; --meter-on-r: #ef5a45;
+  --meter-off: #34302b;
+  /* ---- type: one family. Rubik's slightly rounded corners read as moulded caps; tnum keeps numbers still. */
+  --font: 'Rubik', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Rubik', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-title: var(--font-display);
+  --mono: 'Rubik', ui-monospace, 'SF Mono', Menlo, monospace;
+  --radius: 11px;
+  --radius-sm: 8px;
+  color-scheme: dark;
+
+  /* ---- the room: a desk lamp's pool from above, then the grain of a powder-coated desk. One static paint. */
+  background:
+    url('/themes/studio/grain.png') repeat,
+    radial-gradient(ellipse 70% 55% at 50% -8%, #332e28 0%, #26231f 45%, transparent 80%),
+    var(--bg);
+  color: var(--text);
+  font-feature-settings: 'kern' 1;
+
+  /* ================================================================ modules (panels) */
+  /* a module face: grain, lit top edge, a dark seam where it meets the desk */
+  & .panel {
+    background: url('/themes/studio/grain.png') repeat, linear-gradient(#2d2a26, #282521 60%, #26231f);
+    border: 1px solid #0f0d0b8c;
+    box-shadow: inset 0 1px 0 #fff3e012, inset 0 -1px 0 #00000033, 0 1px 0 #ffffff08, 0 3px 8px -3px #000000a6;
+  }
+  & .slot.empty {
+    background: transparent; box-shadow: none; border: 1.5px dashed #6f6962; /* 3.1:1 on the desk */
+  }
+
+  /* ================================================================ caps (every pressable) */
+  & .btn, & .tb-btn, & .toggle, & .seg, & .step-btn, & .key-btn, & .setlist-chip, & .swell-btn, & .rec-btn, & .hold-btn,
+  & .fxc, & .fxpill, & .mchip {
+    background: linear-gradient(var(--cap-top), var(--cap-bot));
+    border: 1px solid var(--cap-edge);
+    box-shadow: inset 0 1px 0 #fff3e01c, inset 0 -1px 0 #0000002e, 0 1px 1px #0000008c, 0 2px 4px -1px #00000059;
+  }
+  & .btn:hover:not(:disabled), & .tb-btn:hover:not(:disabled), & .toggle:hover:not(:disabled),
+  & .seg:hover:not(:disabled), & .step-btn:hover:not(:disabled), & .key-btn:hover:not(:disabled),
+  & .setlist-chip:hover, & .swell-btn:hover:not(:disabled), & .fxc:hover:not(:disabled) {
+    background: linear-gradient(#45403a, #3a3530); border-color: var(--cap-edge);
+  }
+  /* pressed: the cap goes down into the panel */
+  & .btn:active:not(:disabled), & .toggle:active:not(:disabled), & .seg:active:not(:disabled),
+  & .key-btn:active:not(:disabled), & .setlist-chip:active, & .fxc:active:not(:disabled), & .mchip:active:not(:disabled),
+  & .hold-btn:active:not(:disabled), & .step-btn:active:not(:disabled) {
+    box-shadow: inset 0 2px 4px #00000080, inset 0 0 0 1px #0000004d; background: linear-gradient(#2e2a26, #34302b);
+  }
+  /* a segmented control is one moulded strip; its segments are flat keys cut into it */
+  & .segmented {
+    border: 1px solid var(--cap-edge); background: linear-gradient(var(--cap-top), var(--cap-bot));
+    box-shadow: 0 1px 1px #0000008c, 0 2px 4px -1px #00000059, inset 0 1px 0 #fff3e01c;
+  }
+  & .segmented .seg { background: transparent; border: 0; border-right: 1px solid #1a1714; box-shadow: inset 1px 0 0 #fff3e00d; }
+  & .segmented .seg:first-child { box-shadow: none; }
+  & .segmented .seg.on {
+    background: linear-gradient(#fbd183, var(--accent) 55%, #e9b155); color: var(--accent-ink);
+    box-shadow: inset 0 1px 0 #fff6, 0 0 14px -2px #f7c36766;
+  }
+  & .segmented .seg.on:hover { background: linear-gradient(#fdd997, #f9ca76); }
+  & .toggle.on { border-color: var(--cap-edge); }
+
+  /* ================================================================ type: sentence case, one voice */
+  & .select-label, & .stepper-label, & .fader-label, & .wheel-caption, & .chord-caption, & .section-title, & .tb-cap,
+  & .song-key-cap, & .nav-next-cap, & .qs-st .cap, & .fxpill .fxpill-l, & .fx-chiprow .fx-lab span {
+    text-transform: none; letter-spacing: .01em; font-weight: 600; font-size: 13px; color: var(--muted);
+  }
+  & .drone-title .section-title, & .notes-head .section-title { font-size: 13.5px; letter-spacing: .005em; }
+  & .pedal-lamp, & .drone-swell { text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 600; }
+  & .drone-swell-text::after { font-size: 12.5px; }
+  & .slot-vt { letter-spacing: .05em; font-size: 12.5px; color: var(--faint); font-weight: 600; }
+  /* headerChipRow upper-cases 'Space' / 'Echo' in JS; turn it back into a word */
+  & .fx-chiprow .fx-lab span, & .fxpill .fxpill-l { display: inline-block; text-transform: lowercase; }
+  & .fx-chiprow .fx-lab span::first-letter, & .fxpill .fxpill-l::first-letter { text-transform: uppercase; }
+  & .tag, & .drone-toggles .tag { text-transform: none; letter-spacing: .01em; font-size: 11.5px; font-weight: 600; }
+  & .hold-tag { letter-spacing: .04em; }
+  & .song-key, & .chord-name, & .transpose-val, & .wheel-value { font-weight: 700; }
+  & .transpose-val, & .wheel-value, & .fader-value, & .tb-val, & .rec-time, & .step-value, & .qs-bpm { font-variant-numeric: tabular-nums; }
+  & .ontile .ot-name { letter-spacing: .08em; }
+
+  /* ================================================================ label tape: the song you are on */
+  /* The song name is written on a strip of off-white tape stuck to the module, like a console scribble strip.
+     Torn ends are two 8 px SVG masks; fibres are a faint horizontal repeat. It sizes to the name (align-self) and
+     perform.js's fitSongName still measures it (padding counts, transform does not). */
+  & .song-name {
+    align-self: flex-start; max-width: 100%; margin-left: -6px;
+    padding: 0 18px 0 16px; border-radius: 1px;
+    color: var(--tape-ink); font-weight: 650; letter-spacing: -.015em;
+    background:
+      repeating-linear-gradient(180deg, #ffffff0a 0 1px, transparent 1px 3px),
+      linear-gradient(180deg, #ddd8ca, var(--tape) 30%, #c9c2b2);
+    box-shadow: inset 0 -2px 0 #0000001a, inset 0 1px 0 #ffffff59;
+    transform: rotate(-.5deg);
+    -webkit-mask: url('/themes/studio/tape-l.svg') left / 8px 100% no-repeat,
+      linear-gradient(#000, #000) center / calc(100% - 15px) 100% no-repeat,
+      url('/themes/studio/tape-r.svg') right / 8px 100% no-repeat;
+    mask: url('/themes/studio/tape-l.svg') left / 8px 100% no-repeat,
+      linear-gradient(#000, #000) center / calc(100% - 15px) 100% no-repeat,
+      url('/themes/studio/tape-r.svg') right / 8px 100% no-repeat;
+  }
+  & .song-block.loading .song-name { color: var(--tape-ink-soft); } /* 4.4:1 on tape; the name is ≥ 28 px (large) */
+  & .song-loading { background: var(--panel); }
+  /* the setlist's current song wears the same tape: "the one on the tape is the one playing" */
+  & .setlist-chip.current {
+    background:
+      repeating-linear-gradient(180deg, #ffffff0a 0 1px, transparent 1px 3px),
+      linear-gradient(180deg, #ddd8ca, var(--tape) 30%, #c9c2b2);
+    color: var(--tape-ink); border-color: transparent; border-radius: 2px;
+    box-shadow: inset 0 -2px 0 #0000001a, inset 0 1px 0 #ffffff59;
+    -webkit-mask: url('/themes/studio/tape-l.svg') left / 7px 100% no-repeat,
+      linear-gradient(#000, #000) center / calc(100% - 13px) 100% no-repeat,
+      url('/themes/studio/tape-r.svg') right / 7px 100% no-repeat;
+    mask: url('/themes/studio/tape-l.svg') left / 7px 100% no-repeat,
+      linear-gradient(#000, #000) center / calc(100% - 13px) 100% no-repeat,
+      url('/themes/studio/tape-r.svg') right / 7px 100% no-repeat;
+  }
+  & .setlist-chip.current .chip-num, & .setlist-chip.current .chip-key { color: var(--tape-ink-soft); }
+  & .setlist-chip.current:focus-visible { outline-color: var(--tape-ink); outline-offset: -5px; }
+  & .setlist-chip.loading.current .chip-spinner { border-color: var(--tape-ink); border-top-color: transparent; }
+  & .chip-num { color: var(--faint); }
+  & .chip-key { color: var(--muted); }
+  & .nav-next-name em { color: var(--accent); }
+
+  /* ================================================================ meter bridge (top bar) */
+  & .topbar {
+    background: url('/themes/studio/grain.png') repeat, linear-gradient(#1d1b18, var(--bridge));
+    border-bottom: 3px solid transparent;
+    border-image: var(--walnut) 1;
+    box-shadow: 0 2px 6px #00000080;
+    position: relative; z-index: 2;
+  }
+  & .tb-logo { content: url('/themes/studio/mark.svg'); }
+  & .tb-name { font-weight: 700; font-size: 16.5px; letter-spacing: 0; }
+  & .tb-val { font-weight: 600; }
+  & .midi-name.off { color: var(--warn); }
+  & .latency { color: var(--muted); }
+  /* the counter is a little recessed window, like a tape-counter */
+  & .rec-time {
+    font: 600 15px/1 var(--mono); color: var(--muted); background: #0f0d0b; border-radius: 6px; padding: 7px 8px;
+    box-shadow: inset 0 1px 3px #000000b3, 0 1px 0 #ffffff0d; letter-spacing: .02em;
+  }
+  & .rec-time.on { color: #ff8a78; }
+  & .rec-btn.recording { background: linear-gradient(#5a1f18, #481610); border-color: #1a0806; }
+  & .quick-btn[aria-expanded="true"] { background: linear-gradient(#2c2925, #34302b); border-color: var(--cap-edge);
+    box-shadow: inset 0 2px 4px #00000080, inset 0 -3px 0 var(--accent); }
+  & .tb-views .seg[aria-pressed="true"], & .tb-views .seg.on { color: var(--accent-ink); }
+
+  /* ---- LED lenses: a dark lens with a specular dot when off; a hot core, the colour, and a bloom when lit */
+  & .led, & .toggle-led, & .pedal-led, & .drone-swell-led, & .mchip.cycle .mc-led, & .qs-pedal i {
+    background: radial-gradient(circle at 36% 30%, #ffffff47 0 14%, transparent 42%), var(--led-off);
+    box-shadow: inset 0 0 0 1px #00000099, inset 0 -2px 3px #00000059;
+  }
+  & .led.ok, & .led.warn, & .led.bad, & .led.flash, & .toggle.on .toggle-led, & .mchip.cycle.on .mc-led,
+  & .pedal-lamp.down .pedal-led, & .drone-swell.up .drone-swell-led, & .drone-swell.down .drone-swell-led,
+  & .qs-pedal.on i, & .drone-toggles .toggle.on .toggle-led {
+    --lc: var(--c, var(--accent));
+    background: radial-gradient(circle at 42% 38%, #fffdf6 0 16%, color-mix(in srgb, var(--lc) 70%, #fff) 30%, var(--lc) 62%,
+      color-mix(in srgb, var(--lc) 70%, #000) 100%);
+    box-shadow: 0 0 0 1px #0000008c, 0 0 5px var(--lc), 0 0 14px color-mix(in srgb, var(--lc) 45%, transparent);
+  }
+  & .led.ok { --lc: var(--ok); }
+  & .led.warn { --lc: var(--warn); }
+  & .led.bad { --lc: var(--danger); }
+  & .led.flash { --lc: #d8ffe2; }
+  & .pedal-lamp.down .pedal-led, & .drone-swell.up .drone-swell-led, & .qs-pedal.on i { --lc: #fff6e2; }
+  & .drone-swell.down .drone-swell-led { --lc: var(--slot-2); }
+  & .drone-toggles .toggle.on .toggle-led { --lc: var(--drone); }
+  & .rec-dot {
+    background: radial-gradient(circle at 38% 32%, #ffffff40 0 14%, transparent 44%), var(--rec-idle);
+    box-shadow: inset 0 0 0 1px #0000008c, inset 0 -2px 3px #00000066;
+  }
+  & .rec-btn.recording .rec-dot {
+    background: radial-gradient(circle at 42% 38%, #fff3ee 0 16%, #ff8f7d 32%, var(--danger) 64%, #8a2317 100%);
+    box-shadow: 0 0 0 1px #0000008c, 0 0 6px var(--danger), 0 0 16px #e5533f73;
+  }
+
+  /* ---- meters: an LED ladder. The mask cuts the bar into segments; the dark segments are the unlit LEDs (the scaleY
+     cover), so an idle meter still reads as a meter. Masks are static: the cover's transform is all that changes. */
+  & .meter-bar {
+    background: var(--meter-off); border-radius: 2px; height: 8px;
+    -webkit-mask: repeating-linear-gradient(90deg, #000 0 4px, transparent 4px 5.5px);
+    mask: repeating-linear-gradient(90deg, #000 0 4px, transparent 4px 5.5px);
+  }
+  & .meter-fill { background: linear-gradient(to right, var(--meter-on-g) 0 70%, var(--meter-on-y) 70% 88%, var(--meter-on-r) 88%); }
+  & .meter.vertical .meter-fill { background: linear-gradient(to top, var(--meter-on-g) 0 70%, var(--meter-on-y) 70% 88%, var(--meter-on-r) 88%); }
+  & .meter-hold { background: var(--text); }
+  & .tb-meter .meter { gap: 3px; }
+  & .lvl-meter {
+    width: 6px; border-radius: 1px;
+    background: linear-gradient(to top, var(--meter-on-g) 0 76%, var(--meter-on-y) 76% 92%, var(--meter-on-r) 92%);
+    -webkit-mask: repeating-linear-gradient(0deg, #000 0 3px, transparent 3px 4.5px);
+    mask: repeating-linear-gradient(0deg, #000 0 3px, transparent 3px 4.5px);
+  }
+  & .lvl-cover { background: var(--meter-off); }
+  & .fader.vertical .fader-track > .lvl-meter { left: calc(50% + 30px); }
+
+  /* ================================================================ lamps (onTile): backlit caps */
+  & .ontile {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--c) 78%, #fff) 0%, var(--c) 42%,
+      color-mix(in srgb, var(--c) 90%, #000) 100%);
+    border-color: color-mix(in srgb, var(--c) 55%, #000);
+    color: var(--ink-on-lamp);
+    box-shadow: inset 0 1px 0 #ffffff80, inset 0 -2px 0 #00000026, 0 1px 2px #00000099,
+      0 0 20px -3px color-mix(in srgb, var(--c) 55%, transparent);
+    transition: background-color .12s ease-out, box-shadow .18s ease-out;
+  }
+  /* switching a lamp on: a quick filament flash (one 260 ms opacity fade on a pseudo, only on the off → on change) */
+  & .ontile:not(.off)::after {
+    content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    background: radial-gradient(ellipse 70% 120% at 50% 0%, #fffaf0b3, transparent 70%);
+    opacity: 0; animation: studio-lamp-on .26s ease-out;
+  }
+  & .ontile .ot-name, & .ontile .ot-sub { color: var(--ink-on-lamp); }
+  & .ontile .ot-state {
+    background: #1f191524; color: var(--ink-on-lamp); box-shadow: inset 0 1px 1px #0000002e, 0 1px 0 #ffffff40;
+  }
+  & .ontile .ot-led {
+    background: radial-gradient(circle at 42% 38%, #fff 0 30%, #fff8e8 55%, #ffe9c4 100%);
+    box-shadow: 0 0 0 1.5px #1f191540, 0 0 8px #fffaf0, 0 0 14px #fff6e299;
+  }
+  /* OFF: an unlit lamp cap. The lens keeps a hint of its colour (8 %), the name is struck through, the cap sits flat. */
+  & .ontile.off {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--c) 9%, #37332e), color-mix(in srgb, var(--c) 6%, #2c2825));
+    border-color: var(--cap-edge);
+    box-shadow: inset 0 1px 0 #fff3e014, 0 1px 1px #0000008c;
+  }
+  & .ontile.off .ot-led { background: radial-gradient(circle at 36% 30%, #ffffff38 0 14%, transparent 42%), #3d3833;
+    box-shadow: inset 0 0 0 2px var(--led-off); }
+  & .ontile.off .ot-name, & .ontile.off .ot-sub { color: var(--faint); }
+  & .ontile.off .ot-state { background: #00000033; color: #e0d8cc; box-shadow: inset 0 0 0 1.5px var(--led-off); }
+
+  /* ================================================================ channel strips */
+  /* the channel's scribble strip: its instrument on a short piece of the same tape */
+  & .slot .slot-inst {
+    color: var(--tape-ink); font-weight: 700; padding: 1px 9px; border-radius: 1px;
+    background: repeating-linear-gradient(180deg, #ffffff0a 0 1px, transparent 1px 3px), linear-gradient(#d6d0c1, #c6bfaf);
+    box-shadow: inset 0 -1px 0 #00000014;
+    -webkit-mask: url('/themes/studio/tape-l.svg') left / 5px 100% no-repeat,
+      linear-gradient(#000, #000) center / calc(100% - 9px) 100% no-repeat,
+      url('/themes/studio/tape-r.svg') right / 5px 100% no-repeat;
+    mask: url('/themes/studio/tape-l.svg') left / 5px 100% no-repeat,
+      linear-gradient(#000, #000) center / calc(100% - 9px) 100% no-repeat,
+      url('/themes/studio/tape-r.svg') right / 5px 100% no-repeat;
+  }
+  & .slot.muted .slot-who { filter: none; opacity: .75; }
+  & .wheel-badge { color: var(--muted); }
+  & .slot-badge { color: #e6dfd4; border-color: #5b544d; background: #00000026; }
+
+  /* step chips: small caps; in use = the slot colour showing through the cap, plus its amount bar */
+  & .mchip { color: #c8c0b5; border-color: var(--cap-edge); }
+  & .mchip.on {
+    background: linear-gradient(color-mix(in srgb, var(--c) 30%, #3b3732), color-mix(in srgb, var(--c) 20%, #2e2a26));
+    border-color: color-mix(in srgb, var(--c) 70%, #000); color: var(--text);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--c) 40%, transparent), 0 1px 1px #0000008c;
+  }
+  & .mchip.on > .mc-label { color: color-mix(in srgb, var(--c) 55%, #fffaf0); }
+  & .mchip.open { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--c); }
+  & .slot.muted .mchip.on { background: linear-gradient(#37332e, #2e2a26); border-color: #5d5750; color: #e8e1d6; }
+  & .slot.muted .mchip .mc-bar { background: #8a837b; }
+  & .slot.muted .mchip.cycle.on .mc-led { --lc: #cdc6bc; box-shadow: none; }
+  & .slot.muted .slot-body { background: repeating-linear-gradient(135deg, transparent 0 9px, #fff3e00a 9px 18px); }
+
+  /* ================================================================ faders: a cut slot and a machined cap */
+  & .fader.vertical .fader-input::-webkit-slider-runnable-track {
+    width: 10px; border-radius: 5px; border: 1px solid var(--track-edge);
+    background: linear-gradient(to top, var(--fader-color) var(--pos, 0%), var(--track) var(--pos, 0%));
+    box-shadow: inset 0 2px 3px #000000b3, 0 1px 0 #ffffff0f;
+  }
+  & .fader.horizontal .fader-input::-webkit-slider-runnable-track {
+    height: 9px; border-radius: 5px; border: 1px solid var(--track-edge);
+    background: linear-gradient(to right, var(--fader-color) var(--pos, 0%), var(--track) var(--pos, 0%));
+    box-shadow: inset 0 2px 3px #000000b3, 0 1px 0 #ffffff0f;
+  }
+  /* the cap: brushed metal top and bottom, grip ribs, and a stripe of the channel's colour across the middle */
+  & .fader.vertical .fader-input::-webkit-slider-thumb {
+    margin-left: calc((10px - var(--thumb-w)) / 2);
+    border-radius: 5px; border: 1.5px solid #0e0c0a;
+    background:
+      linear-gradient(transparent calc(50% - 2px), var(--fader-color) calc(50% - 2px) calc(50% + 2px), transparent calc(50% + 2px)),
+      repeating-linear-gradient(transparent 0 3px, #0000001f 3px 4px),
+      linear-gradient(#f3f0ea 0%, #d8d3cb 30%, #bdb7ae 50%, #d3cec6 70%, #b4ada3 100%);
+    box-shadow: 0 3px 6px #000000bf, 0 1px 1px #000, inset 0 1px 0 #ffffffd9, inset 0 -1px 0 #0000004d;
+  }
+  & .fader.horizontal .fader-input::-webkit-slider-thumb {
+    border-radius: 5px; border: 1.5px solid #0e0c0a; margin-top: -14.5px;
+    background:
+      linear-gradient(90deg, transparent calc(50% - 2px), var(--fader-color) calc(50% - 2px) calc(50% + 2px), transparent calc(50% + 2px)),
+      repeating-linear-gradient(90deg, transparent 0 3px, #0000001f 3px 4px),
+      linear-gradient(#f3f0ea 0%, #d8d3cb 35%, #bdb7ae 60%, #cdc7be 100%);
+    box-shadow: 0 2px 5px #000000b3, inset 0 1px 0 #ffffffd9;
+  }
+  & .fader-indicator { background: #fff6e2; box-shadow: 0 0 6px #fff6e299; }
+  & .fader.muted .fader-value { color: var(--faint); }
+  & .fader-value { font-weight: 600; }
+
+  /* ================================================================ header: transpose, shared effects, chord window */
+  & .fxc { color: #ebe4d8; }
+  & .fxc small { color: #b8b0a5; }
+  & .fxc.on {
+    background: linear-gradient(#57504a, #4a443d); border: 2px solid var(--text); color: #fffaf0;
+    box-shadow: inset 0 1px 0 #ffffff26, 0 0 0 1px #0000008c;
+  }
+  & .fxc.on small { color: #e2d9cc; }
+  & .fx-chiprow .fx-lab, & .p-fx .fx-lab .ic { color: var(--fx); }
+  & .fx-more, & .fx-chiprow.fx-open > .fxrow { background: var(--pop-bg); border-color: var(--pop-line); }
+  /* the chord is read off a recessed display window */
+  & .chord-readout {
+    background: url('/themes/studio/grain.png') repeat, linear-gradient(#181613, #1d1a17);
+    box-shadow: inset 0 2px 8px #000000b3, inset 0 0 0 1px #00000080, 0 1px 0 #ffffff0f;
+  }
+  & .chord-readout:not(.live) .chord-name { color: var(--faint); }
+  & .chord-readout.live .chord-name { color: #fff6e2; }
+  & .song-playin { background: #3a3122; }
+  & .hold-btn.key-open { background: linear-gradient(color-mix(in srgb, var(--accent) 10%, var(--cap-top)),
+    color-mix(in srgb, var(--accent) 6%, var(--cap-bot))); border-color: color-mix(in srgb, var(--accent) 40%, var(--cap-edge)); }
+  & .key-open.open { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+
+  /* ================================================================ wheel column: a ribbed wheel in its well */
+  & .wheel-input::-webkit-slider-runnable-track {
+    border-radius: 9px; border: 1px solid var(--track-edge);
+    background:
+      linear-gradient(90deg, #00000066, transparent 28%, transparent 72%, #00000066),
+      repeating-linear-gradient(0deg, transparent 0 5px, #00000030 5px 7px),
+      linear-gradient(to top, var(--wheel-fill) var(--pos, 0%), var(--wheel-track) var(--pos, 0%));
+    box-shadow: inset 0 2px 5px #000000b3;
+  }
+  & .wheel-ghost { background: var(--warn); }
+  & .swell-btn.on { background: linear-gradient(color-mix(in srgb, var(--slot-1) 26%, #3b3732), color-mix(in srgb, var(--slot-1) 16%, #2e2a26));
+    border-color: color-mix(in srgb, var(--slot-1) 70%, #000); color: #e8f7e8; }
+
+  /* ================================================================ key & drone */
+  & .key-btn.accidental { background: linear-gradient(#2b2723, #221f1c); }
+  & .drone-block .key-btn.on { background: linear-gradient(#3b3732, #312d29); box-shadow: inset 0 0 0 1px #0006, 0 0 12px -3px #ebd9ae80; }
+  & .drone-block .segmented .seg.on { background: color-mix(in srgb, var(--drone) 12%, transparent); color: var(--drone);
+    box-shadow: inset 0 0 0 2px var(--drone); }
+  & .drone-toggles .toggle.on { border-color: color-mix(in srgb, var(--drone) 45%, var(--cap-edge)); }
+  & .drone-toggles .tag { color: var(--muted); border-color: var(--line-2); background: transparent; }
+  & .pad-status { border-top-color: #0000004d; box-shadow: 0 -1px 0 #ffffff0a; }
+
+  /* ================================================================ notes: a ruled sheet, dark */
+  & .notes-text {
+    color: #ece5d9; line-height: 24px;
+    background: repeating-linear-gradient(180deg, transparent 0 23px, #fff3e00d 23px 24px);
+    background-attachment: local;
+  }
+
+  /* ================================================================ bottom row: the keybed with walnut cheeks */
+  & .p-keys {
+    background:
+      linear-gradient(90deg, #00000000 7px, #00000059 7px 8px, transparent 8px calc(100% - 8px), #00000059 calc(100% - 8px) calc(100% - 7px), transparent calc(100% - 7px)),
+      var(--walnut-v) left / 7px 100% no-repeat,
+      var(--walnut-v) right / 7px 100% no-repeat,
+      url('/themes/studio/grain.png') repeat,
+      linear-gradient(#2d2a26, #26231f);
+    padding-left: 16px; padding-right: 16px;
+  }
+  & .pkey.white {
+    background: linear-gradient(#aaa294, var(--key-white) 10%, #cfc8ba 85%, #b8b0a2);
+    border-color: #0e0c0a;
+  }
+  & .pkey.black {
+    background: linear-gradient(90deg, #ffffff0f, transparent 30%), linear-gradient(#2b2723, var(--key-black) 70%, #0b0908);
+    border-color: #000; box-shadow: 0 2px 2px #00000080;
+  }
+  & .pkey.white.held { background: linear-gradient(#e7ae52, var(--accent) 20%); }
+  & .pkey.black.held { background: linear-gradient(#b8832f, #d9a24a); }
+  & .pkey-label { color: var(--key-label); }
+  & .rbar.off { background: #5b544d; }
+  & .rv-cnt { color: #e6dfd4; }
+  & .hold-btn.btn-revert, & .hold-btn.lock-toggle, & .btn-fade {
+    background: url('/themes/studio/grain.png') repeat, linear-gradient(#3b3732, #2f2b27);
+  }
+  & .btn-fade.faded { background: linear-gradient(#3a2d12, #2e230c); color: #ffdca6; border: 2px solid var(--warn); }
+  & .btn-panic {
+    background: linear-gradient(#d4412f, var(--panic) 45%, #b93021);
+    box-shadow: inset 0 1px 0 #ffffff4d, inset 0 -2px 0 #0000004d, 0 1px 2px #000000b3, 0 0 22px -2px #c9372a66;
+  }
+  & .btn-panic:hover:not(:disabled), & .btn-panic:active:not(:disabled) { background: #b3301f !important; }
+  & .lock-toggle.on { background: linear-gradient(#33270f, #271d0b); border: 2px solid var(--warn); }
+  & .lock-sub { color: #f0d7a4; }
+
+  /* ================================================================ popovers, toasts, banners, overlay */
+  & .step-panel, & .keypop, & .qs {
+    background: url('/themes/studio/grain.png') repeat, linear-gradient(#37332e, var(--pop-bg));
+  }
+  & .step-panel::after, & .keypop::before, & .qs::before { background: var(--pop-bg); }
+  & .qs, & .qs::before { border-color: var(--pop-line); }
+  /* a short, tight shadow: the app's 60 px one fell on the ON tiles below and pulled "ON" to 3.9:1 */
+  & .qs { box-shadow: 0 10px 16px -6px #000000cc, 0 0 0 1px #000, inset 0 1px 0 #fff3e014; }
+  & .qs-h { border-bottom-color: #0000004d; box-shadow: 0 1px 0 #ffffff0a; }
+  & .qs-sec { border-left-color: #0000004d; }
+  & .qs-tap { background: linear-gradient(#45403a, #3a3530); border-color: var(--text); }
+  & .qs-pedal { background: #1a1815; }
+  & .step-panel .sp-step { background: linear-gradient(var(--cap-top), var(--cap-bot)); border-color: var(--cap-edge);
+    box-shadow: inset 0 1px 0 #fff3e01c, 0 1px 1px #0000008c; }
+  & .step-panel .sp-step.on { background: linear-gradient(color-mix(in srgb, var(--c) 80%, #fff), var(--c) 45%);
+    color: var(--ink-on-lamp); border-color: color-mix(in srgb, var(--c) 55%, #000); }
+  & .step-panel .sp-x, & .qs-h .qs-x { background: linear-gradient(var(--cap-top), var(--cap-bot)); border-color: var(--cap-edge); }
+  & .keypop .key-btn.on.hands::after { color: #5a3f10; }
+  & .toast { background: var(--toast-bg); border-color: var(--pop-line); box-shadow: 0 8px 26px #000000bf; }
+  & .banner.info, & .bstrip[data-kind="info"], & .bstrip.open .banner.info { background: #2a2a28; color: #f1eee6; }
+  & .bstrip.open .bstrip-list { background: var(--pop-bg); border-color: var(--pop-line); }
+  & .cd { box-shadow: 0 0 0 2px var(--bg-deep), 0 0 6px #fff6e2aa; }
+  & .cdi, & .rv-dot { box-shadow: 0 0 6px #fff6e2cc; }
+  & .overlay-start { background: #100e0ce6; backdrop-filter: none; }
+  & .overlay-card { background: url('/themes/studio/grain.png') repeat, linear-gradient(#302c28, #2a2723);
+    border: 1px solid #0f0d0b; box-shadow: inset 0 1px 0 #fff3e014, 0 30px 80px #000; }
+  & .overlay-card img { content: url('/themes/studio/mark.svg'); }
+  & .overlay-title { font-weight: 700; letter-spacing: -.01em; }
+  & .settings-placeholder { border-color: var(--pop-line); background: var(--pop-bg); }
+
+  /* ---- Rubik sets ~5 % wider than SF Pro: at 1024 the status lamps, the Next name and the drone labels take a
+     hair of tracking back so nothing collides or ellipsizes that did not before */
+  @media (max-width: 1250px) {
+    & .tb-status { gap: 10px; }
+    & .tb-val, & .tb-cap, & .ready-text { font-size: 13px; letter-spacing: -.01em; }
+    & .nav-next-name { font-weight: 700; letter-spacing: -.015em; }
+    & .chip-name { letter-spacing: -.01em; }
+    & .drone-char .fader.horizontal .fader-label { letter-spacing: -.02em; }
+    & .drone-char .fader-value { letter-spacing: -.02em; }
+    & .song-name { padding: 0 14px 0 12px; }
+  }
+
+  /* ================================================================ Edit (H-v2): its token block + cold one-offs */
+  & .ev2 {
+    --ev2-rig-bg: #25221f; --fx: #c9bba9; --drone: #ebd9ae; --chg: #fff6e2; --ev2-flash: var(--focus);
+    --ev2-faint: var(--faint);
+    background: transparent;
+  }
+  & .ev2 .ev2-left, & .ev2 .ev2-head, & .ev2 .ev2-bottom, & .ev2 .ev2-rig {
+    border: 1px solid #0f0d0b8c;
+    box-shadow: inset 0 1px 0 #fff3e012, inset 0 -1px 0 #00000033, 0 1px 0 #ffffff08, 0 3px 8px -3px #000000a6;
+  }
+  & .ev2 .ev2-left, & .ev2 .ev2-head, & .ev2 .ev2-bottom {
+    background: url('/themes/studio/grain.png') repeat, linear-gradient(#2d2a26, #282521 60%, #26231f);
+  }
+  & .ev2 .ev2-rig { background: url('/themes/studio/grain.png') repeat, var(--ev2-rig-bg); }
+  & .ev2 .ev2-cap, & .ev2 .ev2-song-chipcap { text-transform: none; letter-spacing: .01em; font-size: 13px; font-weight: 600; }
+  & .ev2 .ev2-song-chipcap { font-size: 12px; }
+  & .ev2 .ev2-sent { color: #dbd3c7; }
+  & .ev2 .ev2-btn, & .ev2 .ev2-song-chip, & .ev2 .ev2-kb-big, & .ev2 .ev2-fx-pc {
+    background: linear-gradient(var(--cap-top), var(--cap-bot)); border-color: var(--cap-edge);
+    box-shadow: inset 0 1px 0 #fff3e01c, 0 1px 1px #0000008c;
+  }
+  & .ev2 .ev2-btn.ghost, & .ev2 .ev2-linkbtn { background: transparent; box-shadow: none; border-color: var(--line-2); }
+  & .ev2 .ev2-btn.danger { background: var(--danger); }
+  & .ev2 button.ev2-song-chip:hover, & .ev2 .ev2-song-bpmnum:hover, & .ev2 .ev2-fx-pc:hover { border-color: var(--line-hover); }
+  /* the song's name on tape here too (it is an input: the tape stays under the caret while you rename) */
+  & .ev2 .ev2-song-name, & .ev2 .ev2-song-name:hover, & .ev2 .ev2-song-name:focus {
+    color: var(--tape-ink); font-weight: 700; letter-spacing: -.01em; padding: 0 14px; border: 0; border-radius: 1px;
+    background: repeating-linear-gradient(180deg, #ffffff0a 0 1px, transparent 1px 3px), linear-gradient(180deg, #ddd8ca, var(--tape) 30%, #c9c2b2);
+    box-shadow: inset 0 -2px 0 #0000001a, inset 0 1px 0 #ffffff59;
+    -webkit-mask: url('/themes/studio/tape-l.svg') left / 7px 100% no-repeat,
+      linear-gradient(#000, #000) center / calc(100% - 13px) 100% no-repeat,
+      url('/themes/studio/tape-r.svg') right / 7px 100% no-repeat;
+    mask: url('/themes/studio/tape-l.svg') left / 7px 100% no-repeat,
+      linear-gradient(#000, #000) center / calc(100% - 13px) 100% no-repeat,
+      url('/themes/studio/tape-r.svg') right / 7px 100% no-repeat;
+  }
+  & .ev2 .ev2-song-name:focus-visible { outline: 2px solid var(--tape-ink); outline-offset: -4px; }
+  & .ev2 .ev2-song-name::selection { background: #f7c36799; color: var(--tape-ink); }
+  & .ev2 .ev2-song-live { background: #00000040; color: #bfe8c7; box-shadow: inset 0 1px 2px #00000080; text-transform: none; letter-spacing: .02em; }
+  & .ev2 .ev2-song-live i {
+    background: radial-gradient(circle at 42% 38%, #f4fff6 0 18%, var(--ok) 60%, #3f7d4c 100%);
+    box-shadow: 0 0 0 1px #0000008c, 0 0 5px var(--ok), 0 0 12px #79d28d73;
+  }
+  & .ev2 .ev2-song-bpmchip .ev2-song-tap:hover { background: #4a443d; }
+  & .ev2 .ev2-switch { background: #141210; box-shadow: inset 0 1px 3px #000000b3; }
+  & .ev2 .ev2-switch::after { background: linear-gradient(#f3f0ea, #bdb7ae); box-shadow: 0 1px 2px #000000b3; }
+  & .ev2 .ev2-wiretog.on .ev2-switch { background: var(--fx); }
+  & .ev2 .ev2-tabs::after { background: #0000004d; box-shadow: 0 1px 0 #ffffff0a; }
+  & .ev2 .ev2-tab:hover { background: #2c2925; }
+  & .ev2 .ev2-tab.sel { background: linear-gradient(#302c28, var(--panel) 60%); border-color: #0f0d0b8c;
+    box-shadow: inset 0 1px 0 #fff3e014; }
+  & .ev2 .ev2-tab.sel::after { background: var(--panel); }
+  & .ev2 .ev2-tab-role { letter-spacing: .08em; }
+  & .ev2 .ev2-tab-led { opacity: .9; box-shadow: inset 0 0 0 1px #00000066; }
+  & .ev2 .ev2-tab.playing .ev2-tab-led { box-shadow: 0 0 0 1px #0000008c, 0 0 6px var(--tc), 0 0 12px color-mix(in srgb, var(--tc) 45%, transparent); }
+  & .ev2 .ev2-tab.empty::before { background: repeating-linear-gradient(90deg, #6b645d 0 6px, transparent 6px 10px); }
+  & .ev2 .ev2-tab-cd { box-shadow: 0 0 0 2px var(--ev2-rig-bg), 0 0 6px #fff6e2aa; }
+  & .ev2 .ev2-tab.sel .ev2-tab-cd { box-shadow: 0 0 0 2px var(--panel), 0 0 6px #fff6e2aa; }
+  & .ev2 .ev2-wire { background: var(--panel); border-bottom-color: #0000004d; }
+  & .ev2 .ev2-wlane::before { background: var(--line-2); }
+  & .ev2 .ev2-wout-br { border-color: #6b645d; }
+  & .ev2 .ev2-chg { color: #e6dfd4; }
+  & .ev2 .ev2-list-row { color: #e2dbcf; }
+  & .ev2 .ev2-list-row:hover { background: #35312d; }
+  & .ev2 .ev2-list-row.on { background: linear-gradient(90deg, #f7c3671f, #3f3b36 55%); box-shadow: inset 3px 0 0 var(--accent); }
+  & .ev2 .ev2-ws-input::-webkit-slider-runnable-track {
+    height: 9px; border-radius: 5px; box-shadow: inset 0 2px 3px #000000b3, 0 1px 0 #ffffff0f; --track: var(--bg-deep);
+  }
+  & .ev2 .ev2-ws-input::-webkit-slider-thumb {
+    width: 18px; height: 26px; margin-top: -9.5px; border-radius: 5px; border: 1.5px solid #0e0c0a;
+    background:
+      linear-gradient(90deg, transparent calc(50% - 1.5px), var(--c) calc(50% - 1.5px) calc(50% + 1.5px), transparent calc(50% + 1.5px)),
+      linear-gradient(#f3f0ea 0%, #d8d3cb 35%, #bdb7ae 60%, #cdc7be 100%);
+    box-shadow: 0 2px 5px #000000b3, inset 0 1px 0 #ffffffd9;
+  }
+  & .ev2 .ev2-fx-pc[aria-pressed="true"] { background: linear-gradient(#57504a, #4a443d); border-color: var(--text); }
+  & .ev2 .ev2-fx-pc[aria-pressed="true"] .ev2-fx-pc-hint { color: #e2d9cc; }
+  & .ev2 .ev2-fx-vibe, & .ev2 .ev2-slot-menu { background: var(--pop-bg); border-color: var(--pop-line); }
+  & .ev2 .ev2-fx-vibe-item:hover, & .ev2 .ev2-fx-vibe-item:focus-visible, & .ev2 .ev2-slot-mi:hover,
+  & .ev2 .ev2-slot-mi:focus { background: #45403a; }
+  & .ev2 .ev2-slot-range .mkey.white { background: var(--key-white); border-right-color: #0e0c0a; }
+  & .ev2 .ev2-slot-range .mkey.black { background: var(--key-black); }
+  & .ev2 .ev2-kb-fade { background: linear-gradient(#3b3732, #2f2b27); }
+  & .ev2 .ev2-kb-panic { background: linear-gradient(#d4412f, var(--panic) 45%, #b93021); border: 0;
+    box-shadow: inset 0 1px 0 #ffffff4d, 0 1px 2px #000000b3, 0 0 20px -2px #c9372a66; }
+  & .ev2 .ev2-kb-panic:hover { background: #b3301f; }
+  & .ev2 .ev2-kb-keys {
+    padding: 0 9px; border-radius: 6px;
+    background: var(--walnut-v) left / 7px 100% no-repeat, var(--walnut-v) right / 7px 100% no-repeat;
+  }
+
+  /* ================================================================ the session sheet (daily hook; not wired yet)
+     Markup the start overlay would carry (concept.md §7). Styles only: nothing renders .studio-session until main.js
+     does. It replaces "Click anywhere to start audio" with today's sheet and a 20-second line check. */
+  & .studio-session {
+    position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; cursor: pointer;
+    background: radial-gradient(ellipse 65% 60% at 50% 35%, #2c2823f2 0%, #161412f5 70%, #0f0d0bfa 100%);
+  }
+  & .ss-desk {
+    width: min(880px, calc(100vw - 64px)); display: grid; grid-template-columns: 1.1fr 1fr; gap: 0;
+    background: var(--walnut) top / 100% 4px no-repeat, url('/themes/studio/grain.png') repeat, linear-gradient(#302c28, #2a2723);
+    border: 1px solid #0f0d0b; border-radius: 16px; overflow: hidden;
+    box-shadow: 0 40px 90px #000000e6;
+  }
+  & .ss-sheet { padding: 26px 28px 22px; display: flex; flex-direction: column; gap: 12px; }
+  & .ss-when { display: flex; align-items: center; gap: 12px; }
+  & .ss-when img { width: 44px; height: 44px; }
+  & .ss-day { font: 700 30px/1.05 var(--font); letter-spacing: -.01em; }
+  & .ss-sub { font-size: 14px; color: var(--muted); margin-top: 3px; }
+  & .ss-tape {
+    align-self: flex-start; font: 700 19px/34px var(--font); color: var(--tape-ink); padding: 0 16px; margin: 6px 0 0 -4px;
+    background: repeating-linear-gradient(180deg, #ffffff0a 0 1px, transparent 1px 3px), linear-gradient(180deg, #ddd8ca, var(--tape) 30%, #c9c2b2);
+    transform: rotate(-.8deg);
+    -webkit-mask: url('/themes/studio/tape-l.svg') left / 7px 100% no-repeat, linear-gradient(#000, #000) center / calc(100% - 13px) 100% no-repeat, url('/themes/studio/tape-r.svg') right / 7px 100% no-repeat;
+    mask: url('/themes/studio/tape-l.svg') left / 7px 100% no-repeat, linear-gradient(#000, #000) center / calc(100% - 13px) 100% no-repeat, url('/themes/studio/tape-r.svg') right / 7px 100% no-repeat;
+  }
+  & .ss-songs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column;
+    background: repeating-linear-gradient(180deg, transparent 0 33px, #fff3e012 33px 34px); }
+  & .ss-songs li { display: grid; grid-template-columns: 24px 1fr auto; gap: 8px; align-items: center; height: 34px;
+    font-size: 16px; font-weight: 600; }
+  & .ss-songs .n { color: var(--faint); font-size: 13px; font-variant-numeric: tabular-nums; }
+  & .ss-songs .k { color: var(--accent); font-weight: 700; }
+  & .ss-songs .more { color: var(--faint); font-weight: 500; font-size: 14px; }
+  & .ss-last { font-size: 13.5px; color: var(--muted); line-height: 1.5; padding-top: 10px; border-top: 1px solid #0000004d;
+    box-shadow: inset 0 1px 0 #ffffff0a; }
+  & .ss-last b { color: var(--text); font-weight: 600; }
+  & .ss-check { padding: 26px 26px 22px; margin-top: 4px; background: linear-gradient(#26231f, #211e1b); box-shadow: inset 1px 0 0 #0000004d;
+    display: flex; flex-direction: column; gap: 14px; }
+  & .ss-check h3 { margin: 0; font: 700 19px/1.2 var(--font); }
+  & .ss-check p { margin: -6px 0 0; font-size: 14px; color: var(--muted); line-height: 1.45; }
+  & .ss-chans { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding: 14px 12px 12px; border-radius: 10px;
+    background: #181613; box-shadow: inset 0 2px 8px #000000b3; }
+  & .ss-ch { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  & .ss-ch .ladder { width: 8px; height: 74px; border-radius: 1px;
+    background: linear-gradient(to top, var(--meter-on-g) 0 var(--lv), var(--meter-off) var(--lv));
+    -webkit-mask: repeating-linear-gradient(0deg, #000 0 4px, transparent 4px 6px); mask: repeating-linear-gradient(0deg, #000 0 4px, transparent 4px 6px); }
+  & .ss-ch .lamp { width: 14px; height: 14px; border-radius: 50%;
+    background: radial-gradient(circle at 42% 38%, #fffdf6 0 16%, color-mix(in srgb, var(--c) 70%, #fff) 30%, var(--c) 62%, color-mix(in srgb, var(--c) 70%, #000) 100%);
+    box-shadow: 0 0 0 1px #0000008c, 0 0 5px var(--c), 0 0 14px color-mix(in srgb, var(--c) 45%, transparent); }
+  & .ss-ch.wait .lamp { background: radial-gradient(circle at 36% 30%, #ffffff47 0 14%, transparent 42%), var(--led-off);
+    box-shadow: inset 0 0 0 1px #00000099; }
+  & .ss-ch.ok { color: var(--text); }
+  & .ss-go {
+    margin-top: auto; min-height: 56px; border-radius: 12px; border: 1px solid #5a3f14; display: flex; align-items: center;
+    justify-content: center; gap: 12px; font: 700 18px/1 var(--font); color: var(--accent-ink);
+    background: linear-gradient(#fbd183, var(--accent) 55%, #e9b155);
+    box-shadow: inset 0 1px 0 #fff8, 0 2px 3px #000000b3, 0 0 30px -6px #f7c36799;
+  }
+  & .ss-go i { width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, #fff 0 30%, #fff1d6);
+    box-shadow: 0 0 0 1.5px #1f191540, 0 0 8px #fffaf0; }
+  & .ss-small { font-size: 12.5px; color: var(--faint); text-align: center; margin-top: -4px; }
+}
+
+@keyframes studio-lamp-on { from { opacity: 1; } to { opacity: 0; } }
+
+/* motion only when asked for */
+@media (prefers-reduced-motion: reduce) {
+  :where(body[data-theme="studio"], body:not([data-theme])) .ontile::after { animation: none; }
+  :where(body[data-theme="studio"], body:not([data-theme])) .ontile { transition: none; }
+}
+/* menu-bar mode (low resource): no grain, no wash, flat modules */
+:root[data-low-resource] :where(body[data-theme="studio"], body:not([data-theme])) { background: var(--bg); }
+:root[data-low-resource] :where(body[data-theme="studio"], body:not([data-theme])) .panel { background: var(--panel); }

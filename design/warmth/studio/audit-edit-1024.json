@@ -1,0 +1,180 @@
+{
+ "label": "edit-1024",
+ "count": 101,
+ "fails": [],
+ "disabledFails": [],
+ "lowest": [
+  {
+   "id": 51,
+   "text": "Space",
+   "color": "color(srgb 0.971961 0.762549 0.617647)",
+   "size": 11.5,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "mc-label",
+   "tag": "span",
+   "rect": {
+    "x": 126.5,
+    "y": 327.546875,
+    "w": 36,
+    "h": 14
+   },
+   "bg": "rgb(109,80,60)",
+   "cr": 4.62,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 53,
+   "text": "Echo",
+   "color": "color(srgb 0.971961 0.762549 0.617647)",
+   "size": 11.5,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "mc-label",
+   "tag": "span",
+   "rect": {
+    "x": 212.5,
+    "y": 327.546875,
+    "w": 30,
+    "h": 14
+   },
+   "bg": "rgb(108,79,59)",
+   "cr": 4.69,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 99,
+   "text": "PANIC",
+   "color": "rgb(255, 255, 255)",
+   "size": 18,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "ev2-kb-big ev2-kb-panic",
+   "tag": "button",
+   "rect": {
+    "x": 926.296875,
+    "y": 636.578125,
+    "w": 61.40625,
+    "h": 22
+   },
+   "bg": "rgb(204,57,43)",
+   "cr": 5.01,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 57,
+   "text": "Sustain",
+   "color": "color(srgb 0.971961 0.762549 0.617647)",
+   "size": 11.5,
+   "weight": 800,
+   "op": 1,
+   "disabled": false,
+   "cls": "mc-value",
+   "tag": "b",
+   "rect": {
+    "x": 212,
+    "y": 378.8125,
+    "w": 48,
+    "h": 14
+   },
+   "bg": "rgb(101,74,56)",
+   "cr": 5.11,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 92,
+   "text": "C2",
+   "color": "rgb(77, 70, 62)",
+   "size": 9.5,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "pkey-label",
+   "tag": "span",
+   "rect": {
+    "x": 33.125,
+    "y": 667.1875,
+    "w": 13,
+    "h": 11
+   },
+   "bg": "rgb(206,199,185)",
+   "cr": 5.53,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 93,
+   "text": "C3",
+   "color": "rgb(77, 70, 62)",
+   "size": 9.5,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "pkey-label",
+   "tag": "span",
+   "rect": {
+    "x": 168.0625,
+    "y": 667.1875,
+    "w": 13,
+    "h": 11
+   },
+   "bg": "rgb(206,199,185)",
+   "cr": 5.53,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 94,
+   "text": "C4",
+   "color": "rgb(77, 70, 62)",
+   "size": 9.5,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "pkey-label",
+   "tag": "span",
+   "rect": {
+    "x": 303,
+    "y": 667.1875,
+    "w": 13,
+    "h": 11
+   },
+   "bg": "rgb(206,199,185)",
+   "cr": 5.53,
+   "need": 4.5,
+   "pass": true
+  },
+  {
+   "id": 95,
+   "text": "C5",
+   "color": "rgb(77, 70, 62)",
+   "size": 9.5,
+   "weight": 700,
+   "op": 1,
+   "disabled": false,
+   "cls": "pkey-label",
+   "tag": "span",
+   "rect": {
+    "x": 437.953125,
+    "y": 667.1875,
+    "w": 13,
+    "h": 11
+   },
+   "bg": "rgb(206,199,185)",
+   "cr": 5.53,
+   "need": 4.5,
+   "pass": true
+  }
+ ],
+ "glare": {
+  "meanLum": 0.0775,
+  "brightShare": 0.0633
+ }
+}

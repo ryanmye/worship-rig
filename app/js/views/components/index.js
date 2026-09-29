@@ -45,7 +45,7 @@ export { fader, knob, posToValue, valueToPos } from './fader.js';
 export { toggle, segmented, select, stepper } from './buttons.js';
 export { keyGrid, miniKeyboard, pianoKeyboard, keyLayout, isBlack } from './keys.js';
 export { meter, dbToMeter } from './meter.js';
-export { levelMeter } from './levelMeter.js';
+export { levelMeter, wakeLevelMeters } from './levelMeter.js';
 export { chordReadout, wheelStrip } from './readouts.js';
 export { setlistStrip } from './setlist.js';
 export { h, setText, setAttr, disposer, rafCoalesce, blurAfterPointer, nextId, relativeDrag } from './util.js';
