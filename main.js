@@ -975,7 +975,9 @@ function sendWindowVisible(visible, force = false) {
   lastVisibleSent = visible;
   win.webContents.send('rig:window-visible', visible);
 }
-const windowShownNow = () => !!(win && !win.isDestroyed() && win.isVisible() && !win.isMinimized());
+// ⌘H hides the whole app: win.isVisible() stays true then, so app.isHidden() has to be asked too (macOS)
+const appHidden = () => IS_MAC && typeof app.isHidden === 'function' && app.isHidden();
+const windowShownNow = () => !!(win && !win.isDestroyed() && win.isVisible() && !win.isMinimized() && !appHidden());
 
 /**
  * The renderer calls setMenuBarMode(on) at start and on every change: the single source of truth for the tray
@@ -1510,6 +1512,16 @@ async function menubarSelftest(wc) {
   await waitFor(() => !win.isMinimized(), 3000);
   out.windowVisibleMinimize = await js(wc, 'new Promise((r) => setTimeout(() => r(window.__mbVisible.slice()), 300))');
   out.eventsOnMinimize = await menuEvents();
+  // ⌘H: app.hide() → app.show() (macOS). Needs an unlocked screen / a window server: `appHideObserved` says whether
+  // the hide took effect (app.isHidden()).
+  if (IS_MAC) {
+    await js(wc, 'window.__mbVisible.length = 0; true');
+    app.hide();
+    out.appHideObserved = await waitFor(() => app.isHidden(), 3000);
+    app.show();
+    await waitFor(() => !app.isHidden(), 3000);
+    out.windowVisibleAppHide = await js(wc, 'new Promise((r) => setTimeout(() => r(window.__mbVisible.slice()), 300))');
+  }
   return out;
 }
 
@@ -1522,6 +1534,14 @@ app.on('before-quit', () => {
 
 // dock icon click / Finder re-open while the window is hidden in the menu bar
 app.on('activate', () => showMain());
+
+// ⌘H / "Hide Worship Rig" (macOS app-level hide): the window stays "visible" to Electron and fires no window events,
+// so without these the page never hears it is hidden and nothing throttles. 'show' only counts when the window
+// itself is up (not hidden to the menu bar, not minimised).
+app.on('hide', () => sendWindowEvent('windowHidden'));
+app.on('show', () => {
+  if (windowShownNow()) sendWindowEvent('windowShown');
+});
 
 app.on('will-quit', (e) => {
   if (powerBlockId !== null && powerSaveBlocker.isStarted(powerBlockId)) powerSaveBlocker.stop(powerBlockId);
