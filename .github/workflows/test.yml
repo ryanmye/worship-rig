@@ -43,10 +43,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright browsers
       - name: Install ffmpeg (engine fixtures)
         run: brew install ffmpeg
 
+      - name: Install Playwright browsers
         run: npx playwright install chromium chromium-headless-shell
 
       - name: Run fast test suite
