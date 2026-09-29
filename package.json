@@ -32,6 +32,8 @@
       "main.js",
       "preload.js",
       "server.js",
+      "build/trayTemplate.png",
+      "build/trayTemplate@2x.png",
       "app/**/*",
       "!app/js/engine/test.html",
       "!**/user-samples/**",
