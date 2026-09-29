@@ -72,6 +72,9 @@ const USER_MANIFEST_MAX_BYTES = 4 * 1024 * 1024;
 const USER_PACKS_MAX = 500;
 /** API routes that are also answered under a path prefix (see handle()). */
 const API_ROUTE_RE = /^\/api\/(health|heartbeat|pads|user-samples|user-samples\/manifest\.json)$/;
+/** S4: routes that expose personal audio or its paths; they need the X-Rig-Key header when the server has a secret. */
+const PRIVATE_ROUTE_RE = /^\/(api\/(pads|user-samples|user-samples\/manifest\.json)$|user-samples\/|pads\/)/;
+const KEY_HEADER = 'x-rig-key';
 const NO_CACHE_EXTS = new Set(['.html', '.htm', '.js', '.mjs', '.css', '.json', '.webmanifest', '.map', '.md', '.txt']);
 const PADS_MAX_DEPTH = 4;
 const PADS_MAX_FILES = 2000;
@@ -395,6 +398,11 @@ async function scanUserSamples(roots, token) {
  * @param {boolean} [opts.csp=true]  send the Content-Security-Policy header on app HTML
  * @param {boolean|string[]} [opts.userSamples=false]  "My Samples": true = defaultUserSampleRoots(), or explicit roots
  * @param {string|null} [opts.docsDir=<repo>/docs]  served read-only at /docs/<name>.md (text/plain, so Chrome shows it)
+ * @param {string|null} [opts.secret=null]  security S4: when set, the personal-audio routes (/api/user-samples*,
+ *   /user-samples/, /api/pads, /pads/) answer 403 unless the request carries `X-Rig-Key: <secret>`. Electron's
+ *   main.js adds that header to its own window's requests (session.webRequest), so another local process (or macOS
+ *   account) can no longer list or download My Samples / pad audio. The Chrome fallback passes none (a page can't
+ *   hold a secret it doesn't also expose) and keeps the open behaviour.
  * @param {(msg:string)=>void} [opts.log]
  */
 function createServer(opts = {}) {
@@ -417,6 +425,16 @@ function createServer(opts = {}) {
   const userToken = crypto.randomBytes(9).toString('base64url'); // stable per process: engine-cached URLs stay valid
   let userScan = null; // last scanUserSamples() result
   let userScanning = null;
+  const secret = typeof opts.secret === 'string' && opts.secret ? Buffer.from(opts.secret) : null;
+
+  /** S4: the per-launch key on a personal-audio route (always true when the server has no secret). */
+  function keyOk(req) {
+    if (!secret) return true;
+    const v = req.headers[KEY_HEADER];
+    if (typeof v !== 'string') return false;
+    const b = Buffer.from(v);
+    return b.length === secret.length && crypto.timingSafeEqual(b, secret);
+  }
 
   function hostAllowed(req) {
     const h = String(req.headers.host || '').toLowerCase();
@@ -431,13 +449,14 @@ function createServer(opts = {}) {
       'Content-Type': 'application/json; charset=utf-8',
       'Content-Length': body.length,
       'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
     });
     res.end(req.method === 'HEAD' ? undefined : body);
   }
 
   function sendText(req, res, status, text, extra = {}) {
     const body = Buffer.from(text);
-    res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Length': body.length, ...extra });
+    res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Length': body.length, 'X-Content-Type-Options': 'nosniff', ...extra });
     res.end(req.method === 'HEAD' ? undefined : body);
   }
 
@@ -641,6 +660,7 @@ function createServer(opts = {}) {
         features: userSamplesOn ? ['user-samples'] : [],
       });
     }
+    if (secret && PRIVATE_ROUTE_RE.test(pathname) && !keyOk(req)) return sendText(req, res, 403, 'Forbidden');
     if (pathname === '/api/user-samples/manifest.json') {
       // always 200: a missing/empty folder is an empty list (a 404 would log a console error in Chromium)
       const r = await rescanUserSamples();
@@ -842,5 +862,5 @@ function probeHealth(port, host = '127.0.0.1') {
 
 module.exports = {
   createServer, parseRange, mimeFor, safeJoin, walkPads, probeHealth, scanUserSamples, defaultUserSampleRoots, userSamplesHome,
-  PAD_EXTS, USER_SAMPLE_EXTS, APP_ID, CSP,
+  PAD_EXTS, USER_SAMPLE_EXTS, APP_ID, CSP, KEY_HEADER,
 };

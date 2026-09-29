@@ -31,13 +31,16 @@ const path = require('node:path');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const os = require('node:os');
-const { createServer, userSamplesHome } = require('./server.js');
+const crypto = require('node:crypto');
+const { createServer, userSamplesHome, KEY_HEADER } = require('./server.js');
 
 const IS_MAC = process.platform === 'darwin';
 const SELFTEST = process.env.RIG_SELFTEST === '1';
 const PORT = Number(process.env.RIG_PORT) || 8438;
 const APP_DIR = path.resolve(process.env.RIG_APP_DIR || path.join(__dirname, 'app'));
 const BACKUPS_KEEP = 10;
+// security S4: per-launch key the server requires on the personal-audio routes; only our window's requests carry it
+const SERVER_KEY = crypto.randomBytes(24).toString('base64url');
 const BACKUP_MAX_BYTES = 50 * 1024 * 1024;
 
 if (process.env.RIG_USER_DATA) app.setPath('userData', path.resolve(process.env.RIG_USER_DATA));
@@ -1084,6 +1087,11 @@ function originOk(url) {
 }
 
 function installPermissions(ses) {
+  // S4: add the per-launch key to requests for our own origin (never to other hosts)
+  ses.webRequest.onBeforeSendHeaders((details, callback) => {
+    if (!originOk(details.url)) return callback({});
+    callback({ requestHeaders: { ...details.requestHeaders, [KEY_HEADER]: SERVER_KEY } });
+  });
   ses.setPermissionRequestHandler((wc, permission, callback, details) => {
     const url = (details && (details.requestingUrl || details.securityOrigin)) || (wc && wc.getURL());
     if (process.env.RIG_DEBUG_PERMS) log('perm request', permission, url, JSON.stringify(details));
@@ -1560,7 +1568,7 @@ app.on('will-quit', (e) => {
 app.whenReady().then(async () => {
   if (!app.hasSingleInstanceLock()) return;
   // M5: always our own server; My Samples on (repo user-samples/ + ~/Music/Worship Rig/Samples, or RIG_USER_SAMPLES)
-  server = createServer({ appDir: APP_DIR, port: PORT, log, reuse: false, portTries: 20, userSamples: true });
+  server = createServer({ appDir: APP_DIR, port: PORT, log, reuse: false, portTries: 20, userSamples: true, secret: SERVER_KEY });
   const cfg = readShellConfig();
   const padsDir = process.env.RIG_PADS_DIR || cfg.padsRoot || null;
   if (padsDir) server.setPadsRoot(padsDir);
