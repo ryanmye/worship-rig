@@ -20,9 +20,9 @@ themselves. (That is a plain-language reading, not legal advice.) So:
   them.**
 - Every instrument's manifest entry carries `"license": "personal-use"` and
   `"attribution": "Apple Logic/GarageBand sound library — personal use only, not redistributable"`.
-- `tools/exs/fixtures/real/*.exs` are six of Apple's instrument *definitions* (zone maps, no audio), kept as parser
-  test fixtures. They are small and contain no sound, but they are still Apple files: keep the repo private, or
-  delete that folder (the tests then skip) before publishing it.
+- The six real Apple instrument *definitions* (zone maps, no audio) used as parser test fixtures are Apple files, so
+  they are not in the repo: they live on the Mac in `~/Music/Worship Rig/exs-fixtures/` (override with
+  `RIG_EXS_FIXTURES=<dir>`), and `test/unit/exs/real-files.test.mjs` skips when that folder is missing.
 
 ## Quick start
 
@@ -169,7 +169,7 @@ its folder atomically. To remove one, delete its folder and rescan.
 
 ## Status: verified on real files
 
-The parser was checked byte by byte against six real Apple instruments, copied into `tools/exs/fixtures/real/`:
+The parser was checked byte by byte against six real Apple instruments, kept outside the repo in `~/Music/Worship Rig/exs-fixtures/`:
 Yamaha Grand Piano, Grand Piano, Steinway Grand Piano 2, Steinway Piano 2 (Logic "01 Acoustic Pianos"), and Flea
 Market Wurli and Lullaby Vibes (Logic "Keyboard Collection"). All six are little-endian (`TBOS`). The consolidated
 layout was checked against the audio in `Steinway Piano_consolidated.caf` on Ryan's Mac.
@@ -328,6 +328,6 @@ leading silence.
 - `tools/exs/sample-index.mjs`: sample-file index and resolution
 - `tools/exs/convert.mjs`, `tools/exs/wav.mjs`: ffmpeg / afconvert conversion and WAV slicing
 - `tools/exs/validate-pack.mjs`: `--validate` (reuses `tools/samples/audio-stats.mjs`)
-- `tools/exs/fixtures/*.json`: synthetic instrument descriptions. `tools/exs/fixtures/real/*.exs`: real Apple
-  instrument definitions (see "Personal use only")
+- `tools/exs/fixtures/*.json`: synthetic instrument descriptions. The real Apple
+  instrument definitions live in `~/Music/Worship Rig/exs-fixtures/` (`RIG_EXS_FIXTURES`), not in the repo
 - `test/unit/exs/*.test.mjs`: node:test suites (`npm run test:unit`)

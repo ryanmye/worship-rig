@@ -17,3 +17,6 @@ _to_delete/
 
 # Claude Code agent worktrees (local tooling)
 .claude/worktrees/
+
+# Apple .exs fixtures: personal content, kept in ~/Music/Worship Rig/exs-fixtures; RIG_EXS_FIXTURES
+tools/exs/fixtures/real/

@@ -2,7 +2,7 @@
 //
 // PROVENANCE: there is no public spec. The starting table came from the open-source reverse-engineering projects
 // (exs2sfz.py, ConvertWithMoss's EXS24 reader, exs24-parser). Fields marked VERIFIED were checked byte-for-byte
-// against six real Apple files (tools/exs/fixtures/real/*.exs: Yamaha Grand Piano, Grand Piano, Steinway Grand
+// against six real Apple files (~/Music/Worship Rig/exs-fixtures/*.exs, not in the repo: Yamaha Grand Piano, Grand Piano, Steinway Grand
 // Piano 2, Steinway Piano 2, Flea Market Wurli, Lullaby Vibes — all little-endian 'TBOS') and, for the consolidated
 // CAF layout, against the audio in 'Steinway Piano_consolidated.caf'. The evidence for each is in
 // docs/garageband-import.md ("Format notes") and test/unit/exs/real-files.test.mjs. Fields marked UNVERIFIED are

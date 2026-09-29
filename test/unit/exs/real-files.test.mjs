@@ -1,21 +1,25 @@
-// Parser + planner against six real Apple .exs files (tools/exs/fixtures/real/, copied from a Logic Pro library; the
-// instrument definitions only — no audio). These pin down the layout in tools/exs/layout.mjs: header counts, zone
+// Parser + planner against six real Apple .exs files (copied from a Logic Pro library; the instrument definitions
+// only — no audio). They are Apple content, so they are NOT in the repo: they live in ~/Music/Worship Rig/exs-fixtures
+// (override with RIG_EXS_FIXTURES). These pin down the layout in tools/exs/layout.mjs: header counts, zone
 // root/keys/velocity, the velocity-range flag vs group velocity, group CC64 "select by", sample 4CC/length, and the
 // two-segment zones of consolidated CAFs. Skipped when the fixtures are absent.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { parseExs } from '../../../tools/exs/parser.mjs';
 import { planInstrument, zoneSlice, planSegments } from '../../../tools/exs/mapping.mjs';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const DIR = path.join(here, '../../../tools/exs/fixtures/real');
-const has = fs.existsSync(path.join(DIR, 'Yamaha Grand Piano.exs'));
+const expandHome = (p) => (p === '~' || p.startsWith('~/') ? path.join(os.homedir(), p.slice(1)) : p);
+const DIR = expandHome(process.env.RIG_EXS_FIXTURES || '~/Music/Worship Rig/exs-fixtures');
+const NAMES = ['Yamaha Grand Piano', 'Grand Piano', 'Steinway Grand Piano 2', 'Steinway Piano 2', 'Flea Market Wurli', 'Lullaby Vibes'];
+const missing = NAMES.filter((n) => !fs.existsSync(path.join(DIR, `${n}.exs`)));
+const has = missing.length === 0;
+if (!has) console.log(`# skipping real .exs tests: ${missing.length}/6 fixtures missing in ${DIR} (set RIG_EXS_FIXTURES)`);
 const load = (n) => parseExs(fs.readFileSync(path.join(DIR, `${n}.exs`)));
 const plan = (n) => planInstrument(load(n), { name: n });
-const opts = { skip: has ? false : 'real .exs fixtures not present' };
+const opts = { skip: has ? false : `real .exs fixtures not found in ${DIR} (RIG_EXS_FIXTURES)` };
 const fileOf = (p, z) => p.samples[z.sampleIndex].fileName;
 
 test('all six parse cleanly: header counts match, key/root/velocity sane', opts, () => {
