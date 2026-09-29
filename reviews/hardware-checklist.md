@@ -329,3 +329,14 @@ GarageBand-derived content must never ship.
 
 ## 2 (addendum). Pedal polarity, second try
 - On a second "Test my pedal" the app reported reversed polarity and offered Invert; after inverting, sustain works. First try had reported 127 / normal. Note for the cloud: the result depends on whether the pedal is pressed at plug-in time (expected by the heuristic), so the wording should tell the user to plug in with the pedal UP, or the test should sample both states.
+
+## 7. Sleep/wake, output change, restart
+- Sleep ≥10 s and wake: sound back ✔. Dock unplugged while selected: handled, sound continues/moves ✔. Quick-sheet hold-to-restart: "Audio restarted", sound resumes ✔.
+
+## 8. Recording
+- 30 s recording → `~/Music/Worship Rig/Rig <date> <HHmm>.wav` ✔; opens and plays cleanly in QuickTime ✔.
+- Split-on-restart mid-recording: NOT TESTED.
+
+## 9. Perform lock
+- Live tier works with no hold ✔; KEY/Transpose need the 600 ms hold ✔; Edit/Settings frozen ✔; hold-to-unlock ✔.
+- **L-23 (cosmetic, NEEDS CLOUD):** the amber hint text under the Lock button (the "hold to unlock" line, `lockLine` in `app/js/views/perform.js`) is cut off by the bottom edge of the window on the MacBook Pro's built-in display. It should render above the button or inside the viewport when the button sits on the bottom row.
