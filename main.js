@@ -102,6 +102,35 @@ function writeShellConfig(patch) {
 const streams = new Map();
 let nextStreamId = 1;
 const approvedPaths = new Set();
+/** S6: files this process created through streamOpen (revealFile may show them even outside Recordings). */
+const writtenPaths = new Set();
+
+/** S6: a recording is always a .wav (a bare name or an unapproved path can't drop x.terminal / x.webloc / x.html). */
+function forceWav(p) {
+  const ext = path.extname(p);
+  return ext.toLowerCase() === '.wav' ? p : `${p.slice(0, p.length - ext.length)}.wav`;
+}
+
+/** S6: `p` (after resolving symlinks of its existing part) is inside `dir`. */
+async function realWithin(dir, p) {
+  const real = async (x) => {
+    let head = x;
+    const tail = [];
+    for (;;) {
+      try {
+        return path.join(await fsp.realpath(head), ...tail);
+      } catch {
+        const up = path.dirname(head);
+        if (up === head) return x;
+        tail.unshift(path.basename(head));
+        head = up;
+      }
+    }
+  };
+  const d = await real(path.resolve(dir));
+  const t = await real(path.resolve(p));
+  return t.startsWith(d + path.sep);
+}
 
 function sanitizeFileName(name) {
   const base = String(name || '').replace(/[\\/:*?"<>|\x00-\x1f]/g, '-').replace(/^\.+/, '').trim().slice(0, 180);
@@ -288,8 +317,9 @@ function registerIpc() {
     const raw = String(p || '');
     if (path.isAbsolute(raw)) {
       target = path.resolve(raw);
-      const inRec = target.startsWith(recordingsDir() + path.sep);
       const approved = approvedPaths.has(target);
+      if (!approved) target = forceWav(target);
+      const inRec = target.startsWith(recordingsDir() + path.sep) && (await realWithin(recordingsDir(), target));
       if (!approved && !inRec) return { error: 'path not allowed (use saveFileDialog first)' };
       approvedPaths.delete(target);
       await fsp.mkdir(path.dirname(target), { recursive: true });
@@ -298,8 +328,9 @@ function registerIpc() {
     } else {
       // bare file name → default recordings folder, never overwrite
       await fsp.mkdir(recordingsDir(), { recursive: true });
-      ({ fh, path: target } = await openExclusive(path.join(recordingsDir(), sanitizeFileName(path.basename(raw)))));
+      ({ fh, path: target } = await openExclusive(path.join(recordingsDir(), forceWav(sanitizeFileName(path.basename(raw))))));
     }
+    writtenPaths.add(target);
     const id = nextStreamId++;
     streams.set(id, { fh, path: target, pos: 0, chain: Promise.resolve(), owner: event.sender.id });
     return { id, path: target };
@@ -399,7 +430,10 @@ function registerIpc() {
 
   handle('rig:revealFile', async (_e, p) => {
     const target = path.resolve(String(p || ''));
-    if (!target.startsWith(recordingsDir() + path.sep) && !fs.existsSync(target)) return { error: 'not found' };
+    // S6: only our own files (Recordings, backups, takes this app wrote), so this is no existence oracle for the disk
+    const inRec = await realWithin(recordingsDir(), target);
+    if (!inRec && !writtenPaths.has(target) && !(await realWithin(backupsDir(), target))) return { error: 'not allowed' };
+    if (!inRec && !fs.existsSync(target)) return { error: 'not found' };
     shell.showItemInFolder(target);
     return { ok: true };
   });
