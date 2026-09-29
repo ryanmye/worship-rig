@@ -259,18 +259,38 @@ function safeRel(rel) {
   return segs.join('/');
 }
 
+// security S5: the engine builds `${dir}/${note}.${ext}` from these, so they must not carry '/', '.', '#', '?'…
+const SAFE_EXT_RE = /^[a-z0-9]{1,5}$/i;
+const SAFE_NOTE_RE = /^[A-G][#b]?-?\d$/;
+const safeExt = (e) => e === undefined || e === null || e === '' || (typeof e === 'string' && SAFE_EXT_RE.test(e));
+const safeNotes = (n) => Array.isArray(n) && n.every((x) => (typeof x === 'string' && SAFE_NOTE_RE.test(x)) || (Number.isInteger(x) && x >= 0 && x <= 127));
+
 /**
  * Rewrite one manifest instrument so its sample URLs point at /user-samples/<token>/<slug>/…
  * (the engine resolves `<dir>/<note>.<ext>` and `files` values against the manifest URL; absolute paths win).
+ * S5: `ext` / `format` / a layer's `ext` must be 1-5 letters or digits and `notes[]` note names (C4, Db4, F#-1) or
+ * MIDI numbers; an instrument or layer that breaks this is dropped with a line in `errors`.
+ * @param {string[]} [errors]
  * @returns {object|null} null when no layer is usable
  */
-function rewriteUserInstrument(inst, prefix) {
+function rewriteUserInstrument(inst, prefix, errors = []) {
   if (!inst || typeof inst !== 'object' || typeof inst.id !== 'string' || !inst.id || !Array.isArray(inst.layers)) return null;
+  if (!safeExt(inst.ext) || !safeExt(inst.format)) {
+    errors.push(`instrument "${inst.id}": "ext"/"format" must be a plain file extension such as "wav"; skipped`);
+    return null;
+  }
+  const instNotesOk = inst.notes === undefined || safeNotes(inst.notes);
   const join = (rel) => (rel ? `${prefix}/${encodeRel(rel)}` : prefix);
   const layers = [];
-  for (const L of inst.layers) {
+  for (const [i, L] of inst.layers.entries()) {
     if (!L || typeof L !== 'object') continue;
     const out = { ...L };
+    const usesNotes = !(L.files && typeof L.files === 'object');
+    const notesOk = L.notes !== undefined ? safeNotes(L.notes) : instNotesOk;
+    if (!safeExt(L.ext) || (usesNotes && !notesOk)) {
+      errors.push(`instrument "${inst.id}" layer ${i + 1}: "ext" must be a plain file extension and "notes" note names (C4, Db4) or MIDI numbers; layer skipped`);
+      continue;
+    }
     if (L.files && typeof L.files === 'object') {
       const files = {};
       for (const [note, rel] of Object.entries(L.files)) {
@@ -288,6 +308,7 @@ function rewriteUserInstrument(inst, prefix) {
   }
   if (!layers.length) return null;
   const { dir, ...rest } = inst;
+  if (!instNotesOk) delete rest.notes;
   return { ...rest, layers };
 }
 
@@ -368,7 +389,10 @@ async function scanUserSamples(roots, token) {
       const prefix = `/user-samples/${token}/${encodeURIComponent(slug)}`;
       let count = 0;
       for (const inst of list) {
-        const r = rewriteUserInstrument(inst, prefix);
+        const why = [];
+        const r = rewriteUserInstrument(inst, prefix, why);
+        for (const w of why) errors.push(`${slug}: ${w}`);
+        if (!r && why.length) continue;
         if (!r) {
           errors.push(`${slug}: instrument ${inst && inst.id ? `"${inst.id}"` : '(no id)'} has no usable layers; skipped`);
           continue;
