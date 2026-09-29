@@ -495,3 +495,70 @@ Method:
   This is FYI only.
 - A leftover Google Chrome process with Worship Rig switches (pid 66929, from an earlier `serve.mjs` session) was
   running throughout. I left it alone.
+
+## Security batch (review-4 S1, S4–S8)
+
+Local fixes for `reviews/security.md`. There is one commit per item, all on `main`, and all are pushed.
+
+- **S1 step 1** (`31bf4ca`): the six Apple `.exs` files are out of the repo.
+  - They are untracked and deleted from the working tree. `.gitignore:21-22` ignores `tools/exs/fixtures/real/`.
+  - Copies live in `~/Music/Worship Rig/exs-fixtures/`, byte-identical (cmp) to the originals, 6 files.
+  - `test/unit/exs/real-files.test.mjs:15-20` reads `RIG_EXS_FIXTURES` (default `~/Music/Worship Rig/exs-fixtures`,
+    with `~` expanded). If any of the six files is missing, it prints the reason and skips every test.
+  - `docs/garageband-import.md` and the `tools/exs/layout.mjs` header now say where the files live.
+  - Tree scan: no other Apple content is tracked.
+    - The only `.exs`/GarageBand path hits are `docs/garageband-import.md` and `tools/import-garageband.mjs`.
+    - The "Apple Inc" hits are MIDI port-manufacturer strings in `app/js/midi.js:42` and `midi-default.test.mjs`.
+    - `audition/mp3` holds renders of the bundled CC instruments. `app/samples` is all CC0/CC-BY/CC-BY-SA per its
+      manifest.
+  - **Step 2 (history purge / private repo) is not done. It needs Ryan.**
+- **S4** (`c88f071`): personal audio routes are keyed per launch.
+  - `server.js` gains `createServer({secret})`. `PRIVATE_ROUTE_RE` (`:76`) covers `/api/user-samples`,
+    `/api/user-samples/manifest.json`, `/user-samples/*`, `/api/pads` and `/pads/*`. They answer 403 unless the request
+    has `X-Rig-Key: <secret>` (timing-safe compare, `keyOk` `:455`, gate `:687`).
+  - `main.js:43` generates a 24-byte key at each launch and passes it to the server (`:1605`).
+  - `installPermissions` adds the header only to requests for our own origin (`session.webRequest.onBeforeSendHeaders`,
+    `:1125`). The main window and the popover share the default session, so both get it.
+  - The Chrome fallback (serve.mjs) passes no secret and behaves as before, as the review recommends.
+  - `sendJSON` and `sendText` now send `nosniff`.
+  - Not done: fix 1 of the review (dropping `roots` from the HTTP manifest). `test/phase1/shell/shell3.test.mjs:106`
+    asserts `m.roots`, and local may not edit it. That call belongs to the cloud.
+  - Probe with a plain node client and `secret:'k3y'`: health and index are 200; every private route is 403 without
+    the key or with a wrong key, and 200/404 with it.
+- **S5** (`c17622c`): `rewriteUserInstrument` (`server.js:263-305`) checks the fields that go into sample URLs.
+  - Instrument `ext`/`format` must match `/^[a-z0-9]{1,5}$/i`, or the instrument is dropped.
+  - A layer's `ext` must match the same rule, and its effective `notes[]` must be note names (`/^[A-G][#b]?-?\d$/`) or
+    MIDI integers 0-127, or the layer is dropped.
+  - An invalid instrument-level `notes` is removed.
+  - Each drop adds a `<slug>: instrument "id" …` line to `errors[]`.
+  - The review's `notes` means the note-name array, not free text. The renderer is already XSS-safe (S10), so free-text
+    fields were left alone.
+  - Real packs: 28 instruments and 47 layers before and after. A hostile manifest (`wav/../../api/heartbeat#`,
+    `C4/../../x#`, `a?b`, `x.y`) was dropped with the right messages.
+- **S6** (`c2667da`, `main.js`):
+  - `streamOpen`: `forceWav` (`:109`) forces `.wav` on bare names and on unapproved absolute paths. An absolute path
+    must also pass `realWithin(recordingsDir)` (`:115`, which follows symlinks). Save-dialog paths are unchanged (the
+    user chose them). Every opened take goes into `writtenPaths` (`:333`).
+  - `revealFile` (`:431`) allows only Recordings, backups (realpath) or a take this process wrote. Anything else gets
+    `{error:'not allowed'}`, so it no longer reveals whether arbitrary paths exist.
+- **S7** (`9a8be4e`): importer path trust.
+  - `tools/exs/sample-index.mjs:134,168`: a stored absolute sample path must have an audio extension. When the caller
+    passes `roots`, it must also realpath inside one of them. The importer passes the sample and instrument roots
+    (`import-garageband.mjs:615`).
+  - `checkOutDir` (`:48`) refuses any `--out` inside `<repo>/app` (realpath, symlinks included) with a friendly error
+    and exit 2. It warns when `--out` is in the repo but outside `user-samples/`. The docs table notes this.
+- **S8** (`0012c72`, `test/integration/build-lint.mjs`):
+  - Repo checks (`:44`, from `git ls-files`) fail on any tracked `.exs`/`.caf`, `user-samples/**`,
+    `tools/exs/fixtures/real/**`, `*personal-use*` file name, or tracked `manifest.json` with a `personal-use` license.
+  - Asar checks (`:97`) fail on `.exs`/`.caf`/`.aif`/`.aiff` or `*personal-use*` files, a packaged `manifest.json` with
+    a `personal-use` license, or an `app/samples/<dir>` the manifest doesn't list.
+
+**Tests:**
+- `node --test test/unit/exs/real-files.test.mjs`: 7/7 pass. With `RIG_EXS_FIXTURES=/nonexistent`: 7 skipped, exit 0.
+- `node --test test/unit/exs/*.test.mjs`: 61/61.
+- `node test/phase1/shell/run.mjs --only unit`: 188/188, after S4, S5 and S6.
+- `RIG_PORT=8452 node --test test/phase1/shell/electron.boot.mjs`: 12/16. The 4 failures only assert the hard-coded
+  port 8438/8439, which can't be used while Ryan's app is open. The pads Range, My Samples manifest + sample,
+  streamOpen-denied, dup-take and M6 steps all pass through the key header, and no request got a 403.
+- `node test/run-all.mjs --only unit,chrome-fallback,build-lint`: 3/3. unit 286 pass, chrome-fallback 15/15,
+  build-lint 31/31.
