@@ -157,3 +157,79 @@ The main thread was idle for 92.4 % of the 10 s. JS plus native work was 7.6 %.
     not reproduce the flip. The only events were one blur/focus pair on the drone segment button.
   - Most likely something outside my script changed the drone while Ryan was using the Mac, for example the menu
     bar mini window. This is not a confirmed bug. It is only worth a look if it shows up again.
+
+## Build 0816b89: idle-cpu part 1 + low-resource + menu-bar (2026-09-29, 04:00–04:10 UTC)
+
+- Build: `dist/mac-arm64/Worship Rig.app` from 23:40 local. That is c0d64c2 plus 0816b89, which only changes a
+  comment in `main.js`, so the build matches main 0816b89.
+- The screen was unlocked. The method is the same as above: Sunday Pad + Piano, 10 s settle, a 20 s window,
+  renderer and GPU CPU from `ps -o time`, `Performance.getMetrics`, and a 2 s rAF counter.
+- New in this section:
+  - RSS is the sum of every Electron process of the app.
+  - At each window's start and end I logged `controller.status.{lowResource, windowVisible}`, the attributes
+    `html[data-low-resource]` and `html[data-window-hidden]`, `rig.getMenuBarState().windowVisible`, and the page's
+    `rig:window-visible` / `menu` / `lowResource` events.
+- **State at launch:** the library had `settings.lowResource = true` and `settings.menuBarMode = true`, left over
+  from earlier use. My first pass therefore measured everything in low-resource mode, and I discarded it.
+  - Only one thing from it is kept: with low-resource on from launch, the first window read 44 %, then 31 % a
+    minute later. So the idle trim takes a while to act.
+  - Pass 2 set both settings to `false` first. At the end both are `false` (`rig-shell.json` `menuBarMode:false`,
+    dock back), the drone is back to `off`, and the app was reopened with a plain `open`.
+
+| config | renderer cputime (ps) | GPU | Task / Script / Style ms/s | style recalcs/s | rAF/s (counter) | `data-low-resource` / `data-window-hidden` | `visibilityState` | status lowResource / windowVisible | RSS all procs MB | renderer threads (audio / main / compositor / reverb-bg) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| (a) drone on, visible | **40.2** (40.4) | 12.7 | 80.3 / 7.0 / 12.3 | 121 | 120.4 | – / – | visible | false / true | 517 | 17.9 / 8.3 / 5.6 / 7.8 |
+| (b) drone off, visible | **7.6** (6.9) | 0.0 | 4.7 / 3.0 / 0.0 | 0 | 120.1 | – / – | visible | false / true | 532 | 5.8 / 0.6 / – / 1.0 |
+| (c) low-resource on (`settings.lowResource`), drone on | **31.0** (31.1) | 0.0 | 3.4 / 2.6 / 0.0 | 0 | 119.8 | **yes** / – | visible | true / true | 529 | 21.1 / <0.5 / – / 9.5 |
+| (c2) same, 33 s later | **30.9** (31.0) | 0.0 | 3.5 / 2.6 / 0.0 | 0 | 120.6 | yes / – | visible | true / true | 505 | 20.9 / – / – / 9.5 |
+| (d0) ⌘H, menu-bar mode **off**, drone on | **44.6** (44.2) | 14.1 | 89.1 / 7.3 / 13.7 | 120 | 120.2 | – / – | visible | false / **true** | 505 | 20.3 / 9.2 / 6.0 / 8.6 |
+| (d1) ⌘H, menu-bar mode **on**, drone on | **40.0** (39.7) | 12.7 | 79.5 / 6.6 / 11.9 | 120 | 120.3 | – / – | visible | false / **true** | 519 | 17.9 / 8.3 / 5.4 / 8.0 |
+| (d2) red close button, menu-bar mode on (hide to menu bar), drone on | **28.8** (28.5) | 0.0 | 3.4 / 2.6 / 0.0 | 0 | 120.2 | yes / **yes** | visible | true (auto) / false | 511 | 19.5 / – / – / 8.9 |
+| (d2b) same, 33 s later | **26.2** (26.4) | 0.0 | 2.9 / 2.2 / 0.0 | 0 | 120.3 | yes / yes | visible | true (auto) / false | 477 | 17.9 / – / – / 8.1 |
+
+- The rAF column is my own counter. It keeps running because `backgroundThrottling` is off, which is expected.
+  Whether the page's loops are running shows in the style recalcs and Task ms/s columns: 121 /s and about 80 ms/s
+  when they run, 0 /s and 3–5 ms/s when they sleep.
+- Heap was 5.2–6.0 MB in every row.
+
+### Before and after, against the first run (build e6da619, screen locked; the unlocked visible reference in the first run was 48–50 %)
+
+| | first run: renderer / GPU | now: renderer / GPU |
+|---|---|---|
+| drone on, visible | 44.4 / 13.2 | **40.2 / 12.7** |
+| drone off, visible | 35.1 / 2.4 | **7.6 / 0.0** |
+| low-resource | 45.1 / 13.1 (attribute only, no mode existed) | **31.0 / 0.0** (drone on) |
+| hidden, ⌘H | 49.3 / 13.9 (unlocked) | **44.6 / 14.1** (menu-bar off), **40.0 / 12.7** (menu-bar on): no change |
+| hidden to menu bar (close button) | not available | **28.8 → 26.2 / 0.0** |
+
+### Findings
+
+- **Silence is now nearly free.** With the drone off, the renderer dropped from 35.1 to 7.6 % and the GPU from
+  2.4 to 0. No style recalcs happen, so the meters sleep, and the audio thread is at 5.8 %. This is the main
+  effect of the idle-cpu part 1 engine fix.
+- **With the drone sounding, the cost stays.** In the visible drone-on case (a), about 18 points are audio, 8 are
+  reverb convolution, and 14 are main thread plus compositor, with the meters animating at 120 Hz. GPU is 12.7.
+  - Low-resource hides the meters and removes the whole UI and GPU share: Task drops from 80 to 3 ms/s, and GPU
+    from 12.7 to 0.
+  - What remains (31 %) is the drone synth on the audio thread (21 %) plus two reverb convolution threads
+    (9.5 %). To go lower, the drone's reverb send, or the convolver itself, would have to be trimmed in
+    low-resource mode.
+- **Hide-to-menu-bar works.** In menu-bar mode, the red close button made the page receive
+  `rig:window-visible {visible:false}`, the menu id `windowHidden`, and `lowResource {on:true, auto:true}`.
+  `data-window-hidden` appeared, the meters stopped, GPU went to 0, and the renderer reached 26 % after about
+  45 s. Showing the window again (`open` → `activate` → `showMain`) sent `windowShown`, turned low-resource off
+  (auto), and returned the page's loops to 120 recalcs/s.
+- **⌘H (app hide) is not detected. This is a bug to fix (NEEDS CLOUD).** With menu-bar mode off or on, ⌘H hid
+  the app, and System Events `visible` read `false`. But no `rig:window-visible` or `windowHidden` event reached
+  the page, and `rig.getMenuBarState().windowVisible` stayed `true` because `win.isVisible()` is still true
+  after `app.hide()`. So nothing throttles and the cost is unchanged (40–45 %). Suggestions:
+  - In `main.js`, listen to `app.on('did-resign-active')`/`'hide'`-equivalents. On macOS these are the
+    `browser-window-blur` event plus `app.isHidden()`, or `win.on('hide')` does not fire for NSApp hide.
+  - Or poll `app.isHidden()` on blur.
+  - Or treat `win.isVisible() && !app.isHidden()` as "shown" in `windowShownNow`, and send `windowHidden` on
+    app hide.
+- **Minimise was not re-tested in this build.** The code sends `windowHidden` on `minimize` (`main.js:1141`).
+- **Popover (e):** skipped. A tray click can't be scripted from here.
+- **RSS:** all Electron processes together were 477–532 MB (`ps` RSS, which understates because of compressed
+  pages; see PERF). Low-resource and hide-to-menu-bar moved it by only about −30 to −50 MB within a minute,
+  because the current song stays pinned.
