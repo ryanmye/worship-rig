@@ -340,3 +340,11 @@ GarageBand-derived content must never ship.
 ## 9. Perform lock
 - Live tier works with no hold ✔; KEY/Transpose need the 600 ms hold ✔; Edit/Settings frozen ✔; hold-to-unlock ✔.
 - **L-23 (cosmetic, NEEDS CLOUD):** the amber hint text under the Lock button (the "hold to unlock" line, `lockLine` in `app/js/views/perform.js`) is cut off by the bottom edge of the window on the MacBook Pro's built-in display. It should render above the button or inside the viewport when the button sits on the bottom row.
+
+## 10–14. Factory songs, gapless switch, drone crossfade, My Pads, My Samples
+- NOT EXERCISED in this pass (Ryan: "should be fine"). Listening pass on the factory songs and the 28 My Samples packs is still open → reviews/listening-notes.md.
+
+## Summary of this pass
+- Passed: 1 (auto-select), 2 (pedal, with a wording note), 3 (latency: dock 20 ms, Bluetooth 176 ms), 4 (wheels), 5 step 4 (CC64 reserved), 6 (hot-unplug/replug), 7 (sleep/wake, output change, restart), 8 (recording), 9 (lock tiers).
+- Deferred: 5 steps 1–3 (MIDI Learn needs a control that sends CC), 8 step 3 (split on restart), 10–14, Chrome column entirely.
+- Findings: L-23 (lock hint clipped), pedal-test wording (section 2 addendum).
