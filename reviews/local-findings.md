@@ -615,3 +615,46 @@ The workflow is `.github/workflows/release.yml` (`6a1bde3`).
 
 No tag or GitHub release was created. The release job runs only for a `refs/tags/v*` ref: on a tag push, or on a
 manual run on a tag with dry_run unticked. It checks the tag against the `package.json` version first.
+
+## Final build b9f7f61: pedal ring, EQ under Advanced, Sanctuary vs Classic (2026-09-30, native macOS)
+
+Built app `dist/mac-arm64/Worship Rig.app` (b9f7f61), relaunched with `--remote-debugging-port=9333` on a fresh temp
+`RIG_USER_DATA` / `RIG_USER_SAMPLES` (factory library, Sanctuary default, 44.1 kHz context, Keystation connected).
+Playwright attached over CDP.
+
+**Pedal ring** (factory "Grand Piano", drone off; `midi._inject` on the selected input: CC64 127 → `status.pedal`
+true, note on vel 90, note off at 0.5 s, pedal kept down; stereo RMS / peak of `engine.analyserL/R` every 0.5 s for
+30 s; pedal up at the end → `status.pedal` false, silence 1.5 s later):
+- **C4 (60): RMS last ≥ −50 dBFS at 6.0 s (peak at 13.5 s), −61.9 at 14 s, then a cliff at 15.5 s (−63 → −90).**
+  That is the file's end, not a cap. CONTRACT "## sustain" lists octave 4 as 8.7–15.5 s after the onset trim, under
+  the old 16 s cap too. So "≈ 20 s" does not apply to C4.
+- **A1 (33, a 20.0 s file): RMS last ≥ −50 dBFS at 19.0 s (peak at 19.5 s), −51.6 at 18 s, −72.3 at 20 s**, silent
+  from 28 s (reverb tail). This is past the old 16 s cap, so the long `maxSec` works in the built app.
+- `pedaled` stayed 1 for the whole 30 s. No early fade.
+
+**EQ under Advanced: yes.** Edit → Keys (`.ev2-tab[data-block="slot:0"]`, selected) → click the
+`details[data-sec="slot0-adv"]` summary. Two frames later `details[data-sec="slot0-adv"] .ev2-slot-tone-host >
+section.eqk` was mounted. There is no `details[data-sec="slot0-tone"]`. The only other `summary` in Advanced is the
+EQ's own "Bring an EQ over (paste)". "Tone" is a plain heading (`.ev2-slot-adv-h`).
+- Site: sanctuary, 1440 × 900 @2× (`Emulation.setDeviceMetricsOverride`), Sunday Pad + Piano, Keys › Advanced open.
+- `edit.webp` is scrolled to the Advanced header: pan/width, transpose/voices, Tone and the EQ's top (86.7 KB).
+- `edit-eq.webp` uses the old framing, scrolled to "Tone": graph, keyboard and bands (96.1 KB).
+- Both were made with `cwebp -q 82 -resize 1440 0`.
+
+**Sanctuary vs Classic** (Sunday Pad + Piano, drone `synth` sounding with analyser peak 0.08–0.15, Perform view,
+visible 1440 × 856 window at 2×, no emulation; 10 s settle, then a 20 s window; `ps -o time=` deltas on the Renderer
+helper and the GPU pid; CDP `Performance.getMetrics` deltas). There were two interleaved rounds (S, C, then C, S):
+
+| theme | renderer % | GPU % | Layout ms/s | RecalcStyle ms/s | recalcs/s | Task ms/s |
+|---|---|---|---|---|---|---|
+| sanctuary | 37.4 / 39.8 | 5.3 / 5.5 | 0 / 0 | 3.09 / 3.42 | 29.0 / 28.9 | 48.0 / 51.7 |
+| classic | 41.4 / 42.7 | 5.9 / 6.0 | 0 / 0 | 3.72 / 3.91 | 29.3 / 28.7 | 55.1 / 54.2 |
+
+- The Sanctuary premium is gone. Before, Sanctuary cost +6–8 renderer points and +2 GPU (45–47 % vs 38.9 %; 10.8
+  vs 8.9 GPU). Now Sanctuary measures 2.9–4.0 points **below** Classic, with GPU −0.5. Both gaps are inside the
+  audio-thread noise between windows.
+- GPU is about half of the 05:32Z run on both themes (10.8 / 8.9 → 5.4 / 6.0). Either the meters are now
+  compositor-only (`will-change`), or the window size differs.
+
+Restored: nothing to restore (temp profile). The debug instance was quit, then the app was reopened with a plain
+`open` on the real profile (no 9333).
