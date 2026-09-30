@@ -1,0 +1,137 @@
+name: release
+
+# Builds Worship Rig.app for Apple Silicon (arm64) and Intel (x64) as .dmg + .zip.
+# - push a tag v*            → build, upload the four files to the run, and create a GitHub prerelease with them
+# - Actions → release → Run  → dry_run (default true): build + upload to the run only, never a release
+# A release is only created when the ref is a v* tag AND it's a tag push (or a manual run on a tag with dry_run off).
+# Dispatching on a branch (e.g. main) can never create a release.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build and upload artifacts to the run only (no GitHub release)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build (${{ matrix.arch }})
+    runs-on: macos-14
+    timeout-minutes: 40
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: arm64
+            cmd: npm run build:mac -- --publish never
+          - arch: x64
+            cmd: npx electron-builder --mac dir zip dmg --x64 --publish never
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          v="$(node -p 'require("./package.json").version')"
+          if [ "v$v" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match package.json version $v"
+            exit 1
+          fi
+
+      - name: Build ${{ matrix.arch }} (dir + zip + dmg, ad-hoc signed)
+        run: ${{ matrix.cmd }}
+
+      - name: Check sizes
+        run: |
+          v="$(node -p 'require("./package.json").version')"
+          app_dir="dist/mac"; [ "${{ matrix.arch }}" = arm64 ] && app_dir="dist/mac-arm64"
+          app_mb=$(( $(du -sk "$app_dir/Worship Rig.app" | cut -f1) / 1024 ))
+          echo "APP_VERSION=$v" >> "$GITHUB_ENV"
+          {
+            echo "### ${{ matrix.arch }}"
+            echo "| file | size |"
+            echo "|---|---|"
+            echo "| Worship Rig.app | ${app_mb} MB |"
+            for f in "dist/Worship-Rig-$v-${{ matrix.arch }}.zip" "dist/Worship-Rig-$v-${{ matrix.arch }}.dmg"; do
+              echo "| $(basename "$f") | $(( $(stat -f %z "$f") / 1048576 )) MB |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+          # CLAUDE.md size budget: the packaged app stays under 500 MB (build-lint fails above 480 MB)
+          if [ "$app_mb" -gt 480 ]; then echo "::error::Worship Rig.app is ${app_mb} MB (> 480 MB)"; exit 1; fi
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: Worship-Rig-${{ env.APP_VERSION }}-${{ matrix.arch }}.zip
+          path: dist/Worship-Rig-${{ env.APP_VERSION }}-${{ matrix.arch }}.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload dmg
+        uses: actions/upload-artifact@v4
+        with:
+          name: Worship-Rig-${{ env.APP_VERSION }}-${{ matrix.arch }}.dmg
+          path: dist/Worship-Rig-${{ env.APP_VERSION }}-${{ matrix.arch }}.dmg
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  release:
+    needs: build
+    # tag push, or a manual run on a tag with dry_run unticked; never from a branch
+    if: startsWith(github.ref, 'refs/tags/v') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Download the four files
+        uses: actions/download-artifact@v4
+        with:
+          pattern: Worship-Rig-*
+          path: assets
+          merge-multiple: true
+
+      - name: Create prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ls -la assets
+          cat > notes.md <<EOF
+          Worship Rig ${GITHUB_REF_NAME}
+
+          **Which file?**
+          - Apple Silicon Mac (M1 or later): \`Worship-Rig-*-arm64.dmg\`
+          - Intel Mac: \`Worship-Rig-*-x64.dmg\`
+          - The \`.zip\` files hold the same app; use them if a .dmg won't open.
+
+          This build is **ad-hoc signed**, not notarized by Apple — see the README
+          ("Running on your Mac → First open on another Mac") for the Gatekeeper steps.
+          EOF
+          gh release create "$GITHUB_REF_NAME" assets/*.dmg assets/*.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --prerelease \
+            --title "Worship Rig $GITHUB_REF_NAME" \
+            --notes-file notes.md
