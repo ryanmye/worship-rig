@@ -122,6 +122,9 @@
     border: 1px solid #0c0a098c;
     box-shadow: inset 0 1px 0 #fff3e010, inset 0 -1px 0 #00000033, 0 1px 0 #ffffff06, 0 3px 8px -3px #000000a6;
   }
+  /* L-32: the setlist strip is a scroller (a compositor layer on the Mac, which has no LCD text). Its drop shadow made
+     each slot strip overlap that layer: one 631 × 551 overlap layer for the whole slot row. The rims stay. */
+  & .setlist-strip { box-shadow: inset 0 1px 0 #fff3e010, inset 0 -1px 0 #00000033; }
   /* an unused channel is a blank, parked channel (a recessed well with its empty fader slot), not a dashed
      wireframe (warmth critic). Border keeps Classic's 1.5 px, so the box doesn't move; 3.5:1 on the module. */
   & .slot.empty {
@@ -464,6 +467,10 @@
      the text) with ruled lines at twice the old opacity; lines follow the app's 24 px line box (16 px × 1.5). */
   & .p-notes {
     background: url('/themes/studio/grain.png') repeat, linear-gradient(#2a2622, #25221e);
+    /* L-32: the notes are a scroller (a compositor layer on the Mac, which has no LCD text); its own stacking context
+       keeps what paints near it from being chained onto one overlap layer with the slot row. Shadow reach: 8 px, into
+       a 12 px gap, so the paint order change is invisible. */
+    isolation: isolate;
   }
   & .notes-text {
     color: #ece5d9;

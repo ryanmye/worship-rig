@@ -198,6 +198,10 @@
     font-variant-caps: normal; letter-spacing: 0; color: var(--text); }
 
   /* ------------------------------------------------------------------ surfaces: planes lit from above */
+  /* L-32: the notes are a scroller (a compositor layer on the Mac, which has no LCD text); its own stacking context keeps
+     what paints near it from being chained onto one overlap layer with the whole slot row (see CONTRACT_CHANGES
+     l31-l32). This theme's panel shadows are 1 px, so the paint order change is invisible. */
+  & .p-notes { isolation: isolate; }
   & .panel { background-color: var(--panel); background-image: linear-gradient(var(--panel-lift), transparent 58%);
     border-color: var(--line); box-shadow: inset 0 1px 0 var(--panel-rim), 0 1px 0 var(--drop); }
   & .topbar { border-bottom: 1px solid color-mix(in srgb, var(--candle) 15%, transparent);

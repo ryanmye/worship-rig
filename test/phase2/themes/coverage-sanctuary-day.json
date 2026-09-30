@@ -4,7 +4,7 @@
   "sanctuary",
   "sanctuary-day"
  ],
- "generated": "2026-09-30T08:32:21.327Z",
+ "generated": "2026-09-30T16:32:29.476Z",
  "states": [
   "sanctuary:perform",
   "sanctuary:perform-held",
@@ -57,29 +57,29 @@
   "sanctuary-day:mini-6-flags",
   "sanctuary-day:mini-drone-keys"
  ],
- "total": 206,
- "matched": 203,
+ "total": 207,
+ "matched": 204,
  "unmatched": 3,
- "unmatchedPct": 1.5,
+ "unmatchedPct": 1.4,
  "limitPct": 5,
  "deadClasses": [],
  "unmatchedSelectors": [
   {
    "selector": "& .bstrip.open .bstrip-list",
    "context": ":where(html:is([data-theme=\"sanctuary\"], [data-theme=\"sanctuary-day\"]))",
-   "line": 244,
+   "line": 248,
    "dead": false
   },
   {
    "selector": "& .bstrip.open .banner.info",
    "context": ":where(html:is([data-theme=\"sanctuary\"], [data-theme=\"sanctuary-day\"]))",
-   "line": 246,
+   "line": 250,
    "dead": false
   },
   {
    "selector": "& .fx-more",
    "context": ":where(html:is([data-theme=\"sanctuary\"], [data-theme=\"sanctuary-day\"]))",
-   "line": 254,
+   "line": 258,
    "dead": false
   }
  ],

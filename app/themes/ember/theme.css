@@ -120,6 +120,10 @@
     border-color: #ffe6c80f;
     box-shadow: inset 0 1px 0 #ffe6c80c, 0 12px 28px -18px #000;
   }
+  /* L-32: the setlist strip is a scroller, and on the Mac (no LCD text) every scroller is a compositor layer. Its drop
+     shadow (22 px down, over the 12 px gap) and the strips' own made each slot strip overlap that layer: one 638 × 570
+     overlap layer for the whole slot row, 25 % of the viewport. The strip keeps its rim; only the shadow goes. */
+  & .setlist-strip { box-shadow: inset 0 1px 0 #ffe6c80c; }
   /* an empty slot is an unlit socket, not a dashed form placeholder (warmth critic).
      Same 1.5 px border, so no layout change. */
   & .slot.empty {

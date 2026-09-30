@@ -2208,6 +2208,54 @@ test('polish-2A responsive (ux-round2 L1 / #1, L-6): six windows — nothing cli
         await page.screenshot({ path: path.join(shots, `responsive-4strips-${w}x${hgt}.png`) });
         assert.deepEqual(bad, [], `4 strips at ${w}×${hgt}: ${bad.join(' · ')}`);
       }
+      // mac-findings L-31: on the Mac (SF Pro) the four-strip tag row at 1366 × 768 measured 122 px of text in a 118 px
+      // box ("↻ 100%" + "Chorus 35%"), which Linux's faces do not reach. The same SFsim stand-in as L-26 (FreeSans
+      // only; the Mac runs real SF in the loop above) at 105 % and 109 %, the four-strip windows, and the tag must
+      // not clip, and keeps the chorus number whole (the wheel percent is what gives way).
+      if (sfOk) {
+        try {
+          for (const adj of [105, 109]) {
+            await page.evaluate((a) => {
+              document.getElementById('sfsim-l31')?.remove();
+              const st = document.createElement('style');
+              st.id = 'sfsim-l31';
+              const m = `size-adjust:${a}%;ascent-override:${Math.round(95 / a * 100)}%;`
+                + `descent-override:${Math.round(24 / a * 100)}%;line-gap-override:0%`;
+              st.textContent = `@font-face{font-family:SFsim;src:local("FreeSans");${m}}`
+                + '@font-face{font-family:SFsim;font-weight:600 900;src:local("FreeSans Bold"),local("FreeSansBold");'
+                + `${m}}`
+                + ':root{--font:SFsim,sans-serif;--font-display:SFsim,sans-serif}';
+              document.head.append(st);
+            }, adj);
+            await page.evaluate(async () => {
+              await document.fonts.ready;
+              await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+            });
+            for (const [w, hgt] of [[1366, 768], [1440, 900], [1024, 700], [1366, 700]]) {
+              await page.setViewportSize({ width: w, height: hgt });
+              await page.waitForTimeout(250);
+              await clearToasts();
+              const m = await page.evaluate(OVERFLOW_PROBE);
+              const tags = await page.evaluate(() => [...document.querySelectorAll('#view-perform .slot-tag')].map((t) => ({
+                box: t.clientWidth, text: t.scrollWidth,
+                chorus: (() => { const c = t.querySelector('.chorus-badge'); return c && !c.hidden ? [c.scrollWidth, c.clientWidth, c.textContent] : null; })(),
+                wheel: (() => { const c = t.querySelector('.wheel-badge'); return c && !c.hidden ? c.textContent : null; })(),
+                pct: (() => { const c = t.querySelector('.wb-val'); return c ? c.offsetParent !== null : null; })(),
+              })));
+              const bad4 = m.bad.filter((x) => !/span\.slot-inst /.test(x));
+              console.log(`# L-31 @${adj}% ${w}×${hgt}: tags ${tags.map((t) => `${t.text}/${t.box}${t.wheel ? ` [${t.wheel.trim()}]` : ''}`).join(' ')}`);
+              assert.deepEqual(bad4, [], `L-31 4 strips at ${w}×${hgt} @${adj}%: ${bad4.join(' · ')}`);
+              for (const t of tags) {
+                if (t.chorus) assert.ok(t.chorus[0] <= t.chorus[1] + 1, `L-31 @${adj}% ${w}×${hgt}: "${t.chorus[2]}" whole (${t.chorus[0]}>${t.chorus[1]})`);
+                // the wheel percent gives way only where the row is ≤ 124 px, and only beside a Chorus chip
+                if (t.wheel && t.chorus) assert.equal(t.pct, t.box > 124, `L-31 @${adj}% ${w}×${hgt}: wheel % shown iff the row is > 124 px (${t.box})`);
+              }
+            }
+          }
+        } finally {
+          await page.evaluate(() => document.getElementById('sfsim-l31')?.remove());
+        }
+      }
     } finally {
       await page.evaluate(({ id, keep }) => {
         const slots = JSON.parse(keep);

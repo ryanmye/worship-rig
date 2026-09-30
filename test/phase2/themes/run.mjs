@@ -10,7 +10,7 @@
 //             one enabled theme sheet and it matches html[data-theme] (never a frame with the old sheet and the new
 //             attributes, or none), the body background is never the UA default; a screenshot one frame after the
 //             store write → screenshots/switch-<id>.png.
-//   layers    (mac-findings) per theme: no composited layer ≥ 25 % of the viewport but the document, ≤ Classic + 4
+//   layers    (mac-findings, L-32) per theme: no composited layer ≥ 25 % of the viewport but the document, ≤ Classic + 8
 //             layers, the meters' moving parts composited (a theme must not change what repaints per meter frame).
 //   picker    Settings › Appearance shows the current theme checked; click and arrow keys write settings.theme;
 //             coming themes are not offered.
@@ -73,7 +73,11 @@ const T = async (name, fn) => {
 const server = createServer({ appDir: APP, port: 0 });
 const info = await server.listen();
 const origin = `http://127.0.0.1:${info.port}`;
-const browser = await chromium.launch({ headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
+// --disable-lcd-text: the Mac's text mode. Without LCD text Chromium composites every scroller (the setlist strip, the
+// notes), and whatever paints over one lands on an overlap layer; Linux's default (LCD text) composites almost none, so
+// the `layers` group below passed here while the Mac failed it (L-32). THEMES_CHROME_ARGS adds more switches.
+const browser = await chromium.launch({ headless: true, args: ['--autoplay-policy=no-user-gesture-required',
+  '--disable-lcd-text', ...(process.env.THEMES_CHROME_ARGS || '').split(/\s+/).filter(Boolean)] });
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
 await context.grantPermissions([...MIDI_PERMISSIONS], { origin });
 const errors = [];
@@ -376,7 +380,10 @@ try {
         assert.ok(wc.length >= 2 && wc.every((v) => v === 'transform'),
           `${t.id}: the meter's moving parts keep will-change: transform (${wc})`);
         if (classicCount !== null) {
-          assert.ok(ls.length <= classicCount + 4, `${t.id}: ${ls.length} layers ≤ Classic ${classicCount} + 4`);
+          // + 8 (was + 4 before the suite ran in the Mac's no-LCD-text mode, L-32): there every scroller is a layer, and
+          // Studio's LED-ladder masks put four 5 × 225 px layers around the two level meters, its notes (which overflow
+          // in Rubik) add the notes scroller and the layer over it. Small layers; the ≥ 25 % check above is the cost.
+          assert.ok(ls.length <= classicCount + 8, `${t.id}: ${ls.length} layers ≤ Classic ${classicCount} + 8`);
         }
       });
     }

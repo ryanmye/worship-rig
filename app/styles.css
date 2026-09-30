@@ -895,6 +895,17 @@ body[data-view="edit"] .quick-btn { display: none; }
   .mchip { padding: 0 1px 3px; }
   .mchip .mc-label, .mchip .mc-value { font-size: 12px; letter-spacing: -.01em; }
 }
+/* mac-findings L-31: four strips at 1366 × 768 leave the tag row 118 px, and "↻ 100%" + "Chorus 35%" is 122 px in SF Pro
+   (119 at 105 %, 121 at 109 % of FreeSans; 125 px at 1440 fits). The wheel percent is the least informative chip (the
+   wheel itself and the fader show it, and it is in full whenever the row has room), so when the strip is this narrow
+   AND a Chorus chip is showing it collapses to "↻". The Chorus chip is the floor: if a face is wider still it ellipsizes
+   by itself instead of the row clipping a chip mid-letter. */
+@container slot (max-width: 124px) {
+  .slot-tag:has(.chorus-badge:not([hidden])) .wb-val { display: none; }
+  /* the stand-in at 109 % also showed "normal" (56 px) 2 px wider than the x4 chip's 54 px box: no side padding here */
+  .mchip { padding: 0 0 3px; }
+}
+.slot-tag .chorus-badge { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .perform .slot-add { width: 34px; min-height: 34px; height: 34px; padding: 0; display: grid; place-items: center; color: var(--muted); }
 .slot-vt { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 12px; font-weight: 800; letter-spacing: .14em; color: var(--faint); white-space: nowrap; }
 .slot-vt span { font-weight: 600; letter-spacing: .04em; }
