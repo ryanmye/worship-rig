@@ -1,6 +1,7 @@
-// Rasterises build/trayTemplate.svg's glyph (kept in sync by hand: same numbers below) into
-// build/trayTemplate.png (22×22) and build/trayTemplate@2x.png (44×44): black + alpha, 8×8 supersampled.
-// No dependencies (zlib + a CRC32 table). Run: node build/make-tray-icon.mjs
+// Rasterises build/trayTemplate.svg (the W·R ligature template glyph; master: design/icon/d-ligature/mono.svg)
+// into build/trayTemplate.png (22×22) and build/trayTemplate@2x.png (44×44): black + alpha, 8×8 supersampled.
+// The SVG is drawn by Playwright's bundled Chromium onto an 8× canvas and box-filtered here, so the glyph lives in
+// one file. Run: node build/make-tray-icon.mjs
 // The "Template" suffix makes Electron mark the image as a macOS template image (tinted for the menu bar).
 // Also prints the base64 of both PNGs: main.js embeds them (TRAY_ICON_1X/2X) because electron-builder's `files`
 // does not ship build/ (buildResources) inside the packaged app.
@@ -8,23 +9,32 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const W = 2.4; // bar stroke width (viewBox units)
-const BARS = [[5.5, 9.6], [9.17, 4.2], [12.83, 6.9], [16.5, 11.2]]; // [x, top]; all end at y 14.4
-const BAR_BOTTOM = 14.4;
-const BASE = { x: 3, y: 17, w: 16, h: 2, r: 1 };
+// base64 in Node (UTF-8 bytes); the page's btoa would mis-encode non-ASCII comment text.
+const SVG = fs.readFileSync(path.join(here, 'trayTemplate.svg')).toString('base64');
+const S = 8; // supersampling per axis
 
-/** Is point (x, y) (viewBox units) inside the glyph? */
-function inside(x, y) {
-  for (const [bx, top] of BARS) {
-    const cy = Math.min(Math.max(y, top), BAR_BOTTOM); // capsule = segment ⊕ disc
-    if ((x - bx) ** 2 + (y - cy) ** 2 <= (W / 2) ** 2) return true;
-  }
-  const { x: rx, y: ry, w, h, r } = BASE;
-  const cx = Math.min(Math.max(x, rx + r), rx + w - r);
-  const cy = Math.min(Math.max(y, ry + r), ry + h - r);
-  return (x - cx) ** 2 + (y - cy) ** 2 <= r * r;
+/** Coverage (0..1) per pixel of the SVG rendered at size×size, from an S× canvas render box-filtered down. */
+async function coverage(page, size) {
+  const big = size * S;
+  const alpha = await page.evaluate(async ({ svg, big }) => {
+    const img = new Image();
+    img.src = 'data:image/svg+xml;base64,' + svg;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = c.height = big;
+    const g = c.getContext('2d');
+    g.drawImage(img, 0, 0, big, big);
+    const d = g.getImageData(0, 0, big, big).data;
+    const a = new Array(big * big);
+    for (let i = 0; i < a.length; i++) a[i] = d[i * 4 + 3];
+    return a;
+  }, { svg: SVG, big });
+  const out = new Float64Array(size * size);
+  for (let y = 0; y < big; y++) for (let x = 0; x < big; x++) out[((y / S) | 0) * size + ((x / S) | 0)] += alpha[y * big + x];
+  return out.map((v) => v / (255 * S * S));
 }
 
 const CRC = new Uint32Array(256).map((_, n) => {
@@ -46,19 +56,11 @@ function chunk(type, data) {
   return Buffer.concat([len, td, crc]);
 }
 
-function png(size) {
-  const S = 8;
-  const scale = 22 / size;
+function png(size, cov) {
   const rows = [];
   for (let py = 0; py < size; py++) {
     const row = Buffer.alloc(1 + size * 4); // filter byte 0 + RGBA
-    for (let px = 0; px < size; px++) {
-      let hit = 0;
-      for (let sy = 0; sy < S; sy++) {
-        for (let sx = 0; sx < S; sx++) if (inside((px + (sx + 0.5) / S) * scale, (py + (sy + 0.5) / S) * scale)) hit++;
-      }
-      row[1 + px * 4 + 3] = Math.round((255 * hit) / (S * S)); // RGB stay 0 (black)
-    }
+    for (let px = 0; px < size; px++) row[1 + px * 4 + 3] = Math.round(255 * cov[py * size + px]); // RGB stay 0
     rows.push(row);
   }
   const ihdr = Buffer.alloc(13);
@@ -74,8 +76,15 @@ function png(size) {
   ]);
 }
 
-const one = png(22);
-const two = png(44);
+const browser = await chromium.launch();
+let one, two;
+try {
+  const page = await browser.newPage({ deviceScaleFactor: 1 });
+  one = png(22, await coverage(page, 22));
+  two = png(44, await coverage(page, 44));
+} finally {
+  await browser.close();
+}
 fs.writeFileSync(path.join(here, 'trayTemplate.png'), one);
 fs.writeFileSync(path.join(here, 'trayTemplate@2x.png'), two);
 console.log('wrote build/trayTemplate.png (22×22) and build/trayTemplate@2x.png (44×44)');
