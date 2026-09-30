@@ -24,13 +24,21 @@ function addMiniPage(fx) {
   for (const f of fs.readdirSync(appDir).filter((n) => /^mini\./.test(n))) {
     fs.copyFileSync(path.join(appDir, f), path.join(fx.app, f));
   }
-  // the cloud's mini.html also loads themes/boot.js and assets/mark.svg (absent from the fixture: they would 404)
-  for (const f of ['themes/boot.js', 'assets/mark.svg']) {
+  // the cloud's mini.html also loads themes/boot.js and assets/mark.svg, and boot.js requests the default theme's
+  // stylesheet (Sanctuary: themes/sanctuary-v2/theme.css); absent from the fixture they would 404 and fail the
+  // zero-HTTP-errors check. Keep this list in step with DEFAULT_THEME_ID in app/js/shared/themes.js.
+  for (const f of ['assets/mark.svg']) {
     const src = path.join(appDir, f);
     const dst = path.join(fx.app, f);
     if (!fs.existsSync(src) || fs.existsSync(dst)) continue;
     fs.mkdirSync(path.dirname(dst), { recursive: true });
     fs.copyFileSync(src, dst);
+  }
+  // Whole theme + font trees: boot.js picks the default theme's css and the themes load app/fonts/*.woff2.
+  for (const d of ['themes', 'fonts']) {
+    const src = path.join(appDir, d);
+    const dst = path.join(fx.app, d);
+    if (fs.existsSync(src) && !fs.existsSync(dst)) fs.cpSync(src, dst, { recursive: true });
   }
 }
 
