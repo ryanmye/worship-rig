@@ -1,5 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="173.0 173.0 678.0 678.0" width="22" height="22">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="166.0 166.0 692.0 692.0" width="22" height="22">
   <title>Ligature (template)</title>
-  <clipPath id="mc"><rect x="127" y="300" width="1247" height="424"/></clipPath>
-    <g clip-path="url(#mc)"><path d="M239 240V672H269L434 460L599 672H629V240M629 672V784M629 352H687A98 98 0 0 1 687 548H629M677 548L837 924" fill="none" stroke="#000" stroke-width="104" stroke-linejoin="miter" stroke-miterlimit="4"/></g>
+  <clipPath id="mc"><rect x="120" y="300" width="1257" height="424"/></clipPath>
+    <g clip-path="url(#mc)"><path d="M231 240V673H261L431 466L601 673H631V240M631 673V784M631 351H693A100 100 0 0 1 693 551H631" fill="none" stroke="#000" stroke-width="102" stroke-linejoin="miter" stroke-miterlimit="4"/>
+      <path d="M683 551L847 924" fill="none" stroke="#000" stroke-width="90"/></g>
 </svg>

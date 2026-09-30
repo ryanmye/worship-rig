@@ -1,10 +1,14 @@
 // Worship Rig, direction D: a W·R ligature. Generates icon.svg, mono.svg and the previews.
-//   node design/icon/d-ligature/build.mjs
+//   node design/icon/d-ligature/build.mjs            → icon.svg, mono.svg, previews
+//   node design/icon/d-ligature/build.mjs --export   → also build/icon.png, build/icon.icns (iconutil),
+//        build/trayTemplate.svg, docs/site favicons; then run `node build/make-tray-icon.mjs` for the tray PNGs.
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderSvg } from '../render.mjs';
+import { execFileSync } from 'node:child_process';
+import os from 'node:os';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SQ = 'M642.22 100C723.36 100 763.93 100 800.51 112.07L807.6 113.81C855.28 131.16 892.84 168.72 910.19 216.4L911.93 223.49C924 260.07 924 300.64 924 381.78L924 642.22C924 723.36 924 763.93 911.93 800.51L910.19 807.6C892.84 855.28 855.28 892.84 807.6 910.19L800.51 911.93C763.93 924 723.36 924 642.22 924L381.78 924C300.64 924 260.07 924 223.49 911.93L216.4 910.19C168.72 892.84 131.16 855.28 113.81 807.6L112.07 800.51C100 763.93 100 723.36 100 642.22L100 381.78C100 300.64 100 260.07 112.07 223.49L113.81 216.4C131.16 168.72 168.72 131.16 216.4 113.81L223.49 112.07C260.07 100 300.64 100 381.78 100Z';
@@ -26,16 +30,17 @@ function mark(g) {
     `M${L} ${top - 60}V${yb}H${L + f}L${L + w / 2} ${apex}L${S - f} ${yb}H${S}V${top - 60}`,
     `M${S} ${yb}V${base + 60}`,
     `M${S} ${by0}H${S + bw}A${rb} ${rb} 0 0 1 ${S + bw} ${by1}H${S}`,
-    `M${S + bw - 10} ${by1}L${S + bw - 10 + legDx} ${base + 200}`,
   ].join('');
-  return { d, clip: [L - h - 60, top, S + bw + legDx + 400, base - top] };
+  // The leg is its own, lighter stroke (phase-2 critique: "the R's leg is heavy").
+  const leg = `M${S + bw - 10} ${by1}L${S + bw - 10 + legDx} ${base + 200}`;
+  return { d, leg, clip: [L - h - 60, top, S + bw + legDx + 400, base - top] };
 }
 
-const G = { top: 300, base: 724, s: 90, w: 380, f: 34, apex: 450, rb: 96, bw: 62, legDx: 160 };
+const G = { top: 300, base: 724, s: 86, legS: 74, w: 392, f: 34, apex: 458, rb: 100, bw: 66, legDx: 164 };
 function centred(g) {
   const S = g.w, by1 = g.top + g.s / 2 + 2 * g.rb;
   const footX = S + g.bw - 10 + g.legDx * (g.base - by1) / (g.base + 200 - by1);
-  const right = Math.max(footX + g.s * 0.6, S + g.bw + g.rb + g.s / 2);
+  const right = Math.max(footX + g.legS * 0.6, S + g.bw + g.rb + g.s / 2);
   const width = right + g.s / 2;
   return { ...g, L: 512 - width / 2 + g.s / 2, width };
 }
@@ -44,7 +49,8 @@ function body(g, fill, id = 'm') {
   const m = mark(g);
   const [cx, cy, cw, ch] = m.clip;
   return `<clipPath id="${id}c"><rect x="${cx}" y="${cy}" width="${cw}" height="${ch}"/></clipPath>
-    <g clip-path="url(#${id}c)"><path d="${m.d}" fill="none" stroke="${fill}" stroke-width="${g.s}" stroke-linejoin="miter" stroke-miterlimit="4"/></g>`;
+    <g clip-path="url(#${id}c)"><path d="${m.d}" fill="none" stroke="${fill}" stroke-width="${g.s}" stroke-linejoin="miter" stroke-miterlimit="4"/>
+      <path d="${m.leg}" fill="none" stroke="${fill}" stroke-width="${g.legS}"/></g>`;
 }
 
 function iconSvg() {
@@ -66,7 +72,7 @@ function iconSvg() {
 
 function monoSvg() {
   // Heavier strokes for the 22 px template; square viewBox cropped to the mark.
-  const g = centred({ ...G, s: 104, w: 390, f: 30, apex: 460, rb: 98, bw: 58 });
+  const g = centred({ ...G, s: 102, legS: 90, w: 400, f: 30, apex: 466, rb: 100, bw: 62 });
   const pad = 14, top = g.top - pad, h = g.base - g.top + 2 * pad;
   const w = g.width + 2 * pad, side = Math.max(w, h);
   const x = 512 - side / 2, y = top - (side - h) / 2;
@@ -105,5 +111,33 @@ try {
   if (process.env.ZOOM) {
     await shot(560, 200, '#f5f1ea', `<img src="${p16}" width="128" height="128" style="image-rendering:pixelated;margin:8px"><img src="${p32}" width="128" height="128" style="image-rendering:pixelated;margin:8px"><img src="${m22}" width="176" height="176" style="image-rendering:pixelated;margin:8px">`, process.env.ZOOM);
   }
+  if (process.argv.includes('--export')) await exportAll();
 } finally { await browser.close(); }
+
+/** Phase 2: ship the master into build/ (app icon + tray glyph) and docs/site (favicons). */
+async function exportAll() {
+  const ROOT = path.resolve(HERE, '../../..');
+  const w = (rel, buf) => { fs.writeFileSync(path.join(ROOT, rel), buf); console.log('wrote', rel); };
+  // macOS iconset: the full 1024 grid (squircle + margin + shadow) at every Apple size.
+  const set = fs.mkdtempSync(path.join(os.tmpdir(), 'wr-icon-')) + '/icon.iconset';
+  fs.mkdirSync(set);
+  for (const n of [16, 32, 128, 256, 512]) {
+    fs.writeFileSync(`${set}/icon_${n}x${n}.png`, await renderSvg(page, icon, n));
+    fs.writeFileSync(`${set}/icon_${n}x${n}@2x.png`, await renderSvg(page, icon, n * 2));
+  }
+  execFileSync('iconutil', ['-c', 'icns', set, '-o', path.join(ROOT, 'build/icon.icns')]);
+  console.log('wrote build/icon.icns');
+  w('build/icon.png', await renderSvg(page, icon, 1024));
+  // Tray template source: the mono master, re-sized to a 22-unit box for readability of the file.
+  w('build/trayTemplate.svg', mono.replace('<title>Ligature (template)</title>',
+    '<title>Worship Rig tray (template)</title>\n  <!-- Menu-bar (Tray) glyph: the W·R ligature in one colour (master: design/icon/d-ligature/mono.svg).\n' +
+    '       macOS tints *Template images for light/dark menu bars. Rasterised by build/make-tray-icon.mjs. -->'));
+  // Site favicons use the squircle body only (crop), so the mark fills the tab icon.
+  w('docs/site/favicon-32.png', await renderSvg(page, icon, 32, { crop: true }));
+  w('docs/site/favicon-16.png', await renderSvg(page, icon, 16, { crop: true }));
+  // apple-touch-icon: iOS applies its own mask and fills transparency with black, so render full-bleed.
+  const touch = icon.replace(/<path d="M642[^"]*" fill="url\(#bg\)" filter="url\(#sh\)"\/>/, '<rect x="100" y="100" width="824" height="824" fill="url(#bg)"/>')
+    .replace(/<path d="M642[^"]*" fill="none"[^>]*\/>/, '');
+  w('docs/site/apple-touch-icon.png', await renderSvg(page, touch, 180, { crop: true }));
+}
 console.log('ok');

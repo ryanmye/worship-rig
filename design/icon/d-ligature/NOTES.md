@@ -12,3 +12,22 @@ the head clotted. Switched to the pointed W, raised the stroke to ~1.4 px at 16,
 counter had closed. Mono uses heavier strokes (104).
 
 Regenerate: `node design/icon/d-ligature/build.mjs`.
+
+## Phase 2 (picked)
+
+**Refine.** Following the critique, the R's leg is now its own lighter stroke (74 vs 86; 90 vs 102 in mono). Counters
+are more open: the stems are 392 apart, the notch apex sits at 458 and the bowl is 100 radius, 66 wide. 16 px was
+re-rendered and checked, and it still reads as WR.
+
+**Exports** (`build.mjs --export`):
+- `build/icon.png`: 1024.
+- `build/icon.icns`: iconset 16 to 512 @1x/@2x, via `iconutil`.
+- `build/trayTemplate.svg`: the mono master. `build/make-tray-icon.mjs` now rasterises it with Chromium, 8×8
+  supersampled, into the 22 and 44 px PNGs.
+- `docs/site`: favicon-16/32 (squircle crop) and a full-bleed apple-touch-icon at 180.
+
+`tray-base64.txt` holds the TRAY_ICON_1X/2X strings for main.js.
+
+**Dock check.** Both displays had full-screen spaces, so no Dock was drawn and a region capture only showed an editor.
+`../dock-check.png` is instead the icon macOS reports for the running app (`NSRunningApplication.icon`, the
+image the Dock draws). It is the new W·R.

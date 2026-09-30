@@ -38,3 +38,7 @@ A hybrid is also possible: D in the Dock and A's arch kept as the in-app mark (t
 iconset 16…1024 @1x/@2x → `build/icon.icns` via `iconutil`, `build/icon.png` 1024, `build/trayTemplate{,@2x}.png`
 from the mono variant, favicon 32/180 for `docs/site` and `app/mini.html`, `app/assets/mark.svg` only if A wins.
 Rebuild, check Dock/Finder/tray, report ICON_OK with a screenshot.
+
+Picked: D + A hybrid, phase 2 done. D (W·R ligature) is the Dock/Finder icon (`build/icon.png`, `build/icon.icns`),
+the menu-bar template (`build/trayTemplate*`) and the site favicons. A's lancet arch stays the in-app mark
+(`app/assets/mark.svg`, unchanged). Notes: `d-ligature/NOTES.md`. Running-app icon check: `dock-check.png`.
