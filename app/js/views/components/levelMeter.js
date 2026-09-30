@@ -1,55 +1,34 @@
 // levelMeter(): a thin vertical level bar for one slot, beside its fader (polish-1; design/H-v2 edit.html `.act`).
-// It reads `read()` → {peak, rms} (controller.slotLevel(i)) once per frame, but only while it is on screen: one
-// shared requestAnimationFrame loop serves every visible meter, and an IntersectionObserver takes a meter out of the
-// loop when its view is hidden (Perform while Edit shows, an empty slot, a closed panel). A meter that is not read
-// lets the engine disconnect its analyser tap after 2 s (engine.slotLevel), so a hidden meter costs no CPU on
-// either thread. With nothing sounding the bar makes no DOM writes, and after IDLE_MS of silence it is not read at
-// all until the next note (wakeLevelMeters; idle-cpu R1). The loop runs at ≤ ~30 updates/s (performance #2).
+// It reads `read()` → {peak, rms} (controller.slotLevel(i)) on the shared meterClock loop (idle-cpu-ui: one rAF for
+// every meter, ≤ 30 updates/s on any display), but only while it is on screen: an IntersectionObserver takes it out
+// of the loop when its view is hidden (Perform while Edit shows, an empty slot, a closed panel, data-low-resource,
+// data-window-hidden). A meter that is not read lets the engine disconnect its analyser tap after 2 s
+// (engine.slotLevel), so a hidden meter costs no CPU on either thread. With nothing sounding the bar makes no DOM
+// writes, and once its input stayed below −90 dBFS for SILENT_MS it is not read at all until the next activity
+// (wakeMeters: a note, any input, a drone / master change). It has no probe: a strip only sounds after a note.
 import { h, disposer } from './util.js';
-import { dbToMeter, MIN_FRAME_MS, IDLE_MS } from './meter.js';
+import { dbToMeter } from './meter.js';
+import { addMeter, wakeMeters, meterClockStats, SILENT_AMP } from './meterClock.js';
 
 const RELEASE_PER_MS = 0.012 / 16.7; // ~20 dB/s, as the top-bar meter
-const FLOOR_AMP = 1e-3; // −60 dBFS, the bottom of the bar
 
-/** @type {Set<{frame:(now:number, dt:number)=>void}>} meters on screen and awake */
-const active = new Set();
-/** @type {Set<object>} meters on screen but asleep: silent for IDLE_MS, not read until wakeLevelMeters() */
-const dormant = new Set();
-let raf = 0;
-let lastRun = 0;
-function loop(now) {
-  raf = 0;
-  if (!active.size) return;
-  // performance #2: ≤ ~30 reads + writes a second on any display
-  if (now - lastRun >= MIN_FRAME_MS) {
-    const dt = lastRun ? Math.min(100, now - lastRun) : 16.7;
-    lastRun = now;
-    for (const m of active) m.frame(now, dt);
-  }
-  if (active.size) raf = requestAnimationFrame(loop);
-  else lastRun = 0;
-}
-function wake() {
-  if (!raf && active.size) raf = requestAnimationFrame(loop);
-}
 /**
- * idle-cpu R1: wake every sleeping level meter (main.js calls this on each controller 'notes' event: a slot only
- * sounds after a note-on). A sleeping meter isn't read, so the engine can drop its analyser tap.
+ * idle-cpu R1: wake every sleeping meter (kept for importers; main.js now wakes them from controller.onActivity).
  */
 export function wakeLevelMeters() {
-  if (!dormant.size) return;
-  for (const m of dormant) {
-    m.quietSince = 0;
-    active.add(m);
-  }
-  dormant.clear();
-  wake();
+  wakeMeters();
+}
+
+/** Test hook: how many strip meters are awake / asleep on screen, and whether the shared loop is scheduled. */
+export function levelMeterStats() {
+  const s = meterClockStats();
+  return { active: s.level.awake, dormant: s.level.visible - s.level.awake, scheduled: s.scheduled };
 }
 
 /**
  * @param {{read:() => ({peak:number, rms?:number}|null), label?:string, className?:string}} o
- * @returns {{el:HTMLElement, set():void, destroy():void, readonly running:boolean, readonly level:number,
- *            readonly reads:number}}
+ * @returns {{el:HTMLElement, set():void, destroy():void, readonly running:boolean, readonly sleeping:boolean,
+ *            readonly level:number, readonly reads:number}}
  */
 export function levelMeter(o = {}) {
   const d = disposer();
@@ -60,66 +39,47 @@ export function levelMeter(o = {}) {
   let shown = -1; // last written position (thousandths)
   let hot = false;
   let reads = 0;
-  const self = {
-    quietSince: 0,
-    frame(now, dt = 16.7) {
-      let r = null;
-      try {
-        r = typeof o.read === 'function' ? o.read() : null;
-      } catch {
-        r = null;
-      }
-      reads++;
-      const p = r && Number.isFinite(r.peak) ? r.peak : 0;
-      const target = p > 0 ? dbToMeter(20 * Math.log10(p)) : 0;
-      // fast attack, ~20 dB/s release (as the top-bar meter)
-      level = target > level ? target : Math.max(target, level - RELEASE_PER_MS * dt);
-      const q = Math.round(level * 1000);
-      // idle-cpu R1: at the floor for IDLE_MS → sleep until the next note (wakeLevelMeters)
-      if (q === 0 && p <= FLOOR_AMP) {
-        if (!self.quietSince) self.quietSince = now;
-        else if (now - self.quietSince > IDLE_MS) {
-          active.delete(self);
-          dormant.add(self);
-        }
-      } else self.quietSince = 0;
-      if (q === shown) return;
+  const tick = (now, dt) => {
+    let r = null;
+    try {
+      r = typeof o.read === 'function' ? o.read() : null;
+    } catch {
+      r = null;
+    }
+    reads++;
+    const p = r && Number.isFinite(r.peak) ? r.peak : 0;
+    const target = p > 0 ? dbToMeter(20 * Math.log10(p)) : 0;
+    // fast attack, ~20 dB/s release (as the top-bar meter)
+    level = target > level ? target : Math.max(target, level - RELEASE_PER_MS * dt);
+    const q = Math.round(level * 1000);
+    if (q !== shown) {
       shown = q;
       cover.style.transform = `scaleY(${(1 - q / 1000).toFixed(3)})`;
       const nowHot = level > dbToMeter(-3);
       if (nowHot !== hot) el.classList.toggle('hot', (hot = nowHot));
-    },
+    }
+    return q !== 0 || p >= SILENT_AMP;
   };
-  const start = () => {
-    if (dormant.has(self)) return;
-    self.quietSince = 0;
-    active.add(self);
-    wake();
-  };
-  const stop = () => {
-    active.delete(self);
-    dormant.delete(self);
-  };
-  d.add(stop);
+  const client = addMeter({ tick, kind: 'level' });
+  d.add(() => client.remove());
   if (typeof IntersectionObserver === 'function') {
     const io = new IntersectionObserver((entries) => {
       const e = entries[entries.length - 1];
-      if (e && e.isIntersecting) start();
-      else stop();
+      client.setVisible(!!(e && e.isIntersecting));
     });
     io.observe(el);
     d.add(() => io.disconnect());
-  } else start();
+  } else client.setVisible(true);
   return {
     el,
     set() {},
-    /** True while this meter is on screen: in the frame loop or asleep until the next note (test hook). */
+    /** True while this meter is on screen: in the frame loop or asleep until the next activity (test hook). */
     get running() {
-      return active.has(self) || dormant.has(self);
+      return client.visible;
     },
-    /** True while asleep (silent; not read until a note wakes it; test hook). */
+    /** True while asleep (silent; not read until wakeMeters(); test hook). */
     get sleeping() {
-      return dormant.has(self);
+      return client.visible && !client.awake;
     },
     /** Current bar position 0..1 (test hook). */
     get level() {

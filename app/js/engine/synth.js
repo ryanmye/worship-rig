@@ -147,15 +147,18 @@ function randomWalkBuffer(ctx, rng) {
   const buf = ctx.createBuffer(1, len, SR);
   const d = buf.getChannelData(0);
   const at = (i) => pts[((i % N) + N) % N];
-  for (let s = 0; s < len; s++) {
-    const x = s / SR;
-    const i = Math.floor(x);
-    const u = x - i;
+  // lowres2-critic R4: one segment (1 s, SR samples) at a time with its 4 control points fetched once (the frozen
+  // drone builds a drone-osc per render on the main thread). Same arithmetic per sample, so the same buffer.
+  for (let i = 0; i < N; i++) {
     const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
-    d[s] = clamp(
-      0.5 * (2 * p1 + (-p0 + p2) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u * u + (-p0 + 3 * p1 - 3 * p2 + p3) * u * u * u),
-      -1, 1,
-    );
+    const c1 = -p0 + p2;
+    const c2 = 2 * p0 - 5 * p1 + 4 * p2 - p3;
+    const c3 = -p0 + 3 * p1 - 3 * p2 + p3;
+    for (let s = i * SR, e = s + SR; s < e; s++) {
+      const u = s / SR - i;
+      const y = 0.5 * (2 * p1 + c1 * u + c2 * u * u + c3 * u * u * u);
+      d[s] = y < -1 ? -1 : y > 1 ? 1 : y;
+    }
   }
   return buf;
 }

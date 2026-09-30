@@ -201,3 +201,95 @@ analyser node processing itself (removing both analysers changed nothing measura
   Reconnecting would replay a stale tail, unless the line is rebuilt, which costs a click-free swap design.
 - **The drone's cost** (≈ 4–7 points) and **the reverb IR length** (6.6 s for size 0.62: 1.1 × the longest band's
   RT60, so the last ~9 % is below −60 dB): both change the sound, so they are left for a listening pass.
+
+## Engine fixer (idle-cpu #2–#4, 2026-09-28 late)
+
+Engine-only changes (`app/js/engine/**`, `shared/automation.js`); UI requests are refreshed in CONTRACT_CHANGES
+`## idle-cpu` › "Engine fixer" and `reviews/for-local.md`. The UI fixers landed R1 (meters: 30 fps cap, loop stops at
+silence, write-on-change) and R3 while this ran, so the UI columns moved too; the back-to-back table isolates the
+engine.
+
+### Measurements (2-CPU box, renderer % of one core; audio = Web Audio thread, rbg = reverb background threads)
+
+Back to back, same UI tree, the pre-change `app/js/engine/` + `automation.js` (a shadow copy) vs this change
+(load 14–34, so ±3 points):
+
+| cfg | before: renderer / audio / rbg | after: renderer / audio / rbg |
+|---|---|---|
+| A Sunday, drone on | 34.3 / 19.6 / 6.1 | 33.0 / 17.2 / 6.4 |
+| B drone off | 7.8 / 7.4 / 0 | **5.1 / 4.1 / 0** |
+| G1 Glass Ocean | 9.2 / 8.1 / 0.7 | **6.5 / 4.6 / 1.0** |
+| G2 Grand Piano | 7.6 / 7.2 / 0 | **4.3 / 3.5 / 0** |
+
+Full post run (23:08–23:17, load 3–20): A 36.0 (audio 18.3, rbg 6.1, main 6.5, compositor 4.2), B 9.4 (audio 4.2),
+K 9.8 (4.4), C1 42.7, D 27.4 (18.9 / 7.7), J 27.6 (19.5 / 7.4), H playing 53.0 (28.8 / 7.6), G1 6.7 (5.2), G2 5.1
+(4.2). Start of this task (22:10, load 6–13, old UI): A 43.9 (20.5 / 6.8), B 15.3 (7.9), J 25.2 (18.9 / 6.1),
+G2 13.4 (7.1). `fxAsleep` in stats: B / K / G1 / G2 all three; A / D / J delay + chorus (the drone feeds the reverb).
+
+What A's DSP is (J = UI floor, in-app bisect after the fixes, load 5–8): drone on 17.7 audio + 6.5–7.2 rbg;
+drone.gain 0 (voices still pulled) 9.4 + 0; drone.out cut 3.9 + 0; drone off 4.0 + 0. So the sounding drone costs
+≈ 5.5 points of voices and ≈ 8 audio + 7 rbg ≈ 15 points of reverb (a 6.6 s stereo IR fed continuously) plus the
+master chain carrying it. **Target A ≤ 15 % is not reachable without changing the sound**: A's DSP alone is ≈ 23–25
+points on this box. Offline DSP estimate: A 16.1 % (unchanged), B 6.3 % (the offline graph never sleeps, by design,
+and every offline render runs the convolver for its first IR length); the ≤ 3 % target does not apply to a sounding
+drone.
+
+### Chromium behaviour measured (plain Web Audio, headless Chromium 1194)
+
+1. **A converged `setTargetAtTime` never ends.** 60 peaking biquads whose gain had converged 16 s earlier: 11.3 %
+   vs 7.0–8.3 % static; + a `setValueAtTime(target)` after it: 8.0 %. `automationRate = 'k-rate'` does not help
+   (14.0 %). Worse, a GainNode at 0 reached by setTarget is not flagged silent: osc → gain(setTarget 0) → 3 s
+   convolver stayed at 13.2 % forever; with the pinning `setValueAtTime(0)` it went idle (2.5 %).
+2. **A convolver whose input is removed (or gated to exactly 0) stops after its tail and restarts without losing
+   its onset.** Plain test: an impulse after 3 s idle gives the same onset (±1 render quantum) whether the input was
+   kept active, silent, disconnected or gated. In the engine, reverb and echo onsets after a wake match a
+   never-sleeping reference to the sample (16.44 ms / 244.01 ms after the dry onset).
+
+### Changes
+
+- **#2 send effects sleep** (fx.js `FxGraph.enableIdleSleep / idleTick / wakeAll`, audio.js `_pollFx`, realtime
+  only). One AnalyserNode tap per effect (reverb, delay, chorus input; plus both delay lines' loop LPFs), read every
+  `FX_IDLE_POLL_SEC` = 0.25 s over a window ≥ 1.25 × the poll (16384 frames), so reads cover time without gaps (a
+  late poll restarts the count). An effect sleeps when no slot instrument is connected (armed, incl. retiring) and
+  its tap stays below `FX_IDLE_THRESHOLD` = 1e-5 (−100 dBFS) for `FX_IDLE_HOLD_SEC` = 1 s (delay: + its loop
+  period, so a whole round trip was seen empty). Sleep = reverb: the active unit's input is disconnected (the tail
+  rings out; no sleep during an IR crossfade); delay / chorus: return disconnected from the FX sum (the loop is then
+  unreachable, not processed) and the delay's loop taps detached. Wake = `_armSlot` (every note, before it sounds),
+  a new drone layer / pad file (Drone option `wake`), or a tap reading signal (backstop). A delay loop only sleeps
+  with its content below −100 dBFS, so no stale echo can replay. Offline renders keep the always-on graph.
+- **#3 `rampTo` pins its target** (shared/automation.js): `setValueAtTime(value, when + RAMP_SETTLE_TC × τ)`,
+  `RAMP_SETTLE_TC` = 12 (residual step e^−12 ≈ 6e-6 of the move). Every helper starts with cancel-and-hold, so a
+  later call removes a pending pin. No `rampTo` targets a DelayNode.delayTime (where a sub-sample step could tick).
+- **#4 drone parked at gain 0** (drone.js `DRONE_PARK_SEC` = 10): a synth or files drone left at drone.gain 0 for
+  10 s fades its layers out (voices end); a key or mode set while parked is remembered; the gain coming back
+  restarts it in the latest key with the voice's own attack. Dips shorter than 10 s are untouched. Worth ≈ 5.5
+  points while parked.
+- Checked, nothing to change: drone mode 'off' ends every voice and returns the instruments disconnected
+  (`droneOffNoVoices`); released voices end and disconnect (0 live voices / voice nodes at idle, `fxIdleSleep`);
+  per-voice drift/walk sources stop with their voice; shared LFOs of a disconnected instrument or a sleeping chorus
+  are not pulled. The IR worker and warming: 0 idle callbacks/s and 0.0 worker CPU in every idle config. Master clip
+  oversample is 'none'; lofi's 4x shaper is only connected while lofi is engaged (Sunday: 0). The chorus and tape
+  LFOs on `delayTime` stay a-rate (k-rate would step the read point ≈ 2.4 samples per quantum: zipper).
+
+### Tests
+
+Engine `realtime.fxIdleSleep` (sleep + wake vs a never-sleeping reference: onsets equal to 0.5 ms, no extra click,
+0 voices / voice nodes at idle), `realtime.droneOffNoVoices`, `offline.droneParkGain0`; `realtime.lowResource` had a
+pre-existing race (fails 2 of 3 on the pre-change engine too: the start-up reverb unit still fading) and now waits for
+the fade. `test/unit/shared/automation.test.mjs` updated for the pin (+1 test).
+
+Runs: engine suite at load ≈ 7: 73/75 (the `lowResource` race, since fixed and 3/3 alone; `eqCpu` soft warning). A
+second full run at load 40–100: 68/75, all 7 failures runner timeouts; re-run one by one: `fxIdleSleep`,
+`droneOffNoVoices`, `slotWidthEq`, `washAcrossCommit`, `realInstrumentsSmoke` pass; `stuckNoteFuzz` passes with a
+600 s bound on both engines (pre-change 374.5 s, this change 349.0 s, back to back at load ≈ 45). Unit shared
+225/225. Instruments suite at load ≈ 40: 140/143 with this change vs 139/143 on the pre-change engine, the same
+"perf × realtime" checks failing on both (0.3–0.4× at that load). The phase-2 eq suite could not boot within its
+30 s `__rig.ready` bound at load ≈ 45 (the pre-change tree took 189 s to ready there too); not validated.
+
+### Left for Ryan / later
+
+- **The sounding drone's reverb (≈ 15 points here, ≈ 8 reverb-thread points on the Mac)** is the largest remaining
+  cost. Options, all audible to some degree: a shorter IR on the drone send (e.g. its own 2–3 s unit), trimming the
+  IR at its −60 dB point (6.6 → 6.0 s, ≈ −9 % of the convolution), or rendering the synth drone + its reverb once
+  per key into a seamless loop and playing that (files-mode path; ≈ 8 MB per key, near-zero idle CPU).
+- The drone's own voices (≈ 5.5 points: 3 voices × 4 saws + sub, 4 StereoPanners, 2 biquads each).

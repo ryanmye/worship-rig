@@ -9,6 +9,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { pinTheme } from '../../integration/lib.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, '../../..');
@@ -224,6 +225,7 @@ before(async () => {
   base = info.url;
   browser = await chromium.launch({ channel: 'chromium', headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
   context = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
+  await pinTheme(context, 'classic'); // theme-classic: this suite asserts the base look (Classic tokens/metrics)
   try {
     await context.grantPermissions(['midi'], { origin: base.replace(/\/$/, '') });
   } catch (err) {
@@ -1559,11 +1561,15 @@ test('round2-ui #8: the Revert snapshot follows the controller commit, not a sto
 });
 
 test('round2-ui #10: hidden views do not animate or poll (meters, runtime lamps)', async () => {
+  // idle-cpu-ui: the meters share one ≤ 30 fps loop (meterClock), so reads are counted per clock frame and per second,
+  // not per display frame (the old "0.25/frame" bounds failed at 120 Hz on the Mac). A held note keeps them awake.
+  await page.evaluate(() => window.__rig.controller.perform.noteOn(60, 110));
   const measure = (view) =>
     page.evaluate(async (v) => {
-      const { engine, ctx } = window.__rig;
+      const { engine, ctx, meters } = window.__rig;
       ctx.setView(v);
-      await new Promise((res) => setTimeout(res, 200));
+      meters.wake();
+      await new Promise((res) => setTimeout(res, 250));
       const an = engine.analyserL;
       const proto = Object.getPrototypeOf(an);
       const names = ['getFloatTimeDomainData', 'getByteTimeDomainData', 'getFloatFrequencyData', 'getByteFrequencyData'];
@@ -1579,26 +1585,31 @@ test('round2-ui #10: hidden views do not animate or poll (meters, runtime lamps)
         rt += 1;
         return origRt.apply(this, a);
       };
-      let frames = 0;
-      let run = true;
-      const tick = () => {
-        frames += 1;
-        if (run) requestAnimationFrame(tick);
-      };
-      requestAnimationFrame(tick);
-      await new Promise((res) => setTimeout(res, 800));
-      run = false;
+      const f0 = meters.stats().frames;
+      const t0 = performance.now();
+      await new Promise((res) => setTimeout(res, 1000));
+      const sec = (performance.now() - t0) / 1000;
+      const frames = meters.stats().frames - f0;
       for (const [n] of saved) delete an[n];
       engine.getRuntimeState = origRt;
-      return { perFrame: reads / Math.max(1, frames), frames, rt };
+      return { perFrame: reads / Math.max(1, frames), readsPerSec: reads / sec, framesPerSec: frames / sec, rt,
+        awake: meters.stats().awake };
     }, view);
   const perf = await measure('perform');
   const edit = await measure('edit');
+  await page.evaluate(() => window.__rig.controller.perform.noteOff(60));
   await page.evaluate(() => window.__rig.ctx.setView('perform'));
   await page.waitForFunction(() => !document.getElementById('view-perform').hidden);
-  console.log(`# analyserL reads/frame: perform ${perf.perFrame.toFixed(2)} (${perf.frames} frames), edit ${edit.perFrame.toFixed(2)}; runtime polls: perform ${perf.rt}, edit ${edit.rt}`);
-  assert.ok(perf.perFrame > 0.5 && perf.perFrame < 1.5, `Perform: only the top-bar meter reads (${perf.perFrame.toFixed(2)}/frame)`);
-  assert.ok(edit.perFrame > 1.5, `Edit: top-bar + Edit meter (${edit.perFrame.toFixed(2)}/frame)`);
+  console.log(`# analyserL reads/clock frame: perform ${perf.perFrame.toFixed(2)} (${perf.readsPerSec.toFixed(1)}/s, `
+    + `${perf.framesPerSec.toFixed(1)} frames/s), edit ${edit.perFrame.toFixed(2)} (${edit.readsPerSec.toFixed(1)}/s); `
+    + `runtime polls: perform ${perf.rt}, edit ${edit.rt}`);
+  assert.ok(perf.framesPerSec > 5 && perf.framesPerSec <= 35, `meter loop ≤ 35/s on any display (${perf.framesPerSec.toFixed(1)})`);
+  assert.ok(perf.perFrame > 0.8 && perf.perFrame < 1.2, `Perform: only the top-bar meter reads (${perf.perFrame.toFixed(2)}/frame)`);
+  assert.ok(perf.readsPerSec <= 35, `Perform: ≤ 35 reads/s (${perf.readsPerSec.toFixed(1)})`);
+  // idle-cpu-ui: the top-bar and Edit meters both show engine.analyserL/R and share one read per clock frame
+  assert.ok(edit.awake >= 2, `Edit: the top-bar and the Edit meter both run (${edit.awake} awake)`);
+  assert.ok(edit.perFrame > 0.8 && edit.perFrame < 1.2, `Edit: one shared read per frame (${edit.perFrame.toFixed(2)}/frame)`);
+  assert.ok(edit.readsPerSec <= 35, `Edit: ≤ 35 reads/s (${edit.readsPerSec.toFixed(1)})`);
   assert.ok(perf.rt >= 3, `Perform polls the runtime lamps (${perf.rt})`);
   assert.equal(edit.rt, 0, 'no runtime polling while Perform is hidden');
 });
@@ -1627,11 +1638,14 @@ test('polish-1: strip level meters follow the slot, sit beside the fader, stop r
     assert.ok(g.inStrip && g.inTrack && g.pe === 'none', JSON.stringify(g));
     assert.ok(g.h > g.inputH * 0.7, `spans the thumb travel (${g.h} of ${g.inputH})`);
   }
-  // count controller.slotLevel reads per frame: Perform reads each filled strip; Edit on Effects reads none
+  // count controller.slotLevel reads per meter-clock frame: Perform reads each filled strip; Edit on Effects reads none.
+  // idle-cpu-ui: one shared ≤ 30 fps loop (meterClock), so the cadence is per clock frame and per second, independent
+  // of the display's refresh rate (the old per-display-frame bound, "about every other frame", failed at 120 Hz).
   const measure = (view, block) => page.evaluate(async ([v, b]) => {
-    const { controller, ctx } = window.__rig;
+    const { controller, ctx, meters } = window.__rig;
     ctx.setView(v);
     if (b) window.__rig.views.edit.editState.select(b);
+    meters.wake();
     await new Promise((res) => setTimeout(res, 250));
     const orig = controller.slotLevel;
     const per = [0, 0, 0, 0];
@@ -1639,26 +1653,27 @@ test('polish-1: strip level meters follow the slot, sit beside the fader, stop r
       per[i] += 1;
       return orig(i);
     };
-    let frames = 0;
-    let run = true;
-    const tick = () => {
-      frames += 1;
-      if (run) requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
+    const f0 = meters.stats().frames;
+    const t0 = performance.now();
     await new Promise((res) => setTimeout(res, 600));
-    run = false;
+    const sec = (performance.now() - t0) / 1000;
+    const frames = meters.stats().frames - f0;
     controller.slotLevel = orig;
-    return { per: per.map((n) => n / Math.max(1, frames)), frames };
+    return { per: per.map((n) => n / Math.max(1, frames)), perSec: per.map((n) => n / sec), frames, fps: frames / sec };
   }, [view, block]);
   await page.evaluate(() => window.__rig.controller.perform.noteOn(60, 110));
   const perf = await measure('perform');
   const filled = await page.evaluate(() => window.__rig.store.currentSong().patch.slots.map((s) => !!s));
+  // a filled strip that stays silent for SILENT_MS (500 ms) sleeps until the next activity (the note may not reach
+  // every strip), so a strip reads once per clock frame or not at all
   perf.per.forEach((n, i) => {
-    // critics-fix (performance #2): the shared loop runs at ≤ ~30 updates/s, so every 2nd frame at 60 Hz
-    if (filled[i]) assert.ok(n > 0.3 && n < 1.1, `Perform reads slot ${i} about every other frame (${n.toFixed(2)})`);
-    else assert.equal(n, 0, `an empty strip's meter is hidden and never reads (slot ${i})`);
+    if (filled[i]) {
+      assert.ok(n === 0 || (n > 0.3 && n <= 1.05), `Perform reads slot ${i} once per clock frame or sleeps (${n.toFixed(2)})`);
+      assert.ok(perf.perSec[i] <= 35, `slot ${i}: ≤ 35 reads/s (${perf.perSec[i].toFixed(1)})`);
+    } else assert.equal(n, 0, `an empty strip's meter is hidden and never reads (slot ${i})`);
   });
+  assert.ok(perf.fps <= 35, `meter clock ≤ 35 frames/s (${perf.fps.toFixed(1)})`);
+  assert.ok(perf.per.some((n, i) => filled[i] && n > 0.3), `the sounding strips are read (${perf.per.map((n) => n.toFixed(2))})`);
   const lv = await page.evaluate(() => [0, 1, 2, 3].map((i) => Number(document
     .querySelector(`[data-testid="slot-level-${i}"] .lvl-cover`)?.style.transform.replace(/[^0-9.]/g, '') || 1)));
   assert.ok(lv.some((c) => c < 0.9), `a sounding slot lifts its bar (covers ${lv.join(', ')})`);
@@ -2474,6 +2489,204 @@ test('round4-perform P1: the bottom-row hold captions (Revert, unlock) are drawn
   }
 });
 
+// ------------------------------------------------------------------------------------------ hardware-fixes
+// reviews/hardware-checklist.md results log (Ryan at the Keystation, built app) + BACKLOG B first bullet
+
+test('hardware-fixes L-23: every hold caption is measured when shown and stays inside the window (lock hint at '
+  + '1280×720 and 1440×900 on the bottom row; transpose captions inside their panel)', async () => {
+  await selectIndex(0);
+  const capBox = (sel) => page.evaluate((s) => {
+    const cap = document.querySelector(`${s} .hb-cap`);
+    const c = cap.getBoundingClientRect();
+    const b = document.querySelector(s).getBoundingClientRect();
+    const p = document.querySelector('.transpose').getBoundingClientRect();
+    return { shown: !cap.hidden, l: c.left, t: c.top, r: c.right, b: c.bottom, h: c.height, text: cap.textContent,
+      vw: document.documentElement.clientWidth, vh: document.documentElement.clientHeight, place: cap.dataset.place || '',
+      btnTop: b.top, pl: p.left, pr: p.right };
+  }, sel);
+  const inWindow = (m) => m.l >= 0 && m.t >= 0 && m.r <= m.vw && m.b <= m.vh;
+  try {
+    await page.evaluate(() => window.__rig.store.set('settings.performLock', true));
+    for (const [w, hgt] of [[1280, 720], [1440, 900], [1024, 700], [1366, 768]]) {
+      await page.setViewportSize({ width: w, height: hgt });
+      await page.waitForTimeout(250);
+      await page.click('[data-testid=perform-lock]'); // a tap while locked: the "press and hold" hint
+      let m = await capBox('[data-testid=perform-lock]');
+      assert.ok(m.shown && m.h > 10, `${w}×${hgt}: unlock hint shown`);
+      assert.ok(inWindow(m), `${w}×${hgt}: unlock hint ${JSON.stringify(m)} fully inside the window`);
+      assert.ok(m.b <= m.btnTop, `${w}×${hgt}: drawn above the bottom-row button (${m.b} ≤ ${m.btnTop})`);
+      assert.equal(m.text, 'press and hold (0.6 s)');
+      // the caption while holding (a different, measured-again text), then release early: hint again
+      await page.hover('[data-testid=perform-lock]');
+      await page.mouse.down();
+      await page.waitForTimeout(150);
+      m = await capBox('[data-testid=perform-lock]');
+      assert.ok(m.shown && inWindow(m), `${w}×${hgt}: "keep holding" inside the window ${JSON.stringify(m)}`);
+      await page.mouse.up();
+      assert.equal(await page.evaluate(() => window.__rig.store.get().settings.performLock), true, 'a short press keeps it');
+      for (const sel of ['[data-testid=transpose-down]', '[data-testid=transpose-up]']) {
+        await page.click(sel);
+        m = await capBox(sel);
+        assert.ok(m.shown && inWindow(m), `${w}×${hgt}: ${sel} hint inside the window`);
+        assert.ok(m.l >= m.pl - 0.5 && m.r <= m.pr + 0.5, `${w}×${hgt}: ${sel} hint ${m.l}–${m.r} inside the Transpose panel ${m.pl}–${m.pr}`);
+      }
+      if (w === 1280) {
+        await page.click('[data-testid=perform-lock]');
+        await clearToasts();
+        await page.screenshot({ path: path.join(shots, 'hwfix-lock-hint-1280x720.png') });
+      }
+    }
+    // a caption pinned against the window's bottom edge flips above; against the right edge it slides left
+    const flip = await page.evaluate(async () => {
+      const { holdButton } = await import('/js/views/components/holdButton.js');
+      const out = {};
+      for (const [k, css] of [['bottom', 'left:300px;bottom:2px'], ['right', 'right:0;top:200px'], ['top', 'left:300px;top:0']]) {
+        const hb = holdButton({ label: 'X', requireHold: true });
+        hb.el.style.cssText = `position:fixed;${css};width:60px;height:40px`;
+        document.body.append(hb.el);
+        hb.el.click();
+        const c = hb.el.querySelector('.hb-cap').getBoundingClientRect();
+        out[k] = { place: hb.el.querySelector('.hb-cap').dataset.place || '', inside: c.left >= 0 && c.top >= 0
+          && c.right <= document.documentElement.clientWidth && c.bottom <= document.documentElement.clientHeight };
+        hb.destroy();
+      }
+      return out;
+    });
+    assert.deepEqual(flip, { bottom: { place: 'above', inside: true }, right: { place: '', inside: true },
+      top: { place: '', inside: true } });
+  } finally {
+    await page.evaluate(() => window.__rig.store.set('settings.performLock', false));
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(150);
+  }
+});
+
+test('hardware-fixes 2b (Mac polish-2A at 1366×768: transpose row 140 > 137): the value takes what the buttons leave, '
+  + '"+5" / "−18" / "+17" fit in wide display faces: no spill out of the value box, never over a ± button', async () => {
+  await selectIndex(0);
+  // a transient hold caption (the previous test's hints, 1.6 s) is an overlay, not row content: let it go first
+  await page.waitForFunction(() => [...document.querySelectorAll('.hb-cap')].every((c) => c.hidden), null, { timeout: 5000 });
+  const setT = (v) => page.evaluate(async (want) => {
+    const { transposeSemisOf } = await import('/js/store.js');
+    const r = window.__rig;
+    r.controller.transposeBy(want - transposeSemisOf(r.store.currentSong()));
+    await new Promise((res) => setTimeout(res, 60));
+  }, v);
+  const rows = [];
+  try {
+    // DejaVu Sans Bold digits (0.70 em) are wider than SF Pro Display Heavy's (≈ 0.67 em, 2.2ch = 44 px on the Mac):
+    // with the old 2.2ch min-width it reproduces the Mac's overflow on Linux. Its minus (.84 em) is wider still, so
+    // "−18" here is a worst case for SF (44.6 px at 20 px; the tightest room is 46 px at 1440×900).
+    for (const font of ['DejaVu Sans', 'Liberation Sans']) {
+      await page.evaluate((f) => document.documentElement.style.setProperty('--font-display', `'${f}'`), font);
+      for (const [w, hgt] of [[1366, 768], [1280, 720], [1440, 900], [1024, 700]]) {
+        await page.setViewportSize({ width: w, height: hgt });
+        await page.waitForTimeout(200);
+        for (const v of [0, 5, -18, 17]) {
+          await setT(v);
+          const m = await page.evaluate(() => {
+            const row = document.querySelector('.transpose-row');
+            const val = row.querySelector('.transpose-val');
+            const btns = [...row.querySelectorAll('.hold-btn')];
+            const rg = document.createRange();
+            rg.selectNodeContents(val);
+            const t = rg.getBoundingClientRect();
+            return { row: [row.scrollWidth, row.clientWidth], val: [val.scrollWidth, val.clientWidth], text: val.textContent,
+              btns: btns.map((b) => [b.scrollWidth, b.clientWidth]), fs: getComputedStyle(val).fontSize,
+              ink: [t.left - btns[0].getBoundingClientRect().right, btns[1].getBoundingClientRect().left - t.right] };
+          });
+          rows.push(`${font} ${w}×${hgt} ${m.text}: row ${m.row.join('/')} val ${m.val.join('/')} @${m.fs} `
+            + `clear ${m.ink.map((x) => x.toFixed(1)).join('/')}`);
+          // the row and the buttons clip (FIT in OVERFLOW_PROBE): no tolerance there
+          assert.ok(m.row[0] <= m.row[1] + 1, `${font} ${w}×${hgt} ${m.text}: row ${m.row[0]} > ${m.row[1]}`);
+          for (const [sw, cw] of m.btns) assert.ok(sw <= cw + 1, `${font} ${w}×${hgt}: a ± button's content fits`);
+          // themes-final: the value box is the whole room between the buttons (no row gap), so it has no slack to
+          // spill into; +1 is scrollWidth's rounding only. The text box itself never reaches a button.
+          assert.ok(m.val[0] <= m.val[1] + 1, `${font} ${w}×${hgt} ${m.text}: value ${m.val[0]} > ${m.val[1]} + 1`);
+          assert.ok(Math.min(...m.ink) >= 0, `${font} ${w}×${hgt} ${m.text}: text over a ± button (${m.ink.join(', ')})`);
+        }
+      }
+    }
+    console.log(`# ${rows.join('\n# ')}`);
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.waitForTimeout(200);
+    await setT(0);
+    await page.evaluate(() => document.documentElement.style.removeProperty('--font-display'));
+    await clearToasts();
+    const m = await page.evaluate(OVERFLOW_PROBE);
+    assert.deepEqual(m.bad, [], `1366×768: ${m.bad.join(' · ')}`);
+  } finally {
+    await page.evaluate(() => document.documentElement.style.removeProperty('--font-display'));
+    await setT(0);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(150);
+  }
+});
+
+test('hardware-fixes: Quick shows "Bluetooth output adds ~176 ms…" in its header while the output latency is > 60 ms; '
+  + '× dismisses it per device name (shared with Settings)', async () => {
+  await selectIndex(0);
+  await page.evaluate(() => {
+    window.__fakeOut = 'JBL Charge 5 (Bluetooth)';
+    navigator.mediaDevices.enumerateDevices = async () => [
+      { kind: 'audiooutput', deviceId: 'default', label: `Default - ${window.__fakeOut}`, groupId: 'g' },
+    ];
+    localStorage.removeItem('worship-rig.latency-hint.dismissed');
+    const c = window.__rig.controller;
+    window.__fakeLat = (ms) => c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status, latencyMs: ms } }));
+  });
+  const hint = '[data-testid=quick-latency-hint]';
+  const state = (ms) => page.evaluate(async ([m, sel]) => {
+    window.__fakeLat(m);
+    await new Promise((res) => setTimeout(res, 120));
+    const el = document.querySelector(sel);
+    const t = el.querySelector('.lh-text');
+    const head = document.querySelector('.qs-h');
+    return { shown: !el.hidden, text: t.textContent, clipped: t.scrollWidth > t.clientWidth + 1,
+      head: head.scrollWidth <= head.clientWidth + 1, sub: document.querySelector('.qs-sub').offsetParent !== null };
+  }, [ms, hint]);
+  try {
+    await page.click('#btn-quick');
+    await page.waitForSelector('[data-testid=quick-sheet]:not([hidden])');
+    for (const [w, hgt] of [[1440, 900], [1280, 720], [1024, 700]]) {
+      await page.setViewportSize({ width: w, height: hgt });
+      await page.waitForTimeout(200);
+      let m = await state(176);
+      assert.ok(m.shown, `${w}: shown at 176 ms`);
+      assert.equal(m.text, 'Bluetooth output adds ~176 ms — use the headphone jack or a dock for live playing');
+      assert.ok(!m.clipped, `${w}×${hgt}: the whole line shows`);
+      assert.ok(m.head, `${w}: the Quick header does not overflow`);
+      assert.equal(m.sub, false, 'it takes the subtitle\'s place');
+      if (w === 1280) {
+        await clearToasts();
+        await page.screenshot({ path: path.join(shots, 'hwfix-quick-latency-1280x720.png') });
+      }
+      m = await state(20);
+      assert.equal(m.shown, false, `${w}: hidden at 20 ms (the dock)`);
+    }
+    assert.equal((await state(60)).shown, false, '60 ms is not "above 60"');
+    await state(176);
+    await page.click(`${hint} .lh-x`);
+    assert.equal((await state(176)).shown, false, 'dismissed for this output');
+    assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('worship-rig.latency-hint.dismissed'))),
+      ['JBL Charge 5 (Bluetooth)']);
+    // another output name (AirPods) warns again
+    await page.evaluate(() => { window.__fakeOut = 'AirPods'; navigator.mediaDevices.dispatchEvent(new Event('devicechange')); });
+    await page.waitForFunction(() => { window.__fakeLat(176); return !document.querySelector('[data-testid=quick-latency-hint]').hidden; },
+      null, { timeout: 5000, polling: 100 });
+  } finally {
+    await page.evaluate(() => {
+      delete navigator.mediaDevices.enumerateDevices;
+      localStorage.removeItem('worship-rig.latency-hint.dismissed');
+      const c = window.__rig.controller;
+      c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } }));
+    });
+    if (await page.isVisible('[data-testid=quick-sheet]')) await page.click('#btn-quick');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(150);
+  }
+});
+
 test('round4-perform P2 (local L-20): the song name\'s line box holds tall-metric fonts (no +1 slack); the KEY row still fits',
   async () => {
     await selectIndex(0);
@@ -2929,9 +3142,10 @@ test('critics-fix O3 / O14 / O11 / O13: loading tooltip says "play now"; a suspe
     c.dispatchEvent(new CustomEvent('status', { detail: { ...real, audio: 'running' } }));
     out.blocked = document.getElementById('audio-text').textContent;
     delete e.ctx.state;
-    c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } }));
+    c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status, ready: true } }));
     out.readyTitle = document.getElementById('ready-status').title;
     out.ok = document.getElementById('audio-text').textContent;
+    c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } }));
     // O11
     recorder.dispatchEvent(new CustomEvent('state', { detail: { state: 'stopping' } }));
     const t = document.getElementById('rec-time');
@@ -2953,13 +3167,13 @@ test('critics-fix O3 / O14 / O11 / O13: loading tooltip says "play now"; a suspe
   await page.click('[data-testid=perform-lock]');
   await page.waitForFunction(() => window.__rig.store.get().settings.performLock === true);
   try {
-    for (const sel of ['[data-testid=view-switch] [data-value="edit"]', '#btn-settings']) {
-      await clearToasts();
+    // (identical toasts merge: the second tap shows as ×2 on the first one)
+    for (const [k, sel] of ['[data-testid=view-switch] [data-value="edit"]', '#btn-settings'].entries()) {
       assert.equal(await page.isDisabled(sel), true, `${sel} disabled under lock`);
       const b = await page.locator(sel).boundingBox();
       await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
-      await page.waitForFunction(() => [...document.querySelectorAll('#toasts .toast')].some((x) => /hold Lock to unlock/.test(x.textContent)),
-        null, { timeout: 3000 });
+      await page.waitForFunction((n) => [...document.querySelectorAll('#toasts .toast')].some((x) => /hold Lock to unlock/.test(x.textContent)
+        && (n === 0 || /×2/.test(x.textContent))), k, { timeout: 3000 });
     }
     assert.equal(await page.evaluate(() => window.__rig.store.get().settings.view), 'perform');
   } finally {
@@ -3048,11 +3262,18 @@ test('critics-fix performance #2 / idle-cpu R1, R4: meters update ≤ ~30×/s, s
   const r = await page.evaluate(async () => {
     const { controller: c } = window.__rig;
     const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+    // idle-cpu-ui: every meter runs on one shared rAF callback (meterClock 'meterFrame'); 'level' counts the strip
+    // meters' reads (controller.slotLevel)
     const counts = { frame: 0, loop: 0 };
     const orig = window.requestAnimationFrame;
     window.requestAnimationFrame = (cb) => {
-      if (cb && (cb.name === 'frame' || cb.name === 'loop')) counts[cb.name] += 1;
+      if (cb && cb.name === 'meterFrame') counts.frame += 1;
       return orig.call(window, cb);
+    };
+    const origLevel = c.slotLevel;
+    c.slotLevel = (i) => {
+      counts.loop += 1;
+      return origLevel(i);
     };
     let fillWrites = 0;
     const mo = new MutationObserver((ms) => {
@@ -3089,19 +3310,25 @@ test('critics-fix performance #2 / idle-cpu R1, R4: meters update ≤ ~30×/s, s
       c.dispatchEvent(new CustomEvent('menu', { detail: { id: 'windowShown' } }));
       await sleep(50);
       hidden.after = document.documentElement.hasAttribute('data-window-hidden');
+      // LOCAL's preload event (every mode): window 'rig:window-visible' {detail:{visible}}
+      window.dispatchEvent(new CustomEvent('rig:window-visible', { detail: { visible: false } }));
+      hidden.dom = document.documentElement.hasAttribute('data-window-hidden');
+      window.dispatchEvent(new CustomEvent('rig:window-visible', { detail: { visible: true } }));
+      hidden.domAfter = document.documentElement.hasAttribute('data-window-hidden');
       return { silent, playing, bars, hidden };
     } finally {
       mo.disconnect();
       window.requestAnimationFrame = orig;
+      c.slotLevel = origLevel;
     }
   });
   assert.deepEqual(r.silent, { frame: 0, loop: 0, fillWrites: 0 }, `silent: no meter frames, no writes (${JSON.stringify(r.silent)})`);
-  assert.ok(r.playing.frame > 10, `a note wakes the top-bar meter (${r.playing.frame} frames/s)`);
-  assert.ok(r.playing.loop > 10, `a note wakes the slot meters (${r.playing.loop} frames/s)`);
+  assert.ok(r.playing.frame > 10 && r.playing.frame <= 36, `a note wakes the shared meter loop (${r.playing.frame} frames/s)`);
+  assert.ok(r.playing.loop > 10, `a note wakes the slot meters (${r.playing.loop} reads/s)`);
   // two bars (L, R) at ≤ ~30 updates a second each, plus scheduling slack
   assert.ok(r.playing.fillWrites > 5 && r.playing.fillWrites <= 2 * 36, `top-bar fill writes in 1 s: ${r.playing.fillWrites}`);
   assert.ok(r.bars.some((t) => Number(t.replace(/[^0-9.]/g, '') || 1) < 0.9), `a slot bar lifts (${r.bars.join(', ')})`);
-  assert.deepEqual(r.hidden, { attr: true, meter: 'none', after: false });
+  assert.deepEqual(r.hidden, { attr: true, meter: 'none', after: false, dom: true, domAfter: false });
 });
 
 test('critics-fix performance #3: a wheel held still writes nothing; a moving wheel touches only the indicator', async () => {
@@ -3113,7 +3340,10 @@ test('critics-fix performance #3: a wheel held still writes nothing; a moving wh
     await sleep(200);
     const muts = [];
     const mo = new MutationObserver((ms) => {
-      for (const m of ms) muts.push(`${m.type}:${m.target.className || m.target.nodeName}:${m.attributeName || ''}`);
+      for (const m of ms) {
+        if (m.target.closest?.('.lvl-meter')) continue; // the slot level bars follow the sound, not the wheel
+        muts.push(`${m.type}:${m.target.className || m.target.nodeName}:${m.attributeName || ''}`);
+      }
     });
     const opts = { attributes: true, childList: true, characterData: true, subtree: true };
     mo.observe(document.querySelector('.p-wheel'), opts);
@@ -3139,6 +3369,453 @@ test('critics-fix performance #3: a wheel held still writes nothing; a moving wh
   assert.ok(r.moving.length > 0, 'a moving wheel is drawn');
   assert.ok(r.moving.every((m) => !/childList/.test(m)), `text changes in place, no node swaps (${r.moving.filter((m) => /childList/.test(m)).slice(0, 4)})`);
   assert.ok(r.indOnSelf && !r.rootInd, '--ind lives on the indicator, not the fader root');
+});
+
+// ------------------------------------------------------------------------------------------ idle-cpu-ui
+/** Select a song by name (ids are generated) and wait for it; the drone mode is forced when given. */
+async function selectByName(name, droneMode) {
+  const idx = await page.evaluate(([n, dm]) => {
+    const { store } = window.__rig;
+    const ids = store.navIds();
+    const i = ids.findIndex((id) => store.getSong(id).name === n);
+    if (i >= 0 && dm) store.set(`songs.${ids[i]}.drone.mode`, dm);
+    return i;
+  }, [name, droneMode || null]);
+  assert.ok(idx >= 0, `song ${name} in the setlist`);
+  await selectIndex(idx);
+}
+/** In-page: counts every rAF callback, master-analyser read and slotLevel read from now on (idempotent). */
+const UI_COUNTERS = () => {
+  if (window.__uic) return;
+  const C = (window.__uic = { raf: 0, an: 0, slot: 0 });
+  const oRaf = window.requestAnimationFrame;
+  window.requestAnimationFrame = function (cb) {
+    return oRaf.call(window, (t) => {
+      C.raf += 1;
+      return cb(t);
+    });
+  };
+  // the stereo meters read engine.analyserL/R (the engine's own fx idle / freeze taps are other AnalyserNodes)
+  const e = window.__rig.engine;
+  for (const an of [e.analyserL, e.analyserR]) {
+    const proto = Object.getPrototypeOf(an);
+    for (const m of ['getFloatTimeDomainData', 'getByteTimeDomainData', 'getFloatFrequencyData', 'getByteFrequencyData']) {
+      an[m] = function (...x) {
+        C.an += 1;
+        return proto[m].apply(this, x);
+      };
+    }
+  }
+  const c = window.__rig.controller;
+  const o = c.slotLevel;
+  c.slotLevel = (i) => {
+    C.slot += 1;
+    return o(i);
+  };
+};
+/** Rates per second over `ms` (rAF callbacks, analyser reads, slotLevel reads, meter-clock frames). */
+const uiRates = (ms) => page.evaluate(async (w) => {
+  const C = window.__uic;
+  const m = window.__rig.meters;
+  const a = { ...C, frames: m.stats().frames };
+  const t0 = performance.now();
+  await new Promise((res) => setTimeout(res, w));
+  const sec = (performance.now() - t0) / 1000;
+  const r = (k) => Math.round(((k === 'frames' ? m.stats().frames : C[k]) - a[k]) / sec * 10) / 10;
+  return { raf: r('raf'), an: r('an'), slot: r('slot'), frames: r('frames'), stats: m.stats() };
+}, ms);
+/** Wait until the meter clock has run `n` more frames (a resumed loop; generous bound for a loaded box). */
+const metersRun = async (n = 5, timeout = 5000) => {
+  const f0 = await page.evaluate(() => window.__rig.meters.stats().frames);
+  await page.waitForFunction(([a, k]) => window.__rig.meters.stats().frames >= a + k, [f0, n], { timeout, polling: 50 });
+};
+/** Wait until every meter sleeps (the shared loop stopped): silence below −90 dBFS for 500 ms. */
+const metersAsleep = (timeout = 20000) => page.waitForFunction(() => {
+  const s = window.__rig.meters.stats();
+  return s.awake === 0 && !s.scheduled;
+}, null, { timeout, polling: 100 });
+
+test('idle-cpu-ui: silent → the meter loop stops (rAF ≤ 1/s, ≤ 5 style recalcs in 3 s); a note restarts it within '
+  + '100 ms; drone on → ≤ 35 rAF/s; low-resource → 0 rAF, 0 analyser reads, lamps at 1 Hz; no reload', async () => {
+  await page.waitForFunction(() => window.__rig.controller.status.ready === true, null, { timeout: 600000, polling: 500 });
+  await page.evaluate(() => window.__rig.ctx.setView('perform'));
+  await selectByName('Grand Piano'); // no drone: silence is reachable
+  await page.evaluate(UI_COUNTERS);
+  await page.mouse.move(2, 890); // park the pointer on nothing hoverable
+  await metersAsleep();
+  await page.waitForTimeout(2000);
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Performance.enable');
+  const metric = async (n) => (await cdp.send('Performance.getMetrics')).metrics.find((x) => x.name === n)?.value ?? 0;
+  const rc0 = await metric('RecalcStyleCount');
+  const lay0 = await metric('LayoutCount');
+  const silent = await uiRates(3000);
+  const recalcs = (await metric('RecalcStyleCount')) - rc0;
+  const layouts = (await metric('LayoutCount')) - lay0;
+  await cdp.detach().catch(() => {});
+  console.log(`# silent: ${JSON.stringify(silent)} recalcs ${recalcs} layouts ${layouts} in 3 s`);
+  assert.ok(silent.raf <= 1, `silent: rAF callbacks/s ${silent.raf} ≤ 1`);
+  assert.equal(silent.frames, 0, 'silent: no meter frames');
+  assert.equal(silent.slot, 0, 'silent: strip meters are not read');
+  assert.ok(silent.an <= 2.5, `silent: only the 1 Hz safety probe reads the master analysers (${silent.an}/s)`);
+  assert.ok(recalcs <= 5, `silent: ${recalcs} style recalcs in 3 s (≤ 5)`);
+
+  // a note-on restarts the loop within 100 ms (the controller's activity signal, not a poll)
+  const wake = await page.evaluate(async () => {
+    const m = window.__rig.meters;
+    const f0 = m.stats().frames;
+    const t0 = performance.now();
+    window.__rig.controller.perform.noteOn(64, 110);
+    while (m.stats().frames === f0 && performance.now() - t0 < 1000) await new Promise((res) => setTimeout(res, 2));
+    const ms = performance.now() - t0;
+    const lift = () => Number((document.querySelector('#meter-mount .meter-fill')?.style.transform || '')
+      .replace(/[^0-9.]/g, '') || 0);
+    while (lift() <= 0.1 && performance.now() - t0 < 2000) await new Promise((res) => setTimeout(res, 20));
+    const fill = document.querySelector('#meter-mount .meter-fill')?.style.transform || '';
+    window.__rig.controller.perform.noteOff(64);
+    return { ms, fill };
+  });
+  console.log(`# note-on → first meter frame ${wake.ms.toFixed(1)} ms; fill ${wake.fill}`);
+  assert.ok(wake.ms < 100, `a note restarts the meters within 100 ms (${wake.ms.toFixed(1)} ms)`);
+  assert.ok(Number(wake.fill.replace(/[^0-9.]/g, '') || 0) > 0.1, `the top-bar bar lifts (${wake.fill})`);
+
+  // drone on: the loop runs, capped at ~30 frames/s whatever the refresh rate; the hold moves without layout
+  await selectByName('Sunday Pad + Piano', 'synth');
+  await metersRun(10, 10000);
+  const droneOn = await uiRates(2000);
+  const holdStyles = await page.evaluate(() => [...document.querySelectorAll('#meter-mount .meter-hold')]
+    .map((x) => x.getAttribute('style') || ''));
+  console.log(`# drone on: ${JSON.stringify(droneOn)}`);
+  assert.ok(droneOn.frames > 10, `drone on: the meters run (${droneOn.frames} frames/s)`);
+  assert.ok(droneOn.raf <= 35, `drone on: rAF callbacks/s ${droneOn.raf} ≤ 35`);
+  assert.ok(droneOn.an <= 2 * 35, `drone on: analyser reads/s ${droneOn.an} ≤ 70 (L + R per frame)`);
+  assert.deepEqual(holdStyles, ['', ''], 'the peak hold is moved by its track transform, never by left/bottom');
+  // the moved track never makes the bar overflow (polish-2A clip check), and the hold sits at the peak: its right edge
+  // at the track's translate (a vertical meter too: its bottom edge at the peak)
+  const holdGeo = await page.evaluate(async () => {
+    const C = await import('/js/views/components/index.js');
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;left:10px;top:10px;width:200px;height:120px;display:flex;gap:20px;z-index:9';
+    document.body.append(host);
+    const h = C.meter({ engine: window.__rig.engine });
+    const v = C.meter({ engine: window.__rig.engine, vertical: true });
+    host.append(h.el, v.el);
+    const out = [];
+    for (let k = 0; k < 40 && out.length < 1; k++) {
+      await new Promise((res) => setTimeout(res, 50));
+      const hb = h.el.querySelector('.meter-bar');
+      const tr = hb.querySelector('.meter-hold-track').style.transform;
+      const p = Number(tr.replace(/[^0-9.]/g, '') || 0);
+      if (p > 5) {
+        const bar = hb.getBoundingClientRect();
+        const hold = hb.querySelector('.meter-hold').getBoundingClientRect();
+        const vb = v.el.querySelector('.meter-bar');
+        const vbar = vb.getBoundingClientRect();
+        const vhold = vb.querySelector('.meter-hold').getBoundingClientRect();
+        const vp = 100 - Number(vb.querySelector('.meter-hold-track').style.transform.replace(/[^0-9.]/g, '') || 0);
+        out.push({ p, holdRight: (hold.right - bar.left) / bar.width * 100, over: hb.scrollWidth - hb.clientWidth,
+          vp, vHoldBottom: (vbar.bottom - vhold.bottom) / vbar.height * 100, vOver: vb.scrollHeight - vb.clientHeight });
+      }
+    }
+    h.destroy();
+    v.destroy();
+    host.remove();
+    return out[0] || null;
+  });
+  console.log(`# hold geometry: ${JSON.stringify(holdGeo)}`);
+  assert.ok(holdGeo, 'the drone lifts the peak hold');
+  assert.ok(Math.abs(holdGeo.holdRight - holdGeo.p) < 1.5, `horizontal hold ends at the peak (${JSON.stringify(holdGeo)})`);
+  assert.ok(Math.abs(holdGeo.vHoldBottom - holdGeo.vp) < 2.5, `vertical hold sits at the peak (${JSON.stringify(holdGeo)})`);
+  assert.equal(holdGeo.over, 0, 'no horizontal overflow from the moved hold');
+  assert.equal(holdGeo.vOver, 0, 'no vertical overflow from the moved hold');
+
+  // low-resource (controller → <html data-low-resource>, main.js): no frames, no reads, runtime lamps at 1 Hz
+  await page.evaluate(() => window.__rig.controller.setLowResource(true));
+  await page.waitForFunction(() => document.documentElement.hasAttribute('data-low-resource'));
+  await page.waitForTimeout(300);
+  const rt = await page.evaluate(() => {
+    const e = window.__rig.engine;
+    window.__rtCount = 0;
+    const o = e.getRuntimeState;
+    window.__rtRestore = () => (e.getRuntimeState = o);
+    e.getRuntimeState = function (...a) {
+      window.__rtCount += 1;
+      return o.apply(this, a);
+    };
+  });
+  void rt;
+  const low = await uiRates(2500);
+  const lowRt = await page.evaluate(() => {
+    window.__rtRestore();
+    return window.__rtCount;
+  });
+  console.log(`# low-resource, drone on: ${JSON.stringify(low)} runtime polls ${lowRt} in 2.5 s`);
+  assert.equal(low.raf, 0, 'low-resource: 0 rAF callbacks/s');
+  assert.equal(low.an, 0, 'low-resource: no analyser reads');
+  assert.equal(low.slot, 0, 'low-resource: no slot level reads');
+  assert.ok(lowRt <= 4, `low-resource: pedal / wheel lamps poll at 1 Hz (${lowRt} in 2.5 s)`);
+  await page.evaluate(() => window.__rig.controller.setLowResource(false));
+  await page.waitForFunction(() => !document.documentElement.hasAttribute('data-low-resource'));
+  // the bare attribute (as the Mac test set it) works the same, and removing it resumes without a reload
+  await page.evaluate(() => document.documentElement.setAttribute('data-low-resource', '1'));
+  await page.waitForTimeout(300);
+  const attr = await uiRates(1500);
+  await page.evaluate(() => document.documentElement.removeAttribute('data-low-resource'));
+  await metersRun(5);
+  const back = await uiRates(1000);
+  console.log(`# data-low-resource="1": ${JSON.stringify(attr)}; removed: ${JSON.stringify(back)}`);
+  assert.deepEqual([attr.raf, attr.an, attr.slot], [0, 0, 0], 'data-low-resource="1": no rAF, no reads');
+  assert.ok(back.frames > 5, `attribute removed: the meters resume (${back.frames} frames/s)`);
+  await selectByName('Grand Piano');
+});
+
+test('idle-cpu-ui critic: a meter back from low-resource shows the current level at once (no stale bar)', async () => {
+  await page.waitForFunction(() => window.__rig.controller.status.ready === true, null, { timeout: 600000, polling: 500 });
+  // the level fell to silence while the clock was blocked: the first frame after the restart must release to it (dt =
+  // this meter's own gap), not replay the old bar from where it stopped at 20 dB/s (dt = one clock frame)
+  const r = await page.evaluate(async () => {
+    const C = await import('/js/views/components/index.js');
+    const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+    let amp = 0.5; // −6 dBFS → bar at 0.9
+    const an = { fftSize: 256, getFloatTimeDomainData: (b) => b.fill(amp) };
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;left:10px;top:10px;width:200px;height:40px;z-index:9';
+    document.body.append(host);
+    const m = C.meter({ analysers: () => [an, an] });
+    host.append(m.el);
+    const fill = () => Number(m.el.querySelector('.meter-fill').style.transform.replace(/[^0-9.]/g, '') || 0);
+    const until = async (ok, t = 5000) => {
+      const t0 = performance.now();
+      while (!ok() && performance.now() - t0 < t) await sleep(10);
+    };
+    await until(() => fill() > 0.85);
+    const loud = fill();
+    const de = document.documentElement;
+    de.setAttribute('data-low-resource', '1');
+    await sleep(200);
+    const held = fill();
+    amp = 0;
+    await sleep(1500);
+    de.removeAttribute('data-low-resource');
+    await until(() => fill() < held - 0.001);
+    const back = fill();
+    m.destroy();
+    host.remove();
+    return { loud, held, back };
+  });
+  console.log(`# stale-bar check: ${JSON.stringify(r)}`);
+  assert.ok(r.loud > 0.85, `the test meter lifts (${r.loud})`);
+  assert.ok(r.back < 0.05, `first frame after low-resource: the bar is at the current (silent) level, not ${r.back}`);
+});
+
+test('idle-cpu-ui R4: a hidden window stops the meters from rig:window-visible / visibilitychange in every mode', async () => {
+  await page.waitForFunction(() => window.__rig.controller.status.ready === true, null, { timeout: 600000, polling: 500 });
+  await selectByName('Sunday Pad + Piano', 'synth');
+  await page.evaluate(UI_COUNTERS);
+  await page.evaluate(() => window.__rig.store.set('settings.menuBarMode', false));
+  await metersRun(5, 10000);
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('rig:window-visible', { detail: { visible: false } })));
+  await page.waitForTimeout(300);
+  const hidden = await uiRates(1500);
+  const st = await page.evaluate(() => ({ attr: document.documentElement.hasAttribute('data-window-hidden'),
+    vis: window.__rig.controller.status.windowVisible }));
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('rig:window-visible', { detail: { visible: true } })));
+  await metersRun(3);
+  const shown = await uiRates(1000);
+  // visibilitychange (a hidden document) does the same
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.waitForTimeout(300);
+  const docHidden = await uiRates(1000);
+  const st2 = await page.evaluate(() => {
+    const r = { attr: document.documentElement.hasAttribute('data-window-hidden'), vis: window.__rig.controller.status.windowVisible };
+    delete document.visibilityState;
+    document.dispatchEvent(new Event('visibilitychange'));
+    return r;
+  });
+  await metersRun(3);
+  const after = await uiRates(1000);
+  console.log(`# hidden ${JSON.stringify(hidden)} shown ${JSON.stringify(shown)} doc-hidden ${JSON.stringify(docHidden)}`);
+  assert.deepEqual(st, { attr: true, vis: false }, 'rig:window-visible false → data-window-hidden + setWindowVisible(false)');
+  assert.deepEqual([hidden.raf, hidden.an, hidden.slot], [0, 0, 0], 'hidden: no rAF, no reads (menu-bar mode off)');
+  assert.ok(shown.frames > 5, `shown again: the meters resume (${shown.frames}/s)`);
+  assert.deepEqual(st2, { attr: true, vis: false }, 'visibilitychange hidden → the same');
+  assert.deepEqual([docHidden.raf, docHidden.an], [0, 0], 'hidden document: no rAF, no reads');
+  assert.ok(after.frames > 5, `visible again: the meters resume (${after.frames}/s)`);
+  assert.equal(await page.evaluate(() => document.documentElement.hasAttribute('data-window-hidden')), false);
+  await selectByName('Grand Piano');
+});
+
+test('L-24: a focus loss never toggles the focused drone tile or commits a hold (blur, Space/Enter held across it)',
+  async () => {
+  await page.waitForFunction(() => window.__rig.controller.status.ready === true, null, { timeout: 600000, polling: 500 });
+  await page.evaluate(() => window.__rig.ctx.setView('perform'));
+  await selectByName('Sunday Pad + Piano', 'synth');
+  const mode = () => page.evaluate(() => ({ store: window.__rig.store.currentSong().drone.mode,
+    engine: window.__rig.engine.drone.getState().mode }));
+  const setOn = () => page.evaluate(() => window.__rig.store.set(`songs.${window.__rig.store.currentSong().id}.drone.mode`,
+    'synth'));
+  const focusTile = async () => {
+    await page.evaluate(() => document.activeElement?.blur?.());
+    // Tab from the element just before the tile, as a keyboard user gets there
+    await page.evaluate(() => {
+      const t = document.querySelector('[data-testid=drone-on]');
+      const all = [...document.querySelectorAll('button, input, select, textarea, [tabindex]')].filter((x) =>
+        x.tabIndex >= 0 && !x.disabled && x.getClientRects().length);
+      all[all.indexOf(t) - 1].focus();
+    });
+    await page.keyboard.press('Tab');
+    return page.evaluate(() => document.activeElement?.dataset?.testid);
+  };
+  const winBlurFocus = () => page.evaluate(async () => {
+    const t = document.activeElement;
+    window.dispatchEvent(new Event('blur'));
+    t?.dispatchEvent(new FocusEvent('blur'));
+    t?.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    await new Promise((res) => setTimeout(res, 120));
+    window.dispatchEvent(new Event('focus'));
+    t?.dispatchEvent(new FocusEvent('focus'));
+  });
+  // another page comes to the front, then this one again (a real focus loss on a desktop; headless emulates focus)
+  const realBlurFocus = async () => {
+    const p2 = await context.newPage();
+    await p2.bringToFront();
+    await page.waitForTimeout(150);
+    await page.bringToFront();
+    await p2.close();
+  };
+  const results = {};
+  const run = async (label, fn) => {
+    await setOn();
+    await page.waitForTimeout(150);
+    const focused = await focusTile();
+    assert.equal(focused, 'drone-on', `${label}: the tile has focus`);
+    await fn();
+    await page.waitForTimeout(250);
+    results[label] = await mode();
+  };
+  await run('window blur/focus', winBlurFocus);
+  await run('real focus loss', realBlurFocus);
+  await run('Space down → blur → focus → Space up', async () => {
+    await page.keyboard.down('Space');
+    await winBlurFocus();
+    await page.keyboard.up('Space');
+  });
+  // (headless Chromium emulates focus per page, so "another page in front" delivers no blur: a Space held across it is
+  // an ordinary press there, which the "a real press still works" check below covers)
+  await run('Space down → element blur → refocus → Space up', async () => {
+    await page.keyboard.down('Space');
+    await page.evaluate(() => document.activeElement.blur());
+    await page.evaluate(() => document.querySelector('[data-testid=drone-on]').focus());
+    await page.keyboard.up('Space');
+  });
+  for (const [k, v] of Object.entries(results)) assert.deepEqual(v, { store: 'synth', engine: 'synth' }, `${k}: drone unchanged`);
+  // a real press still works: Space down/up on the focused tile toggles once; Enter held with auto-repeat toggles once
+  await setOn();
+  await focusTile();
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(200);
+  assert.equal((await mode()).store, 'off', 'Space press on the focused tile turns the drone off');
+  await setOn();
+  await focusTile();
+  await page.keyboard.down('Enter');
+  await page.keyboard.down('Enter'); // auto-repeat
+  await page.keyboard.down('Enter');
+  await realBlurFocus();
+  await page.keyboard.up('Enter');
+  await page.waitForTimeout(200);
+  assert.equal((await mode()).store, 'off', 'Enter held: one toggle, its auto-repeats never toggle back');
+  await setOn();
+  await page.evaluate(() => document.activeElement?.blur?.());
+
+  // holds: a pointer hold keeps focus off the button, so only the window blur can cancel it
+  const holds = await page.evaluate(async () => {
+    const { store } = window.__rig;
+    const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+    const o = { bubbles: true, pointerId: 9, button: 0, pointerType: 'mouse', isPrimary: true };
+    store.set('settings.performLock', true);
+    await sleep(100);
+    const lock = document.querySelector('[data-testid=perform-lock]');
+    lock.dispatchEvent(new PointerEvent('pointerdown', o));
+    await sleep(250);
+    window.dispatchEvent(new Event('blur'));
+    await sleep(700);
+    lock.dispatchEvent(new PointerEvent('pointerup', o));
+    lock.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    await sleep(100);
+    const stillLocked = store.get().settings.performLock;
+    // the key grid under lock (perform.js holdGate)
+    const hear0 = store.currentSong().hearIn;
+    const key = [...document.querySelectorAll('[data-testid=key-grid] .key-btn')].find((b) => Number(b.dataset.pc) !== hear0);
+    key.dispatchEvent(new PointerEvent('pointerdown', o));
+    await sleep(250);
+    window.dispatchEvent(new Event('blur'));
+    await sleep(700);
+    key.dispatchEvent(new PointerEvent('pointerup', o));
+    await sleep(100);
+    const hear1 = store.currentSong().hearIn;
+    // transpose under lock (holdButton requireHold)
+    const tr0 = store.currentSong().playIn;
+    const up = document.querySelector('[data-testid=transpose-up]');
+    up.dispatchEvent(new PointerEvent('pointerdown', o));
+    await sleep(250);
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+    await sleep(700);
+    delete document.visibilityState;
+    document.dispatchEvent(new Event('visibilitychange'));
+    up.dispatchEvent(new PointerEvent('pointerup', o));
+    await sleep(100);
+    const tr1 = store.currentSong().playIn;
+    // a completed hold still works (unlock)
+    await window.__holdEl(lock, 750);
+    await sleep(100);
+    return { stillLocked, hearSame: hear1 === hear0, transposeSame: tr1 === tr0, unlocked: !store.get().settings.performLock };
+  });
+  await page.evaluate(() => window.__rig.store.set('settings.performLock', false));
+  assert.deepEqual(holds, { stillLocked: true, hearSame: true, transposeSame: true, unlocked: true },
+    'a window blur / hidden document abandons a pointer hold (unlock, key grid, transpose); a full hold still works');
+  const diag = await page.evaluate(() => window.__rig.diag.drone.slice(-1)[0]);
+  assert.ok(diag && diag.to && Array.isArray(diag.setBy), `drone.mode changes are logged with their call site (${JSON.stringify(diag)?.slice(0, 200)})`);
+  await selectByName('Grand Piano');
+});
+
+test('lowres2 requests: audio asleep → top bar "Asleep" with an ok LED; Quick › This Mac says how to wake it', async () => {
+  await page.waitForFunction(() => window.__rig.controller.status.ready === true, null, { timeout: 600000, polling: 500 });
+  await page.evaluate(() => window.__rig.ctx.setView('perform'));
+  await page.click('#btn-quick');
+  await page.waitForSelector('[data-testid=quick-sheet]', { state: 'visible' });
+  try {
+    const r = await page.evaluate(() => {
+      const c = window.__rig.controller;
+      const real = { ...c.status };
+      const read = () => ({
+        top: document.getElementById('audio-text').textContent,
+        led: document.getElementById('audio-led').className,
+        mac: document.querySelector('[data-testid=quick-sheet] section[aria-label="This Mac"] .qs-scope').textContent,
+        qsLed: document.querySelector('[data-testid=quick-sheet] .qs-ok .led').className,
+      });
+      // the controller's 1 s tick re-emits the real status; each read happens in the same task as its dispatch
+      c.dispatchEvent(new CustomEvent('status', { detail: { ...real, audio: 'asleep', latencyMs: 12, instance: 'primary' } }));
+      const asleep = read();
+      c.dispatchEvent(new CustomEvent('status', { detail: { ...real, audio: 'running', latencyMs: 12, instance: 'primary' } }));
+      const awake = read();
+      c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } }));
+      return { asleep, awake };
+    });
+    console.log(`# asleep ${JSON.stringify(r.asleep)}`);
+    assert.equal(r.asleep.top, 'Asleep');
+    assert.equal(r.asleep.led, 'led ok', 'asleep is a normal state, not a warning');
+    assert.equal(r.asleep.mac, 'Audio asleep — play a note or press a key to wake');
+    assert.equal(r.asleep.qsLed, 'led ok');
+    assert.equal(r.awake.top, 'Sound OK');
+    assert.equal(r.awake.mac, 'every song · soundcheck settings');
+  } finally {
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('[data-testid=quick-sheet]', { state: 'hidden' });
+  }
 });
 
 test('no console errors on the main page', () => {

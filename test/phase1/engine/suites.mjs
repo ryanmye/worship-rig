@@ -1929,6 +1929,64 @@ export const offline = {
 };
 
 // ----- real-time suites ------------------------------------------------------------------------------------------
+/** Per-test bounds above run.mjs's default (lowres2: offline loop renders run slowly on a loaded 2-CPU box). */
+export const timeouts = { 'realtime.droneFreeze': 300000, 'realtime.droneFreezeReuse': 240000, 'realtime.droneFreezeRender': 400000, 'realtime.audioSleep': 180000 };
+/**
+ * lowres2: gap-free capture of recordTap (mono L+R/2) on the audio thread: every 128-frame block with its render
+ * frame, so page stalls leave no holes. `gaps` counts skipped render quanta (a headless Chromium audio-thread glitch,
+ * seen now and then even on an idle box; the output skipped those frames too) and `gapAt` lists the hole edges (s,
+ * capture-relative) so click counts can leave them out (capClicks).
+ * @returns {Promise<{d:Float32Array, t0:number, gaps:number, gapAt:number[]}>}
+ */
+function capClicks(cap, sr, a, b) {
+  return clicks(cap.d, sr, a, b).filter((c) => !cap.gapAt.some((g) => Math.abs(c.t - g) < 0.012));
+}
+async function captureTapExact(engine, seconds) {
+  const ctx = engine.ctx;
+  if (!ctx.__rigCap) {
+    const CAP = `class RigCapX extends AudioWorkletProcessor {
+      constructor() { super(); this.on = true; this.port.onmessage = () => { this.on = false; }; }
+      process(inputs) {
+        if (!this.on) return false;
+        const i = inputs[0];
+        const m = new Float32Array(128);
+        if (i && i.length) { const L = i[0]; const R = i[1] || i[0]; for (let k = 0; k < L.length; k++) m[k] = 0.5 * (L[k] + R[k]); }
+        this.port.postMessage({ f: currentFrame, m }, [m.buffer]);
+        return true;
+      }
+    }
+    registerProcessor('rig-cap-x', RigCapX);`;
+    ctx.__rigCap = ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([CAP], { type: 'text/javascript' })));
+  }
+  await ctx.__rigCap;
+  const node = new AudioWorkletNode(ctx, 'rig-cap-x', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
+  const blocks = [];
+  const need = Math.ceil((seconds * ctx.sampleRate) / 128);
+  return new Promise((resolve) => {
+    node.port.onmessage = (ev) => {
+      blocks.push(ev.data);
+      if (blocks.length < need) return;
+      node.port.onmessage = null;
+      node.port.postMessage('stop');
+      engine.recordTap.disconnect(node);
+      node.disconnect();
+      const f0 = blocks[0].f;
+      const d = new Float32Array(blocks[blocks.length - 1].f + 128 - f0);
+      let gaps = 0;
+      const gapAt = [];
+      blocks.forEach((b, k) => {
+        d.set(b.m, b.f - f0);
+        if (k && b.f !== blocks[k - 1].f + 128) {
+          gaps++;
+          gapAt.push((blocks[k - 1].f + 128 - f0) / ctx.sampleRate, (b.f - f0) / ctx.sampleRate);
+        }
+      });
+      resolve({ d, t0: f0 / ctx.sampleRate, gaps, gapAt });
+    };
+    engine.recordTap.connect(node);
+    node.connect(ctx.destination);
+  });
+}
 function captureTap(engine, seconds) {
   // ScriptProcessor capture of the exact post-clip output (recordTap)
   const ctx = engine.ctx;
@@ -2463,6 +2521,555 @@ export const realtime = {
     e.dispose();
     const pass = out.voicesOn > 0 && !out.reverbAsleepOn && out.voicesOff === 0 && out.layers === 0 &&
       out.idleInstVoices === 0 && out.idleInstNodes === 0 && !out.idleInstArmed && out.reverbAsleepOff;
+    return { pass, ...out };
+  },
+
+  // lowres2 (1): low-resource mode freezes a sounding synth drone into a seamless offline-rendered loop (4 s here):
+  // live drone voices end, the reverb goes to sleep, the output level matches the live drone (±1 dB), the seam has
+  // no step; a key change goes live and re-renders; low-resource off brings the live synth back.
+  async droneFreeze() {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const until = async (fn, ms) => {
+      const t0 = performance.now();
+      while (!fn() && performance.now() - t0 < ms) await wait(50);
+      return Math.round(performance.now() - t0);
+    };
+    const e = new AudioEngine({ seed: 41, manifestUrl: MANIFEST, instrumentModules: false });
+    await e.start();
+    await use(e, patch({}, { reverb: { size: 0.1 } })); // a short IR keeps the test's renders cheap
+    e._setDroneFreezeOptions({ loopSec: 4, prerollSec: 3.5 });
+    // output power, both channels (a mono sum weighs the drone's L/R decorrelation, which varies window to window)
+    const power = (sec) => new Promise((resolve) => {
+      const sp = e.ctx.createScriptProcessor(4096, 2, 1);
+      let sum = 0;
+      let n = 0;
+      const need = Math.ceil(sec * e.ctx.sampleRate);
+      sp.onaudioprocess = (ev) => {
+        const L = ev.inputBuffer.getChannelData(0);
+        const R = ev.inputBuffer.getChannelData(1);
+        for (let i = 0; i < L.length; i++) sum += 0.5 * (L[i] * L[i] + R[i] * R[i]);
+        n += L.length;
+        if (n >= need) {
+          sp.onaudioprocess = null;
+          e.recordTap.disconnect(sp);
+          sp.disconnect();
+          resolve(10 * Math.log10(sum / n));
+        }
+      };
+      e.recordTap.connect(sp);
+      sp.connect(e.ctx.destination);
+    });
+    const sr = e.ctx.sampleRate;
+    e.drone.configure({ mode: 'synth', gain: 0.5, fade: 0.3 });
+    e.drone.setKey(2);
+    await wait(3500); // drone-osc attack (2 s) + the reverb filling up
+    const out = {};
+    out.liveRmsDb = +(await power(6)).toFixed(2);
+    out.liveVoices = e.drone.liveVoiceCount();
+    // click reference: the live drone through the same capture and detector (a detuned multi-osc drone trips the
+    // detector now and then on its own)
+    out.liveClicks = capClicks(await captureTapExact(e, 2.5), sr, 0.01, 2.49).length;
+    e.setLowResource(true);
+    // ≥ 5 s on (the brief), longer only when the render is slow (a loaded box): frozen and the live voices ended
+    out.frozenAfterMs = await until(() => e._debugStats().droneFrozen && e.drone.liveVoiceCount() === 0 && !e.drone.layers.length, 40000);
+    if (out.frozenAfterMs < 5000) await wait(5000 - out.frozenAfterMs);
+    let st = e._debugStats();
+    out.frozen = st.droneFrozen;
+    out.loopSec = st.droneLoopSec;
+    out.renderMs = st.droneRenderMs;
+    out.seam = st.droneSeam;
+    out.freezeMB = st.droneFreezeMB;
+    out.frozenVoices = e.drone.liveVoiceCount();
+    out.layers = e.drone.layers.length;
+    out.reverbSleepMs = await until(() => e._debugStats().fxAsleep.includes('reverb'), 6000);
+    out.reverbAsleep = e._debugStats().fxAsleep.includes('reverb');
+    out.frozenRmsDb = +(await power(4)).toFixed(2); // one whole loop
+    // gap-free capture (AudioWorklet, frame-stamped blocks): a ScriptProcessor drops input when a loaded box stalls
+    // the page, and each hole reads as a click
+    const fr = await captureTapExact(e, 4.6); // > one loop: the wrap plays inside the capture
+    out.captureGaps = fr.gaps;
+    out.rmsDiffDb = +(out.frozenRmsDb - out.liveRmsDb).toFixed(2);
+    out.frozenClicks = capClicks(fr, sr, 0.01, 4.59).length; // reported next to liveClicks
+    // the realtime wrap (loop start + k·loopSec): no click within ±20 ms of it
+    {
+      const fz = e.drone.frozen;
+      const wraps = [];
+      for (let k = Math.ceil((fr.t0 - fz.t0) / fz.loopSec); fz.t0 + k * fz.loopSec < fr.t0 + 4.6; k++) {
+        if (k > 0) wraps.push(fz.t0 + k * fz.loopSec - fr.t0);
+      }
+      out.wrapsCaptured = wraps.length;
+      out.wrapClicks = capClicks(fr, sr, 0.01, 4.59).filter((c) => wraps.some((w) => Math.abs(c.t - w) < 0.02)).length;
+    }
+    // the loop itself, played twice (so the wrap is inside): no click anywhere, the seam included
+    {
+      const b = e.drone.frozen.src.buffer;
+      const L = b.getChannelData(0);
+      const R = b.getChannelData(1);
+      const m = new Float32Array(L.length * 2);
+      for (let i = 0; i < L.length; i++) m[i] = m[i + L.length] = 0.5 * (L[i] + R[i]);
+      out.loopClicks = clicks(m, sr, 0.01, m.length / sr).length;
+    }
+    // key change: goes through the live synth at once, then freezes again (debounce 2 s after the fade)
+    const r0 = st.droneRenders;
+    e.drone.setKey(4);
+    out.liveAfterKeyChange = await until(() => e.drone.liveVoiceCount() > 0, 2000) < 2000;
+    out.rerenderMs = await until(() => {
+      const s2 = e._debugStats();
+      return s2.droneRenders > r0 && s2.droneFrozen && e.drone.frozen && e.drone.frozen.sig.pc === 4;
+    }, 20000);
+    st = e._debugStats();
+    out.rerendered = st.droneRenders > r0 && st.droneFrozen && e.drone.frozen?.sig.pc === 4;
+    await until(() => e.drone.liveVoiceCount() === 0, 6000);
+    out.frozenVoicesAfterKey = e.drone.liveVoiceCount();
+    // a level change is applied live (post-loop), no re-render
+    const r1 = st.droneRenders;
+    e.setParam('drone.gain', 0.4);
+    await wait(2800);
+    out.levelNoRerender = e._debugStats().droneRenders === r1;
+    // low-resource off: live synth back, loop gone
+    e.setLowResource(false);
+    out.thawMs = await until(() => !e.drone.frozen && !e.drone._fzOut.length && e.drone.liveVoiceCount() > 0, 8000);
+    st = e._debugStats();
+    out.frozenAfterOff = st.droneFrozen;
+    out.voicesAfterOff = e.drone.liveVoiceCount();
+    out.fzOut = e.drone._fzOut.length;
+    out.reverbAwakeAfterOff = !e._debugStats().fxAsleep.includes('reverb');
+    e.dispose();
+    const pass = out.liveVoices > 0 && out.frozen === true && out.loopSec === 4 && out.frozenVoices === 0 &&
+      out.layers === 0 && out.seam && out.seam.ok && out.reverbAsleep && Math.abs(out.rmsDiffDb) <= 1 &&
+      out.loopClicks === 0 && out.wrapsCaptured >= 1 && out.wrapClicks === 0 && out.liveAfterKeyChange && out.rerendered && out.frozenVoicesAfterKey === 0 &&
+      out.levelNoRerender && out.frozenAfterOff === false && out.voicesAfterOff > 0 && out.fzOut === 0 &&
+      out.reverbAwakeAfterOff;
+    return { pass, ...out };
+  },
+
+  // lowres2 (1): the offline loop render: a 30 s loop's render time (real drone-osc), ≤ 12 MB, seam check, and
+  // determinism (same inputs → the same loop within 1e-5).
+  async droneFreezeRender() {
+    const { renderDroneLoop, freezeLoopFrames, FREEZE_MAX_BYTES } = await import('/js/engine/drone-freeze.js');
+    const { Drone } = await import('/js/engine/drone.js');
+    const e = new AudioEngine({ seed: 47, manifestUrl: MANIFEST });
+    await e.start();
+    await use(e, patch({}));
+    const sr = e.ctx.sampleRate;
+    const env = e._droneFreezeEnv();
+    const base = {
+      DroneClass: Drone, registry: e.registry, seed: 47, sampleRate: sr, key: { pc: 7, minor: false },
+      params: { brightness: 0.5, movement: 0.3, width: 0.7 }, trimDb: e.drone.trimDb || 0,
+      reverb: { ir: env.ir, predelay: env.predelay, wet: env.wet },
+    };
+    const out = { sr, realSynth: !!e.registry.synthModuleLoaded, wet: +env.wet.toFixed(3) };
+    const r30 = await renderDroneLoop({ ...base, loopSec: 30 });
+    out.render30 = { renderMs: Math.round(r30.renderMs), buildMs: Math.round(r30.buildMs), renderSec: +r30.renderSec.toFixed(2), loopSec: +r30.loopSec.toFixed(3), MB: +(r30.bytes / 1048576).toFixed(2), seam: r30.seam };
+    let rmsL = 0;
+    const L = r30.buffer.getChannelData(0);
+    for (let i = 0; i < L.length; i++) rmsL += L[i] * L[i];
+    out.render30.rmsDb = +db(Math.sqrt(rmsL / L.length)).toFixed(1);
+    out.cap48 = +((freezeLoopFrames(48000, 30) * 8) / 1048576).toFixed(2);
+    out.cap96 = +((freezeLoopFrames(96000, 30) * 8) / 1048576).toFixed(2);
+    const a = await renderDroneLoop({ ...base, loopSec: 2, prerollSec: 1 });
+    const b = await renderDroneLoop({ ...base, loopSec: 2, prerollSec: 1 });
+    let maxDiff = 0;
+    for (let c = 0; c < 2; c++) {
+      const x = a.buffer.getChannelData(c);
+      const y = b.buffer.getChannelData(c);
+      for (let i = 0; i < x.length; i++) maxDiff = Math.max(maxDiff, Math.abs(x[i] - y[i]));
+    }
+    out.determinismMaxDiff = maxDiff;
+    out.seam3 = a.seam;
+    e.dispose();
+    const pass = r30.seam.ok && a.seam.ok && r30.bytes <= FREEZE_MAX_BYTES && out.cap96 <= 12 && maxDiff <= 1e-5 &&
+      out.render30.rmsDb > -60;
+    return { pass, ...out };
+  },
+
+  // lowres2-critic #1, #2: low-resource off → on with nothing changed reuses the kept loop (no render; a toggle storm
+  // renders at most once, one render at a time), and a re-render of the same voicing starts in step with the playing
+  // loop and crossfades linearly (no beating: the random-offset equal-power swap dipped −3 … −8 dB mid-swap).
+  async droneFreezeReuse() {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const until = async (fn, ms) => {
+      const t0 = performance.now();
+      while (!fn() && performance.now() - t0 < ms) await wait(20);
+      return Math.round(performance.now() - t0);
+    };
+    const e = new AudioEngine({ seed: 45, manifestUrl: MANIFEST, instrumentModules: false });
+    await e.start();
+    await use(e, patch({}, { reverb: { size: 0.1 } }));
+    e._setDroneFreezeOptions({ loopSec: 4, prerollSec: 3.5, debounceSec: 0 });
+    e.drone.configure({ mode: 'synth', gain: 0.5, fade: 0.3 });
+    e.drone.setKey(4);
+    await wait(3000);
+    const d = e.drone;
+    const settled = () => d.frozen && !d._fzOut.length && !d._fz.pendingSig && !d._fz.rendering && !d.layers.length;
+    // count offline renders started (the freeze renders) and the most running at once
+    const P = OfflineAudioContext.prototype;
+    const orig = P.startRendering;
+    const m = { started: 0, running: 0, max: 0 };
+    P.startRendering = function () {
+      m.started++;
+      m.max = Math.max(m.max, ++m.running);
+      const p = orig.call(this);
+      p.finally(() => m.running--);
+      return p;
+    };
+    const out = {};
+    try {
+      e.setLowResource(true);
+      out.firstFreezeMs = await until(settled, 40000);
+      out.firstRenders = m.started;
+      // popover-style churn: off / on 4 times, 300 ms apart (inside the thaw's 1.5 s lead: the loop is kept, nothing
+      // audible changes), then off for 4 s (a real thaw) and on again (the kept loop comes back without a render)
+      m.max = 0;
+      const s0 = m.started;
+      await wait(1000);
+      const churnCap = captureTapExact(e, 9.5);
+      await wait(4300); // one whole loop first: the reference range
+      for (let i = 0; i < 4; i++) {
+        e.setLowResource(false);
+        await wait(300);
+        e.setLowResource(true);
+        await wait(300);
+      }
+      out.unthawed = e._debugStats().droneFreezeReused;
+      out.voicesAfterChurn = await until(() => d.liveVoiceCount() === 0 && !d.layers.length, 3000) < 3000;
+      {
+        const c = await churnCap;
+        const sr = e.ctx.sampleRate;
+        const lv = (a) => {
+          let q = 0;
+          const i0 = Math.floor(a * sr);
+          const i1 = Math.min(c.d.length, i0 + Math.floor(0.25 * sr));
+          for (let i = i0; i < i1; i++) q += c.d[i] * c.d[i];
+          return 10 * Math.log10(q / Math.max(1, i1 - i0) + 1e-30);
+        };
+        const rng = (a0, a1) => {
+          const v = [];
+          for (let a = a0; a + 0.25 <= a1; a += 0.25) if (!c.gapAt.some((g) => g > a - 0.01 && g < a + 0.26)) v.push(lv(a));
+          return [Math.min(...v), Math.max(...v)];
+        };
+        const [s0min, s0max] = rng(0.05, 4.2);
+        const [cmin, cmax] = rng(4.3, 9.4);
+        out.churnDipDb = +(cmin - s0min).toFixed(2);
+        out.churnBumpDb = +(cmax - s0max).toFixed(2);
+      }
+      e.setLowResource(false);
+      await until(() => !d.frozen && !d._fzOut.length && d.liveVoiceCount() > 0, 8000);
+      e.setLowResource(true);
+      out.churnSettleMs = await until(() => settled() && m.running === 0, 40000);
+      out.churnRenders = m.started - s0;
+      out.churnMaxConcurrent = m.max;
+      out.reused = e._debugStats().droneFreezeReused;
+      out.fzOut = d._fzOut.length;
+      out.voices = d.liveVoiceCount();
+      // aligned swap: a tiny brightness change re-renders; the new loop starts at the old loop's position
+      const old = d.frozen;
+      const r0 = d._fz.renders;
+      const cap = captureTapExact(e, 8);
+      await wait(4200); // one whole loop first: its quietest 100 ms window is the reference
+      e.setParam('drone.brightness', 0.505);
+      await until(() => d._fz.renders > r0, 20000);
+      const nu = d.frozen;
+      out.alignedPhaseErr = nu && old ? +Math.abs(((nu.t0 - old.t0) % nu.loopSec + nu.loopSec + 0.5 * nu.loopSec) % nu.loopSec - 0.5 * nu.loopSec).toFixed(6) : null;
+      out.linearFade = !!(nu && nu.fade.lin);
+      const c = await cap;
+      const sr = e.ctx.sampleRate;
+      const w = (a) => {
+        let q = 0;
+        const i0 = Math.floor(a * sr);
+        const i1 = Math.min(c.d.length, i0 + Math.floor(0.1 * sr));
+        for (let i = i0; i < i1; i++) q += c.d[i] * c.d[i];
+        return 10 * Math.log10(q / Math.max(1, i1 - i0) + 1e-30);
+      };
+      const minOver = (a0, a1) => {
+        let min = Infinity;
+        for (let a = a0; a + 0.1 <= a1; a += 0.1) {
+          if (c.gapAt.some((g) => g > a - 0.01 && g < a + 0.11)) continue;
+          min = Math.min(min, w(a));
+        }
+        return min;
+      };
+      out.swapDipDb = +(minOver(4.1, 7.9) - minOver(0.05, 4.05)).toFixed(2); // vs the quietest window of a whole loop
+      await until(settled, 10000);
+      out.fzOutAfter = d._fzOut.length;
+    } finally {
+      P.startRendering = orig;
+    }
+    e.dispose();
+    const pass = out.firstRenders === 1 && out.churnRenders === 0 && out.churnMaxConcurrent <= 1 && out.unthawed >= 4 &&
+      out.voicesAfterChurn && Math.abs(out.churnDipDb) <= 1.5 && out.churnBumpDb <= 1.5 && out.reused >= 5 &&
+      out.fzOut === 0 && out.voices === 0 && out.alignedPhaseErr !== null && out.alignedPhaseErr < 1e-3 && out.linearFade &&
+      out.swapDipDb >= -1.5 && out.fzOutAfter === 0;
+    return { pass, ...out };
+  },
+
+  // lowres2 (2): audio sleep through the real controller (store audioSleepSec = 2, MIDI via MidiInput._inject, the
+  // real document for keys, a mini bus for the popover): suspended after ~2 s of silence with no input; a MIDI noteOn
+  // wakes it and the note sounds (latency reported, no click vs an awake note); a keydown alone wakes it without a
+  // note; recording prevents sleep; the popover's hello counts as input; status.audio 'asleep' is published.
+  // lowres2-scope (Ryan 2026-09-30): only in low-resource mode. Step 0: normal play never sleeps; then low-resource
+  // on (the idle window counts from there); step 5: hello is NOT input (lowres2-critic R2) but a real command is;
+  // step 5c: leaving low-resource wakes at once and normal play stays awake.
+  async audioSleep() {
+    const { createController } = await import('/js/controller.js');
+    const { createStore, memoryStorage } = await import('/js/store.js');
+    const { MidiInput } = await import('/js/midi.js');
+    const { createBus, stateError } = await import('/js/shared/bus.js');
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const until = async (fn, ms) => {
+      const t0 = performance.now();
+      while (!fn() && performance.now() - t0 < ms) await wait(20);
+      return Math.round(performance.now() - t0);
+    };
+    const e = new AudioEngine({ seed: 43, manifestUrl: MANIFEST, instrumentModules: false });
+    await e.start();
+    await use(e, patch({ 0: slot('sampler', 'test-keys') }));
+    const sr = e.ctx.sampleRate;
+    const store = createStore({ storage: memoryStorage(), seed: false, requestIdle: null, warn: () => {} });
+    store.set('settings.audioSleepSec', 2);
+    const midi = new MidiInput({ nav: null, warn: () => {} });
+    const recorder = Object.assign(new EventTarget(), { isRecording: false });
+    const setRec = (on) => {
+      recorder.isRecording = on;
+      recorder.dispatchEvent(new CustomEvent('state', { detail: { state: on ? 'recording' : 'idle' } }));
+    };
+    const ctl = createController({
+      store, engine: e, midi, recorder, doc: document, win: window, nav: null, rig: null, locks: null,
+      heartbeat: false, indexedDB: null, watchdogMs: 200, autoRestart: false,
+    });
+    await ctl.start();
+    const mini = createBus({ role: 'mini', hello: false });
+    const states = [];
+    mini.subscribe((st) => states.push(st));
+    let awakeAt = null;
+    e.addEventListener('sleep', (ev) => {
+      if (ev.detail.state === 'awake') awakeAt = performance.now();
+    });
+    const out = { busTransport: ctl.bus && ctl.bus.transport };
+    const asleep = () => e.sleepState === 'asleep';
+    // 0. normal play (low-resource off): never sleeps, however long idle
+    await wait(3500);
+    out.normalNeverSlept = e.sleepState === 'awake' && e._sleepS.sleeps === 0 && !ctl._sleepDebug().lowResource;
+    store.set('settings.lowResource', true);
+    await until(() => ctl.status.lowResource === true, 2000);
+    out.lowResOn = ctl.status.lowResource === true;
+    // 1. low-resource, silence, no input → asleep audioSleepSec after low-resource turned on
+    const tIdle = Math.max(ctl._sleepDebug().lastInputAt, ctl._sleepDebug().lowResSince);
+    out.sleptMs = await until(asleep, 9000);
+    out.sleptAfterInputMs = Date.now() - tIdle;
+    out.ctxState = e.ctx.state;
+    out.statusAudio = ctl.status.audio;
+    out.stateAudio = ctl.menuBarState().audio;
+    out.stateValid = stateError(ctl.menuBarState()) === null;
+    await wait(400);
+    out.busAsleep = states.some((s) => s.audio === 'asleep');
+    // 2. a MIDI noteOn wakes it; the note is queued and sounds
+    // capture of recordTap on the audio thread (AudioWorklet): every 128-frame block with its exact render frame, so
+    // the stream has no holes when the page stalls (a ScriptProcessor drops input then, and its playbackTime labels
+    // are not frame-exact) and times are exact. `gaps` counts missing blocks (0 by construction; checked anyway).
+    const CAP = `class RigCap extends AudioWorkletProcessor {
+      constructor() { super(); this.on = true; this.port.onmessage = () => { this.on = false; }; }
+      process(inputs) {
+        if (!this.on) return false;
+        const i = inputs[0];
+        const m = new Float32Array(128);
+        if (i && i.length) { const L = i[0]; const R = i[1] || i[0]; for (let k = 0; k < L.length; k++) m[k] = 0.5 * (L[k] + R[k]); }
+        this.port.postMessage({ f: currentFrame, m }, [m.buffer]);
+        return true;
+      }
+    }
+    registerProcessor('rig-cap', RigCap);`;
+    await e.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([CAP], { type: 'text/javascript' })));
+    const grab = (sec) => {
+      const node = new AudioWorkletNode(e.ctx, 'rig-cap', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
+      const blocks = [];
+      const need = Math.ceil((sec * sr) / 128);
+      return {
+        done: new Promise((res) => {
+          node.port.onmessage = (ev) => {
+            blocks.push(ev.data);
+            if (blocks.length < need) return;
+            node.port.onmessage = null;
+            node.port.postMessage('stop');
+            e.recordTap.disconnect(node);
+            node.disconnect();
+            const f0 = blocks[0].f;
+            const d = new Float32Array(blocks[blocks.length - 1].f + 128 - f0);
+            let gaps = 0;
+            blocks.forEach((b, k) => {
+              d.set(b.m, b.f - f0);
+              if (k && b.f !== blocks[k - 1].f + 128) gaps++;
+            });
+            res({ d, t0: f0 / sr, gaps });
+          };
+          e.recordTap.connect(node);
+          node.connect(e.ctx.destination);
+        }),
+      };
+    };
+    const onsetOf = (d, floor = 1e-3) => {
+      for (let i = 0; i < d.length; i++) if (Math.abs(d[i]) > floor) return i;
+      return null;
+    };
+    // A MIDI wake + an awake reference note, up to 3 times (a loaded 2-CPU box can stall the page for a second
+    // between the flush and the note; the best attempt is kept, every attempt reported)
+    const attempt = async () => {
+      const r = {};
+      if (!asleep()) r.sleptMs = await until(asleep, 9000);
+      const g1 = grab(1.2);
+      awakeAt = null;
+      const tMsg = performance.now();
+      midi._inject([0x90, 60, 100]);
+      r.stateAfterMsg = e.sleepState; // 'waking': resume pending, the note queued
+      r.queuedAtMsg = e._sleepS.queue.length;
+      await until(() => awakeAt !== null, 3000);
+      r.msgToPlayMs = awakeAt === null ? null : +(awakeAt - tMsg).toFixed(1);
+      r.lastWake = e._debugStats().lastWake;
+      await wait(500);
+      midi._inject([0x80, 60, 0]);
+      const c1 = await g1.done;
+      const on1 = onsetOf(c1.d);
+      r.noteSounded = on1 !== null;
+      // exact render times (worklet capture): the onset after the note's scheduled time (the output chain: catcher
+      // lookahead, sampler start), then message → sound = (message → flush) + lead + that
+      r.onsetAfterSchedMs = on1 === null ? null : +((c1.t0 + on1 / sr - r.lastWake.at) * 1000).toFixed(2);
+      r.wakeAddedMs = r.msgToPlayMs === null ? null : +(r.msgToPlayMs + r.lastWake.leadMs).toFixed(1);
+      r.wakeTotalMs = r.wakeAddedMs === null || on1 === null ? null : +(r.wakeAddedMs + r.onsetAfterSchedMs).toFixed(1);
+      r.wakeClicks = on1 === null ? null : clicks(c1.d, sr, Math.max(0.002, on1 / sr - 0.05), Math.min(c1.d.length / sr, on1 / sr + 0.4)).length;
+      // reference: the same note while awake
+      await wait(600);
+      const g2 = grab(1.0);
+      await wait(30);
+      const tRef = e.ctx.currentTime;
+      midi._inject([0x90, 60, 100]);
+      await wait(400);
+      midi._inject([0x80, 60, 0]);
+      const c2 = await g2.done;
+      const on2 = onsetOf(c2.d);
+      // awake: noteOn at currentTime → sound (the render runs a device buffer ahead of currentTime, so this includes it)
+      r.awakeTotalMs = on2 === null ? null : +((c2.t0 + on2 / sr - tRef) * 1000).toFixed(1);
+      r.wakeVsAwakeMs = r.wakeTotalMs === null || r.awakeTotalMs === null ? null : +(r.wakeTotalMs - r.awakeTotalMs).toFixed(1);
+      r.refClicks = on2 === null ? null : clicks(c2.d, sr, Math.max(0.002, on2 / sr - 0.05), Math.min(c2.d.length / sr, on2 / sr + 0.4)).length;
+      r.gaps = c1.gaps + c2.gaps;
+      r.ok = r.gaps === 0 && r.stateAfterMsg === 'waking' && r.queuedAtMsg >= 1 && r.noteSounded &&
+        r.wakeTotalMs !== null && r.wakeTotalMs <= 80 && r.wakeClicks <= r.refClicks;
+      return r;
+    };
+    out.midiWake = [];
+    for (let k = 0; k < 3; k++) {
+      const r = await attempt();
+      out.midiWake.push(r);
+      if (r.ok) break;
+    }
+    const best = out.midiWake.find((r) => r.ok) || out.midiWake[out.midiWake.length - 1];
+    Object.assign(out, { stateAfterMsg: best.stateAfterMsg, queuedAtMsg: best.queuedAtMsg, noteSounded: best.noteSounded,
+      wakeAddedMs: best.wakeAddedMs, wakeTotalMs: best.wakeTotalMs, awakeTotalMs: best.awakeTotalMs,
+      wakeVsAwakeMs: best.wakeVsAwakeMs, midiWakeOk: best.ok });
+    // 3. asleep again, then a keydown alone wakes it without a note
+    out.sleptAgainMs = await until(asleep, 9000);
+    document.dispatchEvent(new KeyboardEvent('keydown', { code: 'F13', key: 'F13', bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent('keyup', { code: 'F13', key: 'F13', bubbles: true }));
+    out.keyWakeMs = await until(() => e.sleepState === 'awake', 2000);
+    out.keyWoke = e.sleepState === 'awake';
+    out.keyWakeQueued = e._debugStats().lastWake?.queued;
+    out.keyWakeVoices = e._debugStats().voices;
+    await wait(300);
+    out.statusAfterKeyWake = ctl.status.audio;
+    // 4. recording prevents sleep
+    setRec(true);
+    await wait(3500);
+    out.recordingStayedAwake = e.sleepState === 'awake';
+    setRec(false);
+    out.sleptAfterRecMs = await until(asleep, 9000);
+    // 5. lowres2-critic R2: the popover's hello (opening, asking for state) is NOT input: no wake; a real command is
+    const nHello = states.length;
+    mini.command({ type: 'hello' });
+    await wait(600);
+    out.helloStayedAsleep = e.sleepState === 'asleep';
+    out.helloReplied = states.length > nHello;
+    mini.command({ type: 'record', on: false }); // a real command that changes nothing (not recording)
+    out.cmdWakeMs = await until(() => e.sleepState === 'awake', 2000);
+    out.cmdWoke = e.sleepState === 'awake';
+    out.cmdKind = ctl._sleepDebug().lastInputKind;
+    // 5b. (lowres2-critic #4) a held sustain pedal with no notes keeps it awake; its release starts the clock
+    midi._inject([0xb0, 64, 127]);
+    await wait(3000);
+    out.pedalHeldAwake = e.sleepState === 'awake';
+    out.pedalBlocker = e.sleepBlockers().includes('pedal');
+    const tRel = performance.now();
+    midi._inject([0xb0, 64, 0]);
+    await until(asleep, 9000);
+    out.sleptAfterPedalMs = Math.round(performance.now() - tRel);
+    // 5c. lowres2-scope: leaving low-resource wakes at once (no input needed); normal play then stays awake
+    const tLeave = performance.now();
+    store.set('settings.lowResource', false);
+    out.leaveWakeMs = (await until(() => e.sleepState === 'awake', 2000)) || Math.round(performance.now() - tLeave);
+    out.leaveWoke = e.sleepState === 'awake' && ctl.status.audio === 'running';
+    await wait(3000);
+    out.normalStaysAwake = e.sleepState === 'awake';
+    // 6. sleep / wake ramps are click-free on a drone peaking at −6 dBFS at the output (engine-level, forced): the
+    // master volume is scaled so the captured peak reads 0.5
+    ctl.dispose();
+    mini.close();
+    e.drone.configure({ mode: 'synth', gain: 0.5, fade: 0.2 });
+    e.drone.setKey(9);
+    await wait(2800);
+    {
+      const c0 = await grab(1.0).done;
+      const p0 = peakAbs(c0.d, sr, 0, c0.d.length / sr);
+      if (p0 > 0) e.setParam('master.volume', Math.min(2, (e.getParam('master.volume') ?? 0.5) * (0.5 / p0)));
+      await wait(600);
+    }
+    const rampTest = async () => {
+      const r = {};
+      const g3 = grab(1.6);
+      await wait(500);
+      const sleepP = e.sleep();
+      const rampT = e._sleepS.ramp.t;
+      await sleepP;
+      r.forcedAsleep = e.sleepState === 'asleep' && e.ctx.state === 'suspended';
+      await wait(300);
+      await e.wake();
+      const wakeT = e._sleepS.ramp.t;
+      const c3 = await g3.done;
+      const idx = (t) => Math.round((t - c3.t0) * sr);
+      const maxD = (a, b) => {
+        let m = 0;
+        for (let i = Math.max(1, a); i < Math.min(c3.d.length, b); i++) m = Math.max(m, Math.abs(c3.d[i] - c3.d[i - 1]));
+        return m;
+      };
+      // wide windows: the capture's playbackTime labels are offset from the render time by the processor's buffering
+      const i0 = idx(rampT) - Math.round(0.1 * sr);
+      const i1 = idx(wakeT) + Math.round(0.3 * sr);
+      r.gaps = c3.gaps;
+      r.droneRmsDb = +db(rms(c3.d, sr, 0.05, i0 / sr - 0.02)).toFixed(1);
+      r.dronePeak = +peakAbs(c3.d, sr, 0.05, i0 / sr - 0.02).toFixed(3);
+      r.dronePeakDbfs = +db(r.dronePeak).toFixed(1);
+      r.steadyMaxDelta = +maxD(idx(c3.t0 + 0.05), i0).toFixed(4);
+      r.rampMaxDelta = +maxD(i0, i1).toFixed(4); // sleep ramp, suspend, resume, wake ramp
+      r.rampClicks = clicks(c3.d, sr, Math.max(0.01, i0 / sr), Math.min(c3.d.length / sr - 0.01, i1 / sr)).length;
+      r.ok = r.gaps === 0 && r.forcedAsleep && r.rampMaxDelta <= 0.02 && r.rampClicks === 0 && r.dronePeakDbfs >= -7.5;
+      return r;
+    };
+    out.ramps = [];
+    for (let k = 0; k < 3; k++) {
+      const r = await rampTest();
+      out.ramps.push(r);
+      if (r.ok || r.gaps === 0) break; // a gap-free capture is a verdict; a gap is retried
+      await wait(300);
+    }
+    const rb = out.ramps[out.ramps.length - 1];
+    Object.assign(out, { forcedAsleep: rb.forcedAsleep, rampMaxDelta: rb.rampMaxDelta, rampClicks: rb.rampClicks, rampGaps: rb.gaps });
+    e.dispose();
+    const pass = out.sleptMs < 9000 && out.sleptAfterInputMs >= 2000 && out.sleptAfterInputMs <= 4500 &&
+      out.ctxState === 'suspended' && out.statusAudio === 'asleep' && out.stateAudio === 'asleep' && out.stateValid &&
+      out.busAsleep && out.midiWakeOk &&
+      out.sleptAgainMs < 9000 && out.keyWoke && out.keyWakeQueued === 0 && out.keyWakeVoices === 0 &&
+      out.statusAfterKeyWake === 'running' && out.recordingStayedAwake && out.sleptAfterRecMs < 9000 &&
+      out.normalNeverSlept && out.lowResOn && out.helloStayedAsleep && out.helloReplied && out.cmdWoke &&
+      out.cmdKind === 'bus' && out.leaveWoke && out.leaveWakeMs < 500 && out.normalStaysAwake && out.pedalHeldAwake && out.pedalBlocker && out.sleptAfterPedalMs >= 1800 &&
+      out.sleptAfterPedalMs <= 4500 && out.forcedAsleep && out.rampGaps === 0 && out.rampMaxDelta <= 0.02 &&
+      out.rampClicks === 0;
     return { pass, ...out };
   },
 };

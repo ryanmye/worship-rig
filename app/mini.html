@@ -12,9 +12,10 @@
 <script src="./themes/boot.js"></script>
 </head>
 <!-- Menu-bar popover (docs/menubar-mode.md). No audio here: views/mini.js talks to the main window over the bus
-     (Electron: preload relay; browser: BroadcastChannel 'rig-bus'). Fits 320×440 with no scroll. -->
+     (Electron: preload relay; browser: BroadcastChannel 'rig-bus'). Fits 320×440 with no scroll.
+     The window is transparent: <main class="mini-frame"> paints the card, from the theme's tokens (mini.css). -->
 <body class="mini-body">
-<main id="mini" class="mini" data-state="waiting" aria-label="Worship Rig controls"></main>
+<main id="mini" class="mini mini-frame" data-state="waiting" aria-label="Worship Rig controls"></main>
 <script type="module" src="./js/views/mini.js"></script>
 </body>
 </html>

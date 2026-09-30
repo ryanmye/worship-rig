@@ -267,6 +267,16 @@ function holdGate(root, { selector, ms = HOLD_MS, enabled, run, onHint, d }) {
     key = null;
     cancel(false);
   });
+  // L-24: a pointer hold keeps focus off the grid (no focusout): a window blur / hidden document abandons it
+  d.listen(window, 'blur', () => {
+    key = null;
+    cancel(false);
+  });
+  d.listen(document, 'visibilitychange', () => {
+    if (document.visibilityState !== 'hidden') return;
+    key = null;
+    cancel(false);
+  });
   d.add(stop);
   return {
     /** A short tap (or an arrow key) reached the control while locked: true when a hold just completed instead. */
@@ -325,8 +335,8 @@ export function mountPerform(root, ctx) {
       notesBtn),
   );
 
-  const tDown = use(holdButton({ label: MINUS, ms: HOLD_MS, requireHold: isLocked, className: 't-down', ariaLabel: 'Transpose down a semitone', testid: 'transpose-down', onActivate: () => controller.transposeDown() }));
-  const tUp = use(holdButton({ label: '+', ms: HOLD_MS, requireHold: isLocked, className: 't-up', ariaLabel: 'Transpose up a semitone', testid: 'transpose-up', onActivate: () => controller.transposeUp() }));
+  const tDown = use(holdButton({ label: MINUS, ms: HOLD_MS, requireHold: isLocked, className: 't-down', capBounds: '.transpose', ariaLabel: 'Transpose down a semitone', testid: 'transpose-down', onActivate: () => controller.transposeDown() }));
+  const tUp = use(holdButton({ label: '+', ms: HOLD_MS, requireHold: isLocked, className: 't-up', capBounds: '.transpose', ariaLabel: 'Transpose up a semitone', testid: 'transpose-up', onActivate: () => controller.transposeUp() }));
   const tVal = h('b.transpose-val', { 'data-testid': 'transpose-val', text: '0' });
   const transposeBox = h(
     'section.panel.transpose',
@@ -985,12 +995,14 @@ export function mountPerform(root, ctx) {
       if (transposed) songPlayIn.replaceChildren(h('span.pl-cap', { text: 'you play ' }), `${play}${oct}`);
       setText(songBpm, `you play ${play}${song.tempo ? ` · ${Math.round(song.tempo)} BPM` : ''}`);
       setText(tVal, signed(semis));
+      tVal.dataset.len = String(signed(semis).length); // hardware-fixes 2b: "−18" steps the size down (styles.css)
       tVal.classList.toggle('shift', transposed);
     } else {
       setText(songKey, '');
       songPlayIn.hidden = true;
       setText(songBpm, '');
       setText(tVal, '0');
+      tVal.dataset.len = '1';
       tVal.classList.remove('shift');
     }
     keyBtn.setDisabled(!song);
@@ -1251,14 +1263,18 @@ export function mountPerform(root, ctx) {
   const wheelRaf = rafCoalesce(renderWheel);
   d.add(() => wheelRaf.cancel());
 
-  /** "Eb major · −9.1 dB" from what the engine actually plays; "Drone off" when silent. The tile shows the key. */
+  /**
+   * "Eb major · −9.1 dB" from what the engine actually plays; "Drone off" when silent. The tile shows the key.
+   * idle-cpu-ui: called by the 150 ms runtime tick, so it first compares its inputs with the last render and returns
+   * without building strings or touching the DOM when nothing changed (the Mac profile's 6 layouts/s with the drone
+   * on). The readout cell is visually hidden and contained (styles.css), so a text change never lays out anything else.
+   */
+  let droneSig = null;
   function renderDroneReadout() {
     const song = store.currentSong();
-    let text = '';
-    let sub = '';
+    let mode = song ? song.drone.mode : null;
+    let key = song ? { pc: song.hearIn, minor: !!song.minor } : null;
     if (song) {
-      let mode = song.drone.mode;
-      let key = { pc: song.hearIn, minor: !!song.minor };
       try {
         const dr = engine?.drone;
         if (dr?.cfg?.mode) mode = dr.cfg.mode;
@@ -1266,6 +1282,14 @@ export function mountPerform(root, ctx) {
       } catch {
         /* engine not started */
       }
+    }
+    const sig = song ? `${song.id}|${song.drone.mode}|${song.hearIn}|${song.minor}|${song.drone.gain}|${mode}|${key.pc}|`
+      + `${key.minor}|${padsInfo ? padsInfo.count : '-'}` : '';
+    if (sig === droneSig) return;
+    droneSig = sig;
+    let text = '';
+    let sub = '';
+    if (song) {
       const kn = `${keyName(key.pc, key.minor).replace(/m$/, '')} ${key.minor ? 'minor' : 'major'}`;
       sub = song.drone.mode === 'off' ? `${keyName(song.hearIn, song.minor).replace(/m$/, '')} ${song.minor ? 'minor' : 'major'}` : kn;
       if (mode === 'off') text = 'Drone off';
@@ -1314,7 +1338,9 @@ export function mountPerform(root, ctx) {
       sound: status.instance === 'secondary' ? 'muted' : a === 'suspended' ? 'paused'
         : a === 'stalled' || a === 'restarting' ? a : 'ok',
       latencyMs: Number(status.latencyMs) || null,
+      outputDeviceId: st.outputDeviceId || 'default', // hardware-fixes: the latency hint is dismissed per device
       locked: !!st.performLock,
+      audio: a, // lowres2: 'asleep' → This Mac's caption says how to wake it
       echoSynced: !dl || !(Number(dl.returnGain) > 0) ? null : dl.sync && dl.sync !== 'off',
     });
   }
@@ -1349,11 +1375,20 @@ export function mountPerform(root, ctx) {
     if (f !== faded) setFaded(f);
     renderDroneReadout();
   }
-  // round2-ui #10: no polling while Perform is hidden (Edit); showing it again catches up within one tick
-  const runtimeTimer = setInterval(() => {
+  // round2-ui #10: no polling while Perform is hidden (Edit); showing it again catches up within one tick.
+  // idle-cpu-ui: under <html data-low-resource> or a hidden window the pedal / wheel / faded lamps poll at 1 Hz (the
+  // CC64 listener below still lights the pedal lamp at once); the period is re-read every tick, so no reload.
+  const RUNTIME_MS = 150;
+  const RUNTIME_LOW_MS = 1000;
+  let runtimeTimer = 0;
+  const runtimeTick = () => {
     if (!root.hidden) readRuntime();
-  }, 150);
-  d.add(() => clearInterval(runtimeTimer));
+    const de = document.documentElement;
+    const low = de.hasAttribute('data-low-resource') || de.hasAttribute('data-window-hidden');
+    runtimeTimer = setTimeout(runtimeTick, low ? RUNTIME_LOW_MS : RUNTIME_MS);
+  };
+  runtimeTimer = setTimeout(runtimeTick, RUNTIME_MS);
+  d.add(() => clearTimeout(runtimeTimer));
 
   // ---------------------------------------------------------------- subscriptions
   d.add(store.subscribe((state) => renderSong(state)));

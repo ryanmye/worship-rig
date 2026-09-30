@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
-import { MIDI_PERMISSIONS, waitRigReady } from '../../integration/lib.mjs';
+import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.mjs';
 
 const require = createRequire(import.meta.url);
 export const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -90,6 +90,7 @@ async function mountOnce(panelId, o) {
   const { origin, browser } = await boot();
   const viewport = o.viewport || { width: 1440, height: 900 };
   const context = await browser.newContext({ viewport, acceptDownloads: true });
+  await pinTheme(context, 'classic'); // theme-classic: panels assert the base look whatever the default theme is
   // L-4: 'midi' only (test/README.md "Web MIDI in the browser suites"); MIDI is driven through midi._inject
   await context.grantPermissions([...MIDI_PERMISSIONS], { origin });
   const page = await context.newPage();

@@ -38,8 +38,10 @@ The values are copied by hand from the theme's tokens. **If you change those tok
      has to come after the app's CSS because theme rules have zero specificity and win on source order.
 2. **Runtime.** `applyTheme(id)` in `app/js/main.js` runs from a store subscription on `settings.theme`. It also
    runs once at boot, where the store wins over the mirror. It writes the mirror, then adds the new sheet at the end
-   of `<head>` with `media="not all"`. Once the sheet has loaded, it adds the sheet's `@font-face` files to
-   `document.fonts`, enables the new sheet, removes the old one and flips the attributes, all in one task. The page
+   of `<head>` with `media="not all"`. Once the sheet has loaded, it adds copies of the sheet's `@font-face` rules to
+   `document.fonts` (every descriptor: metric overrides, `unicode-range`…), enables the new sheet, removes the old one
+   and flips the attributes, all in one task. Once the sheet's own faces have loaded, the copies are deleted
+   (`views/components/themeFonts.js`), so a runtime switch renders exactly like a fresh boot. The page
    therefore shows the old theme or the new one, never an unstyled frame. Siblings that share a file (Daylight
    Stage and Day) only flip attributes.
 3. **Picking.** Settings › Appearance › Theme is a radiogroup of swatch cards that writes `settings.theme`. Quick ›
@@ -101,3 +103,27 @@ dead-class list is the one to clear first. It is mostly start-screen mock hooks 
 5. Shoot: run `node tools/themes/shoot.mjs --theme <id>` to get perform, quick, edit and edit-tone-eq screenshots
    plus the audit JSON. Get 0 contrast fails, and attach the screenshots to your report.
 6. Keep the folder ≤ 250 KB, use `/fonts/` for fonts, and never add infinite animation or `backdrop-filter`.
+
+## Popover (menu-bar mini panel)
+
+`app/mini.html` (the menu-bar popover, 320×440, a transparent Electron window) is themed by the same sheet as the
+app. `app/mini.css` uses **tokens only**: every colour reads the app's token names (`--bg`, `--panel`, `--panel-2`,
+`--panel-3`, `--line-2`, `--text`, `--muted`, `--faint`, `--accent`, `--accent-ink`, `--ok`, `--warn`, `--danger`,
+`--danger-ink`, `--panic`, `--rec-idle`, `--thumb`, `--focus`, `--font`), each with the popover's Classic value as
+the `var()` fallback (mini.html loads no styles.css). So a theme that sets its tokens on `html[data-theme]` (or on
+`body`) themes the popover for free.
+
+- The card is `<main class="mini-frame">`: `--bg`, 12 px radius, a 1 px `--line-2` hairline and a soft shadow;
+  html/body paint nothing. A theme's `body` background and its `body::before/::after` layers are switched off in the
+  popover, so the rounded corners stay transparent.
+- Hooks a theme may set (none has to): `--accent-text` (the accent as text on the card, for a theme whose `--accent`
+  is a fill; Daylight sets it) and `--mini-shadow`.
+- **Don't target `.mini-*` classes**, except to fix a contrast failure the audit finds. Generic class names the popover
+  shares with the app (`.led`, `.rec-dot`, `.nav-btn`) do pick up theme rules; that's intended.
+- Live: the open popover follows a switch in Settings through the mirror's `storage` event (and an optional bus
+  `state.theme`), with the same no-flash swap as `applyTheme`.
+- The selector-coverage walk includes the popover (states `mini-waiting`, `mini`, `mini-6-flags`,
+  `mini-drone-keys`; `test/phase2/mini/theme-lib.mjs` `walkMini`).
+- **The critic shoots it per theme**: `node tools/themes/shoot.mjs --theme <id> --only mini` writes `mini.png` and
+  `mini-drone-keys.png` plus their audits (the popover live on the app's real bus state), with 0 contrast fails
+  required. `node test/phase2/mini/theme.mjs --only themes` checks every theme for an opaque card and no overflow.

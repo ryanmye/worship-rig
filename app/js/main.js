@@ -7,7 +7,9 @@ import { MidiInput } from './midi.js';
 import { Recorder } from './recorder.js';
 import { createController, engineLatency } from './controller.js';
 import { mountPerform } from './views/perform.js';
-import { h, setText, segmented, fader, meter, openOverlay, wakeLevelMeters } from './views/components/index.js';
+import { h, setText, segmented, fader, meter, openOverlay, wakeMeters, meterClockStats } from './views/components/index.js';
+import { guardKeyActivation } from './views/components/util.js';
+import { warmThemeFonts, releaseWarmedFonts } from './views/components/themeFonts.js';
 import { resolveThemeId, themeAttrs, THEME_MIRROR_KEY } from './shared/themes.js';
 
 const $ = (id) => document.getElementById(id);
@@ -131,7 +133,6 @@ const controller = createController({ store, engine, midi, recorder, rig });
 let themeSeq = 0;
 let themeApplied = null;
 let themePending = Promise.resolve();
-const warmedFonts = new Set();
 function setThemeAttrs(a) {
   const html = document.documentElement;
   html.dataset.theme = a.html.theme;
@@ -141,37 +142,6 @@ function setThemeAttrs(a) {
     document.body.dataset.theme = a.body.theme;
     document.body.dataset.mode = a.body.mode;
   }
-}
-/** Load a theme sheet's @font-face files into document.fonts first, so a font-display:block face can't blank text. */
-async function warmThemeFonts(sheet) {
-  const loads = [];
-  let rules = [];
-  try {
-    rules = [...(sheet?.cssRules || [])];
-  } catch {
-    return;
-  }
-  for (const r of rules) {
-    if (typeof CSSFontFaceRule === 'undefined' || !(r instanceof CSSFontFaceRule)) continue;
-    const fam = r.style.getPropertyValue('font-family').replace(/^["']|["']$/g, '');
-    const src = r.style.getPropertyValue('src');
-    const url = /url\(\s*["']?([^"')]+)/.exec(src)?.[1];
-    if (!fam || !url || warmedFonts.has(`${fam}|${url}`)) continue;
-    warmedFonts.add(`${fam}|${url}`);
-    const desc = {};
-    for (const [k, p] of [['weight', 'font-weight'], ['style', 'font-style'], ['stretch', 'font-stretch']]) {
-      const v = r.style.getPropertyValue(p);
-      if (v) desc[k] = v;
-    }
-    try {
-      const face = new FontFace(fam, `url(${url})`, desc);
-      document.fonts.add(face);
-      loads.push(face.load().catch(() => {}));
-    } catch {
-      /* descriptor the browser rejects: the sheet's own @font-face still loads it */
-    }
-  }
-  if (loads.length) await Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 1500))]);
 }
 /**
  * Switch the page to theme `id` (unknown → default). Resolves once the new look is showing.
@@ -211,9 +181,12 @@ async function applyTheme(id) {
   next.href = a.css;
   document.head.append(next);
   const ok = await loaded;
-  if (ok) await warmThemeFonts(next.sheet);
+  // T1/T2 (themes-critic): the copies carry every descriptor (metric overrides, unicode-range) and are deleted once
+  // the enabled sheet's own faces are loaded, so a runtime switch renders exactly like a fresh boot
+  const faces = ok ? await warmThemeFonts(next.sheet) : [];
   if (seq !== themeSeq || !ok) {
     next.remove();
+    await releaseWarmedFonts(faces);
     if (!ok) console.warn('[ui] theme stylesheet failed to load:', a.css);
     return themeApplied;
   }
@@ -222,6 +195,7 @@ async function applyTheme(id) {
   cur?.remove();
   next.id = 'theme-css';
   setThemeAttrs(a);
+  await releaseWarmedFonts(faces);
   return tid;
 }
 function onThemeSetting(state) {
@@ -783,17 +757,7 @@ controller.onStatus((s) => {
       : m.reason === 'failed' ? 'MIDI could not start — unplug and replug the keyboard'
         : m.reason ? `MIDI unavailable (${m.reason})` : 'MIDI input';
 
-  // onboarding O14: the controller starts out 'running' and only corrects itself on its 1 s tick, so a plain Chrome
-  // tab said "Sound OK" under the "Click anywhere to start audio" overlay; the context's own state wins here
-  const ctxState = engine.ctx?.state;
-  const a = s.audio === 'running' && ctxState && ctxState !== 'running' ? 'suspended' : s.audio;
-  const lat = Number(s.latencyMs) || 0;
-  const secondary = s.instance === 'secondary';
-  setLed(audioLed, secondary ? 'warn' : a === 'running' ? (lat >= 40 ? 'warn' : 'ok') : a === 'stalled' ? 'bad' : 'warn');
-  setText(audioText, secondary ? 'Muted' : { running: 'Sound OK', suspended: 'Paused', stalled: 'Stopped', restarting: 'Restarting…' }[a] || 'Sound');
-  setText(audioLatency, lat > 0 ? `${Math.round(lat)} ms` : '— ms');
-  audioLatency.classList.toggle('warn', lat >= 40);
-  audioLatency.title = lat >= 40 ? 'The delay between key and sound is high (40 ms or more). In Settings, choose “Lowest” delay or another output.' : 'Delay between key and sound';
+  renderAudioStatus(s);
   renderReady(s);
   renderStatusBanners(s);
   if (!midiHintShown && m.available && !m.connected && (m.inputs || []).length === 0 && lastStatus && !lastStatus.midi?.available) {
@@ -819,6 +783,27 @@ controller.onStatus((s) => {
   }
   lastStatus = s;
 });
+/**
+ * Top-bar sound lamp. onboarding O14: the controller starts out 'running' and only corrects itself on its 1 s tick, so
+ * a plain Chrome tab said "Sound OK" under the "Click anywhere to start audio" overlay; the context's own state wins
+ * (also re-run when the context changes state or the overlay shows).
+ */
+function renderAudioStatus(s) {
+  if (!s) return;
+  const ctxState = engine.ctx?.state;
+  const a = s.audio === 'running' && ctxState !== 'running' ? (ctxState ? 'suspended' : 'starting') : s.audio;
+  const lat = Number(s.latencyMs) || 0;
+  const secondary = s.instance === 'secondary';
+  // lowres2: 'asleep' is the controller's own audio sleep (it wakes on the next input), a normal state, not a warning;
+  // the controller keeps status.audio 'asleep' while the context is suspended, so the ctx override above leaves it
+  const led = a === 'running' ? (lat >= 40 ? 'warn' : 'ok') : a === 'asleep' ? 'ok' : a === 'stalled' ? 'bad' : 'warn';
+  setLed(audioLed, secondary ? 'warn' : led);
+  const text = { running: 'Sound OK', asleep: 'Asleep', suspended: 'Paused', stalled: 'Stopped', restarting: 'Restarting…' };
+  setText(audioText, secondary ? 'Muted' : text[a] || 'Sound');
+  setText(audioLatency, lat > 0 ? `${Math.round(lat)} ms` : '— ms');
+  audioLatency.classList.toggle('warn', lat >= 40);
+  audioLatency.title = lat >= 40 ? 'The delay between key and sound is high (40 ms or more). In Settings, choose “Lowest” delay or another output.' : 'Delay between key and sound';
+}
 let flashTimer = null;
 controller.addEventListener('midi-activity', () => {
   midiLed.classList.add('flash');
@@ -979,6 +964,7 @@ function showOverlay() {
   if (audioRunning() || overlayArmed) return;
   overlayArmed = true;
   els.overlay.hidden = false;
+  renderAudioStatus(lastStatus); // O14: never "Sound OK" under "Click anywhere to start audio"
   const go = async (e) => {
     e?.preventDefault?.();
     await controller.resumeAudio();
@@ -1001,6 +987,7 @@ engine.addEventListener('statechange', () => {
     audioHasRun = true;
     hideOverlay();
   }
+  renderAudioStatus(lastStatus); // O14
 });
 
 async function firstRunHints() {
@@ -1049,6 +1036,11 @@ controller.addEventListener('menu', (e) => {
   const id = e.detail?.id;
   if (id in WINDOW_MENU_IDS) setWindowVisible(WINDOW_MENU_IDS[id]);
 });
+// idle-cpu R4 / menubar-electron: LOCAL's preload re-dispatches main's 'rig:window-visible' IPC on window as a DOM
+// event, on every show / hide / minimize in every mode (the menu ids above only come in menu-bar mode)
+window.addEventListener('rig:window-visible', (e) => {
+  if (typeof e.detail?.visible === 'boolean') setWindowVisible(e.detail.visible);
+});
 controller.addEventListener('openMain', () => {
   if (isElectron) return; // Electron main shows + focuses the window
   try {
@@ -1057,8 +1049,52 @@ controller.addEventListener('openMain', () => {
     /* best effort in a browser tab */
   }
 });
-// idle-cpu R1: sleeping slot level meters wake on the next note (a slot only sounds after one)
-controller.addEventListener('notes', () => wakeLevelMeters());
+// idle-cpu R1 / idle-cpu-ui: the shared meter loop stops once every meter is silent; the controller's activity signal
+// (any input incl. note-on, a song applied, drone / master edits, recording, an audio wake) restarts it. 'notes' too,
+// for a controller without onActivity.
+if (typeof controller.onActivity === 'function') controller.onActivity(() => wakeMeters());
+controller.addEventListener('notes', () => wakeMeters());
+// L-24: a key press interrupted by a focus loss (window hidden / ⌘H / ⌘-Tab) never activates a button, and key
+// auto-repeat never re-activates one (util.js guardKeyActivation)
+guardKeyActivation(document, window);
+// L-24 diagnostics (the drone flipped synth → off in store and engine while the window was hidden on the Mac, 2 of 4
+// runs, with no click on the tile): every change of the current song's drone.mode is logged with the last input kind,
+// the window/focus state and the last bus commands, in __rig.diag.drone (≤ 20 entries). Costs one compare per store
+// change.
+const diag = { drone: [], bus: [] };
+controller.addEventListener('bus-command', (e) => {
+  diag.bus.push({ t: Math.round(performance.now()), type: e.detail?.type ?? e.detail?.cmd ?? String(e.detail) });
+  if (diag.bus.length > 20) diag.bus.shift();
+});
+let diagDrone = null;
+let diagSetStack = null; // the call site of the last store.set(…drone.mode) (the store notifies in a microtask)
+const storeSet = store.set;
+store.set = function (path, ...rest) {
+  if (typeof path === 'string' && path.endsWith('drone.mode')) {
+    diagSetStack = new Error().stack.split('\n').slice(2, 9).map((l) => l.trim());
+  }
+  return storeSet.call(this, path, ...rest);
+};
+store.subscribe((state) => {
+  const song = state.songs[state.settings.currentSongId];
+  const mode = song ? `${song.id}:${song.drone.mode}` : null;
+  if (mode === diagDrone) return;
+  const prev = diagDrone;
+  diagDrone = mode;
+  if (!prev || !mode || prev.split(':')[0] !== mode.split(':')[0]) return; // a song switch, not a toggle
+  let input = null;
+  try {
+    input = controller._sleepDebug?.().lastInputKind ?? null;
+  } catch {
+    /* debug only */
+  }
+  diag.drone.push({ t: Math.round(performance.now()), from: prev.split(':')[1], to: mode.split(':')[1], input,
+    focused: document.hasFocus(), visibility: document.visibilityState, active: document.activeElement?.dataset?.testid
+      || document.activeElement?.tagName || null, hidden: document.documentElement.hasAttribute('data-window-hidden'),
+    bus: diag.bus.slice(-3), setBy: diagSetStack });
+  diagSetStack = null;
+  if (diag.drone.length > 20) diag.drone.shift();
+});
 let lastLowRes = null;
 controller.onStatus((s) => {
   const low = !!s.lowResource;
@@ -1080,4 +1116,6 @@ mirrorMenuBarMode(store.get());
 
 // test / debugging handle (not an API)
 globalThis.__rig = { store, engine, controller, midi, recorder, ctx, views: { perform: performView, get edit() { return editView; }, get settings() { return settingsView; } }, ready: started, viewsReady, ui: { setBanner, plainMessage, toast } };
+globalThis.__rig.diag = diag;
+globalThis.__rig.meters = { stats: meterClockStats, wake: wakeMeters }; // idle-cpu-ui test hook
 globalThis.__rig.theme = { apply: applyTheme, get current() { return themeApplied; }, get pending() { return themePending; } };

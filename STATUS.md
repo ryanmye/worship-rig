@@ -1,79 +1,74 @@
-# Worship Rig: status (2026-09-28, after the H-v2 Perform + Edit, the slot EQ, and hv2-edit-integrate)
+# Worship Rig: status (2026-09-29, after the critics' round: onboarding, security, performance → critics-fix)
 
-One page. Details: `CONTRACT_CHANGES.md` (every change, with numbers), `reviews/` (findings), `test/README.md`.
+One page. Details: `CONTRACT_CHANGES.md` (every change, with numbers), `reviews/` (findings), `test/README.md`,
+`reviews/for-local.md` (what the Mac session is asked to do), `BACKLOG.md`.
 
-## What works (verified on the 2-vCPU Linux container)
+## Test results
 
-Latest: `node test/run-all.mjs --skip soak` after hv2-edit-integrate: **10/12 on the first pass, 1 skipped (soak)**.
-The two failures are flaky tests that pass on re-run: engine `offline.masterEqGlue` and ui-core "Quick sheet: TAP"
-(see Known issues 7–8; ui-core re-run 39/39). The table below is from that run where it changed. The rest, and the
-soak, are from the earlier full `--soak-minutes 10` run (integration-2).
+Latest full picture: LOCAL's Mac run at 2026-09-28 22:51Z (merge d921d4d, `run-all` incl. the 20-min soak), then the
+cloud suites re-run after critics-fix on the 2-CPU Linux box. The box was shared with the theme agents (load 30–55
+for most of the critics-fix runs), so several suites died on their 30 s `__rig.ready` boot bound; those are marked.
 
-| suite | result | what it proves |
-|---|---|---|
-| unit | 239/239 | shared modules: music, params, automation, prng, keydetect, chords, wav |
-| engine | 58/58, 0 console errors | sustain, re-strike, split, transpose, gapless song switch, wash reverb across switch/restart, drones, undamped-keys opt-in |
-| instruments | 143/143 | synth/organ/voice levels, release, stealing, dispose |
-| synth-extra | 153/153 | the extra synth patches and their trims |
-| shell | 156 (node 130, browser 12, Electron 14) | store, controller, MIDI `_inject`, server (Range, MIME, traversal/realpath), recorder, Electron boot with 404 detection |
-| ui-core | 38/39 (39/39 re-run) | H-v2 Perform view, top bar, lock rules, Quick sheet, step chips, focus/Space after Settings |
-| edit-v2 | 10/10 files, 74 tests (75 with the Perform "+" test added after the run) | H-v2 Edit: shell, 8 panels on the harness, and the real app (boot at 1440/1024, Tone EQ, Perform ⇄ Edit baseline, "nothing lost") |
-| settings | 26/26 (app + fixture) | Settings modal over the new Edit, and on the fallback components |
-| eq | 22/22 | the keyboard Tone EQ component and its math |
-| chrome-fallback | 17/17 | `serve.mjs`, start overlay, key A sounds, single-window reuse, SIGINT |
-| electron-full | 28/28 | real app under Electron: 3 songs sound, 2 s recording is a valid WAV, clean quit |
-| build-lint | 26/26 (re-run) | packaged asar contents (77.1 MB, 1999 samples, 23 instruments), packaged app boots with 0 errors |
-| soak (10 min) | 11/11 | 8605 events, 22 song switches: voices back to 0, nodes 224 → 223, heap +0.6 MB, no NaN, 0 errors |
+| suite | result | where / when | what it proves |
+|---|---|---|---|
+| unit | 276/276 | Mac 22:51Z | shared modules: music, params, automation, prng, keydetect, chords, wav, eq-math, themes, bus |
+| engine | 68/69 + 1 soft warn | Mac 22:51Z | sustain, switches, drones, EQ, idle disarm (idle-cpu) |
+| instruments / synth-extra | 143/143 · 153/153 | Mac 22:51Z | levels, release, stealing, dispose, patch trims |
+| shell | 180/180 | Mac 22:51Z | store (incl. security S2/S3), controller, MIDI, server, recorder, Electron boot |
+| ui-core | 57/61 (full run, load 20–23) | Linux, this step | Perform, top bar, lock, Quick, meters, first-run card (+7 critics-fix tests) |
+| edit-v2 | blocked (load 45–78) | Linux, this step | Edit shell + 8 panels + real app (+3 critics-fix tests) |
+| settings | 25/33, 27/33 (load 44–61) | Linux, this step | Settings modal, Menu bar section (+1 critics-fix test) |
+| eq | not run | — | keyboard Tone EQ + L-21 note cells |
+| mini / themes | not run here | — | menu-bar popover over BroadcastChannel; every theme boots and switches (theme agents) |
+| chrome-fallback / electron-full / build-lint | 15/15 · 28/28 · 23/23 | Mac 22:51Z | serve.mjs, the real Electron app, the packaged asar (379 MB app, < 480 MB guard) |
+| soak (20 min) | 12/12 | Mac 22:51Z | 38 switches, 16964 events, voices → 0, nodes flat, heap +0.64 MB, max pinned 568.9 / 600 MB, decoded ≤ cap with `retiring === 0` |
 
-- **Audition** (`node tools/audition.mjs`): 62/62 clips pass (19 songs, 43 instruments), 0 warnings. 12 clips are
-  in `audition/mp3/` (160 kbps) for listening: sunday-pad-piano, prayer-wash, organ-swell, upright-pad, grand-piano,
-  rhodes, 80s-ballad, lofi-rhodes, dusty-piano, anthem, synthwave, dream-juno.
-- **Fresh clone** (copy without `node_modules`/`dist`/renders, `npm ci`, `npm test -- --fast`): 8/8 suites pass.
-  `npm start` there boots the Electron app on 127.0.0.1:8438 with 0 console errors and 0 HTTP errors (only warning:
-  no MIDI device in the container). Electron 44 downloads its binary on first use; Node ≥ 22.12 is required.
+Notes on this step's runs (the theme agents kept the 2-CPU box at load 20–100 for two hours):
+- ui-core 57/61: the 4 failures were "next / prev" and "Quick TAP" (known load flakes, item 6 below), the polish-1
+  meter test (now allows ~30 reads/s and a sleeping silent strip) and the no-autoplay test's new "no Sound OK" check
+  (fixed by re-rendering the lamp when the overlay shows). All 7 critics-fix tests pass, alone and in the full run;
+  the two fixes were checked with direct scripts (their suite re-run died on page.goto / boot bounds at load 54).
+- edit-v2: every file failed its 30 s mount bound in 3 attempts. The three changed behaviours (+ Setlist / + New song,
+  the pencil, the hidden-Edit notes catch-up) were checked in the real app with a direct script: all as expected.
+- settings: the new critics-fix test passed in both modes in both runs; every other test passed in at least one run
+  except boot (30 s ready bound), "latency … sound after restart" and MIDI Learn (app), which failed in both.
+- eq: no eq file changed; not run. A load-gated runner (`scratchpad/cf-gentle.sh`, log `cf-gentle.txt`) re-runs
+  ui-core, edit-v2, settings and eq one at a time when the 1-min load drops below 14.
 
-## Not verified here (needs the Mac and real gear)
+Hardware (Mac, Ryan at a Keystation 49es, 02:39Z): auto-select, pedal (with a wording note, now in Settings),
+latency (dock 20 ms, Bluetooth 176 ms), wheels, hot-unplug, sleep/wake, recording, lock tiers all passed. MIDI Learn
+(no spare CC control), split-on-restart recording, songs/drone/pads/My Samples and the Chrome column are still open
+(`reviews/hardware-checklist.md`).
 
-- **Mac build**: `npm run build:mac`, the ad-hoc codesign in `build/afterPack.js`, first launch and Gatekeeper.
-  build-lint only checks the same `files` config on a Linux `dir` build.
-- **Hardware**: a real MIDI keyboard, sustain pedal polarity, hot-plug and unplug mid-note, MIDI Learn footswitch.
-  MIDI is only covered by injected events. Also the real audio device: latency, output selection (`setSinkId`).
-- **Listening**: every level check is a robot listener. Nobody has heard the clips yet.
-- **GarageBand import** against real GarageBand content (tested on synthetic `.exs` files only).
-- `Start Worship Rig.command` on macOS, and the docs `openPath` fallback (round2-shell #7, macOS-only).
-- Run the 5-minute "Manual check on your Mac" in `README.md` after each build.
+## What changed today (2026-09-28 → 29)
 
-## Known issues
+- **H-v2 Perform + Edit** finished and integrated (hv2-*), then polished (polish-1, polish-2A/2B) and reviewed twice
+  (round3, round4: controller / perform / edit-lib, each with a fixer).
+- **Memory policy** (l8, round4-controller C2): a setlist is pinned only when its exact size fits `PIN_BUDGET_MB`;
+  otherwise a large-set window. The ~1 GB "everything pinned" issue is gone (soak max pinned 568.9 MB).
+- **Menu-bar mode** (C7 menubar-A/B + LOCAL menubar-electron): `shared/bus.js`, `mini.html` popover, low-resource mode,
+  tray, hide-on-close.
+- **Themes** (themes-setup): 8 selectable themes (default Sanctuary), Settings › Appearance, Quick › Theme.
+- **Idle CPU** (idle-cpu): idle instruments are disconnected from their strips (Sunday Pad drone-off 31 → 16 % here).
+- **Security** (security): imports bounded (depth 64, 2 M chars), exports drop device-local settings.
+- **Critics-fix** (this step): hold-to-unlock works at any hold length (O1); "Loading…" no longer covers the title;
+  a one-time **Start here** card and computer-key letters on the piano; plain copy in Quick / Settings / toasts;
+  "Saving…" after REC; a tap on locked Edit/⚙ says why; no "Sound OK" while audio waits for a click; meters capped at
+  ~30 fps and asleep when silent; the wheel path writes only what changed (main-thread task −12 to −39 %, layout
+  −23 to −52 % in the three profiled songs); Edit stops tracking notes while hidden.
 
-1. **About 1 GB of decoded samples pinned in memory.** The soak reports `decodedMB` 1023.6 after visiting the 19
-   songs (flat afterwards, so no leak). With no setlist chosen, the whole library is preloaded and pinned, and pinned
-   buffers are never evicted, so the 700 MB cache cap can't hold. Risky on an 8 GB Mac with other apps open, and it
-   grows with each sampled song. Needs a policy decision (pin only a real setlist, or cap pinned bytes). Details:
-   `reviews/integration-findings.md`, Round 2, item 3.
-2. **Two layers are buried** (round2-shell #8, confirmed by this audition): the Gospel Stab + B3 poly-stab is
-   −12.6 dB under the mix even at full wheel, and the Synthwave square lead is −13.5 dB. The suggested fix is
-   gain 0.5 → 0.8 and 0.6 → 0.9, then re-audition. Not changed, because it should be decided by ear.
-3. Clav Funk's space shows as "Custom" (round2-shell #9, nit, deliberate).
-4. build-lint once exited 5: that was `xvfb-run` failing to clean up its temp dir after a good app report. It passed
-   on the re-run and 5/5 direct boots. It now prints the stderr cause if this happens again, and reaps the Xvfb
-   that `xvfb-run` leaks on that path.
-5. Calibration caveats: `tools/calibrate.mjs` trims decaying instruments slightly hot and doesn't know synth-extra's
-   `calibWindow` (see CLAUDE.md).
-6. Chrome (:8437) and the Mac app (:8438) keep separate libraries. This is by design; move songs with Export/Import.
+## Open items
 
-7. **Flaky: engine `offline.masterEqGlue`** fails about 1 run in 3. Its `neverDiff` limit is 2e-6, and Chromium's
-   run-to-run summing noise is about 1e-6 (2.26e-6 seen). The limit should be about 1e-5, as CLAUDE.md advises.
-8. **Flaky: ui-core "Quick sheet: TAP"** fails about 1 run in 3. Four Playwright clicks 500 ms apart must land within
-   120 ± 12 BPM, and click overhead sometimes stretches the intervals to about 566 ms (106 BPM). The Edit view
-   adds no measurable cost there. The fix is to tap via `quickSheet.tap(now)` with fixed timestamps.
-9. Edit leftovers (CONTRACT_CHANGES "## hv2-edit-integrate", "Left open"): the dead `.ed-*` rules in
-   `styles-edit.css`; the step-panel fine-slider height in `styles.css`; no level meter beside the Edit slot fader.
-
-## Next steps
-
-1. On the Mac: `npm ci && npm run build:mac`, launch, then run the README's manual check with the real keyboard and
-   pedal.
-2. Listen to `audition/mp3/`, then decide #2 (stab/lead gains) by ear.
-3. Decide the preload/pin policy (#1), implement it, and re-run the soak to check `decodedMB` stays under the cap.
-4. Try the GarageBand importer on a real GarageBand instrument (`docs/garageband-import.md`).
-5. Put the repo under git (this container copy isn't a git repository) before the next round of changes.
+1. **Mac verification after the next drop** (for-local.md): L-23 / long-hold unlock, pedal wording, `IDLE_CPU_MAC3`,
+   `HIDDEN_RAF`, `PROFILE_MAC`, `SOAK_RSS`, `C2_MAC`, `M1_MAC`, `L20_MAC`, `L21_MAC`, `EXPORT_NONASCII`.
+2. **S1 (major, needs Ryan):** six Apple `.exs` files are public in `ryanmye/worship-rig` (`tools/exs/fixtures/real`).
+   Remove + purge history or make the repo private. S4–S8 hardening is LOCAL's.
+3. **README (LOCAL):** volunteer-first path, "first five minutes", vocabulary table (onboarding R1–R6 + critics-fix).
+4. **Engine (frozen, report only):** performance #1 (decode copies + warm-up throttling while playing), #4 (convolver
+   builds on the main thread, macro.wash songs), #5 (note-on fan-out); renderer RSS growth over 3 laps (#6, unverified).
+5. **Needs an ear:** buried Gospel Stab + B3 stab (−12.6 dB) and Synthwave lead (−13.5 dB); named Space/Echo for the
+   first 11 factory songs (onboarding O4); the listening pass on `audition/mp3/` and the 28 My Samples packs.
+6. **Flaky on a loaded box:** ui-core "next / prev" (the jump back to song 1 after the 19-song walk is a cold
+   large-set load: ≈ 58 s at load 18) and "Quick TAP"; boot bounds (30 s `__rig.ready`) whenever load > ~20.
+7. Not built: per-file key picker for unrecognised pad files (O10), Trusted Types (S11), level-meter hold via
+   `transform` (themes paint the hold), metronome / chord display / MIDI-out (v2 backlog).

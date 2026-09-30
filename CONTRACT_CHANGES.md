@@ -3392,6 +3392,47 @@ and has its own ascent/descent. `reviews/local-findings.md` is not in the cloud 
   - **R4 hidden window:** pause the meter loops on `status.windowVisible === false` even outside menu-bar mode.
     Measured: `setWindowVisible(false)` without menu-bar mode changes nothing. LOCAL should send `windowHidden` /
     `windowShown`.
+- **Engine fixer (idle-cpu #2–#4; details, numbers and the Chromium measurements in reviews/idle-cpu.md "Engine
+  fixer").** Additive; no param, schema or store change. Offline renders are unchanged except #3's pin.
+  - **#2 send-effect idle sleep (realtime only).** fx.js: `FX_IDLE_POLL_SEC` = 0.25, `FX_IDLE_HOLD_SEC` = 1,
+    `FX_IDLE_THRESHOLD` = 1e-5 (exports); `FxGraph.enableIdleSleep()` (no-op offline), `idleTick(busy)`,
+    `wakeAll()`, getter `fxAsleep` (names); `Reverb.sleep() / wake() / asleep`; `Delay.canSleep() / loopPeriod()`.
+    audio.js `_pollFx` calls `idleTick` every 0.25 s for the engine's life (one AudioTimer node per poll; `timers` in
+    stats is now ≥ 1); `_armSlot` calls `fx.wakeAll()` before every note; `_debugStats()` gains `fxAsleep`. Drone
+    takes an optional `wake` callback (called before a new layer / pad file). A sleeping reverb has its active unit
+    unfed (tail rings out); a sleeping delay / chorus has its return disconnected from the FX sum (not processed).
+    Sleep needs: no armed slot (incl. retiring), the effect's tap < −100 dBFS for 1 s (delay: + loop period).
+    Reverb / echo onsets after a wake match a never-sleeping engine to the sample.
+  - **#3 `rampTo` pins its target** (shared/automation.js, new export `RAMP_SETTLE_TC` = 12):
+    `setValueAtTime(value, when + 12 τ)` after the setTargetAtTime. Chromium never ends a SetTarget: converged
+    biquads stayed on the per-sample path (+60 % cost; k-rate did not help) and a GainNode ramped to 0 was never
+    flagged silent (a convolver behind it ran forever). Later helper calls cancel a pending pin (cancel-and-hold).
+  - **#4 drone parked at gain 0** (drone.js export `DRONE_PARK_SEC` = 10, field `parked`): 10 s at drone.gain 0 →
+    layers fade out, voices end; setKey / setMode while parked are remembered; gain > 0 restarts in the latest key.
+  - **Numbers** (2-CPU box, renderer % of a core, back to back pre/post engine, same UI): Sunday drone off 7.8 → 5.1
+    (audio thread 7.4 → 4.1), Glass Ocean 9.2 → 6.5, Grand Piano 7.6 → 4.3, Sunday drone on 34.3 → 33.0 (noise;
+    its DSP is the sounding drone: ≈ 5.5 points of voices + ≈ 15 of reverb on the drone send, see the review).
+    **Target "A ≤ 15 %" is not reachable without changing the sound.**
+  - **Tests:** engine `realtime.fxIdleSleep`, `realtime.droneOffNoVoices`, `offline.droneParkGain0`;
+    `realtime.lowResource` race fixed (it waited on nothing for the start-up unit's 0.85 s fade; failed 2/3 on the
+    pre-change engine too); `test/unit/shared/automation.test.mjs` updated for the pin (+1 test). Engine suite
+    73/75 at load ≈ 7 (lowResource race, since fixed; eqCpu soft); at load 40–100 only runner timeouts, each passing
+    alone (stuckNoteFuzz with a longer bound, same time as the pre-change engine); unit shared 225/225; instruments
+    140/143 vs 139/143 pre-change at the same load (perf × realtime on both). The phase-2 eq suite never booted
+    within its 30 s bound at load ≈ 45 (the pre-change tree took 189 s to ready); not validated.
+- **UI requests, refreshed after R1 / R3 landed (measured on the 2-CPU box, Sunday, drone on, Perform).** The meter
+  still costs main ≈ 5.9 + compositor ≈ 2.7 points while the drone sounds (A vs low-resource D: 5.9 → 0.8, 2.7 → 0),
+  with 50 rAF callbacks/s of which 24 only return (30 fps cap), 53 DOM mutations/s and 4 layouts/s.
+  - **R1b (meter.js:72):** the peak hold still writes `style.left` / `bottom` (4.7 writes/s → the 4 layouts/s): move it
+    with `transform: translateX()/translateY()` like the fill.
+  - **R1c (meter.js:90):** a frame skipped by `MIN_FRAME_MS` still costs a BeginMainFrame + rAF dispatch (24/s here,
+    ≈ 90/s at 120 Hz ProMotion). Request the next frame from a `setTimeout(MIN_FRAME_MS − elapsed)` (then rAF), so
+    only ≈ 30 frames/s are produced.
+  - **R2 (styles.css:665)** still reads `animation: spin .8s linear infinite` unconditionally; one run (23:12) still
+    counted 1 running animation in Perform with the drone off, a later one 0. Please confirm it only runs under
+    `.song-block.loading`.
+  - **R4** unchanged (LOCAL: `windowHidden` / `windowShown`; pause meters while hidden outside menu-bar mode).
+  - The 150 ms `readRuntime` tick now writes nothing at idle (0 mutations/s with the drone off): R3 is done.
 
 ## security (C6 critics: reviews/security.md S2, S3; app/js/store.js, test/phase1/shell/security.test.mjs)
 - **S2: imports are bounded.**
@@ -3524,3 +3565,1474 @@ and has its own ascent/descent. `reviews/local-findings.md` is not in the cloud 
   lanes.
 - **Also run**: settings 31/31; mini 14/14 (a first run failed low-resource "frames still run (4)" at load avg 10;
   the rerun was green); shell unit green.
+- **Default flip vs existing suites.** ui-core (run once, load avg ~10) gave 47 pass / 8 fail.
+  - At least 3 failures come from the new default look, because they assert Classic tokens and metrics:
+    - #4: `--muted-fader` expected `#707a88`, got Sanctuary `#8a8594`;
+    - #33: the OFF tile background;
+    - #46: the Carlito `.song-name` line box versus Alegreya.
+  - #40 (responsive clipping) is likely the same cause.
+  - #6, #30 and #36 (TAP BPM got 69) look like load or timing.
+  - I did not edit ui-core: other sessions were modifying it at the time.
+  - The new `pinTheme(context, 'classic')` helper in `test/integration/lib.mjs` pins a theme for a whole Playwright
+    context. It writes the mirror and `settings.theme` in the library before any page script runs, and was verified:
+    Classic with no theme link, 19 factory songs seeded.
+  - To keep asserting the base look, call it right after `newContext` in ui-core, and likely in edit-v2 and eq.
+
+## menubar-electron (LOCAL, merged into main e553aa5 on 2026-09-29; recorded here by the cloud from local's status lines)
+- Electron 44: a page-level `window.close()` destroys the window WITHOUT a `BrowserWindow 'close'` event, so hide-on-close
+  and backup-on-close never ran from that path. preload now routes `window.close()` through IPC `rig:closeWindow` →
+  `win.close()` in main (c0d64c2). This is the real fix for L-14; the cloud's Electron test (`hideOnClose` step) now
+  has its hooks: `rig.getMenuBarState()` returns `{menuBarMode, windowVisible, windowDestroyed}`; `rig.setMenuBarMode(on)`.
+- `rig:window-visible` (IPC → DOM CustomEvent `{detail:{visible}}`) is sent on every main-window visibility change
+  (show/hide incl. ⌘H, focus, minimize/restore, hide-on-close, openMain, dock), regardless of menuBarMode, deduped.
+  `backgroundThrottling` stays false; the renderer does its own throttling (C9).
+- Tray icons: `build/trayTemplate.png` and `@2x` are in `build.files`; build-lint allows exactly those two in the asar and
+  checks they are packaged (e553aa5). App size 379 MB (du 366 M) — under the 500 MB rule.
+- `app/mini.html` add/add on merge → the cloud version; local's `drivePlaceholder` stays inert without the placeholder meta.
+- Notes from local: `main.js:568` comment about `build/` not shipping is stale (icons ship now; embedded fallback kept) —
+  LOCAL to fix in its own file. The two `themes/boot.js` script tags in index.html/mini.html are **intentional**, not a
+  dupe: the first run (top of `<head>`) sets `html[data-theme]`/`[data-mode]` before anything paints; the second run
+  (last element of `<head>`) appends the render-blocking `<link id=theme-css>` AFTER the app's stylesheets, because theme
+  rules win only by source order and a script can't wait for `<body>` while still adding a render-blocking sheet
+  (`boot.js` line 19: `if (w.__rigThemeBoot) { // second include`). Documented in app/themes/README.md.
+
+## critics-fix (C6: reviews/onboarding.md, performance.md, security.md; renderer only — app/js/**, app/styles.css, edit panel CSS)
+Every S item of the three critics reviews that lives in renderer code, plus the M items that are clear bugs (O1 was
+S) and the first-run card onboarding.md asks for. LOCAL items (README R1–R6, server/main/preload/tools S1, S4–S8)
+stay in `reviews/for-local.md`; engine items (performance #1, #4, #5a/c/d) stay frozen/report-only.
+
+**Onboarding (reviews/onboarding.md)**
+- **O1 (bug), hold-to-unlock re-locked after a long hold.** `components/holdButton.js`: a completed *pointer* hold
+  sets `swallowClick`; the one click that ends that press is swallowed, however long it lasted. The flag clears on
+  that click, the next `pointerdown` or the next Enter/Space `keydown` (so a keyboard hold never leaves a click
+  swallowed). Replaces the 600 ms `suppressClickUntil` window (1.3 s / 2 s holds re-locked; measured by the reviewer).
+- **O2, "Loading…" over the title.** `songLoading` moved from the absolutely positioned `.song-flags` (deleted) into
+  the KEY row (`.song-sub`) as a flex item that shrinks and ellipsizes; it takes `.song-bpm`'s place while shown
+  (`.song-block.loading .song-bpm {display:none}`). It is `display:none` when not loading, so the spinner no longer
+  animates at opacity 0 forever (idle-cpu R2).
+- **O3.** `#ready-status` title while loading: "Loading the songs in the set (n of N ready). You can play now." (the
+  "Loading n/N" text itself is unchanged: the top bar has no room, L-6). Ready restores the old title.
+- **O5.** Settings › MIDI, no keyboard: "No keyboard connected — plug one in (it connects by itself), or play the
+  computer keys A–;." Settings › Computer keyboard lists the whole `KEY_MAP` (`… K O L P ;`, from middle C, plus ←/→).
+- **O7.** Wake-lock toast: "The screen may dim or sleep during long songs. For the service, set the display to stay on."
+- **O8.** Quick: "Under Lock: This song still works, This Mac can’t be changed"; pedal row "press it: the light comes
+  on" (+ tooltip); "This song’s echo keeps its own time." (was "is fixed").
+- **O9.** Settings › My Samples: the raw folder path (`.st-samples-path`) sits inside the GarageBand disclosure with
+  the Terminal steps; outside it only a plain "isn’t turned on here" line (`.st-samples-note`) when unsupported.
+  Menu bar: "Modes from" → **Menu-bar songs** with "The songs (“modes”) the menu-bar icon lets you switch between, up to
+  6."; the live resource line (`setting-mb-resource`) moved into **Diagnostics**.
+- **O11.** REC stopping: `#rec-time` shows "Saving…" (`.saving`, 12 px so it fits the 6ch cell) until the file is done.
+- **O12.** Edit setlist: **+ Setlist** (was "New"; title "New setlist" unchanged) and **+ New song** (was "+ New");
+  a pencil button after the song name (`.ev2-song-pencil`, "Rename song": focuses and selects the name); name
+  tooltip "Song name: click to rename"; Perform Revert's tooltip says changes are saved with the song and where Reset
+  to factory is.
+- **O13.** Under Perform lock a tap on the disabled Edit tab or ⚙ toasts "Perform lock is on — hold Lock to unlock,
+  then edit." (document capture `pointerdown`: Chromium sends pointer events, not clicks, to disabled buttons).
+- **O14 (bug).** The top-bar lamp said "Sound OK" under "Click anywhere to start audio": the controller's status
+  starts `audio:'running'` and corrects itself only on its 1 s tick. `main.js renderAudioStatus()` lets the context's
+  own state win (`running` + ctx not running → Paused; no ctx yet → "Sound"), and re-renders on the engine's
+  `statechange` and when the overlay shows.
+- **"First 60 seconds" (M).** New `components/startCard.js`: a one-time **Start here** card at the top of Perform's
+  Notes panel (no overlay: at ≤ 1340 px it is inside the Notes pop-over). Lines: no keyboard → A S D F G H J K on the
+  computer (Space = sustain), plug in any time (switches to "Your keyboard is connected" when MIDI connects); → / NEXT
+  = next song, Space row = room; Lock / hold to unlock. It closes on × or on the first song change and never comes
+  back (`localStorage['worship-rig.start-card'] = 'done'`; storage blocked → this session only). Perform view:
+  `get startCard` (test hook: `reset()`, `dismiss()`, `shown`).
+  - Key letters: `pianoKeyboard().setKeyLetters(Map<note,label>|null)` (keys.js). Perform shows `KEY_MAP`'s letters on
+    C4…E5 (following Z/X octaves, controller `'kb-octave'`) while no MIDI keyboard is connected and
+    `settings.computerKeyboard` is on; the C4/C5 label gives way on lettered keys.
+- Not done here: O4 (named Space/Echo on the first 11 factory songs: a sound change, needs a listen), O10 per-file
+  pad key picker (M feature; the README fix is LOCAL's), O6/R1–R6 (README, LOCAL).
+
+**Hardware pass (LOCAL, 2026-09-29, reviews/hardware-checklist.md)** — L-23 (lock hint clipped) is round4-perform P1,
+already in this tree. Pedal wording: Settings › Test my pedal shows "Plug in the pedal and the keyboard with your foot
+off the pedal: many keyboards read its direction then", and a reversed result adds the unplug/replug advice.
+
+**Performance (reviews/performance.md #2, #3, #5b; reviews/idle-cpu.md R1–R4)**
+- **#2 / R1 meters.** `meter.js`: ≤ ~30 updates/s (`MIN_FRAME_MS` 30, release scaled by real frame time), writes only
+  on change (fill in 0.1 %, hold in 0.5 % steps, `clip`/`hot` flips, `aria-valuenow`), and after `IDLE_MS` (1 s) at the
+  floor it stops its rAF loop and polls the analysers every 250 ms (`IDLE_POLL_MS`) until something is above −60 dB.
+  `running` stays true while polling; new `animating`. `levelMeter.js`: the shared loop is ≤ ~30/s; a strip silent for
+  1 s sleeps (not read at all, so the engine can drop its tap) until `wakeLevelMeters()`, which main.js calls on every
+  controller `'notes'` event. New test hook `levelMeterStats()`. The hold still moves with `left` (themes paint
+  `.meter-hold`'s background, so a full-width transformed box would repaint the bar).
+- **R4 hidden window.** `setWindowVisible(false)` sets `html[data-window-hidden]`; styles.css hides `.meter`/
+  `.lvl-meter` there as under low-resource. Fed by the menu ids and by LOCAL's `window` event `'rig:window-visible'`.
+- **R3.** The pedal lamp's `aria-label` is written only when it changes (was 6.6 mutations/s from the 150 ms tick).
+- **#3 wheel path.** perform.js calls `wheel.set({pickup})` only while the ghost shows or when it changes (was per
+  CC); `wheelStrip.render` skips `--pos`/text/`aria-valuetext` when the value is unchanged, and `set()` guards
+  `aria-pressed`/`hidden`; `fader.setIndicator` returns early when unchanged and writes `--ind` on the indicator itself
+  (the rule reads it there), not on the fader root; `setWheelBadge` guards `hidden`; `util.setText` changes a lone Text
+  node's `data` in place instead of replacing the node.
+- **#5b.** Edit shell: while `#view-edit` is hidden, controller `'notes'` only records the held set; one catch-up
+  `'notes'` goes out when the view becomes 'edit' (`core.catchUpNotes`).
+- **Measured** (`tools/profile.mjs` copied with an app-dir override: `PROF_APP=<pre-fix copy>` then this tree; 20 s
+  loops, `--no-profiler`, load 6–10 from other agents, so lag/noteOn are noise here):
+
+  | song | main-thread task ms/s | layout ms/s | style ms/s | layouts / style recalcs per loop |
+  |---|---|---|---|---|
+  | sunday-pad-piano | 198.5 → **120.4** | 48.4 → **23.1** | 10.4 → **4.9** | 655 / 1482 → 495 / 1011 |
+  | building-swell (wheel → slot fader) | 157.9 → **138.2** | 34.3 → **23.3** | 7.1 → **3.8** | 564 / 1189 → 526 / 861 |
+  | grand-piano | 132.6 → **92.0** | 15.6 → **12.0** | 7.7 → **2.9** | 580 / 1300 → 461 / 675 |
+
+  Silent Perform: 0 meter frame callbacks/s (was one per display frame: 60 here, 120 on ProMotion) and 0 meter DOM
+  writes (ui-core test). Not re-measured on the Mac (requested: `IDLE_CPU_MAC3`, `HIDDEN_RAF`).
+- Engine items left frozen (report only): #1 (processSample copies, warm throttling), #4 (convolver builds), #5a/c/d.
+
+**Security (reviews/security.md)** — nothing renderer-side was open: S2/S3 were fixed in `## security`, S10 found no
+injection sink. S1, S4–S8 are LOCAL (for-local.md). S11 (Trusted Types) is optional hardening, not done.
+
+**L-10 (COORDINATION: "CLOUD documents")** — the 700 MB decoded cap is soft during a switch: `BufferCache` never
+evicts a referenced buffer, so while the previous song's instruments retire (`retiring > 0`) decoded can exceed the cap
+by up to that song's pinned set (754 MB once in 44 soak rows), and falls under the 595 MB low-water mark when they are
+released. The soak checks the cap only in rows with `retiring === 0`. docs/ is LOCAL's: asked to add this to
+docs/architecture.md.
+
+**Tests**
+- ui-core: 7 new tests (`critics-fix O1` 1.3 s / 2 s mouse holds + 2 s Enter, `O2` at 1440/1280/1024, `O3/O14/O11/O13`,
+  "first 60 seconds" card + key letters, meters (#2/R1/R4: silent = 0 frames and 0 writes, a note wakes both kinds,
+  ≤ 36 fill writes/s, hidden window), wheel (#3: a still wheel = 0 DOM writes, text changes in place, `--ind` on the
+  indicator)); the no-autoplay test now asserts no "Sound OK" under the overlay; the polish-1 meter test allows ~30
+  reads/s and a sleeping silent strip; components.hv2 quick-sheet hint text.
+- settings: 1 new (`critics-fix O5/O9`: MIDI line, full key map, path in the disclosure, resource line in
+  Diagnostics, "modes" defined, pedal tip).
+- edit-v2: shell `critics-fix (#5b)` (hidden → 0 fan-outs, show → 1 catch-up with the held notes, LED follows);
+  song-header `critics-fix (O12)` pencil; setlist `+ New song` / `+ Setlist` labels.
+- **Runs** (2-CPU box at load 20–100 from the theme agents; details in STATUS.md): ui-core full run 57/61 (next/prev,
+  Quick TAP = load flakes; polish-1 meter and no-autoplay checks fixed afterwards, verified by direct scripts);
+  settings 25/33 and 27/33 (new test ✓ in both modes both times; boot / latency-restart / MIDI Learn app died on load
+  bounds both times); edit-v2 blocked by the 30 s mount bound (changed behaviours verified in the real app by script);
+  eq not run (untouched).
+
+## mini-theme (Ryan 2026-09-29, tested the tray on his Mac: "the menu-bar popover must inherit the theme chosen in Settings")
+- **`app/mini.css` is tokens only.** Every colour reads an app token (`--bg --panel --panel-2 --panel-3 --line-2 --text
+  --muted --faint --accent --accent-ink --ok --warn --danger --danger-ink --panic --rec-idle --thumb --focus`, plus
+  `--font`) through mini-private `--m-*` tokens declared on `.mini-frame`, not `:root`: Ember declares its tokens on
+  `body`, and a custom property resolves where it is declared. The fallbacks are the popover's old Classic values
+  (mini.html loads no styles.css, so under Classic every fallback applies). Derived colours use `color-mix()`
+  (accent tint 16 %, Rec tint 16 %, Eco tint 30 %: equal to the old rgba literals; Panic hover/fired: mixes toward
+  black, within ~2/255 of the old literals). Theme hooks: `--accent-text` (interim fallback: Daylight's
+  `--dl-accent-text`), `--mini-shadow`. On the accent tint, light themes pull accent text 30 % toward `--text`
+  (`light-dark()`; Classic and dark themes unchanged).
+- **The card paints itself** (the Electron window is transparent): `<main id="mini" class="mini mini-frame">` →
+  background `--bg`, `border-radius: 12px`, `overflow: hidden`, a 1 px `--line-2` hairline as an inset shadow (no layout
+  shift) plus an outer soft shadow. html/body are transparent; `body.mini-body` (0,1,1) beats a theme's `body` desk
+  background (0,0,1) and turns off `body::before/::after` (Sanctuary's full-screen vault layer would square the
+  corners). Caveat: the window is exactly 320×440 and the card fills it, so the outer shadow only shows in the
+  corner cut-outs (alpha ≈ 2). The visible edge is the hairline, and macOS draws the window's own shadow if
+  `hasShadow` is on (LOCAL). Not verified on a Mac: that `color-scheme: dark` leaves the transparent window see-through
+  at the corners (Chromium keeps a transparent base background as far as I know).
+- `.panic-sub` loses its `.9` opacity. Themes pick `--panic` for white at ≥ 4.5:1, and the opacity took Daylight
+  Day to 4.08:1. This is the only Classic change inside the card: 98 px (0.07 %).
+- **Live re-theme** (`app/js/views/mini.js` `createThemeFollower`, exported). It follows `window 'storage'` on
+  `worship-rig.theme`. The main window's `applyTheme` writes the mirror first, so the popover starts its switch at
+  once. It also re-reads the mirror on `visibilitychange`/`focus` (a hidden popover that missed the event), and
+  follows an optional `state.theme` on the bus.
+  - The switch mirrors main.js `applyTheme`: preload the sheet with `media="not all"`, warm its `@font-face` files
+    (≤ 1.5 s), then in one task enable it, drop the old one and flip html/body attributes and `color-scheme`. Classic
+    and same-file siblings only flip attributes, and a newer switch cancels an older one.
+  - It never writes the mirror: the popover is a follower. `__mini.theme = {follow, apply, current, wanted, pending}`
+    is exposed for tests. It uses `shared/themes.js` (`resolveThemeId`, `themeAttrs`, `THEME_MIRROR_KEY`), as main.js
+    does.
+- **Bus (`shared/bus.js`, additive; `v` stays 1)**: `state.theme` is optional. When present it must be a non-empty
+  string, else the state is dropped (`stateError` → `'theme'`). An unknown id is valid on the wire; the popover
+  resolves it to `DEFAULT_THEME_ID`. Nothing publishes it yet. controller.js is untouched (the publisher may add it
+  later). Documented in `docs/menubar-mode.md`.
+- **Theme coverage** (`test/phase2/themes/run.mjs`, small additive edit): `collect(label, on = page)`, and
+  `walkStates` ends with `walkMini(...)` from `test/phase2/mini/theme-lib.mjs`. The popover gets its own context with
+  the mirror set to the theme and a fake bus state, and is walked in 4 states: `mini-waiting`, `mini`, `mini-6-flags`
+  (6 modes, Rec/Eco/low-resource on, stalled) and `mini-drone-keys`. Checked on studio: the 4 states were walked with
+  0 errors. That run's edit tabs timed out at load ~55, so I restored the agent's own `coverage-studio.json` (0.4 %).
+- **Shoot**: `tools/themes/shoot.mjs --only mini` (also in the default set) opens mini.html at 320×440 in the app's
+  context, live on the real bus state, and writes `mini.png`, `mini-drone-keys.png` and `audit-mini*-320.json`.
+  Audits after the fixes: daylight-day 0 fails (it was 4: accent text 1.44–1.57:1, "hold" 4.08:1), sanctuary-day 0
+  (it was 2: key on the accent tint 4.07:1), studio 0 (it was 1: "hold" 4.48:1), sanctuary 0. classic has 2
+  pre-existing fails (the `.m-num` badges "2"/"3", `--faint` on `--panel`, 3.49:1, 11 px). I kept them for pixel
+  equality; that's Ryan's/Classic's call. Not shot (the box was at load 55–70 and each shoot boots the whole app):
+  daylight-stage, ember, nave.
+- **README** `app/themes/README.md` has a new "Popover" section: tokens only; don't target `.mini-*` except for
+  contrast; the critic shoots `--only mini`.
+- **Tests** `test/phase2/mini/theme.mjs` (14; `run.mjs` spawns it after its own 14, `--only base` skips it):
+  - bus optional field.
+  - Classic pixel-equal against `fixtures/mini-before.css`, the old mini.css served in place of the new one on the
+    same DOM, in 3 states: waiting, live, and 6 modes + flags + key sheet. Inside the card: 0 px in waiting, 98 px
+    (0.07 %) in live/flags (the "hold" opacity). The whole popover differs by 1.145–1.21 %, all within the new frame
+    ring and corners (1,668 px).
+  - Mirror `daylight-day` → light card `rgb(243, 239, 231)` (L 0.86), the card equals the theme's `--bg`, and an
+    `omitBackground` screenshot has 0 see-through interior pixels.
+  - A bus `theme:'studio'` → `'daylight-day'`, with no bad frames; a state without theme leaves it alone; an unknown
+    id falls back to the default.
+  - All 8 registered themes: opaque card, the right sheet, light/dark luminance, 4 and 6 modes with no overflow,
+    screenshots `test/phase2/mini/screenshots/mini-theme-<id>.png`.
+  - 0 console errors.
+  - live: page B = popover (pinned Classic), page A = the real app. It waits for `__rig.store`/`__rig.theme` only,
+    not `__rig.ready`, because at load ~50 the song load alone passed 120 s. `store.set('settings.theme', …)` in A →
+    B re-themes with no reload, and every rAF frame has an opaque card and exactly the sheet of `html[data-theme]`.
+    - daylight-day took 586 / 800 ms; daylight-stage 1–2 ms (attributes only); studio 540 / 668 ms; back to
+      classic 19–58 ms. Load was 37–50.
+    - An earlier version of this test ran inside run.mjs, on its booted app, and measured 670 ms. A run at load ~58
+      took 2,112 ms and failed the 1 s bound.
+- **Runs (load 37–70 from the parallel agents):**
+  - `theme.mjs` passed 14/14.
+  - The base `run.mjs` was run 4 times, with 10/15, 11/15, 9/15 and 12/14 after the change (the first three include
+    the since-removed inline theme test).
+    - Every original test passed in at least one run except "app boots": `waitRigReady` hit its 90 s bound in
+      every run whose head I logged (starved renderer: 0–5 frames/s; `ready=false`, audio running).
+    - Other failures were timing, in different tests each run: panic hold, 6-modes song-load 30 s, low-resource
+      frame counts, master.
+    - None of these touch mini.css or the theme path (the layout, status, drone and 6-mode layout checks pass on the
+      new CSS). **Needs a quiet-box re-run for 14/14.**
+  - `run-all`'s `mini` entry has a 6-minute timeout; it now also covers `theme.mjs` (~1–3 min including one app
+    boot). Request for the run-all owner: raise it to 10 min.
+
+## hardware-fixes (C9: reviews/hardware-checklist.md results log, BACKLOG B first bullet; views/components/{holdButton,quickSheet,latencyHint}.js, views/settings.js, views/perform.js (3 lines), styles.css, settings + ui-core tests)
+- **L-23 (lock hint clipped at the window bottom).** round4-perform P1 already moved the bottom row's captions above the
+  button (`top: -30px`), which covers the vertical clip Ryan saw in the older built app. Measuring the tree found the
+  other half: the caption is centred on the button, and Lock is the rightmost one, so "press and hold (0.6 s)" (140 px)
+  ran 8 px past the right edge at 1024×700 (1020–1032 vs 1024). SF Pro is wider than the Linux faces, so 1280 was
+  1 px from clipping on the Mac.
+  - `holdButton` now measures the caption once each time it is shown (the hint after a short press, and "keep
+    holding…"). This is one forced layout per press, never per frame. The caption:
+    - flips `data-place="above"` when the space below runs out, and `"below"` when above runs out;
+    - slides sideways (`--cap-dx`) to stay 4 px inside the window;
+    - gets `max-width` = the room it has, and wraps instead of clipping.
+  - New option `capBounds` (selector) keeps a caption inside an ancestor too. Transpose −/+ pass `'.transpose'`.
+  - CSS: `.hb-cap` now uses `top: calc(100% + 8px)`, and "above" uses `bottom: calc(100% + 8px)`. This matches the
+    old ±30 px for one line and grows the right way for two. The cap also has `width: max-content;
+    white-space: normal` and `transform: translateX(calc(-50% + var(--cap-dx, 0px)))`.
+  - Measured (Linux, lock hint at the right edge): 1280×720 1134–1274 / 612–634; 1440×900 1294–1434; 1024×700
+    880–1020 (was 892–1032); 1366×768 1220–1360. All are above the button. Transpose hints sit inside their panel,
+    for example 485–625 inside 471–627.
+  - The task text said "lockLine". `lockLine` in perform.js is the drone column's in-flow "HOLD a key or Major/Minor"
+    line, which can't leave the window. The hint Ryan saw is Lock's `.hb-cap`.
+- **2b transpose row (Mac ui-core at 1366×768: `div.transpose-row` 140 > 137).** The cause is not the hold caption.
+  The probe's label is `textContent`, which includes the hidden captions' text left over from an earlier hold.
+  `.transpose-val { min-width: 2.2ch }` is 44 px in SF Pro Display Heavy (digits ≈ 0.67 em), and
+  44 + 4 + 44 + 4 + 44 = 140, which is exactly the reported width.
+  - The value now takes whatever the buttons leave (`flex: 1 1 0; min-width: 0`). `data-len` (set in perform.js
+    renderSong) steps the size down: 2 glyphs are 27 px (24 at ≤ 1250), and 3 glyphs ("−18"; the range is −18…+17)
+    are 20 px (17). "−18" at 30 px never fit, even on Linux.
+  - The captions have their own overflow rule (panel-bounded `max-width`, wrapping) through `capBounds` above.
+  - Test: DejaVu Sans Bold (digits 0.70 em, wider than SF) as `--font-display` reproduces the Mac overflow with the
+    old CSS. The row and the ± buttons are held to +1 px. Only the value (overflow visible, 4 px gaps each side) may
+    spill ≤ 3 px. Linux, 1366×768: row 137/137 for 0 / +5 / −18.
+  - Themes that set their own `.transpose-val` font-size (sanctuary 32 px, sanctuary-v2) outrank the `data-len`
+    rules. Their "−18" can still overflow; the theme owner should add a `[data-len="3"]` size.
+- **Pedal test (two states).** The critics-fix copy is kept word for word, with "(pedal UP)" added: "Plug in the pedal
+  and the keyboard with your foot off the pedal (pedal UP): many keyboards read its direction then." The reversed
+  result still gives the unplug/replug advice.
+  - Flow: "Press your sustain pedal now and keep it down…" (`.st-pedal-prompt[data-step=press]`). The step settles
+    300 ms after the last CC64, so a continuous pedal's ramp counts at its resting value. Then "Now let go of the
+    pedal…" (`data-step=release`), which ignores values on the pressed side of 64. Then the verdict.
+  - A quick tap inside the press step asks again ("…keep it down until “Now let go” appears"). A tap is a switch
+    pedal's 0/127 flipping once, or any pedal crossing 64 twice.
+  - New export `inferPedalPolarity(down, up)` → `true` (reversed) / `false` / `null` (both on one side: no verdict,
+    no Invert button). `inferPedalInvert` stays exported.
+  - Invert / Turn invert off is offered only after both states, and only when it differs from the setting. The
+    Reversed setting is unchanged. "Test again" has the class `.st-pedal-again`. 15 s per step, then the "No pedal
+    message received…" line.
+- **Bluetooth latency hint.** New `components/latencyHint.js`, which never calls the engine:
+  - `LATENCY_WARN_MS = 60`, `latencyWarnText(ms)` = "Bluetooth output adds ~N ms — use the headphone jack or a dock
+    for live playing", `outputDeviceName(id)`, and `latencyHint({className, testid, onChange})` →
+    `{el, set({latencyMs, deviceId}), shown, device, dismiss(), destroy()}`.
+  - It shows while `status.latencyMs > 60`. It is dismissed per output device NAME: the `enumerateDevices` label with
+    "Default - " stripped, or `device:<id>` while labels are hidden. Names are kept in
+    `localStorage['worship-rig.latency-hint.dismissed']` (last 20; memory-only if storage is blocked), and every
+    instance on the page follows a dismissal. The name is looked up only when over the threshold and on `devicechange`.
+  - Settings › Audio: under the Latency row (`[data-testid=settings-latency-hint]`). The column is narrower than the
+    sentence, so it wraps to 2 lines. It also follows `settings.outputDeviceId`.
+  - Quick: in the header, in the subtitle's place (`[data-testid=quick-latency-hint]`). Every section is full at the
+    sheet's fixed height (This Mac 145/145 px at 1440×900, 121/121 at 1024×700), so a row in This Mac would push the
+    sheet onto the strips. The header shows the whole line (498 px) from 1280 up. At ≤ 1250, unlocked, the "Under
+    Lock: …" note gives it room; locked, it ellipsizes with the full text in the tooltip.
+  - `quickSheet.set()` takes `outputDeviceId`, and perform.js renderQuick passes it.
+
+## theme-ember (app/themes/ember/theme.css; registry `ember` body shim dropped; design/warmth/ship/ember/)
+Ember is the lowest scorer (6.17), but Ryan wants it shipped as an option. This entry brings it to the theme contract
+(app/themes/README.md) and applies the CSS-only fixes from its warmth, stage and build critics (warmth journal). It is
+dark only, with no light sibling.
+- **Contract**
+  - Every rule sits in one `:where(html[data-theme="ember"])` block. The `body:not([data-theme])` branch is deleted.
+  - Tokens are declared on `& body` (0,0,1), not on the guard itself. styles.css declares them on `:root` (0,1,0),
+    which would beat a zero-specificity html rule. **Other theme agents moving to the html guard will hit the same
+    thing.**
+  - The room background sits on `& body` too. That fixes the v1 bug where the hearth glow, vignette and grain never
+    rendered, because the theme's (0,0,0) background lost to styles.css `body { background }`.
+  - Low-resource is `&[data-low-resource] body`.
+  - No `@keyframes`, no `@media`, no `backdrop-filter`, no `content: url()`.
+  - Fonts load from `/fonts/NunitoSans-var.woff2` and `/fonts/YoungSerif-Regular.woff2`, with 0 HTTP ≥ 400 in every
+    run.
+  - Registry: `body: {theme:'ember', mode:'dark'}` is removed from `themes.js` and from the boot.js map. The
+    themes.test sync check passes 9/9.
+- **One mark.** The `.tb-logo` and `.overlay-card img` `content: url(/themes/ember/mark.svg)` overrides are deleted,
+  and so is `app/themes/ember/mark.svg`.
+  - The wordmark keeps its text. Only its font changes, to Young Serif, as README rule 8 allows.
+  - `design/warmth/ember/shoot.mjs`, the old design mock, still names that svg and `.ember-welcome`. No suite runs it.
+- **Deleted**
+  - The "Light the room" start screen hooks (`.ember-welcome`, `.ew-*`: 24 dead selectors).
+  - The infinite drone "breathing" animation (`ember-breathe`, plus its reduced-motion and low-resource branches). The
+    drone is now a static lamp with the same tight halo as the others.
+  - The level-glow column (`.lvl-cover::after { height: 5000% }` and 2 mask layers). It cost one 209 × 11460 px
+    compositor layer per sounding strip (+75 % layer area, build critic), and it was invisible at 1.5 m (stage
+    critic).
+  - The CSS case-flip on `.fx-lab span` / `.fxpill-l` (lowercase + `::first-letter`). It turned acronyms into "Eq".
+    The strings now show as the JS writes them.
+  - There was no `font-size:0` + `::after` copy bridge in Ember. The base `.drone-swell-text::after` ("Bend") is
+    styles.css's own and is untouched.
+- **Critics' CSS fixes applied**
+  - *Numbers (stage BLOCKER, warmth).* `--font-display` is now Nunito Sans, so chord, transpose, wheel % and dB use
+    lining sans digits. `font-variant-numeric: lining-nums tabular-nums` is set on `.chord-name`, `.transpose-val`,
+    `.wheel-value`, `.tb-val` and `.rec-time`. Young Serif (old-style figures) is opted in only for `.song-name`,
+    `.ev2-song-name`, `.overlay-title`, the `.song-key` letter and the `.tb-name` wordmark. The chord is back at
+    Classic's family weight (800) and size.
+  - *Amber has one meaning.*
+    - `.segmented .seg.on` is lit ivory (`#ece2d4` with ink). Only the Perform/Edit switch (`.tb-views .seg.on`)
+      stays amber.
+    - `.midi-name.off` ("Blocked") is in text colour; its lamp carries the warning.
+    - `--warn` moves from `#f5a33a` to `#ff8830`: accent vs warn ΔE×100 goes from 4.7 to 10.4.
+  - *Held keys.* The bone key goes to `--key-white #b3a796`, and a held key is `--key-held #ffc43a` with a 3 px ink top
+    bar. Held vs unheld is ΔE 17.6 (Classic 17.4; v1 Ember 10.7). The key label becomes `#463830` (4.75:1 on the
+    key).
+  - *Level meter.* The per-strip bar keeps one level ramp that is never a slot colour (`#7cc98a → #f2b24a → #e95145`,
+    the master meter's), at Classic's geometry.
+  - *Lamp halos.* Cut from 22 px at 34 % to 10 px at 20 %, so ON tiles keep crisp edges. OFF tiles have no halo
+    (`box-shadow: inset` only, `background-image: none`).
+  - *Wheel.* A brass sheen gradient under a track cover, instead of a flat tan slab.
+  - *Empty slot.* A solid, recessed socket (same 1.5 px border) instead of a dashed placeholder.
+  - *Coverage gaps.*
+    - Settings `.st-h2` / `.st-h3` are sentence case, and `.st-theme.on` uses the accent.
+    - In Edit › Tone, `.eqk` gets `--eqk-bg` / `--eqk-ink` warm, plus `.eqk-onoff` and its knob and the legend
+      swatches.
+    - `.banner.info` becomes a warm neutral.
+  - *Lock.* Under Lock, the drone character faders were dimmed twice (`.drone-char` .45 × `.fader.disabled` .45 = .20,
+    1.5–1.8:1 in Classic too). Ember uses .8 × .8 with `--text` labels: frozen still reads as frozen, and the values
+    are 7.6:1.
+- **Deferred (JS or copy; not done here)**
+  1. The welcome / "Light the room" / Today / "last time" session log and the lamps-warming dots. They need their own
+     first-launch-of-the-day trigger: Electron autoplays, so `#overlay-start` never shows (OPTIONS §3 point 3).
+  2. The 10 voice strings in concept §5.
+  3. Dropping `headerChipRow.js` `.toUpperCase()` if Space/Echo should be sentence case.
+  4. The EQ plot canvas: `eq-keyboard.js` paints fixed slate (`#0f1216`, `#1f242b`…) and should read tokens.
+  5. Nothing for mini: since `## mini-theme`, mini.css reads the app tokens that Ember declares on `body`.
+  6. The empty-slot "+ add a sound" label.
+  7. Pressed keys in the colour of the part that sounded, which needs per-key slot data.
+  8. Chord auto-fit to the card width.
+  9. The Edit sentence in the display face at a larger size. That is a layout change, so it was not done.
+  10. "Banked embers" is **cut**, not deferred: stage hazard (stage and build critics).
+- **Coverage** (`test/phase2/themes/run.mjs --only coverage --theme ember`): 219 selectors → **180**, 41 unmatched
+  (18.7 %) → **3 (1.7 %)**, 24 dead-class selectors → **0**, 0 invalid.
+  - The 3 left are live classes in states the walk doesn't reach: `.fx-more` (the More FX popover), `.swell-btn.on`
+    and `.bstrip.open .bstrip-list`.
+  - Rules for other unreached states whose Classic look is acceptable were dropped, to stay ≤ 2 %: `.led.flash`,
+    `.rec-btn.recording`, `.drone-swell.up` LED, `.meter.vertical` (unused), `.fx-chiprow.fx-open > .fxrow` (<1250 px),
+    `.bstrip.open .banner.info`, `.settings-placeholder`, the Edit wheel lanes (`.ev2-wlane`, `.ev2-wout-br`,
+    `.ev2-wn`) and `.ev2-slot-mi` hover.
+- **Contrast** (`tools/themes/shoot.mjs --theme ember --out design/warmth/ship/ember/`, 1440×900): perform 185 runs,
+  quick 167, edit 166, edit-tone-eq 158, mini 23, mini-drone-keys 28 (320×440). **0 fails**. The lowest is 4.69 (PANIC "Esc"/label on
+  `--panic`); next come the key labels at 4.75.
+  - Glare on perform: mean luminance .070, bright share .062.
+  - The first full run's eq shot timed out (screenshot 120 s at load ~50), so eq was re-shot with `--only eq`.
+    Mini was shot separately (`--only mini`), so `summary.json` holds only eq. The per-shot `audit-*.json` files
+    are all current.
+- **Stage states** (scratch probe, copied to `design/warmth/ship/ember/states/`: `probe.mjs`, `boxdiff.py`, `st-*.png`,
+  `audit-st-*.json`, `probe-{1440,1280}.json`, `classic-probe-*.json`):
+
+  | state | 1440×900 runs / fails | 1280×720 runs / fails | Classic fails (1440) |
+  |---|---|---|---|
+  | held chord | 185 / 0 | 159 / 0 | 0 |
+  | Pad OFF | 185 / 0 | 159 / 0 | 3 (wheel badge 4.44) |
+  | Faded | 184 / 0 | 158 / 0 | 0 |
+  | Locked + held | 191 / 0 | 165 / 0 | 4 (drone-char 1.46–1.84) |
+
+  - Lamps, as the rendered median luminance with text hidden: Keys ON .378, Pad ON .630, Drone ON .714, Pad OFF .019.
+    - Pad ON/OFF is **9.8:1**, and Keys ON vs an OFF tile is 6.2:1. The darkest lamp, plum (flat colours), vs the OFF
+      tile is 4.70:1.
+    - The OFF ring (5 px outside the tile) is .0084, against .0094 around ON tiles, so an OFF lamp does not glow.
+    - Lamps are the same under Lock.
+- **Layout vs Classic** (getBoundingClientRect, idle and held, at 1440×900 and 1280×720): `.song-name`,
+  `.chord-readout`, `.chord-name`, every `.perform .slot`, `.ontile`, `.fader-track`, `.drone-readout`, `.p-drone`,
+  `.setlist-strip`, `.topbar`, `.btn-fade` and `.btn-panic` are all **0.0 px** apart.
+  - Only text-intrinsic widths differ: `.song-key` x −7.3 / −7.6 px (the "Key" caption is sentence case, so
+    narrower), `.transpose-val` w +2.9, `.wheel-value` w +3.7 to +8.6 (Nunito digits).
+  - Font sizes equal Classic's: title 40 / 38 px, chord 22 px (xl bucket, "Cmaj7" held), transpose 30, drone readout
+    15, lamp names 15.
+- **Size**: folder 38 KB (theme.css 20.9 KB + grain.png 17.9 KB), plus 57 KB of /fonts = 95 KB (limit 250).
+- **Suites**: see the numbers under "Runs" below.
+- **Runs** (2 CPUs shared with the other theme agents; load average 25–100 throughout, so every boot-timing number here
+  is noisy):
+  - `node --test test/unit/shared/themes.test.mjs`: 9/9 (registry ↔ boot.js sync without the ember body shim, size
+    budget, /fonts).
+  - `test/phase2/themes/run.mjs --theme ember`, best run 8/11.
+    - Passed: boot ember (link before DCL, render-blocking, attrs, 0 errors / 404s), the unknown-id fallback,
+      switch → ember and → classic (one consistent sheet every frame), the picker, Quick › Theme, mini, and coverage.
+    - Not ember defects:
+      - "first boot … default" timed out on `__rig.ready` at 120 s under load. It is the default theme, not Ember.
+      - "store wins over a stale mirror" needs two css themes. With `--theme ember` alone its `b` is undefined, and the
+        paired run (`--theme ember,nave --only boot`) timed out at load 50.
+      - "Classic card after another theme" drives Sanctuary ("sanctuary changes the look (0 diffs)"): that is
+        Sanctuary's file mid-migration.
+    - The coverage walk also skips states under load. Of 5 coverage runs, 2 walked every state (3 unmatched), 2
+      skipped 2–3 states (3 and 6 unmatched) and 1 skipped 12 (26). The committed `coverage-ember.json` is from a run
+      at 3 unmatched (1.7 %).
+  - `test/phase2/ui-core/run.mjs`, one full run each at comparable load, back to back: **Classic 50/61, Ember 46/61.**
+    - Ember with the unchanged suite: RIG_THEME is not a suite switch. The run uses a preload,
+      `node --import <scratch>/pin-theme.mjs`, which re-applies `pinTheme(context, 'ember')` after the suite's own
+      `pinTheme(context, 'classic')`.
+    - Both fail #1, #2, #17, #30, #36 and #40 (boot, tap and meter timing under load). Classic alone fails #31.
+    - Ember alone fails:
+      - **#4 and #33: Classic-token assertions**, as themes-setup predicted for any theme. #4 expects
+        `--muted-fader #707a88` and gets Ember's `#82746d`. #33 expects the OFF tile at `rgb(39,43,50)` and gets
+        `rgb(45,36,32)`.
+      - #3, #16, #19, #24, #34, #58 and #59: page.click / waitForFunction timeouts. Re-run in isolation
+        (`--test-name-pattern`), #3, #16, #19, #24 and #59 pass. #34 (Revert is a 780 ms hold), #36 (TAP BPM) and #58
+        (meter loop at 0 frames/s) stay flaky under load.
+    - Nothing asserts on layout or behaviour that Ember changes: element boxes are equal to Classic's (above).
+    - A second full Ember run at load ~50 was stopped after its first 5 tests timed out.
+- **Second pass (2026-09-29 evening, load 4–13; everything above re-run against the current tree)**
+  - *Hearth.* The body wash does render now (gutters: R 42–54 beside the keyboard row vs R 20 under the top bar), but
+    it barely shows through the 93 % panels. `.panel.p-keys` now carries its own static radial glow from the bottom
+    edge (the warmth critic's fallback). Contrast unchanged. 181 selectors.
+  - *Coverage* (`--only coverage --theme ember`): 181 selectors, **3 unmatched (1.7 %)**, **0 dead classes**, 0
+    invalid. The 3 are the same live-but-unreached states (`.fx-more`, `.swell-btn.on`, `.bstrip.open .bstrip-list`).
+  - *Contrast* (`tools/themes/shoot.mjs --theme ember --out design/warmth/ship/ember/`, one full run, 0 errors / 404s):
+    perform 185, quick 167, edit 166, edit-tone-eq 158, mini 23, mini-drone-keys 28 runs, **0 fails**, lowest 4.69
+    (PANIC). States probe (`states/probe.mjs`): held / Pad OFF / Faded / Locked+held at 1440×900 = 185 / 185 / 184 /
+    191 runs and at 1280×720 = 159 / 159 / 158 / 165 runs, **0 fails**. Classic at 1440 still has 3 (Pad OFF) and 4
+    (Locked). Lamps: Pad ON L .630 vs OFF .019 (**9.8:1**), and the OFF ring is .0084 vs .0091–.0095 around ON tiles.
+  - *Boxes vs Classic* (`states/boxdiff.py`, Classic re-probed now): `.song-name`, `.chord-name`, every
+    `.perform .slot`, `.ontile`, `.fader-track`, `.drone-readout`, `.topbar`, `.btn-fade`, `.btn-panic` are 0.0 px
+    apart at both sizes. Text-intrinsic only: `.song-key` x −7.3 / −7.6 px, `.wheel-value` w +3.2 to +3.7. Sizes are
+    Classic's: title 40 / 38 px, chord 22, transpose 30, drone readout 15, lamp names 15.
+  - *Suites.* `themes.test` 9/9. `themes --theme ember` **10/11**: the one failure is "store wins over a stale
+    mirror", which now pairs `sanctuary` with `sanctuary-day` (the first two css themes since `coming` was dropped).
+    It fails the same way with `--only boot`, and it does not involve Ember. ui-core, back to back: **Classic 59/67,
+    Ember 62/67** (`node --import <scratch>/pin-theme.mjs`, RIG_THEME=ember). Ember-only: #4 (`--muted-fader`
+    `#707a88` expected) and #33 (OFF tile `rgb(39,43,50)` expected) assert Classic tokens. #34 timed out, then passed
+    alone. #40 and #47 fail on both. Classic-only: #27, #30, #31, #35, #36, #37 (timing under load).
+  - Screenshots: `design/warmth/ship/ember/{perform,quick,edit,edit-tone-eq,mini,mini-drone-keys}.png` + `audit-*.json`
+    + `summary.json`; `states/st-{held,pad-off,faded,locked-held}.png` + `audit-st-*-{1440,1280}.json`,
+    `probe-{1440,1280}.json`, `classic-probe-{1440,1280}.json`.
+
+## lowres2 (low-resource part 2: frozen drone + audio sleep; engine/drone-freeze.js (new), audio.js, drone.js, controller.js, midi.js, store.js, shared/bus.js, Settings › Audio + Quick one-liners, docs/menubar-mode.md)
+Ryan's two decisions after reviews/idle-cpu-mac.md (hidden drone-on ≈ 30 Energy Impact: live drone synth ≈ 21, convolvers
+≈ 9.5; drone-off idle 7.6 %).
+- **(1) Frozen drone** (`engine.setLowResource(true)` → `drone.setFrozen(true)`; realtime only, offline renders keep
+  the live drone).
+  - A sounding static **synth** drone is rendered OFFLINE once (`drone-freeze.js renderDroneLoop`: a Drone of the same
+    class at unit level + the live reverb's chain HPF 180 → LPF 9 k → predelay → the live IR → return × wheel;
+    seeded `rngFor(seed, 'drone-freeze|pc|minor')`, everything at `{when: 0}`) into a loop of `FREEZE_LOOP_SEC` = 20 s
+    (preroll 4 s dropped, then loopLen + 1.5 s; the 1.5 s after the loop end is equal-power crossfaded into its head,
+    so the wrap plays the rendered continuation). Seam check (`seamCheck`): max |Δ| across the wrap ≤ max |Δ| in the
+    body, warned if not.
+  - Played from one looping `AudioBufferSourceNode` → its gain → `drone.level` (so drone.gain, wheel and swell stay
+    live and exact: the chain is linear, hence **a level change never re-renders** — stricter than the brief's ±1 dB
+    rule; only the reverb return level is baked, and it re-renders beyond ±1 dB, `FREEZE_WET_TOL_DB`). Equal-power
+    1.5 s crossfade from the live layers, which then end (voices stopped, drone-osc back in the idle pool,
+    disconnected); `sendGate` fades to 0, so the reverb is unfed and the existing FX idle sleep puts it to sleep
+    (verified: `fxAsleep` includes 'reverb' as soon as the freeze completes).
+  - Re-render (debounced `FREEZE_DEBOUNCE_SEC` = 2 s on the audio clock via AudioTimer, no setTimeout) on
+    brightness / movement / width / trim / IR / predelay / wet > 1 dB; crossfade loop → loop. **A key or mode change
+    goes through the live synth at once** (the key change must sound now, with the song's fade) and re-freezes after
+    the debounce. Chord-follow, files mode and a parked drone are never frozen.
+  - Low-resource off: the live synth starts, the loop fades `FREEZE_THAW_LEAD_SEC` = 1.5 s later (1.5 s equal-power),
+    the send reopens.
+  - Memory: ≤ one loop + one during a crossfade; `buffer = null` on dispose. 20 s = 6.7 MB @44.1 k / 7.3 MB @48 k;
+    hard cap `FREEZE_MAX_BYTES` 12 MB (30 s @96 k clamps to 12.0 MB).
+  - `_debugStats()`: `droneFrozen`, `droneLoopSec`, `droneRenderMs`, plus `droneRenders`, `droneFreezeMB`,
+    `droneSeam`, `droneFreezePending`. Test hook `engine._setDroneFreezeOptions({loopSec, prerollSec, debounceSec})`.
+- **(2) Audio sleep** (`settings.audioSleepSec`, optional, absent = 30; number rounded, clamped 0 … `AUDIO_SLEEP_MAX_SEC`;
+  0 = never; anything else refused; invalid stored value dropped on load; device-local across a replace-import).
+  - Engine: `sleep({ramp})` (fx.out linear ramp to 0 over `SLEEP_RAMP_SEC` 150 ms via `linFrom`, then
+    `ctx.suspend()`), `wake({ramp})` (`ctx.resume()`, then ramp back over `WAKE_RAMP_SEC` 60 ms; 5 ms
+    `WAKE_NOTE_RAMP_SEC` when notes are queued — the output is silent at sleep by construction, so a 60 ms fade would
+    only blunt the note's attack), `sleepState` ('awake' | 'sleeping' | 'asleep' | 'waking'), `sleepBlockers()`
+    (['voices'] / ['drone'] / ['no-audio']; a frozen drone at drone.gain 0 does not block), event `'sleep'`
+    {state, wakeMs?, queued?}. noteOn / noteOff / sustain arriving while not awake are queued and played at the wake
+    ramp's start (never lost); a drone that starts wakes it; an external resume finishes the wake.
+  - Controller: input-activity clock `controller.noteActivity(kind)` — MIDI 'input' (every message except realtime
+    clock / active sensing, and hot-plug 'connected'), 'midi-switched', document-level CAPTURE listeners for keydown /
+    pointerdown / wheel (installed by the controller; main.js needed no change), every bus command (popover `hello`
+    included), every note from any source, `resumeAudio()`. The watchdog tick sleeps when no blockers, not recording,
+    ctx running and idle ≥ audioSleepSec; any wake keeps it up ≥ audioSleepSec. `status.audio = 'asleep'` (not a
+    stall: the tick never resumes or restarts it). `_sleepDebug()` for tests.
+  - `midi.js`: event `'input'` {inputId, kind: 'message'|'hotplug'} emitted BEFORE the message's own event.
+  - Bus: `AUDIO_STATES` gains `'asleep'`; contract stays v 1 (docs/menubar-mode.md updated).
+  - UI: Settings › Audio "Sleep audio after: 30 s / 2 min / Never" + "Audio asleep — play a note or press a key to
+    wake" line; quickSheet This Mac caption shows the same line when given `audio: 'asleep'`.
+- **Numbers (this 2-CPU Linux box, headless Chromium, 44.1 kHz).**
+  - 30 s loop render (35.5 s of audio incl. preroll + seam, real drone-osc + 1.5 s IR): **3.1–4.5 s idle**
+    (graph build on the main thread 48–81 ms, the rest on the offline render thread); **59 s at load 20+** (build
+    3.3 s). Loop 10.09 MB. Seam 0.0013 vs body 0.024. Determinism: same inputs → max diff 2.7e-6. The default 20 s
+    loop renders in ≈ 2.7 s idle.
+  - Freeze (4 s test loop): live −19.54 dB vs frozen −20.0 … −20.1 dB power → **RMS match −0.46 … −0.59 dB**; frozen
+    ≈ 2.2–3.5 s after setLowResource(true) (render 0.4–1.6 s + 1.5 s fade); seam 0.0079 vs body 0.050; no click at
+    the realtime wrap; live drone voices 0, reverb asleep; key change re-freezes 2.5–3.9 s later; thaw 3.07 s.
+  - Wake: MIDI noteOn while asleep → resume 5–9 ms → note scheduled at +20 ms lead: **27–30 ms added**, message →
+    sound 34–37 ms vs 7 ms awake (≤ 80 ms target). keydown wake 20–58 ms (poll granularity), no note queued; popover hello wakes (20 ms).
+  - Sleep/wake ramps on a drone peaking at −6.9 dBFS (master scaled up): **max |Δsample| 0.0121 across sleep →
+    suspend → resume → wake** vs 0.0127 in the steady drone (≤ 0.02), 0 clicks, 0 capture gaps.
+- **Tests.** Engine `realtime.droneFreeze` (above; click checks on a gap-free AudioWorklet capture at the loop wraps
+  plus the loop buffer tiled twice), `realtime.droneFreezeRender` (30 s render, 12 MB cap, determinism),
+  `realtime.audioSleep` (real controller + MidiInput + document + mini bus: sleep after 2 s, MIDI wake + onset,
+  keydown wake without a note, recording blocks sleep, hello wakes, ramps click-free). Shell `lowres2.test.mjs`
+  (store validation, bus 'asleep', controller sleep/wake per input kind, blockers, recording, 0 = never, midi
+  'input'). `engine/run.mjs` honours per-suite `timeouts`. Engine suite **78/78**; shell unit + browser green.
+- **Requests for other owners.**
+  - **C9 (perform.js)**: in `renderQuick()` add `audio: a,` to `quick.set({...})` — Quick › This Mac shows the
+    asleep line only once it is passed (quickSheet.js already handles it).
+  - **C9 (main.js `renderAudioStatus`)**: map `asleep: 'Asleep'` (LED 'ok', not 'warn'); today 'asleep' falls back
+    to "Sound" with a warn LED.
+  - **menubar-B (views/mini.js status line)**: add `asleep: 'Audio asleep'` to the audio text map (today "Sound…").
+  - LOCAL: re-measure hidden drone-on Energy Impact with low-resource on (expect the ≈ 21 synth + ≈ 9.5 convolver to
+    become one buffer source) and idle with audio asleep (AudioContext suspended: the audio thread should drop to ~0).
+
+## theme-daylight (app/themes/daylight-v2/theme.css; registry `daylight-stage` / `daylight-day` body shims dropped; design/warmth/ship/daylight/)
+- **One file, two ids, html guard.** Every rule sits in one `:where(html:is([data-theme="daylight-stage"],
+  [data-theme="daylight-day"]))` block. The old `body[data-mode="day"|"dusk"]` keys and the unguarded
+  `body:not([data-theme])` branch (§3.1 #8) are deleted, and so are the `body` shims for both ids in `themes.js` and
+  `boot.js` (unit sync test 9/9).
+  - Day and Stage: every colour token is `light-dark(day, stage)` on `&:root`. `color-scheme` is `dark` on the root
+    and `light` under `&:root[data-mode="light"]`, driven by boot.js / applyTheme. There is no OS media query.
+    Siblings switch by attribute flip only.
+  - Swatches in `themes.js` are unchanged: they already equal the two branches (`#1b1611 / #261f19 / #f5ede0 /
+    #f6c35a` and `#f3efe7 / #fdfbf7 / #27211b / #f4b73f`).
+  - New token `--accent-text: var(--dl-accent-text)` is the README popover hook. mini.css already fell back to
+    `--dl-accent-text`, so the value is unchanged.
+- **One mark.** `.tb-logo` / `.overlay-card img` `content: url(...)` are removed. `daylight-v2/mark.svg`, `sun.svg`,
+  `moon.svg` and `today.svg` are deleted, so the folder is `theme.css` only. The wordmark keeps its Fraunces face.
+- **Fonts** come from `/fonts/` (`InstrumentSans-var.woff2` twice: `Instrument Sans` and a chord-only
+  `Instrument Sans Chord` face whose ascent and descent overrides fit the 1.1 line box; `Fraunces-soft.woff2`). Boot
+  showed 0 × 404 for both ids. The size is 162 KB: 46 KB of CSS + 61 + 55 KB of fonts, against a 250 KB limit.
+- **Critics' must-fixes (OPTIONS.md §3.1), CSS part**
+  - **#1 Stage slot chroma.** The dusk branch is Keys `#e9833d`, Pad `#66cf7e`, Extra `#139be5` and Bass `#e398fe`,
+    at OKLCH C 0.150 / 0.151 / 0.151 / 0.160 with hues 52 / 149 / 241 / 317 (the same four hues).
+    - Pairwise OKLab ΔE×100 is Keys–Pad 23.4, Keys–Extra 30.4, Keys–Bass 24.3, Pad–Extra 24.5, Pad–Bass 31.0 and
+      Extra–Bass 23.0, so every pair is ≥ 20. Before: 14.0–24.1.
+    - Pad vs Extra ΔL is 0.112, against the ≥ 0.08 target. Lamp ink is ≥ 5.8:1.
+    - The Day pastels are unchanged.
+  - **#2 Chord.** `.chord-name` is Instrument Sans at weight 800 (the vendored axis tops out at 700, which is what
+    renders), with `lining-nums tabular-nums`. It keeps the app's own sizes: 46 px idle "Em", and 22 px for "Cmaj7"
+    through the app's data-len rule.
+    - Idle is `--faint`. The idle → live step is 2.21:1 on Stage and 2.82:1 on Day (before: 1.49:1). Idle on bg
+      is 7.0 and 4.9:1.
+  - **#6 Copy bridge deleted.** There is no `font-size: 0` and no `::after` string swap, and Sound is no longer hidden
+    while healthy. The app's strings show as they are, so screen readers hear each once.
+  - **#8** The unguarded branch is gone (above).
+    - The leftover dashed drone key is `styles.css:896 .drone-block.off .key-btn.on { border-style: dashed }`, which
+      is not my file. The theme overrides it: solid, `--led-off` edge, transparent. The drone-off audit state renders
+      `solid`.
+    - The Today card and sheet selectors (`.dl-today*`, `.dl-ic`) are deleted.
+  - **Stage critic, lamps.** ON is always the more visible state. OFF is a hollow `--led-off` ring. By day, ON is a
+    dark fill (the slot colour mixed with ≥ 60 % `--text`, or the drone ink), and on Stage it is the lamp colour with a
+    glow.
+  - **Lock.** styles.css dims the drone character faders twice (.45 × .45), which put "Soft · 40%" at 1.4–1.6:1
+    (Classic too). Under Daylight the words stay at full strength and only the slider track fades to .4.
+- **Deferred (JS or layout, not theme work)**
+  - #3 Today card (hide under Lock / after song 2, one-line collapse) and #5 the Day · Stage · Auto switch plus the
+    Today sheet's own first-launch trigger: `today.js` stays in `design/warmth/daylight-v2/`.
+  - #4 Lock forcing Stage for as long as it is locked.
+  - The #6 strings in JS: calm top bar (one lamp + one phrase), "Keyboard not allowed yet", "As saved",
+    "Start of set", "Using built-in pads", "Just as you saved it", plus the 4 tests that assert the old strings.
+  - #7 `fonts.ready → fitName` is done by setup.
+  - #8 "collapse the empty Extra/Bass wells into one narrow well": this is a layout change, and themes must keep
+    Classic's boxes.
+  - The warmth critic's retheming of the EQ canvas from tokens (`eq-keyboard.js`). Today it is framed as a dark
+    display with a walnut bezel.
+- **Coverage** (`themes/run.mjs`, 50 states: 25 per id incl. mini): **250 selectors, 4 unmatched (1.6 %), 0 dead
+  classes, 0 invalid.** Before: 340 / 85 unmatched (25 %) / 43 dead.
+  - The 4 unmatched selectors are live classes in states the walk does not reach: `.rec-btn.recording`,
+    `.drone-block.off .key-btn.on` (checked in the states audit), `.ev2 .ev2-wv` (Show wiring), and
+    `.ev2-song-mi.danger` / `.ev2-slot-mi-remove` (open menus).
+- **Contrast** (`tools/themes/shoot.mjs`, 1440×900, 0 console errors):
+
+  | id | perform | quick | edit | eq | mini | mini-drone-keys | lowest |
+  |---|---|---|---|---|---|---|---|
+  | daylight-stage | 185 / 0 fails | 167 / 0 | 166 / 0 | 159 / 0 | 23 / 0 | 28 / 0 | 4.92 "ON" (Quick), PANIC 5.17 |
+  | daylight-day | 185 / 0 | 167 / 0 | 166 / 0 | 159 / 0 | 23 / 0 | 28 / 0 | 4.67 PANIC |
+
+- **States audit** (`design/warmth/ship/daylight/audit-states.mjs` → `states.json`): the checks shoot.mjs does not make.
+  - Text in the states idle, held chord (live), Pad OFF, drone OFF, Faded and Lock: 182–189 runs each, **0 fails**
+    for both ids. The lowest is 5.13 on Stage and 4.67 by day (PANIC).
+  - ON vs OFF of the same lamp, sampled at the centre pixel, must be ≥ 3:1. On Stage: pedal 4.18, slot-tile LED 14.4,
+    drone toggles 12.0 / 9.4, the stepChip cycle LED 6.0, the drone tile 14.4. By day: 4.75 / 14.1 / 6.7 / 5.6 / 6.8 /
+    14.1. All pass, and ON is always the more visible state.
+  - Layout parity against Classic at 1280×720 and 1440×900: `.song-name`, `.chord-name`, the drone readout and all 4
+    `.perform .slot` boxes are Δ 0 px on x / y / w / h for both ids.
+    - Stage sizes are unchanged: title 38 / 40 px, chord 46 px, slot names 17 px.
+    - The only non-zero delta is the text run width of `.slot-inst` (3 px, a different face), not a layout box.
+- **Screenshots**
+  - `design/warmth/ship/daylight/{stage,day}/`: `perform.png`, `quick.png`, `edit.png`, `edit-tone-eq.png`,
+    `mini.png`, `mini-drone-keys.png`, plus `audit-*.json` and `summary.json`.
+  - `design/warmth/ship/daylight/state-daylight-{stage,day}-{held,pad-off,drone-off,faded,locked}.png`.
+- **Suites**
+  - `node --test test/unit/shared/themes.test.mjs`: 9/9.
+  - `test/phase2/themes/run.mjs --theme daylight-stage,daylight-day`: 11/13.
+    - Passed: first boot, boot of both ids (link before DCL, render-blocking, attributes, 0 errors / 404s), the
+      unknown-id fallback, switch → stage / day / classic (one consistent sheet every frame), the picker, Quick ›
+      Theme, mini, and coverage.
+    - Both failures are Sanctuary's, not Daylight's:
+      - "store wins over a stale mirror" always pairs the first two css themes (sanctuary / sanctuary-day) and got
+        `'sanctuary'` ≠ `'sanctuary-day'`.
+      - "Classic card after another theme" drives Sanctuary ("sanctuary changes the look (1 diffs)").
+  - `test/phase2/ui-core/run.mjs` uses a preload (`node --import pin-theme.mjs`, as in theme-ember), because RIG_THEME
+    is not a suite switch.
+    - Classic (same box, back to back) **65/67**. It fails #40 (1280×800 `div.meter-bar` 80 > 72) and #47 (DejaVu
+      −18 transpose value 45 > 41 + 3).
+    - Daylight Day **61/67**. It fails #40 and #47 exactly as Classic does, and adds:
+      - #4, #18 and #33: Classic-token assertions. #4 is `--muted-fader #707a88`. #18 is `accentPanel`: `--accent`
+        as text on `--panel` is 1.74, but Daylight's `--accent` is a highlighter *fill*, and amber text uses
+        `--dl-accent-text` (6.1:1; shoot.mjs finds 0 rendered fails). #33 is the OFF tile `rgb(39,43,50)`.
+      - #34 is a cascade of #33. #33 fails on its Classic OFF-tile colour *after* muting Keys and never unmutes, so
+        #34's "ON tile through an open panel" tap unmutes and its wait for `muted === true` times out. Evidence:
+        #34 alone (`--test-name-pattern`) passes, and a scripted run of #33's remaining steps passes on both ids
+        (the tap mutes, `.rbar.off`, 0 `--warn` colours in the strips).
+    - Daylight Stage **62/67**: #4, #33 (tokens), #34 (the #33 cascade), and #40 / #47 as on Classic. An earlier run
+      at load ~12 collapsed to 48/67 on click timeouts after a hidden view. It is not counted.
+    - No Daylight failure is a layout or behaviour change. All of them are Classic-token assertions or shared with
+      Classic.
+
+## theme-sanctuary (app/themes/sanctuary-v2/theme.css; registry `sanctuary` + `sanctuary-day`; design/warmth/ship/sanctuary/)
+Sanctuary is Ryan's final default (the flip of `DEFAULT_THEME_ID` / boot.js `DEF` from the TEMP `'classic'` is left to
+themes-final, as both files say). This entry brings the file to the theme contract (app/themes/README.md), lands the
+light sibling, and applies the CSS-only items from the v2 warmth / stage / build critics (warmth journal) and OPTIONS
+§ Option 2.
+- **Contract**
+  - One `:where(html:is([data-theme="sanctuary"], [data-theme="sanctuary-day"]))` block holds every rule. The
+    `body:not([data-theme])` / `body:is(...)` (0,1,1) branch is gone. That wrapper caused the build critic's three
+    bugs: the OFF lamp glowed, the OFF badge lost its ring, and the 1024 `.ot-name` tracking step was lost. The app's
+    state and media rules now win on specificity again (1024: `.ot-name` .91 px = Classic).
+  - Tokens sit on `&:root` (0,1,0, same as styles.css's `:root`, wins on source order). Day overrides sit on
+    `&:root[data-mode="light"]` (0,2,0).
+  - No `backdrop-filter`, no infinite animation, and no `will-change` (the full-screen `body::after` layer). The only
+    `@keyframes` is `sanct-fade`, a finite opacity fade-in of 140–160 ms, off under reduced motion. No `@media` on the
+    OS appearance.
+  - Assets are root-absolute (`/themes/sanctuary-v2/triplet.svg`). Fonts load from `/fonts/Alegreya-wght.woff2` and
+    `/fonts/Figtree-wght.woff2` with `font-display: swap` (was `block`, build critic). Every run had 200s on both and 0
+    HTTP ≥ 400.
+  - Registry: `themes.js` and boot.js have no `body` shim for either id. `sanctuary-day` has real swatches
+    (`#efe9de / #f9f5ee / #32162b / #875806`) and `coming` removed. The `sanctuary` swatch is the night branch
+    (`#160913 / #21111c / #f5ecd8 / #e6ba65`). `themes.test.mjs` is 9/9.
+- **One mark.** No `content: url()` on `.tb-logo` / `.overlay-card img` and no wordmark swap. `.tb-name` keeps its
+  text, and only its face changes. `mark.svg` and the start screen's `window-{glass,light,lead}.svg` are deleted from
+  the folder. Nothing references them.
+- **Deleted**
+  - The "Before you play" start screen: `.sanct-before*`, `.sanct-breath`, `.sb-*` (31 dead selectors).
+  - The breathing drone window (an infinite 8 s animation whenever the drone sounds, build critic). The window is now
+    static: lit (opacity 1) while the drone is on, unlit (.3) when it is off, with a .6 s transition.
+  - Grain was already gone in v2. There was no `font-size:0` + `::after` copy bridge in this file.
+- **Light sibling `sanctuary-day`** ("chapel morning") is the same file.
+  - Every colour token is `light-dark(DAY, NIGHT)`. `color-scheme` is `dark` on `&:root` and `light` under
+    `&:root[data-mode="light"]`, so html[data-mode] (boot / applyTheme) picks the branch.
+  - Day palette: stone paper (bg `#efe9de`, panel `#f9f5ee`), plum-ink text `#32162b`, deep brass `#875806`, and
+    deeper lamp glass with cream ink (`#a63d02 / #006e46 / #02648c / #7847a6`). Lamp gradient .02/.05 with an 18 % halo.
+  - **Exception: slot and drone colours are plain values per mode**, not `light-dark()`. `edit/panels/slot.js:858`
+    reads `--c` back with `getPropertyValue` for the response-curve canvas, and a canvas rejects a `light-dark()`
+    string (checked in Chromium 141: `strokeStyle` stays unchanged). Resolved `--c` is now `#f78955` (night) /
+    `#a63d02` (day), and `.ev2 --drone` is `#edd9a6` / `#755002`.
+- **Critics' CSS fixes**
+  - *Warm neutrals (warmth critic, OPTIONS §4).* Night neutrals rotated from hue 297 to 338 at the same OKLCH L, with
+    chroma ×0.8 (bg `#160913`, panel `#21111c`, panel-2 `#2a1a25`, panel-3 `#352530`). The plum-and-gold identity
+    stays: brass accent, cream text, the book face, lit glass.
+  - *OFF lamp (build + stage).* `.ontile.off` is stated in full: an unlit pane with no halo, no lit LED and a ringed
+    badge. See Stage states below for the numbers.
+  - *Held keys (stage).* Night ivory is dimmed (`#a39a88 → #958c7b`) and held is `#f2c35e`.
+  - *Fade out vs Faded (stage).* At rest, Fade out is a neutral lit plane with a `--line-2` rim. Faded is
+    `color-mix(--warn 36 %, panel-2)` and keeps the app's 2 px amber border, so it flips both hue and lightness.
+  - *`--ok`* is `#9ccf66`, a yellower status green, so READY no longer reads as the Pad lamp (dE 2.4 before).
+  - *Glass colours (stage).* `triplet.svg` is recoloured to amber, honey, cream and wine only, with no slot hues.
+  - *Other*
+    - The empty slot is a solid recessed niche, not dashed (warmth).
+    - The drone-character labels set weight only, so the app's 11.5 px step at 1024 applies ("Movement" 59/59 px, not
+      "Movem…").
+    - Under Lock the drone-character faders are .8 × .8 instead of .45 × .45, with `--text` labels (Classic's Lock
+      fails at 1.46).
+    - Edit › Tone `.eqk` re-reads the theme's slot colour and well.
+    - Rubrics are true small caps with `line-height: 14px`, which keeps Classic's 12 px caps line box.
+  - *Chord overflow (found here, ui-core #40 / #47).* Alegreya's content area (1.361 em) overflowed the clipped
+    `.chord-name` inside its `46px/1.1` line box: scrollHeight 56 > 51 at 1280×800 and 1366×768, 46 > 42 at 1024.
+    - New `@font-face 'Sanctuary Chord'` points at the same URL (no second fetch) with `ascent-override 88.55 %` and
+      `descent-override 21.45 %`. That puts the baseline exactly where it sat before, and now 51/51, 33/33, 46/46
+      (xl) and 42/42 (1024).
+    - It is used by `.chord-name` only. Other book text keeps Alegreya's own metrics, so Notes' line boxes are
+      unchanged.
+- **Deferred (JS or copy; not done here)**
+  1. The daily hook: "Before you play" / "Before the service" and the `worship-rig.lastSession` record ("On Sunday you
+     ended on…"). It needs its own first-launch-of-the-day trigger: Electron autoplays, so `#overlay-start` never
+     shows (OPTIONS §3 point 3).
+  2. The voice strings (concept §6.3: *Preparing n of N*, *All N ready*, *Faded out. Play to bring it back.*,
+     *Up next*) and *That's the set. Thank you for serving.*
+  3. The EQ plot canvas: `eq-keyboard.js` paints fixed slate in every theme and should read tokens.
+  4. `slot.js` response-curve spark: its reference diagonal is a hard-coded `rgba(255,255,255,.18)`, which is invisible
+     on Sanctuary Day's paper.
+  5. The window lights on `drone.mode !== 'off'`, not on audibility (Faded or −∞ still shows it lit). That needs a class
+     from perform.js.
+  6. Not done, as design calls: a per-strip warm spill behind the fader, and a 44–48 px window (warmth critic). The
+     title row has no room without a layout change.
+  7. Test harness items (not mine to edit):
+     - `test/phase2/themes/run.mjs` "store wins over a stale mirror" picks the first two css themes. Those are now the
+       siblings sanctuary / sanctuary-day, and a sibling switch only flips attributes, synchronously, before
+       DOMContentLoaded, so `__themeDcl.html` is already the store's id.
+       - Fix: `const b = list.find((t) => t.css !== list[0].css).id`.
+       - With that one-line change (a scratch copy), boot is 5/5.
+     - "Classic card after another theme" is flaky (1 pass, 1 fail at "sanctuary changes the look (1 diffs)",
+       1 `#toasts` height diff, under load 5–9). It passed in the final run.
+- **Coverage** (`test/phase2/themes/run.mjs --theme sanctuary,sanctuary-day`, both ids walked, 50 states): 274
+  selectors → **206**, 61 unmatched (22.3 %) → **3 (1.5 %)**, 31 dead-class → **0**, 0 invalid.
+  - The 3 left are live classes in states the walk doesn't open: `.bstrip.open .bstrip-list`,
+    `.bstrip.open .banner.info` and `.fx-more`.
+  - `states.mjs` opens them and audits them: the banner strip is 9.85 minimum, and the fx-more popover 6.19 at night /
+    5.85 by day.
+- **Contrast** (`tools/themes/shoot.mjs`, 1440×900; `design/warmth/ship/sanctuary/` and `…/day/`):
+
+  | id | perform | quick | edit | edit-tone-eq | mini | mini-drone-keys | lowest |
+  |---|---|---|---|---|---|---|---|
+  | sanctuary | 185 / 0 | 166 / 0 | 166 / 0 | 158 / 0 | 23 / 0 | 28 / 0 | 4.63 PANIC |
+  | sanctuary-day | 185 / 0 | 166 / 0 | 166 / 0 | 158 / 0 | 23 / 0 | 28 / 0 | 4.55 `.song-key` "C" (≥ 24 px bold) |
+
+  Cells are text runs / fails. There are 0 errors in both runs.
+- **Stage states** (`design/warmth/ship/sanctuary/states.mjs`, 1440×900 and 1280×720 for classic, sanctuary and
+  sanctuary-day).
+  - Text audits (runs / fails at 1440; same at 1280):
+
+    | state | Classic | Sanctuary | Day |
+    |---|---|---|---|
+    | OFF lamps | 169 / 3 (wheel badge 4.44) | 169 / 0 | 169 / 0 |
+    | held chord | 184 / 1 (key letter 1.53) | 184 / 0 | 184 / 0 |
+    | Faded | 27 / 0 | 27 / 0 | 27 / 0 |
+    | Lock | 190 / 4 (drone-char 1.46) | 190 / 0 | 190 / 0 |
+    | step panel | 10 / 0 | 10 / 0 | 10 / 0 |
+    | key popover | 27 / 0 | 27 / 0 | 27 / 0 |
+    | fx-more | 14 / 0 | 14 / 0 | 14 / 0 |
+    | banner strip | 4 / 0 | 4 / 0 | 4 / 0 |
+
+  - **Lamps, ON vs OFF** (median tile luminance ratio, text hidden):
+
+    | | Keys | Pad | Drone | OFF LED ring vs tile (flat ≤ 1.1) |
+    |---|---|---|---|---|
+    | Sanctuary | 7.39 | 8.20 | 12.3 | 1.03–1.04 |
+    | Day | 4.98 | 4.93 | 5.46 | 1.05 |
+    | Classic | 6.06 | 7.96 | 10.1 | 1.00 |
+
+    The OFF lamp no longer glows.
+  - **Keybed, held vs unheld** (luminance ratio):
+
+    | | white keys | black keys |
+    |---|---|---|
+    | v2 as reviewed | 1.11 (stage critic) | |
+    | Sanctuary | **3.6** | 8.47 |
+    | Day | 2.4 | 5.2 |
+    | Classic | 2.35 | 8.78 |
+
+  - **Fade out at rest vs Faded:** Sanctuary **2.06**, Day 1.63, Classic 1.05.
+  - **Warmth** (OKLab ×100 over the room pixels, L < 0.35, `sanctuary-v2/warmth.py` method):
+
+    | shot | a | b | room L |
+    |---|---|---|---|
+    | v2 as reviewed | +1.84 | **−3.18** | 0.215 |
+    | Sanctuary, idle | +2.95 | **−0.79** | 0.222 |
+    | Sanctuary, `perform.png` | +2.96 | −0.79 | 0.221 |
+    | Sanctuary at 1280 | +2.92 | −0.80 | 0.225 |
+    | Classic, same run | −0.18 | −0.91 | 0.211 |
+    | Classic, OPTIONS probe | | −1.00 | |
+
+    Sanctuary now meets the b ≥ −1.0 bar and is redder than Classic. Day is paper (87 % of pixels at L ≥ .8), so its
+    room figure doesn't apply: its paper is b +1.53, against Daylight Day's +1.05.
+- **Layout vs Classic** (getBoundingClientRect at 1440×900 and 1280×720, both ids).
+  - Within 2 px:
+    - `.song-block`, `.song-name`, `.song-sub`, `.chord-readout`, `.p-head`, `.p-main`, `.p-drone`, `.drone-readout`,
+      `.p-bottom`, `.p-notes` and the wheel strip;
+    - every `.slot` and every `.slot .ontile`;
+    - `.chord-name` at y −1.1 px.
+  - Beyond 2 px, only text-intrinsic widths:
+    - the setlist chips are 6–9 px narrower each (Alegreya 18 px is narrower than the system sans at 15 px), so later
+      chips sit up to 48 px further left;
+    - `.slot-inst` w −5.1 / −2.8;
+    - the drone ON tile w +3.3.
+  - Stage sizes equal Classic's: song title 40 / 38, chord 46, slot names 17, lamp names 15, drone lamp 15.
+- **Size**: 115 KB, against the 250 KB limit. That is theme.css 37.5 KB, triplet.svg 3.1 KB and the /fonts files
+  Alegreya 52.5 + Figtree 19.3 KB.
+- **Runs** (2 CPUs shared, load 4–9):
+  - `themes.test.mjs` 9/9.
+  - `test/phase2/themes/run.mjs --theme sanctuary,sanctuary-day` **12/13**. The one failure is the sibling-pair
+    artifact in deferred item 7: boot, switch ×3, picker, Classic restore, Quick, mini and coverage all pass.
+  - `test/phase2/ui-core/run.mjs`, back to back:
+
+    | run | pass |
+    |---|---|
+    | Classic | **65/67** |
+    | Sanctuary (unchanged suite plus the `pin-theme.mjs` preload, as in theme-ember / theme-daylight) | **62/67** |
+
+    - Both fail #40 and #47 on the top-bar `div.meter-bar` X overflow (live meter content). Classic also fails #47's
+      DejaVu `−18` check.
+    - The Sanctuary-only chord-name Y overflow in #40 / #47 is fixed (above).
+    - Sanctuary alone fails:
+      - #4: `--muted-fader` expected `#707a88`, got the theme token;
+      - #33: OFF tile expected `rgb(39,43,50)`, got `rgb(37,23,32)`;
+      - #34: the #33 cascade, since slot 0 is left muted. It passes in isolation (`--test-name-pattern`).
+    - No Sanctuary failure is a layout or behaviour change.
+- **Screenshots**
+  - `design/warmth/ship/sanctuary/`: `{perform,quick,edit,edit-tone-eq,mini,mini-drone-keys}.png` and
+    `audit-*.json`, `summary.json`. `day/` holds the same set for sanctuary-day.
+  - `states-{classic,sanctuary,sanctuary-day}-{1440,1280}-{idle,lamps-off,held,faded,locked,bstrip}.png` and
+    `states.json`, from `states.mjs`.
+
+## themes-critic (Sanctuary + Daylight; reviews/themes-critic.md; design/warmth/ship/critic/)
+- **Re-measured** (this box, serial): coverage `sanctuary+sanctuary-day` 206 selectors / 3 unmatched (1.5 %) / 0 dead /
+  0 invalid; `daylight-stage+daylight-day` 251 / 4 (1.6 %) / 0 / 0. `shoot.mjs` 1440×900, 0 contrast fails in all 24
+  shots, 0 console / HTTP errors. Lowest: sanctuary 4.63 PANIC, sanctuary-day 4.55 `.song-key` "C" (large),
+  daylight-stage 4.92 "ON" (Quick), daylight-day 4.67 PANIC. Screens match the options Ryan saw
+  (`design/warmth/{sanctuary-v2/perform.png, daylight-v2/perform{,-dusk}.png}`) minus the deferred JS hooks.
+- **Contract spot-checks**: both files are `@font-face` + one `:where(html:is(…))` block + `@keyframes` only (no
+  unguarded rule); no `content: url()`, no mark or wordmark swap (shared lancet in every shot); no `backdrop-filter`
+  (Daylight's one mention is `none`), no infinite animation; no OS `prefers-color-scheme`: dark ids render dark on a
+  light-OS context and vice versa (`color-scheme` comes from `html[data-mode]`).
+- **Fix: Daylight slot colours as plain values per mode.** `--slot-0..3` were `light-dark()`. `edit/panels/slot.js:858`
+  reads `--c` (= `var(--slot-N)`) back for the Keys/Pad/Extra/Bass response-curve canvas; a canvas ignores a
+  `light-dark()` string, so the curve drew in the leftover `rgba(255,255,255,.18)` reference stroke: grey on Stage,
+  invisible on Day. Now Stage values on `&:root`, Day values on `&:root[data-mode="light"]` (same colours as before,
+  so every contrast number is unchanged; Sanctuary already did this). Re-shot Edit on both ids: curve in the slot
+  colour, 0 fails.
+- **Runtime-switch residue probe** (`design/warmth/ship/critic/residue.mjs`, chain classic → sanctuary →
+  sanctuary-day → daylight-stage → daylight-day → sanctuary → daylight-day → sanctuary-day → classic →
+  daylight-stage at 1280×800, each step vs a fresh reload): attributes, `#theme-css` (exactly one, no
+  `data-theme-next` left), preloads and the computed style/box of 13 Perform elements are identical at every step.
+  **One residue, not fixable in a theme file (T1):** `main.js warmThemeFonts` copies only weight/style/stretch into
+  its FontFace copies, dropping the chord faces' `ascent-/descent-override`, and the copy wins. After a runtime switch
+  `.chord-name` is 56/51 (Sanctuary) and 53/51 (Daylight) instead of 51/51, until the next launch. Fix proposed in
+  reviews/themes-critic.md.
+- **Suites**: `themes.test.mjs` 9/9; `test/phase2/themes/run.mjs --theme sanctuary,sanctuary-day,daylight-stage,
+  daylight-day` 17/18 (the one failure is the harness's "store wins" sibling pairing, T5).
+
+## lowres2-critic (reviews/lowres2-critic.md; engine drone.js + audio.js, tests suites.mjs + critic-lowres2.mjs)
+- **#4 `engine.sleepBlockers()` gains `'pedal'`** (sustain pedal down, no notes needed). Before, a held pedal slept
+  after `audioSleepSec`; its release then landed on a sleeping context. Now it stays awake; the release (a MIDI
+  message) restarts the clock: asleep 2.29 s later with audioSleepSec 2.
+- **#1 Same-voicing re-render swaps in step.** `_freezeSwap`: when the new loop has the playing loop's key, mode,
+  voicing (brightness on the same side of 0.6) and length, it starts at the old loop's position (`start(t, offset)`,
+  `fz.t0 = t − offset`) and both fade linearly (`fade.lin`, `fadeLevel` knows it). The random-offset equal-power swap
+  of two coherent loops dipped −3.4 … −8.0 dB mid-swap; aligned, worst −1.8 dB over 12 swaps.
+- **#2 Kept loop, one render at a time, un-thaw.** `_fz.last` keeps the last rendered loop (one buffer, counted in
+  `droneFreezeMB` when it is not playing); a freeze whose inputs match it swaps it in without rendering
+  (`droneFreezeReused` in `_debugStats`). A render finished after being superseded is still kept. While a render runs,
+  a new request waits for it (never two at once). Low-resource back on before a thaw's `FREEZE_THAW_LEAD_SEC` ends
+  keeps the loop (`_unthaw`: fade cancelled at 1, the silent thaw layer ended, send closed). The first freeze now also
+  waits for a live layer still fading in (key change / thaw). Numbers: on/off 5× in 3 s → 1 render (was 5, 2 at once),
+  a second storm 0; 300 ms off/on ×4 → 4 un-thaws, level within ±1.5 dB of the steady loop.
+- **Verified unchanged** (critic cases, shared 2-CPU box): song switch while frozen (new key / off / files / no
+  continue); note 1 ms after sleep 6.9 / 29.8–50.1 / 42.8–50.6 ms (ramp / suspend pending / asleep); popover record
+  wakes in 20 ms and holds; hot-plug wakes in 20 ms, silent; a 20 s re-render with a pad chord held adds no skipped
+  render quanta (2–11 per 20 s with vs 13–44 without); 20 re-renders: `droneFreezeMB` 6.7 → 6.7, renderer RSS
+  147.4 → 147.3 MB. Frozen vs live level +0.59 / −0.08 dB (4 s / 20 s loop).
+- **Tests.** Engine `realtime.droneFreezeReuse` (new), `realtime.audioSleep` step 5b (pedal). Engine suite **79/79**;
+  shell unit + browser + electron green. Adversarial cases: `node test/phase1/engine/critic-run.mjs [case]`.
+- **Open** (reviews/lowres2-critic.md R1–R5): live ↔ frozen swaps can beat (thaw up to −16 dB); the popover counts as
+  a visible window (thaw on every open); the send taps the drone after the loop joins (reverb of reverb during swaps);
+  one ≈ 74 ms main-thread task per render.
+
+## theme-studio (app/themes/studio/theme.css; registry `studio` body shim dropped; design/warmth/ship/studio/)
+Studio ("the rig as a small analog console", best non-finalist: warmth 7 · stage 6 · build 7) brought to the theme
+contract (app/themes/README.md), with the CSS-only fixes from its warmth, stage and build critics (OPTIONS.md Option 3
+and the warmth journal). Dark only; no light sibling.
+- **Contract**
+  - One `:where(html[data-theme="studio"])` block. The `:where(body[data-theme="studio"], body:not([data-theme]))`
+    guard and its unguarded branch are gone. Tokens sit on `&:root` (0,1,0, ties styles.css `:root` and wins on order);
+    the room paint on `& body`, which is what finally renders the desk-lamp pool and grain (build critic: "body
+    background never renders"). Low-resource: `&[data-low-resource] body` / `.panel` (no grain, no wash).
+  - Registry: `body: {theme:'studio', …}` removed from `themes.js` and `boot.js`; swatch = the new tokens
+    (`#181613 / #221f1c / #f4f0e6 / #f7c367`). `themes.test.mjs` 9/9.
+  - No `@keyframes`, no `animation`, no `transition` (the `studio-lamp-on` flash fired on every strip rebuild, build and
+    stage critics; the 120 ms tile colour fade also made a tile report its old colour mid-toggle, ui-core #33).
+    `backdrop-filter` appears once, as `none`, cancelling styles.css's `.overlay-start` blur. Assets root-absolute;
+    Rubik from `/fonts/Rubik-var.woff2` (0 × HTTP ≥ 400 in every boot/shoot run).
+- **One mark.** `.tb-logo` / `.overlay-card img` `content: url(/themes/studio/mark.svg)` deleted, and the file too.
+  The wordmark keeps its text (Rubik 700).
+- **Deleted**: the session sheet / line check mock (`.studio-session`, `.ss-*`, ~60 lines: deferred hook); the
+  `.fx-lab span` / `.fxpill-l` lowercase + `::first-letter` case flip ("EQ" → "Eq"). There was no `font-size:0` +
+  `::after` copy bridge; none added.
+- **Stage critic (the weakest lens), CSS part**
+  - Current setlist song is the one lit amber cap again (was beige tape); tape only on the Perform title (drawn by
+    `::first-line`, so `.song-name`'s box and fitSongName's measurement are Classic's) and the Edit title.
+  - Tape dimmed `#d0cabb → #aea796` (Y .39, ΔE 16 from the Drone lamp), ink `#1a1512` 7.6:1; the −0.5° tilt is gone
+    (soft 40 px title at 1×).
+  - Strip instrument: ivory 700 with a 2 px tape underline (no tape block); a muted strip loses the underline and
+    drops to `--muted` (× the app's .7 = 5.8:1), so OFF goes quiet top to bottom.
+  - Desk −0.03 L: bg `#201e1b → #181613`, panel `#2a2723 → #221f1c`, bridge `#1a1815 → #13110f`. Glare (perform, 1440,
+    2 slots): mean luminance .0802, share > .45 7.5 % (first cut .086 / 8.6 %; Classic .073 / 7.9 %, concept §1.3).
+  - Keys `#f2955a → #f47e4f` (hue ~40; vs warn ΔE×100 6.0 → 10.7), Pad `#80cd8b → #6fd183` (+15 % chroma). Fader tracks
+    and the strip level bar keep Classic's widths and place (the 6 px bar moved the meter; ui-core polish-1).
+  - Top-bar ladder no longer "lies": one fill colour (green; yellow on `.hot`; the app's red `.clip` inset), the LED
+    gaps are a static overlay above the fill and under a 3 px ivory peak-hold that is never masked.
+  - Lamps: OFF tiles have no halo; OFF lenses (toggle, step-chip cycle, pedal, top-bar) are dark glass in a
+    `--led-off` rim (was a filled `--led-off` disc: ON/OFF only 3.15–3.67:1). Drone off: the key it would play is an
+    unlit dashed outline (the theme's tint + glow stayed on; ui-core #17).
+  - Lock: styles.css dims the drone character group twice (.45 × .45, "Soft · 40%" 1.6:1, Classic too); Studio uses
+    .8 × .8 with ivory words.
+- **Warmth critic, CSS part**: caps only where hands go (header FX chips, drone key row and setlist are flat printed
+  legends; setlist chips opaque `#1d1b18`); Notes is a warmer track sheet with ruled lines at 2× opacity; an empty slot
+  is a parked channel (solid recessed well + fader slot, Classic's 1.5 px border) instead of a dashed wireframe;
+  walnut meter bridge 3 → 5 px (keybed cheeks stay 8 px, inside the app's 10 px padding); `font-kerning: normal`.
+- **Box fixes this round**: `.drone-title` / `.notes-head` `.section-title` `line-height: 16px` (Rubik's line box
+  pushed the drone lamp down 2.2 px); the `.ontile` / current-chip gradients carry a trailing colour so
+  `background-color` is the lamp / accent colour.
+- **Deferred (JS / copy / markup; not theme work)**
+  1. Session sheet + 20 s line check + "Last session" + "That's a wrap" (concept §5): needs its own first-launch-of-
+     the-day trigger (Electron autoplays, `#overlay-start` never shows, OPTIONS §3 point 3) and a session-log field.
+  2. The engineer-voice copy table (concept §4, 13 strings in index.html / perform.js / edit panels / quickSheet.js).
+  3. A one-shot lamp flash gated by a JS `.lit-now` class on a real off → on in onTile (the CSS one is cut).
+  4. "LIVE" / "TAP" / "PEDAL DOWN" are upper case in the markup; "Extra · add a sound" on the empty-slot well.
+  5. Promoting the ~60 literal overrides to styles.css tokens (`--key-white`, `--toast-bg`, …) and the EQ canvas
+     reading tokens (`eq-keyboard.js` paints fixed slate), shared with the other themes.
+  6. Paint profile on the M-series Mac with a 4-slot chord held (grain tile + ladder masks), unverified here.
+- **Coverage** (`themes/run.mjs --only coverage --theme studio`, 25 states incl. mini): 345 selectors / 52 unmatched
+  (15.1 %) / 27 dead → **288 / 1 (0.3 %) / 0 dead / 0 invalid**. The one is `.drone-block.off .key-btn.on` (a state
+  the walk doesn't reach; ui-core #17 exercises it and passes on Studio).
+- **Contrast** (`tools/themes/shoot.mjs --theme studio --out design/warmth/ship/studio/`, 1440×900; mini 320×440):
+  perform 185 runs / 0 fails, quick 167 / 0, edit 166 / 0, edit-tone-eq 158 / 0, mini 23 / 0, mini-drone-keys 28 / 0,
+  0 console / HTTP errors. Lowest 4.96 ("Echo" / "Space" on a tinted step chip), PANIC 5.11.
+- **States / lamps / boxes** (`design/warmth/ship/studio/states.mjs` → `states.json`, `audit-state-*.json`):
+  - Text, 1440×900: held chord 184 / 0 fails, Keys + Drone OFF 182 / 0, Faded 183 / 0, Lock with a chord held 190 / 0
+    (6 disabled-exempt runs: the app's .45 disabled Edit / Prev / Revert / Choose folder, as Classic).
+  - ON vs OFF (median luminance, text hidden): Keys tile 4.88:1, Keys lens 11.1, Drone tile 8.55, Drone lens 11.1,
+    toggle LEDs 8.59 (min ON vs max OFF), step-chip cycle LEDs 8.18, pedal lamp 9.53. ON is always the brighter state.
+  - Boxes vs Classic (getBoundingClientRect, 1440×900 and 1280×720): `.song-name`, `.chord-readout`, `.perform .slot`,
+    `.perform .slot .ontile`, `.transpose-val`, `.p-keys`, `.piano`, `.topbar`, `.p-notes`, `.btn-panic` **0 px**;
+    `.chord-name` 0.7, `.slot-inst` 1.9 (text run, Rubik), drone `.ot-sub` (the visible drone readout; `.drone-readout`
+    is SR-only) 1.6. Text-intrinsic only, > 2 px: `.song-key` x −3.2/−3.4 (sentence-case "Key" caption is
+    narrower), `.setlist-chip.current` w +3.4 and `.drone-head .ontile` w −2.7 (Rubik wider than the Linux fallback in
+    the chip names / the Synth·My Pads segments; container boxes unchanged). Sizes = Classic's: title 40 / 38 px,
+    chord 46 px idle (22 px "Cmaj7" via the app's data-len rule), slot names 17 px, drone readout 14 px, transpose 30.
+- **Size**: folder 50.0 KB (theme.css 37.8, grain.png 11.7, tape masks 0.4) + Rubik 35.4 KB = 85.4 KB (limit 250).
+- **Suites** (2 CPUs, serial, load 3–8)
+  - `test/phase2/themes/run.mjs --theme studio`: **10/11**. The one failure, "store wins over a stale mirror", always
+    pairs the first two css themes (sanctuary / sanctuary-day) whatever `--theme` says (themes-critic T5).
+  - `test/phase2/ui-core/run.mjs`, Studio via the preload `node --import pin-theme.mjs` (RIG_THEME is not a suite
+    switch; the suite pins Classic itself): **Studio 61/68**, Classic back to back **65/68** (fails #40, #47, #66).
+    - Studio fails #40 and #47 as Classic does, plus: #4 (`--muted-fader` Classic token) and #33 (OFF tile
+      `rgb(39,43,50)`, Studio `rgb(41,38,31)`): Classic-token assertions, as for every theme; #34 is #33's cascade
+      (passes alone). #30 / #31 are the meter-clock cadence checks (#31's 4 px geometry passes): #31 passes alone, #30
+      fails alone on Classic too (1.0/frame). #66 (new mid-run) passed on Studio.
+    - Earlier Studio run, fixed since: #31 (6 px meter), #18 (translucent chip read as white), #17 (drone-off key
+      glow).
+- **Screenshots** (`design/warmth/ship/studio/`): `perform.png`, `quick.png`, `edit.png`, `edit-tone-eq.png`,
+  `mini.png`, `mini-drone-keys.png`, `state-{held,muted,faded,locked}.png`, `perform-{classic,studio}-{1440x900,
+  1280x720}.png`, with `audit-*.json`, `summary.json`, `states.json`.
+
+## idle-cpu-ui (reviews/idle-cpu-mac.md UI side, idle-cpu R1–R4, lowres2 UI requests, L-24; views/components/{meterClock (new),meter,levelMeter,util,holdButton,readouts,eq-keyboard,index}.js, views/{perform,mini}.js, views/edit/panels/song-header.css, main.js (renderer), styles.css, controller.js (additive), tools/idle-cpu.mjs)
+Builds on critics-fix #2 / R1 / R4 (per-meter ≤ 30 fps loops with a 250 ms idle poll): verified with the harness, then
+replaced by one shared scheduler.
+- **`components/meterClock.js` (new): one frame loop for every meter.** `meter.js` (top bar, Edit › Master) and
+  `levelMeter.js` (Perform strips, Edit slot panels) register with `addMeter({tick, probe?, kind})` →
+  `{setVisible, wake, remove, awake, visible}`; exports `wakeMeters()`, `meterClockStats()` (test hook, also
+  `__rig.meters`), `meterBlocked()`, `FRAME_MS` (1000/30), `SILENT_MS` 500, `SILENT_AMP` (−90 dBFS), `PROBE_MS` 1000.
+  - ≤ 30 frames/s on any display: after a frame the next rAF is requested from a `setTimeout(FRAME_MS − 2 ms −
+    elapsed)` (idle-cpu R1c: a frame skipped by timestamp still costs a BeginMainFrame, ~90/s at 120 Hz).
+  - A meter whose input stays < −90 dBFS with its bar, hold and clip light at rest for 500 ms sleeps; with every
+    visible meter asleep the loop is **stopped** (0 rAF). Restart: `controller.onActivity(cb)` (new, additive; event
+    `'activity'` {kind}, throttled to one per 50 ms) fired by every input the lowres2 clock sees (note-on from any
+    source, keys, pointer, wheel, MIDI incl. CC, popover bus commands, hot-plug), a song applied, an edit of the current
+    song (drone, levels, key), recording on/off and an audio wake; main.js → `wakeMeters()` (+ `'notes'` as fallback).
+    Safety net: while asleep the stereo meters' master analysers are probed once a second by a timer (no rAF).
+  - Blocked (no rAF, no analyser / slotLevel reads, no probe) under `<html data-low-resource>`,
+    `<html data-window-hidden>` or `document.visibilityState === 'hidden'`; a MutationObserver on those attributes
+    and `visibilitychange` restart it, no reload. The meters are also `display:none` there (menubar-B rule), which
+    takes them out of their IntersectionObservers.
+  - Writes: transform / class / `aria-valuenow` (≤ 2/s) only on change; nothing reads layout in a tick. The peak hold
+    moves with its track's `transform` (R1b: `left` gave the drone's 4–6 layouts/s). The track is one bar long and
+    starts one bar-length **before** the bar (left / above), with the hold at its far edge, so no translate ever pushes
+    past the bar's end (the first version, `inset:0` + `translateX(p%)`, grew the bar's scrollWidth to 72 + p·72 and
+    failed polish-2A's clip check in every theme agent's run). Horizontal hold now ends at the peak; vertical unchanged.
+  - Shared analyser reads: the top-bar and Edit › Master meters read the same `engine.analyserL/R` once per clock
+    frame (a WeakMap keyed by the frame's `now`), so Edit costs 60 reads/s, not 120.
+- **`eq-keyboard.js`** (Advanced › Tone, only while open): under low-resource / a hidden window (no live spectrum) an
+  editor with nothing to redraw for 500 ms leaves its display loop and checks its dirty flags on a 250 ms timer; an
+  edit or clearing the attribute restarts it (measured: 0 rAF in 1 s idle, edit → loop in 268 ms, resume 62 ms).
+- **perform.js.** `renderDroneReadout` compares a signature of its inputs and returns without building strings or
+  touching the DOM when nothing changed; the readout cell is `contain: strict; font-variant-numeric: tabular-nums`.
+  The 150 ms runtime tick (pedal / wheel / faded lamps) runs at 1 Hz under data-low-resource or data-window-hidden
+  (period re-read every tick; the CC64 listener still lights the pedal lamp at once) and not at all while Perform is
+  hidden. `readouts.js`: class writes only on change. The chord readout is event-driven (no poll); `setText` writes
+  only a changed Text node. **lowres2 request:** `renderQuick()` passes `audio: status.audio`, so Quick › This Mac
+  says "Audio asleep — play a note or press a key to wake".
+- **main.js (renderer).** `renderAudioStatus`: `asleep` → "Asleep" with an **ok** LED (not warn).
+  **Hidden-window hook (R4, LOCAL 04:38Z: ⌘H with menu-bar mode off was ignored):**
+  `window` CustomEvent **`'rig:window-visible'` `{detail:{visible:boolean}}`** — LOCAL's preload dispatches it on
+  every show / hide / minimize in **every** mode — and `document` `visibilitychange` (`visibilityState !== 'hidden'`)
+  both call `setWindowVisible(v)`: `<html data-window-hidden>` on/off + `controller.setWindowVisible(v)`, regardless
+  of `settings.menuBarMode`. The `rig:menu` ids `windowShown` / `windowHidden` / `windowFollowDocument` still work.
+  **L-24:** `util.js guardKeyActivation(document, window)` (installed once): a Space keyup activates a button only if
+  its keydown landed on that same control in the same focus session (a window blur, focusout or hidden document in
+  between cancels it), and Space/Enter auto-repeat never re-activates. `holdButton.js` and perform.js's key-grid
+  `holdGate` abandon a pointer hold on window `blur` / hidden document (never commit it). Diagnostics:
+  `__rig.diag.drone` logs every in-song change of `drone.mode` with the last input kind, focus / visibility / hidden
+  state, the last 3 bus commands and the `store.set` call site (≤ 20 entries).
+- **mini.js** (lowres2 request): `statusLine` maps `asleep` → "Audio asleep" with an ok LED.
+- **Tools.** `tools/idle-cpu.mjs` gains UI columns (`raf` rAF callbacks/s, `rcs` / `lay` CDP RecalcStyleCount /
+  LayoutCount deltas per s, `an` all analyser reads/s, `man` reads of engine.analyserL/R, `slot` slotLevel reads/s),
+  config **W** (A + `rig:window-visible {visible:false}`, menuBarMode off) and `--app <dir>` (A/B another app tree).
+- **Numbers** (this 2-CPU box, headless Chromium = 60 Hz, load ≈ 1–4; `node tools/idle-cpu.mjs --only
+  A,B,D,E,G2,W --measure 10 --settle 8 --no-offline`; "before" = `--app` a copy of today's tree with the views,
+  main.js and styles.css from just before this work, i.e. critics-fix's per-meter loops; engine / controller the same):
+
+  | config | rAF/s | style recalcs/s | layouts/s | master-analyser reads/s | DOM mutations/s | timers/s | main + comp % |
+  |---|---|---|---|---|---|---|---|
+  | A Sunday, drone on | 60 → **29.8** | 29 → 29 | 4 → **0** | 60 → 59.6 | 60.1 → 61 | 7.8 → 37.5 | 6.3 → 5.9 |
+  | B drone off (silent) | 0 → 0 | 0 → 0 | 0 → 0 | 8 → **2** | 0 → 0 | 11.8 → 8.8 | 0.7 → 0.6 |
+  | D low-resource | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 7.7 → **2** | 0.5 → 0.5 |
+  | E Edit, drone on | 120.2 → **29.9** | 29 → 29 | 4 → **0** | 120.4 → **59.8** | 117.9 → 118.2 | 7.9 → 37.6 | 7.0 → 5.3 |
+  | W hidden (event, menu-bar off) | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 7.8 → **2.1** | 0.4 → 0.2 |
+  | G2 Grand Piano (silent) | 0 → 0 | 0 → 0 | 0 → 0 | 8 → 2 | 0 → 0 | 11.8 → 8.7 | 0.4 → 0.3 |
+
+  - At 120 Hz ProMotion the "before" loops request one rAF per display frame while animating (≈ 120/s per loop;
+    the Mac's pre-critics-fix baseline was 121 rAF/s and 121 recalcs/s in every configuration); "after" is 30/s in
+    total while something sounds, 0 when silent, hidden or low-resource, whatever the refresh rate. The extra timers
+    in A/E are the R1c pre-frame timeouts (30/s, cheaper than 90 skipped BeginMainFrames). Renderer totals are
+    dominated by the audio thread here (A ≈ 11 of 22.7 %); UI main + compositor are the last column.
+  - ui-core (real app): silent → rAF 0/s, 0 style recalcs and 0 layouts in 3 s, master reads 2/s (1 Hz probe);
+    note-on → first meter frame 6.3 ms; drone on 30 rAF/s, 60 reads/s; low-resource or `data-low-resource="1"` with
+    the drone on → 0 rAF, 0 reads, 2 runtime polls in 2.5 s; attribute removed → 27–30 frames/s again; hidden
+    (event / visibilitychange) → 0 / 0.
+  - L-24 on the pre-change tree: a window blur/focus pair alone does **not** toggle the focused drone tile; a Space
+    press straddling it does (synth → off: keyup after refocus clicks), and Enter auto-repeat toggles once per repeat.
+    Both are guarded now. The Mac's run had no key event, so the root cause is **still unconfirmed**: LOCAL, please
+    read `__rig.diag.drone` after a repro (it names the `store.set` call site and the bus commands around it).
+- **Other fixes.** Edit header live hint hidden below 1401 px (was 1341): since critics-fix O12's rename pencil it
+  wrapped to five lines in the 50 px header at 1366×768 (integration-widths); `integration-widths` expects it hidden at
+  1366 now. Removed `test/phase2/ui-core/_idle_tmp.mjs` (a stray copy of the suite).
+- **Tests.**
+  - ui-core: `idle-cpu-ui` (silent / wake ≤ 100 ms / drone ≤ 35 rAF/s / low-resource + bare attribute 0 rAF 0 reads,
+    1 Hz lamps / no reload; + hold geometry: horizontal hold ends at the peak, vertical at the peak, 0 px overflow),
+    `idle-cpu-ui R4` (rig:window-visible and visibilitychange with menu-bar mode off), `L-24` (window blur/focus,
+    real focus loss, Space held across a blur, element blur, Enter auto-repeat; Lock / key grid / transpose holds
+    abandoned on blur / hidden), `lowres2 requests` (top bar "Asleep" + ok LED, Quick › This Mac line).
+    **Updated for the refresh-independent cadence:** `round2-ui #10` (reads per clock frame and per second: Perform
+    1.00/frame ≤ 35/s, Edit 1 shared read/frame with both meters awake, ≤ 35/s; runtime polls 0 while hidden) and
+    `polish-1` strip meters (≤ 1 read per clock frame per strip or asleep, ≤ 35/s, 0 when hidden); `critics-fix
+    performance #2` kept.
+  - mini: status line `asleep` → "Audio asleep · 12 ms · …" with an ok LED (pure helper + a mounted popover).
+  - eq: `idle-cpu-ui: low-resource → an idle open editor makes 0 rAF/s; an edit redraws; clearing it resumes`.
+- **Runs** (load 1–6, other agents running): ui-core **67/68** (the one failure, `hardware-fixes 2b` "DejaVu Sans
+  1366×768 −18: value 45 > 41 + 3", fails the same way in every theme agent's run since 20:34 and is not in this
+  change); edit-v2 `--only integration`: integration 13/13, integration-widths 5/5 (after the live-hint fix; 4/5
+  before, deterministic); mini 14/14 + mini-theme 14/14; eq 28/28; `tools/idle-cpu.mjs` 0 console errors.
+
+## themes-critic-2 (Studio + Ember; reviews/themes-critic.md "round 2"; design/warmth/ship/critic/{studio,ember,se}/)
+- **Re-measured** on this box (serial, load 3–5):
+  - Coverage: `studio` 288 selectors, 1 unmatched (0.3 %), 0 dead, 0 invalid. `ember` 182 selectors, 3 unmatched
+    (1.6 %), 0 dead, 0 invalid.
+  - `themes --theme studio,ember`: 13/14. The one failure is the known T5 sanctuary-sibling pairing.
+  - `themes.test`: 9/9.
+- **Contrast** (`shoot.mjs`, 1440×900; mini 320×440): 0 fails in all 12 shots and 0 console / HTTP errors.
+  - Run counts are the same for both themes: perform 185, quick 167, edit 166, eq 158, mini 23, mini-drone-keys 28.
+  - Lowest: Studio 4.96 (step-chip "Echo"/"Space"), PANIC 5.11. Ember 4.69 (PANIC).
+- **Option fidelity:** both match `design/warmth/{studio,ember}/perform.png` apart from the deferred JS/copy hooks. The
+  shared lancet shows in every shot.
+- **Contract spot-checks** (both files):
+  - Structure: `@font-face` plus one `:where(html[data-theme="<id>"])` block, and no rule outside it.
+  - Not present: `content: url()`, a mark swap, `@keyframes`, `animation`, `transition`, `light-dark()`, `prefers-*`.
+  - `backdrop-filter` appears only in Studio, as `none`.
+  - Studio's one `@media` is `max-width: 1250px` layout.
+  - Swatches match the tokens.
+- **Fix: Studio title tape (S1).** `.song-name::first-line` painted the tape behind the glyphs only, so the title read as
+  selected text.
+  - The tape is now the `.song-name` box: `width: fit-content; max-width: calc(100% + 10px); margin-left: -10px;
+    padding: 0 12px`, with the Edit title's torn-end masks.
+  - `::first-line` keeps only `color: var(--tape-ink)`, so the `.loading` state stays legible on the tape. Without it
+    the name turns `--muted`, 2.3:1 on the tape.
+  - Box vs Classic: dy/dh 0 at 1440×900, 1280×720, 1366×768 and 1024×700; dx −10; dw −3 to −103 (text-intrinsic).
+  - `.song-block` is unchanged, so ui-core's "no layout shift" and L-20 checks (height = line box) are unaffected.
+  - fitSongName still steps a long name down and ellipsizes it inside the tape.
+  - Glare on perform: mean luminance .0808, bright share 7.53 %. Before it was .0802 and 7.5 %.
+- **Fix: Ember record counter (E3).** `.rec-time` kept styles.css's `--mono`; it now uses `var(--font)` (Nunito,
+  tabular). Box: `.rec-time` w +2.2, and the top-bar items after it move ≤ 4 px in x, with 0 in y.
+- **Box diff vs Classic** (`se/boxdiff.mjs`, 38–44 boxes, idle, fresh boot): every dy and dh is 0.0. Everything above
+  2 px is text-intrinsic:
+  - Studio: `.tb-name` w −4.5 (and `.tb-views` x), `.song-key` x −3.3, `.setlist-chip.current` w +3.4,
+    `.drone-head .ontile` w −2.7, `.wheel-value` w +6.7, plus the tape above.
+  - Ember: `.tb-name` w +5.5, `.song-key` x −7.4 / −7.6, `.setlist-chip.current` w −4.6, `.wheel-value` w +3.7,
+    `.rec-time` w +2.2.
+- **Runtime-switch residue** (`critic/residue.mjs`, 12-step chain through classic / studio / ember / sanctuary /
+  daylight-day / nave): Studio, Ember and Classic steps show 0 diffs from a fresh reload. That covers attributes,
+  color-scheme, one theme link, and the computed style and box of 13 elements. The only diffs are T1 on Sanctuary and
+  Daylight.
+- **Left for others** (reviews/themes-critic.md):
+  - E1: Ember `.chord-name` is 56/51 and `.song-name` 50/48 as line boxes. No ink is clipped (`se/chordclip.mjs`), but
+    ui-core #40's probe flags both. The fix is override faces, after T1.
+  - E2/S2: `headerChipRow.js` uppercases the FX captions.
+
+## lowres2-scope (Ryan 2026-09-30: lowres2 ships in v1 only inside low-resource mode; engine drone.js + drone-freeze.js + audio.js + voice.js + synth.js, controller.js (additive), views/settings.js (1 row out), store.js (comment), shared/bus.js (comment), docs/menubar-mode.md, tests suites.mjs + critic-lowres2.mjs + shell lowres2.test.mjs)
+- **Scope.** The drone freezes and the audio sleeps only while low-resource is on (`settings.lowResource`, or auto while
+  hidden in menu-bar mode). In normal play the context never sleeps and the drone is never frozen (the drone part was
+  already gated by `engine.setLowResource`).
+  - Controller `sleepCheck()` returns unless `lowResEff`. The idle window is `settings.audioSleepSec` (default 30,
+    kept in the store, no UI) counted from `max(lastInput, low-resource on)`, so hiding the window after a long idle
+    does not sleep at once. `_sleepDebug()` adds `lowResource`, `lowResSince`.
+  - Leaving low-resource wakes a sleeping or ramping-down engine at once: the controller's `applyLowResource` calls
+    `engine.wake()`, and `engine.setLowResource(false)` does too (60 ms `WAKE_RAMP_SEC`, click-free; a 150 ms sleep
+    ramp in progress is cancelled from where it is). Measured (real controller): awake 20 ms after
+    `settings.lowResource` → false, then 3 s idle with no sleep.
+  - Settings › Audio "Sleep audio after" row removed (the "Audio asleep" hint stays). The Quick / top-bar asleep
+    states are unchanged.
+- **R2: the popover does not end low-resource.** A bus `hello` (the popover opening or asking for state) is no longer
+  input. It still gets the immediate state, but it does not wake the audio, restart the idle clock or emit
+  'activity'. Every other bus command still wakes the audio. New rig menu ids `popoverShown` / `popoverHidden` set
+  `status.popoverOpen` and never touch low-resource. **Request for LOCAL (Electron main.js):** report the tray popover
+  with those ids, not with `windowShown` or `rig:window-visible` (critic R2 traced the thaw-on-open to that path).
+  The cloud cannot see LOCAL main.js, so the thaw-on-open is fixed here only for `hello`.
+- **R1: live ↔ frozen level.**
+  - Thaw: the live voices now start `max(FREEZE_THAW_LEAD_SEC, drone-osc attack + 0.25 s)` before the crossfade
+    (2.75 s for synth.js, 2.25 s for the fallback). Before, a 1.5 s lead crossfaded the loop out over voices that
+    were still in their 2–2.5 s attack.
+  - Live → frozen: the first swap also waits for the live voices' own attack (`L.voiceT + L.attack`), not only for
+    the layer fade.
+  - Measured with `critic-run.mjs r1Swap`: 4 cycles per instrument, 100 ms windows, each against a control of the
+    same statistic on a steady stretch with no action.
+    - Real drone-osc (synth.js, what the app plays): live→frozen worst −3.62 dB and thaw −3.57 dB, against the
+      drone's own spread of −3.63 dB (live) and −3.41 dB (frozen). The swap adds 0.0 dB beyond the control.
+    - Fallback drone-osc (only used when synth.js fails to load): thaw −0.54 … −1.12 dB (control −0.88; the critic
+      saw −16.1 dB). Live→frozen is still −1.3 … −8.7 dB (control −0.25). That is phase beating between the
+      fallback's two oscillators per voice and the loop: a coherent sum that no gain law fixes. **Open**, fallback only.
+    - The critic's −16.1 dB came from `frozenEngine`, which uses `instrumentModules: false`, i.e. the fallback.
+- **R3: the reverb is fed from one path at a time.**
+  - The drone's gain chain runs 4 channels: [live L, live R, loop L, loop R] → level → wheel → bend. drone.gain, the
+    wheel and the swell still have one set of automation.
+  - `post` (splitter) → `mainMerge` → out gets live + loop. `sendMerge` → sendGate → reverb gets channels 0–1 only.
+  - A frozen loop, which carries its own baked reverb, enters at merge inputs 2–3 (`fzIn`), so it never reaches the
+    live reverb, not even mid-swap.
+  - Nodes: +4 (`nodeCount` 21). `dispose()` also disconnects `sendGate`.
+  - Not changed: after a live→frozen swap the live reverb's tail still decays over the baked one. It was fed only by
+    the live path, as it should be.
+- **R4: render stall.**
+  - `renderDroneLoop` yields between steps, with a MessageChannel turn so queued MIDI / key tasks run first.
+    `scheduler.yield()` is not used, because its continuation jumps the queue. The steps are:
+    1. context + reverb chain;
+    2. Drone + configure / setKey;
+    3. the drone-osc instrument, built into `_idle` with the same rng order;
+    4. voices + `startRendering`;
+    5. after the render, one seam crossfade per channel, one `copyToChannel` per channel, and `seamCheck` in slices of
+       256 k frames.
+  - `voice.js shareWaveCache(from, to)`: the offline context reuses the live context's PeriodicWaves (8 saws × 512
+    harmonics were rebuilt per render, ≈ 8–10 ms). Checked: a wave from another context renders with max diff 0.
+  - `synth.js randomWalkBuffer`: the same per-sample arithmetic, one segment at a time (bit-identical, checked on 3
+    seeds).
+  - `_debugStats().droneRenderMaxStepMs`, `_fz.lastStats {buildMs, postMs, maxStepMs, stepMs}`.
+  - Measured with `r4Stall` and a Chrome trace of RunTask CPU (`tdur`), 4 renders per instrument on the shared 2-CPU
+    box. Load ran 2.6–10 during the runs, so wall times inflate.
+    - Longest render step (wall): real 8.1–21 ms (one outlier at 29.5) and fallback 4.9–13.6 ms at load 2.5–3;
+      15–60 ms at load 5–10.
+    - Traced CPU of the render's own tasks: ≤ 16.4 ms (real), ≤ 7.1 ms (fallback). The critic measured one 74 ms task.
+    - No long task (≥ 50 ms) during renders at load ≈ 3.
+    - Left over: 1–2 Chromium-internal tasks after each render, 14–24 ms CPU, with no JS. They are the GC / Oilpan
+      sweep of the offline graph and its 12 MB render buffer. Not ours to split.
+- **R5: key change with a short song fade.** When something already sounds and the fade is shorter than drone-osc's
+  attack, the new layer's voices attack in `XFADE_ATTACK_SEC` = 0.05 s and the equal-power layer fade shapes the
+  onset. The instrument's attack is restored after the noteOns, so `_revoice` / later layers keep 2.5 s. A start from
+  silence and a parked drone resuming keep the voice attack. Measured with `keyDuringCrossfade` (fade 0.3 s):
+  - live: −2.26 dB (the critic measured −10.6 … −11.6);
+  - with the loop in play: live→frozen −3.49, frozen→frozen −5.21, thaw −1.26, render in flight −1.69 dB (the critic
+    measured −7.4 … −16.6).
+  - All 0 clicks, 0 stale swaps.
+- **Tests.**
+  - Shell `lowres2.test.mjs`: new tests for no sleep in normal play (600 s idle), the window counting from
+    low-resource on, leaving it (and showing the window in menu-bar mode) waking at once, and hello / popoverShown not
+    waking. Low-resource-on tests keep the old assertions; the "popover hello" input became a real command.
+  - Engine `realtime.audioSleep`:
+    - step 0: normal play never sleeps;
+    - low-resource on, then the old steps;
+    - step 5: hello leaves it asleep and still gets the state, and `record {on:false}` wakes it;
+    - step 5c: leaving low-resource wakes it in 20 ms and it stays awake.
+  - New critic cases `r1Swap` and `r4Stall`, with `frozenEngine({modules})`.
+  - Engine **79/79**, shell unit 199/199 + browser 13/13, settings 37/37.
+- **Hardware fixes untouched** (## hardware-fixes).
+
+## idle-cpu-ui-critic (reviews/idle-cpu-ui-critic.md; views/components/meterClock.js, ui-core + mini tests)
+- **Verified** the "## idle-cpu-ui" claims: `tools/idle-cpu.mjs --only A,B,D,E,G2,W --measure 10 --settle 8
+  --no-offline` at load 7–9 → A 26.2 rAF/s, 25 recalcs/s, 0 layouts, 52.4 master reads/s; E 24.4 / 24 / 0 / 48.8
+  (one shared read per frame); B and G2 0 rAF, 2 reads/s (probe); D and W 0 rAF, 0 reads, 2.1 timers/s. Wake paths
+  checked in the real app: song switch that starts a drone, popover `droneToggle`, raw MIDI CC, Edit › Keys slot meter,
+  Perform strips, `rig:window-visible` false → true. 0 console errors.
+- **Fixed (meterClock):** a tick's `dt` is now the meter's own gap (`now − e.last`, ≤ 5 s), not the loop's
+  (`min(100, now − lastRun)`, `FRAME_MS` after a stop). A meter back from low-resource / a hidden window / an off-screen
+  view no longer replays its old bar at 20 dB/s (drone stopped during low-resource: top bar showed 0.72 falling for
+  ~2 s while the output was at 0.47); it releases to the current level on its first frame. Test: ui-core
+  `idle-cpu-ui critic: a meter back from low-resource shows the current level at once` (old clock: 0.876, new: 0).
+- **mini** `low-resource` test: the "normal" window waits for ≥ 20 display frames (≤ 6 s), since at load ≈ 10 the page
+  got 3 frames in 1 s and `reads > 5` failed on the box.
+- **Runs:** ui-core 67/69 (`hardware-fixes 2b` as before; `H-v2 Quick sheet` TAP tempo 81 BPM at load 10, passes
+  alone); edit-v2 `--only integration` 2/2 files; mini 14/14 + mini-theme 14/14.
+- Open items (EQ editor at display rate while open, Perform's runtime timer while Edit shows, recording clock while
+  hidden, engine fx idle taps ≈ 12 reads/s, L-24): reviews/idle-cpu-ui-critic.md.
+
+## theme-classic (registry `classic` = styles.css alone, no theme file; base-look suites pinned; design/warmth/ship/classic/)
+- **No theme file, nothing to strip.** Classic has no folder, no `body` shim, no mark override, no fonts, so checklist
+  items 1–5 and 7 (guard, one mark, must-fixes, copy bridge, coverage, light sibling) do not apply. Coverage: n/a.
+- **Pixel identity** (scratch `diff.mjs`: two copies of today's `app/`, A as shipped, B with both `boot.js` tags
+  deleted from index.html + mini.html and html/body `data-theme|mode` + inline color-scheme stripped; meters, canvas
+  and `#ready-status` hidden, transitions off; a second A run gives the noise floor). Differing pixels, A vs B / A vs A:
+  | shot | 1440×900 | 1280×720 |
+  |---|---|---|
+  | perform idle | **0** / 222 | 31 / 31 (same box, x 846–1265 y 46–213: live) |
+  | perform, chord held | **0** / 196 | 2 / 207 |
+  | Quick open | **0** / 72 | 9 / 58 |
+  | locked, Settings › Appearance, Edit, Edit › Tone EQ | **0** / 0 | **0** / 0 |
+  Element boxes: 132 compared per state; the only deltas are the live meter fills/holds (both A runs differ as much).
+  0 console errors, 0 HTTP ≥ 400 in both. So the theme infrastructure leaves Classic pixel-identical.
+- **styles.css tail** (themes-setup): `.qs-theme` only (Quick › This Mac "Theme: Classic ▸"); nothing keyed
+  on `data-theme`, and no `data-theme` selector anywhere in `app/*.css`. `.st-theme*` (styles-edit.css) styles the
+  new picker only. boot.js on Classic: attrs + `color-scheme: dark` (same as the page's meta), no preload, no link.
+  The Quick button is new content, not a restyle: measured by the first theme-classic run (qprobe, 09-29 01:40), This
+  Song's section already overflowed its 156/176 px sheet body by 27/5 px without it; the caption row grows 17 → 24 px,
+  overflow 33/13 px. Not mine (styles.css); for whoever owns Quick next.
+- **Base-look pins** (`pinTheme(context, 'classic')` from test/integration/lib.mjs, right after `newContext`):
+  ui-core, edit-v2 harness + integration + integration-widths, settings, eq (the eq fixture links styles.css only, so
+  its pin is belt-and-braces). All present; this round added no new pin lines.
+- **themes suite** (test/phase2/themes/run.mjs):
+  - "Classic card after another theme restores the base look exactly" (`--only classic` or `picker`): every visible
+    element's computed look (15 props) and all `:root` tokens after Classic → <first css theme> → Classic equal a
+    fresh Classic; no theme stylesheet left. Hardened this round: `pick()` now waits for `theme.current === id`
+    before awaiting `theme.pending` (the store notifies after the write, so it awaited the previous switch: the
+    "sanctuary changes the look (1 diffs)" flake), then for `html[data-theme]`; `#toasts` itself is skipped (its
+    height follows the toast); the "no theme link" check counts `rel=stylesheet` only (boot.js's `rel=preload` of the
+    boot-time default stays in `<head>`, which failed it with the default at sanctuary).
+  - "store wins over a stale mirror" (themes-critic T5, deferred by 4 theme agents): `b` is now the first css theme
+    whose file differs from `a`'s (siblings flip attributes synchronously before DOMContentLoaded).
+- **Runs** (2 CPUs, serial, load 7–15). "cls" = a repo copy as shipped (default `classic`); "san" = the same copy with
+  `DEFAULT_THEME_ID` and boot.js `DEF` set to `sanctuary` (the mirror/default the pins must beat):
+  - themes (whole suite, cls, before the fixes): 27/28 (store-wins only); every coverage file ≤ 5 %, 0 dead.
+    After: cls `--only boot,switch,picker,classic,quick,mini` **23/23**; san `--only boot,picker,classic` **13/13**.
+  - ui-core: cls **66/68**, san **66/68**, same two fails (#36 TAP ≈ 93 BPM under load; #47 DejaVu Sans 1366×768
+    "−18" 45 > 41 + 3, a Linux-font Classic fail). Contrast readings identical in both (e.g. mutedFader 4.09,
+    ledOffTopbar 3.89); #4 / #33 / #40, which failed unpinned under Sanctuary (themes-setup), pass.
+  - eq: cls **28/28**, san **28/28**.
+- **Contrast** (`tools/themes/shoot.mjs --theme classic --out design/warmth/ship/classic/`, 1440×900; plus `--size
+  1280x720 --only perform,quick` → `1280/`; plus a scratch copy of shoot.mjs with a `states` pass → `states/`,
+  `1280/states/`: Keys OFF, Locked, Faded). Runs / fails / lowest:
+  - perform 185/0/4.63 (PANIC); edit 166/0/4.63; edit-tone-eq 158/0/4.63; mini-drone-keys 28/0/5.31; perform 1280
+    158/0/4.63; Keys OFF 185/0/4.58 (struck "KEYS"); Faded 184/0/4.63 (chip shown).
+  - **Classic base-look failures, not fixable here** (all in files this brief may not touch; identical before
+    themes-setup, per the pixel diff):
+    1. Quick open: the ON pill (`.ontile .ot-state`, 12.5 px, #0d0f12 on #ff8a3d + 18 % ink) falls under the sheet's
+       `box-shadow: 0 22px 60px #000c` (styles.css `.qs`): 4.14 at 1440 (Keys), 3.35 / 4.16 (Keys / Pad) and
+       "KEYS" 4.44 at 1280. By CSS alone the pill is 5.08–7.45. Fix (styles.css owner): a shorter shadow
+       (`0 12px 28px #0009`) or a darker pill tint.
+    2. Mini popover under Classic: `.m-num` "2"/"3" (11 px, #7d756b on #25221e) 3.49; mini.css fallbacks (mini-theme
+       owner): `--m-faint` ≥ #9a9185.
+    3. Locked: the drone Brightness / Movement faders are frozen at opacity .45 × .45 (label 1.84, value 1.46). They
+       are inactive controls (WCAG exempt) but carry no `disabled` / `aria-disabled`, so audits count them; add
+       `aria-disabled="true"` on frozen wrappers (perform.js owner).
+  - ON/OFF lamps (styles.css tokens): ON LED #fff vs OFF ring `--led-off` #6b7380 4.78; ON tile vs `--off-tile`
+    #272b32: Keys 6.06, Pad 7.96, Extra 5.64, Bass 5.25. All ≥ 3.
+- **Stage safety**: Classic is the reference, so its box diff is 0 by definition (the A/B diff above: 0 px at
+  1440×900). Sizes: song title 40 px (1440×900) / 38 px (1280×720), box 410×50 at (35, 76); chord 46 px (800),
+  box 82×51; slot names 15 px / 800 caps on the tiles; drone "DRONE C major" 14.5 px (the `.drone-readout` node is
+  the screen-reader copy, 1×1 clipped).
+- **Screenshots**: design/warmth/ship/classic/{perform,quick,edit,edit-tone-eq,mini,mini-drone-keys}.png,
+  `1280/{perform,quick}.png`, `states/` and `1280/states/` `{perform-keys-off,perform-locked,perform-faded}.png`, each
+  with its `audit-*.json` and `summary.json`; test/phase2/themes/screenshots/classic-restored.png.
+- **Deferred (not CSS / not this brief's files)**: the three contrast items above; Quick's This Song overflow;
+  the themes suite's first test title still says "(Sanctuary)" while `DEFAULT_THEME_ID` is `classic` (TEMP).
+
+## theme-nave (app/themes/sanctuary/theme.css; registry `nave`; design/warmth/ship/nave/)
+Nave is the v1 Sanctuary (ink-navy vault, lancet light, grain), kept as its own dark option next to `sanctuary`
+(sanctuary-v2, plum). Dark only, no light sibling. This entry brings it to the theme contract (app/themes/README.md) and
+applies the CSS-only fixes from its three round-1 critics (warmth journal: warmth 6.5, stage 7.5, build 7).
+- **Contract**
+  - Every rule sits in one `:where(html[data-theme="nave"])` block; the v1 `body:is([data-theme=sanctuary],
+    :not([data-theme]))` guard (0,1,1) and its unguarded branch are gone. Tokens and the vault are on `& body`
+    (styles.css' `:root` tokens are (0,1,0)); low-resource is `&[data-low-resource] body::after { display: none }`.
+  - The zero-specificity guard is what fixes the **OFF-lamp glow**: v1's (0,1,1) `.ontile .ot-led` / halo beat
+    styles.css `.ontile.off …`. OFF now restates no halo, no highlight, a hollow LED; `.p-drone.off::before` is
+    opacity 0 (v1 kept the window at .35 with the drone off, stage critic).
+  - No infinite animation (the drone-window breathing is deleted; the window fades in once, .6 s, when the drone
+    sounds), no `backdrop-filter`, no `will-change` (build critic: ~20 MB full-viewport layer). One finite
+    `nave-fade` (.16 s) on the Quick sheet; `prefers-reduced-motion` turns both off.
+  - Assets root-absolute (`/themes/sanctuary/grain.png`); fonts from `/fonts/` (Alegreya, Figtree, and Instrument Sans
+    for two code points, below): 0 HTTP ≥ 400 in every run.
+  - Registry: `nave` has no `body` shim in `themes.js` or boot.js (themes.test 9/9). Swatch unchanged.
+- **One mark.** The `.tb-logo` / `.overlay-card img` `content: url()` overrides and `app/themes/sanctuary/mark.svg`
+  are deleted; the wordmark keeps its text in the book face (README rule 8). No CSS copy bridge (`font-size:0` +
+  `::after`) existed or exists; `.drone-swell-text::after` is styles.css' own "Bend".
+- **Deleted:** the 31 dead start-screen selectors (`.sanct-before*`, `.sanct-breath`, `.sb-*`), the breathing
+  keyframes, the Edit-drone breathing. `lancet-{glass,lead,light}.svg` (3.4 KB) stay in the folder, unreferenced by the
+  theme, for the deferred start screen; only the old mock `design/warmth/sanctuary/shoot.mjs` names them (and mark.svg).
+- **Critics' CSS fixes applied**
+  - *Warmth:* a static candle pool behind the title card + the brass glow under the keyboard on the vault; panels lit
+    from above (2-stop fill, brass top edge 18 %); Fade out is an ink pane with a brass rim (was the blue-violet slab);
+    lamp tiles are lit glass (top highlight, inner rim, same-hue halo); **Pad `#6ed889` → `#5fc98a`** (emerald, ink
+    9.3:1); wheel = low-chroma candle cream (stage critic: brass only means "where you are"); MIDI / READY / MASTER /
+    PEDAL / BEND back in the bold sans, serif small caps only on section rubrics; the drone window masked to the card's
+    top-right corner so no glass shows between the key-grid buttons or across Edit › Drone's Options column.
+  - *Stage:* keybed ivory dimmed (`#aea48f → #a39a86`), held `#f5c451` (ΔE ≈ 17, luminance ratio ≈ 1.6; v1 1.02); Keys
+    `--slot-0 #f7775f` off the lock amber (ΔE 6.9 → 11.4); Next name 20 px (18 in Classic), chips 18 px (19+ pushed
+    chip 6 under Next at 1440).
+  - *Build:* guard → `:where()`; literals promoted to tokens (`--line-3`, `--lead`, `--chg-glow`, `--hairline-lit`);
+    "Movement" fits at ≤ 1250 px (12.5 px); **the minus**: Figtree's U+2212 is 380/620 units, thin and low, so
+    "−1.9 dB" and the Transpose/Swell − read as a hyphen. A second `Sanctuary Sans` @font-face maps U+2212 and U+002B to
+    `/fonts/InstrumentSans-var.woff2` (411 wide, centred on the figures), with Figtree's metrics as overrides. It must
+    carry the *same* weight range as the Figtree face (300 900): with 400 700 Chromium made it a separate face and never
+    loaded it (verified with CDP `CSS.getPlatformFontsForNode`: now "Instrument Sans" 1 glyph + Figtree 6 on
+    `.fader-value`).
+  - *EQ (Advanced › Tone):* `.eqk *` re-reads `--eqk-c` from the slot panel's `--c` (eq-keyboard.js writes Classic's
+    `#ff8a3d` inline, so "Keys", "A · EQ on" and the band rings were Classic orange), `--eqk-ink` = ink-on-lamp, the
+    graph/band/side wells on the rig ink, the on/off switch on theme tokens.
+  - *Alegreya line box (found by ui-core):* its content area is 1.361 em, so inside Classic's tight line boxes
+    (`.chord-name` 1.1, `.nav-next-name` 1.15) it spilled and ui-core's clip probe failed #40 (1280×800: chord 56 > 51,
+    Next 25 > 23) and #47 (1366×768). The Alegreya @font-face now has `ascent-override: 88%; descent-override: 24%`
+    (baseline at line-height 1.1 moves 0.885 → 0.87 em; ink clipping unchanged). Both tests pass on Nave.
+- **Not applied (on purpose):** moving the neutrals to plum hue 290–300 (warmth critic): that *is* sanctuary-v2; Nave
+  keeps the ink-navy vault, which is what makes it a separate option. `@layer theme` for all themes (app-wide).
+- **Deferred (JS / copy / other files):** (1) "Before the service" start screen — needs its own first-launch-of-the-day
+  trigger (Electron autoplays, `#overlay-start` never shows, OPTIONS §3 point 3), day-aware copy, a last-session
+  record, and the lancet redrawn as irregular leaded quarries; (2) the 12 voice strings (concept §5: main.js,
+  perform.js, edit/lib.js, edit/shell.js, store.js); (3) the EQ canvas (plot curve, grid and key strip are painted in
+  Classic slate/orange by eq-keyboard.js); (4) eq-keyboard.css slate literals in unreached states (`.eqk-readout`,
+  `.eqk-toast`, `.eqk-pill.over/.none`, `tr.sel`) — left Classic to keep coverage ≤ 2 %; (5) "That's the set" after
+  the last Fade out.
+- **Coverage** (`test/phase2/themes/run.mjs --only coverage --theme nave`): 276 selectors / 61 unmatched (22.1 %) /
+  31 dead → **209 / 2 (1.0 %) / 0 dead**, 0 invalid. The 2 are live classes in states the walk doesn't open:
+  `.fx-more`, `.bstrip.open .bstrip-list`.
+- **Contrast** (`tools/themes/shoot.mjs --theme nave --out design/warmth/ship/nave/`, 1440×900, 0 console errors /
+  404s): perform 185 runs, quick 166, edit 166, edit-tone-eq 158, mini 23, mini-drone-keys 28 — **0 fails**. Lowest
+  4.63 PANIC/Esc (unchanged from Classic); next 5.11 (lamp "ON" badge), 5.37 (Edit list numbers), 5.81 (key labels).
+  Glare (perform): mean luminance .066, bright share .059.
+- **Stage states** (`design/warmth/ship/nave/states.mjs`, pinned like the app, idle / held chord / every lamp OFF /
+  Faded / Locked with a chord held; `boxdiff.py` vs a Classic run of the same script):
+
+  | state | 1440×900 runs / fails | 1280×720 runs / fails | Classic (1440 / 1280) |
+  |---|---|---|---|
+  | idle | 184 / 0 | 158 / 0 | 0 / 0 |
+  | held chord | 184 / 0 | 158 / 0 | 0 / 0 |
+  | all OFF | 182 / 0 | 157 / 0 | 3 / 3 (wheel badge 4.44) |
+  | Faded | 183 / 0 | 157 / 0 | 0 / 0 |
+  | Locked + held | 190 / 0 | 164 / 0 | 0 / 0 |
+
+  - Lamps (rendered median fill, text hidden): ON Keys .338, Pad .460, Drone .704; OFF .0111 for all three →
+    **ON/OFF ≥ 6.35:1** (Keys), 8.35 (Pad), 12.3 (Drone). OFF has no halo (box-shadow none) and the drone window is
+    off (opacity 0) with the drone OFF. Lamps read the same under Lock.
+  - Boxes vs Classic at both sizes, every state: `.song-name`, `.chord-name`, every `.perform .slot`,
+    `.drone-readout`, `.p-drone`, `.topbar`, `.btn-fade`, `.btn-panic` ≤ **0.1 px**. Text-intrinsic only: `.song-key`
+    x −3.8/−4.0 px, `.slot-inst` w −2.8…−5.2, setlist chips narrower (serif; the strip scrolls), `.nav-next-name`
+    20 px vs 18 (h 23 vs 20.7, inside the fixed Next button).
+  - Sizes ≥ Classic everywhere: title 40 / 38 px, chord 46 idle / 22 held ("Cmaj7", xl bucket), transpose 32, lamp
+    names 15 px 800, drone readout 15.
+- **Size:** folder 51 KB (theme.css 30 KB, grain 18 KB, lancets 3.4 KB) + /fonts Alegreya 52 + Figtree 19 +
+  Instrument Sans 61 = **184 KB** (limit 250; unit test green).
+- **Suites** (load 7–12):
+  - `node --test test/unit/shared/themes.test.mjs` 9/9.
+  - `node test/phase2/themes/run.mjs --theme nave` **11/11** (an earlier run failed "store wins over a stale mirror",
+    which pairs sanctuary/sanctuary-day, not nave; green on rerun).
+  - `test/phase2/ui-core/run.mjs`, back to back: **Classic 68/69** (#47 "−18" 45 > 41+3 in DejaVu Sans), **Nave 66/69**
+    (`RIG_THEME=nave node --import <scratch>/pin-theme.mjs …`, the preload theme-ember used). Nave-only: #4
+    (`--muted-fader` expects Classic `#707a88`) and #33 (OFF tile expects Classic `rgb(39,43,50)`) assert Classic
+    tokens; #34 times out only because #33 fails with slot 0 still muted (its own click then *un*mutes) — passes
+    alone. Nave passes #40 and #47.
+- Screenshots: `design/warmth/ship/nave/{perform,quick,edit,edit-tone-eq,mini,mini-drone-keys}.png` + `audit-*.json` +
+  `summary.json`; `states-{1440,1280}/state-{idle,held,off,faded,locked}.png` + `check-nave-*.json`.
+
+## themes-critic-3 (Nave + Classic; reviews/themes-critic.md "round 3"; design/warmth/ship/critic/{nave,classic,nc}/)
+- **Re-measured** (serial, load < 3):
+  - Coverage `nave`: 209 selectors / 3 unmatched (1.4 %) / 0 dead / 0 invalid (`.fx-more`, `.bstrip.open .bstrip-list`,
+    `.qs-pedal.on i`: live, state not reached by this walk). `themes --theme nave` 11/11; `themes.test` 9/9.
+  - `shoot.mjs` 1440×900, runs / fails / lowest: **nave** perform 185/0, quick 166/0, edit 166/0, eq 158/0, mini 23/0,
+    mini-drone-keys 28/0, lowest 4.63 PANIC everywhere, 0 console / HTTP errors. **classic** perform 185/0, quick
+    167/**1** (4.14 "ON" under the `.qs` shadow), edit 166/0, eq 158/0, mini 23/**2** (3.49 `.m-num`),
+    mini-drone-keys 28/0; all three are the known base-look items (styles.css / mini.css owners; review C1).
+  - Box diff Nave vs Classic (fresh boot, 1280×800, 11 elements): dy/dh ≤ 0.1 px everywhere; text-intrinsic only
+    (`.slot-inst` dx +2.6 dw −5.2, `.setlist-chip` dw −16.7).
+  - Option fidelity: Nave matches `design/warmth/sanctuary/perform.png` plus the critics' fixes; shared mark in every
+    shot; no rule outside the `:where(html[data-theme="nave"])` block, no `content: url()`, no `backdrop-filter`, no
+    infinite animation, no OS `prefers-color-scheme`. Both ids boot dark on a light-OS context (`nc/lightos.mjs`).
+- **Fix N1 (`app/themes/sanctuary/theme.css`, fonts only):** families `Sanctuary Book/Sans` → `Nave Book/Sans`, and
+  the Instrument Sans minus/plus face now precedes the Figtree face, which gets the complementary unicode-range. Why:
+  `warmThemeFonts` (main.js, T1) copies faces without `unicode-range`, the last copy wins, and copies are never removed
+  (T2), so a runtime switch into Nave set the whole sans in Instrument Sans — in Nave and, via the shared names, in
+  Sanctuary afterwards (CDP: `.slot-inst` "Instrument Sans:11", +7 px). After: Sanctuary steps clean except its own T1;
+  Nave keeps Figtree after a switch (minus falls back to Figtree's until relaunch). Fresh boot unchanged: fader value
+  Instrument Sans 1 + Figtree 6 glyphs, mini shots pixel-identical, 0 contrast fails. Two lines wrapped to ≤ 120.
+- **Residue** (`nc/residue-nc.mjs`, chain classic → nave → sanctuary → nave → classic → nave → sanctuary → classic):
+  Classic 0 diffs at every step; Nave only T1 (`.chord-name` 56/51, `.song-name` 49/48 vs fresh 51/51, 48/48) and the
+  Figtree minus. Both need T1's main.js fix (copy `unicodeRange` + overrides).
+- Registry unchanged (no id or path renamed); swatch matches the tokens (`#0a0c1e` / `#f5ecd8`).
+
+## themes-final (default flip; reviews/themes-critic.md T1/T2/T5/N1/E1; hardware-fixes 2b; popover; app/js/shared/themes.js, app/themes/boot.js, views/components/themeFonts.js (new), main.js, views/mini.js, mini.css, styles.css, ember + studio theme.css, themes + ui-core tests, edit-v2 harness.html)
+- **Default → Sanctuary** (Ryan's decision): `DEFAULT_THEME_ID = 'sanctuary'` (shared/themes.js) and boot.js
+  `DEF = 'sanctuary'`; `themes.test.mjs` asserts it; the TEMP comments are gone. A library without `settings.theme`
+  (and a blocked / empty / unknown mirror) boots into Sanctuary. Base-look pins verified, none added:
+  `pinTheme(context, 'classic')` is in ui-core, edit-v2 (harness, integration, integration-widths), settings and eq
+  (and mini's pixel test). themes suite, first test (a new context: no mirror, no library): Sanctuary's sheet is in
+  the document while `readyState=loading`, before `<body>`, `blocking=render`, linked once, loaded before first paint,
+  html/body attributes set at DOMContentLoaded (the per-theme boot checks, now a shared `assertBootLinked`).
+- **T1 + T2 (runtime switch fonts).** `warmThemeFonts` moved to `views/components/themeFonts.js`, shared by main.js
+  `applyTheme` and mini.js `createThemeFollower` (the popover had the same copy):
+  - `warmThemeFonts(sheet, doc)` copies every descriptor the `@font-face` rule has (`FONT_FACE_DESCRIPTORS`: weight,
+    style, stretch, unicode-range, feature-/variation-settings, display, ascent-/descent-/line-gap-override,
+    size-adjust) and returns the faces. No more `family|url` dedupe set: each switch warms its own copies.
+  - `releaseWarmedFonts(faces, doc)`, awaited after the one-task enable (so `theme.pending` resolves after it): waits
+    until the enabled sheet's own faces show up in `document.fonts` (Chromium lists a just-enabled sheet's faces only
+    from the next task, not after a forced style/layout: measured), `load()`s them (memory cache), then deletes the
+    copies. The copies (now metric-exact) keep rendering until then, so there is still no fallback/blank frame. An
+    overtaken or failed switch deletes its copies too.
+  - Measured (1280×800, chain sanctuary → nave → daylight-day → classic → sanctuary → ember → sanctuary):
+    `.chord-name` 51/51 at every step (critic: 56/51 Sanctuary, 53/51 Daylight, 56/51 Nave); every `delete` happened
+    with the CSS face of the same family already `loaded`; `document.fonts` after a switch back to Sanctuary equals a
+    fresh boot (3 faces, `Sanctuary Chord` 88.55 %). Nave's ranged minus face keeps its `unicode-range`, so N1's
+    remainder (Figtree minus until relaunch) is gone too.
+  - themes suite, every `switch → <id>` (all 8): after the switch settles, `.chord-name` scrollHeight ≤ clientHeight
+    and no two `document.fonts` entries share family + all descriptors.
+- **E1 (chord half) + Studio.** That assertion also caught two fresh-boot overflows, not T1: Ember 56/51 (Nunito
+  Sans, ascent + descent 1.364 em in the 1.1 line box) and Studio 52/51 (Rubik, 1.185 em). New chord-only faces on
+  the same files (no second download), as Sanctuary's: `'Ember Chord'` ascent 88 % / descent 22 %, `'Studio Chord'`
+  89 % / 21 % (sum 1.1 em; baselines within 0.1 px of before: .879 → .88 em, .8925 → .89 em; the ink, b/d .744 and
+  .786, g/y −.193 and −.22 em, stays inside). Both themes now 51/51. Ember's `.song-name` 50/48 (title half of E1)
+  is left (BACKLOG A).
+- **T5** was already fixed by theme-classic (`b` = the first css theme on a different file); verified: themes suite
+  28/28, "store wins over a stale mirror" green with the Sanctuary default.
+- **hardware-fixes 2b ("DejaVu Sans 1366×768 −18: value 45 > 41 + 3").** Measured, Classic pinned, room = space
+  between the ± buttons, old CSS (4 px row gap):
+
+  | viewport | value box | room | "−18" DejaVu Sans Bold @20 | Liberation @20 | SFsim / SFstress @20 | app font |
+  |---|---|---|---|---|---|---|
+  | 1366×768 | 40.8 | 48.8 | 44.6 | 33.9 | 36.0 / 37.0 | 33.9 |
+  | 1440×900 | 38.0 | 46.0 | 44.6 | 33.9 | 36.0 / 37.0 | 33.9 |
+  | 1280×720 | 46.0 | 54.0 | 44.6 | 33.9 | 36.0 / 37.0 | 33.9 |
+  | 1024×700 (@17) | 32.0 | 40.0 | 37.9 | 28.8 | 31.0 / 33.0 | 28.8 |
+
+  - Root cause: not the size step and not a real clip. The value is centred between the buttons either way; the row's
+    4 px gaps only made its *box* 8 px narrower than the room, so the test compared the text with a box it never
+    needed to fit. DejaVu's minus is 0.84 em (digits 0.70), wider than SF's, so "−18" is a worst case: 44.6 px. The
+    tightest room is **1440×900**, not 1366 (side padding `clamp(…, 14px)` grows faster than the column); the
+    old test stopped at its first viewport.
+  - Fix (styles.css): `.transpose-row { gap: 0 }`. Nothing moves on screen (same centring); the value box is now the
+    room (49 / 46 / 54 / 40 px). Every theme measured at all four sizes (app fonts): "−18" 25–41 px, "+5"
+    23–34 px, all inside the box with no spill. Theme `.transpose-val` sizes (Sanctuary / Nave 32 px) never win over
+    the `[data-len]` steps (0,2,0 vs 0,1,0), so hardware-fixes' "theme owner should add a data-len size" is moot.
+  - Test (ui-core 2b): values 0 / +5 / −18 / **+17**, DejaVu Sans + Liberation Sans, 4 viewports; the value's
+    scrollWidth ≤ clientWidth + 1 (rounding only; no gap to hide a spill in any more) and the text box never reaches
+    a button (logged clearance: DejaVu "−18" at 1440×900 0.7 px each side, "+5" 2.3 px; SFsim / SFstress, from the
+    table above, ≥ 3.5 px).
+- **Popover.** Status line verified end to end (real app + real mini.html on the bus, drone off, `audioSleepSec` 2,
+  low-resource on): "Audio asleep · 42 ms · No MIDI keyboard" with an ok LED 5.5 s later; leaving low-resource →
+  "Sound OK …" (plus the existing mini-suite asleep test). Daylight v2 sets the `--accent-text` hook, so mini.css
+  now reads `var(--accent-text, var(--m-accent))`: the interim `--dl-accent-text` fallback is gone (README updated).
+- **edit-v2 harness** (`harness.html`): wires `controller.onActivity` / `'notes'` → `wakeMeters()` as main.js does.
+  Since idle-cpu-ui's shared meter clock, a silent meter sleeps until woken, and the harness has no main.js, so
+  `slot: polish-1 — a level meter beside the fader follows the slot` timed out deterministically (15 s,
+  `slot.test.mjs:491`); it passes now.
+- **Runs** (this box, 2 CPUs, serial, load 0.2–3). `node test/run-all.mjs --fast`, final run:
+
+  | suite | result | time | detail |
+  |---|---|---|---|
+  | unit | PASS | 10.1 s | 286 pass, 0 fail |
+  | engine | PASS | 5m19s | 79/79, 0 soft warnings, 0 console errors |
+  | instruments | PASS | 33.9 s | 143/143 |
+  | synth-extra | PASS | 1m01s | 153/153 |
+  | shell | PASS | 23.9 s | 212 pass (unit + browser; electron skipped by --fast) |
+  | ui-core | PASS | 3m47s | 69 pass, 0 fail (2b green) |
+  | edit-v2 | PASS | 3m56s | 98 pass, 11/11 files |
+  | settings | PASS | 37.7 s | 37/37 |
+  | eq | PASS | 29.6 s | 28/28 |
+  | mini | PASS | 29.4 s | 14/14 + mini-theme 14/14 |
+  | themes | PASS | 2m45s | 28/28 (all 8 ids) |
+  | chrome-fallback | PASS | 11.5 s | 17/17 |
+
+  12/12, 19m44s. The first run of the day was 11/12 (edit-v2 slot meter test, fixed above). `xvfb-run node
+  test/phase1/shell/run.mjs --only electron`: PASS, 14 pass, 1 skipped (L-14 menu-bar hooks: LOCAL's).

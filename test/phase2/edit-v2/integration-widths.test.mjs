@@ -18,7 +18,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { chromium } from 'playwright';
 import { ROOT, SHOTS } from './harness.mjs';
-import { MIDI_PERMISSIONS, waitRigReady } from '../../integration/lib.mjs';
+import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.mjs';
 
 const require = createRequire(import.meta.url);
 const { createServer } = require(path.join(ROOT, 'server.js'));
@@ -179,6 +179,7 @@ before(async () => {
   const origin = `http://127.0.0.1:${port}`;
   browser = await chromium.launch({ headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
   context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await pinTheme(context, 'classic'); // theme-classic: widths are measured on the base look
   await context.grantPermissions(MIDI_PERMISSIONS, { origin });
   page = await context.newPage();
   page.on('console', (m) => {
@@ -231,8 +232,9 @@ test('widths: every tab at 1024 / 1280 / 1366 / 1440×860 / 1512 — no overflow
       info(`${w}×${h} body scroll/height: ${report.splice(0).join(' · ')}; sub dropped on ${
         tabs.filter((t) => t.nosub).map((t) => t.id).join(', ') || 'none'}`);
     }
-    // the header's live hint: shown only where it fits in its row (hidden < 1341 px; LIVE's title has the text)
-    for (const [w, h, want] of [[1280, 800, false], [1366, 768, true], [1440, 860, true]]) {
+    // the header's live hint: shown only where it fits in its row (hidden < 1401 px since critics-fix O12's rename
+    // pencil left it five lines in 50 px at 1366; LIVE's title has the text)
+    for (const [w, h, want] of [[1280, 800, false], [1366, 768, false], [1440, 860, true]]) {
       await size(w, h);
       const hint = await ev(() => {
         const e = document.querySelector('#view-edit .ev2-song-livehint');

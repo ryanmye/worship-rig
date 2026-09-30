@@ -1,141 +1,166 @@
-/* Worship Rig: "Studio" theme (design/warmth/studio/concept.md).
-   The rig as a small analog console on a warm-grey desk: modules with a lit top edge, caps you can press, machined
-   fader caps, LED lenses that bloom, LED-ladder meters, walnut only as thin trim, and the song's name on a strip of
-   label tape. Same H-v2 layout and components; only colour, type, material and a little motion change.
+/* Worship Rig: "Studio" theme (design/warmth/studio/concept.md; app/themes/README.md is the contract).
+   The rig as a small analog console on a warm-grey desk: modules with a lit top edge, caps where your hands go, LED
+   lenses, LED-ladder meters, walnut trim, and the song's name on a strip of label tape. Colour, type and surface
+   only: no element of Perform moves against Classic (theme-studio box check, CONTRACT_CHANGES "## theme-studio").
 
-   How it switches on (one block, two ways in):
-   - Every rule sits under :where(body[data-theme="studio"], body:not([data-theme])). :where() adds no specificity, so
-     each rule weighs exactly what the app rule it replaces weighs, wins on source order (this file loads last), and
-     the app's more specific state rules (.slot.muted .mchip.on, .key-btn.on…) still win where they should.
-   - Linked from index.html later: applies with <body data-theme="studio">, and stops when data-theme names another
-     theme (a Settings › Appearance toggle).
-   - Injected with no attribute (page.addStyleTag, a quick <link> test): the body:not([data-theme]) branch is the
-     "unguarded" path, so the same rules apply as they are. No duplicated second copy of every rule to drift.
-   Asset URLs are root-absolute (/themes/studio/…) so they resolve the same linked and inlined into a <style>.
-   Fonts: Rubik (OFL, Hubert & Fischer et al.), one variable file, wght 300–900, Latin subset, 35 KB woff2, has tnum.
-   Performance: no backdrop-filter, no filter, no background-attachment: fixed, no infinite animation except REC's own
-   pulse. Grain is one 12 KB bitmap tile; meter segments are a static mask over the existing scaleY cover. */
+   Guard: every rule sits inside :where(html[data-theme="studio"]) (README rule 1). :where() adds no specificity, so a
+   nested `& .x` weighs what the app's `.x` weighs and wins on source order (this sheet is linked after the app's CSS);
+   the app's more specific state rules (.slot.muted .mchip.on, .key-btn.on…) still win.
+   - Tokens go on `&:root` (0,1,0), not on the bare guard (0,0,0): styles.css declares them on :root, which would
+     otherwise beat the theme on specificity. `& body` (0,0,1) likewise ties styles.css `body {}` and wins on order,
+     which is what finally paints the desk wash + grain (build critic: "body background never renders").
+   - No unguarded branch, no infinite animation, no backdrop-filter, no lamp flash (it fired on every strip rebuild,
+     build/stage critics; a JS-gated one-shot is deferred). Assets are root-absolute.
+   Fonts: Rubik (OFL, /fonts/Rubik-var.woff2), one variable file, wght 300–900, Latin subset, 35 KB, has tnum.
+   Paint: the grain is one static 12 KB PNG tile, painted with each module; meters change only the app's own
+   transform (the ladder segments are a static mask / a static overlay). */
 
 @font-face {
   font-family: 'Rubik';
   src: url('/fonts/Rubik-var.woff2') format('woff2');
   font-weight: 300 900; font-style: normal; font-display: swap;
 }
+/* themes-final: the chord's own face. Rubik's ascent + descent (.935 + .25 em) overflow the 1.1 line box by 1 px
+   (.chord-name 52/51). 89 % + 21 % = 1.1 em keeps the baseline (.8925 → .89 em). Same URL: no second download. */
+@font-face {
+  font-family: 'Studio Chord';
+  src: url('/fonts/Rubik-var.woff2') format('woff2');
+  font-weight: 300 900; font-style: normal; font-display: swap;
+  ascent-override: 89%; descent-override: 21%; line-gap-override: 0%;
+}
 
-:where(body[data-theme="studio"], body:not([data-theme])) {
-  /* ---- the desk: warm grey, OKLCH hue 70, chroma 0.006–0.010. Lighter than the old near-black (L .235 vs .158), so
-     it reads as a surface you work on, not a void; still dark enough that the lamps carry. */
-  --bg: #201e1b;
-  --bg-deep: #161311;     /* recesses: fader slots, meter windows, the chord window */
-  --panel: #2a2723;       /* module face */
-  --panel-2: #35312d;     /* caps */
-  --panel-3: #3f3b36;     /* caps, hover */
-  --line: #3a3632;
-  --line-2: #534f4a;
-  --line-hover: #68625c;
-  --text: #f4f0e6;        /* ivory: 13.1:1 on --panel */
-  --muted: #cdc6bc;       /* 8.8:1 on --panel */
-  --faint: #b2aba2;       /* 4.9:1 on --panel-3, the lightest surface it sits on */
-  --accent: #f7c367;      /* incandescent amber: current song, key, selection */
-  --accent-ink: #1f1915;
-  --warn: #faaa49;        /* lock / hold only */
-  /* ---- lamp caps: amber-orange, sage, sky, lilac. Extra is the lightest and Bass the darkest, so deutan / protan /
-     tritan viewers still tell them apart (min OKLab ΔE×100: deutan 5.8, protan 4.7, tritan 8.0; today 0.6 deutan) */
-  --slot-0: #f2955a;      /* Keys */
-  --slot-1: #80cd8b;      /* Pad */
-  --slot-2: #9edaff;      /* Extra */
-  --slot-3: #b37fd2;      /* Bass */
-  --ink-on-lamp: #1f1915; /* ≥ 5.7:1 on every lamp (Bass is the lowest) */
-  --drone: #ebd9ae;
-  --fx: #c9bba9;
-  --ok: #79d28d;
-  --danger: #e5533f;
-  --danger-ink: #fff;
-  --panic: #c9372a;       /* white on it 5.2:1 */
-  --panic-bg: #4d1811;
-  --panic-text: #ffd2c8;
-  --rec-idle: #b9574b;
-  --track: #141210;       /* a fader slot is a cut in the panel */
-  --track-edge: #79736d;  /* 3.2:1 on --panel: the unfilled throw stays visible */
-  --led-off: #79736d;     /* 3.2:1 on --panel, 3.9:1 on the meter bridge */
-  --muted-fader: #857e77;
-  --thumb: #e1ddd7;
-  --focus: #ffd48a;
-  --sel-fx: #4a443d;
-  --chg: #fff6e2;
-  --off-tile: #302c28;
-  /* ---- Studio's own materials */
-  --walnut: linear-gradient(90deg, #5a3a24, #7d5236 18%, #6a452c 36%, #8a5c3a 57%, #5e3d26 78%, #7a5034);
-  --walnut-v: linear-gradient(180deg, #5a3a24, #7d5236 22%, #6a452c 45%, #8a5c3a 70%, #5e3d26);
-  --tape: #d0cabb;        /* label tape, dimmed: relative luminance .59, the same as the old amber setlist chip */
-  --tape-ink: #2a221d;    /* 9.6:1 on the tape */
-  --tape-ink-soft: #5b5147;
-  --cap-top: #3b3732;     /* a raised cap: light from above */
-  --cap-bot: #312d29;
-  --cap-edge: #13110f;
-  --bridge: #1a1815;      /* the meter bridge (top bar) */
-  --pop-bg: #34302b;
-  --pop-line: #625b53;
-  --toast-bg: #37322df2;
-  --key-white: #c8c0b2;   /* bone keys: luminance .53, same as today's #b9c0c9 (.52), no glare */
-  --key-black: #171411;
-  --key-label: #4d463e;   /* 5.2:1 on the key face, 4.5:1 at its shaded lip */
-  --wheel-fill: #bdb4a4;
-  --wheel-track: #171512;
-  --meter-on-g: #79d28d; --meter-on-y: #f2c14a; --meter-on-r: #ef5a45;
-  --meter-off: #34302b;
-  /* ---- type: one family. Rubik's slightly rounded corners read as moulded caps; tnum keeps numbers still. */
-  --font: 'Rubik', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-display: 'Rubik', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-title: var(--font-display);
-  --mono: 'Rubik', ui-monospace, 'SF Mono', Menlo, monospace;
-  --radius: 11px;
-  --radius-sm: 8px;
-  color-scheme: dark;
+:where(html[data-theme="studio"]) {
+  &:root {
+    /* ---- the desk: warm grey, OKLCH hue ~70. Stage critic: 0.03 L darker than the first cut (#201e1b) to cut the
+       dark-room glare; the warmth comes from hue and caps, not from a lighter desk. */
+    --bg: #181613;
+    --bg-deep: #100e0c;     /* recesses: fader slots, windows */
+    --panel: #221f1c;       /* module face */
+    --panel-2: #2e2a26;     /* caps */
+    --panel-3: #38342f;     /* caps, hover; faint on it 5.4:1 */
+    --line: #312d29;
+    --line-2: #4a4641;
+    --line-hover: #625c56;
+    --text: #f4f0e6;        /* ivory: 15.9:1 on --bg, 14.6:1 on --panel */
+    --muted: #cdc6bc;
+    --faint: #b2aba2;       /* 7.2:1 on --panel, 5.4:1 on --panel-3 */
+    --accent: #f7c367;      /* incandescent amber: current song, key, selection */
+    --accent-ink: #1f1915;
+    --warn: #faaa49;        /* lock / hold only */
+    /* ---- lamps. Stage critic: Keys pushed redder (hue ~40) to leave the warm pile-up of warn / accent / drone
+       (Keys vs warn OKLab ΔE×100 6.0 → 10.7, vs accent 16.0), Pad chroma +15 %. Extra stays the lightest and Bass
+       the darkest, so they separate by lightness for deutan viewers. */
+    --slot-0: #f47e4f;      /* Keys   ink on it 6.6:1 */
+    --slot-1: #6fd183;      /* Pad    9.2:1 */
+    --slot-2: #9edaff;      /* Extra  11.5:1 */
+    --slot-3: #b37fd2;      /* Bass   5.7:1 */
+    --ink-on-lamp: #1f1915;
+    --drone: #ebd9ae;
+    --fx: #c9bba9;
+    --ok: #79d28d;
+    --danger: #e5533f;
+    --danger-ink: #fff;
+    --panic: #c9372a;       /* white on it 5.2:1 */
+    --panic-bg: #4d1811;
+    --panic-text: #ffd2c8;
+    --rec-idle: #b9574b;
+    --track: #100e0c;       /* a fader slot is a cut in the panel */
+    --track-edge: #79736d;  /* 3.5:1 on --panel: the unfilled throw stays visible */
+    --led-off: #79736d;     /* 4.0:1 on the meter bridge */
+    --muted-fader: #857e77;
+    --thumb: #e1ddd7;
+    --focus: #ffd48a;
+    --sel-fx: #3b3631;
+    --chg: #fff6e2;
+    --off-tile: #29261f;
+    /* ---- Studio's own materials */
+    --walnut: linear-gradient(90deg, #5a3a24, #7d5236 18%, #6a452c 36%, #8a5c3a 57%, #5e3d26 78%, #7a5034);
+    --walnut-v: linear-gradient(180deg, #4e321f, #7d5236 16%, #62402a 34%, #8a5c3a 55%, #5e3d26 76%, #71492f);
+    --tape: #aea796;        /* label tape, dimmed (stage critic): Y .39, ΔE 16 from the Drone lamp, so it can't pass
+                               for a lit lamp */
+    --tape-ink: #1a1512;    /* 7.6:1 on the tape */
+    --cap-top: #36322d;     /* a raised cap: light from above */
+    --cap-bot: #2b2824;
+    --cap-edge: #0e0c0a;
+    --bridge: #13110f;      /* the meter bridge (top bar) */
+    --pop-bg: #2e2a26;
+    --pop-line: #5a534b;
+    --toast-bg: #302b27f2;
+    --key-white: #c8c0b2;   /* bone keys: luminance .53, the same as Classic's #b9c0c9 (.52) */
+    --key-black: #171411;
+    --key-label: #4d463e;   /* 5.2:1 on the key face */
+    --wheel-fill: #bdb4a4;
+    --wheel-track: #12100e;
+    --meter-on-g: #79d28d; --meter-on-y: #f2c14a; --meter-on-r: #ef5a45;
+    --meter-off: #2e2a25;
+    /* ---- type: one family. Rubik's rounded corners read as moulded caps; tnum keeps numbers still. */
+    --font: 'Rubik', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-display: 'Rubik', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-title: var(--font-display);
+    --mono: 'Rubik', ui-monospace, 'SF Mono', Menlo, monospace;
+    --radius: 11px;
+    --radius-sm: 8px;
+    color-scheme: dark;
+  }
 
   /* ---- the room: a desk lamp's pool from above, then the grain of a powder-coated desk. One static paint. */
-  background:
-    url('/themes/studio/grain.png') repeat,
-    radial-gradient(ellipse 70% 55% at 50% -8%, #332e28 0%, #26231f 45%, transparent 80%),
-    var(--bg);
-  color: var(--text);
-  font-feature-settings: 'kern' 1;
+  & body {
+    background:
+      url('/themes/studio/grain.png') repeat,
+      radial-gradient(ellipse 70% 55% at 50% -8%, #2c2823 0%, #1f1c19 45%, transparent 80%),
+      var(--bg);
+    color: var(--text);
+    font-kerning: normal; font-feature-settings: 'kern' 1;
+  }
+  /* menu-bar mode (low resource): no grain, no wash, flat modules */
+  &[data-low-resource] body { background: var(--bg); }
+  &[data-low-resource] .panel { background: var(--panel); }
 
   /* ================================================================ modules (panels) */
-  /* a module face: grain, lit top edge, a dark seam where it meets the desk */
   & .panel {
-    background: url('/themes/studio/grain.png') repeat, linear-gradient(#2d2a26, #282521 60%, #26231f);
-    border: 1px solid #0f0d0b8c;
-    box-shadow: inset 0 1px 0 #fff3e012, inset 0 -1px 0 #00000033, 0 1px 0 #ffffff08, 0 3px 8px -3px #000000a6;
+    background: url('/themes/studio/grain.png') repeat, linear-gradient(#25221e, #211e1b 60%, #1f1c19);
+    border: 1px solid #0c0a098c;
+    box-shadow: inset 0 1px 0 #fff3e010, inset 0 -1px 0 #00000033, 0 1px 0 #ffffff06, 0 3px 8px -3px #000000a6;
   }
+  /* an unused channel is a blank, parked channel (a recessed well with its empty fader slot), not a dashed
+     wireframe (warmth critic). Border keeps Classic's 1.5 px, so the box doesn't move; 3.5:1 on the module. */
   & .slot.empty {
-    background: transparent; box-shadow: none; border: 1.5px dashed #6f6962; /* 3.1:1 on the desk */
+    border: 1.5px solid var(--track-edge);
+    background:
+      linear-gradient(90deg, transparent calc(50% - 3px), #0000006b calc(50% - 3px) calc(50% + 3px),
+        transparent calc(50% + 3px)) center / 100% 56% no-repeat,
+      #0000001f;
+    box-shadow: inset 0 2px 6px #00000059;
   }
+  & .slot-vt { letter-spacing: .05em; font-size: 12.5px; color: var(--faint); font-weight: 600; }
 
-  /* ================================================================ caps (every pressable) */
-  & .btn, & .tb-btn, & .toggle, & .seg, & .step-btn, & .key-btn, & .setlist-chip, & .swell-btn, & .rec-btn, & .hold-btn,
-  & .fxc, & .fxpill, & .mchip {
+  /* ================================================================ caps: only where hands go
+     Warmth critic: "caps everywhere flatten the hierarchy". Caps stay on the transport-like controls (Transpose,
+     the strip switches, Prev/Next, Fade / PANIC / Lock, REC, the top bar); the header FX chips, the drone key row and
+     the setlist are printed legends on the panel (below), so a cap means "hands go here". */
+  & .btn, & .tb-btn, & .toggle, & .seg, & .step-btn, & .keypop .key-btn, & .swell-btn, & .rec-btn, & .hold-btn,
+  & .mchip {
     background: linear-gradient(var(--cap-top), var(--cap-bot));
     border: 1px solid var(--cap-edge);
     box-shadow: inset 0 1px 0 #fff3e01c, inset 0 -1px 0 #0000002e, 0 1px 1px #0000008c, 0 2px 4px -1px #00000059;
   }
   & .btn:hover:not(:disabled), & .tb-btn:hover:not(:disabled), & .toggle:hover:not(:disabled),
-  & .seg:hover:not(:disabled), & .step-btn:hover:not(:disabled), & .key-btn:hover:not(:disabled),
-  & .setlist-chip:hover, & .swell-btn:hover:not(:disabled), & .fxc:hover:not(:disabled) {
-    background: linear-gradient(#45403a, #3a3530); border-color: var(--cap-edge);
+  & .seg:hover:not(:disabled), & .step-btn:hover:not(:disabled), & .swell-btn:hover:not(:disabled) {
+    background: linear-gradient(#403b35, #34302b); border-color: var(--cap-edge);
   }
   /* pressed: the cap goes down into the panel */
   & .btn:active:not(:disabled), & .toggle:active:not(:disabled), & .seg:active:not(:disabled),
-  & .key-btn:active:not(:disabled), & .setlist-chip:active, & .fxc:active:not(:disabled), & .mchip:active:not(:disabled),
-  & .hold-btn:active:not(:disabled), & .step-btn:active:not(:disabled) {
-    box-shadow: inset 0 2px 4px #00000080, inset 0 0 0 1px #0000004d; background: linear-gradient(#2e2a26, #34302b);
+  & .mchip:active:not(:disabled), & .hold-btn:active:not(:disabled), & .step-btn:active:not(:disabled) {
+    box-shadow: inset 0 2px 4px #00000080, inset 0 0 0 1px #0000004d; background: linear-gradient(#282521, #2e2a26);
   }
   /* a segmented control is one moulded strip; its segments are flat keys cut into it */
   & .segmented {
     border: 1px solid var(--cap-edge); background: linear-gradient(var(--cap-top), var(--cap-bot));
     box-shadow: 0 1px 1px #0000008c, 0 2px 4px -1px #00000059, inset 0 1px 0 #fff3e01c;
   }
-  & .segmented .seg { background: transparent; border: 0; border-right: 1px solid #1a1714; box-shadow: inset 1px 0 0 #fff3e00d; }
+  & .segmented .seg {
+    background: transparent; border: 0; border-right: 1px solid #171411; box-shadow: inset 1px 0 0 #fff3e00d;
+  }
   & .segmented .seg:first-child { box-shadow: none; }
   & .segmented .seg.on {
     background: linear-gradient(#fbd183, var(--accent) 55%, #e9b155); color: var(--accent-ink);
@@ -144,53 +169,80 @@
   & .segmented .seg.on:hover { background: linear-gradient(#fdd997, #f9ca76); }
   & .toggle.on { border-color: var(--cap-edge); }
 
+  /* ---- printed legends (flat): header FX chips, the drone key row, the setlist */
+  & .fxc {
+    background: #ffffff05; border-color: var(--line-2); box-shadow: none; color: #ebe4d8;
+  }
+  & .fxc small { color: #b8b0a5; }
+  & .fxc.on {
+    background: var(--sel-fx); border: 2px solid var(--text); color: #fffaf0;
+    box-shadow: 0 0 12px -3px #fff3e059;
+  }
+  & .fxc.on small { color: #e2d9cc; }
+  & .drone-block .key-btn {
+    background: #ffffff05; border-color: var(--line-2); box-shadow: none;
+  }
+  & .drone-block .key-btn.accidental { background: #0000002e; }
+  & .drone-block .key-btn.on {
+    background: color-mix(in srgb, var(--drone) 10%, transparent); box-shadow: 0 0 12px -3px #ebd9ae80;
+  }
+  /* drone off: the key it would play is an unlit outline (app's dashed rim), no tint, no glow (an OFF lamp never
+     glows; ui-core #17) */
+  & .drone-block.off .key-btn.on { background: transparent; box-shadow: none; }
+  & .keypop .key-btn.accidental { background: linear-gradient(#26231f, #1e1b18); }
+  /* opaque (the desk + 2.4 % white): a translucent chip read as white to ui-core's token contrast check */
+  & .setlist-chip { background: #1d1b18; border-color: var(--line-2); box-shadow: none; }
+  & .setlist-chip:hover { background: #24221f; }
+  /* the current song is the one lit amber cap in the row (stage critic: "where am I in the set" at 1.5 m; the tape
+     stays on the title only) */
+  & .setlist-chip.current {
+    background: linear-gradient(#fbd183, var(--accent) 55%, #e9b155) var(--accent); border-color: #7a5818;
+    box-shadow: inset 0 1px 0 #fff8, 0 1px 2px #000000b3, 0 0 16px -4px #f7c36780;
+  }
+  & .setlist-chip.current:focus-visible { outline-color: var(--accent-ink); outline-offset: -5px; }
+  & .chip-num { color: var(--faint); }
+  & .chip-key { color: var(--muted); }
+  & .nav-next-name em { color: var(--accent); }
+
   /* ================================================================ type: sentence case, one voice */
-  & .select-label, & .stepper-label, & .fader-label, & .wheel-caption, & .chord-caption, & .section-title, & .tb-cap,
-  & .song-key-cap, & .nav-next-cap, & .qs-st .cap, & .fxpill .fxpill-l, & .fx-chiprow .fx-lab span {
+  & .select-label, & .stepper-label, & .fader-label, & .wheel-caption, & .chord-caption, & .section-title,
+  & .tb-cap, & .song-key-cap, & .nav-next-cap, & .qs-st .cap, & .fxpill .fxpill-l, & .fx-chiprow .fx-lab span {
     text-transform: none; letter-spacing: .01em; font-weight: 600; font-size: 13px; color: var(--muted);
   }
-  & .drone-title .section-title, & .notes-head .section-title { font-size: 13.5px; letter-spacing: .005em; }
+  /* line-height pinned to the row's 16 px: Rubik's taller line box pushed the drone lamp down 2.2 px (box check) */
+  & .drone-title .section-title, & .notes-head .section-title {
+    font-size: 13.5px; letter-spacing: .005em; line-height: 16px;
+  }
   & .pedal-lamp, & .drone-swell { text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 600; }
-  & .drone-swell-text::after { font-size: 12.5px; }
-  & .slot-vt { letter-spacing: .05em; font-size: 12.5px; color: var(--faint); font-weight: 600; }
-  /* headerChipRow upper-cases 'Space' / 'Echo' in JS; turn it back into a word */
-  & .fx-chiprow .fx-lab span, & .fxpill .fxpill-l { display: inline-block; text-transform: lowercase; }
-  & .fx-chiprow .fx-lab span::first-letter, & .fxpill .fxpill-l::first-letter { text-transform: uppercase; }
   & .tag, & .drone-toggles .tag { text-transform: none; letter-spacing: .01em; font-size: 11.5px; font-weight: 600; }
   & .hold-tag { letter-spacing: .04em; }
-  & .song-key, & .chord-name, & .transpose-val, & .wheel-value { font-weight: 700; }
-  & .transpose-val, & .wheel-value, & .fader-value, & .tb-val, & .rec-time, & .step-value, & .qs-bpm { font-variant-numeric: tabular-nums; }
+  /* 2 m: the names and values you read mid-song keep Classic's size and weight (800), in ivory on the darkest
+     surfaces the theme has */
+  & .song-key, & .chord-name, & .transpose-val, & .wheel-value { font-weight: 800; }
+  & .chord-name { font-family: 'Studio Chord', var(--font-display); }
+  /* Rubik's figures are ~26 % wider than the system font's: 1.75ch keeps the "0" box at Classic's 2.2ch (~37 px at
+     30 px), so the Transpose + key doesn't shift (theme-studio box check) */
+  & .transpose-val { min-width: 1.75ch; }
+  & .transpose-val, & .wheel-value, & .fader-value, & .tb-val, & .rec-time, & .step-value, & .qs-bpm {
+    font-variant-numeric: tabular-nums;
+  }
   & .ontile .ot-name { letter-spacing: .08em; }
 
-  /* ================================================================ label tape: the song you are on */
-  /* The song name is written on a strip of off-white tape stuck to the module, like a console scribble strip.
-     Torn ends are two 8 px SVG masks; fibres are a faint horizontal repeat. It sizes to the name (align-self) and
-     perform.js's fitSongName still measures it (padding counts, transform does not). */
+  /* ================================================================ label tape: the song you are on
+     The song name is written on a strip of tape. No transform (the old -0.5° tilt rendered the largest text on
+     stage soft at 1×, build critic). Tape only here and on the Edit title (stage critic: 6 tapes → 1 per view). */
+  /* themes-critic (Studio S1): a ::first-line background stops at the glyphs, so the tape read as a text selection,
+     not the padded, torn strip of the option (design/warmth/studio/perform.png). The strip is now the box itself:
+     fit-content with 12 px ends, pulled 10 px left (text lands 2 px right of Classic's), torn ends from the Edit
+     title's masks. Height and y are Classic's (1.25em, border-box); fitSongName still compares scrollWidth with
+     clientWidth, which both include the ends, so a long name steps down and ellipsizes inside the tape. */
   & .song-name {
-    align-self: flex-start; max-width: 100%; margin-left: -6px;
-    padding: 0 18px 0 16px; border-radius: 1px;
-    color: var(--tape-ink); font-weight: 650; letter-spacing: -.015em;
+    color: var(--tape-ink); font-weight: 750;
+    width: fit-content; max-width: calc(100% + 10px); margin-left: -10px; padding: 0 12px; box-sizing: border-box;
     background:
       repeating-linear-gradient(180deg, #ffffff0a 0 1px, transparent 1px 3px),
-      linear-gradient(180deg, #ddd8ca, var(--tape) 30%, #c9c2b2);
-    box-shadow: inset 0 -2px 0 #0000001a, inset 0 1px 0 #ffffff59;
-    transform: rotate(-.5deg);
-    -webkit-mask: url('/themes/studio/tape-l.svg') left / 8px 100% no-repeat,
-      linear-gradient(#000, #000) center / calc(100% - 15px) 100% no-repeat,
-      url('/themes/studio/tape-r.svg') right / 8px 100% no-repeat;
-    mask: url('/themes/studio/tape-l.svg') left / 8px 100% no-repeat,
-      linear-gradient(#000, #000) center / calc(100% - 15px) 100% no-repeat,
-      url('/themes/studio/tape-r.svg') right / 8px 100% no-repeat;
-  }
-  & .song-block.loading .song-name { color: var(--tape-ink-soft); } /* 4.4:1 on tape; the name is ≥ 28 px (large) */
-  & .song-loading { background: var(--panel); }
-  /* the setlist's current song wears the same tape: "the one on the tape is the one playing" */
-  & .setlist-chip.current {
-    background:
-      repeating-linear-gradient(180deg, #ffffff0a 0 1px, transparent 1px 3px),
-      linear-gradient(180deg, #ddd8ca, var(--tape) 30%, #c9c2b2);
-    color: var(--tape-ink); border-color: transparent; border-radius: 2px;
-    box-shadow: inset 0 -2px 0 #0000001a, inset 0 1px 0 #ffffff59;
+      linear-gradient(180deg, #bab3a2, var(--tape) 30%, #a8a190);
+    box-shadow: inset 0 -2px 0 #0000001a, inset 0 1px 0 #ffffff40;
     -webkit-mask: url('/themes/studio/tape-l.svg') left / 7px 100% no-repeat,
       linear-gradient(#000, #000) center / calc(100% - 13px) 100% no-repeat,
       url('/themes/studio/tape-r.svg') right / 7px 100% no-repeat;
@@ -198,101 +250,91 @@
       linear-gradient(#000, #000) center / calc(100% - 13px) 100% no-repeat,
       url('/themes/studio/tape-r.svg') right / 7px 100% no-repeat;
   }
-  & .setlist-chip.current .chip-num, & .setlist-chip.current .chip-key { color: var(--tape-ink-soft); }
-  & .setlist-chip.current:focus-visible { outline-color: var(--tape-ink); outline-offset: -5px; }
-  & .setlist-chip.loading.current .chip-spinner { border-color: var(--tape-ink); border-top-color: transparent; }
-  & .chip-num { color: var(--faint); }
-  & .chip-key { color: var(--muted); }
-  & .nav-next-name em { color: var(--accent); }
+  /* the ink stays tape ink while a song loads (styles.css .loading turns it --muted: 2.3:1 on the tape) */
+  & .song-name::first-line { color: var(--tape-ink); }
+  & .song-loading { background: var(--panel); }
 
   /* ================================================================ meter bridge (top bar) */
   & .topbar {
-    background: url('/themes/studio/grain.png') repeat, linear-gradient(#1d1b18, var(--bridge));
-    border-bottom: 3px solid transparent;
-    border-image: var(--walnut) 1;
+    background:
+      var(--walnut) bottom / 100% 5px no-repeat, /* warmth critic: 3 px was noise; 5 px reads as a trim */
+      url('/themes/studio/grain.png') repeat,
+      linear-gradient(#181613, var(--bridge));
+    border-bottom-color: #070605;
     box-shadow: 0 2px 6px #00000080;
     position: relative; z-index: 2;
   }
-  & .tb-logo { content: url('/themes/studio/mark.svg'); }
-  & .tb-name { font-weight: 700; font-size: 16.5px; letter-spacing: 0; }
+  & .tb-name { font-weight: 700; letter-spacing: 0; }
   & .tb-val { font-weight: 600; }
   & .midi-name.off { color: var(--warn); }
   & .latency { color: var(--muted); }
-  /* the counter is a little recessed window, like a tape-counter */
+  /* the counter is a recessed window, like a tape counter; drawn with a spread shadow so its box doesn't grow */
   & .rec-time {
-    font: 600 15px/1 var(--mono); color: var(--muted); background: #0f0d0b; border-radius: 6px; padding: 7px 8px;
-    box-shadow: inset 0 1px 3px #000000b3, 0 1px 0 #ffffff0d; letter-spacing: .02em;
+    color: var(--muted); background: #0b0a08; border-radius: 3px;
+    box-shadow: 0 0 0 5px #0b0a08, 0 0 0 6px #ffffff0d, inset 0 1px 3px #000000b3; letter-spacing: .02em;
   }
-  & .rec-time.on { color: #ff8a78; }
-  & .rec-btn.recording { background: linear-gradient(#5a1f18, #481610); border-color: #1a0806; }
-  & .quick-btn[aria-expanded="true"] { background: linear-gradient(#2c2925, #34302b); border-color: var(--cap-edge);
-    box-shadow: inset 0 2px 4px #00000080, inset 0 -3px 0 var(--accent); }
-  & .tb-views .seg[aria-pressed="true"], & .tb-views .seg.on { color: var(--accent-ink); }
+  & .tb-views .seg.on { color: var(--accent-ink); }
 
-  /* ---- LED lenses: a dark lens with a specular dot when off; a hot core, the colour, and a bloom when lit */
+  /* ---- LED lenses: a dark lens with a specular dot when off; a hot core, the colour, and a bloom when lit.
+     OFF is a dark glass (#34302b) inside a --led-off rim (3.5:1 on the panel, so the lens stays findable): the first
+     cut filled it with --led-off itself, and an unlit toggle / Sustain / pedal lens measured only 3.15–3.67:1 against
+     its lit state (theme-studio lamp pairs); now 8.2–9.5:1. (Recording, the MIDI-activity flash and the drone-swell
+     lamps keep the app's own lit styles: its state rules outrank these on specificity.) */
   & .led, & .toggle-led, & .pedal-led, & .drone-swell-led, & .mchip.cycle .mc-led, & .qs-pedal i {
-    background: radial-gradient(circle at 36% 30%, #ffffff47 0 14%, transparent 42%), var(--led-off);
-    box-shadow: inset 0 0 0 1px #00000099, inset 0 -2px 3px #00000059;
+    background: radial-gradient(circle at 36% 30%, #ffffff33 0 14%, transparent 42%), #34302b;
+    box-shadow: inset 0 0 0 1.5px var(--led-off), inset 0 -2px 3px #00000059;
   }
-  & .led.ok, & .led.warn, & .led.bad, & .led.flash, & .toggle.on .toggle-led, & .mchip.cycle.on .mc-led,
-  & .pedal-lamp.down .pedal-led, & .drone-swell.up .drone-swell-led, & .drone-swell.down .drone-swell-led,
-  & .qs-pedal.on i, & .drone-toggles .toggle.on .toggle-led {
+  & .led.ok, & .led.warn, & .led.bad, & .toggle.on .toggle-led, & .mchip.cycle.on .mc-led,
+  & .pedal-lamp.down .pedal-led, & .qs-pedal.on i, & .drone-toggles .toggle.on .toggle-led {
     --lc: var(--c, var(--accent));
-    background: radial-gradient(circle at 42% 38%, #fffdf6 0 16%, color-mix(in srgb, var(--lc) 70%, #fff) 30%, var(--lc) 62%,
-      color-mix(in srgb, var(--lc) 70%, #000) 100%);
+    background: radial-gradient(circle at 42% 38%, #fffdf6 0 16%, color-mix(in srgb, var(--lc) 70%, #fff) 30%,
+      var(--lc) 62%, color-mix(in srgb, var(--lc) 70%, #000) 100%);
     box-shadow: 0 0 0 1px #0000008c, 0 0 5px var(--lc), 0 0 14px color-mix(in srgb, var(--lc) 45%, transparent);
   }
   & .led.ok { --lc: var(--ok); }
   & .led.warn { --lc: var(--warn); }
   & .led.bad { --lc: var(--danger); }
-  & .led.flash { --lc: #d8ffe2; }
-  & .pedal-lamp.down .pedal-led, & .drone-swell.up .drone-swell-led, & .qs-pedal.on i { --lc: #fff6e2; }
-  & .drone-swell.down .drone-swell-led { --lc: var(--slot-2); }
+  & .pedal-lamp.down .pedal-led, & .qs-pedal.on i { --lc: #fff6e2; }
   & .drone-toggles .toggle.on .toggle-led { --lc: var(--drone); }
   & .rec-dot {
     background: radial-gradient(circle at 38% 32%, #ffffff40 0 14%, transparent 44%), var(--rec-idle);
     box-shadow: inset 0 0 0 1px #0000008c, inset 0 -2px 3px #00000066;
   }
-  & .rec-btn.recording .rec-dot {
-    background: radial-gradient(circle at 42% 38%, #fff3ee 0 16%, #ff8f7d 32%, var(--danger) 64%, #8a2317 100%);
-    box-shadow: 0 0 0 1px #0000008c, 0 0 6px var(--danger), 0 0 16px #e5533f73;
-  }
 
-  /* ---- meters: an LED ladder. The mask cuts the bar into segments; the dark segments are the unlit LEDs (the scaleY
-     cover), so an idle meter still reads as a meter. Masks are static: the cover's transform is all that changes. */
-  & .meter-bar {
-    background: var(--meter-off); border-radius: 2px; height: 8px;
-    -webkit-mask: repeating-linear-gradient(90deg, #000 0 4px, transparent 4px 5.5px);
-    mask: repeating-linear-gradient(90deg, #000 0 4px, transparent 4px 5.5px);
+  /* ---- meters: LED ladders.
+     Top bar (stage critic: "the ladder lies"): the fill is ONE colour (green, yellow when meter.js marks the bar
+     .hot, the app's red .clip inset kept), so a -20 dB level never lights "red LEDs". The segment gaps are a static
+     overlay (::after) above the fill and below the peak-hold, so the hold tick is never masked (it's 3 px ivory).
+     The fill itself is not masked: it scales with scaleX, and a mask would scale with it. */
+  & .meter-bar { background: var(--meter-off); border-radius: 2px; }
+  & .meter-bar::after {
+    content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background: repeating-linear-gradient(90deg, transparent 0 4px, #0f0d0b 4px 5.5px);
   }
-  & .meter-fill { background: linear-gradient(to right, var(--meter-on-g) 0 70%, var(--meter-on-y) 70% 88%, var(--meter-on-r) 88%); }
-  & .meter.vertical .meter-fill { background: linear-gradient(to top, var(--meter-on-g) 0 70%, var(--meter-on-y) 70% 88%, var(--meter-on-r) 88%); }
-  & .meter-hold { background: var(--text); }
-  & .tb-meter .meter { gap: 3px; }
+  & .meter-fill { background: var(--meter-on-g); }
+  & .meter-bar.hot .meter-fill { background: var(--meter-on-y); }
+  & .meter-hold { background: var(--text); width: 3px; z-index: 2; }
+  /* strip level: the gradient is static on .lvl-meter (not scaled), the app's .lvl-cover scaleY hides the unlit
+     part, so the colour follows the level; the static mask cuts it into LEDs */
+  /* Classic's 4 px bar at Classic's place (ui-core polish-1 asserts the geometry; themes change no boxes) */
   & .lvl-meter {
-    width: 6px; border-radius: 1px;
+    border-radius: 1px;
     background: linear-gradient(to top, var(--meter-on-g) 0 76%, var(--meter-on-y) 76% 92%, var(--meter-on-r) 92%);
     -webkit-mask: repeating-linear-gradient(0deg, #000 0 3px, transparent 3px 4.5px);
     mask: repeating-linear-gradient(0deg, #000 0 3px, transparent 3px 4.5px);
   }
   & .lvl-cover { background: var(--meter-off); }
-  & .fader.vertical .fader-track > .lvl-meter { left: calc(50% + 30px); }
 
   /* ================================================================ lamps (onTile): backlit caps */
+  /* the gradients are opaque; the trailing colour keeps background-color = the lamp's colour for anything that reads
+     it (ui-core #33, the picker) */
   & .ontile {
     background: linear-gradient(180deg, color-mix(in srgb, var(--c) 78%, #fff) 0%, var(--c) 42%,
-      color-mix(in srgb, var(--c) 90%, #000) 100%);
+      color-mix(in srgb, var(--c) 90%, #000) 100%) var(--c);
     border-color: color-mix(in srgb, var(--c) 55%, #000);
     color: var(--ink-on-lamp);
     box-shadow: inset 0 1px 0 #ffffff80, inset 0 -2px 0 #00000026, 0 1px 2px #00000099,
       0 0 20px -3px color-mix(in srgb, var(--c) 55%, transparent);
-    transition: background-color .12s ease-out, box-shadow .18s ease-out;
-  }
-  /* switching a lamp on: a quick filament flash (one 260 ms opacity fade on a pseudo, only on the off → on change) */
-  & .ontile:not(.off)::after {
-    content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-    background: radial-gradient(ellipse 70% 120% at 50% 0%, #fffaf0b3, transparent 70%);
-    opacity: 0; animation: studio-lamp-on .26s ease-out;
   }
   & .ontile .ot-name, & .ontile .ot-sub { color: var(--ink-on-lamp); }
   & .ontile .ot-state {
@@ -302,73 +344,71 @@
     background: radial-gradient(circle at 42% 38%, #fff 0 30%, #fff8e8 55%, #ffe9c4 100%);
     box-shadow: 0 0 0 1.5px #1f191540, 0 0 8px #fffaf0, 0 0 14px #fff6e299;
   }
-  /* OFF: an unlit lamp cap. The lens keeps a hint of its colour (8 %), the name is struck through, the cap sits flat. */
+  /* OFF: an unlit lamp cap. The lens keeps a hint of its colour (6–9 %) but no glow at all (Sanctuary's OFF lamp
+     still glowed): the lens is a dark ring, the cap sits flat, the name is struck through (app). */
   & .ontile.off {
-    background: linear-gradient(180deg, color-mix(in srgb, var(--c) 9%, #37332e), color-mix(in srgb, var(--c) 6%, #2c2825));
+    background: linear-gradient(180deg, color-mix(in srgb, var(--c) 9%, #302c28),
+      color-mix(in srgb, var(--c) 6%, #25221e)) var(--off-tile);
     border-color: var(--cap-edge);
-    box-shadow: inset 0 1px 0 #fff3e014, 0 1px 1px #0000008c;
+    box-shadow: inset 0 1px 0 #fff3e012, 0 1px 1px #0000008c;
   }
-  & .ontile.off .ot-led { background: radial-gradient(circle at 36% 30%, #ffffff38 0 14%, transparent 42%), #3d3833;
-    box-shadow: inset 0 0 0 2px var(--led-off); }
+  & .ontile.off .ot-led {
+    background: radial-gradient(circle at 36% 30%, #ffffff30 0 14%, transparent 42%), #2a2622;
+    box-shadow: inset 0 0 0 2px var(--led-off);
+  }
   & .ontile.off .ot-name, & .ontile.off .ot-sub { color: var(--faint); }
   & .ontile.off .ot-state { background: #00000033; color: #e0d8cc; box-shadow: inset 0 0 0 1.5px var(--led-off); }
 
   /* ================================================================ channel strips */
-  /* the channel's scribble strip: its instrument on a short piece of the same tape */
+  /* the instrument: ivory 700 with a tape-coloured underline (stage critic: no tape on the strips; a muted strip
+     goes quiet top to bottom) */
   & .slot .slot-inst {
-    color: var(--tape-ink); font-weight: 700; padding: 1px 9px; border-radius: 1px;
-    background: repeating-linear-gradient(180deg, #ffffff0a 0 1px, transparent 1px 3px), linear-gradient(#d6d0c1, #c6bfaf);
-    box-shadow: inset 0 -1px 0 #00000014;
-    -webkit-mask: url('/themes/studio/tape-l.svg') left / 5px 100% no-repeat,
-      linear-gradient(#000, #000) center / calc(100% - 9px) 100% no-repeat,
-      url('/themes/studio/tape-r.svg') right / 5px 100% no-repeat;
-    mask: url('/themes/studio/tape-l.svg') left / 5px 100% no-repeat,
-      linear-gradient(#000, #000) center / calc(100% - 9px) 100% no-repeat,
-      url('/themes/studio/tape-r.svg') right / 5px 100% no-repeat;
+    color: var(--text); font-weight: 700;
+    text-decoration: underline 2px var(--tape); text-underline-offset: 3px;
   }
-  & .slot.muted .slot-who { filter: none; opacity: .75; }
+  & .slot.muted .slot-inst { text-decoration-color: transparent; color: var(--muted); } /* × the app's .7: 5.8:1 */
   & .wheel-badge { color: var(--muted); }
   & .slot-badge { color: #e6dfd4; border-color: #5b544d; background: #00000026; }
 
   /* step chips: small caps; in use = the slot colour showing through the cap, plus its amount bar */
   & .mchip { color: #c8c0b5; border-color: var(--cap-edge); }
   & .mchip.on {
-    background: linear-gradient(color-mix(in srgb, var(--c) 30%, #3b3732), color-mix(in srgb, var(--c) 20%, #2e2a26));
+    background: linear-gradient(color-mix(in srgb, var(--c) 30%, #36322d), color-mix(in srgb, var(--c) 20%, #29251f));
     border-color: color-mix(in srgb, var(--c) 70%, #000); color: var(--text);
     box-shadow: inset 0 1px 0 color-mix(in srgb, var(--c) 40%, transparent), 0 1px 1px #0000008c;
   }
   & .mchip.on > .mc-label { color: color-mix(in srgb, var(--c) 55%, #fffaf0); }
   & .mchip.open { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--c); }
-  & .slot.muted .mchip.on { background: linear-gradient(#37332e, #2e2a26); border-color: #5d5750; color: #e8e1d6; }
+  & .slot.muted .mchip.on { background: linear-gradient(#322e29, #29251f); border-color: #5d5750; color: #e8e1d6; }
   & .slot.muted .mchip .mc-bar { background: #8a837b; }
-  & .slot.muted .mchip.cycle.on .mc-led { --lc: #cdc6bc; box-shadow: none; }
+  & .slot.muted .mchip.cycle.on .mc-led { --lc: #cdc6bc; background: #b8b0a5; box-shadow: none; } /* app's is slate */
   & .slot.muted .slot-body { background: repeating-linear-gradient(135deg, transparent 0 9px, #fff3e00a 9px 18px); }
 
-  /* ================================================================ faders: a cut slot and a machined cap */
+  /* ================================================================ faders: a cut slot and a machined cap
+     Track widths stay Classic's (12 px vertical, 10 px horizontal): the coloured fill column reads at 1.5 m. */
   & .fader.vertical .fader-input::-webkit-slider-runnable-track {
-    width: 10px; border-radius: 5px; border: 1px solid var(--track-edge);
     background: linear-gradient(to top, var(--fader-color) var(--pos, 0%), var(--track) var(--pos, 0%));
     box-shadow: inset 0 2px 3px #000000b3, 0 1px 0 #ffffff0f;
   }
   & .fader.horizontal .fader-input::-webkit-slider-runnable-track {
-    height: 9px; border-radius: 5px; border: 1px solid var(--track-edge);
     background: linear-gradient(to right, var(--fader-color) var(--pos, 0%), var(--track) var(--pos, 0%));
     box-shadow: inset 0 2px 3px #000000b3, 0 1px 0 #ffffff0f;
   }
-  /* the cap: brushed metal top and bottom, grip ribs, and a stripe of the channel's colour across the middle */
+  /* the cap: brushed metal, grip ribs, and a stripe of the channel's colour across the middle */
   & .fader.vertical .fader-input::-webkit-slider-thumb {
-    margin-left: calc((10px - var(--thumb-w)) / 2);
-    border-radius: 5px; border: 1.5px solid #0e0c0a;
+    border-radius: 5px; border: 2px solid #0e0c0a;
     background:
-      linear-gradient(transparent calc(50% - 2px), var(--fader-color) calc(50% - 2px) calc(50% + 2px), transparent calc(50% + 2px)),
+      linear-gradient(transparent calc(50% - 2px), var(--fader-color) calc(50% - 2px) calc(50% + 2px),
+        transparent calc(50% + 2px)),
       repeating-linear-gradient(transparent 0 3px, #0000001f 3px 4px),
       linear-gradient(#f3f0ea 0%, #d8d3cb 30%, #bdb7ae 50%, #d3cec6 70%, #b4ada3 100%);
     box-shadow: 0 3px 6px #000000bf, 0 1px 1px #000, inset 0 1px 0 #ffffffd9, inset 0 -1px 0 #0000004d;
   }
   & .fader.horizontal .fader-input::-webkit-slider-thumb {
-    border-radius: 5px; border: 1.5px solid #0e0c0a; margin-top: -14.5px;
+    border-radius: 5px; border: 2px solid #0e0c0a;
     background:
-      linear-gradient(90deg, transparent calc(50% - 2px), var(--fader-color) calc(50% - 2px) calc(50% + 2px), transparent calc(50% + 2px)),
+      linear-gradient(90deg, transparent calc(50% - 2px), var(--fader-color) calc(50% - 2px) calc(50% + 2px),
+        transparent calc(50% + 2px)),
       repeating-linear-gradient(90deg, transparent 0 3px, #0000001f 3px 4px),
       linear-gradient(#f3f0ea 0%, #d8d3cb 35%, #bdb7ae 60%, #cdc7be 100%);
     box-shadow: 0 2px 5px #000000b3, inset 0 1px 0 #ffffffd9;
@@ -378,25 +418,20 @@
   & .fader-value { font-weight: 600; }
 
   /* ================================================================ header: transpose, shared effects, chord window */
-  & .fxc { color: #ebe4d8; }
-  & .fxc small { color: #b8b0a5; }
-  & .fxc.on {
-    background: linear-gradient(#57504a, #4a443d); border: 2px solid var(--text); color: #fffaf0;
-    box-shadow: inset 0 1px 0 #ffffff26, 0 0 0 1px #0000008c;
-  }
-  & .fxc.on small { color: #e2d9cc; }
   & .fx-chiprow .fx-lab, & .p-fx .fx-lab .ic { color: var(--fx); }
-  & .fx-more, & .fx-chiprow.fx-open > .fxrow { background: var(--pop-bg); border-color: var(--pop-line); }
-  /* the chord is read off a recessed display window */
+  /* the chord is read off a recessed display window: ivory 16:1 when live, faint 7.8:1 idle (idle → live ≥ 2:1) */
   & .chord-readout {
-    background: url('/themes/studio/grain.png') repeat, linear-gradient(#181613, #1d1a17);
+    background: url('/themes/studio/grain.png') repeat, linear-gradient(#121110, #171513);
     box-shadow: inset 0 2px 8px #000000b3, inset 0 0 0 1px #00000080, 0 1px 0 #ffffff0f;
   }
   & .chord-readout:not(.live) .chord-name { color: var(--faint); }
   & .chord-readout.live .chord-name { color: #fff6e2; }
-  & .song-playin { background: #3a3122; }
-  & .hold-btn.key-open { background: linear-gradient(color-mix(in srgb, var(--accent) 10%, var(--cap-top)),
-    color-mix(in srgb, var(--accent) 6%, var(--cap-bot))); border-color: color-mix(in srgb, var(--accent) 40%, var(--cap-edge)); }
+  & .song-playin { background: #33291a; }
+  & .hold-btn.key-open {
+    background: linear-gradient(color-mix(in srgb, var(--accent) 10%, var(--cap-top)),
+      color-mix(in srgb, var(--accent) 6%, var(--cap-bot)));
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--cap-edge));
+  }
   & .key-open.open { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 
   /* ================================================================ wheel column: a ribbed wheel in its well */
@@ -409,41 +444,51 @@
     box-shadow: inset 0 2px 5px #000000b3;
   }
   & .wheel-ghost { background: var(--warn); }
-  & .swell-btn.on { background: linear-gradient(color-mix(in srgb, var(--slot-1) 26%, #3b3732), color-mix(in srgb, var(--slot-1) 16%, #2e2a26));
-    border-color: color-mix(in srgb, var(--slot-1) 70%, #000); color: #e8f7e8; }
 
   /* ================================================================ key & drone */
-  & .key-btn.accidental { background: linear-gradient(#2b2723, #221f1c); }
-  & .drone-block .key-btn.on { background: linear-gradient(#3b3732, #312d29); box-shadow: inset 0 0 0 1px #0006, 0 0 12px -3px #ebd9ae80; }
-  & .drone-block .segmented .seg.on { background: color-mix(in srgb, var(--drone) 12%, transparent); color: var(--drone);
-    box-shadow: inset 0 0 0 2px var(--drone); }
   & .drone-toggles .toggle.on { border-color: color-mix(in srgb, var(--drone) 45%, var(--cap-edge)); }
   & .drone-toggles .tag { color: var(--muted); border-color: var(--line-2); background: transparent; }
   & .pad-status { border-top-color: #0000004d; box-shadow: 0 -1px 0 #ffffff0a; }
+  /* Lock: styles.css dims the drone character group twice (.45 group × .45 disabled = .20), which put "Soft · 40%"
+     at 1.6:1 (Classic too). Here the group is .8 × .8 with ivory words: frozen still reads as frozen, and the
+     values stay readable from 2 m (≥ 6:1, theme-studio Lock audit). */
+  & .drone-block.locked .drone-head .segmented, & .drone-block.locked .drone-char,
+  & .drone-block.locked .drone-toggles { opacity: .8; }
+  & .drone-block.locked .fader.disabled, & .drone-block.locked .seg:disabled,
+  & .drone-block.locked .toggle:disabled { opacity: .8; }
+  & .drone-block.locked .drone-char .fader-label, & .drone-block.locked .drone-char .fader-value,
+  & .drone-block.locked .toggle-text, & .drone-block.locked .drone-toggles .tag { color: var(--text); }
 
-  /* ================================================================ notes: a ruled sheet, dark */
+  /* ================================================================ notes: a track sheet
+     Warmth critic: the biggest dead surface gets a material. A slightly lighter, warmer sheet (still ≥ 11:1 for
+     the text) with ruled lines at twice the old opacity; lines follow the app's 24 px line box (16 px × 1.5). */
+  & .p-notes {
+    background: url('/themes/studio/grain.png') repeat, linear-gradient(#2a2622, #25221e);
+  }
   & .notes-text {
-    color: #ece5d9; line-height: 24px;
-    background: repeating-linear-gradient(180deg, transparent 0 23px, #fff3e00d 23px 24px);
+    color: #ece5d9;
+    background: repeating-linear-gradient(180deg, transparent 0 23px, #fff3e01a 23px 24px);
     background-attachment: local;
   }
 
-  /* ================================================================ bottom row: the keybed with walnut cheeks */
+  /* ================================================================ bottom row: the keybed with walnut cheeks
+     The cheeks are painted inside the app's own 10 px side padding, so the keys don't move. */
   & .p-keys {
     background:
-      linear-gradient(90deg, #00000000 7px, #00000059 7px 8px, transparent 8px calc(100% - 8px), #00000059 calc(100% - 8px) calc(100% - 7px), transparent calc(100% - 7px)),
-      var(--walnut-v) left / 7px 100% no-repeat,
-      var(--walnut-v) right / 7px 100% no-repeat,
+      linear-gradient(90deg, transparent 8px, #00000073 8px 9px, transparent 9px calc(100% - 9px),
+        #00000073 calc(100% - 9px) calc(100% - 8px), transparent calc(100% - 8px)),
+      var(--walnut-v) left / 8px 100% no-repeat,
+      var(--walnut-v) right / 8px 100% no-repeat,
       url('/themes/studio/grain.png') repeat,
-      linear-gradient(#2d2a26, #26231f);
-    padding-left: 16px; padding-right: 16px;
+      linear-gradient(#25221e, #1f1c19);
   }
   & .pkey.white {
     background: linear-gradient(#aaa294, var(--key-white) 10%, #cfc8ba 85%, #b8b0a2);
     border-color: #0e0c0a;
   }
   & .pkey.black {
-    background: linear-gradient(90deg, #ffffff0f, transparent 30%), linear-gradient(#2b2723, var(--key-black) 70%, #0b0908);
+    background: linear-gradient(90deg, #ffffff0f, transparent 30%),
+      linear-gradient(#2b2723, var(--key-black) 70%, #0b0908);
     border-color: #000; box-shadow: 0 2px 2px #00000080;
   }
   & .pkey.white.held { background: linear-gradient(#e7ae52, var(--accent) 20%); }
@@ -452,20 +497,20 @@
   & .rbar.off { background: #5b544d; }
   & .rv-cnt { color: #e6dfd4; }
   & .hold-btn.btn-revert, & .hold-btn.lock-toggle, & .btn-fade {
-    background: url('/themes/studio/grain.png') repeat, linear-gradient(#3b3732, #2f2b27);
+    background: url('/themes/studio/grain.png') repeat, linear-gradient(#36322d, #2a2723);
   }
-  & .btn-fade.faded { background: linear-gradient(#3a2d12, #2e230c); color: #ffdca6; border: 2px solid var(--warn); }
+  & .btn-fade.faded { background: linear-gradient(#3a2d12, #2e230c); color: #ffdca6; }
   & .btn-panic {
     background: linear-gradient(#d4412f, var(--panic) 45%, #b93021);
     box-shadow: inset 0 1px 0 #ffffff4d, inset 0 -2px 0 #0000004d, 0 1px 2px #000000b3, 0 0 22px -2px #c9372a66;
   }
   & .btn-panic:hover:not(:disabled), & .btn-panic:active:not(:disabled) { background: #b3301f !important; }
-  & .lock-toggle.on { background: linear-gradient(#33270f, #271d0b); border: 2px solid var(--warn); }
+  & .lock-toggle.on { background: linear-gradient(#33270f, #271d0b); }
   & .lock-sub { color: #f0d7a4; }
 
   /* ================================================================ popovers, toasts, banners, overlay */
   & .step-panel, & .keypop, & .qs {
-    background: url('/themes/studio/grain.png') repeat, linear-gradient(#37332e, var(--pop-bg));
+    background: url('/themes/studio/grain.png') repeat, linear-gradient(#34302b, var(--pop-bg));
   }
   & .step-panel::after, & .keypop::before, & .qs::before { background: var(--pop-bg); }
   & .qs, & .qs::before { border-color: var(--pop-line); }
@@ -473,27 +518,33 @@
   & .qs { box-shadow: 0 10px 16px -6px #000000cc, 0 0 0 1px #000, inset 0 1px 0 #fff3e014; }
   & .qs-h { border-bottom-color: #0000004d; box-shadow: 0 1px 0 #ffffff0a; }
   & .qs-sec { border-left-color: #0000004d; }
-  & .qs-tap { background: linear-gradient(#45403a, #3a3530); border-color: var(--text); }
-  & .qs-pedal { background: #1a1815; }
-  & .step-panel .sp-step { background: linear-gradient(var(--cap-top), var(--cap-bot)); border-color: var(--cap-edge);
-    box-shadow: inset 0 1px 0 #fff3e01c, 0 1px 1px #0000008c; }
-  & .step-panel .sp-step.on { background: linear-gradient(color-mix(in srgb, var(--c) 80%, #fff), var(--c) 45%);
-    color: var(--ink-on-lamp); border-color: color-mix(in srgb, var(--c) 55%, #000); }
-  & .step-panel .sp-x, & .qs-h .qs-x { background: linear-gradient(var(--cap-top), var(--cap-bot)); border-color: var(--cap-edge); }
+  & .qs-tap { background: linear-gradient(#403b35, #34302b); border-color: var(--text); }
+  & .qs-pedal { background: #13110f; }
+  & .step-panel .sp-step {
+    background: linear-gradient(var(--cap-top), var(--cap-bot)); border-color: var(--cap-edge);
+    box-shadow: inset 0 1px 0 #fff3e01c, 0 1px 1px #0000008c;
+  }
+  & .step-panel .sp-step.on {
+    background: linear-gradient(color-mix(in srgb, var(--c) 80%, #fff), var(--c) 45%);
+    color: var(--ink-on-lamp); border-color: color-mix(in srgb, var(--c) 55%, #000);
+  }
+  & .step-panel .sp-x, & .qs-h .qs-x {
+    background: linear-gradient(var(--cap-top), var(--cap-bot)); border-color: var(--cap-edge);
+  }
   & .keypop .key-btn.on.hands::after { color: #5a3f10; }
   & .toast { background: var(--toast-bg); border-color: var(--pop-line); box-shadow: 0 8px 26px #000000bf; }
-  & .banner.info, & .bstrip[data-kind="info"], & .bstrip.open .banner.info { background: #2a2a28; color: #f1eee6; }
-  & .bstrip.open .bstrip-list { background: var(--pop-bg); border-color: var(--pop-line); }
+  & .banner.info, & .bstrip[data-kind="info"] { background: #262522; color: #f1eee6; }
   & .cd { box-shadow: 0 0 0 2px var(--bg-deep), 0 0 6px #fff6e2aa; }
   & .cdi, & .rv-dot { box-shadow: 0 0 6px #fff6e2cc; }
-  & .overlay-start { background: #100e0ce6; backdrop-filter: none; }
-  & .overlay-card { background: url('/themes/studio/grain.png') repeat, linear-gradient(#302c28, #2a2723);
-    border: 1px solid #0f0d0b; box-shadow: inset 0 1px 0 #fff3e014, 0 30px 80px #000; }
-  & .overlay-card img { content: url('/themes/studio/mark.svg'); }
+  /* the app's start overlay blurs what's behind it; a flat scrim instead (README rule 3) */
+  & .overlay-start { background: #0c0b09e6; backdrop-filter: none; }
+  & .overlay-card {
+    background: url('/themes/studio/grain.png') repeat, linear-gradient(#2a2622, #221f1c);
+    border: 1px solid #0c0a09; box-shadow: inset 0 1px 0 #fff3e014, 0 30px 80px #000;
+  }
   & .overlay-title { font-weight: 700; letter-spacing: -.01em; }
-  & .settings-placeholder { border-color: var(--pop-line); background: var(--pop-bg); }
 
-  /* ---- Rubik sets ~5 % wider than SF Pro: at 1024 the status lamps, the Next name and the drone labels take a
+  /* ---- Rubik sets ~5 % wider than SF Pro: at ≤ 1250 px the status lamps, the Next name and the drone labels take a
      hair of tracking back so nothing collides or ellipsizes that did not before */
   @media (max-width: 1250px) {
     & .tb-status { gap: 10px; }
@@ -502,24 +553,27 @@
     & .chip-name { letter-spacing: -.01em; }
     & .drone-char .fader.horizontal .fader-label { letter-spacing: -.02em; }
     & .drone-char .fader-value { letter-spacing: -.02em; }
-    & .song-name { padding: 0 14px 0 12px; }
   }
+  /* no transitions at all: a lamp switches in one frame (README rule 3: motion is opacity/transform only; a 120 ms
+     colour fade also made the tile report its old colour to anything reading it mid-toggle, ui-core #33) */
 
   /* ================================================================ Edit (H-v2): its token block + cold one-offs */
   & .ev2 {
-    --ev2-rig-bg: #25221f; --fx: #c9bba9; --drone: #ebd9ae; --chg: #fff6e2; --ev2-flash: var(--focus);
+    --ev2-rig-bg: #1f1c19; --fx: #c9bba9; --drone: #ebd9ae; --chg: #fff6e2; --ev2-flash: var(--focus);
     --ev2-faint: var(--faint);
     background: transparent;
   }
   & .ev2 .ev2-left, & .ev2 .ev2-head, & .ev2 .ev2-bottom, & .ev2 .ev2-rig {
-    border: 1px solid #0f0d0b8c;
-    box-shadow: inset 0 1px 0 #fff3e012, inset 0 -1px 0 #00000033, 0 1px 0 #ffffff08, 0 3px 8px -3px #000000a6;
+    border: 1px solid #0c0a098c;
+    box-shadow: inset 0 1px 0 #fff3e010, inset 0 -1px 0 #00000033, 0 1px 0 #ffffff06, 0 3px 8px -3px #000000a6;
   }
   & .ev2 .ev2-left, & .ev2 .ev2-head, & .ev2 .ev2-bottom {
-    background: url('/themes/studio/grain.png') repeat, linear-gradient(#2d2a26, #282521 60%, #26231f);
+    background: url('/themes/studio/grain.png') repeat, linear-gradient(#25221e, #211e1b 60%, #1f1c19);
   }
   & .ev2 .ev2-rig { background: url('/themes/studio/grain.png') repeat, var(--ev2-rig-bg); }
-  & .ev2 .ev2-cap, & .ev2 .ev2-song-chipcap { text-transform: none; letter-spacing: .01em; font-size: 13px; font-weight: 600; }
+  & .ev2 .ev2-cap, & .ev2 .ev2-song-chipcap {
+    text-transform: none; letter-spacing: .01em; font-size: 13px; font-weight: 600;
+  }
   & .ev2 .ev2-song-chipcap { font-size: 12px; }
   & .ev2 .ev2-sent { color: #dbd3c7; }
   & .ev2 .ev2-btn, & .ev2 .ev2-song-chip, & .ev2 .ev2-kb-big, & .ev2 .ev2-fx-pc {
@@ -527,13 +581,17 @@
     box-shadow: inset 0 1px 0 #fff3e01c, 0 1px 1px #0000008c;
   }
   & .ev2 .ev2-btn.ghost, & .ev2 .ev2-linkbtn { background: transparent; box-shadow: none; border-color: var(--line-2); }
-  & .ev2 .ev2-btn.danger { background: var(--danger); }
-  & .ev2 button.ev2-song-chip:hover, & .ev2 .ev2-song-bpmnum:hover, & .ev2 .ev2-fx-pc:hover { border-color: var(--line-hover); }
-  /* the song's name on tape here too (it is an input: the tape stays under the caret while you rename) */
+  & .ev2 button.ev2-song-chip:hover, & .ev2 .ev2-song-bpmnum:hover, & .ev2 .ev2-fx-pc:hover {
+    border-color: var(--line-hover);
+  }
+  /* the song's name on tape here too (an input: the tape stays under the caret while you rename). Its box is set by
+     the edit CSS (border-box), so the padding only moves the text inside it. No tilt. */
   & .ev2 .ev2-song-name, & .ev2 .ev2-song-name:hover, & .ev2 .ev2-song-name:focus {
-    color: var(--tape-ink); font-weight: 700; letter-spacing: -.01em; padding: 0 14px; border: 0; border-radius: 1px;
-    background: repeating-linear-gradient(180deg, #ffffff0a 0 1px, transparent 1px 3px), linear-gradient(180deg, #ddd8ca, var(--tape) 30%, #c9c2b2);
-    box-shadow: inset 0 -2px 0 #0000001a, inset 0 1px 0 #ffffff59;
+    color: var(--tape-ink); font-weight: 750; letter-spacing: -.01em; padding: 0 14px; border-color: transparent;
+    border-radius: 1px;
+    background: repeating-linear-gradient(180deg, #ffffff0a 0 1px, transparent 1px 3px),
+      linear-gradient(180deg, #bab3a2, var(--tape) 30%, #a8a190);
+    box-shadow: inset 0 -2px 0 #0000001a, inset 0 1px 0 #ffffff40;
     -webkit-mask: url('/themes/studio/tape-l.svg') left / 7px 100% no-repeat,
       linear-gradient(#000, #000) center / calc(100% - 13px) 100% no-repeat,
       url('/themes/studio/tape-r.svg') right / 7px 100% no-repeat;
@@ -543,128 +601,60 @@
   }
   & .ev2 .ev2-song-name:focus-visible { outline: 2px solid var(--tape-ink); outline-offset: -4px; }
   & .ev2 .ev2-song-name::selection { background: #f7c36799; color: var(--tape-ink); }
-  & .ev2 .ev2-song-live { background: #00000040; color: #bfe8c7; box-shadow: inset 0 1px 2px #00000080; text-transform: none; letter-spacing: .02em; }
+  & .ev2 .ev2-song-live {
+    background: #00000040; color: #bfe8c7; box-shadow: inset 0 1px 2px #00000080; text-transform: none;
+    letter-spacing: .02em;
+  }
   & .ev2 .ev2-song-live i {
     background: radial-gradient(circle at 42% 38%, #f4fff6 0 18%, var(--ok) 60%, #3f7d4c 100%);
     box-shadow: 0 0 0 1px #0000008c, 0 0 5px var(--ok), 0 0 12px #79d28d73;
   }
-  & .ev2 .ev2-song-bpmchip .ev2-song-tap:hover { background: #4a443d; }
-  & .ev2 .ev2-switch { background: #141210; box-shadow: inset 0 1px 3px #000000b3; }
+  & .ev2 .ev2-song-bpmchip .ev2-song-tap:hover { background: #45403a; }
+  & .ev2 .ev2-switch { background: #100e0c; box-shadow: inset 0 1px 3px #000000b3; }
   & .ev2 .ev2-switch::after { background: linear-gradient(#f3f0ea, #bdb7ae); box-shadow: 0 1px 2px #000000b3; }
-  & .ev2 .ev2-wiretog.on .ev2-switch { background: var(--fx); }
   & .ev2 .ev2-tabs::after { background: #0000004d; box-shadow: 0 1px 0 #ffffff0a; }
-  & .ev2 .ev2-tab:hover { background: #2c2925; }
-  & .ev2 .ev2-tab.sel { background: linear-gradient(#302c28, var(--panel) 60%); border-color: #0f0d0b8c;
-    box-shadow: inset 0 1px 0 #fff3e014; }
+  & .ev2 .ev2-tab:hover { background: #282521; }
+  & .ev2 .ev2-tab.sel {
+    background: linear-gradient(#2a2622, var(--panel) 60%); border-color: #0c0a098c;
+    box-shadow: inset 0 1px 0 #fff3e014;
+  }
   & .ev2 .ev2-tab.sel::after { background: var(--panel); }
   & .ev2 .ev2-tab-role { letter-spacing: .08em; }
   & .ev2 .ev2-tab-led { opacity: .9; box-shadow: inset 0 0 0 1px #00000066; }
-  & .ev2 .ev2-tab.playing .ev2-tab-led { box-shadow: 0 0 0 1px #0000008c, 0 0 6px var(--tc), 0 0 12px color-mix(in srgb, var(--tc) 45%, transparent); }
+  & .ev2 .ev2-tab.playing .ev2-tab-led {
+    box-shadow: 0 0 0 1px #0000008c, 0 0 6px var(--tc), 0 0 12px color-mix(in srgb, var(--tc) 45%, transparent);
+  }
   & .ev2 .ev2-tab.empty::before { background: repeating-linear-gradient(90deg, #6b645d 0 6px, transparent 6px 10px); }
   & .ev2 .ev2-tab-cd { box-shadow: 0 0 0 2px var(--ev2-rig-bg), 0 0 6px #fff6e2aa; }
   & .ev2 .ev2-tab.sel .ev2-tab-cd { box-shadow: 0 0 0 2px var(--panel), 0 0 6px #fff6e2aa; }
   & .ev2 .ev2-wire { background: var(--panel); border-bottom-color: #0000004d; }
-  & .ev2 .ev2-wlane::before { background: var(--line-2); }
-  & .ev2 .ev2-wout-br { border-color: #6b645d; }
   & .ev2 .ev2-chg { color: #e6dfd4; }
   & .ev2 .ev2-list-row { color: #e2dbcf; }
-  & .ev2 .ev2-list-row:hover { background: #35312d; }
-  & .ev2 .ev2-list-row.on { background: linear-gradient(90deg, #f7c3671f, #3f3b36 55%); box-shadow: inset 3px 0 0 var(--accent); }
+  & .ev2 .ev2-list-row:hover { background: #2e2a26; }
+  & .ev2 .ev2-list-row.on {
+    background: linear-gradient(90deg, #f7c3671f, #38342f 55%); box-shadow: inset 3px 0 0 var(--accent);
+  }
   & .ev2 .ev2-ws-input::-webkit-slider-runnable-track {
     height: 9px; border-radius: 5px; box-shadow: inset 0 2px 3px #000000b3, 0 1px 0 #ffffff0f; --track: var(--bg-deep);
   }
   & .ev2 .ev2-ws-input::-webkit-slider-thumb {
     width: 18px; height: 26px; margin-top: -9.5px; border-radius: 5px; border: 1.5px solid #0e0c0a;
     background:
-      linear-gradient(90deg, transparent calc(50% - 1.5px), var(--c) calc(50% - 1.5px) calc(50% + 1.5px), transparent calc(50% + 1.5px)),
+      linear-gradient(90deg, transparent calc(50% - 1.5px), var(--c) calc(50% - 1.5px) calc(50% + 1.5px),
+        transparent calc(50% + 1.5px)),
       linear-gradient(#f3f0ea 0%, #d8d3cb 35%, #bdb7ae 60%, #cdc7be 100%);
     box-shadow: 0 2px 5px #000000b3, inset 0 1px 0 #ffffffd9;
   }
-  & .ev2 .ev2-fx-pc[aria-pressed="true"] { background: linear-gradient(#57504a, #4a443d); border-color: var(--text); }
+  & .ev2 .ev2-fx-pc[aria-pressed="true"] { background: linear-gradient(#4f4843, #423c36); border-color: var(--text); }
   & .ev2 .ev2-fx-pc[aria-pressed="true"] .ev2-fx-pc-hint { color: #e2d9cc; }
   & .ev2 .ev2-fx-vibe, & .ev2 .ev2-slot-menu { background: var(--pop-bg); border-color: var(--pop-line); }
-  & .ev2 .ev2-fx-vibe-item:hover, & .ev2 .ev2-fx-vibe-item:focus-visible, & .ev2 .ev2-slot-mi:hover,
-  & .ev2 .ev2-slot-mi:focus { background: #45403a; }
+  & .ev2 .ev2-fx-vibe-item:hover, & .ev2 .ev2-fx-vibe-item:focus-visible { background: #403b35; }
   & .ev2 .ev2-slot-range .mkey.white { background: var(--key-white); border-right-color: #0e0c0a; }
   & .ev2 .ev2-slot-range .mkey.black { background: var(--key-black); }
-  & .ev2 .ev2-kb-fade { background: linear-gradient(#3b3732, #2f2b27); }
-  & .ev2 .ev2-kb-panic { background: linear-gradient(#d4412f, var(--panic) 45%, #b93021); border: 0;
-    box-shadow: inset 0 1px 0 #ffffff4d, 0 1px 2px #000000b3, 0 0 20px -2px #c9372a66; }
+  & .ev2 .ev2-kb-fade { background: linear-gradient(#36322d, #2a2723); }
+  & .ev2 .ev2-kb-panic {
+    background: linear-gradient(#d4412f, var(--panic) 45%, #b93021); border: 0;
+    box-shadow: inset 0 1px 0 #ffffff4d, 0 1px 2px #000000b3, 0 0 20px -2px #c9372a66;
+  }
   & .ev2 .ev2-kb-panic:hover { background: #b3301f; }
-  & .ev2 .ev2-kb-keys {
-    padding: 0 9px; border-radius: 6px;
-    background: var(--walnut-v) left / 7px 100% no-repeat, var(--walnut-v) right / 7px 100% no-repeat;
-  }
-
-  /* ================================================================ the session sheet (daily hook; not wired yet)
-     Markup the start overlay would carry (concept.md §7). Styles only: nothing renders .studio-session until main.js
-     does. It replaces "Click anywhere to start audio" with today's sheet and a 20-second line check. */
-  & .studio-session {
-    position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; cursor: pointer;
-    background: radial-gradient(ellipse 65% 60% at 50% 35%, #2c2823f2 0%, #161412f5 70%, #0f0d0bfa 100%);
-  }
-  & .ss-desk {
-    width: min(880px, calc(100vw - 64px)); display: grid; grid-template-columns: 1.1fr 1fr; gap: 0;
-    background: var(--walnut) top / 100% 4px no-repeat, url('/themes/studio/grain.png') repeat, linear-gradient(#302c28, #2a2723);
-    border: 1px solid #0f0d0b; border-radius: 16px; overflow: hidden;
-    box-shadow: 0 40px 90px #000000e6;
-  }
-  & .ss-sheet { padding: 26px 28px 22px; display: flex; flex-direction: column; gap: 12px; }
-  & .ss-when { display: flex; align-items: center; gap: 12px; }
-  & .ss-when img { width: 44px; height: 44px; }
-  & .ss-day { font: 700 30px/1.05 var(--font); letter-spacing: -.01em; }
-  & .ss-sub { font-size: 14px; color: var(--muted); margin-top: 3px; }
-  & .ss-tape {
-    align-self: flex-start; font: 700 19px/34px var(--font); color: var(--tape-ink); padding: 0 16px; margin: 6px 0 0 -4px;
-    background: repeating-linear-gradient(180deg, #ffffff0a 0 1px, transparent 1px 3px), linear-gradient(180deg, #ddd8ca, var(--tape) 30%, #c9c2b2);
-    transform: rotate(-.8deg);
-    -webkit-mask: url('/themes/studio/tape-l.svg') left / 7px 100% no-repeat, linear-gradient(#000, #000) center / calc(100% - 13px) 100% no-repeat, url('/themes/studio/tape-r.svg') right / 7px 100% no-repeat;
-    mask: url('/themes/studio/tape-l.svg') left / 7px 100% no-repeat, linear-gradient(#000, #000) center / calc(100% - 13px) 100% no-repeat, url('/themes/studio/tape-r.svg') right / 7px 100% no-repeat;
-  }
-  & .ss-songs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column;
-    background: repeating-linear-gradient(180deg, transparent 0 33px, #fff3e012 33px 34px); }
-  & .ss-songs li { display: grid; grid-template-columns: 24px 1fr auto; gap: 8px; align-items: center; height: 34px;
-    font-size: 16px; font-weight: 600; }
-  & .ss-songs .n { color: var(--faint); font-size: 13px; font-variant-numeric: tabular-nums; }
-  & .ss-songs .k { color: var(--accent); font-weight: 700; }
-  & .ss-songs .more { color: var(--faint); font-weight: 500; font-size: 14px; }
-  & .ss-last { font-size: 13.5px; color: var(--muted); line-height: 1.5; padding-top: 10px; border-top: 1px solid #0000004d;
-    box-shadow: inset 0 1px 0 #ffffff0a; }
-  & .ss-last b { color: var(--text); font-weight: 600; }
-  & .ss-check { padding: 26px 26px 22px; margin-top: 4px; background: linear-gradient(#26231f, #211e1b); box-shadow: inset 1px 0 0 #0000004d;
-    display: flex; flex-direction: column; gap: 14px; }
-  & .ss-check h3 { margin: 0; font: 700 19px/1.2 var(--font); }
-  & .ss-check p { margin: -6px 0 0; font-size: 14px; color: var(--muted); line-height: 1.45; }
-  & .ss-chans { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding: 14px 12px 12px; border-radius: 10px;
-    background: #181613; box-shadow: inset 0 2px 8px #000000b3; }
-  & .ss-ch { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
-  & .ss-ch .ladder { width: 8px; height: 74px; border-radius: 1px;
-    background: linear-gradient(to top, var(--meter-on-g) 0 var(--lv), var(--meter-off) var(--lv));
-    -webkit-mask: repeating-linear-gradient(0deg, #000 0 4px, transparent 4px 6px); mask: repeating-linear-gradient(0deg, #000 0 4px, transparent 4px 6px); }
-  & .ss-ch .lamp { width: 14px; height: 14px; border-radius: 50%;
-    background: radial-gradient(circle at 42% 38%, #fffdf6 0 16%, color-mix(in srgb, var(--c) 70%, #fff) 30%, var(--c) 62%, color-mix(in srgb, var(--c) 70%, #000) 100%);
-    box-shadow: 0 0 0 1px #0000008c, 0 0 5px var(--c), 0 0 14px color-mix(in srgb, var(--c) 45%, transparent); }
-  & .ss-ch.wait .lamp { background: radial-gradient(circle at 36% 30%, #ffffff47 0 14%, transparent 42%), var(--led-off);
-    box-shadow: inset 0 0 0 1px #00000099; }
-  & .ss-ch.ok { color: var(--text); }
-  & .ss-go {
-    margin-top: auto; min-height: 56px; border-radius: 12px; border: 1px solid #5a3f14; display: flex; align-items: center;
-    justify-content: center; gap: 12px; font: 700 18px/1 var(--font); color: var(--accent-ink);
-    background: linear-gradient(#fbd183, var(--accent) 55%, #e9b155);
-    box-shadow: inset 0 1px 0 #fff8, 0 2px 3px #000000b3, 0 0 30px -6px #f7c36799;
-  }
-  & .ss-go i { width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, #fff 0 30%, #fff1d6);
-    box-shadow: 0 0 0 1.5px #1f191540, 0 0 8px #fffaf0; }
-  & .ss-small { font-size: 12.5px; color: var(--faint); text-align: center; margin-top: -4px; }
 }
-
-@keyframes studio-lamp-on { from { opacity: 1; } to { opacity: 0; } }
-
-/* motion only when asked for */
-@media (prefers-reduced-motion: reduce) {
-  :where(body[data-theme="studio"], body:not([data-theme])) .ontile::after { animation: none; }
-  :where(body[data-theme="studio"], body:not([data-theme])) .ontile { transition: none; }
-}
-/* menu-bar mode (low resource): no grain, no wash, flat modules */
-:root[data-low-resource] :where(body[data-theme="studio"], body:not([data-theme])) { background: var(--bg); }
-:root[data-low-resource] :where(body[data-theme="studio"], body:not([data-theme])) .panel { background: var(--panel); }

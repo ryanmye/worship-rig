@@ -31,7 +31,7 @@
 // status.memory = {mode, decodedMB, pinnedMB, capMB, budgetMB, setMB, windowMB, pinnedSongs, note}.
 // l8 (local soak L-8): the ±radius window is a byte budget too. Current song first, then neighbours by distance while
 // the pinned total stays ≤ PIN_BUDGET_MB; one {pin:'replace'} per switch; a warn if pinnedMB ever passes capMB.
-import { transposeSemisOf } from './store.js';
+import { transposeSemisOf, audioSleepSecOf } from './store.js';
 import { transposeSemis, mod12, keyName } from './shared/music.js';
 import { PARAMS, isValidPath, isLearnButton, faderTaper, inverseTaper, SLOT_COUNT } from './shared/params.js';
 import { detectKeyFromName } from './shared/keydetect.js';
@@ -271,6 +271,7 @@ export function createController(o) {
     memory: { mode: null, decodedMB: null, pinnedMB: null, capMB: null, setMB: null, note: null },
     lowResource: false, // menubar-A: effective low-resource mode (settings.lowResource, or auto while hidden)
     windowVisible: true, // menubar-A: main window shown (setWindowVisible() override, else document visibility)
+    popoverOpen: false, // lowres2-critic R2: menu ids popoverShown / popoverHidden (never ends low-resource)
   };
   function setStatus(patch) {
     let changed = false;
@@ -501,6 +502,7 @@ export function createController(o) {
     const committed = store.getSong(id) || song;
     selected = { id, song: committed };
     emit('song', { id });
+    emitActivity('song'); // idle-cpu-ui: the new song's drone may start sounding now
     emit('songSelected', { id, patchSnapshot: clone(committed.patch), songSnapshot: clone(committed) });
     preloadNeighbors();
     return true;
@@ -867,6 +869,7 @@ export function createController(o) {
 
   function noteOnFrom(src, note, vel) {
     if (!Number.isInteger(note) || note < 0 || note > 127) return;
+    noteActivity(src); // lowres2: every note is input (the engine also queues it while the audio wakes)
     let set = heldBySrc.get(src);
     if (!set) heldBySrc.set(src, (set = new Set()));
     if (set.has(note)) return; // duplicate note-on from the same source
@@ -1061,7 +1064,10 @@ export function createController(o) {
       });
     },
     // midi-default (4): a hot-plug moved us onto another keyboard
-    switched: (e) => warn(`Now using ${e.detail.name || 'another MIDI input'}`),
+    switched: (e) => {
+      noteActivity('midi-switched'); // lowres2: a hot-plug is input
+      warn(`Now using ${e.detail.name || 'another MIDI input'}`);
+    },
     // midi-default (3): the chosen keyboard came back with a new id (matched by name) → remember the new id
     rebind: (e) => {
       if (secondary || settings().midiInputId === e.detail.inputId) return;
@@ -1348,6 +1354,15 @@ export function createController(o) {
     if (memMode) updateMemory();
     const ctx = engine && engine.ctx;
     if (!ctx) return;
+    // lowres2: suspended on purpose (audio sleep): not a stall, never resumed here; any input wakes it
+    const ss = engine.sleepState;
+    if (ss === 'asleep' || ss === 'waking') {
+      lastT = null;
+      stuckTicks = 0;
+      suspendedTicks = 0;
+      setAudio('asleep');
+      return;
+    }
     const st = ctx.state;
     const t = ctx.currentTime;
     if (st === 'running') {
@@ -1359,7 +1374,10 @@ export function createController(o) {
       }
       lastT = t;
       if (stuckTicks >= 2) stalled();
-      else if (stuckTicks === 0) setAudio('running');
+      else if (stuckTicks === 0) {
+        setAudio('running');
+        sleepCheck(); // lowres2: after the state is settled (the engine's 'sleep' event then reports 'asleep')
+      }
     } else if (st === 'suspended' || st === 'interrupted') {
       lastT = null;
       stuckTicks = 0;
@@ -1590,9 +1608,87 @@ export function createController(o) {
     }
     const r = call('start');
     if (r && typeof r.then === 'function') await r.catch((err) => warn(`audio start failed: ${err && err.message}`));
+    noteActivity('resume');
+    if (engine && typeof engine.wake === 'function' && (engine.sleepState || 'awake') !== 'awake') await engine.wake();
     const ctx = engine && engine.ctx;
     if (ctx && ctx.state !== 'running' && ctx.resume) await ctx.resume().catch(() => {});
     tick();
+  }
+
+  // ---- audio sleep (lowres2; CONTRACT_CHANGES "## lowres2")
+  // Input-activity clock: every input (MIDI message or hot-plug, computer key, pointer / wheel anywhere in the app, a
+  // bus command, a note from any source) restarts it and wakes a sleeping engine at once (before the note, which the
+  // engine queues until the context runs). The watchdog tick puts the engine to sleep (engine.sleep(): 150 ms ramp,
+  // ctx.suspend()) once nothing plays, nothing records and there was no input for settings.audioSleepSec (0 = never).
+  // lowres2-scope (Ryan 2026-09-30): ONLY inside low-resource mode (lowResEff: settings.lowResource, or auto while
+  // hidden in menu-bar mode). The idle window counts from the later of the last input and low-resource turning on;
+  // leaving low-resource wakes a sleeping (or ramping-down) engine at once (applyLowResource). In normal play the
+  // context never sleeps.
+  let lastInputAt = now();
+  let lastInputKind = null;
+  let lowResSince = -Infinity; // now() when low-resource last turned on
+  /**
+   * Note an input of any kind (lowres2): restarts the audio-sleep clock and wakes sleeping audio.
+   * @param {string} [kind] for debugging ('midi', 'key', 'pointer', 'bus', …)
+   */
+  function noteActivity(kind = 'input') {
+    lastInputAt = now();
+    lastInputKind = kind;
+    emitActivity(kind);
+    if (secondary || !engine || typeof engine.wake !== 'function') return;
+    const ss = engine.sleepState;
+    if (ss && ss !== 'awake') {
+      const p = optional('wake');
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    }
+  }
+  // idle-cpu-ui: 'activity' for the UI's meter clock, which stops every meter loop at silence and restarts on this.
+  // Any input (the lowres2 clock above: notes, keys, pointer, wheel, MIDI, bus commands), a song applied, a song /
+  // setlist edit (drone, master, levels), recording on/off and an audio wake. At most one event per ACTIVITY_MS: the
+  // meters stay awake ≥ 500 ms after a wake, so a throttled repeat never finds them asleep.
+  const ACTIVITY_MS = 50;
+  let lastActivityAt = -Infinity;
+  const activityNow = () => (globalThis.performance && typeof performance.now === 'function' ? performance.now() : Date.now());
+  function emitActivity(kind) {
+    const t = activityNow();
+    if (t - lastActivityAt < ACTIVITY_MS) return;
+    lastActivityAt = t;
+    emit('activity', { kind });
+  }
+  /**
+   * Watchdog tick: in low-resource mode only (lowres2-scope), sleep when nothing plays, nothing records and no input
+   * came for settings.audioSleepSec since low-resource turned on.
+   */
+  function sleepCheck() {
+    if (secondary || restarting || !engine || typeof engine.sleep !== 'function') return;
+    if (!lowResEff) return; // lowres2-scope: normal play never sleeps
+    const sec = audioSleepSecOf(settings());
+    if (!(sec > 0) || (engine.sleepState || 'awake') !== 'awake') return;
+    if (now() - Math.max(lastInputAt, lowResSince) < sec * 1000) return;
+    if (status.recording || (recorder && recorder.isRecording)) return;
+    const ctx = engine.ctx;
+    if (!ctx || ctx.state !== 'running') return;
+    const blockers = typeof engine.sleepBlockers === 'function' ? engine.sleepBlockers() : ['unknown'];
+    if (blockers && blockers.length) return;
+    const p = optional('sleep');
+    if (p && typeof p.catch === 'function') p.catch(() => {});
+  }
+  function onEngineSleep(d) {
+    if (d.state === 'asleep') setAudio('asleep');
+    else if (d.state === 'awake') {
+      emitActivity('wake'); // idle-cpu-ui
+      lastInputAt = Math.max(lastInputAt, now()); // keep running ≥ audioSleepSec after any wake
+      const ctx = engine && engine.ctx;
+      setAudio(ctx && ctx.state === 'running' ? 'running' : 'suspended');
+    }
+  }
+  /** Document-level capture listeners (the renderer's own listeners may stop propagation). */
+  function listenInput() {
+    const on = (kind) => () => noteActivity(kind);
+    listen(doc, 'keydown', on('key'), true);
+    listen(doc, 'pointerdown', on('pointer'), true);
+    listen(doc, 'wheel', on('wheel'), { capture: true, passive: true });
+    if (midi) listen(midi, 'input', (e) => noteActivity((e && e.detail && e.detail.kind) || 'midi'));
   }
 
   // ---- My Samples (user sample packs served by the local server)
@@ -1825,6 +1921,9 @@ export function createController(o) {
     }
     if (entityChanged) scheduleBackup();
     const cur = state.settings.currentSongId;
+    // idle-cpu-ui: an edit of the current song (drone, master, levels, key) may make sound; background writes to other
+    // songs (preload bookkeeping, imports) must not wake the meters
+    if (cur && entityChanged && paths.some((p) => p.startsWith(`songs.${cur}.`))) emitActivity('edit');
     if (cur && cur !== targetId) {
       selectSong(cur, { index: state.settings.setlistIndex });
     } else if (cur && cur === appliedId && targetId === appliedId) {
@@ -1855,6 +1954,13 @@ export function createController(o) {
         return importLatestBackup();
       case 'rescanUserSamples':
         return rescanUserSamples();
+      case 'popoverShown':
+      case 'popoverHidden':
+        // lowres2-critic R2: the menu-bar popover opening is not the main window showing; it must not end
+        // low-resource (no thaw, no wake). Recorded for status only. Electron main should send these for the
+        // popover (never windowShown / rig:window-visible).
+        setStatus({ popoverOpen: id === 'popoverShown' });
+        return undefined;
       default:
         emit('menu', { id });
         return undefined;
@@ -1982,6 +2088,7 @@ export function createController(o) {
   async function startPrimary() {
     cleanups.push(store.subscribe(onStore));
     if (midi) for (const [type, fn] of Object.entries(midiHandlers)) listen(midi, type, fn);
+    listenInput(); // lowres2: before the note handlers, so a waking key / MIDI note wakes the audio first
     listen(doc, 'keydown', onKeyDown);
     listen(doc, 'keyup', onKeyUp);
     listen(doc, 'visibilitychange', onVisibility);
@@ -1994,11 +2101,15 @@ export function createController(o) {
         if (d.restarted || d.reason === 'restart') onEngineRestarted();
       });
       listen(engine, 'wheel', (e) => onEngineWheel(e.detail));
+      listen(engine, 'sleep', (e) => onEngineSleep(e.detail || {})); // lowres2
       for (const type of ['wheel', 'notes', 'chord', 'loading', 'ready']) listen(engine, type, (e) => emit(type, e.detail));
       listen(engine, 'warn', (e) => emit('warn', { message: (e.detail && e.detail.message) || String(e.detail), source: 'engine' }));
     }
     if (recorder) {
-      listen(recorder, 'state', (e) => setStatus({ recording: e.detail.state === 'recording' }));
+      listen(recorder, 'state', (e) => {
+        setStatus({ recording: e.detail.state === 'recording' });
+        emitActivity('record'); // idle-cpu-ui
+      });
     }
     if (rig && typeof rig.onMenu === 'function') {
       const off = rig.onMenu(onMenu);
@@ -2176,6 +2287,13 @@ export function createController(o) {
     if (want === lowResEff) return want;
     lowResEff = want;
     optional('setLowResource', want);
+    if (want) lowResSince = now();
+    else if (engine && typeof engine.wake === 'function' && (engine.sleepState || 'awake') !== 'awake') {
+      // lowres2-scope: leaving low-resource wakes the audio now (the engine's 60 ms wake ramp: click-free); a sleep
+      // still ramping down is cancelled the same way
+      const p = optional('wake');
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    }
     setStatus({ lowResource: want });
     emit('lowResource', { on: want, auto: want && !settings().lowResource });
     if (preload && started && !secondary) preloadSetlist();
@@ -2273,7 +2391,8 @@ export function createController(o) {
       masterDb: master > 0 ? Math.round(20 * Math.log10(master) * 10) / 10 : null,
       droneOn: !!(song && song.drone && song.drone.mode !== 'off'),
       droneKey: key,
-      audio: ['running', 'stalled', 'suspended'].includes(status.audio) ? status.audio : 'stalled', // restarting
+      // restarting → 'stalled'; 'asleep' (lowres2 audio sleep) is a contract v1 value too
+      audio: ['running', 'stalled', 'suspended', 'asleep'].includes(status.audio) ? status.audio : 'stalled',
       latencyMs: Number.isFinite(lat) ? Math.round(lat * 10) / 10 : 0,
       midi: { connected: !!(status.midi && status.midi.connected), name: (status.midi && status.midi.name) || null },
       lowResource: lowResEff,
@@ -2312,6 +2431,10 @@ export function createController(o) {
       return false;
     }
     if (secondary) return false;
+    // lowres2: a popover / tray command is input (wakes sleeping audio). lowres2-critic R2: except `hello` (the
+    // popover opening / asking for state): it is not a player's input, so it neither wakes the audio nor restarts the
+    // idle clock, and the frozen drone stays frozen while the popover is merely open
+    if (cmd.type !== 'hello') noteActivity('bus');
     const song = store.currentSong();
     switch (cmd.type) {
       case 'hello':
@@ -2459,6 +2582,18 @@ export function createController(o) {
       api.addEventListener(type, fn);
       return () => api.removeEventListener(type, fn);
     },
+    /**
+     * idle-cpu-ui: subscribe to activity — anything that may start sound (any input incl. note-on, a song applied, a
+     * song edit such as drone / master, recording, an audio wake). Throttled to one call per 50 ms; the UI's meter
+     * clock restarts its stopped loop from it.
+     * @param {(d:{kind:string}) => void} cb
+     * @returns {() => void} unsubscribe
+     */
+    onActivity(cb) {
+      const fn = (e) => cb(e.detail || {});
+      api.addEventListener('activity', fn);
+      return () => api.removeEventListener('activity', fn);
+    },
     /** Subscribe to status; cb is called immediately. @returns {() => void} */
     onStatus(cb) {
       const fn = (e) => cb(e.detail);
@@ -2499,6 +2634,15 @@ export function createController(o) {
   });
   // menubar-A (C7): menu-bar mode API (docs/menubar-mode.md)
   Object.assign(api, { modes, setLowResource, setWindowVisible, publishState, menuBarState, handleCommand });
+  // lowres2: input-activity clock + audio sleep
+  Object.assign(api, {
+    noteActivity,
+    _sleepCheck: sleepCheck,
+    _sleepDebug: () => ({
+      lastInputAt, lastInputKind, idleMs: now() - lastInputAt, sleepSec: audioSleepSecOf(settings()),
+      lowResource: lowResEff, lowResSince, // lowres2-scope: the sleep clock only runs in low-resource
+    }),
+  });
   Object.defineProperty(api, 'bus', { get: () => bus });
   Object.defineProperty(api, 'status', { get: () => ({ ...status }) });
   Object.defineProperty(api, 'isElectron', { value: isElectron });

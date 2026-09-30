@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { chromium } from 'playwright';
 import { ROOT, SHOTS } from './harness.mjs';
-import { MIDI_PERMISSIONS } from '../../integration/lib.mjs';
+import { MIDI_PERMISSIONS, pinTheme } from '../../integration/lib.mjs';
 
 const require = createRequire(import.meta.url);
 const { createServer } = require(path.join(ROOT, 'server.js'));
@@ -94,6 +94,7 @@ before(async () => {
   const origin = `http://127.0.0.1:${info.port}`;
   browser = await chromium.launch({ headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
   context = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
+  await pinTheme(context, 'classic'); // theme-classic: assert the base look whatever the default theme is
   await context.grantPermissions(MIDI_PERMISSIONS, { origin }); // L-4: 'midi' only (test/README.md, Web MIDI)
   page = await context.newPage();
   page.on('console', (m) => {

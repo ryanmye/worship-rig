@@ -11,6 +11,9 @@ import { chordName } from '../shared/chords.js';
 import { noteToFreq, relativeMajor, relativeMinor, mod12, keyName } from '../shared/music.js';
 import { detectKeyFromName } from '../shared/keydetect.js';
 import { equalPowerFade, isOfflineContext, linFrom } from './fx.js';
+import {
+  renderDroneLoop, FREEZE_LOOP_SEC, FREEZE_SWAP_SEC, FREEZE_THAW_LEAD_SEC, FREEZE_DEBOUNCE_SEC, FREEZE_WET_TOL_DB,
+} from './drone-freeze.js';
 
 const DRONE_REF = Object.freeze({ type: 'synth', id: 'drone-osc' });
 const FOLLOW_SPLIT = 60; // C4
@@ -27,12 +30,18 @@ const IDLE_INST = 2; // reusable drone-osc instruments kept between key changes 
 export const DRONE_PARK_SEC = 10;
 const PARK_RESUME_FADE = 0.05;
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const MiB = 1048576;
+/** lowres2-critic R5: voice attack (s) for a layer that crossfades in over a song fade shorter than drone-osc's own. */
+const XFADE_ATTACK_SEC = 0.05;
+/** lowres2-critic R1: thaw voices reach full level this long before their layer's crossfade starts. */
+const THAW_SETTLE_SEC = 0.25;
 
 /** Level at time t of an equal-power fade {t, dur, from, to} (see fx.equalPowerFade). */
 function fadeLevel(f, t, dflt = 1) {
   if (!f) return dflt;
   if (t >= f.t + f.dur) return f.to;
   if (t <= f.t) return f.from;
+  if (f.lin) return f.from + ((f.to - f.from) * (t - f.t)) / f.dur; // lowres2-critic #1: aligned loop swap
   const x = ((t - f.t) / f.dur) * (Math.PI / 2);
   return f.to >= f.from ? f.from + (f.to - f.from) * Math.sin(x) : f.to + (f.from - f.to) * Math.cos(x);
 }
@@ -107,7 +116,10 @@ export function followVoicing(held, prevUpper) {
 
 export class Drone {
   /**
-   * @param {object} o {ctx, registry, rng, timer, sum, reverbIn, warn, wake?} (wake: idle-cpu #2, before a layer sounds)
+   * @param {object} o {ctx, registry, rng, timer, sum, reverbIn, warn, wake?, seed?, freezeEnv?}
+   *   wake (idle-cpu #2): called before a new layer / pad file sounds (the engine's sleeping send effects)
+   *   seed, freezeEnv (lowres2): the engine seed and () => {ir, irKey, predelay, wet} of the live reverb, for the
+   *   frozen loop (setFrozen); without freezeEnv the drone never freezes
    */
   constructor(o) {
     const { ctx } = o;
@@ -121,7 +133,14 @@ export class Drone {
     this.filesMode = new GainNode(ctx, { gain: 0 });
     this.widthIn = new GainNode(ctx);
     this.split = new ChannelSplitterNode(ctx, { numberOfOutputs: 2 });
-    this.merge = new ChannelMergerNode(ctx, { numberOfInputs: 2 });
+    // lowres2-critic R3: 4 channels through level → wheel → bend: [live L, live R, loop L, loop R]. One set of gain
+    // automation (drone.gain, wheel, swell) for both, but the reverb send taps channels 0–1 only, so a frozen loop
+    // (which carries its own baked reverb) is never fed to the live reverb, not even during a swap.
+    this.merge = new ChannelMergerNode(ctx, { numberOfInputs: 4 });
+    this.fzIn = new ChannelSplitterNode(ctx, { numberOfOutputs: 2 }); // frozen loops (stereo) → merge inputs 2, 3
+    this.post = new ChannelSplitterNode(ctx, { numberOfOutputs: 4 });
+    this.mainMerge = new ChannelMergerNode(ctx, { numberOfInputs: 2 }); // live + loop → out
+    this.sendMerge = new ChannelMergerNode(ctx, { numberOfInputs: 2 }); // live only → sendGate
     this.wLL = new GainNode(ctx);
     this.wRR = new GainNode(ctx);
     this.wLR = new GainNode(ctx);
@@ -138,9 +157,18 @@ export class Drone {
     this.split.connect(this.wRL, 1).connect(this.merge, 0, 0);
     this.split.connect(this.wRR, 1).connect(this.merge, 0, 1);
     this.split.connect(this.wLR, 0).connect(this.merge, 0, 1);
-    this.merge.connect(this.level).connect(this.wheel).connect(this.bendGain).connect(this.out);
+    this.fzIn.connect(this.merge, 0, 2);
+    this.fzIn.connect(this.merge, 1, 3);
+    this.merge.connect(this.level).connect(this.wheel).connect(this.bendGain).connect(this.post);
+    this.post.connect(this.mainMerge, 0, 0);
+    this.post.connect(this.mainMerge, 2, 0);
+    this.post.connect(this.mainMerge, 1, 1);
+    this.post.connect(this.mainMerge, 3, 1);
+    this.mainMerge.connect(this.out);
+    this.post.connect(this.sendMerge, 0, 0);
+    this.post.connect(this.sendMerge, 1, 1);
     this.out.connect(o.sum);
-    this.out.connect(this.sendGate).connect(o.reverbIn);
+    this.sendMerge.connect(this.sendGate).connect(o.reverbIn);
     this.p = { gain: Math.pow(10, -6 / 20), brightness: 0.5, movement: 0.3, width: 0.7, fade: 4 };
     this.cfg = { mode: 'off', chordFollow: false, continueAcrossSongs: true, minorUsesRelativeMajorFile: true };
     this.key = null; // {pc, minor}
@@ -153,8 +181,19 @@ export class Drone {
     this.follow = { voices: [], pending: null, targets: null, lastHeld: [] };
     this.effectiveMode = 'off';
     this._idle = []; // reusable {inst, gain} drone-osc instruments (REVIEW #16)
+    // lowres2: frozen loop (setFrozen). frozen = the loop playing now; _fzOut = loops fading out (≤ 1 during a swap)
+    this.frozen = null;
+    this._fzOut = [];
+    this._freezeOn = false;
+    this._sendMuted = false; // sendGate held at 0 while a frozen loop (which carries its own reverb) plays
+    this._fz = {
+      seq: 0, cancel: null, pendingSig: null, rendering: false, immediate: false, renders: 0, lastRenderMs: null,
+      loopSec: FREEZE_LOOP_SEC, prerollSec: undefined, debounce: FREEZE_DEBOUNCE_SEC, lastError: null,
+      last: null, reused: 0, rerunSeq: null, // lowres2-critic #2: the last rendered loop; a render waiting its turn
+      lastStats: null, // lowres2-critic R4: {buildMs, postMs, maxStepMs} of the last render
+    };
     this._applyWidth(0);
-    this.nodeCount = 17;
+    this.nodeCount = 21; // lowres2-critic R3: + fzIn, post, mainMerge, sendMerge
   }
 
   /** gain-trims.json `droneTrim` (dB) on the synth bus (synth drone only; files-mode pads are not trimmed). */
@@ -255,7 +294,8 @@ export class Drone {
     }
     if (this.parked || !this.sounding) return;
     this.o.timer.at(t + DRONE_PARK_SEC, (tt) => {
-      if (seq !== this._parkSeq || this._disposed || this.p.gain > 0 || !this.sounding || this.cfg.mode === 'off') return;
+      if (seq !== this._parkSeq || this._disposed || this.p.gain > 0) return;
+      if (!this.sounding || this.cfg.mode === 'off') return;
       this._fadeOutAll(tt, PARK_RESUME_FADE);
       this.sounding = false;
       this.parked = true;
@@ -286,6 +326,14 @@ export class Drone {
     if (keys.has('movement')) out.movement = m;
     if (keys.has('brightness')) out.brightness = this.p.brightness;
     return out;
+  }
+  /** drone-osc's own attack (s): 2.5 (synth.js) / 2 (fallback). The voice envelope's linear rise. */
+  _voiceAttack() {
+    if (this._attackDflt === undefined) {
+      const p = (this.o.registry.paramsFor(DRONE_REF) || []).find((x) => x.key === 'attack');
+      this._attackDflt = p && Number.isFinite(p.default) ? p.default : null;
+    }
+    return this._attackDflt;
   }
   _applyInstParams(inst, t) {
     const ps = this._instParams();
@@ -349,6 +397,15 @@ export class Drone {
   }
 
   _start(key, fade, t, modeSwitch) {
+    // lowres2-critic R5: something already sounds (a key change / song switch, from the live synth or a frozen loop):
+    // the new layer's level is the crossfade itself. With the voices' own 2.5 s attack under a shorter song fade the
+    // old key was gone long before the new one had risen (−10 … −17 dB mid-change at a 0.3 s fade), so those voices
+    // attack in XFADE_ATTACK_SEC and the equal-power layer fade shapes the onset. A start from silence (or a parked
+    // drone resuming) keeps the voice's own attack.
+    const hadSound = this.layers.some((L) => !L.dead) || !!this.frozen || this.follow.voices.length > 0 ||
+      this.activeEls.length > 0;
+    const va = this._voiceAttack();
+    const attack = hadSound && va != null && fade < va ? XFADE_ATTACK_SEC : undefined;
     const wantFiles = this.cfg.mode === 'files';
     let file = null;
     if (wantFiles) {
@@ -365,17 +422,25 @@ export class Drone {
       linFrom(this.synthMode.gain, was === 'files' ? 0 : 1, mode === 'synth' ? 1 : 0, t, 0.05);
       linFrom(this.filesMode.gain, was === 'files' ? 1 : 0, mode === 'files' ? 1 : 0, t, 0.05);
       rampTo(this.sendGate.gain, mode === 'synth' ? 0.4 : 0, t, fade / 4);
+    } else if (this._sendMuted && mode === 'synth') {
+      rampTo(this.sendGate.gain, 0.4, t, fade / 4); // lowres2: the live synth comes back after a frozen loop
     }
+    this._sendMuted = false;
+    this._freezeInvalidate(); // lowres2: a render in flight is for the old key / mode
     // everything currently sounding fades out; the new source fades in (equal-power)
     this._fadeOutAll(t, fade);
     this.effectiveMode = mode;
     if (mode === 'files') this._filesTo(file, fade, t);
-    else this._synthTo(key, fade, t);
+    else this._synthTo(key, fade, t, attack);
     this.sounding = true;
     if (!(this.p.gain > 0)) this._gainChanged(t); // started at gain 0: park it too (idle-cpu #2)
   }
 
   _fadeOutAll(t, fade) {
+    // lowres2: the frozen loop (and one still waiting to fade) goes like a layer
+    for (const fz of [this.frozen, ...this._fzOut]) {
+      if (fz && !(fz.fade.to === 0 && fz.fade.t <= t)) this._fadeOutFrozen(fz, t, fade);
+    }
     for (const L of this.layers.slice()) this._fadeOutLayer(L, t, fade);
     if (this.follow.voices.length) {
       for (const fv of this.follow.voices.slice()) this._fadeOutLayer(fv, t, fade);
@@ -387,14 +452,28 @@ export class Drone {
   }
 
   // ----- synth layers --------------------------------------------------------------------------------------------
-  _newLayer(notes, t, fade, vel = 0.8) {
+  /**
+   * fadeAt (lowres2 thaw): the voices start at `t`, the layer fades in from `fadeAt` (≥ t). attack (lowres2-critic
+   * R5): the voices' envelope attack for this layer (s); undefined = drone-osc's own.
+   */
+  _newLayer(notes, t, fade, vel = 0.8, fadeAt = t, attack = undefined) {
     // a reused instrument (no construction on the key-change path); its params/morph are re-applied on take
     const pe = this._takeInst(t);
     this.o.wake?.(); // idle-cpu #2: the engine's sleeping send effects (the reverb) wake before the layer sounds
     const { inst, gain } = pe;
-    const L = { inst, gain, pe, voices: [], fade: { t, dur: fade, from: 0, to: 1 }, dead: false };
+    const va = this._voiceAttack();
+    const a = Number.isFinite(attack) ? attack : va;
+    const setA = va != null && a !== va; // the instrument keeps drone-osc's own attack between layers (and _revoice)
+    if (setA) inst.setParam('attack', a, t);
+    const L = {
+      inst, gain, pe, voices: [], fade: { t: fadeAt, dur: fade, from: 0, to: 1 }, dead: false,
+      // lowres2-critic R1: the voices are at full level from voiceT + attack
+      voiceT: t, attack: Number.isFinite(a) ? a : 0,
+    };
     for (const n of notes) L.voices.push({ note: n, voice: inst.noteOn(n, vel, t) });
-    equalPowerFade(gain.gain, 0, 1, t, fade);
+    if (setA) inst.setParam('attack', va, t);
+    if (fadeAt > t) setNow(gain.gain, 0, t);
+    equalPowerFade(gain.gain, 0, 1, fadeAt, fade);
     return L;
   }
   _levelAt(L, t) {
@@ -414,8 +493,8 @@ export class Drone {
       });
     });
   }
-  _synthTo(key, fade, t) {
-    const L = this._newLayer(staticVoicing(key.pc, this.p.brightness), t, fade);
+  _synthTo(key, fade, t, attack) {
+    const L = this._newLayer(staticVoicing(key.pc, this.p.brightness), t, fade, 0.8, t, attack);
     L.key = key;
     this.layers.push(L);
   }
@@ -463,6 +542,12 @@ export class Drone {
     if (!old.length) {
       // enter follow: static layers out 1.5 s, follow voices in 2 s
       for (const L of this.layers.slice()) this._fadeOutLayer(L, t, 1.5);
+      if (this.frozen) {
+        // lowres2: chord-follow is never frozen: the loop goes like a static layer and the reverb send reopens
+        this._fadeOutFrozen(this.frozen, t, 1.5);
+        if (this._sendMuted) equalPowerFade(this.sendGate.gain, 0, 0.4, t, 1.5);
+        this._sendMuted = false;
+      }
       this.follow.voices = target.map((n) => this._followVoice(n, t, 2));
     } else {
       const next = [];
@@ -504,6 +589,308 @@ export class Drone {
   /** Target frequencies (Hz) of the chord-follow voicing, bass first; null when not following. */
   _debugTargets() {
     return this.follow.targets ? this.follow.targets.map((n) => noteToFreq(n)) : null;
+  }
+
+  // ----- frozen loop (low-resource mode; lowres2, drone-freeze.js) -------------------------------------------------
+  /**
+   * Low-resource mode (engine.setLowResource): while on, a sounding static synth drone is rendered offline into a
+   * seamless loop (drone-freeze.js renderDroneLoop) and played from one looping buffer source into the drone's level
+   * gain (drone.gain, wheel and swell still apply live, exactly: the chain is linear), with an equal-power crossfade
+   * of FREEZE_SWAP_SEC from the live voices; the live layers then end and the send to the reverb closes (the loop
+   * carries its own reverb), so the reverb unit goes to sleep (fx idle sleep). The loop is re-rendered (debounced
+   * FREEZE_DEBOUNCE_SEC, audio clock) when what it bakes in changes: brightness, movement, width, trim, the reverb IR /
+   * predelay, or the reverb return level by more than FREEZE_WET_TOL_DB; then it crossfades to the new loop. A key or
+   * mode change goes through the live synth (the key change sounds at once, with the song's fade) and freezes again
+   * after the debounce. Off: the live synth starts FREEZE_THAW_LEAD_SEC before the loop fades out. Files mode,
+   * chord-follow and a parked drone are never frozen. Realtime only (an offline engine plays the live drone).
+   * @param {boolean} on
+   * @param {{when?:number}} [o]
+   * @returns {boolean} whether freezing is wanted now
+   */
+  setFrozen(on, { when } = {}) {
+    const v = !!on;
+    if (v === this._freezeOn) return v;
+    this._freezeOn = v;
+    this._fz.immediate = v; // the first freeze does not wait for the debounce
+    this._freezeUpdate(this._t(when));
+    return v;
+  }
+  /** Test / tuning hook: {loopSec, debounceSec, prerollSec}. */
+  _setFreezeOptions({ loopSec, debounceSec, prerollSec } = {}) {
+    if (Number.isFinite(loopSec) && loopSec > 0) this._fz.loopSec = loopSec;
+    if (Number.isFinite(prerollSec) && prerollSec >= 0) this._fz.prerollSec = prerollSec;
+    if (Number.isFinite(debounceSec) && debounceSec >= 0) this._fz.debounce = debounceSec;
+  }
+  /** Engine poll (every FX_IDLE_POLL_SEC, realtime): notices changes of what the loop bakes in. */
+  freezeTick(t) {
+    if (this._freezeOn || this.frozen) this._freezeUpdate(this._t(t));
+  }
+  _freezable() {
+    return this._freezeOn && !this.offline && !this._disposed && typeof this.o.freezeEnv === 'function' &&
+      this.sounding && !this.parked && this.cfg.mode === 'synth' && this.effectiveMode === 'synth' &&
+      !this.cfg.chordFollow && !this.follow.voices.length && !!this.key;
+  }
+  _freezeSig() {
+    const env = this.o.freezeEnv() || {};
+    return {
+      pc: this.key.pc, minor: this.key.minor, brightness: this.p.brightness, movement: this.p.movement,
+      width: this.p.width, trimDb: this.trimDb || 0, irKey: env.irKey ?? null, predelay: env.predelay ?? 0,
+      wet: Number.isFinite(env.wet) ? env.wet : 0, ir: env.ir || null,
+    };
+  }
+  _sigSame(a, b) {
+    if (!a || !b) return false;
+    for (const k of ['pc', 'minor', 'brightness', 'movement', 'width', 'trimDb', 'irKey', 'predelay']) {
+      if (a[k] !== b[k]) return false;
+    }
+    if (a.wet <= 0 || b.wet <= 0) return a.wet <= 0 && b.wet <= 0;
+    return Math.abs(20 * Math.log10(a.wet / b.wet)) <= FREEZE_WET_TOL_DB;
+  }
+  _freezeInvalidate() {
+    const S = this._fz;
+    S.seq++;
+    S.pendingSig = null;
+    if (S.cancel) S.cancel();
+    S.cancel = null;
+  }
+  _freezeUpdate(t) {
+    const S = this._fz;
+    if (!this._freezable()) {
+      if (S.pendingSig) this._freezeInvalidate();
+      // low-resource ended / chord-follow turned on while frozen: back to the live synth
+      if (this.frozen && this.sounding && !this.parked && this.cfg.mode !== 'off') this._thaw(t);
+      return;
+    }
+    const sig = this._freezeSig();
+    if (this.frozen && this._sigSame(this.frozen.sig, sig)) {
+      if (S.pendingSig) this._freezeInvalidate(); // changed and changed back
+      return;
+    }
+    if (!this.frozen) {
+      // lowres2-critic #2: back on before a thaw's crossfade began (the popover opened and closed): keep the loop
+      const fz = this._fzOut.find((x) => x.thawAt > t && x.fade.t > t && this._sigSame(x.sig, sig));
+      if (fz) {
+        this._unthaw(fz, t);
+        return;
+      }
+    }
+    if (S.pendingSig && this._sigSame(S.pendingSig, sig)) return; // already waiting / rendering for this
+    this._freezeInvalidate();
+    S.pendingSig = sig;
+    let delay = S.immediate ? 0 : S.debounce;
+    if (!this.frozen) {
+      // a key change / start / thaw is still fading in: freeze once it has settled (lowres2-critic #2: also for the
+      // first freeze, so hiding the window again mid-thaw never swaps a loop in over one still waiting to fade)
+      for (const L of this.layers) {
+        // lowres2-critic R1: and for the voices' own attack (a 0.3 s song fade still has 2.5 s of voice attack): a
+        // loop rendered at full level swapped over voices still rising was a level bump / beat
+        if (!L.dead) delay = Math.max(delay, L.fade.t + L.fade.dur - t + 0.25, L.voiceT + L.attack - t + 0.25);
+      }
+    }
+    S.immediate = false;
+    const seq = S.seq;
+    S.cancel = this.o.timer.at(t + delay, () => {
+      S.cancel = null;
+      this._freezeRender(seq);
+    });
+  }
+  async _freezeRender(seq) {
+    const S = this._fz;
+    if (seq !== S.seq || !this._freezable()) return;
+    const sig = this._freezeSig();
+    S.pendingSig = sig;
+    // lowres2-critic #2: the last loop is kept (one buffer), so low-resource off → on with nothing changed (the
+    // menu-bar popover opened and closed, the window shown for a moment) swaps it back in without rendering again
+    const last = S.last;
+    if (last && this._sigSame(last.sig, sig) && last.opts === `${S.loopSec}|${S.prerollSec}`) {
+      S.pendingSig = null;
+      S.reused++;
+      this._freezeSwap(last.res, last.sig, this.ctx.currentTime + 0.02);
+      return;
+    }
+    if (S.rendering) {
+      // one render at a time: a toggle storm must not stack offline renders; this request runs when that one ends
+      S.rerunSeq = seq;
+      return;
+    }
+    S.rendering = true;
+    let res;
+    try {
+      res = await renderDroneLoop({
+        DroneClass: this.constructor,
+        registry: this.o.registry,
+        seed: this.o.seed ?? 1,
+        sampleRate: this.ctx.sampleRate,
+        key: { pc: sig.pc, minor: sig.minor },
+        params: { brightness: sig.brightness, movement: sig.movement, width: sig.width },
+        trimDb: sig.trimDb,
+        reverb: sig.ir ? { ir: sig.ir, predelay: sig.predelay, wet: sig.wet } : null,
+        loopSec: S.loopSec,
+        prerollSec: S.prerollSec,
+        waveSource: this.ctx, // lowres2-critic R4
+      });
+    } catch (e) {
+      S.rendering = false;
+      S.rerunSeq = null;
+      S.lastError = String(e?.message || e);
+      // pendingSig stays: no retry until something the loop bakes in changes (never a render loop)
+      this._warnOnce(`freeze|${S.lastError}`, `Could not freeze the drone (${S.lastError}); it keeps playing live.`);
+      return;
+    }
+    S.rendering = false;
+    if (this._disposed) return;
+    // lowres2-critic R4: the render's main-thread cost (graph build, post-processing) and its longest task
+    S.lastStats = {
+      buildMs: Math.round(res.buildMs * 10) / 10, postMs: Math.round((res.postMs || 0) * 10) / 10,
+      maxStepMs: res.maxStepMs ?? null, stepMs: res.stepMs || null,
+    };
+    // a finished render stays valid for its inputs even when superseded (a toggle storm, a change and back)
+    S.last = { sig, res, opts: `${S.loopSec}|${S.prerollSec}` };
+    if (S.rerunSeq != null) {
+      const rs = S.rerunSeq;
+      S.rerunSeq = null;
+      if (rs === S.seq) {
+        this._freezeRender(rs);
+        return;
+      }
+    }
+    if (seq !== S.seq || !this._freezable()) return; // superseded: the newer change renders again
+    S.pendingSig = null;
+    S.renders++;
+    S.lastRenderMs = Math.round(res.renderMs);
+    if (!res.seam.ok) {
+      this._warnOnce('freeze-seam', `Frozen drone loop seam step ${res.seam.seamDelta} > body ${res.seam.bodyDelta}`);
+    }
+    this._freezeSwap(res, sig, this.ctx.currentTime + 0.02);
+  }
+  /** Crossfade to a rendered loop: from the live layers (closing the reverb send) or from the previous loop. */
+  _freezeSwap(res, sig, t) {
+    const ctx = this.ctx;
+    const src = new AudioBufferSourceNode(ctx, { buffer: res.buffer, loop: true });
+    const g = new GainNode(ctx, { gain: 0 });
+    src.connect(g).connect(this.fzIn); // lowres2-critic R3: joins after the send tap (merge inputs 2, 3)
+    // lowres2-critic #1: a re-render of the same voicing (brightness / movement / width / trim / reverb) is the same
+    // seeded render with a parameter changed, so the new loop is coherent with the playing one at the same loop
+    // position. Started at a random offset, the equal-power sum of the two beat (partials in anti-phase: dips of
+    // −3 … −8 dB measured mid-swap); started in step with the old loop and crossfaded linearly, the level holds.
+    const prev = this.frozen;
+    const aligned = !!prev && prev.sig.pc === sig.pc && prev.sig.minor === sig.minor &&
+      prev.sig.brightness > 0.6 === sig.brightness > 0.6 && Math.abs(prev.loopSec - res.loopSec) < 1e-6;
+    let offset = 0;
+    if (aligned) {
+      offset = (t - prev.t0) % prev.loopSec;
+      if (offset < 0) offset += prev.loopSec;
+      if (!(offset < res.buffer.duration)) offset = 0;
+    }
+    src.start(t, offset);
+    if (aligned) linFrom(g.gain, 0, 1, t, FREEZE_SWAP_SEC);
+    else equalPowerFade(g.gain, 0, 1, t, FREEZE_SWAP_SEC);
+    const fz = {
+      src, g, sig, dead: false, t0: t - offset, fade: { t, dur: FREEZE_SWAP_SEC, from: 0, to: 1, lin: aligned },
+      loopSec: res.loopSec, bytes: res.bytes, renderMs: Math.round(res.renderMs), seam: res.seam,
+    };
+    if (prev) this._fadeOutFrozen(prev, t, FREEZE_SWAP_SEC, aligned);
+    else {
+      for (const L of this.layers.slice()) this._fadeOutLayer(L, t, FREEZE_SWAP_SEC);
+      if (!this._sendMuted) equalPowerFade(this.sendGate.gain, 0.4, 0, t, FREEZE_SWAP_SEC);
+      this._sendMuted = true;
+    }
+    this.frozen = fz;
+  }
+  _fadeOutFrozen(fz, t, fade, lin = false) {
+    const from = fadeLevel(fz.fade, t, 1);
+    fz.dead = true;
+    fz.thawAt = 0; // _thaw marks its own fade after this call
+    fz.fade = { t, dur: fade, from, to: 0, lin };
+    if (lin) linFrom(fz.g.gain, from, 0, t, fade);
+    else equalPowerFade(fz.g.gain, from, 0, t, fade);
+    if (this.frozen === fz) this.frozen = null;
+    if (!this._fzOut.includes(fz)) this._fzOut.push(fz);
+    const end = t + fade + 0.05;
+    fz.end = end;
+    this.o.timer.at(end, () => {
+      if (fz.end !== end) return; // re-scheduled (an earlier fade replaced this one)
+      this._disposeFrozen(fz);
+    });
+  }
+  _disposeFrozen(fz) {
+    this._fzOut = this._fzOut.filter((x) => x !== fz);
+    try {
+      fz.src.stop();
+    } catch {}
+    try {
+      fz.src.disconnect();
+      fz.g.disconnect();
+    } catch {}
+    fz.src.buffer = null; // ≤ one loop + one during a crossfade (plus _fz.last, usually one of them)
+  }
+  /**
+   * lowres2-critic R1: the thaw's live voices start this long before the crossfade: FREEZE_THAW_LEAD_SEC, and at least
+   * their own attack + THAW_SETTLE_SEC, so the live layer crossfades in at its full level (it started 1.5 s into a
+   * 2.5 s attack: the loop was fading out over voices still rising).
+   */
+  _thawLead() {
+    const va = this._voiceAttack() || 0;
+    return Math.max(FREEZE_THAW_LEAD_SEC, va + THAW_SETTLE_SEC);
+  }
+  /** Frozen loop → live synth: the voices start now, the loop fades _thawLead() later (equal-power). */
+  _thaw(t) {
+    const fz = this.frozen;
+    if (!fz || !this.key) return;
+    const at = t + this._thawLead();
+    if (!this.follow.voices.length) {
+      const L = this._newLayer(staticVoicing(this.key.pc, this.p.brightness), t, FREEZE_SWAP_SEC, 0.8, at);
+      L.key = this.key;
+      this.layers.push(L);
+    }
+    const inFull = fadeLevel(fz.fade, t, 1) >= 0.999 && fz.fade.to === 1; // not still fading in
+    this._fadeOutFrozen(fz, at, FREEZE_SWAP_SEC);
+    fz.thawAt = inFull ? at : 0; // _unthaw may keep it until then (at level 1)
+    if (this._sendMuted) {
+      setNow(this.sendGate.gain, 0, t);
+      equalPowerFade(this.sendGate.gain, 0, 0.4, at, FREEZE_SWAP_SEC);
+      this._sendMuted = false;
+    }
+  }
+  /**
+   * lowres2-critic #2: low-resource back on while a thaw still waits (FREEZE_THAW_LEAD_SEC) to fade its loop: the loop
+   * stays (its fade is cancelled at level 1), the thaw's live layer (still at gain 0) ends and the send closes again,
+   * so a popover opened and closed within the lead changes nothing audible and renders nothing.
+   */
+  _unthaw(fz, t) {
+    this._freezeInvalidate();
+    this._fz.immediate = false;
+    this._fz.reused++;
+    this._fzOut = this._fzOut.filter((x) => x !== fz);
+    fz.thawAt = 0;
+    fz.dead = false;
+    fz.end = null; // the pending dispose (fadeOutFrozen's timer) no longer matches
+    setNow(fz.g.gain, 1, t);
+    fz.fade = { t, dur: 0, from: 1, to: 1 };
+    this.frozen = fz;
+    for (const L of this.layers.slice()) this._fadeOutLayer(L, t, 0.05);
+    setNow(this.sendGate.gain, 0, t);
+    this._sendMuted = true;
+  }
+  /** lowres2 _debugStats: frozen state, loop length, last render time. */
+  freezeStats() {
+    const fz = this.frozen;
+    // loop memory held now: the playing loop + one fading out during a swap
+    let bytes = (fz?.bytes || 0) + this._fzOut.reduce((n, x) => n + (x.bytes || 0), 0);
+    // lowres2-critic #2: the kept last loop, when it is not one of those
+    const kept = this._fz.last?.res;
+    if (kept && ![fz, ...this._fzOut].some((x) => x && x.src.buffer === kept.buffer)) bytes += kept.bytes || 0;
+    return {
+      droneFrozen: !!fz,
+      droneLoopSec: fz ? Math.round(fz.loopSec * 1000) / 1000 : null,
+      droneRenderMs: this._fz.lastRenderMs,
+      droneRenders: this._fz.renders,
+      droneFreezeMB: Math.round((bytes / MiB) * 10) / 10,
+      droneSeam: fz ? { ...fz.seam } : null,
+      droneFreezePending: !!this._fz.pendingSig,
+      droneFreezeReused: this._fz.reused, // lowres2-critic #2: swaps of the kept loop (no render)
+      droneRenderMaxStepMs: this._fz.lastStats?.maxStepMs ?? null, // lowres2-critic R4: longest main-thread step
+    };
   }
 
   // ----- bend 'drone-swell' ---------------------------------------------------------------------------------------
@@ -758,6 +1145,7 @@ export class Drone {
   liveNodeCount() {
     let n = this.nodeCount + (this.pool ? this.pool.length * 2 : 0);
     for (const L of [...this.layers, ...this.follow.voices]) n += 1 + (L.inst.liveNodeCount?.() || 0);
+    n += (this.frozen ? 2 : 0) + 2 * this._fzOut.length; // lowres2: loop source + its gain
     return n;
   }
   getState() {
@@ -765,6 +1153,10 @@ export class Drone {
   }
   dispose() {
     this._disposed = true;
+    this._freezeInvalidate();
+    this._fz.last = null;
+    for (const fz of [this.frozen, ...this._fzOut]) if (fz) this._disposeFrozen(fz);
+    this.frozen = null;
     for (const L of [...this.layers, ...this.follow.voices, ...this._idle]) {
       try {
         L.inst.dispose();
@@ -777,6 +1169,7 @@ export class Drone {
     if (this.pool) for (const e of this.pool) this._releaseEl(e);
     try {
       this.out.disconnect();
+      this.sendGate.disconnect(); // lowres2-critic R3: the send has its own tap now
     } catch {}
   }
 }

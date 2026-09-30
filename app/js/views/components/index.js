@@ -13,7 +13,7 @@
 //   keyGrid({ onSelect(pc), label })  .set({pc, minor})                     + setDisabled(b)
 //   miniKeyboard({ low, high, from:21, to:108, onRange({low,high}) })  .set({low, high})
 //   pianoKeyboard({ from:36, to:96, onNoteOn(note, vel), onNoteOff(note) })  .set(heldSet)  + releaseAll()
-//   meter({ engine } | { analysers: () => [anL, anR] }, vertical?, compact?)  (rAF; set() unused)
+//   meter({ engine } | { analysers: () => [anL, anR] }, vertical?, compact?)  (meterClock; set() unused)
 //   chordReadout({ label })  .set(chord|null)
 //   wheelStrip({ onSwell(), onWheel(v) })  .set({ value, swelling, target, pickup, hardware, bendMode, bend })
 //   setlistStrip({ onSelect(id, index), onReorder(from, to) })  .set({ songs:[{id,name,key}], currentId, currentIndex, loadingId, reorderable })
@@ -29,14 +29,16 @@
 //       + get(), setChanged(b), setDisabled(b), setOptions(opts, more?)
 //       presets: SPACE_CHIPS, SPACE_MORE, ECHO_CHIPS, SONG_OWN
 //   holdButton({ label|content, ms:600, requireHold:bool|()=>bool, onActivate, onHoldStart?, onHoldCancel?,
-//                holdText?, hintText? })   + holding, progress, setContent(c), setRequireHold(b), setDisabled(b),
+//                holdText?, hintText?, capBounds? })   + holding, progress, setContent(c), setRequireHold(b), setDisabled(b),
 //                                            refresh(), cancel()
 //   quickSheet({ anchor?, onTempo, onSwell, onTouch, onPedalReversed, onRestartAudio, onAllSettings, onClose, state })
-//       .set({ songName, tempo, swell, touch, pedal, pedalReversed, sound, latencyMs, locked, echoSynced })
+//       .set({ songName, tempo, swell, touch, pedal, pedalReversed, sound, latencyMs, outputDeviceId, locked, echoSynced })
 //       + open({focus}), close(), isOpen, tap(now?)
 //   eqKeyboard({ store, engine, slotIndex, controller?, toast?, compact?, rta? }) / eqMiniCurve({ store, slotIndex,
 //       onOpen? })   the keyboard Tone EQ and its sparkline (CONTRACT_CHANGES "## eq-ui")
-//   levelMeter({ read: () => ({peak, rms})|null, label? })   thin slot level bar (rAF only while on screen; polish-1)
+//   levelMeter({ read: () => ({peak, rms})|null, label? })   thin slot level bar (meterClock, only while on screen)
+//   meterClock: wakeMeters() / meterClockStats() — the one ≤ 30 fps loop every meter shares; it stops when all are
+//       silent (idle-cpu-ui) and under html[data-low-resource] / [data-window-hidden]
 //   openOverlay({ el, onClose, swallow, closeOnOutside, passThrough, group }) → close(reason)
 //       Esc / outside-tap rules shared by the step panels, the "…" menu and the Quick sheet
 //
@@ -45,7 +47,8 @@ export { fader, knob, posToValue, valueToPos } from './fader.js';
 export { toggle, segmented, select, stepper } from './buttons.js';
 export { keyGrid, miniKeyboard, pianoKeyboard, keyLayout, isBlack } from './keys.js';
 export { meter, dbToMeter } from './meter.js';
-export { levelMeter, wakeLevelMeters } from './levelMeter.js';
+export { levelMeter, wakeLevelMeters, levelMeterStats } from './levelMeter.js';
+export { wakeMeters, meterClockStats } from './meterClock.js';
 export { chordReadout, wheelStrip } from './readouts.js';
 export { setlistStrip } from './setlist.js';
 export { h, setText, setAttr, disposer, rafCoalesce, blurAfterPointer, nextId, relativeDrag } from './util.js';

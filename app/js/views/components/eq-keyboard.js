@@ -22,6 +22,7 @@
 // feature-detected; the master analyser engine.analyserL/R and engine.ctx are read directly.
 // See CONTRACT_CHANGES "## eq-ui".
 import { h, disposer } from './util.js';
+import { meterBlocked } from './meterClock.js';
 import * as M from '../../shared/eq-math.js';
 import { ROLE_DEFAULTS } from '../../shared/params.js';
 
@@ -812,6 +813,7 @@ export function eqKeyboard(o = {}) {
   let anBuf2 = null;
   function analysers() {
     if (o.rta === false) return null;
+    if (meterBlocked()) return null; // idle-cpu-ui: no analyser reads under low-resource / a hidden window
     const ctx = engine?.ctx;
     if (!ctx || ctx.state !== 'running') return null;
     const sa = via('slotAnalysers');
@@ -1803,11 +1805,37 @@ export function eqKeyboard(o = {}) {
     }
     raf = requestAnimationFrame(frame);
     const settling = enginePending;
+    const busy = dirty || dirtyKeys || settling;
     if (settling) recomputeCurve();
     const an = !!analysers();
     if (dirty || an || settling) drawGraph();
     if (dirtyKeys) drawKeys();
     dirty = dirtyKeys = false;
+    // idle-cpu-ui: under low-resource / a hidden window there is no live spectrum (analysers() is null), so an open
+    // editor with nothing to redraw for BLOCKED_IDLE_MS leaves the display loop (0 rAF/s) and checks its dirty flags
+    // every BLOCKED_POLL_MS on a timer; the first edit then restarts it (the flags are set in many places without kick)
+    const t = performance.now();
+    if (busy) lastBusy = t;
+    else if (meterBlocked() && t - lastBusy > BLOCKED_IDLE_MS) {
+      cancelAnimationFrame(raf);
+      raf = 0;
+      blockedPoll();
+    }
+  }
+  const BLOCKED_IDLE_MS = 500;
+  const BLOCKED_POLL_MS = 250;
+  let lastBusy = 0;
+  let pollT = 0;
+  function blockedPoll() {
+    if (pollT || destroyed) return;
+    pollT = setTimeout(() => {
+      pollT = 0;
+      if (destroyed || raf) return; // kicked meanwhile (resize / update)
+      if (dirty || dirtyKeys || enginePending || !meterBlocked()) {
+        lastBusy = performance.now();
+        kick();
+      } else blockedPoll();
+    }, BLOCKED_POLL_MS);
   }
   const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => resize()) : null;
   ro?.observe(el);
@@ -1853,6 +1881,7 @@ export function eqKeyboard(o = {}) {
       leaveAB();
       destroyed = true;
       cancelAnimationFrame(raf);
+      clearTimeout(pollT);
       cancelDrag();
       clearTimeout(toastT);
       try {

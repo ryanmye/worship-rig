@@ -25,6 +25,7 @@ import { h, setText, disposer } from './util.js';
  * @param {string} [o.title]
  * @param {string} [o.ariaLabel]
  * @param {string} [o.className]
+ * @param {string} [o.capBounds]        selector of an ancestor the caption must stay inside (default: the viewport only)
  * @returns {{el:HTMLButtonElement, readonly holding:boolean, readonly progress:number, setContent(c):void,
  *            setRequireHold(b:boolean|(()=>boolean)):void, setDisabled(b:boolean):void, refresh():void, cancel():void,
  *            destroy():void}}
@@ -85,10 +86,43 @@ export function holdButton(o = {}) {
     setProgress(Math.min(1, (performance.now() - t0) / ms));
     raf = requestAnimationFrame(tick);
   };
+  // hardware-fixes L-23: the caption is measured once each time it is shown and kept inside the window (and inside
+  // o.capBounds): it flips above / below the button when the other side has no room and slides sideways off an edge;
+  // text wider than the room wraps (styles.css .hb-cap). One forced layout per press, never per frame.
+  const EDGE = 4;
+  const placeCap = () => {
+    cap.style.removeProperty('--cap-dx');
+    cap.style.removeProperty('max-width');
+    delete cap.dataset.place;
+    const vw = document.documentElement.clientWidth || window.innerWidth;
+    const vh = document.documentElement.clientHeight || window.innerHeight;
+    let left = EDGE;
+    let right = vw - EDGE;
+    const bound = o.capBounds ? el.closest(o.capBounds) : null;
+    if (bound) {
+      const b = bound.getBoundingClientRect();
+      left = Math.max(left, b.left + 2);
+      right = Math.min(right, b.right - 2);
+    }
+    if (right - left >= 60) cap.style.maxWidth = `${Math.floor(right - left)}px`;
+    const btnR = el.getBoundingClientRect();
+    let c = cap.getBoundingClientRect();
+    if (c.bottom > vh - EDGE && btnR.top - c.height - 8 >= EDGE) cap.dataset.place = 'above';
+    else if (c.top < EDGE && btnR.bottom + c.height + 8 <= vh - EDGE) cap.dataset.place = 'below';
+    if (cap.dataset.place) c = cap.getBoundingClientRect();
+    let dx = 0;
+    if (c.right > right) dx = right - c.right;
+    if (c.left + dx < left) dx = left - c.left;
+    if (dx) cap.style.setProperty('--cap-dx', `${Math.round(dx)}px`);
+  };
+  const showCap = (text) => {
+    setText(cap, text);
+    cap.hidden = false;
+    placeCap();
+  };
   const hint = () => {
     el.classList.add('hint');
-    setText(cap, hintText);
-    cap.hidden = false;
+    showCap(hintText);
     clearTimeout(hintTimer);
     hintTimer = setTimeout(() => {
       el.classList.remove('hint');
@@ -116,8 +150,7 @@ export function holdButton(o = {}) {
     el.classList.remove('hint');
     el.classList.add('holding');
     el.setAttribute('aria-busy', 'true');
-    setText(cap, holdText);
-    cap.hidden = false;
+    showCap(holdText);
     setProgress(0);
     timer = setTimeout(() => {
       stop();
@@ -178,6 +211,17 @@ export function holdButton(o = {}) {
   d.listen(el, 'blur', () => {
     holdKey = null;
     cancelHold(false);
+  });
+  // L-24: a pointer hold keeps focus off the button, so it gets no blur when the window loses focus (⌘H, ⌘-Tab, the
+  // window hidden): a window blur or a hidden document abandons the hold, it never completes (Panic, unlock, Revert)
+  const abandon = () => {
+    holdKey = null;
+    swallowClick = false;
+    cancelHold(false);
+  };
+  d.listen(window, 'blur', abandon);
+  d.listen(document, 'visibilitychange', () => {
+    if (document.visibilityState === 'hidden') abandon();
   });
   d.listen(el, 'click', (e) => {
     if (e.detail > 0) queueMicrotask(() => el.blur());

@@ -62,7 +62,10 @@ async function runBrowser() {
   const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   // L-4: 'midi' only (test/README.md "Web MIDI in the browser suites"); nothing here uses real MIDI ports
-  const { MIDI_PERMISSIONS, waitRigReady } = await import('../../integration/lib.mjs');
+  const { MIDI_PERMISSIONS, waitRigReady, pinTheme } = await import('../../integration/lib.mjs');
+  // theme-classic: the fixture links styles.css only (no boot.js, no main.js), so it is Classic by construction; the
+  // pin keeps it that way if the fixture ever gains the app's head
+  await pinTheme(context, 'classic');
   await context.grantPermissions([...MIDI_PERMISSIONS, 'clipboard-read', 'clipboard-write'], { origin });
   const page = await context.newPage();
   const errors = [];
@@ -690,7 +693,11 @@ async function runBrowser() {
     // "≈Db1 −48¢", "above C8 · 12.5 kHz". Every text must fit its cell's content box (canvas-measured in the cell's own
     // font, so it does not lean on scrollWidth), in the full and the compact layout.
     await T('L-21: worst-case note labels fit their cells under emulated SF Pro metrics (full 1124–1440, compact 1100)', async () => {
-      const face = (adj) => `@font-face{font-family:SFsim;src:local("FreeSans");size-adjust:${adj}%;` +
+      // L-21 follow-up (Mac run 2026-09-29): FreeSans does not exist on macOS, so the face never loaded there and the test
+      // failed on its own precondition. The src list now falls back to the Mac's Helvetica Neue / Arial (any face works
+      // as a stand-in once size-adjust scales it), and a missing face skips instead of failing.
+      const face = (adj) => `@font-face{font-family:SFsim;src:local("FreeSans"),local("Helvetica Neue"),local("HelveticaNeue"),` +
+        `local("Helvetica"),local("Arial"),local("Liberation Sans");size-adjust:${adj}%;` +
         `ascent-override:${Math.round(95 / adj * 100)}%;descent-override:${Math.round(24 / adj * 100)}%;` +
         'line-gap-override:0%} :root{--font:SFsim,sans-serif;--font-display:SFsim,sans-serif}';
       const probe = () => ev(async () => {
@@ -737,7 +744,7 @@ async function runBrowser() {
             await page.setViewportSize({ width: vw, height: 900 });
             await sleep(120);
             const m = await probe();
-            assert.ok(m.font, 'the SF Pro stand-in face loaded (FreeSans present)');
+            if (!m.font) { console.log('# L-21: no stand-in face available on this OS (FreeSans/Helvetica/Arial) — skipped'); return; }
             assert.equal(m.compact, compact, `${vw}: layout (card ${m.w})`);
             assert.deepEqual(m.over, [], `${vw} @${adj}%: every cell's text fits`);
             assert.deepEqual(m.cut, [], `${vw} @${adj}%: no cell reports overflow`);
@@ -943,6 +950,59 @@ async function runBrowser() {
       const r3 = await dbg();
       assert.equal(r3.rafActive, true, 'loop back when shown');
       assert.ok(r3.plot.width > 100);
+    });
+
+    // idle-cpu-ui: under <html data-low-resource> (or a hidden window) there is no live spectrum; an open editor with
+    // nothing to redraw leaves the display loop (0 rAF/s) and polls its dirty flags on a 250 ms timer
+    await T('idle-cpu-ui: low-resource → an idle open editor makes 0 rAF/s; an edit redraws; clearing it resumes', async () => {
+      await ensureB2();
+      await settle();
+      const r = await ev(async () => {
+        const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+        const comp = window.__eq.comp;
+        const { store } = window.__rig;
+        const de = document.documentElement;
+        let n = 0;
+        const o = window.requestAnimationFrame;
+        window.requestAnimationFrame = function (cb) {
+          n += 1;
+          return o.call(window, cb);
+        };
+        try {
+          const running0 = comp.debug().rafActive;
+          de.setAttribute('data-low-resource', '1');
+          await sleep(1200);
+          const stopped = !comp.debug().rafActive;
+          const n0 = n;
+          await sleep(1000);
+          const idleRafs = n - n0;
+          // a store edit marks the graph dirty; the poll restarts the loop
+          const db0 = window.__eq.eq(0)?.b2?.db ?? 0;
+          store.set('slots.0.eq.b2.db', db0 === 3 ? 2 : 3);
+          const t0 = performance.now();
+          while (!comp.debug().rafActive && performance.now() - t0 < 1500) await sleep(10);
+          const editMs = performance.now() - t0;
+          await sleep(1200);
+          const stoppedAgain = !comp.debug().rafActive;
+          de.removeAttribute('data-low-resource');
+          const t1 = performance.now();
+          while (!comp.debug().rafActive && performance.now() - t1 < 1500) await sleep(10);
+          const resumeMs = performance.now() - t1;
+          await sleep(800);
+          return { running0, stopped, idleRafs, editMs, stoppedAgain, resumeMs, runningAfter: comp.debug().rafActive };
+        } finally {
+          window.requestAnimationFrame = o;
+          de.removeAttribute('data-low-resource');
+        }
+      });
+      note(`low-resource editor: ${JSON.stringify(r)}`);
+      assert.equal(r.running0, true, 'loop runs before');
+      assert.equal(r.stopped, true, 'idle under data-low-resource: loop stopped');
+      assert.ok(r.idleRafs <= 1, `idle under data-low-resource: ${r.idleRafs} rAF in 1 s`);
+      assert.ok(r.editMs < 600, `an edit restarts the loop (${Math.round(r.editMs)} ms)`);
+      assert.equal(r.stoppedAgain, true, 'and it stops again once idle');
+      assert.ok(r.resumeMs < 600, `attribute cleared → loop back (${Math.round(r.resumeMs)} ms)`);
+      assert.equal(r.runningAfter, true, 'loop keeps running when not blocked');
     });
 
     await T('destroy() removes listeners, the store subscription and the frame loop; B is restored', async () => {

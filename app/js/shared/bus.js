@@ -17,7 +17,11 @@ export const COMMAND_TYPES = Object.freeze([
   'hello', 'selectMode', 'nextMode', 'prevMode', 'panic', 'fadeOutAll', 'master', 'droneToggle', 'droneKey',
   'lowResource', 'openMain', 'record',
 ]);
-export const AUDIO_STATES = Object.freeze(['running', 'stalled', 'suspended']);
+/**
+ * 'asleep' (lowres2): suspended on purpose after settings.audioSleepSec idle in low-resource mode (lowres2-scope);
+ * any input except a popover `hello` wakes it, and so does leaving low-resource. v stays 1.
+ */
+export const AUDIO_STATES = Object.freeze(['running', 'stalled', 'suspended', 'asleep']);
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -32,6 +36,9 @@ const isCurrent = (c) => c === null || (isObj(c) && isId(c.id) && isStr(c.name) 
 /**
  * Check a `state` message against contract v1. `current` may be null (no song), `masterDb` null (master at 0 =
  * −∞ dB, which JSON can't carry), `memoryMB` null (unknown), `midi.name` null (nothing connected).
+ * Optional (mini-theme, still v1): `theme`, the applied theme id (a non-empty string; the popover resolves an unknown
+ * id to the default the way the app does). Absent = the publisher doesn't send it; the popover then follows the
+ * localStorage mirror alone.
  * @param {any} m
  * @returns {string|null} null when valid, else the first problem
  */
@@ -51,6 +58,7 @@ export function stateError(m) {
   if (!isBool(m.recording)) return 'recording';
   if (!isBool(m.windowVisible)) return 'windowVisible';
   if (!isNumOrNull(m.memoryMB)) return 'memoryMB';
+  if (m.theme !== undefined && !isId(m.theme)) return 'theme';
   return null;
 }
 

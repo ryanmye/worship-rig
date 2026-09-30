@@ -237,6 +237,15 @@ body.recording::before { content: ''; position: fixed; top: 0; left: 0; right: 0
 .meter.vertical .meter-fill { transform-origin: center bottom; transform: scaleY(0); background: linear-gradient(to top, #2fbf71 0%, #2fbf71 72%, #ffcc33 86%, #ff4d4f 100%); }
 .meter-hold { position: absolute; top: 0; bottom: 0; width: 2px; background: #e8ecf1; left: 0; }
 .meter.vertical .meter-hold { left: 0; right: 0; width: auto; height: 2px; top: auto; bottom: 0; }
+/* idle-cpu-ui: the peak hold moves with its track's transform (no layout); z-index keeps it above a theme's ::after.
+   The track is one bar long and starts one bar-length BEFORE the bar (left / above it), holding the hold at its far
+   edge, so translating it by the peak never pushes it past the bar's end: overflow to the left / top is not scrollable,
+   so the bar's scrollWidth stays its width (polish-2A responsive clip check). Horizontal: translateX(p%), the hold ends
+   at the peak; vertical: translateY((100 − p)%), the hold's bottom edge at the peak (as before). */
+.meter-hold-track { position: absolute; top: 0; bottom: 0; left: -100%; width: 100%; pointer-events: none; z-index: 2; }
+.meter-hold-track > .meter-hold { left: auto; right: 0; }
+.meter.vertical .meter-hold-track { left: 0; right: 0; width: auto; top: -100%; bottom: auto; height: 100%; }
+.meter.vertical .meter-hold-track > .meter-hold { left: 0; right: 0; top: auto; bottom: 0; }
 .meter-bar.clip { box-shadow: inset -4px 0 0 var(--danger); }
 
 /* ------------------------------------------------------------------ banners (under the top bar, in flow) */
@@ -520,9 +529,14 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
   -webkit-mask: radial-gradient(circle, transparent 5.5px, #000 6px); mask: radial-gradient(circle, transparent 5.5px, #000 6px); }
 .hold-btn.needs-hold .hb-ring { display: block; }
 .hold-btn.holding { border-color: var(--hb-c); color: var(--hb-c); }
-.hold-btn .hb-cap { position: absolute; left: 50%; bottom: -30px; transform: translateX(-50%); z-index: 5; font-size: 12px; font-weight: 700;
-  color: #1d1400; background: var(--hb-c); border-radius: 6px; padding: 3px 8px; box-shadow: 0 6px 18px #000a; white-space: nowrap; pointer-events: none; }
+.hold-btn .hb-cap { position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(calc(-50% + var(--cap-dx, 0px)));
+  z-index: 5; font-size: 12px; font-weight: 700; line-height: 1.35; color: #1d1400; background: var(--hb-c); border-radius: 6px;
+  padding: 3px 8px; box-shadow: 0 6px 18px #000a; width: max-content; white-space: normal; text-align: center; pointer-events: none; }
 .hold-btn .hb-cap[hidden] { display: none; }
+/* hardware-fixes L-23: holdButton measures the shown caption once and flips it (data-place) when the window edge is
+   in the way; --cap-dx slides it off a side edge, and its max-width (the room it has) makes long copy wrap, not clip */
+.hold-btn .hb-cap[data-place=above], .perform .p-bottom .hold-btn .hb-cap[data-place=above] { top: auto; bottom: calc(100% + 8px); }
+.hold-btn .hb-cap[data-place=below], .perform .p-bottom .hold-btn .hb-cap[data-place=below] { bottom: auto; top: calc(100% + 8px); }
 .hold-btn.hint:not(.holding) { box-shadow: 0 0 0 2px var(--hb-c); }
 .hold-btn.done { box-shadow: 0 0 0 3px var(--hb-c); }
 .hold-btn:disabled { opacity: .45; cursor: default; }
@@ -538,6 +552,20 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
 .qs-h .qs-sub { font-size: 13px; color: var(--muted); }
 .qs-h .qs-lock { margin-left: auto; font-size: 12.5px; color: var(--faint); }
 .qs-h .qs-lock b { color: var(--muted); }
+/* hardware-fixes: the > 60 ms output-latency hint (components/latencyHint.js) — Quick header (in the subtitle's place,
+   one line, ellipsis) and Settings › Audio (under Latency) */
+.latency-hint { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--warn); font-size: 12.5px; font-weight: 700; }
+.latency-hint[hidden] { display: none; }
+.latency-hint .lh-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.latency-hint .lh-x { flex: none; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--panel-2);
+  color: var(--muted); font-size: 16px; line-height: 1; padding: 0; }
+.qs-h .qs-latency { flex: 1 1 auto; }
+.qs-h.has-warn .qs-sub { display: none; }
+.qs-h.has-warn .qs-lock { flex: none; }
+.st-latency-warn { margin: -2px 0 4px; align-items: flex-start; }
+.st-latency-warn .lh-text { white-space: normal; line-height: 1.35; } /* Settings' column: wrap, never cut */
+/* narrow windows: while unlocked the "Under Lock: …" note gives the latency hint its room */
+@media (max-width: 1250px) { .qs:not(.locked) .qs-h.has-warn .qs-lock { display: none; } }
 .qs-h .qs-x { width: 44px; height: 44px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel-2); font-size: 20px; }
 .qs-b { flex: 1; display: grid; grid-template-columns: 1.15fr 1.15fr .8fr; min-height: 0; }
 .qs-sec { padding: 10px 18px 12px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
@@ -672,13 +700,20 @@ body[data-view="edit"] .quick-btn { display: none; }
 /* −  0  + stay whole down to the 156 px column at 1280 (44 px buttons, the side padding gives way) */
 .transpose { padding: 10px clamp(6px, calc((100vw - 1280px) * .05 + 6px), 14px); display: flex; flex-direction: column; justify-content: center; gap: 6px; position: relative; min-width: 0; }
 .transpose-head { display: flex; justify-content: space-between; align-items: center; min-height: 18px; }
-.transpose-row { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+/* themes-final (hardware-fixes 2b, L-25): no row gap. The value is centred between the ± buttons either way, so a
+   4 px gap only made its box 8 px narrower than the space it really has: "−18" in a wide face (DejaVu Sans Bold,
+   minus .84 em) is 44.6 px in a 46–54 px room (1440 is the tightest: the side padding grows faster than the column)
+   and never touches a button, yet it "overflowed" the 38–46 px box. Now the box is the room: nothing spills. */
+.transpose-row { display: flex; align-items: center; justify-content: space-between; gap: 0; }
 .transpose .hold-btn { width: clamp(44px, 3.2vw, 46px); height: 48px; padding: 0; font-size: 26px; font-weight: 700; }
-.transpose-val { min-width: 2.2ch; text-align: center; font: 800 30px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+/* hardware-fixes 2b (Mac ui-core at 1366×768: row 140 > 137 px): a 2.2ch min-width is 44 px in SF Pro Display Heavy, so the
+   value now takes whatever the two buttons leave (flex, no min-width) and three glyphs ("−18") step the size down */
+.transpose-val { flex: 1 1 0; min-width: 0; text-align: center; font: 800 30px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.transpose-val[data-len="2"] { font-size: 27px; } /* "+5" in a wide face (DejaVu Sans Bold ≈ SF Heavy + 5 %): 41.4 of 46 px */
+.transpose-val[data-len="3"] { font-size: 20px; }
 .transpose-val.shift { color: var(--accent); }
-.perform .hold-btn .hb-cap { bottom: -30px; }
 /* round4-perform P1: the bottom row ends ~10 px above the window edge, so its captions (Revert, unlock) go above */
-.perform .p-bottom .hold-btn .hb-cap { bottom: auto; top: -30px; }
+.perform .p-bottom .hold-btn .hb-cap { top: auto; bottom: calc(100% + 8px); }
 
 /* the chip rows keep 44 px at a 102 px header row: padding and gap give way first */
 .p-fx { --pfx-pad: clamp(4px, calc((var(--p-head-h) - 91px) / 3), 7px); padding: var(--pfx-pad) 12px; display: grid;
@@ -851,7 +886,9 @@ body[data-view="edit"] .quick-btn { display: none; }
   container: drone / inline-size; }
 .drone-title { display: flex; align-items: baseline; gap: 8px; min-height: 16px; }
 .drone-title .section-title { font-size: 11.5px; color: var(--muted); letter-spacing: .1em; }
-.drone-readout { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } /* spoken; the tile shows it */
+.drone-readout { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  contain: strict; font-variant-numeric: tabular-nums; } /* spoken; the tile shows it. idle-cpu-ui: a text change stays
+  inside this box (contain), and the tick writes it only when a value changed (perform.js renderDroneReadout) */
 .drone-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .drone-head .ontile { flex: 1 1 auto; width: auto; min-width: 0; }
 .drone-head .ontile { padding-right: 5px; gap: 8px; }
@@ -1061,6 +1098,8 @@ body[data-view="edit"] .quick-btn { display: none; }
   .transpose { padding: 8px 10px; }
   .transpose .hold-btn { width: 40px; height: 42px; font-size: 22px; }
   .transpose-val { font-size: 24px; }
+  .transpose-val[data-len="2"] { font-size: 24px; }
+  .transpose-val[data-len="3"] { font-size: 17px; }
   /* ux-round2 #7: Space and Echo side by side, each the full row height (≈ 76 px) instead of two 36 px pills */
   .p-fx { padding: 6px 8px; gap: 6px; grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .p-fx .fxpill { min-height: 44px; height: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto;

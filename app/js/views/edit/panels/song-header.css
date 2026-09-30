@@ -114,8 +114,10 @@
 .ev2 .ev2-song-foothint { color: var(--ev2-faint); font-size: 12.5px; }
 
 /* polish-2B (ux-round2 L1): at 1280 px the hint was squeezed to 56 px and clipped to "The song / that’s / playing. /
-   Changes are…". Below 1341 px it goes (as ≤ 1250); the LIVE pill's title carries the same text. */
-@media (max-width: 1340px) {
+   Changes are…". Below 1341 px it goes (as ≤ 1250); the LIVE pill's title carries the same text.
+   idle-cpu-ui (integration-widths at 1366×768): since critics-fix O12 added the rename pencil the hint wraps to five
+   lines in the 50 px header at 1366, so it goes below 1401 px. */
+@media (max-width: 1400px) {
   .ev2 .ev2-song-livehint { display: none; }
 }
 
