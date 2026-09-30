@@ -13,7 +13,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
-import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseExs, ExsFormatError } from './exs/parser.mjs';
 import { planInstrument, manifestEntry, estimateBytes, sourceKey, zoneSlice, planSegments, autoMaxSeconds, flatName, PIANO_RE, slugify } from './exs/mapping.mjs';
@@ -346,78 +345,11 @@ const FALLBACKS = { ffmpeg: ['mp3', 'm4a', 'wav'], afconvert: ['m4a', 'wav'] };
 // DC_PACKS: four packs (claverotor, learner-s-piano, record-collection-grand, rise-above-piano) tripped the
 // importer's own --validate DC-offset check (|dc|/peak > 5e-4). Mirrors tools/samples/process-musyngkite.mjs's S2
 // fix: a 10 Hz high-pass ahead of the rest of the chain removes the bias without touching the audible band (2-pole,
-// -0.1 dB at 27.5 Hz). Reuses convert.mjs's ffmpegArgs (segments/gain/trim math untouched) and only inserts the
-// filter into the -af / -filter_complex string it returns, right after each segment's trim and before loudness/fade
-// — same ordering as process-musyngkite.mjs (high-pass before volume/afade) — so this stays one ffmpeg pass.
+// -0.1 dB at 27.5 Hz). Every ffmpeg conversion in this file passes `highpassHz: HPF_HZ` to convert.mjs's
+// ffmpegArgs, which inserts the filter right after each segment's trim and before loudness/fade — same ordering as
+// process-musyngkite.mjs (high-pass before volume/afade) — so this stays one ffmpeg pass. afconvert is untouched:
+// every DC-offset pack in the first real run was an ffmpeg import.
 const HPF_HZ = 10;
-
-function withHighpass(args) {
-  const inject = (chain) =>
-    /asetpts=PTS-STARTPTS/.test(chain)
-      ? chain.replace(/asetpts=PTS-STARTPTS/g, `asetpts=PTS-STARTPTS,highpass=f=${HPF_HZ}`)
-      : `highpass=f=${HPF_HZ}${chain ? `,${chain}` : ''}`;
-  const af = args.indexOf('-af');
-  if (af !== -1) {
-    args[af + 1] = inject(args[af + 1]);
-    return args;
-  }
-  const fc = args.indexOf('-filter_complex');
-  if (fc !== -1) {
-    args[fc + 1] = inject(args[fc + 1]);
-    return args;
-  }
-  // No trim/gain/fade at all (an unmodified whole-file zone): add a plain -af before the codec args.
-  const out = [...args];
-  const at = out.indexOf('-map_metadata');
-  out.splice(at === -1 ? out.length - 1 : at, 0, '-af', `highpass=f=${HPF_HZ}`);
-  return out;
-}
-
-function runFfmpeg(args, timeoutMs = 170000) {
-  return new Promise((resolve) => {
-    let err = '';
-    let done = false;
-    const p = spawn(process.env.FFMPEG || 'ffmpeg', args, { stdio: ['ignore', 'ignore', 'pipe'] });
-    const t = setTimeout(() => {
-      if (!done) p.kill('SIGKILL');
-    }, timeoutMs);
-    p.stderr.on('data', (d) => (err += d));
-    p.on('error', (e) => {
-      done = true;
-      clearTimeout(t);
-      resolve({ ok: false, msg: e.message });
-    });
-    p.on('close', (code) => {
-      done = true;
-      clearTimeout(t);
-      resolve(code === 0 ? { ok: true } : { ok: false, msg: err.trim().split('\n').find((l) => l.trim()) || `exit ${code}` });
-    });
-  });
-}
-
-/**
- * Like convert.mjs's convertFile, but for the ffmpeg encoder adds the DC_PACKS high-pass to the same command
- * (see withHighpass above). afconvert is untouched: every DC-offset pack in the first real run was an ffmpeg import.
- */
-async function convertWithDcFix(encoder, src, dst, o, tmpDir, cache) {
-  if (encoder !== 'ffmpeg') return convertFile(encoder, src, dst, o, tmpDir, cache);
-  const part = `${dst}.part${path.extname(dst)}`;
-  fs.rmSync(part, { force: true });
-  const r = await runFfmpeg(withHighpass(ffmpegArgs(src, part, o)));
-  const wrote = (() => {
-    try {
-      return fs.statSync(part).size > 0;
-    } catch {
-      return false;
-    }
-  })();
-  if (!r.ok || !wrote) {
-    fs.rmSync(part, { force: true });
-    return r.ok ? { ok: false, msg: 'ffmpeg wrote an empty file' } : r;
-  }
-  fs.renameSync(part, dst);
-  return { ok: true };
-}
 
 /**
  * Once per run: convert the first resolvable file in the chosen format. If the encoder can't write it (no libmp3lame
@@ -436,7 +368,7 @@ async function probeFormat(entry, o, st, log) {
   let first = null;
   for (const fmt of chain.slice(Math.max(0, chain.indexOf(st.format)))) {
     const tmp = path.join(o.out, `.probe-${process.pid}.${fmt}`);
-    const r = await convertWithDcFix(st.encoder, src, tmp, { format: fmt, bitrate: fmt === st.format ? st.bitrate : undefined, rate: st.rate, segments: seg.segments }, o.out, new Map());
+    const r = await convertFile(st.encoder, src, tmp, { format: fmt, bitrate: fmt === st.format ? st.bitrate : undefined, rate: st.rate, segments: seg.segments, highpassHz: HPF_HZ }, o.out, new Map());
     for (const f of fs.readdirSync(o.out)) if (f.startsWith(`.probe-${process.pid}`) || /^(whole|cut)-/.test(f)) fs.rmSync(path.join(o.out, f), { force: true });
     if (r.ok) {
       if (fmt !== st.format) {
@@ -528,7 +460,7 @@ async function importOne(entry, o, st, log) {
   await pool(now, st.encoder === 'ffmpeg' ? st.jobs : 1, async (j) => {
     const truncated = j.seg.truncated;
     const totalSec = j.seg.frames != null ? j.seg.frames / j.rate : 0;
-    const r = await convertWithDcFix(st.encoder, j.src, outOf(j), { format: st.format, bitrate: st.bitrate, rate: st.rate, segments: j.seg.segments, gainDb: j.gainDb, fadeOutSec: truncated ? 0.25 : 0, totalSec }, work, cache);
+    const r = await convertFile(st.encoder, j.src, outOf(j), { format: st.format, bitrate: st.bitrate, rate: st.rate, segments: j.seg.segments, gainDb: j.gainDb, fadeOutSec: truncated ? 0.25 : 0, totalSec, highpassHz: HPF_HZ }, work, cache);
     if (!r.ok) failures.push(`${path.basename(j.src)} [${j.k}]: ${r.msg}`);
     n++;
     if (process.stdout.isTTY) process.stdout.write(`\r  ${n}/${now.length}`);

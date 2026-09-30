@@ -34,21 +34,25 @@ export const FORMATS = { ffmpeg: ['mp3', 'm4a', 'wav'], afconvert: ['m4a', 'wav'
  * @param {string} src
  * @param {string} dst
  * @param {{ format:'mp3'|'m4a'|'wav', segments?:{start:number,end:number|null}[], bitrate?:number, rate?:number,
- *           fadeOutSec?:number, totalSec?:number }} o
+ *           fadeOutSec?:number, totalSec?:number, highpassHz?:number }} o
  *   segments: file-frame ranges [start, end) to join in order (omit / [{start:0,end:null}] = whole file).
  *   gainDb: level change baked into the file (group + zone volume relative to the loudest zone kept).
  *   fadeOutSec + totalSec: fade the last fadeOutSec of the output (used when a sample is truncated).
+ *   highpassHz: when truthy, a high-pass (`highpass=f=<hz>`) right after each segment's trim (or, when there's no
+ *     trim at all, at the front of the chain) and before volume/afade — removes a DC bias ahead of the rest of the
+ *     chain without touching the audible band. Default 0/omitted = off.
  */
 export function ffmpegArgs(src, dst, o) {
   const segs = (o.segments || []).filter((s) => !(s.start === 0 && s.end == null));
-  const trim = (s) => `atrim=start_sample=${s.start}${s.end != null ? `:end_sample=${s.end}` : ''},asetpts=PTS-STARTPTS`;
+  const hpf = o.highpassHz ? `highpass=f=${o.highpassHz}` : '';
+  const trim = (s) => `atrim=start_sample=${s.start}${s.end != null ? `:end_sample=${s.end}` : ''},asetpts=PTS-STARTPTS${hpf ? `,${hpf}` : ''}`;
   const post = [];
   if (o.gainDb && Math.abs(o.gainDb) >= 0.05) post.push(`volume=${o.gainDb.toFixed(2)}dB`);
   if (o.fadeOutSec > 0 && o.totalSec > o.fadeOutSec) post.push(`afade=t=out:st=${(o.totalSec - o.fadeOutSec).toFixed(6)}:d=${o.fadeOutSec}`);
   const fade = post.join(',');
   const filter = [];
   if (segs.length <= 1) {
-    const chain = [segs.length ? trim(segs[0]) : '', fade].filter(Boolean).join(',');
+    const chain = [segs.length ? trim(segs[0]) : hpf, fade].filter(Boolean).join(',');
     if (chain) filter.push('-af', chain);
   } else {
     const n = segs.length;
