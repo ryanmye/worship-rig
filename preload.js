@@ -141,10 +141,10 @@ contextBridge.exposeInMainWorld('rig', {
   miniCommand: (commandJson) => call('rig:miniCommand', commandJson),
   /** Mirror settings.menuBarMode to main (tray, hide-on-close, dock). @returns {Promise<MenuBarState|{error}>} */
   setMenuBarMode: (on) => call('rig:setMenuBarMode', on),
-  /** @returns {Promise<{on, popoverOpen, loginItem, windowVisible, tray}>} */
+  /** @returns {Promise<{on, popoverOpen, loginItem, windowVisible, tray, trayBounds, trayHidden}>} */
   getMenuBarState: () => call('rig:getMenuBarState'),
   /** "Open at login" (packaged app only; opens hidden). @returns {Promise<MenuBarState|{error}>} */
   setLoginItem: (on) => call('rig:setLoginItem', on),
-  /** cb({on, popoverOpen, loginItem, windowVisible, tray}) whenever one of them changes. Returns an unsubscribe. */
+  /** cb({on, popoverOpen, loginItem, windowVisible, tray, trayBounds, trayHidden}) whenever one of them changes. Returns an unsubscribe. */
   onMenuBarState: (cb) => listen('rig:menuBarState', cb),
 });

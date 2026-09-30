@@ -32,6 +32,7 @@
       "main.js",
       "preload.js",
       "server.js",
+      "tray-visibility.js",
       "build/trayTemplate.png",
       "build/trayTemplate@2x.png",
       "app/**/*",

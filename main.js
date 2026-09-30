@@ -20,10 +20,15 @@
 //   `settings.menuBarMode` is on (mirrored here via setMenuBarMode and kept in rig-shell.json), an optional login item,
 //   and the IPC relay for the bus (main renderer publishes state / receives commands; the popover subscribes / sends).
 //   Launch with --hidden (or at login) to start with the main window hidden when menu-bar mode is on.
+// Tray hidden (L-30, docs/menubar-mode.md "Tray hidden"): macOS parks the status item when the menu bar is full;
+//   trayIsHidden() (tray-visibility.js) spots it, the renderer hears `trayHidden` / `trayShown` on the Rig menu
+//   channel (transitions only, debounced 1 s), the popover opens at the top-right of the display instead, and the Rig
+//   menu has "Show Worship Rig" / "Open menu-bar panel" as the way back.
 //
 // Test/dev env overrides: RIG_APP_DIR, RIG_PORT, RIG_PADS_DIR, RIG_USER_DATA, RIG_RECORDINGS_DIR, RIG_USER_SAMPLES,
 // RIG_SELFTEST=1 (collect console output + HTTP responses ≥ 400, read window.__RIG_SELFTEST__, print one JSON line, quit),
-// RIG_SELFTEST_TIMEOUT_MS, RIG_DEBUG_PERMS=1 (log every permission request/check).
+// RIG_SELFTEST_TIMEOUT_MS, RIG_DEBUG_PERMS=1 (log every permission request/check),
+// RIG_FAKE_TRAY_BOUNDS='{"x":0,"y":982,"width":0,"height":0}' (RIG_SELFTEST only: stands in for tray.getBounds()).
 
 const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, powerSaveBlocker, screen, session, shell } =
   require('electron');
@@ -33,6 +38,7 @@ const fsp = require('node:fs/promises');
 const os = require('node:os');
 const crypto = require('node:crypto');
 const { createServer, userSamplesHome, KEY_HEADER } = require('./server.js');
+const { trayIsHidden, fallbackPopoverBounds } = require('./tray-visibility.js');
 
 const IS_MAC = process.platform === 'darwin';
 const SELFTEST = process.env.RIG_SELFTEST === '1';
@@ -539,6 +545,10 @@ function buildMenu() {
       { label: 'Rescan My Samples', click: () => sendMenu('rescanUserSamples') },
       { type: 'separator' },
       { label: 'Import Latest Backup…', click: () => confirmImportBackup() },
+      { type: 'separator' },
+      // L-30: the way back when the tray icon has no slot in a full menu bar (the trayHidden toast names the first)
+      { id: 'showWorshipRig', label: 'Show Worship Rig', click: () => showMain() },
+      { id: 'openMenuBarPanel', label: 'Open menu-bar panel', click: () => togglePopover() },
     ],
   };
   const template = [
@@ -626,6 +636,20 @@ let popover = null;
 let popoverHiddenAt = 0;
 let popoverSentSeq = 0;
 const popoverLog = []; // 'show' | 'hide' transitions (self-test)
+// L-30 tray hidden: the state last sent to the renderer (starts "shown": only transitions are sent)
+let trayHiddenSent = false;
+let trayVisTimer = null; // the 1 s debounce
+let trayCheckTimers = [];
+let trayChecksAt = 0;
+/** @type {{x:number,y:number,width:number,height:number}|null} RIG_FAKE_TRAY_BOUNDS (self-test only) */
+let fakeTrayBounds = null;
+if (SELFTEST && process.env.RIG_FAKE_TRAY_BOUNDS) {
+  try {
+    fakeTrayBounds = JSON.parse(process.env.RIG_FAKE_TRAY_BOUNDS);
+  } catch {
+    /* ignored: not JSON */
+  }
+}
 let busState = null; // last published state (parsed)
 let busStateJson = null;
 let busSeq = 0;
@@ -814,14 +838,78 @@ function trayImage() {
 
 // v1 is macOS only (docs/menubar-mode.md "Not in v1": the Windows/Linux tray); the menu and popover work everywhere
 function ensureTray() {
-  if (!IS_MAC || (tray && !tray.isDestroyed())) return;
-  tray = new Tray(trayImage());
-  tray.setToolTip('Worship Rig');
-  tray.on('click', (e) => {
-    if (e && (e.ctrlKey || e.metaKey)) popUpTrayMenu();
-    else togglePopover();
-  });
-  tray.on('right-click', () => popUpTrayMenu());
+  if (tray && !tray.isDestroyed()) return;
+  if (IS_MAC) {
+    tray = new Tray(trayImage());
+    tray.setToolTip('Worship Rig');
+    tray.on('click', (e) => {
+      if (e && (e.ctrlKey || e.metaKey)) popUpTrayMenu();
+      else togglePopover();
+    });
+    tray.on('right-click', () => popUpTrayMenu());
+  } else if (!fakeTrayBounds) {
+    return; // no tray off macOS (the self-test fake stands in for one, so the L-30 checks run on Linux CI too)
+  }
+  scheduleTrayChecks();
+}
+
+// ---- L-30: is the tray icon on screen? (macOS lays status items out asynchronously: look at 500 ms and 3 s, then on
+// display changes, app activate and every notifyMenuBarState)
+function scheduleTrayChecks() {
+  for (const t of trayCheckTimers) clearTimeout(t);
+  trayChecksAt = Date.now();
+  trayCheckTimers = [500, 3000].map((ms) => setTimeout(checkTrayVisibility, ms));
+}
+
+/** tray.getBounds(), or the self-test's fake; null without a tray. */
+function trayBoundsNow() {
+  if (fakeTrayBounds && menuBarMode) return fakeTrayBounds;
+  return tray && !tray.isDestroyed() ? tray.getBounds() : null;
+}
+
+/** @returns {boolean|null} null when there is no tray to judge */
+function trayHiddenNow() {
+  if (!(tray && !tray.isDestroyed()) && !(fakeTrayBounds && menuBarMode)) return null;
+  const b = trayBoundsNow();
+  let display = null;
+  try {
+    display = b && b.width > 0 && b.height > 0 ? screen.getDisplayMatching(b) : null;
+  } catch {
+    /* fall back to the primary display */
+  }
+  return trayIsHidden(b, display || screen.getPrimaryDisplay());
+}
+
+/** Send `trayHidden` / `trayShown` on a transition that still holds 1 s later. Cheap; safe to call often. */
+function checkTrayVisibility() {
+  const h = trayHiddenNow();
+  if (h === null || h === trayHiddenSent) {
+    clearTimeout(trayVisTimer);
+    trayVisTimer = null;
+    return;
+  }
+  if (trayVisTimer) return;
+  trayVisTimer = setTimeout(() => {
+    trayVisTimer = null;
+    const now = trayHiddenNow();
+    if (now === null || now === trayHiddenSent) return;
+    trayHiddenSent = now;
+    log(now ? 'tray icon hidden (no slot in the menu bar):' : 'tray icon visible again:', JSON.stringify(trayBoundsNow()));
+    sendMenu(now ? 'trayHidden' : 'trayShown');
+    notifyMenuBarState();
+  }, 1000);
+}
+
+/** The tray is going away: stop the checks; a renderer told "hidden" hears `trayShown` (nothing is hidden now). */
+function stopTrayChecks() {
+  for (const t of trayCheckTimers) clearTimeout(t);
+  trayCheckTimers = [];
+  clearTimeout(trayVisTimer);
+  trayVisTimer = null;
+  if (trayHiddenSent) {
+    trayHiddenSent = false;
+    sendMenu('trayShown');
+  }
 }
 
 function popUpTrayMenu() {
@@ -834,6 +922,7 @@ function popUpTrayMenu() {
 
 function destroyTray() {
   if (tray && !tray.isDestroyed()) tray.destroy();
+  stopTrayChecks();
   tray = null;
   trayMenu = null;
   trayMenuKey = '';
@@ -893,12 +982,19 @@ function createPopover() {
   return p;
 }
 
+/**
+ * Where the popover opens: under the tray icon, or (no tray / icon hidden, L-30) at the top-right of the work area of
+ * the display the pointer is on.
+ */
+function popoverTargetBounds() {
+  const b = trayBoundsNow();
+  if (b && trayHiddenNow() === false) return popoverBounds(b, screen.getDisplayMatching(b).workArea);
+  return fallbackPopoverBounds(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea, POPOVER_W, POPOVER_H);
+}
+
 function showPopover() {
   if (!popover || popover.isDestroyed()) createPopover();
-  const b = tray && !tray.isDestroyed() ? tray.getBounds() : null;
-  const display =
-    b && b.width ? screen.getDisplayMatching(b) : screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-  popover.setBounds(popoverBounds(b, display.workArea));
+  popover.setBounds(popoverTargetBounds());
   popover.show();
   popover.focus();
   popoverLog.push('show');
@@ -972,11 +1068,14 @@ function menuBarStateSnapshot() {
     windowDestroyed: !win || win.isDestroyed(),
     // L-30 diagnostics: where macOS put the status item ({x:0,y:<screen height>} = parked off-screen, i.e. hidden)
     trayBounds: tray && !tray.isDestroyed() ? tray.getBounds() : null,
+    // L-30: the state last sent as trayHidden / trayShown (debounced; false without a tray)
+    trayHidden: trayHiddenSent,
   };
 }
 
-/** Push {on, popoverOpen, loginItem, windowVisible, tray} to both renderers (window.rig.onMenuBarState). */
+/** Push {on, popoverOpen, loginItem, windowVisible, tray, …} to both renderers (window.rig.onMenuBarState). */
 function notifyMenuBarState() {
+  checkTrayVisibility();
   const snap = menuBarStateSnapshot();
   for (const w of [win, popover]) if (w && !w.isDestroyed()) w.webContents.send('rig:menuBarState', snap);
 }
@@ -1405,7 +1504,7 @@ function installSelftest(wc) {
     try {
       const r = await wc.executeJavaScript('window.__RIG_SELFTEST__ ? JSON.stringify(window.__RIG_SELFTEST__) : null', true);
       if (r) {
-        const menubar = await withTimeout(menubarSelftest(wc), 20000, { error: 'menubar self-test timed out' })
+        const menubar = await withTimeout(menubarSelftest(wc), 30000, { error: 'menubar self-test timed out' })
           .catch((err) => ({ error: (err && err.message) || String(err) }));
         return finish({ result: JSON.parse(r), menubar }, 0);
       }
@@ -1458,6 +1557,30 @@ async function menubarSelftest(wc) {
   };
   out.setMenuBarMode = await js(wc, 'window.rig.setMenuBarMode(true)');
   out.eventsOnEnable = await menuEvents();
+  // L-30: RIG_FAKE_TRAY_BOUNDS (a parked status item) → `trayHidden` once, even past the 3 s re-check; the popover
+  // target falls back to the work area's top-right; then the fake moves to a placed slot (top-right of the primary
+  // display) → `trayShown`. The Rig menu has the two ways back.
+  const appMenu = Menu.getApplicationMenu();
+  out.rigMenuWayBack = ['showWorshipRig', 'openMenuBarPanel'].map((id) => {
+    const it = appMenu && appMenu.getMenuItemById(id);
+    return it ? [it.label, it.enabled, it.visible] : null;
+  });
+  if (fakeTrayBounds) {
+    out.trayHiddenSeen = await waitFor(async () => js(wc, "window.__mbMenu.includes('trayHidden')"), 6000);
+    out.trayHiddenState = (await js(wc, 'window.rig.getMenuBarState()')).trayHidden;
+    const wa = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+    out.popoverFallback = {
+      got: popoverTargetBounds(),
+      want: { x: wa.x + wa.width - 320 - 12, y: wa.y + 8, width: 320, height: 440 },
+    };
+    await settle(Math.max(0, trayChecksAt + 3700 - Date.now())); // past the 3 s check: still only one trayHidden
+    const d = screen.getPrimaryDisplay().bounds;
+    fakeTrayBounds = { x: d.x + d.width - 200, y: d.y, width: 38, height: 22 };
+    checkTrayVisibility();
+    out.trayShownSeen = await waitFor(async () => js(wc, "window.__mbMenu.includes('trayShown')"), 4000);
+    out.trayShownState = (await js(wc, 'window.rig.getMenuBarState()')).trayHidden;
+    out.trayEvents = await js(wc, 'window.__mbMenu.splice(0)');
+  }
   out.tray = !!(tray && !tray.isDestroyed());
   out.shellConfig = readShellConfig().menuBarMode === true;
   out.menuBeforeState = trayMenu ? trayMenu.items.filter((i) => i.type !== 'separator').map((i) => i.label) : null;
@@ -1579,7 +1702,10 @@ app.on('before-quit', () => {
 });
 
 // dock icon click / Finder re-open while the window is hidden in the menu bar
-app.on('activate', () => showMain());
+app.on('activate', () => {
+  showMain();
+  checkTrayVisibility();
+});
 
 // ⌘H / "Hide Worship Rig" (macOS app-level hide): the window stays "visible" to Electron and fires no window events,
 // so without these the page never hears it is hidden and nothing throttles. 'show' only counts when the window
@@ -1621,6 +1747,8 @@ app.whenReady().then(async () => {
   installPermissions(session.defaultSession);
   registerIpc();
   buildMenu();
+  // L-30: a display change can give the tray icon a slot, or take it away
+  for (const ev of ['display-metrics-changed', 'display-added', 'display-removed']) screen.on(ev, () => checkTrayVisibility());
   // L14: known before the renderer boots (it mirrors settings.menuBarMode via setMenuBarMode on start)
   menuBarMode = !!cfg.menuBarMode && !SELFTEST;
   startHidden = menuBarMode && launchedHidden();
