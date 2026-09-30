@@ -67,7 +67,7 @@
         <h3>Menu bar mode and themes</h3>
         <p>Close the window and keep playing: switch songs, the drone and the master level from the menu bar, with a
           low-resource setting. The look comes in
-          <a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/shared/themes.js">7 themes (6 dark, 1 light)</a>.</p>
+          <a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/shared/themes.js">8 themes (6 dark, 2 light)</a>.</p>
       </div>
       <div class="card">
         <h3>Recording and your own sounds</h3>
@@ -79,12 +79,9 @@
 </section>
 
 <section id="screenshots">
-  <!-- SCREENSHOTS: taken 2026-09-30 on the current build (dist/mac-arm64, v0.1.0) in the Classic theme at 1440×900.
-       CLOUD: after the next drop (final theme), retake and replace img/perform.webp, edit.webp, edit-eq.webp,
-       settings.webp, settings-menubar.webp and popover.webp (same names), then drop "current build" from the heading. -->
   <div class="wrap">
-    <h2>Screenshots: current build</h2>
-    <p class="muted small">Classic theme. The final look is still being chosen, so these will be replaced.</p>
+    <h2>Screenshots</h2>
+    <p class="muted small">The built Mac app with the factory library, in the default Sanctuary theme at 1440×900.</p>
     <div class="shots">
       <figure>
         <img src="img/perform.webp" width="1440" height="900" alt="Perform screen: song Sunday Pad + Piano in C, with transpose, Space and Echo menus, the setlist row, four sound faders (Keys, Pad, Extra, Bass), the key and drone panel, song notes and Panic.">
@@ -102,14 +99,18 @@
         <img src="img/settings.webp" width="1440" height="900" alt="Settings: audio latency, output device, mono output, pad folder, My Samples, MIDI keyboard input, touch, sustain pedal and MIDI Learn." loading="lazy">
         <figcaption>Settings: latency, output device, MIDI keyboard, sustain pedal, MIDI Learn.</figcaption>
       </figure>
+      <figure>
+        <img src="img/perform-daylight.webp" width="1440" height="900" alt="The same Perform screen in the light Daylight Day theme." loading="lazy">
+        <figcaption>Perform in Daylight Day, one of the two light themes. Sanctuary (above) is the default.</figcaption>
+      </figure>
       <div class="pair">
         <figure>
-          <img src="img/settings-menubar.webp" width="1440" height="650" alt="Settings, Menu bar section: Keep in the menu bar, menu-bar songs, Low-resource and Open at login." loading="lazy">
-          <figcaption>Settings › Menu bar.</figcaption>
+          <img src="img/settings-appearance.webp" width="1440" height="900" alt="Settings, Appearance section: theme cards for Classic, Sanctuary, Sanctuary Day, Daylight Stage, Daylight Day, Studio, Ember and Nave; beside it the Menu bar section: Keep in the menu bar, menu-bar songs, Low-resource and Open at login." loading="lazy">
+          <figcaption>Settings › Appearance (themes) and Menu bar.</figcaption>
         </figure>
         <figure class="narrow">
           <img src="img/popover.webp" width="320" height="440" alt="Menu-bar popover: three songs to switch between, master level, drone, fade, panic, record and a low-resource switch." loading="lazy">
-          <figcaption>The menu-bar popover (its page, rendered at 320×440).</figcaption>
+          <figcaption>The menu-bar popover.</figcaption>
         </figure>
       </div>
     </div>
@@ -134,11 +135,9 @@
       <li><strong>Effect presets</strong>: 6 Spaces, 5 Echoes and 6 Vibes
         (<a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/shared/fx-presets.js">fx-presets.js</a>).</li>
       <li><strong>No Apple content ships.</strong> GarageBand and Logic sounds are only ever converted on your own Mac.</li>
-      <!-- STARTER LIBRARY: CLOUD, when the starter backup JSON lands after the next drop, link it here (raw GitHub URL)
-           and say in one line how to load it (Settings › Library & backups › Import…). -->
-      <li><strong>Starter library</strong>: a ready-made backup file you can import is coming with the next update. For
-        now, see how songs are exported and imported in the
-        <a href="https://github.com/ryanmye/worship-rig#run-it-in-chrome-instead">README</a>.</li>
+      <li><strong>Starter library</strong>: the 19 factory songs and the first setlist as a backup file,
+        <a href="https://github.com/ryanmye/worship-rig/raw/main/docs/starter/worship-rig-starter-library.json">worship-rig-starter-library.json</a>
+        (62 KB). To load it, open <strong>Settings › Library &amp; backups › Import…</strong> and pick the file.</li>
     </ul>
     <h3>Sample credits</h3>
     <blockquote>Salamander Grand Piano V3 by Alexander Holm, licensed under a Creative Commons Attribution

@@ -1,0 +1,2414 @@
+{
+  "app": "worship-rig",
+  "kind": "library",
+  "schema": 1,
+  "exportedAt": "2026-09-30T05:34:20.580Z",
+  "songs": {
+    "song_muno6ud001lgnxv": {
+      "id": "song_muno6ud001lgnxv",
+      "factoryId": "factory:sunday-pad-piano",
+      "name": "Sunday Pad + Piano",
+      "notes": "The everyday worship sound: grand piano on top of a warm pad, with a soft key drone underneath. Mod wheel (and an expression pedal) brings the pad in and out, so you can start with piano alone and swell the pad for the chorus. Push the pitch-bend wheel up to lift the drone; pull it down to tuck it away.",
+      "category": "worship",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          {
+            "instrument": {
+              "type": "sampler",
+              "id": "salamander-piano"
+            },
+            "gain": 0.8,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.25,
+              "delay": 0.1,
+              "chorus": 0
+            },
+            "params": {}
+          },
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "warm-pad"
+            },
+            "gain": 0.55,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": true,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.5,
+              "delay": 0.1,
+              "chorus": 0.35
+            },
+            "params": {}
+          },
+          null,
+          null
+        ],
+        "fx": {
+          "reverb": {
+            "size": 0.62,
+            "damp": 0.5,
+            "predelay": 0.025,
+            "returnGain": 1
+          },
+          "delay": {
+            "time": 0.42,
+            "feedback": 0.3,
+            "pingpong": false,
+            "tone": 0.4,
+            "sync": "off",
+            "returnGain": 0.8
+          },
+          "chorus": {
+            "rate": 0.4,
+            "depth": 0.5,
+            "returnGain": 1
+          },
+          "lofi": {
+            "amount": 0,
+            "wow": 0.5,
+            "flutter": 0.5,
+            "crackle": 0.3,
+            "bits": 0.5,
+            "tone": 0.5,
+            "saturation": 0.5
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "expression": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "drone-swell",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 8
+        }
+      },
+      "drone": {
+        "mode": "synth",
+        "gain": 1.2,
+        "brightness": 0.4,
+        "movement": 0.3,
+        "width": 0.75,
+        "fade": 5,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": null
+    },
+    "song_muno6ud102fh0ul": {
+      "id": "song_muno6ud102fh0ul",
+      "factoryId": "factory:building-swell",
+      "name": "Building Swell",
+      "notes": "Strings with a shimmering glass pad for builds and bridges. Start with the mod wheel low for just strings, then roll it up (or tap Swell) over a few bars to bloom the glass pad in. Pitch bend bends the synths a whole step for tension-and-release moments.",
+      "category": "worship",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "strings"
+            },
+            "gain": 0.7,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": true,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.45,
+              "delay": 0.1,
+              "chorus": 0
+            },
+            "params": {}
+          },
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "glass-pad"
+            },
+            "gain": 0.75,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": true,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.55,
+              "delay": 0.2,
+              "chorus": 0.45
+            },
+            "params": {}
+          },
+          null,
+          null
+        ],
+        "fx": {
+          "reverb": {
+            "size": 0.72,
+            "damp": 0.45,
+            "predelay": 0.03,
+            "returnGain": 1.05
+          },
+          "delay": {
+            "time": 0.5,
+            "feedback": 0.35,
+            "pingpong": false,
+            "tone": 0.45,
+            "sync": "off",
+            "returnGain": 0.8
+          },
+          "chorus": {
+            "rate": 0.3,
+            "depth": 0.5,
+            "returnGain": 1
+          },
+          "lofi": {
+            "amount": 0,
+            "wow": 0.5,
+            "flutter": 0.5,
+            "crackle": 0.3,
+            "bits": 0.5,
+            "tone": 0.5,
+            "saturation": 0.5
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "expression": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "pitch",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 12
+        }
+      },
+      "drone": {
+        "mode": "off",
+        "gain": 0.5011872336272722,
+        "brightness": 0.5,
+        "movement": 0.3,
+        "width": 0.7,
+        "fade": 4,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": null
+    },
+    "song_muno6ud103ktz7q": {
+      "id": "song_muno6ud103ktz7q",
+      "factoryId": "factory:prayer-wash",
+      "name": "Prayer Wash",
+      "notes": "A single warm pad in a huge room, with the key drone on: for prayer, ministry time and transitions. The mod wheel is the pad volume (wheel down fades the pad, the drone keeps going), so you can hold one chord for minutes and just ride the wheel. Push pitch bend up to swell the drone; use Fade Out All at the end.",
+      "category": "worship",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          null,
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "warm-pad"
+            },
+            "gain": 0.8,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": true,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.7,
+              "delay": 0.25,
+              "chorus": 0.4
+            },
+            "params": {}
+          },
+          null,
+          null
+        ],
+        "fx": {
+          "reverb": {
+            "size": 0.92,
+            "damp": 0.55,
+            "predelay": 0.04,
+            "returnGain": 1.25
+          },
+          "delay": {
+            "time": 0.6,
+            "feedback": 0.45,
+            "pingpong": false,
+            "tone": 0.35,
+            "sync": "off",
+            "returnGain": 0.7
+          },
+          "chorus": {
+            "rate": 0.2,
+            "depth": 0.55,
+            "returnGain": 1
+          },
+          "lofi": {
+            "amount": 0,
+            "wow": 0.5,
+            "flutter": 0.5,
+            "crackle": 0.3,
+            "bits": 0.5,
+            "tone": 0.5,
+            "saturation": 0.5
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "expression": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "drone-swell",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 10
+        }
+      },
+      "drone": {
+        "mode": "synth",
+        "gain": 0.9,
+        "brightness": 0.35,
+        "movement": 0.45,
+        "width": 0.85,
+        "fade": 6,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": null
+    },
+    "song_muno6ud104wkdb1": {
+      "id": "song_muno6ud104wkdb1",
+      "factoryId": "factory:organ-swell",
+      "name": "Organ Swell",
+      "notes": "Gospel drawbar organ with a warm pad behind it. The mod wheel brings the pad in; the pitch-bend wheel switches the rotary speaker between slow and fast (push it for the classic \"Leslie ramp\"). The sustain pedal holds the pad but not the organ, like a real Hammond.",
+      "category": "worship",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          {
+            "instrument": {
+              "type": "organ",
+              "id": "gospel"
+            },
+            "gain": 0.75,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": false,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.2,
+              "delay": 0,
+              "chorus": 0
+            },
+            "params": {}
+          },
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "warm-pad"
+            },
+            "gain": 1.13,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": true,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.5,
+              "delay": 0.1,
+              "chorus": 0.3
+            },
+            "params": {}
+          },
+          null,
+          null
+        ],
+        "fx": {
+          "reverb": {
+            "size": 0.5,
+            "damp": 0.55,
+            "predelay": 0.02,
+            "returnGain": 0.9
+          },
+          "delay": {
+            "time": 0.375,
+            "feedback": 0.35,
+            "pingpong": false,
+            "tone": 0.5,
+            "sync": "off",
+            "returnGain": 0.6
+          },
+          "chorus": {
+            "rate": 0.4,
+            "depth": 0.5,
+            "returnGain": 1
+          },
+          "lofi": {
+            "amount": 0,
+            "wow": 0.5,
+            "flutter": 0.5,
+            "crackle": 0.3,
+            "bits": 0.5,
+            "tone": 0.5,
+            "saturation": 0.5
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "expression": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "morph",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 8
+        }
+      },
+      "drone": {
+        "mode": "off",
+        "gain": 0.5011872336272722,
+        "brightness": 0.5,
+        "movement": 0.3,
+        "width": 0.7,
+        "fade": 4,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": null
+    },
+    "song_muno6ud105zl92z": {
+      "id": "song_muno6ud105zl92z",
+      "factoryId": "factory:grand-piano",
+      "name": "Grand Piano",
+      "notes": "A clean concert grand in a medium hall, for piano-led songs and solo playing. The mod wheel sets how much reverb you hear (wheel down = drier, for fast or rhythmic parts); an expression pedal works as a volume pedal. Pitch bend is off.",
+      "category": "keys",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          {
+            "instrument": {
+              "type": "sampler",
+              "id": "salamander-piano"
+            },
+            "gain": 0.85,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.3,
+              "delay": 0.05,
+              "chorus": 0
+            },
+            "params": {}
+          },
+          null,
+          null,
+          null
+        ],
+        "fx": {
+          "reverb": {
+            "size": 0.5,
+            "damp": 0.45,
+            "predelay": 0.02,
+            "returnGain": 1
+          },
+          "delay": {
+            "time": 0.375,
+            "feedback": 0.35,
+            "pingpong": false,
+            "tone": 0.5,
+            "sync": "off",
+            "returnGain": 1
+          },
+          "chorus": {
+            "rate": 0.4,
+            "depth": 0.5,
+            "returnGain": 1
+          },
+          "lofi": {
+            "amount": 0,
+            "wow": 0.5,
+            "flutter": 0.5,
+            "crackle": 0.3,
+            "bits": 0.5,
+            "tone": 0.5,
+            "saturation": 0.5
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "fx.reverb.returnGain",
+          "min": 0.3,
+          "max": 1
+        },
+        "expression": {
+          "target": "master.volume",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "none",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 8
+        }
+      },
+      "drone": {
+        "mode": "off",
+        "gain": 0.5011872336272722,
+        "brightness": 0.5,
+        "movement": 0.3,
+        "width": 0.7,
+        "fade": 4,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": null
+    },
+    "song_muno6ud106cwhcr": {
+      "id": "song_muno6ud106cwhcr",
+      "factoryId": "factory:rhodes",
+      "name": "Rhodes",
+      "notes": "A sampled Rhodes electric piano with a soft chorus: warm and round for ballads, neo-soul and gentle verses. The mod wheel controls the reverb amount; an expression pedal is a volume pedal. Pitch bend is off, as on a real Rhodes.",
+      "category": "keys",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          {
+            "instrument": {
+              "type": "sampler",
+              "id": "ep-rhodes"
+            },
+            "gain": 0.85,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.25,
+              "delay": 0.1,
+              "chorus": 0.4
+            },
+            "params": {}
+          },
+          null,
+          null,
+          null
+        ],
+        "fx": {
+          "reverb": {
+            "size": 0.4,
+            "damp": 0.5,
+            "predelay": 0.015,
+            "returnGain": 0.9
+          },
+          "delay": {
+            "time": 0.375,
+            "feedback": 0.25,
+            "pingpong": false,
+            "tone": 0.35,
+            "sync": "off",
+            "returnGain": 0.7
+          },
+          "chorus": {
+            "rate": 0.5,
+            "depth": 0.45,
+            "returnGain": 1
+          },
+          "lofi": {
+            "amount": 0,
+            "wow": 0.5,
+            "flutter": 0.5,
+            "crackle": 0.3,
+            "bits": 0.5,
+            "tone": 0.5,
+            "saturation": 0.5
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "fx.reverb.returnGain",
+          "min": 0.3,
+          "max": 1
+        },
+        "expression": {
+          "target": "master.volume",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "none",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 8
+        }
+      },
+      "drone": {
+        "mode": "off",
+        "gain": 0.5011872336272722,
+        "brightness": 0.5,
+        "movement": 0.3,
+        "width": 0.7,
+        "fade": 4,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": null
+    },
+    "song_muno6ud1072n8jg": {
+      "id": "song_muno6ud1072n8jg",
+      "factoryId": "factory:felt-piano",
+      "name": "Felt Piano",
+      "notes": "A dark, soft \"felt\" piano (the tone is rolled off and the touch is gentle) in a big room: intimate intros, reflective moments, film-style ambience. The mod wheel controls the reverb amount; an expression pedal is a volume pedal. Play softly and let the room carry it.",
+      "category": "keys",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          {
+            "instrument": {
+              "type": "sampler",
+              "id": "salamander-piano"
+            },
+            "gain": 0.9,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.5,
+              "delay": 0.1,
+              "chorus": 0
+            },
+            "params": {
+              "tone": 0.25
+            }
+          },
+          null,
+          null,
+          null
+        ],
+        "fx": {
+          "reverb": {
+            "size": 0.68,
+            "damp": 0.7,
+            "predelay": 0.03,
+            "returnGain": 1.1
+          },
+          "delay": {
+            "time": 0.5,
+            "feedback": 0.3,
+            "pingpong": false,
+            "tone": 0.25,
+            "sync": "off",
+            "returnGain": 0.6
+          },
+          "chorus": {
+            "rate": 0.4,
+            "depth": 0.5,
+            "returnGain": 1
+          },
+          "lofi": {
+            "amount": 0,
+            "wow": 0.5,
+            "flutter": 0.5,
+            "crackle": 0.3,
+            "bits": 0.5,
+            "tone": 0.5,
+            "saturation": 0.5
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "fx.reverb.returnGain",
+          "min": 0.3,
+          "max": 1
+        },
+        "expression": {
+          "target": "master.volume",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "none",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 8
+        }
+      },
+      "drone": {
+        "mode": "off",
+        "gain": 0.5011872336272722,
+        "brightness": 0.5,
+        "movement": 0.3,
+        "width": 0.7,
+        "fade": 4,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": null
+    },
+    "song_muno6ud108m7l2l": {
+      "id": "song_muno6ud108m7l2l",
+      "factoryId": "factory:lofi-rhodes",
+      "name": "Lofi Rhodes",
+      "notes": "Soft electric piano through a worn tape machine: wobble, crackle and a dusty top end for lofi beats and chill sets. The mod wheel controls the reverb amount. Pull the pitch-bend wheel down for a tape-stop slowdown; push it up for a filter sweep.",
+      "category": "lofi",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "soft-keys"
+            },
+            "gain": 0.85,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.3,
+              "delay": 0.15,
+              "chorus": 0.25
+            },
+            "params": {}
+          },
+          null,
+          null,
+          null
+        ],
+        "fx": {
+          "reverb": {
+            "size": 0.45,
+            "damp": 0.65,
+            "predelay": 0.02,
+            "returnGain": 0.9
+          },
+          "delay": {
+            "time": 0.5625,
+            "feedback": 0.3,
+            "pingpong": false,
+            "tone": 0.3,
+            "sync": "1/8d",
+            "returnGain": 0.6
+          },
+          "chorus": {
+            "rate": 0.4,
+            "depth": 0.4,
+            "returnGain": 1
+          },
+          "lofi": {
+            "amount": 0.6,
+            "wow": 0.55,
+            "flutter": 0.4,
+            "crackle": 0.35,
+            "bits": 0.45,
+            "tone": 0.55,
+            "saturation": 0.5
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "fx.reverb.returnGain",
+          "min": 0.3,
+          "max": 1
+        },
+        "expression": {
+          "target": "master.volume",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "tape",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 8
+        }
+      },
+      "drone": {
+        "mode": "off",
+        "gain": 0.5011872336272722,
+        "brightness": 0.5,
+        "movement": 0.3,
+        "width": 0.7,
+        "fade": 4,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": 80
+    },
+    "song_muno6ud109ssfhc": {
+      "id": "song_muno6ud109ssfhc",
+      "factoryId": "factory:dusty-piano",
+      "name": "Dusty Piano",
+      "notes": "Grand piano as if sampled from an old record: vinyl crackle, a little tape wobble and a warm, narrow tone. The mod wheel controls the reverb amount. Pull the pitch-bend wheel down for a tape-stop; push it up for a filter sweep.",
+      "category": "lofi",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          {
+            "instrument": {
+              "type": "sampler",
+              "id": "salamander-piano"
+            },
+            "gain": 0.85,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.3,
+              "delay": 0.1,
+              "chorus": 0
+            },
+            "params": {}
+          },
+          null,
+          null,
+          null
+        ],
+        "fx": {
+          "reverb": {
+            "size": 0.4,
+            "damp": 0.7,
+            "predelay": 0.015,
+            "returnGain": 0.85
+          },
+          "delay": {
+            "time": 0.4,
+            "feedback": 0.25,
+            "pingpong": false,
+            "tone": 0.3,
+            "sync": "1/4",
+            "returnGain": 0.5
+          },
+          "chorus": {
+            "rate": 0.4,
+            "depth": 0.5,
+            "returnGain": 1
+          },
+          "lofi": {
+            "amount": 0.5,
+            "wow": 0.45,
+            "flutter": 0.35,
+            "crackle": 0.6,
+            "bits": 0.4,
+            "tone": 0.6,
+            "saturation": 0.45
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "fx.reverb.returnGain",
+          "min": 0.3,
+          "max": 1
+        },
+        "expression": {
+          "target": "master.volume",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "tape",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 8
+        }
+      },
+      "drone": {
+        "mode": "off",
+        "gain": 0.5011872336272722,
+        "brightness": 0.5,
+        "movement": 0.3,
+        "width": 0.7,
+        "fade": 4,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": 75
+    },
+    "song_muno6ud10a7a01e": {
+      "id": "song_muno6ud10a7a01e",
+      "factoryId": "factory:glass-ocean",
+      "name": "Glass Ocean",
+      "notes": "A glassy pad with soft FM bells echoing in a dotted-eighth delay: ambient intros and spacious instrumental sections. Set the song tempo so the echoes lock to the band. The mod wheel is the pad level; pitch bend morphs the sounds (octave bloom on the pad, brighter bells).",
+      "category": "ambient",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          null,
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "glass-pad"
+            },
+            "gain": 0.7,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": true,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.6,
+              "delay": 0.25,
+              "chorus": 0.45
+            },
+            "params": {}
+          },
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "bell"
+            },
+            "gain": 0.5,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.5,
+              "delay": 0.55,
+              "chorus": 0.1
+            },
+            "params": {}
+          },
+          null
+        ],
+        "fx": {
+          "reverb": {
+            "size": 0.82,
+            "damp": 0.4,
+            "predelay": 0.035,
+            "returnGain": 1.1
+          },
+          "delay": {
+            "time": 0.625,
+            "feedback": 0.5,
+            "pingpong": true,
+            "tone": 0.45,
+            "sync": "1/8d",
+            "returnGain": 0.9
+          },
+          "chorus": {
+            "rate": 0.25,
+            "depth": 0.55,
+            "returnGain": 1
+          },
+          "lofi": {
+            "amount": 0,
+            "wow": 0.5,
+            "flutter": 0.5,
+            "crackle": 0.3,
+            "bits": 0.5,
+            "tone": 0.5,
+            "saturation": 0.5
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "expression": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "morph",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 10
+        }
+      },
+      "drone": {
+        "mode": "off",
+        "gain": 0.5011872336272722,
+        "brightness": 0.5,
+        "movement": 0.3,
+        "width": 0.7,
+        "fade": 4,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": 72
+    },
+    "song_muno6ud10b1f7ez": {
+      "id": "song_muno6ud10b1f7ez",
+      "factoryId": "factory:sub-shimmer",
+      "name": "Sub + Shimmer",
+      "notes": "A split: deep mono sub-bass on the left hand (below middle C), glass pad from C3 up, and a key drone underneath. Great for big, spacious moments when there is no bass player. The mod wheel is the pad level; push pitch bend up to swell the drone.",
+      "category": "ambient",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          null,
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "glass-pad"
+            },
+            "gain": 0.65,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 48,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": true,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.6,
+              "delay": 0.2,
+              "chorus": 0.45
+            },
+            "params": {}
+          },
+          null,
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "sub-bass"
+            },
+            "gain": 0.75,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 59,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "lowest",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0,
+              "delay": 0,
+              "chorus": 0
+            },
+            "params": {}
+          }
+        ],
+        "fx": {
+          "reverb": {
+            "size": 0.78,
+            "damp": 0.45,
+            "predelay": 0.03,
+            "returnGain": 1.05
+          },
+          "delay": {
+            "time": 0.5,
+            "feedback": 0.4,
+            "pingpong": false,
+            "tone": 0.4,
+            "sync": "off",
+            "returnGain": 0.7
+          },
+          "chorus": {
+            "rate": 0.25,
+            "depth": 0.5,
+            "returnGain": 1
+          },
+          "lofi": {
+            "amount": 0,
+            "wow": 0.5,
+            "flutter": 0.5,
+            "crackle": 0.3,
+            "bits": 0.5,
+            "tone": 0.5,
+            "saturation": 0.5
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "expression": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "drone-swell",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 10
+        }
+      },
+      "drone": {
+        "mode": "synth",
+        "gain": 0.9,
+        "brightness": 0.55,
+        "movement": 0.35,
+        "width": 0.8,
+        "fade": 5,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": null
+    },
+    "song_muno6ud10cngt1g": {
+      "id": "song_muno6ud10cngt1g",
+      "factoryId": "factory:anthem",
+      "name": "Anthem",
+      "notes": "The big modern-worship chorus: grand piano over a wide supersaw pad, with dotted-eighth echoes. The mod wheel is an intensity macro: roll it down for a verse (piano with a soft, dark pad) and up for the chorus (the pad gets louder and brighter). Set the song tempo so the echoes lock to the band.",
+      "category": "worship",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          {
+            "instrument": {
+              "type": "sampler",
+              "id": "salamander-piano"
+            },
+            "gain": 0.8,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.3,
+              "delay": 0.15,
+              "chorus": 0
+            },
+            "params": {}
+          },
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "supersaw-pad"
+            },
+            "gain": 0.6,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.5,
+              "delay": 0.3,
+              "chorus": 0.15
+            },
+            "params": {}
+          },
+          null,
+          null
+        ],
+        "fx": {
+          "reverb": {
+            "size": 0.42,
+            "damp": 0.5,
+            "predelay": 0.025,
+            "returnGain": 1
+          },
+          "delay": {
+            "time": 0.375,
+            "feedback": 0.38,
+            "pingpong": true,
+            "tone": 0.45,
+            "sync": "1/8d",
+            "returnGain": 0.9
+          },
+          "chorus": {
+            "rate": 0.4,
+            "depth": 0.5,
+            "returnGain": 1
+          },
+          "lofi": {
+            "amount": 0,
+            "wow": 0.5,
+            "flutter": 0.5,
+            "crackle": 0.3,
+            "bits": 0.5,
+            "tone": 0.5,
+            "saturation": 0.5
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "macro.intensity",
+          "min": 0,
+          "max": 1
+        },
+        "expression": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "none",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 12
+        }
+      },
+      "drone": {
+        "mode": "off",
+        "gain": 0.5011872336272722,
+        "brightness": 0.5,
+        "movement": 0.3,
+        "width": 0.7,
+        "fade": 4,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": 72
+    },
+    "song_muno6ud20d8j05g": {
+      "id": "song_muno6ud20d8j05g",
+      "factoryId": "factory:gospel-stab-b3",
+      "name": "Gospel Stab + B3",
+      "notes": "Drawbar organ with a punchy synth stab layered on the right hand and a mono synth bass on the left (below middle C, lowest note only). The mod wheel is the stab level, so you can play pure organ and bring the stabs in for hits. Push the pitch-bend wheel to switch the rotary speaker between slow and fast (it also opens up the stab and bass).",
+      "category": "worship",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          {
+            "instrument": {
+              "type": "organ",
+              "id": "gospel"
+            },
+            "gain": 0.75,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": false,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.2,
+              "delay": 0.1,
+              "chorus": 0
+            },
+            "params": {}
+          },
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "poly-stab"
+            },
+            "gain": 0.85,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 60,
+            "highNote": 127,
+            "sustain": false,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.25,
+              "delay": 0.25,
+              "chorus": 0
+            },
+            "params": {}
+          },
+          null,
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "synth-bass"
+            },
+            "gain": 0.7,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 59,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "lowest",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0,
+              "delay": 0,
+              "chorus": 0
+            },
+            "params": {}
+          }
+        ],
+        "fx": {
+          "reverb": {
+            "size": 0.18,
+            "damp": 0.6,
+            "predelay": 0.01,
+            "returnGain": 0.7
+          },
+          "delay": {
+            "time": 0.11,
+            "feedback": 0.08,
+            "pingpong": false,
+            "tone": 0.55,
+            "sync": "off",
+            "returnGain": 0.7
+          },
+          "chorus": {
+            "rate": 0.4,
+            "depth": 0.5,
+            "returnGain": 1
+          },
+          "lofi": {
+            "amount": 0,
+            "wow": 0.5,
+            "flutter": 0.5,
+            "crackle": 0.3,
+            "bits": 0.5,
+            "tone": 0.5,
+            "saturation": 0.5
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "expression": {
+          "target": "master.volume",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "morph",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 8
+        }
+      },
+      "drone": {
+        "mode": "off",
+        "gain": 0.5011872336272722,
+        "brightness": 0.5,
+        "movement": 0.3,
+        "width": 0.7,
+        "fade": 4,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": 96
+    },
+    "song_muno6ud20e7wvgf": {
+      "id": "song_muno6ud20e7wvgf",
+      "factoryId": "factory:upright-pad",
+      "name": "Upright + Pad",
+      "notes": "A warm, close upright piano with a soft pad and the key drone underneath: acoustic sets, communion and quiet songs. The mod wheel (and an expression pedal) brings the pad in and out. Push the pitch-bend wheel up to lift the drone.",
+      "category": "worship",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          {
+            "instrument": {
+              "type": "sampler",
+              "id": "upright-piano"
+            },
+            "gain": 0.85,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.3,
+              "delay": 0.05,
+              "chorus": 0
+            },
+            "params": {}
+          },
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "warm-pad"
+            },
+            "gain": 0.5,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": true,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.5,
+              "delay": 0.1,
+              "chorus": 0.35
+            },
+            "params": {}
+          },
+          null,
+          null
+        ],
+        "fx": {
+          "reverb": {
+            "size": 0.42,
+            "damp": 0.5,
+            "predelay": 0.025,
+            "returnGain": 1
+          },
+          "delay": {
+            "time": 0.375,
+            "feedback": 0.35,
+            "pingpong": false,
+            "tone": 0.5,
+            "sync": "off",
+            "returnGain": 0
+          },
+          "chorus": {
+            "rate": 0.4,
+            "depth": 0.5,
+            "returnGain": 1
+          },
+          "lofi": {
+            "amount": 0,
+            "wow": 0.5,
+            "flutter": 0.5,
+            "crackle": 0.3,
+            "bits": 0.5,
+            "tone": 0.5,
+            "saturation": 0.5
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "expression": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "drone-swell",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 8
+        }
+      },
+      "drone": {
+        "mode": "synth",
+        "gain": 1,
+        "brightness": 0.4,
+        "movement": 0.3,
+        "width": 0.75,
+        "fade": 5,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": null
+    },
+    "song_muno6ud20fhbvh6": {
+      "id": "song_muno6ud20fhbvh6",
+      "factoryId": "factory:clav-funk",
+      "name": "Clav Funk",
+      "notes": "Clavinet with a Wurlitzer layered underneath, a quick slapback and very little room: funk, gospel grooves and tight band playing. The mod wheel is the Wurlitzer level (wheel down = clav alone); an expression pedal is a volume pedal. Pitch bend is off.",
+      "category": "keys",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          {
+            "instrument": {
+              "type": "sampler",
+              "id": "clavinet"
+            },
+            "gain": 0.8,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": false,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.12,
+              "delay": 0.2,
+              "chorus": 0
+            },
+            "params": {}
+          },
+          {
+            "instrument": {
+              "type": "sampler",
+              "id": "ep-wurli"
+            },
+            "gain": 0.5,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.15,
+              "delay": 0.1,
+              "chorus": 0.25
+            },
+            "params": {}
+          },
+          null,
+          null
+        ],
+        "fx": {
+          "reverb": {
+            "size": 0.18,
+            "damp": 0.6,
+            "predelay": 0.01,
+            "returnGain": 0.5
+          },
+          "delay": {
+            "time": 0.11,
+            "feedback": 0.08,
+            "pingpong": false,
+            "tone": 0.55,
+            "sync": "off",
+            "returnGain": 0.7
+          },
+          "chorus": {
+            "rate": 0.4,
+            "depth": 0.5,
+            "returnGain": 1
+          },
+          "lofi": {
+            "amount": 0,
+            "wow": 0.5,
+            "flutter": 0.5,
+            "crackle": 0.3,
+            "bits": 0.5,
+            "tone": 0.5,
+            "saturation": 0.5
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "expression": {
+          "target": "master.volume",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "none",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 8
+        }
+      },
+      "drone": {
+        "mode": "off",
+        "gain": 0.5011872336272722,
+        "brightness": 0.5,
+        "movement": 0.3,
+        "width": 0.7,
+        "fade": 4,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": 96
+    },
+    "song_muno6ud20g3zue2": {
+      "id": "song_muno6ud20g3zue2",
+      "factoryId": "factory:music-box-lullaby",
+      "name": "Music Box Lullaby",
+      "notes": "Music box over a glassy pad in a cathedral, with celesta taking over from C5 up: lullabies, Christmas and gentle intros. The mod wheel is the pad level. Push the pitch-bend wheel to bloom the pad an octave up.",
+      "category": "ambient",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          {
+            "instrument": {
+              "type": "sampler",
+              "id": "music-box"
+            },
+            "gain": 0.7,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 71,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.45,
+              "delay": 0.15,
+              "chorus": 0
+            },
+            "params": {}
+          },
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "glass-pad"
+            },
+            "gain": 0.5,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.55,
+              "delay": 0.15,
+              "chorus": 0.4
+            },
+            "params": {}
+          },
+          {
+            "instrument": {
+              "type": "sampler",
+              "id": "celesta"
+            },
+            "gain": 0.65,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 72,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.45,
+              "delay": 0.2,
+              "chorus": 0
+            },
+            "params": {}
+          },
+          null
+        ],
+        "fx": {
+          "reverb": {
+            "size": 0.9,
+            "damp": 0.35,
+            "predelay": 0.05,
+            "returnGain": 1.3
+          },
+          "delay": {
+            "time": 0.375,
+            "feedback": 0.35,
+            "pingpong": false,
+            "tone": 0.5,
+            "sync": "off",
+            "returnGain": 0
+          },
+          "chorus": {
+            "rate": 0.4,
+            "depth": 0.5,
+            "returnGain": 1
+          },
+          "lofi": {
+            "amount": 0,
+            "wow": 0.5,
+            "flutter": 0.5,
+            "crackle": 0.3,
+            "bits": 0.5,
+            "tone": 0.5,
+            "saturation": 0.5
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "expression": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "morph",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 10
+        }
+      },
+      "drone": {
+        "mode": "off",
+        "gain": 0.5011872336272722,
+        "brightness": 0.5,
+        "movement": 0.3,
+        "width": 0.7,
+        "fade": 4,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": null
+    },
+    "song_muno6ud20h68lwr": {
+      "id": "song_muno6ud20h68lwr",
+      "factoryId": "factory:dream-juno",
+      "name": "Dream Juno",
+      "notes": "A chorused Juno-style pad with a shimmer pad an octave-bloom above it, in a huge wash with long echo trails: ambient sets and prayer. The mod wheel is an intensity macro: rolling it up brings the Juno pad up and opens both pads. Set the song tempo so the echo trails follow the band.",
+      "category": "ambient",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          null,
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "juno-pad"
+            },
+            "gain": 0.7,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.6,
+              "delay": 0.25,
+              "chorus": 0.3
+            },
+            "params": {}
+          },
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "shimmer-pad"
+            },
+            "gain": 0.55,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.65,
+              "delay": 0.3,
+              "chorus": 0.2
+            },
+            "params": {}
+          },
+          null
+        ],
+        "fx": {
+          "reverb": {
+            "size": 1,
+            "damp": 0.25,
+            "predelay": 0.06,
+            "returnGain": 1.6
+          },
+          "delay": {
+            "time": 0.375,
+            "feedback": 0.6,
+            "pingpong": true,
+            "tone": 0.3,
+            "sync": "1/4",
+            "returnGain": 0.75
+          },
+          "chorus": {
+            "rate": 0.4,
+            "depth": 0.5,
+            "returnGain": 1
+          },
+          "lofi": {
+            "amount": 0,
+            "wow": 0.5,
+            "flutter": 0.5,
+            "crackle": 0.3,
+            "bits": 0.5,
+            "tone": 0.5,
+            "saturation": 0.5
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "macro.intensity",
+          "min": 0,
+          "max": 1
+        },
+        "expression": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "none",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 12
+        }
+      },
+      "drone": {
+        "mode": "off",
+        "gain": 0.5011872336272722,
+        "brightness": 0.5,
+        "movement": 0.3,
+        "width": 0.7,
+        "fade": 4,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": 70
+    },
+    "song_muno6ud20i7nb3i": {
+      "id": "song_muno6ud20i7nb3i",
+      "factoryId": "factory:80s-ballad",
+      "name": "80s Ballad",
+      "notes": "The classic FM electric piano over a Juno-style pad in a big hall, with the chorus turned up. The mod wheel is the pad level (wheel down = electric piano alone); an expression pedal also rides the pad. Pitch bend bends the pad only.",
+      "category": "synth",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "dx-epiano"
+            },
+            "gain": 0.8,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.35,
+              "delay": 0.1,
+              "chorus": 0.45
+            },
+            "params": {}
+          },
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "juno-pad"
+            },
+            "gain": 0.5,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": true,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.5,
+              "delay": 0.1,
+              "chorus": 0.5
+            },
+            "params": {}
+          },
+          null,
+          null
+        ],
+        "fx": {
+          "reverb": {
+            "size": 0.65,
+            "damp": 0.45,
+            "predelay": 0.035,
+            "returnGain": 1.15
+          },
+          "delay": {
+            "time": 0.375,
+            "feedback": 0.35,
+            "pingpong": false,
+            "tone": 0.5,
+            "sync": "off",
+            "returnGain": 0
+          },
+          "chorus": {
+            "rate": 0.6,
+            "depth": 0.65,
+            "returnGain": 1.25
+          },
+          "lofi": {
+            "amount": 0,
+            "wow": 0.5,
+            "flutter": 0.5,
+            "crackle": 0.3,
+            "bits": 0.5,
+            "tone": 0.5,
+            "saturation": 0.5
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "expression": {
+          "target": "slots.1.gain",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "pitch",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 8
+        }
+      },
+      "drone": {
+        "mode": "off",
+        "gain": 0.5011872336272722,
+        "brightness": 0.5,
+        "movement": 0.3,
+        "width": 0.7,
+        "fade": 4,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": null
+    },
+    "song_muno6ud20jdmpxa": {
+      "id": "song_muno6ud20jdmpxa",
+      "factoryId": "factory:synthwave",
+      "name": "Synthwave",
+      "notes": "A three-way split: 808 sub on the lowest left-hand note (below middle C), analog brass in the middle and a square lead from C5 up, with quarter-note echoes. The mod wheel is a wash macro (more reverb and echo); the pitch-bend wheel bends the lead. Set the song tempo so the echoes lock to the track.",
+      "category": "synth",
+      "playIn": 0,
+      "hearIn": 0,
+      "transposeOctave": 0,
+      "minor": false,
+      "patch": {
+        "slots": [
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "analog-brass"
+            },
+            "gain": 0.7,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 48,
+            "highNote": 71,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "off",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.3,
+              "delay": 0.2,
+              "chorus": 0.2
+            },
+            "params": {}
+          },
+          null,
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "square-lead"
+            },
+            "gain": 1.2,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 72,
+            "highNote": 127,
+            "sustain": true,
+            "bendEnabled": true,
+            "mono": "highest",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0.3,
+              "delay": 0.35,
+              "chorus": 0
+            },
+            "params": {}
+          },
+          {
+            "instrument": {
+              "type": "synth",
+              "id": "808-sub"
+            },
+            "gain": 0.75,
+            "pan": 0,
+            "octave": 0,
+            "transpose": 0,
+            "lowNote": 0,
+            "highNote": 59,
+            "sustain": true,
+            "bendEnabled": false,
+            "mono": "lowest",
+            "velocityCurve": "normal",
+            "sends": {
+              "reverb": 0,
+              "delay": 0,
+              "chorus": 0
+            },
+            "params": {}
+          }
+        ],
+        "fx": {
+          "reverb": {
+            "size": 0.42,
+            "damp": 0.5,
+            "predelay": 0.025,
+            "returnGain": 1
+          },
+          "delay": {
+            "time": 0.375,
+            "feedback": 0.3,
+            "pingpong": false,
+            "tone": 0.5,
+            "sync": "1/4",
+            "returnGain": 0.8
+          },
+          "chorus": {
+            "rate": 0.4,
+            "depth": 0.5,
+            "returnGain": 1
+          },
+          "lofi": {
+            "amount": 0,
+            "wow": 0.5,
+            "flutter": 0.5,
+            "crackle": 0.3,
+            "bits": 0.5,
+            "tone": 0.5,
+            "saturation": 0.5
+          },
+          "master": {
+            "volume": 0.5011872336272722
+          }
+        },
+        "modWheel": {
+          "target": "macro.wash",
+          "min": 0,
+          "max": 1
+        },
+        "expression": {
+          "target": "master.volume",
+          "min": 0,
+          "max": 1
+        },
+        "volume": {
+          "target": "master.volume"
+        },
+        "bend": {
+          "mode": "pitch",
+          "range": 2
+        },
+        "swell": {
+          "seconds": 8
+        }
+      },
+      "drone": {
+        "mode": "off",
+        "gain": 0.5011872336272722,
+        "brightness": 0.5,
+        "movement": 0.3,
+        "width": 0.7,
+        "fade": 4,
+        "chordFollow": false,
+        "continueAcrossSongs": true,
+        "minorUsesRelativeMajorFile": true
+      },
+      "tempo": 100
+    }
+  },
+  "songOrder": [
+    "song_muno6ud001lgnxv",
+    "song_muno6ud102fh0ul",
+    "song_muno6ud103ktz7q",
+    "song_muno6ud104wkdb1",
+    "song_muno6ud105zl92z",
+    "song_muno6ud106cwhcr",
+    "song_muno6ud1072n8jg",
+    "song_muno6ud108m7l2l",
+    "song_muno6ud109ssfhc",
+    "song_muno6ud10a7a01e",
+    "song_muno6ud10b1f7ez",
+    "song_muno6ud10cngt1g",
+    "song_muno6ud20d8j05g",
+    "song_muno6ud20e7wvgf",
+    "song_muno6ud20fhbvh6",
+    "song_muno6ud20g3zue2",
+    "song_muno6ud20h68lwr",
+    "song_muno6ud20i7nb3i",
+    "song_muno6ud20jdmpxa"
+  ],
+  "setlists": {
+    "set_muno6ud20ko24dn": {
+      "id": "set_muno6ud20ko24dn",
+      "name": "My Set",
+      "songIds": [
+        "song_muno6ud001lgnxv",
+        "song_muno6ud102fh0ul",
+        "song_muno6ud103ktz7q",
+        "song_muno6ud104wkdb1",
+        "song_muno6ud105zl92z",
+        "song_muno6ud106cwhcr",
+        "song_muno6ud1072n8jg",
+        "song_muno6ud108m7l2l",
+        "song_muno6ud109ssfhc",
+        "song_muno6ud10a7a01e",
+        "song_muno6ud10b1f7ez",
+        "song_muno6ud10cngt1g",
+        "song_muno6ud20d8j05g",
+        "song_muno6ud20e7wvgf",
+        "song_muno6ud20fhbvh6",
+        "song_muno6ud20g3zue2",
+        "song_muno6ud20h68lwr",
+        "song_muno6ud20i7nb3i",
+        "song_muno6ud20jdmpxa"
+      ]
+    }
+  },
+  "setlistOrder": [
+    "set_muno6ud20ko24dn"
+  ],
+  "settings": {
+    "latency": "lowest",
+    "monoOutput": false,
+    "programChange": false,
+    "pedalInvert": false,
+    "velocitySens": "normal",
+    "midiLearn": {},
+    "currentSetlistId": "set_muno6ud20ko24dn",
+    "currentSongId": "song_muno6ud001lgnxv",
+    "setlistIndex": 0,
+    "setlistGap": false,
+    "view": "perform",
+    "performLock": false,
+    "computerKeyboard": true,
+    "menuBarSetlistId": null
+  },
+  "meta": {
+    "factorySeeded": true,
+    "createdAt": 1790746432307,
+    "factoryVersion": 2,
+    "edited": false
+  }
+}

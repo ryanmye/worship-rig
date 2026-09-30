@@ -78,7 +78,7 @@ figure { margin: 0; }
 figure img { border-radius: 10px; border: 1px solid var(--line); background: #0b0d10; }
 figcaption { font-size: 0.9rem; color: var(--muted); margin-top: 0.5rem; }
 .pair { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
-.pair figure.narrow img { max-width: 320px; }
+.pair figure.narrow img { max-width: min(320px, 100%); }
 @media (max-width: 720px) { .pair { grid-template-columns: 1fr; } }
 
 /* lists and quotes */
