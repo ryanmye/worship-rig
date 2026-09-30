@@ -1,0 +1,99 @@
+/* Worship Rig project page. One stylesheet, system fonts, follows the system light/dark setting. */
+:root {
+  color-scheme: light dark;
+  --bg: #f7f4ee;
+  --panel: #ffffff;
+  --text: #1d1a16;
+  --muted: #5e574d;
+  --line: #e2dbcf;
+  --accent: #9a6b1c;
+  --accent-bg: #f3e6c9;
+  --code-bg: #efe9de;
+  --max: 68rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1115;
+    --panel: #171a20;
+    --text: #ece8e1;
+    --muted: #a39d93;
+    --line: #2a2e36;
+    --accent: #e6ba65;
+    --accent-bg: #2b2415;
+    --code-bg: #1f232a;
+  }
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 1rem/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: var(--accent); text-underline-offset: 0.15em; }
+a:hover { text-decoration-thickness: 2px; }
+code {
+  font: 0.88em/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--code-bg);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+.wrap { max-width: var(--max); margin: 0 auto; padding-inline: 1.25rem; }
+section { padding-block: 2.75rem; border-top: 1px solid var(--line); }
+h1, h2, h3 { line-height: 1.2; margin: 0 0 0.6rem; }
+h2 { font-size: 1.6rem; }
+h3 { font-size: 1.05rem; }
+p { margin: 0 0 0.9rem; }
+.muted { color: var(--muted); }
+.small { font-size: 0.9rem; }
+
+/* hero */
+.hero { padding-block: 4rem 3rem; }
+.brand { display: flex; align-items: center; gap: 0.9rem; margin-bottom: 1rem; }
+.brand img { width: 3.25rem; height: 3.25rem; }
+.brand h1 { font-size: clamp(2rem, 6vw, 2.8rem); margin: 0; letter-spacing: -0.01em; }
+.lede { font-size: 1.2rem; max-width: 40rem; }
+.downloads { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 1.5rem 0 0.75rem; }
+.btn {
+  display: inline-flex; flex-direction: column; align-items: flex-start;
+  padding: 0.7rem 1.1rem; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--text);
+  text-decoration: none; font-weight: 600; min-width: 14rem;
+}
+.btn small { font-weight: 400; color: var(--muted); font-size: 0.82rem; }
+.btn[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
+.soon { font-weight: 600; margin-bottom: 0.3rem; }
+
+/* cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: 1rem; margin-top: 1.25rem; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 1.1rem 1.2rem; }
+.card p { margin: 0; color: var(--muted); }
+
+/* screenshots */
+.shots { display: grid; gap: 1.75rem; margin-top: 1.25rem; }
+figure { margin: 0; }
+figure img { border-radius: 10px; border: 1px solid var(--line); background: #0b0d10; }
+figcaption { font-size: 0.9rem; color: var(--muted); margin-top: 0.5rem; }
+.pair { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+.pair figure.narrow img { max-width: 320px; }
+@media (max-width: 720px) { .pair { grid-template-columns: 1fr; } }
+
+/* lists and quotes */
+ul, ol { padding-left: 1.3rem; margin: 0 0 1rem; }
+li { margin-bottom: 0.4rem; }
+blockquote {
+  margin: 0 0 0.9rem; padding: 0.6rem 1rem;
+  border-left: 3px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0;
+  font-size: 0.92rem; overflow-wrap: anywhere;
+}
+.note { background: var(--accent-bg); border-radius: 10px; padding: 0.8rem 1rem; margin: 1rem 0; }
+dl.req { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1.25rem; margin: 0; }
+dl.req dt { font-weight: 600; }
+dl.req dd { margin: 0; }
+@media (max-width: 480px) { dl.req { grid-template-columns: 1fr; } dl.req dd { margin-bottom: 0.5rem; } }
+.links { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 1rem; }
+
+footer { border-top: 1px solid var(--line); padding-block: 2rem 3rem; color: var(--muted); font-size: 0.9rem; }
