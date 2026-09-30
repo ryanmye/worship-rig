@@ -350,6 +350,9 @@ any time.
 
 ## Licenses
 
+The app's own code is free software under the **GNU GPL v3** (`LICENSE`; SPDX `GPL-3.0-only`). The bundled sounds
+keep their own licences, listed below and in `LICENSES.md`.
+
 The grand piano is the Salamander Grand Piano by Alexander Holm (CC BY 3.0). The upright piano comes from VS Chamber
 Orchestra 2: Community Edition by Versilian Studios (CC0). The other 21 sampled instruments come from the Musyng Kite
 General MIDI soundfont, as rendered by gleitz/midi-js-soundfonts, under **CC BY-SA 3.0** (attribution, share-alike).
