@@ -970,6 +970,8 @@ function menuBarStateSnapshot() {
     // reviews/for-local.md L-14 hook 1 names these two as well
     menuBarMode,
     windowDestroyed: !win || win.isDestroyed(),
+    // L-30 diagnostics: where macOS put the status item ({x:0,y:<screen height>} = parked off-screen, i.e. hidden)
+    trayBounds: tray && !tray.isDestroyed() ? tray.getBounds() : null,
   };
 }
 
