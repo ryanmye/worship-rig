@@ -298,3 +298,124 @@ The main thread was idle for 92.4 % of the 10 s. JS plus native work was 7.6 %.
 - `pmset -g therm`: no thermal warning, no performance warning, and no CPU power status recorded.
 - Idle wakeups: `powermetrics` was unavailable, and my `top IDLEW` parse did not come through, so they are not
   reported.
+
+## Build 1ce40b4: lowres2 + idle-cpu-ui + themes (2026-09-30, 05:20–05:30 UTC)
+
+- Build: `dist/mac-arm64/Worship Rig.app` built 01:13 local from the merge 1ce40b4. `app/`, `main.js` and
+  `preload.js` are the same at HEAD 6b5523e. It includes lowres2 + lowres2-scope (frozen drone and audio sleep, both
+  only inside low-resource mode), idle-cpu-ui (one shared meter clock, ≤ 30 frames/s, stops when silent, hidden or
+  in low-resource), 8 themes with Sanctuary as the default, and the popover theming.
+- Setup: the screen was unlocked, and the Mac was on AC. Ryan was at the Mac. I quit the running app and relaunched it
+  with `--remote-debugging-port=9333`. Playwright 1.56 attached over CDP to `http://127.0.0.1:8438/`. The processes
+  were one renderer (38510), GPU (38508), main (38506) and the audio service (38519).
+- Method: the same as the sections above.
+  - Sunday Pad + Piano with the drone set to `synth` (the library copy has `off`). 10 s settle, then a 20 s window.
+  - Renderer, GPU and main %CPU come from `ps -o time=` deltas.
+  - Energy Impact is `top -l 5 -s 5 -stats pid,cpu,power -pid …` over every app process. The first sample is dropped,
+    and the remaining 4 × 5 s are averaged.
+  - Recalcs and layouts come from CDP `Performance.getMetrics` deltas.
+  - "rAF/s" counts the page's own `requestAnimationFrame` calls (a wrapper on `window.requestAnimationFrame`), not a
+    probe loop. This build's meters therefore show up directly.
+  - Audio status is `controller.status.audio` with `engine.sleepState`. Frozen is `engine._debugStats().droneFrozen`.
+  - I read `engine.analyserL` peak at the start and end of each window, to show the drone is still audible.
+- Starting state: `settings.lowResource = true`, `menuBarMode = true`, `audioSleepSec` absent (so 30), theme
+  `sanctuary`, and the Sunday Pad drone `off`. I set `audioSleepSec` to 10 for the sleep test.
+- One discarded run: the first state 1 window ended with the drone `off`. `__rig.diag.drone` recorded it as `synth →
+  off` at input `pointer`, with the focused element `drone-on` and the call site `onTile.js:50 → setDroneOn`.
+  - That is a real click on the Drone tile about 11 s into the window. Most likely Ryan hearing the drone. It is not
+    the L-24 flip.
+  - The diag hook works: it named the cause in one read. The window was re-run and the drone stayed on.
+
+| state | renderer % | GPU % | Energy Impact (app) | recalcs/s | rAF/s | Task ms/s | audio | drone frozen |
+|---|---|---|---|---|---|---|---|---|
+| (1) visible, menu-bar off, drone on (Sanctuary) | **47.0** / 45.0 / 45.2 | 10.9 / 10.8 / 10.6 | **57.0** / 55.2 / 54.9 | 29.1 | 30.2 | 58–62 | running | no (live) |
+| (1t) same, theme Classic | 38.9 | 8.9 | 47.0 | 29.2 | 30.3 | 50 | running | no (live) |
+| (2) low-resource on (`settings.lowResource`), visible, drone on | **11.6** → 10.7 (+20 s) | 0.0 | **11.8** → 11.0 | 0 | 0 | 3–6 | running (peak 0.065–0.072, live was 0.068) | **yes** (1 render, 1041 ms; frozen 1.3 s after the switch) |
+| (3) low-resource on, drone off, idle ≥ `audioSleepSec` (10) | **0.1** | 0.0 | **0.1** | 0 | 0 | 0.6 | **asleep** (ctx `suspended`) | – |
+| (4) ⌘H, menu-bar mode **off**, drone on | **35.9** | **0.0** | **35.6** | **0** | **0** | 3.2 | running | no (live; low-resource stays off) |
+| (5) menu-bar mode on, red close button (hide-on-close), drone on | **9.8** → 9.8 (+20 s) | 0.0 | **10.0** → 10.1 | 0 | 0 | 3.3 | running | **yes** (reused the kept loop, 279 ms after close) |
+| (6) app quit | 0 | 0 | **0** | – | – | – | – | – |
+
+- The main process was 0–0.1 % (Energy 0–0.1) in every row except the discarded one. The audio service was 0.5–0.6 %
+  (Energy about 0.5) whenever the context ran, and 0 while asleep.
+- Rows (1), (1r) and (1t Sanctuary) are three windows of the same config, 6 min apart. The Classic-vs-Sanctuary pair
+  (1t) was taken back to back, and the thread split came from `ps -M` deltas (thread roles inferred from their size
+  and order, as in the first run; no `sample` this time).
+  - Audio render thread: 21.5 (Classic) vs 24.8 (Sanctuary).
+  - Reverb convolution: 4.3 + 4.1 vs 4.8 + 4.5.
+  - Compositor: 3.2 vs 3.8.
+  - GPU: 8.9 vs 10.6.
+  - So Sanctuary costs about +2 GPU and +1 compositor. The rest of the 6-point gap is audio-thread noise between
+    windows.
+
+### Before and after (previous build: sections "Build 0816b89" and "Build d582e68" above)
+
+| | before: renderer / GPU / Energy | now: renderer / GPU / Energy |
+|---|---|---|
+| visible, drone on | 40.2–41.6 / 12.5–12.7 / 50.0 (theme Classic then) | **45–47 / 10.8 / 55–57** (Sanctuary); **38.9 / 8.9 / 47** (Classic). rAF 120 → **30**, recalcs 121 → **29** |
+| low-resource, visible, drone on | 31.0 / 0 / – (live drone synth 21 + convolvers 9.5) | **10.7–11.6 / 0 / 11–12** (frozen loop, reverb asleep) |
+| silent | drone off, awake: 7.6 / 0 / – | low-resource + asleep: **0.1 / 0 / 0.1** |
+| ⌘H, menu-bar off | 39.2 / 11.9 / 54.2 (meters ran) | **35.9 / 0 / 35.6** (meters stop, `data-window-hidden` set) |
+| hidden to menu bar (close or ⌘H), drone on | 26.2–29.5 / 0 / 29.6–29.7 | **9.8 / 0 / 10.0** |
+| quit | 0 | 0 |
+
+### Findings
+
+- **The frozen drone does what lowres2 promised.** Low-resource with the drone sounding went from 31 % (Energy about
+  30) to 11 % (Energy 11), and hidden-to-menu-bar went from 26–29 % to 9.8 % (Energy 10).
+  - The drone stays audible: the analyser peak was 0.057–0.075 frozen vs 0.054–0.073 live.
+  - `fxAsleep` includes the reverb.
+  - The first freeze rendered in 1041 ms and was playing 1.3 s after `settings.lowResource` → true. The close-button
+    path reused the kept loop (279 ms, no render).
+- **Audio sleep brings the idle app to about zero.** In low-resource mode with the drone off, the context suspended
+  5.6 s after the drone was switched off: the drone's 5 s fade, then the sleep tick, since the input clock was already
+  past 10 s. The whole app then reads 0.1 % and Energy 0.1, against 7.6 % for silent-but-awake in the previous build.
+  - As designed (lowres2-scope), a sounding drone blocks sleep: `sleepBlockers()` = `['drone']` after 76 s in
+    low-resource.
+  - Outside low-resource the context never sleeps.
+- **Wake latency (3 trials, asleep for ≥ 1 s each).** Two trials used `midi._inject([0x90,60,70])` through the real
+  MidiInput path, and one used `controller.perform.noteOn`.
+  - `ctx.state` running = `status.audio` running = `sleepState` awake: **21 / 12 / 12 ms** after the injection. The
+    engine's own `lastWake.ms` read 17.3 / 10.3 / 8.0, with the note queued, a 5 ms wake ramp and 20 ms lead.
+  - First analyser frame above 1e-3: **80 / 71 / 59 ms**. That includes the 20 ms note lead and the analyser's
+    2048-sample window, so it is an upper bound on the added latency, not the latency itself.
+- **⌘H with menu-bar mode off is fixed (R4).** The page got `rig:window-visible {visible:false}` and set
+  `html[data-window-hidden]`. Recalcs, rAF and GPU all went to 0, and Energy fell from 55 to 36 (−35 %).
+  - The drone stays live here, as intended: no low-resource, so no freeze.
+  - `open -a` brought back `{visible:true}` and cleared the attribute.
+- **Visible drone-on is not cheaper.** The meters now run at 30 rAF/s and 29 recalcs/s (was 120/121), with 0 layouts.
+  But the renderer total is dominated by the audio thread (21–25 %) and the two reverb convolution threads (about 9 %).
+  - The UI saving (GPU 12.7 → 8.9 on Classic) is partly eaten by Sanctuary's heavier compositing (+2 GPU).
+  - The next lever for the visible case is audio, not UI.
+
+### Popover theme check (real Electron popover)
+
+- In menu-bar mode, with the window closed to the menu bar, I clicked the real tray item through System Events
+  (`click menu bar item 1 of menu bar 2`). That creates the Electron popover, and `mini.html` appeared as its own CDP
+  target, so no headless stand-in was needed.
+- In the main page I ran `store.set('settings.theme', …)` for `classic`, `sanctuary` and `daylight-day`, then
+  `sanctuary` again. The popover's `html[data-theme]` followed each one, **without a reload** (`performance.timeOrigin`
+  unchanged):
+
+  | theme | follow time (includes the CDP round-trip) | popover sheet | popover card background |
+  |---|---|---|---|
+  | `classic` | 21 ms | `/mini.css` only | `rgb(27, 25, 22)` |
+  | `sanctuary` | 33 ms | `/themes/sanctuary-v2/theme.css` | `rgb(22, 9, 19)` (= swatch `#160913`) |
+  | `daylight-day` | 33 ms | `/themes/daylight-v2/theme.css` | `rgb(243, 239, 231)` (= `#f3efe7`), `data-mode=light` |
+  | `sanctuary` (again) | 27 ms | same as above | same as above |
+
+- Screenshots were taken at 320×440 into the scratch folder (`popover-{classic,sanctuary,daylight-day}.png`). All
+  are opaque cards with correct contrast.
+- Opening the popover while the app was hidden did **not** thaw the drone. Low-resource stayed on, the drone stayed
+  frozen, and no `rig:window-visible` or `lowResource` event fired.
+  - `status.popoverOpen` stayed `false`, because LOCAL `main.js` does not send `popoverShown` / `popoverHidden` yet.
+    That is the lowres2-scope R2 request, still open for LOCAL.
+
+### Restored
+
+- The theme is `sanctuary` and the drone is `off` (the object is identical to the original).
+- `lowResource` and `menuBarMode` are back to **true / true**, the values found at start, not off.
+- `audioSleepSec` is now `30`. It was absent before, and `store.set` cannot delete it; 30 is the default, so the
+  behaviour is identical.
+- The app was quit, which left 0 processes and 0 Energy Impact. It was reopened with a plain `open`, with no debug
+  port.
