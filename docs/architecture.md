@@ -76,7 +76,7 @@ shared/ (params grammar, fx-presets, music, automation, keydetect, chords, wav, 
                   (Keys · Pad · Extra · Bass · Drone | Effects · Master), Show wiring, EditState (selection,
                   baseline, changes), a per-panel ctx (store fan-out, Esc stack, song-bound fields, cleanup)
   edit/lib.js     shared helpers: h, icon/iconButton, sentence, createBinder, section, wordSlider, BLOCKS, labels
-  edit/panels/    one module per block/region: slot (Keys/Pad/Extra/Bass, incl. Advanced › Tone = the keyboard EQ),
+  edit/panels/    one module per block/region: slot (Keys/Pad/Extra/Bass, incl. the keyboard EQ + Sustain in Advanced),
                   drone, effects, master (incl. Wheels & pedal), song (+ song-header), setlist, bottom
   edit/base.css + panels/*.css, pulled in by edit/styles-edit-v2.css (base first, so panel rules win ties)
   ```

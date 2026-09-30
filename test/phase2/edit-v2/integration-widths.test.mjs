@@ -1,7 +1,7 @@
 // OWNER: polish-2B (reviews/ux-round2.md #4, #5, L1, §5 Edit rows). The H-v2 Edit inside the REAL app at the window
 // sizes between the two designed breakpoints — 1280×800, 1366×768, 1440×860 (a 1440×900 Mac window after the menu
 // bar) — plus 1024×700 and 1512×900 on either side:
-//   - every tab (and Keys › Advanced › Tone, Show wiring): no horizontal overflow, no ellipsized or clipped text;
+//   - every tab (and Keys › Advanced with its EQ, Show wiring): no horizontal overflow, no ellipsized or clipped text;
 //   - Effects: the 7 Space chips ("Song's own" included) and the Echo chips keep whole words at every width;
 //   - naming: one vocabulary — no visible text (or option / title / aria-label) matches
 //     /\bCustom\b|Reverb level|the Space\b/ over every tab, the Vibe menu, wiring, Wheels & pedal and Tone;
@@ -245,7 +245,7 @@ test('widths: every tab at 1024 / 1280 / 1366 / 1440×860 / 1512 — no overflow
       assert.equal(hint.cut, false, `live hint not cut at ${w}`);
       assert.match(hint.title, /Changes are heard now/);
     }
-    // Show wiring (lane labels) and Keys › Advanced (+ Tone) at every width
+    // Show wiring (lane labels) and Keys › Advanced (+ its EQ) at every width
     await selectBlock('slot:0');
     await page.click('#view-edit .ev2-wiretog');
     await until(() => !document.querySelector('#view-edit .ev2-wire').hidden);
@@ -330,7 +330,7 @@ test('naming: no visible Edit text says "Custom", "Reverb level" or "the Space" 
     await selectBlock(tab);
     await sleep(200);
     await ev(() => {
-      for (const d of document.querySelectorAll('#view-edit details')) d.open = true; // every section (Tone mounts)
+      for (const d of document.querySelectorAll('#view-edit details')) d.open = true; // every section (Advanced mounts the EQ)
     });
     await sleep(300);
     await check(tab);
@@ -425,8 +425,7 @@ test('Tone EQ in the slot panel at every width: table + graph inside the card, c
   async () => {
     await selectBlock('slot:0');
     await ev(() => {
-      document.querySelector('#view-edit details[data-sec="slot0-adv"]').open = true;
-      document.querySelector('#view-edit details[data-sec="slot0-tone"]').open = true;
+      document.querySelector('#view-edit details[data-sec="slot0-adv"]').open = true; // the EQ sits straight in it
     });
     await until(() => !!document.querySelector('#view-edit .ev2-slot-tone-host .eqk'));
     for (const [w, h] of [...SIZES, [1920, 1080]]) {
@@ -459,7 +458,6 @@ test('Tone EQ in the slot panel at every width: table + graph inside the card, c
       if (w !== 1920) await shot(`widths-${w}-tone-eq`);
     }
     await ev(() => {
-      document.querySelector('#view-edit details[data-sec="slot0-tone"]').open = false;
       document.querySelector('#view-edit details[data-sec="slot0-adv"]').open = false;
     });
     await size(1440, 900);

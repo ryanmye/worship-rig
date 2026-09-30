@@ -3,7 +3,7 @@
  "themes": [
   "nave"
  ],
- "generated": "2026-09-30T04:54:46.535Z",
+ "generated": "2026-09-30T08:33:21.090Z",
  "states": [
   "nave:perform",
   "nave:perform-held",
@@ -41,13 +41,13 @@
   {
    "selector": "& .fx-more",
    "context": ":where(html[data-theme=\"nave\"])",
-   "line": 200,
+   "line": 202,
    "dead": false
   },
   {
    "selector": "& .bstrip.open .bstrip-list",
    "context": ":where(html[data-theme=\"nave\"])",
-   "line": 200,
+   "line": 202,
    "dead": false
   }
  ],

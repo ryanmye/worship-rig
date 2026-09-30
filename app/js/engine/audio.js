@@ -113,6 +113,9 @@ export function normalizePatch(patch) {
     for (const k of ['reverb', 'delay', 'chorus']) slot.sends[k] = clampParam(`slots.${i}.sends.${k}`, slot.sends[k]);
     slot.width = clampParam(`slots.${i}.width`, s.width);
     slot.eq = normalizeSlotEq(i, s.eq);
+    // sustain: optional (absent = the instrument's own release / 'natural')
+    slot.release = s.release == null ? null : clampParam(`slots.${i}.release`, s.release);
+    slot.pedalHold = clampParam(`slots.${i}.pedalHold`, s.pedalHold);
     out.slots.push(slot);
   }
   for (const k of ['modWheel', 'expression']) {
@@ -696,12 +699,12 @@ export class AudioEngine extends EventTarget {
     const { urls, jobs, patches } = this._sampleJobs(patchStates);
     // off-thread IR, idle-time buffer; menubar-A: never in low-resource mode (only the reverb in use is built)
     if (!this._lowRes) for (const p of patches) this.fx.reverb.warm(p.fx.reverb.size, p.fx.reverb.damp);
-    const doPin = () => {
+    const doPin = (keys) => {
       if (this._lowRes) this._pinCurrentOnly(); // menubar-A: pin policy 'current-only'
-      else if (pin === 'replace') this.cache.setPins(urls);
-      else if (pin !== 'none') this.cache.pin(urls);
+      else if (pin === 'replace') this.cache.setPins(keys);
+      else if (pin !== 'none') this.cache.pin(keys);
     };
-    doPin();
+    doPin(urls);
     let i = 0;
     const worker = async () => {
       while (i < jobs.length) {
@@ -710,16 +713,26 @@ export class AudioEngine extends EventTarget {
       }
     };
     await Promise.all(Array.from({ length: Math.min(6, jobs.length) }, worker));
-    doPin();
+    // sustain: keys are recomputed now that the natural lengths are known (a long key of a sample shorter than the
+    // legacy cap collapses to the plain URL, which is where its buffer was stored)
+    doPin(this._sampleJobs(patchStates).urls);
     this._emit('ready', { phase: 'preload', decodedMB: this.cache.decodedMB, pinnedMB: this.cache.pinnedMB });
     return true;
   }
 
-  /** Sample URLs (and decode jobs) the sampler slots of these patches use; unknown instruments are skipped. */
+  /**
+   * Sample cache keys (and decode jobs) the sampler slots of these patches use; unknown instruments are skipped.
+   * sustain (pin budget): an instrument the playing song uses is keyed at its long cap (`decodeOpts.maxSec`, the
+   * variant its live SamplerInstrument holds), every other instrument at the legacy 10 s / 16 s cap, so neighbour
+   * preloads cost what they did before and only the current song's pianos pay for the long tails
+   * (CONTRACT_CHANGES "## sustain"). `urls` are cache keys (BufferCache.keyOf).
+   */
   _sampleJobs(patchStates) {
     const urls = [];
     const jobs = [];
     const patches = [];
+    const live = new Set();
+    for (const s of this._patch?.slots || []) if (s && s.instrument.type === 'sampler') live.add(s.instrument.id);
     for (const ps of patchStates) {
       const p = normalizePatch(ps);
       patches.push(p);
@@ -727,9 +740,12 @@ export class AudioEngine extends EventTarget {
         if (!s || s.instrument.type !== 'sampler') continue;
         const def = this.registry.samplers.get(s.instrument.id);
         if (!def) continue;
+        const maxSec = live.has(def.id) ? def.decodeOpts?.maxSec : undefined;
+        const opts = def.decodeOpts?.maxSec && !maxSec ? { ...def.decodeOpts, maxSec: undefined } : def.decodeOpts;
         for (const L of def.layers) for (const smp of L.samples) {
-          urls.push(smp.url);
-          jobs.push({ ...smp, opts: def.decodeOpts });
+          const key = this.cache.keyOf(smp.url, smp.midi, maxSec);
+          urls.push(key);
+          jobs.push({ ...smp, key, opts });
         }
       }
     }
@@ -806,7 +822,7 @@ export class AudioEngine extends EventTarget {
           if (tt - sc.zeroSince >= 1) {
             this._disposeChannel(sc);
             this.retiring = this.retiring.filter((x) => x !== sc);
-            for (const e of [...this.pedaled]) if (e.channel === sc) this.pedaled.delete(e);
+            for (const e of [...this.pedaled]) if (e.channel === sc) this._unpedal(e);
             changed = true;
           }
         } else sc.zeroSince = null;
@@ -1739,12 +1755,12 @@ export class AudioEngine extends EventTarget {
       // re-strike of a pedaled note on this slot: fade the old voice 30 ms, then start the new one
       for (const pe of this.pedaled) {
         if (pe.voice?.state === 'dead') {
-          this.pedaled.delete(pe); // rang out while the pedal stayed down
+          this._unpedal(pe); // rang out while the pedal stayed down
           continue;
         }
         if (pe.channel === sc && pe.soundingNote === sn) {
           this._fadeVoice(sc.inst, pe.voice, t, 0.03);
-          this.pedaled.delete(pe);
+          this._unpedal(pe);
         }
       }
       let voice = null;
@@ -1771,8 +1787,8 @@ export class AudioEngine extends EventTarget {
       this.sounding.delete(n);
       for (const e of entries) {
         if (e.mono) this._monoOff(e.channel, n, t);
-        else if (this.pedal && e.channel.cfg.sustain) this.pedaled.add(e);
-        else e.instrument.noteOff(e.voice, t);
+        else if (this.pedal && e.channel.cfg.sustain) this._pedalHold(e, t);
+        else this._release(e.channel, e.instrument, e.voice, t);
       }
     }
     this._notesChanged(t);
@@ -1787,17 +1803,57 @@ export class AudioEngine extends EventTarget {
     if (d === this.pedal) return true;
     this.pedal = d;
     if (!d) {
-      for (const e of this.pedaled) e.instrument.noteOff(e.voice, t);
-      this.pedaled.clear();
+      for (const e of this.pedaled) this._release(e.channel, e.instrument, e.voice, t);
+      this._unpedalAll();
       for (const sc of [...this.slots, ...this.retiring]) {
         if (sc && sc.mono.pedalHold && sc.mono.notes.size === 0 && sc.mono.cur) {
-          sc.inst.noteOff(sc.mono.cur.voice, t);
+          this._release(sc, sc.inst, sc.mono.cur.voice, t);
           sc.mono.cur = null;
           sc.mono.pedalHold = false;
         }
       }
     }
     return true;
+  }
+
+  /**
+   * Note-off of one voice through the slot's release stage (sustain): `slots.<i>.release` (seconds to −60 dB), when
+   * set, replaces the instrument's own release for this voice (BasicVoice / voice.js `releaseOverride`); absent =
+   * the instrument's release, unchanged. The slot's cfg is read at release time (a retiring channel keeps its own).
+   */
+  _release(sc, inst, voice, t) {
+    if (!voice) return;
+    const r = sc?.cfg?.release;
+    if (Number.isFinite(r) && r > 0) voice.releaseOverride = r;
+    inst.noteOff(voice, t);
+  }
+
+  /**
+   * A key lifted while the pedal holds the note (sustain): the entry joins `pedaled`. With a numeric
+   * `slots.<i>.pedalHold` (s) the note fades after that long under the pedal, over 25 % of it (−60 dB at the end),
+   * so a pedalled pad can't build up forever; 'natural' (default) = rings until the pedal lifts or the sound ends.
+   * Timed on the audio clock (AudioTimer), so offline renders stay deterministic.
+   */
+  _pedalHold(e, t) {
+    this.pedaled.add(e);
+    const hold = e.channel?.cfg?.pedalHold;
+    if (!(Number.isFinite(hold) && hold > 0) || !this.timer) return;
+    e.holdCancel = this.timer.at(t + hold, (tt) => {
+      e.holdCancel = null;
+      if (!this.pedaled.has(e)) return;
+      this.pedaled.delete(e);
+      this._fadeVoice(e.instrument, e.voice, tt, 0.25 * hold);
+    });
+  }
+  /** Take an entry out of `pedaled` (and cancel its pedalHold timer). */
+  _unpedal(e) {
+    this.pedaled.delete(e);
+    e.holdCancel?.();
+    e.holdCancel = null;
+  }
+  _unpedalAll() {
+    for (const e of this.pedaled) e.holdCancel?.();
+    this.pedaled.clear();
   }
 
   _fadeVoice(inst, voice, t, sec) {
@@ -1843,9 +1899,20 @@ export class AudioEngine extends EventTarget {
     }
     if (this.pedal && sc.cfg.sustain) {
       m.pedalHold = true; // pedal only defers the final release
+      const hold = sc.cfg.pedalHold;
+      const cur = m.cur;
+      // sustain: a numeric pedalHold fades the held mono note too (a stale timer finds another note and does nothing)
+      if (Number.isFinite(hold) && hold > 0 && this.timer) {
+        this.timer.at(t + hold, (tt) => {
+          if (sc.mono !== m || !m.pedalHold || m.cur !== cur) return;
+          this._fadeVoice(sc.inst, cur.voice, tt, 0.25 * hold);
+          m.cur = null;
+          m.pedalHold = false;
+        });
+      }
       return;
     }
-    sc.inst.noteOff(m.cur.voice, t);
+    this._release(sc, sc.inst, m.cur.voice, t);
     m.cur = null;
   }
 
@@ -1863,7 +1930,7 @@ export class AudioEngine extends EventTarget {
       sc.mono = { notes: new Map(), cur: null, pedalHold: false };
     }
     this.sounding.clear();
-    this.pedaled.clear();
+    this._unpedalAll();
     this.held.clear();
     this.pedal = false;
     this._swell = null;
@@ -1887,7 +1954,7 @@ export class AudioEngine extends EventTarget {
       for (const sc of [...this.slots, ...this.retiring]) if (sc) sc.inst.allOff(tt, 0.03);
       for (const sc of [...this.slots, ...this.retiring]) if (sc) sc.mono = { notes: new Map(), cur: null, pedalHold: false };
       this.sounding.clear();
-      this.pedaled.clear();
+      this._unpedalAll();
     });
   }
 

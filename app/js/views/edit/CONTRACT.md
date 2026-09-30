@@ -35,7 +35,7 @@ app/js/views/edit/
   base.css              tokens, layout, tabs, wiring, panel frame, shared widgets
   CONTRACT.md           this file
   panels/index.js       the registered list (integrator-owned)
-  panels/slot.js   + slot.css          block 'slot:0'..'slot:3'   (sound panel; Advanced › Tone = ctx.C.eqKeyboard)
+  panels/slot.js   + slot.css          block 'slot:0'..'slot:3'   (sound panel; Advanced = ctx.C.eqKeyboard + Sustain)
   panels/drone.js  + drone.css         block 'drone'
   panels/effects.js + effects.css      block 'effects'
   panels/master.js + master.css        block 'master'             (incl. Wheels & pedal)
@@ -418,6 +418,22 @@ builds the same markup for in-body lines (the Effects tab's three lines).
   - "Reset these settings" writes every default explicitly
   - Hints: "This instrument has no extra settings." / "Instrument details appear once sound has started."
   - ui-edit "sends + instrument params reach the engine" (soft-keys tremolo 0.9, double-click → 0.25)
+- **Tone** (Ryan 2026-09-30): the keyboard EQ (`ctx.C.eqKeyboard`) sits straight in Advanced, after the instrument
+  settings, as a plain block `div.ev2-slot-tone[data-sec="slot<i>-tone"]` (heading "Tone", the `eqSummary` beside it,
+  the hint, then `.ev2-slot-tone-host`). There is no 'Tone' disclosure any more. The editor is mounted while
+  Advanced is open and destroyed on close, rebuild and unmount (`_debug.tone()` counts). A remembered `slot<i>-tone`
+  open flag in `localStorage['worship-rig.edit2.sections']` is dropped at mount (`lib.forgetSections`). The title
+  bar's `eqMiniCurve` click opens Advanced and scrolls to the EQ.
+- **Sustain** (below the EQ; CONTRACT_CHANGES "## sustain"): `div.ev2-slot-sustain[data-sec="slot<i>-sustain"]` with
+  two `lib.wordSlider`s, only when `hasParam` has the rows:
+  - Release (pedal up) on `slots.<i>.release` (log 0.05–8 s). It shows the instrument's own release while the field
+    is absent (its `release` param; a sampler's τ × 6.9). Double-click removes the field.
+  - Pedal hold on `slots.<i>.pedalHold` (log 2–30 s; the top end of the track = 'natural', written as a removal).
+  - The sentence `.ev2-slot-sus-say`: "Rings 0.8 s after you lift the pedal (the instrument’s own). With the pedal
+    down it rings to its natural end." (a synth/organ: "keeps sounding until you lift it"; a number: "fades after
+    9.0 s (over 2.3 s)").
+  - The Advanced summary adds "Release 2.0 s" / "Pedal hold 9.0 s" only when the field is set. Not MIDI-learnable:
+    `params.LEARNABLE` is a fixed list (slot gains and actions), so learn isn't free for any slot param.
 - Footer change line: `changeCount(['patch.slots.<i>'])`.
 
 **Structure and state**

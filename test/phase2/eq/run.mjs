@@ -59,7 +59,11 @@ async function runBrowser() {
   const server = createServer({ appDir: ROOT, port: 0 });
   const info = await server.listen();
   const origin = `http://127.0.0.1:${info.port}`;
-  const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+  // L-21b (mac-findings): chromium-headless-shell on Linux hints local() web fonts to whole-pixel advances, so the SF
+  // stand-in (an @font-face over local("FreeSans") with size-adjust) did not scale linearly: "≈Db6 −50¢ · 1.08 kHz" measured
+  // 138 px at every size-adjust from 100 to 106 % and 142 px from 108 to 114 % (true 112 %: 143.9). No hinting makes it
+  // linear; system faces (the Classic look) keep the same advances either way, and the switch does nothing on macOS.
+  const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required', '--font-render-hinting=none'] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   // L-4: 'midi' only (test/README.md "Web MIDI in the browser suites"); nothing here uses real MIDI ports
   const { MIDI_PERMISSIONS, waitRigReady, pinTheme } = await import('../../integration/lib.mjs');
@@ -696,10 +700,24 @@ async function runBrowser() {
       // L-21 follow-up (Mac run 2026-09-29): FreeSans does not exist on macOS, so the face never loaded there and the test
       // failed on its own precondition. The src list now falls back to the Mac's Helvetica Neue / Arial (any face works
       // as a stand-in once size-adjust scales it), and a missing face skips instead of failing.
-      const face = (adj) => `@font-face{font-family:SFsim;src:local("FreeSans"),local("Helvetica Neue"),local("HelveticaNeue"),` +
-        `local("Helvetica"),local("Arial"),local("Liberation Sans");size-adjust:${adj}%;` +
-        `ascent-override:${Math.round(95 / adj * 100)}%;descent-override:${Math.round(24 / adj * 100)}%;` +
-        'line-gap-override:0%} :root{--font:SFsim,sans-serif;--font-display:SFsim,sans-serif}';
+      // L-21b (mac-findings, Mac run 2026-09-30: "1124 @112%" overflowed over Helvetica Neue). The 112 % margin was
+      // sized for FreeSans (Helvetica widths); Helvetica Neue is itself wider (the Mac's numbers put it at 1.01–1.07 ×
+      // FreeSans), so 112 % of it measures a face ~15 % wider than FreeSans, not SF Pro. The cases now are:
+      //   'system' (no stand-in) everywhere: on the Mac that IS SF Pro, the real requirement;
+      //   105 % everywhere; 112 % only over FreeSans (Linux), where the margin was calibrated. On Linux the weight-600
+      //   label uses FreeSans Bold (a synthetic-bold regular face has regular advances, ~3 % narrower).
+      const freeSans = await ev(async () => {
+        try { await new FontFace('SFprobe', 'local("FreeSans")').load(); return true; } catch { return false; }
+      });
+      const face = (adj) => {
+        const m = `size-adjust:${adj}%;ascent-override:${Math.round(95 / adj * 100)}%;` +
+          `descent-override:${Math.round(24 / adj * 100)}%;line-gap-override:0%`;
+        return `@font-face{font-family:SFsim;src:local("FreeSans"),local("Helvetica Neue"),local("HelveticaNeue"),` +
+          `local("Helvetica"),local("Arial"),local("Liberation Sans");${m}}` +
+          (freeSans ? '@font-face{font-family:SFsim;font-weight:600 900;src:local("FreeSans Bold"),' +
+            `local("FreeSansBold");${m}}` : '') +
+          ' :root{--font:SFsim,sans-serif;--font-display:SFsim,sans-serif}';
+      };
       const probe = () => ev(async () => {
         const { store } = window.__rig;
         const { defaultSlot } = window.__eq.params;
@@ -732,19 +750,25 @@ async function runBrowser() {
         return { compact: !!el.dataset.compact, w: el.clientWidth, over, cut, font: document.fonts.check('13px SFsim') };
       });
       try {
-        for (const adj of [105, 112]) {
+        const cases = ['system', 105, ...(freeSans ? [112] : [])];
+        if (!freeSans) console.log('# L-21b: no FreeSans (macOS): system font (SF Pro) + 105 %; 112 % is Linux-only');
+        for (const adj of cases) {
           await ev((css) => {
             document.getElementById('sfsim')?.remove();
+            if (!css) return;
             const st = document.createElement('style');
             st.id = 'sfsim';
             st.textContent = css;
             document.head.append(st);
-          }, face(adj));
+          }, adj === 'system' ? '' : face(adj));
           for (const [vw, compact] of [[1100, true], [1124, false], [1280, false], [1440, false]]) {
             await page.setViewportSize({ width: vw, height: 900 });
             await sleep(120);
             const m = await probe();
-            if (!m.font) { console.log('# L-21: no stand-in face available on this OS (FreeSans/Helvetica/Arial) — skipped'); return; }
+            if (adj !== 'system' && !m.font) {
+              console.log('# L-21: no stand-in face available on this OS (FreeSans/Helvetica/Arial) — skipped');
+              return;
+            }
             assert.equal(m.compact, compact, `${vw}: layout (card ${m.w})`);
             assert.deepEqual(m.over, [], `${vw} @${adj}%: every cell's text fits`);
             assert.deepEqual(m.cut, [], `${vw} @${adj}%: no cell reports overflow`);

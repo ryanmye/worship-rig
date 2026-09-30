@@ -458,6 +458,62 @@ test('controller: slot strip params (width, eq.*) reach the engine; a removed on
   assert.equal(ctl.status.songId, id);
 });
 
+test('sustain: store validation of slots.<i>.release / pedalHold (optional, words, removal, normalize, reload)', () => {
+  const storage = memoryStorage();
+  const s = makeStore({ storage });
+  const id = s.currentSong().id;
+  const sl = () => s.currentSong().patch.slots[0];
+  assert.equal('release' in sl() || 'pedalHold' in sl(), false, 'absent by default (today’s sound)');
+  assert.equal(s.set('slots.0.release', 2.5), true);
+  assert.equal(sl().release, 2.5);
+  assert.equal(s.set('slots.0.release', 50), true);
+  assert.equal(sl().release, 8, 'clamped to 8 s');
+  assert.equal(s.set('slots.0.release', 'long'), false, 'a string is refused');
+  assert.equal(s.set('slots.0.release', Number.NaN), false);
+  assert.equal(s.set('slots.0.release', null), true, 'null removes it (the instrument’s own again)');
+  assert.equal('release' in sl(), false);
+  assert.equal(s.set('slots.0.pedalHold', 6), true);
+  assert.equal(sl().pedalHold, 6);
+  assert.equal(s.set('slots.0.pedalHold', 0.5), true);
+  assert.equal(sl().pedalHold, 2, 'clamped to 2 s');
+  assert.equal(s.set('slots.0.pedalHold', 'natural'), true);
+  assert.equal(sl().pedalHold, 'natural');
+  assert.equal(s.set('slots.0.pedalHold', 'forever'), false, 'only the table’s words');
+  assert.equal(s.set('slots.0.pedalHold', undefined), true);
+  assert.equal('pedalHold' in sl(), false);
+  // a stored song with junk values normalizes (SCHEMA unchanged, fields optional)
+  const raw = JSON.parse(JSON.stringify(s.currentSong()));
+  raw.patch.slots[0] = { ...raw.patch.slots[0], release: -4, pedalHold: 'forever' };
+  raw.patch.slots[1] = { ...raw.patch.slots[1], release: null, pedalHold: 90 };
+  const n = normalizeSong(raw, id);
+  assert.deepEqual([n.patch.slots[0].release, n.patch.slots[0].pedalHold], [0.05, 'natural']);
+  assert.equal('release' in n.patch.slots[1], false, 'a null release stays absent');
+  assert.equal(n.patch.slots[1].pedalHold, 30);
+  // persisted and reloaded as set
+  s.set('slots.1.release', 1.2);
+  s.set('slots.1.pedalHold', 12);
+  assert.ok(s.persistNow());
+  const b = createStore({ storage, idGen: idGen(), requestIdle: null, warn: () => {}, autoFlush: false });
+  const r = b.getSong(id).patch.slots[1];
+  assert.deepEqual([r.release, r.pedalHold], [1.2, 12]);
+});
+
+test('sustain: controller sends slots.<i>.release / pedalHold; a removed one sends the table default (null / natural)',
+  async () => {
+    const { store, engine } = await setupCtl();
+    await tick();
+    engine.clear();
+    store.set('slots.0.release', 3);
+    store.set('slots.1.pedalHold', 8);
+    await tick();
+    assert.deepEqual(engine.of('setParam').map((c) => [c[1], c[2]]), [['slots.0.release', 3], ['slots.1.pedalHold', 8]]);
+    engine.clear();
+    store.set('slots.0.release', null);
+    store.set('slots.1.pedalHold', undefined);
+    await tick();
+    assert.deepEqual(engine.of('setParam').map((c) => [c[1], c[2]]), [['slots.0.release', null], ['slots.1.pedalHold', 'natural']]);
+  });
+
 test('controller: rescanUserSamples() → rig rescan + engine.reloadManifests(); without it a warn asks for a restart', async () => {
   const rigCalls = [];
   const rig = { rescanUserSamples: async () => (rigCalls.push('rescan'), { count: 3, errors: [] }) };

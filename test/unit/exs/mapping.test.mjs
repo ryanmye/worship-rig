@@ -250,7 +250,7 @@ test('manifestEntry matches the app schema and loads through the engine normaliz
   const p = plan(fixture('test-grand-piano.json'));
   const inst = manifestEntry(p, { ext: 'm4a', origin: 'GarageBand', source: 'GarageBand Instrument Library/x.exs' });
   const bundled = JSON.parse(fs.readFileSync(path.join(here, '../../../app/samples/manifest.json'), 'utf8')).instruments[0];
-  const optional = new Set(['widthDefault', 'maxMonoLossDb']);
+  const optional = new Set(['widthDefault', 'maxMonoLossDb', 'maxSec']); // maxSec: per-set sample cap (## sustain), optional
   assert.deepEqual(Object.keys(inst), Object.keys(bundled).filter((k) => !optional.has(k)), 'same keys, same order');
   assert.equal(inst.name, 'Test Grand Piano (GarageBand)');
   assert.equal(inst.gainTrim, 0);

@@ -44,8 +44,8 @@ const DOUBLE_MS = 400;
 const CUT_Y_DB = -10;
 /**
  * Below this component width the layout is compact (polish-2B re-tune; was 1180). The full table's fixed columns
- * (42 + 118 + 172 + 82 + 72 + 66 + 54 + 40 = 646 px; the note column was 150 before L-21) + the 260 px side + 14 gap +
- * 30 padding/border = 950 px, plus ≥ 130 px for "Acts on" (its text ellipsizes) = 1080. The compact table needs
+ * (42 + 118 + 180 + 82 + 72 + 66 + 54 + 40 = 654 px; the note column was 150 before L-21, 172 before L-21b) + the
+ * 260 px side + 14 gap + 30 padding/border = 958 px, plus ≥ 122 px for "Acts on" (its text ellipsizes) = 1080. The compact table needs
  * 500 (note 100, was 84; dB 62 and Q 58, were 58 and 54: L-21) + 218 + 10 + 22 = 750 + acts.
  */
 export const COMPACT_BELOW_PX = 1080;

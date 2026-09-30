@@ -548,6 +548,21 @@ function readSections() {
   }
 }
 /**
+ * Drop remembered open flags of sections that no longer exist (Ryan 2026-09-30: the slot's 'Tone' disclosure became
+ * part of Advanced, so a stored `slot<i>-tone` flag migrates to nothing). Other ids are kept. Idempotent.
+ * @param {string[]} ids
+ */
+export function forgetSections(ids) {
+  const cur = readSections();
+  if (!ids.some((id) => id in cur)) return;
+  for (const id of ids) delete cur[id];
+  try {
+    globalThis.localStorage?.setItem(SECTIONS_KEY_V2, JSON.stringify(cur));
+  } catch {
+    /* private window / quota: open state is a convenience only */
+  }
+}
+/**
  * `<details class="ev2-sec">` closed by default; its open state is remembered per id in localStorage; the header
  * carries a one-line summary refreshed through `binder.fn(rels, …)`.
  * @param {string} id  globally unique, prefix it with your panel ('fx-reverb', 'master-tape', 'slot0-adv')

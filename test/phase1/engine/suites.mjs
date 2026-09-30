@@ -1926,6 +1926,166 @@ export const offline = {
       out.afterHigh.join() === 'true,true' && out.reused && out.lowPeak > 0.01 && out.bothPeak > out.lowPeak;
     return { pass, ...out };
   },
+
+  /**
+   * sustain (CONTRACT_CHANGES "## sustain"): the real Salamander A1 (v9, a 20.0 s file) held with the pedal rings to
+   * its natural end with the manifest cap (maxSec 30), where the legacy 16 s cap (fade 15 → 16 s) silenced it. Also:
+   * the cache variants (long key only for truncated samples; neighbour preloads at the legacy cap; a current song that
+   * starts on a preloaded legacy copy upgrades to the long one in the background).
+   */
+  async sustainLongCap() {
+    const sal = (await import('/js/engine/sampler.js')).normalizeManifest(await (await fetch('/samples/manifest.json')).json(), '/samples/manifest.json');
+    const salDef = sal.find((d) => d.id === 'salamander-piano');
+    const pick = (id, notes, opts) => ({ ...salDef, id, decodeOpts: opts, layers: salDef.layers.filter((L) => L.lo === 53).map((L) => ({ ...L, lo: 0, hi: 127, samples: L.samples.filter((s) => notes.includes(s.midi)) })) });
+    const legacyOpts = { ...salDef.decodeOpts, maxSec: undefined };
+    const render = async (opts) => {
+      const ctx = mkCtx(19);
+      const e = await mkEngine(ctx);
+      e.registry.samplers.set('a1', pick('a1', [33], opts));
+      await use(e, patch({ 0: slot('sampler', 'a1') }, { master: { volume: 1 } }));
+      e.noteOn(33, 127, { when: 0.1 });
+      e.sustain(true, { when: 0.5 }); // CC64 at 0.5 s
+      e.noteOff(33, { when: 1 }); // the pedal holds it
+      const buf = e.slots[0].inst.layers[0].samples[0].buffer;
+      const b = await ctx.startRendering();
+      // stereo RMS (the file's mid/side is kept; a mono sum would read the anti-phase part as quieter)
+      const L = b.getChannelData(0);
+      const R = b.getChannelData(1);
+      const st = (a, z) => db(Math.sqrt(0.5 * (rms(L, SR, a, z) ** 2 + rms(R, SR, a, z) ** 2)));
+      return { st, lenSec: +(buf.length / SR).toFixed(2), capped: buf._capped };
+    };
+    const now = await render(salDef.decodeOpts);
+    const old = await render(legacyOpts);
+    const at18 = +now.st(17.9, 18.1).toFixed(1);
+    const old17 = old.st(16.5, 17.5);
+    const old14 = +old.st(13.9, 14.1).toFixed(1);
+    const now14 = +now.st(13.9, 14.1).toFixed(1);
+    // cache variants: A1 (20 s, truncated at 16) gets a long key, C7 (≈ 4 s) collapses to its URL once decoded
+    const ctx2 = mkCtx(0.5);
+    const e2 = await mkEngine(ctx2);
+    e2.registry.samplers.set('two', pick('two', [33, 96], salDef.decodeOpts));
+    const P = patch({ 0: slot('sampler', 'two') });
+    const [a1, c7] = e2.registry.samplers.get('two').layers[0].samples;
+    await e2.preload([P], { pin: 'replace' }); // no song playing: a neighbour → legacy keys
+    const preKeys = [...e2.cache.pinned].sort();
+    const neighbourLegacy = preKeys.join() === [a1.url, c7.url].sort().join();
+    await use(e2, P); // now it is the current song: A1 starts on the legacy copy, then upgrades
+    const inst = e2.slots[0].inst;
+    const startLen = inst.layers[0].samples.find((s) => s.midi === 33).buffer.length / SR;
+    await inst.upgraded;
+    const upLen = inst.layers[0].samples.find((s) => s.midi === 33).buffer.length / SR;
+    const longKey = e2.cache.keyOf(a1.url, 33, 30);
+    const shortKey = e2.cache.keyOf(c7.url, 96, 30);
+    const curKeys = e2._sampleJobs([P]).urls.sort();
+    const legacyRefDropped = !e2.cache.entries.get(a1.url)?.refs.has(inst) && e2.cache.entries.get(longKey)?.refs.has(inst);
+    const est = e2.cache.estimateBytes([longKey]);
+    const estExact = est.unknown === 0 && est.bytes === e2.cache.entries.get(longKey).bytes;
+    await ctx2.startRendering();
+    const variants = { neighbourLegacy, startLen: +startLen.toFixed(2), upLen: +upLen.toFixed(2), upgrades: inst.upgrades,
+      longKey: longKey !== a1.url, shortCollapses: shortKey === c7.url, curKeys: curKeys.join() === [longKey, c7.url].sort().join(),
+      legacyRefDropped, estExact };
+    const pass = now.lenSec > 19.5 && now.capped === false && old.lenSec === 16 && old.capped === true && at18 > -50 &&
+      old17 < -90 && Math.abs(now14 - old14) < 0.5 && neighbourLegacy && Math.abs(startLen - 16) < 0.01 &&
+      upLen > 19.5 && inst.upgrades === 1 && variants.longKey && variants.shortCollapses && variants.curKeys &&
+      legacyRefDropped && estExact;
+    return { pass, bufferSec: { now: now.lenSec, legacy: old.lenSec }, at18Db: at18, legacyAt17Db: String(old17), at14Db: { now: now14, legacy: old14 }, variants };
+  },
+
+  /**
+   * sustain critic: (a) a long variant is the legacy buffer plus a tail — processSample's mono-loss factors are
+   * measured on what the legacy cap keeps, so every Salamander v9 sample the legacy cap truncated is bit-identical up
+   * to the legacy fade (the whole-buffer stats moved existing songs by up to 3.4e-5); (b) an instrument disposed
+   * while a long-variant upgrade decode is in flight holds no cache reference afterwards (it leaked one buffer).
+   */
+  async sustainVariants() {
+    const { normalizeManifest, processSample } = await import('/js/engine/sampler.js');
+    const defs = normalizeManifest(await (await fetch('/samples/manifest.json')).json(), '/samples/manifest.json');
+    const sal = defs.find((d) => d.id === 'salamander-piano');
+    const ctx = mkCtx(0.1);
+    let truncated = 0;
+    let monoFixed = 0;
+    let worst = 0;
+    for (const s of sal.layers.find((L) => L.lo === 53).samples) {
+      const raw = await ctx.decodeAudioData(await (await fetch(s.url)).arrayBuffer());
+      const legacy = processSample(raw, s.midi, { ...sal.decodeOpts, maxSec: undefined });
+      if (!legacy._capped) continue;
+      const long = processSample(raw, s.midi, sal.decodeOpts);
+      truncated++;
+      if (legacy._monoFix && legacy._monoFix.mid !== 1) monoFixed++;
+      const n = legacy.length - Math.round(1.0 * SR); // before the legacy 1 s fade-out
+      for (let c = 0; c < legacy.numberOfChannels; c++) {
+        const a = legacy.getChannelData(c);
+        const b = long.getChannelData(c);
+        for (let i = 0; i < n; i++) worst = Math.max(worst, Math.abs(a[i] - b[i]));
+      }
+    }
+    // (b) the upgrade/dispose race: legacy copies from a neighbour preload, then the song becomes current
+    const ctx2 = mkCtx(0.5);
+    const e = await mkEngine(ctx2, { manifestUrl: '/samples/manifest.json' });
+    const P = patch({ 0: slot('sampler', 'upright-piano') });
+    await e.preload([P], { pin: 'none' });
+    await use(e, P); // ready: the first upgrade decode is in flight now
+    const inst = e.slots[0].inst;
+    inst.dispose();
+    await inst.upgraded;
+    const leaked = [...e.cache.entries.values()].filter((x) => x.refs.has(inst)).length;
+    await ctx2.startRendering();
+    const pass = truncated >= 5 && worst === 0 && leaked === 0;
+    return { pass, truncatedV9: truncated, withMonoFix: monoFixed, prefixMaxDiff: worst, refsAfterDispose: leaked };
+  },
+
+  /**
+   * sustain: slots.<i>.release replaces the instrument's release (time to −60 dB after key-up) for voice.js voices
+   * (Church Organ, own release 1.5 s) and BasicVoice (fallback warm-pad); null = the instrument's own again.
+   */
+  async sustainRelease() {
+    const decayTo60 = (d, tOff) => {
+      const ref = db(rms(d, SR, tOff - 0.1, tOff));
+      for (let t = tOff; t + 0.01 <= d.length / SR; t += 0.005) if (db(rms(d, SR, t, t + 0.01)) < ref - 60) return +(t - tOff).toFixed(3);
+      return Infinity;
+    };
+    const run = async (type, id, release, modules, reset = false) => {
+      const ctx = mkCtx(5);
+      const e = await mkEngine(ctx, { instrumentModules: modules });
+      await use(e, patch({ 0: slot(type, id, release === undefined ? {} : { release }) }, { master: { volume: 1 } }));
+      if (reset) e.setParam('slots.0.release', null, { when: 0 });
+      e.noteOn(60, 100, { when: 0.1 });
+      e.noteOff(60, { when: 1 });
+      const d = mono(await ctx.startRendering());
+      return decayTo60(d, 1);
+    };
+    const organ = { own: await run('organ', 'church', undefined, true), r03: await run('organ', 'church', 0.3, true),
+      r4: await run('organ', 'church', 4, true), reset: await run('organ', 'church', 4, true, true) };
+    const pad = { own: await run('synth', 'warm-pad', undefined, false), r03: await run('synth', 'warm-pad', 0.3, false),
+      r1: await run('synth', 'warm-pad', 1, false) };
+    const near = (a, b, tol) => Math.abs(a - b) <= tol;
+    const pass = near(organ.own, 1.5, 0.15) && near(organ.r03, 0.3, 0.06) && near(organ.r4, 4, 0.3) && near(organ.reset, organ.own, 0.02) &&
+      near(pad.r03, 0.3, 0.06) && near(pad.r1, 1, 0.1) && pad.own > 2.5;
+    return { pass, decayTo60s: { organ, pad } };
+  },
+
+  /** sustain: pedalHold 4 s fades a pedalled pad after 4 s under the pedal (over 1 s); 'natural' keeps it ringing. */
+  async sustainPedalHold() {
+    const run = async (pedalHold, mono1 = false) => {
+      const ctx = mkCtx(6);
+      const e = await mkEngine(ctx, { instrumentModules: true });
+      await use(e, patch({ 1: slot('synth', 'warm-pad', { pedalHold, ...(mono1 ? { mono: 'lowest' } : {}) }) }, { master: { volume: 1 } }));
+      e.sustain(true, { when: 0.05 });
+      e.noteOn(60, 100, { when: 0.1 });
+      e.noteOff(60, { when: 0.5 }); // pedal-held from here: the 4 s count starts at the key lift
+      const d = mono(await ctx.startRendering());
+      return { at3: db(rms(d, SR, 2.9, 3.1)), at5: db(rms(d, SR, 4.95, 5.05)), at58: db(rms(d, SR, 5.7, 5.9)), pedaled: e.pedaled.size };
+    };
+    const nat = await run('natural');
+    const h4 = await run(4);
+    const m4 = await run(4, true);
+    const r = (x) => +x.toFixed(1);
+    const out = { natural: { at3: r(nat.at3), at5: r(nat.at5) }, hold4: { at3: r(h4.at3), at5: r(h4.at5), at58: r(h4.at58) },
+      mono4: { at5: r(m4.at5) } };
+    const pass = Math.abs(h4.at3 - nat.at3) < 0.5 && h4.at5 <= nat.at5 - 12 && h4.at58 < nat.at5 - 50 && nat.at5 > -40 &&
+      m4.at5 <= nat.at5 - 12 && h4.pedaled === 0;
+    return { pass, ...out };
+  },
 };
 
 // ----- real-time suites ------------------------------------------------------------------------------------------

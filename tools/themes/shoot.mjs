@@ -250,13 +250,11 @@ try {
       await release(page);
     }
     if (want('eq')) {
+      // the slot EQ sits straight in Advanced (Ryan 2026-09-30: no Tone disclosure)
       const ok = await page.evaluate(() => {
         const adv = document.querySelector('#view-edit details[data-sec="slot0-adv"]');
         if (!adv) return false;
         adv.open = true;
-        const tone = document.querySelector('#view-edit details[data-sec="slot0-tone"]');
-        if (!tone) return false;
-        tone.open = true;
         return true;
       });
       if (ok && await page.waitForSelector('#view-edit .eqk', { timeout: 20000 }).then(() => true, () => false)) {
@@ -265,7 +263,7 @@ try {
         await page.waitForTimeout(400);
         await clearToasts(page);
         summary.shots.eq = await shoot(page, 'edit-tone-eq');
-      } else summary.shots.eq = 'Advanced › Tone / EQ did not mount';
+      } else summary.shots.eq = 'Advanced / EQ did not mount';
     }
   }
   if (want('mini')) {

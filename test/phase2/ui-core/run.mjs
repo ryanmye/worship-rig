@@ -2136,6 +2136,57 @@ test('polish-2A responsive (ux-round2 L1 / #1, L-6): six windows — nothing cli
       }
     }
     console.log(`# ${rows.join('\n# ')}`);
+    // mac-findings L-26: at 1024 × 700 on the Mac (SF Pro) "Minor" (55 > 53) and "Movement" (61 > 54) clipped while
+    // the Linux faces fit. SFsim = FreeSans widths scaled 105 % (≈ SF Pro Text at these sizes: the Mac's own numbers
+    // sit between the 105 % and 109 % stand-ins) and 112 % (margin), with SF's vertical metrics. Only over FreeSans:
+    // the Mac runs the loop above in real SF Pro, and a scaled Helvetica Neue is wider than SF (see L-21b), so it
+    // would fail on a stand-in artefact. Also: the drone toggles stay one line each (they wrapped from ~108 % before).
+    const sfOk = await page.evaluate(async () => {
+      const f = new FontFace('SFprobe', 'local("FreeSans")');
+      try { await f.load(); return true; } catch { return false; }
+    });
+    if (!sfOk) console.log('# L-26: FreeSans not installed (macOS runs real SF Pro above) — stand-in pass skipped');
+    else {
+      try {
+        await page.setViewportSize({ width: 1024, height: 700 });
+        for (const adj of [105, 112]) {
+          await page.evaluate((a) => {
+            document.getElementById('sfsim-l26')?.remove();
+            const st = document.createElement('style');
+            st.id = 'sfsim-l26';
+            const m = `size-adjust:${a}%;ascent-override:${Math.round(95 / a * 100)}%;descent-override:${Math.round(24 / a * 100)}%;`
+              + 'line-gap-override:0%';
+            st.textContent = `@font-face{font-family:SFsim;src:local("FreeSans");${m}}`
+              + '@font-face{font-family:SFsim;font-weight:600 900;src:local("FreeSans Bold"),local("FreeSansBold");'
+              + `${m}}`
+              + ':root{--font:SFsim,sans-serif;--font-display:SFsim,sans-serif}';
+            document.head.append(st);
+          }, adj);
+          await page.evaluate(async () => {
+            await document.fonts.ready;
+            await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+          });
+          await squeeze();
+          await clearToasts();
+          await page.waitForTimeout(80);
+          const m = await page.evaluate(OVERFLOW_PROBE);
+          const lines = await page.evaluate(() => [
+            ...document.querySelectorAll('#view-perform .drone-toggles .toggle-text')]
+            .map((t) => {
+              const rg = document.createRange();
+              rg.selectNodeContents(t);
+              return [t.textContent, new Set([...rg.getClientRects()].map((x) => Math.round(x.top))).size];
+            }));
+          await page.screenshot({ path: path.join(shots, `responsive-1024x700-sf${adj}.png`) });
+          assert.deepEqual(m.bad, [], `L-26 1024×700 @${adj}%: clipped / overflowing: ${m.bad.join(' · ')}`);
+          assert.ok(m.doc[0] <= 1024 && m.doc[1] <= 700, `L-26 @${adj}%: no page scroll (${m.doc})`);
+          assert.ok(m.throw >= 140, `L-26 @${adj}%: fader throw ${m.throw} px ≥ 140`);
+          for (const [t, n] of lines) assert.equal(n, 1, `L-26 @${adj}%: drone toggle "${t}" is one line (${n})`);
+        }
+      } finally {
+        await page.evaluate(() => document.getElementById('sfsim-l26')?.remove());
+      }
+    }
     // four filled strips (no factory song has four): the narrowest strips keep their tiles, chips and badges whole
     const saved = await page.evaluate(() => {
       const r = window.__rig;
@@ -2642,7 +2693,10 @@ test('hardware-fixes: Quick shows "Bluetooth output adds ~176 ms…" in its head
     const el = document.querySelector(sel);
     const t = el.querySelector('.lh-text');
     const head = document.querySelector('.qs-h');
-    return { shown: !el.hidden, text: t.textContent, clipped: t.scrollWidth > t.clientWidth + 1,
+    // mac-findings: the text may wrap to two lines (SF Pro); "whole" = no horizontal or vertical cut of the text box
+    const lh = parseFloat(getComputedStyle(t).lineHeight);
+    return { shown: !el.hidden, text: t.textContent, clipped: t.scrollWidth > t.clientWidth + 1 || t.scrollHeight > t.clientHeight + 1,
+      lines: Math.round(t.clientHeight / lh), x: Math.round(document.querySelector('.qs-h .qs-x').getBoundingClientRect().width),
       head: head.scrollWidth <= head.clientWidth + 1, sub: document.querySelector('.qs-sub').offsetParent !== null };
   }, [ms, hint]);
   try {
@@ -2663,6 +2717,47 @@ test('hardware-fixes: Quick shows "Bluetooth output adds ~176 ms…" in its head
       }
       m = await state(20);
       assert.equal(m.shown, false, `${w}: hidden at 20 ms (the dock)`);
+    }
+    // mac-findings (Mac ui-core at 1280 × 720: "the whole line shows" failed in SF Pro): under the SF stand-in
+    // (FreeSans × 105 % ≈ SF Pro Text, × 112 % margin; FreeSans-only, as L-26) the sentence wraps to ≤ 2 lines, every
+    // glyph inside the text box, and the header's × keeps its 44 px (it shrank to 41 px before).
+    const sfOk = await page.evaluate(async () => {
+      const f = new FontFace('SFprobe', 'local("FreeSans")');
+      try { await f.load(); return true; } catch { return false; }
+    });
+    if (!sfOk) console.log('# Bluetooth hint: FreeSans not installed (macOS runs real SF Pro above) — stand-in pass skipped');
+    else {
+      try {
+        const rows = [];
+        for (const adj of [105, 112]) {
+          await page.evaluate((a) => {
+            document.getElementById('sfsim-bt')?.remove();
+            const st = document.createElement('style');
+            st.id = 'sfsim-bt';
+            const m = `size-adjust:${a}%;ascent-override:${Math.round(95 / a * 100)}%;descent-override:${Math.round(24 / a * 100)}%;`
+              + 'line-gap-override:0%';
+            st.textContent = `@font-face{font-family:SFsim;src:local("FreeSans");${m}}`
+              + '@font-face{font-family:SFsim;font-weight:600 900;src:local("FreeSans Bold"),local("FreeSansBold");'
+              + `${m}}`
+              + ':root{--font:SFsim,sans-serif;--font-display:SFsim,sans-serif}';
+            document.head.append(st);
+          }, adj);
+          for (const [w, hgt] of [[1440, 900], [1366, 768], [1280, 720], [1024, 700]]) {
+            await page.setViewportSize({ width: w, height: hgt });
+            await page.waitForTimeout(150);
+            await page.evaluate(() => document.fonts.ready);
+            const m = await state(176);
+            rows.push(`${adj}% ${w}: ${m.lines} line(s)`);
+            assert.ok(m.shown && !m.clipped, `${w}×${hgt} @${adj}%: the whole sentence shows`);
+            assert.ok(m.lines <= 2, `${w}×${hgt} @${adj}%: ≤ 2 lines (${m.lines})`);
+            assert.ok(m.head, `${w} @${adj}%: the Quick header does not overflow`);
+            assert.ok(m.x >= (w <= 1250 ? 36 : 44), `${w} @${adj}%: × keeps its width (${m.x})`);
+          }
+        }
+        console.log(`# Bluetooth hint under SFsim: ${rows.join(' · ')}`);
+      } finally {
+        await page.evaluate(() => document.getElementById('sfsim-bt')?.remove());
+      }
     }
     assert.equal((await state(60)).shown, false, '60 ms is not "above 60"');
     await state(176);
@@ -3816,6 +3911,50 @@ test('lowres2 requests: audio asleep → top bar "Asleep" with an ok LED; Quick 
     await page.keyboard.press('Escape');
     await page.waitForSelector('[data-testid=quick-sheet]', { state: 'hidden' });
   }
+});
+
+test('L-30: rig menu ids trayHidden / trayShown → one info toast per session + the Settings › Menu bar note', async () => {
+  const TEXT = 'The menu-bar icon is hidden — your Mac’s menu bar is full. Hide a few items in System Settings › '
+    + 'Control Center, or use the Rig menu › Show Worship Rig.';
+  await clearToasts();
+  // the ids arrive exactly as Electron main sends them: preload rig.onMenu(cb) calls controller.onMenu(id)
+  const fire = (id) => page.evaluate((i) => window.__rig.controller.onMenu(i), id);
+  const toasts = () => page.evaluate(() => [...document.querySelectorAll('#toasts .toast')].map((t) => ({
+    text: t.querySelector('.toast-msg').textContent, kind: t.dataset.kind, action: t.querySelector('.toast-action')?.textContent })));
+  const note = () => page.evaluate(() => {
+    const n = document.querySelector('[data-testid=menubar-tray-hidden]');
+    return { hidden: n.hidden, visible: n.offsetParent !== null, text: n.textContent,
+      attr: document.documentElement.hasAttribute('data-tray-hidden') };
+  });
+  await page.click('#btn-settings');
+  await page.waitForFunction(() => !document.getElementById('view-settings').hidden);
+  assert.deepEqual((await note()).hidden, true, 'no note while the tray is visible');
+  await fire('trayHidden');
+  const t1 = await toasts();
+  assert.deepEqual(t1, [{ text: TEXT, kind: 'info', action: 'Dismiss' }], 'one dismissible info toast with the exact words');
+  const n1 = await note();
+  assert.deepEqual([n1.hidden, n1.visible, n1.text, n1.attr], [false, true, TEXT, true], 'the Settings note shows, same words');
+  // dismiss, then a repeat in the same session shows no second toast
+  await page.click('#toasts .toast-action');
+  await page.waitForFunction(() => document.querySelectorAll('#toasts .toast').length === 0);
+  await fire('trayHidden');
+  assert.deepEqual(await toasts(), [], 'not repeated in the same session');
+  assert.equal((await note()).hidden, false, 'the note stays while hidden');
+  await fire('trayShown');
+  const n2 = await note();
+  assert.deepEqual([n2.hidden, n2.attr], [true, false], 'trayShown clears the note and the state');
+  assert.deepEqual(await toasts(), [], 'trayShown shows no toast');
+  // the note follows the state when Settings is reopened
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => document.getElementById('view-settings').hidden);
+  await fire('trayHidden');
+  await page.click('#btn-settings');
+  await page.waitForFunction(() => !document.getElementById('view-settings').hidden);
+  assert.equal((await note()).visible, true, 'reopened Settings shows the note while hidden');
+  await fire('trayShown');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => document.getElementById('view-settings').hidden);
+  await clearToasts();
 });
 
 test('no console errors on the main page', () => {

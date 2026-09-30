@@ -44,7 +44,7 @@ run them one at a time; `run-all` does that for you.
   `engine.setParam`. The store and controller pick it up without changes; there are tests for exactly that
   (`test/phase1/shell/shell3.test.mjs`).
 - **Store schema** is `SCHEMA = 1`. `migrate()` is idempotent and keeps unknown fields. Optional fields (slot
-  `width`/`eq`, `fx.eq`, `fx.comp`) stay absent until they are set.
+  `width`/`eq`/`release`/`pedalHold`, `fx.eq`, `fx.comp`) stay absent until they are set.
 - **Factory songs** (`presets.js`) keep stable ids `factory:<slug>`. To add a song:
   1. Append it to `DEFS` with `since: <n>`.
   2. Bump `FACTORY_VERSION` to `<n>`.
@@ -75,8 +75,9 @@ run them one at a time; `run-all` does that for you.
 - **CSS**: `styles-edit-v2.css` imports `base.css` first, then the panel files, so panel rules win ties. Every
   selector is scoped under `.ev2`.
 - **Changed dots** count against Perform's Revert snapshot (`ctx.getBaseline()` from main.js), so both views agree.
-- **Slot EQ**: Advanced › Tone mounts `components/eq-keyboard.js` `eqKeyboard` only while Advanced and Tone are
-  open, and destroys it on close, rebuild and unmount; `eqMiniCurve` sits in the title bar. The Brightness/Warmth
+- **Slot EQ**: Advanced mounts `components/eq-keyboard.js` `eqKeyboard` (straight in it, no 'Tone' disclosure) only
+  while Advanced is open, and destroys it on close, rebuild and unmount; `eqMiniCurve` sits in the title bar. The
+  Sustain row (`slots.<i>.release` / `slots.<i>.pedalHold`) sits below the EQ. The Brightness/Warmth
   sliders on the strip's shelves read `readEq` and write `shelfWrites` (`shared/eq-math.js`): the legacy
   `eq.low`/`eq.high` rows stop acting once a band has b-rows.
 - **Tests**: `node test/phase2/edit-v2/run.mjs [--only slot,integration]`. Panel files use the harness

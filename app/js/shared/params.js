@@ -17,6 +17,9 @@ export const SLOT_COUNT = 4;
  * @property {number} [step]       1 for integer params
  * @property {string} label
  * @property {boolean} [dynamic]   true for slots.<i>.params.<key> (real range comes from listInstruments())
+ * @property {boolean} [optional]  sustain: `default` is null = "the instrument's own"; writing null / undefined removes
+ *                                 the field (store), and an absent field means the default
+ * @property {string[]} [words]    sustain: string values a numeric row also accepts as-is ('natural')
  */
 
 const num = (path, min, max, def, unit, curve, label, extra = {}) =>
@@ -90,6 +93,12 @@ export const PARAMS = Object.freeze([
   // eq.high only) sounds exactly as before; b2..b7 default off. hiCutHz 20000 = off (like cutHz 20).
   ...eqBandRows(),
   num('slots.<i>.eq.hiCutHz', 200, 20000, 20000, 'Hz', 'log', 'High cut'),
+  // sustain (CONTRACT_CHANGES "## sustain"; Edit › slot › Advanced › Sustain). Both optional: absent = today's sound.
+  // release: seconds to −60 dB after the key / pedal lets go, for every instrument type (the voice release stage);
+  // null = the instrument's own release. pedalHold: how long a note rings under a held pedal: 'natural' = until the
+  // pedal lifts / the sample ends, or 2–30 s, then a fade over 25 % of that time.
+  num('slots.<i>.release', 0.05, 8, null, 's', 'log', 'Release', { optional: true }),
+  num('slots.<i>.pedalHold', 2, 30, 'natural', 's', 'log', 'Pedal hold', { optional: true, words: Object.freeze(['natural']) }),
   // reverb
   num('fx.reverb.size', 0, 1, 0.5, 'lin', 'lin', 'Reverb size'),
   num('fx.reverb.damp', 0, 1, 0.5, 'lin', 'lin', 'Reverb damping'),
@@ -203,6 +212,7 @@ export function expandPaths() {
  * numbers: Number(value), NaN → default (dynamic: NaN → null), clamp to [min,max], round when step=1.
  * bool: booleans as-is; numbers → value >= 0.5; 'true'/'on'/'1' → true; else false.
  * enum: a member → itself; a number → enum[clamped round(index)]; else default.
+ * words (sustain): a numeric row's `words` ('natural') pass as-is; an optional row's null / NaN → its default (null).
  * @param {string} path
  * @param {*} value
  * @returns {number|boolean|string|null}
@@ -226,6 +236,7 @@ export function clamp(path, value) {
     return e.default;
   }
   if (e.dynamic && typeof value === 'boolean') return value;
+  if (e.words && e.words.includes(value)) return value;
   let v = typeof value === 'number' ? value : Number(value);
   if (Number.isNaN(v) || value === null || value === undefined || value === '') return e.default;
   v = Math.min(e.max, Math.max(e.min, v));
@@ -306,6 +317,8 @@ export function formatValue(path, value) {
       return `${f.toFixed(2)} Hz`;
     }
     case 's': {
+      if (e.words && e.words.includes(value)) return value.charAt(0).toUpperCase() + value.slice(1);
+      if (value === null || value === undefined) return 'Default'; // an optional row: the instrument's own
       const s = Number(value);
       return s < 1 ? `${Math.round(s * 1000)} ms` : `${s.toFixed(2)} s`;
     }

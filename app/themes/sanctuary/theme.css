@@ -111,9 +111,11 @@
     font-feature-settings: 'kern' 1;
     /* the vault: one light from above the nave, a candle pool behind the song title, a candle glow below the
        keyboard, and a 128 px grain tile (≤ 6 % alpha), on a fixed ::after (body::before is the REC bar). No
-       will-change (build critic: a promoted full-viewport layer is ~20 MB of GPU memory for a static picture). */
+       will-change (build critic: a promoted full-viewport layer is ~20 MB of GPU memory for a static picture).
+       mac-findings (Sanctuary paint cost): absolute, not fixed: a fixed element in the scroll-container document is
+       composited anyway, and every layer over it then became an overlap layer (sanctuary-v2/theme.css says more). */
     &::after {
-      content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+      content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
       background:
         url('/themes/sanctuary/grain.png') repeat,
         radial-gradient(40% 36% at 16% 8%, #e6ba6514 0%, transparent 70%),

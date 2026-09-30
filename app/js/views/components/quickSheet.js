@@ -96,7 +96,8 @@ export function quickSheet(o = {}) {
   );
   // hardware-fixes: > 60 ms output latency (Bluetooth). It takes the subtitle's place in the header: every section
   // below is full at the sheet's fixed height (This Mac 145 of 145 px at 1440×900), and the header has the width to
-  // show the whole line from 1280 px up (narrower: ellipsis, full text in the tooltip). Dismissed per device name.
+  // show the whole line from 1280 px up in Liberation Sans; in a wider face (SF Pro) it wraps to two lines rather than
+  // ellipsize (mac-findings, styles.css .qs-h .qs-latency). Dismissed per device name.
   const latWarn = latencyHint({ className: 'qs-latency', testid: 'quick-latency-hint',
     onChange: (on) => head.classList.toggle('has-warn', on) });
   d.add(() => latWarn.destroy());

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Themes suite (themes-setup; app/themes/README.md, design/warmth/OPTIONS.md §3.1 #7/#8, §5).
-//   node test/phase2/themes/run.mjs [--only boot,switch,picker,classic,quick,mini,coverage] [--theme id,id]
+//   node test/phase2/themes/run.mjs [--only boot,switch,layers,picker,classic,quick,mini,coverage] [--theme id,id]
 // Real app served by server.js, real Chromium. For EVERY registered, non-coming theme (shared/themes.js):
 //   boot      localStorage mirror + settings.theme set → reload: #theme-css is in the document while
 //             readyState is still "loading" (an init script records it), render-blocking, loaded before first paint;
@@ -10,6 +10,8 @@
 //             one enabled theme sheet and it matches html[data-theme] (never a frame with the old sheet and the new
 //             attributes, or none), the body background is never the UA default; a screenshot one frame after the
 //             store write → screenshots/switch-<id>.png.
+//   layers    (mac-findings) per theme: no composited layer ≥ 25 % of the viewport but the document, ≤ Classic + 4
+//             layers, the meters' moving parts composited (a theme must not change what repaints per meter frame).
 //   picker    Settings › Appearance shows the current theme checked; click and arrow keys write settings.theme;
 //             coming themes are not offered.
 //   classic   (runs with picker too) the Classic card after another theme: no theme link, and every visible
@@ -317,6 +319,71 @@ try {
     }
   }
 
+  if (want('layers')) {
+    // mac-findings (Sanctuary paint cost, Mac 2026-09-30: renderer 45–47 % under Sanctuary vs 38.9 % under Classic, GPU
+    // +2). A theme is colour/type/surface only, so it must not change the compositing: Sanctuary's and Nave's vault was a
+    // position:fixed ::after, which Chromium composites in a scroll-container document, and everything over it went
+    // onto overlap layers (15 layers, four of them 1440 × 900, redrawn with every meter frame). Per theme: no composited
+    // layer but the document's own covers ≥ 25 % of the viewport, no more layers than Classic + 4, and the meters'
+    // moving parts keep will-change: transform (a meter frame is a compositor transform, not a repaint of the theme).
+    const layersOf = async () => {
+      const cdp = await context.newCDPSession(page);
+      let got = null;
+      cdp.on('LayerTree.layerTreeDidChange', (e) => { if (e.layers) got = e.layers; });
+      await cdp.send('DOM.enable');
+      await cdp.send('LayerTree.enable');
+      await ev(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+      const t0 = Date.now();
+      while (!got && Date.now() - t0 < 5000) await sleep(50);
+      const out = [];
+      for (const l of (got || []).filter((x) => x.drawsContent)) {
+        let reasons = [];
+        try {
+          reasons = (await cdp.send('LayerTree.compositingReasons', { layerId: l.layerId })).compositingReasonIds || [];
+        } catch { /* layer gone */ }
+        let node = '';
+        if (l.backendNodeId) {
+          try {
+            const d = await cdp.send('DOM.describeNode', { backendNodeId: l.backendNodeId });
+            const cls = (d.node.attributes || []).join(' ').match(/class (\S+)/)?.[1];
+            node = `${d.node.localName || d.node.nodeName}${cls ? `.${cls}` : ''}`;
+          } catch { /* detached */ }
+        }
+        out.push({ w: Math.round(l.width), h: Math.round(l.height), reasons, node });
+      }
+      await cdp.detach();
+      return out;
+    };
+    const rows = [];
+    let classicCount = null;
+    await storeTheme('classic');
+    await ev(() => window.__rig.engine.drone?.setMode?.('synth'));
+    await sleep(1500);
+    for (const t of [byId('classic'), ...LIVE.filter((x) => x.id !== 'classic')]) {
+      await T(`layers → ${t.id}: no full-viewport overlap layers; meter parts on their own layers`, async () => {
+        await storeTheme(t.id);
+        await ev(() => document.fonts.ready);
+        await sleep(600);
+        const ls = await layersOf();
+        const vp = 1440 * 900;
+        const big = ls.filter((l) => l.w * l.h >= vp / 4 && !l.reasons.includes('RootScroller'));
+        const wc = await ev(() => [...document.querySelectorAll('#topbar .meter-fill, #topbar .meter-hold-track')]
+          .map((e) => getComputedStyle(e).willChange));
+        rows.push(`${t.id} ${ls.length}`);
+        if (t.id === 'classic') classicCount = ls.length;
+        assert.deepEqual(big.map((l) => `${l.node} ${l.w}×${l.h} ${l.reasons.join(',')}`), [],
+          `${t.id}: no composited layer ≥ 25 % of the viewport besides the document`);
+        assert.ok(wc.length >= 2 && wc.every((v) => v === 'transform'),
+          `${t.id}: the meter's moving parts keep will-change: transform (${wc})`);
+        if (classicCount !== null) {
+          assert.ok(ls.length <= classicCount + 4, `${t.id}: ${ls.length} layers ≤ Classic ${classicCount} + 4`);
+        }
+      });
+    }
+    console.log(`    layers (drawing content) per theme: ${rows.join(' · ')}`);
+    await ev(() => window.__rig.engine.drone?.setMode?.('off'));
+  }
+
   if (want('picker')) {
     await T('Settings › Appearance: pickable themes only, current checked, click + arrows write settings.theme', async () => {
       const mark = errors.length;
@@ -619,15 +686,12 @@ async function walkStates(collect, id) {
   const tabs = await ev(() => [...document.querySelectorAll('#view-edit [role=tab]')].map((t) => t.id).filter(Boolean));
   for (const tid of tabs) await extra(`edit-${tid}`, () => page.click(`#${tid}`, { timeout: 5000 }));
   if (tabs[0]) await page.click(`#${tabs[0]}`).catch(() => {});
+  // the slot EQ sits straight in Advanced (Ryan 2026-09-30: no Tone disclosure); state name kept for the coverage
   const tone = await ev(async () => {
     const adv = document.querySelector('#view-edit details[data-sec="slot0-adv"]');
-    const tn = document.querySelector('#view-edit details[data-sec="slot0-tone"]');
     if (!adv) return 'no Advanced section';
     adv.open = true;
     await new Promise((r) => setTimeout(r, 50));
-    const t2 = tn || document.querySelector('#view-edit details[data-sec="slot0-tone"]');
-    if (!t2) return 'no Tone section';
-    t2.open = true;
     return 'ok';
   });
   if (tone === 'ok') {

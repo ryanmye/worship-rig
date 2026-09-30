@@ -23,7 +23,10 @@ test('table entries are well-formed', () => {
       assert.equal(typeof e.default, 'boolean', e.path);
     } else {
       assert.ok(e.min < e.max, e.path);
-      assert.ok(e.default >= e.min && e.default <= e.max, e.path);
+      // sustain: an optional row may default to null (the instrument's own), a row with words to one of them
+      if (e.default === null) assert.equal(e.optional, true, `${e.path}: null default only on an optional row`);
+      else if (typeof e.default === 'string') assert.ok(e.words && e.words.includes(e.default), e.path);
+      else assert.ok(e.default >= e.min && e.default <= e.max, e.path);
       if (e.curve === 'log') assert.ok(e.min > 0, `log param ${e.path} needs min > 0`);
     }
   }
@@ -40,6 +43,8 @@ test('table covers the SPEC §4 grammar', () => {
     // slot EQ (design/eq/DECISION.md §2 flat rows, then AMENDMENT.md §4 WING-style bands b1..b8 + both cuts)
     ...['lowHz', 'mid1', 'mid1Hz', 'mid1Q', 'mid2', 'mid2Hz', 'mid2Q', 'highHz', 'cutHz', 'hiCutHz'].map((k) => `slots.<i>.eq.${k}`),
     ...[1, 2, 3, 4, 5, 6, 7, 8].flatMap((k) => ['on', 'type', 'hz', 'db', 'q'].map((f) => `slots.<i>.eq.b${k}.${f}`)),
+    // sustain: release (s to −60 dB, optional) and pedalHold ('natural' | 2–30 s)
+    'slots.<i>.release', 'slots.<i>.pedalHold',
     'fx.reverb.size', 'fx.reverb.damp', 'fx.reverb.predelay', 'fx.reverb.returnGain',
     'fx.delay.time', 'fx.delay.feedback', 'fx.delay.pingpong', 'fx.delay.tone', 'fx.delay.sync', 'fx.delay.returnGain',
     'fx.chorus.rate', 'fx.chorus.depth', 'fx.chorus.returnGain',
@@ -375,4 +380,22 @@ test('defaultSlot: errors', () => {
   assert.throws(() => defaultSlot(1.5, { type: 'synth', id: 'x' }), RangeError);
   assert.throws(() => defaultSlot(0, null), TypeError);
   assert.throws(() => defaultSlot(0, { type: 'synth' }), TypeError);
+});
+
+test('sustain: slots.<i>.release / pedalHold rows (optional, words, clamp, format)', () => {
+  const r = describe('slots.2.release');
+  const p = describe('slots.2.pedalHold');
+  assert.deepEqual([r.min, r.max, r.default, r.unit, r.curve, r.optional], [0.05, 8, null, 's', 'log', true]);
+  assert.deepEqual([p.min, p.max, p.default, p.curve, [...p.words]], [2, 30, 'natural', 'log', ['natural']]);
+  assert.equal(clamp('slots.0.release', null), null);
+  assert.equal(clamp('slots.0.release', 0.01), 0.05);
+  assert.equal(clamp('slots.0.release', 99), 8);
+  assert.equal(clamp('slots.0.pedalHold', 'natural'), 'natural');
+  assert.equal(clamp('slots.0.pedalHold', 'forever'), 'natural');
+  assert.equal(clamp('slots.0.pedalHold', 1), 2);
+  assert.equal(clamp('slots.0.pedalHold', 45), 30);
+  assert.equal(formatValue('slots.0.pedalHold', 'natural'), 'Natural');
+  assert.equal(formatValue('slots.0.pedalHold', 6), '6.00 s');
+  assert.equal(formatValue('slots.0.release', null), 'Default');
+  assert.equal(isLearnable('slots.0.release'), false);
 });
