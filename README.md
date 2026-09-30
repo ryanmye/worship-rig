@@ -1,5 +1,7 @@
 # Worship Rig
 
+Project page: https://ryanmye.github.io/worship-rig/
+
 Worship Rig turns your Mac and a MIDI keyboard into a live keys rig for church, ambient and lofi sets.
 Plug in your keyboard, pick a song, and play. You get grand and upright pianos, electric pianos, organ, pads,
 strings, synths, mallets and guitars (see [Sounds](#sounds)), a key "drone" pad that holds the song's key underneath
