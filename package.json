@@ -56,8 +56,15 @@
           "arch": [
             "arm64"
           ]
+        },
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
         }
       ],
+      "artifactName": "Worship-Rig-${version}-${arch}.${ext}",
       "identity": null,
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
@@ -67,6 +74,10 @@
         "NSMicrophoneUsageDescription": "Worship Rig does not record the microphone; macOS asks because web audio can open input devices.",
         "LSMinimumSystemVersion": "12.0"
       }
+    },
+    "dmg": {
+      "title": "${productName} ${version}",
+      "filesystem": "APFS"
     }
   }
 }
