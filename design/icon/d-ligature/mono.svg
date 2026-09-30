@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="173.0 173.0 678.0 678.0" width="22" height="22">
+  <title>Ligature (template)</title>
+  <clipPath id="mc"><rect x="127" y="300" width="1247" height="424"/></clipPath>
+    <g clip-path="url(#mc)"><path d="M239 240V672H269L434 460L599 672H629V240M629 672V784M629 352H687A98 98 0 0 1 687 548H629M677 548L837 924" fill="none" stroke="#000" stroke-width="104" stroke-linejoin="miter" stroke-miterlimit="4"/></g>
+</svg>

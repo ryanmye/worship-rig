@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" width="22" height="22">
+  <title>Room (template)</title>
+  <!-- Template tray glyph: the lit opening over its floor spill. Black on transparent; macOS tints it. -->
+  <path d="M6 3H16V12H6Z M6 14H16L19 19H3Z" fill="#000"/>
+</svg>

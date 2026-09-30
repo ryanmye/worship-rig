@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Worship Rig · Lancet</title>
+  <!-- The Sanctuary v2 mark (app/assets/mark.svg) matured for a 1024 squircle: the window group below is the
+       mark's own 32-unit geometry at scale 22 (translate 160), so the icon and the top-bar mark stay one drawing. -->
+  <defs>
+    <path id="sq" d="M642.22 100C723.36 100 763.93 100 800.51 112.07L807.6 113.81C855.28 131.16 892.84 168.72 910.19 216.4L911.93 223.49C924 260.07 924 300.64 924 381.78L924 642.22C924 723.36 924 763.93 911.93 800.51L910.19 807.6C892.84 855.28 855.28 892.84 807.6 910.19L800.51 911.93C763.93 924 723.36 924 642.22 924L381.78 924C300.64 924 260.07 924 223.49 911.93L216.4 910.19C168.72 892.84 131.16 855.28 113.81 807.6L112.07 800.51C100 763.93 100 723.36 100 642.22L100 381.78C100 300.64 100 260.07 112.07 223.49L113.81 216.4C131.16 168.72 168.72 131.16 216.4 113.81L223.49 112.07C260.07 100 300.64 100 381.78 100Z"/>
+    <path id="arch" d="M6 30V14.5A13 13 0 0 1 16 2a13 13 0 0 1 10 12.5V30z"/>
+    <clipPath id="clipSq"><use href="#sq"/></clipPath>
+    <clipPath id="clipWin"><use href="#arch"/></clipPath>
+    <filter id="drop" x="-10%" y="-10%" width="120%" height="125%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity=".32"/></filter>
+    <filter id="bloom" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.2"/></filter>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a2558"/><stop offset=".5" stop-color="#231539"/><stop offset="1" stop-color="#180e2b"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="512" cy="560" r="440" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f2c56f" stop-opacity=".26"/><stop offset=".55" stop-color="#d98f55" stop-opacity=".08"/><stop offset="1" stop-color="#d98f55" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".30"/><stop offset=".25" stop-color="#fff" stop-opacity=".05"/><stop offset=".8" stop-color="#fff" stop-opacity=".03"/><stop offset="1" stop-color="#fff" stop-opacity=".12"/>
+    </linearGradient>
+    <linearGradient id="brass" x1="0" y1="0" x2=".6" y2="1">
+      <stop offset="0" stop-color="#f7de9c"/><stop offset=".4" stop-color="#e6ba65"/><stop offset="1" stop-color="#a9772d"/>
+    </linearGradient>
+    <linearGradient id="sill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3d38a"/><stop offset="1" stop-color="#9a6b1c"/></linearGradient>
+    <linearGradient id="tymp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2d1a4a"/><stop offset="1" stop-color="#170d29"/></linearGradient>
+    <linearGradient id="pO" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffa878"/><stop offset="1" stop-color="#ee7843"/></linearGradient>
+    <linearGradient id="pG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#72dfae"/><stop offset="1" stop-color="#3aaa7b"/></linearGradient>
+    <linearGradient id="pB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a6e3fc"/><stop offset="1" stop-color="#58b9e6"/></linearGradient>
+    <linearGradient id="pV" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c7a2f2"/><stop offset="1" stop-color="#9163cc"/></linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".30"/><stop offset=".42" stop-color="#fff" stop-opacity=".06"/><stop offset=".43" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="ocu"><stop offset="0" stop-color="#fffbef"/><stop offset=".55" stop-color="#f8e8bd"/><stop offset="1" stop-color="#e9cf92"/></radialGradient>
+    <radialGradient id="halo"><stop offset="0" stop-color="#ffe3a0" stop-opacity=".55"/><stop offset="1" stop-color="#ffe3a0" stop-opacity="0"/></radialGradient>
+  </defs>
+
+  <!-- squircle body -->
+  <g filter="url(#drop)"><use href="#sq" fill="url(#body)"/></g>
+  <g clip-path="url(#clipSq)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#glow)"/>
+  </g>
+  <use href="#sq" fill="none" stroke="url(#rim)" stroke-width="4" clip-path="url(#clipSq)"/>
+
+  <g transform="translate(160 160) scale(22)">
+    <!-- coloured light bleeding onto the wall -->
+    <g filter="url(#bloom)" opacity=".36">
+      <path d="M6 12.5l10-1.2V21L6 22z" fill="#f78955"/><path d="M16 11.3l10 1.2V21.5L16 21z" fill="#4ec491"/>
+      <path d="M6 22l10-1v9H6z" fill="#7ad1f7"/><path d="M16 21l10 .5V30H16z" fill="#af80e1"/>
+      <circle cx="16" cy="7.6" r="3" fill="#edd9a6"/>
+    </g>
+    <g clip-path="url(#clipWin)">
+      <rect x="0" y="0" width="32" height="32" fill="url(#tymp)"/>
+      <circle cx="16" cy="7.6" r="6.2" fill="url(#halo)"/>
+      <path d="M6 12.5l10-1.2V21L6 22z" fill="url(#pO)"/><path d="M16 11.3l10 1.2V21.5L16 21z" fill="url(#pG)"/>
+      <path d="M6 22l10-1v9H6z" fill="url(#pB)"/><path d="M16 21l10 .5V30H16z" fill="url(#pV)"/>
+      <path d="M6 12.5l10-1.2 10 1.2V30H6z" fill="url(#sheen)"/>
+      <circle cx="16" cy="7.6" r="3" fill="url(#ocu)"/>
+      <path d="M16 11.3V30M6 12.5l10-1.2 10 1.2M6 22l10-1 10 .5" stroke="#0c0716" stroke-width="1.05" stroke-linejoin="round" fill="none"/>
+    </g>
+    <use href="#arch" fill="none" stroke="url(#brass)" stroke-width="2.3" stroke-linejoin="round"/>
+    <!-- sill -->
+    <rect x="4.4" y="29.3" width="23.2" height="1.9" rx=".55" fill="url(#sill)"/>
+  </g>
+</svg>

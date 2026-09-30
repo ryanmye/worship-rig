@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Swell (template)</title>
+  <!-- macOS template tray glyph: pure black on transparent; the system tints it. -->
+  <g fill="none" stroke="#000" stroke-width="104" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M92 432C273.5 432 240.5 262 422 262L602 262C783.5 262 750.5 432 932 432"/>
+    <path d="M92 682C273.5 682 240.5 512 422 512L602 512C783.5 512 750.5 682 932 682"/>
+    <path d="M92 932C273.5 932 240.5 762 422 762L602 762C783.5 762 750.5 932 932 932"/>
+  </g>
+</svg>

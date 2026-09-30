@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Swell</title>
+  <!-- Worship Rig, direction B: one sustained swell (attack, long hold, release) echoing down as a pad — brass on plum. -->
+  <defs>
+    <clipPath id="sq"><path d="M642.22 100C723.36 100 763.93 100 800.51 112.07L807.6 113.81C855.28 131.16 892.84 168.72 910.19 216.4L911.93 223.49C924 260.07 924 300.64 924 381.78L924 642.22C924 723.36 924 763.93 911.93 800.51L910.19 807.6C892.84 855.28 855.28 892.84 807.6 910.19L800.51 911.93C763.93 924 723.36 924 642.22 924L381.78 924C300.64 924 260.07 924 223.49 911.93L216.4 910.19C168.72 892.84 131.16 855.28 113.81 807.6L112.07 800.51C100 763.93 100 723.36 100 642.22L100 381.78C100 300.64 100 260.07 112.07 223.49L113.81 216.4C131.16 168.72 168.72 131.16 216.4 113.81L223.49 112.07C260.07 100 300.64 100 381.78 100Z"/></clipPath>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#241a38"/><stop offset="1" stop-color="#100a1c"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="512" cy="330" r="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e6ba65" stop-opacity=".30"/>
+      <stop offset="1" stop-color="#e6ba65" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="brass" x1="0" y1="250" x2="0" y2="490" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f4d48a"/><stop offset="1" stop-color="#f4b73f"/>
+    </linearGradient>
+  </defs>
+  <g clip-path="url(#sq)">
+    <rect width="1024" height="1024" fill="url(#bg)"/>
+    <rect width="1024" height="1024" fill="url(#glow)"/>
+  </g>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M232 754C355.2 754 332.8 626 456 626L568 626C691.2 626 668.8 754 792 754" stroke="#644779" stroke-width="76"/>
+    <path d="M232 582C355.2 582 332.8 454 456 454L568 454C691.2 454 668.8 582 792 582" stroke="#a47ab8" stroke-width="84"/>
+    <path d="M232 410C355.2 410 332.8 282 456 282L568 282C691.2 282 668.8 410 792 410" stroke="url(#brass)" stroke-width="96"/>
+  </g>
+  <path d="M642.22 100C723.36 100 763.93 100 800.51 112.07L807.6 113.81C855.28 131.16 892.84 168.72 910.19 216.4L911.93 223.49C924 260.07 924 300.64 924 381.78L924 642.22C924 723.36 924 763.93 911.93 800.51L910.19 807.6C892.84 855.28 855.28 892.84 807.6 910.19L800.51 911.93C763.93 924 723.36 924 642.22 924L381.78 924C300.64 924 260.07 924 223.49 911.93L216.4 910.19C168.72 892.84 131.16 855.28 113.81 807.6L112.07 800.51C100 763.93 100 723.36 100 642.22L100 381.78C100 300.64 100 260.07 112.07 223.49L113.81 216.4C131.16 168.72 168.72 131.16 216.4 113.81L223.49 112.07C260.07 100 300.64 100 381.78 100Z" fill="none" stroke="#ffffff" stroke-opacity=".08" stroke-width="3"/>
+</svg>
