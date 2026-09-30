@@ -72,7 +72,7 @@ jobs:
             echo "| file | size |"
             echo "|---|---|"
             echo "| Worship Rig.app | ${app_mb} MB |"
-            for f in "dist/Worship-Rig-$v-${{ matrix.arch }}.zip" "dist/Worship-Rig-$v-${{ matrix.arch }}.dmg"; do
+            for f in "dist/Worship-Rig-${{ matrix.arch }}.zip" "dist/Worship-Rig-${{ matrix.arch }}.dmg"; do
               echo "| $(basename "$f") | $(( $(stat -f %z "$f") / 1048576 )) MB |"
             done
           } >> "$GITHUB_STEP_SUMMARY"
@@ -82,8 +82,8 @@ jobs:
       - name: Upload zip
         uses: actions/upload-artifact@v4
         with:
-          name: Worship-Rig-${{ env.APP_VERSION }}-${{ matrix.arch }}.zip
-          path: dist/Worship-Rig-${{ env.APP_VERSION }}-${{ matrix.arch }}.zip
+          name: Worship-Rig-${{ matrix.arch }}.zip
+          path: dist/Worship-Rig-${{ matrix.arch }}.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -91,8 +91,8 @@ jobs:
       - name: Upload dmg
         uses: actions/upload-artifact@v4
         with:
-          name: Worship-Rig-${{ env.APP_VERSION }}-${{ matrix.arch }}.dmg
-          path: dist/Worship-Rig-${{ env.APP_VERSION }}-${{ matrix.arch }}.dmg
+          name: Worship-Rig-${{ matrix.arch }}.dmg
+          path: dist/Worship-Rig-${{ matrix.arch }}.dmg
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
