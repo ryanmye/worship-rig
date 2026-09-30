@@ -1,7 +1,7 @@
 name: release
 
 # Builds Worship Rig.app for Apple Silicon (arm64) and Intel (x64) as .dmg + .zip.
-# - push a tag v*            → build, upload the four files to the run, and create a GitHub prerelease with them
+# - push a tag v*            → build, upload the four files to the run, and create a GitHub release with them
 # - Actions → release → Run  → dry_run (default true): build + upload to the run only, never a release
 # A release is only created when the ref is a v* tag AND it's a tag push (or a manual run on a tag with dry_run off).
 # Dispatching on a branch (e.g. main) can never create a release.
@@ -115,7 +115,7 @@ jobs:
           path: assets
           merge-multiple: true
 
-      - name: Create prerelease
+      - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -137,6 +137,5 @@ jobs:
           gh release create "$GITHUB_REF_NAME" assets/*.dmg assets/*.zip docs/starter/worship-rig-starter-library.json \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
-            --prerelease \
             --title "Worship Rig $GITHUB_REF_NAME" \
             --notes-file notes.md

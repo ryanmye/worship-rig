@@ -29,7 +29,7 @@ You need an Apple Silicon Mac (M1 or newer) and **Node.js** from <https://nodejs
    npm run build:mac
    ```
 4. The app is now in `dist/mac-arm64/Worship Rig.app`. Drag it into your **Applications** folder.
-   (A `.zip` and a `.dmg`, `dist/Worship-Rig-<version>-arm64.zip`/`.dmg`, are made too, for moving it to another Mac.)
+   (A `.zip` and a `.dmg`, `dist/Worship-Rig-arm64.zip`/`.dmg`, are made too, for moving it to another Mac.)
 
 **First launch:** double-click the app. It isn't from the App Store, but the build signs it for this Mac,
 so it just opens. A copy moved to *another* Mac through a browser, AirDrop or Messages needs one extra step the
@@ -275,12 +275,12 @@ past the value on screen, so the sound never jumps.
 ## Running on your Mac
 
 **Downloads.** Each release on GitHub has four files. Pick **arm64** for an Apple Silicon Mac (M1 or later) and
-**x64** for an Intel Mac; `Worship-Rig-<version>-<arch>.dmg` opens a window where you drag the app to Applications,
+**x64** for an Intel Mac; `Worship-Rig-<arch>.dmg` opens a window where you drag the app to Applications,
 and the `.zip` holds the same app if you'd rather unzip it. Each is about 200 MB, and the app is about 370 MB
 installed. They aren't notarized, so the first open needs the Gatekeeper steps below.
 
 **Building.** After `npm install`, `npm run build:mac` takes about half a minute on an M-series Mac. It makes
-`dist/mac-arm64/Worship Rig.app` (about 365 MB) plus `dist/Worship-Rig-<version>-arm64.zip` and `.dmg` (about
+`dist/mac-arm64/Worship Rig.app` (about 365 MB) plus `dist/Worship-Rig-arm64.zip` and `.dmg` (about
 190 MB each). For Intel: `npx electron-builder --mac dir zip dmg --x64 --publish never` (app in `dist/mac/`).
 The app has to stay under 500 MB on disk (around 400 MB is fine). The build check (`build-lint`) fails above
 480 MB and prints what takes the space.

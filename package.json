@@ -65,7 +65,7 @@
           ]
         }
       ],
-      "artifactName": "Worship-Rig-${version}-${arch}.${ext}",
+      "artifactName": "Worship-Rig-${arch}.${ext}",
       "identity": null,
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
