@@ -2,7 +2,7 @@
   "name": "worship-rig",
   "productName": "Worship Rig",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Live MIDI keys, pads and key drones for worship, ambient and lofi. Electron app + Chrome fallback.",
   "author": "Ryan Ye",
   "license": "GPL-3.0-only",
