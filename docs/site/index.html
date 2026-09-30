@@ -116,27 +116,54 @@
 </section>
 
 <section class="themes" id="themes">
+  <!-- CSS-only picker: each radio precedes the tiles and the figure, so #th-<id>:checked ~ … shows that theme's
+       <img> and caption (style.css "themes"). Sanctuary is checked in the markup: the page is complete untouched. -->
   <div class="wrap themes-grid">
+  <input class="pick" type="radio" name="theme" id="th-classic" value="classic" aria-label="Classic, dark theme">
+  <input class="pick" type="radio" name="theme" id="th-sanctuary" value="sanctuary" checked aria-label="Sanctuary, dark theme, the default">
+  <input class="pick" type="radio" name="theme" id="th-sanctuary-day" value="sanctuary-day" aria-label="Sanctuary Day, light theme">
+  <input class="pick" type="radio" name="theme" id="th-daylight-stage" value="daylight-stage" aria-label="Daylight Stage, dark theme">
+  <input class="pick" type="radio" name="theme" id="th-daylight-day" value="daylight-day" aria-label="Daylight Day, light theme">
+  <input class="pick" type="radio" name="theme" id="th-studio" value="studio" aria-label="Studio, dark theme">
+  <input class="pick" type="radio" name="theme" id="th-ember" value="ember" aria-label="Ember, dark theme">
+  <input class="pick" type="radio" name="theme" id="th-nave" value="nave" aria-label="Nave, dark theme">
     <div>
       <p class="kicker">Appearance</p>
       <h2>Eight looks for the stage and the booth</h2>
       <p class="muted">Two light, six dark. Sanctuary is the default
-        (<a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/shared/themes.js">themes.js</a>).</p>
+        (<a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/shared/themes.js">themes.js</a>).
+        Pick one to see Perform in it.</p>
       <ul class="swatches">
-        <li class="swatch" style="--p:#15181d;--t:#f1f4f8;--b:#0b0d10;--a:#ffc94d"><b>Classic</b><span class="mode">Dark</span><span class="chips"><i title="#0b0d10"></i><i title="#ffc94d"></i></span></li>
-        <li class="swatch default" style="--p:#21111c;--t:#f5ecd8;--b:#160913;--a:#e6ba65"><b>Sanctuary</b><span class="mode">Dark · default</span><span class="chips"><i title="#160913"></i><i title="#e6ba65"></i></span></li>
-        <li class="swatch" style="--p:#f9f5ee;--t:#32162b;--b:#efe9de;--a:#875806"><b>Sanctuary Day</b><span class="mode">Light</span><span class="chips"><i title="#efe9de"></i><i title="#875806"></i></span></li>
-        <li class="swatch" style="--p:#261f19;--t:#f5ede0;--b:#1b1611;--a:#f6c35a"><b>Daylight Stage</b><span class="mode">Dark</span><span class="chips"><i title="#1b1611"></i><i title="#f6c35a"></i></span></li>
-        <li class="swatch" style="--p:#fdfbf7;--t:#27211b;--b:#f3efe7;--a:#f4b73f"><b>Daylight Day</b><span class="mode">Light</span><span class="chips"><i title="#f3efe7"></i><i title="#f4b73f"></i></span></li>
-        <li class="swatch" style="--p:#221f1c;--t:#f4f0e6;--b:#181613;--a:#f7c367"><b>Studio</b><span class="mode">Dark</span><span class="chips"><i title="#181613"></i><i title="#f7c367"></i></span></li>
-        <li class="swatch" style="--p:#1e1713;--t:#f7efe3;--b:#150e0b;--a:#f7b755"><b>Ember</b><span class="mode">Dark</span><span class="chips"><i title="#150e0b"></i><i title="#f7b755"></i></span></li>
-        <li class="swatch" style="--p:#131529;--t:#f5ecd8;--b:#0a0c1e;--a:#e6ba65"><b>Nave</b><span class="mode">Dark</span><span class="chips"><i title="#0a0c1e"></i><i title="#e6ba65"></i></span></li>
+        <li><label class="swatch" for="th-classic" style="--p:#15181d;--t:#f1f4f8;--b:#0b0d10;--a:#ffc94d"><b>Classic</b><span class="mode">Dark</span><span class="chips"><i title="#0b0d10"></i><i title="#ffc94d"></i></span></label></li>
+        <li><label class="swatch" for="th-sanctuary" style="--p:#21111c;--t:#f5ecd8;--b:#160913;--a:#e6ba65"><b>Sanctuary</b><span class="mode">Dark · default</span><span class="chips"><i title="#160913"></i><i title="#e6ba65"></i></span></label></li>
+        <li><label class="swatch" for="th-sanctuary-day" style="--p:#f9f5ee;--t:#32162b;--b:#efe9de;--a:#875806"><b>Sanctuary Day</b><span class="mode">Light</span><span class="chips"><i title="#efe9de"></i><i title="#875806"></i></span></label></li>
+        <li><label class="swatch" for="th-daylight-stage" style="--p:#261f19;--t:#f5ede0;--b:#1b1611;--a:#f6c35a"><b>Daylight Stage</b><span class="mode">Dark</span><span class="chips"><i title="#1b1611"></i><i title="#f6c35a"></i></span></label></li>
+        <li><label class="swatch" for="th-daylight-day" style="--p:#fdfbf7;--t:#27211b;--b:#f3efe7;--a:#f4b73f"><b>Daylight Day</b><span class="mode">Light</span><span class="chips"><i title="#f3efe7"></i><i title="#f4b73f"></i></span></label></li>
+        <li><label class="swatch" for="th-studio" style="--p:#221f1c;--t:#f4f0e6;--b:#181613;--a:#f7c367"><b>Studio</b><span class="mode">Dark</span><span class="chips"><i title="#181613"></i><i title="#f7c367"></i></span></label></li>
+        <li><label class="swatch" for="th-ember" style="--p:#1e1713;--t:#f7efe3;--b:#150e0b;--a:#f7b755"><b>Ember</b><span class="mode">Dark</span><span class="chips"><i title="#150e0b"></i><i title="#f7b755"></i></span></label></li>
+        <li><label class="swatch" for="th-nave" style="--p:#131529;--t:#f5ecd8;--b:#0a0c1e;--a:#e6ba65"><b>Nave</b><span class="mode">Dark</span><span class="chips"><i title="#0a0c1e"></i><i title="#e6ba65"></i></span></label></li>
       </ul>
     </div>
     <figure>
-      <img src="img/perform-daylight.webp" width="1440" height="900" loading="lazy"
-        alt="The same Perform screen in the light Daylight Day theme.">
-      <figcaption>Perform in Daylight Day, one of the two light themes.</figcaption>
+      <div class="shots">
+        <img class="shot-classic" src="img/perform-classic.webp" width="1440" height="900" loading="lazy"
+          alt="The Perform screen in the Classic theme (dark): Sunday Pad + Piano, the Keys and Pad strips, the key and drone panel and song notes.">
+        <img class="shot-sanctuary" src="img/perform-sanctuary.webp" width="1440" height="900"
+          alt="The Perform screen in the Sanctuary theme (dark): Sunday Pad + Piano, the Keys and Pad strips, the key and drone panel and song notes.">
+        <img class="shot-sanctuary-day" src="img/perform-sanctuary-day.webp" width="1440" height="900" loading="lazy"
+          alt="The Perform screen in the Sanctuary Day theme (light): Sunday Pad + Piano, the Keys and Pad strips, the key and drone panel and song notes.">
+        <img class="shot-daylight-stage" src="img/perform-daylight-stage.webp" width="1440" height="900" loading="lazy"
+          alt="The Perform screen in the Daylight Stage theme (dark): Sunday Pad + Piano, the Keys and Pad strips, the key and drone panel and song notes.">
+        <img class="shot-daylight-day" src="img/perform-daylight-day.webp" width="1440" height="900" loading="lazy"
+          alt="The Perform screen in the Daylight Day theme (light): Sunday Pad + Piano, the Keys and Pad strips, the key and drone panel and song notes.">
+        <img class="shot-studio" src="img/perform-studio.webp" width="1440" height="900" loading="lazy"
+          alt="The Perform screen in the Studio theme (dark): Sunday Pad + Piano, the Keys and Pad strips, the key and drone panel and song notes.">
+        <img class="shot-ember" src="img/perform-ember.webp" width="1440" height="900" loading="lazy"
+          alt="The Perform screen in the Ember theme (dark): Sunday Pad + Piano, the Keys and Pad strips, the key and drone panel and song notes.">
+        <img class="shot-nave" src="img/perform-nave.webp" width="1440" height="900" loading="lazy"
+          alt="The Perform screen in the Nave theme (dark): Sunday Pad + Piano, the Keys and Pad strips, the key and drone panel and song notes.">
+      </div>
+      <figcaption><span class="cap-classic">Perform in Classic, dark</span><span class="cap-sanctuary">Perform in Sanctuary, dark</span><span class="cap-sanctuary-day">Perform in Sanctuary Day, light</span><span class="cap-daylight-stage">Perform in Daylight Stage, dark</span><span class="cap-daylight-day">Perform in Daylight Day, light</span><span class="cap-studio">Perform in Studio, dark</span><span class="cap-ember">Perform in Ember, dark</span><span class="cap-nave">Perform in Nave, dark</span></figcaption>
     </figure>
   </div>
 </section>

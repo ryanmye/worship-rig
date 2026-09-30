@@ -192,16 +192,25 @@ section { padding-block: var(--gap-section); }
 .stage.drone img:not(.inset) { width: min(100%, 404px); margin-bottom: 2.25rem; }
 .stage.pop img { width: 320px; max-width: 100%; border-radius: 16px; }
 
-/* themes */
+/* themes: a CSS-only picker. Eight radios (.pick, visually hidden, still focusable and arrow-key driven) sit first
+   in .themes-grid, so "#th-<id>:checked ~ …" reaches the tile <label>s, the <img> stack and the caption <span>s. */
 .themes { background: var(--panel); border-block: 1px solid var(--line); }
-.themes-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 3.5rem; align-items: center; }
+.themes-grid { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 3.5rem; align-items: center; }
+.pick {
+  position: absolute; top: 0; left: 0; width: 1px; height: 1px; margin: 0; padding: 0;
+  opacity: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
 .swatches { list-style: none; margin: 1.5rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(7.25rem, 1fr)); gap: 0.6rem; }
+.swatches li { display: flex; }
 .swatch {
+  flex: 1; display: block; cursor: pointer;
   background: var(--p); color: var(--t);
   border-radius: 12px; padding: 0.7rem 0.8rem 0.75rem;
   box-shadow: 0 0 0 1px rgb(128 110 100 / 0.28) inset;
   font-size: 0.875rem; line-height: 1.25;
+  -webkit-tap-highlight-color: transparent;
 }
+.swatch:hover { box-shadow: 0 0 0 1px rgb(128 110 100 / 0.28) inset, 0 0 0 2px var(--line); }
 .swatch b { display: block; font: 700 1rem/1.2 var(--font-display); }
 .swatch .mode { opacity: 0.72; font-size: 0.75rem; }
 .chips { display: flex; gap: 0.35rem; margin-top: 0.55rem; }
@@ -211,10 +220,59 @@ section { padding-block: var(--gap-section); }
 }
 .chips i:first-child { background: var(--b); }
 .chips i:last-child { background: var(--a); }
-.swatch.default { box-shadow: 0 0 0 2px var(--accent); }
+/* the chosen tile: a brass ring; with keyboard focus, a second ring outside it */
+#th-classic:checked ~ div [for="th-classic"],
+#th-sanctuary:checked ~ div [for="th-sanctuary"],
+#th-sanctuary-day:checked ~ div [for="th-sanctuary-day"],
+#th-daylight-stage:checked ~ div [for="th-daylight-stage"],
+#th-daylight-day:checked ~ div [for="th-daylight-day"],
+#th-studio:checked ~ div [for="th-studio"],
+#th-ember:checked ~ div [for="th-ember"],
+#th-nave:checked ~ div [for="th-nave"] {
+  box-shadow: 0 0 0 2px var(--accent), 0 6px 18px -10px var(--accent);
+}
+#th-classic:focus-visible ~ div [for="th-classic"],
+#th-sanctuary:focus-visible ~ div [for="th-sanctuary"],
+#th-sanctuary-day:focus-visible ~ div [for="th-sanctuary-day"],
+#th-daylight-stage:focus-visible ~ div [for="th-daylight-stage"],
+#th-daylight-day:focus-visible ~ div [for="th-daylight-day"],
+#th-studio:focus-visible ~ div [for="th-studio"],
+#th-ember:focus-visible ~ div [for="th-ember"],
+#th-nave:focus-visible ~ div [for="th-nave"] {
+  outline: 2px solid var(--accent); outline-offset: 3px;
+}
 .themes figure { margin: 0; }
-.themes figure img { border-radius: 12px; box-shadow: var(--shadow); }
+/* fixed 16:10 box: every shot is stacked in it, so switching never moves the page */
+.shots {
+  position: relative; aspect-ratio: 1440 / 900; border-radius: 12px; overflow: hidden;
+  background: var(--stage); box-shadow: var(--shadow);
+}
+.shots img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  opacity: 0; visibility: hidden;
+}
+#th-classic:checked ~ figure .shot-classic,
+#th-sanctuary:checked ~ figure .shot-sanctuary,
+#th-sanctuary-day:checked ~ figure .shot-sanctuary-day,
+#th-daylight-stage:checked ~ figure .shot-daylight-stage,
+#th-daylight-day:checked ~ figure .shot-daylight-day,
+#th-studio:checked ~ figure .shot-studio,
+#th-ember:checked ~ figure .shot-ember,
+#th-nave:checked ~ figure .shot-nave { opacity: 1; visibility: visible; }
 .themes figcaption { margin-top: 0.7rem; font-size: 0.875rem; color: var(--muted); }
+.themes figcaption span { display: none; }
+#th-classic:checked ~ figure .cap-classic,
+#th-sanctuary:checked ~ figure .cap-sanctuary,
+#th-sanctuary-day:checked ~ figure .cap-sanctuary-day,
+#th-daylight-stage:checked ~ figure .cap-daylight-stage,
+#th-daylight-day:checked ~ figure .cap-daylight-day,
+#th-studio:checked ~ figure .cap-studio,
+#th-ember:checked ~ figure .cap-ember,
+#th-nave:checked ~ figure .cap-nave { display: inline; }
+@media (prefers-reduced-motion: no-preference) {
+  .shots img { transition: opacity 0.2s, visibility 0.2s; }
+  .swatch { transition: box-shadow 0.15s; }
+}
 
 /* download */
 .download { text-align: center; }
@@ -263,6 +321,7 @@ details.credits p { margin-top: 0.8rem; }
   .facts li + li::before { padding-inline: 0.5rem; }
   .stage.drone img:not(.inset) { margin-bottom: 0.75rem; }
   .stage .inset { position: static; width: min(100%, 404px); }
+  .swatches { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: no-preference) {
   a, .btn { transition: text-decoration-thickness 0.15s, opacity 0.15s; }
