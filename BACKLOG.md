@@ -6,7 +6,7 @@ inbox file. Items move to COORDINATION.md "In flight" when scheduled. Last updat
 Legend: **S/M/L** effort · **who** = which side is the natural owner (cloud = implementation, local = Mac/hardware).
 
 
-## v1 release gate (Ryan, 2026-09-30: "after we are done with our backlog we should be good to release v1")
+## v1 release gate — SHIPPED: v1.0.0 published 2026-09-30T16:16Z (https://github.com/ryanmye/worship-rig/releases/tag/v1.0.0; arm64 + x64 dmg/zip + Starter JSON; marked prerelease by release.yml — Ryan decides on promoting it). v1.0.1: L-31 (strip tag clip at 1366×768), L-32 (Ember/Studio compositor layer), tools/exs `manifestEntry` maxSec key.
 Proposed reading: v1 ships when the items below are done; everything else in sections A–C is v1.1+ unless Ryan pulls
 it in. Cloud proposes, Ryan decides.
 **Must (v1):**

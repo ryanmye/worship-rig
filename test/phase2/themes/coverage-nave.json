@@ -3,7 +3,7 @@
  "themes": [
   "nave"
  ],
- "generated": "2026-09-30T08:33:21.090Z",
+ "generated": "2026-09-30T16:33:27.829Z",
  "states": [
   "nave:perform",
   "nave:perform-held",
@@ -31,23 +31,29 @@
   "nave:mini-6-flags",
   "nave:mini-drone-keys"
  ],
- "total": 209,
+ "total": 210,
  "matched": 207,
- "unmatched": 2,
- "unmatchedPct": 1,
+ "unmatched": 3,
+ "unmatchedPct": 1.4,
  "limitPct": 5,
  "deadClasses": [],
  "unmatchedSelectors": [
   {
    "selector": "& .fx-more",
    "context": ":where(html[data-theme=\"nave\"])",
-   "line": 202,
+   "line": 206,
    "dead": false
   },
   {
    "selector": "& .bstrip.open .bstrip-list",
    "context": ":where(html[data-theme=\"nave\"])",
-   "line": 202,
+   "line": 206,
+   "dead": false
+  },
+  {
+   "selector": "& .qs-pedal.on i",
+   "context": ":where(html[data-theme=\"nave\"])",
+   "line": 218,
    "dead": false
   }
  ],

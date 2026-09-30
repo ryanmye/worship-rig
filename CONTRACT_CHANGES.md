@@ -5337,3 +5337,74 @@ Electron main half is LOCAL.
 - **Test:** `test/phase2/ui-core/run.mjs` "L-30: rig menu ids trayHidden / trayShown …": drives `controller.onMenu(id)`
   (the function preload's `rig.onMenu` callback is), asserts the exact toast text/kind/dismiss button once, no repeat
   after dismiss, the Settings note shown/hidden, reopen-while-hidden, and (via the suite's final check) no console errors.
+
+## bundle-id (LOCAL 44d582c, 2026-09-30; recorded by the cloud)
+- L-30 root cause was NOT the notch: macOS 26.4 kept a stuck per-bundle-id menu-bar state for `com.ryan.worshiprig`
+  (item parked at {0,0} or under the clock). The appId is now **`com.ryanmye.worshiprig`** (package.json build.appId;
+  SPEC.md §223 is historical). The `trayHidden`/`trayShown` toast path stays as a safety net. Cloud tree updated so the
+  next drop does not revert it.
+
+## l31-l32 (Mac run, 2026-09-30: L-31 four-strip tag row clips in SF Pro, L-32 themes `layers` fails for ember + studio; styles.css, themes ember / studio / sanctuary / sanctuary-v2 theme.css, ui-core + themes tests)
+- **L-31 (ui-core "polish-2A responsive", 4 strips at 1366 × 768: `div.slot-tag` 122 > 118).** Cause: with four strips the
+  tag row is 118 px (122 at 1024, 125 at 1440), and "↻ 100%" + "Chorus 35%" (the wheel word is already hidden under
+  165 px) is 119 px at 105 % and 121 px at 109 % of FreeSans, 122 px in SF Pro; the row is `overflow: hidden`, so the
+  end of the Chorus chip was cut. Reproduced with the SFsim stand-in (FreeSans, size-adjust, SF's ascent / descent), the
+  same one as L-26. Fix (CSS only, no copy): in a strip whose content box is ≤ 124 px (`@container slot`, i.e. four
+  strips at ≤ 1366 and 1024 × 700) the wheel percent collapses to "↻" while a Chorus chip is showing (`.slot-tag:has(
+  .chorus-badge:not([hidden])) .wb-val`); everywhere else, and whenever there is no Chorus chip, it is in full. The wheel
+  and the fader carry that number anyway, so it is the least informative chip. Floor: `.chorus-badge` has `min-width: 0` +
+  `text-overflow: ellipsis`, so a still wider face shortens that chip instead of the row cutting it. Same stand-in run
+  also showed `button.mchip.x4` "normal" (56 px) in a 54 px box at 109 % in the same 118 px strips: no side padding on
+  `.mchip` at ≤ 124 px (+2 px).
+  - Test: the four-strip block of "polish-2A responsive" gets a FreeSans-only pass (as L-26: the Mac runs its real SF in
+    the loop above) at 105 % and 109 % over 1366 × 768, 1440 × 900, 1024 × 700, 1366 × 700: nothing clips, the Chorus chip
+    is whole, and the wheel percent is shown iff the row is > 124 px. Without the CSS it fails at 109 % (tag 121 > 118,
+    octave 56 > 54; at 105 % the tag is 119 / 118, inside the probe's 1 px tolerance); with it the tag measures 118 / 118
+    (122 / 122, 125 / 125, 128 / 128 in the other windows) at both sizes. Checked in all 8 themes at 1366 × 768 and 1024 × 700 (100 / 105 / 109 %): no tag clips, the
+    Chorus chip is 68–74 px in its box. Residual (unchanged, see L-26): at 1280 × 800 and 109 % "Dotted 8th / worship echo"
+    (80 > 78) and "Building Swell · C" (165 > 163) still clip over FreeSans; the Mac passes those windows in real SF.
+- **L-32 (themes `layers`: "no composited layer ≥ 25 % of the viewport besides the document" failed for ember and
+  studio).** There is no fixed, transformed or filtered full-viewport layer in either theme (their room is a static
+  body background: grain + gradients; no `position: fixed`, `will-change`, `filter`, `backdrop-filter`), so the
+  "equivalent of the Sanctuary vault" does not exist. Cause (reproduced): the suite passed here because Linux's default
+  text mode (LCD text) composites almost no scrollers, while the Mac has no LCD text and composites every one of them.
+  `--disable-lcd-text` reproduces the Mac's failure exactly: old CSS, the themes suite fails sanctuary (`div.panel`
+  637 × 546), studio (631 × 551) and ember (638 × 570), all `Overlap`, each the whole slot row in one layer (x 94–732, the
+  four strips; 25 % of 1440 × 900 is 324 000 px², these are 347 000–363 000). Mechanism: the setlist
+  strip and the notes are scrollers, now layers; a slot chunk whose visual rect reaches one (a theme's outer shadow
+  and glow reach 8–22 px into the 12 px gap) is promoted to an overlap layer, and Chromium's layerizer then chains every
+  following chunk of the row onto it (the meters' `will-change` layers sit between them and stop nothing). Bisected by
+  injection: `.setlist-strip { overflow: hidden }`, or no `box-shadow` on `.panel` / `.setlist-strip`, clears ember and
+  studio; `.notes-text { overflow: hidden }` clears sanctuary, nave and studio after a switch from Classic. Classic has
+  no panel shadow, so it never chains.
+  - Fix, theme CSS only (what a theme paints; no box, no copy): ember and studio `.setlist-strip` keep their inset rim
+    and lose the outer drop shadow (ember 22 px, studio 8 px down, into the 12 px gap under the strip);
+    `.p-notes { isolation: isolate }` in studio, sanctuary-v2 (sanctuary, sanctuary-day) and sanctuary (nave): those
+    panels' shadows are ≤ 8 px into a 12 px gap, so the paint-order change that isolation brings (the notes panel now
+    paints with the positioned layers) cannot be seen. Not in ember: its notes shadow is 22 px, and with the isolation
+    in place the ember shot changed along the bottom panel's top edge (y 760–820, not the setlist's), and ember does not
+    need it. Not in the
+    base styles.css for the same reason.
+  - Test: the themes suite now launches with `--disable-lcd-text` (the Mac's text mode; `THEMES_CHROME_ARGS` adds more
+    switches), so `layers` sees what the Mac sees. In that mode the layer budget "≤ Classic + 4" was too tight for a
+    reason that is not the cost (Classic 12; studio 18 = its LED-ladder masks put four 5 × 225 px layers around the two
+    level meters, and its notes overflow in Rubik, which adds the notes scroller and the layer over it): now ≤ Classic + 8;
+    the ≥ 25 % check is the one that matters. Layers (drawing content) after: classic 12 · sanctuary 13 · sanctuary-day
+    14 · daylight-stage 15 · daylight-day 15 · studio 18 · ember 11 · nave 13; none ≥ 25 % in any of the 8 ids, in
+    3 runs, and in a matrix of switch orders (classic → X alternating, reverse order) at 1440 × 900, 1 × DPR. Without the
+    CSS the suite fails sanctuary, studio and ember as above.
+  - Numbers, `tools/idle-cpu.mjs --only A --themes classic,ember,studio --rounds 2 --no-offline --chrome-args
+    "--disable-lcd-text"` (xvfb, 1440 × 900, % of one core, renderer / compositor / gpu, rounds 1 and 2): classic 20.6 /
+    1.7 / 1.6 and 20.8 / 1.8 / 1.6; ember 20.8 / 1.8 / 1.6 and 20.8 / 1.8 / 1.6; studio 21.4 / 2.0 / 1.7 and 21.3 / 1.9 /
+    1.7. With `--enable-gpu-rasterization --use-angle=swiftshader` added: classic 20.8 / 1.8 / 2.4 and 21.7 / 1.9 / 2.4;
+    ember 21.0 / 1.7 / 2.2 and 21.4 / 1.8 / 2.2; studio 21.6 / 2.0 / 2.4 and 22.0 / 2.0 / 2.5. Compositor and GPU columns
+    are within 0.3 of Classic (renderer ≤ +1.0). The GPU column here is tiny (headless-shell does not keep the GPU busy
+    the way mac-findings' 138 %-of-a-core rows did); the Mac numbers still need the Mac.
+  - Look: `tools/themes/shoot.mjs --only perform`, ember and studio, before / after, same renderer (LCD text, 1440 × 900):
+    pixels differing by > 8 levels 0.003 % (ember) / 0.002 % (studio); by any amount 2.1 % / 1.3 %, which is the
+    faint gradient of the removed shadow under the setlist strip and in the 12 px gap (two shots of the same tree differ
+    by 0.02 %). Contrast audit: 0 fails in both. Against `design/warmth/ship/<id>/perform.png`: > 8 levels 0.74 % (ember)
+    and 1.10 % (studio) after, 0.74 % and 1.10 % before (clock, meters, the song shown), so nothing moved against the
+    mock-up.
+- **Runs** (Linux, 2 CPUs, serial, `node test/run-all.mjs --fast --only ui-core,themes`, first try): ui-core 70/70
+  (3m55s), themes 36/36 (2m51s); total 6m46s.

@@ -143,6 +143,10 @@
     color: var(--label); }
   & .fx-chiprow .fx-lab { color: var(--label); }
   & .fader.horizontal .fader-label { min-width: 3.9em; }
+  /* L-32: the notes are a scroller (a compositor layer on the Mac, which has no LCD text); its own stacking context keeps
+     what paints near it from being chained onto one overlap layer with the whole slot row (see CONTRACT_CHANGES
+     l31-l32). This theme's panel shadows are 1 px, so the paint order change is invisible. */
+  & .p-notes { isolation: isolate; }
   & .slot-vt { font: 650 15px/1 var(--font-book); font-variant-caps: all-small-caps; letter-spacing: .12em;
       color: var(--faint); }
   & .ev2-cap { font-size: 15px; }
