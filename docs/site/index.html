@@ -5,231 +5,252 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Worship Rig</title>
-<meta name="description" content="Pads, keys and drones for live worship, lofi and ambient. Free and open source, for Mac.">
+<meta name="description" content="A live keys rig for worship teams: pads, piano and a key drone, on one Mac. Free and open source.">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#efe9de">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#160913">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://ryanmye.github.io/worship-rig/">
+<meta property="og:title" content="Worship Rig">
+<meta property="og:description" content="A live keys rig for worship teams: pads, piano and a key drone, on one Mac. Free and open source.">
+<meta property="og:image" content="https://ryanmye.github.io/worship-rig/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Worship Rig: the Perform screen in the Sanctuary theme.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Worship Rig">
+<meta name="twitter:description" content="A live keys rig for worship teams: pads, piano and a key drone, on one Mac.">
+<meta name="twitter:image" content="https://ryanmye.github.io/worship-rig/img/og.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="preload" href="fonts/Alegreya-wght.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<header class="hero wrap">
-  <div class="brand">
-    <img src="img/mark.svg" alt="" width="52" height="52">
-    <h1>Worship Rig</h1>
-  </div>
-  <p class="lede">Pads, keys and drones for live worship, lofi and ambient. Free and open source, for Mac.
-    <a href="https://github.com/ryanmye/worship-rig">Source on GitHub</a>.</p>
+<header class="hero">
+  <div class="wrap">
+    <div class="brand">
+      <img src="img/mark.svg" alt="" width="56" height="56">
+      <h1>Worship Rig</h1>
+    </div>
+    <p class="lede">A live keys rig for worship teams: pads, piano and a key drone, on one Mac.</p>
 
-  <!-- RELEASE: no GitHub release exists yet. When v1.0.0 is published, turn both buttons into
-       <a class="btn" href="https://github.com/ryanmye/worship-rig/releases/latest/download/Worship-Rig-1.0.0-arm64.dmg">
-       <a class="btn" href="https://github.com/ryanmye/worship-rig/releases/latest/download/Worship-Rig-1.0.0-x64.dmg">
-       (asset names from .github/workflows/release.yml), drop aria-disabled and the "coming soon" line. -->
-  <div class="downloads">
-    <a class="btn" role="link" aria-disabled="true">Download for Apple Silicon <small>Worship-Rig-1.0.0-arm64.dmg</small></a>
-    <a class="btn" role="link" aria-disabled="true">Download for Intel <small>Worship-Rig-1.0.0-x64.dmg</small></a>
+    <!-- RELEASE: no GitHub release exists yet. When v1.0.0 is published, in BOTH download blocks (hero and #download):
+         turn the button into
+         <a class="btn" href="https://github.com/ryanmye/worship-rig/releases/latest/download/Worship-Rig-1.0.0-arm64.dmg">
+         and the "Intel" word in the note into
+         <a href="https://github.com/ryanmye/worship-rig/releases/latest/download/Worship-Rig-1.0.0-x64.dmg">Intel</a>
+         (asset names from .github/workflows/release.yml), drop role/aria-disabled and the "First release coming soon" line. -->
+    <div class="cta">
+      <a class="btn" role="link" aria-disabled="true" title="Worship-Rig-1.0.0-arm64.dmg (Apple Silicon) · Worship-Rig-1.0.0-x64.dmg (Intel)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m0 0-4-4m4 4 4-4M4 16h12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Download for Mac</a>
+      <a class="alt" href="https://github.com/ryanmye/worship-rig">Source on GitHub</a>
+    </div>
+    <p class="cta-note"><strong>First release coming soon.</strong> Apple Silicon · Intel. Until then,
+      <a href="https://github.com/ryanmye/worship-rig#build-the-mac-app-once">build from source</a>.</p>
   </div>
-  <p class="soon">First release coming soon. Until then,
-    <a href="https://github.com/ryanmye/worship-rig#build-the-mac-app-once">build from source</a>.</p>
-  <p class="muted small">v1.0.0 · about 191 MB download (arm64) / 198 MB (x64),
-    <a href="https://github.com/ryanmye/worship-rig/blob/main/reviews/local-findings.md#release-pipeline-dmg--x64-2026-09-30-native-macos">measured on the release builds</a>.</p>
+
+  <div class="hero-shot">
+    <img src="img/hero.webp" width="1440" height="600" fetchpriority="high"
+      alt="The Perform screen in the Sanctuary theme: song Sunday Pad + Piano in C, transpose, Space and Echo presets, the setlist row, the Keys and Pad sound strips, the key and drone panel and song notes.">
+  </div>
 </header>
+
+<div class="facts">
+  <ul>
+    <li><a href="https://github.com/ryanmye/worship-rig/blob/main/reviews/hardware-checklist.md#3-latency-settings--audio-lowest">20 ms latency</a> on a USB-C dock</li>
+    <li>about <a href="https://github.com/ryanmye/worship-rig/blob/main/reviews/local-findings.md#release-pipeline-dmg--x64-2026-09-30-native-macos">191 MB download</a></li>
+    <li><a href="https://github.com/ryanmye/worship-rig/blob/main/package.json">macOS 12+</a></li>
+  </ul>
+</div>
 
 <main>
 
 <section id="features">
   <div class="wrap">
-    <h2>What it does</h2>
-    <p class="muted">Plug in a MIDI keyboard, pick a song, play. Everything runs on your Mac.</p>
-    <div class="cards">
-      <div class="card">
-        <h3>Four sounds per song</h3>
-        <p>Keys, Pad, Extra and Bass, each with its own level, space, echo and an
+
+    <div class="feature">
+      <figure class="stage drone">
+        <img src="img/key-drone.webp" width="404" height="428" loading="lazy"
+          alt="The Key and Drone panel: DRONE C major switched on, a grid of the twelve keys, Major and Minor, Brightness and Movement sliders, Follow chords and Continue across songs.">
+        <img class="inset" src="img/key-chip.webp" width="456" height="118" loading="lazy"
+          alt="The song title Sunday Pad + Piano with the KEY chip set to C, you play C.">
+      </figure>
+      <div>
+        <p class="kicker">Key &amp; drone</p>
+        <h2>Play in any key</h2>
+        <p>Set the song's key and a soft drone holds the root, fifth and octave underneath, with no third, so it sits
+          under major and minor chords and crossfades when the key changes.</p>
+      </div>
+    </div>
+
+    <div class="feature wide">
+      <figure class="stage">
+        <img src="img/rig-eq.webp" width="1148" height="522" loading="lazy"
+          alt="Edit screen: the rig row with Keys (Grand Piano), Pad (Warm Pad), Extra and Bass, Drone, Effects and Master, and below it the Keys EQ curve drawn over a piano keyboard from A0 to C8.">
+      </figure>
+      <div>
+        <p class="kicker">Keys · Pad · Extra · Bass</p>
+        <h2>Four sounds per song, shaped to the room</h2>
+        <p>Each part gets its own level, space, echo and an
           <a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/shared/eq-math.js">8-band EQ</a>
-          laid out over a piano keyboard.</p>
-      </div>
-      <div class="card">
-        <h3>A drone in any key</h3>
-        <p>A soft pad on the root, fifth and octave, with no third, so it sits under major and minor chords.
-          Crossfades on key changes. Or point it at your own pad recordings.</p>
-      </div>
-      <div class="card">
-        <h3>Space and Echo presets</h3>
-        <p>Pick a room from Dry to Cathedral and an echo from Slapback to Dotted Eighth. Tempo-synced echoes follow the
-          song's tempo. The Vibe menu sets both at once.</p>
-      </div>
-      <div class="card">
-        <h3>Setlists without gaps</h3>
-        <p>Step through the service with buttons, arrow keys or a footswitch. Notes you're holding keep ringing on the
-          old sound until you let go; only new notes use the next song.</p>
-      </div>
-      <div class="card">
-        <h3>Menu bar mode and themes</h3>
-        <p>Close the window and keep playing: switch songs, the drone and the master level from the menu bar, with a
-          low-resource setting. The look comes in
-          <a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/shared/themes.js">8 themes (6 dark, 2 light)</a>.</p>
-      </div>
-      <div class="card">
-        <h3>Recording and your own sounds</h3>
-        <p>REC writes a 16-bit stereo WAV to Music › Worship Rig as you play. My Samples plays instruments you convert
-          from GarageBand or Logic, for your own use.</p>
+          drawn over a piano keyboard, so you can see which notes a cut will touch.</p>
       </div>
     </div>
-  </div>
-</section>
 
-<section id="screenshots">
-  <div class="wrap">
-    <h2>Screenshots</h2>
-    <p class="muted small">The built Mac app with the factory library, in the default Sanctuary theme at 1440×900.</p>
-    <div class="shots">
-      <figure>
-        <img src="img/perform.webp" width="1440" height="900" alt="Perform screen: song Sunday Pad + Piano in C, with transpose, Space and Echo menus, the setlist row, four sound faders (Keys, Pad, Extra, Bass), the key and drone panel, song notes and Panic.">
-        <figcaption>Perform: the screen you play from. Sunday Pad + Piano, one of the factory songs.</figcaption>
+    <div class="feature flip">
+      <figure class="stage pop">
+        <img src="img/popover.webp" width="320" height="440" loading="lazy"
+          alt="Menu-bar popover: three songs to switch between, master level, drone, fade, panic, open, record and a low-resource switch.">
       </figure>
-      <figure>
-        <img src="img/edit.webp" width="1440" height="900" alt="Edit screen: setlist on the left, tabs for Keys, Pad, Extra, Bass, Drone, Effects and Master, and the Keys sound settings." loading="lazy">
-        <figcaption>Edit: build a song one part at a time.</figcaption>
-      </figure>
-      <figure>
-        <img src="img/edit-eq.webp" width="1440" height="900" alt="Edit, Keys, Advanced, Tone: an EQ curve drawn over a piano keyboard from A0 to C8, with a band table below." loading="lazy">
-        <figcaption>Edit › Keys › Advanced › Tone: the slot EQ, with the keyboard under the frequency axis.</figcaption>
-      </figure>
-      <figure>
-        <img src="img/settings.webp" width="1440" height="900" alt="Settings: audio latency, output device, mono output, pad folder, My Samples, MIDI keyboard input, touch, sustain pedal and MIDI Learn." loading="lazy">
-        <figcaption>Settings: latency, output device, MIDI keyboard, sustain pedal, MIDI Learn.</figcaption>
-      </figure>
-      <figure>
-        <img src="img/perform-daylight.webp" width="1440" height="900" alt="The same Perform screen in the light Daylight Day theme." loading="lazy">
-        <figcaption>Perform in Daylight Day, one of the two light themes. Sanctuary (above) is the default.</figcaption>
-      </figure>
-      <div class="pair">
-        <figure>
-          <img src="img/settings-appearance.webp" width="1440" height="900" alt="Settings, Appearance section: theme cards for Classic, Sanctuary, Sanctuary Day, Daylight Stage, Daylight Day, Studio, Ember and Nave; beside it the Menu bar section: Keep in the menu bar, menu-bar songs, Low-resource and Open at login." loading="lazy">
-          <figcaption>Settings › Appearance (themes) and Menu bar.</figcaption>
-        </figure>
-        <figure class="narrow">
-          <img src="img/popover.webp" width="320" height="440" alt="Menu-bar popover: three songs to switch between, master level, drone, fade, panic, record and a low-resource switch." loading="lazy">
-          <figcaption>The menu-bar popover.</figcaption>
-        </figure>
+      <div>
+        <p class="kicker">Menu bar mode</p>
+        <h2>Keep it running in the menu bar</h2>
+        <p>Close the window and keep playing: switch songs, the drone and the master level from the menu bar.</p>
+        <p class="measure"><a href="https://github.com/ryanmye/worship-rig/blob/main/reviews/idle-cpu-mac.md#build-1ce40b4-lowres2--idle-cpu-ui--themes-2026-09-30-05200530-utc">10 on Activity Monitor's energy scale while hidden, 55 in front</a>,
+          measured with the drone playing.</p>
       </div>
     </div>
+
   </div>
 </section>
 
-<section id="in-the-box">
-  <div class="wrap">
-    <h2>What's in the box</h2>
-    <ul>
-      <li><strong>23 sampled instruments</strong> (79.2 MB): grand and upright piano, electric pianos, clavinet,
-        mallets, bells, guitars, harp and more. Licences and changes are in
-        <a href="https://github.com/ryanmye/worship-rig/blob/main/LICENSES.md">LICENSES.md</a>.</li>
-      <li><strong>16 synth patches</strong> (pads, keys, brass, leads, basses; <a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/engine/synth.js">synth.js</a>,
-        <a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/engine/synth-extra.js">synth-extra.js</a>) and an
-        <strong>additive drawbar organ</strong> with 4 presets and a rotary speaker
-        (<a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/engine/organ.js">organ.js</a>). These are generated in code.</li>
-      <li><strong>19 factory songs</strong> in five groups (Worship, Keys, Lofi, Ambient, Synth), each with a note on
-        what it's for, and a first setlist holding all of them
-        (<a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/presets.js">presets.js</a>,
-        <a href="https://github.com/ryanmye/worship-rig#songs-and-setlists">README</a>).</li>
-      <li><strong>Effect presets</strong>: 6 Spaces, 5 Echoes and 6 Vibes
-        (<a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/shared/fx-presets.js">fx-presets.js</a>).</li>
-      <li><strong>No Apple content ships.</strong> GarageBand and Logic sounds are only ever converted on your own Mac.</li>
-      <li><strong>Starter library</strong>: the 19 factory songs and the first setlist as a backup file,
-        <a href="https://github.com/ryanmye/worship-rig/raw/main/docs/starter/worship-rig-starter-library.json">worship-rig-starter-library.json</a>
-        (62 KB). To load it, open <strong>Settings › Library &amp; backups › Import…</strong> and pick the file.</li>
-    </ul>
-    <h3>Sample credits</h3>
-    <blockquote>Salamander Grand Piano V3 by Alexander Holm, licensed under a Creative Commons Attribution
-      3.0 Unported License (<a href="https://creativecommons.org/licenses/by/3.0/">https://creativecommons.org/licenses/by/3.0/</a>).<br>
-      Source: <a href="https://github.com/sfzinstruments/SalamanderGrandPiano">https://github.com/sfzinstruments/SalamanderGrandPiano</a></blockquote>
-    <blockquote>Upright Piano from VS Chamber Orchestra 2: Community Edition by Versilian Studios (Sam Gossner)
-      and Simon Dalzell (Ivy Audio), CC0 1.0. <a href="http://vis.versilstudios.net/vsco-community.html">http://vis.versilstudios.net/vsco-community.html</a></blockquote>
-    <blockquote>Musyng Kite soundfont samples, rendered to MP3 by gleitz/midi-js-soundfonts
-      (<a href="https://github.com/gleitz/midi-js-soundfonts">https://github.com/gleitz/midi-js-soundfonts</a>), licensed under CC BY-SA 3.0
-      (<a href="https://creativecommons.org/licenses/by-sa/3.0/">https://creativecommons.org/licenses/by-sa/3.0/</a>). Modified by the Worship Rig project as described below.</blockquote>
-    <p class="muted small">"Below" refers to the modifications listed in
-      <a href="https://github.com/ryanmye/worship-rig/blob/main/LICENSES.md#musyng-kite-soundfont-samples-cc-by-sa-30">LICENSES.md</a>.</p>
-  </div>
-</section>
-
-<section id="install">
-  <div class="wrap">
-    <h2>Install</h2>
-    <ol>
-      <li>Open the <code>.dmg</code> and drag <strong>Worship Rig</strong> to <strong>Applications</strong>.
-        (Apple Silicon: <code>arm64</code>. Intel: <code>x64</code>.)</li>
-      <li><strong>First launch.</strong> The app isn't notarized by Apple, so macOS says it "could not verify" it. On
-        macOS 15 and later, right-click › Open no longer gets past this. Click <strong>Done</strong>, then open
-        <strong>System Settings › Privacy &amp; Security</strong>, scroll to <em>"Worship Rig" was blocked</em> and
-        click <strong>Open Anyway</strong>. Or run this once in Terminal:<br>
-        <code>xattr -dr com.apple.quarantine "/Applications/Worship Rig.app"</code></li>
-      <li><strong>MIDI.</strong> macOS usually doesn't ask about a USB keyboard. If it does ask, allow it.</li>
-      <li><strong>Keyboard.</strong> Plug it in before or after opening the app. If the MIDI light on the Perform screen
-        stays off, pick your keyboard in <strong>Settings › MIDI keyboard › Input</strong>.</li>
-      <li><strong>Output.</strong> Use the headphone jack or an audio interface, not Bluetooth. Bluetooth output measured
-        176 ms of delay here, against 20 ms on a USB-C dock
-        (<a href="https://github.com/ryanmye/worship-rig/blob/main/reviews/hardware-checklist.md">hardware check</a>).</li>
-    </ol>
-    <p class="small muted">Full steps: <a href="https://github.com/ryanmye/worship-rig#running-on-your-mac">README › Running on your Mac</a>.</p>
-    <h3>Requirements</h3>
-    <dl class="req">
-      <dt>macOS</dt><dd>12 or later (<a href="https://github.com/ryanmye/worship-rig/blob/main/package.json">package.json</a>, <code>LSMinimumSystemVersion</code>)</dd>
-      <dt>Mac</dt><dd>Apple Silicon or Intel (separate downloads)</dd>
-      <dt>Disk</dt><dd>about 370 MB for the installed app (366 MB arm64, 372 MB x64,
-        <a href="https://github.com/ryanmye/worship-rig/blob/main/reviews/local-findings.md#release-pipeline-dmg--x64-2026-09-30-native-macos">measured</a>)</dd>
-      <dt>Keyboard</dt><dd>MIDI keyboard optional: the computer keys play notes too (A W S E D F … for C4 up to E5, Space for sustain)</dd>
-    </dl>
-  </div>
-</section>
-
-<section id="garageband">
-  <div class="wrap">
-    <h2>GarageBand and Logic sounds</h2>
-    <p>If GarageBand or Logic is installed, a small command-line tool converts their sampled instruments (grand
-      pianos, strings, choirs and more) into your <strong>My Samples</strong> folder, and they appear in the instrument
-      picker. Those sounds are Apple's and licensed to you for personal use only: they stay on your Mac, and Worship Rig
-      never copies them into the app, uploads them or shares them. Step by step:
-      <a href="https://github.com/ryanmye/worship-rig/blob/main/docs/garageband-import.md">docs/garageband-import.md</a>.</p>
-  </div>
-</section>
-
-<section id="privacy">
-  <div class="wrap">
-    <h2>Privacy</h2>
-    <p>Worship Rig makes no network calls of its own and has no telemetry or analytics. Songs, settings, recordings and
-      sounds stay on your Mac. The app talks only to its own small web server, which listens on
-      <code>127.0.0.1</code> and nowhere else: see
-      <a href="https://github.com/ryanmye/worship-rig/blob/main/server.js">server.js</a>. It never opens the microphone.</p>
-  </div>
-</section>
-
-<section id="more">
-  <div class="wrap links">
+<section class="themes" id="themes">
+  <div class="wrap themes-grid">
     <div>
-      <h3>Changelog</h3>
-      <p><a href="https://github.com/ryanmye/worship-rig/releases">GitHub Releases</a></p>
+      <p class="kicker">Appearance</p>
+      <h2>Eight looks for the stage and the booth</h2>
+      <p class="muted">Two light, six dark. Sanctuary is the default
+        (<a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/shared/themes.js">themes.js</a>).</p>
+      <ul class="swatches">
+        <li class="swatch" style="--p:#15181d;--t:#f1f4f8;--b:#0b0d10;--a:#ffc94d"><b>Classic</b><span class="mode">Dark</span><span class="chips"><i title="#0b0d10"></i><i title="#ffc94d"></i></span></li>
+        <li class="swatch default" style="--p:#21111c;--t:#f5ecd8;--b:#160913;--a:#e6ba65"><b>Sanctuary</b><span class="mode">Dark · default</span><span class="chips"><i title="#160913"></i><i title="#e6ba65"></i></span></li>
+        <li class="swatch" style="--p:#f9f5ee;--t:#32162b;--b:#efe9de;--a:#875806"><b>Sanctuary Day</b><span class="mode">Light</span><span class="chips"><i title="#efe9de"></i><i title="#875806"></i></span></li>
+        <li class="swatch" style="--p:#261f19;--t:#f5ede0;--b:#1b1611;--a:#f6c35a"><b>Daylight Stage</b><span class="mode">Dark</span><span class="chips"><i title="#1b1611"></i><i title="#f6c35a"></i></span></li>
+        <li class="swatch" style="--p:#fdfbf7;--t:#27211b;--b:#f3efe7;--a:#f4b73f"><b>Daylight Day</b><span class="mode">Light</span><span class="chips"><i title="#f3efe7"></i><i title="#f4b73f"></i></span></li>
+        <li class="swatch" style="--p:#221f1c;--t:#f4f0e6;--b:#181613;--a:#f7c367"><b>Studio</b><span class="mode">Dark</span><span class="chips"><i title="#181613"></i><i title="#f7c367"></i></span></li>
+        <li class="swatch" style="--p:#1e1713;--t:#f7efe3;--b:#150e0b;--a:#f7b755"><b>Ember</b><span class="mode">Dark</span><span class="chips"><i title="#150e0b"></i><i title="#f7b755"></i></span></li>
+        <li class="swatch" style="--p:#131529;--t:#f5ecd8;--b:#0a0c1e;--a:#e6ba65"><b>Nave</b><span class="mode">Dark</span><span class="chips"><i title="#0a0c1e"></i><i title="#e6ba65"></i></span></li>
+      </ul>
     </div>
-    <div>
-      <h3>Known issues</h3>
-      <p><a href="https://github.com/ryanmye/worship-rig/blob/main/BACKLOG.md">BACKLOG.md</a></p>
+    <figure>
+      <img src="img/perform-daylight.webp" width="1440" height="900" loading="lazy"
+        alt="The same Perform screen in the light Daylight Day theme.">
+      <figcaption>Perform in Daylight Day, one of the two light themes.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="download" id="download">
+  <div class="wrap">
+    <h2>Get Worship Rig</h2>
+    <p class="lede">Free and open source. Plug in a MIDI keyboard, pick a song, play. Everything runs on your Mac.</p>
+    <!-- RELEASE: same flip as the hero block above (arm64 dmg on the button, x64 dmg on "Intel"). -->
+    <div class="cta">
+      <a class="btn" role="link" aria-disabled="true" title="Worship-Rig-1.0.0-arm64.dmg (Apple Silicon) · Worship-Rig-1.0.0-x64.dmg (Intel)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m0 0-4-4m4 4 4-4M4 16h12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Download for Mac</a>
+      <a class="alt" href="https://github.com/ryanmye/worship-rig">Source on GitHub</a>
     </div>
-    <div>
-      <h3>License</h3>
-      <p>App code: <a href="https://github.com/ryanmye/worship-rig/blob/main/LICENSE">GNU GPL v3</a>.
-        Bundled sounds: see <a href="https://github.com/ryanmye/worship-rig/blob/main/LICENSES.md">LICENSES.md</a>.</p>
+    <p class="cta-note"><strong>First release coming soon.</strong> Apple Silicon · Intel. Until then,
+      <a href="https://github.com/ryanmye/worship-rig#build-the-mac-app-once">build from source</a>.</p>
+    <p class="sizes">v1.0.0 · about 191 MB download (arm64) / 198 MB (x64), about 370 MB installed,
+      <a href="https://github.com/ryanmye/worship-rig/blob/main/reviews/local-findings.md#release-pipeline-dmg--x64-2026-09-30-native-macos">measured on the release builds</a>.</p>
+  </div>
+</section>
+
+<section class="details" id="details">
+  <div class="wrap">
+    <h2>Details</h2>
+    <div class="cols">
+
+      <div id="install">
+        <h3>Install</h3>
+        <ol>
+          <li>Open the <code>.dmg</code> and drag <strong>Worship Rig</strong> to <strong>Applications</strong>.
+            macOS 12 or later; Apple Silicon (<code>arm64</code>) or Intel (<code>x64</code>).</li>
+          <li><strong>First launch.</strong> The app isn't notarized, so macOS says it "could not verify" it (on
+            macOS 15 and later right-click › Open no longer gets past this). Click <strong>Done</strong>, then
+            <strong>System Settings › Privacy &amp; Security</strong> › <strong>Open Anyway</strong>. Or once in Terminal:
+            <code>xattr -dr com.apple.quarantine "/Applications/Worship Rig.app"</code></li>
+          <li><strong>MIDI.</strong> macOS usually doesn't ask about a USB keyboard; if it does, allow it. If the MIDI
+            light stays off, pick the keyboard in <strong>Settings › MIDI keyboard › Input</strong>. No keyboard? The
+            computer keys play notes too.</li>
+          <li><strong>Output.</strong> Use the headphone jack or a wired interface, not Bluetooth: Bluetooth measured
+            176 ms against 20 ms on a USB-C dock
+            (<a href="https://github.com/ryanmye/worship-rig/blob/main/reviews/hardware-checklist.md">hardware check</a>).</li>
+        </ol>
+        <p class="small muted">Full steps: <a href="https://github.com/ryanmye/worship-rig#running-on-your-mac">README › Running on your Mac</a>.</p>
+      </div>
+
+      <div id="in-the-box">
+        <h3>What's in the box</h3>
+        <ul>
+          <li><strong>23 sample sets</strong> (79.2 MB): grand and upright piano, electric pianos, mallets, bells,
+            guitars, harp and more (<a href="https://github.com/ryanmye/worship-rig/blob/main/LICENSES.md">LICENSES.md</a>).</li>
+          <li><strong>16 synth patches</strong>
+            (<a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/engine/synth.js">synth.js</a>,
+            <a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/engine/synth-extra.js">synth-extra.js</a>)
+            plus a drawbar <strong>organ</strong> with a rotary speaker
+            (<a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/engine/organ.js">organ.js</a>).</li>
+          <li><strong>19 songs</strong> in five groups, each with a note on what it's for
+            (<a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/presets.js">presets.js</a>,
+            <a href="https://github.com/ryanmye/worship-rig#songs-and-setlists">README</a>), and 6 Spaces, 5 Echoes
+            and 6 Vibes (<a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/shared/fx-presets.js">fx-presets.js</a>).</li>
+          <li><strong>Starter library</strong>:
+            <a href="https://github.com/ryanmye/worship-rig/raw/main/docs/starter/worship-rig-starter-library.json">worship-rig-starter-library.json</a>
+            (62 KB), loaded from <strong>Settings › Library &amp; backups › Import…</strong></li>
+        </ul>
+      </div>
+
+      <div id="garageband">
+        <h3>Sounds from GarageBand or Logic</h3>
+        <p>If GarageBand or Logic is installed, a small command-line tool converts their sampled instruments into your
+          <strong>My Samples</strong> folder and they show up in the instrument picker. Those sounds are Apple's and
+          licensed to you for personal use: they stay on your Mac, and Worship Rig never ships, uploads or shares
+          them. Step by step:
+          <a href="https://github.com/ryanmye/worship-rig/blob/main/docs/garageband-import.md">docs/garageband-import.md</a>.</p>
+      </div>
+
     </div>
-    <div>
-      <h3>Source</h3>
-      <p><a href="https://github.com/ryanmye/worship-rig">github.com/ryanmye/worship-rig</a></p>
-    </div>
+    <p class="shots-line">Full-size screenshots (1440×900, Sanctuary):
+      <a href="img/perform.webp">Perform</a> · <a href="img/edit.webp">Edit</a> ·
+      <a href="img/edit-eq.webp">EQ</a> · <a href="img/settings.webp">Settings</a> ·
+      <a href="img/settings-appearance.webp">Appearance and menu bar</a>.</p>
   </div>
 </section>
 
 </main>
 
 <footer>
-  <div class="wrap">Built on a Mac; verified with a Keystation 49es.</div>
+  <div class="wrap">
+    <details class="credits">
+      <summary>Credits</summary>
+      <blockquote>Salamander Grand Piano V3 by Alexander Holm, licensed under a Creative Commons Attribution
+        3.0 Unported License (<a href="https://creativecommons.org/licenses/by/3.0/">https://creativecommons.org/licenses/by/3.0/</a>).<br>
+        Source: <a href="https://github.com/sfzinstruments/SalamanderGrandPiano">https://github.com/sfzinstruments/SalamanderGrandPiano</a></blockquote>
+      <blockquote>Upright Piano from VS Chamber Orchestra 2: Community Edition by Versilian Studios (Sam Gossner)
+        and Simon Dalzell (Ivy Audio), CC0 1.0. <a href="http://vis.versilstudios.net/vsco-community.html">http://vis.versilstudios.net/vsco-community.html</a></blockquote>
+      <blockquote>Musyng Kite soundfont samples, rendered to MP3 by gleitz/midi-js-soundfonts
+        (<a href="https://github.com/gleitz/midi-js-soundfonts">https://github.com/gleitz/midi-js-soundfonts</a>), licensed under CC BY-SA 3.0
+        (<a href="https://creativecommons.org/licenses/by-sa/3.0/">https://creativecommons.org/licenses/by-sa/3.0/</a>). Modified by the Worship Rig project as described below.</blockquote>
+      <p class="small muted">"Below" refers to the modifications listed in
+        <a href="https://github.com/ryanmye/worship-rig/blob/main/LICENSES.md#musyng-kite-soundfont-samples-cc-by-sa-30">LICENSES.md</a>.
+        This page uses Alegreya and Figtree (SIL Open Font License 1.1:
+        <a href="fonts/OFL-Alegreya.txt">OFL-Alegreya.txt</a>, <a href="fonts/OFL-Figtree.txt">OFL-Figtree.txt</a>).</p>
+    </details>
+
+    <p class="privacy">Privacy: no network calls of its own, no telemetry; songs, recordings and sounds stay on your Mac,
+      and its small web server listens only on <code>127.0.0.1</code>
+      (<a href="https://github.com/ryanmye/worship-rig/blob/main/server.js">server.js</a>).</p>
+
+    <ul class="footer-links">
+      <li><a href="https://github.com/ryanmye/worship-rig/releases">Changelog</a></li>
+      <li><a href="https://github.com/ryanmye/worship-rig/blob/main/BACKLOG.md">Known issues</a></li>
+      <li>Licence: <a href="https://github.com/ryanmye/worship-rig/blob/main/LICENSE">GPL v3</a> +
+        <a href="https://github.com/ryanmye/worship-rig/blob/main/LICENSES.md">LICENSES.md</a></li>
+      <li><a href="https://github.com/ryanmye/worship-rig">Source</a></li>
+    </ul>
+    <p class="foot-brand"><img src="img/mark.svg" alt="" width="22" height="22">Built on a Mac; verified with a Keystation 49es.</p>
+  </div>
 </footer>
 
 </body>
