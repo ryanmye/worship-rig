@@ -16,6 +16,8 @@ const { createServer } = require('../../../server.js');
 
 const fx = buildFixture();
 let run;
+// L-30: a status item macOS parked (full menu bar); main.js reads it instead of tray.getBounds() under RIG_SELFTEST
+const FAKE_TRAY_BOUNDS = '{"x":0,"y":982,"width":0,"height":0}';
 
 // L14: the popover loads /mini.html from the app dir; the fixture app has none, so bring the real one (and its
 // mini.* siblings; the cloud's views/mini.js comes through the js → app/js symlink)
@@ -42,7 +44,7 @@ function addMiniPage(fx) {
   }
 }
 
-function boot(fx) {
+function boot(fx, extraEnv = {}) {
   addMiniPage(fx);
   return new Promise((resolve) => {
     const hasXvfb = spawnSync('which', ['xvfb-run']).status === 0;
@@ -60,6 +62,7 @@ function boot(fx) {
         RIG_RECORDINGS_DIR: fx.recordings,
         RIG_SELFTEST_TIMEOUT_MS: '40000',
         ELECTRON_ENABLE_LOGGING: '0',
+        ...extraEnv,
       }),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -77,7 +80,7 @@ function boot(fx) {
 }
 
 before(async () => {
-  run = await boot(fx);
+  run = await boot(fx, { RIG_FAKE_TRAY_BOUNDS: FAKE_TRAY_BOUNDS });
   if (!run.report) console.log('electron stdout:\n', run.out, '\nstderr (tail):\n', run.err.slice(-4000));
 });
 after(() => fx.cleanup());
@@ -248,7 +251,9 @@ test('menu-bar mode (L14): tray, menu from the bus state, IPC relay both ways, p
   assert.equal(m.after.popoverOpen, false);
   // window events on the Rig menu channel (onMenu ids): the popover opening is not "shown"
   assert.deepEqual(m.eventsOnEnable, ['windowShown'], 'setMenuBarMode(true) reports the current window state');
-  assert.deepEqual(m.eventsDuringPopover, []);
+  // opening the popover is not "shown": only the status ids popoverShown / popoverHidden (7071b23, controller
+  // status.popoverOpen) go out, one per transition
+  assert.deepEqual(m.eventsDuringPopover, ['popoverShown', 'popoverHidden', 'popoverShown', 'popoverHidden']);
   // setMenuBarMode(false) is the source of truth too: tray gone, renderer back to the document's visibility
   assert.equal(m.setMenuBarModeOff.on, false);
   assert.equal(m.trayAfterOff, false);
@@ -274,6 +279,22 @@ test('menu-bar mode (L14): tray, menu from the bus state, IPC relay both ways, p
   // the popover page adds no console errors and no HTTP ≥ 400 (checked by the zero-errors test above, which also
   // counts the popover's console)
   assert.ok(!run.report.httpErrors.some((h) => /mini/.test(h.url)));
+});
+
+test('L-30 tray hidden: trayHidden once (debounced, past the 3 s re-check), popover fallback, trayShown, Rig menu', () => {
+  const m = run.report.menubar;
+  assert.ok(m && !m.error, JSON.stringify(m && m.error));
+  // the two ways back are in the Rig menu, always enabled
+  assert.deepEqual(m.rigMenuWayBack, [['Show Worship Rig', true, true], ['Open menu-bar panel', true, true]]);
+  // RIG_FAKE_TRAY_BOUNDS (parked) → exactly one trayHidden, then trayShown when the fake moves to a placed slot
+  assert.equal(m.trayHiddenSeen, true);
+  assert.equal(m.trayHiddenState, true, 'getMenuBarState().trayHidden while hidden');
+  assert.equal(m.trayShownSeen, true);
+  assert.equal(m.trayShownState, false, 'getMenuBarState().trayHidden once shown');
+  assert.deepEqual(m.trayEvents, ['trayHidden', 'trayShown']);
+  // while hidden the popover opens at the top-right of the active display's work area (right − 320 − 12, top + 8)
+  assert.deepEqual(m.popoverFallback.got, m.popoverFallback.want);
+  // none of it leaks into the other window-event checks (asserted in the L14 test: eventsDuringPopover [], …)
 });
 
 test('M5: with 8438 held by another Worship Rig server, Electron runs its own server on 8439 and pads still work', async () => {

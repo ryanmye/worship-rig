@@ -82,7 +82,7 @@ try {
   // ---- contents
   const list = new Set(asar.listPackage(asarPath).map((p) => p.replace(/\\/g, '/').replace(/^\//, '')));
   const has = (rel) => list.has(rel);
-  for (const f of ['package.json', 'main.js', 'preload.js', 'server.js', 'README.md', 'LICENSES.md', 'app/index.html', 'app/package.json', 'app/js/main.js', 'app/js/engine/index.js', 'app/js/worklets/recorder-processor.js', 'app/samples/manifest.json']) {
+  for (const f of ['package.json', 'main.js', 'preload.js', 'server.js', 'tray-visibility.js', 'README.md', 'LICENSES.md', 'app/index.html', 'app/package.json', 'app/js/main.js', 'app/js/engine/index.js', 'app/js/worklets/recorder-processor.js', 'app/samples/manifest.json']) {
     check(`packaged: ${f}`, has(f));
   }
   check('excluded: app/js/engine/test.html', !has('app/js/engine/test.html'));
