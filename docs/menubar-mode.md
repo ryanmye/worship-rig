@@ -160,3 +160,16 @@ probe) gets `menubar: {skipped}`, so no fake state or command reaches a real con
 **macOS caveat.** Window `show`/`hide`/`blur` events follow the occlusion state, so they don't fire while the screen is
 locked; main.js does its popover bookkeeping in `showPopover`/`hidePopover` instead. Blur-to-hide and the real tray
 click can only be checked by hand at an unlocked Mac.
+
+**Tray hidden (L-30).** On a notch MacBook with a full menu bar macOS gives the status item no slot and parks it
+(`tray.getBounds()` → `{x:0,y:0,width:38,height:22}` for the real app on macOS 26.4, or a rect below the display). The
+tray still exists, so nothing errors; it is just invisible. `tray-visibility.js` `trayIsHidden(bounds, display)`
+decides (no bounds, zero size, parked at the origin, below the display or left of it). main.js checks 500 ms and 3 s
+after creating the tray, on display changes, on app activate and on every `notifyMenuBarState()`, and sends Rig menu
+ids `trayHidden` / `trayShown` only on transitions that hold for 1 s. The renderer shows one toast per session and a
+note in Settings › Menu bar. While hidden, the popover opens at the top-right of the work area of the display under
+the pointer. The Rig menu always has "Show Worship Rig" and "Open menu-bar panel". `getMenuBarState()` reports
+`trayHidden` and the raw `trayBounds`. What doesn't help: `tray.setTitle()`, re-creating the Tray (new items go
+leftmost, nearest the notch), private APIs. The fix for the user is fewer Control Center items, or ⌘-dragging the icon
+into view once (macOS remembers the position per bundle id). Self-test: `RIG_FAKE_TRAY_BOUNDS` (JSON rect, only with
+`RIG_SELFTEST=1`) stands in for `tray.getBounds()`; see CONTRACT_CHANGES "## tray-hidden".

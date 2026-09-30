@@ -5337,3 +5337,33 @@ Electron main half is LOCAL.
 - **Test:** `test/phase2/ui-core/run.mjs` "L-30: rig menu ids trayHidden / trayShown …": drives `controller.onMenu(id)`
   (the function preload's `rig.onMenu` callback is), asserts the exact toast text/kind/dismiss button once, no repeat
   after dismiss, the Settings note shown/hidden, reopen-while-hidden, and (via the suite's final check) no console errors.
+- **Electron main half (LOCAL, 2026-09-30):**
+  - **Predicate** `trayIsHidden(b, display)` in `tray-visibility.js` (repo root, CommonJS, no Electron import; in
+    `build.files`, build-lint checks it is packaged): hidden when there are no bounds, width or height is 0, the item is
+    parked at the origin (`x ≤ 0 && y ≤ 0` and at the display's left edge: a real status item never sits there; the
+    extra clause keeps a display left of / above the main one, whose coordinates are negative, from counting), `y ≥
+    display.y + display.height`, or `x + width ≤ display.x`. `display` = `screen.getDisplayMatching(b)` for a
+    non-empty rect, else `screen.getPrimaryDisplay()`. Measured on macOS 26.4 (notch MacBook, 1512×982): the real app
+    parked at `{x:0,y:0,width:38,height:22}`, a test item at `{x:0,y:982,width:99,height:22}`, a placed item at
+    `{x:905,y:0,width:38,height:22}`. The cloud's first guess (`{x:0,y:982,width:0}`) never showed up; the origin case
+    is what the real app gets.
+  - **Cadence:** 500 ms and 3 s after `new Tray`; `screen` `display-metrics-changed` / `display-added` /
+    `display-removed`; `app` `activate`; every `notifyMenuBarState()`. `trayHidden` / `trayShown` go out on the
+    existing `rig:menu` channel only on a transition that still holds 1 s later (initial state "shown", so a visible
+    tray sends nothing). Destroying the tray (menu-bar mode off) after a `trayHidden` sends `trayShown`.
+  - **`getMenuBarState()` / `onMenuBarState`** gain `trayHidden` (bool: the state last sent) next to the
+    diagnostic `trayBounds` (raw `tray.getBounds()`, `null` without a tray).
+  - **Popover fallback:** with no tray or a hidden one, `showPopover()` places the popover at the top-right of the
+    work area of the display under the pointer: `x = right − 320 − 12`, `y = top + 8` (`fallbackPopoverBounds`).
+  - **Rig menu:** "Show Worship Rig" (id `showWorshipRig`: show + focus the main window, dock icon back) and "Open
+    menu-bar panel" (id `openMenuBarPanel`: `togglePopover()`), both always enabled, at the end of the Rig menu.
+  - **Self-test hook:** `RIG_FAKE_TRAY_BOUNDS='{"x":0,"y":982,"width":0,"height":0}'` (read only under
+    `RIG_SELFTEST=1`) replaces `tray.getBounds()` while menu-bar mode is on; it also works without a real tray (Linux
+    CI). `menubarSelftest()` then waits for `trayHidden`, records the popover target, waits past the 3 s re-check,
+    moves the fake to a placed slot (top-right of the primary display) and waits for `trayShown`.
+  - **Tests:** `test/unit/shell/tray-visibility.test.mjs` (7 node:test cases: the measured rects, zero sizes, left of
+    / below the display, a negative-coordinate display, the fallback position). `test/phase1/shell/electron.boot.mjs`
+    "L-30 tray hidden": events exactly `['trayHidden', 'trayShown']`, `trayHidden` true then false in
+    `getMenuBarState`, popover fallback = top-right formula, both Rig menu items present and enabled. The L14 test's
+    `eventsDuringPopover` now expects `popoverShown, popoverHidden, popoverShown, popoverHidden` (the status ids
+    added in 7071b23; that assertion had been failing since).
