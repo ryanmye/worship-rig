@@ -904,6 +904,7 @@ function showPopover() {
   popoverLog.push('show');
   sendToPopover();
   notifyMenuBarState();
+  sendMenu('popoverShown'); // lowres2-critic R2: controller.status.popoverOpen (never ends low-resource)
 }
 
 function hidePopover() {
@@ -912,6 +913,7 @@ function hidePopover() {
   popoverLog.push('hide');
   popoverHiddenAt = Date.now();
   notifyMenuBarState();
+  sendMenu('popoverHidden');
 }
 
 function togglePopover() {
