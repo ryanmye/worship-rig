@@ -658,3 +658,14 @@ helper and the GPU pid; CDP `Performance.getMetrics` deltas). There were two int
 
 Restored: nothing to restore (temp profile). The debug instance was quit, then the app was reopened with a plain
 `open` on the real profile (no 9333).
+
+## L-30 resolved (2026-09-30): menu-bar icon missing — macOS 26 per-bundle-id state
+
+Symptom: the tray item existed (AX listed one unnamed 40×24 item) but macOS 26.4 drew it nowhere: tray.getBounds()
+{x:0,y:0} (parked) or, after enabling System Settings › Menu Bar › "Allow in the Menu Bar", a frame under the clock
+(x 1473) that the clock painted over. Other third-party icons rendered fine with 70 px free right of the notch, so
+neither the notch nor the icon files (old and new both tested) were the cause. Matches exelban/stats#3120 ("stuck
+per-bundle-ID state inside macOS Tahoe: the same binary renders fine with a different CFBundleIdentifier").
+Fix: build.appId com.ryan.worshiprig → com.ryanmye.worshiprig; rebuilt; the item is drawn at x 904 immediately.
+Side effects: a new row in Settings › Menu Bar, login-item registration to re-check. The trayHidden/trayShown toast
+and Rig menu fallbacks (44ff0b9) stay: the parked case is real on this OS.

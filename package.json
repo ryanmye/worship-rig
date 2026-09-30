@@ -21,7 +21,7 @@
     "playwright": "^1.56.0"
   },
   "build": {
-    "appId": "com.ryan.worshiprig",
+    "appId": "com.ryanmye.worshiprig",
     "productName": "Worship Rig",
     "directories": {
       "app": ".",
