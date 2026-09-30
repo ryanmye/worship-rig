@@ -11,18 +11,20 @@
 //  - WHERE IT PLAYS = miniKeyboard range + note fields + Whole keyboard + "Set lowest/highest…" (armed on the next
 //                  held note) + Response (velocityCurve) with the curve sparkline.
 //  - Advanced    = lib.section('slot<i>-adv'): pan, width (only when hasParam and not already a smart slider),
-//                  transpose, voices, pitch bend, sustain pedal, the instrument's own settings (+ Reset), and the
-//                  Tone section (lib.section('slot<i>-tone')) hosting ctx.C.eqKeyboard, mounted only while Advanced
-//                  and Tone are both open and destroyed on close / rebuild / unmount (hv2-edit-integrate). The
-//                  footer line counts this slot's changes since the song was loaded.
-//  - Title bar   = ctx.C.eqMiniCurve (hidden while the EQ is flat; a click opens Advanced → Tone) + the menu.
+//                  transpose, voices, pitch bend, sustain pedal, the instrument's own settings (+ Reset), the Tone
+//                  block hosting ctx.C.eqKeyboard straight in Advanced (Ryan 2026-09-30: no 'Tone' disclosure), mounted
+//                  only while Advanced is open and destroyed on close / rebuild / unmount (hv2-edit-integrate), and
+//                  below it the Sustain row (sustain: Release (pedal up) = slots.<i>.release, Pedal hold =
+//                  slots.<i>.pedalHold, with a sentence). The footer line counts this slot's changes since the song
+//                  was loaded.
+//  - Title bar   = ctx.C.eqMiniCurve (hidden while the EQ is flat; a click opens Advanced at the EQ) + the menu.
 //  Brightness / Warmth on the strip's shelves read and write the EQ's high / low shelf through eq-math shelfWrites.
 // Store → view: lib.createBinder refreshes values in place; the body is rebuilt only when the slot's instrument,
 // emptiness or availability changes (ui-edit "store → view updates in place"). Views never call the engine (reads
 // only: listInstruments via ctx, and engine/audio.js curveVelocity for the sparkline, as views/edit.js does).
 import {
   h, setText, icon, getIn, relOf, hasParam, signed, pct, semitones, formatInstrumentParam, BLOCKS, changedDot,
-  changeText, editedSince, LEVEL_KEYS, createBinder, section, wordSlider, spaceNoun,
+  changeText, editedSince, LEVEL_KEYS, createBinder, section, wordSlider, spaceNoun, forgetSections,
 } from '../lib.js';
 import { defaultSlot, describe, formatValue } from '../../../shared/params.js';
 import { noteName, parseNoteName } from '../../../shared/music.js';
@@ -154,6 +156,8 @@ function mountSlot(el, ctx, opts) {
     return typeof C.stageName === 'function' ? C.stageName(meta.name, slot.instrument) : meta.name;
   };
   const slotKey = (slot) => (slot ? `${refKey(slot.instrument)}:${metaOf(slot) ? 1 : 0}` : 'empty');
+  // Ryan 2026-09-30: the 'Tone' disclosure is gone (the EQ sits in Advanced); drop its remembered open flags
+  forgetSections([0, 1, 2, 3].map((k) => `slot${k}-tone`));
 
   // ---- static frame: confirm bar + body host (rebuilt per instrument) --------------------------------------------
   const confirmEl = h('div.ev2-slot-confirm', { role: 'alertdialog', hidden: true, 'aria-label': 'Remove this sound' });
@@ -172,7 +176,7 @@ function mountSlot(el, ctx, opts) {
     type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false',
   }, chgLabel, icon('down', 14));
   const menuEl = h('div.ev2-slot-menu', { role: 'menu', hidden: true, tabindex: '-1' });
-  // the EQ sparkline (eq-ui integration step 4): hidden while flat; a click opens Advanced → Tone
+  // the EQ sparkline (eq-ui integration step 4): hidden while flat; a click opens Advanced at the EQ
   const miniEq = typeof C.eqMiniCurve === 'function'
     ? C.eqMiniCurve({ store: ctx.store, slotIndex: i, onOpen: () => openTone() }) : null;
   if (miniEq) miniEq.el.classList.add('ev2-slot-eqmini');
@@ -698,24 +702,26 @@ function mountSlot(el, ctx, opts) {
       hint ? h('p.ev2-hint.ev2-slot-inst-hint', { text: hint }) : null,
       movedNote,
       grid.childElementCount ? grid : null);
-    // Tone: the keyboard EQ (ctx.C.eqKeyboard), lazy — see syncTone()
+    // Tone: the keyboard EQ (ctx.C.eqKeyboard) straight in Advanced (Ryan 2026-09-30), lazy — see syncTone()
     let tone = null;
     if (hasParam(P('eq.b1.db'))) {
       const toneHost = h('div.ev2-slot-tone-host');
-      tone = section(`slot${i}-tone`, 'Tone', {
-        binder, rels: [`${rel}.eq`], cls: 'ev2-slot-tone', summary: (s) => eqSummary(slotOf(s)?.eq),
-      }, h('p.ev2-hint.ev2-slot-tone-hint', {
-        text: 'Double-tap the curve to add a band, drag it to shape the sound.'
-          + (shelfNames.length ? ` ${shelfNames.join(', ')} (The sound itself, above).` : '')
-          + (shelfNames.length ? ' Moving one of those sliders switches its shelf back on.' : ''),
-      }), toneHost);
-      tone.addEventListener('toggle', syncTone);
+      const toneSum = h('span.ev2-slot-tone-sum');
+      binder.fn([`${rel}.eq`], (s) => setText(toneSum, eqSummary(slotOf(s)?.eq)));
+      tone = h('div.ev2-slot-tone', { dataset: { sec: `slot${i}-tone` } },
+        h('div.ev2-slot-inst-head', {}, h('b.ev2-slot-adv-h', { text: 'Tone' }), toneSum),
+        h('p.ev2-hint.ev2-slot-tone-hint', {
+          text: 'Double-tap the curve to add a band, drag it to shape the sound.'
+            + (shelfNames.length ? ` ${shelfNames.join(', ')} (The sound itself, above).` : '')
+            + (shelfNames.length ? ' Moving one of those sliders switches its shelf back on.' : ''),
+        }), toneHost);
       ctl.tone = tone;
       ctl.toneHost = toneHost;
     }
+    const sustain = sustainRow(binder, slot, meta);
     const adv = section(`slot${i}-adv`, 'Advanced', {
       binder, rels: [rel], cls: 'ev2-slot-adv', summary: (s) => advSummary(slotOf(s), mapped),
-    }, strip, misc, inst, tone);
+    }, strip, misc, inst, tone, sustain);
     ctl.adv = adv;
     adv.addEventListener('toggle', () => {
       syncTone();
@@ -732,6 +738,85 @@ function mountSlot(el, ctx, opts) {
   /** A word slider (lib.wordSlider; its cancelDrag only acts on a running drag since hv2-edit-integrate). */
   function slider(o) {
     return wordSlider(o);
+  }
+
+  // ---- Advanced › Sustain (sustain: slots.<i>.release / slots.<i>.pedalHold) ------------------------------------
+  /**
+   * The instrument's own release in seconds to −60 dB (what `slots.<i>.release` replaces): its `release` param
+   * (the song's value, else the default); a sampler's is τ (sampler.js: × 6.9). null when the instrument has none.
+   */
+  function ownRelease(slot, meta) {
+    const p = meta && Array.isArray(meta.params) ? meta.params.find((x) => x && x.key === 'release') : null;
+    if (!p) return null;
+    const v = Number(slot?.params?.release ?? p.default);
+    if (!(v > 0)) return null;
+    return slot.instrument.type === 'sampler' ? Math.min(5, v) * 6.9 : v;
+  }
+  /** "0.8 s" / "12 s". */
+  const secs = (v) => {
+    if (v < 0.1) return `${Math.round(v * 1000)} ms`;
+    return v < 10 ? `${(Math.round(v * 10) / 10).toFixed(1)} s` : `${Math.round(v)} s`;
+  };
+  /** Pedal hold slider: 2–30 s on a log track, the top end (≥ HOLD_NATURAL) = 'natural'. */
+  const HOLD_TOP = 40;
+  const HOLD_NATURAL = 31;
+  /**
+   * "Sustain" row: two word sliders and one sentence ("Rings 0.8 s after you lift the pedal. With the pedal down it
+   * rings to its natural end."). Absent fields mean today's sound: the instrument's release and 'natural'; a
+   * double-click on either slider removes the field again. Only when this build's PARAMS table has the rows.
+   */
+  function sustainRow(binder, slot, meta) {
+    if (!hasParam(P('release')) || !hasParam(P('pedalHold'))) return null;
+    const ctl = body.ctl;
+    const rd = describe(P('release'));
+    const own0 = ownRelease(slot, meta) ?? 0.8;
+    const ownOf = (s) => ownRelease(slotOf(s), metaOf(slotOf(s))) ?? own0;
+    ctl.release = binder.ctl(P('release'), (onChange) => slider({
+      label: 'Release (pedal up)', min: rd.min, max: rd.max, curve: 'log', default: own0, ends: ['short', 'long'],
+      word: (v) => wordFor('ringout', v, { default: ownOf(ctx.song()) }), format: secs, onChange,
+    }), {
+      read: (s) => {
+        const sl = slotOf(s);
+        if (!sl) return undefined;
+        return Number.isFinite(sl.release) ? sl.release : ownOf(s);
+      },
+      // the double-click value (the instrument's own at build time) removes the field: back to the instrument
+      write: (v) => ctx.set(P('release'), v === own0 ? null : Math.round(v * 100) / 100),
+    });
+    ctl.pedalHold = binder.ctl(P('pedalHold'), (onChange) => slider({
+      label: 'Pedal hold', min: 2, max: HOLD_TOP, curve: 'log', default: HOLD_TOP, ends: ['fades soon', 'natural'],
+      word: (v) => (v >= HOLD_NATURAL ? 'Natural' : 'Fades'), format: (v) => (v >= HOLD_NATURAL ? '' : secs(v)),
+      onChange,
+    }), {
+      read: (s) => {
+        const sl = slotOf(s);
+        if (!sl) return undefined;
+        return Number.isFinite(sl.pedalHold) ? sl.pedalHold : HOLD_TOP;
+      },
+      // the top of the track = 'natural' (the field is removed); else whole seconds, half seconds below 10 s
+      write: (v) => ctx.set(P('pedalHold'),
+        v >= HOLD_NATURAL ? null : Math.min(30, v < 10 ? Math.round(v * 2) / 2 : Math.round(v))),
+    });
+    ctl.release.el.dataset.sustain = 'release';
+    ctl.pedalHold.el.dataset.sustain = 'pedalHold';
+    const say = h('p.ev2-hint.ev2-slot-sus-say', { 'aria-live': 'polite' });
+    binder.fn([`${REL()}.release`, `${REL()}.pedalHold`, `${REL()}.params.release`], (s) => {
+      const sl = slotOf(s);
+      if (!sl) return;
+      const set = Number.isFinite(sl.release);
+      const r = set ? sl.release : ownOf(s);
+      const a = `Rings ${secs(r)} after you lift the pedal${set ? '' : ' (the instrument’s own)'}.`;
+      const natural = sl.instrument.type === 'sampler' ? 'rings to its natural end' : 'keeps sounding until you lift it';
+      const b = Number.isFinite(sl.pedalHold)
+        ? `With the pedal down it fades after ${secs(sl.pedalHold)} (over ${secs(sl.pedalHold / 4)}).`
+        : `With the pedal down it ${natural}.`;
+      setText(say, `${a} ${b}`);
+    });
+    ctl.sustainSay = say;
+    return h('div.ev2-slot-sustain', { dataset: { sec: `slot${i}-sustain` } },
+      h('div.ev2-slot-inst-head', {}, h('b.ev2-slot-adv-h', { text: 'Sustain' })),
+      h('div.ev2-slot-adv-row', {}, ctl.release.el, ctl.pedalHold.el),
+      say);
   }
 
   // ---- the strip EQ's shelves (Brightness / Warmth) and the Tone editor -------------------------------------------
@@ -753,10 +838,10 @@ function mountSlot(el, ctx, opts) {
   /** @type {object|null} the mounted eqKeyboard */
   let toneEq = null;
   const toneStats = { created: 0, destroyed: 0 };
-  /** Mount the EQ while Advanced and Tone are both open; destroy it otherwise (and before any rebuild). */
+  /** Mount the EQ while Advanced is open; destroy it otherwise (and before any rebuild). */
   function syncTone() {
     const c = body && body.ctl;
-    const want = !!(c && c.adv && c.tone && c.adv.open && c.tone.open);
+    const want = !!(c && c.adv && c.tone && c.adv.open);
     if (want && !toneEq) mountTone(c);
     else if (!want && toneEq) destroyTone();
   }
@@ -790,12 +875,11 @@ function mountSlot(el, ctx, opts) {
     }
     toneStats.destroyed += 1;
   }
-  /** The mini curve's click / a jump: open Advanced → Tone and bring it into view. */
+  /** The mini curve's click / a jump: open Advanced and bring its EQ into view. */
   function openTone() {
     const c = body && body.ctl;
     if (!c || !c.tone) return;
     c.adv.open = true;
-    c.tone.open = true;
     syncTone();
     focusEl(c.tone);
   }
@@ -888,6 +972,9 @@ function mountSlot(el, ctx, opts) {
     parts.push(`Voices ${VOICE_WORDS[slot.mono] || 'All'}`);
     parts.push(`Pitch bend ${slot.bendEnabled ? 'On' : 'Off'}`);
     if (slot.velocityCurve && slot.velocityCurve !== 'normal') parts.push(`${TOUCH_LABELS[slot.velocityCurve]} touch`);
+    // sustain: only when set (absent = today's sound)
+    if (Number.isFinite(slot.release)) parts.push(`Release ${secs(slot.release)}`);
+    if (Number.isFinite(slot.pedalHold)) parts.push(`Pedal hold ${secs(slot.pedalHold)}`);
     return parts.join(' · ');
   }
 

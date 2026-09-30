@@ -149,9 +149,14 @@
   & body { background: var(--bg); color: var(--text); font-feature-settings: 'kern' 1; }
   /* the vault: candle light pooled top-left (behind the song), a plum light from above, a candle glow under the
      keyboard. Static and painted once: no will-change (the build critic: a permanent ~20 MB full-screen layer),
-     no filters, no background-attachment: fixed. body::before is taken (styles.css: the REC bar). */
+     no filters, no background-attachment: fixed. body::before is taken (styles.css: the REC bar).
+     mac-findings (Sanctuary paint cost): absolute, not fixed. The page never scrolls, so the initial containing block
+     is the viewport and the picture is the same; but the document is a scroll container (overflow: hidden), which
+     makes Chromium composite a FIXED element, and a full-viewport composited layer at z-index −1 put everything
+     painted over it on "overlap" layers: 15 layers instead of 1, four of them 1440 × 900 (html, .perform, .p-main,
+     the vault), all updated and drawn with every meter frame (Mac: renderer 45–47 % vs Classic 38.9 %, GPU +2). */
   & body::after {
-    content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
     background:
       radial-gradient(52% 58% at 10% 4%, color-mix(in srgb, var(--candle) 16%, transparent) 0%,
         color-mix(in srgb, var(--candle) 5%, transparent) 45%, transparent 75%),

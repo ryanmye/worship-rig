@@ -1009,6 +1009,16 @@ export function mountSettings(el, ctx) {
   const mbSetSelect = h('select.ed-select.st-mb-set', { 'aria-label': 'Menu-bar set',
     'data-testid': 'setting-mb-set' });
   const mbModes = h('p.st-hint.st-mb-modes', { 'data-testid': 'setting-mb-modes' });
+  // L-30: the tray icon has no slot in a full macOS menu bar; main.js toasts once and sets <html data-tray-hidden>
+  const mbTrayHidden = h('p.st-hint.st-mb-tray-hidden', { 'data-testid': 'menubar-tray-hidden', hidden: true,
+    text: 'The menu-bar icon is hidden — your Mac’s menu bar is full. Hide a few items in System Settings › '
+      + 'Control Center, or use the Rig menu › Show Worship Rig.' });
+  const syncTrayHidden = (hidden) => { mbTrayHidden.hidden = !hidden; };
+  syncTrayHidden(document.documentElement.hasAttribute('data-tray-hidden'));
+  listen(controller, 'menu', (e) => {
+    if (e.detail?.id === 'trayHidden') syncTrayHidden(true);
+    else if (e.detail?.id === 'trayShown') syncTrayHidden(false);
+  });
   const mbResource = h('p.st-status.st-mb-resource', { 'data-testid': 'setting-mb-resource' });
   const mbMode = tog('menuBarMode', 'Keep in the menu bar');
   mbMode.el.dataset.testid = 'setting-mb-mode';
@@ -1132,6 +1142,7 @@ export function mountSettings(el, ctx) {
       // onboarding O9: "Modes" defined where it first appears
       row('Menu-bar songs', h('div.st-inline', {}, mbSetSelect),
         'The songs (“modes”) the menu-bar icon lets you switch between, up to 6.'),
+      mbTrayHidden,
       mbModes,
       row('Low-resource', mbLow.el, 'Only the current song stays loaded and the meters stop. Sound is unchanged. '
         + 'In menu-bar mode it is on by itself while the window is hidden.'),

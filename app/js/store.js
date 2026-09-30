@@ -223,7 +223,8 @@ const oneOf = (v, list, def) => (list.includes(v) ? v : def);
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 /**
  * Strict write value for a §4 path (L1): numeric entries accept only finite numbers (then clamp); booleans and
- * enums keep params.clamp's coercion; dynamic instrument params also accept booleans/strings.
+ * enums keep params.clamp's coercion; dynamic instrument params also accept booleans/strings. sustain: a row's
+ * `words` ('natural') pass as-is, and null / undefined on an `optional` row resolve to undefined (the field is removed).
  * @returns {*|typeof INVALID}
  */
 function strictParam(p, value) {
@@ -231,6 +232,8 @@ function strictParam(p, value) {
   if (!e) return INVALID;
   if (e.unit === 'bool' || e.unit === 'enum') return clamp(p, value);
   if (e.dynamic && (typeof value === 'boolean' || typeof value === 'string')) return value;
+  if (e.words && e.words.includes(value)) return value;
+  if (e.optional && (value === null || value === undefined)) return undefined;
   if (!finite(value)) return INVALID;
   const v = clamp(p, value);
   return v === null || v === undefined ? INVALID : v;
@@ -285,6 +288,10 @@ export function normalizeSlot(raw, i) {
     const v = getIn(raw, segs);
     if (v === undefined) continue;
     const c = clamp(`slots.${i}.${segs.join('.')}`, v);
+    if (c === null || c === undefined) {
+      if (segs.length === 1) delete out[segs[0]]; // sustain: an optional row at its null default stays absent
+      continue;
+    }
     // any depth (eq.b3.hz, design/eq/AMENDMENT.md §4): copy each container on the way down, never mutate `raw`
     let o = out;
     for (const s of segs.slice(0, -1)) o = o[s] = { ...(isObj(o[s]) ? o[s] : {}) };

@@ -267,16 +267,17 @@ test('integration: Show wiring toggles the strip, shows the sends, never writes 
   noErrors();
 });
 
-test('integration: Keys › Advanced › Tone mounts the EQ; a band writes b-rows; the engine curve follows', async () => {
+test('integration: Keys › Advanced mounts the EQ; a band writes b-rows; the engine curve follows', async () => {
   await selectBlock('slot:0');
   await until(() => !!window.__rig.views.edit._debug.instance('slot'));
   assert.deepEqual(await toneState(), { mounted: false, created: 0, destroyed: 0 }, 'lazy: nothing mounted yet');
+  // Ryan 2026-09-30: opening Advanced is enough (the EQ sits straight in it)
   await ev(() => {
-    const adv = document.querySelector('#view-edit details[data-sec="slot0-adv"]');
-    adv.open = true;
-    document.querySelector('#view-edit details[data-sec="slot0-tone"]').open = true;
+    document.querySelector('#view-edit details[data-sec="slot0-adv"]').open = true;
   });
   await until(() => !!document.querySelector('#view-edit .ev2-slot-tone-host .eqk'));
+  assert.equal(await ev(() => !!document.querySelector('#view-edit details[data-sec="slot0-tone"]')), false,
+    'no Tone disclosure');
   assert.equal((await toneState()).mounted, true);
   // geometry from the component itself, after scrolling the plot into view
   await ev(() => document.querySelector('#view-edit .eqk-plot').scrollIntoView({ block: 'center' }));
@@ -314,7 +315,7 @@ test('integration: Keys › Advanced › Tone mounts the EQ; a band writes b-row
   assert.ok(Math.abs((await ev(() => window.__rig.engine.getParam('slots.0.eq.b3.db'))) - 6) < 1e-6, 'engine b3 +6 dB');
   // the header sparkline shows once the EQ is not flat; the Tone summary counts bands
   await until(() => !document.querySelector('#view-edit .ev2-slot-eqmini').hidden);
-  assert.match(await page.textContent('#view-edit details[data-sec="slot0-tone"] .ev2-sec-sum'), /^Shaped · \d+ bands?$/);
+  assert.match(await page.textContent('#view-edit [data-sec="slot0-tone"] .ev2-slot-tone-sum'), /^Shaped · \d+ bands?$/);
   // Warmth (the smart slider) now moves b1, the migrated low shelf — not the dead legacy row
   await ev(() => {
     const input = document.querySelector('#view-edit [data-bind="slots.0.eq.low"] input[type=range]');
@@ -331,7 +332,7 @@ test('integration: Keys › Advanced › Tone mounts the EQ; a band writes b-row
   noErrors();
 });
 
-test('integration: song switches while Tone is open destroy the editor; no store subscriptions leak', async () => {
+test('integration: song switches while Advanced is open destroy the editor; no store subscriptions leak', async () => {
   // count live store subscriptions from now on (the EQ and its sparkline subscribe to the store directly)
   await ev(() => {
     const st = window.__rig.store;
@@ -358,13 +359,13 @@ test('integration: song switches while Tone is open destroy the editor; no store
     const other = st.navIds().map((id) => st.getSong(id)).find((s) => s.patch.slots[0] && key(s) !== key(cur));
     return [cur.id, other.id];
   });
-  // re-open Tone under the wrapper so its subscription is counted
+  // re-open Advanced (the EQ's only disclosure) under the wrapper so its subscription is counted
   await ev(() => {
-    document.querySelector('#view-edit details[data-sec="slot0-tone"]').open = false;
+    document.querySelector('#view-edit details[data-sec="slot0-adv"]').open = false;
   });
   await until(() => !window.__rig.views.edit._debug.instance('slot')._debug.tone().mounted);
   await ev(() => {
-    document.querySelector('#view-edit details[data-sec="slot0-tone"]').open = true;
+    document.querySelector('#view-edit details[data-sec="slot0-adv"]').open = true;
   });
   await until(() => window.__rig.views.edit._debug.instance('slot')._debug.tone().mounted);
   const s0 = await toneState();
@@ -380,7 +381,7 @@ test('integration: song switches while Tone is open destroy the editor; no store
     }, null, 10000);
   }
   const s1 = await toneState();
-  assert.equal(s1.created - s0.created, 4, 'one editor per rebuild (Tone stays open across songs)');
+  assert.equal(s1.created - s0.created, 4, 'one editor per rebuild (Advanced stays open across songs)');
   assert.equal(s1.destroyed - s0.destroyed, 4, 'every replaced editor was destroyed');
   assert.equal(s1.created - s1.destroyed, 1, 'exactly one live editor');
   assert.equal(await ev(() => window.__subs), subs0, 'store subscriptions back to where they were');
@@ -525,9 +526,21 @@ test('integration: round4-edit-lib M1 — ⌘Z in Perform after a song switch le
       document.querySelector(s).addEventListener('input', (e) => window.__m1ev.push(e.inputType), { once: true });
     }, area);
     await ev(() => document.activeElement?.blur?.());
-    await page.keyboard.press('Control+z');
+    // mac-findings L-27: ⌘Z is Meta+Z on macOS; Control+Z is no editing command there, so the Mac run pressed nothing
+    // (expected ['historyUndo'], got []). ControlOrMeta is Meta on macOS, and Playwright then sends the key with
+    // Chromium's 'undo' editing command (macEditingCommands), the frame-level undo Electron's Edit ▸ Undo runs
+    // (webContents.undo()). If a platform still delivers no undo, document.execCommand('undo') is that same
+    // frame-level command, so the invariant below is tested either way.
+    await page.keyboard.press('ControlOrMeta+z');
+    await sleep(300);
+    if ((await ev(() => window.__m1ev)).length === 0) {
+      console.log(`# L-27: ${process.platform}: the key sent no undo — document.execCommand('undo') instead`);
+      await ev(() => document.execCommand('undo'));
+    }
     await sleep(1000); // > the 500 ms notes debounce
     assert.deepEqual(await ev(() => window.__m1ev), ['historyUndo'], 'the undo reached the hidden notes field');
+    assert.equal(await ev((s) => document.querySelector(s).value, area), 'Song B notes, not A.',
+      'the hidden field still shows the shown song’s notes (the undo is reverted, not kept)');
     assert.equal(await ev((x) => window.__rig.store.getSong(x).notes, a), typed, 'A keeps its notes (was B’s)');
     assert.equal(await ev((y) => window.__rig.store.getSong(y).notes, b), 'Song B notes, not A.', 'B unchanged');
     await ev(([x, y]) => {

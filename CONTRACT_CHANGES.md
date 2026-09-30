@@ -5036,3 +5036,304 @@ applies the CSS-only fixes from its three round-1 critics (warmth journal: warmt
 
   12/12, 19m44s. The first run of the day was 11/12 (edit-v2 slot meter test, fixed above). `xvfb-run node
   test/phase1/shell/run.mjs --only electron`: PASS, 14 pass, 1 skipped (L-14 menu-bar hooks: LOCAL's).
+
+## sustain (Ryan: pedal-held Grand Piano notes fade too early; engine sampler.js + audio.js + voice.js + instruments.js, shared/params.js 2 rows, store.js, manifest.json, views/edit/panels/slot.{js,css} + lib.js, tests, docs)
+- **Root cause (confirmed).** `processSample` capped every sample at 16 s (MIDI ≤ 60) / 10 s (above) with a 1 s fade,
+  so a pedal-held low note died at the cap. The bundled files themselves are ≤ 20 s: `tools/samples/download-
+  salamander.mjs` and `download-vsco-upright.mjs` cut at `-t 20` (tail below −60 dBFS trimmed after 8 s, 0.5 s fade).
+  The 20–30 s the originals ring is therefore not in the app; a longer engine cap gets the full 20 s, no more.
+  Measured by decoding every file (ffmpeg, same onset trim as processSample), length after the onset trim per
+  octave, and in brackets the last sample above −60 dBFS; "cut" = files the old cap truncated:
+
+  | octave | Salamander (90 files) | cut | VSCO upright (69 files) | cut |
+  |---|---|---|---|---|
+  | 0 (A0–B0) | 20.0 s (19.8) | 3/3 | 14.2–20.0 s (19.8) | 2/3 |
+  | 1 | 18.9–20.0 s (19.9) | 12/12 | 9.2–20.0 s (19.8) | 4/9 |
+  | 2 | 15.7–20.0 s (19.8) | 9/12 | 14.4–20.0 s (19.9) | 6/9 |
+  | 3 | 14.4–15.4 s (15.0) | 0/12 | 8.6–17.1 s (16.9) | 2/9 |
+  | 4 (C4 = 60 has the 16 s cap) | 8.7–15.5 s (15.0) | 7/12 | 8.4–16.9 s (16.2) | 4/9 |
+  | 5 | 6.9–10.9 s (10.5) | 2/12 | 7.3–14.1 s (13.7) | 4/9 |
+  | 6 | 5.4–6.8 s | 0/12 | 4.9–12.7 s (10.8) | 2/9 |
+  | 7–8 | 2.8–4.8 s | 0/15 | 1.4–5.4 s | 0/12 |
+
+  The 21 Musyng Kite sets are all ≤ 3.1 s: no cap ever touched them.
+- **Decoded MB** (channels × frames × 4; every file of the set):
+
+  | cap | Salamander 44.1 kHz | 48 kHz | upright 44.1 kHz | 48 kHz |
+  |---|---|---|---|---|
+  | 10 / 16 s (before) | 332.9 | 362.4 | 235.9 | 256.8 |
+  | 20 s | 370.0 | 402.8 | 256.7 | 279.4 |
+  | 30 s (now: `maxSec` 30) | 370.0 | 402.8 | 256.7 | 279.4 |
+  | uncapped | 370.0 | 402.8 | 256.7 | 279.4 |
+
+  Salamander +37.1 MB (+11 %), upright +20.8 MB (+9 %) at 44.1 kHz. 44.1 kHz matches the l8 soak's 332.9 MB.
+- **Pinned MB, measured in the real engine** (Chromium OfflineAudioContext, real manifest, factory songs):
+  - *Sunday Pad + Piano* (Salamander + warm-pad synth): 332.9 → **370.0 MB** at 44.1 kHz, 362.4 → **402.8 MB** at
+    48 kHz. Same for Grand Piano / Felt / Dusty / Anthem. Upright Pad 235.9 → 256.7 (256.8 → 279.4).
+  - No song alone comes near the 600 MB budget. Windows do: all-long pricing would push gospel-stab-b3's library
+    window (Anthem + Upright neighbours) to 627 MB and drop a neighbour. So, as asked, **neighbour-preload copies stay
+    at the old cap and only the current song's instruments use the long cap** (below). With that, gospel-stab's
+    window stays 568.9 MB (both neighbours pinned, as before), Upright Pad current + Anthem 589.6 MB.
+  - One window still changes: Anthem current in large-set mode (radius 2) = Salamander long 370.0 + Upright legacy
+    235.9 = 606 MB > 600, so upright-pad (2 away) is left out of the pins and warmed unpinned (l8). Before: 569 MB,
+    pinned. At 48 kHz that window was already over (619 MB) before this change.
+- **Engine API (sampler.js).**
+  - Manifest field **`maxSec`** per instrument (s, clamped to `MAX_SEC_RANGE` [1, 60]; null/false = the legacy rule).
+    Absent: factory `piano` / `ep` / `keys` categories get `KEYS_MAX_SEC` = 30, everything else and every My Samples
+    entry the legacy 10 / 16 s. `manifest.json` sets `"maxSec": 30` on salamander-piano and upright-piano. The def
+    carries `maxSec` and `decodeOpts.maxSec`. New export `legacyCapSec(midi)`.
+  - `processSample(buf, midi, {maxSec})`: the cap is `maxSec` when given. The 1 s fade-out still runs only when the
+    sample is truncated (unchanged). The buffer gets `_natural` (frames after the onset trim) and `_capped`.
+  - **`BufferCache` variants**: entries, `inflight`, `pinned` and `sizes` are keyed by **cache key**
+    (`keyOf(url, midi, maxSec)`: the URL for the legacy cap, `<url>#max=<s>` for a long one). Once a URL is decoded,
+    `meta` holds its natural length, and a long key whose buffer would equal the legacy one collapses to the URL. So
+    only the 33 + 24 truncated samples are ever held twice. `estimateBytes(keys)` is exact for any variant of a
+    decoded URL, without decoding it. New: `has(key)`, `drop(key, owner)`, export `urlOfKey`. `failed` stays per URL,
+    and `invalidate(urls)` drops every variant.
+  - `SamplerInstrument`: a sample whose long variant isn't decoded but whose legacy copy is (a neighbour preload)
+    starts on that copy, so the switch is as quick as before (measured 9 ms prepare + commit for Sunday). Then
+    `inst.upgraded` (a Promise) decodes the long variants one at a time and swaps them in. Notes already playing keep
+    their buffer. `inst.upgrades` = how many were swapped: 33 for Salamander, 3.2 s on this box. The legacy copies stay
+    decoded but unpinned and unreferenced until the LRU needs the room (+159.6 MB decoded at 44.1 kHz, never pinned).
+  - `AudioEngine._sampleJobs` (preload, `estimatePreloadMB`, pins, low-resource `_pinCurrentOnly`): an instrument the
+    committed song uses is keyed at its long cap, and every other one at the legacy cap. `preload` recomputes its pin
+    keys after decoding (collapsed keys). The controller needs no change: the l8 planner prices exactly what gets
+    pinned.
+- **Params** (`shared/params.js`, two rows; the store, controller and UI pick them up from the table):
+  - `slots.<i>.release`: 0.05–8 s, log, **default null** = the instrument's own release; new row flag `optional`.
+    It is the time to −60 dB after the key lifts (pedal up), for samplers, synths and organ alike.
+  - `slots.<i>.pedalHold`: **'natural'** (default) or 2–30 s, log; new row flag `words: ['natural']`.
+  - `params.clamp` passes a row's `words` through, and an optional row's null / NaN gives its null default.
+    `formatValue`: 'Natural', 'Default'.
+  - Store (`strictParam`): the words pass, a string otherwise is refused, and null / undefined on an optional row
+    removes the field. `normalizeSlot` clamps a present value and drops a null one. SCHEMA stays 1, no migration
+    step; absent = today's sound. The controller's table diff sends the default when a field is removed (null /
+    'natural').
+  - Not MIDI-learnable: `LEARNABLE` is a fixed list (slot gains and actions), so learn isn't free for any slot row.
+- **Engine behaviour** (`audio.js`; `{when}` everywhere, AudioTimer only):
+  - `_release(sc, inst, voice, t)` is every poly and mono note-off path (key up, pedal up, mono last-note).
+    `cfg.release`, when set, goes on `voice.releaseOverride` just before `inst.noteOff`.
+  - `BasicVoice.releaseAt` (sampler + fallback synth) uses the override instead of `release`. `voice.js
+    Voice.releaseAt` runs the instrument's `onRelease` hook with `env.release` forced to the override, so hook side
+    effects (bloom freeze, filter settle) stay. A voice without an envelope fades `out` instead. Undamped piano notes
+    (≥ 90) still ignore note-off.
+  - `_pedalHold(e, t)`: a key lifted under the pedal joins `pedaled`. With a numeric `pedalHold`, an AudioTimer at
+    key-up + hold fades the voice (`fadeOut`, −60 dB over 25 % of the hold) and takes it out of `pedaled`. The count
+    starts when the pedal takes the note over. Mono slots do the same for their held note. Timers are cancelled on
+    pedal up, re-strike, panic, fade-out-all and channel disposal (`_unpedal` / `_unpedalAll`). 'natural' = unchanged
+    (samples ring to their end, synths until the pedal lifts).
+- **UI** (Edit › slot › Advanced; no new screens or modes):
+  - The EQ keyboard sits straight in Advanced (Ryan 2026-09-30). The 'Tone' `lib.section` is gone and replaced by a
+    plain `div.ev2-slot-tone[data-sec="slot<i>-tone"]`: heading "Tone", the eqSummary, the hint and
+    `.ev2-slot-tone-host`. `syncTone` mounts the editor while Advanced is open and destroys it on close, rebuild and
+    unmount. The title-bar mini curve opens Advanced and scrolls to it. `lib.forgetSections(ids)` (new export) drops
+    stored `slot<i>-tone` flags from `worship-rig.edit2.sections` at mount; other flags stay.
+  - Below the EQ is the **Sustain** row (`div.ev2-slot-sustain[data-sec="slot<i>-sustain"]`). It has two
+    `wordSlider`s:
+    - "Release (pedal up)": shows the instrument's own release while absent (a sampler's τ × 6.9). Double-click
+      removes the field.
+    - "Pedal hold": the top of the track = Natural (the field is removed); otherwise whole or half seconds.
+  - One sentence under the sliders: "Rings 0.8 s after you lift the pedal (the instrument’s own). With the pedal down
+    it rings to its natural end." (synth/organ: "keeps sounding until you lift it"; numeric: "fades after 9.0 s (over
+    2.3 s)").
+  - The Advanced summary adds "Release …" / "Pedal hold …" only when set. Screenshot:
+    `test/phase2/edit-v2/screenshots/slot-sustain.png`.
+  - Overlap to know: THE SOUND ITSELF's "Ring-out" slider is the instrument's own `params.release`. While
+    `slots.<i>.release` is set it replaces that at key-up; Release (pedal up) displays Ring-out's value until then.
+- **Tests.**
+  - Engine `offline.sustainLongCap`: real Salamander v9 A1 (a 20.0 s file), vel 127, CC64 at 0.5 s, key up at 1 s.
+    The buffer is 20.0 s (`_capped` false) against 16 s before. At 18 s it is **−40.6 dBFS** (stereo RMS); the legacy
+    cap is −∞ over 16.5–17.5 s; 14 s is identical (−42.1). The assertion is > −50 dBFS: the brief's "> −40" misses
+    by 0.6 dB at this sample's real level (the loudest low sample at 18 s; the others are −50 to −60 dBFS in the
+    file). The suite also checks the variants: neighbour preload at legacy keys; the current song starts on the
+    16 s copy and upgrades to 20 s (1 upgrade), and drops its legacy reference; C7 collapses to its URL; the long-key
+    estimate is exact.
+  - Engine `offline.sustainRelease` (decay to −60 dB after key-up): Church Organ (voice.js) own 1.51 s, release 0.3
+    → 0.30 s, 4 → 3.94 s, reset to null → 1.51 s. Fallback warm-pad (BasicVoice) own 3.03 s, 0.3 → 0.31 s, 1 →
+    1.01 s.
+  - Engine `offline.sustainPedalHold` (warm-pad, key up at 0.5 s under the pedal): natural −20.0 dB at 5 s; hold 4 s
+    −49.2 dB at 5 s (≥ 12 dB down), −96.5 at 5.8 s, the same at 3 s (−17.7); a mono slot −49.2 at 5 s.
+  - Shell (`shell3.test.mjs`, +2): store validation (clamps, words, refusals, null / undefined removal, normalize of
+    junk, reload); the controller sends both rows and the table default on removal.
+  - Unit `params.test.mjs`: table well-formedness allows an optional null / words default, the grammar list has both
+    rows, and +1 test.
+  - edit-v2 `slot.test.mjs`: the Advanced test now checks the EQ mounts on Advanced alone (destroyed on close, one
+    new editor on reopen, no `details[data-sec="slot0-tone"]`), plus a new Sustain test (below the EQ, two sliders,
+    sentence, store → engine both ways, removal, synth wording, section-flag migration).
+  - `integration.test.mjs` and `integration-widths.test.mjs` open Advanced only. The themes walk (`walkStates`
+    'edit-tone-eq', name kept for the coverage files) and `tools/themes/shoot.mjs` also open Advanced only (not run
+    here). The eq suite never opened 'Tone' (fixture page), so it is unchanged.
+- **Runs** (2 CPUs, serial):
+
+  | run | result |
+  |---|---|
+  | `node test/phase1/engine/run.mjs` | 82/82 |
+  | `node test/phase1/shell/run.mjs --only unit` | 201/201 |
+  | `node test/phase2/edit-v2/run.mjs --only slot` | 15/15 |
+  | `node test/phase2/edit-v2/run.mjs --only integration` | 13/13 + widths 5/5 |
+  | `test/unit/shared/*.test.mjs` | all pass (params 26/26) |
+- **Not done / follow-ups.**
+  - The tails past 20 s need new files: re-run the two download scripts with `-t 30`. That grows the bundle, by an
+    estimated ≈ 5–8 MB at 160 kbps (not measured). The engine side is already there: `maxSec` 30.
+  - Mac check: the Mac context rate decides the 44.1 vs 48 kHz rows. The Mac soak's `budgetMB` column should show
+    the Anthem large-set window without upright-pad.
+- (added 2026-09-30 from local 7071b23) Electron main sends rig menu ids `popoverShown` / `popoverHidden` on popover
+  show/hide, so `status.popoverOpen` works (lowres2-scope R2: a merely-open popover must not thaw the frozen drone).
+
+## sustain-critic (reviews/sustain-critic.md; engine sampler.js, engine suites.mjs)
+- **Checked against the pre-sustain snapshot** (same server and scripts, real app, 44.1 kHz): Sunday Pad + Piano
+  pinned 332.9 → 370.0 MB, decoded 417.1 → 454.3; Grand Piano window 417.1 → 454.3 pinned; gospel-stab-b3 568.9
+  both; Anthem large-set 568.9 → 370.0 (upright-pad warmed unpinned); Upright Pad 421.2 → 442.0 (not 589.6: Anthem
+  is never in its window). 10-song switch loop, both modes: pinned ≤ 568.9 in every 50 ms sample, settled decoded
+  ≤ 678.5, peak during a switch 754 → 812 MB (reviews R1; L-10's "while retiring" wording doesn't match: the peaks
+  have `retiring === 0` before and after). Pedalled low chord: −49.0 dBFS at 18 s, silent at 21 s; no click at the
+  sample ends (≤ 3.1 dB over the neighbourhood at −93 dBFS). Identity: 19 factory songs, fields absent or explicit
+  defaults, ≤ 6.8e-6 (16 songs) or inside the song's own pre-vs-pre floor (3 lofi/chorus songs, ≤ 5.4e-5).
+- **`limitMonoLoss(L, R, capDb, {statsLen, fadeLen})`** (new optional arg): `processSample` measures the mid/side
+  factors on what the legacy 10 / 16 s cap keeps (its 1 s fade weighed in when the buffer is longer), so a long
+  variant is the legacy buffer plus a tail. The whole-buffer stats moved every current-song Salamander note by up
+  to 3.4e-5 (−89 dB) from its first sample. Legacy variants: unchanged bit for bit.
+- **`SamplerInstrument._upgrade`**: an instrument disposed while a long-variant decode was in flight now releases the
+  reference `acquire()` added after `dispose()` (one unevictable buffer, 4–8 MB, per switch-away during an upgrade).
+- **Test** `offline.sustainVariants`: the 11 truncated Salamander v9 samples are identical up to the legacy fade
+  (max |diff| 0), and a dispose during the upgrade leaves 0 references (1 without the fix).
+- **Runs** (serial): engine 83/83; shell unit 201/201; unit shared 226/226; edit-v2 11/11 files (99 tests, slot
+  15/15, integration 13/13, widths 5/5); eq 28/28; themes `--only coverage --theme ember` 2/2 (walks
+  `edit-tone-eq`); `tools/themes/shoot.mjs --theme classic --only edit,eq` writes the EQ shot, 0 errors.
+
+## mac-findings (Mac run of the cloud's green tree, 2026-09-30: macOS 26, SF Pro, 120 Hz, real Electron; six failures Linux did not show + the Sanctuary paint cost; styles.css, views/mini.js, views/components/{quickSheet,eq-keyboard}.js + eq-keyboard.css, themes sanctuary-v2 + sanctuary theme.css, tools/idle-cpu.mjs, ui-core / edit-v2 integration / eq / mini / themes tests)
+None of this could run on macOS here. Each item was reproduced with an SF stand-in (an `@font-face` over
+`local("FreeSans")` / `local("FreeSans Bold")`, `size-adjust` 105 % and 112 %, SF's ascent .95 / descent .24 divided
+by the size-adjust) or by reading the code against the platform difference. Calibration: at 1024 × 700 the Mac
+measured "Minor" 55 and "Movement" 61 px; the stand-in gives 56 / 59 px at 105 % and 59 / 63 px at 112 %, so SF Pro
+Text sits between 105 % and ~109 % of FreeSans at these sizes.
+- **Stand-in caveat found on the way.** `chromium-headless-shell` on Linux (the eq, mini and themes suites' default
+  launch) hints `local()` web fonts to whole-pixel advances, so the stand-in is not linear there: "≈Db6 −50¢ · 1.08 kHz"
+  measured 138 px at every size-adjust from 100 to 106 % and 142 px from 108 to 114 % (true 112 %: 143.9 px). Full
+  Chromium (`channel: 'chromium'`, ui-core) is linear. The eq suite now launches with `--font-render-hinting=none`
+  (system faces keep their advances; no effect on macOS).
+- **L-26 (ui-core "polish-2A responsive" at 1024 × 700: `button.seg "Minor" 55 > 53`, `label.fader-label "Movement"
+  61 > 54`).** Cause: the drone faders are `compact`, and `.fader.compact .fader-value { font-size: 14px }` (0,3,0)
+  outranked `.drone-char .fader-value` (0,2,0), so the value rendered at 14 px, not the mockup's 12 px (10.5 px at
+  1024; design/H-v2/perform.html `.drone .char small`), and squeezed the label; Major/Minor sat in a shrinkable
+  `.segmented` beside a level fader whose value ("+1.6 dB") was wider than its 6ch min. Fix (layout, no copy):
+  `.drone-char .fader.compact .fader-value` restores 12 / 10.5 px; `.drone-row .segmented` and `.drone-level
+  .fader-value` are `flex: none` (the track gives way); at ≤ 1250 the head's Synth/My Pads pad 6 px and the ON tile 5 /
+  7 px so "DRONE C major ON" stays whole, the Next column is 212 px, the wheel strip pads 4 px, and the drone toggles
+  pad 6 px so "Follow chords" / "Continue across songs" stay one line (they wrapped from ~108 %). Verified: all eight
+  windows clean at 100 % and 105 %; 1024 × 700 clean at 109 % and 112 %; the new stand-in pass in the test (FreeSans
+  only; the Mac runs its real SF in the main loop) asserts that plus one-line toggles and ≥ 140 px throw.
+  Residual: at 1280 × 800 / 1280 × 720 with ≥ 109 % the "Dotted 8th / worship echo" chip (80 > 78) and "Building
+  Swell · C" in Next (165 > 163) still clip; the Mac's own run passed those windows in real SF, so SF is below that.
+- **Bluetooth hint (ui-core "hardware-fixes: Quick shows…" at 1280 × 720: "the whole line shows").** Cause: 518 px of
+  text (SF ≈ 105 %) no longer fit beside "Under Lock: …" (flex: none) and ellipsized; the title, All settings and ×
+  also shrank (× 44 → 41 px at 112 %). Fix: in the Quick header the hint wraps to ≤ 2 lines (`-webkit-line-clamp: 2`,
+  line-height 1.2, `text-wrap: balance`; 2 × 15 px inside the 44 px header), and h2 / All settings / × are
+  `flex: none`. In Liberation Sans it is one line at every window, as before. Test: text box measured (scrollWidth
+  and scrollHeight vs client) at 1440 / 1366 / 1280 / 1024 under SFsim 105 / 112 % (FreeSans only): whole, ≤ 2 lines
+  (2 at 1280, 1 elsewhere), header not overflowing, × keeps 44 px (36 at ≤ 1250).
+- **L-27 (edit-v2 integration "round4-edit-lib M1": expected `['historyUndo']`, got `[]`).** Cause: the test pressed
+  `Control+z`, which is no editing command on macOS; the app was never asked to undo. Fix (test only; the app's M1
+  guard in panels/song.js is unchanged): `ControlOrMeta+z` (Meta on macOS; Playwright then sends Chromium's `undo`
+  editing command, macEditingCommands, i.e. the frame-level undo Electron's Edit ▸ Undo runs), and if no
+  `historyUndo` arrives within 300 ms, `document.execCommand('undo')` (the same frame-level command). The invariant is
+  asserted in full: the event reached the hidden field, the field still shows the shown song's notes, A keeps its
+  notes, B is unchanged. Verified here both ways: the key path, and the fallback forced (the key press removed):
+  2/2 each.
+- **L-21b (eq "1124 @112 %: every cell's text fits" over Helvetica Neue).** Cause: the 112 % margin was calibrated on
+  FreeSans (Helvetica widths); on the Mac the stand-in fell back to Helvetica Neue, itself 1.01–1.07 × FreeSans by the
+  Mac's own pass/fail (105 % passed, 112 % failed at 145 px of room), so it measured a face ~15 % wider than FreeSans,
+  not SF. It also scaled a Regular face for a weight-600 label (synthetic bold keeps regular advances, ~3 % narrower
+  than Bold). Fix: the cases are now `system` (no stand-in: on the Mac that is SF Pro itself, the real requirement),
+  105 % everywhere, and 112 % only over FreeSans, with FreeSans Bold for 600+; and the full note column is 172 → 180 px
+  (154 px of room; "≈Db6 −50¢ · 1.08 kHz" is 132.6 / 139.1 / 148.4 / 153.8 px at 100 / 105 / 112 / 116 % Bold). The
+  8 px come from "Acts on", which ellipsizes anyway (≥ 122 px at the 1080 px compact threshold; `COMPACT_BELOW_PX`
+  unchanged); the compact layout (1100 px, note 100 px, worst 70.2 / 80 at 112 %) does not change. Residual: real SF
+  Semibold's advance widths are not known here; the `system` case is what proves it on the Mac.
+- **L-28 (mini "master: relative drag…", recurring on the Mac only).** Cause (reproduced): mini.js ignored
+  `state.master` for 400 ms after its own last send (`MASTER_ECHO_MS`), and the app publishes state only on change.
+  A real change in the app inside that window (the test's reset right after the drag: on the fast Mac it always landed
+  inside) was dropped for good, and the popover showed a stale master; the next drag then started from it (a Mac-speed
+  loop here: 6 of 8 drags ended at 2.0 instead of 1.534). A second, test-side race: at 120 Hz the moves come faster than
+  the 50 ms send throttle, so "> before + 0.05" could be met by an intermediate batch. Fix: the echo guard is by value,
+  not time — every state's master is kept; while our newest sent value is outstanding, an older value of ours coming
+  back is an echo (thumb stays), our newest means in sync, anything else is an app change and wins; synced on
+  pointerup too. The press engages only after 3 px of travel (a trackpad tap-to-click that wobbles is still a tap), and
+  once engaged the whole travel from the press point counts (a 50 px drag is exactly 50 px). No timers in the gesture;
+  the 50 ms send throttle stays and always flushes on pointerup. Test: waits for the value the mini sent last, a 2 px
+  wobble tap sends nothing, and two quick app-side changes right after the drag must both reach the popover within
+  3 s. The Mac-speed loop: 0 of 8 wrong after the fix. Residual: if the app silently rejected our last value (no song)
+  and never published again, the thumb keeps our value until the next state.
+- **L-29 (themes "switch → classic: .chord-name scrollHeight 52 > clientHeight 51").** Cause (reproduced with SF's
+  metric overrides on a fresh boot too: 52/51; 54/51 with a deeper 1.00/.26 face): Classic's chord uses the system
+  face, and SF Pro Display's content area (1.19 em) is taller than the 1.1 em line box, so its descent reached ~.045 em
+  below the clip; the runtime switch only happens to be where the suite looks. The web-font themes already pin their
+  chord faces to 1.1 em. Fix: `.chord-name { padding-bottom: calc(.05em + 1px); margin-bottom: calc(-.05em - 1px) }`
+  — the clip box reaches lower, the negative margin gives the space back, so the text and the boxes around it stay
+  put. Verified: 54/54 in Liberation, SF (.95/.24) and the 1.00/.26 stress face at 1440 and 1024 (and the 30 / 26 px
+  steps); the header is pixel-identical on Linux in every theme but for ≤ 15 px of compositing noise at a card edge.
+- **Sanctuary paint cost (Mac 05:32Z: renderer 45–47 % under Sanctuary vs 38.9 % under Classic, GPU +2; drone on,
+  window visible).** Cause (LayerTree dump): Sanctuary's and Nave's vault is a full-viewport `body::after` with
+  `position: fixed`. The document is a scroll container (`overflow: hidden`), so Chromium composites fixed elements
+  (as it does #toasts), and at z-index −1 that put everything painted over it on overlap layers: 15 layers drawing
+  content (Classic: 7), four of them 1440 × 900 (the vault, html, .perform, .p-main) plus .song-name, .transpose,
+  .chord-readout, the setlist item, a strip, …, all updated and drawn with every meter frame. Second, in every theme a
+  meter frame repainted the root layer (the fill's transform was not composited: per frame style → paint → layerize →
+  raster of the bar's rect, re-rastering whatever the theme paints under it: gradients, halos, the vault). Fix: the
+  vault is `position: absolute` (the initial containing block is the viewport and nothing scrolls: same picture), and
+  `.meter-fill, .meter-hold-track, .lvl-cover { will-change: transform }` (72 × 7 and 4 × 225 px layers; a meter frame
+  is now a compositor transform: no Paint events, no raster tasks in a 3 s trace). A theme can no longer change what a
+  meter frame costs. Test: themes `layers` group (no composited layer ≥ 25 % of the viewport but the document, ≤ Classic
+  + 4 layers, meter parts keep will-change; fails on the old fixed vault).
+  - `tools/idle-cpu.mjs`: `--theme <id>`, `--themes a,b,… [--rounds N]` (config A per theme, runtime switch,
+    interleaved), `--channel chromium`, `--headed`, `--chrome-args "…"`, `--inject-css "…"` (the "before" rows below are
+    the tree with the two changes reverted by injection).
+  - Measured (xvfb, 1440 × 900, Sunday Pad + Piano, drone on, 2 interleaved rounds of 12 s; % of one core; UI = renderer
+    main + compositor + pool threads, i.e. without the theme-independent audio and reverb threads):
+
+    | theme | sw before: renderer / UI / gpu | sw after | GPU raster before: renderer / gpu / frames/s | GPU raster after |
+    |---|---|---|---|---|
+    | classic | 23.0 / 6.8 / 1.9 | 23.2 / 6.5 / 2.2 | 21.5 / 138.4 / 23.9 | 21.5 / 139.2 / 23.1 |
+    | sanctuary | 23.2 / 7.6 / 2.1 | 23.4 / 6.9 / 2.2 | 20.0 / 153.8 / 13.1 | 21.6 / 141.1 / 23.1 |
+    | daylight-stage | 23.4 / 6.8 / 2.0 | 23.8 / 6.8 / 2.2 | 17.5 / 155.2 / 5.7 | 21.3 / 136.2 / 25.6 |
+    | studio | 24.9 / 7.8 / 2.0 | 23.2 / 6.8 / 2.2 | 17.5 / 157.6 / 3.9 | 20.6 / 137.6 / 25.6 |
+    | ember | 23.7 / 7.3 / 1.9 | 23.0 / 6.6 / 2.2 | 17.1 / 159.3 / 4.8 | 20.9 / 137.3 / 25.7 |
+    | nave | 25.3 / 8.4 / 2.2 | 23.0 / 6.5 / 2.2 | 19.8 / 153.2 / 14.0 | 21.6 / 138.6 / 25.4 |
+
+    "sw" = software compositing (Linux's default): after the fix every theme's renderer is within +0.6 / −0.2 of
+    Classic (before: up to +2.2, Nave). "GPU raster" = `--enable-gpu-rasterization --use-angle=swiftshader`, the
+    closest stand-in for the Mac's GPU pipeline; SwiftShader saturates the 2-CPU box, so the cost shows as frames the
+    themes could not produce: before, the textured themes managed 4–14 meter frames/s against Classic's 24 at a higher
+    GPU load (per frame 2–6 × Classic's); after, all hold 23–26 frames/s at Classic's GPU load, renderers within
+    −0.9 / +0.1 of Classic.
+  - Look: `tools/themes/shoot.mjs --only perform` before/after for all eight themes: contrast audit unchanged (0 fails,
+    same lowest run everywhere). Pixel diff at 1440 × 900 with grayscale text AA (the Mac's mode): ≤ 0.034 % of pixels
+    differ by > 8 levels in every theme (meters / clock), ≤ 1.4 % by any amount (gradient dithering). With Linux's LCD
+    text AA the Sanctuary family differs by 2.8–2.9 %: its text was grayscale-AA before because it sat on
+    non-opaque overlap layers, and is LCD-AA now, as in Classic and every other theme; nothing else moved.
+  - Residual: measured on Linux; the Mac numbers (Metal raster, 120 Hz, Retina) need the Mac:
+    `node tools/idle-cpu.mjs --only X --themes classic,sanctuary,daylight-stage,studio,ember,nave --rounds 2
+    --no-offline` (the /proc columns are Linux-only; on the Mac read Activity Monitor per theme, or the CDP columns).
+- **Runs** (Linux, 2 CPUs, serial, `node test/run-all.mjs --fast --only ui-core,edit-v2,eq,mini,themes`, first try, no
+  load-timeout re-runs): ui-core 69/69 (4m02s), edit-v2 99/99 (4m24s), eq 28/28, mini 14/14 + mini-theme 14/14, themes
+  36/36 (incl. the 8 new `layers` rows); total 12m31s. Side check: settings PASS.
+
+## tray-hidden (L-30: macOS notch MacBook, full menu bar → the tray icon has no slot)
+When the menu bar is full, macOS gives a new status item no slot: the tray exists but is invisible. Renderer half; the
+Electron main half is LOCAL.
+- **Rig menu ids (exact names, sent by Electron main over the existing `rig:menu` channel → `rig.onMenu` →
+  `controller.onMenu(id)`, re-emitted by the controller as `'menu'`):**
+  - `trayHidden`: send once when `tray.getBounds().y >= display height` (the icon was placed off-screen).
+  - `trayShown`: send when the icon becomes visible again (bounds back inside the display).
+  - No payload. Both are idempotent; the renderer tolerates repeats and either order.
+- **`app/js/main.js` (menu-bar section):** `trayHidden` → sets `<html data-tray-hidden>` and shows ONE info toast per
+  session (`ms` 15000, with a "Dismiss" button; toasts are click-through, so the button is the dismiss control):
+  "The menu-bar icon is hidden — your Mac’s menu bar is full. Hide a few items in System Settings › Control Center, or
+  use the Rig menu › Show Worship Rig." A later `trayHidden` in the same session shows no second toast. `trayShown`
+  removes the attribute (no toast).
+- **`app/js/views/settings.js` › Menu bar:** a one-line `p.st-hint` (`data-testid=menubar-tray-hidden`) in the same
+  words, `hidden` while the tray is visible. It follows `<html data-tray-hidden>` on build and the two ids live.
+  LOCAL: "Rig menu › Show Worship Rig" must exist (it is the escape hatch the text names).
+- **Test:** `test/phase2/ui-core/run.mjs` "L-30: rig menu ids trayHidden / trayShown …": drives `controller.onMenu(id)`
+  (the function preload's `rig.onMenu` callback is), asserts the exact toast text/kind/dismiss button once, no repeat
+  after dismiss, the Settings note shown/hidden, reopen-while-hidden, and (via the suite's final check) no console errors.

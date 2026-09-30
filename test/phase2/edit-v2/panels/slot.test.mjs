@@ -875,24 +875,28 @@ test('slot: Advanced — pan/transpose/voices/bend/pedal, width/EQ by hasParam, 
     assert.equal(!!(await t.page.$(bindSel(t, 'slots.0.eq.low'))), have['slots.0.eq.low'], 'Warmth iff eq.low');
     assert.equal(!!(await t.page.$(`${t.host} .ev2-slot-adv [data-bind="slots.0.eq.high"]`)), false,
       'no separate Highs slider in Advanced (the Tone section replaced Lows/Highs)');
-    assert.equal(!!(await t.page.$(`${t.host} details[data-sec="slot0-tone"]`)), have['slots.0.eq.b1.db'],
-      'Tone section iff the EQ rows exist');
+    // Ryan 2026-09-30: the EQ sits straight in Advanced (no 'Tone' disclosure), mounted while Advanced is open
+    assert.equal(await t.page.$(`${t.host} details[data-sec="slot0-tone"]`), null, 'no Tone disclosure');
+    assert.equal(!!(await t.page.$(`${t.host} .ev2-slot-adv [data-sec="slot0-tone"]`)), have['slots.0.eq.b1.db'],
+      'Tone block in Advanced iff the EQ rows exist');
     if (have['slots.0.eq.b1.db']) {
-      // lazy: the editor exists only while Advanced › Tone is open, and is destroyed on close
-      assert.equal(await t.ev(() => window.__rig.view.instance._debug.tone().mounted), false);
-      assert.equal(await t.page.$(`${t.host} .ev2-slot-tone-host .eqk`), null);
-      await openSec(t, 'slot0-tone');
+      // lazy: the editor exists only while Advanced is open, and is destroyed on close
       await t.until((h) => !!document.querySelector(`${h} .ev2-slot-tone-host .eqk`), t.host);
-      assert.match(await t.page.textContent(`${t.host} details[data-sec="slot0-tone"] .ev2-sec-sum`),
+      assert.equal(await t.ev(() => window.__rig.view.instance._debug.tone().mounted), true);
+      assert.match(await t.page.textContent(`${t.host} [data-sec="slot0-tone"] .ev2-slot-tone-sum`),
         /^(Flat|Shaped · \d+ bands?)$/);
       const d0 = await t.ev(() => window.__rig.view.instance._debug.tone());
       await t.ev(() => {
-        document.querySelector('details[data-sec="slot0-tone"]').open = false;
+        document.querySelector('details[data-sec="slot0-adv"]').open = false;
       });
       await t.until(() => !window.__rig.view.instance._debug.tone().mounted);
       const d1 = await t.ev(() => window.__rig.view.instance._debug.tone());
-      assert.equal(d1.destroyed, d0.destroyed + 1, 'closing Tone destroys the editor');
+      assert.equal(d1.destroyed, d0.destroyed + 1, 'closing Advanced destroys the editor');
       assert.equal(await t.page.$(`${t.host} .ev2-slot-tone-host .eqk`), null);
+      await openSec(t, 'slot0-adv');
+      await t.until((h) => !!document.querySelector(`${h} .ev2-slot-tone-host .eqk`), t.host);
+      const d2 = await t.ev(() => window.__rig.view.instance._debug.tone());
+      assert.equal(d2.created, d1.created + 1, 'reopening Advanced mounts one editor');
     }
     if (have['slots.0.width']) {
       await t.setRange(rangeOf(t, 'slots.0.width'), 400); // 0..1.5 → 0.6
@@ -949,6 +953,88 @@ test('slot: Advanced — pan/transpose/voices/bend/pedal, width/EQ by hasParam, 
     await t.setParam('slots.1.gain', 1);
     await t.until((sel) => Math.abs(Number(document.querySelector(sel).value) - Math.round(Math.cbrt(0.5) * 1000)) <= 1,
       rangeOf(t, 'slots.1.gain'));
+    t.assertNoConsoleErrors();
+  }
+});
+
+test('slot: Advanced › Sustain — Release (pedal up) + Pedal hold under the EQ, sentence, store → engine', async () => {
+  const t = await page();
+  {
+    await fresh(t, 'factory:sunday-pad-piano', 'slot:0');
+    // (an earlier test swaps this song's Keys to Soft Keys: put the Grand Piano back, with its default params)
+    await t.setParam('slots.0.instrument', { type: 'sampler', id: 'salamander-piano' });
+    await t.until(() => window.__rig.engine.slots[0]?.ref.id === 'salamander-piano', null, 60000);
+    await t.ev(() => {
+      for (const k of ['release', 'pedalHold']) window.__rig.store.set(`slots.0.${k}`, null);
+    });
+    await openSec(t, 'slot0-adv');
+    const have = await t.ev(async () => {
+      const { describe } = await import('/app/js/shared/params.js');
+      return !!describe('slots.0.release') && !!describe('slots.0.pedalHold');
+    });
+    assert.ok(have, 'PARAMS has the sustain rows');
+    const sus = `${t.host} .ev2-slot-adv [data-sec="slot0-sustain"]`;
+    await t.until((sel) => !!document.querySelector(sel), sus);
+    // below the EQ (Ryan 2026-09-30), two word sliders only
+    const order = await t.ev(() => {
+      const tone = document.querySelector('#view-edit [data-sec="slot0-tone"]');
+      const row = document.querySelector('#view-edit [data-sec="slot0-sustain"]');
+      return !tone || !!(tone.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    assert.ok(order, 'Sustain sits below the EQ');
+    assert.equal(await t.ev((sel) => document.querySelectorAll(`${sel} .ev2-ws`).length, sus), 2);
+    const say = () => t.page.textContent(`${sus} .ev2-slot-sus-say`);
+    // absent fields = today's sound: Salamander's own release (τ 0.12 s × 6.9 = 0.83 s to −60 dB), natural hold
+    const s0 = (await t.song()).patch.slots[0];
+    assert.equal('release' in s0 || 'pedalHold' in s0, false, 'factory song has neither field');
+    assert.equal(await say(),
+      'Rings 0.8 s after you lift the pedal (the instrument’s own). With the pedal down it rings to its natural end.');
+    assert.equal(await t.page.textContent(`${bindSel(t, 'slots.0.pedalHold')} .ev2-ws-word`), 'Natural');
+    assert.equal(await t.engineParam('slots.0.release'), null);
+    assert.equal(await t.engineParam('slots.0.pedalHold'), 'natural');
+    // Release: the slider writes seconds (log 0.05–8) → store → engine
+    await t.setRange(rangeOf(t, 'slots.0.release'), 800);
+    await t.until(() => Number.isFinite(window.__rig.store.currentSong().patch.slots[0].release));
+    const rel = (await t.song()).patch.slots[0].release;
+    assert.ok(Math.abs(rel - Math.exp(Math.log(0.05) + 0.8 * Math.log(8 / 0.05))) < 0.01, `release ${rel}`);
+    await t.untilEngine('slots.0.release', rel);
+    await t.until((sel) => /^Rings \d+(\.\d)? s after you lift the pedal\. /.test(document.querySelector(sel).textContent),
+      `${sus} .ev2-slot-sus-say`);
+    assert.match(await t.page.textContent(`${t.host} details[data-sec="slot0-adv"] .ev2-sec-sum`), /· Release \d/);
+    // double-click: back to the instrument's own (the field is removed)
+    await t.page.dblclick(rangeOf(t, 'slots.0.release'));
+    await t.until(() => !('release' in window.__rig.store.currentSong().patch.slots[0]));
+    await t.untilEngine('slots.0.release', null);
+    // Pedal hold: the middle of the track ≈ 9 s → fades; the top end = natural (field removed)
+    await t.setRange(rangeOf(t, 'slots.0.pedalHold'), 500);
+    await t.until(() => window.__rig.store.currentSong().patch.slots[0].pedalHold === 9);
+    await t.untilEngine('slots.0.pedalHold', 9);
+    assert.equal(await t.page.textContent(`${bindSel(t, 'slots.0.pedalHold')} .ev2-ws-word`), 'Fades');
+    await t.until((sel) => /With the pedal down it fades after 9\.0 s \(over 2\.3 s\)\.$/.test(
+      document.querySelector(sel).textContent), `${sus} .ev2-slot-sus-say`);
+    await t.ev((sel) => document.querySelector(sel).scrollIntoView({ block: 'end' }), sus);
+    await t.screenshot('slot-sustain');
+    await t.setRange(rangeOf(t, 'slots.0.pedalHold'), 1000);
+    await t.until(() => !('pedalHold' in window.__rig.store.currentSong().patch.slots[0]));
+    await t.untilEngine('slots.0.pedalHold', 'natural');
+    // a synth says "until you lift it" instead of "natural end"
+    await t.select('slot:1');
+    await openSec(t, 'slot1-adv');
+    await t.until((sel) => /keeps sounding until you lift it\.$/.test(document.querySelector(sel)?.textContent || ''),
+      `${t.host} .ev2-slot-adv [data-sec="slot1-sustain"] .ev2-slot-sus-say`);
+    // the retired 'Tone' disclosure's open flag migrates to nothing; other flags stay
+    const kept = await t.ev(async () => {
+      const { forgetSections, SECTIONS_KEY_V2 } = await import('/app/js/views/edit/lib.js');
+      const before = localStorage.getItem(SECTIONS_KEY_V2);
+      localStorage.setItem(SECTIONS_KEY_V2, JSON.stringify({ 'slot0-tone': true, 'slot2-tone': false, 'slot0-adv': true }));
+      forgetSections([0, 1, 2, 3].map((k) => `slot${k}-tone`));
+      const after = JSON.parse(localStorage.getItem(SECTIONS_KEY_V2));
+      if (before === null) localStorage.removeItem(SECTIONS_KEY_V2);
+      else localStorage.setItem(SECTIONS_KEY_V2, before);
+      return after;
+    });
+    assert.deepEqual(kept, { 'slot0-adv': true });
+    await t.select('slot:1');
     t.assertNoConsoleErrors();
   }
 });

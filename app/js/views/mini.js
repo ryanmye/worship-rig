@@ -16,7 +16,9 @@ import { warmThemeFonts, releaseWarmedFonts } from './components/themeFonts.js';
 const HELLO_MS = 2000;
 const PANIC_HOLD_MS = 600;
 const MASTER_SEND_MS = 50; // ≤ 20 master commands/s while dragging
-const MASTER_ECHO_MS = 400; // ignore state.master this long after our own send (no thumb jitter from the echo)
+// mac-findings L-28: a press moves the master only after the pointer travels this far (a trackpad tap-to-click can
+// wobble a pixel or two between down and up; the whole travel counts once it engages, so a drag loses nothing)
+const MASTER_SLOP_PX = 3;
 const MAX_MODES = 6;
 const PC_NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
 const LETTER_PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -192,7 +194,15 @@ export function mountMini(el, o) {
   let drag = null;
   let lastSendAt = 0;
   let sendTimer = null;
-  let lastLocalAt = -Infinity;
+  // mac-findings L-28: the echo guard is by VALUE, not by time. It was "ignore state.master for 400 ms after our own
+  // send", which also dropped a real change made in the app inside that window (on a fast Mac the app's reply to the
+  // test's reset came back within it), and the app publishes only on change, so the popover then showed a stale
+  // master until the next unrelated change. Now every state's master is kept; while one of our values is on its way,
+  // an older value of ours coming back is an echo and leaves the thumb alone, our newest value coming back means in
+  // sync, and any other value is a change in the app, which wins.
+  let appMaster = NaN; // the newest master the app reported
+  let awaiting = null; // our newest sent value (1e-4 units) the app has not reported yet; null = in sync
+  const ours = new Set(); // every value (1e-4 units) we sent since we were last in sync
   const renderMaster = () => {
     const g = taper(masterPos);
     fader.style.setProperty('--pos', masterPos.toFixed(4));
@@ -204,14 +214,30 @@ export function mountMini(el, o) {
     clearTimeout(sendTimer);
     sendTimer = null;
     lastSendAt = performance.now();
-    lastLocalAt = lastSendAt;
-    send('master', { value: Math.round(taper(masterPos) * 1e4) / 1e4 });
+    const units = Math.round(taper(masterPos) * 1e4);
+    awaiting = units;
+    ours.add(units);
+    send('master', { value: units / 1e4 });
   };
   const queueMaster = () => {
-    lastLocalAt = performance.now();
-    const wait = MASTER_SEND_MS - (lastLocalAt - lastSendAt);
+    const wait = MASTER_SEND_MS - (performance.now() - lastSendAt);
     if (wait <= 0) flushMaster();
     else if (!sendTimer) sendTimer = setTimeout(flushMaster, wait);
+  };
+  /** Show the app's master unless the user is dragging, a value of ours is still to go out, or it is an old echo. */
+  const syncMaster = () => {
+    if (drag || sendTimer || !Number.isFinite(appMaster)) return;
+    const units = Math.round(appMaster * 1e4);
+    if (awaiting !== null) {
+      if (units !== awaiting && ours.has(units)) return; // an older value of ours on its way back
+      awaiting = null; // ours arrived (in sync), or the app changed it since (the app wins)
+      ours.clear();
+    }
+    const p = untaper(appMaster);
+    if (p !== masterPos) {
+      masterPos = p;
+      renderMaster();
+    }
   };
   const setPos = (p) => {
     masterPos = Math.min(1, Math.max(0, p));
@@ -222,7 +248,7 @@ export function mountMini(el, o) {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     e.preventDefault();
     const r = fader.getBoundingClientRect();
-    drag = { id: e.pointerId, last: e.clientX, len: Math.max(60, r.width - 24) };
+    drag = { id: e.pointerId, x0: e.clientX, last: null, len: Math.max(60, r.width - 24) };
     try {
       fader.setPointerCapture(e.pointerId);
     } catch {
@@ -232,6 +258,11 @@ export function mountMini(el, o) {
   });
   listen(fader, 'pointermove', (e) => {
     if (!drag || e.pointerId !== drag.id) return;
+    // L-28: by distance, never by time: coalesced moves (120 Hz, trackpads) only change how many px each event carries
+    if (drag.last === null) {
+      if (Math.abs(e.clientX - drag.x0) < MASTER_SLOP_PX) return;
+      drag.last = drag.x0;
+    }
     const dx = e.clientX - drag.last;
     drag.last = e.clientX;
     if (dx) setPos(masterPos + (dx / drag.len) * (e.shiftKey ? 0.25 : 1));
@@ -241,6 +272,7 @@ export function mountMini(el, o) {
     drag = null;
     fader.classList.remove('dragging');
     if (sendTimer) flushMaster();
+    syncMaster();
   };
   for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) listen(fader, t, endDrag);
   listen(fader, 'keydown', (e) => {
@@ -407,11 +439,9 @@ export function mountMini(el, o) {
     setText(curKey, s.current?.key ? `Key ${s.current.key}` : '');
     setText(curPos, pos >= 0 ? `${pos + 1} of ${n}` : n ? 'not in the set' : '');
     prevBtn.disabled = nextBtn.disabled = n < 2 && pos >= 0;
-    // master: the main window is the source of truth; hold our own value while dragging and just after a send
-    if (!drag && performance.now() - lastLocalAt > MASTER_ECHO_MS && Number.isFinite(s.master)) {
-      masterPos = untaper(s.master);
-      renderMaster();
-    }
+    // master: the main window is the source of truth (syncMaster: held while dragging; echoes recognised by value)
+    if (Number.isFinite(s.master)) appMaster = s.master;
+    syncMaster();
     const dOn = !!s.droneOn;
     droneBtn.classList.toggle('on', dOn);
     setAttr(droneBtn, 'aria-pressed', dOn);

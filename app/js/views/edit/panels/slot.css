@@ -156,11 +156,14 @@
 .ev2 .ev2-slot-inst { width: 100%; display: flex; flex-direction: column; gap: 10px; }
 .ev2 .ev2-slot-inst-head { display: flex; align-items: center; gap: 12px; }
 .ev2 .ev2-slot-adv-h { font-size: 14px; }
-/* Advanced › Tone: the keyboard EQ across the full panel width (eq-ui integration step 3; hv2-edit-integrate) */
-.ev2 .ev2-slot-tone { width: 100%; }
-.ev2 .ev2-slot-tone > .ev2-sec-body { display: block; padding: 2px 0 6px; }
-.ev2 .ev2-slot-tone-hint { margin: 0 0 8px 22px; }
+/* Advanced › Tone: the keyboard EQ across the full panel width, straight in Advanced (Ryan 2026-09-30; no disclosure) */
+.ev2 .ev2-slot-tone { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.ev2 .ev2-slot-tone-sum { color: var(--muted, #a3acb8); font-size: 13px; }
+.ev2 .ev2-slot-tone-hint { margin: 0 0 2px; }
 .ev2 .ev2-slot-tone-host { width: 100%; min-width: 0; }
+/* Advanced › Sustain (below the EQ): Release (pedal up) + Pedal hold and the sentence */
+.ev2 .ev2-slot-sustain { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+.ev2 .ev2-slot-sus-say { margin: 0; }
 /* title bar: the EQ sparkline before "Change instrument" (hidden while flat) */
 .ev2 .ev2-slot-eqmini { display: inline-grid; place-items: center; height: 32px; padding: 0 4px; border-radius: 7px;
   border: 1px solid var(--line-2, #3a414d); background: transparent; }

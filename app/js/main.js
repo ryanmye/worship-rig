@@ -1041,6 +1041,25 @@ controller.addEventListener('menu', (e) => {
 window.addEventListener('rig:window-visible', (e) => {
   if (typeof e.detail?.visible === 'boolean') setWindowVisible(e.detail.visible);
 });
+// L-30: a full macOS menu bar gives a new status item no slot, so our tray exists but is invisible. Electron main sends
+// the rig menu id 'trayHidden' (once, when tray.getBounds().y >= display height) and 'trayShown' (when it is visible
+// again). One info toast per session; Settings › Menu bar shows the same words while the state is hidden
+// (settings.js reads <html data-tray-hidden>, set here, and listens for the same ids).
+const TRAY_HIDDEN_TEXT = 'The menu-bar icon is hidden — your Mac’s menu bar is full. Hide a few items in System Settings › '
+  + 'Control Center, or use the Rig menu › Show Worship Rig.';
+let trayToastShown = false;
+controller.addEventListener('menu', (e) => {
+  const id = e.detail?.id;
+  if (id === 'trayHidden') {
+    document.documentElement.setAttribute('data-tray-hidden', '');
+    if (!trayToastShown) {
+      trayToastShown = true;
+      toast(TRAY_HIDDEN_TEXT, 'info', { ms: 15000, action: { label: 'Dismiss', run: () => {} } });
+    }
+  } else if (id === 'trayShown') {
+    document.documentElement.removeAttribute('data-tray-hidden');
+  }
+});
 controller.addEventListener('openMain', () => {
   if (isElectron) return; // Electron main shows + focuses the window
   try {

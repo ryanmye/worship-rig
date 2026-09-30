@@ -74,7 +74,10 @@
 /* L-21 (local, SF Pro on the Mac): the note cell ("≈Db6 −49¢ · 1.08 kHz") is the only proportional-font text that must fit a
    fixed column, and its width depends on the font (SF Pro digits/¢/− are wider than Helvetica's). Tabular digits make
    the width independent of WHICH digits are shown; the note columns below carry ≥ 5 % (full) / 20 % (compact) headroom over SF Pro's worst label;
-   min-width 0 + ellipsis is the safety net for wider fallbacks (the full text stays in the title / on focus). */
+   min-width 0 + ellipsis is the safety net for wider fallbacks (the full text stays in the title / on focus).
+   L-21b (mac-findings): full 172 → 180 px (154 px of text room). "≈Db6 −50¢ · 1.08 kHz" is 148.4 px in FreeSans
+   Bold × 112 % (the semibold label measured in a bold face, not a synthetic-bold regular one); the 8 px come out of "Acts on", which
+   ellipsizes anyway, and the compact layout (1100 px) does not change. */
 .eqk-bands input.eqk-note { font-variant-numeric: tabular-nums; text-overflow: ellipsis; min-width: 0; }
 .eqk-bands select { text-overflow: ellipsis; min-width: 0; }
 .eqk-acts { font-variant-numeric: tabular-nums; }
@@ -104,7 +107,7 @@
   font-weight: 700; color: var(--eqk-c); margin-right: 10px; }
 .eqk-add:disabled { color: var(--faint, #8a93a0); cursor: default; }
 .eqk-hint { font-size: 12.5px; color: var(--faint, #8a93a0); }
-.eqk col.c-n { width: 42px; } .eqk col.c-t { width: 118px; } .eqk col.c-note { width: 172px; } .eqk col.c-hz { width: 82px; }
+.eqk col.c-n { width: 42px; } .eqk col.c-t { width: 118px; } .eqk col.c-note { width: 180px; } .eqk col.c-hz { width: 82px; }
 .eqk col.c-db { width: 72px; } .eqk col.c-q { width: 66px; } .eqk col.c-on { width: 54px; } .eqk col.c-x { width: 40px; }
 .eqk.eqk-bypassed .eqk-bands tbody td:not(:last-child) { opacity: .55; }
 

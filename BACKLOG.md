@@ -114,6 +114,12 @@ the note-latency-after-switch engine work from reviews/performance.md unless the
   states at connect; Bluetooth output measured 176 ms vs 20 ms on the dock — show a one-line latency warning when the
   output device's latency > 60 ms (Settings/Quick "This Mac"); MIDI Learn untested on hardware (no spare CC control on
   the 49es — retest with the second keyboard). **S, cloud**
+- Piano samples at full length (Ryan 2026-09-30 follow-up): the bundled Salamander/VSCO files were trimmed to 20 s by
+  the download scripts, so even with the new per-set cap a pedal-held low note ends at 20 s (originals ring 25–30 s).
+  Re-fetch the low two octaves untrimmed (~+40–60 MB decoded, ~+15 MB on disk) if Ryan still hears it end early. **S, cloud**
+- Memory: after the long-cap swap, the short neighbour copies stay cached unpinned (+160 MB until evicted) and the peak
+  during a song switch rose 754 → ~810 MB; the pinned budget and soft cap hold, but a leaner swap (evict the short copy
+  as soon as the long one is in) would keep the peak where it was. **S, cloud**
 - Salamander piano has anti-correlated L/R on ~27 notes (spaced-pair recording, esp. C5); mitigated with
   `maxMonoLossDb`, but a per-note mid/side correction or a mono-safe sample set would be cleaner. **M, cloud**
 - ~~Four GarageBand packs trip the DC-offset check~~ DONE 2026-09-28 (local 334334c: 10 Hz high-pass wrapper in

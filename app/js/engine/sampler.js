@@ -4,6 +4,7 @@
 //                     release /*τ seconds*/, gainTrim /*dB*/, widthDefault /*stereo width ×, optional*/, group?,
 //                     maxMonoLossDb /*optional: per-file anti-phase fix at decode, see processSample*/,
 //                     undampedFrom /*optional MIDI note: notes ≥ it ignore note-off (no dampers); null = off*/,
+//                     maxSec /*optional decode length cap, s (sustain): null = the legacy 10 s / 16 s rule*/,
 //                     license, source, attribution }] }
 // Sample URL = <manifest dir>/<layer.dir>/<note>.<ext>. Decoding happens only while an instrument is being
 // prepared (its `ready` promise), never at note time.
@@ -22,6 +23,22 @@ export const RELEASE_RANGE = [0.02, 1.5];
 export const GAIN_TRIM_MAX_DB = 30;
 /** Default `undampedFrom` for factory `category: 'piano'` entries: a piano's top ~1.5 octaves have no dampers. */
 export const PIANO_UNDAMPED_FROM = 90;
+/**
+ * Decode length cap (s) for factory pianos / keys without a manifest `maxSec` (sustain): long enough that a pedal-held
+ * note rings to the end of its file (the bundled Salamander / VSCO files are ≤ 20 s, tools/samples/download-*.mjs).
+ */
+export const KEYS_MAX_SEC = 30;
+/** Range a manifest `maxSec` is clamped into (s). */
+export const MAX_SEC_RANGE = [1, 60];
+/** Categories that default to KEYS_MAX_SEC (factory manifests only; user packs keep the legacy cap unless they ask). */
+const LONG_CATEGORIES = new Set(['piano', 'ep', 'electric piano', 'electric-piano', 'keys']);
+/**
+ * The legacy decode cap (REVIEW 2.5/2.6): 10 s above middle C, 16 s at/below. Still used for every set without
+ * `maxSec` and for the neighbour-preload copies of long sets (sustain: pin budget).
+ * @param {number} midi
+ * @returns {number} seconds
+ */
+export const legacyCapSec = (midi) => (midi > 60 ? 10 : 16);
 const MB = 1024 * 1024;
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const atT = (ctx, when) => (Number.isFinite(when) && when > ctx.currentTime ? when : ctx.currentTime);
@@ -60,6 +77,9 @@ function toMidi(n) {
  * `undampedFrom` (round2-engine M1): notes at/above it ignore note-off. An explicit number or null/false in the
  * entry wins; otherwise factory `category: 'piano'` entries get PIANO_UNDAMPED_FROM and everything else (every
  * user entry, and sustaining categories such as strings/choir/pad/organ) is damped on every key.
+ * `maxSec` (sustain): the decode length cap in seconds, clamped to MAX_SEC_RANGE; null/false = the legacy 10 s / 16 s
+ * rule. Absent: factory piano / ep / keys entries get KEYS_MAX_SEC, everything else the legacy rule. It travels in
+ * `decodeOpts.maxSec` (processSample).
  * @returns {Array<{id,name,group,layers:{lo,hi,samples:{midi,url}[]}[],release,gainTrimDb,widthDefault,
  *   undampedFrom,license,params}>}
  */
@@ -102,6 +122,16 @@ export function normalizeManifest(json, manifestUrl, { idPrefix = '', group: def
       const off = inst.undampedFrom == null || inst.undampedFrom === false || !Number.isFinite(u);
       undampedFrom = off ? null : clamp(Math.round(u), 0, 128);
     }
+    let maxSec = !secondary && LONG_CATEGORIES.has(cat) ? KEYS_MAX_SEC : null;
+    if ('maxSec' in inst) {
+      const m = Number(inst.maxSec);
+      const off = inst.maxSec == null || inst.maxSec === false || !(m > 0);
+      maxSec = off ? null : clamp(m, MAX_SEC_RANGE[0], MAX_SEC_RANGE[1]);
+    }
+    const decodeOpts = {};
+    const loss = Number(inst.maxMonoLossDb);
+    if (Number.isFinite(loss) && inst.maxMonoLossDb != null) decodeOpts.maxMonoLossDb = loss;
+    if (maxSec) decodeOpts.maxSec = maxSec;
     const wd = Number(inst.widthDefault);
     out.push({
       id: `${idPrefix}${inst.id}`,
@@ -112,7 +142,8 @@ export function normalizeManifest(json, manifestUrl, { idPrefix = '', group: def
       gainTrimDb,
       undampedFrom,
       widthDefault: inst.widthDefault != null && Number.isFinite(wd) ? clamp(wd, 0, 1.5) : 1,
-      decodeOpts: Number.isFinite(Number(inst.maxMonoLossDb)) && inst.maxMonoLossDb != null ? { maxMonoLossDb: Number(inst.maxMonoLossDb) } : undefined,
+      maxSec,
+      decodeOpts: Object.keys(decodeOpts).length ? decodeOpts : undefined,
       license: inst.license || null,
       attribution: inst.attribution || null,
       params: [
@@ -126,15 +157,17 @@ export function normalizeManifest(json, manifestUrl, { idPrefix = '', group: def
 
 /**
  * Onset trim + length cap (REVIEW 2.5/2.6), baked into a new buffer so playback is a plain start(t):
- * start = max(0, first sample > −50 dBFS − 1 ms) with a 2 ms raised-cosine fade-in; length ≤ 10 s above C4
- * (16 s at/below) with a 1 s fade-out when capped.
+ * start = max(0, first sample > −50 dBFS − 1 ms) with a 2 ms raised-cosine fade-in; length ≤ `opts.maxSec` when given
+ * (sustain: pianos / keys, so a pedal-held note rings to its natural end), else ≤ 10 s above C4 (16 s at/below); the
+ * 1 s fade-out is applied only when the sample is actually truncated. `buf._natural` = the frames after the onset
+ * trim (uncapped), `buf._capped` = whether it was truncated (BufferCache keys and exact size estimates).
  * Optional `maxMonoLossDb` (manifest, per instrument): a stereo file whose mono-sum loss (stereo RMS − RMS((L+R)/2))
  * exceeds it — anti-phase mic content, e.g. Salamander C5 ≈ 8 dB — gets its side scaled down to exactly that loss,
  * with the mid raised so the stereo RMS is unchanged (same loudness in stereo, no hole on a mono PA). Baked once at
  * decode, so it costs nothing at note time. `buf._monoFix = {lossDb, mid, side}` records what was done.
  * @param {AudioBuffer} buf
  * @param {number} midi
- * @param {{maxMonoLossDb?:number}} [opts]
+ * @param {{maxMonoLossDb?:number, maxSec?:number}} [opts]
  * @returns {AudioBuffer}
  */
 export function processSample(buf, midi, opts = {}) {
@@ -153,7 +186,8 @@ export function processSample(buf, midi, opts = {}) {
   }
   if (onset >= buf.length) onset = 0;
   const start = Math.max(0, onset - Math.round(0.001 * sr));
-  const cap = Math.round((midi > 60 ? 10 : 16) * sr);
+  const capSec = Number(opts?.maxSec) > 0 ? Number(opts.maxSec) : legacyCapSec(midi);
+  const cap = Math.round(capSec * sr);
   const len = Math.max(1, Math.min(buf.length - start, cap));
   const capped = buf.length - start > cap;
   const out = new AudioBuffer({ numberOfChannels: buf.numberOfChannels, length: len, sampleRate: sr });
@@ -166,19 +200,43 @@ export function processSample(buf, midi, opts = {}) {
     return o;
   });
   const maxLoss = Number(opts?.maxMonoLossDb);
-  if (os.length === 2 && Number.isFinite(maxLoss) && maxLoss > 0) out._monoFix = limitMonoLoss(os[0], os[1], maxLoss);
+  if (os.length === 2 && Number.isFinite(maxLoss) && maxLoss > 0) {
+    // sustain critic: the mid/side factors are measured on exactly what the legacy 10 / 16 s cap keeps (incl. its
+    // 1 s fade), so a long variant is the legacy buffer plus a tail, not a re-balanced copy (the whole-buffer stats
+    // moved every Salamander note by up to 3.4e-5 in the first seconds)
+    const legacyLen = Math.max(1, Math.min(buf.length - start, Math.round(legacyCapSec(midi) * sr)));
+    // the legacy fade is already in the data when this IS the legacy cut (len === legacyLen); weigh it in otherwise
+    const legacyFade = len > legacyLen ? Math.min(legacyLen, Math.round(1.0 * sr)) : 0;
+    out._monoFix = limitMonoLoss(os[0], os[1], maxLoss, { statsLen: legacyLen, fadeLen: legacyFade });
+  }
   os.forEach((o, c) => out.copyToChannel(o, c));
   out._onsetTrim = start / sr;
+  out._natural = buf.length - start;
+  out._capped = capped;
   return out;
 }
 
-/** In place: scale side/mid so the mono-sum loss is at most `capDb`, keeping M² + S² (see processSample). */
-export function limitMonoLoss(L, R, capDb) {
+/**
+ * In place: scale side/mid so the mono-sum loss is at most `capDb`, keeping M² + S² (see processSample).
+ * `statsLen` / `fadeLen` (sustain critic): measure over the first `statsLen` frames with a linear fade-out over the
+ * last `fadeLen` of them (what the legacy cap keeps), so every decode variant of a file gets the same factors.
+ * @param {Float32Array} L
+ * @param {Float32Array} R
+ * @param {number} capDb
+ * @param {{statsLen?:number, fadeLen?:number}} [o]
+ */
+export function limitMonoLoss(L, R, capDb, { statsLen = L.length, fadeLen = 0 } = {}) {
   let mm = 0;
   let ss = 0;
-  for (let i = 0; i < L.length; i++) {
-    const m = 0.5 * (L[i] + R[i]);
-    const s = 0.5 * (L[i] - R[i]);
+  const n = Math.min(L.length, statsLen);
+  const f0 = n - Math.min(n, fadeLen);
+  for (let i = 0; i < n; i++) {
+    // same weight (and the same float32 product) as processSample's fade: o[len-1-j] *= j / fo
+    const w = i < f0 ? 1 : (n - 1 - i) / fadeLen;
+    const l = w === 1 ? L[i] : Math.fround(L[i] * w);
+    const r = w === 1 ? R[i] : Math.fround(R[i] * w);
+    const m = 0.5 * (l + r);
+    const s = 0.5 * (l - r);
     mm += m * m;
     ss += s * s;
   }
@@ -205,6 +263,11 @@ export function limitMonoLoss(L, R, capDb) {
  * Fetches time out (fetchTimeoutMs, 10 s) and transient failures (network error, timeout, HTTP 5xx/408/429) are
  * retried twice; a URL that still fails is skipped, and retried again by a later acquire (next prepare) after
  * RETRY_AFTER_MS. A 404/410 or an undecodable file is a permanent skip (warned once).
+ * Variants (sustain): a buffer is stored under a KEY, not its URL. keyOf(url, midi, maxSec) is the URL itself for
+ * the legacy 10 s / 16 s cap and `<url>#max=<s>` for a long cap. Once a URL has been decoded, its natural length is
+ * known (`meta`), and a long key whose buffer would be identical to the legacy one (the sample is shorter than both
+ * caps) collapses to the URL, so only truncated samples are held twice. Pins, `sizes` and estimateBytes() take keys;
+ * failure marks and invalidate() take URLs (every variant of that URL).
  */
 const RETRY_AFTER_MS = 30000;
 /**
@@ -212,6 +275,17 @@ const RETRY_AFTER_MS = 30000;
  * factory-song samples decode to 1023.6 MB at 44.1 kHz (integration-2 soak) = 1.73 MB each (morning-prep).
  */
 export const DEFAULT_SAMPLE_BYTES = 1.75 * MB;
+const VARIANT_SEP = '#max=';
+/** URL part of a cache key. @param {string} key @returns {string} */
+export const urlOfKey = (key) => {
+  const i = key.indexOf(VARIANT_SEP);
+  return i < 0 ? key : key.slice(0, i);
+};
+/** Long cap of a cache key in seconds (null = the legacy cap). @param {string} key @returns {number|null} */
+const maxOfKey = (key) => {
+  const i = key.indexOf(VARIANT_SEP);
+  return i < 0 ? null : Number(key.slice(i + VARIANT_SEP.length));
+};
 export class BufferCache {
   constructor({ capBytes = 700 * MB, lowWater = 0.85, warn = () => {}, fetchTimeoutMs = 10000, retries = 2,
     retryDelayMs = 400 } = {}) {
@@ -221,18 +295,19 @@ export class BufferCache {
     this.fetchTimeoutMs = fetchTimeoutMs;
     this.retries = retries;
     this.retryDelayMs = retryDelayMs;
-    this.entries = new Map(); // url -> {buffer, bytes, refs:Set, lastUsed}
-    this.inflight = new Map();
-    this.pinned = new Set();
+    this.entries = new Map(); // key -> {buffer, bytes, refs:Set, lastUsed}
+    this.inflight = new Map(); // key -> Promise<AudioBuffer|null>
+    this.pinned = new Set(); // keys
     this.failed = new Map(); // url -> {at, permanent}
     this.bytes = 0;
-    this.sizes = new Map(); // url -> decoded bytes, kept after eviction (estimateBytes; a number per URL)
+    this.sizes = new Map(); // key -> decoded bytes, kept after eviction (estimateBytes; a number per key)
+    this.meta = new Map(); // url -> {nat (frames after the onset trim), ch, sr, midi}, kept after eviction (sustain)
     this._tick = 0;
   }
   get decodedMB() {
     return this.bytes / MB;
   }
-  /** Decoded bytes held by pinned URLs (pins on URLs not decoded yet count 0). */
+  /** Decoded bytes held by pinned keys (pins on keys not decoded yet count 0). */
   get pinnedBytes() {
     let b = 0;
     for (const u of this.pinned) b += this.entries.get(u)?.bytes || 0;
@@ -242,36 +317,70 @@ export class BufferCache {
     return this.pinnedBytes / MB;
   }
   /**
-   * Decoded size of a set of sample URLs (deduplicated), without decoding anything: exact for URLs decoded before
-   * (also when evicted since), else the mean size of the known URLs sharing the URL's folder (an instrument layer),
-   * else DEFAULT_SAMPLE_BYTES. `unknown` = how many URLs were estimated.
-   * @param {Iterable<string>} urls
+   * Cache key of a sample at a decode cap (sustain). No `maxSec` → the URL (legacy cap). A long cap →
+   * `<url>#max=<s>`, unless the URL's natural length is known and both caps give the same buffer (then the URL: shared).
+   * @param {string} url
+   * @param {number} midi  the sample's note (the legacy cap depends on it)
+   * @param {number|null|undefined} maxSec
+   * @returns {string}
+   */
+  keyOf(url, midi, maxSec) {
+    const m = Number(maxSec);
+    if (!(m > 0)) return url;
+    const meta = this.meta.get(url);
+    if (meta) {
+      const legacy = Math.round(legacyCapSec(meta.midi ?? midi) * meta.sr);
+      if (Math.min(meta.nat, legacy) === Math.min(meta.nat, Math.round(m * meta.sr))) return url;
+    }
+    return `${url}${VARIANT_SEP}${m}`;
+  }
+  /** @param {string} key @returns {boolean} a decoded buffer is held under this key */
+  has(key) {
+    return this.entries.has(key);
+  }
+  /**
+   * Decoded size of a set of cache keys (deduplicated), without decoding anything: exact for keys decoded before
+   * (also when evicted since) and for any variant of a URL whose natural length is known (sustain), else the mean size
+   * of the known keys sharing the key's folder and variant (an instrument layer), else DEFAULT_SAMPLE_BYTES.
+   * `unknown` = how many keys were estimated.
+   * @param {Iterable<string>} urls  cache keys (a plain URL is the legacy-cap key)
    * @returns {{bytes:number, unknown:number, count:number}}
    */
   estimateBytes(urls) {
     const uniq = new Set(urls);
-    const dirOf = (u) => u.slice(0, u.lastIndexOf('/') + 1);
+    const groupOf = (k) => {
+      const u = urlOfKey(k);
+      return `${u.slice(0, u.lastIndexOf('/') + 1)}${k.slice(u.length)}`;
+    };
     let byDir = null;
     let bytes = 0;
     let unknown = 0;
-    for (const u of uniq) {
-      if (this.failed.get(u)?.permanent) continue; // a missing file costs nothing
-      const known = this.sizes.get(u);
+    for (const k of uniq) {
+      const url = urlOfKey(k);
+      if (this.failed.get(url)?.permanent) continue; // a missing file costs nothing
+      const known = this.sizes.get(k);
       if (known !== undefined) {
         bytes += known;
         continue;
       }
+      const meta = this.meta.get(url);
+      if (meta) {
+        const m = maxOfKey(k);
+        const cap = Math.round((m > 0 ? m : legacyCapSec(meta.midi)) * meta.sr);
+        bytes += meta.ch * Math.max(1, Math.min(meta.nat, cap)) * 4;
+        continue;
+      }
       if (!byDir) {
         byDir = new Map();
-        for (const [k, v] of this.sizes) {
-          const d = dirOf(k);
+        for (const [key, v] of this.sizes) {
+          const d = groupOf(key);
           const a = byDir.get(d) || { n: 0, sum: 0 };
           a.n += 1;
           a.sum += v;
           byDir.set(d, a);
         }
       }
-      const a = byDir.get(dirOf(u));
+      const a = byDir.get(groupOf(k));
       bytes += a ? a.sum / a.n : DEFAULT_SAMPLE_BYTES;
       unknown += 1;
     }
@@ -286,26 +395,30 @@ export class BufferCache {
   }
   /**
    * Decode (once) and reference a sample. Resolves null on failure (warn once per URL). `opts` (processSample:
-   * maxMonoLossDb) applies at the first decode of a URL; callers pass the instrument def's value every time.
+   * maxMonoLossDb, maxSec) applies at the first decode of a key; callers pass the instrument def's value every time.
+   * `opts.maxSec` picks the variant (keyOf): no maxSec = the legacy cap.
    */
   async acquire(url, ctx, midi, owner, opts) {
-    let e = this.entries.get(url);
+    let key = this.keyOf(url, midi, opts?.maxSec);
+    let e = this.entries.get(key);
     if (!e) {
       if (this._skip(url)) return null;
-      let p = this.inflight.get(url);
+      let p = this.inflight.get(key);
       if (!p) {
-        p = this._load(url, ctx, midi, opts).finally(() => this.inflight.delete(url));
-        this.inflight.set(url, p);
+        p = this._load(url, ctx, midi, opts).finally(() => this.inflight.delete(key));
+        this.inflight.set(key, p);
       }
       const buffer = await p;
       if (!buffer) return null;
-      e = this.entries.get(url);
+      // the first decode of a URL learns its natural length: a long key may collapse to the URL (same buffer)
+      key = this.keyOf(url, midi, opts?.maxSec);
+      e = this.entries.get(key);
       if (!e) {
         const bytes = buffer.numberOfChannels * buffer.length * 4;
         e = { buffer, bytes, refs: new Set(), lastUsed: 0 };
-        this.entries.set(url, e);
+        this.entries.set(key, e);
         this.bytes += bytes;
-        this.sizes.set(url, bytes);
+        this.sizes.set(key, bytes);
       }
     }
     if (owner) e.refs.add(owner);
@@ -351,7 +464,9 @@ export class BufferCache {
     try {
       if (err) throw err;
       const decoded = await ctx.decodeAudioData(ab);
-      return processSample(decoded, midi, opts);
+      const out = processSample(decoded, midi, opts);
+      this.meta.set(url, { nat: out._natural, ch: out.numberOfChannels, sr: out.sampleRate, midi });
+      return out;
     } catch (e) {
       const permanent = !e?.transient;
       if (!this.failed.has(url)) this.warn(`Sample missing or undecodable, skipped: ${url} (${e?.message || e})`);
@@ -363,25 +478,33 @@ export class BufferCache {
     for (const e of this.entries.values()) e.refs.delete(owner);
     this._evict();
   }
+  /** Drop one owner's reference to one key (sustain: an instrument that moved to a sample's long variant). */
+  drop(key, owner) {
+    this.entries.get(key)?.refs.delete(owner);
+    this._evict();
+  }
   /**
    * Forget these URLs (a My Samples rescan, round2-engine m2): their failure marks are cleared (a fixed file is
    * fetched again) and decoded buffers no live instrument references are dropped (a re-imported file at the same
-   * URL is decoded again). Buffers still referenced keep playing in their instruments; pins are left alone.
+   * URL is decoded again), every variant of each URL. Buffers still referenced keep playing in their instruments;
+   * pins are left alone.
    * @param {Iterable<string>} urls
    * @returns {{failed:number, dropped:number}} how many failure marks and buffers were removed
    */
   invalidate(urls) {
     let failed = 0;
     let dropped = 0;
-    for (const u of urls) {
+    const set = new Set([...urls].map(urlOfKey));
+    for (const u of set) {
       if (this.failed.delete(u)) failed++;
-      this.sizes.delete(u); // a re-imported file may differ in length
-      const e = this.entries.get(u);
-      if (e && !e.refs.size) {
-        this.entries.delete(u);
-        this.bytes -= e.bytes;
-        dropped++;
-      }
+      this.meta.delete(u); // a re-imported file may differ in length
+    }
+    for (const k of [...this.sizes.keys()]) if (set.has(urlOfKey(k))) this.sizes.delete(k);
+    for (const [k, e] of [...this.entries]) {
+      if (!set.has(urlOfKey(k)) || e.refs.size) continue;
+      this.entries.delete(k);
+      this.bytes -= e.bytes;
+      dropped++;
     }
     return { failed, dropped };
   }
@@ -451,9 +574,19 @@ export class SamplerInstrument {
     return this.def.layers.flatMap((L) => L.samples.map((s) => s.url));
   }
 
+  /**
+   * Decode (or take from the cache) every sample at the instrument's cap (`decodeOpts.maxSec`, sustain). A sample
+   * whose long variant isn't decoded yet but whose legacy-cap copy is (a neighbour preload, see
+   * AudioEngine._sampleJobs) starts on that copy, so the switch stays as quick as before; `upgraded` then decodes the
+   * long variants in the background and swaps them in (notes started before keep their buffer).
+   */
   async _load(onProgress) {
     const jobs = [];
     this.def.layers.forEach((L, li) => L.samples.forEach((s) => jobs.push({ li, s })));
+    const opts = this.def.decodeOpts;
+    const maxSec = opts?.maxSec;
+    const legacyOpts = maxSec ? { ...opts, maxSec: undefined } : opts;
+    const upgrades = [];
     let done = 0;
     const total = jobs.length || 1;
     onProgress?.(0);
@@ -461,8 +594,14 @@ export class SamplerInstrument {
     const worker = async () => {
       while (i < jobs.length && !this.disposed) {
         const { li, s } = jobs[i++];
-        const buffer = await this.cache.acquire(s.url, this.ctx, s.midi, this, this.def.decodeOpts);
-        if (buffer) this.layers[li].samples.push({ midi: s.midi, buffer });
+        const key = this.cache.keyOf(s.url, s.midi, maxSec);
+        const fallback = maxSec && key !== s.url && !this.cache.has(key) && this.cache.has(s.url);
+        const buffer = await this.cache.acquire(s.url, this.ctx, s.midi, this, fallback ? legacyOpts : opts);
+        if (buffer) {
+          const entry = { midi: s.midi, buffer };
+          this.layers[li].samples.push(entry);
+          if (fallback) upgrades.push({ entry, s });
+        }
         onProgress?.(++done / total);
       }
     };
@@ -471,6 +610,29 @@ export class SamplerInstrument {
     this.layers = this.layers.filter((L) => L.samples.length);
     if (!this.layers.length && !this.disposed) this.warn(`${this.def.name}: no samples could be loaded.`);
     onProgress?.(1);
+    /** Resolves once every sample plays its long variant (sustain); `this.upgrades` = how many were swapped. */
+    this.upgraded = upgrades.length ? this._upgrade(upgrades) : Promise.resolve(0);
+  }
+
+  /** Background: decode the long variants of samples that started on their legacy-cap copy, one at a time. */
+  async _upgrade(list) {
+    let n = 0;
+    for (const { entry, s } of list) {
+      if (this.disposed) break;
+      const buf = await this.cache.acquire(s.url, this.ctx, s.midi, this, this.def.decodeOpts);
+      if (this.disposed) {
+        // sustain critic: disposed while this decode was in flight: acquire() referenced the long buffer after
+        // dispose()'s release, which would hold it (unevictable) for the page's life
+        this.cache.release(this);
+        break;
+      }
+      if (!buf || buf === entry.buffer) continue;
+      entry.buffer = buf;
+      n++;
+      this.cache.drop(s.url, this);
+    }
+    this.upgrades = n;
+    return n;
   }
 
   _toneHz() {

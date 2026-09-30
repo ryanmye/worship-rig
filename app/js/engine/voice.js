@@ -60,6 +60,8 @@ export class Voice {
     /** envelope from makeEnv (optional) */ this.env = null;
     /** final per-voice GainNode — steal/kill fades act on it */ this.out = null;
     /** instrument hook `(when) => stopTime` replacing env.release */ this.onRelease = null;
+    /** seconds to −60 dB set by the engine from `slots.<i>.release` just before note-off (sustain); 0 = unset */
+    this.releaseOverride = 0;
     /** allocator/instrument callbacks run once at teardown */ this._deadCbs = [];
     /** instrument-private data */ this.data = {};
   }
@@ -160,6 +162,9 @@ export class Voice {
 
   /**
    * Start the release at `when` (idempotent). Uses the instrument's `onRelease` hook, else `env.release`.
+   * sustain: with `releaseOverride` (s to −60 dB, the slot's `release`) the envelope releases over that time instead of
+   * the instrument's own (the hook still runs, for its side effects: bloom freeze, filter settle); a voice without an
+   * envelope fades its `out` gain over it.
    * @param {number} when
    */
   releaseAt(when) {
@@ -167,7 +172,21 @@ export class Voice {
     const t = atTime(this.ctx, when);
     this.state = 'released';
     this.releasedAt = t;
-    let stop = this.onRelease ? this.onRelease(t) : this.env ? this.env.release(t) : t;
+    const ov = this.releaseOverride > 0 ? this.releaseOverride : 0;
+    let stop;
+    if (ov && this.env) {
+      const own = this.env.release;
+      this.env.release = (rt) => own(rt, ov);
+      try {
+        stop = this.onRelease ? this.onRelease(t) : this.env.release(t);
+      } finally {
+        this.env.release = own;
+      }
+    } else if (ov && this.out) {
+      if (this.onRelease) this.onRelease(t);
+      rampTo(this.out.gain, 0, t, releaseTau(ov));
+      stop = stopAfterRelease(t, ov);
+    } else stop = this.onRelease ? this.onRelease(t) : this.env ? this.env.release(t) : t;
     if (!Number.isFinite(stop)) stop = t + 0.05;
     this._scheduleStop(stop);
   }

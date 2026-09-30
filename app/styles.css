@@ -243,6 +243,11 @@ body.recording::before { content: ''; position: fixed; top: 0; left: 0; right: 0
    so the bar's scrollWidth stays its width (polish-2A responsive clip check). Horizontal: translateX(p%), the hold ends
    at the peak; vertical: translateY((100 − p)%), the hold's bottom edge at the peak (as before). */
 .meter-hold-track { position: absolute; top: 0; bottom: 0; left: -100%; width: 100%; pointer-events: none; z-index: 2; }
+/* mac-findings (Sanctuary paint cost): the moving parts of the meters are their own (tiny: 72 × 7, 4 × 225 px)
+   compositor layers, so a meter frame is a transform update in the compositor: no repaint, no re-layerize, no re-raster of the
+   theme's surfaces under the bar (gradients, halos, the vault), which cost every textured theme more per frame than
+   flat Classic. */
+.meter-fill, .meter-hold-track, .lvl-cover { will-change: transform; }
 .meter-hold-track > .meter-hold { left: auto; right: 0; }
 .meter.vertical .meter-hold-track { left: 0; right: 0; width: auto; top: -100%; bottom: auto; height: 100%; }
 .meter.vertical .meter-hold-track > .meter-hold { left: 0; right: 0; top: auto; bottom: 0; }
@@ -553,13 +558,20 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
 .qs-h .qs-lock { margin-left: auto; font-size: 12.5px; color: var(--faint); }
 .qs-h .qs-lock b { color: var(--muted); }
 /* hardware-fixes: the > 60 ms output-latency hint (components/latencyHint.js) — Quick header (in the subtitle's place,
-   one line, ellipsis) and Settings › Audio (under Latency) */
+   up to two lines) and Settings › Audio (under Latency) */
 .latency-hint { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--warn); font-size: 12.5px; font-weight: 700; }
 .latency-hint[hidden] { display: none; }
 .latency-hint .lh-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .latency-hint .lh-x { flex: none; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--panel-2);
   color: var(--muted); font-size: 16px; line-height: 1; padding: 0; }
 .qs-h .qs-latency { flex: 1 1 auto; }
+/* mac-findings (Bluetooth hint, Mac ui-core at 1280 × 720): in SF Pro the one-line hint (518 px at 105 %) no longer fit
+   beside "Under Lock: …" and ellipsized, and the title, All settings and × shrank below their size to make room. The
+   hint now wraps to at most two lines (2 × 15 px inside the 44 px header) and the fixed controls keep their width, so
+   the whole sentence shows in any face; in Liberation Sans it is one line at every window, as before. */
+.qs-h .qs-latency .lh-text { white-space: normal; line-height: 1.2; display: -webkit-box; -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2; overflow-wrap: anywhere; text-wrap: balance; }
+.qs-h > h2, .qs-h > .qs-all, .qs-h > .qs-x { flex: none; }
 .qs-h.has-warn .qs-sub { display: none; }
 .qs-h.has-warn .qs-lock { flex: none; }
 .st-latency-warn { margin: -2px 0 4px; align-items: flex-start; }
@@ -735,6 +747,12 @@ body[data-view="edit"] .quick-btn { display: none; }
 
 .chord-readout { padding: 12px 16px; display: flex; flex-direction: column; justify-content: center; min-width: 0; position: relative; }
 .chord-name { font: 800 46px/1.1 var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; color: var(--muted); }
+/* mac-findings L-29: SF Pro Display's content area is 1.19 em (ascent .95 + descent .24) in a 1.1 em line box, so its
+   descent reached (1.19 − 1.1) / 2 = .045 em below the clip (Mac: scrollHeight 52 > clientHeight 51 in Classic, which
+   uses the system face; the web-font themes pin their chord faces to 1.1 em with metric overrides). The clip box now
+   reaches .05 em + 1 px lower and the negative margin gives the space back: the text and every box around it stay where
+   they were (Linux: pixel-identical), and "(" / "/" descenders can no longer be cut in a face with a deeper descent. */
+.chord-name { padding-bottom: calc(.05em + 1px); margin-bottom: calc(-.05em - 1px); }
 .chord-readout.live .chord-name { color: var(--text); } /* the chord changes constantly: muted when idle (UX H1) */
 /* the column is narrow (116 px): long chord names step down instead of ellipsizing (perform.js sets data-len) */
 .chord-readout[data-len="l"] .chord-name { font-size: 30px; }
@@ -917,7 +935,7 @@ body[data-view="edit"] .quick-btn { display: none; }
 .drone-level { flex: 1 1 auto; display: flex; min-width: 0; }
 .drone-level .fader { flex: 1 1 auto; }
 .drone-level .fader-label { display: none; }
-.drone-level .fader-value { font-size: 14px; min-width: 6ch; }
+.drone-level .fader-value { font-size: 14px; min-width: 6ch; flex: none; } /* L-26: "+1.6 dB" > 6ch in SF Pro */
 .drone-lockline { display: none; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); min-height: 18px; }
 .perform.locked .drone-lockline { display: flex; }
 .drone-lockline.hint { color: var(--warn); animation: flash .6s ease-out; }
@@ -925,6 +943,10 @@ body[data-view="edit"] .quick-btn { display: none; }
 .drone-char .fader { flex-wrap: wrap; gap: 0 8px; }
 .drone-char .fader.horizontal .fader-label { flex: 1 1 0; min-width: 0; text-transform: none; letter-spacing: 0; font-size: 13.5px; color: var(--text); }
 .drone-char .fader-value { flex: none; min-width: 0; font-size: 12px; font-weight: 600; color: var(--muted); }
+/* mac-findings L-26: the drone faders are `compact`, and `.fader.compact .fader-value { font-size: 14px }` (0,3,0)
+   outranked the two rules here (0,2,0), so the value rendered at 14 px instead of the mockup's 12 px (10.5 px at 1024) and squeezed
+   "Movement" to an ellipsis under SF Pro at 1024 × 700. The compact class in the selector restores the intended sizes. */
+.drone-char .fader.compact .fader-value { font-size: 12px; }
 .drone-char .fader-value { order: 1; }
 .drone-char .fader-track { flex: 1 1 100%; order: 2; }
 .drone-char .fader.horizontal .fader-input { height: 34px; }
@@ -1113,12 +1135,12 @@ body[data-view="edit"] .quick-btn { display: none; }
   .chord-name { font-size: 38px; }
   .chord-readout[data-len="l"] .chord-name { font-size: 26px; }
   .chord-readout[data-len="xl"] .chord-name { font-size: 18px; }
-  .p-nav { grid-template-columns: 90px minmax(0, 1fr) 200px; }
+  .p-nav { grid-template-columns: 90px minmax(0, 1fr) 212px; } /* L-26: "Building Swell · C" whole in SF Pro (+12 px) */
   .setlist-strip { padding: 2px 6px; }
   .chip-name { font-size: 15px; }
   .nav-next-name { font-size: 16px; }
   .p-main { grid-template-columns: 76px minmax(0, 1fr) 330px; }
-  .wheel-strip { padding: 8px 6px; gap: 5px; }
+  .wheel-strip { padding: 8px 4px; gap: 5px; } /* L-26: "→ Pad level" (10.5 px) is 62–65 px in SF Pro */
   .wheel-value { font-size: 18px; }
   .swell-btn { min-height: 44px; font-size: 12.5px; } /* ux-round2 #7: live under lock */
   .slot { padding: 7px 6px; gap: 5px; }
@@ -1131,22 +1153,27 @@ body[data-view="edit"] .quick-btn { display: none; }
   .slot-mods { gap: 4px; }
   .slot.empty { flex-basis: 44px; }
   .p-drone { padding: 8px 10px 9px; gap: 7px; }
-  .drone-head .segmented .seg { min-height: 44px; padding: 0 8px; font-size: 13px; }
+  /* mac-findings L-26 (SF Pro at 1024 × 700: "Minor" 55 > 53, "DRONE C major" cut): Major/Minor keep their text
+     (the level fader's track gives way), and the head's Synth/My Pads pad 6 px so the ON tile keeps "DRONE C major ON" */
+  .drone-head { gap: 6px; }
+  .drone-head .segmented .seg { min-height: 44px; padding: 0 6px; font-size: 13px; }
   .key-btn { min-height: 38px; font-size: 15px; }
+  .drone-row .segmented { flex: none; }
   .drone-row .segmented .seg { min-width: 0; padding: 0 9px; font-size: 13px; }
   .drone-char { gap: 10px; }
   .drone-char .fader.horizontal .fader-label { font-size: 11.5px; }
-  .drone-char .fader-value { font-size: 10.5px; }
+  .drone-char .fader-value, .drone-char .fader.compact .fader-value { font-size: 10.5px; }
   .drone-char { gap: 8px; }
   .wheel-target { font-size: 10.5px; }
   .drone-head .ontile .ot-sub { font-size: 13px; }
   .drone-head .ontile .ot-name { font-size: 12.5px; letter-spacing: .03em; }
-  .drone-head .ontile { gap: 6px; padding-left: 8px; }
+  .drone-head .ontile { gap: 5px; padding-left: 7px; }
   .drone-head .ontile .ot-state { padding: 2px 4px; }
   .drone-head .ontile .ot-label { gap: 5px; }
   .drone-char .fader.horizontal .fader-input { height: 26px; }
-  .perform .drone-toggles .toggle { min-height: 36px; font-size: 12px; padding: 0 8px; gap: 6px; }
-  .drone-toggles { gap: 6px; flex-wrap: nowrap; }
+  /* L-26: both toggles stay one line each in SF Pro (they wrapped to two from ~108 % of Liberation Sans's width) */
+  .perform .drone-toggles .toggle { min-height: 36px; font-size: 12px; padding: 0 6px; gap: 5px; }
+  .drone-toggles { gap: 5px; flex-wrap: nowrap; }
   .drone-toggles .tag { display: none; } /* the title still says "experimental" */
   .pad-status { display: none; } /* Settings › My Pads has it (perform-1024.png) */
   .p-bottom { grid-template-columns: minmax(0, 1fr) 104px 96px 118px 100px; }

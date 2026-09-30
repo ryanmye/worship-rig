@@ -58,6 +58,8 @@ export class BasicVoice {
     this.sources = [];
     this.out = null;
     this.release = 0.2; // seconds to −60 dB
+    /** seconds to −60 dB set by the engine from `slots.<i>.release` just before note-off (sustain); 0 = unset */
+    this.releaseOverride = 0;
     this.ignoreRelease = false;
     this._pending = 0;
     this._dead = [];
@@ -116,8 +118,10 @@ export class BasicVoice {
     this.releasedAt = t;
     // undamped strings (sampler def.undampedFrom, factory pianos ≥ 90): ring to the buffer end
     if (this.ignoreRelease) return;
-    rampTo(this.out.gain, 0, t, releaseTau(this.release));
-    this._stop(stopAfterRelease(t, this.release));
+    // sustain: the slot's release (engine _release) replaces the instrument's for this voice
+    const r = this.releaseOverride > 0 ? this.releaseOverride : this.release;
+    rampTo(this.out.gain, 0, t, releaseTau(r));
+    this._stop(stopAfterRelease(t, r));
   }
   /** Click-free kill: exponential fade (τ = fadeSec/6.9 → −60 dB at fadeSec), stop at 1.3 × fadeSec. */
   fadeOut(when, fadeSec = STEAL_FADE) {

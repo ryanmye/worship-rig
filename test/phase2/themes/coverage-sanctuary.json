@@ -4,7 +4,7 @@
   "sanctuary",
   "sanctuary-day"
  ],
- "generated": "2026-09-30T04:53:47.607Z",
+ "generated": "2026-09-30T08:32:21.327Z",
  "states": [
   "sanctuary:perform",
   "sanctuary:perform-held",
@@ -67,19 +67,19 @@
   {
    "selector": "& .bstrip.open .bstrip-list",
    "context": ":where(html:is([data-theme=\"sanctuary\"], [data-theme=\"sanctuary-day\"]))",
-   "line": 239,
+   "line": 244,
    "dead": false
   },
   {
    "selector": "& .bstrip.open .banner.info",
    "context": ":where(html:is([data-theme=\"sanctuary\"], [data-theme=\"sanctuary-day\"]))",
-   "line": 241,
+   "line": 246,
    "dead": false
   },
   {
    "selector": "& .fx-more",
    "context": ":where(html:is([data-theme=\"sanctuary\"], [data-theme=\"sanctuary-day\"]))",
-   "line": 249,
+   "line": 254,
    "dead": false
   }
  ],

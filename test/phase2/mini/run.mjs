@@ -175,16 +175,27 @@ try {
     const box = await mini.locator('[data-testid="mini-master"]').boundingBox();
     // a tap far right of the thumb: relative drag never jumps
     await mini.mouse.click(box.x + box.width - 16, box.y + box.height / 2);
+    // mac-findings L-28: a trackpad tap-to-click that wobbles 2 px between down and up is still a tap
+    const y = box.y + box.height / 2;
+    await mini.mouse.move(box.x + 60, y);
+    await mini.mouse.down();
+    await mini.mouse.move(box.x + 62, y);
+    await mini.mouse.up();
     await sleep(400);
     assert.ok(Math.abs((await masterA()) - before) < 1e-9, 'tap does not change the master');
+    assert.equal(await evB(() => window.__mini.sent.filter((c) => c.type === 'master').length), 0, 'a tap sends nothing');
     // drag right by 50 px
-    const y = box.y + box.height / 2;
     await mini.mouse.move(box.x + 40, y);
     await mini.mouse.down();
     for (let dx = 5; dx <= 50; dx += 5) await mini.mouse.move(box.x + 40 + dx, y);
     await mini.mouse.up();
-    await untilA((b) => window.__rig.store.currentSong().patch.fx.master.volume > b + 0.05, before);
+    // L-28 (Mac only, recurring): at 120 Hz the moves come faster than the 50 ms send throttle, so the values reach the
+    // app in batches and "> before + 0.05" could be met by an intermediate one. Wait for the value the mini sent LAST.
+    const sentLast = await evB(() => window.__mini.sent.filter((c) => c.type === 'master').at(-1)?.value);
+    assert.ok(Number.isFinite(sentLast), 'the drag sent the master');
+    await untilA((v) => Math.abs(window.__rig.store.currentSong().patch.fx.master.volume - v) < 1e-6, sentLast);
     const after = await masterA();
+    assert.ok(after > before + 0.05, `the drag raised the master (${before} → ${after})`);
     const expectPos = Math.cbrt(before / 2) + 50 / (box.width - 24);
     assert.ok(Math.abs(after - 2 * expectPos ** 3) < 0.02, `taper mapping (${after} vs ${2 * expectPos ** 3})`);
     await untilA((v) => Math.abs(window.__rig.engine.getParam('master.volume') - v) < 1e-6, after);
@@ -192,9 +203,15 @@ try {
     const want = 20 * Math.log10(after);
     assert.match(db, /^[+−]?\d+\.\d dB$/);
     assert.ok(Math.abs(Number(db.replace('−', '-').replace(' dB', '')) - want) < 0.11, `${db} vs ${want.toFixed(2)}`);
-    // the app is the source of truth: a change there comes back to the mini
+    // the app is the source of truth: a change there comes back to the mini. L-28: this reset reaches the mini within
+    // 400 ms of its last send (at once here; on the Mac it always did), which the old time-based echo guard dropped
+    // for good: the app publishes only on change. Two quick changes in a row must both show.
+    const miniIs = (v) => untilB((x) => Math.abs(Number(document.querySelector('[data-testid="mini-master"]')
+      .getAttribute('aria-valuenow')) - x) < 1e-3, v, 3000);
+    await evA((v) => window.__rig.store.set('master.volume', v), 0.7);
+    await miniIs(0.7);
     await evA((v) => window.__rig.store.set('master.volume', v), before);
-    await untilB((b) => Math.abs(Number(document.querySelector('[data-testid="mini-master"]').getAttribute('aria-valuenow')) - b) < 1e-3, before);
+    await miniIs(before);
     // keyboard: → nudges up
     await mini.focus('[data-testid="mini-master"]');
     await mini.keyboard.press('ArrowRight');

@@ -24,7 +24,11 @@
 //   * DSP estimate: an OfflineAudioContext engine given the live engine's getState() renders OFFLINE_S seconds
 //     (silence in, drone as configured); CPU of the offline render thread / OFFLINE_S = audio-thread share.
 // Usage: node tools/idle-cpu.mjs [--only A,B,...] [--measure 20] [--settle 10] [--offline 20] [--no-offline]
-//        [--json out.json] [--emulate-prefix] [--app <dir>]
+//        [--json out.json] [--emulate-prefix] [--app <dir>] [--theme <id>] [--themes <id,id,…> [--rounds N]]
+//        [--channel chromium] [--headed] [--chrome-args "<switches>"] [--inject-css "<css>"]
+// --theme pins a registered theme (app/js/shared/themes.js) before boot; without it the app's default applies.
+// --themes (mac-findings, Sanctuary paint cost) measures configuration A once per theme per round, switching at runtime
+// (settings.theme, then theme.pending + fonts), rows "A:<id>"; rounds interleave the themes so box drift hits them all.
 // --app serves another copy of app/ (A/B a UI change against a snapshot of the tree). UI columns (idle-cpu-ui):
 // raf = rAF callbacks/s, rcs = style recalcs/s and lay = layouts/s (CDP RecalcStyleCount / LayoutCount deltas),
 // an = AnalyserNode reads/s (UI and engine taps), man = reads of engine.analyserL/R (the stereo meters),
@@ -57,6 +61,9 @@ const JSON_OUT = arg('json', null);
 // --emulate-prefix: connect every fresh instrument at once, as the engine did before idle-cpu #1 (A/B the fix)
 const EMULATE_PREFIX = argv.includes('--emulate-prefix');
 const APP_DIR = path.resolve(arg('app', path.join(ROOT, 'app')));
+const THEME = arg('theme', null);
+const THEMES = arg('themes', null)?.split(',').map((s) => s.trim()).filter(Boolean) || null;
+const ROUNDS = Number(arg('rounds', 1));
 const CLK_TCK = 100; // /proc stat ticks per second on Linux (sysconf(_SC_CLK_TCK); 100 on every mainstream kernel)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -337,13 +344,26 @@ const OFFLINE_RENDER = async () => {
 const server = createServer({ appDir: APP_DIR, port: 0 });
 const info = await server.listen();
 const origin = `http://127.0.0.1:${info.port}`;
+// --channel chromium: the full browser in new-headless mode (the real compositor → raster pipeline; the default
+// headless shell barely rasters, so paint cost differences between themes do not show there). --headed: a window
+// (run under xvfb-run on Linux).
+const CHANNEL = arg('channel', null);
 const browser = await chromium.launch({
-  headless: true,
-  args: ['--autoplay-policy=no-user-gesture-required', '--enable-precise-memory-info'],
+  headless: !argv.includes('--headed'),
+  ...(CHANNEL ? { channel: CHANNEL } : {}),
+  // --chrome-args "a b": extra Chromium switches (e.g. GPU raster over SwiftShader, as the Mac rasters on the GPU)
+  args: ['--autoplay-policy=no-user-gesture-required', '--enable-precise-memory-info',
+    ...(arg('chrome-args', '') || '').split(/\s+/).filter(Boolean)],
 });
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 await context.grantPermissions(['midi'], { origin }).catch(() => {});
 await context.addInitScript(INIT);
+// --inject-css "<css>": a measurement-only style added after boot (A/B a paint change without editing the tree)
+const INJECT_CSS = arg('inject-css', null);
+if (THEME || THEMES) {
+  const { pinTheme } = await import('../test/integration/lib.mjs');
+  await pinTheme(context, THEME || THEMES[0]);
+}
 const page = await context.newPage();
 const errors = [];
 page.on('console', (m) => {
@@ -387,6 +407,10 @@ await ev(() => {
   }
 });
 if (APP_DIR !== path.join(ROOT, 'app')) console.log(`[idle-cpu] app dir ${APP_DIR}`);
+if (INJECT_CSS) {
+  await page.addStyleTag({ content: INJECT_CSS });
+  console.log(`[idle-cpu] injected CSS: ${INJECT_CSS}`);
+}
 
 // the renderer that runs our page = the child with a Web Audio device thread
 // Browser has no process() (only BrowserServer does): the Chromium browser process is our child without --type=
@@ -600,6 +624,26 @@ try {
   const droneMode = await ev(() => window.__rig.engine.drone.getState().mode);
   console.log(`[idle-cpu] Sunday Pad + Piano selected; drone ${droneMode}; view ${await ev(() => document.body.dataset.view)}`);
 
+  if (THEMES) {
+    for (let round = 0; round < ROUNDS; round++) {
+      for (const id of THEMES) {
+        await ev(async (tid) => {
+          window.__rig.store.set('settings.theme', tid);
+          const t0 = performance.now();
+          while (window.__rig.theme.current !== tid && performance.now() - t0 < 10000) {
+            await new Promise((r) => setTimeout(r, 50));
+          }
+          await window.__rig.theme.pending;
+          await document.fonts.ready;
+        }, id);
+        const shown = await ev(() => document.documentElement.dataset.theme);
+        if (shown !== id) throw new Error(`theme ${id} did not apply (html[data-theme]=${shown})`);
+        const r = await measure(`A:${id} (round ${round + 1}) Sunday, Perform, drone on`);
+        r.key = `A:${id}`;
+        results.push(r);
+      }
+    }
+  }
   await rec('A', 'baseline Sunday, Perform, drone on', null, {});
   if (want('B')) {
     const prev = await ev(() => window.__rig.store.currentSong().patch.drone?.mode || window.__rig.engine.drone.getState().mode);
