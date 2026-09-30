@@ -562,3 +562,56 @@ Local fixes for `reviews/security.md`. There is one commit per item, all on `mai
   streamOpen-denied, dup-take and M6 steps all pass through the key header, and no request got a 403.
 - `node test/run-all.mjs --only unit,chrome-fallback,build-lint`: 3/3. unit 286 pass, chrome-fallback 15/15,
   build-lint 31/31.
+
+## Release pipeline (dmg + x64, 2026-09-30, native macOS)
+
+Config (`d941f57`): mac targets are `dir` + `zip` + `dmg` (arm64 by default), `mac.artifactName`
+`Worship-Rig-${version}-${arch}.${ext}` (no space, no `-mac` suffix), `dmg.filesystem: "APFS"`.
+The workflow is `.github/workflows/release.yml` (`6a1bde3`).
+
+- **HFS+ dmg images don't attach on this Mac.** electron-builder's default dmg (HFS+) failed with
+  `hdiutil: attach failed - no mountable file systems`. A bare `hdiutil create -fs HFS+` image fails the same way,
+  inside and outside the sandbox, while an APFS image attaches. APFS is fine for the app's macOS 12+ minimum, so
+  the config uses APFS.
+- **CLI `--x64` doesn't override config arch.** Every target in `mac.target` pins `arch: ["arm64"]`, and build-lint
+  checks for that. So `npx electron-builder --mac --x64` would rebuild arm64 and add nothing for x64
+  (`computeArchToTargetNamesMap`). The x64 command names the targets:
+  `npx electron-builder --mac dir zip dmg --x64 --publish never`.
+- Builds went to a scratch output dir (`-c.directories.output=…`), because Ryan's app runs from
+  `dist/mac-arm64/` and a build into `dist/` would replace it underneath him.
+
+| | arm64 | x64 |
+|---|---|---|
+| build (dir+zip+dmg), local | 29 s | 71 s (includes the one-time x64 Electron download) |
+| build job, CI (macos-14) | 72 s | 66 s |
+| `Worship Rig.app` (`du -sm`) | 366 MB | 372 MB |
+| `.zip` | 190.5 MB (199,788,509 B) | 196.8 MB (206,401,887 B) |
+| `.dmg` (UDZO, APFS) | 191.3 MB (200,607,203 B) | 197.6 MB (207,226,881 B) |
+
+- Both apps are under 480 MB. `node test/run-all.mjs --only build-lint`: 31/31 pass, 1 skipped, app 379 MB.
+- dmg contents: `Worship Rig.app` (`Signature=adhoc`, `Identifier=com.ryan.worshiprig`), an `Applications` link and
+  a volume icon. Volume name: "Worship Rig 0.1.0".
+- x64 binary: `lipo -archs` prints `x86_64` and `file` reports `Mach-O 64-bit executable x86_64`. An x86_64-only
+  binary running on this arm64 Mac (`hw.optional.arm64=1`) must be running under Rosetta, and that's the proof
+  used here.
+
+**Rosetta smoke** (`arch -x86_64 …/mac/Worship Rig.app/Contents/MacOS/Worship Rig`, `RIG_PORT=8452`, temp
+`RIG_USER_DATA`, `RIG_SELFTEST=1`):
+- The first launch took **35.4 s** to reach `/api/health` 200. Most of that is Rosetta translating Electron on
+  first run. The second launch took **2.65 s**.
+- Health: `{"ok":true,"app":"worship-rig","version":"0.1.0",…}`.
+- Self-test report: `consoleErrors 0, consoleWarnings 0, httpErrors []`, then `timeout:true` with exit 2. That
+  result is expected, because the real app has no `__RIG_SELFTEST__` probe.
+- MIDI (read over DevTools, `--remote-debugging-port=9452`): the top bar shows `Keystation 49es Port 1`
+  (`MIDI input: Keystation 49es Port 1`).
+- Both runs quit themselves, and nothing was left on 8452.
+
+**CI dry run**: https://github.com/ryanmye/worship-rig/actions/runs/36653192277. Both build jobs succeeded, and
+`release` was skipped. It uploaded four artifacts:
+- `Worship-Rig-0.1.0-arm64.zip` (200,948,216 B)
+- `Worship-Rig-0.1.0-arm64.dmg` (201,769,903 B)
+- `Worship-Rig-0.1.0-x64.zip` (206,402,051 B)
+- `Worship-Rig-0.1.0-x64.dmg` (207,218,145 B)
+
+No tag or GitHub release was created. The release job runs only for a `refs/tags/v*` ref: on a tag push, or on a
+manual run on a tag with dry_run unticked. It checks the tag against the `package.json` version first.
