@@ -155,6 +155,15 @@ export function curveVelocity(vel127, curve) {
 export const SLOT_TAP_IDLE_SEC = 2;
 /** idle-cpu #1: a slot instrument with no live voice for this long is disconnected from its strip (realtime only). */
 export const SLOT_IDLE_DISARM_SEC = 2;
+/** lowres2 audio sleep: output ramp before ctx.suspend() (s). */
+export const SLEEP_RAMP_SEC = 0.15;
+/** lowres2 audio sleep: output ramp after ctx.resume() (s). */
+export const WAKE_RAMP_SEC = 0.06;
+/**
+ * lowres2: the wake ramp when the wake carries queued notes. The output is silent at sleep (no voices, no audible
+ * drone: the controller's sleep conditions), so nothing can click, and a 60 ms fade-in would blunt the note's attack.
+ */
+export const WAKE_NOTE_RAMP_SEC = 0.005;
 
 export class AudioEngine extends EventTarget {
   /**
@@ -228,6 +237,8 @@ export class AudioEngine extends EventTarget {
     this._slotTaps = [null, null, null, null];
     this._idlePollArmed = false; // idle-cpu #1: _pollIdleSlots scheduled
     this._fxPollArmed = false; // idle-cpu #2: _pollFx scheduled
+    // lowres2: audio sleep (sleep()/wake()); a new context starts awake
+    this._sleepS = { state: 'awake', seq: 0, queue: [], wakeP: null, ramp: null, last: null, sleeps: 0, wakes: 0 };
   }
 
   // ----- lifecycle -----------------------------------------------------------------------------------------------
@@ -261,7 +272,11 @@ export class AudioEngine extends EventTarget {
       }),
     ]);
     this._afterRegistry();
-    this.ctx.onstatechange = () => this._emit('statechange', { state: this.ctx.state, latencyMs: this.latencyMs });
+    this.ctx.onstatechange = () => {
+      // lowres2: something else resumed a context we put to sleep (resumeAudio, the OS): finish the wake properly
+      if (this.ctx.state === 'running' && this._sleepS.state === 'asleep') this.wake();
+      this._emit('statechange', { state: this.ctx.state, latencyMs: this.latencyMs });
+    };
     this._emit('statechange', { state: this.ctx.state, latencyMs: this.latencyMs });
     this._emit('ready', { phase: 'start' });
     return this;
@@ -294,8 +309,14 @@ export class AudioEngine extends EventTarget {
       sum: this.fx.sum,
       reverbIn: this.fx.reverb.input,
       warn: (m) => this._warn(m),
-      wake: () => this.fx?.wakeAll(), // idle-cpu #2: a new drone layer / pad file feeds the reverb
+      wake: () => {
+        this.fx?.wakeAll(); // idle-cpu #2: a new drone layer / pad file feeds the reverb
+        if (this._sleepS.state !== 'awake') this.wake(); // lowres2: a drone that starts wakes the audio
+      },
+      seed: this.seed, // lowres2: the frozen loop's render seed
+      freezeEnv: () => this._droneFreezeEnv(),
     });
+    this.drone.setFrozen(this._lowRes); // lowres2: low-resource mode freezes the drone (realtime only)
     // idle-cpu #2: send effects sleep while nothing feeds them (realtime only; FxGraph.enableIdleSleep)
     if (this.fx.enableIdleSleep()) this._pollFx(this.ctx.currentTime);
     if (this._monoOut) this.fx.setMono(true, 0);
@@ -602,6 +623,7 @@ export class AudioEngine extends EventTarget {
     this._fxPollArmed = true;
     this.timer.at(t + FX_IDLE_POLL_SEC, (tt) => {
       this._fxPollArmed = false;
+      this.drone?.freezeTick(tt); // lowres2: re-render the frozen loop when what it bakes in changed
       if (!this.fx?._sleep) return;
       const busy = [...this.slots, ...this.retiring].some((sc) => sc && sc.armed);
       this.fx.idleTick(busy);
@@ -1122,6 +1144,7 @@ export class AudioEngine extends EventTarget {
     const v = !!on;
     if (v === this._lowRes) return v;
     this._lowRes = v;
+    this.drone?.setFrozen(v); // lowres2: the drone plays from a frozen loop while low-resource is on
     if (v) {
       this._lowResSavedPins = [...this.cache.pinned];
       this._pinCurrentOnly();
@@ -1131,9 +1154,183 @@ export class AudioEngine extends EventTarget {
       const cur = this._currentSampleUrls();
       this.cache.setPins([...(this._lowResSavedPins || []), ...cur]);
       this._lowResSavedPins = null;
+      // lowres2-scope (Ryan 2026-09-30): audio sleep belongs to low-resource mode; leaving it wakes the audio at once
+      // (wake(): resume + the 60 ms WAKE_RAMP_SEC ramp, click-free; a sleep still ramping down is cancelled)
+      if (this._sleepS && this._sleepS.state !== 'awake' && !this.offline) this.wake().catch(() => {});
     }
     this._emit('stats', this._debugStats());
     return v;
+  }
+
+  /** lowres2: the live reverb as the frozen drone loop needs it (drone-freeze.js renderDroneLoop). */
+  _droneFreezeEnv() {
+    const R = this.fx && this.fx.reverb;
+    const u = R && R.active;
+    if (!u || !u.conv || !u.conv.buffer) return { ir: null, irKey: null, predelay: 0, wet: 0 };
+    return { ir: u.conv.buffer, irKey: u.key, predelay: R.predelayV, wet: R.ret.gain.value * R.wheel.gain.value };
+  }
+
+  /** Test / tuning hook for the frozen drone: {loopSec, debounceSec} (lowres2). */
+  _setDroneFreezeOptions(o = {}) {
+    this.drone?._setFreezeOptions(o);
+  }
+
+  // ----- audio sleep (lowres2) ------------------------------------------------------------------------------------
+  /** 'awake' | 'sleeping' (ramping down, context running) | 'asleep' (suspended) | 'waking' (resume pending). */
+  get sleepState() {
+    return this._sleepS.state;
+  }
+
+  /**
+   * What keeps the audio from sleeping now (the controller adds recording and input): 'voices' (a slot voice, a held
+   * or pedaled note), 'pedal' (the sustain pedal is down, even with no notes), 'drone' (a sounding drone, unless it
+   * is a frozen loop at drone.gain 0; or drone voices still ringing out), 'no-audio' (not started, offline or not
+   * running). Empty = nothing to play.
+   * @returns {string[]}
+   */
+  sleepBlockers() {
+    if (!this.ctx || this.offline || !this.fx) return ['no-audio'];
+    const out = [];
+    let v = this.sounding.size + this.pedaled.size;
+    for (const sc of [...this.slots, ...this.retiring]) {
+      if (!sc) continue;
+      v += typeof sc.inst.liveVoiceCount === 'function' ? sc.inst.liveVoiceCount() : sc.armed ? 1 : 0;
+      if (sc.mono.cur) v++;
+    }
+    if (v > 0) out.push('voices');
+    // lowres2-critic #4: a held pedal is input in progress; its release (a MIDI message) restarts the sleep clock
+    if (this.pedal) out.push('pedal');
+    const d = this.drone;
+    if (d) {
+      const quietFrozen = !!d.frozen && !(d.p.gain > 0) && !d.layers.length;
+      const sounding = d.sounding && d.cfg.mode !== 'off' && !quietFrozen;
+      const ringing = (!d.sounding && d.liveVoiceCount() > 0) || d._fzOut.length || (d.activeEls && d.activeEls.length);
+      if (sounding || ringing) out.push('drone');
+    }
+    return out;
+  }
+
+  /**
+   * Put the audio to sleep: ramp the output to 0 over `ramp` (fx.out, after the ceiling), then ctx.suspend(). The
+   * caller decides when (controller: nothing to play and no input for settings.audioSleepSec). Realtime only.
+   * @param {{ramp?:number}} [o]
+   * @returns {Promise<boolean>} true once suspended (false: not possible, or a wake came first)
+   */
+  sleep({ ramp = SLEEP_RAMP_SEC } = {}) {
+    const S = this._sleepS;
+    if (this.offline || !this.ctx || !this.fx || !this.timer || S.state !== 'awake' || this.ctx.state !== 'running') {
+      return Promise.resolve(false);
+    }
+    const seq = ++S.seq;
+    const t = this.ctx.currentTime + this._rampLead();
+    const from = this._outGainAt(t);
+    linFrom(this.fx.out.gain, from, 0, t, ramp);
+    S.ramp = { t, dur: ramp, from, to: 0 };
+    S.state = 'sleeping';
+    this._emit('sleep', { state: 'sleeping' });
+    return new Promise((resolve) => {
+      this.timer.at(t + ramp + 0.005, async () => {
+        if (seq !== S.seq || S.state !== 'sleeping') return resolve(false);
+        try {
+          await this.ctx.suspend();
+        } catch (e) {
+          if (seq === S.seq) {
+            S.state = 'awake';
+            this._outRamp(1, WAKE_RAMP_SEC);
+            this._warn(`Audio sleep failed: ${e.message || e}`);
+          }
+          return resolve(false);
+        }
+        if (seq !== S.seq) return resolve(false); // a wake came in while suspending: it resumes
+        S.state = 'asleep';
+        S.sleeps++;
+        this._emit('sleep', { state: 'asleep' });
+        resolve(true);
+      });
+    });
+  }
+
+  /**
+   * Wake the audio: ctx.resume(), then ramp the output back over `ramp` (WAKE_RAMP_SEC; WAKE_NOTE_RAMP_SEC when
+   * notes are waiting), then play the perform calls that came in meanwhile (noteOn / noteOff / sustain are queued
+   * while the context is not running, never lost). Idempotent; a wake while ramping down cancels the sleep.
+   * @param {{ramp?:number}} [o]
+   * @returns {Promise<boolean>} true when this call woke it
+   */
+  wake({ ramp } = {}) {
+    const S = this._sleepS;
+    if (S.state === 'awake') return Promise.resolve(false);
+    if (S.wakeP) return S.wakeP;
+    const seq = ++S.seq;
+    S.state = 'waking';
+    const p0 = performance.now();
+    const p = (async () => {
+      if (this.ctx.state !== 'running') {
+        try {
+          await this.ctx.resume();
+        } catch (e) {
+          this._warn(`Audio wake failed: ${e.message || e}`);
+        }
+      }
+      if (seq !== S.seq || this._sleepS !== S || !this.fx) return false;
+      // ahead of the render position (it runs a device buffer ahead of currentTime right after a resume): a ramp
+      // anchored in the past would start mid-way, a step; the queued notes land on the ramp's start
+      const t = this.ctx.currentTime + this._rampLead();
+      const q = S.queue.splice(0);
+      const dur = Number.isFinite(ramp) ? ramp : q.some((x) => x[0] === 'noteOn') ? WAKE_NOTE_RAMP_SEC : WAKE_RAMP_SEC;
+      const from = this._outGainAt(t);
+      linFrom(this.fx.out.gain, from, 1, t, dur);
+      S.ramp = { t, dur, from, to: 1 };
+      S.state = 'awake';
+      S.wakes++;
+      const leadMs = Math.round((t - this.ctx.currentTime) * 10000) / 10;
+      S.last = { ms: Math.round((performance.now() - p0) * 10) / 10, queued: q.length, ramp: dur, at: t, leadMs };
+      for (const [name, args] of q) {
+        try {
+          this[name](...args, { when: t });
+        } catch (e) {
+          console.warn('[engine] queued call failed', e);
+        }
+      }
+      this._emit('sleep', { state: 'awake', wakeMs: S.last.ms, queued: q.length });
+      return true;
+    })();
+    S.wakeP = p;
+    p.finally(() => {
+      if (S.wakeP === p) S.wakeP = null;
+    });
+    if (S.state === 'awake') S.wakeP = null; // woke synchronously (the context was still running)
+    return p;
+  }
+
+  /** Sleep / wake ramps start this far ahead of currentTime: ≥ 10 ms, 2 × baseLatency, ≤ 40 ms. */
+  _rampLead() {
+    return Math.min(0.04, Math.max(0.01, 2 * (this.ctx.baseLatency || 0)));
+  }
+
+  /** The sleep ramp's gain on fx.out at audio time t (1 when no ramp ran). */
+  _outGainAt(t) {
+    const r = this._sleepS.ramp;
+    if (!r) return 1;
+    if (t <= r.t) return r.from;
+    if (t >= r.t + r.dur) return r.to;
+    return r.from + ((r.to - r.from) * (t - r.t)) / r.dur;
+  }
+  _outRamp(to, dur) {
+    if (!this.fx || !this.ctx) return;
+    const t = this.ctx.currentTime + this._rampLead();
+    const from = this._outGainAt(t);
+    linFrom(this.fx.out.gain, from, to, t, dur);
+    this._sleepS.ramp = { t, dur, from, to };
+  }
+
+  /** Perform input while not awake (lowres2): queued for wake(), which this starts. @returns {boolean} held */
+  _sleepHold(name, args) {
+    const S = this._sleepS;
+    if (S.state === 'awake' || this.offline) return false;
+    S.queue.push([name, args]);
+    this.wake();
+    return true;
   }
 
   /** True while low-resource mode is on (setLowResource). */
@@ -1507,6 +1704,7 @@ export class AudioEngine extends EventTarget {
   // ----- perform input -------------------------------------------------------------------------------------------
   noteOn(note, vel = 100, { when } = {}) {
     if (!this.fx) return false;
+    if (this._sleepHold('noteOn', [note, vel])) return true; // lowres2: played as soon as the context runs
     if (!(Number(vel) > 0)) return this.noteOff(note, { when }); // MIDI convention: velocity 0 = note-off
     const t = this._t(when);
     const n = clampMidi(note);
@@ -1564,6 +1762,7 @@ export class AudioEngine extends EventTarget {
 
   noteOff(note, { when } = {}) {
     if (!this.fx) return false;
+    if (this._sleepHold('noteOff', [note])) return true; // lowres2: after the queued noteOn, in order
     const t = this._t(when);
     const n = clampMidi(note);
     this.held.delete(n);
@@ -1582,6 +1781,7 @@ export class AudioEngine extends EventTarget {
 
   sustain(down, { when } = {}) {
     if (!this.fx) return false;
+    if (this._sleepHold('sustain', [down])) return true; // lowres2
     const t = this._t(when);
     const d = !!down;
     if (d === this.pedal) return true;
@@ -1804,6 +2004,10 @@ export class AudioEngine extends EventTarget {
       slotLevelTaps: this.slotTapCount(),
       reverbUnits: this.fx && this.fx.reverb && this.fx.reverb.units ? this.fx.reverb.units.size : 0,
       fxAsleep: this.fx ? this.fx.fxAsleep : [], // idle-cpu #2: send effects asleep now
+      // lowres2: frozen drone (droneFrozen, droneLoopSec, droneRenderMs, …) and audio sleep
+      ...(this.drone ? this.drone.freezeStats() : { droneFrozen: false, droneLoopSec: null, droneRenderMs: null }),
+      audioSleep: this._sleepS.state,
+      lastWake: this._sleepS.last ? { ...this._sleepS.last } : null,
     };
   }
 }

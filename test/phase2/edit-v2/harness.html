@@ -70,6 +70,11 @@
   const midi = new MidiInput();
   const recorder = new Recorder({ engine });
   const controller = createController({ store, engine, midi, recorder });
+  // idle-cpu-ui: silent meters sleep until wakeMeters(), which main.js calls on controller activity; the harness has
+  // no main.js, so wire the same two hooks here (themes-final: the polish-1 slot level-meter test timed out without)
+  const { wakeMeters } = await import('/app/js/views/components/meterClock.js');
+  if (typeof controller.onActivity === 'function') controller.onActivity(() => wakeMeters());
+  controller.addEventListener('notes', () => wakeMeters());
   let baseline = null; // what main.js will pass as getBaseline (perform.js savedSnapshot); tests can set it
   const ctx = {
     store, controller, engine, midi, recorder, toast,

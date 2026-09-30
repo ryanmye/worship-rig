@@ -1,38 +1,39 @@
-/* Worship Rig: "Daylight v2" theme (design/warmth/daylight-v2/concept.md; v1 is app/themes/daylight/).
-   One planner, two lights. By day (rehearsal, planning, Edit at the kitchen table) the rig is warm paper: oat desk,
-   ink text, the four sounds as coloured planner tabs. By night (and on a dark stage) the same page turns over: warm
-   walnut under a music-stand lamp, and the paper colour becomes the text. Same H-v2 layout and components.
-   v2 changes (after critique): what you read is printed on the desk (song, chord, setlist rail) or on songbook stock
-   (Notes); only what you operate is a card; no dashed boxes; a calmer top bar and a friendlier voice (a CSS bridge,
-   see the status block); warmer Stage neutrals; a framed EQ display; the Today card/sheet styles for today.js.
+/* Worship Rig: "Daylight v2" theme (design/warmth/daylight-v2/concept.md; app/themes/README.md is the contract).
+   One planner, two lights, one file. Registry ids (app/js/shared/themes.js):
+     daylight-stage  mode dark   walnut desk under a music-stand lamp (the stage light)
+     daylight-day    mode light  warm paper (rehearsal, planning, Edit at the kitchen table)
+   What you read is printed on the desk (song, chord, setlist rail) or on songbook stock (Notes); only what you operate
+   is a card; no dashed boxes.
 
-   How it switches on:
-   - Every rule sits inside ONE block whose selector is :where(body[data-theme="daylight-v2"], body:not([data-theme])).
-     :where() adds no specificity, so each nested rule weighs exactly what the app rule it replaces weighs and wins on
-     source order (this file loads last). The app's more specific state rules still win where they should.
-     · Linked from index.html later: applies with <body data-theme="daylight-v2">, and stops when data-theme names another
-       theme (a Settings › Appearance picker).
-     · Injected with no attribute (page.addStyleTag, a quick <link> test): the body:not([data-theme]) branch is the
-       unguarded path, so the same rules apply as they are. That branch IS the "second block without the guard"; it is
-       spelled inside the same :where() so the two can never drift apart.
-   - Day or stage: every colour token is light-dark(day, dusk), so ONE property picks the light:
-       body (no data-mode)     color-scheme: light dark → follows the Mac's appearance (Auto switches at sunset)
-       body[data-mode="day"]   color-scheme: light
-       body[data-mode="dusk"]  color-scheme: dark
-     design/warmth/daylight-v2/today.js sets data-mode (the Today sheet's Day · Stage · Auto; Lock → Stage, sticky).
-   Assets are root-absolute (/themes/daylight-v2/…) so they resolve the same linked and inlined into a <style>.
-   Fonts: Instrument Sans (OFL; wdth 75–100, wght 400–700, tnum; 61 KB woff2, Latin subset) for everything you
-   operate; Fraunces (OFL; instanced SOFT 100, WONK 0; opsz + wght 500–800; 55 KB) only for what you read from across
-   the room: song title, chord, the Edit sentence, the wordmark. Fraunces has no tnum, so --font-display stays the sans
-   (transpose and wheel numbers use it) and titles use --dl-title.
+   How it switches on (README "The contract"):
+   - Every rule sits inside ONE block guarded by :where(html:is([data-theme="daylight-stage"],
+     [data-theme="daylight-day"])). :where() adds no specificity, so each nested rule weighs exactly what the app rule
+     it replaces weighs and wins on source order (boot.js links this file after the app's CSS). There is no unguarded
+     branch (OPTIONS.md §3.1 #8).
+   - The tokens sit on `&:root` (0,1,0), the same weight as styles.css `:root`, so they win on source order too.
+   - Day or Stage: every colour token is light-dark(day, stage), resolved by color-scheme, which html[data-mode] picks
+     (boot.js / applyTheme set data-mode and the inline color-scheme from the registry entry; no OS media query).
+   - Assets are root-absolute; fonts come from /fonts/ (README rules 4 and 6). The logo is the shared
+     /assets/mark.svg (rule 8): this file only colours and sets type, it never swaps the mark or any string.
+   Fonts: Instrument Sans (OFL; wdth 75–100, wght 400–700, tnum) for everything you operate, the chord included;
+   Fraunces Soft (OFL; opsz, wght 500–800) only for the song title, Notes, the Edit sentence and the wordmark.
    Performance: no backdrop-filter, no filter, no background-attachment: fixed, no infinite animation. The desk is two
-   static gradients on the body; shadows are static; the Notes ruling is painted with its content (attachment: local);
-   the setlist fade is a static mask on the scroller's own box; the only motion is a 160 ms unfold on popovers. */
+   static gradients on the body; the Notes ruling is painted with its content (attachment: local); the setlist fade is
+   a static mask on the scroller's own box; the only motion is a 160 ms unfold on popovers (off under reduced motion). */
 
 @font-face {
   font-family: 'Instrument Sans';
   src: url('/fonts/InstrumentSans-var.woff2') format('woff2');
   font-weight: 400 700; font-stretch: 75% 100%; font-style: normal; font-display: swap;
+}
+/* The same file again, for the chord only: Instrument Sans' ascent + descent is 1.22 em, so at the app's 46 px / 1.1
+   the text overflowed its own line box by 2 px (ui-core #40 "Y span.chord-name 53>51"). These overrides make the
+   content area exactly the 1.1 em line and keep the baseline where it was (0.91 em from the top). */
+@font-face {
+  font-family: 'Instrument Sans Chord';
+  src: url('/fonts/InstrumentSans-var.woff2') format('woff2');
+  font-weight: 400 700; font-stretch: 75% 100%; font-style: normal; font-display: swap;
+  ascent-override: 91%; descent-override: 19%; line-gap-override: 0%;
 }
 @font-face {
   font-family: 'Fraunces Soft';
@@ -40,79 +41,87 @@
   font-weight: 500 800; font-style: normal; font-display: swap;
 }
 
-:where(body[data-theme="daylight-v2"], body:not([data-theme])) {
-  color-scheme: light dark;
-  &[data-mode="day"] { color-scheme: light; }
-  &[data-mode="dusk"] { color-scheme: dark; }
+:where(html:is([data-theme="daylight-stage"], [data-theme="daylight-day"])) {
+  &:root { color-scheme: dark; }
+  &:root[data-mode="light"] { color-scheme: light; }
+  /* Day's slot pastels as plain values (0,2,0 beats the Stage values on &:root; see the note at --slot-0) */
+  &:root[data-mode="light"] { --slot-0: #f28a4c; --slot-1: #79c68f; --slot-2: #7cc4ee; --slot-3: #a883d4; }
 
-  /* ================================================================ tokens: light-dark(day, dusk)
-     Day neutrals: OKLCH hue 70–85 (oat paper), chroma ≤ 0.02. Dusk: hue 60–70 graphite, chroma ≤ 0.008.
-     Every text pair is in concept.md §3 (palette.py); the rendered audit is audit-*.json. */
-  --bg:        light-dark(#f3efe7, #1b1611);   /* the desk */
-  --panel:     light-dark(#fdfbf7, #261f19);   /* a card */
-  --panel-2:   light-dark(#f6f2eb, #2f2720);   /* inset controls */
-  --panel-3:   light-dark(#ece6dc, #3a3129);   /* hover / selected row */
-  --line:      light-dark(#e5ded2, #3a3029);
-  --line-2:    light-dark(#d2c8b9, #52463b);
-  --dl-line-hover: light-dark(#b9ad9c, #6e6052);
-  --text:      light-dark(#27211b, #f5ede0);   /* ink by day; by night the paper colour becomes the text */
-  --muted:     light-dark(#5e554b, #cfc3b2);   /* 7.1:1 panel (day) · 9.4:1 (dusk) */
-  --faint:     light-dark(#6f665b, #ada08e);   /* ≥ 4.5:1 on panel-3 in both */
-  --accent:    light-dark(#f4b73f, #f6c35a);   /* highlighter amber: current song, key, selection (a fill) */
-  --accent-ink: #2a1d05;                        /* on the amber: 9.2:1 / 10.1:1 */
-  --dl-accent-text: light-dark(#8a5300, #f6c35a); /* amber AS TEXT on paper: 6.1:1 */
-  --warn:      light-dark(#eea43a, #f7ad4a);   /* lock / hold (a fill) */
-  --dl-warn-text: light-dark(#8f4a00, #f7ad4a);
-  --ok:        light-dark(#287547, #79d28d);   /* "Ready" as text on the top bar: 5.3:1 by day */
-  --danger:    light-dark(#cf3b2c, #ec5a47);
-  --danger-ink: #fff;
-  /* planner tabs by day, lamps by night. Extra is the lightest and Bass the darkest in both, so deutan viewers tell them
-     apart by lightness (min OKLab ΔE×100: day deutan 7.8 / protan 6.3 / tritan 4.3; dusk 6.1 / 8.3 / 5.4; today's
-     palette is 0.6 deutan, Extra ≈ Bass) */
-  --slot-0:    light-dark(#f28a4c, #f39a62);   /* Keys  · tangerine */
-  --slot-1:    light-dark(#79c68f, #7fcb92);   /* Pad   · sage */
-  --slot-2:    light-dark(#7cc4ee, #8fd0f5);   /* Extra · sky */
-  --slot-3:    light-dark(#a883d4, #b98bdc);   /* Bass  · plum */
-  --drone:     light-dark(#e4d3a8, #eddcae);   /* linen / candle */
-  --dl-drone-ink: light-dark(#6c5728, #eddcae);/* drone colour as text or outline: 6.4:1 on paper */
-  --dl-ink-on-lamp: light-dark(#241a10, #1d1712); /* on any lamp: ≥ 5.6:1 (Bass is the lowest) */
-  --fx:        light-dark(#7a7064, #bfb3a3);   /* shared effects: pencil grey, never a slot colour */
-  --chg:       light-dark(#27211b, #ffffff);   /* the "changed" dot: a pencil mark by day */
-  --off-tile:  light-dark(#efe9df, #2f2720);
-  --sel-fx:    light-dark(#ffffff, #41372e);
-  --track:     light-dark(#e7e0d4, #140f0b);
-  --track-edge: light-dark(#958b7e, #877a6b);  /* 3.2:1 / 3.9:1 on panel */
-  --led-off:   light-dark(#958b7e, #877a6b);
-  --muted-fader: light-dark(#948a7d, #877a6b);
-  --thumb:     light-dark(#fffdf8, #efe8dc);
-  --panic:     light-dark(#d23f2f, #c9372a);   /* white on it 4.7:1 / 5.2:1 */
-  --panic-bg:  light-dark(#fde3df, #4d1811);
-  --panic-text: light-dark(#7a1b12, #ffd2c8);
-  --rec-idle:  light-dark(#c8503e, #b9574b);
-  --focus:     light-dark(#2f6fb0, #7cc4ff);
-  --radius: 12px;
-  --radius-sm: 9px;
-  /* new tokens (the promotion pass research.md §5.4 asks for; the app can adopt them later) */
-  --dl-title: 'Fraunces Soft', 'Iowan Old Style', Georgia, serif;
-  --dl-topbar: light-dark(#fbf8f2, #211a15);
-  --dl-well:   light-dark(#ebe5db, #140f0b);   /* recesses: meter bars, the wheel slot, pedal box */
-  --dl-lit:    light-dark(#27211b, #ffffff);   /* a "white LED" (pedal, bend, fader indicator): ink on paper */
-  --dl-key-white: light-dark(#fffdf8, #cfc6b6);/* dimmed ivory at night: no glare (UX H3) */
-  --dl-key-black: light-dark(#2c2621, #17110d);
-  --dl-key-edge:  light-dark(#cfc5b6, #0d0b09);
-  --dl-key-label: light-dark(#6f665b, #4a4238);
-  --dl-wheel:  light-dark(#d9c7a5, #b9ad9b);   /* the throw: linen by day, dimmed ivory at night (no glare) */
-  --dl-wheel-edge: light-dark(#27211b, #f3eee4); /* a pencil line at the level: 12:1 on the well */
-  --dl-pop:    light-dark(#fffdf9, #2c241d);   /* popovers, sheets, toasts */
-  --dl-shadow: light-dark(rgb(74 52 28 / .10), rgb(0 0 0 / .45));
-  --dl-shadow-2: light-dark(rgb(74 52 28 / .18), rgb(0 0 0 / .7));
-  --dl-card-shadow: 0 1px 0 light-dark(rgb(255 255 255 / .9), rgb(255 246 230 / .04)) inset,
-    0 1px 2px var(--dl-shadow), 0 6px 18px -10px var(--dl-shadow-2);
-  --dl-btn-shadow: 0 1px 0 light-dark(rgb(255 255 255 / 1), rgb(255 246 230 / .05)) inset, 0 1px 1.5px var(--dl-shadow);
-  --dl-pop-shadow: 0 18px 44px -12px var(--dl-shadow-2), 0 2px 6px var(--dl-shadow);
-  --dl-tint-amt: 14%;                          /* a chip in use: slot tint on the card */
-  --font: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-display: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* ================================================================ tokens: light-dark(day, stage)
+     Day neutrals: OKLCH hue 70–85 (oat paper), chroma ≤ 0.02. Stage: walnut, hue 57–67, chroma 0.013–0.019.
+     Text pairs: concept.md §2 (palette.py); the rendered audit: design/warmth/ship/daylight/. */
+  &:root {
+    --bg:        light-dark(#f3efe7, #1b1611);   /* the desk */
+    --panel:     light-dark(#fdfbf7, #261f19);   /* a card */
+    --panel-2:   light-dark(#f6f2eb, #2f2720);   /* inset controls */
+    --panel-3:   light-dark(#ece6dc, #3a3129);   /* hover / selected row */
+    --line:      light-dark(#e5ded2, #3a3029);
+    --line-2:    light-dark(#d2c8b9, #52463b);
+    --dl-line-hover: light-dark(#b9ad9c, #6e6052);
+    --text:      light-dark(#27211b, #f5ede0);   /* ink by day; by night the paper colour becomes the text */
+    --muted:     light-dark(#5e554b, #cfc3b2);   /* 7.1:1 panel (day) · 9.4:1 (dusk) */
+    --faint:     light-dark(#6f665b, #ada08e);   /* ≥ 4.5:1 on panel-3 in both */
+    --accent:    light-dark(#f4b73f, #f6c35a);   /* highlighter amber: current song, key, selection (a fill) */
+    --accent-ink: #2a1d05;                        /* on the amber: 9.2:1 / 10.1:1 */
+    --dl-accent-text: light-dark(#8a5300, #f6c35a); /* amber AS TEXT on paper: 6.1:1 */
+    --accent-text: var(--dl-accent-text);         /* README "Popover" hook (mini.css reads it first) */
+    --warn:      light-dark(#eea43a, #f7ad4a);   /* lock / hold (a fill) */
+    --dl-warn-text: light-dark(#8f4a00, #f7ad4a);
+    --ok:        light-dark(#287547, #79d28d);   /* "Ready" as text on the top bar: 5.3:1 by day */
+    --danger:    light-dark(#cf3b2c, #ec5a47);
+    --danger-ink: #fff;
+    /* planner tabs by day, lamps by night. Day keeps the pastels. Stage (OPTIONS.md §3.1 #1, stage critic): the same four
+       hues at OKLCH chroma ≥ 0.15, so every slot pair is OKLab ΔE×100 ≥ 23 (Keys–Pad 23.4, Keys–Extra 30.4, Keys–Bass
+       24.3, Pad–Extra 24.5, Pad–Bass 31.0, Extra–Bass 23.0; today's app 14.7–35.3, v2 before 14.0–24.1) and Pad and
+       Extra differ by 0.11 OKLab L. Machado CVD min ΔE×100: deutan 7.7, protan 6.1, tritan 9.9. Lamp ink ≥ 5.8:1. */
+    /* Stage values here, Day values on &:root[data-mode="light"] below: plain colours, NOT light-dark(), because
+       edit/panels/slot.js:858 reads --c (= var(--slot-N)) back for the response-curve canvas, and a canvas ignores a
+       light-dark() string (themes-critic: the curve drew in the .18 white reference stroke, invisible by day). */
+    --slot-0:    #e9833d;   /* Keys  · tangerine  L .71 C .150 h 52 */
+    --slot-1:    #66cf7e;   /* Pad   · sage       L .77 C .151 h 149 */
+    --slot-2:    #139be5;   /* Extra · sky        L .66 C .151 h 241 */
+    --slot-3:    #e398fe;   /* Bass  · plum       L .79 C .160 h 317 */
+    --drone:     light-dark(#e4d3a8, #eddcae);   /* linen / candle */
+    --dl-drone-ink: light-dark(#6c5728, #eddcae);/* drone colour as text or outline: 6.4:1 on paper */
+    --dl-ink-on-lamp: light-dark(#241a10, #1d1712); /* on any lamp: ≥ 5.6:1 (Bass is the lowest) */
+    --fx:        light-dark(#7a7064, #bfb3a3);   /* shared effects: pencil grey, never a slot colour */
+    --chg:       light-dark(#27211b, #ffffff);   /* the "changed" dot: a pencil mark by day */
+    --off-tile:  light-dark(#efe9df, #2f2720);
+    --sel-fx:    light-dark(#ffffff, #41372e);
+    --track:     light-dark(#e7e0d4, #140f0b);
+    --track-edge: light-dark(#958b7e, #877a6b);  /* 3.2:1 / 3.9:1 on panel */
+    --led-off:   light-dark(#958b7e, #877a6b);
+    --muted-fader: light-dark(#948a7d, #877a6b);
+    --thumb:     light-dark(#fffdf8, #efe8dc);
+    --panic:     light-dark(#d23f2f, #c9372a);   /* white on it 4.7:1 / 5.2:1 */
+    --panic-bg:  light-dark(#fde3df, #4d1811);
+    --panic-text: light-dark(#7a1b12, #ffd2c8);
+    --rec-idle:  light-dark(#c8503e, #b9574b);
+    --focus:     light-dark(#2f6fb0, #7cc4ff);
+    --radius: 12px;
+    --radius-sm: 9px;
+    /* new tokens (the promotion pass research.md §5.4 asks for; the app can adopt them later) */
+    --dl-title: 'Fraunces Soft', 'Iowan Old Style', Georgia, serif;
+    --dl-topbar: light-dark(#fbf8f2, #211a15);
+    --dl-well:   light-dark(#ebe5db, #140f0b);   /* recesses: meter bars, the wheel slot, pedal box */
+    --dl-lit:    light-dark(#27211b, #ffffff);   /* a "white LED" (pedal, bend, fader indicator): ink on paper */
+    --dl-key-white: light-dark(#fffdf8, #cfc6b6);/* dimmed ivory at night: no glare (UX H3) */
+    --dl-key-black: light-dark(#2c2621, #17110d);
+    --dl-key-edge:  light-dark(#cfc5b6, #0d0b09);
+    --dl-key-label: light-dark(#6f665b, #4a4238);
+    --dl-wheel:  light-dark(#d9c7a5, #b9ad9b);   /* the throw: linen by day, dimmed ivory at night (no glare) */
+    --dl-wheel-edge: light-dark(#27211b, #f3eee4); /* a pencil line at the level: 12:1 on the well */
+    --dl-pop:    light-dark(#fffdf9, #2c241d);   /* popovers, sheets, toasts */
+    --dl-shadow: light-dark(rgb(74 52 28 / .10), rgb(0 0 0 / .45));
+    --dl-shadow-2: light-dark(rgb(74 52 28 / .18), rgb(0 0 0 / .7));
+    --dl-card-shadow: 0 1px 0 light-dark(rgb(255 255 255 / .9), rgb(255 246 230 / .04)) inset,
+      0 1px 2px var(--dl-shadow), 0 6px 18px -10px var(--dl-shadow-2);
+    --dl-btn-shadow: 0 1px 0 light-dark(rgb(255 255 255 / 1), rgb(255 246 230 / .05)) inset, 0 1px 1.5px var(--dl-shadow);
+    --dl-pop-shadow: 0 18px 44px -12px var(--dl-shadow-2), 0 2px 6px var(--dl-shadow);
+    --dl-tint-amt: 14%;                          /* a chip in use: slot tint on the card */
+    --font: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-display: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
 
   /* ================================================================ the room */
   /* the desk. v2: the paper-tooth PNG is gone (invisible at 1x in every v1 shot, critique #10). Two static gradient
@@ -121,19 +130,20 @@
         (no card). Day: a soft butter light. Stage: amber at 12 % alpha, fading out by ~40 % of the width, so the
         title sits in lamplight and the rest of the desk stays dark (glare in concept.md §6).
      2. window light from the top left (day) / a wide, faint warm wash (stage). */
-  background:
-    radial-gradient(34% 26% at 15% 11%, light-dark(rgb(255 236 196 / .55), rgb(246 176 84 / .12)), transparent 100%),
-    radial-gradient(90% 70% at 18% -10%, light-dark(rgb(255 251 240 / .95), rgb(150 96 44 / .10)), transparent 70%),
-    var(--bg);
-  font-feature-settings: 'ss04', 'ss07';       /* Instrument's friendlier K and G */
-  transition: background-color .3s;
+  & body {
+    background:
+      radial-gradient(34% 26% at 15% 11%, light-dark(rgb(255 236 196 / .55), rgb(246 176 84 / .12)), transparent 100%),
+      radial-gradient(90% 70% at 18% -10%, light-dark(rgb(255 251 240 / .95), rgb(150 96 44 / .10)), transparent 70%),
+      var(--bg);
+    font-feature-settings: 'ss04', 'ss07';     /* Instrument's friendlier K and G */
+  }
 
   /* ================================================================ labels: sentence case, no tracking
      Caps stay only where they are physical labels: the lamp names (KEYS / PAD), PANIC, REC, MIDI. */
   & :is(.select-label, .stepper-label, .fader-label, .wheel-caption, .chord-caption, .section-title, .tb-cap,
     .song-key-cap, .nav-next-cap, .qs-st .cap, .fxpill-l, .fx-chiprow .fx-lab span, .pedal-lamp, .drone-swell,
     .st-h2, .st-h3, .fc-label, .ev2-cap, .ev2-song-chipcap, .ev2-slot-mg-head, .ev2-list-bcat, .eqk-title,
-    .eqk-seg-label, .eqk-bands th, .st-learn-table thead th, .ev2-fx-who-cap) {
+    .eqk-seg-label, .eqk-bands th, .st-learn-table thead th, .ev2-fx-who-cap, .start-card .sc-title) {
     text-transform: none; letter-spacing: 0; font-weight: 650;
   }
   & :is(.section-title, .ev2-cap, .qs-st .cap, .st-h2) { font-size: 13px; color: var(--muted); }
@@ -158,53 +168,51 @@
   & .segmented .seg { box-shadow: none; }
   & .segmented .seg.on:hover { background: color-mix(in oklab, var(--accent) 88%, #fff); }
   & .toggle.on { border-color: color-mix(in oklab, var(--accent) 60%, var(--line-2)); }
-  & .toggle-led { box-shadow: inset 0 0 0 1px rgb(0 0 0 / .18); }
+  /* lamps: the ON state is always the more visible one (stage critic; README checklist "ON/OFF ≥ 3:1"). OFF is a
+     hollow ring in both lights (as the app's own OFF tile LED); ON is filled: dark ink mixed from the lamp colour on
+     paper (a pastel dot on paper was 1.4–2:1 against the OFF ring), the lamp colour itself with a glow on Stage. */
+  & .toggle-led { background: transparent; box-shadow: inset 0 0 0 2px var(--led-off); }
+  & .toggle.on .toggle-led {
+    background: light-dark(color-mix(in oklab, var(--c, var(--accent)) 40%, var(--text)), var(--c, var(--accent)));
+    box-shadow: 0 0 0 1px light-dark(transparent, color-mix(in oklab, var(--c, var(--accent)) 60%, #000)),
+      0 0 8px light-dark(transparent, var(--c, var(--accent)));
+  }
   & .select-input { background: var(--panel); border-color: var(--line-2); }
   & .hold-btn { background: var(--panel); border-color: var(--line-2); box-shadow: var(--dl-btn-shadow); }
   & .hold-btn .hb-ring { background: conic-gradient(var(--hb-c) calc(var(--hold, 0) * 360deg), var(--line-2) 0); }
-  & .hold-btn .hb-cap { color: var(--accent-ink); box-shadow: 0 6px 18px var(--dl-shadow-2); }
-  & .hold-btn.holding, & .perform .hold-btn.holding { border-color: var(--warn); color: var(--dl-warn-text); }
+  /* state colours through scoped tokens, not state selectors: the app's own state rules (.hold-btn.holding →
+     --hb-c: var(--warn); .perform .hold-btn.holding, .drone-block .holding, .drone-lockline.hint, .qs-ok.bad,
+     .wheel-strip.pickup → --warn; .transpose-val.shift, the loading chip spinner, .ed-btn.on, the pedal prompt, the
+     setlist "add" menu → --accent) then print in the text-safe amber (6.1–7:1 on paper; the same colours on Stage) and
+     keep working if the app renames a state class. */
+  & :is(.hold-btn, .drone-block :is(.key-btn, .seg), .drone-lockline, .qs-ok, .wheel-value) { --warn: var(--dl-warn-text); }
+  & :is(.transpose-val, .setlist-chip:not(.current) .chip-spinner, .ed-btn, .st-pedal, .ev2 .ev2-list-add,
+    .start-card :is(.sc-title, b)) {
+    --accent: var(--dl-accent-text);
+  }
+  & .hold-btn .hb-cap { color: light-dark(#fff, var(--accent-ink)); box-shadow: 0 6px 18px var(--dl-shadow-2); }
   & :is(.btn, .toggle, .seg, .key-btn, .setlist-chip, .ontile, .mchip, .fxc, .hold-btn):active:not(:disabled) {
     transform: translateY(1px);
   }
   & .btn-panic { background: var(--panic); }
-  & .warn-btn { background: light-dark(#fdf0d2, #4a2a00); border-color: var(--warn); color: light-dark(#6b4000, #ffd899); }
 
   /* ================================================================ top bar */
   & .topbar { background: var(--dl-topbar); border-bottom-color: var(--line); box-shadow: 0 1px 0 var(--dl-shadow); }
   & .tb-name { font: 650 19px/1 var(--dl-title); letter-spacing: -.01em; }
-  & .tb-logo { content: url('/themes/daylight-v2/mark.svg'); border-radius: 8px; }
   & .led { box-shadow: inset 0 0 0 1px rgb(0 0 0 / .2); }
   & .led.ok { box-shadow: 0 0 0 3px color-mix(in oklab, var(--ok) 22%, transparent); }
   & .led.warn { box-shadow: 0 0 0 3px color-mix(in oklab, var(--warn) 28%, transparent); }
   & .led.bad { box-shadow: 0 0 0 3px color-mix(in oklab, var(--danger) 25%, transparent); }
-  & .led.flash { background: var(--ok); box-shadow: 0 0 0 5px color-mix(in oklab, var(--ok) 30%, transparent); }
   & .midi-name.off, & .latency.warn { color: var(--dl-warn-text); }
   & .rec-btn.recording { background: var(--panic-bg); border-color: var(--danger); color: var(--panic-text); }
   & .rec-time { font-family: var(--font); font-variant-numeric: tabular-nums; }
   & .meter-bar { background: var(--dl-well); }
   & .meter-fill { background: linear-gradient(to right, var(--ok) 0 72%, #e2b23c 86%, var(--danger) 100%); }
-  & .meter.vertical .meter-fill { background: linear-gradient(to top, var(--ok) 0 72%, #e2b23c 86%, var(--danger) 100%); }
   & .meter-hold { background: var(--dl-lit); }
-  /* v2 status: one lamp and one phrase when all is well; a light only appears when it needs you (critique: "the
-     status cluster is a server monitor"). All state comes from the classes main.js already sets:
-     · Sound hides while its lamp is ok (running, latency < 40 ms). Paused / Stopped / Muted / a slow delay still show.
-     · Ready reads "Ready to play" (.on) or "Warming up…" (lamp warn); the per-song spinners in the setlist
-       already show which songs are still loading, so the n/19 count is dropped here.
-     · MIDI's caption reads "Keyboard".
-     These text swaps are a CSS bridge: the visible words change, the DOM text (and tests) do not. concept.md §7 lists
-     the JS edits that replace this block. */
-  & #audio-status:has(#audio-led.ok) { display: none; }
-  & #midi-status .tb-cap { font-size: 0; letter-spacing: 0; }
-  & #midi-status .tb-cap::after { content: 'Keyboard'; font-size: 13px; color: var(--muted); }
-  & #ready-status:is(.on, :has(#ready-led.warn)) .ready-text { font-size: 0; }
-  & #ready-status.on .ready-text::after { content: 'Ready to play'; font-size: 13px; }
-  & #ready-status:not(.on):has(#ready-led.warn) .ready-text::after { content: 'Warming up…'; font-size: 13px; color: var(--muted); }
+  /* OPTIONS.md §3.1 #6: the v2 CSS copy bridge (font-size:0 + ::after string swaps, and hiding Sound while ok) is
+     gone: screen readers read both strings and the hidden item reflowed the centred status row. The app's own strings
+     show as they are; the calmer top-bar copy is a JS change (deferred, CONTRACT_CHANGES "## theme-daylight"). */
   & #ready-status.on .ready-text { color: var(--ok); }
-  & .overlay-title { font-size: 0 !important; }
-  & .overlay-title::after { content: 'Tap anywhere to wake the sound.'; font: 650 34px/1.15 var(--dl-title); }
-  & .overlay-sub { font-size: 0; }
-  & .overlay-sub::after { content: 'Your browser needs one tap before it can play.'; font-size: 15px; }
   & .quick-btn[aria-expanded="true"] { background: var(--panel-3); border-color: var(--text); box-shadow: inset 0 -3px 0 var(--text); }
 
   /* ================================================================ banners, toasts, overlay, settings */
@@ -213,20 +221,15 @@
   & :is(.banner.info, .bstrip[data-kind="info"], .bstrip.open .banner.info) { background: light-dark(#e2eff9, #10263d); color: light-dark(#153c5e, #e3f1ff); }
   & .bstrip .banner { background: transparent; color: inherit; }
   & .bstrip-more { border-left-color: color-mix(in oklab, currentColor 18%, transparent); background: color-mix(in oklab, currentColor 6%, transparent); }
-  & .bstrip.open .bstrip-list { background: var(--dl-pop); border-color: var(--line-2); box-shadow: var(--dl-pop-shadow); }
   & .toast { background: var(--dl-pop); border-color: var(--line-2); box-shadow: var(--dl-pop-shadow); color: var(--text); }
   & .overlay-start { background: light-dark(rgb(243 239 231 / .88), rgb(14 12 10 / .82)); backdrop-filter: none; }
   & .overlay-card { background: var(--dl-pop); border-color: var(--line-2); box-shadow: var(--dl-pop-shadow); border-radius: 20px; }
-  & .overlay-card img { content: url('/themes/daylight-v2/mark.svg'); }
   & .overlay-title { font: 650 34px/1.15 var(--dl-title); }
   & .settings-modal, & .st-backdrop { background: light-dark(rgb(60 44 26 / .28), rgb(0 0 0 / .66)); }
   & .st-dialog { background: var(--panel); box-shadow: var(--dl-pop-shadow); border-radius: 18px; }
   & .st-title { font: 650 24px/1.1 var(--dl-title); }
   & .st-section { background: var(--panel-2); }
-  & .ed-danger { background: var(--panic-bg); color: var(--panic-text); }
-  & .ed-danger:hover:not(:disabled) { background: color-mix(in oklab, var(--panic-bg) 85%, var(--danger)) !important; }
   & :is(.st-status.warn, .st-map-note) { color: var(--dl-warn-text) !important; }
-  & :is(.st-pedal-prompt, .ed-btn.on) { color: var(--dl-accent-text); }
   & .st-doc-link { color: var(--focus); }
 
   /* ================================================================ cards */
@@ -252,8 +255,9 @@
   & .ontile :is(.ot-name, .ot-sub, .ot-state) { color: var(--dl-ink-on-lamp); }
   & .ontile .ot-state { background: color-mix(in oklab, var(--dl-ink-on-lamp) 14%, transparent); }
   & .ontile .ot-led {
-    background: #fffdf8;
-    box-shadow: 0 0 0 2px color-mix(in oklab, var(--c) 45%, var(--dl-ink-on-lamp)), 0 0 8px light-dark(transparent, #fff);
+    background: light-dark(var(--dl-ink-on-lamp), #fffdf8);
+    box-shadow: 0 0 0 2px light-dark(color-mix(in oklab, var(--c) 55%, #fff), color-mix(in oklab, var(--c) 45%, var(--dl-ink-on-lamp))),
+      0 0 8px light-dark(transparent, #fff);
   }
   & .ontile.off { background: var(--off-tile); border-color: var(--line-2); box-shadow: var(--dl-btn-shadow); }
   & .ontile.off .ot-led { background: transparent; box-shadow: inset 0 0 0 2px var(--led-off); }
@@ -270,7 +274,10 @@
   & .mchip.on > .mc-label { color: color-mix(in oklab, var(--c) 40%, var(--text)); }
   & .mchip .mc-bar { background: light-dark(color-mix(in oklab, var(--c) 80%, var(--text)), var(--c)); }
   & .mchip.open { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px light-dark(color-mix(in oklab, var(--c) 70%, var(--text)), var(--c)); }
-  & .mchip.cycle.on .mc-led { box-shadow: 0 0 0 2px color-mix(in oklab, var(--c) 30%, transparent); }
+  & .mchip.cycle.on .mc-led {
+    background: light-dark(color-mix(in oklab, var(--c) 45%, var(--text)), var(--c));
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--c) 30%, transparent);
+  }
 
   /* stepPanel: a card that unfolds from its chip */
   & .step-panel { background: var(--dl-pop); box-shadow: var(--dl-pop-shadow); border-radius: 12px; }
@@ -282,10 +289,13 @@
   /* ================================================================ shared effects: pencil grey, a circled choice */
   & .fxc { color: var(--text); background: var(--panel); border-color: var(--line-2); box-shadow: var(--dl-btn-shadow); }
   & .fxc small { color: var(--faint); }
-  & .fxc.on { background: var(--sel-fx); border: 2px solid var(--text); color: var(--text); box-shadow: 0 2px 8px -3px var(--dl-shadow-2); }
+  /* :is() lifts it to .fxc.more.on's weight (0,3,0), whose #fff would be white on white by day */
+  & .fxc:is(.on, .more.on) { background: var(--sel-fx); border: 2px solid var(--text); color: var(--text); box-shadow: 0 2px 8px -3px var(--dl-shadow-2); }
   & .fxc.on small { color: var(--muted); }
-  & .fxc.more.on { color: var(--text); }
-  & :is(.fx-more, .fx-chiprow.fx-open > .fxrow) { background: var(--dl-pop); border-color: var(--line-2); box-shadow: var(--dl-pop-shadow); }
+  /* popovers (one rule: .fx-more, the <1250 px FX row and the Edit menus are the same sheet) */
+  & :is(.fx-more, .fx-chiprow.fx-open > .fxrow, .ev2 .ev2-slot-menu, .ev2 .ev2-fx-vibe-menu) {
+    background: var(--dl-pop); border-color: var(--line-2); box-shadow: var(--dl-pop-shadow);
+  }
   & .fxpill { background: var(--panel); border-color: var(--line-2); box-shadow: var(--dl-btn-shadow); }
 
   /* ================================================================ Quick sheet */
@@ -294,10 +304,8 @@
   & .qs-h h2 { font: 650 19px/1.1 var(--dl-title); }
   & .qs-bpm { font-variant-numeric: tabular-nums; }
   & .qs-tap { background: var(--panel); border-color: var(--text); letter-spacing: .02em; }
-  & .qs-tap.flash { animation-name: dl-qs-flash; }
   & .qs-pedal { background: var(--dl-well); letter-spacing: .02em; color: var(--muted); }
   & .qs-pedal.on i { background: var(--dl-lit); box-shadow: 0 0 0 3px color-mix(in oklab, var(--dl-lit) 22%, transparent); }
-  & .qs-ok.bad { color: var(--dl-warn-text); }
   & .qs-restart { color: var(--accent-ink); }
 
   /* ================================================================ Perform: head */
@@ -318,8 +326,14 @@
   & .song-playin { background: light-dark(#fbefd2, #2e2716); }
   & .song-loading { color: var(--dl-accent-text); background: var(--panel); }
   & .song-loading-spin { border-color: var(--dl-accent-text); border-top-color: transparent; }
-  & .transpose-val.shift { color: var(--dl-accent-text); }
-  & .chord-name { font-family: var(--dl-title); font-weight: 650; letter-spacing: -.01em; }
+  /* OPTIONS.md §3.1 #2: the chord is a quick-glance stage readout, so it is back in the operating sans at the app's
+     own sizes (46 / 30 / 22 px by data-len), weight 800 (the vendored Instrument Sans axis tops out at 700, which is
+     what renders), lining tabular figures. Idle is --faint, so idle → live (.chord-readout.live → --text) is a
+     2.2:1 step on Stage and 2.8:1 by day (v2 before: 1.49:1). */
+  & .chord-name {
+    font-family: 'Instrument Sans Chord', var(--font-display); font-weight: 800;
+    font-variant-numeric: lining-nums tabular-nums; color: var(--faint);
+  }
   & .faded-chip { color: var(--accent-ink); }
   & .hold-tag { color: var(--dl-warn-text); }
 
@@ -333,6 +347,7 @@
   & .perform .setlist-strip {
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
     mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+    padding-inline-end: 42px; /* build critic: scrolled to the end, the last chip clears the fade (its key letter) */
   }
   & .nav-next-name em { color: var(--dl-accent-text); }
   & .setlist-chip { background: var(--panel); border-color: var(--line-2); }
@@ -342,7 +357,6 @@
   }
   & .setlist-chip.current :is(.chip-num, .chip-key) { color: color-mix(in oklab, var(--accent-ink) 78%, var(--accent)); }
   & .chip-spinner { border-color: var(--accent-ink); border-top-color: transparent; }
-  & .setlist-chip.loading:not(.current) .chip-spinner { border-color: var(--dl-accent-text); border-top-color: transparent; }
 
   /* ================================================================ Perform: stage */
   /* wheel: a sand-coloured throw in a recessed slot */
@@ -350,15 +364,14 @@
     background: linear-gradient(to top, var(--dl-wheel) 0 calc(var(--pos, 0%) - 3px), var(--dl-wheel-edge) calc(var(--pos, 0%) - 3px) var(--pos, 0%),
       var(--dl-well) var(--pos, 0%));
   }
-  & .wheel-strip.pickup .wheel-value { color: var(--dl-warn-text); }
-  & .swell-btn.on { background: light-dark(#e3f2e6, #173a26); border-color: var(--ok); color: light-dark(#1d5530, #b8ffd6); }
-  & .pedal-lamp.down .pedal-led, & .drone-swell.up .drone-swell-led { background: var(--dl-lit); box-shadow: 0 0 0 3px color-mix(in oklab, var(--dl-lit) 20%, transparent); }
-  & .pedal-lamp.stuck { color: var(--accent-ink); }
+  & :is(.pedal-lamp.down .pedal-led, .drone-swell.up .drone-swell-led) { background: var(--dl-lit); box-shadow: 0 0 0 3px color-mix(in oklab, var(--dl-lit) 20%, transparent); }
 
   /* strips */
   & .slot-inst { font-weight: 650; }
   & .slot-icon { color: light-dark(color-mix(in oklab, var(--c) 70%, var(--text)), var(--c)); }
   & .wheel-badge { color: var(--muted); }
+  /* a muted slot fades its tag to .7 opacity: --muted at .7 on paper was 3.4:1, ink at .7 is ≥ 5:1 */
+  & .slot.muted .wheel-badge { color: light-dark(var(--text), var(--muted)); }
   & .slot-badge { color: var(--text); border-color: var(--line-2); background: var(--panel-2); }
   & .slot.muted .slot-body { background: repeating-linear-gradient(135deg, transparent 0 9px, light-dark(rgb(60 40 20 / .045), #ffffff0b) 9px 18px); }
   & .slot.muted .mchip.on { background: var(--panel-2); border-color: var(--line-2); color: var(--text); }
@@ -405,17 +418,24 @@
       0 6px 16px -9px light-dark(color-mix(in oklab, var(--dl-drone-ink) 80%, transparent), transparent),
       0 0 18px light-dark(transparent, color-mix(in oklab, var(--drone) 24%, transparent));
   }
-  & .p-drone .ontile:not(.off) .ot-led { box-shadow: 0 0 0 2px var(--dl-drone-edge), 0 0 8px light-dark(transparent, #fff); }
+  & .p-drone .ontile:not(.off) .ot-led { box-shadow: 0 0 0 2px light-dark(#fbf5e8, var(--dl-drone-edge)), 0 0 8px light-dark(transparent, #fff); }
   & .p-drone .ontile:not(.off) .ot-state { background: light-dark(var(--dl-drone-ink), #3a2c16); color: light-dark(#fbf5e8, #f3e4bd); }
   & .key-btn.accidental { background: light-dark(#f1ebe1, #211a15); }
   & .drone-block .key-btn.on { border-color: var(--dl-drone-ink); color: var(--dl-drone-ink); background: color-mix(in oklab, var(--drone) 22%, var(--panel)); }
   & .drone-block .segmented .seg.on {
     background: color-mix(in oklab, var(--drone) 22%, transparent); color: var(--dl-drone-ink); box-shadow: inset 0 0 0 2px var(--dl-drone-ink);
   }
-  & .drone-block .holding { border-color: var(--warn) !important; color: var(--dl-warn-text) !important; }
-  & .drone-lockline.hint { color: var(--dl-warn-text); }
   & .drone-toggles .toggle.on { border-color: color-mix(in oklab, var(--dl-drone-ink) 55%, var(--line-2)); }
+  /* linen on paper was 1.43:1 (stage critic): by day the lit drone lamp is the drone's ink */
+  & .drone-toggles .toggle.on .toggle-led { background: var(--dl-drone-ink); box-shadow: 0 0 8px light-dark(transparent, var(--drone)); }
+  /* §3.1 #8: styles.css keeps the chosen root dashed while the drone is off; here it stays chosen, solid and quiet */
+  & .drone-block.off .key-btn.on { border-style: solid; border-color: var(--led-off); background: transparent; }
   & .drone-toggles .tag { color: var(--muted); border-color: var(--line-2); }
+  /* Lock: styles.css dims the drone character faders twice (.drone-char .45 × .fader.disabled .45 = .20), which put
+     "Brightness / Soft · 40%" at 1.4–1.6:1 (the audit's only Lock fails; Classic has them too). Here the words stay
+     at full strength and only the slider itself fades, so it still reads as frozen. */
+  & .drone-block.locked .drone-char, & .drone-char .fader.disabled { opacity: 1; }
+  & .drone-char .fader.disabled .fader-track { opacity: .4; }
   & .kp-note .kp-drone { color: var(--dl-drone-ink); }
 
   /* notes: a songbook page. Cream stock, a pencil margin rule, faint ruled lines that scroll with the text
@@ -435,8 +455,8 @@
     color: var(--text); font: 500 16.5px/27px var(--dl-title); letter-spacing: 0; font-optical-sizing: auto;
     background: repeating-linear-gradient(to bottom, transparent 0 26px, var(--dl-notes-line) 26px 27px);
     background-attachment: local; padding-top: 1px;
+    font-synthesis: none;  /* the app sets empty notes italic; the vendored Fraunces has no italic, so no fake oblique */
   }
-  & .notes-text.empty { font-style: normal; color: var(--faint); }
   & .notes-head .section-title { font: 600 15px/1 var(--dl-title); color: var(--muted); }
 
   /* ---------------------------------------------------------------- no dashed boxes (critique: they read as
@@ -444,9 +464,6 @@
   & .perform .nav-btn:disabled {
     opacity: 1; background: transparent; border-color: transparent; box-shadow: none; color: var(--faint);
   }
-  & .perform .nav-btn.prev:disabled { font-size: 0; }
-  & .perform .nav-btn.prev:disabled::after { content: 'Start of set'; font: 500 15px/1.2 var(--dl-title); white-space: nowrap; }
-  @media (max-width: 1439px) { & .perform .nav-btn.prev:disabled::after { content: 'Start'; } }
   & .slot.empty {
     background: light-dark(#ece6db, #1f1914); border: 1px solid transparent;
     box-shadow: inset 0 2px 5px light-dark(rgb(74 52 28 / .12), rgb(0 0 0 / .45)), inset 0 0 0 1px light-dark(rgb(74 52 28 / .06), rgb(255 240 220 / .03));
@@ -454,8 +471,6 @@
   & .perform .slot-add { border-radius: 50%; background: var(--panel); color: var(--muted); }
   & .slot-vt { font: 500 15px/1 var(--dl-title); letter-spacing: 0; color: var(--muted); text-transform: lowercase; }
   & .slot-vt::first-letter { text-transform: uppercase; }
-  & .slot-vt span { font-size: 0; }
-  & .slot-vt span::after { content: ' · add a sound'; font-size: 15px; letter-spacing: 0; }
   & .ev2 .ev2-tab.empty::before { background: color-mix(in oklab, var(--line-2) 55%, transparent); }
 
   /* ================================================================ Perform: bottom row */
@@ -471,8 +486,6 @@
      either; a flat printed label "↺ Revert / As saved" on the desk (4.9:1 day, 7.0:1 stage) */
   & .hold-btn.btn-revert:disabled { opacity: 1; background: transparent; box-shadow: none; color: var(--faint); border-color: transparent; }
   & .btn-revert.none .rv-cnt { color: var(--faint); }
-  & .btn-revert:disabled .rv-cnt-t { font-size: 0; }
-  & .btn-revert:disabled .rv-cnt-t::after { content: 'As saved'; font: 500 14px/1.2 var(--dl-title); }
   & .btn-fade { background: var(--panel); border-color: var(--line-2); }
   & .btn-fade.faded { color: light-dark(#6b4000, #ffd899); background: light-dark(#fdf0d2, #2e2408); }
   & .btn-panic { box-shadow: inset 0 -3px 0 light-dark(#a82d20, #8d2519), 0 6px 18px -8px light-dark(#d23f2f, #c9372a); }
@@ -502,15 +515,15 @@
   }
   & .ev2 :is(.ev2-left, .ev2-head, .ev2-rig, .ev2-bottom) { box-shadow: var(--dl-card-shadow); }
   & .ev2 .ev2-btn { background: var(--panel); border-color: var(--line-2); box-shadow: var(--dl-btn-shadow); }
-  & .ev2 .ev2-btn.danger { background: var(--danger); }
   & .ev2 .ev2-btn.ghost { box-shadow: none; }
   & .ev2 .ev2-switch { background: var(--line-2); }
   & .ev2 .ev2-switch::after { background: var(--panel); box-shadow: 0 1px 2px var(--dl-shadow-2); }
-  & .ev2 .ev2-wiretog.on .ev2-switch::after { background: #fff; }
 
   /* tabs: coloured planner tabs on the card's top edge */
   & .ev2 .ev2-tab-role { color: light-dark(color-mix(in oklab, var(--tc) 45%, var(--text)), var(--tc)); letter-spacing: .06em; }
-  & .ev2 .ev2-tab:hover { background: var(--panel-3); }
+  /* hover / selected row (the base files hard-code slate here): tabs, the slot and vibe menus, the EQ band table */
+  & :is(.ev2 .ev2-tab:hover, .ev2 .ev2-slot-mi:is(:hover, :focus), .ev2 .ev2-fx-vibe-item:is(:hover, :focus),
+    .eqk-bands tr.sel td) { background: var(--panel-3); }
   & .ev2 .ev2-tab.sel { background: var(--panel); }
   & .ev2 .ev2-tab.sel::after { background: var(--panel); }
   & .ev2 .ev2-tab::before { height: 4px; }
@@ -519,11 +532,7 @@
   & .ev2 .ev2-tab.sel .ev2-tab-cd { box-shadow: 0 0 0 2px var(--panel), 0 0 6px light-dark(transparent, #fffa); }
 
   /* Show wiring */
-  & .ev2 .ev2-wlane::before { background: var(--line-2); }
   & .ev2 .ev2-wv { color: var(--text); background: color-mix(in oklab, var(--c) 18%, var(--panel)); border-color: light-dark(color-mix(in oklab, var(--c) 70%, var(--text)), var(--c)); }
-  & .ev2 .ev2-wv.zero { background: var(--panel); border-color: var(--line-2); }
-  & .ev2 .ev2-wn { background: var(--panel-2); }
-  & .ev2 .ev2-wout-br { border-color: var(--line-2); }
 
   /* the sentence: the Edit view's voice, set in the soft serif */
   & .ev2 .ev2-sent { font-family: var(--dl-title); font-weight: 500; color: light-dark(#4a4238, #d9d1c4); letter-spacing: -.005em; }
@@ -532,7 +541,6 @@
   & .ev2 .ev2-tok { border-bottom-color: light-dark(color-mix(in oklab, var(--c) 75%, var(--text)), color-mix(in oklab, var(--c) 80%, transparent)); }
   & .ev2 .ev2-fx-lt-title .ev2-sent { font-weight: 500; }
   & .ev2 .ev2-title-icon { color: light-dark(color-mix(in oklab, var(--c) 60%, var(--text)), var(--c)); background: color-mix(in oklab, var(--c) 20%, var(--panel)); }
-  & .ev2 .ev2-chg { color: var(--text); }
 
   /* word sliders */
   & .ev2 .ev2-ws-input::-webkit-slider-runnable-track {
@@ -556,30 +564,24 @@
   & .ev2 :is(button.ev2-song-chip, .ev2-song-bpmnum):hover { border-color: var(--dl-line-hover); }
   & .ev2 .ev2-song-bpmchip .ev2-song-tap:hover { background: var(--line-2); }
   & .ev2 .ev2-song-pop { background: var(--dl-pop); box-shadow: var(--dl-pop-shadow); }
-  & .ev2 .ev2-song-mi.danger { color: var(--danger); }
-  & .ev2 .ev2-song-readout { color: var(--text); }
-  & .ev2 :is(.ev2-song-select, .ev2-song-tempo, .ev2-song-notes) { background: var(--panel); }
+  & .ev2 :is(.ev2-song-mi.danger, .ev2-slot-mi-remove) { color: var(--danger); }
 
   /* setlist column */
-  & .ev2 .ev2-list-row { color: var(--text); }
+  & .ev2 :is(.ev2-list-row, .ev2-song-readout, .ev2-chg) { color: var(--text); }
   & .ev2 .ev2-list-row.on { background: color-mix(in oklab, var(--accent) 18%, var(--panel)); box-shadow: inset 3px 0 0 var(--accent); }
   & .ev2 .ev2-list-row.on .ev2-list-key { color: var(--dl-accent-text); }
   & .ev2 .ev2-list-row.on .ev2-list-num { color: var(--muted); }
-  & .ev2 .ev2-list-select, & .ev2 .ev2-list-search { background: var(--panel); }
+  /* fields and chips the base files paint slate: the setlist picker/search, slot note, fade key, wiring names */
+  & .ev2 :is(.ev2-list-select, .ev2-list-search, .ev2-slot-note, .ev2-kb-fade, .ev2-wn) { background: var(--panel); }
   & .ev2 :is(.ev2-list-confirm, .ev2-list-row.confirming) { background: var(--panic-bg); }
   & .ev2 :is(.ev2-list-gapnote, .ev2-list-gap) { color: var(--dl-warn-text); }
-  & .ev2 .ev2-list-add .ev2-btn[aria-expanded="true"] { color: var(--dl-accent-text); }
 
   /* slot panel */
-  & .ev2 :is(.ev2-slot-menu, .ev2-fx-vibe-menu) { background: var(--dl-pop); border-color: var(--line-2); box-shadow: var(--dl-pop-shadow); }
-  & .ev2 :is(.ev2-slot-mi, .ev2-fx-vibe-item):is(:hover, :focus) { background: var(--panel-3); }
-  & .ev2 .ev2-slot-mi-remove { color: var(--danger); }
   & .ev2 .ev2-slot-range .mkey.white { background: var(--dl-key-white); border-right-color: var(--dl-key-edge); }
   & .ev2 .ev2-slot-range .mkey.black { background: var(--dl-key-black); }
   & .ev2 .ev2-slot-range .mini-board { opacity: .7; }
   & .ev2 .ev2-slot-range .mini-handle { background: var(--thumb); border: 1px solid light-dark(#b3a898, #0d0b09); box-shadow: 0 1px 4px var(--dl-shadow-2); }
   & .ev2 .ev2-slot-respctl .segmented .seg.on { background: var(--c); color: var(--dl-ink-on-lamp); }
-  & .ev2 .ev2-slot-note { background: var(--panel); }
   & .ev2 .ev2-drone-src .on { background: var(--drone); color: var(--dl-ink-on-lamp); }
   & .ev2 .ev2-drone-opt .toggle.on { border-color: color-mix(in oklab, var(--dl-drone-ink) 55%, var(--line-2)); }
 
@@ -591,7 +593,6 @@
 
   /* keyboard row */
   & .ev2 .ev2-kb-big { background: var(--panel); box-shadow: var(--dl-btn-shadow); }
-  & .ev2 .ev2-kb-fade { background: var(--panel); }
   & .ev2 .ev2-kb-panic { background: var(--panic); box-shadow: inset 0 -3px 0 light-dark(#a82d20, #8d2519); }
   & .ev2 .ev2-kb-panic:hover { background: color-mix(in oklab, var(--panic) 88%, #000); }
 
@@ -611,82 +612,22 @@
   & :is(.eqk-bands select, .eqk-bands input[type=text], .eqk-cut input, .eqk-paste textarea) {
     background: var(--panel-2); border-color: var(--line-2); color: var(--text);
   }
+  /* the OFF switch was a slate pill (#2a2f37), darker than the ON one on paper: OFF is a hollow track, ON is filled */
+  & .eqk-onoff { background: var(--panel-2); border-color: var(--track-edge); }
+  & .eqk-onoff::after { background: var(--track-edge); }
   & .eqk-onoff[aria-pressed="true"] { background: color-mix(in oklab, var(--eqk-c) 35%, var(--panel)); }
-  & .eqk-cut .eqk-onoff[aria-pressed="true"] { background: color-mix(in oklab, var(--focus) 30%, var(--panel)); border-color: var(--focus); }
   & .eqk-side { background: var(--panel-2); }
   & .eqk-seg button { background: var(--panel); }
   & .eqk-mini canvas { background: #15120f; }
-  & .eqk-bands tr.sel td { background: var(--panel-3); }
-  & .eqk-pill.over { background: var(--panel-3); color: var(--text); }
-  & .eqk-pill.none { background: var(--panic-bg); color: var(--panic-text); }
-  & .eqk-ab button.eqk-ab-b[aria-pressed="true"] { background: var(--text); color: var(--panel); }
-
-  /* ================================================================ Today (design/warmth/daylight-v2/today.js)
-     Rendered only once today.js is mounted; without it none of these elements exist. */
-  & .dl-ic { display: inline-block; flex: none; width: 18px; height: 18px; background: currentColor;
-    -webkit-mask: var(--m) center / contain no-repeat; mask: var(--m) center / contain no-repeat; }
-  /* the Today card: top of the Notes column, on the notes' own stock */
-  & .dl-today { flex: none; border-radius: 12px; padding: 10px 12px 11px; margin: 0 -2px 4px -8px;
-    background: color-mix(in oklab, var(--accent) 13%, var(--panel)); border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--line)); }
-  & .dl-today-h { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 650; color: var(--dl-accent-text); }
-  & .dl-today-d { font: 650 21px/1.1 var(--dl-title); margin: 5px 0 3px; }
-  & .dl-today-s { font-size: 13.5px; color: var(--muted); line-height: 1.4; }
-  & .dl-today-s b { color: var(--text); font-weight: 650; }
-  & .dl-today-bar { display: flex; gap: 3px; margin-top: 9px; }
-  & .dl-today-bar i { flex: 1; height: 5px; border-radius: 3px; background: var(--line-2); }
-  & .dl-today-bar i.done { background: var(--dl-accent-text); }
-  & .dl-today-bar i.now { background: var(--accent); box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 60%, var(--text)); }
-  /* the before-service sheet replaces the overlay card inside #overlay-start (main.js still owns the tap) */
-  & .overlay-start.dl-has-today .overlay-card { display: none; }
-  & .overlay-start.dl-has-today { display: grid; place-items: center; }
-  & .overlay-start.dl-has-today[hidden] { display: none; }
-  & .dl-sheet { width: min(820px, calc(100vw - 32px)); display: grid; grid-template-columns: 1.2fr 1fr; border-radius: 22px;
-    overflow: hidden; background: var(--dl-pop); border: 1px solid var(--line-2); box-shadow: var(--dl-pop-shadow);
-    text-align: left; cursor: default; animation: dl-unfold .2s cubic-bezier(.2, .8, .2, 1); }
-  & .dl-sheet-l { padding: 30px 32px 28px; }
-  & .dl-sheet-r { padding: 30px 28px 28px; background: var(--panel-2); border-left: 1px solid var(--line); display: flex;
-    flex-direction: column; gap: 14px; }
-  & .dl-kick { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 650; color: var(--muted); }
-  & .dl-kick img { width: 26px; height: 26px; }
-  & .dl-day { font: 650 46px/1.05 var(--dl-title); letter-spacing: -.02em; margin: 14px 0 4px; }
-  & .dl-date { font-size: 16px; color: var(--muted); font-weight: 550; }
-  & .dl-set { margin-top: 22px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-  & .dl-set b { font-size: 17px; }
-  & .dl-set span { font-size: 14px; color: var(--muted); }
-  & .dl-songs { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-  & .dl-songs li { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 8px; min-height: 36px;
-    padding: 0 10px; border-radius: 9px; font-size: 16px; font-weight: 600; word-spacing: .09em; }
-  & .dl-songs li.first { background: color-mix(in oklab, var(--accent) 22%, var(--panel)); box-shadow: inset 3px 0 0 var(--accent); }
-  & .dl-songs .n { color: var(--faint); font-size: 13px; font-variant-numeric: tabular-nums; }
-  & .dl-songs .k { font-size: 13px; font-weight: 700; color: var(--muted); padding: 1px 8px; border-radius: 10px; background: var(--panel-3); }
-  & .dl-songs li.first .n { color: var(--muted); }
-  & .dl-songs li.first .k { color: var(--accent-ink); background: var(--accent); }
-  & .dl-songs .more { color: var(--muted); font-weight: 550; font-size: 14px; }
-  & .dl-card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 13px 16px; box-shadow: var(--dl-card-shadow); }
-  & .dl-card h4 { margin: 0 0 6px; font-size: 13px; font-weight: 650; color: var(--muted); }
-  & .dl-card p { margin: 0; font: 500 15.5px/1.45 var(--dl-title); }
-  & .dl-card p b { font-weight: 700; }
-  & .dl-light { display: flex; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; background: var(--panel); }
-  & .dl-light button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px;
-    font: 650 14px/1 var(--font); color: var(--muted); background: transparent; border: 0; cursor: pointer; }
-  & .dl-light button + button { border-left: 1px solid var(--line-2); }
-  & .dl-light button.on { background: var(--accent); color: var(--accent-ink); }
-  & .dl-go { margin-top: auto; min-height: 58px; border-radius: 14px; border: 1px solid color-mix(in oklab, var(--accent) 70%, var(--text));
-    background: var(--accent); color: var(--accent-ink); font: 700 19px/1 var(--font); cursor: pointer;
-    box-shadow: inset 0 -3px 0 color-mix(in oklab, var(--accent) 65%, var(--text)), 0 10px 22px -12px color-mix(in oklab, var(--accent) 80%, var(--text)); }
-  & .dl-small { font-size: 12.5px; color: var(--muted); text-align: center; }
-  @media (max-width: 900px) { & .dl-sheet { grid-template-columns: 1fr; } }
 
   /* ================================================================ reduced motion */
   @media (prefers-reduced-motion: reduce) {
-    & :is(.step-panel, .qs, .keypop, .fx-more, .ev2-slot-menu, .ev2-fx-vibe-menu, .ev2-song-pop, .toast, .dl-sheet) { animation: none; }
+    & :is(.step-panel, .qs, .keypop, .fx-more, .ev2-slot-menu, .ev2-fx-vibe-menu, .ev2-song-pop, .toast) { animation: none; }
     & :is(.btn, .toggle, .seg, .key-btn, .setlist-chip, .ontile, .mchip, .fxc, .hold-btn):active:not(:disabled) { transform: none; }
   }
 }
 
 @keyframes dl-unfold { from { opacity: 0; transform: translateY(4px) scale(.985); } }
-@keyframes dl-qs-flash { from { background: var(--text); color: var(--panel); } }
-
-/* switching the light: main.js (later) wraps the data-mode change in document.startViewTransition(), so the page
-   crossfades once on the compositor instead of every element transitioning (concept.md §5). */
-::view-transition-old(root), ::view-transition-new(root) { animation-duration: .45s; animation-timing-function: ease; }
+/* the Quick sheet's TAP flash: the app's keyframes with a token for the text (#111 on an ink flash by day). A keyframes
+   rule cannot sit inside the guard; it only exists while this file is linked, i.e. while a Daylight id is active. */
+@keyframes qs-flash { from { background: var(--text); color: var(--panel); } }

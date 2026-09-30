@@ -2089,10 +2089,10 @@ export class FxGraph {
     return true;
   }
   /**
-   * idle-cpu #2 (reviews/idle-cpu.md): let the send effects sleep while nothing feeds them. Chromium never lets
-   * the delay's feedback loop or the chorus's LFO-modulated lines go idle, and it keeps a convolver running for as
-   * long as its input is *connected to something active*, even when that is only unflagged zeros (idle-cpu #1's
-   * warm-pad leak). Realtime only: offline renders keep the always-on graph (deterministic, and the tests inject
+   * idle-cpu #2 (reviews/idle-cpu.md): let the send effects sleep while nothing feeds them. The profiler saw the
+   * delay loop and the chorus's LFO-modulated lines never go idle, and Chromium keeps a convolver running for as
+   * long as its input is fed by something that is not flagged silent, even when that is only zeros (idle-cpu #1's
+   * warm-pad leak, a converged SetTarget gain at 0 before #3). Sleeping takes them out of the pull. Realtime only: offline renders keep the always-on graph (deterministic, and the tests inject
    * into the effect inputs directly). Each effect gets one AnalyserNode tap (an automatic-pull node: it pulls only
    * the effect's input gain / the delay's loop LPFs, never the effect itself) that idleTick reads every
    * FX_IDLE_POLL_SEC; its window (≥ 1.25 × the poll period) makes consecutive reads cover the time without gaps.

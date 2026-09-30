@@ -5,8 +5,13 @@
 // modes) · master fader (relative drag) · Drone pill + key sheet · Fade · Panic (hold 600 ms) · Open · Rec ·
 // Eco · status line.
 // Until the first `state` arrives it shows "Waiting for Worship Rig…" and sends `hello` now and every 2 s.
+// Theme (mini-theme): boot.js themes the page from the localStorage mirror before first paint; while open, the
+// popover follows the Settings theme live from the mirror's `storage` event and from an optional `state.theme`
+// (createThemeFollower below). mini.css is tokens only, so a theme's tokens theme the popover.
 
 import { createBus } from '../shared/bus.js';
+import { resolveThemeId, themeAttrs, THEME_MIRROR_KEY } from '../shared/themes.js';
+import { warmThemeFonts, releaseWarmedFonts } from './components/themeFonts.js';
 
 const HELLO_MS = 2000;
 const PANIC_HOLD_MS = 600;
@@ -52,10 +57,13 @@ export function formatDb(g) {
  */
 export function statusLine(s) {
   const a = s?.audio;
-  const audio = { running: 'Sound OK', suspended: 'Sound paused', stalled: 'Sound stopped' }[a] || 'Sound…';
+  // lowres2: the app's own audio sleep is a normal state (it wakes on the next note or key), so its LED stays 'ok'
+  const audio = { running: 'Sound OK', asleep: 'Audio asleep', suspended: 'Sound paused', stalled: 'Sound stopped' }[a]
+    || 'Sound…';
   const lat = Number(s?.latencyMs) > 0 ? `${Math.round(s.latencyMs)} ms` : '— ms';
   const midi = s?.midi?.connected ? s.midi.name || 'MIDI connected' : 'No MIDI keyboard';
-  const led = a === 'running' ? (Number(s?.latencyMs) >= 40 ? 'warn' : 'ok') : a === 'stalled' ? 'bad' : 'warn';
+  const led = a === 'running' ? (Number(s?.latencyMs) >= 40 ? 'warn' : 'ok') : a === 'asleep' ? 'ok'
+    : a === 'stalled' ? 'bad' : 'warn';
   return { text: `${audio} · ${lat} · ${midi}`, led };
 }
 
@@ -484,13 +492,149 @@ export function mountMini(el, o) {
   };
 }
 
+// ------------------------------------------------------------------------------------------------ theme
+/**
+ * Follow the app's theme while the popover is open (mini-theme). The same switch as app/js/main.js applyTheme, minus
+ * the mirror write (the popover is a follower; the main window owns settings.theme and the mirror): the new sheet is
+ * loaded disabled (media="not all") at the end of <head>, its @font-face files are warmed (≤ 1.5 s), then ONE task
+ * enables it, drops the old sheet and flips html/body[data-theme|data-mode] + color-scheme. So the card always shows
+ * the old theme or the new one, never an unstyled frame. Siblings in one file (Daylight Stage ↔ Day) and Classic
+ * only flip attributes. A newer switch cancels an older one.
+ * @param {{doc?:Document, win?:Window}} [o]
+ * @returns {{follow:(id:unknown) => Promise<string>|null, apply:(id:unknown) => Promise<string>,
+ *   readonly current:string|null, readonly wanted:string|null, readonly pending:Promise<string>, destroy():void}}
+ *   follow(id) is apply(id) unless id resolves to the theme already shown or on its way (then null).
+ */
+export function createThemeFollower(o = {}) {
+  const doc = o.doc || document;
+  const win = o.win || window;
+  const root = doc.documentElement;
+  let seq = 0;
+  let current = root.dataset.theme || null; // what boot.js applied
+  let wanted = current;
+  let pending = Promise.resolve(current);
+  const cleanups = [];
+
+  const setAttrs = (a) => {
+    root.dataset.theme = a.html.theme;
+    root.dataset.mode = a.html.mode;
+    root.style.colorScheme = a.colorScheme;
+    if (doc.body) {
+      doc.body.dataset.theme = a.body.theme;
+      doc.body.dataset.mode = a.body.mode;
+    }
+  };
+  async function run(tid, my) {
+    const a = themeAttrs(tid);
+    const cur = doc.getElementById('theme-css');
+    const curHref = cur ? cur.getAttribute('href') : null;
+    if (curHref === a.css || (!a.css && !cur)) {
+      setAttrs(a); // same file (Daylight Stage ↔ Day) or Classic → Classic
+      current = tid;
+      return tid;
+    }
+    if (!a.css) {
+      cur.remove();
+      setAttrs(a);
+      current = tid;
+      return tid;
+    }
+    for (const n of doc.head.querySelectorAll('link[data-theme-next]')) n.remove(); // an overtaken switch
+    const next = doc.createElement('link');
+    next.rel = 'stylesheet';
+    next.media = 'not all';
+    next.dataset.themeNext = tid;
+    const loaded = new Promise((res) => {
+      next.addEventListener('load', () => res(true), { once: true });
+      next.addEventListener('error', () => res(false), { once: true });
+    });
+    next.href = a.css;
+    doc.head.append(next);
+    const ok = await loaded;
+    // themes-final T1/T2: full-descriptor copies, deleted once the sheet's own faces are loaded (themeFonts.js)
+    const faces = ok ? await warmThemeFonts(next.sheet, doc) : [];
+    if (my !== seq || !ok) {
+      next.remove();
+      await releaseWarmedFonts(faces, doc);
+      if (!ok) {
+        console.warn('[mini] theme stylesheet failed to load:', a.css);
+        if (my === seq) wanted = current; // let a later event retry
+      }
+      return current;
+    }
+    next.removeAttribute('media');
+    delete next.dataset.themeNext;
+    doc.getElementById('theme-css')?.remove();
+    next.id = 'theme-css';
+    setAttrs(a);
+    current = tid;
+    await releaseWarmedFonts(faces, doc);
+    return tid;
+  }
+  const apply = (id) => {
+    const tid = resolveThemeId(id);
+    wanted = tid;
+    pending = run(tid, ++seq);
+    return pending;
+  };
+  const follow = (id) => (resolveThemeId(id) === wanted ? null : apply(id));
+  const readMirror = () => {
+    try {
+      return win.localStorage.getItem(THEME_MIRROR_KEY);
+    } catch {
+      return null; // storage blocked: keep what boot showed
+    }
+  };
+  const on = (t, type, fn) => {
+    t.addEventListener(type, fn);
+    cleanups.push(() => t.removeEventListener(type, fn));
+  };
+  // the main window writes the mirror first thing in its applyTheme, so this fires as the switch starts there;
+  // `key === null` is localStorage.clear()
+  on(win, 'storage', (e) => {
+    if (e.key === THEME_MIRROR_KEY || e.key === null) {
+      const v = e.key === null ? null : e.newValue;
+      if (v !== null) follow(v);
+    }
+  });
+  // belt and braces for a popover that was hidden when the event fired: re-read on show/focus (cheap, no reflow)
+  const recheck = () => {
+    const v = readMirror();
+    if (v !== null) follow(v);
+  };
+  on(doc, 'visibilitychange', () => doc.visibilityState === 'visible' && recheck());
+  on(win, 'focus', recheck);
+  return {
+    follow,
+    apply,
+    get current() {
+      return current;
+    },
+    get wanted() {
+      return wanted;
+    },
+    get pending() {
+      return pending;
+    },
+    destroy() {
+      for (const c of cleanups.splice(0)) c();
+    },
+  };
+}
+
 // ------------------------------------------------------------------------------------------------ transport
 const host = typeof document !== 'undefined' ? document.getElementById('mini') : null;
 if (host) {
   // hello:false — mountMini sends its own hello now and every 2 s until the first state (the bus sends only one)
   const bus = createBus({ role: 'mini', hello: false });
-  const view = mountMini(host, {
-    bus: { send: (cmd) => bus.command(cmd), onState: (cb) => bus.subscribe(cb), close: () => bus.close() },
+  const theme = createThemeFollower();
+  // state.theme is optional (bus contract v1, mini-theme): present and different → follow it before rendering
+  const onState = (cb) => bus.subscribe((s) => {
+    if (typeof s.theme === 'string') theme.follow(s.theme);
+    cb(s);
   });
-  globalThis.__mini = Object.assign(view, { bus }); // test / debugging handle (not an API)
+  const view = mountMini(host, {
+    bus: { send: (cmd) => bus.command(cmd), onState, close: () => bus.close() },
+  });
+  globalThis.__mini = Object.assign(view, { bus, theme }); // test / debugging handle (not an API)
 }

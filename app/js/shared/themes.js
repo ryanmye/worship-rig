@@ -29,50 +29,45 @@ export const THEMES = Object.freeze([
     swatch: { bg: '#0b0d10', panel: '#15181d', text: '#f1f4f8', accent: '#ffc94d' }, // styles.css :root
   },
   {
+    // theme-sanctuary: html guard (no body shim); swatch = the light-dark() night branch of theme.css
     id: 'sanctuary', name: 'Sanctuary', mode: 'dark', css: '/themes/sanctuary-v2/theme.css', family: 'sanctuary',
-    swatch: { bg: '#100a1c', panel: '#191327', text: '#f5ecd8', accent: '#e6ba65' },
-    body: { theme: 'sanctuary-v2', mode: 'dark' },
+    swatch: { bg: '#160913', panel: '#21111c', text: '#f5ecd8', accent: '#e6ba65' },
   },
   {
-    // the light-dark() sibling lands with the Sanctuary theme agent; until then it would render as dark Sanctuary.
-    // Swatch is provisional (cream paper, plum ink, dark brass): that agent replaces it with the real tokens.
+    // theme-sanctuary: the light-dark() day branch of the same file (chapel morning: stone paper, plum ink, brass)
     id: 'sanctuary-day', name: 'Sanctuary Day', mode: 'light', css: '/themes/sanctuary-v2/theme.css',
-    family: 'sanctuary', coming: true,
-    swatch: { bg: '#f5ecd8', panel: '#fbf6ea', text: '#191327', accent: '#9a6b1c' },
-    body: { theme: 'sanctuary-v2', mode: 'light' },
+    family: 'sanctuary',
+    swatch: { bg: '#efe9de', panel: '#f9f5ee', text: '#32162b', accent: '#875806' },
   },
   {
     id: 'daylight-stage', name: 'Daylight Stage', mode: 'dark', css: '/themes/daylight-v2/theme.css',
     family: 'daylight',
     swatch: { bg: '#1b1611', panel: '#261f19', text: '#f5ede0', accent: '#f6c35a' }, // light-dark() dusk branch
-    body: { theme: 'daylight-v2', mode: 'dusk' },
   },
   {
     id: 'daylight-day', name: 'Daylight Day', mode: 'light', css: '/themes/daylight-v2/theme.css',
     family: 'daylight',
     swatch: { bg: '#f3efe7', panel: '#fdfbf7', text: '#27211b', accent: '#f4b73f' }, // light-dark() day branch
-    body: { theme: 'daylight-v2', mode: 'day' },
   },
   {
     id: 'studio', name: 'Studio', mode: 'dark', css: '/themes/studio/theme.css', family: 'studio',
-    swatch: { bg: '#201e1b', panel: '#2a2723', text: '#f4f0e6', accent: '#f7c367' },
-    body: { theme: 'studio', mode: 'dark' },
+    swatch: { bg: '#181613', panel: '#221f1c', text: '#f4f0e6', accent: '#f7c367' }, // theme.css &:root tokens
   },
   {
     id: 'ember', name: 'Ember', mode: 'dark', css: '/themes/ember/theme.css', family: 'ember',
-    swatch: { bg: '#150e0b', panel: '#1e1713', text: '#f7efe3', accent: '#f7b755' },
-    body: { theme: 'ember', mode: 'dark' },
+    swatch: { bg: '#150e0b', panel: '#1e1713', text: '#f7efe3', accent: '#f7b755' }, // html guard since theme-ember
   },
   {
-    // v1 Sanctuary (ink-navy nave), kept as its own look
+    // v1 Sanctuary (ink-navy nave), kept as its own look; guards on html[data-theme="nave"] (theme-nave), no body shim
     id: 'nave', name: 'Nave', mode: 'dark', css: '/themes/sanctuary/theme.css', family: 'nave',
     swatch: { bg: '#0a0c1e', panel: '#131529', text: '#f5ecd8', accent: '#e6ba65' },
-    body: { theme: 'sanctuary', mode: 'dark' },
   },
-].map((t) => Object.freeze({ ...t, swatch: Object.freeze(t.swatch), ...(t.body ? { body: Object.freeze(t.body) } : {}) })));
+].map((t) => Object.freeze({
+  ...t, swatch: Object.freeze(t.swatch), ...(t.body ? { body: Object.freeze(t.body) } : {}),
+})));
 
 /** Theme used when settings.theme is absent or unknown. */
-export const DEFAULT_THEME_ID = 'classic'; // TEMP until themes-final (final default: sanctuary)
+export const DEFAULT_THEME_ID = 'sanctuary'; // Ryan's decision (themes-final); boot.js DEF mirrors it
 /** localStorage key of the boot mirror of settings.theme (boot.js reads it before first paint). */
 export const THEME_MIRROR_KEY = 'worship-rig.theme';
 

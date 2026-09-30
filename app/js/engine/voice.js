@@ -347,6 +347,23 @@ export class VoiceAllocator {
 const WAVE_CACHE = new WeakMap();
 
 /**
+ * Let context `to` use the PeriodicWaves already built for `from` (same sample rate only). lowres2-critic R4: every
+ * frozen-drone render is a new OfflineAudioContext, and rebuilding drone-osc's 8 phase-rotated saws (512 harmonics)
+ * plus its triangles there cost ≈ 8–10 ms of main thread per render. Chromium's PeriodicWave is not bound to its
+ * context (a wave built on the realtime context renders identically in an OfflineAudioContext: max diff 0).
+ * @param {BaseAudioContext} from
+ * @param {BaseAudioContext} to
+ * @returns {boolean} shared
+ */
+export function shareWaveCache(from, to) {
+  if (!from || !to || from === to || from.sampleRate !== to.sampleRate || WAVE_CACHE.has(to)) return false;
+  let byKey = WAVE_CACHE.get(from);
+  if (!byKey) WAVE_CACHE.set(from, (byKey = new Map()));
+  WAVE_CACHE.set(to, byKey);
+  return true;
+}
+
+/**
  * `n` PeriodicWaves of the same spectrum (sine coefficients `sin[k]`) time-shifted by 2π·i/n: the same
  * waveform started at n different phases. Cached per context under `key` (build in prepare).
  * @param {BaseAudioContext} ctx

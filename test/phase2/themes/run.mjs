@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Themes suite (themes-setup; app/themes/README.md, design/warmth/OPTIONS.md §3.1 #7/#8, §5).
-//   node test/phase2/themes/run.mjs [--only boot,switch,picker,quick,mini,coverage] [--theme id,id]
+//   node test/phase2/themes/run.mjs [--only boot,switch,picker,classic,quick,mini,coverage] [--theme id,id]
 // Real app served by server.js, real Chromium. For EVERY registered, non-coming theme (shared/themes.js):
 //   boot      localStorage mirror + settings.theme set → reload: #theme-css is in the document while
 //             readyState is still "loading" (an init script records it), render-blocking, loaded before first paint;
@@ -12,11 +12,14 @@
 //             store write → screenshots/switch-<id>.png.
 //   picker    Settings › Appearance shows the current theme checked; click and arrow keys write settings.theme;
 //             coming themes are not offered.
-//   quick     Quick › This Mac › Theme shows the name and opens Settings › Appearance with focus in the picker.
+//   classic   (runs with picker too) the Classic card after another theme: no theme link, and every visible
+//             element's computed look + the :root tokens equal a fresh Classic (theme-classic).
+//   quick    Quick › This Mac › Theme shows the name and opens Settings › Appearance with focus in the picker.
 //   mini      mini.html boots with the mirror's theme too.
 //   coverage  each theme file's selectors (nesting resolved, pseudo-elements and :hover/:focus… dropped) checked
 //             against the DOM across Perform (idle, held notes, locked), Quick, a toast, Edit (held notes, Advanced ›
-//             Tone with the EQ), Settings. FAIL when > 5 % match nothing, or a selector names a class that no longer
+//             Tone with the EQ), Settings, and the menu-bar popover (mini.html: waiting, live, 6 modes + flags, drone
+//             key sheet; mini-theme). FAIL when > 5 % match nothing, or a selector names a class that no longer
 //             exists anywhere in app/ outside app/themes. Per theme → coverage-<id>.json (siblings that share a file
 //             are visited together and share the result).
 import { createRequire } from 'node:module';
@@ -28,6 +31,7 @@ import { chromium } from 'playwright';
 import { MIDI_PERMISSIONS, waitRigReady } from '../../integration/lib.mjs';
 import { THEMES, DEFAULT_THEME_ID, THEME_MIRROR_KEY, byId } from '../../../app/js/shared/themes.js';
 import { parseThemeSelectors, classesOf, deadClassFinder } from './css-selectors.mjs';
+import { walkMini } from '../mini/theme-lib.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -144,6 +148,34 @@ function assertThemeShown(st, t, where) {
   assert.equal(st.pendingNext, 0, `${where}: no half-loaded sheet left`);
   assert.equal(st.mirror, t.id, `${where}: localStorage mirror`);
 }
+/**
+ * The boot-time link of theme `t` as the init script logged it: no flash. html/body[data-theme] already set at
+ * DOMContentLoaded; the sheet inserted while the document is loading, before <body>, render-blocking, exactly once
+ * (no runtime re-link), and loaded before first paint.
+ */
+async function assertBootLinked(t, log) {
+  assert.equal(log.dcl.html, t.id, 'html[data-theme] at DOMContentLoaded');
+  assert.equal(log.dcl.body, t.body ? t.body.theme : t.id, 'body[data-theme] at DOMContentLoaded');
+  if (t.css) {
+    assert.equal(log.dcl.link, t.css, '#theme-css present at DOMContentLoaded');
+    const first = log.log.find((e) => e.id === 'theme-css');
+    assert.ok(first, 'theme link inserted');
+    assert.equal(first.readyState, 'loading', 'inserted while the document is still loading');
+    assert.equal(first.bodyExisted, false, 'inserted before <body> exists');
+    assert.equal(first.blocking, 'render', 'blocking=render');
+    assert.equal(log.log.filter((e) => e.id === 'theme-css').length, 1, 'no re-link at runtime (store agreed)');
+    const paint = await ev((href) => {
+      const res = performance.getEntriesByType('resource').find((e) => e.name.endsWith(href));
+      const fp = performance.getEntriesByType('paint').find((e) => e.name === 'first-paint');
+      return { resEnd: res ? res.responseEnd : null, fp: fp ? fp.startTime : null };
+    }, t.css);
+    if (paint.resEnd !== null && paint.fp !== null) {
+      assert.ok(paint.resEnd <= paint.fp, `sheet loaded (${paint.resEnd.toFixed(0)} ms) before first paint (${paint.fp.toFixed(0)} ms)`);
+    } else note(`${t.id}: no paint/resource timing (${JSON.stringify(paint)})`);
+  } else {
+    assert.equal(log.dcl.link, null, 'classic links no theme file');
+  }
+}
 /** Put a theme in the store (and so the mirror) and persist, for a reload. */
 const storeTheme = (id) => ev(async (tid) => {
   window.__rig.store.set('settings.theme', tid);
@@ -154,12 +186,15 @@ const storeTheme = (id) => ev(async (tid) => {
 
 console.log(`\n[themes] ${origin}  themes: ${LIVE.map((t) => t.id).join(', ')}`);
 try {
-  await T('first boot, nothing stored: the default theme (Sanctuary) is linked', async () => {
+  await T('first boot, nothing stored: the default (Sanctuary) is linked before first paint, no flash', async () => {
+    assert.equal(DEFAULT_THEME_ID, 'sanctuary', "Ryan's default (themes-final)");
     const mark = errors.length;
-    await bootApp();
+    await bootApp(); // a new browser context: empty localStorage, no mirror, no library
+    const log = await ev(() => ({ log: window.__themeBootLog, dcl: window.__themeDcl }));
     const st = await pageTheme();
     assert.equal(st.store, null, 'settings.theme stays absent');
     assertThemeShown(st, byId(DEFAULT_THEME_ID), 'default');
+    await assertBootLinked(byId(DEFAULT_THEME_ID), log);
     assert.deepEqual(errorsSince(mark), []);
   });
 
@@ -172,32 +207,16 @@ try {
         const log = await ev(() => ({ log: window.__themeBootLog, dcl: window.__themeDcl }));
         const st = await pageTheme();
         assertThemeShown(st, t, 'after boot');
-        assert.equal(log.dcl.html, t.id, 'html[data-theme] at DOMContentLoaded');
-        assert.equal(log.dcl.body, t.body ? t.body.theme : t.id, 'body[data-theme] at DOMContentLoaded');
-        if (t.css) {
-          assert.equal(log.dcl.link, t.css, '#theme-css present at DOMContentLoaded');
-          const first = log.log.find((e) => e.id === 'theme-css');
-          assert.ok(first, 'theme link inserted');
-          assert.equal(first.readyState, 'loading', 'inserted while the document is still loading');
-          assert.equal(first.bodyExisted, false, 'inserted before <body> exists');
-          assert.equal(first.blocking, 'render', 'blocking=render');
-          assert.equal(log.log.filter((e) => e.id === 'theme-css').length, 1, 'no re-link at runtime (store agreed)');
-          const paint = await ev((href) => {
-            const res = performance.getEntriesByType('resource').find((e) => e.name.endsWith(href));
-            const fp = performance.getEntriesByType('paint').find((e) => e.name === 'first-paint');
-            return { resEnd: res ? res.responseEnd : null, fp: fp ? fp.startTime : null };
-          }, t.css);
-          if (paint.resEnd !== null && paint.fp !== null) {
-            assert.ok(paint.resEnd <= paint.fp, `sheet loaded (${paint.resEnd.toFixed(0)} ms) before first paint (${paint.fp.toFixed(0)} ms)`);
-          } else note(`${t.id}: no paint/resource timing (${JSON.stringify(paint)})`);
-        } else {
-          assert.equal(log.dcl.link, null, 'classic links no theme file');
-        }
+        await assertBootLinked(t, log);
         assert.deepEqual(errorsSince(mark), [], 'console errors / HTTP ≥ 400');
       });
     }
     await T('boot: the store wins over a stale mirror (and fixes the mirror)', async () => {
-      const [a, b] = THEMES.filter((t) => t.css && !t.coming).map((t) => t.id);
+      // theme-classic: a and b must use different files. Siblings (sanctuary / sanctuary-day) only flip attributes,
+      // synchronously in main.js before DOMContentLoaded, so __themeDcl would already show the store's id (T5).
+      const files = THEMES.filter((t) => t.css && !t.coming);
+      const a = files[0].id;
+      const b = files.find((t) => t.css !== files[0].css).id;
       await storeTheme(a);
       await ev((id) => localStorage.setItem('worship-rig.theme', id), b); // e.g. a library imported elsewhere
       const mark = errors.length;
@@ -276,6 +295,23 @@ try {
         const bg = await ev(() => getComputedStyle(document.body).backgroundColor);
         assert.notEqual(bg, 'rgba(0, 0, 0, 0)');
         await ev(() => window.__rig.theme.pending);
+        // themes-final T1/T2: the warmed FontFace copies carry every descriptor and are gone once the switch lands,
+        // so the chord keeps its face's metric overrides (51/51 on a fresh boot; 56/51 with the old copies)
+        const fx = await ev(async () => {
+          await document.fonts.ready;
+          const c = document.querySelector('.chord-name');
+          const key = (f) => [f.family, f.style, f.weight, f.stretch, f.unicodeRange, f.featureSettings, f.display,
+            f.ascentOverride, f.descentOverride, f.lineGapOverride, f.sizeAdjust].join('|');
+          const seen = new Set();
+          const dups = [];
+          for (const f of document.fonts) {
+            if (seen.has(key(f))) dups.push(key(f));
+            seen.add(key(f));
+          }
+          return { sh: c.scrollHeight, ch: c.clientHeight, dups };
+        });
+        assert.ok(fx.sh <= fx.ch, `.chord-name scrollHeight ${fx.sh} ≤ clientHeight ${fx.ch} after a runtime switch`);
+        assert.deepEqual(fx.dups, [], 'document.fonts: no duplicate family + descriptor faces');
         assert.deepEqual(errorsSince(mark), []);
       });
     }
@@ -311,6 +347,79 @@ try {
       await ev(() => window.__rig.theme.pending);
       await page.screenshot({ path: path.join(SHOTS, 'settings-appearance.png') });
       await ev(() => window.__rig.ctx.closeSettings());
+      assert.deepEqual(errorsSince(mark), []);
+    });
+  }
+
+  if (want('picker') || want('classic')) {
+    // theme-classic: Classic is the rollback, so picking it after any other theme must give back exactly the base
+    // look (styles.css alone): no theme sheet, and every visible element's computed look equal to a fresh Classic.
+    await T('Settings › Appearance › Classic card after another theme restores the base look exactly', async () => {
+      const mark = errors.length;
+      const away = THEMES.find((t) => t.css && !t.coming).id;
+      const look = () => ev(() => {
+        const skip = '.led, .meter, .meter *, .lvl-meter, .lvl-meter *, canvas, #ready-status, #ready-status *, #toasts, '
+          + '#toasts *'; // live readouts and transient toasts (#toasts' height follows whatever toast is up)
+        const props = ['color', 'background-color', 'background-image', 'font-family', 'font-size', 'font-weight',
+          'letter-spacing', 'border-top-color', 'border-top-width', 'border-radius', 'box-shadow', 'text-shadow',
+          'opacity', 'width', 'height'];
+        document.activeElement?.blur?.();
+        const out = {};
+        const rootCs = getComputedStyle(document.documentElement);
+        for (const sh of document.styleSheets) {
+          let rules = [];
+          try { rules = [...sh.cssRules]; } catch { /* cross-origin */ }
+          for (const r of rules) {
+            if (r.selectorText !== ':root' || !r.style) continue;
+            for (const k of r.style) if (k.startsWith('--')) out[`:root ${k}`] = rootCs.getPropertyValue(k).trim();
+          }
+        }
+        let i = 0;
+        for (const el of document.querySelectorAll('body *')) {
+          if (el.matches(skip) || el.closest('[hidden]') || !el.getClientRects().length) continue;
+          const cs = getComputedStyle(el);
+          out[`${i++} ${el.tagName} ${String(el.className?.baseVal ?? el.className).slice(0, 40)}`] =
+            props.map((k) => cs.getPropertyValue(k)).join(' | ');
+        }
+        return out;
+      });
+      const diffs = (a, b) => [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => a[k] !== b[k]);
+      const pick = async (id) => {
+        await ev(() => window.__rig.ctx.openSettings({ section: 'appearance' }));
+        await page.waitForSelector(`[data-testid="theme-card-${id}"]`, { state: 'visible' });
+        await page.click(`[data-testid="theme-card-${id}"]`);
+        await page.waitForFunction((tid) => window.__rig.store.get().settings.theme === tid, id);
+        // the store notifies its subscribers after the write, so `pending` is only this switch's promise once
+        // applyTheme has started (theme.current = the id); awaiting it earlier awaited the previous switch (flake:
+        // "sanctuary changes the look (1 diffs)")
+        await page.waitForFunction((tid) => window.__rig.theme.current === tid, id);
+        await ev(() => window.__rig.theme.pending);
+        await page.waitForFunction((tid) => document.documentElement.dataset.theme === tid, id);
+        await ev(() => window.__rig.ctx.closeSettings());
+        await ev(() => document.fonts.ready);
+        await sleep(400);
+      };
+      await storeTheme('classic');
+      await ev(() => window.__rig.store.set('settings.view', 'perform'));
+      await sleep(400);
+      const base = await look();
+      assert.ok(Object.keys(base).length > 100, `walked ${Object.keys(base).length} entries`);
+      await pick(away);
+      assert.equal((await pageTheme()).html, away);
+      const themed = await look();
+      assert.ok(diffs(base, themed).length > 20, `${away} changes the look (${diffs(base, themed).length} diffs)`);
+      await pick('classic');
+      const st = await pageTheme();
+      assert.equal(st.html, 'classic');
+      assert.equal(st.body, 'classic');
+      assert.deepEqual(st.links, [], 'no theme sheet left enabled');
+      // stylesheets only: boot.js's rel=preload of the boot-time theme stays in <head> and styles nothing
+      assert.equal(await ev(() => document.querySelectorAll('link[rel=stylesheet][href*="/themes/"]').length), 0,
+        'no theme stylesheet at all, enabled or pending');
+      const back = await look();
+      const d = diffs(base, back);
+      assert.deepEqual(d.map((k) => `${k}: ${base[k]} → ${back[k]}`), [], 'Classic after a theme = fresh Classic');
+      await page.screenshot({ path: path.join(SHOTS, 'classic-restored.png') });
       assert.deepEqual(errorsSince(mark), []);
     });
   }
@@ -372,8 +481,8 @@ try {
         const matched = new Set();
         const invalid = new Set();
         const states = [];
-        const collect = async (label) => {
-          const r = await ev((list) => list.map((sel) => {
+        const collect = async (label, on = page) => { // on: the page to check (the mini popover: walkMini)
+          const r = await on.evaluate((list) => list.map((sel) => {
             if (!sel) return 'skip';
             try {
               return document.querySelector(sel) ? 1 : 0;
@@ -536,6 +645,9 @@ async function walkStates(collect, id) {
   await sleep(300);
   await collect(`${id}:settings`);
   await ev(() => window.__rig.ctx.closeSettings());
+  // mini-theme: the menu-bar popover (app/mini.html, 320×440, fake bus state: waiting · live · 6 modes + flags ·
+  // drone key sheet) in its own context with the mirror = id; test/phase2/mini/theme-lib.mjs
+  await walkMini({ browser, origin, id, collect, onPage: (p) => watch(p, `mini:${id}`) });
 }
 
 const failed = results.filter((r) => !r.ok);

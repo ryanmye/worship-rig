@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
-import { MIDI_PERMISSIONS, waitRigReady } from '../../integration/lib.mjs';
+import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -47,6 +47,7 @@ async function runMode(mode, browser) {
   const info = await server.listen();
   const origin = `http://127.0.0.1:${info.port}`;
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
+  await pinTheme(context, 'classic'); // theme-classic: assert the base look whatever the default theme is
   // L-4: 'midi' only (test/README.md "Web MIDI in the browser suites"); MIDI Learn etc. use midi._inject
   await context.grantPermissions([...MIDI_PERMISSIONS], { origin });
   const page = await context.newPage();
@@ -218,19 +219,66 @@ async function runMode(mode, browser) {
       await ev(() => window.__rig.store.set('slots.1.gain', 0.7));
     });
 
-    await T('settings: pedal polarity detector suggests invert and applies it', async () => {
+    // hardware-fixes: the test samples BOTH states (press → settle → release → settle) and decides from the pair
+    const pedalStep = (step) => until((st) => !!document.querySelector(`.st-pedal-prompt[data-step="${st}"]`), step);
+    const cc64 = (v) => ev((x) => window.__rig.midi._inject([0xb0, 64, x]), v);
+    await T('settings: pedal polarity detector samples pressed + released, suggests invert and applies it', async () => {
       await page.click('.st-pedal-test');
       await until(() => /Press your sustain pedal now/.test(document.querySelector('.st-pedal').textContent));
-      await ev(() => window.__rig.midi._inject([0xb0, 64, 0]));
+      await pedalStep('press');
+      await cc64(0); // reversed: pressed reads "up"
+      await pedalStep('release');
+      assert.equal(await ev(() => !!document.querySelector('.st-pedal-result')), false, 'no verdict from one state');
+      await cc64(127);
       await until(() => !!document.querySelector('.st-pedal-result[data-invert="true"]'));
+      assert.match(await page.textContent('.st-pedal-result'), /sent 0 pressed and 127 released/);
       await page.click('.st-pedal-apply');
       await until(() => window.__rig.store.get().settings.pedalInvert === true);
       await page.click('.st-pedal-test');
-      await ev(() => window.__rig.midi._inject([0xb0, 64, 127]));
+      await pedalStep('press');
+      await cc64(127);
+      await pedalStep('release');
+      await cc64(0);
       await until(() => !!document.querySelector('.st-pedal-result[data-invert="false"]'));
       await page.click('.st-pedal-apply');
       await until(() => window.__rig.store.get().settings.pedalInvert === false);
       assert.equal(await ev(() => window.__rig.controller._debug().pedalDown), false, 'no stuck pedal');
+    });
+
+    await T('settings: pedal test — a quick tap asks again; a continuous pedal settles; the release step ignores '
+      + '"still down" values; the pair rule; the plug-in-with-pedal-UP copy', async () => {
+      // a switch pedal tapped (127 then 0 inside the settle window) ends on the released value: ask again
+      await page.click('.st-pedal-test');
+      await pedalStep('press');
+      await ev(() => {
+        window.__rig.midi._inject([0xb0, 64, 127]);
+        window.__rig.midi._inject([0xb0, 64, 0]);
+      });
+      await until(() => /keep it down until/.test(document.querySelector('.st-pedal-prompt')?.textContent || ''));
+      assert.equal(await ev(() => document.querySelector('.st-pedal-prompt').dataset.step), 'press');
+      // a continuous (half-)pedal ramps: the value it rests on counts; repeats of "down" in the release step don't
+      await ev(() => [20, 50, 90, 127].forEach((v) => window.__rig.midi._inject([0xb0, 64, v])));
+      await pedalStep('release');
+      await cc64(127);
+      await cc64(100);
+      await new Promise((r) => setTimeout(r, 450));
+      assert.equal(await ev(() => document.querySelector('.st-pedal-prompt')?.dataset.step), 'release',
+        'values on the pressed side do not end the release step');
+      await ev(() => [60, 20, 0].forEach((v) => window.__rig.midi._inject([0xb0, 64, v])));
+      await until(() => !!document.querySelector('.st-pedal-result[data-invert="false"]'));
+      assert.match(await page.textContent('.st-pedal-result'), /sent 127 pressed and 0 released — normal/);
+      assert.equal(await ev(() => !!document.querySelector('.st-pedal-apply')), false, 'setting already right: no button');
+      const rule = await ev(async (url) => {
+        const m = await import(url);
+        return [m.inferPedalPolarity(127, 0), m.inferPedalPolarity(0, 127), m.inferPedalPolarity(127, 90),
+          m.inferPedalPolarity(10, 0), m.inferPedalPolarity(64, 63), m.inferPedalInvert(0)];
+      }, mode === 'app' ? '/js/views/settings.js' : '/app/js/views/settings.js');
+      assert.deepEqual(rule, [false, true, null, null, false, true]);
+      await page.click('.st-pedal-again');
+      await pedalStep('press');
+      await page.click('.st-pedal button'); // Cancel
+      const tip = await page.textContent('.st-pedal');
+      assert.match(tip, /with your foot off the pedal \(pedal UP\)/);
     });
 
 
@@ -379,6 +427,72 @@ async function runMode(mode, browser) {
       await page.click('.st-close');
       await until(() => document.getElementById('view-settings').hidden);
     });
+
+    // hardware-fixes (hardware pass: Bluetooth 176 ms vs 20 ms on the dock): > 60 ms output latency → one-line hint
+    // under Latency, dismissed per output device NAME. The fake status is re-sent on every poll, so a real status
+    // event in between can't make it flaky; enumerateDevices is faked to give the default output a Bluetooth label.
+    await T('settings: output latency > 60 ms shows the Bluetooth hint; × dismisses it for that device name only',
+      async () => {
+        await openSettings();
+        try {
+          await ev(() => {
+            const md = navigator.mediaDevices;
+            window.__fakeOut = 'JBL Charge 5 (Bluetooth)';
+            md.enumerateDevices = async () => [
+              { kind: 'audiooutput', deviceId: 'default', label: `Default - ${window.__fakeOut}`, groupId: 'g' },
+            ];
+            localStorage.removeItem('worship-rig.latency-hint.dismissed');
+            const c = window.__rig.controller;
+            window.__fakeLat = (ms) => c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status, latencyMs: ms } }));
+          });
+          const hint = '[data-testid="settings-latency-hint"]';
+          const shownAt = (ms) => until(([m, sel]) => {
+            window.__fakeLat(m);
+            const el = document.querySelector(sel);
+            return el && !el.hidden;
+          }, [ms, hint]);
+          const hiddenAt = (ms) => until(([m, sel]) => {
+            window.__fakeLat(m);
+            return document.querySelector(sel).hidden;
+          }, [ms, hint]);
+          await shownAt(176);
+          assert.equal(await page.textContent(`${hint} .lh-text`),
+            'Bluetooth output adds ~176 ms — use the headphone jack or a dock for live playing');
+          assert.match(await ev(() => document.querySelector('.st-status.warn')?.textContent || ''), /176 ms — high/);
+          const box = await ev((sel) => {
+            const t = document.querySelector(`${sel} .lh-text`);
+            return { clipped: t.scrollWidth > t.clientWidth + 1 || t.scrollHeight > t.clientHeight + 1,
+              lines: Math.round(t.getBoundingClientRect().height / parseFloat(getComputedStyle(t).lineHeight)) };
+          }, hint);
+          // Settings' column is narrower than the sentence: it wraps (≤ 2 lines) instead of ellipsizing
+          assert.ok(!box.clipped && box.lines <= 2, `the whole sentence shows in Settings (${JSON.stringify(box)})`);
+          await hiddenAt(20); // the dock
+          await hiddenAt(60); // "exceeds 60 ms"
+          await shownAt(61);
+          await page.click(`${hint} .lh-x`);
+          await hiddenAt(176);
+          assert.deepEqual(await ev(() => JSON.parse(localStorage.getItem('worship-rig.latency-hint.dismissed'))),
+            ['JBL Charge 5 (Bluetooth)']);
+          // another Bluetooth device (a new name) warns again
+          await ev(() => {
+            window.__fakeOut = 'AirPods';
+            navigator.mediaDevices.dispatchEvent(new Event('devicechange'));
+          });
+          await shownAt(176);
+        } catch (err) {
+          console.log(`      (latency hint) ${err && err.message}`);
+          throw err;
+        } finally {
+          await ev(() => {
+            delete navigator.mediaDevices.enumerateDevices; // back to MediaDevices.prototype's
+            localStorage.removeItem('worship-rig.latency-hint.dismissed');
+            const c = window.__rig.controller;
+            c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } }));
+          });
+          if (await ev(() => !document.getElementById('view-settings').hidden)) await page.click('.st-close');
+          await until(() => document.getElementById('view-settings').hidden);
+        }
+      });
 
     // C7 menubar-B (docs/menubar-mode.md): the "Menu bar" section
     await T('settings: Menu bar — mode toggle, set picker → modes, low-resource → controller + engine, resource line', async () => {

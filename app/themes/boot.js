@@ -8,8 +8,9 @@
         use zero-specificity :where() rules that win on source order, so the theme file must follow the app's CSS.
         (A script can only add render-blocking sheets while <body> does not exist yet, so it can't wait for <body>.)
    A page that includes it once still gets the sheet, at DOMContentLoaded (not render-blocking).
-   The id → {css, mode, body} map below is a COPY of app/js/shared/themes.js (THEMES); test/unit/shared/themes.test.mjs
-   fails when the two drift. `body` = the legacy <body> attributes a theme file still guards on (see themes.js). */
+   The id → {css, mode, body} map below is a COPY of app/js/shared/themes.js (THEMES);
+   test/unit/shared/themes.test.mjs fails when the two drift. `body` = the legacy <body> attributes a theme file
+   still guards on (see themes.js). */
 (function () {
   'use strict';
   var w = window;
@@ -20,16 +21,16 @@
     return;
   }
   var KEY = 'worship-rig.theme';
-  var DEF = 'classic'; // TEMP, mirrors themes.js; final default sanctuary
+  var DEF = 'sanctuary'; // mirrors themes.js DEFAULT_THEME_ID
   var MAP = {
     'classic': { css: null, mode: 'dark' },
-    'sanctuary': { css: '/themes/sanctuary-v2/theme.css', mode: 'dark', body: ['sanctuary-v2', 'dark'] },
-    'sanctuary-day': { css: '/themes/sanctuary-v2/theme.css', mode: 'light', body: ['sanctuary-v2', 'light'] },
-    'daylight-stage': { css: '/themes/daylight-v2/theme.css', mode: 'dark', body: ['daylight-v2', 'dusk'] },
-    'daylight-day': { css: '/themes/daylight-v2/theme.css', mode: 'light', body: ['daylight-v2', 'day'] },
-    'studio': { css: '/themes/studio/theme.css', mode: 'dark', body: ['studio', 'dark'] },
-    'ember': { css: '/themes/ember/theme.css', mode: 'dark', body: ['ember', 'dark'] },
-    'nave': { css: '/themes/sanctuary/theme.css', mode: 'dark', body: ['sanctuary', 'dark'] }
+    'sanctuary': { css: '/themes/sanctuary-v2/theme.css', mode: 'dark' },
+    'sanctuary-day': { css: '/themes/sanctuary-v2/theme.css', mode: 'light' },
+    'daylight-stage': { css: '/themes/daylight-v2/theme.css', mode: 'dark' },
+    'daylight-day': { css: '/themes/daylight-v2/theme.css', mode: 'light' },
+    'studio': { css: '/themes/studio/theme.css', mode: 'dark' },
+    'ember': { css: '/themes/ember/theme.css', mode: 'dark' },
+    'nave': { css: '/themes/sanctuary/theme.css', mode: 'dark' }
   };
   var id = null;
   try {

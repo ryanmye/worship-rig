@@ -6,6 +6,7 @@ import { loadComponents, markDialog } from './_fallback-components.js';
 import { LEARNABLE, ROLE_DEFAULTS } from '../shared/params.js';
 import { noteName } from '../shared/music.js';
 import { pickableThemes, resolveThemeId } from '../shared/themes.js';
+import { latencyHint } from './components/latencyHint.js';
 
 const C = await loadComponents();
 
@@ -81,6 +82,21 @@ export function mappingText(m) {
 /** Pedal polarity from the first CC64 value after "press your pedal": < 64 on press → reversed. */
 export function inferPedalInvert(firstValue) {
   return Number(firstValue) < 64;
+}
+
+/**
+ * hardware-fixes: polarity from BOTH states of the pedal (the settled CC64 value while held down, then after letting
+ * go). One value can't tell a reversed pedal from a keyboard that read the pedal's direction while it was held at
+ * plug-in, or from a foot that let go early; the pair can: the states must fall on opposite sides of 64.
+ * @param {number} down  CC64 value while pressed
+ * @param {number} up    CC64 value after release
+ * @returns {boolean|null} true = reversed, false = normal, null = the two states read the same (no verdict)
+ */
+export function inferPedalPolarity(down, up) {
+  const d = Number(down) >= 64;
+  const u = Number(up) >= 64;
+  if (!Number.isFinite(Number(down)) || !Number.isFinite(Number(up)) || d === u) return null;
+  return !d;
 }
 
 function h(tag, attrs = {}, ...children) {
@@ -277,6 +293,10 @@ export function mountSettings(el, ctx) {
   // Audio
   // =============================================================================================================
   const latencyInfo = h('span.st-status');
+  // hardware-fixes: > 60 ms output latency (Bluetooth) gets a one-line hint, dismissed per output device name
+  const latencyWarn = latencyHint({ className: 'st-latency-warn', testid: 'settings-latency-hint' });
+  cleanups.push(() => latencyWarn.destroy());
+  settingBinds.push({ key: 'outputDeviceId', apply: (st) => latencyWarn.set({ deviceId: st.outputDeviceId }) });
   const outputSelect = h('select.ed-select.st-output', { 'aria-label': 'Audio output' });
   const outputNote = h('p.st-hint');
   const labelsBtn = btn('Show device names', askLabels, { hidden: true, class: 'st-labels' });
@@ -349,15 +369,20 @@ export function mountSettings(el, ctx) {
       restartBtn.disabled = false;
     }
   }, { class: 'st-restart' });
+  // lowres2-scope (Ryan 2026-09-30): audio sleep only runs inside low-resource mode, so the "Sleep audio after" row is
+  // gone; settings.audioSleepSec (absent = 30 s) stays in the store as the low-resource idle window, with no UI.
+  const asleepNote = h('p.st-hint', { hidden: true, text: 'Audio asleep — play a note or press a key to wake' });
 
   colA.append(
     h('section.st-section', { 'aria-label': 'Audio' },
       h('h2.st-h2', { text: 'Audio' }),
       row('Latency', h('div.st-inline', {}, seg('latency', LATENCY_OPTS, 'Latency').el, latencyInfo), 'Lower = more responsive; raise it if you hear crackles. Changing it restarts audio for a moment.'),
+      latencyWarn.el,
       row('Output device', h('div.st-inline', {}, outputSelect, labelsBtn), null),
       outputNote,
       row('Mono output', tog('monoOutput', 'Mono').el, 'Sum to mono for a single speaker or a mono PA feed.'),
       row('Audio engine', restartBtn, 'Use if sound stops or after changing audio hardware.'),
+      asleepNote,
     ),
   );
 
@@ -380,15 +405,21 @@ export function mountSettings(el, ctx) {
   settingBinds.push({ key: 'midiInputId', apply: populateMidi });
   listen(midi, 'devices', populateMidi);
 
-  // pedal polarity detector
+  // pedal polarity detector. hardware-fixes (hardware pass: the one-value test depended on the pedal's state when the
+  // keyboard was plugged in): press → settle → release → settle, and the verdict comes from the pair
   const pedalBox = h('div.st-pedal', { 'aria-live': 'polite' });
+  const PEDAL_SETTLE_MS = 300; // a half-pedal / continuous pedal sends a run of values; take the one it rests on
+  const PEDAL_WAIT_MS = 15000;
   let pedalListener = null;
   let pedalTimer = null;
+  let pedalSettle = null;
   function stopPedalTest() {
     if (pedalListener && midi) midi.removeEventListener('cc', pedalListener);
     pedalListener = null;
     clearTimeout(pedalTimer);
+    clearTimeout(pedalSettle);
     pedalTimer = null;
+    pedalSettle = null;
   }
   /** Replace the pedal box content without dropping keyboard focus to <body>. */
   function pedalShow(...kids) {
@@ -398,45 +429,87 @@ export function mountSettings(el, ctx) {
   }
   // hardware pass (local, 2026-09-29): many keyboards read the pedal's direction when they power up or the pedal is
   // plugged in, so a pedal held down then reads backwards; the test says so before and after
-  const PEDAL_TIP = 'Plug in the pedal and the keyboard with your foot off the pedal: many keyboards read its direction then.';
+  const PEDAL_TIP = 'Plug in the pedal and the keyboard with your foot off the pedal (pedal UP): many keyboards read '
+    + 'its direction then.';
+  const PEDAL_NONE = 'No pedal message received. Is the pedal in the keyboard’s SUSTAIN jack and the keyboard selected above?';
   function pedalIdle(msg) {
     pedalShow(btn('Test my pedal', startPedalTest, { class: 'st-pedal-test' }), h('span.st-hint', { text: msg || PEDAL_TIP }));
+  }
+  function pedalCancelBtn() {
+    return btn('Cancel', () => {
+      stopPedalTest();
+      pedalIdle();
+    });
+  }
+  /**
+   * One step of the test: show `prompt`, then call done(value, tapped) with the CC64 value the pedal settles on (no
+   * CC64 for PEDAL_SETTLE_MS). `differentFrom`: ignore values on the same side of 64 as this one (a release step
+   * waits for the pedal to actually come up). `tapped`: the pedal went down and up again within the step (a switch
+   * pedal's 0/127 flipped once, or any pedal crossed 64 twice). Times out to the "no pedal message" line.
+   */
+  function pedalStep(step, prompt, differentFrom, done) {
+    stopPedalTest();
+    pedalShow(h('strong.st-pedal-prompt', { dataset: { step }, text: prompt }), pedalCancelBtn());
+    let last = null;
+    let flips = 0;
+    let extremesOnly = true;
+    pedalListener = (e) => {
+      const d = e.detail || {};
+      if (d.cc !== 64) return;
+      const v = Number(d.value);
+      if (differentFrom !== null && last === null && (v >= 64) === (differentFrom >= 64)) return;
+      if (last !== null && (v >= 64) !== (last >= 64)) flips += 1;
+      if (v > 1 && v < 126) extremesOnly = false;
+      last = v;
+      clearTimeout(pedalSettle);
+      pedalSettle = setTimeout(() => {
+        stopPedalTest();
+        done(last, flips >= 2 || (flips === 1 && extremesOnly));
+      }, PEDAL_SETTLE_MS);
+    };
+    midi.addEventListener('cc', pedalListener);
+    pedalTimer = setTimeout(() => {
+      stopPedalTest();
+      pedalIdle(PEDAL_NONE);
+    }, PEDAL_WAIT_MS);
   }
   function startPedalTest() {
     if (!midi) {
       pedalIdle('MIDI is not available.');
       return;
     }
-    stopPedalTest();
-    pedalShow(h('strong.st-pedal-prompt', { text: 'Press your sustain pedal now…' }), btn('Cancel', () => {
-      stopPedalTest();
-      pedalIdle();
-    }));
-    pedalListener = (e) => {
-      const d = e.detail || {};
-      if (d.cc !== 64) return;
-      stopPedalTest();
-      const invert = inferPedalInvert(d.value);
+    pressStep('Press your sustain pedal now and keep it down…');
+  }
+  function pressStep(prompt) {
+    pedalStep('press', prompt, null, (down, tapped) => {
+      // a quick tap ends on the released value: ask again rather than read it as "pressed"
+      if (tapped) return pressStep('Press the pedal and keep it down until “Now let go” appears…');
+      pedalStep('release', 'Now let go of the pedal…', down, (up) => pedalResult(down, up));
+    });
+  }
+  function pedalResult(down, up) {
+    const invert = inferPedalPolarity(down, up);
+    const kids = [];
+    if (invert === null) {
+      kids.push(h('span.st-pedal-result', { dataset: { invert: 'unknown' },
+        text: `Your pedal sent ${down} pressed and ${up} released — that doesn’t tell which way round it is. Keep it `
+          + 'down until “Now let go” appears, then test again.' }));
+    } else {
       const cur = !!S().pedalInvert;
       const msg = invert
-        ? `Your pedal sent ${d.value} when pressed — it works the other way round. If it was held down when the `
-          + 'keyboard was switched on or plugged in, let go, unplug and replug the keyboard, and test again first.'
-        : `Your pedal sent ${d.value} when pressed — normal polarity.`;
-      const kids = [h('span.st-pedal-result', { dataset: { invert: String(invert) }, text: msg })];
+        ? `Your pedal sent ${down} pressed and ${up} released — it works the other way round. If it was held down `
+          + 'when the keyboard was switched on or plugged in, let go, unplug and replug the keyboard, and test again first.'
+        : `Your pedal sent ${down} pressed and ${up} released — normal polarity.`;
+      kids.push(h('span.st-pedal-result', { dataset: { invert: String(invert) }, text: msg }));
       if (invert !== cur) {
         kids.push(btn(invert ? 'Invert pedal' : 'Turn invert off', () => {
           store.set('settings.pedalInvert', invert);
           pedalIdle(invert ? 'Pedal inverted. Press it again to check sustain.' : 'Pedal set to normal.');
         }, { class: 'st-pedal-apply' }));
       } else kids.push(h('span.st-hint', { text: 'Your setting is already right.' }));
-      kids.push(btn('Test again', startPedalTest));
-      pedalShow(...kids);
-    };
-    midi.addEventListener('cc', pedalListener);
-    pedalTimer = setTimeout(() => {
-      stopPedalTest();
-      pedalIdle('No pedal message received. Is the pedal in the keyboard’s SUSTAIN jack and the keyboard selected above?');
-    }, 15000);
+    }
+    kids.push(btn('Test again', startPedalTest, { class: 'st-pedal-again' }));
+    pedalShow(...kids);
   }
   pedalIdle();
 
@@ -1145,7 +1218,9 @@ export function mountSettings(el, ctx) {
       controller.onStatus((st) => {
         const ms = Number(st.latencyMs) || 0;
         setText(latencyInfo, ms ? `${Math.round(ms)} ms${ms > 40 ? ' — high' : ''}` : '');
+        asleepNote.hidden = st.audio !== 'asleep'; // lowres2
         latencyInfo.classList.toggle('warn', ms > 40);
+        latencyWarn.set({ latencyMs: ms, deviceId: S().outputDeviceId });
         const m = st.midi || {};
         setText(
           midiStatus,

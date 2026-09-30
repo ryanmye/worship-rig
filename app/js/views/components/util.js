@@ -134,6 +134,59 @@ export function blurAfterPointer(el, d) {
   else el.addEventListener('click', fn);
 }
 
+/**
+ * L-24 (drone flipped off while the window was hidden on the Mac): a key press that a focus loss interrupted never
+ * activates a control. Installed once on the document (main.js), capture phase, so it covers every button in the app
+ * (ON tiles, Lock / Panic / transpose, song chips, key grid):
+ *   * Space: a button clicks on keyup. The keyup activates only when its keydown landed on that same element and no
+ *     window blur / focus move / hidden document came in between; otherwise its default is prevented (no click).
+ *   * Enter (and Space) auto-repeat never re-activates: a button clicks on every Enter keydown, so a key left held
+ *     while the window lost focus would toggle an ON tile on and off at the repeat rate.
+ * Pointer holds are cancelled on window blur by holdButton / perform.js holdGate themselves.
+ * @param {Document} [doc]
+ * @param {Window} [win]
+ * @returns {() => void} uninstall
+ */
+export function guardKeyActivation(doc = document, win = window) {
+  let armed = null; // the control a Space keydown landed on in this focus session
+  const ctl = (t) => (t instanceof Element ? t.closest('button, [role="button"], [role="switch"], [role="tab"], '
+    + 'input[type="checkbox"], input[type="radio"], input[type="button"], input[type="submit"], summary') : null);
+  const onDown = (e) => {
+    if (e.key !== ' ' && e.key !== 'Enter') return;
+    const c = ctl(e.target);
+    if (!c) return;
+    if (e.repeat) {
+      e.preventDefault();
+      return;
+    }
+    if (e.key === ' ') armed = c;
+  };
+  const onUp = (e) => {
+    if (e.key !== ' ') return;
+    const c = ctl(e.target);
+    if (c && armed !== c) e.preventDefault(); // its press began before a focus loss (or elsewhere): no click
+    armed = null;
+  };
+  const reset = () => {
+    armed = null;
+  };
+  const onVis = () => {
+    if (doc.visibilityState === 'hidden') armed = null;
+  };
+  doc.addEventListener('keydown', onDown, true);
+  doc.addEventListener('keyup', onUp, true);
+  doc.addEventListener('focusout', reset, true);
+  doc.addEventListener('visibilitychange', onVis);
+  win.addEventListener('blur', reset);
+  return () => {
+    doc.removeEventListener('keydown', onDown, true);
+    doc.removeEventListener('keyup', onUp, true);
+    doc.removeEventListener('focusout', reset, true);
+    doc.removeEventListener('visibilitychange', onVis);
+    win.removeEventListener('blur', reset);
+  };
+}
+
 /** Clamp helper. */
 export const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 

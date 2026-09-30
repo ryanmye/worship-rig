@@ -48,7 +48,7 @@ const SUITES = [
   { name: 'settings', groups: ['phase2'], cmd: [node, 'test/phase2/settings/run.mjs'], timeout: 10 * MIN },
   { name: 'eq', groups: ['phase2'], cmd: [node, 'test/phase2/eq/run.mjs'], timeout: 10 * MIN },
   // menu-bar popover (app/mini.html) + the real app, two pages over BroadcastChannel (C7 menubar-B)
-  { name: 'mini', groups: ['phase2'], cmd: [node, 'test/phase2/mini/run.mjs'], timeout: 6 * MIN },
+  { name: 'mini', groups: ['phase2'], cmd: [node, 'test/phase2/mini/run.mjs'], timeout: 10 * MIN },
   // themes-setup: every registered theme boots flash-free, switches at runtime, picker/Quick, selector coverage
   // (writes test/phase2/themes/coverage-<id>.json for the theme agents)
   { name: 'themes', groups: ['phase2'], cmd: [node, 'test/phase2/themes/run.mjs'], timeout: 25 * MIN },

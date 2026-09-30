@@ -10,6 +10,8 @@
 //   I A + the hidden 'Loading…' spinner's infinite animation paused (measurement-only style injection)
 //   J D + the spinner paused (meters off and no running animation: the UI floor)
 //   K Sunday Pad + Piano, drone off, the pad played once (a fresh never-played pad vs one that has sounded)
+//   W A + the window hidden through LOCAL's 'rig:window-visible' {visible:false} DOM event, menuBarMode off
+//     (idle-cpu-ui: the renderer must stop its meters from that event alone)
 // Metrics per configuration (window of MEASURE_S seconds after SETTLE_S):
 //   * /proc per-thread CPU of the renderer (Linux): main, the Web Audio device thread, reverb background threads,
 //     compositor, raster, workers, other; the GPU and browser processes. This is the only place the audio thread's
@@ -22,7 +24,11 @@
 //   * DSP estimate: an OfflineAudioContext engine given the live engine's getState() renders OFFLINE_S seconds
 //     (silence in, drone as configured); CPU of the offline render thread / OFFLINE_S = audio-thread share.
 // Usage: node tools/idle-cpu.mjs [--only A,B,...] [--measure 20] [--settle 10] [--offline 20] [--no-offline]
-//        [--json out.json] [--emulate-prefix]
+//        [--json out.json] [--emulate-prefix] [--app <dir>]
+// --app serves another copy of app/ (A/B a UI change against a snapshot of the tree). UI columns (idle-cpu-ui):
+// raf = rAF callbacks/s, rcs = style recalcs/s and lay = layouts/s (CDP RecalcStyleCount / LayoutCount deltas),
+// an = AnalyserNode reads/s (UI and engine taps), man = reads of engine.analyserL/R (the stereo meters),
+// slot = controller.slotLevel() reads/s (the strip level meters' analyser taps).
 // Linux only for the /proc numbers (elsewhere they are omitted); 2-CPU CI boxes are noisy: compare configs within
 // one run, and read the CPU-time columns (not wall time).
 import { createRequire } from 'node:module';
@@ -50,6 +56,7 @@ const ONLY = arg('only', null)?.split(',').map((s) => s.trim().toUpperCase());
 const JSON_OUT = arg('json', null);
 // --emulate-prefix: connect every fresh instrument at once, as the engine did before idle-cpu #1 (A/B the fix)
 const EMULATE_PREFIX = argv.includes('--emulate-prefix');
+const APP_DIR = path.resolve(arg('app', path.join(ROOT, 'app')));
 const CLK_TCK = 100; // /proc stat ticks per second on Linux (sysconf(_SC_CLK_TCK); 100 on every mainstream kernel)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -141,6 +148,8 @@ const INIT = () => {
     t: { timeout: 0, interval: 0, raf: 0, idle: 0 },
     sites: new Map(), // "kind site" -> fires
     an: { float: 0, byte: 0, freqF: 0, freqB: 0 },
+    slot: 0, // controller.slotLevel() calls (counted by a wrapper installed after boot)
+    man: 0, // reads of the master analysers engine.analyserL/R (the stereo meters; the engine's own taps excluded)
     mut: 0,
     mutRecords: 0,
     mutTargets: new Map(),
@@ -151,6 +160,8 @@ const INIT = () => {
       this.t = { timeout: 0, interval: 0, raf: 0, idle: 0 };
       this.sites = new Map();
       this.an = { float: 0, byte: 0, freqF: 0, freqB: 0 };
+      this.slot = 0;
+      this.man = 0;
       this.mut = 0;
       this.mutRecords = 0;
       this.mutTargets = new Map();
@@ -269,6 +280,8 @@ const SNAP = () => {
     t: { ...P.t },
     sites: [...P.sites.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12),
     an: { ...P.an },
+    slot: P.slot,
+    man: P.man,
     mut: P.mut,
     mutTop: [...P.mutTargets.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8),
     longTasks: P.longTasks,
@@ -321,7 +334,7 @@ const OFFLINE_RENDER = async () => {
 };
 
 // ------------------------------------------------------------------------------------------------ main
-const server = createServer({ appDir: path.join(ROOT, 'app'), port: 0 });
+const server = createServer({ appDir: APP_DIR, port: 0 });
 const info = await server.listen();
 const origin = `http://127.0.0.1:${info.port}`;
 const browser = await chromium.launch({
@@ -349,6 +362,31 @@ await ev(() => window.__rig.ready);
 const overlay = await page.$('#overlay-start:not([hidden])');
 if (overlay) await overlay.click().catch(() => {});
 await until(() => window.__rig.engine.ctx && window.__rig.engine.ctx.state === 'running', null, 60000);
+// count slotLevel reads (levelMeter's read() looks controller.slotLevel up on every call, so a wrapper sees them)
+await ev(() => {
+  const c = window.__rig.controller;
+  if (typeof c.slotLevel !== 'function' || c.slotLevel.__prof) return;
+  const o = c.slotLevel;
+  c.slotLevel = function (...a) {
+    window.__prof.slot++;
+    return o.apply(this, a);
+  };
+  c.slotLevel.__prof = true;
+  // the stereo meters' reads (AnalyserNode reads also include the engine's own fx idle / freeze taps)
+  const e = window.__rig.engine;
+  for (const an of [e.analyserL, e.analyserR]) {
+    if (!an || an.__prof) continue;
+    an.__prof = true;
+    const proto = Object.getPrototypeOf(an);
+    for (const m of ['getFloatTimeDomainData', 'getByteTimeDomainData', 'getFloatFrequencyData', 'getByteFrequencyData']) {
+      an[m] = function (...x) {
+        window.__prof.man++;
+        return proto[m].apply(this, x);
+      };
+    }
+  }
+});
+if (APP_DIR !== path.join(ROOT, 'app')) console.log(`[idle-cpu] app dir ${APP_DIR}`);
 
 // the renderer that runs our page = the child with a Web Audio device thread
 // Browser has no process() (only BrowserServer does): the Chromium browser process is our child without --type=
@@ -496,6 +534,8 @@ async function measure(label, { seconds = MEASURE_S, settle = SETTLE_S } = {}) {
       raf: per(snap.t.raf),
       idle: per(snap.t.idle),
       analyser: per(snap.an.float + snap.an.byte + snap.an.freqF + snap.an.freqB),
+      slot: per(snap.slot),
+      man: per(snap.man),
       mut: per(snap.mut),
     },
     snap,
@@ -623,6 +663,11 @@ try {
       document.getElementById('idle-cpu-spin')?.remove();
     });
   }
+  if (want('W')) {
+    await ev(() => window.dispatchEvent(new CustomEvent('rig:window-visible', { detail: { visible: false } })));
+    await rec('W', "'rig:window-visible' {visible:false}, menuBarMode off");
+    await ev(() => window.dispatchEvent(new CustomEvent('rig:window-visible', { detail: { visible: true } })));
+  }
   if (want('F1')) {
     await ev(() => window.__rig.controller.setWindowVisible(false));
     await rec('F1', 'setWindowVisible(false), menuBarMode off');
@@ -679,8 +724,12 @@ try {
     style: r.cdp.style,
     dsp: r.offline ? r.offline.pct : '',
     raf: r.rate.raf,
+    rcs: r.cdp.styles,
+    lay: r.cdp.layouts,
     tmr: Math.round((r.rate.timeout + r.rate.interval) * 10) / 10,
     an: r.rate.analyser,
+    slot: r.rate.slot,
+    man: r.rate.man,
     mut: r.rate.mut,
     osc: r.snap.live.OscillatorNode || 0,
     src: Object.values(r.snap.live).reduce((a, b) => a + b, 0),

@@ -33,9 +33,11 @@ async function runGroup(group, timeout) {
   const names = await page.evaluate((g) => Object.keys(window.__suites[g]), group);
   for (const name of names) {
     if (filter && !`${group}.${name}`.includes(filter)) continue;
+    // lowres2: a suite may ask for a longer bound (suites.mjs `timeouts`, e.g. a 30 s offline render)
+    const tmo = (await page.evaluate((k) => window.__suites.timeouts?.[k], `${group}.${name}`)) || timeout;
     const r = await Promise.race([
       page.evaluate(([g, n]) => window.__run(g, n), [group, name]),
-      new Promise((res) => setTimeout(() => res({ pass: false, error: `timeout ${timeout} ms` }), timeout)),
+      new Promise((res) => setTimeout(() => res({ pass: false, error: `timeout ${tmo} ms` }), tmo)),
     ]);
     results.push({ name: `${group}.${name}`, ...r });
     const tag = r.pass ? (r.skipped ? 'SKIP' : 'PASS') : r.soft ? 'WARN' : 'FAIL';

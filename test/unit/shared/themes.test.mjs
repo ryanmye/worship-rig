@@ -52,7 +52,7 @@ test('registry: shape, unique ids, default registered and not coming, css files 
   assert.equal(new Set(ids).size, ids.length);
   assert.deepEqual(ids, ['classic', 'sanctuary', 'sanctuary-day', 'daylight-stage', 'daylight-day', 'studio', 'ember', 'nave']);
   assert.ok(isValidId(DEFAULT_THEME_ID) && !byId(DEFAULT_THEME_ID).coming);
-  assert.equal(DEFAULT_THEME_ID, 'classic'); // TEMP
+  assert.equal(DEFAULT_THEME_ID, 'sanctuary'); // Ryan's decision (themes-final)
   for (const t of THEMES) {
     assert.match(t.id, /^[a-z][a-z0-9-]*$/);
     assert.ok(t.name && typeof t.name === 'string');
@@ -64,7 +64,7 @@ test('registry: shape, unique ids, default registered and not coming, css files 
     assert.ok(fs.existsSync(path.join(APP, t.css)), `${t.css} exists`);
   }
   assert.equal(byId('classic').css, null);
-  assert.equal(byId('sanctuary-day').coming, true);
+  assert.ok(!byId('sanctuary-day').coming, 'sanctuary-day shipped with its light-dark() branch (theme-sanctuary)');
   assert.ok(Object.isFrozen(THEMES) && Object.isFrozen(THEMES[1]) && Object.isFrozen(THEMES[1].swatch));
 });
 
@@ -79,9 +79,9 @@ test('registry helpers: byId / isValidId / resolveThemeId / pickableThemes / the
   }
   assert.equal(resolveThemeId('studio'), 'studio');
   assert.ok(!pickableThemes().some((t) => t.coming));
-  assert.equal(pickableThemes().length, THEMES.length - 1);
+  assert.equal(pickableThemes().length, THEMES.filter((t) => !t.coming).length);
   assert.deepEqual(themeAttrs('daylight-day'), {
-    html: { theme: 'daylight-day', mode: 'light' }, body: { theme: 'daylight-v2', mode: 'day' },
+    html: { theme: 'daylight-day', mode: 'light' }, body: { theme: 'daylight-day', mode: 'light' },
     colorScheme: 'light', css: '/themes/daylight-v2/theme.css',
   });
   assert.deepEqual(themeAttrs('classic').body, { theme: 'classic', mode: 'dark' });
@@ -119,11 +119,11 @@ test('boot.js: mirror → html attrs, color-scheme, preload, render-blocking lin
   assert.equal(link.attrs.blocking, 'render');
   r.runAgain();
   assert.equal(r.head.children.filter((n) => n.id === 'theme-css').length, 1, 'idempotent');
-  // body appears → legacy body attributes
+  // body appears → body attributes (theme-daylight: Daylight dropped its legacy shim, so the canonical values)
   r.doc.body = r.body;
   r.observers[0].cb();
-  assert.equal(r.body.attrs['data-theme'], 'daylight-v2');
-  assert.equal(r.body.attrs['data-mode'], 'day');
+  assert.equal(r.body.attrs['data-theme'], 'daylight-day');
+  assert.equal(r.body.attrs['data-mode'], 'light');
 });
 
 test('boot.js: unknown / blocked mirror → default; classic links nothing; body present at once', () => {

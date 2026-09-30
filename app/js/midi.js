@@ -12,6 +12,9 @@
 //   'rebind'  {inputId, previousId, name} — the explicitly chosen device came back under a new id (matched by name)
 //   'unavailable' {reason:'unsupported'|'denied'|'failed', message}
 //   'activity' {inputId, type}
+//   'input'   {inputId, kind:'message'|'hotplug'} — lowres2: emitted BEFORE a message is parsed (any message but the
+//             realtime ones: clock / active sensing are not a player's input) and when a port connects, so a listener
+//             can wake sleeping audio before the note event
 // Channel pressure / poly aftertouch / clock / active sensing are ignored.
 // MIDI Learn (M2): learn(id, {accept, motion}) — 'fader' takes only a continuous CC, never CC64/66/67 or notes
 // (with motion > 0 the CC must also travel that far first — off by default: one message learns, as the UI expects); 'button' takes a note-on or a switch CC press (value ≥ 64); CC64 (sustain) is never learnable
@@ -314,6 +317,7 @@ export class MidiInput extends EventTarget {
     const prev = this._known.get(port.id);
     this._known.set(port.id, port.state);
     if (prev === port.state) return; // connection open/close churn only
+    if (port.state === 'connected') this._emit('input', { inputId: port.id, kind: 'hotplug' }); // lowres2
     if (port.state === 'disconnected') {
       const was = this._attached.get(port.id);
       if (was) {
@@ -346,6 +350,17 @@ export class MidiInput extends EventTarget {
     this._parseBytes(e.data, ts, inputId);
   }
 
+  /** lowres2: 'input' before the message is handled (not for realtime-only messages: clock, active sensing). */
+  _noteInput(bytes, inputId) {
+    if (!bytes) return;
+    for (let i = 0; i < bytes.length; i++) {
+      if ((bytes[i] & 0xff) < 0xf8) {
+        this._emit('input', { inputId, kind: 'message' });
+        return;
+      }
+    }
+  }
+
   /**
    * Test hook: feed raw bytes as if they arrived from an input.
    * @param {ArrayLike<number>} bytes
@@ -358,6 +373,7 @@ export class MidiInput extends EventTarget {
 
   _parseBytes(bytes, ts, inputId) {
     if (!bytes) return;
+    this._noteInput(bytes, inputId);
     let st = this._parse.get(inputId);
     if (!st) {
       st = { running: 0, data: [], sysex: false };

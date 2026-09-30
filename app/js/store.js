@@ -45,8 +45,25 @@ export const SONG_CATEGORIES = Object.freeze([...CATEGORIES, 'user']);
 /** Settings that belong to this machine and survive a replace-import. */
 // menubar-A (C7): menu-bar mode and low-resource are how this machine runs the app, not library content.
 export const DEVICE_LOCAL_SETTINGS = Object.freeze([
-  'outputDeviceId', 'padFolder', 'midiInputId', 'midiInputName', 'menuBarMode', 'lowResource',
+  'outputDeviceId', 'padFolder', 'midiInputId', 'midiInputName', 'menuBarMode', 'lowResource', 'audioSleepSec',
 ]);
+/**
+ * lowres2: settings.audioSleepSec (optional; absent = AUDIO_SLEEP_DEFAULT_SEC): suspend the audio after this many
+ * seconds with nothing to play and no input; 0 = never. Whole seconds 0..AUDIO_SLEEP_MAX_SEC. lowres2-scope (Ryan
+ * 2026-09-30): the low-resource idle window only (the controller never sleeps outside low-resource); no Settings UI.
+ */
+export const AUDIO_SLEEP_DEFAULT_SEC = 30;
+export const AUDIO_SLEEP_MAX_SEC = 3600;
+/** @param {*} v @returns {number|null} the valid audioSleepSec for `v`, null when it is not a number */
+export function validAudioSleepSec(v) {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+  return Math.min(AUDIO_SLEEP_MAX_SEC, Math.max(0, Math.round(v)));
+}
+/** @param {object} settings @returns {number} effective audioSleepSec (the default when absent/invalid) */
+export function audioSleepSecOf(settings) {
+  const v = validAudioSleepSec(settings && settings.audioSleepSec);
+  return v === null ? AUDIO_SLEEP_DEFAULT_SEC : v;
+}
 /** Settings that only move around the library (not an edit of it; round2-shell #2). */
 const NAV_SETTINGS = new Set(['currentSongId', 'setlistIndex', 'currentSetlistId']);
 /** Settings that change how the app looks, not the library (themes-setup): they don't mark it edited. */
@@ -415,6 +432,12 @@ function normalizeSettings(raw, songs, setlists) {
   // themes-setup: settings.theme is optional (absent = DEFAULT_THEME_ID, so no SCHEMA bump); an id that is no longer
   // registered falls back to the default instead of throwing or keeping a dead value
   if (hasOwn(out, 'theme') && out.theme !== undefined && !isThemeId(out.theme)) out.theme = DEFAULT_THEME_ID;
+  if (hasOwn(out, 'audioSleepSec')) {
+    // lowres2: optional; an invalid value is dropped (absent = the default), never kept
+    const v = validAudioSleepSec(out.audioSleepSec);
+    if (v === null) delete out.audioSleepSec;
+    else out.audioSleepSec = v;
+  }
   return out;
 }
 
@@ -844,10 +867,14 @@ export function createStore(opts = {}) {
           else next[cid] = value;
           return { segs: ['settings', 'midiLearn'], value: normalizeMidiLearn(next) };
         }
-        return hasOwn(SETTINGS_VALIDATORS, k) || k === 'theme' ? null : { segs, value: clone(value) };
+        return hasOwn(SETTINGS_VALIDATORS, k) || k === 'theme' || k === 'audioSleepSec' ? null : { segs, value: clone(value) };
       }
       // themes-setup: an unknown theme id is stored as the default (never an error, never a dead id)
       if (k === 'theme') return { segs, value: isThemeId(value) ? value : DEFAULT_THEME_ID };
+      if (k === 'audioSleepSec') {
+        const v = validAudioSleepSec(value); // lowres2: a number, rounded and clamped; anything else is refused
+        return v === null ? null : { segs, value: v };
+      }
       const fn = hasOwn(SETTINGS_VALIDATORS, k) ? SETTINGS_VALIDATORS[k] : null;
       if (!fn) return { segs, value: clone(value) }; // unknown settings are allowed (preserved)
       const v = fn(value);

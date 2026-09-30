@@ -13,16 +13,13 @@ export function chordReadout(o = {}) {
   return {
     el,
     set(chord) {
-      if (chord && chord.name) {
-        last = chord.name;
-        setText(name, chord.name);
-        el.classList.remove('stale');
-        el.classList.add('live');
-      } else {
-        setText(name, last || '—');
-        el.classList.toggle('stale', !!last);
-        el.classList.remove('live');
-      }
+      // idle-cpu-ui: class writes only on change (a no-op classList.add still re-sets the attribute)
+      const live = !!(chord && chord.name);
+      if (live) last = chord.name;
+      setText(name, live ? chord.name : last || '—');
+      const stale = !live && !!last;
+      if (el.classList.contains('stale') !== stale) el.classList.toggle('stale', stale);
+      if (el.classList.contains('live') !== live) el.classList.toggle('live', live);
     },
     destroy() {
       el.remove();

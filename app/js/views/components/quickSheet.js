@@ -4,12 +4,14 @@
 //   This song (Revert undoes)  Tempo + big TAP, Swell time stepper            live under lock
 //   This Mac (soundcheck)      Touch, live PEDAL DOWN light, pedal Reversed    frozen under lock
 //   If something's wrong       Sound OK readout, hold-to-restart audio         live under lock
+//   header: "Bluetooth output adds ~N ms…" (components/latencyHint.js) while the output latency is > 60 ms
 // The sheet only reports intents through callbacks; Perform writes the store / calls the controller.
 import { h, setText, disposer } from './util.js';
 import { stepper, segmented, toggle } from './buttons.js';
 import { holdButton } from './holdButton.js';
 import { openOverlay } from './overlay.js';
 import { byId, resolveThemeId } from '../../shared/themes.js';
+import { latencyHint } from './latencyHint.js';
 
 /** Touch options = settings.velocitySens (same words as Settings). */
 export const TOUCH_OPTIONS = Object.freeze(
@@ -56,7 +58,8 @@ const SOUND_TEXT = {
  * @param {() => void} [o.onAllSettings]
  * @param {() => void} [o.onTheme]           Theme row (default: event 'rig-open-settings' {section:'appearance'})
  * @param {(reason:string) => void} [o.onClose]
- * @param {object} [o.state]                    initial state, see set()
+ * @param {object} [o.state]                    initial state, see set() (latencyMs + outputDeviceId drive the
+ *                                              latency hint)
  * @returns {{el:HTMLElement, set(state:object):void, open(opts?:{focus?:boolean}):void, close():void,
  *            readonly isOpen:boolean, tap(now?:number):number|null, destroy():void}}
  */
@@ -74,8 +77,10 @@ export function quickSheet(o = {}) {
     pedalReversed: false,
     sound: 'ok',
     latencyMs: null,
+    outputDeviceId: 'default',
     locked: false,
     echoSynced: null,
+    audio: null, // lowres2: controller status.audio; 'asleep' → This Mac's caption says how to wake it
   };
 
   // ---- header
@@ -89,6 +94,12 @@ export function quickSheet(o = {}) {
     h('b', { text: 'This Mac' }),
     ' can’t be changed',
   );
+  // hardware-fixes: > 60 ms output latency (Bluetooth). It takes the subtitle's place in the header: every section
+  // below is full at the sheet's fixed height (This Mac 145 of 145 px at 1440×900), and the header has the width to
+  // show the whole line from 1280 px up (narrower: ellipsis, full text in the tooltip). Dismissed per device name.
+  const latWarn = latencyHint({ className: 'qs-latency', testid: 'quick-latency-hint',
+    onChange: (on) => head.classList.toggle('has-warn', on) });
+  d.add(() => latWarn.destroy());
   const allBtn = h('button.btn.qs-all', { type: 'button', text: 'All settings' });
   const xBtn = h('button.qs-x', { type: 'button', 'aria-label': 'Close Quick settings', title: 'Close' }, '×');
   const head = h(
@@ -96,6 +107,7 @@ export function quickSheet(o = {}) {
     {},
     h('h2', { text: 'Quick settings' }),
     h('span.qs-sub', { text: 'Changes apply now. Keep playing.' }),
+    latWarn.el,
     lockNote,
     allBtn,
     xBtn,
@@ -160,6 +172,7 @@ export function quickSheet(o = {}) {
   // ctx). The name comes from html[data-theme], which boot.js / applyTheme set.
   const themeBtn = h('button.qs-theme', { type: 'button', 'data-testid': 'quick-theme',
     title: 'Choose a theme in Settings › Appearance' });
+  const macScope = h('span.qs-scope', { text: 'every song · soundcheck settings' });
   const secMac = h(
     'section.qs-sec',
     { 'aria-label': 'This Mac' },
@@ -167,7 +180,7 @@ export function quickSheet(o = {}) {
       'div.qs-st',
       {},
       h('span.cap', { text: 'This Mac' }),
-      h('span.qs-scope', { text: 'every song · soundcheck settings' }),
+      macScope,
       themeBtn,
     ),
     h(
@@ -291,6 +304,7 @@ export function quickSheet(o = {}) {
       okLine.querySelector('small'),
       !bad && Number.isFinite(st.latencyMs) ? ` · ${Math.round(st.latencyMs)} ms` : '',
     );
+    latWarn.set({ latencyMs: st.latencyMs, deviceId: st.outputDeviceId });
     // stalled / paused: Restart is a normal one-click primary button (quick.png problem state); OK: hold, so a stray
     // tap can't
     restartHold.el.hidden = oneClick;
@@ -303,6 +317,9 @@ export function quickSheet(o = {}) {
     allBtn.disabled = !!st.locked;
     const theme = byId(resolveThemeId(document.documentElement.dataset.theme));
     setText(themeBtn, `Theme: ${theme.name} ▸`);
+    const asleep = st.audio === 'asleep'; // lowres2 (needs perform.js renderQuick to pass `audio: status.audio`)
+    setText(macScope, asleep ? 'Audio asleep — play a note or press a key to wake'
+      : 'every song · soundcheck settings');
     themeBtn.disabled = !!st.locked;
     secMac.classList.toggle('frozen', !!st.locked);
     el.classList.toggle('locked', !!st.locked);

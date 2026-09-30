@@ -2,9 +2,10 @@
 // Theme screenshots + contrast audit for ANY registered theme (themes-setup; generalised from the Daylight v2
 // design shoot, design/warmth/daylight-v2/shoot.mjs, which this replaces). The theme is applied the way the app does
 // it (settings.theme → boot.js + main.js applyTheme), not injected, so what you see is what ships.
-//   node tools/themes/shoot.mjs --theme <id> [--out <dir>] [--only perform,quick,edit,eq] [--size 1440x900]
+//   node tools/themes/shoot.mjs --theme <id> [--out <dir>] [--only perform,quick,edit,eq,mini] [--size 1440x900]
 //   default --out: design/warmth/shots/<id>/
-// Writes <out>/{perform,quick,edit,edit-tone-eq}.png, <out>/audit-<shot>-<W>.json (every visible text run: computed
+// Writes <out>/{perform,quick,edit,edit-tone-eq}.png, <out>/{mini,mini-drone-keys}.png (the menu-bar popover,
+// app/mini.html at 320×440, live on the app's real bus state; mini-theme: the critic shoots it per theme), <out>/audit-<shot>-<W>.json (every visible text run: computed
 // colour vs the median rendered background behind it, WCAG 4.5 / 3 for large text; disabled controls exempt) and
 // <out>/summary.json (per shot: runs, fails, lowest; console/HTTP errors).
 import { createRequire } from 'node:module';
@@ -23,7 +24,7 @@ const opt = (n, d = null) => (args.includes(n) ? args[args.indexOf(n) + 1] : d);
 const THEME = opt('--theme');
 if (!THEME || !byId(THEME)) {
   console.error(`usage: node tools/themes/shoot.mjs --theme <${THEMES.map((t) => t.id).join('|')}> [--out dir] `
-    + '[--only perform,quick,edit,eq] [--size 1440x900]');
+    + '[--only perform,quick,edit,eq,mini] [--size 1440x900]');
   process.exit(2);
 }
 const OUT = path.resolve(opt('--out', path.join(ROOT, 'design/warmth/shots', THEME)));
@@ -266,6 +267,31 @@ try {
         summary.shots.eq = await shoot(page, 'edit-tone-eq');
       } else summary.shots.eq = 'Advanced › Tone / EQ did not mount';
     }
+  }
+  if (want('mini')) {
+    // the menu-bar popover (app/mini.html) in the same context: it boots from the mirror the app wrote and goes live
+    // on the app's real bus state (BroadcastChannel 'rig-bus'); the audit runs on the 320×440 page
+    const mp = await ctx.newPage();
+    mp.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(`[mini] ${m.text()}`); });
+    mp.on('response', (r) => { if (r.status() >= 400) consoleErrors.push(`[mini] ${r.status()} ${r.url()}`); });
+    await mp.setViewportSize({ width: 320, height: 440 });
+    await mp.goto(new URL('mini.html', url).href, { timeout: 120000 });
+    await mp.waitForFunction(() => document.getElementById('mini')?.dataset.state === 'live', null, { timeout: 60000 });
+    await mp.evaluate(() => document.fonts.ready);
+    await mp.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation-duration: 0s !important; }' });
+    await mp.waitForTimeout(300);
+    summary.miniShown = await mp.evaluate(() => document.documentElement.dataset.theme);
+    const shootMini = async (name) => {
+      const file = path.join(OUT, `${name}.png`);
+      await mp.screenshot({ path: file });
+      return audit(mp, `${name}-320`, file);
+    };
+    summary.shots.mini = await shootMini('mini');
+    await mp.click('[data-testid="mini-drone-keys"]');
+    await mp.mouse.move(0, 0);
+    await mp.waitForTimeout(200);
+    summary.shots.miniKeys = await shootMini('mini-drone-keys');
+    await mp.close();
   }
   await ctx.close();
 } finally {

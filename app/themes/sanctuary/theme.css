@@ -1,141 +1,176 @@
-/* Worship Rig: "Sanctuary" theme (design/warmth/sanctuary/concept.md).
-   A night-time nave: deep ink-navy vault, cream light, brass trim, one stained-glass window (the drone card).
-   Not linked from index.html. It applies in two ways from ONE block:
-     - toggled: <body data-theme="sanctuary"> (any other data-theme value turns it off);
-     - injected / linked plainly: <body> with no data-theme attribute at all.
-   That is the guard `body:is([data-theme="sanctuary"], :not([data-theme]))`, which also adds (0,1,1) specificity so
-   every rule here wins its tie with styles.css / the edit CSS without !important.
+/* Worship Rig: "Nave" theme, registry id `nave` (dark). The v1 Sanctuary (design/warmth/sanctuary/concept.md),
+   kept as its own look next to Sanctuary (sanctuary-v2): an ink-navy vault (OKLCH hue 268-277), cream light, brass
+   trim, a grain tile, and a stained-glass light in the drone card's corner.
+   Contract (app/themes/README.md): every rule sits inside :where(html[data-theme="nave"]) — zero specificity, so it
+   wins ties on source order (the sheet is linked after the app's CSS) and the app's own state rules (.off, .faded,
+   .locked, :disabled) still win on specificity. That is what fixes the v1 OFF-lamp glow: the old (0,1,1) body guard
+   let `.ontile .ot-led` beat styles.css `.ontile.off .ot-led`. No unguarded branch, no infinite animation, no
+   backdrop-filter, root-absolute assets, fonts from /fonts. The logo is app/assets/mark.svg for every theme.
    Rules of the theme:
      - Songs are set in the book face (Alegreya): song title, key, chord, setlist names, notes, Edit's sentence.
-       Things you press are set in the sans (Figtree). Labels are Alegreya true small caps (smcp/c2sc), tracked.
+       Things you press and status lamps (MIDI, READY, MASTER, PEDAL, BEND) are the sans (Figtree). Section headings
+       are Alegreya true small caps (smcp/c2sc), tracked: the rubrics of a service order.
      - Colour is light: ON = a lit lamp (slot colour + a glass highlight), OFF = an unlit pane with a rim.
      - Brass (--accent) marks "where you are": current song, selected view, key. Amber (--warn) stays lock/hold only.
-     - Motion is opacity only, and only at rest; nothing ambient runs under Lock or prefers-reduced-motion.
-   Fonts are same-origin (CSP font-src 'self'); absolute paths so the file works linked or injected. */
+     - Motion is opacity only and finite (a fade when a sheet opens, the window lighting when the drone starts). */
 
+/* Family names are Nave's own (themes-critic N1): with sanctuary-v2's names, main.js warmThemeFonts' FontFace copies
+   of these faces (kept in document.fonts for the session, reviews/themes-critic.md T1/T2) re-dressed Sanctuary after a
+   runtime switch through Nave. */
 @font-face {
-  font-family: 'Sanctuary Book'; /* Alegreya, OFL (fonts/OFL-Alegreya.txt); Latin subset, wght 400-900, smcp c2sc tnum */
+  font-family: 'Nave Book'; /* Alegreya, OFL (fonts/OFL-Alegreya.txt); Latin, wght 400-900, smcp c2sc tnum */
   src: url('/fonts/Alegreya-wght.woff2') format('woff2');
   font-weight: 400 900; font-style: normal; font-display: block;
+  /* Alegreya's content area is 1.361 em (1016 / 345): inside Classic's tight line boxes (.chord-name 1.1, the Next
+     name 1.15) it spilled 2-6 px and ui-core's clip probe failed at 1280×800 and 1366×768 (chord 56 > 51, Next
+     25 > 23). 88 / 24 keeps the baseline where it sat at line-height 1.1 (0.87 vs 0.885 em) and fits a 1.12 em box;
+     the ink is clipped exactly as before (the app's own overflow: hidden). */
+  ascent-override: 88%; descent-override: 24%; line-gap-override: 0%;
+}
+/* The minus and plus of the sans come from Instrument Sans (the file Daylight ships, fonts/OFL-InstrumentSans.txt).
+   Figtree's U+2212 is 380 units of ink in a 620 advance, 57 units thick and sitting below the figures' middle, so
+   "−1.9 dB" and the Transpose / Swell − buttons read as a hyphen at stage distance (build critic, "the minus sign
+   is weak"). Instrument Sans' pair is 411 wide, centred on its lining figures. Same descriptors as the Figtree face,
+   so Chromium keeps both in one segmented face (a 400-700 range made it a separate face that never loaded); the
+   variable file clamps 800 to its 700. Metric overrides = Figtree's (950 / 250 / 0), so no line box moves.
+   The two ranges are disjoint and this face comes FIRST (themes-critic N1): warmThemeFonts copies a face without
+   its unicode-range, and the last copy wins, so after a runtime switch the copy of Figtree (not of this face) takes
+   every glyph. Declared second, the copy of this face set the whole UI in Instrument Sans. */
+@font-face {
+  font-family: 'Nave Sans';
+  src: url('/fonts/InstrumentSans-var.woff2') format('woff2');
+  font-weight: 300 900; font-style: normal; font-display: block; unicode-range: U+2212, U+002B;
+  ascent-override: 95%; descent-override: 25%; line-gap-override: 0%;
 }
 @font-face {
-  font-family: 'Sanctuary Sans'; /* Figtree, OFL (fonts/OFL-Figtree.txt); Latin subset, wght 300-900, tnum */
+  font-family: 'Nave Sans'; /* Figtree, OFL (fonts/OFL-Figtree.txt); Latin subset, wght 300-900, tnum */
   src: url('/fonts/Figtree-wght.woff2') format('woff2');
   font-weight: 300 900; font-style: normal; font-display: block;
+  unicode-range: U+0000-002A, U+002C-2211, U+2213-10FFFF;
 }
 
-body:is([data-theme="sanctuary"], :not([data-theme])) {
-  /* ------------------------------------------------------------------ tokens
-     Neutrals are ink (OKLCH hue 268-274, chroma 0.03-0.04): a chosen colour, not the grey-blue slate (C 0.007) the
-     app had. Everything that is light (text, thumbs, keys, dots) is cream (hue 80-90). Ratios: concept.md §2. */
-  --bg: #0a0c1e;
-  --panel: #131529;
-  --panel-2: #1c1e33;
-  --panel-3: #27293e;
-  --line: #25273c;
-  --line-2: #3c3e52;
-  --text: #f5ecd8;
-  --muted: #cec1aa;
-  --faint: #ab9d87;
-  --label: #d3bf94;          /* small-caps labels: brass-cream */
-  --accent: #e6ba65;         /* brass */
-  --accent-2: #f1cd84;       /* brass, lit (hover) */
-  --accent-ink: #1c1406;
-  --ink-on-lamp: #150f08;
-  --slot-0: #f78955;         /* Keys: ember glass */
-  --slot-1: #6ed889;         /* Pad: green glass */
-  --slot-2: #7ad1f7;         /* Extra: sky glass, lighter than Bass (deutan separation, research §5.3) */
-  --slot-3: #b073da;         /* Bass: amethyst glass */
-  --danger: #ef5b4f;
-  --warn: #f7a23d;
-  --ok: #6ed889;
-  --track: #2b2d44;
-  --track-edge: #7d7a86;
-  --led-off: #77737f;
-  --muted-fader: #8a8594;
-  --panic: #d9363a;
-  --panic-bg: #54121a;
-  --panic-text: #ffd0cc;
-  --rec-idle: #c9565a;
-  --thumb: #f4ecdc;
-  --focus: #f6e2a8;
-  --fx: #cdbf9f;             /* shared effects: pewter-cream, never a slot colour */
-  --drone: #edd9a6;          /* the candle */
-  --sel-fx: #2e2f56;
-  --chg: #fff4dc;
-  --off-tile: #181a2c;
-  --glass-ruby: #d9485a;
-  --glass-sapphire: #3f66d8;
-  --glass-gold: #e6ba65;
-  --glass-emerald: #3fae7c;
-  --glass-amethyst: #8a5bd0;
-  --font: 'Sanctuary Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-display: 'Sanctuary Book', 'Iowan Old Style', Palatino, Georgia, serif; /* Alegreya has tnum: safe for numbers */
-  --font-book: 'Sanctuary Book', 'Iowan Old Style', Palatino, Georgia, serif;
-  --radius: 12px;
-  --radius-sm: 8px;
+:where(html[data-theme="nave"]) {
+  /* ------------------------------------------------------------------ tokens (on body: styles.css declares its
+     tokens on :root at (0,1,0), which a zero-specificity rule on <html> would lose to; body's win by inheritance).
+     Neutrals are ink (OKLCH hue 268-274, chroma 0.03-0.04). Everything that is light is cream (hue 80-90). */
+  & body {
+    --bg: #0a0c1e;
+    --panel: #131529;
+    --panel-2: #1c1e33;
+    --panel-3: #27293e;
+    --line: #25273c;
+    --line-2: #3c3e52;
+    --line-3: #4b4d6a;         /* hover rims, the unlit switch, dashed empty tabs */
+    --text: #f5ecd8;
+    --muted: #cec1aa;
+    --faint: #ab9d87;
+    --label: #d3bf94;          /* small-caps rubrics: brass-cream */
+    --accent: #e6ba65;         /* brass */
+    --accent-2: #f1cd84;       /* brass, lit (hover) */
+    --accent-ink: #1c1406;
+    --ink-on-lamp: #150f08;
+    --slot-0: #f7775f;         /* Keys: coral-ember glass, pulled off the lock amber (stage critic: ΔE 6.9 → 11.4) */
+    --slot-1: #5fc98a;         /* Pad: emerald glass, off v1's mint (warmth critic); ink 9.3:1, vs OFF pane 8.4:1 */
+    --slot-2: #7ad1f7;         /* Extra: sky glass, lighter than Bass (deutan separation, research §5.3) */
+    --slot-3: #b073da;         /* Bass: amethyst glass */
+    --danger: #ef5b4f;
+    --warn: #f7a23d;
+    --ok: #6ed889;
+    --track: #2b2d44;
+    --track-edge: #7d7a86;
+    --led-off: #77737f;
+    --muted-fader: #8a8594;
+    --panic: #d9363a;
+    --panic-bg: #54121a;
+    --panic-text: #ffd0cc;
+    --rec-idle: #c9565a;
+    --thumb: #f4ecdc;
+    --focus: #f6e2a8;
+    --fx: #cdbf9f;             /* shared effects: pewter-cream, never a slot colour */
+    --drone: #edd9a6;          /* the candle */
+    --sel-fx: #2e2f56;
+    --chg: #fff4dc;
+    --chg-glow: #fff4dcaa;
+    --hairline-lit: #f5ecd80f;
+    --off-tile: #181a2c;
+    --lead: #0a0c1e55;
+    --glass-ruby: #d9485a;
+    --glass-sapphire: #3f66d8;
+    --glass-gold: #e6ba65;
+    --glass-emerald: #3fae7c;
+    --glass-amethyst: #8a5bd0;
+    --font: 'Nave Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    /* Alegreya has tnum: safe for numbers */
+    --font-display: 'Nave Book', 'Iowan Old Style', Palatino, Georgia, serif;
+    --font-book: 'Nave Book', 'Iowan Old Style', Palatino, Georgia, serif;
+    --radius: 12px;
+    --radius-sm: 8px;
 
-  background: var(--bg);
-  color: var(--text);
-  /* the vault: one light from above the nave, a candle glow below the keyboard, a 128 px grain tile (≤ 6 % alpha).
-     It lives on a fixed ::after promoted with will-change, so a full-frame repaint of the page need not re-raster the
-     grain and gradients (intent; the headless measurements were too noisy to confirm: concept.md §4). No filters, no
-     background-attachment: fixed. body::before is taken (styles.css: the REC bar). */
-  &::after {
-    content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none; will-change: transform;
-    background:
-      url('/themes/sanctuary/grain.png') repeat,
-      radial-gradient(90% 60% at 50% -18%, #1f2458 0%, #14163c 38%, transparent 72%),
-      radial-gradient(55% 28% at 50% 112%, #e6ba651c 0%, transparent 70%),
-      var(--bg);
+    background: var(--bg);
+    color: var(--text);
+    font-feature-settings: 'kern' 1;
+    /* the vault: one light from above the nave, a candle pool behind the song title, a candle glow below the
+       keyboard, and a 128 px grain tile (≤ 6 % alpha), on a fixed ::after (body::before is the REC bar). No
+       will-change (build critic: a promoted full-viewport layer is ~20 MB of GPU memory for a static picture). */
+    &::after {
+      content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+      background:
+        url('/themes/sanctuary/grain.png') repeat,
+        radial-gradient(40% 36% at 16% 8%, #e6ba6514 0%, transparent 70%),
+        radial-gradient(90% 60% at 50% -18%, #1f2458 0%, #14163c 38%, transparent 72%),
+        radial-gradient(55% 28% at 50% 112%, #e6ba651c 0%, transparent 70%),
+        var(--bg);
+    }
   }
-  font-feature-settings: 'kern' 1;
+  /* menu-bar / low-resource mode (docs/menubar-mode.md): no texture layer */
+  &[data-low-resource] body::after { display: none; }
 
-  /* ------------------------------------------------------------------ small-caps labels
-     True small caps from the book face, tracked. They read as the rubrics of a service order, not as dashboard caps:
-     serif, lower weight, cream-brass, and they are captions only (nothing you press is set this way). */
-  & :is(.select-label, .stepper-label, .fader-label, .wheel-caption, .chord-caption, .section-title, .tb-cap,
+  /* ------------------------------------------------------------------ small-caps rubrics (section headings only)
+     Serif, lower weight, cream-brass, and captions only: nothing you press and no status lamp is set this way
+     (warmth + stage critics: MIDI / READY / MASTER / PEDAL / BEND went back to the bold sans). */
+  & :is(.select-label, .stepper-label, .fader-label, .wheel-caption, .chord-caption, .section-title,
         .song-key-cap, .nav-next-cap, .fxpill-l, .qs-st .cap, .ev2-cap, .ev2-song-chipcap, .ev2-slot-mg-head,
         .ev2-list-bcat) {
     font-family: var(--font-book); font-variant-caps: all-small-caps; text-transform: none; font-weight: 650;
     letter-spacing: .09em; font-size: 16px; color: var(--label); font-variant-numeric: lining-nums;
+    /* = Classic's 12 px × 1.35 line box: the rubric rows (Key & drone, Chord…) keep their height */
+    line-height: 16px;
   }
-  & .drone-title .section-title, & .notes-head .section-title { font-size: 16px; color: var(--label); letter-spacing: .09em; }
-  & .fx-chiprow .fx-lab span { font: 650 15px/1 var(--font-book); font-variant-caps: all-small-caps; letter-spacing: .08em;
+  & .fx-chiprow .fx-lab span { font: 650 15px/1 var(--font-book); font-variant-caps: all-small-caps;
+      letter-spacing: .08em;
     color: var(--label); }
   & .fx-chiprow .fx-lab { color: var(--label); }
-  & .tb-cap { font-size: 15px; }
-  & .ready-text { font-family: var(--font-book); font-variant-caps: all-small-caps; letter-spacing: .08em; font-size: 16px; }
   & .fader.horizontal .fader-label { min-width: 3.9em; }
-  & .pedal-lamp, & .drone-swell { font: 650 14px/1 var(--font-book); font-variant-caps: all-small-caps; text-transform: none;
-    letter-spacing: .09em; }
-  & .drone-swell-text::after { font-size: 14px; }
-  & .slot-vt { font: 650 15px/1 var(--font-book); font-variant-caps: all-small-caps; letter-spacing: .12em; color: var(--faint); }
-  & .step-panel .sp-owner { font: 700 13px/1.1 var(--font-book); font-variant-caps: all-small-caps; letter-spacing: .1em; }
+  & .slot-vt { font: 650 15px/1 var(--font-book); font-variant-caps: all-small-caps; letter-spacing: .12em;
+      color: var(--faint); }
   & .ev2-cap { font-size: 15px; }
-  & .ev2-song-chipcap, & .ev2-slot-mg-head, & .ev2-list-bcat { font-size: 14px; }
+  & :is(.ev2-song-chipcap, .ev2-slot-mg-head, .ev2-list-bcat) { font-size: 14px; }
   & .drone-char .fader.horizontal .fader-label { font: 650 13.5px/1.2 var(--font); font-variant-caps: normal;
     letter-spacing: 0; color: var(--text); }
+  /* status lamps (MIDI, READY, MASTER in the top bar; PEDAL, BEND) keep styles.css' bold sans caps, one step up:
+     v1's 14 px serif small caps had a 6.3 px glyph height against the sans' 7.7 (stage critic) */
+  & .pedal-lamp, & .drone-swell { font-size: 12px; letter-spacing: .08em; }
+  & .tb-master .fader-label { font: 700 12px/1 var(--font); font-variant-caps: normal; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted); }
+  & .drone-swell-text::after { font-size: 12px; }
 
   /* ------------------------------------------------------------------ surfaces: planes lit from above, not boxes */
-  & .panel { background: var(--panel); border-color: var(--line);
-    box-shadow: inset 0 1px 0 #e6ba651a, 0 1px 0 #0000004d; } /* a brass top edge: lit from above */
+  & .panel { background-color: var(--panel); background-image: linear-gradient(#f5ecd80a, #f5ecd800 44%);
+      border-color: var(--line);
+    box-shadow: inset 0 1px 0 #e6ba652e, 0 1px 0 #0000004d; } /* a brass top edge and a faint wash: lit from above */
   & .topbar { background: linear-gradient(#0e1030, #0b0d25); border-bottom: 1px solid #e6ba6526; }
   & .tb-name { font: 700 18px/1 var(--font-book); letter-spacing: .01em; }
-  & .tb-logo { content: url('/themes/sanctuary/mark.svg'); }
-  /* buttons: styles.css already paints them from the tokens; only its hard-coded hover border is cold. (No background
-     overrides on the generic classes: the guard's extra specificity would beat single-class rules like .btn-panic.) */
-  & :is(.btn, .tb-btn, .toggle, .seg, .step-btn, .key-btn, .setlist-chip, .swell-btn):hover:not(:disabled) {
-    border-color: #4b4d6a; }
+  /* buttons: styles.css paints them from the tokens; only its hard-coded hover border is cold */
+  & :is(.btn, .tb-btn, .toggle, .seg, .step-btn, .key-btn, .setlist-chip, .swell-btn):hover:not(:disabled, .faded) {
+    border-color: var(--line-3); } /* not over Faded's amber frame: the pointer is still on it after the click */
   & .segmented .seg.on { background: linear-gradient(#efc878, var(--accent)); color: var(--accent-ink); }
   & .segmented .seg.on:hover { background: var(--accent-2); }
   & .select-input { background: var(--panel-2); border-color: var(--line-2); }
   & .toggle.on { border-color: #7a6436; }
-  & .hold-btn .hb-ring { background: conic-gradient(var(--hb-c) calc(var(--hold, 0) * 360deg), #4b4d6a 0); }
+  & .hold-btn .hb-ring { background: conic-gradient(var(--hb-c) calc(var(--hold, 0) * 360deg), var(--line-3) 0); }
   & .hold-btn .hb-cap { color: var(--accent-ink); }
   & .quick-btn[aria-expanded="true"] { background: var(--panel-3); border-color: var(--accent);
     box-shadow: inset 0 -3px 0 var(--accent); }
-  & .warn-btn { background: #3d2608; color: #ffdca6; }
 
   /* faders: ivory thumbs with an ink rim; the playing indicator is candle-light, not white */
   & .fader.horizontal .fader-input::-webkit-slider-thumb { background: linear-gradient(#fbf5e8, #e3d6bd);
@@ -148,93 +183,87 @@ body:is([data-theme="sanctuary"], :not([data-theme])) {
   /* top-bar meter, lamps */
   & .meter-bar { background: #0d0f23; }
   & .meter-fill { background: linear-gradient(to right, #4fbf82 0%, #4fbf82 72%, #e8c35a 86%, #e5553f 100%); }
-  & .meter.vertical .meter-fill { background: linear-gradient(to top, #4fbf82 0%, #4fbf82 72%, #e8c35a 86%, #e5553f 100%); }
   & .meter-hold { background: #f5ecd8; }
   & .led { box-shadow: inset 0 0 0 1px #0008; }
   & .led.ok { box-shadow: 0 0 8px #6ed88999; }
   & .led.warn { box-shadow: 0 0 8px #f7a23d99; }
   & .led.bad { box-shadow: 0 0 8px #ef5b4f99; }
-  & .led.flash { background: #d4ffe2; box-shadow: 0 0 12px #d4ffe2; }
-  & .rec-btn.recording { background: #4a1219; }
   & .rec-time { font: 700 16px/1 var(--font); font-variant-numeric: tabular-nums; }
 
   /* banners, toasts, sheets and popovers: the same ink planes, a brass hairline on top */
-  & .bstrip.open .bstrip-list { background: var(--panel-2); border-color: var(--line-2); }
-  & .banner.info, & .bstrip[data-kind="info"], & .bstrip.open .banner.info { background: #14224a; color: #e8efff; }
+  & .banner.info, & .bstrip[data-kind="info"] { background: #14224a; color: #e8efff; }
   & .toast { background: #1c1e33f5; border-color: var(--line-2); border-left-color: var(--accent);
     box-shadow: 0 6px 24px #000b, inset 0 1px 0 #f5ecd812; }
   & .toast.warn { border-left-color: var(--warn); }
-  & .toast.error { border-left-color: var(--danger); }
-  & .toast.ok { border-left-color: var(--ok); }
+  /* popovers (styles.css paints them slate #1f242c / #1b1f26) */
   & .step-panel, & .step-panel::after { background: var(--panel-2); }
-  & .step-panel { box-shadow: 0 14px 40px #000c, inset 0 1px 0 #f5ecd812; animation: sanct-fade .14s ease-out; }
-  & .step-panel .sp-step.on { color: var(--ink-on-lamp); }
-  & .step-panel .sp-x { background: var(--panel-3); border-color: var(--line-2); }
-  & .fx-more, & .keypop, & .keypop::before { background: var(--panel-2); }
-  & .fx-more { border-color: var(--line-2); }
+  & .fx-more, & .bstrip.open .bstrip-list { background: var(--panel-2); border-color: var(--line-2); }
+  & .keypop, & .keypop::before { background: var(--panel-2); }
   & .keypop h3 { font: 700 21px/1.2 var(--font-book); }
   & .keypop .key-btn.on.hands::after { color: #5a4214; }
   & .qs, & .qs::before { background: #16182f; border-color: #3f415f; }
-  & .qs { box-shadow: 0 22px 60px #000c, 0 0 0 1px #000, inset 0 1px 0 #f5ecd814; animation: sanct-fade .16s ease-out; }
+  /* a short shadow: styles.css' 0 22px 60px darkens the lamps under the sheet by ~18 % (Keys' ON badge measured
+     3.62:1 there); the lamps must read the same with Quick open */
+  & .qs { box-shadow: 0 10px 22px #0009, 0 0 0 1px #000, inset 0 1px 0 #f5ecd814; animation: nave-fade .16s ease-out; }
   & .qs-h h2 { font: 700 20px/1.1 var(--font-book); letter-spacing: .005em; }
   & .qs-h .qs-x { background: var(--panel-3); border-color: var(--line-2); }
   & .qs-tap { background: var(--panel-3); border-color: var(--text); }
-  & .qs-pedal { background: #0d0f23; border-color: var(--line-2); font: 650 15px/1 var(--font-book);
-    font-variant-caps: all-small-caps; letter-spacing: .09em; }
+  & .qs-pedal { background: #0d0f23; border-color: var(--line-2); font: 700 13px/1 var(--font); letter-spacing: .06em; }
   & .qs-pedal.on i { background: #fff4dc; box-shadow: 0 0 10px #fff4dc; }
   & .qs-bpm { font: 700 28px/1 var(--font-book); font-variant-numeric: lining-nums tabular-nums; }
   & .qs-restart { color: var(--accent-ink); }
   & .settings-modal { background: #03061099; }
-  & .settings-placeholder { background: var(--panel); border-color: var(--line-2); }
 
-  /* ------------------------------------------------------------------ the start overlay (see also .sanct-before below) */
-  & .overlay-start { background: #050918e6; backdrop-filter: none; }
-  & .overlay-card { background: var(--panel); border-color: #3f415f; box-shadow: 0 30px 80px #000c, inset 0 1px 0 #f5ecd814; }
-  & .overlay-card img { content: url('/themes/sanctuary/mark.svg'); }
+  /* ------------------------------------------------------------------ the start overlay (the mark stays the app's) */
+  & .overlay-start { background: #050918e6; }
+  & .overlay-card { background: var(--panel); border-color: #3f415f;
+      box-shadow: 0 30px 80px #000c, inset 0 1px 0 #f5ecd814; }
   & .overlay-title { font: 700 36px/1.1 var(--font-book); }
 
   /* ------------------------------------------------------------------ changed dots: cream, ringed in ink */
-  & .cd { box-shadow: 0 0 0 2px var(--bg), 0 0 6px #fff4dcaa; }
+  & .cd { box-shadow: 0 0 0 2px var(--bg), 0 0 6px var(--chg-glow); }
   & .cdi { box-shadow: 0 0 6px #fff4dccc; }
-  & .rv-dot { box-shadow: 0 0 6px #fff4dcaa; }
+  & .rv-dot { box-shadow: 0 0 6px var(--chg-glow); }
 
-  /* ------------------------------------------------------------------ lamps (onTile): lit glass vs an unlit pane */
+  /* ------------------------------------------------------------------ lamps (onTile): lit glass vs an unlit pane.
+     The OFF rules restate styles.css on purpose: an OFF lamp has no halo, no highlight and a hollow LED. */
   & .ontile { color: var(--ink-on-lamp);
     background-image: linear-gradient(#ffffff38, #ffffff00 58%);
-    box-shadow: 0 0 20px color-mix(in srgb, var(--c) 30%, transparent), inset 0 -2px 0 #00000024; }
+    box-shadow: 0 0 20px color-mix(in srgb, var(--c) 30%, transparent), inset 0 1px 0 #ffffff59,
+        inset 0 -2px 0 #00000024; }
   & .ontile .ot-name, & .ontile .ot-sub { color: var(--ink-on-lamp); }
   & .ontile .ot-name { letter-spacing: .12em; }
   & .ontile .ot-led { background: #fffaf0; box-shadow: 0 0 0 2px #150f0833, 0 0 8px #fffaf0; }
   & .ontile .ot-state { background: #150f0830; color: var(--ink-on-lamp); }
   & .ontile.off { background: var(--off-tile); background-image: none; border-color: #3f415c; box-shadow: none; }
   & .ontile.off .ot-name, & .ontile.off .ot-sub { color: var(--faint); }
-  & .ontile.off .ot-state { color: #d9ccb6; }
-  & .ontile.off .ot-led { background: transparent; }
+  & .ontile.off .ot-state { background: transparent; color: #d9ccb6; box-shadow: inset 0 0 0 1.5px var(--led-off); }
+  & .ontile.off .ot-led { background: transparent; box-shadow: inset 0 0 0 2px var(--led-off); }
 
   /* chips: quiet until in use; in use = a tint of their lamp */
   & .mchip { border-color: var(--line-2); color: #a99d8b; }
   & .mchip.on { color: var(--text); }
   & .mchip.on > .mc-label { color: color-mix(in srgb, var(--c) 60%, #fff4dc); }
-  & .mchip.open { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--c); }
-  & .slot.muted .mchip.on { background: #1f2139; border-color: #4b4d6a; color: #e6dccb; }
+  & .slot.muted .mchip.on { background: #1f2139; border-color: var(--line-3); color: #e6dccb; }
   & .slot.muted .mchip .mc-bar { background: #847f8c; }
   & .slot.muted .mchip.cycle.on .mc-led { background: var(--muted); }
   & .slot.muted .slot-body { background: repeating-linear-gradient(135deg, transparent 0 9px, #f5ecd809 9px 18px); }
   & .slot.empty { border-color: #393b55; background: transparent; box-shadow: none; }
-  & .slot-badge { color: #e6dccb; border-color: #4b4d6a; }
+  & .slot-badge { color: #e6dccb; border-color: var(--line-3); }
   & .slot-inst { letter-spacing: .005em; }
 
   /* shared-effect chips (header Space / Echo) */
   & .fxc { background: var(--panel-2); border-color: var(--line-2); color: #e6dccb; }
   & .fxc small { color: #a99d8b; }
-  & .fxc:hover:not(:disabled) { border-color: #4b4d6a; }
+  & .fxc:hover:not(:disabled) { border-color: var(--line-3); }
   & .fxc.on { background: var(--sel-fx); border-color: var(--text); color: var(--text); }
   & .fxc.on small { color: var(--muted); }
-  & .fxc.more.on { color: var(--text); }
   & .fxpill { background: var(--panel-2); border-color: var(--line-2); }
 
   /* ------------------------------------------------------------------ Perform head: the song, set in the book face */
-  & .song-name { font: 700 clamp(30px, calc(var(--p-head-h) - 62px), 42px)/1.05 var(--font-book);
+  /* Classic's size and 1.25 line box (styles.css also sets height: 1.25em), so the title's box is Classic's to the
+     pixel; perform.js' fit-to-width shrinks it the same way */
+  & .song-name { font: 700 clamp(28px, calc(var(--p-head-h) - 64px), 40px)/1.25 var(--font-book);
     letter-spacing: 0; font-variant-numeric: lining-nums; }
   & .song-key { font-family: var(--font-book); font-weight: 800; font-variant-numeric: lining-nums; }
   & .hold-btn.key-open { background: color-mix(in srgb, var(--accent) 9%, var(--panel-2));
@@ -242,74 +271,81 @@ body:is([data-theme="sanctuary"], :not([data-theme])) {
   & .song-playin { background: #2a2414; }
   & .song-loading { background: var(--panel); font: 700 16px/1 var(--font-book); font-variant-caps: all-small-caps;
     letter-spacing: .08em; }
-  & .song-block.loading .song-name { color: var(--muted); opacity: .8; transition: opacity .2s ease; }
   & .transpose-val { font: 700 32px/1 var(--font-book); font-variant-numeric: lining-nums tabular-nums; }
   & .chord-name { font-family: var(--font-book); font-weight: 700; font-variant-numeric: lining-nums; }
   & .wheel-value { font-family: var(--font-book); font-weight: 700; font-variant-numeric: lining-nums tabular-nums; }
   & .faded-chip { color: var(--accent-ink); }
 
-  /* setlist: song names are book type; the current song is a brass plate */
+  /* setlist: song names are book type; the current song is a brass plate. Alegreya's x-height is 0.45 against the
+     sans' ~0.52 (stage critic): Next runs a size up; the chips stay at 18 px, since 19 px pushed chip 6 under Next
+     at 1440 (all six fit at 18). */
   & .chip-name { font-family: var(--font-book); font-weight: 700; font-size: 18px; letter-spacing: .005em; }
   & .chip-num { color: var(--faint); }
   & .chip-key { color: var(--muted); }
-  & .setlist-chip.current { background: linear-gradient(#efc878, #dfb05a); border-color: #f3d593; color: var(--accent-ink);
+  & .setlist-chip.current { background: linear-gradient(#efc878, #dfb05a); border-color: #f3d593;
+      color: var(--accent-ink);
     box-shadow: 0 0 18px #e6ba6533, inset 0 1px 0 #fff3d2; }
   & .setlist-chip.current .chip-num, & .setlist-chip.current .chip-key { color: #4d3814; }
-  & .perform .nav-btn { background: var(--panel); border-color: var(--line); box-shadow: inset 0 1px 0 #f5ecd80f; }
-  & .nav-next-name { font-family: var(--font-book); font-weight: 700; font-size: 19px; }
+  & .perform .nav-btn { background: var(--panel); border-color: var(--line);
+      box-shadow: inset 0 1px 0 var(--hairline-lit); }
+  & .nav-next-name { font-family: var(--font-book); font-weight: 700; font-size: 20px; }
 
   /* ------------------------------------------------------------------ stage row */
-  & .wheel-input::-webkit-slider-runnable-track { /* a brass-cream column, dimmer than the text: no glare (UX H3) */
-    background: linear-gradient(to top, #b9a77f var(--pos, 0%), #0d0f23 var(--pos, 0%)); }
-  & .swell-btn.on { background: #173524; border-color: var(--ok); color: #c8f5d6; }
-  & .pedal-lamp.down .pedal-led, & .drone-swell.up .drone-swell-led { background: #fff4dc; }
-  & .pedal-lamp.down .pedal-led { box-shadow: 0 0 8px #fff4dc; }
-  & .pedal-lamp.stuck, & .pedal-lamp.stuck .pedal-led { color: var(--accent-ink); }
+  & .wheel-input::-webkit-slider-runnable-track {
+    /* candle light rising in a low-chroma cream, dimmer than the text (no glare, UX H3) and not brass: brass is
+       "where you are" only (stage critic) */
+    background: linear-gradient(to top, #8a7e68 0%, #c4b89c var(--pos, 0%), #0d0f23 var(--pos, 0%)); }
+  & .pedal-lamp.down .pedal-led { background: #fff4dc; box-shadow: 0 0 8px #fff4dc; }
   & .key-btn.accidental { background: #0e1027; }
   & .notes-text { font: 400 17.5px/1.5 var(--font-book); color: #e9dfcb; }
-  & .notes-text.empty { color: var(--faint); }
   & .pad-status { border-top-color: var(--line); }
 
-  /* the drone card is the window: a stained-glass light pooled in its upper corner. One ::before, painted once; it
-     breathes (opacity only) while the drone sounds and the rig is not locked. Everything in the card has its own
-     opaque fill, so text contrast is measured against --panel-2 / --panel-3, not the glass. */
+  /* the drone card is the window: a stained-glass light pooled in its top-right corner. It is a lamp: lit only while
+     the drone sounds (stage critic: the OFF window still glowed at .35), static (no breathing: the contract bans
+     infinite animation), and masked to the card's title row and drone tile so no glass shows between the key-grid
+     buttons (stage critic, glass-.95.png). Everything in the card has its own opaque fill. */
   & .p-drone { position: relative; isolation: isolate;
-    background:
-      radial-gradient(120% 70% at 100% 0%, #1d1e4a 0%, transparent 60%),
-      var(--panel); }
+    background: radial-gradient(120% 70% at 100% 0%, #1d1e4a 0%, transparent 60%), var(--panel); }
   & .p-drone::before {
     content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: inherit;
     background:
       conic-gradient(from 198deg at 104% -6%,
         transparent 0deg,
-        color-mix(in srgb, var(--glass-sapphire) 30%, transparent) 0deg 11deg, #0a0c1e55 11deg 11.6deg,
-        color-mix(in srgb, var(--glass-ruby) 26%, transparent) 11.6deg 19deg, #0a0c1e55 19deg 19.6deg,
-        color-mix(in srgb, var(--glass-gold) 26%, transparent) 19.6deg 30deg, #0a0c1e55 30deg 30.6deg,
-        color-mix(in srgb, var(--glass-emerald) 22%, transparent) 30.6deg 38deg, #0a0c1e55 38deg 38.6deg,
-        color-mix(in srgb, var(--glass-amethyst) 26%, transparent) 38.6deg 49deg, #0a0c1e55 49deg 49.6deg,
-        color-mix(in srgb, var(--glass-sapphire) 22%, transparent) 49.6deg 62deg,
+        color-mix(in srgb, var(--glass-sapphire) 34%, transparent) 0deg 11deg, var(--lead) 11deg 11.6deg,
+        color-mix(in srgb, var(--glass-ruby) 30%, transparent) 11.6deg 19deg, var(--lead) 19deg 19.6deg,
+        color-mix(in srgb, var(--glass-gold) 30%, transparent) 19.6deg 30deg, var(--lead) 30deg 30.6deg,
+        color-mix(in srgb, var(--glass-emerald) 26%, transparent) 30.6deg 38deg, var(--lead) 38deg 38.6deg,
+        color-mix(in srgb, var(--glass-amethyst) 30%, transparent) 38.6deg 49deg, var(--lead) 49deg 49.6deg,
+        color-mix(in srgb, var(--glass-sapphire) 26%, transparent) 49.6deg 62deg,
         transparent 62deg);
-    -webkit-mask-image: radial-gradient(95% 80% at 100% 0%, #000 0%, #0009 40%, transparent 78%);
-    mask-image: radial-gradient(95% 80% at 100% 0%, #000 0%, #0009 40%, transparent 78%);
-    opacity: .8; transition: opacity .6s ease; }
-  & .p-drone.off::before { opacity: .35; animation: none; }
-  & .p-drone:not(.off)::before { animation: sanct-breathe 8s ease-in-out infinite; }
-  & .perform.locked .p-drone::before { animation: none; opacity: .8; }
-  & .drone-block .segmented .seg.on { background: color-mix(in srgb, var(--drone) 14%, var(--panel-2)); color: var(--drone); }
+    -webkit-mask-image: radial-gradient(440px 96px at 100% 0%, #000 0%, #0009 45%, transparent 100%);
+    mask-image: radial-gradient(440px 96px at 100% 0%, #000 0%, #0009 45%, transparent 100%);
+    opacity: 0; transition: opacity .6s ease; }
+  & .p-drone:not(.off)::before { opacity: .9; }
+  & .drone-block .segmented .seg.on { background: color-mix(in srgb, var(--drone) 14%, var(--panel-2));
+      color: var(--drone); }
   & .drone-toggles .toggle { background: var(--panel-2); }
   & .drone-toggles .tag { color: var(--muted); border-color: var(--line-2); }
 
   /* ------------------------------------------------------------------ bottom row */
   & .rbar.off { background: #4b4f63; }
-  & .pkey.white { background: linear-gradient(#c8bea9, #b9ae98); border-color: var(--bg); } /* aged ivory, dimmed (UX H3) */
+  /* keybed: ivory dimmed a step further so a held (brass) key separates by lightness as well as hue — v1 had them at
+     a 1.02 luminance ratio, the stage critic's biggest regression; now ΔE ≈ 17, ratio ≈ 1.6 */
+  & .pkey.white { background: linear-gradient(#aea48f, #a39a86); border-color: var(--bg); }
   & .pkey.black { background: linear-gradient(#17192f, #0b0c20); border-color: #03050c; }
-  & .pkey.white.held { background: var(--accent); }
+  & .pkey.white.held { background: #f5c451; }
   & .pkey.black.held { background: #c99a3c; }
-  & .pkey-label { color: #372c1d; }
-  & .hold-btn.btn-revert, & .hold-btn.lock-toggle { background: var(--panel); box-shadow: inset 0 1px 0 #f5ecd80f; }
+  /* ≥ 5.6:1 on the dimmed ivory (styles.css' slate: 4.72) */
+  & .pkey-label, & .pkey.white .pkey-letter { color: #2a2115; }
+  & .pkey.black .pkey-letter { color: #e3d6bd; }
+  & .hold-btn.btn-revert, & .hold-btn.lock-toggle { background: var(--panel);
+      box-shadow: inset 0 1px 0 var(--hairline-lit); }
   & .rv-cnt { color: #e6dccb; }
-  & .btn-fade { background: linear-gradient(#1f2047, #141634); border-color: #3d3f6c; }
-  & .btn-fade.faded { background: #2e2208; color: #ffdca6; }
+  /* Fade out: an ink pane with a brass rim, not v1's blue-violet slab (the coldest object on screen, warmth critic).
+     Faded is styles.css' amber pane with a 2 px amber frame (.btn-fade.faded wins on specificity), so the two never
+     look alike (the v2 stage critic's "Fade out and Faded look alike"). */
+  & .btn-fade { background: var(--panel-2); border-color: #6b5a36; color: var(--text);
+      box-shadow: inset 0 1px 0 #e6ba6524; }
   & .btn-panic { box-shadow: 0 0 22px #d9363a4d; }
   & .lock-toggle.on { background: #221a0b; }
   & .lock-sub { color: #ecd3a0; }
@@ -318,7 +354,7 @@ body:is([data-theme="sanctuary"], :not([data-theme])) {
   & .ev2 { --ev2-rig-bg: #0d0f23; --fx: #cdbf9f; --drone: #edd9a6; --chg: #fff4dc; --ev2-flash: var(--focus);
     background: transparent; }
   & .ev2 .ev2-left, & .ev2 .ev2-head, & .ev2 .ev2-rig, & .ev2 .ev2-bottom { border-color: var(--line);
-    box-shadow: inset 0 1px 0 #f5ecd80f, 0 1px 0 #0000004d; }
+    box-shadow: inset 0 1px 0 var(--hairline-lit), 0 1px 0 #0000004d; }
   & .ev2 .ev2-left, & .ev2 .ev2-head, & .ev2 .ev2-bottom { background: var(--panel); }
   & .ev2 .ev2-rig { background: var(--ev2-rig-bg); }
   & .ev2 .ev2-btn, & .ev2 .ev2-song-chip, & .ev2 .ev2-list-select, & .ev2 .ev2-list-setname, & .ev2 .ev2-list-search {
@@ -326,137 +362,92 @@ body:is([data-theme="sanctuary"], :not([data-theme])) {
   & .ev2 .ev2-linkbtn { border-color: var(--line-2); }
   & .ev2 .ev2-switch { background: #393b55; }
   & .ev2 .ev2-switch::after { background: #d9ccb6; }
-  & .ev2 .ev2-wiretog.on .ev2-switch::after { background: #fff4dc; }
   & .ev2 .ev2-tab:hover { background: #141634; }
-  & .ev2 .ev2-tab.empty::before { background: repeating-linear-gradient(90deg, #4b4d6a 0 6px, transparent 6px 10px); }
+  & .ev2 .ev2-tab.empty::before {
+      background: repeating-linear-gradient(90deg, var(--line-3) 0 6px, transparent 6px 10px); }
   & .ev2 .ev2-tab-role { letter-spacing: .12em; }
-  & .ev2 .ev2-tab-cd { box-shadow: 0 0 0 2px var(--ev2-rig-bg), 0 0 6px #fff4dcaa; }
-  & .ev2 .ev2-tab.sel .ev2-tab-cd { box-shadow: 0 0 0 2px var(--panel), 0 0 6px #fff4dcaa; }
-  & .ev2 .ev2-wlane::before { background: #393b55; }
-  & .ev2 .ev2-wout-br { border-color: #4b4d6a; }
-  & .ev2 .ev2-wn { background: #16182f; }
-  & .ev2 .ev2-wv { color: var(--text); }
-  & .ev2 .ev2-wv.zero { border-color: #4b4d6a; }
+  & .ev2 .ev2-tab-cd { box-shadow: 0 0 0 2px var(--ev2-rig-bg), 0 0 6px var(--chg-glow); }
+  & .ev2 .ev2-tab.sel .ev2-tab-cd { box-shadow: 0 0 0 2px var(--panel), 0 0 6px var(--chg-glow); }
   /* the sentence is prose, so it is set as prose */
-  & .ev2 .ev2-sent { font-family: var(--font-book); font-size: 23px; font-weight: 400; color: #d8ccb5; line-height: 1.22; }
+  & .ev2 .ev2-sent { font-family: var(--font-book); font-size: 23px; font-weight: 400; color: #d8ccb5;
+      line-height: 1.22; }
   & .ev2 .ev2-sent-role { font-variant-caps: all-small-caps; letter-spacing: .09em; font-weight: 800; }
-  & .ev2 .ev2-sent-val, & .ev2 .ev2-tok { font-weight: 700; color: var(--text); }
-  & .ev2 .ev2-title-icon { background: color-mix(in srgb, var(--c) 14%, var(--panel-2)); box-shadow: inset 0 1px 0 #f5ecd814; }
+  & .ev2 .ev2-tok { font-weight: 700; color: var(--text); }
+  & .ev2 .ev2-title-icon { background: color-mix(in srgb, var(--c) 14%, var(--panel-2));
+      box-shadow: inset 0 1px 0 #f5ecd814; }
   & .ev2 .ev2-chg { color: #e6dccb; }
-  & .ev2 .ev2-ws-input::-webkit-slider-thumb { background: linear-gradient(#fbf5e8, #e3d6bd); box-shadow: 0 1px 4px #000a; }
+  & .ev2 .ev2-ws-input::-webkit-slider-thumb { background: linear-gradient(#fbf5e8, #e3d6bd);
+      box-shadow: 0 1px 4px #000a; }
   & .ev2 .ev2-song-name { font-family: var(--font-book); font-size: 27px; font-weight: 700; }
   & .ev2 .ev2-song-live { background: #15301f; color: #9fe6b6; }
-  & .ev2 button.ev2-song-chip:hover, & .ev2 .ev2-song-bpmnum:hover { border-color: #4b4d6a; }
+  & .ev2 button.ev2-song-chip:hover, & .ev2 .ev2-song-bpmnum:hover { border-color: var(--line-3); }
   & .ev2 .ev2-song-bpmchip .ev2-song-tap { background: var(--panel-3); }
   & .ev2 .ev2-song-bpmchip .ev2-song-tap:hover { background: #33345a; }
   & .ev2 .ev2-list-row { color: #e6dccb; font-family: var(--font-book); font-size: 16.5px; font-weight: 700; }
   & .ev2 .ev2-list-row.on { background: var(--panel-3); box-shadow: inset 3px 0 0 var(--accent); }
   & .ev2 .ev2-list-num, & .ev2 .ev2-list-key { font-family: var(--font); }
-  & .ev2 .ev2-list-rename { background: var(--bg); }
   & .ev2 :is(.ev2-slot-menu, .ev2-fx-vibe-menu) { background: var(--panel-2); border-color: #3f415f; }
-  & .ev2 .ev2-slot-mi:hover, & .ev2 .ev2-slot-mi:focus { background: var(--panel-3); }
   & .ev2 .ev2-fx-vibe-item:hover, & .ev2 .ev2-fx-vibe-item:focus-visible { background: var(--panel-3); }
-  & .ev2 .ev2-fx-pc:hover { border-color: #4b4d6a; }
+  & .ev2 .ev2-fx-pc:hover { border-color: var(--line-3); }
   & .ev2 .ev2-fx-pc[aria-pressed="true"] { background: var(--sel-fx); border-color: var(--text); }
   & .ev2 .ev2-fx-pc[aria-pressed="true"] .ev2-fx-pc-hint { color: var(--muted); }
   & .ev2 .ev2-slot-range .mkey.white { background: #cdbfa3; border-right-color: var(--bg); }
   & .ev2 .ev2-slot-range .mkey.black { background: #0e1027; }
   & .ev2 .ev2-slot-range .mini-handle { background: #f4ecdc; }
   & .ev2 .ev2-slot-respctl .segmented .seg.on { color: var(--ink-on-lamp); }
-  & .ev2 .ev2-kb-fade { background: linear-gradient(#1f2047, #141634); border-color: #3d3f6c; }
+  & .ev2 .ev2-kb-fade { background: var(--panel-2); border-color: #6b5a36; }
   & .ev2 .ev2-list-confirm { background: #2a0f16; }
-  /* Edit's drone panel is the same window */
+  /* Edit's drone panel shows the same window, kept to its top-right corner (warmth critic: the v1 wedge crossed the
+     Options column and read as a rendering artifact) */
   & .ev2 .ev2-drone { position: relative; isolation: isolate; }
-  & .ev2 .ev2-drone::before { content: ''; position: absolute; inset: 0 -18px 0 -18px; z-index: -1; pointer-events: none;
+  & .ev2 .ev2-drone::before { content: ''; position: absolute; inset: 0 -18px 0 -18px; z-index: -1;
+      pointer-events: none;
     background: conic-gradient(from 198deg at 104% -6%,
         transparent 0deg,
-        color-mix(in srgb, var(--glass-sapphire) 26%, transparent) 0deg 11deg, #0a0c1e55 11deg 11.6deg,
-        color-mix(in srgb, var(--glass-ruby) 22%, transparent) 11.6deg 19deg, #0a0c1e55 19deg 19.6deg,
-        color-mix(in srgb, var(--glass-gold) 22%, transparent) 19.6deg 30deg, #0a0c1e55 30deg 30.6deg,
-        color-mix(in srgb, var(--glass-emerald) 18%, transparent) 30.6deg 38deg, #0a0c1e55 38deg 38.6deg,
+        color-mix(in srgb, var(--glass-sapphire) 26%, transparent) 0deg 11deg, var(--lead) 11deg 11.6deg,
+        color-mix(in srgb, var(--glass-ruby) 22%, transparent) 11.6deg 19deg, var(--lead) 19deg 19.6deg,
+        color-mix(in srgb, var(--glass-gold) 22%, transparent) 19.6deg 30deg, var(--lead) 30deg 30.6deg,
+        color-mix(in srgb, var(--glass-emerald) 18%, transparent) 30.6deg 38deg, var(--lead) 38deg 38.6deg,
         color-mix(in srgb, var(--glass-amethyst) 22%, transparent) 38.6deg 49deg,
         transparent 49deg);
-    -webkit-mask-image: radial-gradient(38% 48% at 100% 0%, #000 0%, #0007 45%, transparent 80%);
-    mask-image: radial-gradient(38% 48% at 100% 0%, #000 0%, #0007 45%, transparent 80%); opacity: .6; }
+    -webkit-mask-image: radial-gradient(360px 110px at 100% 0%, #000 0%, #0007 45%, transparent 100%);
+    mask-image: radial-gradient(360px 110px at 100% 0%, #000 0%, #0007 45%, transparent 100%); opacity: .6; }
   & .ev2 .ev2-drone-src .on { background: var(--drone); color: var(--ink-on-lamp); }
+  /* Advanced › Tone EQ: eq-keyboard.js writes Classic's slot hex (#ff8a3d…) and ink inline on .eqk, so its children
+     re-read this theme's slot colour from the slot panel's --c; the slate literals of eq-keyboard.css become ink */
+  & .eqk * { --eqk-c: var(--c, var(--slot-0)); --eqk-ink: var(--ink-on-lamp); }
+  & .eqk :is(.eqk-graph, .eqk-bands, .eqk-side) { --eqk-bg: var(--ev2-rig-bg, #0d0f23); }
+  & .eqk-onoff { background: var(--track); }
+  & .eqk-onoff::after { background: var(--led-off); }
+  & .eqk-onoff[aria-pressed="true"] { background: color-mix(in srgb, var(--eqk-c) 35%, var(--panel-2)); }
 
-  /* ------------------------------------------------------------------ motion: opacity only, at rest only */
-  & .perform.locked .p-drone::before, & .perform.locked .sanct-breath { animation: none; }
-  /* menu-bar / low-resource mode (docs/menubar-mode.md): no texture layer, no breathing */
-  :root[data-low-resource] &::after { display: none; }
-  :root[data-low-resource] & .p-drone::before { animation: none; }
+  /* ------------------------------------------------------------------ motion: finite fades only */
   @media (prefers-reduced-motion: reduce) {
-    & .p-drone::before, & .step-panel, & .qs, & .sanct-before *, & .sanct-before { animation: none !important; }
+    & .qs { animation: none; }
+    & .p-drone::before { transition: none; }
   }
 
   /* ------------------------------------------------------------------ 1024-wide */
   @media (max-width: 1250px) {
-    & .song-name { font-size: 33px; }
+    & .song-name { font-size: 32px; }
     & .chip-name { font-size: 16px; }
     & .nav-next-name { font-size: 17px; }
     & .transpose-val { font-size: 26px; }
     & .ev2 .ev2-sent { font-size: 17.5px; }
     & .ev2 .ev2-song-name { font-size: 22px; }
-    & :is(.select-label, .stepper-label, .fader-label, .wheel-caption, .chord-caption, .section-title, .tb-cap,
+    & :is(.select-label, .stepper-label, .fader-label, .wheel-caption, .chord-caption, .section-title,
           .song-key-cap, .nav-next-cap, .fxpill-l, .qs-st .cap, .ev2-cap) { font-size: 15px; letter-spacing: .07em; }
+    /* "Movement" fits again (build critic: v1 cut it to "Movem…") */
+    & .drone-char .fader.horizontal .fader-label { font-size: 12.5px; letter-spacing: -.005em; }
     & .notes-text { font-size: 16.5px; }
   }
   @media (max-width: 1340px) {
-    & .p-notes { box-shadow: 0 10px 40px #000c, inset 0 1px 0 #f5ecd80f; }
+    & .p-notes { box-shadow: 0 10px 40px #000c, inset 0 1px 0 var(--hairline-lit); }
   }
   @media (min-width: 1251px) and (max-width: 1480px) {
     & .ev2 .ev2-sent { font-size: 21px; }
   }
-
-  /* ------------------------------------------------------------------ "Before the service" (the start overlay's
-     proposed content; needs markup from main.js, see concept.md §6). Classes are prefixed sanct- so nothing collides. */
-  & .sanct-before { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; cursor: pointer;
-    background:
-      url('/themes/sanctuary/grain.png') repeat,
-      radial-gradient(60% 70% at 30% 40%, #1d1f54 0%, transparent 70%),
-      #08091b;
-    animation: sanct-fade .4s ease-out; }
-  & .sanct-before .sb-wrap { display: grid; grid-template-columns: auto minmax(0, 560px); gap: 64px; align-items: center;
-    padding: 40px; max-width: 1100px; }
-  & .sanct-before .sb-window { position: relative; width: clamp(180px, 20vw, 260px); aspect-ratio: 200 / 320; }
-  & .sanct-before .sb-window > i { position: absolute; inset: 0; background-position: center; background-size: contain;
-    background-repeat: no-repeat; }
-  & .sanct-before .sb-glass { background-image: url('/themes/sanctuary/lancet-glass.svg'); opacity: .92; }
-  & .sanct-before .sb-light { background-image: url('/themes/sanctuary/lancet-light.svg'); }
-  & .sanct-before .sb-lead { background-image: url('/themes/sanctuary/lancet-lead.svg'); }
-  & .sanct-before .sb-halo { inset: -30% -40% !important;
-    background: radial-gradient(closest-side, #e6ba6524, #3f66d814 55%, transparent) !important; }
-  /* one breath ≈ 6.4 s (about 9 a minute: slower than the room, never a pulse) */
-  & .sanct-before .sanct-breath { animation: sanct-breathe-deep 6.4s ease-in-out infinite; }
-  & .sanct-before .sb-pad { position: absolute; left: 0; right: 0; bottom: -44px; text-align: center; color: var(--muted);
-    font: 650 15px/1 var(--font-book); font-variant-caps: all-small-caps; letter-spacing: .1em; }
-  & .sanct-before .sb-pad b { color: var(--drone); font-weight: 700; }
-  & .sanct-before .sb-day { font: 650 17px/1 var(--font-book); font-variant-caps: all-small-caps; letter-spacing: .12em;
-    color: var(--label); }
-  & .sanct-before .sb-title { margin: 12px 0 10px; font: 700 54px/1.02 var(--font-book); color: var(--text); letter-spacing: -.005em; }
-  & .sanct-before .sb-sub { margin: 0 0 26px; font: 400 19px/1.45 var(--font-book); color: #e1d6c0; max-width: 32em; }
-  & .sanct-before .sb-sub b { color: var(--text); font-weight: 700; }
-  & .sanct-before .sb-set { list-style: none; margin: 0 0 22px; padding: 14px 0; border-block: 1px solid #e6ba6533;
-    display: grid; gap: 2px; counter-reset: sb; }
-  & .sanct-before .sb-set li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: baseline; gap: 10px;
-    padding: 5px 0; font: 700 19px/1.25 var(--font-book); color: #e9dfcb; counter-increment: sb; }
-  & .sanct-before .sb-set li::before { content: counter(sb); font: 600 13px/1 var(--font); color: var(--faint);
-    font-variant-numeric: tabular-nums; text-align: right; }
-  & .sanct-before .sb-set li span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  & .sanct-before .sb-set li em { font: 700 14px/1 var(--font); font-style: normal; color: var(--accent); }
-  & .sanct-before .sb-set li.first { color: var(--text); }
-  & .sanct-before .sb-set li.more { color: var(--muted); font: 400 16px/1.25 var(--font-book); }
-  & .sanct-before .sb-set li.more::before { content: ''; }
-  & .sanct-before .sb-foot { display: flex; align-items: center; gap: 18px; }
-  & .sanct-before .sb-go { min-height: 56px; padding: 0 26px; border-radius: 28px; border: 1px solid #f3d593;
-    background: linear-gradient(#efc878, #dfb05a); color: var(--accent-ink); font: 800 18px/1 var(--font);
-    box-shadow: 0 0 28px #e6ba6533, inset 0 1px 0 #fff3d2; }
-  & .sanct-before .sb-last { font-size: 14px; color: var(--muted); line-height: 1.4; }
-  & .sanct-before .sb-last b { color: var(--text); font-weight: 650; }
-  & .sanct-before .sb-small { margin-top: 18px; font-size: 13px; color: var(--faint); }
 }
 
-/* keyframes must be top level; all are opacity-only (compositor) */
-@keyframes sanct-breathe { 0%, 100% { opacity: .62; } 50% { opacity: .95; } }
-@keyframes sanct-breathe-deep { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
-@keyframes sanct-fade { from { opacity: 0; } to { opacity: 1; } }
+/* keyframes must be top level; opacity only, finite */
+@keyframes nave-fade { from { opacity: 0; } to { opacity: 1; } }

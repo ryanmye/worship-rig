@@ -11,6 +11,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { spawnSync } from 'node:child_process';
 import { MIDI_PERMISSIONS, waitRigReady } from '../../integration/lib.mjs';
 
 const require = createRequire(import.meta.url);
@@ -267,6 +268,9 @@ try {
           reads += 1;
           return proto[n].apply(this, a);
         };
+        // idle-cpu-ui: the meters sleep at silence and run ≤ 30×/s (meterClock); a held note keeps them awake
+        controller.perform.noteOn(60, 100);
+        window.__rig.meters?.wake?.();
         const origSl = controller.slotLevel;
         let sl = 0;
         controller.slotLevel = function (...a) {
@@ -280,11 +284,17 @@ try {
           if (run) requestAnimationFrame(tick);
         };
         requestAnimationFrame(tick);
-        await new Promise((r) => setTimeout(r, 1000));
+        // ≥ 1 s and ≥ 20 display frames (idle-cpu-ui critic: at load ≈ 10 the page once got 3 frames in 1 s, so the
+        // 30 fps meter clock ran 3 times and "reads > 5" failed on the box, not on the app); 6 s cap
+        const t0 = performance.now();
+        while (performance.now() - t0 < 1000 || (frames < 20 && performance.now() - t0 < 6000)) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
         run = false;
         for (const n of names) delete an[n];
         controller.slotLevel = origSl;
-        return { frames, analyser: reads / Math.max(1, frames), slot: sl / Math.max(1, frames) };
+        controller.perform.noteOff(60);
+        return { frames, reads, analyser: reads / Math.max(1, frames), slot: sl / Math.max(1, frames) };
       });
     await app.bringToFront(); // a background tab's rAF is throttled; measure the app as the front page
     const before = await meterReads();
@@ -298,7 +308,8 @@ try {
     const during = await meterReads();
     const fmt = (m) => `analyser ${m.analyser.toFixed(2)}/frame, slotLevel ${m.slot.toFixed(2)}/frame (${m.frames} frames)`;
     console.log(`      meters: normal ${fmt(before)} → low-resource ${fmt(during)}`);
-    assert.ok(before.analyser > 0.5, `meters run normally (${fmt(before)})`);
+    // ≈ 30 reads/s whatever the display rate (idle-cpu-ui: per display frame this is 0.25 at 120 Hz)
+    assert.ok(before.reads > 5, `meters run normally (${fmt(before)})`);
     assert.ok(during.frames > 5, `frames still run (${during.frames})`);
     assert.equal(during.analyser + during.slot, 0, `no meter reads in low-resource (${fmt(during)})`);
     assert.equal(await evA(() => getComputedStyle(document.querySelector('#meter-mount .meter')).display), 'none');
@@ -314,6 +325,26 @@ try {
     const t = await mini.textContent('[data-testid="mini-status"]');
     assert.match(t, /^Sound (OK|paused|stopped|…) · (\d+|—) ms · .+$/);
     assert.match(await evB(() => document.querySelector('.mini-status .led').className), /led (ok|warn|bad)/);
+     // lowres2: the app's audio sleep shows as "Audio asleep" with an ok LED (a second popover on a fake bus)
+    const asleep = await evB(async () => {
+      const m = await import('/js/views/mini.js');
+      const host = document.createElement('div');
+      document.body.append(host);
+      const base = window.__mini.state || {};
+      const v = m.mountMini(host, { bus: { send() {}, onState(cb) {
+        cb({ ...base, audio: 'asleep', latencyMs: 12, midi: { connected: false } });
+        return () => {};
+      } } });
+      const out = { pure: m.statusLine({ audio: 'asleep', latencyMs: 12, midi: { connected: false } }),
+        text: host.querySelector('[data-testid="mini-status"]').textContent,
+        led: host.querySelector('.mini-status .led').className };
+      v.destroy?.();
+      host.remove();
+      return out;
+    });
+    assert.deepEqual(asleep.pure, { text: 'Audio asleep · 12 ms · No MIDI keyboard', led: 'ok' });
+    assert.match(asleep.text, /^Audio asleep · 12 ms · /);
+    assert.equal(asleep.led, 'led ok');
   });
 
   await T('layout: 320×440, no overflow, ≥ 44 px targets; screenshot', async () => {
@@ -368,4 +399,12 @@ try {
 
 const failed = results.filter((r) => !r.ok);
 console.log(`\nmini: ${results.length - failed.length}/${results.length} passed`);
-process.exit(failed.length ? 1 : 0);
+// mini-theme suite (test/phase2/mini/theme.mjs) in its own process, serially after this one (its `live` test boots
+// its own app page but waits only for the store, not audio). `--only base` skips it.
+let themeFailed = false;
+if (!process.argv.includes('--only') || process.argv[process.argv.indexOf('--only') + 1] !== 'base') {
+  const r = spawnSync(process.execPath, [path.join(HERE, 'theme.mjs'), '--only', 'bus,classic,light,live,bus-theme,themes'],
+    { stdio: 'inherit', timeout: 480000 });
+  themeFailed = r.status !== 0;
+}
+process.exit(failed.length || themeFailed ? 1 : 0);

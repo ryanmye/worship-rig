@@ -150,3 +150,56 @@ Append-only. Each entry: who, what, why.
      warm-up decodes 443 samples then)?
   2. Sweep the mod wheel on Synthwave (macro.wash): any hitch the first time the Space size crosses a bucket?
   Report `FEEL upright=<ok|late> synthwave=<ok|hitch>`.
+
+## critics-fix (C6, 2026-09-29; CONTRACT_CHANGES "## critics-fix")
+- **L-23 (lock hint clipped at the window bottom) is round4-perform P1.** The fix (`.perform .p-bottom .hold-btn .hb-cap
+  { top: -30px }`: Revert's and the locked Lock's "press and hold" caption above the button) is in the cloud tree
+  since round4-perform, after the drop your built app came from. After the next drop, tap Lock while locked on the
+  built-in display and report `L23_MAC ok/not`. Also new there: a hold of any length now unlocks (onboarding O1; before,
+  holding longer than ~1.2 s re-locked on release). Report `LOCK_LONGHOLD_MAC ok/not` (hold 2 s with the mouse).
+- **Pedal wording (your hardware addendum):** Settings › Test my pedal now says, before the test, "Plug in the pedal
+  and the keyboard with your foot off the pedal: many keyboards read its direction then", and a "reversed" result
+  adds "If it was held down when the keyboard was switched on or plugged in, let go, unplug and replug the keyboard,
+  and test again first." Quick › Sustain pedal: "press it: the light comes on" (tooltip: turn on Reversed if it's on
+  with your foot up). Worth one look with Ryan at the Keystation.
+- **README (yours), vocabulary from this round** (in addition to the onboarding R1–R6 list above):
+  - Edit's setlist buttons are now **+ Setlist** (was "New") and **+ New song** (was "+ New"); the song title has a
+    pencil ("Rename song").
+  - Settings › Menu bar: **Menu-bar songs** (was "Modes from"); the live resource line moved to **Diagnostics**.
+  - Settings › Computer keyboard lists the whole map: `A W S E D F T G Y H U J K O L P ;` from middle C, Z/X octave,
+    Space sustain, ↑/↓ wheel, ←/→ songs.
+  - First run: a one-time **Start here** card at the top of the Notes panel (no keyboard → A S D F G H J K; → / NEXT;
+    Space row; Lock / hold to unlock), and the computer-key letters on the on-screen piano while no MIDI keyboard is
+    connected. The README's "first five minutes" (R2) can point at it.
+- **R4 hidden window (idle-cpu):** the renderer now hides every meter (`html[data-window-hidden]`, same CSS as
+  low-resource) on `windowHidden` / `windowShown` (menu ids) and on your preload's DOM event `window`
+  `'rig:window-visible'` `{detail:{visible}}` (menubar-electron, every mode). Nothing to change on your side once
+  e553aa5's preload is in the drop. Then please re-run the hidden-window measurement:
+  `HIDDEN_RAF hidden=<rAF/s> minimized=<rAF/s>` and the renderer CPU.
+- **IDLE_CPU_MAC3 (after the next drop):** the top-bar and slot meters now update at ≤ ~30/s (120 Hz ProMotion ran
+  them at 120) and stop their frame loops after 1 s of silence (a 250 ms poll wakes the top bar; a note wakes the slot
+  bars); the loading spinner no longer animates while hidden. Same configurations as reviews/idle-cpu-mac.md; expected:
+  rAF well under 120/s in (a)/(b) and renderer CPU down in the silent rows. Report
+  `IDLE_CPU_MAC3 a=<r>/<g> b=<r>/<g> f=<r> g=<r> rAF_b=<n/s>`.
+- **docs/architecture.md (yours; COORDINATION listed it for this step):** please add the L-10 rule in a few lines:
+  the 700 MB decoded-sample cap is soft during a song switch. `BufferCache` never evicts a referenced buffer, so while
+  the previous song's instruments are retiring (`retiring > 0`) decoded can exceed the cap by up to that song's pinned
+  set (754 MB seen once in 44 soak rows); it falls under the 595 MB low-water mark once they are released. The soak
+  checks `decoded ≤ cap` only in rows with `retiring === 0` (your L10_RESOLVED).
+
+## idle-cpu engine fixer (2026-09-28; reviews/idle-cpu.md "Engine fixer", CONTRACT_CHANGES `## idle-cpu`)
+- **In the next drop (engine + shared/automation.js):** send effects (reverb, delay, chorus) sleep when nothing
+  feeds them and wake before the next note; `rampTo` pins its target (Chromium never ended SetTarget automation,
+  which kept biquads on the per-sample path and zero gains non-silent); a drone left at volume 0 for 10 s parks.
+  Linux 2-CPU box, back to back: Sunday drone off 7.8 → 5.1 % of a core, Glass Ocean 9.2 → 6.5, Grand Piano
+  7.6 → 4.3. Sunday with the drone **on** barely moves (34 → 33): the sounding drone's DSP (≈ 5.5 points of voices,
+  ≈ 15 of reverb on its send) is real work, left for Ryan (options in the review).
+- **IDLE_CPU_MAC2 (please re-measure after the drop, built app, unlocked screen):** configurations (a) Sunday drone
+  on, (b) drone off, (b′) (b) after one note + 20 s, (f) Glass Ocean, (g) Grand Piano; same method as
+  reviews/idle-cpu-mac.md. Also (a0): (a) with the drone volume at 0 for > 10 s. Report
+  `IDLE_CPU_MAC2 a=<r>/<g> a0=<r> b=<r>/<g> b2=<r> f=<r> g=<r> audio_b=<pts> reverbBg_a=<pts> reverbBg_b=<pts>`.
+  Expected: (b)/(f)/(g) audio thread ≈ half of before, reverb-bg 0 in (b); (a) lower mainly from the UI fixes (R1).
+- **Listening check with Ryan (optional):** after ~5 s of silence, play one short staccato note on Sunday Pad +
+  Piano with the pad up: the reverb and echo should start exactly as before (measured equal to the sample on Linux).
+  And pull the drone volume to 0 for > 10 s, then back up: the drone returns with its 2 s attack (by design).
+  Report `FX_WAKE ok|late` and `DRONE_PARK ok|odd`.
