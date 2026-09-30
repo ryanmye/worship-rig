@@ -106,6 +106,8 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download the four files
         uses: actions/download-artifact@v4
         with:
@@ -126,10 +128,13 @@ jobs:
           - Intel Mac: \`Worship-Rig-*-x64.dmg\`
           - The \`.zip\` files hold the same app; use them if a .dmg won't open.
 
+          Starter library: worship-rig-starter-library.json — import via Settings › Library & backups if you want
+          the factory set back.
+
           This build is **ad-hoc signed**, not notarized by Apple — see the README
           ("Running on your Mac → First open on another Mac") for the Gatekeeper steps.
           EOF
-          gh release create "$GITHUB_REF_NAME" assets/*.dmg assets/*.zip \
+          gh release create "$GITHUB_REF_NAME" assets/*.dmg assets/*.zip docs/starter/worship-rig-starter-library.json \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --prerelease \
