@@ -35,7 +35,7 @@ MAIN_BRANCH=main
 CLOUD_BRANCH=cloud
 
 # Never touched or deleted by the rsync. Every .gitignore entry (local and snapshot) is added on top of these.
-ALWAYS_EXCLUDE=(.git/ .DS_Store node_modules/ dist/ user-samples/ _to_delete/ test/logs/)
+ALWAYS_EXCLUDE=(.git/ .DS_Store node_modules/ dist/ user-samples/ _to_delete/ test/logs/ tools/exs/fixtures/real/)
 # Trees that arrive in a separate archive or not in every snapshot (v3's code.tgz has no app/samples at all).
 # When the snapshot lacks one it is excluded; otherwise --delete would wipe e.g. the 2000 tracked sample files.
 SEPARATE_TREES=(app/samples audition/mp3)
