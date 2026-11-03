@@ -7,6 +7,7 @@ import { LEARNABLE, ROLE_DEFAULTS } from '../shared/params.js';
 import { noteName } from '../shared/music.js';
 import { pickableThemes, resolveThemeId } from '../shared/themes.js';
 import { latencyHint } from './components/latencyHint.js';
+import { mountHotkeys, mountUpdates } from './settings-mac.js';
 
 const C = await loadComponents();
 
@@ -269,7 +270,8 @@ export function mountSettings(el, ctx) {
   // Esc closes wherever focus is (it may have fallen to <body>); preventDefault keeps the controller from
   // treating it as Panic. main.js has its own capture listener; whichever runs first closes, the other no-ops.
   listen(window, 'keydown', (e) => {
-    if (!isOpen || e.key !== 'Escape') return;
+    // v11-electron: while a global shortcut is being recorded, Esc cancels the recording (settings-mac.js)
+    if (!isOpen || e.key !== 'Escape' || document.documentElement.hasAttribute('data-hotkey-capture')) return;
     e.preventDefault();
     requestClose();
   }, true);
@@ -1002,6 +1004,13 @@ export function mountSettings(el, ctx) {
     h('section.st-section', { 'aria-label': 'About' }, h('h2.st-h2', { text: 'About' }), aboutBox),
   );
 
+  // v11-electron (Mac app only): the "update available" line under About, global shortcuts under Menu bar
+  const macDeps = { store, rig, h, btn, row, toggle: C.toggle };
+  const updates = rig && typeof rig.setUpdateCheck === 'function' ? mountUpdates(macDeps) : null;
+  if (updates) colA.querySelector('.st-section[aria-label="About"]').append(updates.el);
+  const hotkeys = rig && typeof rig.setHotkeys === 'function' ? mountHotkeys(macDeps) : null;
+  for (const p of [updates, hotkeys]) if (p) cleanups.push(() => p.destroy());
+
   // =============================================================================================================
   // Menu bar (docs/menubar-mode.md; C7 menubar-B): menu-bar mode, which set the popover's modes come from,
   // low-resource mode, open at login (Mac app only) and a live resource line (engine._debugStats, 1 s while open)
@@ -1150,6 +1159,7 @@ export function mountSettings(el, ctx) {
         ? row('Open at login', mbLogin.el, 'Start Worship Rig in the menu bar when you log in.')
         : h('p.st-hint.st-mb-login-hint', { text: 'Open at login is available in the Mac app.' }),
       mbOpenMini ? row('Mini panel', mbOpenMini, 'Mode buttons, master, drone and panic in a 320×440 window.') : null,
+      hotkeys ? hotkeys.el : null,
     ),
   );
   // onboarding O9: the live resource line is a diagnostic, not a setting
@@ -1273,6 +1283,8 @@ export function mountSettings(el, ctx) {
     renderAbout();
     renderSamples();
     restoreIdle();
+    if (updates) updates.refresh();
+    if (hotkeys) hotkeys.refresh();
     markDialog('settings', true);
     statsTimer = setInterval(renderStats, 1000);
     queueMicrotask(() => closeBtn.focus());
@@ -1289,6 +1301,7 @@ export function mountSettings(el, ctx) {
     statsTimer = null;
     stopPedalTest();
     pedalIdle();
+    if (hotkeys) hotkeys.cancel();
     if (learningId) {
       learningId = null;
       if (typeof controller.cancelLearn === 'function') controller.cancelLearn();

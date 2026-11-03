@@ -50,6 +50,10 @@
     setView: () => true,
   };
   const { mountSettings } = await import('/app/js/views/settings.js');
+  // v11-electron: the Mac-only settings follow the store through Electron main, as in app/js/main.js (a no-op without
+  // window.rig; the settings suite's "mac" mode stands in a fake one)
+  const { mirrorShellSettings } = await import('/app/js/shell-mirror.js');
+  mirrorShellSettings({ store });
   const ready = controller.start();
   settingsView = mountSettings(settingsEl, ctx);
   globalThis.__rig = { store, engine, controller, midi, recorder, ctx, toasts, views: { settings: settingsView }, ready, viewsReady: Promise.resolve() };

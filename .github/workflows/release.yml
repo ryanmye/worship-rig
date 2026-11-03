@@ -5,6 +5,10 @@ name: release
 # - Actions → release → Run  → dry_run (default true): build + upload to the run only, never a release
 # A release is only created when the ref is a v* tag AND it's a tag push (or a manual run on a tag with dry_run off).
 # Dispatching on a branch (e.g. main) can never create a release.
+# v11-electron: the app's "update available" check (update-check.js) reads GitHub's /releases/latest and offers
+# Worship-Rig-<arch>.dmg (else .zip) from it. So: keep the four asset names stable (package.json mac.artifactName),
+# keep releases non-draft / non-prerelease (the API's "latest" skips those), and tag v<package.json version>.
+# No latest-mac.yml is needed: nothing uses electron-updater (ad-hoc signed builds can't be auto-installed).
 
 on:
   push:
@@ -124,8 +128,8 @@ jobs:
           Worship Rig ${GITHUB_REF_NAME}
 
           **Which file?**
-          - Apple Silicon Mac (M1 or later): \`Worship-Rig-*-arm64.dmg\`
-          - Intel Mac: \`Worship-Rig-*-x64.dmg\`
+          - Apple Silicon Mac (M1 or later): \`Worship-Rig-arm64.dmg\`
+          - Intel Mac: \`Worship-Rig-x64.dmg\`
           - The \`.zip\` files hold the same app; use them if a .dmg won't open.
 
           Starter library: worship-rig-starter-library.json — import via Settings › Library & backups if you want

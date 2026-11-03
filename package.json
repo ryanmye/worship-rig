@@ -33,6 +33,8 @@
       "preload.js",
       "server.js",
       "tray-visibility.js",
+    "global-hotkeys.js",
+    "update-check.js",
       "build/trayTemplate.png",
       "build/trayTemplate@2x.png",
       "app/**/*",
