@@ -17,8 +17,8 @@
 import { ClickGrid, meterOf, MIDI_CLOCK, MIDI_START, MIDI_STOP, CLICK_DEFAULTS } from '../shared/click-math.js';
 import { rampTo } from '../shared/automation.js';
 
-/** How far ahead clicks and MIDI pulses are scheduled (s). Covers a main-thread stall of this length. */
-export const CLICK_LOOKAHEAD_SEC = 0.2;
+/** How far ahead clicks and MIDI pulses are scheduled (s): a main-thread stall shorter than this loses nothing. */
+export const CLICK_LOOKAHEAD_SEC = 0.3;
 /** Pump period on the audio clock (s). */
 export const CLICK_PUMP_SEC = 0.05;
 /** First click this long after clickStart() (s), so it is never late. */

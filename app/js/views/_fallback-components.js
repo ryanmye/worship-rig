@@ -273,8 +273,9 @@ export function segmented(o = {}) {
       render();
     },
     get: () => value,
-    setDisabled(d) {
-      for (const [, b] of btns) b.disabled = !!d;
+    /** v11-metronome: like ui-core's segmented, `optValue` disables that one option only. */
+    setDisabled(d, optValue) {
+      for (const [opt, b] of btns) if (optValue === undefined || opt.value === optValue) b.disabled = !!d;
     },
     destroy() {
       root.remove();

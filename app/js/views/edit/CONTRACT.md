@@ -552,11 +552,15 @@ builds the same markup for in-body lines (the Effects tab's three lines).
     "Bbm" in the readout
 - **Tempo** `song-tempo`: number input 30–300 (empty → null, song-bound), Clear, Tap. ui-edit: fill 96 + Enter →
   tempo 96.
+- **Click** `song-click` (v11-metronome; CONTRACT_CHANGES "## v11-metronome"): Time select (`song.timeSig`,
+  `shared/click-math.js` TIME_SIGS; 4/4 writes null = absent), and for every song (`settings.click` through
+  `store.setClick`) Count-in Off / 1 bar / 2 bars, After the count-in Keep clicking / Go quiet (disabled while the
+  count-in is Off) and the Level fader. Perform's Click chip starts it; the panel never calls the engine.
 - **Notes** `song-notes`: textarea, song-bound, max 10000.
   - Debounced 500 ms; flushed on blur and in `ctx.onLeaveSong`.
   - Placeholder "Notes for this song (shown in Perform)".
   - ui-edit "round2-ui #3": notes typed before a switch land in the old song.
-- `opts.focus` 'key' | 'tempo' | 'notes' focuses that control.
+- `opts.focus` 'key' | 'tempo' | 'click' | 'notes' focuses that control.
 
 ### setlist: `panels/setlist.js` (region `left`; ≤ 1250 px it is the drawer)
 

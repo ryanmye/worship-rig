@@ -5686,3 +5686,134 @@ is quiet by default: no new field is written until someone uses a control, and a
   Studio lamp, Ember keys + title, Daylight switch + Lock + Auto + boot); ui-core 3 (FR-1 at 1280×800, Quick fit at
   four windows, pedal light / tag / aria-disabled / chord fit / .crswap toast); edit-v2 effects (tone glyph) and drone
   (`.audible`).
+
+## v11-metronome (v1.1: BACKLOG A "Metronome / click track … with a count-in and a MIDI-clock out option"; shared/click-math.js (new), engine/metronome.js (new), midi-clock.js (new), engine/audio.js + index.js, store.js, controller.js, shared/song-diff.js, shared/voice.js, views/perform.js, views/edit/panels/song.js + song-header.css, views/edit/lib.js, views/settings.js, views/_fallback-components.js, styles.css)
+
+**What it does (quiet by default).** Perform gets a small **Click** chip next to the BPM (hidden while the song has no
+tempo). A tap starts the click at the song's tempo, with the count-in if one is set; a tap stops it. The chip says
+"Count-in" (and pulses softly) during the count-in and "Click on" after it. It is live under Lock, like Prev / Next.
+Tap tempo, the tempo field and a song switch move a running click. Edit › Song gets a **Click** column: Time (this
+song), Count-in (Off · 1 bar · 2 bars), After the count-in (Keep clicking · Go quiet), Level. Settings › Audio gets
+Click output (With the music · Outputs 3–4) and Record the click; Settings › MIDI keyboard gets Clock out (Off · an
+output). Nothing runs until someone taps Click: a new launch always starts with the click off.
+
+**Count-in trigger (Ryan's live-safety rule).** The click is its own transport, triggered by the Click chip only, so
+it can never block or delay a song switch or touch a held note:
+- the song switch commits at once, as before;
+- held / pedalled notes and the drone are not involved (the click has its own bus);
+- a click that is running when you press Next keeps going. It takes the new song's tempo and time signature on its
+  first beat past the scheduled horizon, as a new bar (accent). If the switch happens during the count-in, the
+  count-in starts over in the new tempo. A song without a tempo stops it.
+
+So the flow on stage is: Next whenever you like, then tap Click when the leader is ready and the band hears the
+count-in.
+
+**Data (SCHEMA stays 1; everything optional, absent until set; migrate keeps / validates):**
+- `song.timeSig`: one of `TIME_SIGS` = `4/4 3/4 2/4 5/4 6/8 12/8`. Absent = 4/4, and choosing 4/4 removes the field.
+  An unknown value is dropped by `normalizeSong`, and `set` refuses it. It is in `DIFF_WATCH` (Perform's Revert dot
+  count, the Edit change line), and `revertSong` takes it back to absent.
+- `settings.click` = `{level 0..1 (0.6), countIn 0|1|2 (0), after 'click'|'quiet' ('click'), record bool (false),
+  output 'main'|'aux' ('main')}`. It is set whole (`store.setClick(fields)` merges; null removes a field; empty =
+  absent), and unknown fields are kept.
+- `settings.midiClockOut`: a Web MIDI output **name** (ids change on a re-plug). null removes it (= off).
+- `click` and `midiClockOut` are in `DEVICE_LOCAL_SETTINGS`: they describe this rig's monitoring and wiring.
+
+**Compound meters.** In 6/8 and 12/8 the song's BPM counts the dotted quarter (the felt beat, what Tap catches). The
+click plays three eighths per beat: the accent, then the beat click on the other dotted quarters, then quieter
+subdivisions. MIDI clock is 36 pulses per dotted quarter (24 ppq). Open question for Ryan: if his charts give 6/8
+tempos in eighths, this is the one thing to flip.
+
+**Engine API** (all on `AudioEngine`; no setTimeout; every call has `{when}` or acts "now"):
+- `setTimeSig(sig, {newBar})`, and `setTempo(bpm)` (null stops a running click).
+- `clickStart({countIn, quietAfter, when}) → {t0, downbeat} | null`, `clickStop({when})`.
+- `setClick({level, record, output}) → {output, auxAvailable}`, `clickState()`, `clickOutputs() → {aux, channels}`,
+  `setClockSink(fn | null)`.
+- Event `'click'` `{running, counting, bpm, sig, output, level, record, downbeat}`.
+- `sleepBlockers()` names `'click'`; `_debugStats().click` has the state, live sources and pump stats.
+- `restart()` brings a running click back, without a count-in.
+- Settings (level / record / output), the time signature and the clock sink survive a restart.
+
+**Scheduling.** `ClickGrid` (pure, `shared/click-math.js`) is a list of segments `{t0, beat0, spb, meter, bar0}` on
+the audio clock. `engine/metronome.js` pumps it on the engine's `AudioTimer` every 50 ms (`CLICK_PUMP_SEC`) and
+schedules `CLICK_LOOKAHEAD_SEC = 0.3 s` ahead. Each tick is an `AudioBufferSourceNode` started at its grid time. A
+tempo / meter change lands on the first whole beat at or after the horizon, so nothing already handed to Web Audio
+or Web MIDI ever moves, and a song switch (tempo + meter in one go) merges into one change on one beat. A pump that
+ran late (a main-thread stall longer than 0.3 s) skips the clicks already in the past (`stats.late`) instead of
+playing them late. Stop disconnects every click not yet started. Clicks are 40 ms cosine-phase tones (non-zero from
+the first sample): accent 1980 Hz at `CLICK_PEAK` 0.5 × level, beat 1320 Hz × 0.55 (−5.2 dB), subdivision × 0.3
+(−10.5 dB). Default level 0.6 → accent −10.5 dBFS.
+
+**Routing and the recorder.**
+- **'main':** the click bus sums into `ctx.destination` *after* `fx.out`. The music's master volume, fade, catcher
+  compressor and ceiling never act on it, and `fx.recordTap` (the recorder's only input, post-clip) never hears it.
+  "Record the click" connects the bus to `recordTap` as well. Trade-off: a mix at the −0.3 dBFS ceiling plus an
+  accent can pass 0 dBFS for the click's few ms. The default level keeps the accent at −10.5 dBFS.
+- **'aux' (outputs 3–4, "click in the in-ears only"):** when `destination.maxChannelCount ≥ 4`, the destination is
+  set to 4 channels, explicit, 'discrete'. The stereo music up-mixes into channels 1–2 only, and the click goes to 3
+  and 4 through a ChannelMerger. Back on 'main', the destination gets its own layout again. After `setSinkId` the
+  routing is re-applied (`reapplyOutput`: the new device may have fewer channels). On a 2-channel output the option
+  is disabled in Settings with a one-line reason, and a saved 'aux' falls back to 'main' with one warning.
+- **Not offered: a separate output device** (a second AudioContext with `setSinkId` for the in-ears). Two devices
+  have two hardware clocks: the click would drift against the music by tens of ppm (about 2–6 ms a minute) and need
+  constant re-anchoring through `getOutputTimestamp`. It would also add a second context's render cost and a second
+  output latency. A 4-output interface (Scarlett 4i4, MOTU M4, …) on one context is the practical way.
+
+**MIDI clock out** (`app/js/midi-clock.js`, off by default). The engine hands the clock sink each pump's 24 ppq pulses
+as audio times, plus Start and Stop:
+- **Start** goes right before the pulse of the song's first downbeat. Pulses run during the count-in, so a receiver
+  locks to the tempo before it starts.
+- **Stop** goes at stop time.
+- The controller maps the times to `performance.now()` through `AudioContext.getOutputTimestamp()` (`ClockMap`: EMA
+  α 0.05 on the offset; a jump > 15 ms, from a device change or an audio-thread glitch, re-anchors at once). Each
+  message then goes out with `output.send(data, timestamp)`, so the browser times the send and a pulse leaves when
+  its click is heard.
+- The output is found again by name on a MIDI 'devices' event.
+- Electron already allows `midi` / `midiSysex` for our origin, which covers outputs.
+
+**Measured (Linux CI container, headless Chromium, load average 8–12 on 4 CPUs from the other workers):**
+- **Grid accuracy** (offline, `engine` suite `offline.clickGrid`): 9/9 onsets across a 120 → 150 BPM change, max
+  0.27 samples from t·sr. The start is at a fractional frame, 11030.73; Chromium starts on the next frame. The change
+  landed on beat 3, the first beat past the 0.3 s horizon. Accent peak −6.09 dBFS at level 1 (CLICK_PEAK −6.02);
+  beat / accent 0.5535 (0.55); L = R.
+- **6/8 count-in only** (`offline.clickCountInMidi`): 6 clicks "AssBss", then quiet. 151 clock pulses spaced 1/36 s
+  (error 3e-16 s). Start at exactly the downbeat (2.1 s); Stop at 4.0025 s (the next render quantum).
+- **Recorder** (`offline.clickRecordTap`): 0 click onsets in recordTap until Record the click, then every click.
+  **Outputs 3–4** (`offline.clickAuxOutput`, 4-channel render): the clicks are on 3 and 4 only, and the music's L = R
+  on 1–2.
+- **CPU while running** (`realtime.clickCpu`, 132 BPM 12/8, the busiest grid): the pump takes 0.08 ms per run, about
+  17 runs/s, **1.4 ms/s of main thread (0.14 % of a core)**, 0 late clicks. At most 2 source nodes are alive at once.
+  In the real app (CDP TaskDuration over 15 s, two rounds) the renderer's main thread measured 61–123 ms/s idle and
+  74–80 ms/s with the click: within the noise of this loaded box. An offline 60 s render of the engine graph took
+  +3–27 % with the click, mostly the offline pump's suspends; a realtime context has none.
+- **MIDI clock jitter** (settings suite, a fake Web MIDI output in the real app and the settings fixture, 120 BPM,
+  4 s, about 200 pulses). The timestamps handed to `send()` vs the ideal 20.833 ms grid:
+  - **max 0.026–0.17 ms, rms 0.002–0.012 ms**;
+  - sent 35–335 ms ahead, 0 late, on the runs without a stall.
+  - Two runs under load showed what the guards are for. In one, a ~30 ms audio-thread skip re-anchored the map, and
+    one gap was off by 30 ms (the click skipped too). In the other, a main-thread stall longer than the look-ahead
+    (then 0.2 s, now 0.3 s) sent 4 pulses late, up to 71 ms; late pulses go out at once, never dropped, so receivers
+    keep the count.
+  - These numbers are the scheduling side only. The jitter on the wire is the OS MIDI driver's (CoreMIDI) and needs
+    the Mac with a real interface (LOCAL).
+
+**Tests:**
+- unit `test/unit/shared/click-math.test.mjs` (12): meters, grid, tempo change at the horizon, a song-switch merge
+  in both orders, count-in bar math for 4/4 / 3/4 / 6/8 with 1 and 2 bars, a re-count on a switch during the
+  count-in, 24 / 36 ppq pulses in contiguous windows, normaliseClick, ClockMap, clockJitter;
+- shell `test/phase1/shell/metronome.test.mjs` (5): store fields and migrate; the controller's start with count-in
+  and needs-a-tempo; a song switch → setTimeSig(newBar) and never a stop; settings → setClick and the clock sink;
+  Revert;
+- engine `test/phase1/engine/click-suites.mjs`: offline clickGrid, clickCountInMidi, clickRecordTap, clickAuxOutput;
+  realtime clickCpu;
+- ui-core: the Perform chip (hidden without a tempo, count-in → on, Next keeps it running with the held note and
+  the new tempo / meter, live under Lock, a cleared tempo stops it);
+- edit-v2 song: the Click column (time → song + engine, 4/4 = absent, count-in / after / level → settings.click →
+  engine, outside writes repaint it, and the 1024×700 fit still holds);
+- settings: Click output (disabled with a reason on 2 channels), Record the click → engine, Clock out → Start,
+  24 ppq, Stop and jitter.
+
+**Needs the Mac (LOCAL):**
+- Outputs 3–4 on a real 4-output interface. Check that Chrome / Electron report `maxChannelCount ≥ 4` there and
+  that CoreAudio takes the 4-channel destination without a dropout when the option is switched.
+- MIDI clock into a real receiver (a delay pedal or drum machine) for wire jitter and Start alignment.
+- The click's sound and level in in-ears.

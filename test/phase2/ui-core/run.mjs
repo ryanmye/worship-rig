@@ -4150,6 +4150,76 @@ test('v11-polish: strip pedal light, no EXPERIMENTAL tag on stage, aria-disabled
   await clearToasts();
 });
 
+test('v11-metronome: Perform Click chip — hidden without a tempo; count-in → on; keeps running over Next (held note '
+  + 'kept, new tempo); live under Lock; a song without a tempo stops it', async () => {
+  await selectIndex(0);
+  const ids = await page.evaluate(() => window.__rig.store.navIds());
+  const ev = (fn, arg) => page.evaluate(fn, arg);
+  const chip = '[data-testid=click-toggle]';
+  const orig = await ev((x) => x.map((id) => window.__rig.store.getSong(id).tempo), ids.slice(0, 2));
+  await ev(([a, b]) => {
+    const s = window.__rig.store;
+    s.set('settings.performLock', false);
+    s.set(`songs.${a}.tempo`, null);
+    s.set(`songs.${b}.tempo`, 80);
+    s.set(`songs.${b}.timeSig`, '3/4');
+  }, ids);
+  await page.waitForFunction((c) => document.querySelector(c).hidden, chip);
+  assert.equal(await ev(() => window.__rig.controller.status.click.available), false);
+  // a tempo shows the chip; quiet by default (off, plain)
+  await ev((a) => window.__rig.store.set(`songs.${a}.tempo`, 100), ids[0]);
+  await page.waitForFunction((c) => !document.querySelector(c).hidden, chip);
+  assert.equal(await page.getAttribute(chip, 'aria-pressed'), 'false');
+  assert.equal((await page.textContent(chip)).trim(), 'Click');
+  // one bar of count-in at 100 BPM (2.4 s), then the click keeps going
+  await ev(() => window.__rig.store.setClick({ countIn: 1 }));
+  await page.click(chip);
+  await page.waitForFunction((c) => document.querySelector(c).classList.contains('counting'), chip);
+  assert.equal((await page.textContent(chip)).trim(), 'Count-in');
+  assert.equal(await page.getAttribute(chip, 'aria-pressed'), 'true');
+  await page.screenshot({ path: path.join(shots, 'v11-click-countin.png'), clip: { x: 0, y: 60, width: 720, height: 120 } });
+  await page.waitForFunction((c) => {
+    const el = document.querySelector(c);
+    return el.classList.contains('on') && !el.classList.contains('counting');
+  }, chip, { timeout: 8000 });
+  assert.equal((await page.textContent(chip)).trim(), 'Click on');
+  const st1 = await ev(() => ({ ...window.__rig.engine.clickState(), ticks: window.__rig.engine.metronome.stats.ticks }));
+  assert.equal(st1.running, true);
+  assert.equal(st1.bpm, 100);
+  assert.ok(st1.ticks >= 4, `count-in clicks scheduled (${st1.ticks})`);
+  // Next while a note is held: the switch is immediate, the note keeps sounding, the click takes the new tempo / meter
+  await ev(() => window.__rig.controller.perform.noteOn(60, 100));
+  await page.click('[data-testid=next-song]');
+  await waitSong(ids[1]);
+  const st2 = await ev(() => ({ ...window.__rig.engine.clickState(), held: window.__rig.engine.sounding.has(60) }));
+  assert.equal(st2.running, true, 'the click keeps running across the song switch');
+  assert.equal(st2.bpm, 80);
+  assert.equal(st2.sig, '3/4');
+  assert.equal(st2.held, true, 'the held note survives the switch');
+  await ev(() => window.__rig.controller.perform.noteOff(60));
+  assert.equal(await page.getAttribute(chip, 'aria-pressed'), 'true');
+  // Lock: the chip stays live (one tap stops it)
+  await ev(() => window.__rig.store.set('settings.performLock', true));
+  await page.waitForTimeout(100);
+  await page.click(chip);
+  await page.waitForFunction((c) => document.querySelector(c).getAttribute('aria-pressed') === 'false', chip);
+  assert.equal(await ev(() => window.__rig.engine.clickState().running), false);
+  await ev(() => window.__rig.store.set('settings.performLock', false));
+  // a song whose tempo is cleared stops a running click and hides the chip
+  await page.click(chip);
+  await page.waitForFunction(() => window.__rig.controller.status.click.on === true);
+  await ev((b) => window.__rig.store.set(`songs.${b}.tempo`, null), ids[1]);
+  await page.waitForFunction((c) => document.querySelector(c).hidden && !window.__rig.engine.clickState().running, chip);
+  await ev(([[a, b], [ta, tb]]) => {
+    const s = window.__rig.store;
+    s.setClick({ countIn: null });
+    s.set(`songs.${a}.tempo`, ta);
+    s.set(`songs.${b}.tempo`, tb);
+    s.set(`songs.${b}.timeSig`, null);
+  }, [ids, orig]);
+  await selectIndex(0);
+});
+
 test('no console errors on the main page', () => {
   assert.deepEqual(consoleErrors, [], consoleErrors.join('\n'));
 });

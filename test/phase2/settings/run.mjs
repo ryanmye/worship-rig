@@ -658,6 +658,94 @@ async function runMode(mode, browser) {
       await until(() => document.getElementById('view-settings').hidden);
     });
 
+    // v11-metronome: Click output (outputs 3–4 only on a 4+ channel device), Record the click, MIDI clock out. The
+    // clock goes to a fake Web MIDI output (no MIDI devices here): its timestamps give the scheduling jitter.
+    await T('settings: v11-metronome — Click output / Record the click → engine; MIDI clock out → timed clock, '
+      + 'Start / Stop', async () => {
+      await openSettings();
+      const out = '[data-testid="setting-click-output"]';
+      await page.locator(out).scrollIntoViewIfNeeded();
+      assert.equal(await page.getAttribute(`${out} button[data-value="main"]`, 'aria-checked'), 'true');
+      const aux = await ev(() => window.__rig.engine.clickOutputs());
+      // headless Chromium's output has 2 channels: Outputs 3–4 is offered but disabled, and the hint says why
+      assert.equal(await page.isDisabled(`${out} button[data-value="aux"]`), !aux.aux);
+      assert.match(await page.textContent('[data-testid="setting-click-output-hint"]'),
+        aux.aux ? /Outputs 3–4 sends the click there only/ : /needs an audio interface with 4 or more outputs/);
+      await page.click('[data-testid="setting-click-record"]');
+      await until(() => window.__rig.store.get().settings.click?.record === true
+        && window.__rig.engine.clickState().record === true);
+      await page.click('[data-testid="setting-click-record"]');
+      await until(() => !window.__rig.store.get().settings.click && window.__rig.engine.clickState().record === false);
+      // MIDI clock out: a fake output appears in the list; choosing it attaches the clock sink
+      await ev(() => {
+        const sent = [];
+        const port = {
+          id: 'fake-clock', name: 'Fake Clock Out', type: 'output', state: 'connected',
+          send: (data, ts) => sent.push({ b: data[0], ts, at: performance.now() }),
+        };
+        const m = window.__rig.midi;
+        window.__clock = { sent, prev: m.access };
+        m.access = { inputs: m.access?.inputs || new Map(), outputs: new Map([[port.id, port]]) };
+        m._emitDevices();
+      });
+      const sel = '[data-testid="setting-midi-clock"]';
+      await until((s) => !!document.querySelector(`${s} option[value="Fake Clock Out"]`), sel);
+      assert.equal(await page.inputValue(sel), '', 'off by default');
+      await page.selectOption(sel, 'Fake Clock Out');
+      await until(() => window.__rig.controller.status.click.midiClockConnected === true);
+      await page.click('.st-close');
+      await until(() => document.getElementById('view-settings').hidden);
+      // run the click 4 s at 120 BPM: Start before the first clock, 24 per beat, Stop at the end
+      const orig = await ev(() => window.__rig.store.currentSong().tempo);
+      await ev(() => window.__rig.store.set('song.tempo', 120));
+      await until(() => window.__rig.engine.tempo === 120);
+      await ev(() => window.__rig.controller.startClick());
+      await sleep(4000);
+      await ev(() => window.__rig.controller.stopClick());
+      await sleep(300);
+      const r = await ev(() => {
+        const s = window.__clock.sent;
+        const clocks = s.filter((x) => x.b === 0xf8);
+        const ideal = 60000 / 120 / 24;
+        // gaps between pulses that were both sent ahead of time (a main-thread stall longer than the 300 ms
+        // look-ahead makes a pump late on this loaded box: those pulses go out at once and are counted as late)
+        const onTime = (x) => x.ts > x.at;
+        const dev = [];
+        for (let i = 1; i < clocks.length; i++) {
+          if (onTime(clocks[i]) && onTime(clocks[i - 1])) dev.push(clocks[i].ts - clocks[i - 1].ts - ideal);
+        }
+        const leads = s.map((x) => x.ts - x.at);
+        return {
+          outliers: dev.filter((d) => Math.abs(d) > 1).length,
+          n: clocks.length, first: s[0]?.b, last: s.at(-1)?.b, starts: s.filter((x) => x.b === 0xfa).length,
+          maxDevMs: Math.max(...dev.map(Math.abs)), rmsDevMs: Math.sqrt(dev.reduce((a, d) => a + d * d, 0) / dev.length),
+          minLeadMs: Math.min(...leads), maxLeadMs: Math.max(...leads),
+          stats: window.__rig.controller.midiClockStats(),
+        };
+      });
+      note(mode, `MIDI clock (fake output, 120 BPM, ${r.n} pulses): timestamp jitter max ${r.maxDevMs.toFixed(3)} ms, `
+        + `rms ${r.rmsDevMs.toFixed(3)} ms; sent ${r.minLeadMs.toFixed(1)}–${r.maxLeadMs.toFixed(1)} ms ahead; `
+        + `late ${r.stats.late}, anchor resets ${r.stats.resets}`);
+      assert.equal(r.first, 0xfa, 'Start first (no count-in: the first click is the downbeat)');
+      assert.equal(r.starts, 1);
+      assert.equal(r.last, 0xfc, 'Stop last');
+      assert.ok(r.n > 150 && r.n < 220, `≈ 4 s × 48 pulses/s (${r.n})`);
+      // on the grid; an audio-thread glitch (headless Chromium skips render quanta under load) moves the audio clock
+      // against performance.now(), the map re-anchors (ClockMap resetMs) and that one gap is off by the glitch
+      assert.ok(r.outliers <= 2 * (r.stats.resets - 1), `pulse timestamps on the grid (${JSON.stringify(r)})`);
+      if (r.stats.resets === 1) assert.ok(r.maxDevMs < 1, `max ${r.maxDevMs} ms`);
+      assert.ok(r.stats.late <= r.n * 0.05, `at most a stall's worth of late pulses (${r.stats.late})`);
+      if (r.stats.late === 0) assert.ok(r.minLeadMs > 0, `every message is sent ahead of its time (${r.minLeadMs} ms)`);
+      // off again: the sink is detached, nothing more is sent
+      await ev(() => window.__rig.store.set('settings.midiClockOut', null));
+      await until(() => window.__rig.controller.status.click.midiClock === null);
+      await ev((t) => {
+        window.__rig.store.set('song.tempo', t);
+        window.__rig.midi.access = window.__clock.prev;
+        window.__rig.midi._emitDevices();
+      }, orig);
+    });
+
     // polish-1: the retired Edit's .ed-* rules are pruned; what remains is exactly what settings.js renders
     if (mode === 'app') {
       await T('settings: styles-settings.css keeps only the .ed-* classes Settings renders (polish-1)', async () => {

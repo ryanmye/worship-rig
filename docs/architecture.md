@@ -102,7 +102,12 @@ shared/ (params grammar, fx-presets, music, automation, keydetect, chords, wav, 
                                                                   └─ send → chorus ───────────────────┘   → master EQ → glue comp
   drone (synth or files) ─────────────────────────────────────────────────────────────────────────────┘   → master → wheel → fade
                                                                   → [mono sum] → catcher comp → soft clip → out + recordTap
+  click (engine/metronome.js, own level) ─────── after out → destination (or outputs 3–4); recordTap only if asked
   ```
+- **Click / metronome** (v11-metronome): `shared/click-math.js` `ClickGrid` is the beat grid; the engine pumps it on
+  the AudioTimer 0.3 s ahead (sample-accurate buffer sources) and hands MIDI clock pulses to a sink that
+  `app/js/midi-clock.js` sends with Web MIDI timestamps. Perform's Click chip starts / stops it (controller
+  `toggleClick`); a song switch never waits for it.
 - **Instruments** (`engine/instruments.js` registry):
   - `synth.js` and `synth-extra.js` are subtractive/FM synths; `organ.js` is a drawbar organ with a rotary speaker.
   - `sampler.js` plays the multi-sampled instruments from `app/samples/manifest.json`, plus the optional My Samples

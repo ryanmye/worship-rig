@@ -454,6 +454,47 @@ test('song: round4-edit-lib m3/m2 — a bad number keeps the tempo; IME text in 
     t.assertNoConsoleErrors();
   });
 
+test('song: v11-metronome Click column — time (this song; 4/4 = absent) → engine; count-in, after, level → '
+  + 'settings.click → engine', async () => {
+  const H = t.host;
+  const sig = `${H} select[data-bind="song.timeSig"]`;
+  assert.ok(await t.page.$(`${H} [data-sec="song-click"]`), 'the Click column');
+  assert.equal(await t.page.inputValue(sig), '4/4');
+  await t.page.selectOption(sig, '6/8');
+  await t.until(() => window.__rig.store.currentSong().timeSig === '6/8' && window.__rig.engine.timeSig === '6/8');
+  // the time signature is a song change (Revert / the change line count it)
+  await t.until((s) => /change/.test(document.querySelector(s).textContent), `${H} .ev2-chg`);
+  await t.page.selectOption(sig, '4/4');
+  await t.until(() => !('timeSig' in window.__rig.store.currentSong()) && window.__rig.engine.timeSig === '4/4');
+  // an outside write moves the select
+  await t.setParam('song.timeSig', '3/4');
+  await t.until((s) => document.querySelector(s).value === '3/4', sig);
+  await t.setParam('song.timeSig', null);
+  // count-in: Off by default, "After the count-in" disabled until a count-in is chosen
+  const ci = `${H} [data-bind="settings.click.countIn"]`;
+  const after = `${H} [data-bind="settings.click.after"]`;
+  assert.equal(await t.page.getAttribute(`${ci} button[data-value="0"]`, 'aria-checked'), 'true');
+  assert.equal(await t.page.isDisabled(`${after} button[data-value="quiet"]`), true);
+  await t.click(`${ci} button[data-value="2"]`);
+  await t.until(() => window.__rig.store.get().settings.click?.countIn === 2);
+  assert.equal(await t.page.isDisabled(`${after} button[data-value="quiet"]`), false);
+  await t.click(`${after} button[data-value="quiet"]`);
+  await t.until(() => window.__rig.store.get().settings.click?.after === 'quiet');
+  // level: the fader writes settings.click.level and the engine's click bus follows
+  await t.setRange(`${H} [data-bind="settings.click.level"] input[type=range]`, 250);
+  await t.until(() => {
+    const l = window.__rig.store.get().settings.click?.level;
+    return l > 0 && l < 0.6 && Math.abs(window.__rig.engine.clickState().level - l) < 1e-9;
+  });
+  assert.match(await t.page.textContent(`${H} [data-bind="settings.click.level"] .fader-value`), /^−?-?\d+ dB$/);
+  // settings written elsewhere (Settings, another window) repaint the column
+  await t.ev(() => window.__rig.store.set('settings.click', undefined));
+  await t.until((s) => document.querySelector(`${s} button[data-value="0"]`).getAttribute('aria-checked') === 'true', ci);
+  assert.equal('click' in (await t.ev(() => window.__rig.store.get().settings)), false);
+  await t.screenshot('song-click-1440');
+  t.assertNoConsoleErrors();
+});
+
 test('song: 1024×700 — focus on mount, fits with no horizontal (or vertical) scroll, change line', async () => {
   // the same page, resized and remounted with {focus:'tempo'} (a second boot doubles the cost on the loaded box)
   const u = t;
