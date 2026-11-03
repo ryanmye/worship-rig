@@ -54,12 +54,14 @@ export function headerChipRow(o = {}) {
   let disabled = false;
   const label = o.label || '';
   const row = h('div.fxrow', { role: 'radiogroup', 'aria-label': label });
-  const caption = h('div.fx-lab', { 'aria-hidden': 'true' }, o.icon || null, h('span', { text: label.toUpperCase() }));
+  // v11-polish (themes-critic E2/S2): the captions keep the label's own case; Classic's caps are CSS
+  // (styles.css `.fx-lab span` / `.fxpill-l` text-transform), so a theme can show "Space" / "Echo" without a JS hook
+  const caption = h('div.fx-lab', { 'aria-hidden': 'true' }, o.icon || null, h('span', { text: label }));
   const pillValue = h('b.fxpill-v');
   const pill = h(
     'button.fxpill',
     { type: 'button', 'aria-haspopup': 'true', 'aria-expanded': 'false', title: `${label}: choose` },
-    h('span.fxpill-l', { text: label.toUpperCase() }),
+    h('span.fxpill-l', { text: label }),
     pillValue,
     h('span.fxpill-caret', { 'aria-hidden': 'true', text: '▾' }),
   );

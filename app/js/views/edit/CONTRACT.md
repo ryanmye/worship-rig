@@ -741,7 +741,8 @@ test('slot: …', async () => {
 
 ## 8. Integration (integrator only, after the six panels land) — done in hv2-edit-integrate
 
-All steps below are done (CONTRACT_CHANGES "## hv2-edit-integrate"). Deviations: `styles-edit.css` stays linked
+All steps below are done (CONTRACT_CHANGES "## hv2-edit-integrate"; `styles-edit.css` is `styles-settings.css` since
+v11-polish). Deviations: `styles-edit.css` stays linked
 (Settings' `.st-*`, the fallback `.fc-*`, and `.ed-btn/.ed-danger/.ed-select` used by settings.js); its dead `.ed-*`
 rules are left for a later prune. `integration.test.mjs` runs on the real app (its own server, appDir = app/).
 

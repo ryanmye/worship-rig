@@ -17,6 +17,7 @@ import { SPACE_PRESETS, ECHO_PRESETS, matchPreset } from '../../shared/fx-preset
 import { changedPaths, hasChange } from '../../shared/song-diff.js';
 import PANELS from './panels/index.js';
 import { h, setText, icon, getIn, relOf, pct, BLOCKS, blockOf, sentence, droneKeyText, chorusWord } from './lib.js';
+import { say, onVoiceChange } from '../components/voice.js';
 
 const C = await loadComponents();
 // overlay.js's stack is shared with Perform; the shell closes Edit's overlays when the view is hidden (round3-edit M1)
@@ -651,10 +652,14 @@ export function mountEdit(el, ctx) {
     h('span.ev2-switch', { 'aria-hidden': 'true' }), 'Show wiring');
   const rigTop = h('div.ev2-rig-top', {},
     h('span.ev2-cap', { text: 'Your rig' }),
-    h('span.ev2-rig-hint', {
-      text: 'Pick a part to edit it. The dot on a tab means a switch changed since the song was loaded.',
-    }),
+    h('span.ev2-rig-hint', { text: say('editHint') }),
     h('span.ev2-sp'), wheelsBtn, wireBtn);
+  // v11-polish: a theme switch re-words the hint and (through a 'changes' event) every panel's footer line
+  core.cleanups.push(onVoiceChange(() => {
+    setText(rigTop.querySelector('.ev2-rig-hint'), say('editHint'));
+    for (const n of root.querySelectorAll('.ev2-slot-same')) setText(n, say('editStripFoot'));
+    editState.dispatchEvent(new CustomEvent('changes', { detail: { paths: editState.changes } }));
+  }));
   const tablist = h('div.ev2-tabs', { role: 'tablist', 'aria-label': 'Your rig' });
   const tabs = new Map();
   for (const b of BLOCKS) {

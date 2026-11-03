@@ -1,4 +1,6 @@
-/* Worship Rig — Settings modal (.st-*), fallback components (.fc-*), and the three .ed-* classes settings.js uses
+/* v11-polish (BACKLOG B): was styles-edit.css; since the old Edit view was retired it serves Settings alone, so it
+   is the settings stylesheet now (the .ed-* class names are kept: settings.js and the themes use them).
+   Worship Rig — Settings modal (.st-*), fallback components (.fc-*), and the three .ed-* classes settings.js uses
    (.ed-btn / .ed-danger / .ed-select). Uses the tokens from styles.css; every var() has a fallback so Settings also
    renders on its own (test fixture).
    polish-1: the retired Edit view's (views/edit.js) other .ed-* rules were pruned: 237 selectors that no app

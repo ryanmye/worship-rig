@@ -160,8 +160,10 @@ export default {
       foot);
     el.replaceChildren(root);
     // OFF: the sound controls stay editable (you can shape it before turning it on) but read as resting
-    binder.fn(['drone.mode'], (s) => {
+    binder.fn(['drone.mode', 'drone.gain'], (s) => {
       root.classList.toggle('off', s.drone.mode === 'off');
+      // v11-polish: `.audible` = on and above −∞ (Sanctuary's / Nave's window lights on it, not on the mode)
+      root.classList.toggle('audible', s.drone.mode !== 'off' && Number(s.drone.gain) > 0.0005);
       level.setMuted?.(s.drone.mode === 'off'); // the Perform strip's muted fader look
     });
 

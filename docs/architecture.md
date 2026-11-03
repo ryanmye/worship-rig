@@ -82,7 +82,7 @@ shared/ (params grammar, fx-presets, music, automation, keydetect, chords, wav, 
   ```
   A panel reads and writes only through its ctx (`ctx.set`, `ctx.subscribe`, `controller.*`), never the engine.
   The slot EQ editor is `components/eq-keyboard.js` (`eqKeyboard`, `eqMiniCurve`) over `shared/eq-math.js`.
-- **Settings** (`views/settings.js`, styles in `styles-edit.css` `.st-*`) is a modal over either view.
+- **Settings** (`views/settings.js`, styles in `styles-settings.css` `.st-*`) is a modal over either view.
 
 ## Engine
 

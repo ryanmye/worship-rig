@@ -245,6 +245,10 @@ export function fader(o = {}) {
     setDisabled(b) {
       input.disabled = !!b;
       el.classList.toggle('disabled', !!b);
+      // v11-polish (themes-critic C1/T4): the group says it too, so a frozen drone fader under Lock reads as frozen
+      // to assistive tech and the contrast audit (exempt), not only its inner input
+      if (b) el.setAttribute('aria-disabled', 'true');
+      else el.removeAttribute('aria-disabled');
     },
     setLabel(s) {
       setText(label, s);

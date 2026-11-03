@@ -36,6 +36,17 @@ export function onTile(o = {}) {
   if (o.color) el.style.setProperty('--c', o.color);
   if (o.className) el.classList.add(...String(o.className).split(/\s+/).filter(Boolean));
 
+  // v11-polish (theme-studio deferred #3): a real off → on (a tap or set()) marks the tile `.lit-now` for LIT_NOW_MS,
+  // so a theme can flash the lamp once (Studio does). Never on the first render or a same-state set(); no class at
+  // rest, so a theme without the rule shows nothing and Classic is unchanged.
+  const LIT_NOW_MS = 700;
+  let litTimer = 0;
+  const litNow = () => {
+    el.classList.add('lit-now');
+    clearTimeout(litTimer);
+    litTimer = setTimeout(() => el.classList.remove('lit-now'), LIT_NOW_MS);
+  };
+  d.add(() => clearTimeout(litTimer));
   const render = () => {
     el.classList.toggle('off', !on);
     el.setAttribute('aria-pressed', String(on));
@@ -46,6 +57,7 @@ export function onTile(o = {}) {
   };
   d.listen(el, 'click', () => {
     on = !on;
+    if (on) litNow();
     render();
     if (typeof o.onToggle === 'function') o.onToggle(on);
   });
@@ -54,7 +66,9 @@ export function onTile(o = {}) {
   return {
     el,
     set(v) {
+      const was = on;
       on = !!v;
+      if (on && !was) litNow();
       render();
     },
     get: () => on,

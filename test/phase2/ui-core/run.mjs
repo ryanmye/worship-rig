@@ -22,7 +22,7 @@ const { createServer } = require('../../../server.js');
 // The Edit and Settings views' files; while one is absent the page's own 404 for it is expected, nothing else is.
 // (hv2-edit-integrate: the H-v2 Edit replaced views/edit.js.)
 const SIBLING_FILES = [
-  'styles-edit.css', 'js/views/edit/styles-edit-v2.css', 'js/views/edit/shell.js', 'js/views/settings.js',
+  'styles-settings.css', 'js/views/edit/styles-edit-v2.css', 'js/views/edit/shell.js', 'js/views/settings.js',
 ];
 const missingSiblings = SIBLING_FILES.filter((f) => !fs.existsSync(path.join(appDir, f)));
 
@@ -261,7 +261,7 @@ test('boots: overlay (if shown) starts audio, controller becomes ready, favicon 
   assert.equal(await page.isVisible('#overlay-start'), false, 'overlay hidden once audio runs');
   const dom = await page.evaluate(() => ({
     icon: document.querySelector('link[rel=icon]')?.getAttribute('href'),
-    editCss: !!document.querySelector('link[rel=stylesheet][href="./styles-edit.css"]'),
+    editCss: !!document.querySelector('link[rel=stylesheet][href="./styles-settings.css"]'),
     mounts: ['view-perform', 'view-edit', 'view-settings', 'toasts', 'overlay-start'].map((id) => !!document.getElementById(id)),
     editHidden: document.getElementById('view-edit').hidden,
     settingsHidden: document.getElementById('view-settings').hidden,
@@ -270,7 +270,7 @@ test('boots: overlay (if shown) starts audio, controller becomes ready, favicon 
   assert.ok(dom.icon && dom.icon.endsWith('.svg'));
   const iconRes = await page.request.get(new URL(dom.icon, base).href);
   assert.equal(iconRes.status(), 200);
-  assert.ok(dom.editCss, 'styles-edit.css is linked for ui-edit');
+  assert.ok(dom.editCss, 'styles-settings.css (Settings, fallback components) is linked');
   assert.deepEqual(dom.mounts, [true, true, true, true, true]);
   assert.equal(dom.editHidden, true);
   assert.equal(dom.settingsHidden, true);

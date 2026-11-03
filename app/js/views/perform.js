@@ -30,6 +30,7 @@ import { quickSheet } from './components/quickSheet.js';
 import { startCard } from './components/startCard.js';
 import { KEY_MAP } from '../controller.js';
 import { openOverlay } from './components/overlay.js';
+import { say, onVoiceChange } from './components/voice.js';
 
 const lerp = (a, b, x) => a + (b - a) * x;
 const MINUS = '−';
@@ -324,7 +325,7 @@ export function mountPerform(root, ctx) {
   const songPlayIn = h('span.song-playin', { 'data-testid': 'song-playin', hidden: true });
   const songBpm = h('span.song-bpm', { 'data-testid': 'song-bpm', text: '' });
   const songLoading = h('span.song-loading', { role: 'status' }, h('span.song-loading-spin', { 'aria-hidden': 'true' }), h('span', { text: 'Loading…' }));
-  const fadedChip = h('span.faded-chip', { hidden: true, role: 'status', 'data-testid': 'faded-chip', text: 'Faded — play to resume' });
+  const fadedChip = h('span.faded-chip', { hidden: true, role: 'status', 'data-testid': 'faded-chip', text: say('fadedChip') });
   const notesBtn = btn('.notes-btn', [icon('note', 16), 'Notes'], { 'aria-pressed': 'false', 'aria-controls': 'perform-notes', 'data-testid': 'notes-toggle' });
   const songBlock = h(
     'section.panel.song-block',
@@ -368,10 +369,11 @@ export function mountPerform(root, ctx) {
   // Prev / Next pass through an open step panel's outside-tap swallow (OPTIONS.md round-3 fix 4)
   const prevBtn = btn('.nav-btn.prev', '◀ Prev', { 'aria-label': 'Previous song', 'data-testid': 'prev-song', 'data-overlay-pass': '' });
   const nextName = h('b.nav-next-name', { 'data-testid': 'next-name', text: '' });
+  const nextCap = h('small.nav-next-cap', { text: say('nextCap') });
   const nextBtn = h(
     'button.btn.nav-btn.next',
     { type: 'button', 'aria-label': 'Next song', 'data-testid': 'next-song', 'data-overlay-pass': '' },
-    h('span.nav-next-text', {}, h('small.nav-next-cap', { text: 'Next' }), nextName),
+    h('span.nav-next-text', {}, nextCap, nextName),
     icon('chevron', 22),
   );
   blurAfterPointer(nextBtn, d);
@@ -481,7 +483,7 @@ export function mountPerform(root, ctx) {
       steps: SUSTAIN_STEPS,
       format: (v) => (v ? 'Sustain' : 'Sustain off'),
       lit: (v) => v === true,
-      className: 'x4',
+      className: 'x4 sus-chip',
       title: 'Does the sustain pedal hold this sound? Tap to switch.',
       testid: `slot-sustain-${i}`,
       onChange: (v) => setSlot(i, 'sustain', !!v),
@@ -489,7 +491,8 @@ export function mountPerform(root, ctx) {
     const addBtn = btn('.slot-add', icon('plus', 18), { 'aria-label': `${role.name} is empty: add a sound in Edit`, title: 'Empty slot: add a sound in Edit', 'data-testid': `slot-add-${i}` });
     // opens Edit on this slot's tab with the instrument picker open (H-v2 Edit: focus 'instrument')
     d.listen(addBtn, 'click', () => ctx.setView?.('edit', { block: `slot:${i}`, focus: 'instrument' }));
-    const empty = h('div.slot-empty', { hidden: true }, addBtn, h('div.slot-vt', {}, ROLE, h('span', { text: ' · empty' })));
+    const emptyWord = h('span.slot-vt-word', { text: say('emptySlot') });
+    const empty = h('div.slot-empty', { hidden: true }, addBtn, h('div.slot-vt', {}, ROLE, emptyWord));
     const elSlot = h(
       'div.panel.slot.strip',
       { dataset: { slot: String(i) }, 'data-testid': `slot-${i}`, style: { '--c': color } },
@@ -502,7 +505,7 @@ export function mountPerform(root, ctx) {
     );
     slots.push({
       el: elSlot, tile, instIcon, inst, badge, badgeVal, chorusBadge, octBadge, susBadge, fader: f, lvl, space, echo,
-      octave, sustain, empty, gain: null, muted: false,
+      octave, sustain, empty, emptyWord, gain: null, muted: false,
     });
     slotsEl.append(elSlot);
   }
@@ -572,7 +575,8 @@ export function mountPerform(root, ctx) {
   brightness.el.dataset.testid = 'drone-brightness';
   const movement = use(fader({ path: 'drone.movement', label: 'Movement', compact: true, color: 'var(--drone)', relative: true, resetOnDoubleClick: false, format: (v) => `${movementWord(v)} · ${Math.round(v * 100)}%`, onChange: (v) => setSong('drone.movement', v) }));
   movement.el.dataset.testid = 'drone-movement';
-  const follow = use(toggle({ label: 'Follow chords', tag: 'experimental', title: 'The synth drone follows the chords you hold below middle C (experimental)', onChange: (v) => setSong('drone.chordFollow', v) }));
+  // v11-polish (ux-round2 §2): no EXPERIMENTAL tag on the stage card; the tooltip and Edit › Drone still say so
+  const follow = use(toggle({ label: 'Follow chords', title: 'The synth drone follows the chords you hold below middle C (experimental)', onChange: (v) => setSong('drone.chordFollow', v) }));
   follow.el.dataset.testid = 'drone-follow';
   const cont = use(toggle({ label: 'Continue across songs', title: 'Keep the drone playing when you switch songs (it glides to the new key)', onChange: (v) => setSong('drone.continueAcrossSongs', v) }));
   cont.el.dataset.testid = 'drone-continue';
@@ -621,7 +625,7 @@ export function mountPerform(root, ctx) {
   });
   const notesClose = btn('.notes-close', 'Close', { 'aria-label': 'Close notes' });
   // onboarding "first 60 seconds": a one-time Start here card at the top of the Notes panel (components/startCard.js)
-  const start = use(startCard());
+  const start = use(startCard({ onDismiss: () => startGone() }));
   const notesEl = h('section.panel.p-notes', { id: 'perform-notes', 'aria-label': 'Song notes' }, h('div.notes-head', {}, h('span.section-title', { text: 'Notes' }), notesClose), start.el, notesText);
 
   const main = h('div.p-main', {}, wheelPanel, slotsEl, droneEl, notesEl);
@@ -726,8 +730,43 @@ export function mountPerform(root, ctx) {
     notesBtn.setAttribute('aria-pressed', String(on));
     if (on) checkNotesOverflow();
   };
-  d.listen(notesBtn, 'click', () => showNotes(!perform.classList.contains('show-notes')));
-  d.listen(notesClose, 'click', () => showNotes(false));
+  // v11-polish FR-1: at ≤ 1340 px Notes is hidden until opened, and the Start here card lives in it, so a fresh
+  // library at 1280×800 never saw the card and the first song change then marked it done. While the card is pending, Notes
+  // opens by itself in a narrow window; closing the card (× or the first song change) closes that auto-opened Notes
+  // again (a Notes the player opened stays open). The card only counts as read once it was on screen.
+  let autoNotes = false;
+  let startSeen = false;
+  const narrowMq = typeof matchMedia === 'function' ? matchMedia('(max-width: 1340px)') : null;
+  const autoOpenNotes = () => {
+    if (!start.shown || !narrowMq?.matches || perform.classList.contains('show-notes')) return;
+    autoNotes = true;
+    showNotes(true);
+  };
+  function startGone() {
+    if (!autoNotes) return;
+    autoNotes = false;
+    showNotes(false);
+  }
+  d.listen(notesBtn, 'click', () => {
+    autoNotes = false;
+    showNotes(!perform.classList.contains('show-notes'));
+  });
+  d.listen(notesClose, 'click', () => {
+    autoNotes = false;
+    showNotes(false);
+  });
+  if (narrowMq) d.listen(narrowMq, 'change', autoOpenNotes);
+  autoOpenNotes();
+  if (typeof IntersectionObserver === 'function') {
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        startSeen = true;
+        io.disconnect();
+      }
+    });
+    if (start.shown) io.observe(start.el);
+    d.add(() => io.disconnect());
+  } else startSeen = true;
 
   const openQuick = (opts) => {
     if (quick.isOpen) return;
@@ -1025,7 +1064,10 @@ export function mountPerform(root, ctx) {
     });
     const nb = store.neighbors();
     prevBtn.disabled = !nb.prev;
+    // v11-polish: Daylight's "Start of set" on the first song (Classic keeps "◀ Prev", greyed)
+    setText(prevBtn, nb.prev ? '◀ Prev' : say('prevStart'));
     nextBtn.disabled = !nb.next;
+    atSetEnd = !nb.next && !!st.currentSetlistId && ids.length > 1;
     const ns = nb.next ? state.songs[nb.next.id] : null;
     if (ns) {
       const k = keyName(ns.hearIn, ns.minor);
@@ -1067,6 +1109,7 @@ export function mountPerform(root, ctx) {
     cont.setDisabled(locked);
     droneEl.classList.toggle('locked', locked);
     renderDroneReadout();
+    renderAudible();
     renderPads(state);
     renderPresets(song);
     spaceRow.setDisabled(!song);
@@ -1078,7 +1121,7 @@ export function mountPerform(root, ctx) {
     const notes = song && song.notes ? song.notes : '';
     notesText.classList.toggle('empty', !notes);
     notesBtn.classList.toggle('has-notes', !!notes);
-    setText(notesText, notes || 'No notes for this song. Add some in Edit.');
+    setText(notesText, notes || say('notesEmpty'));
     checkNotesOverflow();
     // lock
     renderLock(locked);
@@ -1101,7 +1144,7 @@ export function mountPerform(root, ctx) {
     revertBtn.setDisabled(same);
     revertBtn.el.classList.toggle('none', n === 0);
     // faders and mutes carry no dot and aren't counted (concept §2, round-3 fix 2); Revert still restores them
-    setText(revertCount, same ? 'nothing changed' : n ? `${n} changed` : 'levels only');
+    setText(revertCount, same ? say('revertNone') : n ? `${n} changed` : 'levels only');
     revertBtn.el.dataset.count = String(same ? 0 : n);
   }
 
@@ -1152,10 +1195,37 @@ export function mountPerform(root, ctx) {
     }
   });
   d.add(() => fitName.cancel());
+  // v11-polish (theme-ember deferred #8, chord auto-fit): the data-len steps are the CSS cap; a name still wider
+  // than the card (a wide theme face: "Cadd9" in Nunito, "F#m7b5" anywhere) steps down to 60 % before it would
+  // ellipsize. Measured only when the shown name changes or the card resizes, at most once a frame.
+  const chordName = chord.el.querySelector('.chord-name');
+  let chordFitKey = '';
+  const fitChord = rafCoalesce(() => {
+    if (!chordName || !chordName.isConnected || chordName.closest('[hidden]')) return;
+    chordName.style.fontSize = '';
+    if (chordName.scrollWidth <= chordName.clientWidth + 1) return;
+    const max = parseFloat(getComputedStyle(chordName).fontSize) || 46;
+    const min = Math.round(max * 0.6);
+    let fs = max;
+    while (chordName.scrollWidth > chordName.clientWidth + 1 && fs > min) {
+      fs = Math.max(min, fs - 2);
+      chordName.style.fontSize = `${fs}px`;
+    }
+  });
+  d.add(() => fitChord.cancel());
+  const refitChord = () => {
+    const k = `${chordName?.textContent}|${chord.el.dataset.len || ''}`;
+    if (k === chordFitKey) return;
+    chordFitKey = k;
+    fitChord.push();
+  };
   if (typeof ResizeObserver === 'function') {
     const ro = new ResizeObserver(() => fitName.push());
     ro.observe(songBlock);
     d.add(() => ro.disconnect());
+    const rc = new ResizeObserver(() => fitChord.push());
+    rc.observe(chord.el);
+    d.add(() => rc.disconnect());
   }
 
   function renderSlots(song) {
@@ -1314,7 +1384,7 @@ export function mountPerform(root, ctx) {
       setText(padText, mode === 'files' ? 'Pad folder not connected — using the synth drone' : 'Pad folder chosen (not loaded yet)');
       setText(padBtn, 'Pad folder…');
     } else {
-      setText(padText, mode === 'files' ? 'No pad folder — using the synth drone' : 'My Pads: no folder chosen');
+      setText(padText, mode === 'files' ? 'No pad folder — using the synth drone' : say('padsNone'));
       setText(padBtn, 'Choose folder…');
     }
     padStatus.classList.toggle('attention', mode === 'files' && !(padsInfo && padsInfo.count > 0));
@@ -1349,11 +1419,17 @@ export function mountPerform(root, ctx) {
   let faded = false;
   let pedalDown = false;
   let pedalSince = 0;
+  let atSetEnd = false; // the current song is the last of a setlist (renderSong)
   function setFaded(on) {
     faded = !!on;
     fadedChip.hidden = !faded;
     fadeBtn.classList.toggle('faded', faded);
-    setText(fadeLabel, faded ? 'Faded — play to resume' : 'Fade out');
+    // v11-polish (Sanctuary §6.4, Ember §6.5, Studio §5): faded on the set's last song is the set's end, in the
+    // voices that have that line (Classic and Daylight keep the plain faded chip)
+    const end = faded && atSetEnd ? say('setEnd') : null;
+    setText(fadedChip, end || say('fadedChip'));
+    fadedChip.classList.toggle('set-end', !!end);
+    setText(fadeLabel, faded ? say('fadedButton') : 'Fade out');
   }
   function readRuntime() {
     let p = false;
@@ -1369,11 +1445,33 @@ export function mountPerform(root, ctx) {
     if (p !== pedalDown) {
       pedalDown = p;
       pedalSince = t;
+      // v11-polish (ux-round2 L4 / #9): the pedal shows on every strip it holds, not only as the wheel's 10 px dot
+      perform.classList.toggle('pedal-down', p);
       if (quick.isOpen) quick.set({ pedal: p });
     }
     wheel.set({ pedal: pedalDown, pedalStuck: pedalDown && t - pedalSince > PEDAL_STUCK_MS });
     if (f !== faded) setFaded(f);
     renderDroneReadout();
+    renderAudible();
+  }
+  /**
+   * v11-polish (theme-sanctuary deferred #5): `.p-drone.audible` while the drone can actually be heard: on, its
+   * level above −∞ and not faded out. Sanctuary's / Nave's lancet window lights on this, not on drone.mode (a Faded
+   * or −∞ drone used to show it lit). One class write per change, from the runtime tick.
+   */
+  let audible = null;
+  function renderAudible() {
+    const song = store.currentSong();
+    let mode = song ? song.drone.mode : 'off';
+    try {
+      if (song && engine?.drone?.cfg?.mode) mode = engine.drone.cfg.mode;
+    } catch {
+      /* engine not started */
+    }
+    const a = !!song && mode !== 'off' && Number(song.drone.gain) > 0.0005 && !faded;
+    if (a === audible) return;
+    audible = a;
+    droneEl.classList.toggle('audible', a);
   }
   // round2-ui #10: no polling while Perform is hidden (Edit); showing it again catches up within one tick.
   // idle-cpu-ui: under <html data-low-resource> or a hidden window the pedal / wheel / faded lamps poll at 1 Hz (the
@@ -1390,8 +1488,33 @@ export function mountPerform(root, ctx) {
   runtimeTimer = setTimeout(runtimeTick, RUNTIME_MS);
   d.add(() => clearTimeout(runtimeTimer));
 
+  /**
+   * v11-polish: the part a held key sounds on (the first unmuted slot whose range holds it; -1 none), for the
+   * on-screen keys' `data-part` (components/keys.js). Read per new key, from the store's current song.
+   * @param {number} n MIDI note
+   * @returns {number}
+   */
+  function partOf(n) {
+    const song = store.currentSong();
+    if (!song) return -1;
+    for (let i = 0; i < SLOT_COUNT; i++) {
+      const sl = song.patch.slots[i];
+      if (!sl || slotMuteState(sl).muted) continue;
+      const lo = Number.isFinite(sl.lowNote) ? sl.lowNote : 0;
+      const hi = Number.isFinite(sl.highNote) ? sl.highNote : 127;
+      if (n >= lo && n <= hi) return i;
+    }
+    return -1;
+  }
   // ---------------------------------------------------------------- subscriptions
   d.add(store.subscribe((state) => renderSong(state)));
+  // v11-polish: a theme switch re-words the strings this view wrote (shared/voice.js)
+  d.add(onVoiceChange(() => {
+    setText(nextCap, say('nextCap'));
+    for (const S of slots) setText(S.emptyWord, say('emptySlot'));
+    renderSong(store.get());
+    setFaded(faded);
+  }));
   // ---------------------------------------------------------------- first run: Start card + computer-key letters
   // The card goes after the first song change (it said how); letters sit on the on-screen piano while no MIDI
   // keyboard is connected and the computer keyboard plays (Settings › Computer keyboard), following Z/X octaves.
@@ -1399,7 +1522,7 @@ export function mountPerform(root, ctx) {
   d.add(store.subscribe((state) => {
     const id = state.settings.currentSongId;
     if (id === cardSong) return;
-    if (cardSong && start.shown) start.dismiss('next');
+    if (cardSong && start.shown && startSeen) start.dismiss('next'); // FR-1: only a card that was on screen
     cardSong = id;
   }));
   const KEY_LABELS = Object.entries(KEY_MAP).map(([code, off]) => [off, code === 'Semicolon' ? ';' : code.slice(3)]);
@@ -1495,6 +1618,7 @@ export function mountPerform(root, ctx) {
       const n = String(engineChord.name).length;
       chord.el.dataset.len = n > 4 ? 'xl' : n > 2 ? 'l' : ''; // the chord column is narrow (H-v2: 116 px)
     } else if (chord.el.classList.contains('live')) chord.set(null); // keeps the last live name, dimmed
+    refitChord();
   };
   d.listen(controller, 'chord', (e) => {
     engineChord = e.detail ? e.detail.chord : null;
@@ -1504,7 +1628,7 @@ export function mountPerform(root, ctx) {
     const held = e.detail ? e.detail.held : [];
     physHeld = held ? (held.size ?? held.length ?? 0) : 0;
     queueMicrotask(refreshChord);
-    piano.set(held);
+    piano.set(held, partOf);
     if (faded && held && (held.size || held.length)) queueMicrotask(readRuntime);
   });
   d.listen(controller, 'pads', (e) => {

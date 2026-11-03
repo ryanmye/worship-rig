@@ -2,7 +2,7 @@
 // (views/edit/shell.js, ctx.C) ONLY when
 // ./components/index.js cannot be imported. Same call shapes: every factory takes an options object with an
 // onChange-style callback and returns { el, set(value), destroy() } (+ a few extras ui-core also exposes:
-// input, get(), setDisabled()). Plain native inputs; styled by styles-edit.css (.fc-*).
+// input, get(), setDisabled()). Plain native inputs; styled by styles-settings.css (.fc-*).
 //
 // loadComponents() merges ui-core's exports OVER these, so a missing ui-core export still has a stand-in.
 import { describe, formatValue } from '../shared/params.js';

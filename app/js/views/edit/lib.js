@@ -4,6 +4,7 @@
 import { describe, faderTaper, inverseTaper, SLOT_COUNT } from '../../shared/params.js';
 import { keyName } from '../../shared/music.js';
 import { sameValue } from '../../shared/song-diff.js';
+import { say } from '../components/voice.js';
 
 // ---------------------------------------------------------------------------------------------------------------
 // DOM
@@ -311,7 +312,9 @@ export const changedDot = (title = 'Changed since the song was loaded') =>
  */
 export const changeText = (n, edited = false) => {
   if (n > 0) return `${n} change${n === 1 ? '' : 's'} since the song was loaded`;
-  return edited ? 'Sound edited (no switch changes)' : 'No switch changes since the song was loaded';
+  // v11-polish: the untouched line is the theme's voice ("Just as you saved it"); shell.js re-emits 'changes' on a
+  // theme switch so every mounted footer re-reads it
+  return edited ? 'Sound edited (no switch changes)' : say('editFoot');
 };
 /**
  * True when any of `prefixes` (song-relative) differs from the baseline, levels and mutes aside: `omit` keys are

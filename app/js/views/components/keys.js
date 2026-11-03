@@ -157,11 +157,35 @@ export function pianoKeyboard(o = {}) {
 
   return {
     el,
-    /** @param {Set<number>|number[]} heldSet */
-    set(heldSet) {
+    /**
+     * @param {Set<number>|number[]} heldSet
+     * @param {(note:number) => number} [partOf]  v11-polish (theme-ember deferred #7): the slot that sounds the note
+     *        (-1: none). A newly held key gets `data-part` and `--kp: var(--slot-N)`, so a theme can light it in the
+     *        part's colour; Classic has no rule for it and keeps its amber.
+     */
+    set(heldSet, partOf) {
       const next = new Set(heldSet || []);
-      for (const n of held) if (!next.has(n)) keys.get(n)?.classList.remove('held');
-      for (const n of next) if (!held.has(n)) keys.get(n)?.classList.add('held');
+      for (const n of held) {
+        if (next.has(n)) continue;
+        const k = keys.get(n);
+        if (!k) continue;
+        k.classList.remove('held');
+        if (k.dataset.part !== undefined) {
+          delete k.dataset.part;
+          k.style.removeProperty('--kp');
+        }
+      }
+      for (const n of next) {
+        if (held.has(n)) continue;
+        const k = keys.get(n);
+        if (!k) continue;
+        k.classList.add('held');
+        const p = typeof partOf === 'function' ? partOf(n) : -1;
+        if (p >= 0) {
+          k.dataset.part = String(p);
+          k.style.setProperty('--kp', `var(--slot-${p})`);
+        }
+      }
       held = next;
     },
     releaseAll() {

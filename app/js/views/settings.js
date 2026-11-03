@@ -5,7 +5,7 @@
 import { loadComponents, markDialog } from './_fallback-components.js';
 import { LEARNABLE, ROLE_DEFAULTS } from '../shared/params.js';
 import { noteName } from '../shared/music.js';
-import { pickableThemes, resolveThemeId } from '../shared/themes.js';
+import { pickableThemes, resolveThemeId, lightSiblings, byId as themeById, LIGHT_AUTO_KEY } from '../shared/themes.js';
 import { latencyHint } from './components/latencyHint.js';
 
 const C = await loadComponents();
@@ -1190,6 +1190,52 @@ export function mountSettings(el, ctx) {
   };
   settingBinds.push({ key: 'theme', apply: renderThemes });
   renderThemes();
+  // v11-polish (OPTIONS §3.1 #5): Daylight's light switch, shown only while a Daylight theme is picked. Day / Stage
+  // pick the sibling (settings.theme); Auto is per Mac (localStorage, OPTIONS §5) and follows the Mac's appearance.
+  // main.js applies it (and forces Stage while Perform lock is on).
+  const readAuto = () => {
+    try {
+      return localStorage.getItem(LIGHT_AUTO_KEY) === 'auto';
+    } catch {
+      return false;
+    }
+  };
+  const writeAuto = (on) => {
+    try {
+      if (on) localStorage.setItem(LIGHT_AUTO_KEY, 'auto');
+      else localStorage.removeItem(LIGHT_AUTO_KEY);
+    } catch {
+      /* storage blocked: Day / Stage still work */
+    }
+    document.dispatchEvent(new CustomEvent('rig-theme-light'));
+  };
+  const lightSeg = C.segmented({
+    label: 'Light',
+    options: [
+      { value: 'day', label: 'Day', title: 'Paper and ink, for a bright room' },
+      { value: 'stage', label: 'Stage', title: 'Dark, for a dark room' },
+      { value: 'auto', label: 'Auto', title: 'Follows this Mac’s light or dark appearance' },
+    ],
+    onChange: (v) => {
+      const sib = lightSiblings(S().theme);
+      if (!sib) return;
+      writeAuto(v === 'auto');
+      if (v !== 'auto') store.set('settings.theme', v === 'day' ? sib.light : sib.dark);
+    },
+  });
+  lightSeg.el.dataset.testid = 'setting-theme-light';
+  comps.push(lightSeg);
+  const lightRow = h('div.st-row.st-row-light', { hidden: true },
+    h('div.st-label', {}, h('span', { text: 'Light' }),
+      h('span.st-hint', { text: 'Auto follows this Mac. Lock always shows Stage.' })),
+    h('div.st-control', {}, lightSeg.el));
+  const renderLight = (s = S()) => {
+    const sib = lightSiblings(s.theme);
+    lightRow.hidden = !sib;
+    if (!sib) return;
+    lightSeg.set(readAuto() ? 'auto' : themeById(resolveThemeId(s.theme))?.mode === 'light' ? 'day' : 'stage');
+  };
+  settingBinds.push({ key: 'theme', apply: renderLight });
   listen(themeGrid, 'keydown', (e) => {
     const i = themeCards.indexOf(e.target);
     if (i < 0) return;
@@ -1208,7 +1254,9 @@ export function mountSettings(el, ctx) {
   h('div.st-row.st-row-themes', {},
     h('div.st-label', {}, h('span', { text: 'Theme' }),
       h('span.st-hint', { text: 'How the whole app looks. The sound doesn’t change.' })),
-    h('div.st-control', {}, themeGrid)));
+    h('div.st-control', {}, themeGrid)),
+  lightRow);
+  renderLight();
   colA.insertBefore(appearance, colA.querySelector('.st-section[aria-label="Perform view"]'));
   /** open({section}): bring that section into view and focus its first control (Quick › This Mac › Theme). */
   function revealSection(name) {

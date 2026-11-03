@@ -1,5 +1,5 @@
-/* H-v2 Edit view stylesheet (linked from app/index.html after styles-edit.css). Order matters: the shared base first,
-   then one file per panel owner, so panel rules win ties with the shared ones (views/edit/CONTRACT.md §4). */
+/* H-v2 Edit view stylesheet (linked from app/index.html after styles-settings.css). Order matters: the shared base
+   first, then one file per panel owner, so panel rules win ties with the shared ones (views/edit/CONTRACT.md §4). */
 @import url('./base.css');
 @import url('./panels/slot.css');
 @import url('./panels/drone.css');

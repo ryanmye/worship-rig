@@ -150,6 +150,10 @@ export default {
 
     // ---- "How much of each sound goes in": the Perform strip's Space/Echo/Chorus chip, one per slot
     const who = { reverb: [], delay: [], chorus: [] };
+    // v11-polish (ux-round2 leftover, hv2-edit-integrate "no mini curve"): a slot whose Tone EQ is shaped shows its
+    // curve as a small picture in the corner of its "goes in" chip, so you see what goes into the room (hidden while
+    // flat; the chip stays the control). eqMiniCurve({decorative}) is a span, aria-hidden, computed locally.
+    const toneGlyphs = [];
     const makeChip = (o) => (typeof C.stepChip === 'function'
       ? C.stepChip({
         steps: C.AMOUNT_STEPS || FALLBACK_STEPS,
@@ -181,6 +185,12 @@ export default {
         }), { read: (s) => (s.patch.slots[i] ? Number(getIn(s, rel)) || 0 : 0) });
         chip.el.classList.add('ev2-fx-mod');
         chip.el.dataset.slot = String(i);
+        if (typeof C.eqMiniCurve === 'function') {
+          const g = C.eqMiniCurve({ store: ctx.store, slotIndex: i, width: 30, height: 12, decorative: true });
+          g.el.classList.add('ev2-fx-tone');
+          chip.el.append(g.el);
+          toneGlyphs.push(g);
+        }
         who[u.unit].push(chip);
         mods.append(chip.el);
       }
@@ -586,6 +596,7 @@ export default {
         dead = true;
         clearTimeout(flashTimer);
         closeMenu(false);
+        for (const g of toneGlyphs.splice(0)) g.destroy();
         binder.destroy();
       },
     };
