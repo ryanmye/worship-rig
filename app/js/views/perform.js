@@ -48,7 +48,7 @@ const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `${MINUS}${-n}` : '0');
 export const LOCK = Object.freeze({
   live: Object.freeze([
     'slot faders', 'ON tiles', 'drone ON tile', 'drone level', 'wheel', 'Swell', 'strip chips', 'header Space / Echo',
-    'Quick › This song', 'Quick › restart audio', 'Prev / Next / setlist tap', 'Fade out', 'PANIC',
+    'Quick › This song', 'Quick › restart audio', 'Prev / Next / setlist tap', 'Fade out', 'PANIC', 'Click',
     'pad folder Rescan (Mac app, pads loaded)', 'Notes toggle', 'top bar: master volume / REC / Quick',
     'banner: Restart sound / Not now',
   ]),
@@ -175,6 +175,7 @@ const ICONS = {
   lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   note: '<path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h4"/>',
+  click: '<path d="M6.5 21 10 3h4l3.5 18z"/><path d="M12 16.5l6.5-10"/><path d="M7.4 17h9.2"/>',
 };
 /** Inline stroke icon (static markup from the table above, never user data). */
 function icon(name, size = 20) {
@@ -327,13 +328,29 @@ export function mountPerform(root, ctx) {
   const songLoading = h('span.song-loading', { role: 'status' }, h('span.song-loading-spin', { 'aria-hidden': 'true' }), h('span', { text: 'Loading…' }));
   const fadedChip = h('span.faded-chip', { hidden: true, role: 'status', 'data-testid': 'faded-chip', text: say('fadedChip') });
   const notesBtn = btn('.notes-btn', [icon('note', 16), 'Notes'], { 'aria-pressed': 'false', 'aria-controls': 'perform-notes', 'data-testid': 'notes-toggle' });
+  // v11-metronome: the click chip sits by the tempo. Hidden while the song has no tempo; a tap starts the click (with
+  // the count-in from Edit › Song) or stops it. Live under Lock: it never touches the sound, the song or held notes.
+  const clickText = h('span.click-l', { text: say('clickOff') });
+  const clickBtn = btn('.click-btn', [icon('click', 16), clickText], {
+    'aria-pressed': 'false', 'data-testid': 'click-toggle', hidden: true, title: say('clickTitle'),
+  });
+  d.listen(clickBtn, 'click', () => controller.toggleClick());
+  const renderClick = () => {
+    const c = status.click || {};
+    clickBtn.hidden = !c.available && !c.on;
+    clickBtn.classList.toggle('on', !!c.on);
+    clickBtn.classList.toggle('counting', !!c.counting);
+    clickBtn.setAttribute('aria-pressed', c.on ? 'true' : 'false');
+    setText(clickText, say(c.counting ? 'clickCounting' : c.on ? 'clickOn' : 'clickOff'));
+    clickBtn.title = say('clickTitle');
+  };
   const songBlock = h(
     'section.panel.song-block',
     { 'aria-label': 'Current song' },
     songName,
     // onboarding O2: "Loading…" sits in the KEY row (it takes the BPM's place while it shows), never over the title
-    h('div.song-sub', {}, h('span.song-key-cap', { text: 'Key' }), keyBtn.el, songPlayIn, songBpm, songLoading, holdTag(),
-      notesBtn),
+    h('div.song-sub', {}, h('span.song-key-cap', { text: 'Key' }), keyBtn.el, songPlayIn, songBpm, clickBtn,
+      songLoading, holdTag(), notesBtn),
   );
 
   const tDown = use(holdButton({ label: MINUS, ms: HOLD_MS, requireHold: isLocked, className: 't-down', capBounds: '.transpose', ariaLabel: 'Transpose down a semitone', testid: 'transpose-down', onActivate: () => controller.transposeDown() }));
@@ -1513,6 +1530,7 @@ export function mountPerform(root, ctx) {
     for (const S of slots) setText(S.emptyWord, say('emptySlot'));
     renderSong(store.get());
     setFaded(faded);
+    renderClick();
   }));
   // ---------------------------------------------------------------- first run: Start card + computer-key letters
   // The card goes after the first song change (it said how); letters sit on the on-screen piano while no MIDI
@@ -1548,6 +1566,7 @@ export function mountPerform(root, ctx) {
       start.setMidi(!!s.midi?.connected);
       renderKeyLetters();
       songBlock.classList.toggle('loading', !!s.loading);
+      renderClick();
       if (prevLoading !== s.loading || prevSong !== s.songId) {
         const st = store.get();
         setlist.set({ loadingId: s.loading ? s.songId : null, currentId: st.settings.currentSongId, currentIndex: store.currentIndex(), gap: gapOf(store.neighbors()) });

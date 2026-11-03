@@ -286,7 +286,7 @@ export const BLOCKS = Object.freeze([
 /** The 'song' block has no tab (header chips select it). */
 export const SONG_BLOCK = Object.freeze({
   id: 'song', panel: 'song', opts: Object.freeze({}), role: 'Song', color: 'var(--accent, #ffc94d)',
-  prefixes: Object.freeze(['hearIn', 'playIn', 'transposeOctave', 'minor', 'tempo', 'name', 'notes']),
+  prefixes: Object.freeze(['hearIn', 'playIn', 'transposeOctave', 'minor', 'tempo', 'timeSig', 'name', 'notes']),
 });
 /**
  * Resolve a block id ('slot:2', 'drone', 'effects', 'master', 'song').

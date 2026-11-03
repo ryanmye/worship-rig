@@ -20,6 +20,8 @@ import { FxGraph, Channel, AudioTimer, Coalescer, rngFor, isOfflineContext, linF
 import { InstrumentRegistry } from './instruments.js';
 import { BufferCache } from './sampler.js';
 import { Drone } from './drone.js';
+import { Metronome } from './metronome.js';
+import { meterOf } from '../shared/click-math.js';
 import {
   COMPILED_PRESETS, compileTouch, touchAt, pedalCurve, PEDAL_CURVES, TOUCH_KEYS,
 } from '../shared/touch-curve.js';
@@ -260,6 +262,11 @@ export class AudioEngine extends EventTarget {
     // controller already hands compiled ones). A slot's own curve is cached on its channel (_slotTouch).
     this._touchSpecs = new WeakMap();
     this._pedalSwell = false;
+    // v11-metronome: click settings and time signature survive restart() like the tempo (the Metronome itself is
+    // rebuilt with the graph); the MIDI clock sink is the controller's
+    this._clickCfg = { level: undefined, record: false, output: 'main' };
+    this.timeSig = '4/4';
+    this._clockSink = null;
   }
 
   /**
@@ -393,6 +400,18 @@ export class AudioEngine extends EventTarget {
     if (this.fx.enableIdleSleep()) this._pollFx(this.ctx.currentTime);
     if (this._monoOut) this.fx.setMono(true, 0);
     if (this.tempo) this.fx.delay.tempo = this.tempo;
+    // v11-metronome: the click bus sums after fx.out (see engine/metronome.js for the routing)
+    this.metronome = new Metronome({
+      ctx,
+      timer: this.timer,
+      recordTap: this.fx.recordTap,
+      emit: (d) => this._emit('click', d),
+      warn: (m) => this._warn(m),
+    });
+    this.metronome.bpm = this.tempo;
+    this.metronome.sig = this.timeSig;
+    this.metronome.configure(this._clickCfg, 0);
+    this.metronome.setClockSink(this._clockSink);
   }
 
   /** After registry.init(): drone synth trim (gain-trims.json droneTrim) and the drone's reusable instruments. */
@@ -425,6 +444,7 @@ export class AudioEngine extends EventTarget {
     if (latency !== undefined) this.latency = latency;
     if (sinkId !== undefined) this.sinkId = sinkId;
     const state = this.getState();
+    const clickWas = !!this.metronome?.running; // v11-metronome: a running click comes back (without a count-in)
     const files = this.drone?.files ? [...this.drone.files.entries()] : null;
     const old = this.ctx;
     this._teardown();
@@ -440,6 +460,7 @@ export class AudioEngine extends EventTarget {
     // the new Drone keeps the pad files, so a files-mode drone comes back as files (not the synth fallback)
     if (files && this.drone) this.drone.files = new Map(files);
     await this.applyState(state);
+    if (clickWas) this.clickStart();
     this._emit('statechange', { state: this.ctx.state, latencyMs: this.latencyMs, restarted: true });
     return this;
   }
@@ -449,6 +470,7 @@ export class AudioEngine extends EventTarget {
     if (this.ctx && typeof this.ctx.setSinkId === 'function') {
       try {
         await this.ctx.setSinkId(this.sinkId === 'default' ? '' : this.sinkId);
+        this.metronome?.reapplyOutput(); // v11-metronome: the new device may have a different channel count
         this._emit('statechange', { state: this.ctx.state, latencyMs: this.latencyMs });
         return true;
       } catch (e) {
@@ -471,6 +493,8 @@ export class AudioEngine extends EventTarget {
     if (this._plan) this._discardPlan(this._plan);
     this._plan = null;
     this.drone?.dispose();
+    this.metronome?.dispose();
+    this.metronome = null;
     this.timer?.dispose();
     this.fx?.dispose();
     this._resetState();
@@ -1294,6 +1318,7 @@ export class AudioEngine extends EventTarget {
       if (sc.mono.cur) v++;
     }
     if (v > 0) out.push('voices');
+    if (this.metronome?.running) out.push('click'); // v11-metronome: the click (or its MIDI clock) is playing
     // lowres2-critic #4: a held pedal is input in progress; its release (a MIDI message) restarts the sleep clock
     if (this.pedal) out.push('pedal');
     const d = this.drone;
@@ -1491,9 +1516,72 @@ export class AudioEngine extends EventTarget {
 
   setTempo(bpm) {
     this.tempo = Number(bpm) > 0 ? Number(bpm) : null;
+    // v11-metronome: tap tempo / the tempo field move a running click from its next unscheduled beat; no tempo stops it
+    this.metronome?.retime({ bpm: this.tempo });
     if (!this.fx) return; // stored; applied by start()
     this.fx.delay.tempo = this.tempo;
     if (this.fx.delay.p.sync !== 'off') this.fx.delay.updateTime(this._t());
+  }
+
+  // ----- click / metronome (v11-metronome; engine/metronome.js) --------------------------------------------------
+  /**
+   * The song's time signature ('4/4', '3/4', '6/8', … shared/click-math.js TIME_SIGS; anything else is 4/4). A
+   * running click takes it on its next unscheduled beat, as a new bar.
+   * @param {string} sig
+   * @param {{newBar?:boolean}} [o] newBar: start a new bar there even when the signature is unchanged (song switch)
+   */
+  setTimeSig(sig, { newBar = false } = {}) {
+    this.timeSig = meterOf(sig).sig;
+    this.metronome?.retime({ sig: this.timeSig, newBar });
+  }
+
+  /**
+   * Start the click at the song's tempo (no tempo: nothing happens, returns null). countIn bars first; quietAfter:
+   * only the count-in is heard (a MIDI clock keeps running until clickStop).
+   * @param {{countIn?:number, quietAfter?:boolean, when?:number}} [o]
+   * @returns {{t0:number, downbeat:number}|null}
+   */
+  clickStart({ countIn = 0, quietAfter = false, when } = {}) {
+    if (!this.metronome) {
+      this._warn('clickStart() before start(); ignored.');
+      return null;
+    }
+    if (this._sleepS.state !== 'awake' && !this.offline) this.wake().catch(() => {}); // lowres2: the click wakes audio
+    return this.metronome.start({ bpm: this.tempo, sig: this.timeSig, countIn, quietAfter, when: this._t(when) });
+  }
+
+  /** Stop the click (clicks not yet started are dropped; MIDI Stop goes out). @returns {boolean} it was running */
+  clickStop({ when } = {}) {
+    return this.metronome ? this.metronome.stop({ when: this._t(when) }) : false;
+  }
+
+  /**
+   * Click settings: level (0..1 linear), record (the recorder hears the click), output 'main' | 'aux' (outputs 3–4).
+   * @param {{level?:number, record?:boolean, output?:'main'|'aux'}} cfg
+   * @returns {{output:string, auxAvailable:boolean}|null}
+   */
+  setClick(cfg = {}, { when } = {}) {
+    for (const k of ['level', 'record', 'output']) if (cfg[k] !== undefined) this._clickCfg[k] = cfg[k];
+    return this.metronome ? this.metronome.configure(cfg, this._t(when)) : null;
+  }
+
+  /** @returns {{running:boolean, counting:boolean, bpm:number|null, sig:string, output:string, level:number}|null} */
+  clickState() {
+    return this.metronome ? this.metronome.state() : null;
+  }
+
+  /** @returns {{aux:boolean, channels:number}} what the click routing can use on the current output */
+  clickOutputs() {
+    return this.metronome ? this.metronome.outputs() : { aux: false, channels: 2 };
+  }
+
+  /**
+   * MIDI clock sink: fn([{t, data}]) gets 24 ppq clock (+ Start / Stop) as audio-clock times while the click runs.
+   * The engine never touches MIDI; the controller sends them (app/js/midi-clock.js). null removes it.
+   */
+  setClockSink(fn) {
+    this._clockSink = typeof fn === 'function' ? fn : null;
+    this.metronome?.setClockSink(this._clockSink);
   }
 
   setKeyContext(pc, minor = false) {
@@ -2099,6 +2187,7 @@ export class AudioEngine extends EventTarget {
       routing: clone(this._routing),
       transpose: this.transpose,
       tempo: this.tempo,
+      timeSig: this.timeSig,
       keyContext: { ...this._keyCtx },
       drone: this.drone ? this.drone.getState() : null,
       mono: this._monoOut,
@@ -2142,6 +2231,7 @@ export class AudioEngine extends EventTarget {
     if (s.routing) this.setRouting(s.routing);
     if (Number.isFinite(s.transpose)) this.setTranspose(s.transpose);
     if ('tempo' in s) this.setTempo(s.tempo);
+    if (typeof s.timeSig === 'string') this.setTimeSig(s.timeSig);
     if (s.keyContext) this.setKeyContext(s.keyContext.pc, s.keyContext.minor);
     if (typeof s.mono === 'boolean') this.setMono(s.mono);
     if (s.drone) {
@@ -2183,6 +2273,10 @@ export class AudioEngine extends EventTarget {
       // lowres2: frozen drone (droneFrozen, droneLoopSec, droneRenderMs, …) and audio sleep
       ...(this.drone ? this.drone.freezeStats() : { droneFrozen: false, droneLoopSec: null, droneRenderMs: null }),
       audioSleep: this._sleepS.state,
+      // v11-metronome: click transport, scheduled sources and the pump's main-thread cost
+      click: this.metronome
+        ? { ...this.metronome.state(), live: this.metronome.liveCount, ...this.metronome.stats }
+        : null,
       lastWake: this._sleepS.last ? { ...this._sleepS.last } : null,
     };
   }

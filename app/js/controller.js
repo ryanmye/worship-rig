@@ -38,6 +38,8 @@ import { transposeSemis, mod12, keyName } from './shared/music.js';
 import { PARAMS, isValidPath, isLearnButton, faderTaper, inverseTaper, SLOT_COUNT } from './shared/params.js';
 import { detectKeyFromName } from './shared/keydetect.js';
 import { createBus, commandError } from './shared/bus.js';
+import { clickSettingsOf } from './shared/click-math.js';
+import { createMidiClock } from './midi-clock.js';
 
 /** Menu-bar modes (docs/menubar-mode.md): the popover shows at most this many. */
 export const MENU_BAR_MAX_MODES = 6;
@@ -274,6 +276,9 @@ export function createController(o) {
     lowResource: false, // menubar-A: effective low-resource mode (settings.lowResource, or auto while hidden)
     windowVisible: true, // menubar-A: main window shown (setWindowVisible() override, else document visibility)
     popoverOpen: false, // lowres2-critic R2: menu ids popoverShown / popoverHidden (never ends low-resource)
+    // v11-metronome: on = the click transport runs (counting = still in the count-in); available = the current song
+    // has a tempo; output = the routing in effect ('main' | 'aux'); midiClock = the chosen output name (null = off)
+    click: { on: false, counting: false, available: false, output: 'main', midiClock: null, midiClockConnected: false },
   };
   function setStatus(patch) {
     let changed = false;
@@ -301,6 +306,14 @@ export function createController(o) {
     if (force || !prev || !same(r, routingOf(prev))) call('setRouting', r);
     if (drone) applyDrone(song, prev, force);
     if (force || !prev || song.tempo !== prev.tempo) call('setTempo', song.tempo ?? null);
+    // v11-metronome: the time signature; a new song starts a new bar on the click's next free beat (never delays the
+    // switch: the click is its own transport)
+    const newSong = !!prev && prev.id !== song.id;
+    if (force || !prev || newSong || song.timeSig !== prev.timeSig) {
+      optional('setTimeSig', song.timeSig || '4/4', { newBar: newSong || (!!prev && song.timeSig !== prev.timeSig) });
+    }
+    const avail = Number(song.tempo) > 0;
+    if (status.click.available !== avail) setClickStatus({ available: avail });
   }
 
   function optional(name, ...args) {
@@ -527,6 +540,9 @@ export function createController(o) {
       if (snap[k] === undefined) continue;
       if (store.set(`songs.${id}.${k}`, clone(snap[k]))) changed = true;
     }
+    // v11-metronome: timeSig is optional, so "absent in the snapshot" means 4/4 again (remove it)
+    const cur = store.getSong(id);
+    if (cur && cur.timeSig !== snap.timeSig && store.set(`songs.${id}.timeSig`, snap.timeSig ?? null)) changed = true;
     if (changed) emit('action', { type: 'revertSong', id });
     return changed;
   }
@@ -1868,9 +1884,74 @@ export function createController(o) {
         rebuildTouch();
         applyRemembered();
         break;
+      case 'click':
+        applyClickSettings(s);
+        break;
+      case 'midiClockOut':
+        applyMidiClock(s);
+        break;
       default:
         break;
     }
+  }
+
+  // ---- click / metronome + MIDI clock out (v11-metronome)
+  const midiClock = createMidiClock({
+    getAccess: () => (midi && midi.access) || null,
+    getCtx: () => (engine && engine.ctx) || null,
+    warn: (m) => warn(m, true),
+  });
+  function setClickStatus(patch) {
+    setStatus({ click: { ...status.click, ...patch } });
+  }
+  /** settings.click → the engine (level, record the click, output routing). */
+  function applyClickSettings(s = settings()) {
+    const c = clickSettingsOf(s);
+    const r = optional('setClick', { level: c.level, record: c.record, output: c.output });
+    if (r && r.output) setClickStatus({ output: r.output });
+  }
+  /** settings.midiClockOut → the clock sink (attached only while an output is chosen; off by default). */
+  function applyMidiClock(s = settings()) {
+    const name = typeof s.midiClockOut === 'string' && s.midiClockOut ? s.midiClockOut : null;
+    const ok = midiClock.setOutput(name);
+    optional('setClockSink', name ? midiClock.sink : null);
+    setClickStatus({ midiClock: name, midiClockConnected: ok });
+  }
+  function onEngineClick(d) {
+    if (!d) return;
+    setClickStatus({ on: !!d.running, counting: !!d.counting, ...(d.output ? { output: d.output } : {}) });
+  }
+  /**
+   * Start the click on the current song's tempo, with settings.click's count-in. Live-safe: the click is its own
+   * transport, so a song switch, held notes and the drone are never touched or delayed.
+   * @returns {boolean} started
+   */
+  function startClick() {
+    if (secondary) return false;
+    const song = applied && store.getSong(applied.id);
+    if (!song || !(Number(song.tempo) > 0)) {
+      warn('This song has no tempo yet: set one in Edit › Song (or Quick › Tap) to use the click.', true);
+      return false;
+    }
+    noteActivity('click');
+    const c = clickSettingsOf(settings());
+    const r = optional('clickStart', { countIn: c.countIn, quietAfter: c.after === 'quiet' });
+    if (r) emit('action', { type: 'click', on: true });
+    return !!r;
+  }
+  function stopClick() {
+    const r = optional('clickStop');
+    if (r) emit('action', { type: 'click', on: false });
+    return !!r;
+  }
+  /** Perform's Click chip. @returns {boolean} the click runs now */
+  function toggleClick() {
+    const st = typeof engine?.clickState === 'function' ? engine.clickState() : null;
+    if (st && st.running) {
+      stopClick();
+      return false;
+    }
+    return startClick();
   }
 
   // ---- backups (Electron)
@@ -2157,6 +2238,14 @@ export function createController(o) {
   async function startPrimary() {
     cleanups.push(store.subscribe(onStore));
     if (midi) for (const [type, fn] of Object.entries(midiHandlers)) listen(midi, type, fn);
+    // v11-metronome: a re-plugged clock output is found again by name
+    if (midi) {
+      listen(midi, 'devices', () => {
+        if (!midiClock.name) return;
+        const ok = midiClock.resolve();
+        if (ok !== status.click.midiClockConnected) setClickStatus({ midiClockConnected: ok });
+      });
+    }
     listenInput(); // lowres2: before the note handlers, so a waking key / MIDI note wakes the audio first
     listen(doc, 'keydown', onKeyDown);
     listen(doc, 'keyup', onKeyUp);
@@ -2171,6 +2260,7 @@ export function createController(o) {
       });
       listen(engine, 'wheel', (e) => onEngineWheel(e.detail));
       listen(engine, 'sleep', (e) => onEngineSleep(e.detail || {})); // lowres2
+      listen(engine, 'click', (e) => onEngineClick(e.detail)); // v11-metronome
       for (const type of ['wheel', 'notes', 'chord', 'loading', 'ready']) listen(engine, type, (e) => emit(type, e.detail));
       listen(engine, 'warn', (e) => emit('warn', { message: (e.detail && e.detail.message) || String(e.detail), source: 'engine' }));
     }
@@ -2192,6 +2282,7 @@ export function createController(o) {
     if (r && typeof r.then === 'function') await r.catch((err) => warn(`audio start failed: ${err && err.message}`));
     const s = settings();
     if (s.monoOutput) call('setMono', true);
+    if (s.click) applyClickSettings(s); // v11-metronome: absent = the defaults the engine already has
     if (s.outputDeviceId && s.outputDeviceId !== 'default' && engine && typeof engine.setSinkId === 'function') {
       const sr = call('setSinkId', s.outputDeviceId);
       if (sr && typeof sr.catch === 'function') sr.catch((err) => warn(`could not select the saved output: ${err && err.message}`));
@@ -2236,6 +2327,7 @@ export function createController(o) {
         clearSoft();
         if (gen !== midiGen) return false;
         midi.select(settings().midiInputId, rememberMidiInputName(settings()));
+        if (settings().midiClockOut) applyMidiClock(); // v11-metronome: the output list exists from here on
         return ok !== false && !!midi.available;
       })
       .catch((err) => {
@@ -2627,6 +2719,13 @@ export function createController(o) {
     rescanUserSamples,
     revertSong,
     learn,
+    startClick,
+    stopClick,
+    toggleClick,
+    /** v11-metronome: MIDI outputs for Settings' clock select, and the clock's send / jitter stats. */
+    midiOutputs: () => midiClock.outputs(),
+    clickOutputs: () => optional('clickOutputs') || { aux: false, channels: 2 },
+    midiClockStats: () => midiClock.stats(),
     /**
      * One slot's level for the strip meters (polish-1): engine.slotLevel, null-safe and silent (it is read every
      * frame while a meter shows). Views read levels here, never from the engine.

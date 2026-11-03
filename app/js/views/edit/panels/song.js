@@ -4,6 +4,7 @@
 // "Easy Transpose", "tap tempo", "song name + notes" and "round2-ui #3" port 1:1.
 import { keyName, mod12 } from '../../../shared/music.js';
 import { transposeSemisOf } from '../../../store.js';
+import { TIME_SIGS, DEFAULT_TIME_SIG, clickSettingsOf } from '../../../shared/click-math.js';
 import {
   h, setText, createBinder, bpmFromTaps, semitones, MINUS, SONG_BLOCK, changedDot, changeText,
 } from '../lib.js';
@@ -12,7 +13,7 @@ import {
 export const KEY_RELS = Object.freeze(['hearIn', 'playIn', 'transposeOctave', 'minor']);
 /** Notes debounce (edit.js: 500 ms). */
 export const NOTES_DEBOUNCE_MS = 500;
-const FOCUS_SEC = Object.freeze({ key: 'song-key', tempo: 'song-tempo', notes: 'song-notes' });
+const FOCUS_SEC = Object.freeze({ key: 'song-key', tempo: 'song-tempo', click: 'song-click', notes: 'song-notes' });
 const TITLE_SUB = 'Easy Transpose, tempo and notes for this song · click an underlined word to jump to it';
 const FOCUSABLE = 'select:not([disabled]), input:not([disabled]), textarea:not([disabled]), button:not([disabled])';
 
@@ -64,6 +65,13 @@ export function flashTap(b) {
   void b.offsetWidth; // restart the CSS animation
   b.classList.add('ev2-song-flash');
 }
+
+/**
+ * v11-metronome: the click level as words for the level slider (0 = off).
+ * @param {number} v linear 0..1
+ * @returns {string}
+ */
+export const clickLevelText = (v) => (v > 0.0005 ? `${Math.round(20 * Math.log10(v))} dB` : 'off');
 
 /** A labelled field: caption over the control. */
 const field = (label, node, cls = '') =>
@@ -153,9 +161,64 @@ export default {
     binder.fn(['tempo'], (s) => {
       clearBtn.disabled = s.tempo === null || s.tempo === undefined;
     });
+    // ---- Click (v11-metronome): the time signature belongs to this song (song.timeSig, absent = 4/4); count-in, what
+    // follows it and the level are for every song (settings.click, store.setClick). Perform's Click chip starts it.
+    const sigSel = h('select.ev2-song-select.ev2-song-sig', { 'aria-label': 'Time signature' });
+    for (const sg of TIME_SIGS) sigSel.append(h('option', { value: sg, text: sg }));
+    // 4/4 is the default, so choosing it removes the optional field again
+    sigSel.addEventListener('change', () => {
+      ctx.set('song.timeSig', sigSel.value === DEFAULT_TIME_SIG ? null : sigSel.value);
+    });
+    binder.ctl('song.timeSig', () => ({ el: sigSel, set: (v) => (sigSel.value = v || DEFAULT_TIME_SIG) }), {
+      read: (sg) => sg.timeSig || DEFAULT_TIME_SIG,
+    });
+    const clickCfg = () => clickSettingsOf(ctx.store.get().settings);
+    const countIn = C.segmented({
+      label: 'Count-in',
+      options: [{ value: 0, label: 'Off' }, { value: 1, label: '1 bar' }, { value: 2, label: '2 bars' }],
+      onChange: (v) => ctx.store.setClick({ countIn: Number(v) }),
+      className: 'ev2-song-seg',
+    });
+    countIn.el.dataset.bind = 'settings.click.countIn';
+    const after = C.segmented({
+      label: 'After the count-in',
+      options: [{ value: 'click', label: 'Keep clicking' }, { value: 'quiet', label: 'Go quiet' }],
+      onChange: (v) => ctx.store.setClick({ after: v === 'quiet' ? 'quiet' : null }),
+      className: 'ev2-song-seg',
+    });
+    after.el.dataset.bind = 'settings.click.after';
+    const level = C.fader({
+      label: '', min: 0, max: 1, unit: 'lin', default: 0.6, format: clickLevelText,
+      onChange: (v) => ctx.store.setClick({ level: Math.round(v * 1000) / 1000 }),
+    });
+    level.el.dataset.bind = 'settings.click.level';
+    level.el.classList.add('ev2-song-clicklevel');
+    const renderClickCfg = () => {
+      const c = clickCfg();
+      countIn.set(c.countIn);
+      after.set(c.after);
+      after.setDisabled?.(c.countIn === 0);
+      level.set(c.level);
+    };
+    renderClickCfg();
+    ctx.subscribe((ev) => {
+      if (ev.paths.some((p) => p === 'settings' || p === 'settings.click')) renderClickCfg();
+    });
+    ctx.cleanup(() => {
+      for (const c of [countIn, after, level]) c.destroy?.();
+    });
+    const clickCol = h('div.ev2-col.ev2-song-col.ev2-song-click', { dataset: { sec: 'song-click' } },
+      h('h3.ev2-cap', { text: 'Click' }),
+      h('p.ev2-col-sub', {
+        text: 'Start it with Click on Perform. The time is this song’s; the rest is for every song.',
+      }),
+      h('div.ev2-song-row', {}, field('Time', sigSel), field('Count-in', countIn.el)),
+      h('div.ev2-song-row', {}, field('After the count-in', after.el)),
+      field('Level', level.el, 'ev2-song-clicklevel'),
+    );
     const tempoCol = h('div.ev2-col.ev2-song-col', { dataset: { sec: 'song-tempo' } },
       h('h3.ev2-cap', { text: 'Tempo' }),
-      h('p.ev2-col-sub', { text: 'Synced echoes follow it. Tap 2–4 times in time.' }),
+      h('p.ev2-col-sub', { text: 'Synced echoes and the click follow it. Tap 2–4 times in time.' }),
       h('div.ev2-song-row.mid', {},
         h('label.ev2-song-tempowrap', {}, tempoInput, h('span.ev2-song-unit', { text: 'BPM' })), tapBtn, clearBtn),
     );
@@ -218,7 +281,7 @@ export default {
       h('span.ev2-song-foothint', { text: 'The name and notes save as you type.' }), chg);
 
     el.replaceChildren(
-      h('div.ev2-cols.ev2-song-cols', {}, keyCol, tempoCol, notesCol),
+      h('div.ev2-cols.ev2-song-cols', {}, keyCol, tempoCol, clickCol, notesCol),
       foot,
     );
 

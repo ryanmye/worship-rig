@@ -727,6 +727,17 @@ body[data-view="edit"] .quick-btn { display: none; }
 .song-block.loading .song-bpm { display: none; }
 .song-block.loading .song-name { color: var(--muted); }
 .notes-btn, .notes-close { display: none !important; align-items: center; gap: 6px; min-height: 36px !important; font-size: 13px; margin-left: auto; padding: 0 10px; }
+/* v11-metronome: the Click chip by the BPM (hidden without a tempo). Quiet when off; the accent fill while it runs,
+   and a soft pulse during the count-in. A flex item that never shrinks below its 36 px target. */
+.click-btn { display: inline-flex; align-items: center; gap: 5px; flex: none; min-height: 36px; padding: 0 10px;
+  font-size: 13px; font-weight: 700; }
+.click-btn[hidden] { display: none; }
+.click-btn .ic { color: var(--muted); }
+.click-btn.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, var(--panel-2)); }
+.click-btn.on .ic { color: var(--accent); }
+.click-btn.counting { animation: click-count 1s ease-in-out infinite; }
+@keyframes click-count { 50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .click-btn.counting { animation: none; } }
 .notes-btn.has-notes::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-left: 4px; }
 
 /* −  0  + stay whole down to the 156 px column at 1280 (44 px buttons, the side padding gives way) */

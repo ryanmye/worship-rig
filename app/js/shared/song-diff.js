@@ -33,6 +33,7 @@ export const DIFF_WATCH = Object.freeze([
   'transposeOctave',
   'minor',
   'tempo',
+  'timeSig', // v11-metronome: the click's time signature (optional; absent = 4/4)
   'patch.swell.seconds',
   'drone.mode',
   'drone.chordFollow',

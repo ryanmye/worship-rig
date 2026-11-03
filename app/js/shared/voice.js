@@ -41,6 +41,11 @@ const CLASSIC = Object.freeze({
   editFoot: 'No switch changes since the song was loaded',
   editHint: 'Pick a part to edit it. The dot on a tab means a switch changed since the song was loaded.',
   editStripFoot: 'Same switches, same colours as your Perform strip',
+  // v11-metronome: Perform's click chip
+  clickOff: 'Click',
+  clickOn: 'Click on',
+  clickCounting: 'Count-in',
+  clickTitle: 'Start or stop the click at this song’s tempo (count-in and level: Edit › Song)',
 });
 
 /** Sanctuary v1 §5 (Nave) = what Sanctuary v2 §6.3 asks for: a verger who likes you. */

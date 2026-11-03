@@ -86,7 +86,7 @@
 .ev2 .ev2-song-qbtns { display: flex; gap: 8px; justify-content: flex-end; }
 
 /* ------------------------------------------------------------------ Song panel (block 'song') */
-.ev2 .ev2-song-cols { grid-template-columns: minmax(0, 1.25fr) minmax(0, .85fr) minmax(0, 1.3fr); }
+.ev2 .ev2-song-cols { grid-template-columns: minmax(0, 1.15fr) minmax(0, .8fr) minmax(0, 1fr) minmax(0, 1fr); }
 .ev2 .ev2-song-col h3 { margin: 0; }
 .ev2 .ev2-song-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; margin-bottom: 14px; }
 .ev2 .ev2-song-row.mid { align-items: center; }
@@ -98,6 +98,10 @@
 }
 .ev2 .ev2-song-tempo { width: 88px; min-width: 0; }
 .ev2 .ev2-song-tempowrap { display: inline-flex; align-items: center; gap: 8px; }
+/* v11-metronome: the Click column (time signature, count-in, level); the level fader takes the column's width */
+.ev2 .ev2-song-clicklevel { width: 100%; }
+.ev2 .ev2-song-clicklevel .fader { width: 100%; }
+.ev2 .ev2-song-clicklevel .fader-label { display: none; } /* the field caption names it */
 .ev2 .ev2-song-unit { font-size: 13px; color: var(--muted, #a3acb8); font-weight: 600; }
 .ev2 .ev2-song-seg .seg { min-width: 52px; min-height: 36px; }
 .ev2 .ev2-song-readout {
@@ -135,7 +139,7 @@
   /* the mockup hides "⋯ Song" at 1024; it stays as an icon button so Reset to factory… is reachable */
   .ev2 .ev2-song-menutext { display: none; }
   .ev2 .ev2-song-head .ev2-btn.ev2-song-menubtn { padding: 0 8px; }
-  .ev2 .ev2-song-cols { grid-template-columns: minmax(0, 1.2fr) minmax(0, .9fr) minmax(0, 1.2fr); }
+  .ev2 .ev2-song-cols { grid-template-columns: minmax(0, 1.1fr) minmax(0, .85fr) minmax(0, 1fr) minmax(0, 1fr); }
   .ev2 .ev2-song-row { margin-bottom: 10px; gap: 10px 12px; }
   .ev2 .ev2-song-select, .ev2 .ev2-song-tempo { height: 34px; font-size: 15px; min-width: 76px; }
   .ev2 .ev2-song-tempo { width: 76px; min-width: 0; }

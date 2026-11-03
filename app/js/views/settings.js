@@ -9,6 +9,7 @@ import { pickableThemes, resolveThemeId, lightSiblings, byId as themeById, LIGHT
 import { latencyHint } from './components/latencyHint.js';
 import { mountHotkeys, mountUpdates } from './settings-mac.js';
 import { mountKeyboards } from './settings-keyboards.js';
+import { clickSettingsOf } from '../shared/click-math.js';
 
 const C = await loadComponents();
 
@@ -376,6 +377,39 @@ export function mountSettings(el, ctx) {
   // gone; settings.audioSleepSec (absent = 30 s) stays in the store as the low-resource idle window, with no UI.
   const asleepNote = h('p.st-hint', { hidden: true, text: 'Audio asleep — play a note or press a key to wake' });
 
+  // v11-metronome: where the click plays and whether recordings keep it (settings.click; the level, count-in and time
+  // signature live in Edit › Song, by the tempo). Outputs 3–4 = "click in the in-ears only" on a 4+ output
+  // interface.
+  const clickOut = C.segmented({
+    label: 'Click output',
+    options: [{ value: 'main', label: 'With the music' }, { value: 'aux', label: 'Outputs 3–4' }],
+    onChange: (v) => store.setClick({ output: v === 'aux' ? 'aux' : null }),
+  });
+  clickOut.el.dataset.bind = 'settings.click.output';
+  clickOut.el.dataset.testid = 'setting-click-output';
+  comps.push(clickOut);
+  const clickOutHint = h('p.st-hint.st-click-hint', { 'data-testid': 'setting-click-output-hint' });
+  const clickRec = C.toggle({ label: 'Record', onChange: (v) => store.setClick({ record: v ? true : null }) });
+  clickRec.el.dataset.bind = 'settings.click.record';
+  clickRec.el.dataset.testid = 'setting-click-record';
+  comps.push(clickRec);
+  function renderClickSettings(s = S()) {
+    const c = clickSettingsOf(s);
+    clickOut.set(c.output);
+    clickRec.set(c.record);
+    const o = (typeof controller.clickOutputs === 'function' && controller.clickOutputs())
+      || { aux: false, channels: 2 };
+    clickOut.setDisabled(!o.aux && c.output !== 'aux', 'aux');
+    const used = controller.status?.click?.output;
+    clickOutHint.textContent = o.aux
+      ? `This output has ${o.channels} channels: Outputs 3–4 sends the click there only, the music stays on 1–2.`
+      : c.output === 'aux' && used !== 'aux'
+        ? 'This output has no outputs 3–4, so the click plays with the music for now.'
+        : 'Outputs 3–4 (click in the in-ears only) needs an audio interface with 4 or more outputs.';
+  }
+  settingBinds.push({ key: 'click', apply: renderClickSettings });
+  settingBinds.push({ key: 'outputDeviceId', apply: () => renderClickSettings() });
+
   colA.append(
     h('section.st-section', { 'aria-label': 'Audio' },
       h('h2.st-h2', { text: 'Audio' }),
@@ -386,6 +420,9 @@ export function mountSettings(el, ctx) {
       row('Mono output', tog('monoOutput', 'Mono').el, 'Sum to mono for a single speaker or a mono PA feed.'),
       row('Audio engine', restartBtn, 'Use if sound stops or after changing audio hardware.'),
       asleepNote,
+      row('Click output', clickOut.el, 'Where Perform’s Click plays.'),
+      clickOutHint,
+      row('Record the click', clickRec.el, 'Off: recordings have the music only.'),
     ),
   );
 
@@ -407,6 +444,28 @@ export function mountSettings(el, ctx) {
   }
   settingBinds.push({ key: 'midiInputId', apply: populateMidi });
   listen(midi, 'devices', populateMidi);
+
+  // v11-metronome: MIDI clock out (off by default): 24 ppq clock + Start / Stop while Perform's Click runs
+  const clockSelect = h('select.ed-select.st-midi-clock', {
+    'aria-label': 'MIDI clock out', 'data-testid': 'setting-midi-clock',
+  });
+  clockSelect.dataset.bind = 'settings.midiClockOut';
+  listen(clockSelect, 'change', () => store.set('settings.midiClockOut', clockSelect.value || null));
+  function populateClock() {
+    const sel = S().midiClockOut || '';
+    const outs = typeof controller.midiOutputs === 'function' ? controller.midiOutputs() : [];
+    const opts = [h('option', { value: '', text: 'Off' })];
+    for (const o of outs) {
+      opts.push(h('option', { value: o.name, text: `${o.name}${o.state === 'disconnected' ? ' — unplugged' : ''}` }));
+    }
+    if (sel && !outs.some((o) => o.name === sel)) {
+      opts.push(h('option', { value: sel, text: `${sel} (not connected)` }));
+    }
+    clockSelect.replaceChildren(...opts);
+    clockSelect.value = sel;
+  }
+  settingBinds.push({ key: 'midiClockOut', apply: populateClock });
+  listen(midi, 'devices', populateClock);
 
   // pedal polarity detector. hardware-fixes (hardware pass: the one-value test depended on the pedal's state when the
   // keyboard was plugged in): press → settle → release → settle, and the verdict comes from the pair
@@ -608,6 +667,8 @@ export function mountSettings(el, ctx) {
       row('Sustain pedal', h('div.st-inline', {}, tog('pedalInvert', 'Reversed').el), 'If notes hold when your foot is off the pedal, turn this on — or let the test below decide.'),
       pedalBox,
       row('Song buttons', tog('programChange', 'Keyboard picks songs').el, 'Lets the keyboard’s program/patch buttons choose songs: 1 = first song in the setlist, 2 = second, …'),
+      row('Clock out', clockSelect,
+        'While the click runs: MIDI clock, start and stop, so a drum machine or delay pedal follows the tempo.'),
       h('h3.st-h3', { text: 'MIDI Learn' }),
       h('p.st-hint', { text: 'Press Learn, then move a knob, fader or pedal, or press a key or pad. A hardware fader takes over once you move it past the current level. The sustain pedal can’t be mapped — it always sustains.' }),
       h('table.st-learn-table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Control' }), h('th', { text: 'Mapped to' }), h('th', { text: '' }))), learnBody),
@@ -1333,6 +1394,8 @@ export function mountSettings(el, ctx) {
     for (const b of settingBinds) b.apply(S());
     refreshOutputs();
     populateMidi();
+    populateClock();
+    renderClickSettings();
     renderStats();
     renderAbout();
     renderSamples();

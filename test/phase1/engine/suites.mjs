@@ -1,6 +1,7 @@
 // Engine test suites, run in-page (Chromium) by run.mjs. Offline suites inject a seeded OfflineAudioContext.
 import { AudioEngine, buildIR, followVoicing } from '/js/engine/index.js';
 import { eqSuites } from './eq-suites.mjs';
+import { clickSuites } from './click-suites.mjs';
 
 const SR = 44100;
 const MANIFEST = '/__fixtures/manifest.json';
@@ -2273,6 +2274,9 @@ function captureTap(engine, seconds) {
 
 // slot EQ (design/eq/AMENDMENT.md): offline.eqIdentity … offline.eqCpu
 Object.assign(offline, eqSuites({ SR, mkCtx, mkEngine, slot, patch, use, mono, clicks, db }));
+// v11-metronome: the click track (click-suites.mjs)
+const CLICK = clickSuites({ SR, mkEngine, db });
+Object.assign(offline, CLICK.offline);
 
 export const realtime = {
   async smoke() {
@@ -3343,3 +3347,4 @@ export const realtime = {
     return { pass, ...out };
   },
 };
+Object.assign(realtime, CLICK.realtime);

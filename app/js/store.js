@@ -31,6 +31,7 @@ import { isValidId as isThemeId, DEFAULT_THEME_ID } from './shared/themes.js';
 import { normalizeHotkeys } from './shared/hotkeys.js';
 import { PARAMS, clamp, describe, isValidPath, parsePath, defaultSlot, SLOT_COUNT } from './shared/params.js';
 import { normalizeTouch, PEDAL_CURVES, COMPUTER_KEYBOARD } from './shared/touch-curve.js';
+import { normalizeClick, validTimeSig } from './shared/click-math.js';
 import {
   FACTORY_SONGS, FACTORY_VERSION, FACTORY_SINCE, CATEGORIES, WHEEL_TARGETS, BEND_MODES, DRONE_MODES, defaultFx, defaultDrone, defaultRouting,
   blankSong, factoryById,
@@ -59,7 +60,11 @@ export const SONG_CATEGORIES = Object.freeze([...CATEGORIES, 'user']);
 export const DEVICE_LOCAL_SETTINGS = Object.freeze([
   'outputDeviceId', 'padFolder', 'midiInputId', 'midiInputName', 'menuBarMode', 'lowResource', 'audioSleepSec',
   'hotkeys', 'updateCheck',
+  // v11-metronome: the click's monitor setup (level, count-in, outputs 3–4) and the MIDI clock port are this rig's
+  'click', 'midiClockOut',
 ]);
+/** v11-metronome: settings.midiClockOut (optional, absent = off) is a Web MIDI output name; ids change on re-plug. */
+export const MIDI_CLOCK_NAME_MAX = 120;
 /**
  * lowres2: settings.audioSleepSec (optional; absent = AUDIO_SLEEP_DEFAULT_SEC): suspend the audio after this many
  * seconds with nothing to play and no input; 0 = never. Whole seconds 0..AUDIO_SLEEP_MAX_SEC. lowres2-scope (Ryan
@@ -404,6 +409,8 @@ export function normalizeSong(raw, id) {
   out.transposeOctave = int(raw.transposeOctave, -1, 1, 0);
   out.minor = bool(raw.minor, false);
   out.tempo = raw.tempo === null || raw.tempo === undefined ? null : num(raw.tempo, 30, 300, null);
+  // v11-metronome: song.timeSig is optional (absent = 4/4); an unknown signature is dropped
+  if (hasOwn(out, 'timeSig') && validTimeSig(out.timeSig) === undefined) delete out.timeSig;
   out.patch = normalizePatch(raw.patch);
   out.drone = normalizeDrone(raw.drone);
   return out;
@@ -502,7 +509,19 @@ function normalizeSettings(raw, songs, setlists) {
     else out.hotkeys = v;
   }
   if (hasOwn(out, 'updateCheck') && typeof out.updateCheck !== 'boolean') delete out.updateCheck;
+  // v11-metronome: settings.click / settings.midiClockOut are optional, absent until set; bad values are dropped
+  if (hasOwn(out, 'click')) {
+    const c = normalizeClick(out.click);
+    if (c && Object.keys(c).length) out.click = c;
+    else delete out.click;
+  }
+  if (hasOwn(out, 'midiClockOut') && validMidiClockOut(out.midiClockOut) === undefined) delete out.midiClockOut;
   return out;
+}
+
+/** v11-metronome: a MIDI output name for settings.midiClockOut, else undefined (= off). */
+function validMidiClockOut(v) {
+  return typeof v === 'string' && v && v.length <= MIDI_CLOCK_NAME_MAX ? v : undefined;
 }
 
 function orderOf(order, map) {
@@ -897,6 +916,12 @@ export function createStore(opts = {}) {
           return typeof value === 'boolean' ? { segs, value } : null;
         case 'tempo':
           return value === null ? { segs, value } : Number.isFinite(Number(value)) ? { segs, value: num(value, 30, 300, null) } : null;
+        case 'timeSig': {
+          // v11-metronome: null / undefined removes it (4/4); an unknown signature is refused
+          if (value === null || value === undefined) return { segs, value: undefined };
+          const v = validTimeSig(value);
+          return v === undefined ? null : { segs, value: v };
+        }
         case 'name':
           return typeof value === 'string' ? { segs, value: value.slice(0, 120) } : null;
         case 'notes':
@@ -933,7 +958,7 @@ export function createStore(opts = {}) {
         }
         // keyboards: device names may contain dots, so only the whole map is a path (store.setKeyboard)
         const whole = k === 'theme' || k === 'audioSleepSec' || k === 'hotkeys' || k === 'updateCheck'
-          || k === 'keyboards';
+          || k === 'keyboards' || k === 'click' || k === 'midiClockOut';
         return hasOwn(SETTINGS_VALIDATORS, k) || whole ? null : { segs, value: clone(value) };
       }
       // themes-setup: an unknown theme id is stored as the default (never an error, never a dead id)
@@ -955,6 +980,18 @@ export function createStore(opts = {}) {
         return v === null ? null : { segs, value: v };
       }
       if (k === 'updateCheck') return typeof value === 'boolean' ? { segs, value } : null;
+      // v11-metronome: settings.click is set whole (normalised; empty = absent); midiClockOut is a name or null (off)
+      if (k === 'click') {
+        if (value === null || value === undefined) return { segs, value: undefined };
+        const c = normalizeClick(value);
+        if (!c) return null;
+        return { segs, value: Object.keys(c).length ? c : undefined };
+      }
+      if (k === 'midiClockOut') {
+        if (value === null || value === undefined) return { segs, value: undefined };
+        const v = validMidiClockOut(value);
+        return v === undefined ? null : { segs, value: v };
+      }
       const fn = hasOwn(SETTINGS_VALIDATORS, k) ? SETTINGS_VALIDATORS[k] : null;
       if (!fn) return { segs, value: clone(value) }; // unknown settings are allowed (preserved)
       const v = fn(value);
@@ -1554,6 +1591,18 @@ export function createStore(opts = {}) {
         else delete next[name];
       } else return false;
       return api.set('settings.keyboards', next);
+    },
+
+    /**
+     * v11-metronome: merge fields into settings.click (null / undefined removes a field; an empty object = absent).
+     * @param {{level?:number, countIn?:number, after?:string, record?:boolean, output?:string}} fields
+     * @returns {boolean}
+     */
+    setClick(fields) {
+      if (!isObj(fields)) return false;
+      const next = { ...(state.settings.click || {}), ...fields };
+      for (const k of Object.keys(next)) if (next[k] === null || next[k] === undefined) delete next[k];
+      return api.set('settings.click', next);
     },
 
     // ---- factory / import / export

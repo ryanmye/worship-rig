@@ -9,3 +9,6 @@ export { processSample, normalizeManifest, BufferCache, limitMonoLoss, USER_RELE
 export { KEYS, keyName } from '../shared/music.js';
 export { detectKeyFromName } from '../shared/keydetect.js';
 export { chordName } from '../shared/chords.js';
+export {
+  Metronome, clickSamples, CLICK_PEAK, CLICK_KIND_GAIN, CLICK_LOOKAHEAD_SEC, CLICK_PUMP_SEC,
+} from './metronome.js';
