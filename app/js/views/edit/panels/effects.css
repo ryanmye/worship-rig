@@ -84,6 +84,10 @@
 .ev2 .ev2-fx-mods { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
 .ev2 .ev2-fx-mods .ev2-fx-mod { min-height: 44px; height: 44px; }
 .ev2 .ev2-fx-mods .ev2-fx-mod.ev2-fx-empty { border-style: dashed; }
+/* v11-polish: the slot's Tone EQ curve (eqMiniCurve decorative), top-right of its "goes in" chip, a picture only */
+.ev2 .ev2-fx-mods .ev2-fx-mod .ev2-fx-tone { position: absolute; top: 2px; right: 2px; padding: 0; border: 0;
+  border-radius: 3px; pointer-events: none; opacity: .9; cursor: default; }
+.ev2 .ev2-fx-mods .ev2-fx-mod.ev2-fx-empty .ev2-fx-tone { display: none; }
 .ev2 .ev2-fx-plainchip {
   min-height: 44px; border-radius: 8px; border: 1.5px solid var(--line-2, #3a414d); background: transparent;
   display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12.5px;

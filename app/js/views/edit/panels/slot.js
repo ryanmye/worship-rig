@@ -37,6 +37,7 @@ import { readEq, shelfWrites, eqSummary as mathSummary } from '../../../shared/e
 import {
   COMPILED_PRESETS, LINEAR_TOUCH, COMPUTER_KEYBOARD, compileTouch, touchAt, touchWord,
 } from '../../../shared/touch-curve.js';
+import { say } from '../../components/voice.js'; // v11-polish: the strip foot's words per theme
 
 /** "Flat" / "Shaped · 3 bands": eq-math says "Custom · …", a word Edit keeps off screen (polish-2B, ux-round2 #5). */
 const eqSummary = (eq) => mathSummary(eq).replace(/^Custom\b/, 'Shaped');
@@ -508,7 +509,7 @@ function mountSlot(el, ctx, opts) {
       h('div.ev2-slot-osb', {},
         h('div.ev2-slot-fz', {}, ctl.fader.el),
         h('div.ev2-slot-mods', {}, ctl.space.el, ctl.echo.el, ctl.octave.el, ctl.sustain.el, ctl.chorus.el)),
-      h('p.ev2-slot-same', { text: 'Same switches, same colours as your Perform strip' }),
+      h('p.ev2-slot-same', { text: say('editStripFoot') }), // v11-polish: Studio's voice; shell.js re-words it
     );
 
     // ============ THE SOUND ITSELF ============

@@ -44,7 +44,7 @@ views (perform.js, edit/ (H-v2 Edit), settings.js, components/)
 store.js ──── subscribe(state, changedPaths) ────► controller.js ────► engine (app/js/engine/index.js)
    ▲                                                 │  ▲
 presets.js (factory songs)                  midi.js ─┘  └─ recorder.js (AudioWorklet on engine.recordTap)
-shared/ (params grammar, fx-presets, music, automation, keydetect, chords, wav, prng, touch-curve): pure, no DOM/audio
+shared/ (params grammar, fx-presets, music, automation, keydetect, chords, wav, prng, themes, voice, touch-curve): pure
 ```
 
 - **store.js** holds the whole library: songs, setlists, settings and meta. It persists to localStorage with debouncing,
@@ -83,7 +83,7 @@ shared/ (params grammar, fx-presets, music, automation, keydetect, chords, wav, 
   ```
   A panel reads and writes only through its ctx (`ctx.set`, `ctx.subscribe`, `controller.*`), never the engine.
   The slot EQ editor is `components/eq-keyboard.js` (`eqKeyboard`, `eqMiniCurve`) over `shared/eq-math.js`.
-- **Settings** (`views/settings.js`, styles in `styles-edit.css` `.st-*`) is a modal over either view.
+- **Settings** (`views/settings.js`, styles in `styles-settings.css` `.st-*`) is a modal over either view.
 
 ## Engine
 

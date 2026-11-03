@@ -12,6 +12,7 @@ import { holdButton } from './holdButton.js';
 import { openOverlay } from './overlay.js';
 import { byId, resolveThemeId } from '../../shared/themes.js';
 import { latencyHint } from './latencyHint.js';
+import { say, onVoiceChange } from './voice.js';
 
 /** Touch options = settings.velocitySens (same words as Settings). */
 export const TOUCH_OPTIONS = Object.freeze(
@@ -107,7 +108,7 @@ export function quickSheet(o = {}) {
     'div.qs-h',
     {},
     h('h2', { text: 'Quick settings' }),
-    h('span.qs-sub', { text: 'Changes apply now. Keep playing.' }),
+    h('span.qs-sub', { text: say('quickSub') }),
     latWarn.el,
     lockNote,
     allBtn,
@@ -193,8 +194,8 @@ export function quickSheet(o = {}) {
     h(
       'div.qs-row',
       {},
-      h('div.qs-lbl', {}, h('b', { text: 'Sustain pedal' }), h('small', {
-        text: 'press it: the light comes on',
+      h('div.qs-lbl', {}, h('b', { text: 'Sustain pedal' }), h('small.qs-pedal-hint', {
+        text: say('quickPedalHint'),
         title: 'Press your pedal: the light should come on. If it is on while your foot is up, turn on Reversed.',
       })),
       h('div.qs-pedalrow', {}, pedalLamp, reversed.el),
@@ -211,13 +212,19 @@ export function quickSheet(o = {}) {
   );
   const restartHold = holdButton({
     ms: 1000,
-    label: 'Hold to restart audio',
+    label: say('quickRestart'),
     holdText: 'keep holding… (1 s)',
     className: 'qs-restart-hold',
     title: 'Press and hold for 1 second: restarts the audio engine (a short gap in the sound)',
     onActivate: () => call(o.onRestartAudio),
   });
   d.add(() => restartHold.destroy());
+  // v11-polish: the sheet's own lines follow the theme's voice (shared/voice.js) after a runtime switch
+  d.add(onVoiceChange(() => {
+    setText(head.querySelector('.qs-sub'), say('quickSub'));
+    setText(secMac.querySelector('.qs-pedal-hint'), say('quickPedalHint'));
+    if (!restartHold.holding) restartHold.setContent(say('quickRestart'));
+  }));
   const restartNow = h(
     'button.qs-restart',
     { type: 'button', hidden: true, 'data-testid': 'quick-restart' },

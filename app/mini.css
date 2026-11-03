@@ -21,7 +21,7 @@
   --m-edge: var(--line-2, #413b34);
   --m-text: var(--text, #f1ebe3);
   --m-muted: var(--muted, #a89f93);
-  --m-faint: var(--faint, #7d756b);
+  --m-faint: var(--faint, #9a9185); /* v11-polish C1: #7d756b put the .m-num badges at 3.49:1 under Classic */
   --m-accent: var(--accent, #e3a857);
   /* accent AS TEXT (key names). --accent-text is the hook, for a theme whose --accent is a fill (Daylight: a
      highlighter, 1.5:1 as text on paper; it sets the hook). themes-final: the interim --dl-accent-text read is gone */

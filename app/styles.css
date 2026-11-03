@@ -1,5 +1,5 @@
 /* Worship Rig — stage theme (SPEC §10, §13). Dark, high-contrast, big targets, no external fonts.
-   Tokens are shared with styles-edit.css (ui-edit). */
+   Tokens are shared with styles-settings.css (Settings). */
 :root {
   --bg: #0b0d10;
   --panel: #15181d;
@@ -494,7 +494,8 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
 /* ---- headerChipRow: shared effects, one tap, neutral steel */
 .fx-chiprow { position: relative; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .fx-chiprow .fx-lab { width: 74px; flex: none; display: flex; align-items: center; gap: 7px; color: var(--fx); }
-.fx-chiprow .fx-lab span { font-size: 11.5px; font-weight: 800; letter-spacing: .1em; color: var(--muted); }
+.fx-chiprow .fx-lab span { font-size: 11.5px; font-weight: 800; letter-spacing: .1em; color: var(--muted);
+  text-transform: uppercase; } /* v11-polish E2/S2: was label.toUpperCase() in headerChipRow.js */
 .fxrow { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
 .fxc { position: relative; min-height: 44px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel-2);
   font-weight: 700; font-size: 14.5px; white-space: nowrap; color: #d7dce3; display: inline-flex; flex-direction: column;
@@ -510,7 +511,8 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
   background: #1f242c; border: 1px solid #555e6c; box-shadow: 0 14px 40px #000c; }
 .fxpill { display: none; position: relative; min-height: 44px; grid-template-columns: auto 1fr auto; align-items: center; column-gap: 8px;
   text-align: left; border: 1px solid var(--line-2); background: var(--panel-2); border-radius: 8px; padding: 0 9px; flex: 1; }
-.fxpill .fxpill-l { font-size: 10.5px; font-weight: 800; letter-spacing: .1em; color: var(--muted); }
+.fxpill .fxpill-l { font-size: 10.5px; font-weight: 800; letter-spacing: .1em; color: var(--muted);
+  text-transform: uppercase; }
 .fxpill .fxpill-v { font-size: 15px; white-space: nowrap; }
 .fxpill .fxpill-caret { color: var(--faint); }
 .fxpill.changed::after { content: ''; position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--chg); }
@@ -548,7 +550,8 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
 
 /* ---- quickSheet: over the song header + setlist rows only (the host sets top/left/right) */
 .qs { position: absolute; z-index: 30; top: 12px; left: 14px; right: 14px; min-height: 178px; display: flex; flex-direction: column;
-  background: #1b1f26; border: 1px solid #555e6c; border-radius: 14px; box-shadow: 0 22px 60px #000c, 0 0 0 1px #000; }
+  background: #1b1f26; border: 1px solid #555e6c; border-radius: 14px; box-shadow: 0 22px 60px #0008, 0 0 0 1px #000; }
+/* v11-polish (themes-critic C1): the shadow was #000c; it darkened the strips' ON pills under the sheet to 4.14:1 */
 .qs[hidden] { display: none; }
 .qs::before { content: ''; position: absolute; top: -8px; left: var(--qx, 356px); width: 14px; height: 14px; background: #1b1f26;
   border-left: 1px solid #555e6c; border-top: 1px solid #555e6c; transform: rotate(45deg); }
@@ -579,7 +582,8 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
 /* narrow windows: while unlocked the "Under Lock: …" note gives the latency hint its room */
 @media (max-width: 1250px) { .qs:not(.locked) .qs-h.has-warn .qs-lock { display: none; } }
 .qs-h .qs-x { width: 44px; height: 44px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel-2); font-size: 20px; }
-.qs-b { flex: 1; display: grid; grid-template-columns: 1.15fr 1.15fr .8fr; min-height: 0; }
+.qs-b { flex: 1; display: grid; grid-template-columns: 1.15fr 1.15fr .8fr; grid-template-rows: minmax(0, 1fr);
+  min-height: 0; container: qsb / size; }
 .qs-sec { padding: 10px 18px 12px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .qs-sec:first-child { border-left: 0; }
 .qs-sec.frozen .qs-row { opacity: .45; }
@@ -588,7 +592,10 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
 .qs-scope { font-size: 12px; color: var(--faint); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .qs-row { display: grid; grid-template-columns: 112px 1fr; align-items: center; gap: 10px; min-height: 44px; }
 .qs-lbl b { display: block; font-size: 14.5px; }
-.qs-lbl small { display: block; font-size: 11.5px; color: var(--muted); line-height: 1.25; }
+.qs-lbl small { display: block; font-size: 11.5px; color: var(--muted); line-height: 1.1;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+/* v11-polish T4: label + two caption lines = 17 + 25 px, inside the 44 px row (it was 47 and pushed the sheet) */
+.qs-lbl b { line-height: 1.2; }
 .qs-tempo { display: flex; align-items: center; gap: 10px; }
 .qs-bpm { font-size: 26px; font-weight: 800; line-height: 1; min-width: 44px; }
 .qs-bpm small { font-size: 12px; color: var(--muted); font-weight: 700; margin-left: 3px; }
@@ -634,6 +641,19 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
 }
 @media (prefers-reduced-motion: reduce) {
   .qs-tap.flash { animation: none; }
+}
+/* v11-polish (themes-critic C1/T4): the sheet covers exactly the header + setlist rows (round4-perform P11), so below
+   900 px tall (or with a banner) its body is shorter than two 44 px rows + the caption: This Song / This Mac ran
+   27 / 5 px past the sheet and cut the "Sustain pedal" caption. When the body is that short, the rows take the
+   1024 layout's 38 px (quick-1024 mockup), measured on the body itself so a banner counts too. */
+@container qsb (max-height: 128px) {
+  .perform .qs-sec { padding: 4px 18px 4px; gap: 3px; }
+  .perform .qs-row { min-height: 38px; }
+  .perform .qs-lbl small, .perform .qs-tempo-hint { display: none; } /* as at 1024; their title keeps the words */
+  .perform .qs-theme { padding: 1px 9px; }
+  .perform .qs-tap, .perform .qs .stepper .step-btn, .perform .qs .stepper .step-value, .perform .qs .segmented .seg,
+  .perform .qs-pedal, .perform .qs .toggle, .perform .qs .qs-ok, .perform .qs .hold-btn, .perform .qs-restart {
+    min-height: 38px; height: 38px; }
 }
 
 /* ================================================================== Perform (H-v2, design/H-v2/perform.png)
@@ -871,6 +891,13 @@ body[data-view="edit"] .quick-btn { display: none; }
 .slot.muted .mchip.on > .mc-label { color: var(--muted); }
 .slot.muted .mchip .mc-bar { background: #7a8391; }
 .slot.muted .mchip.cycle.on .mc-led { background: #a3acb8; box-shadow: none; }
+/* v11-polish (ux-round2 L4 / #9 "pedal light"): while the sustain pedal is down, each strip whose Sustain is on lights
+   its Sustain chip white (the pedal is holding that sound); an OFF strip's chip gets a grey ring only, since nothing
+   of it sounds. perform.js toggles .pedal-down from the pedal poll / CC64. */
+.perform.pedal-down .slot:not(.empty) .sus-chip.on { border-color: var(--text); color: var(--text); }
+.perform.pedal-down .slot:not(.empty) .sus-chip.on .mc-led { background: var(--text); box-shadow: 0 0 8px var(--text); }
+.perform.pedal-down .slot.muted .sus-chip.on { border-color: var(--muted); }
+.perform.pedal-down .slot.muted .sus-chip.on .mc-led { background: var(--muted); box-shadow: none; }
 /* empty slot: a narrow dashed column (neutral grey, not a fifth colour) */
 .slot.empty { flex: 0 0 60px; padding: 8px 4px; align-items: center; justify-content: center; background: transparent; border: 1.5px dashed var(--line-2); }
 .slot.empty > :not(.slot-empty) { display: none; }
@@ -965,7 +992,6 @@ body[data-view="edit"] .quick-btn { display: none; }
 .drone-toggles .toggle { font-size: 13.5px; padding: 0 13px; }
 .drone-toggles .toggle.on .toggle-led { background: var(--drone); box-shadow: 0 0 8px var(--drone); }
 .drone-toggles .toggle.on { border-color: color-mix(in srgb, var(--drone) 55%, var(--line-2)); }
-.drone-toggles .tag { background: transparent; color: var(--muted); border: 1px solid var(--line-2); }
 .pad-status { margin-top: auto; display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 9px; }
 .pad-status-text { flex: 1 1 auto; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; }
 .pad-status .btn { font-size: 13px; white-space: nowrap; background: transparent; }
@@ -1079,9 +1105,8 @@ body[data-view="edit"] .quick-btn { display: none; }
   .slot .ontile { height: 44px; }
   .slot .mchip { min-height: 44px; }
   .p-drone { gap: 8px; }
-  /* one row of toggles: the title and Edit still say "experimental" */
+  /* one row of toggles (the EXPERIMENTAL tag is Edit-only since v11-polish) */
   .drone-toggles { flex-wrap: nowrap; gap: 6px; }
-  .drone-toggles .tag { display: none; }
   .perform .drone-toggles .toggle { font-size: 13px; padding: 0 10px; gap: 7px; min-width: 0; }
 }
 @container pmain (max-height: 450px) {
@@ -1185,7 +1210,6 @@ body[data-view="edit"] .quick-btn { display: none; }
   /* L-26: both toggles stay one line each in SF Pro (they wrapped to two from ~108 % of Liberation Sans's width) */
   .perform .drone-toggles .toggle { min-height: 36px; font-size: 12px; padding: 0 6px; gap: 5px; }
   .drone-toggles { gap: 5px; flex-wrap: nowrap; }
-  .drone-toggles .tag { display: none; } /* the title still says "experimental" */
   .pad-status { display: none; } /* Settings › My Pads has it (perform-1024.png) */
   .p-bottom { grid-template-columns: minmax(0, 1fr) 104px 96px 118px 100px; }
   .p-keys { padding: 5px 8px 7px; }

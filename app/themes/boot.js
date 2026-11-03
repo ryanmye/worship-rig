@@ -37,6 +37,15 @@
     id = w.localStorage.getItem(KEY);
   } catch (e) { /* storage blocked: default */ }
   if (!id || !Object.prototype.hasOwnProperty.call(MAP, id)) id = DEF;
+  // v11-polish: Daylight's per-Mac "Auto" light follows the Mac before first paint (themes.js effectiveThemeId; the
+  // mirror already holds Stage while Perform lock was on). Same key as themes.js LIGHT_AUTO_KEY.
+  if (id === 'daylight-stage' || id === 'daylight-day') {
+    try {
+      if (w.localStorage.getItem('worship-rig.light') === 'auto' && typeof w.matchMedia === 'function') {
+        id = w.matchMedia('(prefers-color-scheme: light)').matches ? 'daylight-day' : 'daylight-stage';
+      }
+    } catch (e) { /* storage blocked: the mirror's id */ }
+  }
   var t = MAP[id];
   root.setAttribute('data-theme', id);
   root.setAttribute('data-mode', t.mode);

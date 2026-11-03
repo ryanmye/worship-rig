@@ -660,10 +660,10 @@ async function runMode(mode, browser) {
 
     // polish-1: the retired Edit's .ed-* rules are pruned; what remains is exactly what settings.js renders
     if (mode === 'app') {
-      await T('settings: styles-edit.css keeps only the .ed-* classes Settings renders (polish-1 prune)', async () => {
+      await T('settings: styles-settings.css keeps only the .ed-* classes Settings renders (polish-1)', async () => {
         await openSettings();
         const r = await ev(() => {
-          const sheet = [...document.styleSheets].find((s) => /styles-edit\.css/.test(s.href || ''));
+          const sheet = [...document.styleSheets].find((s) => /styles-settings\.css/.test(s.href || ''));
           const cls = new Set();
           const walk = (rules) => {
             for (const x of rules) {

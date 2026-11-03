@@ -31,6 +31,15 @@
   font-weight: 200 1000; font-style: normal; font-display: swap;
   ascent-override: 88%; descent-override: 22%; line-gap-override: 0%;
 }
+/* v11-polish (themes-critic E1, title half): the Perform title's own face. Young Serif's ascent + descent
+   (1.05 + .37 em, measured in Chromium) overflow the 1.25 line box (.song-name 50/48 px). 96.5 % + 28.5 % = 1.25 em keeps the baseline
+   where it was ((1.25 − 1.42) / 2 + 1.05 = .965 em), so nothing moves and no ink is cut that wasn't before. */
+@font-face {
+  font-family: 'Ember Title';
+  src: url('/fonts/YoungSerif-Regular.woff2') format('woff2');
+  font-weight: 400; font-style: normal; font-display: swap;
+  ascent-override: 96.5%; descent-override: 28.5%; line-gap-override: 0%;
+}
 
 :where(html[data-theme="ember"]) {
   color-scheme: dark;
@@ -156,12 +165,13 @@
   & .st-h3 { color: var(--faint); }
   & .pedal-lamp, & .drone-swell { text-transform: none; letter-spacing: 0; }
   & .slot-vt { letter-spacing: .06em; color: var(--faint); }
-  & .tag, & .drone-toggles .tag { text-transform: none; letter-spacing: .01em; font-weight: 700; }
+  & .tag { text-transform: none; letter-spacing: .01em; font-weight: 700; }
 
   /* the serif is for what you read from across the stage and has no digits: song title, key letter, wordmark */
   & .song-name, & .ev2 .ev2-song-name, & .overlay-title {
     font-family: var(--font-title); font-weight: 400; letter-spacing: -.005em;
   }
+  & .song-name { font-family: 'Ember Title', var(--font-title); } /* v11-polish E1: a 1.25 em line box */
   & .song-key { font-family: var(--font-title); font-weight: 400; }
   & .tb-name { font-family: var(--font-title); font-weight: 400; letter-spacing: 0; }
   /* every stage number: lining + tabular, so "0" is never an "o" and nothing jitters (stage critic, BLOCKER in v1) */
@@ -290,6 +300,10 @@
   /* held: a brighter, more saturated amber than the bone key (ΔE 17.6, Classic 17.4), plus an ink top bar */
   & .pkey.white.held { background: var(--key-held); box-shadow: inset 0 3px 0 #1e130e8c; }
   & .pkey.black.held { background: #ffb428; }
+  /* v11-polish (deferred #7): a held key glows in the colour of the part that sounded it (keys.js `--kp`) */
+  & .pkey.white.held[data-part] { background: color-mix(in srgb, var(--kp) 82%, var(--key-white)); }
+  & .pkey.black.held[data-part] { background: color-mix(in srgb, var(--kp) 78%, var(--key-black)); }
+  & .pkey.held[data-part] .pkey-label { color: var(--ink-on-lamp); } /* C3 on the part colour: 4.37 → ink */
   & .pkey-label { color: var(--key-label); }
   & .rbar.off { background: #5a4d45; }
   & .rv-cnt { color: #e8dccd; }

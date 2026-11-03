@@ -112,3 +112,40 @@ export function themeAttrs(id) {
   const body = t.body || { theme: t.id, mode: t.mode };
   return { html: { theme: t.id, mode: t.mode }, body: { ...body }, colorScheme: t.mode, css: t.css };
 }
+
+// ------------------------------------------------------------------------------------------------- the light switch
+// v11-polish (OPTIONS.md §3.1 #4/#5, theme-daylight deferred #4/#5): Daylight's Day · Stage · Auto, kept inside the
+// theme. Day and Stage are the two registry ids (settings.theme, in the library); Auto is per Mac (it depends on the
+// room, OPTIONS §5), a localStorage flag that follows the Mac's light/dark setting. Lock forces Stage for as long as
+// it is locked. Only these families have the switch; every other theme is unchanged.
+/** family → its two siblings */
+export const LIGHT_SWITCH = Object.freeze({
+  daylight: Object.freeze({ dark: 'daylight-stage', light: 'daylight-day' }),
+});
+/** localStorage key of the per-Mac Auto flag ('auto' or absent); boot.js reads the same key. */
+export const LIGHT_AUTO_KEY = 'worship-rig.light';
+
+/**
+ * @param {unknown} id a theme id
+ * @returns {{dark:string, light:string}|null} the light-switch siblings of `id`'s family, or null (no switch)
+ */
+export function lightSiblings(id) {
+  const t = byId(id);
+  return t ? LIGHT_SWITCH[t.family] || null : null;
+}
+
+/**
+ * The theme the page shows for stored id `id`: Lock forces the dark sibling, Auto follows the Mac. Themes without a
+ * light switch are returned as they are (resolved).
+ * @param {unknown} id settings.theme
+ * @param {{locked?:boolean, auto?:boolean, osLight?:boolean}} [o]
+ * @returns {string}
+ */
+export function effectiveThemeId(id, o = {}) {
+  const tid = resolveThemeId(id);
+  const sib = lightSiblings(tid);
+  if (!sib) return tid;
+  if (o.locked) return sib.dark;
+  if (o.auto) return o.osLight ? sib.light : sib.dark;
+  return tid;
+}

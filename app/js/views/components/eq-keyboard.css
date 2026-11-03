@@ -5,11 +5,82 @@
   --eqk-ink: #1f0e00;
   --eqk-line: var(--line, #2d333d);
   --eqk-line-2: var(--line-2, #3a414d);
-  --eqk-bg: #0f1216;
   display: flex; flex-direction: column; gap: 10px; min-width: 0;
   background: var(--panel, #15181d); color: var(--text, #f1f4f8);
   border: 1px solid var(--eqk-line); border-radius: 14px; padding: 12px 14px;
   font: 14px/1.35 var(--font, system-ui, sans-serif);
+}
+/* v11-polish (EQ canvas theming): every colour the two canvases (and the mini curve) paint, read by
+   components/eq-palette.js. The base is Classic's literals, so Classic (and a bare fixture) paints exactly as before;
+   under any other theme the block below derives them from that theme's own tokens. A theme may still set any of them
+   (they are plain custom properties on .eqk / .eqk-mini; a theme rule comes later in source and wins the tie). */
+:is(.eqk, .eqk-mini) {
+  --eqk-bg: #0f1216; --eqk-plot-out: #12151a; --eqk-hatch: #1a1d22; --eqk-hatch-line: #262a31;
+  --eqk-over: rgba(255, 255, 255, .035); --eqk-grid: #1f242b; --eqk-grid-hz: #2a3038; --eqk-zero: #3a414d;
+  --eqk-label: #6b7380; --eqk-label-0: #a3acb8; --eqk-zone: #8a93a0; --eqk-zone-over: #9aa3ae;
+  --eqk-pre: rgba(215, 220, 227, .55); --eqk-grey: #a3acb8; --eqk-grey-2: #c9d0d8; --eqk-curve: #fff;
+  --eqk-cut: #7cc4ff; --eqk-cut-ink: #08131f; --eqk-node: #15181d; --eqk-off: #6b7380; --eqk-off-text: #8a93a0;
+  --eqk-danger: #ff4d4f; --eqk-danger-ink: #fff;
+  --eqk-tag-del: #5a0d10; --eqk-tag-del-ink: #ffc9ca; --eqk-tag-over: #3a3f48; --eqk-tag-over-ink: #e6e9ee;
+  --eqk-tag-none: #4a2326; --eqk-tag-none-ink: #ffc9ca; --eqk-tag-off: #2a2f37; --eqk-tag-off-ink: #a3acb8;
+  --eqk-ruler: #0b0d10; --eqk-ruler-line: #2d333d; --eqk-tick: #3a414d; --eqk-a440: #ffc94d;
+  --eqk-hover: rgba(241, 244, 248, .35);
+  --eqk-keys-bg: #0b0d10; --eqk-range: #1c2027; --eqk-air-1: #1b1f25; --eqk-air-2: #101317;
+  --eqk-key-white: #b4bcc6; --eqk-key-white-off: #3a3f47; --eqk-key-black: #1b1e23; --eqk-key-black-off: #23272e;
+  --eqk-key-press: #ffc94d; --eqk-key-press-black: #c79a1c; --eqk-key-hatch-white: #454b54;
+  --eqk-key-hatch-black: #2c3139; --eqk-key-hatch-on: rgba(35, 39, 46, .35); --eqk-key-sep: #0b0d10;
+  --eqk-key-label: #23272e; --eqk-key-label-off: #8a93a0; --eqk-bracket: #fff;
+  --eqk-mini-out: rgba(58, 63, 71, .55); --eqk-mini-line: rgba(163, 172, 184, .35);
+  /* the DOM's own slate (states the themes' coverage walk doesn't reach: readout, toast, pills, selected row) */
+  --eqk-pop: rgba(11, 13, 16, .94); --eqk-sel-row: #1f232b; --eqk-switch: #2a2f37; --eqk-switch-knob: #6b7380;
+  --eqk-cut-on: #16304a; --eqk-b: #d7dce3; --eqk-b-ink: #111; --eqk-btn-hover: #2c323c; --eqk-btn-hover-line: #4a5260;
+}
+/* any theme but Classic: the same roles from the theme's tokens (light-dark() follows the theme's colour scheme) */
+:where(html[data-theme]:not([data-theme="classic"])) :is(.eqk, .eqk-mini) {
+  --eqk-bg: color-mix(in srgb, var(--bg) 55%, var(--panel));
+  --eqk-plot-out: color-mix(in srgb, var(--eqk-bg) 93%, var(--text));
+  --eqk-hatch: color-mix(in srgb, var(--eqk-bg) 90%, var(--text));
+  --eqk-hatch-line: color-mix(in srgb, var(--eqk-bg) 80%, var(--text));
+  --eqk-over: color-mix(in srgb, var(--text) 5%, transparent);
+  --eqk-grid: color-mix(in srgb, var(--eqk-bg) 87%, var(--text));
+  --eqk-grid-hz: color-mix(in srgb, var(--eqk-bg) 78%, var(--text));
+  --eqk-zero: var(--line-2); --eqk-label: var(--faint); --eqk-label-0: var(--muted);
+  --eqk-zone: var(--faint); --eqk-zone-over: var(--muted);
+  --eqk-pre: color-mix(in srgb, var(--text) 50%, transparent);
+  --eqk-grey: var(--muted); --eqk-grey-2: color-mix(in srgb, var(--text) 55%, var(--muted)); --eqk-curve: var(--text);
+  --eqk-cut: light-dark(#1d6fb5, #7cc4ff); --eqk-cut-ink: light-dark(#fff, #08131f);
+  --eqk-node: var(--panel); --eqk-off: var(--faint); --eqk-off-text: var(--faint);
+  --eqk-danger: var(--danger); --eqk-danger-ink: var(--danger-ink, #fff);
+  --eqk-tag-del: color-mix(in srgb, var(--danger) 30%, var(--eqk-bg)); --eqk-tag-del-ink: var(--text);
+  --eqk-tag-over: color-mix(in srgb, var(--text) 16%, var(--eqk-bg)); --eqk-tag-over-ink: var(--text);
+  --eqk-tag-none: color-mix(in srgb, var(--danger) 22%, var(--eqk-bg)); --eqk-tag-none-ink: var(--text);
+  --eqk-tag-off: color-mix(in srgb, var(--text) 10%, var(--eqk-bg)); --eqk-tag-off-ink: var(--muted);
+  --eqk-ruler: var(--bg); --eqk-ruler-line: var(--line); --eqk-tick: var(--line-2);
+  --eqk-a440: var(--accent-text, var(--accent)); --eqk-hover: color-mix(in srgb, var(--text) 35%, transparent);
+  --eqk-keys-bg: var(--bg); --eqk-range: var(--panel-2);
+  --eqk-air-1: color-mix(in srgb, var(--eqk-bg) 92%, var(--text)); --eqk-air-2: var(--eqk-bg);
+  --eqk-key-white: light-dark(var(--panel), color-mix(in srgb, var(--text) 72%, var(--panel)));
+  --eqk-key-white-off: light-dark(color-mix(in srgb, var(--text) 36%, var(--panel)),
+    color-mix(in srgb, var(--text) 20%, var(--panel)));
+  --eqk-key-black: light-dark(color-mix(in srgb, var(--text) 82%, var(--panel)),
+    color-mix(in srgb, var(--bg) 40%, var(--panel)));
+  --eqk-key-black-off: light-dark(color-mix(in srgb, var(--text) 42%, var(--panel)),
+    color-mix(in srgb, var(--text) 8%, var(--panel)));
+  --eqk-key-press: var(--accent); --eqk-key-press-black: color-mix(in srgb, var(--accent) 78%, #000);
+  --eqk-key-hatch-white: light-dark(color-mix(in srgb, var(--text) 50%, var(--panel)),
+    color-mix(in srgb, var(--text) 28%, var(--panel)));
+  --eqk-key-hatch-black: light-dark(color-mix(in srgb, var(--text) 55%, var(--panel)),
+    color-mix(in srgb, var(--text) 13%, var(--panel)));
+  --eqk-key-hatch-on: light-dark(color-mix(in srgb, var(--text) 22%, transparent),
+    color-mix(in srgb, var(--bg) 35%, transparent));
+  --eqk-key-sep: light-dark(var(--line-2), var(--bg)); --eqk-key-label: light-dark(var(--text), var(--bg));
+  --eqk-key-label-off: var(--faint); --eqk-bracket: var(--text);
+  --eqk-mini-out: color-mix(in srgb, var(--text) 16%, transparent);
+  --eqk-mini-line: color-mix(in srgb, var(--muted) 40%, transparent);
+  --eqk-pop: color-mix(in srgb, var(--bg) 94%, transparent); --eqk-sel-row: var(--panel-3);
+  --eqk-switch: var(--panel-3); --eqk-switch-knob: var(--faint);
+  --eqk-cut-on: color-mix(in srgb, var(--eqk-cut) 28%, var(--panel)); --eqk-b: var(--text); --eqk-b-ink: var(--bg);
+  --eqk-btn-hover: color-mix(in srgb, var(--panel-3) 80%, var(--text)); --eqk-btn-hover-line: var(--muted);
 }
 .eqk * { box-sizing: border-box; }
 .eqk button, .eqk input, .eqk select, .eqk textarea { font: inherit; color: inherit; }
@@ -33,7 +104,7 @@
 .eqk-seg button:last-child { border-right: 0; }
 .eqk-seg button:hover { background: var(--panel-3, #252a33); }
 .eqk-ab button[aria-pressed="true"] { background: var(--eqk-c); color: var(--eqk-ink); }
-.eqk-ab button.eqk-ab-b[aria-pressed="true"] { background: #d7dce3; color: #111; }
+.eqk-ab button.eqk-ab-b[aria-pressed="true"] { background: var(--eqk-b); color: var(--eqk-b-ink); }
 
 /* graph + keyboard */
 .eqk-graph { position: relative; display: flex; flex-direction: column; background: var(--eqk-bg);
@@ -43,10 +114,10 @@
 .eqk-plot[data-cursor="ew"] { cursor: ew-resize; }
 .eqk-plot:active[data-cursor="grab"] { cursor: grabbing; }
 .eqk-kb { display: block; width: 100%; height: 64px; flex: none; cursor: pointer; touch-action: manipulation; }
-.eqk-readout { position: absolute; top: 6px; left: 50%; pointer-events: none; background: #0b0d10ee;
+.eqk-readout { position: absolute; top: 6px; left: 50%; pointer-events: none; background: var(--eqk-pop);
   border: 1px solid var(--eqk-line-2); border-radius: 6px; padding: 3px 8px; font-weight: 600; font-size: 12.5px;
   white-space: nowrap; transform: translateX(-50%); display: none; z-index: 3; }
-.eqk-toast { position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%); background: #0b0d10f2;
+.eqk-toast { position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%); background: var(--eqk-pop);
   border: 1px solid var(--eqk-c); padding: 6px 12px; border-radius: 8px; font-weight: 650; opacity: 0;
   transition: opacity .18s; pointer-events: none; z-index: 4; white-space: nowrap; max-width: calc(100% - 16px);
   overflow: hidden; text-overflow: ellipsis; }
@@ -61,7 +132,7 @@
   text-transform: uppercase; padding: 0 5px 4px; white-space: nowrap; }
 .eqk-bands td { padding: 3px 5px; border-top: 1px solid var(--eqk-line); vertical-align: middle; height: 40px; }
 .eqk-bands tfoot td { border-top: 1px solid var(--eqk-line); height: 40px; }
-.eqk-bands tr.sel td { background: #1f232b; }
+.eqk-bands tr.sel td { background: var(--eqk-sel-row); }
 .eqk-bands tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--eqk-c); }
 .eqk-bands tr.off td:not(:first-child):not(:nth-last-child(-n+2)) { opacity: .45; }
 .eqk-num { width: 30px; height: 30px; border-radius: 50%; display: inline-grid; place-items: center; font-weight: 800;
@@ -89,20 +160,22 @@
 .eqk-pill { display: inline-block; font-size: 10.5px; font-weight: 800; letter-spacing: .04em; border-radius: 999px;
   padding: 1px 7px; margin-right: 6px; vertical-align: 1px; text-transform: uppercase;
   background: color-mix(in srgb, var(--eqk-c) 22%, transparent); color: var(--eqk-c); }
-.eqk-pill.over { background: #3a3f48; color: #e6e9ee; }
-.eqk-pill.none { background: #4a2326; color: #ffc9ca; }
+.eqk-pill.over { background: var(--eqk-tag-over); color: var(--eqk-tag-over-ink); }
+.eqk-pill.none { background: var(--eqk-tag-none); color: var(--eqk-tag-none-ink); }
 .eqk-pill.flat { background: transparent; border: 1px solid var(--eqk-line-2); color: var(--faint, #8a93a0); }
-.eqk-onoff { width: 40px; height: 24px; border-radius: 999px; border: 1px solid var(--eqk-line-2); background: #2a2f37;
+.eqk-onoff { width: 40px; height: 24px; border-radius: 999px; border: 1px solid var(--eqk-line-2);
+  background: var(--eqk-switch);
   position: relative; padding: 0; flex: none; }
 .eqk-onoff::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%;
-  background: #6b7380; transition: left .1s; }
-.eqk-onoff[aria-pressed="true"] { background: color-mix(in srgb, var(--eqk-c) 35%, #1c2027); border-color: var(--eqk-c); }
+  background: var(--eqk-switch-knob); transition: left .1s; }
+.eqk-onoff[aria-pressed="true"] { background: color-mix(in srgb, var(--eqk-c) 35%, var(--panel-2, #1c2027));
+  border-color: var(--eqk-c); }
 .eqk-onoff[aria-pressed="true"]::after { left: 19px; background: var(--eqk-c); }
-.eqk-cut .eqk-onoff[aria-pressed="true"] { background: #16304a; border-color: #7cc4ff; }
-.eqk-cut .eqk-onoff[aria-pressed="true"]::after { background: #7cc4ff; }
+.eqk-cut .eqk-onoff[aria-pressed="true"] { background: var(--eqk-cut-on); border-color: var(--eqk-cut); }
+.eqk-cut .eqk-onoff[aria-pressed="true"]::after { background: var(--eqk-cut); }
 .eqk-del { width: 30px; height: 30px; border-radius: 7px; border: 1px solid transparent; background: transparent;
   color: var(--faint, #8a93a0); font-size: 14px; padding: 0; }
-.eqk-del:hover { border-color: var(--danger, #ff4d4f); color: #ffc9ca; }
+.eqk-del:hover { border-color: var(--danger, #ff4d4f); color: var(--eqk-tag-del-ink); }
 .eqk-add { border: 1px dashed var(--eqk-line-2); background: transparent; border-radius: 7px; min-height: 30px; padding: 0 12px;
   font-weight: 700; color: var(--eqk-c); margin-right: 10px; }
 .eqk-add:disabled { color: var(--faint, #8a93a0); cursor: default; }
@@ -118,15 +191,16 @@
   font-size: 13px; color: var(--muted, #a3acb8); }
 .eqk-legend { font-size: 12px; color: var(--muted, #a3acb8); display: grid; gap: 3px; }
 .eqk-legend i { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: 3px; margin-right: 6px; }
-.eqk-legend .eqk-lg-curve { background: #fff; }
+.eqk-legend .eqk-lg-curve { background: var(--eqk-curve); }
 .eqk-legend .eqk-lg-hear { background: var(--eqk-c); height: 7px; vertical-align: 1px; opacity: .8; }
-.eqk-legend .eqk-lg-none { background: repeating-linear-gradient(135deg, #2a2f38 0 3px, #1a1d23 3px 6px); height: 10px;
-  vertical-align: -1px; border: 1px solid #3a414d; }
-.eqk-legend .eqk-lg-over { background: #2a2e35; height: 10px; vertical-align: -1px; border: 1px solid #454c58; margin-left: 2px; }
+.eqk-legend .eqk-lg-none {
+  background: repeating-linear-gradient(135deg, var(--eqk-hatch-line) 0 3px, var(--eqk-hatch) 3px 6px); height: 10px; vertical-align: -1px; border: 1px solid var(--eqk-zero); }
+.eqk-legend .eqk-lg-over { background: color-mix(in srgb, var(--eqk-bg) 86%, var(--eqk-curve)); height: 10px;
+  vertical-align: -1px; border: 1px solid var(--eqk-key-hatch-white); margin-left: 2px; }
 .eqk-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .eqk-btn { border: 1px solid var(--eqk-line-2); background: var(--panel-3, #252a33); border-radius: var(--radius-sm, 7px);
   min-height: 32px; padding: 0 10px; font-size: 12.5px; font-weight: 650; }
-.eqk-btn:hover { border-color: #4a5260; background: #2c323c; }
+.eqk-btn:hover { border-color: var(--eqk-btn-hover-line); background: var(--eqk-btn-hover); }
 .eqk-copied { color: var(--eqk-c); font-weight: 650; font-size: 12.5px; }
 .eqk-paste summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--muted, #a3acb8); }
 .eqk-paste-body { display: grid; gap: 6px; margin-top: 6px; }
@@ -135,7 +209,7 @@
 .eqk-paste-out { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 11.5px; max-height: 140px;
   overflow: auto; }
 .eqk-paste-out li { color: var(--muted, #a3acb8); overflow-wrap: anywhere; }
-.eqk-paste-out li.skipped .eqk-pill { background: #3a3f48; color: #e6e9ee; }
+.eqk-paste-out li.skipped .eqk-pill { background: var(--eqk-tag-over); color: var(--eqk-tag-over-ink); }
 .eqk-paste-out code { font: 11px var(--mono, ui-monospace, monospace); color: var(--text, #f1f4f8); }
 .eqk-why { color: var(--faint, #8a93a0); }
 
@@ -168,7 +242,7 @@
 
 /* eqMiniCurve(): the Sound panel header sparkline */
 .eqk-mini { display: inline-flex; align-items: center; padding: 2px; border: 1px solid var(--line-2, #3a414d);
-  border-radius: 6px; background: #0f1216; cursor: pointer; vertical-align: middle; }
+  border-radius: 6px; background: var(--eqk-bg); cursor: pointer; vertical-align: middle; }
 .eqk-mini:hover { border-color: var(--muted, #a3acb8); }
 .eqk-mini[hidden] { display: none; }
 .eqk-mini canvas { display: block; }

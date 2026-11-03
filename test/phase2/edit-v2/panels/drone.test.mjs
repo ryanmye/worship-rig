@@ -147,6 +147,26 @@ test('drone: routing + drone controls write the song (ui-edit port: synth, brigh
     t.assertNoConsoleErrors();
   });
 
+test('drone: v11-polish — .audible (on and above −∞) drives Sanctuary’s window, not the mode', async () => {
+  const t = await mountA();
+  const cls = () => t.ev(() => {
+    const d = document.querySelector('#view-edit .ev2-drone');
+    return { off: d.classList.contains('off'), audible: d.classList.contains('audible') };
+  });
+  const g0 = await t.ev(() => window.__rig.store.currentSong().drone.gain);
+  await t.setParam('song.drone.mode', 'synth');
+  await t.setParam('song.drone.gain', 0.5);
+  assert.deepEqual(await cls(), { off: false, audible: true });
+  await t.setParam('song.drone.gain', 0);
+  assert.deepEqual(await cls(), { off: false, audible: false }, 'on at −∞ is not audible');
+  await t.setParam('song.drone.gain', 0.5);
+  await t.setParam('song.drone.mode', 'off');
+  assert.deepEqual(await cls(), { off: true, audible: false });
+  await t.setParam('song.drone.mode', 'synth');
+  await t.setParam('song.drone.gain', g0);
+  t.assertNoConsoleErrors();
+});
+
 test('drone: song switch updates in place', async () => {
   const t = await mountA();
   await t.ev((host) => {

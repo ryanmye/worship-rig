@@ -4,7 +4,7 @@
   "daylight-stage",
   "daylight-day"
  ],
- "generated": "2026-09-30T16:32:52.955Z",
+ "generated": "2026-11-03T22:16:21.082Z",
  "states": [
   "daylight-stage:perform",
   "daylight-stage:perform-held",
@@ -57,8 +57,8 @@
   "daylight-day:mini-6-flags",
   "daylight-day:mini-drone-keys"
  ],
- "total": 251,
- "matched": 247,
+ "total": 245,
+ "matched": 241,
  "unmatched": 4,
  "unmatchedPct": 1.6,
  "limitPct": 5,
@@ -67,25 +67,25 @@
   {
    "selector": "& .rec-btn.recording",
    "context": ":where(html:is([data-theme=\"daylight-stage\"], [data-theme=\"daylight-day\"]))",
-   "line": 207,
+   "line": 203,
    "dead": false
   },
   {
    "selector": "& .drone-block.off .key-btn.on",
    "context": ":where(html:is([data-theme=\"daylight-stage\"], [data-theme=\"daylight-day\"]))",
-   "line": 432,
+   "line": 428,
    "dead": false
   },
   {
    "selector": "& .ev2 .ev2-wv",
    "context": ":where(html:is([data-theme=\"daylight-stage\"], [data-theme=\"daylight-day\"]))",
-   "line": 535,
+   "line": 530,
    "dead": false
   },
   {
    "selector": "& .ev2 :is(.ev2-song-mi.danger, .ev2-slot-mi-remove)",
    "context": ":where(html:is([data-theme=\"daylight-stage\"], [data-theme=\"daylight-day\"]))",
-   "line": 567,
+   "line": 562,
    "dead": false
   }
  ],

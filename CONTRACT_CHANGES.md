@@ -5599,3 +5599,90 @@ is quiet by default: no new field is written until someone uses a control, and a
   (both modes); edit-v2 slot "v11-touch" and master "v11-touch". `params.test.mjs` updated for the new rows / enum.
 - **Needs the Mac / hardware**: the fit with real keys (Keystation 49 MK3 and the second board), Remember with two
   boards plugged in, an expression pedal on the log curve, and how the drone swell sounds under a held pedal.
+
+## v11-polish (Worship Rig v1.1: BACKLOG A "Visual identity" leftovers + BACKLOG B quality items; shared/voice.js (new), shared/themes.js, themes/boot.js, views/components/{voice,eq-palette}.js (new), eq-keyboard.{js,css}, onTile.js, keys.js, fader.js, headerChipRow.js, quickSheet.js, views/perform.js, views/settings.js, views/edit/{lib,shell}.js + panels/{slot,drone,effects}, main.js, engine/sampler.js, styles.css, mini.css, styles-edit.css → styles-settings.css, theme files (sanctuary-v2, sanctuary, daylight-v2, studio, ember))
+- **Already done before this item (checked in the code):** L-23 hold-to-unlock hint (holdButton measures and flips
+  its caption, `## hardware-fixes`), the pedal-polarity wording "(pedal UP)" + the two-state pedal test (settings.js),
+  the Bluetooth > 60 ms latency hint (components/latencyHint.js, Settings › Audio + Quick header), and the idle chord
+  readout: it already idles **dimmed on the last chord** it showed live (polish-2A #8). MIDI Learn on hardware stays
+  LOCAL.
+- **Voice per theme** (`shared/voice.js`, pure): `voiceText(themeId, key, vars)` / `VOICE_KEYS`; views use
+  `components/voice.js` `say(key, vars)` (html[data-theme]) and `onVoiceChange(cb)` (one MutationObserver; fires only
+  when the voice changes, so Daylight Stage ↔ Day calls nothing). Classic = the app's words before, word for word
+  (every Classic-pinned suite is unchanged). Voices: Sanctuary + Sanctuary Day + Nave (Sanctuary v1 §5 = v2 §6.3),
+  Ember §5, Studio §4, Daylight v2 §3 / OPTIONS §3.1 #6. Keys: start overlay title/sub, Loading / Ready (top bar),
+  MIDI "No device" / "Blocked" + the denied toast/title, the Chrome MIDI prompt toast, the stalled banner line, Faded
+  chip + Fade button, **end of set** (Fade out on the last song of a setlist: Sanctuary "That’s the set. Thank you for
+  serving.", Ember "…Thanks for serving.", Studio "That’s a wrap."; Classic and Daylight keep the faded chip), the
+  Next caption, Prev on song 1 (Daylight "Start of set"), empty Notes, pad folder, Revert "nothing changed", the
+  empty-slot well ("Extra · add a sound" in every warm theme), Quick subtitle / pedal caption / restart hold, the Edit
+  footer, rig hint and strip foot. A runtime switch re-words what shows (Perform re-renders, Quick and Edit update in
+  place; Edit's footers through a re-emitted `editState` 'changes'). Toasts keep the words they were shown with. Not
+  done, on purpose: the default setlist name ("Today’s set" is library data), Daylight's hidden-when-healthy top bar.
+- **FX captions** (themes-critic E2/S2): `headerChipRow.js` keeps the label's case ("Space"); styles.css
+  `.fx-chiprow .fx-lab span` / `.fxpill .fxpill-l` get `text-transform: uppercase`, so Classic still reads SPACE /
+  ECHO; Daylight's lowercase + `::first-letter` workaround is deleted.
+- **EQ canvas theming** (`components/eq-palette.js`): every colour the plot, key strip and mini curve paint is a
+  `--eqk-*` token (55 roles), resolved through a hidden probe's computed `color` and a 1×1 canvas (so `light-dark()`,
+  `color-mix()` and `oklch()` work), re-read on a theme switch (html data-theme / data-mode) and a slot change.
+  eq-keyboard.css: the base is Classic's literals (Classic paints exactly as before: plot corner #0f1216, themes
+  suite), and `:where(html[data-theme]:not([data-theme="classic"])) :is(.eqk, .eqk-mini)` derives them from the
+  theme's tokens. The inline `--eqk-c` / `--eqk-ink` are `var(--slot-N, <hex>)` / `var(--ink-on-lamp, <hex>)`. The
+  DOM's slate literals in unreached states (readout, toast, pills, selected row, switches, legend) read tokens too.
+  Daylight's forced dark display (`--eqk-bg: #15120f`) is gone: Day gets the paper graph its concept §6 #5 asked for,
+  inside the same bezel. Measured per theme (themes `v11 EQ canvas`): curve and 0 dB label ≥ 4.5:1 on the plot, lit
+  vs greyed keys ≥ 1.8:1 (on paper the greyed keys are 36 % ink).
+- **Theme JS hooks:** `.p-drone.audible` (perform.js, from the runtime tick: on, gain > 0.0005, not faded) and
+  `.ev2-drone.audible` (drone.js); Sanctuary v2 and Nave light the lancet on it (−∞ and Faded are now unlit).
+  `onTile` adds `.lit-now` for 700 ms on a real off → on; Studio flashes the lamp once (`@keyframes studio-lamp-on`,
+  transform + opacity, not under Lock or reduced motion). `pianoKeyboard.set(held, partOf)`: a newly held key gets
+  `data-part` + `--kp: var(--slot-N)` (the first unmuted slot whose range holds it); Ember colours held keys by it
+  (labels in `--ink-on-lamp`: the C3 label was 4.37:1). **Chord auto-fit** (perform.js): after the data-len steps, a
+  name still wider than the card steps down to 60 %, measured only when the shown name changes or the card resizes.
+- **Daylight light switch** (`themes.js` `LIGHT_SWITCH`, `lightSiblings`, `effectiveThemeId`, `LIGHT_AUTO_KEY`):
+  Settings › Appearance shows "Light: Day · Stage · Auto" only while a Daylight theme is picked. Day / Stage write
+  `settings.theme`; Auto is per Mac (`localStorage['worship-rig.light'] = 'auto'`, OPTIONS §5) and follows
+  `prefers-color-scheme` live; boot.js applies Auto before first paint. Perform lock shows Stage while locked (a
+  same-file attribute flip, < 100 ms after the store notifies; the stored choice is untouched). The mirror holds the
+  shown id. Caveat: a boot while locked under Auto on a light Mac paints Day until main.js runs.
+- **Ember title** (E1, title half): `'Ember Title'` = Young Serif with ascent 96.5 % / descent 28.5 % (1.25 em; the
+  baseline stays at .965 em; Chromium measures the face at 1.05 + .37 em). `.song-name` 50/48 → fits.
+- **Classic base look (C1 / T4):** Quick shadow `#000c` → `#0008` (the strips' "ON" pill under the sheet 4.14 →
+  4.60:1); mini.css `--m-faint` fallback `#7d756b` → `#9a9185` (`.m-num` 3.49 → 5.10:1); `fader.setDisabled` also sets
+  `aria-disabled` on the fader group (frozen drone faders under Lock). Quick › This Song / This Mac: the body is a
+  size container (`qsb`) with one `minmax(0, 1fr)` row; captions are two tight lines (17 + 25 px inside a 44 px row,
+  was 47); when the body is ≤ 128 px (below 900 px tall, or with a banner) the rows take the 1024 layout's 38 px and
+  the captions hide (their title keeps the words). Content past the sheet's bottom, before → after: 1440×900 +5 →
+  −2 px, 1280×800 +22 → −1, 1366×768 +22 → 0, 1024×700 0 → −4. Contrast audit (`tools/themes/shoot.mjs`,
+  1440×900): Classic quick 1 → 0 fails, mini 2 → 0; every theme 0 fails in all 6 shots.
+- **Memory: the leaner long-cap swap** (BufferCache, sustain-critic R1). `supersede(url, longKey, owner)` (from
+  `_upgrade`) deletes the legacy copy as soon as the long one plays, even while the old window still pins it; a
+  legacy request for a URL whose long variant is held (a neighbour preload after leaving a piano song) takes the long
+  buffer instead of decoding a second copy. The long buffer then stands in for the legacy key: `has()`, `acquire()`,
+  a pin on the legacy key (keeps it from eviction), `pinnedBytes` and `estimateBytes` (so the pin budget prices it at
+  its real size). main.js's Ready count uses `cache.has()`. Measured (real app, 44.1 kHz, the sustain critic's 10-song
+  loop, `_debugStats` every 50 ms; library / large-set): duplicate legacy + long bytes after a settle, max 159 / 159 MB
+  → 38 / 13 MB; pinned max 454.3 / 589.6 → 454.3 / 454.3 MB (≤ 600); settled decoded max 680 / 698 → 679 / 684 MB.
+  **The transient peak is unchanged: 809.5 / 812.0 → 810.7 / 810.7 MB.** At the peak there were 0 MB of duplicates,
+  before and after: it is the new song's referenced buffers (≈ 625 MB) plus the old window's pins, not the short
+  copies, so BACKLOG's "keeps the peak where it was" does not follow from this fix; R1's option (a) (upgrade only
+  after the new window's `setPins`) is what would lower it. Test: `test/unit/engine/buffer-cache.test.mjs` (4).
+- **ux-round2 leftovers:** the strip pedal light (`.perform.pedal-down`: every Sustain-on chip's LED and border in
+  `--text` while the pedal is down, `--muted` on an OFF strip); no EXPERIMENTAL tag on the Perform drone card (the
+  tooltip and Edit keep it; the dead `.drone-toggles .tag` theme rules are removed); the Effects "goes in" chips show
+  the slot's Tone EQ curve as a 30×12 picture in their corner (`eqMiniCurve({decorative: true})`: a span, aria-hidden,
+  pointer-events none, hidden while flat). Idle chord: already "dimmed last chord" (above).
+- **FR-1 (first run at ≤ 1340 px):** the Start card lives in Notes, which is hidden there until opened. While the
+  card is pending, Notes opens by itself (after the first render), and closing the card (× or the first song change)
+  closes that Notes again; a Notes the player opened stays. The card is marked done on a song change only once it was
+  on screen (IntersectionObserver), so a first run that boots into Edit keeps it.
+- **Chrome fallback:** recording through the save dialog toasts "Recording “…”. Chrome writes the file when you stop
+  (until then the folder shows a .crswap file), so keep this tab open." (8 s).
+- **styles-edit.css → styles-settings.css** (git mv; index.html, the settings fixture, the edit-v2 harness, ui-core's
+  file list, docs). It only serves Settings and the fallback components; the `.ed-btn/.ed-danger/.ed-select` names are
+  kept (settings.js and the themes use them).
+- **Tests added:** unit `shared/voice.test.mjs` (7) and `engine/buffer-cache.test.mjs` (4); themes group `v11` (22:
+  voice per theme incl. a 1024 top-bar fit, EQ canvas per theme, set end / Start of set / runtime re-wording, lancet,
+  Studio lamp, Ember keys + title, Daylight switch + Lock + Auto + boot); ui-core 3 (FR-1 at 1280×800, Quick fit at
+  four windows, pedal light / tag / aria-disabled / chord fit / .crswap toast); edit-v2 effects (tone glyph) and drone
+  (`.audible`).

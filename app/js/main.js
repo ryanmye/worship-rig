@@ -10,7 +10,10 @@ import { mountPerform } from './views/perform.js';
 import { h, setText, segmented, fader, meter, openOverlay, wakeMeters, meterClockStats } from './views/components/index.js';
 import { guardKeyActivation } from './views/components/util.js';
 import { warmThemeFonts, releaseWarmedFonts } from './views/components/themeFonts.js';
-import { resolveThemeId, themeAttrs, THEME_MIRROR_KEY } from './shared/themes.js';
+import { say, onVoiceChange } from './views/components/voice.js';
+import {
+  resolveThemeId, themeAttrs, THEME_MIRROR_KEY, effectiveThemeId, lightSiblings, LIGHT_AUTO_KEY,
+} from './shared/themes.js';
 import { mirrorShellSettings } from './shell-mirror.js';
 
 const $ = (id) => document.getElementById(id);
@@ -199,14 +202,36 @@ async function applyTheme(id) {
   await releaseWarmedFonts(faces);
   return tid;
 }
+// v11-polish (OPTIONS §3.1 #4/#5): a theme with a light switch (Daylight) shows Stage while locked and, with the
+// per-Mac Auto flag, follows the Mac's appearance. Siblings share a file, so either flip is an instant attribute change (a
+// PANIC tap can't land in a crossfade). Other themes: effectiveThemeId returns the stored id.
+const osLight = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: light)') : null;
+function lightAuto() {
+  try {
+    return localStorage.getItem(LIGHT_AUTO_KEY) === 'auto';
+  } catch {
+    return false;
+  }
+}
+function shownThemeId(state) {
+  return effectiveThemeId(state.settings.theme, {
+    locked: !!state.settings.performLock, auto: lightAuto(), osLight: !!osLight?.matches,
+  });
+}
 function onThemeSetting(state) {
-  const tid = resolveThemeId(state.settings.theme);
+  const tid = shownThemeId(state);
   if (tid === themeApplied) return;
   themePending = applyTheme(tid);
 }
 store.subscribe(onThemeSetting);
+// the Auto flag (Settings › Appearance › Light) and the Mac's appearance only matter for a theme with the switch
+const onLight = () => {
+  if (lightSiblings(store.get().settings.theme)) onThemeSetting(store.get());
+};
+osLight?.addEventListener?.('change', onLight);
+document.addEventListener('rig-theme-light', onLight);
 // boot reconcile: the store wins over the mirror boot.js read (e.g. a library imported in another window)
-if (document.documentElement.dataset.theme === resolveThemeId(store.get().settings.theme)) {
+if (document.documentElement.dataset.theme === shownThemeId(store.get())) {
   themeApplied = document.documentElement.dataset.theme;
   try {
     localStorage.setItem(THEME_MIRROR_KEY, themeApplied);
@@ -484,7 +509,7 @@ function setAudioBanner(state) {
   if (on === !audioBanner.hidden && !on) return;
   audioBanner.hidden = !on;
   if (state === 'stalled') {
-    setText(audioBanner.querySelector('.banner-msg'), 'Sound stopped — click “Restart sound”.');
+    setText(audioBanner.querySelector('.banner-msg'), say('audioStopped'));
     restartBtn.disabled = false;
   } else if (state === 'restarting') setText(audioBanner.querySelector('.banner-msg'), 'Restarting sound…');
   layoutBanners();
@@ -598,7 +623,12 @@ recorder.addEventListener('state', (e) => {
     clearInterval(recTimer);
     setText(recTime, '00:00');
     recTimer = setInterval(() => setText(recTime, fmtTime(recorder.elapsed)), 250);
-    toast(`Recording${det.path ? ` to ${det.path}` : det.filename ? ` “${det.filename}”` : ''}`, 'info', { ms: 3000 });
+    // v11-polish (BACKLOG B, Chrome fallback): Chrome's save-file stream writes a hidden .crswap file and only makes
+    // the real file when the recording stops, so closing the tab (or a crash) mid-take loses it: say so where it matters
+    if (det.sink === 'fsa') {
+      toast(`Recording “${det.filename}”. Chrome writes the file when you stop (until then the folder shows a `
+        + '.crswap file), so keep this tab open.', 'info', { ms: 8000 });
+    } else toast(`Recording${det.path ? ` to ${det.path}` : det.filename ? ` “${det.filename}”` : ''}`, 'info', { ms: 3000 });
   } else if (st === 'idle' || st === 'unavailable') {
     clearInterval(recTimer);
     recTimer = null;
@@ -634,7 +664,9 @@ function songsLoaded() {
         if (!sl || sl.instrument.type !== 'sampler') continue;
         const def = samplers.get(sl.instrument.id);
         if (!def) continue;
-        for (const L of def.layers || []) for (const smp of L.samples || []) if (!cache.entries.has(smp.url) && !cache.failed?.has?.(smp.url)) ok = false;
+        // v11-polish: has() also answers for a legacy copy its long variant superseded (engine sampler.js)
+        const held = (u) => (typeof cache.has === 'function' ? cache.has(u) : cache.entries.has(u));
+        for (const L of def.layers || []) for (const smp of L.samples || []) if (!held(smp.url) && !cache.failed?.has?.(smp.url)) ok = false;
       }
       if (ok) done += 1;
     }
@@ -649,14 +681,15 @@ function renderReady(s) {
   $('ready-status').classList.toggle('on', ready);
   if (ready || s.instance === 'secondary') {
     $('ready-status').title = READY_TITLE;
-    setText(readyText, ready ? 'Ready' : 'Not loaded');
+    // v11-polish: the theme's voice ("All 19 ready", "Ready to play"); the count only when the voice uses it
+    setText(readyText, ready ? say('ready', { total: songsLoaded()?.total || 0 }) : 'Not loaded');
     clearInterval(readyTimer);
     readyTimer = null;
     return;
   }
   const upd = () => {
     const c = songsLoaded();
-    setText(readyText, c && c.total ? `Loading ${Math.min(c.done, c.total)}/${c.total}` : 'Loading…');
+    setText(readyText, say('loading', c && c.total ? { done: Math.min(c.done, c.total), total: c.total } : {}));
     // onboarding O3: the count is the rest of the set loading behind the current song, which can be played now
     $('ready-status').title = c && c.total
       ? `Loading the songs in the set (${Math.min(c.done, c.total)} of ${c.total} ready). You can play now.`
@@ -727,8 +760,9 @@ let midiPromptHintShown = false; // round4-perform P7: firstRunHints already tol
 // polish-2A ("## l3" UI follow-up): pending is info, never a failure, and a reload would not help
 const MIDI_PENDING_TEXT = 'MIDI starting… answer the browser’s permission prompt if it appears.';
 const MIDI_PENDING_TEXT_ELECTRON = 'MIDI is taking a while to start. The computer keys A–; play notes meanwhile.';
-const MIDI_DENIED_TEXT = 'MIDI was blocked — allow it in the browser’s site settings.';
-controller.onStatus((s) => {
+// v11-polish: the denied sentence and the lamp words follow the theme's voice (shared/voice.js)
+const midiDeniedText = () => say('midiDenied');
+function renderMidiStatus(s) {
   const m = s.midi || {};
   if (m.connected) {
     setLed(midiLed, 'ok');
@@ -736,7 +770,7 @@ controller.onStatus((s) => {
     midiName.classList.remove('off');
   } else if (m.available) {
     setLed(midiLed, 'warn');
-    setText(midiName, 'No device');
+    setText(midiName, say('midiNoDevice'));
     midiName.classList.add('off');
   } else if (m.pending || m.reason === 'pending') {
     // polish-1 / polish-2A (local L-3 follow-up): Web MIDI has not answered yet (Chrome's permission prompt, a slow
@@ -746,7 +780,7 @@ controller.onStatus((s) => {
     midiName.classList.add('off');
   } else if (m.reason) {
     setLed(midiLed, 'bad');
-    setText(midiName, { denied: 'Blocked', unsupported: 'Not supported', failed: 'Error' }[m.reason] || 'Off');
+    setText(midiName, { denied: say('midiBlocked'), unsupported: 'Not supported', failed: 'Error' }[m.reason] || 'Off');
     midiName.classList.add('off');
   } else {
     setLed(midiLed, null);
@@ -754,10 +788,14 @@ controller.onStatus((s) => {
   }
   const pending = !!(m.pending || m.reason === 'pending');
   $('midi-status').title = m.connected ? `MIDI input: ${m.name}` : pending ? MIDI_PENDING_TEXT
-    : m.reason === 'denied' && !isElectron ? MIDI_DENIED_TEXT
+    : m.reason === 'denied' && !isElectron ? midiDeniedText()
       : m.reason === 'failed' ? 'MIDI could not start — unplug and replug the keyboard'
         : m.reason ? `MIDI unavailable (${m.reason})` : 'MIDI input';
-
+}
+controller.onStatus((s) => {
+  const m = s.midi || {};
+  const pending = !!(m.pending || m.reason === 'pending');
+  renderMidiStatus(s);
   renderAudioStatus(s);
   renderReady(s);
   renderStatusBanners(s);
@@ -778,7 +816,7 @@ controller.onStatus((s) => {
   }
   if (!midiHintShown && !pending && m.reason && m.reason !== lastStatus?.midi?.reason) {
     midiHintShown = true;
-    if (m.reason === 'denied') toast(isElectron ? 'MIDI access was denied.' : MIDI_DENIED_TEXT, 'warn', { ms: 10000 });
+    if (m.reason === 'denied') toast(isElectron ? 'MIDI access was denied.' : midiDeniedText(), 'warn', { ms: 10000 });
     else if (m.reason === 'unsupported') toast('This browser has no Web MIDI. Use Chrome or the Worship Rig app to play a MIDI keyboard.', 'warn', { ms: 10000 });
     else toast('MIDI could not start. Unplug and replug the keyboard, then reload.', 'warn');
   }
@@ -965,6 +1003,7 @@ function audioRunning() {
 function showOverlay() {
   if (audioRunning() || overlayArmed) return;
   overlayArmed = true;
+  renderOverlayText();
   els.overlay.hidden = false;
   renderAudioStatus(lastStatus); // O14: never "Sound OK" under "Click anywhere to start audio"
   const go = async (e) => {
@@ -976,6 +1015,21 @@ function showOverlay() {
   window.addEventListener('keydown', go, { capture: true, once: true });
   els.overlay._go = go;
 }
+/** v11-polish: the start overlay's two lines in the theme's voice (index.html carries Classic's as the fallback). */
+function renderOverlayText() {
+  const t = els.overlay.querySelector('.overlay-title');
+  const sub = els.overlay.querySelector('.overlay-sub');
+  if (t) setText(t, say('overlayTitle'));
+  if (sub) setText(sub, say('overlaySub'));
+}
+// a theme switch re-words what is showing now (the lamps, the banner, the overlay); toasts keep the words they had
+onVoiceChange(() => {
+  renderOverlayText();
+  if (!lastStatus) return;
+  renderMidiStatus(lastStatus);
+  if (lastStatus.audio === 'stalled') setText(audioBanner.querySelector('.banner-msg'), say('audioStopped'));
+  renderReady(lastStatus);
+});
 function hideOverlay() {
   els.overlay.hidden = true;
   if (els.overlay._go) {
@@ -998,7 +1052,7 @@ async function firstRunHints() {
     const p = await navigator.permissions.query({ name: 'midi' });
     if (p.state !== 'prompt') return;
     midiPromptHintShown = true;
-    toast('Chrome will ask to use your MIDI devices — click “Allow”.', 'info', { ms: 10000 });
+    toast(say('midiPrompt'), 'info', { ms: 10000 });
   } catch {
     /* permission name unsupported */
   }

@@ -25,6 +25,7 @@ import { h, disposer } from './util.js';
 import { meterBlocked } from './meterClock.js';
 import * as M from '../../shared/eq-math.js';
 import { ROLE_DEFAULTS } from '../../shared/params.js';
+import { readEqPalette, rgba, onThemeChange, SLOT_HEX, SLOT_INK } from './eq-palette.js';
 
 /**
  * "Flat" / "Shaped · 3 bands" (eq-math's eqSummary says "Custom · …"; Edit keeps "Custom" off screen so the only
@@ -34,9 +35,6 @@ import { ROLE_DEFAULTS } from '../../shared/params.js';
  */
 export const toneSummary = (eq) => M.eqSummary(eq).replace(/^Custom\b/, 'Shaped');
 
-const SLOT_HEX = ['#ff8a3d', '#3ddc84', '#4aa8ff', '#b784ff'];
-const SLOT_INK = ['#1f0e00', '#002010', '#001a33', '#1a0a33'];
-const CUT_BLUE = '#7cc4ff';
 const DB_RANGE = 15;
 const DEADZONE = 4;
 const LONG_PRESS_MS = 550;
@@ -184,8 +182,19 @@ export function eqKeyboard(o = {}) {
   // ------------------------------------------------------------------------------------------------ store access
   const song = () => (typeof store.currentSong === 'function' ? store.currentSong() : null);
   const slotNow = () => song()?.patch?.slots?.[slotIndex] || null;
-  const color = () => SLOT_HEX[slotIndex] || SLOT_HEX[0];
-  const ink = () => SLOT_INK[slotIndex] || SLOT_INK[0];
+  // v11-polish (EQ canvas theming): the CSS side reads the theme's slot colour (Classic's hex as the fallback); the
+  // canvases read every colour from the palette (eq-palette.js), resolved once per theme / slot change
+  const color = () => `var(--slot-${slotIndex}, ${SLOT_HEX[slotIndex] || SLOT_HEX[0]})`;
+  const ink = () => `var(--ink-on-lamp, ${SLOT_INK[slotIndex] || SLOT_INK[0]})`;
+  let pal = null;
+  // a detached element has no computed style: read, but don't keep, a palette before the editor is in the page
+  // (read inside .eqk-graph, the canvases' parent, so a theme that re-tokens the graph alone is honoured)
+  const P = () => pal || (el.isConnected ? (pal = readEqPalette(graph, slotIndex)) : readEqPalette(graph, slotIndex));
+  d.add(onThemeChange(() => {
+    pal = null;
+    dirty = dirtyKeys = true;
+    if (!destroyed) kick();
+  }));
   const slotName = () => ROLE_DEFAULTS[slotIndex]?.name || `Slot ${slotIndex + 1}`;
   const fs = () => engine?.ctx?.sampleRate || 48000;
 
@@ -857,10 +866,6 @@ export function eqKeyboard(o = {}) {
   }
 
   // ------------------------------------------------------------------------------------------------ drawing
-  const hexA = (hex, a) => {
-    const n = parseInt(hex.slice(1), 16);
-    return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
-  };
   const rr = (c, x, y, w, hh, r) => {
     c.beginPath();
     if (c.roundRect) c.roundRect(x, y, w, hh, r);
@@ -872,17 +877,18 @@ export function eqKeyboard(o = {}) {
     const c = g2;
     const W = G.w;
     const H = G.h;
-    const col = color();
+    const pl = P();
+    const col = pl.col;
     const byp = ab === 'b';
     c.setTransform(G.dpr, 0, 0, G.dpr, 0, 0);
     c.clearRect(0, 0, W, H);
-    c.fillStyle = '#0f1216';
+    c.fillStyle = rgba(pl.plot);
     c.fillRect(0, 0, W, H);
     const pB = plotB();
     const pT = G.T;
     const xk0 = xOfSemi(M.S_LO);
     const xk1 = xOfSemi(M.S_HI);
-    c.fillStyle = '#12151a';
+    c.fillStyle = rgba(pl.plotOut);
     c.fillRect(G.L, pT, xk0 - G.L, pB - pT);
     c.fillRect(xk1, pT, W - G.R - xk1, pB - pT);
     // no-notes zone (hatched) and the overtones zone (a light tint, not a disabled veil: DECISION §5)
@@ -893,9 +899,9 @@ export function eqKeyboard(o = {}) {
       c.beginPath();
       c.rect(G.L, pT, xs - G.L, pB - pT);
       c.clip();
-      c.fillStyle = '#1a1d22';
+      c.fillStyle = rgba(pl.hatch);
       c.fillRect(G.L, pT, xs - G.L, pB - pT);
-      c.strokeStyle = '#262a31';
+      c.strokeStyle = rgba(pl.hatchLine);
       c.lineWidth = 1;
       for (let x = G.L - (pB - pT); x < xs; x += 7) {
         c.beginPath();
@@ -906,12 +912,12 @@ export function eqKeyboard(o = {}) {
       c.restore();
     }
     if (xo < W - G.R - 1) {
-      c.fillStyle = 'rgba(255,255,255,0.035)';
+      c.fillStyle = rgba(pl.over);
       c.fillRect(xo, pT, W - G.R - xo, pB - pT);
     }
     // grid: C octaves, Hz decades, dB
     c.lineWidth = 1;
-    c.strokeStyle = '#1f242b';
+    c.strokeStyle = rgba(pl.grid);
     for (let n = 24; n <= 108; n += 12) {
       const x = Math.round(xOfSemi(n)) + 0.5;
       c.beginPath();
@@ -919,7 +925,7 @@ export function eqKeyboard(o = {}) {
       c.lineTo(x, pB);
       c.stroke();
     }
-    c.strokeStyle = '#2a3038';
+    c.strokeStyle = rgba(pl.gridHz);
     c.setLineDash([2, 3]);
     for (const f of [100, 1000, 10000]) {
       const x = Math.round(xOfF(f)) + 0.5;
@@ -933,16 +939,16 @@ export function eqKeyboard(o = {}) {
     c.textBaseline = 'middle';
     for (let v = -12; v <= 12; v += 6) {
       const y = Math.round(yOfDb(v)) + 0.5;
-      c.strokeStyle = v === 0 ? '#3a414d' : '#1f242b';
+      c.strokeStyle = rgba(v === 0 ? pl.zero : pl.grid);
       c.beginPath();
       c.moveTo(G.L, y);
       c.lineTo(W - G.R, y);
       c.stroke();
-      c.fillStyle = v === 0 ? '#a3acb8' : '#6b7380';
+      c.fillStyle = rgba(v === 0 ? pl.label0 : pl.label);
       c.textAlign = 'right';
       c.fillText((v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v) + (v === 0 ? ' dB' : ''), G.L - 6, y);
     }
-    c.strokeStyle = '#3a414d';
+    c.strokeStyle = rgba(pl.zero);
     for (const x of [xk0, xk1]) {
       c.beginPath();
       c.moveTo(Math.round(x) + 0.5, pT);
@@ -970,13 +976,13 @@ export function eqKeyboard(o = {}) {
       const why = zone.why.lo === 'split' ? `below the split (${nm(zone.lo)})`
         : zone.why.lo === 'instrument' ? 'below the lowest sample' : 'below your keyboard';
       zoneLabel(Math.max(G.L, xk0), xs, [`${slotName()} doesn't play here`, why, 'no notes to shape, only rumble'],
-        '#8a93a0');
+        rgba(pl.zone));
     }
     if (xo < xk1 - 4) {
       zoneLabel(xo, W - G.R, [`Tone (overtones) of ${nm(zone.lo)}–${nm(zone.hi)}`,
-        `no ${slotName()} notes above ${nm(zone.hi)}`], '#9aa3ae');
+        `no ${slotName()} notes above ${nm(zone.hi)}`], rgba(pl.zoneOver));
     }
-    else zoneLabel(xk1, W - G.R, ['Air', 'overtones only'], '#6b7380');
+    else zoneLabel(xk1, W - G.R, ['Air', 'overtones only'], rgba(pl.label));
 
     // analyser behind the curve (WING: RTA behind)
     const an = analysers();
@@ -1004,7 +1010,7 @@ export function eqKeyboard(o = {}) {
         const pre = new Float32Array(an.pre.frequencyBinCount);
         an.pre.getFloatFrequencyData(pre);
         path(pre);
-        c.strokeStyle = 'rgba(215,220,227,.55)';
+        c.strokeStyle = rgba(pl.pre);
         c.lineWidth = 1;
         c.stroke();
       }
@@ -1013,12 +1019,12 @@ export function eqKeyboard(o = {}) {
       c.lineTo(cols[0].x, pB);
       c.closePath();
       const gr = c.createLinearGradient(0, pT, 0, pB);
-      gr.addColorStop(0, hexA(byp ? '#a3acb8' : col, 0.3));
-      gr.addColorStop(1, hexA(byp ? '#a3acb8' : col, 0.04));
+      gr.addColorStop(0, rgba(byp ? pl.grey : col, 0.3));
+      gr.addColorStop(1, rgba(byp ? pl.grey : col, 0.04));
       c.fillStyle = gr;
       c.fill();
       path(anBuf);
-      c.strokeStyle = hexA(byp ? '#c9d0d8' : col, 0.85);
+      c.strokeStyle = rgba(byp ? pl.grey2 : col, 0.85);
       c.lineWidth = 1.3;
       c.stroke();
     }
@@ -1034,7 +1040,7 @@ export function eqKeyboard(o = {}) {
       c.lineTo(W - G.R, yOfDb(0));
       c.closePath();
       // lift in the slot colour, anything that takes away (cut, notch, low/high cut) in blue, as on the keys
-      c.fillStyle = hexA(M.hasGain(sb.type) && sb.db > 0 ? col : CUT_BLUE, 0.16);
+      c.fillStyle = rgba(M.hasGain(sb.type) && sb.db > 0 ? col : pl.cut, 0.16);
       c.fill();
     }
     // composite curve
@@ -1045,7 +1051,7 @@ export function eqKeyboard(o = {}) {
       else c.moveTo(x, y);
     });
     c.lineWidth = 2.6;
-    c.strokeStyle = byp ? '#6b7380' : '#ffffff';
+    c.strokeStyle = rgba(byp ? pl.off : pl.curve);
     if (byp) c.setLineDash([6, 5]);
     c.stroke();
     c.setLineDash([]);
@@ -1056,7 +1062,7 @@ export function eqKeyboard(o = {}) {
       const isSel = sel === which;
       const hot = hoverHit?.cut === which || drag?.cut === which;
       if (p.on) {
-        c.strokeStyle = hexA(CUT_BLUE, 0.5);
+        c.strokeStyle = rgba(pl.cut, 0.5);
         c.setLineDash([2, 3]);
         c.beginPath();
         c.moveTo(p.x, p.y);
@@ -1066,14 +1072,14 @@ export function eqKeyboard(o = {}) {
       }
       const s = 13 + (hot ? 2 : 0);
       rr(c, p.x - s, p.y - s * 0.8, 2 * s, 1.6 * s, 6);
-      c.fillStyle = isSel && p.on ? CUT_BLUE : '#15181d';
+      c.fillStyle = rgba(isSel && p.on ? pl.cut : pl.node);
       c.fill();
       c.lineWidth = 2;
-      c.strokeStyle = p.on ? CUT_BLUE : '#6b7380';
+      c.strokeStyle = rgba(p.on ? pl.cut : pl.off);
       if (!p.on) c.setLineDash([3, 2.5]);
       c.stroke();
       c.setLineDash([]);
-      c.fillStyle = isSel && p.on ? '#08131f' : p.on ? CUT_BLUE : '#8a93a0';
+      c.fillStyle = rgba(isSel && p.on ? pl.cutInk : p.on ? pl.cut : pl.offText);
       c.font = font('800 11px');
       c.textAlign = 'center';
       c.textBaseline = 'middle';
@@ -1083,7 +1089,7 @@ export function eqKeyboard(o = {}) {
     // Q wings for the selected band
     const ws = sb && !byp ? wings(sb) : null;
     if (ws) {
-      c.strokeStyle = hexA(col, 0.8);
+      c.strokeStyle = rgba(col, 0.8);
       c.lineWidth = 1.5;
       c.setLineDash([3, 3]);
       c.beginPath();
@@ -1093,13 +1099,13 @@ export function eqKeyboard(o = {}) {
       c.setLineDash([]);
       for (const [i, w] of ws.entries()) {
         const hot = drag?.wing === i || hoverHit?.wing === i;
-        c.fillStyle = hot ? col : '#0f1216';
-        c.strokeStyle = col;
+        c.fillStyle = rgba(hot ? col : pl.plot);
+        c.strokeStyle = rgba(col);
         c.lineWidth = 2;
         rr(c, w.x - 6, w.y - 14, 12, 28, 5);
         c.fill();
         c.stroke();
-        c.strokeStyle = hot ? ink() : hexA(col, 0.9);
+        c.strokeStyle = hot ? rgba(pl.ink) : rgba(col, 0.9);
         c.lineWidth = 1.2;
         for (const dy of [-5, 0, 5]) {
           c.beginPath();
@@ -1124,21 +1130,21 @@ export function eqKeyboard(o = {}) {
         const cue = drag?.k === b.k && drag.lpCue;
         c.beginPath();
         c.arc(p.x, p.y, R + 6, 0, Math.PI * 2);
-        c.strokeStyle = cue ? '#ffffff' : hexA(doomed ? '#ff4d4f' : col, 0.35);
+        c.strokeStyle = cue ? rgba(pl.curve) : rgba(doomed ? pl.danger : col, 0.35);
         c.lineWidth = cue ? 4 : 3;
         c.stroke();
       }
       c.beginPath();
       c.arc(p.x, p.y, R, 0, Math.PI * 2);
-      c.fillStyle = doomed ? '#ff4d4f' : !b.on || byp ? '#15181d' : isSel ? col : 'rgba(21,24,29,.92)';
+      c.fillStyle = doomed ? rgba(pl.danger) : !b.on || byp ? rgba(pl.node) : isSel ? rgba(col) : rgba(pl.node, 0.92);
       c.fill();
       c.lineWidth = 2.5;
-      c.strokeStyle = doomed ? '#ff4d4f' : !b.on || byp ? '#6b7380' : inGrey ? '#a3acb8' : col;
+      c.strokeStyle = rgba(doomed ? pl.danger : !b.on || byp ? pl.off : inGrey ? pl.grey : col);
       if (inGrey || !b.on) c.setLineDash([3, 2.5]);
       c.stroke();
       c.setLineDash([]);
-      c.fillStyle = doomed ? '#fff' : isSel && b.on && !byp ? ink()
-        : !b.on || byp ? '#8a93a0' : inGrey ? '#c9d0d8' : col;
+      c.fillStyle = rgba(doomed ? pl.dangerInk : isSel && b.on && !byp ? pl.ink
+        : !b.on || byp ? pl.offText : inGrey ? pl.grey2 : col);
       c.font = font(`800 ${G.r >= 17 ? 15 : 13}px`);
       c.textAlign = 'center';
       c.textBaseline = 'middle';
@@ -1150,31 +1156,31 @@ export function eqKeyboard(o = {}) {
         c.fillText(glyph, p.x, p.y + R * 0.62);
       }
       let tag = null;
-      if (doomed) tag = ['release to remove', '#5a0d10', '#ffc9ca'];
-      else if (inGrey && r.kind === 'over') tag = ['overtones only', '#3a3f48', '#e6e9ee'];
-      else if (inGrey) tag = ['no effect', '#4a2326', '#ffc9ca'];
-      else if (!b.on) tag = ['off', '#2a2f37', '#a3acb8'];
+      if (doomed) tag = ['release to remove', pl.tagDel, pl.tagDelInk];
+      else if (inGrey && r.kind === 'over') tag = ['overtones only', pl.tagOver, pl.tagOverInk];
+      else if (inGrey) tag = ['no effect', pl.tagNone, pl.tagNoneInk];
+      else if (!b.on) tag = ['off', pl.tagOff, pl.tagOffInk];
       if (tag) {
         c.font = font('700 11px');
         const tw = c.measureText(tag[0]).width + 12;
         const ty = p.y + R + 22 > pB ? p.y - R - 22 : p.y + R + 5;
-        c.fillStyle = tag[1];
+        c.fillStyle = rgba(tag[1]);
         rr(c, p.x - tw / 2, ty, tw, 17, 8);
         c.fill();
-        c.fillStyle = tag[2];
+        c.fillStyle = rgba(tag[2]);
         c.fillText(tag[0], p.x, ty + 9);
       }
     }
 
     // Hz ruler
-    c.fillStyle = '#0b0d10';
+    c.fillStyle = rgba(pl.ruler);
     c.fillRect(0, pB, W, G.RULER);
-    c.strokeStyle = '#2d333d';
+    c.strokeStyle = rgba(pl.rulerLine);
     c.beginPath();
     c.moveTo(0, pB + 0.5);
     c.lineTo(W, pB + 0.5);
     c.stroke();
-    c.strokeStyle = '#3a414d';
+    c.strokeStyle = rgba(pl.tick);
     for (const f of [30, 40, 60, 70, 80, 90, 150, 300, 400, 600, 700, 800, 900, 1500, 3000, 4000, 7000, 9000, 15000]) {
       const x = Math.round(xOfF(f)) + 0.5;
       c.beginPath();
@@ -1188,29 +1194,29 @@ export function eqKeyboard(o = {}) {
       [5000, '5k'], [10000, '10k'], [20000, '20k']];
     for (const [f, t] of major) {
       const x = Math.round(xOfF(f)) + 0.5;
-      c.strokeStyle = '#6b7380';
+      c.strokeStyle = rgba(pl.off);
       c.beginPath();
       c.moveTo(x, pB);
       c.lineTo(x, pB + 7);
       c.stroke();
-      c.fillStyle = '#c9d0d8';
+      c.fillStyle = rgba(pl.grey2);
       c.textAlign = f === 20 ? 'left' : f === 20000 ? 'right' : 'center';
       c.fillText(t, f === 20 ? x + 2 : f === 20000 ? x - 2 : x, pB + 14);
     }
     const x440 = Math.round(xOfF(440)) + 0.5;
-    c.strokeStyle = 'rgba(255,201,77,.7)';
+    c.strokeStyle = rgba(pl.a440, 0.7);
     c.beginPath();
     c.moveTo(x440, pB);
     c.lineTo(x440, pB + 6);
     c.stroke();
-    c.fillStyle = '#ffc94d';
+    c.fillStyle = rgba(pl.a440);
     c.textAlign = 'center';
     c.fillText('440', x440, pB + 14);
     c.textAlign = 'left';
-    c.fillStyle = '#6b7380';
+    c.fillStyle = rgba(pl.off);
     c.fillText('Hz', 6, pB + 12);
     if (hover && !drag && hover.y < pB && hover.x > G.L) {
-      c.strokeStyle = 'rgba(241,244,248,.35)';
+      c.strokeStyle = rgba(pl.hoverLine);
       c.lineWidth = 1;
       const x = Math.round(hover.x) + 0.5;
       c.beginPath();
@@ -1225,10 +1231,11 @@ export function eqKeyboard(o = {}) {
     const c = k2;
     const W = G.w;
     const H = G.kh;
-    const col = color();
+    const pl = P();
+    const col = pl.col;
     c.setTransform(G.dpr, 0, 0, G.dpr, 0, 0);
     c.clearRect(0, 0, W, H);
-    c.fillStyle = '#0b0d10';
+    c.fillStyle = rgba(pl.keysBg);
     c.fillRect(0, 0, W, H);
     const bar = 11;
     const top = bar + 2;
@@ -1237,26 +1244,26 @@ export function eqKeyboard(o = {}) {
     const stretched = (n) => zone.stretched.some(([a, b]) => n >= a && n <= b);
     const sb = typeof sel === 'number' && ab !== 'b' ? bandByK(sel) : null;
     // range bar
-    c.fillStyle = '#1c2027';
+    c.fillStyle = rgba(pl.range);
     c.fillRect(xOfSemi(M.S_LO), 3, xOfSemi(M.S_HI) - xOfSemi(M.S_LO), 6);
     const r0 = xOfSemi(Math.max(M.S_LO, zone.lo - 0.5));
     const r1 = xOfSemi(Math.min(M.S_HI, zone.hi + 0.5));
     if (r1 > r0) {
-      c.fillStyle = col;
+      c.fillStyle = rgba(col);
       rr(c, r0, 3, r1 - r0, 6, 3);
       c.fill();
     }
     c.font = font('700 11px');
     c.textBaseline = 'middle';
-    c.fillStyle = '#a3acb8';
+    c.fillStyle = rgba(pl.label0);
     c.textAlign = 'right';
     c.fillText(slotName(), G.L - 6, 6);
-    c.fillStyle = '#12151a';
+    c.fillStyle = rgba(pl.plotOut);
     c.fillRect(G.L, top, xOfSemi(M.S_LO) - G.L - 1, kh);
     const xa = xOfSemi(M.S_HI) + 1;
     const ag = c.createLinearGradient(xa, 0, W - G.R, 0);
-    ag.addColorStop(0, '#1b1f25');
-    ag.addColorStop(1, '#101317');
+    ag.addColorStop(0, rgba(pl.air1));
+    ag.addColorStop(1, rgba(pl.air2));
     c.fillStyle = ag;
     c.fillRect(xa, top, W - G.R - xa, kh);
     const airW = W - G.R - xa;
@@ -1264,7 +1271,7 @@ export function eqKeyboard(o = {}) {
       // polish-2B: the second line was wider than the strip at ≤ 1440 ("ertones · 4.2–20 kHz", drawn under the
       // keys): each line takes the longest wording that fits
       const fit = (words) => words.find((t) => c.measureText(t).width <= airW - 8) || null;
-      c.fillStyle = '#8a93a0';
+      c.fillStyle = rgba(pl.zone);
       c.textAlign = 'center';
       c.font = font('700 11px');
       const l1 = fit(['no keys up here', 'no keys']);
@@ -1281,16 +1288,16 @@ export function eqKeyboard(o = {}) {
       const w = x1 - x0;
       const on = inR(k.n);
       const hh = k.black ? kh * 0.6 : kh;
-      let fill = k.black ? (on ? '#1b1e23' : '#23272e') : on ? '#b4bcc6' : '#3a3f47';
-      if (pressedKey === k.n && on) fill = k.black ? '#c79a1c' : '#ffc94d';
-      c.fillStyle = fill;
+      let fill = k.black ? (on ? pl.keyBlack : pl.keyBlackOff) : on ? pl.keyWhite : pl.keyWhiteOff;
+      if (pressedKey === k.n && on) fill = k.black ? pl.keyPressBlack : pl.keyPress;
+      c.fillStyle = rgba(fill);
       rr(c, x0 + 0.5, top, w - 1, hh, [0, 0, 3, 3]);
       c.fill();
       if (!on || stretched(k.n)) {
         c.save();
         rr(c, x0 + 0.5, top, w - 1, hh, [0, 0, 3, 3]);
         c.clip();
-        c.strokeStyle = !on ? (k.black ? '#2c3139' : '#454b54') : 'rgba(35,39,46,.35)';
+        c.strokeStyle = rgba(!on ? (k.black ? pl.keyHatchBlack : pl.keyHatchWhite) : pl.keyHatchOn);
         c.lineWidth = 1;
         for (let y = top - w; y < top + hh; y += on ? 9 : 6) {
           c.beginPath();
@@ -1303,12 +1310,12 @@ export function eqKeyboard(o = {}) {
       const v = tint(k.n);
       if (Math.abs(v) >= 0.4 && !(pressedKey === k.n && on)) {
         const a = M.clamp(Math.abs(v) / 9, 0.12, 0.85) * (on ? 1 : 0.45);
-        c.fillStyle = v > 0 ? hexA(col, a) : `rgba(124,196,255,${a})`;
+        c.fillStyle = rgba(v > 0 ? col : pl.cut, a);
         rr(c, x0 + 0.5, top + (k.black ? 0 : kh * 0.62), w - 1, k.black ? hh : kh * 0.38, [0, 0, 3, 3]);
         c.fill();
       }
       if (!k.black) {
-        c.strokeStyle = '#0b0d10';
+        c.strokeStyle = rgba(pl.keySep);
         c.lineWidth = 1;
         c.beginPath();
         c.moveTo(Math.round(x1) + 0.5, top);
@@ -1316,7 +1323,7 @@ export function eqKeyboard(o = {}) {
         c.stroke();
       }
       if (!k.black && k.n % 12 === 0 && w > 6) {
-        c.fillStyle = on ? '#23272e' : '#8a93a0';
+        c.fillStyle = rgba(on ? pl.keyLabel : pl.keyLabelOff);
         c.font = font('800 10px');
         c.textAlign = 'center';
         c.fillText(M.noteName(k.n), (x0 + x1) / 2, top + kh - 8);
@@ -1336,7 +1343,7 @@ export function eqKeyboard(o = {}) {
         }
       }
       if (a !== null && g0 >= 0.25) {
-        c.strokeStyle = '#fff';
+        c.strokeStyle = rgba(pl.bracket);
         c.lineWidth = 2;
         c.beginPath();
         c.moveTo(a, top + 7);
@@ -1872,6 +1879,7 @@ export function eqKeyboard(o = {}) {
       slotAn = null;
       slotAnTried = -1;
       slotIndex = Number(i) || 0;
+      pal = null;
       sel = null;
       builtSig = null;
       refresh(true);
@@ -1944,6 +1952,7 @@ export function eqKeyboard(o = {}) {
  * @param {() => void} [o.onOpen]
  * @param {number} [o.width=120]
  * @param {number} [o.height=28]
+ * @param {boolean} [o.decorative]  a picture only (a span, aria-hidden, no click): the Effects "goes in" glyph
  * @returns {{el:HTMLButtonElement, update():void, setSlot(i:number):void, destroy():void}}
  */
 export function eqMiniCurve(o = {}) {
@@ -1953,8 +1962,13 @@ export function eqMiniCurve(o = {}) {
   let slotIndex = Number(o.slotIndex) || 0;
   const d = disposer();
   const cv = h('canvas', { width: String(W), height: String(H), style: { width: `${W}px`, height: `${H}px` } });
-  const el = h('button', { type: 'button', class: 'eqk-mini' }, cv);
+  // v11-polish (ux-round2 leftover): `decorative` is the Effects tab's "goes in" glyph, a picture beside a chip that is
+  // already the control (no button, hidden from assistive tech)
+  const deco = !!o.decorative;
+  const el = deco ? h('span', { class: 'eqk-mini eqk-mini-deco', 'aria-hidden': 'true' }, cv)
+    : h('button', { type: 'button', class: 'eqk-mini' }, cv);
   let sig = '';
+  let pal = null; // v11-polish: theme tokens (eq-palette.js), re-read on a theme / slot change
   function draw() {
     const song = store.currentSong?.();
     const slot = song?.patch?.slots?.[slotIndex] || null;
@@ -1965,11 +1979,12 @@ export function eqMiniCurve(o = {}) {
     } catch {
       songT = 0;
     }
-    const s = JSON.stringify([slot?.eq ?? null, slot?.lowNote, slot?.highNote, slot?.octave, slot?.transpose, songT]);
+    const s = JSON.stringify([slot?.eq ?? null, slot?.lowNote, slot?.highNote, slot?.octave, slot?.transpose, songT,
+      slotIndex, !!pal]);
     if (s === sig) return;
     sig = s;
     el.hidden = !slot || summary === 'Flat';
-    el.setAttribute('aria-label', `Tone EQ: ${summary}. Open the Tone panel`);
+    if (!deco) el.setAttribute('aria-label', `Tone EQ: ${summary}. Open the Tone panel`);
     el.title = `Tone EQ: ${summary}`;
     if (el.hidden) return;
     const dpr = window.devicePixelRatio || 1;
@@ -1978,14 +1993,17 @@ export function eqMiniCurve(o = {}) {
     const c = cv.getContext('2d');
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.clearRect(0, 0, W, H);
+    if (!pal) pal = readEqPalette(el, slotIndex);
+    if (!el.isConnected) pal = null; // detached: no computed style yet (the palette is the Classic fallback)
+    const pl = pal || readEqPalette(el, slotIndex);
     const xOfF = (f) => (M.uOfF(f) / M.TOTAL_U) * W;
     const zone = M.soundingRange(slot, { songTranspose: songT });
     const xs = M.clamp(xOfF(zone.fLo), 0, W);
     if (xs > 0) {
-      c.fillStyle = 'rgba(58,63,71,.55)';
+      c.fillStyle = rgba(pl.miniOut);
       c.fillRect(0, 0, xs, H);
     }
-    c.strokeStyle = 'rgba(163,172,184,.35)';
+    c.strokeStyle = rgba(pl.miniLine);
     c.lineWidth = 1;
     c.beginPath();
     c.moveTo(0, H / 2 + 0.5);
@@ -1999,15 +2017,32 @@ export function eqMiniCurve(o = {}) {
       if (x) c.lineTo(x, y);
       else c.moveTo(x, y);
     });
-    c.strokeStyle = SLOT_HEX[slotIndex] || SLOT_HEX[0];
+    c.strokeStyle = rgba(pl.col);
     c.lineWidth = 1.6;
     c.stroke();
   }
-  d.listen(el, 'click', () => {
-    if (typeof onOpen === 'function') onOpen();
-  });
+  if (!deco) {
+    d.listen(el, 'click', () => {
+      if (typeof onOpen === 'function') onOpen();
+    });
+  }
   const unsub = store.subscribe?.(() => draw());
   d.add(() => unsub?.());
+  d.add(onThemeChange(() => {
+    pal = null;
+    sig = '';
+    draw();
+  }));
+  // a curve drawn while detached used the fallback palette: redraw once it is in the page
+  if (typeof requestAnimationFrame === 'function') {
+    const r = requestAnimationFrame(() => {
+      if (!pal && el.isConnected) {
+        sig = '';
+        draw();
+      }
+    });
+    d.add(() => cancelAnimationFrame(r));
+  }
   draw();
   return {
     el,
@@ -2017,6 +2052,7 @@ export function eqMiniCurve(o = {}) {
     },
     setSlot(i) {
       slotIndex = Number(i) || 0;
+      pal = null;
       sig = '';
       draw();
     },

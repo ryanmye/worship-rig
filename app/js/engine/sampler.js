@@ -302,7 +302,61 @@ export class BufferCache {
     this.bytes = 0;
     this.sizes = new Map(); // key -> decoded bytes, kept after eviction (estimateBytes; a number per key)
     this.meta = new Map(); // url -> {nat (frames after the onset trim), ch, sr, midi}, kept after eviction (sustain)
+    // v11-polish (BACKLOG B memory, sustain-critic R1): a legacy-cap copy dropped because its long variant is decoded
+    // (supersede): legacy key → long key, and back. The long buffer then answers for the legacy key: has(), acquire()
+    // and a pin on the legacy key (it keeps the long one from being evicted).
+    this.superseded = new Map();
+    this.supersededBy = new Map();
+    this.longKeys = new Map(); // url → Set of its long keys ever decoded
     this._tick = 0;
+  }
+  /** A decoded long variant of `url`, if any (sustain variants). @returns {string|null} */
+  _longOf(url) {
+    for (const k of this.longKeys.get(url) || []) if (this.entries.has(k)) return k;
+    return null;
+  }
+  /** The long key now standing in for legacy key `key`, if its buffer is held. @returns {string|null} */
+  _standIn(key) {
+    const k = this.superseded.get(key);
+    return k && this.entries.has(k) ? k : null;
+  }
+  /** A pin on this key, or on the legacy key it stands in for. */
+  _isPinned(key) {
+    if (this.pinned.has(key)) return true;
+    const legacy = this.supersededBy.get(key);
+    return !!legacy && this.pinned.has(legacy);
+  }
+  /** Remove a decoded entry (and its stand-in links). */
+  _deleteEntry(key) {
+    const e = this.entries.get(key);
+    if (!e) return;
+    this.entries.delete(key);
+    this.bytes -= e.bytes;
+    const legacy = this.supersededBy.get(key);
+    if (legacy !== undefined) {
+      this.supersededBy.delete(key);
+      this.superseded.delete(legacy);
+    }
+  }
+  /**
+   * v11-polish (the leaner long-cap swap): `owner` now plays `longKey` instead of the legacy-cap copy `url` (its
+   * neighbour preload). The legacy copy goes at once when nothing else references it, pinned or not: the long buffer
+   * answers for it from then on (a pin on `url` holds the long buffer instead, has(url) is true, acquire(url) returns
+   * it). Before, the legacy copy stayed cached (pinned by the old window, then unpinned until the LRU reached it):
+   * +160 MB for a piano song and a higher peak during the switch.
+   * @param {string} url the legacy key
+   * @param {string} longKey
+   * @param {object} owner
+   */
+  supersede(url, longKey, owner) {
+    const e = this.entries.get(url);
+    if (e) e.refs.delete(owner);
+    if (e && !e.refs.size && longKey !== url && this.entries.has(longKey)) {
+      this._deleteEntry(url);
+      this.superseded.set(url, longKey);
+      this.supersededBy.set(longKey, url);
+    }
+    this._evict();
   }
   get decodedMB() {
     return this.bytes / MB;
@@ -310,7 +364,13 @@ export class BufferCache {
   /** Decoded bytes held by pinned keys (pins on keys not decoded yet count 0). */
   get pinnedBytes() {
     let b = 0;
-    for (const u of this.pinned) b += this.entries.get(u)?.bytes || 0;
+    const seen = new Set();
+    for (const u of this.pinned) {
+      const k = this.entries.has(u) ? u : this._standIn(u); // a superseded legacy pin holds its long buffer
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      b += this.entries.get(k).bytes;
+    }
     return b;
   }
   get pinnedMB() {
@@ -336,7 +396,7 @@ export class BufferCache {
   }
   /** @param {string} key @returns {boolean} a decoded buffer is held under this key */
   has(key) {
-    return this.entries.has(key);
+    return this.entries.has(key) || !!this._standIn(key);
   }
   /**
    * Decoded size of a set of cache keys (deduplicated), without decoding anything: exact for keys decoded before
@@ -347,7 +407,14 @@ export class BufferCache {
    * @returns {{bytes:number, unknown:number, count:number}}
    */
   estimateBytes(urls) {
-    const uniq = new Set(urls);
+    // v11-polish: a legacy key whose long variant is held is served by that buffer (acquire's stand-in), so it costs
+    // the long buffer's size, counted once with the long key itself (the pin budget stays true: CONTRACT_CHANGES
+    // "## v11-polish")
+    const uniq = new Set();
+    for (const k of urls) {
+      const held = this.entries.has(k) ? null : this._standIn(k) || (k === urlOfKey(k) ? this._longOf(k) : null);
+      uniq.add(held || k);
+    }
     const groupOf = (k) => {
       const u = urlOfKey(k);
       return `${u.slice(0, u.lastIndexOf('/') + 1)}${k.slice(u.length)}`;
@@ -401,6 +468,18 @@ export class BufferCache {
   async acquire(url, ctx, midi, owner, opts) {
     let key = this.keyOf(url, midi, opts?.maxSec);
     let e = this.entries.get(key);
+    if (!e && this._standIn(key)) e = this.entries.get(this._standIn(key)); // superseded: the long buffer answers
+    if (!e && key === url) {
+      // v11-polish: a legacy-cap request (a neighbour preload) for a URL whose long variant is decoded (the song just
+      // left) takes the long buffer instead of decoding a second, shorter copy of the same file (the +160 MB of
+      // short neighbour copies after a switch away from a piano song). Same audio up to the legacy cap.
+      const long = this._longOf(url);
+      if (long) {
+        this.superseded.set(url, long);
+        this.supersededBy.set(long, url);
+        e = this.entries.get(long);
+      }
+    }
     if (!e) {
       if (this._skip(url)) return null;
       let p = this.inflight.get(key);
@@ -417,6 +496,10 @@ export class BufferCache {
         const bytes = buffer.numberOfChannels * buffer.length * 4;
         e = { buffer, bytes, refs: new Set(), lastUsed: 0 };
         this.entries.set(key, e);
+        if (key !== url) {
+          if (!this.longKeys.has(url)) this.longKeys.set(url, new Set());
+          this.longKeys.get(url).add(key);
+        }
         this.bytes += bytes;
         this.sizes.set(key, bytes);
       }
@@ -502,8 +585,7 @@ export class BufferCache {
     for (const k of [...this.sizes.keys()]) if (set.has(urlOfKey(k))) this.sizes.delete(k);
     for (const [k, e] of [...this.entries]) {
       if (!set.has(urlOfKey(k)) || e.refs.size) continue;
-      this.entries.delete(k);
-      this.bytes -= e.bytes;
+      this._deleteEntry(k);
       dropped++;
     }
     return { failed, dropped };
@@ -526,12 +608,11 @@ export class BufferCache {
   _evict() {
     if (this.bytes <= this.capBytes) return;
     const cands = [...this.entries.entries()]
-      .filter(([u, e]) => !e.refs.size && !this.pinned.has(u))
+      .filter(([u, e]) => !e.refs.size && !this._isPinned(u))
       .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
-    for (const [u, e] of cands) {
+    for (const [u] of cands) {
       if (this.bytes <= this.lowWaterBytes) break;
-      this.entries.delete(u);
-      this.bytes -= e.bytes;
+      this._deleteEntry(u);
     }
   }
 }
@@ -629,7 +710,8 @@ export class SamplerInstrument {
       if (!buf || buf === entry.buffer) continue;
       entry.buffer = buf;
       n++;
-      this.cache.drop(s.url, this);
+      // v11-polish: the legacy copy goes as soon as the long one is in (was drop(): kept until the LRU reached it)
+      this.cache.supersede(s.url, this.cache.keyOf(s.url, s.midi, this.def.decodeOpts?.maxSec), this);
     }
     this.upgrades = n;
     return n;
