@@ -46,6 +46,19 @@ const CLASSIC = Object.freeze({
   clickOn: 'Click on',
   clickCounting: 'Count-in',
   clickTitle: 'Start or stop the click at this song’s tempo (count-in and level: Edit › Song)',
+  // v11-scenes: saved levels per song (Perform's scene numbers, Quick › This song, Edit › Song)
+  sceneOwn: 'Scenes: playing the song’s own levels',
+  sceneLabel: ({ n }) => `Scene ${n}`,
+  sceneBack: 'Playing. Tap to go back to the song’s own levels',
+  sceneSaveCap: 'Save as scene',
+  sceneSaveTitle: ({ n }) => `Save what you hear now (levels, ON switches, drone level, wheel) as scene ${n}`,
+  sceneSaved: ({ n }) => `Saved as scene ${n}. A footswitch or the scene numbers step through them.`,
+  sceneEditHint: 'Up to 3 saved sets of levels for this song: faders, ON switches, the drone level and the wheel. '
+    + 'The song always starts on its own levels; step through the scenes with a footswitch (Settings › MIDI › '
+    + 'Next scene), the numbers in Perform, or a hotkey. A change glides, held notes keep sounding.',
+  sceneEditSub: 'Saved levels to step through while you play. The song always starts on its own levels.',
+  scenePlaying: 'playing',
+  sceneNone: 'No scenes yet.',
 });
 
 /** Sanctuary v1 §5 (Nave) = what Sanctuary v2 §6.3 asks for: a verger who likes you. */

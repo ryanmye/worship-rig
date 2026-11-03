@@ -33,6 +33,11 @@
 //   so Squirrel.Mac could not apply an update anyway. Packaged app only; never from source or in a self-test unless
 //   RIG_UPDATE_FEED points at a fake feed.
 //
+// GarageBand / Logic importer (v11-importer, importer-host.js): Settings › My Samples › "Import from GarageBand /
+//   Logic…" scans the Apple library and converts the chosen instruments into the My Samples folder in a
+//   utilityProcess (tools/exs/import-worker.mjs), with per-instrument progress (rig:garageBandProgress) and Cancel;
+//   the page rescans.
+//
 // Test/dev env overrides: RIG_APP_DIR, RIG_PORT, RIG_PADS_DIR, RIG_USER_DATA, RIG_RECORDINGS_DIR, RIG_USER_SAMPLES,
 // RIG_SELFTEST=1 (collect console output + HTTP responses ≥ 400, read window.__RIG_SELFTEST__, print one JSON line, quit),
 // RIG_SELFTEST_TIMEOUT_MS, RIG_DEBUG_PERMS=1 (log every permission request/check),
@@ -40,10 +45,11 @@
 // RIG_UPDATE_FEED=<url of a /releases/latest-shaped JSON> (turns the update check on for tests, also from source),
 // RIG_UPDATE_DELAY_MS (launch-check delay, default 20 s), RIG_UPDATE_CHECK=0 (never check, even packaged),
 // RIG_FAKE_TAKEN_HOTKEY=<accelerator> (RIG_SELFTEST only: globalShortcut.register reports it taken by another app).
+// RIG_GB_LIBRARY=<dir>[:<dir>…] (the importer searches these instead of the Apple locations, like the CLI's --root).
 
 const {
   app, BrowserWindow, Menu, Tray, dialog, globalShortcut, ipcMain, nativeImage, powerSaveBlocker, screen, session,
-  shell,
+  shell, utilityProcess,
 } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -54,6 +60,7 @@ const { createServer, userSamplesHome, KEY_HEADER } = require('./server.js');
 const { trayIsHidden, fallbackPopoverBounds } = require('./tray-visibility.js');
 const { createHotkeys } = require('./global-hotkeys.js');
 const { createUpdateChecker, buildArch } = require('./update-check.js');
+const { createGarageBandImporter, utilityWorker } = require('./importer-host.js');
 
 const IS_MAC = process.platform === 'darwin';
 const SELFTEST = process.env.RIG_SELFTEST === '1';
@@ -472,6 +479,7 @@ const USER_SAMPLES_README = [
   'app/samples/manifest.json). Packs appear in the instrument picker under "My Samples" (ids "user:<id>").',
   '',
   'GarageBand / Logic instruments on this Mac can be converted into this folder with',
+  'Settings › My Samples › Import from GarageBand / Logic…, or in Terminal with',
   '  node tools/import-garageband.mjs --list      (see docs/garageband-import.md)',
   '',
   'These files are for your own use on this Mac: never share them or add them to the app.',
@@ -623,7 +631,7 @@ const BUS_STATE_MAX = 64 * 1024;
 const BUS_COMMAND_MAX = 4 * 1024;
 const BUS_COMMANDS = new Set([
   'hello', 'selectMode', 'nextMode', 'prevMode', 'panic', 'fadeOutAll', 'master', 'droneToggle', 'droneKey',
-  'lowResource', 'openMain', 'record',
+  'lowResource', 'openMain', 'record', 'nextScene', 'prevScene', // v11-scenes
 ]);
 const POPOVER_W = 320;
 const POPOVER_H = 440;
@@ -1282,7 +1290,48 @@ function getUpdater() {
   return updater;
 }
 
+// ---------------------------------------------------------------------------------------------
+// v11-importer: GarageBand / Logic → My Samples, off the main thread (importer-host.js + tools/exs/import-worker.mjs)
+//
+//   rig:garageBandScan ──▶ worker: walk + parse + index ──▶ {instruments:[{key, name, sizes…}], encoder}
+//   rig:garageBandImport([keys]) ──▶ worker: convert into userSamplesHome() ──rig:garageBandProgress──▶ page
+//   rig:garageBandCancel ──▶ worker stops (current instrument discarded); the page then rescans My Samples
+const GB_LIBRARY = (process.env.RIG_GB_LIBRARY || '').split(path.delimiter).map((s) => s.trim()).filter(Boolean);
+let gbImporter = null;
+let gbSender = null; // the webContents that started the import (progress goes there)
+function getGbImporter() {
+  if (gbImporter) return gbImporter;
+  gbImporter = createGarageBandImporter({
+    spawn: () => utilityWorker(utilityProcess),
+    roots: GB_LIBRARY.length ? GB_LIBRARY.map((p) => path.resolve(p)) : null,
+    out: () => userSamplesHome(),
+    // the output must be a folder the server scans, or the automatic Rescan would not find the new packs
+    allowedOut: () => (server ? server.userSampleRoots : []),
+    cache: path.join(app.getPath('userData'), 'exs-index.json'),
+    log,
+    onProgress: (snap) => {
+      const wc = gbSender && !gbSender.isDestroyed() ? gbSender : win && !win.isDestroyed() ? win.webContents : null;
+      if (wc) wc.send('rig:garageBandProgress', snap);
+    },
+  });
+  return gbImporter;
+}
+
+function registerImporterIpc() {
+  handle('rig:garageBandScan', async (_e, opts) => getGbImporter().scan({ reindex: !!(opts && opts.reindex === true) }),
+  );
+  handle('rig:garageBandImport', async (event, keys) => {
+    const bad = !Array.isArray(keys) || keys.length > 1000 || keys.some((k) => typeof k !== 'string' || k.length > 64);
+    if (bad) return { error: 'bad-request' };
+    gbSender = event.sender;
+    return getGbImporter().start(keys);
+  });
+  handle('rig:garageBandCancel', async () => getGbImporter().cancel());
+  handle('rig:garageBandStatus', async () => getGbImporter().status());
+}
+
 function registerV11Ipc() {
+  registerImporterIpc();
   handle('rig:setHotkeys', async (_e, cfg) => hotkeys.set(cfg));
   handle('rig:pauseHotkeys', async (_e, on) => {
     if (typeof on !== 'boolean') return { error: 'expected a boolean' };
@@ -1604,7 +1653,12 @@ function installSelftest(wc) {
           .catch((err) => ({ error: (err && err.message) || String(err) }));
         const v11 = await withTimeout(v11Selftest(wc), 30000, { error: 'v11 self-test timed out' })
           .catch((err) => ({ error: (err && err.message) || String(err) }));
-        return finish({ result: JSON.parse(r), menubar, v11 }, 0);
+        // v11-importer: only when a test points RIG_GB_LIBRARY at a synthetic library
+        const importer = GB_LIBRARY.length
+          ? await withTimeout(importerSelftest(wc), 90000, { error: 'importer self-test timed out' })
+            .catch((err) => ({ error: (err && err.message) || String(err) }))
+          : undefined;
+        return finish({ result: JSON.parse(r), menubar, v11, importer }, 0);
       }
     } catch {
       /* page not ready yet */
@@ -1868,6 +1922,37 @@ async function v11Selftest(wc) {
   return out;
 }
 
+/**
+ * v11-importer self-test (RIG_SELFTEST=1 + RIG_GB_LIBRARY), reported as `importer`: the GarageBand importer through
+ * the real preload + IPC + utilityProcess worker, on a synthetic library (test/phase1/shell/electron.importer.mjs):
+ * scan, refused keys, an import with pushed progress, then the server's rescan and manifest see the new pack.
+ */
+async function importerSelftest(wc) {
+  const out = {};
+  const js = (code, ms = 20000) => withTimeout(wc.executeJavaScript(code, true), ms,
+    { error: 'executeJavaScript timeout' });
+  await js('window.__gb = []; window.rig.onGarageBandProgress((s) => window.__gb.push(s)); true');
+  out.statusBefore = await js('window.rig.garageBandStatus()');
+  out.scan = await js('window.rig.garageBandScan()', 60000);
+  out.badKeys = await js("window.rig.garageBandImport(['../../etc/passwd'])");
+  out.badType = await js("window.rig.garageBandImport('x')");
+  const keys = ((out.scan && out.scan.instruments) || []).filter((i) => i.found).map((i) => i.key);
+  out.start = await js(`window.rig.garageBandImport(${JSON.stringify(keys)})`);
+  const t0 = Date.now();
+  for (;;) {
+    out.final = await js('window.rig.garageBandStatus()');
+    if (!out.final || out.final.state !== 'importing' || Date.now() - t0 > 60000) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  out.pushed = await js('window.__gb.map((s) => s.state)');
+  out.rescan = await js('window.rig.rescanUserSamples()');
+  out.manifestIds = await js("fetch('/api/user-samples/manifest.json').then((r) => r.json())"
+    + '.then((j) => j.instruments.map((i) => i.id))');
+  out.outDir = userSamplesHome();
+  out.written = fs.existsSync(out.outDir) ? fs.readdirSync(out.outDir).sort() : [];
+  return out;
+}
+
 // ---------------------------------------------------------------------------------------------
 app.on('window-all-closed', () => app.quit());
 
@@ -1893,6 +1978,7 @@ app.on('will-quit', (e) => {
   // v11-electron: give the combinations back to the Mac (Electron does this too; be explicit)
   hotkeys.dispose();
   if (updater) updater.dispose();
+  if (gbImporter) gbImporter.dispose();
   if (app.isReady()) globalShortcut.unregisterAll();
   if (powerBlockId !== null && powerSaveBlocker.isStarted(powerBlockId)) powerSaveBlocker.stop(powerBlockId);
   if (streams.size || server) {

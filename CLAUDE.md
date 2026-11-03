@@ -96,12 +96,15 @@ run them one at a time; `run-all` does that for you.
   keep attribution and share-alike.
 - My Samples:
   - Scan roots are `<repo>/user-samples/` and `~/Music/Worship Rig/Samples/`; `RIG_USER_SAMPLES` overrides them.
-  - The server code is in `server.js` (`scanUserSamples`). The importer is `tools/import-garageband.mjs`, documented
-    in `docs/garageband-import.md`.
+  - The server code is in `server.js` (`scanUserSamples`). The importer is `tools/import-garageband.mjs` (CLI) over
+    `tools/exs/importer.mjs`, documented in `docs/garageband-import.md`. The Mac app runs the same module from
+    Settings › My Samples (`importer-host.js` → utilityProcess `tools/exs/import-worker.mjs`; those `tools/exs`
+    modules are packaged, the rest of `tools/` is not).
   - **GarageBand/Logic conversions are Apple-licensed personal content. Never commit them, package them or copy them
     into `app/`.** `.gitignore` and electron-builder `files` both exclude `user-samples/`.
 - Electron env overrides for tests: `RIG_APP_DIR`, `RIG_PORT`, `RIG_PADS_DIR`, `RIG_USER_DATA`,
-  `RIG_RECORDINGS_DIR`, `RIG_USER_SAMPLES`, `RIG_SELFTEST=1`, `RIG_DEBUG_PERMS=1`.
+  `RIG_RECORDINGS_DIR`, `RIG_USER_SAMPLES`, `RIG_GB_LIBRARY` (importer library roots), `RIG_SELFTEST=1`,
+  `RIG_DEBUG_PERMS=1`.
 
 ## Known caveats
 

@@ -1,5 +1,5 @@
-// OWNER: song agent (views/edit/CONTRACT.md §6). The Song panel (block 'song', no tab): Easy Transpose, tempo and
-// notes. The header's KEY / BPM / Notes chips open it with {focus:'key'|'tempo'|'notes'} (CONTRACT §1 placement).
+// OWNER: song agent (views/edit/CONTRACT.md §6). The Song panel (block 'song', no tab): Easy Transpose, tempo (+ the
+// song's scenes, v11-scenes) and notes. The header's KEY / BPM / Notes chips open it with {focus:'key'|'tempo'|'notes'} (CONTRACT §1 placement).
 // Behaviour copied from views/edit.js (keySelect, trSentence, tempo field, Tap, debounced notes) so the ui-edit tests
 // "Easy Transpose", "tap tempo", "song name + notes" and "round2-ui #3" port 1:1.
 import { keyName, mod12 } from '../../../shared/music.js';
@@ -8,6 +8,8 @@ import { TIME_SIGS, DEFAULT_TIME_SIG, clickSettingsOf } from '../../../shared/cl
 import {
   h, setText, createBinder, bpmFromTaps, semitones, MINUS, SONG_BLOCK, changedDot, changeText,
 } from '../lib.js';
+import { say } from '../../components/voice.js';
+import { scenesOf } from '../../../shared/scenes.js';
 
 /** Song-relative paths of the key (the KEY chip dot and the title's key words). */
 export const KEY_RELS = Object.freeze(['hearIn', 'playIn', 'transposeOctave', 'minor']);
@@ -216,11 +218,59 @@ export default {
       h('div.ev2-song-row', {}, field('After the count-in', after.el)),
       field('Level', level.el, 'ev2-song-clicklevel'),
     );
+    // ---- Scenes (v11-scenes): saved levels to step through live. Actions go through controller.scenes (it captures
+    // what plays, wheel included); the list is the song's `scenes` field. Under the tempo (the column with room left),
+    // so the panel keeps its 3 columns; one compact row per scene.
+    const scenesList = h('div.ev2-song-scenes', { 'data-testid': 'edit-scenes' });
+    const scenesHint = h('p.ev2-col-sub.ev2-song-sceneshint');
+    const scenesSec = h('div.ev2-song-scenesec', { dataset: { sec: 'song-scenes' } },
+      h('h3.ev2-cap', { text: 'Scenes' }), scenesHint, scenesList);
+    const sc = ctx.controller && ctx.controller.scenes;
+    const renderScenes = () => {
+      const s = ctx.song();
+      const list = scenesOf(s);
+      const st = sc ? sc.state() : { id: null, n: null };
+      const playing = s && st.id === s.id ? st.n : null;
+      const live = !!(sc && s && st.id === s.id); // the song that plays (one still loading has no scenes yet)
+      setText(scenesHint, say('sceneEditSub'));
+      scenesHint.title = say('sceneEditHint');
+      const rows = list.map((_, n) => {
+        const on = playing === n;
+        const btn = (cls, text, title, run) => {
+          const b = h(`button.ev2-btn.sm.ghost.${cls}`, { type: 'button', text, title, disabled: !live });
+          b.addEventListener('click', run);
+          return b;
+        };
+        // the playing one: accent label + Stop (no extra word: the column is narrow)
+        return h('div.ev2-song-scene', { class: on ? 'on' : '', dataset: { n: String(n) },
+          title: on ? `${say('sceneLabel', { n: n + 1 })} · ${say('scenePlaying')}` : '' },
+          h('b', { text: say('sceneLabel', { n: n + 1 }) }),
+          btn('ev2-song-sceneplay', on ? 'Stop' : 'Play', on ? say('sceneBack') : 'Play this scene now (it glides)',
+            () => sc.go(on ? null : n)),
+          btn('ev2-song-scenesave', 'Save', say('sceneSaveTitle', { n: n + 1 }), () => sc.save(n)),
+          btn('ev2-song-scenedel', '×', `Delete scene ${n + 1}`, () => sc.remove(n)));
+      });
+      const max = sc ? sc.max : 3;
+      if (list.length < max) {
+        const add = h('button.ev2-btn.sm.ev2-song-sceneadd', {
+          type: 'button', disabled: !live, text: `${say('sceneSaveCap')} ${list.length + 1}`,
+          title: say('sceneSaveTitle', { n: list.length + 1 }),
+        });
+        add.addEventListener('click', () => sc.save(list.length));
+        rows.push(add);
+      }
+      if (!list.length) rows.unshift(h('span.ev2-song-scenesnone', { text: say('sceneNone') }));
+      scenesList.replaceChildren(...rows);
+    };
+    binder.fn(['scenes'], renderScenes);
+    if (sc) ctx.listen(ctx.controller, 'scene', renderScenes);
+    if (ctx.controller) ctx.listen(ctx.controller, 'song', renderScenes);
     const tempoCol = h('div.ev2-col.ev2-song-col', { dataset: { sec: 'song-tempo' } },
       h('h3.ev2-cap', { text: 'Tempo' }),
       h('p.ev2-col-sub', { text: 'Synced echoes and the click follow it. Tap 2–4 times in time.' }),
       h('div.ev2-song-row.mid', {},
         h('label.ev2-song-tempowrap', {}, tempoInput, h('span.ev2-song-unit', { text: 'BPM' })), tapBtn, clearBtn),
+      scenesSec,
     );
 
     // ---- Notes (song-notes): song-bound, debounced 500 ms, flushed on blur and before the song changes

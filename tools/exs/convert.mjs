@@ -71,25 +71,30 @@ export function ffmpegArgs(src, dst, o) {
   return ['-hide_banner', '-v', 'error', '-nostdin', '-y', '-i', src, ...filter, '-map_metadata', '-1', ...codec, ...rate, dst];
 }
 
-function runAsync(bin, args, timeoutMs = 170000) {
+/**
+ * v11-importer: `signal` (AbortSignal) kills the encoder at once (SIGKILL), so Cancel in the app never waits for a long
+ * consolidated-CAF read; the caller's .part file is removed by convertWithFfmpeg as for any failed run.
+ */
+function runAsync(bin, args, timeoutMs = 170000, signal = null) {
   return new Promise((resolve) => {
     let err = '';
     let done = false;
+    if (signal?.aborted) return resolve({ ok: false, msg: 'cancelled', cancelled: true });
     const p = spawn(bin, args, { stdio: ['ignore', 'ignore', 'pipe'] });
-    const t = setTimeout(() => {
+    const kill = () => {
       if (!done) p.kill('SIGKILL');
-    }, timeoutMs);
+    };
+    const t = setTimeout(kill, timeoutMs);
+    signal?.addEventListener('abort', kill, { once: true });
+    const end = (r) => {
+      done = true;
+      clearTimeout(t);
+      signal?.removeEventListener('abort', kill);
+      resolve(signal?.aborted ? { ok: false, msg: 'cancelled', cancelled: true } : r);
+    };
     p.stderr.on('data', (d) => (err += d));
-    p.on('error', (e) => {
-      done = true;
-      clearTimeout(t);
-      resolve({ ok: false, msg: e.message });
-    });
-    p.on('close', (code) => {
-      done = true;
-      clearTimeout(t);
-      resolve(code === 0 ? { ok: true } : { ok: false, msg: err.trim().split('\n').find((l) => l.trim()) || `exit ${code}` });
-    });
+    p.on('error', (e) => end({ ok: false, msg: e.message }));
+    p.on('close', (code) => end(code === 0 ? { ok: true } : { ok: false, msg: err.trim().split('\n').find((l) => l.trim()) || `exit ${code}` }));
   });
 }
 
@@ -101,11 +106,14 @@ const nonEmpty = (f) => {
   }
 };
 
-/** ffmpeg conversion into dst (written via dst.part + rename, so a killed run never leaves a truncated file). */
+/**
+ * ffmpeg conversion into dst (written via dst.part + rename, so a killed run never leaves a truncated file).
+ * `o.signal` (v11-importer): an AbortSignal that kills the running ffmpeg.
+ */
 export async function convertWithFfmpeg(src, dst, o) {
   const part = `${dst}.part${path.extname(dst)}`;
   fs.rmSync(part, { force: true });
-  const r = await runAsync(FFMPEG(), ffmpegArgs(src, part, o));
+  const r = await runAsync(FFMPEG(), ffmpegArgs(src, part, o), undefined, o.signal);
   if (!r.ok || !nonEmpty(part)) {
     fs.rmSync(part, { force: true });
     return r.ok ? { ok: false, msg: 'ffmpeg wrote an empty file' } : r;
@@ -187,13 +195,18 @@ export async function convertFile(encoder, src, dst, o, tmpDir, cache) {
   return convertWithAfconvert(src, dst, o, tmpDir, cache);
 }
 
-/** Run async jobs with at most `n` in flight. */
-export async function pool(items, n, fn) {
+/**
+ * Run async jobs with at most `n` in flight. `signal` (v11-importer) stops handing out new ones; with a signal every
+ * job is followed by a macrotask turn, because the afconvert path is synchronous (spawnSync) and would otherwise never
+ * let the worker read its "cancel" message until the whole instrument was done.
+ */
+export async function pool(items, n, fn, { signal } = {}) {
   let i = 0;
   const workers = Array.from({ length: Math.max(1, Math.min(n, items.length)) }, async () => {
-    while (i < items.length) {
+    while (i < items.length && !signal?.aborted) {
       const k = i++;
       await fn(items[k], k);
+      if (signal) await new Promise((r) => setImmediate(r));
     }
   });
   await Promise.all(workers);

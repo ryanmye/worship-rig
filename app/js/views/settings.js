@@ -10,6 +10,7 @@ import { latencyHint } from './components/latencyHint.js';
 import { mountHotkeys, mountUpdates } from './settings-mac.js';
 import { mountKeyboards } from './settings-keyboards.js';
 import { clickSettingsOf } from '../shared/click-math.js';
+import { mountGarageBandImport } from './settings-import.js';
 
 const C = await loadComponents();
 
@@ -27,6 +28,8 @@ export const LEARN_NAMES = Object.freeze({
   panic: 'Panic (all notes off)',
   fadeOutAll: 'Fade out all',
   swell: 'Swell',
+  nextScene: 'Next scene', // v11-scenes
+  prevScene: 'Previous scene',
 });
 /** Rows of the Learn table: params.LEARNABLE, plus 'swell' (the controller accepts it; see CONTRACT_CHANGES shell #4). */
 export const LEARN_ROWS = Object.freeze([...LEARNABLE, ...(LEARNABLE.includes('swell') ? [] : ['swell'])]);
@@ -272,8 +275,11 @@ export function mountSettings(el, ctx) {
   // Esc closes wherever focus is (it may have fallen to <body>); preventDefault keeps the controller from
   // treating it as Panic. main.js has its own capture listener; whichever runs first closes, the other no-ops.
   listen(window, 'keydown', (e) => {
-    // v11-electron: while a global shortcut is being recorded, Esc cancels the recording (settings-mac.js)
-    if (!isOpen || e.key !== 'Escape' || document.documentElement.hasAttribute('data-hotkey-capture')) return;
+    // v11-electron: while a global shortcut is being recorded, Esc cancels the recording (settings-mac.js);
+    // v11-importer: while the GarageBand import dialog is open, Esc closes that dialog only (settings-import.js)
+    const html = document.documentElement;
+    if (!isOpen || e.key !== 'Escape' || html.hasAttribute('data-hotkey-capture')) return;
+    if (html.hasAttribute('data-gb-import')) return;
     e.preventDefault();
     requestClose();
   }, true);
@@ -986,8 +992,13 @@ export function mountSettings(el, ctx) {
       console.warn('[settings] rescan user samples', err);
       toast('The My Samples folder could not be scanned.', 'error');
     }
-    renderSamples();
+    await renderSamples();
   }
+  // v11-importer (Mac app only): "Import from GarageBand / Logic…" converts instruments in a worker, then Rescans
+  const gbImport = rig && typeof rig.garageBandScan === 'function' && typeof rig.garageBandImport === 'function'
+    ? mountGarageBandImport({ rig, h, btn, rescan: () => rescanSamples(), host: dialog })
+    : null;
+  if (gbImport) cleanups.push(() => gbImport.destroy());
   async function renderAbout() {
     const rows = [];
     let info = null;
@@ -1034,14 +1045,20 @@ export function mountSettings(el, ctx) {
       samplesNote,
       samplesBtns,
       samplesStatus,
+      gbImport ? h('div.st-inline.st-gb-entry', {}, gbImport.button) : null,
+      gbImport ? gbImport.line : null,
       h('details.st-howto', {},
-        h('summary', { text: 'Bringing GarageBand instruments over' }),
+        h('summary', { text: gbImport ? 'More about GarageBand instruments' : 'Bringing GarageBand instruments over' }),
         samplesPath,
-        h('ol.st-howto-steps', {},
-          h('li', {}, 'On the Mac, open Terminal in the Worship Rig folder and run ', h('code', { text: 'node tools/import-garageband.mjs --list' }), ' to see what GarageBand has installed.'),
-          h('li', {}, 'Import one, e.g. ', h('code', { text: 'node tools/import-garageband.mjs --import "Steinway"' }), '. It is copied into the My Samples folder.'),
-          h('li', { text: 'Press Rescan (or restart Worship Rig). It shows up under “My Samples” in the instrument picker.' }),
-        ),
+        // v11-importer: the Mac app has the button above; the Chrome version keeps the Terminal steps
+        gbImport
+          ? h('p.st-hint', {}, 'Import from GarageBand / Logic… converts them into the My Samples folder. The same '
+            + 'tool also runs in Terminal: ', h('code', { text: 'node tools/import-garageband.mjs --list' }), '.')
+          : h('ol.st-howto-steps', {},
+            h('li', {}, 'On the Mac, open Terminal in the Worship Rig folder and run ', h('code', { text: 'node tools/import-garageband.mjs --list' }), ' to see what GarageBand has installed.'),
+            h('li', {}, 'Import one, e.g. ', h('code', { text: 'node tools/import-garageband.mjs --import "Steinway"' }), '. It is copied into the My Samples folder.'),
+            h('li', { text: 'Press Rescan (or restart Worship Rig). It shows up under “My Samples” in the instrument picker.' }),
+          ),
         h('p.st-hint', { text: 'For your own playing only — Apple’s sounds must not be shared or copied to other people.' }),
         docLink,
       ),
@@ -1418,6 +1435,7 @@ export function mountSettings(el, ctx) {
     statsTimer = null;
     stopPedalTest();
     pedalIdle();
+    if (gbImport) gbImport.close();
     if (hotkeys) hotkeys.cancel();
     keyboards.stop();
     if (learningId) {

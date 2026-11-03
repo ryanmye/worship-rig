@@ -39,7 +39,7 @@ app/js/views/edit/
   panels/drone.js  + drone.css         block 'drone'
   panels/effects.js + effects.css      block 'effects'
   panels/master.js + master.css        block 'master'             (incl. Wheels & pedal)
-  panels/song.js   (+ song-header.css) block 'song'               (Easy Transpose, tempo, notes)
+  panels/song.js   (+ song-header.css) block 'song'               (Easy Transpose, tempo + scenes, notes)
   panels/song-header.js + song-header.css   region 'head'
   panels/setlist.js + setlist.css      region 'left'
   panels/bottom.js + bottom.css        region 'bottom'
@@ -556,6 +556,11 @@ builds the same markup for in-body lines (the Effects tab's three lines).
   `shared/click-math.js` TIME_SIGS; 4/4 writes null = absent), and for every song (`settings.click` through
   `store.setClick`) Count-in Off / 1 bar / 2 bars, After the count-in Keep clicking / Go quiet (disabled while the
   count-in is Off) and the Level fader. Perform's Click chip starts it; the panel never calls the engine.
+- **Scenes** `song-scenes` (v11-scenes, under the tempo): one row per saved scene ("Scene n" · Play/Stop · Save · ×)
+  and "Save as scene n" while there are fewer than 3; "No scenes yet." otherwise. Every button is an action through
+  `ctx.controller.scenes` (go / save / remove: the controller captures what plays, wheel included); the list follows
+  the song's `scenes` field (`binder.fn(['scenes'])`) and the controller's `scene` / `song` events. Disabled for a
+  song still loading.
 - **Notes** `song-notes`: textarea, song-bound, max 10000.
   - Debounced 500 ms; flushed on blur and in `ctx.onLeaveSong`.
   - Placeholder "Notes for this song (shown in Perform)".

@@ -111,6 +111,10 @@ async function phase2(rig, saved) {
 async function hideOnClose(rig) {
   const missing = ['getMenuBarState', 'setMenuBarMode'].filter((m) => typeof rig[m] !== 'function');
   if (missing.length) return { skipped: `window.rig.${missing.join(' / ')} absent (L-14 menu-bar hooks not landed)` };
+  // CI-2: hide-on-close is macOS only (main.js IS_MAC). Elsewhere window.close() really closes the last window and
+  // the app quits before main prints the self-test report, which failed every Electron boot test on Linux.
+  const info = await rig.getInfo();
+  if (info && info.platform !== 'darwin') return { skipped: `hide-on-close is macOS only (platform ${info.platform})` };
   const ids = [];
   rig.onMenu((id) => ids.push(id));
   const before = await rig.getMenuBarState();

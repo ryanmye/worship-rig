@@ -16,6 +16,7 @@ export const BUS_THROTTLE_MS = 250;
 export const COMMAND_TYPES = Object.freeze([
   'hello', 'selectMode', 'nextMode', 'prevMode', 'panic', 'fadeOutAll', 'master', 'droneToggle', 'droneKey',
   'lowResource', 'openMain', 'record',
+  'nextScene', 'prevScene', // v11-scenes: step the current song's scenes (no payload)
 ]);
 /**
  * 'asleep' (lowres2): suspended on purpose after settings.audioSleepSec idle in low-resource mode (lowres2-scope);
@@ -59,6 +60,10 @@ export function stateError(m) {
   if (!isBool(m.windowVisible)) return 'windowVisible';
   if (!isNumOrNull(m.memoryMB)) return 'memoryMB';
   if (m.theme !== undefined && !isId(m.theme)) return 'theme';
+  // v11-scenes (optional, still v1): present only while the current song has scenes; n = the playing one (0-based,
+  // null = the song's own levels)
+  if (m.scene !== undefined && !(isObj(m.scene) && Number.isInteger(m.scene.count) && m.scene.count > 0
+    && (m.scene.n === null || (isIndex(m.scene.n) && m.scene.n < m.scene.count)))) return 'scene';
   return null;
 }
 

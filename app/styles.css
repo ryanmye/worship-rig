@@ -746,6 +746,20 @@ body[data-view="edit"] .quick-btn { display: none; }
   .click-btn .click-l { display: none; }
   .click-btn .click-bpm { display: inline; }
 }
+/* the same at every width while the scene numbers (v11-scenes) share the row: the BPM line would be squeezed to a
+   few px between the Click chip and SCENE 1 2 3 */
+.song-sub:has(> .scene-dots:not([hidden])):has(> .click-btn:not([hidden])) .song-bpm { display: none; }
+.song-sub:has(> .scene-dots:not([hidden])) .click-btn .click-l { display: none; }
+.song-sub:has(> .scene-dots:not([hidden])) .click-btn .click-bpm { display: inline; }
+/* ≤ 1340 px the row also holds the Notes button: with the Click chip and the scene numbers all there, the SCENE
+   caption goes (the numbers keep their title) and Notes is its icon (the text stays for assistive tech), so nothing
+   clips at 1280 or 1024 */
+@media (max-width: 1340px) {
+  .song-sub:has(> .scene-dots:not([hidden])):has(> .click-btn:not([hidden])) .scene-dots > .song-key-cap {
+    display: none;
+  }
+  .song-sub:has(> .scene-dots:not([hidden])):has(> .click-btn:not([hidden])) .notes-btn { font-size: 0; gap: 0; }
+}
 .notes-btn.has-notes::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-left: 4px; }
 
 /* −  0  + stay whole down to the 156 px column at 1280 (44 px buttons, the side padding gives way) */
@@ -1279,3 +1293,27 @@ body[data-view="edit"] .quick-btn { display: none; }
 .qs-theme:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
 .qs-theme:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .qs-theme:disabled { opacity: .5; cursor: default; }
+
+/* v11-scenes: Perform's scene numbers (KEY row, only for a song with scenes) and Quick › This song "Save as scene". */
+.scene-dots { display: inline-flex; align-items: center; gap: 6px; flex: none; margin-left: auto; }
+.scene-dots[hidden] { display: none; }
+.scene-dots .song-key-cap { margin-right: 2px; }
+.scene-dot { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line-2, var(--line));
+  background: var(--panel-2); color: var(--muted); font: inherit; font-size: 15px; font-weight: 800; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.scene-dot.on { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.scene-dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scene-dots:not([hidden]) ~ .notes-btn { margin-left: 0; }
+/* the caption row keeps its text height (the sheet's rows are measured to the pixel, v11-polish T4): the pills hang
+   into the row gap instead of growing it */
+.qs-scenes { margin-left: auto; flex: none; align-self: center; display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; height: 14px; }
+.qs-scenes[hidden] { display: none; }
+.qs-st:has(.qs-scenes:not([hidden])) .cap { flex: none; white-space: nowrap; } /* the song's name gives way */
+.qs-scenes-cap { margin-right: 2px; }
+.qs-scene { min-width: 26px; padding: 1px 8px; line-height: 1.2; border: 1px solid var(--line-2, var(--line)); border-radius: 999px;
+  background: transparent; color: var(--muted); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.qs-scene.saved { color: var(--text); }
+.qs-scene.on { border-color: var(--accent); color: var(--accent); }
+.qs-scene:hover { color: var(--text); border-color: var(--accent); }
+.qs-scene:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

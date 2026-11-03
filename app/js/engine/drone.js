@@ -10,7 +10,7 @@ import { rampTo, setNow } from '../shared/automation.js';
 import { chordName } from '../shared/chords.js';
 import { noteToFreq, relativeMajor, relativeMinor, mod12, keyName } from '../shared/music.js';
 import { detectKeyFromName } from '../shared/keydetect.js';
-import { equalPowerFade, isOfflineContext, linFrom } from './fx.js';
+import { equalPowerFade, isOfflineContext, linFrom, trackedMove } from './fx.js';
 import {
   renderDroneLoop, FREEZE_LOOP_SEC, FREEZE_SWAP_SEC, FREEZE_THAW_LEAD_SEC, FREEZE_DEBOUNCE_SEC, FREEZE_WET_TOL_DB,
 } from './drone-freeze.js';
@@ -264,14 +264,23 @@ export class Drone {
   }
 
   // ----- params ---------------------------------------------------------------------------------------------------
-  setParam(key, value, when) {
+  /**
+   * @param {string} key
+   * @param {number} value
+   * @param {number} [when]
+   * @param {number} [glide]  v11-scenes: 'gain' only, seconds of a linear glide from where the level is at `when`
+   */
+  setParam(key, value, when, glide = 0) {
     const t = this._t(when);
     const v = Number(value);
     if (!Number.isFinite(v) || !(key in this.p)) return false;
     const prevBright = this.p.brightness;
+    const prevGain = clamp(this.p.gain, 0, 2);
     this.p[key] = v;
     if (key === 'gain') {
-      rampTo(this.level.gain, clamp(v, 0, 2), t, 0.015);
+      // v11-scenes: every level write is recorded (fx.trackedMove), so a scene glide starts where the level is
+      const g = glide > 0 ? glide : 0;
+      this._levelMove = trackedMove(this.level.gain, this._levelMove, clamp(v, 0, 2), t, g, prevGain);
       this._gainChanged(t);
     }
     else if (key === 'width') this._applyWidth(t);

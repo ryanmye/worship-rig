@@ -40,6 +40,10 @@ import { detectKeyFromName } from './shared/keydetect.js';
 import { createBus, commandError } from './shared/bus.js';
 import { clickSettingsOf } from './shared/click-math.js';
 import { createMidiClock } from './midi-clock.js';
+import {
+  SCENE_MAX, SCENE_GLIDE_SEC, scenesOf, applyScene, captureScene, levelsOf, levelDiff, stepScene, withScene,
+  withoutScene, tweakScene,
+} from './shared/scenes.js';
 
 /** Menu-bar modes (docs/menubar-mode.md): the popover shows at most this many. */
 export const MENU_BAR_MAX_MODES = 6;
@@ -56,7 +60,8 @@ export const KEY_MAP = Object.freeze({
   KeyK: 12, KeyO: 13, KeyL: 14, KeyP: 15, Semicolon: 16,
 });
 /** Momentary learnable actions (note-on or CC ≥ 64). */
-export const BUTTON_CONTROLS = Object.freeze(['nextSong', 'prevSong', 'panic', 'fadeOutAll', 'swell']);
+export const BUTTON_CONTROLS = Object.freeze(['nextSong', 'prevSong', 'panic', 'fadeOutAll', 'swell', 'nextScene',
+  'prevScene']);
 /** Web Lock name for the single-instance guard (H2). */
 export const INSTANCE_LOCK = 'rig-instance';
 export const SECONDARY_MESSAGE = 'Another Worship Rig window is open — this one is read-only and muted. Close the other window to play here.';
@@ -398,11 +403,13 @@ export function createController(o) {
       reprepare(next.id);
       return;
     }
-    if (applyParamDiff(prev, next) === false) {
+    const a = live(prev); // v11-scenes: diff what the engine plays (the playing scene on top of the song)
+    const b = live(next);
+    if (applyParamDiff(a, b) === false) {
       reprepare(next.id, true);
       return;
     }
-    applySongLevel(next, prev, false);
+    applySongLevel(b, a, false);
     applied = next;
   }
 
@@ -422,7 +429,7 @@ export function createController(o) {
     setStatus({ loading: true });
     let token;
     try {
-      token = await preparePatch(song);
+      token = await preparePatch(live(song)); // v11-scenes: a new instrument mid-scene keeps the scene's levels
     } catch (err) {
       if (my === seq) {
         repreparing = null;
@@ -443,7 +450,7 @@ export function createController(o) {
     const prev = applied;
     applied = song;
     appliedId = id;
-    applySongLevel(song, prev, false);
+    applySongLevel(live(song), live(prev), false);
     catchUp(song);
     setStatus({ loading: false });
     return true;
@@ -510,6 +517,7 @@ export function createController(o) {
     appliedId = id;
     appliedIndex = store.currentIndex();
     pickups.clear();
+    sceneState = { id, n: null, baseWheel: null, tweak: null }; // v11-scenes: every song starts on its own levels
     applySongLevel(song, prev, true);
     catchUp(song);
     setStatus({ loading: false, songId: id });
@@ -543,9 +551,145 @@ export function createController(o) {
     // v11-metronome: timeSig is optional, so "absent in the snapshot" means 4/4 again (remove it)
     const cur = store.getSong(id);
     if (cur && cur.timeSig !== snap.timeSig && store.set(`songs.${id}.timeSig`, snap.timeSig ?? null)) changed = true;
+    if (sceneState.n !== null && sceneState.id === id) goScene(null); // v11-scenes: back to the song's own levels
     if (changed) emit('action', { type: 'revertSong', id });
     return changed;
   }
+
+  // ---- v11-scenes: saved level/wheel states on top of the song (shared/scenes.js). Which one plays is transient.
+  // n: index into song.scenes (null = the song's own levels); tweak: live level moves on top of the playing scene
+  // (shared/scenes.js tweakScene), dropped at the next scene change; baseWheel: the wheel when the own levels were left
+  let sceneState = { id: null, n: null, baseWheel: null, tweak: null };
+  /** The playing scene of this song (null = its own levels). */
+  const sceneFor = (song) => (song && sceneState.n !== null && sceneState.id === song.id
+    ? scenesOf(song)[sceneState.n] || null : null);
+  /** The song as the engine plays it: the playing scene and its live moves on top. */
+  const live = (song) => {
+    const sc = sceneFor(song);
+    return sc ? applyScene(applyScene(song, sc), sceneState.tweak) : song;
+  };
+  const wheelNow = () => {
+    const w = optional('wheelValues');
+    return w && Number.isFinite(w.mod) ? w.mod : wheelState.mod;
+  };
+  const sceneInfo = () => {
+    const song = appliedId ? store.getSong(appliedId) : null;
+    const count = scenesOf(song).length;
+    const n = song && sceneState.id === song.id && sceneState.n !== null && sceneState.n < count ? sceneState.n : null;
+    return { id: song ? song.id : null, n, count };
+  };
+  /** Leaving the song's own levels: remember its wheel, so stepping back puts the wheel where it was. */
+  const leaveBase = () => {
+    if (sceneState.id === appliedId && sceneState.n !== null) return;
+    sceneState = { id: appliedId, n: null, baseWheel: wheelNow(), tweak: null };
+  };
+  /**
+   * Play scene `n` of the applied song (null = its own levels): every level that differs glides SCENE_GLIDE_SEC from
+   * where it is (engine setParam {glide}); held notes, the drone and the song switch path are untouched.
+   * @param {number|null} n
+   * @returns {boolean} false when there is no such scene (or no song is playing yet)
+   */
+  function goScene(n) {
+    if (!applied || targetId !== appliedId) return false; // a song still loading: its scenes start after the commit
+    const cur = store.getSong(appliedId);
+    if (cur && cur !== applied) applyDiff(applied, cur); // pending edits first, under the scene that played them
+    const list = scenesOf(applied);
+    if (n !== null && !(Number.isInteger(n) && n >= 0 && n < list.length)) return false;
+    const was = sceneFor(applied);
+    const from = levelsOf(live(applied));
+    leaveBase();
+    sceneState = { ...sceneState, n, tweak: null };
+    const to = levelsOf(live(applied));
+    for (const [path, v] of levelDiff(from, to)) call('setParam', path, v, { glide: SCENE_GLIDE_SEC });
+    const sc = n === null ? null : list[n];
+    const wheel = sc ? sc.wheel : was && Number.isFinite(was.wheel) ? sceneState.baseWheel : undefined;
+    if (Number.isFinite(wheel) && Math.abs(wheel - (wheelNow() ?? -1)) > 1e-4) {
+      virtualWheel = wheel;
+      noteWheel('virtual', wheel);
+      call('setWheel', 'virtual', wheel, { glide: SCENE_GLIDE_SEC });
+    }
+    emit('scene', sceneInfo());
+    if (bus) publishState();
+    return true;
+  }
+  /** Next / previous scene (one footswitch cycles own → 1 → 2 → 3 → 1; previous walks back to the own levels). */
+  const stepSceneBy = (dir) => {
+    const i = sceneInfo();
+    return i.count ? goScene(stepScene(i.n, i.count, dir)) : false;
+  };
+  /**
+   * Save what plays now (levels, mutes, drone level, the wheel when routed) as scene `n` of the current song: a new
+   * scene (n = the count) or over an existing one. That scene then plays.
+   * @param {number} n 0-based, ≤ the count, < SCENE_MAX
+   * @returns {boolean}
+   */
+  function saveScene(n) {
+    if (!applied || targetId !== appliedId) return false;
+    const cur = store.getSong(appliedId);
+    if (cur !== applied) applyDiff(applied, cur); // pending edits first, under the scene that played them
+    const next = withScene(scenesOf(cur), n, captureScene(live(cur), { wheel: wheelNow() }));
+    if (!next) return false;
+    store.set(`songs.${appliedId}.scenes`, next); // false when unchanged (the same scene saved again)
+    const saved = store.getSong(appliedId);
+    if (!scenesOf(saved)[n]) return false; // a read-only store
+    leaveBase();
+    sceneState = { ...sceneState, n, tweak: null };
+    if (applied === cur) applied = saved; // only `scenes` changed, and it now plays exactly what was heard
+    emit('scene', sceneInfo());
+    if (bus) publishState();
+    return true;
+  }
+  /**
+   * A level move while a scene plays (Perform's faders / ON tiles, a learned MIDI fader): it is heard at once and held
+   * on top of the scene (tweakScene); the song's own levels and the saved scene stay. Views call this first and write
+   * the store only when it returns false (no scene playing, or a level the scene doesn't hold).
+   * @param {string} path 'slots.<i>.gain' | 'slots.<i>.muted' | 'drone.gain'
+   * @param {number|boolean} value
+   * @returns {boolean} true when the playing scene took it
+   */
+  function adjustScene(path, value) {
+    const song = appliedId && targetId === appliedId ? store.getSong(appliedId) : null;
+    const sc = sceneFor(song);
+    if (!sc) return false;
+    const m = /^slots\.(\d)\./.exec(path);
+    if (m ? !sc.slots[Number(m[1])] : path === 'drone.gain' ? !sc.drone : true) return false; // the song's own level
+    if (song !== applied) applyDiff(applied, song);
+    const from = levelsOf(live(applied));
+    const tweak = tweakScene(sceneState.tweak, live(applied), path, value);
+    if (!tweak) return false;
+    sceneState = { ...sceneState, tweak };
+    for (const [p, v] of levelDiff(from, levelsOf(live(applied)))) call('setParam', p, v);
+    emit('scene', sceneInfo());
+    return true;
+  }
+  /** Delete scene `n` (the playing one glides back to the song's own levels first). @returns {boolean} */
+  function removeScene(n) {
+    const song = appliedId ? store.getSong(appliedId) : null;
+    if (!song || !(n >= 0 && n < scenesOf(song).length)) return false;
+    const i = sceneInfo();
+    if (i.n === n) goScene(null); // (it also applies pending edits)
+    else if (song !== applied) applyDiff(applied, song);
+    const before = applied;
+    store.set(`songs.${song.id}.scenes`, withoutScene(scenesOf(song), n));
+    if (i.n !== null && i.n > n) sceneState = { ...sceneState, n: i.n - 1 };
+    if (before === song) applied = store.getSong(song.id); // only `scenes` changed; the same scene still plays
+    emit('scene', sceneInfo());
+    if (bus) publishState();
+    return true;
+  }
+  const scenes = Object.freeze({
+    /** @returns {{id:string|null, n:number|null, count:number}} the playing song, its playing scene, its count */
+    state: sceneInfo,
+    /** The song as it sounds (its playing scene on top): Perform's faders show this. */
+    view: (song) => live(song),
+    go: goScene,
+    adjust: adjustScene,
+    next: () => stepSceneBy(1),
+    prev: () => stepSceneBy(-1),
+    save: saveScene,
+    remove: removeScene,
+    max: SCENE_MAX,
+  });
 
   // ---- decoded-sample memory policy (morning-prep; integration-2 round 2 #3)
   let memMode = null; // 'library' | 'setlist' | 'large-set'
@@ -1022,6 +1166,8 @@ export function createController(o) {
     else if (id === 'prevSong') prevSong();
     else if (id === 'panic') panic();
     else if (id === 'fadeOutAll') fadeOutAll();
+    else if (id === 'nextScene') stepSceneBy(1); // v11-scenes: a learned footswitch
+    else if (id === 'prevScene') stepSceneBy(-1);
   }
 
   /**
@@ -1042,7 +1188,7 @@ export function createController(o) {
   /** Hardware fader with pickup: ignored until it crosses the stored value (REVIEW 2.1). */
   function learnedFader(id, value01) {
     if (!isValidPath(id)) return;
-    const cur = songParam(store.currentSong(), id);
+    const cur = songParam(live(store.currentSong()), id); // v11-scenes: pick up the level as it sounds
     if (cur === undefined || cur === null) return;
     const pos = inverseTaper(cur);
     let pu = pickups.get(id);
@@ -1053,7 +1199,7 @@ export function createController(o) {
       else if (pu.last !== null && (pu.last - pos) * (value01 - pos) <= 0) pu.picked = true;
     }
     pu.last = value01;
-    if (pu.picked) store.set(id, faderTaper(value01));
+    if (pu.picked && !adjustScene(id, faderTaper(value01))) store.set(id, faderTaper(value01));
   }
 
   const midiHandlers = {
@@ -1532,7 +1678,7 @@ export function createController(o) {
     // a switch still loading applies its own on commit.
     if (applied) {
       if (!droneReapplied) lastDroneKey = null;
-      applySongLevel(applied, null, true, { drone: !droneReapplied });
+      applySongLevel(live(applied), null, true, { drone: !droneReapplied }); // v11-scenes: with the scene
     }
     setAudio(engine && engine.ctx && engine.ctx.state === 'running' ? 'running' : 'suspended');
   }
@@ -1550,7 +1696,7 @@ export function createController(o) {
     if (applied && applied.drone && applied.drone.mode === 'files') {
       lastDroneKey = null;
       droneCall('configure', { ...applied.drone, mode: 'off' });
-      applyDrone(applied, null, true);
+      applyDrone(live(applied), null, true);
       return true;
     }
     return false;
@@ -2561,6 +2707,7 @@ export function createController(o) {
       recording: !!status.recording,
       windowVisible: isWindowVisible(),
       memoryMB: memoryMB(),
+      ...(sceneInfo().count ? { scene: { n: sceneInfo().n, count: sceneInfo().count } } : {}), // v11-scenes
     };
   }
   /**
@@ -2647,6 +2794,12 @@ export function createController(o) {
       case 'openMain':
         emit('openMain', {});
         break;
+      case 'nextScene': // v11-scenes (global hotkeys, popover)
+        stepSceneBy(1);
+        break;
+      case 'prevScene':
+        stepSceneBy(-1);
+        break;
       default:
         break;
     }
@@ -2718,6 +2871,7 @@ export function createController(o) {
     importLatestBackup,
     rescanUserSamples,
     revertSong,
+    scenes,
     learn,
     startClick,
     stopClick,
