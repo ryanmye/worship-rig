@@ -906,8 +906,11 @@ els.settings.addEventListener('click', (e) => {
 window.addEventListener(
   'keydown',
   (e) => {
-    // v11-electron: Esc while recording a global shortcut cancels the recording only (views/settings-mac.js)
-    if (settingsOpen && e.key === 'Escape' && !document.documentElement.hasAttribute('data-hotkey-capture')) {
+    // v11-electron: Esc while recording a global shortcut cancels the recording only (views/settings-mac.js);
+    // v11-importer: Esc in the GarageBand import dialog closes that dialog only (views/settings-import.js)
+    const html = document.documentElement;
+    const owned = html.hasAttribute('data-hotkey-capture') || html.hasAttribute('data-gb-import');
+    if (settingsOpen && e.key === 'Escape' && !owned) {
       e.preventDefault();
       closeSettings();
     }

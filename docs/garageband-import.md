@@ -24,7 +24,27 @@ themselves. (That is a plain-language reading, not legal advice.) So:
   they are not in the repo: they live on the Mac in `~/Music/Worship Rig/exs-fixtures/` (override with
   `RIG_EXS_FIXTURES=<dir>`), and `test/unit/exs/real-files.test.mjs` skips when that folder is missing.
 
-## Quick start
+## In the Mac app
+
+**Settings › My Samples › Import from GarageBand / Logic…** does the same as the command line, without Terminal:
+
+1. It looks through the same places the CLI searches (see "Where it looks") and lists every instrument it finds,
+   with its size once converted (the same estimate as `--list`, after the 120 MB thinning) and a note when its sounds
+   are missing ("Sounds not downloaded", "12 of 60 sounds found") or it is already in My Samples.
+2. Tick the instruments you want (search narrows the list; at most 40 and about 2 GB per run) and press **Import**.
+   Each instrument shows its own progress bar. **Stop** discards the instrument being converted; the finished ones
+   stay. You can close the dialog or Settings meanwhile: a line under the button says how far it is.
+3. When it finishes, My Samples is rescanned by itself, and the new instruments are in the picker under "My Samples".
+
+The packs go to `~/Music/Worship Rig/Samples/` (never into the app). The conversion runs in a separate background
+process at low priority, with at most 4 parallel encoders (two cores fewer than the Mac has), so the app keeps
+playing. Without ffmpeg the dialog says so and uses macOS's afconvert (AAC .m4a, slower); it also finds a Homebrew
+ffmpeg that is not on the app's PATH (`/opt/homebrew/bin`, `/usr/local/bin`). The Chrome version has no import
+button: use the commands below. The code is `tools/exs/importer.mjs` (shared with the CLI),
+`tools/exs/import-worker.mjs` (the worker) and `importer-host.js` (Electron main); see CONTRACT_CHANGES
+"## v11-importer".
+
+## Quick start (Terminal)
 
 ```sh
 cd ~/Projects/worship-rig
@@ -320,7 +340,10 @@ leading silence.
 
 ## Files
 
-- `tools/import-garageband.mjs`: the CLI
+- `tools/import-garageband.mjs`: the CLI (flags, `--list` / `--dump` output, the run loop)
+- `tools/exs/importer.mjs`: discover → resolve → thin → convert → install, shared by the CLI and the Mac app
+  (`scanLibrary` / `importInstruments` add progress, cancel, path checks and limits for the app)
+- `tools/exs/import-worker.mjs`, `importer-host.js`: the app's worker process and its Electron-main side
 - `tools/exs/layout.mjs`: binary layout (offsets, flags, what was verified and how)
 - `tools/exs/parser.mjs`: defensive `.exs` parser
 - `tools/exs/writer.mjs`: synthetic `.exs` writer (`node tools/exs/writer.mjs desc.json out.exs`)

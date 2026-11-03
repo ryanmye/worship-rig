@@ -12,50 +12,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { parseExs, ExsFormatError } from './exs/parser.mjs';
-import { planInstrument, manifestEntry, estimateBytes, sourceKey, zoneSlice, planSegments, autoMaxSeconds, flatName, PIANO_RE, slugify } from './exs/mapping.mjs';
-import { DEFAULT_INSTRUMENT_ROOTS, DEFAULT_SAMPLE_ROOTS, DEFAULT_CACHE, walkFiles, loadOrBuildIndex, resolveSample } from './exs/sample-index.mjs';
-import { hasAfconvert, hasFfmpeg, convertFile, ffmpegArgs, pool, FORMATS } from './exs/convert.mjs';
+import { parseExs } from './exs/parser.mjs';
+import { planInstrument, estimateBytes, flatName, slugify } from './exs/mapping.mjs';
+import { DEFAULT_INSTRUMENT_ROOTS, DEFAULT_SAMPLE_ROOTS, DEFAULT_CACHE, loadOrBuildIndex } from './exs/sample-index.mjs';
 import { HEADER_SIZE } from './exs/layout.mjs';
+import {
+  DEFAULT_OUT, EXIT_INCOMPLETE, checkOutDir, chooseEncoder, discover, resolvePlan, counts, select, dedupe, estOpts,
+  fitToBudget, importOne, mb,
+} from './exs/importer.mjs';
 
-export const DEFAULT_OUT = path.join(os.homedir(), 'Music', 'Worship Rig', 'Samples');
-export const EXIT_INCOMPLETE = 3;
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-
-/** realpath of the longest existing prefix of `p`, plus the rest (so a not-yet-created --out still compares right). */
-function realish(p) {
-  let head = path.resolve(p);
-  const tail = [];
-  for (;;) {
-    try {
-      return path.join(fs.realpathSync(head), ...tail);
-    } catch {
-      const up = path.dirname(head);
-      if (up === head) return path.resolve(p);
-      tail.unshift(path.basename(head));
-      head = up;
-    }
-  }
-}
-
-/**
- * security S7: --out must not be inside <repo>/app (electron-builder would package personal Apple content).
- * @returns {{ error?: string, warn?: string }}
- */
-export function checkOutDir(out, repoRoot = REPO_ROOT) {
-  const o = realish(out);
-  const repo = realish(repoRoot);
-  const inside = (dir) => o === dir || o.startsWith(dir + path.sep);
-  if (inside(path.join(repo, 'app'))) {
-    return { error: `--out ${out} is inside the app folder (${path.join(repo, 'app')}), which is packaged into Worship Rig.app. Imported Apple sounds are personal-use only: use the default (${DEFAULT_OUT}) or <repo>/user-samples.` };
-  }
-  if (inside(repo) && !inside(path.join(repo, 'user-samples'))) {
-    return { warn: `warning: --out ${out} is inside the repo but not under user-samples/ (the only git-ignored place for imports); do not commit it.` };
-  }
-  return {};
-}
+// v11-importer: the work itself lives in tools/exs/importer.mjs (shared with the Mac app's in-app importer); this file
+// is the command line: flags, --list / --dump output and the run loop. Re-exported for the tests and older callers.
+export { DEFAULT_OUT, EXIT_INCOMPLETE, LOSSY_HEADROOM_DB, checkOutDir, chooseEncoder, sourceLabel, discover, select } from './exs/importer.mjs';
 
 const USAGE = `Import GarageBand / Logic sampler instruments into Worship Rig (personal use only).
 
@@ -141,115 +110,8 @@ export function parseArgs(argv) {
   return o;
 }
 
-/** Pick the encoder and output format for a run. Returns { encoder, format, bitrate, rate, note? } or { error }. */
-export function chooseEncoder(o, { ffmpeg = hasFfmpeg(), afconvert = hasAfconvert() } = {}) {
-  let encoder = o.encoder;
-  if (encoder === 'auto') encoder = ffmpeg ? 'ffmpeg' : afconvert ? 'afconvert' : null;
-  if (!encoder) return { error: 'Neither ffmpeg nor afconvert was found. Install ffmpeg (brew install ffmpeg), or run on a Mac (afconvert ships with macOS). --list, --dry and --dump work anywhere.' };
-  if (encoder === 'ffmpeg' && !ffmpeg) return { error: 'ffmpeg not found (brew install ffmpeg), or use --encoder afconvert.' };
-  if (encoder === 'afconvert' && !afconvert) return { error: 'afconvert not found. It ships with macOS; elsewhere install ffmpeg and use --encoder ffmpeg.' };
-  let format = o.format || (encoder === 'ffmpeg' ? 'mp3' : 'm4a');
-  let note;
-  if (!FORMATS[encoder].includes(format)) {
-    note = `afconvert cannot write ${format}; using m4a (install ffmpeg for mp3)`;
-    format = 'm4a';
-  }
-  const bitrate = o.bitrate || (format === 'm4a' ? 192000 : 160000);
-  const rate = o.rate || (format === 'mp3' && encoder === 'ffmpeg' ? 48000 : 0);
-  return { encoder, format, bitrate, rate: encoder === 'ffmpeg' ? rate : 0, note };
-}
-
-const mb = (b) => `${(b / 1048576).toFixed(b < 10 * 1048576 ? 1 : 0)} MB`;
 const pad = (s, n) => (String(s).length >= n ? String(s).slice(0, n - 1) + '…' : String(s).padEnd(n));
 const lpad = (s, n) => String(s).padStart(n);
-
-function originOf(p) {
-  if (p.includes('/GarageBand/') || p.includes('/Instrument Library/')) return 'GarageBand';
-  if (p.includes('/Logic/') || p.includes('Audio Music Apps')) return 'Logic';
-  return 'EXS';
-}
-
-/** Short, machine-independent description of where an .exs came from, for the manifest's `source`. */
-export function sourceLabel(exsPath, origin) {
-  const m = /(?:^|\/)((?:Sampler Instruments|Instrument Library)\/.*)$/.exec(exsPath.split(path.sep).join('/'));
-  return `${origin} ${m ? m[1] : path.basename(exsPath)}`;
-}
-
-/** Find and parse every .exs under the instrument roots. */
-export function discover(roots, { maxNotes } = {}) {
-  const found = [];
-  const errors = [];
-  for (const r of roots) {
-    for (const p of walkFiles(r, (n) => n.toLowerCase().endsWith('.exs'))) {
-      try {
-        const parsed = parseExs(fs.readFileSync(p));
-        const name = path.basename(p).replace(/\.exs$/i, '');
-        found.push({ exsPath: p, name, origin: originOf(p), parsed, plan: planInstrument(parsed, { name, maxNotesPerLayer: maxNotes }) });
-      } catch (e) {
-        errors.push({ exsPath: p, error: e instanceof ExsFormatError ? e.message : `${e.name}: ${e.message}` });
-      }
-    }
-  }
-  found.sort((a, b) => a.name.localeCompare(b.name) || a.origin.localeCompare(b.origin));
-  return { found, errors };
-}
-
-/** Resolve every sample the plan needs. Returns Map(sampleIndex → {path,how}|null). */
-function resolvePlan(entry, index, roots) {
-  const res = new Map();
-  for (const L of entry.plan.layers) {
-    for (const p of L.picks) {
-      const si = p.zone.sampleIndex;
-      if (!res.has(si)) res.set(si, resolveSample(entry.parsed.samples[si], entry.exsPath, index, { roots }));
-    }
-  }
-  return res;
-}
-
-function counts(res) {
-  let ok = 0;
-  for (const v of res.values()) if (v) ok++;
-  return { ok, total: res.size };
-}
-
-/** --import texts are case-insensitive substrings, except that an exact name match wins over substring matches. */
-export function select(found, o) {
-  const pick = new Set();
-  for (const text of o.imports.map((s) => s.toLowerCase())) {
-    const exact = found.filter((f) => f.name.toLowerCase() === text);
-    for (const f of exact.length ? exact : found.filter((f) => f.name.toLowerCase().includes(text))) pick.add(f);
-  }
-  if (o.pianos) for (const f of found) if (PIANO_RE.test(f.name)) pick.add(f);
-  return found.filter((f) => pick.has(f));
-}
-
-/** Same instrument name in several places (GarageBand + Logic copies) → keep the one with most resolved samples. */
-function dedupe(entries) {
-  const by = new Map();
-  for (const e of entries) {
-    const k = e.plan.id;
-    const prev = by.get(k);
-    if (!prev || e.resolvedCount > prev.resolvedCount) by.set(k, e);
-  }
-  return [...by.values()];
-}
-
-const estOpts = (st) => ({ bitrate: st.bitrate, rate: st.rate, maxSeconds: st.maxSeconds });
-
-/** Re-plan with thinner layers until the estimate fits in maxMb (minor-third grid first, then evenly). */
-function fitToBudget(entry, st, log) {
-  if (!st.maxMb) return;
-  const budget = st.maxMb * 1048576;
-  const est = () => estimateBytes(entry.plan.layers, entry.parsed.samples, st.format, estOpts(st));
-  const before = est();
-  if (before <= budget) return;
-  const most = Math.max(...entry.plan.layers.map((L) => L.picks.length));
-  for (let n = Math.min(most - 1, 30); n >= 4; n = n > 30 ? 30 : n - 2) {
-    entry.plan = planInstrument(entry.parsed, { name: entry.name, maxNotesPerLayer: n });
-    if (est() <= budget) break;
-  }
-  log(`  ~${mb(before)} > --max-mb ${st.maxMb}: thinned to ≤ ${Math.max(...entry.plan.layers.map((L) => L.picks.length))} notes per layer (~${mb(est())})`);
-}
 
 // ---------------------------------------------------------------- --dump
 
@@ -330,190 +192,13 @@ function list(entries, st, log) {
   log(`\n${entries.length} instrument(s). "samples" = audio files found / files the import needs; size is an estimate of the converted output (${mb(total)} for all).`);
 }
 
-// ---------------------------------------------------------------- import
-
-function linkOrCopy(src, dst) {
-  try {
-    fs.linkSync(src, dst);
-  } catch {
-    fs.copyFileSync(src, dst);
-  }
-}
-
-const FALLBACKS = { ffmpeg: ['mp3', 'm4a', 'wav'], afconvert: ['m4a', 'wav'] };
-
-// DC_PACKS: four packs (claverotor, learner-s-piano, record-collection-grand, rise-above-piano) tripped the
-// importer's own --validate DC-offset check (|dc|/peak > 5e-4). Mirrors tools/samples/process-musyngkite.mjs's S2
-// fix: a 10 Hz high-pass ahead of the rest of the chain removes the bias without touching the audible band (2-pole,
-// -0.1 dB at 27.5 Hz). Every ffmpeg conversion in this file passes `highpassHz: HPF_HZ` to convert.mjs's
-// ffmpegArgs, which inserts the filter right after each segment's trim and before loudness/fade — same ordering as
-// process-musyngkite.mjs (high-pass before volume/afade) — so this stays one ffmpeg pass. afconvert is untouched:
-// every DC-offset pack in the first real run was an ffmpeg import.
-const HPF_HZ = 10;
-
-/**
- * Once per run: convert the first resolvable file in the chosen format. If the encoder can't write it (no libmp3lame
- * in this ffmpeg build, no AAC encoder in afconvert…), fall back along FALLBACKS for the whole run.
- */
-async function probeFormat(entry, o, st, log) {
-  if (st.probed) return;
-  const p = entry.plan.layers.flatMap((L) => L.picks).find((x) => entry.resolved.get(x.zone.sampleIndex));
-  if (!p) return;
-  st.probed = true;
-  const smp = entry.parsed.samples[p.zone.sampleIndex];
-  const seg = planSegments(zoneSlice(p.zone, smp), smp.length || 0, Math.round(2 * (smp.sampleRate || 44100)));
-  const src = entry.resolved.get(p.zone.sampleIndex).path;
-  const chain = FALLBACKS[st.encoder] || [st.format];
-  fs.mkdirSync(o.out, { recursive: true });
-  let first = null;
-  for (const fmt of chain.slice(Math.max(0, chain.indexOf(st.format)))) {
-    const tmp = path.join(o.out, `.probe-${process.pid}.${fmt}`);
-    const r = await convertFile(st.encoder, src, tmp, { format: fmt, bitrate: fmt === st.format ? st.bitrate : undefined, rate: st.rate, segments: seg.segments, highpassHz: HPF_HZ }, o.out, new Map());
-    for (const f of fs.readdirSync(o.out)) if (f.startsWith(`.probe-${process.pid}`) || /^(whole|cut)-/.test(f)) fs.rmSync(path.join(o.out, f), { force: true });
-    if (r.ok) {
-      if (fmt !== st.format) {
-        log(`  ${st.format.toUpperCase()} encoding failed (${first}); falling back to ${fmt === 'wav' ? '16-bit WAV' : fmt} for this run`);
-        st.format = fmt;
-        if (fmt !== 'mp3') st.bitrate = fmt === 'm4a' ? 192000 : st.bitrate;
-      }
-      return;
-    }
-    first ??= r.msg;
-  }
-}
-
-// Lossy encoders overshoot the source peak: libmp3lame at 160 kb/s turned Yamaha's 0.00 dBFS 107_B6KM56_H.wav into a
-// +0.22 dBFS mp3 (clipped). mp3/m4a output is therefore lowered by this much, uniformly across the instrument, so the
-// layers keep their relative levels; the overall level is gainTrim's job (tools/calibrate.mjs). WAV output is untouched.
-export const LOSSY_HEADROOM_DB = 1;
-const headroomDb = (st) => (st.format === 'wav' ? 0 : LOSSY_HEADROOM_DB);
-
-const settingsKey = (st) => JSON.stringify({ v: 4, headroomDb: headroomDb(st), keepLevels: st.keepLevels !== false, encoder: st.encoder, format: st.format, bitrate: st.bitrate, rate: st.rate, maxSeconds: st.maxSeconds });
-
-/**
- * Convert (resumably) and install one instrument. Converted files live in <out>/.<id>.importing/_src/<hash>.<ext>
- * until the instrument is complete, so a run that stops (--batch, a timeout, Ctrl-C) continues where it left off.
- * @returns {Promise<{ ok:boolean, incomplete?:boolean, dir?:string, manifest?:object, stats?:object }>}
- */
-async function importOne(entry, o, st, log) {
-  const { plan, parsed, exsPath } = entry;
-  const res = entry.resolved;
-  const missing = [...res.values()].filter((v) => !v).length;
-  const id = o.id || plan.id;
-  const finalDir = path.join(o.out, id);
-  const displayPlan = { ...plan, id, name: o.name || plan.name };
-  if (!o.dry) await probeFormat(entry, o, st, log);
-  // Files to produce: one per distinct zone slice + level. Levels (group + zone volume) are baked in relative to the
-  // loudest zone kept, so nothing is boosted, minus LOSSY_HEADROOM_DB for mp3/m4a.
-  const jobs = [];
-  const byKey = new Map();
-  const ref = Math.max(...plan.layers.flatMap((L) => L.picks.map((p) => p.zone.gainDb || 0)));
-  const gainOf = (z) => Math.round(((st.keepLevels === false ? 0 : (z.gainDb || 0) - ref) - headroomDb(st)) * 10) / 10;
-  const keyOf = (p) => `${sourceKey(p.zone, parsed.samples[p.zone.sampleIndex])}|${gainOf(p.zone)}`;
-  for (const L of plan.layers) {
-    for (const p of L.picks) {
-      const smp = parsed.samples[p.zone.sampleIndex];
-      const k = keyOf(p);
-      if (byKey.has(k)) continue;
-      const maxSec = st.maxSeconds === 'auto' ? autoMaxSeconds(p.midi) : st.maxSeconds || 0;
-      const rate = smp.sampleRate || 44100;
-      const seg = planSegments(zoneSlice(p.zone, smp), smp.length || 0, maxSec ? Math.round(maxSec * rate) : 0);
-      const hash = crypto.createHash('sha1').update(`${settingsKey(st)}|${k}|${maxSec}`).digest('hex').slice(0, 16);
-      const job = { k, p, smp, seg, rate, hash, gainDb: gainOf(p.zone), src: res.get(p.zone.sampleIndex)?.path || null };
-      byKey.set(k, job);
-      jobs.push(job);
-    }
-  }
-  if (o.dry) {
-    log(`\n[dry] ${entry.name} (${entry.origin}) → ${finalDir}`);
-    for (const L of plan.layers) {
-      const have = L.picks.filter((p) => res.get(p.zone.sampleIndex));
-      log(`  layer vel ${L.vel[0]}-${L.vel[1]}: ${have.length}/${L.picks.length} notes  ${have.map((p) => p.note).join(' ')}`);
-    }
-    log(`  ${jobs.length} file(s), release τ ${plan.release}s, category ${plan.category}, ~${mb(estimateBytes(plan.layers, parsed.samples, st.format, estOpts(st)))} as ${st.format}${missing ? `, ${missing} sample file(s) not found` : ''}`);
-    for (const w of new Set(plan.warnings)) log(`  note: ${w}`);
-    return { ok: true, dry: true };
-  }
-  fs.mkdirSync(o.out, { recursive: true });
-  const work = path.join(o.out, `.${id}.importing`);
-  const srcDir = path.join(work, '_src');
-  const stamp = path.join(work, 'settings.json');
-  let prevSettings = null;
-  try {
-    prevSettings = fs.readFileSync(stamp, 'utf8');
-  } catch {
-    /* fresh */
-  }
-  if (prevSettings !== settingsKey(st)) fs.rmSync(work, { recursive: true, force: true });
-  fs.mkdirSync(srcDir, { recursive: true });
-  fs.writeFileSync(stamp, settingsKey(st));
-  const outOf = (j) => path.join(srcDir, `${j.hash}.${st.format}`);
-  const todo = jobs.filter((j) => j.src && !fs.existsSync(outOf(j)));
-  const resumed = jobs.filter((j) => j.src).length - todo.length;
-  if (st.encoder === 'afconvert') todo.sort((a, b) => (a.src < b.src ? -1 : a.src > b.src ? 1 : 0)); // one cached source at a time
-  const now = st.batch ? todo.slice(0, st.batch) : todo;
-  log(`\n${entry.name} (${entry.origin}) → ${finalDir}: ${jobs.length} file(s)${resumed ? `, ${resumed} already converted` : ''}, converting ${now.length} with ${st.encoder}${st.encoder === 'ffmpeg' ? ` ×${st.jobs}` : ''}`);
-  const failures = [];
-  const cache = new Map();
-  let n = 0;
-  const t0 = Date.now();
-  await pool(now, st.encoder === 'ffmpeg' ? st.jobs : 1, async (j) => {
-    const truncated = j.seg.truncated;
-    const totalSec = j.seg.frames != null ? j.seg.frames / j.rate : 0;
-    const r = await convertFile(st.encoder, j.src, outOf(j), { format: st.format, bitrate: st.bitrate, rate: st.rate, segments: j.seg.segments, gainDb: j.gainDb, fadeOutSec: truncated ? 0.25 : 0, totalSec, highpassHz: HPF_HZ }, work, cache);
-    if (!r.ok) failures.push(`${path.basename(j.src)} [${j.k}]: ${r.msg}`);
-    n++;
-    if (process.stdout.isTTY) process.stdout.write(`\r  ${n}/${now.length}`);
-  });
-  if (process.stdout.isTTY) process.stdout.write('\r');
-  for (const f of fs.readdirSync(work)) if (/^(whole|cut)-/.test(f)) fs.rmSync(path.join(work, f), { force: true });
-  const left = jobs.filter((j) => j.src && !fs.existsSync(outOf(j))).length;
-  if (left && st.batch && todo.length > now.length) {
-    log(`  converted ${now.length - failures.length} in ${((Date.now() - t0) / 1000).toFixed(1)} s; ${left} file(s) left — run the same command again to continue`);
-    for (const f of failures.slice(0, 5)) log(`    failed: ${f}`);
-    return { ok: true, incomplete: true, left };
-  }
-  // Install: hard-link each converted file to <layer.dir>/<note>.<ext>.
-  const stage = path.join(work, 'stage');
-  fs.rmSync(stage, { recursive: true, force: true });
-  fs.mkdirSync(stage, { recursive: true });
-  const writtenLayers = [];
-  const converted = jobs.filter((j) => j.src && fs.existsSync(outOf(j))).length;
-  for (const L of plan.layers) {
-    const dir = path.join(stage, L.dir);
-    const notes = [];
-    for (const p of L.picks) {
-      const j = byKey.get(keyOf(p));
-      if (!j?.src || !fs.existsSync(outOf(j))) continue;
-      fs.mkdirSync(dir, { recursive: true });
-      linkOrCopy(outOf(j), path.join(dir, `${p.note}.${st.format}`));
-      notes.push(p.note);
-    }
-    writtenLayers.push({ vel: L.vel, dir: L.dir, notes });
-  }
-  const inst = manifestEntry(displayPlan, { ext: st.format, origin: entry.origin, source: sourceLabel(exsPath, entry.origin), writtenLayers });
-  if (!inst.layers.length) {
-    fs.rmSync(work, { recursive: true, force: true });
-    log(`  FAILED: no sample could be ${missing === res.size ? 'found' : 'converted'} (${missing} missing, ${failures.length} failed)`);
-    for (const f of failures.slice(0, 5)) log(`    ${f}`);
-    return { ok: false };
-  }
-  // Same top-level shape as app/samples/manifest.json: { instruments: [...] }.
-  const manifest = { instruments: [inst] };
-  fs.writeFileSync(path.join(stage, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
-  const old = path.join(o.out, `.${id}.old-${process.pid}`);
-  if (fs.existsSync(finalDir)) fs.renameSync(finalDir, old);
-  fs.renameSync(stage, finalDir);
-  fs.rmSync(old, { recursive: true, force: true });
-  fs.rmSync(work, { recursive: true, force: true });
-  const made = inst.layers.reduce((s, L) => s + L.notes.length, 0);
-  log(`  ok: ${inst.layers.length} layer(s) × ${inst.layers.map((L) => L.notes.length).join('/')} notes = ${made} note file(s) from ${converted} converted audio file(s), ${st.format}${missing ? `; ${missing} sample(s) not found` : ''}${failures.length ? `; ${failures.length} conversion(s) failed` : ''}`);
-  for (const f of failures.slice(0, 5)) log(`    failed: ${f}`);
-  for (const w of new Set(plan.warnings)) log(`  note: ${w}`);
-  return { ok: true, dir: finalDir, manifest };
-}
-
 // ---------------------------------------------------------------- main
+
+/** The `\r  n/total` counter on a terminal (the app reports the same callbacks as a progress bar instead). */
+const ttyProgress = {
+  onFile: (n, total) => process.stdout.isTTY && process.stdout.write(`\r  ${n}/${total}`),
+  onEnd: () => process.stdout.isTTY && process.stdout.write('\r'),
+};
 
 export async function main(argv, log = console.log, err = console.error) {
   let o;
@@ -606,7 +291,7 @@ export async function main(argv, log = console.log, err = console.error) {
         fitToBudget(e, st, log);
         e.resolved = resolvePlan(e, index, allowedRoots);
       }
-      const r = await importOne(e, o, st, log);
+      const r = await importOne(e, { ...o, ...ttyProgress }, st, log);
       if (r.incomplete) incomplete++;
       else if (r.ok) okCount++;
     } catch (x) {

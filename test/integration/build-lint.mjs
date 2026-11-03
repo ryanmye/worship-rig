@@ -6,7 +6,8 @@
 // app.asar (resources/ on linux, <productName>.app/Contents/Resources/ on mac):
 //   • present: package.json, main.js, preload.js, server.js, README.md, LICENSES.md, app/index.html,
 //     app/samples/manifest.json and EVERY sample file the manifest lists
-//   • excluded: app/js/engine/test.html, test/, tools/, audition/, reviews/, dist/, node_modules/electron*, *.md specs
+//   • excluded: app/js/engine/test.html, test/, tools/ (except the importer's tools/exs runtime modules,
+//     v11-importer), audition/, reviews/, dist/, node_modules/electron*, *.md specs
 //   • every file under app/ that exists on disk (minus the exclusions) is packaged
 //   • security S8: no Apple instrument/sample formats (.exs .caf .aif .aiff), no app/samples/<dir> the manifest doesn't
 //     list, and no "personal-use" manifest entry in the asar; in git (`git ls-files`, before the build) no tracked
@@ -89,7 +90,13 @@ try {
   // L14: the tray template icons are the one thing from build/ that ships (package.json build.files)
   const shippedFromBuild = new Set(['build', 'build/trayTemplate.png', 'build/trayTemplate@2x.png']);
   for (const f of shippedFromBuild) if (f !== 'build') check(`packaged: ${f}`, has(f));
-  const leaked = [...list].filter((p) => !shippedFromBuild.has(p)).filter((p) => /^(test|tools|audition|reviews|dist|build)(\/|$)/.test(p) || /^node_modules\/(electron|electron-builder|playwright)(\/|$)/.test(p) || /^(SPEC|REVIEW|VERIFY|CONTRACT_CHANGES)\.md$/.test(p));
+  // v11-importer: the in-app GarageBand importer's worker and the .exs modules it imports are the one part of tools/
+  // that ships (code only: no fixtures, writer, validator or CLI)
+  const shippedFromTools = new Set(['tools', 'tools/exs', ...['importer', 'import-worker', 'parser', 'layout',
+    'mapping', 'sample-index', 'convert', 'wav'].map((n) => `tools/exs/${n}.mjs`)]);
+  for (const f of shippedFromTools) if (f.endsWith('.mjs')) check(`packaged: ${f}`, has(f));
+  check('packaged: importer-host.js', has('importer-host.js'));
+  const leaked = [...list].filter((p) => !shippedFromBuild.has(p) && !shippedFromTools.has(p)).filter((p) => /^(test|tools|audition|reviews|dist|build)(\/|$)/.test(p) || /^node_modules\/(electron|electron-builder|playwright)(\/|$)/.test(p) || /^(SPEC|REVIEW|VERIFY|CONTRACT_CHANGES)\.md$/.test(p));
   check('nothing from test/, tools/, audition/, reviews/, build/, dev deps or spec docs is packaged', leaked.length === 0, leaked.slice(0, 10).join(', '));
 
   // manifest (as packaged) → every listed sample present

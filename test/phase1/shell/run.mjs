@@ -16,7 +16,8 @@ const units = fs.readdirSync(here).filter((f) => f.endsWith('.test.mjs')).sort()
 const suites = [
   { name: 'unit', files: units, timeout: 120000 },
   { name: 'browser', files: [path.join(here, 'browser.pw.mjs')], timeout: 300000 },
-  { name: 'electron', files: [path.join(here, 'electron.boot.mjs')], timeout: 300000 },
+  // v11-importer: electron.importer.mjs picks a free port (RIG_PORT), so it runs next to the 8438 boot test
+  { name: 'electron', files: [path.join(here, 'electron.boot.mjs'), path.join(here, 'electron.importer.mjs')], timeout: 420000 },
 ];
 
 let failed = 0;
