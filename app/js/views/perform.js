@@ -331,7 +331,9 @@ export function mountPerform(root, ctx) {
   // v11-metronome: the click chip sits by the tempo. Hidden while the song has no tempo; a tap starts the click (with
   // the count-in from Edit › Song) or stops it. Live under Lock: it never touches the sound, the song or held notes.
   const clickText = h('span.click-l', { text: say('clickOff') });
-  const clickBtn = btn('.click-btn', [icon('click', 16), clickText], {
+  // ≤ 1340 px the chip is the metronome + the tempo (styles.css): the BPM line gives it its room there
+  const clickBpm = h('span.click-bpm', { text: '' });
+  const clickBtn = btn('.click-btn', [icon('click', 16), clickText, clickBpm], {
     'aria-pressed': 'false', 'data-testid': 'click-toggle', hidden: true, title: say('clickTitle'),
   });
   d.listen(clickBtn, 'click', () => controller.toggleClick());
@@ -341,7 +343,11 @@ export function mountPerform(root, ctx) {
     clickBtn.classList.toggle('on', !!c.on);
     clickBtn.classList.toggle('counting', !!c.counting);
     clickBtn.setAttribute('aria-pressed', c.on ? 'true' : 'false');
-    setText(clickText, say(c.counting ? 'clickCounting' : c.on ? 'clickOn' : 'clickOff'));
+    const word = say(c.counting ? 'clickCounting' : c.on ? 'clickOn' : 'clickOff');
+    setText(clickText, word);
+    const bpm = store.currentSong()?.tempo;
+    setText(clickBpm, bpm ? String(Math.round(bpm)) : '');
+    clickBtn.setAttribute('aria-label', bpm ? `${word} (${Math.round(bpm)} BPM)` : word);
     clickBtn.title = say('clickTitle');
   };
   const songBlock = h(
@@ -1060,6 +1066,7 @@ export function mountPerform(root, ctx) {
       tVal.dataset.len = '1';
       tVal.classList.remove('shift');
     }
+    renderClick(); // v11-metronome: the chip's tempo number
     keyBtn.setDisabled(!song);
     tDown.setDisabled(!song);
     tUp.setDisabled(!song);

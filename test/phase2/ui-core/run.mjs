@@ -4170,19 +4170,32 @@ test('v11-metronome: Perform Click chip — hidden without a tempo; count-in →
   await ev((a) => window.__rig.store.set(`songs.${a}.tempo`, 100), ids[0]);
   await page.waitForFunction((c) => !document.querySelector(c).hidden, chip);
   assert.equal(await page.getAttribute(chip, 'aria-pressed'), 'false');
-  assert.equal((await page.textContent(chip)).trim(), 'Click');
+  assert.equal((await page.textContent(`${chip} .click-l`)).trim(), 'Click');
   // one bar of count-in at 100 BPM (2.4 s), then the click keeps going
   await ev(() => window.__rig.store.setClick({ countIn: 1 }));
   await page.click(chip);
   await page.waitForFunction((c) => document.querySelector(c).classList.contains('counting'), chip);
-  assert.equal((await page.textContent(chip)).trim(), 'Count-in');
+  assert.equal((await page.textContent(`${chip} .click-l`)).trim(), 'Count-in');
   assert.equal(await page.getAttribute(chip, 'aria-pressed'), 'true');
   await page.screenshot({ path: path.join(shots, 'v11-click-countin.png'), clip: { x: 0, y: 60, width: 720, height: 120 } });
   await page.waitForFunction((c) => {
     const el = document.querySelector(c);
     return el.classList.contains('on') && !el.classList.contains('counting');
   }, chip, { timeout: 8000 });
-  assert.equal((await page.textContent(chip)).trim(), 'Click on');
+  assert.equal((await page.textContent(`${chip} .click-l`)).trim(), 'Click on');
+  // ≤ 1340 px the chip is the metronome + the tempo, and the BPM line makes room for it
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.waitForTimeout(250);
+  const narrow = await ev((c) => ({
+    num: document.querySelector(`${c} .click-bpm`).offsetParent !== null,
+    word: document.querySelector(`${c} .click-l`).offsetParent !== null,
+    text: document.querySelector(`${c} .click-bpm`).textContent,
+    bpmLine: getComputedStyle(document.querySelector('.song-bpm')).display,
+    label: document.querySelector(c).getAttribute('aria-label'),
+  }), chip);
+  assert.deepEqual(narrow, { num: true, word: false, text: '100', bpmLine: 'none', label: 'Click on (100 BPM)' });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(150);
   const st1 = await ev(() => ({ ...window.__rig.engine.clickState(), ticks: window.__rig.engine.metronome.stats.ticks }));
   assert.equal(st1.running, true);
   assert.equal(st1.bpm, 100);

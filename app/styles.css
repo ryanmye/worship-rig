@@ -738,6 +738,14 @@ body[data-view="edit"] .quick-btn { display: none; }
 .click-btn.counting { animation: click-count 1s ease-in-out infinite; }
 @keyframes click-count { 50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .click-btn.counting { animation: none; } }
+.click-bpm { display: none; font-variant-numeric: tabular-nums; }
+/* ≤ 1340 px the song row has no room for both: the chip becomes metronome + tempo ("♩ 97") and the BPM line goes
+   (it is hidden ≤ 1250 anyway, so the tempo now shows at 1024 too) */
+@media (max-width: 1340px) {
+  .song-sub:has(> .click-btn:not([hidden])) .song-bpm { display: none; }
+  .click-btn .click-l { display: none; }
+  .click-btn .click-bpm { display: inline; }
+}
 .notes-btn.has-notes::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-left: 4px; }
 
 /* −  0  + stay whole down to the 156 px column at 1280 (44 px buttons, the side padding gives way) */
