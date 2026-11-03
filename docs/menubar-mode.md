@@ -64,7 +64,10 @@ key to wake"), not as a fault.
 
 `command` (popover/tray → main renderer): `{ "v":1, "type": "hello" | "selectMode" (id) | "nextMode" | "prevMode" | "panic" |
 "fadeOutAll" | "master" (value 0..2) | "droneToggle" | "droneKey" (pc 0..11) | "lowResource" (on: bool) | "openMain" |
-"record" (on: bool) }` — `openMain` is handled by Electron main (show + focus the window); everything else by the controller.
+"record" (on: bool) | "nextScene" | "prevScene" }` — `openMain` is handled by Electron main (show + focus the window);
+everything else by the controller. `nextScene` / `prevScene` (v11-scenes, still v 1) step the current song's scenes
+(own levels → 1 → 2 → 3 → 1 / back to the own levels); a song without scenes ignores them. The state then carries
+the optional `scene: {n, count}` (only while the song has scenes; `n` 0-based, null = the song's own levels).
 
 ## Ownership (parallel build)
 | Piece | Owner | Files |
@@ -177,7 +180,8 @@ into view once (macOS remembers the position per bundle id). Self-test: `RIG_FAK
 ## Global hotkeys (v1.1, v11-electron)
 
 Off by default. Settings › Menu bar › **Global shortcuts** ("Work in any app") turns them on and lists the five
-actions with their combinations; click one, press the new keys (Esc cancels, Delete leaves it without one).
+actions with their combinations (seven since v11-scenes); click one, press the new keys (Esc cancels, Delete leaves it
+without one).
 
 | action (`settings.hotkeys.keys.<id>`) | standard keys | sends (existing bus command) |
 |---|---|---|
@@ -186,6 +190,8 @@ actions with their combinations; click one, press the new keys (Esc cancels, Del
 | `panic` | ⌃⌥⌘P | `{type:'panic'}` |
 | `masterUp` | ⌃⌥⌘= | `{type:'master', value}`: the last published `state.master` + 2 dB (from silence: −40 dB; ≤ 2) |
 | `masterDown` | ⌃⌥⌘- | `{type:'master', value}`: − 2 dB; below −40 dB → 0 |
+| `nextScene` (v11-scenes) | ⌃⌥⌘. | `{type:'nextScene'}` |
+| `prevScene` (v11-scenes) | ⌃⌥⌘, | `{type:'prevScene'}` |
 
 Not the arrows: Rectangle / Magnet take ⌃⌥⌘←/→. Two quick master presses step from the value sent last (the state
 is throttled to ≤ 4/s); after 1.5 s the published state counts again.

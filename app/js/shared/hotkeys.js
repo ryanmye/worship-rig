@@ -11,6 +11,8 @@ export const HOTKEY_ACTIONS = Object.freeze([
   Object.freeze({ id: 'panic', label: 'Panic (all notes off)' }),
   Object.freeze({ id: 'masterUp', label: 'Master louder' }),
   Object.freeze({ id: 'masterDown', label: 'Master softer' }),
+  Object.freeze({ id: 'nextScene', label: 'Next scene' }), // v11-scenes
+  Object.freeze({ id: 'prevScene', label: 'Previous scene' }),
 ]);
 export const HOTKEY_IDS = Object.freeze(HOTKEY_ACTIONS.map((a) => a.id));
 /** Master ± step in dB (global-hotkeys.js MASTER_STEP_DB uses the same number). */
@@ -27,6 +29,9 @@ export const DEFAULT_HOTKEYS = Object.freeze({
   panic: 'Control+Alt+Command+P',
   masterUp: 'Control+Alt+Command+=',
   masterDown: 'Control+Alt+Command+-',
+  // v11-scenes: . / , (the > / < keys) step the song's scenes
+  nextScene: 'Control+Alt+Command+.',
+  prevScene: 'Control+Alt+Command+,',
 });
 
 // canonical modifier names (Electron accelerators) and their aliases

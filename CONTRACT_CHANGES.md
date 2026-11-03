@@ -5770,3 +5770,84 @@ is quiet by default: no new field is written until someone uses a control, and a
 - **Not verified here (Mac only):** real GarageBand / Logic content, the packaged app's utilityProcess from the
   signed .app, Homebrew ffmpeg discovery from a Finder launch, afconvert (m4a) in the app, and the build-lint size
   check (≈ +70 KB).
+
+## v11-scenes
+
+Song "scenes" (BACKLOG A, "Sunday Keys patch snapshots"; Ryan 2026-11-03 for v1.1): up to 3 saved live states per
+song, stepped by a footswitch, Perform, the bus (popover / global hotkeys). Quiet by default: nothing is written and
+nothing shows in Perform until a song has a scene; a v1.0 library plays exactly as before.
+
+- **What a scene holds** (`app/js/shared/scenes.js`, pure): exactly what Perform's faders, ON tiles and wheel move
+  while playing, nothing that changes the sound itself or restarts a voice:
+  `{slots: [{gain, muted?} | null ×4], drone?: {gain}, wheel?: 0..1}`: each filled slot's level (the pre-mute level
+  while muted) and its ON tile, the drone **level** (not its ON tile: `drone.mode` off ↔ on reconfigures the drone),
+  and the mod-wheel position only when the song routes the wheel (`patch.modWheel.target` ≠ none; it drives the
+  macros / a level). Instruments, sends, Space / Echo, key, tempo, master, the expression pedal (a physical position)
+  are not in a scene.
+- **Interface changes**
+  - Store: optional song field `scenes` (array ≤ 3, absent until a scene is saved; SCHEMA stays 1). Written whole:
+    `set('songs.<id>.scenes', list)`, normalised by `normalizeScenes` (gains clamped 0..2, junk entries dropped, an
+    empty list removes the field); nested paths are refused. `normalizeSong` / `migrate()` keep it and stay idempotent.
+    Duplicate / export / import carry it like any song field.
+  - The song's own fields stay its **base**. A scene is an overlay the controller applies on top while it plays
+    (`applyScene`), so stepping never writes the song: Revert, the Edit changed dots (`ctx.getBaseline`) and the next
+    time the song loads keep meaning the song itself (and levels / mutes carry no dot anyway, `song-diff.js`).
+  - Controller (`controller.scenes`): `state()` → `{id, n, count}` (n 0-based, null = the song's own levels),
+    `view(song)` (the song as it sounds), `go(n|null)`, `next()`, `prev()`, `save(n)` (captures what plays, wheel
+    included; that scene then plays), `remove(n)`, `adjust(path, v)`, `max`; event `scene`. Which scene plays is
+    transient: every song starts on its own levels (reset at commit; the song switch path is otherwise untouched).
+    The store→engine diff (`applyDiff`), a re-prepare (a new instrument mid-scene), the restart re-send and the files
+    drone re-apply all use the live song (scene on top), so the engine never falls back to the base mid-scene.
+  - **Stepping**: next from the own levels → scene 1, wraps from the last to scene 1 (one footswitch cycles); previous
+    walks back to the own levels and stops there. Tapping the lit number (Perform) or Stop (Edit) = the own levels.
+    Leaving the own levels remembers the wheel; coming back glides it there.
+  - **Live moves inside a scene** (Perform faders / ON tiles / drone level, a learned MIDI fader): `adjust()` holds
+    them as a transient tweak on top of the scene (`tweakScene`): heard at once (normal 15 ms ramp), shown by the
+    faders, kept only by "Save as scene n", dropped at the next scene change. So building scenes one after another
+    never rewrites the song's own levels or the scene saved a moment ago (the first design wrote the move into the
+    playing scene, and "set levels → Save as 2" then overwrote scene 1 as well). A learned MIDI fader picks up against
+    the level as heard. Edit's level controls still edit the song's own levels; a level the playing scene holds is
+    heard again once the scene is left (open question below).
+  - Engine: `setParam(path, v, {when, glide})` (`glide` s, slots.<i>.gain and drone.gain only): a linear glide from
+    where the level is at `when`. Every write of those two params is now recorded (`fx.trackedMove` / `fx.moveAt`:
+    `{from, to, t0, dur}` for a glide, `{…, tc}` for rampTo's exponential approach, `'set'` for a fresh channel), so
+    a glide scheduled while an earlier ramp or glide is still moving passes the right `{from}` (CLAUDE.md "glides
+    ahead of now"). `sc.faderMove`, `drone._levelMove`. `setWheel('virtual', v, {when, glide})` walks the virtual
+    wheel there in 25 ms steps on the audio clock (the swell's method, each step smoothed by `_applyWheels`' τ); a
+    wheel write, a hardware takeover (pickup) or a swell ends it. `SCENE_GLIDE_SEC` = **0.5 s** (setting-free).
+  - MIDI: `LEARNABLE` / `BUTTON_CONTROLS` + `nextScene`, `prevScene` (buttons: note-on or CC ≥ 64, the C9 press-only
+    retrigger rule applies). Settings › MIDI Learn shows two more rows, "Next scene" / "Previous scene".
+  - Bus (still v 1): commands `nextScene`, `prevScene` (no payload; main.js `BUS_COMMANDS` relays them); state gains
+    the optional `scene: {n, count}` only while the current song has scenes (validated by `stateError`).
+  - Global hotkeys: actions `nextScene` (⌃⌥⌘.) and `prevScene` (⌃⌥⌘,) in `shared/hotkeys.js` and
+    `global-hotkeys.js` (a press sends the bus command; Settings › Menu bar lists seven actions).
+- **UI** (strings through `say()`: `sceneOwn`, `sceneLabel`, `sceneBack`, `sceneSaveCap`, `sceneSaveTitle`,
+  `sceneSaved`, `sceneEditSub`, `sceneEditHint`, `scenePlaying`, `sceneNone`; Classic words, other voices fall back)
+  - Perform: "SCENE 1 2 3" in the KEY row (`[data-testid=scene-dots]`), only for a song with scenes; the lit number
+    is the playing scene; live under Perform lock (LOCK.live 'scene numbers'). Faders, ON tiles and the drone level
+    show the song as it sounds (`scenes.view`); Revert also goes back to the own levels.
+  - Quick › This song: "Save as scene 1 · 2 · 3" in the caption row (the saved ones and the next free one), like This
+    Mac's Theme button: the sheet's height is fixed, so no new row. A toast confirms.
+  - Edit › Song: a Scenes block under the tempo (Play/Stop · Save · × per scene, "Save as scene n"), actions through
+    `ctx.controller.scenes`; fits at 1024×700 with three scenes (edit-v2 test).
+- **Numbers** (engine `offline.sceneGlide`, 44.1 kHz offline, a sine-like sub-bass held through it): two scene changes
+  200 ms apart (1.0 → 0.25, then mid-glide → 1.0): max sample delta |x[i] − x[i−1]| across the changes / steady =
+  **1.00** (a hard step at the same moment, the positive control: **22.9**); second-difference ratio 1.00 (step:
+  727); click detector 0 (step: 1); level at the turn −3.1 dB (expected 20·log10(0.7) = −3.10: the second glide
+  started where the first was); the held note still sounds. Drone level 0.8 → 0.2 over 0.5 s: no clicks, monotonic
+  (−22.6 → −24.3 → −31.2 dBFS). `offline.sceneWheelGlide`: wheel 1 → 0.2 over 0.5 s reads 0.62 at 250 ms (0.6
+  expected, 25 ms steps), 0.2 at the end, a wheel write mid-glide wins, no clicks.
+- **Tests**: unit `test/unit/shared/scenes.test.mjs` (9: stored form, capture / apply / levels / diff, stepping,
+  withScene, tweaks, matches); shell `test/phase1/shell/scenes.test.mjs` (6: store field + migrate, save → step
+  glides with no cut call (allNotesOff / noteOff / prepare / commit / drone.configure / …) and the note still held,
+  learned CC footswitch incl. press-only, bus commands + state, a learned MIDI fader inside a scene, Revert / delete /
+  song switch, re-prepare with the scene's levels); engine `offline.sceneGlide`, `offline.sceneWheelGlide`; ui-core
+  `scenes.mjs` (6, its own process, run by `ui-core/run.mjs`: quiet by default, Quick save, a live move leaves the song
+  alone, the numbers, the bus, a footswitch learned in Settings › MIDI via `midi._inject`, song switch, Edit list and
+  delete, zero console errors); edit-v2 song "v11-scenes". Updated: params LEARNABLE, menubar COMMAND_TYPES (14),
+  global-hotkeys (7 actions).
+- **Needs the Mac / hardware**: a real footswitch (momentary and press-only) learned to Next scene; how a 0.5 s glide
+  feels between a verse and a chorus scene on the PA; the ⌃⌥⌘. / ⌃⌥⌘, global shortcuts on a Mac keyboard layout.
+- **Open questions for Ryan**: (1) should the menu-bar popover show the scene numbers too (the bus has the commands
+  and the state field; the 320×440 popover has no free row today); (2) while a scene plays, Edit's level faders edit
+  the song's own levels, which the scene covers until it is left: fine, or should opening Edit leave the scene?

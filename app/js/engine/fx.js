@@ -44,6 +44,42 @@ export function glideFrom(param, from, to, when, dur) {
   return glideTo(param, to, when, dur, { from });
 }
 
+// v11-scenes: a scene change glides a fader from wherever it is at `when`, which may be mid-way through an earlier
+// fader ramp or glide (a footswitch pressed twice). The writers of such a param record each move they schedule
+// ({from, to, t0, dur} linear, or {…, tc} for rampTo's exponential approach), so the next glide knows its {from}
+// without reading param.value (only right when `when` ≈ now, CLAUDE.md).
+/**
+ * Value of a recorded move at time `t`.
+ * @param {{from:number, to:number, t0:number, dur?:number, tc?:number}|null} m
+ * @param {number} t
+ * @param {number} fallback  the value when nothing was recorded yet
+ * @returns {number}
+ */
+export function moveAt(m, t, fallback) {
+  if (!m) return fallback;
+  if (t <= m.t0) return m.from;
+  if (m.tc > 0) return t >= m.t0 + 12 * m.tc ? m.to : m.to + (m.from - m.to) * Math.exp(-(t - m.t0) / m.tc);
+  if (!(m.dur > 0) || t >= m.t0 + m.dur) return m.to;
+  return m.from + (m.to - m.from) * ((t - m.t0) / m.dur);
+}
+/**
+ * Tracked writes (v11-scenes): `glide` > 0 → a linear glide over `glide` s from where the recorded move is at `when`
+ * (linFrom); 0 → rampTo (τ 15 ms); 'set' → setNow (a fresh, silent channel). @returns the new move to record
+ */
+export function trackedMove(param, m, to, when, glide, fallback) {
+  const from = moveAt(m, when, fallback);
+  if (glide === 'set') {
+    setNow(param, to, when);
+    return { from: to, to, t0: when, dur: 0 };
+  }
+  if (glide > 0) {
+    linFrom(param, from, to, when, glide);
+    return { from, to, t0: when, dur: glide };
+  }
+  rampTo(param, to, when, TAU);
+  return { from, to, t0: when, tc: TAU };
+}
+
 /**
  * Equal-power fade drawn as piecewise-linear segments through automation.linearTo (no direct AudioParam calls).
  * Fade in (to > from) follows sin, fade out follows cos, so two uncorrelated signals keep constant power.

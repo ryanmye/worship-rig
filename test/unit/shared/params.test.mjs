@@ -314,8 +314,9 @@ test('formatValue: bool / enum / semis / midi / pan / octave / percent / dynamic
 test('LEARNABLE', () => {
   assert.deepEqual([...LEARNABLE], [
     'slots.0.gain', 'slots.1.gain', 'slots.2.gain', 'slots.3.gain', 'drone.gain', 'fx.reverb.returnGain',
-    'master.volume', 'nextSong', 'prevSong', 'panic', 'fadeOutAll', 'swell',
+    'master.volume', 'nextSong', 'prevSong', 'panic', 'fadeOutAll', 'swell', 'nextScene', 'prevScene',
   ]);
+  assert.ok(isLearnButton('nextScene') && isLearnButton('prevScene'), 'v11-scenes: footswitch buttons');
   assert.ok(Object.isFrozen(LEARNABLE));
   assert.ok(isLearnable('panic'));
   assert.ok(!isLearnable('fx.reverb.size'));
