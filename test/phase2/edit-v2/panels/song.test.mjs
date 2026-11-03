@@ -490,3 +490,33 @@ test('song: 1024×700 — focus on mount, fits with no horizontal (or vertical) 
   await u.screenshot('song-1024');
   u.assertNoConsoleErrors();
 });
+
+test('song: v11-scenes — the Scenes list (Save as / Play · Stop / Save / ×) through controller.scenes; fits at 1024',
+  async () => {
+    const u = t; // still 1024×700 from the test above
+    const H = u.host;
+    const rows = () => u.page.locator(`${H} [data-testid=edit-scenes] .ev2-song-scene`).count();
+    assert.match(await u.page.textContent(`${H} [data-sec="song-scenes"]`), /No scenes yet\./);
+    for (let n = 1; n <= 3; n++) {
+      await u.click(`${H} .ev2-song-sceneadd`);
+      await u.until((k) => (window.__rig.store.currentSong().scenes || []).length === k, n);
+    }
+    assert.equal(await rows(), 3);
+    assert.equal(await u.page.$(`${H} .ev2-song-sceneadd`), null, 'three is the most');
+    assert.equal(await u.ev(() => window.__rig.controller.scenes.state().n), 2, 'the scene just saved plays');
+    await u.click(`${H} .ev2-song-scene[data-n="0"] .ev2-song-sceneplay`);
+    await u.until(() => window.__rig.controller.scenes.state().n === 0);
+    assert.equal(await u.page.textContent(`${H} .ev2-song-scene[data-n="0"] .ev2-song-sceneplay`), 'Stop');
+    await u.click(`${H} .ev2-song-scene[data-n="0"] .ev2-song-sceneplay`);
+    await u.until(() => window.__rig.controller.scenes.state().n === null);
+    const fits = await u.ev(() => {
+      const body = document.querySelector('#view-edit .ev2-body');
+      return body.scrollHeight <= body.clientHeight + 1;
+    });
+    assert.equal(fits, true, 'three scenes still fit at 1024×700');
+    await u.screenshot('song-1024-scenes');
+    await u.click(`${H} .ev2-song-scene[data-n="2"] .ev2-song-scenedel`);
+    await u.until(() => window.__rig.store.currentSong().scenes.length === 2);
+    assert.equal(await rows(), 2);
+    u.assertNoConsoleErrors();
+  });

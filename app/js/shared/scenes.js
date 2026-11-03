@@ -9,7 +9,9 @@
 // Stored as the optional song field `scenes` (an array, absent until a scene is saved; SCHEMA stays 1). The song's
 // own fields stay its base: a scene is an overlay the controller applies on top while it plays (applyScene), so
 // Revert, the Edit changed dots (ctx.getBaseline) and the next time the song loads all keep meaning the song itself.
-// Which scene plays is transient (controller), and every song starts on its own levels (no scene).
+// Which scene plays is transient (controller), and every song starts on its own levels (no scene). Level moves made
+// while a scene plays (Perform's faders, ON tiles, a learned MIDI fader) are a transient tweak on top of it
+// (tweakScene): heard at once, kept by "Save as scene", dropped at the next scene change.
 import { SLOT_COUNT, clamp } from './params.js';
 
 /** Scenes per song. */

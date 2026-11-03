@@ -44,7 +44,8 @@ views (perform.js, edit/ (H-v2 Edit), settings.js, components/)
 store.js ──── subscribe(state, changedPaths) ────► controller.js ────► engine (app/js/engine/index.js)
    ▲                                                 │  ▲
 presets.js (factory songs)                  midi.js ─┘  └─ recorder.js (AudioWorklet on engine.recordTap)
-shared/ (params grammar, fx-presets, music, automation, keydetect, chords, wav, prng, themes, voice, touch-curve): pure
+shared/ (params grammar, fx-presets, music, automation, keydetect, chords, wav, prng, themes, voice, touch-curve,
+         scenes): pure
 ```
 
 - **store.js** holds the whole library: songs, setlists, settings and meta. It persists to localStorage with debouncing,
@@ -59,7 +60,10 @@ shared/ (params grammar, fx-presets, music, automation, keydetect, chords, wav, 
   - MIDI, computer-keyboard and on-screen input (refcounted notes, sustain, pedal polarity, learned controls with
     pickup, and each keyboard's own touch curve from `settings.keyboards`, keyed by device name and handed to
     `engine.noteOn(…, {touch})` for the slots on Response "Normal"; CONTRACT_CHANGES "v11-touch");
-  - the audio watchdog and restarts, the wake lock, Electron menu actions, backups and the My Samples rescan.
+  - the audio watchdog and restarts, the wake lock, Electron menu actions, backups and the My Samples rescan;
+  - song scenes (`controller.scenes`, `shared/scenes.js`; CONTRACT_CHANGES "v11-scenes"): which saved level/wheel
+    state of the current song plays. It is an overlay on the song (the store's song stays its base), applied in the
+    store→engine diff, and a change glides every level with `engine.setParam(path, v, {glide})`.
 - **Parameter grammar** (`shared/params.js`): examples are `slots.1.gain`, `slots.0.params.tone`,
   `fx.reverb.size`, `master.volume` and `drone.gain`. The PARAMS table is the single source for ranges and
   defaults. The store, controller, UI and engine all read it, so adding a row there makes a param flow end to end.

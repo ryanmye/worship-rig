@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { pinTheme } from '../../integration/lib.mjs';
@@ -4183,4 +4184,11 @@ test('first run without autoplay permission: "Click anywhere to start audio" ove
     await b2.close();
   }
   assert.deepEqual(errs, [], errs.join('\n'));
+});
+
+// v11-scenes: its own process and browser (a fresh library: the scenes it saves never meet this file's checks)
+test('v11-scenes (scenes.mjs: save, step, footswitch, Edit › Song)', () => {
+  const r = spawnSync(process.execPath, ['--test', '--test-reporter=spec', path.join(here, 'scenes.mjs')],
+    { cwd: repo, stdio: 'inherit', timeout: 300000 });
+  assert.equal(r.status, 0, `scenes.mjs exited ${r.status}${r.signal ? ` (${r.signal})` : ''}`);
 });

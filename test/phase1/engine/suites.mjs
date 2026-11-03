@@ -1,6 +1,7 @@
 // Engine test suites, run in-page (Chromium) by run.mjs. Offline suites inject a seeded OfflineAudioContext.
 import { AudioEngine, buildIR, followVoicing } from '/js/engine/index.js';
 import { eqSuites } from './eq-suites.mjs';
+import { setNow } from '/js/shared/automation.js'; // v11-scenes: sceneGlide's positive control (a hard step)
 
 const SR = 44100;
 const MANIFEST = '/__fixtures/manifest.json';
@@ -2179,6 +2180,104 @@ export const offline = {
       Math.abs(g.rest - 1) < 1e-6 && g.swelled > 3.5 && g.back < 1.1 && g.comboOff < 2 &&
       lvl.swelled - lvl.rest > 10 && lvl.swelled - lvl.rest < 14.5 && Math.abs(lvl.back - lvl.rest) < 1.5;
     return { pass, lin, log, bogus, ...g, lvl };
+  },
+
+  /**
+   * v11-scenes: a scene change (setParam {glide}) moves a slot fader and the drone level linearly over the glide,
+   * from wherever they are, also when a second press lands mid-glide; a held note keeps sounding. Measured on a
+   * sine-like bass: the max sample delta (|x[i] − x[i−1]|) across the switch stays within the steady signal's (a level
+   * change only scales the sine), and the second difference has no spike. A hard step at the same moment (positive
+   * control) is caught by the same measure.
+   */
+  async sceneGlide() {
+    const GLIDE = 0.5;
+    const T = 1.0;
+    const maxD1 = (d, a, b) => {
+      let m = 0;
+      for (let i = Math.max(1, Math.floor(a * SR)); i < Math.min(d.length, Math.floor(b * SR)); i++) m = Math.max(m, Math.abs(d[i] - d[i - 1]));
+      return m;
+    };
+    const maxD2 = (d, a, b) => {
+      let m = 0;
+      for (let i = Math.max(2, Math.floor(a * SR)); i < Math.min(d.length, Math.floor(b * SR)); i++) m = Math.max(m, Math.abs(d[i] - 2 * d[i - 1] + d[i - 2]));
+      return m;
+    };
+    const run = async (mode) => {
+      const ctx = mkCtx(3.2);
+      const e = await mkEngine(ctx);
+      await use(e, patch({ 0: slot('synth', 'sub-bass', { gain: 1, params: { tri: 0, tone: 1 } }) }), 0);
+      e.noteOn(57, 120, { when: 0.1 }); // held to the end: the scene change must not touch it
+      const at = {};
+      if (mode === 'glide') {
+        // footswitch twice: down to 0.25, and 200 ms later (mid-glide) up to 1.0 — the second starts where the first is
+        e.at(T, (t) => e.setParam('slots.0.gain', 0.25, { when: t, glide: GLIDE }));
+        e.at(T + 0.2, (t) => e.setParam('slots.0.gain', 1, { when: t, glide: GLIDE }));
+        e.at(T + 0.1, () => (at.mid = e.slots[0].faderMove));
+      } else if (mode === 'step') {
+        e.at(T, (t) => setNow(e.slots[0].strip.fader.gain, 0.25, t)); // positive control: a hard step
+      }
+      const d = (await ctx.startRendering()).getChannelData(0);
+      await settle();
+      const steady = Math.max(maxD1(d, T - 0.4, T - 0.01), maxD1(d, 2.6, 3.0));
+      const steadyD2 = Math.max(maxD2(d, T - 0.4, T - 0.01), maxD2(d, 2.6, 3.0));
+      const cl = clicks(d, SR, T - 0.1, T + 0.9);
+      return {
+        ratio: +(maxD1(d, T - 0.01, T + 0.75) / steady).toFixed(3),
+        d2Ratio: +(maxD2(d, T - 0.01, T + 0.75) / steadyD2).toFixed(3),
+        clicks: cl.length,
+        // level through the glide: 10 ms RMS just before, at the turn (T+0.2: 1 − 0.75·0.4 = 0.7) and at the end
+        before: +db(rms(d, SR, T - 0.05, T - 0.04)).toFixed(1),
+        dip: +db(rms(d, SR, T + 0.195, T + 0.205)).toFixed(1),
+        end: +db(rms(d, SR, 2.9, 3.0)).toFixed(1),
+        held: e.sounding.has(57),
+        midMove: at.mid ? { from: at.mid.from, to: at.mid.to, dur: at.mid.dur } : null,
+      };
+    };
+    const glide = await run('glide');
+    const step = await run('step');
+    // drone: the same glide on drone.gain (engine setParam → Drone.setParam)
+    const ctx = mkCtx(3);
+    const e = await mkEngine(ctx);
+    e.drone.configure({ mode: 'synth', gain: 0.8, fade: 0.2 }, { when: 0 });
+    e.drone.setKey(9, { when: 0 });
+    e.at(1.5, (t) => e.setParam('drone.gain', 0.2, { when: t, glide: GLIDE }));
+    const dd = mono(await ctx.startRendering());
+    await settle();
+    const drone = {
+      clicks: clicks(dd, SR, 1.3, 2.3).length,
+      before: +db(rms(dd, SR, 1.3, 1.5)).toFixed(1),
+      mid: +db(rms(dd, SR, 1.7, 1.8)).toFixed(1),
+      after: +db(rms(dd, SR, 2.6, 2.9)).toFixed(1),
+      move: e.drone._levelMove ? { from: e.drone._levelMove.from, to: e.drone._levelMove.to, dur: e.drone._levelMove.dur } : null,
+    };
+    // the turn: −20·log10(0.7) ≈ 3.1 dB under "before" (a jump to 0.25 would be 12 dB, no move at all 0 dB)
+    const dipDb = glide.before - glide.dip;
+    const pass = glide.ratio <= 1.05 && glide.d2Ratio < 2 && glide.clicks === 0 && glide.held && dipDb > 2.3 && dipDb < 4 &&
+      Math.abs(glide.end - glide.before) < 0.5 && glide.midMove && glide.midMove.to === 0.25 && glide.midMove.dur === GLIDE &&
+      step.ratio > 3 && drone.clicks === 0 && drone.before - drone.after > 6 && drone.mid < drone.before &&
+      drone.mid > drone.after && drone.move && drone.move.dur === GLIDE;
+    return { pass, glide, step, dipDb: +dipDb.toFixed(2), drone };
+  },
+
+  /** v11-scenes: setWheel('virtual', v, {glide}) walks the wheel there on the audio clock; a hardware takeover ends it. */
+  async sceneWheelGlide() {
+    const ctx = mkCtx(3);
+    const e = await mkEngine(ctx);
+    await use(e, patch({ 0: slot('synth', 'sub-bass', { params: { tri: 0, tone: 1 } }) }, {}, { modWheel: { target: 'slots.0.gain', min: 0, max: 1 } }));
+    e.noteOn(57, 120, { when: 0.05 });
+    const seen = {};
+    e.at(1.0, (t) => e.setWheel('virtual', 0.2, { when: t, glide: 0.5 }));
+    e.at(1.25, () => (seen.mid = e.wheel.mod));
+    e.at(1.6, () => (seen.end = e.wheel.mod));
+    e.at(2.0, (t) => e.setWheel('virtual', 1, { when: t, glide: 0.5 }));
+    e.at(2.1, (t) => e.setWheel('virtual', 0.5, { when: t })); // a wheel move mid-glide wins
+    e.at(2.7, () => (seen.after = e.wheel.mod));
+    const d = (await ctx.startRendering()).getChannelData(0);
+    await settle();
+    const cl = clicks(d, SR, 0.9, 2.8);
+    const pass = Math.abs(seen.mid - 0.6) < 0.08 && Math.abs(seen.end - 0.2) < 1e-9 && Math.abs(seen.after - 0.5) < 1e-9 &&
+      cl.length === 0 && e.sounding.has(57);
+    return { pass, ...seen, clicks: cl.slice(0, 3) };
   },
 };
 
