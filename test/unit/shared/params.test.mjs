@@ -45,6 +45,8 @@ test('table covers the SPEC §4 grammar', () => {
     ...[1, 2, 3, 4, 5, 6, 7, 8].flatMap((k) => ['on', 'type', 'hz', 'db', 'q'].map((f) => `slots.<i>.eq.b${k}.${f}`)),
     // sustain: release (s to −60 dB, optional) and pedalHold ('natural' | 2–30 s)
     'slots.<i>.release', 'slots.<i>.pedalHold',
+    // v11-touch: the slot's own touch curve (velocityCurve 'custom')
+    ...['shape', 'min', 'max', 'top'].map((k) => `slots.<i>.touch.${k}`),
     'fx.reverb.size', 'fx.reverb.damp', 'fx.reverb.predelay', 'fx.reverb.returnGain',
     'fx.delay.time', 'fx.delay.feedback', 'fx.delay.pingpong', 'fx.delay.tone', 'fx.delay.sync', 'fx.delay.returnGain',
     'fx.chorus.rate', 'fx.chorus.depth', 'fx.chorus.returnGain',
@@ -62,7 +64,7 @@ test('specific ranges from the contract', () => {
   assert.deepEqual([d('slots.0.transpose').min, d('slots.0.transpose').max, d('slots.0.transpose').unit], [-12, 12, 'semis']);
   assert.deepEqual([d('slots.0.lowNote').default, d('slots.0.highNote').default], [0, 127]);
   assert.deepEqual([...d('slots.0.mono').enum], ['off', 'lowest', 'highest']);
-  assert.deepEqual([...d('slots.0.velocityCurve').enum], ['soft', 'normal', 'hard', 'fixed']);
+  assert.deepEqual([...d('slots.0.velocityCurve').enum], ['soft', 'normal', 'hard', 'fixed', 'custom']); // v11-touch
   assert.deepEqual([d('fx.delay.time').min, d('fx.delay.time').max, d('fx.delay.time').curve, d('fx.delay.time').unit], [0.05, 1.5, 'log', 's']);
   assert.equal(d('fx.delay.feedback').max, 0.9);
   assert.deepEqual([...d('fx.delay.sync').enum], ['off', '1/4', '1/8d', '1/8']);

@@ -25,6 +25,10 @@
 // devices.hint = NO_KEYBOARD_HINT (never a virtual port alone, silently). An explicit choice is matched by id, then by
 // name (re-plugged device with a new id → 'rebind'); while it is absent the best hardware port stands in
 // ('switched').
+// v11-touch: setRemembered(names) = the keyboards the player marked "remember" in Settings (settings.keyboards,
+// matched by name). In 'first' mode a connected remembered port outranks every heuristic (and counts as hardware even
+// when its name looks virtual), but the sticky choice (L8) still holds while connected, so plugging a remembered board
+// in mid-song never moves the listening port.
 
 /** CCs never accepted by learn(). */
 export const LEARN_IGNORED_CCS = Object.freeze([120, 121, 122, 123, 124, 125, 126, 127]);
@@ -53,6 +57,8 @@ const VENDOR_RE = new RegExp(
   'i',
 );
 const GENERIC_HW_RE = /USB|Keyboard|Piano/i;
+/** v11-touch: rank of a remembered device (above every heuristic rank, which tops out at 4). */
+export const REMEMBERED_RANK = 10;
 /** Status hint while no hardware keyboard is connected and every port is listened to. */
 export const NO_KEYBOARD_HINT = 'No keyboard found — listening to all MIDI ports';
 
@@ -111,6 +117,8 @@ export class MidiInput extends EventTarget {
     this._parse = new Map();
     this._learn = null;
     this._firstId = null; // sticky 'first' resolution (L8)
+    /** @type {Set<string>} v11-touch: remembered device names (setRemembered) */
+    this._remembered = new Set();
     this._selName = null; // name of the explicitly chosen device (matched when its id changes)
     /** effective resolution of the last _reattach (for 'switched' diffing) */
     this._active = { id: null, name: null, fallback: false, standIn: false };
@@ -161,10 +169,41 @@ export class MidiInput extends EventTarget {
     return [...this.access.inputs.values()];
   }
 
-  /** @returns {Array<{id, name, manufacturer, state, kind:'hardware'|'virtual', rank:number, virtual, selected}>} */
+  /**
+   * v11-touch: classifyInput() plus the remembered names: a remembered port is hardware, rank REMEMBERED_RANK.
+   * @param {{name?:string, manufacturer?:string}} p
+   * @returns {{kind:'hardware'|'virtual', rank:number, remembered?:boolean}}
+   */
+  _classify(p) {
+    if (this._remembered.size && this._remembered.has(String((p && p.name) || ''))) {
+      return { kind: 'hardware', rank: REMEMBERED_RANK, remembered: true };
+    }
+    return classifyInput(p);
+  }
+
+  /**
+   * v11-touch: device names to prefer in 'first' mode. Re-resolves only when the set changes.
+   * @param {Iterable<string>} names
+   */
+  setRemembered(names) {
+    const next = new Set([...(names || [])].filter((n) => typeof n === 'string' && n));
+    if (next.size === this._remembered.size && [...next].every((n) => this._remembered.has(n))) return;
+    this._remembered = next;
+    if (this.access) this._reattach('select');
+  }
+
+  /** @returns {string[]} the remembered device names */
+  get remembered() {
+    return [...this._remembered];
+  }
+
+  /**
+   * @returns {Array<{id, name, manufacturer, state, kind:'hardware'|'virtual', rank:number, virtual, selected,
+   *          remembered}>}
+   */
   get inputs() {
     return this._allInputs().map((p) => {
-      const c = classifyInput(p);
+      const c = this._classify(p);
       return {
         id: p.id,
         name: p.name || 'MIDI input',
@@ -174,6 +213,7 @@ export class MidiInput extends EventTarget {
         rank: c.rank,
         virtual: c.kind === 'virtual',
         selected: this._attached.has(p.id),
+        remembered: !!c.remembered,
       };
     });
   }
@@ -217,13 +257,13 @@ export class MidiInput extends EventTarget {
 
   /** Best-ranked connected hardware port; the sticky one (L8) wins while connected. Stable on ties. */
   _bestHardware(connected) {
-    const isHw = (p) => classifyInput(p).kind === 'hardware';
+    const isHw = (p) => this._classify(p).kind === 'hardware';
     const sticky = this._firstId && connected.find((p) => p.id === this._firstId && isHw(p));
     if (sticky) return sticky;
     let pick = null;
     let best = 0;
     for (const p of connected) {
-      const c = classifyInput(p);
+      const c = this._classify(p);
       if (c.kind === 'hardware' && c.rank > best) {
         pick = p;
         best = c.rank;

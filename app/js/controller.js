@@ -6,7 +6,7 @@
 // Engine calls used (all feature-detected; a missing method warns once):
 //   start, restart({latency, sinkId}), prepare(patch)→token, commit(token,{when}), preload(patches[]),
 //   setParam(path, v), setTranspose(semis), setRouting({modWheel,expression,volume,bend,swell}), setTempo(bpm|null),
-//   noteOn(note, vel 1..127), noteOff(note), sustain(bool), pitchBend(-1..1), modWheel/expression/volumeCC(0..1),
+//   noteOn(note, vel 1..127[, {touch}]) (v11-touch: the keyboard's own curve), noteOff(note), sustain(bool), pitchBend(-1..1), modWheel/expression/volumeCC(0..1),
 //   setWheel('virtual', v), swell(bool), allNotesOff(), fadeOutAll(sec), setSinkId(id), setMono(bool),
 //   drone.setKey(pc, {minor}), drone.configure(songDrone) (mode + options + params), drone.attachFiles([{name,url}]),
 //   setKeyContext(pc, minor) (optional: chord spelling), ctx.{state,currentTime,resume}, latencyMs,
@@ -31,7 +31,8 @@
 // status.memory = {mode, decodedMB, pinnedMB, capMB, budgetMB, setMB, windowMB, pinnedSongs, note}.
 // l8 (local soak L-8): the ±radius window is a byte budget too. Current song first, then neighbours by distance while
 // the pinned total stays ≤ PIN_BUDGET_MB; one {pin:'replace'} per switch; a warn if pinnedMB ever passes capMB.
-import { transposeSemisOf, audioSleepSecOf } from './store.js';
+import { transposeSemisOf, audioSleepSecOf, COMPUTER_KEYBOARD } from './store.js';
+import { compileTouch } from './shared/touch-curve.js';
 import { transposeSemis, mod12, keyName } from './shared/music.js';
 import { PARAMS, isValidPath, isLearnButton, faderTaper, inverseTaper, SLOT_COUNT } from './shared/params.js';
 import { detectKeyFromName } from './shared/keydetect.js';
@@ -867,7 +868,61 @@ export function createController(o) {
 
   const settings = () => store.get().settings;
 
-  function noteOnFrom(src, note, vel) {
+  // ---- v11-touch: per-keyboard touch curves (settings.keyboards, keyed by MIDI device name)
+  /** MIDI input id → device name (from the 'devices' events; Web MIDI ids change on a re-plug, names don't). */
+  const inputNames = new Map();
+  /** input id (or COMPUTER_KEYBOARD) → noteOn options {touch} for a keyboard with its own curve; rebuilt on change. */
+  const touchOpts = new Map();
+  let touchCapture = null; // captureTouch() listener
+  function rebuildTouch() {
+    touchOpts.clear();
+    const kb = settings().keyboards || {};
+    const optsFor = (name) => (kb[name] && kb[name].touch ? { touch: compileTouch(kb[name].touch) } : null);
+    for (const [id, name] of inputNames) {
+      const o = optsFor(name);
+      if (o) touchOpts.set(id, o);
+    }
+    const own = optsFor(COMPUTER_KEYBOARD);
+    if (own) touchOpts.set(COMPUTER_KEYBOARD, own);
+  }
+  /** v11-touch: names of remembered keyboards → midi ('first' prefers them). */
+  function applyRemembered() {
+    if (!midi || typeof midi.setRemembered !== 'function') return;
+    const kb = settings().keyboards || {};
+    midi.setRemembered(Object.keys(kb).filter((n) => kb[n] && kb[n].remember === true));
+  }
+  function noteDevices(inputs) {
+    if (!Array.isArray(inputs)) return;
+    inputNames.clear();
+    for (const i of inputs) if (i && i.id) inputNames.set(i.id, i.name || '');
+    rebuildTouch();
+  }
+  rebuildTouch();
+  /**
+   * v11-touch: listen to every played note-on's raw velocity (before the Touch setting or any curve) for the "play
+   * soft, then hard" calibration. One listener at a time (a new one replaces the old). The notes still play.
+   * @param {(n:{velocity:number, device:string|null, inputId:string|null}) => void} cb  device = the MIDI device's
+   *        name, or COMPUTER_KEYBOARD for the on-screen and computer keys
+   * @returns {() => void} stop
+   */
+  function captureTouch(cb) {
+    const fn = typeof cb === 'function' ? cb : null;
+    touchCapture = fn;
+    return () => {
+      if (touchCapture === fn) touchCapture = null;
+    };
+  }
+  /** Tell a captureTouch() listener about a played note (raw velocity, before any curve). */
+  function captured(velocity, device, inputId) {
+    if (!touchCapture) return;
+    try {
+      touchCapture({ velocity, device, inputId: inputId ?? null });
+    } catch (err) {
+      console.warn('[controller] touch capture', err);
+    }
+  }
+
+  function noteOnFrom(src, note, vel, opts) {
     if (!Number.isInteger(note) || note < 0 || note > 127) return;
     noteActivity(src); // lowres2: every note is input (the engine also queues it while the audio wakes)
     let set = heldBySrc.get(src);
@@ -876,7 +931,10 @@ export function createController(o) {
     set.add(note);
     const c = heldCount.get(note) || 0;
     heldCount.set(note, c + 1);
-    if (c === 0) call('noteOn', note, vel);
+    if (c === 0) {
+      if (opts) call('noteOn', note, vel, opts); // v11-touch: the keyboard's own curve (its 'normal' slots use it)
+      else call('noteOn', note, vel);
+    }
   }
 
   function noteOffFrom(src, note) {
@@ -987,7 +1045,11 @@ export function createController(o) {
       const learned = learnedFor('note', d.note, d.channel);
       if (learned && isButtonControl(learned)) return triggerButton(learned, d.velocity > 0);
       if (d.velocity === 0) return noteOffFrom(midiSrc(d), d.note);
-      noteOnFrom(midiSrc(d), d.note, applyVelocitySens(d.velocity, settings().velocitySens));
+      captured(d.velocity, inputNames.get(d.inputId) ?? null, d.inputId);
+      // v11-touch: a keyboard with its own curve gets the raw velocity (its curve replaces the Touch setting)
+      const own = touchOpts.get(d.inputId);
+      if (own) noteOnFrom(midiSrc(d), d.note, d.velocity, own);
+      else noteOnFrom(midiSrc(d), d.note, applyVelocitySens(d.velocity, settings().velocitySens));
     },
     noteoff: (e) => {
       const d = e.detail;
@@ -1044,6 +1106,7 @@ export function createController(o) {
     disconnected: (e) => releaseSource(e.detail.inputId),
     devices: (e) => {
       const d = e.detail;
+      noteDevices(d.inputs);
       const sel = d.inputs.filter((i) => i.selected);
       const hint = d.hint || null;
       // midi-default: announce the all-ports fallback once each time it starts (no hardware keyboard connected)
@@ -1177,7 +1240,8 @@ export function createController(o) {
       const note = 60 + 12 * kbOctave + KEY_MAP[e.code];
       if (note < 0 || note > 127) return;
       kbHeld.set(e.code, note);
-      noteOnFrom('kb', note, KB_VELOCITY);
+      captured(KB_VELOCITY, COMPUTER_KEYBOARD, null);
+      noteOnFrom('kb', note, KB_VELOCITY, touchOpts.get(COMPUTER_KEYBOARD));
     }
   }
 
@@ -1799,6 +1863,10 @@ export function createController(o) {
       case 'pedalInvert':
         reapplyPedalInvert();
         break;
+      case 'keyboards':
+        rebuildTouch();
+        applyRemembered();
+        break;
       default:
         break;
     }
@@ -2165,6 +2233,7 @@ export function createController(o) {
       .then((ok) => {
         clearSoft();
         if (gen !== midiGen) return false;
+        applyRemembered(); // v11-touch: before select(), so the first resolution already prefers them
         midi.select(settings().midiInputId, rememberMidiInputName(settings()));
         return ok !== false && !!midi.available;
       })
@@ -2544,6 +2613,7 @@ export function createController(o) {
     transposeDown,
     transposeBy,
     swell,
+    captureTouch,
     record,
     restartAudio,
     resumeAudio,
@@ -2603,7 +2673,13 @@ export function createController(o) {
     },
     /** On-screen / programmatic performance input (source 'ui'). */
     perform: {
-      noteOn: (note, vel = KB_VELOCITY) => noteOnFrom('ui', note, applyVelocitySens(vel, settings().velocitySens)),
+      noteOn: (note, vel = KB_VELOCITY) => {
+        captured(vel, COMPUTER_KEYBOARD, null);
+        // v11-touch: the on-screen keys' own curve (settings.keyboards['@computer']) replaces the Touch setting
+        const own = touchOpts.get(COMPUTER_KEYBOARD);
+        if (own) noteOnFrom('ui', note, Math.min(127, Math.max(1, Math.round(Number(vel) || 0))), own);
+        else noteOnFrom('ui', note, applyVelocitySens(vel, settings().velocitySens));
+      },
       noteOff: (note) => noteOffFrom('ui', note),
       sustain: (down) => {
         pedalBySrc.set('ui', !!down);

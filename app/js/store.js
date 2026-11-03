@@ -29,6 +29,7 @@
 import { mod12, transposeSemis } from './shared/music.js';
 import { isValidId as isThemeId, DEFAULT_THEME_ID } from './shared/themes.js';
 import { PARAMS, clamp, describe, isValidPath, parsePath, defaultSlot, SLOT_COUNT } from './shared/params.js';
+import { normalizeTouch, PEDAL_CURVES } from './shared/touch-curve.js';
 import {
   FACTORY_SONGS, FACTORY_VERSION, FACTORY_SINCE, CATEGORIES, WHEEL_TARGETS, BEND_MODES, DRONE_MODES, defaultFx, defaultDrone, defaultRouting,
   blankSong, factoryById,
@@ -40,6 +41,15 @@ export const INSTRUMENT_TYPES = Object.freeze(['sampler', 'synth', 'organ']);
 export const LATENCIES = Object.freeze(['lowest', 'balanced', 'safe']);
 export const VELOCITY_SENS = Object.freeze(['soft', 'normal', 'hard', 'fixed']);
 export const VIEWS = Object.freeze(['perform', 'edit']);
+/**
+ * v11-touch: settings.keyboards (optional; absent until a keyboard is remembered or given a curve) =
+ * { [MIDI device name]: { touch?: {shape,min,max,top}, remember?: true } }. touch = the keyboard's own curve, which
+ * slots on 'normal' inherit; remember = prefer this device when choosing the "first keyboard" automatically. Keyed by
+ * name (Web MIDI ids change when a device is re-plugged). COMPUTER_KEYBOARD is the on-screen + computer keys entry.
+ */
+export const COMPUTER_KEYBOARD = '@computer';
+export const KEYBOARDS_MAX = 32;
+export const KEYBOARD_NAME_MAX = 120;
 /** Song categories the UI groups by (factory categories incl. 'synth', plus 'user'). Unknown strings are kept. */
 export const SONG_CATEGORIES = Object.freeze([...CATEGORIES, 'user']);
 /** Settings that belong to this machine and survive a replace-import. */
@@ -336,7 +346,10 @@ export function normalizeFx(raw) {
 
 function normalizeWheel(raw, defTarget) {
   const w = isObj(raw) ? raw : {};
-  return { ...w, target: oneOf(w.target, WHEEL_TARGETS, defTarget), min: num(w.min, 0, 1, 0), max: num(w.max, 0, 1, 1) };
+  const out = { ...w, target: oneOf(w.target, WHEEL_TARGETS, defTarget), min: num(w.min, 0, 1, 0), max: num(w.max, 0, 1, 1) };
+  // v11-touch: expression.curve is optional ('linear' | 'log'; absent = linear); an unknown value is dropped
+  if (out.curve !== undefined && !PEDAL_CURVES.includes(out.curve)) delete out.curve;
+  return out;
 }
 
 export function normalizePatch(raw) {
@@ -354,8 +367,15 @@ export function normalizePatch(raw) {
     expression: normalizeWheel(p.expression, r.expression.target),
     volume: { ...vol, target: oneOf(vol.target, WHEEL_TARGETS, r.volume.target) },
     bend: { ...bend, mode: oneOf(bend.mode, BEND_MODES, r.bend.mode), range: int(bend.range, 0, 24, r.bend.range) },
-    swell: { ...swell, seconds: num(swell.seconds, 1, 60, r.swell.seconds) },
+    swell: normalizeSwell(swell, r.swell.seconds),
   };
+}
+
+/** v11-touch: swell.pedal is optional (true = the sustain pedal also swells the drone; anything else = absent). */
+function normalizeSwell(swell, defSeconds) {
+  const out = { ...swell, seconds: num(swell.seconds, 1, 60, defSeconds) };
+  if (out.pedal !== true) delete out.pedal;
+  return out;
 }
 
 export function normalizeDrone(raw) {
@@ -402,6 +422,25 @@ function normalizeMidiLearn(raw) {
   return out;
 }
 
+/** v11-touch: settings.keyboards (see COMPUTER_KEYBOARD). Unknown entry fields are kept; empty entries dropped. */
+export function normalizeKeyboards(raw) {
+  const out = {};
+  if (!isObj(raw)) return out;
+  for (const [name, v] of Object.entries(raw)) {
+    if (Object.keys(out).length >= KEYBOARDS_MAX) break;
+    if (!name || name.length > KEYBOARD_NAME_MAX || isReservedKey(name) || !isObj(v)) continue;
+    const e = {};
+    for (const [k, x] of Object.entries(v)) if (!isReservedKey(k)) e[k] = clone(x);
+    if (e.touch !== undefined) {
+      if (isObj(e.touch)) e.touch = normalizeTouch(e.touch);
+      else delete e.touch;
+    }
+    if (e.remember !== true) delete e.remember;
+    if (Object.keys(e).length) out[name] = e;
+  }
+  return out;
+}
+
 const SETTINGS_VALIDATORS = {
   latency: (v) => oneOf(v, LATENCIES, INVALID),
   outputDeviceId: (v) => (typeof v === 'string' && v ? v : INVALID),
@@ -439,6 +478,12 @@ function normalizeSettings(raw, songs, setlists) {
   // themes-setup: settings.theme is optional (absent = DEFAULT_THEME_ID, so no SCHEMA bump); an id that is no longer
   // registered falls back to the default instead of throwing or keeping a dead value
   if (hasOwn(out, 'theme') && out.theme !== undefined && !isThemeId(out.theme)) out.theme = DEFAULT_THEME_ID;
+  if (hasOwn(out, 'keyboards')) {
+    // v11-touch: optional; an empty or invalid map is dropped (absent = no keyboard has its own settings)
+    const kb = normalizeKeyboards(out.keyboards);
+    if (Object.keys(kb).length) out.keyboards = kb;
+    else delete out.keyboards;
+  }
   if (hasOwn(out, 'audioSleepSec')) {
     // lowres2: optional; an invalid value is dropped (absent = the default), never kept
     const v = validAudioSleepSec(out.audioSleepSec);
@@ -874,10 +919,18 @@ export function createStore(opts = {}) {
           else next[cid] = value;
           return { segs: ['settings', 'midiLearn'], value: normalizeMidiLearn(next) };
         }
-        return hasOwn(SETTINGS_VALIDATORS, k) || k === 'theme' || k === 'audioSleepSec' ? null : { segs, value: clone(value) };
+        // keyboards: device names may contain dots, so only the whole map is a path (store.setKeyboard)
+        return hasOwn(SETTINGS_VALIDATORS, k) || k === 'theme' || k === 'audioSleepSec' || k === 'keyboards'
+          ? null : { segs, value: clone(value) };
       }
       // themes-setup: an unknown theme id is stored as the default (never an error, never a dead id)
       if (k === 'theme') return { segs, value: isThemeId(value) ? value : DEFAULT_THEME_ID };
+      if (k === 'keyboards') {
+        if (value === null || value === undefined) return { segs, value: undefined };
+        if (!isObj(value)) return null;
+        const kb = normalizeKeyboards(value);
+        return { segs, value: Object.keys(kb).length ? kb : undefined }; // v11-touch: empty = absent
+      }
       if (k === 'audioSleepSec') {
         const v = validAudioSleepSec(value); // lowres2: a number, rounded and clamped; anything else is refused
         return v === null ? null : { segs, value: v };
@@ -955,6 +1008,11 @@ export function createStore(opts = {}) {
       if (rest.length === 1) return { segs, value: normalizeWheel(value, defaultRouting()[k].target) };
       if (a === 'target') return WHEEL_TARGETS.includes(value) ? { segs, value } : null;
       if (a === 'min' || a === 'max') return finite(value) ? { segs, value: num(value, 0, 1, 0) } : null;
+      if (a === 'curve' && rest.length === 2) {
+        // v11-touch: 'linear' is the default, so it is stored as absent
+        if (value === null || value === undefined || value === 'linear') return { segs, value: undefined };
+        return PEDAL_CURVES.includes(value) ? { segs, value } : null;
+      }
       return { segs, value: clone(value) };
     }
     if (k === 'volume') {
@@ -971,6 +1029,11 @@ export function createStore(opts = {}) {
     if (k === 'swell') {
       if (rest.length === 1) return { segs, value: normalizePatch({ swell: value }).swell };
       if (a === 'seconds') return finite(value) ? { segs, value: num(value, 1, 60, 8) } : null;
+      if (a === 'pedal' && rest.length === 2) {
+        // v11-touch: off is stored as absent
+        if (value === null || value === undefined || value === false) return { segs, value: undefined };
+        return value === true ? { segs, value } : null;
+      }
       return { segs, value: clone(value) };
     }
     return { segs, value: clone(value) };
@@ -1449,6 +1512,26 @@ export function createStore(opts = {}) {
       if (mapping) next[controlId] = { ...mapping };
       else delete next[controlId];
       return api.set('settings.midiLearn', next);
+    },
+
+    /**
+     * v11-touch: merge `fields` into one keyboard's entry of settings.keyboards (names contain dots, so this is not a
+     * set() path). A field set to null is removed; `fields` null forgets the keyboard. An entry left empty is dropped.
+     * @param {string} name  MIDI device name, or COMPUTER_KEYBOARD
+     * @param {{touch?:object|null, remember?:boolean|null}|null} fields
+     * @returns {boolean} changed
+     */
+    setKeyboard(name, fields) {
+      if (typeof name !== 'string' || !name || name.length > KEYBOARD_NAME_MAX || isReservedKey(name)) return false;
+      const next = { ...(state.settings.keyboards || {}) };
+      if (fields === null) delete next[name];
+      else if (isObj(fields)) {
+        const e = { ...(next[name] || {}), ...fields };
+        for (const k of Object.keys(e)) if (e[k] === null || e[k] === undefined || (k === 'remember' && e[k] !== true)) delete e[k];
+        if (Object.keys(e).length) next[name] = e;
+        else delete next[name];
+      } else return false;
+      return api.set('settings.keyboards', next);
     },
 
     // ---- factory / import / export

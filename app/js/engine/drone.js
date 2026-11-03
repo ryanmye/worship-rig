@@ -28,6 +28,9 @@ const IDLE_INST = 2; // reusable drone-osc instruments kept between key changes 
  * own attack). Short dips (a fader pulled down for a verse) never park.
  */
 export const DRONE_PARK_SEC = 10;
+/** v11-touch: pedal-swell time constants (s): rise ≈ 2.5 s to 99 %, fall ≈ 3 s (like a bend push-up's return). */
+export const PEDAL_SWELL_RISE_TC = 0.55;
+export const PEDAL_SWELL_FALL_TC = 3 / 4.6;
 const PARK_RESUME_FADE = 0.05;
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const MiB = 1048576;
@@ -904,7 +907,31 @@ export class Drone {
     this._bendTarget = target;
     // falling back from a push-up is slow (~3 s); everything else follows the wheel quickly
     const slow = target < prev && prev > 1;
-    rampTo(this.bendGain.gain, target, t, slow ? 3 / 4.6 : 0.12);
+    rampTo(this.bendGain.gain, Math.min(4, target * this._pedalFactor()), t, slow ? 3 / 4.6 : 0.12);
+  }
+
+  /**
+   * v11-touch "hold pedal = sustain + drone swell": while `on`, the drone rises toward full level (drone.gain 1, at
+   * most +12 dB, like a full bend push-up) over ~2.5 s, and sinks back over ~3 s when the pedal lifts. It shares
+   * bendGain with bendSwell (the two multiply, capped at ×4).
+   * @param {boolean} on
+   * @param {number} [when]
+   * @returns {boolean} false when already in that state
+   */
+  pedalSwell(on, when) {
+    const v = !!on;
+    if (v === !!this._pedalOn) return false;
+    const t = this._t(when);
+    this._pedalOn = v;
+    const target = Math.min(4, (this._bendTarget ?? 1) * this._pedalFactor());
+    rampTo(this.bendGain.gain, target, t, v ? PEDAL_SWELL_RISE_TC : PEDAL_SWELL_FALL_TC);
+    return true;
+  }
+
+  /** Gain factor of the pedal swell: 1 while off, else up to drone.gain = 1 (≤ ×4). */
+  _pedalFactor() {
+    if (!this._pedalOn) return 1;
+    return Math.min(4, Math.max(1, 1 / Math.max(0.05, this.p.gain)));
   }
 
   // ----- files mode ----------------------------------------------------------------------------------------------
