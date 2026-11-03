@@ -163,7 +163,9 @@
 .st-kb-sum.own { color: var(--text, #f1f4f8); font-weight: 650; }
 .st-kb-acts { display: flex; gap: 6px; flex-wrap: wrap; }
 .st-kb-acts .ed-btn, .st-kb-btns .ed-btn, .st-kb-fit .ed-btn { min-height: 30px; padding: 0 10px; font-size: 13px; }
-.st-kb-remember.on { background: var(--accent, #ffc94d); color: var(--accent-ink, #1a1400); border-color: var(--accent, #ffc94d); }
+.st-kb-remember.on {
+  background: var(--accent, #ffc94d); color: var(--accent-ink, #1a1400); border-color: var(--accent, #ffc94d);
+}
 .st-kb-edit { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr); gap: 8px 14px; margin-top: 8px; }
 .st-kb-edit[hidden] { display: none; }
 .st-kb-graph { display: flex; flex-direction: column; gap: 4px; }
@@ -173,7 +175,9 @@
 .st-kb-line { stroke: var(--accent, #ffc94d); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
 .st-kb-mark { fill: var(--text, #f1f4f8); }
 .st-kb-sliders { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.st-kb-slider { display: grid; grid-template-columns: 110px minmax(0, 1fr) 52px; align-items: center; gap: 8px; font-size: 13px; }
+.st-kb-slider {
+  display: grid; grid-template-columns: 110px minmax(0, 1fr) 52px; align-items: center; gap: 8px; font-size: 13px;
+}
 .st-kb-slider input { width: 100%; min-width: 0; accent-color: var(--accent, #ffc94d); }
 .st-kb-val { font-variant-numeric: tabular-nums; color: var(--muted, #a3acb8); text-align: right; }
 .st-kb-btns, .st-kb-fit { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

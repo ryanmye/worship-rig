@@ -111,7 +111,9 @@ export function mountKeyboards({ store, controller, midi, listen, toast = () => 
       seen.add(n);
       out.push({ name: n, connected, virtual });
     };
-    for (const i of (midi && midi.inputs) || []) if (i.state !== 'disconnected') add(i.name, true, !!i.virtual && !i.remembered);
+    for (const i of (midi && midi.inputs) || []) {
+      if (i.state !== 'disconnected') add(i.name, true, !!i.virtual && !i.remembered);
+    }
     for (const n of Object.keys(saved())) if (n !== COMPUTER_KEYBOARD) add(n, false, false);
     add(COMPUTER_KEYBOARD, true, false);
     return out;
@@ -169,7 +171,8 @@ export function mountKeyboards({ store, controller, midi, listen, toast = () => 
     const fitBtn = btn('Fit to my touch', () => startFit(name), { class: 'st-kb-fitbtn' });
     const stdBtn = btn('Back to standard', () => store.setKeyboard(name, { touch: null }), { class: 'st-kb-std' });
     const editor = h('div.st-kb-edit', { hidden: true },
-      h('div.st-kb-graph', {}, diagram.el, h('small.st-hint', { text: 'Left = soft key press, right = hard; up = louder.' })),
+      h('div.st-kb-graph', {}, diagram.el,
+        h('small.st-hint', { text: 'Left = soft key press, right = hard; up = louder.' })),
       h('div.st-kb-sliders', {}, sliders.map((s) => s.wrap)),
       h('div.st-kb-btns', {}, fitBtn, stdBtn),
       fitBox);
@@ -259,7 +262,8 @@ export function mountKeyboards({ store, controller, midi, listen, toast = () => 
     const who = f.name === COMPUTER_KEYBOARD ? 'the on-screen keys (higher on a key = softer)' : f.name;
     if (f.step === 'soft') {
       row.fitBox.replaceChildren(h('strong.st-kb-prompt', { dataset: { step: 'soft' },
-        text: `Play ${FIT_NOTES} notes softly on ${who}, as quietly as you would really play. ${f.soft.length} of ${FIT_NOTES}` }),
+        text: `Play ${FIT_NOTES} notes softly on ${who}, as quietly as you would really play. `
+          + `${f.soft.length} of ${FIT_NOTES}` }),
       cancel);
       return;
     }

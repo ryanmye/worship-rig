@@ -10,7 +10,7 @@
 //  - THE SOUND   = three lib.wordSlider()s from smartSlidersFor(meta), each a view of exactly one PARAMS path.
 //  - WHERE IT PLAYS = miniKeyboard range + note fields + Whole keyboard + "Set lowest/highest…" (armed on the next
 //                  held note) + Response (velocityCurve) with the curve sparkline. v11-touch: the sparkline draws
-//                  the curve that plays: the preset, the slot's own (Custom: Feel / Softest / Loudest / Full volume
+//                  the curve that plays: the preset, the slot's own (Own: Feel / Softest / Loudest / Full volume
 //                  at = slots.<i>.touch.*), or for Normal the playing keyboard's own curve (Settings › Your
 //                  keyboards); its reference diagonal is the --line-2 token (themes-critic T3).
 //  - Advanced    = lib.section('slot<i>-adv'): pan, width (only when hasParam and not already a smart slider),
@@ -65,15 +65,16 @@ const GROUP_NOUNS = {
 };
 const TYPE_WORDS = { sampler: 'sampled', synth: 'synth', organ: 'organ' };
 /** Same words as Settings ▸ Velocity (views/edit.js TOUCH_LABELS). The mockup's Soft/Hard were not adopted. */
+// v11-touch: velocityCurve 'custom' reads "Own": "Custom" is not an Edit word (ux-round2 #5)
 export const TOUCH_LABELS = Object.freeze({
-  soft: 'Light', normal: 'Normal', hard: 'Heavy', fixed: 'Fixed', custom: 'Custom',
+  soft: 'Light', normal: 'Normal', hard: 'Heavy', fixed: 'Fixed', custom: 'Own',
 });
 const TOUCH_HINTS = {
   soft: 'Light: soft playing still sounds full.',
   normal: 'Normal: volume follows how hard you play (and your keyboard’s own touch, if you gave it one in Settings).',
   hard: 'Heavy: you have to dig in for full volume.',
   fixed: 'Fixed: every note plays at the same volume.',
-  custom: 'Custom: this sound’s own curve.',
+  custom: 'Own: this sound’s own curve.',
 };
 const VEL_OPTS = ['soft', 'normal', 'hard', 'fixed', 'custom']
   .map((v) => ({ value: v, label: TOUCH_LABELS[v], title: TOUCH_HINTS[v] }));
@@ -594,11 +595,13 @@ function mountSlot(el, ctx, opts) {
     ctl.resp = binder.ctl(P('velocityCurve'), (onChange) => C.segmented({
       label: 'Response', options: VEL_OPTS, onChange,
     }));
-    // v11-touch: Custom = this sound's own curve (slots.<i>.touch.*; absent rows = the linear defaults)
-    const touchSl = (k, o) => binder.ctl(P(`touch.${k}`), (onChange) => slider({
-      min: describe(P(`touch.${k}`)).min, max: describe(P(`touch.${k}`)).max, default: describe(P(`touch.${k}`)).default,
-      ...o, onChange,
-    }));
+    // v11-touch: Own ('custom') = this sound's own curve (slots.<i>.touch.*; absent rows = the linear defaults)
+    const touchSl = (k, o) => {
+      const row = describe(P(`touch.${k}`));
+      return binder.ctl(P(`touch.${k}`), (onChange) => slider({
+        min: row.min, max: row.max, default: row.default, ...o, onChange,
+      }));
+    };
     ctl.touch = [
       touchSl('shape', { label: 'Feel', curve: 'log', ends: ['light', 'heavy'], word: (v) => touchWord({ shape: v }),
         format: () => '' }),
@@ -1023,7 +1026,8 @@ function mountSlot(el, ctx, opts) {
     parts.push(`Transpose ${signed(Math.round(Number(slot.transpose) || 0))}`);
     parts.push(`Voices ${VOICE_WORDS[slot.mono] || 'All'}`);
     parts.push(`Pitch bend ${slot.bendEnabled ? 'On' : 'Off'}`);
-    if (slot.velocityCurve && slot.velocityCurve !== 'normal') parts.push(`${TOUCH_LABELS[slot.velocityCurve] || 'Custom'} touch`);
+    const vc = slot.velocityCurve;
+    if (vc && vc !== 'normal') parts.push(`${TOUCH_LABELS[vc] || 'Own'} touch`);
     // sustain: only when set (absent = today's sound)
     if (Number.isFinite(slot.release)) parts.push(`Release ${secs(slot.release)}`);
     if (Number.isFinite(slot.pedalHold)) parts.push(`Pedal hold ${secs(slot.pedalHold)}`);

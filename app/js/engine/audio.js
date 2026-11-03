@@ -20,7 +20,9 @@ import { FxGraph, Channel, AudioTimer, Coalescer, rngFor, isOfflineContext, linF
 import { InstrumentRegistry } from './instruments.js';
 import { BufferCache } from './sampler.js';
 import { Drone } from './drone.js';
-import { COMPILED_PRESETS, compileTouch, touchAt, pedalCurve, PEDAL_CURVES, TOUCH_KEYS } from '../shared/touch-curve.js';
+import {
+  COMPILED_PRESETS, compileTouch, touchAt, pedalCurve, PEDAL_CURVES, TOUCH_KEYS,
+} from '../shared/touch-curve.js';
 
 const MB = 1024 * 1024;
 const lerp = (a, b, x) => a + (b - a) * x;
@@ -120,7 +122,9 @@ export function normalizePatch(patch) {
     // v11-touch: the slot's own curve (read while velocityCurve is 'custom'); absent = the PARAMS defaults
     if (s.touch && typeof s.touch === 'object') {
       slot.touch = {};
-      for (const k of TOUCH_KEYS) if (s.touch[k] !== undefined) slot.touch[k] = clampParam(`slots.${i}.touch.${k}`, s.touch[k]);
+      for (const k of TOUCH_KEYS) {
+        if (s.touch[k] !== undefined) slot.touch[k] = clampParam(`slots.${i}.touch.${k}`, s.touch[k]);
+      }
     } else delete slot.touch;
     out.slots.push(slot);
   }
@@ -1064,7 +1068,9 @@ export class AudioEngine extends EventTarget {
         if (rest[1] === 'cutHz' || rest[1] === 'hiCutHz') return resolveSlotEq(cfg.eq)[rest[1]];
         return cfg.eq?.[rest[1]] ?? PARAMS.find((e) => e.path === `slots.<i>.eq.${rest[1]}`)?.default;
       }
-      if (rest[0] === 'touch') return cfg.touch?.[rest[1]] ?? PARAMS.find((e) => e.path === `slots.<i>.touch.${rest[1]}`)?.default;
+      if (rest[0] === 'touch') {
+        return cfg.touch?.[rest[1]] ?? PARAMS.find((e) => e.path === `slots.<i>.touch.${rest[1]}`)?.default;
+      }
       return rest[0] === 'sends' ? cfg.sends[rest[1]] : cfg[rest[0]];
     }
     const [head, unit, key] = path.split('.');

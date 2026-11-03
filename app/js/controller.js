@@ -6,7 +6,8 @@
 // Engine calls used (all feature-detected; a missing method warns once):
 //   start, restart({latency, sinkId}), prepare(patch)→token, commit(token,{when}), preload(patches[]),
 //   setParam(path, v), setTranspose(semis), setRouting({modWheel,expression,volume,bend,swell}), setTempo(bpm|null),
-//   noteOn(note, vel 1..127[, {touch}]) (v11-touch: the keyboard's own curve), noteOff(note), sustain(bool), pitchBend(-1..1), modWheel/expression/volumeCC(0..1),
+//   noteOn(note, vel 1..127[, {touch}]) (v11-touch: the keyboard's own curve),
+//   noteOff(note), sustain(bool), pitchBend(-1..1), modWheel/expression/volumeCC(0..1),
 //   setWheel('virtual', v), swell(bool), allNotesOff(), fadeOutAll(sec), setSinkId(id), setMono(bool),
 //   drone.setKey(pc, {minor}), drone.configure(songDrone) (mode + options + params), drone.attachFiles([{name,url}]),
 //   setKeyContext(pc, minor) (optional: chord spelling), ctx.{state,currentTime,resume}, latencyMs,
@@ -871,7 +872,7 @@ export function createController(o) {
   // ---- v11-touch: per-keyboard touch curves (settings.keyboards, keyed by MIDI device name)
   /** MIDI input id → device name (from the 'devices' events; Web MIDI ids change on a re-plug, names don't). */
   const inputNames = new Map();
-  /** input id (or COMPUTER_KEYBOARD) → noteOn options {touch} for a keyboard with its own curve; rebuilt on change. */
+  /** input id (or COMPUTER_KEYBOARD) → noteOn options {touch} of a keyboard with its own curve (rebuilt on change). */
   const touchOpts = new Map();
   let touchCapture = null; // captureTouch() listener
   function rebuildTouch() {

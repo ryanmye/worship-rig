@@ -346,7 +346,9 @@ export function normalizeFx(raw) {
 
 function normalizeWheel(raw, defTarget) {
   const w = isObj(raw) ? raw : {};
-  const out = { ...w, target: oneOf(w.target, WHEEL_TARGETS, defTarget), min: num(w.min, 0, 1, 0), max: num(w.max, 0, 1, 1) };
+  const out = {
+    ...w, target: oneOf(w.target, WHEEL_TARGETS, defTarget), min: num(w.min, 0, 1, 0), max: num(w.max, 0, 1, 1),
+  };
   // v11-touch: expression.curve is optional ('linear' | 'log'; absent = linear); an unknown value is dropped
   if (out.curve !== undefined && !PEDAL_CURVES.includes(out.curve)) delete out.curve;
   return out;
@@ -1527,7 +1529,9 @@ export function createStore(opts = {}) {
       if (fields === null) delete next[name];
       else if (isObj(fields)) {
         const e = { ...(next[name] || {}), ...fields };
-        for (const k of Object.keys(e)) if (e[k] === null || e[k] === undefined || (k === 'remember' && e[k] !== true)) delete e[k];
+        for (const k of Object.keys(e)) {
+          if (e[k] === null || e[k] === undefined || (k === 'remember' && e[k] !== true)) delete e[k];
+        }
         if (Object.keys(e).length) next[name] = e;
         else delete next[name];
       } else return false;

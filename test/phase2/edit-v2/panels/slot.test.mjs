@@ -637,7 +637,7 @@ test('slot: WHERE IT PLAYS — note fields, mini keyboard, Whole keyboard, Set l
     // ui-edit "velocity-curve sparkline + More summary": Response = velocityCurve with Settings' words
     const resp = bindSel(t, 'slots.0.velocityCurve');
     assert.deepEqual(await t.ev((s) => [...document.querySelectorAll(`${s} button`)].map((b) => b.textContent), resp),
-      ['Light', 'Normal', 'Heavy', 'Fixed', 'Custom']); // v11-touch: + Custom
+      ['Light', 'Normal', 'Heavy', 'Fixed', 'Own']); // v11-touch: + Own (velocityCurve 'custom')
     const spark = `${t.host} .ev2-slot-spark`;
     assert.equal(await t.page.getAttribute(spark, 'data-curve'), 'normal');
     await t.click(`${resp} button[data-value="soft"]`);
@@ -668,7 +668,7 @@ test('slot: v11-touch — Custom touch curve, sparkline shows the active curve, 
     const resp = bindSel(t, 'slots.0.velocityCurve');
     const spark = `${t.host} .ev2-slot-spark`;
     const box = `${t.host} .ev2-slot-touch`;
-    assert.equal(await t.ev((s) => document.querySelector(s).hidden, box), true, 'hidden until Custom');
+    assert.equal(await t.ev((s) => document.querySelector(s).hidden, box), true, 'hidden until Own');
     // T3: the reference line is the theme's --line-2, never the hard-coded white
     const ref = await t.page.getAttribute(spark, 'data-ref');
     assert.ok(ref && !/255,\s*255,\s*255/.test(ref), `reference stroke ${ref}`);
@@ -687,7 +687,7 @@ test('slot: v11-touch — Custom touch curve, sparkline shows the active curve, 
     await t.until(() => Math.abs((window.__rig.store.currentSong().patch.slots[0].touch?.min ?? 0) - 0.4) < 0.02);
     await t.until(() => Math.abs((window.__rig.engine.getParam('slots.0.touch.min') ?? 0) - 0.4) < 0.02);
     assert.deepEqual(await t.ev(() => Object.keys(window.__rig.store.currentSong().patch.slots[0].touch)), ['min']);
-    assert.match(await t.page.textContent(`${t.host} details[data-sec="slot0-adv"] .ev2-sec-sum`), /Custom touch/);
+    assert.match(await t.page.textContent(`${t.host} details[data-sec="slot0-adv"] .ev2-sec-sum`), /Own touch/);
     await t.screenshot('slot-touch-custom');
     // the playing slot uses it: the engine's own channel cache compiles the custom curve
     const v01 = await t.ev(() => {
