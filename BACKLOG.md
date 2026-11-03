@@ -1,7 +1,8 @@
 # BACKLOG — ideas and deferred work (kept so nothing is lost)
 
 Owner: cloud session writes it; either side may propose lines via `.cloud-outbox/status.md` (`BACKLOG: …`) or an
-inbox file. Items move to COORDINATION.md "In flight" when scheduled. Last updated 2026-09-30 (themes-final).
+inbox file. Items move to COORDINATION.md "In flight" when scheduled. Last updated 2026-11-03 (v1 gate ticked
+against the status log).
 
 Legend: **S/M/L** effort · **who** = which side is the natural owner (cloud = implementation, local = Mac/hardware).
 
@@ -10,22 +11,30 @@ Legend: **S/M/L** effort · **who** = which side is the natural owner (cloud = i
 Proposed reading: v1 ships when the items below are done; everything else in sections A–C is v1.1+ unless Ryan pulls
 it in. Cloud proposes, Ryan decides.
 **Must (v1):**
-- [ ] Next cloud drop merged on the Mac: review-4 fixes, engine idle-CPU, themes (8, Sanctuary default, T1 font fix),
+- [x] Next cloud drop merged on the Mac: review-4 fixes, engine idle-CPU, themes (8, Sanctuary default, T1 font fix),
       popover theming, hardware fixes (L-23/L-25, two-state pedal test, Bluetooth hint), C9 UI idle items, L-24 audit.
-- [ ] Low-resource part 2 (drone freeze + audio sleep) merged and measured on the Mac (hidden drone-on ≤ ~10, asleep ≈ 0).
+      Done: SYNC 083933Z + 164743Z, fast tier 12/12 on the Mac (2026-09-30T17:03Z).
+- [x] Low-resource part 2 (drone freeze + audio sleep) merged and measured on the Mac (hidden drone-on ≤ ~10, asleep ≈ 0).
+      Measured 2026-09-30T05:31Z: frozen 10.7–11.6 % (slightly over ~10), asleep 0.1 %, hide-on-close 9.8 %.
 - [ ] Full suites green on the Mac incl. Electron, build-lint, 20-min soak; CI green on main (macos-14).
+      Mac: fast 12/12, Electron 17/17, build-lint green on v1.0.1. OPEN: no soak on the v1.0.1 tree (last 12/12 was
+      pre-themes, 09-30T01:14Z); CI red on macos-14 (engine 81/83, settings 32/37, chrome-fallback 4/5; 2026-10-02).
 - [x] Listening pass — Ryan did it offline 2026-09-30 and is happy with the sounds; no calibration round needed.
 - [ ] Hardware leftovers with Ryan: split-on-restart recording; MIDI Learn on the second keyboard.
-- [ ] Release pipeline: v1.0.0 tag APPROVED by Ryan (2026-09-30, after the drop + icon); Release with arm64 + x64 dmg/zip (dry run passes); README "Running on your Mac"
-      current; Starter library JSON exported and attached.
-- [ ] Site: real content + Mac screenshots (spec sent 2026-09-30), download buttons live once the Release exists.
-- [ ] Security: S1–S8 done; GitHub Support purge request — Ryan's call (not blocking).
-- [ ] App size < 500 MB per arch (366 / 372 MB today).
-- [ ] App icon: LOCAL running a proposer/critic loop (brief sent 2026-09-30); Ryan picks from design/icon/options.png.
+- [x] Release pipeline: v1.0.0 tag APPROVED by Ryan (2026-09-30, after the drop + icon); Release with arm64 + x64 dmg/zip (dry run passes); README "Running on your Mac"
+      current; Starter library JSON exported and attached. Done: v1.0.0 + v1.0.1 full releases, stable asset names.
+- [x] Site: real content + Mac screenshots (spec sent 2026-09-30), download buttons live once the Release exists.
+- [x] Security: S1–S8 done (S1 history rewrite 2026-09-30T00:15Z). Still Ryan's call, not blocking: send the GitHub
+      Support purge request drafted in reviews/s1-support-request.md.
+- [x] App size < 500 MB per arch (366 / 372 MB today).
+- [x] App icon: LOCAL running a proposer/critic loop (brief sent 2026-09-30); Ryan picks from design/icon/options.png. Done: D (W·R ligature)
+      shipped 2026-09-30T04:36Z; A stays the in-app mark.
 - [ ] First-run: Start-here card + key letters (done in review-4) verified on the Mac by a fresh library.
-- [ ] Sustain editable per slot (Ryan 2026-09-30: grand piano fades too early under a held pedal — the sampler's 10/16 s
+      Partly: site shots were taken on a fresh library; no explicit check of the card + key letters logged.
+- [x] Sustain editable per slot (Ryan 2026-09-30: grand piano fades too early under a held pedal — the sampler's 10/16 s
       sample cap; make the cap per instrument, add Release (pedal up) + Pedal hold (pedal down) to slot Advanced). Cloud
-      workflow `sustain`, runs after themes-final, before the drop.
+      workflow `sustain`, runs after themes-final, before the drop. Done: shipped in the 09-30 drop; pedal ring checked
+      on the Mac (EYEBALL 15:51Z).
 **Deferred to v1.1 (not gating) — Ryan's rule: v1 stays simple; anything that adds a new screen, mode, setting or concept waits:** everything else in A (menu-bar hotkeys, daily hook, H-sheet Edit, EQ simple mode,
 metronome, chord charts, MIDI-out, multitrack, shimmer/choir, Planning Center, in-app importer, disk streaming,
 auto-updater, pedal curves, custom velocity curves, scenes, stage display, practice mode, Windows/Linux), the low-resource part 3 items, and
