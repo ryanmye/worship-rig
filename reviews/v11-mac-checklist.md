@@ -53,6 +53,17 @@ CONTRACT_CHANGES `## v11-*` and `## ci-*`.
 - [ ] Split-on-restart recording; MIDI Learn on the second keyboard (hardware leftovers).
 - [ ] Low-resource drone-frozen CPU was 10.7–11.6 % against a target of about 10 %.
 
+## Ryan's answers (2026-11-03)
+- Release path: merge `claude/amazing-ptolemy-r464ae` straight into `main` when the suites are green (no PR; Ryan is
+  the only one working on the repo). The push to main runs CI on macos-14.
+- Version: **1.1.0**. The tag still waits for Ryan's word after the Mac checks, because it publishes a release.
+- Q3: global next/previous hotkeys move through the **setlist's songs**, not the menu-bar modes.
+- Q10: yes. Lower the song-switch peak, and see how far memory can come down in general (task v11-memory).
+- Q18: **Panic stops the click** (metronome and count-in; the MIDI clock sends Stop).
+- Q7: keyboard curves are **per MIDI device and stay with each Mac**: device-local like the chosen MIDI input, not
+  exported, and not overwritten by a replace-import.
+- All other questions: still open.
+
 ## Questions for Ryan
 
 **Electron**
