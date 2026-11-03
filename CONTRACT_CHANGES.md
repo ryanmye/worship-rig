@@ -5952,14 +5952,20 @@ as audio times, plus Start and Stop:
   +3–27 % with the click, mostly the offline pump's suspends; a realtime context has none.
 - **MIDI clock jitter** (settings suite, a fake Web MIDI output in the real app and the settings fixture, 120 BPM,
   4 s, about 200 pulses). The timestamps handed to `send()` vs the ideal 20.833 ms grid:
-  - **max 0.026–0.17 ms, rms 0.002–0.012 ms**;
-  - sent 35–335 ms ahead, 0 late, on the runs without a stall.
+  - **max 0.026–0.60 ms, rms 0.002–0.062 ms** (six runs; the 0.60 ms one is the real app after the scenes merge);
+  - sent 21–338 ms ahead, 0 late, on the runs without a stall.
   - Two runs under load showed what the guards are for. In one, a ~30 ms audio-thread skip re-anchored the map, and
     one gap was off by 30 ms (the click skipped too). In the other, a main-thread stall longer than the look-ahead
     (then 0.2 s, now 0.3 s) sent 4 pulses late, up to 71 ms; late pulses go out at once, never dropped, so receivers
     keep the count.
   - These numbers are the scheduling side only. The jitter on the wire is the OS MIDI driver's (CoreMIDI) and needs
     the Mac with a real interface (LOCAL).
+
+**Perform's song row** (KEY · BPM line · Click · SCENE 1 2 3 (v11-scenes) · Notes ≤ 1340 px). The chip says
+"Click" / "Click on" / "Count-in" at ≥ 1341 px. At ≤ 1340 px, and at every width while the scene numbers show, it is
+the metronome plus the tempo ("♩ 97"), and the BPM line goes (`.click-bpm`; `aria-label` "Click on (97 BPM)"). With
+Click and scenes both there at ≤ 1340 px, the SCENE caption goes and Notes is its icon. Measured in Classic:
+1280×800 row 373 / 399 px, 1024×700 365 / 432 px. Before that fix, Notes clipped by 77 px at 1280.
 
 **Tests:**
 - unit `test/unit/shared/click-math.test.mjs` (12): meters, grid, tempo change at the horizon, a song-switch merge
