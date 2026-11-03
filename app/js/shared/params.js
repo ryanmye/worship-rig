@@ -361,6 +361,7 @@ export const LEARNABLE = Object.freeze([
   'slots.0.gain', 'slots.1.gain', 'slots.2.gain', 'slots.3.gain',
   'drone.gain', 'fx.reverb.returnGain', 'master.volume',
   'nextSong', 'prevSong', 'panic', 'fadeOutAll', 'swell',
+  'nextScene', 'prevScene', // v11-scenes: a footswitch steps the song's scenes
 ]);
 
 /**
@@ -373,7 +374,8 @@ export function isLearnable(controlId) {
 
 /**
  * @param {string} controlId
- * @returns {boolean} true for momentary actions (nextSong/prevSong/panic/fadeOutAll/swell), false for faders
+ * @returns {boolean} true for momentary actions (nextSong/prevSong/panic/fadeOutAll/swell/nextScene/prevScene),
+ *   false for faders
  */
 export function isLearnButton(controlId) {
   return isLearnable(controlId) && !isValidPath(controlId);

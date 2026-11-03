@@ -31,6 +31,7 @@ import { isValidId as isThemeId, DEFAULT_THEME_ID } from './shared/themes.js';
 import { normalizeHotkeys } from './shared/hotkeys.js';
 import { PARAMS, clamp, describe, isValidPath, parsePath, defaultSlot, SLOT_COUNT } from './shared/params.js';
 import { normalizeTouch, PEDAL_CURVES, COMPUTER_KEYBOARD } from './shared/touch-curve.js';
+import { normalizeScenes } from './shared/scenes.js';
 import {
   FACTORY_SONGS, FACTORY_VERSION, FACTORY_SINCE, CATEGORIES, WHEEL_TARGETS, BEND_MODES, DRONE_MODES, defaultFx, defaultDrone, defaultRouting,
   blankSong, factoryById,
@@ -406,6 +407,11 @@ export function normalizeSong(raw, id) {
   out.tempo = raw.tempo === null || raw.tempo === undefined ? null : num(raw.tempo, 30, 300, null);
   out.patch = normalizePatch(raw.patch);
   out.drone = normalizeDrone(raw.drone);
+  // v11-scenes: optional (absent until a scene is saved); an empty or unusable list is dropped, so migrate stays
+  // idempotent
+  const scenes = normalizeScenes(raw.scenes);
+  if (scenes) out.scenes = scenes;
+  else delete out.scenes;
   return out;
 }
 
@@ -883,6 +889,12 @@ export function createStore(opts = {}) {
           return v === INVALID ? null : { segs, value: v };
         }
         return { segs, value: clone(value) };
+      }
+      // v11-scenes: the scenes list is written whole (shared/scenes.js); null / [] removes the field
+      if (field === 'scenes') {
+        if (rest.length) return null;
+        if (value !== null && value !== undefined && !Array.isArray(value)) return null;
+        return { segs, value: normalizeScenes(value) };
       }
       if (rest.length) return { segs, value: clone(value) }; // unknown nested fields
       switch (field) {

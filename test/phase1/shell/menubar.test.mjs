@@ -138,8 +138,8 @@ test('bus: state validation follows contract v1 (required fields, v:1, nullable 
 });
 
 test('bus: command validation covers every type and its payload', () => {
-  assert.equal(COMMAND_TYPES.length, 12);
-  for (const type of ['hello', 'nextMode', 'prevMode', 'panic', 'fadeOutAll', 'droneToggle', 'openMain']) assert.equal(commandError({ v: 1, type }), null, type);
+  assert.equal(COMMAND_TYPES.length, 14);
+  for (const type of ['hello', 'nextMode', 'prevMode', 'panic', 'fadeOutAll', 'droneToggle', 'openMain', 'nextScene', 'prevScene']) assert.equal(commandError({ v: 1, type }), null, type);
   assert.equal(commandError({ v: 1, type: 'selectMode', id: 'factory:x' }), null);
   assert.notEqual(commandError({ v: 1, type: 'selectMode' }), null);
   assert.equal(commandError({ v: 1, type: 'master', value: 2 }), null);

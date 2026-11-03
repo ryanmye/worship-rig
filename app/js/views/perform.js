@@ -50,7 +50,7 @@ export const LOCK = Object.freeze({
     'slot faders', 'ON tiles', 'drone ON tile', 'drone level', 'wheel', 'Swell', 'strip chips', 'header Space / Echo',
     'Quick › This song', 'Quick › restart audio', 'Prev / Next / setlist tap', 'Fade out', 'PANIC',
     'pad folder Rescan (Mac app, pads loaded)', 'Notes toggle', 'top bar: master volume / REC / Quick',
-    'banner: Restart sound / Not now',
+    'banner: Restart sound / Not now', 'scene numbers', // v11-scenes
   ]),
   hold: Object.freeze(['KEY ▾ Sing it in…', 'Transpose −/+', 'drone key grid', 'Major / Minor', 'Revert']),
   frozen: Object.freeze([
@@ -327,13 +327,22 @@ export function mountPerform(root, ctx) {
   const songLoading = h('span.song-loading', { role: 'status' }, h('span.song-loading-spin', { 'aria-hidden': 'true' }), h('span', { text: 'Loading…' }));
   const fadedChip = h('span.faded-chip', { hidden: true, role: 'status', 'data-testid': 'faded-chip', text: say('fadedChip') });
   const notesBtn = btn('.notes-btn', [icon('note', 16), 'Notes'], { 'aria-pressed': 'false', 'aria-controls': 'perform-notes', 'data-testid': 'notes-toggle' });
+  // v11-scenes: "SCENE 1 2 3", only for a song with scenes. A tap plays that scene; the lit one goes back to the
+  // song's own levels. Live under lock (a playing move, like the faders).
+  const sceneDots = h('span.scene-dots', { hidden: true, role: 'group', 'data-testid': 'scene-dots' });
+  d.listen(sceneDots, 'click', (e) => {
+    const b = e.target.closest('button[data-n]');
+    if (!b) return;
+    const n = Number(b.dataset.n);
+    controller.scenes?.go(controller.scenes.state().n === n ? null : n);
+  });
   const songBlock = h(
     'section.panel.song-block',
     { 'aria-label': 'Current song' },
     songName,
     // onboarding O2: "Loading…" sits in the KEY row (it takes the BPM's place while it shows), never over the title
     h('div.song-sub', {}, h('span.song-key-cap', { text: 'Key' }), keyBtn.el, songPlayIn, songBpm, songLoading, holdTag(),
-      notesBtn),
+      sceneDots, notesBtn),
   );
 
   const tDown = use(holdButton({ label: MINUS, ms: HOLD_MS, requireHold: isLocked, className: 't-down', capBounds: '.transpose', ariaLabel: 'Transpose down a semitone', testid: 'transpose-down', onActivate: () => controller.transposeDown() }));
@@ -569,7 +578,7 @@ export function mountPerform(root, ctx) {
   quality.el.dataset.testid = 'key-quality';
   const gridGate = holdGate(grid.el, { selector: '.key-btn', enabled: isLocked, run: (b) => setSongKey(Number(b.dataset.pc)), onHint: () => lockHint(), d });
   const qualityGate = holdGate(quality.el, { selector: '.seg', enabled: isLocked, run: (b) => setSong('minor', b.dataset.value === 'true'), onHint: () => lockHint(), d });
-  const droneGain = use(fader({ path: 'drone.gain', label: 'Drone level', compact: true, color: 'var(--drone)', relative: true, resetOnDoubleClick: false, onChange: (v) => setSong('drone.gain', v) }));
+  const droneGain = use(fader({ path: 'drone.gain', label: 'Drone level', compact: true, color: 'var(--drone)', relative: true, resetOnDoubleClick: false, onChange: (v) => sceneLevel('drone.gain', v) || setSong('drone.gain', v) }));
   droneGain.el.dataset.testid = 'drone-gain';
   const brightness = use(fader({ path: 'drone.brightness', label: 'Brightness', compact: true, color: 'var(--drone)', relative: true, resetOnDoubleClick: false, format: (v) => `${brightnessWord(v)} · ${Math.round(v * 100)}%`, onChange: (v) => setSong('drone.brightness', v) }));
   brightness.el.dataset.testid = 'drone-brightness';
@@ -713,6 +722,9 @@ export function mountPerform(root, ctx) {
       onTouch: (v) => !isLocked() && store.set('settings.velocitySens', v),
       onPedalReversed: (b) => !isLocked() && store.set('settings.pedalInvert', !!b),
       onRestartAudio: () => controller.restartAudio(),
+      onSaveScene: (n) => {
+        if (controller.scenes?.save(n)) ctx.toast?.(say('sceneSaved', { n: n + 1 }), 'ok', { ms: 3000 });
+      },
       onResumeAudio: () =>
         (typeof controller.resumeAudio === 'function' ? controller.resumeAudio() : controller.restartAudio()),
       onAllSettings: () => {
@@ -890,16 +902,28 @@ export function mountPerform(root, ctx) {
     store.set(`songs.${shownId}.patch.slots.${i}.${field}`, value);
   }
   function setSlotGain(i, v) {
-    setSlot(i, 'gain', v);
+    if (!sceneLevel(`slots.${i}.gain`, v)) setSlot(i, 'gain', v);
   }
+  /**
+   * v11-scenes: while a scene plays, Perform's level moves (faders, ON tiles, drone level) are live moves on top of
+   * it (controller.scenes.adjust): heard at once, kept by "Save as scene", dropped at the next scene change. The
+   * song's own levels stay as saved. @returns {boolean} true when the playing scene took it
+   */
+  function sceneLevel(path, value) {
+    return !!(shownId && controller.scenes?.state().id === shownId && controller.scenes.adjust(path, value));
+  }
+  /** The song as it sounds: its playing scene on top (the faders and ON tiles show this). */
+  const liveOf = (song) => (song && controller.scenes ? controller.scenes.view(song) : song);
   function setMuted(i, muted) {
     if (!shownId) return;
-    const slot = store.getSong(shownId)?.patch.slots[i];
+    const slot = liveOf(store.getSong(shownId))?.patch.slots[i];
     if (!slot) return;
     // first-class mute (shell fixes §1 migrates the old gain 0 + mutedGain convention; round2-ui #9 dropped the
     // write fallback — a refused set means a read-only store, where the fallback writes were refused too)
-    if (slotMuteState(slot).muted !== muted) store.set(`songs.${shownId}.patch.slots.${i}.muted`, muted);
-    renderSlots(store.getSong(shownId)); // a refused write puts the tile back
+    if (slotMuteState(slot).muted !== muted && !sceneLevel(`slots.${i}.muted`, muted)) {
+      store.set(`songs.${shownId}.patch.slots.${i}.muted`, muted);
+    }
+    renderSlots(liveOf(store.getSong(shownId))); // a refused write puts the tile back
   }
   /** Drone ON tile: off ↔ the last source (this session), else the snapshot's source, else Synth (round-3 fix 5). */
   function setDroneOn(on) {
@@ -956,6 +980,7 @@ export function mountPerform(root, ctx) {
     for (const k of SAVED_FIELDS) {
       if (JSON.stringify(cur[k]) !== JSON.stringify(s[k])) store.set(`songs.${shownId}.${k}`, s[k]);
     }
+    if (controller.scenes?.state().n !== null) controller.scenes?.go(null); // v11-scenes: the song's own levels
     ctx.toast?.(`“${s.name}” is back to how it was when you selected it.`, 'ok', { ms: 3000 });
   }
 
@@ -1078,9 +1103,11 @@ export function mountPerform(root, ctx) {
       nextBtn.title = '';
       nextBtn.setAttribute('aria-label', 'Next song (end of set)');
     }
-    // strips
+    // strips (v11-scenes: levels and ON tiles as they sound, the playing scene on top)
     perform.classList.toggle('chips-2', st.performChips === 2);
-    renderSlots(song);
+    const live = liveOf(song);
+    renderSlots(live);
+    renderScenes();
     // drone
     if (song) {
       const dr = song.drone;
@@ -1089,7 +1116,7 @@ export function mountPerform(root, ctx) {
       droneMode.set(on ? dr.mode : lastDroneSource || droneOnMode(snap && snap.id === song.id ? snap.song : song));
       grid.set({ pc: song.hearIn, minor: song.minor });
       quality.set(!!song.minor);
-      droneGain.set(dr.gain);
+      droneGain.set(live.drone.gain);
       brightness.set(Number.isFinite(dr.brightness) ? dr.brightness : 0.5);
       movement.set(Number.isFinite(dr.movement) ? dr.movement : 0.3);
       follow.set(dr.chordFollow);
@@ -1390,13 +1417,38 @@ export function mountPerform(root, ctx) {
     padBtn.disabled = locked && !(ctx.rig?.isElectron && padsInfo && padsInfo.total > 0);
   }
 
+  /** v11-scenes: the scene numbers (hidden until the song has a scene). */
+  function renderScenes() {
+    const sc = controller.scenes?.state() || { count: 0 };
+    const count = sc.id && sc.id === shownId ? sc.count : 0;
+    sceneDots.hidden = !count;
+    if (!count) return;
+    if (sceneDots.childElementCount !== count + 1) {
+      sceneDots.replaceChildren(h('span.song-key-cap', { text: 'Scene' }));
+      for (let n = 0; n < count; n++) {
+        sceneDots.append(h('button.scene-dot', { type: 'button', 'data-n': String(n), 'data-testid': `scene-${n + 1}`,
+          text: String(n + 1) }));
+      }
+    }
+    sceneDots.setAttribute('aria-label', sc.n === null ? say('sceneOwn') : say('sceneLabel', { n: sc.n + 1 }));
+    for (const b of sceneDots.querySelectorAll('button')) {
+      const n = Number(b.dataset.n);
+      b.classList.toggle('on', n === sc.n);
+      b.setAttribute('aria-pressed', String(n === sc.n));
+      b.title = n === sc.n ? say('sceneBack') : say('sceneLabel', { n: n + 1 });
+    }
+  }
+
   function renderQuick() {
     const state = store.get();
     const st = state.settings;
     const song = state.songs[st.currentSongId] || null;
     const dl = song?.patch.fx?.delay;
     const a = status.audio;
+    const sc = controller.scenes?.state();
     quick.set({
+      // v11-scenes: Save as scene 1..count+1 (≤ 3) for the playing song
+      scenes: sc && song && sc.id === song.id ? { count: sc.count, n: sc.n, max: controller.scenes.max } : null,
       songName: song ? song.name : '',
       tempo: song?.tempo ?? null,
       swell: song?.patch.swell?.seconds ?? 8,
@@ -1654,6 +1706,7 @@ export function mountPerform(root, ctx) {
     wheelRaf.push();
     renderDroneReadout();
   });
+  d.listen(controller, 'scene', () => renderSong(store.get())); // v11-scenes
   if (midi) {
     d.listen(midi, 'bend', (e) => {
       const v = Number(e.detail?.value) || 0;

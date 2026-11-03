@@ -26,6 +26,8 @@ export const LEARN_NAMES = Object.freeze({
   panic: 'Panic (all notes off)',
   fadeOutAll: 'Fade out all',
   swell: 'Swell',
+  nextScene: 'Next scene', // v11-scenes
+  prevScene: 'Previous scene',
 });
 /** Rows of the Learn table: params.LEARNABLE, plus 'swell' (the controller accepts it; see CONTRACT_CHANGES shell #4). */
 export const LEARN_ROWS = Object.freeze([...LEARNABLE, ...(LEARNABLE.includes('swell') ? [] : ['swell'])]);

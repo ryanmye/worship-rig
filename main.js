@@ -623,7 +623,7 @@ const BUS_STATE_MAX = 64 * 1024;
 const BUS_COMMAND_MAX = 4 * 1024;
 const BUS_COMMANDS = new Set([
   'hello', 'selectMode', 'nextMode', 'prevMode', 'panic', 'fadeOutAll', 'master', 'droneToggle', 'droneKey',
-  'lowResource', 'openMain', 'record',
+  'lowResource', 'openMain', 'record', 'nextScene', 'prevScene', // v11-scenes
 ]);
 const POPOVER_W = 320;
 const POPOVER_H = 440;

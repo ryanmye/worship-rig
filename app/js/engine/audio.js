@@ -17,6 +17,7 @@ import { PARAMS, parsePath, clamp as clampParam, defaultSlot, SLOT_COUNT } from 
 import { spellingPreference, clampMidi, mod12 } from '../shared/music.js';
 import { chordName } from '../shared/chords.js';
 import { FxGraph, Channel, AudioTimer, Coalescer, rngFor, isOfflineContext, linFrom, glideFrom, measureCompMakeup, measureGlueRef, resolveSlotEq, slotEqResponse, FX_IDLE_POLL_SEC } from './fx.js';
+import { trackedMove } from './fx.js'; // v11-scenes
 import { InstrumentRegistry } from './instruments.js';
 import { BufferCache } from './sampler.js';
 import { Drone } from './drone.js';
@@ -31,6 +32,8 @@ const clone = (o) => (o == null ? o : JSON.parse(JSON.stringify(o)));
 /** Coalescer keys that carry song (patch) state; commit() drops their pending writes (round3-eq M1). */
 const isSongKey = (k) => k.startsWith('slots.') || k.startsWith('fx.') || k.startsWith('master.');
 // macro.intensity → morph() of these (type:id). organ soft-pad: morph ≥ .5 switches its rotary speed.
+/** v11-scenes: step of a virtual-wheel glide (setWheel {glide}); the swell steps every 50 ms. */
+const WHEEL_GLIDE_STEP = 0.025;
 const PAD_LIKE = new Set(['synth:warm-pad', 'synth:glass-pad', 'synth:strings', 'synth:supersaw-pad', 'synth:juno-pad', 'synth:shimmer-pad', 'organ:soft-pad']);
 /** Default sample manifests, relative to the app root: factory + the optional "My Samples" one. */
 export const DEFAULT_MANIFEST_URLS = Object.freeze(['./samples/manifest.json', './api/user-samples/manifest.json']);
@@ -841,13 +844,13 @@ export class AudioEngine extends EventTarget {
     sc.cfg = cfg;
     if (fresh) {
       // nothing sounds on a fresh channel yet: step values are inaudible
-      setNow(s.fader.gain, cfg.gain, t);
+      sc.faderMove = trackedMove(s.fader.gain, null, cfg.gain, t, 'set'); // v11-scenes: tracked (fx.moveAt)
       setNow(s.pan.pan, cfg.pan, t);
       for (const k of ['reverb', 'delay', 'chorus']) setNow(s.sends[k].gain, cfg.sends[k], t);
       s.setWidth(this._effWidth(sc, cfg), t, true);
       s.setEq(cfg.eq || {}, t, true);
     } else {
-      rampTo(s.fader.gain, cfg.gain, t);
+      sc.faderMove = trackedMove(s.fader.gain, sc.faderMove, cfg.gain, t, 0, prev ? prev.gain : cfg.gain);
       rampTo(s.pan.pan, cfg.pan, t);
       s.setWidth(this._effWidth(sc, cfg), t);
       s.setEq(cfg.eq || {}, t);
@@ -937,17 +940,18 @@ export class AudioEngine extends EventTarget {
   /**
    * @param {string} path
    * @param {*} value
-   * @param {{when?:number}} [o]
+   * @param {{when?:number, glide?:number}} [o]  glide (v11-scenes): seconds of a linear glide from where the level is
+   *        at `when`, for slots.<i>.gain and drone.gain (a scene change); other paths ignore it
    * @returns {boolean}
    */
-  setParam(path, value, { when } = {}) {
+  setParam(path, value, { when, glide = 0 } = {}) {
     const d = parsePath(path);
     if (!d) {
       this._warn(`Unknown parameter "${path}"`);
       return false;
     }
     const t = this._t(when);
-    if (d.slot !== null) return this._setSlotParam(d, path, value, t);
+    if (d.slot !== null) return this._setSlotParam(d, path, value, t, glide);
     let v;
     try {
       v = clampParam(path, value);
@@ -960,7 +964,7 @@ export class AudioEngine extends EventTarget {
         this._warn(`${path} before start(); ignored.`);
         return false;
       }
-      this.drone.setParam(unit, v, t);
+      this.drone.setParam(unit, v, t, glide);
       return true;
     }
     if (head === 'master') {
@@ -1000,7 +1004,7 @@ export class AudioEngine extends EventTarget {
     return true;
   }
 
-  _setSlotParam(d, path, value, t) {
+  _setSlotParam(d, path, value, t, glide = 0) {
     const cfg = this._patch.slots[d.slot];
     if (!cfg || !this.coalesce) return false;
     const sc = this.slots[d.slot];
@@ -1042,10 +1046,17 @@ export class AudioEngine extends EventTarget {
       return true;
     }
     const key = rest[0];
+    const prevGain = cfg.gain;
     cfg[key] = v;
     if (key === 'velocityCurve' && sc) sc.touchCfg = null; // v11-touch: rebuilt at the next noteOn
     if (!sc) return true;
-    if (key === 'gain') this.coalesce.push(path, t, (tt) => rampTo(sc.strip.fader.gain, v, tt));
+    if (key === 'gain') {
+      // v11-scenes: `glide` (s) = a scene change, a linear glide from where the fader is (fx.trackedMove)
+      const from = prevGain;
+      this.coalesce.push(path, t, (tt) => {
+        sc.faderMove = trackedMove(sc.strip.fader.gain, sc.faderMove, v, tt, glide > 0 ? glide : 0, from);
+      });
+    }
     else if (key === 'width') this.coalesce.push(path, t, (tt) => sc.strip.setWidth(this._effWidth(sc, cfg), tt));
     else if (key === 'pan') this.coalesce.push(path, t, (tt) => rampTo(sc.strip.pan.pan, v, tt));
     else if (key === 'bendEnabled' && !v) sc.inst.setBend?.(0, t);
@@ -1642,15 +1653,40 @@ export class AudioEngine extends EventTarget {
   /**
    * @param {'mod'|'expr'|'vol'|'virtual'} source
    * @param {number} value01
+   * @param {{when?:number, glide?:number}} [o]  glide (v11-scenes, 'virtual' only): move there over `glide` s
    */
-  setWheel(source, value01, { when } = {}) {
+  setWheel(source, value01, { when, glide = 0 } = {}) {
+    if (source === 'virtual' && glide > 0 && this.timer) return this._glideWheel(value01, this._t(when), glide);
     return this._setWheel(source, value01, this._t(when), false);
+  }
+
+  /**
+   * v11-scenes: the virtual wheel walks to `to` in WHEEL_GLIDE_STEP steps on the audio clock (the swell's method:
+   * each step is smoothed by _applyWheels' τ, so the wheel factors move without a step). A wheel write, a hardware
+   * takeover or a swell ends it.
+   */
+  _glideWheel(to, t, dur) {
+    const g = { from: this.wheel.mod, to: clamp01(to), t0: t, dur };
+    this._swell = null;
+    this._wheelGlide = g;
+    const step = (tt) => {
+      if (this._wheelGlide !== g) return;
+      const x = Math.min(1, (tt - g.t0) / g.dur);
+      this._setWheel('virtual', lerp(g.from, g.to, x), tt, true);
+      if (x >= 1) this._wheelGlide = null;
+      else this.timer.at(tt + WHEEL_GLIDE_STEP, step);
+    };
+    step(t);
+    return true;
   }
 
   _setWheel(source, value01, t, fromSwell) {
     const v = clamp01(value01);
     if (source === 'virtual') {
-      if (!fromSwell) this._swell = null;
+      if (!fromSwell) {
+        this._swell = null;
+        this._wheelGlide = null;
+      }
       this.wheel.mod = v;
       this._modOwner = 'virtual';
       this._pickup = { lastHw: null };
@@ -1667,6 +1703,7 @@ export class AudioEngine extends EventTarget {
         }
         this._modOwner = 'hw';
         this._swell = null;
+        this._wheelGlide = null;
       }
       this.wheel.mod = v;
     } else if (source === 'expr') this.wheel.expr = v;
@@ -1700,6 +1737,7 @@ export class AudioEngine extends EventTarget {
     const t = this._t(when);
     if (start === undefined) start = !(this._swell && this._swell.dir === 'up');
     const seq = (this._swellSeq = (this._swellSeq || 0) + 1);
+    this._wheelGlide = null; // v11-scenes: the swell takes the wheel from a scene glide
     if (start) {
       const pre = this._swell?.pre ?? this.wheel.mod;
       this._swell = { seq, dir: 'up', pre, from: 0, to: 1, t0: t, dur: this._routing.swell.seconds };

@@ -2,6 +2,7 @@
 // button over the song header + setlist rows only; strips, drone, keyboard and PANIC stay visible and live, so an
 // outside tap never closes it (Esc, ×, or the Quick button do).
 //   This song (Revert undoes)  Tempo + big TAP, Swell time stepper            live under lock
+//                              caption row: Save as scene 1 · 2 · 3 (v11-scenes; no extra row: the height is fixed)
 //   This Mac (soundcheck)      Touch, live PEDAL DOWN light, pedal Reversed    frozen under lock
 //   If something's wrong       Sound OK readout, hold-to-restart audio         live under lock
 //   header: "Bluetooth output adds ~N ms…" (components/latencyHint.js) while the output latency is > 60 ms
@@ -56,6 +57,7 @@ const SOUND_TEXT = {
  * @param {(b:boolean) => void} [o.onPedalReversed]
  * @param {() => void} [o.onRestartAudio]       after the 1 s hold (or one click while the sound is stalled)
  * @param {() => void} [o.onResumeAudio]        one click while the sound is paused (falls back to onRestartAudio)
+ * @param {(n:number) => void} [o.onSaveScene]  v11-scenes: "Save as scene n+1" (0-based n)
  * @param {() => void} [o.onAllSettings]
  * @param {() => void} [o.onTheme]           Theme row (default: event 'rig-open-settings' {section:'appearance'})
  * @param {(reason:string) => void} [o.onClose]
@@ -82,6 +84,7 @@ export function quickSheet(o = {}) {
     locked: false,
     echoSynced: null,
     audio: null, // lowres2: controller status.audio; 'asleep' → This Mac's caption says how to wake it
+    scenes: null, // v11-scenes: {count, n, max} of the playing song (null = no song)
   };
 
   // ---- header
@@ -130,10 +133,16 @@ export function quickSheet(o = {}) {
     onChange: (v) => call(o.onSwell, v),
   });
   d.add(() => swell.destroy());
+  // v11-scenes: compact, in the caption row like This Mac's Theme button (the sheet's height is fixed)
+  const sceneSave = h('span.qs-scenes', { 'data-testid': 'quick-scenes' }, h('span.qs-scenes-cap'));
+  d.listen(sceneSave, 'click', (e) => {
+    const b = e.target.closest('button[data-n]');
+    if (b && !b.disabled) call(o.onSaveScene, Number(b.dataset.n));
+  });
   const secSong = h(
     'section.qs-sec',
     { 'aria-label': 'This song' },
-    h('div.qs-st', {}, h('span.cap', { text: 'This song' }), scope),
+    h('div.qs-st', {}, h('span.cap', { text: 'This song' }), scope, sceneSave),
     h(
       'div.qs-row',
       {},
@@ -295,6 +304,7 @@ export function quickSheet(o = {}) {
           : '',
     );
     swell.set(st.swell);
+    renderScenes();
     touch.set(st.touch);
     reversed.set(st.pedalReversed);
     pedalLamp.classList.toggle('on', !!st.pedal);
@@ -332,6 +342,29 @@ export function quickSheet(o = {}) {
     secMac.classList.toggle('frozen', !!st.locked);
     el.classList.toggle('locked', !!st.locked);
   };
+
+  /** Save as scene 1 · 2 · 3: the saved ones (overwrite) and the next free one. */
+  function renderScenes() {
+    const sc = st.scenes;
+    sceneSave.hidden = !sc;
+    if (!sc) return;
+    const max = sc.max || 3;
+    setText(sceneSave.firstChild, say('sceneSaveCap'));
+    const want = Math.min(max, sc.count + 1);
+    if (sceneSave.childElementCount !== want + 1) {
+      while (sceneSave.childElementCount > 1) sceneSave.lastChild.remove();
+      for (let n = 0; n < want; n++) {
+        sceneSave.append(h('button.qs-scene', { type: 'button', 'data-n': String(n), 'data-testid': `quick-scene-${n + 1}`,
+          text: String(n + 1) }));
+      }
+    }
+    for (const b of sceneSave.querySelectorAll('button')) {
+      const n = Number(b.dataset.n);
+      b.classList.toggle('saved', n < sc.count);
+      b.classList.toggle('on', n === sc.n);
+      b.title = say('sceneSaveTitle', { n: n + 1 });
+    }
+  }
 
   const open = ({ focus = false } = {}) => {
     if (closeOverlay) return;

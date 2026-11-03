@@ -1260,3 +1260,25 @@ body[data-view="edit"] .quick-btn { display: none; }
 .qs-theme:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
 .qs-theme:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .qs-theme:disabled { opacity: .5; cursor: default; }
+
+/* v11-scenes: Perform's scene numbers (KEY row, only for a song with scenes) and Quick › This song "Save as scene". */
+.scene-dots { display: inline-flex; align-items: center; gap: 6px; flex: none; margin-left: auto; }
+.scene-dots[hidden] { display: none; }
+.scene-dots .song-key-cap { margin-right: 2px; }
+.scene-dot { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line-2, var(--line));
+  background: var(--panel-2); color: var(--muted); font: inherit; font-size: 15px; font-weight: 800; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.scene-dot.on { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.scene-dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scene-dots:not([hidden]) ~ .notes-btn { margin-left: 0; }
+.qs-scenes { margin-left: auto; flex: none; align-self: center; display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.qs-scenes[hidden] { display: none; }
+.qs-st:has(.qs-scenes:not([hidden])) .cap { flex: none; white-space: nowrap; } /* the song's name gives way */
+.qs-scenes-cap { margin-right: 2px; }
+.qs-scene { min-width: 26px; padding: 2px 8px; border: 1px solid var(--line-2, var(--line)); border-radius: 999px;
+  background: transparent; color: var(--muted); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.qs-scene.saved { color: var(--text); }
+.qs-scene.on { border-color: var(--accent); color: var(--accent); }
+.qs-scene:hover { color: var(--text); border-color: var(--accent); }
+.qs-scene:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
