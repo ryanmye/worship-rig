@@ -333,7 +333,14 @@ puts it to sleep. After waking, play a note; if the top bar says *Audio stopped*
 the app and open it, all in one step. A Terminal window shows progress and closes itself when it's done; if
 something goes wrong (no internet, local changes in the way, a build error) it prints a plain-English explanation
 and waits for a key press so you can read it. It refuses to run over local changes, so it's safe to double-click
-any time.
+any time. If you installed from a downloaded `.dmg` instead, Settings › About says when a newer release is out
+("Version 1.1.1 is available") and **Download** opens the right `.dmg` in your browser; quit the app, open the
+`.dmg` and drag Worship Rig to Applications. It checks GitHub at most once a day, never installs anything by
+itself, and the check can be switched off there.
+
+**Global shortcuts** (Settings › Menu bar, off until you switch them on): next / previous mode, Panic and master
+louder / softer from any app, even with the window hidden. Standard keys ⌃⌥⌘] / ⌃⌥⌘[ / ⌃⌥⌘P / ⌃⌥⌘= / ⌃⌥⌘-; click
+one to set your own. If another app already uses a combination, Settings says so.
 
 ## Manual check on your Mac (5 minutes, after each build)
 

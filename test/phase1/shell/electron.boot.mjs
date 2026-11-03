@@ -5,6 +5,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { buildFixture, repoRoot } from './fixture.mjs';
@@ -79,11 +80,38 @@ function boot(fx, extraEnv = {}) {
   });
 }
 
+// v11-electron: a local stand-in for GitHub's /releases/latest (the self-test never reaches the network), and one
+// combination "taken by another app" (RIG_FAKE_TAKEN_HOTKEY: main's register wrapper answers false for it)
+const FAKE_TAKEN_HOTKEY = 'Control+Alt+Shift+F11';
+const FEED_REPO = 'https://github.com/ryanmye/worship-rig/releases';
+const FAKE_RELEASE = {
+  tag_name: 'v9.9.9', draft: false, prerelease: false, html_url: `${FEED_REPO}/tag/v9.9.9`,
+  assets: ['arm64', 'x64'].flatMap((a) => ['dmg', 'zip'].map((e) => ({
+    name: `Worship-Rig-${a}.${e}`, browser_download_url: `${FEED_REPO}/download/v9.9.9/Worship-Rig-${a}.${e}`,
+  }))),
+};
+const feedHits = [];
+let feed = null;
+
 before(async () => {
-  run = await boot(fx, { RIG_FAKE_TRAY_BOUNDS: FAKE_TRAY_BOUNDS });
+  feed = http.createServer((req, res) => {
+    feedHits.push({ url: req.url, ua: req.headers['user-agent'] || '' });
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(FAKE_RELEASE));
+  });
+  await new Promise((r) => feed.listen(0, '127.0.0.1', r));
+  run = await boot(fx, {
+    RIG_FAKE_TRAY_BOUNDS: FAKE_TRAY_BOUNDS,
+    RIG_UPDATE_FEED: `http://127.0.0.1:${feed.address().port}/repos/ryanmye/worship-rig/releases/latest`,
+    RIG_UPDATE_DELAY_MS: '0',
+    RIG_FAKE_TAKEN_HOTKEY: FAKE_TAKEN_HOTKEY,
+  });
   if (!run.report) console.log('electron stdout:\n', run.out, '\nstderr (tail):\n', run.err.slice(-4000));
 });
-after(() => fx.cleanup());
+after(async () => {
+  fx.cleanup();
+  if (feed) await new Promise((r) => feed.close(r));
+});
 
 test('boots, loads from 127.0.0.1:8438 and quits by itself with exit 0', () => {
   assert.ok(run.report, 'selftest report printed');
@@ -338,4 +366,54 @@ test('L-14: window.close hides the window (menu-bar mode) instead of quitting, a
   assert.ok(h.ids.includes('windowHidden'), `windowHidden sent over rig:menu, got ${JSON.stringify(h.ids)}`);
   assert.equal(h.after.windowVisible, false, 'window hidden');
   assert.equal(h.after.windowDestroyed, false, 'window hidden, not destroyed');
+});
+
+test('v11-electron: global hotkeys — registered / taken / invalid, presses → existing bus commands, pause, off', (t) => {
+  const v = run.report.v11;
+  assert.ok(v && !v.error && !v.skipped, JSON.stringify(v && (v.error || v.skipped)));
+  assert.equal(v.hotkeysBefore.on, false, 'off until the renderer mirrors settings.hotkeys');
+  assert.equal(v.hotkeyStates.panic, 'taken', 'RIG_FAKE_TAKEN_HOTKEY: "another app" holds it');
+  assert.ok(['invalid', 'taken'].includes(v.hotkeyStates.masterDown), `unparseable: ${v.hotkeyStates.masterDown}`);
+  assert.equal(v.hotkeyStatusPushed, true, 'rig.onHotkeyStatus hears every change');
+  // pressing: hotkeys.fire (a system-wide key press can't be synthesised) → the same relay as a tray click
+  assert.deepEqual(v.firedCommands.map((c) => c.type), ['nextMode', 'prevMode', 'panic', 'master', 'master']);
+  assert.equal(v.masterFrom, 0.5, 'the menu-bar self-test left a published state with master 0.5');
+  const db = (x) => 20 * Math.log10(x);
+  assert.ok(Math.abs(db(v.firedCommands[3].value) - (db(0.5) + 2)) < 0.02, JSON.stringify(v.firedCommands[3]));
+  assert.ok(Math.abs(db(v.firedCommands[4].value) - db(0.5)) < 0.02, 'down again steps from the value just sent');
+  assert.match(String(v.badPause && v.badPause.error), /boolean/);
+  assert.ok(v.offStates.every((s) => s === 'off'));
+  assert.equal(v.registeredAfterOff, 0, 'off unregisters everything');
+  assert.equal(v.registeredWhilePaused, 0, 'paused while Settings records a combination');
+  if (v.hotkeyStates.nextMode !== 'ok' && process.platform !== 'darwin') {
+    return t.skip(`this display refused a real global grab (${v.hotkeyStates.nextMode}); the Mac run asserts it`);
+  }
+  assert.deepEqual([v.hotkeyStates.nextMode, v.hotkeyStates.prevMode, v.hotkeyStates.masterUp], ['ok', 'ok', 'ok']);
+  assert.deepEqual([v.registered.nextMode, v.registered.prevMode, v.registered.masterUp, v.registered.panic],
+    [true, true, true, false]);
+  assert.equal(v.registeredAfterPause, 3, 'taken back after the recording');
+});
+
+test('v11-electron: update check against a fake feed — found, Download → the dmg URL, cached, never a dialog', () => {
+  const v = run.report.v11;
+  assert.ok(v && !v.error && !v.skipped, JSON.stringify(v && (v.error || v.skipped)));
+  assert.equal(v.updateBefore.enabled, false, 'nothing runs until the renderer mirrors settings.updateCheck');
+  assert.equal(v.updateBefore.supported, true, 'RIG_UPDATE_FEED turns checking on from source');
+  assert.match(String(v.badUpdateCheck && v.badUpdateCheck.error), /boolean/);
+  assert.equal(v.updateFound, true, JSON.stringify(v.updateStates));
+  assert.ok(v.updateStates.includes('checking'));
+  const s = v.updateStatus;
+  assert.equal(s.state, 'update');
+  assert.equal(s.latest, '9.9.9');
+  assert.equal(s.current, JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8')).version);
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  assert.equal(s.asset, `Worship-Rig-${arch}.dmg`);
+  assert.deepEqual(v.openDownload, { ok: true, url: `${FEED_REPO}/download/v9.9.9/Worship-Rig-${arch}.dmg` });
+  assert.deepEqual(v.openPage, { ok: true, url: `${FEED_REPO}/tag/v9.9.9` });
+  assert.deepEqual(v.opened, [v.openDownload.url, v.openPage.url], 'recorded, not opened (self-test)');
+  assert.equal(v.checkNow.state, 'update');
+  assert.equal(feedHits.length, 2, 'the launch check + Check now, nothing else');
+  assert.match(feedHits[0].ua, /^Worship-Rig\/\d/);
+  assert.equal(v.cached.latest, '9.9.9', 'kept in rig-shell.json for the next launch');
+  assert.ok(!run.report.httpErrors.length || run.report.httpErrors.every((h) => !/releases/.test(h.url)));
 });

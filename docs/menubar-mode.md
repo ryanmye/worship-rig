@@ -77,7 +77,7 @@ Low-resource must be observable: `engine._debugStats()` gains `lowResource:true`
 `memory.mode:'current-only'`. Cloud tests assert taps = 0 and pins = current only; local measures CPU on the Mac.
 
 ## Not in v1
-Global hotkeys (later, via `globalShortcut`), Touch Bar, a Windows/Linux tray (Electron supports it; test later), multiple
+Global hotkeys (done in v1.1, below), Touch Bar, a Windows/Linux tray (Electron supports it; test later), multiple
 menu-bar sets.
 
 ## Electron side: as built (LOCAL, branch `menubar-local`)
@@ -173,3 +173,35 @@ the pointer. The Rig menu always has "Show Worship Rig" and "Open menu-bar panel
 leftmost, nearest the notch), private APIs. The fix for the user is fewer Control Center items, or ⌘-dragging the icon
 into view once (macOS remembers the position per bundle id). Self-test: `RIG_FAKE_TRAY_BOUNDS` (JSON rect, only with
 `RIG_SELFTEST=1`) stands in for `tray.getBounds()`; see CONTRACT_CHANGES "## tray-hidden".
+
+## Global hotkeys (v1.1, v11-electron)
+
+Off by default. Settings › Menu bar › **Global shortcuts** ("Work in any app") turns them on and lists the five
+actions with their combinations; click one, press the new keys (Esc cancels, Delete leaves it without one).
+
+| action (`settings.hotkeys.keys.<id>`) | standard keys | sends (existing bus command) |
+|---|---|---|
+| `nextMode` | ⌃⌥⌘] `Control+Alt+Command+]` | `{type:'nextMode'}` |
+| `prevMode` | ⌃⌥⌘[ | `{type:'prevMode'}` |
+| `panic` | ⌃⌥⌘P | `{type:'panic'}` |
+| `masterUp` | ⌃⌥⌘= | `{type:'master', value}`: the last published `state.master` + 2 dB (from silence: −40 dB; ≤ 2) |
+| `masterDown` | ⌃⌥⌘- | `{type:'master', value}`: − 2 dB; below −40 dB → 0 |
+
+Not the arrows: Rectangle / Magnet take ⌃⌥⌘←/→. Two quick master presses step from the value sent last (the state
+is throttled to ≤ 4/s); after 1.5 s the published state counts again.
+
+- **Store**: `settings.hotkeys = {on, keys}` (optional, absent = off with the standard keys; set whole; normalised by
+  `shared/hotkeys.js normalizeHotkeys`: every action, canonical accelerators, a duplicate keeps the first; device-local
+  like `menuBarMode`). Settings refuses combinations with fewer than two of ⌃ ⌥ ⌘ (unless a function key) and a few
+  macOS system ones (`acceleratorError`), and duplicates.
+- **Mirror**: `app/js/shell-mirror.js` → `window.rig.setHotkeys({on, keys})` at start and on every change.
+- **Main** (`global-hotkeys.js`, wired in main.js): unregisters ours, then registers each with `globalShortcut`.
+  Per-action state in `HotkeyStatus {on, paused, keys:{<id>:{accelerator, state}}}`: `ok`, `taken` (`register()`
+  returned false: another app or macOS holds it; Settings: "Another app already uses this. Pick another."),
+  `invalid` (Electron threw), `none`, `off`, `paused`. Pushed as `rig:hotkeyStatus` (`window.rig.onHotkeyStatus`).
+  A press goes through `sendBusCommand`, exactly like a tray click; no new command type, no engine path.
+- **Recording** a combination pauses ours (`rig.pauseHotkeys(true/false)`), or our own combination would never reach
+  the page. `<html data-hotkey-capture>` tells Settings' and main.js's Esc handlers to leave Esc to the recorder.
+- **Released** on off, on main-window close, and on quit (`will-quit`: `globalShortcut.unregisterAll()`).
+- **Self-test** (`RIG_SELFTEST=1`, `v11` in the JSON line): real registration with ⌃⌥⇧F9–F12,
+  `RIG_FAKE_TAKEN_HOTKEY` makes one "taken", presses via the registrar's `fire()`.

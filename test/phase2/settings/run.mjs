@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 // Settings Playwright suite (views/settings.js), moved out of the retired ui-edit suite (hv2-edit-integrate).
 //   node test/phase2/settings/run.mjs            → both modes
-//   SETTINGS_MODES=app|fixture node …            → one mode
+//   SETTINGS_MODES=app|fixture|mac node …        → one mode
 // Modes:
 //   app     — the real app (app/index.html + main.js: Perform, the H-v2 Edit and Settings) served by server.js at "/".
 //             The page switches to Edit first, so Settings is tested over the new Edit view (Esc ownership, focus).
 //   fixture — test/phase2/settings/fixture.html: a minimal bootstrap that mounts ONLY Settings with the FALLBACK
 //             component set (exercises views/_fallback-components.js).
+//   mac     — the fixture with a fake window.rig (v11-electron, mac.mjs): global shortcuts and the update line, which
+//             only exist in the Mac app. Its own tests only.
 // Every mode: the 11 settings tests from ui-edit, zero console.error, screenshots at 1440×900 and 1024×700 →
 // test/phase2/settings/screenshots/<mode>-<size>-settings.png (+ settings.png for the app at 1440).
 import { createRequire } from 'node:module';
@@ -17,6 +19,7 @@ import os from 'node:os';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.mjs';
+import { runMac } from './mac.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -27,7 +30,7 @@ const { createServer } = require(path.join(ROOT, 'server.js'));
 
 const haveApp = fs.existsSync(path.join(APP, 'index.html')) && fs.existsSync(path.join(APP, 'js', 'main.js')) &&
   /mountSettings/.test(fs.readFileSync(path.join(APP, 'js', 'main.js'), 'utf8'));
-const MODES = (process.env.SETTINGS_MODES || (haveApp ? 'app,fixture' : 'fixture')).split(',').map((s) => s.trim()).filter(Boolean);
+const MODES = (process.env.SETTINGS_MODES || (haveApp ? 'app,fixture,mac' : 'fixture,mac')).split(',').map((s) => s.trim()).filter(Boolean);
 const VERBOSE = !!process.env.VERBOSE;
 
 fs.mkdirSync(SHOTS, { recursive: true });
@@ -591,7 +594,10 @@ async function runMode(mode, browser) {
 // -----------------------------------------------------------------------------------------------------------
 const browser = await chromium.launch({ headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
 try {
-  for (const m of MODES) await runMode(m, browser);
+  for (const m of MODES) {
+    if (m === 'mac') await runMac({ browser, createServer, ROOT, SHOTS, results });
+    else await runMode(m, browser);
+  }
 } finally {
   await browser.close();
 }

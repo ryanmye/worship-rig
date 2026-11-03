@@ -5408,3 +5408,61 @@ Electron main half is LOCAL.
     mock-up.
 - **Runs** (Linux, 2 CPUs, serial, `node test/run-all.mjs --fast --only ui-core,themes`, first try): ui-core 70/70
   (3m55s), themes 36/36 (2m51s); total 6m46s.
+
+## v11-electron (v1.1: menu-bar global hotkeys + "update available" check; main.js, preload.js, global-hotkeys.js, update-check.js, store.js, shell-mirror.js, views/settings-mac.js)
+- **Why not a silent auto-updater.** The release builds are ad-hoc signed (`identity: null`, `build/afterPack.js`) and
+  not notarized. Squirrel.Mac, which electron-updater uses on macOS, only applies an update whose code signature
+  matches the running app's Developer ID; with an ad-hoc signature it refuses, so a "download and install on quit"
+  flow would download ~150 MB and then fail. The app also must never quit or restart itself, and never show a modal over
+  Perform. So: a notice only. Once a day the installed app asks GitHub's REST API (`GET
+  /repos/ryanmye/worship-rig/releases/latest`, unauthenticated: 60 requests/h per IP, we use ≤ 1/day) for the
+  latest release, compares its tag with `app.getVersion()` (semver, prereleases lower), and Settings › About shows
+  "Version 1.1.1 is available. You have 1.0.1." with **Download** (opens `Worship-Rig-<arch>.dmg` from the release
+  in the default browser; `.zip` if the dmg is missing; Apple Silicon for an x64 copy under Rosetta) and **What's
+  new** (the release page). Installing stays the README's drag-to-Applications. No `latest-mac.yml` needed: nothing
+  uses electron-updater; release.yml only had its notes corrected to the real asset names
+  (`Worship-Rig-arm64.dmg`, not `Worship-Rig-*-arm64.dmg`) and a comment that the names, non-prerelease releases and
+  `v<version>` tags are now what the check relies on. A real auto-update needs a Developer ID + notarization (BACKLOG).
+- **When it checks.** Only after the renderer mirrors `settings.updateCheck` (absent = on) through
+  `rig.setUpdateCheck(true)`, then 20 s later if due, then an hourly tick that checks if due. Due = no attempt in 24 h
+  (an attempt that never reached GitHub, `offline`, may retry after 1 h). The result is cached in
+  `<userData>/rig-shell.json` `updateCheck`, so a relaunch the same day shows the notice without a request, and after
+  updating the same cache reads "latest". "Check now" ignores the 24 h rule.
+- **Never in tests, never from source.** `supported` = packaged app and not `RIG_SELFTEST` and not
+  `RIG_UPDATE_CHECK=0`, or `RIG_UPDATE_FEED` is set (a test's local fake feed). Unsupported: no network at all,
+  Settings says "Update checks run in the installed Mac app." The fetch uses its own in-memory session
+  (`session.fromPartition('rig-update-check')`), so it never shows up in the default session's request hooks (S4 key)
+  or the self-test's HTTP ≥ 400 count, and leaves nothing on disk.
+- **Errors stay quiet.** `fetchLatest` never throws: `offline` / `rate-limited` (403 with `x-ratelimit-remaining: 0`,
+  or 429) / `no-release` (404: counts as up to date) / `bad-response`. An automatic check shows nothing and logs
+  nothing; only a "Check now" shows one plain line ("Couldn't reach GitHub. Check the internet connection and try
+  again."). No console output in the renderer at all.
+- **Only safe URLs open.** `openUpdate('download'|'page')` opens `https://github.com/ryanmye/worship-rig/releases`
+  or a URL under `…/releases/` from the feed, nothing else (a cache or feed with other URLs falls back to the
+  releases page). Under `RIG_SELFTEST` it records the URL instead of opening a browser.
+- **Global hotkeys** (docs/menubar-mode.md "Global hotkeys"): `settings.hotkeys = {on, keys:{nextMode, prevMode,
+  panic, masterUp, masterDown}}`, off by default, standard keys ⌃⌥⌘ ] [ P = -. Main registers them with
+  `globalShortcut` and a press sends the existing bus command (`nextMode`, `prevMode`, `panic`, `master` with the
+  value ±2 dB from the last published state); bus contract v1 is unchanged. "Taken by another app" = `register()`
+  returned false, shown under that shortcut in plain words. Unregistered when switched off, while Settings records a
+  combination, on main-window close and on quit.
+- **New `window.rig` methods** (all resolve; failures → `{error}`): `setHotkeys(cfg)`, `pauseHotkeys(bool)`,
+  `getHotkeyStatus()`, `onHotkeyStatus(cb)`, `setUpdateCheck(bool)`, `checkForUpdate()`, `getUpdateStatus()`,
+  `onUpdateStatus(cb)`, `openUpdate(kind)`. IPC `rig:setHotkeys`, `rig:pauseHotkeys`, `rig:getHotkeyStatus`,
+  `rig:setUpdateCheck`, `rig:getUpdateStatus`, `rig:checkForUpdate`, `rig:openUpdate` (invoke, our origin only) and
+  `rig:hotkeyStatus`, `rig:updateStatus` (main → main window).
+- **Store** (SCHEMA stays 1): `settings.hotkeys` (set whole, normalised by `shared/hotkeys.js normalizeHotkeys`;
+  nested paths refused) and `settings.updateCheck` (boolean). Both optional (absent until set; an invalid stored value
+  is dropped on load) and in `DEVICE_LOCAL_SETTINGS` (not exported, kept across a replace-import, not an edit).
+- **Packaging**: `global-hotkeys.js` and `update-check.js` join `tray-visibility.js` in `build.files` (build-lint's
+  "present" list too).
+- **Env (tests)**: `RIG_UPDATE_FEED`, `RIG_UPDATE_DELAY_MS`, `RIG_UPDATE_CHECK=0`, `RIG_FAKE_TAKEN_HOTKEY`
+  (RIG_SELFTEST only). The self-test adds `v11` to the `RIG_SELFTEST` line (shell fixture page only).
+- **Numbers.** Unit: test/unit/shared/hotkeys.test.mjs 9, test/unit/shell/global-hotkeys.test.mjs 8,
+  test/unit/shell/update-check.test.mjs 11, test/phase1/shell/v11-electron.test.mjs 7 (all pass). Settings suite
+  `mac` mode (fixture + fake `window.rig`) 10/10; app + fixture modes unchanged, 47/47 in total. Electron 44.4.5
+  smoke on Linux/xvfb (shell fixture, free port, fake feed): registered ⌃⌥⇧F9/F10/F12 = ok, the fake-taken one =
+  taken, an unparseable one = invalid (Electron throws); 0 registered while paused and after off; presses arrived as
+  `nextMode, prevMode, panic, master 0.6295, master 0.5` (0.5 + 2 dB, then back); update states `idle → checking →
+  update`, 9.9.9 found, x64 dmg offered, 2 feed requests (launch + Check now), no console errors beyond the fixture's
+  deliberate 404.
