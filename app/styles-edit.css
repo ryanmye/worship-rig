@@ -150,3 +150,18 @@
 .st-theme-name { font-weight: 700; font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; }
 .st-theme-tag { font-size: 11px; color: var(--muted, #aab3c0); }
+
+/* v11-electron (Mac app only): Settings › Menu bar › Global shortcuts and the About update line (views/settings-mac.js) */
+.st-hotkeys { display: grid; gap: 10px; }
+.st-hk-list { display: grid; gap: 6px; }
+.st-hk-list[hidden] { display: none; }
+.st-hk-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; }
+.st-hk-label { font-size: 14px; min-width: 0; }
+.st-hk-key { min-width: 112px; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+.st-hk-key.recording { border-color: var(--accent, #ffc94d); color: var(--accent, #ffc94d); }
+.st-hk-key.warn { border-color: var(--warn, #ffb020); }
+.st-hk-state { grid-column: 1 / -1; font-size: 12.5px; color: var(--warn, #ffb020); }
+.st-hk-state:empty { display: none; }
+.st-update { display: grid; gap: 8px; margin-top: 12px; }
+.st-update-line.st-update-new { color: var(--accent, #ffc94d); font-weight: 600; }
+.st-update [hidden] { display: none; }

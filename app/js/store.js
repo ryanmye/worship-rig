@@ -28,6 +28,7 @@
 // ('songs.<id>.patch.slots.1.gain', 'songs.<id>.drone.gain', 'settings.view', …).
 import { mod12, transposeSemis } from './shared/music.js';
 import { isValidId as isThemeId, DEFAULT_THEME_ID } from './shared/themes.js';
+import { normalizeHotkeys } from './shared/hotkeys.js';
 import { PARAMS, clamp, describe, isValidPath, parsePath, defaultSlot, SLOT_COUNT } from './shared/params.js';
 import {
   FACTORY_SONGS, FACTORY_VERSION, FACTORY_SINCE, CATEGORIES, WHEEL_TARGETS, BEND_MODES, DRONE_MODES, defaultFx, defaultDrone, defaultRouting,
@@ -44,8 +45,10 @@ export const VIEWS = Object.freeze(['perform', 'edit']);
 export const SONG_CATEGORIES = Object.freeze([...CATEGORIES, 'user']);
 /** Settings that belong to this machine and survive a replace-import. */
 // menubar-A (C7): menu-bar mode and low-resource are how this machine runs the app, not library content.
+// v11-electron: so are the global hotkeys and the update check (optional; absent = hotkeys off, checking on).
 export const DEVICE_LOCAL_SETTINGS = Object.freeze([
   'outputDeviceId', 'padFolder', 'midiInputId', 'midiInputName', 'menuBarMode', 'lowResource', 'audioSleepSec',
+  'hotkeys', 'updateCheck',
 ]);
 /**
  * lowres2: settings.audioSleepSec (optional; absent = AUDIO_SLEEP_DEFAULT_SEC): suspend the audio after this many
@@ -445,6 +448,13 @@ function normalizeSettings(raw, songs, setlists) {
     if (v === null) delete out.audioSleepSec;
     else out.audioSleepSec = v;
   }
+  // v11-electron: optional, absent until set; a bad value is dropped (absent = the default), never kept
+  if (hasOwn(out, 'hotkeys')) {
+    const v = normalizeHotkeys(out.hotkeys);
+    if (v === null) delete out.hotkeys;
+    else out.hotkeys = v;
+  }
+  if (hasOwn(out, 'updateCheck') && typeof out.updateCheck !== 'boolean') delete out.updateCheck;
   return out;
 }
 
@@ -874,7 +884,8 @@ export function createStore(opts = {}) {
           else next[cid] = value;
           return { segs: ['settings', 'midiLearn'], value: normalizeMidiLearn(next) };
         }
-        return hasOwn(SETTINGS_VALIDATORS, k) || k === 'theme' || k === 'audioSleepSec' ? null : { segs, value: clone(value) };
+        const whole = k === 'theme' || k === 'audioSleepSec' || k === 'hotkeys' || k === 'updateCheck';
+        return hasOwn(SETTINGS_VALIDATORS, k) || whole ? null : { segs, value: clone(value) };
       }
       // themes-setup: an unknown theme id is stored as the default (never an error, never a dead id)
       if (k === 'theme') return { segs, value: isThemeId(value) ? value : DEFAULT_THEME_ID };
@@ -882,6 +893,13 @@ export function createStore(opts = {}) {
         const v = validAudioSleepSec(value); // lowres2: a number, rounded and clamped; anything else is refused
         return v === null ? null : { segs, value: v };
       }
+      // v11-electron: settings.hotkeys is set whole (normalised: every action, canonical accelerators);
+      // settings.updateCheck is a boolean
+      if (k === 'hotkeys') {
+        const v = normalizeHotkeys(value);
+        return v === null ? null : { segs, value: v };
+      }
+      if (k === 'updateCheck') return typeof value === 'boolean' ? { segs, value } : null;
       const fn = hasOwn(SETTINGS_VALIDATORS, k) ? SETTINGS_VALIDATORS[k] : null;
       if (!fn) return { segs, value: clone(value) }; // unknown settings are allowed (preserved)
       const v = fn(value);
