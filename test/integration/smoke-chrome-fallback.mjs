@@ -77,12 +77,38 @@ try {
     if (m.type() === 'error') consoleErrors.push(`${m.text()} @ ${m.location()?.url || ''}`);
   });
   page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message}`));
+  // CI-1: Playwright runs every page.evaluate / waitForFunction / waitForSelector with userGesture:true, so polling
+  // the page before the click gave it sticky activation, and the controller's 1 s watchdog tick (ctx.resume() while
+  // suspended) then started audio and hid the overlay by itself. On a fast machine the click won that race; on the
+  // 5–7× slower macos-14 runner the tick came first and page.click waited 30 s for a hidden overlay. page.click is no
+  // way out: its actionability checks are gesture evaluations too, hundreds of ms before the mouse event on a loaded
+  // box. Until the click, read the page through CDP with userGesture:false and click with raw mouse input, so only the
+  // click can start audio, on any machine.
+  const cdp = await context.newCDPSession(page);
+  const readNoGesture = async (expression) => {
+    const r = await cdp.send('Runtime.evaluate', { expression, returnByValue: true, userGesture: false });
+    return r.result && r.result.value;
+  };
   await page.goto(url);
-  await page.waitForFunction(() => !!window.__rig, null, { timeout: 30000 });
-  const overlayShown = await page.waitForSelector('#overlay-start:not([hidden])', { state: 'visible', timeout: 8000 }).then(() => true, () => false);
-  const stateBefore = await page.evaluate(() => window.__rig.engine.ctx && window.__rig.engine.ctx.state);
+  await waitFor(() => readNoGesture('!!window.__rig'), { timeout: 30000, what: 'window.__rig' });
+  const overlayShown = await waitFor(() => readNoGesture(`(() => {
+    const el = document.getElementById('overlay-start');
+    return !!el && !el.hidden && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+  })()`), { timeout: 8000, what: 'the start overlay' }).then(() => true, () => false);
+  const stateBefore = await readNoGesture('window.__rig.engine.ctx && window.__rig.engine.ctx.state');
   check('start overlay shown while audio needs a gesture', overlayShown && stateBefore === 'suspended', `ctx ${stateBefore}`);
-  if (overlayShown) await page.click('#overlay-start');
+  if (overlayShown) {
+    // the overlay's centre, and that the overlay (not a toast over it) is what a click there hits
+    const at = await readNoGesture(`(() => {
+      const r = document.getElementById('overlay-start').getBoundingClientRect();
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      return { x, y, hits: !!document.getElementById('overlay-start').contains(document.elementFromPoint(x, y)) };
+    })()`);
+    if (!at.hits) throw new Error(`the start overlay is covered at its centre (${JSON.stringify(at)})`);
+    await page.mouse.click(at.x, at.y);
+  }
+  await cdp.detach();
   const running = await page.waitForFunction(() => window.__rig.engine.ctx && window.__rig.engine.ctx.state === 'running' && document.getElementById('overlay-start').hidden, null, { timeout: 10000 }).then(() => true, () => false);
   check('click → AudioContext running, overlay hidden', running, JSON.stringify(await page.evaluate(() => ({ ctx: window.__rig.engine.ctx && window.__rig.engine.ctx.state, overlayHidden: document.getElementById('overlay-start').hidden }))));
   await waitRigReady(page, { timeout: 30000, what: 'chrome-fallback: window.__rig.ready' }); // L-4: bounded

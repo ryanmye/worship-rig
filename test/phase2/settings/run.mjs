@@ -67,6 +67,14 @@ async function runMode(mode, browser) {
     } catch (err) {
       results.push({ mode, name, ok: false, err });
       console.log(`  ✗ [${mode}] ${name}\n      ${String(err && err.stack ? err.stack : err).split('\n').slice(0, 6).join('\n      ')}`);
+      // CI-1: a failed test must not leave Settings open: the modal covers #btn-settings, so every later
+      // openSettings() timed out on the click and one failure was reported as five (macos-14 run of 2026-09-30).
+      try {
+        if (await page.evaluate(() => !document.getElementById('view-settings')?.hidden)) {
+          await page.keyboard.press('Escape');
+          await page.waitForFunction(() => document.getElementById('view-settings').hidden, null, { timeout: 5000 });
+        }
+      } catch { /* the next test reports its own failure */ }
     }
   };
   const ev = (fn, arg) => page.evaluate(fn, arg);
@@ -370,15 +378,17 @@ async function runMode(mode, browser) {
       const texts = await ev(async () => {
         const c = window.__rig.controller;
         const real = { ...c.status };
-        const read = async (midi) => {
+        // CI-1: Settings renders a status event synchronously, so read the line in the same task as the fake event.
+        // The old 50 ms wait let a real status event (latency updates, MIDI 'denied' on the device-less macos-14
+        // runner) repaint the line first: "pending" read back as "MIDI was blocked…".
+        const read = (midi) => {
           c.dispatchEvent(new CustomEvent('status', { detail: { ...real, midi: { available: false, connected: false, inputs: [], ...midi } } }));
-          await new Promise((res) => setTimeout(res, 50));
           return document.querySelector('.st-midi-input').parentElement.querySelector('.st-status').textContent;
         };
         const out = {
-          pending: await read({ reason: 'pending', pending: true }),
-          denied: await read({ reason: 'denied', pending: false }),
-          failed: await read({ reason: 'failed', pending: false }),
+          pending: read({ reason: 'pending', pending: true }),
+          denied: read({ reason: 'denied', pending: false }),
+          failed: read({ reason: 'failed', pending: false }),
         };
         c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } }));
         return out;
@@ -398,8 +408,8 @@ async function runMode(mode, browser) {
       const r = await ev(async () => {
         const c = window.__rig.controller;
         const real = { ...c.status };
+        // CI-1: read in the same task as the fake event (see the "pending" test above)
         c.dispatchEvent(new CustomEvent('status', { detail: { ...real, midi: { available: true, connected: false, inputs: [] } } }));
-        await new Promise((res) => setTimeout(res, 50));
         const midiLine = document.querySelector('.st-midi-input').parentElement.querySelector('.st-status').textContent;
         c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } }));
         const kb = [...document.querySelectorAll('#view-settings section[aria-label="Computer keyboard"] *')]
@@ -443,7 +453,18 @@ async function runMode(mode, browser) {
             ];
             localStorage.removeItem('worship-rig.latency-hint.dismissed');
             const c = window.__rig.controller;
-            window.__fakeLat = (ms) => c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status, latencyMs: ms } }));
+            // CI-1: pin the fake latency onto every status event, real ones included. Re-sending it on each poll
+            // isn't enough: a real event (watchdog stall/restart on a slow, device-less runner) landing between a
+            // poll and the next read or the × click repaints the real latency and hides the hint.
+            window.__pinLat = null;
+            c.dispatchEvent = (e) => {
+              if (window.__pinLat !== null && e.type === 'status' && e.detail) e.detail.latencyMs = window.__pinLat;
+              return EventTarget.prototype.dispatchEvent.call(c, e);
+            };
+            window.__fakeLat = (ms) => {
+              window.__pinLat = ms;
+              c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status, latencyMs: ms } }));
+            };
           });
           const hint = '[data-testid="settings-latency-hint"]';
           const shownAt = (ms) => until(([m, sel]) => {
@@ -487,6 +508,8 @@ async function runMode(mode, browser) {
             delete navigator.mediaDevices.enumerateDevices; // back to MediaDevices.prototype's
             localStorage.removeItem('worship-rig.latency-hint.dismissed');
             const c = window.__rig.controller;
+            delete c.dispatchEvent; // back to EventTarget.prototype's (CI-1 pin)
+            window.__pinLat = null;
             c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } }));
           });
           if (await ev(() => !document.getElementById('view-settings').hidden)) await page.click('.st-close');

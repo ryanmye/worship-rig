@@ -7,8 +7,9 @@
 // sleep). This module holds the pure pieces: the offline render, the seam crossfade and the seam check.
 //
 // Loop recipe: render preroll + loopLen + xfade frames; keep [preroll, preroll + loopLen) and crossfade the xfade
-// frames that follow the loop end into its head with an equal-power fade (head: sin, tail: cos). Looping that buffer
-// plays …x[P+L−1] → x[P+L]·1 + x[P]·0… at the wrap, i.e. exactly the rendered continuation: no seam step.
+// frames that follow the loop end into its head with a power-preserving fade (head: sin·g, tail: cos·g; g corrects for
+// the head/tail correlation, see makeSeamlessLoop). Looping that buffer plays …x[P+L−1] → x[P+L]·1 + x[P]·0… at the
+// wrap, i.e. exactly the rendered continuation: no seam step.
 import { AudioTimer, BUTTER2_Q, rngFor } from './fx.js';
 import { shareWaveCache } from './voice.js';
 
@@ -46,7 +47,14 @@ export function freezeLoopFrames(sr, loopSec) {
 
 /**
  * Make [start, start + loopLen) of each channel loop seamlessly, in place: its first `xf` frames become
- * head·sin + tail·cos, where tail = the `xf` frames right after the loop end (so `chans` must hold them).
+ * (head·sin + tail·cos)·g, where tail = the `xf` frames right after the loop end (so `chans` must hold them).
+ *
+ * CI-1: a plain equal-power fade (g = 1) keeps the level only for UNcorrelated head and tail. A steady drone's head and
+ * tail, loopLen apart, are coherent, with a phase that depends on the voicing, the seed and the sample rate: on the
+ * macos-14 runner (48 kHz) the 4 s test loop had correlation ρ ≈ −0.74, a −5.8 dB hole mid-seam, and the loop played
+ * 1.13 dB under the live drone (limit 1 dB); a 20 s loop at 44.1 kHz bumped +1 dB instead. With the channel's
+ * measured ρ, g = 1 / √(1 + ρ·sin 2x) holds head² + tail² + 2ρ·head·tail = 1 through the fade (ρ = 0: equal power,
+ * ρ = 1: equal gain); g = 1 at both ends, so the wrap and the end of the fade stay exact.
  * @param {Float32Array[]} chans rendered channels (length ≥ start + loopLen + xf)
  * @param {number} start first loop frame
  * @param {number} loopLen frames
@@ -57,12 +65,39 @@ export function makeSeamlessLoop(chans, start, loopLen, xf) {
   const n = Math.max(0, Math.min(xf, Math.floor(loopLen / 2)));
   const w = n > 0 ? (Math.PI / 2) / n : 0;
   for (const c of chans) {
+    const rho = seamCorrelation(c, start, loopLen, n);
     for (let i = 0; i < n; i++) {
       const x = i * w;
-      c[start + i] = c[start + i] * Math.sin(x) + c[start + loopLen + i] * Math.cos(x);
+      const g = 1 / Math.sqrt(1 + rho * Math.sin(2 * x));
+      c[start + i] = (c[start + i] * Math.sin(x) + c[start + loopLen + i] * Math.cos(x)) * g;
     }
   }
   return chans.map((c) => c.subarray(start, start + loopLen));
+}
+
+/**
+ * CI-1: correlation coefficient of a loop's head [start, start + n) and the tail after its end
+ * [start + loopLen, start + loopLen + n), clamped to [−0.9, 1] (−0.9 caps the seam gain at +10 dB: two near-opposite
+ * copies have little left to restore).
+ * @param {ArrayLike<number>} c channel
+ * @param {number} start first loop frame
+ * @param {number} loopLen frames
+ * @param {number} n crossfade frames
+ * @returns {number} ρ (0 when either side is silent)
+ */
+export function seamCorrelation(c, start, loopLen, n) {
+  let hh = 0;
+  let tt = 0;
+  let ht = 0;
+  for (let i = 0; i < n; i++) {
+    const h = c[start + i];
+    const t = c[start + loopLen + i];
+    hh += h * h;
+    tt += t * t;
+    ht += h * t;
+  }
+  if (!(hh > 0 && tt > 0)) return 0;
+  return Math.min(1, Math.max(-0.9, ht / Math.sqrt(hh * tt)));
 }
 
 /**

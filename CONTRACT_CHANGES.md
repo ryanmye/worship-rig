@@ -5408,3 +5408,50 @@ Electron main half is LOCAL.
     mock-up.
 - **Runs** (Linux, 2 CPUs, serial, `node test/run-all.mjs --fast --only ui-core,themes`, first try): ui-core 70/70
   (3m55s), themes 36/36 (2m51s); total 6m46s.
+
+## ci-macos14 (CI-1: `test.yml` on the GitHub macos-14 runner red on the v1.0.1 tree, 12/12 on the Mac; engine/drone-freeze.js, engine + settings + chrome-fallback tests, a new unit test)
+Source: the run's `test-logs` artifact (run 36765186303, 2026-09-30T19:22Z): engine 81/83, settings 32/37,
+chrome-fallback 4/5. Every failure was reproduced here before it was fixed: `SIM_SR=48000` (the runner's AudioContext
+rate; Linux runs 44.1 kHz), CDP `Emulation.setCPUThrottlingRate` 6×, `taskset -c 0`, a rejecting
+`requestMIDIAccess` (the runner's "MIDI was blocked") and a real controller status event every 15 ms.
+- **Engine `realtime.droneFreeze` (rmsDiffDb −1.14, limit ±1): an app bug, not the runner.** The loop's seam fade was
+  plain equal-power (head·sin + tail·cos), which keeps the level only for UNcorrelated head and tail. A steady drone's
+  head and tail are coherent with a voicing / seed / sample-rate-dependent phase. At 48 kHz the 4 s test loop had
+  ρ ≈ −0.74: the first 1.5 s of the loop read −13.63 dB against a −10.75 dB body (−5.8 dB mid-seam), so the loop sat
+  1.13 dB under the live drone. At 44.1 kHz the same loop dipped −3 dB at the head (it passed at −0.5 overall), and a
+  20 s loop bumped +0.7 / +1.0 dB. This is a once-per-loop swell or hole in the frozen drone, on any box.
+  - Fix: `makeSeamlessLoop` measures each channel's head/tail correlation (`seamCorrelation`, new export, clamped
+    [−0.9, 1]) and scales the fade by g = 1 / √(1 + ρ·sin 2x), so head² + tail² + 2ρ·head·tail = 1 throughout
+    (ρ = 0: the old equal-power fade; ρ = 1: equal gain). g = 1 at both ends, so the wrap is still exactly the
+    rendered continuation. Cost: one more pass over the 1.5 s seam per channel, in the same task.
+  - After (head 1.5 s / mid-seam / body, offline render, seed 41, key D): 4 s loop at 48 kHz −10.85 / −11.03 / −10.75
+    (was −13.63 / −16.56 / −10.75); at 44.1 kHz −7.23 / −7.53 / −7.10 (was −10.11 / −13.40 / −7.10); 20 s loops within
+    0.1 dB. Realtime `droneFreeze` rmsDiffDb at 48 kHz: −0.29 (was −1.13, the runner −1.14); at 44.1 kHz +0.36
+    (was −0.53).
+    Seam check and clicks unchanged (seam 0.0079 vs body 0.036–0.058; 0 loop / wrap clicks).
+  - New `test/unit/engine/drone-freeze.test.mjs` (in `unit`): mid-seam power within 1 dB of the body for ρ ≈ −0.6,
+    +0.6, 1 and 0, exact wrap and fade end; it fails 3 of 4 cases with the old fade.
+- **Engine `realtime.audioSleep` (midiWakeOk false): the test's latency budget charged the runner's own resume.**
+  The runner's three attempts: capture holes (2), then message → sound 108 and 91 ms with `ctx.resume()` alone taking
+  94 and 73 ms (`lastWake.ms`; 5–9 ms on the Mac and here). Two test changes, both identical on a normal box:
+  - Only resume time beyond `WAKE_RESUME_NOMINAL_MS` = 10 ms is forgiven (`resumeExcessMs`, reported); everything else
+    (message → wake, lead, output chain) still counts against 80 ms.
+  - A capture hole voids an attempt only inside what the verdict reads: the onset and the click window
+    [onset − 50 ms, onset + 400 ms] of either capture (`gapsInWindow`, reported; `gaps` still reported).
+  - Here: idle 43.5 ms total, 0 excess; 48 kHz + 6× throttle 73.7 ms with 13.3 ms excess, first attempt.
+- **Settings (5 failures, one cause): a race plus a cascade.** The MIDI "pending" test dispatched a fake status, waited
+  50 ms, and then read the line. A real status event during the wait (the runner reports MIDI 'denied') repainted it:
+  "MIDI was blocked…" was read back for "pending". Settings renders a status event synchronously, so the line is now
+  read in the same task as the fake event (also in the O5/O9 no-keyboard line). The test then left Settings open, the
+  modal covered `#btn-settings`, and the next four tests timed out on the click. `T()` now closes Settings (Esc) after
+  any failure. The Bluetooth-hint test pins its fake latency onto every status event while it runs, real ones
+  included (removed in its `finally`).
+- **Chrome-fallback (smoke crashed on `page.click('#overlay-start')`): Playwright's own user gesture.** Every Playwright
+  evaluate / waitForFunction / waitForSelector runs with `userGesture: true`, so the page had sticky activation before
+  the click. The controller's 1 s watchdog tick (`ctx.resume()` while suspended) then started audio and hid the overlay
+  by itself. On a fast box the click wins that race, but on the runner the tick came first. `page.click` cannot
+  avoid this, because its actionability checks are gesture evaluations too. Until the click, the test now reads the
+  page over CDP `Runtime.evaluate` with `userGesture: false` and clicks with raw mouse input at the overlay's centre
+  (after checking that the overlay is what is hit there), so only the click can start audio, on any machine. With a
+  1.5 s or 5 s pause injected before the click, the old test fails as on the runner and the new one passes 4/4.
+- Not changed: app behaviour for the overlay (hiding it once audio runs is right) or Settings.

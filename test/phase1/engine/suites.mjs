@@ -5,6 +5,8 @@ import { eqSuites } from './eq-suites.mjs';
 const SR = 44100;
 const MANIFEST = '/__fixtures/manifest.json';
 const db = (x) => (x > 0 ? 20 * Math.log10(x) : -Infinity);
+/** CI-1: ctx.resume() on a normal box (CONTRACT_CHANGES lowres2: 5–9 ms); audioSleep forgives only resume beyond it. */
+const WAKE_RESUME_NOMINAL_MS = 10;
 
 // ----- helpers ---------------------------------------------------------------------------------------------------
 function mkCtx(sec, sr = SR) {
@@ -3056,11 +3058,15 @@ export const realtime = {
             const f0 = blocks[0].f;
             const d = new Float32Array(blocks[blocks.length - 1].f + 128 - f0);
             let gaps = 0;
+            const gapAt = []; // CI-1: [from, to] s from the capture start, so an attempt can tell where a hole is
             blocks.forEach((b, k) => {
               d.set(b.m, b.f - f0);
-              if (k && b.f !== blocks[k - 1].f + 128) gaps++;
+              if (k && b.f !== blocks[k - 1].f + 128) {
+                gaps++;
+                gapAt.push([(blocks[k - 1].f + 128 - f0) / sr, (b.f - f0) / sr]);
+              }
             });
-            res({ d, t0: f0 / sr, gaps });
+            res({ d, t0: f0 / sr, gaps, gapAt });
           };
           e.recordTap.connect(node);
           node.connect(e.ctx.destination);
@@ -3111,8 +3117,20 @@ export const realtime = {
       r.wakeVsAwakeMs = r.wakeTotalMs === null || r.awakeTotalMs === null ? null : +(r.wakeTotalMs - r.awakeTotalMs).toFixed(1);
       r.refClicks = on2 === null ? null : clicks(c2.d, sr, Math.max(0.002, on2 / sr - 0.05), Math.min(c2.d.length / sr, on2 / sr + 0.4)).length;
       r.gaps = c1.gaps + c2.gaps;
-      r.ok = r.gaps === 0 && r.stateAfterMsg === 'waking' && r.queuedAtMsg >= 1 && r.noteSounded &&
-        r.wakeTotalMs !== null && r.wakeTotalMs <= 80 && r.wakeClicks <= r.refClicks;
+      // CI-1: a hole (missing render blocks, a loaded box) only spoils what is read around it. The verdict reads the
+      // onset and the click window [onset − 50 ms, onset + 400 ms] of each capture, so only a hole there (or before
+      // the first onset found, which may then be the hole's end) voids the attempt. The macos-14 runner had a hole in
+      // its first attempt and spent its three attempts (2026-09-30 run).
+      const holeIn = (c, on) =>
+        on === null || c.gapAt.some(([a, b]) => a < on / sr + 0.4 && b > Math.max(0, on / sr - 0.05));
+      r.gapsInWindow = (r.noteSounded ? +holeIn(c1, on1) : 0) + (on2 !== null ? +holeIn(c2, on2) : 0);
+      // CI-1: lastWake.ms is the platform's own ctx.resume() (engine.wake awaits only that before it schedules the
+      // note): 5–9 ms on the Mac and here, but 72–94 ms on the device-less, 5–7× slower macos-14 runner, which no
+      // app could fit in 80 ms. Only resume time beyond WAKE_RESUME_NOMINAL_MS is the platform's; everything else
+      // (message → wake, the lead, the output chain) still counts, so on a normal box the bound is the same 80 ms.
+      r.resumeExcessMs = r.lastWake ? +Math.max(0, r.lastWake.ms - WAKE_RESUME_NOMINAL_MS).toFixed(1) : 0;
+      r.ok = r.gapsInWindow === 0 && r.stateAfterMsg === 'waking' && r.queuedAtMsg >= 1 && r.noteSounded &&
+        r.wakeTotalMs !== null && r.wakeTotalMs - r.resumeExcessMs <= 80 && r.wakeClicks <= r.refClicks;
       return r;
     };
     out.midiWake = [];
@@ -3124,7 +3142,7 @@ export const realtime = {
     const best = out.midiWake.find((r) => r.ok) || out.midiWake[out.midiWake.length - 1];
     Object.assign(out, { stateAfterMsg: best.stateAfterMsg, queuedAtMsg: best.queuedAtMsg, noteSounded: best.noteSounded,
       wakeAddedMs: best.wakeAddedMs, wakeTotalMs: best.wakeTotalMs, awakeTotalMs: best.awakeTotalMs,
-      wakeVsAwakeMs: best.wakeVsAwakeMs, midiWakeOk: best.ok });
+      wakeVsAwakeMs: best.wakeVsAwakeMs, resumeExcessMs: best.resumeExcessMs, midiWakeOk: best.ok });
     // 3. asleep again, then a keydown alone wakes it without a note
     out.sleptAgainMs = await until(asleep, 9000);
     document.dispatchEvent(new KeyboardEvent('keydown', { code: 'F13', key: 'F13', bubbles: true }));
