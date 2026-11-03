@@ -303,6 +303,7 @@
   /* v11-polish (deferred #7): a held key glows in the colour of the part that sounded it (keys.js `--kp`) */
   & .pkey.white.held[data-part] { background: color-mix(in srgb, var(--kp) 82%, var(--key-white)); }
   & .pkey.black.held[data-part] { background: color-mix(in srgb, var(--kp) 78%, var(--key-black)); }
+  & .pkey.held[data-part] .pkey-label { color: var(--ink-on-lamp); } /* C3 on the part colour: 4.37 → ink */
   & .pkey-label { color: var(--key-label); }
   & .rbar.off { background: #5a4d45; }
   & .rv-cnt { color: #e8dccd; }

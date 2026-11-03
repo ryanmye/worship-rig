@@ -756,7 +756,6 @@ export function mountPerform(root, ctx) {
     showNotes(false);
   });
   if (narrowMq) d.listen(narrowMq, 'change', autoOpenNotes);
-  autoOpenNotes();
   if (typeof IntersectionObserver === 'function') {
     const io = new IntersectionObserver((entries) => {
       if (entries.some((e) => e.isIntersecting)) {
@@ -1671,6 +1670,7 @@ export function mountPerform(root, ctx) {
   renderSong(store.get());
   songBlock.classList.toggle('loading', !!status.loading);
   readRuntime();
+  autoOpenNotes(); // FR-1 (after the first render: showNotes measures the notes text)
 
   return {
     el: perform,

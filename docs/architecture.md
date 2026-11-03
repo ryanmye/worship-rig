@@ -44,7 +44,7 @@ views (perform.js, edit/ (H-v2 Edit), settings.js, components/)
 store.js ──── subscribe(state, changedPaths) ────► controller.js ────► engine (app/js/engine/index.js)
    ▲                                                 │  ▲
 presets.js (factory songs)                  midi.js ─┘  └─ recorder.js (AudioWorklet on engine.recordTap)
-shared/ (params grammar, fx-presets, music, automation, keydetect, chords, wav, prng): pure, no DOM/audio
+shared/ (params grammar, fx-presets, music, automation, keydetect, chords, wav, prng, themes, voice): pure
 ```
 
 - **store.js** holds the whole library: songs, setlists, settings and meta. It persists to localStorage with debouncing,

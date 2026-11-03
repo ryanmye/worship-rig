@@ -60,13 +60,15 @@
   --eqk-keys-bg: var(--bg); --eqk-range: var(--panel-2);
   --eqk-air-1: color-mix(in srgb, var(--eqk-bg) 92%, var(--text)); --eqk-air-2: var(--eqk-bg);
   --eqk-key-white: light-dark(var(--panel), color-mix(in srgb, var(--text) 72%, var(--panel)));
-  --eqk-key-white-off: color-mix(in srgb, var(--text) 20%, var(--panel));
+  --eqk-key-white-off: light-dark(color-mix(in srgb, var(--text) 36%, var(--panel)),
+    color-mix(in srgb, var(--text) 20%, var(--panel)));
   --eqk-key-black: light-dark(color-mix(in srgb, var(--text) 82%, var(--panel)),
     color-mix(in srgb, var(--bg) 40%, var(--panel)));
   --eqk-key-black-off: light-dark(color-mix(in srgb, var(--text) 42%, var(--panel)),
     color-mix(in srgb, var(--text) 8%, var(--panel)));
   --eqk-key-press: var(--accent); --eqk-key-press-black: color-mix(in srgb, var(--accent) 78%, #000);
-  --eqk-key-hatch-white: color-mix(in srgb, var(--text) 28%, var(--panel));
+  --eqk-key-hatch-white: light-dark(color-mix(in srgb, var(--text) 50%, var(--panel)),
+    color-mix(in srgb, var(--text) 28%, var(--panel)));
   --eqk-key-hatch-black: light-dark(color-mix(in srgb, var(--text) 55%, var(--panel)),
     color-mix(in srgb, var(--text) 13%, var(--panel)));
   --eqk-key-hatch-on: light-dark(color-mix(in srgb, var(--text) 22%, transparent),

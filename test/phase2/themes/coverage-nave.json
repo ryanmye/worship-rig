@@ -3,7 +3,7 @@
  "themes": [
   "nave"
  ],
- "generated": "2026-09-30T16:33:27.829Z",
+ "generated": "2026-11-03T21:47:01.874Z",
  "states": [
   "nave:perform",
   "nave:perform-held",
@@ -31,8 +31,8 @@
   "nave:mini-6-flags",
   "nave:mini-drone-keys"
  ],
- "total": 210,
- "matched": 207,
+ "total": 209,
+ "matched": 206,
  "unmatched": 3,
  "unmatchedPct": 1.4,
  "limitPct": 5,
@@ -51,9 +51,9 @@
    "dead": false
   },
   {
-   "selector": "& .qs-pedal.on i",
+   "selector": "& .p-drone.audible::before",
    "context": ":where(html[data-theme=\"nave\"])",
-   "line": 218,
+   "line": 330,
    "dead": false
   }
  ],

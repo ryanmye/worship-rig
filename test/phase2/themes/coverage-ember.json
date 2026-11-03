@@ -3,7 +3,7 @@
  "themes": [
   "ember"
  ],
- "generated": "2026-09-30T16:33:16.173Z",
+ "generated": "2026-11-03T21:46:47.950Z",
  "states": [
   "ember:perform",
   "ember:perform-held",
@@ -31,8 +31,8 @@
   "ember:mini-6-flags",
   "ember:mini-drone-keys"
  ],
- "total": 184,
- "matched": 181,
+ "total": 186,
+ "matched": 183,
  "unmatched": 3,
  "unmatchedPct": 1.6,
  "limitPct": 5,
@@ -41,19 +41,19 @@
   {
    "selector": "& .fx-more",
    "context": ":where(html[data-theme=\"ember\"])",
-   "line": 228,
+   "line": 238,
    "dead": false
   },
   {
    "selector": "& .swell-btn.on",
    "context": ":where(html[data-theme=\"ember\"])",
-   "line": 265,
+   "line": 275,
    "dead": false
   },
   {
    "selector": "& .bstrip.open .bstrip-list",
    "context": ":where(html[data-theme=\"ember\"])",
-   "line": 310,
+   "line": 323,
    "dead": false
   }
  ],

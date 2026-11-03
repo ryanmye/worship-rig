@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Themes suite (themes-setup; app/themes/README.md, design/warmth/OPTIONS.md §3.1 #7/#8, §5).
-//   node test/phase2/themes/run.mjs [--only boot,switch,layers,picker,classic,quick,mini,coverage] [--theme id,id]
+//   node test/phase2/themes/run.mjs [--only boot,switch,layers,picker,classic,quick,mini,v11,coverage] [--theme id,id]
 // Real app served by server.js, real Chromium. For EVERY registered, non-coming theme (shared/themes.js):
 //   boot      localStorage mirror + settings.theme set → reload: #theme-css is in the document while
 //             readyState is still "loading" (an init script records it), render-blocking, loaded before first paint;
@@ -32,6 +32,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { MIDI_PERMISSIONS, waitRigReady } from '../../integration/lib.mjs';
 import { THEMES, DEFAULT_THEME_ID, THEME_MIRROR_KEY, byId } from '../../../app/js/shared/themes.js';
+import { voiceText } from '../../../app/js/shared/voice.js';
 import { parseThemeSelectors, classesOf, deadClassFinder } from './css-selectors.mjs';
 import { walkMini } from '../mini/theme-lib.mjs';
 
@@ -542,6 +543,8 @@ try {
     });
   }
 
+  if (want('v11')) await v11Tests();
+
   if (want('coverage')) {
     const deadFinder = deadClassFinder(APP);
     const files = new Map(); // css → [theme]
@@ -605,6 +608,298 @@ try {
 } finally {
   await browser.close().catch(() => {});
   await server.close().catch(() => {});
+}
+
+/**
+ * v11-polish: what the theme leftovers made real, per theme — the voice strings, the EQ canvases painting the theme's
+ * tokens, a top bar that still fits at 1024 with the longer words, and the per-theme JS hooks (Sanctuary / Nave's
+ * lancet on audibility, Studio's one-shot lamp, Ember's part-coloured keys and title line box, Daylight's light switch).
+ */
+async function v11Tests() {
+  const settle = async () => {
+    await ev(() => window.__rig.theme.pending);
+    await page.waitForFunction(() => !window.__rig.controller.status.loading, null, { timeout: 240000, polling: 300 });
+    await sleep(700); // the 500 ms ready poll + a frame
+  };
+  /** The whole set decoded (the top bar's Ready lamp), for the "ready" words. */
+  const allReady = async () => {
+    await settle();
+    await page.waitForFunction(() => document.getElementById('ready-status').classList.contains('on'), null,
+      { timeout: 240000, polling: 300 });
+  };
+  /** A CSS colour as the browser resolves it on `sel` (custom property → computed rgb), and WCAG contrast. */
+  const lum = (c) => {
+    const f = (v) => {
+      const s = v / 255;
+      return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+  };
+  const contrast = (a, b) => {
+    const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+    return (x + 0.05) / (y + 0.05);
+  };
+
+  for (const t of LIVE) {
+    await T(`v11 voice → ${t.id}: top bar, Next, Notes, empty slot, FX caption case; fits at 1024`, async () => {
+      const mark = errors.length;
+      await ev(() => {
+        window.__rig.ctx.closeSettings();
+        window.__rig.store.set('settings.performLock', false);
+        window.__rig.store.set('settings.view', 'perform');
+      });
+      await storeTheme(t.id);
+      await allReady();
+      const r = await ev(() => ({
+        ready: document.getElementById('ready-text').textContent,
+        total: window.__rig.store.navIds().length,
+        next: document.querySelector('.nav-next-cap').textContent,
+        empty: [...document.querySelectorAll('.slot-vt-word')].map((n) => n.textContent),
+        fx: [...document.querySelectorAll('.fx-chiprow .fx-lab span')].map((n) => n.textContent),
+        fxCase: getComputedStyle(document.querySelector('.fx-chiprow .fx-lab span')).textTransform,
+      }));
+      assert.equal(r.ready, voiceText(t.id, 'ready', { total: r.total }));
+      assert.equal(r.next, voiceText(t.id, 'nextCap'));
+      assert.ok(r.empty.length && r.empty.every((x) => x === voiceText(t.id, 'emptySlot')), JSON.stringify(r.empty));
+      assert.deepEqual(r.fx, ['Space', 'Echo'], 'the caption keeps the label’s own case (themes-critic E2/S2)');
+      if (t.id === 'classic') assert.equal(r.fxCase, 'uppercase', 'Classic keeps SPACE / ECHO through CSS');
+      // the longer words still fit the top bar at the narrowest supported window
+      await page.setViewportSize({ width: 1024, height: 700 });
+      await sleep(300);
+      const fit = await ev(() => {
+        const tb = document.querySelector('.topbar');
+        const rt = document.getElementById('ready-text');
+        return { tb: [tb.scrollWidth, tb.clientWidth], rt: [rt.scrollWidth, rt.clientWidth] };
+      });
+      await page.setViewportSize({ width: 1440, height: 900 });
+      assert.ok(fit.tb[0] <= fit.tb[1] + 1, `top bar overflows at 1024: ${fit.tb}`);
+      assert.ok(fit.rt[0] <= fit.rt[1] + 1, `ready text clipped at 1024: ${fit.rt}`);
+      assert.deepEqual(errorsSince(mark), []);
+    });
+  }
+
+  for (const t of LIVE) {
+    await T(`v11 EQ canvas → ${t.id}: plot and keys paint the theme's tokens, legible`, async () => {
+      const mark = errors.length;
+      await storeTheme(t.id);
+      await ev(() => window.__rig.store.set('settings.view', 'edit'));
+      await page.waitForSelector('#view-edit .ev2', { state: 'visible', timeout: 60000 });
+      await ev(async () => {
+        const adv = document.querySelector('#view-edit details[data-sec="slot0-adv"]');
+        if (adv) adv.open = true;
+      });
+      await page.waitForSelector('#view-edit .eqk .eqk-plot', { timeout: 20000 });
+      await sleep(700);
+      const r = await ev(() => {
+        const graph = document.querySelector('#view-edit .eqk .eqk-graph');
+        const probe = document.createElement('i');
+        probe.hidden = true;
+        graph.append(probe);
+        const read = (v) => {
+          probe.style.color = v;
+          const c = document.createElement('canvas').getContext('2d');
+          c.fillStyle = getComputedStyle(probe).color;
+          c.fillRect(0, 0, 1, 1);
+          return [...c.getImageData(0, 0, 1, 1).data].slice(0, 3);
+        };
+        const tok = { bg: read('var(--eqk-bg)'), curve: read('var(--eqk-curve)'), label: read('var(--eqk-label-0)'),
+          keyOn: read('var(--eqk-key-white)'), keyOff: read('var(--eqk-key-white-off)') };
+        probe.remove();
+        const px = (sel, x, y) => {
+          const cv = document.querySelector(`#view-edit .eqk ${sel}`);
+          const dpr = cv.width / cv.clientWidth;
+          return [...cv.getContext('2d').getImageData(Math.round(x * dpr), Math.round(y * dpr), 1, 1).data].slice(0, 3);
+        };
+        return { tok, corner: px('.eqk-plot', 3, 3) };
+      });
+      const near = (a, b) => a.every((v, i) => Math.abs(v - b[i]) <= 2);
+      assert.ok(near(r.corner, r.tok.bg), `plot background ${r.corner} = the theme's --eqk-bg ${r.tok.bg}`);
+      if (t.id === 'classic') assert.deepEqual(r.corner, [15, 18, 22], 'Classic paints exactly as before (#0f1216)');
+      else if (t.mode === 'light') assert.ok(lum(r.corner) > 0.5, `a light theme gets a paper graph (${r.corner})`);
+      assert.ok(contrast(r.tok.curve, r.tok.bg) >= 4.5, `curve on plot ${contrast(r.tok.curve, r.tok.bg).toFixed(2)}`);
+      assert.ok(contrast(r.tok.label, r.tok.bg) >= 4.5, `0 dB label on plot ${contrast(r.tok.label, r.tok.bg).toFixed(2)}`);
+      assert.ok(contrast(r.tok.keyOn, r.tok.keyOff) >= 1.8, `lit vs greyed keys ${contrast(r.tok.keyOn, r.tok.keyOff)}`);
+      await page.screenshot({ path: path.join(SHOTS, `v11-eq-${t.id}.png`) });
+      await ev(() => {
+        const adv = document.querySelector('#view-edit details[data-sec="slot0-adv"]');
+        if (adv) adv.open = false;
+        window.__rig.store.set('settings.view', 'perform');
+      });
+      assert.deepEqual(errorsSince(mark), []);
+    });
+  }
+
+  await T('v11 voice: the set’s end after Fade out, Daylight’s "Start of set", a switch re-words Quick and Edit',
+    async () => {
+      const mark = errors.length;
+      await storeTheme('sanctuary');
+      await settle();
+      const n = await ev(() => window.__rig.store.navIds().length);
+      assert.ok(n > 1 && await ev(() => !!window.__rig.store.get().settings.currentSetlistId), 'a setlist is current');
+      await ev((i) => window.__rig.controller.selectSong(window.__rig.store.navIds()[i], { index: i }), n - 1);
+      await settle();
+      await page.click('[data-testid="fade-out"]');
+      await page.waitForSelector('[data-testid="faded-chip"]:not([hidden])', { timeout: 12000 });
+      assert.equal(await page.textContent('[data-testid="faded-chip"]'), voiceText('sanctuary', 'setEnd'));
+      await storeTheme('classic'); // a voice switch while faded re-words the chip (Classic has no end-of-set line)
+      await page.waitForFunction((t) => document.querySelector('[data-testid="faded-chip"]').textContent === t,
+        voiceText('classic', 'fadedChip'), { timeout: 3000 });
+      await ev(() => {
+        const p = window.__rig.controller.perform;
+        p.noteOn(60, 90);
+        p.noteOff(60);
+      });
+      await ev(() => window.__rig.controller.selectSong(window.__rig.store.navIds()[0], { index: 0 }));
+      await storeTheme('daylight-day');
+      await settle();
+      assert.equal((await page.textContent('[data-testid="prev-song"]')).trim(), 'Start of set');
+      // Quick and Edit re-word on a runtime switch (no remount)
+      await storeTheme('studio');
+      await page.click('#btn-quick');
+      await page.waitForSelector('[data-testid="quick-sheet"]', { state: 'visible' });
+      assert.match(await page.textContent('.qs-restart-hold'), new RegExp(voiceText('studio', 'quickRestart')));
+      await storeTheme('ember');
+      assert.equal(await page.textContent('.qs-sub'), voiceText('ember', 'quickSub'));
+      await page.click('#btn-quick');
+      await ev(() => window.__rig.store.set('settings.view', 'edit'));
+      await page.waitForSelector('#view-edit .ev2-rig-hint', { state: 'visible', timeout: 60000 });
+      await storeTheme('studio');
+      assert.equal(await page.textContent('#view-edit .ev2-rig-hint'), voiceText('studio', 'editHint'));
+      await storeTheme('classic');
+      assert.equal(await page.textContent('#view-edit .ev2-rig-hint'), voiceText('classic', 'editHint'));
+      await ev(() => window.__rig.store.set('settings.view', 'perform'));
+      assert.deepEqual(errorsSince(mark), []);
+    });
+
+  await T('v11 Sanctuary / Nave: the lancet lights on audibility (−∞ or Faded unlit), not on drone.mode', async () => {
+    const mark = errors.length;
+    for (const id of ['sanctuary', 'nave']) {
+      await storeTheme(id);
+      await settle();
+      const op = () => ev(() => {
+        const d = document.querySelector('.p-drone');
+        return { audible: d.classList.contains('audible'), off: d.classList.contains('off'),
+          op: Number(getComputedStyle(d, '::before').opacity) };
+      });
+      const sid = await ev(() => window.__rig.store.get().settings.currentSongId);
+      const g0 = await ev((s) => window.__rig.store.getSong(s).drone.gain, sid);
+      let s = await op();
+      assert.ok(s.audible && !s.off, `${id}: drone on → audible ${JSON.stringify(s)}`);
+      await ev((sId) => window.__rig.store.set(`songs.${sId}.drone.gain`, 0), sid);
+      await page.waitForFunction(() => !document.querySelector('.p-drone').classList.contains('audible'), null,
+        { timeout: 3000 });
+      await sleep(800); // the .6 s opacity transition
+      s = await op();
+      assert.ok(!s.off && s.op < 0.5, `${id}: on at −∞ is unlit (${JSON.stringify(s)})`);
+      await ev(({ sId, g }) => window.__rig.store.set(`songs.${sId}.drone.gain`, g), { sId: sid, g: g0 });
+      await page.waitForFunction(() => document.querySelector('.p-drone').classList.contains('audible'), null,
+        { timeout: 3000 });
+    }
+    assert.deepEqual(errorsSince(mark), []);
+  });
+
+  await T('v11 Studio: a channel coming on flashes its lamp once (.lit-now), never at rest', async () => {
+    const mark = errors.length;
+    await storeTheme('studio');
+    await settle();
+    const tile = page.locator('.perform .slot').first().locator('.ontile').first();
+    assert.equal(await ev(() => document.querySelectorAll('.ontile.lit-now').length), 0, 'no class at rest');
+    await tile.click();
+    assert.equal(await tile.evaluate((n) => n.classList.contains('lit-now')), false, 'on → off: no flash');
+    await tile.click();
+    const r = await tile.evaluate((n) => ({ lit: n.classList.contains('lit-now'),
+      anim: getComputedStyle(n.querySelector('.ot-led')).animationName }));
+    assert.deepEqual(r, { lit: true, anim: 'studio-lamp-on' });
+    await sleep(900);
+    assert.equal(await tile.evaluate((n) => n.classList.contains('lit-now')), false, 'gone after 700 ms');
+    assert.deepEqual(errorsSince(mark), []);
+  });
+
+  await T('v11 Ember: held keys in the part’s colour; the title’s line box holds its face', async () => {
+    const mark = errors.length;
+    await storeTheme('ember');
+    await settle();
+    const r = await ev(async () => {
+      const p = window.__rig.controller.perform;
+      p.noteOn(60, 100);
+      await new Promise((res) => setTimeout(res, 300));
+      const k = document.querySelector('.piano .pkey[data-note="60"]');
+      const out = { part: k.dataset.part ?? null, kp: k.style.getPropertyValue('--kp'), bg: getComputedStyle(k).backgroundColor };
+      p.releaseAll();
+      await new Promise((res) => setTimeout(res, 200));
+      out.after = k.dataset.part ?? null;
+      const n = document.querySelector('.song-name');
+      out.name = [n.scrollHeight, n.clientHeight, getComputedStyle(n).fontFamily];
+      return out;
+    });
+    assert.ok(r.part !== null && /var\(--slot-\d\)/.test(r.kp), `data-part on the held key ${JSON.stringify(r)}`);
+    assert.notEqual(r.bg, 'rgb(255, 180, 40)', 'not the plain amber');
+    assert.equal(r.after, null, 'cleared on release');
+    assert.match(r.name[2], /Ember Title/);
+    assert.ok(r.name[0] <= r.name[1] + 1, `.song-name ${r.name[0]}/${r.name[1]} (E1 was 50/48)`);
+    assert.deepEqual(errorsSince(mark), []);
+  });
+
+  await T('v11 Daylight: Day · Stage · Auto in Settings (Daylight only); Lock shows Stage; Auto follows the Mac', async () => {
+    const mark = errors.length;
+    const shown = () => ev(() => ({ html: document.documentElement.dataset.theme,
+      link: document.getElementById('theme-css')?.getAttribute('href'), mirror: localStorage.getItem('worship-rig.theme'),
+      store: window.__rig.store.get().settings.theme }));
+    await storeTheme('sanctuary');
+    await ev(() => window.__rig.ctx.openSettings({ section: 'appearance' }));
+    await page.waitForSelector('[data-testid="settings-appearance"]', { state: 'visible' });
+    assert.equal(await page.isVisible('[data-testid="setting-theme-light"]'), false, 'no Light row outside Daylight');
+    await page.click('[data-testid="theme-card-daylight-day"]');
+    await ev(() => window.__rig.theme.pending);
+    await page.waitForSelector('[data-testid="setting-theme-light"]', { state: 'visible' });
+    assert.equal(await page.getAttribute('[data-testid="setting-theme-light"] [data-value="day"]', 'aria-checked'), 'true');
+    await page.click('[data-testid="setting-theme-light"] [data-value="stage"]');
+    await ev(() => window.__rig.theme.pending);
+    assert.equal((await shown()).store, 'daylight-stage');
+    await page.click('[data-testid="setting-theme-light"] [data-value="day"]');
+    await ev(() => window.__rig.theme.pending);
+    await ev(() => window.__rig.ctx.closeSettings());
+    // Lock forces Stage while locked: a same-file attribute flip (no sheet load), right after the store notifies
+    const flip = await ev(async () => {
+      const t0 = performance.now();
+      window.__rig.store.set('settings.performLock', true);
+      while (document.documentElement.dataset.theme !== 'daylight-stage' && performance.now() - t0 < 1000) {
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+      return { html: document.documentElement.dataset.theme, mode: document.documentElement.dataset.mode,
+        ms: Math.round(performance.now() - t0) };
+    });
+    assert.deepEqual({ html: flip.html, mode: flip.mode }, { html: 'daylight-stage', mode: 'dark' }, 'Stage under Lock');
+    assert.ok(flip.ms < 100, `within a frame or two (${flip.ms} ms)`);
+    let s = await shown();
+    assert.equal(s.store, 'daylight-day', 'the stored choice is untouched');
+    assert.equal(s.link, '/themes/daylight-v2/theme.css');
+    await ev(() => window.__rig.store.set('settings.performLock', false));
+    assert.equal((await shown()).html, 'daylight-day', 'Day again when unlocked');
+    // Auto (per Mac) follows the Mac's appearance, live
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await ev(() => window.__rig.ctx.openSettings({ section: 'appearance' }));
+    await page.click('[data-testid="setting-theme-light"] [data-value="auto"]');
+    await ev(() => window.__rig.theme.pending);
+    s = await shown();
+    assert.equal(await ev(() => localStorage.getItem('worship-rig.light')), 'auto');
+    assert.equal(s.html, 'daylight-stage', 'Auto on a dark Mac = Stage');
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.waitForFunction(() => document.documentElement.dataset.theme === 'daylight-day', null, { timeout: 3000 });
+    // a reload under Auto boots straight into the Mac's light (boot.js), no flip after first paint
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await bootApp();
+    assert.equal(await ev(() => window.__themeDcl.html), 'daylight-stage', 'boot.js applied Auto before DCL');
+    await ev(() => window.__rig.ctx.openSettings({ section: 'appearance' }));
+    await page.click('[data-testid="setting-theme-light"] [data-value="day"]');
+    await ev(() => window.__rig.theme.pending);
+    assert.equal(await ev(() => localStorage.getItem('worship-rig.light')), null, 'Day clears Auto');
+    assert.equal((await shown()).html, 'daylight-day');
+    await ev(() => window.__rig.ctx.closeSettings());
+    await page.emulateMedia({ colorScheme: null });
+    await storeTheme('sanctuary');
+    assert.deepEqual(errorsSince(mark), []);
+  });
 }
 
 /** Visit the app states whose DOM the themes style; `collect(label)` after each. */

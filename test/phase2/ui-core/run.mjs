@@ -4005,6 +4005,151 @@ test('L-30: rig menu ids trayHidden / trayShown → one info toast per session +
   await clearToasts();
 });
 
+test('v11-polish FR-1: a fresh library at 1280×800 shows the Start card (Notes opens for it); only a seen card '
+  + 'closes on the next song, and that Notes closes with it', async () => {
+  const b2 = await chromium.launch({ channel: 'chromium', headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
+  const errs = [];
+  try {
+    const ctx2 = await b2.newContext({ viewport: { width: 1280, height: 800 } });
+    await pinTheme(ctx2, 'classic');
+    const p2 = await ctx2.newPage();
+    watchConsole(p2, errs);
+    await p2.goto(base);
+    await p2.waitForFunction(() => !!window.__rig?.viewsReady, null, { timeout: 30000 });
+    await p2.evaluate(() => window.__rig.viewsReady);
+    const card = '[data-testid=start-card]';
+    await p2.waitForSelector(card, { state: 'visible', timeout: 10000 });
+    const g = await p2.evaluate(() => ({
+      notesShown: document.querySelector('.perform').classList.contains('show-notes'),
+      pressed: document.querySelector('.notes-btn').getAttribute('aria-pressed'),
+      done: localStorage.getItem('worship-rig.start-card'),
+    }));
+    assert.deepEqual(g, { notesShown: true, pressed: 'true', done: null }, 'Notes opened for the pending card');
+    await p2.screenshot({ path: path.join(shots, 'v11-fr1-start-card-1280.png') });
+    // the next song: the card was on screen, so it closes for good, and the Notes it opened goes with it
+    await p2.evaluate(() => window.__rig.controller.selectSong(window.__rig.store.navIds()[1], { index: 1 }));
+    await p2.waitForFunction(() => localStorage.getItem('worship-rig.start-card') === 'done', null, { timeout: 10000 });
+    assert.equal(await p2.isVisible(card), false);
+    assert.equal(await p2.evaluate(() => document.querySelector('.perform').classList.contains('show-notes')), false,
+      'the auto-opened Notes closed again (the drone card is back)');
+    assert.equal(await p2.isVisible('.p-drone .ontile'), true);
+    // a card that was never on screen (Edit open at boot) survives a song change
+    await p2.evaluate(() => {
+      localStorage.removeItem('worship-rig.start-card');
+      window.__rig.store.set('settings.view', 'edit');
+      window.__rig.store.persistNow?.();
+    });
+    await p2.reload();
+    await p2.waitForFunction(() => !!window.__rig?.viewsReady, null, { timeout: 30000 });
+    await p2.evaluate(() => window.__rig.viewsReady);
+    await p2.evaluate(() => window.__rig.ready);
+    await p2.waitForTimeout(300);
+    await p2.evaluate(() => window.__rig.controller.selectSong(window.__rig.store.navIds()[2], { index: 2 }));
+    await p2.waitForTimeout(600);
+    assert.equal(await p2.evaluate(() => localStorage.getItem('worship-rig.start-card')), null,
+      'not marked done unseen');
+    await p2.evaluate(() => window.__rig.store.set('settings.view', 'perform'));
+    await p2.waitForSelector(card, { state: 'visible', timeout: 10000 });
+  } finally {
+    await b2.close();
+  }
+  assert.deepEqual(errs, [], errs.join('\n'));
+});
+
+test('v11-polish T4 / C1: Quick’s three sections fit the sheet at 1440×900, 1366×768, 1280×800, 1024×700; '
+  + 'the pedal caption is whole', async () => {
+  try {
+    for (const [w, hh] of [[1440, 900], [1366, 768], [1280, 800], [1024, 700]]) {
+      await page.setViewportSize({ width: w, height: hh });
+      await page.waitForTimeout(250);
+      await page.click('#btn-quick');
+      await page.waitForSelector('[data-testid="quick-sheet"]', { state: 'visible' });
+      await page.waitForTimeout(250);
+      const r = await page.evaluate(() => {
+        const qs = document.querySelector('.qs');
+        const qb = qs.getBoundingClientRect().bottom;
+        const over = [];
+        for (const n of qs.querySelectorAll('.qs-sec *')) {
+          if (!n.getClientRects().length || getComputedStyle(n).visibility === 'hidden') continue;
+          const b = n.getBoundingClientRect().bottom;
+          if (b > qb + 1) over.push(`${n.className || n.tagName} +${(b - qb).toFixed(1)}`);
+        }
+        const cap = [...qs.querySelectorAll('.qs-lbl small')].find((s) => /pedal|light/.test(s.textContent));
+        const shown = cap && getComputedStyle(cap).display !== 'none';
+        return { over, qs: [qs.scrollHeight, qs.clientHeight],
+          capCut: shown ? cap.scrollHeight > cap.clientHeight + 1 : false };
+      });
+      await page.click('#btn-quick');
+      assert.deepEqual(r.over, [], `${w}×${hh}: nothing below the sheet (${JSON.stringify(r)})`);
+      assert.ok(r.qs[0] <= r.qs[1] + 1, `${w}×${hh}: sheet scrollHeight ${r.qs}`);
+      assert.equal(r.capCut, false, `${w}×${hh}: the Sustain pedal caption is not cut`);
+    }
+  } finally {
+    await page.setViewportSize({ width: 1440, height: 900 });
+  }
+});
+
+test('v11-polish: strip pedal light, no EXPERIMENTAL tag on stage, aria-disabled frozen drone faders, chord '
+  + 'auto-fit, the Chrome .crswap note', async () => {
+  await selectIndex(0);
+  // the pedal lights the Sustain chips of the strips it holds (white), grey on an OFF strip
+  const p = await page.evaluate(async () => {
+    const c = window.__rig.controller;
+    c.perform.sustain(true);
+    await new Promise((r) => setTimeout(r, 400));
+    const pf = document.querySelector('.perform');
+    const chip = document.querySelector('.slot:not(.empty):not(.muted) .sus-chip.on .mc-led');
+    const out = { down: pf.classList.contains('pedal-down'), led: chip ? getComputedStyle(chip).backgroundColor : null };
+    c.perform.sustain(false);
+    await new Promise((r) => setTimeout(r, 400));
+    out.up = pf.classList.contains('pedal-down');
+    out.ledUp = chip ? getComputedStyle(chip).backgroundColor : null;
+    return out;
+  });
+  assert.equal(p.down, true);
+  assert.equal(p.led, 'rgb(241, 244, 248)', 'the LED is the pedal lamp’s white (--text)');
+  assert.equal(p.up, false);
+  assert.notEqual(p.ledUp, p.led, 'back to the slot colour');
+  // EXPERIMENTAL is Edit-only now (ux-round2 §2)
+  assert.equal(await page.locator('.p-drone .tag').count(), 0);
+  // a frozen drone fader says so to assistive tech (themes-critic C1)
+  await page.evaluate(() => window.__rig.store.set('settings.performLock', true));
+  await page.waitForTimeout(150);
+  const ad = await page.evaluate(() => [...document.querySelectorAll('.drone-char .fader')]
+    .map((f) => f.getAttribute('aria-disabled')));
+  await page.evaluate(() => window.__rig.store.set('settings.performLock', false));
+  assert.deepEqual(ad, ['true', 'true']);
+  // chord auto-fit: a name wider than the card steps down before it would ellipsize
+  const fit = await page.evaluate(async () => {
+    const st = document.createElement('style');
+    st.textContent = 'html body .perform .chord-readout[data-len="l"] .chord-name { font-size: 50px; }';
+    document.head.append(st);
+    const c = window.__rig.controller;
+    c.dispatchEvent(new CustomEvent('notes', { detail: { held: new Set([60, 64, 67]) } }));
+    c.dispatchEvent(new CustomEvent('chord', { detail: { chord: { name: 'Gsus' } } }));
+    await new Promise((r) => setTimeout(r, 200));
+    const n = document.querySelector('.chord-name');
+    const out = { fs: parseFloat(n.style.fontSize) || null, sw: n.scrollWidth, cw: n.clientWidth };
+    st.remove();
+    c.dispatchEvent(new CustomEvent('notes', { detail: { held: new Set() } }));
+    return out;
+  });
+  assert.ok(fit.sw <= fit.cw + 1, `the name fits (${JSON.stringify(fit)})`);
+  assert.ok(fit.fs && fit.fs < 50 && fit.fs >= 30, `stepped down, not below 60 % (${fit.fs})`);
+  // Chrome's save-file recording: the toast says the file appears when you stop (it's a .crswap until then)
+  await clearToasts();
+  const t = await page.evaluate(async () => {
+    const r = window.__rig.recorder;
+    r.dispatchEvent(new CustomEvent('state', { detail: { state: 'recording', sink: 'fsa', filename: 'Rig test.wav' } }));
+    await new Promise((res) => setTimeout(res, 50));
+    const text = [...document.querySelectorAll('#toasts .toast')].map((x) => x.textContent).join(' | ');
+    r.dispatchEvent(new CustomEvent('state', { detail: { state: 'idle' } }));
+    return text;
+  });
+  assert.match(t, /Recording “Rig test\.wav”\. Chrome writes the file when you stop .*\.crswap.*keep this tab open/);
+  await clearToasts();
+});
+
 test('no console errors on the main page', () => {
   assert.deepEqual(consoleErrors, [], consoleErrors.join('\n'));
 });

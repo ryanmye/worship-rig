@@ -217,6 +217,38 @@ test('effects: presets: Space / Echo / Vibe apply through the store; tweak → y
   }
 });
 
+test('effects: v11-polish — a shaped slot shows its tone curve on its "goes in" chips; flat and empty slots don’t',
+  async () => {
+    const t = await wideMount();
+    const glyphs = () => t.ev(() => [...document.querySelectorAll('.ev2-fx-mod')].map((c) => {
+      const g = c.querySelector('.ev2-fx-tone');
+      return `${c.dataset.bind}:${g ? (g.hidden ? 'hidden' : `shown/${g.tagName}/${g.getAttribute('aria-hidden')}`) : '-'}`;
+    }));
+    let g = await glyphs();
+    assert.equal(g.length, 12);
+    assert.ok(g.every((x) => x.endsWith(':hidden')), `flat EQs show nothing: ${g.join(' ')}`);
+    await t.setParam('slots.0.eq.b3', { on: true, type: 'peaking', hz: 800, db: 6, q: 1 });
+    await t.ev(() => new Promise((r) => setTimeout(r, 120)));
+    g = await glyphs();
+    for (const u of ['reverb', 'delay', 'chorus']) {
+      assert.ok(g.includes(`slots.0.sends.${u}:shown/SPAN/true`), `Keys/${u} shows a picture (not a button): ${g}`);
+      assert.ok(g.includes(`slots.1.sends.${u}:hidden`), `Pad/${u} is flat`);
+    }
+    // a picture only: the chip is still the one control (a click opens its step panel, never Tone)
+    const box = await t.ev(() => {
+      const c = document.querySelector('[data-bind="slots.0.sends.reverb"]');
+      const gr = c.querySelector('.ev2-fx-tone').getBoundingClientRect();
+      const cr = c.getBoundingClientRect();
+      return { inside: gr.left >= cr.left && gr.right <= cr.right + 0.5 && gr.top >= cr.top && gr.bottom <= cr.bottom,
+        pe: getComputedStyle(c.querySelector('.ev2-fx-tone')).pointerEvents };
+    });
+    assert.deepEqual(box, { inside: true, pe: 'none' });
+    await t.setParam('slots.0.eq.b3', null);
+    await t.ev(() => new Promise((r) => setTimeout(r, 120)));
+    assert.ok((await glyphs()).every((x) => x.endsWith(':hidden')), 'flat again → hidden');
+    t.assertNoConsoleErrors();
+  });
+
 test('effects: FX reverb / delay (sync, pingpong) / chorus reach the engine (ui-edit FX port)', async () => {
   const t = await wideMount();
   try {

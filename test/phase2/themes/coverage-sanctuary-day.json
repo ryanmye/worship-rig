@@ -4,7 +4,7 @@
   "sanctuary",
   "sanctuary-day"
  ],
- "generated": "2026-09-30T16:32:29.476Z",
+ "generated": "2026-11-03T21:45:52.628Z",
  "states": [
   "sanctuary:perform",
   "sanctuary:perform-held",
@@ -57,10 +57,10 @@
   "sanctuary-day:mini-6-flags",
   "sanctuary-day:mini-drone-keys"
  ],
- "total": 207,
- "matched": 204,
- "unmatched": 3,
- "unmatchedPct": 1.4,
+ "total": 206,
+ "matched": 202,
+ "unmatched": 4,
+ "unmatchedPct": 1.9,
  "limitPct": 5,
  "deadClasses": [],
  "unmatchedSelectors": [
@@ -80,6 +80,12 @@
    "selector": "& .fx-more",
    "context": ":where(html:is([data-theme=\"sanctuary\"], [data-theme=\"sanctuary-day\"]))",
    "line": 258,
+   "dead": false
+  },
+  {
+   "selector": "& .p-drone.audible::before",
+   "context": ":where(html:is([data-theme=\"sanctuary\"], [data-theme=\"sanctuary-day\"]))",
+   "line": 397,
    "dead": false
   }
  ],

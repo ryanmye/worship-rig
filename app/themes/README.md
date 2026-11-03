@@ -127,3 +127,22 @@ the `var()` fallback (mini.html loads no styles.css). So a theme that sets its t
 - **The critic shoots it per theme**: `node tools/themes/shoot.mjs --theme <id> --only mini` writes `mini.png` and
   `mini-drone-keys.png` plus their audits (the popover live on the app's real bus state), with 0 contrast fails
   required. `node test/phase2/mini/theme.mjs --only themes` checks every theme for an opaque card and no overflow.
+
+## JS hooks a theme may style (v11-polish, CONTRACT_CHANGES "## v11-polish")
+
+A theme is still CSS only. These are the app's own classes and tokens a theme file may use; none shows anything
+without a theme rule, so Classic is unchanged.
+
+- **Voice.** The app's words per theme live in `app/js/shared/voice.js` (keyed by registry id; Classic = the app's
+  words). Never fake copy with `::after` / `font-size: 0`: add or change an entry there.
+- **EQ canvases.** `eq-keyboard.js` paints every colour from `--eqk-*` tokens on `.eqk` / `.eqk-mini`
+  (`eq-keyboard.css`): Classic's literals as the base, derived from your `--bg`, `--panel*`, `--text`, `--muted`,
+  `--faint`, `--line*`, `--accent`, `--danger` otherwise. Set any `--eqk-*` on `.eqk` (or `.eqk-graph`) to override.
+- `.p-drone.audible` / `.ev2-drone.audible`: the drone can be heard (on, above −∞, not faded).
+- `.ontile.lit-now`: for 700 ms after a real off → on (a one-shot lamp; keep it finite, off under Lock and reduced
+  motion).
+- `.piano .pkey.held[data-part]` with `--kp: var(--slot-N)`: the part a held key sounds on.
+- `.perform.pedal-down`: the sustain pedal is down.
+- **Light switch** (`LIGHT_SWITCH` in `themes.js`, Daylight only): Day · Stage · Auto in Settings › Appearance; Auto is
+  per Mac (`localStorage['worship-rig.light']`), Lock shows the dark sibling while locked.
+
