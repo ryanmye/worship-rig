@@ -3,7 +3,7 @@
  "themes": [
   "nave"
  ],
- "generated": "2026-11-03T21:47:01.874Z",
+ "generated": "2026-11-03T22:16:57.718Z",
  "states": [
   "nave:perform",
   "nave:perform-held",
@@ -32,9 +32,9 @@
   "nave:mini-drone-keys"
  ],
  "total": 209,
- "matched": 206,
- "unmatched": 3,
- "unmatchedPct": 1.4,
+ "matched": 207,
+ "unmatched": 2,
+ "unmatchedPct": 1,
  "limitPct": 5,
  "deadClasses": [],
  "unmatchedSelectors": [
@@ -48,12 +48,6 @@
    "selector": "& .bstrip.open .bstrip-list",
    "context": ":where(html[data-theme=\"nave\"])",
    "line": 206,
-   "dead": false
-  },
-  {
-   "selector": "& .p-drone.audible::before",
-   "context": ":where(html[data-theme=\"nave\"])",
-   "line": 330,
    "dead": false
   }
  ],
