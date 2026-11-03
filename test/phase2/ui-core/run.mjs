@@ -499,6 +499,10 @@ test('REC start/stop changes state, runs the timer and saves (OPFS fallback in h
   assert.equal(await page.getAttribute('#btn-rec', 'aria-pressed'), 'true');
   await page.evaluate(() => window.__rig.controller.perform.noteOn(67, 90));
   await page.waitForTimeout(1300);
+  // CI-2: the timer counts from when the recorder really started, which lags the click on a loaded box (failed 3 of
+  // 4 runs at load 5–8). Wait for the tick instead of reading it once; it must still reach 00:01 within 6 s.
+  await page.waitForFunction(() => /^00:0[1-9]$/.test(document.getElementById('rec-time').textContent), null,
+    { timeout: 6000 }).catch(() => {});
   await page.evaluate(() => window.__rig.controller.perform.noteOff(67));
   assert.match(await page.textContent('#rec-time'), /^00:0[1-9]$/);
   await page.click('#btn-rec');
@@ -2035,14 +2039,14 @@ test('polish-1 / polish-2A (local L-3): MIDI "pending" = starting (info), "denie
         };
       };
       const out = {};
+      // CI-2: main.js renders a status event synchronously, so read in the same task as each fake event. A sleep
+      // let the controller's real status event repaint the lamp and dismiss the "starting" toast first (CI-1 in
+      // the settings suite had the same race).
       fire({ available: false, connected: false, reason: 'pending', pending: true, inputs: [] });
-      await new Promise((res) => setTimeout(res, 50));
       out.pending = read();
       fire({ available: false, connected: false, reason: 'denied', pending: false, inputs: [] });
-      await new Promise((res) => setTimeout(res, 30));
       out.denied = read();
       fire({ available: false, connected: false, reason: 'failed', pending: false, inputs: [] });
-      await new Promise((res) => setTimeout(res, 30));
       out.failed = read();
       c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status } })); // back to the real status
       return out;
