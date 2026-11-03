@@ -5466,3 +5466,89 @@ Electron main half is LOCAL.
   `nextMode, prevMode, panic, master 0.6295, master 0.5` (0.5 + 2 dB, then back); update states `idle → checking →
   update`, 9.9.9 found, x64 dmg offered, 2 feed requests (launch + Check now), no console errors beyond the fixture's
   deliberate 404.
+## v11-touch
+
+Custom key sensitivity (BACKLOG A, Ryan 2026-11-02), the expression-pedal curve and the "hold pedal = sustain + drone
+swell" combo (BACKLOG A), and "remember per device name" for the MIDI first-input heuristics (BACKLOG B). Everything
+is quiet by default: no new field is written until someone uses a control, and a v1.0 library plays exactly as before.
+
+- **Curve math** (`app/js/shared/touch-curve.js`, pure): a touch curve is `{shape, min, max, top}`, evaluated as
+  `x = clamp(vel / top)`, `y = min + (max − min) · x^shape`. `compileTouch()` precomputes it once; `touchAt()` is the
+  per-note evaluation (no allocation, one `Math.pow`, none when shape = 1). The four named curves are special cases
+  (soft `{0.6,0,1,127}`, normal `{1,0,1,127}`, hard `{1.6,0,1,127}`, fixed `{1,100/127,100/127,127}`) and return
+  bit-identical values to the old `curveVelocity` for every velocity −3…130 (and for 0.5, NaN, '90'; unit test).
+  `fitTouch(soft[], hard[], base)`: top = the median hard velocity (clamped 20–127), shape chosen so the median soft
+  velocity lands on `FIT_SOFT_TARGET` = 0.3 of the output range, min / max kept from the curve being replaced; refuses
+  with `few` (< 3 notes per step) or `same` (medians < 8 apart, e.g. the computer keys' fixed 100). A typical player
+  (soft ≈ 40, hard ≈ 126) fits ≈ linear (shape 1.00 ± 0.1); soft 20 / hard 90 → top 90, shape 0.75; soft 60 / hard 127
+  → shape ≈ 1.6 (= the 'hard' preset). `pedalCurve(x, 'log')` = (10^(2x) − 1) / 99 (half travel = 9/99 ≈ −20.8 dB).
+- **Interface changes**
+  - PARAMS: `slots.<i>.velocityCurve` gains `'custom'` (enum is now soft/normal/hard/fixed/custom); new rows
+    `slots.<i>.touch.shape` (0.25–4, log, 1), `.min` (0–1, 0), `.max` (0–1, 1), `.top` (20–127, step 1, 127), read
+    only while the curve is 'custom'. The store and controller pick them up through the table (no code there);
+    `engine.setParam` stores them in `cfg.touch` and `getParam` reads them. A v1.1 song opened in v1.0 clamps
+    'custom' to 'normal' (linear).
+  - `settings.keyboards` (optional; absent until set): `{ [MIDI device name]: { touch?: spec, remember?: true } }`,
+    plus `COMPUTER_KEYBOARD = '@computer'` for the on-screen + computer keys. Device names contain dots, so writes go
+    through `store.setKeyboard(name, fields|null)` (a null field removes it, null forgets the keyboard, an empty map is
+    dropped); `set('settings.keyboards', map)` validates the whole map; deeper paths are refused. Max 32 entries,
+    names ≤ 120 chars, unknown entry fields kept, `migrate()` idempotent.
+  - `patch.expression.curve` ('log'; 'linear' = absent) and `patch.swell.pedal` (true; false = absent), validated by
+    the store and the engine; `engine._routingInto` treats an expression object without `curve` as linear (the song's
+    routing is sent whole).
+  - `engine.noteOn(note, vel, {when, touch})`: `touch` = the playing keyboard's curve (compiled, or a spec compiled
+    once per object). Slots on **'normal'** use it ("slots inherit the keyboard default"); soft / hard / fixed /
+    custom slots override it. Without `touch` 'normal' is the identity, as before. A slot's own compiled curve is cached
+    on its channel (`sc.touchCfg` / `sc.touchK`, cleared by setParam of velocityCurve / touch.*), so the per-note cost
+    is one comparison. Queued (audio-asleep) note-ons keep their `touch`. `curveVelocity(vel, curve, touch?)` still
+    exported.
+  - Controller: a MIDI input whose device name has a curve sends the **raw** velocity plus `{touch}` (the keyboard's
+    curve replaces Settings › Touch for it; other keyboards keep the Touch setting, and their engine call keeps its
+    old 3-argument shape). The on-screen keys and the computer keys use the `@computer` entry the same way.
+    `controller.captureTouch(cb)` → stop(): every note-on's raw velocity with its device name (calibration).
+    `settings.keyboards[*].remember` → `midi.setRemembered(names)` (applied before `midi.init()`).
+  - MIDI: `setRemembered(names)` / `remembered`; in 'first' mode a connected remembered port ranks
+    `REMEMBERED_RANK` = 10 (above every heuristic, which tops out at 4) and counts as hardware even with a
+    virtual-looking name. Changing the list re-resolves (like `select()`); a remembered board plugged in later does not
+    take the port from the sticky one (L8), so a hot-plug never moves the input mid-song. `inputs[*].remembered`.
+  - Drone: `pedalSwell(on, when)`: while the sustain pedal is down (and the song's `swell.pedal`), `bendGain` rises
+    toward drone.gain 1 (≤ ×4 = +12 dB) with τ 0.55 s (≈ 2.5 s to 99 %) and sinks back with τ 0.65 s; it multiplies with
+    the bend 'drone-swell' (capped ×4). The engine re-evaluates it on every pedal change, routing change, commit and
+    allNotesOff, so a song without the combo lets go of a swell the previous song started (slowly: the drone keeps
+    sounding across the switch, the gapless rule).
+- **UI**
+  - Settings › MIDI keyboard › **Your keyboards** (`views/settings-keyboards.js`): one row per connected MIDI input,
+    saved keyboard and the on-screen keys. "Touch…" opens a curve diagram (SVG; the reference diagonal is `--line-2`),
+    Feel / Softest / Loudest / Full volume at, **Fit to my touch** (6 soft notes, then 6 hard, from that keyboard only;
+    the result is previewed with the two medians marked before "Use this") and Back to standard. **Remember** (MIDI
+    rows) / **Forget**.
+  - Edit › slot › Response: a fifth segment **Own** (`'custom'`; "Custom" is banned from Edit copy, ux-round2 #5)
+    with the four `touch.*` sliders; the sparkline draws the curve that plays (for Normal: the playing keyboard's own
+    curve, with a "Normal follows …" line); the reference diagonal reads `--line-2` instead of
+    `rgba(255,255,255,.18)` (themes-critic T3, invisible on the Day themes). Five segments fit the 1024 px column
+    (12.5 px labels).
+  - Edit › Master › Wheels & pedal: "Pedal curve" (Linear (even) / Log (fine when quiet)) beside the expression
+    row, and "Sustain pedal also swells the drone"; the section summary says "(log)" / "Sustain swells the drone".
+- **Cost per note-on** (`tools/bench-noteon.mjs`; headless Chromium, OfflineAudioContext, 4 synth slots on normal /
+  soft / hard / normal; before = `git archive 0187e88 app`, same script with `--app`; this Linux box was shared with
+  other workers, so the medians of 7 rounds move ±30 % run to run): see the table below.
+
+  | 3 alternating runs (µs or ns) | before (0187e88) | after, no keyboard curve | after, with `{touch}` |
+  |---|---|---|---|
+  | engine note-on + note-off, instruments stubbed (µs) | 5.84 · 6.26 · 7.37 | 6.16 · 5.72 · 6.05 | 5.63 · 6.61 · 5.65 |
+  | engine note-on + note-off, real synth voices (µs) | 563 · 674 · 538 | 605 · 723 · 543 | 546 · 618 · 631 |
+  | per-slot curve step as noteOn runs it (ns) | 29.8 · 28.5 · 16.4 | 39.7 · 41.5 · 50.7 | — |
+  | exported `curveVelocity` alone (ns) | 43.8 · 39.1 · 24.0 | 36.8 · 42.1 · 34.4 | — |
+
+  The curve step costs ~+15–30 ns per slot (the channel-cache comparison plus `touchAt`; a WeakMap cache measured
+  ~+70–110 ns and was replaced), i.e. ≤ 0.12 µs per note-on with 4 slots: inside the run-to-run noise of the
+  stubbed path (≈ 6 µs) and ~0.02 % of a real note-on (≈ 0.6 ms of node creation). No allocation per note for the
+  curves (the compiled objects are built once per configuration change; the controller hands the same `{touch}`
+  object to every note of a keyboard).
+- **Tests**: `test/unit/shared/touch-curve.test.mjs` (7: bit-exact presets, compile/eval, ranges = PARAMS rows,
+  fit cases, refusals, pedal taper); `test/phase1/shell/touch.test.mjs` (5: store fields, controller routing and
+  capture, remembered devices); engine `offline.touchCurves`, `offline.exprCurveAndPedalSwell` (drone.gain 0.25 →
+  +12…13 dB swell while held, back within 1.5 dB, lets go when the combo is turned off); Settings "Your keyboards"
+  (both modes); edit-v2 slot "v11-touch" and master "v11-touch". `params.test.mjs` updated for the new rows / enum.
+- **Needs the Mac / hardware**: the fit with real keys (Keystation 49 MK3 and the second board), Remember with two
+  boards plugged in, an expression pedal on the log curve, and how the drone swell sounds under a held pedal.

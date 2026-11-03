@@ -20,6 +20,9 @@ import { FxGraph, Channel, AudioTimer, Coalescer, rngFor, isOfflineContext, linF
 import { InstrumentRegistry } from './instruments.js';
 import { BufferCache } from './sampler.js';
 import { Drone } from './drone.js';
+import {
+  COMPILED_PRESETS, compileTouch, touchAt, pedalCurve, PEDAL_CURVES, TOUCH_KEYS,
+} from '../shared/touch-curve.js';
 
 const MB = 1024 * 1024;
 const lerp = (a, b, x) => a + (b - a) * x;
@@ -116,6 +119,13 @@ export function normalizePatch(patch) {
     // sustain: optional (absent = the instrument's own release / 'natural')
     slot.release = s.release == null ? null : clampParam(`slots.${i}.release`, s.release);
     slot.pedalHold = clampParam(`slots.${i}.pedalHold`, s.pedalHold);
+    // v11-touch: the slot's own curve (read while velocityCurve is 'custom'); absent = the PARAMS defaults
+    if (s.touch && typeof s.touch === 'object') {
+      slot.touch = {};
+      for (const k of TOUCH_KEYS) {
+        if (s.touch[k] !== undefined) slot.touch[k] = clampParam(`slots.${i}.touch.${k}`, s.touch[k]);
+      }
+    } else delete slot.touch;
     out.slots.push(slot);
   }
   for (const k of ['modWheel', 'expression']) {
@@ -123,6 +133,7 @@ export function normalizePatch(patch) {
     if (!validTarget(r.target)) r.target = d[k].target;
     r.min = clamp01(r.min ?? 0);
     r.max = clamp01(r.max ?? 1);
+    if (r.curve !== undefined && !PEDAL_CURVES.includes(r.curve)) delete r.curve; // v11-touch: absent = 'linear'
     out[k] = r;
   }
   out.volume = { ...d.volume, ...(p.volume || {}) };
@@ -130,7 +141,14 @@ export function normalizePatch(patch) {
   out.bend = { ...d.bend, ...(p.bend || {}) };
   if (!['pitch', 'morph', 'drone-swell', 'tape', 'none'].includes(out.bend.mode)) out.bend.mode = 'pitch';
   out.bend.range = Math.min(24, Math.max(0, Number(out.bend.range) || 2));
-  out.swell = { seconds: Math.min(60, Math.max(0.5, Number(p.swell?.seconds) || 8)) };
+  out.swell = swellOf(p.swell);
+  return out;
+}
+
+/** Routing `swell`: seconds, plus v11-touch `pedal: true` ("hold pedal = sustain + drone swell"; absent = off). */
+function swellOf(sw) {
+  const out = { seconds: Math.min(60, Math.max(0.5, Number(sw?.seconds) || 8)) };
+  if (sw && sw.pedal === true) out.pedal = true;
   return out;
 }
 
@@ -145,13 +163,37 @@ function sameVal(a, b) {
   return String(a) === String(b);
 }
 
-/** Velocity curve (SPEC §2 Slot.velocityCurve). */
-export function curveVelocity(vel127, curve) {
-  const v = Math.min(1, Math.max(0, (Number(vel127) || 0) / 127));
-  if (curve === 'soft') return Math.pow(v, 0.6);
-  if (curve === 'hard') return Math.pow(v, 1.6);
-  if (curve === 'fixed') return 100 / 127;
-  return v;
+/**
+ * Velocity curve (SPEC §2 Slot.velocityCurve; v11-touch). The named curves give exactly the SPEC formulas
+ * (shared/touch-curve.js). 'custom' uses `touch` (a {shape,min,max,top} spec); 'normal' uses `touch` when given (the
+ * keyboard's own curve, which 'normal' slots inherit), else the identity.
+ * @param {number} vel127
+ * @param {'soft'|'normal'|'hard'|'fixed'|'custom'} curve
+ * @param {object} [touch]
+ * @returns {number} 0..1
+ */
+export function curveVelocity(vel127, curve, touch) {
+  if (touch && (curve === 'custom' || curve === 'normal')) return touchAt(compileTouch(touch), vel127);
+  return touchAt(namedTouch(curve) || T_LINEAR, vel127);
+}
+
+// v11-touch: the compiled named curves as plain bindings (a switch, no keyed lookup, on the note path)
+const T_LINEAR = COMPILED_PRESETS.normal;
+const T_SOFT = COMPILED_PRESETS.soft;
+const T_HARD = COMPILED_PRESETS.hard;
+const T_FIXED = COMPILED_PRESETS.fixed;
+/** @returns {object|null} the compiled named curve, or null ('normal' / 'custom' / unknown) */
+function namedTouch(curve) {
+  switch (curve) {
+    case 'soft':
+      return T_SOFT;
+    case 'hard':
+      return T_HARD;
+    case 'fixed':
+      return T_FIXED;
+    default:
+      return null;
+  }
 }
 
 /** Seconds without a slotLevel() read before a slot's level tap is disconnected (polish-1). */
@@ -214,6 +256,32 @@ export class AudioEngine extends EventTarget {
     // menubar-A (C7): low-resource mode (setLowResource); survives restart() like the other engine settings
     this._lowRes = false;
     this._lowResSavedPins = null; // pin set held when low-resource turned on (restored when it turns off)
+    // v11-touch: compiled keyboard specs handed to noteOn as plain {shape,…} objects (compiled once per object; the
+    // controller already hands compiled ones). A slot's own curve is cached on its channel (_slotTouch).
+    this._touchSpecs = new WeakMap();
+    this._pedalSwell = false;
+  }
+
+  /**
+   * v11-touch: a slot's compiled curve, or null when it follows the keyboard ('normal'). Cached on the channel for its
+   * cfg object (sc.touchCfg); setParam of velocityCurve / touch.* clears the cache, so the per-note cost is one
+   * comparison.
+   */
+  _slotTouch(sc, c) {
+    if (sc.touchCfg === c) return sc.touchK;
+    const vc = c.velocityCurve;
+    sc.touchK = vc === 'custom' ? compileTouch(c.touch) : namedTouch(vc);
+    sc.touchCfg = c;
+    return sc.touchK;
+  }
+
+  /** v11-touch: noteOn's `touch` (compiled, or a spec compiled once per object) → a compiled curve. */
+  _touchSpec(touch) {
+    if (typeof touch.g === 'number' && typeof touch.span === 'number') return touch;
+    if (typeof touch !== 'object') return T_LINEAR;
+    let k = this._touchSpecs.get(touch);
+    if (!k) this._touchSpecs.set(touch, (k = compileTouch(touch)));
+    return k;
   }
 
   _resetState() {
@@ -222,6 +290,7 @@ export class AudioEngine extends EventTarget {
     this.held = new Set();
     this.sounding = new Map();
     this.pedal = false;
+    this._pedalSwell = false; // v11-touch: the drone (rebuilt with the graph) starts unswelled
     this.pedaled = new Set();
     this.bend = 0;
     this.wheel = { mod: 1, expr: 1, vol: 1 };
@@ -682,6 +751,7 @@ export class AudioEngine extends EventTarget {
     if (oldBend !== this._routing.bend.mode) this._neutralBend(oldBend, t);
     this._applyWheels(t, 0.03);
     this.drone.songChanged({ when: t });
+    this._syncPedalSwell(t);
     if (this._lowRes) this._pinCurrentOnly(); // menubar-A: the pins follow the song that is playing
     this._emit('stats', this._debugStats());
     return true;
@@ -949,6 +1019,12 @@ export class AudioEngine extends EventTarget {
       if (sc) this.coalesce.push(path, t, (tt) => rampTo(sc.strip.sends[rest[1]].gain, v, tt));
       return true;
     }
+    if (rest[0] === 'touch') {
+      // v11-touch: a new object, so the per-cfg compiled curve (_touchOf) is rebuilt at the next noteOn
+      cfg.touch = { ...(cfg.touch || {}), [rest[1]]: v };
+      if (sc) sc.touchCfg = null; // rebuilt at the next noteOn
+      return true;
+    }
     if (rest[0] === 'eq') {
       // eq.<key> or eq.b<k>.<field> (AMENDMENT §4). One coalesce key per slot EQ: a drag moves hz and db together,
       // and SlotEq.set diffs the whole target anyway.
@@ -967,6 +1043,7 @@ export class AudioEngine extends EventTarget {
     }
     const key = rest[0];
     cfg[key] = v;
+    if (key === 'velocityCurve' && sc) sc.touchCfg = null; // v11-touch: rebuilt at the next noteOn
     if (!sc) return true;
     if (key === 'gain') this.coalesce.push(path, t, (tt) => rampTo(sc.strip.fader.gain, v, tt));
     else if (key === 'width') this.coalesce.push(path, t, (tt) => sc.strip.setWidth(this._effWidth(sc, cfg), tt));
@@ -990,6 +1067,9 @@ export class AudioEngine extends EventTarget {
         if (rest.length === 3) return resolveSlotEq(cfg.eq).bands[Number(rest[1].slice(1)) - 1][rest[2]];
         if (rest[1] === 'cutHz' || rest[1] === 'hiCutHz') return resolveSlotEq(cfg.eq)[rest[1]];
         return cfg.eq?.[rest[1]] ?? PARAMS.find((e) => e.path === `slots.<i>.eq.${rest[1]}`)?.default;
+      }
+      if (rest[0] === 'touch') {
+        return cfg.touch?.[rest[1]] ?? PARAMS.find((e) => e.path === `slots.<i>.touch.${rest[1]}`)?.default;
       }
       return rest[0] === 'sends' ? cfg.sends[rest[1]] : cfg[rest[0]];
     }
@@ -1301,9 +1381,9 @@ export class AudioEngine extends EventTarget {
       S.wakes++;
       const leadMs = Math.round((t - this.ctx.currentTime) * 10000) / 10;
       S.last = { ms: Math.round((performance.now() - p0) * 10) / 10, queued: q.length, ramp: dur, at: t, leadMs };
-      for (const [name, args] of q) {
+      for (const [name, args, extra] of q) {
         try {
-          this[name](...args, { when: t });
+          this[name](...args, extra ? { ...extra, when: t } : { when: t });
         } catch (e) {
           console.warn('[engine] queued call failed', e);
         }
@@ -1341,10 +1421,10 @@ export class AudioEngine extends EventTarget {
   }
 
   /** Perform input while not awake (lowres2): queued for wake(), which this starts. @returns {boolean} held */
-  _sleepHold(name, args) {
+  _sleepHold(name, args, extra = null) {
     const S = this._sleepS;
     if (S.state === 'awake' || this.offline) return false;
-    S.queue.push([name, args]);
+    S.queue.push([name, args, extra]);
     this.wake();
     return true;
   }
@@ -1430,6 +1510,19 @@ export class AudioEngine extends EventTarget {
     if (r.bend && oldBend !== this._routing.bend.mode) this._neutralBend(oldBend, t);
     Object.assign(this._patch, { modWheel: this._routing.modWheel, expression: this._routing.expression, volume: this._routing.volume, bend: this._routing.bend, swell: this._routing.swell });
     this._applyWheels(t, 0.03);
+    this._syncPedalSwell(t);
+  }
+
+  /**
+   * v11-touch "hold pedal = sustain + drone swell" (routing swell.pedal): the drone swells while the sustain pedal is
+   * down. Re-evaluated on every pedal change, routing change and commit, so a song without the combo lets go of a
+   * swell the previous song started (slowly: the drone keeps sounding across the switch).
+   */
+  _syncPedalSwell(t) {
+    const want = !!(this.pedal && this._routing.swell.pedal);
+    if (want === this._pedalSwell || !this.drone) return;
+    this._pedalSwell = want;
+    this.drone.pedalSwell?.(want, t);
   }
 
   /** Routing state only (no audio). */
@@ -1445,6 +1538,8 @@ export class AudioEngine extends EventTarget {
       if (!validTarget(x.target)) x.target = R[k].target;
       x.min = clamp01(x.min);
       x.max = clamp01(x.max);
+      // v11-touch: the song's routing carries the curve only when it is not linear, so an object without one is linear
+      if (r[k].curve === undefined || !PEDAL_CURVES.includes(x.curve)) delete x.curve;
       R[k] = x;
     }
     if (r.volume && validTarget(r.volume.target)) R.volume = { ...r.volume };
@@ -1452,7 +1547,7 @@ export class AudioEngine extends EventTarget {
       R.bend = { ...R.bend, ...r.bend };
       if (!['pitch', 'morph', 'drone-swell', 'tape', 'none'].includes(R.bend.mode)) R.bend.mode = 'pitch';
     }
-    if (r.swell) R.swell = { seconds: Math.min(60, Math.max(0.5, Number(r.swell.seconds) || 8)) };
+    if (r.swell) R.swell = swellOf(r.swell);
   }
 
   /** Leave the old bend mode neutral. */
@@ -1474,14 +1569,18 @@ export class AudioEngine extends EventTarget {
     const R = this._routing;
     let f = 1;
     if (R.modWheel.target === target) f *= lerp(R.modWheel.min, R.modWheel.max, this.wheel.mod);
-    if (R.expression.target === target) f *= lerp(R.expression.min, R.expression.max, this.wheel.expr);
+    if (R.expression.target === target) f *= lerp(R.expression.min, R.expression.max, this._exprAmount(R));
     if (R.volume.target === target) f *= this.wheel.vol;
     return f;
+  }
+  /** v11-touch: the expression pedal through the song's taper (patch.expression.curve; absent = linear). */
+  _exprAmount(R = this._routing) {
+    return pedalCurve(this.wheel.expr, R.expression.curve);
   }
   _macro(name, R = this._routing) {
     let x = null;
     if (R.modWheel.target === name) x = lerp(R.modWheel.min, R.modWheel.max, this.wheel.mod);
-    if (R.expression.target === name) x = (x ?? 1) * lerp(R.expression.min, R.expression.max, this.wheel.expr);
+    if (R.expression.target === name) x = (x ?? 1) * lerp(R.expression.min, R.expression.max, this._exprAmount(R));
     if (R.volume.target === name) x = (x ?? 1) * this.wheel.vol;
     return x;
   }
@@ -1718,9 +1817,16 @@ export class AudioEngine extends EventTarget {
   }
 
   // ----- perform input -------------------------------------------------------------------------------------------
-  noteOn(note, vel = 100, { when } = {}) {
+  /**
+   * @param {number} note
+   * @param {number} [vel] 1..127 (0 = note-off)
+   * @param {{when?:number, touch?:object}} [o] touch (v11-touch): the playing keyboard's own curve (a compileTouch()
+   *        result, or a {shape,min,max,top} spec, compiled once and cached), used by slots whose velocityCurve is
+   *        'normal'; absent = the identity, as before
+   */
+  noteOn(note, vel = 100, { when, touch } = {}) {
     if (!this.fx) return false;
-    if (this._sleepHold('noteOn', [note, vel])) return true; // lowres2: played as soon as the context runs
+    if (this._sleepHold('noteOn', [note, vel], touch ? { touch } : null)) return true; // lowres2: played on wake
     if (!(Number(vel) > 0)) return this.noteOff(note, { when }); // MIDI convention: velocity 0 = note-off
     const t = this._t(when);
     const n = clampMidi(note);
@@ -1731,6 +1837,7 @@ export class AudioEngine extends EventTarget {
     }
     if (this.sounding.has(n)) this.noteOff(n, { when: t }); // duplicate note-on = re-strike
     this.held.add(n);
+    const kbd = touch ? this._touchSpec(touch) : T_LINEAR; // v11-touch: 'normal' slots follow it
     const entries = [];
     this.slots.forEach((sc, i) => {
       if (!sc) return;
@@ -1741,7 +1848,7 @@ export class AudioEngine extends EventTarget {
         this._warn(`Note out of range after transpose (slot ${i}); skipped.`);
         return;
       }
-      const v01 = curveVelocity(vel, c.velocityCurve);
+      const v01 = touchAt((sc.touchCfg === c ? sc.touchK : this._slotTouch(sc, c)) || kbd, vel);
       this._armSlot(sc);
       if (c.mono && c.mono !== 'off') {
         try {
@@ -1802,6 +1909,7 @@ export class AudioEngine extends EventTarget {
     const d = !!down;
     if (d === this.pedal) return true;
     this.pedal = d;
+    this._syncPedalSwell(t);
     if (!d) {
       for (const e of this.pedaled) this._release(e.channel, e.instrument, e.voice, t);
       this._unpedalAll();
@@ -1933,6 +2041,7 @@ export class AudioEngine extends EventTarget {
     this._unpedalAll();
     this.held.clear();
     this.pedal = false;
+    this._syncPedalSwell(t);
     this._swell = null;
     const mode = this._routing.bend.mode;
     this.bend = 0;

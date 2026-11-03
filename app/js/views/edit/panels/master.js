@@ -2,7 +2,9 @@
 // views/edit/CONTRACT.md §1 placement table and §6 "master"). Owner: master agent.
 //
 // Layout: the master volume on top, then four lib.sections: Tape (fx.lofi.*), Tone (fx.eq.*, only when the PARAMS
-// table has it), Glue (fx.comp.amount, ditto) and Wheels & pedal (song.patch.modWheel/expression/volume/bend/swell).
+// table has it), Glue (fx.comp.amount, ditto) and Wheels & pedal (song.patch.modWheel/expression/volume/bend/swell;
+// v11-touch: the expression pedal's curve, song.patch.expression.curve, and "Sustain pedal also swells the drone",
+// song.patch.swell.pedal; both absent = off / linear, as before).
 // Every control is bound through lib.createBinder, so store changes update values in place (ui-edit "store → view
 // updates in place") and nothing is rebuilt on a song switch. opts.focus ('wheels' | 'tape' | 'tone' | 'glue') opens
 // its section, scrolls to it and focuses its first control, on mount and in update() (CONTRACT §2 "focus ids").
@@ -37,6 +39,11 @@ const LOFI_DETAILS = Object.freeze([
   { k: 'saturation', name: 'Saturation', ends: ['clean', 'driven'] },
 ]);
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+/** v11-touch: patch.expression.curve choices (shared/touch-curve.js PEDAL_CURVES). */
+const PEDAL_CURVE_OPTS = Object.freeze([
+  { value: 'linear', label: 'Linear (even)' },
+  { value: 'log', label: 'Log (fine when quiet)' },
+]);
 const shortTarget = (t) => (TARGET_LABELS[t] || t).replace(/\s*\(.*\)$/, '');
 const seconds = (v) => `${Number(v).toFixed(Number(v) < 10 ? 1 : 0)} s`;
 const semis = (v) => `${v} semitone${Number(v) === 1 ? '' : 's'}`;
@@ -167,7 +174,7 @@ export default {
       c.input.setAttribute('aria-label', `${who} ${end.toLowerCase()}`);
       return c;
     };
-    const wheelRow = (who, key) => {
+    const wheelRow = (who, key, extra = []) => {
       const target = sel(`${who} controls`, `song.patch.${key}.target`, targetOpts);
       const from = range(who, 'From', `song.patch.${key}.min`, 0);
       const to = range(who, 'To', `song.patch.${key}.max`, 1);
@@ -176,9 +183,22 @@ export default {
         const none = s.patch[key].target === 'none';
         from.setDisabled(none);
         to.setDisabled(none);
+        for (const x of extra) x.setDisabled?.(none);
       });
-      return h('div.ev2-master-row', { dataset: { route: key } }, target.el, from.el, to.el);
+      return h('div.ev2-master-row', { dataset: { route: key } }, target.el, from.el, to.el, ...extra.map((x) => x.el));
     };
+    // v11-touch: linear (the default, stored as absent) or log, an audio taper: fine control at the quiet end
+    const pedalCurve = binder.ctl('song.patch.expression.curve', (onChange) => C.select({
+      label: 'Pedal curve', options: PEDAL_CURVE_OPTS, onChange,
+    }), { read: (s) => s.patch.expression.curve || 'linear', rels: ['patch.expression'] });
+    pedalCurve.el.classList.add('ev2-master-sel');
+    const pedalSwell = binder.ctl('song.patch.swell.pedal', (onChange) => C.toggle({
+      label: 'Sustain pedal also swells the drone',
+      title: 'While you hold the sustain pedal, the drone rises toward full level; it sinks back when you let go',
+      onChange,
+    }), { read: (s) => s.patch.swell.pedal === true, write: (v) => ctx.set('song.patch.swell.pedal', !!v),
+      rels: ['patch.swell'] });
+    pedalSwell.el.classList.add('ev2-master-pswell');
     const bendMode = sel('Pitch-bend wheel', 'song.patch.bend.mode',
       BEND_MODES.map((m) => ({ value: m, label: BEND_LABELS[m] || m })));
     const bendRange = binder.ctl('song.patch.bend.range', (onChange) =>
@@ -198,15 +218,17 @@ export default {
       binder,
       rels: ['patch.modWheel', 'patch.expression', 'patch.volume', 'patch.bend', 'patch.swell'],
       summary: (s) => `Mod wheel: ${shortTarget(s.patch.modWheel.target)}`
-        + ` · Pedal: ${shortTarget(s.patch.expression.target)}`
-        + ` · Bend: ${BEND_LABELS[s.patch.bend.mode] || s.patch.bend.mode} · Swell ${seconds(s.patch.swell.seconds)}`,
+        + ` · Pedal: ${shortTarget(s.patch.expression.target)}${s.patch.expression.curve === 'log' ? ' (log)' : ''}`
+        + ` · Bend: ${BEND_LABELS[s.patch.bend.mode] || s.patch.bend.mode} · Swell ${seconds(s.patch.swell.seconds)}`
+        + (s.patch.swell.pedal === true ? ' · Sustain swells the drone' : ''),
     },
     h('div.ev2-master-route', {},
       wheelRow('Mod wheel', 'modWheel'),
-      wheelRow('Expression pedal', 'expression'),
+      wheelRow('Expression pedal', 'expression', [pedalCurve]),
       h('div.ev2-master-row', { dataset: { route: 'volume' } },
         sel('Volume knob controls', 'song.patch.volume.target', targetOpts).el),
       h('div.ev2-master-row', { dataset: { route: 'bend' } }, bendMode.el, bendRange.el, swell.el),
+      h('div.ev2-master-row', { dataset: { route: 'pedal' } }, pedalSwell.el),
       h('p.ev2-hint.ev2-master-note', {
         text: 'Saved with this song. Swell time is how long the Swell button takes to bring the sound in.',
       }),

@@ -8,6 +8,7 @@ import { noteName } from '../shared/music.js';
 import { pickableThemes, resolveThemeId } from '../shared/themes.js';
 import { latencyHint } from './components/latencyHint.js';
 import { mountHotkeys, mountUpdates } from './settings-mac.js';
+import { mountKeyboards } from './settings-keyboards.js';
 
 const C = await loadComponents();
 
@@ -517,6 +518,10 @@ export function mountSettings(el, ctx) {
 
   const velHint = h('p.st-hint.st-vel-hint', { 'aria-live': 'polite' });
   settingBinds.push({ key: 'velocitySens', apply: (s) => setText(velHint, VEL_HINTS[s.velocitySens] || VEL_HINTS.normal) });
+  // v11-touch: per-keyboard touch curves, remember / forget (BACKLOG A "Custom key sensitivity", B "first input")
+  const keyboards = mountKeyboards({ store, controller, midi, listen, toast });
+  cleanups.push(() => keyboards.destroy());
+  settingBinds.push({ key: 'keyboards', apply: () => keyboards.render() });
 
   // MIDI Learn table
   const learnBody = h('tbody');
@@ -599,6 +604,7 @@ export function mountSettings(el, ctx) {
       row('Input', h('div.st-inline', {}, midiSelect, midiStatus)),
       row('Touch', seg('velocitySens', VEL_OPTS, 'Touch sensitivity').el, 'How hard you have to play for full volume.'),
       velHint,
+      keyboards.el,
       row('Sustain pedal', h('div.st-inline', {}, tog('pedalInvert', 'Reversed').el), 'If notes hold when your foot is off the pedal, turn this on — or let the test below decide.'),
       pedalBox,
       row('Song buttons', tog('programChange', 'Keyboard picks songs').el, 'Lets the keyboard’s program/patch buttons choose songs: 1 = first song in the setlist, 2 = second, …'),
@@ -1302,6 +1308,7 @@ export function mountSettings(el, ctx) {
     stopPedalTest();
     pedalIdle();
     if (hotkeys) hotkeys.cancel();
+    keyboards.stop();
     if (learningId) {
       learningId = null;
       if (typeof controller.cancelLearn === 'function') controller.cancelLearn();

@@ -293,6 +293,85 @@ async function runMode(mode, browser) {
       await until(() => /"velocitySens":"normal"/.test(localStorage.getItem('rig.v1') || ''), null, 5000);
     });
 
+    // v11-touch: Your keyboards — the on-screen keys row, the guided "play soft, then hard" fit (through the real
+    // controller.captureTouch), the curve reaching engine.noteOn as {touch}, Back to standard, Remember / Forget
+    await T('settings: Your keyboards — fit the on-screen keys to a soft/hard touch, use it, remember / forget', async () => {
+      const row = '.st-kbs [data-keyboard="@computer"]';
+      await until((r) => !!document.querySelector(r), row);
+      assert.match(await page.textContent(`${row} .st-kb-name`), /On-screen & computer keys/);
+      assert.match(await page.textContent(`${row} .st-kb-sum`), /Standard touch/);
+      assert.equal(await ev(() => 'keyboards' in window.__rig.store.get().settings), false, 'nothing saved by default');
+      await page.click(`${row} .st-kb-touch`);
+      await until((r) => !document.querySelector(`${r} .st-kb-edit`).hidden, row);
+      // T3: the diagram's reference diagonal is a theme token, not white-on-paper
+      assert.equal(await ev((r) => getComputedStyle(document.querySelector(`${r} .st-kb-ref`)).stroke !== 'none', row), true);
+      const play = (vels) => ev(async (vs) => {
+        let n = 48;
+        for (const v of vs) {
+          window.__rig.controller.perform.noteOn(n, v);
+          window.__rig.controller.perform.noteOff(n);
+          n += 1;
+          await new Promise((r) => setTimeout(r, 20));
+        }
+      }, vels);
+      // the computer keys play at one strength: soft = hard → a plain "nothing to fit" message
+      await page.click(`${row} .st-kb-fitbtn`);
+      await until((r) => document.querySelector(`${r} .st-kb-prompt`)?.dataset.step === 'soft', row);
+      await play([100, 100, 100, 100, 100, 100]);
+      await until((r) => document.querySelector(`${r} .st-kb-prompt`)?.dataset.step === 'hard', row);
+      await play([100, 100, 100, 100, 100, 100]);
+      await until((r) => document.querySelector(`${r} .st-kb-result`)?.dataset.result === 'same', row);
+      // again with the on-screen keys' range (higher on a key = softer)
+      await page.click(`${row} .st-kb-again`);
+      await play([24, 26, 22, 25, 23, 24]);
+      await play([96, 100, 98, 97, 99, 98]);
+      await until((r) => document.querySelector(`${r} .st-kb-result`)?.dataset.result === 'ok', row);
+      assert.match(await page.textContent(`${row} .st-kb-result`), /around 24, hard around 98/);
+      await page.locator('.st-kbs').scrollIntoViewIfNeeded();
+      await page.locator('.st-kbs').screenshot({ path: path.join(SHOTS, `${mode}-keyboards-fit.png`) });
+      await page.click(`${row} .st-kb-use`);
+      await until(() => !!window.__rig.store.get().settings.keyboards?.['@computer']?.touch);
+      const t = await ev(() => window.__rig.store.get().settings.keyboards['@computer'].touch);
+      assert.equal(t.top, 98);
+      assert.ok(t.shape < 1, `a light touch fits a lighter curve (${t.shape})`);
+      await until((r) => /Own touch/.test(document.querySelector(`${r} .st-kb-sum`).textContent), row);
+      // played notes now carry the curve; the velocity is raw (the Touch setting no longer applies to these keys)
+      const call = await ev(() => {
+        const e = window.__rig.engine;
+        const orig = e.noteOn;
+        let got = null;
+        e.noteOn = function (...a) {
+          got = [a[1], !!(a[2] && a[2].touch)];
+          return orig.apply(this, a);
+        };
+        window.__rig.controller.perform.noteOn(72, 40);
+        window.__rig.controller.perform.noteOff(72);
+        e.noteOn = orig;
+        return got;
+      });
+      assert.deepEqual(call, [40, true]);
+      // a slider edit writes the whole curve; Back to standard removes it
+      await ev((r) => {
+        const i = document.querySelector(`${r} input[data-touch="min"]`);
+        i.value = '0.2';
+        i.dispatchEvent(new Event('input', { bubbles: true }));
+      }, row);
+      await until(() => window.__rig.store.get().settings.keyboards['@computer'].touch.min === 0.2);
+      await page.click(`${row} .st-kb-std`);
+      await until(() => !('keyboards' in window.__rig.store.get().settings));
+      // a saved MIDI keyboard that is not plugged in: Remember toggles, Forget drops it
+      await ev(() => window.__rig.store.setKeyboard('Test Board 61', { remember: true }));
+      const tb = '.st-kbs [data-keyboard="Test Board 61"]';
+      await until((r) => !!document.querySelector(r), tb);
+      assert.match(await page.textContent(`${tb} .st-kb-state`), /not connected/);
+      assert.equal(await page.getAttribute(`${tb} .st-kb-remember`, 'aria-pressed'), 'true');
+      assert.deepEqual(await ev(() => window.__rig.midi.remembered), ['Test Board 61']);
+      await page.click(`${tb} .st-kb-forget`);
+      await until((r) => !document.querySelector(r), tb);
+      assert.deepEqual(await ev(() => window.__rig.midi.remembered), []);
+      await page.click(`${row} .st-kb-touch`); // close the editor again
+    });
+
     await T('settings: MIDI Learn refuses the sustain pedal with a plain message', async () => {
       await page.click('tr[data-control="slots.0.gain"] .st-learn');
       await until(() => window.__rig.midi.learning === 'slots.0.gain');
