@@ -44,7 +44,7 @@ metronome, chord charts, MIDI-out, multitrack, shimmer/choir, Planning Center, i
 auto-updater, pedal curves, custom velocity curves, scenes, stage display, practice mode, Windows/Linux), the low-resource part 3 items, and
 the note-latency-after-switch engine work from reviews/performance.md unless the listening pass makes it audible.
 
-## v1.1 scope — decided by Ryan 2026-11-03; all built and merged on `claude/amazing-ptolemy-r464ae` (2026-11-04)
+## v1.1 scope — decided by Ryan 2026-11-03; all built and merged on `claude/amazing-ptolemy-r464ae` (2026-11-03)
 Done in the cloud, waiting on the Mac checks and Ryan's answers in `reviews/v11-mac-checklist.md`:
 - [x] **v11-touch**: custom velocity curve (per-keyboard default, soft/hard fit, Remember/Forget per device) + pedal
       curve and sustain + drone-swell combo.
