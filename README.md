@@ -338,8 +338,8 @@ any time. If you installed from a downloaded `.dmg` instead, Settings › About 
 `.dmg` and drag Worship Rig to Applications. It checks GitHub at most once a day, never installs anything by
 itself, and the check can be switched off there.
 
-**Global shortcuts** (Settings › Menu bar, off until you switch them on): next / previous mode, Panic and master
-louder / softer from any app, even with the window hidden. Standard keys ⌃⌥⌘] / ⌃⌥⌘[ / ⌃⌥⌘P / ⌃⌥⌘= / ⌃⌥⌘-; click
+**Global shortcuts** (Settings › Menu bar, off until you switch them on): next / previous song in the
+setlist (like → / ← in Perform), Panic and master louder / softer from any app, even with the window hidden. Standard keys ⌃⌥⌘] / ⌃⌥⌘[ / ⌃⌥⌘P / ⌃⌥⌘= / ⌃⌥⌘-; click
 one to set your own. If another app already uses a combination, Settings says so.
 
 ## Manual check on your Mac (5 minutes, after each build)

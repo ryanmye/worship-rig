@@ -16,10 +16,10 @@ test('store: hotkeys and updateCheck stay absent until set (schema stays 1)', ()
 
 test('store: settings.hotkeys is set whole and normalised; nested paths and junk are refused', () => {
   const s = makeStore();
-  assert.notEqual(s.set('settings.hotkeys', { on: true, keys: { nextMode: 'cmd+ctrl+alt+n' } }), false);
+  assert.notEqual(s.set('settings.hotkeys', { on: true, keys: { nextSong: 'cmd+ctrl+alt+n' } }), false);
   const hk = s.get().settings.hotkeys;
   assert.equal(hk.on, true);
-  assert.equal(hk.keys.nextMode, 'Control+Alt+Command+N');
+  assert.equal(hk.keys.nextSong, 'Control+Alt+Command+N');
   assert.equal(hk.keys.panic, DEFAULT_HOTKEYS.panic, 'missing actions get the defaults');
   const before = s.get().settings.hotkeys;
   s.set('settings.hotkeys.on', false);
@@ -50,6 +50,23 @@ test('store: a stored library with bad values loads clean (bad hotkeys/updateChe
   const b = makeStore({ storage: storage2 });
   assert.equal(b.get().settings.hotkeys.keys.panic, 'Control+Alt+Command+K');
   assert.equal(b.get().settings.hotkeys.on, true);
+});
+
+test('v11-decisions: a stored settings.hotkeys with nextMode / prevMode loads as nextSong / prevSong', () => {
+  const storage = memoryStorage();
+  const keys = { nextMode: 'Control+Alt+Command+N', prevMode: '', panic: 'F13' };
+  const lib = { schema: 1, songs: {}, setlists: {}, meta: {}, settings: { hotkeys: { on: true, keys } } };
+  storage.setItem(STORAGE_KEY, JSON.stringify(lib));
+  const s = makeStore({ storage });
+  const hk = s.get().settings.hotkeys;
+  assert.equal(hk.on, true);
+  assert.equal(hk.keys.nextSong, 'Control+Alt+Command+N', 'the saved combination moved');
+  assert.equal(hk.keys.prevSong, '', 'a saved "none" stays none');
+  assert.equal(hk.keys.panic, 'F13');
+  assert.ok(!('nextMode' in hk.keys) && !('prevMode' in hk.keys));
+  s.dispose();
+  const again = makeStore({ storage });
+  assert.deepEqual(again.get().settings.hotkeys, hk, 'idempotent across a reload');
 });
 
 test('store: both are device-local — not exported, kept across a replace-import, and not an edit', () => {

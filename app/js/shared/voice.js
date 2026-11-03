@@ -59,6 +59,15 @@ const CLASSIC = Object.freeze({
   sceneEditSub: 'Saved levels to step through while you play. The song always starts on its own levels.',
   scenePlaying: 'playing',
   sceneNone: 'No scenes yet.',
+  // v11-decisions (Ryan, checklist Q3): Settings › Menu bar › Global shortcuts: next / previous step the setlist's
+  // songs (they were "Next mode" / "Previous mode")
+  hotkeyNextSong: 'Next song',
+  hotkeyPrevSong: 'Previous song',
+  hotkeysSub: 'Step through the setlist’s songs, panic and turn the master up or down from any app, even with the '
+    + 'window hidden.',
+  hotkeysListHint: 'Click a shortcut, then press the new keys. Esc cancels; Delete leaves that one without a '
+    + 'shortcut. Next and previous song go through the setlist like → and ← in Perform; the menu-bar buttons still '
+    + 'step the modes above.',
 });
 
 /** Sanctuary v1 §5 (Nave) = what Sanctuary v2 §6.3 asks for: a verger who likes you. */

@@ -2800,6 +2800,14 @@ export function createController(o) {
       case 'prevScene':
         stepSceneBy(-1);
         break;
+      // v11-decisions (Ryan, checklist Q3): the global next / previous hotkeys = Perform's → / ← and the footswitch
+      // (gapless switch, the setlist's end stops: no wrap); the popover / Tray keep stepping modes
+      case 'nextSong':
+        nextSong();
+        break;
+      case 'prevSong':
+        prevSong();
+        break;
       default:
         break;
     }

@@ -1,13 +1,15 @@
 // Menu-bar global hotkeys (v11-electron; docs/menubar-mode.md "Global hotkeys"): the actions, their default
 // accelerators, and the pure helpers Settings and the store use: validate an Electron accelerator string, build one
 // from a KeyboardEvent (the "press the keys" recorder), show it in Mac symbols, and normalise settings.hotkeys.
-// Electron main registers them (globalShortcut, global-hotkeys.js) and turns a press into an existing bus command.
+// Electron main registers them (globalShortcut, global-hotkeys.js) and turns a press into a bus command.
+// v11-decisions (Ryan 2026-11-03, checklist Q3): next / previous step the setlist's songs (Perform's → / ←, the
+// footswitch nextSong / prevSong), not the menu-bar modes; the ids were nextMode / prevMode before (LEGACY_HOTKEY_IDS).
 // Pure module: no DOM, no Web Audio.
 
 /** The actions, in Settings order. `id` is the key in settings.hotkeys.keys and in main.js's status. */
 export const HOTKEY_ACTIONS = Object.freeze([
-  Object.freeze({ id: 'nextMode', label: 'Next mode' }),
-  Object.freeze({ id: 'prevMode', label: 'Previous mode' }),
+  Object.freeze({ id: 'nextSong', label: 'Next song' }), // v11-decisions: was nextMode ("Next mode")
+  Object.freeze({ id: 'prevSong', label: 'Previous song' }),
   Object.freeze({ id: 'panic', label: 'Panic (all notes off)' }),
   Object.freeze({ id: 'masterUp', label: 'Master louder' }),
   Object.freeze({ id: 'masterDown', label: 'Master softer' }),
@@ -15,17 +17,22 @@ export const HOTKEY_ACTIONS = Object.freeze([
   Object.freeze({ id: 'prevScene', label: 'Previous scene' }),
 ]);
 export const HOTKEY_IDS = Object.freeze(HOTKEY_ACTIONS.map((a) => a.id));
+/**
+ * v11-decisions: stored ids from v1.1 builds before the rename → today's id. normalizeHotkeys reads a legacy entry
+ * when the new id is absent, so a saved combination (or a saved "none") carries over; the old key is then dropped.
+ */
+export const LEGACY_HOTKEY_IDS = Object.freeze({ nextMode: 'nextSong', prevMode: 'prevSong' });
 /** Master ± step in dB (global-hotkeys.js MASTER_STEP_DB uses the same number). */
 export const MASTER_STEP_DB = 2;
 
 /**
  * Defaults: ⌃⌥⌘ + a key. Three modifiers keep them clear of app shortcuts (⌘…, ⌘⇧…) and of typing (⌥ letters make
- * accented characters). ] / [ for modes (the ⌘] / ⌘[ forward/back idiom) and = / − for master (the zoom idiom), not
+ * accented characters). ] / [ for songs (the ⌘] / ⌘[ forward/back idiom) and = / − for master (the zoom idiom), not
  * the arrows: window managers (Rectangle, Magnet) take ⌃⌥⌘←/→ for "next / previous display". P for Panic.
  */
 export const DEFAULT_HOTKEYS = Object.freeze({
-  nextMode: 'Control+Alt+Command+]',
-  prevMode: 'Control+Alt+Command+[',
+  nextSong: 'Control+Alt+Command+]',
+  prevSong: 'Control+Alt+Command+[',
   panic: 'Control+Alt+Command+P',
   masterUp: 'Control+Alt+Command+=',
   masterDown: 'Control+Alt+Command+-',
@@ -180,7 +187,8 @@ export function formatAccelerator(acc, { mac = true } = {}) {
 /**
  * settings.hotkeys → its normal form: `{on: boolean, keys: {<id>: accelerator | ''}}`. Every action gets a key
  * ('' = none; a missing one gets its default); unreadable accelerators become ''; a duplicate keeps the first action.
- * Unknown action ids are dropped. The same function the store uses on set and on load (schema stays 1).
+ * Unknown action ids are dropped; a legacy id (LEGACY_HOTKEY_IDS) stands in for its renamed action when that one is
+ * absent. The same function the store uses on set and on load (schema stays 1).
  * @param {*} v
  * @returns {{on: boolean, keys: Object<string, string>}|null} null when `v` is not an object
  */
@@ -189,8 +197,11 @@ export function normalizeHotkeys(v) {
   const src = v.keys && typeof v.keys === 'object' && !Array.isArray(v.keys) ? v.keys : {};
   const keys = {};
   const used = new Set();
+  const has = (k) => Object.prototype.hasOwnProperty.call(src, k);
+  const legacy = Object.fromEntries(Object.entries(LEGACY_HOTKEY_IDS).map(([old, id]) => [id, old]));
   for (const id of HOTKEY_IDS) {
-    const raw = Object.prototype.hasOwnProperty.call(src, id) ? src[id] : DEFAULT_HOTKEYS[id];
+    const from = has(id) ? id : legacy[id] && has(legacy[id]) ? legacy[id] : null;
+    const raw = from ? src[from] : DEFAULT_HOTKEYS[id];
     const p = typeof raw === 'string' && raw ? parseAccelerator(raw) : null;
     const acc = p && !p.error && !used.has(p.canonical) ? p.canonical : '';
     if (acc) used.add(acc);

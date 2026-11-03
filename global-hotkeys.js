@@ -1,14 +1,15 @@
 'use strict';
 // Menu-bar global hotkeys, Electron-main side (v11-electron; docs/menubar-mode.md "Global hotkeys").
 // The renderer mirrors settings.hotkeys here (rig.setHotkeys); this module registers them through an injected
-// globalShortcut-like object, reports each one's state in plain terms, and turns a press into an EXISTING bus command
-// (nextMode / prevMode / panic / master; v11-scenes: nextScene / prevScene), so no new engine path exists. Pure: no
+// globalShortcut-like object, reports each one's state in plain terms, and turns a press into a bus command the
+// controller already has a path for (nextSong / prevSong = Perform's → / ← and the footswitch, v11-decisions; panic /
+// master; v11-scenes: nextScene / prevScene), so no new engine path exists. Pure: no
 // Electron import, so the unit tests drive it with a fake globalShortcut (test/unit/shell/global-hotkeys.test.mjs).
 // The accelerator rules the user sees live in app/js/shared/hotkeys.js (ES module, Settings + store); main only
 // guards the shape here and lets globalShortcut.register decide the rest.
 
 /** Same ids as app/js/shared/hotkeys.js HOTKEY_IDS (a unit test keeps them in step). */
-const HOTKEY_IDS = Object.freeze(['nextMode', 'prevMode', 'panic', 'masterUp', 'masterDown', 'nextScene', 'prevScene']);
+const HOTKEY_IDS = Object.freeze(['nextSong', 'prevSong', 'panic', 'masterUp', 'masterDown', 'nextScene', 'prevScene']);
 /** dB per master step (shared/hotkeys.js MASTER_STEP_DB). */
 const MASTER_STEP_DB = 2;
 /** Below this the next step down is silence (0); the first step up from silence lands here. */
@@ -57,7 +58,8 @@ function sanitizeHotkeyConfig(cfg) {
  * @returns {object|null}
  */
 function hotkeyCommand(id, master) {
-  if (id === 'nextMode' || id === 'prevMode' || id === 'panic') return { v: 1, type: id };
+  // v11-decisions (Ryan, checklist Q3): next / previous step the setlist's songs (was nextMode / prevMode)
+  if (id === 'nextSong' || id === 'prevSong' || id === 'panic') return { v: 1, type: id };
   if (id === 'nextScene' || id === 'prevScene') return { v: 1, type: id }; // v11-scenes
   if (id === 'masterUp' || id === 'masterDown') {
     if (!Number.isFinite(master)) return null;

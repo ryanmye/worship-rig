@@ -368,7 +368,7 @@ test('L-14: window.close hides the window (menu-bar mode) instead of quitting, a
   assert.equal(h.after.windowDestroyed, false, 'window hidden, not destroyed');
 });
 
-test('v11-electron: global hotkeys — registered / taken / invalid, presses → existing bus commands, pause, off', (t) => {
+test('v11-electron: global hotkeys — registered / taken / invalid, presses → bus commands (songs), pause, off', (t) => {
   const v = run.report.v11;
   assert.ok(v && !v.error && !v.skipped, JSON.stringify(v && (v.error || v.skipped)));
   assert.equal(v.hotkeysBefore.on, false, 'off until the renderer mirrors settings.hotkeys');
@@ -376,7 +376,7 @@ test('v11-electron: global hotkeys — registered / taken / invalid, presses →
   assert.ok(['invalid', 'taken'].includes(v.hotkeyStates.masterDown), `unparseable: ${v.hotkeyStates.masterDown}`);
   assert.equal(v.hotkeyStatusPushed, true, 'rig.onHotkeyStatus hears every change');
   // pressing: hotkeys.fire (a system-wide key press can't be synthesised) → the same relay as a tray click
-  assert.deepEqual(v.firedCommands.map((c) => c.type), ['nextMode', 'prevMode', 'panic', 'master', 'master']);
+  assert.deepEqual(v.firedCommands.map((c) => c.type), ['nextSong', 'prevSong', 'panic', 'master', 'master']);
   assert.equal(v.masterFrom, 0.5, 'the menu-bar self-test left a published state with master 0.5');
   const db = (x) => 20 * Math.log10(x);
   assert.ok(Math.abs(db(v.firedCommands[3].value) - (db(0.5) + 2)) < 0.02, JSON.stringify(v.firedCommands[3]));
@@ -385,11 +385,11 @@ test('v11-electron: global hotkeys — registered / taken / invalid, presses →
   assert.ok(v.offStates.every((s) => s === 'off'));
   assert.equal(v.registeredAfterOff, 0, 'off unregisters everything');
   assert.equal(v.registeredWhilePaused, 0, 'paused while Settings records a combination');
-  if (v.hotkeyStates.nextMode !== 'ok' && process.platform !== 'darwin') {
-    return t.skip(`this display refused a real global grab (${v.hotkeyStates.nextMode}); the Mac run asserts it`);
+  if (v.hotkeyStates.nextSong !== 'ok' && process.platform !== 'darwin') {
+    return t.skip(`this display refused a real global grab (${v.hotkeyStates.nextSong}); the Mac run asserts it`);
   }
-  assert.deepEqual([v.hotkeyStates.nextMode, v.hotkeyStates.prevMode, v.hotkeyStates.masterUp], ['ok', 'ok', 'ok']);
-  assert.deepEqual([v.registered.nextMode, v.registered.prevMode, v.registered.masterUp, v.registered.panic],
+  assert.deepEqual([v.hotkeyStates.nextSong, v.hotkeyStates.prevSong, v.hotkeyStates.masterUp], ['ok', 'ok', 'ok']);
+  assert.deepEqual([v.registered.nextSong, v.registered.prevSong, v.registered.masterUp, v.registered.panic],
     [true, true, true, false]);
   assert.equal(v.registeredAfterPause, 3, 'taken back after the recording');
 });

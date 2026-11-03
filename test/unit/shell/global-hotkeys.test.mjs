@@ -10,7 +10,7 @@ const { masterStep, hotkeyCommand, sanitizeHotkeyConfig, createHotkeys, MASTER_F
 
 const db = (v) => 20 * Math.log10(v);
 const KEYS = {
-  nextMode: 'Control+Alt+Command+]', prevMode: 'Control+Alt+Command+[', panic: 'Control+Alt+Command+P',
+  nextSong: 'Control+Alt+Command+]', prevSong: 'Control+Alt+Command+[', panic: 'Control+Alt+Command+P',
   masterUp: 'Control+Alt+Command+=', masterDown: 'Control+Alt+Command+-',
   nextScene: 'Control+Alt+Command+.', prevScene: 'Control+Alt+Command+,', // v11-scenes
 };
@@ -69,8 +69,8 @@ test('masterStep: ±2 dB, silence below −40 dB, the first step up from silence
   assert.ok(Math.abs(v - 1) < 1e-3, String(v));
 });
 
-test('hotkeyCommand: every press is a valid contract-v1 bus command (no new command types)', () => {
-  for (const id of ['nextMode', 'prevMode', 'panic', 'masterUp', 'masterDown', 'nextScene', 'prevScene']) {
+test('hotkeyCommand: every press is a valid contract-v1 bus command', () => {
+  for (const id of ['nextSong', 'prevSong', 'panic', 'masterUp', 'masterDown', 'nextScene', 'prevScene']) {
     const c = hotkeyCommand(id, 0.5);
     assert.equal(commandError(c), null, `${id}: ${JSON.stringify(c)}`);
   }
@@ -79,13 +79,17 @@ test('hotkeyCommand: every press is a valid contract-v1 bus command (no new comm
   assert.deepEqual(hotkeyCommand('panic', null), { v: 1, type: 'panic' });
   assert.deepEqual(hotkeyCommand('nextScene', null), { v: 1, type: 'nextScene' }, 'v11-scenes');
   assert.deepEqual(hotkeyCommand('prevScene', null), { v: 1, type: 'prevScene' });
+  // v11-decisions (Ryan, checklist Q3): next / previous step the setlist's songs, never the menu-bar modes
+  assert.deepEqual(hotkeyCommand('nextSong', null), { v: 1, type: 'nextSong' });
+  assert.deepEqual(hotkeyCommand('prevSong', null), { v: 1, type: 'prevSong' });
+  assert.equal(hotkeyCommand('nextMode', null), null, 'the pre-rename ids are not actions any more');
 });
 
 test('sanitizeHotkeyConfig: only known ids and accelerator-shaped strings survive', () => {
-  const s = sanitizeHotkeyConfig({ on: 'yes', keys: { nextMode: 'Control+Alt+N', panic: 'rm -rf /;', zap: 'F1', prevMode: 7 } });
+  const s = sanitizeHotkeyConfig({ on: 'yes', keys: { nextSong: 'Control+Alt+N', panic: 'rm -rf /;', zap: 'F1', prevSong: 7 } });
   assert.equal(s.on, false);
   assert.deepEqual(s.keys, {
-    nextMode: 'Control+Alt+N', prevMode: '', panic: '', masterUp: '', masterDown: '', nextScene: '', prevScene: '',
+    nextSong: 'Control+Alt+N', prevSong: '', panic: '', masterUp: '', masterDown: '', nextScene: '', prevScene: '',
   });
   assert.deepEqual(sanitizeHotkeyConfig(null).keys.panic, '');
   assert.equal(sanitizeHotkeyConfig([1]).on, false);
@@ -95,11 +99,11 @@ test('register: ok / taken (another app) / invalid (Electron throws) / none; sta
   const { sc, hk, statuses } = setup({ taken: [KEYS.panic], bad: [KEYS.masterUp] });
   const s = hk.set({ on: true, keys: { ...KEYS, masterDown: '', nextScene: '', prevScene: '' } });
   assert.deepEqual(Object.fromEntries(Object.entries(s.keys).map(([k, v]) => [k, v.state])), {
-    nextMode: 'ok', prevMode: 'ok', panic: 'taken', masterUp: 'invalid', masterDown: 'none', nextScene: 'none',
+    nextSong: 'ok', prevSong: 'ok', panic: 'taken', masterUp: 'invalid', masterDown: 'none', nextScene: 'none',
     prevScene: 'none',
   });
-  assert.equal(s.keys.nextMode.accelerator, KEYS.nextMode);
-  assert.deepEqual([...sc.held.keys()].sort(), [KEYS.nextMode, KEYS.prevMode].sort());
+  assert.equal(s.keys.nextSong.accelerator, KEYS.nextSong);
+  assert.deepEqual([...sc.held.keys()].sort(), [KEYS.nextSong, KEYS.prevSong].sort());
   assert.equal(statuses.length, 1);
   assert.deepEqual(hk.status(), s);
 });
@@ -108,8 +112,8 @@ test('off and dispose unregister everything; re-setting replaces the old combina
   const { sc, hk } = setup();
   hk.set({ on: true, keys: KEYS });
   assert.equal(sc.held.size, 7);
-  hk.set({ on: true, keys: { ...KEYS, nextMode: 'Control+Alt+Command+N' } });
-  assert.ok(sc.held.has('Control+Alt+Command+N') && !sc.held.has(KEYS.nextMode), 'the old one is released');
+  hk.set({ on: true, keys: { ...KEYS, nextSong: 'Control+Alt+Command+N' } });
+  assert.ok(sc.held.has('Control+Alt+Command+N') && !sc.held.has(KEYS.nextSong), 'the old one is released');
   assert.equal(sc.held.size, 7);
   const off = hk.set({ on: false, keys: KEYS });
   assert.equal(sc.held.size, 0);
@@ -134,10 +138,10 @@ test('pause (Settings is recording a combination) lets go, unpause takes them ba
 test('presses send the existing bus commands; master steps from the value just sent, then from the state', () => {
   const { sc, hk, sent, advance, setMaster } = setup({ master: 0.5 });
   hk.set({ on: true, keys: KEYS });
-  sc.press(KEYS.nextMode);
-  sc.press(KEYS.prevMode);
+  sc.press(KEYS.nextSong);
+  sc.press(KEYS.prevSong);
   sc.press(KEYS.panic);
-  assert.deepEqual(sent.splice(0), [{ v: 1, type: 'nextMode' }, { v: 1, type: 'prevMode' }, { v: 1, type: 'panic' }]);
+  assert.deepEqual(sent.splice(0), [{ v: 1, type: 'nextSong' }, { v: 1, type: 'prevSong' }, { v: 1, type: 'panic' }]);
   sc.press(KEYS.nextScene); // v11-scenes
   sc.press(KEYS.prevScene);
   assert.deepEqual(sent.splice(0), [{ v: 1, type: 'nextScene' }, { v: 1, type: 'prevScene' }]);
