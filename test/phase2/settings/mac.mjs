@@ -8,13 +8,14 @@ import os from 'node:os';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.mjs';
+import { runImporterTests } from './importer.mjs';
 
 /**
  * The fake bridge (page init script). Registration: 'Control+Alt+Command+P' is "taken by another app"; everything
  * else registers. window.__fake holds the calls and lets the test push statuses / press a shortcut.
  */
 function installFakeRig() {
-  const subs = { hk: new Set(), up: new Set(), bus: new Set() };
+  const subs = { hk: new Set(), up: new Set(), bus: new Set(), gb: new Set() };
   const sub = (set) => (cb) => {
     set.add(cb);
     return () => set.delete(cb);
@@ -49,6 +50,16 @@ function installFakeRig() {
     /** main.js relaying a press: the bus command arrives at the controller like a tray click */
     press(cmd) {
       for (const cb of subs.bus) cb(JSON.stringify({ v: 1, ...cmd }));
+    },
+    // v11-importer: GarageBand import (importer-host.js stand-in). gbScan = the next scan's answer; gbImportReply =
+    // the next import's answer; gbPush(snapshot) = a progress event from main
+    gbScan: null,
+    gbImportReply: null,
+    gbStatus: { state: 'idle', items: [] },
+    gbPush(snap) {
+      F.gbStatus = snap;
+      for (const cb of subs.gb) cb(JSON.parse(JSON.stringify(snap)));
+      return snap;
     },
   };
   window.__fake = F;
@@ -96,6 +107,30 @@ function installFakeRig() {
       F.calls.push(['openUpdate', kind]);
       return { ok: true, url: kind === 'download' ? F.up.downloadUrl : F.up.pageUrl };
     },
+    rescanUserSamples: async () => {
+      F.calls.push(['rescanUserSamples']);
+      return { count: 0, instruments: [], packs: [], roots: [], errors: [] };
+    },
+    garageBandScan: async (opts) => {
+      F.calls.push(['garageBandScan', opts ?? null]);
+      await new Promise((r) => setTimeout(r, 150)); // the "Looking for…" state is visible for a moment
+      return JSON.parse(JSON.stringify(F.gbScan));
+    },
+    garageBandImport: async (keys) => {
+      F.calls.push(['garageBandImport', keys]);
+      if (F.gbImportReply) return F.gbImportReply;
+      const names = new Map((F.gbScan.instruments || []).map((it) => [it.key, it.name]));
+      F.gbPush({ state: 'importing', startedAt: Date.now(), total: keys.length, imported: 0, failed: 0, current: -1,
+        items: keys.map((k) => ({ key: k, name: names.get(k), state: 'waiting', done: 0, files: 0 })) });
+      return { ok: true, total: keys.length };
+    },
+    garageBandCancel: async () => {
+      F.calls.push(['garageBandCancel']);
+      F.gbPush({ ...F.gbStatus, cancelling: true });
+      return { ok: true };
+    },
+    garageBandStatus: async () => JSON.parse(JSON.stringify(F.gbStatus)),
+    onGarageBandProgress: sub(subs.gb),
   };
 }
 
@@ -155,12 +190,16 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
     // afterwards, since a second tab on the same origin would make the next page a secondary (Web Lock) controller
     const chrome = await context.newPage();
     watch(chrome);
-    await T('Chrome (no window.rig): no global shortcuts, no update line', async () => {
+    await T('Chrome (no window.rig): no global shortcuts, no update line, no GarageBand import (the CLI steps)', async () => {
       try {
         await boot(chrome);
         await openSettings(chrome);
         assert.equal(await chrome.locator('[data-testid="settings-hotkeys"]').count(), 0);
         assert.equal(await chrome.locator('[data-testid="settings-update"]').count(), 0);
+        // v11-importer: Mac app only; Chrome keeps the Terminal steps
+        assert.equal(await chrome.locator('[data-testid="gb-open"]').count(), 0);
+        assert.equal(await chrome.locator('[data-testid="gb-dialog"]').count(), 0);
+        assert.match(await chrome.textContent('.st-samples .st-howto-steps'), /node tools\/import-garageband\.mjs --list/);
       } finally {
         await chrome.close();
       }
@@ -334,6 +373,7 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
       assert.equal(await page.isHidden('[data-testid="update-check-now"]'), true);
       await closeSettings();
     });
+    await runImporterTests({ page, T, ev, until, openSettings, calls, SHOTS });
   } finally {
     await T('zero console.error', async () => {
       assert.deepEqual(errors, []);

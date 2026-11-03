@@ -91,6 +91,26 @@ contextBridge.exposeInMainWorld('rig', {
    */
   rescanUserSamples: () => call('rig:rescanUserSamples'),
   revealFile: (p) => call('rig:revealFile', p),
+
+  // ---- v11-importer: GarageBand / Logic → My Samples (main.js + importer-host.js; the work runs in a worker)
+  /**
+   * Look for GarageBand / Logic instruments. opts {reindex?: boolean} rebuilds the sample index.
+   * @returns {Promise<{ok, out, roots:{path,exists}[], encoder:{encoder, format, ffmpeg, afconvert, error},
+   *   instruments:{key, name, id, origin, category, source, layers, notes, found, needed, sourceBytes, estBytes,
+   *   consolidated, installed}[], parseErrors, truncated, limits:{maxPerImport, maxTotalMb}}|{error}>}
+   */
+  garageBandScan: (opts) => call('rig:garageBandScan', opts),
+  /**
+   * Import instruments by key (from the latest scan); progress arrives on onGarageBandProgress.
+   * @returns {Promise<{ok, total}|{error}>}
+   */
+  garageBandImport: (keys) => call('rig:garageBandImport', keys),
+  /** Stop the running import (finished instruments stay). @returns {Promise<{ok}>} */
+  garageBandCancel: () => call('rig:garageBandCancel'),
+  /** The running (or last) import: {state: idle|importing|done|cancelled|failed, items, busy}. */
+  garageBandStatus: () => call('rig:garageBandStatus'),
+  /** cb(snapshot) while an import runs (≤ 10/s, every state change). Returns an unsubscribe. */
+  onGarageBandProgress: (cb) => listen('rig:garageBandProgress', cb),
   /** Open a bundled doc: 'garageband-import' | 'architecture' | … (docs/<name>.md) or 'readme'. @returns {Promise<{ok}|{error}>} */
   openDoc: (name) => call('rig:openDoc', name),
   /** cb(id) with id ∈ panic|fadeOutAll|nextSong|prevSong|toggleView|record|restartAudio|openSettings|importLatestBackup|rescanUserSamples */

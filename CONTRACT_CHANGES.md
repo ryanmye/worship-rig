@@ -5686,3 +5686,87 @@ is quiet by default: no new field is written until someone uses a control, and a
   Studio lamp, Ember keys + title, Daylight switch + Lock + Auto + boot); ui-core 3 (FR-1 at 1280×800, Quick fit at
   four windows, pedal light / tag / aria-disabled / chord fit / .crswap toast); edit-v2 effects (tone glyph) and drone
   (`.audible`).
+
+## v11-importer (v1.1, BACKLOG A "In-app GarageBand/Logic importer UI"; tools/exs/importer.mjs + import-worker.mjs (new), tools/import-garageband.mjs, tools/exs/convert.mjs, importer-host.js (new), main.js, preload.js, views/settings-import.js (new), views/settings.js, app/js/main.js, styles-settings.css, package.json, build-lint)
+
+- **What (user-visible, Mac app only):** Settings › My Samples gets one button, "Import from GarageBand / Logic…".
+  It opens a panel over Settings that scans the Apple library (the CLI's default roots: GarageBand Instrument
+  Library, Logic Sampler Instruments, ~/Music/Audio Music Apps), lists every instrument (deduped by id, the copy with
+  the most samples found wins, as the CLI's import) with its converted-size estimate ("about 36 MB", the `--list`
+  estimate after the 120 MB thinning), and flags "Sounds not downloaded" (checkbox off), "12 of 60 sounds found" and
+  "Already in My Samples (imports again)". Tick → Import → one progress bar per instrument, Stop, then an automatic
+  Rescan (settings.js `rescanSamples` → `controller.rescanUserSamples()` → `engine.reloadManifests`), so the packs are
+  in the picker with no restart. The panel and Settings can close while it runs (a line under the button says
+  "Importing 2 of 5…"). A one-line licence note is always shown: "For your own use on this Mac. Apple's sounds must
+  not be shared or copied to other people." No ffmpeg → a plain-words note (afconvert → AAC .m4a, slower; "brew
+  install ffmpeg"); no converter at all → Import stays off with the same advice. The Chrome version has no button
+  and keeps the Terminal steps (the disclosure is now "More about GarageBand instruments" in the Mac app).
+- **CLI → module + thin wrapper:** everything `import-garageband.mjs` did (checkOutDir, chooseEncoder, discover,
+  resolvePlan, select, dedupe, fitToBudget, probeFormat, importOne, LOSSY_HEADROOM_DB, HPF_HZ) moved verbatim into
+  `tools/exs/importer.mjs`; the CLI keeps parseArgs / USAGE / --dump / --list / main and re-exports the old names.
+  Same flags, same output: an old-vs-new comparison on the synthetic library (`--list`, `--import grand --dry`,
+  `--import grand`, `--import strings --format wav`, `--pianos --max-notes-per-layer 4`; stdout, stderr, exit code,
+  file tree and manifests) is identical except that the first `--list` of the pair built the index cache. The TTY
+  counter is now `importOne`'s `onFile` / `onEnd` callbacks. New in the module: `scanLibrary`, `importInstruments`,
+  `appEncoder`, `findFfmpeg`, `defaultJobs`, `freeBytes`, `insideDir`, `libraryRoots`, `entryFor`, `APP_LIMITS`.
+  `importOne` takes `o.signal` (abort: running ffmpegs SIGKILLed via `convertWithFfmpeg`'s new `signal`, the
+  `.<id>.importing` work folder removed, `{ok:false, cancelled:true}`) and returns `reason` ('no-samples' |
+  'convert-failed' | 'cancelled'). `pool(items, n, fn, {signal})` stops handing out jobs and yields a macrotask after
+  each one when a signal is given (the afconvert path is spawnSync and would otherwise never let the worker read
+  "cancel").
+- **ffmpeg discovery (why):** a Finder-launched Mac app gets launchd's PATH (`/usr/bin:/bin:/usr/sbin:/sbin`), so a
+  Homebrew ffmpeg (`/opt/homebrew/bin` on Apple silicon, `/usr/local/bin` on Intel) looked missing although the CLI
+  finds it in Terminal. `findFfmpeg()`: `$FFMPEG`, then PATH, then those folders (+ MacPorts); the worker sets
+  `$FFMPEG` to what it found. The CLI is unchanged (PATH only).
+- **Off the main/renderer threads:** every scan and every import is a fresh worker process:
+  `tools/exs/import-worker.mjs` under Electron's `utilityProcess` (verified on Electron 44 here: an `.mjs` entry inside
+  app.asar loads, relative ESM imports work, ffmpeg spawns), `child_process.fork` in the tests (same messages:
+  `process.parentPort` or `process.send`). The worker lowers its own priority (`os.setPriority(0, 10)`, inherited by
+  ffmpeg) and the app uses `defaultJobs()` = clamp(cpus − 2, 1, 4) parallel encoders (the CLI keeps min(cpus, 8)).
+  SIGTERM (app quit, `importer-host.dispose()` in will-quit) cancels like Stop and cleans up; a crash (SIGKILL) leaves
+  the resumable work folder, as an interrupted CLI run does.
+- **IPC (preload `window.rig`, all through main's `handle()` → `isOurFrame`):** `garageBandScan({reindex?})` →
+  `{ok, out, roots, encoder:{encoder, format, ffmpeg, afconvert, error}, instruments:[{key, name, id, origin,
+  category, source, layers, notes, found, needed, sourceBytes, estBytes, consolidated, installed}], parseErrors,
+  truncated, limits}`; `garageBandImport(keys)` → `{ok, total}` | `{error}`; `garageBandCancel()`;
+  `garageBandStatus()`; `onGarageBandProgress(cb)` (channel `rig:garageBandProgress`, a whole snapshot `{state:
+  importing|done|cancelled|failed, items:[{key, name, state: waiting|converting|done|failed|cancelled, done, files,
+  notes, missing, reason, message}], total, imported, failed, cancelling, startedAt, finishedAt, format, error}`,
+  throttled to ≤ 10/s with every state change sent at once). No HTTP endpoint was added: the importer is Electron-only
+  and the server stays GET/HEAD, so there is nothing for another local process to call (S4).
+- **Security / limits:** the page never sends a path. Keys are `sha1(exsPath)[0..16]` of the latest scan (anything
+  else → `unknown-instrument`; a non-array or > 1000 / > 64-char keys → `bad-request`); absolute paths are stripped
+  from the scan reply. The worker re-checks every `.exs` (absolute, `.exs`, realpath inside a library root: `..` and
+  symlinks out are `bad-path`) and the output folder (main's `userSamplesHome()`; must pass `checkOutDir` (never
+  `<repo>/app`) and be inside one of the server's My Samples roots, else `bad-out`). Limits (host and worker):
+  40 instruments and 2048 MB estimated per run, the estimate + 256 MB must fit the volume's free space
+  (`no-space`), one operation at a time (`busy`), a 10-minute scan timeout, 3000 instruments listed. Library roots
+  for tests: `RIG_GB_LIBRARY` (path-delimited, like `--root`). The sample-index cache is `<userData>/exs-index.json`.
+- **Packaging:** `package.json` build.files adds `importer-host.js` and the eight runtime modules `tools/exs/{importer,
+  import-worker, parser, layout, mapping, sample-index, convert, wav}.mjs` (~70 KB; no fixtures, writer, validator
+  or CLI). build-lint now requires those and still fails on anything else from `tools/` (and on any `.exs` / `.caf`
+  / personal-use manifest, as before). Converted audio is never inside the app.
+- **Esc:** while the panel is open `<html data-gb-import>` is set; settings.js and app/js/main.js leave Esc to the
+  panel (as with `data-hotkey-capture`), so Esc closes the panel and a second Esc closes Settings.
+- **Measured:** scan of the synthetic library through the forked worker (spawn + walk + parse + index) 420 ms; the
+  Electron self-test (real preload → ipcMain → utilityProcess → fake ffmpeg, 27 files) ≈ 7 s for the whole boot.
+  Stop after the 2nd file with a 150 ms-per-file fake ffmpeg: the whole run (index, probe, 2 files, stop, clean-up)
+  1.0 s in-process and 1.2 s through the forked worker (27 files would take ≥ 4 s); nothing left in the output
+  folder.
+- **Tests (synthetic .exs only: tools/exs/writer.mjs + generated WAVs + a fake ffmpeg, `test/unit/exs/fake-library.mjs`):**
+  unit `exs/importer.test.mjs` (8: scan fields and sizes, empty library / no converter, import + progress events +
+  installed flag, refused paths (outside, `..`, relative, symlink out, not .exs) / outputs (app/, outside the roots,
+  relative) / limits / disk space / no encoder, abort mid-instrument, a missing-sounds instrument next to a good one,
+  findFfmpeg's Homebrew fallback, defaultJobs / insideDir / freeBytes); unit `shell/importer-host.test.mjs` (7: keys
+  without paths, key / size / count validation, busy, throttled progress → done, Stop, a SIGKILLed worker → failed
+  `worker-exit`, SIGTERM → clean cancel, the worker's own `bad-out`); Electron `phase1/shell/electron.importer.mjs`
+  (3, own free port via RIG_PORT, minimal app dir: scan, refused keys, import with pushed progress, the server's
+  rescan + `/api/user-samples/manifest.json` list the new pack, zero console errors / HTTP ≥ 400); settings suite
+  "mac" mode +6 (`test/phase2/settings/importer.mjs` with a stubbed bridge: quiet button, list + sizes + flags,
+  search + ticks + estimate, Esc closes the panel only, progress bars, background line, done → exactly one rescan,
+  Stop, `no-space` in plain words, no-ffmpeg note, no converter, empty library, Settings closing closes the panel)
+  and the Chrome check (no button, Terminal steps kept). Screenshots `mac-gb-import-list.png`,
+  `mac-gb-import-progress.png`.
+- **Not verified here (Mac only):** real GarageBand / Logic content, the packaged app's utilityProcess from the
+  signed .app, Homebrew ffmpeg discovery from a Finder launch, afconvert (m4a) in the app, and the build-lint size
+  check (≈ +70 KB).
