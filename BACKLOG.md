@@ -44,14 +44,20 @@ metronome, chord charts, MIDI-out, multitrack, shimmer/choir, Planning Center, i
 auto-updater, pedal curves, custom velocity curves, scenes, stage display, practice mode, Windows/Linux), the low-resource part 3 items, and
 the note-latency-after-switch engine work from reviews/performance.md unless the listening pass makes it audible.
 
-## v1.1 scope — decided by Ryan 2026-11-03 (in flight; everything else in A stays v1.2+)
-Wave 1 (running): **v11-touch** custom velocity curve (per-keyboard default + soft/hard calibration, per-device MIDI
-memory in Settings) + expression pedal curve and sustain + drone-swell combo · **v11-polish** theme leftovers (copy,
-EQ canvas tokens, JS hooks, Ember title face; not the daily hook) + section B quality fixes · **v11-electron**
-menu-bar global hotkeys + "update available" check against GitHub Releases (not a silent updater: builds are ad-hoc
-signed).
-Wave 2 (after wave 1 merges): **v11-metronome** click + count-in (+ MIDI clock out) · **v11-scenes** 2–3 saved
-wheel/level states per song, footswitch-stepped · **v11-importer** in-app GarageBand/Logic importer UI.
+## v1.1 scope — decided by Ryan 2026-11-03; all built and merged on `claude/amazing-ptolemy-r464ae` (2026-11-04)
+Done in the cloud, waiting on the Mac checks and Ryan's answers in `reviews/v11-mac-checklist.md`:
+- [x] **v11-touch**: custom velocity curve (per-keyboard default, soft/hard fit, Remember/Forget per device) + pedal
+      curve and sustain + drone-swell combo.
+- [x] **v11-polish**: theme leftovers (voices, EQ canvas tokens, JS hooks, Ember title face) + section B fixes +
+      FR-1 (first-run card at ≤ 1340 px). The switch-peak memory goal was not met (about 810 MB; see the checklist).
+- [x] **v11-electron**: global hotkeys + "update available" check (not a silent updater: builds are ad-hoc signed).
+- [x] **v11-metronome**: click, count-in, time signature, outputs 3–4 option, record-the-click option, MIDI clock
+      out.
+- [x] **v11-scenes**: up to 3 per song, glide 0.5 s, footswitch / hotkeys / bus stepping.
+- [x] **v11-importer**: Settings › My Samples › Import from GarageBand / Logic (Mac app).
+- [x] **ci-macos14 / ci-2**: CI fixes (drone-freeze seam level was a real bug), Linux Electron boot fixture, ui-core
+      races.
+- [ ] Mac verification + CI green on macos-14 + version 1.1.0 + tag (Ryan's word).
 Not in v1.1: EQ simple mode, shimmer/choir, chord charts, stage display, Planning Center, daily hook, disk streaming.
 
 ## A. Features Ryan asked for or floated, not yet built — ALL v1.1+ (Ryan 2026-09-30: "don't make the app too complex"; nothing in A gates v1)
