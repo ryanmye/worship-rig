@@ -637,7 +637,7 @@ test('slot: WHERE IT PLAYS — note fields, mini keyboard, Whole keyboard, Set l
     // ui-edit "velocity-curve sparkline + More summary": Response = velocityCurve with Settings' words
     const resp = bindSel(t, 'slots.0.velocityCurve');
     assert.deepEqual(await t.ev((s) => [...document.querySelectorAll(`${s} button`)].map((b) => b.textContent), resp),
-      ['Light', 'Normal', 'Heavy', 'Fixed']);
+      ['Light', 'Normal', 'Heavy', 'Fixed', 'Custom']); // v11-touch: + Custom
     const spark = `${t.host} .ev2-slot-spark`;
     assert.equal(await t.page.getAttribute(spark, 'data-curve'), 'normal');
     await t.click(`${resp} button[data-value="soft"]`);
@@ -654,6 +654,58 @@ test('slot: WHERE IT PLAYS — note fields, mini keyboard, Whole keyboard, Set l
     assert.match(await t.page.textContent(`${t.host} details[data-sec="slot0-adv"] .ev2-sec-sum`), /Light touch/);
     await t.click(`${resp} button[data-value="normal"]`);
     await t.untilEngine('slots.0.velocityCurve', 'normal');
+    t.assertNoConsoleErrors();
+  }
+});
+
+// v11-touch: Response › Custom shows the slot's own curve controls (slots.<i>.touch.*, written only when moved) and the
+// sparkline draws the curve that plays; Normal follows the playing keyboard's own curve (settings.keyboards); the
+// reference diagonal is the --line-2 token (themes-critic T3), not white
+test('slot: v11-touch — Custom touch curve, sparkline shows the active curve, Normal follows the keyboard', async () => {
+  const t = await page();
+  {
+    await fresh(t, 'factory:sunday-pad-piano', 'slot:0');
+    const resp = bindSel(t, 'slots.0.velocityCurve');
+    const spark = `${t.host} .ev2-slot-spark`;
+    const box = `${t.host} .ev2-slot-touch`;
+    assert.equal(await t.ev((s) => document.querySelector(s).hidden, box), true, 'hidden until Custom');
+    // T3: the reference line is the theme's --line-2, never the hard-coded white
+    const ref = await t.page.getAttribute(spark, 'data-ref');
+    assert.ok(ref && !/255,\s*255,\s*255/.test(ref), `reference stroke ${ref}`);
+    await t.click(`${resp} button[data-value="custom"]`);
+    await t.untilEngine('slots.0.velocityCurve', 'custom');
+    await t.until((s) => !document.querySelector(s).hidden && document.querySelector('.ev2-slot-spark').dataset.curve === 'custom', box);
+    assert.equal(await t.ev(() => 'touch' in window.__rig.store.currentSong().patch.slots[0]), false, 'no rows yet');
+    // Softest note → 40%: the store gets one row, the engine the value, the sparkline redraws
+    const minRange = rangeOf(t, 'slots.0.touch.min');
+    await t.ev((s) => {
+      const i = document.querySelector(s);
+      i.value = String(Number(i.min) + (Number(i.max) - Number(i.min)) * 0.4);
+      i.dispatchEvent(new Event('input', { bubbles: true }));
+      i.dispatchEvent(new Event('change', { bubbles: true }));
+    }, minRange);
+    await t.until(() => Math.abs((window.__rig.store.currentSong().patch.slots[0].touch?.min ?? 0) - 0.4) < 0.02);
+    await t.until(() => Math.abs((window.__rig.engine.getParam('slots.0.touch.min') ?? 0) - 0.4) < 0.02);
+    assert.deepEqual(await t.ev(() => Object.keys(window.__rig.store.currentSong().patch.slots[0].touch)), ['min']);
+    assert.match(await t.page.textContent(`${t.host} details[data-sec="slot0-adv"] .ev2-sec-sum`), /Custom touch/);
+    await t.screenshot('slot-touch-custom');
+    // the playing slot uses it: the engine's own channel cache compiles the custom curve
+    const v01 = await t.ev(() => {
+      const e = window.__rig.engine;
+      const sc = e.slots[0];
+      return e._slotTouch(sc, sc.cfg).lo;
+    });
+    assert.ok(Math.abs(v01 - 0.4) < 0.02, `floor ${v01}`);
+    // Normal + the on-screen keys' own curve (no MIDI keyboard here) → the sparkline follows it, with a plain line
+    await t.click(`${resp} button[data-value="normal"]`);
+    await t.untilEngine('slots.0.velocityCurve', 'normal');
+    await t.ev(() => window.__rig.store.setKeyboard('@computer', { touch: { shape: 0.5, min: 0, max: 1, top: 90 } }));
+    await t.until((s) => document.querySelector(s).dataset.from === 'the on-screen keys', spark);
+    assert.match(await t.page.textContent(`${t.host} .ev2-slot-rnote2`), /Normal follows the on-screen keys’ own touch/);
+    await t.ev(() => window.__rig.store.setKeyboard('@computer', null));
+    await t.until((s) => document.querySelector(s).dataset.from === '', spark);
+    assert.equal(await t.page.textContent(`${t.host} .ev2-slot-rnote2`), '');
+    await t.ev(() => window.__rig.store.set('slots.0.touch', undefined));
     t.assertNoConsoleErrors();
   }
 });

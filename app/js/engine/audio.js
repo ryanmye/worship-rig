@@ -1064,6 +1064,7 @@ export class AudioEngine extends EventTarget {
         if (rest[1] === 'cutHz' || rest[1] === 'hiCutHz') return resolveSlotEq(cfg.eq)[rest[1]];
         return cfg.eq?.[rest[1]] ?? PARAMS.find((e) => e.path === `slots.<i>.eq.${rest[1]}`)?.default;
       }
+      if (rest[0] === 'touch') return cfg.touch?.[rest[1]] ?? PARAMS.find((e) => e.path === `slots.<i>.touch.${rest[1]}`)?.default;
       return rest[0] === 'sends' ? cfg.sends[rest[1]] : cfg[rest[0]];
     }
     const [head, unit, key] = path.split('.');
@@ -1531,7 +1532,8 @@ export class AudioEngine extends EventTarget {
       if (!validTarget(x.target)) x.target = R[k].target;
       x.min = clamp01(x.min);
       x.max = clamp01(x.max);
-      if (x.curve !== undefined && !PEDAL_CURVES.includes(x.curve)) delete x.curve; // v11-touch
+      // v11-touch: the song's routing carries the curve only when it is not linear, so an object without one is linear
+      if (r[k].curve === undefined || !PEDAL_CURVES.includes(x.curve)) delete x.curve;
       R[k] = x;
     }
     if (r.volume && validTarget(r.volume.target)) R.volume = { ...r.volume };

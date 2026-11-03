@@ -9,7 +9,10 @@
 //                  stepChips plus an Edit-only wide Chorus chip, each with setLoaded(baseline) for the white dot.
 //  - THE SOUND   = three lib.wordSlider()s from smartSlidersFor(meta), each a view of exactly one PARAMS path.
 //  - WHERE IT PLAYS = miniKeyboard range + note fields + Whole keyboard + "Set lowest/highest…" (armed on the next
-//                  held note) + Response (velocityCurve) with the curve sparkline.
+//                  held note) + Response (velocityCurve) with the curve sparkline. v11-touch: the sparkline draws
+//                  the curve that plays: the preset, the slot's own (Custom: Feel / Softest / Loudest / Full volume
+//                  at = slots.<i>.touch.*), or for Normal the playing keyboard's own curve (Settings › Your
+//                  keyboards); its reference diagonal is the --line-2 token (themes-critic T3).
 //  - Advanced    = lib.section('slot<i>-adv'): pan, width (only when hasParam and not already a smart slider),
 //                  transpose, voices, pitch bend, sustain pedal, the instrument's own settings (+ Reset), the Tone
 //                  block hosting ctx.C.eqKeyboard straight in Advanced (Ryan 2026-09-30: no 'Tone' disclosure), mounted
@@ -21,7 +24,7 @@
 //  Brightness / Warmth on the strip's shelves read and write the EQ's high / low shelf through eq-math shelfWrites.
 // Store → view: lib.createBinder refreshes values in place; the body is rebuilt only when the slot's instrument,
 // emptiness or availability changes (ui-edit "store → view updates in place"). Views never call the engine (reads
-// only: listInstruments via ctx, and engine/audio.js curveVelocity for the sparkline, as views/edit.js does).
+// only: listInstruments via ctx; the sparkline evaluates shared/touch-curve.js, the engine's own curve math).
 import {
   h, setText, icon, getIn, relOf, hasParam, signed, pct, semitones, formatInstrumentParam, BLOCKS, changedDot,
   changeText, editedSince, LEVEL_KEYS, createBinder, section, wordSlider, spaceNoun, forgetSections,
@@ -31,22 +34,13 @@ import { noteName, parseNoteName } from '../../../shared/music.js';
 import { SPACE_PRESETS, matchPreset } from '../../../shared/fx-presets.js';
 import { smartSlidersFor, slotPath, wordFor, formatSmart, describeSlot } from '../../../shared/smart-controls.js';
 import { readEq, shelfWrites, eqSummary as mathSummary } from '../../../shared/eq-math.js';
+import {
+  COMPILED_PRESETS, LINEAR_TOUCH, COMPUTER_KEYBOARD, compileTouch, touchAt, touchWord,
+} from '../../../shared/touch-curve.js';
 
 /** "Flat" / "Shaped · 3 bands": eq-math says "Custom · …", a word Edit keeps off screen (polish-2B, ux-round2 #5). */
 const eqSummary = (eq) => mathSummary(eq).replace(/^Custom\b/, 'Shaped');
 
-/** The engine's own velocity curve (engine/audio.js); a local copy only if that module cannot load (views/edit.js). */
-const curveVelocity = await import('../../../engine/audio.js').then(
-  (m) => (typeof m.curveVelocity === 'function' ? m.curveVelocity : localCurve),
-  () => localCurve,
-);
-function localCurve(vel127, curve) {
-  const v = Math.min(1, Math.max(0, (Number(vel127) || 0) / 127));
-  if (curve === 'soft') return Math.pow(v, 0.6);
-  if (curve === 'hard') return Math.pow(v, 1.6);
-  if (curve === 'fixed') return 100 / 127;
-  return v;
-}
 
 // ---------------------------------------------------------------------------------------------------------------
 // constants (copied from views/edit.js so the old view keeps its exports untouched until it is retired)
@@ -71,14 +65,17 @@ const GROUP_NOUNS = {
 };
 const TYPE_WORDS = { sampler: 'sampled', synth: 'synth', organ: 'organ' };
 /** Same words as Settings ▸ Velocity (views/edit.js TOUCH_LABELS). The mockup's Soft/Hard were not adopted. */
-export const TOUCH_LABELS = Object.freeze({ soft: 'Light', normal: 'Normal', hard: 'Heavy', fixed: 'Fixed' });
+export const TOUCH_LABELS = Object.freeze({
+  soft: 'Light', normal: 'Normal', hard: 'Heavy', fixed: 'Fixed', custom: 'Custom',
+});
 const TOUCH_HINTS = {
   soft: 'Light: soft playing still sounds full.',
-  normal: 'Normal: volume follows how hard you play.',
+  normal: 'Normal: volume follows how hard you play (and your keyboard’s own touch, if you gave it one in Settings).',
   hard: 'Heavy: you have to dig in for full volume.',
   fixed: 'Fixed: every note plays at the same volume.',
+  custom: 'Custom: this sound’s own curve.',
 };
-const VEL_OPTS = ['soft', 'normal', 'hard', 'fixed']
+const VEL_OPTS = ['soft', 'normal', 'hard', 'fixed', 'custom']
   .map((v) => ({ value: v, label: TOUCH_LABELS[v], title: TOUCH_HINTS[v] }));
 const MONO_OPTS = [
   { value: 'off', label: 'Chords' },
@@ -597,10 +594,40 @@ function mountSlot(el, ctx, opts) {
     ctl.resp = binder.ctl(P('velocityCurve'), (onChange) => C.segmented({
       label: 'Response', options: VEL_OPTS, onChange,
     }));
-    binder.fn([`${rel}.velocityCurve`], (s) => {
-      const sl = slotOf(s);
-      if (sl) spark.draw(sl.velocityCurve || 'normal');
-    });
+    // v11-touch: Custom = this sound's own curve (slots.<i>.touch.*; absent rows = the linear defaults)
+    const touchSl = (k, o) => binder.ctl(P(`touch.${k}`), (onChange) => slider({
+      min: describe(P(`touch.${k}`)).min, max: describe(P(`touch.${k}`)).max, default: describe(P(`touch.${k}`)).default,
+      ...o, onChange,
+    }));
+    ctl.touch = [
+      touchSl('shape', { label: 'Feel', curve: 'log', ends: ['light', 'heavy'], word: (v) => touchWord({ shape: v }),
+        format: () => '' }),
+      touchSl('min', { label: 'Softest note', format: pct, ends: ['silent', 'loud'] }),
+      touchSl('max', { label: 'Loudest note', format: pct, ends: ['quiet', 'full'] }),
+      touchSl('top', { label: 'Full volume at', step: 1, format: (v) => `${Math.round(v)}`,
+        ends: ['a light press', 'the hardest'] }),
+    ];
+    const respNote = h('small.ev2-slot-rnote2', { 'aria-live': 'polite' });
+    const customBox = h('div.ev2-slot-touch', { hidden: true }, ctl.touch.map((c) => c.el));
+    let sparkKey = '';
+    const drawSpark = () => {
+      const sl = curSlot();
+      if (!sl) return;
+      const a = activeCurve(sl);
+      const key = JSON.stringify([a.c, a.curve, a.from]);
+      if (key !== sparkKey) {
+        sparkKey = key;
+        spark.draw(a.c, a.curve, a.from);
+      }
+      customBox.hidden = a.curve !== 'custom';
+      const whose = a.from === 'the on-screen keys' ? 'the on-screen keys’' : `${a.from}’s`;
+      setText(respNote, a.from ? `Normal follows ${whose} own touch (Settings).` : '');
+    };
+    binder.fn([`${rel}.velocityCurve`, `${rel}.touch`], drawSpark);
+    // settings.keyboards (a keyboard's own curve) is outside the song, and the playing keyboard can change; both
+    // listeners belong to this body (released with its binder on a rebuild)
+    const offs = [ctx.subscribe(drawSpark), ctx.listen(ctx.controller, 'status', drawSpark)];
+    binder.track({ destroy: () => offs.forEach((off) => typeof off === 'function' && off()) });
     const play = h('div.ev2-col.ev2-slot-play', {},
       h('span.ev2-cap', { text: 'Where it plays' }),
       h('span.ev2-col-sub', { text: 'Only for this sound.' }),
@@ -610,7 +637,9 @@ function mountSlot(el, ctx, opts) {
           h('span.ev2-slot-rh', {},
             h('b', { text: 'Response' }), ' ', h('em', { text: '· how it answers your touch' })),
           spark.el),
-        h('div.ev2-slot-respctl', {}, ctl.resp.el)));
+        h('div.ev2-slot-respctl', {}, ctl.resp.el),
+        customBox,
+        respNote));
 
     // ============ Advanced ============
     const mapped = new Set(specs.map((s) => s.path.replace('slots.<i>.', '')));
@@ -919,13 +948,33 @@ function mountSlot(el, ctx, opts) {
     return input;
   }
 
+  /**
+   * v11-touch: the curve this slot plays with: its preset, its own (custom), or for 'normal' the playing keyboard's
+   * own curve from settings.keyboards (the MIDI keyboard the controller is listening to; with none connected, the
+   * on-screen + computer keys' entry), else linear.
+   * @returns {{c:object, curve:string, from:string|null}}
+   */
+  function activeCurve(slot) {
+    const curve = slot.velocityCurve || 'normal';
+    if (curve === 'custom') return { c: compileTouch(slot.touch), curve, from: null };
+    if (curve !== 'normal') return { c: COMPILED_PRESETS[curve] || LINEAR_TOUCH, curve, from: null };
+    const kb = (ctx.store && ctx.store.get().settings.keyboards) || {};
+    const m = ctx.controller && ctx.controller.status ? ctx.controller.status.midi : null;
+    const name = m && m.connected && m.name ? m.name : COMPUTER_KEYBOARD;
+    const own = kb[name] && kb[name].touch;
+    if (!own) return { c: LINEAR_TOUCH, curve, from: null };
+    return { c: compileTouch(own), curve, from: name === COMPUTER_KEYBOARD ? 'the on-screen keys' : name };
+  }
+
   /** Tiny velocity-curve graph (x = how hard you play, y = how loud it sounds), drawn in the slot colour. */
   function curveSpark() {
     const cv = h('canvas.ev2-slot-spark', { width: 128, height: 56, role: 'img', 'aria-label': 'Response curve' });
     return {
       el: cv,
-      draw(curve) {
+      /** @param {object} c compiled curve (shared/touch-curve.js) @param {string} curve @param {string|null} from */
+      draw(c, curve, from) {
         cv.dataset.curve = curve;
+        cv.dataset.from = from || '';
         cv.title = `${TOUCH_HINTS[curve] || ''} Left = soft key press, right = hard.`;
         const g = cv.getContext && cv.getContext('2d');
         if (!g) return;
@@ -933,19 +982,22 @@ function mountSlot(el, ctx, opts) {
         const H = cv.height;
         const pad = 5;
         g.clearRect(0, 0, W, H);
-        g.strokeStyle = 'rgba(255,255,255,.18)';
+        // themes-critic T3: a theme token, so the reference shows on the Day themes' paper too
+        const css = getComputedStyle(root);
+        g.strokeStyle = (css.getPropertyValue('--line-2') || '').trim() || 'rgba(128,128,128,.45)';
+        cv.dataset.ref = g.strokeStyle;
         g.lineWidth = 1.5;
         g.beginPath();
         g.moveTo(pad, H - pad);
         g.lineTo(W - pad, pad); // the "Normal" diagonal for reference
         g.stroke();
-        g.strokeStyle = (getComputedStyle(root).getPropertyValue('--c') || '').trim() || ROLE_COLORS[i];
+        g.strokeStyle = (css.getPropertyValue('--c') || '').trim() || ROLE_COLORS[i];
         g.lineWidth = 4;
         g.lineJoin = 'round';
         g.beginPath();
         for (let v = 1; v <= 127; v += 2) {
           const x = pad + ((v - 1) / 126) * (W - 2 * pad);
-          const y = H - pad - curveVelocity(v, curve) * (H - 2 * pad);
+          const y = H - pad - touchAt(c, v) * (H - 2 * pad);
           if (v === 1) g.moveTo(x, y);
           else g.lineTo(x, y);
         }
@@ -971,7 +1023,7 @@ function mountSlot(el, ctx, opts) {
     parts.push(`Transpose ${signed(Math.round(Number(slot.transpose) || 0))}`);
     parts.push(`Voices ${VOICE_WORDS[slot.mono] || 'All'}`);
     parts.push(`Pitch bend ${slot.bendEnabled ? 'On' : 'Off'}`);
-    if (slot.velocityCurve && slot.velocityCurve !== 'normal') parts.push(`${TOUCH_LABELS[slot.velocityCurve]} touch`);
+    if (slot.velocityCurve && slot.velocityCurve !== 'normal') parts.push(`${TOUCH_LABELS[slot.velocityCurve] || 'Custom'} touch`);
     // sustain: only when set (absent = today's sound)
     if (Number.isFinite(slot.release)) parts.push(`Release ${secs(slot.release)}`);
     if (Number.isFinite(slot.pedalHold)) parts.push(`Pedal hold ${secs(slot.pedalHold)}`);
