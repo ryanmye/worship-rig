@@ -40,6 +40,16 @@ metronome, chord charts, MIDI-out, multitrack, shimmer/choir, Planning Center, i
 auto-updater, pedal curves, custom velocity curves, scenes, stage display, practice mode, Windows/Linux), the low-resource part 3 items, and
 the note-latency-after-switch engine work from reviews/performance.md unless the listening pass makes it audible.
 
+## v1.1 scope — decided by Ryan 2026-11-03 (in flight; everything else in A stays v1.2+)
+Wave 1 (running): **v11-touch** custom velocity curve (per-keyboard default + soft/hard calibration, per-device MIDI
+memory in Settings) + expression pedal curve and sustain + drone-swell combo · **v11-polish** theme leftovers (copy,
+EQ canvas tokens, JS hooks, Ember title face; not the daily hook) + section B quality fixes · **v11-electron**
+menu-bar global hotkeys + "update available" check against GitHub Releases (not a silent updater: builds are ad-hoc
+signed).
+Wave 2 (after wave 1 merges): **v11-metronome** click + count-in (+ MIDI clock out) · **v11-scenes** 2–3 saved
+wheel/level states per song, footswitch-stepped · **v11-importer** in-app GarageBand/Logic importer UI.
+Not in v1.1: EQ simple mode, shimmer/choir, chord charts, stage display, Planning Center, daily hook, disk streaming.
+
 ## A. Features Ryan asked for or floated, not yet built — ALL v1.1+ (Ryan 2026-09-30: "don't make the app too complex"; nothing in A gates v1)
 - Menu-bar mode v1.1: global hotkeys (`globalShortcut`) for next/prev mode, panic, master ±; Touch Bar strip; multiple
   menu-bar sets; a Windows/Linux tray (Electron supports it; untested). **M, local+cloud**
