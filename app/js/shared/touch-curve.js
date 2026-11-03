@@ -9,6 +9,9 @@
 //
 // Engine use: compileTouch() once per configuration change, touchAt() per note: no allocation, one Math.pow.
 
+/** settings.keyboards key of the on-screen + computer keys (a MIDI device name never starts with '@'). */
+export const COMPUTER_KEYBOARD = '@computer';
+
 /** Field ranges of a touch spec (the PARAMS rows `slots.<i>.touch.*` use the same numbers). */
 export const TOUCH_RANGE = Object.freeze({
   shape: Object.freeze({ min: 0.25, max: 4, default: 1 }),

@@ -2229,11 +2229,11 @@ export function createController(o) {
       if (midiTimer !== null) timers.clearTimeout(midiTimer);
       midiTimer = null;
     };
+    applyRemembered(); // v11-touch: known before init() attaches, so the first resolution already prefers them
     midiPromise = (midi.access ? Promise.resolve(true) : midi.init())
       .then((ok) => {
         clearSoft();
         if (gen !== midiGen) return false;
-        applyRemembered(); // v11-touch: before select(), so the first resolution already prefers them
         midi.select(settings().midiInputId, rememberMidiInputName(settings()));
         return ok !== false && !!midi.available;
       })

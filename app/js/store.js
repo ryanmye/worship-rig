@@ -29,7 +29,7 @@
 import { mod12, transposeSemis } from './shared/music.js';
 import { isValidId as isThemeId, DEFAULT_THEME_ID } from './shared/themes.js';
 import { PARAMS, clamp, describe, isValidPath, parsePath, defaultSlot, SLOT_COUNT } from './shared/params.js';
-import { normalizeTouch, PEDAL_CURVES } from './shared/touch-curve.js';
+import { normalizeTouch, PEDAL_CURVES, COMPUTER_KEYBOARD } from './shared/touch-curve.js';
 import {
   FACTORY_SONGS, FACTORY_VERSION, FACTORY_SINCE, CATEGORIES, WHEEL_TARGETS, BEND_MODES, DRONE_MODES, defaultFx, defaultDrone, defaultRouting,
   blankSong, factoryById,
@@ -47,7 +47,7 @@ export const VIEWS = Object.freeze(['perform', 'edit']);
  * slots on 'normal' inherit; remember = prefer this device when choosing the "first keyboard" automatically. Keyed by
  * name (Web MIDI ids change when a device is re-plugged). COMPUTER_KEYBOARD is the on-screen + computer keys entry.
  */
-export const COMPUTER_KEYBOARD = '@computer';
+export { COMPUTER_KEYBOARD };
 export const KEYBOARDS_MAX = 32;
 export const KEYBOARD_NAME_MAX = 120;
 /** Song categories the UI groups by (factory categories incl. 'synth', plus 'user'). Unknown strings are kept. */

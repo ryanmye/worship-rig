@@ -27,8 +27,8 @@
 // ('switched').
 // v11-touch: setRemembered(names) = the keyboards the player marked "remember" in Settings (settings.keyboards,
 // matched by name). In 'first' mode a connected remembered port outranks every heuristic (and counts as hardware even
-// when its name looks virtual), but the sticky choice (L8) still holds while connected, so plugging a remembered board
-// in mid-song never moves the listening port.
+// when its name looks virtual). Changing the list re-resolves (like select()), but a remembered board plugged in later
+// does not take over: the sticky choice (L8) holds while connected, so a hot-plug never moves the listening port.
 
 /** CCs never accepted by learn(). */
 export const LEARN_IGNORED_CCS = Object.freeze([120, 121, 122, 123, 124, 125, 126, 127]);
@@ -189,6 +189,8 @@ export class MidiInput extends EventTarget {
     const next = new Set([...(names || [])].filter((n) => typeof n === 'string' && n));
     if (next.size === this._remembered.size && [...next].every((n) => this._remembered.has(n))) return;
     this._remembered = next;
+    // the player just changed the list in Settings (or it was loaded at start): resolve afresh, like select()
+    this._firstId = null;
     if (this.access) this._reattach('select');
   }
 
