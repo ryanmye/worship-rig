@@ -1,6 +1,7 @@
 // Parameter address grammar + table (SPEC §4, REVIEW 4.2). Used by store.set, engine.setParam, MIDI learn, presets, UI.
 // Gains are stored linear 0..2 (fader taper 2·pos³, displayed in dB). Frequencies Hz, times seconds.
 import { noteName } from './music.js';
+import { TOUCH_RANGE } from './touch-curve.js';
 
 /** Number of fixed slots per patch. */
 export const SLOT_COUNT = 4;
@@ -65,7 +66,9 @@ export const PARAMS = Object.freeze([
   num('slots.<i>.highNote', 0, 127, 127, 'midi', 'lin', 'High note', { step: 1 }),
   bool('slots.<i>.sustain', true, 'Sustain pedal'),
   enm('slots.<i>.mono', ['off', 'lowest', 'highest'], 'off', 'Mono'),
-  enm('slots.<i>.velocityCurve', ['soft', 'normal', 'hard', 'fixed'], 'normal', 'Velocity'),
+  // v11-touch: 'normal' also means "follow this keyboard's own touch curve" (settings.keyboards, set per MIDI device
+  // name; none = linear, as before); 'custom' = this slot's slots.<i>.touch.* curve
+  enm('slots.<i>.velocityCurve', ['soft', 'normal', 'hard', 'fixed', 'custom'], 'normal', 'Velocity'),
   bool('slots.<i>.bendEnabled', false, 'Pitch bend'),
   num('slots.<i>.sends.reverb', 0, 1, 0, 'lin', 'lin', 'Reverb send'),
   num('slots.<i>.sends.delay', 0, 1, 0, 'lin', 'lin', 'Delay send'),
@@ -99,6 +102,14 @@ export const PARAMS = Object.freeze([
   // pedal lifts / the sample ends, or 2–30 s, then a fade over 25 % of that time.
   num('slots.<i>.release', 0.05, 8, null, 's', 'log', 'Release', { optional: true }),
   num('slots.<i>.pedalHold', 2, 30, 'natural', 's', 'log', 'Pedal hold', { optional: true, words: Object.freeze(['natural']) }),
+  // v11-touch: the slot's own touch curve (shared/touch-curve.js), read only while velocityCurve is 'custom'. Absent
+  // rows = the defaults (the linear curve), so a slot only carries the ones someone moved.
+  num('slots.<i>.touch.shape', TOUCH_RANGE.shape.min, TOUCH_RANGE.shape.max, TOUCH_RANGE.shape.default, 'lin', 'log',
+    'Touch shape'),
+  num('slots.<i>.touch.min', 0, 1, TOUCH_RANGE.min.default, 'lin', 'lin', 'Softest note'),
+  num('slots.<i>.touch.max', 0, 1, TOUCH_RANGE.max.default, 'lin', 'lin', 'Loudest note'),
+  num('slots.<i>.touch.top', TOUCH_RANGE.top.min, TOUCH_RANGE.top.max, TOUCH_RANGE.top.default, 'lin', 'lin',
+    'Full volume at', { step: 1 }),
   // reverb
   num('fx.reverb.size', 0, 1, 0.5, 'lin', 'lin', 'Reverb size'),
   num('fx.reverb.damp', 0, 1, 0.5, 'lin', 'lin', 'Reverb damping'),

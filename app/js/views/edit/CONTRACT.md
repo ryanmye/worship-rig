@@ -403,6 +403,11 @@ builds the same markup for in-body lines (the Effects tab's three lines).
 - Response = `velocityCurve` segmented. Keep Settings' words Light / Normal / Heavy / Fixed (`TOUCH_LABELS`); the
   mockup's "Soft/Hard" differs, so flag it if you change them. Include the curve sparkline canvas
   (`data-curve`, drawn in the slot colour, > 50 px drawn). ui-edit "mute toggle + velocity-curve sparkline".
+  v11-touch: a fifth option **Own** (`velocityCurve: 'custom'`; "Custom" is not an Edit word, ux-round2 #5) shows Feel / Softest note / Loudest note / Full
+  volume at (`slots.<i>.touch.shape|min|max|top`, written only when moved). The sparkline draws the curve that plays
+  (`shared/touch-curve.js`): the preset, the slot's own, or for Normal the playing keyboard's own curve from
+  `settings.keyboards` (`data-from` names it, and a line under the control says "Normal follows …"). Its reference
+  diagonal is the `--line-2` token (`data-ref`), never a hard-coded white (themes-critic T3).
 
 **Advanced** (a `lib.section('slot<i>-adv')` footer)
 - Summary line: "Pan Center · Width 100% · Highs 0 dB · Transpose 0 · Voices All · Pitch bend Off". Show "Light

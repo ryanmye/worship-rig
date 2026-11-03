@@ -2088,6 +2088,98 @@ export const offline = {
       m4.at5 <= nat.at5 - 12 && h4.pedaled === 0;
     return { pass, ...out };
   },
+
+  // v11-touch: noteOn's {touch} (the playing keyboard's curve) reaches the 'normal' slots only; named and custom slot
+  // curves override it; the named curves are bit-identical to before; setParam of touch.* / velocityCurve applies on
+  // the next note
+  async touchCurves() {
+    const ctx = mkCtx(2);
+    const e = await mkEngine(ctx);
+    const { compileTouch, touchAt } = await import('/js/shared/touch-curve.js');
+    const custom = { shape: 2, min: 0.1, max: 0.9, top: 100 };
+    await use(e, patch({
+      0: slot('synth', 'soft-keys'),
+      1: slot('synth', 'warm-pad', { velocityCurve: 'soft' }),
+      2: slot('synth', 'bell', { velocityCurve: 'custom', touch: custom }),
+      3: slot('synth', 'soft-keys', { velocityCurve: 'fixed', highNote: 127, mono: 'off' }),
+    }));
+    const got = [[], [], [], []];
+    e.slots.forEach((sc, i) => {
+      const orig = sc.inst.noteOn.bind(sc.inst);
+      sc.inst.noteOn = (n, v01, t) => {
+        got[i].push(v01);
+        return orig(n, v01, t);
+      };
+    });
+    const kbd = compileTouch({ shape: 0.5, min: 0.2, max: 1, top: 90 });
+    const old = (v, c) => {
+      const x = Math.min(1, Math.max(0, v / 127));
+      return c === 'soft' ? Math.pow(x, 0.6) : c === 'hard' ? Math.pow(x, 1.6) : c === 'fixed' ? 100 / 127 : x;
+    };
+    e.noteOn(60, 64, { when: 0.1 });
+    e.noteOff(60, { when: 0.2 });
+    e.noteOn(62, 64, { when: 0.3, touch: kbd });
+    e.noteOff(62, { when: 0.4 });
+    e.noteOn(64, 64, { when: 0.5, touch: { shape: 0.5, min: 0.2, max: 1, top: 90 } }); // a plain spec is compiled
+    e.noteOff(64, { when: 0.6 });
+    e.setParam('slots.2.touch.shape', 1, { when: 0.7 });
+    e.setParam('slots.1.velocityCurve', 'hard', { when: 0.7 });
+    e.noteOn(65, 64, { when: 0.8 });
+    e.noteOff(65, { when: 0.9 });
+    e.setParam('slots.0.velocityCurve', 'custom', { when: 1 }); // no touch rows: the defaults = linear
+    e.noteOn(67, 30, { when: 1.1, touch: kbd });
+    e.noteOff(67, { when: 1.2 });
+    await ctx.startRendering();
+    const k64 = touchAt(kbd, 64);
+    const checks = {
+      plainNormal: got[0][0] === 64 / 127,
+      plainSoft: got[1][0] === old(64, 'soft'),
+      plainCustom: Math.abs(got[2][0] - touchAt(compileTouch(custom), 64)) < 1e-12,
+      plainFixed: got[3][0] === 100 / 127,
+      kbdNormal: Math.abs(got[0][1] - k64) < 1e-12 && Math.abs(got[0][2] - k64) < 1e-12,
+      kbdIgnoredByOverrides: got[1][1] === old(64, 'soft') && got[3][1] === 100 / 127 && got[2][1] === got[2][0],
+      setParamShape: Math.abs(got[2][3] - (0.1 + 0.8 * 0.64)) < 1e-12,
+      setParamCurve: got[1][3] === old(64, 'hard'),
+      customDefaults: got[0][4] === 30 / 127,
+    };
+    return { pass: Object.values(checks).every(Boolean), ...checks, got: got.map((a) => a.map((x) => +x.toFixed(4))) };
+  },
+
+  // v11-touch: patch.expression.curve 'log' tapers the pedal (half travel = 9/99 of the range; linear unchanged) and
+  // swell.pedal swells the drone while the sustain pedal is down, letting go when it lifts or a song without it plays
+  async exprCurveAndPedalSwell() {
+    const ctx = mkCtx(12);
+    const e = await mkEngine(ctx);
+    const R = { modWheel: { target: 'none', min: 0, max: 1 }, expression: { target: 'slots.1.gain', min: 0, max: 1 } };
+    await use(e, patch({ 1: slot('synth', 'warm-pad') }, {}, R));
+    e.expression(0.5, { when: 0 });
+    const lin = e._factorFor('slots.1.gain');
+    e.setRouting({ expression: { ...R.expression, curve: 'log' } }, { when: 0 });
+    const log = e._factorFor('slots.1.gain');
+    e.setRouting({ expression: { ...R.expression, curve: 'bogus' } }, { when: 0 });
+    const bogus = e._factorFor('slots.1.gain');
+    e.setRouting({ swell: { seconds: 8, pedal: true } }, { when: 0 });
+    e.drone.configure({ mode: 'synth', gain: 0.25, fade: 1 }, { when: 0 });
+    e.drone.setKey(0, { when: 0 });
+    const g = {};
+    e.at(2.4, () => (g.rest = e.drone.bendGain.gain.value));
+    e.sustain(true, { when: 2.5 });
+    e.at(5.5, () => (g.swelled = e.drone.bendGain.gain.value));
+    e.sustain(false, { when: 6 });
+    e.at(9.5, () => (g.back = e.drone.bendGain.gain.value));
+    e.at(9.6, () => {
+      e.sustain(true, { when: 9.6 });
+      e.setRouting({ swell: { seconds: 8 } }, { when: 9.7 }); // combo off while held → lets go
+    });
+    e.at(11.9, () => (g.comboOff = e.drone.bendGain.gain.value));
+    const d = mono(await ctx.startRendering());
+    const lvl = { rest: db(rms(d, SR, 1.8, 2.4)), swelled: db(rms(d, SR, 5.2, 5.9)), back: db(rms(d, SR, 9.2, 9.5)) };
+    // drone.gain 0.25 → the swell rises toward drone.gain 1: ×4 = +12 dB (± the drone's own movement)
+    const pass = Math.abs(lin - 0.5) < 1e-12 && Math.abs(log - 9 / 99) < 1e-9 && Math.abs(bogus - 0.5) < 1e-12 &&
+      Math.abs(g.rest - 1) < 1e-6 && g.swelled > 3.5 && g.back < 1.1 && g.comboOff < 2 &&
+      lvl.swelled - lvl.rest > 10 && lvl.swelled - lvl.rest < 14.5 && Math.abs(lvl.back - lvl.rest) < 1.5;
+    return { pass, lin, log, bogus, ...g, lvl };
+  },
 };
 
 // ----- real-time suites ------------------------------------------------------------------------------------------

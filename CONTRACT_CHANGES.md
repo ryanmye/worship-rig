@@ -5455,3 +5455,147 @@ rate; Linux runs 44.1 kHz), CDP `Emulation.setCPUThrottlingRate` 6×, `taskset -
   (after checking that the overlay is what is hit there), so only the click can start audio, on any machine. With a
   1.5 s or 5 s pause injected before the click, the old test fails as on the runner and the new one passes 4/4.
 - Not changed: app behaviour for the overlay (hiding it once audio runs is right) or Settings.
+
+## v11-electron (v1.1: menu-bar global hotkeys + "update available" check; main.js, preload.js, global-hotkeys.js, update-check.js, store.js, shell-mirror.js, views/settings-mac.js)
+- **Why not a silent auto-updater.** The release builds are ad-hoc signed (`identity: null`, `build/afterPack.js`) and
+  not notarized. Squirrel.Mac, which electron-updater uses on macOS, only applies an update whose code signature
+  matches the running app's Developer ID; with an ad-hoc signature it refuses, so a "download and install on quit"
+  flow would download ~150 MB and then fail. The app also must never quit or restart itself, and never show a modal over
+  Perform. So: a notice only. Once a day the installed app asks GitHub's REST API (`GET
+  /repos/ryanmye/worship-rig/releases/latest`, unauthenticated: 60 requests/h per IP, we use ≤ 1/day) for the
+  latest release, compares its tag with `app.getVersion()` (semver, prereleases lower), and Settings › About shows
+  "Version 1.1.1 is available. You have 1.0.1." with **Download** (opens `Worship-Rig-<arch>.dmg` from the release
+  in the default browser; `.zip` if the dmg is missing; Apple Silicon for an x64 copy under Rosetta) and **What's
+  new** (the release page). Installing stays the README's drag-to-Applications. No `latest-mac.yml` needed: nothing
+  uses electron-updater; release.yml only had its notes corrected to the real asset names
+  (`Worship-Rig-arm64.dmg`, not `Worship-Rig-*-arm64.dmg`) and a comment that the names, non-prerelease releases and
+  `v<version>` tags are now what the check relies on. A real auto-update needs a Developer ID + notarization (BACKLOG).
+- **When it checks.** Only after the renderer mirrors `settings.updateCheck` (absent = on) through
+  `rig.setUpdateCheck(true)`, then 20 s later if due, then an hourly tick that checks if due. Due = no attempt in 24 h
+  (an attempt that never reached GitHub, `offline`, may retry after 1 h). The result is cached in
+  `<userData>/rig-shell.json` `updateCheck`, so a relaunch the same day shows the notice without a request, and after
+  updating the same cache reads "latest". "Check now" ignores the 24 h rule.
+- **Never in tests, never from source.** `supported` = packaged app and not `RIG_SELFTEST` and not
+  `RIG_UPDATE_CHECK=0`, or `RIG_UPDATE_FEED` is set (a test's local fake feed). Unsupported: no network at all,
+  Settings says "Update checks run in the installed Mac app." The fetch uses its own in-memory session
+  (`session.fromPartition('rig-update-check')`), so it never shows up in the default session's request hooks (S4 key)
+  or the self-test's HTTP ≥ 400 count, and leaves nothing on disk.
+- **Errors stay quiet.** `fetchLatest` never throws: `offline` / `rate-limited` (403 with `x-ratelimit-remaining: 0`,
+  or 429) / `no-release` (404: counts as up to date) / `bad-response`. An automatic check shows nothing and logs
+  nothing; only a "Check now" shows one plain line ("Couldn't reach GitHub. Check the internet connection and try
+  again."). No console output in the renderer at all.
+- **Only safe URLs open.** `openUpdate('download'|'page')` opens `https://github.com/ryanmye/worship-rig/releases`
+  or a URL under `…/releases/` from the feed, nothing else (a cache or feed with other URLs falls back to the
+  releases page). Under `RIG_SELFTEST` it records the URL instead of opening a browser.
+- **Global hotkeys** (docs/menubar-mode.md "Global hotkeys"): `settings.hotkeys = {on, keys:{nextMode, prevMode,
+  panic, masterUp, masterDown}}`, off by default, standard keys ⌃⌥⌘ ] [ P = -. Main registers them with
+  `globalShortcut` and a press sends the existing bus command (`nextMode`, `prevMode`, `panic`, `master` with the
+  value ±2 dB from the last published state); bus contract v1 is unchanged. "Taken by another app" = `register()`
+  returned false, shown under that shortcut in plain words. Unregistered when switched off, while Settings records a
+  combination, on main-window close and on quit.
+- **New `window.rig` methods** (all resolve; failures → `{error}`): `setHotkeys(cfg)`, `pauseHotkeys(bool)`,
+  `getHotkeyStatus()`, `onHotkeyStatus(cb)`, `setUpdateCheck(bool)`, `checkForUpdate()`, `getUpdateStatus()`,
+  `onUpdateStatus(cb)`, `openUpdate(kind)`. IPC `rig:setHotkeys`, `rig:pauseHotkeys`, `rig:getHotkeyStatus`,
+  `rig:setUpdateCheck`, `rig:getUpdateStatus`, `rig:checkForUpdate`, `rig:openUpdate` (invoke, our origin only) and
+  `rig:hotkeyStatus`, `rig:updateStatus` (main → main window).
+- **Store** (SCHEMA stays 1): `settings.hotkeys` (set whole, normalised by `shared/hotkeys.js normalizeHotkeys`;
+  nested paths refused) and `settings.updateCheck` (boolean). Both optional (absent until set; an invalid stored value
+  is dropped on load) and in `DEVICE_LOCAL_SETTINGS` (not exported, kept across a replace-import, not an edit).
+- **Packaging**: `global-hotkeys.js` and `update-check.js` join `tray-visibility.js` in `build.files` (build-lint's
+  "present" list too).
+- **Env (tests)**: `RIG_UPDATE_FEED`, `RIG_UPDATE_DELAY_MS`, `RIG_UPDATE_CHECK=0`, `RIG_FAKE_TAKEN_HOTKEY`
+  (RIG_SELFTEST only). The self-test adds `v11` to the `RIG_SELFTEST` line (shell fixture page only).
+- **Numbers.** Unit: test/unit/shared/hotkeys.test.mjs 9, test/unit/shell/global-hotkeys.test.mjs 8,
+  test/unit/shell/update-check.test.mjs 11, test/phase1/shell/v11-electron.test.mjs 7 (all pass). Settings suite
+  `mac` mode (fixture + fake `window.rig`) 10/10; app + fixture modes unchanged, 47/47 in total. Electron 44.4.5
+  smoke on Linux/xvfb (shell fixture, free port, fake feed): registered ⌃⌥⇧F9/F10/F12 = ok, the fake-taken one =
+  taken, an unparseable one = invalid (Electron throws); 0 registered while paused and after off; presses arrived as
+  `nextMode, prevMode, panic, master 0.6295, master 0.5` (0.5 + 2 dB, then back); update states `idle → checking →
+  update`, 9.9.9 found, x64 dmg offered, 2 feed requests (launch + Check now), no console errors beyond the fixture's
+  deliberate 404.
+## v11-touch
+
+Custom key sensitivity (BACKLOG A, Ryan 2026-11-02), the expression-pedal curve and the "hold pedal = sustain + drone
+swell" combo (BACKLOG A), and "remember per device name" for the MIDI first-input heuristics (BACKLOG B). Everything
+is quiet by default: no new field is written until someone uses a control, and a v1.0 library plays exactly as before.
+
+- **Curve math** (`app/js/shared/touch-curve.js`, pure): a touch curve is `{shape, min, max, top}`, evaluated as
+  `x = clamp(vel / top)`, `y = min + (max − min) · x^shape`. `compileTouch()` precomputes it once; `touchAt()` is the
+  per-note evaluation (no allocation, one `Math.pow`, none when shape = 1). The four named curves are special cases
+  (soft `{0.6,0,1,127}`, normal `{1,0,1,127}`, hard `{1.6,0,1,127}`, fixed `{1,100/127,100/127,127}`) and return
+  bit-identical values to the old `curveVelocity` for every velocity −3…130 (and for 0.5, NaN, '90'; unit test).
+  `fitTouch(soft[], hard[], base)`: top = the median hard velocity (clamped 20–127), shape chosen so the median soft
+  velocity lands on `FIT_SOFT_TARGET` = 0.3 of the output range, min / max kept from the curve being replaced; refuses
+  with `few` (< 3 notes per step) or `same` (medians < 8 apart, e.g. the computer keys' fixed 100). A typical player
+  (soft ≈ 40, hard ≈ 126) fits ≈ linear (shape 1.00 ± 0.1); soft 20 / hard 90 → top 90, shape 0.75; soft 60 / hard 127
+  → shape ≈ 1.6 (= the 'hard' preset). `pedalCurve(x, 'log')` = (10^(2x) − 1) / 99 (half travel = 9/99 ≈ −20.8 dB).
+- **Interface changes**
+  - PARAMS: `slots.<i>.velocityCurve` gains `'custom'` (enum is now soft/normal/hard/fixed/custom); new rows
+    `slots.<i>.touch.shape` (0.25–4, log, 1), `.min` (0–1, 0), `.max` (0–1, 1), `.top` (20–127, step 1, 127), read
+    only while the curve is 'custom'. The store and controller pick them up through the table (no code there);
+    `engine.setParam` stores them in `cfg.touch` and `getParam` reads them. A v1.1 song opened in v1.0 clamps
+    'custom' to 'normal' (linear).
+  - `settings.keyboards` (optional; absent until set): `{ [MIDI device name]: { touch?: spec, remember?: true } }`,
+    plus `COMPUTER_KEYBOARD = '@computer'` for the on-screen + computer keys. Device names contain dots, so writes go
+    through `store.setKeyboard(name, fields|null)` (a null field removes it, null forgets the keyboard, an empty map is
+    dropped); `set('settings.keyboards', map)` validates the whole map; deeper paths are refused. Max 32 entries,
+    names ≤ 120 chars, unknown entry fields kept, `migrate()` idempotent.
+  - `patch.expression.curve` ('log'; 'linear' = absent) and `patch.swell.pedal` (true; false = absent), validated by
+    the store and the engine; `engine._routingInto` treats an expression object without `curve` as linear (the song's
+    routing is sent whole).
+  - `engine.noteOn(note, vel, {when, touch})`: `touch` = the playing keyboard's curve (compiled, or a spec compiled
+    once per object). Slots on **'normal'** use it ("slots inherit the keyboard default"); soft / hard / fixed /
+    custom slots override it. Without `touch` 'normal' is the identity, as before. A slot's own compiled curve is cached
+    on its channel (`sc.touchCfg` / `sc.touchK`, cleared by setParam of velocityCurve / touch.*), so the per-note cost
+    is one comparison. Queued (audio-asleep) note-ons keep their `touch`. `curveVelocity(vel, curve, touch?)` still
+    exported.
+  - Controller: a MIDI input whose device name has a curve sends the **raw** velocity plus `{touch}` (the keyboard's
+    curve replaces Settings › Touch for it; other keyboards keep the Touch setting, and their engine call keeps its
+    old 3-argument shape). The on-screen keys and the computer keys use the `@computer` entry the same way.
+    `controller.captureTouch(cb)` → stop(): every note-on's raw velocity with its device name (calibration).
+    `settings.keyboards[*].remember` → `midi.setRemembered(names)` (applied before `midi.init()`).
+  - MIDI: `setRemembered(names)` / `remembered`; in 'first' mode a connected remembered port ranks
+    `REMEMBERED_RANK` = 10 (above every heuristic, which tops out at 4) and counts as hardware even with a
+    virtual-looking name. Changing the list re-resolves (like `select()`); a remembered board plugged in later does not
+    take the port from the sticky one (L8), so a hot-plug never moves the input mid-song. `inputs[*].remembered`.
+  - Drone: `pedalSwell(on, when)`: while the sustain pedal is down (and the song's `swell.pedal`), `bendGain` rises
+    toward drone.gain 1 (≤ ×4 = +12 dB) with τ 0.55 s (≈ 2.5 s to 99 %) and sinks back with τ 0.65 s; it multiplies with
+    the bend 'drone-swell' (capped ×4). The engine re-evaluates it on every pedal change, routing change, commit and
+    allNotesOff, so a song without the combo lets go of a swell the previous song started (slowly: the drone keeps
+    sounding across the switch, the gapless rule).
+- **UI**
+  - Settings › MIDI keyboard › **Your keyboards** (`views/settings-keyboards.js`): one row per connected MIDI input,
+    saved keyboard and the on-screen keys. "Touch…" opens a curve diagram (SVG; the reference diagonal is `--line-2`),
+    Feel / Softest / Loudest / Full volume at, **Fit to my touch** (6 soft notes, then 6 hard, from that keyboard only;
+    the result is previewed with the two medians marked before "Use this") and Back to standard. **Remember** (MIDI
+    rows) / **Forget**.
+  - Edit › slot › Response: a fifth segment **Own** (`'custom'`; "Custom" is banned from Edit copy, ux-round2 #5)
+    with the four `touch.*` sliders; the sparkline draws the curve that plays (for Normal: the playing keyboard's own
+    curve, with a "Normal follows …" line); the reference diagonal reads `--line-2` instead of
+    `rgba(255,255,255,.18)` (themes-critic T3, invisible on the Day themes). Five segments fit the 1024 px column
+    (12.5 px labels).
+  - Edit › Master › Wheels & pedal: "Pedal curve" (Linear (even) / Log (fine when quiet)) beside the expression
+    row, and "Sustain pedal also swells the drone"; the section summary says "(log)" / "Sustain swells the drone".
+- **Cost per note-on** (`tools/bench-noteon.mjs`; headless Chromium, OfflineAudioContext, 4 synth slots on normal /
+  soft / hard / normal; before = `git archive 0187e88 app`, same script with `--app`; this Linux box was shared with
+  other workers, so the medians of 7 rounds move ±30 % run to run): see the table below.
+
+  | 3 alternating runs (µs or ns) | before (0187e88) | after, no keyboard curve | after, with `{touch}` |
+  |---|---|---|---|
+  | engine note-on + note-off, instruments stubbed (µs) | 5.84 · 6.26 · 7.37 | 6.16 · 5.72 · 6.05 | 5.63 · 6.61 · 5.65 |
+  | engine note-on + note-off, real synth voices (µs) | 563 · 674 · 538 | 605 · 723 · 543 | 546 · 618 · 631 |
+  | per-slot curve step as noteOn runs it (ns) | 29.8 · 28.5 · 16.4 | 39.7 · 41.5 · 50.7 | — |
+  | exported `curveVelocity` alone (ns) | 43.8 · 39.1 · 24.0 | 36.8 · 42.1 · 34.4 | — |
+
+  The curve step costs ~+15–30 ns per slot (the channel-cache comparison plus `touchAt`; a WeakMap cache measured
+  ~+70–110 ns and was replaced), i.e. ≤ 0.12 µs per note-on with 4 slots: inside the run-to-run noise of the
+  stubbed path (≈ 6 µs) and ~0.02 % of a real note-on (≈ 0.6 ms of node creation). No allocation per note for the
+  curves (the compiled objects are built once per configuration change; the controller hands the same `{touch}`
+  object to every note of a keyboard).
+- **Tests**: `test/unit/shared/touch-curve.test.mjs` (7: bit-exact presets, compile/eval, ranges = PARAMS rows,
+  fit cases, refusals, pedal taper); `test/phase1/shell/touch.test.mjs` (5: store fields, controller routing and
+  capture, remembered devices); engine `offline.touchCurves`, `offline.exprCurveAndPedalSwell` (drone.gain 0.25 →
+  +12…13 dB swell while held, back within 1.5 dB, lets go when the combo is turned off); Settings "Your keyboards"
+  (both modes); edit-v2 slot "v11-touch" and master "v11-touch". `params.test.mjs` updated for the new rows / enum.
+- **Needs the Mac / hardware**: the fit with real keys (Keystation 49 MK3 and the second board), Remember with two
+  boards plugged in, an expression pedal on the log curve, and how the drone swell sounds under a held pedal.

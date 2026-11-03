@@ -176,6 +176,46 @@ test('master: Wheels & pedal write the song and the engine routing; swell counts
   }
 });
 
+// v11-touch: the expression pedal's curve (linear = absent, log) and "Sustain pedal also swells the drone" (absent =
+// off) write the song and reach the engine routing; quiet by default
+test('master: v11-touch — pedal curve linear/log and the sustain-swells-the-drone combo', async () => {
+  const t = await mountPanelForTest('master');
+  try {
+    await open(t, 'master-wheels');
+    const curve = selectOf(t, 'song.patch.expression.curve');
+    const combo = `${t.host} [data-bind="song.patch.swell.pedal"]`;
+    assert.equal(await t.page.inputValue(curve), 'linear');
+    assert.equal(await t.ev(() => {
+      const p = window.__rig.store.currentSong().patch;
+      return 'curve' in p.expression || 'pedal' in p.swell;
+    }), false, 'nothing stored by default');
+    await t.page.selectOption(curve, 'log');
+    await t.until(() => window.__rig.store.currentSong().patch.expression.curve === 'log'
+      && window.__rig.engine._routing.expression.curve === 'log');
+    assert.match(await sumOf(t, 'master-wheels'), /Pedal: .* \(log\)/);
+    await t.click(combo);
+    await t.until(() => window.__rig.store.currentSong().patch.swell.pedal === true
+      && window.__rig.engine._routing.swell.pedal === true);
+    assert.match(await sumOf(t, 'master-wheels'), /Sustain swells the drone/);
+    // the engine follows: pedal down → the drone's pedal swell is on
+    await t.ev(() => window.__rig.controller.perform.sustain(true));
+    await t.until(() => window.__rig.engine._pedalSwell === true);
+    await t.ev(() => window.__rig.controller.perform.sustain(false));
+    await t.until(() => window.__rig.engine._pedalSwell === false);
+    // back to the defaults: both fields absent again
+    await t.click(combo);
+    await t.page.selectOption(curve, 'linear');
+    await t.until(() => {
+      const p = window.__rig.store.currentSong().patch;
+      return !('curve' in p.expression) && !('pedal' in p.swell) && !window.__rig.engine._routing.swell.pedal
+        && !window.__rig.engine._routing.expression.curve;
+    });
+    t.assertNoConsoleErrors();
+  } finally {
+    await t.close();
+  }
+});
+
 test('master: focus wheels/tape on mount and in update(); values update in place; song switch; 1024 fits', async () => {
   const t = await mountPanelForTest('master', {
     panelOpts: { focus: 'wheels' }, viewport: { width: 1024, height: 700 },

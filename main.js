@@ -24,14 +24,27 @@
 //   trayIsHidden() (tray-visibility.js) spots it, the renderer hears `trayHidden` / `trayShown` on the Rig menu
 //   channel (transitions only, debounced 1 s), the popover opens at the top-right of the display instead, and the Rig
 //   menu has "Show Worship Rig" / "Open menu-bar panel" as the way back.
+// Global hotkeys (v11-electron, global-hotkeys.js): settings.hotkeys mirrored here (rig.setHotkeys) → globalShortcut;
+//   a press sends an existing bus command (nextMode / prevMode / panic / master) to the main renderer. Off by default,
+//   paused while Settings records a combination, unregistered on disable, window close and quit.
+// Update check (v11-electron, update-check.js): settings.updateCheck mirrored here (rig.setUpdateCheck); at most once a
+//   day GitHub Releases' latest is compared with app.getVersion() and Settings › About shows "Version x is available —
+//   Download" (opens the .dmg in the browser). Never installs, quits or shows a dialog: the builds are ad-hoc signed,
+//   so Squirrel.Mac could not apply an update anyway. Packaged app only; never from source or in a self-test unless
+//   RIG_UPDATE_FEED points at a fake feed.
 //
 // Test/dev env overrides: RIG_APP_DIR, RIG_PORT, RIG_PADS_DIR, RIG_USER_DATA, RIG_RECORDINGS_DIR, RIG_USER_SAMPLES,
 // RIG_SELFTEST=1 (collect console output + HTTP responses ≥ 400, read window.__RIG_SELFTEST__, print one JSON line, quit),
 // RIG_SELFTEST_TIMEOUT_MS, RIG_DEBUG_PERMS=1 (log every permission request/check),
-// RIG_FAKE_TRAY_BOUNDS='{"x":0,"y":982,"width":0,"height":0}' (RIG_SELFTEST only: stands in for tray.getBounds()).
+// RIG_FAKE_TRAY_BOUNDS='{"x":0,"y":982,"width":0,"height":0}' (RIG_SELFTEST only: stands in for tray.getBounds()),
+// RIG_UPDATE_FEED=<url of a /releases/latest-shaped JSON> (turns the update check on for tests, also from source),
+// RIG_UPDATE_DELAY_MS (launch-check delay, default 20 s), RIG_UPDATE_CHECK=0 (never check, even packaged),
+// RIG_FAKE_TAKEN_HOTKEY=<accelerator> (RIG_SELFTEST only: globalShortcut.register reports it taken by another app).
 
-const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, powerSaveBlocker, screen, session, shell } =
-  require('electron');
+const {
+  app, BrowserWindow, Menu, Tray, dialog, globalShortcut, ipcMain, nativeImage, powerSaveBlocker, screen, session,
+  shell,
+} = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
@@ -39,6 +52,8 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const { createServer, userSamplesHome, KEY_HEADER } = require('./server.js');
 const { trayIsHidden, fallbackPopoverBounds } = require('./tray-visibility.js');
+const { createHotkeys } = require('./global-hotkeys.js');
+const { createUpdateChecker, buildArch } = require('./update-check.js');
 
 const IS_MAC = process.platform === 'darwin';
 const SELFTEST = process.env.RIG_SELFTEST === '1';
@@ -445,6 +460,7 @@ function registerIpc() {
   });
 
   registerMenuBarIpc();
+  registerV11Ipc();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1213,6 +1229,85 @@ function launchedHidden() {
 }
 
 // ---------------------------------------------------------------------------------------------
+// v11-electron: global hotkeys (global-hotkeys.js) + the "update available" check (update-check.js)
+//
+//   renderer ──rig:setHotkeys({on, keys})──▶ globalShortcut ──press──▶ sendBusCommand(nextMode|prevMode|panic|master)
+//   renderer ──rig:setUpdateCheck(on)──────▶ GitHub /releases/latest (≤ 1/day) ──rig:updateStatus──▶ Settings › About
+//
+// Both start only when the renderer mirrors its setting (app/js/shell-mirror.js), so nothing runs before it boots.
+const UPDATE_FEED = process.env.RIG_UPDATE_FEED || null;
+const FAKE_TAKEN_HOTKEY = SELFTEST ? process.env.RIG_FAKE_TAKEN_HOTKEY || null : null;
+/** externals the self-test would have opened (SELFTEST never opens a browser) */
+const selftestOpened = [];
+
+function sendToMain(channel, payload) {
+  if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+}
+
+const hotkeys = createHotkeys({
+  shortcuts: {
+    register: (acc, cb) => (FAKE_TAKEN_HOTKEY && acc === FAKE_TAKEN_HOTKEY ? false : globalShortcut.register(acc, cb)),
+    unregister: (acc) => globalShortcut.unregister(acc),
+  },
+  send: (cmd) => {
+    const r = sendBusCommand(cmd);
+    if (r.error) log('hotkey', cmd.type, r.error);
+  },
+  masterNow: () => (busState && Number.isFinite(busState.master) ? busState.master : null),
+  onStatus: (s) => sendToMain('rig:hotkeyStatus', s),
+});
+
+/** Installed app only (or a test's fake feed): from source or in a self-test it never touches the network. */
+const updateSupported = () => !!UPDATE_FEED || (app.isPackaged && !SELFTEST && process.env.RIG_UPDATE_CHECK !== '0');
+let updateSession = null;
+let updater = null;
+function getUpdater() {
+  if (updater) return updater;
+  const delay = Number(process.env.RIG_UPDATE_DELAY_MS);
+  updater = createUpdateChecker({
+    // its own in-memory session: no cookies, nothing on disk, and none of our origin's request hooks
+    fetch: (url, init) => {
+      if (!updateSession) updateSession = session.fromPartition('rig-update-check', { cache: false });
+      return updateSession.fetch(url, init);
+    },
+    url: UPDATE_FEED || undefined,
+    supported: updateSupported(),
+    currentVersion: app.getVersion(),
+    arch: buildArch(process.arch, !!app.runningUnderARM64Translation),
+    readCache: () => readShellConfig().updateCheck || null,
+    writeCache: (c) => writeShellConfig({ updateCheck: c }),
+    launchDelayMs: process.env.RIG_UPDATE_DELAY_MS && delay >= 0 ? delay : 20000,
+    onStatus: (s) => sendToMain('rig:updateStatus', s),
+  });
+  return updater;
+}
+
+function registerV11Ipc() {
+  handle('rig:setHotkeys', async (_e, cfg) => hotkeys.set(cfg));
+  handle('rig:pauseHotkeys', async (_e, on) => {
+    if (typeof on !== 'boolean') return { error: 'expected a boolean' };
+    return hotkeys.pause(on);
+  });
+  handle('rig:getHotkeyStatus', async () => hotkeys.status());
+  handle('rig:setUpdateCheck', async (_e, on) => {
+    if (typeof on !== 'boolean') return { error: 'expected a boolean' };
+    return getUpdater().setEnabled(on);
+  });
+  handle('rig:getUpdateStatus', async () => getUpdater().status());
+  handle('rig:checkForUpdate', async () => getUpdater().checkNow());
+  handle('rig:openUpdate', async (_e, kind) => {
+    const url = getUpdater().urlFor(kind === 'download' ? 'download' : 'page');
+    if (!url) return { error: 'nothing to open' };
+    if (SELFTEST) {
+      selftestOpened.push(url);
+      return { ok: true, url };
+    }
+    await shell.openExternal(url);
+    return { ok: true, url };
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
 // permissions: MIDI + output-device selection; everything else denied.
 // NOTE (verified on Electron 44.4.5): Chromium now gates ALL Web MIDI behind the sysex permission, so
 // requestMIDIAccess({sysex:false}) arrives here as 'midiSysex'. Denying it blocks MIDI entirely. The renderer still
@@ -1358,6 +1453,7 @@ function createWindow(url) {
   });
   win.on('closed', () => {
     win = null;
+    hotkeys.dispose(); // v11-electron: a press would have nowhere to go
     // the popover alone must not keep the app alive (window-all-closed → quit)
     if (popover && !popover.isDestroyed()) popover.destroy();
   });
@@ -1506,7 +1602,9 @@ function installSelftest(wc) {
       if (r) {
         const menubar = await withTimeout(menubarSelftest(wc), 30000, { error: 'menubar self-test timed out' })
           .catch((err) => ({ error: (err && err.message) || String(err) }));
-        return finish({ result: JSON.parse(r), menubar }, 0);
+        const v11 = await withTimeout(v11Selftest(wc), 30000, { error: 'v11 self-test timed out' })
+          .catch((err) => ({ error: (err && err.message) || String(err) }));
+        return finish({ result: JSON.parse(r), menubar, v11 }, 0);
       }
     } catch {
       /* page not ready yet */
@@ -1694,6 +1792,82 @@ async function menubarSelftest(wc) {
   return out;
 }
 
+/**
+ * v11-electron self-test (RIG_SELFTEST=1), reported as `v11` in the JSON line: global hotkeys through the real
+ * globalShortcut (registered / taken via RIG_FAKE_TAKEN_HOTKEY / invalid, pause, off), presses through the real relay
+ * (hotkeys.fire: a real key press can't be synthesised system-wide), and the update check against RIG_UPDATE_FEED
+ * (the boot test's local fake feed; without it the check must report `unsupported` and never touch the network).
+ * Shell fixture page only, like menubarSelftest.
+ */
+async function v11Selftest(wc) {
+  const out = {};
+  const js = (code) => withTimeout(wc.executeJavaScript(code, true), 5000, { error: 'executeJavaScript timeout' });
+  const settle = (ms) => new Promise((r) => setTimeout(r, ms));
+  const waitFor = async (fn, ms = 5000) => {
+    const t0 = Date.now();
+    while (Date.now() - t0 < ms) {
+      if (await fn()) return true;
+      await settle(50);
+    }
+    return false;
+  };
+  if (await js('!!window.__rig')) return { skipped: 'real app page (window.__rig): runs on the shell fixture only' };
+  const isReg = (acc) => {
+    try {
+      return globalShortcut.isRegistered(acc);
+    } catch {
+      return 'throws';
+    }
+  };
+  // ---- hotkeys
+  const keys = {
+    nextMode: 'Control+Alt+Shift+F9',
+    prevMode: 'Control+Alt+Shift+F10',
+    panic: FAKE_TAKEN_HOTKEY || 'Control+Alt+Shift+F11',
+    masterUp: 'Control+Alt+Shift+F12',
+    masterDown: 'Control+Alt+Shift+Banana', // shape passes main's guard; globalShortcut.register throws
+  };
+  out.hotkeysBefore = await js('window.rig.getHotkeyStatus()');
+  await js(`window.__v11Cmds = []; window.rig.onBusCommand((j) => window.__v11Cmds.push(JSON.parse(j)));
+    window.__v11Hk = []; window.rig.onHotkeyStatus((s) => window.__v11Hk.push(s)); true`);
+  const st = await js(`window.rig.setHotkeys(${JSON.stringify({ on: true, keys })})`);
+  out.hotkeyStates = st && st.keys ? Object.fromEntries(Object.entries(st.keys).map(([k, v]) => [k, v.state])) : st;
+  out.registered = Object.fromEntries(Object.entries(keys).map(([id, acc]) => [id, isReg(acc)]));
+  out.hotkeyStatusPushed = await waitFor(async () => (await js('window.__v11Hk.length')) >= 1, 2000);
+  out.fired = ['nextMode', 'prevMode', 'panic', 'masterUp', 'masterDown'].map((id) => hotkeys.fire(id));
+  await waitFor(async () => (await js('window.__v11Cmds.length')) >= 5, 3000);
+  out.firedCommands = await js('window.__v11Cmds.splice(0)');
+  out.masterFrom = busState ? busState.master : null;
+  out.paused = (await js('window.rig.pauseHotkeys(true)')).paused;
+  out.registeredWhilePaused = Object.values(keys).filter((acc) => isReg(acc) === true).length;
+  await js('window.rig.pauseHotkeys(false)');
+  out.registeredAfterPause = Object.values(keys).filter((acc) => isReg(acc) === true).length;
+  out.badPause = await js("window.rig.pauseHotkeys('yes')");
+  out.offStates = Object.values((await js(`window.rig.setHotkeys(${JSON.stringify({ on: false, keys })})`)).keys)
+    .map((k) => k.state);
+  out.registeredAfterOff = Object.values(keys).filter((acc) => isReg(acc) === true).length;
+  // ---- update check
+  out.updateBefore = await js('window.rig.getUpdateStatus()');
+  await js('window.__v11Up = []; window.rig.onUpdateStatus((s) => window.__v11Up.push(s)); true');
+  out.badUpdateCheck = await js("window.rig.setUpdateCheck('on')");
+  out.setUpdateCheck = await js('window.rig.setUpdateCheck(true)');
+  if (UPDATE_FEED) {
+    // RIG_UPDATE_DELAY_MS=0 in the boot test: the launch check runs right away
+    out.updateFound = await waitFor(async () => js("window.__v11Up.some((s) => s.state === 'update')"), 8000);
+    out.updateStates = await js('window.__v11Up.map((s) => s.state)');
+    out.updateStatus = await js('window.rig.getUpdateStatus()');
+    out.openDownload = await js("window.rig.openUpdate('download')");
+    out.openPage = await js("window.rig.openUpdate('page')");
+    out.checkNow = await js('window.rig.checkForUpdate()');
+    out.cached = readShellConfig().updateCheck || null;
+  } else {
+    out.checkNow = await js('window.rig.checkForUpdate()');
+  }
+  out.opened = selftestOpened.slice();
+  await js('window.rig.setUpdateCheck(false)');
+  return out;
+}
+
 // ---------------------------------------------------------------------------------------------
 app.on('window-all-closed', () => app.quit());
 
@@ -1716,6 +1890,10 @@ app.on('show', () => {
 });
 
 app.on('will-quit', (e) => {
+  // v11-electron: give the combinations back to the Mac (Electron does this too; be explicit)
+  hotkeys.dispose();
+  if (updater) updater.dispose();
+  if (app.isReady()) globalShortcut.unregisterAll();
   if (powerBlockId !== null && powerSaveBlocker.isStarted(powerBlockId)) powerSaveBlocker.stop(powerBlockId);
   if (streams.size || server) {
     e.preventDefault();

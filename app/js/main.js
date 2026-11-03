@@ -11,6 +11,7 @@ import { h, setText, segmented, fader, meter, openOverlay, wakeMeters, meterCloc
 import { guardKeyActivation } from './views/components/util.js';
 import { warmThemeFonts, releaseWarmedFonts } from './views/components/themeFonts.js';
 import { resolveThemeId, themeAttrs, THEME_MIRROR_KEY } from './shared/themes.js';
+import { mirrorShellSettings } from './shell-mirror.js';
 
 const $ = (id) => document.getElementById(id);
 const rig = globalThis.rig || null;
@@ -867,7 +868,8 @@ els.settings.addEventListener('click', (e) => {
 window.addEventListener(
   'keydown',
   (e) => {
-    if (settingsOpen && e.key === 'Escape') {
+    // v11-electron: Esc while recording a global shortcut cancels the recording only (views/settings-mac.js)
+    if (settingsOpen && e.key === 'Escape' && !document.documentElement.hasAttribute('data-hotkey-capture')) {
       e.preventDefault();
       closeSettings();
     }
@@ -1132,6 +1134,8 @@ function mirrorMenuBarMode(state) {
 }
 store.subscribe(mirrorMenuBarMode);
 mirrorMenuBarMode(store.get());
+// v11-electron: settings.hotkeys → globalShortcut, settings.updateCheck → the once-a-day update check (Mac app only)
+mirrorShellSettings({ store, rig });
 
 // test / debugging handle (not an API)
 globalThis.__rig = { store, engine, controller, midi, recorder, ctx, views: { perform: performView, get edit() { return editView; }, get settings() { return settingsView; } }, ready: started, viewsReady, ui: { setBanner, plainMessage, toast } };

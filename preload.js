@@ -147,4 +147,35 @@ contextBridge.exposeInMainWorld('rig', {
   setLoginItem: (on) => call('rig:setLoginItem', on),
   /** cb({on, popoverOpen, loginItem, windowVisible, tray, trayBounds, trayHidden}) whenever one of them changes. Returns an unsubscribe. */
   onMenuBarState: (cb) => listen('rig:menuBarState', cb),
+
+  // ---- v11-electron: global hotkeys (globalShortcut) and the "update available" check (main.js, CONTRACT_CHANGES)
+  /**
+   * Mirror settings.hotkeys {on, keys:{nextMode, prevMode, panic, masterUp, masterDown}} (accelerators, '' = none).
+   * @returns {Promise<HotkeyStatus|{error}>} {on, paused, keys:{<id>:{accelerator, state}}};
+   *   state ∈ ok | taken (another app holds it) | invalid | none | off | paused
+   */
+  setHotkeys: (cfg) => call('rig:setHotkeys', cfg),
+  /** Settings records a new combination: let go of ours meanwhile (true) / take them back (false). */
+  pauseHotkeys: (on) => call('rig:pauseHotkeys', on),
+  /** @returns {Promise<HotkeyStatus>} */
+  getHotkeyStatus: () => call('rig:getHotkeyStatus'),
+  /** cb(HotkeyStatus) on every change. Returns an unsubscribe. */
+  onHotkeyStatus: (cb) => listen('rig:hotkeyStatus', cb),
+  /**
+   * Mirror settings.updateCheck (absent = on). Turning on schedules the launch check if one is due (≤ 1/day).
+   * @returns {Promise<UpdateStatus|{error}>} {enabled, supported, current, state, latest, pageUrl, downloadUrl, asset,
+   *   checkedAt, error}; state ∈ unsupported | idle | checking | latest | update
+   */
+  setUpdateCheck: (on) => call('rig:setUpdateCheck', on),
+  /** "Check now" (ignores the once-a-day limit). @returns {Promise<UpdateStatus>} */
+  checkForUpdate: () => call('rig:checkForUpdate'),
+  /** @returns {Promise<UpdateStatus>} */
+  getUpdateStatus: () => call('rig:getUpdateStatus'),
+  /** cb(UpdateStatus) on every change. Returns an unsubscribe. */
+  onUpdateStatus: (cb) => listen('rig:updateStatus', cb),
+  /**
+   * Open the right .dmg ('download') or the release page ('page') in the browser.
+   * @returns {Promise<{ok, url}|{error}>}
+   */
+  openUpdate: (kind) => call('rig:openUpdate', kind),
 });
