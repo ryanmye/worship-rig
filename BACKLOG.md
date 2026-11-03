@@ -28,7 +28,7 @@ it in. Cloud proposes, Ryan decides.
       workflow `sustain`, runs after themes-final, before the drop.
 **Deferred to v1.1 (not gating) — Ryan's rule: v1 stays simple; anything that adds a new screen, mode, setting or concept waits:** everything else in A (menu-bar hotkeys, daily hook, H-sheet Edit, EQ simple mode,
 metronome, chord charts, MIDI-out, multitrack, shimmer/choir, Planning Center, in-app importer, disk streaming,
-auto-updater, pedal curves, scenes, stage display, practice mode, Windows/Linux), the low-resource part 3 items, and
+auto-updater, pedal curves, custom velocity curves, scenes, stage display, practice mode, Windows/Linux), the low-resource part 3 items, and
 the note-latency-after-switch engine work from reviews/performance.md unless the listening pass makes it audible.
 
 ## A. Features Ryan asked for or floated, not yet built — ALL v1.1+ (Ryan 2026-09-30: "don't make the app too complex"; nothing in A gates v1)
@@ -99,6 +99,12 @@ the note-latency-after-switch engine work from reviews/performance.md unless the
 - Auto-update / one-click update script (`git pull && npm run build:mac` behind a `.command`, or GitHub Releases +
   electron-updater; `app-update.yml` is already emitted but inert). **S (script) / M (updater), local**
 - Set the app icon/branding properly (current icon is a placeholder monogram). **S, cloud/design**
+- Custom key sensitivity (velocity) curve tuning (Ryan 2026-11-02). Today each slot picks one of four fixed curves
+  (soft / normal / hard / fixed: `slots.<i>.velocityCurve`, applied by `curveVelocity` in engine/audio.js). Add a
+  tunable curve: drag points or a shape + min/max output, a per-keyboard default (keyed by MIDI device name, so the
+  Keystation and a second board can differ) that slots inherit unless overridden, and a "play soft, then hard"
+  calibration that fits the curve to the player's touch. Needs a new PARAMS row or a store field, not just an enum
+  value. **M, cloud**
 - Expression pedal curve (linear/log) and a "hold pedal = sustain + drone swell" combo mode. **S, cloud**
 - Song "scenes" (Sunday Keys "patch snapshots"): 2–3 saved wheel/level states per song, stepped by footswitch. **M, cloud**
 - Second-window mode as a real feature (a read-only "stage display" window for the MD/vocalist with song, key, next). **M**
