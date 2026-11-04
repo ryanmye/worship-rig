@@ -156,3 +156,63 @@ cloud should add, since macOS won't report a conflict:
 3. Keep `taken` for platforms where `register()` does return false; on macOS don't rely on it.
 4. Tests: a unit test for the test-mode state machine (fired → "Works", timeout → hint) and the settings "mac" mode.
    The real cross-app press stays in Ryan's hardware batch.
+
+## Final dev tree d8970ef (= 73641ce code + reviews only), full `node test/run-all.mjs`, 2026-11-03 ~20:40–21:17 EST
+
+13/15 suites pass in 36m40s. **Soak 12/12 and memory fixed on the Mac:** max decoded **699.5 MB**, 100 ms peak
+**699.7 MB** (untouchable 544.9, pinned 340) on factory:dusty-piano against the 700 MB cap (was 812 MB at ef3d58a,
+passing only through the soft exemption); max pinned 595.4 MB on factory:gospel-stab-b3 (budget 600 MB).
+unit 393, ui-core 82, settings 57/57, themes 58/58, electron-full 28/28, build-lint 43/43 all pass.
+Failures: engine 2 (L11-5, L11-6, both deterministic) and shell 1 (L11-4). Re-runs below were with the screen locked.
+
+## L11-4 shell Electron L14: an extra `windowShown` while the popover opens (screen unlocked)
+
+**Status:** open, seen once (full run, screen unlocked). New since 6d8d336, where the Electron boot passed 22/22.
+
+```
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  [
+    'popoverShown',
++   'windowShown',
+    'popoverHidden',
+    'popoverShown',
+    'popoverHidden'
+  ]
+    at TestContext.<anonymous> (test/phase1/shell/electron.boot.mjs:284:10)
+```
+
+Same family as L11-1: a window event leaks into a list that expects only popover ids. Filter
+`eventsDuringPopover` to `popover*` the way L11-1's fix filtered `trayEvents`, or find what shows the window there.
+
+## L11-2 is not fixed on the Mac: locked-screen reruns still fail at electron.boot.mjs:296
+
+3/3 `node test/phase1/shell/run.mjs --only electron` runs with the screen locked (CGSession `ScreenIsLocked` = 1)
+fail in the L14 test with `+ []` at `electron.boot.mjs:296:61` (the ⌘H `windowVisibleAppHide` assert). So
+`powerMonitor.getSystemIdleState(1)` doesn't report `'locked'` here, or the check runs before the value is read.
+Suggest also skipping when no visibility event arrived at all (an empty list), as the minimise guard does.
+
+## L11-5 engine offline.preloadAndLRU: preloaded pins are evicted
+
+**Status:** open, deterministic (2/2: full run + rerun alone). Likely from 7127d3d v11-memory.
+
+```
+FAIL  offline.preloadAndLRU  (86 ms)  {"pinned":4,"afterPreload":4,"pinnedStill":false,"decodedMB":2.02}
+```
+
+`pinnedStill` = every URL in `e.cache.pinned` is still in `e.cache.entries`. With v11-memory a pinned URL is no
+longer in the cache after the preload, so either the new eviction drops pinned entries (a gapless-rule risk) or the
+test's idea of "pinned" is out of date. Please check which before changing the test.
+
+## L11-6 engine offline.dualMonoIdentity: music-box decodes as 2 channels, not collapsed to mono
+
+**Status:** open, deterministic (2/2). Likely from 7127d3d v11-memory (the L == R stereo de-duplication).
+
+```
+FAIL  offline.dualMonoIdentity  (1037 ms)  {"fixture":{"monoChannels":1,"maxDiff":0,"peak":0.305},
+  "music-box":{"monoChannels":2,"maxDiff":0.0000695,"peak":0.523},"vibesChannels":2}
+```
+
+The test wants music-box collapsed to 1 channel with L/R difference ≤ 1e-6. On the Mac the bundled music-box decodes
+with L and R up to 6.95e-5 apart, so it stays stereo. Probably a decoder difference (macOS vs Linux mp3 decode) on a
+file that is dual-mono at the source: the threshold may need to sit above decoder noise (about 1e-4), or the test
+should not require music-box specifically. Inaudible either way; it only costs the memory saving on that instrument.
