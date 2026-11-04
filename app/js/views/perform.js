@@ -1536,7 +1536,7 @@ export function mountPerform(root, ctx) {
    */
   let audible = null;
   function renderAudible() {
-    const song = store.currentSong();
+    const song = liveOf(store.currentSong()); // v11-review-fixes R-6: the playing scene's drone level
     let mode = song ? song.drone.mode : 'off';
     try {
       if (song && engine?.drone?.cfg?.mode) mode = engine.drone.cfg.mode;
@@ -1565,12 +1565,12 @@ export function mountPerform(root, ctx) {
 
   /**
    * v11-polish: the part a held key sounds on (the first unmuted slot whose range holds it; -1 none), for the
-   * on-screen keys' `data-part` (components/keys.js). Read per new key, from the store's current song.
+   * on-screen keys' `data-part` (components/keys.js). Read per new key, from the current song as it plays.
    * @param {number} n MIDI note
    * @returns {number}
    */
   function partOf(n) {
-    const song = store.currentSong();
+    const song = liveOf(store.currentSong()); // v11-review-fixes R-6: the playing scene's ON switches
     if (!song) return -1;
     for (let i = 0; i < SLOT_COUNT; i++) {
       const sl = song.patch.slots[i];
