@@ -16,11 +16,12 @@ it in. Cloud proposes, Ryan decides.
       Done: SYNC 083933Z + 164743Z, fast tier 12/12 on the Mac (2026-09-30T17:03Z).
 - [x] Low-resource part 2 (drone freeze + audio sleep) merged and measured on the Mac (hidden drone-on ≤ ~10, asleep ≈ 0).
       Measured 2026-09-30T05:31Z: frozen 10.7–11.6 % (slightly over ~10), asleep 0.1 %, hide-on-close 9.8 %.
-- [ ] Full suites green on the Mac incl. Electron, build-lint, 20-min soak; CI green on main (macos-14).
+- [x] Full suites green on the Mac incl. Electron, build-lint, 20-min soak; CI green on main (macos-14).
       Mac: fast 12/12, Electron 17/17, build-lint green on v1.0.1. Soak on the v1.0.1 tree: 12/12 (cloud Linux,
       2026-11-03, seed 738586854: 38 switches, voices → 0 in 0 s, nodes 230 → 230, heap +0.63 MB, max decoded
       698.3/700, max pinned 568.9/600, 0 console errors; load up to 8.4 on 4 CPUs). OPEN: CI red on macos-14
-      (engine 81/83, settings 32/37, chrome-fallback 4/5; 2026-10-02) — fix in progress.
+      (engine 81/83, settings 32/37, chrome-fallback 4/5; 2026-10-02) → fixed (ci-macos14): test.yml green on
+      macos-14 for ef3d58a, run 41742444055 (2026-11-04).
 - [x] Listening pass — Ryan did it offline 2026-09-30 and is happy with the sounds; no calibration round needed.
 - [ ] Hardware leftovers with Ryan: split-on-restart recording; MIDI Learn on the second keyboard.
 - [x] Release pipeline: v1.0.0 tag APPROVED by Ryan (2026-09-30, after the drop + icon); Release with arm64 + x64 dmg/zip (dry run passes); README "Running on your Mac"
