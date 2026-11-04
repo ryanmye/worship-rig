@@ -705,6 +705,27 @@ test('slot: v11-touch — Custom touch curve, sparkline shows the active curve, 
     await t.ev(() => window.__rig.store.setKeyboard('@computer', null));
     await t.until((s) => document.querySelector(s).dataset.from === '', spark);
     assert.equal(await t.page.textContent(`${t.host} .ev2-slot-rnote2`), '');
+    // v11-review-fixes R-7: two keyboards listened to ('All'): status.midi.name joins them, but each has its own curve
+    await t.ev(() => {
+      const r = window.__rig;
+      r.store.setKeyboard('Keystation', { touch: { shape: 0.8, min: 0, max: 1, top: 127 } });
+      r.store.setKeyboard('nanoKEY', { touch: { shape: 0.2, min: 0.1, max: 1, top: 100 } });
+      const inp = (id, name) => ({ id, name, manufacturer: '', state: 'connected', kind: 'hardware', rank: 1,
+        virtual: false, selected: true, remembered: false });
+      r.midi._emit('devices', { inputs: [inp('a', 'Keystation'), inp('b', 'nanoKEY')], selected: ['a', 'b'],
+        available: true, mode: 'all', activeId: null, activeName: null, fallback: false, standIn: false, hint: null });
+    });
+    assert.equal(await t.ev(() => window.__rig.controller.status.midi.name), 'Keystation, nanoKEY');
+    await t.until((s) => document.querySelector(s).dataset.from === 'each keyboard', spark);
+    assert.match(await t.page.textContent(`${t.host} .ev2-slot-rnote2`), /Normal follows each keyboard’s own touch/);
+    await t.ev(() => window.__rig.store.setKeyboard('nanoKEY', null)); // only one of the two has a curve now
+    await t.until((s) => document.querySelector(s).dataset.from === 'Keystation', spark);
+    assert.match(await t.page.textContent(`${t.host} .ev2-slot-rnote2`), /Normal follows Keystation’s own touch/);
+    await t.ev(() => {
+      window.__rig.store.setKeyboard('Keystation', null);
+      window.__rig.midi._emitDevices(); // back to the real (empty) device list
+    });
+    await t.until((s) => document.querySelector(s).dataset.from === '', spark);
     await t.ev(() => window.__rig.store.set('slots.0.touch', undefined));
     t.assertNoConsoleErrors();
   }
