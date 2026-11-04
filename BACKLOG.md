@@ -135,6 +135,25 @@ Not in v1.1: EQ simple mode, shimmer/choir, chord charts, stage display, Plannin
   Keystation and a second board can differ) that slots inherit unless overridden, and a "play soft, then hard"
   calibration that fits the curve to the player's touch. Needs a new PARAMS row or a store field, not just an enum
   value. **M, cloud**
+- **iPad / iPhone app (Ryan 2026-11-04): "so I don't need to always use my computer".** Play the rig from an iPad
+  (or iPhone) with a USB/Bluetooth MIDI keyboard, no Mac on stage. Not scheduled. Notes for whoever picks it up:
+  - The app is plain ES modules on Web Audio, so most of it can run in a WebView. But **iOS Safari has no Web MIDI**,
+    so it needs a native shell (e.g. Capacitor or a small Swift app around WKWebView) that bridges CoreMIDI to the
+    page, or a native rewrite. USB-C/Lightning class-compliant keyboards and Bluetooth MIDI both work through
+    CoreMIDI.
+  - Memory: iOS kills apps well below the Mac's budget (roughly 1.5–3 GB on recent iPads, less on iPhones). Today's
+    700 MB decoded cap + reverbs needs an iOS profile (smaller cap, fewer neighbours, shorter IRs) or the disk
+    streaming item above.
+  - Audio: an AVAudioSession "playback" category so it keeps sounding with the screen locked or the ringer switch on;
+    latency on iOS is usually good (5–10 ms buffers).
+  - Replace the Electron-only parts: menu bar/tray, global hotkeys, GarageBand importer, the local server (serve the
+    app from the bundle), recordings via the Files app. Library sync with the Mac via export/import (iCloud Drive)
+    to start.
+  - Distribution: TestFlight / App Store needs an Apple Developer account ($99/yr). **Licensing check first:** the app
+    is GPL-3.0-only and the FSF considers GPL incompatible with App Store terms. Ryan owns the code, so he can dual
+    license or add an App Store exception. Musyng Kite stays CC BY-SA (attribution in-app).
+  - Rough size: L (shell + MIDI bridge + iOS memory profile + touch-sized Perform layout), plus testing on real
+    devices. **L, cloud (web/shell) + local (Xcode, devices)**
 - Expression pedal curve (linear/log) and a "hold pedal = sustain + drone swell" combo mode. **S, cloud**
 - Song "scenes" (Sunday Keys "patch snapshots"): 2–3 saved wheel/level states per song, stepped by footswitch. **M, cloud**
 - Second-window mode as a real feature (a read-only "stage display" window for the MD/vocalist with song, key, next). **M**
