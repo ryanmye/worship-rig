@@ -6724,3 +6724,23 @@ probe read 0.95–1.0 of the meters. Their mechanism is shown by measurement (fr
   - The 1 failure was `polish-1: strip level meters…` (test 31, untouched): "Perform reads slot 3 once per clock
     frame or sleeps (0.11)". A silent strip fell asleep partway through the 600 ms window under load.
   - It passed 3/3 alone and in both CI runs. This is a pre-existing race, not changed here.
+
+## ci-5 (CI run 41780168918 on 38a997d: 11/12, ui-core 81/82; test/phase2/ui-core/run.mjs only)
+Source: the run's `test-logs` artifact (13299204284). The one failure was `polish-1: strip level meters follow the
+slot…` (test 31): "Perform reads slot 3 once per clock frame or sleeps (0.25)". This is the race noted in ci-4.
+- **Cause, in the test.** `measure()` calls `meters.wake()`, waits 250 ms, then counts `slotLevel` reads per clock
+  frame over 600 ms. It accepted a ratio of 0 or 0.3–1.05 per frame.
+  - A filled strip that stays silent sleeps SILENT_MS (500 ms) after the wake. That lands inside the window, after
+    a part of it that depends on load.
+  - The ratio was 0.42 on an idle box, 0.11 here under load and 0.25 on the runner.
+  - The 6× + 48 kHz simulation reproduced the runner's failure exactly (0.25) on the first run.
+- **Fix.** The wrapped `slotLevel` records the clock frame of every read (`meterClock` stats.frames, which ticks
+  before the reads). Per filled strip, the test asserts that its reads are either none, or one per frame in
+  consecutive frames starting at the window's first frame: awake, then asleep, and nothing in the window wakes it.
+  - That is the claim the ratio approximated, and it is stricter: a double read, a skipped frame or a late wake now
+    fails, where 0.3–1.05 let them pass.
+  - The ≤ 35 reads/s, ≤ 35 frames/s and "the sounding strips are read (> 0.3)" checks are unchanged.
+- **After:** simulation 4/4 (before: failed 1 run in 2 with the original file), 2/2 here alone.
+- Seen once in the simulation, not on CI: the last wait in the same test (back in Perform, `slotTapCount() >= 1`
+  within 3 s) timed out. It passed in the 6 other simulated runs. Not changed. If CI ever shows it, a v11-reverb-quiet
+  warm-up build landing in that window (6 s quiet after the note-off) is the first thing to check.

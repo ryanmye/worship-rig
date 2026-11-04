@@ -12,8 +12,9 @@ The one page to read. Details: `reviews/v11-mac-checklist.md` (every Mac check, 
   ci-4. Soak 12/12, peak 700.0 MB of 700.
 - **Mac full run on `d8970ef`:** 13/15 (L11-4..L11-6, all fixed since). Packaged-app checks all pass. Low-resource
   CPU is now 6.1 % (the v1 target was about 10 %).
-- **CI (macos-14):** green on `ef3d58a`; red on the next three commits from runner timing (ci-3, ci-4 fixed the
-  causes); a run on `38a997d` is in progress.
+- **CI (macos-14):** green on `ef3d58a`. Since then every red run was runner timing (ci-3, ci-4, ci-5 fixed the
+  causes). Run 41 on `38a997d` was 11/12; the last ui-core test (strip meters, ci-5) is fixed in this push and passes
+  76/76 here, but has **not been through CI yet**. The first push to `main` (task 03) is that check.
 
 ## 1. LOCAL session (testing): do in this order
 1. `git pull` (`38a997d` or later).

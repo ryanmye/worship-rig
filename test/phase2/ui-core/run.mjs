@@ -1654,8 +1654,10 @@ test('polish-1: strip level meters follow the slot, sit beside the fader, stop r
     await new Promise((res) => setTimeout(res, 250));
     const orig = controller.slotLevel;
     const per = [0, 0, 0, 0];
+    const at = [[], [], [], []]; // ci-5: the clock frame (meterClock stats.frames) of every read, per slot
     controller.slotLevel = (i) => {
       per[i] += 1;
+      at[i].push(meters.stats().frames);
       return orig(i);
     };
     const f0 = meters.stats().frames;
@@ -1664,7 +1666,14 @@ test('polish-1: strip level meters follow the slot, sit beside the fader, stop r
     const sec = (performance.now() - t0) / 1000;
     const frames = meters.stats().frames - f0;
     controller.slotLevel = orig;
-    return { per: per.map((n) => n / Math.max(1, frames)), perSec: per.map((n) => n / sec), frames, fps: frames / sec };
+    // ci-5: "once per clock frame or asleep", read off the frames themselves: a strip's reads are one per frame, in
+    // consecutive frames from the window's first one (awake), then none (asleep: nothing in the window wakes it). The
+    // old per-window ratio also failed a silent strip that went to sleep partway (SILENT_MS after meters.wake()):
+    // 0.11 here under load, 0.25 on the macos-14 runner.
+    const runs = at.map((fs) => ({ reads: fs.length, first: fs.length ? fs[0] - f0 : null,
+      run: fs.every((f, k) => f === fs[0] + k) }));
+    return { per: per.map((n) => n / Math.max(1, frames)), perSec: per.map((n) => n / sec), frames, fps: frames / sec,
+      runs };
   }, [view, block]);
   await page.evaluate(() => window.__rig.controller.perform.noteOn(60, 110));
   const perf = await measure('perform');
@@ -1673,7 +1682,9 @@ test('polish-1: strip level meters follow the slot, sit beside the fader, stop r
   // every strip), so a strip reads once per clock frame or not at all
   perf.per.forEach((n, i) => {
     if (filled[i]) {
-      assert.ok(n === 0 || (n > 0.3 && n <= 1.05), `Perform reads slot ${i} once per clock frame or sleeps (${n.toFixed(2)})`);
+      const run = perf.runs[i];
+      assert.ok(run.reads === 0 || (run.first === 1 && run.run), `Perform reads slot ${i} once per clock frame until `
+        + `it sleeps (${n.toFixed(2)} of ${perf.frames} frames; ${JSON.stringify(run)})`);
       assert.ok(perf.perSec[i] <= 35, `slot ${i}: ≤ 35 reads/s (${perf.perSec[i].toFixed(1)})`);
     } else assert.equal(n, 0, `an empty strip's meter is hidden and never reads (slot ${i})`);
   });
