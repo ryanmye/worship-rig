@@ -182,6 +182,17 @@ contextBridge.exposeInMainWorld('rig', {
   /** cb(HotkeyStatus) on every change. Returns an unsubscribe. */
   onHotkeyStatus: (cb) => listen('rig:hotkeyStatus', cb),
   /**
+   * v11-hotkey-test: "press it to test". Until the next press of `id` (or cancelHotkeyTest, or main's 10 s safety
+   * timeout) that press is reported on onHotkeyTest and does NOT run its action. One test at a time.
+   * accelerator (optional): the combination Settings shows; refused when main holds another one for `id`.
+   * @returns {Promise<{ok, id, accelerator, timeoutMs}|{error, state?}>}
+   */
+  testHotkey: (id, accelerator) => call('rig:testHotkey', id, typeof accelerator === 'string' ? accelerator : null),
+  /** @returns {Promise<{ok}>} */
+  cancelHotkeyTest: () => call('rig:cancelHotkeyTest'),
+  /** cb({id, accelerator, fired: true}) on the tested press; {fired: false, reason} when main ended it. Unsubscribe. */
+  onHotkeyTest: (cb) => listen('rig:hotkeyTest', cb),
+  /**
    * Mirror settings.updateCheck (absent = on). Turning on schedules the launch check if one is due (≤ 1/day).
    * @returns {Promise<UpdateStatus|{error}>} {enabled, supported, current, state, latest, pageUrl, downloadUrl, asset,
    *   checkedAt, error}; state ∈ unsupported | idle | checking | latest | update

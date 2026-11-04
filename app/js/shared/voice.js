@@ -66,9 +66,15 @@ const CLASSIC = Object.freeze({
   hotkeysSub: 'Step through the setlist’s songs, panic and turn the master up or down from any app, even with the '
     + 'window hidden.',
   // L11-3: macOS lets two apps register the same global shortcut (register() still returns true), so the app can't
-  // tell when another app uses one; say so instead of promising a warning that never comes.
-  hotkeysMacTakenHint: 'macOS doesn’t tell apps when another app uses the same shortcut. If one does nothing, pick '
-    + 'another.',
+  // tell when another app uses one; say so instead of promising a warning that never comes. v11-hotkey-test: and
+  // point at the Test button, which lets the user find a clash themselves.
+  hotkeysMacTakenHint: 'macOS can’t tell apps when another app (Rectangle, Magnet, Raycast…) uses a shortcut. Test '
+    + 'each one once.',
+  // v11-hotkey-test: press it to test (Settings › Menu bar › Global shortcuts); `keys` = the combination in symbols
+  hotkeyTest: 'Test',
+  hotkeyTesting: ({ keys }) => `Press ${keys} in any app…`,
+  hotkeyWorks: 'Works',
+  hotkeyNothing: 'Nothing came through. Another app may use this. Pick another.',
   hotkeysListHint: 'Click a shortcut, then press the new keys. Esc cancels; Delete leaves that one without a '
     + 'shortcut. Next and previous song go through the setlist like → and ← in Perform; the menu-bar buttons still '
     + 'step the modes above.',

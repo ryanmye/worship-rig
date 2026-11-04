@@ -398,6 +398,31 @@ test('v11-electron: global hotkeys — registered / taken / invalid, presses →
   assert.equal(v.registeredAfterPause, 3, 'taken back after the recording');
 });
 
+test('v11-hotkey-test: press-to-test — the press reaches the page and does not run the action; cancel', (t) => {
+  const v = run.report.v11;
+  assert.ok(v && !v.error && !v.skipped, JSON.stringify(v && (v.error || v.skipped)));
+  const [unknown, notString, badAcc, taken] = v.testBad;
+  assert.match(String(unknown && unknown.error), /unknown shortcut/);
+  assert.match(String(notString && notString.error), /expected a shortcut id/);
+  assert.match(String(badAcc && badAcc.error), /bad accelerator/);
+  assert.equal(taken && taken.error, 'not registered', 'a shortcut another app holds can\'t be tested');
+  if (!v.testId) {
+    if (process.platform === 'darwin') assert.fail('nextSong / prevSong should register on the Mac');
+    return t.skip(`this display refused a real global grab (${JSON.stringify(v.hotkeyStates)})`);
+  }
+  assert.equal(v.testStart.ok, true, JSON.stringify(v.testStart));
+  assert.equal(v.testStart.timeoutMs, 10000, 'main\'s safety net');
+  assert.equal(v.testFire, null, 'swallowed: no command');
+  assert.deepEqual(v.testEvents.map((e) => [e.id, e.fired]), [[v.testId, true]]);
+  assert.deepEqual(v.testCommands, [], `a test of ${v.testId} must not step the setlist`);
+  assert.deepEqual(v.afterTestCommands.map((c) => c.type), [v.testId], 'one press ends the test');
+  assert.equal(v.cancelStart.ok, true);
+  assert.equal(v.cancel.ok, true);
+  assert.equal(v.testingAfterCancel, null);
+  assert.deepEqual(v.afterCancelCommands.map((c) => c.type), [v.testId], 'after a cancel the action runs');
+  assert.deepEqual(v.testEventsAfterCancel, [], 'a cancel from the page is silent');
+});
+
 test('v11-electron: update check against a fake feed — found, Download → the dmg URL, cached, never a dialog', () => {
   const v = run.report.v11;
   assert.ok(v && !v.error && !v.skipped, JSON.stringify(v && (v.error || v.skipped)));

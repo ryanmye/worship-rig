@@ -420,8 +420,11 @@ from any app, even with the window hidden.
 | ⌃⌥⌘= / ⌃⌥⌘- | Master louder / softer (2 dB) |
 | ⌃⌥⌘. / ⌃⌥⌘, | Next scene / Previous scene |
 
-Click a shortcut to set your own keys. macOS doesn't tell apps when another app uses the same shortcut, so if one
-does nothing, pick another.
+Click a shortcut to set your own keys. macOS can't tell apps when another app (Rectangle, Magnet, Raycast…) uses a
+shortcut, so test each one once: click **Test** next to it (a test also starts right after you record new keys) and
+press the keys in any app. The row says **Works** when the press came through; the test press doesn't do the action,
+so testing Next song doesn't change the song. If nothing comes through within 5 seconds, another app probably has the
+combination: pick another. Esc stops a test.
 
 ## Manual check on your Mac (5 minutes, after each build)
 

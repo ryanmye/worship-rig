@@ -28,6 +28,7 @@
 //   a press sends a bus command (nextSong / prevSong / panic / master / nextScene / prevScene) to the main renderer
 //   (v11-decisions: next / previous step the setlist's songs; the Tray's Previous / Next stay on modes). Off by
 //   default, paused while Settings records a combination, unregistered on disable, window close and quit.
+//   v11-hotkey-test: rig.testHotkey(id) → that id's next press goes to Settings (rig:hotkeyTest) and is swallowed.
 // Update check (v11-electron, update-check.js): settings.updateCheck mirrored here (rig.setUpdateCheck); at most once a
 //   day GitHub Releases' latest is compared with app.getVersion() and Settings › About shows "Version x is available —
 //   Download" (opens the .dmg in the browser). Never installs, quits or shows a dialog: the builds are ad-hoc signed,
@@ -1266,6 +1267,8 @@ const hotkeys = createHotkeys({
   },
   masterNow: () => (busState && Number.isFinite(busState.master) ? busState.master : null),
   onStatus: (s) => sendToMain('rig:hotkeyStatus', s),
+  // v11-hotkey-test: Settings' "press it to test" hears the press here instead of the action running
+  onTest: (ev) => sendToMain('rig:hotkeyTest', ev),
 });
 
 /** Installed app only (or a test's fake feed): from source or in a self-test it never touches the network. */
@@ -1341,6 +1344,14 @@ function registerV11Ipc() {
     return hotkeys.pause(on);
   });
   handle('rig:getHotkeyStatus', async () => hotkeys.status());
+  // v11-hotkey-test: one id at a time; hotkeys.test checks the id against HOTKEY_IDS and the accelerator's shape
+  handle('rig:testHotkey', async (_e, id, accelerator) => {
+    if (typeof id !== 'string' || id.length > 32) return { error: 'expected a shortcut id' };
+    const acc = accelerator === null ? undefined : accelerator; // the bridge may send null for "not given"
+    if (acc !== undefined && (typeof acc !== 'string' || acc.length > 80)) return { error: 'expected an accelerator' };
+    return hotkeys.test(id, acc);
+  });
+  handle('rig:cancelHotkeyTest', async () => hotkeys.cancelTest());
   handle('rig:setUpdateCheck', async (_e, on) => {
     if (typeof on !== 'boolean') return { error: 'expected a boolean' };
     return getUpdater().setEnabled(on);
@@ -1900,7 +1911,32 @@ async function v11Selftest(wc) {
   await waitFor(async () => (await js('window.__v11Cmds.length')) >= 5, 3000);
   out.firedCommands = await js('window.__v11Cmds.splice(0)');
   out.masterFrom = busState ? busState.master : null;
-  out.paused = (await js('window.rig.pauseHotkeys(true)')).paused;
+  // ---- v11-hotkey-test: press-to-test through the real preload + IPC. The press goes through hotkeys.fire, the
+  // function the globalShortcut callback calls (a system-wide key press can't be synthesised)
+  await js('window.__v11HkTest = []; window.rig.onHotkeyTest((e) => window.__v11HkTest.push(e)); true');
+  out.testBad = [await js("window.rig.testHotkey('formatDisk')"), await js('window.rig.testHotkey(42)'),
+    await js("window.rig.testHotkey('nextSong', 'rm -rf /;')"), await js("window.rig.testHotkey('panic')")];
+  const tid = ['nextSong', 'prevSong'].find((id) => out.hotkeyStates && out.hotkeyStates[id] === 'ok') || null;
+  out.testId = tid;
+  if (tid) {
+    out.testStart = await js(`window.rig.testHotkey('${tid}', ${JSON.stringify(keys[tid])})`);
+    out.testFire = hotkeys.fire(tid); // swallowed: null
+    await waitFor(async () => (await js('window.__v11HkTest.length')) >= 1, 2000);
+    await settle(300); // a command, had one been sent, would have arrived by now
+    out.testEvents = await js('window.__v11HkTest.splice(0)');
+    out.testCommands = await js('window.__v11Cmds.splice(0)');
+    out.afterTestFire = hotkeys.fire(tid); // the test is over: the action runs again
+    await waitFor(async () => (await js('window.__v11Cmds.length')) >= 1, 2000);
+    out.afterTestCommands = await js('window.__v11Cmds.splice(0)');
+    out.cancelStart = await js(`window.rig.testHotkey('${tid}')`);
+    out.cancel = await js('window.rig.cancelHotkeyTest()');
+    out.testingAfterCancel = hotkeys.testing();
+    out.afterCancelFire = hotkeys.fire(tid);
+    await waitFor(async () => (await js('window.__v11Cmds.length')) >= 1, 2000);
+    out.afterCancelCommands = await js('window.__v11Cmds.splice(0)');
+    out.testEventsAfterCancel = await js('window.__v11HkTest.splice(0)');
+  }
+  out.paused =(await js('window.rig.pauseHotkeys(true)')).paused;
   out.registeredWhilePaused = Object.values(keys).filter((acc) => isReg(acc) === true).length;
   await js('window.rig.pauseHotkeys(false)');
   out.registeredAfterPause = Object.values(keys).filter((acc) => isReg(acc) === true).length;

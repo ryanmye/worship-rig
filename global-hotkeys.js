@@ -7,6 +7,9 @@
 // Electron import, so the unit tests drive it with a fake globalShortcut (test/unit/shell/global-hotkeys.test.mjs).
 // The accelerator rules the user sees live in app/js/shared/hotkeys.js (ES module, Settings + store); main only
 // guards the shape here and lets globalShortcut.register decide the rest.
+// v11-hotkey-test (L11-3): macOS lets two apps register one combination (register() → true), so `taken` never shows
+// there. Settings' "press it to test" puts one id in test mode (test / cancelTest): its next press goes to onTest
+// instead of the bus, and a safety timeout ends the mode if the page goes away.
 
 /** Same ids as app/js/shared/hotkeys.js HOTKEY_IDS (a unit test keeps them in step). */
 const HOTKEY_IDS = Object.freeze(['nextSong', 'prevSong', 'panic', 'masterUp', 'masterDown', 'nextScene', 'prevScene']);
@@ -17,6 +20,12 @@ const MASTER_FLOOR_DB = -40;
 const MASTER_MAX = 2; // contract `master` 0..2 (+6 dB)
 /** A master press within this long of the last one steps from the value sent then, not the (throttled) state. */
 const MASTER_PENDING_MS = 1500;
+/**
+ * v11-hotkey-test: main ends a press-to-test on its own after this long. Settings gives up after 5 s
+ * (shared/hotkeys.js HOTKEY_TEST_MS) and cancels; this is the safety net for a page that went away mid-test, so a
+ * shortcut never stays swallowed.
+ */
+const HOTKEY_TEST_SAFETY_MS = 10000;
 const ACC_RE = /^[A-Za-z0-9+\-=[\]\\;',./`]{1,80}$/;
 /** Modifier spellings Electron accepts → the canonical name (shared/hotkeys.js MOD_ALIASES, Shift left out). */
 const STRONG_MODS = Object.freeze({
@@ -98,10 +107,18 @@ function hotkeyCommand(id, master) {
  *   masterNow: () => number|null,         // the last published state's master
  *   now?: () => number,
  *   onStatus?: (status: object) => void,  // pushed to the renderers on every change
+ *   onTest?: (ev: {id, accelerator, fired: boolean, reason?: string}) => void, // v11-hotkey-test, to Settings
+ *   setTimer?: (fn: Function, ms: number) => *, clearTimer?: (handle: *) => void, // the test's safety timeout
+ *   testSafetyMs?: number,
  * }} o
  */
 function createHotkeys(o) {
   const now = o.now || Date.now;
+  const setTimer = o.setTimer || ((fn, ms) => setTimeout(fn, ms));
+  const clearTimer = o.clearTimer || ((h) => clearTimeout(h));
+  const testSafetyMs = o.testSafetyMs > 0 ? o.testSafetyMs : HOTKEY_TEST_SAFETY_MS;
+  /** v11-hotkey-test: {id, accelerator, until, timer} while Settings tests one shortcut, else null */
+  let testing = null;
   let cfg = { on: false, keys: Object.fromEntries(HOTKEY_IDS.map((id) => [id, ''])) };
   let paused = false;
   /** accelerator → id, as registered right now */
@@ -110,7 +127,27 @@ function createHotkeys(o) {
   const states = {};
   let pendingMaster = null; // {value, at}: the master this module sent last
 
+  /** End the running test. With a reason (timeout / changed), Settings hears it; a cancel from the page is silent. */
+  function endTest(reason) {
+    if (!testing) return;
+    const t = testing;
+    testing = null;
+    clearTimer(t.timer);
+    if (reason && o.onTest) o.onTest({ id: t.id, accelerator: t.accelerator, fired: false, reason });
+  }
+
   function fire(id) {
+    if (testing && testing.id === id) {
+      // v11-hotkey-test: the press under test is reported to Settings and swallowed (a test of Next song must not
+      // switch songs). One press ends the test; the next press runs the action again.
+      const live = now() <= testing.until;
+      const { accelerator } = testing;
+      endTest(null);
+      if (live) {
+        if (o.onTest) o.onTest({ id, accelerator, fired: true });
+        return null;
+      }
+    }
     let master = o.masterNow();
     if (id === 'masterUp' || id === 'masterDown') {
       if (pendingMaster && now() - pendingMaster.at < MASTER_PENDING_MS) master = pendingMaster.value;
@@ -155,6 +192,9 @@ function createHotkeys(o) {
         states[id] = ok ? 'ok' : bad ? 'invalid' : 'taken';
       }
     }
+    // v11-hotkey-test: a test only holds while its combination is still registered (a pause for recording, off, or a
+    // new combination ends it); Settings hears this before the status, so it can test again on the new one
+    if (testing && (states[testing.id] !== 'ok' || cfg.keys[testing.id] !== testing.accelerator)) endTest('changed');
     const s = status();
     if (o.onStatus) o.onStatus(s);
     return s;
@@ -179,10 +219,38 @@ function createHotkeys(o) {
       return apply();
     },
     status,
-    /** A press (also the self-test's way in). @returns {object|null} the command sent */
+    /** A press (also the self-test's way in). @returns {object|null} the command sent (null: none, or swallowed) */
     fire,
+    /**
+     * v11-hotkey-test: Settings' "press it to test". Until the next press of `id` (or cancelTest, or the safety
+     * timeout) that press is reported through onTest and does not run its action. Replaces a running test.
+     * @param {string} id
+     * @param {string} [accelerator] the combination Settings shows; refused when main holds another one for `id`
+     * @returns {{ok: true, id, accelerator, timeoutMs}|{error: string, state?: string}}
+     */
+    test(id, accelerator) {
+      if (typeof id !== 'string' || !HOTKEY_IDS.includes(id)) return { error: 'unknown shortcut' };
+      if (accelerator !== undefined && (typeof accelerator !== 'string' || !ACC_RE.test(accelerator))) {
+        return { error: 'bad accelerator' };
+      }
+      endTest(null);
+      const acc = cfg.keys[id];
+      if (states[id] !== 'ok' || !acc) return { error: 'not registered', state: states[id] || 'off' };
+      if (accelerator !== undefined && accelerator !== acc) return { error: 'not registered', state: 'changed' };
+      testing = { id, accelerator: acc, until: now() + testSafetyMs, timer: null };
+      testing.timer = setTimer(() => endTest('timeout'), testSafetyMs);
+      return { ok: true, id, accelerator: acc, timeoutMs: testSafetyMs };
+    },
+    /** v11-hotkey-test: Esc / Settings closed / the page's own timeout. @returns {{ok: true}} */
+    cancelTest() {
+      endTest(null);
+      return { ok: true };
+    },
+    /** @returns {string|null} the id under test */
+    testing: () => (testing ? testing.id : null),
     /** Quit / window gone: unregister everything we hold. */
     dispose() {
+      endTest(null);
       releaseAll();
       for (const id of HOTKEY_IDS) states[id] = 'off';
     },
@@ -193,5 +261,5 @@ function createHotkeys(o) {
 
 module.exports = {
   HOTKEY_IDS, MASTER_STEP_DB, MASTER_FLOOR_DB, masterStep, sanitizeHotkeyConfig, hotkeyCommand, createHotkeys,
-  isStrongAccelerator,
+  isStrongAccelerator, HOTKEY_TEST_SAFETY_MS,
 };
