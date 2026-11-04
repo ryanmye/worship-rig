@@ -4,7 +4,7 @@
   "daylight-stage",
   "daylight-day"
  ],
- "generated": "2026-11-04T01:45:45.789Z",
+ "generated": "2026-11-03T22:16:21.082Z",
  "states": [
   "daylight-stage:perform",
   "daylight-stage:perform-held",
@@ -58,24 +58,12 @@
   "daylight-day:mini-drone-keys"
  ],
  "total": 245,
- "matched": 239,
- "unmatched": 6,
- "unmatchedPct": 2.4,
+ "matched": 241,
+ "unmatched": 4,
+ "unmatchedPct": 1.6,
  "limitPct": 5,
  "deadClasses": [],
  "unmatchedSelectors": [
-  {
-   "selector": "& .led.warn",
-   "context": ":where(html:is([data-theme=\"daylight-stage\"], [data-theme=\"daylight-day\"]))",
-   "line": 200,
-   "dead": false
-  },
-  {
-   "selector": "& .latency.warn",
-   "context": ":where(html:is([data-theme=\"daylight-stage\"], [data-theme=\"daylight-day\"]))",
-   "line": 202,
-   "dead": false
-  },
   {
    "selector": "& .rec-btn.recording",
    "context": ":where(html:is([data-theme=\"daylight-stage\"], [data-theme=\"daylight-day\"]))",
