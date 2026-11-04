@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import {
   HOTKEY_ACTIONS, HOTKEY_IDS, DEFAULT_HOTKEYS, MASTER_STEP_DB, LEGACY_HOTKEY_IDS, parseAccelerator, acceleratorError,
-  acceleratorFromEvent, formatAccelerator, normalizeHotkeys, hotkeysOf, hotkeyConflict,
+  isStrongAccelerator, acceleratorFromEvent, formatAccelerator, normalizeHotkeys, hotkeysOf, hotkeyConflict,
 } from '../../../app/js/shared/hotkeys.js';
 
 const require = createRequire(import.meta.url);
@@ -52,6 +52,39 @@ test('every default is valid, distinct and accepted by main’s guard', () => {
   }
   assert.equal(new Set(Object.values(DEFAULT_HOTKEYS)).size, HOTKEY_IDS.length);
   assert.deepEqual(main.sanitizeHotkeyConfig({ on: true, keys: DEFAULT_HOTKEYS }).keys, DEFAULT_HOTKEYS);
+});
+
+test('v11-decisions R-4: one rule for Settings, the store and Electron main (two of ⌃⌥⌘, or an F-key)', () => {
+  const mods = ['Control', 'ctrl', 'Alt', 'option', 'Shift', 'Command', 'cmd', 'Super', 'CommandOrControl'];
+  const keys = ['A', 'n', '5', 'Space', 'Return', 'Right', ']', '=', 'F1', 'f13', 'F24', 'F25', 'Escape'];
+  let n = 0;
+  // every key, alone and with every set of up to three modifiers: Settings' rule and main's mirror agree
+  const sets = [[]];
+  for (const a of mods) for (const s of [...sets]) if (s.length < 3) sets.push([...s, a]);
+  for (const set of sets) {
+    for (const k of keys) {
+      const acc = [...set, k].join('+');
+      if (parseAccelerator(acc).error) continue;
+      assert.equal(main.isStrongAccelerator(acc), isStrongAccelerator(acc), acc);
+      assert.equal(isStrongAccelerator(acc), !/two of/.test(acceleratorError(acc) || ''), acc);
+      n++;
+    }
+  }
+  assert.ok(n > 1000, `${n} combinations compared`);
+  for (const weak of ['A', 'Space', 'Return', 'Shift+A', 'Command+C', 'Control+Shift+N', 'Alt+Alt+N']) {
+    assert.equal(main.isStrongAccelerator(weak), false, weak);
+  }
+  for (const ok of ['F13', 'Shift+F5', 'Control+Alt+N', 'cmd+ctrl+]', 'Control+Alt+Command+P']) {
+    assert.equal(main.isStrongAccelerator(ok), true, ok);
+  }
+  // the store's normaliser holds nothing Settings would refuse: plain keys and macOS system shortcuts become none
+  const nk = normalizeHotkeys({
+    on: true,
+    keys: { nextSong: 'A', prevSong: 'Space', panic: 'Return', masterUp: 'Command+C', masterDown: 'Alt+Command+Escape',
+      nextScene: 'F13', prevScene: 'Control+Alt+Command+8' },
+  }).keys;
+  assert.deepEqual(nk, { nextSong: '', prevSong: '', panic: '', masterUp: '', masterDown: '', nextScene: 'F13',
+    prevScene: '' });
 });
 
 test('the renderer and Electron main agree on the action ids and the master step', () => {

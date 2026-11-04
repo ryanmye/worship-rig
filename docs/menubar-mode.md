@@ -209,7 +209,9 @@ is throttled to ≤ 4/s); after 1.5 s the published state counts again.
 - **Store**: `settings.hotkeys = {on, keys}` (optional, absent = off with the standard keys; set whole; normalised by
   `shared/hotkeys.js normalizeHotkeys`: every action, canonical accelerators, a duplicate keeps the first; device-local
   like `menuBarMode`). Settings refuses combinations with fewer than two of ⌃ ⌥ ⌘ (unless a function key) and a few
-  macOS system ones (`acceleratorError`), and duplicates.
+  macOS system ones (`acceleratorError`), and duplicates. Since v11-decisions (review R-4) the store's normaliser
+  blanks such a value too, and main reports one that still arrives as `invalid` without registering it
+  (`global-hotkeys.js isStrongAccelerator`).
 - **Mirror**: `app/js/shell-mirror.js` → `window.rig.setHotkeys({on, keys})` at start and on every change.
 - **Main** (`global-hotkeys.js`, wired in main.js): unregisters ours, then registers each with `globalShortcut`.
   Per-action state in `HotkeyStatus {on, paused, keys:{<id>:{accelerator, state}}}`: `ok`, `taken` (`register()`

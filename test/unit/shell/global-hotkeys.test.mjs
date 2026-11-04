@@ -108,6 +108,20 @@ test('register: ok / taken (another app) / invalid (Electron throws) / none; sta
   assert.deepEqual(hk.status(), s);
 });
 
+test('v11-decisions R-4: main refuses a single plain key (state invalid, never registered), whatever the page sends',
+  () => {
+    const { sc, hk } = setup();
+    const keys = { nextSong: 'A', prevSong: 'Space', panic: 'Return', masterUp: 'Shift+X', masterDown: 'Command+C',
+      nextScene: 'F13', prevScene: 'Control+Alt+Command+,' };
+    const s = hk.set({ on: true, keys });
+    assert.deepEqual(Object.fromEntries(Object.entries(s.keys).map(([k, v]) => [k, v.state])), {
+      nextSong: 'invalid', prevSong: 'invalid', panic: 'invalid', masterUp: 'invalid', masterDown: 'invalid',
+      nextScene: 'ok', prevScene: 'ok',
+    });
+    assert.equal(s.keys.nextSong.accelerator, 'A', 'the status names what was refused');
+    assert.deepEqual([...sc.held.keys()].sort(), ['Control+Alt+Command+,', 'F13']);
+  });
+
 test('off and dispose unregister everything; re-setting replaces the old combinations', () => {
   const { sc, hk } = setup();
   hk.set({ on: true, keys: KEYS });

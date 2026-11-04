@@ -77,6 +77,7 @@ test('v11-decisions: settings.keyboards is device-local — left out of an expor
   const doc = JSON.parse(text);
   assert.equal('keyboards' in doc.settings, false, 'not in the library file');
   assert.doesNotMatch(text, /Keystation|@computer/, 'the device names do not leave the Mac (security S3)');
+  assert.doesNotMatch(text, /"remember"/, 'nor the Remember list (review R-3)');
   // a curve is this Mac's set-up, not an edit of the library (Electron backups skip an untouched library)
   const b = makeStore();
   const edited = b.get().meta.edited;
@@ -120,6 +121,25 @@ test('v11-decisions: a replace-import keeps this Mac\'s curves; another Mac\'s k
   a.dispose();
   fresh.dispose();
 });
+
+test('v11-decisions R-3: Remember stays with this Mac — a replace-import never steers the "first keyboard" choice',
+  async () => {
+    const store = makeStore();
+    store.setKeyboard(KEYS, { remember: true });
+    const { ctl, midi } = await setup([port('k', KEYS), port('o', OTHER)], store);
+    await tick();
+    assert.deepEqual(midi.remembered, [KEYS]);
+    // another rig's library (an older v1.1 export) remembers its own board
+    const other = JSON.parse(store.exportJSON());
+    other.settings.keyboards = {
+      [OTHER]: { remember: true }, [KEYS]: { touch: { shape: 0.3, min: 0, max: 1, top: 127 } },
+    };
+    assert.equal(store.importJSON(JSON.stringify(other), { replace: true }).ok, true);
+    await tick();
+    assert.deepEqual(store.get().settings.keyboards, { [KEYS]: { remember: true } }, 'this Mac\'s list, untouched');
+    assert.deepEqual(midi.remembered, [KEYS], 'the imported names never reach midi.setRemembered');
+    ctl.dispose();
+  });
 
 test('store: slot touch rows / custom curve, expression.curve and swell.pedal are optional and validated', () => {
   const store = makeStore();

@@ -6031,10 +6031,26 @@ Click and scenes both there at ≤ 1340 px, the SCENE caption goes and Notes is 
   keeps this Mac's.
 - Settings › Your keyboards hint: "Saved on this computer by the keyboard's name, not in library exports." It goes
   through `say()` (`keyboardsHint`).
+- Review R-3 is the same change. The whole map is device-local, so the `remember` flags (device names that steer
+  `midi.setRemembered` / the 'first' input choice) move with the curves. An export has no `"remember"` and no
+  device name, and a replace-import of another rig's library leaves `midi.remembered` as this Mac's list.
+
+**R-4 (review, Low): one global-shortcut rule everywhere.** A function key, or two different ones of ⌃ ⌥ ⌘ (⇧
+doesn't count). Before this, only the Settings recorder applied it.
+- `shared/hotkeys.js` exports `isStrongAccelerator(acc)`, the predicate `acceleratorError` uses.
+- `normalizeHotkeys` (the store, on set and on load) blanks any accelerator `acceleratorError` refuses: a single plain
+  key, ⌘C, or a macOS system shortcut. The store can no longer hold one, whoever writes `settings.hotkeys`.
+- Electron main (`global-hotkeys.js`, CJS, so a mirror and not an import) has its own `isStrongAccelerator`. A key
+  that fails it is reported with state `invalid` and never reaches `globalShortcut.register`.
+- `hotkeys.test.mjs` compares the two predicates on 1,000+ generated combinations, so they stay in step.
+
 
 **Tests:**
 - unit `hotkeys.test.mjs`: the rename, the defaults and the legacy carry-over.
-- unit `global-hotkeys.test.mjs`: the ids, and `nextSong` / `prevSong` → bus commands.
+- unit `global-hotkeys.test.mjs`: the ids, and `nextSong` / `prevSong` → bus commands; R-4: 'A' / 'Space' /
+  'Return' / 'Shift+X' / 'Command+C' → `invalid`, never registered.
+- unit `hotkeys.test.mjs` R-4: Settings' rule = main's mirror on every generated combination; the normaliser blanks
+  plain keys and system shortcuts.
 - shell `menubar.test.mjs`: 16 command types; `nextSong` / `prevSong` step the current setlist, stop at both ends,
   go through `songSelected` and never touch the modes.
 - shell `v11-electron.test.mjs`: a stored `nextMode` / `prevMode` loads as `nextSong` / `prevSong`, idempotent on
@@ -6042,8 +6058,9 @@ Click and scenes both there at ≤ 1340 px, the SCENE caption goes and Notes is 
 - shell `metronome.test.mjs` (+2): Panic during the count-in and after it stops the click, the chip status reads
   off, MIDI clock Stop reaches the output, and a Panic with no click makes no `clickStop` call. A second case
   covers no clock out.
-- shell `touch.test.mjs` (+2): export without `keyboards`, not an edit; a replace-import keeps this Mac's curves;
-  another Mac's `keyboards` is ignored or dropped; merge; storage.
+- shell `touch.test.mjs` (+3): export without `keyboards` / `remember` / device names, not an edit; a replace-import
+  keeps this Mac's curves; another Mac's `keyboards` is ignored or dropped; merge; storage; R-3: a replace-import
+  with another rig's Remember list leaves `midi.remembered` alone.
 - ui-core: PANIC during the count-in, and Esc after it, stop the real metronome; the chip reads "Click" with
   `aria-pressed=false`; the held note is released.
 - settings `mac`: the renamed rows and the conflict message; a relayed `nextSong` / `prevSong` steps to the song →

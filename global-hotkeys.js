@@ -18,6 +18,28 @@ const MASTER_MAX = 2; // contract `master` 0..2 (+6 dB)
 /** A master press within this long of the last one steps from the value sent then, not the (throttled) state. */
 const MASTER_PENDING_MS = 1500;
 const ACC_RE = /^[A-Za-z0-9+\-=[\]\\;',./`]{1,80}$/;
+/** Modifier spellings Electron accepts → the canonical name (shared/hotkeys.js MOD_ALIASES, Shift left out). */
+const STRONG_MODS = Object.freeze({
+  control: 'Control', ctrl: 'Control', alt: 'Alt', option: 'Alt', command: 'Command', cmd: 'Command',
+  super: 'Command', meta: 'Command', commandorcontrol: 'CommandOrControl', cmdorctrl: 'CommandOrControl',
+});
+
+/**
+ * v11-decisions R-4: the global-hotkey rule, as Settings applies it (shared/hotkeys.js isStrongAccelerator; a unit
+ * test keeps the two in step): a function key (F1–F24) as the key, or two different ones of ⌃ ⌥ ⌘ (⇧ doesn't
+ * count). Main never trusts the page, so a single plain key ('A', 'Space', 'Return') is refused here too: it would
+ * take that key from every app on the Mac and report each press to the page.
+ * @param {string} acc an accelerator that passed ACC_RE
+ * @returns {boolean}
+ */
+function isStrongAccelerator(acc) {
+  if (typeof acc !== 'string' || !acc) return false;
+  const parts = acc.split('+').map((s) => s.trim().toLowerCase());
+  const key = parts[parts.length - 1];
+  if (/^f([1-9]|1\d|2[0-4])$/.test(key)) return true;
+  const mods = new Set(parts.slice(0, -1).map((m) => STRONG_MODS[m]).filter(Boolean));
+  return mods.size >= 2;
+}
 
 /**
  * One master step in dB from the current linear master (0..2).
@@ -118,6 +140,7 @@ function createHotkeys(o) {
       if (!cfg.on) states[id] = 'off';
       else if (!acc) states[id] = 'none';
       else if (paused) states[id] = 'paused';
+      else if (!isStrongAccelerator(acc)) states[id] = 'invalid'; // v11-decisions R-4: never registered
       else if ([...held.keys()].some((a) => a.toLowerCase() === acc.toLowerCase())) states[id] = 'invalid';
       else {
         let ok = false;
@@ -170,4 +193,5 @@ function createHotkeys(o) {
 
 module.exports = {
   HOTKEY_IDS, MASTER_STEP_DB, MASTER_FLOOR_DB, masterStep, sanitizeHotkeyConfig, hotkeyCommand, createHotkeys,
+  isStrongAccelerator,
 };

@@ -124,6 +124,27 @@ export function parseAccelerator(acc) {
 }
 
 /**
+ * The global-hotkey rule on a parsed accelerator: a function key, or two of ⌃ ⌥ ⌘ (⇧ doesn't count). v11-decisions
+ * R-4: Electron main applies the same rule (global-hotkeys.js isStrongAccelerator, a CJS mirror kept in step by
+ * test/unit/shared/hotkeys.test.mjs), so a single plain key can't be taken system-wide whoever writes the setting.
+ * @param {{mods: string[], key: string}} p
+ * @returns {boolean}
+ */
+function strongEnough(p) {
+  return fnKey(p.key) || p.mods.filter((m) => m !== 'Shift').length >= 2;
+}
+
+/**
+ * The rule alone (no reserved-shortcut check): can this be a global hotkey at all?
+ * @param {string} acc
+ * @returns {boolean} false for a malformed accelerator too
+ */
+export function isStrongAccelerator(acc) {
+  const p = parseAccelerator(acc);
+  return !p.error && strongEnough(p);
+}
+
+/**
  * Can this accelerator be a global hotkey? It needs two of ⌃ ⌥ ⌘ (⇧ may come on top), or a function key: a single
  * ⌘ / ⌃ / ⌥ combination belongs to apps or to typing everywhere on the Mac. A few system shortcuts are refused.
  * @param {string} acc
@@ -133,8 +154,7 @@ export function acceleratorError(acc) {
   const p = parseAccelerator(acc);
   if (p.error) return `That isn’t a key combination (${p.error}).`;
   if (fnKey(p.key)) return null;
-  const strong = p.mods.filter((m) => m !== 'Shift').length;
-  if (strong < 2) return 'Use at least two of ⌃ ⌥ ⌘ (⇧ can be added), or a function key — '
+  if (!strongEnough(p)) return 'Use at least two of ⌃ ⌥ ⌘ (⇧ can be added), or a function key — '
     + 'shorter combinations belong to other apps.';
   const reserved = RESERVED[p.canonical];
   if (reserved) return `macOS uses ${formatAccelerator(p.canonical)} for ${reserved}.`;
@@ -186,7 +206,8 @@ export function formatAccelerator(acc, { mac = true } = {}) {
 
 /**
  * settings.hotkeys → its normal form: `{on: boolean, keys: {<id>: accelerator | ''}}`. Every action gets a key
- * ('' = none; a missing one gets its default); unreadable accelerators become ''; a duplicate keeps the first action.
+ * ('' = none; a missing one gets its default); unreadable accelerators, and ones acceleratorError refuses (a single
+ * plain key, a macOS system shortcut), become ''; a duplicate keeps the first action.
  * Unknown action ids are dropped; a legacy id (LEGACY_HOTKEY_IDS) stands in for its renamed action when that one is
  * absent. The same function the store uses on set and on load (schema stays 1).
  * @param {*} v
@@ -203,7 +224,10 @@ export function normalizeHotkeys(v) {
     const from = has(id) ? id : legacy[id] && has(legacy[id]) ? legacy[id] : null;
     const raw = from ? src[from] : DEFAULT_HOTKEYS[id];
     const p = typeof raw === 'string' && raw ? parseAccelerator(raw) : null;
-    const acc = p && !p.error && !used.has(p.canonical) ? p.canonical : '';
+    // v11-decisions R-4: the store holds only what Settings would accept (the two-of-⌃⌥⌘ / F-key rule, no macOS
+    // system shortcut), whoever writes settings.hotkeys; anything else becomes none
+    const ok = p && !p.error && acceleratorError(p.canonical) === null;
+    const acc = ok && !used.has(p.canonical) ? p.canonical : '';
     if (acc) used.add(acc);
     keys[id] = acc;
   }
