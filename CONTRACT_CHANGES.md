@@ -6069,3 +6069,108 @@ doesn't count). Before this, only the Settings recorder applied it.
 
 **Needs the Mac (LOCAL):** ⌃⌥⌘] / ⌃⌥⌘[ with the window hidden, stepping a real setlist (with a held note and the
 drone across the switch). Panic with MIDI clock out into a real receiver, which should stop on 0xFC.
+
+## v11-review-fixes (the v1.1 seam review `git diff 0187e88..ef3d58a`, findings R-1, R-2, R-5–R-8; engine/drone.js, engine/audio.js, controller.js, update-check.js, views/perform.js, views/edit/panels/slot.js)
+
+R-3 and R-4 went to the hotkeys / device-local worker and are not in this section.
+
+**R-1 (High): the drone swells are an absolute level target, not a factor on top of drone.gain.**
+- What was wrong: "hold pedal = sustain + drone swell" set `bendGain` to `1 / drone.gain` (≤ ×4) when the pedal went
+  down, and nothing recomputed it. A drone.gain move under the held pedal kept the old factor: a scene step, the
+  Perform fader, a learned MIDI fader, or a song switch where both songs have the combo
+  (`_syncPedalSwell` skips same-state commits). Drone 0.25 → 1.0 played 1.0 × 4 = 4.0 (+12 dB over full).
+- Now `Drone._levelTarget()` is the level the drone plays at:
+  - drone.gain `g` ≥ 1: just `g` (a swell adds nothing);
+  - otherwise `min(4g, g + (1 − g)·up)`, where `up = max(pedal ? 1 : 0, bend push-up x)`.
+
+  That target goes on `level`, the one param drone.gain already moves, and it is recorded like `fx.trackedMove`
+  (`_levelMove`, `fx.moveAt`), so every move starts where the level is:
+  - drone.gain (`setParam`): `trackedMove` with the scene glide or τ 15 ms; when the target doesn't change (a swell
+    already at full), the running swell is left alone;
+  - the pedal: `rampTo` with τ 0.55 s up / 0.652 s down (unchanged);
+  - a bend push-up: τ 0.12 s, falling back at 0.652 s (unchanged).
+
+  `bendGain` only carries the bend's duck (down to ×0.3), a ratio that doesn't depend on drone.gain. A level can't
+  overshoot the larger of where it was and where it goes, because one param moves monotonically.
+- Behaviour changes:
+  - The pedal and a bend push-up no longer stack past full. Both rise toward drone.gain 1. Before, they multiplied up
+    to ×4 of the drone level: at drone 0.5, pedal + full push-up gave 2.0.
+  - A push-up at drone.gain > 1 no longer lowers the level. Before, the factor was `1 + (1/g − 1)·x` < 1.
+  - Pedal alone and push-up alone give the same levels as before for 0.05 ≤ g ≤ 1.
+- Measured (engine `offline.pedalSwellLevelMoves`, real Drone, synth mode, the effective `level × bendGain` sampled
+  every 25 ms on the audio clock, drone 0.25, pedal held):
+
+  | drone → 1.0 by        | effective before | max after | end | RMS before → after |
+  | --------------------- | ---------------- | --------- | --- | ------------------ |
+  | scene (glide 0.5 s)   | 0.998            | 1.000     | 1.0 | −15.9 → −15.5 dB   |
+  | fader (setParam)      | 0.998            | 1.000     | 1.0 | −15.9 → −15.5 dB   |
+  | song switch (commit + same-mode configure) | 0.998 | 1.000 | 1.0 | −15.9 → −15.5 dB |
+  | reference: drone 1.0, no pedal | –       | 1.000     | 1.0 | −15.5 dB           |
+  | before this fix (each of the three) | 0.998 | **4.0** | 4.0 | −15.9 → −11.9 dB |
+
+  0.5 → 0.1 under the pedal (glide) ends on its own swell, 0.4. The stale factor gave 0.2. No clicks in any run.
+  `bendModes` and `exprCurveAndPedalSwell` now read `level × bendGain`: the swell sits on `level` now. Their numbers
+  didn't change: push-up ×3.33, slow fall ×2.08, duck 0.301, pedal ×3.99.
+
+**R-2 (Medium): a scene step or live move during an instrument re-prepare survives the commit.**
+- What was wrong: `reprepare()` prepares `live(song)` (the playing scene's levels at that moment). The engine's
+  `commit()` drops coalesced slot writes and applies the prepared gains. A `goScene` / `adjustScene` made while the
+  load ran went to the old channels and was undone. `catchUp` can't see it: the playing scene is controller state,
+  not store state.
+- Now `reprepare` keeps what it sent (`sent = live(song)`). After the commit it sends
+  `levelDiff(levelsOf(sent), levelsOf(live(song)))`, for slot paths only, with `{glide: SCENE_GLIDE_SEC}`. The commit
+  doesn't touch the drone. This runs before `applySongLevel` / `catchUp`. Scene changes stay allowed during the load.
+- Test: shell `scenes.test.mjs` "a scene step / live move during an instrument re-prepare…" (`fakeEngine({manual})`).
+  - Scene 1 has Keys 0.2. The re-prepare goes out with 0.2, and scene 2 (Keys 0.8) is pressed during the load.
+    After the commit there is exactly one `setParam('slots.0.gain', 0.8, {glide})`. Unchanged slots are not
+    re-sent.
+  - A second load with a live move (0.45) in between: 0.45 after the commit.
+  - Before the fix there was no write after the commit, so the engine stayed at 0.2.
+
+**R-5 (Low): `update-check.js` parses the URL it opens.**
+- `safeOpenUrl(u)` (exported) replaces the string-prefix `openable`. It returns the normalised `href` or null:
+  - the string is ≤ 2048 characters, with no whitespace, quotes, `<>`, backslash or control characters;
+  - the raw form starts with `https://github.com/`;
+  - `new URL` gives origin `https://github.com`, no username, password or port, and no query or fragment;
+  - every raw path segment, percent-decoded, is not `.` or `..` and holds no `/`, `\` or control character (a bad
+    escape is refused);
+  - the normalised path is `/ryanmye/worship-rig/releases` or lies under it.
+- `parseRelease`, `pickAsset`, `status()` and `urlFor()` hand out the normalised href. `OPEN_PREFIX` is gone.
+- Tests: unit `update-check.test.mjs` (+2) covers 32 refused forms, among them `..`, `%2e%2e` / `%2E%2E` / `.%2e`,
+  `.`, `\` and `%5c`, `%2f`, credentials, `@host`, `:8443`, `:443`, http, look-alike hosts, other repos,
+  `releasesx`, query, fragment, NUL and an over-long URL. It also covers a cache that holds escaping URLs.
+
+**R-6 (Low): Perform's drone lamp and held-key part read the playing scene.**
+- `renderAudible()` and `partOf()` now read `liveOf(store.currentSong())` (`controller.scenes.view`), the same view
+  the faders use.
+- The `'scene'` listener already reaches `renderAudible` through `renderSong`. `partOf` is read per new key.
+- Test: themes `--only v11`, "the lancet and a held key's part follow the playing scene". A scene sets the drone to
+  −∞ and mutes the sounding part: the lancet is unlit and the key's `data-part` moves to the next part. Stepping back
+  restores both. Before the fix, the lancet stayed lit and the part stayed `0`.
+
+**R-7 (Low): Edit's "Normal follows X's own touch" looks up each listened-to keyboard.**
+- `activeCurve()` reads `status.midi.inputs.filter(selected)`, by device name, which is how the controller keys
+  `touchOpts`. `status.midi.name` joins the names ("Keystation, nanoKEY") in 'All' mode or the all-ports fallback.
+- With several keyboards:
+  - two or more with their own curve: "Normal follows each keyboard's own touch (Settings)." (spark
+    `data-from="each keyboard"`, the linear diagonal);
+  - one with its own curve: that keyboard's line and curve;
+  - none: linear and no line.
+- One keyboard, or none, works as before.
+- Test: edit-v2 slot "Custom touch curve…", extended with two fake inputs through `midi._emit('devices')`.
+
+**R-8 (Low, plausible): an audio restart while the click runs sends MIDI Stop before the new Start.**
+- Decision: Stop, then Start with the new grid (bar 1, now + 60 ms).
+  - Continue can't keep the phase. The new context's grid starts "now", not on the old bar's next beat. Holding the
+    restart to the old grid's next downbeat would delay the sound coming back.
+  - A second Start without a Stop is undefined. Some receivers ignore it and drift off the new grid; others jump to
+    bar 1 anyway.
+  - With Stop + Start, the click and the drum machine restart together.
+- `restart()` sends `[MIDI_STOP]` through the clock sink with the old context's `currentTime`, while `this.ctx` is
+  still the old one, so midi-clock.js maps it to now. It does this before `_teardown()`, whose metronome stop is
+  silent. The metronome is unchanged.
+- Test: engine realtime `clickRestartMidi`: the real midi-clock.js into a fake Web MIDI output, 120 BPM, restart after
+  0.8 s. The receiver gets `fa fc fa fc`, the Stop is timestamped no later than the new Start, and no clock pulse
+  falls between them. Before the fix it got `fa fa fc`.
+- LOCAL: confirm with a real clock receiver (drum machine or delay pedal) that Stop + Start on a restart re-locks
+  cleanly, and that the gap (the restart takes ~0.1–0.5 s) is acceptable.

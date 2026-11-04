@@ -428,8 +428,9 @@ export function createController(o) {
     repreparing = id;
     setStatus({ loading: true });
     let token;
+    const sent = live(song); // v11-scenes: a new instrument mid-scene keeps the scene's levels
     try {
-      token = await preparePatch(live(song)); // v11-scenes: a new instrument mid-scene keeps the scene's levels
+      token = await preparePatch(sent);
     } catch (err) {
       if (my === seq) {
         repreparing = null;
@@ -450,6 +451,12 @@ export function createController(o) {
     const prev = applied;
     applied = song;
     appliedId = id;
+    // v11-review-fixes R-2: the commit set the slots to the levels captured before the load. A scene step or a live
+    // move inside the scene made while it loaded went to the old channels (scenes stay allowed meanwhile), and the
+    // playing scene is controller state that catchUp can't see: glide the slots to what that scene plays now.
+    for (const [path, v] of levelDiff(levelsOf(sent), levelsOf(live(song)))) {
+      if (path.startsWith('slots.')) call('setParam', path, v, { glide: SCENE_GLIDE_SEC }); // (the drone isn't reset)
+    }
     applySongLevel(live(song), live(prev), false);
     catchUp(song);
     setStatus({ loading: false });

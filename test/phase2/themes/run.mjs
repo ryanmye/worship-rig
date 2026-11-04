@@ -840,6 +840,46 @@ async function v11Tests() {
     assert.deepEqual(errorsSince(mark), []);
   });
 
+  await T('v11 scenes: the lancet and a held key’s part follow the playing scene (review R-6)', async () => {
+    const mark = errors.length;
+    await storeTheme('sanctuary');
+    await settle();
+    const r = await ev(async () => {
+      const { store, controller: c } = window.__rig;
+      const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+      const sId = store.get().settings.currentSongId;
+      const lit = () => document.querySelector('.p-drone').classList.contains('audible');
+      const part = async () => {
+        c.perform.noteOn(60, 100);
+        await wait(300);
+        const p = document.querySelector('.piano .pkey[data-note="60"]').dataset.part ?? null;
+        c.perform.releaseAll();
+        await wait(200);
+        return p;
+      };
+      const out = { song: lit(), songPart: await part() };
+      const i = Number(out.songPart);
+      const slots = [null, null, null, null];
+      slots[i] = { gain: store.getSong(sId).patch.slots[i].gain, muted: true };
+      store.set(`songs.${sId}.scenes`, [{ slots, drone: { gain: 0 } }]); // drone at −∞, the sounding part muted
+      out.went = c.scenes.go(0);
+      await wait(400);
+      out.scene = lit();
+      out.scenePart = await part();
+      c.scenes.go(null);
+      await wait(400);
+      out.back = lit();
+      out.backPart = await part();
+      store.set(`songs.${sId}.scenes`, null);
+      return out;
+    });
+    assert.ok(r.went && r.song && r.songPart !== null, JSON.stringify(r));
+    assert.equal(r.scene, false, `a scene with the drone at −∞ leaves the lancet unlit ${JSON.stringify(r)}`);
+    assert.notEqual(r.scenePart, r.songPart, 'the scene’s muted part no longer colours the key');
+    assert.deepEqual([r.back, r.backPart], [true, r.songPart], 'back on the song’s own levels');
+    assert.deepEqual(errorsSince(mark), []);
+  });
+
   await T('v11 Daylight: Day · Stage · Auto in Settings (Daylight only); Lock shows Stage; Auto follows the Mac', async () => {
     const mark = errors.length;
     const shown = () => ev(() => ({ html: document.documentElement.dataset.theme,

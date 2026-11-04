@@ -22,7 +22,7 @@ import { InstrumentRegistry } from './instruments.js';
 import { BufferCache } from './sampler.js';
 import { Drone } from './drone.js';
 import { Metronome } from './metronome.js';
-import { meterOf } from '../shared/click-math.js';
+import { meterOf, MIDI_STOP } from '../shared/click-math.js';
 import {
   COMPILED_PRESETS, compileTouch, touchAt, pedalCurve, PEDAL_CURVES, TOUCH_KEYS,
 } from '../shared/touch-curve.js';
@@ -450,6 +450,19 @@ export class AudioEngine extends EventTarget {
     const clickWas = !!this.metronome?.running; // v11-metronome: a running click comes back (without a count-in)
     const files = this.drone?.files ? [...this.drone.files.entries()] : null;
     const old = this.ctx;
+    // v11-review-fixes R-8: the old grid dies with the context (a silent stop) and the new one starts afresh, with
+    // its own MIDI Start on its first downbeat. A clock receiver must hear Stop first: a second Start while running
+    // is undefined (some drum machines ignore it and drift off the new grid, others jump to bar 1 anyway). Continue
+    // can't keep the phase either (the new grid's beat 1 is "now", not the old bar's next beat). So: Stop now, then
+    // Start with the new click, both together on bar 1. Sent through the sink while this.ctx is still the old one,
+    // so its timestamp maps to now (midi-clock.js).
+    if (clickWas && this._clockSink) {
+      try {
+        this._clockSink([{ t: old.currentTime, data: [MIDI_STOP] }]);
+      } catch (e) {
+        this._warn(`MIDI clock send failed: ${e.message || e}`);
+      }
+    }
     this._teardown();
     if (old && !isOfflineContext(old)) {
       try {

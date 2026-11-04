@@ -86,6 +86,8 @@ const MONO_OPTS = [
 ];
 const VOICE_WORDS = { off: 'All', lowest: 'Lowest', highest: 'Highest' };
 const MINUS = '−';
+/** activeCurve's `from` when several listened-to keyboards each have their own curve (v11-review-fixes R-7). */
+const EACH_KEYBOARD = 'each keyboard';
 const JUMP_HINT = 'click an underlined word to jump to its control';
 const FOCUSABLE = 'input:not([disabled]), select:not([disabled]), textarea, button:not([disabled]), [tabindex]';
 
@@ -624,7 +626,8 @@ function mountSlot(el, ctx, opts) {
         spark.draw(a.c, a.curve, a.from);
       }
       customBox.hidden = a.curve !== 'custom';
-      const whose = a.from === 'the on-screen keys' ? 'the on-screen keys’' : `${a.from}’s`;
+      const whose = a.from === 'the on-screen keys' ? 'the on-screen keys’' : a.from === EACH_KEYBOARD
+        ? 'each keyboard’s' : `${a.from}’s`;
       setText(respNote, a.from ? `Normal follows ${whose} own touch (Settings).` : '');
     };
     binder.fn([`${rel}.velocityCurve`, `${rel}.touch`], drawSpark);
@@ -964,7 +967,17 @@ function mountSlot(el, ctx, opts) {
     if (curve !== 'normal') return { c: COMPILED_PRESETS[curve] || LINEAR_TOUCH, curve, from: null };
     const kb = (ctx.store && ctx.store.get().settings.keyboards) || {};
     const m = ctx.controller && ctx.controller.status ? ctx.controller.status.midi : null;
-    const name = m && m.connected && m.name ? m.name : COMPUTER_KEYBOARD;
+    // v11-review-fixes R-7: the controller gives each listened-to input its own device's curve, so look the inputs
+    // up one by one (status.midi.name joins them, "Keystation, nanoKEY", in 'All' mode or the all-ports fallback)
+    const sel = m && m.connected && Array.isArray(m.inputs) ? m.inputs.filter((x) => x && x.selected) : [];
+    const names = [...new Set(sel.map((x) => x.name || ''))];
+    if (names.length > 1) {
+      const withOwn = names.filter((n) => kb[n] && kb[n].touch);
+      if (withOwn.length > 1) return { c: LINEAR_TOUCH, curve, from: EACH_KEYBOARD };
+      if (!withOwn.length) return { c: LINEAR_TOUCH, curve, from: null };
+      return { c: compileTouch(kb[withOwn[0]].touch), curve, from: withOwn[0] };
+    }
+    const name = names[0] ?? (m && m.connected && m.name ? m.name : COMPUTER_KEYBOARD);
     const own = kb[name] && kb[name].touch;
     if (!own) return { c: LINEAR_TOUCH, curve, from: null };
     return { c: compileTouch(own), curve, from: name === COMPUTER_KEYBOARD ? 'the on-screen keys' : name };

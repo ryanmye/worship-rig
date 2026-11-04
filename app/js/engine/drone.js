@@ -10,7 +10,7 @@ import { rampTo, setNow } from '../shared/automation.js';
 import { chordName } from '../shared/chords.js';
 import { noteToFreq, relativeMajor, relativeMinor, mod12, keyName } from '../shared/music.js';
 import { detectKeyFromName } from '../shared/keydetect.js';
-import { equalPowerFade, isOfflineContext, linFrom, trackedMove } from './fx.js';
+import { equalPowerFade, isOfflineContext, linFrom, moveAt, trackedMove } from './fx.js';
 import {
   renderDroneLoop, FREEZE_LOOP_SEC, FREEZE_SWAP_SEC, FREEZE_THAW_LEAD_SEC, FREEZE_DEBOUNCE_SEC, FREEZE_WET_TOL_DB,
 } from './drone-freeze.js';
@@ -275,12 +275,17 @@ export class Drone {
     const v = Number(value);
     if (!Number.isFinite(v) || !(key in this.p)) return false;
     const prevBright = this.p.brightness;
-    const prevGain = clamp(this.p.gain, 0, 2);
+    const prevLevel = this._levelTarget();
     this.p[key] = v;
     if (key === 'gain') {
-      // v11-scenes: every level write is recorded (fx.trackedMove), so a scene glide starts where the level is
+      // v11-scenes: every level write is recorded (fx.trackedMove), so a scene glide starts where the level is.
+      // v11-review-fixes R-1: the target is the absolute level (drone.gain plus any held swell, _levelTarget), so a
+      // move under a held pedal glides to the swelled level of the new drone.gain, never to a stale multiple of it.
       const g = glide > 0 ? glide : 0;
-      this._levelMove = trackedMove(this.level.gain, this._levelMove, clamp(v, 0, 2), t, g, prevGain);
+      const to = this._levelTarget();
+      // the same target (a swell already at full): leave a running swell alone rather than re-time it
+      if (to !== (this._levelMove ? this._levelMove.to : prevLevel))
+        this._levelMove = trackedMove(this.level.gain, this._levelMove, to, t, g, prevLevel);
       this._gainChanged(t);
     }
     else if (key === 'width') this._applyWidth(t);
@@ -906,23 +911,30 @@ export class Drone {
   }
 
   // ----- bend 'drone-swell' ---------------------------------------------------------------------------------------
+  // v11-review-fixes R-1: the swells used to be a factor on bendGain (1 / drone.gain, taken when the pedal went down
+  // or the wheel moved). A drone.gain move while one was held kept the old factor: drone 0.25 → 1.0 under the pedal
+  // played 1.0 × 4 = 4.0 (+12 dB over full). Now the push-ups (pedal, bend up) are an absolute target on `level`,
+  // the one tracked param that drone.gain already moves (_levelTarget), and bendGain only carries the bend's duck
+  // (a ratio, independent of drone.gain). One param, each move from where it is (fx.moveAt) to its target: a level
+  // can't overshoot the larger of where it was and where it goes.
   bendSwell(x, when) {
     const t = this._t(when);
-    const g = Math.max(0.05, this.p.gain);
-    let target;
-    if (x > 0) target = Math.min(4, 1 + (1 / g - 1) * x); // rises toward drone.gain = 1
-    else target = 1 - 0.7 * Math.min(1, -x); // ducks to .3
-    const prev = this._bendTarget ?? 1;
-    this._bendTarget = target;
-    // falling back from a push-up is slow (~3 s); everything else follows the wheel quickly
-    const slow = target < prev && prev > 1;
-    rampTo(this.bendGain.gain, Math.min(4, target * this._pedalFactor()), t, slow ? 3 / 4.6 : 0.12);
+    const up = x > 0 ? Math.min(1, x) : 0; // rises toward drone.gain = 1
+    const duck = x < 0 ? 1 - 0.7 * Math.min(1, -x) : 1; // ducks to .3
+    const prevUp = this._bendUp || 0;
+    this._bendUp = up;
+    // falling back from a push-up is slow (~3 s); everything else follows the wheel quickly, and a duck also cuts
+    // short what is left of a slow fall (as when both shared bendGain)
+    const tc = up < prevUp && x >= 0 ? 3 / 4.6 : 0.12;
+    if (up !== prevUp || x < 0) this._swellLevel(t, tc);
+    if (duck !== (this._bendDuck ?? 1)) rampTo(this.bendGain.gain, duck, t, 0.12);
+    this._bendDuck = duck;
   }
 
   /**
    * v11-touch "hold pedal = sustain + drone swell": while `on`, the drone rises toward full level (drone.gain 1, at
-   * most +12 dB, like a full bend push-up) over ~2.5 s, and sinks back over ~3 s when the pedal lifts. It shares
-   * bendGain with bendSwell (the two multiply, capped at ×4).
+   * most +12 dB, like a full bend push-up) over ~2.5 s, and sinks back over ~3 s when the pedal lifts. The pedal and a
+   * bend push-up don't stack: both rise toward full (v11-review-fixes R-1, _levelTarget).
    * @param {boolean} on
    * @param {number} [when]
    * @returns {boolean} false when already in that state
@@ -932,15 +944,33 @@ export class Drone {
     if (v === !!this._pedalOn) return false;
     const t = this._t(when);
     this._pedalOn = v;
-    const target = Math.min(4, (this._bendTarget ?? 1) * this._pedalFactor());
-    rampTo(this.bendGain.gain, target, t, v ? PEDAL_SWELL_RISE_TC : PEDAL_SWELL_FALL_TC);
+    this._swellLevel(t, v ? PEDAL_SWELL_RISE_TC : PEDAL_SWELL_FALL_TC);
     return true;
   }
 
-  /** Gain factor of the pedal swell: 1 while off, else up to drone.gain = 1 (≤ ×4). */
-  _pedalFactor() {
-    if (!this._pedalOn) return 1;
-    return Math.min(4, Math.max(1, 1 / Math.max(0.05, this.p.gain)));
+  /**
+   * v11-review-fixes R-1: the level the drone plays at: drone.gain, raised by a held swell (pedal, or the bend's
+   * push-up `x`) toward full (1), at most ×4 (+12 dB). At or above full a swell adds nothing.
+   * @returns {number}
+   */
+  _levelTarget() {
+    const g = clamp(this.p.gain, 0, 2);
+    if (g >= 1) return g;
+    const up = Math.max(this._pedalOn ? 1 : 0, this._bendUp || 0);
+    return Math.min(4 * g, g + (1 - g) * up);
+  }
+
+  /**
+   * Move `level` to _levelTarget() with time constant `tc`, from where it is (recorded like fx.trackedMove). The same
+   * target is left alone unless `tc` is quicker than the move under way.
+   */
+  _swellLevel(t, tc) {
+    const m = this._levelMove;
+    const to = this._levelTarget();
+    const from = moveAt(m, t, clamp(this.p.gain, 0, 2));
+    if (m ? m.to === to && !(m.tc > tc) : from === to) return;
+    rampTo(this.level.gain, to, t, tc);
+    this._levelMove = { from, to, t0: t, tc };
   }
 
   // ----- files mode ----------------------------------------------------------------------------------------------

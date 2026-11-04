@@ -217,3 +217,61 @@ test('checker: no release yet counts as up to date; urlFor only hands out this r
   assert.equal(evil.c.urlFor('download'), U.RELEASES_PAGE);
   assert.equal(evil.c.urlFor('page'), U.RELEASES_PAGE);
 });
+
+// v11-review-fixes R-5: the allowlist parses the URL (new URL) instead of matching a string prefix
+test('safeOpenUrl: only this repo’s releases on https://github.com; every path escape is refused', () => {
+  const R = `https://github.com/${U.REPO}/releases`;
+  for (const ok of [R, `${R}/`, `${R}/tag/v1.1.1`, `${R}/download/v1.1.1/Worship-Rig-arm64.dmg`, `${R}/latest`]) {
+    assert.equal(U.safeOpenUrl(ok), new URL(ok).href, ok);
+  }
+  const bad = {
+    dotdot: `${R}/../../../evil/x`,
+    dotdotEnc: `${R}/%2e%2e/%2e%2e/%2e%2e/evil/download`,
+    dotdotEncUpper: `${R}/%2E%2E/%2E%2E/%2E%2E/evil/download`,
+    dotdotMixed: `${R}/.%2e/.%2E/%2e./evil`,
+    dot: `${R}/./x`,
+    dotEnc: `${R}/%2e/x`,
+    backslash: `${R}\\..\\..\\..\\evil`,
+    backslashEnc: `${R}/%5c..%5c..%5cevil`,
+    slashEnc: `${R}/..%2f..%2f..%2fevil`,
+    credentials: `https://user:pw@github.com/${U.REPO}/releases/tag/v1`,
+    userOnly: `https://ryan@github.com/${U.REPO}/releases/tag/v1`,
+    atHost: `https://github.com@evil.example/${U.REPO}/releases/tag/v1`,
+    port: `https://github.com:8443/${U.REPO}/releases/tag/v1`,
+    defaultPort: `https://github.com:443/${U.REPO}/releases/tag/v1`,
+    http: `http://github.com/${U.REPO}/releases/tag/v1`,
+    otherHost: `https://github.com.evil.example/${U.REPO}/releases/tag/v1`,
+    subdomain: `https://gist.github.com/${U.REPO}/releases/tag/v1`,
+    upperHost: `https://GITHUB.com/${U.REPO}/releases/tag/v1`,
+    otherRepo: 'https://github.com/evil/worship-rig/releases/tag/v1',
+    prefixRepo: `https://github.com/${U.REPO}-evil/releases/tag/v1`,
+    releasesLike: `https://github.com/${U.REPO}/releasesx`,
+    notReleases: `https://github.com/${U.REPO}/archive/main.zip`,
+    query: `${R}/tag/v1?redirect=https://evil.example`,
+    hash: `${R}/tag/v1#x`,
+    space: `${R}/tag/v1 x`,
+    quote: `${R}/tag/v1"onclick`,
+    newline: `${R}/tag/v1\nx`,
+    nul: `${R}/tag/v1%00`,
+    badEscape: `${R}/%zz`,
+    file: 'file:///etc/passwd',
+    js: 'javascript:alert(1)',
+    long: `${R}/${'a'.repeat(3000)}`,
+  };
+  for (const [k, u] of Object.entries(bad)) assert.equal(U.safeOpenUrl(u), null, k);
+  for (const u of [null, undefined, 42, {}, ['x']]) assert.equal(U.safeOpenUrl(u), null);
+  // parseRelease only hands out URLs that passed (an escaping html_url falls back to the releases page)
+  const r = U.parseRelease({ ...RELEASE, html_url: bad.dotdotEnc, assets: [{ name: 'Worship-Rig-arm64.dmg',
+    browser_download_url: bad.dotdot }] }, { currentVersion: '1.0.0', arch: 'arm64' });
+  assert.equal(r.pageUrl, U.RELEASES_PAGE);
+  assert.equal(r.downloadUrl, null);
+});
+
+test('checker: a cached URL that escapes the releases path is never opened', async () => {
+  const R = `https://github.com/${U.REPO}/releases`;
+  const k = checker({ cache: { attemptAt: 1e12, checkedAt: 1e12, latest: '9.0.0',
+    pageUrl: `${R}/%2e%2e/%2e%2e/%2e%2e/evil/x`, downloadUrl: `${R}/../../../evil/x.dmg` } });
+  assert.equal(k.c.urlFor('download'), U.RELEASES_PAGE);
+  assert.equal(k.c.urlFor('page'), U.RELEASES_PAGE);
+  assert.equal(k.c.status().downloadUrl, null);
+});
