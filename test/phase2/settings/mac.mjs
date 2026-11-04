@@ -15,7 +15,7 @@ import { runImporterTests } from './importer.mjs';
  * else registers. window.__fake holds the calls and lets the test push statuses / press a shortcut.
  */
 function installFakeRig() {
-  const subs = { hk: new Set(), up: new Set(), bus: new Set(), gb: new Set() };
+  const subs = { hk: new Set(), up: new Set(), bus: new Set(), gb: new Set(), test: new Set() };
   const sub = (set) => (cb) => {
     set.add(cb);
     return () => set.delete(cb);
@@ -51,6 +51,31 @@ function installFakeRig() {
     press(cmd) {
       for (const cb of subs.bus) cb(JSON.stringify({ v: 1, ...cmd }));
     },
+    // v11-hotkey-test: main's test mode (global-hotkeys.js test / cancelTest). testing = the id under test
+    testing: null,
+    testingAcc: null,
+    pushTest(ev) {
+      for (const cb of subs.test) cb({ ...ev });
+    },
+    /** the global shortcut for `id` fires: under test → reported and swallowed, else the action (like main) */
+    pressHotkey(id) {
+      if (F.testing === id) {
+        F.testing = null;
+        F.pushTest({ id, accelerator: F.cfg.keys[id], fired: true });
+        return 'swallowed';
+      }
+      if (id === 'nextSong' || id === 'prevSong' || id === 'panic') F.press({ type: id });
+      return 'sent';
+    },
+    /** like main's apply(): a test only holds while its combination stays registered */
+    endTestIfGone() {
+      const st = F.testing && F.hkStatus().keys[F.testing];
+      if (F.testing && (!st || st.state !== 'ok' || st.accelerator !== F.testingAcc)) {
+        const id = F.testing;
+        F.testing = null;
+        F.pushTest({ id, fired: false, reason: 'changed' });
+      }
+    },
     // v11-importer: GarageBand import (importer-host.js stand-in). gbScan = the next scan's answer; gbImportReply =
     // the next import's answer; gbPush(snapshot) = a progress event from main
     gbScan: null,
@@ -84,13 +109,31 @@ function installFakeRig() {
     setHotkeys: async (cfg) => {
       F.calls.push(['setHotkeys', cfg]);
       F.cfg = cfg;
+      F.endTestIfGone();
       return F.pushHk();
     },
     pauseHotkeys: async (on) => {
       F.calls.push(['pauseHotkeys', on]);
       F.paused = on;
+      F.endTestIfGone();
       return F.pushHk();
     },
+    testHotkey: async (id, acc) => {
+      F.calls.push(['testHotkey', [id, acc]]);
+      const st = F.hkStatus().keys[id];
+      F.testing = null;
+      if (!st || st.state !== 'ok') return { error: 'not registered', state: st ? st.state : 'off' };
+      if (acc !== undefined && acc !== st.accelerator) return { error: 'not registered', state: 'changed' };
+      F.testing = id;
+      F.testingAcc = st.accelerator;
+      return { ok: true, id, accelerator: st.accelerator, timeoutMs: 10000 };
+    },
+    cancelHotkeyTest: async () => {
+      F.calls.push(['cancelHotkeyTest']);
+      F.testing = null;
+      return { ok: true };
+    },
+    onHotkeyTest: sub(subs.test),
     getHotkeyStatus: async () => F.hkStatus(),
     onHotkeyStatus: sub(subs.hk),
     setUpdateCheck: async (on) => {
@@ -231,7 +274,13 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
       assert.equal(await page.isVisible('[data-testid="hotkey-list"]'), true);
       // L11-3: macOS can't report another app's shortcut, so the Mac copy says so (the 'taken' state stays for a
       // register() that really fails)
-      assert.match(await page.textContent('[data-testid="hotkey-mac-taken"]'), /macOS doesn’t tell apps/);
+      // v11-hotkey-test: … and points at the Test button
+      assert.equal(await page.textContent('[data-testid="hotkey-mac-taken"]'),
+        'macOS can’t tell apps when another app (Rectangle, Magnet, Raycast…) uses a shortcut. Test each one once.');
+      await until(() => document.querySelector('[data-testid="hotkey-test-nextSong"]').disabled === false);
+      assert.equal(await page.isVisible('[data-testid="hotkey-test-nextSong"]'), true, 'Test where main holds it');
+      assert.equal(await page.isVisible('[data-testid="hotkey-test-panic"]'), false, '"taken" already says why not');
+      assert.equal(await page.textContent('[data-testid="hotkey-result-nextSong"]'), '', 'quiet until tested');
       assert.equal(await keyText('nextSong'), '⌃⌥⌘]');
       assert.equal(await keyText('prevSong'), '⌃⌥⌘[');
       assert.equal(await keyText('masterUp'), '⌃⌥⌘=');
@@ -325,6 +374,104 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
       assert.equal(r.master, 0.25);
       assert.deepEqual(r.labels, ['Next song', 'Previous song']);
       assert.match(r.hint, /Next and previous song go through the setlist/);
+    });
+
+    const result = (id) => page.textContent(`[data-testid="hotkey-result-${id}"]`);
+    const songNow = () => ev(() => window.__rig.store.get().settings.currentSongId);
+
+    await T('press to test: Test → "Press ⌃⌥⌘] in any app…" → the press → Works; the song stays', async () => {
+      await page.locator('[data-testid="settings-hotkeys"]').scrollIntoViewIfNeeded();
+      const before = await songNow();
+      await page.click('[data-testid="hotkey-test-nextSong"]');
+      assert.equal(await result('nextSong'), 'Press ⌃⌥⌘] in any app…');
+      await until(() => window.__fake.testing === 'nextSong');
+      assert.deepEqual((await calls('testHotkey')).at(-1), ['nextSong', 'Control+Alt+Command+]']);
+      assert.equal(await ev(() => document.documentElement.getAttribute('data-hotkey-capture')), 'test');
+      assert.equal(await ev(() => window.__fake.pressHotkey('nextSong')), 'swallowed');
+      await until(() => document.querySelector('[data-testid="hotkey-result-nextSong"]').textContent === 'Works');
+      assert.equal(await ev(() => document.querySelector('[data-testid="hotkey-result-nextSong"]').dataset.phase),
+        'works');
+      await new Promise((r) => setTimeout(r, 200));
+      assert.equal(await songNow(), before, 'a test of Next song does not switch songs');
+      await until(() => !document.documentElement.hasAttribute('data-hotkey-capture'));
+      assert.equal(await ev(() => window.__rig.views.settings.isOpen), true);
+      await ev(() => document.activeElement?.blur?.());
+      await page.locator('[data-testid="settings-hotkeys"]')
+        .screenshot({ path: path.join(SHOTS, 'mac-hotkey-test.png') });
+    });
+
+    await T('press to test: one at a time; Esc cancels without closing Settings; nothing in 5 s → pick another',
+      async () => {
+        await page.click('[data-testid="hotkey-test-prevSong"]');
+        await until(() => window.__fake.testing === 'prevSong');
+        await page.click('[data-testid="hotkey-test-masterUp"]');
+        assert.equal(await result('prevSong'), '', 'the first test is replaced');
+        assert.equal(await result('masterUp'), 'Press ⌃⌥⌘= in any app…');
+        await until(() => window.__fake.testing === 'masterUp');
+        assert.equal(await result('nextSong'), 'Works', 'a finished result stays');
+        // a late press of the replaced one reaches neither row
+        await ev(() => window.__fake.pushTest({ id: 'prevSong', fired: true }));
+        assert.equal(await result('prevSong'), '');
+        await page.keyboard.press('Escape');
+        await until(() => document.querySelector('[data-testid="hotkey-result-masterUp"]').textContent === '');
+        await until(() => window.__fake.testing === null);
+        await until(() => !document.documentElement.hasAttribute('data-hotkey-capture'));
+        assert.equal(await ev(() => window.__rig.views.settings.isOpen), true, 'Esc cancelled the test only');
+        // no press: after 5 s the hint, main's test mode is ended, the key is marked
+        const t0 = Date.now();
+        await page.click('[data-testid="hotkey-test-prevSong"]');
+        await until(() => window.__fake.testing === 'prevSong');
+        await until(() => /^Nothing came through/.test(document.querySelector('[data-testid="hotkey-result-prevSong"]')
+          .textContent), null, 9000);
+        const waited = Date.now() - t0;
+        assert.ok(waited >= 4900 && waited < 8000, `waited ${waited} ms`);
+        assert.equal(await result('prevSong'), 'Nothing came through. Another app may use this. Pick another.');
+        assert.equal(await ev(() => window.__fake.testing), null, 'main is told to stop swallowing the press');
+        assert.equal(await ev(() => document.querySelector('[data-testid="hotkey-prevSong"]').classList
+          .contains('warn')), true);
+        assert.equal(await page.textContent('[data-testid="hotkey-state-prevSong"]'), '',
+          '"taken" stays for register()');
+        // a press now does its job again
+        const before = await songNow();
+        await ev(() => window.__fake.press({ type: 'nextSong' }));
+        await until((b) => window.__rig.store.get().settings.currentSongId !== b, before);
+        assert.equal(await ev(() => window.__fake.pressHotkey('prevSong')), 'sent');
+        await until((b) => window.__rig.store.get().settings.currentSongId === b, before);
+      });
+
+    await T('press to test: runs right after recording a new combination; closing Settings cancels it', async () => {
+      await page.click('[data-testid="hotkey-nextSong"]');
+      await until(() => window.__fake.paused === true);
+      await page.keyboard.press('Control+Alt+Meta+KeyJ');
+      await until(() => window.__rig.store.get().settings.hotkeys.keys.nextSong === 'Control+Alt+Command+J');
+      assert.equal(await result('nextSong'), 'Press ⌃⌥⌘J in any app…', 'the old "Works" was for ⌃⌥⌘]');
+      // armed only once main holds the new combination (not while paused, not on the old one)
+      await until(() => window.__fake.testing === 'nextSong');
+      assert.deepEqual((await calls('testHotkey')).at(-1), ['nextSong', 'Control+Alt+Command+J']);
+      assert.equal(await ev(() => window.__fake.cfg.keys.nextSong), 'Control+Alt+Command+J');
+      assert.equal(await ev(() => document.documentElement.getAttribute('data-hotkey-capture')), 'test');
+      await closeSettings();
+      await until(() => window.__fake.testing === null);
+      await until(() => !document.documentElement.hasAttribute('data-hotkey-capture'));
+      await openSettings();
+      assert.equal(await result('nextSong'), '', 'a closed Settings forgets the test');
+      // recording a combination another app holds: no test, the row says "taken"
+      await page.locator('[data-testid="settings-hotkeys"]').scrollIntoViewIfNeeded();
+      await page.click('[data-testid="hotkey-panic"]');
+      await page.keyboard.press('Delete');
+      await until(() => window.__rig.store.get().settings.hotkeys.keys.panic === '');
+      await page.click('[data-testid="hotkey-nextSong"]');
+      await page.keyboard.press('Control+Alt+Meta+KeyP');
+      await until(() => window.__rig.store.get().settings.hotkeys.keys.nextSong === 'Control+Alt+Command+P');
+      await until(() => document.querySelector('[data-testid="hotkey-state-nextSong"]').textContent !== '');
+      assert.equal(await page.textContent('[data-testid="hotkey-state-nextSong"]'),
+        'Another app already uses this. Pick another.');
+      await until(() => document.querySelector('[data-testid="hotkey-result-nextSong"]').textContent === '');
+      assert.equal(await ev(() => window.__fake.testing), null);
+      await until(() => !document.documentElement.hasAttribute('data-hotkey-capture'));
+      await page.click('[data-testid="hotkey-reset"]');
+      await until(() => window.__rig.store.get().settings.hotkeys.keys.nextSong === 'Control+Alt+Command+]'
+        && window.__rig.store.get().settings.hotkeys.keys.panic === 'Control+Alt+Command+P');
     });
 
     await T('global shortcuts: off → main hears it, the list hides', async () => {

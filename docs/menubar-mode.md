@@ -216,12 +216,26 @@ is throttled to ≤ 4/s); after 1.5 s the published state counts again.
 - **Main** (`global-hotkeys.js`, wired in main.js): unregisters ours, then registers each with `globalShortcut`.
   Per-action state in `HotkeyStatus {on, paused, keys:{<id>:{accelerator, state}}}`: `ok`, `taken` (`register()`
   returned false; Settings: "Another app already uses this. Pick another."; on macOS `register()` returns true even
-  when another app holds the combination (L11-3), so Settings › Menu bar also says that macOS can't tell),
+  when another app holds the combination (L11-3), so Settings › Menu bar says that macOS can't tell and offers
+  press-to-test instead, below),
   `invalid` (Electron threw), `none`, `off`, `paused`. Pushed as `rig:hotkeyStatus` (`window.rig.onHotkeyStatus`).
   A press goes through `sendBusCommand`, exactly like a tray click; no engine path of its own (`nextSong` /
   `prevSong` are the controller's own song steps).
 - **Recording** a combination pauses ours (`rig.pauseHotkeys(true/false)`), or our own combination would never reach
   the page. `<html data-hotkey-capture>` tells Settings' and main.js's Esc handlers to leave Esc to the recorder.
+- **Press to test** (v11-hotkey-test, L11-3 follow-up: Ryan wants the user to find a clash themselves, since macOS
+  won't report one). Each row whose combination main holds (`ok`) has a **Test** button, and a test also starts right
+  after a recording. The row says "Press ⌃⌥⌘] in any app…"; Settings calls `rig.testHotkey(id, accelerator)` once
+  main's status shows that combination registered (after a recording the new one arrives a moment later), and main
+  puts that one id in test mode: its next press is sent to the page as `rig:hotkeyTest {id, accelerator,
+  fired: true}` (`window.rig.onHotkeyTest`) and **swallowed**, so a test of Next song doesn't switch songs. The row
+  says "Works". With nothing after 5 s (the view's timer, `shared/hotkeys.js HOTKEY_TEST_MS`) it says "Nothing came
+  through. Another app may use this. Pick another." and calls `rig.cancelHotkeyTest()`. One test at a time (a second
+  replaces the first); Esc (`<html data-hotkey-capture="test">`), a recording or closing Settings cancels it. Main
+  ends test mode by itself after 10 s (`HOTKEY_TEST_SAFETY_MS`, the page may have gone away) and whenever the
+  combination stops being registered (pause, off, a new one), then sends `{fired: false, reason}`. The state machine
+  is `hotkeyTestStep` (pure, unit-tested); the `taken` state stays for a `register()` that really fails.
 - **Released** on off, on main-window close, and on quit (`will-quit`: `globalShortcut.unregisterAll()`).
 - **Self-test** (`RIG_SELFTEST=1`, `v11` in the JSON line): real registration with ⌃⌥⇧F9–F12,
-  `RIG_FAKE_TAKEN_HOTKEY` makes one "taken", presses via the registrar's `fire()`.
+  `RIG_FAKE_TAKEN_HOTKEY` makes one "taken", presses via the registrar's `fire()` (the function the accelerator
+  callback calls), including a press under test (reported, no bus command) and a cancelled test.

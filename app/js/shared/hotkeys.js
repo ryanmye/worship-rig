@@ -260,3 +260,80 @@ export function hotkeyConflict(keys, id, acc) {
   }
   return null;
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// v11-hotkey-test (L11-3 follow-up, Ryan 2026-11-03): "press it to test". macOS lets two apps register the same
+// global shortcut (register() still returns true), so Settings can't say "another app uses this" there. Instead the
+// user presses the combination once: main reports the press (and swallows it, so a test of Next song doesn't switch
+// songs) and Settings says "Works", or, after HOTKEY_TEST_MS with nothing, that another app may be using it. The
+// view holds the timer; this reducer is the state machine (one test at a time).
+
+/** How long Settings waits for the press before it says "Nothing came through". */
+export const HOTKEY_TEST_MS = 5000;
+
+/**
+ * @typedef {{phase: 'testing'|'works'|'nothing', accelerator: string}} HotkeyTestResult
+ * @typedef {{active: {id: string, accelerator: string, token: number}|null, results: Object<string, HotkeyTestResult>,
+ *   seq: number}} HotkeyTestState
+ */
+
+/** @returns {HotkeyTestState} no test running, no results */
+export function hotkeyTestInit() {
+  return { active: null, results: {}, seq: 0 };
+}
+
+const withoutKey = (o, k) => {
+  const out = { ...o };
+  delete out[k];
+  return out;
+};
+
+/**
+ * One step of the press-to-test state machine. Pure: returns a new state (the same object when nothing changes).
+ * - `{type: 'start', id, accelerator}`: test this row. A test running on another row is dropped (one at a time);
+ *   restarting the same row gets a new token, so the old timer no longer counts.
+ * - `{type: 'fired', id}`: main saw the press → 'works'. A press for another row, or after the test ended, is ignored.
+ * - `{type: 'timeout', token}`: the view's timer for test `token` ran out → 'nothing'.
+ * - `{type: 'cancel'}`: Esc, a recording, closing Settings: the running test ends with no result.
+ * @param {HotkeyTestState} state
+ * @param {{type: string, id?: string, accelerator?: string, token?: number}} ev
+ * @returns {HotkeyTestState}
+ */
+export function hotkeyTestStep(state, ev) {
+  const s = state && typeof state === 'object' && state.results ? state : hotkeyTestInit();
+  const a = s.active;
+  switch (ev && ev.type) {
+    case 'start': {
+      if (!HOTKEY_IDS.includes(ev.id) || typeof ev.accelerator !== 'string' || !ev.accelerator) return s;
+      const results = a && a.id !== ev.id ? withoutKey(s.results, a.id) : { ...s.results };
+      results[ev.id] = { phase: 'testing', accelerator: ev.accelerator };
+      const seq = s.seq + 1;
+      return { active: { id: ev.id, accelerator: ev.accelerator, token: seq }, results, seq };
+    }
+    case 'fired':
+      if (!a || a.id !== ev.id) return s;
+      return { ...s, active: null, results: { ...s.results, [a.id]: { phase: 'works', accelerator: a.accelerator } } };
+    case 'timeout':
+      if (!a || a.token !== ev.token) return s;
+      return { ...s, active: null,
+        results: { ...s.results, [a.id]: { phase: 'nothing', accelerator: a.accelerator } } };
+    case 'cancel':
+      if (!a) return s;
+      return { ...s, active: null, results: withoutKey(s.results, a.id) };
+    default:
+      return s;
+  }
+}
+
+/**
+ * What a row shows: its last test result, but only for the combination it shows now (after a new recording, a reset
+ * or a change from elsewhere an old "Works" means nothing).
+ * @param {HotkeyTestState} state
+ * @param {string} id
+ * @param {string} accelerator the row's current accelerator
+ * @returns {'testing'|'works'|'nothing'|null}
+ */
+export function hotkeyTestPhase(state, id, accelerator) {
+  const r = state && state.results && state.results[id];
+  return r && accelerator && r.accelerator === accelerator ? r.phase : null;
+}

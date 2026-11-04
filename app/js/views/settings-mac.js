@@ -5,7 +5,7 @@
 // the rest is window.rig (main's registration results, "Check now", opening the download in the browser).
 import {
   HOTKEY_ACTIONS, MASTER_STEP_DB, acceleratorError, acceleratorFromEvent, formatAccelerator, hotkeyConflict, hotkeysOf,
-  DEFAULT_HOTKEYS,
+  DEFAULT_HOTKEYS, HOTKEY_TEST_MS, hotkeyTestInit, hotkeyTestStep, hotkeyTestPhase,
 } from '../shared/hotkeys.js';
 import { say } from './components/voice.js';
 
@@ -39,16 +39,26 @@ function ago(ms, now = Date.now()) {
 
 /**
  * Global shortcuts (Settings › Menu bar). Mounted only when window.rig.setHotkeys exists (the Mac app).
- * @param {{store: object, rig: object, h: Function, btn: Function, row: Function, toggle: Function}} d  settings.js
- *   helpers (h, btn, row) and the toggle component
+ * v11-hotkey-test (L11-3): a "Test" button per row, and a test right after recording, since macOS can't report a
+ * combination another app holds: "Press ⌃⌥⌘] in any app…" → "Works", or after `testMs` the hint to pick another.
+ * @param {{store: object, rig: object, h: Function, btn: Function, row: Function, toggle: Function,
+ *   testMs?: number}} d  settings.js helpers (h, btn, row), the toggle component, and the test's wait (default
+ *   HOTKEY_TEST_MS)
  * @returns {{el: HTMLElement, refresh: () => void, cancel: () => void, destroy: () => void}}
  */
 export function mountHotkeys(d) {
   const { store, rig, h, btn, row } = d;
   const mac = (rig.platform || 'darwin') === 'darwin';
+  const canTest = typeof rig.testHotkey === 'function';
+  const testMs = d.testMs > 0 ? d.testMs : HOTKEY_TEST_MS;
   let status = null; // the last HotkeyStatus from main
   let capturing = null; // action id while recording
   let message = '';
+  // v11-hotkey-test: the press-to-test state (shared/hotkeys.js hotkeyTestStep); `armed` = main is in test mode for
+  // the active test (or the request is on its way); the timer is this view's (no timers in the engine)
+  let test = hotkeyTestInit();
+  let armed = false;
+  let testTimer = null;
   const cleanups = [];
   const cfg = () => hotkeysOf(store.get().settings);
   const write = (next) => store.set('settings.hotkeys', next);
@@ -58,6 +68,8 @@ export function mountHotkeys(d) {
   onToggle.el.dataset.bind = 'settings.hotkeys';
   const keyBtns = {};
   const stateEls = {};
+  const testBtns = {};
+  const testEls = {};
   const rows = HOTKEY_ACTIONS.map((a) => {
     keyBtns[a.id] = btn('', () => (capturing === a.id ? stop() : start(a.id)), {
       class: 'st-hk-key', 'data-testid': `hotkey-${a.id}`, 'aria-label': `${labelOf(a)} shortcut`,
@@ -66,10 +78,16 @@ export function mountHotkeys(d) {
       if (capturing === a.id) stop();
     });
     stateEls[a.id] = h('span.st-hk-state', { 'data-testid': `hotkey-state-${a.id}`, role: 'status' });
+    testBtns[a.id] = btn(say('hotkeyTest'), () => startTest(a.id), {
+      class: 'st-hk-test', 'data-testid': `hotkey-test-${a.id}`, 'aria-label': `Test the ${labelOf(a)} shortcut`,
+    });
+    testEls[a.id] = h('span.st-hk-result', { 'data-testid': `hotkey-result-${a.id}`, role: 'status' });
     return h('div.st-hk-row', { 'data-hotkey': a.id },
       h('span.st-hk-label', {}, labelOf(a), LABEL_HINT[a.id] ? h('span.st-hint', { text: ` ${LABEL_HINT[a.id]}` }) : null),
       keyBtns[a.id],
-      stateEls[a.id]);
+      testBtns[a.id],
+      stateEls[a.id],
+      testEls[a.id]);
   });
   const msg = h('p.st-status.warn.st-hk-msg', { 'data-testid': 'hotkey-message', role: 'status', hidden: true });
   const reset = btn('Use the standard keys', () => {
@@ -103,7 +121,19 @@ export function mountHotkeys(d) {
       const word = st && st.accelerator === acc && c.on && !rec ? HOTKEY_STATE_TEXT[st.state] || '' : '';
       stateEls[a.id].textContent = word;
       stateEls[a.id].dataset.state = st && st.accelerator === acc ? st.state : '';
-      b.classList.toggle('warn', !!word);
+      // v11-hotkey-test: Test only where main holds the combination shown (taken / invalid already say why not)
+      const phase = hotkeyTestPhase(test, a.id, acc);
+      const registered = !!(st && st.accelerator === acc && st.state === 'ok');
+      const testable = canTest && !rec && c.on && !!acc && (registered || phase === 'testing');
+      // not `hidden` (styles.css hides that with !important): the column stays, so the rows stay aligned
+      testBtns[a.id].classList.toggle('off', !testable);
+      testBtns[a.id].disabled = !testable;
+      testBtns[a.id].setAttribute('aria-hidden', String(!testable));
+      testBtns[a.id].textContent = say('hotkeyTest');
+      testEls[a.id].textContent = phase === 'testing' ? say('hotkeyTesting', { keys: formatAccelerator(acc, { mac }) })
+        : phase === 'works' ? say('hotkeyWorks') : phase === 'nothing' ? say('hotkeyNothing') : '';
+      testEls[a.id].dataset.phase = phase || '';
+      b.classList.toggle('warn', !!word || phase === 'nothing');
     }
     msg.hidden = !message;
     msg.textContent = message;
@@ -134,10 +164,13 @@ export function mountHotkeys(d) {
       write({ ...cfg(), keys: { ...cfg().keys, [id]: acc } });
     }
     stop();
+    // v11-hotkey-test: test the new combination right away (it arms once main reports it registered)
+    if (!err && !other) startTest(id);
   }
 
   function start(id) {
     if (capturing) stop();
+    cancelTest(); // one thing at a time: recording lets go of our shortcuts, so a test could never come through
     capturing = id;
     message = '';
     // settings.js and main.js close Settings on Esc in a window capture listener; this attribute tells them not to
@@ -154,15 +187,100 @@ export function mountHotkeys(d) {
     window.removeEventListener('keydown', onKey, true);
     // removed after this keydown has finished travelling, so Settings' own Esc handler still skips it
     setTimeout(() => {
-      if (!capturing) document.documentElement.removeAttribute('data-hotkey-capture');
+      // v11-hotkey-test: the test that follows a recording keeps the attribute (its Esc cancels the test)
+      if (!capturing && !test.active) document.documentElement.removeAttribute('data-hotkey-capture');
     }, 0);
     Promise.resolve(rig.pauseHotkeys && rig.pauseHotkeys(false)).catch(() => {});
     render();
   }
 
+  // ---- v11-hotkey-test: press it to test (one at a time; Esc, a recording or closing Settings cancels)
+  function startTest(id) {
+    const acc = cfg().keys[id];
+    if (!canTest || !acc || capturing) return;
+    if (test.active) cancelTest();
+    test = hotkeyTestStep(test, { type: 'start', id, accelerator: acc });
+    const { token } = test.active;
+    clearTimeout(testTimer);
+    testTimer = setTimeout(() => onTestTimeout(token), testMs);
+    // Esc cancels the test, not Settings: settings.js / main.js leave Esc alone while this attribute is set
+    document.documentElement.setAttribute('data-hotkey-capture', 'test');
+    window.addEventListener('keydown', onTestKey, true);
+    armed = false;
+    arm();
+    render();
+  }
+  /** Put main in test mode once it holds the combination under test (right after a recording it may not yet). */
+  function arm() {
+    const a = test.active;
+    if (!a || armed || capturing) return;
+    const st = status && status.keys && status.keys[a.id];
+    if (!st || st.accelerator !== a.accelerator || status.paused) return; // wait for main's next status
+    if (st.state !== 'ok') { // taken / invalid / off: the row says why; there is nothing to test
+      cancelTest();
+      return;
+    }
+    armed = true;
+    Promise.resolve(rig.testHotkey(a.id, a.accelerator)).then((r) => {
+      if (test.active === a && r && r.error) armed = false; // a status push on its way will try again
+    }, () => {
+      if (test.active === a) armed = false;
+    });
+  }
+  function endTest() {
+    clearTimeout(testTimer);
+    testTimer = null;
+    armed = false;
+    window.removeEventListener('keydown', onTestKey, true);
+    // after this keydown has finished travelling (an Esc must not reach Settings' own handler), unless recording
+    setTimeout(() => {
+      if (!capturing && !test.active) document.documentElement.removeAttribute('data-hotkey-capture');
+    }, 0);
+  }
+  function cancelTest() {
+    if (!test.active) return;
+    const wasArmed = armed;
+    test = hotkeyTestStep(test, { type: 'cancel' });
+    endTest();
+    if (wasArmed && typeof rig.cancelHotkeyTest === 'function') {
+      Promise.resolve(rig.cancelHotkeyTest()).catch(() => {});
+    }
+    render();
+  }
+  function onTestTimeout(token) {
+    if (!test.active || test.active.token !== token) return;
+    test = hotkeyTestStep(test, { type: 'timeout', token });
+    endTest();
+    // main would swallow a late press until its own safety timeout: end its test mode now
+    if (typeof rig.cancelHotkeyTest === 'function') Promise.resolve(rig.cancelHotkeyTest()).catch(() => {});
+    render();
+  }
+  function onTestKey(e) {
+    if (e.key !== 'Escape' || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+    e.preventDefault();
+    e.stopPropagation(); // never Panic or Settings' own Esc
+    cancelTest();
+  }
+  /** main.js rig:hotkeyTest: {id, fired: true} for the tested press; {fired: false, reason} when main ended it */
+  function onTestEvent(ev) {
+    if (!ev || typeof ev !== 'object' || !test.active || ev.id !== test.active.id) return;
+    if (ev.fired === true) {
+      test = hotkeyTestStep(test, { type: 'fired', id: ev.id });
+      endTest();
+      render();
+    } else if (ev.reason === 'changed') {
+      armed = false; // main re-registered; the status that follows arms it again if the combination still holds
+    }
+  }
+  if (canTest && typeof rig.onHotkeyTest === 'function') {
+    const off = rig.onHotkeyTest(onTestEvent);
+    if (typeof off === 'function') cleanups.push(off);
+  }
+
   const setStatus = (s) => {
     if (s && typeof s === 'object' && !s.error && s.keys) {
       status = s;
+      arm();
       render();
     }
   };
@@ -184,9 +302,13 @@ export function mountHotkeys(d) {
     cancel() {
       message = '';
       stop();
+      cancelTest();
+      test = hotkeyTestInit(); // a closed Settings forgets the results; the next visit starts quiet
+      render();
     },
     destroy() {
       stop();
+      cancelTest();
       for (const c of cleanups.splice(0)) c();
       onToggle.destroy?.();
     },

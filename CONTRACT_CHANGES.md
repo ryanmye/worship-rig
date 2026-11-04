@@ -6364,3 +6364,78 @@ R-3 and R-4 went to the hotkeys / device-local worker and are not in this sectio
     `peakDecodedMB` column is the check.
   - The far-jump deferral by ear: jump while holding a pad. The reverb should change at the release.
   - `conv.buffer =` times on the M2 Pro (expected to be lower; the deferral makes them matter less anyway).
+
+## v11-hotkey-test (L11-3 follow-up, Ryan 2026-11-03: "make it so user can customize", and find clashes themselves; global-hotkeys.js, main.js, preload.js, shared/hotkeys.js, shared/voice.js, views/settings-mac.js, styles-settings.css)
+- **Why.** On macOS `globalShortcut.register()` returns true even when another app holds the combination (L11-3,
+  checked with a helper app: Carbon `RegisterEventHotKey` allows duplicates across apps), so `taken` never shows
+  there. Customizing already worked. What was missing was a way for the user to see that a combination doesn't come
+  through. So: **press it to test**.
+- **Settings › Menu bar › Global shortcuts:**
+  - each row whose combination main holds (`state: 'ok'`) has a **Test** button. Rows that are `taken`, `invalid` or
+    have no keys hide it, but the column stays so the rows stay aligned;
+  - a test also starts by itself right after a new combination is recorded;
+  - while testing, the row says "Press ⌃⌥⌘] in any app…" (the accelerator, formatted);
+  - on the press: "Works";
+  - after 5 s with nothing (`HOTKEY_TEST_MS`, the view's timer; the engine has no timers): "Nothing came through.
+    Another app may use this. Pick another.", and the key is marked like a warning;
+  - one test at a time (a second replaces the first, whose result goes). Esc cancels the test without closing
+    Settings (`<html data-hotkey-capture="test">`, the attribute the recorder already uses), and so do a recording
+    and closing Settings. A closed Settings forgets the results.
+- **Copy** (`say()`): `hotkeysMacTakenHint` (Mac only) is now "macOS can't tell apps when another app (Rectangle,
+  Magnet, Raycast…) uses a shortcut. Test each one once." New keys: `hotkeyTest`, `hotkeyTesting({keys})`,
+  `hotkeyWorks`, `hotkeyNothing` (Classic only; the other voices fall back). `taken` ("Another app already uses this.
+  Pick another.") stays for a `register()` that really returns false (other platforms, `RIG_FAKE_TAKEN_HOTKEY`).
+- **Main's test mode** (`createHotkeys().test(id, accelerator?)` / `cancelTest()` / `testing()`):
+  - while an id is under test, its next press goes to `onTest({id, accelerator, fired: true})` and is **swallowed**,
+    with no bus command: a test of Next song doesn't switch songs and a test of Master louder doesn't change the master.
+    Other ids keep working. One press ends the test;
+  - safety net: main ends test mode by itself after `HOTKEY_TEST_SAFETY_MS = 10000`, in case the page goes away. It
+    also checks the deadline on the press, so a timer that never ran can't keep a shortcut swallowed. Then it sends
+    `{fired: false, reason: 'timeout'}`;
+  - the test only holds while its combination stays registered. A pause (recording), off, or a new combination ends
+    it with `reason: 'changed'`, sent before the status push so Settings can arm again on the new combination. A
+    cancel from the page is silent. `dispose()` ends it too;
+  - refused: an unknown id (`unknown shortcut`), an accelerator that isn't accelerator-shaped (`bad accelerator`), an
+    id that isn't registered (`{error: 'not registered', state}`, e.g. `taken` / `none`), or an accelerator that
+    isn't the one main holds for that id (`state: 'changed'`).
+- **IPC** (own-origin `handle()` like the other v11-electron channels):
+  - `rig:testHotkey(id, accelerator|null)`: id a string ≤ 32 chars, accelerator a string ≤ 80 chars or null, both
+    checked again in `hotkeys.test`;
+  - `rig:cancelHotkeyTest()`;
+  - push `rig:hotkeyTest`.
+  - Preload: `rig.testHotkey(id, accelerator?)`, `rig.cancelHotkeyTest()` and `rig.onHotkeyTest(cb)` (returns an
+    unsubscribe).
+- **Arming after a recording.** The store notifies in a microtask, so the recorder's `pauseHotkeys(false)` reaches
+  main before the mirror's `setHotkeys(new)`, and main briefly re-registers the old combination. Settings therefore
+  calls `testHotkey` only once main's status shows the combination under test registered (`ok`, not paused). If it
+  shows `taken` / `invalid` instead, the test is dropped and the row says why. It passes the accelerator, so main
+  refuses a stale one.
+- **State machine**: `shared/hotkeys.js hotkeyTestStep(state, {start|fired|timeout|cancel})`, pure, plus
+  `hotkeyTestPhase(state, id, accelerator)`. A result only counts for the combination it was tested with, so a new
+  recording starts quiet.
+- **Tests:**
+  - unit `test/unit/shared/hotkey-test.test.mjs` (new, 8): fired → works; timeout → nothing (a late press stays
+    nothing); cancel; a second test replaces the first (old token and old row ignored); a restarted row gets a new
+    token; results tied to the accelerator; bad events; the words.
+  - unit `test/unit/shell/global-hotkeys.test.mjs` +5 (9 → 14): press swallowed and action not sent (also for master);
+    other ids still work; safety timeout; deadline without the timer; cancel is silent; replace; refusals; the test
+    ends on pause / a new combination / off / dispose.
+  - settings "mac" +3 (fake `window.rig` with a test mode like main's): Test → "Press ⌃⌥⌘] in any app…" → press →
+    "Works", with no song change; one at a time, Esc keeps Settings open, no press → the hint after 5 s (measured
+    4.9–8 s, the real timer) and main told to stop; the auto-test after recording arms only on the new combination;
+    closing Settings cancels; a `taken` combination isn't tested. The Mac hint's new wording is pinned. A screenshot
+    is `mac-hotkey-test.png`.
+  - `electron.boot` +1 (`v11` self-test): through the real preload and IPC, with the press through `hotkeys.fire`
+    (the function the accelerator callback calls): bad id / non-string / bad accelerator / taken refused; a press under
+    test sends no bus command and the page hears `{fired: true}`; the next press sends the command; after a cancel the
+    press sends the command and no event.
+- **Runs** (this worktree, 4 shared CPUs):
+
+  | run | result |
+  |---|---|
+  | `node test/run-all.mjs --only unit` | 399 pass, 7 skip |
+  | `node test/phase1/shell/run.mjs --only unit` | 233/233 |
+  | `xvfb-run -a node test/phase1/shell/run.mjs --only electron` | 22 pass, 1 skip (L-14, macOS only) |
+  | `node test/phase2/settings/run.mjs` | 60/60 (57 + 3) |
+
+- **Needs the Mac (LOCAL):** the real cross-app press. See the report / reviews/v11-local-findings.md L11-3.
