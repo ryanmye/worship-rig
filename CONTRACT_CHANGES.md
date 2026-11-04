@@ -5988,3 +5988,193 @@ Click and scenes both there at ≤ 1340 px, the SCENE caption goes and Notes is 
   that CoreAudio takes the 4-channel destination without a dropout when the option is switched.
 - MIDI clock into a real receiver (a delay pedal or drum machine) for wire jitter and Start alignment.
 - The click's sound and level in in-ears.
+
+## v11-memory (Ryan 2026-11-03: "fix the switch peak, see how much we can lower memory in general"; engine sampler.js + audio.js + fx.js, controller.js 3 lines, unit / engine / shell tests, soak)
+- **Where the memory is** (Linux Chromium, memory-infra dumps over CDP). The renderer's RSS above the decoded cache
+  (performance #6: 800–940 MB) is mostly **reverb convolvers**, not samples.
+  - A `ConvolverNode` with a stereo IR holds ≈ 13 MB of Chromium kernels per second of IR (PartitionAlloc buffer +
+    malloc, ≈ 37× the IR data). A mono IR costs the same.
+  - Per unit, at rest:
+
+    | bucket (IR s) | 1.5 (1.65) | 2 (2.2) | 2.8 (3.1) | 3.8 (4.2) | 5 (5.5) | 6.5 (7.2) | 8 (8.8) |
+    |---|---|---|---|---|---|---|---|
+    | allocated MB | 22.5 | 28.3 | 40.9 | 55.2 | 71.0 | 93.1 | 113.5 |
+    | resident MB | 10.2 | 16.5 | 20.7 | 28.8 | 32.9 | 47.2 | 55.3 |
+    | `conv.buffer =` ms (main thread) | 13–14 | 17 | 29–32 | 48–50 | 92–99 | 71–125 | 72–82 |
+
+  - The pool kept up to 10 idle units (`REVERB_UNITS_MAX`). The factory songs use 10 distinct spaces, 61.7
+    IR-seconds: ≈ 800 MB allocated once all are built.
+  - In-app after 4 heavy switches: before, 8 units with buffer partition 593 MB + malloc 315 MB. With this change, 3
+    units with 291 + 139 MB: −478 MB allocated.
+- **Switch peak** (sustain-critic R1, BACKLOG B). The peak was three things held at once: the playing song's
+  referenced buffers, the incoming song's, and the old window's pins. Example: Anthem from Upright Pad,
+  257 + 366 + 185 = 808 MB, with `retiring` 0.
+  - Fix: `BufferCache.protect`. The engine sets it to the playing and the incoming song's keys, at both decode caps,
+    in `prepare()`, and to the new song's in `commit()`.
+  - Once `protect` is set, the cap is **hard**. Over the cap (counting the buffer about to be inserted:
+    `_evict(incoming)` runs before the insert):
+    1. unpinned, unreferenced buffers outside `protect` go first, LRU, down to the 85 % low-water mark;
+    2. then **pinned**, unreferenced buffers outside `protect`, LRU, only until the cap holds. Their pins stay.
+  - Referenced buffers are never evicted (gapless rule: a retiring song under held notes keeps every buffer). Neither
+    are the playing or incoming song's.
+  - `protect` null (no song prepared yet, e.g. a bare preload in a test) = the old absolute pins.
+  - `preload` no longer decodes a sample that would push pinned buffers out (`BufferCache.roomFor`). A pinned one is
+    deferred; an unpinned warm-up is skipped.
+  - `AudioEngine._rewarmPins()` decodes the deferred or evicted pinned samples again, in preload order, while they
+    fit. It runs once the retiring channels are gone, after a discarded plan, and at the end of a preload that
+    deferred.
+  - New `_debugStats().referencedMB`: the part no eviction can touch.
+  - R1 option (a) (upgrades wait for the window's `setPins`) is not needed: the cap no longer depends on the order.
+- **Dual mono.** `processSample` keeps a stereo file whose two channels are identical sample for sample as one
+  channel (`buf._dualMono`): half the bytes.
+  - 14 of the 21 Musyng Kite sets are dual mono by ffmpeg (6 files checked per set): clavinet, dulcimer, Rhodes,
+    glockenspiel, harp, harpsichord, kalimba, marimba, music box, nylon and steel guitar, steel drums, tubular bells,
+    xylophone. The bright / honky-tonk / electric grand pianos, celesta, clean guitar, vibes and Wurli are real
+    stereo, as are Salamander and the upright, which are not Musyng Kite.
+    The engine checks the decoded data itself, so a file that isn't bit-identical stays stereo.
+  - The voice's env `GainNode` is now `channelCount: 2, channelCountMode: 'explicit'`. It up-mixes a mono buffer to
+    two identical channels before the tone filter and the strip. A mono input would otherwise take StereoPanner's
+    mono law (−3 dB at centre).
+  - Output identical: `offline.dualMonoIdentity` max |diff| **0** (fixture and real music-box, pan / width / reverb
+    send).
+  - The engine test fixtures (`expr|expr` WAVs) are dual mono too, so every sampler suite now runs the mono path.
+- **Decode copies** (performance #1). `processSample` copies the kept range straight from the decoded data
+  (`copyToChannel(subarray)`). Only the faded ends go through small temporaries: one full-size transient copy less per
+  decode.
+  - Sets with `maxMonoLossDb` (Salamander) keep the old path, because limitMonoLoss needs whole arrays.
+  - Never `getChannelData()` on a cached buffer: a first version that did made V8 count every decoded buffer in the
+    JS heap (usedJSHeapSize 662–753 MB after GC).
+- **Reverb pool = the window.** `Reverb.retain(keys)` / `AudioEngine.retainReverb(patches)`.
+  - Idle units are kept only for the spaces of the songs around the current one, plus the active, staged and fading
+    units and every space the current song played on (incl. macro.wash buckets, `_songKeys`).
+  - `warm()` skips other spaces.
+  - The controller calls it in `preloadNeighbors()` with the window candidates: ±1 for the library and a pinned
+    setlist, ±2 for a large set.
+  - Without a `retain` call (offline renders, tests) the old LRU of 10 applies.
+- **No convolver build in the play path.** A far jump now has to build its space's unit (15–400 ms of main thread
+  here). So:
+  - `prepare()` passes `stage(…, {defer})` while keys are held or pedalled (`sounding` / `pedaled`). A unit not built
+    yet is not built then. Only the IR is started (worker); the switch doesn't wait for it.
+  - `commitTo` keeps the playing space. `request(…, {quiet})` builds the unit once `env.busy()` is false (audio-clock
+    polls every 0.25 s, at most `REVERB_DEFER_MAX_SEC`, 30 s), then crossfades like any size change (0.8 s).
+  - Idle-time `warm()` builds (performance #4b) wait the same way (`_unitAsync({quiet})`, ≤ 30 s). A `stage()` that
+    needs the unit hurries it. Live macro.wash requests don't wait.
+  - Trade-off: after a far jump *while playing*, the new song's reverb space comes in at the first moment no key is
+    held or pedalled (or after 30 s), not at the switch. A neighbour switch is unchanged: its unit is already built.
+- **Before / after**, Linux, 4 shared CPUs, 44.1 kHz. Base = ef3d58a archived and served from its own tree. Runs
+  alternated base / new; load = 1-min average during the run. The soak ran in the background of the second pair.
+  10-song switch loop (the sustain critic's), `_debugStats` every 50 ms, renderer `/proc` VmRSS every 200 ms:
+
+  | mode | run | load | peak decoded | max pinned | settled max | JS heap (GC) | RSS max | RSS end | switch Σ s |
+  |---|---|---|---|---|---|---|---|---|---|
+  | library | base 1 / 2 | 8.6–9.9 / 6.0–7.7 | 809.5 / 809.5 | 454.3 | 678.5 / 695.5 | 12.9 / 9.8 | 1893 / 1884 | 1685 / 1686 | 25.7 / 22.9 |
+  | library | new 1 / 2 | 6.5–7.8 / 6.9–8.4 | **700.0 / 699.9** | 527.8 / 534.4 | 699.5 / 699.4 | 27.7 / 9.8 | 1458 / 1479 | **1111 / 1123** | 15.6 / 7.6 |
+  | large set (My Set) | base 1 / 2 | 8.7–9.1 / 5.3–6.0 | 810.7 / 807.5 | 454.3 | 691.2 / 683.7 | 98.6 / 37.8 | 1901 / 1960 | 1729 / 1713 | 29.6 / 16.4 |
+  | large set (My Set) | new 1 / 2 | 8.2–9.4 / 7.0–7.4 | **700.0 / 700.0** | 534.6 | 699.5 / 699.9 | 61.9 / 39.9 | 1656 / 1646 | **1248 / 1310** | 12.4 / 11.4 |
+  | 6-song set¹ | base 1 / 2 | 8.0–8.7 / 4.1–5.0 | 822.3 / 820.7 | 555.3 | 681.9 / 678.7 | 9.7 | 1754 / 1795 | 1389 / 1458 | 13.8 / 6.1 |
+  | 6-song set¹ | new 1 / 2 | 9.2–9.4 / 7.6–8.0 | **690.1 / 690.1** | 551.1 | 690.1 | 9.8 | 1285 / 1316 | **1107 / 1112** | 1.2 / 0.6 |
+
+  - MB unless noted. ¹ Sunday, Rhodes, Clav Funk, Music Box, Felt, Gospel Stab. It is over 600 MB, so it takes the
+    large-set path.
+  - Max pinned is higher because dual-mono sets are half the size, so more neighbours fit the 600 MB budget.
+  - The settled decoded sits at the cap: the LRU keeps evictable buffers until it needs the room (unchanged).
+  - Switch Σ = the 10 `selectSong` awaits. It is mostly cold decodes, and it varies with load and the LRU state (the
+    hard cap evicts a different set). Read it as "not slower", not as a speed-up.
+  - The JS heap varies with GC timing in the large-set loops, not with this change.
+  - Zero console errors in every run.
+- **Far-jump note latency.** Real app, library mode. A held bass note, plus a note-on / note-off pair every 20 ms
+  through `midi._inject`; lateness = the macrotask's delay. Jumps go to the four 8 s-bucket songs from a light song.
+  2 runs each, alternated, load 5–11.
+  - Before the deferral (retain only), the switch built the 8 s unit in prepare: **95–397 ms** of main thread, notes
+    up to 302–722 ms late.
+  - With the deferral, **0 convolver builds while a key was held**: every build ran after the release.
+    - New: note lateness max 23–270 ms, p95 7–259 ms.
+    - Base: max 16–513 ms, p95 3–317 ms. Base also builds idle-time neighbour units while playing (162 ms, once
+      884 ms at load 9).
+  - The rest of the lateness at a switch on this box is the switch's other main-thread work: long tasks of
+    50–330 ms in both trees.
+- **Soak** (`test/integration/soak.mjs`):
+  - An in-page 100 ms peak tracker per row: `peakDecodedMB`, `peakHardMB` (referenced or `protect`ed at that
+    instant), `peakPinnedMB`, plus `referencedMB`.
+  - The cap check replaces L-10's +25 % / 90 s exemption. For every row and every row's 100 ms peak: decoded ≤ cap,
+    or decoded ≤ the untouchable part + 48 MB.
+  - The exemption path stays in that form, because two big songs under held notes can be over 700 MB referenced
+    alone.
+  - Results, 20 min, My Set (large set), 12/12 both:
+
+    | | base (main checkout, 00:08Z, load 3–8) | new (00:35Z, load 6–11) |
+    |---|---|---|
+    | max decoded (30 s rows) | 696.2 | 699.4 |
+    | max decoded, 100 ms peaks | not tracked | **700.0** (untouchable 593.1, pinned 363.6) |
+    | max pinned | 454.3 | 534.6 |
+    | max referenced | not tracked | 412.1 |
+    | JS heap baseline → final (GC) | 11.27 → 11.91 | 11.41 → 12.15 |
+    | reverb units at the end | 10 | 3 |
+    | switches / events | 38 / 16782 | 41 / 17764 |
+
+    Base's row-sampled maximum misses the switch transients. The 10-song loop above measures them at 807–822 MB.
+- **Electron renderer RSS** (Linux, Electron from scratchpad/electron-dist under `xvfb-run`, own `RIG_PORT`;
+  **indicative only**, the Mac is the reference). `/proc` VmRSS of the renderer after: boot (My Set), the 10-song
+  loop in large-set mode, the same loop in library mode, then `settings.lowResource` on for 8 s. Runs alternated
+  (load 0.6–2.8):
+
+  | | boot | after large-set loop | after library loop | low-resource |
+  |---|---|---|---|---|
+  | base 1 / 2 | 1289 / 1292 | 1737 / 1747 | 1817 / 1859 | 1813 / 1856 |
+  | new 1 / 2 (without the low-res trim) | 1078 / 1080 | 1420 / 1402 | 1246 / 1263 | 1243 / 1115 |
+  | new + low-res trim | 1073 | 1428 | 1219 | **462** |
+
+  - Reverb units at the end: base 10, new 2–3 (1 in low-resource mode).
+  - Peak decoded during the loops: base 808.9–812, new 699.9–700.
+- **Low-resource trim** (added after the first Electron runs showed low-resource mode kept the whole LRU):
+  `setLowResource(true)` now also calls `BufferCache.trimUnpinned()`. Every decoded buffer that is neither pinned
+  (current song only by then), referenced nor protected goes.
+  - In the run above: decoded 652 → 0 MB (the current song, Gospel Stab, has no sampler slot), RSS 1243 → 462 MB.
+  - Cost: leaving low-resource mode re-decodes the window (the controller's `preloadSetlist()` already runs then), so
+    a switch right after showing the window can be a cold one.
+  - Test: `realtime.lowResource` now also asserts the setlist song's buffers are gone and the playing song's stay.
+- **Not done** (estimates for Ryan):
+  - Neighbour radius 0 (library) / 1 (large set): −100–200 MB pinned. Cost: a cold neighbour switch (Salamander takes
+    5–14 s to decode here).
+  - Evicting "instruments no setlist song uses": the steady state sits at the cap because the LRU fills it. A lower
+    cap (e.g. 500 MB) trades ≈ 200 MB for cold re-decodes when going back to a song outside the window.
+  - Transient decode buffers: up to 6 parallel full-length raw decodes (≈ 40 MB, garbage after processSample), plus
+    the compressed fetch (detached by decodeAudioData).
+  - IR cache: ≤ 12 IRs, ≤ 30 MB. JS heap: 10–12 MB after GC (soak baseline), nothing to gain.
+  - Splitting the reverb IR into shorter convolvers (same sum, builds of ≤ 15 ms each, no deferral needed): memory
+    unchanged, but more background threads and CPU. That is an architecture change, so not done.
+- **Tests:**
+  - unit `test/unit/engine/switch-headroom.test.mjs` (6): absolute pins without `protect`; the LRU tiers, just
+    enough; referenced and protected buffers never go; stand-in protection; evict before insert; `roomFor`.
+  - Engine offline:
+    - `switchHeadroom`: the cap holds through a switch that doesn't fit, the pins stay, the retiring song's buffer
+      stays, and rewarm restores the evicted pins;
+    - `dualMonoIdentity`;
+    - `reverbRetain`.
+  - Engine realtime `reverbDeferWhilePlaying`: with a key held, the old space stays and nothing is built; after the
+    release, the new space comes in; with nothing held, the unit is built in prepare. Switch 5 ms.
+  - `offline.preloadAndLRU` now asserts the pinned set survives a decode *with room*: its 0.5 MB cap is below the mono
+    pinned set. The over-cap case is `switchHeadroom`.
+  - Shell `memory.test.mjs` +1: retainReverb gets current ± 1 in the library, ± 2 in a large set.
+- **Runs** (serial, 4 shared CPUs):
+
+  | run | result |
+  |---|---|
+  | `node test/phase1/engine/run.mjs` (load 0.6–1.6) | 96/96 |
+  | `node test/phase1/instruments/run.mjs` | 143/143 |
+  | `node test/phase2/ui-core/run.mjs` | 75/75 |
+  | `node test/run-all.mjs --only unit` | 381/381 |
+  | `node test/phase1/shell/run.mjs --only unit` | 225/225 |
+  | `node test/integration/soak.mjs --minutes 20` | 12/12 |
+
+  - An earlier full engine run under load 4–7 failed `realtime.fxIdleSleep` (2 clicks vs 1). It passed 2/2 alone and
+    in the final full run: a load flake.
+  - The soak ran before the last two changes: the deferred stage no longer waits for the worker IR, and the
+    low-resource trim. Both are covered by their engine suites in the final engine run.
+- **Needs the Mac (LOCAL):**
+  - Activity Monitor (Memory, Real Mem) and `ps -o rss` for the Electron renderer, visible and in menu-bar
+    low-resource mode, on 1.1 vs this branch. Use the soak's warm-up, then the 10-song loop.
+  - The Mac's context rate: at 48 kHz every size is ×1.09, and the cap still has to hold. The soak's new
+    `peakDecodedMB` column is the check.
+  - The far-jump deferral by ear: jump while holding a pad. The reverb should change at the release.
+  - `conv.buffer =` times on the M2 Pro (expected to be lower; the deferral makes them matter less anyway).

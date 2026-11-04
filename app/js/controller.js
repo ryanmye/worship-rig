@@ -893,6 +893,9 @@ export function createController(o) {
   function preloadNeighbors() {
     if (!hasPreload()) return;
     if (lowResEff) return void pinCurrentOnly().then(updateMemory); // menubar-A: no neighbour preload
+    // v11-memory: only the reverb spaces of the songs around this one stay built (a convolver is 15–113 MB)
+    const radius = inSetlist() && memMode === 'large-set' ? LARGE_SET_PIN_RADIUS : LIBRARY_PIN_RADIUS;
+    optional('retainReverb', patchesOf(windowCandidates(radius).ids));
     if (!inSetlist()) return void pinWindow(LIBRARY_PIN_RADIUS).then(updateMemory);
     // (a setlist still being sized, round4-controller C2, keeps the large-set window meanwhile: memMode is 'large-set')
     if (memMode === 'large-set') return void pinWindow(LARGE_SET_PIN_RADIUS).then(updateMemory);

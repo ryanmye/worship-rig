@@ -77,9 +77,24 @@ const INSTALL = () => {
       }
     }
   };
+  // v11-memory: the decoded peak between two rows, sampled every 100 ms (a switch's transient is far shorter than a
+  // row), with what no eviction may touch at that instant ("hard": referenced by an instrument, or the playing / incoming
+  // song's own buffers, BufferCache.protect)
+  const peak0 = () => ({ decodedMB: 0, hardMB: 0, pinnedMB: 0 });
+  S.peak = peak0();
+  S.peakTimer = setInterval(() => {
+    const c = engine.cache;
+    if (!c || c.bytes / 1048576 <= S.peak.decodedMB) return;
+    let hard = 0;
+    for (const [k, e] of c.entries) if (e.refs.size || (c.protect && c._protected && c._protected(k))) hard += e.bytes;
+    S.peak = { decodedMB: c.bytes / 1048576, hardMB: hard / 1048576, pinnedMB: c.pinnedMB };
+  }, 100);
   S.snapshot = () => {
     const st = engine._debugStats();
+    const pk = S.peak;
+    S.peak = peak0();
     return {
+      peakDecodedMB: +pk.decodedMB.toFixed(1), peakHardMB: +pk.hardMB.toFixed(1), peakPinnedMB: +pk.pinnedMB.toFixed(1),
       ...st, droneVoices: droneVoices(), kbVoices: st.voices - droneVoices(), heap: S.heap(), ctxTime: engine.ctx ? +engine.ctx.currentTime.toFixed(2) : null,
       ctxState: engine.ctx ? engine.ctx.state : 'none', audio: controller.status.audio, memMode: controller.status.memory?.mode, budgetMB: controller.status.memory?.budgetMB, memNote: controller.status.memory?.note, song: store.currentSong()?.factoryId || store.currentSong()?.id,
       events: S.events, switches: S.switches, panics: S.panics, keyChanges: S.keyChanges, nan: S.nan, maxDb: +S.maxDb.toFixed(1),
@@ -303,7 +318,7 @@ const browser = await chromium.launch({
 });
 const consoleErrors = [];
 const rows = [];
-const COLS = ['t_s', 'phase', 'song', 'voices', 'kbVoices', 'droneVoices', 'nodes', 'retiring', 'sounding', 'pedaled', 'timers', 'decodedMB', 'pinnedMB', 'capMB', 'budgetMB', 'memMode', 'memNote', 'heapMB', 'ctxTime', 'ctxState', 'audio', 'events', 'switches', 'panics', 'keyChanges', 'nan', 'maxDb'];
+const COLS = ['t_s', 'phase', 'song', 'voices', 'kbVoices', 'droneVoices', 'nodes', 'retiring', 'sounding', 'pedaled', 'timers', 'decodedMB', 'pinnedMB', 'referencedMB', 'peakDecodedMB', 'peakHardMB', 'peakPinnedMB', 'capMB', 'budgetMB', 'memMode', 'memNote', 'heapMB', 'ctxTime', 'ctxState', 'audio', 'events', 'switches', 'panics', 'keyChanges', 'nan', 'maxDb'];
 const tStart = Date.now();
 let exitCode = 1;
 
@@ -311,7 +326,7 @@ function record(phase, s) {
   const row = { t_s: Math.round((Date.now() - tStart) / 1000), phase, ...s, heapMB: s.heap != null ? +(s.heap / 1048576).toFixed(2) : '' };
   rows.push(row);
   fs.writeFileSync(CSV, [COLS.join(','), ...rows.map((r) => COLS.map((c) => JSON.stringify(r[c] ?? '')).join(','))].join('\n') + '\n');
-  console.log(`[${String(row.t_s).padStart(5)} s] ${phase.padEnd(8)} ${String(row.song).padEnd(28)} voices ${row.voices} (kb ${row.kbVoices}, drone ${row.droneVoices}) nodes ${row.nodes} retiring ${row.retiring} heap ${row.heapMB} MB decoded ${row.decodedMB} MB (pinned ${row.pinnedMB}, ${row.memMode}) events ${row.events} nan ${row.nan} audio ${row.audio}`);
+  console.log(`[${String(row.t_s).padStart(5)} s] ${phase.padEnd(8)} ${String(row.song).padEnd(28)} voices ${row.voices} (kb ${row.kbVoices}, drone ${row.droneVoices}) nodes ${row.nodes} retiring ${row.retiring} heap ${row.heapMB} MB decoded ${row.decodedMB} MB (pinned ${row.pinnedMB}, ${row.memMode}; peak ${row.peakDecodedMB}) events ${row.events} nan ${row.nan} audio ${row.audio}`);
   return row;
 }
 
@@ -431,22 +446,26 @@ try {
   // while the current song alone is bigger (it is then pinned alone, note "This song alone is … MB")
   const pinPeak = rows.reduce((m, r) => (Number(r.pinnedMB) > m.pinnedMB ? r : m), { pinnedMB: -1 });
   const pinsOk = (r) => !(r.budgetMB > 0) || !(r.pinnedMB > r.budgetMB) || /alone/.test(r.memNote || '');
-  // L-10: the cap is SOFT while a retired song is still fading: its buffers can't be freed without cutting held
-  // notes (gapless rule). Rule: decoded ≤ cap whenever retiring == 0; while retiring > 0 and within 90 s of the last
-  // song switch, decoded ≤ cap + 25 %. (Rows are 30 s apart, so a switch is dated by the row where `switches` grew.)
-  const SOFT_CAP = 1.25, SOFT_WINDOW_S = 90;
-  let lastSwitchT = -Infinity, lastSwitches = -1;
+  // v11-memory (replaces L-10's +25 % / 90 s soft window): the cap is hard except for buffers no eviction may touch:
+  // those an instrument references (a retired song still fading under held notes, the gapless rule) and the playing /
+  // incoming song's own (BufferCache.protect). Rule, per row and for the 100 ms peak since the previous row:
+  // decoded ≤ cap, or decoded ≤ that untouchable part + SLACK (one decode in flight per worker).
+  const SLACK_MB = 48;
   const capOk = (r) => {
-    if (Number(r.switches) > lastSwitches) { lastSwitches = Number(r.switches); lastSwitchT = Number(r.t_s); }
-    if (!(r.capMB > 0) || r.decodedMB <= r.capMB) return true;
-    return Number(r.retiring) > 0 && Number(r.t_s) - lastSwitchT <= SOFT_WINDOW_S && r.decodedMB <= r.capMB * SOFT_CAP;
+    if (!(r.capMB > 0)) return true;
+    const peakOk = !(Number(r.peakDecodedMB) > r.capMB) || Number(r.peakDecodedMB) <= Number(r.peakHardMB) + SLACK_MB;
+    const rowOk = r.decodedMB <= r.capMB || r.decodedMB <= Number(r.referencedMB) + SLACK_MB;
+    return peakOk && rowOk;
   };
   const capFails = rows.filter((r) => !capOk(r) || !pinsOk(r));
-  check('decoded samples stay under the engine cache cap (soft +25 % ≤ 90 s after a switch while retiring; pins limited)',
+  const pk = rows.reduce((m, r) => (Number(r.peakDecodedMB) > Number(m.peakDecodedMB || -1) ? r : m), {});
+  check('decoded samples stay under the engine cache cap (hard but for playing buffers; 100 ms peaks; pins limited)',
     capFails.length === 0,
-    `max ${peak.decodedMB} MB (pinned ${peak.pinnedMB} MB, ${peak.memMode}) of ${peak.capMB} MB cap; max pinned ` +
+    `max ${peak.decodedMB} MB (pinned ${peak.pinnedMB} MB, ${peak.memMode}) of ${peak.capMB} MB cap; peak ` +
+    `${pk.peakDecodedMB} MB (untouchable ${pk.peakHardMB}, pinned ${pk.peakPinnedMB}) on ${pk.song}; max pinned ` +
     `${pinPeak.pinnedMB} MB on ${pinPeak.song} (budget ${pinPeak.budgetMB} MB)` +
-    (capFails.length ? `; over: ${capFails.slice(0, 5).map((r) => `${r.t_s}s ${r.song} ${r.decodedMB}/${r.pinnedMB}`).join(', ')}` : ''));
+    (capFails.length ? `; over: ${capFails.slice(0, 5).map((r) => `${r.t_s}s ${r.song} ${r.decodedMB}/${r.pinnedMB} ` +
+      `peak ${r.peakDecodedMB}/${r.peakHardMB}`).join(', ')}` : ''));
   check('zero console.error', consoleErrors.length === 0, consoleErrors.slice(0, 10).join(' | '));
   exitCode = finish();
   console.log(`# CSV: ${path.relative(repoRoot, CSV)} (${rows.length} rows)`);

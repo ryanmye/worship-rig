@@ -165,6 +165,7 @@ export function normalizeManifest(json, manifestUrl, { idPrefix = '', group: def
  * exceeds it — anti-phase mic content, e.g. Salamander C5 ≈ 8 dB — gets its side scaled down to exactly that loss,
  * with the mid raised so the stereo RMS is unchanged (same loudness in stereo, no hole on a mono PA). Baked once at
  * decode, so it costs nothing at note time. `buf._monoFix = {lossDb, mid, side}` records what was done.
+ * v11-memory: a stereo file with identical channels comes back as a 1-channel buffer (`buf._dualMono` true).
  * @param {AudioBuffer} buf
  * @param {number} midi
  * @param {{maxMonoLossDb?:number, maxSec?:number}} [opts]
@@ -190,30 +191,69 @@ export function processSample(buf, midi, opts = {}) {
   const cap = Math.round(capSec * sr);
   const len = Math.max(1, Math.min(buf.length - start, cap));
   const capped = buf.length - start > cap;
-  const out = new AudioBuffer({ numberOfChannels: buf.numberOfChannels, length: len, sampleRate: sr });
+  // v11-memory: a stereo file whose two channels are identical sample for sample (most Musyng Kite sets are dual
+  // mono) is kept as ONE channel: half the decoded bytes. The sampler voice up-mixes it back to two identical
+  // channels (SamplerInstrument.noteOn, env channelCountMode 'explicit'), so the output is the same bit for bit.
+  const dualMono = chans.length === 2 && sameRange(chans[0], chans[1], start, start + len);
+  const used = dualMono ? chans.slice(0, 1) : chans;
+  const out = new AudioBuffer({ numberOfChannels: used.length, length: len, sampleRate: sr });
   const fi = Math.min(len, Math.round(0.002 * sr));
   const fo = capped ? Math.min(len, Math.round(1.0 * sr)) : 0;
-  const os = chans.map((d) => {
-    const o = d.slice(start, start + len);
-    for (let i = 0; i < fi; i++) o[i] *= 0.5 - 0.5 * Math.cos((Math.PI * i) / fi);
-    for (let i = 0; i < fo; i++) o[len - 1 - i] *= i / fo;
-    return o;
-  });
   const maxLoss = Number(opts?.maxMonoLossDb);
-  if (os.length === 2 && Number.isFinite(maxLoss) && maxLoss > 0) {
-    // sustain critic: the mid/side factors are measured on exactly what the legacy 10 / 16 s cap keeps (incl. its
-    // 1 s fade), so a long variant is the legacy buffer plus a tail, not a re-balanced copy (the whole-buffer stats
-    // moved every Salamander note by up to 3.4e-5 in the first seconds)
-    const legacyLen = Math.max(1, Math.min(buf.length - start, Math.round(legacyCapSec(midi) * sr)));
-    // the legacy fade is already in the data when this IS the legacy cut (len === legacyLen); weigh it in otherwise
-    const legacyFade = len > legacyLen ? Math.min(legacyLen, Math.round(1.0 * sr)) : 0;
-    out._monoFix = limitMonoLoss(os[0], os[1], maxLoss, { statsLen: legacyLen, fadeLen: legacyFade });
+  const monoFix = used.length === 2 && Number.isFinite(maxLoss) && maxLoss > 0;
+  const fadeIn = (o) => {
+    for (let i = 0; i < fi; i++) o[i] *= 0.5 - 0.5 * Math.cos((Math.PI * i) / fi);
+  };
+  const fadeOut = (o) => {
+    for (let i = 0; i < fo; i++) o[o.length - 1 - i] *= i / fo;
+  };
+  if (monoFix || fi + fo > len) {
+    // the mid/side fix needs whole channels in JS (and a cut shorter than both fades gets them as before)
+    const os = used.map((d) => {
+      const o = d.slice(start, start + len);
+      fadeIn(o);
+      fadeOut(o);
+      return o;
+    });
+    if (monoFix) {
+      // sustain critic: the mid/side factors are measured on exactly what the legacy 10 / 16 s cap keeps (incl. its
+      // 1 s fade), so a long variant is the legacy buffer plus a tail, not a re-balanced copy (the whole-buffer
+      // stats moved every Salamander note by up to 3.4e-5 in the first seconds)
+      const legacyLen = Math.max(1, Math.min(buf.length - start, Math.round(legacyCapSec(midi) * sr)));
+      // the legacy fade is already in the data when this IS the legacy cut (len === legacyLen); weigh it in otherwise
+      const legacyFade = len > legacyLen ? Math.min(legacyLen, Math.round(1.0 * sr)) : 0;
+      out._monoFix = limitMonoLoss(os[0], os[1], maxLoss, { statsLen: legacyLen, fadeLen: legacyFade });
+    }
+    os.forEach((o, c) => out.copyToChannel(o, c));
+  } else {
+    // v11-memory (performance #1): no full-length slice() per channel: the kept range is copied straight from the
+    // decoded data, and only the two short faded ends go through small temporary arrays (same values). Never
+    // getChannelData() on `out`: a channel array handed to JS counts its whole backing store in V8's heap.
+    used.forEach((d, c) => {
+      out.copyToChannel(d.subarray(start, start + len), c);
+      if (fi) {
+        const h = d.slice(start, start + fi);
+        fadeIn(h);
+        out.copyToChannel(h, c, 0);
+      }
+      if (fo) {
+        const t = d.slice(start + len - fo, start + len);
+        fadeOut(t);
+        out.copyToChannel(t, c, len - fo);
+      }
+    });
   }
-  os.forEach((o, c) => out.copyToChannel(o, c));
+  out._dualMono = dualMono;
   out._onsetTrim = start / sr;
   out._natural = buf.length - start;
   out._capped = capped;
   return out;
+}
+
+/** a[i] === b[i] for every i in [from, to) (v11-memory: dual-mono detection). */
+function sameRange(a, b, from, to) {
+  for (let i = from; i < to; i++) if (a[i] !== b[i]) return false;
+  return true;
 }
 
 /**
@@ -308,7 +348,39 @@ export class BufferCache {
     this.superseded = new Map();
     this.supersededBy = new Map();
     this.longKeys = new Map(); // url → Set of its long keys ever decoded
+    // v11-memory (switch headroom): null = pins are absolute (the pre-v11 rule). A Set (the engine sets it from its
+    // first prepare on: the keys of the playing and the incoming song) = the cap is hard: once the unpinned buffers
+    // are gone, pinned buffers outside this set and referenced by no instrument are evicted too, LRU first, just
+    // enough to stay ≤ capBytes. Referenced buffers are never evicted (gapless rule).
+    this.protect = null;
     this._tick = 0;
+  }
+  /** A key (or the legacy key it stands in for) is in `protect`. */
+  _protected(key) {
+    if (!this.protect) return true;
+    if (this.protect.has(key)) return true;
+    const legacy = this.supersededBy.get(key);
+    return legacy !== undefined && this.protect.has(legacy);
+  }
+  /** Decoded bytes referenced by a live instrument (they can't be evicted: gapless rule). */
+  get referencedBytes() {
+    let b = 0;
+    for (const e of this.entries.values()) if (e.refs.size) b += e.bytes;
+    return b;
+  }
+  /**
+   * v11-memory: can `extra` more bytes be decoded with the cache ≤ capBytes, evicting only what is neither pinned nor
+   * referenced? (Preload warming defers a decode that would push out other pinned songs: AudioEngine._rewarmPins.)
+   * @param {number} extra
+   * @returns {boolean}
+   */
+  roomFor(extra) {
+    if (this.bytes + extra <= this.capBytes) return true;
+    let free = 0;
+    for (const [k, e] of this.entries) {
+      if (!e.refs.size && !this._isPinned(k) && !(this.protect && this._protected(k))) free += e.bytes;
+    }
+    return this.bytes - free + extra <= this.capBytes;
   }
   /** A decoded long variant of `url`, if any (sustain variants). @returns {string|null} */
   _longOf(url) {
@@ -494,6 +566,7 @@ export class BufferCache {
       e = this.entries.get(key);
       if (!e) {
         const bytes = buffer.numberOfChannels * buffer.length * 4;
+        this._evict(bytes); // v11-memory: make room first, so decodedMB never passes the cap by the new buffer
         e = { buffer, bytes, refs: new Set(), lastUsed: 0 };
         this.entries.set(key, e);
         if (key !== url) {
@@ -590,6 +663,18 @@ export class BufferCache {
     }
     return { failed, dropped };
   }
+  /**
+   * v11-memory: drop every decoded buffer that is neither pinned, referenced nor protected (low-resource mode: the
+   * evictable LRU content is not needed while hidden in the menu bar; the window comes back on leaving it).
+   * @returns {number} bytes freed
+   */
+  trimUnpinned() {
+    const before = this.bytes;
+    for (const [k, e] of [...this.entries]) {
+      if (!e.refs.size && !this._isPinned(k) && !(this.protect && this._protected(k))) this._deleteEntry(k);
+    }
+    return before - this.bytes;
+  }
   /** Add to the pin set (union): a neighbour preload never unpins the setlist (REVIEW #12). */
   pin(urls) {
     for (const u of urls) this.pinned.add(u);
@@ -605,14 +690,31 @@ export class BufferCache {
     for (const u of urls) this.pinned.delete(u);
     this._evict();
   }
-  _evict() {
-    if (this.bytes <= this.capBytes) return;
-    const cands = [...this.entries.entries()]
-      .filter(([u, e]) => !e.refs.size && !this._isPinned(u))
-      .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+  /**
+   * Over the cap (counting `incoming` bytes about to be inserted): evict unpinned, unreferenced buffers LRU-first
+   * down to the low-water mark. v11-memory: if that is not enough and `protect` is set, unreferenced pinned buffers
+   * outside `protect` follow, LRU-first, only until the cap holds (their pins stay: a later preload or
+   * AudioEngine._rewarmPins decodes them again when there is room).
+   * @param {number} [incoming]
+   */
+  _evict(incoming = 0) {
+    const limit = this.capBytes - incoming;
+    if (this.bytes <= limit) return;
+    const lru = (a, b) => a[1].lastUsed - b[1].lastUsed;
+    const target = Math.min(this.lowWaterBytes, limit);
+    // (with `protect` set, the playing / incoming song's unreferenced copies are not victims: the prepare reuses them)
+    const free = ([u, e]) => !e.refs.size && !this._isPinned(u) && !(this.protect && this._protected(u));
+    const cands = [...this.entries.entries()].filter(free).sort(lru);
     for (const [u] of cands) {
-      if (this.bytes <= this.lowWaterBytes) break;
+      if (this.bytes <= target) break;
       this._deleteEntry(u);
+    }
+    if (this.bytes <= limit || !this.protect) return;
+    const pinned = [...this.entries.entries()].filter(([u, e]) => !e.refs.size && !this._protected(u)).sort(lru);
+    for (const [u] of pinned) {
+      if (this.bytes <= limit) break;
+      this._deleteEntry(u);
+      this.evictedPinned = (this.evictedPinned || 0) + 1;
     }
   }
 }
@@ -758,7 +860,12 @@ export class SamplerInstrument {
       new AudioBufferSourceNode(ctx, { buffer: s.buffer, playbackRate: Math.pow(2, (n - s.midi) / 12), detune: this.bend * 100 }),
       t,
     );
-    const env = v.add(new GainNode(ctx, { gain: 0 }));
+    // v11-memory: 'explicit' 2 channels up-mixes a dual-mono (1-channel) buffer to two identical channels here, so
+    // the tone filter, the strip's panner and width see the same stereo signal as before (a mono input would take
+    // StereoPanner's mono law: −3 dB at centre). A stereo buffer passes unchanged.
+    const env = v.add(new GainNode(ctx, {
+      gain: 0, channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers',
+    }));
     let head = src;
     let gDb;
     if (this.multiLayer) gDb = -10 * (1 - v01); // layers carry the dynamics: only a −10 dB span
