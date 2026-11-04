@@ -140,3 +140,19 @@ For the same reason, the "nothing stays registered after Off / Quit" check can't
 Suggestion for the cloud: drop the macOS promise of "taken" in the Settings copy, or describe it as "macOS can't tell
 us if another app uses this; if a shortcut does nothing, pick another". No code path is broken; the state just can't
 be detected.
+
+### L11-3 follow-up: Ryan's decision (2026-11-03): keep it customizable, and let the user find conflicts themselves
+
+Customizing already works (Settings › Menu bar › Global shortcuts: click a key to record, Delete clears, "Use the
+standard keys" resets, duplicates inside Worship Rig are refused). Ryan: "make it so user can customize". What the
+cloud should add, since macOS won't report a conflict:
+
+1. **A "press it to test" check.** After recording a combination (and on a "Test" link next to each row), show
+   "Press ⌃⌥⌘] in any app…" and, when the global shortcut fires, "Works". If nothing arrives within ~5 s:
+   "Nothing came through. Another app may use this. Pick another." That replaces the never-shown `taken` state on
+   macOS with something the user can see.
+2. **Settings copy:** say plainly that macOS can't tell us when another app (Rectangle, Magnet, Raycast…) uses a
+   combination, so test each one once.
+3. Keep `taken` for platforms where `register()` does return false; on macOS don't rely on it.
+4. Tests: a unit test for the test-mode state machine (fired → "Works", timeout → hint) and the settings "mac" mode.
+   The real cross-app press stays in Ryan's hardware batch.
