@@ -3139,33 +3139,62 @@ export const realtime = {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     // one ScriptProcessor for all three signals (dry mix, reverb return, delay return), so their onsets compare to
     // the sample (separate processors' playbackTime differ by whole render quanta)
+    // ci-4: captured on the audio thread (an AudioWorklet posts every 128-frame block with its render frame, as
+    // captureTapExact), so a starved main thread (6× throttle; the macos-14 runner) leaves no splice that reads as a
+    // click: the old ScriptProcessor capture lost chunks there. One worklet for all three signals keeps their onsets
+    // comparable to the sample; `gapAt` lists the edges of any skipped render quanta.
+    const capModule = (ctx) => {
+      if (!ctx.__rigCapK) {
+        const CAP = `class RigCapK extends AudioWorkletProcessor {
+          constructor() { super(); this.on = true; this.port.onmessage = () => { this.on = false; }; }
+          process(inputs) {
+            if (!this.on) return false;
+            const i = inputs[0] || [];
+            const m = i.map((c) => new Float32Array(c));
+            this.port.postMessage({ f: currentFrame, m }, m.map((x) => x.buffer));
+            return true;
+          }
+        }
+        registerProcessor('rig-cap-k', RigCapK);`;
+        ctx.__rigCapK = ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([CAP], { type: 'text/javascript' })));
+      }
+      return ctx.__rigCapK;
+    };
+    // (the module is loaded before the capture starts: run() awaits capModule, so the capture is on before the note)
     const grab = (ctx, nodes, sec) => {
       const sr = ctx.sampleRate;
       const k = nodes.length;
       const merge = new ChannelMergerNode(ctx, { numberOfInputs: k });
       nodes.forEach((n, i) => n.connect(merge, 0, i));
-      const sp = ctx.createScriptProcessor(2048, k, 1);
-      const need = Math.ceil(sec * sr);
-      const chunks = [];
-      let n = 0;
+      const node = new AudioWorkletNode(ctx, 'rig-cap-k', { numberOfInputs: 1, numberOfOutputs: 1,
+        outputChannelCount: [1], channelCount: k, channelCountMode: 'explicit', channelInterpretation: 'discrete' });
+      const need = Math.ceil((sec * sr) / 128);
+      const blocks = [];
       return new Promise((res) => {
-        sp.onaudioprocess = (ev) => {
-          chunks.push([...Array(k).keys()].map((c) => new Float32Array(ev.inputBuffer.getChannelData(c))));
-          n += 2048;
-          if (n >= need) {
-            sp.onaudioprocess = null;
-            nodes.forEach((x) => x.disconnect(merge));
-            merge.disconnect();
-            sp.disconnect();
-            res([...Array(k).keys()].map((c) => {
-              const d = new Float32Array(n);
-              chunks.forEach((ch, j) => d.set(ch[c], j * 2048));
-              return d;
-            }));
-          }
+        node.port.onmessage = (ev) => {
+          blocks.push(ev.data);
+          if (blocks.length < need) return;
+          node.port.onmessage = null;
+          node.port.postMessage('stop');
+          nodes.forEach((x) => x.disconnect(merge));
+          merge.disconnect();
+          node.disconnect();
+          const f0 = blocks[0].f;
+          const len = blocks[blocks.length - 1].f + 128 - f0;
+          const gapAt = [];
+          blocks.forEach((b, j) => {
+            if (j && b.f !== blocks[j - 1].f + 128) gapAt.push((blocks[j - 1].f + 128 - f0) / sr, (b.f - f0) / sr);
+          });
+          const out = [...Array(k).keys()].map((c) => {
+            const d = new Float32Array(len);
+            for (const b of blocks) if (b.m[c]) d.set(b.m[c], b.f - f0);
+            return d;
+          });
+          out.gapAt = gapAt;
+          res(out);
         };
-        merge.connect(sp);
-        sp.connect(ctx.destination);
+        merge.connect(node);
+        node.connect(ctx.destination);
       });
     };
     const run = async (sleepOn) => {
@@ -3177,6 +3206,7 @@ export const realtime = {
       }
       const ctx = e.ctx;
       const sr = ctx.sampleRate;
+      await capModule(ctx);
       const sends = { reverb: 0.6, delay: 0.5, chorus: 0.5 };
       await use(e, patch({ 0: slot('sampler', 'test-keys', { sends }) }, { reverb: { size: 0.1 }, delay: { time: 0.25, feedback: 0.3, sync: 'off' } }));
       const r = {};
@@ -3201,7 +3231,8 @@ export const realtime = {
       r.awakeAfterNoteOn = asleep() === '';
       r.unitConnectedAfterNoteOn = e.fx.reverb.active.connected;
       e.noteOff(64, { when: tOn + 0.4 });
-      const [dry, rev, del] = await cap;
+      const caught = await cap;
+      const [dry, rev, del] = caught;
       const onset = (d) => {
         for (let i = 0; i < d.length; i++) if (Math.abs(d[i]) > 1e-4) return i;
         return null;
@@ -3210,8 +3241,15 @@ export const realtime = {
       r.reverbLagMs = lag(rev); // after the dry onset (predelay + the IR's first tap, minus the catcher's lookahead)
       r.delayLagMs = lag(del);
       const cl = clicks(dry, sr, 0.02, Math.min(2.4, dry.length / sr));
-      r.clicks = cl.length;
-      r.clickAt = cl.map((c) => +((c.t - onset(dry) / sr) * 1000).toFixed(1)); // ms after the dry onset
+      r.clickAt = cl.map((c) => +((c.t - onset(dry) / sr) * 1000).toFixed(1)); // ms after the dry onset (all)
+      // ci-4: not counted: the note's own attack (≤ 1 ms from the dry onset; the detector flags it or not by where
+      // the onset falls in its 256-sample blocks: 1 vs 1 here, 1 vs 0 once on the macos-14 runner), and capture holes
+      // (±12 ms, as capClicks). A wake click lands at a return's onset (reverb ≈ 17 ms, echo ≈ 244 ms) or later.
+      const t1 = onset(dry) === null ? null : onset(dry) / sr;
+      const counted = cl.filter((c) => (t1 === null || Math.abs(c.t - t1) > 0.001) &&
+        !caught.gapAt.some((g) => Math.abs(c.t - g) < 0.012));
+      r.clicks = counted.length;
+      r.captureGaps = caught.gapAt.length / 2;
       e.dispose();
       return r;
     };

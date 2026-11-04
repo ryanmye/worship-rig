@@ -900,17 +900,26 @@ async function v11Tests() {
     await ev(() => window.__rig.theme.pending);
     await ev(() => window.__rig.ctx.closeSettings());
     // Lock forces Stage while locked: a same-file attribute flip (no sheet load), right after the store notifies
+    // ci-4: checked after the store's notify microtask, counting the frames it took. The old loop always awaited one
+    // rAF first, so it timed the browser's next frame, not the flip: 122 ms on the macos-14 runner, whose requested
+    // rAF takes ≈ 70–100 ms (ci-3). The flip itself lands in the notify microtask (2–8 ms here, 6× throttle too),
+    // so it now must be on screen before the next frame, which is stricter than "within a frame or two" anywhere.
     const flip = await ev(async () => {
       const t0 = performance.now();
       window.__rig.store.set('settings.performLock', true);
+      await Promise.resolve(); // store.set queued its notify first: it has run now
+      const ms = performance.now() - t0;
+      let frames = 0;
       while (document.documentElement.dataset.theme !== 'daylight-stage' && performance.now() - t0 < 1000) {
         await new Promise((r) => requestAnimationFrame(r));
+        frames += 1;
       }
       return { html: document.documentElement.dataset.theme, mode: document.documentElement.dataset.mode,
-        ms: Math.round(performance.now() - t0) };
+        ms: Math.round(ms), frames };
     });
     assert.deepEqual({ html: flip.html, mode: flip.mode }, { html: 'daylight-stage', mode: 'dark' }, 'Stage under Lock');
-    assert.ok(flip.ms < 100, `within a frame or two (${flip.ms} ms)`);
+    assert.equal(flip.frames, 0, `before the next frame (${JSON.stringify(flip)})`);
+    assert.ok(flip.ms < 100, `in the store's notify (${flip.ms} ms)`);
     let s = await shown();
     assert.equal(s.store, 'daylight-day', 'the stored choice is untouched');
     assert.equal(s.link, '/themes/daylight-v2/theme.css');

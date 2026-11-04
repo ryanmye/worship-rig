@@ -6668,3 +6668,59 @@ Source: the real `test-logs` artifact of run 41753512499 (accabe7, macos-14). Th
   should change only after you stop for about 2 s, with no hiccup in the chords. Then a neighbour switch after a
   pause of more than 6 s should change the reverb at the switch, with no build (Activity Monitor: no main-thread
   spike).
+
+## ci-4 (CI after ci-3: run 41763607572 on b2aecc7 red 10/12 (engine 97/98, themes 57/58); run 40 = 41773491460 on d39f7d5 red (ui-core 80/82); engine + ui-core + themes tests only)
+Source: the real `test-logs` artifacts of both runs (13293210688 and 13296936377). No app change: every failure is a
+test that measured the runner's slow frame / audio delivery instead of the behaviour it names. fxIdleSleep and test
+61 were reproduced here under `sim/throttle.mjs` (6× CDP throttle, `SIM_SR=48000`, denied MIDI) before the fix. The
+Daylight flip and the drone-on miss were not: at 6× the old one-rAF wait costs < 100 ms here, and the old sequential
+probe read 0.95–1.0 of the meters. Their mechanism is shown by measurement (frames 0; the run-40 log).
+- **ci-3 follow-up: `dualMonoIdentity` printed `decodedLR` on the runner, in both runs.** test-mp3 lrDiff 3.0547e-5,
+  music-box C5 3.0532e-5. Both are exactly 1 LSB of 16-bit (2^-15 = 3.0518e-5), both now 1 channel. That is 1/20
+  of the music-box bound (6.3e-4) and 1/8 of the −72 dBFS floor. Engine 99/99 in run 40.
+- **Engine `realtime.fxIdleSleep` (b2aecc7: sleep 1 click vs reference 0; passed in run 40).**
+  - Two test causes, both in its capture and click count.
+  - The click counted was the note's own attack, at 0.1 ms after the dry onset. The detector flags an attack or not
+    depending on where the onset falls in its 256-sample blocks. On every earlier runner log, and here, both runs
+    had it (1 vs 1). On b2aecc7 the reference didn't (1 vs 0).
+  - Under the simulation, the ScriptProcessor capture also lost chunks to the starved main thread. The splice read
+    as a click: 2 vs 0 at 1261 ms, 1 run in 3.
+  - Fix (`test/phase1/engine/suites.mjs`, fxIdleSleep):
+    - The three signals are captured on the audio thread by one AudioWorklet (`rig-cap-k`), with every 128-frame
+      block placed by its render frame (as `captureTapExact`). `gapAt` holds the edges of skipped render quanta.
+    - Not counted: a click within 1 ms of the dry onset (the attack, the same note in both runs), and clicks within
+      ±12 ms of a capture hole (as `capClicks`). `clickAt` still lists every click, and `captureGaps` is reported.
+    - A wake click lands at a return's onset (reverb ≈ 17 ms, echo ≈ 244 ms) or later, so it is still counted. The
+      lag checks (±0.5 ms against the reference) are unchanged.
+  - An earlier try placed ScriptProcessor chunks by `playbackTime`. That made 51 false holes here, so it was dropped.
+  - After: here 1/1, lags 16.44 / 244.01 as before. Simulation 4/4, lags 16.83 / 244.13 in both runs (the runner's
+    exact values), some runs with 2–5 capture gaps. Before: simulation 2/3.
+- **Themes `v11 Daylight` (b2aecc7: "within a frame or two (122 ms)"; passed in run 40).**
+  - The loop always awaited one rAF before its first check, so it timed the browser's next frame: ≈ 70–120 ms on the
+    runner (ci-3).
+  - The Stage flip itself lands in the store's notify microtask. Here, after `await Promise.resolve()` it is already
+    on screen: 0 frames, 2–8 ms, the same under 6× throttle.
+  - Fix (`test/phase2/themes/run.mjs`): it reads after the notify microtask and counts frames, and asserts
+    `frames === 0` (on screen before the next frame) and < 100 ms. That is stricter than "within a frame or two" on
+    any box.
+- **ui-core `critics-fix performance #2` ("a note wakes the shared meter loop", 10 frames/s, needs > 10) and
+  `idle-cpu-ui` (9.4 frames/s, needs > 9.84 = 0.8 × 12.3) in run 40.**
+  - ci-3's capacity probe ran *after* the meter window. On the runner, load moved in between: 12.3/s against the
+    meters' 9.4/s.
+  - `PROBE_LOOP` (in-page, on the original rAF `__origRaf`, never counted as a meter frame) now runs *in the same
+    window* as the meter count (`uiRates(ms, true)`, and test 61's playing window).
+    - Here: frames / cap 30 / 29.5, 29.8 / 28.8.
+    - Simulation: 26.4 / 25.4, 27.3 / 26.3, 26 / 24. The probe tracks the meters within 1–2 frames/s.
+  - Test 61's bound is now `runBound(10, cap)` (= 10 on any box with capacity ≥ 12.5), for both the frame rate and
+    the slot reads/s. The ≤ 36 cap and the write counts are unchanged.
+  - Test 61 also opened its window 150 ms after the two note-ons. At 6× the Perform view's own note-on work is one
+    236 ms long task, which landed in the window: 8–9 frames/s for any loop. A CDP / longtask probe found no
+    `conv.buffer =` builds in it.
+    - The window now starts once the woken loop has run 3 frames (≤ 3 s).
+    - Simulation: frames 13 / 17 (was 10 / 11, and failing on the slot reads at 10/s).
+- Not changed: app code, meterClock, the reverb quiet gate (`reverbQuietGate` passed in run 40), the click detector.
+- **Runs here** (serial, `node test/run-all.mjs --only unit,engine,ui-core,edit-v2,themes`): unit 399 (7 skip),
+  engine 99/99, edit-v2 105/105, themes 58/58. ui-core was 81/82 in that run and 82/82 in a full re-run.
+  - The 1 failure was `polish-1: strip level meters…` (test 31, untouched): "Perform reads slot 3 once per clock
+    frame or sleeps (0.11)". A silent strip fell asleep partway through the 600 ms window under load.
+  - It passed 3/3 alone and in both CI runs. This is a pre-existing race, not changed here.
