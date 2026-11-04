@@ -555,8 +555,24 @@ function idlePeriod(ms, maxWait = 5000) {
   });
 }
 const REVERB_UNITS_MAX = 10;
-/** v11-memory: a deferred switch build waits at most this long (s, audio clock) for the keyboard to go quiet. */
-const REVERB_DEFER_MAX_SEC = 30;
+/**
+ * v11-reverb-quiet: a `conv.buffer =` blocks the main thread 14–125 ms here (95–397 ms for the 8 s space), and a
+ * note-on that arrives meanwhile is that late. ci-3 measured that the moment after a key release is when the next
+ * chord comes (150–600 ms later), so "no key held" is not a pause. A build the current song needs (a far jump
+ * while playing) waits for a real pause: no key held, the pedal up and no input of any kind (note on/off, pedal,
+ * wheel, bend, CC, a fader or a tap; engine.noteInput) for this long, on the audio clock (env.quietFor).
+ */
+export const REVERB_QUIET_SEC = 2;
+/**
+ * v11-reverb-quiet: speculative builds (the neighbours' spaces, Reverb.warm) wait this long of the same quiet:
+ * nothing plays for them now, so they can wait for a break between songs rather than a breath between phrases.
+ */
+export const REVERB_WARM_QUIET_SEC = 6;
+/**
+ * v11-reverb-quiet: the shortest re-check of a waiting build (s, audio clock). A check re-arms for when the window
+ * could be full at the earliest (window − quiet so far: a held key means a whole window), so it never spins.
+ */
+const REVERB_QUIET_POLL_SEC = 0.02;
 const clampPd = (v) => Math.min(0.5, Math.max(0, Number(v) || 0));
 
 class Reverb {
@@ -588,6 +604,13 @@ class Reverb {
     // current song's own (incl. its macro.wash buckets) are dropped, and warm() skips spaces outside them.
     this._retain = null; // Set of IR keys, or null = the plain LRU of REVERB_UNITS_MAX (offline renders, tests)
     this._songKeys = new Set(); // IR keys the current song has played on (commitTo + live requests)
+    // v11-reverb-quiet: builds that wait for a pause (_whenQuiet): one audio-clock check at a time
+    this._quietQ = []; // [{entry, resolve, seq}]
+    this._quietSeq = 0;
+    this._quietCancel = null; // cancels the armed check
+    this._quietAt = Infinity; // audio time of the armed check
+    this._builtAt = -Infinity; // audio time the last convolver build ended (realtime)
+    this.quietBuilds = 0; // debug stat: builds that waited for a pause
     this._disposed = false;
     // debug stat (leak checks compare engines): static nodes + two units' worth, independent of the pool size
     this.nodeCount = 5 + 2 * 6;
@@ -656,6 +679,7 @@ class Reverb {
     conv.connect(out).connect(this.ret);
     const u = { key, pd, pg, conv, out, cur: 0, pdV: [this.predelayV, this.predelayV], pdBusyUntil: 0, state: 'idle', idleAt: 0, connected: false };
     this.units.set(key, u);
+    if (!this.env.offline) this._builtAt = ctx.currentTime; // v11-reverb-quiet: a build ends a pause (_quietNow)
     this._evict();
     return u;
   }
@@ -709,9 +733,12 @@ class Reverb {
   /**
    * Unit via the worker. `idle` (ms): set the convolver buffer (Chromium does its FFT partitioning synchronously on
    * the main thread) in an idle period, waiting at most `idle` ms for one. prepare() doesn't wait (it resolves as
-   * soon as the unit exists); preload warming and live size edits do.
+   * soon as the unit exists); live size edits do.
+   * v11-reverb-quiet `quiet` (s): the build waits for that much quiet (_whenQuiet: no key held, pedal up, no input,
+   * on the audio clock), however long that takes. `need()`: still wanted when the quiet comes? (else no build, null).
+   * A caller without `idle`/`quiet` (prepare's stage) hurries a waiting build; a shorter `quiet` shortens its wait.
    */
-  _unitAsync(size, damp, { idle = 0, quiet = false } = {}) {
+  _unitAsync(size, damp, { idle = 0, quiet = 0, need = null } = {}) {
     const key = this.irKey(size, damp);
     const have = this.units.get(key);
     if (have) {
@@ -720,29 +747,126 @@ class Reverb {
     }
     const running = this._inflight.get(key);
     if (running) {
-      if (!(idle > 0)) running.hurry(); // prepare needs it now: stop waiting for an idle period
+      // prepare needs it now (no idle, no quiet): stop waiting; a live edit doesn't wait for a pause either
+      if (!(quiet > 0) && (!(idle > 0) || running.quiet > 0)) running.hurry();
+      else if (quiet > 0 && running.quiet > 0) {
+        // a deferred switch build joins a speculative warm-up of the same space: the shortest wait of the callers
+        // that still need it applies (a warm-up goes back to the long wait if the switch moved on)
+        running.needs.push({ q: quiet, f: need || (() => true) });
+        this._armQuiet(0);
+      }
       return running.p;
     }
     let hurry = () => {};
     const hurried = new Promise((r) => (hurry = r));
+    const gated = quiet > 0 && !this.env.offline && typeof this.env.quietFor === 'function';
+    const entry = { p: null, hurry, quiet: gated ? quiet : 0, needs: [{ q: quiet, f: need || (() => true) }],
+      cancelQuiet: null };
     const p = (async () => {
       const { ir } = await this.irAsync(size, damp);
-      if (idle > 0 && !this.env.offline && typeof requestIdleCallback === 'function') {
+      let paused = false;
+      if (gated) {
+        const ok = await Promise.race([this._whenQuiet(entry), hurried.then(() => 'hurried')]);
+        entry.cancelQuiet?.();
+        if (!ok) return null;
+        paused = ok === true;
+      } else if (idle > 0 && !this.env.offline && typeof requestIdleCallback === 'function') {
         await Promise.race([idlePeriod(40, idle), hurried]);
-        // v11-memory (performance #4b): a warm-up build waits while keys are held or pedalled (conv.buffer = blocks
-        // the main thread 15–400 ms: a note played then is that late), at most REVERB_DEFER_MAX_SEC
-        const t0 = Date.now();
-        let hurry = false;
-        hurried.then(() => (hurry = true));
-        while (quiet && !hurry && this.env.busy?.() && Date.now() - t0 < REVERB_DEFER_MAX_SEC * 1000) {
-          await Promise.race([idlePeriod(40, 1000), hurried]);
-        }
       }
       if (this._disposed) return null;
+      if (paused) this.quietBuilds++;
       return this.units.get(key) || this._newUnit(key, ir);
     })().finally(() => this._inflight.delete(key));
-    this._inflight.set(key, { p, hurry });
+    entry.p = p;
+    this._inflight.set(key, entry);
     return p;
+  }
+
+  /**
+   * v11-reverb-quiet: seconds of quiet now, for a gated build: the input quiet (env.quietFor: 0 while a key is held
+   * or the pedal is down) or the time since the last convolver build ended, whichever is shorter. A build ends a
+   * pause: input that came during it is dispatched after it, and the next gated build waits a whole window again
+   * (one build per pause).
+   */
+  _quietNow() {
+    const q = Number(this.env.quietFor()) || 0;
+    return Math.min(q, this.ctx.currentTime - this._builtAt);
+  }
+
+  /**
+   * v11-reverb-quiet: resolves true once _waitSec(entry) seconds of quiet have passed (and claims that pause: the
+   * next gated build counts its window from now), or false when it is cancelled or no `entry.needs` wants the unit
+   * any more. Audio clock only (env.timer): no setTimeout, and a suspended context simply waits.
+   * @returns {Promise<boolean>}
+   */
+  _whenQuiet(entry) {
+    return new Promise((resolve) => {
+      const w = { entry, resolve, seq: ++this._quietSeq };
+      this._quietQ.push(w);
+      entry.cancelQuiet = () => {
+        const i = this._quietQ.indexOf(w);
+        if (i >= 0) this._quietQ.splice(i, 1);
+        resolve(false);
+      };
+      this._armQuiet(0);
+    });
+  }
+
+  /** Arm the quiet check `delay` s from now, unless one is armed sooner already. */
+  _armQuiet(delay) {
+    if (!this._quietQ.length || this._disposed) return;
+    const at = this.ctx.currentTime + Math.max(0, delay);
+    if (this._quietCancel && this._quietAt <= at + 1e-3) return;
+    this._quietCancel?.();
+    this._quietAt = at;
+    this._quietCancel = this.env.timer.at(at, () => {
+      this._quietCancel = null;
+      this._quietAt = Infinity;
+      this._quietTick();
+    });
+  }
+
+  /** The window a gated build waits for: the shortest of its callers that still need it (0: none does). */
+  _waitSec(entry) {
+    let q = Infinity;
+    for (const n of entry.needs) if (n.q < q && n.f()) q = n.q;
+    return q === Infinity ? 0 : q;
+  }
+
+  _quietTick() {
+    const Q = this._quietQ;
+    if (this._disposed) {
+      for (const w of Q.splice(0)) w.resolve(false);
+      return;
+    }
+    for (const w of [...Q]) {
+      w.sec = this._waitSec(w.entry);
+      if (w.sec > 0) continue;
+      Q.splice(Q.indexOf(w), 1);
+      w.resolve(false);
+    }
+    const quiet = this._quietNow();
+    // the shortest window first (the current song's space before a neighbour's), then first come
+    let best = null;
+    for (const w of Q) {
+      if (quiet < w.sec) continue;
+      if (!best || w.sec < best.sec || (w.sec === best.sec && w.seq < best.seq)) best = w;
+    }
+    if (best) {
+      Q.splice(Q.indexOf(best), 1);
+      this._builtAt = this.ctx.currentTime; // claimed: the build runs next (a microtask); a second one waits again
+      best.resolve(true);
+    }
+    if (!Q.length) return;
+    const min = Math.min(...Q.map((w) => w.sec));
+    this._armQuiet(Math.max(REVERB_QUIET_POLL_SEC, min - (best ? 0 : quiet)));
+  }
+
+  /** v11-reverb-quiet debug stat: builds waiting for a pause, as {key, quiet} (key = the IR key). */
+  get quietWaiting() {
+    const out = [];
+    for (const [key, e] of this._inflight) if (e.quiet > 0) out.push({ key, quiet: this._waitSec(e) });
+    return out;
   }
 
   /** Resolves when every unit being built (worker IR + idle-time buffer set) exists. */
@@ -795,7 +919,7 @@ class Reverb {
    * v11-memory: `defer` (the engine passes it while keys are held or pedalled): a unit that isn't built yet is not
    * built now. `conv.buffer =` blocks the main thread 15–400 ms (8 s bucket ≈ 100 ms+ on this box), which would make
    * a note played during the switch that late. Only the IR is started (worker); commitTo then keeps the playing
-   * space until the keyboard is quiet (request {quiet}), builds the unit and crossfades as usual.
+   * space until a real pause (request {quiet}: REVERB_QUIET_SEC, v11-reverb-quiet), builds the unit and crossfades.
    * @param {number} size
    * @param {number} damp
    * @param {{defer?: boolean}} [o]
@@ -814,13 +938,15 @@ class Reverb {
     return { key, size, damp };
   }
 
-  /** Preload: warm a unit in idle time (realtime only; never blocks). */
+  /** Preload: warm a unit once the keyboard has been quiet REVERB_WARM_QUIET_SEC (realtime only; never blocks). */
   warm(size, damp) {
     if (this.env.offline) return Promise.resolve(null);
     const key = this.irKey(size, damp);
     // v11-memory: a space no song around the current one uses is not built ahead (it would be dropped at once)
-    if (this._retain && !this._retain.has(key) && !this._songKeys.has(key)) return Promise.resolve(null);
-    return this._unitAsync(size, damp, { idle: 5000, quiet: true }).catch(() => null);
+    const wanted = () => !this._retain || this._retain.has(key) || this._songKeys.has(key);
+    if (!wanted()) return Promise.resolve(null);
+    // v11-reverb-quiet: speculative, so it waits for the long quiet (and is dropped if the window moved on)
+    return this._unitAsync(size, damp, { quiet: REVERB_WARM_QUIET_SEC, need: wanted }).catch(() => null);
   }
 
   /** commit-phase: switch to a staged IR and/or predelay. Cheap: gains and connections only. */
@@ -924,8 +1050,10 @@ class Reverb {
 
   /**
    * Live size/damp edit (knob, macro.wash): debounced 300 ms (event time), then an off-thread unit + swap.
-   * v11-memory `quiet` (a deferred song-switch stage): a unit still to be built waits, on the audio clock, until
-   * `env.busy()` is false (no key held or pedalled), at most REVERB_DEFER_MAX_SEC.
+   * `quiet` (a deferred song-switch stage, v11-memory): a unit still to be built waits for a real pause,
+   * REVERB_QUIET_SEC of no input with no key held and the pedal up (v11-reverb-quiet: no deadline: a build that
+   * lands mid-phrase makes the next chord late, the playing space meanwhile is only a different room). It is
+   * dropped if another switch or edit comes first. Live edits don't wait: the player asked for the change.
    */
   request(size, damp, when, { quiet = false } = {}) {
     const seq = ++this._reqSeq;
@@ -944,11 +1072,12 @@ class Reverb {
         this._swapUnit(this._unitSync(size, damp), st, tt, seq);
         return;
       }
-      if (quiet && this.env.busy?.() && tt - t0 < REVERB_DEFER_MAX_SEC) {
-        this.env.timer.at(tt + 0.25, go);
-        return;
-      }
-      this._unitAsync(size, damp, { idle: 1000 }).then(
+      const o = quiet ? { quiet: REVERB_QUIET_SEC, need: () => seq === this._reqSeq } : { idle: 1000 };
+      // v11-reverb-quiet: a live (wheel / macro.wash) bucket stays built for the song even when the wheel moves on
+      // before the swap. It used to be dropped as it was built (not swapped yet, not retained: _newUnit's _evict)
+      // and built again on the wheel's next pass.
+      if (!quiet) this._songKeys.add(key);
+      this._unitAsync(size, damp, o).then(
         (u) => {
           if (u && seq === this._reqSeq && !this._disposed) this._swapUnit(u, st, this.ctx.currentTime, seq);
         },
@@ -987,6 +1116,8 @@ class Reverb {
 
   dispose() {
     this._disposed = true;
+    this._quietCancel?.();
+    for (const w of this._quietQ.splice(0)) w.resolve(false); // v11-reverb-quiet: no waiting build outlives us
   }
 }
 

@@ -1884,6 +1884,7 @@ export function createController(o) {
     lastInputAt = now();
     lastInputKind = kind;
     emitActivity(kind);
+    optional('noteInput'); // v11-reverb-quiet: reverb builds wait for a pause in any input, not only in notes
     if (secondary || !engine || typeof engine.wake !== 'function') return;
     const ss = engine.sleepState;
     if (ss && ss !== 'awake') {

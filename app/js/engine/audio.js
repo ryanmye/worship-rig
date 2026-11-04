@@ -36,6 +36,12 @@ const isSongKey = (k) => k.startsWith('slots.') || k.startsWith('fx.') || k.star
 // macro.intensity → morph() of these (type:id). organ soft-pad: morph ≥ .5 switches its rotary speed.
 /** v11-scenes: step of a virtual-wheel glide (setWheel {glide}); the swell steps every 50 ms. */
 const WHEEL_GLIDE_STEP = 0.025;
+/**
+ * v11-reverb-quiet: a sustain pedal held down this long (s) stops counting against a pause (Reverb quiet builds):
+ * a latched or reverse-polarity pedal would otherwise keep the new song's reverb space from ever being built. Held
+ * keys and input still count.
+ */
+const PEDAL_STUCK_SEC = 30;
 const PAD_LIKE = new Set(['synth:warm-pad', 'synth:glass-pad', 'synth:strings', 'synth:supersaw-pad', 'synth:juno-pad', 'synth:shimmer-pad', 'organ:soft-pad']);
 /** Default sample manifests, relative to the app root: factory + the optional "My Samples" one. */
 export const DEFAULT_MANIFEST_URLS = Object.freeze(['./samples/manifest.json', './api/user-samples/manifest.json']);
@@ -302,6 +308,8 @@ export class AudioEngine extends EventTarget {
     this.pedal = false;
     this._pedalSwell = false; // v11-touch: the drone (rebuilt with the graph) starts unswelled
     this.pedaled = new Set();
+    this._inputAt = -Infinity; // v11-reverb-quiet: audio time of the last input (noteInput); a new context: none yet
+    this._pedalDownAt = 0;
     this.bend = 0;
     this.wheel = { mod: 1, expr: 1, vol: 1 };
     this._modOwner = 'hw';
@@ -380,7 +388,7 @@ export class AudioEngine extends EventTarget {
     this.timer = new AudioTimer(ctx);
     this.coalesce = new Coalescer(this.timer, 0.01);
     this.fx = new FxGraph(ctx, { seed: this.seed, timer: this.timer, irCache: this._irCache, lofi: this._lofiOpt, clipOversample: this._clipOs, glue: this._glueOpt });
-    this.fx.env.busy = () => this.sounding.size > 0 || this.pedaled.size > 0; // v11-memory: deferred reverb builds
+    this.fx.env.quietFor = () => this.quietFor(); // v11-reverb-quiet: reverb builds wait for a pause
     this.fx.reverb.predelayV = this._patch.fx.reverb.predelay;
     this._reverbInit = this.fx.reverb.init(this._effReverbSize(), this._patch.fx.reverb.damp).catch((e) => this._warn(`Reverb IR build failed: ${e.message || e}`));
     this._applyFx(this._patch.fx, 0, null, true);
@@ -589,12 +597,10 @@ export class AudioEngine extends EventTarget {
     // reverb unit (IR off the main thread + convolver buffer) in parallel with the instruments. The size staged is
     // the *effective* one: with a wheel on macro.wash it is lerp(size, .9, wash) under the new song's routing, so
     // commit lands on the washed IR directly (round2-engine M2: it used to land on the plain size and stay there).
-    const R2 = { ...this._routing };
-    this._routingInto(R2, p);
-    const W2 = this._macro('macro.wash', R2);
-    const stageSize = W2 === null ? p.fx.reverb.size : lerp(p.fx.reverb.size, 0.9, W2);
-    // v11-memory: while keys are held or pedalled, a space not built yet is built at the next quiet moment instead
-    // (conv.buffer = blocks the main thread up to ≈ 400 ms: notes played meanwhile would be that late)
+    const stageSize = this._stageReverbSize(p);
+    // v11-memory: while keys are held or pedalled, a space not built yet is built later instead (conv.buffer =
+    // blocks the main thread up to ≈ 400 ms: notes played meanwhile would be that late), at the next real pause
+    // (v11-reverb-quiet: REVERB_QUIET_SEC without input, not the next release)
     const playing = this.sounding.size > 0 || this.pedaled.size > 0;
     const reverbP = this.fx.reverb.stage(stageSize, p.fx.reverb.damp, { defer: playing && !this.offline }).then(
       (st) => (plan.reverb = st),
@@ -639,6 +645,21 @@ export class AudioEngine extends EventTarget {
     }
     this._plan = plan;
     return token;
+  }
+
+  /**
+   * The reverb size a switch to `p` stages: the *effective* one, lerp(size, .9, wash) when p's routing puts a wheel
+   * on macro.wash (at the wheels' current values). v11-reverb-quiet: warm() and retainReverb() use it too, so a
+   * neighbour's warmed unit is the one its switch needs (they used the plain size: a wash song's neighbour switch
+   * still built its unit in prepare).
+   * @param {object} p a normalized patch
+   * @returns {number}
+   */
+  _stageReverbSize(p) {
+    const R2 = { ...this._routing };
+    this._routingInto(R2, p);
+    const W2 = this._macro('macro.wash', R2);
+    return W2 === null ? p.fx.reverb.size : lerp(p.fx.reverb.size, 0.9, W2);
   }
 
   _discardPlan(plan) {
@@ -713,7 +734,7 @@ export class AudioEngine extends EventTarget {
     if (!R || typeof R.retain !== 'function') return false;
     R.retain(patchStates.filter(Boolean).map((ps) => {
       const p = normalizePatch(ps);
-      return R.irKey(p.fx.reverb.size, p.fx.reverb.damp);
+      return R.irKey(this._stageReverbSize(p), p.fx.reverb.damp);
     }));
     return true;
   }
@@ -887,7 +908,7 @@ export class AudioEngine extends EventTarget {
     if (pin === 'auto') pin = patchStates.length > 2 ? 'replace' : 'add';
     const { urls, jobs, patches } = this._sampleJobs(patchStates);
     // off-thread IR, idle-time buffer; menubar-A: never in low-resource mode (only the reverb in use is built)
-    if (!this._lowRes) for (const p of patches) this.fx.reverb.warm(p.fx.reverb.size, p.fx.reverb.damp);
+    if (!this._lowRes) for (const p of patches) this.fx.reverb.warm(this._stageReverbSize(p), p.fx.reverb.damp);
     const doPin = (keys) => {
       if (this._lowRes) this._pinCurrentOnly(); // menubar-A: pin policy 'current-only'
       else if (pin === 'replace') this.cache.setPins(keys);
@@ -1367,6 +1388,33 @@ export class AudioEngine extends EventTarget {
       tap.strips.clear();
       this._slotTaps[i] = null; // the next read makes a fresh one
     });
+  }
+
+  // ----- input quiet (v11-reverb-quiet) ------------------------------------------------------------------------------
+  /**
+   * Note an input (v11-reverb-quiet): the engine's own note / pedal / wheel / bend / swell calls do it, and the
+   * controller calls it from its input clock for everything else (a tap or click, a computer key, any MIDI message,
+   * a bus command). Reverb builds that wait for a pause count from the latest one (quietFor).
+   * @param {{when?: number}} [o]
+   */
+  noteInput({ when } = {}) {
+    if (!this.ctx) return;
+    const t = this._t(when);
+    if (t > this._inputAt) this._inputAt = t;
+  }
+
+  /**
+   * Seconds the player has been quiet (audio clock): 0 while a key is held, a note is pedal-held or the pedal is
+   * down (a pedal down for PEDAL_STUCK_SEC stops counting), else the time since the last input (noteInput).
+   * Reverb builds wait on it: REVERB_QUIET_SEC for the current song's space, REVERB_WARM_QUIET_SEC for warm-ups.
+   * @returns {number}
+   */
+  quietFor() {
+    if (!this.ctx) return 0;
+    const now = this.ctx.currentTime;
+    if (this.sounding.size > 0) return 0;
+    if ((this.pedal || this.pedaled.size > 0) && now - this._pedalDownAt < PEDAL_STUCK_SEC) return 0;
+    return Math.max(0, now - this._inputAt);
   }
 
   // ----- low-resource mode (menu-bar mode; docs/menubar-mode.md, C7 menubar-A) --------------------------------------
@@ -1853,6 +1901,7 @@ export class AudioEngine extends EventTarget {
    * @param {{when?:number, glide?:number}} [o]  glide (v11-scenes, 'virtual' only): move there over `glide` s
    */
   setWheel(source, value01, { when, glide = 0 } = {}) {
+    this.noteInput({ when });
     if (source === 'virtual' && glide > 0 && this.timer) return this._glideWheel(value01, this._t(when), glide);
     return this._setWheel(source, value01, this._t(when), false);
   }
@@ -1931,6 +1980,7 @@ export class AudioEngine extends EventTarget {
       this._warn('Swell before start(); ignored.');
       return false;
     }
+    this.noteInput({ when });
     const t = this._t(when);
     if (start === undefined) start = !(this._swell && this._swell.dir === 'up');
     const seq = (this._swellSeq = (this._swellSeq || 0) + 1);
@@ -1965,6 +2015,7 @@ export class AudioEngine extends EventTarget {
 
   // ----- bend ----------------------------------------------------------------------------------------------------
   pitchBend(x, { when } = {}) {
+    this.noteInput({ when });
     const t = this._t(when);
     this.bend = Math.max(-1, Math.min(1, Number(x) || 0));
     if (!this.coalesce) return; // before start(): stored only
@@ -2061,6 +2112,7 @@ export class AudioEngine extends EventTarget {
    */
   noteOn(note, vel = 100, { when, touch } = {}) {
     if (!this.fx) return false;
+    this.noteInput({ when });
     if (this._sleepHold('noteOn', [note, vel], touch ? { touch } : null)) return true; // lowres2: played on wake
     if (!(Number(vel) > 0)) return this.noteOff(note, { when }); // MIDI convention: velocity 0 = note-off
     const t = this._t(when);
@@ -2120,6 +2172,7 @@ export class AudioEngine extends EventTarget {
 
   noteOff(note, { when } = {}) {
     if (!this.fx) return false;
+    this.noteInput({ when });
     if (this._sleepHold('noteOff', [note])) return true; // lowres2: after the queued noteOn, in order
     const t = this._t(when);
     const n = clampMidi(note);
@@ -2140,10 +2193,12 @@ export class AudioEngine extends EventTarget {
   sustain(down, { when } = {}) {
     if (!this.fx) return false;
     if (this._sleepHold('sustain', [down])) return true; // lowres2
+    this.noteInput({ when });
     const t = this._t(when);
     const d = !!down;
     if (d === this.pedal) return true;
     this.pedal = d;
+    if (d) this._pedalDownAt = t;
     this._syncPedalSwell(t);
     if (!d) {
       for (const e of this.pedaled) this._release(e.channel, e.instrument, e.voice, t);
@@ -2418,6 +2473,7 @@ export class AudioEngine extends EventTarget {
       lowResource: this._lowRes,
       slotLevelTaps: this.slotTapCount(),
       reverbUnits: this.fx && this.fx.reverb && this.fx.reverb.units ? this.fx.reverb.units.size : 0,
+      reverbQuietWaiting: this.fx?.reverb?.quietWaiting ? this.fx.reverb.quietWaiting.length : 0, // v11-reverb-quiet
       fxAsleep: this.fx ? this.fx.fxAsleep : [], // idle-cpu #2: send effects asleep now
       // lowres2: frozen drone (droneFrozen, droneLoopSec, droneRenderMs, …) and audio sleep
       ...(this.drone ? this.drone.freezeStats() : { droneFrozen: false, droneLoopSec: null, droneRenderMs: null }),

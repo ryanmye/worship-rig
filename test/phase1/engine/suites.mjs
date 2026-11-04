@@ -2845,6 +2845,109 @@ export const realtime = {
     return { pass, switchMs: Math.round(switchMs), oldKey, heldActive, builtWhileHeld, afterQuiet, quietSwitch, deferred };
   },
 
+  /**
+   * v11-reverb-quiet: a reverb build waits for a real pause. A far jump under a held key defers its space; after
+   * the release, a tap, the pedal and a controller input (noteInput) each restart the quiet, and the build lands
+   * REVERB_QUIET_SEC after the last of them, not at the release (v11-memory built it then). A neighbour warm-up
+   * queued at the same time waits REVERB_WARM_QUIET_SEC, counted from that build. A switch with nothing held still
+   * builds its own space in prepare (hurrying a waiting warm-up), so it is active at the commit. A held pedal is
+   * not a pause (unless latched for 30 s), and a warm-up joined by a deferred switch waits 2 s only while that
+   * switch still needs it.
+   */
+  async reverbQuietGate() {
+    const { REVERB_QUIET_SEC, REVERB_WARM_QUIET_SEC } = await import('/js/engine/fx.js');
+    const e = new AudioEngine({ seed: 13, manifestUrl: MANIFEST, instrumentModules: false });
+    await e.start();
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const R = e.fx.reverb;
+    const bell = (size, damp = 0.5) => patch({ 0: slot('synth', 'bell') }, { reverb: { size, damp } });
+    await use(e, bell(0.2));
+    await R.settled();
+    const builds = [];
+    const onu = R._newUnit.bind(R);
+    R._newUnit = (key, ir) => {
+      const at = e.ctx.currentTime;
+      const u = onu(key, ir);
+      builds.push({ key, at, end: e.ctx.currentTime });
+      return u;
+    };
+    const kB = R.irKey(0.9, 0.5); // the far jump's space
+    const kC = R.irKey(0.42, 0.3); // a neighbour's (none of them is the engine-start space)
+    const kD = R.irKey(0.3, 0.3);
+    let lastIn = 0;
+    const input = (f) => {
+      f();
+      lastIn = e.ctx.currentTime;
+    };
+    input(() => e.noteOn(60, 90));
+    await use(e, bell(0.9)); // under a held key: deferred
+    await e.preload([bell(0.42, 0.3)], { pin: 'none' }); // a neighbour warm-up starts waiting too
+    await wait(500);
+    input(() => e.noteOff(60)); // v11-memory built B here (no key held)
+    const tRel = lastIn;
+    await wait(1000);
+    input(() => (e.noteOn(62, 80), e.noteOff(62))); // a short tap
+    await wait(1000);
+    input(() => e.sustain(true)); // pedal down, no key: still not a pause
+    await wait(1000);
+    input(() => e.sustain(false));
+    await wait(800);
+    input(() => e.noteInput()); // the controller's input clock (a fader, a tap, any MIDI message)
+    const tLast = lastIn;
+    const waitingAtLast = R.quietWaiting.map((x) => `${x.key.split('|')[0]}@${x.quiet}`);
+    for (let i = 0; i < 160 && !builds.some((b) => b.key === kC); i++) await wait(100);
+    const bB = builds.find((b) => b.key === kB);
+    const bC = builds.find((b) => b.key === kC);
+    const activeB = R.active?.key === kB;
+    const r3 = (x) => (x == null ? null : +x.toFixed(3));
+    const out = {
+      quietSec: REVERB_QUIET_SEC, warmSec: REVERB_WARM_QUIET_SEC, waitingAtLast,
+      deferredAfterRelease: r3(bB && bB.at - tRel), deferredAfterInput: r3(bB && bB.at - tLast),
+      warmAfterDeferred: r3(bC && bB && bC.at - bB.end), warmAfterInput: r3(bC && bC.at - tLast),
+      buildsBeforeLastInput: builds.filter((b) => b.at < tLast).map((b) => b.key), activeB,
+    };
+    // a switch with nothing held: its space is built in prepare (a waiting warm-up is hurried), active at commit
+    await e.preload([bell(0.3, 0.3)], { pin: 'none' });
+    await wait(300);
+    out.dWaiting = R.quietWaiting.some((x) => x.key === kD);
+    input(() => (e.noteOn(64, 80), e.noteOff(64)));
+    await use(e, bell(0.3, 0.3));
+    out.quietSwitchActive = R.active?.key === kD;
+    out.dBuiltAfterInput = r3(builds.find((b) => b.key === kD)?.at - lastIn);
+    out.quietBuilds = R.quietBuilds;
+    // the pedal down is not a pause; one held down PEDAL_STUCK_SEC (30 s) no longer counts (a latched pedal)
+    e.sustain(true);
+    out.quietPedal = e.quietFor();
+    e._pedalDownAt -= 31;
+    await wait(50);
+    out.quietStuckPedal = r3(e.quietFor());
+    e.sustain(false);
+    // a deferred switch joins a waiting warm-up of its space (2 s wait); once another switch supersedes it, the
+    // warm-up is speculative again (6 s)
+    const kE = R.irKey(0.62, 0.8);
+    const waitOf = (k) => R.quietWaiting.find((x) => x.key === k)?.quiet ?? null;
+    await e.preload([bell(0.62, 0.8)], { pin: 'none' });
+    await wait(200);
+    out.eWarm = waitOf(kE);
+    e.noteOn(65, 80);
+    await use(e, bell(0.62, 0.8));
+    await wait(600); // past the request's 0.3 s debounce
+    out.eJoined = waitOf(kE);
+    await use(e, bell(0.15, 0.8));
+    await wait(200);
+    out.eAlone = waitOf(kE);
+    e.noteOff(65);
+    e.dispose();
+    const tol = 0.02;
+    const pass = !!bB && !!bC && out.buildsBeforeLastInput.length === 0 &&
+      out.deferredAfterInput >= REVERB_QUIET_SEC - tol && out.deferredAfterInput < REVERB_QUIET_SEC + 1 &&
+      out.warmAfterDeferred >= REVERB_WARM_QUIET_SEC - tol && out.warmAfterDeferred < REVERB_WARM_QUIET_SEC + 1 &&
+      activeB && out.dWaiting && out.quietSwitchActive && out.dBuiltAfterInput < 1 && out.quietBuilds === 2 &&
+      out.quietPedal === 0 && out.quietStuckPedal > 0.03 && out.eWarm === REVERB_WARM_QUIET_SEC &&
+      out.eJoined === REVERB_QUIET_SEC && out.eAlone === REVERB_WARM_QUIET_SEC;
+    return { pass, ...out };
+  },
+
   /** round2-engine M2: the washed reverb size survives restart() (it used to come back at the song's plain size). */
   async washSurvivesRestart() {
     const e = new AudioEngine({ seed: 9, manifestUrl: MANIFEST, instrumentModules: false });

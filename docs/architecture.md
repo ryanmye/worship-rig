@@ -96,6 +96,12 @@ shared/ (params grammar, fx-presets, music, automation, keydetect, chords, wav, 
   token. `commit(token, {when})` only changes gains and connections. Held and pedalled notes keep sounding on the old
   instruments (the "MainStage" switch). Old channels are retired and disposed after 1 s without voices, timed on the
   audio clock. Only the latest token can commit.
+- A reverb unit's build (`ConvolverNode.buffer =`) blocks the main thread for 14–400 ms, so it never runs while
+  someone plays. A switch with nothing held builds its own space in `prepare`. A switch under held notes keeps the
+  playing space, and the new one is built after a real pause: 2 s with no key held, the pedal up and no input
+  (`engine.quietFor()`, fed by the engine's note/pedal/wheel calls and the controller's `engine.noteInput()`).
+  Neighbour warm-ups wait 6 s of the same quiet. Each build starts a new pause (fx.js `REVERB_QUIET_SEC`,
+  `REVERB_WARM_QUIET_SEC`; CONTRACT_CHANGES "v11-reverb-quiet").
 - Every time-sensitive call takes `{when}`, and no timers are used (`AudioTimer`). The same graph therefore renders
   deterministically into an OfflineAudioContext. The tests, `tools/calibrate.mjs` and `tools/audition.mjs` rely on this.
 - **Signal path** (`engine/fx.js`):

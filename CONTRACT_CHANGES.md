@@ -6520,3 +6520,151 @@ Source: the real `test-logs` artifact of run 41753512499 (accabe7, macos-14). Th
     ≈ 3e-5, against a bound of 6.3e-4 for music-box.
   - The Mac's decoded MB for the factory library should drop by about half on the 14 dual-mono sets (the soak's
     `peakDecodedMB`).
+
+## v11-reverb-quiet (ci-3 follow-up: "a reverb build never lands where a player is likely to play"; engine fx.js + audio.js, controller.js 1 line, docs/architecture.md, engine test)
+- **Why.** A reverb unit's build (`conv.buffer =`) blocks the main thread 14–125 ms here, and 95–397 ms for the 8 s
+  space. v11-memory moved the far-jump builds and the neighbour warm-ups to "the first quiet moment": no key held,
+  no note pedal-held. ci-3 then found that this moment, right after a release, is exactly when the next chord comes
+  (150–600 ms later). Warm-ups ran there and blocked 120–190 ms.
+- **The quiet clock** (`engine.quietFor()`, audio clock, s): 0 while a key is held, a note is pedal-held or the
+  pedal is down. Otherwise it is the time since the last input.
+  - Input = the engine's own `noteOn`, `noteOff`, `sustain`, `setWheel` (mod / expression / volume CC, the virtual
+    wheel), `pitchBend` and `swell`.
+  - New `engine.noteInput({when})`: the controller's input clock (`noteActivity`, lowres2) calls it for everything
+    else it already sees: a tap or click anywhere (faders included), a computer key, any MIDI message (not clock /
+    active sensing), a bus command. No new listeners.
+  - `PEDAL_STUCK_SEC` (audio.js, 30 s): a pedal held down that long stops counting. Held keys and input still
+    count. Without this, a latched or reverse-polarity pedal would keep a deferred space from ever being built.
+  - `fx.env.busy` is gone; the reverb reads `env.quietFor`.
+- **The gate** (fx.js `Reverb._whenQuiet` / `_quietTick` / `_armQuiet`). A gated build waits on the audio clock
+  (`env.timer`, no setTimeout) until `min(quietFor(), now − end of the last convolver build) ≥ its window`.
+  - `REVERB_QUIET_SEC = 2` (exported): builds the current song needs. That is a far jump under held notes
+    (`stage({defer})` → `commitTo` → `request({quiet})`).
+  - `REVERB_WARM_QUIET_SEC = 6` (exported): speculative builds (`warm()`: the neighbours' spaces).
+  - **One build per pause.** A pass claims the pause, and every build (gated or not) restarts the clock for the
+    next one. Input that arrived during a build is dispatched after it, so it restarts the window too.
+  - The shortest window goes first (the current song's space before a neighbour's), then first come.
+  - There is one armed check at a time. It re-arms for the earliest moment the window could be full
+    (window − quiet so far; a held key waits a whole window), at least 20 ms later, so it never spins.
+  - **No deadline.** v11-memory's `REVERB_DEFER_MAX_SEC` (30 s, which built mid-phrase after 30 s of playing) is
+    removed. Until a pause comes, the playing space simply stays.
+  - **Needs.** Each caller of a gated build says whether it still wants it. A deferred build is dropped once
+    another switch or edit supersedes it. A warm-up is dropped once the window has moved on. When a deferred
+    switch joins a waiting warm-up of the same space, the 2 s wait applies only while that switch still needs it.
+  - `stage()` without `defer` (a switch with nothing held) and live edits still **hurry** a waiting build. So the
+    gapless rule holds: the current song's own space is built in `prepare` when no note is held, and it is active
+    at the commit, crossfaded (0.8 s) as before.
+  - `quietWaiting` (getter) and `_debugStats().reverbQuietWaiting`; `quietBuilds` counts builds that passed the
+    gate.
+  - `dispose()` releases any waiting build.
+- **Warm-ups go for the right space.** `_stageReverbSize(p)` is the size `prepare` stages: the effective
+  lerp(size, .9, wash) under p's routing at the current wheel values. `warm()` and `retainReverb()` now use it too.
+  Before, they used the plain size, so a neighbour switch of a song with the wheel on macro.wash still built its
+  unit in prepare. (Not measured on its own: the player model moves the wheel, so the washed size it switches to
+  varies.)
+- **Live wash buckets stay built.** A live `request` adds its key to the song's keys (`_songKeys`) before the build.
+  Before, a bucket the wheel passed was built, then dropped by `_newUnit`'s own `_evict` (not swapped yet, not
+  retained), then built again on the wheel's next pass. One run built 5|0.5 three times in 8 s.
+- **Warm-ups: the 6 s quiet, not "during the switch's own prepare".** Variant B was measured as well: a warm-up
+  builds at once when it is asked for with nothing held, which means right after the switch's commit, in the gap
+  before the next chord. Same player model, same seeds, alternated runs:
+  - **Variant B:** 14 of its 24 deferred and warm builds landed within 2 s of input. Its main-thread reverb time
+    within 2 s of input was 2.1 s in total (vs 1.1 s for the 6 s rule), and one note was 71.6 ms late behind a
+    warm-up.
+  - **The 6 s rule:** pays with cold neighbour switches (12 of 20 vs 6 of 20). Each one is a prepare build at the
+    switch, 28–136 ms.
+  - The 6 s rule still has less reverb work near input in total. It also keeps all of it inside the switch the
+    player asked for.
+  - The "hidden / low-resource with nothing sounding" option was not taken. Hidden in menu-bar mode is
+    low-resource mode, which warms nothing (menubar-A), so a hidden window adds no case.
+- **Measured.** The player model (`scratchpad/rq/player.mjs`, real app, Chrome version, library mode, MIDI through
+  `midi._inject`). Its parts:
+  - Chords of 3 notes held 0.3–1.2 s, 150–600 ms from a release to the next note-on. 30 % with the pedal, 10 %
+    with a mod-wheel move.
+  - Phrases of 4–8 chords. Between phrases: 60 % the same short gap, 25 % a 2.5–4 s pause, 15 % a 7–9 s pause.
+  - After 60 % of the phrases, a song switch: half under the held last chord, half 40 ms after its release.
+    Targets: half a neighbour, half a far jump (4–9 away).
+  - 180 s per run, 3 seeds, each seed played identically by the three trees: base = b2aecc7, new = this branch,
+    varB. Runs alternated, load 0.5–1.4.
+  - Lateness = dispatch − intended time of each chord's note-on macrotask. "Within 2 s" = a build that started less
+    than 2 s after the last input. A late note is blamed on a build only when that build held the main thread at
+    its due time.
+  - Builds are given as total / within 2 s, per kind: prepare (a switch's own, nothing held) · deferred · warm ·
+    live (wheel / wash request).
+
+  | run | late max ms | p99 | p95 | builds | prepare · deferred · warm · live | reverb ms ≤ 2 s after input | late > 20 ms (blamed on a build) | cold neighbour switches |
+  |---|---|---|---|---|---|---|---|---|
+  | base 1 | 203.4 | 142 | 6.4 | 13 / 13 | 2/2 · 2/2 · 8/8 · 1/1 | 923 | 3 (1 warm, 203 ms) | 2/5 |
+  | new 1 | 150.3 | 148.9 | 6.9 | 6 / 3 | 3/3 · 1/0 · 1/0 · 1/0 | 314 | 2 (1 prepare, 150 ms) | 3/5 |
+  | varB 1 | 9.8 | 7.7 | 6.9 | 7 / 5 | 3/3 · 1/0 · 2/2 · 1/0 | 462 | 0 | 3/5 |
+  | base 2 | 130.5 | 9.8 | 6.0 | 27 / 26 | 3/3 · 2/2 · 17/16 · 5/5 | 1953 | 1 (none) | 1/9 |
+  | new 2 | 100.8 | 71.9 | 6.9 | 12 / 7 | 4/4 · 3/0 · 2/0 · 3/3 | 549 | 3 (none) | 5/9 |
+  | varB 2 | 90.6 | 71.6 | 6.8 | 18 / 15 | 3/3 · 2/1 · 10/8 · 3/3 | 1329 | 2 (1 warm, 72 ms) | 1/9 |
+  | base 3 | 225.6 | 154 | 7.5 | 14 / 14 | 3/3 · 3/3 · 8/8 · 0/0 | 1000 | 3 (none) | 1/6 |
+  | new 3 | 260.6 | 249.6 | 8.2 | 10 / 4 | 4/4 · 2/0 · 4/0 · 0/0 | 219 | 4 (none) | 4/6 |
+  | varB 3 | 140.7 | 101.5 | 7.0 | 12 / 6 | 3/3 · 3/0 · 6/3 · 0/0 | 352 | 4 (none) | 2/6 |
+
+  Pooled over the 3 runs (370 note-ons each):
+
+  | | base | new | varB |
+  |---|---|---|---|
+  | note-on lateness max / p99.5 / p99 / p95 (ms) | 225.6 / 203.4 / 142 / 6.3 | 260.6 / 249.6 / 148.9 / 7.3 | 140.7 / 101.5 / 71.6 / 6.9 |
+  | deferred + warm builds within 2 s of input | **39 of 40** | **0 of 13** (shortest quiet 2000 ms) | 14 of 24 |
+  | live (wheel) builds within 2 s | 6 of 6 | 3 of 4 | 3 of 4 |
+  | prepare builds (the switch's own, nothing held) | 8 | 11 | 9 |
+  | reverb main-thread ms within 2 s of input | 3877 | **1083** (all prepare + live) | 2142 |
+  | notes > 20 ms late blamed on a reverb build | 1 (warm, 203 ms) | 1 (prepare, 150 ms) | 1 (warm, 72 ms) |
+  | notes > 20 ms late with no reverb build at their due time | 6 | 8 | 5 |
+  | deferred spaces arrived: time from the last input to the space | 9 of 9, 0.09–1.08 s | 11 of 16 (the other 5 were superseded by the next switch before a 2 s pause); 2.05–2.10 s, or at once when a non-held switch hurried it | 10 of 11 |
+
+  - **What changed:** no deferred or speculative reverb build runs within 2 s of input any more (39 of 40 → 0 of
+    13), and the reverb's main-thread time near input fell from 3.9 s to 1.1 s per 9 minutes of playing.
+  - **What didn't: the lateness percentiles.** On this box a 14–136 ms build rarely lands exactly on a note-on: one
+    blamed note per 370 in every tree. The max and p99 are set by the switch's other main-thread work, in all
+    three trees alike: long tasks of 170–270 ms (instruments, decode bookkeeping, the view). v11-memory found the
+    same. Read the lateness rows as "not worse"; the build-position rows are the effect of this change.
+  - **The remaining reverb work near input:**
+    - prepare builds at a switch with nothing held (goal 3: the song's own space must be there at the commit);
+    - live wash-wheel requests (the player moved the wheel and asked for the bigger space).
+  - The table was measured before the last refinement: a warm-up joined by a superseded deferred switch goes back
+    to the 6 s wait. In "new", 2 of the 7 warm builds passed the 2 s gate (quiet 2000 / 2005 ms), most likely such
+    warm-ups.
+  - Zero console errors in every run.
+- **Trade-offs:**
+  - After a far jump while playing, the new space now comes 2 s into the first real pause, not at the first release.
+    If the player switches again before one, it never comes (it is no longer needed).
+  - With no 6 s pause between songs, neighbour switches are cold more often, and a cold one builds in prepare
+    (28–136 ms at the switch).
+- **Test:** engine realtime `reverbQuietGate` (≈ 14 s, real constants). In order:
+  - A far jump under a held key. The release, a tap, the pedal down and up, and `noteInput()` follow ≤ 1 s apart.
+    No build happens before the last input. The deferred space builds at 2.003 s after it (≥ 2 s, < 3 s) and is
+    active. v11-memory built it at the release.
+  - A neighbour warm-up queued at the same time builds at 6.008 s after that build (≥ 6 s, < 7 s).
+  - A switch with nothing held builds its own space in prepare and hurries a waiting warm-up: active at the
+    commit.
+  - The pedal down → `quietFor()` 0. A pedal down for 31 s → the input quiet counts again.
+  - A waiting warm-up shows 6 s. Joined by a deferred switch: 2 s. That switch superseded: 6 s again.
+  - `reverbDeferWhilePlaying` passes unchanged (its 6 s wait covers the 2 s quiet).
+  - The ci-3 waits (`engine.fx.reverb.settled()` ≤ 20 s in ui-core `idle-cpu-ui`) still cover the new timing:
+    with the library window of ±1, at most two warm-ups, 6 s + 6 s.
+- **Runs** (here, serial, load 0.5–2.0, final code):
+
+  | run | result |
+  |---|---|
+  | `node test/run-all.mjs --only unit` | 399 pass, 7 skip |
+  | `node test/phase1/engine/run.mjs` | 99/99 (+1 `reverbQuietGate`) |
+  | `node test/phase1/shell/run.mjs --only unit` | 233/233 |
+  | `node test/phase1/shell/run.mjs --only browser` | 13/13 |
+  | `node test/phase2/ui-core/run.mjs` | 76/76 (scenes 6 inside one); `idle-cpu-ui` drone-on 30 frames/s, capacity 29.9 |
+  | `node test/phase2/edit-v2/run.mjs` | 105/105 (11 files) |
+
+- **Not done / open for Ryan:**
+  - Live wash-wheel builds still run while playing (3 of the 4 in "new" were within 2 s of input). Gating them
+    would make the wash's size lag the wheel until a pause; its return gain and delay feedback would still follow
+    at once.
+  - The switch's other main-thread work (the 170–270 ms long tasks) is now the larger cause of a late note at a
+    switch.
+- **Needs the Mac (LOCAL):** by ear. Jump far while holding a pad and keep playing with short gaps: the reverb
+  should change only after you stop for about 2 s, with no hiccup in the chords. Then a neighbour switch after a
+  pause of more than 6 s should change the reverb at the switch, with no build (Activity Monitor: no main-thread
+  spike).
