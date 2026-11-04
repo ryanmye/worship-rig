@@ -6364,3 +6364,84 @@ R-3 and R-4 went to the hotkeys / device-local worker and are not in this sectio
     `peakDecodedMB` column is the check.
   - The far-jump deferral by ear: jump while holding a pad. The reverb should change at the release.
   - `conv.buffer =` times on the M2 Pro (expected to be lower; the deferral makes them matter less anyway).
+
+## ci-3 (`test.yml` red on the session branch after the v11-memory / v11-decisions / v11-review-fixes merge: engine 96/98, ui-core 81/82, edit-v2 104/105; Mac findings L11-5 / L11-6; engine/sampler.js, engine + ui-core + edit-v2 tests)
+Source: the real `test-logs` artifact of run 41753512499 (accabe7, macos-14). The last green run was 41742444055
+(ef3d58a). Four failures, two causes. Each was reproduced here before it was fixed.
+- **Engine `offline.dualMonoIdentity` and `offline.preloadAndLRU` (= Mac findings L11-6 and L11-5): an app bug from
+  v11-memory, and it hit the Mac itself.**
+  - `processSample` kept a stereo file as one channel only when L and R were equal sample for sample. Chromium on
+    macOS decodes the dual-mono MP3s with channels that differ in the last bits; Linux Chromium and ffmpeg give
+    exactly equal channels. On the runner, test-mp3 decoded to 848 832 bytes (here 424 416) and music-box stayed 2
+    channels. So on the Mac the v11-memory halving never applied to any of the 14 dual-mono Musyng Kite sets.
+  - L11-6: the reported 6.94e-5 (runner) / 6.95e-5 (Mac) is the test's OUTPUT difference between the file as decoded
+    and the same file with R := L, through pan 0.3, width 0.7 and reverb send. That is −83 dBFS: what collapsing
+    the channels costs at most, on that file.
+  - L11-5: the eviction is not a gapless risk and the test is not stale. The test leaves 0.6 MB of room above the
+    pinned set, which fits the mono test-mp3 (0.40 MB) but not the stereo one (0.81 MB). Over the cap, with a song
+    prepared (`protect` set), v11-memory's hard cap evicts *unreferenced* pinned buffers outside the playing and
+    incoming songs. That is designed, and `_rewarmPins` decodes them again later. A buffer an instrument holds
+    (`refs`) is never a victim, so held notes and drones can't lose their buffers. With the dual-mono fix the
+    test passes unchanged. It now also reports `mp3Channels` and `evictedPinned`, so a recurrence names its cause.
+  - Fix (`app/js/engine/sampler.js`, `DUAL_MONO_REL` / `DUAL_MONO_ABS`, `lrDiff`): dual mono when max |L − R| over
+    the kept range ≤ max(1e-3 × the sample's peak, 2^-12). That is −60 dB under its own peak, and never less than −72
+    dBFS (≈ 8 LSB of 16-bit). Channel 0 is kept, so R moves by at most that bound. Why this bound:
+    - Above decoder noise: the runner's difference is ≈ 1 LSB of 16-bit. A simulation that adds ±1 LSB to R of
+      every bit-identical MP3 decode reproduces the runner's numbers exactly (preloadAndLRU decodedMB
+      2.0212478637695312, switchHeadroom bytesM 848 832, music-box output diff 8.1e-5). The bound leaves ≥ 8×
+      margin: ±4 LSB still collapses.
+    - Far below audibility: −60 dB re peak is under any stereo image a listener could hear, and R is the only
+      channel that changes.
+    - No real stereo file gets close: all 2 039 bundled files decoded here keep their old classification (mono count
+      = exact count in every set). The real-stereo file closest to the bound is a celesta note, 14.9× above it with a
+      side at −42 dBFS. The early exit at |L − R| > 0.01 keeps real stereo files cheap. `buf._lrDiff` records the
+      measured value.
+    - The 1e-4 suggested in L11-6 would leave a 1.4× margin over the measured noise, so it wasn't used.
+  - Test: `dualMonoIdentity` adds a synthetic pair (R = L ± 1 LSB → 1 channel holding L exactly; a −40 dB side → 2
+    channels). It also decodes test-mp3 and music-box C5 on whatever platform runs it, so the next Mac run prints
+    their real `lrDiff`. With the old exact compare the new cases fail here, on Linux.
+- **ui-core `idle-cpu-ui` ("drone on: the meters run", 9.9 frames/s > 10) and edit-v2 `slot: polish-1` ("reads per
+  slot 3,0,0,0", wants > 3 in 400 ms): the windows measured a busy main thread.**
+  - Both measure right after a song switch or a note release. v11-memory runs the reverb warm-ups for the
+    neighbours' spaces exactly then: they are deferred while keys are held. Each `conv.buffer =` blocks the main
+    thread: 119 / 143 / 186 ms here in the polish-1 window (CDP TaskDuration 0.85–0.95 s of ~1.1 s), 5–7× that on
+    the runner.
+  - The meter clock is a timer of FRAME_MS − 2 ms followed by a requested rAF. During those builds it got ≈ 12
+    frames/s in the edit-v2 harness *here* (3–6 reads in the 400 ms window, so it was already marginal) and 9.9/s
+    on the runner.
+  - Not an app bug: the meters run the whole time (awake, scheduled), and they are throttled by what the browser
+    delivers. The deferral is v11-memory's chosen trade-off (performance #4b).
+  - polish-1 (`test/phase2/edit-v2/panels/slot.test.mjs`): holds a note so slot 0's meter stays awake (on a slow
+    box the piano tail could otherwise fall silent first, giving 0 reads in the simulation). It counts for ≥ 400 ms
+    and until slot 0 has been read 4 times (≤ 8 s). Slots 1–3 must still read 0 over the whole, now longer, window.
+    The assertion is unchanged.
+  - idle-cpu-ui (`test/phase2/ui-core/run.mjs`):
+    - It waits for `engine.fx.reverb.settled()` (≤ 20 s) before it measures drone-on, and again after
+      `setLowResource(false)`, whose rebuild of the trimmed units otherwise lands in the resume window.
+    - Simulation (6× + 48 kHz), drone-on frames/s: 13–18 before the wait, 22.9–25.5 after. Resume: 2.9–8.9 before,
+      23.8–25.9 after (the old resume check failed there once, at 2.9).
+    - New `loopCapacity(ms)`: in the same state, it measures the rate a loop of the meter clock's own shape gets,
+      on the page's uncounted original rAF.
+    - "The meters run" now requires frames/s > min(10, 0.8 × capacity), and the resume check requires
+      > min(5, 0.8 × capacity). On any box with capacity ≥ 12.5 that is the old 10 / 5. Here capacity is 29.6–29.8
+      and the meters run at 29.4–30.
+    - 6× throttle + 48 kHz: capacity tracks the meters (15.2 vs 15.8/s), so a sleeping or broken loop still
+      fails.
+- Not changed: meterClock, the reverb deferral, BufferCache eviction.
+- **Runs** (here, serial, `node test/run-all.mjs --only engine,ui-core,edit-v2,unit`): unit 386 pass (7 skip),
+  engine 98/98, ui-core 82/82, edit-v2 105/105. Before / after for the fixed tests:
+
+  | test | before (here / simulation) | after (here / simulation) |
+  |---|---|---|
+  | engine `dualMonoIdentity` | pass / FAIL (music-box 2 ch, diff 8.1e-5) | pass / pass at ±1 and ±4 LSB |
+  | engine `preloadAndLRU` | pass / FAIL (pinnedStill false, 2.0212 MB, the runner's numbers exactly) | pass / pass |
+  | ui-core `idle-cpu-ui` | pass / FAIL 1 of 3 (resume 2.9/s) | 3/3 / 4/4 |
+  | edit-v2 `polish-1` | 3 of 4 reads (marginal) / FAIL 2/2 (0 and 2 reads) | 3/3 / 3/3 |
+
+  The simulation is `scratchpad/sim/throttle.mjs` (6× CDP throttle, `SIM_SR=48000`, denied MIDI); the engine
+  rows use a decode-noise preload instead (±1 LSB on R of every bit-identical MP3 decode, as on the runner).
+- **Needs the next CI / Mac run:**
+  - `dualMonoIdentity` now prints `decodedLR` (the real macOS max |L − R| of test-mp3 and music-box C5). Expected
+    ≈ 3e-5, against a bound of 6.3e-4 for music-box.
+  - The Mac's decoded MB for the factory library should drop by about half on the 14 dual-mono sets (the soak's
+    `peakDecodedMB`).

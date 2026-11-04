@@ -545,8 +545,15 @@ export const offline = {
     await use(e, patch({ 0: slot('sampler', 'test-mp3') }));
     await use(e, patch({ 0: slot('synth', 'bell') })); // test-mp3 retired; its buffer becomes evictable once disposed
     const pinnedStill = [...e.cache.pinned].every((u) => e.cache.entries.has(u));
+    // ci-3 (L11-5): what took the room. On the macos-14 runner test-mp3 decoded as 2 channels (dual mono missed),
+    // 0.81 MB > the 0.6 MB of room, so the hard cap evicted unreferenced pins (evictedPinned) as designed
+    const mp3 = [...e.cache.entries.entries()].find(([u]) => u.includes('/test-mp3/'));
+    const mp3Channels = mp3 ? mp3[1].buffer.numberOfChannels : null;
     await ctx.startRendering();
-    return { pass: pinned === 4 && afterPreload === 4 && pinnedStill && loads.includes('preload') && e.cache.decodedMB > 0, pinned, afterPreload, pinnedStill, decodedMB: e.cache.decodedMB };
+    const pass = pinned === 4 && afterPreload === 4 && pinnedStill && loads.includes('preload') &&
+      e.cache.decodedMB > 0;
+    return { pass, pinned, afterPreload, pinnedStill, decodedMB: e.cache.decodedMB, mp3Channels,
+      evictedPinned: e.cache.evictedPinned || 0 };
   },
 
   async droneSongChangeAndFiles() {
@@ -1119,9 +1126,43 @@ export const offline = {
     const ctx = mkCtx(0.1);
     const raw = await ctx.decodeAudioData(await (await fetch('/samples/vibes/C4.mp3')).arrayBuffer());
     const vib = processSample(raw, 60);
+    // ci-3: what this platform's decoder makes of two dual-mono MP3s (exactly 0 on Linux; the macos-14 runner's
+    // Chromium differs in the last bits, which kept them stereo before the tolerance)
+    const decodedLR = {};
+    for (const [k, url] of [['test-mp3', '/__fixtures/test-mp3/C4.mp3'], ['music-box', '/samples/music-box/C5.mp3']]) {
+      const b = processSample(await ctx.decodeAudioData(await (await fetch(url)).arrayBuffer()), 60);
+      decodedLR[k] = { ch: b.numberOfChannels, lrDiff: b._lrDiff };
+    }
+    // ci-3: a synthetic dual-mono pair whose R differs from L by ±1 16-bit LSB (decoder noise) is one channel, holding
+    // L exactly; the same tone with a side at −40 dB re peak (a quiet real stereo image) stays two channels
+    const n = 22050;
+    const pair = (side) => {
+      const b = new AudioBuffer({ numberOfChannels: 2, length: n, sampleRate: SR });
+      const L = new Float32Array(n);
+      const R = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        L[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / SR) * Math.exp(-i / n);
+        R[i] = L[i] + side(i);
+      }
+      b.copyToChannel(L, 0);
+      b.copyToChannel(R, 1);
+      return { b, L };
+    };
+    const noisy = pair((i) => ((i * 7919) % 3 - 1) / 32768);
+    const pNoisy = processSample(noisy.b, 60);
+    const kept = new Float32Array(pNoisy.length);
+    pNoisy.copyFromChannel(kept, 0);
+    const off = Math.round(pNoisy._onsetTrim * SR);
+    const fi = Math.round(0.002 * SR);
+    let keptDiff = 0;
+    for (let i = fi; i < kept.length; i++) keptDiff = Math.max(keptDiff, Math.abs(kept[i] - noisy.L[off + i]));
+    const pSide = processSample(pair((i) => 0.005 * Math.sin((2 * Math.PI * 660 * i) / SR)).b, 60);
+    const synthetic = { lsbNoiseChannels: pNoisy.numberOfChannels, keptDiff, sideChannels: pSide.numberOfChannels };
     const pass = out.fixture.monoChannels === 1 && out['music-box'].monoChannels === 1 && worst <= 1e-6 &&
-      out['music-box'].peak > 0.01 && vib.numberOfChannels === 2 && vib._dualMono === false;
-    return { pass, ...out, vibesChannels: vib.numberOfChannels };
+      out['music-box'].peak > 0.01 && vib.numberOfChannels === 2 && vib._dualMono === false &&
+      decodedLR['test-mp3'].ch === 1 && decodedLR['music-box'].ch === 1 &&
+      synthetic.lsbNoiseChannels === 1 && keptDiff === 0 && synthetic.sideChannels === 2;
+    return { pass, ...out, vibesChannels: vib.numberOfChannels, decodedLR, synthetic };
   },
 
   /**
