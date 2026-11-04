@@ -101,3 +101,34 @@ CONTRACT_CHANGES `## v11-*` and `## ci-*`.
 19. Do you want a footswitch or hotkey for Click?
 20. The click mixes in after the ceiling (the default accent is −10.5 dBFS), so it can briefly go over 0 dBFS on a
     full mix. OK?
+
+## Added 2026-11-04 (cloud dev round 2: decisions, review fixes, memory)
+
+### LOCAL checks
+- [ ] Full `node test/run-all.mjs` on the final dev tree (`accabe7` or later). Then shell `--only electron` once
+      unlocked and once with the screen locked (L11-1/L11-2 fixes).
+- [ ] ⌃⌥⌘] / ⌃⌥⌘[ with the window hidden step a real setlist (held note + drone survive); first/last song is the
+      end (no wrap).
+- [ ] Panic with MIDI clock out into a real receiver stops on 0xFC; an audio restart with the click running sends
+      Stop then Start (R-8) and the receiver re-locks.
+- [ ] Drone swell under a held pedal sounds the same as before (R-1 moved it onto the drone level).
+- [ ] Memory (v11-memory): Activity Monitor / `ps -o rss` for the Electron renderer: visible, after a 10-song loop,
+      and in menu-bar low-resource mode, 1.0.1 vs this branch. Linux showed about 1.8 GB → 1.2–1.4 GB, and
+      low-resource 1.8 GB → 0.46 GB.
+- [ ] The soak's new `peakDecodedMB` column holds 700 at a 48 kHz context.
+- [ ] Far jump while holding a pad: the reverb changes at the first pause (not at the switch), and the jump itself
+      has no note stall.
+- [ ] Reverb build times on the M2 Pro (CONTRACT_CHANGES `## v11-memory` lists the Linux numbers).
+
+### Questions for Ryan (round 2)
+21. Should the Panic tooltip ("All notes off (Esc, ⌘.)") mention the click?
+22. Auto-backups are exports, so restoring one no longer brings back keyboard curves or the other per-Mac settings.
+    OK?
+23. Pedal + bend push-up now stop at full drone level (before: up to 4× the drone level). OK?
+24. On an audio restart the MIDI clock sends Stop + Start rather than Continue. OK?
+25. After a far jump made while playing, the new song's reverb comes in at the first pause. The alternatives are a
+    100–400 ms note stall, or keeping every reverb built (about 400 MB). OK?
+26. In setlist mode the hard cap can push a pinned setlist song out during a switch; it's re-decoded when there's
+    room. Prefer this to going over the cap?
+27. Low-resource mode now drops unpinned samples (Electron 1.2 GB → 0.46 GB); showing the window again re-decodes the
+    songs around the current one. OK?
