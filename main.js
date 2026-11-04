@@ -49,7 +49,8 @@
 // RIG_GB_LIBRARY=<dir>[:<dir>…] (the importer searches these instead of the Apple locations, like the CLI's --root).
 
 const {
-  app, BrowserWindow, Menu, Tray, dialog, globalShortcut, ipcMain, nativeImage, powerSaveBlocker, screen, session,
+  app, BrowserWindow, Menu, Tray, dialog, globalShortcut, ipcMain, nativeImage, powerMonitor, powerSaveBlocker, screen,
+  session,
   shell, utilityProcess,
 } = require('electron');
 const path = require('node:path');
@@ -1733,7 +1734,9 @@ async function menubarSelftest(wc) {
     checkTrayVisibility();
     out.trayShownSeen = await waitFor(async () => js(wc, "window.__mbMenu.includes('trayShown')"), 4000);
     out.trayShownState = (await js(wc, 'window.rig.getMenuBarState()')).trayHidden;
-    out.trayEvents = await js(wc, 'window.__mbMenu.splice(0)');
+    // L11-1: only the tray ids. macOS can deliver an unrelated windowHidden / windowShown pair (focus, display
+    // changes) during the ~7 s wait; window events are asserted in the L14 test, not here.
+    out.trayEvents = (await js(wc, 'window.__mbMenu.splice(0)')).filter((id) => /^tray/.test(id));
   }
   out.tray = !!(tray && !tray.isDestroyed());
   out.shellConfig = readShellConfig().menuBarMode === true;
@@ -1841,6 +1844,9 @@ async function menubarSelftest(wc) {
     await js(wc, 'window.__mbVisible.length = 0; true');
     app.hide();
     out.appHideObserved = await waitFor(() => app.isHidden(), 3000);
+    // L11-2: on a locked Mac app.hide() reports done but the window never sends rig:window-visible; the test only
+    // asserts the events when the screen is unlocked (getSystemIdleState says 'locked' on macOS)
+    out.screenLocked = powerMonitor.getSystemIdleState(1) === 'locked';
     app.show();
     await waitFor(() => !app.isHidden(), 3000);
     out.windowVisibleAppHide = await js(wc, 'new Promise((r) => setTimeout(() => r(window.__mbVisible.slice()), 300))');

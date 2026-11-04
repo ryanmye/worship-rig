@@ -292,8 +292,12 @@ test('menu-bar mode (L14): tray, menu from the bus state, IPC relay both ways, p
   else console.log('# minimise not observed on this display; windowVisibleMinimize not asserted');
   assert.deepEqual(m.eventsOnMinimize, []);
   // ⌘H (app.hide / app.show, macOS): same DOM events. Guarded: the hide needs an unlocked screen / window server.
-  if (isMac && m.appHideObserved) assert.deepEqual(m.windowVisibleAppHide, [false, true]);
-  else if (isMac) console.log('# app.hide() not observed on this display; windowVisibleAppHide not asserted');
+  // L11-2: a locked screen also hides it (app.hide() "succeeds" but sends no visibility events).
+  if (isMac && m.appHideObserved && !m.screenLocked) assert.deepEqual(m.windowVisibleAppHide, [false, true]);
+  else if (isMac) {
+    console.log(`# ${m.screenLocked ? 'screen locked' : 'app.hide() not observed on this display'}; `
+      + 'windowVisibleAppHide not asserted');
+  }
   if (isMac) {
     assert.deepEqual(m.hideOnClose, { destroyed: false, visible: false, dock: false }, 'close hides, dock icon hidden');
     assert.equal(m.hideBackup, true, 'hiding still writes the library backup (M5)');

@@ -43,7 +43,9 @@ real hardware: the switch peak matches the cloud's ~810 MB.
 
 ## L11-1 shell Electron: L-30 tray-hidden test sees extra window events on the Mac
 
-**Status:** flaky, low priority. Failed once (first run, 18:5x EST), passed in the full run and in 5 more Electron runs.
+**Status:** fixed by the cloud (2026-11-04): the self-test's `trayEvents` keeps only `tray*` ids; window events stay
+asserted in the L14 test. Please re-run on the Mac. (Was: flaky, low priority. Failed once (first run, 18:5x EST),
+passed in the full run and in 5 more Electron runs.)
 
 `test/phase1/shell/electron.boot.mjs:312`, "L-30 tray hidden: trayHidden once (debounced, past the 3 s re-check),
 popover fallback, trayShown, Rig menu". The other 21 Electron boot tests passed.
@@ -66,7 +68,9 @@ made the Linux fixture skip hide-on-close, so this path only runs on a Mac), or 
 
 ## L11-2 shell Electron: the ⌘H guard asserts while the screen is locked
 
-**Status:** open, test robustness only. Reproduces 5/5 with the screen locked; passes with it unlocked (full run).
+**Status:** fixed by the cloud (2026-11-04): the self-test records `screenLocked`
+(`powerMonitor.getSystemIdleState(1) === 'locked'`) and the ⌘H events are asserted only when unlocked. Please
+re-run locked and unlocked. (Was: open; reproduces 5/5 with the screen locked, passes unlocked.)
 
 `test/phase1/shell/electron.boot.mjs:295`, inside "menu-bar mode (L14): tray, menu from the bus state, IPC relay both
 ways, popover, hide-on-close":
