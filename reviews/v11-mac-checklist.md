@@ -11,16 +11,16 @@ CONTRACT_CHANGES `## v11-*` and `## ci-*`.
       Electron boot fixture now skips hide-on-close off macOS (CI-2), so on the Mac it must still run and pass.
 - [ ] CI (`test.yml`, macos-14) green on the merged tree: the CI-1 fixes were reproduced under a local simulation,
       never on the real runner.
-- [ ] `npm run build:mac` + build-lint: app < 480 MB; `importer-host.js` and the 8 `tools/exs/*.mjs` runtime
+- [x] `npm run build:mac` + build-lint: app < 480 MB; `importer-host.js` and the 8 `tools/exs/*.mjs` runtime
       modules packaged, nothing else from `tools/`.
 
 ### v11-electron (hotkeys + update check)
 - [ ] Global shortcuts fire from another app with the window hidden; macOS doesn't ask for Accessibility.
-- [ ] A combination held by another app (e.g. Rectangle on ⌃⌥⌘]) shows "Another app already uses this". It's not
+- [x] (fails: L11-3, never detected on macOS) A combination held by another app (e.g. Rectangle on ⌃⌥⌘]) shows "Another app already uses this". It's not
       confirmed that `register()` returns false on macOS.
 - [ ] While recording a shortcut in Settings, ⌃⌥⌘ combinations reach the page, not Mission Control or the menu.
 - [ ] Nothing stays registered after Quit or after switching shortcuts off.
-- [ ] Packaged build: Settings › About shows the version line about 20 s after launch; Download opens the arm64 dmg;
+- [x] (status API, see findings) Packaged build: Settings › About shows the version line about 20 s after launch; Download opens the arm64 dmg;
       no request at all with `RIG_UPDATE_CHECK=0`.
 
 ### v11-touch (curves)
@@ -28,17 +28,17 @@ CONTRACT_CHANGES `## v11-*` and `## ci-*`.
 - [ ] An expression pedal on the Log curve; how "sustain pedal also swells the drone" sounds.
 
 ### v11-polish (themes + B)
-- [ ] The longer theme words in the top bar in SF Pro at 1024 (they fit in Linux fonts); Ember title metrics.
+- [x] The longer theme words in the top bar in SF Pro at 1024 (they fit in Linux fonts); Ember title metrics.
 - [ ] Daylight "Auto" follows a real macOS appearance change; the Day paper EQ graph looks right.
 
 ### v11-importer
-- [ ] Open the built app from Finder with Homebrew ffmpeg: the list shows the real GarageBand/Logic instruments and
+- [x] Open the built app from Finder with Homebrew ffmpeg: the list shows the real GarageBand/Logic instruments and
       no "ffmpeg isn't installed" note.
 - [ ] Import Classical Grand + Yamaha Grand Piano while Perform plays: no glitches; the packs appear without a
       restart; `node tools/import-garageband.mjs --validate` passes on the output.
-- [ ] Stop a big import (Steinway Grand Piano 2): it stops within about 1 s and leaves no `.…importing` folder.
-- [ ] With ffmpeg hidden: the afconvert note shows, and `.m4a` packs play in Electron (AAC never checked).
-- [ ] Quit mid-import: no stray ffmpeg and no half-written pack.
+- [x] Stop a big import (Steinway Grand Piano 2): it stops within about 1 s and leaves no `.…importing` folder.
+- [x] With ffmpeg hidden: the afconvert note shows, and `.m4a` packs play in Electron (AAC never checked).
+- [x] Quit mid-import: no stray ffmpeg and no half-written pack.
 
 ### v11-scenes
 - [ ] A real footswitch (momentary and press-only) learned to Next scene; the 0.5 s glide between verse and chorus
@@ -51,7 +51,7 @@ CONTRACT_CHANGES `## v11-*` and `## ci-*`.
 
 ### Still open from v1
 - [ ] Split-on-restart recording; MIDI Learn on the second keyboard (hardware leftovers).
-- [ ] Low-resource drone-frozen CPU was 10.7–11.6 % against a target of about 10 %.
+- [x] (6d8d336: 10.6 → 6.1 %; re-measure after v11-memory) Low-resource drone-frozen CPU was 10.7–11.6 % against a target of about 10 %.
 
 ## Ryan's answers (2026-11-03)
 - Release path: merge `claude/amazing-ptolemy-r464ae` straight into `main` when the suites are green (no PR; Ryan is

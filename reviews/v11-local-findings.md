@@ -93,3 +93,47 @@ the window never sends `rig:window-visible`. The guard's comment already says th
 window server"; the guard should also skip (with the `#` note) when no visibility event arrives, the way the
 minimise guard does. Repro: lock the screen (⌃⌘Q), then `node test/phase1/shell/run.mjs --only electron`.
 L11-1 may be the same family (window events depending on the display state), so treat both together.
+
+## Packaged-app checks on 6d8d336 (before v11-memory), 2026-11-03 ~20:00–20:30 EST
+
+Built with `npm run build:mac` (366 MB). Every launch used a throwaway `RIG_USER_DATA`, `RIG_PORT=8450` and, for the
+importer, a throwaway `RIG_USER_SAMPLES`; Ryan's library and `~/Music/Worship Rig` were not touched. The app was
+driven over `--remote-debugging-port` with Playwright `connectOverCDP` (scripts in the ignored `test/logs/pkg-*.mjs`).
+
+| check | result |
+|---|---|
+| Update check against real GitHub (1.0.1 build) | `state: latest`, `latest: 1.0.1`; cache in `rig-shell.json` has the v1.0.1 arm64 dmg URL |
+| Update check, fake feed announcing v1.1.0 | `state: update`, `latest: 1.1.0`, `downloadUrl` = `…/releases/download/v1.1.0/Worship-Rig-arm64.dmg`, `asset` arm64 |
+| `RIG_UPDATE_CHECK=0` | `supported: false`, `state: unsupported`, no `rig-shell.json` written (no request) |
+| Importer scan with launchd's PATH (`/usr/bin:/bin:/usr/sbin:/sbin`, as from Finder) | encoder `ffmpeg` (found in `/opt/homebrew/bin`), mp3; 102 instruments; 0 parse errors; scan 300 ms |
+| Import Classical Grand + Yamaha Grand Piano | done in 13 s, 52 + 252 files, 0 missing, 10 + 36 MB; `--validate` OK on both (L/R anti-correlation notes on C5/C7 come from the Apple sources) |
+| Stop Steinway Grand Piano 2 after 3 s (4 ffmpeg running) | `cancelled` in **57 ms**; no ffmpeg left; output folder empty (no `.…importing`) |
+| Quit (SIGTERM) mid-import, same instrument | no ffmpeg left; output folder empty |
+| ffmpeg hidden (`FFMPEG=/nonexistent/ffmpeg`) | encoder `afconvert`, m4a; Classical Grand in 7 s, 52 `.m4a`; two decoded in Electron via `/user-samples/…`: 11 s, 2 ch, 44.1 kHz, peaks 0.34 / 0.55 |
+| All 8 themes at 1024×700 in the packaged app (real SF Pro + bundled faces) | no horizontal scroll (`scrollWidth` 1024), no clipped leaf text in the top bar; `.song-name` 40 px box on 40 px line in every theme incl. Ember. Screenshots: `test/logs/shots/theme-1024-*.png` on the Mac |
+| Low-resource CPU, Sunday Pad + Piano (synth drone), visible | renderer **46.1 %** off → **10.6 %** first 20 s on → **6.1 %** next 20 s; GPU 5.9 % → 0.0 % (was 10.7–11.6 % in 1.0.1) |
+
+Not checked here (needs a real key press, ears or hardware): shortcuts firing from another app, shortcut recording
+in Settings, "while Perform plays: no glitches", Daylight Auto on a real appearance change.
+
+## L11-3 Global shortcuts: "taken" never shows on macOS; registration succeeds even when another app holds the combination
+
+**Status:** open. Confirms the checklist's doubt ("It's not confirmed that `register()` returns false on macOS").
+
+A helper Electron app (`test/logs/hk/`) registered `Control+Alt+Command+]` first (`register()` → true) and kept it.
+Then the packaged Worship Rig was switched on with the defaults:
+
+```
+HELPER Control+Alt+Command+] true
+on {"on":true,...,"keys":{"nextSong":{"accelerator":"Control+Alt+Command+]","state":"ok"}, ... all "ok"}}
+```
+
+So on macOS `globalShortcut.register()` returns true for a combination another process already holds (Carbon
+`RegisterEventHotKey` allows duplicates across apps), and Settings will never show "Another app already uses this".
+Which app receives the press when both hold it is not known yet (needs a real key press, Ryan's batch).
+For the same reason, the "nothing stays registered after Off / Quit" check can't be proved this way: the helper's
+`register()` returned true for all 7 defaults after Off and after Quit, but it would have returned true anyway.
+
+Suggestion for the cloud: drop the macOS promise of "taken" in the Settings copy, or describe it as "macOS can't tell
+us if another app uses this; if a shortcut does nothing, pick another". No code path is broken; the state just can't
+be detected.
