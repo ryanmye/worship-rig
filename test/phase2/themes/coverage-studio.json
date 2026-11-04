@@ -3,7 +3,7 @@
  "themes": [
   "studio"
  ],
- "generated": "2026-11-03T22:16:33.487Z",
+ "generated": "2026-11-04T01:45:57.150Z",
  "states": [
   "studio:perform",
   "studio:perform-held",
@@ -32,9 +32,9 @@
   "studio:mini-drone-keys"
  ],
  "total": 289,
- "matched": 288,
- "unmatched": 1,
- "unmatchedPct": 0.3,
+ "matched": 286,
+ "unmatched": 3,
+ "unmatchedPct": 1,
  "limitPct": 5,
  "deadClasses": [],
  "unmatchedSelectors": [
@@ -42,6 +42,18 @@
    "selector": "& .drone-block.off .key-btn.on",
    "context": ":where(html[data-theme=\"studio\"])",
    "line": 194,
+   "dead": false
+  },
+  {
+   "selector": "& .led.warn",
+   "context": ":where(html[data-theme=\"studio\"])",
+   "line": 291,
+   "dead": false
+  },
+  {
+   "selector": "& .led.warn",
+   "context": ":where(html[data-theme=\"studio\"])",
+   "line": 298,
    "dead": false
   }
  ],
