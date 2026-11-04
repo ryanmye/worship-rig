@@ -8,12 +8,17 @@ strings, synths, mallets and guitars (see [Sounds](#sounds)), a key "drone" pad 
 you, and one-button song changes that never cut off a note you're holding. It can also record your playing to a WAV
 file, and play sampled instruments you convert from GarageBand ([My Samples](#my-samples-garageband-and-your-own-sounds)).
 
+New in 1.1: a [click with a count-in](#click-and-count-in), [scenes](#scenes-verse-chorus-bridge) (saved levels per
+song that a footswitch steps through), a [touch that fits your keyboard](#your-keyboards-touch), and, in the Mac app,
+global shortcuts, an update check and a GarageBand importer. Each one stays out of the way until you turn it on.
+
 It runs two ways, with exactly the same sound and screens:
 
 - **As a Mac app** ("Worship Rig.app"), which you build once on your own Mac. This is the recommended way.
 - **In Google Chrome**: double-click `Start Worship Rig.command`. Use this if you can't build the app.
 
-Nothing is downloaded while you play. Everything, the sounds included, lives on your Mac.
+Nothing is downloaded while you play. Everything, the sounds included, lives on your Mac. The Mac app's only trip
+online is a once-a-day check for a newer version, which you can switch off in Settings › About.
 
 ---
 
@@ -66,6 +71,20 @@ while you play; closing it stops Worship Rig), and Chrome opens Worship Rig in i
 If you unplug the keyboard mid-song, any notes it was holding are released, so nothing gets stuck. Plug it back in
 and keep playing.
 
+### Your keyboards (touch)
+
+Every keyboard feels different: on one, soft playing comes out too loud; on another, you have to hammer it.
+**Settings → MIDI keyboard → Your keyboards** lists every keyboard you've plugged in, plus the computer keys.
+
+- **Touch…** gives one keyboard its own feel. Press **Fit to my touch**, play six soft notes and then six hard ones,
+  look at the curve, and press **Use this**. **Back to standard** undoes it.
+- **Remember** tells the app to pick that keyboard when the input is set to **First keyboard (automatic)**.
+  **Forget** clears what was saved for it.
+- Each keyboard's touch is saved on this Mac under the keyboard's name. It isn't included when you export your
+  library, and an import doesn't replace it.
+- Sounds set to **Normal** response follow the keyboard's own touch. To give one sound its own curve, use **Own** in
+  Edit's Response setting.
+
 No keyboard handy? Your computer keyboard plays notes too: **A W S E D F T G Y H U J K O L P ;** play C4 up to E5,
 **Z / X** shift the octave down or up, and **Space** is the sustain pedal.
 
@@ -92,6 +111,9 @@ A **Setlist** is the order of songs for a service. Step through it with the **�
 the pedal) keep ringing on the old sound until you let go. Only new notes use the new song, so switches are
 seamless. The **Ready** light means every song in the setlist is loaded and switching will be instant.
 
+A **Scene** is a saved set of levels inside one song (for example verse, chorus and bridge): see
+[Scenes](#scenes-verse-chorus-bridge).
+
 Worship Rig comes with 19 factory songs. Each one has a note explaining what it's for and what the wheels do.
 
 | Category | Songs |
@@ -105,6 +127,38 @@ Worship Rig comes with 19 factory songs. Each one has a note explaining what it'
 Change them as much as you like: **Reset to factory** puts one back the way it was. If you used an earlier version,
 the eight newer songs (Anthem through Synthwave) are added to your library the next time you start Worship Rig.
 Your own songs and setlists aren't touched.
+
+## Click and count-in
+
+Tap **Click**, next to the tempo on the Perform screen, to start a click at the song's tempo. Tap it again to stop.
+The button is hidden for a song with no tempo, and Worship Rig always starts with the click off.
+
+- **Edit → Song → Click** sets the song's **Time** (4/4, 3/4, 2/4, 5/4, 6/8 or 12/8), saved with the song. In 6/8
+  and 12/8 the tempo counts the dotted quarter, the beat you'd tap.
+- The same place has the **Count-in** (Off, 1 bar or 2 bars), what happens **After the count-in** (**Keep clicking**
+  or **Go quiet**) and the click's level. These apply to every song.
+- The click never holds up a song change. Press Next whenever you like, then tap Click when the leader is ready.
+  If the click is running when you change songs, it picks up the new song's tempo within a beat, as a new bar.
+- **In-ears only:** with an audio interface that has 4 outputs, **Settings → Audio → Click output → Outputs 3–4**
+  puts the click on outputs 3 and 4, and the music stays on 1 and 2.
+- Recordings leave the click out unless you turn on **Settings → Audio → Record the click**.
+- **Settings → MIDI keyboard → Clock out** sends MIDI clock (with start and stop) to a drum machine or delay pedal
+  while the click runs.
+
+## Scenes: verse, chorus, bridge
+
+A song can keep up to three **scenes**: saved sets of levels that you step through while you play. A scene holds the
+faders, the ON switches, the drone level and the mod wheel. It doesn't change the instruments, the effects or the
+key.
+
+1. Set the levels the way you want them for the verse.
+2. Open **Quick** (top bar) → **This song** and tap **Save as scene** 1, or use **Edit → Song → Scenes**.
+3. Do the same for the chorus (scene 2) and the bridge (scene 3).
+
+Perform then shows **SCENE 1 2 3** in the song row. Tap a number to play that scene, and tap the lit number to go
+back to the song's own levels. A change glides over half a second, and the notes you're holding keep sounding. To
+use a footswitch, learn **Next scene** in MIDI Learn (below). One switch cycles through all the scenes. Every song
+starts on its own levels, and a song with no scenes looks exactly as before.
 
 ## Sounds
 
@@ -158,10 +212,18 @@ Worship Rig can also play sampled instruments that live outside the app, in a **
 Each sub-folder is one sample pack: a `manifest.json` plus its audio files (MP3, WAV, M4A/AAC, AIFF or CAF). The
 instruments appear in the instrument picker under **My Samples**.
 
-**GarageBand and Logic instruments.** If GarageBand or Logic is installed on your Mac, `tools/import-garageband.mjs`
-converts their sampled instruments (Steinway Grand Piano, strings, choirs and more) into this folder. It also works
-for sound packs you downloaded in GarageBand. Step-by-step instructions are in
-[docs/garageband-import.md](docs/garageband-import.md) (also in the app: **Help → Importing GarageBand Sounds**).
+**GarageBand and Logic instruments.** If GarageBand or Logic is installed on your Mac, Worship Rig can convert their
+sampled instruments (Steinway Grand Piano, strings, choirs and more) into this folder. It also works for sound packs
+you downloaded in GarageBand.
+
+- **Mac app:** **Settings → My Samples → Import from GarageBand / Logic…** lists the instruments with their size.
+  Tick the ones you want and press **Import**. You can keep playing while it converts, and the new instruments show
+  up in the picker without a restart. **Stop** doesn't leave a half-converted instrument behind. For the best result,
+  install ffmpeg first (in Terminal: `brew install ffmpeg`); without it the Mac's own converter is used, which is
+  slower.
+- **Chrome, or from Terminal:** `tools/import-garageband.mjs` does the same. Step-by-step instructions are in
+  [docs/garageband-import.md](docs/garageband-import.md) (also in the app: **Help → Importing GarageBand Sounds**).
+
 Those sounds are Apple's and licensed to you for personal use only, so they stay on your Mac: Worship Rig never
 copies them into the app, the build or git.
 
@@ -178,7 +240,10 @@ You play G shapes and everyone hears B. The **− / +** buttons on the Perform s
 
 - **Mod wheel**: usually brings the **pad** in and out, so you can start on piano alone and swell the pad for the
   chorus. Until you touch the wheel it counts as "all the way up", so pads never start silent.
-- **Expression pedal** (if you have one): does the same as the mod wheel by default.
+- **Expression pedal** (if you have one): does the same as the mod wheel by default. If it jumps too fast at the
+  quiet end, set **Edit → Master → Wheels & pedal → Pedal curve** to **Log (fine when quiet)**.
+- **Sustain pedal also swells the drone** (same place, per song): holding the sustain pedal brings the drone up
+  slowly, and it sinks back when you lift your foot.
 - **Pitch-bend wheel**: depends on the song. It might bend the synth pitch, lift the drone (push up) and
   tuck it away (pull down), switch the organ's rotary speaker between slow and fast, or do a lofi tape-stop.
 - **No wheels?** Press **Swell** (or **Shift+↑**). The pad rises over a few seconds. Press it again to go back.
@@ -213,13 +278,15 @@ Press **REC** (or **⌘R**) to record exactly what comes out of Worship Rig. Pre
   press stop: if the Chrome window crashes or is force-quit mid-recording, that take is lost. If Chrome can't show
   the save dialog, it records internally and downloads the file to your **Downloads** folder when you stop.
 - Recordings are 16-bit stereo WAV at your Mac's audio rate (usually 48 kHz). That's about 11 MB per minute.
+- The click isn't recorded unless you turn on **Settings → Audio → Record the click**.
 
 ## MIDI Learn: map a footswitch to "Next Song"
 
 The most useful thing you can do with MIDI Learn: put a footswitch on your keyboard's second pedal jack (or use a
 button/pad on your controller), then go to **Settings → MIDI Learn**, click **Learn** next to **Next Song**, and
 press the footswitch. Now you can change songs without taking your hands off the keys. Do the same for
-**Previous Song** if you have two.
+**Previous Song** if you have two. If a song has [scenes](#scenes-verse-chorus-bridge), learn **Next scene** (and
+**Previous scene**) the same way.
 
 You can also learn **Panic**, **Fade Out All**, **Swell**, and faders/knobs for each slot's level, the drone level,
 the reverb level and the master volume. Learned faders use "pickup": a hardware knob does nothing until you move it
@@ -227,7 +294,7 @@ past the value on screen, so the sound never jumps.
 
 ## Other handy controls
 
-- **Panic** (**⌘.** or **Esc**): silences stuck notes instantly (the drone keeps going).
+- **Panic** (**⌘.** or **Esc**): silences stuck notes instantly and stops the click (the drone keeps going).
 - **Fade Out All** (**⌘⇧F**): everything, drone included, fades out over about 6 seconds. Good for the end of a
   prayer time. The next note you play brings the volume back.
 - **Perform / Edit** (**⌘E**): the Perform screen is big and simple for the service. Edit is where you build songs.
@@ -246,8 +313,10 @@ past the value on screen, so the sound never jumps.
 - **Output device**: send the sound to your audio interface or the sound desk instead of the headphone jack.
 - **Mono output**: turn on if the church sound desk takes a single (mono) cable from you.
 - **Program Change**: off by default, because many keyboards send these by accident and would jump songs.
-- **Velocity sensitivity**: *Soft* makes gentle playing louder; *Hard* needs more force; *Fixed* ignores how hard
-  you play.
+- **Touch** (MIDI keyboard): *Light* makes gentle playing louder; *Heavy* needs more force; *Fixed* ignores how
+  hard you play. To give one keyboard its own touch, see [Your keyboards](#your-keyboards-touch).
+- **Click output**, **Record the click** (Audio) and **Clock out** (MIDI keyboard): see
+  [Click and count-in](#click-and-count-in).
 
 ## Troubleshooting
 
@@ -309,6 +378,9 @@ Or run this once in Terminal: `xattr -dr com.apple.quarantine "/Applications/Wor
   play. The newest 10 are kept. Open them with **Help → Open Backups Folder**.
 - **Recordings**: `~/Music/Worship Rig/Rig 2026-10-04 1030.wav` (`… 2.wav` if that name is taken). The folder is
   created at your first recording.
+- **This Mac's own settings** stay on this Mac: the output device, the MIDI input, each keyboard's touch and
+  Remember, the click settings (count-in, level, output), Clock out, the pad folder, the menu-bar settings, the
+  global shortcuts and the update check. They aren't in an export, and importing a library doesn't replace them.
 - **My Samples**: the built app only looks in `~/Music/Worship Rig/Samples/`. The `user-samples/` folder in the
   repo is only scanned when you run from source (`npm start` or the Chrome launcher). To use a pack in the app,
   put it in `~/Music/Worship Rig/Samples/`.
@@ -333,14 +405,22 @@ puts it to sleep. After waking, play a note; if the top bar says *Audio stopped*
 the app and open it, all in one step. A Terminal window shows progress and closes itself when it's done; if
 something goes wrong (no internet, local changes in the way, a build error) it prints a plain-English explanation
 and waits for a key press so you can read it. It refuses to run over local changes, so it's safe to double-click
-any time. If you installed from a downloaded `.dmg` instead, Settings › About says when a newer release is out
-("Version 1.1.1 is available") and **Download** opens the right `.dmg` in your browser; quit the app, open the
-`.dmg` and drag Worship Rig to Applications. It checks GitHub at most once a day, never installs anything by
-itself, and the check can be switched off there.
+any time. If you installed from a downloaded `.dmg` instead (version 1.1 or later), Settings › About says when a
+newer release is out ("Version 1.1.1 is available") and **Download** opens the right `.dmg` in your browser; quit the
+app, open the `.dmg` and drag Worship Rig to Applications. Your songs stay. It checks GitHub at most once a day,
+never installs anything by itself, and **Check for updates** there switches it off.
 
-**Global shortcuts** (Settings › Menu bar, off until you switch them on): next / previous mode, Panic and master
-louder / softer from any app, even with the window hidden. Standard keys ⌃⌥⌘] / ⌃⌥⌘[ / ⌃⌥⌘P / ⌃⌥⌘= / ⌃⌥⌘-; click
-one to set your own. If another app already uses a combination, Settings says so.
+**Global shortcuts** (Settings › Menu bar › Global shortcuts, off until you turn on **Work in any app**): use these
+from any app, even with the window hidden.
+
+| Shortcut | Does |
+|---|---|
+| ⌃⌥⌘] / ⌃⌥⌘[ | Next song / Previous song in the setlist |
+| ⌃⌥⌘P | Panic (all notes off, and the click stops) |
+| ⌃⌥⌘= / ⌃⌥⌘- | Master louder / softer (2 dB) |
+| ⌃⌥⌘. / ⌃⌥⌘, | Next scene / Previous scene |
+
+Click a shortcut to set your own keys. If another app already uses a combination, Settings says so.
 
 ## Manual check on your Mac (5 minutes, after each build)
 
@@ -354,6 +434,10 @@ one to set your own. If another app already uses a combination, Settings says so
 7. Unplug the keyboard while holding a chord: nothing gets stuck. Plug it back in: it plays again.
 8. Change the output device in Settings (e.g. to headphones/interface): the sound moves there.
 9. Close the lid or let the Mac sleep, wake it: sound comes back (press Restart audio if it says Audio stopped).
+10. Set a 1-bar count-in on a song (Edit → Song → Click), tap Click: four count-in clicks, then the click. Hold a
+    chord and press Next Song: the chord keeps ringing and the click carries on at the new tempo. Panic stops it.
+11. Save two scenes in Quick → This song and step through them with the SCENE numbers: the levels glide and a held
+    chord keeps sounding.
 
 ## Licenses
 
@@ -375,19 +459,23 @@ Plain ES modules, no build step for the app itself. Node ≥ 22.12 for the tools
 
 ```
 main.js, preload.js, server.js   Electron shell and the local HTTP server (also used by serve.mjs)
+global-hotkeys.js, update-check.js, importer-host.js
+                                 Mac app only: global shortcuts, the update check, the GarageBand importer's worker
 serve.mjs                        Chrome launcher / server CLI (Start Worship Rig.command runs it)
 app/index.html, app/styles*.css  the page
 app/js/main.js                   bootstrap: store → engine → controller → views
 app/js/store.js                  library + settings (localStorage), validation, factory seeding
 app/js/controller.js             the only place store and engine meet (song switching, MIDI/keyboard, restarts)
 app/js/midi.js, recorder.js      Web MIDI input + learn; WAV recorder (AudioWorklet)
+app/js/midi-clock.js             MIDI clock out for the click
 app/js/presets.js                factory songs
 app/js/shared/                   pure helpers: params (address grammar), fx-presets, music, automation, wav …
 app/js/engine/                   Web Audio engine: audio.js (graph, prepare/commit), fx.js, sampler.js, synth.js,
                                  synth-extra.js, organ.js, drone.js, instruments.js (registry), gain-trims.json
 app/js/views/                    Perform, Edit, Settings (+ components/)
 app/samples/                     bundled samples + manifest.json (see LICENSES.md)
-tools/                           calibrate, audition, sample downloaders, import-garageband
+tools/                           calibrate, audition, sample downloaders, import-garageband (+ tools/exs/,
+                                 the importer the Mac app runs too)
 test/                            node:test + Playwright + Electron suites (test/README.md)
 docs/                            developer and user docs (below)
 ```

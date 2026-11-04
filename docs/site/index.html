@@ -24,7 +24,7 @@
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="preload" href="fonts/Alegreya-wght.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=c714693">
+<link rel="stylesheet" href="style.css?v=v110-1">
 </head>
 <body>
 
@@ -35,6 +35,7 @@
       <h1>Worship Rig</h1>
     </div>
     <p class="lede">A live keys rig for worship teams: pads, piano and a key drone, on one Mac.</p>
+    <p class="new-pill"><a href="#new"><b>New in 1.1</b> A click with a count-in, scenes and your own touch</a></p>
 
     <!-- RELEASE: no GitHub release exists yet. When v1.0.0 is published, in BOTH download blocks (hero and #download):
          turn the button into
@@ -113,6 +114,71 @@
       </div>
     </div>
 
+    <div class="feature wide left">
+      <figure class="stage">
+        <!-- SHOT: scenes-perform.webp, 1148x522, Sanctuary. Perform at 1440x900, Sunday Pad + Piano with three scenes
+             saved and scene 2 playing, cropped to the song row (KEY · BPM · Click · SCENE 1 2 3) and the Keys / Pad
+             strips. Replace the div below with
+             <img src="img/scenes-perform.webp" width="1148" height="522" loading="lazy"
+               alt="The Perform screen: the song row shows SCENE 1 2 3 with scene 2 lit, above the Keys and Pad strips.">
+             (webp ≈ q80, ≤ 70 KB, like rig-eq.webp) -->
+        <div class="shot-todo" style="--ar: 1148 / 522" role="img"
+          aria-label="Screenshot to come: Perform with the scene numbers"><span>Screenshot to come</span></div>
+      </figure>
+      <div>
+        <p class="kicker">Scenes · new in 1.1</p>
+        <h2>Verse, chorus, bridge on one footswitch</h2>
+        <p>Save up to three sets of levels per song and step through them with a footswitch or the numbers on Perform.
+          Each change glides over half a second, and the notes you're holding keep ringing.</p>
+        <p class="measure"><a href="https://github.com/ryanmye/worship-rig/blob/main/CONTRACT_CHANGES.md#v11-scenes">No click
+          when a scene changes</a>: the biggest sample-to-sample step is the same as on a steady note (a hard switch
+          measured 22.9 times that).</p>
+      </div>
+    </div>
+
+    <div class="feature flip">
+      <figure class="stage">
+        <!-- SHOT: edit-song-click.webp, 480x520, Sanctuary. Edit › Song at 1440x900, cropped to the Click column
+             (Time 4/4, Count-in 1 bar, After the count-in, Level) and the Scenes list with three scenes.
+             Replace the div below with
+             <img src="img/edit-song-click.webp" width="480" height="520" loading="lazy"
+               alt="Edit › Song: the Click settings (time, count-in, after the count-in, level) and the song's three scenes.">
+             (webp ≈ q80, ≤ 30 KB, like key-drone.webp) -->
+        <div class="shot-todo narrow" style="--ar: 480 / 520" role="img"
+          aria-label="Screenshot to come: the Click and Scenes settings in Edit"><span>Screenshot to come</span></div>
+      </figure>
+      <div>
+        <p class="kicker">Click &amp; count-in · new in 1.1</p>
+        <h2>A count-in that never holds up the song</h2>
+        <p>Tap Click and the band hears one or two bars, then the click or quiet. Change songs whenever you like: a
+          running click picks up the new tempo on the next beat. With a 4-output interface it plays in your in-ears
+          only, and MIDI clock can drive a delay pedal.</p>
+        <p class="measure"><a href="https://github.com/ryanmye/worship-rig/blob/main/test/phase1/engine/click-suites.mjs">Every
+          click lands within 0.3 samples of the beat</a>, and the click uses 0.14 % of one CPU core.</p>
+      </div>
+    </div>
+
+    <div class="feature">
+      <figure class="stage">
+        <!-- SHOT: settings-keyboards.webp, 720x450, Sanctuary. Settings › MIDI keyboard › Your keyboards with one
+             keyboard's Touch… open (the curve and a Fit to my touch result), cropped to the section. Replace the div
+             below with
+             <img src="img/settings-keyboards.webp" width="720" height="450" loading="lazy"
+               alt="Settings › Your keyboards: a keyboard's touch curve with Fit to my touch, Remember and Forget.">
+             (webp ≈ q80, ≤ 40 KB) -->
+        <div class="shot-todo" style="--ar: 720 / 450" role="img"
+          aria-label="Screenshot to come: Your keyboards in Settings"><span>Screenshot to come</span></div>
+      </figure>
+      <div>
+        <p class="kicker">Your keyboards · new in 1.1</p>
+        <h2>A touch that fits your keyboard</h2>
+        <p>Play six soft notes and six hard ones, and Worship Rig fits its touch to that keyboard. Each keyboard
+          keeps its own, saved on this Mac.</p>
+        <p class="measure"><a href="https://github.com/ryanmye/worship-rig/blob/main/CONTRACT_CHANGES.md#v11-touch">A
+          keyboard's own curve adds less than a microsecond</a> to each note.</p>
+      </div>
+    </div>
+
   </div>
 </section>
 
@@ -169,6 +235,76 @@
   </div>
 </section>
 
+<section class="new" id="new">
+  <!-- RELEASE: pages.yml publishes this page on every push to main. If main is pushed before the v1.1.0 tag, the
+       download buttons still give 1.0.1 for a while: push docs/site with the tag, or accept the gap. -->
+  <div class="wrap">
+    <div class="new-head">
+      <div>
+        <p class="kicker">Version 1.1</p>
+        <h2>What's new in 1.1</h2>
+      </div>
+      <p class="muted">Everything new stays out of the way until you want it. A 1.0 library plays exactly as before.
+        <a href="https://github.com/ryanmye/worship-rig/blob/main/docs/release-notes-1.1.0.md">Full release notes</a>.</p>
+    </div>
+    <ul class="new-grid">
+      <li class="new-card">
+        <h3>Click and count-in</h3>
+        <p>Tap Click by the tempo for one or two bars of count-in, then the click or quiet. Outputs 3–4 can send it to
+          the in-ears only.</p>
+        <p class="where">Perform › Click · Edit › Song › Click</p>
+      </li>
+      <li class="new-card">
+        <h3>Scenes</h3>
+        <p>Up to three saved sets of levels per song, stepped by a footswitch. Changes glide, and held notes ring
+          on.</p>
+        <p class="where">Quick › This song › Save as scene</p>
+      </li>
+      <li class="new-card">
+        <h3>Your keyboards</h3>
+        <p>Play six soft notes and six hard ones, and the app fits its touch to that keyboard. Saved on this Mac, for
+          each keyboard.</p>
+        <p class="where">Settings › MIDI keyboard › Your keyboards</p>
+      </li>
+      <li class="new-card">
+        <h3>Pedal</h3>
+        <p>A Log curve gives an expression pedal finer control when it's quiet, and a switch lets the sustain pedal
+          swell the drone.</p>
+        <p class="where">Edit › Master › Wheels &amp; pedal</p>
+      </li>
+      <li class="new-card">
+        <h3>Global shortcuts</h3>
+        <p>Next or previous song, Panic, master louder or softer and scenes from any app, even with the window hidden:
+          <kbd>⌃⌥⌘]</kbd> <kbd>⌃⌥⌘[</kbd> for songs.</p>
+        <p class="where">Settings › Menu bar · Mac app · off until you turn it on</p>
+      </li>
+      <li class="new-card">
+        <h3>Update check</h3>
+        <p>Once a day the app asks GitHub whether there's a newer version and tells you in Settings › About. It never
+          installs anything by itself.</p>
+        <p class="where">Settings › About · Mac app · can be switched off</p>
+      </li>
+      <li class="new-card">
+        <h3>GarageBand importer</h3>
+        <p>Tick GarageBand or Logic instruments and import them into My Samples while you play. Apple's sounds stay on
+          your Mac.</p>
+        <p class="where">Settings › My Samples · Mac app</p>
+      </li>
+      <li class="new-card">
+        <h3>Themes and polish</h3>
+        <p>Each theme uses its own wording, Daylight can follow your Mac's light or dark mode, and the EQ graph matches
+          the theme.</p>
+        <p class="where">Settings › Appearance</p>
+      </li>
+      <li class="new-card">
+        <h3>Fixes</h3>
+        <p>The frozen drone no longer dips once each time its loop goes around, Panic also stops the click, and piano
+          songs use less memory.</p>
+      </li>
+    </ul>
+  </div>
+</section>
+
 <section class="download" id="download">
   <div class="wrap">
     <h2>Get Worship Rig</h2>
@@ -181,8 +317,10 @@
     </div>
     <p class="cta-note">Apple Silicon · <a href="https://github.com/ryanmye/worship-rig/releases/latest/download/Worship-Rig-x64.dmg">Intel</a> · <a href="https://github.com/ryanmye/worship-rig/releases/latest">all downloads</a>.
       Ad-hoc signed: see the first-launch steps below.</p>
-    <p class="sizes">v1.0.1 · about 191 MB download (arm64) / 198 MB (x64), about 370 MB installed,
-      <a href="https://github.com/ryanmye/worship-rig/blob/main/reviews/local-findings.md#release-pipeline-dmg--x64-2026-09-30-native-macos">measured on the release builds</a>.</p>
+    <!-- RELEASE: sizes below are the v1.0.1 builds (1.1 adds about 70 KB of code). After v1.1.0 is published,
+         measure its dmg / installed size and replace "v1.0.1 release builds" with the new numbers. -->
+    <p class="sizes">About 191 MB download (arm64) / 198 MB (x64), about 370 MB installed,
+      <a href="https://github.com/ryanmye/worship-rig/blob/main/reviews/local-findings.md#release-pipeline-dmg--x64-2026-09-30-native-macos">measured on the v1.0.1 release builds</a>.</p>
   </div>
 </section>
 
@@ -206,6 +344,8 @@
           <li><strong>Output.</strong> Use the headphone jack or a wired interface, not Bluetooth: Bluetooth measured
             176 ms against 20 ms on a USB-C dock
             (<a href="https://github.com/ryanmye/worship-rig/blob/main/reviews/hardware-checklist.md">hardware check</a>).</li>
+          <li><strong>Updating.</strong> From 1.1 on, <strong>Settings › About</strong> tells you when a new version is
+            out. Quit Worship Rig, open the new <code>.dmg</code> and drag it over the old app. Your songs stay.</li>
         </ol>
         <p class="small muted">Full steps: <a href="https://github.com/ryanmye/worship-rig#running-on-your-mac">README › Running on your Mac</a>.</p>
       </div>
@@ -231,9 +371,20 @@
       </div>
 
       <div id="garageband">
+        <figure class="stage thumb">
+          <!-- SHOT: gb-import.webp, 720x450, Sanctuary. On the Mac with GarageBand installed: Settings › My Samples ›
+               Import from GarageBand / Logic…, the list with sizes and two instruments ticked (or the progress bars),
+               cropped to the panel. Replace the div below with
+               <img src="img/gb-import.webp" width="720" height="450" loading="lazy"
+                 alt="The Import from GarageBand / Logic panel: a list of instruments with their sizes, two of them ticked.">
+               (webp ≈ q80, ≤ 40 KB) -->
+          <div class="shot-todo" style="--ar: 720 / 450" role="img"
+            aria-label="Screenshot to come: the GarageBand importer"><span>Screenshot to come</span></div>
+        </figure>
         <h3>Sounds from GarageBand or Logic</h3>
-        <p>If GarageBand or Logic is installed, a small command-line tool converts their sampled instruments into your
-          <strong>My Samples</strong> folder and they show up in the instrument picker. Those sounds are Apple's and
+        <p>If GarageBand or Logic is installed, <strong>Settings › My Samples › Import from GarageBand / Logic…</strong>
+          converts their sampled instruments into your <strong>My Samples</strong> folder, and they show up in the
+          instrument picker without a restart (a command-line tool does the same). Those sounds are Apple's and
           licensed to you for personal use: they stay on your Mac, and Worship Rig never ships, uploads or shares
           them. Step by step:
           <a href="https://github.com/ryanmye/worship-rig/blob/main/docs/garageband-import.md">docs/garageband-import.md</a>.</p>
@@ -267,8 +418,10 @@
         <a href="fonts/OFL-Alegreya.txt">OFL-Alegreya.txt</a>, <a href="fonts/OFL-Figtree.txt">OFL-Figtree.txt</a>).</p>
     </details>
 
-    <p class="privacy">Privacy: no network calls of its own, no telemetry; songs, recordings and sounds stay on your Mac,
-      and its small web server listens only on <code>127.0.0.1</code>
+    <p class="privacy">Privacy: no telemetry. The only network call is a once-a-day check of GitHub's latest release
+      (<a href="https://github.com/ryanmye/worship-rig/blob/main/update-check.js">update-check.js</a>, switch it off in
+      Settings › About). Songs, recordings and sounds stay on your Mac, and its small web server listens only on
+      <code>127.0.0.1</code>
       (<a href="https://github.com/ryanmye/worship-rig/blob/main/server.js">server.js</a>).</p>
 
     <ul class="footer-links">

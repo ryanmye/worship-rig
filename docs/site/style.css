@@ -274,6 +274,52 @@ section { padding-block: var(--gap-section); }
   .swatch { transition: box-shadow 0.15s; }
 }
 
+/* what's new in 1.1: a grid of text cards (the 1.1 screenshots sit in the feature rows and Details) */
+.new-pill { margin: -1rem auto 2rem; max-width: none; }
+.new-pill a {
+  display: inline-flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 0.2rem 0.6rem;
+  padding: 0.4rem 1rem; border-radius: 999px; border: 1px solid var(--line); background: var(--panel);
+  color: var(--text); font-size: 0.9375rem; line-height: 1.35; text-decoration: none;
+}
+.new-pill a:hover { border-color: var(--accent); }
+.new-pill b { color: var(--accent); font-weight: 700; }
+.new-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 0.5rem 3rem; }
+.new-head h2 { margin-bottom: 0; }
+.new-head p.muted { margin: 0; max-width: 46ch; }
+.new-grid {
+  list-style: none; margin: 2rem 0 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); gap: 1.25rem;
+}
+.new-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 1.2rem 1.3rem 1.1rem; display: flex; flex-direction: column;
+}
+.new-card h3 { font-size: 1.25rem; margin-bottom: 0.35em; }
+.new-card p { font-size: 0.9375rem; color: var(--muted); margin-bottom: 0.7em; }
+.new-card .where {
+  margin: auto 0 0; padding-top: 0.6rem; border-top: 1px solid var(--line);
+  font-size: 0.8125rem; color: var(--text);
+}
+.stage.thumb { padding: 0.75rem; border-radius: 12px; margin: 0 0 1.1rem; }
+.new + .download { border-top: 1px solid var(--line); }
+kbd {
+  font: 600 0.8125rem/1 var(--font-body); white-space: nowrap;
+  padding: 0.15em 0.4em; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px;
+  background: var(--panel-2); color: var(--text);
+}
+/* the scenes row: image on the left (the other wide row has it on the right) */
+.feature.wide.left { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); }
+.feature.wide.left .stage { order: 0; }
+/* screenshot placeholders (SHOT comments in index.html): a neutral box at the shot's aspect ratio, always on the
+   dark stage, so the layout is final before the Mac screenshots replace them */
+.shot-todo {
+  width: 100%; aspect-ratio: var(--ar, 16 / 10);
+  display: grid; place-items: center; border-radius: 10px;
+  border: 1px dashed rgb(245 236 216 / 0.3); background: rgb(245 236 216 / 0.04);
+  color: rgb(245 236 216 / 0.62); font-size: 0.875rem; letter-spacing: 0.02em;
+}
+.shot-todo.narrow { width: min(100%, 404px); }
+
 /* download */
 .download { text-align: center; }
 .download h2 { font-size: var(--fs-4); }
@@ -309,7 +355,7 @@ details.credits p { margin-top: 0.8rem; }
 
 /* narrow */
 @media (max-width: 880px) {
-  .feature, .feature.wide, .themes-grid { grid-template-columns: 1fr; gap: 1.75rem; }
+  .feature, .feature.wide, .feature.wide.left, .themes-grid { grid-template-columns: 1fr; gap: 1.75rem; }
   .feature .stage, .feature.flip .stage, .feature.wide .stage { order: 0; }
   .feature p { font-size: 1.125rem; }
 }
