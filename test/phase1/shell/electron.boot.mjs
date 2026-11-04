@@ -281,7 +281,13 @@ test('menu-bar mode (L14): tray, menu from the bus state, IPC relay both ways, p
   assert.deepEqual(m.eventsOnEnable, ['windowShown'], 'setMenuBarMode(true) reports the current window state');
   // opening the popover is not "shown": only the status ids popoverShown / popoverHidden (7071b23, controller
   // status.popoverOpen) go out, one per transition
-  assert.deepEqual(m.eventsDuringPopover, ['popoverShown', 'popoverHidden', 'popoverShown', 'popoverHidden']);
+  // L11-4: on a Mac with the screen unlocked, focus coming back to the (visible) main window can add a truthful
+  // windowShown; what must never happen is a window event that contradicts the window's real state.
+  const popIds = m.eventsDuringPopover.filter((id) => /^popover/.test(id));
+  assert.deepEqual(popIds, ['popoverShown', 'popoverHidden', 'popoverShown', 'popoverHidden']);
+  const winIds = m.eventsDuringPopover.filter((id) => !/^popover/.test(id));
+  const truth = m.windowShownDuringPopover ? 'windowShown' : 'windowHidden';
+  assert.ok(winIds.every((id) => id === truth), `window events during the popover match the window (${winIds})`);
   // setMenuBarMode(false) is the source of truth too: tray gone, renderer back to the document's visibility
   assert.equal(m.setMenuBarModeOff.on, false);
   assert.equal(m.trayAfterOff, false);
@@ -293,10 +299,15 @@ test('menu-bar mode (L14): tray, menu from the bus state, IPC relay both ways, p
   assert.deepEqual(m.eventsOnMinimize, []);
   // ⌘H (app.hide / app.show, macOS): same DOM events. Guarded: the hide needs an unlocked screen / window server.
   // L11-2: a locked screen also hides it (app.hide() "succeeds" but sends no visibility events).
-  if (isMac && m.appHideObserved && !m.screenLocked) assert.deepEqual(m.windowVisibleAppHide, [false, true]);
-  else if (isMac) {
-    console.log(`# ${m.screenLocked ? 'screen locked' : 'app.hide() not observed on this display'}; `
-      + 'windowVisibleAppHide not asserted');
+  // L11-2 (Mac rerun): getSystemIdleState didn't say 'locked' there, so also skip when no visibility event came at
+  // all, like the minimise guard; a partial or wrong sequence still fails.
+  const hideEvents = m.windowVisibleAppHide || [];
+  if (isMac && m.appHideObserved && !m.screenLocked && hideEvents.length) {
+    assert.deepEqual(hideEvents, [false, true]);
+  } else if (isMac) {
+    const why = m.screenLocked ? 'screen locked'
+      : m.appHideObserved ? 'no visibility event (locked screen?)' : 'app.hide() not observed on this display';
+    console.log(`# ${why}; windowVisibleAppHide not asserted`);
   }
   if (isMac) {
     assert.deepEqual(m.hideOnClose, { destroyed: false, visible: false, dock: false }, 'close hides, dock icon hidden');

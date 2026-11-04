@@ -1802,6 +1802,7 @@ async function menubarSelftest(wc) {
   out.popoverToggled = reopened && (await waitFor(() => !popover.isVisible()));
   out.popoverTransitions = popoverLog.slice();
   out.eventsDuringPopover = await menuEvents(); // opening the popover is not "shown"
+  out.windowShownDuringPopover = windowShownNow(); // L11-4: what a window event in that list may truthfully say
   // hide-on-close (macOS): the window hides instead of closing, the dock icon goes away, a library backup is written;
   // openMain brings window and dock icon back
   if (IS_MAC) {

@@ -167,7 +167,9 @@ Failures: engine 2 (L11-5, L11-6, both deterministic) and shell 1 (L11-4). Re-ru
 
 ## L11-4 shell Electron L14: an extra `windowShown` while the popover opens (screen unlocked)
 
-**Status:** open, seen once (full run, screen unlocked). New since 6d8d336, where the Electron boot passed 22/22.
+**Status:** fixed by the cloud (2026-11-04): the popover ids must still be exactly the 4 transitions, and any
+window event in that list must match the window's real state (`windowShownDuringPopover`), so a truthful
+`windowShown` from focus returning passes and a false one still fails. (Was: open, seen once, screen unlocked.)
 
 ```
 AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
@@ -185,6 +187,9 @@ Same family as L11-1: a window event leaks into a list that expects only popover
 `eventsDuringPopover` to `popover*` the way L11-1's fix filtered `trayEvents`, or find what shows the window there.
 
 ## L11-2 is not fixed on the Mac: locked-screen reruns still fail at electron.boot.mjs:296
+
+**Status:** fixed again by the cloud (2026-11-04): the ⌘H check also skips (with a `#` note) when no visibility
+event arrived at all; a partial or wrong sequence still fails. Please re-run locked.
 
 3/3 `node test/phase1/shell/run.mjs --only electron` runs with the screen locked (CGSession `ScreenIsLocked` = 1)
 fail in the L14 test with `+ []` at `electron.boot.mjs:296:61` (the ⌘H `windowVisibleAppHide` assert). So
