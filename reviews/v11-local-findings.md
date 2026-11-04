@@ -118,7 +118,10 @@ in Settings, "while Perform plays: no glitches", Daylight Auto on a real appeara
 
 ## L11-3 Global shortcuts: "taken" never shows on macOS; registration succeeds even when another app holds the combination
 
-**Status:** open. Confirms the checklist's doubt ("It's not confirmed that `register()` returns false on macOS").
+**Status:** fixed by the cloud (2026-11-04), wording only: Settings › Menu bar now says on macOS "macOS doesn’t
+tell apps when another app uses the same shortcut. If one does nothing, pick another." README, release notes and
+docs/menubar-mode.md no longer promise a warning. The `taken` state stays for a register() that really fails. Still
+open for Ryan's batch: which app receives the press when both hold it. (Was: open; confirms the checklist's doubt.)
 
 A helper Electron app (`test/logs/hk/`) registered `Control+Alt+Command+]` first (`register()` → true) and kept it.
 Then the packaged Worship Rig was switched on with the defaults:

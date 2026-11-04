@@ -215,7 +215,8 @@ is throttled to ≤ 4/s); after 1.5 s the published state counts again.
 - **Mirror**: `app/js/shell-mirror.js` → `window.rig.setHotkeys({on, keys})` at start and on every change.
 - **Main** (`global-hotkeys.js`, wired in main.js): unregisters ours, then registers each with `globalShortcut`.
   Per-action state in `HotkeyStatus {on, paused, keys:{<id>:{accelerator, state}}}`: `ok`, `taken` (`register()`
-  returned false: another app or macOS holds it; Settings: "Another app already uses this. Pick another."),
+  returned false; Settings: "Another app already uses this. Pick another."; on macOS `register()` returns true even
+  when another app holds the combination (L11-3), so Settings › Menu bar also says that macOS can't tell),
   `invalid` (Electron threw), `none`, `off`, `paused`. Pushed as `rig:hotkeyStatus` (`window.rig.onHotkeyStatus`).
   A press goes through `sendBusCommand`, exactly like a tray click; no engine path of its own (`nextSong` /
   `prevSong` are the controller's own song steps).

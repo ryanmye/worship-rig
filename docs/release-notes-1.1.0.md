@@ -52,8 +52,8 @@ the Worship Rig window hidden:
 - **Master louder** / **Master softer** (2 dB): ⌃⌥⌘= / ⌃⌥⌘-
 - **Next scene** / **Previous scene**: ⌃⌥⌘. / ⌃⌥⌘,
 
-To set your own keys, click a shortcut and press the new combination. If another app already uses a combination,
-Settings tells you. The shortcuts are off until you switch them on.
+To set your own keys, click a shortcut and press the new combination. macOS doesn't tell apps when another app uses
+the same shortcut, so if one does nothing, pick another. The shortcuts are off until you switch them on.
 
 ### Update check (Mac app)
 
@@ -123,8 +123,8 @@ factory set back.
 
 Everything above was built and tested in software. These parts still need a real Mac, real hardware or real ears:
 
-- Global shortcuts from another app with the window hidden, a combination already taken by another app (for example
-  Rectangle), and recording a ⌃⌥⌘ combination in Settings.
+- Global shortcuts from another app with the window hidden, which app wins when another app (for example Rectangle)
+  holds the same combination, and recording a ⌃⌥⌘ combination in Settings.
 - The update check in the installed app: the "available" line, Download and the switch that turns it off.
 - Fit to my touch and Remember with two real keyboards plugged in.
 - An expression pedal on the Log curve, and how "Sustain pedal also swells the drone" sounds.

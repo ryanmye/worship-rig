@@ -420,7 +420,8 @@ from any app, even with the window hidden.
 | ⌃⌥⌘= / ⌃⌥⌘- | Master louder / softer (2 dB) |
 | ⌃⌥⌘. / ⌃⌥⌘, | Next scene / Previous scene |
 
-Click a shortcut to set your own keys. If another app already uses a combination, Settings says so.
+Click a shortcut to set your own keys. macOS doesn't tell apps when another app uses the same shortcut, so if one
+does nothing, pick another.
 
 ## Manual check on your Mac (5 minutes, after each build)
 

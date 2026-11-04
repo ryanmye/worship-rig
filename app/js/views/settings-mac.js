@@ -79,6 +79,7 @@ export function mountHotkeys(d) {
   const list = h('div.st-hk-list', { 'data-testid': 'hotkey-list', hidden: true },
     ...rows,
     h('p.st-hint', { text: say('hotkeysListHint') }),
+    mac ? h('p.st-hint', { 'data-testid': 'hotkey-mac-taken', text: say('hotkeysMacTakenHint') }) : null,
     msg,
     h('div.st-inline', {}, reset));
   const el = h('div.st-hotkeys', { 'data-testid': 'settings-hotkeys' },

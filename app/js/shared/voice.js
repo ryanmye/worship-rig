@@ -65,6 +65,10 @@ const CLASSIC = Object.freeze({
   hotkeyPrevSong: 'Previous song',
   hotkeysSub: 'Step through the setlist’s songs, panic and turn the master up or down from any app, even with the '
     + 'window hidden.',
+  // L11-3: macOS lets two apps register the same global shortcut (register() still returns true), so the app can't
+  // tell when another app uses one; say so instead of promising a warning that never comes.
+  hotkeysMacTakenHint: 'macOS doesn’t tell apps when another app uses the same shortcut. If one does nothing, pick '
+    + 'another.',
   hotkeysListHint: 'Click a shortcut, then press the new keys. Esc cancels; Delete leaves that one without a '
     + 'shortcut. Next and previous song go through the setlist like → and ← in Perform; the menu-bar buttons still '
     + 'step the modes above.',

@@ -229,6 +229,9 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
       await until(() => window.__rig.store.get().settings.hotkeys?.on === true);
       await until(() => window.__fake.cfg && window.__fake.cfg.on === true);
       assert.equal(await page.isVisible('[data-testid="hotkey-list"]'), true);
+      // L11-3: macOS can't report another app's shortcut, so the Mac copy says so (the 'taken' state stays for a
+      // register() that really fails)
+      assert.match(await page.textContent('[data-testid="hotkey-mac-taken"]'), /macOS doesn’t tell apps/);
       assert.equal(await keyText('nextSong'), '⌃⌥⌘]');
       assert.equal(await keyText('prevSong'), '⌃⌥⌘[');
       assert.equal(await keyText('masterUp'), '⌃⌥⌘=');
