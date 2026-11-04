@@ -555,6 +555,8 @@ function idlePeriod(ms, maxWait = 5000) {
   });
 }
 const REVERB_UNITS_MAX = 10;
+/** v11-memory: a deferred switch build waits at most this long (s, audio clock) for the keyboard to go quiet. */
+const REVERB_DEFER_MAX_SEC = 30;
 const clampPd = (v) => Math.min(0.5, Math.max(0, Number(v) || 0));
 
 class Reverb {
@@ -580,6 +582,12 @@ class Reverb {
     this._target = null; // IR key the reverb is at or heading to (commitTo / request); null → the active unit's
     this._inflight = new Map(); // key -> {p: Promise<unit>, hurry}
     this._keep = new Set(); // staged keys (never evicted before their commit)
+    // v11-memory: a ConvolverNode holds ≈ 13 MB of Chromium kernels per second of stereo IR (8 s bucket: 113 MB
+    // allocated, ≈ 55 MB resident), so a pool of 10 idle units was the renderer's biggest hidden cost. Once the
+    // engine names the spaces of the songs around the current one (retain), idle units outside them and outside the
+    // current song's own (incl. its macro.wash buckets) are dropped, and warm() skips spaces outside them.
+    this._retain = null; // Set of IR keys, or null = the plain LRU of REVERB_UNITS_MAX (offline renders, tests)
+    this._songKeys = new Set(); // IR keys the current song has played on (commitTo + live requests)
     this._disposed = false;
     // debug stat (leak checks compare engines): static nodes + two units' worth, independent of the pool size
     this.nodeCount = 5 + 2 * 6;
@@ -655,18 +663,38 @@ class Reverb {
     this.units.delete(u.key);
     this.units.set(u.key, u);
   }
+  _busy(u) {
+    return u === this.active || u.state !== 'idle' || u.connected || this._keep.has(u.key);
+  }
+  _dropUnit(u) {
+    this.units.delete(u.key);
+    for (const n of [...u.pd, ...u.pg, u.conv, u.out]) {
+      try {
+        n.disconnect();
+      } catch {}
+    }
+  }
   _evict() {
+    if (this._retain) {
+      for (const u of [...this.units.values()]) {
+        if (!this._busy(u) && !this._retain.has(u.key) && !this._songKeys.has(u.key)) this._dropUnit(u);
+      }
+    }
     if (this.units.size <= REVERB_UNITS_MAX) return;
     for (const u of [...this.units.values()]) {
       if (this.units.size <= REVERB_UNITS_MAX) break;
-      if (u === this.active || u.state !== 'idle' || u.connected || this._keep.has(u.key)) continue;
-      this.units.delete(u.key);
-      for (const n of [...u.pd, ...u.pg, u.conv, u.out]) {
-        try {
-          n.disconnect();
-        } catch {}
-      }
+      if (!this._busy(u)) this._dropUnit(u);
     }
+  }
+
+  /**
+   * v11-memory: keep idle units only for these IR keys (plus the active, staged, fading ones and the current song's).
+   * The engine calls it with the spaces of the songs around the current one (AudioEngine.retainReverb).
+   * @param {Iterable<string>} keys irKey() values
+   */
+  retain(keys) {
+    this._retain = new Set(keys);
+    this._evict();
   }
 
   /** Synchronous unit (offline, or already pooled). */
@@ -683,7 +711,7 @@ class Reverb {
    * the main thread) in an idle period, waiting at most `idle` ms for one. prepare() doesn't wait (it resolves as
    * soon as the unit exists); preload warming and live size edits do.
    */
-  _unitAsync(size, damp, { idle = 0 } = {}) {
+  _unitAsync(size, damp, { idle = 0, quiet = false } = {}) {
     const key = this.irKey(size, damp);
     const have = this.units.get(key);
     if (have) {
@@ -699,7 +727,17 @@ class Reverb {
     const hurried = new Promise((r) => (hurry = r));
     const p = (async () => {
       const { ir } = await this.irAsync(size, damp);
-      if (idle > 0 && !this.env.offline && typeof requestIdleCallback === 'function') await Promise.race([idlePeriod(40, idle), hurried]);
+      if (idle > 0 && !this.env.offline && typeof requestIdleCallback === 'function') {
+        await Promise.race([idlePeriod(40, idle), hurried]);
+        // v11-memory (performance #4b): a warm-up build waits while keys are held or pedalled (conv.buffer = blocks
+        // the main thread 15–400 ms: a note played then is that late), at most REVERB_DEFER_MAX_SEC
+        const t0 = Date.now();
+        let hurry = false;
+        hurried.then(() => (hurry = true));
+        while (quiet && !hurry && this.env.busy?.() && Date.now() - t0 < REVERB_DEFER_MAX_SEC * 1000) {
+          await Promise.race([idlePeriod(40, 1000), hurried]);
+        }
+      }
       if (this._disposed) return null;
       return this.units.get(key) || this._newUnit(key, ir);
     })().finally(() => this._inflight.delete(key));
@@ -754,14 +792,24 @@ class Reverb {
 
   /**
    * prepare-phase: make sure a unit (IR + convolver buffer) exists for (size, damp). Resolves when ready.
-   * @returns {Promise<{key, size, damp}>}
+   * v11-memory: `defer` (the engine passes it while keys are held or pedalled): a unit that isn't built yet is not
+   * built now. `conv.buffer =` blocks the main thread 15–400 ms (8 s bucket ≈ 100 ms+ on this box), which would make
+   * a note played during the switch that late. Only the IR is started (worker); commitTo then keeps the playing
+   * space until the keyboard is quiet (request {quiet}), builds the unit and crossfades as usual.
+   * @param {number} size
+   * @param {number} damp
+   * @param {{defer?: boolean}} [o]
+   * @returns {Promise<{key, size, damp, deferred?: boolean}>}
    */
-  async stage(size, damp) {
+  async stage(size, damp, { defer = false } = {}) {
     const key = this.irKey(size, damp);
     this._keep = new Set([key]);
     if (!(this.active && this.active.key === key)) {
       if (this.env.offline) this._unitSync(size, damp);
-      else await this._unitAsync(size, damp);
+      else if (defer && !this.units.has(key)) {
+        this.irAsync(size, damp).catch(() => {}); // the IR is computed meanwhile (worker); the switch doesn't wait
+        return { key, size, damp, deferred: true };
+      } else await this._unitAsync(size, damp);
     }
     return { key, size, damp };
   }
@@ -769,7 +817,10 @@ class Reverb {
   /** Preload: warm a unit in idle time (realtime only; never blocks). */
   warm(size, damp) {
     if (this.env.offline) return Promise.resolve(null);
-    return this._unitAsync(size, damp, { idle: 5000 }).catch(() => null);
+    const key = this.irKey(size, damp);
+    // v11-memory: a space no song around the current one uses is not built ahead (it would be dropped at once)
+    if (this._retain && !this._retain.has(key) && !this._songKeys.has(key)) return Promise.resolve(null);
+    return this._unitAsync(size, damp, { idle: 5000, quiet: true }).catch(() => null);
   }
 
   /** commit-phase: switch to a staged IR and/or predelay. Cheap: gains and connections only. */
@@ -778,6 +829,7 @@ class Reverb {
     if (stage) {
       this._target = stage.key;
       ++this._reqSeq; // a live request still in its debounce belongs to the previous song: drop it
+      this._songKeys = new Set([stage.key]); // v11-memory: a new song: its own spaces start here
     }
     if (!stage || (this.active && stage.key === this.active.key)) {
       if (stage) {
@@ -789,8 +841,9 @@ class Reverb {
     }
     const u = this.units.get(stage.key);
     if (!u) {
-      // evicted between prepare and commit (should not happen): the async path swaps when it's ready
-      this.request(stage.size, stage.damp, when - 0.3);
+      // a deferred stage (v11-memory), or evicted between prepare and commit: the async path swaps when it's ready
+      if (stage.deferred) this.deferredBuilds = (this.deferredBuilds || 0) + 1;
+      this.request(stage.size, stage.damp, when - 0.3, { quiet: !!stage.deferred });
       return;
     }
     this._swapUnit(u, stage, when, ++this._reqSeq);
@@ -832,6 +885,7 @@ class Reverb {
       });
     }
     this.active = u;
+    this._songKeys.add(u.key); // v11-memory: a macro.wash bucket the song reached stays built while it plays
     this._touch(u);
     this.size = st.size;
     this.damp = st.damp;
@@ -868,11 +922,16 @@ class Reverb {
     u.pdBusyUntil = when + this.pdFade + 0.005;
   }
 
-  /** Live size/damp edit (knob, macro.wash): debounced 300 ms (event time), then an off-thread unit + swap. */
-  request(size, damp, when) {
+  /**
+   * Live size/damp edit (knob, macro.wash): debounced 300 ms (event time), then an off-thread unit + swap.
+   * v11-memory `quiet` (a deferred song-switch stage): a unit still to be built waits, on the audio clock, until
+   * `env.busy()` is false (no key held or pedalled), at most REVERB_DEFER_MAX_SEC.
+   */
+  request(size, damp, when, { quiet = false } = {}) {
     const seq = ++this._reqSeq;
     this._target = this.irKey(size, damp);
-    this.env.timer.at(when + 0.3, (tt) => {
+    const t0 = when + 0.3;
+    const go = (tt) => {
       if (seq !== this._reqSeq) return;
       const key = this.irKey(size, damp);
       if (this.active && this.active.key === key) {
@@ -885,13 +944,18 @@ class Reverb {
         this._swapUnit(this._unitSync(size, damp), st, tt, seq);
         return;
       }
+      if (quiet && this.env.busy?.() && tt - t0 < REVERB_DEFER_MAX_SEC) {
+        this.env.timer.at(tt + 0.25, go);
+        return;
+      }
       this._unitAsync(size, damp, { idle: 1000 }).then(
         (u) => {
           if (u && seq === this._reqSeq && !this._disposed) this._swapUnit(u, st, this.ctx.currentTime, seq);
         },
         () => {},
       );
-    });
+    };
+    this.env.timer.at(t0, go);
   }
 
   /** Live predelay edit (after the engine's coalescer). */

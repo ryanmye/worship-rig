@@ -398,3 +398,39 @@ test('memory L-8: never-decoded neighbours are decoded unpinned first, then pinn
   assert.equal(engine.pinnedMB(), 185);
   assert.equal(ctl.status.memory.windowMB, 185);
 });
+
+test('v11-memory: after a switch the engine keeps only the reverb spaces of the songs around the current one', async () => {
+  const store = makeStore();
+  store.setCurrentSetlist(null);
+  const engine = pinEngine(store);
+  const idOf = (patch) => store.get().songOrder.find((id) => store.getSong(id).patch === patch);
+  const retained = [];
+  engine.retainReverb = (patches) => {
+    retained.push(patches.map(idOf));
+    return true;
+  };
+  const ctl = mkCtl(store, engine);
+  await ctl.start();
+  await settle();
+  const order = store.get().songOrder;
+  for (let i = 1; i < 4; i++) {
+    await ctl.nextSong();
+    await settle();
+    const want = [order[i - 1], order[i], order[i + 1]].sort();
+    assert.deepEqual([...retained.at(-1)].sort(), want, `library song ${i}: ±1`);
+  }
+  // large set (the seeded "My Set", priced over the budget): ±2
+  const big = makeStore();
+  const e2 = pinEngine(big, { mbPerSong: 54 });
+  const got = [];
+  e2.retainReverb = (patches) => got.push(patches.length);
+  const c2 = mkCtl(big, e2);
+  await c2.start();
+  await settle();
+  await c2.nextSong();
+  await settle();
+  await c2.nextSong();
+  await settle();
+  assert.equal(c2.status.memory.mode, 'large-set');
+  assert.equal(got.at(-1), 5, 'current ± 2');
+});

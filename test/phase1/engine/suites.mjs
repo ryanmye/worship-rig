@@ -530,13 +530,17 @@ export const offline = {
 
   async preloadAndLRU() {
     const ctx = mkCtx(0.5);
-    const e = await mkEngine(ctx, { cacheMB: 0.5 }); // tiny cap: every unpinned, unreferenced buffer is evictable
+    const e = await mkEngine(ctx, { cacheMB: 0.5 });
     const P = patch({ 0: slot('sampler', 'test-keys') });
     const loads = [];
     e.addEventListener('ready', (ev) => loads.push(ev.detail.phase));
     await e.preload([P]);
     const pinned = e.cache.pinned.size;
     const afterPreload = e.cache.entries.size;
+    // v11-memory: a cap with room for the pinned set + the one mp3 sample (the 0.5 MB cap is now below the pinned set
+    // alone; switchHeadroom covers a switch that doesn't fit): every unpinned, unreferenced buffer beyond is evictable
+    e.cache.capBytes = e.cache.bytes + 0.6 * 1048576;
+    e.cache.lowWaterBytes = e.cache.capBytes * 0.85;
     // decoding another instrument (not pinned) over the cap does not evict the pinned set
     await use(e, patch({ 0: slot('sampler', 'test-mp3') }));
     await use(e, patch({ 0: slot('synth', 'bell') })); // test-mp3 retired; its buffer becomes evictable once disposed
@@ -1013,6 +1017,134 @@ export const offline = {
     const pass = urlsK.length === 4 && urlsM.length >= 1 && bytesM > 0 && estOk && pinnedOnlyK && statsOk &&
       overCapWhilePinned && kLeft > 0 && kLeft < 4 && underCap && kEvicted && mKept && sizesKept;
     return { pass, bytesK, bytesM, est, pinnedOnlyK, statsOk, overCapWhilePinned, kLeft, underCap, kEvicted, mKept, sizesKept };
+  },
+
+  /**
+   * v11-memory (switch headroom): a switch whose new song doesn't fit next to the pinned window keeps decodedMB ≤ the
+   * cap: the pinned buffers of other songs give way (LRU, just enough; their pins stay), the incoming song's and the
+   * playing song's never do, and a referenced buffer never goes (gapless). Once the old song's buffers are released,
+   * _rewarmPins decodes the evicted pinned samples again. Before any prepare (protect null) pins stay absolute.
+   */
+  async switchHeadroom() {
+    const ctx = mkCtx(0.3);
+    const e = await mkEngine(ctx, { cacheMB: 100 });
+    const K = patch({ 0: slot('sampler', 'test-keys') });
+    const M = patch({ 0: slot('sampler', 'test-mp3') });
+    await e.preload([M], { pin: 'none' });
+    const bytesM = e.cache.bytes;
+    e.cache.invalidate([...e.cache.entries.keys()]); // M's size is known now, its buffer gone
+    await e.preload([K], { pin: 'replace' });
+    const bytesK = e.cache.bytes;
+    const keysK = [...e.cache.pinned];
+    const protectBefore = e.cache.protect;
+    e.cache.capBytes = bytesK + bytesM / 2; // K pinned + M can't both fit
+    e.cache.lowWaterBytes = e.cache.capBytes * 0.85;
+    let peak = 0;
+    const acq = e.cache.acquire.bind(e.cache);
+    e.cache.acquire = async (...a) => {
+      const b = await acq(...a);
+      peak = Math.max(peak, e.cache.bytes);
+      return b;
+    };
+    await use(e, M); // M decodes while K is pinned
+    const mKey = [...e.cache.entries.keys()].find((k) => !keysK.includes(k));
+    const underCap = peak <= e.cache.capBytes && e.cache.bytes <= e.cache.capBytes;
+    const kEvicted = keysK.filter((k) => !e.cache.entries.has(k)).length;
+    const pinsKept = keysK.every((k) => e.cache.pinned.has(k));
+    // the switch away from M: M retires (its buffer is referenced while it may still sound), then is released
+    await use(e, patch({ 0: slot('synth', 'bell') }));
+    const mHeldWhileRetiring = !!mKey && e.cache.entries.has(mKey) && e.retiring.length === 1;
+    for (const sc of e.retiring) e._disposeChannel(sc);
+    e.retiring = [];
+    await e._rewarmPins();
+    const kBack = keysK.every((k) => e.cache.entries.has(k));
+    const st = e._debugStats();
+    await ctx.startRendering();
+    const pass = protectBefore === null && bytesM > 0 && underCap && kEvicted >= 1 && pinsKept && mHeldWhileRetiring &&
+      kBack && e.cache.bytes <= e.cache.capBytes && 'referencedMB' in st;
+    return { pass, bytesK, bytesM, capMB: e.cache.capBytes / 1048576, peakMB: peak / 1048576, kEvicted, pinsKept,
+      mHeldWhileRetiring, kBack, rewarmed: e.rewarmed, referencedMB: st.referencedMB };
+  },
+
+  /**
+   * v11-memory: a stereo file with identical channels is kept as one channel (half the bytes), and the voice up-mixes
+   * it, so a note renders exactly as from the two-channel buffer: fixture (dual-mono WAV) and a real Musyng Kite
+   * music-box sample, dry and through the strip (pan, width, reverb send), against the same buffer as a stereo copy.
+   */
+  async dualMonoIdentity() {
+    const { processSample } = await import('/js/engine/sampler.js');
+    const out = {};
+    let worst = 0;
+    for (const [name, manifestUrl, id, note] of [['fixture', MANIFEST, 'test-keys', 60],
+      ['music-box', '/samples/manifest.json', 'music-box', 72]]) {
+      const render = async (stereo) => {
+        const ctx = mkCtx(2.5);
+        const e = await mkEngine(ctx, { manifestUrl });
+        const sends = { reverb: 0.3, delay: 0, chorus: 0 };
+        await use(e, patch({ 0: slot('sampler', id, { pan: 0.3, width: 0.7, sends }) }, { reverb: { size: 0.3 } }));
+        const inst = e.slots[0].inst;
+        let ch = 0;
+        for (const L of inst.layers) {
+          for (const smp of L.samples) {
+            ch = Math.max(ch, smp.buffer.numberOfChannels);
+            if (!stereo) continue;
+            const b = smp.buffer;
+            const s2 = new AudioBuffer({ numberOfChannels: 2, length: b.length, sampleRate: b.sampleRate });
+            const d = new Float32Array(b.length);
+            b.copyFromChannel(d, 0);
+            s2.copyToChannel(d, 0);
+            s2.copyToChannel(d, 1);
+            smp.buffer = s2;
+          }
+        }
+        e.noteOn(note, 100, { when: 0.1 });
+        e.noteOn(note + 7, 60, { when: 0.3 });
+        e.noteOff(note, { when: 1.2 });
+        e.noteOff(note + 7, { when: 1.4 });
+        const r = await ctx.startRendering();
+        return { L: r.getChannelData(0), R: r.getChannelData(1), ch };
+      };
+      const a = await render(false);
+      const b = await render(true);
+      let m = 0;
+      let pk = 0;
+      for (let i = 0; i < a.L.length; i++) {
+        m = Math.max(m, Math.abs(a.L[i] - b.L[i]), Math.abs(a.R[i] - b.R[i]));
+        pk = Math.max(pk, Math.abs(b.L[i]));
+      }
+      worst = Math.max(worst, m);
+      out[name] = { monoChannels: a.ch, maxDiff: m, peak: +pk.toFixed(3) };
+    }
+    // processSample: a real stereo file stays stereo, a dual-mono one becomes one channel
+    const ctx = mkCtx(0.1);
+    const raw = await ctx.decodeAudioData(await (await fetch('/samples/vibes/C4.mp3')).arrayBuffer());
+    const vib = processSample(raw, 60);
+    const pass = out.fixture.monoChannels === 1 && out['music-box'].monoChannels === 1 && worst <= 1e-6 &&
+      out['music-box'].peak > 0.01 && vib.numberOfChannels === 2 && vib._dualMono === false;
+    return { pass, ...out, vibesChannels: vib.numberOfChannels };
+  },
+
+  /**
+   * v11-memory: once the engine names the songs around the current one (retainReverb), idle reverb units for other
+   * spaces are dropped (a ConvolverNode holds ≈ 13 MB per second of IR in Chromium) and warm() skips them; the
+   * active unit, a staged one and the current song's own spaces stay.
+   */
+  async reverbRetain() {
+    const ctx = mkCtx(0.3);
+    const e = await mkEngine(ctx);
+    await use(e, patch({ 0: slot('synth', 'bell') }, { reverb: { size: 0.3 } }));
+    const R = e.fx.reverb;
+    for (const sz of [0.2, 0.5, 0.7, 0.9]) R._unitSync(sz, 0.5); // the old pool: idle units of earlier songs
+    const before = R.units.size;
+    const activeKey = R.active.key;
+    const keep = R.irKey(0.5, 0.5);
+    const ok = e.retainReverb([patch({}, { reverb: { size: 0.5, damp: 0.5 } })]);
+    const after = [...R.units.keys()];
+    const warmSkipped = (await R.warm(0.9, 0.5)) === null && !R.units.has(R.irKey(0.9, 0.5));
+    await ctx.startRendering();
+    const pass = ok && before === 5 && after.length === 2 && after.includes(activeKey) && after.includes(keep) &&
+      warmSkipped && e._debugStats().reverbUnits === 2;
+    return { pass, before, after };
   },
 
   /** #13: public calls before start() never throw; stored values apply once started. */
@@ -2638,6 +2770,40 @@ export const realtime = {
     return { pass, filesPlayable: filesOk, ...after, pickupAfterRestart: ignored, owner };
   },
 
+  /**
+   * v11-memory: a switch while a key is held to a reverb space that isn't built doesn't build it in prepare
+   * (conv.buffer = blocks the main thread up to ≈ 400 ms, so a note played meanwhile is that late): the old space
+   * keeps playing, and the new unit is built and crossfaded in once the keyboard is quiet. With nothing held the
+   * unit is built in prepare as before.
+   */
+  async reverbDeferWhilePlaying() {
+    const e = new AudioEngine({ seed: 11, manifestUrl: MANIFEST, instrumentModules: false });
+    await e.start();
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const R = e.fx.reverb;
+    await use(e, patch({ 0: slot('synth', 'bell') }, { reverb: { size: 0.2, damp: 0.5 } }));
+    const oldKey = R.active.key;
+    const want = R.irKey(0.9, 0.5);
+    e.noteOn(60, 90);
+    const t0 = performance.now();
+    await use(e, patch({ 0: slot('synth', 'bell') }, { reverb: { size: 0.9, damp: 0.5 } }));
+    const switchMs = performance.now() - t0;
+    await wait(1200);
+    const heldActive = R.active.key;
+    const builtWhileHeld = R.units.has(want);
+    e.noteOff(60);
+    for (let i = 0; i < 60 && R.active.key !== want; i++) await wait(100);
+    const afterQuiet = R.active.key;
+    // nothing held: built in prepare, active at once
+    await use(e, patch({ 0: slot('synth', 'bell') }, { reverb: { size: 0.4, damp: 0.5 } }));
+    await wait(1200);
+    const quietSwitch = R.active.key === R.irKey(0.4, 0.5);
+    const deferred = R.deferredBuilds || 0;
+    e.dispose();
+    const pass = heldActive === oldKey && !builtWhileHeld && afterQuiet === want && quietSwitch && deferred === 1;
+    return { pass, switchMs: Math.round(switchMs), oldKey, heldActive, builtWhileHeld, afterQuiet, quietSwitch, deferred };
+  },
+
   /** round2-engine M2: the washed reverb size survives restart() (it used to come back at the song's plain size). */
   async washSurvivesRestart() {
     const e = new AudioEngine({ seed: 9, manifestUrl: MANIFEST, instrumentModules: false });
@@ -2699,7 +2865,7 @@ export const realtime = {
    * menubar-A (C7, docs/menubar-mode.md): engine.setLowResource. On: the pins become the current song's samples only
    * (the setlist pins are remembered), slotLevel taps are disconnected and stay at 0 while a meter keeps reading, and
    * a 30 s real-time window with neighbour preloads of songs on new reverb sizes builds no IR and no reverb unit (idle
-   * warming off); idle units are dropped. A commit moves the pins to the new song. Off: the remembered pins (plus the
+   * warming off); idle units are dropped, and so are the decoded buffers that are no longer pinned (v11-memory). A commit moves the pins to the new song. Off: the remembered pins (plus the
    * current song's) come back, taps and warming work again.
    */
   async lowResource() {
@@ -2733,6 +2899,8 @@ export const realtime = {
     const w0 = { ...irStats };
     out.returned = e.setLowResource(true);
     out.pinsCurrentOnly = sameSet(new Set(e.cache.pinned), uA);
+    // v11-memory: the evictable buffers (B: a setlist song, unpinned now) are dropped; the playing song's stay
+    out.trimmedAtOn = [...uB].every((u) => !e.cache.entries.has(u)) && [...uA].every((u) => e.cache.has(u));
     out.tapsAtOn = e.slotTapCount();
     out.unitsAtOn = R.units.size;
     out.unitStatesAtOn = [...R.units.values()].map((u) => `${u.key}:${u.state}${u.connected ? '+conn' : ''}${u === R.active ? '*' : ''}${R._keep.has(u.key) ? '+keep' : ''}`);
@@ -2775,7 +2943,7 @@ export const realtime = {
       out.windowReads >= 60 && out.idleIRBuilds === 0 && out.idleUnitBuilds === 0 && out.unitsAtOn <= 1 &&
       out.unitsAtOn < out.unitsBefore && out.statsOn.lowResource === true && out.statsOn.slotLevelTaps === 0 &&
       out.pinsFollowCommit && out.returnedOff === false && out.pinsRestored && out.tapsAfterOff === 1 &&
-      out.warmAfterOff === 1 && out.statsOff === false;
+      out.warmAfterOff === 1 && out.statsOff === false && out.trimmedAtOn;
     return { pass, ...out };
   },
 

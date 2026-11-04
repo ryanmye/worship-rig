@@ -380,6 +380,7 @@ export class AudioEngine extends EventTarget {
     this.timer = new AudioTimer(ctx);
     this.coalesce = new Coalescer(this.timer, 0.01);
     this.fx = new FxGraph(ctx, { seed: this.seed, timer: this.timer, irCache: this._irCache, lofi: this._lofiOpt, clipOversample: this._clipOs, glue: this._glueOpt });
+    this.fx.env.busy = () => this.sounding.size > 0 || this.pedaled.size > 0; // v11-memory: deferred reverb builds
     this.fx.reverb.predelayV = this._patch.fx.reverb.predelay;
     this._reverbInit = this.fx.reverb.init(this._effReverbSize(), this._patch.fx.reverb.damp).catch((e) => this._warn(`Reverb IR build failed: ${e.message || e}`));
     this._applyFx(this._patch.fx, 0, null, true);
@@ -581,6 +582,9 @@ export class AudioEngine extends EventTarget {
     if (this._plan) this._discardPlan(this._plan);
     this._plan = null;
     const p = normalizePatch(patchState);
+    // v11-memory (switch headroom): while the new song decodes next to the playing one, the cap is hard: pinned
+    // buffers of other songs give way (LRU, just enough), these two songs' never do, referenced ones never at all
+    this.cache.protect = this._protectKeys([this._patch, p]);
     const plan = { token, patch: p, slots: [], created: [], reverb: null, committed: false };
     // reverb unit (IR off the main thread + convolver buffer) in parallel with the instruments. The size staged is
     // the *effective* one: with a wheel on macro.wash it is lerp(size, .9, wash) under the new song's routing, so
@@ -589,7 +593,10 @@ export class AudioEngine extends EventTarget {
     this._routingInto(R2, p);
     const W2 = this._macro('macro.wash', R2);
     const stageSize = W2 === null ? p.fx.reverb.size : lerp(p.fx.reverb.size, 0.9, W2);
-    const reverbP = this.fx.reverb.stage(stageSize, p.fx.reverb.damp).then(
+    // v11-memory: while keys are held or pedalled, a space not built yet is built at the next quiet moment instead
+    // (conv.buffer = blocks the main thread up to ≈ 400 ms: notes played meanwhile would be that late)
+    const playing = this.sounding.size > 0 || this.pedaled.size > 0;
+    const reverbP = this.fx.reverb.stage(stageSize, p.fx.reverb.damp, { defer: playing && !this.offline }).then(
       (st) => (plan.reverb = st),
       (e) => this._warn(`Reverb IR build failed: ${e?.message || e}`),
     );
@@ -637,7 +644,78 @@ export class AudioEngine extends EventTarget {
   _discardPlan(plan) {
     if (plan.committed) return;
     for (const sc of plan.created) this._disposeChannel(sc);
+    if (plan.created.length) this._rewarmPins();
     plan.created = [];
+  }
+
+  /**
+   * v11-memory: cache keys of these patches' sampler samples at both decode caps (legacy URL and long variant):
+   * the BufferCache.protect set of a switch (the playing song and the incoming one).
+   * @param {object[]} patches
+   * @returns {Set<string>}
+   */
+  _protectKeys(patches) {
+    const out = new Set();
+    for (const ps of patches) {
+      if (!ps) continue;
+      for (const s of normalizePatch(ps).slots) {
+        if (!s || s.instrument.type !== 'sampler') continue;
+        const def = this.registry.samplers.get(s.instrument.id);
+        if (!def) continue;
+        const m = def.decodeOpts?.maxSec;
+        for (const L of def.layers) {
+          for (const smp of L.samples) {
+            out.add(smp.url);
+            if (m) {
+              out.add(this.cache.keyOf(smp.url, smp.midi, m));
+              out.add(`${smp.url}#max=${Number(m)}`);
+            }
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  /**
+   * v11-memory: decode pinned samples that were evicted for a switch's headroom (or deferred by preload for lack
+   * of room), nearest-pinned first in preload order, while they fit without pushing anything pinned out. Runs when
+   * the retired song's buffers were released. One run at a time.
+   * @returns {Promise<void>|null}
+   */
+  _rewarmPins() {
+    if (this._rewarming || !this._pinJobs || !this._pinJobs.size || !this.ctx) return this._rewarming || null;
+    this._rewarming = (async () => {
+      for (const [key, s] of [...this._pinJobs]) {
+        const c = this.cache;
+        if (!c.pinned.has(key) && !c.pinned.has(s.url)) continue;
+        if (c.has(key) || c.has(c.keyOf(s.url, s.midi, s.opts?.maxSec))) continue;
+        if (!c.roomFor(c.estimateBytes([key]).bytes)) break;
+        await c.acquire(s.url, this.ctx, s.midi, null, s.opts);
+        this.rewarmed = (this.rewarmed || 0) + 1;
+      }
+    })()
+      .catch(() => {})
+      .finally(() => {
+        this._rewarming = null;
+      });
+    return this._rewarming;
+  }
+
+  /**
+   * v11-memory: keep built only the reverb spaces of these songs (the controller's window around the current song)
+   * plus the current song's own; idle convolver units outside them are dropped and not warmed (fx.js Reverb.retain).
+   * @param {object[]} patchStates
+   * @returns {boolean} false before start()
+   */
+  retainReverb(patchStates = []) {
+    const R = this.fx && this.fx.reverb;
+    if (!R || typeof R.retain !== 'function') return false;
+    R.retain(patchStates.filter(Boolean).map((ps) => {
+      const p = normalizePatch(ps);
+      return R.irKey(p.fx.reverb.size, p.fx.reverb.damp);
+    }));
+    return true;
   }
 
   /** The instance's effective params (inst.getParam, else its cfg, else the default) equal `cfg.params`? */
@@ -786,6 +864,7 @@ export class AudioEngine extends EventTarget {
       sc.inst.morph?.(sc.morph, t);
     }
     this._patch = p;
+    this.cache.protect = this._protectKeys([p]); // v11-memory: the song that now plays (its buffers stay)
     Object.assign(this._patch, { modWheel: this._routing.modWheel, expression: this._routing.expression, volume: this._routing.volume, bend: this._routing.bend, swell: this._routing.swell });
     this._applyFx(p.fx, t, plan.reverb, false);
     if (oldBend !== this._routing.bend.mode) this._neutralBend(oldBend, t);
@@ -815,18 +894,33 @@ export class AudioEngine extends EventTarget {
       else if (pin !== 'none') this.cache.pin(keys);
     };
     doPin(urls);
+    // v11-memory: remembered for _rewarmPins (a pinned sample evicted for a switch's headroom comes back later)
+    if (pin === 'replace' || pin === 'add') {
+      if (pin === 'replace' || !this._pinJobs) this._pinJobs = new Map();
+      for (const s of jobs) this._pinJobs.set(s.key, s);
+    }
     let i = 0;
+    let deferred = 0;
     const worker = async () => {
       while (i < jobs.length) {
         const s = jobs[i++];
-        await this.cache.acquire(s.url, this.ctx, s.midi, null, s.opts);
+        const c = this.cache;
+        // v11-memory: a warm-up decode never pushes another song's pinned buffers out (the cap is hard once a song
+        // was prepared): with no unpinned room left it waits for _rewarmPins (pinned) or is skipped (unpinned)
+        const held = c.has(s.key) || (s.key === s.url && c._longOf(s.url)); // (a held long variant answers for free)
+        if (c.protect && !c.protect.has(s.key) && !held && !c.roomFor(c.estimateBytes([s.key]).bytes)) {
+          deferred++;
+          continue;
+        }
+        await c.acquire(s.url, this.ctx, s.midi, null, s.opts);
       }
     };
     await Promise.all(Array.from({ length: Math.min(6, jobs.length) }, worker));
     // sustain: keys are recomputed now that the natural lengths are known (a long key of a sample shorter than the
     // legacy cap collapses to the plain URL, which is where its buffer was stored)
     doPin(this._sampleJobs(patchStates).urls);
-    this._emit('ready', { phase: 'preload', decodedMB: this.cache.decodedMB, pinnedMB: this.cache.pinnedMB });
+    if (deferred) this._rewarmPins();
+    this._emit('ready', { phase: 'preload', decodedMB: this.cache.decodedMB, pinnedMB: this.cache.pinnedMB, deferred });
     return true;
   }
 
@@ -937,6 +1031,7 @@ export class AudioEngine extends EventTarget {
           }
         } else sc.zeroSince = null;
       }
+      if (changed && !this.retiring.length) this._rewarmPins(); // v11-memory: the old song's buffers are free now
       if (changed) this._emit('stats', this._debugStats());
       if (this.retiring.length) this._pollRetiring(tt);
     });
@@ -1292,6 +1387,7 @@ export class AudioEngine extends EventTarget {
     if (v) {
       this._lowResSavedPins = [...this.cache.pinned];
       this._pinCurrentOnly();
+      this.cache.trimUnpinned(); // v11-memory: the LRU's evictable buffers go too (the playing song's stay)
       this._releaseSlotTaps();
       this._trimReverbUnits();
     } else {
@@ -2312,6 +2408,8 @@ export class AudioEngine extends EventTarget {
       retiring: this.retiring.length,
       decodedMB: Math.round(this.cache.decodedMB * 10) / 10,
       pinnedMB: Math.round(this.cache.pinnedMB * 10) / 10, // morning-prep: how much of decodedMB the LRU can't evict
+      // v11-memory: what no eviction can touch (live and retiring instruments; the cap can't hold below it)
+      referencedMB: Math.round((this.cache.referencedBytes / MB) * 10) / 10,
       capMB: Math.round((this.cache.capBytes / MB) * 10) / 10,
       sounding: this.sounding.size,
       pedaled: this.pedaled.size,
