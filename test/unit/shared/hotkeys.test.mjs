@@ -4,8 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import {
-  HOTKEY_ACTIONS, HOTKEY_IDS, DEFAULT_HOTKEYS, MASTER_STEP_DB, parseAccelerator, acceleratorError,
-  acceleratorFromEvent, formatAccelerator, normalizeHotkeys, hotkeysOf, hotkeyConflict,
+  HOTKEY_ACTIONS, HOTKEY_IDS, DEFAULT_HOTKEYS, MASTER_STEP_DB, LEGACY_HOTKEY_IDS, parseAccelerator, acceleratorError,
+  isStrongAccelerator, acceleratorFromEvent, formatAccelerator, normalizeHotkeys, hotkeysOf, hotkeyConflict,
 } from '../../../app/js/shared/hotkeys.js';
 
 const require = createRequire(import.meta.url);
@@ -54,6 +54,39 @@ test('every default is valid, distinct and accepted by main’s guard', () => {
   assert.deepEqual(main.sanitizeHotkeyConfig({ on: true, keys: DEFAULT_HOTKEYS }).keys, DEFAULT_HOTKEYS);
 });
 
+test('v11-decisions R-4: one rule for Settings, the store and Electron main (two of ⌃⌥⌘, or an F-key)', () => {
+  const mods = ['Control', 'ctrl', 'Alt', 'option', 'Shift', 'Command', 'cmd', 'Super', 'CommandOrControl'];
+  const keys = ['A', 'n', '5', 'Space', 'Return', 'Right', ']', '=', 'F1', 'f13', 'F24', 'F25', 'Escape'];
+  let n = 0;
+  // every key, alone and with every set of up to three modifiers: Settings' rule and main's mirror agree
+  const sets = [[]];
+  for (const a of mods) for (const s of [...sets]) if (s.length < 3) sets.push([...s, a]);
+  for (const set of sets) {
+    for (const k of keys) {
+      const acc = [...set, k].join('+');
+      if (parseAccelerator(acc).error) continue;
+      assert.equal(main.isStrongAccelerator(acc), isStrongAccelerator(acc), acc);
+      assert.equal(isStrongAccelerator(acc), !/two of/.test(acceleratorError(acc) || ''), acc);
+      n++;
+    }
+  }
+  assert.ok(n > 1000, `${n} combinations compared`);
+  for (const weak of ['A', 'Space', 'Return', 'Shift+A', 'Command+C', 'Control+Shift+N', 'Alt+Alt+N']) {
+    assert.equal(main.isStrongAccelerator(weak), false, weak);
+  }
+  for (const ok of ['F13', 'Shift+F5', 'Control+Alt+N', 'cmd+ctrl+]', 'Control+Alt+Command+P']) {
+    assert.equal(main.isStrongAccelerator(ok), true, ok);
+  }
+  // the store's normaliser holds nothing Settings would refuse: plain keys and macOS system shortcuts become none
+  const nk = normalizeHotkeys({
+    on: true,
+    keys: { nextSong: 'A', prevSong: 'Space', panic: 'Return', masterUp: 'Command+C', masterDown: 'Alt+Command+Escape',
+      nextScene: 'F13', prevScene: 'Control+Alt+Command+8' },
+  }).keys;
+  assert.deepEqual(nk, { nextSong: '', prevSong: '', panic: '', masterUp: '', masterDown: '', nextScene: 'F13',
+    prevScene: '' });
+});
+
 test('the renderer and Electron main agree on the action ids and the master step', () => {
   assert.deepEqual([...main.HOTKEY_IDS], [...HOTKEY_IDS]);
   assert.deepEqual(HOTKEY_ACTIONS.map((a) => a.id), [...HOTKEY_IDS]);
@@ -98,11 +131,11 @@ test('normalizeHotkeys: every action, canonical, duplicates and junk dropped, of
   assert.deepEqual(normalizeHotkeys({}), { on: false, keys: { ...DEFAULT_HOTKEYS } }, 'missing keys get the defaults');
   const n = normalizeHotkeys({
     on: 1,
-    keys: { nextMode: 'cmd+ctrl+alt+n', prevMode: 'Command+Control+Alt+N', panic: '', masterUp: 'Banana', zap: 'F13' },
+    keys: { nextSong: 'cmd+ctrl+alt+n', prevSong: 'Command+Control+Alt+N', panic: '', masterUp: 'Banana', zap: 'F13' },
   });
   assert.equal(n.on, false, 'only true turns them on');
-  assert.equal(n.keys.nextMode, 'Control+Alt+Command+N');
-  assert.equal(n.keys.prevMode, '', 'a duplicate keeps the first action');
+  assert.equal(n.keys.nextSong, 'Control+Alt+Command+N');
+  assert.equal(n.keys.prevSong, '', 'a duplicate keeps the first action');
   assert.equal(n.keys.panic, '', "'' stays none");
   assert.equal(n.keys.masterUp, '', 'unreadable → none');
   assert.equal(n.keys.masterDown, DEFAULT_HOTKEYS.masterDown);
@@ -111,10 +144,31 @@ test('normalizeHotkeys: every action, canonical, duplicates and junk dropped, of
   assert.deepEqual(hotkeysOf({}), { on: false, keys: { ...DEFAULT_HOTKEYS } }, 'absent = off with the defaults');
 });
 
+test('v11-decisions: the pre-rename ids (nextMode / prevMode) carry over to nextSong / prevSong', () => {
+  assert.deepEqual(LEGACY_HOTKEY_IDS, { nextMode: 'nextSong', prevMode: 'prevSong' });
+  assert.deepEqual(HOTKEY_ACTIONS.slice(0, 2).map((a) => [a.id, a.label]),
+    [['nextSong', 'Next song'], ['prevSong', 'Previous song']]);
+  assert.equal(DEFAULT_HOTKEYS.nextSong, 'Control+Alt+Command+]', 'the standard keys stay ⌃⌥⌘] / ⌃⌥⌘[');
+  assert.equal(DEFAULT_HOTKEYS.prevSong, 'Control+Alt+Command+[');
+  // a v1.1-beta library: a custom next key, "none" for previous
+  const old = { on: true, keys: { nextMode: 'Control+Alt+Command+N', prevMode: '', panic: 'F13' } };
+  const n = normalizeHotkeys(old);
+  assert.equal(n.on, true);
+  assert.equal(n.keys.nextSong, 'Control+Alt+Command+N', 'the saved combination moves to the new id');
+  assert.equal(n.keys.prevSong, '', 'a saved "none" stays none (not the default)');
+  assert.equal(n.keys.panic, 'F13');
+  assert.ok(!('nextMode' in n.keys) && !('prevMode' in n.keys), 'the old ids are dropped');
+  assert.deepEqual(normalizeHotkeys(n), n, 'idempotent');
+  // the new id wins when both are there
+  assert.equal(normalizeHotkeys({ keys: { nextMode: 'F14', nextSong: 'F15' } }).keys.nextSong, 'F15');
+  // the defaults when neither is there
+  assert.equal(normalizeHotkeys({ keys: { panic: 'F13' } }).keys.nextSong, DEFAULT_HOTKEYS.nextSong);
+});
+
 test('hotkeyConflict names the other action using a combination', () => {
   const keys = { ...DEFAULT_HOTKEYS };
-  assert.equal(hotkeyConflict(keys, 'nextMode', 'cmd+alt+ctrl+p'), 'panic');
+  assert.equal(hotkeyConflict(keys, 'nextSong', 'cmd+alt+ctrl+p'), 'panic');
   assert.equal(hotkeyConflict(keys, 'panic', 'Control+Alt+Command+P'), null, 'its own combination is no conflict');
   assert.equal(hotkeyConflict(keys, 'panic', 'Control+Alt+Command+K'), null);
-  assert.equal(hotkeyConflict({ ...keys, panic: '' }, 'nextMode', 'Control+Alt+Command+P'), null);
+  assert.equal(hotkeyConflict({ ...keys, panic: '' }, 'nextSong', 'Control+Alt+Command+P'), null);
 });

@@ -6,10 +6,12 @@
 //   - Remember (MIDI only, BACKLOG B "first input heuristics"): prefer this keyboard when the input is "First keyboard
 //     (automatic)", even when its name looks like a virtual port. "Forget" drops everything saved for it.
 // Quiet by default: nothing is saved until the player uses a control; a keyboard without an entry behaves as before.
+// settings.keyboards is device-local (v11-decisions, checklist Q7): it stays on this computer, never in an export.
 // Writes go through store.setKeyboard (names contain dots, so they are not set() paths); notes through the controller.
 import {
   TOUCH_RANGE, normalizeTouch, compileTouch, touchAt, touchWord, fitTouch, FIT_NOTES, LINEAR_TOUCH, COMPUTER_KEYBOARD,
 } from '../shared/touch-curve.js';
+import { say } from './components/voice.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 /** Display name of the on-screen + computer keys entry. */
@@ -94,8 +96,7 @@ export function mountKeyboards({ store, controller, midi, listen, toast = () => 
   const list = h('div.st-kb-list', { role: 'list' });
   const el = h('div.st-kbs', { dataset: { testid: 'settings-keyboards' } },
     h('h3.st-h3', { text: 'Your keyboards' }),
-    h('p.st-hint', { text: 'Give a keyboard its own touch, or have the app remember it as yours. Saved by the '
-      + 'keyboard’s name. Sounds set to “Normal” response follow the keyboard’s touch.' }),
+    h('p.st-hint', { text: say('keyboardsHint') }), // v11-decisions: device-local, said so
     list);
   /** @type {Map<string, ReturnType<typeof makeRow>>} */
   const rows = new Map();

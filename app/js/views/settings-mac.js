@@ -7,6 +7,7 @@ import {
   HOTKEY_ACTIONS, MASTER_STEP_DB, acceleratorError, acceleratorFromEvent, formatAccelerator, hotkeyConflict, hotkeysOf,
   DEFAULT_HOTKEYS,
 } from '../shared/hotkeys.js';
+import { say } from './components/voice.js';
 
 /** Plain words for main.js's per-shortcut state (HotkeyStatus.keys[id].state). */
 export const HOTKEY_STATE_TEXT = Object.freeze({
@@ -19,6 +20,10 @@ export const UPDATE_ERROR_TEXT = Object.freeze({
   'rate-limited': 'GitHub is busy right now. Try again in an hour.',
   'bad-response': 'GitHub sent an unexpected answer. Try again later.',
 });
+
+/** v11-decisions: actions whose label is voice copy (shared/voice.js); the rest read HOTKEY_ACTIONS' label. */
+const LABEL_VOICE = Object.freeze({ nextSong: 'hotkeyNextSong', prevSong: 'hotkeyPrevSong' });
+const labelOf = (a) => (LABEL_VOICE[a.id] ? say(LABEL_VOICE[a.id]) : a.label);
 
 const LABEL_HINT = Object.freeze({
   masterUp: `+${MASTER_STEP_DB} dB`,
@@ -55,14 +60,14 @@ export function mountHotkeys(d) {
   const stateEls = {};
   const rows = HOTKEY_ACTIONS.map((a) => {
     keyBtns[a.id] = btn('', () => (capturing === a.id ? stop() : start(a.id)), {
-      class: 'st-hk-key', 'data-testid': `hotkey-${a.id}`, 'aria-label': `${a.label} shortcut`,
+      class: 'st-hk-key', 'data-testid': `hotkey-${a.id}`, 'aria-label': `${labelOf(a)} shortcut`,
     });
     keyBtns[a.id].addEventListener('blur', () => {
       if (capturing === a.id) stop();
     });
     stateEls[a.id] = h('span.st-hk-state', { 'data-testid': `hotkey-state-${a.id}`, role: 'status' });
     return h('div.st-hk-row', { 'data-hotkey': a.id },
-      h('span.st-hk-label', {}, a.label, LABEL_HINT[a.id] ? h('span.st-hint', { text: ` ${LABEL_HINT[a.id]}` }) : null),
+      h('span.st-hk-label', {}, labelOf(a), LABEL_HINT[a.id] ? h('span.st-hint', { text: ` ${LABEL_HINT[a.id]}` }) : null),
       keyBtns[a.id],
       stateEls[a.id]);
   });
@@ -73,13 +78,11 @@ export function mountHotkeys(d) {
   }, { class: 'st-hk-reset', 'data-testid': 'hotkey-reset' });
   const list = h('div.st-hk-list', { 'data-testid': 'hotkey-list', hidden: true },
     ...rows,
-    h('p.st-hint', { text: 'Click a shortcut, then press the new keys. Esc cancels; Delete leaves that one without a '
-      + 'shortcut. Modes are the menu-bar songs above.' }),
+    h('p.st-hint', { text: say('hotkeysListHint') }),
     msg,
     h('div.st-inline', {}, reset));
   const el = h('div.st-hotkeys', { 'data-testid': 'settings-hotkeys' },
-    row('Global shortcuts', onToggle.el, 'Switch modes, panic and turn the master up or down from any app, even with '
-      + 'the window hidden.'),
+    row('Global shortcuts', onToggle.el, say('hotkeysSub')),
     list);
 
   function render() {
@@ -124,7 +127,7 @@ export function mountHotkeys(d) {
     const other = err ? null : hotkeyConflict(cfg().keys, id, acc);
     if (err) message = err;
     else if (other) message = `${formatAccelerator(acc, { mac })} is already the shortcut for `
-      + `${HOTKEY_ACTIONS.find((a) => a.id === other).label}.`;
+      + `${labelOf(HOTKEY_ACTIONS.find((a) => a.id === other))}.`;
     else {
       message = '';
       write({ ...cfg(), keys: { ...cfg().keys, [id]: acc } });

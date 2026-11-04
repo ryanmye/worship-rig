@@ -17,6 +17,8 @@ export const COMMAND_TYPES = Object.freeze([
   'hello', 'selectMode', 'nextMode', 'prevMode', 'panic', 'fadeOutAll', 'master', 'droneToggle', 'droneKey',
   'lowResource', 'openMain', 'record',
   'nextScene', 'prevScene', // v11-scenes: step the current song's scenes (no payload)
+  // v11-decisions: step the current setlist's songs like Perform's → / ← (global hotkeys; no payload, no wrap)
+  'nextSong', 'prevSong',
 ]);
 /**
  * 'asleep' (lowres2): suspended on purpose after settings.audioSleepSec idle in low-resource mode (lowres2-scope);

@@ -170,7 +170,7 @@ contextBridge.exposeInMainWorld('rig', {
 
   // ---- v11-electron: global hotkeys (globalShortcut) and the "update available" check (main.js, CONTRACT_CHANGES)
   /**
-   * Mirror settings.hotkeys {on, keys:{nextMode, prevMode, panic, masterUp, masterDown}} (accelerators, '' = none).
+   * Mirror settings.hotkeys {on, keys:{nextSong, prevSong, panic, masterUp, masterDown, …}} (accelerators, '' = none).
    * @returns {Promise<HotkeyStatus|{error}>} {on, paused, keys:{<id>:{accelerator, state}}};
    *   state ∈ ok | taken (another app holds it) | invalid | none | off | paused
    */

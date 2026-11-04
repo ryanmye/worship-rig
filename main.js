@@ -25,8 +25,9 @@
 //   channel (transitions only, debounced 1 s), the popover opens at the top-right of the display instead, and the Rig
 //   menu has "Show Worship Rig" / "Open menu-bar panel" as the way back.
 // Global hotkeys (v11-electron, global-hotkeys.js): settings.hotkeys mirrored here (rig.setHotkeys) → globalShortcut;
-//   a press sends an existing bus command (nextMode / prevMode / panic / master) to the main renderer. Off by default,
-//   paused while Settings records a combination, unregistered on disable, window close and quit.
+//   a press sends a bus command (nextSong / prevSong / panic / master / nextScene / prevScene) to the main renderer
+//   (v11-decisions: next / previous step the setlist's songs; the Tray's Previous / Next stay on modes). Off by
+//   default, paused while Settings records a combination, unregistered on disable, window close and quit.
 // Update check (v11-electron, update-check.js): settings.updateCheck mirrored here (rig.setUpdateCheck); at most once a
 //   day GitHub Releases' latest is compared with app.getVersion() and Settings › About shows "Version x is available —
 //   Download" (opens the .dmg in the browser). Never installs, quits or shows a dialog: the builds are ad-hoc signed,
@@ -632,6 +633,7 @@ const BUS_COMMAND_MAX = 4 * 1024;
 const BUS_COMMANDS = new Set([
   'hello', 'selectMode', 'nextMode', 'prevMode', 'panic', 'fadeOutAll', 'master', 'droneToggle', 'droneKey',
   'lowResource', 'openMain', 'record', 'nextScene', 'prevScene', // v11-scenes
+  'nextSong', 'prevSong', // v11-decisions: the global next / previous hotkeys step the setlist's songs
 ]);
 const POPOVER_W = 320;
 const POPOVER_H = 440;
@@ -1239,7 +1241,7 @@ function launchedHidden() {
 // ---------------------------------------------------------------------------------------------
 // v11-electron: global hotkeys (global-hotkeys.js) + the "update available" check (update-check.js)
 //
-//   renderer ──rig:setHotkeys({on, keys})──▶ globalShortcut ──press──▶ sendBusCommand(nextMode|prevMode|panic|master)
+//   renderer ──rig:setHotkeys({on, keys})──▶ globalShortcut ──press──▶ sendBusCommand(nextSong|prevSong|panic|master|…)
 //   renderer ──rig:setUpdateCheck(on)──────▶ GitHub /releases/latest (≤ 1/day) ──rig:updateStatus──▶ Settings › About
 //
 // Both start only when the renderer mirrors its setting (app/js/shell-mirror.js), so nothing runs before it boots.
@@ -1875,8 +1877,8 @@ async function v11Selftest(wc) {
   };
   // ---- hotkeys
   const keys = {
-    nextMode: 'Control+Alt+Shift+F9',
-    prevMode: 'Control+Alt+Shift+F10',
+    nextSong: 'Control+Alt+Shift+F9',
+    prevSong: 'Control+Alt+Shift+F10',
     panic: FAKE_TAKEN_HOTKEY || 'Control+Alt+Shift+F11',
     masterUp: 'Control+Alt+Shift+F12',
     masterDown: 'Control+Alt+Shift+Banana', // shape passes main's guard; globalShortcut.register throws
@@ -1888,7 +1890,7 @@ async function v11Selftest(wc) {
   out.hotkeyStates = st && st.keys ? Object.fromEntries(Object.entries(st.keys).map(([k, v]) => [k, v.state])) : st;
   out.registered = Object.fromEntries(Object.entries(keys).map(([id, acc]) => [id, isReg(acc)]));
   out.hotkeyStatusPushed = await waitFor(async () => (await js('window.__v11Hk.length')) >= 1, 2000);
-  out.fired = ['nextMode', 'prevMode', 'panic', 'masterUp', 'masterDown'].map((id) => hotkeys.fire(id));
+  out.fired = ['nextSong', 'prevSong', 'panic', 'masterUp', 'masterDown'].map((id) => hotkeys.fire(id));
   await waitFor(async () => (await js('window.__v11Cmds.length')) >= 5, 3000);
   out.firedCommands = await js('window.__v11Cmds.splice(0)');
   out.masterFrom = busState ? busState.master : null;

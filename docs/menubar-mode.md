@@ -64,10 +64,13 @@ key to wake"), not as a fault.
 
 `command` (popover/tray → main renderer): `{ "v":1, "type": "hello" | "selectMode" (id) | "nextMode" | "prevMode" | "panic" |
 "fadeOutAll" | "master" (value 0..2) | "droneToggle" | "droneKey" (pc 0..11) | "lowResource" (on: bool) | "openMain" |
-"record" (on: bool) | "nextScene" | "prevScene" }` — `openMain` is handled by Electron main (show + focus the window);
+"record" (on: bool) | "nextScene" | "prevScene" | "nextSong" | "prevSong" }` — `openMain` is handled by Electron main (show + focus the window);
 everything else by the controller. `nextScene` / `prevScene` (v11-scenes, still v 1) step the current song's scenes
 (own levels → 1 → 2 → 3 → 1 / back to the own levels); a song without scenes ignores them. The state then carries
 the optional `scene: {n, count}` (only while the song has scenes; `n` 0-based, null = the song's own levels).
+`nextSong` / `prevSong` (v11-decisions, still v 1; sent by the global hotkeys) step the current setlist (else the
+library) exactly like Perform's → / ← and the footswitch: the same gapless switch, and the first / last song is the
+end (no wrap). `nextMode` / `prevMode` stay the popover's and the Tray's ‹ › through the menu-bar modes (wrapping).
 
 ## Ownership (parallel build)
 | Piece | Owner | Files |
@@ -183,10 +186,17 @@ Off by default. Settings › Menu bar › **Global shortcuts** ("Work in any app
 actions with their combinations (seven since v11-scenes); click one, press the new keys (Esc cancels, Delete leaves it
 without one).
 
-| action (`settings.hotkeys.keys.<id>`) | standard keys | sends (existing bus command) |
+v11-decisions (Ryan, 2026-11-03, checklist Q3): **Next song / Previous song** step the setlist's songs, the same path
+as Perform's → / ← and the footswitch `nextSong` / `prevSong` (gapless switch; the setlist's ends stop, no wrap). They
+were `nextMode` / `prevMode` ("Next mode" / "Previous mode") before; `normalizeHotkeys` reads a stored `nextMode` /
+`prevMode` entry as `nextSong` / `prevSong` when the new id is absent (`LEGACY_HOTKEY_IDS`), so a saved combination or
+a saved "none" carries over. The standard keys are unchanged. The Tray menu's Previous / Next and the popover's ‹ ›
+still step the menu-bar modes.
+
+| action (`settings.hotkeys.keys.<id>`) | standard keys | sends (bus command) |
 |---|---|---|
-| `nextMode` | ⌃⌥⌘] `Control+Alt+Command+]` | `{type:'nextMode'}` |
-| `prevMode` | ⌃⌥⌘[ | `{type:'prevMode'}` |
+| `nextSong` (was `nextMode`) | ⌃⌥⌘] `Control+Alt+Command+]` | `{type:'nextSong'}` |
+| `prevSong` (was `prevMode`) | ⌃⌥⌘[ | `{type:'prevSong'}` |
 | `panic` | ⌃⌥⌘P | `{type:'panic'}` |
 | `masterUp` | ⌃⌥⌘= | `{type:'master', value}`: the last published `state.master` + 2 dB (from silence: −40 dB; ≤ 2) |
 | `masterDown` | ⌃⌥⌘- | `{type:'master', value}`: − 2 dB; below −40 dB → 0 |
@@ -199,13 +209,16 @@ is throttled to ≤ 4/s); after 1.5 s the published state counts again.
 - **Store**: `settings.hotkeys = {on, keys}` (optional, absent = off with the standard keys; set whole; normalised by
   `shared/hotkeys.js normalizeHotkeys`: every action, canonical accelerators, a duplicate keeps the first; device-local
   like `menuBarMode`). Settings refuses combinations with fewer than two of ⌃ ⌥ ⌘ (unless a function key) and a few
-  macOS system ones (`acceleratorError`), and duplicates.
+  macOS system ones (`acceleratorError`), and duplicates. Since v11-decisions (review R-4) the store's normaliser
+  blanks such a value too, and main reports one that still arrives as `invalid` without registering it
+  (`global-hotkeys.js isStrongAccelerator`).
 - **Mirror**: `app/js/shell-mirror.js` → `window.rig.setHotkeys({on, keys})` at start and on every change.
 - **Main** (`global-hotkeys.js`, wired in main.js): unregisters ours, then registers each with `globalShortcut`.
   Per-action state in `HotkeyStatus {on, paused, keys:{<id>:{accelerator, state}}}`: `ok`, `taken` (`register()`
   returned false: another app or macOS holds it; Settings: "Another app already uses this. Pick another."),
   `invalid` (Electron threw), `none`, `off`, `paused`. Pushed as `rig:hotkeyStatus` (`window.rig.onHotkeyStatus`).
-  A press goes through `sendBusCommand`, exactly like a tray click; no new command type, no engine path.
+  A press goes through `sendBusCommand`, exactly like a tray click; no engine path of its own (`nextSong` /
+  `prevSong` are the controller's own song steps).
 - **Recording** a combination pauses ours (`rig.pauseHotkeys(true/false)`), or our own combination would never reach
   the page. `<html data-hotkey-capture>` tells Settings' and main.js's Esc handlers to leave Esc to the recorder.
 - **Released** on off, on main-window close, and on quit (`will-quit`: `globalShortcut.unregisterAll()`).

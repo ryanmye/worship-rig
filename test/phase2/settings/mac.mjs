@@ -229,19 +229,19 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
       await until(() => window.__rig.store.get().settings.hotkeys?.on === true);
       await until(() => window.__fake.cfg && window.__fake.cfg.on === true);
       assert.equal(await page.isVisible('[data-testid="hotkey-list"]'), true);
-      assert.equal(await keyText('nextMode'), '⌃⌥⌘]');
-      assert.equal(await keyText('prevMode'), '⌃⌥⌘[');
+      assert.equal(await keyText('nextSong'), '⌃⌥⌘]');
+      assert.equal(await keyText('prevSong'), '⌃⌥⌘[');
       assert.equal(await keyText('masterUp'), '⌃⌥⌘=');
       await until(() => document.querySelector('[data-testid="hotkey-state-panic"]').textContent !== '');
       assert.equal(await page.textContent('[data-testid="hotkey-state-panic"]'), 'Another app already uses this. Pick another.');
-      assert.equal(await page.textContent('[data-testid="hotkey-state-nextMode"]'), '', 'registered: nothing to say');
+      assert.equal(await page.textContent('[data-testid="hotkey-state-nextSong"]'), '', 'registered: nothing to say');
     });
 
     await T('global shortcuts: record a new combination (ours paused meanwhile); Esc cancels without closing Settings', async () => {
-      await page.click('[data-testid="hotkey-nextMode"]');
-      assert.equal(await keyText('nextMode'), 'Press keys…');
+      await page.click('[data-testid="hotkey-nextSong"]');
+      assert.equal(await keyText('nextSong'), 'Press keys…');
       await until(() => window.__fake.paused === true);
-      assert.equal(await ev(() => document.documentElement.getAttribute('data-hotkey-capture')), 'nextMode');
+      assert.equal(await ev(() => document.documentElement.getAttribute('data-hotkey-capture')), 'nextSong');
       await page.keyboard.down('Control');
       await page.keyboard.down('Alt');
       await page.keyboard.down('Meta');
@@ -249,15 +249,15 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
       await page.keyboard.up('Meta');
       await page.keyboard.up('Alt');
       await page.keyboard.up('Control');
-      await until(() => window.__rig.store.get().settings.hotkeys.keys.nextMode === 'Control+Alt+Command+N');
-      await until(() => window.__fake.paused === false && window.__fake.cfg.keys.nextMode === 'Control+Alt+Command+N');
-      assert.equal(await keyText('nextMode'), '⌃⌥⌘N');
+      await until(() => window.__rig.store.get().settings.hotkeys.keys.nextSong === 'Control+Alt+Command+N');
+      await until(() => window.__fake.paused === false && window.__fake.cfg.keys.nextSong === 'Control+Alt+Command+N');
+      assert.equal(await keyText('nextSong'), '⌃⌥⌘N');
       // Esc: the recording stops, Settings stays open, nothing changes
-      await page.click('[data-testid="hotkey-prevMode"]');
+      await page.click('[data-testid="hotkey-prevSong"]');
       await page.keyboard.press('Escape');
       await until(() => !document.documentElement.hasAttribute('data-hotkey-capture'));
       assert.equal(await ev(() => window.__rig.views.settings.isOpen), true, 'Settings is still open');
-      assert.equal(await keyText('prevMode'), '⌃⌥⌘[');
+      assert.equal(await keyText('prevSong'), '⌃⌥⌘[');
       assert.equal(await ev(() => window.__fake.paused), false);
       // a second Esc (nothing recording) closes Settings as before
       await page.keyboard.press('Escape');
@@ -267,13 +267,13 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
 
     await T('global shortcuts: weak and duplicate combinations are refused in plain words; Delete clears one', async () => {
       const before = await ev(() => JSON.stringify(window.__rig.store.get().settings.hotkeys));
-      await page.click('[data-testid="hotkey-prevMode"]');
+      await page.click('[data-testid="hotkey-prevSong"]');
       await page.keyboard.press('Meta+KeyC');
       await until(() => !document.querySelector('[data-testid="hotkey-message"]').hidden);
       assert.match(await page.textContent('[data-testid="hotkey-message"]'), /at least two of ⌃ ⌥ ⌘/);
-      await page.click('[data-testid="hotkey-prevMode"]');
+      await page.click('[data-testid="hotkey-prevSong"]');
       await page.keyboard.press('Control+Alt+Meta+KeyN');
-      await until(() => /already the shortcut for Next mode/.test(document.querySelector('[data-testid="hotkey-message"]').textContent));
+      await until(() => /already the shortcut for Next song/.test(document.querySelector('[data-testid="hotkey-message"]').textContent));
       assert.equal(await ev(() => JSON.stringify(window.__rig.store.get().settings.hotkeys)), before, 'nothing written');
       await page.click('[data-testid="hotkey-masterDown"]');
       await page.keyboard.press('Delete');
@@ -283,7 +283,7 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
       // the computer keyboard never played while recording (Delete / ⌘C / N reached only the recorder)
       assert.equal(await ev(() => window.__rig.controller.status.activeNotes?.length ?? 0), 0);
       await page.click('[data-testid="hotkey-reset"]');
-      await until(() => window.__rig.store.get().settings.hotkeys.keys.nextMode === 'Control+Alt+Command+]'
+      await until(() => window.__rig.store.get().settings.hotkeys.keys.nextSong === 'Control+Alt+Command+]'
         && window.__rig.store.get().settings.hotkeys.keys.masterDown === 'Control+Alt+Command+-');
       const sec = page.locator('[data-testid="settings-menubar"]');
       await sec.scrollIntoViewIfNeeded();
@@ -291,27 +291,37 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
       await sec.screenshot({ path: path.join(SHOTS, 'mac-menubar-hotkeys.png') });
     });
 
-    await T('global shortcuts: a press (relayed by main as an existing bus command) reaches the controller', async () => {
+    await T('global shortcuts: a press (relayed by main as a bus command) steps the setlist\'s songs', async () => {
+      // v11-decisions (Ryan, checklist Q3): next / previous = Perform's → / ←, not the menu-bar modes
       const r = await ev(async () => {
         const c = window.__rig.controller;
         const st = window.__rig.store;
-        const modes = c.modes.list();
+        const wait = async (cond) => {
+          const t0 = performance.now();
+          while (!cond() && performance.now() - t0 < 5000) await new Promise((res) => setTimeout(res, 50));
+        };
         const before = st.get().settings.currentSongId;
-        window.__fake.press({ type: 'nextMode' });
-        const t0 = performance.now();
-        while (st.get().settings.currentSongId === before && performance.now() - t0 < 5000) {
-          await new Promise((res) => setTimeout(res, 50));
-        }
+        const expectNext = st.neighbors().next?.id ?? null;
+        window.__fake.press({ type: 'nextSong' });
+        await wait(() => st.get().settings.currentSongId !== before);
+        const afterNext = st.get().settings.currentSongId;
+        window.__fake.press({ type: 'prevSong' });
+        await wait(() => st.get().settings.currentSongId !== afterNext);
+        const afterPrev = st.get().settings.currentSongId;
         const song = st.currentSong();
         window.__fake.press({ type: 'master', value: 0.25 });
         await new Promise((res) => setTimeout(res, 50));
-        return { n: modes.length, before, after: st.get().settings.currentSongId, inModes: modes.some((m) => m.id === st.get().settings.currentSongId),
-          master: st.getSong(song.id).patch.fx.master.volume };
+        return { before, expectNext, afterNext, afterPrev, master: st.getSong(song.id).patch.fx.master.volume,
+          labels: [...document.querySelectorAll('.st-hk-label')].slice(0, 2).map((e) => e.textContent),
+          hint: document.querySelector('[data-testid="hotkey-list"] > p.st-hint').textContent,
+          modeCount: c.modes.list().length };
       });
-      assert.ok(r.n >= 2, `needs 2+ modes, got ${r.n}`);
-      assert.notEqual(r.after, r.before, 'nextMode switched the song');
-      assert.ok(r.inModes, 'to a menu-bar mode');
+      assert.ok(r.expectNext, 'the fixture has a next song');
+      assert.equal(r.afterNext, r.expectNext, 'nextSong = the song → would pick');
+      assert.equal(r.afterPrev, r.before, 'prevSong comes back');
       assert.equal(r.master, 0.25);
+      assert.deepEqual(r.labels, ['Next song', 'Previous song']);
+      assert.match(r.hint, /Next and previous song go through the setlist/);
     });
 
     await T('global shortcuts: off → main hears it, the list hides', async () => {

@@ -1,13 +1,15 @@
 // Menu-bar global hotkeys (v11-electron; docs/menubar-mode.md "Global hotkeys"): the actions, their default
 // accelerators, and the pure helpers Settings and the store use: validate an Electron accelerator string, build one
 // from a KeyboardEvent (the "press the keys" recorder), show it in Mac symbols, and normalise settings.hotkeys.
-// Electron main registers them (globalShortcut, global-hotkeys.js) and turns a press into an existing bus command.
+// Electron main registers them (globalShortcut, global-hotkeys.js) and turns a press into a bus command.
+// v11-decisions (Ryan 2026-11-03, checklist Q3): next / previous step the setlist's songs (Perform's → / ←, the
+// footswitch nextSong / prevSong), not the menu-bar modes; the ids were nextMode / prevMode before (LEGACY_HOTKEY_IDS).
 // Pure module: no DOM, no Web Audio.
 
 /** The actions, in Settings order. `id` is the key in settings.hotkeys.keys and in main.js's status. */
 export const HOTKEY_ACTIONS = Object.freeze([
-  Object.freeze({ id: 'nextMode', label: 'Next mode' }),
-  Object.freeze({ id: 'prevMode', label: 'Previous mode' }),
+  Object.freeze({ id: 'nextSong', label: 'Next song' }), // v11-decisions: was nextMode ("Next mode")
+  Object.freeze({ id: 'prevSong', label: 'Previous song' }),
   Object.freeze({ id: 'panic', label: 'Panic (all notes off)' }),
   Object.freeze({ id: 'masterUp', label: 'Master louder' }),
   Object.freeze({ id: 'masterDown', label: 'Master softer' }),
@@ -15,17 +17,22 @@ export const HOTKEY_ACTIONS = Object.freeze([
   Object.freeze({ id: 'prevScene', label: 'Previous scene' }),
 ]);
 export const HOTKEY_IDS = Object.freeze(HOTKEY_ACTIONS.map((a) => a.id));
+/**
+ * v11-decisions: stored ids from v1.1 builds before the rename → today's id. normalizeHotkeys reads a legacy entry
+ * when the new id is absent, so a saved combination (or a saved "none") carries over; the old key is then dropped.
+ */
+export const LEGACY_HOTKEY_IDS = Object.freeze({ nextMode: 'nextSong', prevMode: 'prevSong' });
 /** Master ± step in dB (global-hotkeys.js MASTER_STEP_DB uses the same number). */
 export const MASTER_STEP_DB = 2;
 
 /**
  * Defaults: ⌃⌥⌘ + a key. Three modifiers keep them clear of app shortcuts (⌘…, ⌘⇧…) and of typing (⌥ letters make
- * accented characters). ] / [ for modes (the ⌘] / ⌘[ forward/back idiom) and = / − for master (the zoom idiom), not
+ * accented characters). ] / [ for songs (the ⌘] / ⌘[ forward/back idiom) and = / − for master (the zoom idiom), not
  * the arrows: window managers (Rectangle, Magnet) take ⌃⌥⌘←/→ for "next / previous display". P for Panic.
  */
 export const DEFAULT_HOTKEYS = Object.freeze({
-  nextMode: 'Control+Alt+Command+]',
-  prevMode: 'Control+Alt+Command+[',
+  nextSong: 'Control+Alt+Command+]',
+  prevSong: 'Control+Alt+Command+[',
   panic: 'Control+Alt+Command+P',
   masterUp: 'Control+Alt+Command+=',
   masterDown: 'Control+Alt+Command+-',
@@ -117,6 +124,27 @@ export function parseAccelerator(acc) {
 }
 
 /**
+ * The global-hotkey rule on a parsed accelerator: a function key, or two of ⌃ ⌥ ⌘ (⇧ doesn't count). v11-decisions
+ * R-4: Electron main applies the same rule (global-hotkeys.js isStrongAccelerator, a CJS mirror kept in step by
+ * test/unit/shared/hotkeys.test.mjs), so a single plain key can't be taken system-wide whoever writes the setting.
+ * @param {{mods: string[], key: string}} p
+ * @returns {boolean}
+ */
+function strongEnough(p) {
+  return fnKey(p.key) || p.mods.filter((m) => m !== 'Shift').length >= 2;
+}
+
+/**
+ * The rule alone (no reserved-shortcut check): can this be a global hotkey at all?
+ * @param {string} acc
+ * @returns {boolean} false for a malformed accelerator too
+ */
+export function isStrongAccelerator(acc) {
+  const p = parseAccelerator(acc);
+  return !p.error && strongEnough(p);
+}
+
+/**
  * Can this accelerator be a global hotkey? It needs two of ⌃ ⌥ ⌘ (⇧ may come on top), or a function key: a single
  * ⌘ / ⌃ / ⌥ combination belongs to apps or to typing everywhere on the Mac. A few system shortcuts are refused.
  * @param {string} acc
@@ -126,8 +154,7 @@ export function acceleratorError(acc) {
   const p = parseAccelerator(acc);
   if (p.error) return `That isn’t a key combination (${p.error}).`;
   if (fnKey(p.key)) return null;
-  const strong = p.mods.filter((m) => m !== 'Shift').length;
-  if (strong < 2) return 'Use at least two of ⌃ ⌥ ⌘ (⇧ can be added), or a function key — '
+  if (!strongEnough(p)) return 'Use at least two of ⌃ ⌥ ⌘ (⇧ can be added), or a function key — '
     + 'shorter combinations belong to other apps.';
   const reserved = RESERVED[p.canonical];
   if (reserved) return `macOS uses ${formatAccelerator(p.canonical)} for ${reserved}.`;
@@ -179,8 +206,10 @@ export function formatAccelerator(acc, { mac = true } = {}) {
 
 /**
  * settings.hotkeys → its normal form: `{on: boolean, keys: {<id>: accelerator | ''}}`. Every action gets a key
- * ('' = none; a missing one gets its default); unreadable accelerators become ''; a duplicate keeps the first action.
- * Unknown action ids are dropped. The same function the store uses on set and on load (schema stays 1).
+ * ('' = none; a missing one gets its default); unreadable accelerators, and ones acceleratorError refuses (a single
+ * plain key, a macOS system shortcut), become ''; a duplicate keeps the first action.
+ * Unknown action ids are dropped; a legacy id (LEGACY_HOTKEY_IDS) stands in for its renamed action when that one is
+ * absent. The same function the store uses on set and on load (schema stays 1).
  * @param {*} v
  * @returns {{on: boolean, keys: Object<string, string>}|null} null when `v` is not an object
  */
@@ -189,10 +218,16 @@ export function normalizeHotkeys(v) {
   const src = v.keys && typeof v.keys === 'object' && !Array.isArray(v.keys) ? v.keys : {};
   const keys = {};
   const used = new Set();
+  const has = (k) => Object.prototype.hasOwnProperty.call(src, k);
+  const legacy = Object.fromEntries(Object.entries(LEGACY_HOTKEY_IDS).map(([old, id]) => [id, old]));
   for (const id of HOTKEY_IDS) {
-    const raw = Object.prototype.hasOwnProperty.call(src, id) ? src[id] : DEFAULT_HOTKEYS[id];
+    const from = has(id) ? id : legacy[id] && has(legacy[id]) ? legacy[id] : null;
+    const raw = from ? src[from] : DEFAULT_HOTKEYS[id];
     const p = typeof raw === 'string' && raw ? parseAccelerator(raw) : null;
-    const acc = p && !p.error && !used.has(p.canonical) ? p.canonical : '';
+    // v11-decisions R-4: the store holds only what Settings would accept (the two-of-⌃⌥⌘ / F-key rule, no macOS
+    // system shortcut), whoever writes settings.hotkeys; anything else becomes none
+    const ok = p && !p.error && acceleratorError(p.canonical) === null;
+    const acc = ok && !used.has(p.canonical) ? p.canonical : '';
     if (acc) used.add(acc);
     keys[id] = acc;
   }

@@ -138,8 +138,9 @@ test('bus: state validation follows contract v1 (required fields, v:1, nullable 
 });
 
 test('bus: command validation covers every type and its payload', () => {
-  assert.equal(COMMAND_TYPES.length, 14);
-  for (const type of ['hello', 'nextMode', 'prevMode', 'panic', 'fadeOutAll', 'droneToggle', 'openMain', 'nextScene', 'prevScene']) assert.equal(commandError({ v: 1, type }), null, type);
+  assert.equal(COMMAND_TYPES.length, 16); // v11-scenes +2, v11-decisions +2 (nextSong / prevSong)
+  for (const type of ['hello', 'nextMode', 'prevMode', 'panic', 'fadeOutAll', 'droneToggle', 'openMain', 'nextScene',
+    'prevScene', 'nextSong', 'prevSong']) assert.equal(commandError({ v: 1, type }), null, type);
   assert.equal(commandError({ v: 1, type: 'selectMode', id: 'factory:x' }), null);
   assert.notEqual(commandError({ v: 1, type: 'selectMode' }), null);
   assert.equal(commandError({ v: 1, type: 'master', value: 2 }), null);
@@ -380,6 +381,43 @@ test('controller.modes: select / next / prev wrap; from a song outside the set n
   assert.equal(store.get().settings.currentSongId, set[2], 'outside the set: prev → last');
   ctl.dispose();
 });
+
+test('v11-decisions: nextSong / prevSong step the current setlist like Perform\'s → / ← (no wrap; modes untouched)',
+  async () => {
+    const { store, ctl, events } = await setup();
+    const order = store.get().songOrder;
+    const menu = store.addSetlist('Menu', [order[9], order[10]]);
+    store.set('settings.menuBarSetlistId', menu); // the modes are another set: the hotkeys must not use them
+    const set = [order[2], order[4], order[6]];
+    const sl = store.addSetlist('Sunday', set);
+    store.setCurrentSetlist(sl);
+    await settle();
+    assert.equal(store.get().settings.currentSongId, set[0]);
+    const picked = [];
+    ctl.addEventListener('songSelected', (e) => picked.push(e.detail.id));
+    assert.equal(ctl.handleCommand({ v: 1, type: 'nextSong' }), true);
+    await settle();
+    assert.equal(store.get().settings.currentSongId, set[1]);
+    ctl.handleCommand({ v: 1, type: 'nextSong' });
+    await settle();
+    assert.equal(store.get().settings.currentSongId, set[2]);
+    ctl.handleCommand({ v: 1, type: 'nextSong' });
+    await settle();
+    assert.equal(store.get().settings.currentSongId, set[2], 'the end of the setlist stops (like →), no wrap');
+    ctl.handleCommand({ v: 1, type: 'prevSong' });
+    await settle();
+    assert.equal(store.get().settings.currentSongId, set[1]);
+    ctl.handleCommand({ v: 1, type: 'prevSong' });
+    ctl.handleCommand({ v: 1, type: 'prevSong' });
+    await settle();
+    assert.equal(store.get().settings.currentSongId, set[0], 'the start stops too');
+    assert.equal(store.get().settings.setlistIndex, 0);
+    assert.deepEqual(picked, [set[1], set[2], set[1], set[0]], 'the controller\'s own song switch (selectSong)');
+    assert.equal(ctl.modes.current(), null, 'never a menu-bar mode');
+    const handled = events.filter(([t]) => t === 'bus-command').map(([, c]) => c.type);
+    assert.ok(handled.includes('nextSong') && handled.includes('prevSong'));
+    ctl.dispose();
+  });
 
 // ---- controller: commands -----------------------------------------------------------------------------------------
 test('controller: every contract command is handled', async () => {

@@ -1500,7 +1500,19 @@ export function createController(o) {
     setStatus({ pedal: false });
     buttonState.clear();
     swellActive = false; // round4-controller C8: engine.allNotesOff() drops the swell, so the next toggle starts one
+    stopClickForPanic();
     emit('action', { type: 'panic' });
+  }
+  /**
+   * v11-decisions (Ryan 2026-11-03, checklist Q18): Panic also stops the click and any count-in. The metronome's
+   * stop sends MIDI clock Stop when clock out is on (engine/metronome.js stop → the clock sink). Only while the click
+   * runs, so a Panic without a click calls the engine exactly as before. The engine's 'click' event turns Perform's
+   * chip off; the status is set here too, for an engine that reports it late.
+   */
+  function stopClickForPanic() {
+    const st = typeof engine?.clickState === 'function' ? optional('clickState') : null;
+    if (!(st && st.running) && !status.click.on) return;
+    if (stopClick() && (status.click.on || status.click.counting)) setClickStatus({ on: false, counting: false });
   }
   function fadeOutAll(seconds = 6) {
     call('fadeOutAll', seconds);
@@ -2799,6 +2811,14 @@ export function createController(o) {
         break;
       case 'prevScene':
         stepSceneBy(-1);
+        break;
+      // v11-decisions (Ryan, checklist Q3): the global next / previous hotkeys = Perform's → / ← and the footswitch
+      // (gapless switch, the setlist's end stops: no wrap); the popover / Tray keep stepping modes
+      case 'nextSong':
+        nextSong();
+        break;
+      case 'prevSong':
+        prevSong();
         break;
       default:
         break;

@@ -5539,7 +5539,10 @@ is quiet by default: no new field is written until someone uses a control, and a
     plus `COMPUTER_KEYBOARD = '@computer'` for the on-screen + computer keys. Device names contain dots, so writes go
     through `store.setKeyboard(name, fields|null)` (a null field removes it, null forgets the keyboard, an empty map is
     dropped); `set('settings.keyboards', map)` validates the whole map; deeper paths are refused. Max 32 entries,
-    names ≤ 120 chars, unknown entry fields kept, `migrate()` idempotent.
+    names ≤ 120 chars, unknown entry fields kept, `migrate()` idempotent. **Device-local since v11-decisions**
+    (Ryan 2026-11-03, checklist Q7): in `DEVICE_LOCAL_SETTINGS`, so the curves stay with each Mac. A library export
+    leaves `keyboards` out, a replace-import keeps this Mac's (or none), an incoming file's `keyboards` is dropped,
+    and setting a curve is not a library edit.
   - `patch.expression.curve` ('log'; 'linear' = absent) and `patch.swell.pedal` (true; false = absent), validated by
     the store and the engine; `engine._routingInto` treats an expression object without `curve` as linear (the song's
     routing is sent whole).
@@ -5988,3 +5991,81 @@ Click and scenes both there at ≤ 1340 px, the SCENE caption goes and Notes is 
   that CoreAudio takes the 4-channel destination without a dropout when the option is switched.
 - MIDI clock into a real receiver (a delay pedal or drum machine) for wire jitter and Start alignment.
 - The click's sound and level in in-ears.
+
+## v11-decisions (Ryan's 2026-11-03 answers, reviews/v11-mac-checklist.md Q3 / Q18 / Q7; global-hotkeys.js, main.js, preload.js, shared/hotkeys.js, shared/bus.js, shared/voice.js, controller.js, store.js, views/settings-mac.js, views/settings-keyboards.js, docs/menubar-mode.md, README.md)
+
+**A. The global next / previous hotkeys step the setlist's songs (Q3).**
+- New bus commands `nextSong` / `prevSong` (no payload, contract still v 1). `COMMAND_TYPES` 14 → 16, and main.js
+  `BUS_COMMANDS` gets the same two. The controller runs its own `nextSong()` / `prevSong()` for them. That is the
+  path Perform's → / ← and the footswitch `nextSong` / `prevSong` (`BUTTON_CONTROLS`) take: `store.neighbors()` →
+  `selectSong`, the gapless switch, and the setlist's first / last song is the end (no wrap). `nextMode` /
+  `prevMode` stay as they were, for the popover's ‹ › and the Tray's Previous / Next (still modes, wrapping).
+- Hotkey ids `nextMode` / `prevMode` → `nextSong` / `prevSong` (global-hotkeys.js and shared/hotkeys.js
+  `HOTKEY_IDS`, the two stay in step by a unit test), labels "Next song" / "Previous song". The standard keys are
+  unchanged (⌃⌥⌘] / ⌃⌥⌘[).
+- Migration, schema still 1: `normalizeHotkeys` (the store runs it on set and on load) reads a stored `nextMode` /
+  `prevMode` entry as `nextSong` / `prevSong` when the new id is absent (`LEGACY_HOTKEY_IDS`). A saved combination
+  and a saved "none" ('') both carry over, the old keys are dropped, it is idempotent, and the new id wins when both
+  are present. `settings.hotkeys` was already device-local, so no library file carries it.
+- Settings › Menu bar › Global shortcuts: the labels, the row's sub-line and the list hint go through `say()`
+  (`hotkeyNextSong`, `hotkeyPrevSong`, `hotkeysSub`, `hotkeysListHint`; Classic only).
+
+**B. Panic stops the click (Q18).**
+- `controller.panic()` now also calls `stopClick()` while the click runs, either in the count-in or after it
+  (`engine.clickState().running`, or `status.click.on`). `Metronome.stop()` drops the clicks that have not started
+  yet and sends MIDI clock Stop (0xFC) when clock out is on (the clock sink is only attached then). Its `click`
+  event turns Perform's chip off, and the controller sets `status.click` off too. Without a running click, Panic
+  makes exactly the engine calls it made before (no `clickStop`, no MIDI). Nothing else in Panic changed, and no
+  engine file was touched.
+
+**C. Keyboard curves are per MIDI device and stay with each Mac (Q7).**
+- `'keyboards'` is in `DEVICE_LOCAL_SETTINGS`, so it works like `hotkeys` / `click` / `midiClockOut`. A library
+  export leaves it out, so the device names stay on the machine (security S3). A replace-import keeps this Mac's
+  value. A Mac with no curves stays without them, because an incoming file's `keyboards` is dropped (the `keep` map
+  overrides it and `migrate` removes the empty value). A merge-import ignores settings as before. Changing a curve
+  no longer marks the library edited, the same as the other device-local settings.
+- Checked: the Starter library (`docs/starter/worship-rig-starter-library.json`) has no `keyboards`. The S2 size
+  bound is measured on the parsed file before the device-local values are swapped in, as for the other
+  device-local fields (at most 32 entries × ~200 chars). The S3 export test loops over `DEVICE_LOCAL_SETTINGS`, so
+  it now covers `keyboards`. Electron auto-backups are exports, so they don't carry the curves either: a restore
+  keeps this Mac's.
+- Settings › Your keyboards hint: "Saved on this computer by the keyboard's name, not in library exports." It goes
+  through `say()` (`keyboardsHint`).
+- Review R-3 is the same change. The whole map is device-local, so the `remember` flags (device names that steer
+  `midi.setRemembered` / the 'first' input choice) move with the curves. An export has no `"remember"` and no
+  device name, and a replace-import of another rig's library leaves `midi.remembered` as this Mac's list.
+
+**R-4 (review, Low): one global-shortcut rule everywhere.** A function key, or two different ones of ⌃ ⌥ ⌘ (⇧
+doesn't count). Before this, only the Settings recorder applied it.
+- `shared/hotkeys.js` exports `isStrongAccelerator(acc)`, the predicate `acceleratorError` uses.
+- `normalizeHotkeys` (the store, on set and on load) blanks any accelerator `acceleratorError` refuses: a single plain
+  key, ⌘C, or a macOS system shortcut. The store can no longer hold one, whoever writes `settings.hotkeys`.
+- Electron main (`global-hotkeys.js`, CJS, so a mirror and not an import) has its own `isStrongAccelerator`. A key
+  that fails it is reported with state `invalid` and never reaches `globalShortcut.register`.
+- `hotkeys.test.mjs` compares the two predicates on 1,000+ generated combinations, so they stay in step.
+
+
+**Tests:**
+- unit `hotkeys.test.mjs`: the rename, the defaults and the legacy carry-over.
+- unit `global-hotkeys.test.mjs`: the ids, and `nextSong` / `prevSong` → bus commands; R-4: 'A' / 'Space' /
+  'Return' / 'Shift+X' / 'Command+C' → `invalid`, never registered.
+- unit `hotkeys.test.mjs` R-4: Settings' rule = main's mirror on every generated combination; the normaliser blanks
+  plain keys and system shortcuts.
+- shell `menubar.test.mjs`: 16 command types; `nextSong` / `prevSong` step the current setlist, stop at both ends,
+  go through `songSelected` and never touch the modes.
+- shell `v11-electron.test.mjs`: a stored `nextMode` / `prevMode` loads as `nextSong` / `prevSong`, idempotent on
+  reload.
+- shell `metronome.test.mjs` (+2): Panic during the count-in and after it stops the click, the chip status reads
+  off, MIDI clock Stop reaches the output, and a Panic with no click makes no `clickStop` call. A second case
+  covers no clock out.
+- shell `touch.test.mjs` (+3): export without `keyboards` / `remember` / device names, not an edit; a replace-import
+  keeps this Mac's curves; another Mac's `keyboards` is ignored or dropped; merge; storage; R-3: a replace-import
+  with another rig's Remember list leaves `midi.remembered` alone.
+- ui-core: PANIC during the count-in, and Esc after it, stop the real metronome; the chip reads "Click" with
+  `aria-pressed=false`; the held note is released.
+- settings `mac`: the renamed rows and the conflict message; a relayed `nextSong` / `prevSong` steps to the song →
+  would pick and back; labels and hint.
+- `electron.boot.mjs`: the self-test fires `nextSong` / `prevSong` (main.js self-test keys renamed).
+
+**Needs the Mac (LOCAL):** ⌃⌥⌘] / ⌃⌥⌘[ with the window hidden, stepping a real setlist (with a held note and the
+drone across the switch). Panic with MIDI clock out into a real receiver, which should stop on 0xFC.
