@@ -68,6 +68,9 @@ const CLASSIC = Object.freeze({
   hotkeysListHint: 'Click a shortcut, then press the new keys. Esc cancels; Delete leaves that one without a '
     + 'shortcut. Next and previous song go through the setlist like → and ← in Perform; the menu-bar buttons still '
     + 'step the modes above.',
+  // v11-decisions (checklist Q7): Settings › MIDI keyboard › Your keyboards: the curves stay on this computer
+  keyboardsHint: 'Give a keyboard its own touch, or have the app remember it as yours. Saved on this computer by the '
+    + 'keyboard’s name, not in library exports. Sounds set to “Normal” response follow the keyboard’s touch.',
 });
 
 /** Sanctuary v1 §5 (Nave) = what Sanctuary v2 §6.3 asks for: a verger who likes you. */

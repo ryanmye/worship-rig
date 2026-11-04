@@ -4,7 +4,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MidiInput, REMEMBERED_RANK } from '../../../app/js/midi.js';
 import { createController } from '../../../app/js/controller.js';
-import { COMPUTER_KEYBOARD, normalizeKeyboards, migrate } from '../../../app/js/store.js';
+import {
+  COMPUTER_KEYBOARD, DEVICE_LOCAL_SETTINGS, normalizeKeyboards, migrate, memoryStorage, STORAGE_KEY,
+} from '../../../app/js/store.js';
 import { compileTouch, touchAt } from '../../../app/js/shared/touch-curve.js';
 import { makeStore, fakeEngine, fakeTimers, fakeDoc, key, tick } from './helpers.mjs';
 
@@ -62,6 +64,61 @@ test('store: settings.keyboards is absent until set, validated, and an emptied m
   const once = migrate(lib);
   assert.deepEqual(migrate(once).settings.keyboards, once.settings.keyboards);
   assert.deepEqual(once.settings.keyboards[KEYS].touch, { shape: 2, min: 0, max: 1, top: 127 });
+});
+
+// v11-decisions (Ryan 2026-11-03, checklist Q7): curves are per MIDI device and stay with each Mac (device-local)
+test('v11-decisions: settings.keyboards is device-local — left out of an export, and not a library edit', () => {
+  assert.ok(DEVICE_LOCAL_SETTINGS.includes('keyboards'));
+  const a = makeStore();
+  a.setKeyboard(KEYS, { touch: { shape: 2, min: 0.1, max: 1, top: 110 }, remember: true });
+  a.setKeyboard(COMPUTER_KEYBOARD, { touch: { shape: 0.5, min: 0, max: 1, top: 127 } });
+  assert.ok(a.get().settings.keyboards[KEYS]);
+  const text = a.exportJSON();
+  const doc = JSON.parse(text);
+  assert.equal('keyboards' in doc.settings, false, 'not in the library file');
+  assert.doesNotMatch(text, /Keystation|@computer/, 'the device names do not leave the Mac (security S3)');
+  // a curve is this Mac's set-up, not an edit of the library (Electron backups skip an untouched library)
+  const b = makeStore();
+  const edited = b.get().meta.edited;
+  b.setKeyboard(KEYS, { remember: true });
+  assert.equal(b.get().meta.edited, edited);
+  a.dispose();
+  b.dispose();
+});
+
+test('v11-decisions: a replace-import keeps this Mac\'s curves; another Mac\'s keyboards never overwrite them', () => {
+  const mine = { touch: { shape: 2, min: 0.1, max: 1, top: 110 }, remember: true };
+  const theirs = { touch: { shape: 0.25, min: 0.4, max: 0.6, top: 30 } };
+  // our export, re-imported here: this Mac's curves stay as they are
+  const a = makeStore();
+  a.setKeyboard(KEYS, mine);
+  const own = a.exportJSON();
+  a.setKeyboard(KEYS, { touch: { shape: 3, min: 0, max: 1, top: 127 } }); // changed since the export
+  const now = a.get().settings.keyboards;
+  assert.equal(a.importJSON(own, { replace: true }).ok, true);
+  assert.deepEqual(a.get().settings.keyboards, now, 'replace-import keeps the current curves');
+  // a library from another Mac (an older v1.1 build exported keyboards): its field is dropped, ours kept
+  const other = JSON.parse(own);
+  other.settings.keyboards = { [KEYS]: theirs, [OTHER]: { remember: true }, [COMPUTER_KEYBOARD]: theirs };
+  const foreign = JSON.stringify(other);
+  assert.equal(a.importJSON(foreign, { replace: true }).ok, true);
+  assert.deepEqual(a.get().settings.keyboards, now, 'the other Mac\'s curves are ignored');
+  // a Mac with no curves yet stays without (absent, like the other device-local settings)
+  const fresh = makeStore();
+  assert.equal(fresh.importJSON(foreign, { replace: true }).ok, true);
+  assert.equal('keyboards' in fresh.get().settings, false, 'the incoming keyboards are dropped');
+  // a merge-import never touches settings at all
+  assert.equal(a.importJSON(foreign).ok, true);
+  assert.deepEqual(a.get().settings.keyboards, now);
+  // and it survives a reload of the stored library as before
+  const storage = memoryStorage();
+  const c = makeStore({ storage });
+  c.setKeyboard(KEYS, mine);
+  c.dispose();
+  assert.deepEqual(makeStore({ storage }).get().settings.keyboards[KEYS], mine);
+  assert.ok(JSON.parse(storage.getItem(STORAGE_KEY)).settings.keyboards, 'kept in this Mac\'s own storage');
+  a.dispose();
+  fresh.dispose();
 });
 
 test('store: slot touch rows / custom curve, expression.curve and swell.pedal are optional and validated', () => {

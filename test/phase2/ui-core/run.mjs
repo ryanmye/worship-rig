@@ -4238,6 +4238,46 @@ test('v11-metronome: Perform Click chip — hidden without a tempo; count-in →
   await selectIndex(0);
 });
 
+test('v11-decisions: PANIC stops the click (during the count-in and after); the chip reads off; held notes go too',
+  async () => {
+    await selectIndex(0);
+    const ev = (fn, arg) => page.evaluate(fn, arg);
+    const chip = '[data-testid=click-toggle]';
+    const id = await ev(() => window.__rig.store.currentSong().id);
+    const orig = await ev((a) => window.__rig.store.getSong(a).tempo, id);
+    await ev((a) => {
+      const s = window.__rig.store;
+      s.set('settings.performLock', false);
+      s.set(`songs.${a}.tempo`, 90);
+      s.setClick({ countIn: 2 }); // 2 bars at 90 BPM = 5.3 s: Panic lands inside the count-in
+    }, id);
+    await page.waitForFunction((c) => !document.querySelector(c).hidden, chip);
+    await page.click(chip);
+    await page.waitForFunction((c) => document.querySelector(c).classList.contains('counting'), chip);
+    await ev(() => window.__rig.controller.perform.noteOn(64, 90));
+    await page.click('[data-testid=panic]');
+    await page.waitForFunction((c) => document.querySelector(c).getAttribute('aria-pressed') === 'false', chip);
+    const a = await ev((c) => ({
+      running: window.__rig.engine.clickState().running,
+      on: window.__rig.controller.status.click.on,
+      counting: window.__rig.controller.status.click.counting,
+      cls: [...document.querySelector(c).classList].filter((x) => x === 'on' || x === 'counting'),
+      word: document.querySelector(`${c} .click-l`).textContent.trim(),
+      held: window.__rig.engine.sounding.has(64),
+      song: window.__rig.store.currentSong().id,
+    }), chip);
+    assert.deepEqual(a, { running: false, on: false, counting: false, cls: [], word: 'Click', held: false, song: id });
+    // after the count-in: Esc (the Panic key) stops a running click the same way
+    await ev(() => window.__rig.store.setClick({ countIn: null }));
+    await page.click(chip);
+    await page.waitForFunction((c) => document.querySelector(c).classList.contains('on'), chip);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction((c) => document.querySelector(c).getAttribute('aria-pressed') === 'false', chip);
+    assert.equal(await ev(() => window.__rig.engine.clickState().running), false);
+    assert.equal(await ev(() => window.__rig.engine.metronome.running), false, 'no MIDI clock transport left running');
+    await ev(([s, t]) => window.__rig.store.set(`songs.${s}.tempo`, t), [id, orig]);
+  });
+
 test('no console errors on the main page', () => {
   assert.deepEqual(consoleErrors, [], consoleErrors.join('\n'));
 });

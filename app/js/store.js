@@ -63,6 +63,9 @@ export const DEVICE_LOCAL_SETTINGS = Object.freeze([
   'hotkeys', 'updateCheck',
   // v11-metronome: the click's monitor setup (level, count-in, outputs 3–4) and the MIDI clock port are this rig's
   'click', 'midiClockOut',
+  // v11-decisions (Ryan 2026-11-03, checklist Q7): the keyboard curves / "remember" are per MIDI device and stay with
+  // each Mac: not exported, a replace-import keeps this Mac's, an incoming library's are dropped
+  'keyboards',
 ]);
 /** v11-metronome: settings.midiClockOut (optional, absent = off) is a Web MIDI output name; ids change on re-plug. */
 export const MIDI_CLOCK_NAME_MAX = 120;

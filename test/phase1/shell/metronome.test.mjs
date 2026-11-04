@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createController } from '../../../app/js/controller.js';
 import { migrate } from '../../../app/js/store.js';
+import { MidiInput } from '../../../app/js/midi.js';
 import { makeStore, fakeEngine, fakeTimers, fakeDoc, tick } from './helpers.mjs';
 
 /** The fake engine plus the click API (state kept like the real Metronome). */
@@ -20,7 +21,9 @@ function clickEngine() {
   e.clickStop = () => {
     e.calls.push(['clickStop']);
     const was = e.click.running;
+    if (!was) return false; // like Metronome.stop: nothing to stop, no MIDI Stop, no event
     e.click.running = false;
+    if (e.sink) e.sink([{ t: e.ctx.currentTime, data: [0xfc] }]); // Metronome.stop → MIDI clock Stop
     e.dispatchEvent(new CustomEvent('click', { detail: { running: false, counting: false } }));
     return was;
   };
@@ -28,14 +31,17 @@ function clickEngine() {
   e.setTimeSig = rec('setTimeSig');
   // like a 2-channel output: outputs 3–4 are not there, so the routing in effect stays 'main'
   e.setClick = (cfg) => (e.calls.push(['setClick', cfg]), { output: 'main', auxAvailable: false });
-  e.setClockSink = rec('setClockSink');
+  e.setClockSink = (fn) => {
+    e.calls.push(['setClockSink', fn]);
+    e.sink = fn;
+  };
   e.clickOutputs = () => ({ aux: false, channels: 2 });
   return e;
 }
 
-async function setup(store = makeStore()) {
+async function setup(store = makeStore(), { midi = null } = {}) {
   const engine = clickEngine();
-  const ctl = createController({ store, engine, midi: null, recorder: null, doc: fakeDoc(), nav: null,
+  const ctl = createController({ store, engine, midi, recorder: null, doc: fakeDoc(), nav: null,
     win: new EventTarget(), rig: null, timers: fakeTimers(), now: () => 0 });
   store.seedFactory();
   await ctl.start();
@@ -151,5 +157,65 @@ test('controller: Revert takes a changed time signature back to absent (4/4)', a
   await tick();
   assert.equal(ctl.revertSong(), true);
   assert.equal('timeSig' in store.getSong(id), false);
+  ctl.dispose();
+});
+
+test('v11-decisions: Panic stops the click and its count-in, sends MIDI clock Stop, and the chip reads off', async () => {
+  // a MIDI output for the clock (named like a real IAC bus) that records what it is sent
+  const sent = [];
+  const port = { id: 'o1', name: 'IAC Driver Bus 1', state: 'connected', send: (data, ts) => sent.push({ data, ts }) };
+  const midi = new MidiInput({ nav: null, warn: () => {} });
+  midi.access = { inputs: new Map(), outputs: new Map([['o1', port]]) };
+  const store = makeStore();
+  store.set('settings.midiClockOut', 'IAC Driver Bus 1');
+  const { engine, ctl } = await setup(store, { midi });
+  await tick();
+  assert.equal(ctl.status.click.midiClockConnected, true);
+  assert.equal(typeof engine.sink, 'function', 'the clock sink is attached');
+  const id = store.currentSong().id;
+  store.set(`songs.${id}.tempo`, 96);
+  store.setClick({ countIn: 1 });
+  await tick();
+  // during the count-in
+  assert.equal(ctl.toggleClick(), true);
+  assert.equal(ctl.status.click.counting, true);
+  const actions = [];
+  ctl.addEventListener('action', (e) => actions.push(e.detail));
+  engine.clear();
+  ctl.panic();
+  assert.deepEqual(engine.names().filter((n) => n === 'allNotesOff' || n === 'clickStop'), ['allNotesOff', 'clickStop']);
+  assert.equal(engine.click.running, false);
+  assert.equal(ctl.status.click.on, false, "Perform's Click chip reads off");
+  assert.equal(ctl.status.click.counting, false, 'the count-in is gone too');
+  assert.deepEqual(sent.map((m) => m.data), [[0xfc]], 'MIDI clock Stop went out');
+  assert.deepEqual(actions.map((a) => a.type), ['click', 'panic']);
+  // running past the count-in: the same
+  ctl.startClick();
+  engine.clear();
+  ctl.panic();
+  assert.equal(engine.of('clickStop').length, 1);
+  assert.equal(ctl.status.click.on, false);
+  assert.equal(sent.length, 2);
+  // no click running: Panic is what it was (no clickStop call, no MIDI message)
+  engine.clear();
+  ctl.panic();
+  assert.equal(engine.of('clickStop').length, 0);
+  assert.ok(engine.names().includes('allNotesOff'));
+  assert.equal(sent.length, 2);
+  // the next tap starts it again
+  assert.equal(ctl.toggleClick(), true);
+  assert.equal(ctl.status.click.on, true);
+  ctl.dispose();
+});
+
+test('v11-decisions: Panic stops the click without MIDI clock out (nothing is sent anywhere)', async () => {
+  const { store, engine, ctl } = await setup();
+  store.set(`songs.${store.currentSong().id}.tempo`, 120);
+  await tick();
+  ctl.startClick();
+  assert.equal(engine.sink, undefined, 'clock out is off: no sink');
+  ctl.panic();
+  assert.equal(engine.of('clickStop').length, 1);
+  assert.equal(ctl.status.click.on, false);
   ctl.dispose();
 });
