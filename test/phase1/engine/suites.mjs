@@ -651,12 +651,14 @@ export const offline = {
     e.drone.setKey(0, { when: 0 });
     e.noteOn(64, 100, { when: 0.1 });
     let g = {};
+    // v11-review-fixes R-1: a push-up is an absolute target on drone.level, a duck stays on bendGain: read the product
+    const swell = () => (e.drone.level.gain.value * e.drone.bendGain.gain.value) / 0.3;
     e.pitchBend(1, { when: 1.0 });
-    e.at(1.8, () => (g.swellUp = e.drone.bendGain.gain.value));
+    e.at(1.8, () => (g.swellUp = swell()));
     e.pitchBend(0, { when: 2.0 });
-    e.at(2.5, () => (g.fallingSlowly = e.drone.bendGain.gain.value));
+    e.at(2.5, () => (g.fallingSlowly = swell()));
     e.pitchBend(-1, { when: 3.0 });
-    e.at(3.8, () => (g.ducked = e.drone.bendGain.gain.value));
+    e.at(3.8, () => (g.ducked = swell()));
     e.pitchBend(0, { when: 4.0 });
     e.at(4.1, () => e.setRouting({ bend: { mode: 'tape' } }, { when: 4.1 }));
     e.at(4.2, () => e.pitchBend(-0.8, { when: 4.2 }));
@@ -2164,16 +2166,18 @@ export const offline = {
     e.drone.configure({ mode: 'synth', gain: 0.25, fade: 1 }, { when: 0 });
     e.drone.setKey(0, { when: 0 });
     const g = {};
-    e.at(2.4, () => (g.rest = e.drone.bendGain.gain.value));
+    // v11-review-fixes R-1: the swell is an absolute target on drone.level (no longer a factor on bendGain)
+    const swell = () => (e.drone.level.gain.value * e.drone.bendGain.gain.value) / 0.25;
+    e.at(2.4, () => (g.rest = swell()));
     e.sustain(true, { when: 2.5 });
-    e.at(5.5, () => (g.swelled = e.drone.bendGain.gain.value));
+    e.at(5.5, () => (g.swelled = swell()));
     e.sustain(false, { when: 6 });
-    e.at(9.5, () => (g.back = e.drone.bendGain.gain.value));
+    e.at(9.5, () => (g.back = swell()));
     e.at(9.6, () => {
       e.sustain(true, { when: 9.6 });
       e.setRouting({ swell: { seconds: 8 } }, { when: 9.7 }); // combo off while held → lets go
     });
-    e.at(11.9, () => (g.comboOff = e.drone.bendGain.gain.value));
+    e.at(11.9, () => (g.comboOff = swell()));
     const d = mono(await ctx.startRendering());
     const lvl = { rest: db(rms(d, SR, 1.8, 2.4)), swelled: db(rms(d, SR, 5.2, 5.9)), back: db(rms(d, SR, 9.2, 9.5)) };
     // drone.gain 0.25 → the swell rises toward drone.gain 1: ×4 = +12 dB (± the drone's own movement)
@@ -2258,6 +2262,63 @@ export const offline = {
       step.ratio > 3 && drone.clicks === 0 && drone.before - drone.after > 6 && drone.mid < drone.before &&
       drone.mid > drone.after && drone.move && drone.move.dur === GLIDE;
     return { pass, glide, step, dipDb: +dipDb.toFixed(2), drone };
+  },
+
+  /**
+   * v11-review-fixes R-1: with the sustain pedal held under "hold pedal = sustain + drone swell", drone.gain 0.25 → 1.0
+   * by a scene step (setParam {glide}), a fader (setParam) and a song switch (commit + configure) keeps the drone at
+   * full (1.0: the swell's target); it used to keep the old ×4 factor and play 4.0 (+12 dB). The effective level
+   * (level × bendGain, sampled every 25 ms on the audio clock) never passes 1, the rendered RMS after the move matches
+   * the swelled RMS before it, the scene glide has no click, and the reference (drone 1.0, no pedal) is the same level.
+   * A pull from 0.5 down to 0.1 under the pedal lands on its own swell (×4 = 0.4), not on the stale ×2 (0.2).
+   */
+  async pedalSwellLevelMoves() {
+    const SW = { seconds: 8, pedal: true };
+    const T = 3.5;
+    const run = async (how) => {
+      const ctx = mkCtx(6.5);
+      const e = await mkEngine(ctx);
+      await use(e, patch({ 1: slot('synth', 'warm-pad') }, {}, { swell: SW }));
+      e.drone.configure({ mode: 'synth', gain: { reference: 1, down: 0.5 }[how] ?? 0.25, fade: 0.5 }, { when: 0 });
+      e.drone.setKey(0, { when: 0 });
+      if (how !== 'reference') e.sustain(true, { when: 0.1 });
+      let tok = null;
+      if (how === 'song') tok = await e.prepare(patch({ 1: slot('synth', 'warm-pad') }, {}, { swell: SW }));
+      const eff = [];
+      for (let t = 0.5; t < 6.45; t += 0.025) e.at(t, () => eff.push([t, e.drone.level.gain.value * e.drone.bendGain.gain.value]));
+      e.at(T, (t) => {
+        if (how === 'scene') e.setParam('drone.gain', 1, { when: t, glide: 0.5 });
+        else if (how === 'fader') e.setParam('drone.gain', 1, { when: t });
+        else if (how === 'down') e.setParam('drone.gain', 0.1, { when: t, glide: 0.5 });
+        else if (how === 'song') {
+          e.commit(tok, { when: t });
+          e.drone.configure({ mode: 'synth', gain: 1, fade: 0.5 }, { when: t }); // same mode: params only
+        }
+      });
+      const d = mono(await ctx.startRendering());
+      await settle();
+      const after = eff.filter(([t]) => t >= T);
+      return {
+        before: +db(rms(d, SR, 2.8, T)).toFixed(2),
+        after: +db(rms(d, SR, 5.6, 6.4)).toFixed(2),
+        effBefore: +eff.filter(([t]) => t > 2.8 && t < T).at(-1)[1].toFixed(4),
+        effMax: +Math.max(...after.map(([, v]) => v)).toFixed(4),
+        effEnd: +after.at(-1)[1].toFixed(4),
+        clicks: clicks(d, SR, T - 0.2, T + 1).length,
+      };
+    };
+    const r = {};
+    for (const how of ['reference', 'scene', 'fader', 'song', 'down']) r[how] = await run(how);
+    const ok = (x) => x.effBefore > 0.97 && x.effMax <= 1.001 && Math.abs(x.effEnd - 1) < 0.01 &&
+      Math.abs(x.after - x.before) < 1 && Math.abs(x.after - r.reference.after) < 1.5 && x.clicks === 0;
+    const checks = {
+      reference: Math.abs(r.reference.effEnd - 1) < 1e-3,
+      scene: ok(r.scene),
+      fader: ok(r.fader),
+      song: ok(r.song),
+      down: r.down.effMax <= 1.001 && Math.abs(r.down.effEnd - 0.4) < 0.01 && r.down.clicks === 0,
+    };
+    return { pass: Object.values(checks).every(Boolean), checks, ...r };
   },
 
   /** v11-scenes: setWheel('virtual', v, {glide}) walks the wheel there on the audio clock; a hardware takeover ends it. */
