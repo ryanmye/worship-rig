@@ -193,6 +193,42 @@ export function clickSuites(h) {
         pumpMsPerSec: +msPerSec.toFixed(3), pumpMsAvg: +(st.pumpMs / st.pumps).toFixed(4), liveAfterStop, liveLater,
       };
     },
+
+    /**
+     * v11-review-fixes R-8: an audio restart while the click runs sends MIDI Stop (with the old context's clock)
+     * before the new grid's Start, so a receiver sees Start · clocks · Stop · Start · clocks · Stop, never two Starts
+     * in a row. Through the real midi-clock.js with a fake Web MIDI output (timestamps in send order).
+     */
+    async clickRestartMidi() {
+      const { AudioEngine } = await import('/js/engine/index.js');
+      const { createMidiClock } = await import('/js/midi-clock.js');
+      const sent = [];
+      const port = { id: 'o1', name: 'Fake Clock In', state: 'connected', send: (data, ts) => sent.push({ b: data[0], ts }) };
+      const access = { outputs: new Map([[port.id, port]]) };
+      const e = new AudioEngine({ seed: 3, manifestUrl: '/__fixtures/manifest.json', instrumentModules: false });
+      await e.start();
+      const clock = createMidiClock({ getAccess: () => access, getCtx: () => e.ctx });
+      const connected = clock.setOutput('Fake Clock In');
+      e.setClockSink(clock.sink);
+      e.setTempo(120);
+      e.setClick({ level: 0.1 });
+      e.clickStart();
+      await new Promise((r) => setTimeout(r, 800));
+      const beforeRestart = sent.length;
+      await e.restart();
+      const runningAfter = !!e.clickState()?.running;
+      await new Promise((r) => setTimeout(r, 800));
+      e.clickStop();
+      e.dispose();
+      const seq = sent.filter((m) => m.b !== 0xf8).map((m) => m.b.toString(16)).join(' ');
+      const iStop = sent.findIndex((m) => m.b === 0xfc);
+      const iStart2 = sent.findIndex((m, i) => i > iStop && m.b === 0xfa);
+      const clocksBetween = sent.slice(iStop + 1, iStart2).filter((m) => m.b === 0xf8).length;
+      // the Stop goes out at the restart, timed before the new grid's Start (its first pulse: no count-in)
+      const pass = connected && beforeRestart > 20 && runningAfter && seq === 'fa fc fa fc' && iStop >= beforeRestart &&
+        clocksBetween === 0 && sent[iStop].ts <= sent[iStart2].ts;
+      return { pass, connected, seq, beforeRestart, runningAfter, clocksBetween, sent: sent.length };
+    },
   };
   return { offline, realtime };
 }
