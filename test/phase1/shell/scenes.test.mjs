@@ -221,7 +221,8 @@ test('a scene step / live move during an instrument re-prepare is not undone by 
   const id = sid(store);
   const base = store.currentSong().patch.slots.map((s) => s && s.gain);
   // scene 1: Keys 0.2; scene 2: Keys 0.8 (other slots stay the song's own)
-  store.set(`songs.${id}.scenes`, [{ slots: [{ gain: 0.2 }, null, null, null] }, { slots: [{ gain: 0.8 }, null, null, null] }]);
+  const keysAt = (gain) => ({ slots: [{ gain }, null, null, null] });
+  store.set(`songs.${id}.scenes`, [keysAt(0.2), keysAt(0.8)]);
   await tick();
   assert.equal(ctl.scenes.go(0), true);
   // a new Keys instrument: a structural change → re-prepare with scene 1's levels; the decode is slow
@@ -240,7 +241,8 @@ test('a scene step / live move during an instrument re-prepare is not undone by 
   assert.deepEqual(keys.map((c) => c.slice(1)), [['slots.0.gain', 0.8, { glide: SCENE_GLIDE_SEC }]],
     'after the commit Keys goes to scene 2 (what Perform shows), once');
   assert.equal(ctl.scenes.view(store.currentSong()).patch.slots[0].gain, 0.8);
-  assert.ok(!after.some((c) => c[0] === 'setParam' && /^slots\.[1-3]\.gain$/.test(c[1])), 'unchanged slots are not re-sent');
+  assert.ok(!after.some((c) => c[0] === 'setParam' && /^slots\.[1-3]\.gain$/.test(c[1])),
+    'unchanged slots are not re-sent');
   // a live move inside the scene during a second load wins too
   store.set(`songs.${id}.patch.slots.0.instrument`, { type: 'synth', id: 'warm-pad' });
   await tick();

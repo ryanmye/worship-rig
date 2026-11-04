@@ -203,7 +203,8 @@ export function clickSuites(h) {
       const { AudioEngine } = await import('/js/engine/index.js');
       const { createMidiClock } = await import('/js/midi-clock.js');
       const sent = [];
-      const port = { id: 'o1', name: 'Fake Clock In', state: 'connected', send: (data, ts) => sent.push({ b: data[0], ts }) };
+      const port = { id: 'o1', name: 'Fake Clock In', state: 'connected',
+        send: (data, ts) => sent.push({ b: data[0], ts }) };
       const access = { outputs: new Map([[port.id, port]]) };
       const e = new AudioEngine({ seed: 3, manifestUrl: '/__fixtures/manifest.json', instrumentModules: false });
       await e.start();

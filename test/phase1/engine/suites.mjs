@@ -2285,7 +2285,8 @@ export const offline = {
       let tok = null;
       if (how === 'song') tok = await e.prepare(patch({ 1: slot('synth', 'warm-pad') }, {}, { swell: SW }));
       const eff = [];
-      for (let t = 0.5; t < 6.45; t += 0.025) e.at(t, () => eff.push([t, e.drone.level.gain.value * e.drone.bendGain.gain.value]));
+      const effNow = () => e.drone.level.gain.value * e.drone.bendGain.gain.value;
+      for (let t = 0.5; t < 6.45; t += 0.025) e.at(t, () => eff.push([t, effNow()]));
       e.at(T, (t) => {
         if (how === 'scene') e.setParam('drone.gain', 1, { when: t, glide: 0.5 });
         else if (how === 'fader') e.setParam('drone.gain', 1, { when: t });

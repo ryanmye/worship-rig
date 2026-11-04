@@ -840,7 +840,7 @@ async function v11Tests() {
     assert.deepEqual(errorsSince(mark), []);
   });
 
-  await T('v11 scenes: the lancet and a held key’s part follow the playing scene, not the song (review R-6)', async () => {
+  await T('v11 scenes: the lancet and a held key’s part follow the playing scene (review R-6)', async () => {
     const mark = errors.length;
     await storeTheme('sanctuary');
     await settle();
