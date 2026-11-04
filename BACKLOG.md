@@ -154,6 +154,11 @@ Not in v1.1: EQ simple mode, shimmer/choir, chord charts, stage display, Plannin
     license or add an App Store exception. Musyng Kite stays CC BY-SA (attribution in-app).
   - Rough size: L (shell + MIDI bridge + iOS memory profile + touch-sized Perform layout), plus testing on real
     devices. **L, cloud (web/shell) + local (Xcode, devices)**
+  - **Platform decision lives here** (cloud, 2026-11-04): stay on Electron for the Mac in 1.x. Tauri / a WKWebView
+    shell would cut the app to about 15–30 MB but loses Web MIDI and setSinkId (outputs 3–4) and changes Web Audio
+    behaviour, so the Chromium-based suites no longer prove it. When the iPad app starts, choose between a WebKit
+    shell + CoreMIDI bridge (one codebase) and a native Swift engine (AVAudioEngine/CoreMIDI) shared by iPad and a
+    future native Mac app (rewrite, but best latency and memory).
 - Expression pedal curve (linear/log) and a "hold pedal = sustain + drone swell" combo mode. **S, cloud**
 - Song "scenes" (Sunday Keys "patch snapshots"): 2–3 saved wheel/level states per song, stepped by footswitch. **M, cloud**
 - Second-window mode as a real feature (a read-only "stage display" window for the MD/vocalist with song, key, next). **M**
