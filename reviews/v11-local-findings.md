@@ -15,6 +15,8 @@ on the Mac; the relevant output is quoted below.
 | ef3d58a | first full run (stopped by a machine restart after 6 suites) | unit, engine 91/92 (1 soft warning, 0 failures), instruments 143/143, synth-extra 153/153, ui-core pass; shell 1 failure (L11-1) |
 | ef3d58a | **full `node test/run-all.mjs`, 2026-11-03 ~19:00–19:37 EST, screen unlocked** | **15/15 suites PASS in 36m52s** (table below) |
 | ef3d58a | shell `--only electron` ×5, 19:38–19:45 EST, **screen locked** | 5/5 exit 1, same test each time (L11-2); L-30 passed all 5 |
+| 070eb50 (v11-decisions A/B/C + R-3/R-4 in) | `run-all --skip soak` | 13/14 pass in 15m49s; shell 265/266, the one failure is L11-2 (screen locked during the run); unit 385, ui-core 82, settings 57/57 |
+| 070eb50 | shell `--only electron`, screen unlocked | 22/22 pass |
 
 Full run, ef3d58a:
 
