@@ -13,6 +13,15 @@ import { parseNoteName } from '../shared/music.js';
 import { BasicVoice, BasicAllocator } from './instruments.js';
 
 const ONSET_DB = -50;
+/**
+ * ci-3: dual-mono tolerance. A stereo file counts as dual mono when max |L − R| over the kept range is at most
+ * max(DUAL_MONO_REL × its peak, DUAL_MONO_ABS): −60 dB under the sample's own peak, and never less than −72 dBFS
+ * (≈ 8 LSB of 16-bit). Chromium on the macOS runner decodes the same dual-mono MP3s with channels that differ in the
+ * last bits (test-mp3 and music-box stayed stereo there: 848 832 vs 424 416 decoded bytes), so an exact compare
+ * dropped the v11-memory saving on the Mac. Real stereo content has a side far above either bound.
+ */
+export const DUAL_MONO_REL = 1e-3;
+export const DUAL_MONO_ABS = 2 ** -12;
 /** 2-pole Butterworth for a Web Audio lowpass (its Q is in dB): −3.01 dB. */
 const BUTTER2_Q = 20 * Math.log10(Math.SQRT1_2);
 /** Release τ for a manifest entry without `release` (user manifests, "My Samples"). */
@@ -165,7 +174,8 @@ export function normalizeManifest(json, manifestUrl, { idPrefix = '', group: def
  * exceeds it — anti-phase mic content, e.g. Salamander C5 ≈ 8 dB — gets its side scaled down to exactly that loss,
  * with the mid raised so the stereo RMS is unchanged (same loudness in stereo, no hole on a mono PA). Baked once at
  * decode, so it costs nothing at note time. `buf._monoFix = {lossDb, mid, side}` records what was done.
- * v11-memory: a stereo file with identical channels comes back as a 1-channel buffer (`buf._dualMono` true).
+ * v11-memory: a stereo file with identical channels comes back as a 1-channel buffer (`buf._dualMono` true; ci-3:
+ * identical within DUAL_MONO_REL / DUAL_MONO_ABS, `buf._lrDiff` = the measured max |L − R|).
  * @param {AudioBuffer} buf
  * @param {number} midi
  * @param {{maxMonoLossDb?:number, maxSec?:number}} [opts]
@@ -191,10 +201,13 @@ export function processSample(buf, midi, opts = {}) {
   const cap = Math.round(capSec * sr);
   const len = Math.max(1, Math.min(buf.length - start, cap));
   const capped = buf.length - start > cap;
-  // v11-memory: a stereo file whose two channels are identical sample for sample (most Musyng Kite sets are dual
-  // mono) is kept as ONE channel: half the decoded bytes. The sampler voice up-mixes it back to two identical
-  // channels (SamplerInstrument.noteOn, env channelCountMode 'explicit'), so the output is the same bit for bit.
-  const dualMono = chans.length === 2 && sameRange(chans[0], chans[1], start, start + len);
+  // v11-memory: a stereo file whose two channels are identical (most Musyng Kite sets are dual mono) is kept as ONE
+  // channel: half the decoded bytes. The sampler voice up-mixes it back to two identical channels
+  // (SamplerInstrument.noteOn, env channelCountMode 'explicit'), so the output is the same bit for bit when the
+  // channels are. ci-3: "identical" within decoder noise (DUAL_MONO_REL / _ABS); channel 0 is kept, so R moves by at
+  // most that bound (≤ −60 dB re peak), where the Mac's decoder differs in the last bits.
+  const lr = chans.length === 2 ? lrDiff(chans[0], chans[1], start, start + len) : null;
+  const dualMono = !!lr && lr.diff <= Math.max(DUAL_MONO_REL * lr.peak, DUAL_MONO_ABS);
   const used = dualMono ? chans.slice(0, 1) : chans;
   const out = new AudioBuffer({ numberOfChannels: used.length, length: len, sampleRate: sr });
   const fi = Math.min(len, Math.round(0.002 * sr));
@@ -244,16 +257,32 @@ export function processSample(buf, midi, opts = {}) {
     });
   }
   out._dualMono = dualMono;
+  out._lrDiff = lr ? lr.diff : null; // ci-3: max |L − R| of the kept range (Infinity: stopped early, real stereo)
   out._onsetTrim = start / sr;
   out._natural = buf.length - start;
   out._capped = capped;
   return out;
 }
 
-/** a[i] === b[i] for every i in [from, to) (v11-memory: dual-mono detection). */
-function sameRange(a, b, from, to) {
-  for (let i = from; i < to; i++) if (a[i] !== b[i]) return false;
-  return true;
+/**
+ * max |a[i] − b[i]| and max |a[i]| over [from, to) (v11-memory / ci-3: dual-mono detection). Stops at the first
+ * difference above 0.01 (−40 dBFS: above either tolerance for any sample peaking under 10), reporting Infinity, so a
+ * real stereo file still costs only a few samples.
+ * @returns {{diff:number, peak:number}}
+ */
+function lrDiff(a, b, from, to) {
+  let diff = 0;
+  let peak = 0;
+  for (let i = from; i < to; i++) {
+    const d = Math.abs(a[i] - b[i]);
+    if (d > diff) {
+      if (d > 0.01) return { diff: Infinity, peak };
+      diff = d;
+    }
+    const v = Math.abs(a[i]);
+    if (v > peak) peak = v;
+  }
+  return { diff, peak };
 }
 
 /**

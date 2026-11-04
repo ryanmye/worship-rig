@@ -3537,6 +3537,7 @@ const UI_COUNTERS = () => {
   if (window.__uic) return;
   const C = (window.__uic = { raf: 0, an: 0, slot: 0 });
   const oRaf = window.requestAnimationFrame;
+  window.__uicRaf = oRaf; // loopCapacity's probe loop runs on the original (uncounted)
   window.requestAnimationFrame = function (cb) {
     return oRaf.call(window, (t) => {
       C.raf += 1;
@@ -3572,6 +3573,31 @@ const uiRates = (ms) => page.evaluate(async (w) => {
   const r = (k) => Math.round(((k === 'frames' ? m.stats().frames : C[k]) - a[k]) / sec * 10) / 10;
   return { raf: r('raf'), an: r('an'), slot: r('slot'), frames: r('frames'), stats: m.stats() };
 }, ms);
+/**
+ * ci-3: frames/s the browser delivers right now to a loop of the meter clock's own shape (a FRAME_MS − 2 ms timer,
+ * then one rAF; meterClock.js), on the page's original rAF (not counted in __uic). On a capable box ≈ 25–30; on the
+ * macos-14 runner the meters ran at 9.9/s, i.e. a requested rAF took ≈ 70 ms to arrive there.
+ */
+const loopCapacity = (ms) => page.evaluate(async (w) => {
+  const raf = window.__uicRaf || window.requestAnimationFrame;
+  const { FRAME_MS } = await import('/js/views/components/meterClock.js');
+  let n = 0;
+  const t0 = performance.now();
+  await new Promise((res) => {
+    const step = () => {
+      n += 1;
+      if (performance.now() - t0 >= w) res();
+      else setTimeout(() => raf.call(window, step), FRAME_MS - 2);
+    };
+    setTimeout(() => raf.call(window, step), FRAME_MS - 2);
+  });
+  return Math.round((n / ((performance.now() - t0) / 1000)) * 10) / 10;
+}, ms);
+/**
+ * ci-3: "the meters run" = at least `floor` frames/s, or, where the browser cannot deliver that to a timer + rAF loop
+ * (`cap` from loopCapacity), at least 0.8 × what it delivers. On any box with cap ≥ floor / 0.8 this is `floor`.
+ */
+const runBound = (floor, cap) => Math.min(floor, 0.8 * cap);
 /** Wait until the meter clock has run `n` more frames (a resumed loop; generous bound for a loaded box). */
 const metersRun = async (n = 5, timeout = 5000) => {
   const f0 = await page.evaluate(() => window.__rig.meters.stats().frames);
@@ -3629,12 +3655,19 @@ test('idle-cpu-ui: silent → the meter loop stops (rAF ≤ 1/s, ≤ 5 style rec
 
   // drone on: the loop runs, capped at ~30 frames/s whatever the refresh rate; the hold moves without layout
   await selectByName('Sunday Pad + Piano', 'synth');
+  // ci-3: the switch starts v11-memory's reverb warm-ups for the neighbours' spaces (conv.buffer = blocks the main
+  // thread 120–190 ms per unit here, 5–7× on the macos-14 runner): measure the meters once they have landed
+  await page.evaluate(() => Promise.race([window.__rig.engine.fx.reverb.settled(),
+    new Promise((res) => setTimeout(res, 20000))]));
   await metersRun(10, 10000);
   const droneOn = await uiRates(2000);
   const holdStyles = await page.evaluate(() => [...document.querySelectorAll('#meter-mount .meter-hold')]
     .map((x) => x.getAttribute('style') || ''));
-  console.log(`# drone on: ${JSON.stringify(droneOn)}`);
-  assert.ok(droneOn.frames > 10, `drone on: the meters run (${droneOn.frames} frames/s)`);
+  const droneCap = await loopCapacity(1500);
+  console.log(`# drone on: ${JSON.stringify(droneOn)}; timer+rAF loop capacity ${droneCap}/s`);
+  const droneMin = runBound(10, droneCap);
+  assert.ok(droneOn.frames > droneMin,
+    `drone on: the meters run (${droneOn.frames} frames/s > ${droneMin}; loop capacity ${droneCap}/s)`);
   assert.ok(droneOn.raf <= 35, `drone on: rAF callbacks/s ${droneOn.raf} ≤ 35`);
   assert.ok(droneOn.an <= 2 * 35, `drone on: analyser reads/s ${droneOn.an} ≤ 70 (L + R per frame)`);
   assert.deepEqual(holdStyles, ['', ''], 'the peak hold is moved by its track transform, never by left/bottom');
@@ -3704,6 +3737,9 @@ test('idle-cpu-ui: silent → the meter loop stops (rAF ≤ 1/s, ≤ 5 style rec
   assert.ok(lowRt <= 4, `low-resource: pedal / wheel lamps poll at 1 Hz (${lowRt} in 2.5 s)`);
   await page.evaluate(() => window.__rig.controller.setLowResource(false));
   await page.waitForFunction(() => !document.documentElement.hasAttribute('data-low-resource'));
+  // ci-3: leaving low-resource rebuilds what its trim dropped (reverb units: conv.buffer = on the main thread)
+  await page.evaluate(() => Promise.race([window.__rig.engine.fx.reverb.settled(),
+    new Promise((res) => setTimeout(res, 20000))]));
   // the bare attribute (as the Mac test set it) works the same, and removing it resumes without a reload
   await page.evaluate(() => document.documentElement.setAttribute('data-low-resource', '1'));
   await page.waitForTimeout(300);
@@ -3711,9 +3747,13 @@ test('idle-cpu-ui: silent → the meter loop stops (rAF ≤ 1/s, ≤ 5 style rec
   await page.evaluate(() => document.documentElement.removeAttribute('data-low-resource'));
   await metersRun(5);
   const back = await uiRates(1000);
-  console.log(`# data-low-resource="1": ${JSON.stringify(attr)}; removed: ${JSON.stringify(back)}`);
+  const backCap = await loopCapacity(1000);
+  console.log(`# data-low-resource="1": ${JSON.stringify(attr)}; removed: ${JSON.stringify(back)}; `
+    + `capacity ${backCap}/s`);
   assert.deepEqual([attr.raf, attr.an, attr.slot], [0, 0, 0], 'data-low-resource="1": no rAF, no reads');
-  assert.ok(back.frames > 5, `attribute removed: the meters resume (${back.frames} frames/s)`);
+  const backMin = runBound(5, backCap);
+  assert.ok(back.frames > backMin,
+    `attribute removed: the meters resume (${back.frames} frames/s > ${backMin}; loop capacity ${backCap}/s)`);
   await selectByName('Grand Piano');
 });
 

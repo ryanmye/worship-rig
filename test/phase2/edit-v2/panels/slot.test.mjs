@@ -497,6 +497,10 @@ test('slot: polish-1 — a level meter beside the fader follows the slot; a slot
   await t.select('slot:0');
   await t.until((sel) => !!document.querySelector(sel), meter(0));
   assert.equal(await t.page.$(meter(1)), null);
+  // ci-3: count over ≥ 400 ms AND until slot 0 has been read 4 times (≤ 8 s), with a note held so slot 0's meter
+  // stays awake. Right after the release above, v11-memory's deferred reverb warm-ups run (conv.buffer = 120–190 ms
+  // each here, main thread ≈ 85 % busy for ~1 s; 5–7× that on the macos-14 runner), so a fixed 400 ms saw 3 reads
+  // there and 3–6 here, and on a slow box the piano tail could fall silent first (meter asleep: 0 reads).
   const per = await t.ev(async () => {
     const c = window.__rig.controller;
     const orig = c.slotLevel;
@@ -505,7 +509,12 @@ test('slot: polish-1 — a level meter beside the fader follows the slot; a slot
       n[i] += 1;
       return orig(i);
     };
-    await new Promise((r) => setTimeout(r, 400));
+    c.perform.noteOn(60, 100);
+    const t0 = performance.now();
+    while (performance.now() - t0 < 400 || (n[0] < 4 && performance.now() - t0 < 8000)) {
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    c.perform.noteOff(60);
     c.slotLevel = orig;
     return n;
   });
