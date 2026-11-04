@@ -9,8 +9,6 @@
 const REPO = 'ryanmye/worship-rig';
 const LATEST_API = `https://api.github.com/repos/${REPO}/releases/latest`;
 const RELEASES_PAGE = `https://github.com/${REPO}/releases`;
-/** Only these URLs are ever opened (release page and asset downloads of this repo). */
-const OPEN_PREFIX = `https://github.com/${REPO}/releases/`;
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** An attempt that never reached GitHub (offline) may be retried after an hour; anything else waits a day. */
 const OFFLINE_RETRY_MS = 60 * 60 * 1000;
@@ -66,8 +64,44 @@ function buildArch(arch, translated = false) {
   return arch === 'arm64' || translated ? 'arm64' : 'x64';
 }
 
-const openable = (u) =>
-  typeof u === 'string' && (u === RELEASES_PAGE || u.startsWith(OPEN_PREFIX)) && !/[\s"'<>]/.test(u);
+/** Only these URLs are ever opened (release page and asset downloads of this repo): safeOpenUrl. */
+const GITHUB = 'https://github.com';
+const RELEASES_PATH = `/${REPO}/releases`;
+
+/**
+ * v11-review-fixes R-5: the URL to hand shell.openExternal, or null. It used to be a string-prefix check, so
+ * `…/releases/../../../evil/x` and `…/releases/%2e%2e/%2e%2e/%2e%2e/evil/x` passed and normalised to another repo.
+ * Now: parsed with `new URL`; origin exactly https://github.com (no credentials, no port, written as such); every raw
+ * path segment, decoded, is a plain name (no `.`/`..`, no `/` or `\` inside, no control characters); the normalised
+ * path is the releases page or under it; no query or fragment. Returns the normalised `href`.
+ * @param {*} u
+ * @returns {string|null}
+ */
+function safeOpenUrl(u) {
+  if (typeof u !== 'string' || u.length > 2048 || /[\s"'<>\\\x00-\x1f\x7f]/.test(u)) return null;
+  if (!u.startsWith(`${GITHUB}/`)) return null; // the raw form too: no userinfo, port or odd case before the path
+  let url;
+  try {
+    url = new URL(u);
+  } catch {
+    return null;
+  }
+  if (url.origin !== GITHUB || url.username || url.password || url.port || url.search || url.hash) return null;
+  const raw = u.slice(GITHUB.length).split(/[?#]/)[0];
+  for (const seg of raw.split('/').slice(1)) {
+    let d;
+    try {
+      d = decodeURIComponent(seg);
+    } catch {
+      return null;
+    }
+    if (d === '.' || d === '..' || /[/\\\x00-\x1f\x7f]/.test(d)) return null;
+  }
+  const path = url.pathname;
+  if (path !== RELEASES_PATH && !path.startsWith(`${RELEASES_PATH}/`)) return null;
+  return url.href;
+}
+const openable = (u) => safeOpenUrl(u) !== null;
 
 /**
  * The release asset for this Mac: Worship-Rig-<arch>.dmg (release.yml's stable names), else the .zip, else null.
@@ -80,7 +114,7 @@ function pickAsset(assets, arch) {
   for (const ext of ['dmg', 'zip']) {
     const name = `Worship-Rig-${arch}.${ext}`;
     const a = assets.find((x) => x && x.name === name && openable(x.browser_download_url));
-    if (a) return { name, url: a.browser_download_url };
+    if (a) return { name, url: safeOpenUrl(a.browser_download_url) };
   }
   return null;
 }
@@ -100,7 +134,7 @@ function parseRelease(json, { currentVersion, arch }) {
   return {
     latest,
     update: compareVersions(latest, currentVersion) > 0,
-    pageUrl: openable(json.html_url) ? json.html_url : RELEASES_PAGE,
+    pageUrl: safeOpenUrl(json.html_url) || RELEASES_PAGE,
     downloadUrl: asset ? asset.url : null,
     asset: asset ? asset.name : null,
   };
@@ -186,8 +220,8 @@ function createUpdateChecker(o) {
       current: o.currentVersion,
       state: !o.supported ? 'unsupported' : checking ? 'checking' : update ? 'update' : known ? 'latest' : 'idle',
       latest: known ? c.latest : null,
-      pageUrl: update && openable(c.pageUrl) ? c.pageUrl : RELEASES_PAGE,
-      downloadUrl: update && openable(c.downloadUrl) ? c.downloadUrl : null,
+      pageUrl: (update && safeOpenUrl(c.pageUrl)) || RELEASES_PAGE,
+      downloadUrl: (update && safeOpenUrl(c.downloadUrl)) || null,
       asset: update ? c.asset || null : null,
       checkedAt: Number.isFinite(c.checkedAt) ? c.checkedAt : null,
       error: manualError,
@@ -256,7 +290,7 @@ function createUpdateChecker(o) {
     urlFor(kind) {
       const s = status();
       const u = kind === 'download' ? s.downloadUrl || s.pageUrl : s.pageUrl;
-      return openable(u) ? u : null;
+      return safeOpenUrl(u);
     },
     dispose() {
       enabled = false;
@@ -269,4 +303,5 @@ function createUpdateChecker(o) {
 module.exports = {
   REPO, LATEST_API, RELEASES_PAGE, DAY_MS, OFFLINE_RETRY_MS,
   parseVersion, compareVersions, buildArch, pickAsset, parseRelease, isCheckDue, fetchLatest, createUpdateChecker,
+  safeOpenUrl,
 };
