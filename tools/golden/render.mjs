@@ -241,11 +241,14 @@ const SPREAD_SEEDS = [1, 2, 3, 4];
  * port of the PRNG streams (mulberry32 + the stream names + draw order) makes the fixture a strong (exact) test.
  */
 function spreadTolerance(spread) {
+  // seeds decorrelate the envelope itself (frozen-drone loops: ρ < 0.5 across seeds): the envelope checks say nothing
+  // there without the PRNG port, so they are switched off (envCorr −1, lag up to the ±200 ms search window)
+  const noEnv = spread.envCorr < 0.5;
   const t = {
     bandsDb: round(Math.max(TOL_STAT.bandsDb, 1.25 * spread.bandsDb), 3),
     bandRangeDb: TOL_STAT.bandRangeDb,
-    envCorr: round(Math.max(-1, Math.min(TOL_STAT.envCorr, spread.envCorr - 0.05)), 3),
-    envLagMs: Math.max(TOL_STAT.envLagMs, Math.abs(spread.lagMs) + 10),
+    envCorr: noEnv ? -1 : round(Math.max(-1, Math.min(TOL_STAT.envCorr, spread.envCorr - 0.05)), 3),
+    envLagMs: noEnv ? 200 : Math.max(TOL_STAT.envLagMs, Math.abs(spread.lagMs) + 10),
     rmsDb: round(Math.max(TOL_STAT.rmsDb, 1.25 * spread.rmsDb), 3),
   };
   const widened = t.bandsDb > TOL_STAT.bandsDb || t.envCorr < TOL_STAT.envCorr || t.envLagMs > TOL_STAT.envLagMs ||

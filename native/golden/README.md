@@ -19,9 +19,9 @@ node tools/golden/compare.mjs <id> <file.wav>            # one fixture
 node tools/golden/render.mjs --out <dir> --seed 2        # renders with another engine seed, manifest untouched
 ```
 
-Measured on the Linux CI box (2 slow CPUs, headless Chromium 157.0.8103.78): the full run takes **about 3 min**
-(≈ 100 s for 87 fixtures × 2 repeat renders, plus ≈ 70 s of seed-spread renders for the PRNG-dependent ones;
-`--no-spread` skips those). It needs no audio device.
+Measured on the Linux CI box (2 slow CPUs, headless Chromium 157.0.8103.78): the full run takes **234 s**
+(≈ 100 s for 87 fixtures × 2 repeat renders, ≈ 135 s for 4 seed-spread renders of each of the 40 PRNG-dependent
+fixtures; `--no-spread` skips those). It needs no audio device.
 
 ## Layout
 
@@ -90,7 +90,8 @@ The native engine has to expose the same points (by name) for isolated tests.
 
 Defined in `tools/golden/stimuli.mjs` (closed-form, float64 → float32 once): `impulse` (0.5 at 0.25 s), `sweep`
 (exp. 20 Hz–20 kHz, 2 s, −12 dBFS), `noise` (0.5 s white, ±0.25), `stereo-noise` (independent L/R, 1 s), `sine`
-(440 Hz, 1 s), `steps` (1 kHz at −36/−24/−12/−6/−1 dBFS, 0.4 s each), `tone-burst` (200 Hz + 2 kHz, 50 ms bursts).
+(440 Hz, 1 s), `steps` (1 kHz at −36/−24/−12/−6/−1 dBFS, 0.4 s each), `tone-burst` (200 Hz + 2 kHz,
+50 ms bursts).
 Noise uses mulberry32 seeded by FNV-1a of the stimulus' `seed` string (one draw per frame; stereo: L then R).
 The WAVs in `stimuli/` are authoritative: feed them, don't regenerate.
 
@@ -107,7 +108,10 @@ The WAVs in `stimuli/` are authoritative: feed them, don't regenerate.
   or a seeded PRNG stream reaches the tap. Tolerance: bands within `bandsDb` (bands within 50 dB of the loudest),
   envelope correlation ≥ `envCorr`, |lag| ≤ `envLagMs`, RMS within `rmsDb`. For PRNG-dependent fixtures these are
   per fixture: never tighter than 1.5 dB / 0.95 / 10 ms / 1 dB, and widened to 1.25 × the **seed spread** (the same
-  fixture rendered with engine seeds +1 and +2, `seedSpread`) so that "as close as another seed would be" passes.
+  fixture rendered with engine seeds +1…+4, `seedSpread`) so that "as close as another seed would be" passes;
+  where seeds decorrelate the envelope itself (seed-spread envelope ρ < 0.5: the frozen-drone loops) the envelope
+  checks are switched off. Out-of-sample check: renders with engine seed 7 pass 40/40 PRNG-dependent fixtures
+  (with only 2 spread seeds, seed 5 failed 9/40, so the spread tolerances are an estimate, not a bound).
   `prngPortRecommended: true` marks fixtures where that widening was needed: without a port of the PRNG streams
   those are weak tests; with the port they should be held to the exact tolerance.
 
@@ -123,7 +127,7 @@ Streams are named and seeded with FNV-1a: `rngFor(seed, name) = createRng(hashSe
 
 | stream | name | consumers |
 |---|---|---|
-| instrument | `inst\|<slot>\|<type>\|<id>\|<seq>` (seq = engine-wide creation counter, 1-based) | voices fork it per note |
+| instrument | `inst\|<slot>\|<type>\|<id>\|<seq>` (seq: engine-wide creation counter, from 1) | forked per note |
 | drone | `drone` | each drone-osc instrument forks it |
 | frozen drone | `drone-freeze\|<pc>\|<minor 0/1>` | renderDroneLoop's drone |
 | reverb IR | `createRng(hashSeed(`${seed}\|ir\|${bucket}\|${dampQ}\|${sr}`))` | buildIRChannels (noise, early taps) |
