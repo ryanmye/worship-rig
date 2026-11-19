@@ -6,6 +6,7 @@ set(_rig_t01_core "${CMAKE_CURRENT_LIST_DIR}/..")
 get_filename_component(_rig_t01_repo "${_rig_t01_core}/../.." ABSOLUTE)
 add_executable(rig_t01_tests
   ${_rig_t01_core}/tests/test_main.cpp
+  ${_rig_t01_core}/tests/alloc_trap.cpp
   ${_rig_t01_core}/tests/num_math_test.cpp
   ${_rig_t01_core}/tests/num_prng_test.cpp
   ${_rig_t01_core}/tests/time_param_test.cpp

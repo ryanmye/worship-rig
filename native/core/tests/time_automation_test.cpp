@@ -12,10 +12,15 @@
 
 #include "doctest.h"
 #include "num_vectors.h"
+#include "runtime/rt_guard.h"
 #include "time/automation.h"
 #include "time/param.h"
 
 using namespace rig::wa;
+
+namespace rigtest {
+extern long g_rtAllocs;  // tests/alloc_trap.cpp
+}
 
 namespace {
 
@@ -92,7 +97,7 @@ struct Call {
 };
 
 /** Run one dumped op on p; returns false where the JS call threw. */
-bool runOp(Param &p, const Call &c, std::vector<std::unique_ptr<float[]>> &curves) {
+bool runOp(Param &p, const Call &c, std::vector<std::unique_ptr<float[]>> &curves, std::size_t &nextCurve) {
   const auto &a = c.a;
   const std::string &op = c.op;
   if (op == "set") return p.setValueAtTime(a[0], a[1]);
@@ -101,9 +106,9 @@ bool runOp(Param &p, const Call &c, std::vector<std::unique_ptr<float[]>> &curve
   if (op == "target") return p.setTargetAtTime(a[0], a[1], a[2]);
   if (op == "curve") {
     const auto n = static_cast<std::size_t>(a[0]);
-    curves.emplace_back(new float[n < 2 ? 2 : n]);
-    const std::size_t len = equalPowerCurve(curves.back().get(), n, a[1] != 0);
-    return p.setValueCurveAtTime(curves.back().get(), static_cast<std::uint32_t>(len), a[2], a[3]);
+    float *buf = curves[nextCurve++].get();  // allocated before the render scope
+    const std::size_t len = equalPowerCurve(buf, n, a[1] != 0);
+    return p.setValueCurveAtTime(buf, static_cast<std::uint32_t>(len), a[2], a[3]);
   }
   if (op == "cancel") return p.cancelScheduledValues(a[0]);
   if (op == "hold") return p.cancelAndHoldAtTime(a[0]);
@@ -160,16 +165,28 @@ TEST_SUITE("time") {
       Param p(1.0);
       p.setValue(init);
       std::vector<std::unique_ptr<float[]>> curves;
+      for (const auto &c : calls)
+        if (c.op == "curve") curves.emplace_back(new float[c.a[0] < 2 ? 2 : static_cast<std::size_t>(c.a[0])]);
+      std::size_t nextCurve = 0;
       std::vector<float> got(frames);
-      for (std::size_t f = 0; f < frames; f += Param::kQuantum) {
-        p.setContextTime(static_cast<std::int64_t>(f), sr);
-        for (const auto &c : calls) {
-          if (c.frame != f) continue;
-          INFO(name << " call " << c.op << " at frame " << f);
-          CHECK(runOp(p, c, curves) == !c.throws);
+      std::vector<int> ok(calls.size(), -1);
+      const long allocsBefore = rigtest::g_rtAllocs;
+      {
+        // as on the audio thread: commands are inserted and rendered inside the render scope (FTZ/DAZ on, the
+        // allocation trap armed)
+        rig::rt::RenderScope rs;
+        for (std::size_t f = 0; f < frames; f += Param::kQuantum) {
+          p.setContextTime(static_cast<std::int64_t>(f), sr);
+          for (std::size_t ci = 0; ci < calls.size(); ++ci)
+            if (calls[ci].frame == f) ok[ci] = runOp(p, calls[ci], curves, nextCurve) ? 1 : 0;
+          const std::size_t n = std::min(Param::kQuantum, frames - f);
+          p.process(rate, static_cast<std::int64_t>(f), sr, got.data() + f, n);
         }
-        const std::size_t n = std::min(Param::kQuantum, frames - f);
-        p.process(rate, static_cast<std::int64_t>(f), sr, got.data() + f, n);
+      }
+      CHECK(rigtest::g_rtAllocs == allocsBefore);
+      for (std::size_t ci = 0; ci < calls.size(); ++ci) {
+        INFO(name << " call " << calls[ci].op << " at frame " << calls[ci].frame);
+        CHECK(ok[ci] == (calls[ci].throws ? 0 : 1));
       }
       std::size_t mism = 0, first = w1;
       double maxAbs = 0;
