@@ -80,7 +80,9 @@ async function launch() {
     const roots = [process.env.GOLDEN_CHROMIUM, process.env.PLAYWRIGHT_BROWSERS_PATH, '/opt/pw-browsers',
       path.join(os.homedir(), '.cache/ms-playwright')].filter(Boolean);
     for (const r of roots) {
-      if (fs.existsSync(r) && fs.statSync(r).isFile()) return chromium.launch({ headless: true, args, executablePath: r });
+      if (fs.existsSync(r) && fs.statSync(r).isFile()) {
+        return chromium.launch({ headless: true, args, executablePath: r });
+      }
       if (!fs.existsSync(r)) continue;
       const dirs = fs.readdirSync(r).sort().reverse();
       for (const d of dirs) {
@@ -150,9 +152,23 @@ function randomnessOf(fx, resolved) {
       `${seed}|ir|${resolved.reverbKey || ''}`);
     return { prng: 'mulberry32', hash: 'FNV-1a', engineSeed: seed, streams };
   }
-  for (const [name, calls] of Object.entries(resolved?.rngCalls || {})) {
-    if (calls > 0) streams.push({ name, calls, why: 'instrument rng (rngFor(seed, `inst|slot|type|id|seq`), forks per voice)' });
-  }
+  // instrument streams count only when the instrument sounds: a strip-test slot that never gets a note draws at
+  // construction but is not connected (idle-cpu #1: inst.output joins the strip on the first note)
+  // Engine stream names: a fresh engine creates the song's instruments in slot order, seq 1, 2, … (audio.js prepare)
+  const calls = resolved?.rngCalls || {};
+  const notes = fx.events.some((e) => e.type === 'noteOn');
+  let k = 0;
+  (resolved?.patch?.slots || []).forEach((sl, i) => {
+    if (!sl) return;
+    k++;
+    const n = calls[`inst|${sl.instrument.type}|${sl.instrument.id}|#${k}`] || 0;
+    if (notes && n > 0) {
+      const nm = `inst|${i}|${sl.instrument.type}|${sl.instrument.id}|${k}`;
+      stream(nm, `instrument rng (${n} calls; forked per voice)`);
+    }
+  });
+  const droneCalls = Object.entries(calls).filter(([nm]) => nm.includes('drone-osc')).reduce((t, [, c]) => t + c, 0);
+  if (s.drone && droneCalls > 0) stream('drone', `drone rng (${droneCalls} calls by its drone-osc instruments)`);
   const slots = (resolved?.patch?.slots || []).filter(Boolean);
   const reverbFed = s.inject?.at === 'fx.reverb.input' || slots.some((sl) => (sl.sends?.reverb || 0) > 0) ||
     !!s.drone || fx.events.some((e) => e.type === 'param' && /sends\.reverb/.test(e.path) && e.value > 0);
@@ -166,9 +182,41 @@ function randomnessOf(fx, resolved) {
   if (lofiOn && tap !== 'fx.reverb.output' && tap !== 'fx.delay.output' && !tap.startsWith('slot')) {
     stream('crackle', 'lofi crackle impulse positions (6 s loop)');
   }
+  // the stimulus is shipped as a WAV (native/golden/stimuli/), so its seed never makes a fixture statistical
   const stim = s.inject && STIMULI[s.inject.stimulus];
-  if (stim?.seed) streams.push({ name: `stimulus:${s.inject.stimulus}`, seed: hashSeed(stim.seed), why: 'stimuli.mjs noise' });
-  return { prng: 'mulberry32', hash: 'FNV-1a', engineSeed: seed, streams };
+  const stimulusSeed = stim?.seed ? { name: stim.seed, seed: hashSeed(stim.seed) } : undefined;
+  return { prng: 'mulberry32', hash: 'FNV-1a', engineSeed: seed, streams, stimulusSeed };
+}
+
+/**
+ * Chromium nodes in the recorded path whose exact output a native port reimplements rather than mirrors (heuristic,
+ * from the fixture's setup). Where the native implementation of one of these is not sample-identical, its runner
+ * may fall back to the statistical tolerance (tolerance.fallback) and must log that it did.
+ */
+function chromiumNodesOf(fx, resolved) {
+  const s = fx.setup || {};
+  const tap = s.tap || 'out';
+  const out = new Set();
+  const slots = (resolved?.patch?.slots || []).filter(Boolean);
+  const notes = fx.events.some((e) => e.type === 'noteOn');
+  if (notes && slots.some((x) => x.instrument.type === 'sampler')) out.add('mp3-decode+resample (decodeAudioData)');
+  if (notes && slots.some((x) => x.instrument.type === 'sampler')) out.add('AudioBufferSourceNode playbackRate');
+  if ((notes && slots.some((x) => x.instrument.type !== 'sampler')) || s.drone || fx.kind === 'drone-freeze') {
+    out.add('OscillatorNode/PeriodicWave wavetables');
+  }
+  const fxp = resolved?.patch?.fx || {};
+  if (tap === 'fx.reverb.output' || (s.drone && tap !== 'fx.sum') || fx.kind === 'drone-freeze' && s.reverb ||
+    slots.some((x) => (x.sends?.reverb || 0) > 0) && tap === 'out') out.add('ConvolverNode');
+  if (tap === 'out') out.add('DynamicsCompressorNode (catcher)');
+  if (tap === 'out') out.add('WaveShaperNode (soft clip)');
+  if ((fxp.comp?.amount || 0) > 0 && ['out', 'fx.master'].includes(tap)) out.add('DynamicsCompressorNode (glue)');
+  if ((fxp.lofi?.amount || 0) > 0 && ['out', 'fx.lofi.output', 'fx.master'].includes(tap)) {
+    out.add('WaveShaperNode 4x oversampling (lofi)');
+  }
+  if (tap === 'fx.chorus.output' || tap === 'fx.lofi.output' || slots.some((x) => (x.sends?.chorus || 0) > 0)) {
+    out.add('DelayNode with audio-rate delayTime');
+  }
+  return [...out];
 }
 
 // ---- tolerances -----------------------------------------------------------------------------------------------------
@@ -181,7 +229,7 @@ function sha256(buf) {
 
 const round = (x, d = 6) => (Number.isFinite(x) ? Number(x.toPrecision(d)) : x);
 
-// ---- main -------------------------------------------------------------------------------------------------------------
+// ---- main -----------------------------------------------------------------------------------------------------
 async function main() {
   let list = FIXTURES.filter((f) => (!SMOKE_ONLY || f.smoke) && (!ONLY || ONLY.some((o) => f.id.includes(o))));
   if (!list.length) throw new Error('no fixtures selected');
@@ -195,7 +243,9 @@ async function main() {
     const buf = encodeWavF32(stereo ? [L, R] : [L], GOLDEN_SR);
     const file = `stimuli/${id}.wav`;
     fs.writeFileSync(path.join(GOLD, file), buf);
-    stimuli[id] = { file, channels: stereo ? 2 : 1, frames: L.length, sha256: sha256(buf), leadSec: STIM_LEAD_SEC, def };
+    stimuli[id] = {
+      file, channels: stereo ? 2 : 1, frames: L.length, sha256: sha256(buf), leadSec: STIM_LEAD_SEC, def,
+    };
   }
 
   const server = await startServer();
@@ -207,8 +257,11 @@ async function main() {
 
   // coverage check: every synth / organ in the registry has a fixture
   const refs = await pages[0].instruments();
-  const missing = refs.filter((r) => (r.type === 'synth' && !SYNTH_IDS.includes(r.id)) || (r.type === 'organ' && !ORGAN_IDS.includes(r.id)));
-  if (missing.length) console.warn(`WARNING: instruments without a fixture: ${missing.map((r) => `${r.type}:${r.id}`).join(', ')}`);
+  const missing = refs.filter((r) => (r.type === 'synth' && !SYNTH_IDS.includes(r.id)) ||
+    (r.type === 'organ' && !ORGAN_IDS.includes(r.id)));
+  if (missing.length) {
+    console.warn(`WARNING: instruments without a fixture: ${missing.map((r) => `${r.type}:${r.id}`).join(', ')}`);
+  }
 
   const manifestPath = path.join(GOLD, 'manifest.json');
   const prev = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manifestPath, 'utf8')) : null;
@@ -230,7 +283,8 @@ async function main() {
     const randomness = randomnessOf(fx, a.resolved);
     const random = randomness.streams.length > 0;
     const repeatable = rep === null ? null : rep <= EXACT_REPEAT;
-    const classification = repeatable === false || random ? 'statistical' : 'exact';
+    // a silent render (Dry space, No Echo) is exact whatever it would draw
+    const classification = lv.peak > 0 && (repeatable === false || random) ? 'statistical' : 'exact';
     const issues = [...new Set([...(a.warnings || []), ...a.console])].filter(Boolean);
     const entry = {
       id: fx.id,
@@ -252,7 +306,8 @@ async function main() {
       bandsDb: thirdOctaveBands(a.chs, a.sr).map((x) => round(x, 4)),
       repeatMaxAbsDiff: rep,
       renderMs: a.ms,
-      tolerance: classification === 'exact' ? TOL_EXACT : TOL_STAT,
+      tolerance: classification === 'exact' ? { ...TOL_EXACT, fallback: TOL_STAT } : TOL_STAT,
+      chromiumNodes: chromiumNodesOf(fx, a.resolved),
       randomness,
       fixture: fx,
       resolved: a.resolved,
@@ -266,7 +321,8 @@ async function main() {
     const pct = lv.peak > 0 ? lv.peakDb.toFixed(1) : '-inf';
     console.log(`[${i}/${list.length}] ${fx.id.padEnd(28)} ${classification.padEnd(11)} peak ${pct.padStart(6)} dB  ` +
       `repeat ${rep === null ? '-' : rep.toExponential(2)}  ${((Date.now() - tf) / 1000).toFixed(1)} s` +
-      (issues.length ? `  issues: ${issues.length}` : '') + (lv.peak === 0 && !/dry|none/.test(fx.id) ? '  SILENT' : ''));
+      (issues.length ? `  issues: ${issues.length}` : '') +
+      (lv.peak === 0 && !/dry|none/.test(fx.id) ? '  SILENT' : ''));
   }
   const renderSec = (Date.now() - t0) / 1000;
   await browser.close();
@@ -287,17 +343,23 @@ async function main() {
     exactRepeatThreshold: EXACT_REPEAT,
     tolerances: { exact: TOL_EXACT, statistical: TOL_STAT },
     measures: 'tools/golden/analysis.mjs (definitions in its header and native/golden/README.md)',
-    lastRun: { fixtures: list.length, repeat: REPEAT, seconds: Math.round(renderSec * 10) / 10, cpus: os.cpus().length },
+    lastRun: {
+      fixtures: list.length, repeat: REPEAT, seconds: Math.round(renderSec * 10) / 10, cpus: os.cpus().length,
+    },
     stimuli,
     fixtures,
   };
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 1)}\n`);
-  const sizeOf = (d) => fs.readdirSync(path.join(GOLD, d)).reduce((s, f) => s + fs.statSync(path.join(GOLD, d, f)).size, 0);
+  const sizeOf = (d) => fs.readdirSync(path.join(GOLD, d))
+    .reduce((s, f) => s + fs.statSync(path.join(GOLD, d, f)).size, 0);
   const by = (k) => fixtures.reduce((m, e) => ((m[e[k]] = (m[e[k]] || 0) + 1), m), {});
-  console.log(`\n${list.length} fixtures rendered ×${REPEAT} in ${renderSec.toFixed(1)} s (chromium ${chromiumVersion})`);
-  console.log(`manifest: ${fixtures.length} fixtures; by kind ${JSON.stringify(by('kind'))}; ${JSON.stringify(by('classification'))}`);
+  console.log(`\n${list.length} fixtures rendered ×${REPEAT} in ${renderSec.toFixed(1)} s ` +
+    `(chromium ${chromiumVersion})`);
+  console.log(`manifest: ${fixtures.length} fixtures; by kind ${JSON.stringify(by('kind'))}; ` +
+    JSON.stringify(by('classification')));
   const MB = (b) => (b / 1048576).toFixed(2);
-  console.log(`sizes: smoke ${MB(sizeOf('smoke'))} MB, stimuli ${MB(sizeOf('stimuli'))} MB, out ${MB(sizeOf('out'))} MB, ` +
+  console.log(`sizes: smoke ${MB(sizeOf('smoke'))} MB, stimuli ${MB(sizeOf('stimuli'))} MB, ` +
+    `out ${MB(sizeOf('out'))} MB, ` +
     `manifest ${MB(fs.statSync(manifestPath).size)} MB`);
   const reps = fixtures.map((e) => e.repeatMaxAbsDiff).filter((x) => x !== null && x !== undefined);
   if (reps.length) console.log(`repeat max|diff|: max ${Math.max(...reps).toExponential(2)}, ` +

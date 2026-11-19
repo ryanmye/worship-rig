@@ -67,7 +67,9 @@ export function writeWavF32(file, chs, sr) {
  * @returns {{sr:number, chs:Float32Array[], format:string}}
  */
 export function decodeWav(b) {
-  if (b.toString('ascii', 0, 4) !== 'RIFF' || b.toString('ascii', 8, 12) !== 'WAVE') throw new Error('not a RIFF/WAVE file');
+  if (b.toString('ascii', 0, 4) !== 'RIFF' || b.toString('ascii', 8, 12) !== 'WAVE') {
+    throw new Error('not a RIFF/WAVE file');
+  }
   let o = 12;
   let fmt = null;
   let data = null;

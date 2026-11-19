@@ -157,7 +157,9 @@ export async function renderFixture(fx) {
   // commit at t 0 does not crossfade from the default space (a 0.8 s IR swap) or engage the glue late
   const patch = s.patch || {};
   for (const [unit, vals] of Object.entries(patch.fx || {})) {
-    for (const [k, v] of Object.entries(vals)) engine.setParam(unit === 'master' ? `master.${k}` : `fx.${unit}.${k}`, v);
+    for (const [k, v] of Object.entries(vals)) {
+      engine.setParam(unit === 'master' ? `master.${k}` : `fx.${unit}.${k}`, v);
+    }
   }
   await engine.start();
   const draws = {};
@@ -213,8 +215,10 @@ export async function renderFixture(fx) {
     patch: clone(engine._patch),
     routing: clone(engine._routing),
     trims: clone(engine.registry.gainTrims),
-    slots: engine.slots.map((sc) => (sc ? { ref: sc.ref, params: clone(sc.cfg?.params), widthDefault: sc.inst.widthDefault ?? 1,
-      fallback: !!sc.inst.isFallback } : null)),
+    slots: engine.slots.map((sc) => (sc ? {
+      ref: sc.ref, params: clone(sc.cfg?.params), widthDefault: sc.inst.widthDefault ?? 1,
+      fallback: !!sc.inst.isFallback,
+    } : null)),
     stimulus: stimDef,
   };
   const evs = [...(fx.events || [])].sort((a, b) => a.t - b.t);

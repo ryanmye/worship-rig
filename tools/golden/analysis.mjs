@@ -108,7 +108,9 @@ export function thirdOctaveBands(chs, sr) {
     let e = 0;
     for (let k = Math.ceil((lo * N) / sr); k <= Math.floor((hi * N) / sr) && k <= N / 2; k++) e += psd[k];
     // the lowest bands can be narrower than a bin: take the nearest bin then
-    if (e === 0 && Math.floor((hi * N) / sr) < Math.ceil((lo * N) / sr)) e = psd[Math.min(N / 2, Math.round((fc * N) / sr))];
+    if (e === 0 && Math.floor((hi * N) / sr) < Math.ceil((lo * N) / sr)) {
+      e = psd[Math.min(N / 2, Math.round((fc * N) / sr))];
+    }
     const v = e / Math.max(1, frames) / (N * N);
     out.push(v > 0 ? Math.max(-200, 10 * Math.log10(v)) : -200);
   }

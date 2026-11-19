@@ -7,7 +7,8 @@
 //   setup: {
 //     patch      engine patch (SPEC §2; normalized by the engine, the result is stored as resolved.patch)
 //     tap        recorded node (default 'out' = the whole master chain): see page.js TAP
-//     inject     {stimulus, at, gain?, start?}: a stimuli.mjs buffer started at `start` s into node `at` (page.js INJECT)
+//     inject     {stimulus, at, gain?, start?}: a stimuli.mjs buffer started at `start` s into node `at`
+//                (page.js INJECT)
 //     drone      {mode, gain, brightness, movement, width, fade, key:{pc, minor}}
 //     tempo, timeSig, click {level}, transpose, keyContext {pc, minor}, wheel {mod, expr}
 //     (drone-freeze only) key, params, loopSec, prerollSec, seamSec, reverb {size, damp, predelay, wet}
@@ -127,7 +128,8 @@ for (const ep of ECHO_PRESETS) {
 add({ id: 'echo-dotted-noise', kind: 'effect', seconds: 3.5,
   setup: { patch: noSlots(fxFromPaths(ECHO_PRESETS.find((p) => p.id === 'dotted').params)), tempo: 120,
     inject: { stimulus: 'noise', at: 'fx.delay.input', start: START }, tap: 'fx.delay.output' }, events: [] });
-for (const [name, chorus, stim] of [['default-sine', {}, 'sine'], ['fast-deep-noise', { rate: 2, depth: 1 }, 'noise']]) {
+const CHORUS_CASES = [['default-sine', {}, 'sine'], ['fast-deep-noise', { rate: 2, depth: 1 }, 'noise']];
+for (const [name, chorus, stim] of CHORUS_CASES) {
   add({ id: `chorus-${name}`, kind: 'effect', seconds: 2, smoke: name === 'default-sine',
     setup: { patch: noSlots({ chorus }), inject: { stimulus: stim, at: 'fx.chorus.input', start: START },
       tap: 'fx.chorus.output' }, events: [] });
@@ -153,8 +155,10 @@ const EQ_CASES = {
 for (const [type, cases] of Object.entries(EQ_CASES)) {
   cases.forEach(([hz, db, q], i) => {
     const eq = { b1: { on: false }, b8: { on: false }, b4: { on: true, type, hz, db, q } };
-    add({ id: `eq-${type}-${'abc'[i]}`, kind: 'effect', seconds: 1, smoke: (type === 'peak' || type === 'lowcut') && i === 0,
-      setup: { patch: soloPatch('synth', 'warm-pad', { eq }), inject: { stimulus: 'impulse', at: 'slot0.strip', start: START },
+    add({ id: `eq-${type}-${'abc'[i]}`, kind: 'effect', seconds: 1,
+      smoke: (type === 'peak' || type === 'lowcut') && i === 0,
+      setup: { patch: soloPatch('synth', 'warm-pad', { eq }),
+        inject: { stimulus: 'impulse', at: 'slot0.strip', start: START },
         tap: 'slot0.pan' }, events: [] });
   });
 }
@@ -176,14 +180,16 @@ for (const [name, stim, gain] of [['steps', 'steps', 1], ['steps-hot', 'steps', 
 }
 for (const width of [0, 0.5, 1.5]) {
   add({ id: `width-${width * 100}`, kind: 'effect', seconds: 2, smoke: width === 0,
-    setup: { patch: soloPatch('synth', 'warm-pad', { width }), inject: { stimulus: 'stereo-noise', at: 'slot0.strip', start: START },
+    setup: { patch: soloPatch('synth', 'warm-pad', { width }),
+      inject: { stimulus: 'stereo-noise', at: 'slot0.strip', start: START },
       tap: 'slot0.pan' }, events: [] });
 }
 
 // ---- drone: synth mode, 2 keys; and the frozen loop (lowres2) ---------------------------------------------------
 const DRONE = { mode: 'synth', gain: 1, brightness: 0.4, movement: 0.3, width: 0.75, fade: 2 };
 add({ id: 'drone-synth-2keys', kind: 'drone', seconds: 10,
-  setup: { patch: noSlots({ reverb: { returnGain: 0 } }), drone: { ...DRONE, key: { pc: 0, minor: false } }, tap: 'fx.sum' },
+  setup: { patch: noSlots({ reverb: { returnGain: 0 } }), drone: { ...DRONE, key: { pc: 0, minor: false } },
+    tap: 'fx.sum' },
   events: [{ t: 5, type: 'droneKey', pc: 9, minor: true }] });
 add({ id: 'drone-synth-stage', kind: 'drone', seconds: 8,
   setup: { patch: noSlots(fxFromPaths(SPACE_PRESETS.find((p) => p.id === 'stage').params)),
@@ -208,12 +214,14 @@ add({ id: 'auto-filter-cutoff', kind: 'automation', seconds: 7,
     { t: 3.5, type: 'param', path: 'slots.0.params.cutoff', value: 8000 },
     { t: 4.2, type: 'param', path: 'slots.0.params.resonance', value: 0.8 }] });
 add({ id: 'auto-reverb-send', kind: 'automation', seconds: 6,
-  setup: { patch: { slots: [{ instrument: { type: 'organ', id: 'soft-pad' }, gain: 1, sends: { reverb: 0 } }, null, null, null],
+  setup: { patch: { slots: [{ instrument: { type: 'organ', id: 'soft-pad' }, gain: 1, sends: { reverb: 0 } },
+    null, null, null],
     fx: fxFromPaths(SPACE_PRESETS.find((p) => p.id === 'room').params) }, tap: 'out' },
   events: [...held(60, 0.1, 4), { t: 1.5, type: 'param', path: 'slots.0.sends.reverb', value: 0.8 },
     { t: 3, type: 'param', path: 'fx.reverb.returnGain', value: 0.2 }] });
 add({ id: 'auto-delay-send', kind: 'automation', seconds: 5,
-  setup: { patch: { slots: [{ instrument: { type: 'synth', id: 'pluck' }, gain: 1, sends: { delay: 0 } }, null, null, null],
+  setup: { patch: { slots: [{ instrument: { type: 'synth', id: 'pluck' }, gain: 1, sends: { delay: 0 } },
+    null, null, null],
     fx: fxFromPaths(ECHO_PRESETS.find((p) => p.id === 'slapback').params) }, tap: 'out' },
   events: [...held(64, 0.1, 0.3), { t: 1, type: 'param', path: 'slots.0.sends.delay', value: 1 }, ...held(67, 1.2, 1.4),
     { t: 2.2, type: 'param', path: 'fx.delay.feedback', value: 0.7 }, ...held(71, 2.4, 2.6)] });
@@ -234,11 +242,13 @@ const touchEvents = (touch) => VELS.flatMap((v, i) => [
   { t: r6(0.5 + i * 0.5), type: 'noteOff', note: 60 },
 ]);
 for (const curve of ['soft', 'hard', 'fixed']) {
-  add({ id: `touch-${curve}`, kind: 'touch', seconds: 3.5, setup: { patch: soloPatch('synth', 'soft-keys', { velocityCurve: curve }),
+  add({ id: `touch-${curve}`, kind: 'touch', seconds: 3.5,
+    setup: { patch: soloPatch('synth', 'soft-keys', { velocityCurve: curve }),
     tap: 'slot0.pan' }, events: touchEvents(null) });
 }
 add({ id: 'touch-custom', kind: 'touch', seconds: 3.5,
-  setup: { patch: soloPatch('synth', 'soft-keys', { velocityCurve: 'custom', touch: { shape: 2, min: 0.2, max: 0.9, top: 100 } }),
+  setup: { patch: soloPatch('synth', 'soft-keys',
+    { velocityCurve: 'custom', touch: { shape: 2, min: 0.2, max: 0.9, top: 100 } }),
     tap: 'slot0.pan' }, events: touchEvents(null) });
 add({ id: 'touch-keyboard', kind: 'touch', seconds: 3.5,
   setup: { patch: soloPatch('synth', 'soft-keys'), tap: 'slot0.pan' },
@@ -260,7 +270,7 @@ add({ id: 'click-90-68-countin', kind: 'click', seconds: 6,
   setup: { patch: noSlots({}), tempo: 90, timeSig: '6/8', click: { level: 0.6 }, tap: 'out' },
   events: [{ t: 0.1, type: 'clickStart', countIn: 1, quietAfter: true }] });
 
-// ---- full songs: 3 factory presets with a scripted I–V–vi–IV progression ----------------------------------------
+// ---- full songs: 3 factory presets with a scripted I–V–vi–IV progression -------------------------------------
 function progression(pc, { bass = false, pedal = true } = {}) {
   const ev = [];
   const roots = [0, 7, 9, 5];
@@ -276,7 +286,9 @@ function progression(pc, { bass = false, pedal = true } = {}) {
     // a melody note on beat 3 of each bar
     ev.push({ t: r6(t + 1), type: 'noteOn', note: root + 24 + quality[i][2], vel: 96 },
       { t: r6(t + 1.5), type: 'noteOff', note: root + 24 + quality[i][2] });
-    if (bass) ev.push({ t, type: 'noteOn', note: root - 12, vel: 100 }, { t: r6(t + 1.8), type: 'noteOff', note: root - 12 });
+    if (bass) {
+      ev.push({ t, type: 'noteOn', note: root - 12, vel: 100 }, { t: r6(t + 1.8), type: 'noteOff', note: root - 12 });
+    }
   });
   return ev;
 }

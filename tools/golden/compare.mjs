@@ -4,7 +4,8 @@
 //   node tools/golden/compare.mjs <dir>                  every manifest fixture: <dir>/<id>.wav vs its golden
 //   node tools/golden/compare.mjs <id> <test.wav>        one fixture
 //   node tools/golden/compare.mjs --ref a.wav --test b.wav [--id <id>]   two files (tolerance from <id>, else exact)
-//   node tools/golden/compare.mjs --self-test            golden vs itself (must pass) and vs perturbed copies (must fail)
+//   node tools/golden/compare.mjs --self-test            goldens vs themselves (must pass) and vs perturbed copies
+//                                                        (must fail)
 //   options: --manifest <path> (default native/golden/manifest.json), --json (machine-readable rows)
 //
 // Exit status 0 when every compared fixture passes, 1 otherwise (2 on usage errors). A fixture whose golden WAV is
@@ -43,11 +44,15 @@ export function compareSignals(ref, test, tol) {
   if (tol.maxAbsDiff !== undefined && !(d.maxAbs <= tol.maxAbsDiff)) {
     fails.push(`max|diff| ${d.maxAbs.toExponential(2)} > ${tol.maxAbsDiff}`);
   }
-  if (!(bd.worstDb <= tol.bandsDb)) fails.push(`band ${bd.worstHz?.toFixed(0)} Hz off ${bd.worstDb.toFixed(2)} dB > ${tol.bandsDb}`);
+  if (!(bd.worstDb <= tol.bandsDb)) {
+    fails.push(`band ${bd.worstHz?.toFixed(0)} Hz off ${bd.worstDb.toFixed(2)} dB > ${tol.bandsDb}`);
+  }
   if (!(ec >= tol.envCorr)) fails.push(`envelope corr ${ec.toFixed(4)} < ${tol.envCorr}`);
   if (!(rmsDb <= tol.rmsDb)) fails.push(`rms off ${rmsDb.toFixed(2)} dB > ${tol.rmsDb}`);
-  return { pass: fails.length === 0, fails, maxAbs: d.maxAbs, bandsDb: bd.worstDb, worstHz: bd.worstHz, envCorr: ec, rmsDb,
-    lengthDiff: d.lengthDiff };
+  return {
+    pass: fails.length === 0, fails, maxAbs: d.maxAbs, bandsDb: bd.worstDb, worstHz: bd.worstHz, envCorr: ec, rmsDb,
+    lengthDiff: d.lengthDiff,
+  };
 }
 
 function loadManifest(p) {
@@ -70,7 +75,9 @@ function printTable(rows) {
 
 function compareFixture(entry, testFile, manifestDir) {
   const refFile = path.join(manifestDir, entry.file);
-  if (!fs.existsSync(refFile) || !fs.existsSync(testFile)) return { id: entry.id, cls: entry.classification, missing: true };
+  if (!fs.existsSync(refFile) || !fs.existsSync(testFile)) {
+    return { id: entry.id, cls: entry.classification, missing: true };
+  }
   const r = compareSignals(readWav(refFile), readWav(testFile), entry.tolerance);
   return { id: entry.id, cls: entry.classification, ...r };
 }
