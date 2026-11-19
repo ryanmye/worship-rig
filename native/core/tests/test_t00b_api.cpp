@@ -1,6 +1,5 @@
 // T00b freeze: test-point tables equal tools/golden/page.js, C API additions (memory pressure, paths), registry.
 #include <fstream>
-#include <regex>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -24,10 +23,14 @@ std::vector<std::string> pageKeys(const std::string &src, const std::string &nam
   std::istringstream body(src.substr(a, b - a));
   std::string line;
   std::getline(body, line);  // the `const NAME = {` line
-  const std::regex key(R"(^\s*'?([A-Za-z0-9_.]+)'?\s*:)");
-  while (std::getline(body, line)) {
-    std::smatch m;
-    if (std::regex_search(line, m, key)) keys.push_back(m[1]);
+  while (std::getline(body, line)) {  // `  'name': (e) => ...` or `  name: (e) => ...` (no std::regex: GCC 13 ASan
+                                      // -Wmaybe-uninitialized false positive)
+    size_t i = line.find_first_not_of(" \t");
+    if (i == std::string::npos || line.compare(i, 2, "//") == 0) continue;
+    if (line[i] == '\'') ++i;
+    const size_t j = line.find_first_of("':", i);
+    if (j == std::string::npos || j == i) continue;
+    keys.push_back(line.substr(i, j - i));
   }
   return keys;
 }

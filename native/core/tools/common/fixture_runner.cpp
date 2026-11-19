@@ -110,7 +110,16 @@ RunResult runFixture(const Fixture &f, const std::string &goldenDir, double sr) 
     sink.msgs.clear();
     post(m);
     for (const auto &r : sink.msgs)
-      if (r.find("\"ok\":false") != std::string::npos) skipped.insert(what);
+      if (r.find("\"ok\":false") != std::string::npos || r.find("\"applied\":false") != std::string::npos)
+        skipped.insert(what);
+  };
+  // `warn` events with code 'unsupported' (e.g. an instrument type no module provides yet) are reported too.
+  auto collectUnsupported = [&] {
+    for (const auto &r : sink.msgs) {
+      if (r.find("\"code\":\"unsupported\"") == std::string::npos) continue;
+      const size_t a = r.find("'"), b = a == std::string::npos ? a : r.find("'", a + 1);
+      if (b != std::string::npos) skipped.insert("instrument " + r.substr(a + 1, b - a - 1));
+    }
   };
   post("{\"v\":1,\"op\":\"hello\",\"protocol\":1,\"app\":\"rig-golden\",\"id\":1}");
 
@@ -172,7 +181,9 @@ RunResult runFixture(const Fixture &f, const std::string &goldenDir, double sr) 
       yyjson_doc_free(doc);
       return res;
     }
+    sink.msgs.clear();
     post("{\"v\":1,\"op\":\"commit\",\"id\":6,\"token\":" + std::to_string(token) + ",\"when\":0}");
+    collectUnsupported();
   }
   if (yyjson_val *v = yyjson_obj_get(setup, "transpose"))
     postSkippable("{\"v\":1,\"op\":\"song\",\"id\":7,\"transpose\":" + str(v) + "}", "song transpose");

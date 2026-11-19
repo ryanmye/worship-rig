@@ -198,7 +198,8 @@ void Graph::apply(const Command &c) {
       return;
     default:
       if (isModuleOp(c.op) && c.target < kUnitSlots && units_[c.target]) units_[c.target]->apply(c);
-      else if (isModuleOp(c.op) && c.sub == kSubOwnedPayload) garbage(GarbageKind::Owned, c.p.ptr);  // no unit: give it back
+      else if (isModuleOp(c.op) && c.sub == kSubOwnedPayload)
+        garbage(GarbageKind::Owned, c.p.ptr);  // no unit to take it: give it back
       return;
   }
 }
@@ -316,7 +317,8 @@ void Graph::renderQuantum(float *const *out, unsigned channels) {
     renderChannel(instSlot(i), stripSlot(i), i == 0, base, tapHere ? &tapBus_ : nullptr);
     tapped = tapped || tapHere;
   }
-  for (std::size_t i = 0; i < kRetiring; ++i) renderChannel(retireInstSlot(i), retireStripSlot(i), false, base, nullptr);
+  for (std::size_t i = 0; i < kRetiring; ++i)
+    renderChannel(retireInstSlot(i), retireStripSlot(i), false, base, nullptr);
   // 2. drone
   if (units_[idx(UnitSlot::Drone)]) {
     UnitIO io;

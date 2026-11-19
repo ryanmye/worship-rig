@@ -10,6 +10,16 @@
 #include <cstdint>
 #include <cstring>
 
+// Force LLVM libc's non-FMA code paths on every target (arm64 always defines __ARM_FEATURE_FMA). Chromium's x86-64
+// build has no FMA, and LLVM's atan is not correctly rounded on every path: built with FMA it differs from Chromium's
+// Math.atan in 157 of 1e5 cases. The other functions are correctly rounded either way. With the macros removed
+// fputil::multiply_add is a plain x * y + z, which -ffp-contract=off keeps unfused.
+#include "src/__support/macros/properties/cpu_features.h"
+#undef LIBC_TARGET_CPU_HAS_FMA
+#undef LIBC_TARGET_CPU_HAS_FMA_HALF
+#undef LIBC_TARGET_CPU_HAS_FMA_FLOAT
+#undef LIBC_TARGET_CPU_HAS_FMA_DOUBLE
+
 #include "shared/math/atan.h"
 #include "shared/math/atan2.h"
 #include "shared/math/cbrt.h"

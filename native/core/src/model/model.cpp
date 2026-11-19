@@ -235,7 +235,12 @@ bool Model::commit(std::uint32_t token, double when) {
   for (std::size_t i = 0; i < kChannels; ++i) {
     const SlotPatch &sp = active_.slots[i];
     const int ch = static_cast<int>(i);
-    if (!sp.present || !attachUnit(instSlot(i), "inst." + sp.instType, when, ch)) detachUnit(instSlot(i), when);
+    if (!sp.present || !attachUnit(instSlot(i), "inst." + sp.instType, when, ch)) {
+      detachUnit(instSlot(i), when);
+      if (sp.present && !Registry::global().unit("inst." + sp.instType))  // skeleton only: T13 owns the policy
+        warn("instrument type '" + sp.instType + "' is not available in this build (slot stays silent)",
+             "unsupported");
+    }
     if (!attachUnit(stripSlot(i), kKindStrip, when, ch)) continue;
     // Fresh channel: the fader is *set* to the slot gain at the commit instant (contract 3.1), not ramped.
     setParamAt(stripSlot(i), kStripFader, sp.present ? sp.gain : 0.0, when);
