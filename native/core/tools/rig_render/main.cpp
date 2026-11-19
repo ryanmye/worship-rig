@@ -18,12 +18,18 @@ int main(int argc, char **argv) {
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
     auto val = [&]() -> std::string { return i + 1 < argc ? argv[++i] : ""; };
-    if (a == "--manifest" || a == "--fixture-file") manifest = val();
-    else if (a == "--out") out = val();
-    else if (a == "--golden-dir") golden = val();
-    else if (a == "--only") only = val();
-    else if (a == "--sr") sr = std::atof(val().c_str());
-    else if (a == "--list") list = true;
+    if (a == "--manifest" || a == "--fixture-file")
+      manifest = val();
+    else if (a == "--out")
+      out = val();
+    else if (a == "--golden-dir")
+      golden = val();
+    else if (a == "--only")
+      only = val();
+    else if (a == "--sr")
+      sr = std::atof(val().c_str());
+    else if (a == "--list")
+      list = true;
     else {
       std::fprintf(stderr, "usage: %s --manifest FILE --out DIR [--only a,b] [--golden-dir DIR] [--sr N] [--list]\n",
                    argv[0]);
@@ -34,8 +40,8 @@ int main(int argc, char **argv) {
     std::fprintf(stderr, "--manifest or --fixture-file required\n");
     return 2;
   }
-  if (golden.empty()) golden = manifest.substr(0, manifest.find_last_of('/') == std::string::npos
-                                                      ? 0 : manifest.find_last_of('/'));
+  if (golden.empty())
+    golden = manifest.substr(0, manifest.find_last_of('/') == std::string::npos ? 0 : manifest.find_last_of('/'));
   if (golden.empty()) golden = ".";
   std::vector<rig::tools::Fixture> fixtures;
   std::string err;

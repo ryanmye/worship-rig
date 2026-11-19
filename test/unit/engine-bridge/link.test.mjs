@@ -99,6 +99,15 @@ test('batches are processed strictly in order, replies and events interleaved', 
   assert.deepEqual(seen, ['notes:pending=1', 'wheel:pending=0']);
 });
 
+test('nested batches (the shell joins several core callbacks) are flattened in order', () => {
+  const m = manual();
+  const seen = [];
+  const link = new BridgeLink(m.t, { timers: fakeEnv().timers, onEvent: (e) => seen.push(e.ev) });
+  m.deliver([[{ v: 1, ev: 'a' }, { v: 1, ev: 'b' }], { v: 1, ev: 'c' }, [[{ v: 1, ev: 'd' }]]]);
+  assert.deepEqual(seen, ['a', 'b', 'c', 'd']);
+  assert.equal(link.stats.badMessages, 0);
+});
+
 test('events with another protocol version are dropped and reported; unknown fields are ignored', () => {
   const m = manual();
   const bad = [];

@@ -18,7 +18,7 @@ namespace rig {
 class CommandSink {
  public:
   virtual ~CommandSink() = default;
-  virtual bool send(Command c) = 0;       // stamps seq; false when the queue is full
+  virtual bool send(Command c) = 0;  // stamps seq; false when the queue is full
   virtual std::int64_t renderedFrames() const = 0;
   virtual double sampleRate() const = 0;
 };

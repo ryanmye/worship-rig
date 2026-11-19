@@ -211,7 +211,7 @@ static const ParamRow kParamRows[RIG_PARAM_COUNT] = {
     "", nullptr, 2},
   {"slots.<i>.pan", 0, 0.0, -1.0, 1.0, NAN, false,
     "", "slots.<i>.pan", 1},
-  {"slots.<i>.pedalHold", 0, natural, 2.0, 30.0, NAN, true,
+  {"slots.<i>.pedalHold", 0, NAN, 2.0, 30.0, NAN, true,
     "", nullptr, 6},
   {"slots.<i>.release", 0, NAN, 0.05, 8.0, NAN, true,
     "", nullptr, 6},

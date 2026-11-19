@@ -7,8 +7,8 @@ namespace rig::wa {
 
 bool Param::insert(const Event &e) {
   if (count_ == kCapacity) {
-    // Fold the past into the timeline (drop all but the last event that already started before this one).
-    fold(e.time);
+    // Fold the past (relative to the last processed time) into the timeline; future events are never dropped.
+    fold(now_);
     if (count_ == kCapacity) {
       ++dropped_;
       return false;
@@ -97,7 +97,9 @@ double Param::eval(double t, std::size_t &cur) const {
   return prev->value;
 }
 
-double Param::valueAt(double t) const { return eval(t, cursor_); }
+double Param::valueAt(double t) const {
+  return eval(t, cursor_);
+}
 
 void Param::fold(double t) {
   // Keep the last event that starts at or before t (it anchors what follows); drop the older ones.
@@ -117,7 +119,8 @@ bool Param::settledAt(double t) const {
 }
 
 void Param::processARate(std::int64_t frame0, double sampleRate, float *out, std::size_t n) {
-  if (count_ > 1) fold(static_cast<double>(frame0) / sampleRate);
+  now_ = static_cast<double>(frame0) / sampleRate;
+  if (count_ > 1) fold(now_);
   if (count_ == 0 || settledAt(static_cast<double>(frame0) / sampleRate)) {
     const float v = static_cast<float>(count_ == 0 ? value_ : ev_[count_ - 1].value);
     for (std::size_t i = 0; i < n; ++i) out[i] = v;
@@ -132,6 +135,7 @@ void Param::processARate(std::int64_t frame0, double sampleRate, float *out, std
 
 float Param::processKRate(std::int64_t frame0, double sampleRate) {
   const double t = static_cast<double>(frame0) / sampleRate;
+  now_ = t;
   if (count_ > 1) fold(t);
   return static_cast<float>(eval(t, cursor_));
 }

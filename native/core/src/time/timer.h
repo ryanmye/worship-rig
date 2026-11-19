@@ -16,9 +16,7 @@ class TimerQueue {
     return static_cast<std::int64_t>(std::ceil(t * sr / 128.0 - 1e-6));
   }
 
-  void at(double t, double sr, Fn fn) {
-    items_.push_back({quantumOf(t, sr), seq_++, t, std::move(fn)});
-  }
+  void at(double t, double sr, Fn fn) { items_.push_back({quantumOf(t, sr), seq_++, t, std::move(fn)}); }
 
   /** Run every timer whose quantum is <= q, in (quantum, submission) order; callbacks may schedule more. */
   void runDue(std::int64_t q) {

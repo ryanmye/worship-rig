@@ -82,8 +82,8 @@ BiquadCoeffs biquadCoeffs(BiquadType type, double freqHz, double q, double gainD
       const double k2 = 2.0 * std::sqrt(A) * alpha;
       const double ap1 = A + 1.0;
       const double am1 = A - 1.0;
-      return norm(A * (ap1 - am1 * k + k2), 2.0 * A * (am1 - ap1 * k), A * (ap1 - am1 * k - k2),
-                  ap1 + am1 * k + k2, -2.0 * (am1 + ap1 * k), ap1 + am1 * k - k2);
+      return norm(A * (ap1 - am1 * k + k2), 2.0 * A * (am1 - ap1 * k), A * (ap1 - am1 * k - k2), ap1 + am1 * k + k2,
+                  -2.0 * (am1 + ap1 * k), ap1 + am1 * k - k2);
     }
     case BiquadType::Highshelf: {
       if (f >= 1.0) return norm(1, 0, 0, 1, 0, 0);
@@ -95,8 +95,8 @@ BiquadCoeffs biquadCoeffs(BiquadType type, double freqHz, double q, double gainD
       const double k2 = 2.0 * std::sqrt(A) * alpha;
       const double ap1 = A + 1.0;
       const double am1 = A - 1.0;
-      return norm(A * (ap1 + am1 * k + k2), -2.0 * A * (am1 + ap1 * k), A * (ap1 + am1 * k - k2),
-                  ap1 - am1 * k + k2, 2.0 * (am1 - ap1 * k), ap1 - am1 * k - k2);
+      return norm(A * (ap1 + am1 * k + k2), -2.0 * A * (am1 + ap1 * k), A * (ap1 + am1 * k - k2), ap1 - am1 * k + k2,
+                  2.0 * (am1 - ap1 * k), ap1 - am1 * k - k2);
     }
   }
   return {};

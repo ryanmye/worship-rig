@@ -99,7 +99,7 @@ if(RIG_BUILD_TESTS)
   target_compile_definitions(rig_tests PRIVATE
     RIG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}" RIG_REPO_DIR="${RIG_REPO_ROOT}")
   target_link_libraries(rig_tests PRIVATE rig_fixture)
-  rig_target_defaults(rig_tests)
+  rig_test_defaults(rig_tests)
 
   foreach(suite queues param biquad wav params bridge offline voice thirdparty golden-analytic)
     add_test(NAME unit.${suite} COMMAND rig_tests -ts=${suite})
@@ -112,7 +112,10 @@ if(RIG_BUILD_TESTS)
              COMMAND ${NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen-params.mjs --check)
     set_tests_properties(unit.params-drift PROPERTIES LABELS unit)
     # fixtures the skeleton is expected to match (single-band slot EQ through the strip); grows with T02+
-    set(RIG_GOLDEN_IDS "eq-peak-a,eq-lowcut-a,eq-peak-b,eq-notch-a")
+    set(RIG_GOLDEN_IDS
+      "eq-lowshelf-a,eq-lowshelf-b,eq-lowshelf-c,eq-peak-a,eq-peak-b,eq-peak-c,eq-highshelf-a,eq-highshelf-b,eq-highshelf-c"
+      "eq-notch-a,eq-notch-b,eq-notch-c,eq-lowcut-a,eq-lowcut-b,eq-lowcut-c,eq-highcut-a,eq-highcut-b,eq-highcut-c")
+    string(REPLACE ";" "," RIG_GOLDEN_IDS "${RIG_GOLDEN_IDS}")
     add_test(NAME golden.eq
              COMMAND ${CMAKE_COMMAND} -DRENDER=$<TARGET_FILE:rig_render> -DREPO=${RIG_REPO_ROOT}
                      -DNODE=${NODE_EXECUTABLE} -DOUT=${CMAKE_BINARY_DIR}/golden-out -DIDS=${RIG_GOLDEN_IDS}

@@ -12,28 +12,44 @@
 
 using rig::Engine;
 
-static Engine *impl(rig_engine *e) { return reinterpret_cast<Engine *>(e); }
-static const Engine *impl(const rig_engine *e) { return reinterpret_cast<const Engine *>(e); }
+static Engine *impl(rig_engine *e) {
+  return reinterpret_cast<Engine *>(e);
+}
+static const Engine *impl(const rig_engine *e) {
+  return reinterpret_cast<const Engine *>(e);
+}
 
 extern "C" {
 
 const char *rig_status_string(rig_status s) {
   switch (s) {
-    case RIG_OK: return "ok";
-    case RIG_E_INVALID: return "invalid";
-    case RIG_E_STATE: return "state";
-    case RIG_E_NOMEM: return "nomem";
-    case RIG_E_UNSUPPORTED: return "unsupported";
-    case RIG_E_FULL: return "full";
-    case RIG_E_IO: return "io";
-    case RIG_E_PROTOCOL: return "protocol";
+    case RIG_OK:
+      return "ok";
+    case RIG_E_INVALID:
+      return "invalid";
+    case RIG_E_STATE:
+      return "state";
+    case RIG_E_NOMEM:
+      return "nomem";
+    case RIG_E_UNSUPPORTED:
+      return "unsupported";
+    case RIG_E_FULL:
+      return "full";
+    case RIG_E_IO:
+      return "io";
+    case RIG_E_PROTOCOL:
+      return "protocol";
   }
   return "unknown";
 }
 
-uint32_t rig_api_version(void) { return (RIG_API_VERSION_MAJOR << 16) | RIG_API_VERSION_MINOR; }
+uint32_t rig_api_version(void) {
+  return (RIG_API_VERSION_MAJOR << 16) | RIG_API_VERSION_MINOR;
+}
 
-const char *rig_version_string(void) { return "worship-rig-core 0.1.0-skeleton (" RIG_GIT_DESCRIBE ")"; }
+const char *rig_version_string(void) {
+  return "worship-rig-core 0.1.0-skeleton (" RIG_GIT_DESCRIBE ")";
+}
 
 void rig_config_init(rig_config *cfg) {
   if (!cfg) return;
@@ -56,7 +72,9 @@ rig_engine *rig_create(const rig_config *cfg, rig_status *err) {
   return reinterpret_cast<rig_engine *>(Engine::create(full, err));
 }
 
-void rig_destroy(rig_engine *e) { delete impl(e); }
+void rig_destroy(rig_engine *e) {
+  delete impl(e);
+}
 
 rig_status rig_post(rig_engine *e, const char *json, size_t len) {
   return e ? impl(e)->post(json, len) : RIG_E_INVALID;
@@ -88,9 +106,13 @@ rig_status rig_host_midi_ports(rig_engine *e, const char *ports_json, size_t len
   return RIG_E_UNSUPPORTED;  // T07 (port table, hot-plug release)
 }
 
-double rig_engine_time(const rig_engine *e) { return e ? impl(e)->engineTime() : 0.0; }
+double rig_engine_time(const rig_engine *e) {
+  return e ? impl(e)->engineTime() : 0.0;
+}
 
-rig_status rig_get_meters(const rig_engine *e, rig_meters *out) { return e ? impl(e)->getMeters(out) : RIG_E_INVALID; }
+rig_status rig_get_meters(const rig_engine *e, rig_meters *out) {
+  return e ? impl(e)->getMeters(out) : RIG_E_INVALID;
+}
 
 rig_status rig_offline_render(rig_engine *e, float *const *out, uint32_t channels, uint32_t frames) {
   return e ? impl(e)->offlineRender(out, channels, frames) : RIG_E_INVALID;
@@ -101,7 +123,9 @@ rig_status rig_offline_settle(rig_engine *e) {
   return impl(e)->realtime() ? RIG_E_STATE : RIG_OK;  // offline work is inline: nothing to wait for
 }
 
-rig_status rig_test_tap(rig_engine *e, const char *node) { return e ? impl(e)->testTap(node) : RIG_E_INVALID; }
+rig_status rig_test_tap(rig_engine *e, const char *node) {
+  return e ? impl(e)->testTap(node) : RIG_E_INVALID;
+}
 
 rig_status rig_test_inject(rig_engine *e, const char *node, const float *const *data, uint32_t channels,
                            uint64_t frames, double start_sec, float gain) {

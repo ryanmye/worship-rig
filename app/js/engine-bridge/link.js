@@ -124,10 +124,13 @@ export class BridgeLink {
     }
   }
 
-  /** One message or an ordered array (native batches one main-thread turn). Strictly in order. */
+  /**
+   * One message or an ordered array (native batches one main-thread turn). Strictly in order. Arrays may nest: the
+   * Swift shell joins several core callbacks (each already a message or an array) into one evaluateJavaScript call.
+   */
   _receive(batch) {
-    const list = Array.isArray(batch) ? batch : [batch];
-    for (const m of list) this._one(m);
+    if (Array.isArray(batch)) for (const m of batch) this._receive(m);
+    else this._one(batch);
   }
 
   _one(m) {

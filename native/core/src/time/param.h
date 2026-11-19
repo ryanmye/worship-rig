@@ -30,7 +30,8 @@ class Param {
   /** Value at time t (double precision, no state change except the search cursor). */
   double valueAt(double t) const;
 
-  /** a-rate: out[i] = value at (frame0 + i) / sampleRate. Folds past events first (keeps the last one before frame0). */
+  /** a-rate: out[i] = value at (frame0 + i) / sampleRate. Folds past events first (keeps the last one before frame0).
+   */
   void processARate(std::int64_t frame0, double sampleRate, float *out, std::size_t n);
   /** k-rate: the value at the first frame of the quantum. */
   float processKRate(std::int64_t frame0, double sampleRate);
@@ -44,10 +45,10 @@ class Param {
   enum class Type : std::uint8_t { Set, Linear, Exp, Target };
   struct Event {
     Type type;
-    double value;   // target value (Set/Linear/Exp end value, Target asymptote)
-    double time;    // event time (ramp: END time)
-    double tau;     // Target time constant
-    double start;   // Target: value of the timeline at `time` before this event (the curve's starting value)
+    double value;  // target value (Set/Linear/Exp end value, Target asymptote)
+    double time;   // event time (ramp: END time)
+    double tau;    // Target time constant
+    double start;  // Target: value of the timeline at `time` before this event (the curve's starting value)
   };
   bool insert(const Event &e);
   double endValue(const Event &e) const { return e.value; }
@@ -58,6 +59,7 @@ class Param {
   Event ev_[kCapacity];
   std::size_t count_ = 0;
   mutable std::size_t cursor_ = 0;
+  double now_ = 0.0;  // last time processed: events at or before it can be folded
   std::uint32_t dropped_ = 0;
 };
 

@@ -11,12 +11,15 @@ namespace rig {
 bool jsonToParamValue(const ParamRow &row, const yyjson_val *v, double &out) {
   if (!v) return false;
   if (row.kind == 1) {  // bool: booleans, numbers >= .5, true/on/1
-    if (yyjson_is_bool(const_cast<yyjson_val *>(v))) out = yyjson_get_bool(const_cast<yyjson_val *>(v)) ? 1 : 0;
-    else if (yyjson_is_num(const_cast<yyjson_val *>(v))) out = yyjson_get_num(const_cast<yyjson_val *>(v)) >= 0.5;
+    if (yyjson_is_bool(const_cast<yyjson_val *>(v)))
+      out = yyjson_get_bool(const_cast<yyjson_val *>(v)) ? 1 : 0;
+    else if (yyjson_is_num(const_cast<yyjson_val *>(v)))
+      out = yyjson_get_num(const_cast<yyjson_val *>(v)) >= 0.5;
     else if (yyjson_is_str(const_cast<yyjson_val *>(v))) {
       const char *s = yyjson_get_str(const_cast<yyjson_val *>(v));
       out = (!std::strcmp(s, "true") || !std::strcmp(s, "on") || !std::strcmp(s, "1")) ? 1 : 0;
-    } else return false;
+    } else
+      return false;
     return true;
   }
   if (row.kind == 2) {  // enum: member name or rounded index
@@ -33,14 +36,18 @@ bool jsonToParamValue(const ParamRow &row, const yyjson_val *v, double &out) {
     return false;
   }
   yyjson_val *mv = const_cast<yyjson_val *>(v);
-  if (yyjson_is_num(mv)) out = clampNumber(row, yyjson_get_num(mv));
-  else if (yyjson_is_bool(mv)) out = clampNumber(row, yyjson_get_bool(mv) ? 1 : 0);
+  if (yyjson_is_num(mv))
+    out = clampNumber(row, yyjson_get_num(mv));
+  else if (yyjson_is_bool(mv))
+    out = clampNumber(row, yyjson_get_bool(mv) ? 1 : 0);
   else if (yyjson_is_str(mv)) {
     char *end = nullptr;
     const double d = std::strtod(yyjson_get_str(mv), &end);
     out = clampNumber(row, (end && *end == 0 && end != yyjson_get_str(mv)) ? d : NAN);
-  } else if (yyjson_is_null(mv)) out = row.def;
-  else return false;
+  } else if (yyjson_is_null(mv))
+    out = row.def;
+  else
+    return false;
   return true;
 }
 
@@ -88,11 +95,16 @@ void parseEq(const yyjson_val *eq, SlotEqSpec &spec) {
       const ParamRow *row = findParam(p);
       double d;
       if (!row || !jsonToParamValue(*row, fv, d)) continue;
-      if (!std::strcmp(f, "on")) b.on = d != 0.0;
-      else if (!std::strcmp(f, "type")) b.type = static_cast<int>(d);
-      else if (!std::strcmp(f, "hz")) b.hz = d;
-      else if (!std::strcmp(f, "db")) b.db = d;
-      else b.q = d;
+      if (!std::strcmp(f, "on"))
+        b.on = d != 0.0;
+      else if (!std::strcmp(f, "type"))
+        b.type = static_cast<int>(d);
+      else if (!std::strcmp(f, "hz"))
+        b.hz = d;
+      else if (!std::strcmp(f, "db"))
+        b.db = d;
+      else
+        b.q = d;
     }
   }
   spec.cutHz = numField(eq, "cutHz", "slots.0.eq.cutHz", rowDefault("slots.0.eq.cutHz"));

@@ -8,13 +8,13 @@
 namespace rig {
 
 struct ParamRow {
-  const char *path;     // "slots.<i>.gain", "fx.reverb.size", "master.volume", ...
-  int kind;             // 0 number, 1 bool, 2 enum
+  const char *path;            // "slots.<i>.gain", "fx.reverb.size", "master.volume", ...
+  int kind;                    // 0 number, 1 bool, 2 enum
   double def, min, max, step;  // NAN where absent (bool/enum have no range)
   bool log;
-  const char *enums;    // "a|b|c" for enum rows, else ""
-  const char *coalesce; // coalescing key or nullptr
-  int smoothing;        // index into smoothingText()
+  const char *enums;     // "a|b|c" for enum rows, else ""
+  const char *coalesce;  // coalescing key or nullptr
+  int smoothing;         // index into smoothingText()
 };
 
 const ParamRow *paramRows();

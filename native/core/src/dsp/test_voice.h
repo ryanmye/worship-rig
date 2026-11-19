@@ -26,7 +26,7 @@ class TestVoice {
   InstKind kind_ = InstKind::TestSine;
   int note_ = 0;
   float amp_ = 0;
-  double inc_ = 0;           // phase increment per frame (cycles)
+  double inc_ = 0;  // phase increment per frame (cycles)
   std::int64_t start_ = 0;
   std::int64_t endFrame_ = INT64_MAX;
   wa::Param env_;

@@ -8,7 +8,8 @@ enum class InstKind : unsigned char { None = 0, TestSine, TestSaw };
 
 struct SlotSpec {
   InstKind inst = InstKind::None;
-  double attack = 0.01, decay = 0.1, sustain = 0.7, release = 0.2;  // test voice ADSR (decay/release are time constants)
+  double attack = 0.01, decay = 0.1, sustain = 0.7,
+         release = 0.2;  // test voice ADSR (decay/release are time constants)
   int lowNote = 0, highNote = 127;
   SlotEqSpec eq;
 };

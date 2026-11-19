@@ -8,7 +8,7 @@ namespace rig::tools {
 
 struct Fixture {
   std::string id;
-  std::string json;      // the fixture object as JSON text
+  std::string json;            // the fixture object as JSON text
   std::string classification;  // from the manifest entry, "" for mini-fixtures
 };
 

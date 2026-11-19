@@ -22,7 +22,9 @@ using EventQueue = SpscQueue<AudioEvent, 4096>;
 /** Param target ids carried by the Param* ops. */
 namespace pid {
 inline constexpr std::uint32_t kFader = 0, kPan = 1, kSlotStride = 8, kMasterVolume = 100;
-inline constexpr std::uint32_t slot(std::uint32_t i, std::uint32_t which) { return i * kSlotStride + which; }
+inline constexpr std::uint32_t slot(std::uint32_t i, std::uint32_t which) {
+  return i * kSlotStride + which;
+}
 }  // namespace pid
 
 enum class Tap : std::uint32_t { Out = 0, Slot0Pan, Slot1Pan, Slot2Pan, Slot3Pan };
@@ -50,7 +52,10 @@ class Graph {
   std::uint32_t liveVoices() const;
   void setSampleRate(double sr) { sr_ = sr; }
   /** Host-side numbers folded into the next meter snapshot (audio thread). */
-  void setHostStats(float cpu, std::uint32_t xruns) { cpu_ = cpu; xruns_ = xruns; }
+  void setHostStats(float cpu, std::uint32_t xruns) {
+    cpu_ = cpu;
+    xruns_ = xruns;
+  }
 
  private:
   struct Slot {

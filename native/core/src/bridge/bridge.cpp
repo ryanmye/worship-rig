@@ -14,7 +14,7 @@ namespace rig {
 namespace {
 
 struct Req {
-  yyjson_val *m;
+  yyjson_val *m = nullptr;
   bool hasId = false;
   std::uint64_t id = 0;
   std::string op;
@@ -59,7 +59,9 @@ const char *getStr(yyjson_val *o, const char *k) {
   return v && yyjson_is_str(v) ? yyjson_get_str(v) : nullptr;
 }
 /** `when`: absent / null / non-numeric = now (-1). */
-double getWhen(yyjson_val *o) { return getNum(o, "when", -1.0); }
+double getWhen(yyjson_val *o) {
+  return getNum(o, "when", -1.0);
+}
 
 void opHello(Engine &e, const Req &r) {
   if (getNum(r.m, "protocol", 1) != RIG_BRIDGE_PROTOCOL) {
@@ -115,8 +117,10 @@ void opCommit(Engine &e, const Req &r) {
 
 bool setOne(Engine &e, const Req &r, const char *path, yyjson_val *value, double glide, double when, bool single) {
   const SetResult s = e.model().set(path, value, glide, when);
-  if (single && s.status == SetResult::Unknown) fail(e, r, "unknown-param", s.message);
-  else if (single && s.status == SetResult::Bad) fail(e, r, "bad-request", s.message);
+  if (single && s.status == SetResult::Unknown)
+    fail(e, r, "unknown-param", s.message);
+  else if (single && s.status == SetResult::Bad)
+    fail(e, r, "bad-request", s.message);
   return s.status == SetResult::Applied;
 }
 
@@ -134,8 +138,8 @@ void opSet(Engine &e, const Req &r) {
         yyjson_val *p = yyjson_arr_get(it, 0);
         yyjson_val *g = yyjson_arr_size(it) > 2 ? yyjson_arr_get(it, 2) : nullptr;
         if (yyjson_is_str(p))
-          applied = setOne(e, r, yyjson_get_str(p), yyjson_arr_get(it, 1), g && yyjson_is_num(g) ? yyjson_get_num(g) : 0.0,
-                           when, false);
+          applied = setOne(e, r, yyjson_get_str(p), yyjson_arr_get(it, 1),
+                           g && yyjson_is_num(g) ? yyjson_get_num(g) : 0.0, when, false);
       }
       j.elemBool(applied);
     }
@@ -157,8 +161,10 @@ void opPlay(Engine &e, const Req &r) {
   const std::string k = ev;
   const double when = getWhen(r.m);
   bool done = false;
-  if (k == "on") done = e.model().noteOn(static_cast<int>(getNum(r.m, "n", 60)), static_cast<int>(getNum(r.m, "vel", 100)), when);
-  else if (k == "off") done = e.model().noteOff(static_cast<int>(getNum(r.m, "n", 60)), when);
+  if (k == "on")
+    done = e.model().noteOn(static_cast<int>(getNum(r.m, "n", 60)), static_cast<int>(getNum(r.m, "vel", 100)), when);
+  else if (k == "off")
+    done = e.model().noteOff(static_cast<int>(getNum(r.m, "n", 60)), when);
   else if (k == "panic") {
     e.model().panic(when);
     done = true;
@@ -172,10 +178,14 @@ void opGet(Engine &e, const Req &r) {
   const char *what = getStr(r.m, "what");
   if (!what) return fail(e, r, "bad-request", "get: what required");
   const std::string w = what;
-  if (w == "state") ok(e, r, e.model().stateJson());
-  else if (w == "stats") ok(e, r, e.statsJson());
-  else if (w == "devices") ok(e, r, e.deviceListJson());
-  else fail(e, r, "unsupported", "get: '" + w + "' is not implemented in the T00 skeleton");
+  if (w == "state")
+    ok(e, r, e.model().stateJson());
+  else if (w == "stats")
+    ok(e, r, e.statsJson());
+  else if (w == "devices")
+    ok(e, r, e.deviceListJson());
+  else
+    fail(e, r, "unsupported", "get: '" + w + "' is not implemented in the T00 skeleton");
 }
 
 }  // namespace
@@ -189,7 +199,8 @@ bool Bridge::handle(const char *json, std::size_t len) {
       warn(e_, "message is not an object", "bad-request", "");
       return;
     }
-    Req r{m};
+    Req r;
+    r.m = m;
     yyjson_val *id = yyjson_obj_get(m, "id");
     if (id && yyjson_is_uint(id)) {
       r.hasId = true;
@@ -211,17 +222,24 @@ bool Bridge::handle(const char *json, std::size_t len) {
       return opHello(e_, r);
     }
     if (!helloDone_) return fail(e_, r, "protocol", "hello must be the first message");
-    if (r.op == "audio") opAudio(e_, r);
-    else if (r.op == "prepare") opPrepare(e_, r);
-    else if (r.op == "commit") opCommit(e_, r);
-    else if (r.op == "set") opSet(e_, r);
-    else if (r.op == "play") opPlay(e_, r);
-    else if (r.op == "get") opGet(e_, r);
-    else if (r.op == "config") ok(e_, r, "{}");  // accepted, not acted on in T00
-    else if (r.op == "cache" || r.op == "song" || r.op == "drone" || r.op == "click" || r.op == "midi" ||
-             r.op == "rec")
+    if (r.op == "audio")
+      opAudio(e_, r);
+    else if (r.op == "prepare")
+      opPrepare(e_, r);
+    else if (r.op == "commit")
+      opCommit(e_, r);
+    else if (r.op == "set")
+      opSet(e_, r);
+    else if (r.op == "play")
+      opPlay(e_, r);
+    else if (r.op == "get")
+      opGet(e_, r);
+    else if (r.op == "config")
+      ok(e_, r, "{}");  // accepted, not acted on in T00
+    else if (r.op == "cache" || r.op == "song" || r.op == "drone" || r.op == "click" || r.op == "midi" || r.op == "rec")
       fail(e_, r, "unsupported", "op '" + r.op + "' is not implemented in the T00 skeleton");
-    else fail(e_, r, "unknown-op", "unknown op '" + r.op + "'");
+    else
+      fail(e_, r, "unknown-op", "unknown op '" + r.op + "'");
   };
   if (yyjson_is_arr(root)) {
     std::size_t i, n;

@@ -170,8 +170,11 @@ RunResult runFixture(const Fixture &f, const std::string &goldenDir, double sr) 
       yyjson_doc_free(doc);
       return res;
     }
+    // The reference (tools/golden/page.js) always injects a 2-channel buffer: a mono stimulus is dual-mono, which
+    // matters because the stereo pan law is unity at centre while the mono law is -3 dB.
     std::vector<const float *> ptrs;
     for (auto &c : wav.ch) ptrs.push_back(c.data());
+    if (ptrs.size() == 1) ptrs.push_back(wav.ch[0].data());
     const rig_status s = rig_test_inject(e, at, ptrs.data(), static_cast<uint32_t>(ptrs.size()), wav.frames(),
                                          num(inj, "start", 0.0), static_cast<float>(num(inj, "gain", 1.0)));
     if (s != RIG_OK) skipped.insert(std::string("inject ") + at);
@@ -195,10 +198,11 @@ RunResult runFixture(const Fixture &f, const std::string &goldenDir, double sr) 
            ",\"when\":" + when + "}");
     else if (ty == "param")
       postSkippable("{\"v\":1,\"op\":\"set\",\"id\":7,\"path\":" + toJson(yyjson_obj_get(ev, "path")) +
-                        ",\"value\":" + toJson(yyjson_obj_get(ev, "value")) + ",\"glide\":" +
-                        std::to_string(num(ev, "glide", 0.0)) + ",\"when\":" + when + "}",
+                        ",\"value\":" + toJson(yyjson_obj_get(ev, "value")) +
+                        ",\"glide\":" + std::to_string(num(ev, "glide", 0.0)) + ",\"when\":" + when + "}",
                     "param events");
-    else skipped.insert("event " + ty);
+    else
+      skipped.insert("event " + ty);
   }
   // 5. render
   const size_t frames = static_cast<size_t>(std::ceil(seconds * sr));

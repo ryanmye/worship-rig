@@ -1,0 +1,15 @@
+{
+  "comment": "T00 test voice fixtures (instrument type test); schema of native/golden/manifest.json.",
+  "fixtures": [
+    {"id": "test-sine-adsr", "seconds": 1.2, "seed": 1,
+     "setup": {"patch": {"slots": [{"instrument": {"type": "test", "id": "sine"}, "gain": 1, "pan": 0,
+       "params": {"attack": 0.01, "decay": 0.1, "sustain": 0.7, "release": 0.2}}, null, null, null]},
+       "tap": "slot0.pan"},
+     "events": [{"t": 0.1, "type": "noteOn", "note": 69, "vel": 100}, {"t": 0.6, "type": "noteOff", "note": 69}]},
+    {"id": "test-saw-middecay-release", "seconds": 0.9, "seed": 1,
+     "setup": {"patch": {"slots": [{"instrument": {"type": "test", "id": "saw"}, "gain": 0.5, "pan": 0.5,
+       "params": {"attack": 0.01, "decay": 0.1, "sustain": 0.7, "release": 0.05}}, null, null, null]},
+       "tap": "slot0.pan"},
+     "events": [{"t": 0.05, "type": "noteOn", "note": 57, "vel": 64}, {"t": 0.3, "type": "noteOff", "note": 57}]}
+  ]
+}

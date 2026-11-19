@@ -232,10 +232,41 @@ async function main() {
     await sleep(seg / 2);
     await page.evaluate(() => { globalThis.__rig.controller.toggleClick(); });
   });
-  await step('Edit view and back', async () => {
-    await page.evaluate(() => { globalThis.__rig.controller.toggleView(); });
+  await step('settings that reach the engine (mono, click, output, low-resource)', async () => {
+    await page.evaluate(() => {
+      const { store } = globalThis.__rig;
+      store.set('settings.monoOutput', true);
+      store.set('settings.outputDeviceId', 'mock-device');
+      store.set('settings.click', { level: 0.4, record: true });
+      store.set('settings.midiClockOut', 'Mock Out');
+      store.set('settings.lowResource', true);
+    });
     await sleep(seg);
-    await page.evaluate(() => { globalThis.__rig.controller.toggleView(); });
+    await page.evaluate(() => {
+      const { store } = globalThis.__rig;
+      store.set('settings.lowResource', false);
+      store.set('settings.monoOutput', false);
+    });
+    await sleep(seg / 2);
+  });
+  await step('Edit view: open Advanced (EQ analyser, play range) and back', async () => {
+    await page.evaluate(() => globalThis.__rig.ctx.setView('edit'));
+    await sleep(seg / 2);
+    await page.evaluate(async () => {
+      let d = null;
+      const tab = document.querySelector('#view-edit [role=tab][data-block]');
+      if (tab) tab.click();
+      for (let i = 0; i < 100 && !d; i++) {
+        d = document.querySelector('#view-edit details[data-sec$="-adv"]');
+        if (!d) await new Promise((r) => setTimeout(r, 50));
+      }
+      if (!d) throw new Error(`no Advanced section found (view-edit hidden=${document.querySelector('#view-edit').hidden}, `
+        + `${document.querySelectorAll('#view-edit *').length} elements)`);
+      d.open = true;
+      d.dispatchEvent(new Event('toggle'));
+    });
+    await sleep(seg);
+    await page.evaluate(() => globalThis.__rig.ctx.setView('perform'));
   });
   await step('Settings open / close', async () => {
     await page.click('#btn-settings');
@@ -259,6 +290,9 @@ async function main() {
   srv.close();
 
   // ---- analysis
+  // feature-detected by eq-keyboard.js and absent from the Web engine too (ENGINE_CONTRACT 1.7): not a gap
+  const OPTIONAL_PROBES = new Set(['slotAnalysers', 'auditionNote']);
+  const optionalProbes = new Set();
   const IGNORE = new Set(['constructor', 'removeEventListener', 'dispatchEvent', 'toJSON', 'inspect', 'nodeType']);
   const memberOf = (k) => (k.startsWith('has:') ? null : k.replace(/^undefined:/, ''));
   const touched = new Set();
@@ -267,6 +301,10 @@ async function main() {
   for (const k of Object.keys(endSeen)) {
     const name = memberOf(k);
     if (!name || IGNORE.has(name)) continue;
+    if (OPTIONAL_PROBES.has(name)) {
+      optionalProbes.add(name);
+      continue;
+    }
     if (k.startsWith('undefined:')) missingOnShim.add(name);
     if (name === 'drone' || name.startsWith('ctx.') || contract.has(name)) touched.add(name);
     else notInContract.add(name);
@@ -279,7 +317,7 @@ async function main() {
     session: { seconds: SECONDS, steps, ui: endUi },
     engineMembers: {
       touchedByUi: topTouched, ctxMembersTouched: ctxMembers,
-      notInContract: [...notInContract].sort(), missingOnShim: [...missingOnShim].sort(),
+      optionalProbes: [...optionalProbes].sort(), notInContract: [...notInContract].sort(), missingOnShim: [...missingOnShim].sort(),
       contractMembersNeverTouched: untouched,
       counts: Object.fromEntries(Object.entries(endSeen).filter(([k]) => !k.startsWith('has:')).sort((a, b) => b[1] - a[1]).slice(0, 25)),
     },
@@ -307,6 +345,7 @@ function printReport(r) {
   L('ENGINE MEMBERS touched by the UI');
   L(`  ${r.engineMembers.touchedByUi.join(', ')}`);
   L(`  ctx.*: ${r.engineMembers.ctxMembersTouched.join(', ')}`);
+  L(`  optional probes (absent in the Web engine too): ${r.engineMembers.optionalProbes.join(', ') || '(none)'}`);
   L(`  NOT IN CONTRACT: ${r.engineMembers.notInContract.join(', ') || '(none)'}`);
   L(`  MISSING ON SHIM: ${r.engineMembers.missingOnShim.join(', ') || '(none)'}`);
   L(`  contract members never touched: ${r.engineMembers.contractMembersNeverTouched.join(', ')}`);

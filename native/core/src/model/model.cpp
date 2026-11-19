@@ -17,7 +17,9 @@ Model::Model(CommandSink &sink) : sink_(sink) {
   trackedMaster_ = mv ? mv->def : 0.5;
 }
 
-double Model::now() const { return static_cast<double>(sink_.renderedFrames()) / sink_.sampleRate(); }
+double Model::now() const {
+  return static_cast<double>(sink_.renderedFrames()) / sink_.sampleRate();
+}
 
 std::int64_t Model::frameFor(double when) const {
   if (!(when >= 0.0)) return kFrameNow;
@@ -141,16 +143,23 @@ SetResult Model::set(std::string_view path, const yyjson_val *value, double glid
   } else if (rp.rfind("slots.<i>.eq.", 0) == 0 && committedAny_) {
     SlotEqSpec &eq = active_.slots[slot].spec.eq;
     const std::string_view f = rp.substr(13);
-    if (f == "cutHz") eq.cutHz = v;
-    else if (f == "hiCutHz") eq.hiCutHz = v;
+    if (f == "cutHz")
+      eq.cutHz = v;
+    else if (f == "hiCutHz")
+      eq.hiCutHz = v;
     else if (f.size() > 3 && f[0] == 'b' && f[1] >= '1' && f[1] <= '8' && f[2] == '.') {
       EqBand &b = eq.bands[f[1] - '1'];
       const std::string_view k = f.substr(3);
-      if (k == "on") b.on = v != 0.0;
-      else if (k == "type") b.type = static_cast<int>(v);
-      else if (k == "hz") b.hz = v;
-      else if (k == "db") b.db = v;
-      else if (k == "q") b.q = v;
+      if (k == "on")
+        b.on = v != 0.0;
+      else if (k == "type")
+        b.type = static_cast<int>(v);
+      else if (k == "hz")
+        b.hz = v;
+      else if (k == "db")
+        b.db = v;
+      else if (k == "q")
+        b.q = v;
     }
     attach(static_cast<std::size_t>(slot), when);  // step change; T02 adds the glide / chain crossfade
   } else {
@@ -191,8 +200,10 @@ void Model::panic(double when) {
 void Model::onAudioEvent(const AudioEvent &e) {
   switch (e.kind) {
     case EventKind::Garbage:
-      if (e.aux == static_cast<std::uint32_t>(GarbageKind::SlotSpec)) delete static_cast<SlotSpec *>(e.ptr);
-      else if (e.aux == static_cast<std::uint32_t>(GarbageKind::InjectBuffer)) delete static_cast<InjectBuffer *>(e.ptr);
+      if (e.aux == static_cast<std::uint32_t>(GarbageKind::SlotSpec))
+        delete static_cast<SlotSpec *>(e.ptr);
+      else if (e.aux == static_cast<std::uint32_t>(GarbageKind::InjectBuffer))
+        delete static_cast<InjectBuffer *>(e.ptr);
       break;
     case EventKind::VoiceEnded:
       ++stats_.voicesEnded;
@@ -207,7 +218,12 @@ std::string Model::stateJson() const {
   j.begin().kvBool("committed", committedAny_);
   j.key("slots").beginArray();
   for (const auto &s : active_.slots) {
-    j.begin().kvBool("present", s.present).kv("type", s.instType).kv("id", s.instId).kv("gain", s.gain).kv("pan", s.pan);
+    j.begin()
+        .kvBool("present", s.present)
+        .kv("type", s.instType)
+        .kv("id", s.instId)
+        .kv("gain", s.gain)
+        .kv("pan", s.pan);
     j.end();
   }
   j.endArray().end();

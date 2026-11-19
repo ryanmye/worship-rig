@@ -57,7 +57,7 @@ class Engine final : public CommandSink {
 
   // Used by the bridge (control thread / offline caller).
   Model &model() { return model_; }
-  void emit(std::string &&json);   // queue one message for the event callback (flushed per turn / immediately offline)
+  void emit(std::string &&json);  // queue one message for the event callback (flushed per turn / immediately offline)
   void flush();
   const rig_config &config() const { return cfg_; }
   std::uint32_t seed() const { return seed_; }

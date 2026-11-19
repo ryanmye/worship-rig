@@ -10,7 +10,9 @@
 namespace rig::rt {
 
 inline thread_local int g_renderDepth = 0;
-inline bool inRender() { return g_renderDepth > 0; }
+inline bool inRender() {
+  return g_renderDepth > 0;
+}
 
 /** Marks the audio-thread section and sets flush-to-zero / denormals-are-zero, restoring both on exit. */
 class RenderScope {

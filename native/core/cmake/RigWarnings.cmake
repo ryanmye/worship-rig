@@ -8,3 +8,10 @@ function(rig_target_defaults tgt)
     target_compile_options(${tgt} PRIVATE /W4 /WX /fp:precise)
   endif()
 endfunction()
+
+# Tests: same warnings minus the numeric-conversion family (test code mixes int/double freely).
+function(rig_test_defaults tgt)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(${tgt} PRIVATE -Wall -Wextra -Wpedantic -Werror -ffp-contract=off -fno-finite-math-only)
+  endif()
+endfunction()

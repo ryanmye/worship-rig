@@ -7,9 +7,15 @@
 namespace rig {
 #include "params/params_gen.inc"
 
-const ParamRow *paramRows() { return kParamRows; }
-std::size_t paramCount() { return RIG_PARAM_COUNT; }
-const char *smoothingText(int idx) { return idx >= 0 && idx < RIG_SMOOTHING_COUNT ? kSmoothingText[idx] : ""; }
+const ParamRow *paramRows() {
+  return kParamRows;
+}
+std::size_t paramCount() {
+  return RIG_PARAM_COUNT;
+}
+const char *smoothingText(int idx) {
+  return idx >= 0 && idx < RIG_SMOOTHING_COUNT ? kSmoothingText[idx] : "";
+}
 
 const ParamRow *findParam(std::string_view path, int *slot, bool *dynamic) {
   if (dynamic) *dynamic = false;
@@ -24,9 +30,8 @@ const ParamRow *findParam(std::string_view path, int *slot, bool *dynamic) {
   }
   const ParamRow *lo = kParamRows;
   const ParamRow *hi = kParamRows + RIG_PARAM_COUNT;
-  const ParamRow *it = std::lower_bound(lo, hi, norm, [](const ParamRow &r, const std::string &k) {
-    return std::strcmp(r.path, k.c_str()) < 0;
-  });
+  const ParamRow *it = std::lower_bound(
+      lo, hi, norm, [](const ParamRow &r, const std::string &k) { return std::strcmp(r.path, k.c_str()) < 0; });
   return (it != hi && norm == it->path) ? it : nullptr;
 }
 

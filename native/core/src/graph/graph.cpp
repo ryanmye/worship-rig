@@ -30,7 +30,9 @@ std::uint32_t Graph::liveVoices() const {
   return n;
 }
 
-void Graph::pushEvent(const AudioEvent &e) { out_.push(e); }
+void Graph::pushEvent(const AudioEvent &e) {
+  out_.push(e);
+}
 
 void Graph::garbage(GarbageKind k, void *p) {
   if (!p) return;
@@ -72,11 +74,16 @@ void Graph::apply(const Command &c) {
       wa::Param *p = paramFor(c.target);
       if (!p) return;
       const std::uint32_t before = p->dropped();
-      if (c.op == Op::ParamSet) p->setValueAtTime(c.f.a, c.f.b);
-      else if (c.op == Op::ParamLinear) p->linearRampToValueAtTime(c.f.a, c.f.b);
-      else if (c.op == Op::ParamExp) p->exponentialRampToValueAtTime(c.f.a, c.f.b);
-      else if (c.op == Op::ParamTarget) p->setTargetAtTime(c.f.a, c.f.b, c.f.c);
-      else p->cancelAndHoldAtTime(c.f.b);
+      if (c.op == Op::ParamSet)
+        p->setValueAtTime(c.f.a, c.f.b);
+      else if (c.op == Op::ParamLinear)
+        p->linearRampToValueAtTime(c.f.a, c.f.b);
+      else if (c.op == Op::ParamExp)
+        p->exponentialRampToValueAtTime(c.f.a, c.f.b);
+      else if (c.op == Op::ParamTarget)
+        p->setTargetAtTime(c.f.a, c.f.b, c.f.c);
+      else
+        p->cancelAndHoldAtTime(c.f.b);
       stats_.paramDropped.fetch_add(p->dropped() - before, std::memory_order_relaxed);
       break;
     }
@@ -121,8 +128,10 @@ void Graph::apply(const Command &c) {
         for (auto &v : s.voices) {
           if (!v.active() || v.released()) continue;
           if (c.op == Op::NoteOff && v.note() != static_cast<int>(c.aux)) continue;
-          if (c.op == Op::Panic) v.kill();
-          else v.release(*s.spec, c.frame, sr_);
+          if (c.op == Op::Panic)
+            v.kill();
+          else
+            v.release(*s.spec, c.frame, sr_);
         }
       }
       break;
@@ -163,19 +172,20 @@ void Graph::renderSlot(std::size_t si, std::int64_t q0, float (*sum)[Q], float (
   if (si == 0 && inject_) {  // slot0.strip injection
     const InjectBuffer &ib = *inject_;
     const long long a = std::max<long long>(q0, ib.startFrame);
-    const long long b = std::min<long long>(q0 + static_cast<long long>(Q),
-                                            ib.startFrame + static_cast<long long>(ib.frames));
+    const long long b =
+        std::min<long long>(q0 + static_cast<long long>(Q), ib.startFrame + static_cast<long long>(ib.frames));
     if (a < b) {
       any = true;
       nch = static_cast<int>(ib.channels);
       for (long long f = a; f < b; ++f)
-        for (int c = 0; c < nch; ++c)
-          in[c][f - q0] += ib.data[c][f - ib.startFrame] * ib.gain;
+        for (int c = 0; c < nch; ++c) in[c][f - q0] += ib.data[c][f - ib.startFrame] * ib.gain;
     }
   }
   const int tailQuanta = static_cast<int>(6.0 * sr_ / Q);  // filter ring-out after the last input (notch Q 10 at 60 Hz)
-  if (any) s.tail = s.eq.filters() > 0 ? tailQuanta : 1;
-  else if (s.tail > 0) --s.tail;
+  if (any)
+    s.tail = s.eq.filters() > 0 ? tailQuanta : 1;
+  else if (s.tail > 0)
+    --s.tail;
   else {
     if (tapBuf) std::memset(tapBuf, 0, 2 * Q * sizeof(float));
     return;

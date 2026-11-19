@@ -8,7 +8,9 @@
 
 #include "rig/rig_engine.h"
 
-static void post(rig_engine *e, const std::string &m) { rig_post(e, m.data(), m.size()); }
+static void post(rig_engine *e, const std::string &m) {
+  rig_post(e, m.data(), m.size());
+}
 
 static double run(const char *label, int voices, double seconds, double sr, bool eq) {
   rig_config cfg;
@@ -22,10 +24,11 @@ static double run(const char *label, int voices, double seconds, double sr, bool
   const int perSlot = (voices + 3) / 4;
   for (int s = 0; s < 4; ++s) {
     slots += s ? "," : "";
-    slots += voices ? std::string(R"({"instrument":{"type":"test","id":")") + (s % 2 ? "saw" : "sine") +
-                          R"("},"gain":0.5,"params":{"attack":0.01,"sustain":0.7,"release":0.2})" +
-                          (eq ? R"(,"eq":{"b4":{"on":true,"type":"peak","hz":1000,"db":6,"q":1},"cutHz":80})" : "") + "}"
-                    : "null";
+    slots += voices
+                 ? std::string(R"({"instrument":{"type":"test","id":")") + (s % 2 ? "saw" : "sine") +
+                       R"("},"gain":0.5,"params":{"attack":0.01,"sustain":0.7,"release":0.2})" +
+                       (eq ? R"(,"eq":{"b4":{"on":true,"type":"peak","hz":1000,"db":6,"q":1},"cutHz":80})" : "") + "}"
+                 : "null";
   }
   slots += "]";
   post(e, R"({"v":1,"op":"prepare","id":1,"patch":{"slots":)" + slots + "}}");
@@ -53,7 +56,6 @@ int main(int argc, char **argv) {
   const double seconds = argc > 1 ? std::atof(argv[1]) : 20.0;
   const double sr = argc > 2 ? std::atof(argv[2]) : 48000.0;
   run("empty graph", 0, seconds, sr, false);
-  run("4 strips, 0 voices (slots attached)", 0, seconds, sr, false);
   run("32 test voices (4 strips)", 32, seconds, sr, false);
   run("32 test voices + EQ (hp80 + peak)", 32, seconds, sr, true);
   return 0;

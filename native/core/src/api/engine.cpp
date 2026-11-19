@@ -90,7 +90,9 @@ void Engine::log(int level, const std::string &msg) {
   if (cfg_.on_log) cfg_.on_log(cfg_.log_user, level, msg.c_str());
 }
 
-void Engine::emit(std::string &&json) { outBatch_.push_back(std::move(json)); }
+void Engine::emit(std::string &&json) {
+  outBatch_.push_back(std::move(json));
+}
 
 void Engine::flush() {
   if (outBatch_.empty()) return;
@@ -215,8 +217,10 @@ void Engine::fifoRead(float *const *out, uint32_t channels, uint32_t frames, boo
     }
     const uint32_t n = std::min<uint32_t>(frames - done, Q - fifoPos_);
     for (uint32_t c = 0; c < channels; ++c) {
-      if (c < outCh_) std::memcpy(out[c] + done, fifo_[c] + fifoPos_, n * sizeof(float));
-      else std::memset(out[c] + done, 0, n * sizeof(float));
+      if (c < outCh_)
+        std::memcpy(out[c] + done, fifo_[c] + fifoPos_, n * sizeof(float));
+      else
+        std::memset(out[c] + done, 0, n * sizeof(float));
     }
     done += n;
     fifoPos_ += n;
@@ -251,7 +255,8 @@ rig_status Engine::offlineRender(float *const *out, uint32_t channels, uint32_t 
 rig_status Engine::midiIn(const char *port, const std::uint8_t *bytes, std::size_t len, std::uint64_t hostTimeNs) {
   if (!bytes && len) return RIG_E_INVALID;
   std::uint16_t pid = 0;
-  for (const char *p = port ? port : ""; *p; ++p) pid = static_cast<std::uint16_t>(pid * 31u + static_cast<unsigned char>(*p));
+  for (const char *p = port ? port : ""; *p; ++p)
+    pid = static_cast<std::uint16_t>(pid * 31u + static_cast<unsigned char>(*p));
   rig_status st = RIG_OK;
   for (std::size_t off = 0; off < len; off += 13) {
     MidiIn m{};
@@ -349,10 +354,12 @@ rig_status Engine::testTap(const char *node) {
   if (!(cfg_.flags & RIG_FLAG_TEST_API) || realtime()) return RIG_E_UNSUPPORTED;
   std::uint32_t id;
   const std::string n = node ? node : "";
-  if (n == "out") id = 0;
+  if (n == "out")
+    id = 0;
   else if (n.size() == 9 && n.compare(0, 4, "slot") == 0 && n[4] >= '0' && n[4] <= '3' && n.compare(5, 4, ".pan") == 0)
     id = static_cast<std::uint32_t>(n[4] - '0') + 1;
-  else return RIG_E_UNSUPPORTED;
+  else
+    return RIG_E_UNSUPPORTED;
   Command c{};
   c.op = Op::TestTap;
   c.frame = kFrameNow;
@@ -394,9 +401,12 @@ rig_status Engine::testInject(const char *node, const float *const *data, uint32
 std::size_t Engine::testQuery(const char *what, char *buf, std::size_t cap) {
   const std::string w = what ? what : "";
   std::string out;
-  if (w == "stats") out = statsJson();
-  else if (w == "getState") out = model_.stateJson();
-  else out = "null";
+  if (w == "stats")
+    out = statsJson();
+  else if (w == "getState")
+    out = model_.stateJson();
+  else
+    out = "null";
   if (buf && cap) {
     const std::size_t n = std::min(out.size(), cap - 1);
     std::memcpy(buf, out.data(), n);

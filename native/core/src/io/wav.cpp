@@ -11,16 +11,24 @@ namespace {
 struct Rd {
   const std::uint8_t *p;
   std::size_t n;
-  std::uint32_t u32(std::size_t o) const { std::uint32_t v; std::memcpy(&v, p + o, 4); return v; }
-  std::uint16_t u16(std::size_t o) const { std::uint16_t v; std::memcpy(&v, p + o, 2); return v; }
+  std::uint32_t u32(std::size_t o) const {
+    std::uint32_t v;
+    std::memcpy(&v, p + o, 4);
+    return v;
+  }
+  std::uint16_t u16(std::size_t o) const {
+    std::uint16_t v;
+    std::memcpy(&v, p + o, 2);
+    return v;
+  }
 };
 
 void put32(std::vector<std::uint8_t> &b, std::uint32_t v) {
-  for (int i = 0; i < 4; ++i) b.push_back((v >> (8 * i)) & 255);
+  for (int i = 0; i < 4; ++i) b.push_back(static_cast<std::uint8_t>((v >> (8 * i)) & 255u));
 }
 void put16(std::vector<std::uint8_t> &b, std::uint16_t v) {
-  b.push_back(v & 255);
-  b.push_back(v >> 8);
+  b.push_back(static_cast<std::uint8_t>(v & 255u));
+  b.push_back(static_cast<std::uint8_t>(v >> 8));
 }
 void putTag(std::vector<std::uint8_t> &b, const char *t) {
   for (int i = 0; i < 4; ++i) b.push_back(static_cast<std::uint8_t>(t[i]));
@@ -66,8 +74,8 @@ bool readWavMemory(const std::uint8_t *d, std::size_t size, WavData &out, std::s
   }
   if (!data || nch == 0 || nch > 8) return fail(err, "missing fmt/data chunk");
   const unsigned bps = bits / 8;
-  if (bps == 0 || !((fmtTag == 1 && (bits == 16 || bits == 24 || bits == 32)) ||
-                    (fmtTag == 3 && (bits == 32 || bits == 64))))
+  if (bps == 0 ||
+      !((fmtTag == 1 && (bits == 16 || bits == 24 || bits == 32)) || (fmtTag == 3 && (bits == 32 || bits == 64))))
     return fail(err, "unsupported sample format");
   const std::size_t frames = dataBytes / (bps * nch);
   out.sampleRate = sr;
@@ -76,14 +84,24 @@ bool readWavMemory(const std::uint8_t *d, std::size_t size, WavData &out, std::s
     for (unsigned c = 0; c < nch; ++c) {
       const std::uint8_t *s = data + (i * nch + c) * bps;
       float v;
-      if (fmtTag == 3 && bits == 32) { std::memcpy(&v, s, 4); }
-      else if (fmtTag == 3) { double dv; std::memcpy(&dv, s, 8); v = static_cast<float>(dv); }
-      else if (bits == 16) { std::int16_t x; std::memcpy(&x, s, 2); v = x / 32768.0f; }
-      else if (bits == 24) {
+      if (fmtTag == 3 && bits == 32) {
+        std::memcpy(&v, s, 4);
+      } else if (fmtTag == 3) {
+        double dv;
+        std::memcpy(&dv, s, 8);
+        v = static_cast<float>(dv);
+      } else if (bits == 16) {
+        std::int16_t x;
+        std::memcpy(&x, s, 2);
+        v = x / 32768.0f;
+      } else if (bits == 24) {
         const std::int32_t x = (s[0] << 8) | (s[1] << 16) | (static_cast<std::int32_t>(s[2]) << 24);
         v = static_cast<float>(x / 2147483648.0);
+      } else {
+        std::int32_t x;
+        std::memcpy(&x, s, 4);
+        v = static_cast<float>(x / 2147483648.0);
       }
-      else { std::int32_t x; std::memcpy(&x, s, 4); v = static_cast<float>(x / 2147483648.0); }
       out.ch[c][i] = v;
     }
   }
@@ -107,12 +125,23 @@ std::vector<std::uint8_t> encodeWavF32(const std::vector<std::vector<float>> &ch
   const std::uint32_t dataBytes = n * nch * 4;
   std::vector<std::uint8_t> b;
   b.reserve(12 + 26 + 12 + 8 + dataBytes);
-  putTag(b, "RIFF"); put32(b, 4 + 26 + 12 + 8 + dataBytes); putTag(b, "WAVE");
-  putTag(b, "fmt "); put32(b, 18); put16(b, 3); put16(b, static_cast<std::uint16_t>(nch));
-  put32(b, static_cast<std::uint32_t>(sampleRate)); put32(b, static_cast<std::uint32_t>(sampleRate) * nch * 4);
-  put16(b, static_cast<std::uint16_t>(nch * 4)); put16(b, 32); put16(b, 0);
-  putTag(b, "fact"); put32(b, 4); put32(b, n);
-  putTag(b, "data"); put32(b, dataBytes);
+  putTag(b, "RIFF");
+  put32(b, 4 + 26 + 12 + 8 + dataBytes);
+  putTag(b, "WAVE");
+  putTag(b, "fmt ");
+  put32(b, 18);
+  put16(b, 3);
+  put16(b, static_cast<std::uint16_t>(nch));
+  put32(b, static_cast<std::uint32_t>(sampleRate));
+  put32(b, static_cast<std::uint32_t>(sampleRate) * nch * 4);
+  put16(b, static_cast<std::uint16_t>(nch * 4));
+  put16(b, 32);
+  put16(b, 0);
+  putTag(b, "fact");
+  put32(b, 4);
+  put32(b, n);
+  putTag(b, "data");
+  put32(b, dataBytes);
   for (std::uint32_t i = 0; i < n; ++i)
     for (std::uint32_t c = 0; c < nch; ++c) {
       std::uint8_t t[4];
@@ -131,11 +160,19 @@ bool writeWavPcm16(const std::string &path, const std::vector<std::vector<float>
   const std::uint32_t n = ch.empty() ? 0 : static_cast<std::uint32_t>(ch[0].size());
   const std::uint32_t dataBytes = n * nch * 2;
   std::vector<std::uint8_t> b;
-  putTag(b, "RIFF"); put32(b, 36 + dataBytes); putTag(b, "WAVE");
-  putTag(b, "fmt "); put32(b, 16); put16(b, 1); put16(b, static_cast<std::uint16_t>(nch));
-  put32(b, static_cast<std::uint32_t>(sr)); put32(b, static_cast<std::uint32_t>(sr) * nch * 2);
-  put16(b, static_cast<std::uint16_t>(nch * 2)); put16(b, 16);
-  putTag(b, "data"); put32(b, dataBytes);
+  putTag(b, "RIFF");
+  put32(b, 36 + dataBytes);
+  putTag(b, "WAVE");
+  putTag(b, "fmt ");
+  put32(b, 16);
+  put16(b, 1);
+  put16(b, static_cast<std::uint16_t>(nch));
+  put32(b, static_cast<std::uint32_t>(sr));
+  put32(b, static_cast<std::uint32_t>(sr) * nch * 2);
+  put16(b, static_cast<std::uint16_t>(nch * 2));
+  put16(b, 16);
+  putTag(b, "data");
+  put32(b, dataBytes);
   for (std::uint32_t i = 0; i < n; ++i)
     for (std::uint32_t c = 0; c < nch; ++c) {
       const float v = std::clamp(ch[c][i], -1.0f, 1.0f);

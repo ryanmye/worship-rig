@@ -40,9 +40,7 @@ class SpscQueue {
   }
 
   /** Approximate occupancy (exact when called from either end while the other is idle). */
-  std::size_t size() const {
-    return head_.load(std::memory_order_acquire) - tail_.load(std::memory_order_acquire);
-  }
+  std::size_t size() const { return head_.load(std::memory_order_acquire) - tail_.load(std::memory_order_acquire); }
   bool empty() const { return size() == 0; }
 
  private:
