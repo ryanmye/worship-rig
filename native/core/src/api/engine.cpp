@@ -4,7 +4,9 @@
 #include <chrono>
 #include <cstring>
 
+#include "api/registry.h"
 #include "bridge/bridge.h"
+#include "graph/test_points.h"
 #include "bridge/json_out.h"
 #include "num/hash_seed.h"
 #include "yyjson.h"
@@ -23,14 +25,32 @@ bool looksLikeJson(const char *s, std::size_t n) {
   return false;
 }
 
+std::uint32_t computeSeed(const rig_config &cfg) {
+  std::uint32_t seed = cfg.seed_string ? hashSeed(cfg.seed_string) : cfg.seed;
+  if (seed == 0 && cfg.mode == RIG_MODE_REALTIME)
+    seed = static_cast<std::uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count()) | 1u;
+  return seed;
+}
+
 }  // namespace
+
+UnitEnv Engine::makeEnv(const rig_config &cfg, std::uint32_t seed) {
+  UnitEnv env;
+  env.sampleRate = cfg.sample_rate > 0 ? cfg.sample_rate : 48000.0;
+  env.seed = seed;
+  return env;  // env.config is pointed at cfg_ in the constructor body (cfg_ is final there)
+}
 
 Engine::Engine(const rig_config &cfg)
     : cfg_(cfg),
-      sr_(cfg.sample_rate > 0 ? cfg.sample_rate : 48000.0),
+      seed_(computeSeed(cfg)),
       outCh_(cfg.output_channels >= 4 ? 4u : 2u),
-      graph_(sr_, cmdQ_, evQ_, meters_),
-      model_(*this) {
+      graph_(cfg.sample_rate > 0 ? cfg.sample_rate : 48000.0, cmdQ_, evQ_, meters_),
+      model_(*this, [&] {
+        UnitEnv env = makeEnv(cfg, seed_);
+        env.config = &cfg_;
+        return env;
+      }()) {
   if (cfg.host) host_ = *cfg.host;
   cfg_.host = cfg.host ? &host_ : nullptr;
   auto keep = [](const char *s, std::string &store, const char *&ptr) {
@@ -42,9 +62,12 @@ Engine::Engine(const rig_config &cfg)
   keep(cfg.pads_dir, padsDir_, cfg_.pads_dir);
   keep(cfg.recordings_dir, recDir_, cfg_.recordings_dir);
   keep(cfg.seed_string, seedString_, cfg_.seed_string);
-  seed_ = cfg.seed_string ? hashSeed(cfg.seed_string) : cfg.seed;
-  if (seed_ == 0 && cfg.mode == RIG_MODE_REALTIME)
-    seed_ = static_cast<std::uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count()) | 1u;
+  EnginePaths paths;
+  paths.appDir = appDir_;
+  paths.userManifest = userManifest_;
+  paths.padsDir = padsDir_;
+  paths.recordingsDir = recDir_;
+  model_.setPaths(paths);
   bridge_ = std::make_unique<Bridge>(*this);
 }
 
@@ -55,6 +78,7 @@ Engine *Engine::create(const rig_config &cfg, rig_status *err) {
   };
   if (cfg.mode != RIG_MODE_REALTIME && cfg.mode != RIG_MODE_OFFLINE) return fail(RIG_E_INVALID);
   if (cfg.sample_rate < 8000.0 || cfg.sample_rate > 384000.0) return fail(RIG_E_INVALID);
+  ensureModulesRegistered();
   Engine *e = new (std::nothrow) Engine(cfg);
   if (!e) return fail(RIG_E_NOMEM);
   if (cfg.mode == RIG_MODE_REALTIME) {
@@ -73,9 +97,37 @@ Engine::~Engine() {
   }
   // Free whatever the graph handed back or never consumed (the Graph destructor frees what it still holds).
   AudioEvent ev;
-  while (evQ_.pop(ev)) model_.onAudioEvent(ev);
+  while (evQ_.pop(ev)) freeGarbage(ev);
   Command c;
   while (cmdQ_.pop(c)) freeCommandPayload(c);
+}
+
+void Engine::at(double t, std::function<void(double)> fn) {
+  timers_.at(t, sampleRate(), std::move(fn));
+}
+
+void Engine::onControl(std::function<void()> fn) {
+  if (!realtime()) {
+    fn();
+    flush();
+    return;
+  }
+  {
+    std::lock_guard<std::mutex> lk(inMu_);
+    hostCalls_.push_back(std::move(fn));
+  }
+  wake_.release();
+}
+
+void Engine::memoryPressure(int level) {
+  onControl([this, level] { model_.memoryPressure(level); });
+}
+
+void Engine::setPaths(const char *userManifest, const char *padsDir) {
+  EnginePaths p;
+  if (userManifest) p.userManifest = userManifest;
+  if (padsDir) p.padsDir = padsDir;
+  onControl([this, p] { model_.setPaths(p); });
 }
 
 bool Engine::send(Command c) {
@@ -162,17 +214,23 @@ void Engine::controlLoop() {
     wakePending_ = false;
     std::deque<std::string> batch;
     std::vector<std::string> hostEv;
+    std::vector<std::function<void()>> calls;
     {
       std::lock_guard<std::mutex> lk(inMu_);
       batch.swap(inQ_);
       hostEv.swap(hostEvents_);
+      calls.swap(hostCalls_);
     }
     for (auto &h : hostEv) emit(std::move(h));
+    for (auto &fn : calls) fn();
     for (const auto &m : batch) processMessage(m);
     drainAudioEvents();
-    timers_.runDue(frames_.load(std::memory_order_acquire) / Q);
+    timers_.runDue(graph_.timeBase().frame / Q);
     MidiIn mi;
-    while (midiQ_.pop(mi)) midiRecv_.fetch_add(1, std::memory_order_relaxed);  // T07 parses and routes
+    while (midiQ_.pop(mi)) {
+      midiRecv_.fetch_add(1, std::memory_order_relaxed);
+      model_.midiBytes(mi.port, mi.bytes, mi.len, mi.hostTimeNs);  // "midi" service (T07) parses and routes
+    }
     emitTick();
     flush();
   }
@@ -180,12 +238,13 @@ void Engine::controlLoop() {
 
 void Engine::emitTick() {
   if (!rtRunning_ || !awake_) return;
-  const std::int64_t f = frames_.load(std::memory_order_acquire);
-  if (f - lastTickFrame_ < static_cast<std::int64_t>(sr_ / 30.0)) return;
+  const TimeBase tb = graph_.timeBase();
+  const std::int64_t f = static_cast<std::int64_t>(tb.rendered);
+  if (f - lastTickFrame_ < static_cast<std::int64_t>(tb.sampleRate / 30.0)) return;
   lastTickFrame_ = f;
   const rig_meters m = meters_.read();
   JsonOut j;
-  j.begin().kv("v", 1).kv("ev", "tick").kv("t", static_cast<double>(f) / sr_).kv("frames", static_cast<double>(f));
+  j.begin().kv("v", 1).kv("ev", "tick").kv("t", tb.time()).kv("frames", static_cast<double>(tb.rendered));
   j.key("out").beginArray().elem(m.out_peak[0]).elem(m.out_peak[1]).endArray();
   j.kv("pedal", 0).kv("held", 0).kv("cpu", m.cpu_load).end();
   emit(j.take());
@@ -202,12 +261,11 @@ void Engine::renderOne() {
     const auto t0 = std::chrono::steady_clock::now();
     graph_.renderQuantum(ptrs, outCh_);
     const double dt = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-    const double load = dt / (Q / sr_);
+    const double load = dt / (Q / graph_.sampleRate());
     if (load > 1.0) xruns_.fetch_add(1, std::memory_order_relaxed);
     graph_.setHostStats(static_cast<float>(load), xruns_.load(std::memory_order_relaxed));
     if (!evQ_.empty() && !wakePending_.exchange(true)) wake_.release();
   }
-  frames_.store(graph_.frame(), std::memory_order_release);
 }
 
 void Engine::fifoRead(float *const *out, uint32_t channels, uint32_t frames, bool) {
@@ -275,11 +333,15 @@ rig_status Engine::midiIn(const char *port, const std::uint8_t *bytes, std::size
 }
 
 void Engine::requestAudio(const std::string &action, const std::string &deviceId, double latency) {
+  model_.audioStarted(-1.0);  // global units (FX, master, click, drone, sinks) exist before the first sound
   if (!realtime()) {
     started_ = true;
     return;
   }
   (void)action;
+  // audio_start must return at once (rig_host contract: "must not block for long"): the Apple layer opens AUHAL on its
+  // own queue (queue.async, SETUP_REVIEW 25) and reports back through rig_host_audio_started. T08 adds a watchdog
+  // (state `closed` when no completion arrives within 5 s) and keeps ticks/timers/MIDI running meanwhile.
   if (host_.audio_start) {
     host_.audio_start(host_.user, deviceId.empty() ? nullptr : deviceId.c_str(), latency, outCh_);
   } else {
@@ -288,15 +350,15 @@ void Engine::requestAudio(const std::string &action, const std::string &deviceId
 }
 
 void Engine::hostAudioStarted(const rig_device_info &info) {
-  if (!started_.load() && info.sample_rate >= 8000.0) {
-    sr_ = info.sample_rate;
-    graph_.setSampleRate(sr_);
-  }
-  if (info.channels >= 4) outCh_ = 4;
+  // Any thread, lock-free hand-off (SETUP_REVIEW 15/16): the audio thread adopts the rate before its next quantum
+  // (Graph::renderQuantum -> adoptRate: time grid rebased, engine time continues, never backwards).
+  const double sr = info.sample_rate >= 8000.0 && info.sample_rate <= 384000.0 ? info.sample_rate : sampleRate();
+  graph_.requestSampleRate(sr);
+  outCh_ = info.channels >= 4 ? 4u : 2u;
   started_ = true;
   JsonOut j;
   j.begin().kv("v", 1).kv("ev", "state").kv("state", "running").kv("sleep", "awake");
-  j.kv("latencyMs", info.output_latency_sec * 1000.0).kv("sampleRate", sr_);
+  j.kv("latencyMs", info.output_latency_sec * 1000.0).kv("sampleRate", sr);
   j.kv("deviceId", info.device_id ? info.device_id : "").kv("channels", outCh_.load()).end();
   postHostEvent(j.take());
 }
@@ -341,45 +403,61 @@ std::string Engine::statsJson() {
   const GraphStats &g = graph_.stats();
   const rig_meters m = meters_.read();
   JsonOut j;
-  j.begin().kv("frames", static_cast<double>(frames_.load())).kv("quanta", static_cast<double>(g.quanta.load()));
+  const TimeBase tb = graph_.timeBase();
+  j.begin().kv("frames", static_cast<double>(tb.rendered)).kv("quanta", static_cast<double>(g.quanta.load()));
+  j.kv("rateChanges", g.rateChanges.load()).kv("eventsDropped", g.eventsDropped.load());
   j.kv("heapDropped", g.heapDropped.load()).kv("paramDropped", g.paramDropped.load());
   j.kv("voicesStolen", g.voicesStolen.load()).kv("voices", m.voices).kv("xruns", m.xruns);
   j.kv("cmdDropped", model_.stats().droppedCommands).kv("midiDropped", midiDropped_.load());
   j.kv("midiReceived", midiRecv_.load()).kv("prepares", model_.stats().prepares);
   j.kv("commits", model_.stats().commits).kv("voicesEnded", model_.stats().voicesEnded).end();
-  return j.take();
+  std::string out = j.take();
+  const std::string extra = model_.statsJson();
+  if (!extra.empty()) out.insert(out.size() - 1, "," + extra);
+  return out;
 }
 
 // ---- test hooks ---------------------------------------------------------------------------------------------------
 
+namespace {
+
+/** A test point is served when it needs no unit, or a module unit is attached in its slot (with the local point
+ *  listed in the kind's UnitInfo for unit-local points). graph/test_points.h. */
+bool served(const Model &m, const TestPoint &p, bool tap) {
+  if (!p.needsUnit) return true;
+  if (!m.attachedIsModule(p.unit)) return false;
+  if (p.local == kGraphBus) return true;
+  const Registry::UnitEntry *e = Registry::global().unit(m.attachedKind(p.unit));
+  const std::uint32_t mask = e ? (tap ? e->info.tapPoints : e->info.injectPoints) : 0u;
+  return p.local < 32 && (mask >> p.local & 1u);
+}
+
+}  // namespace
+
 rig_status Engine::testTap(const char *node) {
   if (!(cfg_.flags & RIG_FLAG_TEST_API) || realtime()) return RIG_E_UNSUPPORTED;
-  std::uint32_t id;
-  const std::string n = node ? node : "";
-  if (n == "out")
-    id = 0;
-  else if (n.size() == 9 && n.compare(0, 4, "slot") == 0 && n[4] >= '0' && n[4] <= '3' && n.compare(5, 4, ".pan") == 0)
-    id = static_cast<std::uint32_t>(n[4] - '0') + 1;
-  else
-    return RIG_E_UNSUPPORTED;
+  const int i = tapIndex(node ? node : "");
+  if (i < 0 || !served(model_, kTapPoints[i], true)) return RIG_E_UNSUPPORTED;
   Command c{};
   c.op = Op::TestTap;
   c.frame = kFrameNow;
-  c.aux = id;
+  c.aux = static_cast<std::uint32_t>(i);
   return send(c) ? RIG_OK : RIG_E_FULL;
 }
 
 rig_status Engine::testInject(const char *node, const float *const *data, uint32_t channels, uint64_t frames,
                               double start, float gain) {
   if (!(cfg_.flags & RIG_FLAG_TEST_API) || realtime()) return RIG_E_UNSUPPORTED;
-  if (!node || std::strcmp(node, "slot0.strip") != 0) return RIG_E_UNSUPPORTED;
+  const int i = injectIndex(node ? node : "");
+  if (i < 0 || !served(model_, kInjectPoints[i], false)) return RIG_E_UNSUPPORTED;
   if (channels < 1 || channels > 2 || !data) return RIG_E_INVALID;
   auto *ib = new (std::nothrow) InjectBuffer();
   if (!ib) return RIG_E_NOMEM;
+  ib->point = static_cast<unsigned>(i);
   ib->channels = channels;
   ib->frames = frames;
   ib->gain = gain;
-  ib->startFrame = std::llround(start * sr_);
+  ib->startFrame = std::llround(start * sampleRate());
   ib->storage = new (std::nothrow) float[frames * channels];
   if (!ib->storage) {
     delete ib;

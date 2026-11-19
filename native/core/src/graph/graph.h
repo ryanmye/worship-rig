@@ -1,60 +1,75 @@
-// Render graph (audio thread). Executes Commands, renders 128-frame quanta. Interfaces frozen by T00; the DSP behind
-// it is a skeleton: 4 slot strips (fader -> SlotEq -> pan) carrying test voices, a sum and a master gain.
+// Render graph (audio thread). Executes Commands, renders 128-frame quanta through the FIXED topology of
+// graph/unit.h over pluggable units. Orchestrator-owned and frozen after T00b: modules never edit it; they register
+// units (api/registry.h) that the Model attaches with Op::AttachUnit.
+//
+// Clock (contract 6.3, SETUP_REVIEW 15/16): `frame()` is the TIME-GRID frame: engine time = frame / sampleRate,
+// always. A device rate change is handed over lock-free (requestSampleRate, any thread) and adopted by the audio
+// thread between two quanta: the grid is rebased to frame' = ceil(frame * new / old) (engine time continues, moves
+// forward by < 1 sample, never backwards), pending command frames are rescaled the same way, every unit gets
+// setSampleRate, and a RateChanged event tells the control side to rebuild rate-dependent tables. `rendered()` counts
+// frames actually rendered (statistics only).
 #pragma once
-#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
 
-#include "rig/rig_engine.h"
-#include "dsp/test_voice.h"
+#include "graph/epoch.h"
+#include "graph/unit.h"
 #include "mix/slot_spec.h"
+#include "rig/rig_engine.h"
 #include "runtime/command.h"
 #include "runtime/seqlock.h"
 #include "runtime/spsc.h"
-#include "time/param.h"
 
 namespace rig {
 
 using CommandQueue = SpscQueue<Command, 16384>;
 using EventQueue = SpscQueue<AudioEvent, 4096>;
 
-/** Param target ids carried by the Param* ops. */
-namespace pid {
-inline constexpr std::uint32_t kFader = 0, kPan = 1, kSlotStride = 8, kMasterVolume = 100;
-inline constexpr std::uint32_t slot(std::uint32_t i, std::uint32_t which) {
-  return i * kSlotStride + which;
-}
-}  // namespace pid
-
-enum class Tap : std::uint32_t { Out = 0, Slot0Pan, Slot1Pan, Slot2Pan, Slot3Pan };
-enum class InjectNode : std::uint32_t { Slot0Strip = 0 };
-
 struct GraphStats {  // written on the audio thread, read anywhere (relaxed)
-  std::atomic<std::uint32_t> heapDropped{0}, voicesStolen{0}, paramDropped{0};
+  std::atomic<std::uint32_t> heapDropped{0}, voicesStolen{0}, paramDropped{0}, eventsDropped{0}, rateChanges{0};
   std::atomic<std::uint64_t> quanta{0};
+};
+
+/** Published once per quantum (seqlock): what the control side needs to map engine time <-> frames. */
+struct TimeBase {
+  std::int64_t frame = 0;       // time-grid frame of the next quantum to render
+  double sampleRate = 48000;    // rate of that grid
+  std::uint64_t rendered = 0;   // frames rendered in total
+  std::uint64_t epoch = 0;
+  double time() const { return static_cast<double>(frame) / sampleRate; }
 };
 
 /** Frees what a never-applied command owns (shutdown path; control thread). */
 void freeCommandPayload(const Command &c);
+/** Frees a Garbage event's object (control thread). */
+void freeGarbage(const AudioEvent &e);
 
-class Graph {
+class Graph final : private EventSink {
  public:
-  static constexpr std::size_t kSlots = 4, kVoices = 16, kHeap = 8192;
+  static constexpr std::size_t kHeap = 8192;
 
   Graph(double sampleRate, CommandQueue &in, EventQueue &out, Seqlock<rig_meters> &meters);
   ~Graph();
+  Graph(const Graph &) = delete;
+  Graph &operator=(const Graph &) = delete;
 
-  /** Move queued commands into the pending heap. */
+  /** Move queued commands into the pending heap (audio thread; offline: the caller's thread). */
   void drainCommands();
   /** Render one quantum of RIG_QUANTUM_FRAMES into out[0..channels). Applies due commands first. */
   void renderQuantum(float *const *out, unsigned channels);
 
+  /** Any thread, lock-free: the rate the next quantum is rendered at (rig_host_audio_started). */
+  void requestSampleRate(double sr) { requestedSr_.store(sr, std::memory_order_release); }
+
+  // Audio-thread views (offline driver: caller's thread).
   std::int64_t frame() const { return frame_; }
   double sampleRate() const { return sr_; }
+  // Any thread.
+  TimeBase timeBase() const { return timeBase_.read(); }
   const GraphStats &stats() const { return stats_; }
+  std::uint64_t epoch() const { return epoch_.current(); }
   std::uint32_t liveVoices() const;
-  void setSampleRate(double sr) { sr_ = sr; }
   /** Host-side numbers folded into the next meter snapshot (audio thread). */
   void setHostStats(float cpu, std::uint32_t xruns) {
     cpu_ = cpu;
@@ -62,37 +77,39 @@ class Graph {
   }
 
  private:
-  struct Slot {
-    const SlotSpec *spec = nullptr;
-    wa::Param fader{0.0}, pan{0.0};
-    SlotEq eq;
-    std::array<TestVoice, kVoices> voices;
-    std::uint32_t nextVoice = 0;
-    int tail = 0;  // quanta left to render with silent input (EQ ring-out)
-  };
+  bool push(const AudioEvent &e) override;
   void apply(const Command &c);
-  void renderSlot(std::size_t i, std::int64_t q0, float (*sum)[RIG_QUANTUM_FRAMES],
-                  float (*tapBuf)[RIG_QUANTUM_FRAMES]);
+  void applyParam(const Command &c);
+  void adoptRate(double sr);
   void garbage(GarbageKind k, void *p);
-  void pushEvent(const AudioEvent &e);
-  wa::Param *paramFor(std::uint32_t target);
+  void renderChannel(UnitSlot inst, UnitSlot strip, bool injectHere, const RenderContext &base, Bus *tapBus);
+  void runUnit(UnitSlot s, const RenderContext &base, UnitIO &io);
+  void addInject(std::uint32_t point, Bus &bus);
+  bool injectOverlaps(std::uint32_t point) const;
 
   double sr_;
+  std::atomic<double> requestedSr_;
   CommandQueue &in_;
   EventQueue &out_;
   Seqlock<rig_meters> &meters_;
+  Seqlock<TimeBase> timeBase_;
+  EpochCounter epoch_;
   std::int64_t frame_ = 0;
-  Slot slots_[kSlots];
-  wa::Param master_{0.5011872336272722};
+  std::uint64_t rendered_ = 0;
+  Unit *units_[kUnitSlots] = {};
+  // buses (one quantum each)
+  Bus instBus_, stripBus_, sends_[kSendBuses], sum_, fxBus_, eqIn_, outBus_, clickBus_, tapBus_;
   Command heap_[kHeap];
   std::size_t heapN_ = 0;
-  Tap tap_ = Tap::Out;
+  int tap_ = 0;  // index into kTapPoints (0 = out)
   InjectBuffer *inject_ = nullptr;
+  bool clickAux_ = false, clickRecord_ = false;
   float peakRing_[64][2] = {};
   unsigned peakPos_ = 0;
   GraphStats stats_;
   float cpu_ = 0;
   std::uint32_t xruns_ = 0;
+  std::uint32_t lostEvents_ = 0;
 };
 
 }  // namespace rig

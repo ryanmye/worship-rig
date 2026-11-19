@@ -304,6 +304,22 @@ RIG_API void rig_host_audio_state(rig_engine *e, rig_device_state state, const c
 /** The device list changed (hot-plug); the core emits a `state` event so JS re-queries `get devices`. [any] */
 RIG_API void rig_host_devices_changed(rig_engine *e);
 
+/**
+ * The OS reports memory pressure (iPad didReceiveMemoryWarning, macOS DISPATCH_SOURCE_TYPE_MEMORYPRESSURE).
+ * level 1 = warning: drop unpinned decoded buffers and idle reverb units; level 2 = critical: also drop pins beyond
+ * the current song. The core emits a `warn` event (code 'memory') and the next `stats` reflects the trim. Handled on
+ * the control thread (inline offline). Added by T00b (SETUP_REVIEW 21a). [any]
+ */
+RIG_API void rig_host_memory_pressure(rig_engine *e, int level);
+
+/**
+ * Change the My Samples manifest and/or the pad folder after rig_create (Settings > pad folder, reloadManifests;
+ * SETUP_REVIEW 21b). NULL = unchanged. The strings are copied. Takes effect on the control thread before the next
+ * message is processed (inline offline); a following `get {what:'instruments', reload:true}` re-reads the manifest.
+ * RIG_E_INVALID when both are NULL. Added by T00b. [any]
+ */
+RIG_API rig_status rig_set_paths(rig_engine *e, const char *user_manifest, const char *pads_dir);
+
 /* -------------------------------------------------------------------------------------------------------------- */
 /* MIDI fast path (platform MIDI layer)                                                                             */
 /* -------------------------------------------------------------------------------------------------------------- */

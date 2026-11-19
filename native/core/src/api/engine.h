@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <semaphore>
@@ -37,8 +38,12 @@ class Engine final : public CommandSink {
 
   // CommandSink
   bool send(Command c) override;
-  std::int64_t renderedFrames() const override { return frames_.load(std::memory_order_acquire); }
-  double sampleRate() const override { return sr_; }
+  TimeBase timeBase() const override { return graph_.timeBase(); }
+  void emit(std::string &&json) override;  // queue one message for the event callback (flushed per turn / offline)
+  void at(double t, std::function<void(double)> fn) override;
+
+  /** Current engine rate (the rate of the time grid; changes with the device, contract 6.3). */
+  double sampleRate() const { return graph_.timeBase().sampleRate; }
 
   rig_status post(const char *json, std::size_t len);
   rig_status render(float *const *out, uint32_t channels, uint32_t frames, uint64_t hostTimeNs);
@@ -48,7 +53,11 @@ class Engine final : public CommandSink {
   void hostAudioState(rig_device_state s, const char *msg);
   void hostDevicesChanged();
   rig_status getMeters(rig_meters *out) const;
-  double engineTime() const { return static_cast<double>(frames_.load(std::memory_order_acquire)) / sr_; }
+  /** Engine time of the next frame to render: monotonic across device rate changes (SETUP_REVIEW 16). */
+  double engineTime() const { return graph_.timeBase().time(); }
+  /** rig_host_memory_pressure / rig_set_paths: run on the control thread (inline offline). [any] */
+  void memoryPressure(int level);
+  void setPaths(const char *userManifest, const char *padsDir);
 
   rig_status testTap(const char *node);
   rig_status testInject(const char *node, const float *const *data, uint32_t channels, uint64_t frames, double start,
@@ -57,7 +66,7 @@ class Engine final : public CommandSink {
 
   // Used by the bridge (control thread / offline caller).
   Model &model() { return model_; }
-  void emit(std::string &&json);  // queue one message for the event callback (flushed per turn / immediately offline)
+  Graph &graph() { return graph_; }
   void flush();
   const rig_config &config() const { return cfg_; }
   std::uint32_t seed() const { return seed_; }
@@ -80,14 +89,15 @@ class Engine final : public CommandSink {
   void renderOne();
   void emitTick();
   void postHostEvent(std::string &&json);
+  /** Run fn on the control thread (realtime: queued + wake; offline: inline). */
+  void onControl(std::function<void()> fn);
+  static UnitEnv makeEnv(const rig_config &cfg, std::uint32_t seed);
 
   rig_config cfg_;
   rig_host host_{};
   std::string appDir_, userManifest_, padsDir_, recDir_, seedString_;
-  double sr_;
   std::uint32_t seed_ = 1;
   std::atomic<unsigned> outCh_;  // written by the host thread (device change), read on the audio thread
-  std::atomic<std::int64_t> frames_{0};
   CommandQueue cmdQ_;
   EventQueue evQ_;
   Seqlock<rig_meters> meters_;
@@ -110,6 +120,7 @@ class Engine final : public CommandSink {
   std::mutex inMu_;
   std::deque<std::string> inQ_;
   std::vector<std::string> hostEvents_;
+  std::vector<std::function<void()>> hostCalls_;
   std::binary_semaphore wake_{0};
   std::atomic<bool> stop_{false};
   std::atomic<bool> wakePending_{false};

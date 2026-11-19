@@ -1,0 +1,19 @@
+# Slot EQ single-band fixtures (owner T02). One golden id per line.
+eq-lowshelf-a
+eq-lowshelf-b
+eq-lowshelf-c
+eq-peak-a
+eq-peak-b
+eq-peak-c
+eq-highshelf-a
+eq-highshelf-b
+eq-highshelf-c
+eq-notch-a
+eq-notch-b
+eq-notch-c
+eq-lowcut-a
+eq-lowcut-b
+eq-lowcut-c
+eq-highcut-a
+eq-highcut-b
+eq-highcut-c

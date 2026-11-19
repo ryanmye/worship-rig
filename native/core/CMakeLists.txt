@@ -56,18 +56,27 @@ if(UNIX)
   target_link_libraries(rig_third_party PUBLIC m)
 endif()
 
+# ---- module lists ------------------------------------------------------------------------------------------------
+# Adding a module = adding files (BUILD_PLAN "Rules"): every src/**/*.cpp is compiled into rig_core, every
+# src/**/*_register.cpp is a self-registration point (api/registry.h), every src/**/*.cmake is a build hook (below),
+# every tests/**/*.cpp is a test source, every
+# TEST_SUITE("x") becomes ctest `unit.x` (suite "realtime" -> `rt.realtime`), every tests/golden_ids/<name>.ids becomes
+# ctest `golden.<name>`. No task edits this file to add a module.
+include(RigModules)
+set(RIG_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
+set(RIG_SOURCE_EXCLUDE "" CACHE STRING
+    "regex of src/ paths left out of rig_core (orchestrator: isolate a task's unfinished files; empty in CI)")
+file(GLOB_RECURSE RIG_CORE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
+list(FILTER RIG_CORE_SOURCES EXCLUDE REGEX "/third_party/")  # vendored code: added by its module's .cmake hook
+if(RIG_SOURCE_EXCLUDE)
+  list(FILTER RIG_CORE_SOURCES EXCLUDE REGEX "${RIG_SOURCE_EXCLUDE}")
+endif()
+list(SORT RIG_CORE_SOURCES)
+rig_module_list(${CMAKE_CURRENT_SOURCE_DIR}/src "" ${RIG_GEN_DIR}/rig_modules.inc)
+
 # ---- the core ----------------------------------------------------------------------------------------------------
-add_library(rig_core STATIC
-  src/api/rig_engine.cpp src/api/engine.cpp
-  src/bridge/bridge.cpp
-  src/graph/graph.cpp
-  src/model/model.cpp src/model/patch.cpp
-  src/params/params.cpp
-  src/time/param.cpp
-  src/dsp/biquad.cpp src/dsp/test_voice.cpp
-  src/mix/slot_eq.cpp
-  src/io/wav.cpp)
-target_include_directories(rig_core PUBLIC include PRIVATE src)
+add_library(rig_core STATIC ${RIG_CORE_SOURCES})
+target_include_directories(rig_core PUBLIC include PRIVATE src ${RIG_GEN_DIR})
 target_include_directories(rig_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
 target_compile_definitions(rig_core PRIVATE RIG_GIT_DESCRIBE="${RIG_GIT_DESCRIBE}")
 target_link_libraries(rig_core PUBLIC rig_third_party)
@@ -75,12 +84,22 @@ find_package(Threads REQUIRED)
 target_link_libraries(rig_core PUBLIC Threads::Threads)
 rig_target_defaults(rig_core)
 set_target_properties(rig_core PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+# Per-module build hooks: every src/**/*.cmake is included here, after rig_core exists, so a module can add include
+# directories (e.g. -isystem for vendored headers), definitions or vendored sources without editing this file.
+# Hooks touch only rig_core settings for their own files (target_sources, set_source_files_properties,
+# target_include_directories(rig_core SYSTEM PRIVATE ...)).
+file(GLOB_RECURSE RIG_MODULE_HOOKS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cmake)
+list(SORT RIG_MODULE_HOOKS)
+foreach(hook ${RIG_MODULE_HOOKS})
+  include(${hook})
+endforeach()
 
 if(RIG_BUILD_TESTS)
   enable_testing()
   find_program(NODE_EXECUTABLE node)
 
-  add_library(rig_fixture STATIC tools/common/fixture_runner.cpp)
+  file(GLOB_RECURSE RIG_FIXTURE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tools/common/*.cpp)
+  add_library(rig_fixture STATIC ${RIG_FIXTURE_SOURCES})
   target_link_libraries(rig_fixture PUBLIC rig_core)
   rig_target_defaults(rig_fixture)
 
@@ -96,37 +115,45 @@ if(RIG_BUILD_TESTS)
   target_link_libraries(rig_bench PRIVATE rig_core)
   rig_target_defaults(rig_bench)
 
-  set(RIG_TEST_SOURCES
-    tests/test_main.cpp tests/alloc_trap.cpp tests/test_queues.cpp tests/test_param.cpp tests/test_biquad.cpp
-    tests/test_wav.cpp tests/test_params.cpp tests/test_bridge.cpp tests/test_offline.cpp tests/test_voice.cpp
-    tests/test_realtime.cpp tests/test_third_party.cpp tests/test_golden.cpp)
+  file(GLOB_RECURSE RIG_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp)
+  list(SORT RIG_TEST_SOURCES)
+  rig_module_list(${CMAKE_CURRENT_SOURCE_DIR}/tests "tests_" ${RIG_GEN_DIR}/rig_test_modules.inc)
   add_executable(rig_tests ${RIG_TEST_SOURCES})
-  target_include_directories(rig_tests PRIVATE third_party/doctest tools/common)
+  target_include_directories(rig_tests PRIVATE third_party/doctest tools/common tests ${RIG_GEN_DIR})
   target_compile_definitions(rig_tests PRIVATE
     RIG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}" RIG_REPO_DIR="${RIG_REPO_ROOT}")
   target_link_libraries(rig_tests PRIVATE rig_fixture)
   rig_test_defaults(rig_tests)
 
-  foreach(suite queues param biquad wav params bridge offline voice thirdparty golden-analytic)
-    add_test(NAME unit.${suite} COMMAND rig_tests -ts=${suite})
-    set_tests_properties(unit.${suite} PROPERTIES LABELS unit)
+  rig_test_suites("${RIG_TEST_SOURCES}" _suites)
+  foreach(suite ${_suites})
+    if(suite STREQUAL "realtime")
+      add_test(NAME rt.realtime COMMAND rig_tests -ts=realtime)
+      set_tests_properties(rt.realtime PROPERTIES LABELS rt)
+    else()
+      add_test(NAME unit.${suite} COMMAND rig_tests -ts=${suite})
+      set_tests_properties(unit.${suite} PROPERTIES LABELS unit)
+    endif()
   endforeach()
-  add_test(NAME rt.realtime COMMAND rig_tests -ts=realtime)
-  set_tests_properties(rt.realtime PROPERTIES LABELS rt)
   if(NODE_EXECUTABLE)
     add_test(NAME unit.params-drift
              COMMAND ${NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen-params.mjs --check)
     set_tests_properties(unit.params-drift PROPERTIES LABELS unit)
-    # fixtures the skeleton is expected to match (single-band slot EQ through the strip); grows with T02+
-    set(RIG_GOLDEN_IDS
-      "eq-lowshelf-a,eq-lowshelf-b,eq-lowshelf-c,eq-peak-a,eq-peak-b,eq-peak-c"
-      "eq-highshelf-a,eq-highshelf-b,eq-highshelf-c,eq-notch-a,eq-notch-b,eq-notch-c"
-      "eq-lowcut-a,eq-lowcut-b,eq-lowcut-c,eq-highcut-a,eq-highcut-b,eq-highcut-c")
-    string(REPLACE ";" "," RIG_GOLDEN_IDS "${RIG_GOLDEN_IDS}")
-    add_test(NAME golden.eq
-             COMMAND ${CMAKE_COMMAND} -DRENDER=$<TARGET_FILE:rig_render> -DREPO=${RIG_REPO_ROOT}
-                     -DNODE=${NODE_EXECUTABLE} -DOUT=${CMAKE_BINARY_DIR}/golden-out -DIDS=${RIG_GOLDEN_IDS}
-                     -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_golden.cmake)
-    set_tests_properties(golden.eq PROPERTIES LABELS golden)
+    # golden fixtures expected to pass: one ctest per tests/golden_ids/<name>.ids (one id per line, # comments)
+    file(GLOB RIG_GOLDEN_LISTS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tests/golden_ids/*.ids)
+    list(SORT RIG_GOLDEN_LISTS)
+    foreach(list_file ${RIG_GOLDEN_LISTS})
+      get_filename_component(_name ${list_file} NAME_WE)
+      file(STRINGS ${list_file} _ids REGEX "^[a-z0-9][a-z0-9.-]*$")
+      if(NOT _ids)
+        continue()
+      endif()
+      string(REPLACE ";" "," _ids "${_ids}")
+      add_test(NAME golden.${_name}
+               COMMAND ${CMAKE_COMMAND} -DRENDER=$<TARGET_FILE:rig_render> -DREPO=${RIG_REPO_ROOT}
+                       -DNODE=${NODE_EXECUTABLE} -DOUT=${CMAKE_BINARY_DIR}/golden-out/${_name} -DIDS=${_ids}
+                       -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_golden.cmake)
+      set_tests_properties(golden.${_name} PROPERTIES LABELS golden)
+    endforeach()
   endif()
 endif()

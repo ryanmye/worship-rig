@@ -115,7 +115,21 @@ RunResult runFixture(const Fixture &f, const std::string &goldenDir, double sr) 
   post("{\"v\":1,\"op\":\"hello\",\"protocol\":1,\"app\":\"rig-golden\",\"id\":1}");
 
   yyjson_val *patch = yyjson_obj_get(setup, "patch");
-  // 1. fx / master rows before start (so the song's reverb unit exists at start in the JS reference)
+  auto str = [](yyjson_val *v) { return toJson(v); };
+  auto field = [&](yyjson_val *o, const char *k) -> std::string {
+    yyjson_val *v = yyjson_obj_get(o, k);
+    return v ? std::string(",\"") + k + "\":" + str(v) : std::string();
+  };
+  const std::string kindStr = [&] {
+    yyjson_val *k = yyjson_obj_get(fx, "kind");
+    return k && yyjson_is_str(k) ? std::string(yyjson_get_str(k)) : std::string();
+  }();
+  if (kindStr == "drone-freeze") {
+    // renderDroneLoop in page.js (key, params, reverb, loopSec, prerollSec, seamSec): no bridge equivalent until T16
+    // decides question 7; rendered as silence and reported.
+    skipped.insert("drone-freeze");
+  }
+  // 1. fx / master rows before start (page.js: start() builds reverb/delay/lofi/glue for the song's values)
   if (patch) {
     yyjson_val *fxo = yyjson_obj_get(patch, "fx");
     size_t i, n;
@@ -125,24 +139,28 @@ RunResult runFixture(const Fixture &f, const std::string &goldenDir, double sr) 
         if (!yyjson_is_obj(v)) continue;
         size_t j, m;
         yyjson_val *k2, *v2;
+        const std::string unit = yyjson_get_str(k);
         yyjson_obj_foreach(v, j, m, k2, v2) {
-          std::string path = std::string("fx.") + yyjson_get_str(k) + "." + yyjson_get_str(k2);
-          postSkippable("{\"v\":1,\"op\":\"set\",\"id\":2,\"path\":\"" + path + "\",\"value\":" + toJson(v2) + "}",
+          const std::string path = (unit == "master" ? "master." : "fx." + unit + ".") + yyjson_get_str(k2);
+          postSkippable("{\"v\":1,\"op\":\"set\",\"id\":2,\"path\":\"" + path + "\",\"value\":" + str(v2) + "}",
                         "fx rows");
         }
       }
     }
   }
   post("{\"v\":1,\"op\":\"audio\",\"action\":\"start\",\"id\":3}");
-  const char *keys[] = {"tempo", "timeSig"};
-  for (const char *key : keys)
-    if (yyjson_val *v = yyjson_obj_get(setup, key))
-      postSkippable("{\"v\":1,\"op\":\"song\",\"id\":4,\"" + std::string(key) + "\":" + toJson(v) + "}", "song state");
-  if (yyjson_obj_get(setup, "click")) skipped.insert("click");
+  if (yyjson_val *v = yyjson_obj_get(setup, "tempo"))
+    postSkippable("{\"v\":1,\"op\":\"song\",\"id\":4,\"tempo\":" + str(v) + "}", "song tempo");
+  if (yyjson_val *v = yyjson_obj_get(setup, "timeSig"))
+    postSkippable("{\"v\":1,\"op\":\"song\",\"id\":4,\"timeSig\":" + str(v) + "}", "song timeSig");
+  if (yyjson_val *c = yyjson_obj_get(setup, "click"))
+    postSkippable("{\"v\":1,\"op\":\"click\",\"id\":4,\"action\":\"config\"" + field(c, "level") + field(c, "record") +
+                      field(c, "output") + ",\"when\":0}",
+                  "click config");
   // 2. prepare + commit at t = 0
   if (patch) {
     sink.msgs.clear();
-    post("{\"v\":1,\"op\":\"prepare\",\"id\":5,\"patch\":" + toJson(patch) + "}");
+    post("{\"v\":1,\"op\":\"prepare\",\"id\":5,\"patch\":" + str(patch) + "}");
     long token = -1;
     for (const auto &r : sink.msgs) {
       const size_t p = r.find("\"token\":");
@@ -156,8 +174,43 @@ RunResult runFixture(const Fixture &f, const std::string &goldenDir, double sr) 
     }
     post("{\"v\":1,\"op\":\"commit\",\"id\":6,\"token\":" + std::to_string(token) + ",\"when\":0}");
   }
-  for (const char *key : {"transpose", "keyContext", "drone", "wheel"})
-    if (yyjson_obj_get(setup, key)) skipped.insert(key);
+  if (yyjson_val *v = yyjson_obj_get(setup, "transpose"))
+    postSkippable("{\"v\":1,\"op\":\"song\",\"id\":7,\"transpose\":" + str(v) + "}", "song transpose");
+  if (yyjson_val *kc = yyjson_obj_get(setup, "keyContext"))
+    postSkippable("{\"v\":1,\"op\":\"song\",\"id\":7,\"key\":{\"pc\":" + str(yyjson_obj_get(kc, "pc")) +
+                      ",\"minor\":" + (yyjson_get_bool(yyjson_obj_get(kc, "minor")) ? "true" : "false") + "}}",
+                  "song key");
+  if (yyjson_val *d = yyjson_obj_get(setup, "drone"); d && kindStr != "drone-freeze") {
+    yyjson_val *mode = yyjson_obj_get(d, "mode");
+    if (mode && yyjson_is_str(mode) && std::strcmp(yyjson_get_str(mode), "off") != 0) {
+      yyjson_val *key = yyjson_obj_get(d, "key");
+      const std::string pc = key && yyjson_obj_get(key, "pc") ? str(yyjson_obj_get(key, "pc")) : "0";
+      const bool minor = key && yyjson_get_bool(yyjson_obj_get(key, "minor"));
+      postSkippable("{\"v\":1,\"op\":\"drone\",\"id\":8,\"key\":{\"pc\":" + pc + ",\"minor\":" +
+                        (minor ? "true" : "false") + "},\"when\":0}",
+                    "drone");
+      // config = the drone object without `key` (page.js: const {key, ...cfg} = s.drone)
+      std::string cfgJson = "{";
+      size_t i, n;
+      yyjson_val *k, *v;
+      yyjson_obj_foreach(d, i, n, k, v) {
+        if (!std::strcmp(yyjson_get_str(k), "key")) continue;
+        if (cfgJson.size() > 1) cfgJson += ',';
+        cfgJson += str(k) + ":" + str(v);
+      }
+      cfgJson += "}";
+      postSkippable("{\"v\":1,\"op\":\"drone\",\"id\":8,\"config\":" + cfgJson + ",\"when\":0}", "drone");
+    }
+  }
+  if (yyjson_val *w = yyjson_obj_get(setup, "wheel")) {
+    for (const char *src : {"mod", "expr"}) {
+      yyjson_val *v = yyjson_obj_get(w, src);
+      if (v && yyjson_is_num(v))
+        postSkippable("{\"v\":1,\"op\":\"play\",\"id\":9,\"e\":\"wheel\",\"src\":\"" + std::string(src) +
+                          "\",\"value\":" + str(v) + ",\"when\":0}",
+                      "wheel");
+    }
+  }
   // 3. inject + tap
   if (yyjson_val *inj = yyjson_obj_get(setup, "inject")) {
     const char *name = yyjson_get_str(yyjson_obj_get(inj, "stimulus"));
@@ -182,25 +235,68 @@ RunResult runFixture(const Fixture &f, const std::string &goldenDir, double sr) 
   const char *tap = "out";
   if (yyjson_val *t = yyjson_obj_get(setup, "tap")) tap = yyjson_get_str(t);
   if (rig_test_tap(e, tap) != RIG_OK) skipped.insert(std::string("tap ") + tap);
-  // 4. events (each with when = t)
+  // 4. events (each with when = t; page.js applyEvent)
   size_t i, n;
   yyjson_val *ev;
   yyjson_arr_foreach(events, i, n, ev) {
     const char *type = yyjson_get_str(yyjson_obj_get(ev, "type"));
-    const std::string when = std::to_string(num(ev, "t", 0.0));
     if (!type) continue;
+    const std::string when = ",\"when\":" + str(yyjson_obj_get(ev, "t")) + "}";
     const std::string ty = type;
+    const std::string play = "{\"v\":1,\"op\":\"play\",\"id\":10,\"e\":";
+    auto wheel = [&](const char *src, double value) {
+      postSkippable(play + "\"wheel\",\"src\":\"" + src + "\",\"value\":" + std::to_string(value) + when, "wheel");
+    };
     if (ty == "noteOn")
-      post("{\"v\":1,\"op\":\"play\",\"e\":\"on\",\"n\":" + std::to_string(static_cast<int>(num(ev, "note", 60))) +
-           ",\"vel\":" + std::to_string(static_cast<int>(num(ev, "vel", 100))) + ",\"when\":" + when + "}");
+      post(play + "\"on\",\"n\":" + std::to_string(static_cast<int>(num(ev, "note", 60))) +
+           ",\"vel\":" + std::to_string(static_cast<int>(num(ev, "vel", 100))) + field(ev, "touch") + when);
     else if (ty == "noteOff")
-      post("{\"v\":1,\"op\":\"play\",\"e\":\"off\",\"n\":" + std::to_string(static_cast<int>(num(ev, "note", 60))) +
-           ",\"when\":" + when + "}");
+      post(play + "\"off\",\"n\":" + std::to_string(static_cast<int>(num(ev, "note", 60))) + when);
+    else if (ty == "pedal")
+      postSkippable(play + "\"pedal\",\"down\":" + (yyjson_get_bool(yyjson_obj_get(ev, "down")) ? "true" : "false") +
+                        when,
+                    "pedal");
+    else if (ty == "cc") {  // controller.js mapping: 1 mod, 11 expression, 7 volume, 64 sustain (>= 64 down)
+      const int cc = static_cast<int>(num(ev, "cc", -1));
+      const double value = num(ev, "value", 0.0);
+      if (cc == 1)
+        wheel("mod", value / 127.0);
+      else if (cc == 11)
+        wheel("expr", value / 127.0);
+      else if (cc == 7)
+        wheel("vol", value / 127.0);
+      else if (cc == 64)
+        postSkippable(play + "\"pedal\",\"down\":" + (value >= 64 ? "true" : "false") + when, "pedal");
+      else
+        skipped.insert("cc " + std::to_string(cc));
+    } else if (ty == "wheel")
+      postSkippable(play + "\"wheel\",\"src\":" + str(yyjson_obj_get(ev, "source")) +
+                        ",\"value\":" + str(yyjson_obj_get(ev, "value")) +
+                        ",\"glide\":" + std::to_string(num(ev, "glide", 0.0)) + when,
+                    "wheel");
+    else if (ty == "bend")
+      postSkippable(play + "\"bend\",\"x\":" + str(yyjson_obj_get(ev, "value")) + when, "bend");
     else if (ty == "param")
-      postSkippable("{\"v\":1,\"op\":\"set\",\"id\":7,\"path\":" + toJson(yyjson_obj_get(ev, "path")) +
-                        ",\"value\":" + toJson(yyjson_obj_get(ev, "value")) +
-                        ",\"glide\":" + std::to_string(num(ev, "glide", 0.0)) + ",\"when\":" + when + "}",
+      postSkippable("{\"v\":1,\"op\":\"set\",\"id\":7,\"path\":" + str(yyjson_obj_get(ev, "path")) +
+                        ",\"value\":" + str(yyjson_obj_get(ev, "value")) +
+                        ",\"glide\":" + std::to_string(num(ev, "glide", 0.0)) + when,
                     "param events");
+    else if (ty == "droneKey")
+      postSkippable("{\"v\":1,\"op\":\"drone\",\"id\":11,\"key\":{\"pc\":" + str(yyjson_obj_get(ev, "pc")) +
+                        ",\"minor\":" + (yyjson_get_bool(yyjson_obj_get(ev, "minor")) ? "true" : "false") +
+                        field(ev, "fade") + "}" + when,
+                    "droneKey");
+    else if (ty == "clickStart")
+      postSkippable("{\"v\":1,\"op\":\"click\",\"id\":12,\"action\":\"start\",\"countIn\":" +
+                        std::to_string(static_cast<int>(num(ev, "countIn", 0))) + ",\"quietAfter\":" +
+                        (yyjson_get_bool(yyjson_obj_get(ev, "quietAfter")) ? "true" : "false") + when,
+                    "clickStart");
+    else if (ty == "clickStop")
+      postSkippable("{\"v\":1,\"op\":\"click\",\"id\":12,\"action\":\"stop\"" + when, "clickStop");
+    else if (ty == "swell")
+      postSkippable(play + "\"swell\",\"start\":" + (yyjson_get_bool(yyjson_obj_get(ev, "start")) ? "true" : "false") +
+                        when,
+                    "swell");
     else
       skipped.insert("event " + ty);
   }

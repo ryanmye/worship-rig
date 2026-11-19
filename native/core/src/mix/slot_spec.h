@@ -1,4 +1,5 @@
-// Immutable per-slot description built on the control thread and attached to the graph by pointer.
+// Immutable per-slot description built on the control thread (T00 skeleton fields read by the builtin units and the
+// patch parser), and the test-injection buffer. Orchestrator-owned after T00b.
 #pragma once
 #include "mix/slot_eq.h"
 
@@ -16,6 +17,7 @@ struct SlotSpec {
 
 /** Stimulus injected at a node (rig_test_inject): control-side allocation, graph reads it, then hands it back. */
 struct InjectBuffer {
+  unsigned point = 0;  // index into kInjectPoints (graph/test_points.h)
   unsigned channels = 1;
   unsigned long long frames = 0;
   long long startFrame = 0;

@@ -96,6 +96,16 @@ void rig_host_devices_changed(rig_engine *e) {
   if (e) impl(e)->hostDevicesChanged();
 }
 
+void rig_host_memory_pressure(rig_engine *e, int level) {
+  if (e) impl(e)->memoryPressure(level < 1 ? 1 : level > 2 ? 2 : level);
+}
+
+rig_status rig_set_paths(rig_engine *e, const char *user_manifest, const char *pads_dir) {
+  if (!e || (!user_manifest && !pads_dir)) return RIG_E_INVALID;
+  impl(e)->setPaths(user_manifest, pads_dir);
+  return RIG_OK;
+}
+
 rig_status rig_midi_in(rig_engine *e, const char *port_id, const uint8_t *bytes, size_t len, uint64_t host_time_ns) {
   return e ? impl(e)->midiIn(port_id, bytes, len, host_time_ns) : RIG_E_INVALID;
 }
