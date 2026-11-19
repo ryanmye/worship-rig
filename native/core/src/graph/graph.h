@@ -2,10 +2,11 @@
 // it is a skeleton: 4 slot strips (fader -> SlotEq -> pan) carrying test voices, a sum and a master gain.
 #pragma once
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 
-#include "include/rig/rig_engine.h"
+#include "rig/rig_engine.h"
 #include "dsp/test_voice.h"
 #include "mix/slot_spec.h"
 #include "runtime/command.h"
@@ -27,9 +28,9 @@ inline constexpr std::uint32_t slot(std::uint32_t i, std::uint32_t which) { retu
 enum class Tap : std::uint32_t { Out = 0, Slot0Pan, Slot1Pan, Slot2Pan, Slot3Pan };
 enum class InjectNode : std::uint32_t { Slot0Strip = 0 };
 
-struct GraphStats {
-  std::uint32_t heapDropped = 0, voicesStolen = 0, paramDropped = 0;
-  std::uint64_t quanta = 0;
+struct GraphStats {  // written on the audio thread, read anywhere (relaxed)
+  std::atomic<std::uint32_t> heapDropped{0}, voicesStolen{0}, paramDropped{0};
+  std::atomic<std::uint64_t> quanta{0};
 };
 
 class Graph {
@@ -48,6 +49,8 @@ class Graph {
   const GraphStats &stats() const { return stats_; }
   std::uint32_t liveVoices() const;
   void setSampleRate(double sr) { sr_ = sr; }
+  /** Host-side numbers folded into the next meter snapshot (audio thread). */
+  void setHostStats(float cpu, std::uint32_t xruns) { cpu_ = cpu; xruns_ = xruns; }
 
  private:
   struct Slot {
@@ -79,6 +82,8 @@ class Graph {
   float peakRing_[64][2] = {};
   unsigned peakPos_ = 0;
   GraphStats stats_;
+  float cpu_ = 0;
+  std::uint32_t xruns_ = 0;
 };
 
 }  // namespace rig

@@ -46,7 +46,7 @@ void Graph::drainCommands() {
   while (in_.pop(c)) {
     if (c.frame == kFrameNow) c.frame = frame_;
     if (heapN_ == kHeap) {
-      ++stats_.heapDropped;
+      stats_.heapDropped.fetch_add(1, std::memory_order_relaxed);
       if (c.op == Op::AttachSlot) garbage(GarbageKind::SlotSpec, c.p.ptr);
       continue;
     }
@@ -77,7 +77,7 @@ void Graph::apply(const Command &c) {
       else if (c.op == Op::ParamExp) p->exponentialRampToValueAtTime(c.f.a, c.f.b);
       else if (c.op == Op::ParamTarget) p->setTargetAtTime(c.f.a, c.f.b, c.f.c);
       else p->cancelAndHoldAtTime(c.f.b);
-      stats_.paramDropped += p->dropped() - before;
+      stats_.paramDropped.fetch_add(p->dropped() - before, std::memory_order_relaxed);
       break;
     }
     case Op::AttachSlot: {
@@ -106,7 +106,7 @@ void Graph::apply(const Command &c) {
           }
         if (!v) {  // steal round-robin
           v = &s.voices[s.nextVoice++ % kVoices];
-          ++stats_.voicesStolen;
+          stats_.voicesStolen.fetch_add(1, std::memory_order_relaxed);
         }
         v->start(*s.spec, note, vel, c.frame, sr_);
       }
@@ -249,7 +249,7 @@ void Graph::renderQuantum(float *const *out, unsigned channels) {
     }
   }
   frame_ = q1;
-  ++stats_.quanta;
+  stats_.quanta.fetch_add(1, std::memory_order_relaxed);
   peakRing_[peakPos_][0] = pk[0];
   peakRing_[peakPos_][1] = pk[1];
   peakPos_ = (peakPos_ + 1) & 63;
@@ -262,6 +262,8 @@ void Graph::renderQuantum(float *const *out, unsigned channels) {
     m.out_peak[1] = std::max(m.out_peak[1], r[1]);
   }
   m.voices = liveVoices();
+  m.cpu_load = cpu_;
+  m.xruns = xruns_;
   meters_.write(m);
 }
 

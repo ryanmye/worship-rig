@@ -278,7 +278,7 @@ export class BridgeEngine extends EventTarget {
     for (const k of ['state', 'sleep', 'latencyMs', 'sampleRate', 'deviceId', 'channels']) {
       if (s[k] !== undefined && s[k] !== this._st[k]) {
         this._st[k] = s[k];
-        changed = true;
+        if (k !== 'sleep') changed = true; // sleep has its own event
       }
     }
     return changed;
@@ -774,7 +774,7 @@ export class BridgeEngine extends EventTarget {
   }
 
   fadeOutAll(seconds = 6, { when } = {}) {
-    this._send('play', { e: 'fade', seconds: Math.max(0.05, Number(seconds) || 6), ...this._whenArg(when) });
+    this._send('play', { e: 'fade', seconds: Math.max(0.05, Number.isFinite(Number(seconds)) ? Number(seconds) : 6), ...this._whenArg(when) });
   }
 
   noteInput({ when } = {}) {
@@ -939,10 +939,9 @@ export class BridgeEngine extends EventTarget {
     this._rta.readAt = now;
     if (!this._rtaOn) {
       this._rtaOn = true;
-      this._touchMeters();
-      this._sendMeters();
+      if (this._meterRate === METER_RATE_ACTIVE) this._sendMeters(); // else _touchMeters sends the new set
     }
-    this._armSweep();
+    this._touchMeters();
     if (!this._rta.bytes && this._rta.b64) {
       try {
         const bin = atob(this._rta.b64);
@@ -964,12 +963,10 @@ export class BridgeEngine extends EventTarget {
     if (!Number.isInteger(i) || i < 0 || i >= SLOT_COUNT || !this._started) return null;
     if (!this._patch || !this._patch.slots[i] || this._lowResource) return { peak: 0, rms: 0 };
     const now = this._now();
-    if (!this._slotRead[i]) {
-      this._slotRead[i] = now;
-      this._touchMeters();
-      this._sendMeters();
-    } else this._slotRead[i] = now;
-    this._armSweep();
+    const added = !this._slotRead[i];
+    this._slotRead[i] = now;
+    if (added && this._meterRate === METER_RATE_ACTIVE) this._sendMeters(); // else _touchMeters sends the new set
+    this._touchMeters();
     const s = this._slots[i];
     return s ? { peak: Number(s[0]) || 0, rms: Number(s[1]) || 0 } : { peak: 0, rms: 0 };
   }
