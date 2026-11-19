@@ -47,8 +47,9 @@ recordTap, reloadManifests, sleepBlockers, volumeCC (need MIDI, pads, recorder, 
 
 ## Contract gaps
 
-- G1: `when` is sent by setRouting, eqAudition, drone.setKey, drone.configure but song/config/drone ops list none.
-- G2: `set` lists path/value as required, but the batch form omits them.
+- G1 (closed in SETUP_REVIEW): `when` is sent by setRouting, eqAudition, drone.setKey, drone.configure; song/config/drone
+  ops now list it.
+- G2 (closed in SETUP_REVIEW): `set` path/value are optional in the spec (required unless `batch` is given).
 - G3: clickStart is sync in the contract (`{t0, downbeat}`); native cannot answer sync. Shim returns an estimate.
 - G4: setClockSink(fn) has no port id but `config.midiClock.port` needs one. Shim sends `fn.portId ?? 'auto'`.
 - G5: `get sampleStatus` shape is ambiguous. Shim relies on `load{phase:'samples', loaded:{id:bool}}` events.
