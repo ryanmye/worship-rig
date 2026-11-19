@@ -26,11 +26,12 @@ TEST_SUITE("dummy-module") {
     CHECK(dummy::counters().built >= 1);
     REQUIRE(rig_test_tap(e.e, "fx.chorus.output") == RIG_OK);
 
-    // A module opcode from the scratch range, scheduled at 0.01 s.
+    // A module opcode from the scratch range at frame 512. The graph applies a command at the start of the quantum
+    // that contains Command::frame; a unit that needs sub-quantum accuracy reads c.frame itself.
     rig::Command c{};
     c.op = rig::opOf(dummy::DummyOp::SetDc);
     c.f.a = 0.25;
-    REQUIRE(m.sendUnitOp(rig::UnitSlot::Chorus, c, 0.01));
+    REQUIRE(m.sendUnitOp(rig::UnitSlot::Chorus, c, 512.0 / 48000.0));
     // An injected ramp into the chorus send bus passes through the unit.
     std::vector<float> ramp(4800);
     for (size_t i = 0; i < ramp.size(); ++i) ramp[i] = static_cast<float>(i) / 48000.0f;
@@ -39,8 +40,8 @@ TEST_SUITE("dummy-module") {
 
     const auto out = e.render(9600);
     CHECK(out[0][0] == 0.0f);
-    CHECK(out[0][479] == 0.0f);  // frame 480 = 0.01 s
-    CHECK(out[0][480] == doctest::Approx(0.25));
+    CHECK(out[0][511] == 0.0f);
+    CHECK(out[0][512] == doctest::Approx(0.25));
     CHECK(out[1][1000] == doctest::Approx(0.25));
     CHECK(out[0][2400 + 100] == doctest::Approx(0.25 + 100.0 / 48000.0));
 
