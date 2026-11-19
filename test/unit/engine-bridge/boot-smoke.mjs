@@ -25,7 +25,8 @@ const opt = (n, d) => (args.includes(n) ? args[args.indexOf(n) + 1] : d);
 const SECONDS = Number(opt('--seconds', 10));
 
 const MIME = {
-  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png',
   '.woff2': 'font/woff2', '.ico': 'image/x-icon', '.md': 'text/plain; charset=utf-8',
 };
@@ -38,13 +39,17 @@ function serve() {
       res.end(body);
     };
     if (u.pathname === '/__bridge/engine-api.json') return send(200, fs.readFileSync(apiPath));
-    if (u.pathname === '/api/health') return send(200, JSON.stringify({ ok: true, app: 'worship-rig', version: 'smoke', userSamples: false }));
+    if (u.pathname === '/api/health') {
+      return send(200, JSON.stringify({ ok: true, app: 'worship-rig', version: 'smoke', userSamples: false }));
+    }
     if (u.pathname.startsWith('/api/user-samples')) return send(200, JSON.stringify({ instruments: [] }));
     if (u.pathname === '/api/heartbeat' || u.pathname === '/favicon.ico') return send(204, '');
     let p = path.normalize(decodeURIComponent(u.pathname));
     if (p.endsWith('/')) p += 'index.html';
     const file = path.join(appDir, p);
-    if (!file.startsWith(appDir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return send(404, 'not found', 'text/plain');
+    if (!file.startsWith(appDir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+      return send(404, 'not found', 'text/plain');
+    }
     return send(200, fs.readFileSync(file), MIME[path.extname(file)] || 'application/octet-stream');
   });
   return new Promise((r) => srv.listen(0, '127.0.0.1', () => r(srv)));
@@ -84,6 +89,12 @@ async function launch(chromium) {
     throw e;
   }
 }
+
+/** Entries of a __bridgeSeen snapshot without the `has:` probes. */
+const members = (seen, entries = false) => {
+  const e = Object.entries(seen).filter(([k]) => !k.startsWith('has:'));
+  return entries ? e : e.map(([k]) => k);
+};
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -129,13 +140,16 @@ async function main() {
   });
   const ui = () => page.evaluate(() => {
     const txt = (s) => (document.querySelector(s) ? document.querySelector(s).textContent.trim() : null);
-    const vis = (s) => { const e = document.querySelector(s); return !!e && !e.hidden && e.getClientRects().length > 0; };
+    const vis = (s) => {
+      const e = document.querySelector(s);
+      return !!e && !e.hidden && e.getClientRects().length > 0;
+    };
     const r = globalThis.__rig;
     return {
       audioText: txt('#audio-text'), latency: txt('#audio-latency'), readyText: txt('#ready-text'),
       midi: txt('#midi-name'), audioBannerVisible: vis('#audio-banner'), startOverlayVisible: vis('#overlay-start'),
       toasts: [...document.querySelectorAll('#toasts > *')].map((e) => e.textContent.trim().slice(0, 120)),
-      status: r ? { audio: r.controller.status.audio, latencyMs: r.controller.status.latencyMs, ready: r.controller.status.ready } : null,
+      status: r ? (({ audio, latencyMs, ready }) => ({ audio, latencyMs, ready }))(r.controller.status) : null,
       ctxState: r ? r.engine.ctx.state : null,
     };
   });
@@ -260,8 +274,10 @@ async function main() {
         d = document.querySelector('#view-edit details[data-sec$="-adv"]');
         if (!d) await new Promise((r) => setTimeout(r, 50));
       }
-      if (!d) throw new Error(`no Advanced section found (view-edit hidden=${document.querySelector('#view-edit').hidden}, `
-        + `${document.querySelectorAll('#view-edit *').length} elements)`);
+      if (!d) {
+        const ve = document.querySelector('#view-edit');
+        throw new Error(`no Advanced section (view-edit hidden=${ve.hidden}, ${ve.querySelectorAll('*').length} nodes)`);
+      }
       d.open = true;
       d.dispatchEvent(new Event('toggle'));
     });
@@ -285,7 +301,10 @@ async function main() {
   const endUi = await ui();
   const endSeen = await seenNow();
   const endWire = await wire();
-  const rawStats = await page.evaluate(() => (globalThis.__bridgeRaw ? { ...globalThis.__bridgeRaw._link.stats } : null));
+  const rawStats = await page.evaluate(() => {
+    const raw = globalThis.__bridgeRaw;
+    return raw ? { ...raw._link.stats } : null;
+  });
   await browser.close();
   srv.close();
 
@@ -313,13 +332,14 @@ async function main() {
   const topTouched = [...touched].filter((n) => !n.startsWith('ctx.') && n !== 'drone').sort();
   const untouched = [...contract].filter((n) => !touched.has(n) && !(n === 'ctx' && ctxMembers.length)).sort();
   const report = {
-    boot: { ok: booted, ms: bootMs, ui: bootUi, engineCallsDuringBoot: Object.keys(bootSeen).filter((k) => !k.startsWith('has:')).length },
+    boot: { ok: booted, ms: bootMs, ui: bootUi, engineCallsDuringBoot: members(bootSeen).length },
     session: { seconds: SECONDS, steps, ui: endUi },
     engineMembers: {
       touchedByUi: topTouched, ctxMembersTouched: ctxMembers,
-      optionalProbes: [...optionalProbes].sort(), notInContract: [...notInContract].sort(), missingOnShim: [...missingOnShim].sort(),
+      optionalProbes: [...optionalProbes].sort(), notInContract: [...notInContract].sort(),
+      missingOnShim: [...missingOnShim].sort(),
       contractMembersNeverTouched: untouched,
-      counts: Object.fromEntries(Object.entries(endSeen).filter(([k]) => !k.startsWith('has:')).sort((a, b) => b[1] - a[1]).slice(0, 25)),
+      counts: Object.fromEntries(members(endSeen, true).sort((a, b) => b[1] - a[1]).slice(0, 25)),
     },
     wire: {
       afterBoot: bootWire && bootWire.calls, afterSession: endWire && endWire.calls,
@@ -331,7 +351,8 @@ async function main() {
   if (flag('--json')) console.log(JSON.stringify(report, null, 2));
   else printReport(report);
   const bad = report.page.pageErrors.length || !report.boot.ok || report.engineMembers.notInContract.length
-    || report.engineMembers.missingOnShim.length || (report.wire.findings || []).some((f) => f.kind !== 'unknown-field');
+    || report.engineMembers.missingOnShim.length
+    || (report.wire.findings || []).some((f) => f.kind !== 'unknown-field');
   process.exitCode = bad ? 1 : 0;
 }
 
@@ -355,7 +376,9 @@ function printReport(r) {
   L(`  link: ${JSON.stringify(r.wire.link)}`);
   L(`  validation findings: ${JSON.stringify(r.wire.findings)}`);
   L('PAGE');
-  for (const [k, v] of Object.entries(r.page)) L(`  ${k}: ${v.length}${v.length ? `\n    ${v.slice(0, 12).join('\n    ')}` : ''}`);
+  for (const [k, v] of Object.entries(r.page)) {
+    L(`  ${k}: ${v.length}${v.length ? `\n    ${v.slice(0, 12).join('\n    ')}` : ''}`);
+  }
 }
 
 main().catch((e) => {

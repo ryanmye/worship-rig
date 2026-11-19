@@ -60,7 +60,8 @@ export function checkSpec(spec, value) {
     if (a.endsWith('[]')) {
       if (!Array.isArray(value)) return false;
       const inner = a.slice(0, -2);
-      return value.every((x) => (inner === 'string' ? typeof x === 'string' : inner === 'int' ? Number.isInteger(x) : true));
+      const okItem = (x) => (inner === 'string' ? typeof x === 'string' : inner === 'int' ? Number.isInteger(x) : true);
+      return value.every(okItem);
     }
     if (a.startsWith('[')) return Array.isArray(value);
     if (a.startsWith('{') || ['object', 'Patch', 'Routing', 'touch', 'SongDrone'].includes(a)) return isObj(value);
@@ -286,8 +287,8 @@ export class MockNative {
   // ------------------------------------------------------------------------------------------- state events
   _state(extra = {}) {
     return {
-      state: this.audio.started ? 'running' : 'suspended', sleep: this.st.sleep, latencyMs: 12, sampleRate: this.sampleRate,
-      deviceId: this.st.deviceId, channels: this.channels, ...extra,
+      state: this.audio.started ? 'running' : 'suspended', sleep: this.st.sleep, latencyMs: 12,
+      sampleRate: this.sampleRate, deviceId: this.st.deviceId, channels: this.channels, ...extra,
     };
   }
 
@@ -295,8 +296,8 @@ export class MockNative {
     if (m.protocol !== PROTOCOL) return this._fail(m, 'protocol', `protocol ${m.protocol} not supported`);
     this.helloDone = true;
     return this._reply(m.id, true, {
-      protocol: PROTOCOL, minor: MINOR, engine: 'worship-rig-core mock 0.0', caps: ['mock'], sampleRate: this.sampleRate,
-      seed: this.seed,
+      protocol: PROTOCOL, minor: MINOR, engine: 'worship-rig-core mock 0.0', caps: ['mock'],
+      sampleRate: this.sampleRate, seed: this.seed,
     });
   }
 
@@ -381,11 +382,13 @@ export class MockNative {
     const patches = m.patches || [];
     if (m.action === 'preload') {
       this._emitSamples(patches);
-      this._emit('load', { phase: 'preload', decodedMB: 12 * patches.length, pinnedMB: 12 * patches.length, deferred: 0 });
-      return this._reply(m.id, true, { decodedMB: 12 * patches.length, pinnedMB: 12 * patches.length, deferred: 0 });
+      const mb = 12 * patches.length;
+      this._emit('load', { phase: 'preload', decodedMB: mb, pinnedMB: mb, deferred: 0 });
+      return this._reply(m.id, true, { decodedMB: mb, pinnedMB: mb, deferred: 0 });
     }
     if (m.action === 'estimate') {
-      return this._reply(m.id, true, { mb: 1.75 * 40 * patches.length, exact: false, samples: 40 * patches.length, capMB: 700 });
+      const samples = 40 * patches.length;
+      return this._reply(m.id, true, { mb: 1.75 * samples, exact: false, samples, capMB: 700 });
     }
     return this._reply(m.id, true, { ok: true });
   }
@@ -538,7 +541,8 @@ export class MockNative {
   op_midi(m) {
     if (m.action === 'listen') {
       this._emit('midi', {
-        type: 'ports', ports: [{ id: 'mock-in', name: 'Mock Keys', manufacturer: 'Mock', state: 'connected', kind: 'input' }],
+        type: 'ports',
+        ports: [{ id: 'mock-in', name: 'Mock Keys', manufacturer: 'Mock', state: 'connected', kind: 'input' }],
       });
       return this._reply(m.id, true, { ports: [] });
     }
@@ -554,7 +558,8 @@ export class MockNative {
     const secs = this._rec ? this.t() - this._rec.t : 0;
     this._rec = null;
     this._emit('rec', { state: 'stopped', path: '/tmp/mock.wav' });
-    return this._reply(m.id, true, { path: '/tmp/mock.wav', seconds: secs, bytes: Math.round(secs * this.sampleRate * 4) });
+    const bytes = Math.round(secs * this.sampleRate * 4);
+    return this._reply(m.id, true, { path: '/tmp/mock.wav', seconds: secs, bytes });
   }
 
   // ------------------------------------------------------------------------------------------- ticks
@@ -582,7 +587,8 @@ export class MockNative {
       cpu: 0.02,
     };
     if (this.meters.slots.length) {
-      tick.slots = [0, 1, 2, 3].map((i) => (this.meters.slots.includes(i) ? [this.peak[0], this.peak[0] * 0.7] : [0, 0]));
+      const on = (i) => this.meters.slots.includes(i);
+      tick.slots = [0, 1, 2, 3].map((i) => (on(i) ? [this.peak[0], this.peak[0] * 0.7] : [0, 0]));
     }
     if (this.meters.rta) {
       const bytes = new Uint8Array(2048);

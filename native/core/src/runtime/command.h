@@ -37,14 +37,16 @@ struct Command {
   std::uint16_t sub;
   std::uint32_t target;
   std::uint32_t aux;
+  struct FloatArgs {
+    double a, b, c, d, e;
+  };
+  struct PtrArgs {
+    void *ptr;
+    std::uint64_t u0, u1, u2, u3;
+  };
   union {
-    struct {
-      double a, b, c, d, e;
-    } f;
-    struct {
-      void *ptr;
-      std::uint64_t u0, u1, u2, u3;
-    } p;
+    FloatArgs f;
+    PtrArgs p;
   };
 };
 static_assert(sizeof(Command) == 64, "Command is one cache line");
@@ -65,10 +67,11 @@ struct AudioEvent {
   EventKind kind;
   std::uint16_t sub;
   std::uint32_t aux;
+  struct FloatArgs {
+    double a, b;
+  };
   union {
-    struct {
-      double a, b;
-    } f;
+    FloatArgs f;
     void *ptr;
   };
 };

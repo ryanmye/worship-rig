@@ -23,6 +23,19 @@ Graph::Graph(double sr, CommandQueue &in, EventQueue &out, Seqlock<rig_meters> &
   for (auto &s : slots_) s.pan.setValue(0.0);
 }
 
+void freeCommandPayload(const Command &c) {
+  if (c.op == Op::AttachSlot)
+    delete static_cast<SlotSpec *>(c.p.ptr);
+  else if (c.op == Op::TestInject)
+    delete static_cast<InjectBuffer *>(c.p.ptr);
+}
+
+Graph::~Graph() {
+  for (std::size_t i = 0; i < heapN_; ++i) freeCommandPayload(heap_[i]);
+  for (auto &s : slots_) delete s.spec;
+  delete inject_;
+}
+
 std::uint32_t Graph::liveVoices() const {
   std::uint32_t n = 0;
   for (const auto &s : slots_)

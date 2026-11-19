@@ -28,7 +28,8 @@ export const DEFAULT_TIMEOUTS = Object.freeze({
 const FALLBACK_TIMEOUT_MS = 10000;
 
 /**
- * @typedef {{post:(msg:object)=>void, onMessage:(cb:(m:object|object[])=>void)=>(()=>void)|void, close?:()=>void}} Transport
+ * @typedef {{post:(msg:object)=>void, close?:()=>void,
+ *   onMessage:(cb:(m:object|object[])=>void)=>(()=>void)|void}} Transport
  */
 
 export class BridgeLink {
@@ -149,7 +150,8 @@ export class BridgeLink {
       } else if (m.ok) e.resolve(m.result);
       else {
         const er = m.error || {};
-        e.reject(new BridgeError(er.code || 'internal', er.message || `${e.op} failed`, { op: e.op, detail: er.detail }));
+        const extra = { op: e.op, detail: er.detail };
+        e.reject(new BridgeError(er.code || 'internal', er.message || `${e.op} failed`, extra));
       }
       return undefined;
     }

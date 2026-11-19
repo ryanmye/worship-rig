@@ -80,7 +80,8 @@ test('BridgeEngine picks the webkit transport by default and talks through it', 
     assert.equal(win.posted[0].op, 'hello');
     assert.equal(win.posted[0].v, 1);
     assert.equal(typeof win.posted[0].id, 'number');
-    globalThis.__rigNative.receive({ v: 1, re: win.posted[0].id, ok: true, result: { protocol: 1, sampleRate: 44100 } });
+    const result = { protocol: 1, sampleRate: 44100 };
+    globalThis.__rigNative.receive({ v: 1, re: win.posted[0].id, ok: true, result });
     await new Promise((r) => setImmediate(r));
     assert.equal(e.ctx.sampleRate, 44100);
     e._dispose();

@@ -106,7 +106,8 @@ test('driving every contracted member sends only valid messages and covers all 1
   assert.equal(e.eqAudition(0, 'bypass', { when: 7 }), true);
   e.drone.setKey(2, { minor: true, fade: 3, when: 7 });
   e.drone.configure({ mode: 'synth', gain: 0.5 }, { when: 7 });
-  assert.equal(e.drone.attachFiles([{ name: 'Pad C.wav', path: '/p/Pad C.wav' }, { name: 'junk.wav', path: '/p/j' }]), 1);
+  const pads = [{ name: 'Pad C.wav', path: '/p/Pad C.wav' }, { name: 'junk.wav', path: '/p/j' }];
+  assert.equal(e.drone.attachFiles(pads), 1);
   e.noteInput();
   e.noteOn(60, 100, { touch: { shape: 1, min: 0, max: 1, top: 127 } });
   e.noteOff(60);

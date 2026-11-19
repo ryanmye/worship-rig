@@ -50,7 +50,7 @@ test('latency is sent with start and restart; restart({sinkId}) maps to deviceId
   assert.equal(r.engine.latency, 'interactive');
 });
 
-test('commit(): true once for the latest token, false for stale, repeated, unknown and post-restart tokens', async () => {
+test('commit(): true once, for the latest token only (not stale, repeated, unknown, post-restart)', async () => {
   const r = rig();
   const e = r.engine;
   await e.start();
@@ -124,7 +124,7 @@ test('setParam with {when} or glide is sent on its own with those fields', async
   assert.deepEqual([s[1].path, s[1].when], ['drone.gain', 9]);
 });
 
-test('perform calls: before start they return false and send nothing; after start they map to play messages', async () => {
+test('perform calls: false and silent before start; mapped to play messages after', async () => {
   const r = rig();
   const e = r.engine;
   assert.equal(e.noteOn(60, 100), false);
@@ -168,7 +168,8 @@ test('song ops: transpose clamps, tempo null clears, key is reduced mod 12, time
   e.setTimeSig('6/8', { newBar: false });
   await flush();
   assert.deepEqual(ops(r, 'song').map(({ v, op, ...m }) => m), [
-    { transpose: 48 }, { tempo: null }, { tempo: 96 }, { key: { pc: 2, minor: true } }, { timeSig: '6/8', newBar: false },
+    { transpose: 48 }, { tempo: null }, { tempo: 96 }, { key: { pc: 2, minor: true } },
+    { timeSig: '6/8', newBar: false },
   ]);
 });
 
@@ -176,8 +177,10 @@ test('getEqResponse equals eq-math at the engine sample rate; perBand lists lc, 
   const r = rig({ sampleRate: 44100 });
   const e = r.engine;
   await e.start();
-  const eq = { b1: { on: true, type: 'lowshelf', hz: 120, db: 3, q: 0.7 }, b3: { on: true, type: 'peak', hz: 1000, db: -4, q: 1 },
-    cutHz: 80, hiCutHz: 12000 };
+  const eq = {
+    b1: { on: true, type: 'lowshelf', hz: 120, db: 3, q: 0.7 }, b3: { on: true, type: 'peak', hz: 1000, db: -4, q: 1 },
+    cutHz: 80, hiCutHz: 12000,
+  };
   e.commit(await e.prepare(patchOf(slot('salamander-piano', { eq }))));
   const f = [50, 120, 1000, 5000, 30000];
   const total = e.getEqResponse(0, f);
@@ -185,7 +188,8 @@ test('getEqResponse equals eq-math at the engine sample rate; perBand lists lc, 
   const want = eqResponseDb(eq, f.map((x) => Math.min(x, 22050)), 44100);
   total.forEach((v, i) => assert.ok(Math.abs(v - want[i]) < 1e-4, `bin ${i}: ${v} vs ${want[i]}`));
   const pb = e.getEqResponse(0, f, { perBand: true });
-  assert.deepEqual(Object.keys(pb.bands).sort(), ['b1', 'b3', 'b8', 'hc', 'lc']); // b8: the legacy 6 kHz shelf, 0 dB = identity
+  // b8 is the legacy 6 kHz shelf: present, 0 dB = identity
+  assert.deepEqual(Object.keys(pb.bands).sort(), ['b1', 'b3', 'b8', 'hc', 'lc']);
   for (let i = 0; i < f.length; i++) {
     const sum = Object.values(pb.bands).reduce((a, c) => a + c[i], 0);
     assert.ok(Math.abs(sum - pb.total[i]) < 1e-3);
@@ -266,7 +270,9 @@ test('drone mirrors: key, cfg and keyed files are what the UI reads back', async
   assert.equal(d.cfg.continueAcrossSongs, true);
   d.setKey(14, { minor: false });
   assert.deepEqual(d.key, { pc: 2, minor: false });
-  const n = d.attachFiles([{ name: 'Pad D.wav', url: 'u1', path: '/p/D.wav' }, { name: 'Pad D copy.wav', url: 'u2' }, { name: 'x.wav' }]);
+  const n = d.attachFiles([
+    { name: 'Pad D.wav', url: 'u1', path: '/p/D.wav' }, { name: 'Pad D copy.wav', url: 'u2' }, { name: 'x.wav' },
+  ]);
   assert.equal(n, 1);
   assert.ok(d.files instanceof Map && d.files.size === 1);
   d.setKey(2, { minor: false });
@@ -305,7 +311,7 @@ test('sleep/wake are only sent from the right state; applyRuntimeState is a no-o
   assert.equal(await e.wake(), true);
 });
 
-test('listInstruments hides hidden entries, keeps identity until refreshed; reloadManifests returns the list', async () => {
+test('listInstruments hides hidden entries and keeps identity until refreshed', async () => {
   const r = rig();
   await r.engine.start();
   const a = r.engine.listInstruments();

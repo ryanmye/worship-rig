@@ -71,9 +71,11 @@ Engine::~Engine() {
     wake_.release();
     control_.join();
   }
-  // Free whatever the graph handed back or never consumed.
+  // Free whatever the graph handed back or never consumed (the Graph destructor frees what it still holds).
   AudioEvent ev;
   while (evQ_.pop(ev)) model_.onAudioEvent(ev);
+  Command c;
+  while (cmdQ_.pop(c)) freeCommandPayload(c);
 }
 
 bool Engine::send(Command c) {

@@ -107,7 +107,9 @@ test('load samples feeds the cache/registry facades main.js reads for "Loading n
 
 test('click event carries the metronome state and updates clickState()', async () => {
   const r = rig();
-  const s = { running: true, counting: false, bpm: 90, sig: '4/4', output: 'main', level: 0.5, record: false, downbeat: 3 };
+  const s = {
+    running: true, counting: false, bpm: 90, sig: '4/4', output: 'main', level: 0.5, record: false, downbeat: 3,
+  };
   r.native.post({ v: 1, ev: 'click', ...s });
   assert.deepEqual(r.events[0], { name: 'click', detail: s });
   assert.deepEqual(r.engine.clickState(), s);

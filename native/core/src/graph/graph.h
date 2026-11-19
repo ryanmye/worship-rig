@@ -35,11 +35,15 @@ struct GraphStats {  // written on the audio thread, read anywhere (relaxed)
   std::atomic<std::uint64_t> quanta{0};
 };
 
+/** Frees what a never-applied command owns (shutdown path; control thread). */
+void freeCommandPayload(const Command &c);
+
 class Graph {
  public:
   static constexpr std::size_t kSlots = 4, kVoices = 16, kHeap = 8192;
 
   Graph(double sampleRate, CommandQueue &in, EventQueue &out, Seqlock<rig_meters> &meters);
+  ~Graph();
 
   /** Move queued commands into the pending heap. */
   void drainCommands();

@@ -1,0 +1,122 @@
+# XcodeGen spec for the Worship Rig native shell (2.0). UNBUILT on Linux: written without a Mac, to be generated and
+# opened on one:
+#   brew install xcodegen cmake && cd native/apple && ./scripts/build-core.sh && xcodegen && open WorshipRig.xcodeproj
+# Two app targets share Sources/Shared and Sources/Audio:  WorshipRig-macOS (macOS 14.5+)  and  WorshipRig-iPad
+# (iPadOS 17.5+; the floor comes from light-dark() in the themes, WEBKIT_AUDIT section 3).
+# The C++ core is NOT compiled by Xcode: scripts/build-core.sh builds native/core with CMake for each slice and wraps
+# the result in build/RigCore.xcframework, so CMake stays the single source of truth for the core's source list.
+name: WorshipRig
+
+options:
+  bundleIdPrefix: com.ryanmye
+  createIntermediateGroups: true
+  developmentLanguage: en
+  deploymentTarget:
+    macOS: "14.5"
+    iOS: "17.5"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "2.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CLANG_CXX_LANGUAGE_STANDARD: c++20
+    CLANG_CXX_LIBRARY: libc++
+    GCC_C_LANGUAGE_STANDARD: gnu11
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    SWIFT_OBJC_BRIDGING_HEADER: Sources/Shared/RigShell-Bridging-Header.h
+    # the xcframework adds its own header path; this one makes "rig_apple_*.h" and <rig/rig_engine.h> resolvable even
+    # when the framework search is the thing that is broken (first-build checklist item 3)
+    HEADER_SEARCH_PATHS: "$(SRCROOT)/Sources/Audio $(SRCROOT)/../core/include"
+    OTHER_LDFLAGS: "-lc++"
+    # For the iPad: Xcode > Settings > Accounts > add your Apple ID, then paste the Personal Team id here (or pick the
+    # team in the target's Signing & Capabilities tab). A free Apple ID works; the install expires after 7 days.
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  WorshipRig-macOS:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.5"
+    sources:
+      - path: Sources/Shared
+      - path: Sources/Audio
+      - path: Sources/macOS
+        optional: true
+      # the web app and the two docs the page links to, as folder references (copied verbatim into Resources/)
+      - path: ../../app
+        type: folder
+        buildPhase: resources
+      - path: ../../docs
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - framework: build/RigCore.xcframework
+        embed: false
+      - sdk: CoreAudio.framework
+      - sdk: AudioToolbox.framework
+      - sdk: CoreMIDI.framework
+      - sdk: WebKit.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ryanmye.worshiprig.native
+        PRODUCT_NAME: "Worship Rig"
+        ENABLE_HARDENED_RUNTIME: NO # first build: ad-hoc signed, not sandboxed (the shell reads ~/Music itself later)
+        CODE_SIGN_IDENTITY: "-"
+    info:
+      path: Config/Info-macOS.plist
+      properties:
+        CFBundleDisplayName: Worship Rig
+        LSMinimumSystemVersion: "14.5"
+        LSApplicationCategoryType: public.app-category.music
+        NSHighResolutionCapable: true
+        NSMicrophoneUsageDescription: Worship Rig does not record from a microphone.
+    entitlements:
+      path: Config/WorshipRig-macOS.entitlements
+      properties: {}
+
+  WorshipRig-iPad:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.5"
+    sources:
+      - path: Sources/Shared
+      - path: Sources/Audio
+      - path: Sources/iPad
+        optional: true
+      - path: ../../app
+        type: folder
+        buildPhase: resources
+      - path: ../../docs
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - framework: build/RigCore.xcframework
+        embed: false
+      - sdk: CoreAudio.framework
+      - sdk: AudioToolbox.framework
+      - sdk: CoreMIDI.framework
+      - sdk: AVFoundation.framework
+      - sdk: WebKit.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ryanmye.worshiprig.native.ipad
+        PRODUCT_NAME: "Worship Rig"
+        TARGETED_DEVICE_FAMILY: "2" # iPad only
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+    info:
+      path: Config/Info-iPad.plist
+      properties:
+        CFBundleDisplayName: Worship Rig
+        UILaunchScreen: {}
+        UIRequiresFullScreen: true
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIBackgroundModes: [audio] # keep playing when the app is not frontmost
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        ITSAppUsesNonExemptEncryption: false
+        NSMicrophoneUsageDescription: Worship Rig does not record from a microphone.

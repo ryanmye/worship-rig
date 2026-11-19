@@ -214,7 +214,9 @@ export class BridgeEngine extends EventTarget {
     this._hello = this._link.request('hello', { protocol: PROTOCOL, app: opts.app || 'worship-rig-ui', caps: [] })
       .then((r) => {
         this._info = r || null;
-        if (!r || r.protocol !== PROTOCOL) throw new BridgeError('protocol', `native speaks protocol ${r && r.protocol}`);
+        if (!r || r.protocol !== PROTOCOL) {
+          throw new BridgeError('protocol', `native speaks protocol ${r && r.protocol}`);
+        }
         if (Number.isFinite(r.sampleRate)) this._st.sampleRate = r.sampleRate;
         return r;
       })
@@ -635,7 +637,8 @@ export class BridgeEngine extends EventTarget {
   eqAudition(slot, mode = 'on', { when } = {}) {
     const i = Number(slot);
     if (!Number.isInteger(i) || i < 0 || i >= SLOT_COUNT) return false;
-    this._send('config', { eqAudition: { slot: i, mode: mode === 'bypass' ? 'bypass' : 'on' }, ...this._whenArg(when) });
+    const eqAudition = { slot: i, mode: mode === 'bypass' ? 'bypass' : 'on' };
+    this._send('config', { eqAudition, ...this._whenArg(when) });
     return true;
   }
 
@@ -774,7 +777,8 @@ export class BridgeEngine extends EventTarget {
   }
 
   fadeOutAll(seconds = 6, { when } = {}) {
-    this._send('play', { e: 'fade', seconds: Math.max(0.05, Number.isFinite(Number(seconds)) ? Number(seconds) : 6), ...this._whenArg(when) });
+    const s = Number.isFinite(Number(seconds)) ? Number(seconds) : 6;
+    this._send('play', { e: 'fade', seconds: Math.max(0.05, s), ...this._whenArg(when) });
   }
 
   noteInput({ when } = {}) {

@@ -135,7 +135,9 @@ test('tick fields feed the sync getters: wheels, pedal, blockers, stats, runtime
   assert.deepEqual(r.engine.sleepBlockers(), ['voices', 'pedal']);
   assert.equal(r.engine.pedal, true);
   assert.deepEqual(r.engine.wheelValues(), { mod: 0.3, expr: 0.8, vol: 0.9, owner: 'virtual', swelling: true });
-  assert.deepEqual(r.engine.getRuntimeState(), { wheel: { mod: 0.3, expr: 0.8, vol: 0.9 }, modOwner: 'virtual', faded: true });
+  assert.deepEqual(r.engine.getRuntimeState(), {
+    wheel: { mod: 0.3, expr: 0.8, vol: 0.9 }, modOwner: 'virtual', faded: true,
+  });
   const s = r.engine._debugStats();
   assert.equal(s.voices, 5);
   assert.equal(s.decodedMB, 120);

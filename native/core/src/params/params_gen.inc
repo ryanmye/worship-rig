@@ -31,7 +31,7 @@ static const char *const kSmoothingText[RIG_SMOOTHING_COUNT] = {
   "setTarget tau 20 ms on the L/R matrix a=(1+w)/2, b=(1-w)/2",
   "state (key/mode change fade)",
 };
-// path, kind (0 number, 1 bool, 2 enum), default, min, max, step, log, enum "a|b|c", coalesce, smoothing idx
+// path, kind (0 number, 1 bool, 2 enum), default, min, max, step, log, enum "a|b|c", coalesce, smoothing
 static const ParamRow kParamRows[RIG_PARAM_COUNT] = {
   {"drone.brightness", 0, 0.5, 0.0, 1.0, NAN, false,
     "", nullptr, 18},
