@@ -235,7 +235,7 @@ add({ id: 'auto-modwheel-cc', kind: 'automation', seconds: 5,
   events: [...held(60, 0.1, 4.5), { t: 1, type: 'cc', cc: 1, value: 20 }, { t: 2, type: 'cc', cc: 1, value: 127 },
     { t: 3, type: 'wheel', source: 'mod', value: 0.1, glide: 0.8 }] });
 
-// ---- 1.1: touch curves, scene glides, metronome click -----------------------------------------------------------
+// ---- 1.1: touch curves (808 Sub: no PRNG, no audio-rate FM, so exact), scene glides, metronome click ---------
 const VELS = [20, 50, 80, 110, 127];
 const touchEvents = (touch) => VELS.flatMap((v, i) => [
   { t: r6(0.1 + i * 0.5), type: 'noteOn', note: 60, vel: v, ...(touch ? { touch } : {}) },
@@ -243,15 +243,15 @@ const touchEvents = (touch) => VELS.flatMap((v, i) => [
 ]);
 for (const curve of ['soft', 'hard', 'fixed']) {
   add({ id: `touch-${curve}`, kind: 'touch', seconds: 3.5,
-    setup: { patch: soloPatch('synth', 'soft-keys', { velocityCurve: curve }),
+    setup: { patch: soloPatch('synth', '808-sub', { velocityCurve: curve }),
     tap: 'slot0.pan' }, events: touchEvents(null) });
 }
 add({ id: 'touch-custom', kind: 'touch', seconds: 3.5,
-  setup: { patch: soloPatch('synth', 'soft-keys',
+  setup: { patch: soloPatch('synth', '808-sub',
     { velocityCurve: 'custom', touch: { shape: 2, min: 0.2, max: 0.9, top: 100 } }),
     tap: 'slot0.pan' }, events: touchEvents(null) });
 add({ id: 'touch-keyboard', kind: 'touch', seconds: 3.5,
-  setup: { patch: soloPatch('synth', 'soft-keys'), tap: 'slot0.pan' },
+  setup: { patch: soloPatch('synth', '808-sub'), tap: 'slot0.pan' },
   events: touchEvents({ shape: 0.5, min: 0.1, max: 1, top: 90 }) });
 // scene change = what controller.scenes does: every level glides SCENE_GLIDE_SEC from where it is
 add({ id: 'scene-glide', kind: 'scene', seconds: 6.5,

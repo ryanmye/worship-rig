@@ -5,6 +5,9 @@
 //   node tools/golden/render.mjs --only eq-,reverb-room   ids containing any of these substrings (manifest merged)
 //   node tools/golden/render.mjs --smoke         the smoke subset only
 //   node tools/golden/render.mjs --repeat 1      skip the second render (no repeatability numbers)
+//   node tools/golden/render.mjs --out <dir> [--seed N]   render to <dir>/<id>.wav only (manifest untouched), e.g.
+//                                                with another engine seed: what a native engine that does not port
+//                                                the PRNG streams would produce (checks the statistical tolerances)
 //
 // Output: native/golden/smoke/<id>.wav (smoke fixtures, committed), native/golden/out/<id>.wav (the rest,
 // git-ignored), native/golden/stimuli/<name>.wav (the dry inputs, committed) and native/golden/manifest.json.
@@ -34,7 +37,9 @@ const arg = (k, d) => {
 };
 const ONLY = arg('--only', null)?.split(',').filter(Boolean) || null;
 const SMOKE_ONLY = argv.includes('--smoke');
-const REPEAT = Math.max(1, Number(arg('--repeat', 2)) || 2);
+const OUT_DIR = arg('--out', null);
+const SEED = arg('--seed', null);
+const REPEAT = OUT_DIR ? Math.max(1, Number(arg('--repeat', 1)) || 1) : Math.max(1, Number(arg('--repeat', 2)) || 2);
 
 // ---- static server: app/ at /, tools/golden/ at /__golden/ ---------------------------------------------------------
 const MIME = {
@@ -220,8 +225,8 @@ function chromiumNodesOf(fx, resolved) {
 }
 
 // ---- tolerances -----------------------------------------------------------------------------------------------------
-const TOL_EXACT = { maxAbsDiff: 2e-4, bandsDb: 0.25, bandRangeDb: 60, envCorr: 0.999, rmsDb: 0.1 };
-const TOL_STAT = { bandsDb: 1.5, bandRangeDb: 50, envCorr: 0.95, rmsDb: 1 };
+const TOL_EXACT = { maxAbsDiff: 2e-4, bandsDb: 0.25, bandRangeDb: 60, envCorr: 0.999, envLagMs: 0, rmsDb: 0.1 };
+const TOL_STAT = { bandsDb: 1.5, bandRangeDb: 50, envCorr: 0.95, envLagMs: 10, rmsDb: 1 };
 
 function sha256(buf) {
   return crypto.createHash('sha256').update(buf).digest('hex');
@@ -233,6 +238,8 @@ const round = (x, d = 6) => (Number.isFinite(x) ? Number(x.toPrecision(d)) : x);
 async function main() {
   let list = FIXTURES.filter((f) => (!SMOKE_ONLY || f.smoke) && (!ONLY || ONLY.some((o) => f.id.includes(o))));
   if (!list.length) throw new Error('no fixtures selected');
+  if (SEED !== null) list = list.map((f) => ({ ...f, seed: Number(SEED) >>> 0 }));
+  if (OUT_DIR) return renderTo(list, path.resolve(OUT_DIR));
   for (const d of ['smoke', 'out', 'stimuli']) fs.mkdirSync(path.join(GOLD, d), { recursive: true });
 
   // stimuli (always: cheap); mono stimuli are written as 1-channel files to keep the committed set small
@@ -364,6 +371,23 @@ async function main() {
   const reps = fixtures.map((e) => e.repeatMaxAbsDiff).filter((x) => x !== null && x !== undefined);
   if (reps.length) console.log(`repeat max|diff|: max ${Math.max(...reps).toExponential(2)}, ` +
     `exactly 0 in ${reps.filter((x) => x === 0).length}/${reps.length}`);
+}
+
+/** --out: plain renders to a directory (no manifest, no stimuli). */
+async function renderTo(list, dir) {
+  fs.mkdirSync(dir, { recursive: true });
+  const server = await startServer();
+  const browser = await launch();
+  const page = await openPage(browser, `http://127.0.0.1:${server.address().port}`);
+  const t0 = Date.now();
+  for (const fx of list) {
+    const a = await page.render(fx);
+    fs.writeFileSync(path.join(dir, `${fx.id}.wav`), encodeWavF32(a.chs, a.sr));
+    console.log(`${fx.id} (seed ${fx.seed}) ${a.ms} ms`);
+  }
+  console.log(`${list.length} fixtures → ${dir} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+  await browser.close();
+  server.close();
 }
 
 main().catch((e) => {

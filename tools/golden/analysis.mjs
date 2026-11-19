@@ -8,6 +8,8 @@
 //                   10^(k/10) Hz, k = 14..43 (25 Hz … 20 kHz), edges centre·2^(±1/6)
 //   envelope        10 ms (441-frame) block RMS of the mono mix, in dB floored at −120
 //   envCorr         Pearson correlation of two envelopes (in dB), over blocks where either is above −90 dB
+//   envLagMs        the shift (in 10 ms blocks, ±200 ms) of the test envelope that maximises envCorr, × 10 ms:
+//                   a timing error (late onset, wrong delay time) that a slow envelope's envCorr alone forgives
 //   maxAbsDiff      max over channels and frames of |a − b| (lengths: the shorter; a length mismatch is reported)
 
 /** @returns {Float32Array} (L+R)/2 */
@@ -166,6 +168,26 @@ export function envCorrelation(a, b, gateDb = -90) {
   if (da === 0 && db === 0) return 1;
   if (da === 0 || db === 0) return 0;
   return num / Math.sqrt(da * db);
+}
+
+/**
+ * Envelope lag: the shift of `b` (blocks, |lag| ≤ maxLag) with the highest envCorrelation against `a`. Positive =
+ * `b` is late. Ties go to the smallest |lag|.
+ * @returns {{lag:number, corr:number}}
+ */
+export function envLag(a, b, maxLag = 20, gateDb = -90) {
+  let best = { lag: 0, corr: -Infinity };
+  for (let k = 0; k <= maxLag; k++) {
+    for (const lag of k === 0 ? [0] : [k, -k]) {
+      const n = Math.min(a.length, b.length) - Math.abs(lag);
+      if (n < 2) continue;
+      const aa = lag >= 0 ? a.subarray(0, n) : a.subarray(-lag, -lag + n);
+      const bb = lag >= 0 ? b.subarray(lag, lag + n) : b.subarray(0, n);
+      const c = envCorrelation(aa, bb, gateDb);
+      if (c > best.corr + 1e-9) best = { lag, corr: c };
+    }
+  }
+  return best;
 }
 
 /** max |a − b| over channels, and the length difference (frames). */

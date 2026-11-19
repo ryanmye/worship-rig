@@ -219,7 +219,8 @@ rounded index; numbers ← `Number(v)`, NaN/null/'' ⇒ default, clamped, rounde
 
 ### 2.3 Rows, smoothing and the DSP object driven
 
-Full table (102 PARAMS rows, 72 of them per slot incl. 40 EQ band rows; ranges, defaults, units) is generated into `engine-api.json`
+Full table (102 PARAMS rows, 72 of them per slot incl. 40 EQ band rows; ranges, defaults, units) is generated into
+`engine-api.json`
 `params.rows`; this is the behaviour of `engine.setParam` per group. "co" = coalesced (10 ms/key).
 
 | rows | range / default | smoothing in setParam | drives |
@@ -396,7 +397,8 @@ DelayNode (5 ms + wow LFO .35 Hz depth .002·a·wow s + flutter LFO 5 Hz depth .
 (makeup) → wet`, plus `crackle loop (6 s stereo, rng 'crackle': per channel n = 60 + floor(next·30) impulses at
 floor(next·(len−8)), amplitude (.3 + next·.7)·(next < .5 ? −1 : 1), shape a·e^(−.8j), j < 6) → BPF 2500 Hz Q .8 →
 gain` into wet. `driveDb = 9·min(1, 2a·sat)` quantised to .25 dB; tanh curve `tanh(g·x)/g` in the ×4 domain (4096
-points); `bits = max(10, round(16 − 5·min(1, a·(.5 + bits))))`, 16 ⇒ no quantiser, curve `round(x·2^(bits−1))/2^(bits−1)`
+points); `bits = max(10, round(16 − 5·min(1, a·(.5 + bits))))`, 16 ⇒ no quantiser, curve
+`round(x·2^(bits−1))/2^(bits−1)`
 (32768 points); LPF `18000·(3500/18000)^(a·(.4 + .6(1−tone)))`, HPF `20·6^(a·(.5 + .5(1−tone)))`, both τ 15 ms;
 crackle gain `10^((−60 + 22·crackle)/20)·min(1, 1.5a)·4` (τ 50 ms). Engage: 30 ms linear dry→wet crossfade starting
 `.0075 + 320/sr` s later (wet latency `[Q]`); disengage: 30 ms back, wet disconnected 40 ms later. WaveShaper

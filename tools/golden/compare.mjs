@@ -14,7 +14,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readWav } from './wav.mjs';
-import { levelStats, thirdOctaveBands, envelopeDb, envCorrelation, maxAbsDiff, bandDiff } from './analysis.mjs';
+import {
+  levelStats, thirdOctaveBands, envelopeDb, envCorrelation, envLag, maxAbsDiff, bandDiff, BAND_CENTERS,
+} from './analysis.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const GOLD = path.resolve(HERE, '../../native/golden');
@@ -23,9 +25,9 @@ const GOLD = path.resolve(HERE, '../../native/golden');
  * Compare a test signal against a reference under a tolerance.
  * @param {{sr:number, chs:Float32Array[]}} ref
  * @param {{sr:number, chs:Float32Array[]}} test
- * @param {object} tol manifest tolerance ({maxAbsDiff?, bandsDb, bandRangeDb, envCorr, rmsDb})
+ * @param {object} tol manifest tolerance ({maxAbsDiff?, bandsDb, bandRangeDb, envCorr, envLagMs, rmsDb})
  * @returns {{pass:boolean, fails:string[], maxAbs:number, bandsDb:number, worstHz:number|null, envCorr:number,
- *   rmsDb:number, lengthDiff:number}}
+ *   rmsDb:number, lagMs:number, lengthDiff:number}}
  */
 export function compareSignals(ref, test, tol) {
   const fails = [];
@@ -40,7 +42,10 @@ export function compareSignals(ref, test, tol) {
   const rmsDb = silentR && silentT ? 0 : silentR || silentT ? Infinity : Math.abs(lr.rmsDb - lt.rmsDb);
   const bd = silentR && silentT ? { worstDb: 0, worstHz: null }
     : bandDiff(thirdOctaveBands(ref.chs, ref.sr), thirdOctaveBands(test.chs, test.sr), tol.bandRangeDb ?? 60);
-  const ec = envCorrelation(envelopeDb(ref.chs, ref.sr), envelopeDb(test.chs, test.sr));
+  const er = envelopeDb(ref.chs, ref.sr);
+  const et = envelopeDb(test.chs, test.sr);
+  const ec = envCorrelation(er, et);
+  const lagMs = silentR && silentT ? 0 : envLag(er, et).lag * 10;
   if (tol.maxAbsDiff !== undefined && !(d.maxAbs <= tol.maxAbsDiff)) {
     fails.push(`max|diff| ${d.maxAbs.toExponential(2)} > ${tol.maxAbsDiff}`);
   }
@@ -49,9 +54,10 @@ export function compareSignals(ref, test, tol) {
   }
   if (!(ec >= tol.envCorr)) fails.push(`envelope corr ${ec.toFixed(4)} < ${tol.envCorr}`);
   if (!(rmsDb <= tol.rmsDb)) fails.push(`rms off ${rmsDb.toFixed(2)} dB > ${tol.rmsDb}`);
+  if (!(Math.abs(lagMs) <= (tol.envLagMs ?? 10))) fails.push(`envelope lag ${lagMs} ms > ${tol.envLagMs ?? 10}`);
   return {
     pass: fails.length === 0, fails, maxAbs: d.maxAbs, bandsDb: bd.worstDb, worstHz: bd.worstHz, envCorr: ec, rmsDb,
-    lengthDiff: d.lengthDiff,
+    lagMs, lengthDiff: d.lengthDiff,
   };
 }
 
@@ -61,13 +67,13 @@ function loadManifest(p) {
 
 const fmt = (x, d = 2) => (x === Infinity ? 'inf' : Number.isFinite(x) ? x.toFixed(d) : String(x));
 function printTable(rows) {
-  const head = ['fixture', 'class', 'max|diff|', 'band dB', 'env corr', 'rms dB', 'result'];
-  const body = rows.map((r) => r.missing ? [r.id, r.cls, '-', '-', '-', '-', 'missing'] : [
-    r.id, r.cls, r.maxAbs.toExponential(2), fmt(r.bandsDb), fmt(r.envCorr, 4), fmt(r.rmsDb),
+  const head = ['fixture', 'class', 'max|diff|', 'band dB', 'env corr', 'lag ms', 'rms dB', 'result'];
+  const body = rows.map((r) => r.missing ? [r.id, r.cls, '-', '-', '-', '-', '-', 'missing'] : [
+    r.id, r.cls, r.maxAbs.toExponential(2), fmt(r.bandsDb), fmt(r.envCorr, 4), String(r.lagMs), fmt(r.rmsDb),
     r.pass ? 'PASS' : `FAIL: ${r.fails.join('; ')}`,
   ]);
-  const w = head.map((h, i) => Math.max(h.length, ...body.map((b) => (i === 6 ? 4 : String(b[i]).length))));
-  const line = (cells) => cells.map((c, i) => (i === 6 ? c : String(c).padEnd(w[i]))).join('  ');
+  const w = head.map((h, i) => Math.max(h.length, ...body.map((b) => (i === 7 ? 4 : String(b[i]).length))));
+  const line = (cells) => cells.map((c, i) => (i === 7 ? c : String(c).padEnd(w[i]))).join('  ');
   console.log(line(head));
   console.log(line(w.map((n) => '-'.repeat(n))));
   for (const b of body) console.log(line(b));
@@ -95,8 +101,18 @@ function perturb(sig, how) {
     chs[0][k] += 0.01 * Math.max(lv.peak, 0.1);
   }
   if (how === 'lowpass') {
-    // one-pole lowpass at ~1 kHz: a spectral change the band check must see
-    const a = Math.exp((-2 * Math.PI * 1000) / sig.sr);
+    // one-pole lowpass at the signal's spectral centroid (third-octave power weighted): a spectral change the band
+    // check must see, whatever the register (a fixed 1 kHz corner left a sub bass untouched)
+    const bands = thirdOctaveBands(chs, sig.sr);
+    let wsum = 0;
+    let fsum = 0;
+    bands.forEach((db, i) => {
+      const p = Math.pow(10, db / 10);
+      wsum += p;
+      fsum += p * Math.log(BAND_CENTERS[i]);
+    });
+    const fc = wsum > 0 ? Math.exp(fsum / wsum) : 1000;
+    const a = Math.exp((-2 * Math.PI * fc) / sig.sr);
     for (const c of chs) {
       let y = 0;
       for (let i = 0; i < n; i++) c[i] = y = (1 - a) * c[i] + a * y;
