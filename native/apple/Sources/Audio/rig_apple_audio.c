@@ -1,10 +1,12 @@
 /* See rig_apple_audio.h. UNBUILT on Linux. */
 #include "rig_apple_audio.h"
 
-#include <AudioToolbox/AudioToolbox.h>
-#include <CoreAudio/CoreAudio.h>
-#include <CoreAudio/HostTime.h>
 #include <TargetConditionals.h>
+#include <AudioToolbox/AudioToolbox.h>
+#if TARGET_OS_OSX
+#include <CoreAudio/CoreAudio.h> /* AudioHardware.h (AudioObject*) is macOS-only (SETUP_REVIEW S3) */
+#endif
+#include <mach/mach_time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,7 +31,7 @@ static OSStatus rig_render_cb(void *ref, AudioUnitRenderActionFlags *flags, cons
   for (uint32_t i = 0; i < n; i++) outs[i] = (float *)io->mBuffers[i].mData;
   uint64_t host_ns = 0;
   if (ts && (ts->mFlags & kAudioTimeStampHostTimeValid)) {
-    host_ns = AudioConvertHostTimeToNanos(ts->mHostTime) + a->latency_ns;
+    host_ns = rig_apple_host_to_ns(ts->mHostTime) + a->latency_ns;
   }
   if (rig_render(a->engine, outs, n, frames, host_ns) != RIG_OK) {
     for (uint32_t i = 0; i < io->mNumberBuffers; i++) memset(io->mBuffers[i].mData, 0, io->mBuffers[i].mDataByteSize);
@@ -438,5 +440,25 @@ void rig_apple_free_decoded(void *user, rig_decoded_audio *audio) {
 
 uint64_t rig_apple_host_time_ns(void *user) {
   (void)user;
-  return AudioConvertHostTimeToNanos(AudioGetCurrentHostTime());
+  return rig_apple_host_to_ns(mach_absolute_time());
+}
+
+/* ---------------------------------------------------------------------------------------------- host time */
+
+static mach_timebase_info_data_t rig_timebase(void) {
+  static mach_timebase_info_data_t tb; /* benign race: every writer stores the same value */
+  if (tb.denom == 0) mach_timebase_info(&tb);
+  return tb;
+}
+
+uint64_t rig_apple_host_to_ns(uint64_t t) {
+  mach_timebase_info_data_t tb = rig_timebase();
+  if (tb.numer == tb.denom) return t;
+  return (uint64_t)((__uint128_t)t * tb.numer / tb.denom);
+}
+
+uint64_t rig_apple_ns_to_host(uint64_t ns) {
+  mach_timebase_info_data_t tb = rig_timebase();
+  if (tb.numer == tb.denom) return ns;
+  return (uint64_t)((__uint128_t)ns * tb.denom / tb.numer);
 }

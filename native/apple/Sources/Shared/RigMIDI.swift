@@ -1,6 +1,5 @@
 // CoreMIDI glue: port enumeration and hot-plug (rig_host_midi_ports), input forwarding (the receive path is C:
 // rig_apple_midi_receive), MIDI out (rig_host.midi_send). UNBUILT on Linux.
-import CoreAudio
 import CoreMIDI
 import Foundation
 
@@ -10,6 +9,7 @@ final class RigMIDI {
     private var inPort = MIDIPortRef()
     private var outPort = MIDIPortRef()
     private var connected: [Int32: UnsafeMutablePointer<CChar>] = [:] // source uniqueID -> id string given to the core
+    private var refCons: [Int32: UnsafeMutablePointer<CChar>] = [:] // every id string ever handed out (kept for life)
     private var wanted = Set<String>()
     private let lock = NSLock()
 
@@ -84,13 +84,15 @@ final class RigMIDI {
             let u = uid(src)
             let id = String(u)
             if ids.contains(id), connected[u] == nil {
-                let p = strdup(id)! // lives as long as the connection: the receive block gets it as its refCon
+                // refCon of the receive block. Never freed: a receive callback may still be running on the CoreMIDI
+                // thread after MIDIPortDisconnectSource returns (SETUP_REVIEW S4). One small string per uniqueID.
+                let p = refCons[u] ?? strdup(id)!
+                refCons[u] = p
                 connected[u] = p
                 MIDIPortConnectSource(inPort, src, UnsafeMutableRawPointer(p))
-            } else if !ids.contains(id), let p = connected[u] {
+            } else if !ids.contains(id), connected[u] != nil {
                 MIDIPortDisconnectSource(inPort, src)
                 connected[u] = nil
-                free(p)
             }
         }
     }
@@ -103,7 +105,7 @@ final class RigMIDI {
         for i in 0..<MIDIGetNumberOfDestinations() {
             let d = MIDIGetDestination(i)
             guard uid(d) == want else { continue }
-            let ts: MIDITimeStamp = hostTimeNs == 0 ? 0 : AudioConvertNanosToHostTime(hostTimeNs)
+            let ts: MIDITimeStamp = hostTimeNs == 0 ? 0 : rig_apple_ns_to_host(hostTimeNs)
             var buf = [UInt8](repeating: 0, count: 1024)
             buf.withUnsafeMutableBytes { raw in
                 let list = raw.baseAddress!.assumingMemoryBound(to: MIDIPacketList.self)

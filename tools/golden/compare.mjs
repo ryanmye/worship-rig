@@ -30,7 +30,7 @@ function printTable(rows) {
   const head = ['fixture', 'class', 'max|diff|', 'band dB', 'env corr', 'lag ms', 'rms dB', 'result'];
   const body = rows.map((r) => r.missing ? [r.id, r.cls, '-', '-', '-', '-', '-', 'missing'] : [
     r.id, r.cls, r.maxAbs.toExponential(2), fmt(r.bandsDb), fmt(r.envCorr, 4), String(r.lagMs), fmt(r.rmsDb),
-    r.pass ? 'PASS' : `FAIL: ${r.fails.join('; ')}`,
+    r.pass ? (r.label || 'PASS') : `FAIL: ${r.fails.join('; ')}`,
   ]);
   const w = head.map((h, i) => Math.max(h.length, ...body.map((b) => (i === 7 ? 4 : String(b[i]).length))));
   const line = (cells) => cells.map((c, i) => (i === 7 ? c : String(c).padEnd(w[i]))).join('  ');
@@ -108,7 +108,11 @@ function selfTest(manifest, manifestDir) {
       if (r.pass) ok = false;
     }
   }
-  printTable(rows.map((r) => ({ ...r, pass: r.id.endsWith('(self)') ? r.pass : !r.pass, fails: r.fails })));
+  // perturbation rows print 'detected' (not 'PASS') so the table cannot be read as "the perturbed copy passed"
+  printTable(rows.map((r) => {
+    const self = r.id.endsWith('(self)');
+    return { ...r, pass: self ? r.pass : !r.pass, label: self ? 'PASS' : 'detected', fails: r.fails };
+  }));
   console.log(ok ? `\nself-test OK: ${pick.length} goldens pass against themselves; every perturbation is detected`
     : '\nself-test FAILED');
   return ok;

@@ -86,7 +86,7 @@ class Engine final : public CommandSink {
   std::string appDir_, userManifest_, padsDir_, recDir_, seedString_;
   double sr_;
   std::uint32_t seed_ = 1;
-  unsigned outCh_;
+  std::atomic<unsigned> outCh_;  // written by the host thread (device change), read on the audio thread
   std::atomic<std::int64_t> frames_{0};
   CommandQueue cmdQ_;
   EventQueue evQ_;
@@ -98,7 +98,7 @@ class Engine final : public CommandSink {
   std::unique_ptr<Bridge> bridge_;
   std::uint32_t seq_ = 0;
   TimerQueue timers_;
-  bool awake_ = true;
+  std::atomic<bool> awake_{true};  // set on the control thread, read by rig_render (SETUP_REVIEW R1)
   std::atomic<bool> rtRunning_{false};
   std::atomic<bool> started_{false};  // audio started (or a driver with no host): rig_render produces sound
 

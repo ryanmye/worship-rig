@@ -141,8 +141,8 @@ test('driving every contracted member sends only valid messages and covers all 1
   await flush();
   assert.deepEqual(r.mock.findings.filter((f) => f.kind !== 'unknown-field'), []);
   const unknown = r.mock.findings.filter((f) => f.kind === 'unknown-field').map((f) => `${f.op}.${f.field}`);
-  // contract gaps found by driving the surface: the method takes {when} but the op does not list it
-  assert.deepEqual([...new Set(unknown)].sort(), ['config.when', 'drone.when', 'song.when']);
+  // G1 (song/drone/config `when`) is closed in engine-api.spec.mjs: driving the surface sends no unlisted field
+  assert.deepEqual([...new Set(unknown)].sort(), []);
   const ops = new Set([...r.mock.calls.keys()].map((k) => k.split(':')[0]));
   assert.deepEqual([...ops].sort(), api.messages.ops.map((o) => o.op).sort());
   for (const ev of ['on', 'off', 'pedal', 'wheel', 'bend', 'swell', 'panic', 'fade', 'input']) {

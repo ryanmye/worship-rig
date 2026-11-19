@@ -45,7 +45,13 @@ add_library(rig_third_party STATIC
 target_include_directories(rig_third_party PUBLIC
   third_party/yyjson third_party/dr_libs third_party/pffft/include/pffft)
 target_include_directories(rig_third_party PRIVATE third_party/pffft/src)
-target_compile_options(rig_third_party PRIVATE -w)
+# -ffp-contract=off here too: pffft/dr_mp3 feed parity paths, and clang on arm64 contracts a*b+c into FMA by default
+# (SETUP_REVIEW A9)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(rig_third_party PRIVATE -w -ffp-contract=off)
+else()
+  target_compile_options(rig_third_party PRIVATE -w)
+endif()
 if(UNIX)
   target_link_libraries(rig_third_party PUBLIC m)
 endif()

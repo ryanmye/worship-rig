@@ -68,6 +68,13 @@ void rig_apple_free_decoded(void *user, rig_decoded_audio *audio);
 /** Host clock in ns (mach host time, the timebase of AudioTimeStamp.mHostTime and MIDI packet timestamps). */
 uint64_t rig_apple_host_time_ns(void *user);
 
+/**
+ * mach host ticks <-> ns via mach_timebase_info (24 MHz ticks on Apple silicon). Replaces AudioConvertHostTimeToNanos
+ * / AudioConvertNanosToHostTime, which live in <CoreAudio/HostTime.h> and do not exist on iOS (SETUP_REVIEW S3).
+ */
+uint64_t rig_apple_host_to_ns(uint64_t host_ticks);
+uint64_t rig_apple_ns_to_host(uint64_t ns);
+
 #ifdef __cplusplus
 }
 #endif

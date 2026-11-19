@@ -14,7 +14,7 @@ final class RigHost: NSObject, ObservableObject {
     private(set) var engine: OpaquePointer?
     let webView: WKWebView
     private let scheme: RigSchemeHandler
-    private let bridge = RigBridgeHandler()
+    private let bridge: RigBridgeHandler
     private(set) var audio: RigAudio!
     private(set) var midi: RigMIDI!
 
@@ -28,11 +28,16 @@ final class RigHost: NSObject, ObservableObject {
     private var flushScheduled = false
 
     override init() {
+        // Phase 1 of a class init must not read `self` (scheme, bridge) before super.init: build locals first
+        // (SETUP_REVIEW S1).
         let conf = WKWebViewConfiguration()
-        scheme = RigSchemeHandler(root: RigPaths.appDir, docs: RigPaths.docsDir)
-        conf.setURLSchemeHandler(scheme, forURLScheme: RigSchemeHandler.scheme)
+        let schemeHandler = RigSchemeHandler(root: RigPaths.appDir, docs: RigPaths.docsDir)
+        let bridgeHandler = RigBridgeHandler()
+        scheme = schemeHandler
+        bridge = bridgeHandler
+        conf.setURLSchemeHandler(schemeHandler, forURLScheme: RigSchemeHandler.scheme)
         let ucc = WKUserContentController()
-        ucc.add(WeakScriptHandler(bridge), name: "rig")
+        ucc.add(WeakScriptHandler(bridgeHandler), name: "rig")
         ucc.addUserScript(WKUserScript(source: RigHost.documentStartScript, injectionTime: .atDocumentStart,
                                        forMainFrameOnly: true))
         conf.userContentController = ucc
@@ -40,14 +45,15 @@ final class RigHost: NSObject, ObservableObject {
         #if os(iOS)
         conf.allowsInlineMediaPlayback = true
         #endif
-        webView = WKWebView(frame: .zero, configuration: conf)
+        let wv = WKWebView(frame: .zero, configuration: conf)
         #if DEBUG
-        webView.isInspectable = true // Safari > Develop > <device> > Worship Rig
+        wv.isInspectable = true // Safari > Develop > <device> > Worship Rig
         #endif
         #if os(iOS)
-        webView.scrollView.pinchGestureRecognizer?.isEnabled = false // WEBKIT_AUDIT 6: inputs < 16 px zoom the page
-        webView.scrollView.bounces = false
+        wv.scrollView.pinchGestureRecognizer?.isEnabled = false // WEBKIT_AUDIT 6: inputs < 16 px zoom the page
+        wv.scrollView.bounces = false
         #endif
+        webView = wv
         super.init()
         bridge.host = self
         audio = RigAudio(host: self)
@@ -148,7 +154,7 @@ final class RigHost: NSObject, ObservableObject {
         var status = RIG_OK
         engine = rig_create(&cfg, &status)
         if engine == nil {
-            NSLog("rig_create failed: %s", String(cString: rig_status_string(status)))
+            NSLog("rig_create failed: %@", String(cString: rig_status_string(status))) // %@: Swift String (S2)
         }
     }
 
@@ -164,7 +170,7 @@ final class RigHost: NSObject, ObservableObject {
         data.withUnsafeBytes { raw in
             guard let base = raw.baseAddress else { return }
             let s = rig_post(engine, base.assumingMemoryBound(to: CChar.self), data.count)
-            if s != RIG_OK { NSLog("rig_post: %s", String(cString: rig_status_string(s))) }
+            if s != RIG_OK { NSLog("rig_post: %@", String(cString: rig_status_string(s))) }
         }
     }
 

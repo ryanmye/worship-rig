@@ -6352,8 +6352,8 @@
       {
         "op": "set",
         "args": {
-          "path": "ParamPath",
-          "value": "any",
+          "path": "ParamPath?",
+          "value": "any?",
           "glide": "s?",
           "when": "engine s?",
           "batch": "[[path, value, glide?]]?"
@@ -6371,7 +6371,8 @@
           "tempo": "number|null?",
           "timeSig": "string?",
           "newBar": "bool?",
-          "key": "{pc, minor}?"
+          "key": "{pc, minor}?",
+          "when": "engine s?"
         },
         "reply": "{}",
         "order": [
@@ -6394,7 +6395,8 @@
         "args": {
           "key": "{pc, minor, fade?}?",
           "config": "SongDrone?",
-          "files": "[{name, path}]?"
+          "files": "[{name, path}]?",
+          "when": "engine s?"
         },
         "reply": "{files?, changed?}",
         "order": [
@@ -6465,7 +6467,8 @@
           "lowResource": "bool?",
           "eqAudition": "{slot, mode}?",
           "meters": "{rate?, slots?, rta?}?",
-          "midiClock": "{port: id|null}?"
+          "midiClock": "{port: id|null}?",
+          "when": "engine s?"
         },
         "reply": "{lowResource?, eqAudition?}",
         "maps": [

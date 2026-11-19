@@ -297,7 +297,7 @@ void Engine::hostAudioStarted(const rig_device_info &info) {
   JsonOut j;
   j.begin().kv("v", 1).kv("ev", "state").kv("state", "running").kv("sleep", "awake");
   j.kv("latencyMs", info.output_latency_sec * 1000.0).kv("sampleRate", sr_);
-  j.kv("deviceId", info.device_id ? info.device_id : "").kv("channels", outCh_).end();
+  j.kv("deviceId", info.device_id ? info.device_id : "").kv("channels", outCh_.load()).end();
   postHostEvent(j.take());
 }
 
