@@ -288,10 +288,10 @@ linearly to 0.95 s at slope 0.5·|x| (pitch drop), LPF `18000·0.08^|x|`; x>0 re
 ## 3. The audio graph as built today (formulas and constants for the port)
 
 ```
-slot: inst.output ─(armed only while voices live)→ fader → wheel → width(M/S) → SlotEq → pan ─┬→ sum
-                                                                                              ├→ send.reverb → Reverb.input
-                                                                                              ├→ send.delay  → Delay.input
-                                                                                              └→ send.chorus → Chorus.input
+slot: inst.output ─(armed while voices live)→ fader → wheel → width(M/S) → SlotEq → pan ─┬→ sum
+                                                                                         ├→ send.reverb → Reverb.input
+                                                                                         ├→ send.delay  → Delay.input
+                                                                                         └→ send.chorus → Chorus.input
 drone: layers → synthBus(trim) → HPF80 → synthMode ┐                                  ┌→ out → sum
        pads (<audio>) → filesBus → filesMode ──────┴→ width matrix → level → wheel → bend ┤
        frozen loop (ch 2-3) ──────────────────────────────────────────────────────────┘ └→ sendGate(.4|0) → Reverb.input

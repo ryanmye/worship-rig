@@ -5,6 +5,7 @@
 //   node tools/golden/render.mjs --only eq-,reverb-room   ids containing any of these substrings (manifest merged)
 //   node tools/golden/render.mjs --smoke         the smoke subset only
 //   node tools/golden/render.mjs --repeat 1      skip the second render (no repeatability numbers)
+//   node tools/golden/render.mjs --no-spread     skip the seed-spread renders of PRNG-dependent fixtures
 //   node tools/golden/render.mjs --out <dir> [--seed N]   render to <dir>/<id>.wav only (manifest untouched), e.g.
 //                                                with another engine seed: what a native engine that does not port
 //                                                the PRNG streams would produce (checks the statistical tolerances)
@@ -22,7 +23,9 @@ import { chromium } from 'playwright';
 import { FIXTURES, SYNTH_IDS, ORGAN_IDS } from './fixtures.mjs';
 import { STIMULI, makeStimulus, GOLDEN_SR, STIM_LEAD_SEC, hashSeed } from './stimuli.mjs';
 import { encodeWavF32 } from './wav.mjs';
-import { levelStats, thirdOctaveBands, maxAbsDiff, envelopeDb, envCorrelation, bandDiff } from './analysis.mjs';
+import {
+  levelStats, thirdOctaveBands, maxAbsDiff, envelopeDb, envCorrelation, bandDiff, compareSignals,
+} from './analysis.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
@@ -39,6 +42,7 @@ const ONLY = arg('--only', null)?.split(',').filter(Boolean) || null;
 const SMOKE_ONLY = argv.includes('--smoke');
 const OUT_DIR = arg('--out', null);
 const SEED = arg('--seed', null);
+const SPREAD = !argv.includes('--no-spread');
 const REPEAT = OUT_DIR ? Math.max(1, Number(arg('--repeat', 1)) || 1) : Math.max(1, Number(arg('--repeat', 2)) || 2);
 
 // ---- static server: app/ at /, tools/golden/ at /__golden/ ---------------------------------------------------------
@@ -227,6 +231,27 @@ function chromiumNodesOf(fx, resolved) {
 // ---- tolerances -----------------------------------------------------------------------------------------------------
 const TOL_EXACT = { maxAbsDiff: 2e-4, bandsDb: 0.25, bandRangeDb: 60, envCorr: 0.999, envLagMs: 0, rmsDb: 0.1 };
 const TOL_STAT = { bandsDb: 1.5, bandRangeDb: 50, envCorr: 0.95, envLagMs: 10, rmsDb: 1 };
+/** Engine seeds of the seed-spread renders (fixture seed + these). */
+const SPREAD_SEEDS = [1, 2, 3, 4];
+
+/**
+ * Statistical tolerance for a PRNG-dependent fixture: never tighter than TOL_STAT, and wide enough that renders of
+ * the same fixture with other engine seeds pass (×1.25 margin), i.e. "as close to the golden as another seed is".
+ * `widened` marks fixtures whose seed spread exceeds TOL_STAT: there the statistical test is weak, and only a native
+ * port of the PRNG streams (mulberry32 + the stream names + draw order) makes the fixture a strong (exact) test.
+ */
+function spreadTolerance(spread) {
+  const t = {
+    bandsDb: round(Math.max(TOL_STAT.bandsDb, 1.25 * spread.bandsDb), 3),
+    bandRangeDb: TOL_STAT.bandRangeDb,
+    envCorr: round(Math.max(-1, Math.min(TOL_STAT.envCorr, spread.envCorr - 0.05)), 3),
+    envLagMs: Math.max(TOL_STAT.envLagMs, Math.abs(spread.lagMs) + 10),
+    rmsDb: round(Math.max(TOL_STAT.rmsDb, 1.25 * spread.rmsDb), 3),
+  };
+  const widened = t.bandsDb > TOL_STAT.bandsDb || t.envCorr < TOL_STAT.envCorr || t.envLagMs > TOL_STAT.envLagMs ||
+    t.rmsDb > TOL_STAT.rmsDb;
+  return { ...t, widened };
+}
 
 function sha256(buf) {
   return crypto.createHash('sha256').update(buf).digest('hex');
@@ -320,6 +345,25 @@ async function main() {
       resolved: a.resolved,
       issues,
     };
+    if (classification === 'statistical' && random && SPREAD) {
+      // seed spread: the same fixture with other engine seeds, rendered on the pages in parallel
+      const vars = await Promise.all(SPREAD_SEEDS.map((d, j) => pages[j % pages.length]
+        .render({ ...fx, seed: fx.seed + d })));
+      const sp = { seeds: SPREAD_SEEDS.map((d) => fx.seed + d), bandsDb: 0, envCorr: 1, rmsDb: 0, lagMs: 0, maxAbs: 0 };
+      for (const v of vars) {
+        const c = compareSignals({ sr: a.sr, chs: a.chs }, { sr: v.sr, chs: v.chs }, TOL_STAT);
+        sp.bandsDb = Math.max(sp.bandsDb, c.bandsDb);
+        sp.envCorr = Math.min(sp.envCorr, c.envCorr);
+        sp.rmsDb = Math.max(sp.rmsDb, c.rmsDb);
+        sp.maxAbs = Math.max(sp.maxAbs, c.maxAbs);
+        if (Math.abs(c.lagMs) > Math.abs(sp.lagMs)) sp.lagMs = c.lagMs;
+      }
+      for (const k of ['bandsDb', 'envCorr', 'rmsDb', 'maxAbs']) sp[k] = round(sp[k], 4);
+      entry.seedSpread = sp;
+      const { widened, ...tol } = spreadTolerance(sp);
+      entry.tolerance = tol;
+      entry.prngPortRecommended = widened;
+    }
     if (runs.length > 1) {
       entry.repeatEnvCorr = round(envCorrelation(envelopeDb(a.chs, a.sr), envelopeDb(runs[1].chs, a.sr)));
       entry.repeatBandsDb = round(bandDiff(entry.bandsDb, thirdOctaveBands(runs[1].chs, a.sr)).worstDb, 4);
@@ -368,6 +412,9 @@ async function main() {
   console.log(`sizes: smoke ${MB(sizeOf('smoke'))} MB, stimuli ${MB(sizeOf('stimuli'))} MB, ` +
     `out ${MB(sizeOf('out'))} MB, ` +
     `manifest ${MB(fs.statSync(manifestPath).size)} MB`);
+  const weak = fixtures.filter((e) => e.prngPortRecommended).map((e) => e.id);
+  console.log(`PRNG port recommended (seed spread exceeds the default statistical tolerance): ${weak.length}: ` +
+    weak.join(' '));
   const reps = fixtures.map((e) => e.repeatMaxAbsDiff).filter((x) => x !== null && x !== undefined);
   if (reps.length) console.log(`repeat max|diff|: max ${Math.max(...reps).toExponential(2)}, ` +
     `exactly 0 in ${reps.filter((x) => x === 0).length}/${reps.length}`);

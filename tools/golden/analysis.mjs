@@ -226,3 +226,43 @@ export function bandDiff(ref, test, rangeDb = 60) {
   });
   return { worstDb: worst, worstHz };
 }
+
+/**
+ * Compare a test signal against a reference under a tolerance.
+ * @param {{sr:number, chs:Float32Array[]}} ref
+ * @param {{sr:number, chs:Float32Array[]}} test
+ * @param {object} tol manifest tolerance ({maxAbsDiff?, bandsDb, bandRangeDb, envCorr, envLagMs, rmsDb})
+ * @returns {{pass:boolean, fails:string[], maxAbs:number, bandsDb:number, worstHz:number|null, envCorr:number,
+ *   rmsDb:number, lagMs:number, lengthDiff:number}}
+ */
+export function compareSignals(ref, test, tol) {
+  const fails = [];
+  if (ref.sr !== test.sr) fails.push(`sample rate ${test.sr} ≠ ${ref.sr}`);
+  if (ref.chs.length !== test.chs.length) fails.push(`channels ${test.chs.length} ≠ ${ref.chs.length}`);
+  const d = maxAbsDiff(ref.chs, test.chs);
+  if (d.lengthDiff > 0) fails.push(`length differs by ${d.lengthDiff} frames`);
+  const lr = levelStats(ref.chs);
+  const lt = levelStats(test.chs);
+  const silentR = lr.rms < 1e-7;
+  const silentT = lt.rms < 1e-7;
+  const rmsDb = silentR && silentT ? 0 : silentR || silentT ? Infinity : Math.abs(lr.rmsDb - lt.rmsDb);
+  const bd = silentR && silentT ? { worstDb: 0, worstHz: null }
+    : bandDiff(thirdOctaveBands(ref.chs, ref.sr), thirdOctaveBands(test.chs, test.sr), tol.bandRangeDb ?? 60);
+  const er = envelopeDb(ref.chs, ref.sr);
+  const et = envelopeDb(test.chs, test.sr);
+  const ec = envCorrelation(er, et);
+  const lagMs = silentR && silentT ? 0 : envLag(er, et).lag * 10;
+  if (tol.maxAbsDiff !== undefined && !(d.maxAbs <= tol.maxAbsDiff)) {
+    fails.push(`max|diff| ${d.maxAbs.toExponential(2)} > ${tol.maxAbsDiff}`);
+  }
+  if (!(bd.worstDb <= tol.bandsDb)) {
+    fails.push(`band ${bd.worstHz?.toFixed(0)} Hz off ${bd.worstDb.toFixed(2)} dB > ${tol.bandsDb}`);
+  }
+  if (!(ec >= tol.envCorr)) fails.push(`envelope corr ${ec.toFixed(4)} < ${tol.envCorr}`);
+  if (!(rmsDb <= tol.rmsDb)) fails.push(`rms off ${rmsDb.toFixed(2)} dB > ${tol.rmsDb}`);
+  if (!(Math.abs(lagMs) <= (tol.envLagMs ?? 10))) fails.push(`envelope lag ${lagMs} ms > ${tol.envLagMs ?? 10}`);
+  return {
+    pass: fails.length === 0, fails, maxAbs: d.maxAbs, bandsDb: bd.worstDb, worstHz: bd.worstHz, envCorr: ec, rmsDb,
+    lagMs, lengthDiff: d.lengthDiff,
+  };
+}
