@@ -113,8 +113,9 @@ if(RIG_BUILD_TESTS)
     set_tests_properties(unit.params-drift PROPERTIES LABELS unit)
     # fixtures the skeleton is expected to match (single-band slot EQ through the strip); grows with T02+
     set(RIG_GOLDEN_IDS
-      "eq-lowshelf-a,eq-lowshelf-b,eq-lowshelf-c,eq-peak-a,eq-peak-b,eq-peak-c,eq-highshelf-a,eq-highshelf-b,eq-highshelf-c"
-      "eq-notch-a,eq-notch-b,eq-notch-c,eq-lowcut-a,eq-lowcut-b,eq-lowcut-c,eq-highcut-a,eq-highcut-b,eq-highcut-c")
+      "eq-lowshelf-a,eq-lowshelf-b,eq-lowshelf-c,eq-peak-a,eq-peak-b,eq-peak-c"
+      "eq-highshelf-a,eq-highshelf-b,eq-highshelf-c,eq-notch-a,eq-notch-b,eq-notch-c"
+      "eq-lowcut-a,eq-lowcut-b,eq-lowcut-c,eq-highcut-a,eq-highcut-b,eq-highcut-c")
     string(REPLACE ";" "," RIG_GOLDEN_IDS "${RIG_GOLDEN_IDS}")
     add_test(NAME golden.eq
              COMMAND ${CMAKE_COMMAND} -DRENDER=$<TARGET_FILE:rig_render> -DREPO=${RIG_REPO_ROOT}

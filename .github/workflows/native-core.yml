@@ -1,0 +1,76 @@
+# Native engine core (native/core): build + ctest on Linux and macOS, plus an ASan/UBSan job.
+# UNVERIFIED until pushed: written on a box without GitHub Actions, macOS or Apple clang (T00 skeleton).
+name: native-core
+
+on:
+  push:
+    paths:
+      - 'native/core/**'
+      - 'native/golden/**'
+      - 'native/contract/**'
+      - 'tools/golden/**'
+      - '.github/workflows/native-core.yml'
+  pull_request:
+    paths:
+      - 'native/core/**'
+      - 'native/golden/**'
+      - 'native/contract/**'
+      - 'tools/golden/**'
+      - '.github/workflows/native-core.yml'
+
+jobs:
+  build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install ninja
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update && sudo apt-get install -y ninja-build
+          else
+            brew install ninja
+          fi
+      - name: Configure (release)
+        run: cmake --preset release
+        working-directory: native/core
+      - name: Build
+        run: cmake --build build/release
+        working-directory: native/core
+      - name: Test (unit, rt, golden)
+        run: ctest --output-on-failure
+        working-directory: native/core/build/release
+        env:
+          TMPDIR: ${{ runner.temp }}
+
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: ASan + UBSan
+        run: |
+          cmake --preset asan
+          cmake --build build/asan
+          cd build/asan && ctest --output-on-failure
+        working-directory: native/core
+        env:
+          TMPDIR: ${{ runner.temp }}
+      - name: TSan (queues, offline, bridge, realtime)
+        run: |
+          cmake --preset tsan
+          cmake --build build/tsan
+          cd build/tsan && ctest --output-on-failure -R "queues|offline|bridge|realtime"
+        working-directory: native/core
+        env:
+          TMPDIR: ${{ runner.temp }}
