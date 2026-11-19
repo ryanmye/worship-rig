@@ -20,3 +20,4 @@ _to_delete/
 
 # Apple .exs fixtures: personal content, kept in ~/Music/Worship Rig/exs-fixtures; RIG_EXS_FIXTURES
 tools/exs/fixtures/real/
+native/golden/out/

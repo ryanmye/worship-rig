@@ -53,10 +53,10 @@ export const STIMULI = Object.freeze({
   noise: { kind: 'noise', seconds: 1, amp: 0.25, dur: 0.5, fade: 0.005, seed: 'golden-noise' },
   // independent L/R noise (slot width: the side signal must be non-zero)
   'stereo-noise': { kind: 'stereo-noise', seconds: 1.5, amp: 0.25, dur: 1, fade: 0.005, seed: 'golden-stereo-noise' },
-  // steady 440 Hz sine, 1.5 s, 10 ms fades (chorus / lofi modulation)
-  sine: { kind: 'sine', seconds: 2, amp: 0.3, hz: 440, dur: 1.5, fade: 0.01 },
-  // 1 kHz sine in 0.5 s steps at −36, −24, −12, −6, −1 dBFS then 0.5 s silence (compressor / limiter curves)
-  steps: { kind: 'steps', seconds: 3.25, hz: 1000, step: 0.5, levelsDb: [-36, -24, -12, -6, -1], fade: 0.002 },
+  // steady 440 Hz sine, 1 s, 10 ms fades (chorus / lofi modulation)
+  sine: { kind: 'sine', seconds: 1.5, amp: 0.3, hz: 440, dur: 1, fade: 0.01 },
+  // 1 kHz sine in 0.4 s steps at −36, −24, −12, −6, −1 dBFS then 0.25 s silence (compressor / limiter curves)
+  steps: { kind: 'steps', seconds: 2.25, hz: 1000, step: 0.4, levelsDb: [-36, -24, -12, -6, -1], fade: 0.002 },
   // 200 Hz + 2 kHz tone bursts at −6 dBFS: 50 ms on / 450 ms off ×4 (compressor attack / release)
   'tone-burst': { kind: 'tone-burst', seconds: 2.5, hz: [200, 2000], amp: 0.5, on: 0.05, period: 0.5, count: 4,
     fade: 0.001 },
@@ -116,7 +116,9 @@ export function makeStimulus(id, sr = GOLDEN_SR) {
     case 'sine': {
       const n = Math.round(def.dur * sr);
       const nf = Math.round(def.fade * sr);
-      for (let i = 0; i < n; i++) L[s0 + i] = R[s0 + i] = def.amp * fadeGain(i, n, nf) * Math.sin((2 * Math.PI * def.hz * i) / sr);
+      for (let i = 0; i < n; i++) {
+        L[s0 + i] = R[s0 + i] = def.amp * fadeGain(i, n, nf) * Math.sin((2 * Math.PI * def.hz * i) / sr);
+      }
       break;
     }
     case 'steps': {

@@ -22,6 +22,26 @@ function b64(f32) {
 
 const clone = (x) => JSON.parse(JSON.stringify(x ?? null));
 
+/**
+ * Wrap a seeded Rng so its calls are counted per stream name (manifest `randomness`: which PRNG streams a fixture
+ * actually consumes). Every method delegates to the original, so the values drawn are unchanged; forks are wrapped
+ * under the same name. Counts are method calls (gaussian may draw 0 or 2 values).
+ */
+function countingRng(rng, name, draws) {
+  if (!rng || typeof rng.next !== 'function') return rng;
+  const w = Object.create(null);
+  for (const k of ['next', 'range', 'int', 'gaussian', 'pick', 'shuffle']) {
+    if (typeof rng[k] !== 'function') continue;
+    w[k] = (...a) => {
+      draws[name] = (draws[name] || 0) + 1;
+      return rng[k](...a);
+    };
+  }
+  w.seed = rng.seed;
+  w.fork = () => countingRng(rng.fork(), name, draws);
+  return w;
+}
+
 /** Nodes a stimulus can be injected into. */
 const INJECT = {
   'fx.sum': (e) => e.fx.sum, // the dry/return sum, before lofi
@@ -140,6 +160,16 @@ export async function renderFixture(fx) {
     for (const [k, v] of Object.entries(vals)) engine.setParam(unit === 'master' ? `master.${k}` : `fx.${unit}.${k}`, v);
   }
   await engine.start();
+  const draws = {};
+  const reg = engine.registry;
+  const create = reg.create.bind(reg);
+  let instSeq = 0;
+  reg.create = (c, rng, ref, params, opts) => {
+    const name = ref && ref.type !== 'synth' && ref.type !== 'organ' && ref.type !== 'sampler' ? `inst|${ref.id}`
+      : `inst|${ref?.type}|${ref?.id}|#${++instSeq}`;
+    return create(c, countingRng(rng, name, draws), ref, params, opts);
+  };
+  if (engine.drone?.o?.rng) engine.drone.o.rng = countingRng(engine.drone.o.rng, 'drone', draws);
   if (s.tempo) engine.setTempo(s.tempo);
   if (s.timeSig) engine.setTimeSig(s.timeSig);
   if (s.click) engine.setClick(s.click, { when: 0 });
@@ -191,6 +221,8 @@ export async function renderFixture(fx) {
   for (const ev of evs) applyEvent(engine, ev);
   const buf = await ctx.startRendering();
   resolved.stats = engine._debugStats();
+  resolved.rngCalls = draws;
+  resolved.reverbKey = engine.fx.reverb.active?.key ?? null;
   engine.dispose();
   return {
     sr: buf.sampleRate,
