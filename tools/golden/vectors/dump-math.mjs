@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // T01 / SETUP_REVIEW finding 14: what does V8's Math.* compute in the Chromium that rendered the goldens?
 // Dumps Math.sin/cos/tan/exp/log/log2/log10/pow/tanh/atan/atan2/sqrt/cbrt/expm1 (+ sinh, used by eq-math) over
-// deterministic inputs as exact hex doubles. The inputs mix generic coverage (random bit patterns per binade) with
+// deterministic inputs as exact hex doubles (+ Math.round and Math.fround). The inputs mix generic coverage (random bit patterns per binade) with
 // the argument ranges the engine uses (oscillator / IR phases, dB to gain, filter prewarp, setTarget decay, cents).
 //
 //   node tools/golden/vectors/dump-math.mjs                       → tools/golden/vectors/data/math.txt (committed)
@@ -15,10 +15,11 @@ import path from 'node:path';
 import { openPage, hex64, mulberry32, arg, DATA } from './lib.mjs';
 
 const argv = process.argv.slice(2);
-const N = Number(arg(argv, '--n', 600));
+const N = Number(arg(argv, '--n', 500));
 const OUT = arg(argv, '--out', path.join(DATA, 'math.txt'));
 
-const ONE = ['sin', 'cos', 'tan', 'exp', 'log', 'log2', 'log10', 'tanh', 'atan', 'sqrt', 'cbrt', 'expm1', 'sinh'];
+const ONE = ['sin', 'cos', 'tan', 'exp', 'log', 'log2', 'log10', 'tanh', 'atan', 'sqrt', 'cbrt', 'expm1', 'sinh', 'round',
+  'fround'];
 const TWO = ['pow', 'atan2'];
 
 /** Random double with a uniformly chosen binade in [2^lo, 2^hi) and random mantissa bits (sign optional). */
@@ -51,6 +52,9 @@ const ENGINE = {
   cbrt: [(r) => uni(r, 0, 2) / 2],
   expm1: [(r) => uni(r, -1, 1)],
   sinh: [(r) => (Math.LN2 / 2) * uni(r, 0.05, 4)],
+  // Math.round of dB/Hz/ms values and of exact halves; Math.fround of gains
+  round: [(r) => uni(r, -100, 100) * 10, (r) => Math.floor(uni(r, -1e6, 1e6)) + 0.5, (r) => uni(r, -1, 1)],
+  fround: [(r) => 10 ** uni(r, -6, 1), (r) => uni(r, -1, 1)],
   // dB → gain 10^(db/20), cents 2^(c/1200), exponential ramps (v1/v0)^x, glue makeup ^0.6, LPF sweep ratio^a
   pow: [(r) => [10, uni(r, -120, 24) / 20], (r) => [2, uni(r, -4800, 4800) / 1200],
     (r) => [uni(r, 1e-4, 20), uni(r, 0, 1)], (r) => [uni(r, 1, 30), 0.6], (r) => [3500 / 18000, uni(r, 0, 1)],
@@ -66,9 +70,10 @@ const GENERIC = {
   log10: (r) => binade(r, -1000, 1000, false), tanh: (r) => binade(r, -30, 5, true), atan: (r) => binade(r, -30, 30, true),
   sqrt: (r) => binade(r, -1000, 1000, false), cbrt: (r) => binade(r, -1000, 1000, true),
   expm1: (r) => binade(r, -30, 9, true), sinh: (r) => binade(r, -30, 9, true),
+  round: (r) => binade(r, -10, 60, true), fround: (r) => binade(r, -160, 130, true),
   pow: (r) => [binade(r, -20, 20, false), uni(r, -40, 40)], atan2: (r) => [binade(r, -20, 20, true), binade(r, -20, 20, true)],
 };
-const EDGES = [0, -0, 1, -1, 0.5, 2, Math.PI, Math.PI / 2, Math.PI / 4, 1e-300, 5e-324, 710, -746, 1e300, Infinity,
+const EDGES = [0, -0, 1, -1, 0.5, -0.5, 2.5, -2.5, 0.49999999999999994, 2 ** 52 + 1, 2, Math.PI, Math.PI / 2, Math.PI / 4, 1e-300, 5e-324, 710, -746, 1e300, Infinity,
   -Infinity, NaN];
 
 function inputs(fn) {

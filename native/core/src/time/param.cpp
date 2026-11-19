@@ -7,11 +7,14 @@
 #include <cmath>
 #include <limits>
 
-#include "num/js_math.h"
+#include "num/fdlibm_embed.h"
 
 namespace rig::wa {
 
 namespace {
+
+// Chromium's fdlibm (Blink calls fdlibm::exp / fdlibm::pow here), compiled into this TU (num/fdlibm_embed.h).
+namespace fdlibm = rig::fdlibm_internal::v8::base::ieee754;
 
 constexpr float kTimeConstantsToConverge = 10.0f;
 constexpr float kSetTargetThreshold = 4.539992976248485e-05f;  // exp(-10)
@@ -364,7 +367,15 @@ void Param::clampNewEventsToCurrentTime(double t) {
       clamped = true;
     }
   }
-  if (clamped) std::stable_sort(ev_, ev_ + count_, [](const Event &a, const Event &b) { return a.time < b.time; });
+  if (clamped) {
+    // std::stable_sort, but in place: the libstdc++ one allocates a temporary buffer (audio thread, ≤ 64 events)
+    for (std::size_t i = 1; i < count_; ++i) {
+      const Event e = ev_[i];
+      std::size_t j = i;
+      for (; j > 0 && e.time < ev_[j - 1].time; --j) ev_[j] = ev_[j - 1];
+      ev_[j] = e;
+    }
+  }
 }
 
 bool Param::handleAllEventsInThePast(double currentTimeS, double sr, float &defaultValue, float *values,
