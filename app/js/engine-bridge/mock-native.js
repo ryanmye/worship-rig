@@ -1,0 +1,610 @@
+// MockNative: a JS stand-in for the native engine's bridge side (BRIDGE v1, contract section 6). It plays two roles:
+//  1. Validator. Every incoming message is checked against native/contract/engine-api.json (`messages.ops`, the
+//     param grammar from shared/params.js, the error codes). Problems become `findings` (and `bad-request` replies),
+//     so a shim that drifts from the contract is caught without a native build.
+//  2. Plausible peer. It answers every op with a result of the documented shape and emits the documented events
+//     (state, tick, notes, wheel, load, click, warn, midi, rec), so the real UI can boot against the bridge in
+//     Chromium. It makes no sound.
+// The contract JSON is passed in (`api`): Node tests read the file, the browser smoke fetches it.
+import { PROTOCOL } from './link.js';
+import { isValidPath } from '../shared/params.js';
+import { chordName } from '../shared/chords.js';
+
+const MINOR = 0;
+const OPS_NEED_AUDIO = new Set(['prepare', 'commit', 'cache', 'play', 'click', 'rec']);
+const GRAMMAR_KEYS = new Set(['v', 'op', 'id']);
+
+/** Split on `|` outside brackets and quotes. */
+function splitAlts(spec) {
+  const out = [];
+  let depth = 0;
+  let q = false;
+  let cur = '';
+  for (const ch of spec) {
+    if (ch === "'") q = !q;
+    if (!q && (ch === '{' || ch === '[')) depth += 1;
+    if (!q && (ch === '}' || ch === ']')) depth -= 1;
+    if (ch === '|' && depth === 0 && !q) {
+      out.push(cur.trim());
+      cur = '';
+    } else cur += ch;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+/**
+ * Check a value against one contract type spec ("int", "'a'|'b'?", "string[]?", "{pc, minor}?", ...).
+ * @returns {{optional:boolean, ok:boolean, unknown?:string}}
+ */
+export function checkSpec(spec, value) {
+  let s = String(spec).trim();
+  const optional = s.endsWith('?') && !s.endsWith('|?');
+  if (optional) s = s.slice(0, -1);
+  if (value === undefined) return { optional, ok: optional };
+  let unknown;
+  const one = (alt) => {
+    const a = alt.trim();
+    if (/^'.*'$/.test(a)) return value === a.slice(1, -1);
+    if (/^-?\d+(\.\d+)?$/.test(a)) return value === Number(a);
+    if (a === 'null') return value === null;
+    if (a === 'int') return Number.isInteger(value);
+    if (a === 'string' || a === 'ParamPath' || a === 'id') return typeof value === 'string';
+    if (a === 'bool') return typeof value === 'boolean';
+    if (['s', 'number', 'engine s', '0..1'].includes(a)) {
+      return typeof value === 'number' && Number.isFinite(value) && (a !== '0..1' || (value >= 0 && value <= 1));
+    }
+    if (a === 'any') return true;
+    if (a.endsWith('[]')) {
+      if (!Array.isArray(value)) return false;
+      const inner = a.slice(0, -2);
+      return value.every((x) => (inner === 'string' ? typeof x === 'string' : inner === 'int' ? Number.isInteger(x) : true));
+    }
+    if (a.startsWith('[')) return Array.isArray(value);
+    if (a.startsWith('{') || ['object', 'Patch', 'Routing', 'touch', 'SongDrone'].includes(a)) return isObj(value);
+    unknown = a;
+    return true;
+  };
+  return { optional, ok: splitAlts(s).some(one), unknown };
+}
+
+/** @param {{api:object, transport:{post:Function,onMessage:Function}, now?:()=>number, timers?:object,
+ *   autoTick?:boolean, seed?:number, sampleRate?:number, channels?:number, devices?:object[]}} o */
+export class MockNative {
+  constructor(o) {
+    if (!o || !o.api || !o.transport) throw new TypeError('MockNative needs {api, transport}');
+    this.api = o.api;
+    this.transport = o.transport;
+    this.now = o.now || (() => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
+    this.timers = o.timers || {
+      setInterval: (f, ms) => setInterval(f, ms), clearInterval: (h) => clearInterval(h),
+    };
+    this.sampleRate = o.sampleRate || 48000;
+    this.channels = o.channels || 2;
+    this.seed = o.seed ?? 1;
+    this.devices = o.devices || [
+      { id: 'default', name: 'Mock output', channels: this.channels, default: true, sampleRates: [44100, 48000] },
+    ];
+    this.ops = new Map(this.api.messages.ops.map((op) => [op.op, op]));
+    this.errorCodes = new Set(this.api.messages.errors);
+    /** Everything the validator did not like: {kind, op, ...}. kinds: unknown-op, unknown-field, missing, type,
+     *  bad-enum, protocol, before-hello, unknown-param, spec-gap, unrecognised-spec. */
+    this.findings = [];
+    /** op[:action|e] -> count, for the smoke ("which contracted messages did the UI send"). */
+    this.calls = new Map();
+    this.received = [];
+    this.helloDone = false;
+    this.audio = { started: false, startPerf: 0, epoch: 0, frames0: 0, asleepAt: null, asleepTotal: 0 };
+    this.st = { sleep: 'awake', deviceId: 'default', latency: 'interactive' };
+    this.nextToken = 1;
+    this.latestToken = 0;
+    this.committedToken = 0;
+    this.patch = null;
+    this.held = new Map(); // note -> vel
+    this.chord = null;
+    this._chordKey = 'null';
+    this.pedal = false;
+    this.wheel = { mod: 0, expr: 1, vol: 1 };
+    this.modOwner = 'hw';
+    this.faded = false;
+    this.swelling = false;
+    this.lowResource = false;
+    this.meters = { rate: 4, slots: [], rta: false };
+    this.click = { running: false, counting: false, bpm: null, sig: '4/4', output: 'main', level: 0.5, record: false,
+      downbeat: null };
+    this.tempo = null;
+    this.params = new Map();
+    this.peak = [0, 0];
+    this.tickCount = 0;
+    this._out = [];
+    this._unspec = new Set();
+    this._timer = null;
+    this._offMsg = o.transport.onMessage((m) => this.receive(m));
+    this.autoTick = !!o.autoTick;
+    this._lastPerf = this.now();
+    this._clockT = 0;
+    this._running = false;
+  }
+
+  close() {
+    if (this._timer !== null) this.timers.clearInterval(this._timer);
+    this._timer = null;
+    if (typeof this._offMsg === 'function') this._offMsg();
+  }
+
+  // ------------------------------------------------------------------------------------------- engine time
+  /** Engine time (s): frames rendered / sample rate; runs only while the device is open and awake. */
+  t() {
+    const p = this.now();
+    if (this._running) this._clockT += (p - this._lastPerf) / 1000;
+    this._lastPerf = p;
+    return this._clockT;
+  }
+
+  _setRunning(on) {
+    this.t();
+    this._running = on;
+  }
+
+  // ------------------------------------------------------------------------------------------- output
+  _emit(ev, data = {}) {
+    this._out.push({ v: PROTOCOL, ev, ...data });
+  }
+
+  _reply(id, ok, payload) {
+    if (id === undefined) return;
+    if (ok) this._out.push({ v: PROTOCOL, re: id, ok: true, result: payload });
+    else this._out.push({ v: PROTOCOL, re: id, ok: false, error: payload });
+  }
+
+  _flush() {
+    if (!this._out.length) return;
+    const batch = this._out;
+    this._out = [];
+    this.transport.post(batch);
+  }
+
+  _fail(msg, code, message, detail) {
+    if (!this.errorCodes.has(code)) this.findings.push({ kind: 'bad-error-code', code });
+    if (msg.id !== undefined) this._reply(msg.id, false, { code, message, ...(detail ? { detail } : {}) });
+    else this._emit('warn', { message, code, op: msg.op });
+  }
+
+  _find(kind, msg, extra = {}) {
+    this.findings.push({ kind, op: msg && msg.op, ...extra });
+  }
+
+  // ------------------------------------------------------------------------------------------- validation
+  /** @returns {string|null} a problem description (the message is rejected) or null */
+  validate(msg) {
+    if (!isObj(msg)) {
+      this._find('type', msg, { detail: 'not an object' });
+      return 'message is not an object';
+    }
+    if (msg.v !== PROTOCOL) {
+      this._find('protocol', msg, { v: msg.v });
+      return 'protocol';
+    }
+    const def = this.ops.get(msg.op);
+    if (!def) {
+      this._find('unknown-op', msg, { op: msg.op });
+      return 'unknown-op';
+    }
+    let problem = null;
+    const batch = msg.op === 'set' && msg.batch !== undefined;
+    for (const [field, spec] of Object.entries(def.args)) {
+      // spec gap: `set` lists path/value as required but the batch form has neither
+      if (msg.op === 'set' && (field === 'path' || field === 'value') && batch) continue;
+      if (msg.op === 'set' && field === 'value' && msg.path !== undefined && msg.value === undefined) {
+        if (!('value' in msg)) {
+          problem = problem || 'set without value';
+          this._find('missing', msg, { field });
+        }
+        continue;
+      }
+      const r = checkSpec(spec, msg[field]);
+      if (r.unknown && !this._unspec.has(`${msg.op}.${field}`)) {
+        this._unspec.add(`${msg.op}.${field}`);
+        this._find('unrecognised-spec', msg, { field, spec });
+      }
+      if (msg[field] === undefined && !r.optional) {
+        // `value` may legitimately be null/absent after JSON round trip of undefined: treat as missing
+        this._find('missing', msg, { field });
+        problem = problem || `missing ${field}`;
+      } else if (!r.ok) {
+        this._find('type', msg, { field, spec, got: JSON.stringify(msg[field]) });
+        problem = problem || `bad ${field}`;
+      }
+    }
+    for (const k of Object.keys(msg)) {
+      if (GRAMMAR_KEYS.has(k) || k in def.args) continue;
+      this._find('unknown-field', msg, { field: k });
+    }
+    if (batch && Array.isArray(msg.batch)) {
+      for (const e of msg.batch) {
+        if (!Array.isArray(e) || typeof e[0] !== 'string' || e.length < 2 || e.length > 3) {
+          this._find('type', msg, { field: 'batch', got: JSON.stringify(e) });
+          problem = problem || 'bad batch entry';
+        }
+      }
+    }
+    if (msg.op === 'set' && !batch && msg.path === undefined) problem = problem || 'set without path';
+    if (msg.op === 'play' && !problem) problem = this._playShape(msg);
+    return problem;
+  }
+
+  _playShape(msg) {
+    const need = {
+      on: ['n'], off: ['n'], pedal: ['down'], wheel: ['src', 'value'], bend: ['x'], swell: [], panic: [], fade: [],
+      input: [],
+    }[msg.e];
+    if (!need) return null; // enum failure already reported by checkSpec
+    for (const f of need) {
+      if (msg[f] === undefined) {
+        this._find('missing', msg, { field: f, e: msg.e });
+        return `play ${msg.e} needs ${f}`;
+      }
+    }
+    return null;
+  }
+
+  // ------------------------------------------------------------------------------------------- receive
+  receive(batch) {
+    const list = Array.isArray(batch) ? batch : [batch];
+    for (const m of list) this._handle(m);
+    this._flush();
+  }
+
+  _count(msg) {
+    const sub = msg.action ?? msg.e ?? msg.what;
+    const key = sub !== undefined ? `${msg.op}:${sub}` : String(msg.op);
+    this.calls.set(key, (this.calls.get(key) || 0) + 1);
+  }
+
+  _handle(msg) {
+    this.received.push(msg);
+    if (isObj(msg) && typeof msg.op === 'string') this._count(msg);
+    const problem = this.validate(msg);
+    if (isObj(msg) && msg.op !== 'hello' && !this.helloDone) this._find('before-hello', msg);
+    if (problem) {
+      const code = problem === 'protocol' ? 'protocol' : problem === 'unknown-op' ? 'unknown-op' : 'bad-request';
+      return this._fail(isObj(msg) ? msg : {}, code, `${isObj(msg) ? msg.op : '?'}: ${problem}`);
+    }
+    if (OPS_NEED_AUDIO.has(msg.op) && !this.audio.started) {
+      return this._fail(msg, 'not-started', `${msg.op} before audio start`);
+    }
+    try {
+      const fn = this[`op_${msg.op}`];
+      return fn.call(this, msg);
+    } catch (err) {
+      return this._fail(msg, 'internal', `${msg.op}: ${err && err.message}`);
+    }
+  }
+
+  // ------------------------------------------------------------------------------------------- state events
+  _state(extra = {}) {
+    return {
+      state: this.audio.started ? 'running' : 'suspended', sleep: this.st.sleep, latencyMs: 12, sampleRate: this.sampleRate,
+      deviceId: this.st.deviceId, channels: this.channels, ...extra,
+    };
+  }
+
+  op_hello(m) {
+    if (m.protocol !== PROTOCOL) return this._fail(m, 'protocol', `protocol ${m.protocol} not supported`);
+    this.helloDone = true;
+    return this._reply(m.id, true, {
+      protocol: PROTOCOL, minor: MINOR, engine: 'worship-rig-core mock 0.0', caps: ['mock'], sampleRate: this.sampleRate,
+      seed: this.seed,
+    });
+  }
+
+  op_audio(m) {
+    switch (m.action) {
+      case 'start':
+      case 'restart': {
+        const restarted = m.action === 'restart';
+        if (restarted) this.audio.epoch += 1;
+        if (m.deviceId !== undefined) this.st.deviceId = m.deviceId || 'default';
+        if (m.latency !== undefined) this.st.latency = m.latency;
+        const first = !this.audio.started;
+        this.audio.started = true;
+        this.st.sleep = 'awake';
+        this._setRunning(true);
+        this._emit('state', this._state(restarted ? { restarted: true } : {}));
+        if (first) this._emit('load', { phase: 'start' });
+        this._ensureTicker();
+        return this._reply(m.id, true, this._state());
+      }
+      case 'output':
+        this.st.deviceId = m.deviceId || 'default';
+        this._emit('state', this._state());
+        return this._reply(m.id, true, this._state());
+      case 'sleep':
+      case 'wake': {
+        if (!this.audio.started) return this._fail(m, 'not-started', `${m.action} before audio start`);
+        const sleep = m.action === 'sleep';
+        const changed = (this.st.sleep === 'awake') === sleep;
+        if (changed) {
+          this.st.sleep = sleep ? 'asleep' : 'awake';
+          this._setRunning(!sleep);
+          this._emit('state', this._state(sleep ? {} : { wakeMs: 8, queued: 0 }));
+        }
+        return this._reply(m.id, true, { done: changed });
+      }
+      default:
+        return this._fail(m, 'bad-request', `audio action ${m.action}`);
+    }
+  }
+
+  // ------------------------------------------------------------------------------------------- songs, cache
+  _samplerIds(patch) {
+    const ids = [];
+    for (const s of (patch && patch.slots) || []) {
+      if (s && s.instrument && s.instrument.type === 'sampler') ids.push(s.instrument.id);
+    }
+    return ids;
+  }
+
+  _emitSamples(patches) {
+    const loaded = {};
+    for (const p of patches) for (const id of this._samplerIds(p)) loaded[id] = true;
+    if (Object.keys(loaded).length) this._emit('load', { phase: 'samples', loaded });
+  }
+
+  op_prepare(m) {
+    const token = this.nextToken++;
+    this.latestToken = token;
+    ((m.patch && m.patch.slots) || []).forEach((s, slot) => {
+      if (!s) return;
+      this._emit('load', { phase: 'slot', slot, progress: 0.5, token });
+      this._emit('load', { phase: 'slot', slot, progress: 1, token });
+    });
+    this._emitSamples([m.patch]);
+    this._plans = this._plans || new Map();
+    this._plans.set(token, m.patch);
+    return this._reply(m.id, true, { token });
+  }
+
+  op_commit(m) {
+    if (!(this._plans && this._plans.has(m.token))) return this._fail(m, 'stale-token', `unknown token ${m.token}`);
+    const ok = m.token === this.latestToken && m.token !== this.committedToken;
+    if (ok) {
+      this.committedToken = m.token;
+      this.patch = this._plans.get(m.token);
+    }
+    return this._reply(m.id, true, { committed: ok });
+  }
+
+  op_cache(m) {
+    const patches = m.patches || [];
+    if (m.action === 'preload') {
+      this._emitSamples(patches);
+      this._emit('load', { phase: 'preload', decodedMB: 12 * patches.length, pinnedMB: 12 * patches.length, deferred: 0 });
+      return this._reply(m.id, true, { decodedMB: 12 * patches.length, pinnedMB: 12 * patches.length, deferred: 0 });
+    }
+    if (m.action === 'estimate') {
+      return this._reply(m.id, true, { mb: 1.75 * 40 * patches.length, exact: false, samples: 40 * patches.length, capMB: 700 });
+    }
+    return this._reply(m.id, true, { ok: true });
+  }
+
+  op_set(m) {
+    const one = (path, value) => {
+      if (!isValidPath(path)) {
+        this._find('unknown-param', m, { path });
+        return false;
+      }
+      this.params.set(path, value);
+      return true;
+    };
+    if (m.batch) {
+      const applied = m.batch.map((e) => one(e[0], e[1]));
+      return this._reply(m.id, true, { applied });
+    }
+    if (!isValidPath(m.path)) return this._fail(m, 'unknown-param', `Unknown parameter "${m.path}"`);
+    return this._reply(m.id, true, { applied: one(m.path, m.value) });
+  }
+
+  op_song(m) {
+    if (m.tempo !== undefined) {
+      this.tempo = m.tempo;
+      this.click.bpm = m.tempo;
+    }
+    if (m.timeSig) this.click.sig = m.timeSig;
+    return this._reply(m.id, true, {});
+  }
+
+  op_drone(m) {
+    const r = {};
+    if (m.files) r.files = m.files.length;
+    if (m.key) r.changed = true;
+    return this._reply(m.id, true, r);
+  }
+
+  // ------------------------------------------------------------------------------------------- perform
+  _noteState() {
+    const notes = [...this.held.keys()].sort((a, b) => a - b);
+    const ev = { held: notes };
+    let chord = null;
+    if (notes.length >= 2) {
+      const r = chordName(notes.map((n) => n % 12), notes[0] % 12);
+      if (r && typeof r === 'object') chord = r;
+    }
+    const key = JSON.stringify(chord);
+    if (key !== this._chordKey) {
+      this._chordKey = key;
+      ev.chord = chord;
+    }
+    this._emit('notes', ev);
+  }
+
+  op_play(m) {
+    switch (m.e) {
+      case 'on':
+        this.held.set(m.n, m.vel ?? 100);
+        this._noteState();
+        break;
+      case 'off':
+        this.held.delete(m.n);
+        this._noteState();
+        break;
+      case 'pedal':
+        this.pedal = !!m.down;
+        break;
+      case 'wheel':
+        if (m.src !== 'virtual') this.wheel[m.src] = m.value;
+        this._emit('wheel', { source: m.src, value: m.value });
+        break;
+      case 'panic':
+        this.held.clear();
+        this.pedal = false;
+        this._noteState();
+        break;
+      case 'fade':
+        this.faded = true;
+        break;
+      default:
+        break;
+    }
+    if (m.e === 'on' && this.faded) this.faded = false;
+    return this._reply(m.id, true, { ok: true });
+  }
+
+  op_click(m) {
+    if (m.action === 'start') {
+      if (!(this.tempo > 0)) return this._reply(m.id, true, null);
+      const t = this.t();
+      this.click.running = true;
+      this.click.counting = (m.countIn || 0) > 0;
+      this.click.downbeat = t + 0.06;
+      this._emit('click', { ...this.click });
+      return this._reply(m.id, true, { t0: t + 0.06, downbeat: t + 0.06 });
+    }
+    if (m.action === 'stop') {
+      const was = this.click.running;
+      this.click.running = false;
+      this.click.counting = false;
+      this._emit('click', { ...this.click });
+      return this._reply(m.id, true, { wasRunning: was });
+    }
+    if (m.level !== undefined) this.click.level = m.level;
+    if (m.record !== undefined) this.click.record = m.record;
+    if (m.output !== undefined) this.click.output = this.channels >= 4 ? m.output : 'main';
+    this._emit('click', { ...this.click });
+    return this._reply(m.id, true, { output: this.click.output, auxAvailable: this.channels >= 4 });
+  }
+
+  op_config(m) {
+    const r = {};
+    if (m.lowResource !== undefined) {
+      this.lowResource = !!m.lowResource;
+      r.lowResource = this.lowResource;
+    }
+    if (m.eqAudition) r.eqAudition = Number.isInteger(m.eqAudition.slot);
+    if (m.meters) {
+      this.meters = {
+        rate: m.meters.rate ?? this.meters.rate, slots: m.meters.slots ?? this.meters.slots,
+        rta: m.meters.rta ?? this.meters.rta,
+      };
+      if (this._timer !== null) this._ensureTicker(true);
+    }
+    return this._reply(m.id, true, r);
+  }
+
+  op_get(m) {
+    switch (m.what) {
+      case 'instruments':
+        return this._reply(m.id, true, this.api.instruments.list.map((e) => ({ ...e })));
+      case 'stats':
+        return this._reply(m.id, true, this._stats());
+      case 'devices':
+        return this._reply(m.id, true, this.devices);
+      case 'sampleStatus': {
+        const ps = m.patches || [];
+        return this._reply(m.id, true, { loaded: ps.map(() => true), failed: ps.map(() => false) });
+      }
+      case 'state':
+        return this._reply(m.id, true, {
+          patch: this.patch, routing: {}, transpose: 0, tempo: this.tempo, timeSig: this.click.sig, keyContext: null,
+          drone: {}, mono: false, runtime: this._runtime(), click: { ...this.click }, sleep: this.st.sleep,
+        });
+      default:
+        return this._fail(m, 'bad-request', `get ${m.what}`);
+    }
+  }
+
+  op_midi(m) {
+    if (m.action === 'listen') {
+      this._emit('midi', {
+        type: 'ports', ports: [{ id: 'mock-in', name: 'Mock Keys', manufacturer: 'Mock', state: 'connected', kind: 'input' }],
+      });
+      return this._reply(m.id, true, { ports: [] });
+    }
+    return this._reply(m.id, true, {});
+  }
+
+  op_rec(m) {
+    if (m.action === 'start') {
+      this._rec = { t: this.t() };
+      this._emit('rec', { state: 'recording', path: '/tmp/mock.wav' });
+      return this._reply(m.id, true, { path: '/tmp/mock.wav' });
+    }
+    const secs = this._rec ? this.t() - this._rec.t : 0;
+    this._rec = null;
+    this._emit('rec', { state: 'stopped', path: '/tmp/mock.wav' });
+    return this._reply(m.id, true, { path: '/tmp/mock.wav', seconds: secs, bytes: Math.round(secs * this.sampleRate * 4) });
+  }
+
+  // ------------------------------------------------------------------------------------------- ticks
+  _runtime() {
+    return { wheel: { ...this.wheel }, modOwner: this.modOwner, faded: this.faded, swelling: this.swelling };
+  }
+
+  _stats() {
+    return {
+      voices: this.held.size, nodes: 0, retiring: 0, decodedMB: 0, pinnedMB: 0, referencedMB: 0, capMB: 700,
+      sounding: this.held.size, pedaled: this.pedal ? 1 : 0, timers: 0, lowResource: this.lowResource, slotLevelTaps: 0,
+    };
+  }
+
+  /** Emit one tick now (tests call this; the auto ticker calls it at `meters.rate`). */
+  emitTick() {
+    if (!this.audio.started || this.st.sleep === 'asleep') return;
+    this.tickCount += 1;
+    const level = Math.min(1, [...this.held.values()].reduce((a, v) => a + (v / 127) * 0.2, 0));
+    this.peak = this.peak.map((p) => Math.max(level, p * 0.85));
+    const t = this.t();
+    const tick = {
+      t, frames: Math.round(t * this.sampleRate), out: [this.peak[0], this.peak[1]],
+      blockers: this.held.size ? ['voices'] : [], pedal: this.pedal, held: this.held.size, runtime: this._runtime(),
+      cpu: 0.02,
+    };
+    if (this.meters.slots.length) {
+      tick.slots = [0, 1, 2, 3].map((i) => (this.meters.slots.includes(i) ? [this.peak[0], this.peak[0] * 0.7] : [0, 0]));
+    }
+    if (this.meters.rta) {
+      const bytes = new Uint8Array(2048);
+      for (let i = 0; i < 2048; i++) bytes[i] = 200 - ((i % 1024) >> 3);
+      let bin = '';
+      for (const b of bytes) bin += String.fromCharCode(b);
+      tick.rta = btoa(bin);
+    }
+    if (this.tickCount % Math.max(1, Math.round(this.meters.rate)) === 0) tick.stats = this._stats();
+    this._emit('tick', tick);
+    this._flush();
+  }
+
+  _ensureTicker(reset = false) {
+    if (!this.autoTick) return;
+    if (this._timer !== null && !reset) return;
+    if (this._timer !== null) this.timers.clearInterval(this._timer);
+    this._timer = this.timers.setInterval(() => this.emitTick(), Math.round(1000 / Math.max(1, this.meters.rate)));
+  }
+
+  /** @returns {{ops:Object<string,number>, findings:object[]}} summary for reports */
+  summary() {
+    return { calls: Object.fromEntries(this.calls), findings: this.findings };
+  }
+}
