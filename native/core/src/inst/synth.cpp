@@ -160,6 +160,7 @@ SynthInstrument::SynthInstrument(const PatchDef &patch, double sampleRate, std::
       releaseOverride_(releaseOverride > 0 ? releaseOverride : 0),
       sh_(std::make_unique<SynthShared>()) {
   pool_.setCap(kDefaultVoiceCap);
+  (void)oscFinalValueCalls();  // probe once here, on the control thread (it allocates a wavetable)
   resolveParams(patch_, paramsJson, params_);
   bank_ = WaveBank::get(sr_, familiesFor(patch_.id));
   SynthShared &s = *sh_;
@@ -629,7 +630,7 @@ void SynthInstrument::process(const RenderContext &ctx, UnitIO &io) {
     float det = 0.0f;
     det += s.fcs[0];
     if (s.hasLfo) {
-      s.lfo.process(f0, sr, s.lfoOut, n);
+      oscProcess(s.lfo, true, false, f0, sr, s.lfoOut, n, nullptr, nullptr);
       float *c[1] = {s.lfoOut};
       s.lfoGain.process(c, c, 1, n, f0, sr);
       det += s.lfoOut[0];
@@ -649,7 +650,7 @@ void SynthInstrument::process(const RenderContext &ctx, UnitIO &io) {
         in.bloom = s.bloom;
         break;
       }
-      s.chorusLfo.process(f0, sr, tmp, n);
+      oscProcess(s.chorusLfo, true, false, f0, sr, tmp, n, nullptr, nullptr);
       const float *src[1] = {tmp};
       float *p1[1] = {s.cPos}, *n1[1] = {s.cNeg};
       s.chorusPos.process(src, p1, 1, n, f0, sr);
@@ -670,7 +671,7 @@ void SynthInstrument::process(const RenderContext &ctx, UnitIO &io) {
         for (unsigned i = 0; i < 4; ++i) pulled = pulled || v.srcActive(i, f0, sr, n);
       });
       if (!pulled) break;
-      s.uniLfo.process(f0, sr, tmp, n);
+      oscProcess(s.uniLfo, true, false, f0, sr, tmp, n, nullptr, nullptr);
       const float *src[1] = {tmp};
       float *p1[1] = {s.uPos}, *n1[1] = {s.uNeg};
       s.uniPos.process(src, p1, 1, n, f0, sr);
@@ -680,7 +681,7 @@ void SynthInstrument::process(const RenderContext &ctx, UnitIO &io) {
       break;
     }
     case PatchId::SoftKeys: {
-      s.tremLfo.process(f0, sr, s.trem, n);
+      oscProcess(s.tremLfo, true, false, f0, sr, s.trem, n, nullptr, nullptr);
       const float *src[1] = {s.trem};
       float *p1[1] = {s.cPos}, *n1[1] = {s.cNeg};
       s.tremPos.process(src, p1, 1, n, f0, sr);

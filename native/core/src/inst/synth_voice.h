@@ -62,6 +62,22 @@ struct FmDepth {
   void retune(double fm_, double cap_, double t, double dur);
 };
 
+/**
+ * OscillatorHandler::Process (Chromium 157) calls FinalValue() on frequency and detune THREE times per quantum when
+ * neither is sample accurate (CalculateSampleAccuratePhaseIncrements, Process before the kernel, ProcessKRate), and
+ * each call advances a running setTarget by one control step: a k-rate detune moved by rampTo (every synth.js
+ * `detune` param) glides three steps per quantum. Measured: dump-synth.mjs `warm-params` and a single-oscillator probe
+ * (effective detune per quantum 39.4 / 65.3 / 80.7 cents = 3, 6, 9 steps of tau 15 ms). wa::Oscillator (T11a)
+ * evaluates once, so oscProcess() makes the missing calls itself; oscFinalValueCalls() probes wa::Oscillator once
+ * (control thread) so the extra calls shrink by themselves if the oscillator port is changed to match.
+ */
+inline constexpr int kChromiumOscFinalValueCalls = 3;
+int oscFinalValueCalls();
+/** wa::Oscillator::process for an oscillator that renders this quantum (`active`), with Chromium's FinalValue count.
+ *  `detuneKRate`: detune.automationRate is 'k-rate' (InstrumentBase.osc); frequency is always a-rate here. */
+void oscProcess(wa::Oscillator &o, bool active, bool detuneKRate, std::int64_t f0, double sr, float *out,
+                std::size_t n, const float *freqMod, const float *detuneMod);
+
 /** One source of a voice and its earliest stop (voice.js `_stopSource`: the earliest stop() wins). */
 struct VoiceSrc {
   wa::Oscillator *osc = nullptr;
@@ -107,6 +123,13 @@ class SynthVoice {
   double envRelease(double rt, double r);
   /** voice.fadeOut(t, fade): out gain to 0 (tau fade/6.9), sources stop at t + 1.3 fade. */
   void fadeOut(double t, double fadeSec);
+
+  /** Render source `src` (an oscillator) for this quantum through oscProcess. */
+  void runOsc(unsigned src, wa::Oscillator &o, const VoiceIn &in, float *out, const float *freqMod,
+              const float *detuneMod, bool detuneKRate = true) {
+    oscProcess(o, srcActive(src, in.frame0, in.sr, in.n), detuneKRate, in.frame0, in.sr, out, in.n, freqMod,
+               detuneMod);
+  }
 
   /** Count down the teardown after the sources finished: true = destroy now. */
   bool tick() {

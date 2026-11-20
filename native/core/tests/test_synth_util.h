@@ -125,7 +125,8 @@ struct Driver {
     return out;
   }
   std::size_t count(rig::EventKind k) const {
-    return static_cast<std::size_t>(std::count_if(sink.ev.begin(), sink.ev.end(), [&](auto &e) { return e.kind == k; }));
+    return static_cast<std::size_t>(
+        std::count_if(sink.ev.begin(), sink.ev.end(), [&](auto &e) { return e.kind == k; }));
   }
 };
 

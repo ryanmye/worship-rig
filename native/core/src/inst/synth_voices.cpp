@@ -105,10 +105,10 @@ void WarmVoice::render(const VoiceIn &in, float *l, float *r) {
   zero(sumL_, n);
   zero(sumR_, n);
   for (int i = 0; i < 5; ++i) {
-    saw[i].process(in.frame0, in.sr, tmp, n, nullptr, in.bend);
+    runOsc(static_cast<unsigned>(i), saw[i], in, tmp, nullptr, in.bend);
     pan[i].addTo(tmp, sumL_, sumR_, n);
   }
-  sub.process(in.frame0, in.sr, tmp, n, nullptr, in.bend);
+  runOsc(5, sub, in, tmp, nullptr, in.bend);
   float *t1[1] = {tmp};
   subG.process(t1, t1, 1, n, in.frame0, in.sr);
   addTo(sumL_, tmp, n);
@@ -149,20 +149,20 @@ void GlassVoice::render(const VoiceIn &in, float *l, float *r) {
   zero(sumR_, n);
   zero(sideL, n);
   zero(sideR, n);
-  c.process(in.frame0, in.sr, tmp, n, nullptr, in.bend);
+  runOsc(0, c, in, tmp, nullptr, in.bend);
   addTo(sumL_, tmp, n);
   addTo(sumR_, tmp, n);
   sumDet(det, in.bend, in.chorusNeg, n);
-  a.process(in.frame0, in.sr, tmp, n, nullptr, det);
+  runOsc(1, a, in, tmp, nullptr, det);
   pa.addTo(tmp, sideL, sideR, n);
   sumDet(det, in.bend, in.chorusPos, n);
-  b.process(in.frame0, in.sr, tmp, n, nullptr, det);
+  runOsc(2, b, in, tmp, nullptr, det);
   pb.addTo(tmp, sideL, sideR, n);
   constGain(sideL, n, 0.7f);
   constGain(sideR, n, 0.7f);
   addTo(sumL_, sideL, n);
   addTo(sumR_, sideR, n);
-  bloom.process(in.frame0, in.sr, tmp, n, nullptr, in.bend);
+  runOsc(3, bloom, in, tmp, nullptr, in.bend);
   for (std::size_t i = 0; i < n; ++i) tmp[i] *= 0.0f + in.bloom[i];  // bloomG: gain 0 + bloomCS (a-rate input)
   addTo(sumL_, tmp, n);
   addTo(sumR_, tmp, n);
@@ -203,14 +203,14 @@ StringsVoice::StringsVoice(const BuildCtx &b) : SynthVoice(b.note, b.t, (0.5 + 0
 void StringsVoice::render(const VoiceIn &in, float *l, float *r) {
   const std::size_t n = in.n;
   float tmp[kQuantum], vibOut[kQuantum], det[kQuantum];
-  vib.process(in.frame0, in.sr, vibOut, n);
+  runOsc(5, vib, in, vibOut, nullptr, nullptr, false);
   float *v1[1] = {vibOut};
   vibG.process(v1, v1, 1, n, in.frame0, in.sr);
   sumDet(det, in.bend, vibOut, n);
   zero(sumL_, n);
   zero(sumR_, n);
   for (int i = 0; i < 5; ++i) {
-    saw[i].process(in.frame0, in.sr, tmp, n, nullptr, det);
+    runOsc(static_cast<unsigned>(i), saw[i], in, tmp, nullptr, det);
     pan[i].addTo(tmp, sumL_, sumR_, n);
   }
   constGain(sumL_, n, 0.2f);
@@ -242,12 +242,12 @@ SubVoice::SubVoice(const BuildCtx &b) : SynthVoice(b.note, b.t, 0.6 + 0.4 * b.ve
 void SubVoice::render(const VoiceIn &in, float *l, float *) {
   const std::size_t n = in.n;
   float tmp[kQuantum];
-  s.process(in.frame0, in.sr, sumL_, n, nullptr, in.bend);
-  tr.process(in.frame0, in.sr, tmp, n, nullptr, in.bend);
+  runOsc(0, s, in, sumL_, nullptr, in.bend);
+  runOsc(1, tr, in, tmp, nullptr, in.bend);
   float *t1[1] = {tmp};
   trG.process(t1, t1, 1, n, in.frame0, in.sr);
   addTo(sumL_, tmp, n);
-  h2.process(in.frame0, in.sr, tmp, n, nullptr, in.bend);
+  runOsc(2, h2, in, tmp, nullptr, in.bend);
   for (std::size_t i = 0; i < n; ++i) tmp[i] *= 0.0f + in.h2[i];  // h2G: gain 0 + h2CS
   addTo(sumL_, tmp, n);
   constGain(sumL_, n, 0.5f);
@@ -292,16 +292,16 @@ KeysVoice::KeysVoice(const BuildCtx &b) : SynthVoice(b.note, b.t, (0.15 + 0.85 *
 void KeysVoice::render(const VoiceIn &in, float *l, float *) {
   const std::size_t n = in.n;
   float tmp[kQuantum], fm[kQuantum];
-  m1.process(in.frame0, in.sr, fm, n, nullptr, in.bend);
+  runOsc(1, m1, in, fm, nullptr, in.bend);
   float *f1[1] = {fm};
   m1G.process(f1, f1, 1, n, in.frame0, in.sr);
   if (hasTine) {
-    tine.process(in.frame0, in.sr, tmp, n, nullptr, in.bend);
+    runOsc(2, tine, in, tmp, nullptr, in.bend);
     float *t1[1] = {tmp};
     tG.process(t1, t1, 1, n, in.frame0, in.sr);
     addTo(fm, tmp, n);
   }
-  car.process(in.frame0, in.sr, sumL_, n, fm, in.bend);
+  runOsc(0, car, in, sumL_, fm, in.bend);
   envOut(in, l, nullptr, 1);
 }
 
@@ -329,10 +329,10 @@ BellVoice::BellVoice(const BuildCtx &b)
 void BellVoice::render(const VoiceIn &in, float *l, float *) {
   const std::size_t n = in.n;
   float fm[kQuantum];
-  mod.process(in.frame0, in.sr, fm, n, nullptr, in.bend);
+  runOsc(1, mod, in, fm, nullptr, in.bend);
   float *f1[1] = {fm};
   mG.process(f1, f1, 1, n, in.frame0, in.sr);
-  car.process(in.frame0, in.sr, sumL_, n, fm, in.bend);
+  runOsc(0, car, in, sumL_, fm, in.bend);
   envOut(in, l, nullptr, 1);
 }
 
@@ -380,11 +380,11 @@ void DroneVoice::render(const VoiceIn &in, float *l, float *r) {
   for (int i = 0; i < 4; ++i) {
     const float *uni = (i % 2 == 0) ? in.uniNeg : in.uniPos;
     for (std::size_t k = 0; k < n; ++k) det[k] = in.bend[k] + drift[k] + uni[k];
-    saw[i].process(in.frame0, in.sr, tmp, n, nullptr, det);
+    runOsc(static_cast<unsigned>(i), saw[i], in, tmp, nullptr, det);
     pan[i].addTo(tmp, sumL_, sumR_, n);
   }
   sumDet(det, in.bend, drift, n);
-  sub.process(in.frame0, in.sr, tmp, n, nullptr, det);
+  runOsc(4, sub, in, tmp, nullptr, det);
   float *t1[1] = {tmp};
   subG.process(t1, t1, 1, n, in.frame0, in.sr);
   addTo(sumL_, tmp, n);

@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <memory>
 
 #include "dsp/oscillator_schedule.h"
 #include "num/js_math.h"
@@ -89,6 +90,48 @@ void FmDepth::retune(double fm_, double cap_, double t, double dur) {
   fm = fm_;
   cap = cap_;
   schedule(t, from, dur);
+}
+
+// ---- oscillator FinalValue count ----------------------------------------------------------------------------------
+
+int oscFinalValueCalls() {
+  static const int calls = [] {
+    // k-rate detune with a running setTarget: after 4 quanta the param has moved 4 x (evaluations per quantum) steps
+    std::unique_ptr<wa::PeriodicWave> w(wa::PeriodicWave::basic(wa::PeriodicWave::Basic::Sine, 48000));
+    wa::Oscillator o(w.get(), 440, 0);
+    o.setDetuneRate(wa::Param::Rate::KRate);
+    o.detune().setTargetAtTime(1200, 0.001, 0.1);
+    o.start(0);
+    float buf[kQuantum];
+    const float zero[kQuantum] = {};
+    constexpr std::int64_t kQ = static_cast<std::int64_t>(kQuantum);
+    for (std::int64_t f = 0; f < 4 * kQ; f += kQ) o.process(f, 48000, buf, kQuantum, nullptr, zero);
+    for (int k = 1; k <= 4; ++k) {
+      wa::Param ref(0);
+      ref.setTargetAtTime(1200, 0.001, 0.1);
+      for (std::int64_t f = 0; f < 4 * kQ; f += kQ)
+        for (int j = 0; j < k; ++j) ref.processKRate(f, 48000);
+      if (ref.intrinsic() == o.detune().intrinsic()) return k;
+    }
+    return 1;
+  }();
+  return calls;
+}
+
+void oscProcess(wa::Oscillator &o, bool active, bool detuneKRate, std::int64_t f0, double sr, float *out,
+                std::size_t n, const float *freqMod, const float *detuneMod) {
+  const int extra = kChromiumOscFinalValueCalls - oscFinalValueCalls();
+  if (active && extra > 0) {
+    const bool freqSA = freqMod != nullptr || o.frequency().hasSampleAccurateValues(f0, sr);
+    const bool detSA = !detuneKRate && (detuneMod != nullptr || o.detune().hasSampleAccurateValues(f0, sr));
+    if (!freqSA && !detSA) {
+      for (int k = 0; k < extra; ++k) {  // the FinalValue() pairs wa::Oscillator does not make
+        o.frequency().processKRate(f0, sr);
+        o.detune().processKRate(f0, sr);
+      }
+    }
+  }
+  o.process(f0, sr, out, n, freqMod, detuneMod);
 }
 
 // ---- Voice -----------------------------------------------------------------------------------------------------
