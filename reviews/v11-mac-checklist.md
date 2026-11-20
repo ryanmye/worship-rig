@@ -7,7 +7,7 @@ CONTRACT_CHANGES `## v11-*` and `## ci-*`.
 ## LOCAL (Mac) checks
 
 ### Before tagging
-- [ ] `node test/run-all.mjs` on the Mac (incl. shell Electron, electron-full, build-lint, soak). The Linux
+- [x] (29eb984: 14/15, the shell failures were the installed app on :8438, L11-7; then shell electron 23/23 ×3 unlocked) `node test/run-all.mjs` on the Mac (incl. shell Electron, electron-full, build-lint, soak). The Linux
       Electron boot fixture now skips hide-on-close off macOS (CI-2), so on the Mac it must still run and pass.
 - [ ] CI (`test.yml`, macos-14) green on the merged tree: the CI-1 fixes were reproduced under a local simulation,
       never on the real runner.
@@ -112,10 +112,10 @@ CONTRACT_CHANGES `## v11-*` and `## ci-*`.
 - [ ] Panic with MIDI clock out into a real receiver stops on 0xFC; an audio restart with the click running sends
       Stop then Start (R-8) and the receiver re-locks.
 - [ ] Drone swell under a held pedal sounds the same as before (R-1 moved it onto the drone level).
-- [ ] Memory (v11-memory): Activity Monitor / `ps -o rss` for the Electron renderer: visible, after a 10-song loop,
+- [x] (L11-8: low-resource kept ~1057 MB until a GC, fixed in 5f4c6d4 → 228 MB; 1.0.1 995 MB; after a 10-song loop 1319 → 1093 MB) Memory (v11-memory): Activity Monitor / `ps -o rss` for the Electron renderer: visible, after a 10-song loop,
       and in menu-bar low-resource mode, 1.0.1 vs this branch. Linux showed about 1.8 GB → 1.2–1.4 GB, and
       low-resource 1.8 GB → 0.46 GB.
-- [ ] The soak's new `peakDecodedMB` column holds 700 at a 48 kHz context.
+- [x] (SOAK_SAMPLE_RATE=48000, 12/12, peak 700.0, max pinned 581.9/600; 44.1 kHz full run: 699.9; dual mono collapses on the Mac now, lrDiff 3.05e-5, test-mp3 2.02 MB) The soak's new `peakDecodedMB` column holds 700 at a 48 kHz context.
 - [ ] Far jump while holding a pad: the reverb changes at the first pause (not at the switch), and the jump itself
       has no note stall.
 - [ ] Reverb build times on the M2 Pro (CONTRACT_CHANGES `## v11-memory` lists the Linux numbers).
