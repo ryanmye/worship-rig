@@ -150,6 +150,7 @@ std::string Metronome::retime(double bpm, bool bpmNull, std::string_view sig, bo
 void Metronome::pump(double now) {
   if (!grid_) return;
   const auto p0 = std::chrono::steady_clock::now();
+  while (!live_.empty() && live_.front() + kClickLenSec <= now) live_.pop_front();  // finished sources
   const ClickGrid &g = *grid_;
   const double from = horizon_;
   const double to = now + kLookaheadSec;

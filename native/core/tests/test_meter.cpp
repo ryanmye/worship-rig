@@ -1,6 +1,7 @@
 // T08 meters (M16): out peaks never missed (Q14), slot levels over 256 frames (contract 3.11 slotLevel), the RTA
 // encoding (engine-api.json messages.rta), tick rate rules (G6) and the tick builder.
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -10,6 +11,7 @@
 #include "doctest.h"
 #include "helpers.h"
 #include "meter/meter.h"
+#include "rec/rec.h"
 #include "yyjson.h"
 
 using namespace rigtest;
@@ -158,6 +160,44 @@ TEST_SUITE("meter") {
     yyjson_doc_free(on);
     ms->rtaBase64();
     CHECK(ms->lastDb(0)[bin] == doctest::Approx(expect + 20 * std::log10(0.2)).epsilon(0.002));
+  }
+
+  TEST_CASE("cost per 128-frame quantum of the T08 audio-thread units (indicative, this box)") {
+    rig::Bus in;
+    in.clear(2);
+    for (std::size_t i = 0; i < rig::kQ; ++i) in.ch[0][i] = in.ch[1][i] = 0.25f * std::sin(0.05 * double(i));
+    rig::UnitIO io;
+    io.in = &in;
+    rig::RenderContext ctx{0, 48000, 0, rig::UnitSlot::Meter, nullptr};
+    auto *ms = new rig::MeterShared();
+    rig::MeterUnit mu(ms);
+    auto *rs = new rig::RecShared();
+    rig::RecUnit ru(rs);
+    rs->armed = true;
+    constexpr int N = 200000;
+    auto time = [&](auto &&fn) {
+      const auto t0 = std::chrono::steady_clock::now();
+      for (int i = 0; i < N; ++i) fn(i);
+      return std::chrono::duration<double, std::nano>(std::chrono::steady_clock::now() - t0).count() / N;
+    };
+    const double meterOff = time([&](int) { mu.process(ctx, io); });
+    ms->rtaOn = true;
+    const double meterOn = time([&](int) { mu.process(ctx, io); });
+    const double rec = time([&](int i) {
+      ru.process(ctx, io);
+      if ((i & 255) == 0) rs->tail.store(rs->head.load());  // a writer keeping up
+    });
+    rs->armed = false;
+    const double recIdle = time([&](int) { ru.process(ctx, io); });
+    const double period = 128.0 / 48000.0 * 1e9;
+    MESSAGE("ns per quantum: meter " << meterOff << " (RTA ring on: " << meterOn << "), rec armed " << rec
+                                     << " (idle " << recIdle << "); % of a 48 kHz quantum: meter+RTA "
+                                     << 100 * meterOn / period << ", rec " << 100 * rec / period);
+    CHECK(meterOn < 0.05 * period);  // generous: a shared 2-CPU box
+    CHECK(rec < 0.05 * period);
+    CHECK(rs->dropped.load() == 0);
+    delete ms;
+    delete rs;
   }
 
   TEST_CASE("tick rate rules and the tick builder fields") {

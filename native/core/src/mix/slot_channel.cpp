@@ -127,7 +127,11 @@ void SlotChannel::process(const RenderContext &ctx, UnitIO &io) {
     for (unsigned c = 0; c < channels_; ++c) std::memcpy(x[c], io.in->ch[c], sizeof x[c]);
     tail_ = static_cast<int>(kTailSeconds * sr / static_cast<double>(kQ));
   } else {
+    // No live source (no voice, injection over): in Web Audio the strip input then has no active connection and
+    // reads as MONO silence; a stereo chain re-initialises its biquads (BiquadFilterHandler, zero state), a mono
+    // one rings out (eq-notch-b, eq-lowcut-c: the stereo impulse response stops when the stimulus ends).
     std::memset(x, 0, sizeof x);
+    channels_ = 1;
     if (tail_ > 0) --tail_;
   }
   float *ch[2] = {x[0], x[1]};
