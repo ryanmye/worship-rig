@@ -10,8 +10,10 @@ unattended command on the Mac). Tier 2 is one short checklist for Ryan, done onc
 | 1 | Ryan's Mac, `bash tools/mac/check.sh` | the push agent, one `RUN` | none after the one-time setup below | tier 0 again on the real Mac, plus the audio probe on the real output device (D2, D4 numbers) |
 | 2 | Ryan's Mac and iPad, by hand | Ryan | about 20 minutes, once, after T13/T14 | what needs ears, hands, a MIDI keyboard, his real library, an iPad |
 
-Status: `tools/mac/check.sh` and `rig-probe` are tested on Linux (argument parsing, `git archive` export, the core and
-probe stages on the null audio backend, `summary.json` shape, Apple stages SKIPPED with a reason). The macOS-only
+Status: `tools/mac/check.sh` and `rig-probe` are tested on Linux (argument parsing and usage errors, `git archive`
+export and reuse, `--src`, the core stage from a clean export, the probe stage on the null audio backend, missing-tool
+and bad-revision paths, `summary.json` parsed back, Apple stages SKIPPED with a reason; shellcheck clean). The script
+was written for `/bin/bash` 3.2 but only run under bash 5 here. The macOS-only
 parts (Core Audio probe run, `build-core.sh`, `xcodegen`, `xcodebuild`, the `mac-check` CI job) are written but have
 never run: the first tier-0 or tier-1 run is their test.
 
@@ -51,7 +53,8 @@ What it guarantees:
 - **Nothing is installed, no admin rights, no UI.** Missing tools are reported with the exact brew line and the stages
   that need them are SKIPPED. If `xcode-select` points at the Command Line Tools while `/Applications/Xcode.app`
   exists, the script sets `DEVELOPER_DIR` for its own process only. The app is never launched. The probe opens the
-  default output device and writes zeros to it (it never changes the volume, the default device or any setting).
+  default output device and writes zeros to it; it never changes the volume or the default device (the I/O buffer
+  size it asks for, 64-512 frames, is Core Audio's per-client setting and ends with the process).
 - **One machine-readable result.** `<out>/summary.json` plus one log per stage; a one-screen table at the end.
   Exit 0 = no stage FAILED (SKIPPED is not a failure), 1 = something failed, 2 = usage.
 - **It keeps going.** A failed stage does not stop the stages that do not depend on it (core, probe and the two Apple
