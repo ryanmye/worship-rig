@@ -14,7 +14,31 @@ Windows is out of scope. iPad installs via Xcode + free Apple ID (7-day re-sign)
 
 ## 2. Where it stands (at the pause)
 
-STATUS_TABLE_PLACEHOLDER
+Paused at about 09:10Z on 2026-11-20 after wave 2's first round. The last commit before the pause and this file's
+commit are on GitHub (`v2-native`); check `git log origin/v2-native -3`.
+
+| step | state | evidence |
+|---|---|---|
+| Setup, contract, goldens (wave 0 / 0b) | done | `SETUP_REVIEW.md`, `WAVE0B_REVIEW.md` |
+| Wave 1: T01–T09, T11a, T17 (filters/strip, master chain, reverb, delay/chorus/lofi, click/MIDI, bridge/runtime, web shim + Linux devhost, DSP sources) | done, integrated | `PARITY.md`, `reviews/T02..T09,T11a.md`, `INTERFACE_LOG.md` |
+| T00c scale-out (Ryan's D1–D3: 16 slots, 32/64/128 voice cap, 64–512 buffer request) | done, review VERIFIED | `reviews/T00c.md`, INTERFACE_LOG entries 11–23 |
+| T11 voice allocator + synth.js (6 patches) | done, review VERIFIED | `reviews/T11.md` |
+| T12 sampler | done, review VERIFIED | `reviews/T12.md` |
+| T13 Model: song and graph | **not started (next)** | BUILD_PLAN wave 2 |
+| Wave 3: T14 perform, T15 synth-extra + organ, T16 drone | not started | BUILD_PLAN wave 3 |
+| UI wave: 16-slot scrolling Perform/Edit, Settings polyphony + buffer, store SCHEMA bump | not started | `DECISIONS.md` D1–D3 |
+| T10 Apple shell (Mac + iPad) | written, **never built** | `SHELL.md`, BUILD_PLAN "Verified only on the Mac or iPad" |
+
+Numbers at the pause (tree `723cb53` + the final review edits):
+- ctest **55/55** on g++ 13 Release (orchestrator re-run on the final tree); reviewers measured 55/55 on clang 18 and
+  g++ ASan+UBSan on the full tree. `rt.realtime` can exceed its xrun limit when run under ASan next to other jobs on
+  the 2-CPU box (passes alone): treat that as load, re-check on the Mac.
+- Fixtures: **64/108** pass (50 wave-1, 6 T11 synth, 8 T12 sampler); g++ and clang renders byte-identical. The other
+  44 render silent and name their missing module (PARITY.md lists the unblocking task per fixture; PARITY.md itself
+  still shows the wave-1 count 50 until it is regenerated).
+- JS: `node test/run-all.mjs --only unit` 506 pass / 0 fail; `test/unit/engine-bridge` 107 pass.
+- T09's ui-core-through-devhost baseline: 25/76 (songs need T13/T14).
+- 1.1.0 (main `d01f286`) is merged into `v2-native`.
 
 Docs to read, in order: `BUILD_PLAN.md` (task table, ownership, frozen interfaces, what is next), `PARITY.md`
 (fixture × result; regenerate after waves), `DECISIONS.md` (Ryan's D1–D3 + the open question), `INTERFACE_LOG.md`
@@ -84,7 +108,31 @@ on the Mac and give it this prompt:
 
 ## 6. What to do next (in order)
 
-NEXT_STEPS_PLACEHOLDER
+1. **Re-gate the combined tree once** (fresh `build-int{,-clang,-asan}` + TSan runtime suites) and regenerate
+   `PARITY.md` (expect 64/108). Run `node tools/golden/promote.mjs` for the five synth.js fixtures the T11 review
+   found promotable (`synth-warm-pad`, `-glass-pad`, `-strings`, `-sub-bass`, `-bell`; soft-keys stays statistical).
+2. **T13 Model: song and graph** (BUILD_PLAN wave 2 row; T00c's BUILD_PLAN note says exactly what changed for it:
+   UnitSlot table, PatchSpec arrays, retiring channels, params grammar for 16 slots). T13's first step moves the
+   perform bodies into `model/perform.cpp` (T14's file); the `STOPGAP(T12)` perform overlay in `model.cpp` goes
+   with them and is replaced by T14 (T12 review O5: its global map leaks per Model).
+3. Carry-overs already assigned in the reviews (each review's "open items" table names the owner):
+   T11 O1 (MEDIUM: first-touch page faults of the 19.2 MB voice pool on the audio thread at song switch: pre-fault
+   on the control thread), T11 O2 (T11a FinalValue compensation lives in T11 only), T12 O1 (`settings.dynamicRange`
+   contract gap), T12 O2/O3 (T13/T14), T12 O4 (`user:` sampler param index + `get instruments` listing from
+   SampleRegistry: T11), T04 reverb memory on iPad (T00c landed the cap; re-measure), T07 O6 (jitterFree delay =
+   device buffer + one quantum, measure on the Mac), T09 #1–6.
+4. **Wave 3** after T13: T14 perform (also the `touch-*` fixtures), T15 synth-extra + organ (through T11's
+   dispatch hook in `inst.synth`), T16 drone (`drone-freeze-*` blocked on Ryan's Q7). Run T15 and T16 in parallel
+   with T14 where BUILD_PLAN's deps allow.
+5. **UI wave** for D1–D3 (store SCHEMA bump with idempotent migration; 4-slot songs unchanged; Perform/Edit scroll
+   beyond 4; Settings › Audio polyphony 32/64/128 and buffer 64–512 showing the granted size). Needs Ryan's answer
+   on the global voice ceiling first (DECISIONS.md open question).
+6. **Mac/iPad** (Ryan's machine, through the push agent's RUN verb or a local Claude Code session): `xcodegen` +
+   `xcodebuild` under `native/apple`, then the "Verified only on the Mac or iPad" list (AUHAL/RemoteIO at 64/128,
+   xruns, CoreMIDI timestamps, WKWebView `rig://` origin and the localStorage migration from the Electron origin
+   127.0.0.1:8438 (data-loss risk: import a backup on first launch), AAC decode, real GarageBand content), CI's
+   macos-15 leg and the CI goldens job (never run on GitHub yet: the cloud proxy blocked the Chrome for Testing
+   download).
 
 ## 7. Files outside the repo (cloud session outputs, `v2/`)
 

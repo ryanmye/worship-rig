@@ -11,6 +11,8 @@
 //
 //   node tools/golden/vectors/dump-synth.mjs   -> tools/golden/vectors/data/synth.txt
 //
+// Cases render at 44.1 kHz unless they name `sr`.
+//
 // Format:
 //   case <name>
 //   spec <json>   {patch, params, trimDb, sr, sec, win:[from,to] (frames), cap, ev:[[t, op, a, b], ...]}
@@ -57,6 +59,19 @@ const CASES = [
   { name: 'drone-osc', patch: 'drone-osc', params: { attack: 0.2 }, sec: 1.0, win: W(0.0, 1.0),
     ev: [[0.05, 'on', 48, 100], [0.05, 'on', 55, 100], [0.3, 'param', 'drift', 8], [0.35, 'param', 'unisonDrift', 10],
       [0.4, 'param', 'sub', 0.8], [0.45, 'param', 'cutoff', 3000], [0.5, 'param', 'detune', 20], [0.6, 'morph', 1]] },
+  // T11 review: shared LFOs across a gap with no voice (filter LFO always runs; the glass chorus LFO is pulled only
+  // while a consumer plays), the voice.js steal of released voices (released by `when` first), and 48 kHz
+  { name: 'warm-gap', patch: 'warm-pad', params: { release: 0.1, lfoRate: 3, lfoDepth: 900, attack: 0.02 }, sec: 0.8,
+    win: W(0.45, 0.8), ev: [[0.05, 'on', 60, 100], [0.1, 'off', 60], [0.5, 'on', 64, 100]] },
+  { name: 'glass-gap', patch: 'glass-pad', params: { release: 0.1, chorus: 1, attack: 0.02 }, sec: 0.9,
+    win: W(0.55, 0.9), ev: [[0.05, 'on', 60, 100], [0.1, 'off', 60], [0.6, 'on', 64, 100]] },
+  { name: 'warm-steal-rel', patch: 'warm-pad', params: { attack: 0.02, release: 1 }, sec: 0.6, win: W(0.0, 0.6), cap: 4,
+    ev: [[0.05, 'on', 48, 100], [0.05, 'on', 52, 100], [0.05, 'on', 55, 100], [0.05, 'on', 59, 100],
+      [0.1, 'off', 52], [0.12, 'off', 48], [0.15, 'on', 62, 100], [0.2, 'on', 64, 100], [0.25, 'on', 67, 100]] },
+  { name: 'warm-48k', patch: 'warm-pad', sr: 48000, sec: 0.6, win: [4800, 28800],
+    ev: [[0.05, 'on', 60, 90], [0.05, 'on', 64, 90], [0.3, 'bend', 1], [0.4, 'off', 60]] },
+  { name: 'keys-48k', patch: 'soft-keys', sr: 48000, sec: 0.5, win: [4800, 24000],
+    ev: [[0.05, 'on', 60, 100], [0.1, 'on', 72, 80], [0.3, 'off', 60]] },
 ];
 
 const { browser, page, server, version } = await openPage();
@@ -102,8 +117,9 @@ for (const c of CASES) {
   // times on the frame grid: the native Model hands instruments frames (Model::frameFor), so a time whose t * sr is a
   // hair above an integer (0.02 + 7 * 0.01) would start Chromium's oscillators on the sub-sample path natively absent
   // and issued in time order (stable), as tools/golden/page.js does: allocator decisions depend on call order
-  const ev = c.ev.map(([t, ...rest]) => [Math.round(t * SR) / SR, ...rest]).sort((a, b) => a[0] - b[0]);
-  const spec = { patch: c.patch, params: c.params || {}, trimDb: trims[c.patch] || 0, sr: SR, sec: c.sec,
+  const sr = c.sr || SR;
+  const ev = c.ev.map(([t, ...rest]) => [Math.round(t * sr) / sr, ...rest]).sort((a, b) => a[0] - b[0]);
+  const spec = { patch: c.patch, params: c.params || {}, trimDb: trims[c.patch] || 0, sr, sec: c.sec,
     win: c.win, cap: c.cap || 0, ev, name: c.name };
   const b64 = await page.evaluate((s) => window.renderCase(s), spec);
   lines.push(`case ${c.name}`, `spec ${JSON.stringify(spec)}`, `out ${b64}`, 'end');

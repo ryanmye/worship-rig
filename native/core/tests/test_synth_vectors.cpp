@@ -1,6 +1,7 @@
 // T11: the native SynthInstrument against app/js/engine/synth.js rendered in the golden Chromium
 // (tools/golden/vectors/dump-synth.mjs -> data/synth.txt): legato, bend, every patch param, morph, the 16-voice steal,
-// allOff, fadeOutVoice and the hidden drone-osc. Each JS call is replayed as the graph would deliver its command: at
+// allOff, fadeOutVoice, the hidden drone-osc, shared LFOs across a voice gap, the steal of released voices and 48 kHz
+// (T11 review). Each JS call is replayed as the graph would deliver its command: at
 // the start of the quantum that contains its frame. Exact tier (max |diff| <= 2e-4), allocation trap on.
 #include <cmath>
 #include <cstdint>
@@ -65,7 +66,7 @@ double num(yyjson_val *v) {
 TEST_SUITE("synth-vectors") {
   TEST_CASE("synth.js reference renders (dump-synth.mjs) at the exact tier") {
     const std::vector<Case> cases = loadCases();
-    REQUIRE(cases.size() >= (std::getenv("T11_VECTORS") ? 1u : 10u));
+    REQUIRE(cases.size() >= (std::getenv("T11_VECTORS") ? 1u : 15u));
     for (const Case &cs : cases) {
       CAPTURE(cs.name);
       yyjson_doc *doc = yyjson_read(cs.spec.data(), cs.spec.size(), 0);
