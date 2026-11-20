@@ -101,8 +101,9 @@ struct Driver {
     c.aux = static_cast<std::uint32_t>(note);
     apply(c);
   }
-  /** Render `frames` (multiple of 128); returns {L, R} (R = L for a mono unit). */
+  /** Render `frames` (rounded up to whole quanta); returns {L, R} (R = L for a mono unit). */
   std::vector<std::vector<float>> run(std::size_t frames) {
+    frames = (frames + rig::kQ - 1) / rig::kQ * rig::kQ;
     std::vector<std::vector<float>> out(2, std::vector<float>(frames));
     rig::Bus bo;
     for (std::size_t q = 0; q < frames; q += rig::kQ) {

@@ -96,7 +96,7 @@ E = `views/components/eq-keyboard.js`, R = `recorder.js`, K = `midi-clock.js`, V
 | `setTimeSig(sig, {newBar})` | '4/4','3/4','2/4','5/4','6/8','12/8' (else 4/4) | — | sync | click takes it on its next unscheduled beat (as a new bar). `audio.js:1701` | C (optional) |
 | `setKeyContext(pc, minor)` | pc 0..11 (mod 12), bool | — | sync | chord spelling preference; re-emits `chord` (forced). `audio.js:1755` | C (optional) |
 | `setMono(on)` | bool | — | sync | 50 ms linear crossfade stereo ↔ mono sum (−3 dB) before the catcher; survives restart. `audio.js:509`, `fx.js:2232` | C |
-| `eqAudition(slot, mode, {when})` | 0..3, 'bypass' \| 'on' | boolean | sync | A/B: plays the slot with a flat EQ (via SlotEq crossfade); never persisted; a commit ends it. `audio.js:1272` | E (via controller when it has one, else the engine) |
+| `eqAudition(slot, mode, {when})` | 0..15 (native; web 0..3), 'bypass' \| 'on' | boolean | sync | A/B: plays the slot with a flat EQ (via SlotEq crossfade); never persisted; a commit ends it. `audio.js:1272` | E (via controller when it has one, else the engine) |
 | `getEqResponse(slot, freqs, {perBand})` | Hz array | `Float32Array` dB, or `{total, bands:{lc,b1..b8,hc}}`, null | sync | target magnitude of the stored EQ via `BiquadFilterNode.getFrequencyResponse` at the context's rate (above Nyquist → Nyquist). `audio.js:1255`, `fx.js:1742` | E |
 | `getSlotPlayRange(slot)` | | `{lowNote, highNote, sampledLow, sampledHigh, transpose, physLow, physHigh, instrumentRange}` or null | sync | sounding range after octave/transposes, clipped 0..127; sampled range from the sampler manifest. `audio.js:1295` | E, shared/eq-math (via caller) |
 | `drone.setKey(pc, {minor, fade?, when})` | | boolean | sync | same key ⇒ no-op; else new layer crossfades in over `fade` (default `drone.fade`). `drone.js:405` | C (`droneCall`) |
@@ -134,7 +134,7 @@ E = `views/components/eq-keyboard.js`, R = `recorder.js`, K = `midi-clock.js`, V
 | `clickOutputs()` | | `{aux: channels ≥ 4, channels}` | sync | | C |
 | `setClockSink(fn)` | `fn([{t (engine s), data:[status]}])` or null | — | sync | 24 ppq clock + Start (on the first downbeat) / Stop while the click runs; the controller maps `t` to `performance.now()` and sends via Web MIDI (`midi-clock.js:70-95`). | K/C |
 | `analyserL`, `analyserR` (getters) | `AnalyserNode` (fftSize 2048, smoothing 0.8, −100/−30 dB) on `fx.out` L/R | | | meters read `getFloatTimeDomainData` (peak) per frame; the EQ RTA reads `getFloatFrequencyData` and `frequencyBinCount`, `fftSize`, `context.state` | V (`components/meter.js:31-53`, `_fallback-components.js:545`), E (`:840,996`) |
-| `slotLevel(i)` | 0..3 | `{peak, rms}` linear, zeros for empty slot / low-resource, null for bad index or before start | sync | first read creates an AnalyserNode (fftSize 256, smoothing 0, downmix ½(L+R)) on the strip's pan output; released after 2 s without a read. `audio.js:1336` | C (`controller.slotLevel`, read by `components/levelMeter.js` per frame) |
+| `slotLevel(i)` | 0..15 (native; web 0..3) | `{peak, rms}` linear, zeros for empty slot / low-resource, null for bad index or before start | sync | first read creates an AnalyserNode (fftSize 256, smoothing 0, downmix ½(L+R)) on the strip's pan output; released after 2 s without a read. `audio.js:1336` | C (`controller.slotLevel`, read by `components/levelMeter.js` per frame) |
 | `recordTap` (getter) | GainNode on `fx.out` (post ceiling, post sleep ramp; the click only when `setClick({record:true})`) | | | `recorder.js:302-482` connects an AudioWorklet (16-bit stereo WAV) | R |
 
 `_debugStats()` fields (`audio.js:2460-2486`): `voices, nodes, retiring, decodedMB, pinnedMB, referencedMB, capMB,
@@ -189,9 +189,16 @@ engine implements them.
 
 ```
 path   := slotPath | 'fx.' unit '.' key | 'master.volume' | 'drone.' key
-slotPath := 'slots.' [0-3] '.' ( 'params.' [A-Za-z_][A-Za-z0-9_]*          (dynamic: instrument param)
-                               | row-of-'slots.<i>.…' )                     (incl. 'eq.b<k>.<field>', 'touch.<k>')
+slotPath := 'slots.' i '.' ( 'params.' [A-Za-z_][A-Za-z0-9_]*               (dynamic: instrument param)
+                           | row-of-'slots.<i>.…' )                         (incl. 'eq.b<k>.<field>', 'touch.<k>')
+i      := [0-9] | '1' [0-5]        (native, DECISIONS D3: 16 slots; the web engine and its PARAMS grammar: [0-3])
 ```
+**Slots (T00c, DECISIONS D3).** A native song has 1..16 slots: `patch.slots` is an array of up to 16 entries (null =
+empty slot; more than 16 is `bad-request`). The engine keeps max(entries, 4) slot channels, so a 4-slot song behaves
+exactly as the web engine (the golden oracle stays at 4 slots); slots 4..15 are the same path as slot 0 (strip, pan,
+sends, EQ, meters). Every slot-indexed surface takes 0..15: `set` paths, `config.eqAudition.slot`,
+`config.meters.slots`, `slotLevel`, `tick.slots` (one pair per slot of the song, at least 4), `get state` (`slotCount`).
+Wheel / pedal routing and MIDI-learn targets follow the slot index (T14).
 `clamp(path, v)` (`params.js:232`): bool ← booleans, numbers ≥ .5, 'true'/'on'/'1'; enum ← member, or a number as
 rounded index; numbers ← `Number(v)`, NaN/null/'' ⇒ default, clamped, rounded when `step: 1`; `words` pass through
 (`pedalHold: 'natural'`); dynamic rows accept booleans, and the engine clamps numbers to the instrument's own
@@ -514,7 +521,17 @@ dotted beat) + Start (first downbeat) / Stop to the sink with engine times.
   referenced buffers (live or retiring instruments) are never evicted. Controller: `PIN_BUDGET_MB` 600; no setlist ⇒
   current ± 1; setlist ⇒ whole set if it fits, else current ± 2 within the budget (`LARGE_SET_PIN_RADIUS`); unpinned
   warming stops at 80 % of the cap; `status.memory = {mode, decodedMB, pinnedMB, capMB, budgetMB, setMB, windowMB,
-  pinnedSongs, note}`.
+  pinnedSongs, note}`. **Native additions (T00c, D3: 16 sampler slots can reference > 2 GB of float32 samples):** a
+  hard cap on stored bytes (iPad = the 320 MB cap, desktop 1.5 × 700 MB): a decode that would pass it once nothing
+  else can be evicted is refused (the url is marked failed for the retry window; one `warn {code:'memory'}` until a
+  later load fits; `stats.capRefused`); pins are limited to 85 % of the hard cap in request order (the rest stay
+  unpinned; `warn memory`, `stats.pinsDropped`). The reverb pool's byte cap covers kernels and the running state of
+  every render slot (T04 finding 1; `stats.reverbMB`). Budgets per profile: ARCHITECTURE 7.
+- **Polyphony (native, T00c / DECISIONS D1)**: per slot, `config {polyphony}` 32 | 64 | 128 (default 64; `get
+  state.polyphony`), for every instrument kind (1.x: 16 synth/organ, 32 sampler). At the cap a note-on steals the
+  oldest released voice, else the oldest held one (1.x policy, 20 ms fade in the instruments); a free voice is taken
+  first. A lower cap does not cut sounding voices: it is enforced at note-on. Voice pools are sized for 128. A global
+  ceiling across slots is an open question (DECISIONS D1).
 - **Low-resource mode**: 1.1 above (pins current-only, no warm-ups, no slot taps, idle reverb units dropped, frozen
   drone, audio sleep allowed).
 - **Output device**: `settings.outputDeviceId` → `setSinkId` (fallback restart); device list from
@@ -522,7 +539,11 @@ dotted beat) + Start (first downbeat) / Stop to the sink with engine times.
   `controller.js:2003`) — in a WKWebView this list does not exist, so the bridge must supply it (6.4 `get devices`).
   `settings.latency` → 'interactive' | .01 | .025 s (`LATENCY_MAP`, `controller.js:54`) → restart.
 - **Latency reporting**: `latencyMs` = base + output latency; `statechange.latencyMs` → `controller.status.latencyMs`
-  (shown in Settings and the latency hint).
+  (shown in Settings and the latency hint). Native (T00c, D2): `latencyMs` = `tick.hostLatency` = the host's
+  `output_latency_sec` (which includes the device buffer it granted) + the frames the 128-frame FIFO holds back for
+  that block, `(128 − b mod 128) mod 128` (64 → 64 frames, 441 → 71, 128/256/512 → 0). `audio {bufferFrames}` asks
+  the host for 64 | 128 | 256 | 512 frames (`rig_host.audio_start_frames`; a 1.0 host gets `latency_sec = frames /
+  rate`); `state.bufferFrames` reports what the OS granted (iPad may round).
 - **Status**: the engine has no status object; `controller.status` (`controller.js:259-297`) is fed by engine
   events: `audio` ('running'|'suspended'|'stalled'|'restarting'|'asleep'), `latencyMs`, `loading`, `ready`,
   `memory`, `lowResource`, `click{on,counting,available,output,midiClock,midiClockConnected}`, `pedal`.
@@ -613,7 +634,7 @@ texts where `main.js` matches them (`engine.<name> failed`, `No pad file for <ke
 | op | args | reply `result` | replaces |
 |---|---|---|---|
 | `hello` | `{protocol:1, app, caps?}` | `{protocol, minor, engine, caps, sampleRate, seed}` | — |
-| `audio` | `{action:'start'\|'restart'\|'output'\|'sleep'\|'wake', latency?, deviceId?, ramp?}` | `{state, sleep, latencyMs, sampleRate, deviceId, channels}`; sleep/wake: `{done: bool}` | `start`, `restart`, `setSinkId`, `latency=`, `sleep`, `wake` |
+| `audio` | `{action:'start'\|'restart'\|'output'\|'sleep'\|'wake', latency?, deviceId?, ramp?, bufferFrames?: 64\|128\|256\|512}` (T00c, D2: host buffer size, default 128, kept across restarts) | `{state, sleep, latencyMs, sampleRate, deviceId, channels, bufferFrames}` (granted size); sleep/wake: `{done: bool}` | `start`, `restart`, `setSinkId`, `latency=`, `sleep`, `wake` |
 | `prepare` | `{patch}` | `{token}` | `prepare` |
 | `commit` | `{token, when?}` | `{committed: bool}` | `commit` |
 | `cache` | `{action:'preload'\|'estimate'\|'retainReverb', patches, pin?}` | preload `{decodedMB, pinnedMB, deferred}`; estimate `{mb, exact, samples, capMB}`; retain `{ok}` | `preload`, `estimatePreloadMB`, `retainReverb` |
@@ -622,7 +643,7 @@ texts where `main.js` matches them (`engine.<name> failed`, `No pad file for <ke
 | `drone` | `{key?:{pc, minor, fade?}, config?:{song.drone}, files?:[{name, path}]}` | `{files?: count, changed?: bool}` | `drone.setKey`, `drone.configure`, `drone.attachFiles` (applied key → files → config) |
 | `play` | `{e:'on', n, vel, touch?}` \| `{e:'off', n}` \| `{e:'pedal', down}` \| `{e:'wheel', src:'mod'\|'expr'\|'vol'\|'virtual', value, glide?}` \| `{e:'bend', x}` \| `{e:'swell', start?}` \| `{e:'panic'}` \| `{e:'fade', seconds?}` \| `{e:'input'}` — each with optional `when` | `{ok: bool}` | `noteOn/noteOff/sustain/modWheel/expression/volumeCC/setWheel/pitchBend/swell/allNotesOff/fadeOutAll/noteInput` |
 | `click` | `{action:'start'\|'stop'\|'config', countIn?, quietAfter?, level?, record?, output?, when?}` | start `{t0, downbeat}\|null`; stop `{wasRunning}`; config `{output, auxAvailable}` | `clickStart`, `clickStop`, `setClick` |
-| `config` | `{mono?, lowResource?, eqAudition?:{slot, mode}, meters?:{rate?, slots?:[i…], rta?: bool}, midiClock?:{port: id\|null}}` | `{lowResource?, eqAudition?: bool}` | `setMono`, `setLowResource`, `eqAudition`, meter/slot-tap/RTA subscriptions, `setClockSink` |
+| `config` | `{mono?, lowResource?, eqAudition?:{slot, mode}, meters?:{rate?, slots?:[i…], rta?: bool}, midiClock?:{port: id\|null}, polyphony?: 32\|64\|128}` (T00c, D1: voices per slot, default 64) | `{lowResource?, eqAudition?: bool, polyphony?}` | `setMono`, `setLowResource`, `eqAudition`, meter/slot-tap/RTA subscriptions, `setClockSink` |
 | `get` | `{what:'instruments', reload?: bool}` \| `{what:'stats'}` \| `{what:'devices'}` \| `{what:'sampleStatus', patches}` \| `{what:'state'}` | instruments `[entry + range?]`; stats `_debugStats`; devices `[{id, name, channels, default, sampleRates}]`; sampleStatus `{loaded: bool[], failed: bool[]}`; state `{patch, routing, transpose, tempo, timeSig, keyContext, drone, mono, runtime, click, sleep}` | `listInstruments`, `reloadManifests`, `_debugStats`, `enumerateDevices`, `cache`/`registry` reach-in, `getState` |
 | `midi` | `{action:'listen', ids:[…]}` \| `{action:'route', on, learn:{…}, pedalInvert, velocitySens, touch:{deviceName: spec}, jitterFree?}` \| `{action:'send', port, data, when?}` | `{ports?}` | Web MIDI access (`midi.js` adapter), the direct perform path |
 | `rec` | `{action:'start', dir?, filename?, bits?: 16}` \| `{action:'stop'}` | start `{path}`; stop `{path, seconds, bytes}` | `recordTap` + `recorder.js` worklet/sinks |
@@ -631,8 +652,8 @@ texts where `main.js` matches them (`engine.<name> failed`, `No pad file for <ke
 
 | ev | data | replaces / feeds |
 |---|---|---|
-| `state` | `{state:'running'\|'suspended'\|'interrupted'\|'closed', sleep:'awake'\|'sleeping'\|'asleep'\|'waking', latencyMs, sampleRate, deviceId, channels, restarted?, wakeMs?, queued?}` | `statechange`, `sleep`, `ctx.state`, `latencyMs`, `sleepState`, `clickOutputs` |
-| `tick` | `{t, frames, out:[peakL, peakR], slots?:[[peak, rms] ×4], rta?: base64(Uint8 1024·2, 0.5 dB steps down from 0 dBFS), blockers:[…], pedal, held:n, runtime:{wheel, modOwner, faded, swelling}, cpu, stats? (every 1 s)}` at `config.meters.rate` (default 30 Hz; 4 Hz when no meter is subscribed; none while asleep) | `currentTime`, `analyserL/R` peaks, `slotLevel`, RTA, `sleepBlockers`, `pedal`, `wheelValues`, `getRuntimeState`, `_debugStats` |
+| `state` | `{state:'running'\|'suspended'\|'interrupted'\|'closed', sleep:'awake'\|'sleeping'\|'asleep'\|'waking', latencyMs, sampleRate, deviceId, channels, bufferFrames, restarted?, wakeMs?, queued?}` (`bufferFrames`: the host block the device granted, else the request; T00c D2) | `statechange`, `sleep`, `ctx.state`, `latencyMs`, `sleepState`, `clickOutputs` |
+| `tick` | `{t, frames, out:[peakL, peakR], slots?:[[peak, rms] × max(4, song slots) ≤ 16], rta?: base64(Uint8 1024·2, 0.5 dB steps down from 0 dBFS), blockers:[…], pedal, held:n, runtime:{wheel, modOwner, faded, swelling}, cpu, stats? (every 1 s)}` at `config.meters.rate` (default 30 Hz; 4 Hz when no meter is subscribed; none while asleep) | `currentTime`, `analyserL/R` peaks, `slotLevel`, RTA, `sleepBlockers`, `pedal`, `wheelValues`, `getRuntimeState`, `_debugStats` |
 | `notes` | `{held:[n…], chord?: {name, root, quality, bass}\|null}` (`chord` key present only when it changed) | `notes`, `chord` |
 | `wheel` | `{source, value, hardware?, pickup?}` | `wheel` |
 | `load` | `{phase:'slot', slot, progress, token}` \| `{phase:'start'}` \| `{phase:'preload', decodedMB, pinnedMB, deferred}` \| `{phase:'instruments', count}` \| `{phase:'samples', loaded:{id: bool}}` | `loading`, `ready`, `instruments`, "Loading n/m" |
@@ -723,7 +744,7 @@ complexity of the port: S = straightforward, M = careful, L = large or parity-cr
 | `sampler.js` (instrument + BufferCache + decode) | 963 | M | decode/trim/caps/dual-mono, LRU with pins/protect/refs, repitch (Q12), release |
 | `voice.js` (shared voice architecture) | 886 | M | envelopes, oscillator banks, filters, mono-below, tracked params |
 | `synth.js` (7 patches incl. drone-osc) | 763 | M | pads, FM soft-keys/bell |
-| `instruments.js` (registry, fallback synth, allocator) | 650 | S | manifest loading, catalogue, voice stealing (16 voices; sampler 32) |
+| `instruments.js` (registry, fallback synth, allocator) | 650 | S | manifest loading, catalogue, voice stealing (1.x: 16 voices, sampler 32; native: 32/64/128 per slot, T00c) |
 | `metronome.js` | 390 | S | click synthesis, grid pump, aux routing, MIDI clock |
 | `organ.js` (4 presets) | 365 | M | drawbars, percussion, rotary speaker, clip |
 | `drone-freeze.js` | 290 | S | offline loop render (may be dropped, question 7) |

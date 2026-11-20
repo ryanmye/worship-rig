@@ -336,3 +336,21 @@ test('setSinkId maps to audio output and resolves true; "default" becomes the em
   assert.equal(await r.engine.setSinkId('default'), true);
   assert.equal(ops(r, 'audio').pop().deviceId, '');
 });
+
+test('16-slot songs (T00c, D3): slots 4..15 of the committed song are settable, metered, auditioned', async () => {
+  const r = rig();
+  const e = r.engine;
+  await e.start();
+  assert.equal(e.setParam('slots.12.gain', 0.5), false, 'no 16-slot song yet: the web grammar (0..3)');
+  const slots = Array.from({ length: 16 }, (_, i) => (i === 12 || i === 0 ? slot('salamander-piano') : null));
+  const tok = await e.prepare({ slots });
+  assert.ok(e.commit(tok));
+  assert.equal(e.setParam('slots.12.gain', 0.5), true);
+  assert.equal(e.setParam('slots.13.gain', 0.5), false, 'empty slot');
+  assert.equal(e.setParam('slots.16.gain', 0.5), false, 'beyond 16 slots');
+  assert.equal(e.eqAudition(15, 'bypass'), true);
+  assert.equal(e.eqAudition(16, 'bypass'), false);
+  assert.deepEqual(e.slotLevel(12), { peak: 0, rms: 0 });
+  await flush();
+  assert.equal(ops(r, 'set').filter((m) => m.path === 'slots.12.gain').length, 1);
+});

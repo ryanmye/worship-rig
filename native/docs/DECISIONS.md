@@ -34,6 +34,27 @@ Decisions that change 2.0's scope. Each names where it lands. Agents: treat thes
 - Parity: the web oracle stays at 4 slots for goldens; slots 4..15 are tested as copies of the slot-0 path (unit and
   bridge tests), plus a native-only fixture with 16 active slots for CPU and memory.
 
+## Open question for Ryan (T00c, 2026-11-20): a global voice ceiling across slots (D1 guard rail)
+
+Not implemented: D1 as decided is per slot only. The numbers that make the question real (Linux box, 2 vCPU,
+g++ -O3, 48 kHz, 128-frame quantum = 2667 µs; ARCHITECTURE 7.1):
+
+- 16 slots with idle strips: 90-100 µs per quantum (3.6 %). 16 slots × 8 test voices: 420-480 µs (17 %).
+  16 slots × 64 test voices: **2430 µs (91 %)**: one more step and the audio thread misses its deadline.
+- The test voice is the cheapest possible voice (sine + one envelope, ≈ 2.2 µs per voice per quantum). Synth and
+  sampler voices cost several of them (T11/T12 publish their per-voice cost), and the oldest supported iPad is
+  slower than this box (Mac list). So 16 slots × 64 (the default) can already overload the audio thread when
+  everything is held under the pedal; 16 × 128 certainly can.
+- Proposal: an engine-wide ceiling N (total live voices across all slots, retiring channels included), sized from
+  the per-voice cost on the oldest supported iPad (e.g. the count that keeps the render at ≤ 60 % of the quantum).
+  At the ceiling a note-on steals the globally oldest released voice, then the oldest held one, in any slot; the
+  per-slot cap still applies first. Cost: one counter per quantum in the Model / graph, a `ceiling` stat.
+- Without it, the protection is the per-slot cap alone (16 × 32 = 512 voices at the lowest setting) plus the xrun
+  counter in `stats`.
+
+Decide: (a) add the global ceiling (value set after the iPad measurement), (b) per-slot only, or (c) a ceiling only on
+the iPad profile.
+
 ## Scheduling
 - 2.0 only; 1.1 ships with 4 slots and today's limits.
 - These change frozen interfaces, so they land as one serial step **T00c (scale-out amendment)** after the wave-1

@@ -56,7 +56,7 @@ checkable on this box.
 | interface | file | implemented by |
 |---|---|---|
 | `Command` 64 B / `AudioEvent` 32 B, core `Op` values, **opcode range table**, `kSubOwnedPayload`, `GarbageKind` | `src/runtime/command.h` | core |
-| `Unit` (process / apply / param / setSampleRate / liveVoices / giveBack), `Bus`, `UnitIO`, `RenderContext`, `UnitSlot` (49 fixed slots incl. 16 retiring channels, drone, reverb, delay, chorus, lofi, master, click, meter, recorder), `paramTarget()`, send buses, `Owned` | `src/graph/unit.h` | every unit |
+| `Unit` (process / apply / param / setSampleRate / liveVoices / giveBack), `Bus`, `UnitIO`, `RenderContext`, `UnitSlot` (105 fixed slots since T00c: 16 inst + 16 strip, 32 + 32 retiring, drone, reverb, delay, chorus, lofi, master, click, meter, recorder), `paramTarget()`, send buses, `Owned` | `src/graph/unit.h` | every unit |
 | fixed render topology, lock-free rate hand-off, `TimeBase`, epoch | `src/graph/graph.{h,cpp}`, `src/graph/epoch.h` | core |
 | TestHooks TAP (10) / INJECT (7) tables = `tools/golden/page.js` key for key (test `unit.t00b` parses page.js) | `src/graph/test_points.h` | core + MasterChain local points |
 | Registry: unit factories by kind, set handlers by row prefix, services by name; `UnitEnv`, `UnitSpec`, `UnitInfo`, `SetRequest` | `src/api/registry.h` | every module |
@@ -64,7 +64,7 @@ checkable on this box.
 | resolved patch structs (`SlotPatch`, `ReverbPatch`, `DelayPatch`, `ChorusPatch`, `LofiPatch`, `MasterPatch`, `DronePatch`, `SongState`), `storeRow` | `src/model/patch.h` | core |
 | services `CacheService`, `InstrumentService`, `ReverbService`, `ClickService`, `MidiService`, `DroneService`, `MeterService`, `RecService`; `EnginePaths` | `src/model/services.h` | T06, T11, T04, T07, T07, T16, T08, T08 |
 | `BufferCacheApi`, `SampleBuffer` | `src/model/buffer_cache_api.h` | T06 |
-| `Instrument` virtuals (noteOn/noteOff/allNotesOff/kill/sustain/setBend/legatoTo/setParam/releaseVoice/outputChannels) + core-op decode | `src/inst/instrument.h`, `src/graph/instrument_apply.cpp` | T11, T12, T15 |
+| `Instrument` virtuals (noteOn/noteOff/allNotesOff/kill/sustain/setBend/legatoTo/setParam/releaseVoice/outputChannels, `setVoiceCap` since T00c) + core-op decode | `src/inst/instrument.h`, `src/graph/instrument_apply.cpp` | T11, T12, T15 |
 | `SlotChannel` (kind `strip`), `StripParam`, `StripOp` | `src/mix/slot_channel.h` | T02 |
 | `MasterEq` | `src/mix/master_eq.h` | T02 |
 | `MasterChain` (kind `master`), `MasterParam`, `MasterOp`, local test points | `src/mix/master_chain.h` | T03 |
@@ -78,11 +78,12 @@ checkable on this box.
 | `wa::Param` (unchanged API) | `src/time/param.h` | T01 |
 | C API (+ `rig_host_memory_pressure`, `rig_set_paths`, added by T00b, R21a/b) | `include/rig/rig_engine.h` | T08 |
 
-Kinds the skeleton Model attaches by itself: per channel `inst.<instrument.type>` + `strip` at every commit; once,
-at `audio start` / first commit, `reverb delay chorus lofi master click drone meter rec` when registered (`lofi`
-skipped with `RIG_FLAG_NO_LOFI`). Builtins (priority 0, replaced by any module of the same kind): `strip` (fader →
-SlotEq → pan), `inst.test` (test voice), `master` (volume only). A wave-1 module therefore reaches its golden
-fixtures through `rig_render` by registering its kind plus its `set` handler prefix; nothing else.
+Kinds the skeleton Model attaches by itself: per channel `inst.<instrument.type>` + `strip` at every commit (channels
+0 .. max(song slots, 4) − 1 since T00c); once, at `audio start` / first commit, `reverb delay chorus lofi master click
+drone meter rec` when registered (`lofi` skipped with `RIG_FLAG_NO_LOFI`). Builtin (priority 0): `inst.test` (test
+voice, 128-voice pool with the D1 cap); T00c removed the builtin `strip` and `master` (T02/T03 are the only ones).
+A wave-1 module therefore reaches its golden fixtures through `rig_render` by registering its kind plus its `set`
+handler prefix; nothing else.
 
 Clock (R15, R16): engine time = time-grid frame / rate. `rig_host_audio_started` stores the new rate atomically (any
 thread); the audio thread adopts it between quanta: frame' = ceil(frame·new/old) (time continues, never backwards,
@@ -99,7 +100,7 @@ rendering; TSan-clean under g++).
 | `include/rig/rig_engine.h` | orchestrator (T08 proposes additions) |
 | `src/runtime/command.h`, `spsc.h`, `mpsc.h`, `seqlock.h` | orchestrator (frozen) |
 | `src/runtime/**` other (`rt_guard.h`, new control-loop / worker / clock-map / offline-driver files) | T08 |
-| `src/graph/**` | orchestrator (frozen; builtins removed by the orchestrator once T02/T03 land) |
+| `src/graph/**` | orchestrator (frozen; the `strip` / `master` builtins were removed by T00c) |
 | `src/api/registry.{h,cpp}` | orchestrator (frozen) |
 | `src/api/engine.{h,cpp}`, `src/api/rig_engine.cpp`, `src/bridge/**` | T08 |
 | `src/model/model.h`, `patch.h`, `services.h`, `buffer_cache_api.h`, `patch.cpp` | orchestrator (frozen) |
@@ -217,7 +218,7 @@ T15) through the velocity curve → moved from T12 to T14 (with T15); T13's four
 kind; the 22 instrument goldens on disk do not match their manifest sha256: re-render them before T11/T12/T15
 compare (`PARITY.md`).
 
-## T00c: scale-out amendment (serial, orchestrator; after the wave-1 integrator, before T13)
+## T00c: scale-out amendment (DONE 2026-11-20; serial, orchestrator; after the wave-1 integrator, before T13)
 
 Ryan's decisions D1–D3 (`DECISIONS.md`) change frozen interfaces, so one orchestrator step lands them all, logs each
 change in `INTERFACE_LOG.md`, and re-runs the integrator's gate (ctest on the three configs + TSan runtime suites,
@@ -233,6 +234,40 @@ Also in T00c (small frozen-file items already reviewed): T03 O7 `WaveShaper::res
 and O8 (delete `mix/master_chain_eq_fallback.cpp` + `master_chain.cmake`), T08 #1 origin slot of retiring strips in
 the slot meters (`graph.cpp`), and removing the `strip` / `master` builtins now that T02/T03 landed.
 
+### T00c results (2026-11-20)
+
+Landed D1 (per-slot cap, `config {polyphony}`, `Op::VoiceCap` → `Instrument::setVoiceCap`), D2 (`audio
+{bufferFrames}`, `rig_host.audio_start_frames`, granted size in `state`, FIFO residue in `latencyMs` / `hostLatency`,
+devhost `--buffer`, Apple request path UNBUILT), D3 (16 slots everywhere in the core), T03 O7 / O8, T04 finding 1,
+T08 #1, the builtin `strip` / `master` removed; the global voice ceiling is NOT built (open question in
+`DECISIONS.md`). Every change: `INTERFACE_LOG.md` 11-23. Gate (snapshot of the tree without the in-progress T11/T12
+files, build dirs `build-t00c{,-clang,-asan,-tsan}`): see the T00c report; the 50 passing fixtures render
+byte-identical WAVs to the integrator's build. Tests: `unit.t00c` (16-slot prepare/commit, meters, routing copies of
+slot 0, bridge validation, polyphony, allocator, retire metering, FIFO, cache hard cap / pin budget, reverb iPad cap,
+CPU) and `rt.realtime` (D2 host request, realtime FIFO at 64/192/256/441/512, soak).
+
+**What changed under T13** (read before starting):
+- `UnitSlot` numbers: Inst0..15 = 0..15, Strip0..15 = 16..31, RetireInst0..31 = 32..63, RetireStrip0..31 = 64..95,
+  Drone 96 … Count 105. Use `instSlot(i)`, `stripSlot(i)`, `retireInstSlot(j)`, `retireStripSlot(j)` and
+  `isInstSlot` / `isRetireInstSlot` / `isRetireStripSlot`, never numbers. `kChannels` = 16, `kRetiring` = 32 (two per
+  slot: two back-to-back switches of 16-slot songs).
+- Retire = MOVE, not re-attach: `Model::moveUnit(instSlot(i), retireInstSlot(j), when)` and
+  `moveUnit(stripSlot(i), retireStripSlot(j), when)` (`Op::MoveUnit`; state kept, `attachedKind` and tracked param
+  values move with it). A strip moved from `Strip<i>` keeps metering slot i (`rig_meters.slot_*_all[i]`,
+  `slot_retiring[i]`; T08 #1 closed). Retiring channels never get `NoteOn` (graph rule); `kAllSlots` ops reach them.
+- `PatchSpec.slots[16]` + `slotCount` (entries of `patch.slots`, 0..16; > 16 is rejected at parse). The skeleton
+  commit keeps channels 0 .. max(slotCount, 4) − 1 and detaches the rest; T13's policy must keep "4-slot songs
+  behave exactly as the web engine" (goldens) and treat slots 4..15 like slot 0.
+- `Model::attachUnit` sends `Op::VoiceCap` after every instrument attach: keep using it (or send the cap yourself).
+  `Model::setPolyphony` re-caps live instruments with `kAllSlots`.
+- `rig_meters.slot_count` is set by the bridge after a commit (`Graph::setSlotCount`); `Engine::buildTick` emits
+  max(4, slotCount) slot pairs.
+- Memory: sampler slots beyond the hard cap get refused buffers (null `ready`, url marked failed for the retry
+  window): T12's sampler must play what it has and report `sampleStatus` failed for those.
+- T11/T12: implement `setVoiceCap` (pools of 128, cap at note-on, steal oldest released then oldest held; the test
+  voice in `graph/builtin_units.cpp` is the reference) and report your per-voice bytes and µs per quantum
+  (ARCHITECTURE 7.1: the test voice's one `wa::Param` is 6.7 KB, 865 KB per 128-voice instrument).
+
 **Wave 2 against T00c.** T11 **can start now**: synth.js patches, voice.js DSP over T11a's sources, PRNG draw order,
 `InstrumentService` / `get instruments`, the synth fixtures, and its allocator with pools sized for 128 and a cap
 (default 64) held in T11's own code until T00c wires the setting; it also owns the synth-extra dispatch hook. T12
@@ -246,7 +281,7 @@ T11 publishes it; its cache-budget work follows T00c (D3). **T13 waits for T00c*
 |---|---|---|---|---|---|---|---|---|
 | **T11 voice, synth.js** | `src/inst/**` except `instrument.h`, `sampler*`, `synth_extra*`, `organ*` | `Instrument` for `inst.synth` (7 patches incl. hidden drone-osc), voice.js, allocator, `InstrumentService` (`get instruments` = `engine-api.json` list); allocator pools for 128 voices, cap per D1 (T00c wires the setting); the `inst.synth` factory dispatches synth-extra ids to T15 through a hook in T11's files; T11a O3/O4 (never skip `process()` on a started source; rebuild PeriodicWaves on `RateChanged`) | `synth-warm-pad`, `synth-glass-pad`, `synth-strings`, `synth-sub-bass`, `synth-bell` **exact** (every `exactIfPrngPorted` synth.js fixture passes the exact tier; PRNG draw order = JS); `synth-soft-keys` statistical (Q11); catalogue equality test | T01, T02, T11a | L | opus | ✔ | R6, R7 |
 | **T12 sampler** | `src/inst/sampler*` | `Instrument` for `inst.sampler` | `sampler-salamander-piano`, `sampler-ep-rhodes` exact (with T06's `pcmOverride` where R13 requires it); T17's `sampler-sweep-1` … `-6` (21 sets, one note each; all `needsPcm`); JS `sampler` suite + `undampedOptIn` ported (the `touch-*` fixtures play `synth:808-sub`: moved to T14) | T06, T11 (allocator), T11a | M | sonnet | ✔ | R13 (consumer) |
-| **T13 Model: song & graph** | `src/model/model.cpp` + the T13 globs | prepare/commit/tokens/instSeq, reuse and **retire** (RetireInst/RetireStrip slots), routing, setParam dispatch with 10 ms coalescing, transpose/tempo/timeSig/keyContext, low resource, reverb policy, stats, getState | `auto-slot-level`, `auto-reverb-send`, `auto-delay-send`, `auto-master-volume` exact (`exactIfPrngPorted`; they play organ / `synth:pluck`, so they pass only after T15, unless T17 adds synth.js twins first) + T17's `switch-retire-retain` (mid-render commit + retire + `retainReverb`, with T04) and `fx-row-sweep` (statistical; with T03 mono, T05, T16); JS `supersededPrepare`, `gaplessSwitch`, `paramResetOnReuse`, `freshStripWheel`, `switchHeadroom`, `washAcrossCommit`, `morphAtCommit`, `beforeStartNoThrow`, `lowResource`, `restartKeepsState` ported | **T00c**, T02–T05 landed, T11 interface, T12 (`switch-retire-retain`, `fx-row-sweep` play a sampler); carry-overs: T02 #2 (`endAudition` on reused strips) and #4, T03 O4, T04 findings 3–4, T08 #1 | L | opus | ✔ | R6 (test list), R8, R18 (Model side) |
+| **T13 Model: song & graph** (T00c done: read "What changed under T13") | `src/model/model.cpp` + the T13 globs | prepare/commit/tokens/instSeq, reuse and **retire** (RetireInst/RetireStrip slots), routing, setParam dispatch with 10 ms coalescing, transpose/tempo/timeSig/keyContext, low resource, reverb policy, stats, getState | `auto-slot-level`, `auto-reverb-send`, `auto-delay-send`, `auto-master-volume` exact (`exactIfPrngPorted`; they play organ / `synth:pluck`, so they pass only after T15, unless T17 adds synth.js twins first) + T17's `switch-retire-retain` (mid-render commit + retire + `retainReverb`, with T04) and `fx-row-sweep` (statistical; with T03 mono, T05, T16); JS `supersededPrepare`, `gaplessSwitch`, `paramResetOnReuse`, `freshStripWheel`, `switchHeadroom`, `washAcrossCommit`, `morphAtCommit`, `beforeStartNoThrow`, `lowResource`, `restartKeepsState` ported | **T00c**, T02–T05 landed, T11 interface, T12 (`switch-retire-retain`, `fx-row-sweep` play a sampler); carry-overs: T02 #2 (`endAudition` on reused strips) and #4, T03 O4, T04 findings 3–4, T08 #1 | L | opus | ✔ | R6 (test list), R8, R18 (Model side) |
 
 ## Wave 3: everything that plays (after T11, T12, T13)
 

@@ -132,7 +132,8 @@ struct Eng {
          R"("},"gain":1)" + slotExtra + R"(},null,null,null]}})");
     long token = -1;
     for (const auto &r : msgs)
-      if (const auto p = r.find("\"token\":"); p != std::string::npos) token = std::strtol(r.c_str() + p + 8, nullptr, 10);
+      if (const auto p = r.find("\"token\":"); p != std::string::npos)
+        token = std::strtol(r.c_str() + p + 8, nullptr, 10);
     REQUIRE(token >= 0);
     post(R"({"v":1,"op":"commit","id":6,"token":)" + std::to_string(token) + R"(,"when":0})");
   }

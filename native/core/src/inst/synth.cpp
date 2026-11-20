@@ -45,6 +45,7 @@ struct SynthShared {
   // per-quantum signals
   alignas(16) float bend[kQuantum], fcs[kQuantum], lfoOut[kQuantum], cPos[kQuantum], cNeg[kQuantum],
       bloom[kQuantum], h2[kQuantum], uPos[kQuantum], uNeg[kQuantum], trem[kQuantum];
+  alignas(16) float zeros[kQuantum] = {};  // an LFO input that was not pulled this quantum (its consumers are silent)
 };
 
 namespace {
@@ -622,6 +623,7 @@ void SynthInstrument::process(const RenderContext &ctx, UnitIO &io) {
   in.n = n;
   s.bendCS.process(f0, sr, s.bend, n);
   in.bend = s.bend;
+  in.chorusPos = in.chorusNeg = in.uniPos = in.uniNeg = s.zeros;
   if (s.hasFilterMod) {  // linkFilter: filterCS then the LFO gain into every voice filter's k-rate detune
     s.filterCS.process(f0, sr, s.fcs, n);
     float det = 0.0f;

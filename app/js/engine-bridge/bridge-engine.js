@@ -653,7 +653,7 @@ export class BridgeEngine extends EventTarget {
 
   eqAudition(slot, mode = 'on', { when } = {}) {
     const i = Number(slot);
-    if (!Number.isInteger(i) || i < 0 || i >= NATIVE_SLOT_COUNT) return false;
+    if (!Number.isInteger(i) || i < 0 || i >= this._slotLimit()) return false;
     const eqAudition = { slot: i, mode: mode === 'bypass' ? 'bypass' : 'on' };
     this._send('config', { eqAudition, ...this._whenArg(when) });
     return true;
@@ -711,6 +711,11 @@ export class BridgeEngine extends EventTarget {
     const n = Math.min(NATIVE_SLOT_COUNT, Math.max(SLOT_COUNT, Array.isArray(p.slots) ? p.slots.length : 0));
     p.slots = Array.from({ length: n }, (_, i) => (p.slots && p.slots[i]) || null);
     this._patch = p;
+  }
+
+  /** Slot indices of the committed song: max(4, its slot entries) <= NATIVE_SLOT_COUNT (T00c, D3); 4 before one. */
+  _slotLimit() {
+    return this._patch ? this._patch.slots.length : SLOT_COUNT;
   }
 
   /**
@@ -998,7 +1003,7 @@ export class BridgeEngine extends EventTarget {
   }
 
   slotLevel(i) {
-    if (!Number.isInteger(i) || i < 0 || i >= NATIVE_SLOT_COUNT || !this._started) return null;
+    if (!Number.isInteger(i) || i < 0 || i >= this._slotLimit() || !this._started) return null;
     if (!this._patch || !this._patch.slots[i] || this._lowResource) return { peak: 0, rms: 0 };
     const now = this._now();
     const added = !this._slotRead[i];
