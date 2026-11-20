@@ -199,11 +199,20 @@ void DelayUnit::panic(double when) {
 
 void DelayUnit::addTimer(double t, TimerKind k, unsigned line, std::uint32_t seq) {
   Timer *slot = nullptr;
-  for (Timer &tm : timers_)
-    if (tm.kind == TimerKind::None) {
-      slot = &tm;
-      break;
-    }
+  // A newer switch retry supersedes the pending one (JS: the stale callback returns on its seq), so a burst of time
+  // changes while the other line flushes reuses one slot instead of filling the table and evicting ring/flush timers.
+  if (k == TimerKind::SwitchRetry)
+    for (Timer &tm : timers_)
+      if (tm.kind == TimerKind::SwitchRetry) {
+        slot = &tm;
+        break;
+      }
+  if (!slot)
+    for (Timer &tm : timers_)
+      if (tm.kind == TimerKind::None) {
+        slot = &tm;
+        break;
+      }
   if (!slot) {  // full (cannot happen: at most one switch retry and two timers per line are live): drop the oldest
     slot = &timers_[0];
     for (Timer &tm : timers_)

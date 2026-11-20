@@ -15,3 +15,9 @@
 [14/97] Building CXX object CMakeFiles/devhost_tests.dir/tests/test_ws_codec.cpp.o
 [15/97] Building C object core/CMakeFiles/rig_third_party.dir/third_party/pffft/src/pffft.c.o
 [16/97] Building C object core/CMakeFiles/rig_third_party.dir/third_party/pffft/src/pffft_common.c.o
+[17/97] Building C object core/CMakeFiles/rig_third_party.dir/third_party/impl/dr_libs_impl.c.o
+[18/97] Building CXX object core/CMakeFiles/rig_core.dir/src/api/engine.cpp.o
+[19/97] Building CXX object core/CMakeFiles/rig_core.dir/src/api/registry.cpp.o
+[20/97] Building CXX object core/CMakeFiles/rig_core.dir/src/api/rig_engine.cpp.o
+[21/97] Building CXX object core/CMakeFiles/rig_core.dir/src/bridge/bridge.cpp.o
+[22/97] Building CXX object core/CMakeFiles/rig_core.dir/src/bridge/schema.cpp.o

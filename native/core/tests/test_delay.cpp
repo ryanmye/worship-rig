@@ -169,6 +169,22 @@ TEST_SUITE("delay") {
     CHECK(std::string(u.lineState(1)) == "ringing");
   }
 
+  TEST_CASE("a burst of time changes while the other line is busy: one retry, the last time wins, lines settle") {
+    DelayUnit u(kSr, patchOf(0.375, 0.5, false), 0);
+    t05::Driver d(&u, kSr);
+    d.run(22016);
+    u.updateTime(0.6, 0.5);  // line B active, line A ringing
+    REQUIRE(u.activeLine() == 1);
+    d.run(8832);
+    for (int k = 0; k < 40; ++k) u.updateTime(0.25 + 0.001 * k, d.now());  // more retries than timer slots
+    CHECK(std::string(u.lineState(0)) == "flushing");
+    d.run(static_cast<std::size_t>(0.45 * kSr) / 128 * 128);
+    REQUIRE(u.activeLine() == 0);
+    CHECK(u.lineTime(0) == doctest::Approx(0.289));
+    d.run(static_cast<std::size_t>(7.0 * kSr) / 128 * 128);  // B rings 0.6 * 10 + .1 s, flushes .7 s
+    CHECK(std::string(u.lineState(1)) == "idle");
+  }
+
   TEST_CASE("panic: feedback 0 for max(.2, longest + .05) s empties the loop, then feedback returns") {
     const std::size_t at = 4410, len = static_cast<std::size_t>(2.5 * kSr);
     auto render = [&](bool panic) {

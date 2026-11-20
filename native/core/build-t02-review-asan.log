@@ -79,3 +79,19 @@
 [78/136] Building CXX object CMakeFiles/rig_core.dir/src/time/param.cpp.o
 [79/136] Building CXX object CMakeFiles/rig_core.dir/src/samples/manifest.cpp.o
 [80/136] Linking CXX static library librig_core.a
+[81/136] Building CXX object CMakeFiles/rig_render.dir/tools/rig_render/main.cpp.o
+[82/136] Building CXX object CMakeFiles/rig-golden.dir/tools/rig_render/main.cpp.o
+[83/136] Building CXX object CMakeFiles/rig_fixture.dir/tools/common/fixture_runner.cpp.o
+[84/136] Linking CXX static library librig_fixture.a
+[85/136] Linking CXX executable rig_render
+[86/136] Linking CXX executable rig-golden
+[87/136] Building CXX object CMakeFiles/rig_tests.dir/tests/alloc_trap.cpp.o
+[88/136] Building CXX object CMakeFiles/rig_tests.dir/tests/dummy_module/dummy_register.cpp.o
+[89/136] Building CXX object CMakeFiles/rig_bench.dir/tools/rig_bench/main.cpp.o
+[90/136] Linking CXX executable rig_bench
+[91/136] Building CXX object CMakeFiles/rig_tests.dir/tests/dummy_module/test_dummy_module.cpp.o
+[92/136] Building CXX object CMakeFiles/rig_tests.dir/tests/num_math_test.cpp.o
+[93/136] Building CXX object CMakeFiles/rig_tests.dir/tests/num_prng_test.cpp.o
+[94/136] Building CXX object CMakeFiles/rig_tests.dir/tests/samples_decode.cpp.o
+[95/136] Building CXX object CMakeFiles/rig_tests.dir/tests/samples_cache.cpp.o
+[96/136] Building CXX object CMakeFiles/rig_tests.dir/tests/samples_process.cpp.o
