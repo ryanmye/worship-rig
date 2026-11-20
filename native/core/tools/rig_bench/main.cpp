@@ -1,7 +1,8 @@
 // rig_bench: render-throughput baseline (128-frame quanta per second) of the empty graph and of N test voices, and
 // the CPU cost of the reverb (T04, ARCHITECTURE 2.1 budgets; BUILD_PLAN T04: one unit <= 8 % of one core here).
 //   rig_bench [seconds_of_audio_per_case=20] [sample_rate=48000] [--reverb-only]
-// Exit status 1 when the reverb unit exceeds its budget on this machine.
+// Exit status 1 when the reverb unit exceeds its budget on this machine (per-quantum cost = thread CPU time, so a
+// loaded shared box measures the DSP, not the scheduler; wall-clock figures are printed beside it).
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -9,6 +10,8 @@
 #include <cstring>
 #include <string>
 #include <vector>
+
+#include <time.h>
 
 #include "fx/reverb_unit.h"
 #include "num/prng.h"
@@ -62,6 +65,14 @@ struct UnitCost {
   double meanUs, p999Us, maxUs, pctCore;
 };
 
+/** Thread CPU time in microseconds: a quantum's cost without the time the thread spent preempted (this box runs
+ *  several builds at once; wall-clock p99.9 is then the scheduler tick, not the DSP). */
+static double threadCpuUs() {
+  timespec ts{};
+  clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+  return static_cast<double>(ts.tv_sec) * 1e6 + static_cast<double>(ts.tv_nsec) * 1e-3;
+}
+
 /** The reverb render unit alone (HPF, LPF, predelay lines, convolvers, gains) fed continuous stereo noise:
  *  `spaces` units rendering at once (2 = a unit crossfade), mean and worst microseconds per 128-frame quantum. */
 static UnitCost reverbUnit(const char *label, double sr, double seconds, const std::vector<double> &sizes) {
@@ -96,29 +107,39 @@ static UnitCost reverbUnit(const char *label, double sr, double seconds, const s
   io.in = &in;
   io.out = &out;
   const long quanta = static_cast<long>(seconds * sr / 128);
-  double total = 0, worst = 0;
-  std::vector<double> each;
+  double total = 0, worst = 0, wallTotal = 0, wallWorst = 0;
+  std::vector<double> each, wall;
   each.reserve(static_cast<std::size_t>(quanta));
+  wall.reserve(static_cast<std::size_t>(quanta));
   for (long q = -64; q < quanta; ++q) {  // 64 warm-up quanta
     for (int c = 0; c < 2; ++c)
       for (std::size_t i = 0; i < kQ; ++i) in.ch[c][i] = static_cast<float>((rng.next() * 2 - 1) * 0.25);
     const long f = q + 64;
     RenderContext ctx{static_cast<std::int64_t>(f) * 128, sr, static_cast<std::uint64_t>(f), UnitSlot::Reverb, &sink};
+    const double c0 = threadCpuUs();
     const auto t0 = std::chrono::steady_clock::now();
     unit.process(ctx, io);
-    const double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
+    const double wus = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
+    const double us = threadCpuUs() - c0;
     if (q < 0) continue;
     total += us;
     worst = std::max(worst, us);
     each.push_back(us);
+    wallTotal += wus;
+    wallWorst = std::max(wallWorst, wus);
+    wall.push_back(wus);
   }
   std::sort(each.begin(), each.end());
-  const double p999 = each[std::min(each.size() - 1, each.size() * 999 / 1000)];
+  std::sort(wall.begin(), wall.end());
+  const auto p999of = [](const std::vector<double> &v) { return v[std::min(v.size() - 1, v.size() * 999 / 1000)]; };
+  const double p999 = p999of(each);
   const double mean = total / static_cast<double>(quanta);
   const double period = 128.0 / sr * 1e6;
-  std::printf("%-40s %6.2f us/quantum mean = %5.2f%% of one core; p99.9 %6.1f us (%4.1f%% of the %.0f us period), "
-              "max %6.1f us\n",
+  std::printf("%-40s CPU %6.2f us/quantum mean = %5.2f%% of one core; p99.9 %6.1f us (%4.1f%% of the %.0f us "
+              "period), max %6.1f us\n",
               label, mean, 100.0 * mean / period, p999, 100.0 * p999 / period, period, worst);
+  std::printf("%-40s wall %5.2f us mean, p99.9 %6.1f us, max %6.1f us (includes preemption)\n", "",
+              wallTotal / static_cast<double>(quanta), p999of(wall), wallWorst);
   return {mean, p999, worst, 100.0 * mean / period};
 }
 
@@ -144,7 +165,8 @@ int main(int argc, char **argv) {
   (void)room;
   (void)xf;
   const double budget = 8.0;  // BUILD_PLAN T04: one reverb unit <= 8 % of one core on this box at 48 kHz
-  // the max is preemption on a shared box; the p99.9 quantum is what the DSP itself costs at its worst phase
+  // thread CPU time: the max can still hold a page fault or a cache-cold quantum; the p99.9 quantum is what the
+  // DSP itself costs at its worst phase
   const bool ok = big.pctCore <= budget && big.p999Us <= 0.5 * 128.0 / sr * 1e6;
   std::printf("reverb budget (8 s unit <= %.0f%% of one core, p99.9 quantum below 50%% of its period): %s\n", budget,
               ok ? "PASS" : "FAIL");

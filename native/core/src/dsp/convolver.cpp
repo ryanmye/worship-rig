@@ -212,10 +212,9 @@ float chromiumNormalizationScale(const float *const *channels, unsigned numChann
   constexpr float kMinPower = 0.000125f;
   if (!std::isfinite(power) || power < kMinPower) power = kMinPower;
   float scale = 1 / power;
-  // fdlibm::powf(10, kGainCalibration * 0.05f) with kGainCalibration = -58: a constant, taken as the correctly
-  // rounded float of 10^(float)(-2.9f) via Math.pow (fdlibm's powf is accurate to < 1 ulp; checked only through the
-  // normalised ConvolverNode vectors, which agree to float rounding)
-  scale *= static_cast<float>(rig::js::pow(10.0, static_cast<double>(-58.0f * 0.05f)));
+  // fdlibm::powf(10, kGainCalibration * 0.05f), kGainCalibration = -58.0f: Chromium's fdlibm powf is the double
+  // pow rounded to float (third_party/fdlibm/ieee754.cc), so rig::fdlibm::pow on the float exponent, then float
+  scale *= static_cast<float>(rig::fdlibm::pow(10.0, static_cast<double>(-58.0f * 0.05f)));
   if (sampleRate > 0) scale *= static_cast<float>(44100.0f / static_cast<float>(sampleRate));
   if (numChannels == 4) scale *= 0.5f;
   return scale;
