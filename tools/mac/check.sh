@@ -22,8 +22,9 @@ set -euo pipefail
 
 ALL_STAGES="tools core probe apple-mac apple-sim"
 
-usage() {  # the header comment above `set -euo pipefail`
-  awk 'NR > 1 && /^set -euo/ { exit } NR > 1' "$0" | sed 's/^# \{0,1\}//'
+usage() {  # the header comment above `set -euo pipefail` (when run as a file; see MAC_CHECK.md for `bash -c`)
+  if [ -f "$0" ]; then awk 'NR > 1 && /^set -euo/ { exit } NR > 1' "$0" | sed 's/^# \{0,1\}//'
+  else echo "usage: check.sh [--rev <ref>] [--stage <list>] [--out <dir>] [--quick] (native/docs/MAC_CHECK.md)"; fi
 }
 
 die_usage() {
@@ -70,6 +71,7 @@ done
 
 if [ "$quick" -eq 1 ] && [ -n "$stage_arg" ]; then die_usage "--quick and --stage cannot be combined"; fi
 if [ -n "$src_dir" ] && [ -n "$rev" ]; then die_usage "--src and --rev cannot be combined"; fi
+case "$rev" in -*) die_usage "--rev '$rev' is not a revision" ;; esac
 if [ -n "$src_dir" ]; then
   [ -d "$src_dir/native/core" ] || die_usage "--src $src_dir has no native/core"
   src_dir="$(cd "$src_dir" && pwd -P)"
@@ -195,7 +197,7 @@ tmo() {
   "$@" < /dev/null &
   pid=$!
   cur_job="$pid"
-  # shellcheck disable=SC2046  # the pid list is meant to split
+  # shellcheck disable=SC2086  # the pid list is meant to split
   ( sleep "$secs"; echo "timeout" > "$state/.tmo.$pid"; pids="$(tree_pids "$pid")"; kill -TERM $pids
     sleep 5; kill -KILL $pids ) >/dev/null 2>&1 &
   wd=$!
@@ -357,6 +359,7 @@ on_signal() {  # TERM/INT/HUP (e.g. the push agent gives up): stop the running c
 trap on_signal TERM INT HUP
 
 if want tools; then
+  cur_stage=tools
   t0=$SECONDS
   tl="$out/tools.log"
   {
@@ -406,6 +409,7 @@ if [ -z "$cache_root" ]; then
 fi
 mkdir -p "$cache_root"
 cache_root="$(cd "$cache_root" && pwd -P)"
+cur_stage=""
 t0=$SECONDS
 if [ -n "$src_dir" ]; then
   # --src: an uncommitted tree (testing this script, or a change before it is pushed): copied, never built in place
@@ -467,7 +471,7 @@ else
     fi
     touch "$work"
     # keep the three most recent revisions (each holds an export plus its build trees)
-    # shellcheck disable=SC2012  # names are 7 hex digits (local/ from --src and anything else are left alone)
+    # shellcheck disable=SC2010,SC2012  # names are 7 hex digits (local/ from --src and others are left alone)
     ls -1t "$cache_root" 2>/dev/null | grep -E '^[0-9a-f]{7}$' | tail -n +4 | while IFS= read -r old; do
       rm -rf "${cache_root:?}/$old"
     done
@@ -670,8 +674,8 @@ apple_stage() {  # apple_stage <stage> <build-core flags> <scheme> <destination>
   : > "$log"; : > "$errs"
   step="build-core.sh $flags"
   # shellcheck disable=SC2086  # $flags is a word list
-  if RIG_CMAKE_GENERATOR=Ninja RIG_JOBS="$jobs" run_timeout 2400 "$log" in_dir "$src/native/apple" \
-      bash scripts/build-core.sh $flags; then
+  if run_timeout 2400 "$log" in_dir "$src/native/apple" \
+      env RIG_CMAKE_GENERATOR=Ninja RIG_JOBS="$jobs" bash scripts/build-core.sh $flags; then
     step="xcodegen"
     if run_timeout 300 "$log" in_dir "$src/native/apple" xcodegen generate --spec project.yml; then
       step="xcodebuild $scheme"
@@ -683,7 +687,8 @@ apple_stage() {  # apple_stage <stage> <build-core flags> <scheme> <destination>
       fi
       # Xcode 15+ ships the iOS platform (simulator runtime) as a separate download: without it the generic
       # simulator destination does not resolve. That is a missing install, not a compile error.
-      if [ "$sdk" = iphonesimulator ] && grep -qE 'is not installed\. To use with Xcode, first download and install|Unable to find a destination matching' "$log"; then
+      if [ "$sdk" = iphonesimulator ] \
+          && grep -q 'is not installed. To use with Xcode, first download and install the platform' "$log"; then
         record "$stage" SKIPPED $((SECONDS - t0)) "$platform_note" "$errs"
         return 0
       fi
