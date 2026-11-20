@@ -1,0 +1,9 @@
+# T12 sampler: the two bundled instrument fixtures and T17 sweep fixtures (needsPcm; pcmOverride)
+sampler-salamander-piano
+sampler-ep-rhodes
+sampler-sweep-1
+sampler-sweep-2
+sampler-sweep-3
+sampler-sweep-4
+sampler-sweep-5
+sampler-sweep-6

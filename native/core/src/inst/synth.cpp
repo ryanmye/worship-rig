@@ -159,7 +159,7 @@ SynthInstrument::SynthInstrument(const PatchDef &patch, double sampleRate, std::
   auto filterMod = [&](double base, bool withLfo, double morphCents, unsigned rate, unsigned depth) {
     s.filterBase = base;  // initFilterMod
     s.hasFilterMod = true;
-    s.filterCS.offset().setValue(cents(p[patch_.id == PatchId::DroneOsc ? dCutoff : wCutoff] / base) +
+    s.filterCS.offset().setValue(cents(p[patch_.id == PatchId::DroneOsc ? static_cast<unsigned>(dCutoff) : static_cast<unsigned>(wCutoff)] / base) +
                                  morphX_ * morphCents);
     s.filterCS.start(0);
     if (withLfo) {
