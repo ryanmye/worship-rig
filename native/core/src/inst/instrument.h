@@ -62,6 +62,11 @@ class Instrument : public Unit {
   }
   /** Output channel count (1 or 2): decides the strip's pan law (contract 3.1). */
   virtual unsigned outputChannels() const = 0;
+  // INTERFACE-CHANGE(T00c) D1: per-slot polyphony cap (DECISIONS D1: 32 | 64 | 128, default 64). The Model calls it
+  // at attach and on change (Op::VoiceCap, audio thread, before any note of the attach). The instrument steals
+  // (oldest released first, then oldest held; its own policy) once more than `cap` voices would sound. Default
+  // no-op: an instrument that never allocates past its own fixed pool may ignore it.
+  virtual void setVoiceCap(unsigned cap) { (void)cap; }
 
  protected:
   virtual void applyModule(const Command &c) { (void)c; }
