@@ -316,3 +316,30 @@ test("midi: 'input' comes before the message's own event, not for realtime bytes
   m._handleStateChange({ port: { id: 'k1', type: 'input', state: 'connected', name: 'Keys' } });
   assert.deepEqual(seen, [['input', 'hotplug']]);
 });
+
+test('controller (L11-8): one GC 3 s after low-resource turns on; none if it turns off first, none in normal play', async () => {
+  const store = makeStore();
+  const timers = fakeTimers();
+  let gcs = 0;
+  const ctl = createController({
+    store, engine: sleepyEngine(), midi: null, recorder: null, doc: fakeDoc(), nav: null, win: new EventTarget(),
+    rig: null, timers, bus: fakeBus(), autoRestart: false, gc: () => gcs++,
+  });
+  await ctl.start();
+  await tick();
+  const gcTimeouts = () => [...timers.timeouts.values()].filter((t) => t.ms === 3000);
+  assert.equal(gcTimeouts().length, 0, 'normal play: no GC scheduled');
+  ctl.setLowResource(true);
+  assert.equal(gcTimeouts().length, 1, 'scheduled once on');
+  timers.runTimeouts();
+  assert.equal(gcs, 1, 'ran once');
+  ctl.setLowResource(false);
+  ctl.setLowResource(true);
+  ctl.setLowResource(false);
+  timers.runTimeouts();
+  assert.equal(gcs, 1, 'off before the delay: no GC');
+  ctl.setLowResource(true);
+  ctl.dispose();
+  assert.equal(gcTimeouts().length, 0, 'dispose clears it');
+  assert.equal(gcs, 1);
+});

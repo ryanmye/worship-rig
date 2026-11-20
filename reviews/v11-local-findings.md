@@ -239,3 +239,34 @@ Fix: `test/port-preflight.mjs`. `run-all` (8437, 8438) and the shell runner (843
 with exit 2 and a "quit the running Worship Rig" message instead of producing misleading failures.
 `RIG_ALLOW_BUSY_PORT=1` overrides. Checked with a port held (both exit 2, unit-only shell unaffected) and free
 (unit 406 pass).
+
+## L11-8 low-resource mode frees the samples but the Mac renderer keeps the memory until a GC (fixed)
+
+**Status:** fixed locally (controller + main.js, one commit). Found with the v11-memory Activity Monitor check.
+
+Measured with `footprint` (the Activity Monitor "Memory" number). Each run used a fresh profile on the default 44.1 kHz
+output, driven over CDP: boot, 10 songs (`songsInOrder` first 10, 5 s each), then `settings.lowResource` on. Renderer
+footprint in MB:
+
+| phase | 1.0.1 | 1.1 `29eb984` | 1.1 + L11-8 |
+|---|---|---|---|
+| boot (after a GC) | 1136 | 918 | 912 |
+| after the 10-song loop | 1319 | 1178 | 1093 |
+| low-resource, +1 min | 1009 | 1057 | **228** |
+| low-resource, +5 min | 995 | 1058 | 227 |
+| low-resource, then a forced GC | 994 | 392 | 226 |
+
+At `29eb984`, entering low-resource dropped the engine's decoded MB from 648 to 0. The renderer stayed at about
+1057 MB for 5 idle minutes, slightly above 1.0.1, and went to 392 MB only after a forced GC
+(`HeapProfiler.collectGarbage`). AudioBuffer storage is external to the V8 heap, and an idle hidden page allocates
+almost nothing, so V8 has no reason to collect. On the Mac, v11-memory's low-resource saving never reached the user.
+Linux reported RSS, which isn't the same measure.
+
+Fix: `main.js` adds `--js-flags=--expose-gc`. The controller (`applyLowResource`) runs one `gc()` 3 s
+(`LOWRES_GC_MS`) after low-resource turns on, once release tails are done. It skips the GC if low-resource turns off
+first, and `dispose()` clears the timer. Chrome has no `gc` and is unchanged. One full GC as the window hides costs
+milliseconds and happens only on that transition. Test: `lowres2.test.mjs` "controller (L11-8)". Shell and ui-core
+both pass.
+
+Visible-mode memory is also lower than 1.0.1 by about 140–230 MB after the loop, less than the −450–600 MB reported
+on Linux (RSS, not footprint).
