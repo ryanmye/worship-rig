@@ -7,6 +7,7 @@
 //   • memory:   last resort (warns above 10 minutes; stops itself at 60 minutes so a long service can't OOM the page)
 // Events: 'state' {state, result?, reason?}, 'level' {peakL, peakR, peak}, 'warn' {message}.
 import { wavHeader } from './shared/wav.js';
+import { NativeRecorder, isBridgeEngine } from './engine-bridge/native-recorder.js';
 
 export const WORKLET_URL = new URL('./worklets/recorder-processor.js', import.meta.url);
 export const PROCESSOR_NAME = 'rig-recorder';
@@ -257,6 +258,8 @@ export class Recorder extends EventTarget {
    * @param {() => number} [o.now]
    */
   constructor(o = {}) {
+    // 2.0: the native engine records in the core (T09, contract G10); the web engine keeps this class.
+    if (isBridgeEngine(o.engine)) return new NativeRecorder(o);
     super();
     this.engine = o.engine;
     this.win = o.win || globalThis;
