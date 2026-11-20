@@ -55,6 +55,9 @@ enum WaveFamily : unsigned {
 };
 inline constexpr unsigned kRotations = 8;
 
+/** Which table an oscillator reads (kept per oscillator so a rate change can re-point it, T11a O4). */
+enum class WaveKind : std::uint8_t { None, Saw, Glass, Sine, Tri, BasicSine, BasicTriangle };
+
 /** The PeriodicWaves of one sample rate. Immutable once built; oscillators borrow the pointers. */
 struct WaveBank {
   double sampleRate = 0;
@@ -62,6 +65,20 @@ struct WaveBank {
   std::array<std::unique_ptr<wa::PeriodicWave>, kRotations> saw, glass, sine, tri;
   std::unique_ptr<wa::PeriodicWave> basicSine, basicTriangle;
   ~WaveBank();
+
+  /** The table for (kind, rotation); null when the family was not built. */
+  const wa::PeriodicWave *wave(WaveKind k, unsigned rot = 0) const {
+    rot %= kRotations;
+    switch (k) {
+      case WaveKind::Saw: return saw[rot].get();
+      case WaveKind::Glass: return glass[rot].get();
+      case WaveKind::Sine: return sine[rot].get();
+      case WaveKind::Tri: return tri[rot].get();
+      case WaveKind::BasicSine: return basicSine.get();
+      case WaveKind::BasicTriangle: return basicTriangle.get();
+      default: return nullptr;
+    }
+  }
 
   /** Control thread: the bank for `sampleRate` holding at least `families` (shared, built on first use). */
   static std::shared_ptr<const WaveBank> get(double sampleRate, unsigned families);

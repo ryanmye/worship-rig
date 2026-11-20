@@ -41,6 +41,12 @@ class TestInstrument final : public Instrument {
   void setVoiceCap(unsigned cap) override { cap_ = cap < 1 ? 1u : cap > kVoices ? unsigned{kVoices} : cap; }
   unsigned voiceCap() const { return cap_; }
   std::uint32_t stolen() const { return stolen_; }
+  /** Tests: active voices playing `note` (held = not released / released). */
+  int voicesOf(int note, bool released) const {
+    int n = 0;
+    for (const auto &v : voices_) n += v.active() && v.note() == note && v.released() == released ? 1 : 0;
+    return n;
+  }
   unsigned outputChannels() const override { return 1; }
 
  private:

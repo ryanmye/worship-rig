@@ -23,6 +23,7 @@
 #include "dsp/buffer_source.h"
 #include "dsp/gain.h"
 #include "inst/instrument.h"
+#include "inst/voice_alloc.h"
 #include "model/buffer_cache_api.h"
 #include "runtime/command.h"
 
@@ -50,8 +51,10 @@ enum SamplerParam : std::uint32_t { kSamplerRelease = 0, kSamplerTone = 1, kSamp
 /** `slots.<i>.params.<key>` → index, -1 when the sampler has no such param. */
 int samplerParamIndex(std::string_view key);
 
-/** The JS SAMPLER_MAX_VOICES (sampler.js:756) was 32; DECISIONS D1: per-slot cap 32 | 64 | 128, default 64. */
-inline constexpr unsigned kSamplerPoolVoices = 128, kSamplerDefaultCap = 64;
+/** The JS SAMPLER_MAX_VOICES (sampler.js:756) was 32; DECISIONS D1: per-slot cap 32 | 64 | 128, default 64. Voices
+ *  live in T11's inst::VoicePool (128 + 32 spare slots for steal fades; BasicAllocator policy: any released voice
+ *  first, else the oldest held). */
+inline constexpr unsigned kSamplerPoolVoices = inst::kVoicePoolSize, kSamplerDefaultCap = inst::kDefaultVoiceCap;
 
 class SamplerLeases;
 
@@ -93,7 +96,7 @@ class SamplerInstrument final : public Instrument {
   // Unit
   void process(const RenderContext &ctx, UnitIO &io) override;
   void setSampleRate(double sr) override;
-  std::uint32_t liveVoices() const override { return live_; }
+  std::uint32_t liveVoices() const override { return pool_.live(); }
 
   // Instrument
   void noteOn(int note, int vel, float velGain, std::int64_t frame) override;
@@ -107,57 +110,53 @@ class SamplerInstrument final : public Instrument {
   void setVoiceCap(unsigned cap) override;
 
   // Control-side reads (tests; before attach or after the graph gave the unit back)
-  double param(std::uint32_t index) const { return index == kSamplerRelease ? release_ : tone_; }
+  double paramValue(std::uint32_t index) const { return index == kSamplerRelease ? release_ : tone_; }
   double toneHz() const;
-  unsigned voiceCap() const { return cap_; }
+  unsigned voiceCap() const { return pool_.cap(); }
   /** Voices in each state (tests: polyphony / steal checks). */
   struct Counts {
     unsigned held = 0, released = 0, killed = 0;
   };
   Counts counts() const;
+  /** Voice id of the most recent note-on (0 = none yet). */
+  VoiceId lastVoice() const { return lastId_; }
   const SamplerZones *zones() const { return zones_; }
 
  protected:
   void applyModule(const Command &c) override;
 
  private:
-  enum class State : std::uint8_t { Free, Held, Released, Killed };
+  /** The voice's own nodes; state, note, start / release times and the id live in the pool (inst::VoicePool). */
   struct Voice {
+    explicit Voice(const SampleBuffer *b) : src(b) {}
     wa::BufferSource src;
     wa::Gain env{0.0};
     wa::Biquad lp[2];
     bool useLp = false;
-    State state = State::Free;
-    int note = 0;
-    VoiceId id = 0;
-    std::uint64_t seq = 0;  // allocation order (the JS Set's insertion order)
-    double startedAt = 0, releasedAt = 0, stopAt = 0;
-    double release = 0.2;          // s to −60 dB (BasicVoice.release)
-    double releaseOverride = 0;    // s to −60 dB, 0 = unset (sustain: slots.<i>.release)
+    double stopAt = 0;
+    double release = 0.2;        // s to −60 dB (BasicVoice.release)
+    double releaseOverride = 0;  // s to −60 dB, 0 = unset (sustain: slots.<i>.release)
     bool ignoreRelease = false;
   };
+  using Pool = inst::VoicePool<Voice>;
 
   double timeOf(std::int64_t frame);
-  void prepParams(Voice &v, std::int64_t frame);
-  Voice *allocate(double t, std::int64_t frame);
-  void makeRoom(double t, std::int64_t frame);
-  void releaseAt(Voice &v, double t, std::int64_t frame);
-  void fadeOut(Voice &v, double t, double fadeSec, std::int64_t frame);
-  void stopVoice(Voice &v, double t);
-  void free(Voice &v);
+  void prepParams(Voice &v);
+  void releaseAt(int slot, double t);
+  void fadeOut(int slot, double t, double fadeSec);
+  void stopVoice(int slot, double t);
+  double nowSec() const { return static_cast<double>(frame0_) / sr_; }
   void rampTone(double t, double tau);
   void deferGarbage(Owned *p);
 
   SamplerSetup setup_;
   SamplerZones *zones_ = nullptr;
-  std::unique_ptr<Voice[]> voices_;
-  unsigned cap_ = kSamplerDefaultCap, live_ = 0;
-  std::uint64_t seq_ = 0;
-  VoiceId nextId_ = 0;
+  Pool pool_{inst::StealPolicy::AnyReleased};
   double sr_;
   std::int64_t frame0_ = 0;  // first frame of the quantum being rendered / last rendered (param context time)
   double release_, tone_, morph_ = 0, bend_ = 0, dynRange_ = 1, relOverride_ = 0;
   float trim_;
+  VoiceId lastId_ = 0;
   wa::BiquadFilter toneLp_;
   Owned *garbage_[8] = {};  // payloads to give back at the next process() (apply has no RenderContext)
   unsigned garbageN_ = 0;

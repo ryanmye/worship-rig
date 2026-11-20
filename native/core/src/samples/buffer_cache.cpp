@@ -308,7 +308,6 @@ std::size_t BufferCache::collect() {
 
 void BufferCache::evict(double incoming) {
   collect();
-  if (capWarned_ && static_cast<double>(bytes_) <= lowWaterBytes()) capWarned_ = false;  // T00c
   const double limit = static_cast<double>(cfg_.capBytes) - incoming;
   if (static_cast<double>(bytes_) <= limit) return;
   const double target = std::min(lowWaterBytes(), limit);
@@ -554,6 +553,7 @@ void BufferCache::finish(Done &d) {
                           " MB cap): " + d.url + " and later samples are not loaded until memory frees");
         }
       } else {
+        capWarned_ = false;  // T00c: a load fits again, the next refusal warns again
         b.lastUsed = ++tick_;
         const std::uint64_t nb = b.bytes;
         e = d.out.buffer.get();

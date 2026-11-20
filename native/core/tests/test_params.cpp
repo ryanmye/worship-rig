@@ -23,7 +23,23 @@ TEST_SUITE("params") {
     CHECK(std::string(r->path) == "slots.<i>.gain");
     CHECK(r->def == doctest::Approx(0.8));
     CHECK(r->max == 2.0);
-    CHECK(findParam("slots.4.gain") == nullptr);  // only 4 slots
+    // T00c D3: 16 slots, slots.0 .. slots.15 (decimal, no leading zero)
+    CHECK(findParam("slots.4.gain", &slot) != nullptr);
+    CHECK(slot == 4);
+    CHECK(findParam("slots.15.eq.b3.hz", &slot) != nullptr);
+    CHECK(slot == 15);
+    CHECK(findParam("slots.10.gain", &slot) != nullptr);
+    CHECK(slot == 10);
+    CHECK(findParam("slots.16.gain") == nullptr);
+    CHECK(findParam("slots.20.gain") == nullptr);
+    CHECK(findParam("slots.05.gain") == nullptr);
+    CHECK(findParam("slots.1x.gain") == nullptr);
+    {
+      bool d = false;
+      CHECK(findParam("slots.12.params.attack", &slot, &d) == nullptr);
+      CHECK(d);
+      CHECK(slot == 12);
+    }
     CHECK(findParam("slots.0.nonsense") == nullptr);
     CHECK(findParam("master.volume") != nullptr);
     bool dyn = false;

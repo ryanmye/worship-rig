@@ -55,7 +55,6 @@ SamplerZones::~SamplerZones() {
 SamplerInstrument::SamplerInstrument(const SamplerSetup &s, SamplerZones *zones, double sampleRate)
     : setup_(s),
       zones_(zones),
-      voices_(new Voice[kSamplerPoolVoices]),
       sr_(sampleRate),
       release_(clampD(s.release, kReleaseMin, kReleaseMax)),
       tone_(clampD(s.tone, 0, 1)),
@@ -88,8 +87,7 @@ double SamplerInstrument::timeOf(std::int64_t frame) {
   return static_cast<double>(frame) / sr_;
 }
 
-void SamplerInstrument::prepParams(Voice &v, std::int64_t frame) {
-  (void)frame;
+void SamplerInstrument::prepParams(Voice &v) {
   v.src.playbackRate().setContextTime(frame0_, sr_);
   v.src.detune().setContextTime(frame0_, sr_);
   v.env.gain().setContextTime(frame0_, sr_);
@@ -112,17 +110,17 @@ void SamplerInstrument::rampTone(double t, double tau) {
 
 SamplerInstrument::Counts SamplerInstrument::counts() const {
   Counts c;
-  for (unsigned i = 0; i < kSamplerPoolVoices; ++i) {
-    const State s = voices_[i].state;
-    if (s == State::Held) ++c.held;
-    else if (s == State::Released) ++c.released;
-    else if (s == State::Killed) ++c.killed;
+  for (unsigned i = 0; i < Pool::capacity(); ++i) {
+    const inst::VoiceState st = pool_.meta(static_cast<int>(i)).state;
+    if (st == inst::VoiceState::Held) ++c.held;
+    else if (st == inst::VoiceState::Released) ++c.released;
+    else if (st == inst::VoiceState::Killed) ++c.killed;
   }
   return c;
 }
 
 void SamplerInstrument::setVoiceCap(unsigned cap) {
-  cap_ = std::clamp(cap, 1u, kSamplerPoolVoices);
+  pool_.setCap(cap);
 }
 
 void SamplerInstrument::setSampleRate(double sr) {
@@ -132,85 +130,35 @@ void SamplerInstrument::setSampleRate(double sr) {
   toneLp_.frequency().setValue(toneHz());
 }
 
-// ---- voice life (instruments.js BasicVoice / BasicAllocator) --------------------------------------------------------
+// ---- voice life (instruments.js BasicVoice; BasicAllocator = inst::VoicePool, StealPolicy::AnyReleased) ------------
 
-void SamplerInstrument::stopVoice(Voice &v, double t) {
+void SamplerInstrument::stopVoice(int slot, double t) {
   // BasicVoice._stop: only ever earlier; source.stop(max(t, startedAt))
+  Voice &v = pool_.voice(slot);
   if (!(t < v.stopAt)) return;
   v.stopAt = t;
-  v.src.stop(std::max(t, v.startedAt));
+  v.src.stop(std::max(t, pool_.meta(slot).startedAt));
 }
 
-void SamplerInstrument::releaseAt(Voice &v, double t, std::int64_t frame) {
-  if (v.state != State::Held) return;
-  v.state = State::Released;
-  v.releasedAt = t;
+void SamplerInstrument::releaseAt(int slot, double t) {
+  if (pool_.meta(slot).state != inst::VoiceState::Held) return;
+  pool_.markReleased(slot, t);
+  Voice &v = pool_.voice(slot);
   if (v.ignoreRelease) return;  // undamped strings ring to the buffer end
   const double r = v.releaseOverride > 0 ? v.releaseOverride : v.release;
-  prepParams(v, frame);
+  prepParams(v);
   wa::rampTo(v.env.gain(), 0, t, wa::releaseTau(r));
-  stopVoice(v, wa::stopAfterRelease(t, r));
+  stopVoice(slot, wa::stopAfterRelease(t, r));
 }
 
-void SamplerInstrument::fadeOut(Voice &v, double t, double fadeSec, std::int64_t frame) {
-  if (v.state == State::Free) return;
+void SamplerInstrument::fadeOut(int slot, double t, double fadeSec) {
+  if (pool_.meta(slot).state == inst::VoiceState::Free) return;
   const double f = std::max(0.003, fadeSec);
-  prepParams(v, frame);
+  Voice &v = pool_.voice(slot);
+  prepParams(v);
   wa::rampTo(v.env.gain(), 0, t, wa::releaseTau(f));  // setTarget: starts from the real current value
-  if (v.state != State::Killed) v.releasedAt = std::min(v.releasedAt, t);
-  v.state = State::Killed;
-  stopVoice(v, wa::stopAfterRelease(t, f));
-}
-
-void SamplerInstrument::free(Voice &v) {
-  if (v.state == State::Free) return;
-  v.state = State::Free;
-  --live_;
-}
-
-void SamplerInstrument::makeRoom(double t, std::int64_t frame) {
-  // BasicAllocator.makeRoom: while playing (held | released) >= max, steal the oldest released (by releasedAt),
-  // else the oldest held (by startedAt); ties go to the earlier allocation (Set insertion order), 20 ms fade
-  for (;;) {
-    unsigned playing = 0;
-    Voice *victim = nullptr;
-    for (unsigned i = 0; i < kSamplerPoolVoices; ++i) {
-      Voice &v = voices_[i];
-      if (v.state != State::Held && v.state != State::Released) continue;
-      ++playing;
-      if (v.state == State::Released &&
-          (!victim || victim->state != State::Released || v.releasedAt < victim->releasedAt ||
-           (v.releasedAt == victim->releasedAt && v.seq < victim->seq)))
-        victim = &v;
-    }
-    if (playing < cap_) return;
-    if (!victim || victim->state != State::Released) {
-      victim = nullptr;
-      for (unsigned i = 0; i < kSamplerPoolVoices; ++i) {
-        Voice &v = voices_[i];
-        if (v.state != State::Held) continue;
-        if (!victim || v.startedAt < victim->startedAt || (v.startedAt == victim->startedAt && v.seq < victim->seq))
-          victim = &v;
-      }
-    }
-    if (!victim) return;
-    fadeOut(*victim, t, kStealFade, frame);
-  }
-}
-
-SamplerInstrument::Voice *SamplerInstrument::allocate(double t, std::int64_t frame) {
-  makeRoom(t, frame);
-  // a free pool entry; with every entry busy (killed voices still fading), the oldest killed one is cut
-  Voice *pick = nullptr;
-  for (unsigned i = 0; i < kSamplerPoolVoices && !pick; ++i)
-    if (voices_[i].state == State::Free) pick = &voices_[i];
-  if (!pick) {
-    for (unsigned i = 0; i < kSamplerPoolVoices; ++i)
-      if (voices_[i].state == State::Killed && (!pick || voices_[i].seq < pick->seq)) pick = &voices_[i];
-    if (!pick) pick = &voices_[0];
-    free(*pick);
-  }
-  return pick;
+  pool_.markKilled(slot, t);                          // releasedAt = min(releasedAt, t) unless killed already
+  stopVoice(slot, wa::stopAfterRelease(t, f));
 }
 
 // ---- Instrument ---------------------------------------------------------------------------------------------------
@@ -242,23 +190,15 @@ void SamplerInstrument::noteOn(int note, int vel, float velGain, std::int64_t fr
     if (!s || std::abs(x.midi - n) < std::abs(s->midi - n)) s = &x;
   if (!s->buf) return;
 
-  Voice &v = *allocate(t, frame);
-  std::destroy_at(&v.src);
-  std::construct_at(&v.src, s->buf);
-  std::destroy_at(&v.env);
-  std::construct_at(&v.env, 0.0);
-  v.lp[0].reset();
-  v.lp[1].reset();
-  v.state = State::Held;
-  v.note = n;
-  v.id = ++nextId_;
-  v.seq = ++seq_;
-  v.startedAt = t;
-  v.releasedAt = kInf;
+  pool_.makeRoom(t, [&](int victim) { fadeOut(victim, t, kStealFade); });
+  // every slot busy (spare slots full of fading voices): the oldest fading one is cut (it is within 20 ms of
+  // silence); its VoiceEnded is not raised (no RenderContext here), the Model's retire poll sees the count drop
+  const int slot = pool_.emplace(n, t, s->buf);
+  if (slot < 0) return;
+  Voice &v = pool_.voice(slot);
   v.stopAt = kInf;
   v.releaseOverride = relOverride_;
-  ++live_;
-
+  lastId_ = pool_.idOf(slot);
   v.src.playbackRate().setValue(js::pow(2, (n - s->midi) / 12.0));
   v.src.detune().setValue(bend_ * 100);
   double gDb;
@@ -273,7 +213,7 @@ void SamplerInstrument::noteOn(int note, int vel, float velGain, std::int64_t fr
     v.lp[0].set(c);
     v.lp[1].set(c);
   }
-  prepParams(v, frame);
+  prepParams(v);
   wa::setNow(v.env.gain(), js::pow(10, gDb / 20), t);  // the 2 ms fade-in is baked into the buffer
   v.release = clampD(release_, 0.005, 5) * 6.9;      // params.release is τ; BasicVoice wants time to −60 dB
   v.ignoreRelease = setup_.undampedFrom >= 0 && n >= setup_.undampedFrom;
@@ -283,42 +223,39 @@ void SamplerInstrument::noteOn(int note, int vel, float velGain, std::int64_t fr
 void SamplerInstrument::noteOff(int note, std::int64_t frame, bool forced) {
   (void)forced;  // the pedal lives in the Model: every note-off that reaches the sampler releases
   const double t = timeOf(frame);
-  for (unsigned i = 0; i < kSamplerPoolVoices; ++i) {
-    Voice &v = voices_[i];
-    if (v.state == State::Held && v.note == note) releaseAt(v, t, frame);
-  }
+  pool_.forEach([&](int i, Voice &) {
+    if (pool_.meta(i).state == inst::VoiceState::Held && pool_.meta(i).note == note) releaseAt(i, t);
+  });
 }
 
 void SamplerInstrument::allNotesOff(std::int64_t frame) {
   const double t = timeOf(frame);
-  for (unsigned i = 0; i < kSamplerPoolVoices; ++i) fadeOut(voices_[i], t, kAllOffFade, frame);
+  pool_.forEach([&](int i, Voice &) { fadeOut(i, t, kAllOffFade); });
 }
 
 void SamplerInstrument::kill() {
-  for (unsigned i = 0; i < kSamplerPoolVoices; ++i) free(voices_[i]);
+  pool_.destroyAll();
 }
 
 void SamplerInstrument::releaseVoice(VoiceId id, std::int64_t frame, double fadeSec) {
   const double t = timeOf(frame);
-  for (unsigned i = 0; i < kSamplerPoolVoices; ++i)
-    if (voices_[i].state != State::Free && voices_[i].id == id) fadeOut(voices_[i], t, fadeSec, frame);
+  const int slot = pool_.slotOf(id);
+  if (slot >= 0) fadeOut(slot, t, fadeSec);
 }
 
 void SamplerInstrument::setBend(double semis, std::int64_t frame) {
   bend_ = std::isfinite(semis) ? semis : 0;
   const double t = timeOf(frame);
-  for (unsigned i = 0; i < kSamplerPoolVoices; ++i) {
-    Voice &v = voices_[i];
-    if (v.state == State::Free) continue;
-    prepParams(v, frame);
+  pool_.forEach([&](int, Voice &v) {
+    prepParams(v);
     wa::rampTo(v.src.detune(), bend_ * 100, t, 0.008);
-  }
+  });
 }
 
 void SamplerInstrument::setParam(std::uint32_t index, double value, double time, double glide) {
   (void)glide;  // sampler.js setParam has no glide: tone is a 15 ms rampTo, release is read at the next note
   if (!std::isfinite(value)) return;
-  const double t = std::isfinite(time) && time * sr_ > static_cast<double>(frame0_) ? time : frame0_ / sr_;
+  const double t = std::isfinite(time) && time > nowSec() ? time : nowSec();
   if (index == kSamplerRelease) {
     release_ = clampD(value, kReleaseMin, kReleaseMax);
   } else if (index == kSamplerTone) {
@@ -345,7 +282,7 @@ void SamplerInstrument::applyModule(const Command &c) {
       return;
     case SamplerOp::Morph: {
       morph_ = std::isfinite(c.f.a) ? clampD(c.f.a, 0, 1) : 0;
-      const double t = c.f.b * sr_ > static_cast<double>(frame0_) ? c.f.b : frame0_ / sr_;
+      const double t = c.f.b > nowSec() ? c.f.b : nowSec();
       rampTone(t, 0.03);
       return;
     }
@@ -376,9 +313,7 @@ void SamplerInstrument::process(const RenderContext &ctx, UnitIO &io) {
   alignas(16) float buf[2][kQ];
   alignas(16) float g[kQ];
   float *bp[2] = {buf[0], buf[1]};
-  for (unsigned vi = 0; vi < kSamplerPoolVoices; ++vi) {
-    Voice &v = voices_[vi];
-    if (v.state == State::Free) continue;
+  pool_.forEach([&](int slot, Voice &v) {
     v.src.process(ctx.frame0, sr_, bp, n);
     const unsigned nch = v.src.channels();
     if (v.useLp)
@@ -399,16 +334,16 @@ void SamplerInstrument::process(const RenderContext &ctx, UnitIO &io) {
         for (std::size_t i = 0; i < n; ++i) mix[c][i] += x[i] * g[i];
       }
     }
-    if (v.src.ended()) {
+    if (v.src.ended()) {  // BasicVoice: the source's onended tears the voice down
       AudioEvent e{};
       e.frame = ctx.frame0;
       e.kind = EventKind::VoiceEnded;
       e.f.a = static_cast<double>(static_cast<std::uint16_t>(ctx.self));
-      e.f.b = static_cast<double>(v.id);
+      e.f.b = static_cast<double>(pool_.idOf(slot));
       if (ctx.events) ctx.events->push(e);
-      free(v);
+      pool_.destroy(slot);
     }
-  }
+  });
   toneLp_.process(mix, 2, n, ctx.frame0, sr_);
   if (trim_ != 1.0f)
     for (unsigned c = 0; c < 2; ++c)

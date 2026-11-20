@@ -220,8 +220,7 @@ void SamplerService::onCommit(const PatchSpec &patch, double when) {
   for (std::size_t i = 0; i < slots; ++i) {
     const SlotPatch &sp = patch.slots[i];
     if (!sp.present || sp.instType != "sampler") continue;
-    if (const samples::SamplerDef *d = def(sp.instId))
-      if (d->widthDefault != 1.0) sendWidthDefault(m_, static_cast<int>(i), d->widthDefault, when);
+    if (const samples::SamplerDef *d = def(sp.instId)) sendWidthDefault(m_, static_cast<int>(i), d->widthDefault, when);
   }
 }
 

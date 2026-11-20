@@ -643,7 +643,7 @@
       "args": [
         {
           "name": "slot",
-          "type": "int 0..3"
+          "type": "int 0..15"
         },
         {
           "name": "mode",
@@ -1376,7 +1376,7 @@
       "args": [
         {
           "name": "slot",
-          "type": "int 0..3"
+          "type": "int 0..15"
         }
       ],
       "callers": [
@@ -1602,8 +1602,9 @@
   ],
   "params": {
     "grammar": {
-      "path": "^(slots\\.[0-3]\\.(params\\.[A-Za-z_][A-Za-z0-9_]*|<row>)|fx\\.<unit>\\.<key>|master\\.volume|drone\\.<key>)$",
-      "slotCount": 4,
+      "path": "^(slots\\.([0-9]|1[0-5])\\.(params\\.[A-Za-z_][A-Za-z0-9_]*|<row>)|fx\\.<unit>\\.<key>|master\\.volume|drone\\.<key>)$",
+      "slotCount": 16,
+      "webSlotCount": 4,
       "eqBandCount": 8,
       "eqBandTypes": [
         "off",
@@ -6302,9 +6303,10 @@
           "action": "'start'|'restart'|'output'|'sleep'|'wake'",
           "latency": "'interactive'|s?",
           "deviceId": "string?",
-          "ramp": "s?"
+          "ramp": "s?",
+          "bufferFrames": "64|128|256|512?"
         },
-        "reply": "{state, sleep, latencyMs, sampleRate, deviceId, channels} | sleep/wake {done}",
+        "reply": "{state, sleep, latencyMs, sampleRate, deviceId, channels, bufferFrames} | sleep/wake {done}",
         "maps": [
           "start",
           "restart",
@@ -6468,9 +6470,10 @@
           "eqAudition": "{slot, mode}?",
           "meters": "{rate?, slots?, rta?}?",
           "midiClock": "{port: id|null}?",
-          "when": "engine s?"
+          "when": "engine s?",
+          "polyphony": "32|64|128?"
         },
-        "reply": "{lowResource?, eqAudition?}",
+        "reply": "{lowResource?, eqAudition?, polyphony?}",
         "maps": [
           "setMono",
           "setLowResource",
@@ -6536,7 +6539,7 @@
     "events": [
       {
         "ev": "state",
-        "data": "{state, sleep, latencyMs, sampleRate, deviceId, channels, restarted?, wakeMs?, queued?}",
+        "data": "{state, sleep, latencyMs, sampleRate, deviceId, channels, bufferFrames, restarted?, wakeMs?, queued?}",
         "maps": [
           "statechange",
           "sleep",
@@ -6548,7 +6551,7 @@
       },
       {
         "ev": "tick",
-        "data": "{t, frames, out:[peakL, peakR], slots?:[[peak, rms]x4], rta?:base64, blockers, pedal, held, runtime, cpu, stats?}",
+        "data": "{t, frames, out:[peakL, peakR], slots?:[[peak, rms] x max(4, song slots), <= 16], rta?:base64, blockers, pedal, held, runtime, cpu, hostLatency?, stats?}",
         "rate": "config.meters.rate (default 30 Hz; 4 Hz with no meter subscribed; none while asleep)",
         "maps": [
           "currentTime",

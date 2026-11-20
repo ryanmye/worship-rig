@@ -105,7 +105,7 @@ export const METHODS = [
   { name: 'setMono', kind: 'method', sync: true, ref: 'audio.js:509', args: [a('on', 'boolean')],
     callers: ['controller.js'], bridge: { op: 'config', field: 'mono' } },
   { name: 'eqAudition', kind: 'method', sync: true, returns: 'boolean', ref: 'audio.js:1272',
-    args: [a('slot', 'int 0..3'), a('mode', "'bypass'|'on'"), WHEN], callers: ['eq-keyboard.js'],
+    args: [a('slot', 'int 0..15'), a('mode', "'bypass'|'on'"), WHEN], callers: ['eq-keyboard.js'],
     bridge: { op: 'config', field: 'eqAudition' } },
   { name: 'getEqResponse', kind: 'method', sync: true, returns: 'Float32Array | {total, bands} | null',
     ref: 'audio.js:1255', args: [a('slot', 'int'), a('freqs', 'number[] Hz'), a('o', 'object',
@@ -189,7 +189,7 @@ export const METHODS = [
   { name: 'analyserR', kind: 'getter', returns: 'AnalyserNode (fftSize 2048) on out R', ref: 'audio.js:445',
     callers: ['components/meter.js', 'eq-keyboard.js'], bridge: { local: 'analyser facade on tick.out / tick.rta' } },
   { name: 'slotLevel', kind: 'method', sync: true, returns: '{peak, rms} | null', ref: 'audio.js:1336',
-    args: [a('slot', 'int 0..3')], callers: ['controller.js (→ components/levelMeter.js)'],
+    args: [a('slot', 'int 0..15')], callers: ['controller.js (→ components/levelMeter.js)'],
     bridge: { local: 'tick.slots (subscribed via config.meters.slots)' } },
   { name: 'recordTap', kind: 'getter', returns: 'GainNode on out', ref: 'audio.js:439', callers: ['recorder.js'],
     bridge: { op: 'rec' } },
@@ -346,9 +346,10 @@ export const BRIDGE = {
   ops: [
     { op: 'hello', args: { protocol: 'int', app: 'string', caps: 'string[]?' },
       reply: '{protocol, minor, engine, caps, sampleRate, seed}' },
+    // bufferFrames: T00c / DECISIONS D2 (host buffer size; kept across restarts; the reply/state carry the grant)
     { op: 'audio', args: { action: "'start'|'restart'|'output'|'sleep'|'wake'", latency: "'interactive'|s?",
-      deviceId: 'string?', ramp: 's?' },
-      reply: '{state, sleep, latencyMs, sampleRate, deviceId, channels} | sleep/wake {done}',
+      deviceId: 'string?', ramp: 's?', bufferFrames: '64|128|256|512?' },
+      reply: '{state, sleep, latencyMs, sampleRate, deviceId, channels, bufferFrames} | sleep/wake {done}',
       maps: ['start', 'restart', 'setSinkId', 'latency', 'sleep', 'wake'] },
     { op: 'prepare', args: { patch: 'Patch' }, reply: '{token}', maps: ['prepare'] },
     { op: 'commit', args: { token: 'int', when: 'engine s?' }, reply: '{committed}', maps: ['commit'] },
@@ -380,9 +381,11 @@ export const BRIDGE = {
       output: "'main'|'aux'?", when: 'engine s?' },
         reply: 'start {t0, downbeat}|null; stop {wasRunning}; config {output, auxAvailable}',
       maps: ['clickStart', 'clickStop', 'setClick'] },
+    // polyphony: T00c / DECISIONS D1 (voices per slot, default 64; echoed by get state)
     { op: 'config', args: { mono: 'bool?', lowResource: 'bool?', eqAudition: '{slot, mode}?',
       meters: '{rate?, slots?, rta?}?',
-      midiClock: '{port: id|null}?', when: 'engine s?' }, reply: '{lowResource?, eqAudition?}',
+      midiClock: '{port: id|null}?', when: 'engine s?', polyphony: '32|64|128?' },
+      reply: '{lowResource?, eqAudition?, polyphony?}',
       maps: ['setMono', 'setLowResource', 'eqAudition', 'slotLevel/analyser subscriptions', 'setClockSink'] },
     { op: 'get', args: { what: "'instruments'|'stats'|'devices'|'sampleStatus'|'state'", reload: 'bool?',
       patches: 'Patch[]?' },
@@ -399,11 +402,12 @@ export const BRIDGE = {
       reply: 'start {path}; stop {path, seconds, bytes}', maps: ['recordTap', 'recorder.js'] },
   ],
   events: [
-    { ev: 'state', data: '{state, sleep, latencyMs, sampleRate, deviceId, channels, restarted?, wakeMs?, queued?}',
+    { ev: 'state', data: '{state, sleep, latencyMs, sampleRate, deviceId, channels, bufferFrames, restarted?, ' +
+      'wakeMs?, queued?}',
       maps: ['statechange', 'sleep', 'ctx.state', 'latencyMs', 'sleepState', 'clickOutputs'] },
     { ev: 'tick',
-      data: '{t, frames, out:[peakL, peakR], slots?:[[peak, rms]x4], rta?:base64, blockers, pedal, held, runtime, ' +
-        'cpu, stats?}',
+      data: '{t, frames, out:[peakL, peakR], slots?:[[peak, rms] x max(4, song slots), <= 16], rta?:base64, ' +
+        'blockers, pedal, held, runtime, cpu, hostLatency?, stats?}',
       rate: 'config.meters.rate (default 30 Hz; 4 Hz with no meter subscribed; none while asleep)',
       maps: ['currentTime', 'analyserL/R', 'slotLevel', 'sleepBlockers', 'pedal', 'wheelValues', 'getRuntimeState',
         '_debugStats'] },

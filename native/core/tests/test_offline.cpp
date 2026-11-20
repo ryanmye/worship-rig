@@ -159,7 +159,7 @@ TEST_SUITE("offline") {
     cfg.struct_size = 8;  // shorter than the minimum
     CHECK(rig_create(&cfg, &st) == nullptr);
     CHECK(std::string(rig_status_string(RIG_E_FULL)) == "full");
-    CHECK(rig_api_version() == ((1u << 16) | 0u));
+    CHECK(rig_api_version() == ((1u << 16) | 1u));  // T00c: API 1.1 (additive, struct_size-gated)
     rig_destroy(nullptr);  // no-op
   }
 

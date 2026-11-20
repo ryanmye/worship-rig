@@ -54,6 +54,9 @@ class CacheServiceImpl final : public rig::CacheService {
   void setLowResource(bool on);
   /** Decode pinned samples that were evicted for a switch's headroom (or deferred), while they fit. */
   void rewarmPins();
+  /** T00c pin policy: the prefix of `keys` (request order, deduplicated) whose estimated bytes fit the pin budget
+   *  (85 % of the cap; with `add`, on top of what is pinned already). Counts and warns about the rest. */
+  std::vector<std::string> withinPinBudget(const std::vector<std::string> &keys, bool add);
 
   /** samples.pcmOverride test hook (SETUP_REVIEW 13): decoded PCM dumped from the golden Chromium
    *  (tools/golden/decode-dump/dump.mjs) replaces the native decoder wherever a dump exists, so exact-tier sampler
@@ -80,7 +83,6 @@ class CacheServiceImpl final : public rig::CacheService {
   std::vector<rig::PatchSpec> parsePatches(const yyjson_val *patches) const;
   std::vector<std::string> currentKeys() const;
   void doPin(const std::vector<std::string> &keys, const std::string &pin);
-  std::vector<std::string> withinPinBudget(const std::vector<std::string> &keys, bool add);  // T00c
   void warnMsg(const std::string &m, const char *code);
   void build(const rig::EnginePaths &p);
 

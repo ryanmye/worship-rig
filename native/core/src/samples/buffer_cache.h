@@ -99,7 +99,7 @@ class BufferCache final : public BufferCacheApi {
     std::function<void()> wake;                     // a worker finished: the control thread should pump()
     // T00c (D3 memory budget): hard cap on STORED bytes. A finished decode that would push the total above it
     // after eviction (everything left is referenced, pinned or protected) is refused: its waiters get null, the url
-    // is marked failed for the retry window, and `warnMemory` fires once until the cache drops below low water.
+    // is marked failed for the retry window, and `warnMemory` fires once until a later load fits again.
     // 0 = off (1.x behaviour: the cap is soft and referenced buffers may exceed it). CacheService sets it per
     // profile (ARCHITECTURE section 7).
     std::uint64_t hardCapBytes = 0;
@@ -252,7 +252,7 @@ class BufferCache final : public BufferCacheApi {
   std::uint64_t bytes_ = 0, tick_ = 0;
   int evictedPinned_ = 0;
   int capRefused_ = 0;     // T00c
-  bool capWarned_ = false;  // T00c: one warnMemory per excursion above low water
+  bool capWarned_ = false;  // T00c: one warnMemory until a load fits again
   std::mutex mailM_;
   std::vector<Done> mailbox_;
   std::size_t posted_ = 0;  // jobs posted whose result has not been integrated (control thread view)

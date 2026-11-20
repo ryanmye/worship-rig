@@ -12,6 +12,7 @@ const CONTRACT = path.resolve(HERE, '..');
 const REPO = path.resolve(CONTRACT, '..', '..');
 const APP = path.join(REPO, 'app');
 const OUT = path.join(CONTRACT, 'engine-api.json');
+const NATIVE_SLOT_COUNT = 16;  // T00c / DECISIONS D3 (native/core RIG_MAX_SLOTS)
 
 const imp = (rel) => import(pathToFileURL(path.join(REPO, rel)).href);
 
@@ -114,9 +115,12 @@ async function build() {
     debugStats: spec.DEBUG_STATS,
     params: {
       grammar: {
-        path: '^(slots\\.[0-3]\\.(params\\.[A-Za-z_][A-Za-z0-9_]*|<row>)|fx\\.<unit>\\.<key>|' +
+        // T00c / DECISIONS D3: the native engine has 16 slots (slots.0 .. slots.15); the web engine keeps
+        // params.SLOT_COUNT (4) and is the oracle for slots 0..3
+        path: '^(slots\\.([0-9]|1[0-5])\\.(params\\.[A-Za-z_][A-Za-z0-9_]*|<row>)|fx\\.<unit>\\.<key>|' +
           'master\\.volume|drone\\.<key>)$',
-        slotCount: params.SLOT_COUNT,
+        slotCount: NATIVE_SLOT_COUNT,
+        webSlotCount: params.SLOT_COUNT,
         eqBandCount: params.EQ_BAND_COUNT,
         eqBandTypes: params.EQ_BAND_TYPES,
         clamp: 'bool: booleans, numbers >= .5, true/on/1; enum: member or rounded index; number: Number(v), ' +

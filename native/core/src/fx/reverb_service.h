@@ -101,7 +101,9 @@ class ReverbPool final : public ReverbService {
   unsigned maxUnits() const { return maxUnits_; }
   std::size_t maxBytes() const { return maxBytes_; }
   std::size_t units() const { return pool_.size(); }
+  /** Kernels in the pool + the running state of every occupied render slot (T00c, T04 finding 1). */
   std::size_t bytes() const;
+  std::size_t kernelBytes() const;
   std::vector<std::string> keys() const;  // LRU order, oldest first
   bool has(const std::string &key) const { return pool_.count(key) != 0; }
   std::string activeKey() const;
@@ -127,6 +129,9 @@ class ReverbPool final : public ReverbService {
     double pdPending = 0;
     std::uint64_t gen = 0;  // bumped whenever the slot gets another unit (stale timer callbacks check it)
     std::uint64_t lastUse = 0;
+    // T00c (T04 finding 1): ConvUnit::bytes() of the unit in this render slot (convolver FDL + buffers + predelay
+    // lines; about as large as the kernel), counted in bytes() until the slot is released
+    std::size_t stateBytes = 0;
   };
   struct Need {
     double q;
@@ -162,6 +167,7 @@ class ReverbPool final : public ReverbService {
   void evict();
   bool busy(const std::string &key) const;
   void dropKernel(const std::string &key);
+  void releaseSlot(unsigned s);  // T00c: ReverbOp::Release + mirror reset (an Idle slot's state goes)
 
   void swapUnit(const std::string &key, KernelPtr k, const Stage &st, double when, std::uint32_t seq,
                 double fade = kReverbFade);

@@ -87,9 +87,16 @@ void ReverbPool::setLimits(unsigned maxUnits, std::size_t maxBytes) {
   evict();
 }
 
-std::size_t ReverbPool::bytes() const {
+std::size_t ReverbPool::kernelBytes() const {
   std::size_t b = 0;
   for (const auto &e : pool_) b += e.second.first->bytes();
+  return b;
+}
+
+std::size_t ReverbPool::bytes() const {  // T00c (T04 finding 1): the cap covers all reverb memory
+  std::size_t b = kernelBytes();
+  for (const SlotMirror &s : slots_)
+    if (s.st != SlotState::Empty) b += s.stateBytes;
   return b;
 }
 
@@ -152,21 +159,32 @@ bool ReverbPool::busy(const std::string &key) const {
   return false;
 }
 
+void ReverbPool::releaseSlot(unsigned s) {
+  Command c{};
+  c.op = opOf(ReverbOp::Release);
+  c.aux = s;
+  m_.sendUnitOp(UnitSlot::Reverb, c, -1.0);
+  slots_[s] = SlotMirror{};
+  slots_[s].gen = ++tick_;
+}
+
 void ReverbPool::dropKernel(const std::string &key) {
   pool_.erase(key);
-  for (unsigned s = 0; s < kReverbSlots; ++s) {
-    SlotMirror &m = slots_[s];
-    if (m.key != key || m.st != SlotState::Idle) continue;
-    Command c{};
-    c.op = opOf(ReverbOp::Release);
-    c.aux = s;
-    m_.sendUnitOp(UnitSlot::Reverb, c, -1.0);
-    m = SlotMirror{};
-    m.gen = ++tick_;
-  }
+  for (unsigned s = 0; s < kReverbSlots; ++s)
+    if (slots_[s].key == key && slots_[s].st == SlotState::Idle) releaseSlot(s);
 }
 
 void ReverbPool::evict() {
+  // T00c (T04 finding 1): over the byte cap, the running state of Idle slots (kept for a quick reactivation) goes
+  // first, least recently used first; then kernels (below)
+  while (bytes() > maxBytes_) {
+    int lru = -1;
+    for (unsigned s = 0; s < kReverbSlots; ++s)
+      if (slots_[s].st == SlotState::Idle && (lru < 0 || slots_[s].lastUse < slots_[lru].lastUse))
+        lru = static_cast<int>(s);
+    if (lru < 0) break;
+    releaseSlot(static_cast<unsigned>(lru));
+  }
   for (const std::string &k : keys())  // spaces built for an earlier device rate are never played again
     if (pool_.at(k).first->sampleRate != sr_ && !busy(k)) dropKernel(k);
   if (retain_) {
@@ -454,8 +472,10 @@ Unit *ReverbPool::buildUnit(const UnitEnv &env, const UnitSpec &spec) {
     auto *cu = new ConvUnit(unitSync(size_, damp_), sr_);
     cu->slot = 0;
     cu->predelay = predelayV_;
+    const std::size_t sb = cu->bytes();
     u->installInitial(cu);
     activate0(predelayV_);
+    slots_[0].stateBytes = sb;  // T00c
   } else {
     building_ = u;  // a build that completes inside this call (inline builds) installs directly
     unitAsync(size_, damp_, 0, nullptr, [this, activate0](KernelPtr k) {
@@ -464,11 +484,13 @@ Unit *ReverbPool::buildUnit(const UnitEnv &env, const UnitSpec &spec) {
       cu->slot = 0;
       cu->when = now();
       cu->predelay = predelayV_;
+      const std::size_t sb = cu->bytes();
       if (building_)
         building_->installInitial(cu);
       else
         m_.sendOwned(UnitSlot::Reverb, opOf(ReverbOp::AttachKernel), cu, -1.0);
       activate0(predelayV_);
+      slots_[0].stateBytes = sb;  // T00c
     });
     building_ = nullptr;
   }
@@ -568,8 +590,10 @@ void ReverbPool::swapUnit(const std::string &key, KernelPtr k, const Stage &st, 
     cu->fade = fade;
     cu->predelay = predelayV_;
     cu->fadeOutSlot = out;
+    const std::size_t sb = cu->bytes();
     m_.sendOwned(UnitSlot::Reverb, opOf(ReverbOp::AttachKernel), cu, -1.0);
     slots_[s].gen = ++tick_;
+    slots_[s].stateBytes = sb;  // T00c (T04 finding 1)
   }
   SlotMirror &u = slots_[s];
   u.key = key;
@@ -735,7 +759,8 @@ void ReverbPool::onMemoryPressure(int level) {
 
 std::string ReverbPool::statsFields() {
   return "\"reverbUnits\":" + std::to_string(pool_.size()) + ",\"reverbQuietWaiting\":" +
-         std::to_string(quietWaiting());
+         std::to_string(quietWaiting()) + ",\"reverbMB\":" +  // T00c: kernels + slot state
+         std::to_string(static_cast<double>(bytes()) / (1024.0 * 1024.0));
 }
 
 }  // namespace rig::fx
