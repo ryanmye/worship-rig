@@ -119,3 +119,21 @@ ninja: Entering directory `build-t08-review'
 [117/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_panner.cpp.o
 [118/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_params.cpp.o
 [119/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_queues.cpp.o
+[120/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_realtime.cpp.o
+[121/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_rec.cpp.o
+[122/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_reverb.cpp.o
+[123/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_runtime.cpp.o
+[124/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_reverb_engine.cpp.o
+[125/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_runtime_probe_register.cpp.o
+[126/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_runtime_soak.cpp.o
+[127/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_sources.cpp.o
+[128/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_strip_delay_line.cpp.o
+[129/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_strip.cpp.o
+[130/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_third_party.cpp.o
+[131/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_t00b_api.cpp.o
+[132/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_voice.cpp.o
+[133/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_wav.cpp.o
+[134/136] Building CXX object CMakeFiles/rig_tests.dir/tests/time_automation_test.cpp.o
+[135/136] Building CXX object CMakeFiles/rig_tests.dir/tests/time_param_test.cpp.o
+[136/136] Linking CXX executable rig_tests
+EXIT 0

@@ -164,7 +164,6 @@ async function main() {
       ticks: raw ? raw._clock.ticks : null,
       transport: globalThis.__devhostTransport ? { state: globalThis.__devhostTransport.state,
         ...globalThis.__devhostTransport.stats } : null,
-      recorder: r && r.controller ? null : null,
     };
   });
   await sleep(1500);
@@ -285,6 +284,7 @@ async function main() {
     wire: { link, ...wireSummary(logFile) },
     recordings: wavs,
     devhost: summaryLine.replace(/^rig-devhost: /, ''),
+    sanitizer: host.stderr().match(/(ERROR: AddressSanitizer|runtime error|WARNING: ThreadSanitizer).*/g) || [],
     page: problems,
   };
   fs.rmSync(work, { recursive: true, force: true });
@@ -315,6 +315,7 @@ function printReport(r) {
   for (const w of r.wire.warnings.slice(0, 20)) L(`    ${w}`);
   L(`RECORDINGS ${JSON.stringify(r.recordings)}`);
   L(`DEVHOST ${r.devhost}`);
+  L(`SANITIZER ${r.sanitizer.length ? r.sanitizer.join('\n  ') : '(none)'}`);
   L('PAGE');
   for (const [k, v] of Object.entries(r.page)) {
     L(`  ${k}: ${v.length}${v.length ? `\n    ${v.slice(0, 15).join('\n    ')}` : ''}`);
