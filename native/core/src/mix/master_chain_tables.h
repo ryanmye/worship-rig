@@ -4,8 +4,9 @@
 //   glueRefDb()    measureGlueRef: total glue gain (dB) on a 1 kHz sine at amplitude .1, amounts 0, .1, ..., 1
 //   clipCurve()    fx.js clipCurve(16384): soft ceiling at -0.3 dBFS over x in [-2, 2] (rig::js math, bit-exact)
 // Both measurements replay the JS OfflineAudioContext renders through the native OscillatorNode (wa::Oscillator, sine)
-// and compressor (wa::DynamicsCompressor), so the cancelled makeup is the native kernel's own; tests/test_master_dsp.cpp checks them against the values the
-// golden Chromium measured (tools/golden/vectors/data/compressor.txt).
+// and compressor (wa::DynamicsCompressor), so the cancelled makeup is the native kernel's own;
+// tests/test_master_dsp.cpp checks them against the values the golden Chromium measured
+// (tools/golden/vectors/data/compressor.txt).
 #pragma once
 #include <array>
 #include <cstddef>

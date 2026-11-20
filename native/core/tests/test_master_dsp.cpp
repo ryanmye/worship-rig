@@ -186,7 +186,8 @@ TEST_SUITE("master-dsp") {
       const Diff d0 = diff(ref0, got0), d1 = diff(ref1, got1);
       const double m = std::max(d0.max, d1.max);
       worst = std::max(worst, m);
-      std::printf("  compressor %-20s max|diff| %.3g (frame %zu)\n", cs.name.c_str(), m, d0.max >= d1.max ? d0.at : d1.at);
+      std::printf("  compressor %-20s max|diff| %.3g (frame %zu)\n", cs.name.c_str(), m,
+                  d0.max >= d1.max ? d0.at : d1.at);
       CHECK_MESSAGE(m <= 2e-6, cs.name);
       yyjson_doc_free(doc);
     }

@@ -99,7 +99,8 @@ const results = await page.evaluate(async (cases) => {
     const r = await ctx.startRendering();
     const c0 = r.getChannelData(0), c1 = r.getChannelData(1);
     const same = c0.every((v, i) => Object.is(v, c1[i]));
-    out.push(`case ${name}`, `spec ${JSON.stringify(spec)}`, `out ${b64(c0)}`, `out1 ${same ? 'same' : b64(c1)}`, 'end');
+    out.push(`case ${name}`, `spec ${JSON.stringify(spec)}`, `out ${b64(c0)}`,
+      `out1 ${same ? 'same' : b64(c1)}`, 'end');
   }
   const fx = await import('/js/engine/fx.js');
   const makeup = await fx.measureCompMakeup();
@@ -109,7 +110,8 @@ const results = await page.evaluate(async (cases) => {
 await browser.close();
 server.close();
 
-const header = `# DynamicsCompressorNode reference renders from Chromium ${version} (tools/golden/vectors/dump-compressor.mjs)`;
+const header =
+  `# DynamicsCompressorNode reference renders from Chromium ${version} (tools/golden/vectors/dump-compressor.mjs)`;
 const lines = [header, `makeup ${hex64(results.makeup)}`, `glueref ${results.table.map(hex64).join(' ')}`,
   ...results.lines];
 fs.writeFileSync(OUT, lines.join('\n') + '\n');
