@@ -31,6 +31,7 @@ class UpSampler {
   std::vector<float> reversed_;  // kernel reversed (Conv's prepared filter)
   std::vector<float> conv_;      // DirectConvolver buffer: kernel - 1 history + block
   std::vector<float> input_;     // kKernelSize / 2 + block
+  std::vector<float> odd_;       // block: the interpolated (odd) outputs before interleaving
 };
 
 /** dst[n/2] from src[n]: half-band low-pass, keep every second frame. */

@@ -3,8 +3,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <vector>
 
+#include "dsp/oscillator.h"
+#include "dsp/periodic_wave.h"
 #include "num/js_math.h"
 
 namespace rig::master {
@@ -17,16 +20,17 @@ constexpr std::size_t kQ = 128;
 double renderTail(double sr, std::size_t frames, float amp, const wa::DynamicsCompressor::Params &p) {
   wa::DynamicsCompressor comp(sr);
   comp.setParams(p);
+  const std::unique_ptr<wa::PeriodicWave> wave(wa::PeriodicWave::basic(wa::PeriodicWave::Basic::Sine, sr));
+  wa::Oscillator osc(wave.get(), 1000.0);
+  osc.start(0.0);
   float in[kQ], l[kQ], r[kQ];
   const float *src[1] = {in};
   float *dst[2] = {l, r};
   double s = 0;
   const std::size_t from = frames - 4410;
   for (std::size_t f0 = 0; f0 < frames; f0 += kQ) {
-    for (std::size_t i = 0; i < kQ; ++i) {
-      const double t = static_cast<double>(f0 + i);
-      in[i] = static_cast<float>(rig::js::sin(2.0 * rig::js::kPi * 1000.0 * t / sr)) * amp;
-    }
+    osc.process(static_cast<std::int64_t>(f0), sr, in, kQ);
+    for (float &v : in) v *= amp;
     comp.process(src, 1, dst, kQ);
     for (std::size_t i = 0; i < kQ; ++i) {
       const std::size_t f = f0 + i;

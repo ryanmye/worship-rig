@@ -22,6 +22,10 @@ enum class ClickOp : std::uint16_t {
   Schedule = kOpBaseT07,  // aux = 0 accent / 1 beat / 2 sub, frame = start frame
   ClearAfter,             // drop scheduled clicks at frames > Command::frame (stop)
   // T07 appends below.
+  // T07 usage (no new opcodes): both ops are sent with frame = kFrameNow so that they are applied in FIFO order
+  // (a ClearAfter must see every click scheduled before it, as metronome.js stop() disconnects its live sources at
+  // call time). Schedule: f.a = start time in engine seconds (sub-sample, AudioBufferSourceNode.start(t)).
+  // ClearAfter: f.a = t; drops every click whose start >= t - 1e-6 (metronome.js stop()).
 };
 
 struct UnitEnv;

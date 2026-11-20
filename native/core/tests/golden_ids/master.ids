@@ -1,0 +1,8 @@
+# T03 master chain fixtures (owner T03). One golden id per line.
+master-eq
+glue-50
+glue-100
+glue-100-bursts
+limiter-steps
+limiter-steps-hot
+limiter-bursts-hot

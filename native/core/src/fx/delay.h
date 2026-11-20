@@ -22,6 +22,9 @@ enum class DelayOp : std::uint16_t {
   SetPingPong,           // aux = 0/1
   Panic,                 // feedback -> 0 window (contract allNotesOff)
   // T05 appends below (shared range with chorus/lofi: 0x0500..0x05FF; delay uses 0x0500..0x053F).
+  SetFeedback,  // a = effective feedback, b = time constant (0 = 15 ms): active line only (feedback row, wash)
+  ApplyAll,     // a = effective seconds, b = feedback, c = tone 0..1, aux = pingpong (commit, tone/pingpong rows)
+  // every DelayOp carries `when` (engine seconds) in f.e (fx/delay_unit.h)
 };
 
 struct UnitEnv;

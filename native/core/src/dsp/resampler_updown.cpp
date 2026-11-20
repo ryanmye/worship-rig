@@ -28,7 +28,7 @@ std::vector<float> upKernel(std::size_t size) {
   const double subsampleOffset = -0.5;
   for (int i = 0; i < n; ++i) {
     const double s = kPiDouble * (i - halfSize - subsampleOffset);
-    const double sinc = !s ? 1.0 : rig::fdlibm::sin(s) / s;
+    const double sinc = s == 0.0 ? 1.0 : rig::fdlibm::sin(s) / s;
     const double x = (i - subsampleOffset) / n;
     const double window = a0 - a1 * rig::fdlibm::cos(kTwoPiDouble * x) + a2 * rig::fdlibm::cos(kTwoPiDouble * 2.0 * x);
     kernel[static_cast<std::size_t>(i)] = static_cast<float>(sinc * window);
@@ -48,7 +48,7 @@ std::vector<float> downReducedKernel(int size) {
   const double sincScaleFactor = 0.5;
   for (int i = 1; i < n; i += 2) {
     const double s = sincScaleFactor * kPiDouble * (i - halfSize);
-    double sinc = !s ? 1.0 : rig::fdlibm::sin(s) / s;
+    double sinc = s == 0.0 ? 1.0 : rig::fdlibm::sin(s) / s;
     sinc *= sincScaleFactor;
     const double x = static_cast<double>(i) / n;
     const double window = a0 - a1 * rig::fdlibm::cos(kTwoPiDouble * x) + a2 * rig::fdlibm::cos(kTwoPiDouble * 2.0 * x);
@@ -64,7 +64,21 @@ std::vector<float> reversed(const std::vector<float> &k) {
 }  // namespace
 
 void directConvolve(const float *buf, const float *rev, std::size_t taps, float *dst, std::size_t n) {
-  for (std::size_t f = 0; f < n; ++f) {
+  // Vectorised across outputs, never across taps: every output is still the sequential float sum over k ascending
+  // (the order of Chromium's SSE Conv, whose lanes are also outputs), so the result is bit-identical to the scalar
+  // loop below; the compiler turns the fixed-width j loop into 4- or 8-lane mul + add (no FMA: -ffp-contract=off).
+  constexpr std::size_t kBlock = 16;
+  std::size_t f = 0;
+  for (; f + kBlock <= n; f += kBlock) {
+    float acc[kBlock] = {};
+    const float *s = buf + f;
+    for (std::size_t k = 0; k < taps; ++k) {
+      const float r = rev[k];
+      for (std::size_t j = 0; j < kBlock; ++j) acc[j] = acc[j] + r * s[k + j];
+    }
+    std::memcpy(dst + f, acc, sizeof acc);
+  }
+  for (; f < n; ++f) {
     float sum = 0.0f;
     const float *s = buf + f;
     for (std::size_t k = 0; k < taps; ++k) sum = sum + rev[k] * s[k];
@@ -78,7 +92,8 @@ UpSampler::UpSampler(std::size_t inputBlockSize)
     : block_(inputBlockSize),
       reversed_(reversed(upKernel(kKernelSize))),
       conv_(kKernelSize - 1 + inputBlockSize, 0.0f),
-      input_(kKernelSize / 2 + inputBlockSize, 0.0f) {}
+      input_(kKernelSize / 2 + inputBlockSize, 0.0f),
+      odd_(inputBlockSize, 0.0f) {}
 
 void UpSampler::reset() {
   std::fill(conv_.begin(), conv_.end(), 0.0f);
@@ -91,12 +106,8 @@ void UpSampler::process(const float *src, float *dst) {
   for (std::size_t i = 0; i < n; ++i) dst[i * 2] = input_[i];  // delayed input
   // odd samples: DirectConvolver::Process(source) -> temp, written interleaved
   std::memcpy(conv_.data() + history, src, n * sizeof(float));
-  for (std::size_t f = 0; f < n; ++f) {
-    float sum = 0.0f;
-    const float *s = conv_.data() + f;
-    for (std::size_t k = 0; k < kKernelSize; ++k) sum = sum + reversed_[k] * s[k];
-    dst[f * 2 + 1] = sum;
-  }
+  directConvolve(conv_.data(), reversed_.data(), kKernelSize, odd_.data(), n);
+  for (std::size_t f = 0; f < n; ++f) dst[f * 2 + 1] = odd_[f];
   std::memmove(conv_.data(), conv_.data() + n, history * sizeof(float));
   std::memmove(input_.data(), input_.data() + n, half * sizeof(float));
 }

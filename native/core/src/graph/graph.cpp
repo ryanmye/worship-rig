@@ -66,6 +66,9 @@ void freeGarbage(const AudioEvent &e) {
 
 Graph::~Graph() {
   for (std::size_t i = 0; i < heapN_; ++i) freeCommandPayload(heap_[i]);
+  for (std::size_t i = 0; i < stashN_; ++i) freeGarbage(stash_[i]);  // INTERFACE-CHANGE(T08)
+  AudioEvent g;
+  while (garbage_.pop(g)) freeGarbage(g);  // INTERFACE-CHANGE(T08): the owner normally drained it already
   for (Unit *u : units_) delete u;
   delete inject_;
 }
@@ -80,10 +83,49 @@ std::uint32_t Graph::liveVoices() const {
 }
 
 bool Graph::push(const AudioEvent &e) {
+  if (e.kind == EventKind::Garbage) {  // INTERFACE-CHANGE(T08): own ring + stash, never the shared event ring
+    if (stashN_ == 0 && garbage_.push(e)) return true;
+    if (stashN_ < kGarbageStash) {
+      stash_[stashN_++] = e;
+      stats_.garbageParked.fetch_add(1, std::memory_order_relaxed);
+      return true;
+    }
+    stats_.garbageLost.fetch_add(1, std::memory_order_relaxed);
+    return false;
+  }
   if (out_.push(e)) return true;
+  if (e.kind == EventKind::VoiceEnded && e.f.a >= 0.0 && e.f.a < 64.0)  // INTERFACE-CHANGE(T08): ended bits
+    endedLost_.fetch_or(std::uint64_t{1} << static_cast<unsigned>(e.f.a), std::memory_order_acq_rel);
   ++lostEvents_;
   stats_.eventsDropped.fetch_add(1, std::memory_order_relaxed);
   return false;
+}
+
+// INTERFACE-CHANGE(T08): retry parked garbage in order before anything new goes to the ring.
+void Graph::flushGarbageStash() {
+  std::size_t i = 0;
+  while (i < stashN_ && garbage_.push(stash_[i])) ++i;
+  if (i == 0) return;
+  for (std::size_t k = i; k < stashN_; ++k) stash_[k - i] = stash_[k];
+  stashN_ -= i;
+}
+
+// INTERFACE-CHANGE(T08): per-slot level of the post-pan strip output (null = silent / no strip this quantum).
+void Graph::slotMeter(std::size_t slot, const Bus *strip) {
+  float pk = 0.0f;
+  double sq = 0.0;
+  if (strip) {
+    const bool st = strip->channels == 2;
+    for (std::size_t i = 0; i < kQ; ++i) {
+      const float m = st ? 0.5f * (strip->ch[0][i] + strip->ch[1][i]) : strip->ch[0][i];
+      pk = std::max(pk, std::fabs(m));
+      sq += static_cast<double>(m) * static_cast<double>(m);
+    }
+  }
+  slotPeakQ_[slot][0] = slotPeakQ_[slot][1];
+  slotSqQ_[slot][0] = slotSqQ_[slot][1];
+  slotPeakQ_[slot][1] = pk;
+  slotSqQ_[slot][1] = sq;
 }
 
 void Graph::garbage(GarbageKind k, void *p) {
@@ -288,6 +330,7 @@ void Graph::renderChannel(UnitSlot inst, UnitSlot strip, bool injectHere, const 
 
 void Graph::renderQuantum(float *const *out, unsigned channels) {
   rt::RenderScope scope;
+  if (stashN_) flushGarbageStash();  // INTERFACE-CHANGE(T08)
   const double want = requestedSr_.load(std::memory_order_acquire);
   if (want >= 8000.0 && want != sr_) adoptRate(want);
   drainCommands();
@@ -315,6 +358,7 @@ void Graph::renderQuantum(float *const *out, unsigned channels) {
   for (std::size_t i = 0; i < kChannels; ++i) {
     const bool tapHere = (i == 0 && tapIs("slot0.pan")) || (i == 1 && tapIs("slot1.pan"));
     renderChannel(instSlot(i), stripSlot(i), i == 0, base, tapHere ? &tapBus_ : nullptr);
+    slotMeter(i, units_[idx(stripSlot(i))] ? &stripBus_ : nullptr);  // INTERFACE-CHANGE(T08)
     tapped = tapped || tapHere;
   }
   for (std::size_t i = 0; i < kRetiring; ++i)
@@ -449,6 +493,10 @@ void Graph::renderQuantum(float *const *out, unsigned channels) {
   for (auto &r : peakRing_) {
     m.out_peak[0] = std::max(m.out_peak[0], r[0]);
     m.out_peak[1] = std::max(m.out_peak[1], r[1]);
+  }
+  for (std::size_t i = 0; i < kChannels; ++i) {  // INTERFACE-CHANGE(T08): 256 frames = this + previous quantum
+    m.slot_peak[i] = std::max(slotPeakQ_[i][0], slotPeakQ_[i][1]);
+    m.slot_rms[i] = static_cast<float>(std::sqrt((slotSqQ_[i][0] + slotSqQ_[i][1]) / (2.0 * kQ)));
   }
   m.voices = liveVoices();
   m.cpu_load = cpu_;

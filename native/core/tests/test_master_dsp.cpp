@@ -212,11 +212,11 @@ TEST_SUITE("master-dsp") {
     REQUIRE(chromeTable.size() == rig::master::kGlueGrid + 1);
     const double m = rig::master::compMakeup();
     std::printf("  makeup native %.9f chromium %.9f (%.2f dB)\n", m, chromeMakeup, 20 * std::log10(m));
-    CHECK(std::fabs(m / chromeMakeup - 1) < 1e-5);
+    CHECK(std::fabs(m / chromeMakeup - 1) < 1e-6);  // measured 3.9e-8 (wa::Oscillator is not bit-exact)
     const auto &t = rig::master::glueRefTable();
     for (std::size_t k = 0; k < t.size(); ++k) {
       std::printf("  glueref[%zu] native %.6f chromium %.6f dB\n", k, t[k], chromeTable[k]);
-      CHECK(std::fabs(t[k] - chromeTable[k]) < 1e-4);
+      CHECK(std::fabs(t[k] - chromeTable[k]) < 1e-5);
     }
     // contract 3.8: [0, .07, .45, 1.23, 2.23, 3.33, 4.51, 5.75, 7.02, 8.12, 8.44] dB; makeup ~ +1.10 dB
     CHECK(std::fabs(t[5] - 3.33) < 0.01);

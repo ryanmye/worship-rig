@@ -25,10 +25,16 @@ namespace rig {
 
 using CommandQueue = SpscQueue<Command, 16384>;
 using EventQueue = SpscQueue<AudioEvent, 4096>;
+// INTERFACE-CHANGE(T08): Garbage never shares the event ring (SETUP_REVIEW 18, WAVE0B_REVIEW V13). Its own ring is
+// sized above every pointer that can be in flight (command ring 16384 + pending heap 8192 + 49 units); a full ring
+// parks the pointer in a fixed stash retried every quantum, so a slow control thread delays frees but never leaks.
+using GarbageQueue = SpscQueue<AudioEvent, 32768>;
 
 struct GraphStats {  // written on the audio thread, read anywhere (relaxed)
   std::atomic<std::uint32_t> heapDropped{0}, voicesStolen{0}, paramDropped{0}, eventsDropped{0}, rateChanges{0};
   std::atomic<std::uint64_t> quanta{0};
+  // INTERFACE-CHANGE(T08): garbage parked because its ring was full / lost because the stash was full too
+  std::atomic<std::uint32_t> garbageParked{0}, garbageLost{0};
 };
 
 /** Published once per quantum (seqlock): what the control side needs to map engine time <-> frames. */
@@ -70,6 +76,13 @@ class Graph final : private EventSink {
   const GraphStats &stats() const { return stats_; }
   std::uint64_t epoch() const { return epoch_.current(); }
   std::uint32_t liveVoices() const;
+  // INTERFACE-CHANGE(T08) begin: control-thread consumers of the reliable paths (SETUP_REVIEW 18).
+  /** Control thread: next handed-back object (free it with freeGarbage / Model::onAudioEvent). */
+  bool popGarbage(AudioEvent &e) { return garbage_.pop(e); }
+  /** Control thread: unit slots (bit = UnitSlot) whose VoiceEnded was lost to a full event ring since the last
+   *  call; the owner rescans those slots (Dropped event, "ended bits"). */
+  std::uint64_t takeEndedSlots() { return endedLost_.exchange(0, std::memory_order_acq_rel); }
+  // INTERFACE-CHANGE(T08) end
   /** Host-side numbers folded into the next meter snapshot (audio thread). */
   void setHostStats(float cpu, std::uint32_t xruns) {
     cpu_ = cpu;
@@ -86,6 +99,8 @@ class Graph final : private EventSink {
   void runUnit(UnitSlot s, const RenderContext &base, UnitIO &io);
   void addInject(std::uint32_t point, Bus &bus);
   bool injectOverlaps(std::uint32_t point) const;
+  void flushGarbageStash();                              // INTERFACE-CHANGE(T08)
+  void slotMeter(std::size_t slot, const Bus *strip);    // INTERFACE-CHANGE(T08)
 
   double sr_;
   std::atomic<double> requestedSr_;
@@ -110,6 +125,15 @@ class Graph final : private EventSink {
   float cpu_ = 0;
   std::uint32_t xruns_ = 0;
   std::uint32_t lostEvents_ = 0;
+  // INTERFACE-CHANGE(T08): reliable garbage path, lost-VoiceEnded bits, per-slot 256-frame level (rig_meters
+  // slot_peak / slot_rms: post-pan strip output, mono down-mix 0.5 (L + R), two quanta; contract 3.11 slotLevel).
+  GarbageQueue garbage_;
+  static constexpr std::size_t kGarbageStash = 1024;
+  AudioEvent stash_[kGarbageStash] = {};
+  std::size_t stashN_ = 0;
+  std::atomic<std::uint64_t> endedLost_{0};
+  float slotPeakQ_[kChannels][2] = {};
+  double slotSqQ_[kChannels][2] = {};
 };
 
 }  // namespace rig
