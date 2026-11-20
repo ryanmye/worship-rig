@@ -335,13 +335,19 @@ async function runMode(mode, browser) {
       await play([96, 100, 98, 97, 99, 98]);
       await until((r) => document.querySelector(`${r} .st-kb-result`)?.dataset.result === 'ok', row);
       assert.match(await page.textContent(`${row} .st-kb-result`), /around 24, hard around 98/);
+      assert.match(await page.textContent(`${row} .st-kb-result`), /play at about 15% and full volume/, 'FIT_SOFT_TARGET');
+      // screenshot pass 2026-11-20: btn()'s {class} used to replace the tag's .ed-btn, leaving native grey buttons
+      const unstyled = await ev((r) => [...document.querySelectorAll(`.st-kbs button`)]
+        .filter((b) => !b.classList.contains('ed-btn')).map((b) => b.className), row);
+      assert.deepEqual(unstyled, [], 'every Your keyboards button keeps .ed-btn');
       await page.locator('.st-kbs').scrollIntoViewIfNeeded();
       await page.locator('.st-kbs').screenshot({ path: path.join(SHOTS, `${mode}-keyboards-fit.png`) });
       await page.click(`${row} .st-kb-use`);
       await until(() => !!window.__rig.store.get().settings.keyboards?.['@computer']?.touch);
       const t = await ev(() => window.__rig.store.get().settings.keyboards['@computer'].touch);
       assert.equal(t.top, 98);
-      assert.ok(t.shape < 1, `a light touch fits a lighter curve (${t.shape})`);
+      // soft 24 of full-at-98 lands on FIT_SOFT_TARGET (0.15, Ryan Q5)
+      assert.ok(Math.abs(Math.pow(24 / 98, t.shape) - 0.15) < 0.01, `soft notes land on 15 % (${t.shape})`);
       await until((r) => /Own touch/.test(document.querySelector(`${r} .st-kb-sum`).textContent), row);
       // played notes now carry the curve; the velocity is raw (the Touch setting no longer applies to these keys)
       const call = await ev(() => {

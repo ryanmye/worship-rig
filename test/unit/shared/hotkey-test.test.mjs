@@ -7,6 +7,9 @@ import {
 } from '../../../app/js/shared/hotkeys.js';
 import { voiceText } from '../../../app/js/shared/voice.js';
 
+/** L11-9: the press-to-test result when the press arrives */
+const WORKS = 'Worship Rig gets it. If another app also reacts, pick another.';
+
 const NEXT = DEFAULT_HOTKEYS.nextSong;
 const PREV = DEFAULT_HOTKEYS.prevSong;
 const step = (s, ...evs) => evs.reduce(hotkeyTestStep, s);
@@ -88,8 +91,8 @@ test('bad events change nothing', () => {
 
 test('the words (Classic): the formatted combination, Works, the pick-another hint, the Mac hint', () => {
   assert.equal(voiceText('classic', 'hotkeyTesting', { keys: '⌃⌥⌘]' }), 'Press ⌃⌥⌘] in any app…');
-  assert.equal(voiceText('classic', 'hotkeyWorks'), 'Works');
+  assert.equal(voiceText('classic', 'hotkeyWorks'), WORKS);
   assert.equal(voiceText('classic', 'hotkeyNothing'), 'Nothing came through. Another app may use this. Pick another.');
   assert.match(voiceText('classic', 'hotkeysMacTakenHint'), /macOS can’t tell apps .*Rectangle.*Test each one once/);
-  assert.equal(voiceText('ember', 'hotkeyWorks'), 'Works', 'the other voices say what Classic says');
+  assert.equal(voiceText('ember', 'hotkeyWorks'), WORKS, 'the other voices say what Classic says');
 });

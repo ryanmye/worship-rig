@@ -6,8 +6,8 @@
 <meta name="color-scheme" content="light dark">
 <title>Worship Rig</title>
 <meta name="description" content="A live keys rig for worship teams: pads, piano and a key drone, on one Mac. Free and open source.">
-<meta name="theme-color" media="(prefers-color-scheme: light)" content="#efe9de">
-<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#160913">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f1f7f5">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0d1513">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://ryanmye.github.io/worship-rig/">
 <meta property="og:title" content="Worship Rig">
@@ -24,7 +24,7 @@
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="preload" href="fonts/Alegreya-wght.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=v110-1">
+<link rel="stylesheet" href="style.css?v=v110-sage1">
 </head>
 <body>
 
@@ -37,12 +37,6 @@
     <p class="lede">A live keys rig for worship teams: pads, piano and a key drone, on one Mac.</p>
     <p class="new-pill"><a href="#new"><b>New in 1.1</b> A click with a count-in, scenes and your own touch</a></p>
 
-    <!-- RELEASE: no GitHub release exists yet. When v1.0.0 is published, in BOTH download blocks (hero and #download):
-         turn the button into
-         <a class="btn" href="https://github.com/ryanmye/worship-rig/releases/latest/download/Worship-Rig-1.0.0-arm64.dmg">
-         and the "Intel" word in the note into
-         <a href="https://github.com/ryanmye/worship-rig/releases/latest/download/Worship-Rig-1.0.0-x64.dmg">Intel</a>
-         (asset names from .github/workflows/release.yml), drop role/aria-disabled and the "First release coming soon" line. -->
     <div class="cta">
       <a class="btn" href="https://github.com/ryanmye/worship-rig/releases/latest/download/Worship-Rig-arm64.dmg" title="Worship-Rig-arm64.dmg, Apple Silicon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m0 0-4-4m4 4 4-4M4 16h12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Download for Mac</a>
       <a class="alt" href="https://github.com/ryanmye/worship-rig">Source on GitHub</a>
@@ -61,7 +55,7 @@
 <div class="facts">
   <ul>
     <li><a href="https://github.com/ryanmye/worship-rig/blob/main/reviews/hardware-checklist.md#3-latency-settings--audio-lowest">20 ms latency</a> on a USB-C dock</li>
-    <li>about <a href="https://github.com/ryanmye/worship-rig/blob/main/reviews/local-findings.md#release-pipeline-dmg--x64-2026-09-30-native-macos">191 MB download</a></li>
+    <li>about <a href="https://github.com/ryanmye/worship-rig/releases/tag/v1.1.0">192 MB download</a></li>
     <li><a href="https://github.com/ryanmye/worship-rig/blob/main/package.json">macOS 12+</a></li>
   </ul>
 </div>
@@ -116,14 +110,8 @@
 
     <div class="feature wide left">
       <figure class="stage">
-        <!-- SHOT: scenes-perform.webp, 1148x522, Sanctuary. Perform at 1440x900, Sunday Pad + Piano with three scenes
-             saved and scene 2 playing, cropped to the song row (KEY · BPM · Click · SCENE 1 2 3) and the Keys / Pad
-             strips. Replace the div below with
-             <img src="img/scenes-perform.webp" width="1148" height="522" loading="lazy"
-               alt="The Perform screen: the song row shows SCENE 1 2 3 with scene 2 lit, above the Keys and Pad strips.">
-             (webp ≈ q80, ≤ 70 KB, like rig-eq.webp) -->
-        <div class="shot-todo" style="--ar: 1148 / 522" role="img"
-          aria-label="Screenshot to come: Perform with the scene numbers"><span>Screenshot to come</span></div>
+        <img src="img/scenes-perform.webp" width="1148" height="522" loading="lazy"
+          alt="The Perform screen: the song row shows SCENE 1 2 3 with scene 2 lit, above the Keys and Pad strips.">
       </figure>
       <div>
         <p class="kicker">Scenes · new in 1.1</p>
@@ -138,14 +126,8 @@
 
     <div class="feature flip">
       <figure class="stage">
-        <!-- SHOT: edit-song-click.webp, 480x520, Sanctuary. Edit › Song at 1440x900, cropped to the Click column
-             (Time 4/4, Count-in 1 bar, After the count-in, Level) and the Scenes list with three scenes.
-             Replace the div below with
-             <img src="img/edit-song-click.webp" width="480" height="520" loading="lazy"
-               alt="Edit › Song: the Click settings (time, count-in, after the count-in, level) and the song's three scenes.">
-             (webp ≈ q80, ≤ 30 KB, like key-drone.webp) -->
-        <div class="shot-todo narrow" style="--ar: 480 / 520" role="img"
-          aria-label="Screenshot to come: the Click and Scenes settings in Edit"><span>Screenshot to come</span></div>
+        <img src="img/edit-song-click.webp" width="480" height="520" loading="lazy"
+          alt="Edit › Song: the Click settings (time, count-in, after the count-in, level) and the song's three scenes.">
       </figure>
       <div>
         <p class="kicker">Click &amp; count-in · new in 1.1</p>
@@ -160,20 +142,15 @@
 
     <div class="feature">
       <figure class="stage">
-        <!-- SHOT: settings-keyboards.webp, 720x450, Sanctuary. Settings › MIDI keyboard › Your keyboards with one
-             keyboard's Touch… open (the curve and a Fit to my touch result), cropped to the section. Replace the div
-             below with
-             <img src="img/settings-keyboards.webp" width="720" height="450" loading="lazy"
-               alt="Settings › Your keyboards: a keyboard's touch curve with Fit to my touch, Remember and Forget.">
-             (webp ≈ q80, ≤ 40 KB) -->
-        <div class="shot-todo" style="--ar: 720 / 450" role="img"
-          aria-label="Screenshot to come: Your keyboards in Settings"><span>Screenshot to come</span></div>
+        <img src="img/settings-keyboards.webp" width="720" height="450" loading="lazy"
+          alt="Settings › Your keyboards: a keyboard's touch curve with Fit to my touch, Remember and Forget.">
       </figure>
       <div>
         <p class="kicker">Your keyboards · new in 1.1</p>
         <h2>A touch that fits your keyboard</h2>
         <p>Play six soft notes and six hard ones, and Worship Rig fits its touch to that keyboard. Each keyboard
-          keeps its own, saved on this Mac.</p>
+          keeps its own, saved on this Mac. One <strong>Range</strong> slider sets how far soft is from loud: softer
+          soft notes, and hard notes that go past the old full level.</p>
         <p class="measure"><a href="https://github.com/ryanmye/worship-rig/blob/main/CONTRACT_CHANGES.md#v11-touch">A
           keyboard's own curve adds less than a microsecond</a> to each note.</p>
       </div>
@@ -236,8 +213,7 @@
 </section>
 
 <section class="new" id="new">
-  <!-- RELEASE: pages.yml publishes this page on every push to main. If main is pushed before the v1.1.0 tag, the
-       download buttons still give 1.0.1 for a while: push docs/site with the tag, or accept the gap. -->
+
   <div class="wrap">
     <div class="new-head">
       <div>
@@ -262,8 +238,8 @@
       </li>
       <li class="new-card">
         <h3>Your keyboards</h3>
-        <p>Play six soft notes and six hard ones, and the app fits its touch to that keyboard. Saved on this Mac, for
-          each keyboard.</p>
+        <p>Play six soft notes and six hard ones, and the app fits its touch to that keyboard, with a Range slider
+          for how far soft is from loud. Saved on this Mac.</p>
         <p class="where">Settings › MIDI keyboard › Your keyboards</p>
       </li>
       <li class="new-card">
@@ -298,8 +274,8 @@
       </li>
       <li class="new-card">
         <h3>Fixes</h3>
-        <p>The frozen drone no longer dips once each time its loop goes around, Panic also stops the click, and piano
-          songs use less memory.</p>
+        <p>The frozen drone no longer dips once each time its loop goes around, Panic also stops the click, piano
+          songs use less memory, and hidden in the menu bar the app gives about 800 MB back to the Mac.</p>
       </li>
     </ul>
   </div>
@@ -309,7 +285,6 @@
   <div class="wrap">
     <h2>Get Worship Rig</h2>
     <p class="lede">Free and open source. Plug in a MIDI keyboard, pick a song, play. Everything runs on your Mac.</p>
-    <!-- RELEASE: same flip as the hero block above (arm64 dmg on the button, x64 dmg on "Intel"). -->
     <div class="cta">
       <a class="btn" href="https://github.com/ryanmye/worship-rig/releases/latest/download/Worship-Rig-arm64.dmg" title="Worship-Rig-arm64.dmg, Apple Silicon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m0 0-4-4m4 4 4-4M4 16h12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Download for Mac</a>
       <a class="alt" href="https://github.com/ryanmye/worship-rig">Source on GitHub</a>
@@ -317,10 +292,9 @@
     </div>
     <p class="cta-note">Apple Silicon · <a href="https://github.com/ryanmye/worship-rig/releases/latest/download/Worship-Rig-x64.dmg">Intel</a> · <a href="https://github.com/ryanmye/worship-rig/releases/latest">all downloads</a>.
       Ad-hoc signed: see the first-launch steps below.</p>
-    <!-- RELEASE: sizes below are the v1.0.1 builds (1.1 adds about 70 KB of code). After v1.1.0 is published,
-         measure its dmg / installed size and replace "v1.0.1 release builds" with the new numbers. -->
-    <p class="sizes">About 191 MB download (arm64) / 198 MB (x64), about 370 MB installed,
-      <a href="https://github.com/ryanmye/worship-rig/blob/main/reviews/local-findings.md#release-pipeline-dmg--x64-2026-09-30-native-macos">measured on the v1.0.1 release builds</a>.</p>
+
+    <p class="sizes">About 192 MB download (arm64) / 197 MB (x64), about 368 MB installed,
+      <a href="https://github.com/ryanmye/worship-rig/releases/tag/v1.1.0">measured on the v1.1.0 release builds</a>.</p>
   </div>
 </section>
 
@@ -372,14 +346,8 @@
 
       <div id="garageband">
         <figure class="stage thumb">
-          <!-- SHOT: gb-import.webp, 720x450, Sanctuary. On the Mac with GarageBand installed: Settings › My Samples ›
-               Import from GarageBand / Logic…, the list with sizes and two instruments ticked (or the progress bars),
-               cropped to the panel. Replace the div below with
-               <img src="img/gb-import.webp" width="720" height="450" loading="lazy"
-                 alt="The Import from GarageBand / Logic panel: a list of instruments with their sizes, two of them ticked.">
-               (webp ≈ q80, ≤ 40 KB) -->
-          <div class="shot-todo" style="--ar: 720 / 450" role="img"
-            aria-label="Screenshot to come: the GarageBand importer"><span>Screenshot to come</span></div>
+          <img src="img/gb-import.webp" width="720" height="450" loading="lazy"
+            alt="The Import from GarageBand / Logic panel: a list of instruments with their sizes, two of them ticked.">
         </figure>
         <h3>Sounds from GarageBand or Logic</h3>
         <p>If GarageBand or Logic is installed, <strong>Settings › My Samples › Import from GarageBand / Logic…</strong>

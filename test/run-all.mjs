@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { requirePortsFree } from './port-preflight.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, '..');
@@ -68,6 +69,8 @@ if (argv.includes('--list')) {
   for (const s of SUITES) console.log(`${s.name.padEnd(16)} [${s.groups.join(', ')}]  ${s.cmd ? s.cmd.slice(1).join(' ') : `(${s.absent})`}`);
   process.exit(0);
 }
+
+await requirePortsFree([8437, 8438], 'run-all'); // L11-7
 
 const matches = (s, set) => set.has(s.name) || s.groups.some((g) => set.has(g));
 function decide(s) {

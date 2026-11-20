@@ -119,10 +119,13 @@
 .ev2 .ev2-song-scenesec { margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--line, #2a2f37); min-height: 0;
   overflow-y: auto; }
 .ev2 .ev2-song-sceneshint { font-size: 12.5px; line-height: 1.35; }
-.ev2 .ev2-song-scenes { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
-.ev2 .ev2-song-scene { display: flex; align-items: center; gap: 6px; }
-.ev2 .ev2-song-scene b { min-width: 60px; font-size: 14px; }
-.ev2 .ev2-song-scenedel { min-width: 30px; padding: 0 8px; }
+/* screenshot pass 2026-11-20: a scene row (label, Play, Save, ×) was ≈ 205 px in a 178 px column at 1440: clipped ×
+   and a scrollbar. Compact buttons keep it on one line (wrapping pushed the list over the footer) */
+.ev2 .ev2-song-scenes { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.ev2 .ev2-song-scene { display: flex; align-items: center; gap: 4px; max-width: 100%; }
+.ev2 .ev2-song-scene b { min-width: 0; margin-right: 2px; font-size: 14px; white-space: nowrap; }
+.ev2 .ev2-song-scene .ev2-btn.sm { padding: 0 7px; min-height: 28px; font-size: 12.5px; }
+.ev2 .ev2-song-scene .ev2-btn.sm.ev2-song-scenedel { min-width: 24px; padding: 0 6px; }
 .ev2 .ev2-song-scene.on b { color: var(--accent, #f5c84c); }
 .ev2 .ev2-song-scenesnone { font-size: 13px; color: var(--muted, #a3acb8); }
 .ev2 .ev2-song-scenes .ev2-btn:disabled { opacity: .45; cursor: default; }

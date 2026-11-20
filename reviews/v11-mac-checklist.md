@@ -7,7 +7,7 @@ CONTRACT_CHANGES `## v11-*` and `## ci-*`.
 ## LOCAL (Mac) checks
 
 ### Before tagging
-- [ ] `node test/run-all.mjs` on the Mac (incl. shell Electron, electron-full, build-lint, soak). The Linux
+- [x] (29eb984: 14/15, the shell failures were the installed app on :8438, L11-7; then shell electron 23/23 ×3 unlocked) `node test/run-all.mjs` on the Mac (incl. shell Electron, electron-full, build-lint, soak). The Linux
       Electron boot fixture now skips hide-on-close off macOS (CI-2), so on the Mac it must still run and pass.
 - [ ] CI (`test.yml`, macos-14) green on the merged tree: the CI-1 fixes were reproduced under a local simulation,
       never on the real runner.
@@ -15,42 +15,42 @@ CONTRACT_CHANGES `## v11-*` and `## ci-*`.
       modules packaged, nothing else from `tools/`.
 
 ### v11-electron (hotkeys + update check)
-- [ ] Global shortcuts fire from another app with the window hidden; macOS doesn't ask for Accessibility.
+- [x] (Ryan 2026-11-20: ⌘H-hidden window, ⌃⌥⌘] ×2 / ⌃⌥⌘[ stepped the setlist, no Accessibility prompt) Global shortcuts fire from another app with the window hidden; macOS doesn't ask for Accessibility.
 - [x] (fails: L11-3, never detected on macOS) A combination held by another app (e.g. Rectangle on ⌃⌥⌘]) shows "Another app already uses this". It's not
       confirmed that `register()` returns false on macOS.
-- [ ] While recording a shortcut in Settings, ⌃⌥⌘ combinations reach the page, not Mission Control or the menu.
-- [ ] Nothing stays registered after Quit or after switching shortcuts off.
+- [x] (synthetic ⌃⌥⌘K recorded as Control+Alt+Command+K) While recording a shortcut in Settings, ⌃⌥⌘ combinations reach the page, not Mission Control or the menu.
+- [x] (off: the press no longer steps the song; after Quit no process left) Nothing stays registered after Quit or after switching shortcuts off.
 - [x] (status API, see findings) Packaged build: Settings › About shows the version line about 20 s after launch; Download opens the arm64 dmg;
       no request at all with `RIG_UPDATE_CHECK=0`.
 
 ### v11-touch (curves)
-- [ ] "Fit to my touch" with the Keystation and with the second keyboard; Remember with both plugged in.
-- [ ] An expression pedal on the Log curve; how "sustain pedal also swells the drone" sounds.
+- [ ] (not tested: Ryan 2026-11-20 "everything should be fine"; stays in the release notes' hardware list) (Fit: pass on the Roland and the Keystation, each keeps its own curve, after v11-dynamic-range / 15 %; Remember: batch item 6) "Fit to my touch" with the Keystation and with the second keyboard; Remember with both plugged in.
+- [ ] (not tested: Ryan 2026-11-20 "everything should be fine"; stays in the release notes' hardware list) (drone swell under the sustain pedal: pass, Ryan 2026-11-20, drone at −12 dB rises ~12 dB, fader follows; expression pedal: not tested, Ryan has only an on/off pedal) An expression pedal on the Log curve; how "sustain pedal also swells the drone" sounds.
 
 ### v11-polish (themes + B)
 - [x] The longer theme words in the top bar in SF Pro at 1024 (they fit in Linux fonts); Ember title metrics.
-- [ ] Daylight "Auto" follows a real macOS appearance change; the Day paper EQ graph looks right.
+- [ ] (not tested: Ryan 2026-11-20 "everything should be fine"; stays in the release notes' hardware list) (Auto: pass, raw CDP dark→stage, light→day, dark→stage; EQ graph eyeball: Ryan) Daylight "Auto" follows a real macOS appearance change; the Day paper EQ graph looks right.
 
 ### v11-importer
 - [x] Open the built app from Finder with Homebrew ffmpeg: the list shows the real GarageBand/Logic instruments and
       no "ffmpeg isn't installed" note.
-- [ ] Import Classical Grand + Yamaha Grand Piano while Perform plays: no glitches; the packs appear without a
+- [ ] (not tested: Ryan 2026-11-20 "everything should be fine"; stays in the release notes' hardware list) Import Classical Grand + Yamaha Grand Piano while Perform plays: no glitches; the packs appear without a
       restart; `node tools/import-garageband.mjs --validate` passes on the output.
 - [x] Stop a big import (Steinway Grand Piano 2): it stops within about 1 s and leaves no `.…importing` folder.
 - [x] With ffmpeg hidden: the afconvert note shows, and `.m4a` packs play in Electron (AAC never checked).
 - [x] Quit mid-import: no stray ffmpeg and no half-written pack.
 
 ### v11-scenes
-- [ ] A real footswitch (momentary and press-only) learned to Next scene; the 0.5 s glide between verse and chorus
+- [ ] (not tested: Ryan 2026-11-20 "everything should be fine"; stays in the release notes' hardware list) A real footswitch (momentary and press-only) learned to Next scene; the 0.5 s glide between verse and chorus
       on the PA; ⌃⌥⌘. / ⌃⌥⌘, on a real keyboard.
 
 ### v11-metronome
-- [ ] "Outputs 3–4" on a real 4-output interface: at least 4 channels reported, and no dropout when switching.
-- [ ] MIDI clock into a real delay or drum machine: wire jitter, Start on the downbeat.
-- [ ] The click's sound and level in in-ears.
+- [ ] (not tested: Ryan 2026-11-20 "everything should be fine"; stays in the release notes' hardware list) "Outputs 3–4" on a real 4-output interface: at least 4 channels reported, and no dropout when switching.
+- [ ] (not tested: Ryan 2026-11-20 "everything should be fine"; stays in the release notes' hardware list) MIDI clock into a real delay or drum machine: wire jitter, Start on the downbeat.
+- [ ] (not tested: Ryan 2026-11-20 "everything should be fine"; stays in the release notes' hardware list) The click's sound and level in in-ears.
 
 ### Still open from v1
-- [ ] Split-on-restart recording; MIDI Learn on the second keyboard (hardware leftovers).
+- [ ] (not tested: Ryan 2026-11-20 "everything should be fine"; stays in the release notes' hardware list) Split-on-restart recording; MIDI Learn on the second keyboard (hardware leftovers).
 - [x] (6d8d336: 10.6 → 6.1 %; re-measure after v11-memory) Low-resource drone-frozen CPU was 10.7–11.6 % against a target of about 10 %.
 
 ## Ryan's answers (2026-11-03)
@@ -63,6 +63,16 @@ CONTRACT_CHANGES `## v11-*` and `## ci-*`.
 - Q7: keyboard curves are **per MIDI device and stay with each Mac**: device-local like the chosen MIDI input, not
   exported, and not overwritten by a replace-import.
 - All other questions: still open.
+
+## Ryan's answers (2026-11-20, after the Mac checks)
+- Q5: soft playing fits to **15 %** (was 30 %), plus the new **Range** slider (v11-dynamic-range).
+- L11-9: the press-to-test result reads "Worship Rig gets it. If another app also reacts, pick another."
+- Everything else in v11-todo §3 as recommended ("yep do all of this"): Q1, Q2, Q4, Q6, Q8, Q9, Q11/Q12, Q14,
+  Q15, Q16, Q17, Q20, Q22–Q27 keep; Q13 later; Q19 1.1.x if wanted; **Q21 yes** (Panic tooltip: "All notes off and
+  the click stops (Esc, ⌘.)"); wash-wheel room size follows the wheel; song-switch latency in 1.2 after measuring on
+  the Mac; warm-theme press-to-test wording later. S1 (GitHub Support purge) stays Ryan's to send.
+- Release: tag v1.1.0 approved (Ryan 2026-11-20: "update my worship rig … after you push 1.1.0 … don't stop until
+  everything is good").
 
 ## Questions for Ryan
 
@@ -105,20 +115,20 @@ CONTRACT_CHANGES `## v11-*` and `## ci-*`.
 ## Added 2026-11-04 (cloud dev round 2: decisions, review fixes, memory)
 
 ### LOCAL checks
-- [ ] Full `node test/run-all.mjs` on the final dev tree (`accabe7` or later). Then shell `--only electron` once
+- [x] (29eb984 full run + L11-7; shell electron unlocked 23/23 ×3, locked 22 pass 1 skip) Full `node test/run-all.mjs` on the final dev tree (`accabe7` or later). Then shell `--only electron` once
       unlocked and once with the screen locked (L11-1/L11-2 fixes).
-- [ ] ⌃⌥⌘] / ⌃⌥⌘[ with the window hidden step a real setlist (held note + drone survive); first/last song is the
+- [ ] (not tested: Ryan 2026-11-20 "everything should be fine"; stays in the release notes' hardware list) ⌃⌥⌘] / ⌃⌥⌘[ with the window hidden step a real setlist (held note + drone survive); first/last song is the
       end (no wrap).
-- [ ] Panic with MIDI clock out into a real receiver stops on 0xFC; an audio restart with the click running sends
+- [ ] (not tested: Ryan 2026-11-20 "everything should be fine"; stays in the release notes' hardware list) Panic with MIDI clock out into a real receiver stops on 0xFC; an audio restart with the click running sends
       Stop then Start (R-8) and the receiver re-locks.
-- [ ] Drone swell under a held pedal sounds the same as before (R-1 moved it onto the drone level).
-- [ ] Memory (v11-memory): Activity Monitor / `ps -o rss` for the Electron renderer: visible, after a 10-song loop,
+- [x] (Ryan 2026-11-20: pass) Drone swell under a held pedal sounds the same as before (R-1 moved it onto the drone level).
+- [x] (L11-8: low-resource kept ~1057 MB until a GC, fixed in 5f4c6d4 → 228 MB; 1.0.1 995 MB; after a 10-song loop 1319 → 1093 MB) Memory (v11-memory): Activity Monitor / `ps -o rss` for the Electron renderer: visible, after a 10-song loop,
       and in menu-bar low-resource mode, 1.0.1 vs this branch. Linux showed about 1.8 GB → 1.2–1.4 GB, and
       low-resource 1.8 GB → 0.46 GB.
-- [ ] The soak's new `peakDecodedMB` column holds 700 at a 48 kHz context.
-- [ ] Far jump while holding a pad: the reverb changes at the first pause (not at the switch), and the jump itself
+- [x] (SOAK_SAMPLE_RATE=48000, 12/12, peak 700.0, max pinned 581.9/600; 44.1 kHz full run: 699.9; dual mono collapses on the Mac now, lrDiff 3.05e-5, test-mp3 2.02 MB) The soak's new `peakDecodedMB` column holds 700 at a 48 kHz context.
+- [ ] (not tested: Ryan 2026-11-20 "everything should be fine"; stays in the release notes' hardware list) Far jump while holding a pad: the reverb changes at the first pause (not at the switch), and the jump itself
       has no note stall.
-- [ ] Reverb build times on the M2 Pro (CONTRACT_CHANGES `## v11-memory` lists the Linux numbers).
+- [x] (conv.buffer 4.5–30 ms main thread, 11 spaces; see findings) Reverb build times on the M2 Pro (CONTRACT_CHANGES `## v11-memory` lists the Linux numbers).
 
 ### Questions for Ryan (round 2)
 21. Should the Panic tooltip ("All notes off (Esc, ⌘.)") mention the click?

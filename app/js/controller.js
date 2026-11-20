@@ -119,6 +119,8 @@ export const LARGE_SET_NOTE = 'Large set: loading songs as you go';
 export const songAloneNote = (mb) => `This song alone is ${Math.round(mb)} MB`;
 /** A learned CC button held at ≥ 64 fires again after this long (press-only footswitches; round4-controller C9). */
 const CC_RETRIGGER_MS = 150;
+/** L11-8: wait this long after low-resource turns on (release tails end) before the one GC. */
+const LOWRES_GC_MS = 3000;
 /** 'memory' event note when pinned samples pass the cache cap (round4-controller C5: plain copy, never toasted). */
 export const OVER_CAP_NOTE = 'This set is using a lot of memory; songs load as you go.';
 const routingOf = (song) => {
@@ -197,6 +199,10 @@ export function createController(o) {
   const win = o.win !== undefined ? o.win : typeof globalThis.addEventListener === 'function' && globalThis.document ? globalThis : null;
   const rig = o.rig !== undefined ? o.rig : globalThis.rig || null;
   const isElectron = !!(rig && rig.isElectron);
+  // L11-8: low-resource drops the decoded buffers, but on macOS the renderer only gives that memory back after a V8
+  // GC, and an idle hidden page may go minutes without one (Mac: 1057 MB for 5 min → 392 MB after a GC). Electron
+  // exposes gc (main.js --expose-gc); Chrome doesn't, so this is a no-op there.
+  const gcNow = o.gc !== undefined ? o.gc : typeof globalThis.gc === 'function' ? () => globalThis.gc() : null;
   const timers = o.timers || {
     setTimeout: (...a) => globalThis.setTimeout(...a),
     clearTimeout: (id) => globalThis.clearTimeout(id),
@@ -2053,6 +2059,9 @@ export function createController(o) {
         rebuildTouch();
         applyRemembered();
         break;
+      case 'dynamicRange':
+        call('setDynamicRange', s.dynamicRange ?? 1);
+        break;
       case 'click':
         applyClickSettings(s);
         break;
@@ -2451,6 +2460,7 @@ export function createController(o) {
     if (r && typeof r.then === 'function') await r.catch((err) => warn(`audio start failed: ${err && err.message}`));
     const s = settings();
     if (s.monoOutput) call('setMono', true);
+    if (s.dynamicRange) call('setDynamicRange', s.dynamicRange); // absent = 1, the engine's default
     if (s.click) applyClickSettings(s); // v11-metronome: absent = the defaults the engine already has
     if (s.outputDeviceId && s.outputDeviceId !== 'default' && engine && typeof engine.setSinkId === 'function') {
       const sr = call('setSinkId', s.outputDeviceId);
@@ -2535,6 +2545,8 @@ export function createController(o) {
     watchdogTimer = null;
     if (backupTimer !== null) timers.clearTimeout(backupTimer);
     backupTimer = null;
+    if (lowResGcTimer !== null) timers.clearTimeout(lowResGcTimer);
+    lowResGcTimer = null;
     if (heartbeatTimer !== null) timers.clearInterval(heartbeatTimer);
     heartbeatTimer = null;
     midiGen++;
@@ -2572,6 +2584,7 @@ export function createController(o) {
   let bus = null;
   let ownBus = false; // created here (closed on dispose), not passed in via o.bus
   let menubarStarted = false;
+  let lowResGcTimer = null; // L11-8
   let lowResEff = false; // effective low-resource state the engine and memory policy follow
   let windowVisibleOverride = null; // setWindowVisible(): wins over document visibility; null = follow the document
   let lastDroneOnMode = null; // droneToggle: the drone mode before the bus turned it off
@@ -2619,6 +2632,15 @@ export function createController(o) {
     lowResEff = want;
     optional('setLowResource', want);
     if (want) lowResSince = now();
+    if (lowResGcTimer !== null) timers.clearTimeout(lowResGcTimer);
+    lowResGcTimer = null;
+    // L11-8: one GC once the release tails holding dropped buffers have ended
+    if (want && gcNow) {
+      lowResGcTimer = timers.setTimeout(() => {
+        lowResGcTimer = null;
+        if (lowResEff) gcNow();
+      }, LOWRES_GC_MS);
+    }
     else if (engine && typeof engine.wake === 'function' && (engine.sleepState || 'awake') !== 'awake') {
       // lowres2-scope: leaving low-resource wakes the audio now (the engine's 60 ms wake ramp: click-free); a sleep
       // still ramping down is cancelled the same way

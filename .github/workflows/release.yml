@@ -30,7 +30,7 @@ concurrency:
 jobs:
   build:
     name: build (${{ matrix.arch }})
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 40
     strategy:
       fail-fast: true

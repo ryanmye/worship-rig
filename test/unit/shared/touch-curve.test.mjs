@@ -74,20 +74,25 @@ test('presetOf / touchWord', () => {
   assert.equal(T.touchWord({ min: 0.5, max: 0.5 }), 'Fixed');
 });
 
-test('fitTouch: an average player fits ≈ linear; light and heavy hands fit lighter / heavier curves', () => {
+test('fitTouch: soft playing lands on FIT_SOFT_TARGET (15 %), hard on full; lighter hands fit lighter curves', () => {
+  assert.equal(T.FIT_SOFT_TARGET, 0.15, 'Ryan Q5 (2026-11-20): wider than the first 0.3');
+  const at = (r, v) => T.touchAt(T.compileTouch(r.touch), v);
   const avg = T.fitTouch([38, 40, 42, 39, 41, 40], [124, 127, 126, 127, 125, 127]);
   assert.equal(avg.ok, true);
   assert.equal(avg.soft, 40);
-  assert.ok(Math.abs(avg.touch.shape - 1) < 0.1 && avg.touch.top >= 125, JSON.stringify(avg));
-  // light-touch board: soft ≈ 20, hard never past ≈ 90 → reaches full at 90, lighter curve
+  assert.ok(avg.touch.top >= 125, JSON.stringify(avg));
+  near(at(avg, avg.soft), T.FIT_SOFT_TARGET, 1e-3, 'average: soft notes land on the target');
+  assert.ok(avg.touch.shape > 1.5 && avg.touch.shape < 1.8, `average player ≈ the hard preset (${avg.touch.shape})`);
+  // light-touch board: soft ≈ 20, hard never past ≈ 90 → reaches full at 90, lighter than the average fit
   const light = T.fitTouch([18, 20, 22, 21, 19, 20], [88, 90, 92, 91, 89, 90]);
   assert.equal(light.touch.top, 90);
-  assert.ok(light.touch.shape < 1, JSON.stringify(light));
-  near(T.touchAt(T.compileTouch(light.touch), light.soft), T.FIT_SOFT_TARGET, 1e-3, 'soft notes land on the target');
-  near(T.touchAt(T.compileTouch(light.touch), light.hard), 1, 1e-12, 'hard notes reach full');
-  // heavy hand: soft ≈ 60 → needs the exponent up (≈ the 'hard' preset)
+  assert.ok(light.touch.shape < avg.touch.shape, JSON.stringify(light));
+  near(at(light, light.soft), T.FIT_SOFT_TARGET, 1e-3, 'soft notes land on the target');
+  near(at(light, light.hard), 1, 1e-12, 'hard notes reach full');
+  // heavy hand: soft ≈ 60 → heavier than the average fit, still inside the shape range
   const heavy = T.fitTouch([58, 60, 62, 61, 59, 60], [127, 127, 126, 127, 127, 127]);
-  assert.ok(heavy.touch.shape > 1.4 && heavy.touch.shape < 1.8, JSON.stringify(heavy));
+  assert.ok(heavy.touch.shape > avg.touch.shape && heavy.touch.shape <= T.TOUCH_RANGE.shape.max, JSON.stringify(heavy));
+  near(at(heavy, heavy.soft), T.FIT_SOFT_TARGET, 1e-3);
   // min / max of the curve being replaced are kept, and the soft notes still land on the target
   const floor = T.fitTouch([30, 30, 30], [110, 110, 110], { min: 0.1, max: 0.9 });
   assert.equal(floor.touch.min, 0.1);

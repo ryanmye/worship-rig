@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requirePortsFree } from '../../port-preflight.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, '../../..');
@@ -19,6 +20,9 @@ const suites = [
   // v11-importer: electron.importer.mjs picks a free port (RIG_PORT), so it runs next to the 8438 boot test
   { name: 'electron', files: [path.join(here, 'electron.boot.mjs'), path.join(here, 'electron.importer.mjs')], timeout: 420000 },
 ];
+
+// L11-7: electron.boot asserts port 8438; a running Worship Rig would push the test build to 8439
+if (!((only && only !== 'electron') || skip.has('electron'))) await requirePortsFree([8438], 'shell');
 
 let failed = 0;
 for (const s of suites) {

@@ -73,7 +73,9 @@ const CLASSIC = Object.freeze({
   // v11-hotkey-test: press it to test (Settings › Menu bar › Global shortcuts); `keys` = the combination in symbols
   hotkeyTest: 'Test',
   hotkeyTesting: ({ keys }) => `Press ${keys} in any app…`,
-  hotkeyWorks: 'Works',
+  // L11-9 (Ryan 2026-11-20): macOS delivers a combination two apps registered to both, so "Works" can't promise
+  // nobody else reacts
+  hotkeyWorks: 'Worship Rig gets it. If another app also reacts, pick another.',
   hotkeyNothing: 'Nothing came through. Another app may use this. Pick another.',
   hotkeysListHint: 'Click a shortcut, then press the new keys. Esc cancels; Delete leaves that one without a '
     + 'shortcut. Next and previous song go through the setlist like → and ← in Perform; the menu-bar buttons still '

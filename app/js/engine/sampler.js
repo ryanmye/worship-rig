@@ -10,6 +10,7 @@
 // prepared (its `ready` promise), never at note time.
 import { rampTo, setNow } from '../shared/automation.js';
 import { parseNoteName } from '../shared/music.js';
+import { velocityDb } from '../shared/touch-curve.js';
 import { BasicVoice, BasicAllocator } from './instruments.js';
 
 const ONSET_DB = -50;
@@ -756,8 +757,10 @@ export const SAMPLER_MAX_VOICES = 32;
 
 /** Sampler Instrument (SPEC §3.2 interface). */
 export class SamplerInstrument {
-  constructor(ctx, prng, def, initialParams = {}, { cache, warn = () => {}, onProgress } = {}) {
+  constructor(ctx, prng, def, initialParams = {}, { cache, warn = () => {}, onProgress, dyn } = {}) {
     this.ctx = ctx;
+    /** settings.dynamicRange, shared with the registry (engine.setDynamicRange): read per note, so it acts at once */
+    this._dyn = dyn || { range: 1 };
     this.def = def;
     this.id = def.id;
     this.cache = cache || new BufferCache({ warn });
@@ -897,9 +900,10 @@ export class SamplerInstrument {
     }));
     let head = src;
     let gDb;
-    if (this.multiLayer) gDb = -10 * (1 - v01); // layers carry the dynamics: only a −10 dB span
+    const range = this._dyn.range; // settings.dynamicRange (1 = the built-in spans below)
+    if (this.multiLayer) gDb = velocityDb(v01, 10, range); // layers carry the dynamics: only a −10 dB span
     else {
-      gDb = -24 * (1 - v01); // single layer: −24 dB span + LPF 2 k → 12 k with velocity
+      gDb = velocityDb(v01, 24, range); // single layer: −24 dB span + LPF 2 k → 12 k with velocity
       const lp = v.add(new BiquadFilterNode(ctx, { type: 'lowpass', frequency: 2000 * Math.pow(6, v01), Q: BUTTER2_Q }));
       head.connect(lp);
       head = lp;

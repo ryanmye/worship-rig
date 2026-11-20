@@ -338,6 +338,17 @@ try {
     /* not supported in this build */
   }
   const page = await context.newPage();
+  // v11 Mac check: the decoded MB depends on the context rate, which follows the output device (44.1 kHz on the
+  // dock). SOAK_SAMPLE_RATE=48000 forces the app's AudioContext rate (test only; decodeAudioData resamples to it).
+  const forceRate = Number(process.env.SOAK_SAMPLE_RATE) || 0;
+  if (forceRate) {
+    await page.addInitScript((sr) => {
+      const Base = window.AudioContext;
+      window.AudioContext = class extends Base {
+        constructor(o = {}) { super({ ...o, sampleRate: o.sampleRate || sr }); }
+      };
+    }, forceRate);
+  }
   page.on('console', (m) => {
     if (m.type() === 'error') consoleErrors.push(`${m.text()} @ ${m.location()?.url || ''}`);
   });
@@ -358,7 +369,8 @@ try {
       for (let i = 0; i < 100 && !window.__rig.controller.status.ready; i++) await new Promise((r) => setTimeout(r, 100));
     });
   }
-  console.log(`# navigation: ${await page.evaluate(() => (window.__rig.store.currentSetlist() ? `setlist "${window.__rig.store.currentSetlist().name}" (${window.__rig.store.navIds().length} songs)` : 'library order (no setlist)'))}`);
+  console.log(`# context: ${await page.evaluate(() => window.__rig.engine.ctx?.sampleRate)} Hz${forceRate ? ' (SOAK_SAMPLE_RATE)' : ''}`);
+  console.log(`# navigation:${await page.evaluate(() => (window.__rig.store.currentSetlist() ? `setlist "${window.__rig.store.currentSetlist().name}" (${window.__rig.store.navIds().length} songs)` : 'library order (no setlist)'))}`);
 
   // warm-up + baseline
   const warm = await page.evaluate(() => window.__soak.warmup());

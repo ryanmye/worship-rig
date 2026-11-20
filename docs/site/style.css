@@ -1,13 +1,13 @@
 /* Worship Rig project page. Static HTML + this sheet; no scripts, no external hosts.
 
-   Tokens (every colour is a real hex from the app theme files, via app/js/shared/themes.js):
-     light  = Daylight Day paper (#f3efe7 / #fdfbf7) + Sanctuary Day plum ink (#32162b, #685362) + deep brass (#875806)
-     dark   = Sanctuary night: plum (#160913 / #21111c / #2a1a25), cream (#f5ecd8, #cec1aa), brass (#e6ba65)
+   Tokens (Ryan 2026-11-20: sage / teal on white, replacing the plum + brass page):
+     light  = white first (#ffffff / #f4f8f7 / #e8f0ee), green-black ink (#13201d, #4e615c), teal (#0f766e, 5.1:1 on white)
+     dark   = deep sage night (#0d1513 / #14201d / #1a2a26), mint-white ink (#e9f2ef, #a9bdb7), sea teal (#5ec4b0)
      --bg / --panel / --panel-2 / --line      grounds and rules
      --text / --muted                         ink
-     --accent / --accent-ink                  brass, and the ink that sits on brass
-     --hero-bg / --hero-glow                  the hero ground and its warm radial light
-     --stage / --stage-glow                   the dark plum card every screenshot sits on (screenshots are dark, so both schemes)
+     --accent / --accent-ink                  teal, and the ink that sits on teal
+     --hero-bg / --hero-glow                  the hero ground and its soft sage radial light
+     --stage / --stage-glow                   the dark sage card every screenshot sits on (screenshots are dark, so both schemes)
    Type: display = Alegreya (the Sanctuary book face), body = Figtree (the Sanctuary sans), both OFL, in fonts/.
    Scale 16 / 20 / 28 / 44. Measure ≤ 65ch. Section rhythm 96 px desktop, 56 px phone.
    Scheme: prefers-color-scheme, overridable by [data-theme="light|dark"] on <html>. */
@@ -25,20 +25,20 @@
 
 :root {
   color-scheme: light;
-  --bg: #f3efe7;
-  --panel: #fdfbf7;
-  --panel-2: #efe9de;
-  --line: #dcd3c6;
-  --text: #32162b;
-  --muted: #685362;
-  --accent: #875806;
-  --accent-ink: #fffaf0;
-  --link: #875806;
-  --hero-bg: #efe9de;
-  --hero-glow: rgb(224 169 64 / 0.28);
-  --stage: #160913;
-  --stage-glow: rgb(230 186 101 / 0.20);
-  --shadow: 0 1px 2px rgb(50 22 43 / 0.10), 0 18px 48px -12px rgb(50 22 43 / 0.35);
+  --bg: #ffffff;
+  --panel: #f4f8f7;
+  --panel-2: #e8f0ee;
+  --line: #d5e1de;
+  --text: #13201d;
+  --muted: #4e615c;
+  --accent: #0f766e;
+  --accent-ink: #ffffff;
+  --link: #0f766e;
+  --hero-bg: #f1f7f5;
+  --hero-glow: rgb(94 160 140 / 0.22);
+  --stage: #10201d;
+  --stage-glow: rgb(110 190 165 / 0.18);
+  --shadow: 0 1px 2px rgb(19 32 29 / 0.08), 0 18px 48px -12px rgb(19 32 29 / 0.28);
 
   --font-display: "WR Display", "Iowan Old Style", Palatino, Georgia, serif;
   --font-body: "WR Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -55,37 +55,37 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #160913;
-    --panel: #21111c;
-    --panel-2: #2a1a25;
-    --line: #33232e;
-    --text: #f5ecd8;
-    --muted: #cec1aa;
-    --accent: #e6ba65;
-    --accent-ink: #1c1406;
-    --link: #f1cd84;
-    --hero-bg: #160913;
-    --hero-glow: rgb(230 186 101 / 0.16);
-    --stage: #21111c;
-    --stage-glow: rgb(230 186 101 / 0.14);
+    --bg: #0d1513;
+    --panel: #14201d;
+    --panel-2: #1a2a26;
+    --line: #243631;
+    --text: #e9f2ef;
+    --muted: #a9bdb7;
+    --accent: #5ec4b0;
+    --accent-ink: #062320;
+    --link: #7fd6c4;
+    --hero-bg: #0d1513;
+    --hero-glow: rgb(94 196 176 / 0.14);
+    --stage: #14201d;
+    --stage-glow: rgb(94 196 176 / 0.12);
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 24px 60px -16px rgb(0 0 0 / 0.75);
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #160913;
-  --panel: #21111c;
-  --panel-2: #2a1a25;
-  --line: #33232e;
-  --text: #f5ecd8;
-  --muted: #cec1aa;
-  --accent: #e6ba65;
-  --accent-ink: #1c1406;
-  --link: #f1cd84;
-  --hero-bg: #160913;
-  --hero-glow: rgb(230 186 101 / 0.16);
-  --stage: #21111c;
-  --stage-glow: rgb(230 186 101 / 0.14);
+  --bg: #0d1513;
+  --panel: #14201d;
+  --panel-2: #1a2a26;
+  --line: #243631;
+  --text: #e9f2ef;
+  --muted: #a9bdb7;
+  --accent: #5ec4b0;
+  --accent-ink: #062320;
+  --link: #7fd6c4;
+  --hero-bg: #0d1513;
+  --hero-glow: rgb(94 196 176 / 0.14);
+  --stage: #14201d;
+  --stage-glow: rgb(94 196 176 / 0.12);
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 24px 60px -16px rgb(0 0 0 / 0.75);
 }
 @media (max-width: 640px) {
@@ -151,7 +151,7 @@ section { padding-block: var(--gap-section); }
 .hero-shot { margin: 56px auto 0; max-width: 68rem; padding-inline: var(--gutter); }
 .hero-shot img {
   width: 100%; border-radius: 12px 12px 0 0;
-  box-shadow: var(--shadow), 0 0 0 1px rgb(245 236 216 / 0.08);
+  box-shadow: var(--shadow), 0 0 0 1px rgb(255 255 255 / 0.06);
 }
 .facts { background: var(--bg); padding-block: 1.25rem; border-bottom: 1px solid var(--line); }
 .facts ul {
@@ -183,11 +183,11 @@ section { padding-block: var(--gap-section); }
   border-radius: 20px; padding: clamp(1rem, 4vw, 2.5rem);
   display: grid; place-items: center;
 }
-.stage img { border-radius: 10px; box-shadow: 0 20px 50px -18px rgb(0 0 0 / 0.8), 0 0 0 1px rgb(245 236 216 / 0.07); }
+.stage img { border-radius: 10px; box-shadow: 0 20px 50px -18px rgb(0 0 0 / 0.8), 0 0 0 1px rgb(255 255 255 / 0.06); }
 .stage .inset {
   position: absolute; left: clamp(0.5rem, 2vw, 1.25rem); bottom: clamp(0.5rem, 3vw, 1.5rem);
   width: min(62%, 300px); border-radius: 10px;
-  box-shadow: 0 16px 40px -10px rgb(0 0 0 / 0.9), 0 0 0 1px rgb(230 186 101 / 0.35);
+  box-shadow: 0 16px 40px -10px rgb(0 0 0 / 0.9), 0 0 0 1px rgb(94 196 176 / 0.35);
 }
 .stage.drone img:not(.inset) { width: min(100%, 404px); margin-bottom: 2.25rem; }
 .stage.pop img { width: 320px; max-width: 100%; border-radius: 16px; }
@@ -206,17 +206,17 @@ section { padding-block: var(--gap-section); }
   flex: 1; display: block; cursor: pointer;
   background: var(--p); color: var(--t);
   border-radius: 12px; padding: 0.7rem 0.8rem 0.75rem;
-  box-shadow: 0 0 0 1px rgb(128 110 100 / 0.28) inset;
+  box-shadow: 0 0 0 1px rgb(100 125 118 / 0.28) inset;
   font-size: 0.875rem; line-height: 1.25;
   -webkit-tap-highlight-color: transparent;
 }
-.swatch:hover { box-shadow: 0 0 0 1px rgb(128 110 100 / 0.28) inset, 0 0 0 2px var(--line); }
+.swatch:hover { box-shadow: 0 0 0 1px rgb(100 125 118 / 0.28) inset, 0 0 0 2px var(--line); }
 .swatch b { display: block; font: 700 1rem/1.2 var(--font-display); }
 .swatch .mode { opacity: 0.72; font-size: 0.75rem; }
 .chips { display: flex; gap: 0.35rem; margin-top: 0.55rem; }
 .chips i {
   width: 1.4rem; height: 1.4rem; border-radius: 50%; display: block;
-  box-shadow: 0 0 0 1px rgb(128 110 100 / 0.45);
+  box-shadow: 0 0 0 1px rgb(100 125 118 / 0.45);
 }
 .chips i:first-child { background: var(--b); }
 .chips i:last-child { background: var(--a); }
@@ -315,8 +315,8 @@ kbd {
 .shot-todo {
   width: 100%; aspect-ratio: var(--ar, 16 / 10);
   display: grid; place-items: center; border-radius: 10px;
-  border: 1px dashed rgb(245 236 216 / 0.3); background: rgb(245 236 216 / 0.04);
-  color: rgb(245 236 216 / 0.62); font-size: 0.875rem; letter-spacing: 0.02em;
+  border: 1px dashed rgb(233 242 239 / 0.3); background: rgb(233 242 239 / 0.04);
+  color: rgb(233 242 239 / 0.62); font-size: 0.875rem; letter-spacing: 0.02em;
 }
 .shot-todo.narrow { width: min(100%, 404px); }
 

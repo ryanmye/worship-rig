@@ -123,8 +123,12 @@ export function touchWord(spec) {
 // ---------------------------------------------------------------------------------------------------------------
 // "Play soft, then hard" calibration
 
-/** Level a soft note should get after fitting (a normal player's soft playing, ~40 / 127, on the linear curve). */
-export const FIT_SOFT_TARGET = 0.3;
+/**
+ * Level a soft note should get after fitting. Ryan's Q5 answer (2026-11-20, on his Roland): 0.3 (≈ a normal player's
+ * soft playing on the linear curve) left soft playing not quiet enough, so 0.15: a wider range from soft to hard. An
+ * average player (soft ≈ 40, hard ≈ 127) now fits ≈ shape 1.65, near the 'hard' preset.
+ */
+export const FIT_SOFT_TARGET = 0.15;
 /** Notes per step of the guided calibration. */
 export const FIT_NOTES = 6;
 /** Fewest notes per step fitTouch() accepts. */
@@ -166,6 +170,41 @@ export function fitTouch(soft, hard, base) {
   const g = Math.log(want) / Math.log(x);
   const shape = Math.round(clampTo(g, TOUCH_RANGE.shape) * 1000) / 1000;
   return { ok: true, touch: { shape, min: b.min, max: b.max, top }, soft: sm, hard: hm };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Dynamic range (Ryan 2026-11-20, hardware batch: "physically expand the range", on his Roland)
+
+/**
+ * settings.dynamicRange (optional, absent = 1 = today's sound): how far the sampled instruments spread soft from
+ * loud. 1 keeps the built-in spans (multi-layer −10 dB, single layer −24 dB from velocity 0 to full); 2 doubles them
+ * around DYN_PIVOT, so soft notes get quieter AND the hardest notes louder than today's full (the master ceiling
+ * still catches peaks). Device-local: it is about this player's keyboard and room.
+ */
+export const DYN_RANGE = Object.freeze({ min: 1, max: 3, default: 1, step: 0.05 });
+/** Touch level that keeps its loudness at any range: velocity ≈ 96 of 127, where the sampler trims are calibrated. */
+export const DYN_PIVOT = 0.75;
+
+/**
+ * @param {unknown} v
+ * @returns {number|null} a valid range (clamped, 2 decimals), or null for a non-number
+ */
+export function validDynRange(v) {
+  if (!fin(v)) return null;
+  return Math.round(Math.min(DYN_RANGE.max, Math.max(DYN_RANGE.min, v)) * 100) / 100;
+}
+
+/**
+ * Note gain in dB for a touch level. range 1 = −spanDb · (1 − v) exactly (the pre-range formula); a wider range adds
+ * spanDb · (range − 1) · (v − DYN_PIVOT): below the pivot quieter, above it louder.
+ * @param {number} v01 touch level 0..1
+ * @param {number} spanDb the instrument's built-in span (10 multi-layer, 24 single layer)
+ * @param {number} [range] settings.dynamicRange (1..3)
+ * @returns {number}
+ */
+export function velocityDb(v01, spanDb, range = 1) {
+  const base = -spanDb * (1 - v01);
+  return range === 1 ? base : base + spanDb * (range - 1) * (v01 - DYN_PIVOT);
 }
 
 // ---------------------------------------------------------------------------------------------------------------

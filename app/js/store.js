@@ -30,7 +30,7 @@ import { mod12, transposeSemis } from './shared/music.js';
 import { isValidId as isThemeId, DEFAULT_THEME_ID } from './shared/themes.js';
 import { normalizeHotkeys } from './shared/hotkeys.js';
 import { PARAMS, clamp, describe, isValidPath, parsePath, defaultSlot, SLOT_COUNT } from './shared/params.js';
-import { normalizeTouch, PEDAL_CURVES, COMPUTER_KEYBOARD } from './shared/touch-curve.js';
+import { normalizeTouch, PEDAL_CURVES, COMPUTER_KEYBOARD, validDynRange } from './shared/touch-curve.js';
 import { normalizeClick, validTimeSig } from './shared/click-math.js';
 import { normalizeScenes } from './shared/scenes.js';
 import {
@@ -66,6 +66,8 @@ export const DEVICE_LOCAL_SETTINGS = Object.freeze([
   // v11-decisions (Ryan 2026-11-03, checklist Q7): the keyboard curves / "remember" are per MIDI device and stay with
   // each Mac: not exported, a replace-import keeps this Mac's, an incoming library's are dropped
   'keyboards',
+  // Ryan 2026-11-20 (hardware batch): the dynamic range is this player's keyboard and room, like the curves
+  'dynamicRange',
 ]);
 /** v11-metronome: settings.midiClockOut (optional, absent = off) is a Web MIDI output name; ids change on re-plug. */
 export const MIDI_CLOCK_NAME_MAX = 120;
@@ -518,6 +520,12 @@ function normalizeSettings(raw, songs, setlists) {
     else out.hotkeys = v;
   }
   if (hasOwn(out, 'updateCheck') && typeof out.updateCheck !== 'boolean') delete out.updateCheck;
+  // settings.dynamicRange: optional (absent = 1, today's sound); a bad value is dropped, 1 is stored as absent
+  if (hasOwn(out, 'dynamicRange')) {
+    const v = validDynRange(out.dynamicRange);
+    if (v === null || v === 1) delete out.dynamicRange;
+    else out.dynamicRange = v;
+  }
   // v11-metronome: settings.click / settings.midiClockOut are optional, absent until set; bad values are dropped
   if (hasOwn(out, 'click')) {
     const c = normalizeClick(out.click);
@@ -973,7 +981,7 @@ export function createStore(opts = {}) {
         }
         // keyboards: device names may contain dots, so only the whole map is a path (store.setKeyboard)
         const whole = k === 'theme' || k === 'audioSleepSec' || k === 'hotkeys' || k === 'updateCheck'
-          || k === 'keyboards' || k === 'click' || k === 'midiClockOut';
+          || k === 'keyboards' || k === 'click' || k === 'midiClockOut' || k === 'dynamicRange';
         return hasOwn(SETTINGS_VALIDATORS, k) || whole ? null : { segs, value: clone(value) };
       }
       // themes-setup: an unknown theme id is stored as the default (never an error, never a dead id)
@@ -995,6 +1003,11 @@ export function createStore(opts = {}) {
         return v === null ? null : { segs, value: v };
       }
       if (k === 'updateCheck') return typeof value === 'boolean' ? { segs, value } : null;
+      if (k === 'dynamicRange') {
+        if (value === null || value === undefined) return { segs, value: undefined };
+        const v = validDynRange(value); // a number, clamped to 1..3; 1 = absent (today's sound)
+        return v === null ? null : { segs, value: v === 1 ? undefined : v };
+      }
       // v11-metronome: settings.click is set whole (normalised; empty = absent); midiClockOut is a name or null (off)
       if (k === 'click') {
         if (value === null || value === undefined) return { segs, value: undefined };

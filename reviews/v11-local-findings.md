@@ -221,3 +221,132 @@ The test wants music-box collapsed to 1 channel with L/R difference ≤ 1e-6. On
 with L and R up to 6.95e-5 apart, so it stays stereo. Probably a decoder difference (macOS vs Linux mp3 decode) on a
 file that is dual-mono at the source: the threshold may need to sit above decoder noise (about 1e-4), or the test
 should not require music-box specifically. Inaudible either way; it only costs the memory saving on that instrument.
+
+## L11-7 shell Electron: 4 failures when another Worship Rig holds port 8438 (environment; preflight added)
+
+**Status:** fixed locally (test-only). Mac full run on `29eb984` (2026-11-20): 14/15. Every suite but shell passed,
+including soak 12/12 (`peakDecodedMB` max 699.9 of 700, untouchable 509, pinned 370, max pinned 513.9 / 600). Shell
+had 4 failures, all from the installed 1.0.1 app (a login item) listening on 127.0.0.1:8438:
+- `boots…`, `window.rig bridge`, `zero console errors`: `8439 !== 8438`, because the test build fell back to 8439 (M5).
+- L14 ⌘H `windowVisibleAppHide`: `[false, true, false]` (an extra hide after `app.show()`), presumably the other app
+  taking activation back.
+
+With the installed app quit, `node test/phase1/shell/run.mjs --only electron` (screen unlocked) passed 23/23 in 3 of 3
+runs, so the ⌘H extra `false` only happens with a second Worship Rig running. It is not an app bug: two Rigs at once
+isn't a supported setup.
+
+Fix: `test/port-preflight.mjs`. `run-all` (8437, 8438) and the shell runner (8438, when the Electron files run) stop
+with exit 2 and a "quit the running Worship Rig" message instead of producing misleading failures.
+`RIG_ALLOW_BUSY_PORT=1` overrides. Checked with a port held (both exit 2, unit-only shell unaffected) and free
+(unit 406 pass).
+
+## L11-8 low-resource mode frees the samples but the Mac renderer keeps the memory until a GC (fixed)
+
+**Status:** fixed locally (controller + main.js, one commit). Found with the v11-memory Activity Monitor check.
+
+Measured with `footprint` (the Activity Monitor "Memory" number). Each run used a fresh profile on the default 44.1 kHz
+output, driven over CDP: boot, 10 songs (`songsInOrder` first 10, 5 s each), then `settings.lowResource` on. Renderer
+footprint in MB:
+
+| phase | 1.0.1 | 1.1 `29eb984` | 1.1 + L11-8 |
+|---|---|---|---|
+| boot (after a GC) | 1136 | 918 | 912 |
+| after the 10-song loop | 1319 | 1178 | 1093 |
+| low-resource, +1 min | 1009 | 1057 | **228** |
+| low-resource, +5 min | 995 | 1058 | 227 |
+| low-resource, then a forced GC | 994 | 392 | 226 |
+
+At `29eb984`, entering low-resource dropped the engine's decoded MB from 648 to 0. The renderer stayed at about
+1057 MB for 5 idle minutes, slightly above 1.0.1, and went to 392 MB only after a forced GC
+(`HeapProfiler.collectGarbage`). AudioBuffer storage is external to the V8 heap, and an idle hidden page allocates
+almost nothing, so V8 has no reason to collect. On the Mac, v11-memory's low-resource saving never reached the user.
+Linux reported RSS, which isn't the same measure.
+
+Fix: `main.js` adds `--js-flags=--expose-gc`. The controller (`applyLowResource`) runs one `gc()` 3 s
+(`LOWRES_GC_MS`) after low-resource turns on, once release tails are done. It skips the GC if low-resource turns off
+first, and `dispose()` clears the timer. Chrome has no `gc` and is unchanged. One full GC as the window hides costs
+milliseconds and happens only on that transition. Test: `lowres2.test.mjs` "controller (L11-8)". Shell and ui-core
+both pass.
+
+Visible-mode memory is also lower than 1.0.1 by about 140–230 MB after the loop, less than the −450–600 MB reported
+on Linux (RSS, not footprint).
+
+## L11-9 press-to-test says "Works" when another app holds the same combination: macOS delivers it to both
+
+**Status:** fixed, option (a) (Ryan 2026-11-20: "sure"). The `hotkeyWorks` copy is now "Worship Rig gets it. If another
+app also reacts, pick another." Unit 406 and settings 60/60 pass. Press-to-test itself works as specified.
+
+Mac run on `5f4c6d4`, source build with a fresh profile, driven over CDP. The presses were synthetic
+(`System Events keystroke "]" using {control, option, command}` sent from Finder), and they do reach Carbon global
+shortcuts.
+1. Test on Next song: the row reads "Press ⌃⌥⌘] in any app…". Pass.
+2. The press from Finder: "Works", and the song does not change (the press is swallowed). Pass.
+3. The next press outside a test steps the song. Pass.
+4. Clash: the L11-3 helper (`test/logs/hk`, a second Electron app) registered ⌃⌥⌘] first (`register()` → true),
+   then Worship Rig registered it too (`ok`). On the press, **both apps fire**: the helper logged `fired` for the
+   test press and the plain press, and Worship Rig showed "Works" and then stepped the song. So "which app gets the
+   press" is both. "Nothing came through" can only appear when the other app swallows the key (an event tap, or a
+   system shortcut), not when it uses the same `RegisterEventHotKey` API. That API covers Electron, and probably
+   Rectangle and Magnet. Raycast is unconfirmed.
+5. Esc during a test clears the row and leaves Settings open. Pass.
+
+Also: with shortcuts switched off, the press no longer steps the song. After Quit, no Electron process is left.
+While recording, a synthetic ⌃⌥⌘K reaches the page and is saved as `Control+Alt+Command+K`.
+
+Effect: a ⌃⌥⌘] that Rectangle also uses would step the setlist and run Rectangle's action, with "Works" showing.
+Options:
+- (a) Change the copy. "Works" becomes "Worship Rig gets it. If another app also reacts, pick another." The Mac hint
+  already says "Test each one once." Recommended.
+- (b) Keep it as is, and rely on the hardware batch with Rectangle or Raycast to see what real apps do.
+Ryan's batch item 1 (Rectangle or Raycast on the same keys) will show whether real apps behave like the helper.
+
+## Daylight Auto (checklist v11-polish): follows the Mac's appearance (pass)
+
+Raw CDP, with no Playwright emulation. Playwright's CDP connection forces `prefers-color-scheme: light`, so don't use
+it for this check. Theme Daylight with the Auto flag set: Mac dark → `daylight-stage`, set light → `daylight-day`
+within 2.5 s, set dark → `daylight-stage`. The Mac was left in dark mode as before. The Day paper EQ graph is still
+an eyeball check for Ryan.
+
+## Reverb build times on the M2 Pro (checklist v11-memory): 4.5–30 ms of main thread (Linux: 15–400 ms)
+
+Source build `a31ebea`, 44.1 kHz context, fresh profile, idle app. For each of the 11 distinct factory spaces
+(`irKey`), I timed `reverb.irAsync` (IR built in the worker) and then `new ConvolverNode(...).buffer = ir` three
+times. The buffer assignment is the main-thread block that v11-memory defers while playing.
+
+| space (size·damp) | IR length | irAsync (worker) | `conv.buffer =` main thread, 3 runs | songs |
+|---|---|---|---|---|
+| 1.5 · 0.6 | 1.98 s | 16 ms | 6.4 / 6 / 4.5 ms | 2 |
+| 3.8 · 0.5 | 5.02 s | 42 ms | 13.4 / 11.4 / 11.8 ms | 3 |
+| 3.8 · 0.7 | 5.02 s | 37 ms | 11.3 / 10.8 / 11.1 ms | 2 |
+| 5 · 0.5 | 6.6 s | 0 ms | 29.5 / 19.4 / 17.4 ms | 2 |
+| 5 · 0.6 | 6.6 s | 47 ms | 15.2 / 14.8 / 15.2 ms | 1 |
+| 6.5 · 0.5 | 8.58 s | 0 ms | 19.8 / 19.3 / 18.7 ms | 3 |
+| 6.5 · 0.7 | 8.58 s | 63 ms | 19.5 / 19 / 18.7 ms | 1 |
+| 8 · 0.3 | 10.56 s | 77 ms | 22.7 / 23.1 / 24.3 ms | 1 |
+| 8 · 0.4 | 10.56 s | 76 ms | 23.7 / 22.8 / 22.3 ms | 2 |
+| 8 · 0.5 | 10.56 s | 98 ms | 25.7 / 30.3 / 27.1 ms | 1 |
+| 8 · 0.6 | 10.56 s | 76 ms | 21.9 / 22.2 / 22.6 ms | 1 |
+
+An irAsync of 0 ms was an IR cache hit. So on this Mac a reverb build can delay a note by about 30 ms at most. Q25
+(reverb at the first 2 s pause) still holds, but the 100–400 ms stall it avoids is mostly a Linux number. The
+song-switch work, not the reverb, is what's left for the Mac latency question.
+
+## Locked-screen shell Electron run (L11-2 / L11-4): pass
+
+`node test/phase1/shell/run.mjs --only electron` with the screen locked (`IOConsoleLocked` = Yes from 02:42:01Z,
+run done 02:42:27Z): 22 pass, 0 fail, 1 skip (the WAV recording test: no running audio context while locked). L14
+passes. Together with the 3 unlocked 23/23 runs, L11-2 and L11-4 are closed on the Mac.
+
+## Hardware batch (Ryan, 2026-11-20): items 1–3, then stopped
+
+- Global shortcuts with the window hidden (⌘H): ⌃⌥⌘] ×2 / ⌃⌥⌘[ step the setlist, and no Accessibility prompt
+  appears. Recording ⌃⌥⌘↑ reaches the page (⌃↑ itself is macOS's Mission Control, which apps never get). Pass.
+- Fit to my touch, Roland and Keystation: each keeps its own curve. "Quiet not quiet enough, loud not loud enough"
+  led to v11-dynamic-range (Range slider) and Q5 = 15 %. Pass with those.
+- Sustain pedal swells the drone: from −12 dB it rises about 12 dB in about 2 s and falls back, and the Drone level
+  fader follows while the pedal is held. Pass. Expression pedal not tested (only an on/off pedal).
+- Not tested, Ryan's call ("everything should be fine"): footswitch → Next scene, scene glide on the PA, far jump
+  + reverb at the pause, setlist end without wrap, Remember with two boards, MIDI Learn on the second keyboard,
+  click on Outputs 3–4 / in-ears, MIDI clock into a receiver (Start, Panic, restart), split-on-restart recording,
+  GarageBand import while playing, the Day paper EQ graph. These stay in the release notes' "Not yet checked on
+  real hardware".

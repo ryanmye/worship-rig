@@ -24,7 +24,7 @@ import { Drone } from './drone.js';
 import { Metronome } from './metronome.js';
 import { meterOf, MIDI_STOP } from '../shared/click-math.js';
 import {
-  COMPILED_PRESETS, compileTouch, touchAt, pedalCurve, PEDAL_CURVES, TOUCH_KEYS,
+  COMPILED_PRESETS, compileTouch, touchAt, pedalCurve, PEDAL_CURVES, TOUCH_KEYS, validDynRange,
 } from '../shared/touch-curve.js';
 
 const MB = 1024 * 1024;
@@ -1415,6 +1415,18 @@ export class AudioEngine extends EventTarget {
     if (this.sounding.size > 0) return 0;
     if ((this.pedal || this.pedaled.size > 0) && now - this._pedalDownAt < PEDAL_STUCK_SEC) return 0;
     return Math.max(0, now - this._inputAt);
+  }
+
+  /**
+   * settings.dynamicRange (shared/touch-curve.js velocityDb): how far sampled instruments spread soft from loud.
+   * Takes effect on the next note (held notes keep their gain). Synth and organ voices are unchanged.
+   * @param {number} range 1..3 (1 = the built-in spans)
+   * @returns {number} the range in use
+   */
+  setDynamicRange(range) {
+    const v = validDynRange(range) ?? 1;
+    this.registry.dyn.range = v;
+    return v;
   }
 
   // ----- low-resource mode (menu-bar mode; docs/menubar-mode.md, C7 menubar-A) --------------------------------------

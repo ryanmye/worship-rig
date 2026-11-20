@@ -79,6 +79,8 @@ if (process.env.RIG_USER_DATA) app.setPath('userData', path.resolve(process.env.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
+// L11-8: the controller runs one GC after low-resource drops the decoded samples, so macOS gets the memory back
+app.commandLine.appendSwitch('js-flags', '--expose-gc');
 
 /** @type {BrowserWindow|null} */
 let win = null;

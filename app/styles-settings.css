@@ -249,3 +249,5 @@
   .st-kb-edit { grid-template-columns: minmax(0, 1fr); }
   .st-kb-slider { grid-template-columns: 90px minmax(0, 1fr) 46px; }
 }
+/* settings.dynamicRange (Ryan 2026-11-20): the Range slider above the keyboard list */
+.st-kb-range { display: grid; gap: 2px; margin: 8px 0 12px; }
