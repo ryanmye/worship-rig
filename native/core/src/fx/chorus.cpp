@@ -69,7 +69,8 @@ void ChorusUnit::process(const RenderContext &ctx, UnitIO &io) {
     for (std::size_t i = 0; i < Q; ++i) lfo[i] *= g[i];  // depth GainNode output
     v.dTime.processARate(ctx.frame0, sr_, dt, Q);
     const float *conn[1] = {lfo};
-    sumAndClip(dt, conn, 1, static_cast<float>(kBaseDelay), 0.0f, static_cast<float>(kMaxDelay), Q);
+    // NaN -> DelayNode.delayTime.defaultValue, which is 0 (the 7 ms is the option value, not the default)
+    sumAndClip(dt, conn, 1, 0.0f, 0.0f, static_cast<float>(kMaxDelay), Q);
     const float *src[1] = {mono};
     float *dst[1] = {out.ch[k]};
     v.d.process(src, dst, 1, dt);

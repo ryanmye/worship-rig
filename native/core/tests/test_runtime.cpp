@@ -281,6 +281,48 @@ TEST_SUITE("runtime") {
     CHECK(rt.waitFor("\"re\":4,"));
   }
 
+  TEST_CASE("restart: audio_stop's SUSPENDED completion keeps the new start pending (busy, watchdog armed)") {
+    static std::atomic<rig_engine *> eng{nullptr};
+    static std::atomic<int> starts{0};
+    starts = 0;
+    rig_host h{};
+    h.struct_size = sizeof h;
+    h.audio_start = [](void *, const char *, double, uint32_t) {
+      if (++starts > 1) std::this_thread::sleep_for(std::chrono::milliseconds(400));  // the reopen blocks
+      rig_device_info info{};
+      info.struct_size = sizeof info;
+      info.sample_rate = 48000;
+      info.channels = 2;
+      rig_host_audio_started(eng.load(), &info);
+    };
+    h.audio_stop = [](void *) { rig_host_audio_state(eng.load(), RIG_DEVICE_SUSPENDED, nullptr); };  // devhost/Apple
+    RtEngine rt(&h);
+    eng = rt.e;
+    hello(rt);
+    rt.post(R"({"v":1,"op":"audio","action":"start","id":2})");
+    REQUIRE(rt.waitFor("\"state\":\"running\""));
+    rt.post(R"({"v":1,"op":"audio","action":"restart","id":3})");
+    REQUIRE(rt.waitFor("\"re\":3,"));
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));  // audio_stop's SUSPENDED has been handled
+    rt.post(R"({"v":1,"op":"audio","action":"restart","id":4})");  // the reopen is still blocked: busy
+    REQUIRE(rt.waitFor("\"re\":4,"));
+    CHECK(rt.countOf("\"code\":\"busy\"") == 1);
+    CHECK(rt.waitFor("\"restarted\":true", 3000));
+  }
+
+  TEST_CASE("an interruption stops rendering; RIG_DEVICE_RUNNING from the host resumes it") {
+    RtEngine rt;
+    hello(rt);
+    rt.post(R"({"v":1,"op":"audio","action":"start","id":2})");
+    REQUIRE(rt.waitFor("\"re\":2,"));
+    CHECK(impl(rt.e).audioStarted());
+    rig_host_audio_state(rt.e, RIG_DEVICE_INTERRUPTED, nullptr);
+    CHECK(!impl(rt.e).audioStarted());
+    rig_host_audio_state(rt.e, RIG_DEVICE_RUNNING, nullptr);
+    CHECK(impl(rt.e).audioStarted());
+    CHECK(rt.waitFor("\"state\":\"running\""));
+  }
+
   TEST_CASE("ticks: 8 Hz idle floor (G6), the subscribed rate, stats every second, none while asleep") {
     RtEngine rt;
     hello(rt);

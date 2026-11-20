@@ -213,7 +213,9 @@ void DelayUnit::addTimer(double t, TimerKind k, unsigned line, std::uint32_t seq
         slot = &tm;
         break;
       }
-  if (!slot) {  // full (cannot happen: at most one switch retry and two timers per line are live): drop the oldest
+  // Full: only under a long run of > 5 % time changes (stale ring-end timers of superseded seqs live up to 8 s). Drop
+  // the oldest: the live ring/flush timer of a line is always its newest, so the evicted one is a stale no-op.
+  if (!slot) {
     slot = &timers_[0];
     for (Timer &tm : timers_)
       if (tm.order < slot->order) slot = &tm;

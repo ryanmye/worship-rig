@@ -96,7 +96,7 @@ Engine *Engine::create(const rig_config &cfg, rig_status *err) {
 Engine::~Engine() {
   if (control_.joinable()) {
     stop_ = true;
-    wake_.release();
+    wakeControl();
     control_.join();
   }
   {
@@ -131,7 +131,11 @@ void Engine::onControl(std::function<void()> fn) {
     std::lock_guard<std::mutex> lk(inMu_);
     hostCalls_.push_back(std::move(fn));
   }
-  wake_.release();
+  wakeControl();
+}
+
+void Engine::wakeControl() {
+  if (!wakePending_.exchange(true, std::memory_order_acq_rel)) wake_.release();
 }
 
 void Engine::memoryPressure(int level) {
@@ -214,7 +218,7 @@ rig_status Engine::post(const char *json, std::size_t len) {
     if (inQ_.size() >= 16384) return RIG_E_FULL;
     inQ_.emplace_back(json, len);
   }
-  wake_.release();
+  wakeControl();
   return RIG_OK;
 }
 
@@ -228,7 +232,7 @@ void Engine::postHostEvent(std::string &&json) {
     std::lock_guard<std::mutex> lk(inMu_);
     hostEvents_.push_back(std::move(json));
   }
-  wake_.release();
+  wakeControl();
 }
 
 void Engine::drainAudioEvents() {
@@ -259,8 +263,9 @@ void Engine::drainAudioEvents() {
 
 void Engine::controlLoop() {
   while (!stop_.load()) {
-    wake_.try_acquire_for(std::chrono::milliseconds(4));
-    wakePending_ = false;
+    // reset only after a release was consumed: every release follows a false -> true flip, so the binary
+    // semaphore never exceeds 1 (release() past max() is UB; libc++ asserts it in hardened builds)
+    if (wake_.try_acquire_for(std::chrono::milliseconds(4))) wakePending_ = false;
     std::deque<std::string> batch;
     std::vector<std::string> hostEv;
     std::vector<std::function<void()>> calls;
@@ -357,7 +362,7 @@ void Engine::renderOne() {
     const double load = dt / (Q / graph_.sampleRate());
     if (load > 1.0) xruns_.fetch_add(1, std::memory_order_relaxed);
     graph_.setHostStats(static_cast<float>(load), xruns_.load(std::memory_order_relaxed));
-    if (!evQ_.empty() && !wakePending_.exchange(true)) wake_.release();
+    if (!evQ_.empty()) wakeControl();
   }
 }
 
@@ -435,7 +440,9 @@ void Engine::hostCallLoop() {
   std::unique_lock<std::mutex> lk(hostMu_);
   for (;;) {
     hostCv_.wait(lk, [&] { return hostStop_ || !hostJobs_.empty(); });
-    if (hostJobs_.empty()) return;  // stop requested and nothing left
+    // rig_destroy: drop queued starts. The platform has already stopped the device (rig_destroy contract); a late
+    // audio_start would reopen it and render into an engine being destroyed.
+    if (hostStop_) return;
     auto fn = std::move(hostJobs_.front());
     hostJobs_.pop_front();
     lk.unlock();
@@ -584,10 +591,12 @@ void Engine::hostAudioStarted(const rig_device_info &info) {
 void Engine::hostAudioState(rig_device_state s, const char *msg) {
   static const char *names[] = {"running", "suspended", "interrupted", "closed"};
   const int k = s >= RIG_DEVICE_RUNNING && s <= RIG_DEVICE_CLOSED ? static_cast<int>(s) : 3;
-  if (s != RIG_DEVICE_RUNNING) started_ = false;
+  started_ = s == RIG_DEVICE_RUNNING;  // RUNNING (e.g. after an interruption) renders again, like audio_started
   const std::string m = msg ? msg : "";
   onControl([this, k, m] {
-    pending_ = false;
+    // SUSPENDED is audio_stop's completion, which a restart sends before its audio_start: the start stays pending
+    // (watchdog armed, `busy` for another restart) until audio_started or a failure (CLOSED / INTERRUPTED)
+    if (k != 1) pending_ = false;
     emitState(names[k], false);
     if (k == 3 || (k != 1 && !m.empty())) {  // a failed open / lost device: `device` warning (contract 6.2)
       JsonOut j;

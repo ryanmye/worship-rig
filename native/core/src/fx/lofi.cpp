@@ -222,7 +222,7 @@ void LofiUnit::renderWet(std::int64_t frame0, const Bus &in, float *const wet[2]
   for (std::size_t i = 0; i < Q; ++i) w2[i] *= a[i];
   tapeTime_.processARate(frame0, sr_, dt, Q);
   const float *conns[2] = {w1, w2};
-  sumAndClip(dt, conns, 2, 0.005f, 0.0f, 1.0f, Q);
+  sumAndClip(dt, conns, 2, 0.0f, 0.0f, 1.0f, Q);  // NaN -> delayTime.defaultValue (0, not the 5 ms option value)
   {
     const float *s2[2] = {x[0], x[1]};
     float *d2[2] = {y[0], y[1]};

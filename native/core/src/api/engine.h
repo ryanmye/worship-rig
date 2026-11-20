@@ -119,6 +119,8 @@ class Engine final : public CommandSink {
   void postHostEvent(std::string &&json);
   /** Run fn on the control thread (realtime: queued + wake; offline: inline). */
   void onControl(std::function<void()> fn);
+  /** Wake the control loop: at most one release in flight (binary semaphore). [any, RT-safe] */
+  void wakeControl();
   static UnitEnv makeEnv(const rig_config &cfg, std::uint32_t seed);
 
   rig_config cfg_;

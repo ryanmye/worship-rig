@@ -276,7 +276,8 @@ async function main() {
       }
       if (!d) {
         const ve = document.querySelector('#view-edit');
-        throw new Error(`no Advanced section (view-edit hidden=${ve.hidden}, ${ve.querySelectorAll('*').length} nodes)`);
+        const n = ve.querySelectorAll('*').length;
+        throw new Error(`no Advanced section (view-edit hidden=${ve.hidden}, ${n} nodes)`);
       }
       d.open = true;
       d.dispatchEvent(new Event('toggle'));

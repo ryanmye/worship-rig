@@ -43,6 +43,9 @@ Engine side: the `state` event carries the new `sampleRate`; the clock map takes
 
 `audio start|restart|output` -> `state` event (G9) -> `load {phase:'start'}` once -> reply; the host call runs on
 the device thread; no `rig_host_audio_started` / `rig_host_audio_state` within 5 s -> `state closed` + `warn
-{code:'device'}`. `restart`/`output` while a start is pending -> `busy`. `restart` invalidates prepared tokens
-(`superseded`). `sleep` (realtime, started, awake) -> Model ramp (T14) -> rendering suspends after lead + ramp
-(`sleeping` -> `asleep`); `wake` resumes (`wakeMs`). Ticks: none while asleep or before the device runs.
+{code:'device'}`. `restart`/`output` while a start is pending -> `busy`; `rig_host_audio_state(SUSPENDED)` (audio_stop's
+completion, sent before a restart's reopen) keeps the start pending, CLOSED / INTERRUPTED / RUNNING end it, and
+RUNNING resumes rendering. `rig_destroy` drops device jobs not yet started (no audio_start after the platform's
+stop). `restart` invalidates prepared tokens (`superseded`). `sleep` (realtime, started, awake) -> Model ramp
+(T14) -> rendering suspends after lead + ramp (`sleeping` -> `asleep`); `wake` resumes (`wakeMs`). Ticks:
+none while asleep or before the device runs.

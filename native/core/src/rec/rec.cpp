@@ -99,8 +99,8 @@ void RecUnit::process(const RenderContext &, UnitIO &io) {
     const std::size_t k = ((h + i) & (RecShared::kFrames - 1)) * 2;
     s_->buf[k] = l[i];
     s_->buf[k + 1] = r[i];
-    pl = std::max(pl, std::fabs(l[i]));
-    pr = std::max(pr, std::fabs(r[i]));
+    pl = std::max(pl, std::min(std::fabs(l[i]), 1.0f));  // clamped like recorder-processor.js; NaN ignored
+    pr = std::max(pr, std::min(std::fabs(r[i]), 1.0f));
   }
   casMax(s_->peakBits[0], pl);
   casMax(s_->peakBits[1], pr);

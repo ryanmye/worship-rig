@@ -76,5 +76,11 @@ Devices: id = ALSA/PulseAudio name or Core Audio UID, else `<backend>:<index>` (
   (end to end, opt-in: `RIG_DEVHOST=1`).
 - `node test/unit/engine-bridge/boot-devhost.mjs` boots the real UI headless against `rig-devhost` and reports how far
   it gets (not in run-all).
+- `node test/unit/engine-bridge/ui-core-devhost.mjs [--grep <regex>] [--json] [--out f]` runs the **ui-core Perform
+  suite** (`test/phase2/ui-core/run.mjs`, unchanged) against `rig-devhost` (opt-in, not in run-all): a `--require`
+  preload swaps `server.js`'s `createServer` for this host and falls back to the installed Chromium when Playwright's
+  pinned revision is missing. It reports each test plus the bridge's error replies and warn events by op. Most
+  ui-core tests read Web Audio internals (`engine.slots[i].strip.pan`, `AnalyserNode` on `engine.ctx`), so they only
+  become meaningful against the shim once the core plays (T11+ instruments, T14 perform).
 
 Licence of the vendored audio library: `third_party/miniaudio/` (public domain or MIT-0, tag 0.11.22).

@@ -21,9 +21,10 @@ const char *const kFieldNames[5] = {"on", "type", "hz", "db", "q"};
 const char *const kLegacyNames[kEqLegacyRows] = {"low", "lowHz", "mid1", "mid1Hz", "mid1Q",
                                                  "mid2", "mid2Hz", "mid2Q", "high", "highHz"};
 
-double butter2Q() {  // BUTTER2_Q = 20 * Math.log10(Math.SQRT1_2)
-  static const double q = 20 * js::log10(js::kSqrt1_2);
-  return q;
+// BUTTER2_Q = 20 * Math.log10(Math.SQRT1_2). Computed per call (no function-local static): eqSpec() runs on the
+// audio thread, where a first-use static would take the init guard.
+double butter2Q() {
+  return 20 * js::log10(js::kSqrt1_2);
 }
 
 const ParamRow *eqRow(const char *key) {

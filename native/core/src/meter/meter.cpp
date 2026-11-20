@@ -157,7 +157,8 @@ std::string MeterServiceImpl::rtaBase64() {
         frames[c][i] = w0 + i >= N ? shared_->ring[c][f & (MeterShared::kRing - 1)].load(std::memory_order_relaxed)
                                    : 0.0f;
       }
-    if (shared_->written.load(std::memory_order_acquire) - w0 <= MeterShared::kRing - N) break;
+    // the writer's in-progress quantum (stored before `written` moves) counts too: one kQ of margin
+    if (shared_->written.load(std::memory_order_acquire) - w0 + kQ <= MeterShared::kRing - N) break;
   }
   const double scale = 1.0 / static_cast<double>(N);
   for (int c = 0; c < 2; ++c) {
