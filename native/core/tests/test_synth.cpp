@@ -237,6 +237,17 @@ TEST_SUITE("synth") {
     CHECK(d.rtAllocs == 0);
   }
 
+  TEST_CASE("rate change down (96 -> 48 kHz): a note-on of the adoption quantum starts at once, not later") {
+    t11::Driver d(t11::makeSynth("bell", 96000), 96000);
+    d.run(96000 * 2);  // t = 2 s
+    d.sr = 48000;  // Graph::adoptRate: frame grid rescaled, setSampleRate, then the quantum's commands
+    d.u->setSampleRate(48000);
+    d.frame = d.frame / 2;
+    d.noteOn(69, 100, static_cast<double>(d.frame) / 48000);
+    const auto out = d.run(1280);
+    CHECK(t11::rms(out[0], 0, 1280) > 1e-3);
+  }
+
   TEST_CASE("synth-extra ids: silent + 'unsupported' warning without T15; dispatched through the hook with it") {
     REQUIRE(rig::inst::kSynthExtraCount == 10);
     CHECK(rig::inst::isSynthExtraId("juno-pad"));

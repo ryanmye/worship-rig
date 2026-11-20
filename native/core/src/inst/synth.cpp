@@ -273,6 +273,15 @@ double SynthInstrument::timeOf(std::int64_t frame) const {
   return static_cast<double>(frame) / sr_;
 }
 
+void SynthInstrument::setSampleRate(double sr) {
+  // Graph::adoptRate rescales its frame grid, then applies this quantum's commands before process(): rescale the
+  // "currentTime" frame the same way, or atTime() would read old-rate frames at the new rate (a 48 -> 44.1 kHz
+  // change at t = 1000 s would push that quantum's note-ons 88 s into the future).
+  if (sr_ > 0 && sr > 0 && sr != sr_)
+    nextFrame_ = static_cast<std::int64_t>(std::ceil(static_cast<double>(nextFrame_) * sr / sr_ - 1e-9));
+  sr_ = sr;
+}
+
 double SynthInstrument::atTime(double when) const {
   const double now = static_cast<double>(nextFrame_) / sr_;
   return std::isfinite(when) && when > now ? when : now;

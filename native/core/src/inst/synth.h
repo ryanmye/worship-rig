@@ -63,7 +63,7 @@ class SynthInstrument final : public Instrument {
   void setVoiceCap(unsigned cap) override { pool_.setCap(clampVoiceCap(cap)); }
 
   void process(const RenderContext &ctx, UnitIO &io) override;
-  void setSampleRate(double sr) override { sr_ = sr; }
+  void setSampleRate(double sr) override;
   std::uint32_t liveVoices() const override { return pool_.live(); }
 
   // ---- introspection (tests) ----
