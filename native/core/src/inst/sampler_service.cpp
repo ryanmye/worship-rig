@@ -60,12 +60,13 @@ SamplerService::~SamplerService() {
     gEnvs.erase(std::remove_if(gEnvs.begin(), gEnvs.end(), [this](const auto &e) { return e.second == this; }),
                 gEnvs.end());
   }
-  for (auto &ld : loads_) {
-    ld->cancelled = true;
-    for (auto &e : ld->entries) leases_->release(e.buf);
-  }
+  // Services die with the Model in an unspecified order (std::vector element destruction: libstdc++ front to back,
+  // libc++ back to front, so on Apple the "cache" service registered after this one is ALREADY destroyed here).
+  // Nothing below touches the cache: the references of in-flight loads die with it, and the tables of units the
+  // graph deletes after the Model see detached leases.
+  leases_->detach();
+  for (auto &ld : loads_) ld->cancelled = true;
   loads_.clear();
-  leases_->detach();  // tables of units the graph deletes after the Model must not touch the cache any more
 }
 
 SamplerService *SamplerService::forEnv(const UnitEnv *env) {
