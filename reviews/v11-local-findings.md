@@ -305,3 +305,27 @@ Raw CDP, with no Playwright emulation. Playwright's CDP connection forces `prefe
 it for this check. Theme Daylight with the Auto flag set: Mac dark → `daylight-stage`, set light → `daylight-day`
 within 2.5 s, set dark → `daylight-stage`. The Mac was left in dark mode as before. The Day paper EQ graph is still
 an eyeball check for Ryan.
+
+## Reverb build times on the M2 Pro (checklist v11-memory): 4.5–30 ms of main thread (Linux: 15–400 ms)
+
+Source build `a31ebea`, 44.1 kHz context, fresh profile, idle app. For each of the 11 distinct factory spaces
+(`irKey`), I timed `reverb.irAsync` (IR built in the worker) and then `new ConvolverNode(...).buffer = ir` three
+times. The buffer assignment is the main-thread block that v11-memory defers while playing.
+
+| space (size·damp) | IR length | irAsync (worker) | `conv.buffer =` main thread, 3 runs | songs |
+|---|---|---|---|---|
+| 1.5 · 0.6 | 1.98 s | 16 ms | 6.4 / 6 / 4.5 ms | 2 |
+| 3.8 · 0.5 | 5.02 s | 42 ms | 13.4 / 11.4 / 11.8 ms | 3 |
+| 3.8 · 0.7 | 5.02 s | 37 ms | 11.3 / 10.8 / 11.1 ms | 2 |
+| 5 · 0.5 | 6.6 s | 0 ms | 29.5 / 19.4 / 17.4 ms | 2 |
+| 5 · 0.6 | 6.6 s | 47 ms | 15.2 / 14.8 / 15.2 ms | 1 |
+| 6.5 · 0.5 | 8.58 s | 0 ms | 19.8 / 19.3 / 18.7 ms | 3 |
+| 6.5 · 0.7 | 8.58 s | 63 ms | 19.5 / 19 / 18.7 ms | 1 |
+| 8 · 0.3 | 10.56 s | 77 ms | 22.7 / 23.1 / 24.3 ms | 1 |
+| 8 · 0.4 | 10.56 s | 76 ms | 23.7 / 22.8 / 22.3 ms | 2 |
+| 8 · 0.5 | 10.56 s | 98 ms | 25.7 / 30.3 / 27.1 ms | 1 |
+| 8 · 0.6 | 10.56 s | 76 ms | 21.9 / 22.2 / 22.6 ms | 1 |
+
+An irAsync of 0 ms was an IR cache hit. So on this Mac a reverb build can delay a note by about 30 ms at most. Q25
+(reverb at the first 2 s pause) still holds, but the 100–400 ms stall it avoids is mostly a Linux number. The
+song-switch work, not the reverb, is what's left for the Mac latency question.

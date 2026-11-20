@@ -118,7 +118,7 @@ CONTRACT_CHANGES `## v11-*` and `## ci-*`.
 - [x] (SOAK_SAMPLE_RATE=48000, 12/12, peak 700.0, max pinned 581.9/600; 44.1 kHz full run: 699.9; dual mono collapses on the Mac now, lrDiff 3.05e-5, test-mp3 2.02 MB) The soak's new `peakDecodedMB` column holds 700 at a 48 kHz context.
 - [ ] Far jump while holding a pad: the reverb changes at the first pause (not at the switch), and the jump itself
       has no note stall.
-- [ ] Reverb build times on the M2 Pro (CONTRACT_CHANGES `## v11-memory` lists the Linux numbers).
+- [x] (conv.buffer 4.5–30 ms main thread, 11 spaces; see findings) Reverb build times on the M2 Pro (CONTRACT_CHANGES `## v11-memory` lists the Linux numbers).
 
 ### Questions for Ryan (round 2)
 21. Should the Panic tooltip ("All notes off (Esc, ⌘.)") mention the click?
