@@ -10,6 +10,7 @@
 #include "doctest.h"
 #include "fixture_runner.h"
 #include "io/wav.h"
+#include "yyjson.h"
 
 using namespace rig::tools;
 
@@ -106,14 +107,56 @@ TEST_SUITE("golden-analytic") {
   }
 
   TEST_CASE("the golden harness reports what it cannot do instead of pretending") {
+    // T07 review O3: no hard-coded id (click-120-44 stopped being "unimplemented" when T07 landed). Probe, from the
+    // manifest, the first single-instrument fixture (one slot, no injection, no drone) whose render reports its
+    // instrument as unsupported; such a render must be silent. Each instrument type is rendered at most once, so the
+    // probe moves on by itself as waves 2-3 land, and passes vacuously once every instrument type exists.
     std::vector<Fixture> fx;
     std::string err;
     REQUIRE(loadFixtures(golden + "/manifest.json", fx, &err));
-    const auto it = std::find_if(fx.begin(), fx.end(), [](const Fixture &f) { return f.id == "click-120-44"; });
-    REQUIRE(it != fx.end());
-    const RunResult r = runFixture(*it, golden, 44100);
-    REQUIRE(r.ok);
-    CHECK(!r.skipped.empty());
-    CHECK(*std::max_element(r.channels[0].begin(), r.channels[0].end()) == 0.0f);  // silent until T07
+    std::vector<std::string> implemented;
+    bool probed = false;
+    for (const Fixture &f : fx) {
+      yyjson_doc *d = yyjson_read(f.json.data(), f.json.size(), 0);
+      REQUIRE(d != nullptr);
+      yyjson_val *root = yyjson_doc_get_root(d);
+      yyjson_val *setup = yyjson_obj_get(root, "setup");
+      yyjson_val *patch = yyjson_obj_get(setup, "patch");
+      yyjson_val *drone = yyjson_obj_get(patch, "drone");
+      const char *kind = yyjson_get_str(yyjson_obj_get(root, "kind"));
+      std::string type;
+      int used = 0;
+      size_t i, n;
+      yyjson_val *slot;
+      yyjson_arr_foreach(yyjson_obj_get(patch, "slots"), i, n, slot) {
+        if (yyjson_is_null(slot)) continue;
+        ++used;
+        const char *t = yyjson_get_str(yyjson_obj_get(yyjson_obj_get(slot, "instrument"), "type"));
+        type = t ? t : "";
+      }
+      const bool candidate = used == 1 && !type.empty() && !yyjson_obj_get(setup, "inject") &&
+                             !yyjson_get_bool(yyjson_obj_get(drone, "on")) &&
+                             std::string(kind ? kind : "") != "drone-freeze" &&
+                             std::find(implemented.begin(), implemented.end(), type) == implemented.end();
+      yyjson_doc_free(d);
+      if (!candidate) continue;
+      const RunResult r = runFixture(f, golden, 44100);
+      REQUIRE(r.ok);
+      const bool unsupported = std::any_of(r.skipped.begin(), r.skipped.end(),
+                                           [](const std::string &s) { return s.rfind("instrument ", 0) == 0; });
+      if (!unsupported) {
+        implemented.push_back(type);
+        continue;
+      }
+      MESSAGE("probe fixture " << f.id << " (instrument type " << type << ", reported unsupported)");
+      for (const auto &ch : r.channels) {
+        float peak = 0.0f;
+        for (float s : ch) peak = std::fmax(peak, std::fabs(s));
+        CHECK(peak == 0.0f);
+      }
+      probed = true;
+      break;
+    }
+    if (!probed) MESSAGE("every instrument type in the manifest is implemented: nothing left to probe");
   }
 }

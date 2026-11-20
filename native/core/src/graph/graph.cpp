@@ -439,16 +439,17 @@ void Graph::renderQuantum(float *const *out, unsigned channels) {
   } else {
     outBus_ = eqIn_;
   }
-  // 6. click
+  // 6. click: rendered here, summed into the destination only after the sinks (T07 review O1, orchestrator). The JS
+  // sends 'main' to ctx.destination alone: the analysers sit on fx.out and recordTap hears the click only with
+  // setClick({record:true}) (contract 1.5, 3.11), for main and aux alike.
   bool clickOn = false;
   if (units_[idx(UnitSlot::Click)]) {
     UnitIO io;
     io.out = &clickBus_;
     runUnit(UnitSlot::Click, base, io);
     clickOn = true;
-    if (!clickAux_) outBus_.add(clickBus_);
   }
-  // 7. sinks: meter sees `out`, recorder sees `out` (+ aux click when recorded)
+  // 7. sinks: the meter sees `out` without the click; the recorder sees `out` + the click when it is recorded
   if (units_[idx(UnitSlot::Meter)]) {
     UnitIO io;
     io.in = &outBus_;
@@ -457,7 +458,7 @@ void Graph::renderQuantum(float *const *out, unsigned channels) {
   if (units_[idx(UnitSlot::Recorder)]) {
     UnitIO io;
     io.in = &outBus_;
-    if (clickOn && clickAux_ && clickRecord_) {
+    if (clickOn && clickRecord_) {
       fxBus_ = outBus_;
       fxBus_.add(clickBus_);
       io.in = &fxBus_;
@@ -467,12 +468,16 @@ void Graph::renderQuantum(float *const *out, unsigned channels) {
 
   if (tap_ != 0 && !tapped) tapBus_.clear(2);  // tap point not served this quantum: silence
   const Bus &src = tap_ == 0 ? outBus_ : tapBus_;
-  float pk[2] = {0, 0};
+  float pk[2] = {0, 0};  // rig_meters.out_peak: pre-click, like the JS analysers on fx.out
+  for (unsigned c = 0; c < channels && c < 2; ++c) {
+    const float *s = src.ch[src.channels == 1 ? 0 : c];
+    for (std::size_t i = 0; i < kQ; ++i) pk[c] = std::max(pk[c], std::fabs(s[i]));
+  }
+  if (clickOn && !clickAux_) outBus_.add(clickBus_);  // the destination keeps the click (the `out` tap = goldens)
   for (unsigned c = 0; c < channels; ++c) {
     if (c < 2) {
       const float *s = src.ch[src.channels == 1 ? 0 : c];
       std::memcpy(out[c], s, kQ * sizeof(float));
-      for (std::size_t i = 0; i < kQ; ++i) pk[c] = std::max(pk[c], std::fabs(s[i]));
     } else if (clickOn && clickAux_) {
       std::memcpy(out[c], clickBus_.ch[0], kQ * sizeof(float));  // aux click on device channels 3-4
     } else {

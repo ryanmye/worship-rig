@@ -221,10 +221,12 @@ void ClickServiceImpl::onSongState(const SongState &s) {
     lastTempo_ = s.tempo;
     met_.retime(s.tempo, !(s.tempo > 0), {}, false);
   }
-  if (s.sigNum != lastSigNum_ || s.sigDen != lastSigDen_) {  // setTimeSig -> retime({sig}) (newBar: see report)
+  // setTimeSig(sig, {newBar}) -> retime({sig, newBar}): a song switch with the same signature still starts a new bar
+  // on the next free beat (controller.js passes newBar: true; T07 review O2)
+  if (s.sigNum != lastSigNum_ || s.sigDen != lastSigDen_ || s.newBar) {
     lastSigNum_ = s.sigNum;
     lastSigDen_ = s.sigDen;
-    met_.retime(0, false, sigOf(s), false);
+    met_.retime(0, false, sigOf(s), s.newBar);
   }
 }
 

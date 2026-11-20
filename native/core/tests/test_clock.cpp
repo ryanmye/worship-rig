@@ -63,7 +63,10 @@ TEST_SUITE("clock") {
       // the note scheduled for t = 1.0 s plays at t = 1.0 s on the new grid
       const double newGridAtSwitch = std::ceil(rendered * to / 48000.0 - 1e-9);
       const size_t expect = static_cast<size_t>(rendered + (std::llround(1.0 * to) - newGridAtSwitch)) + 1;
-      CHECK(firstNonZero(all[0]) == expect);
+      // the `out` signal passes the master chain, whose compressors delay it by their look-ahead (contract 3.8:
+      // output latency = DynamicsCompressor pre-delay, floor(0.006 * rate) frames at the new rate; T03 review O1)
+      const size_t lookahead = static_cast<size_t>(0.006f * static_cast<float>(to));
+      CHECK(firstNonZero(all[0]) == expect + lookahead);
       char buf[512];
       rig_test_query(e.e, "stats", buf, sizeof buf);
       CHECK(contains(buf, "\"rateChanges\":1"));

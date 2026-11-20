@@ -80,6 +80,9 @@ struct SongState {
   int keyPc = -1;  // -1 = no key context
   bool keyMinor = false;
   bool mono = false;
+  // INTERFACE-CHANGE(T07): setTimeSig(sig, {newBar}) (controller.js song switch): true only while the Model runs
+  // forEachService(onSongState) for that call, false at every other time (T07 review O2).
+  bool newBar = false;
 };
 
 /** Resolve a JSON patch object against the PARAMS defaults and clamps. False + err on a non-object patch. */

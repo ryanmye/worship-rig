@@ -378,7 +378,7 @@ void Model::setTempo(double bpm) {
   song_.tempo = bpm > 0 ? bpm : 0;
   forEachService([&](Service &s) { s.onSongState(song_); });
 }
-void Model::setTimeSig(std::string_view sig, bool) {
+void Model::setTimeSig(std::string_view sig, bool newBar) {
   int n = 4, d = 4;
   if (sig == "3/4") n = 3;
   else if (sig == "2/4") n = 2;
@@ -387,7 +387,9 @@ void Model::setTimeSig(std::string_view sig, bool) {
   else if (sig == "12/8") n = 12, d = 8;
   song_.sigNum = n;
   song_.sigDen = d;
+  song_.newBar = newBar;  // INTERFACE-CHANGE(T07): visible to the services of this call only (T07 review O2)
   forEachService([&](Service &s) { s.onSongState(song_); });
+  song_.newBar = false;
 }
 void Model::setKeyContext(int pc, bool minor) {
   song_.keyPc = ((pc % 12) + 12) % 12;

@@ -209,6 +209,7 @@ void Engine::processMessage(const std::string &json) {
 rig_status Engine::post(const char *json, std::size_t len) {
   if (!json || !looksLikeJson(json, len)) return RIG_E_INVALID;
   if (!realtime()) {
+    drainMidi();  // offline: rig_midi_in bytes reach the midi service at the next post or quantum (T07 review O5)
     const bool ok = bridge_->handle(json, len);
     flush();
     return ok ? RIG_OK : RIG_E_INVALID;
@@ -280,15 +281,19 @@ void Engine::controlLoop() {
     for (const auto &m : batch) processMessage(m);
     drainAudioEvents();
     timers_.runDue(graph_.timeBase().frame / Q);
-    MidiIn mi;
-    while (midiQ_.pop(mi)) {
-      midiRecv_.fetch_add(1, std::memory_order_relaxed);
-      model_.midiBytes(mi.port, mi.bytes, mi.len, mi.hostTimeNs);  // "midi" service (T07) parses and routes
-    }
+    drainMidi();
     checkWatchdog();
     pumpRec(false);
     emitTick();
     flush();
+  }
+}
+
+void Engine::drainMidi() {
+  MidiIn mi;
+  while (midiQ_.pop(mi)) {
+    midiRecv_.fetch_add(1, std::memory_order_relaxed);
+    model_.midiBytes(mi.port, mi.bytes, mi.len, mi.hostTimeNs);  // "midi" service (T07) parses and routes
   }
 }
 
@@ -352,6 +357,7 @@ void Engine::renderOne() {
   for (unsigned c = 0; c < RIG_MAX_OUTPUT_CHANNELS; ++c) ptrs[c] = fifo_[c];
   if (!realtime()) {
     drainAudioEvents();
+    drainMidi();  // T07 review O5
     timers_.runDue(graph_.frame() / Q);
     graph_.renderQuantum(ptrs, outCh_);
     pumpRec(true);  // the offline recorder writes inline, per quantum (no threads offline)

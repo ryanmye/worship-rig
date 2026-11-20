@@ -141,7 +141,7 @@ function runCase(name, sr, frames, script, { channels = 2 } = {}) {
         return undefined;
       case 'sig':
         eng.timeSig = a.sig;
-        m.retime({ sig: a.sig, newBar: false });
+        m.retime({ sig: a.sig, newBar: !!a.newBar }); // controller.js song switch: setTimeSig(sig, {newBar: true})
         eng.timeSig = m.sig;
         return undefined;
       case 'config':
@@ -199,6 +199,12 @@ for (const sr of [44100, 48000]) {
   cases.push(runCase(`odd-countin-${sr}`, sr, 128 * Math.ceil((3 * sr) / 128), [
     [-1, 'tempo', { bpm: 180 }], [-1, 'sig', { sig: '7/8' }], [-1, 'clock', { on: true }],
     [-1, 'start', { countIn: 3, quietAfter: true }], [1.0, 'stop', {}], [1.5, 'start', { countIn: 1 }]]));
+  // song switch (integrator, T07 review O2): same tempo and signature, newBar only -> the next free beat is a downbeat;
+  // then a switch that also changes the tempo (controller.js: setTempo, then setTimeSig with newBar)
+  cases.push(runCase(`songswitch-newbar-${sr}`, sr, 128 * Math.ceil((5 * sr) / 128), [
+    [-1, 'tempo', { bpm: 120 }], [-1, 'sig', { sig: '4/4' }], [-1, 'clock', { on: true }], [-1, 'start', { when: 0.1 }],
+    [1.3, 'sig', { sig: '4/4', newBar: true }], [2.95, 'tempo', { bpm: 96 }],
+    [2.95, 'sig', { sig: '4/4', newBar: true }], [4.4, 'stop', {}]]));
 }
 
 const head = [

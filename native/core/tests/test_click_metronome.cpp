@@ -137,7 +137,8 @@ TEST_SUITE("click") {
         if (k.op == "tempo") {
           msg = R"({"v":1,"op":"song","id":)" + ids + field(a, "bpm").replace(2, 3, "tempo") + "}";
         } else if (k.op == "sig") {
-          msg = R"({"v":1,"op":"song","id":)" + ids + field(a, "sig").replace(2, 3, "timeSig") + "}";
+          msg = R"({"v":1,"op":"song","id":)" + ids + field(a, "sig").replace(2, 3, "timeSig") + field(a, "newBar") +
+                "}";  // newBar: song switch (T07 review O2, songswitch-newbar-* cases)
         } else if (k.op == "config") {
           msg = R"({"v":1,"op":"click","action":"config","id":)" + ids + field(a, "level") + field(a, "record") +
                 field(a, "output") + field(a, "when") + "}";
