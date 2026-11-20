@@ -1,0 +1,6036 @@
+# MIDI parser vectors from the real app/js/midi.js (tools/golden/vectors/dump-midi.mjs, node v22.23.5)
+chunk a 4d
+input a
+chunk a -
+chunk b fc9e346c362e639b7931
+input b
+noteon 52 108 14
+noteon 54 46 14
+noteon 121 49 11
+chunk a -
+chunk a c119e43c0081707f924e24947e7b944a0087042c9a
+input a
+program 25 1
+bend bfefc40000000000 60 4
+noteoff 112 127 1
+noteon 78 36 2
+noteon 126 123 4
+noteoff 74 0 4
+noteoff 4 44 7
+chunk a 904c0e824c01c5e024121751388f5a31
+input a
+noteon 76 14 0
+noteoff 76 1 2
+bend bfe6dc0000000000 2340 0
+bend 3fd12e89744ba25d 10391 0
+noteoff 90 49 15
+chunk b ec000c9e4400
+input b
+bend bfea000000000000 1536 12
+noteoff 68 0 14
+chunk a e15d7f63373b9670009d40009e6900c25fbf631b
+input a
+bend 3fefddfeeff77fbc 16349 1
+bend bfc0740000000000 7139 1
+noteoff 112 0 6
+noteoff 64 0 13
+noteoff 105 0 14
+program 95 2
+cc 99 27 3fcb366cd9b366ce 15
+chunk b 5f5a9b9a0577947851b60770
+input b
+noteon 95 90 14
+noteon 5 119 10
+noteon 120 81 4
+cc 7 112 3fec3870e1c3870e 6
+chunk a 8942519302759b1108e3997017
+input a
+noteoff 66 81 9
+noteon 2 117 3
+noteon 17 8 11
+noteon 112 23 9
+chunk a e6755d7f119f5800bd012f9b1148
+input a
+bend 3fddeaef577abbd6 12021 6
+bend bfe7010000000000 2303 6
+noteoff 88 0 15
+cc 1 47 3fd7af5ebd7af5ec 13
+noteon 17 72 11
+chunk a 987236964f33836517d32e
+input a
+noteon 114 54 8
+noteon 79 51 6
+noteoff 101 23 3
+chunk a ca1c
+input a
+program 28 10
+chunk b b0011dc209e7c5293b39890b4f967c00
+input b
+cc 1 29 3fcd3a74e9d3a74f 0
+program 9 2
+program 41 5
+program 59 5
+program 57 5
+noteoff 11 79 9
+noteoff 124 0 6
+chunk a 70b80b0689500c9c
+input a
+program 112 10
+cc 11 6 3fa83060c183060c 8
+noteoff 80 12 9
+chunk b 9b361ac73eee0000b97850b64072
+input b
+noteon 54 26 11
+program 62 7
+bend bff0000000000000 0 14
+cc 120 80 3fe42850a142850a 9
+cc 64 114 3fecb972e5cb972e 6
+chunk a 957d00
+input a
+noteoff 125 0 5
+chunk a 27e8ca7f
+input a
+program 127 10
+chunk a 8d7b519553163064
+input a
+noteoff 123 81 13
+noteon 83 22 5
+noteon 48 100 5
+chunk a 9c7f59936221b14070cb52
+input a
+noteon 127 89 12
+noteon 98 33 3
+cc 64 112 3fec3870e1c3870e 1
+program 82 11
+chunk a b64032e8005699160094245b
+input a
+cc 64 50 3fd93264c993264d 6
+bend 3fd600b005802c01 11008 8
+noteoff 22 0 9
+noteon 36 91 4
+chunk a 15f09a81652e71c911
+input a
+noteoff 101 46 1
+program 17 9
+chunk b e20000971a499e3100
+input b
+bend bff0000000000000 0 2
+noteon 26 73 7
+noteoff 49 0 14
+chunk a 9223408f1b559e913c38b41f58
+input a
+noteon 35 64 2
+noteoff 27 85 15
+noteon 60 56 1
+cc 31 88 3fe62c58b162c58b 4
+chunk b fc946f24
+input b
+noteon 111 36 4
+chunk b e77f7b847f579b1047f035369364008b
+input b
+bend 3fedffefff7ffc00 15871 7
+noteoff 127 87 4
+noteon 16 71 11
+noteoff 100 0 3
+chunk a -
+chunk a -
+chunk b e10000
+input b
+bend bff0000000000000 0 1
+chunk a ba0716c368815d4496460b
+input a
+cc 7 22 3fc62c58b162c58b 10
+program 104 3
+noteoff 93 68 1
+noteon 70 11 6
+chunk b 198c4358943000be070701dc73812f26ff
+input b
+noteoff 67 88 12
+noteoff 48 0 4
+cc 7 7 3fac3870e1c3870e 14
+noteoff 47 38 1
+chunk b 0705fee1067f7fff9f566c
+input b
+noteoff 7 5 1
+bend 3fef86fc37e1bf0e 16262 1
+noteon 86 108 15
+chunk b e37f40
+input b
+bend 3f8fc0fe07f03f82 8319 3
+chunk b b1
+input b
+chunk b 8224389c280d917e6d64b1402fe04a0000e200008c
+input b
+noteoff 36 56 2
+noteon 40 13 12
+noteon 126 109 1
+cc 64 47 3fd7af5ebd7af5ec 1
+bend bfefb60000000000 74 0
+bend bff0000000000000 0 2
+chunk a 8d6629f0be4015943300ee0007
+input a
+noteoff 102 41 13
+cc 64 21 3fc52a54a952a54b 14
+noteoff 51 0 4
+bend bfec800000000000 896 14
+chunk a 956600592c9c3052cc4f904f64fd
+input a
+noteoff 102 0 5
+noteon 89 44 5
+noteon 48 82 12
+program 79 12
+noteon 79 100 0
+chunk b 511d
+input b
+noteoff 81 29 12
+chunk a 9c4b56
+input a
+noteon 75 86 12
+chunk a cd5e229e502d6d25d7f37c5e86
+input a
+program 94 13
+program 34 13
+noteon 80 45 14
+noteon 109 37 14
+chunk a 0fb80b7f945b00
+input a
+cc 11 127 3ff0000000000000 8
+noteoff 91 0 4
+chunk a e24f639d267e
+input a
+bend 3fe1cf8e7c73e39f 12751 2
+noteon 38 126 13
+chunk a 9ff7972b1083051a8d150d22
+input a
+noteon 43 16 7
+noteoff 5 26 3
+noteoff 21 13 13
+chunk a e14f4028b71ebe074d8c650949c55f926972
+input a
+bend 3f83c09e04f02781 8271 1
+cc 7 77 3fe366cd9b366cda 14
+noteoff 101 9 12
+program 95 5
+noteon 105 114 2
+chunk a 2bf09d250088
+input a
+noteoff 37 0 13
+chunk a 9f4d2d65
+input a
+noteon 77 45 15
+chunk a 913f375171ec6d009a635a
+input a
+noteon 63 55 1
+noteon 81 113 1
+bend bfef930000000000 109 12
+noteon 99 90 10
+chunk b ef7f00
+input b
+bend bfef810000000000 127 15
+chunk a b8c556e2007f940000c529911332
+input a
+program 86 5
+bend 3fef80fc07e03f02 16256 2
+noteoff 0 0 4
+program 41 5
+noteon 19 50 1
+chunk a b7016fcf76
+input a
+cc 1 111 3febf7efdfbf7efe 7
+program 118 15
+chunk a 7899e500007e29982e000515
+input a
+program 120 15
+bend bff0000000000000 0 5
+bend bfd6040000000000 5374 5
+noteoff 46 0 8
+noteon 5 21 8
+chunk a 961400e48d940f2bc950
+input a
+noteoff 20 0 6
+noteon 15 43 4
+program 80 9
+chunk a 9a6834
+input a
+noteon 104 52 10
+chunk a b8be608746cb1d91
+input a
+program 29 11
+chunk a 97b10b22c8900600
+input a
+cc 11 34 3fd1224489122449 1
+noteoff 6 0 0
+chunk b 47ef7f40
+input b
+bend 3f8fc0fe07f03f82 8319 15
+chunk b 8032419e4100
+input b
+noteoff 50 65 0
+noteoff 65 0 14
+chunk a f371823b59905a019790396e79f0
+input a
+noteoff 59 89 2
+noteon 90 1 0
+noteon 57 110 0
+chunk b 975c1b8a4a13f79218380378
+input b
+noteon 92 27 7
+noteoff 74 19 10
+noteon 24 56 2
+noteon 3 120 2
+chunk a 921a28961a00
+input a
+noteon 26 40 2
+noteoff 26 0 6
+chunk a 8a705f92750b
+input a
+noteoff 112 95 10
+noteon 117 11 2
+chunk a 9f0d00
+input a
+noteoff 13 0 15
+chunk a 4d3a
+input a
+noteon 77 58 15
+chunk a 21975e1b20
+input a
+noteon 94 27 7
+chunk a f9566019c48d6076806a7546
+input a
+noteon 32 86 7
+noteon 96 25 7
+noteoff 96 118 13
+noteoff 106 117 0
+chunk a -
+chunk b 937226871c690e203f7620
+input b
+noteon 114 38 3
+noteoff 28 105 7
+noteoff 14 32 7
+noteoff 63 118 7
+chunk b 22903500842e33
+input b
+noteoff 32 34 7
+noteoff 53 0 0
+noteoff 46 51 4
+chunk b 7f
+input b
+chunk b 141643
+input b
+noteoff 127 20 4
+noteoff 22 67 4
+chunk a 9376139355689c511b105eb50b5a950f289d1400881351
+input a
+noteon 118 19 3
+noteon 85 104 3
+noteon 81 27 12
+noteon 16 94 12
+cc 11 90 3fe6ad5ab56ad5ab 5
+noteon 15 40 5
+noteoff 20 0 13
+noteoff 19 81 8
+chunk a b0407e6b7d619280394d8f280e4a
+input a
+cc 64 126 3fefbf7efdfbf7f0 0
+cc 107 125 3fef7efdfbf7efe0 0
+noteoff 57 77 0
+noteoff 40 14 15
+chunk a -
+chunk a 390b
+input a
+noteoff 74 57 15
+chunk a bf909e7900896d0956061fb27827
+input a
+noteoff 121 0 14
+noteoff 109 9 9
+noteoff 86 6 9
+cc 120 39 3fd3a74e9d3a74ea 2
+chunk b 965a7e2d
+input b
+noteon 90 126 6
+chunk a b07b1399
+input a
+cc 123 19 3fc3264c993264ca 0
+chunk a 455b32599c1916b19e9d122b9c051b
+input a
+noteon 69 91 9
+noteon 50 89 9
+noteon 25 22 12
+noteon 18 43 13
+noteon 5 27 12
+chunk a -
+chunk a b50775
+input a
+cc 7 117 3fed7af5ebd7af5f 5
+chunk a 3a0d9f8f7c76e2
+input a
+cc 58 13 3fba3468d1a3468d 5
+noteoff 124 118 15
+chunk a 9e0800821d431933
+input a
+noteoff 8 0 14
+noteoff 29 67 2
+noteoff 25 51 2
+chunk b -
+chunk b 800544795421
+input b
+noteoff 5 68 0
+noteoff 121 84 0
+chunk a -
+chunk a bb0775e509009246011c95140b9e530b386346
+input a
+cc 7 117 3fed7af5ebd7af5f 11
+bend bfeff70000000000 9 5
+noteon 70 1 2
+noteon 20 11 5
+noteon 83 11 14
+noteon 56 99 14
+chunk b a9942a1de4247fe29a5564
+input b
+noteon 42 29 4
+bend 3fefa4fd27e93f4a 16292 4
+noteon 85 100 10
+chunk b 259390066e9f5101eb7f027c909997
+input b
+noteon 6 110 0
+noteon 81 1 15
+bend bfee810000000000 383 11
+chunk b ca02ee15
+input b
+program 2 10
+chunk a f98d8a4d7576409b2c009c5800f0cf4cf0
+input a
+noteoff 77 117 10
+noteoff 118 64 10
+noteoff 44 0 11
+noteoff 88 0 12
+program 76 15
+chunk a 44b3401b
+input a
+cc 64 27 3fcb366cd9b366ce 3
+chunk a 039109759e3343
+input a
+noteon 9 117 1
+noteon 51 67 14
+chunk a 8e037d31947c4c96427b759fc13ecd78bb7849
+input a
+noteoff 3 125 14
+noteon 124 76 4
+noteon 66 123 6
+program 62 1
+program 120 13
+cc 120 73 3fe264c993264c99 11
+chunk a 8f9c12103679f7792af8
+input a
+noteon 18 16 12
+noteon 54 121 12
+chunk b 6177f3be0b299b58007a
+input b
+bend 3fe09584ac25612b 12437 14
+cc 11 41 3fd4a952a54a952a 14
+noteoff 88 0 11
+chunk b 996e00ef7f00992c00
+input b
+noteoff 110 0 9
+bend bfef810000000000 127 15
+noteoff 44 0 9
+chunk a bf071dec3a7fb50b4c0e78ca
+input a
+cc 7 29 3fcd3a74e9d3a74f 15
+bend 3fefbafdd7eebf76 16314 12
+cc 11 76 3fe3264c993264ca 5
+cc 14 120 3fee3c78f1e3c78f 5
+chunk b bd7b1a9a2c339c55007070290eba
+input b
+cc 123 26 3fca3468d1a3468d 13
+noteon 44 51 10
+noteoff 85 0 12
+noteon 112 112 12
+noteon 41 14 12
+chunk a -
+chunk a 816e550e279f3502
+input a
+noteoff 110 85 1
+noteoff 14 39 1
+noteon 53 2 15
+chunk a 02b4076fb00100
+input a
+cc 7 111 3febf7efdfbf7efe 4
+cc 1 0 0000000000000000 0
+chunk b 85687d
+input b
+noteoff 104 125 5
+chunk b cf4fc7519b1b0077f70b06bd400a
+input b
+program 79 15
+program 81 7
+noteoff 27 0 11
+cc 64 10 3fb42850a142850a 13
+chunk a 8b22585697171c579f0c7d095bfb
+input a
+noteoff 34 88 11
+noteon 23 28 7
+noteon 12 125 15
+noteon 9 91 15
+chunk a 26bc7837289b
+input a
+cc 120 55 3fdbb76eddbb76ee 12
+chunk a cc7bb397580219412d9b0700e97f00c311
+input a
+program 123 12
+noteon 88 2 7
+noteon 25 65 7
+noteoff 7 0 11
+bend bfef810000000000 127 9
+program 17 3
+chunk a 942a1b80272b993522
+input a
+noteon 42 27 4
+noteoff 39 43 0
+noteon 53 34 9
+chunk a 892d79880a4858cf51cf6fc657
+input a
+noteoff 45 121 9
+noteoff 10 72 8
+program 81 15
+program 111 15
+program 87 6
+chunk a c5315c3f51
+input a
+program 49 5
+program 92 5
+program 63 5
+program 81 5
+chunk b 942c002eec00009b460042b57b26
+input b
+noteoff 44 0 4
+bend bff0000000000000 0 12
+noteoff 70 0 11
+cc 123 38 3fd3264c993264ca 5
+chunk a 942f04
+input a
+noteon 47 4 4
+chunk b 426f
+input b
+cc 66 111 3febf7efdfbf7efe 5
+chunk a af926f0f395a
+input a
+noteon 111 15 2
+noteon 57 90 2
+chunk a c93f641a96761d9a0f008e
+input a
+program 63 9
+program 100 9
+program 26 9
+noteon 118 29 6
+noteoff 15 0 10
+chunk b f03f681601260d5f
+input b
+chunk a e60040
+input a
+bend 0000000000000000 8192 6
+chunk a c54b
+input a
+program 75 5
+chunk b 9761758b4a27bd0770389b7800
+input b
+noteon 97 117 7
+noteoff 74 39 11
+cc 7 112 3fec3870e1c3870e 13
+noteoff 120 0 11
+chunk a 173492130028
+input a
+program 23 5
+program 52 5
+noteoff 19 0 2
+chunk a 95f0
+input a
+chunk a 47439b4838009174ef0032925a00
+input a
+noteon 72 56 11
+bend bfcc000000000000 6400 15
+noteoff 90 0 2
+chunk a b67814
+input a
+cc 120 20 3fc42850a142850a 6
+chunk b 9d210a
+input b
+noteon 33 10 13
+chunk a ffec2800
+input a
+bend bfefd80000000000 40 12
+chunk a 19fb967049
+input a
+noteon 112 73 6
+chunk a f62a779f24009e1d584eb57b6a3692
+input a
+noteoff 36 0 15
+noteon 29 88 14
+cc 123 106 3feab56ad5ab56ad 5
+chunk a 1e2b5dc27403f091104be17f7f79
+input a
+noteon 30 43 2
+program 116 2
+program 3 2
+noteon 16 75 1
+bend 3ff0000000000000 16383 1
+chunk a 98316f
+input a
+noteon 49 111 8
+chunk a 9e0b000f9879427269
+input a
+noteoff 11 0 14
+noteon 121 66 8
+noteon 114 105 8
+chunk a 963c26933273b2e40059be0b07
+input a
+noteon 60 38 6
+noteon 50 115 3
+bend 3fd900c806403202 11392 4
+cc 11 7 3fac3870e1c3870e 14
+chunk b c47b12804f007e
+input b
+program 123 4
+program 18 4
+noteoff 79 0 0
+chunk a f44f41983d0058559b
+input a
+noteoff 61 0 8
+noteon 88 85 8
+chunk a 82200f0d7a12497667
+input a
+noteoff 32 15 2
+noteoff 13 122 2
+noteoff 18 73 2
+noteoff 118 103 2
+chunk b f8bf070c99663bcf1b
+input b
+cc 7 12 3fb83060c183060c 15
+noteon 102 59 9
+program 27 15
+chunk a 801d06964813941c2bc1629d6d697465
+input a
+noteoff 29 6 0
+noteon 72 19 6
+noteon 28 43 4
+program 98 1
+noteon 109 105 13
+noteon 116 101 13
+chunk a 9a0e11
+input a
+noteon 14 17 10
+chunk a 1a4ee10000
+input a
+noteon 26 78 10
+bend bff0000000000000 0 1
+chunk a 953b799c45249281182b9d293d6aba403f16
+input a
+noteon 59 121 5
+noteon 69 36 12
+noteoff 24 43 1
+noteon 41 61 13
+cc 64 63 3fdfbf7efdfbf7f0 10
+chunk b b5406a682b2e0f3b952c62245f
+input b
+cc 64 106 3feab56ad5ab56ad 5
+cc 104 43 3fd5ab56ad5ab56b 5
+cc 46 15 3fbe3c78f1e3c78f 5
+noteon 44 98 5
+noteon 36 95 5
+chunk a f03e0c1b9b7305aacf1a7099154e
+input a
+noteon 115 5 11
+program 26 15
+program 112 15
+noteon 21 78 9
+chunk a 976675913f568f5645c0bb873032
+input a
+noteon 102 117 7
+noteon 63 86 1
+noteoff 86 69 15
+noteoff 48 50 7
+chunk a cf6ce57f400a109f1a7846cc17ec0040e47b40
+input a
+program 108 15
+bend 3f8fc0fe07f03f82 8319 5
+bend bfe7f60000000000 2058 5
+noteon 26 120 15
+program 23 12
+bend 0000000000000000 8192 12
+bend 3f8ec0f607b03d82 8315 4
+chunk a 2599165f7d1e4c8ee2
+input a
+noteon 22 95 9
+noteon 125 30 9
+chunk a e80000fcc0bd7830ce1c
+input a
+bend bff0000000000000 0 8
+cc 120 48 3fd83060c183060c 13
+program 28 14
+chunk a cbee72009a6c1c
+input a
+bend bfef8e0000000000 114 14
+noteon 108 28 10
+chunk b 9a056cca3251799d1b00c203f1e258003c3d966740
+input b
+noteon 5 108 10
+program 50 10
+program 81 10
+program 121 10
+noteoff 27 0 13
+program 3 2
+bend bfefa80000000000 88 2
+bend bfa4400000000000 7868 2
+noteon 103 64 6
+chunk a 89571d1887335a
+input a
+noteoff 87 29 9
+noteoff 51 90 7
+chunk a c925509bab991f4c9116
+input a
+program 37 9
+program 80 9
+noteon 31 76 9
+chunk a 9a70684bbe4875389b483b
+input a
+noteon 112 104 10
+cc 72 117 3fed7af5ebd7af5f 14
+noteon 72 59 11
+chunk a 966337b1405fb57b47e2007f4a961059e50b00eb1b63
+input a
+noteon 99 55 6
+cc 64 95 3fe7efdfbf7efdfc 1
+cc 123 71 3fe1e3c78f1e3c79 5
+bend 3fef80fc07e03f02 16256 2
+noteon 16 89 6
+bend bfeff50000000000 11 5
+bend 3fe19b8cdc66e337 12699 11
+chunk a 02e60000903b52
+input a
+bend bff0000000000000 0 6
+noteon 59 82 0
+chunk a c52d499299267c9d5268c39436003e01
+input a
+program 45 5
+program 73 5
+noteon 38 124 9
+noteon 82 104 13
+noteoff 54 0 4
+noteon 62 1 4
+chunk a e06300
+input a
+bend bfef9d0000000000 99 0
+chunk a ec7f3be37f00bd40479a0d72aafbc83ff5ca0f
+input a
+bend bfb0080000000000 7679 12
+bend bfef810000000000 127 3
+cc 64 71 3fe1e3c78f1e3c79 13
+noteon 13 114 10
+program 63 8
+program 15 10
+chunk a 855524971c0199c72f3684885409
+input a
+noteoff 85 36 5
+noteon 28 1 7
+program 47 7
+program 54 7
+noteoff 84 9 8
+chunk a 980a01ae2156b07b03b30148840651e742
+input a
+noteon 10 1 8
+cc 123 3 3f983060c183060c 0
+cc 1 72 3fe2244891224489 3
+noteoff 6 81 4
+chunk a 7bed7f4094e57f7f
+input a
+bend 3fedc2ee1770bb86 15810 7
+bend 3f8fc0fe07f03f82 8319 13
+bend 3ff0000000000000 16383 5
+chunk a dffb5406fa9c415cea4010726e
+input a
+noteon 65 92 12
+bend bfe7c00000000000 2112 10
+bend 3fe772bb95dcaee5 14194 10
+chunk a 0304cf47e92740984e2de658401e60992c3dbf3c5dc905
+input a
+bend bfedfd0000000000 515 10
+program 71 15
+bend 3f73809c04e02701 8231 9
+noteon 78 45 8
+bend 3f8600b005802c01 8280 6
+bend 3fe01e80f407a03d 12318 6
+noteon 44 61 9
+cc 60 93 3fe76eddbb76eddc 15
+program 5 9
+chunk a c429a49743009200009c5b4e07388224635a65915317
+input a
+program 41 4
+noteoff 67 0 7
+noteoff 0 0 2
+noteon 91 78 12
+noteon 7 56 12
+noteoff 36 99 2
+noteoff 90 101 2
+noteon 83 23 1
+chunk a 659e0400834d4211b1934561
+input a
+noteoff 4 0 14
+noteoff 77 66 3
+noteon 69 97 3
+chunk a 9a7318fb933d009f3863345eee6f
+input a
+noteon 115 24 10
+noteoff 61 0 3
+noteon 56 99 15
+noteon 52 94 15
+chunk a c5e7154094261e8d6b5c514b
+input a
+bend 3f6500a805402a01 8213 7
+noteon 38 30 4
+noteoff 107 92 13
+noteoff 81 75 13
+chunk a f6f7904b00bb4019bc7c33564d9b0334917737
+input a
+noteoff 75 0 0
+cc 64 25 3fc93264c993264d 11
+cc 124 51 3fd9b366cd9b366d 12
+cc 86 77 3fe366cd9b366cda 12
+noteon 3 52 11
+noteon 119 55 1
+chunk a 548d7b1c7af9f0b0406c92
+input a
+noteoff 123 28 13
+cc 64 108 3feb366cd9b366ce 0
+chunk a 716cea915c00bc7b268dcb9b2e13
+input a
+noteon 113 108 2
+noteoff 92 0 1
+cc 123 38 3fd3264c993264ca 12
+noteon 46 19 11
+chunk b e423973d054a4798f2
+input b
+noteon 61 5 7
+noteon 74 71 7
+chunk a 8a19473c1616
+input a
+noteoff 25 71 10
+noteoff 60 22 10
+chunk a 36e92321cc99aa8d977a4d
+input a
+noteoff 22 54 10
+bend bfdeba0000000000 4259 9
+noteon 122 77 7
+chunk a 90486c728b3600947e14025f9b89
+input a
+noteon 72 108 0
+noteoff 54 0 11
+noteon 126 20 4
+noteon 2 95 4
+chunk b 95033c90440d769f
+input b
+noteon 3 60 5
+noteon 68 13 0
+chunk b 5fc543bf0b6a90674d
+input b
+program 67 5
+cc 11 106 3feab56ad5ab56ad 15
+noteon 103 77 0
+chunk a 4b39adff16cc01c5
+input a
+noteoff 75 57 9
+program 1 12
+chunk a -
+chunk a 942453e5000e950500
+input a
+noteon 36 83 4
+bend bfe9000000000000 1792 5
+noteoff 5 0 5
+chunk a e10d7fb20162ce242c9d7417028d6d703e
+input a
+bend 3fef8dfc6fe37f1c 16269 1
+cc 1 98 3fe8b162c58b162c 2
+program 36 14
+program 44 14
+noteon 116 23 13
+noteoff 109 112 13
+chunk a 805322ffcf04cb2d0d1a1200
+input a
+noteoff 83 34 0
+program 4 15
+program 45 11
+program 13 11
+program 26 11
+program 18 11
+program 0 11
+chunk a eb7f7f33cd03
+input a
+bend 3ff0000000000000 16383 11
+program 3 13
+chunk a 9d5700b1405b939d3000
+input a
+noteoff 87 0 13
+cc 64 91 3fe6eddbb76eddbb 1
+noteoff 48 0 13
+chunk a 9201
+input a
+chunk b 0768
+input b
+noteon 7 104 0
+chunk a e27f7f449635126b933b6ab240113051
+input a
+bend 3ff0000000000000 16383 2
+noteon 53 18 6
+noteon 59 106 3
+cc 64 17 3fc1224489122449 2
+cc 48 81 3fe468d1a3468d1a 2
+chunk a e57f409d19647137
+input a
+bend 3f8fc0fe07f03f82 8319 5
+noteon 25 100 13
+noteon 113 55 13
+chunk a -
+chunk a 05b1010ab8783dc179b0013a
+input a
+cc 1 10 3fb42850a142850a 1
+cc 120 61 3fdebd7af5ebd7af 8
+program 121 1
+cc 1 58 3fdd3a74e9d3a74f 0
+chunk a fad01914c22c469d2d00
+input a
+program 44 2
+program 70 2
+noteoff 45 0 13
+chunk b e40a7f
+input b
+bend 3fef8afc57e2bf16 16266 4
+chunk a bacdd8907e0b64903000
+input a
+noteon 126 11 0
+noteoff 48 0 0
+chunk a 4e
+input a
+chunk a 847d0591121d451d9d54619d2458e10040558d7d2c
+input a
+noteoff 125 5 4
+noteon 18 29 1
+noteon 69 29 1
+noteon 84 97 13
+noteon 36 88 13
+bend 0000000000000000 8192 1
+noteoff 125 44 13
+chunk a 108a3b102bc4c1014342ac
+input a
+noteoff 59 16 10
+program 1 1
+program 67 1
+program 66 1
+chunk a 1cb60b328119279d090a
+input a
+cc 11 50 3fd93264c993264d 6
+noteoff 25 39 1
+noteon 9 10 13
+chunk a b40a6997087d8e6f6e
+input a
+cc 10 105 3fea74e9d3a74e9d 4
+noteon 8 125 7
+noteoff 111 110 14
+chunk a fec757807214943a222f50
+input a
+program 87 7
+noteoff 114 20 0
+noteon 58 34 4
+noteon 47 80 4
+chunk a 920d7ec8399e10009e004b97721aff
+input a
+noteon 13 126 2
+program 57 8
+noteoff 16 0 14
+noteon 0 75 14
+noteon 114 26 7
+chunk b c14fb14067989b1e7099907b00962018
+input b
+program 79 1
+cc 64 103 3fe9f3e7cf9f3e7d 1
+noteon 30 112 11
+noteoff 123 0 0
+noteon 32 24 6
+chunk a 9b5d6d056f2212eb7f402e
+input a
+noteon 93 109 11
+noteon 5 111 11
+noteon 34 18 11
+bend 3f8fc0fe07f03f82 8319 11
+chunk b 9c462b57f9973d26
+input b
+noteon 70 43 12
+noteon 61 38 7
+chunk b 839e3900940c00e36e001b299ce17f7f332f1b
+input b
+noteoff 57 0 14
+noteoff 12 0 4
+bend bfef920000000000 110 3
+bend bfd6ca0000000000 5275 3
+bend 3ff0000000000000 16383 1
+bend bfd09a0000000000 6067 1
+chunk a 96555e852b02
+input a
+noteon 85 94 6
+noteoff 43 2 5
+chunk a c40a82e2004018d8e37f40c431
+input a
+program 10 4
+bend 0000000000000000 8192 2
+bend 3f8fc0fe07f03f82 8319 3
+program 49 4
+chunk a 8f0a08
+input a
+noteoff 10 8 15
+chunk a -
+chunk a c805b90d0abb0b71e100002b1abd
+input a
+program 5 8
+cc 13 10 3fb42850a142850a 9
+cc 11 113 3fec78f1e3c78f1e 11
+bend bff0000000000000 0 1
+bend bfe2d50000000000 3371 1
+chunk a 9833842534f3
+input a
+noteoff 37 52 4
+chunk a e31c353a26c203
+input a
+bend bfc5900000000000 6812 3
+bend bfd98c0000000000 4922 3
+program 3 2
+chunk b 9d5c00f5baec007fb901149b17008b014d
+input b
+noteoff 92 0 13
+bend 3fef80fc07e03f02 16256 12
+cc 1 20 3fc42850a142850a 9
+noteoff 23 0 11
+noteoff 1 77 11
+chunk b d1c551
+input b
+program 81 5
+chunk a ce6ecb6acc10
+input a
+program 110 14
+program 106 11
+program 16 12
+chunk a 34b118369dcd1c2a892527962c00
+input a
+program 52 12
+cc 24 54 3fdb366cd9b366ce 1
+program 28 13
+program 42 13
+noteoff 37 39 9
+noteoff 44 0 6
+chunk a 36528862679a7b07c0fb983600123b0c3d
+input a
+noteon 54 82 6
+noteoff 98 103 8
+noteon 123 7 10
+noteoff 54 0 8
+noteon 18 59 8
+noteon 12 61 8
+chunk a 10
+input a
+chunk a 3cc03ece1321269c057b
+input a
+noteon 16 60 8
+program 62 0
+program 19 14
+program 33 14
+program 38 14
+noteon 5 123 12
+chunk a 9b760bce5bb60129c82b63
+input a
+noteon 118 11 11
+program 91 14
+cc 1 41 3fd4a952a54a952a 6
+program 43 8
+program 99 8
+chunk b bd016b77
+input b
+cc 1 107 3feaf5ebd7af5ebd 13
+chunk a 12822044ed00009e75059a3967b1787d9c4734e40040
+input a
+program 18 8
+noteoff 32 68 2
+bend bff0000000000000 0 13
+noteon 117 5 14
+noteon 57 103 10
+cc 120 125 3fef7efdfbf7efe0 1
+noteon 71 52 12
+bend 0000000000000000 8192 4
+chunk a 9f6e0f5654ac9917005f248c7b08cd412c1b5250
+input a
+noteon 110 15 15
+noteon 86 84 15
+noteoff 23 0 9
+noteon 95 36 9
+noteoff 123 8 12
+program 65 13
+program 44 13
+program 27 13
+program 82 13
+program 80 13
+chunk a 9d2879c32ece079d0610
+input a
+noteon 40 121 13
+program 46 3
+program 7 14
+noteon 6 16 13
+chunk a 842b2a9e7a3dc9397e
+input a
+noteoff 43 42 4
+noteon 122 61 14
+program 57 9
+program 126 9
+chunk b 749a7f3a69302562b8783df0
+input b
+cc 119 116 3fed3a74e9d3a74f 13
+noteon 127 58 10
+noteon 105 48 10
+noteon 37 98 10
+cc 120 61 3fdebd7af5ebd7af 8
+chunk a 998d5151be0170895344c47c2e4df6
+input a
+noteoff 81 81 13
+cc 1 112 3fec3870e1c3870e 14
+noteoff 83 68 9
+program 124 4
+program 46 4
+program 77 4
+chunk a 401e
+input a
+chunk b 90263039916518b3403c
+input b
+noteon 38 48 0
+noteon 101 24 1
+cc 64 60 3fde3c78f1e3c78f 3
+chunk b 3b6f8c701cfac10a9c1c00b0402f921900987e00
+input b
+cc 59 111 3febf7efdfbf7efe 3
+noteoff 112 28 12
+program 10 1
+noteoff 28 0 12
+cc 64 47 3fd7af5ebd7af5ec 0
+noteoff 25 0 2
+noteoff 126 0 8
+chunk a cb46
+input a
+program 70 11
+chunk a fa0d2c4e
+input a
+program 13 11
+program 44 11
+program 78 11
+chunk b a63abb7d5b1f
+input b
+cc 125 91 3fe6eddbb76eddbb 11
+chunk b e87f7f5507
+input b
+bend 3ff0000000000000 16383 8
+bend bfec2b0000000000 981 8
+chunk a 9c7526
+input a
+noteon 117 38 12
+chunk b 904000894048
+input b
+noteoff 64 0 0
+noteoff 64 72 9
+chunk b 6ecc4de67f0046cd0edb
+input b
+program 77 12
+bend bfef810000000000 127 6
+program 14 13
+chunk a 8deb0000ea8d2e3eb90b37
+input a
+bend bff0000000000000 0 11
+noteoff 46 62 13
+cc 11 55 3fdbb76eddbb76ee 9
+chunk a -
+chunk a 850c65975566f7b501499e64158b
+input a
+noteoff 12 101 5
+noteon 85 102 7
+cc 1 73 3fe264c993264c99 5
+noteon 100 21 14
+chunk a 9275265dd4f42fe6006c
+input a
+noteon 117 38 2
+bend 3fe600b005802c01 13824 6
+chunk a 038e6f22f14ccd783a997d6f99eb7e2e
+input a
+noteoff 111 34 14
+program 120 13
+program 58 13
+noteon 125 111 9
+bend bfd1040000000000 6014 11
+chunk a 5e933100b69329008e1755
+input a
+noteoff 49 0 3
+noteoff 41 0 3
+noteoff 23 85 14
+chunk a b97829e9007f9275
+input a
+cc 120 41 3fd4a952a54a952a 9
+bend 3fef80fc07e03f02 16256 9
+chunk b 26724fe27f4080c25a42942b00
+input b
+bend 3f8fc0fe07f03f82 8319 2
+program 90 2
+program 66 2
+noteoff 43 0 4
+chunk a c757d0b40b1beb0a00
+input a
+program 87 7
+cc 11 27 3fcb366cd9b366ce 4
+bend bfeff60000000000 10 11
+chunk a 95637497b70b2c4d
+input a
+noteon 99 116 5
+cc 11 44 3fd62c58b162c58b 7
+chunk a b0077e99
+input a
+cc 7 126 3fefbf7efdfbf7f0 0
+chunk a -
+chunk b ec797fcf4cbf0729
+input b
+bend 3feff9ffcffe7ff4 16377 12
+program 76 15
+cc 7 41 3fd4a952a54a952a 15
+chunk a 31721613fc6538
+input a
+noteon 49 114 9
+noteon 22 19 9
+noteon 101 56 9
+chunk a 75ce780d610d77cc3619
+input a
+program 120 14
+program 13 14
+program 97 14
+program 13 14
+program 119 14
+program 54 12
+program 25 12
+chunk b 894a45be780199726fce699c3700
+input b
+noteoff 74 69 9
+cc 120 1 3f80204081020408 14
+noteon 114 111 9
+program 105 14
+noteoff 55 0 12
+chunk a c56074e47f42fc9e040ef0fd952900
+input a
+program 96 5
+program 116 5
+bend 3fa7f0bf85fc2fe1 8575 4
+noteon 4 14 14
+noteoff 41 0 5
+chunk a 9c421afc
+input a
+noteon 66 26 12
+chunk a c87848957b
+input a
+program 120 8
+program 72 8
+chunk b 9e570083581bc3469f5226fc6e74b2995900ee6b5b
+input b
+noteoff 87 0 14
+noteoff 88 27 3
+program 70 3
+noteon 82 38 15
+noteon 110 116 15
+noteoff 89 0 9
+bend 3fdbd6deb6f5b7ae 11755 14
+chunk a 9d43009bbf402895
+input a
+noteoff 67 0 13
+cc 64 40 3fd42850a142850a 15
+chunk b 946c2ab040089a3571
+input b
+noteon 108 42 4
+cc 64 8 3fb0204081020408 0
+noteon 53 113 10
+chunk b 3bef751b8c7f6d891811
+input b
+bend bfe20b0000000000 3573 15
+noteoff 127 109 12
+noteoff 24 17 9
+chunk b 66
+input b
+chunk b ec0000f08c3649992c009c7c02
+input b
+bend bff0000000000000 0 12
+noteoff 54 73 12
+noteoff 44 0 9
+noteon 124 2 12
+chunk b 913a0092211ae87f7fb6015ac06a9e197d
+input b
+noteoff 58 0 1
+noteon 33 26 2
+bend 3ff0000000000000 16383 8
+cc 1 90 3fe6ad5ab56ad5ab 6
+program 106 0
+noteon 25 125 14
+chunk a 8a992400ca56e27f239f6510779b4b2b
+input a
+noteoff 36 0 9
+program 86 10
+bend bfdc020000000000 4607 2
+noteon 101 16 15
+noteon 75 43 11
+chunk a 944b008e574bcc7685bf0713ee237f1752e27f7f
+input a
+noteoff 75 0 4
+noteoff 87 75 14
+program 118 12
+cc 7 19 3fc3264c993264ca 15
+bend 3fefa3fd1fe8ff48 16291 14
+bend 3fd22e91748ba45d 10519 14
+bend 3ff0000000000000 16383 2
+chunk b 15974f00727b170d8648279f29242b985676
+input b
+noteoff 79 0 7
+noteon 114 123 7
+noteon 23 13 7
+noteoff 72 39 6
+noteon 41 36 15
+noteon 86 118 8
+chunk a 985800846d37e300009273008e1230
+input a
+noteoff 88 0 8
+noteoff 109 55 4
+bend bff0000000000000 0 3
+noteoff 115 0 2
+noteoff 18 48 14
+chunk a 8d674285e50000
+input a
+noteoff 103 66 13
+bend bff0000000000000 0 5
+chunk a 9866186f996d76bf401f9e4c1f
+input a
+noteon 102 24 8
+noteon 109 118 9
+cc 64 31 3fcf3e7cf9f3e7d0 15
+noteon 76 31 14
+chunk a f137e07f7fb007ef006e
+input a
+bend 3ff0000000000000 16383 0
+bend 3fe700b805c02e01 14080 15
+chunk a 8e234043f284834a50dd983900e47f00
+input a
+noteoff 35 64 14
+noteoff 74 80 3
+noteoff 57 0 8
+bend bfef810000000000 127 4
+chunk b -
+chunk a bf4078b04076
+input a
+cc 64 120 3fee3c78f1e3c78f 15
+cc 64 118 3fedbb76eddbb76f 0
+chunk a 9660539e1800c428
+input a
+noteon 96 83 6
+noteoff 24 0 14
+program 40 4
+chunk a 937420954200172e031053
+input a
+noteon 116 32 3
+noteoff 66 0 5
+noteon 23 46 5
+noteon 3 16 5
+chunk b 04
+input b
+chunk a 1f564b03ed49004e65ff9c
+input a
+noteon 83 31 5
+noteon 86 75 5
+bend bfefb70000000000 73 13
+bend 3fe2ce9674b3a59d 13006 13
+chunk a 822b15574a7a621f15
+input a
+noteoff 43 21 2
+noteoff 87 74 2
+noteoff 122 98 2
+noteoff 31 21 2
+chunk a 8e17723306bc5054902200f0cb9a2300ef007fef0069
+input a
+noteoff 23 114 14
+noteoff 51 6 14
+cc 80 84 3fe52a54a952a54b 12
+noteoff 34 0 0
+noteoff 35 0 10
+bend 3fef80fc07e03f02 16256 15
+bend 3fe480a405202901 13440 15
+chunk a 973100631efe985c5e00176f983a45902f50916833
+input a
+noteoff 49 0 7
+noteon 99 30 7
+noteon 92 94 8
+noteon 0 23 8
+noteon 58 69 8
+noteon 47 80 0
+noteon 104 51 1
+chunk b -
+chunk a 8c732b920e009a370c
+input a
+noteoff 115 43 12
+noteoff 14 0 2
+noteon 55 12 10
+chunk a ee004f925d656e9743a0a1169c
+input a
+bend 3fce00f007803c02 10112 14
+noteon 93 101 2
+chunk b 9c5500
+input b
+noteoff 85 0 12
+chunk a cd7985181e9d782ee47f40c567f4b07b4560e67f40
+input a
+program 121 13
+noteoff 24 30 5
+noteon 120 46 13
+bend 3f8fc0fe07f03f82 8319 4
+program 103 5
+cc 123 69 3fe162c58b162c59 0
+bend 3f8fc0fe07f03f82 8319 6
+chunk a ba077f900d00
+input a
+cc 7 127 3ff0000000000000 10
+noteoff 13 0 0
+chunk a 964d008c2374
+input a
+noteoff 77 0 6
+noteoff 35 116 12
+chunk b 1b9bf1962b00c61c9d155e
+input b
+noteoff 43 0 6
+program 28 6
+noteon 21 94 13
+chunk a 92416f92503ab71005c556
+input a
+noteon 65 111 2
+noteon 80 58 2
+cc 16 5 3fa42850a142850a 7
+program 86 5
+chunk b eb
+input b
+chunk a 4d911600e90040913637ec
+input a
+program 77 5
+noteoff 22 0 1
+bend 0000000000000000 8192 9
+noteon 54 55 1
+chunk a 7ceb7f008a7615
+input a
+bend bfef810000000000 127 11
+noteoff 118 21 10
+chunk a 4e6a952e15f49f0c56
+input a
+noteoff 78 106 10
+noteon 46 21 5
+noteon 12 86 15
+chunk b 042aca62
+input b
+bend bfd5f80000000000 5380 11
+program 98 10
+chunk a 8f6044e7357fca23
+input a
+noteoff 96 68 15
+bend 3fefb5fdafed7f6c 16309 7
+program 35 10
+chunk a -
+chunk b 9f1bafcc28924c679a2a2350b3
+input b
+program 40 12
+noteon 76 103 2
+noteon 42 35 10
+chunk b 9ad8
+input b
+chunk a e40040
+input a
+bend 0000000000000000 8192 4
+chunk a f0280486242c38861f47
+input a
+noteoff 36 44 6
+noteoff 31 71 6
+chunk a 9491212eed7f00ed
+input a
+noteon 33 46 1
+bend bfef810000000000 127 13
+chunk b 9de2417f
+input b
+bend 3fefc1fe0ff07f84 16321 2
+chunk a 9d607d9d5b6c18e37f7fc512
+input a
+noteon 96 125 13
+noteon 91 108 13
+bend 3ff0000000000000 16383 3
+program 18 5
+chunk a 9b23008d1f5df7b40b3233793e249a77
+input a
+noteoff 35 0 11
+noteoff 31 93 13
+cc 11 50 3fd93264c993264d 4
+cc 51 121 3fee7cf9f3e7cf9f 4
+cc 62 36 3fd2244891224489 4
+chunk a b78617378314572463a06018ee0040
+input a
+noteoff 23 55 6
+noteoff 20 87 3
+noteoff 36 99 3
+bend 0000000000000000 8192 14
+chunk b 41f7
+input b
+chunk b 8766070e950c5e9c3e29fb98791bcb
+input b
+noteoff 102 7 7
+noteon 12 94 5
+noteon 62 41 12
+noteon 121 27 8
+chunk b b8
+input b
+chunk a 3dc849
+input a
+program 73 8
+chunk a e7d38c
+input a
+chunk a -
+chunk a -
+chunk a fce60000921600
+input a
+bend bff0000000000000 0 6
+noteoff 22 0 2
+chunk a 84923d1d
+input a
+noteon 61 29 2
+chunk a c10d885d8a5604a93991
+input a
+program 13 1
+noteoff 86 4 10
+chunk a 9b4239f5f00c0964963563
+input a
+noteon 66 57 11
+noteon 53 99 6
+chunk a ccb640270a85986e02b97b043f9b3b009c6931
+input a
+cc 64 39 3fd3a74e9d3a74ea 6
+noteon 110 2 8
+cc 123 4 3fa0204081020408 9
+noteoff 59 0 11
+noteon 105 49 12
+chunk a 99215f6372679f630036
+input a
+noteon 33 95 9
+noteon 99 114 9
+noteoff 99 0 15
+chunk a ce4b953200bd2b13b80177
+input a
+program 75 14
+noteoff 50 0 5
+cc 43 19 3fc3264c993264ca 13
+cc 1 119 3fedfbf7efdfbf7f 8
+chunk b 87711c
+input b
+noteoff 113 28 7
+chunk b c5
+input b
+chunk b c931fe9fee00009a737140359d0446
+input b
+program 49 9
+bend bff0000000000000 0 14
+noteon 115 113 10
+noteon 64 53 10
+noteon 4 70 13
+chunk a f4
+input a
+chunk a 986900902a7a890520
+input a
+noteoff 105 0 8
+noteon 42 122 0
+noteoff 5 32 9
+chunk a c55c71954700
+input a
+program 92 5
+program 113 5
+noteoff 71 0 5
+chunk b 7a411c9a091de881191ae8007f9c6400ce7d9d
+input b
+noteon 122 65 13
+noteon 9 29 10
+noteoff 25 26 1
+bend 3fef80fc07e03f02 16256 8
+noteoff 100 0 12
+program 125 14
+chunk a e47f40ed007f954d7f9c0e006cf39920706e6784
+input a
+bend 3f8fc0fe07f03f82 8319 4
+bend 3fef80fc07e03f02 16256 13
+noteon 77 127 5
+noteoff 14 0 12
+noteon 32 112 9
+noteon 110 103 9
+chunk b d1
+input b
+chunk a ea000063557fe87f7f903500
+input a
+bend bff0000000000000 0 10
+bend 3fd5c6ae3571ab8d 10979 10
+bend 3ff0000000000000 16383 8
+noteoff 53 0 0
+chunk a 6b23b50b7dc522
+input a
+noteon 107 35 0
+cc 11 125 3fef7efdfbf7efe0 5
+program 34 5
+chunk b c8266e3c923100308307340e
+input b
+program 38 8
+program 110 8
+program 60 8
+noteoff 49 0 2
+noteoff 7 52 3
+chunk a 14518a6730
+input a
+program 20 5
+program 81 5
+noteoff 103 48 10
+chunk a c87484324b9213
+input a
+program 116 8
+noteoff 50 75 4
+chunk a 213c904d00
+input a
+noteon 19 33 2
+noteoff 77 0 0
+chunk a f3206b937c152d34c323
+input a
+noteon 124 21 3
+noteon 45 52 3
+program 35 3
+chunk a 8c21f0e15b7f8044548f614471
+input a
+bend 3fefdbfedff6ffb8 16347 1
+noteoff 68 84 0
+noteoff 97 68 15
+chunk a 50d991362a9b4f32b50b7ff0ca
+input a
+noteoff 113 80 15
+noteon 54 42 1
+noteon 79 50 11
+cc 11 127 3ff0000000000000 5
+chunk a 5d827714b2072c854a6dbe401b8236418c1026fe
+input a
+program 93 10
+noteoff 119 20 2
+cc 7 44 3fd62c58b162c58b 2
+noteoff 74 109 5
+cc 64 27 3fcb366cd9b366ce 14
+noteoff 54 65 2
+noteoff 16 38 12
+chunk a 35cc409d6500c5368264305ec83256
+input a
+program 64 12
+noteoff 101 0 13
+program 54 5
+noteoff 100 48 2
+program 50 8
+program 86 8
+chunk a 9c
+input a
+chunk a c839
+input a
+program 57 8
+chunk a b32b70
+input a
+cc 43 112 3fec3870e1c3870e 3
+chunk a c76e990b05
+input a
+program 110 7
+noteon 11 5 9
+chunk a e92000865d53e80040fe9553005631
+input a
+bend bfefe00000000000 32 9
+noteoff 93 83 6
+bend 0000000000000000 8192 8
+noteoff 83 0 5
+noteon 86 49 5
+chunk a 8b534796305718769b1c0025917000
+input a
+noteoff 83 71 11
+noteon 48 87 6
+noteon 24 118 6
+noteoff 28 0 11
+noteoff 112 0 1
+chunk a fa6c
+input a
+chunk a 347e
+input a
+noteon 108 52 1
+chunk a 6453ba407edb0f9e2e7d96e77f0095
+input a
+noteon 126 100 1
+cc 64 126 3fefbf7efdfbf7f0 10
+noteon 46 125 14
+bend bfef810000000000 127 7
+chunk b 93b9402f
+input b
+cc 64 47 3fd7af5ebd7af5ec 9
+chunk a 974010b5073a97e25d9e3b58833d25512706
+input a
+noteon 64 16 7
+cc 7 58 3fdd3a74e9d3a74f 5
+noteon 59 88 14
+noteoff 61 37 3
+noteoff 81 39 3
+chunk a ee000097433a
+input a
+bend bff0000000000000 0 14
+noteon 67 58 7
+chunk a 94f99f230076fa2e9c02007d
+input a
+noteoff 35 0 15
+noteon 118 46 15
+noteoff 2 0 12
+chunk a ce25976700f9b7402a
+input a
+program 37 14
+noteoff 103 0 7
+cc 64 42 3fd52a54a952a54b 7
+chunk b 92c7ebc64ab3071d
+input b
+program 74 6
+cc 7 29 3fcd3a74e9d3a74f 3
+chunk a b5402b0a881c4e9d4a274e9f464056
+input a
+cc 64 43 3fd5ab56ad5ab56b 5
+noteoff 28 78 8
+noteon 74 39 13
+noteon 70 64 15
+chunk a 930b024e3b984f2a6f14e3006014ee007f1e
+input a
+noteon 11 2 3
+noteon 78 59 3
+noteon 79 42 8
+noteon 111 20 8
+bend 3fe0008004002001 12288 3
+bend 3fef80fc07e03f02 16256 14
+chunk a b0780c16380fe1417e2bb8eb4940
+input a
+cc 120 12 3fb83060c183060c 0
+cc 22 56 3fdc3870e1c3870e 0
+bend 3fef41fa0fd07e84 16193 1
+bend 3f82409204902481 8265 11
+chunk b 96
+input b
+chunk a e67f7fb26b21
+input a
+bend 3ff0000000000000 16383 6
+cc 107 33 3fd0a142850a1428 2
+chunk a 9e1d00e094532b
+input a
+noteoff 29 0 14
+noteon 83 43 4
+chunk a 1c97215b
+input a
+noteon 33 91 7
+chunk a 9e4b35ef007f925103958c8e2a1f9d7e2855942d0f
+input a
+noteon 75 53 14
+bend 3fef80fc07e03f02 16256 15
+noteon 81 3 2
+noteoff 42 31 14
+noteon 126 40 13
+noteon 45 15 4
+chunk a 841c2564059a7b7f9a395f9c37d8c757
+input a
+noteoff 28 37 4
+noteoff 100 5 4
+noteon 123 127 10
+noteon 57 95 10
+program 87 7
+chunk a 4cc27884294c520865007a9f5d3a0876
+input a
+program 76 7
+program 120 2
+noteoff 41 76 4
+noteoff 82 8 4
+noteoff 101 0 4
+noteon 93 58 15
+noteon 8 118 15
+chunk a fe8d2d7a932b0068
+input a
+noteoff 45 122 13
+noteoff 43 0 3
+chunk b 23021687
+input b
+noteon 35 2 6
+chunk b 9220789d713c03c3957d00799147006b
+input b
+noteon 32 120 2
+noteon 113 60 13
+noteoff 125 0 5
+noteoff 71 0 1
+chunk a b50b33955f28930d349a494d9d26c946840c43f1
+input a
+cc 11 51 3fd9b366cd9b366d 5
+noteon 95 40 5
+noteon 13 52 3
+noteon 73 77 10
+program 70 9
+noteoff 12 67 4
+chunk a 83c4407743cd2c
+input a
+program 64 4
+program 119 4
+program 67 4
+program 44 13
+chunk a 9f55452f
+input a
+noteon 85 69 15
+chunk a 957d007b8789356255965326
+input a
+noteoff 125 0 5
+noteoff 53 98 9
+noteon 83 38 6
+chunk a 9792cb2603bd3e38
+input a
+program 38 11
+program 3 11
+cc 62 56 3fdc3870e1c3870e 13
+chunk a 154a9c084b8b7a05
+input a
+cc 21 74 3fe2a54a952a54a9 13
+noteon 8 75 12
+noteoff 122 5 11
+chunk a -
+chunk a e57b9b532cb940259a796d945a2e9462009900398f0957
+input a
+noteon 83 44 11
+cc 64 37 3fd2a54a952a54a9 9
+noteon 121 109 10
+noteon 90 46 4
+noteoff 98 0 4
+noteon 0 57 9
+noteoff 9 87 15
+chunk b 904d32bc780f9e1d60927a4ee47b00ce967700
+input b
+noteon 77 50 0
+cc 120 15 3fbe3c78f1e3c78f 12
+noteon 29 96 14
+noteon 122 78 2
+bend bfef850000000000 123 4
+noteoff 119 0 6
+chunk a b278609d0a77
+input a
+cc 120 96 3fe83060c183060c 2
+noteon 10 119 13
+chunk b 08
+input b
+chunk a 6463
+input a
+noteon 100 99 13
+chunk a cb47930500
+input a
+program 71 11
+noteoff 5 0 3
+chunk a c03a
+input a
+program 58 0
+chunk b 89141e20e47c
+input b
+noteoff 20 30 9
+chunk a 98144d63f0fe974900de71
+input a
+noteon 20 77 8
+noteoff 73 0 7
+chunk b b8781263
+input b
+cc 120 18 3fc2244891224489 8
+chunk b 713353972c28bc401dcc02ab699f782d
+input b
+cc 99 113 3fec78f1e3c78f1e 8
+cc 51 83 3fe4e9d3a74e9d3a 8
+noteon 44 40 7
+cc 64 29 3fcd3a74e9d3a74f 12
+program 2 12
+noteon 120 45 15
+chunk b b740149e36309d04243ad58a304dd69a4524
+input b
+cc 64 20 3fc42850a142850a 7
+noteon 54 48 14
+noteon 4 36 13
+noteoff 48 77 10
+noteon 69 36 10
+chunk b 5369984f006910e9397f423780053199386b5d8c3c69
+input b
+noteon 83 105 10
+noteoff 79 0 8
+noteon 105 16 8
+bend 3fefb9fdcfee7f74 16313 9
+bend bfc0f80000000000 7106 9
+noteoff 5 49 0
+noteon 56 107 9
+noteoff 60 105 12
+chunk b e15479
+input b
+bend 3fecd4e6a73539aa 15572 1
+chunk b e40040895f4295966b24e57f408a5d33
+input b
+bend 0000000000000000 8192 4
+noteoff 95 66 9
+noteon 107 36 6
+bend 3f8fc0fe07f03f82 8319 5
+noteoff 93 51 10
+chunk a 9e5b00ec311e
+input a
+noteoff 91 0 14
+bend bfe0cf0000000000 3889 12
+chunk a 9483945d00b7014785362e9d7d1c1c956600
+input a
+noteoff 93 0 4
+cc 1 71 3fe1e3c78f1e3c79 7
+noteoff 54 46 5
+noteon 125 28 13
+noteoff 102 0 5
+chunk a 9c2a0069b22f0912
+input a
+noteoff 42 0 12
+cc 47 9 3fb2244891224489 2
+chunk b 977700c442
+input b
+noteoff 119 0 7
+program 66 4
+chunk b 523877937c28
+input b
+program 82 4
+program 56 4
+program 119 4
+noteon 124 40 3
+chunk b 487af0
+input b
+noteon 72 122 3
+chunk b 9d32442822f7885f40494db17b6b957f52
+input b
+noteon 50 68 13
+noteon 40 34 13
+noteoff 95 64 8
+noteoff 73 77 8
+cc 123 107 3feaf5ebd7af5ebd 1
+noteon 127 82 5
+chunk b 8a5d185636
+input b
+noteoff 93 24 10
+noteoff 86 54 10
+chunk a 81310d9be96a32
+input a
+noteoff 49 13 1
+bend bfca580000000000 6506 9
+chunk b f7963256c64e8d326dfd
+input b
+noteon 50 86 6
+program 78 6
+noteoff 50 109 13
+chunk a 0ae6ca31a39e792ee07f00
+input a
+program 49 10
+noteon 121 46 14
+bend bfef810000000000 127 0
+chunk a 9d3f009c0a037a1d
+input a
+noteoff 63 0 13
+noteon 10 3 12
+noteon 122 29 12
+chunk a 905150cd402490120002
+input a
+noteon 81 80 0
+program 64 13
+program 36 13
+noteoff 18 0 0
+chunk b 733af5e1000075ce2046
+input b
+noteoff 115 58 13
+bend bff0000000000000 0 1
+program 32 14
+program 70 14
+chunk b -
+chunk b 84bb07509c422b4c33
+input b
+cc 7 80 3fe42850a142850a 11
+noteon 66 43 12
+noteon 76 51 12
+chunk b ee791d64
+input b
+bend bfe1070000000000 3833 14
+chunk a cbb440669c0d1710924611a28b0123902727b1
+input a
+cc 64 102 3fe9b366cd9b366d 4
+noteon 13 23 12
+noteon 70 17 2
+noteoff 1 35 11
+noteon 39 39 0
+chunk b 996c341267b20730bac89e414874
+input b
+noteon 108 52 9
+noteon 18 103 9
+cc 7 48 3fd83060c183060c 2
+noteon 65 72 14
+chunk a c9916e850f736a14
+input a
+noteoff 15 115 5
+noteoff 106 20 5
+chunk a 10c188952000bb033e66
+input a
+noteoff 32 0 5
+cc 3 62 3fdf3e7cf9f3e7d0 11
+chunk a 53bb0cb40124852d0d960d53e24d00925579
+input a
+cc 102 83 3fe4e9d3a74e9d3a 11
+cc 1 36 3fd2244891224489 4
+noteoff 45 13 5
+noteon 13 83 6
+bend bfefb30000000000 77 2
+noteon 85 121 2
+chunk b 287e97342bfb88167377
+input b
+noteon 116 40 14
+noteon 52 43 7
+noteoff 22 115 8
+chunk b ee4fc869
+input b
+program 105 8
+chunk a bc404e1a716476
+input a
+cc 64 78 3fe3a74e9d3a74ea 12
+cc 26 113 3fec78f1e3c78f1e 12
+cc 100 118 3fedbb76eddbb76f 12
+chunk a 948e6867
+input a
+noteoff 104 103 14
+chunk a ca3c12cd0e0437
+input a
+program 60 10
+program 18 10
+program 14 13
+program 4 13
+program 55 13
+chunk a e97f2cec1640e3007f30888529188e3213
+input a
+bend bfd3020000000000 5759 9
+bend 3f6600b005802c01 8214 12
+bend 3fef80fc07e03f02 16256 3
+noteoff 41 24 5
+noteoff 50 19 14
+chunk a 931c5580515a9f6e00f7
+input a
+noteon 28 85 3
+noteoff 81 90 0
+noteoff 110 0 15
+chunk a efe7002508e30000966718975c50922e0d11
+input a
+bend bfdb000000000000 4736 7
+bend bff0000000000000 0 3
+noteon 103 24 6
+noteon 92 80 7
+noteon 46 13 2
+chunk a 0c748caf
+input a
+noteon 17 12 2
+chunk b c58f139052008c7f0d2eeb597f
+input b
+noteoff 82 0 0
+noteoff 127 13 12
+bend 3fefd9fecff67fb4 16345 11
+chunk a 90
+input a
+chunk a 6b2a925136e500408b0c62
+input a
+noteon 107 42 0
+noteon 81 54 2
+bend 0000000000000000 8192 5
+noteoff 12 98 11
+chunk b 5b
+input b
+chunk a 1514e1ea9a7b1f93b27b18cb18
+input a
+noteoff 21 20 11
+noteon 123 31 10
+cc 123 24 3fc83060c183060c 2
+program 24 11
+chunk a 9a7d00992f74e04e40ed00408a3743
+input a
+noteoff 125 0 10
+noteon 47 116 9
+bend 3f83809c04e02701 8270 0
+bend 0000000000000000 8192 13
+noteoff 55 67 10
+chunk b c6ef007f9e0b9906007d039b2419bb0774
+input b
+bend 3fef80fc07e03f02 16256 15
+noteoff 6 0 9
+noteon 125 3 9
+noteon 36 25 11
+cc 7 116 3fed3a74e9d3a74f 11
+chunk a 4c0a
+input a
+noteoff 76 10 10
+chunk a 2339
+input a
+noteoff 35 57 10
+chunk a cc2e9e7f3ac6581a668b3550
+input a
+program 46 12
+noteon 127 58 14
+program 88 6
+program 26 6
+program 102 6
+noteoff 53 80 11
+chunk a 966b33e87f401f920200951a00b894065990836910
+input a
+noteon 107 51 6
+bend 3f8fc0fe07f03f82 8319 8
+noteoff 2 0 2
+noteoff 26 0 5
+noteon 6 89 4
+noteoff 105 16 3
+chunk a 932e34fa949335449e3733dacc47
+input a
+noteon 46 52 3
+noteon 53 68 3
+noteon 55 51 14
+program 71 12
+chunk a 984e2edebd402b9e
+input a
+noteon 78 46 8
+cc 64 43 3fd5ab56ad5ab56b 13
+chunk a d08b10328c167d7c6f4f925f5c0e925e2db7785a
+input a
+noteoff 16 50 11
+noteoff 22 125 12
+noteoff 124 111 12
+noteon 95 92 2
+noteon 94 45 2
+cc 120 90 3fe6ad5ab56ad5ab 7
+chunk a ea7500ff6236f699103307
+input a
+bend bfef8b0000000000 117 10
+bend bfc2780000000000 7010 10
+noteon 16 51 9
+chunk a 9193984144e7
+input a
+noteon 65 68 8
+chunk a 395c
+input a
+bend 3fdc72e3971cb8e6 11833 7
+chunk a 329c34589e6920986b0090
+input a
+noteon 52 88 12
+noteon 105 32 14
+noteoff 107 0 8
+chunk a d0ed7f409d0d0005c76b9b7d6e
+input a
+bend 3f8fc0fe07f03f82 8319 13
+noteoff 13 0 13
+program 107 7
+noteon 125 110 11
+chunk a 5f239bb30753ef7f00ea00003b71
+input a
+noteon 95 35 11
+cc 7 83 3fe4e9d3a74e9d3a 3
+bend bfef810000000000 127 15
+bend bff0000000000000 0 10
+bend 3fe8bbc5de2ef178 14523 10
+chunk a -
+chunk a bf346d903a09e1007f907e009268008b4807
+input a
+cc 52 109 3feb76eddbb76ede 15
+noteon 58 9 0
+bend 3fef80fc07e03f02 16256 1
+noteoff 126 0 0
+noteoff 104 0 2
+noteoff 72 7 11
+chunk a f0f2
+input a
+chunk b 946a78cb667ea197915149983d20f7
+input b
+noteon 106 120 4
+program 102 11
+program 126 11
+noteon 81 73 1
+noteon 61 32 8
+chunk b 629f3c514a40039f1700b440059c7a499c3f00c639
+input b
+noteon 60 81 15
+noteon 74 64 15
+noteoff 23 0 15
+cc 64 5 3fa42850a142850a 4
+noteon 122 73 12
+noteoff 63 0 12
+program 57 6
+chunk a e6494a
+input a
+bend 3fc524a925492a49 9545 6
+chunk b 7401273e994a009dce29e9659c2300
+input b
+program 116 6
+program 1 6
+program 39 6
+program 62 6
+noteoff 74 0 9
+program 41 14
+noteoff 35 0 12
+chunk a 99
+input a
+chunk a 633c409838446ce7770c3f
+input a
+noteon 99 60 9
+noteon 56 68 8
+bend bfe9890000000000 1655 7
+chunk a fedceb95114fb4405be0460046
+input a
+noteon 17 79 5
+cc 64 91 3fe6eddbb76eddbb 4
+bend bfefba0000000000 70 0
+chunk a 571e9b0c08971b464c1d74833a3be65c00
+input a
+bend 3fd78cbc65e32f19 11206 0
+noteon 12 8 11
+noteon 27 70 7
+noteon 76 29 7
+noteoff 58 59 3
+bend bfefa40000000000 92 6
+chunk b c94b9a042a96603a9f71389b99723f9b3c349b
+input b
+program 75 9
+noteon 4 42 10
+noteon 96 58 6
+noteon 113 56 15
+noteon 114 63 9
+noteon 60 52 11
+chunk a 764799030090650ceb0051
+input a
+bend 3fbfb0fd87ec3f62 9206 6
+noteoff 3 0 9
+noteon 101 12 0
+bend 3fd1008804402201 10368 11
+chunk a 8b047e991c008f6377f66e9c7e00c0472e
+input a
+noteoff 4 126 11
+noteoff 28 0 9
+noteoff 99 119 15
+noteoff 126 0 12
+program 71 0
+program 46 0
+chunk a b60b5199ef007f
+input a
+cc 11 81 3fe468d1a3468d1a 6
+bend 3fef80fc07e03f02 16256 15
+chunk a 6d9d0529b0709c6100974b0074
+input a
+noteon 5 41 13
+noteoff 97 0 12
+noteoff 75 0 7
+chunk a 9a1624c2305f3f960137
+input a
+noteon 22 36 10
+program 48 2
+program 95 2
+program 63 2
+noteon 1 55 6
+chunk b 885f5fb23d4a94682758
+input b
+noteoff 95 95 8
+cc 61 74 3fe2a54a952a54a9 2
+noteon 104 39 4
+chunk a 83254b5bb301726a
+input a
+noteoff 37 75 3
+cc 1 114 3fecb972e5cb972e 3
+chunk b 9e5f1e51
+input b
+noteon 95 30 14
+chunk a bdc49e1d0071
+input a
+noteoff 29 0 14
+chunk a e87f3f84640ac09a
+input a
+bend bf20000000000000 8191 8
+noteoff 100 10 4
+chunk a b5403c
+input a
+cc 64 60 3fde3c78f1e3c78f 5
+chunk a cef7b5bd011232
+input a
+cc 1 18 3fc2244891224489 13
+chunk a 4e114b2d388fc41890673c22
+input a
+cc 50 78 3fe3a74e9d3a74ea 13
+cc 17 75 3fe2e5cb972e5cb9 13
+cc 45 56 3fdc3870e1c3870e 13
+program 24 4
+noteon 103 60 0
+chunk b 9214055b9a5a7a9dce0d
+input b
+noteon 20 5 2
+noteon 90 122 10
+program 13 14
+chunk b 9e162c8d1235b14077981554f0b73a77ee7f6e7e9a
+input b
+noteon 22 44 14
+noteoff 18 53 13
+cc 64 119 3fedfbf7efdfbf7f 1
+noteon 21 84 8
+cc 58 119 3fedfbf7efdfbf7f 7
+bend 3fe77fbbfddfeeff 14207 14
+chunk a -
+chunk a 5e069859728e7f6d915d00cd9f5b16
+input a
+noteon 34 94 0
+noteon 89 114 8
+noteoff 127 109 14
+noteoff 93 0 1
+noteon 91 22 15
+chunk a c94b8b6872
+input a
+program 75 9
+noteoff 104 114 11
+chunk b b56f5354f9e17a40982900
+input b
+cc 111 83 3fe4e9d3a74e9d3a 5
+bend 3f8e80f407a03d02 8314 1
+noteoff 41 0 8
+chunk a 9a065e904c8d5b0d9e6142
+input a
+noteon 6 94 10
+noteoff 91 13 13
+noteon 97 66 14
+chunk a 5c972b646dbd0758f0e227404a987300
+input a
+noteon 43 100 7
+cc 7 88 3fe62c58b162c58b 13
+bend 3f73809c04e02701 8231 2
+noteoff 115 0 8
+chunk b 46b107482fc02e4521e47a6f31f0
+input b
+cc 7 72 3fe2244891224489 1
+program 46 0
+program 69 0
+program 33 0
+bend 3fe7fabfd5feaff5 14330 4
+chunk b 5c957f124c942716
+input b
+noteon 127 18 5
+noteon 39 22 4
+chunk a 5b9535609b922d70e87f7f
+input a
+noteon 53 96 5
+noteon 45 112 2
+bend 3ff0000000000000 16383 8
+chunk a 931c1003b6785aee6d23f095256cbe1565
+input a
+noteon 28 16 3
+cc 120 90 3fe6ad5ab56ad5ab 6
+bend bfdc260000000000 4589 14
+noteon 37 108 5
+cc 21 101 3fe972e5cb972e5d 14
+chunk a -
+chunk b 10b3075fc02e997300
+input b
+cc 7 95 3fe7efdfbf7efdfc 3
+program 46 0
+noteoff 115 0 9
+chunk a 90716b9b1c00c6619e3778f38e6507b1
+input a
+noteon 113 107 0
+noteoff 28 0 11
+program 97 6
+noteon 55 120 14
+noteoff 101 7 14
+chunk a 922d33c851
+input a
+noteon 45 51 2
+program 81 8
+chunk a 984332
+input a
+noteon 67 50 8
+chunk a ee00578b1b72921e75532bc96f4c654dcc4a
+input a
+bend 3fd700b805c02e01 11136 14
+noteoff 27 114 11
+noteon 30 117 2
+noteon 83 43 2
+program 111 9
+program 76 9
+program 101 9
+program 77 9
+program 74 12
+chunk b 2291690030caba40799d06759e7b14c551
+input b
+noteoff 105 0 1
+cc 64 121 3fee7cf9f3e7cf9f 10
+noteon 6 117 13
+noteon 123 20 14
+program 81 5
+chunk a bd405cc167
+input a
+cc 64 92 3fe72e5cb972e5cc 13
+program 103 1
+chunk a 0608519b7d00
+input a
+program 6 1
+program 8 1
+program 81 1
+noteoff 125 0 11
+chunk a 943300974314fc
+input a
+noteoff 51 0 4
+noteon 67 20 7
+chunk a c431e0007f089f5d6087015a6d301c9491
+input a
+program 49 4
+bend 3fef80fc07e03f02 16256 0
+noteon 93 96 15
+noteoff 1 90 7
+noteoff 109 48 7
+chunk b e7ec75e801409f46
+input b
+bend 3f20008004002001 8193 8
+chunk a 003a
+input a
+noteon 0 58 1
+chunk b f7c2750ac715ef0000fd
+input b
+program 117 2
+program 10 2
+program 21 7
+bend bff0000000000000 0 15
+chunk a cd3d
+input a
+program 61 13
+chunk b e31c40
+input b
+bend 3f6c00e007003802 8220 3
+chunk b ec08009d6803b50746b30b43941d00c569a290991300
+input b
+bend bfeff80000000000 8 12
+noteon 104 3 13
+cc 7 70 3fe1a3468d1a3469 5
+cc 11 67 3fe0e1c3870e1c38 3
+noteoff 29 0 4
+program 105 5
+noteoff 19 0 9
+chunk a 9e9e6627ca5be07f02
+input a
+noteon 102 39 14
+program 91 10
+bend bfee810000000000 383 0
+chunk a 31957735984820
+input a
+noteon 119 53 5
+noteon 72 32 8
+chunk a 78ce66b9407c
+input a
+program 102 14
+cc 64 124 3fef3e7cf9f3e7d0 9
+chunk b 77
+input b
+chunk a 9f60bd0b59
+input a
+cc 11 89 3fe66cd9b366cd9b 13
+chunk a 42
+input a
+chunk a b39f1b1c7a3f9f1f00ea872654932827005b76
+input a
+noteon 27 28 15
+noteon 122 63 15
+noteoff 31 0 15
+noteoff 38 84 7
+noteon 40 39 3
+noteon 0 91 3
+chunk b 952938599d107b
+input b
+noteon 41 56 5
+noteon 16 123 13
+chunk a 374c5a9d5800
+input a
+noteon 118 55 3
+noteon 76 90 3
+noteoff 88 0 13
+chunk a b340369c2d0290492226ee7f00
+input a
+cc 64 54 3fdb366cd9b366ce 3
+noteon 45 2 12
+noteon 73 34 0
+bend bfef810000000000 127 14
+chunk b bf7b5d79e73c7f2f3dc00b851612
+input b
+cc 123 93 3fe76eddbb76eddc 15
+bend 3fefbcfde7ef3f7a 16316 7
+bend bfa5100000000000 7855 7
+program 11 0
+noteoff 22 18 5
+chunk b 86417a954917
+input b
+noteoff 65 122 6
+noteon 73 23 5
+chunk a 62
+input a
+chunk a 94b57b4e
+input a
+cc 123 78 3fe3a74e9d3a74ea 5
+chunk a f89808449e134f224dc4585cbe317e
+input a
+noteon 8 68 8
+noteon 19 79 14
+noteon 34 77 14
+program 88 4
+program 92 4
+cc 49 126 3fefbf7efdfbf7f0 14
+chunk b 90121180423a881d43
+input b
+noteon 18 17 0
+noteoff 66 58 0
+noteoff 29 67 8
+chunk b cb55
+input b
+program 85 11
+chunk a 919d3857cc69987e1b
+input a
+noteon 56 87 13
+program 105 12
+noteon 126 27 8
+chunk a f5a3940200992a6c84366b4fb7231c99
+input a
+noteoff 2 0 4
+noteon 42 108 9
+noteoff 54 107 4
+cc 35 28 3fcc3870e1c3870e 7
+chunk b c060
+input b
+program 96 0
+chunk a 927751
+input a
+noteon 119 81 2
+chunk a e3007fb240311f41949558007bb00149b10159f1
+input a
+bend 3fef80fc07e03f02 16256 3
+cc 64 49 3fd8b162c58b162c 2
+cc 31 65 3fe060c183060c18 2
+noteoff 88 0 5
+cc 1 73 3fe264c993264c99 0
+cc 1 89 3fe66cd9b366cd9b 1
+chunk a dae96d6ee50a0095
+input a
+bend 3fe76dbb6ddb6edb 14189 9
+bend bfeff60000000000 10 5
+chunk b 657c9a264d45279c3b77
+input b
+program 101 0
+program 124 0
+noteon 38 77 10
+noteon 69 39 10
+noteon 59 119 12
+chunk a 9c5600399a1d5ced7c40019b2400
+input a
+noteoff 86 0 12
+noteon 29 92 10
+bend 3f8f00f807c03e02 8316 13
+noteoff 36 0 11
+chunk a fc78c7386e6987b6071e816063
+input a
+program 56 7
+program 110 7
+program 105 7
+cc 7 30 3fce3c78f1e3c78f 6
+noteoff 96 99 1
+chunk a b90b6454b107142f78813a49c61b
+input a
+cc 11 100 3fe93264c993264d 9
+cc 7 20 3fc42850a142850a 1
+cc 47 120 3fee3c78f1e3c78f 1
+noteoff 58 73 1
+program 27 6
+chunk a 953757e000404d7390eb9077062c6b
+input a
+noteon 55 87 5
+bend 0000000000000000 8192 0
+bend 3fe9cdce6e73739c 14797 0
+noteon 119 6 0
+noteon 44 107 0
+chunk a 159803007a1a
+input a
+noteoff 3 0 8
+noteon 122 26 8
+chunk a 9e1d1939b74036b94040fdbf0170889a6b2a8b774f
+input a
+noteon 29 25 14
+cc 64 54 3fdb366cd9b366ce 7
+cc 64 64 3fe0204081020408 9
+cc 1 112 3fec3870e1c3870e 15
+noteon 107 42 10
+noteoff 119 79 11
+chunk a 51079f6e67
+input a
+noteoff 81 7 11
+noteon 110 103 15
+chunk a 35128c3f0bbe4009
+input a
+noteon 53 18 15
+noteoff 63 11 12
+cc 64 9 3fb2244891224489 14
+chunk a 01fa834a4e
+input a
+noteoff 74 78 3
+chunk b 851002916600817b755c388e13592e45
+input b
+noteoff 16 2 5
+noteoff 102 0 1
+noteoff 123 117 1
+noteoff 92 56 1
+noteoff 19 89 14
+noteoff 46 69 14
+chunk a 9c4000137c935f0a944619ba077d
+input a
+noteoff 64 0 12
+noteon 19 124 12
+noteon 95 10 3
+noteon 70 25 4
+cc 7 125 3fef7efdfbf7efe0 10
+chunk a e43500979d
+input a
+bend bfefcb0000000000 53 4
+chunk b ea0a7f39ad983d00f4
+input b
+bend 3fef8afc57e2bf16 16266 10
+noteoff 61 0 8
+chunk a 362a8843409f5318c577
+input a
+noteon 54 42 13
+noteoff 67 64 8
+noteon 83 24 15
+program 119 5
+chunk b ea0040d49b64008b1f20
+input b
+bend 0000000000000000 8192 10
+noteoff 100 0 11
+noteoff 31 32 11
+chunk b 51ee0100bf0ec003c3308f6118
+input b
+bend bfefff0000000000 1 14
+program 3 0
+program 48 3
+noteoff 97 24 15
+chunk b 1b29c27c30b140489f1364
+input b
+noteoff 27 41 15
+program 124 2
+program 48 2
+cc 64 72 3fe2244891224489 1
+noteon 19 100 15
+chunk a c95bc610cdcc0326
+input a
+program 91 9
+program 16 6
+program 3 12
+program 38 12
+chunk a -
+chunk b fdc13b68
+input b
+program 59 1
+program 104 1
+chunk a 946551
+input a
+noteon 101 81 4
+chunk b 922357ba1d53ec3c2712799f1555852a2520439d6306
+input b
+noteon 35 87 2
+cc 29 83 3fe4e9d3a74e9d3a 10
+bend bfd8880000000000 5052 12
+bend 3fec92e49724b926 15506 12
+noteon 21 85 15
+noteoff 42 37 5
+noteoff 32 67 5
+noteon 99 6 13
+chunk a 8b27499d067e871b53924800b3b5786b09
+input a
+noteoff 39 73 11
+noteon 6 126 13
+noteoff 27 83 7
+noteoff 72 0 2
+cc 120 107 3feaf5ebd7af5ebd 5
+chunk b 8c761195007899e77f401d
+input b
+noteoff 118 17 12
+noteon 0 120 5
+bend 3f8fc0fe07f03f82 8319 7
+chunk a 879d3d00b37b611295584aec0000cd4f55
+input a
+noteoff 61 0 13
+cc 123 97 3fe870e1c3870e1c 3
+noteon 88 74 5
+bend bff0000000000000 0 12
+program 79 13
+program 85 13
+chunk a c152fbcb325326cf4d61965437cb07e2
+input a
+program 82 1
+program 50 11
+program 83 11
+program 38 11
+program 77 15
+program 97 15
+noteon 84 55 6
+program 7 11
+chunk a 953568f0f08ab50128
+input a
+noteon 53 104 5
+cc 1 40 3fd42850a142850a 5
+chunk a bc400b9e3a00981c3a9d0116e7007f4d
+input a
+cc 64 11 3fb62c58b162c58b 12
+noteoff 58 0 14
+noteon 28 58 8
+noteon 1 22 13
+bend 3fef80fc07e03f02 16256 7
+chunk a ea00414f55b27b7c
+input a
+bend 3f90008004002001 8320 10
+bend 3fd59eacf567ab3d 10959 10
+cc 123 124 3fef3e7cf9f3e7d0 2
+chunk a c214992f00cb16b6017e967067cf942172ed0950ee7f00
+input a
+program 20 2
+noteoff 47 0 9
+program 22 11
+cc 1 126 3fefbf7efdfbf7f0 6
+noteon 112 103 6
+noteon 33 114 4
+bend 3fd012809404a025 10249 13
+bend bfef810000000000 127 14
+chunk a 995c006b197084
+input a
+noteoff 92 0 9
+noteon 107 25 9
+chunk a 9f58
+input a
+chunk b 8775687941e90040ca3a
+input b
+noteoff 117 104 7
+noteoff 121 65 7
+bend 0000000000000000 8192 9
+program 58 10
+chunk b 7a60b8026b35496d1fba9c5610
+input b
+program 122 10
+program 96 10
+cc 2 107 3feaf5ebd7af5ebd 8
+cc 53 73 3fe264c993264c99 8
+cc 109 31 3fcf3e7cf9f3e7d0 8
+noteon 86 16 12
+chunk a 9c2e00c4709d07009406269198a04a2390633c
+input a
+noteoff 46 0 12
+program 112 4
+noteoff 7 0 13
+noteon 6 38 4
+noteon 99 60 0
+chunk b 903434933b35cb7418383dd0
+input b
+noteon 52 52 0
+noteon 59 53 3
+program 116 11
+program 24 11
+program 56 11
+program 61 11
+chunk a 9f7500c31f9512002961c46f
+input a
+noteoff 117 0 15
+program 31 3
+noteoff 18 0 5
+noteon 41 97 5
+program 111 4
+chunk b b37b6f4c884d06
+input b
+cc 123 111 3febf7efdfbf7efe 3
+noteoff 77 6 8
+chunk b 16cd705a739b6622973c00
+input b
+program 112 13
+program 90 13
+program 115 13
+noteon 102 34 11
+noteoff 60 0 7
+chunk a 63
+input a
+program 99 4
+chunk a c96ebc163a6b9f230012229b18749334001e9b6054
+input a
+program 110 9
+cc 22 58 3fdd3a74e9d3a74f 12
+noteoff 35 0 15
+noteon 18 34 15
+noteon 24 116 11
+noteoff 52 0 3
+noteon 96 84 11
+chunk a 469c0100cc2bbf4057ff20544811e20a40
+input a
+noteoff 1 0 12
+program 43 12
+cc 64 87 3fe5ebd7af5ebd7b 15
+cc 32 84 3fe52a54a952a54b 15
+cc 72 17 3fc1224489122449 15
+bend 3f5400a005002801 8202 2
+chunk a e2953b0081231c5ac120
+input a
+noteoff 59 0 5
+noteoff 35 28 1
+program 32 1
+chunk b 522045fa22f2c426
+input b
+noteon 82 32 7
+noteon 69 34 7
+program 38 4
+chunk a -
+chunk a 9218409862308f271d
+input a
+noteon 24 64 2
+noteon 98 48 8
+noteoff 39 29 15
+chunk a 82752b78b6403d2a9793135894460ff3
+input a
+noteoff 117 43 2
+cc 64 61 3fdebd7af5ebd7af 6
+noteon 19 88 3
+noteon 70 15 4
+chunk a 982a34900d0e004d
+input a
+noteon 42 52 8
+noteon 13 14 0
+noteon 0 77 0
+chunk a 6e7a75b397701974ea3e40
+input a
+noteon 110 122 0
+noteon 112 25 7
+bend 3f7f00f807c03e02 8254 10
+chunk a 219b
+input a
+chunk a b27b199e487e987a5a
+input a
+cc 123 25 3fc93264c993264d 2
+noteon 72 126 14
+noteon 122 90 8
+chunk b 07359b1a005a0f8e2f09
+input b
+program 7 4
+program 53 4
+noteoff 26 0 11
+noteon 90 15 11
+noteoff 47 9 14
+chunk a eef899b00144ea4f40759a155315
+input a
+cc 1 68 3fe1224489122449 0
+bend 3f83c09e04f02781 8271 10
+noteon 21 83 10
+chunk a 943200e90000eb4a70
+input a
+noteoff 50 0 4
+bend bff0000000000000 0 9
+bend 3fe84ac25612b096 14410 11
+chunk b 9c584d3c544b917d009b3b3f902c46b74048c500ee3a03
+input b
+noteon 88 77 12
+noteon 60 84 12
+noteoff 125 0 1
+noteon 59 63 11
+noteon 44 70 0
+cc 64 72 3fe2244891224489 7
+program 0 5
+bend bfee460000000000 442 14
+chunk a 883b00
+input a
+noteoff 59 0 8
+chunk a 6e
+input a
+chunk a 69ce7e569968e21a7f11f6b90767
+input a
+noteoff 110 105 8
+program 126 14
+program 86 14
+bend 3fef9afcd7e6bf36 16282 2
+cc 7 103 3fe9f3e7cf9f3e7d 9
+chunk a de819fca5595e2be1127
+input a
+program 85 10
+cc 17 39 3fd3a74e9d3a74ea 14
+chunk a 6590b40142ba0108896a7b893728
+input a
+cc 1 66 3fe0a142850a1428 4
+cc 1 8 3fb0204081020408 10
+noteoff 106 123 9
+noteoff 55 40 9
+chunk a 9c9dc3
+input a
+chunk a 996e52983318
+input a
+noteon 110 82 9
+noteon 51 24 8
+chunk a c72cb8075ff591342f6336c6136066e0
+input a
+program 44 7
+cc 7 95 3fe7efdfbf7efdfc 8
+noteon 52 47 1
+noteon 99 54 1
+program 19 6
+program 96 6
+program 102 6
+chunk a b6786364a50ab7013a873b3091bf4044
+input a
+cc 120 99 3fe8f1e3c78f1e3c 6
+cc 1 58 3fdd3a74e9d3a74f 7
+noteoff 59 48 7
+cc 64 68 3fe1224489122449 15
+chunk a e00022912d37
+input a
+bend bfde000000000000 4352 0
+noteon 45 55 1
+chunk a 946859faeb0000c3349d024090605edd98322e
+input a
+noteon 104 89 4
+bend bff0000000000000 0 11
+program 52 3
+noteon 2 64 13
+noteon 96 94 0
+noteon 50 46 8
+chunk a b81984271c9f4e6b8f7630b6010b927b00985c0d
+input a
+noteoff 39 28 4
+noteon 78 107 15
+noteoff 118 48 15
+cc 1 11 3fb62c58b162c58b 6
+noteoff 123 0 2
+noteon 92 13 8
+chunk a 0f60f09bb3406c82021e964f33
+input a
+noteon 15 96 8
+cc 64 108 3feb366cd9b366ce 3
+noteoff 2 30 2
+noteon 79 51 6
+chunk a 5fb77b2f5cd8
+input a
+cc 123 47 3fd7af5ebd7af5ec 7
+chunk b e47f38c18f
+input b
+bend bfbc080000000000 7295 4
+chunk b ca669f1800b7401a
+input b
+program 102 10
+noteoff 24 0 15
+cc 64 26 3fca3468d1a3468d 7
+chunk b 8516
+input b
+chunk b 912400
+input b
+noteoff 36 0 1
+chunk a 951a32ba407d
+input a
+noteon 26 50 5
+cc 64 125 3fef7efdfbf7efe0 10
+chunk b 856d6098073e9855156fcc3816b7402997222e
+input b
+noteoff 109 96 5
+noteon 7 62 8
+noteon 85 21 8
+program 56 12
+program 22 12
+cc 64 41 3fd4a952a54a952a 7
+noteon 34 46 7
+chunk b 9fea3540e77f00f89b5b43c065aaa5
+input b
+bend 3f7a80d406a03502 8245 10
+bend bfef810000000000 127 7
+noteon 91 67 11
+program 101 0
+chunk b cc1231
+input b
+program 18 12
+program 49 12
+chunk b 0ffe0d0cb2bd7b7c9c1563
+input b
+program 15 12
+program 13 12
+program 12 12
+cc 123 124 3fef3e7cf9f3e7d0 13
+noteon 21 99 12
+chunk a bb7b5f9c0701bf
+input a
+cc 123 95 3fe7efdfbf7efdfc 11
+noteon 7 1 12
+chunk b 9d52007b42938c0f259713509a4b1fc8c51e
+input b
+noteoff 82 0 13
+noteon 123 66 13
+noteoff 15 37 12
+noteon 19 80 7
+noteon 75 31 10
+program 30 5
+chunk b ee00009f3a1a937b00994a30b6780eee7f00
+input b
+bend bff0000000000000 0 14
+noteon 58 26 15
+noteoff 123 0 3
+noteon 74 48 9
+cc 120 14 3fbc3870e1c3870e 6
+bend bfef810000000000 127 14
+chunk a f827
+input a
+chunk b c109f0419b0000458d7210440d
+input b
+program 9 1
+noteoff 0 0 11
+noteoff 114 16 13
+noteoff 68 13 13
+chunk a c856967642
+input a
+program 86 8
+noteon 118 66 6
+chunk b 1d65b348911b3f5b23862215
+input b
+noteoff 29 101 13
+noteon 27 63 1
+noteon 91 35 1
+noteoff 34 21 6
+chunk a 9e4b00896309907c7d966717cdea007f98141f927100
+input a
+noteoff 75 0 14
+noteoff 99 9 9
+noteon 124 125 0
+noteon 103 23 6
+bend 3fef80fc07e03f02 16256 10
+noteon 20 31 8
+noteoff 113 0 2
+chunk b 1326962006
+input b
+noteoff 19 38 6
+noteon 32 6 6
+chunk a c6bea5925c00b50079
+input a
+noteoff 92 0 2
+cc 0 121 3fee7cf9f3e7cf9f 5
+chunk b -
+chunk a -
+chunk a 9a1a097d369b1400c62d956c3f3405e4004099
+input a
+noteon 26 9 10
+noteon 125 54 10
+noteoff 20 0 11
+program 45 6
+noteon 108 63 5
+noteon 52 5 5
+bend 0000000000000000 8192 4
+chunk b 0f
+input b
+chunk a 69957875ef007f77a080
+input a
+noteon 120 117 5
+bend 3fef80fc07e03f02 16256 15
+chunk b fc8b8a7d350794
+input b
+noteoff 125 53 10
+chunk b 3fe0677fbb0b3bc1906b2aee6519e3002e2bc12b
+input b
+bend 3fefe7ff3ff9ffd0 16359 0
+cc 11 59 3fddbb76eddbb76f 11
+noteon 107 42 0
+bend bfe31b0000000000 3301 14
+bend bfd2000000000000 5888 3
+program 43 1
+chunk a b840158a386c
+input a
+cc 64 21 3fc52a54a952a54b 8
+noteoff 56 108 10
+chunk a -
+chunk a 9b2f4e
+input a
+noteon 47 78 11
+chunk a ee2936f3
+input a
+bend bfc35c0000000000 6953 14
+chunk a -
+chunk b -
+chunk a 97532de359954302fe927e003419ec7f00792d
+input a
+noteon 83 45 7
+noteon 67 2 5
+noteoff 126 0 2
+noteon 52 25 2
+bend bfef810000000000 127 12
+bend bfd20e0000000000 5881 12
+chunk a 924377b9402e5d1a518e5f729532574be00000
+input a
+noteon 67 119 2
+cc 64 46 3fd72e5cb972e5cc 9
+cc 93 26 3fca3468d1a3468d 9
+noteoff 95 114 14
+noteon 50 87 5
+bend bff0000000000000 0 0
+chunk a 941800942500ea75250fcc64fa8d1617b14028
+input a
+noteoff 24 0 4
+noteoff 37 0 4
+bend bfda160000000000 4853 10
+program 100 12
+noteoff 22 23 13
+cc 64 40 3fd42850a142850a 1
+chunk a b44d4a
+input a
+cc 77 74 3fe2a54a952a54a9 4
+chunk a 28399e5d72bd07692e
+input a
+cc 40 57 3fdcb972e5cb972e 4
+noteon 93 114 14
+cc 7 105 3fea74e9d3a74e9d 13
+chunk b -
+chunk a 032ff89f0a2d
+input a
+cc 46 3 3f983060c183060c 13
+noteon 10 45 15
+chunk a 1a962600d9c62960be0b4e1bc414
+input a
+noteoff 38 0 6
+program 41 6
+program 96 6
+cc 11 78 3fe3a74e9d3a74ea 14
+program 20 4
+chunk a 86362b9b07009979008d27422a
+input a
+noteoff 54 43 6
+noteoff 7 0 11
+noteoff 121 0 9
+noteoff 39 66 13
+chunk a c25e5f06306b815040f1
+input a
+program 94 2
+program 95 2
+program 6 2
+program 48 2
+program 107 2
+noteoff 80 64 1
+chunk b c024956300ed7f40951069
+input b
+program 36 0
+noteoff 99 0 5
+bend 3f8fc0fe07f03f82 8319 13
+noteon 16 105 5
+chunk a 887c12e762009a2300
+input a
+noteoff 124 18 8
+bend bfef9e0000000000 98 7
+noteoff 35 0 10
+chunk a fbb4070288e5000083
+input a
+cc 7 2 3f90204081020408 4
+bend bff0000000000000 0 5
+chunk a 00937c1fbb7801cc02c825837362
+input a
+noteon 124 31 3
+cc 120 1 3f80204081020408 11
+program 2 12
+program 37 8
+noteoff 115 98 3
+chunk b -
+chunk b c6991172ba7822952e37b54d963d239a1e6a
+input b
+noteon 17 114 9
+cc 120 34 3fd1224489122449 10
+noteon 46 55 5
+noteon 61 35 6
+noteon 30 106 10
+chunk a cd5c996d0f039870
+input a
+program 92 13
+noteon 109 15 9
+chunk a 967600
+input a
+noteoff 118 0 6
+chunk a 95610043
+input a
+noteoff 97 0 5
+chunk a -
+chunk b f0b865009d5b2b9d720a9a7844779d5318
+input b
+cc 101 0 0000000000000000 8
+noteon 91 43 13
+noteon 114 10 13
+noteon 120 68 10
+noteon 83 24 13
+chunk a afbcb978619d2eb40738
+input a
+cc 120 97 3fe870e1c3870e1c 9
+cc 7 56 3fdc3870e1c3870e 4
+chunk a -
+chunk a 9d4f890f5953814f1e5291957b3498296c
+input a
+noteoff 15 89 9
+noteoff 79 30 1
+noteon 123 52 5
+noteon 41 108 8
+chunk b 0f44912446965f00919c1970e4007e2df7901600
+input b
+noteon 15 68 13
+noteon 36 70 1
+noteoff 95 0 6
+noteon 25 112 12
+bend 3fef00f807c03e02 16128 4
+noteoff 22 0 0
+chunk b 9a3162e87f40b27b2956
+input b
+noteon 49 98 10
+bend 3f8fc0fe07f03f82 8319 8
+cc 123 41 3fd4a952a54a952a 2
+chunk b 4275e1924106e2004e
+input b
+cc 86 66 3fe0a142850a1428 2
+noteon 65 6 2
+bend 3fcc00e007003802 9984 2
+chunk a 94baea0040f1290c75996500bf
+input a
+bend 0000000000000000 8192 10
+noteoff 101 0 9
+chunk a b201656450bf015e977d393028
+input a
+cc 1 101 3fe972e5cb972e5d 2
+cc 100 80 3fe42850a142850a 2
+cc 1 94 3fe7af5ebd7af5ec 15
+noteon 125 57 7
+noteon 48 40 7
+chunk a 930c51646bb50720
+input a
+noteon 12 81 3
+noteon 100 107 3
+cc 7 32 3fd0204081020408 5
+chunk a 916c00811a639c6e00e4000045
+input a
+noteoff 108 0 1
+noteoff 26 99 1
+noteoff 110 0 12
+bend bff0000000000000 0 4
+chunk a c54691f2eb7f0085527e867652
+input a
+program 70 5
+bend bfef810000000000 127 11
+noteoff 82 126 5
+noteoff 118 82 6
+chunk a 13209653
+input a
+noteoff 19 32 6
+chunk a 8b081d0c
+input a
+noteoff 8 29 11
+chunk a 5bfc120ab84034cd1de27f4053
+input a
+noteoff 12 91 11
+noteoff 18 10 11
+cc 64 52 3fda3468d1a3468d 8
+program 29 13
+bend 3f8fc0fe07f03f82 8319 2
+chunk a cd4073
+input a
+program 64 13
+program 115 13
+chunk a 84022e5f621ff3b6070e
+input a
+noteoff 2 46 4
+noteoff 95 98 4
+cc 7 14 3fbc3870e1c3870e 6
+chunk a 900b34
+input a
+noteon 11 52 0
+chunk a 9995337895605e13feb24014e97f7f913800
+input a
+noteon 51 120 5
+noteon 96 94 5
+cc 64 20 3fc42850a142850a 2
+bend 3ff0000000000000 16383 9
+noteoff 56 0 1
+chunk b e37f7f969d3000902900e72f1ed0
+input b
+bend 3ff0000000000000 16383 3
+noteoff 48 0 13
+noteoff 41 0 0
+bend bfe0d10000000000 3887 7
+chunk a 9a184d5b9193
+input a
+noteon 24 77 10
+chunk a e37f7f6a62
+input a
+bend 3ff0000000000000 16383 3
+bend 3fe16a8b545aa2d5 12650 3
+chunk a b10734977c58bb4034e57f7f5b95236dbd
+input a
+cc 7 52 3fda3468d1a3468d 1
+noteon 124 88 7
+cc 64 52 3fda3468d1a3468d 11
+bend 3ff0000000000000 16383 5
+noteon 35 109 5
+chunk a c8408b5f72
+input a
+program 64 8
+noteoff 95 114 11
+chunk a 9a0c6f9d1979e4
+input a
+noteon 12 111 10
+noteon 25 121 13
+chunk b e800439e06179666009e7862917849fc914e009b6348
+input b
+bend 3fa800c006003002 8576 8
+noteon 6 23 14
+noteoff 102 0 6
+noteon 120 98 14
+noteon 120 73 1
+noteoff 78 0 1
+noteon 99 72 11
+chunk b fed7e14b62e47f00b40b4c
+input b
+bend 3fe14b8a5c52e297 12619 1
+bend bfef810000000000 127 4
+cc 11 76 3fe3264c993264ca 4
+chunk a b6468b713b91c972
+input a
+noteoff 113 59 11
+program 114 9
+chunk a 3e950a3d
+input a
+program 62 9
+noteon 10 61 5
+chunk a c209992b3a881d0b0498315221994200ec03005132
+input a
+program 9 2
+noteon 43 58 9
+noteoff 29 11 8
+noteon 49 82 8
+noteoff 66 0 9
+bend bfeffd0000000000 3 12
+bend bfcabc0000000000 6481 12
+chunk a bd402ce97f7ab67b76b10772
+input a
+cc 64 44 3fd62c58b162c58b 13
+bend 3fed7febff5ffb00 15743 9
+cc 123 118 3fedbb76eddbb76f 6
+cc 7 114 3fecb972e5cb972e 1
+chunk a c3019b4365b40b5fe23c40
+input a
+program 1 3
+noteon 67 101 11
+cc 11 95 3fe7efdfbf7efdfc 4
+bend 3f7e00f007803c02 8252 2
+chunk a 8a4703eb7f4080503d4e
+input a
+noteoff 71 3 10
+bend 3f8fc0fe07f03f82 8319 11
+noteoff 80 61 0
+chunk b 9e3f599c433a
+input b
+noteon 63 89 14
+noteon 67 58 12
+chunk a d4831e53e4007f
+input a
+noteoff 30 83 3
+bend 3fef80fc07e03f02 16256 4
+chunk a -
+chunk a 09ad17529f6009
+input a
+noteon 96 9 15
+chunk a ee0078c855991c64877e40806e1ec2759c
+input a
+bend 3fec00e007003802 15360 14
+program 85 8
+noteon 28 100 9
+noteoff 126 64 7
+noteoff 110 30 0
+program 117 2
+chunk a 94c6698d222c
+input a
+program 105 6
+noteoff 34 44 13
+chunk b -
+chunk a dd
+input a
+chunk b 4d3f78830050e57f0022a7e80000
+input b
+noteon 77 63 12
+noteoff 0 80 3
+bend bfef810000000000 127 5
+bend bff0000000000000 0 8
+chunk a 15d91b94477128
+input a
+noteon 71 113 4
+chunk a 91547af5c87c926400e3007f965d64353b349a2700
+input a
+noteon 84 122 1
+program 124 8
+noteoff 100 0 2
+bend 3fef80fc07e03f02 16256 3
+noteon 93 100 6
+noteon 53 59 6
+noteoff 39 0 10
+chunk a 5b914336e50038f773
+input a
+noteon 67 54 1
+bend bfc0000000000000 7168 5
+chunk a fc9bce0db1071fcf5595197c91
+input a
+program 13 14
+cc 7 31 3fcf3e7cf9f3e7d0 1
+program 85 15
+noteon 25 124 5
+chunk a 9f4a00
+input a
+noteoff 74 0 15
+chunk a 12375175ff5d91944e
+input a
+noteon 18 55 15
+noteon 81 117 15
+chunk b b5407f
+input b
+cc 64 127 3ff0000000000000 5
+chunk a 996f00961429c870901800
+input a
+noteoff 111 0 9
+noteon 20 41 6
+program 112 8
+noteoff 24 0 0
+chunk a 758566679b6300945e25953e219c807472907e4f
+input a
+noteoff 102 103 5
+noteoff 99 0 11
+noteon 94 37 4
+noteon 62 33 5
+noteoff 116 114 0
+noteon 126 79 0
+chunk a -
+chunk a c5139966006b9e1635b31c52b4077a58
+input a
+program 19 5
+noteoff 102 0 9
+noteon 22 53 14
+cc 28 82 3fe4a952a54a952a 3
+cc 7 122 3feebd7af5ebd7af 4
+chunk a b7077f6b98d65b41
+input a
+cc 7 127 3ff0000000000000 7
+chunk a 252125663d
+input a
+chunk a fc3811f9bc7b65b17b565f91183ee2
+input a
+cc 123 101 3fe972e5cb972e5d 12
+cc 123 86 3fe5ab56ad5ab56b 1
+noteon 24 62 1
+chunk a a78b7727523989443f8e2f3e
+input a
+noteoff 119 39 11
+noteoff 82 57 11
+noteoff 68 63 9
+noteoff 47 62 14
+chunk a 9e351c
+input a
+noteon 53 28 14
+chunk a 901345f771bf076ea9
+input a
+noteon 19 69 0
+cc 7 110 3febb76eddbb76ee 15
+chunk a 9d673bc9
+input a
+noteon 103 59 13
+chunk a e47f00851755997663933700bc4039946a4c92099c7c74
+input a
+bend bfef810000000000 127 4
+noteoff 23 85 5
+noteon 118 99 9
+noteoff 55 0 3
+cc 64 57 3fdcb972e5cb972e 12
+noteon 106 76 4
+noteon 124 116 12
+chunk a b0cc448154000aeb00001c0a904138c60019
+input a
+program 68 12
+noteoff 84 0 1
+bend bff0000000000000 0 11
+bend bfeae40000000000 1308 11
+noteon 65 56 0
+program 0 6
+program 25 6
+chunk b cc66ec007fe50051
+input b
+program 102 12
+bend 3fef80fc07e03f02 16256 12
+bend 3fd1008804402201 10368 5
+chunk a 019749911b519a571e96003b9cb7535d5c75
+input a
+program 1 6
+noteon 27 81 1
+noteon 87 30 10
+noteon 0 59 6
+cc 83 93 3fe76eddbb76eddc 7
+cc 92 117 3fed7af5ebd7af5f 7
+chunk a f0e87f40f9955600974c33c3486a
+input a
+bend 3f8fc0fe07f03f82 8319 8
+noteoff 86 0 5
+noteon 76 51 7
+program 72 3
+program 106 3
+chunk a -
+chunk a c515
+input a
+program 21 5
+chunk b e70006ec9f0c3a
+input b
+bend bfed000000000000 768 7
+noteon 12 58 15
+chunk a 9b1c00be7b1b9b0877c544487bcc259e4a0c6254
+input a
+noteoff 28 0 11
+cc 123 27 3fcb366cd9b366ce 14
+noteon 8 119 11
+program 68 5
+program 72 5
+program 123 5
+program 37 12
+noteon 74 12 14
+noteon 98 84 14
+chunk b 4a40930a0070e20047f2cf52
+input b
+noteon 74 64 15
+noteoff 10 0 3
+bend 3fbc00e007003802 9088 2
+program 82 15
+chunk a 9f2e36c53b1146e57f7ff8293b
+input a
+noteon 46 54 15
+program 59 5
+program 17 5
+program 70 5
+bend 3ff0000000000000 16383 5
+bend bfb2b80000000000 7593 5
+chunk a bd0164f06fee7f0ec46b5e278c5348
+input a
+cc 1 100 3fe93264c993264d 13
+bend bfe8810000000000 1919 14
+program 107 4
+program 94 4
+program 39 4
+noteoff 83 72 12
+chunk a eb0056
+input a
+bend 3fd600b005802c01 11008 11
+chunk a e67f7f960b6a2fe67f008a3f7d9b0b371b04
+input a
+bend 3ff0000000000000 16383 6
+noteon 11 106 6
+bend bfef810000000000 127 6
+noteoff 63 125 10
+noteon 11 55 11
+noteon 27 4 11
+chunk a 946d04ee007fb0014a921c17
+input a
+noteon 109 4 4
+bend 3fef80fc07e03f02 16256 14
+cc 1 74 3fe2a54a952a54a9 0
+noteon 28 23 2
+chunk a -
+chunk a c7b44057b1407a9c7a78
+input a
+cc 64 87 3fe5ebd7af5ebd7b 4
+cc 64 122 3feebd7af5ebd7af 1
+noteon 122 120 12
+chunk a 919a7072cc41cf
+input a
+noteon 112 114 10
+program 65 12
+chunk a 944118977467cad79d3f6a429c9c
+input a
+noteon 65 24 4
+noteon 116 103 7
+noteon 63 106 13
+chunk a 9c0927
+input a
+noteon 9 39 12
+chunk b 842d54b9013d
+input b
+noteoff 45 84 4
+cc 1 61 3fdebd7af5ebd7af 9
+chunk a 452b38218ab3732189663d642c1c
+input a
+noteon 69 43 12
+noteon 56 33 12
+cc 115 33 3fd0a142850a1428 3
+noteoff 102 61 9
+noteoff 100 44 9
+chunk a 9b5a354b1b61f8
+input a
+noteon 90 53 11
+noteon 75 27 11
+chunk a b1
+input a
+chunk a 8b490c925c3883917e36b6401192867268f1
+input a
+noteoff 73 12 11
+noteon 92 56 2
+noteon 126 54 1
+cc 64 17 3fc1224489122449 6
+noteoff 114 104 6
+chunk a -
+chunk a 49bb073d4398805847
+input a
+cc 7 61 3fdebd7af5ebd7af 11
+noteoff 88 71 0
+chunk a 986500925b759f1a28cb118d1522e10000e8007f82587b
+input a
+noteoff 101 0 8
+noteon 91 117 2
+noteon 26 40 15
+program 17 11
+noteoff 21 34 13
+bend bff0000000000000 0 1
+bend 3fef80fc07e03f02 16256 8
+noteoff 88 123 2
+chunk a ea3f8a42337d
+input a
+noteoff 66 51 10
+chunk b 90025a
+input b
+noteon 2 90 0
+chunk b 947a40826e528291637a0de1004f8f4800
+input b
+noteon 122 64 4
+noteoff 110 82 2
+noteon 99 122 1
+bend 3fce00f007803c02 10112 1
+noteoff 72 0 15
+chunk a e36e0f5407c9619024009f063e71
+input a
+bend bfe8120000000000 2030 3
+bend bfec2c0000000000 980 3
+program 97 9
+noteoff 36 0 0
+noteon 6 62 15
+chunk a e400672e7ecd70c819e6
+input a
+bend 3fe3809c04e02701 13184 4
+bend 3fef2ef977cbbe5e 16174 4
+program 112 13
+program 25 8
+chunk a 801958c359301ba2
+input a
+noteoff 25 88 0
+program 89 3
+program 48 3
+program 27 3
+chunk a -
+chunk a 0ee6000db4401696560067b60108
+input a
+bend bfe9800000000000 1664 6
+cc 64 22 3fc62c58b162c58b 4
+noteoff 86 0 6
+cc 1 8 3fb0204081020408 6
+chunk a 974a2ee2000037923900
+input a
+noteon 74 46 7
+bend bff0000000000000 0 2
+noteoff 57 0 2
+chunk b 8510416a903d01ec006ad2
+input b
+noteoff 16 65 5
+noteon 61 1 0
+bend 3fe500a805402a01 13568 12
+chunk a 9fc25c
+input a
+program 92 2
+chunk a -
+chunk a 6c66e90000f8f0b9b9845555
+input a
+program 108 2
+program 102 2
+bend bff0000000000000 0 9
+noteoff 85 85 4
+chunk b 20cf974b00c6294f66
+input b
+noteoff 75 0 7
+program 41 6
+program 79 6
+program 102 6
+chunk a 9e0c1dba0109b4401be30000905700907f5e1d1b975010
+input a
+noteon 12 29 14
+cc 1 9 3fb2244891224489 10
+cc 64 27 3fcb366cd9b366ce 4
+bend bff0000000000000 0 3
+noteoff 87 0 0
+noteon 127 94 0
+noteon 29 27 0
+noteon 80 16 7
+chunk a ca4d970c991f00
+input a
+program 77 10
+noteoff 31 0 9
+chunk a 020942f73f857354905c2de27f00
+input a
+noteon 2 9 9
+noteoff 115 84 5
+noteon 92 45 0
+bend bfef810000000000 127 2
+chunk a 9964009e387c974b00d19d
+input a
+noteoff 100 0 9
+noteon 56 124 14
+noteoff 75 0 7
+chunk b 5f915139013cb77b03c68a4c6d
+input b
+program 95 6
+noteon 81 57 1
+noteon 1 60 1
+cc 123 3 3f983060c183060c 7
+noteoff 76 109 10
+chunk a 614f881175e8004048cb5ce501
+input a
+noteon 97 79 13
+noteoff 17 117 8
+bend 0000000000000000 8192 8
+program 92 11
+chunk a 5a9f031e9f4600ed9025715706946a00f7
+input a
+bend 3fda02d01680b406 11521 5
+noteon 3 30 15
+noteoff 70 0 15
+noteon 37 113 0
+noteon 87 6 0
+noteoff 106 0 4
+chunk b ca63911500e70000
+input b
+program 99 10
+noteoff 21 0 1
+bend bff0000000000000 0 7
+chunk a -
+chunk a ca42f079
+input a
+program 66 10
+chunk a c269c366957b049766538f4a5ac86dc85f951900
+input a
+program 105 2
+program 102 3
+noteon 123 4 5
+noteon 102 83 7
+noteoff 74 90 15
+program 109 8
+program 95 8
+noteoff 25 0 5
+chunk a 5c05716a9e71239a
+input a
+noteon 92 5 5
+noteon 113 106 5
+noteon 113 35 14
+chunk b 9d1164893f569c4e009599cb1f
+input b
+noteon 17 100 13
+noteoff 63 86 9
+noteoff 78 0 12
+program 31 11
+chunk a 9e68003348
+input a
+noteoff 104 0 14
+noteon 51 72 14
+chunk a b90b619a7156
+input a
+cc 11 97 3fe870e1c3870e1c 9
+noteon 113 86 10
+chunk a e84c7fe07f409f05399b4378
+input a
+bend 3fefccfe67f33f9a 16332 8
+bend 3f8fc0fe07f03f82 8319 0
+noteon 5 57 15
+noteon 67 120 11
+chunk a 8a
+input a
+chunk a eb7769faeb0018e27f7f1f1b
+input a
+bend 3fe4f7a7bd3de9ef 13559 11
+bend bfe4000000000000 3072 11
+bend 3ff0000000000000 16383 2
+bend bfe2610000000000 3487 2
+chunk a c6e70040e57f1c8e513ef8c857ca46
+input a
+bend 0000000000000000 8192 7
+bend bfe1810000000000 3711 5
+noteoff 81 62 14
+program 87 8
+program 70 10
+chunk a 9e10269d3d008a112d
+input a
+noteon 16 38 14
+noteoff 61 0 13
+noteoff 17 45 10
+chunk b 9a050f404bef504098
+input b
+noteon 5 15 10
+noteon 64 75 10
+bend 3f8400a005002801 8272 15
+chunk a eb217fe40000be20b50163072e
+input a
+bend 3fefa1fd0fe87f44 16289 11
+bend bff0000000000000 0 4
+cc 1 99 3fe8f1e3c78f1e3c 5
+cc 7 46 3fd72e5cb972e5cc 5
+chunk a 21ec004286435b06e06400b6
+input a
+bend 3fa0008004002001 8448 12
+noteoff 67 91 6
+bend bfef9c0000000000 100 0
+chunk a 8de80000e67f00915a3486b80b1f
+input a
+bend bff0000000000000 0 8
+bend bfef810000000000 127 6
+noteon 90 52 1
+cc 11 31 3fcf3e7cf9f3e7d0 8
+chunk a 973d72
+input a
+noteon 61 114 7
+chunk a 7139916000f2951e1d1655
+input a
+noteon 113 57 7
+noteoff 96 0 1
+noteon 30 29 5
+noteon 22 85 5
+chunk a 7c985378
+input a
+noteon 83 120 8
+chunk a 9c0500914a7e973d00c961e11500e37f0018ca0c
+input a
+noteoff 5 0 12
+noteon 74 126 1
+noteoff 61 0 7
+program 97 9
+bend bfefeb0000000000 21 1
+bend bfef810000000000 127 3
+program 12 10
+chunk a 34ac3b2a85
+input a
+program 52 10
+chunk a fec4994d00
+input a
+noteoff 77 0 9
+chunk b 8b4724973c708028683ee52d4f60
+input b
+noteoff 71 36 11
+noteon 60 112 7
+noteoff 40 104 0
+bend 3fceb4f5a7ad3d6a 10157 5
+chunk a fc
+chunk a 936f00bf014d8e2e2b94
+input a
+noteoff 111 0 3
+cc 1 77 3fe366cd9b366cda 15
+noteoff 46 43 14
+chunk b 2891131d920700994612841563
+input b
+bend bfd7400000000000 5216 5
+noteon 19 29 1
+noteoff 7 0 2
+noteon 70 18 9
+noteoff 21 99 4
+chunk b 0f0f54e47f00c91028
+input b
+noteoff 15 15 4
+bend bfef810000000000 127 4
+program 16 9
+program 40 9
+chunk b 4452b07b40b50b
+input b
+program 68 9
+program 82 9
+cc 123 64 3fe0204081020408 0
+chunk a b0970a029b
+input a
+noteon 10 2 7
+chunk a 8896b2665484151a
+input a
+cc 102 84 3fe52a54a952a54b 2
+noteoff 21 26 4
+chunk b 9ab97b39936a7c
+input b
+cc 123 57 3fdcb972e5cb972e 9
+noteon 106 124 3
+chunk b 9c
+input b
+chunk b a1ef0f7f367f
+input b
+bend 3fef8ffc7fe3ff20 16271 15
+bend 3fefb6fdb7edbf6e 16310 15
+chunk a c121e57f40f5133a
+input a
+program 33 1
+bend 3f8fc0fe07f03f82 8319 5
+chunk a 7f9e6541
+input a
+noteon 101 65 14
+chunk b e90000
+input b
+bend bff0000000000000 0 9
+chunk a 9d604c3e1a14b64047e41a6a2a975900
+input a
+noteon 96 76 13
+noteon 62 26 13
+cc 64 71 3fe1e3c78f1e3c79 6
+bend 3fe51aa8d546aa35 13594 4
+noteoff 89 0 7
+chunk a 5f6c8204360a2942e5900e4d9b1800942874
+input a
+noteon 95 108 7
+noteoff 4 54 2
+noteoff 10 41 2
+noteon 14 77 0
+noteoff 24 0 11
+noteon 40 116 4
+chunk b -
+chunk a c01eeb7f7fb40554ec7f40965446
+input a
+program 30 0
+bend 3ff0000000000000 16383 11
+cc 5 84 3fe52a54a952a54b 4
+bend 3f8fc0fe07f03f82 8319 12
+noteon 84 70 6
+chunk b a385075796547eb74a35eb0000cf230d34
+input b
+noteoff 7 87 5
+noteon 84 126 6
+cc 74 53 3fdab56ad5ab56ad 7
+bend bff0000000000000 0 11
+program 35 15
+program 13 15
+program 52 15
+chunk a 81ce32939cc32058529e8e47
+input a
+program 50 14
+program 32 3
+program 88 3
+program 82 3
+chunk b b84004
+input b
+cc 64 4 3fa0204081020408 8
+chunk a 9c54124b7c3686354a375e282a936b11ccc123
+input a
+noteon 84 18 12
+noteon 75 124 12
+noteoff 53 74 6
+noteoff 55 94 6
+noteoff 40 42 6
+noteon 107 17 3
+program 35 1
+chunk b 3a919cbb781c599af62016994100
+input b
+cc 120 28 3fcc3870e1c3870e 11
+noteoff 65 0 9
+chunk b f791220094954b00
+input b
+noteoff 34 0 1
+noteoff 75 0 5
+chunk a 950a1f876670
+input a
+noteon 10 31 5
+noteoff 102 112 7
+chunk b fccc03ec8a6a12
+input b
+program 3 12
+noteoff 106 18 10
+chunk a 96fb3d35728b950c5b
+input a
+noteon 61 53 6
+noteon 12 91 5
+chunk a d4837754854e3bad98363c
+input a
+noteoff 119 84 3
+noteoff 78 59 5
+noteon 54 60 8
+chunk a 9f07008b2034db90ee1816
+input a
+noteoff 7 0 15
+noteoff 32 52 11
+bend bfe4e80000000000 2840 14
+chunk b 9720451b8608551e
+input b
+noteon 32 69 7
+noteoff 8 85 6
+chunk a 9e0b4f892902903b00fa
+input a
+noteon 11 79 14
+noteoff 41 2 9
+noteoff 59 0 0
+chunk a b76a6b2a9a741b923600c201e4000099911704
+input a
+cc 106 107 3feaf5ebd7af5ebd 7
+noteon 116 27 10
+noteoff 54 0 2
+program 1 2
+bend bff0000000000000 0 4
+noteon 23 4 1
+chunk a 935809977f49977f4a8d9b4b2aeb000254
+input a
+noteon 88 9 3
+noteon 127 73 7
+noteon 127 74 7
+noteon 75 42 11
+bend bfef000000000000 256 11
+chunk b -
+chunk b 02c6750880404a9e3608913700
+input b
+noteoff 30 2 6
+program 117 6
+program 8 6
+noteoff 64 74 0
+noteon 54 8 14
+noteoff 55 0 1
+chunk a 961062694045a095
+input a
+noteon 16 98 6
+noteon 105 64 6
+chunk a 6e6e
+input a
+noteon 110 110 5
+chunk a 1b913600ba406efc9e2300e500009c0a50337b3b
+input a
+noteoff 54 0 1
+cc 64 110 3febb76eddbb76ee 10
+noteoff 35 0 14
+bend bff0000000000000 0 5
+noteon 10 80 12
+noteon 51 123 12
+chunk b 8b6823631d127586786288185dff
+input b
+noteoff 104 35 11
+noteoff 99 29 11
+noteoff 18 117 11
+noteoff 120 98 6
+noteoff 24 93 8
+chunk a -
+chunk a 881b1a9b2d0087441d952501bf780378719a33668c4843
+input a
+noteoff 27 26 8
+noteoff 45 0 11
+noteoff 68 29 7
+noteon 37 1 5
+cc 120 3 3f983060c183060c 15
+cc 120 113 3fec78f1e3c78f1e 15
+noteon 51 102 10
+noteoff 72 67 12
+chunk a 9d3f7f961757e47f7fea57450b791909954d4f
+input a
+noteon 63 127 13
+noteon 23 87 6
+bend 3ff0000000000000 16383 4
+bend 3fb6b8b5c5ae2d71 8919 10
+bend 3fec8be45f22f918 15499 10
+bend bfeb670000000000 1177 10
+noteon 77 79 5
+chunk a 214fcf339d3f
+input a
+noteon 33 79 5
+program 51 15
+chunk a c77c40
+input a
+program 124 7
+program 64 7
+chunk a c627097c9b0c11d79c4400e00040ba0b7f89e9
+input a
+program 39 6
+program 9 6
+program 124 6
+noteon 12 17 11
+noteoff 68 0 12
+bend 0000000000000000 8192 0
+cc 11 127 3ff0000000000000 10
+chunk a 930a2ac60af0
+input a
+noteon 10 42 3
+program 10 6
+chunk b 840349bb40569a221a83442ad3183b09016d
+input b
+noteoff 3 73 4
+cc 64 86 3fe5ab56ad5ab56b 11
+noteon 34 26 10
+noteoff 68 42 3
+chunk a 9055e08d1b7cc1984b68
+input a
+noteoff 27 124 13
+noteon 75 104 8
+chunk b 9ce77f00892c1f935b67915279005afd
+input b
+bend bfef810000000000 127 7
+noteoff 44 31 9
+noteon 91 103 3
+noteon 82 121 1
+noteon 0 90 1
+chunk a 6c6e
+input a
+noteon 108 110 8
+chunk a 45768f3e68
+input a
+noteon 69 118 8
+noteoff 62 104 15
+chunk b 236383193a9c520089387e80
+input b
+noteon 35 99 1
+noteoff 25 58 3
+noteoff 82 0 12
+noteoff 56 126 9
+chunk a 854d1f912970
+input a
+noteoff 77 31 5
+noteon 41 112 1
+chunk a ea001c9c7932b8013e
+input a
+bend bfe2000000000000 3584 10
+noteon 121 50 12
+cc 1 62 3fdf3e7cf9f3e7d0 8
+chunk b cb713308528d6b3b95504ee20010c08a27679e4205
+input b
+program 113 11
+program 51 11
+program 8 11
+program 82 11
+noteoff 107 59 13
+noteon 80 78 5
+bend bfe8000000000000 2048 2
+noteoff 39 103 10
+noteon 66 5 14
+chunk a f09a3c6b9d6759b24010
+input a
+noteon 60 107 10
+noteon 103 89 13
+cc 64 16 3fc0204081020408 2
+chunk a 9cc619ca88054b3572f08c1a1c
+input a
+program 25 6
+noteoff 5 75 8
+noteoff 53 114 8
+noteoff 26 28 12
+chunk b 9d391fc0922334982064ec7f7f99
+input b
+noteon 57 31 13
+noteon 35 52 2
+noteon 32 100 8
+bend 3ff0000000000000 16383 12
+chunk b cd6c9f7f74ca
+input b
+program 108 13
+noteon 127 116 15
+chunk a 6f02c42d37b3b4b2071970
+input a
+noteoff 111 2 12
+program 45 4
+program 55 4
+cc 7 25 3fc93264c993264d 2
+chunk b 9472250c914d003d
+input b
+noteon 114 37 4
+noteoff 77 0 1
+chunk a ed0040
+input a
+bend 0000000000000000 8192 13
+chunk a be073a
+input a
+cc 7 58 3fdd3a74e9d3a74f 14
+chunk a c40ccb3f9e010eaf83
+input a
+program 12 4
+program 63 11
+noteon 1 14 14
+chunk a 33c915
+input a
+program 21 9
+chunk a 225f
+input a
+program 34 9
+program 95 9
+chunk a ef0000987a00f8
+input a
+bend bff0000000000000 0 15
+noteoff 122 0 8
+chunk a 0a9c5b00940f006432
+input a
+noteoff 91 0 12
+noteoff 15 0 4
+noteon 100 50 4
+chunk b ce359c573a
+input b
+program 53 14
+noteon 87 58 12
+chunk a e4
+input a
+chunk a 961014b90b32956200c614914204
+input a
+noteon 16 20 6
+cc 11 50 3fd93264c993264d 9
+noteoff 98 0 5
+program 20 6
+noteon 66 4 1
+chunk b e9ee0000944f00c0e30000
+input b
+bend bff0000000000000 0 14
+noteoff 79 0 4
+bend bff0000000000000 0 3
+chunk a 90107ebf4025011bb5ba0b3104bd402d
+input a
+noteon 16 126 0
+cc 64 37 3fd2a54a952a54a9 15
+cc 1 27 3fcb366cd9b366ce 15
+cc 11 49 3fd8b162c58b162c 10
+cc 64 45 3fd6ad5ab56ad5ab 13
+chunk a 820b6fe2ee7f7f9b2600eec81f
+input a
+noteoff 11 111 2
+bend 3ff0000000000000 16383 14
+noteoff 38 0 11
+program 31 8
+chunk a e8001e
+input a
+bend bfe1000000000000 3840 8
+chunk b c53c9a11553846bd7845c51f
+input b
+program 60 5
+noteon 17 85 10
+noteon 56 70 10
+cc 120 69 3fe162c58b162c59 13
+program 31 5
+chunk a 9c3000b0214e5a
+input a
+noteoff 48 0 12
+cc 33 78 3fe3a74e9d3a74ea 0
+chunk b f7bf952a00416663b05c4596367f
+input b
+noteoff 42 0 5
+noteon 65 102 5
+cc 92 69 3fe162c58b162c59 0
+noteon 54 127 6
+chunk a e2be0b1c9d2600b8a8c67927
+input a
+cc 11 28 3fcc3870e1c3870e 14
+noteoff 38 0 13
+program 121 6
+program 39 6
+chunk a 46c52626840241e90000fc
+input a
+program 70 6
+program 38 5
+program 38 5
+noteoff 2 65 4
+bend bff0000000000000 0 9
+chunk b 9a0e0a547b9529001cb2145a
+input b
+noteon 14 10 10
+noteon 84 123 10
+noteoff 41 0 5
+cc 20 90 3fe6ad5ab56ad5ab 2
+chunk b 4c789f6d00c02529e37a009f477c0139b2
+input b
+cc 76 120 3fee3c78f1e3c78f 2
+noteoff 109 0 15
+program 37 0
+program 41 0
+bend bfef860000000000 122 3
+noteon 71 124 15
+noteon 1 57 15
+chunk a 31059ee60000926a0ee1007f4367
+input a
+bend bfed4f0000000000 689 9
+bend bff0000000000000 0 6
+noteon 106 14 2
+bend 3fef80fc07e03f02 16256 1
+bend 3fe3c39e1cf0e787 13251 1
+chunk a 9949526f
+input a
+noteon 73 82 9
+chunk a f7bd010ab97b611bcd769e6000
+input a
+cc 1 10 3fb42850a142850a 13
+cc 123 97 3fe870e1c3870e1c 9
+program 118 13
+noteoff 96 0 14
+chunk b 972800ea7f00954d53eb6f001f9e33009b
+input b
+noteoff 40 0 7
+bend bfef810000000000 127 10
+noteon 77 83 5
+bend bfef910000000000 111 11
+noteoff 51 0 14
+chunk b 6c97c233995d68
+input b
+program 51 2
+noteon 93 104 9
+chunk b c1401e
+input b
+program 64 1
+program 30 1
+chunk a 952756913d009a721201ce48f0841600e4660095045c
+input a
+noteon 39 86 5
+noteoff 61 0 1
+noteon 114 18 10
+program 72 14
+noteoff 22 0 4
+bend bfef9a0000000000 102 4
+noteon 4 92 5
+chunk a bd783ef4b30b594f14c36f8083342b
+input a
+cc 120 62 3fdf3e7cf9f3e7d0 13
+cc 11 89 3fe66cd9b366cd9b 3
+cc 79 20 3fc42850a142850a 3
+program 111 3
+noteoff 52 43 3
+chunk b 991620f79029
+input b
+noteon 22 32 9
+chunk a 9f4b00b2405fb2cb1b924b00fc9e326b
+input a
+noteoff 75 0 15
+cc 64 95 3fe7efdfbf7efdfc 2
+program 27 11
+noteoff 75 0 2
+noteon 50 107 14
+chunk b 73943700e67f7f9abf1474
+input b
+noteon 41 115 0
+noteoff 55 0 4
+bend 3ff0000000000000 16383 6
+cc 20 116 3fed3a74e9d3a74f 15
+chunk b 937d76ca76c065ca1c3fb4bf9c670e895166
+input b
+noteon 125 118 3
+program 118 10
+program 101 0
+program 28 10
+program 63 10
+noteon 103 14 12
+noteoff 81 102 9
+chunk a 8d6b1454
+input a
+noteoff 107 20 13
+chunk a 6349
+input a
+noteoff 84 99 13
+chunk a 9256197312e67f40946a31
+input a
+noteon 86 25 2
+noteon 115 18 2
+bend 3f8fc0fe07f03f82 8319 6
+noteon 106 49 4
+chunk b ec1d40beba014a
+input b
+bend 3f6d00e807403a02 8221 12
+cc 1 74 3fe2a54a952a54a9 10
+chunk b 944106e3e97d40
+input b
+noteon 65 6 4
+bend 3f8f40fa07d03e82 8317 9
+chunk a 936770788e1c38c32ee87f408e081ece4914
+input a
+noteon 103 112 3
+noteoff 28 56 14
+program 46 3
+bend 3f8fc0fe07f03f82 8319 8
+noteoff 8 30 14
+program 73 14
+program 20 14
+chunk a 9868731bb9406eb17b4b75944100886332
+input a
+noteon 104 115 8
+cc 64 110 3febb76eddbb76ee 9
+cc 123 75 3fe2e5cb972e5cb9 1
+noteoff 65 0 4
+noteoff 99 50 8
+chunk a a0ade37f40820d1489234852
+input a
+bend 3f8fc0fe07f03f82 8319 3
+noteoff 13 20 2
+noteoff 35 72 9
+chunk a b47b40956a17e30000
+input a
+cc 123 64 3fe0204081020408 4
+noteon 106 23 5
+bend bff0000000000000 0 3
+chunk a 9b660df2
+input a
+noteon 102 13 11
+chunk a eb4f4097470093732c3de3006dc92cba012a
+input a
+bend 3f83c09e04f02781 8271 11
+noteoff 71 0 7
+noteon 115 44 3
+bend 3fe680b405a02d01 13952 3
+program 44 9
+cc 1 42 3fd52a54a952a54b 10
+chunk b 9ecc630e974b5d9f440079993e44e9557fc54c
+input b
+program 99 12
+program 14 12
+noteon 75 93 7
+noteoff 68 0 15
+noteon 62 68 9
+bend 3fefd5feaff57fac 16341 9
+program 76 5
+chunk a -
+chunk a 91590093853744
+input a
+noteoff 89 0 1
+noteoff 55 68 5
+chunk a b44059941a038b073a
+input a
+cc 64 89 3fe66cd9b366cd9b 4
+noteon 26 3 4
+noteoff 7 58 11
+chunk a edc833cb509c6848
+input a
+program 51 8
+program 80 11
+noteon 104 72 12
+chunk b 89265e277b9e82726c976a6eb37826971211f8
+input b
+noteoff 38 94 9
+noteoff 39 123 9
+noteoff 114 108 2
+noteon 106 110 7
+cc 120 38 3fd3264c993264ca 3
+noteon 18 17 7
+chunk a 07b77a7ce87f4093054194581379139f307a89696fb90b2a
+input a
+cc 122 124 3fef3e7cf9f3e7d0 7
+bend 3f8fc0fe07f03f82 8319 8
+noteon 5 65 3
+noteon 88 19 4
+noteon 121 19 4
+noteon 48 122 15
+noteoff 105 111 9
+cc 11 42 3fd52a54a952a54b 9
+chunk a 71209927005f9e0529be6b1b97395184295350
+input a
+cc 113 32 3fd0204081020408 9
+noteoff 39 0 9
+noteon 5 41 14
+cc 107 27 3fcb366cd9b366ce 14
+noteon 57 81 7
+noteoff 41 83 4
+chunk a 02585f37
+input a
+noteoff 80 2 4
+noteoff 88 95 4
+chunk b 972445953900ef0010fedf85bf4064
+input b
+noteon 36 69 7
+noteoff 57 0 5
+bend bfe8000000000000 2048 15
+cc 64 100 3fe93264c993264d 15
+chunk a 7bc57c91930b0d
+input a
+noteoff 55 123 4
+program 124 5
+noteon 11 13 3
+chunk a 936700
+input a
+noteoff 103 0 3
+chunk a 6ee3002f24bf0127
+input a
+bend bfd1000000000000 6016 3
+cc 1 39 3fd3a74e9d3a74ea 15
+chunk a 9e4e00b707058d486bb530
+input a
+noteoff 78 0 14
+cc 7 5 3fa42850a142850a 7
+noteoff 72 107 13
+chunk b 944b4a98926f009e5000b7155888195f891604892e68
+input b
+noteon 75 74 4
+noteoff 111 0 2
+noteoff 80 0 14
+cc 21 88 3fe62c58b162c58b 7
+noteoff 25 95 8
+noteoff 22 4 9
+noteoff 46 104 9
+chunk b 20f75d8a186bcb2d
+input b
+noteoff 24 107 10
+program 45 11
+chunk b 96b80b758d366695167303
+input b
+cc 11 117 3fed7af5ebd7af5f 8
+noteoff 54 102 13
+noteon 22 115 5
+chunk a f02fff3435
+input a
+chunk a 9e2271c962
+input a
+noteon 34 113 14
+program 98 9
+chunk a 9b2f00e610009b5747b00134
+input a
+noteoff 47 0 11
+bend bfeff00000000000 16 6
+noteon 87 71 11
+cc 1 52 3fda3468d1a3468d 0
+chunk a 3594902d0f8c3a57902c18
+input a
+noteon 45 15 0
+noteoff 58 87 12
+noteon 44 24 0
+chunk a eb0040b90b123f
+input a
+bend 0000000000000000 8192 11
+cc 11 18 3fc2244891224489 9
+chunk b 1d80240e97022a
+input b
+noteon 3 29 5
+noteoff 36 14 0
+noteon 2 42 7
+chunk b be0b01973b2c24983000be403f24
+input b
+cc 11 1 3f80204081020408 14
+noteon 59 44 7
+noteoff 48 0 8
+cc 64 63 3fdfbf7efdfbf7f0 14
+chunk a -
+chunk b 956f4b0c
+input b
+noteon 111 75 5
+chunk b 36a5885815927a0056f498997100
+input b
+noteon 12 54 5
+noteoff 88 21 8
+noteoff 122 0 2
+noteoff 113 0 9
+chunk a 5460ba2b55e4007f
+input a
+cc 63 84 3fe52a54a952a54b 9
+cc 43 85 3fe56ad5ab56ad5b 10
+bend 3fef80fc07e03f02 16256 4
+chunk a bcba40489c512be57f0011903e57
+input a
+cc 64 72 3fe2244891224489 10
+noteon 81 43 12
+bend bfef810000000000 127 5
+noteon 62 87 0
+chunk b 2ffe
+input b
+chunk b 77ea5700ce396b6383112a8f152698
+input b
+noteon 47 119 9
+bend bfefa90000000000 87 10
+program 57 14
+program 107 14
+program 99 14
+noteoff 17 42 3
+noteoff 21 38 15
+chunk b be4d4f8c3962b00713
+input b
+cc 77 79 3fe3e7cf9f3e7cfa 14
+noteoff 57 98 12
+cc 7 19 3fc3264c993264ca 0
+chunk a cd5997640024fb
+input a
+program 89 13
+noteoff 100 0 7
+chunk a 950b008b7220
+input a
+noteoff 11 0 5
+noteoff 114 32 11
+chunk a ba07487347e67f4057cf4a2d089b5935
+input a
+cc 7 72 3fe2244891224489 10
+cc 115 71 3fe1e3c78f1e3c79 10
+bend 3f8fc0fe07f03f82 8319 6
+program 74 15
+program 45 15
+program 8 15
+noteon 89 53 11
+chunk b ea00449f4b77bb40350c76
+input b
+bend 3fb0008004002001 8704 10
+noteon 75 119 15
+cc 64 53 3fdab56ad5ab56ad 11
+cc 12 118 3fedbb76eddbb76f 11
+chunk b f4969a5a7c
+input b
+noteon 90 124 10
+chunk a ce7ded0075990e628f5707c5658e1c3f
+input a
+program 125 14
+bend 3fea80d406a03502 14976 13
+noteon 14 98 9
+noteoff 87 7 15
+program 101 5
+noteoff 28 63 14
+chunk a bc4060
+input a
+cc 64 96 3fe83060c183060c 12
+chunk b 93760091355f4b3512e62b21b17868
+input b
+noteoff 118 0 3
+noteon 53 95 1
+noteon 75 53 1
+bend bfdeaa0000000000 4267 6
+cc 120 104 3fea3468d1a3468d 1
+chunk a bd7b1ae8850e794c
+input a
+cc 123 26 3fca3468d1a3468d 13
+noteoff 14 121 5
+chunk b 44979cb8073bb14033922624209f2f49
+input b
+cc 7 59 3fddbb76eddbb76f 8
+cc 64 51 3fd9b366cd9b366d 1
+noteon 38 36 2
+noteon 47 73 15
+chunk a 8d823f20b0070e926c0097c9634836
+input a
+noteoff 63 32 2
+cc 7 14 3fbc3870e1c3870e 0
+noteoff 108 0 2
+program 99 9
+program 72 9
+program 54 9
+chunk a 946a20f9b1cf6d65
+input a
+noteon 106 32 4
+program 109 15
+program 101 15
+chunk a 913a449bce7695
+input a
+noteon 58 68 1
+program 118 14
+chunk a 9f3b349c6b3b6b956340183373ef007f
+input a
+noteon 59 52 15
+noteon 107 59 12
+noteon 99 64 5
+noteon 24 51 5
+bend 3fef80fc07e03f02 16256 15
+chunk b 9c5179c5ffe43200
+input b
+noteon 81 121 12
+bend bfefce0000000000 50 4
+chunk a 9062428f4d2752e97f642d3dc314991f77
+input a
+noteon 98 66 0
+noteoff 77 39 15
+bend 3fe27f93fc9fe4ff 12927 9
+bend bfa5300000000000 7853 9
+program 20 3
+noteon 31 119 9
+chunk a 915000e2cf9a1050c7
+input a
+noteoff 80 0 1
+noteon 16 80 10
+chunk a 2640d8953f0cea
+input a
+program 38 7
+program 64 7
+noteon 63 12 5
+chunk a 9f2a39bb7835b24047
+input a
+noteon 42 57 15
+cc 120 53 3fdab56ad5ab56ad 11
+cc 64 71 3fe1e3c78f1e3c79 2
+chunk b 90724610955900f095455692620c
+input b
+noteon 114 70 0
+noteoff 89 0 5
+noteon 69 86 5
+noteon 98 12 2
+chunk a f22a76
+input a
+chunk a ca60e27f00f393
+input a
+program 96 10
+bend bfef810000000000 127 2
+chunk a ebc91b905400cb61661ae1004030955300912049
+input a
+program 27 9
+noteoff 84 0 0
+program 97 11
+program 102 11
+program 26 11
+bend 0000000000000000 8192 1
+noteoff 83 0 5
+noteon 32 73 1
+chunk a 930e798c2347e2007f3e9ab3955300834f39c61c
+input a
+noteon 14 121 3
+noteoff 35 71 12
+bend 3fef80fc07e03f02 16256 2
+noteoff 83 0 5
+noteoff 79 57 3
+program 28 6
+chunk a 9277098b78479f1200b0925f00ed570093474fba7845
+input a
+noteon 119 9 2
+noteoff 120 71 11
+noteoff 18 0 15
+noteoff 95 0 2
+bend bfefa90000000000 87 13
+noteon 71 79 3
+cc 120 69 3fe162c58b162c59 10
+chunk a f7
+input a
+chunk b 90850e2850cbb04c46
+input b
+noteoff 14 40 5
+cc 76 70 3fe1a3468d1a3469 0
+chunk a 1b245101bb0775bf78448781257b
+input a
+cc 7 117 3fed7af5ebd7af5f 11
+cc 120 68 3fe1224489122449 15
+noteoff 37 123 1
+chunk a 9e3440872855920b00
+input a
+noteon 52 64 14
+noteoff 40 85 7
+noteoff 11 0 2
+chunk a 4956cb3d
+input a
+noteon 73 86 2
+program 61 11
+chunk b c07c993500
+input b
+program 124 0
+noteoff 53 0 9
+chunk b 8a1614
+input b
+noteoff 22 20 10
+chunk a ed1a668d919f480068364d941f009c763de93300
+input a
+bend 3fe31a98d4c6a635 13082 13
+noteoff 72 0 15
+noteon 104 54 15
+noteoff 31 0 4
+noteon 118 61 12
+bend bfefcd0000000000 51 9
+chunk a 954400fc7d
+input a
+noteoff 68 0 5
+chunk a 1824b240721340
+input a
+noteon 125 24 5
+cc 64 114 3fecb972e5cb972e 2
+cc 19 64 3fe0204081020408 2
+chunk a 81270b26ce2eb67b4f78e87f7f
+input a
+noteoff 39 11 1
+program 46 14
+cc 123 79 3fe3e7cf9f3e7cfa 6
+bend 3ff0000000000000 16383 8
+chunk a 5f3c379737001b018879748e1892986a00
+input a
+bend bfaa100000000000 7775 8
+noteoff 55 0 7
+noteon 27 1 7
+noteoff 121 116 8
+noteoff 106 0 8
+chunk a ca11c229804b63ce4b9f11
+input a
+program 17 10
+program 41 2
+noteoff 75 99 0
+program 75 14
+chunk a f2c9207813923900
+input a
+program 32 9
+program 120 9
+program 19 9
+noteoff 57 0 2
+chunk b b8013c937800b47c9f3300bd5462131c2db00758
+input b
+cc 1 60 3fde3c78f1e3c78f 8
+noteoff 120 0 3
+noteoff 51 0 15
+cc 84 98 3fe8b162c58b162c 13
+cc 19 28 3fcc3870e1c3870e 13
+cc 7 88 3fe62c58b162c58b 0
+chunk a ec5587105193076710c21043061c956669
+input a
+noteoff 16 81 7
+noteon 7 103 3
+program 16 2
+program 67 2
+program 6 2
+program 28 2
+noteon 102 105 5
+chunk a 875d1ebe40530092b5012ff0cd0dcf47
+input a
+noteoff 93 30 7
+cc 64 83 3fe4e9d3a74e9d3a 14
+cc 1 47 3fd7af5ebd7af5ec 5
+program 13 13
+program 71 15
+chunk b -
+chunk a 45
+input a
+program 69 15
+chunk a ea
+input a
+chunk a e77f00a154
+input a
+bend bfef810000000000 127 7
+chunk a ab
+input a
+chunk a 870476219d610195767e54f5489e2039
+input a
+noteoff 4 118 7
+noteon 97 1 13
+noteon 118 126 5
+noteon 32 57 14
+chunk a c064dd
+input a
+program 100 0
+chunk b 827b13
+input b
+noteoff 123 19 2
+chunk b c56b
+input b
+program 107 5
+chunk b cc71932214
+input b
+program 113 12
+noteon 34 20 3
+chunk a c66cec0002be0b749fba010fc36c92202d
+input a
+program 108 6
+bend bfef000000000000 256 12
+cc 11 116 3fed3a74e9d3a74f 14
+cc 1 15 3fbe3c78f1e3c78f 10
+program 108 3
+noteon 32 45 2
+chunk a e6936e3496311a
+input a
+noteon 110 52 3
+noteon 49 26 6
+chunk a 1dbb011c6235a3e8
+input a
+cc 1 28 3fcc3870e1c3870e 11
+cc 98 53 3fdab56ad5ab56ad 11
+chunk a 934b55b1fb4d061144e67f40ec0000
+input a
+noteon 75 85 3
+cc 77 6 3fa83060c183060c 1
+cc 17 68 3fe1224489122449 1
+bend 3f8fc0fe07f03f82 8319 6
+bend bff0000000000000 0 12
+chunk a e15e00390d3e5e32
+input a
+bend bfefa20000000000 94 1
+bend bfe9470000000000 1721 1
+bend 3fde7cf3e79f3cfa 12094 1
+chunk a 9a222eb3016b55
+input a
+noteon 34 46 10
+cc 1 107 3feaf5ebd7af5ebd 3
+chunk a 77883b459e67509d2355c051
+input a
+cc 85 119 3fedfbf7efdfbf7f 3
+noteoff 59 69 8
+noteon 103 80 14
+noteon 35 85 13
+program 81 0
+chunk a b408323b
+input a
+cc 8 50 3fd93264c993264d 4
+chunk a e87f7f48
+input a
+bend 3ff0000000000000 16383 8
+chunk a 4e07ba
+input a
+bend 3fcd20e907483a42 10056 8
+chunk b 843115cd86e37f409684450d910d00
+input b
+noteoff 49 21 4
+bend 3f8fc0fe07f03f82 8319 3
+noteoff 69 13 4
+noteoff 13 0 1
+chunk a 26ea2e409a325c59
+input a
+bend 3f7700b805c02e01 8238 10
+noteon 50 92 10
+chunk a a5
+input a
+chunk b 4a01c70d91
+input b
+noteon 74 1 1
+program 13 7
+chunk a 9c936b00c56196bf0b76b432
+input a
+noteoff 107 0 3
+program 97 5
+cc 11 118 3fedbb76eddbb76f 15
+chunk a f78d1060ae7c26947e79
+input a
+noteoff 16 96 13
+noteon 126 121 4
+chunk a f3821d5a83194a9d4f3f
+input a
+noteoff 29 90 2
+noteoff 25 74 3
+noteon 79 63 13
+chunk a 5f1c8597
+input a
+noteon 95 28 13
+chunk a 9b6d00949c7a00534f97381bed7f00
+input a
+noteoff 109 0 11
+noteoff 122 0 12
+noteon 83 79 12
+noteon 56 27 7
+bend bfef810000000000 127 13
+chunk b 883e0f43109e9d5337
+input b
+noteoff 62 15 8
+noteoff 67 16 8
+noteon 83 55 13
+chunk a 965600983b003e
+input a
+noteoff 86 0 6
+noteoff 59 0 8
+chunk a 9b26007b9d4054944400903d5b
+input a
+noteoff 38 0 11
+noteon 64 84 13
+noteoff 68 0 4
+noteon 61 91 0
+chunk a -
+chunk a 83925d56f7ee797f6364
+input a
+noteon 93 86 2
+bend 3feff9ffcffe7ff4 16377 14
+bend 3fe263931c98e4c7 12899 14
+chunk a fa2a
+input a
+chunk a 976c4245
+input a
+noteon 108 66 7
+chunk a fef663
+input a
+chunk b 896323
+input b
+noteoff 99 35 9
+chunk a f093290114ca4b944d008535149d100072d8
+input a
+noteon 41 1 3
+program 75 10
+noteoff 77 0 4
+noteoff 53 20 5
+noteoff 16 0 13
+chunk b 9d9a751c39501e830d0bf4
+input b
+noteon 117 28 10
+noteon 57 80 10
+noteoff 13 11 3
+chunk b 93
+input b
+chunk b f4e50000b44d3bf7032098917113
+input b
+bend bff0000000000000 0 5
+cc 77 59 3fddbb76eddbb76f 4
+noteon 113 19 1
+chunk a -
+chunk a d94b2699b90b179f1842
+input a
+cc 11 23 3fc72e5cb972e5cc 9
+noteon 24 66 15
+chunk b 81323cbe4051443a510796296889220dbf0132
+input b
+noteoff 50 60 1
+cc 64 81 3fe468d1a3468d1a 14
+cc 68 58 3fdd3a74e9d3a74f 14
+cc 81 7 3fac3870e1c3870e 14
+noteon 41 104 6
+noteoff 34 13 9
+cc 1 50 3fd93264c993264d 15
+chunk a 0a7ff6fb942c7f812d5d
+input a
+noteon 10 127 15
+noteon 44 127 4
+noteoff 45 93 1
+chunk b aa941367
+input b
+noteon 19 103 4
+chunk a b97b587006e97f00
+input a
+cc 123 88 3fe62c58b162c58b 9
+cc 112 6 3fa83060c183060c 9
+bend bfef810000000000 127 9
+chunk a ba787f9367789c431229bd7b003dc63768
+input a
+cc 120 127 3ff0000000000000 10
+noteon 103 120 3
+noteon 67 18 12
+cc 123 0 0000000000000000 13
+program 55 6
+program 104 6
+chunk a -
+chunk a bd9d5600ce7b9d3c006d8d2a5543
+input a
+noteoff 86 0 13
+program 123 14
+noteoff 60 0 13
+noteoff 42 85 13
+chunk b -
+chunk a -
+chunk b 9b3d72ec0040951b00d8
+input b
+noteon 61 114 11
+bend 0000000000000000 8192 12
+noteoff 27 0 5
+chunk b -
+chunk b 3a8c3c10974e318b7b51b00b7c58955c1bcd
+input b
+noteoff 60 16 12
+noteon 78 49 7
+noteoff 123 81 11
+cc 11 124 3fef3e7cf9f3e7d0 0
+noteon 92 27 5
+chunk a 2c9a3200d7948e920d00920d00b33d51c81c
+input a
+noteoff 67 44 13
+noteoff 50 0 10
+noteoff 13 0 2
+noteoff 13 0 2
+cc 61 81 3fe468d1a3468d1a 3
+program 28 8
+chunk b 756c9b76009b0d35
+input b
+program 117 13
+program 108 13
+noteoff 118 0 11
+noteon 13 53 11
+chunk a 943370c33d
+input a
+noteon 51 112 4
+program 61 3
+chunk b c7f7
+input b
+chunk a f02b9a58009a273433
+input a
+noteoff 88 0 10
+noteon 39 52 10
+chunk a 9071357df29b68009b45f0
+input a
+noteon 113 53 0
+noteoff 104 0 11
+chunk a 98a4911b00e21240
+input a
+noteoff 27 0 1
+bend 3f62009004802401 8210 2
+chunk a 0b
+input a
+chunk a 872e65bd071b20e9bf074d852f4b872c7d
+input a
+noteoff 46 101 7
+cc 7 27 3fcb366cd9b366ce 13
+cc 7 77 3fe366cd9b366cda 15
+noteoff 47 75 5
+noteoff 44 125 7
+chunk a 50fdecc9930b55c80dc661e40040
+input a
+noteon 11 85 3
+program 13 8
+program 97 6
+bend 0000000000000000 8192 4
+chunk a 53069b6e75b0407f991425fe
+input a
+bend bfecad0000000000 851 4
+noteon 110 117 11
+cc 64 127 3ff0000000000000 0
+noteon 20 37 9
+chunk b 992a41ee955009942c4898f8
+input b
+noteon 42 65 9
+noteon 80 9 5
+noteon 44 72 4
+chunk a 5d15d5
+input a
+noteon 93 21 9
+chunk b 903b003bb70b55e57f7f
+input b
+noteoff 59 0 0
+cc 11 85 3fe56ad5ab56ad5b 7
+bend 3ff0000000000000 16383 5
+chunk a ec7040b2075ab14064930b00
+input a
+bend 3f8c00e007003802 8304 12
+cc 7 90 3fe6ad5ab56ad5ab 2
+cc 64 100 3fe93264c993264d 1
+noteoff 11 0 3
+chunk a 9e1136972a43904250d8ee6300932d5e9e4f7f914300
+input a
+noteon 17 54 14
+noteon 42 67 7
+noteon 66 80 0
+bend bfef9d0000000000 99 14
+noteon 45 94 3
+noteon 79 127 14
+noteoff 67 0 1
+chunk b 8a163744
+input b
+noteoff 22 55 10
+chunk a 0cc8567be20f10
+input a
+program 86 8
+program 123 8
+bend bfe7f10000000000 2063 2
+chunk a 906300911c64f8cd5c957c4851
+input a
+noteoff 99 0 0
+noteon 28 100 1
+program 92 13
+noteon 124 72 5
+chunk a b87b5f9d7a62963f74ef7f403822bd1138c777
+input a
+cc 123 95 3fe7efdfbf7efdfc 8
+noteon 122 98 13
+noteon 63 116 6
+bend 3f8fc0fe07f03f82 8319 15
+bend bfdd900000000000 4408 15
+cc 17 56 3fdc3870e1c3870e 13
+program 119 7
+chunk a b50b63e97f40
+input a
+cc 11 99 3fe8f1e3c78f1e3c 5
+bend 3f8fc0fe07f03f82 8319 9
+chunk a c51fc85d971c79
+input a
+program 31 5
+program 93 8
+noteon 28 121 7
+chunk b -
+chunk b f0ca649e00056a51
+input b
+program 100 10
+noteon 0 5 14
+noteon 106 81 14
+chunk a 8e4e15850a4ec0049c1a54e943408a6b3b9477035b4bc9
+input a
+noteoff 78 21 14
+noteoff 10 78 5
+program 4 0
+noteon 26 84 12
+bend 3f80c08604302181 8259 9
+noteoff 107 59 10
+noteon 119 3 4
+noteon 91 75 4
+chunk a c053bdb29e1d00e4cd59073090
+input a
+program 83 0
+noteoff 29 0 14
+program 89 13
+program 7 13
+program 48 13
+chunk a ca3a4e25b07b2ca4
+input a
+program 58 10
+program 78 10
+program 37 10
+cc 123 44 3fd62c58b162c58b 0
+chunk b 9a3069042c9148082d18e300619c3f30
+input b
+noteon 48 105 10
+noteon 4 44 10
+noteon 72 8 1
+noteon 45 24 1
+bend 3fe0808404202101 12416 3
+noteon 63 48 12
+chunk a 9f92063593055861951300c74fc60a995331b37875
+input a
+noteon 6 53 2
+noteon 5 88 3
+noteoff 19 0 5
+program 79 7
+program 10 6
+noteon 83 49 9
+cc 120 117 3fed7af5ebd7af5f 3
+chunk a eb7f00
+input a
+bend bfef810000000000 127 11
+chunk a c608e37f0094197f
+input a
+program 8 6
+bend bfef810000000000 127 3
+noteon 25 127 4
+chunk a 946e31eb777f9a527e90071bef0000990548b64062c225997b1a
+input a
+noteon 110 49 4
+bend 3feff7ffbffdfff0 16375 11
+noteon 82 126 10
+noteon 7 27 0
+bend bff0000000000000 0 15
+noteon 5 72 9
+cc 64 98 3fe8b162c58b162c 6
+program 37 2
+noteon 123 26 9
+chunk b b8010f7457fffb9d2176c968e55000
+input b
+cc 1 15 3fbe3c78f1e3c78f 8
+cc 116 87 3fe5ebd7af5ebd7b 8
+noteon 33 118 13
+program 104 9
+bend bfefb00000000000 80 5
+chunk a a089626447912410
+input a
+noteoff 98 100 9
+noteon 36 16 1
+chunk b 960200b72e3fb53b7e099443009f
+input b
+noteoff 2 0 6
+cc 46 63 3fdfbf7efdfbf7f0 7
+cc 59 126 3fefbf7efdfbf7f0 5
+noteoff 67 0 4
+chunk a 84786f303fea0040
+input a
+noteoff 120 111 4
+noteoff 48 63 4
+bend 0000000000000000 8192 10
+chunk a 825b61
+input a
+noteoff 91 97 2
+chunk a 58
+input a
+chunk a 15e60040
+input a
+noteoff 88 21 2
+bend 0000000000000000 8192 6
+chunk b 97620027874e26832033
+input b
+noteoff 98 0 7
+noteoff 78 38 7
+noteoff 32 51 3
+chunk b 6c946f1c955f17ef7500958e14789f067e
+input b
+noteon 111 28 4
+noteon 95 23 5
+bend bfef8b0000000000 117 15
+noteoff 20 120 14
+noteon 6 126 15
+chunk a 936a1289335a5c3e28439f3632f6961b68
+input a
+noteon 106 18 3
+noteoff 51 90 9
+noteoff 92 62 9
+noteoff 40 67 9
+noteon 54 50 15
+noteon 27 104 6
+chunk b 93720008932e00
+input b
+noteoff 114 0 3
+noteoff 46 0 3
+chunk a 7c530d6aff5306ef7f7606ee2c
+input a
+noteon 124 83 6
+noteon 13 106 6
+noteon 83 6 6
+bend 3feb7fdbfedff700 15231 15
+chunk a 1af716964f9e5900b10b77cc7d174a
+input a
+bend bfe2d40000000000 3372 14
+noteoff 89 0 14
+cc 11 119 3fedfbf7efdfbf7f 1
+program 125 12
+program 23 12
+program 74 12
+chunk b e37f7fe47f24405abe0108
+input b
+bend 3ff0000000000000 16383 3
+bend bfdb020000000000 4735 4
+bend 3fda80d406a03502 11584 4
+cc 1 8 3fb0204081020408 14
+chunk a 7f52b1073d83
+input a
+program 127 12
+program 82 12
+cc 7 61 3fdebd7af5ebd7af 1
+chunk a c7
+input a
+chunk a bb1b0e85e500409b63006f2fbe7b18
+input a
+cc 27 14 3fbc3870e1c3870e 11
+bend 0000000000000000 8192 5
+noteoff 99 0 11
+noteon 111 47 11
+cc 123 24 3fc83060c183060c 14
+chunk a -
+chunk a ebe92100ec
+input a
+bend bfefdf0000000000 33 9
+chunk a 843673f1e90040933f3f9328007e9b2057
+input a
+noteoff 54 115 4
+bend 0000000000000000 8192 9
+noteon 63 63 3
+noteoff 40 0 3
+noteon 32 87 11
+chunk a b819139c3f3bc774ba4027b6407e8e
+input a
+cc 25 19 3fc3264c993264ca 8
+noteon 63 59 12
+program 116 7
+cc 64 39 3fd3a74e9d3a74ea 10
+cc 64 126 3fefbf7efdfbf7f0 6
+chunk a 3b91024a6f855013b10738981e007c
+input a
+noteon 2 74 1
+noteoff 80 19 5
+cc 7 56 3fdc3870e1c3870e 1
+noteoff 30 0 8
+chunk b 9116667111963300
+input b
+noteon 22 102 1
+noteon 113 17 1
+noteoff 51 0 6
+chunk a b6070f8f6f219f0a651f964e11
+input a
+cc 7 15 3fbe3c78f1e3c78f 6
+noteoff 111 33 15
+noteon 10 101 15
+noteon 78 17 6
+chunk a 9f7031f7f111c320
+input a
+noteon 112 49 15
+program 32 3
+chunk a c50822e57f7feb2900c4
+input a
+program 8 5
+program 34 5
+bend 3ff0000000000000 16383 5
+bend bfefd70000000000 41 11
+chunk a b07825486b5f
+input a
+cc 120 37 3fd2a54a952a54a9 0
+cc 72 107 3feaf5ebd7af5ebd 0
+chunk a 7d1034976931932a2494305299357a
+input a
+cc 95 125 3fef7efdfbf7efe0 0
+cc 16 52 3fda3468d1a3468d 0
+noteon 105 49 7
+noteon 42 36 3
+noteon 48 82 4
+noteon 53 122 9
+chunk a 1b0b913a769d5806eb7f4083076a9e712b66
+input a
+noteon 27 11 9
+noteon 58 118 1
+noteon 88 6 13
+bend 3f8fc0fe07f03f82 8319 11
+noteoff 7 106 3
+noteon 113 43 14
+chunk a 9479009a7030f48a6b40eb797fcf03
+input a
+noteoff 121 0 4
+noteon 112 48 10
+noteoff 107 64 10
+bend 3feff9ffcffe7ff4 16377 11
+program 3 15
+chunk a -
+chunk a 9266799d4318cf90
+input a
+noteon 102 121 2
+noteon 67 24 13
+chunk b 3a7acc426172fb34
+input b
+noteon 58 122 6
+program 66 12
+program 97 12
+program 114 12
+program 52 12
+chunk a 6c924c49
+input a
+noteon 76 73 2
+chunk a 904fd48c215df7e9477f963c2f
+input a
+noteoff 33 93 12
+bend 3fefc7fe3ff1ff90 16327 9
+noteon 60 47 6
+chunk b 8e73472e22906a00
+input b
+noteoff 115 71 14
+noteoff 46 34 14
+noteoff 106 0 0
+chunk a c9820c2e5fb7402f9214114ef69b84
+input a
+noteoff 12 46 2
+cc 64 47 3fd7af5ebd7af5ec 7
+noteon 20 17 2
+chunk a c241508a7c3276
+input a
+program 65 2
+program 80 2
+noteoff 124 50 10
+chunk a 902a093f2a9b3d3ae8727f9a1d50964a4aed9478260d4f
+input a
+noteon 42 9 0
+noteon 63 42 0
+noteon 61 58 11
+bend 3feff2ff97fcbfe6 16370 8
+noteon 29 80 10
+noteon 74 74 6
+noteon 120 38 4
+noteon 13 79 4
+chunk a e07f14c733e47f00c64f9a5c34eb3e7fb7013c876d16816a21
+input a
+bend bfe5810000000000 2687 0
+program 51 7
+bend bfef810000000000 127 4
+program 79 6
+noteon 92 52 10
+bend 3fefbefdf7efbf7e 16318 11
+cc 1 60 3fde3c78f1e3c78f 7
+noteoff 109 22 7
+noteoff 106 33 1
+chunk a e90047b0077c9e4800932371f7cd
+input a
+bend 3fbc00e007003802 9088 9
+cc 7 124 3fef3e7cf9f3e7d0 0
+noteoff 72 0 14
+noteon 35 113 3
+chunk b 50
+input b
+chunk b c06dce74
+input b
+program 109 0
+program 116 14
+chunk a 03158d632274833669beba7b6823679e
+input a
+program 3 13
+program 21 13
+noteoff 99 34 13
+noteoff 54 105 3
+cc 123 104 3fea3468d1a3468d 10
+cc 35 103 3fe9f3e7cf9f3e7d 10
+chunk a bf3b62906c008a405acf74c2680cf0b1017d
+input a
+cc 59 98 3fe8b162c58b162c 15
+noteoff 108 0 0
+noteoff 64 90 10
+program 116 15
+program 104 2
+program 12 2
+cc 1 125 3fef7efdfbf7efe0 1
+chunk b e39156004d8873985600ba7174
+input b
+noteoff 86 0 1
+noteoff 86 0 8
+cc 113 116 3fed3a74e9d3a74f 10
+chunk a 6f5eda9a2c11bd782ecf2e98170048
+input a
+cc 111 94 3fe7af5ebd7af5ec 1
+noteon 44 17 10
+cc 120 46 3fd72e5cb972e5cc 13
+program 46 15
+noteoff 23 0 8
+chunk a 4d1775cc5bb08b1c0aee001b988e3e06
+input a
+noteon 72 77 8
+noteon 23 117 8
+program 91 12
+noteoff 28 10 11
+bend bfe2800000000000 3456 14
+noteoff 62 6 14
+chunk a 9c5b46525e6eff8e053d05
+input a
+noteon 91 70 12
+noteon 82 94 12
+noteoff 5 61 14
+chunk a f9884a12ce5c
+input a
+noteoff 74 18 8
+program 92 14
+chunk a 5f47917973c950
+input a
+program 95 14
+program 71 14
+noteon 121 115 1
+program 80 9
+chunk a bd40719bddf8
+input a
+cc 64 113 3fec78f1e3c78f1e 13
+chunk b 89443d
+input b
+noteoff 68 61 9
+chunk a 93a3962c00e92d40
+input a
+noteoff 44 0 6
+bend 3f7680b405a02d01 8237 9
+chunk a c70fb1014acb76
+input a
+program 15 7
+cc 1 74 3fe2a54a952a54a9 1
+program 118 11
+chunk a e8adc356
+input a
+program 86 3
+chunk a cd6f
+input a
+program 111 13
+chunk a 06387ecf75
+input a
+program 6 13
+program 56 13
+program 126 13
+program 117 15
+chunk a 7a24956c00
+input a
+program 122 15
+program 36 15
+noteoff 108 0 5
+chunk a 9c4000c129bf40249e4500
+input a
+noteoff 64 0 12
+program 41 1
+cc 64 36 3fd2244891224489 15
+noteoff 69 0 14
+chunk b 927b57874159ca6e9c262252f6e97f0082510d
+input b
+noteon 123 87 2
+noteoff 65 89 7
+program 110 10
+noteon 38 34 12
+bend bfef810000000000 127 9
+noteoff 81 13 2
+chunk a 0f2f84
+input a
+noteon 15 47 14
+chunk b 913876c34c6d553363
+input b
+noteon 56 118 1
+program 76 3
+program 109 3
+program 85 3
+program 51 3
+program 99 3
+chunk a 93ca66a4bb367242f790714d9b
+input a
+program 102 10
+cc 54 114 3fecb972e5cb972e 11
+noteon 113 77 0
+chunk a 0f1d3ce31c71ed7f00ac9b7a
+input a
+noteon 15 29 11
+bend 3fe89cc4e627313a 14492 3
+bend bfef810000000000 127 13
+chunk a f70fd0db
+input a
+chunk b cb0dcb575d92280524ca65
+input b
+program 13 11
+program 87 11
+program 93 11
+noteon 40 5 2
+program 101 10
+chunk b 9c957c00937f40f9
+input b
+noteoff 124 0 5
+noteon 127 64 3
+chunk a c3197409
+input a
+program 25 3
+program 116 3
+program 9 3
+chunk a fe97460090133ef78d903e6eef007f97653d67
+input a
+noteoff 70 0 7
+noteon 19 62 0
+noteon 62 110 0
+bend 3fef80fc07e03f02 16256 15
+noteon 101 61 7
+chunk a 81056b99
+input a
+noteoff 5 107 1
+chunk a ed7f7f7d441223ca7e
+input a
+bend 3ff0000000000000 16383 13
+bend 3fb3e89f44fa27d1 8829 13
+bend bfdcdc0000000000 4498 13
+program 126 10
+chunk a 8a641cb2076ac04d9444139cf797064079
+input a
+noteoff 100 28 10
+cc 7 106 3feab56ad5ab56ad 2
+program 77 0
+noteon 68 19 4
+noteon 6 64 7
+chunk a ec00729a6446e37f59892d3f9a1d00c2089e410094
+input a
+bend 3fe900c806403202 14592 12
+noteon 100 70 10
+bend 3fd9fecff67fb3fe 11519 3
+noteoff 45 63 9
+noteoff 29 0 10
+program 8 2
+noteoff 65 0 14
+chunk a 9a1200889f081bc4248c433bb0784e
+input a
+noteoff 18 0 10
+noteon 8 27 15
+program 36 4
+noteoff 67 59 12
+cc 120 78 3fe3a74e9d3a74ea 0
+chunk a 901d05905d7c944b
+input a
+noteon 29 5 0
+noteon 93 124 0
+chunk b 9c3d0803c63db5685ec5
+input b
+noteon 61 8 12
+program 61 6
+cc 104 94 3fe7af5ebd7af5ec 5
+chunk a 02c911b040779b045ccc019e010c
+input a
+noteon 75 2 4
+program 17 9
+cc 64 119 3fedfbf7efdfbf7f 0
+noteon 4 92 11
+program 1 12
+noteon 1 12 14
+chunk a e40000491ea586106dbf0b75fc
+input a
+bend bff0000000000000 0 4
+bend bfe0b70000000000 3913 4
+noteoff 16 109 6
+cc 11 117 3fed7af5ebd7af5f 15
+chunk b 993375970e0474c2c001e85a00
+input b
+noteon 51 117 9
+noteon 14 4 7
+program 1 0
+bend bfefa60000000000 90 8
+chunk a 5a03e05500926428e436128d4807
+input a
+cc 90 3 3f983060c183060c 15
+bend bfefab0000000000 85 0
+noteon 100 40 2
+bend bfe6ca0000000000 2358 4
+noteoff 72 7 13
+chunk a cf5c5c
+input a
+program 92 15
+program 92 15
+chunk a f91ff7
+input a
+program 31 15
+chunk a 832e379e34675e497494421b9b570010
+input a
+noteoff 46 55 3
+noteon 52 103 14
+noteon 94 73 14
+noteon 66 27 4
+noteoff 87 0 11
+chunk a 5c03519e0d5bf6c801e511409e200048
+input a
+noteon 16 92 11
+noteon 3 81 11
+noteon 13 91 14
+program 1 8
+bend 3f61008804402201 8209 5
+noteoff 32 0 14
+chunk a 9e1104
+input a
+noteon 17 4 14
+chunk b 901f0fc548
+input b
+noteon 31 15 0
+program 72 5
+chunk a c8579f376d9a4162957200
+input a
+program 87 8
+noteon 55 109 15
+noteon 65 98 10
+noteoff 114 0 5
+chunk a ba321c954a2fd4cdc4d5
+input a
+cc 50 28 3fcc3870e1c3870e 10
+noteon 74 47 5
+chunk b 66e65025
+input b
+program 102 5
+bend bfda600000000000 4816 6
+chunk a c66dfd61e87f7fcf0fc958cf067c5f
+input a
+program 109 6
+program 97 6
+bend 3ff0000000000000 16383 8
+program 15 15
+program 88 9
+program 6 15
+program 124 15
+program 95 15
+chunk a accc3f39179108791603960a48
+input a
+program 63 12
+program 57 12
+program 23 12
+noteon 8 121 1
+noteon 22 3 1
+noteon 10 72 6
+chunk a -
+chunk b 927700
+input b
+noteoff 119 0 2
+chunk a -
+chunk b 367e
+input b
+noteon 54 126 2
+chunk a d29f1100
+input a
+noteoff 17 0 15
+chunk b -
+chunk a 06679631398fe17f4092393c9a
+input a
+noteon 6 103 15
+noteon 49 57 6
+bend 3f8fc0fe07f03f82 8319 1
+noteon 57 60 2
+chunk a 0a7d19961c00052ee67f62b00b1e
+input a
+noteon 10 125 10
+noteoff 28 0 6
+noteon 5 46 6
+bend 3fe17f8bfc5fe2ff 12671 6
+cc 11 30 3fce3c78f1e3c78f 0
+chunk b f50ab307147e
+input b
+cc 7 20 3fc42850a142850a 3
+chunk b 5a94695204b33c65850f36
+input b
+cc 126 90 3fe6ad5ab56ad5ab 3
+noteon 105 82 4
+cc 60 101 3fe972e5cb972e5d 3
+noteoff 15 54 5
+chunk a 9b1f7c9b5f35984c00
+input a
+noteon 31 124 11
+noteon 95 53 11
+noteoff 76 0 8
+chunk a 9b1c009b6a2e856409b8436b3a389a1420
+input a
+noteoff 28 0 11
+noteon 106 46 11
+noteoff 100 9 5
+cc 67 107 3feaf5ebd7af5ebd 8
+cc 58 56 3fdc3870e1c3870e 8
+noteon 20 32 10
+chunk b 64b2402e19931603
+input b
+cc 64 46 3fd72e5cb972e5cc 2
+noteon 22 3 3
+chunk a b22049b01b57ea9a70688d7105
+input a
+cc 32 73 3fe264c993264c99 2
+cc 27 87 3fe5ebd7af5ebd7b 0
+noteon 112 104 10
+noteoff 113 5 13
+chunk a cb58c62f15bd7b769123008d7b6839965f0a
+input a
+program 88 11
+program 47 6
+program 21 6
+cc 123 118 3fedbb76eddbb76f 13
+noteoff 35 0 1
+noteoff 123 104 13
+noteon 95 10 6
+chunk b b8191a4a9f4500e47f7f6e
+input b
+cc 25 26 3fca3468d1a3468d 8
+noteoff 69 0 15
+bend 3ff0000000000000 16383 4
+chunk a -
+chunk b b6074cbf9f5c603099
+input b
+cc 7 76 3fe3264c993264ca 6
+noteon 92 96 15
+chunk a 6865
+input a
+noteon 104 101 6
+chunk a f6965227
+input a
+noteon 82 39 6
+chunk a 341d658504238b7063c24492ca79
+input a
+noteon 52 29 6
+noteoff 4 35 5
+noteoff 112 99 11
+program 68 2
+program 121 10
+chunk a c7e21a7f942064
+input a
+bend 3fef9afcd7e6bf36 16282 2
+noteon 32 100 4
+chunk b -
+chunk a bd07735b7992033fe747008c867002
+input a
+cc 7 115 3fecf9f3e7cf9f3e 13
+cc 91 121 3fee7cf9f3e7cf9f 13
+noteon 3 63 2
+bend bfefb90000000000 71 7
+noteoff 112 2 6
+chunk b 2a68
+input b
+noteon 42 104 9
+chunk a 97660095927d03d6ea4805
+input a
+noteoff 102 0 7
+noteon 125 3 2
+bend bfed380000000000 712 10
+chunk a 9257005ab7077219b2013586153381
+input a
+noteoff 87 0 2
+cc 7 114 3fecb972e5cb972e 7
+cc 1 53 3fdab56ad5ab56ad 2
+noteoff 21 51 6
+chunk a -
+chunk a -
+chunk a 9fc15d4e94961d3e
+input a
+program 93 1
+program 78 1
+noteon 29 62 6
+chunk a e65d00a88464319a1b1781ff
+input a
+bend bfefa30000000000 93 6
+noteoff 100 49 4
+noteon 27 23 10
+chunk a 532d559c3100f21c74
+input a
+noteoff 83 45 1
+noteoff 49 0 12
+chunk a 5bfc991a009f1200f8939d5e7f9e7a76
+input a
+noteoff 26 0 9
+noteoff 18 0 15
+noteon 94 127 13
+noteon 122 118 14
+chunk a 6394f80b8e0e57fe94930c00e9007f
+input a
+noteoff 14 87 14
+noteoff 12 0 3
+bend 3fef80fc07e03f02 16256 9
+chunk a 9639798625419c
+input a
+noteon 57 121 6
+noteoff 37 65 6
+chunk a 9c4e6a
+input a
+noteon 78 106 12
+chunk a 976000cd12b60102e07f7f
+input a
+noteoff 96 0 7
+program 18 13
+cc 1 2 3f90204081020408 6
+bend 3ff0000000000000 16383 0
+chunk a f0e9207f554ce7307f8758657f21
+input a
+bend 3fefa0fd07e83f42 16288 9
+bend 3fc954caa65532aa 9813 9
+bend 3fefb0fd87ec3f62 16304 7
+noteoff 88 101 7
+noteoff 127 33 7
+chunk a 9c984f5f820a0790
+input a
+noteon 79 95 8
+noteoff 10 7 2
+chunk a 912208e97a7f8b5263953443
+input a
+noteon 34 8 1
+bend 3feffaffd7febff6 16378 9
+noteoff 82 99 11
+noteon 52 67 5
+chunk a 2b5e58ef0b30a5
+input a
+noteon 43 94 5
+bend bfcfd40000000000 6155 15
+chunk b 99671c16b04056e300008750c749cf75911500
+input b
+noteon 103 28 9
+cc 64 86 3fe5ab56ad5ab56b 0
+bend bff0000000000000 0 3
+program 73 7
+program 117 15
+noteoff 21 0 1
+chunk a 246e940200b29a
+input a
+noteoff 2 0 4
+chunk a 432f86
+input a
+noteon 67 47 10
+chunk b 914576b579499929364bf9956477e17f00ce51
+input b
+noteon 69 118 1
+cc 121 73 3fe264c993264c99 5
+noteon 41 54 9
+noteon 100 119 5
+bend bfef810000000000 127 1
+program 81 14
+chunk a 1c4632426e1a
+input a
+noteoff 28 70 6
+noteoff 50 66 6
+noteoff 110 26 6
+chunk b 425d96736f
+input b
+program 66 14
+program 93 14
+noteon 115 111 6
+chunk a 74b040159e4f37
+input a
+cc 64 21 3fc52a54a952a54b 0
+noteon 79 55 14
+chunk b 0c987c04ef7f0039
+input b
+noteon 124 4 8
+bend bfef810000000000 127 15
+chunk b e56b7f
+input b
+bend 3fefebff5ffaffd8 16363 5
+chunk a 132e2e
+input a
+noteon 19 46 14
+chunk a 17977f51
+input a
+noteon 46 23 14
+noteon 127 81 7
+chunk a 9d395e39
+input a
+noteon 57 94 13
+chunk a f45e5d959f3b67937852
+input a
+noteon 59 103 15
+noteon 120 82 3
+chunk a 947a1eb34074
+input a
+noteon 122 30 4
+cc 64 116 3fed3a74e9d3a74f 3
+chunk b 577d9e6001e97f60e97f7fb67874
+input b
+bend 3feed7f6bfb5fdb0 16087 5
+noteon 96 1 14
+bend 3fe07f83fc1fe0ff 12415 9
+bend 3ff0000000000000 16383 9
+cc 120 116 3fed3a74e9d3a74f 6
+chunk a 9e33009f4a00
+input a
+noteoff 51 0 14
+noteoff 74 0 15
+chunk a cf59ee00004fd193106b
+input a
+program 89 15
+bend bff0000000000000 0 14
+noteon 16 107 3
+chunk a 99c7051b58967d1f8001419d9a2227
+input a
+program 5 7
+program 27 7
+program 88 7
+noteon 125 31 6
+noteoff 1 65 0
+noteon 34 39 10
+chunk a -
+chunk a c56050915e009637009d2701e43f7143
+input a
+program 96 5
+program 80 5
+noteoff 94 0 1
+noteoff 55 0 6
+noteon 39 1 13
+bend 3fe8bfc5fe2ff180 14527 4
+chunk a 06b87b21b501349144279d7414a0b3405571e90000
+input a
+bend bfecbd0000000000 835 4
+cc 123 33 3fd0a142850a1428 8
+cc 1 52 3fda3468d1a3468d 5
+noteon 68 39 1
+noteon 116 20 13
+cc 64 85 3fe56ad5ab56ad5b 3
+bend bff0000000000000 0 9
+chunk a ec7f75
+input a
+bend 3feaffd7febff600 15103 12
+chunk b 1f9e676b41bd7869b00b0ae72400
+input b
+noteon 103 107 14
+cc 120 105 3fea74e9d3a74e9d 13
+cc 11 10 3fb42850a142850a 0
+bend bfefdc0000000000 36 7
+chunk b 810e5c255a8b1768db
+input b
+noteoff 14 92 1
+noteoff 37 90 1
+noteoff 23 104 11
+chunk a 5f940b66c23fcf0e9c671a1a
+input a
+noteon 11 102 4
+program 63 2
+program 14 15
+noteon 103 26 12
+chunk a 4b
+input a
+noteon 26 75 12
+chunk a 914c6b825500ce4455e47f00
+input a
+noteon 76 107 1
+noteoff 85 0 2
+program 68 14
+program 85 14
+bend bfef810000000000 127 4
+chunk a 4bbf7b19ef007f920a600f975600
+input a
+cc 123 25 3fc93264c993264d 15
+bend 3fef80fc07e03f02 16256 15
+noteon 10 96 2
+noteoff 86 0 7
+chunk a 6a61eac43a
+input a
+noteon 106 97 7
+program 58 4
+chunk a -
+chunk b 956c00c3ccc115ef00008f731bce53
+input b
+noteoff 108 0 5
+program 21 1
+bend bff0000000000000 0 15
+noteoff 115 27 15
+program 83 14
+chunk b 5383621292eb7f0074e4f7f7
+input b
+program 83 14
+noteoff 98 18 3
+bend bfef810000000000 127 11
+chunk a 90e1436f9c0d65e18b5112bd0b03ee5440c236
+input a
+bend 3fe7c3be1df0ef87 14275 1
+noteon 13 101 12
+noteoff 81 18 11
+cc 11 3 3f983060c183060c 13
+bend 3f8500a805402a01 8276 14
+program 54 2
+chunk a 71ef7f73e20040ba0708
+input a
+program 113 2
+bend 3fe9ffcffe7ff400 14847 15
+bend 0000000000000000 8192 2
+cc 7 8 3fb0204081020408 10
+chunk a 154ebb01281d3841b80b17be4059eb2040359a4461
+input a
+cc 21 78 3fe3a74e9d3a74ea 10
+cc 1 40 3fd42850a142850a 11
+cc 29 56 3fdc3870e1c3870e 11
+cc 11 23 3fc72e5cb972e5cc 8
+cc 64 89 3fe66cd9b366cd9b 14
+bend 3f70008004002001 8224 11
+noteon 68 97 10
+bendvalue 0 0 bff0000000000000
+bendvalue 127 127 3ff0000000000000
+bendvalue 0 64 0000000000000000
+bendvalue 127 63 bf20000000000000
+bendvalue 1 64 3f20008004002001
+bendvalue 0 1 bfef800000000000
+bendvalue 100 20 bfe59c0000000000

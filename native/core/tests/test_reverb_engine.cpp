@@ -102,7 +102,7 @@ TEST_SUITE("reverb") {
     const long allocs = g_rtAllocs;
     for (const char *id :
          {"reverb-dry", "reverb-room", "reverb-stage", "reverb-hall", "reverb-cathedral", "reverb-wash"}) {
-      INFO(id);
+      INFO(std::string(id));
       const auto it = std::find_if(all.begin(), all.end(), [&](const auto &f) { return f.id == id; });
       REQUIRE(it != all.end());
       rig::io::WavData gold;

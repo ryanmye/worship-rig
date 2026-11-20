@@ -1,9 +1,9 @@
 // MIDI port table (T07; SETUP_REVIEW 21c): the ports the platform reports through rig_host_midi_ports
 // (`[{id, name, manufacturer, state:'connected'|'disconnected', kind:'input'|'output'}]`, contract 6.5 `midi ports`).
-// Entries keep a stable index for the engine's lifetime (up to kMaxPorts ids), so the MIDI receive thread can turn
-// the platform's port id string into a small integer without a hash collision: wireId() is lock-free (a seqlock
-// snapshot of the ids) and RT-safe. Until T08 forwards ids through it, rig_midi_in still hashes the id string to a
-// uint16 (api/engine.cpp); byWire() accepts both encodings (kIndexTag | index, else the legacy hash).
+// Entries keep a stable index in order of first appearance, never reused (the same rule as T08's
+// runtime/midi_ports.h MidiPortTable, which turns rig_midi_in's id string into that index on the MIDI thread), so the
+// uint16 MidiService::onBytes receives names the same port here. byWire() also accepts the T00 string hash that
+// rig_midi_in used before T08's table (values >= the table size).
 #pragma once
 #include <cstddef>
 #include <cstdint>
@@ -11,13 +11,9 @@
 #include <string_view>
 #include <vector>
 
-#include "runtime/seqlock.h"
-
 namespace rig::midi {
 
-inline constexpr std::size_t kMaxPorts = 64;
-inline constexpr std::size_t kMaxIdLen = 47;
-inline constexpr std::uint16_t kIndexTag = 0xff00;  // wire id of table entry i = kIndexTag | i
+inline constexpr std::size_t kMaxPorts = 128;  // MidiPortTable::kMax
 
 struct Port {
   std::string id, name, manufacturer;
@@ -29,19 +25,18 @@ struct Port {
 
 class PortTable {
  public:
-  PortTable();
   /** api/engine.cpp Engine::midiIn's id hash (h = h * 31 + byte, uint16). */
   static std::uint16_t legacyHash(std::string_view id);
 
   /** Apply a report. `vanished` receives the ids of inputs that were connected and are not any more. False = not
    *  a JSON array (table unchanged). Control thread. */
   bool update(const char *json, std::size_t len, std::vector<std::string> &vanished);
-  /** Wire id for a platform id: kIndexTag | index when known, else the legacy hash. [rt, any thread] */
-  std::uint16_t wireId(const char *id) const;
+  /** Index of a known id (order of first appearance), else the legacy hash. */
+  std::uint16_t wireId(std::string_view id) const;
 
   const Port *byId(std::string_view id) const;
   const Port *byName(std::string_view name, bool input) const;
-  /** The port a uint16 from rig_midi_in names (index tag or legacy hash), or null. */
+  /** The port a uint16 from rig_midi_in names (table index, else the legacy hash), or null. */
   const Port *byWire(std::uint16_t wire) const;
   /** First connected output (`midiClock.port: 'auto'`, SHELL.md G4). */
   const Port *firstOutput() const;
@@ -53,13 +48,7 @@ class PortTable {
   const std::vector<Port> &ports() const { return ports_; }
 
  private:
-  struct Ids {
-    std::uint32_t n;
-    char id[kMaxPorts][kMaxIdLen + 1];
-  };
-  void publish();
   std::vector<Port> ports_;
-  Seqlock<Ids> ids_;
   std::size_t collisions_ = 0;
 };
 

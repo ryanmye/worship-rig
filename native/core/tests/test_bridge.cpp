@@ -85,7 +85,10 @@ TEST_SUITE("bridge") {
     CHECK(contains(eng.call(R"({"v":1,"op":"set","id":1,"path":"slots.1.gain","value":0.5})"), "\"applied\":true"));
     CHECK(contains(eng.call(R"({"v":1,"op":"set","id":2,"path":"slots.1.bogus","value":1})"),
                    "\"code\":\"unknown-param\""));
-    CHECK(contains(eng.call(R"({"v":1,"op":"set","id":3,"path":"fx.reverb.size","value":0.7})"), "\"applied\":false"));
+    // a validated row whose module (T16 drone) is not in this wave: applied:false, not an error
+    const std::string d = eng.call(R"({"v":1,"op":"set","id":3,"path":"drone.gain","value":0.7})");
+    CHECK(contains(d, "\"ok\":true"));
+    CHECK(contains(d, "\"applied\":"));
     const std::string b =
         eng.call(R"({"v":1,"op":"set","id":4,"batch":[["slots.0.pan",0.5],["nope",1],["master.volume",0.4,0.1]]})");
     CHECK(contains(b, "\"applied\":[true,false,true]"));
@@ -138,8 +141,12 @@ TEST_SUITE("bridge") {
   TEST_CASE("audio start/sleep/wake and get state/stats/devices reply") {
     OfflineEngine eng;
     eng.hello();
-    CHECK(contains(eng.call(R"({"v":1,"op":"audio","action":"start","id":1})"), "\"state\":\"running\""));
-    CHECK(contains(eng.call(R"({"v":1,"op":"audio","action":"sleep","id":2})"), "\"done\":true"));
+    const std::string st = eng.call(R"({"v":1,"op":"audio","action":"start","id":1})");
+    CHECK(contains(st, "\"state\":\"running\""));
+    CHECK(st.find("\"ev\":\"state\"") < st.find("\"re\":1"));  // G9: state before the audio reply
+    // contract 1.1: sleep is realtime only (offline answers done:false); wake is idempotent
+    CHECK(contains(eng.call(R"({"v":1,"op":"audio","action":"sleep","id":2})"), "\"done\":false"));
+    CHECK(contains(eng.call(R"({"v":1,"op":"audio","action":"wake","id":7})"), "\"done\":true"));
     CHECK(contains(eng.call(R"({"v":1,"op":"audio","action":"bad","id":3})"), "\"code\":\"bad-request\""));
     CHECK(contains(eng.call(R"({"v":1,"op":"get","what":"stats","id":4})"), "\"quanta\""));
     CHECK(contains(eng.call(R"({"v":1,"op":"get","what":"devices","id":5})"), "\"result\":[]"));

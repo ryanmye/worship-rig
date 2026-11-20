@@ -112,8 +112,7 @@ rig_status rig_midi_in(rig_engine *e, const char *port_id, const uint8_t *bytes,
 
 rig_status rig_host_midi_ports(rig_engine *e, const char *ports_json, size_t len) {
   if (!e || !ports_json) return RIG_E_INVALID;
-  (void)len;
-  return RIG_E_UNSUPPORTED;  // T07 (port table, hot-plug release)
+  return impl(e)->midiPorts(ports_json, len);  // T08 interns the ids; the "midi" service (T07) diffs and releases
 }
 
 double rig_engine_time(const rig_engine *e) {

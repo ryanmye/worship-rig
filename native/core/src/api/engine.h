@@ -2,6 +2,7 @@
 // offline driver, the render FIFO adapter and the event sink.
 #pragma once
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
@@ -16,6 +17,8 @@
 #include "rig/rig_engine.h"
 #include "graph/graph.h"
 #include "model/model.h"
+#include "runtime/clock_map.h"
+#include "runtime/midi_ports.h"
 #include "runtime/mpsc.h"
 #include "runtime/seqlock.h"
 #include "time/timer.h"
@@ -23,6 +26,8 @@
 namespace rig {
 
 class Bridge;
+class MeterServiceImpl;
+class RecServiceImpl;
 
 struct MidiIn {
   std::uint64_t hostTimeNs;
@@ -49,6 +54,10 @@ class Engine final : public CommandSink {
   rig_status render(float *const *out, uint32_t channels, uint32_t frames, uint64_t hostTimeNs);
   rig_status offlineRender(float *const *out, uint32_t channels, uint32_t frames);
   rig_status midiIn(const char *port, const std::uint8_t *bytes, std::size_t len, std::uint64_t hostTimeNs);
+  rig_status midiPorts(const char *json, std::size_t len);
+  /** Port id of a rig_midi_in index (runtime/midi_ports.h); "" when unknown. [any] */
+  std::string midiPortId(std::uint16_t index) const;
+  const ClockMap &clockMap() const { return clock_; }
   void hostAudioStarted(const rig_device_info &info);
   void hostAudioState(rig_device_state s, const char *msg);
   void hostDevicesChanged();
@@ -73,11 +82,24 @@ class Engine final : public CommandSink {
   bool realtime() const { return cfg_.mode == RIG_MODE_REALTIME; }
   const rig_host *host() const { return cfg_.host ? &host_ : nullptr; }
   std::string statsJson();
-  void requestAudio(const std::string &action, const std::string &deviceId, double latency);
+  /** `audio start|restart|output`: asks the host on the device thread (never blocks the control thread; R25) and
+   *  arms the 5 s watchdog. Emits `state` before the caller's reply (G9). "" = accepted, else an error code
+   *  (`busy` while a start is pending for restart/output, `unsupported` when the host has no audio_start). */
+  const char *requestAudio(const std::string &action, const std::string &deviceId, double latency);
+  /** `audio sleep|wake` (engine side: suspend/resume rendering after the Model's ramp). */
+  bool sleepAudio(double ramp);
+  bool wakeAudio(double ramp);
+  bool audioPending() const { return pending_; }
+  bool audioStarted() const { return started_.load(std::memory_order_acquire); }
+  /** `state` event / audio reply fields. */
+  std::string stateFieldsJson(const char *state, double sr = 0) const;
+  const char *deviceState() const { return devState_; }
   bool awake() const { return awake_; }
   void setAwake(bool a) { awake_ = a; }
   unsigned outChannels() const { return outCh_; }
   std::string deviceListJson();
+  /** Tick builder (contract 6.5 `tick`): realtime control loop at MeterService::tickHz; public for tests. */
+  std::string buildTick(bool withStats);
   void log(int level, const std::string &msg);
 
  private:
@@ -85,9 +107,14 @@ class Engine final : public CommandSink {
   void controlLoop();
   void processMessage(const std::string &json);
   void drainAudioEvents();
+  void checkWatchdog();
+  void pumpRec(bool offline);
+  void hostCall(std::function<void()> fn);
+  void hostCallLoop();
   void fifoRead(float *const *out, uint32_t channels, uint32_t frames, bool offline);
   void renderOne();
   void emitTick();
+  void emitState(const char *state, bool restarted);
   void postHostEvent(std::string &&json);
   /** Run fn on the control thread (realtime: queued + wake; offline: inline). */
   void onControl(std::function<void()> fn);
@@ -132,6 +159,27 @@ class Engine final : public CommandSink {
   std::atomic<std::uint64_t> cpuNsAccum_{0};
   std::uint32_t tapId_ = 0;
   bool hello_ = false;
+
+  // T08 runtime: device requests off the control thread, watchdog, clock map, MIDI ports, tick pacing
+  static constexpr double kWatchdogSec = 5.0;
+  std::thread hostThread_;
+  std::mutex hostMu_;
+  std::condition_variable hostCv_;
+  std::deque<std::function<void()>> hostJobs_;
+  bool hostStop_ = false;
+  bool pending_ = false;            // control thread: a start/restart waits for the host
+  bool restartPending_ = false;
+  std::chrono::steady_clock::time_point deadline_{};
+  const char *devState_ = "suspended";  // control thread view (state event)
+  std::string deviceId_ = "default", deviceName_;
+  double latencySec_ = 0;               // host-reported output latency
+  const char *sleepState_ = "awake";
+  ClockMap clock_;
+  MeterServiceImpl *meterSvc_ = nullptr;  // resolved once (services never change after Model construction)
+  RecServiceImpl *recSvc_ = nullptr;
+  MidiPortTable midiPorts_;
+  std::chrono::steady_clock::time_point lastTick_{}, lastStats_{};
+  std::atomic<std::uint32_t> garbageFreed_{0}, endedRescans_{0};
   friend class Bridge;
 };
 

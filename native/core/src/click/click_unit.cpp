@@ -91,13 +91,13 @@ class ClickUnit final : public Unit {
 
  private:
   struct Voice {
-    wa::BufferSource src;
+    wa::BufferSource src{nullptr};
     double t = 0;
     bool active = false;
   };
   std::array<std::vector<float>, 3> data_;
   SampleBuffer bufs_[3];
-  std::array<Voice, kVoices> voices_{};
+  std::array<Voice, kVoices> voices_;
   wa::Param level_{click::kDefaultLevel};
   alignas(16) float scratch_[kQ] = {};
   alignas(16) float gain_[kQ] = {};

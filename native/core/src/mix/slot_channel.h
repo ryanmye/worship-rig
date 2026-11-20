@@ -35,6 +35,7 @@ enum class StripOp : std::uint16_t {
   EqAudition,          // aux = 1 bypass / 0 on (contract 1.3 eqAudition; ends at commit)
   SetWidthDefault,     // a = instrument widthDefault
   // T02 appends below; values are stable once used.
+  SetSlotWidth,  // f.a = slot width (0..1.5), f.b = when: rampTo tau 15 ms on the effective width (x widthDefault)
 };
 
 struct UnitEnv;

@@ -22,6 +22,8 @@ void setup(OfflineEngine &e) {
   e.hello();
   e.call(kPatch);
   e.call(R"({"v":1,"op":"commit","token":1,"when":0})");
+  // timing checks read the strip output: the master chain (T03) adds the compressor's 6 ms look-ahead
+  REQUIRE(rig_test_tap(e.e, "slot0.pan") == RIG_OK);
 }
 
 size_t firstNonZero(const std::vector<float> &v) {

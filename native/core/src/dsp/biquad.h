@@ -72,16 +72,19 @@ class BiquadFilter {
   Param &q() { return q_; }
   Param &gain() { return gain_; }
   BiquadType type() const { return type_; }
-  /** BiquadFilterNode.type = t (takes effect at the next quantum's coefficient update). */
+  /** BiquadFilterNode.type = t: a different type resets the kernels (BiquadFilterHandler::SetType). */
   void setType(BiquadType t) {
+    if (t == type_) return;
     type_ = t;
-    dirty_ = true;
+    reset();
   }
   /** automationRate of every param ('k-rate' for the slot EQ, fx.js `_node`). */
   void setKRate(bool k) { krate_ = k; }
   bool kRate() const { return krate_; }
-  /** Reset both kernels (a new node). */
+  /** Reset both kernels (filter memory). */
   void reset();
+  /** Become a new node (fresh params with these values, no events; zero state; k-rate kept). */
+  void reinit(BiquadType type, double freqHz, double q, double gainDb);
 
   /**
    * One quantum (n ≤ 128) of `nch` channels in place: ch[c] is read and overwritten. frame0 / sampleRate drive the

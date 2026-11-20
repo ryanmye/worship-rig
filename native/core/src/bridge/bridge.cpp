@@ -2,16 +2,18 @@
 
 #include <cmath>
 #include <cstring>
+#include <exception>
+#include <stdexcept>
 #include <string>
 
 #include "api/engine.h"
 #include "bridge/json_out.h"
+#include "bridge/schema.h"
 #include "model/patch.h"
 #include "params/params.h"
 #include "yyjson.h"
 
 namespace rig {
-namespace {
 
 struct Req {
   yyjson_val *m = nullptr;
@@ -19,6 +21,15 @@ struct Req {
   std::uint64_t id = 0;
   std::string op;
 };
+
+namespace {
+
+// The bridge handling the current message (re-entrant: an offline on_event callback may post again).
+thread_local Bridge *g_current = nullptr;
+Bridge *bridgeOf(Engine &) {
+  return g_current;
+}
+
 
 std::string envelopeHead(const Req &r, bool ok) {
   JsonOut j;
@@ -50,6 +61,22 @@ void fail(Engine &e, const Req &r, const char *code, const std::string &msg) {
   e.emit(envelopeHead(r, false) + j.take() + "}");
 }
 
+/** A service result: "" = unsupported, {"error":{code,message}} = error reply (services' convention, T08), else ok. */
+void reply(Engine &e, const Req &r, const std::string &res, const std::string &what) {
+  if (res.empty()) return fail(e, r, "unsupported", what + " is not implemented in this build");
+  if (res.rfind("{\"error\":", 0) == 0) {
+    yyjson_doc *d = yyjson_read(res.data(), res.size(), 0);
+    yyjson_val *er = d ? yyjson_obj_get(yyjson_doc_get_root(d), "error") : nullptr;
+    yyjson_val *c = er ? yyjson_obj_get(er, "code") : nullptr;
+    yyjson_val *m = er ? yyjson_obj_get(er, "message") : nullptr;
+    const std::string code = c && yyjson_is_str(c) ? yyjson_get_str(c) : "internal";
+    const std::string msg = m && yyjson_is_str(m) ? yyjson_get_str(m) : what + " failed";
+    if (d) yyjson_doc_free(d);
+    return fail(e, r, code.c_str(), msg);
+  }
+  ok(e, r, res);
+}
+
 double getNum(yyjson_val *o, const char *k, double dflt) {
   yyjson_val *v = yyjson_obj_get(o, k);
   return v && yyjson_is_num(v) ? yyjson_get_num(v) : dflt;
@@ -70,29 +97,29 @@ void opHello(Engine &e, const Req &r) {
   }
   JsonOut j;
   j.begin().kv("protocol", RIG_BRIDGE_PROTOCOL).kv("minor", 0).kv("engine", rig_version_string());
-  j.key("caps").beginArray().elemStr("skeleton").elemStr("when").elemStr("testVoice").endArray();
+  j.key("caps").beginArray().elemStr("when").elemStr("testVoice").elemStr("meters").elemStr("rta");
+  if (e.model().service(RecService::kName)) j.elemStr("rec");
+  j.endArray();
   j.kv("sampleRate", e.sampleRate()).kv("seed", e.seed()).end();
   ok(e, r, j.take());
 }
 
-void opAudio(Engine &e, const Req &r) {
-  const char *action = getStr(r.m, "action");
-  if (!action) return fail(e, r, "bad-request", "audio: action required");
-  const std::string a = action;
-  JsonOut j;
+void opAudio(Engine &e, Bridge &b, const Req &r) {
+  const std::string a = getStr(r.m, "action");
   if (a == "sleep" || a == "wake") {
-    e.setAwake(a == "wake");  // T00: immediate, no ramp
-    j.begin().kvBool("done", true).end();
-  } else if (a == "start" || a == "restart" || a == "output") {
-    const char *dev = getStr(r.m, "deviceId");
-    e.requestAudio(a, dev ? dev : "", getNum(r.m, "latency", 0.0));
-    j.begin().kv("state", e.host() ? "suspended" : "running").kv("sleep", e.awake() ? "awake" : "asleep");
-    j.kv("latencyMs", 0).kv("sampleRate", e.sampleRate()).kv("deviceId", dev ? dev : "default");
-    j.kv("channels", e.outChannels()).end();
-  } else {
-    return fail(e, r, "bad-request", "audio: unknown action " + a);
+    const double ramp = getNum(r.m, "ramp", -1.0);
+    const bool done = a == "sleep" ? e.sleepAudio(ramp) : e.wakeAudio(ramp);
+    return ok(e, r, done ? "{\"done\":true}" : "{\"done\":false}");
   }
-  ok(e, r, j.take());
+  const char *dev = getStr(r.m, "deviceId");
+  yyjson_val *lat = yyjson_obj_get(r.m, "latency");  // 'interactive' | seconds (0 = interactive)
+  const double latency = lat && yyjson_is_num(lat) ? yyjson_get_num(lat) : 0.0;
+  if (const char *err = e.requestAudio(a, dev ? dev : "", latency); *err)
+    return fail(e, r, err, std::string("audio ") + a + ": " +
+                               (std::strcmp(err, "busy") == 0 ? "a device start is still pending"
+                                                              : "the host has no audio output"));
+  if (a == "restart") b.restartFloor_ = b.maxToken_;  // in-flight prepares die with the old context
+  ok(e, r, e.stateFieldsJson(e.deviceState()));
 }
 
 void opPrepare(Engine &e, const Req &r) {
@@ -100,6 +127,7 @@ void opPrepare(Engine &e, const Req &r) {
   std::string err;
   if (!parsePatch(yyjson_obj_get(r.m, "patch"), p, &err)) return fail(e, r, "bad-request", "prepare: " + err);
   const std::uint32_t token = e.model().prepare(std::move(p));
+  if (Bridge *b = bridgeOf(e)) b->maxToken_ = std::max(b->maxToken_, token);
   JsonOut j;
   j.begin().kv("token", token).end();
   ok(e, r, j.take());
@@ -108,8 +136,15 @@ void opPrepare(Engine &e, const Req &r) {
 void opCommit(Engine &e, const Req &r) {
   yyjson_val *t = yyjson_obj_get(r.m, "token");
   if (!t || !yyjson_is_num(t)) return fail(e, r, "bad-request", "commit: token required");
-  const bool committed = e.model().commit(static_cast<std::uint32_t>(yyjson_get_num(t)), getWhen(r.m));
-  if (!committed) return fail(e, r, "stale-token", "commit: unknown or superseded token");
+  const double tv = yyjson_get_num(t);
+  const std::uint32_t token = tv >= 1 && tv <= 4294967295.0 ? static_cast<std::uint32_t>(tv) : 0;
+  Bridge *b = bridgeOf(e);
+  if (!token || (b && token > b->maxToken_)) return fail(e, r, "stale-token", "commit: unknown token");
+  if (b && token <= b->restartFloor_ && token != b->committedToken_)
+    return fail(e, r, "superseded", "commit: token prepared before an audio restart");
+  if (!e.model().commit(token, getWhen(r.m)))
+    return fail(e, r, "superseded", "commit: token superseded by later prepares");
+  if (b) b->committedToken_ = token;
   JsonOut j;
   j.begin().kvBool("committed", true).end();
   ok(e, r, j.take());
@@ -202,8 +237,7 @@ void opGet(Engine &e, const Req &r) {
     res = m.listInstruments();
   } else if (w == "sampleStatus")
     res = m.sampleStatus(yyjson_obj_get(r.m, "patches"));
-  if (res.empty()) return fail(e, r, "unsupported", "get: '" + w + "' has no provider in this build");
-  ok(e, r, res);
+  reply(e, r, res, "get " + w);
 }
 
 // ---- ops whose bodies live in module services (WAVE0B_REVIEW V1: SETUP_REVIEW 1(f) "bridge op dispatch -> Model
@@ -252,8 +286,7 @@ void opClick(Engine &e, const Req &r) {
     res = m.setClick(r.m, when);
   else
     return fail(e, r, "bad-request", "click: unknown action " + a);
-  if (res.empty()) return fail(e, r, "unsupported", "click: '" + a + "' not implemented");
-  ok(e, r, res);
+  reply(e, r, res, "click " + a);
 }
 
 void opDrone(Engine &e, const Req &r) {  // contract order: key, files, config
@@ -293,8 +326,7 @@ void opCache(Engine &e, const Req &r) {
   } else {
     return fail(e, r, "bad-request", "cache: unknown action " + a);
   }
-  if (res.empty()) return fail(e, r, "unsupported", "cache: '" + a + "' has no provider in this build");
-  ok(e, r, res);
+  reply(e, r, res, "cache " + a);
 }
 
 void opConfig(Engine &e, const Req &r) {
@@ -327,22 +359,58 @@ void opRec(Engine &e, const Req &r) {
     res = e.model().recStop();
   else
     return fail(e, r, "bad-request", "rec: unknown action " + a);
-  if (res.empty()) return fail(e, r, "unsupported", "rec: '" + a + "' not implemented");
-  ok(e, r, res);
+  reply(e, r, res, "rec " + a);
 }
 
 void opMidi(Engine &e, const Req &r) {
   if (!needService(e, r, MidiService::kName)) return;
-  const std::string res = e.model().midiOp(r.m);
-  if (res.empty()) return fail(e, r, "unsupported", "midi: not implemented");
-  ok(e, r, res);
+  reply(e, r, e.model().midiOp(r.m), "midi");
 }
 
 }  // namespace
 
+void Bridge::dispatch(const Req &r) {
+  if (r.op == "hello") {
+    helloDone_ = helloDone_ || getNum(r.m, "protocol", 0) == RIG_BRIDGE_PROTOCOL;
+    return opHello(e_, r);
+  }
+  if (r.op == "audio")
+    opAudio(e_, *this, r);
+  else if (r.op == "prepare")
+    opPrepare(e_, r);
+  else if (r.op == "commit")
+    opCommit(e_, r);
+  else if (r.op == "set")
+    opSet(e_, r);
+  else if (r.op == "play")
+    opPlay(e_, r);
+  else if (r.op == "get")
+    opGet(e_, r);
+  else if (r.op == "config")
+    opConfig(e_, r);
+  else if (r.op == "song")
+    opSong(e_, r);
+  else if (r.op == "click")
+    opClick(e_, r);
+  else if (r.op == "drone")
+    opDrone(e_, r);
+  else if (r.op == "cache")
+    opCache(e_, r);
+  else if (r.op == "rec")
+    opRec(e_, r);
+  else if (r.op == "midi")
+    opMidi(e_, r);
+  else if (r.op == "__throw" && (e_.config().flags & RIG_FLAG_TEST_API))
+    throw std::runtime_error("test");
+  else
+    fail(e_, r, "unknown-op", "unknown op '" + r.op + "'");
+}
+
 bool Bridge::handle(const char *json, std::size_t len) {
   yyjson_doc *doc = yyjson_read(json, len, 0);
   if (!doc) return false;
+  Bridge *const saved = g_current;
+  g_current = this;
   yyjson_val *root = yyjson_doc_get_root(doc);
   auto one = [&](yyjson_val *m) {
     if (!yyjson_is_obj(m)) {
@@ -367,39 +435,19 @@ bool Bridge::handle(const char *json, std::size_t len) {
       return;
     }
     if (r.op.empty()) return fail(e_, r, "bad-request", "op required");
-    if (r.op == "hello") {
-      helloDone_ = true;
-      return opHello(e_, r);
+    const bridge::OpSpec *spec = bridge::findOp(r.op.c_str());
+    if (r.op != "hello" && !helloDone_) return fail(e_, r, "protocol", "hello must be the first message");
+    const bool testThrow = r.op == "__throw" && (e_.config().flags & RIG_FLAG_TEST_API);  // `internal` test hook
+    if (!spec && !testThrow) return fail(e_, r, "unknown-op", "unknown op '" + r.op + "'");
+    std::string err;
+    if (spec && !bridge::validate(*spec, m, &err)) return fail(e_, r, "bad-request", err);
+    try {
+      dispatch(r);
+    } catch (const std::exception &x) {  // a handler bug must not kill the control thread: `internal`
+      fail(e_, r, "internal", "op '" + r.op + "' failed: " + x.what());
+    } catch (...) {
+      fail(e_, r, "internal", "op '" + r.op + "' failed");
     }
-    if (!helloDone_) return fail(e_, r, "protocol", "hello must be the first message");
-    if (r.op == "audio")
-      opAudio(e_, r);
-    else if (r.op == "prepare")
-      opPrepare(e_, r);
-    else if (r.op == "commit")
-      opCommit(e_, r);
-    else if (r.op == "set")
-      opSet(e_, r);
-    else if (r.op == "play")
-      opPlay(e_, r);
-    else if (r.op == "get")
-      opGet(e_, r);
-    else if (r.op == "config")
-      opConfig(e_, r);
-    else if (r.op == "song")
-      opSong(e_, r);
-    else if (r.op == "click")
-      opClick(e_, r);
-    else if (r.op == "drone")
-      opDrone(e_, r);
-    else if (r.op == "cache")
-      opCache(e_, r);
-    else if (r.op == "rec")
-      opRec(e_, r);
-    else if (r.op == "midi")
-      opMidi(e_, r);
-    else
-      fail(e_, r, "unknown-op", "unknown op '" + r.op + "'");
   };
   if (yyjson_is_arr(root)) {
     std::size_t i, n;
@@ -409,9 +457,11 @@ bool Bridge::handle(const char *json, std::size_t len) {
     one(root);
   } else {
     yyjson_doc_free(doc);
+    g_current = saved;
     return false;
   }
   yyjson_doc_free(doc);
+  g_current = saved;
   return true;
 }
 

@@ -14,7 +14,9 @@
 #include "doctest.h"
 #include "dsp/compressor.h"
 #include "dsp/waveshaper.h"
+#include "fixture_runner.h"
 #include "helpers.h"
+#include "io/wav.h"
 #include "mix/master_chain_tables.h"
 
 using namespace rigtest;
@@ -104,6 +106,42 @@ std::vector<std::vector<float>> renderWith(OfflineEngine &e, double seconds,
 }  // namespace
 
 TEST_SUITE("master") {
+  TEST_CASE("golden fixtures master-eq, glue-*, limiter-* in process at the exact tier, allocation trap on") {
+    const std::string golden = std::string(RIG_REPO_DIR) + "/native/golden";
+    std::vector<rig::tools::Fixture> all;
+    std::string err;
+    REQUIRE(rig::tools::loadFixtures(golden + "/manifest.json", all, &err));
+    const long allocs = g_rtAllocs;
+    for (const char *id : {"master-eq", "glue-50", "glue-100", "glue-100-bursts", "limiter-steps", "limiter-steps-hot",
+                           "limiter-bursts-hot"}) {
+      INFO(std::string(id));
+      const auto it = std::find_if(all.begin(), all.end(), [&](const auto &f) { return f.id == id; });
+      REQUIRE(it != all.end());
+      rig::io::WavData gold;
+      if (!rig::io::readWav(golden + "/out/" + id + ".wav", gold) &&
+          !rig::io::readWav(golden + "/smoke/" + id + ".wav", gold)) {
+        MESSAGE("golden WAV missing for " << id << " (node tools/golden/render.mjs --only " << id << "): skipped");
+        continue;
+      }
+      const rig::tools::RunResult r = rig::tools::runFixture(*it, golden, 44100);
+      REQUIRE(r.ok);
+      for (const auto &sk : r.skipped) MESSAGE("skipped: " << sk);
+      CHECK(r.skipped.empty());
+      REQUIRE(r.channels.size() == 2);
+      double m = 0, peak = 0;
+      for (int c = 0; c < 2; ++c) {
+        REQUIRE(r.channels[c].size() == gold.ch[c].size());
+        m = std::max(m, maxAbsDiff(r.channels[c], gold.ch[c]));
+        for (float v : gold.ch[c]) peak = std::max(peak, double(std::fabs(v)));
+      }
+      std::printf("  %-20s max|native - golden| %.3g, golden peak %.3f\n", id, m, peak);
+      CHECK(m <= 2e-4);  // the exact tier
+      CHECK(m <= 1e-6);  // what the port achieves (Chromium's hash-order sums, the makeup measurement's oscillator)
+      CHECK(peak > 0.1);  // none of these goldens is silence
+    }
+    CHECK(g_rtAllocs == allocs);
+  }
+
   TEST_CASE("mono sum: sqrt2 * (L + R) / 2 on both channels, stereo untouched, 50 ms crossfade") {
     const double inDb = db(0.1 / std::sqrt(2.0));
     auto run = [&](bool mono, bool leftOnly) {

@@ -8,7 +8,9 @@
 #include "bridge/bridge.h"
 #include "graph/test_points.h"
 #include "bridge/json_out.h"
+#include "meter/meter.h"
 #include "num/hash_seed.h"
+#include "rec/rec.h"
 #include "yyjson.h"
 
 namespace rig {
@@ -69,6 +71,8 @@ Engine::Engine(const rig_config &cfg)
   paths.recordingsDir = recDir_;
   model_.setPaths(paths);
   bridge_ = std::make_unique<Bridge>(*this);
+  meterSvc_ = MeterServiceImpl::of(model_);
+  recSvc_ = RecServiceImpl::of(model_);
 }
 
 Engine *Engine::create(const rig_config &cfg, rig_status *err) {
@@ -95,9 +99,16 @@ Engine::~Engine() {
     wake_.release();
     control_.join();
   }
+  {
+    std::lock_guard<std::mutex> lk(hostMu_);
+    hostStop_ = true;
+  }
+  hostCv_.notify_all();
+  if (hostThread_.joinable()) hostThread_.join();
   // Free whatever the graph handed back or never consumed (the Graph destructor frees what it still holds).
   AudioEvent ev;
   while (evQ_.pop(ev)) freeGarbage(ev);
+  while (graph_.popGarbage(ev)) freeGarbage(ev);
   Command c;
   while (cmdQ_.pop(c)) freeCommandPayload(c);
 }
@@ -205,7 +216,31 @@ void Engine::postHostEvent(std::string &&json) {
 
 void Engine::drainAudioEvents() {
   AudioEvent ev;
-  while (evQ_.pop(ev)) model_.onAudioEvent(ev);
+  // Garbage first and from its own ring (never dropped; SETUP_REVIEW 18 / V13): frees run on this thread only.
+  while (graph_.popGarbage(ev)) {
+    model_.onAudioEvent(ev);
+    garbageFreed_.fetch_add(1, std::memory_order_relaxed);
+  }
+  bool dropped = false;
+  while (evQ_.pop(ev)) {
+    dropped = dropped || ev.kind == EventKind::Dropped;
+    model_.onAudioEvent(ev);
+  }
+  // Ended bits: VoiceEnded events lost to a full ring come back as one VoiceEnded per affected slot with voice id
+  // -1 ("rescan this slot": the owner polls the unit's live voices instead of trusting its own bookkeeping).
+  if (const std::uint64_t bits = dropped ? graph_.takeEndedSlots() : 0) {
+    for (unsigned s = 0; s < 64; ++s) {
+      if (!(bits >> s & 1u)) continue;
+      AudioEvent e{};
+      e.kind = EventKind::VoiceEnded;
+      e.sub = 1;  // synthesized
+      e.frame = graph_.timeBase().frame;
+      e.f.a = static_cast<double>(s);
+      e.f.b = -1.0;
+      model_.onAudioEvent(e);
+      endedRescans_.fetch_add(1, std::memory_order_relaxed);
+    }
+  }
 }
 
 void Engine::controlLoop() {
@@ -231,23 +266,66 @@ void Engine::controlLoop() {
       midiRecv_.fetch_add(1, std::memory_order_relaxed);
       model_.midiBytes(mi.port, mi.bytes, mi.len, mi.hostTimeNs);  // "midi" service (T07) parses and routes
     }
+    checkWatchdog();
+    pumpRec(false);
     emitTick();
     flush();
   }
 }
 
-void Engine::emitTick() {
-  if (!rtRunning_ || !awake_) return;
+std::string Engine::buildTick(bool withStats) {
   const TimeBase tb = graph_.timeBase();
-  const std::int64_t f = static_cast<std::int64_t>(tb.rendered);
-  if (f - lastTickFrame_ < static_cast<std::int64_t>(tb.sampleRate / 30.0)) return;
-  lastTickFrame_ = f;
   const rig_meters m = meters_.read();
+  MeterServiceImpl *ms = meterSvc_;
+  const bool unit = ms && ms->shared().attached.load(std::memory_order_relaxed);
+  // out: peak since the previous tick from the meter unit (Q14: never misses a peak); else the graph's 64-quantum
+  // window. t = engine time of the last rendered frame.
+  const float pl = unit ? ms->shared().takePeak(0) : m.out_peak[0];
+  const float pr = unit ? ms->shared().takePeak(1) : m.out_peak[1];
   JsonOut j;
   j.begin().kv("v", 1).kv("ev", "tick").kv("t", tb.time()).kv("frames", static_cast<double>(tb.rendered));
-  j.key("out").beginArray().elem(m.out_peak[0]).elem(m.out_peak[1]).endArray();
-  j.kv("pedal", 0).kv("held", 0).kv("cpu", m.cpu_load).end();
-  emit(j.take());
+  j.key("out").beginArray().elem(pl).elem(pr).endArray();
+  if (ms && ms->anySlot()) {  // contract 3.11 slotLevel: zeros for unsubscribed slots and in low-resource mode
+    j.key("slots").beginArray();
+    for (int i = 0; i < 4; ++i) {
+      const bool on = ms->slotSubscribed(i) && !model_.lowResource();
+      j.beginArray().elem(on ? m.slot_peak[i] : 0.0).elem(on ? m.slot_rms[i] : 0.0).endArray();
+    }
+    j.endArray();
+  }
+  if (ms && ms->rtaOn()) j.kv("rta", ms->rtaBase64());
+  j.kvRaw("blockers", model_.sleepBlockersJson());
+  j.kvBool("pedal", m.pedal != 0).kv("held", m.held);  // T14 fills the snapshot's pedal/held
+  j.kvRaw("runtime", model_.runtimeStateJson());
+  j.kv("cpu", m.cpu_load);
+  if (latencySec_ > 0) j.kv("hostLatency", latencySec_);  // G7
+  if (withStats) j.kvRaw("stats", statsJson());
+  j.end();
+  return j.take();
+}
+
+void Engine::emitTick() {
+  // Realtime only (offline renders have no wall clock); none while asleep or before the device runs (contract 6.5).
+  if (!rtRunning_ || !awake_ || !started_.load(std::memory_order_acquire)) return;
+  const auto now = std::chrono::steady_clock::now();
+  MeterServiceImpl *ms = meterSvc_;
+  const double hz = ms ? ms->tickHz() : kActiveTickHz;
+  if (now - lastTick_ < std::chrono::duration<double>(1.0 / hz)) return;
+  const TimeBase tb = graph_.timeBase();
+  if (static_cast<std::int64_t>(tb.rendered) == lastTickFrame_) return;  // nothing rendered since: no new t
+  lastTickFrame_ = static_cast<std::int64_t>(tb.rendered);
+  // keep the cadence even: the next deadline is one period after the previous one unless we fell behind
+  lastTick_ = now - lastTick_ < std::chrono::duration<double>(2.0 / hz)
+                  ? lastTick_ + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                                    std::chrono::duration<double>(1.0 / hz))
+                  : now;
+  const bool stats = now - lastStats_ >= std::chrono::seconds(1);  // `stats` every 1 s (contract 6.5)
+  if (stats) lastStats_ = now;
+  emit(buildTick(stats));
+}
+
+void Engine::pumpRec(bool offline) {
+  if (RecServiceImpl *r = recSvc_) r->pump(offline, graph_.timeBase().time());
 }
 
 void Engine::renderOne() {
@@ -257,6 +335,7 @@ void Engine::renderOne() {
     drainAudioEvents();
     timers_.runDue(graph_.frame() / Q);
     graph_.renderQuantum(ptrs, outCh_);
+    pumpRec(true);  // the offline recorder writes inline, per quantum (no threads offline)
   } else {
     const auto t0 = std::chrono::steady_clock::now();
     graph_.renderQuantum(ptrs, outCh_);
@@ -287,7 +366,7 @@ void Engine::fifoRead(float *const *out, uint32_t channels, uint32_t frames, boo
   }
 }
 
-rig_status Engine::render(float *const *out, uint32_t channels, uint32_t frames, uint64_t) {
+rig_status Engine::render(float *const *out, uint32_t channels, uint32_t frames, uint64_t hostTimeNs) {
   if (!out || channels == 0) return RIG_E_INVALID;
   auto zero = [&] {
     for (uint32_t c = 0; c < channels; ++c) std::memset(out[c], 0, frames * sizeof(float));
@@ -299,6 +378,10 @@ rig_status Engine::render(float *const *out, uint32_t channels, uint32_t frames,
   if (!rtRunning_ || !awake_ || !started_.load(std::memory_order_acquire)) {
     zero();
     return RIG_OK;
+  }
+  if (hostTimeNs) {  // the first frame of this block plays at hostTimeNs (runtime/clock_map.h)
+    const std::int64_t first = graph_.frame() - static_cast<std::int64_t>(fifoPos_ < Q ? Q - fifoPos_ : 0);
+    clock_.publish(hostTimeNs, first, graph_.sampleRate(), frames);
   }
   fifoRead(out, channels, frames, false);
   return RIG_OK;
@@ -314,9 +397,9 @@ rig_status Engine::offlineRender(float *const *out, uint32_t channels, uint32_t 
 
 rig_status Engine::midiIn(const char *port, const std::uint8_t *bytes, std::size_t len, std::uint64_t hostTimeNs) {
   if (!bytes && len) return RIG_E_INVALID;
-  std::uint16_t pid = 0;
-  for (const char *p = port ? port : ""; *p; ++p)
-    pid = static_cast<std::uint16_t>(pid * 31u + static_cast<unsigned char>(*p));
+  // port table (SETUP_REVIEW 21c): stable index per id; a port the host never listed is interned on first use
+  // (lock-free CAS; the table only grows, MidiPortTable::kMax ids)
+  const std::uint16_t pid = midiPorts_.intern(port ? port : "");
   rig_status st = RIG_OK;
   for (std::size_t off = 0; off < len; off += 13) {
     MidiIn m{};
@@ -332,21 +415,122 @@ rig_status Engine::midiIn(const char *port, const std::uint8_t *bytes, std::size
   return st;
 }
 
-void Engine::requestAudio(const std::string &action, const std::string &deviceId, double latency) {
+// ---- device lifecycle (T08: SETUP_REVIEW 25, G9, R15) --------------------------------------------------------------
+
+void Engine::hostCallLoop() {
+  std::unique_lock<std::mutex> lk(hostMu_);
+  for (;;) {
+    hostCv_.wait(lk, [&] { return hostStop_ || !hostJobs_.empty(); });
+    if (hostJobs_.empty()) return;  // stop requested and nothing left
+    auto fn = std::move(hostJobs_.front());
+    hostJobs_.pop_front();
+    lk.unlock();
+    fn();  // may block (an AUHAL open): only this thread waits, the control loop keeps ticking
+    lk.lock();
+  }
+}
+
+void Engine::hostCall(std::function<void()> fn) {
+  {
+    std::lock_guard<std::mutex> lk(hostMu_);
+    if (!hostThread_.joinable()) hostThread_ = std::thread([this] { hostCallLoop(); });
+    hostJobs_.push_back(std::move(fn));
+  }
+  hostCv_.notify_one();
+}
+
+std::string Engine::stateFieldsJson(const char *state, double sr) const {
+  JsonOut j;
+  j.begin().kv("state", state).kv("sleep", sleepState_).kv("latencyMs", latencySec_ * 1000.0);
+  j.kv("sampleRate", sr > 0 ? sr : sampleRate()).kv("deviceId", deviceId_).kv("channels", outCh_.load()).end();
+  return j.take();
+}
+
+void Engine::emitState(const char *state, bool restarted) {
+  devState_ = state;
+  std::string f = stateFieldsJson(state);
+  f.pop_back();
+  std::string m = "{\"v\":1,\"ev\":\"state\"," + f.substr(1);
+  if (restarted) m += ",\"restarted\":true";
+  m += "}";
+  emit(std::move(m));
+}
+
+const char *Engine::requestAudio(const std::string &action, const std::string &deviceId, double latency) {
+  const bool restart = action == "restart" || action == "output";
+  if (pending_ && restart) return "busy";  // contract 6.2 `busy`: a restart while the device is still opening
+  if (pending_ || (action == "start" && started_.load(std::memory_order_acquire))) {
+    emitState(devState_, false);  // start is idempotent (the JS start() promise is memoised): report, no new open
+    return "";
+  }
+  if (realtime() && cfg_.host && !host_.audio_start) return "unsupported";
   model_.audioStarted(-1.0);  // global units (FX, master, click, drone, sinks) exist before the first sound
-  if (!realtime()) {
+  if (!deviceId.empty() || action == "output") deviceId_ = deviceId.empty() ? "default" : deviceId;
+  if (!realtime() || !cfg_.host) {  // offline, or no host: the caller drives rig_render() itself (tests)
     started_ = true;
-    return;
+    emitState("running", restart);
+    return "";
   }
-  (void)action;
-  // audio_start must return at once (rig_host contract: "must not block for long"): the Apple layer opens AUHAL on its
-  // own queue (queue.async, SETUP_REVIEW 25) and reports back through rig_host_audio_started. T08 adds a watchdog
-  // (state `closed` when no completion arrives within 5 s) and keeps ticks/timers/MIDI running meanwhile.
-  if (host_.audio_start) {
-    host_.audio_start(host_.user, deviceId.empty() ? nullptr : deviceId.c_str(), latency, outCh_);
-  } else {
-    started_ = true;  // no host: the caller drives rig_render() itself (tests)
-  }
+  // audio_start runs on the device thread and must return at once anyway (rig_host contract; the Apple layer opens
+  // AUHAL on its own queue, SETUP_REVIEW 25). If it blocks, only the device thread waits; the watchdog reports a
+  // `closed` state + `device` warning after kWatchdogSec while ticks, timers and MIDI keep running here.
+  pending_ = true;
+  restartPending_ = restart;
+  deadline_ = std::chrono::steady_clock::now() +
+              std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double>(
+                  kWatchdogSec));
+  emitState("suspended", false);  // G9: a state event before the reply
+  const std::string dev = deviceId == "default" ? std::string() : deviceId;
+  const unsigned ch = outCh_;
+  hostCall([this, restart, dev, latency, ch] {
+    if (restart && host_.audio_stop) host_.audio_stop(host_.user);
+    host_.audio_start(host_.user, dev.empty() ? nullptr : dev.c_str(), latency, ch);
+  });
+  return "";
+}
+
+void Engine::checkWatchdog() {
+  if (!pending_ || std::chrono::steady_clock::now() < deadline_) return;
+  pending_ = false;
+  emitState("closed", false);
+  JsonOut j;
+  j.begin().kv("v", 1).kv("ev", "warn").kv("message", "audio device did not start within 5 s").kv("code", "device");
+  j.kv("op", "audio").end();
+  emit(j.take());
+}
+
+bool Engine::sleepAudio(double ramp) {
+  // contract 1.1 sleep: realtime only, only from awake and running. The Model ramps `out` (T14, sleep*); the
+  // engine suspends rendering once the ramp has played (time pauses, like ctx.suspend()).
+  if (!realtime() || !started_.load(std::memory_order_acquire) || std::strcmp(sleepState_, "awake") != 0)
+    return false;
+  const double r = std::isfinite(ramp) && ramp >= 0 ? ramp : 0.15;
+  model_.sleep(r);
+  sleepState_ = "sleeping";
+  emitState(devState_, false);
+  const double lead = std::clamp(2.0 * latencySec_, 0.01, 0.04);
+  at(graph_.timeBase().time() + lead + r, [this](double) {
+    if (std::strcmp(sleepState_, "sleeping") != 0) return;
+    awake_ = false;
+    sleepState_ = "asleep";
+    emitState(devState_, false);
+  });
+  return true;
+}
+
+bool Engine::wakeAudio(double ramp) {
+  if (std::strcmp(sleepState_, "awake") == 0) return true;  // idempotent
+  const auto t0 = std::chrono::steady_clock::now();
+  awake_ = true;
+  model_.wake(std::isfinite(ramp) && ramp >= 0 ? ramp : 0.06);
+  sleepState_ = "awake";
+  std::string f = stateFieldsJson(devState_);
+  f.pop_back();
+  const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+  JsonOut tail;
+  tail.raw(",").kv("wakeMs", ms).kv("queued", 0);
+  emit("{\"v\":1,\"ev\":\"state\"," + f.substr(1) + tail.take() + "}");
+  return true;
 }
 
 void Engine::hostAudioStarted(const rig_device_info &info) {
@@ -356,27 +540,74 @@ void Engine::hostAudioStarted(const rig_device_info &info) {
   graph_.requestSampleRate(sr);
   outCh_ = info.channels >= 4 ? 4u : 2u;
   started_ = true;
-  JsonOut j;
-  j.begin().kv("v", 1).kv("ev", "state").kv("state", "running").kv("sleep", "awake");
-  j.kv("latencyMs", info.output_latency_sec * 1000.0).kv("sampleRate", sr);
-  j.kv("deviceId", info.device_id ? info.device_id : "").kv("channels", outCh_.load()).end();
-  postHostEvent(j.take());
+  const std::string id = info.device_id ? info.device_id : "";
+  const double lat = info.output_latency_sec > 0 ? info.output_latency_sec : 0.0;
+  onControl([this, id, lat, sr] {
+    const bool restarted = restartPending_ || std::strcmp(devState_, "running") == 0;
+    pending_ = false;
+    restartPending_ = false;
+    if (!id.empty()) deviceId_ = id;
+    latencySec_ = lat;
+    // the state event announces the rate the audio thread is about to adopt (RateChanged follows from the graph)
+    devState_ = "running";
+    std::string f = stateFieldsJson("running", sr);
+    f.pop_back();
+    std::string m = "{\"v\":1,\"ev\":\"state\"," + f.substr(1);
+    if (restarted) m += ",\"restarted\":true";
+    m += "}";
+    emit(std::move(m));
+  });
 }
 
 void Engine::hostAudioState(rig_device_state s, const char *msg) {
   static const char *names[] = {"running", "suspended", "interrupted", "closed"};
+  const int k = s >= RIG_DEVICE_RUNNING && s <= RIG_DEVICE_CLOSED ? static_cast<int>(s) : 3;
   if (s != RIG_DEVICE_RUNNING) started_ = false;
-  JsonOut j;
-  j.begin().kv("v", 1).kv("ev", "state").kv("state", names[s]);
-  if (msg) j.kv("message", msg);
-  j.end();
-  postHostEvent(j.take());
+  const std::string m = msg ? msg : "";
+  onControl([this, k, m] {
+    pending_ = false;
+    emitState(names[k], false);
+    if (k == 3 || (k != 1 && !m.empty())) {  // a failed open / lost device: `device` warning (contract 6.2)
+      JsonOut j;
+      j.begin().kv("v", 1).kv("ev", "warn").kv("message", m.empty() ? std::string("audio device closed") : m);
+      j.kv("code", "device").kv("op", "audio").end();
+      emit(j.take());
+    }
+  });
 }
 
 void Engine::hostDevicesChanged() {
-  JsonOut j;
-  j.begin().kv("v", 1).kv("ev", "state").kvBool("devicesChanged", true).end();
-  postHostEvent(j.take());
+  onControl([this] {
+    JsonOut j;
+    j.begin().kv("v", 1).kv("ev", "state").kv("state", devState_).kv("sleep", sleepState_);
+    j.kvBool("devicesChanged", true).end();
+    emit(j.take());
+  });
+}
+
+rig_status Engine::midiPorts(const char *json, std::size_t len) {
+  yyjson_doc *doc = yyjson_read(json, len, 0);
+  if (!doc) return RIG_E_INVALID;
+  yyjson_val *root = yyjson_doc_get_root(doc);
+  if (!yyjson_is_arr(root)) {
+    yyjson_doc_free(doc);
+    return RIG_E_INVALID;
+  }
+  std::size_t i, n;
+  yyjson_val *it;
+  yyjson_arr_foreach(root, i, n, it) {
+    yyjson_val *id = yyjson_obj_get(it, "id");
+    if (id && yyjson_is_str(id)) midiPorts_.intern(yyjson_get_str(id));
+  }
+  yyjson_doc_free(doc);
+  std::string copy(json, len);
+  onControl([this, copy] { model_.midiPorts(copy.data(), copy.size()); });  // T07 diffs + emits `midi ports`
+  return RIG_OK;
+}
+
+std::string Engine::midiPortId(std::uint16_t index) const {
+  char buf[MidiPortTable::kIdLen];
+  return midiPorts_.id(index, buf, sizeof buf) ? std::string(buf) : std::string();
 }
 
 rig_status Engine::getMeters(rig_meters *out) const {
