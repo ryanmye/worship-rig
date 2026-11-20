@@ -11,6 +11,9 @@ import { isValidPath } from '../shared/params.js';
 import { chordName } from '../shared/chords.js';
 
 const MINOR = 0;
+/** DECISIONS D4 'auto' per resource profile: mirrors native/core/src/inst/voice_alloc.h kAutoVoiceLimitDesktop/Ipad
+ *  (provisional numbers from the Linux bench, ARCHITECTURE 7.1). */
+export const AUTO_VOICE_LIMIT = Object.freeze({ desktop: 128, ipad: 64 });
 const OPS_NEED_AUDIO = new Set(['prepare', 'commit', 'cache', 'play', 'click', 'rec']);
 const GRAMMAR_KEYS = new Set(['v', 'op', 'id']);
 
@@ -72,7 +75,8 @@ export function checkSpec(spec, value) {
 }
 
 /** @param {{api:object, transport:{post:Function,onMessage:Function}, now?:()=>number, timers?:object,
- *   autoTick?:boolean, seed?:number, sampleRate?:number, channels?:number, devices?:object[]}} o */
+ *   autoTick?:boolean, seed?:number, sampleRate?:number, channels?:number, devices?:object[],
+ *   profile?:'desktop'|'ipad'}} o */
 export class MockNative {
   constructor(o) {
     if (!o || !o.api || !o.transport) throw new TypeError('MockNative needs {api, transport}');
@@ -112,6 +116,10 @@ export class MockNative {
     this.faded = false;
     this.swelling = false;
     this.lowResource = false;
+    // config {polyphony} (D1) and {voiceLimit} (D4), echoed like the core (bridge.cpp opConfig, Model::stateJson)
+    this.profile = o.profile === 'ipad' ? 'ipad' : 'desktop';
+    this.polyphony = 64;
+    this.voiceLimit = 'auto';
     this.meters = { rate: 4, slots: [], rta: false };
     this.click = { running: false, counting: false, bpm: null, sig: '4/4', output: 'main', level: 0.5, record: false,
       downbeat: null };
@@ -506,6 +514,11 @@ export class MockNative {
       r.lowResource = this.lowResource;
     }
     if (m.eqAudition) r.eqAudition = Number.isInteger(m.eqAudition.slot);
+    if (m.polyphony !== undefined) r.polyphony = this.polyphony = m.polyphony;
+    if (m.voiceLimit !== undefined && m.voiceLimit !== null) {
+      this.voiceLimit = m.voiceLimit;
+      Object.assign(r, this._voiceLimitFields());
+    }
     if (m.meters) {
       this.meters = {
         rate: m.meters.rate ?? this.meters.rate, slots: m.meters.slots ?? this.meters.slots,
@@ -514,6 +527,12 @@ export class MockNative {
       if (this._timer !== null) this._ensureTicker(true);
     }
     return this._reply(m.id, true, r);
+  }
+
+  /** D4: `{voiceLimit: 'auto'|n, voiceLimitEffective: n}` (0 = off), as the core's Model::voiceLimitJson. */
+  _voiceLimitFields() {
+    const eff = this.voiceLimit === 'auto' ? AUTO_VOICE_LIMIT[this.profile] : this.voiceLimit;
+    return { voiceLimit: this.voiceLimit, voiceLimitEffective: eff };
   }
 
   op_get(m) {
@@ -532,6 +551,7 @@ export class MockNative {
         return this._reply(m.id, true, {
           patch: this.patch, routing: {}, transpose: 0, tempo: this.tempo, timeSig: this.click.sig, keyContext: null,
           drone: {}, mono: false, runtime: this._runtime(), click: { ...this.click }, sleep: this.st.sleep,
+          polyphony: this.polyphony, ...this._voiceLimitFields(),
         });
       default:
         return this._fail(m, 'bad-request', `get ${m.what}`);

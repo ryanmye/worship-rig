@@ -359,7 +359,6 @@ export function mountUpdates(d) {
   // 2.0 Settings restructure: the switch lives in Settings › Mac, the status line and its buttons in About
   // (settings.js places toggleRow; el no longer contains it)
   const toggleRow = row('Updates', onToggle.el, 'Once a day, from GitHub. Nothing installs by itself.');
-  toggleRow.dataset.section = 'updates-check';
   const el = h('div.st-update', { 'data-testid': 'settings-update' }, line, buttons, how);
 
   function render() {

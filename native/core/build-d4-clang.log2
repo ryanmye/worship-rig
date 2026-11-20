@@ -1,0 +1,4 @@
+ninja: Entering directory `build-d4-clang'
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/rig_tests.dir/tests/test_voice_limit.cpp.o
+[2/2] Linking CXX executable rig_tests

@@ -83,6 +83,40 @@ slot state is counted now), `test_params.cpp` (16 slots); outside the core `app/
 (T09: slots 4..15 of the committed song, eqAudition / slotLevel 0..15), `native/devhost` (`--buffer`,
 `audio_start_frames`), `native/apple` (buffer request path, UNBUILT).
 
+## D4: engine-wide voice limit (DECISIONS D4), marked `INTERFACE-CHANGE(D4)`
+
+All additive. Bridge: `config {voiceLimit: 'auto'|128|256|512|0}` (0 = off, default 'auto'); the config reply and
+`get state` echo `voiceLimit` (the mode) and `voiceLimitEffective` (the number enforced, 0 = off); `get stats` gains
+`voiceLimitSteals` and `voiceLimit`; `hello.caps` gains `voiceLimit`. `hello.minor` stays 1: bumping it to 2 (the
+contract README rule) breaks `test_t00c.cpp`'s `"minor":1` check, a file outside D4; the orchestrator decides (open
+item). No C API change.
+
+Design: the instruments keep their voices (VoicePool: a running Held + Released count, O(1)); after each note-on the
+Graph sums `playingVoices()` over the 48 instrument slots (16 + 32 retiring) and, while over the limit, picks the
+globally earliest-released, else the globally oldest playing voice from each instrument's `oldestVoice()` and steals
+it with the existing `releaseVoice(id, frame, kStealFade)`. Enforcing AFTER the note-on keeps the per-slot cap first
+(it runs inside noteOn) and makes a note the instrument ignored (out of range, no sample) steal nothing. The limit
+reaches the graph as a lock-free atomic adopted at the start of each quantum (no new `Op`: the core range is frozen),
+so a change applies live from the next note-on. At most `kMaxLimitStealsPerNote` (4) steals per note-on: a live
+lowering converges over a few note-ons instead of a burst of fades, and the audio thread's work stays bounded
+(≤ 48 virtual counts + 4 x (2 x 48) candidate scans of 160 pool slots). No allocation, no locks. A per-quantum
+counter in the graph was not needed: the pools already hold the count.
+
+| # | file(s) | change | why |
+|---|---|---|---|
+| 24 | `src/graph/unit.h` | `class Instrument;` + `virtual Instrument *Unit::asInstrument()` (null; `Instrument` overrides it `final`): the graph reaches the instrument virtuals without RTTI | D4 |
+| 25 | `src/inst/instrument.h` | `virtual unsigned playingVoices() const` (0) and `virtual bool oldestVoice(bool released, int64 frame, double &at, VoiceId &id)` (false); defaults = not counted, never stolen from | D4 |
+| 26 | `src/inst/voice_alloc.h` | `playing()` is a running count (same values); `oldestReleased(when)` / `oldestPlaying()` (the two halves of `makeRoom`'s victim choice, now shared by it); `kAutoVoiceLimitDesktop` 128, `kAutoVoiceLimitIpad` 64 (PROVISIONAL), `autoVoiceLimit(ipad)`, `kVoiceLimitChoices`, `kMaxLimitStealsPerNote` 4 | D4 |
+| 27 | `src/inst/synth.{h,cpp}`, `src/inst/sampler.{h,cpp}` | `playingVoices()` (synth: the existing method now `override`) and `oldestVoice()` over the pool, at the time their own noteOn would use | D4 |
+| 28 | `src/graph/graph.{h,cpp}` | `setVoiceLimit(total)` (any thread, atomic; 0 = off, the bare Graph's default), `voiceLimitRequested()`; `GraphStats::limitSteals`; `limitVoices()` after every NoteOn (targeted or kAllSlots) | D4 |
+| 29 | `src/model/model.{h,cpp}` | `CommandSink::setVoiceLimit(total)` (default no-op; `Engine` forwards to the graph); `Model::setVoiceLimit(int)` (`kVoiceLimitAuto` = -1, 0, 128, 256, 512), `voiceLimit()`, `voiceLimitEffective()` (auto from `env().config->profile`), `voiceLimitJson(JsonOut &)`; `stateJson` gains the two fields | D4 |
+| 30 | `src/api/engine.{h,cpp}` | `Engine::setVoiceLimit` override; the constructor sets the Model's default (auto) on the graph; `statsJson` + `voiceLimitSteals`, `voiceLimit` | D4 |
+| 31 | `src/bridge/bridge.cpp`, `src/bridge/schema.cpp` (T08 files, smallest edit) | `opConfig` parses `voiceLimit`; hello cap; schema row `voiceLimit` Enum `auto|128|256|512|0`, and an Enum now also matches an integral NUMBER whose decimal form is a member (a numeric STRING never matches: "128" is refused) | D4 |
+
+Contract (`native/contract`): `config.voiceLimit` `'auto'|128|256|512|0?`, reply `voiceLimit?`, `voiceLimitEffective?`,
+get state note; `engine-api.json` regenerated (`--check` clean). `app/js/engine-bridge/mock-native.js` answers
+`config {polyphony, voiceLimit}` and `get state` like the core (`AUTO_VOICE_LIMIT` per `profile` option).
+
 ## Notes for later tasks
 
 - T05 review R1 (closed by the integrator): the `src/fx/delay.h` header comment and ENGINE_CONTRACT §3.5 now

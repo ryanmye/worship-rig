@@ -903,7 +903,8 @@ async function runMode(mode, browser) {
       const LINKS = [
         ['pads', 'samples', 'My Pads'], ['appearance', 'look', 'Appearance'], ['backups', 'library', 'Library'],
         ['midi', 'keyboards', 'MIDI'], ['theme', 'look', 'Appearance'], ['voices', 'sound', 'Voices and buffer'],
-        ['learn', 'keyboards', 'MIDI Learn'], ['menubar', 'look', 'Menu bar'], ['diagnostics', 'about', null],
+        ['learn', 'keyboards', 'MIDI Learn'], ['menubar', 'look', 'Menu bar'], ['mac', 'look', 'Menu bar'],
+        ['diagnostics', 'about', null],
         ['library', 'library', null], ['about', 'about', null], // (About has nothing to focus in Chrome)
       ];
       for (const [section, want, label] of LINKS) {

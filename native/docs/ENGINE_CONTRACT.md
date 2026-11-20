@@ -530,8 +530,17 @@ dotted beat) + Start (first downbeat) / Stop to the sink with engine times.
 - **Polyphony (native, T00c / DECISIONS D1)**: per slot, `config {polyphony}` 32 | 64 | 128 (default 64; `get
   state.polyphony`), for every instrument kind (1.x: 16 synth/organ, 32 sampler). At the cap a note-on steals the
   oldest released voice, else the oldest held one (1.x policy, 20 ms fade in the instruments); a free voice is taken
-  first. A lower cap does not cut sounding voices: it is enforced at note-on. Voice pools are sized for 128. A global
-  ceiling across slots is an open question (DECISIONS D1).
+  first. A lower cap does not cut sounding voices: it is enforced at note-on. Voice pools are sized for 128.
+- **Total voice limit (native, DECISIONS D4)**: `config {voiceLimit}` 'auto' | 128 | 256 | 512 | 0 (= off; default
+  'auto'), echoed with the number in force by the reply and `get state` (`voiceLimit`, `voiceLimitEffective`, 0 =
+  off). It counts the held + released voices of every slot and retiring channel (fading steal victims do not
+  count). A note-on first applies its slot's cap (above); if the total is then over the limit, the globally
+  earliest-released voice (each instrument's own release rule, as for its cap), else the globally oldest held one,
+  in any slot or retiring channel, is faded out like a steal (20 ms); at most 4 such steals per note-on, so lowering
+  the limit live converges over a few notes instead of cutting a burst. A change applies from the next note-on;
+  sounding voices are never cut by the change itself. 'auto' = desktop 128, iPad 64 (`RIG_PROFILE_IPAD`):
+  PROVISIONAL numbers sized for <= ~60 % of the 128-frame quantum with every voice held (ARCHITECTURE 7.1 "D4").
+  `get stats.voiceLimitSteals` counts its steals. The web engine (1.x) has no such limit.
 - **Low-resource mode**: 1.1 above (pins current-only, no warm-ups, no slot taps, idle reverb units dropped, frozen
   drone, audio sleep allowed).
 - **Output device**: `settings.outputDeviceId` → `setSinkId` (fallback restart); device list from
@@ -644,8 +653,8 @@ texts where `main.js` matches them (`engine.<name> failed`, `No pad file for <ke
 | `drone` | `{key?:{pc, minor, fade?}, config?:{song.drone}, files?:[{name, path}]}` | `{files?: count, changed?: bool}` | `drone.setKey`, `drone.configure`, `drone.attachFiles` (applied key → files → config) |
 | `play` | `{e:'on', n, vel, touch?}` \| `{e:'off', n}` \| `{e:'pedal', down}` \| `{e:'wheel', src:'mod'\|'expr'\|'vol'\|'virtual', value, glide?}` \| `{e:'bend', x}` \| `{e:'swell', start?}` \| `{e:'panic'}` \| `{e:'fade', seconds?}` \| `{e:'input'}` — each with optional `when` | `{ok: bool}` | `noteOn/noteOff/sustain/modWheel/expression/volumeCC/setWheel/pitchBend/swell/allNotesOff/fadeOutAll/noteInput` |
 | `click` | `{action:'start'\|'stop'\|'config', countIn?, quietAfter?, level?, record?, output?, when?}` | start `{t0, downbeat}\|null`; stop `{wasRunning}`; config `{output, auxAvailable}` | `clickStart`, `clickStop`, `setClick` |
-| `config` | `{mono?, lowResource?, eqAudition?:{slot, mode}, meters?:{rate?, slots?:[i…], rta?: bool}, midiClock?:{port: id\|null}, polyphony?: 32\|64\|128}` (T00c, D1: voices per slot, default 64) | `{lowResource?, eqAudition?: bool, polyphony?}` | `setMono`, `setLowResource`, `eqAudition`, meter/slot-tap/RTA subscriptions, `setClockSink` |
-| `get` | `{what:'instruments', reload?: bool}` \| `{what:'stats'}` \| `{what:'devices'}` \| `{what:'sampleStatus', patches}` \| `{what:'state'}` | instruments `[entry + range?]`; stats `_debugStats`; devices `[{id, name, channels, default, sampleRates}]`; sampleStatus `{loaded: bool[], failed: bool[]}`; state `{patch, routing, transpose, tempo, timeSig, keyContext, drone, mono, runtime, click, sleep}` | `listInstruments`, `reloadManifests`, `_debugStats`, `enumerateDevices`, `cache`/`registry` reach-in, `getState` |
+| `config` | `{mono?, lowResource?, eqAudition?:{slot, mode}, meters?:{rate?, slots?:[i…], rta?: bool}, midiClock?:{port: id\|null}, polyphony?: 32\|64\|128, voiceLimit?: 'auto'\|128\|256\|512\|0}` (T00c, D1: voices per slot, default 64; D4: total voices, 0 = off, default 'auto') | `{lowResource?, eqAudition?: bool, polyphony?, voiceLimit?, voiceLimitEffective?}` | `setMono`, `setLowResource`, `eqAudition`, meter/slot-tap/RTA subscriptions, `setClockSink` |
+| `get` | `{what:'instruments', reload?: bool}` \| `{what:'stats'}` \| `{what:'devices'}` \| `{what:'sampleStatus', patches}` \| `{what:'state'}` | instruments `[entry + range?]`; stats `_debugStats`; devices `[{id, name, channels, default, sampleRates}]`; sampleStatus `{loaded: bool[], failed: bool[]}`; state `{patch, routing, transpose, tempo, timeSig, keyContext, drone, mono, runtime, click, sleep}` (+ native `polyphony`, `voiceLimit`, `voiceLimitEffective`: D1, D4) | `listInstruments`, `reloadManifests`, `_debugStats`, `enumerateDevices`, `cache`/`registry` reach-in, `getState` |
 | `midi` | `{action:'listen', ids:[…]}` \| `{action:'route', on, learn:{…}, pedalInvert, velocitySens, touch:{deviceName: spec}, jitterFree?}` \| `{action:'send', port, data, when?}` | `{ports?}` | Web MIDI access (`midi.js` adapter), the direct perform path |
 | `rec` | `{action:'start', dir?, filename?, bits?: 16}` \| `{action:'stop'}` | start `{path}`; stop `{path, seconds, bytes}` | `recordTap` + `recorder.js` worklet/sinks |
 

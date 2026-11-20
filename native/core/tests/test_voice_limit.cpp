@@ -1,10 +1,14 @@
 // DECISIONS D4: the engine-wide voice limit (total voices counted by every instrument, slots and retiring channels).
 // Cross-slot stealing order on a bare Graph with synth.js instruments (released before held, oldest first, retiring
 // channels included, a 20 ms fade and not a hard cut, the per-slot cap first), a limit change applying live (bounded
-// steals per note-on), Off, Auto per profile through the bridge (config reply, get state, validation), and 16 slots x
-// 128 voices per slot held under a 512 limit with no allocation on the audio thread.
+// steals per note-on), Off, Auto per profile through the bridge (config reply, get state, validation), the limit set
+// from another thread while the audio thread steals (TSan), and 16 slots x 128 voices per slot held under a 512 limit
+// with no allocation on the audio thread.
+#include <atomic>
+#include <chrono>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "api/engine.h"
@@ -352,6 +356,39 @@ TEST_SUITE("voice-limit") {
     const rig_meters m = meters(e);
     CHECK(m.voices == 512u);  // no slot reached its own cap of 128 first: the per-slot steals stay at 0
     CHECK(contains(e.call(R"({"v":1,"op":"get","what":"stats","id":9})"), "\"voiceLimitSteals\":1536"));
+  }
+
+  TEST_CASE("threads: the limit set from the control thread while the audio thread renders and steals (TSan)") {
+    GraphRig r;
+    r.attach(rig::UnitSlot::Inst0, "sub-bass");
+    r.attach(rig::instSlot(1), "sub-bass");
+    std::atomic<bool> stop{false};
+    std::thread audio([&] {
+      float l[rig::kQ], rr[rig::kQ];
+      float *out[2] = {l, rr};
+      while (!stop.load(std::memory_order_acquire)) {
+        r.g->renderQuantum(out, 2);
+        rig::AudioEvent e;
+        while (r.eq->pop(e)) {
+        }
+      }
+    });
+    for (int i = 0; i < 400; ++i) {  // producer side of the SPSC command ring + the lock-free limit
+      r.g->setVoiceLimit(static_cast<std::uint32_t>(4 + i % 8));
+      rig::Command c{};
+      c.op = rig::Op::NoteOn;
+      c.target = static_cast<std::uint32_t>(rig::instSlot(static_cast<std::size_t>(i % 2)));
+      c.frame = rig::kFrameNow;
+      c.aux = static_cast<std::uint32_t>(30 + i % 60) | (100u << 8);
+      c.seq = ++r.seq;
+      while (!r.cq->push(c)) std::this_thread::yield();
+      if (i % 16 == 0) std::this_thread::sleep_for(std::chrono::microseconds(200));
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    stop.store(true, std::memory_order_release);
+    audio.join();
+    CHECK(r.limitSteals() > 0);
+    CHECK(r.g->voiceLimitRequested() == 4u + 399u % 8u);
   }
 
   TEST_CASE("16 slots x 128 voices per slot with the limit Off: every voice sounds (2048)") {

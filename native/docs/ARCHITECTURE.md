@@ -315,8 +315,28 @@ Measured on the Linux box (2 vCPU, g++ 13 -O3, offline render, 48 kHz) unless ma
 | CPU: 4 slots, idle strips | 67-70 µs per 128-frame quantum (2.6 % of 2667 µs) | Mac/iPad list | |
 | CPU: 16 slots, idle strips | 90-100 µs (3.6 %) | Mac/iPad list | +2 µs per extra idle strip |
 | CPU: 16 slots × 8 test voices | 420-480 µs (17 %) | Mac/iPad list | test voice ≈ 2.2 µs per voice per quantum (sine + a-rate envelope) |
-| CPU: 16 slots × 64 test voices | **2430 µs (91 %)** | Mac/iPad list | real synth/sampler voices cost several test voices (T11/T12 bench): 16 × 64 cannot run on one core, hence the global ceiling question (DECISIONS D1, open) |
+| CPU: 16 slots × 64 test voices | **2430 µs (91 %)** | Mac/iPad list | real synth/sampler voices cost several test voices (T11/T12 bench): 16 × 64 cannot run on one core, hence the total voice limit (DECISIONS D4, below) |
+| CPU per held voice, 16 synth slots (D4; `unit.voice-limit-cpu`, thread CPU time, 3 runs) | warm-pad **9.0 / 9.4 / 11.1 µs**, strings 8.9-9.2, glass-pad 6.5-6.9, bell 4.5-6.1, soft-keys 4.7-5.2, sub-bass 2.3-2.7; sampler 2.4 single-layer (T12) | Mac/iPad list | 16 synth slots committed, nothing sounding: 98-221 µs (warm-pad the highest) |
+| **total voice limit 'auto'** (D4) | **128** (PROVISIONAL) | **64** (PROVISIONAL) | `inst::autoVoiceLimit`; formula and numbers below |
 | host buffer (D2) | 64 / 128 / 256 / 512 frames | same, OS may round | FIFO residue (at most 128 − gcd(b, 128) frames) added to the reported latency; at 64 every other callback renders a quantum (worst `rig_render` at 64 here: 450 µs of a 1333 µs callback under the test) |
+
+**D4 'auto' (total voice limit).** Sized for the held-pedal worst case: every voice held (nothing released), all of
+them the costliest voice measured (warm-pad), 16 slots, the render at or under about 60 % of the 128-frame quantum
+(2667 µs at 48 kHz):
+
+    auto = (0.60 × 2667 µs − fixed16) / perVoice, rounded to a multiple of 16
+
+Linux box (g++ 13 Release, 2 vCPU shared with another build, three runs of `unit.voice-limit-cpu`): fixed16 =
+212-221 µs, perVoice = 9.0 / 9.4 / 11.1 µs → 154 / 147 / 125 voices. Desktop **128**: 53 % of the quantum at the median
+cost, 61 % at the worst run; the same test renders 16 warm-pad slots played to 256 note-ons at the limit in 1240-1320 µs
+(47-50 %). iPad **64**: the same formula with an ASSUMED 2× slower core than this box, (1600 − 2 × 218) / (2 × 9.4) = 62
+→ 64. Both are PROVISIONAL: a Mac is likely faster than this box (128 is then conservative), and the oldest supported
+iPad has never been measured. Mac list: run `rig_tests -ts=voice-limit-cpu` on the Mac and an equivalent measurement on
+the iPad (no iPad test target exists yet), recompute with the formula, and replace `kAutoVoiceLimitDesktop` /
+`kAutoVoiceLimitIpad` (and the mock's `AUTO_VOICE_LIMIT`). T15's organ / synth-extra voices must be measured too: if one
+costs more than warm-pad it becomes perVoice. The manual choices (128 / 256 / 512 / Off) are not sized: 512 warm-pad
+voices (~5 ms per quantum here) overrun the audio thread on this box, which is what Off and the large values mean for a
+user who chooses them.
 
 Engine resident target on a 4 GB iPad stays ≤ 450 MB: 320 MB samples (hard) + 32 MB reverb + voice pools + graph +
 code; the voice pools are the open term (T11/T12 report their per-voice size).
