@@ -331,7 +331,7 @@ TEST_SUITE("voice-limit") {
       CHECK(contains(e.call(R"({"v":1,"op":"config","id":6,"voiceLimit":"auto"})"),
                      ("\"voiceLimit\":\"auto\",\"voiceLimitEffective\":" + autoN).c_str()));
       CHECK(contains(e.call(R"({"v":1,"op":"get","what":"stats","id":7})"), "\"voiceLimitSteals\":0"));
-      for (const char *bad : {"300", "64", "\"128\"", "\"off\"", "-1", "128.5", "true"}) {
+      for (const char *bad : {"300", "64", "\"128\"", "\"off\"", "-1", "128.5", "true", "1e300", "-1e300"}) {
         const std::string r = e.call(std::string(R"({"v":1,"op":"config","id":8,"voiceLimit":)") + bad + "}");
         INFO(bad << " -> " << r);
         CHECK(contains(r, "bad-request"));

@@ -323,7 +323,10 @@ export function mountSettings(el, ctx) {
     const adv = advs.get(cat) || null;
     for (const n of nodes.flat()) if (n) panel.insertBefore(n, adv);
   };
-  /** Rows that are rarely changed go in one "Advanced" disclosure at the end of their category (closed each open). */
+  /**
+   * Rows that are rarely changed go in one "Advanced" disclosure at the end of their category (closed at mount; it
+   * stays as the viewer left it, and a deep link into it opens it).
+   */
   const advanced = (cat, ...nodes) => {
     let d = advs.get(cat);
     if (!d) {
@@ -1576,6 +1579,12 @@ export function mountSettings(el, ctx) {
     e.stopPropagation(); // arrows are the mod wheel and previous / next song on the computer keyboard
     showCategory(ids[to], { remember: true, focus: true });
   });
+  /** review: the narrow layout turns the list into a row (container query), so tell assistive tech which way. */
+  const syncOrientation = () => {
+    if (!isOpen) return;
+    nav.setAttribute('aria-orientation', getComputedStyle(nav).flexDirection === 'row' ? 'horizontal' : 'vertical');
+  };
+  listen(window, 'resize', syncOrientation);
   /**
    * open({section}) → the category and the [data-section] it names: a category id, a data-section of the page (the
    * 1.x names: 'appearance', 'pads', 'backups', 'midi', …) or a SECTION_ALIASES name. Unknown → null.
@@ -1604,7 +1613,10 @@ export function mountSettings(el, ctx) {
       if (!isOpen) return;
       sec.scrollIntoView({ block: 'start' });
       const f = sec.querySelector('[role=radio][tabindex="0"]') || sec.querySelector('button, select, input');
-      f?.focus({ preventScroll: true });
+      if (f) f.focus({ preventScroll: true });
+      // review: a section with no control (About, Diagnostics) reached while open left focus on a now-hidden
+      // control, i.e. on <body>; keep it in the dialog on that category's tab
+      else if (!dialog.contains(document.activeElement)) tabs.get(r.cat)?.focus({ preventScroll: true });
     }, 0);
     return true;
   }
@@ -1669,6 +1681,7 @@ export function mountSettings(el, ctx) {
     if (hotkeys) hotkeys.refresh();
     renderSound2();
     if (!revealSection(opts && opts.section)) showCategory(readLastCat());
+    syncOrientation();
     markDialog('settings', true);
     statsTimer = setInterval(renderStats, 1000);
     queueMicrotask(() => closeBtn.focus());

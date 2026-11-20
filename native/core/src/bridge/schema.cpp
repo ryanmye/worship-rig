@@ -134,7 +134,9 @@ bool typeOk(const ArgSpec &a, yyjson_val *v) {
     case T::Enum:  // D4: an integral number also matches a numeric member ("auto|128|...|0")
       if (yyjson_is_num(v)) {
         const double d = yyjson_get_num(v);
-        return std::isfinite(d) && d == std::floor(d) && inList(a.values, std::to_string(static_cast<long long>(d)));
+        // |d| bound first: casting an out-of-range double (1e300 from the WebView) to long long is UB (D4 review)
+        return std::isfinite(d) && std::fabs(d) < 1e9 && d == std::floor(d) &&
+               inList(a.values, std::to_string(static_cast<long long>(d)));
       }
       if (!yyjson_is_str(v)) return false;
       if (std::string_view(yyjson_get_str(v)).find_first_not_of("0123456789") == std::string_view::npos)
