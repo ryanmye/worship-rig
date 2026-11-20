@@ -22,6 +22,10 @@ class WaveShaper {
   void process(float *const *ch, unsigned channels, std::size_t n);
   /** Group delay of the oversampler in frames at the engine rate (Chromium value, 0 for None). */
   double latencyFrames() const;
+  // INTERFACE-CHANGE(T00c) T03 O7: clear the oversampler history (Up/DownSampler kernels), as Chromium's
+  // Uninitialize + Initialize. Audio thread safe (no allocation); a no-op without oversampling. Called by
+  // MasterChain::setSampleRate so no old-rate history (up to 192 frames) leaks across a rate change.
+  void reset();
 
  private:
   struct Impl;

@@ -178,7 +178,7 @@ void SlotChannel::process(const RenderContext &ctx, UnitIO &io) {
 }  // namespace
 
 Unit *makeSlotChannel(const UnitEnv &env, const UnitSpec &spec) {
-  if (!spec.patch || spec.channel < 0 || spec.channel > 3) return nullptr;
+  if (!spec.patch || spec.channel < 0 || spec.channel >= static_cast<int>(kChannels)) return nullptr;  // T00c D3
   (void)defaultSlotEqSpec();  // its function-local static is built here, never first on the audio thread (audition)
   return new SlotChannel(spec.patch->slots[spec.channel], env.sampleRate);
 }

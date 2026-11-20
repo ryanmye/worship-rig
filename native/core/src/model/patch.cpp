@@ -137,7 +137,7 @@ void applyTable(const yyjson_val *patch, PatchSpec &out) {
     const ParamRow *row = findParam(f.row);
     const std::string_view rp(f.row);
     if (rp.substr(0, 10) == "slots.<i>.") {
-      for (int i = 0; i < 4; ++i) {
+      for (int i = 0; i < kMaxSlots; ++i) {  // INTERFACE-CHANGE(T00c) D3: was 4
         SlotPatch &sp = out.slots[i];
         if (!sp.present) continue;
         if (row && !std::isnan(row->def)) f.set(out, i, row->def);
@@ -208,10 +208,15 @@ bool parsePatch(const yyjson_val *patch, PatchSpec &out, std::string *err) {
     applyTable(p, out);
     return true;
   }
+  // INTERFACE-CHANGE(T00c) D3: 1..16 slots (was: entries past 4 ignored). More than 16 is a bad request.
+  if (yyjson_arr_size(slots) > static_cast<std::size_t>(kMaxSlots)) {
+    if (err) *err = "patch.slots has more than 16 entries";
+    return false;
+  }
+  out.slotCount = static_cast<int>(yyjson_arr_size(slots));
   std::size_t idx, max;
   yyjson_val *s;
   yyjson_arr_foreach(slots, idx, max, s) {
-    if (idx >= 4) break;
     if (!yyjson_is_obj(s)) continue;
     SlotPatch &sp = out.slots[idx];
     sp.present = true;
@@ -250,7 +255,7 @@ bool storeRow(PatchSpec &p, std::string_view rowPath, int slot, double value) {
   for (const Field &f : kFields) {
     if (rowPath != f.row) continue;
     const bool perSlot = rowPath.substr(0, 10) == "slots.<i>.";
-    if (perSlot && (slot < 0 || slot > 3)) return false;
+    if (perSlot && (slot < 0 || slot >= kMaxSlots)) return false;  // INTERFACE-CHANGE(T00c) D3: was > 3
     f.set(p, perSlot ? slot : -1, value);
     return true;
   }

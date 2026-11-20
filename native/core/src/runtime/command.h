@@ -54,7 +54,7 @@ enum class Op : std::uint16_t {
   ParamCancelHold = 5,  // cancelAndHoldAtTime(b)
   // Object management (ptr owned by the control side until handed back through a Garbage event).
   AttachSlot = 6,  // legacy T00 skeleton: target = slot 0..3, ptr = SlotSpec* (builtin strip + test instrument)
-  // Perform. target = unit slot of an instrument (UnitSlot::Inst0..3, RetireInst*) or kAllSlots.
+  // Perform. target = unit slot of an instrument (UnitSlot::Inst0..15, RetireInst*) or kAllSlots.
   NoteOn = 7,       // aux = note | vel << 8, f.c = velocity gain (0..1, after the touch curve; 0 = derive from vel)
   NoteOff = 8,      // aux = note; sub = 1: forced release (ignore pedal)
   AllNotesOff = 9,  // 30 ms fade of every voice (panic of instruments)
@@ -63,7 +63,8 @@ enum class Op : std::uint16_t {
   TestInject = 11,  // aux = test point index, ptr = InjectBuffer* (garbage when replaced)
   Panic = 12,       // hard kill of every voice (no fade)
   // ---- T00b additions (frozen) ----
-  AttachUnit = 16,   // target = UnitSlot, ptr = Unit* (the previous unit in that slot goes back as Garbage)
+  AttachUnit = 16,   // target = UnitSlot, ptr = Unit* (the previous unit in that slot goes back as Garbage);
+                     // T00c: into a RetireStrip slot, aux = origin slot + 1 (its slot meter; 0 = none)
   DetachUnit = 17,   // target = UnitSlot (the unit goes back as Garbage; the slot renders silence / pass-through)
   Sustain = 18,      // target = instrument slot or kAllSlots, aux = 1 down / 0 up (pedal-held bookkeeping)
   Bend = 19,         // target = instrument slot, a = semitones (Instrument::setBend)
@@ -74,7 +75,12 @@ enum class Op : std::uint16_t {
   ClickRoute = 23,    // graph: aux bit 0 = click on device channels 3-4 (else added to out 1-2), bit 1 = recorded
   // INTERFACE-CHANGE(T00c) D1: per-slot polyphony cap. target = instrument slot, aux = cap (32 | 64 | 128);
   // decoded into Instrument::setVoiceCap. The Model sends it right after every instrument AttachUnit and on change.
-  VoiceCap = 24
+  VoiceCap = 24,
+  // INTERFACE-CHANGE(T00c) D3 / T08 #1: move a live unit (state kept) from slot `aux` to slot `target`, e.g. a
+  // slot's instrument and strip into retiring channels at a commit (T13). The unit previously in `target` goes back
+  // as Garbage; `aux` is left empty. A strip moved from Strip<i> into a RetireStrip slot keeps metering slot i
+  // (rig_meters slot arrays); RetireStrip -> RetireStrip keeps its origin. Never allocates.
+  MoveUnit = 25
 };
 
 /** A module opcode from its own enum (see the range table). */

@@ -41,7 +41,8 @@ bs::ArgType kindOf(std::string t) {
   if (t == "'interactive'|s") return bs::ArgType::NumberOrString;
   if (t == "number|null") return bs::ArgType::NumberOrNull;
   if (!t.empty() && t[0] == '\'') return bs::ArgType::Enum;
-  if (t == "int" || t == "16") return bs::ArgType::Int;
+  // T00c: an integer set ("64|128|256|512") is an Int with allowed values, like rec `bits` ("16")
+  if (t == "int" || (!t.empty() && t.find_first_not_of("0123456789|") == std::string::npos)) return bs::ArgType::Int;
   if (t == "s" || t == "engine s" || t == "number" || t == "0..1") return bs::ArgType::Number;
   if (t == "string" || t == "ParamPath") return bs::ArgType::String;
   if (t == "bool") return bs::ArgType::Bool;

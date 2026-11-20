@@ -61,8 +61,15 @@ struct DronePatch {  // drone.* rows (song.drone config; contract 3.9)
   double gain = 0.5011872336272722, width = 0.7, brightness = 0.5, movement = 0.3, fade = 4;
 };
 
+/** Sound slots per song (DECISIONS D3; = graph kChannels = RIG_MAX_SLOTS) and the web engine's fixed count. */
+inline constexpr int kMaxSlots = 16, kWebSlots = 4;
+
 struct PatchSpec {
-  SlotPatch slots[4];
+  // INTERFACE-CHANGE(T00c) D3: 16 slots (was 4). `slotCount` = entries of the patch's `slots` array (0..16; null
+  // entries count, they are empty slots). The skeleton commit keeps max(slotCount, 4) channels, like the web
+  // engine's fixed 4, so 4-slot songs render exactly as before.
+  SlotPatch slots[kMaxSlots];
+  int slotCount = 0;
   ReverbPatch reverb;
   DelayPatch delay;
   ChorusPatch chorus;

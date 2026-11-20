@@ -76,7 +76,7 @@ Graph::~Graph() {
 std::uint32_t Graph::liveVoices() const {
   std::uint32_t n = 0;
   for (std::size_t i = 0; i < kChannels; ++i)
-    if (units_[i]) n += units_[i]->liveVoices();
+    if (Unit *u = units_[idx(instSlot(i))]) n += u->liveVoices();
   for (std::size_t i = 0; i < kRetiring; ++i)
     if (Unit *u = units_[idx(retireInstSlot(i))]) n += u->liveVoices();
   return n;
@@ -94,8 +94,10 @@ bool Graph::push(const AudioEvent &e) {
     return false;
   }
   if (out_.push(e)) return true;
-  if (e.kind == EventKind::VoiceEnded && e.f.a >= 0.0 && e.f.a < 64.0)  // INTERFACE-CHANGE(T08): ended bits
-    endedLost_.fetch_or(std::uint64_t{1} << static_cast<unsigned>(e.f.a), std::memory_order_acq_rel);
+  if (e.kind == EventKind::VoiceEnded && e.f.a >= 0.0 && e.f.a < static_cast<double>(kUnitSlots)) {  // ended bits
+    const auto s = static_cast<unsigned>(e.f.a);  // T00c: kEndedWords words cover every unit slot
+    endedLost_[s / 64].fetch_or(std::uint64_t{1} << (s % 64), std::memory_order_acq_rel);
+  }
   ++lostEvents_;
   stats_.eventsDropped.fetch_add(1, std::memory_order_relaxed);
   return false;
@@ -110,22 +112,37 @@ void Graph::flushGarbageStash() {
   stashN_ -= i;
 }
 
-// INTERFACE-CHANGE(T08): per-slot level of the post-pan strip output (null = silent / no strip this quantum).
-void Graph::slotMeter(std::size_t slot, const Bus *strip) {
-  float pk = 0.0f;
-  double sq = 0.0;
-  if (strip) {
-    const bool st = strip->channels == 2;
-    for (std::size_t i = 0; i < kQ; ++i) {
-      const float m = st ? 0.5f * (strip->ch[0][i] + strip->ch[1][i]) : strip->ch[0][i];
-      pk = std::max(pk, std::fabs(m));
-      sq += static_cast<double>(m) * static_cast<double>(m);
-    }
+// INTERFACE-CHANGE(T08): per-slot level of the post-pan strip output, mono down-mix 0.5 (L + R).
+// INTERFACE-CHANGE(T00c) D3 / T08 #1: the slot's strip and every retiring strip of that origin slot are summed
+// sample-wise into one accumulator (JS: the outgoing strip stays connected to the slot's analyser until disposed);
+// with no retiring strip the numbers are exactly the T08 ones (same order of operations).
+void Graph::slotAccumulate(std::size_t slot, const Bus &strip) {
+  float *acc = slotAcc_[slot];
+  const bool st = strip.channels == 2;
+  if (!slotHas_[slot]) {
+    for (std::size_t i = 0; i < kQ; ++i) acc[i] = st ? 0.5f * (strip.ch[0][i] + strip.ch[1][i]) : strip.ch[0][i];
+    slotHas_[slot] = true;
+    return;
   }
-  slotPeakQ_[slot][0] = slotPeakQ_[slot][1];
-  slotSqQ_[slot][0] = slotSqQ_[slot][1];
-  slotPeakQ_[slot][1] = pk;
-  slotSqQ_[slot][1] = sq;
+  for (std::size_t i = 0; i < kQ; ++i) acc[i] += st ? 0.5f * (strip.ch[0][i] + strip.ch[1][i]) : strip.ch[0][i];
+}
+
+void Graph::slotMeters() {
+  for (std::size_t slot = 0; slot < kChannels; ++slot) {
+    float pk = 0.0f;
+    double sq = 0.0;
+    if (slotHas_[slot]) {
+      const float *acc = slotAcc_[slot];
+      for (std::size_t i = 0; i < kQ; ++i) {
+        pk = std::max(pk, std::fabs(acc[i]));
+        sq += static_cast<double>(acc[i]) * static_cast<double>(acc[i]);
+      }
+    }
+    slotPeakQ_[slot][0] = slotPeakQ_[slot][1];
+    slotSqQ_[slot][0] = slotSqQ_[slot][1];
+    slotPeakQ_[slot][1] = pk;
+    slotSqQ_[slot][1] = sq;
+  }
 }
 
 void Graph::garbage(GarbageKind k, void *p) {
@@ -201,6 +218,28 @@ void Graph::apply(const Command &c) {
       units_[c.target] = nu;
       if (nu) nu->setSampleRate(sr_);
       garbage(GarbageKind::Unit, old);
+      const UnitSlot t = static_cast<UnitSlot>(c.target);  // INTERFACE-CHANGE(T00c): retiring strip origin
+      if (isRetireStripSlot(t))
+        retireOrigin_[c.target - idx(UnitSlot::RetireStrip0)] =
+            nu && c.aux >= 1 && c.aux <= kChannels ? static_cast<std::uint8_t>(c.aux) : 0;
+      return;
+    }
+    case Op::MoveUnit: {  // INTERFACE-CHANGE(T00c) D3 / T08 #1
+      if (c.target >= kUnitSlots || c.aux >= kUnitSlots || c.target == c.aux) return;
+      const UnitSlot to = static_cast<UnitSlot>(c.target), from = static_cast<UnitSlot>(c.aux);
+      std::uint8_t origin = 0;
+      if (static_cast<std::size_t>(from) >= idx(UnitSlot::Strip0) &&
+          static_cast<std::size_t>(from) < idx(UnitSlot::Strip0) + kChannels)
+        origin = static_cast<std::uint8_t>(static_cast<std::size_t>(from) - idx(UnitSlot::Strip0) + 1);
+      else if (isRetireStripSlot(from))
+        origin = retireOrigin_[c.aux - idx(UnitSlot::RetireStrip0)];
+      if (isRetireStripSlot(from)) retireOrigin_[c.aux - idx(UnitSlot::RetireStrip0)] = 0;
+      Unit *old = units_[c.target];
+      units_[c.target] = units_[c.aux];
+      units_[c.aux] = nullptr;
+      garbage(GarbageKind::Unit, old);
+      if (isRetireStripSlot(to))
+        retireOrigin_[c.target - idx(UnitSlot::RetireStrip0)] = units_[c.target] ? origin : 0;
       return;
     }
     case Op::AttachSlot:  // legacy T00 op: no longer emitted (builtin strip + test instrument replace it)
@@ -215,9 +254,10 @@ void Graph::apply(const Command &c) {
     case Op::LegatoTo:
     case Op::InstParam:
     case Op::ReleaseVoice:
+    case Op::VoiceCap:  // INTERFACE-CHANGE(T00c) D1
       if (c.target == kAllSlots) {
         for (std::size_t i = 0; i < kChannels; ++i)
-          if (units_[i]) units_[i]->apply(c);
+          if (Unit *u = units_[idx(instSlot(i))]) u->apply(c);
         if (c.op != Op::NoteOn)  // retiring channels never get new notes
           for (std::size_t i = 0; i < kRetiring; ++i)
             if (Unit *u = units_[idx(retireInstSlot(i))]) u->apply(c);
@@ -355,14 +395,22 @@ void Graph::renderQuantum(float *const *out, unsigned channels) {
   // 1. slot channels (+ retiring) into sum and the send buses
   sum_.clear(2);
   for (auto &s : sends_) s.clear(2);
+  for (std::size_t i = 0; i < kChannels; ++i) slotHas_[i] = slotRetiring_[i] = false;
   for (std::size_t i = 0; i < kChannels; ++i) {
     const bool tapHere = (i == 0 && tapIs("slot0.pan")) || (i == 1 && tapIs("slot1.pan"));
     renderChannel(instSlot(i), stripSlot(i), i == 0, base, tapHere ? &tapBus_ : nullptr);
-    slotMeter(i, units_[idx(stripSlot(i))] ? &stripBus_ : nullptr);  // INTERFACE-CHANGE(T08)
+    if (units_[idx(stripSlot(i))]) slotAccumulate(i, stripBus_);  // INTERFACE-CHANGE(T08)
     tapped = tapped || tapHere;
   }
-  for (std::size_t i = 0; i < kRetiring; ++i)
+  for (std::size_t i = 0; i < kRetiring; ++i) {
     renderChannel(retireInstSlot(i), retireStripSlot(i), false, base, nullptr);
+    const std::uint8_t o = retireOrigin_[i];  // INTERFACE-CHANGE(T00c) T08 #1: the origin slot's meter hears it
+    if (o && units_[idx(retireStripSlot(i))]) {
+      slotAccumulate(o - 1u, stripBus_);
+      slotRetiring_[o - 1u] = true;
+    }
+  }
+  slotMeters();
   // 2. drone
   if (units_[idx(UnitSlot::Drone)]) {
     UnitIO io;
@@ -500,9 +548,17 @@ void Graph::renderQuantum(float *const *out, unsigned channels) {
     m.out_peak[1] = std::max(m.out_peak[1], r[1]);
   }
   for (std::size_t i = 0; i < kChannels; ++i) {  // INTERFACE-CHANGE(T08): 256 frames = this + previous quantum
-    m.slot_peak[i] = std::max(slotPeakQ_[i][0], slotPeakQ_[i][1]);
-    m.slot_rms[i] = static_cast<float>(std::sqrt((slotSqQ_[i][0] + slotSqQ_[i][1]) / (2.0 * kQ)));
+    const float sp = std::max(slotPeakQ_[i][0], slotPeakQ_[i][1]);
+    const float rms = static_cast<float>(std::sqrt((slotSqQ_[i][0] + slotSqQ_[i][1]) / (2.0 * kQ)));
+    if (i < 4) {  // API 1.0 layout (rig_engine.h): the first four slots
+      m.slot_peak[i] = sp;
+      m.slot_rms[i] = rms;
+    }
+    m.slot_peak_all[i] = sp;  // INTERFACE-CHANGE(T00c) D3
+    m.slot_rms_all[i] = rms;
+    m.slot_retiring[i] = slotRetiring_[i] ? 1 : 0;
   }
+  m.slot_count = slotCount_.load(std::memory_order_relaxed);
   m.voices = liveVoices();
   m.cpu_load = cpu_;
   m.xruns = xruns_;

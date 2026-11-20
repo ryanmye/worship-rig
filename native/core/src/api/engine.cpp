@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstddef>
 #include <cstring>
 
 #include "api/registry.h"
@@ -53,7 +54,12 @@ Engine::Engine(const rig_config &cfg)
         env.config = &cfg_;
         return env;
       }()) {
-  if (cfg.host) host_ = *cfg.host;
+  if (cfg.host) {  // T00c: struct_size-gated copy (a 1.0 host's struct ends before audio_start_frames)
+    const std::size_t n = std::min<std::size_t>(cfg.host->struct_size ? cfg.host->struct_size : RIG_HOST_SIZE_V1,
+                                                sizeof(rig_host));
+    std::memcpy(&host_, cfg.host, n);
+    host_.struct_size = static_cast<std::uint32_t>(n);
+  }
   cfg_.host = cfg.host ? &host_ : nullptr;
   auto keep = [](const char *s, std::string &store, const char *&ptr) {
     if (s) store = s;
@@ -247,14 +253,15 @@ void Engine::drainAudioEvents() {
   }
   // Ended bits: VoiceEnded events lost to a full ring come back as one VoiceEnded per affected slot with voice id
   // -1 ("rescan this slot": the owner polls the unit's live voices instead of trusting its own bookkeeping).
-  if (const std::uint64_t bits = dropped ? graph_.takeEndedSlots() : 0) {
-    for (unsigned s = 0; s < 64; ++s) {
-      if (!(bits >> s & 1u)) continue;
+  for (unsigned w = 0; dropped && w < Graph::kEndedWords; ++w) {  // T00c: every unit slot (two words)
+    const std::uint64_t bits = graph_.takeEndedSlots(w);
+    for (unsigned b = 0; bits && b < 64; ++b) {
+      if (!(bits >> b & 1u)) continue;
       AudioEvent e{};
       e.kind = EventKind::VoiceEnded;
       e.sub = 1;  // synthesized
       e.frame = graph_.timeBase().frame;
-      e.f.a = static_cast<double>(s);
+      e.f.a = static_cast<double>(w * 64 + b);
       e.f.b = -1.0;
       model_.onAudioEvent(e);
       endedRescans_.fetch_add(1, std::memory_order_relaxed);
@@ -310,10 +317,12 @@ std::string Engine::buildTick(bool withStats) {
   j.begin().kv("v", 1).kv("ev", "tick").kv("t", tb.time()).kv("frames", static_cast<double>(tb.rendered));
   j.key("out").beginArray().elem(pl).elem(pr).endArray();
   if (ms && ms->anySlot()) {  // contract 3.11 slotLevel: zeros for unsubscribed slots and in low-resource mode
+    // T00c D3: one [peak, rms] per slot of the committed song (at least the web engine's 4)
+    const int n = std::clamp(model_.patch().slotCount, kWebSlots, kMaxSlots);
     j.key("slots").beginArray();
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < n; ++i) {
       const bool on = ms->slotSubscribed(i) && !model_.lowResource();
-      j.beginArray().elem(on ? m.slot_peak[i] : 0.0).elem(on ? m.slot_rms[i] : 0.0).endArray();
+      j.beginArray().elem(on ? m.slot_peak_all[i] : 0.0).elem(on ? m.slot_rms_all[i] : 0.0).endArray();
     }
     j.endArray();
   }
@@ -469,7 +478,8 @@ void Engine::hostCall(std::function<void()> fn) {
 std::string Engine::stateFieldsJson(const char *state, double sr) const {
   JsonOut j;
   j.begin().kv("state", state).kv("sleep", sleepState_).kv("latencyMs", latencySec_ * 1000.0);
-  j.kv("sampleRate", sr > 0 ? sr : sampleRate()).kv("deviceId", deviceId_).kv("channels", outCh_.load()).end();
+  j.kv("sampleRate", sr > 0 ? sr : sampleRate()).kv("deviceId", deviceId_).kv("channels", outCh_.load());
+  j.kv("bufferFrames", bufferGrant_ ? bufferGrant_ : bufferReq_).end();  // T00c D2: granted (else requested)
   return j.take();
 }
 
@@ -483,14 +493,19 @@ void Engine::emitState(const char *state, bool restarted) {
   emit(std::move(m));
 }
 
-const char *Engine::requestAudio(const std::string &action, const std::string &deviceId, double latency) {
+const char *Engine::requestAudio(const std::string &action, const std::string &deviceId, double latency,
+                                 std::uint32_t bufferFrames) {
   const bool restart = action == "restart" || action == "output";
+  if (bufferFrames) {  // T00c D2: kept across restarts; takes effect at the next (re)open
+    bufferReq_ = bufferFrames;
+    bufferExplicit_ = true;
+  }
   if (pending_ && restart) return "busy";  // contract 6.2 `busy`: a restart while the device is still opening
   if (pending_ || (action == "start" && started_.load(std::memory_order_acquire))) {
     emitState(devState_, false);  // start is idempotent (the JS start() promise is memoised): report, no new open
     return "";
   }
-  if (realtime() && cfg_.host && !host_.audio_start) return "unsupported";
+  if (realtime() && cfg_.host && !host_.audio_start && !host_.audio_start_frames) return "unsupported";
   model_.audioStarted(-1.0);  // global units (FX, master, click, drone, sinks) exist before the first sound
   if (!deviceId.empty() || action == "output") deviceId_ = deviceId.empty() ? "default" : deviceId;
   // contract 1.1 start(): `ready {phase:'start'}` once, after the global graph exists; G9: after `state`
@@ -517,9 +532,16 @@ const char *Engine::requestAudio(const std::string &action, const std::string &d
   loadStart();
   const std::string dev = deviceId == "default" ? std::string() : deviceId;
   const unsigned ch = outCh_;
-  hostCall([this, restart, dev, latency, ch] {
+  const std::uint32_t frames = bufferReq_;
+  // T00c D2: a 1.0 host (no audio_start_frames) gets the size as a buffer duration when no latency was asked
+  const double lat = latency > 0 || !bufferExplicit_ ? latency : frames / sampleRate();
+  const bool withFrames = host_.struct_size >= RIG_HOST_SIZE_V1 + sizeof(void *) && host_.audio_start_frames;
+  hostCall([this, restart, dev, lat, ch, frames, withFrames] {
     if (restart && host_.audio_stop) host_.audio_stop(host_.user);
-    host_.audio_start(host_.user, dev.empty() ? nullptr : dev.c_str(), latency, ch);
+    if (withFrames)
+      host_.audio_start_frames(host_.user, dev.empty() ? nullptr : dev.c_str(), lat, ch, frames);
+    else
+      host_.audio_start(host_.user, dev.empty() ? nullptr : dev.c_str(), lat, ch);
   });
   return "";
 }
@@ -577,12 +599,17 @@ void Engine::hostAudioStarted(const rig_device_info &info) {
   started_ = true;
   const std::string id = info.device_id ? info.device_id : "";
   const double lat = info.output_latency_sec > 0 ? info.output_latency_sec : 0.0;
-  onControl([this, id, lat, sr] {
+  // T00c D2: the granted host block; the host's output latency includes its own buffering, the core adds what its
+  // 128-frame FIFO holds back for a block that is not a multiple of 128 (64 -> 64 frames, 441 -> 71, 256 -> 0)
+  const std::uint32_t grant = info.buffer_frames;  // in rig_device_info since API 1.0
+  const double residue = grant ? fifoResidue(grant) / sr : 0.0;
+  onControl([this, id, lat, sr, grant, residue] {
     const bool restarted = restartPending_ || std::strcmp(devState_, "running") == 0;
     pending_ = false;
     restartPending_ = false;
     if (!id.empty()) deviceId_ = id;
-    latencySec_ = lat;
+    latencySec_ = lat + residue;
+    bufferGrant_ = grant;
     // the state event announces the rate the audio thread is about to adopt (RateChanged follows from the graph)
     devState_ = "running";
     std::string f = stateFieldsJson("running", sr);
@@ -649,8 +676,12 @@ std::string Engine::midiPortId(std::uint16_t index) const {
 
 rig_status Engine::getMeters(rig_meters *out) const {
   if (!out || out->struct_size < 16) return RIG_E_INVALID;
-  *out = meters_.read();
-  out->struct_size = sizeof(rig_meters);
+  // T00c: struct_size-versioned (an API 1.0 caller's struct ends after `held`): copy only what the caller has
+  static_assert(RIG_METERS_SIZE_V1 == 80, "API 1.0 rig_meters layout");
+  const std::size_t n = std::min<std::size_t>(out->struct_size, sizeof(rig_meters));
+  const rig_meters m = meters_.read();
+  std::memcpy(out, &m, n);
+  out->struct_size = static_cast<std::uint32_t>(n);
   return RIG_OK;
 }
 

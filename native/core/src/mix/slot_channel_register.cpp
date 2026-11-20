@@ -26,7 +26,8 @@ std::string key(int slot, const char *rest) {
 }
 
 bool hasStrip(const Model &m, int slot) {
-  return slot >= 0 && slot <= 3 && !m.attachedKind(stripSlot(static_cast<std::size_t>(slot))).empty();
+  return slot >= 0 && slot < static_cast<int>(kChannels) &&  // T00c D3: slots 0..15
+         !m.attachedKind(stripSlot(static_cast<std::size_t>(slot))).empty();
 }
 
 StripService *svc(Model &m) {
@@ -34,7 +35,7 @@ StripService *svc(Model &m) {
 }
 
 bool setEqRow(Model &m, const SetRequest &r) {
-  if (r.slot < 0 || r.slot > 3 || !r.row) return false;
+  if (r.slot < 0 || r.slot >= static_cast<int>(kChannels) || !r.row) return false;  // T00c D3
   const std::string_view rp(r.row->path);
   const std::string field(rp.substr(std::string_view("slots.<i>.eq.").size()));
   SlotEqSpec &eq = m.patchMut().slots[r.slot].spec.eq;

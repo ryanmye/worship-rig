@@ -99,6 +99,11 @@ double WaveShaper::latencyFrames() const {
   return 0.0;
 }
 
+void WaveShaper::reset() {  // INTERFACE-CHANGE(T00c) T03 O7
+  if (impl_->os == Oversample::None) return;
+  for (auto &k : impl_->k) k->reset();
+}
+
 void WaveShaper::process(float *const *ch, unsigned channels, std::size_t n) {
   Impl &m = *impl_;
   if (m.hasPending) {

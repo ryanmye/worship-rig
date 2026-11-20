@@ -85,7 +85,13 @@ class Model {
   void setTimeSig(std::string_view sig, bool newBar);
   void setKeyContext(int pc, bool minor);
   void setMono(bool on);
-  bool eqAudition(int slot, std::string_view mode, double when);
+  bool eqAudition(int slot, std::string_view mode, double when);  // slot 0..15 (T00c D3)
+  // INTERFACE-CHANGE(T00c) D1: per-slot polyphony cap (`config {polyphony}`: 32 | 64 | 128, default 64). Applied
+  // to every instrument attached from now on (Op::VoiceCap right after its AttachUnit) and at once to every live
+  // one (slots and retiring channels). False (unchanged) for any other value.
+  bool setPolyphony(unsigned cap);
+  unsigned polyphony() const { return polyphony_; }
+  static constexpr unsigned kPolyphonyDefault = 64;
   bool droneSetKey(int pc, bool minor, double fade, double when);  // "drone" service
   void droneConfigure(const yyjson_val *cfg, double when);         // "drone" service
   int droneAttachFiles(const yyjson_val *files);                    // "drone" service; -1 unsupported
@@ -147,6 +153,9 @@ class Model {
    *  kind is not registered, the factory declined, or the queue is full (the unit is freed). */
   bool attachUnit(UnitSlot slot, std::string_view kind, double when, int channel = -1);
   void detachUnit(UnitSlot slot, double when);
+  /** INTERFACE-CHANGE(T00c) D3: move the live unit (state kept) from `from` to `to` at `when` (Op::MoveUnit; the
+   *  unit in `to` is freed). The bookkeeping (attachedKind) moves with it. For T13's retire. */
+  bool moveUnit(UnitSlot from, UnitSlot to, double when);
   /** Kind attached (or scheduled) in a slot, "" = none. */
   const std::string &attachedKind(UnitSlot slot) const { return attached_[static_cast<std::size_t>(slot)].kind; }
   bool attachedIsModule(UnitSlot slot) const { return attached_[static_cast<std::size_t>(slot)].module; }
@@ -189,6 +198,7 @@ class Model {
   std::vector<std::pair<std::string, std::unique_ptr<Service>>> services_;
   std::uint32_t instSeq_ = 0;
   ModelStats stats_;
+  unsigned polyphony_ = kPolyphonyDefault;  // INTERFACE-CHANGE(T00c) D1
 };
 
 }  // namespace rig

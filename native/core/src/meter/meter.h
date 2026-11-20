@@ -65,7 +65,9 @@ class MeterServiceImpl final : public MeterService {
   /** Effective tick rate: the requested rate clamped to [kIdleTickHz, kMaxTickHz]; without a request 30 Hz while
    *  something is subscribed, else kIdleTickHz. */
   double tickHz() const;
-  bool slotSubscribed(int slot) const { return slot >= 0 && slot < 4 && slots_[static_cast<std::size_t>(slot)]; }
+  bool slotSubscribed(int slot) const {  // T00c D3: slots 0..15
+    return slot >= 0 && slot < RIG_MAX_SLOTS && slots_[static_cast<std::size_t>(slot)];
+  }
   bool anySlot() const;
   bool rtaOn() const { return rta_; }
   /** Base64 of Uint8[1024 x 2] (L then R): clamp(round(-dB * 2), 0, 255), Blackman 2048, smoothing 0.8 per call
@@ -82,7 +84,7 @@ class MeterServiceImpl final : public MeterService {
   Model &m_;
   MeterShared *shared_;
   double rate_ = 0;  // requested Hz (0 = none)
-  std::array<bool, 4> slots_{};
+  std::array<bool, RIG_MAX_SLOTS> slots_{};  // T00c D3 (was 4)
   bool rta_ = false;
   PFFFT_Setup *fft_ = nullptr;
   float *in_ = nullptr, *out_ = nullptr, *work_ = nullptr;

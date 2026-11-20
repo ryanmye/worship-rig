@@ -103,9 +103,20 @@ bool Model::attachUnit(UnitSlot slot, std::string_view kind, double when, int ch
   c.target = static_cast<std::uint32_t>(slot);
   c.frame = frameFor(when);
   c.p.ptr = u;
+  // T00c / T08 #1: a strip attached straight into a retiring channel meters its origin slot
+  if (isRetireStripSlot(slot) && channel >= 0 && channel < static_cast<int>(kChannels))
+    c.aux = static_cast<std::uint32_t>(channel + 1);
   if (!send(c)) {
     delete u;
     return false;
+  }
+  if (kind.substr(0, 5) == "inst." && (isInstSlot(slot) || isRetireInstSlot(slot))) {
+    Command vc{};  // INTERFACE-CHANGE(T00c) D1: the cap reaches the instrument before any note (same frame, FIFO)
+    vc.op = Op::VoiceCap;
+    vc.target = static_cast<std::uint32_t>(slot);
+    vc.frame = c.frame;
+    vc.aux = polyphony_;
+    send(vc);
   }
   Attached &a = attached_[idx(slot)];
   a.kind = std::string(kind);
@@ -125,6 +136,49 @@ void Model::detachUnit(UnitSlot slot, double when) {
   c.frame = frameFor(when);
   send(c);
   a = Attached{};
+}
+
+bool Model::moveUnit(UnitSlot from, UnitSlot to, double when) {  // INTERFACE-CHANGE(T00c) D3
+  if (from == to || idx(from) >= kUnitSlots || idx(to) >= kUnitSlots || attached_[idx(from)].kind.empty())
+    return false;
+  Command c{};
+  c.op = Op::MoveUnit;
+  c.target = static_cast<std::uint32_t>(to);
+  c.aux = static_cast<std::uint32_t>(from);
+  c.frame = frameFor(when);
+  if (!send(c)) return false;
+  attached_[idx(to)] = std::move(attached_[idx(from)]);
+  attached_[idx(from)] = Attached{};
+  for (auto it = tracked_.begin(); it != tracked_.end();) {  // tracked values follow the unit
+    if (paramUnit(it->first) == to) {
+      it = tracked_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+  std::map<std::uint32_t, double> moved;
+  for (auto it = tracked_.begin(); it != tracked_.end();) {
+    if (paramUnit(it->first) == from) {
+      moved[paramTarget(to, paramIndex(it->first))] = it->second;
+      it = tracked_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+  tracked_.insert(moved.begin(), moved.end());
+  return true;
+}
+
+bool Model::setPolyphony(unsigned cap) {  // INTERFACE-CHANGE(T00c) D1
+  if (cap != 32 && cap != 64 && cap != 128) return false;
+  polyphony_ = cap;
+  Command c{};
+  c.op = Op::VoiceCap;
+  c.target = kAllSlots;  // slots + retiring channels (graph routing of the per-instrument core ops)
+  c.frame = kFrameNow;
+  c.aux = cap;
+  send(c);
+  return true;
 }
 
 bool Model::sendUnitOp(UnitSlot slot, Command c, double when) {
@@ -232,7 +286,13 @@ bool Model::commit(std::uint32_t token, double when) {
   ++stats_.commits;
   committedAny_ = true;
   // Skeleton policy (T13 replaces: reuse, retire, crossfades): every channel gets a fresh instrument + strip.
-  for (std::size_t i = 0; i < kChannels; ++i) {
+  // T00c D3: channels 0 .. max(slotCount, 4) - 1 (the web engine always has 4); the rest are detached.
+  const std::size_t used = static_cast<std::size_t>(std::clamp(active_.slotCount, kWebSlots, kMaxSlots));
+  for (std::size_t i = used; i < kChannels; ++i) {
+    detachUnit(instSlot(i), when);
+    detachUnit(stripSlot(i), when);
+  }
+  for (std::size_t i = 0; i < used; ++i) {
     const SlotPatch &sp = active_.slots[i];
     const int ch = static_cast<int>(i);
     if (!sp.present || !attachUnit(instSlot(i), "inst." + sp.instType, when, ch)) {
@@ -401,7 +461,7 @@ void Model::setMono(bool on) {
   forEachService([&](Service &s) { s.onSongState(song_); });
 }
 bool Model::eqAudition(int slot, std::string_view mode, double when) {
-  if (slot < 0 || slot > 3 || !attachedIsModule(stripSlot(static_cast<std::size_t>(slot)))) return false;
+  if (slot < 0 || slot >= kMaxSlots || !attachedIsModule(stripSlot(static_cast<std::size_t>(slot)))) return false;
   Command c{};
   c.op = opOf(StripOp::EqAudition);
   c.aux = mode == "bypass" ? 1u : 0u;
@@ -555,8 +615,12 @@ void Model::onAudioEvent(const AudioEvent &e) {
 std::string Model::stateJson() const {
   JsonOut j;
   j.begin().kvBool("committed", committedAny_);
+  // T00c: slotCount (D3; the array keeps at least the web engine's 4 entries) and the polyphony cap (D1)
+  j.kv("slotCount", active_.slotCount).kv("polyphony", polyphony_);
   j.key("slots").beginArray();
-  for (const auto &s : active_.slots) {
+  const int shown = std::clamp(active_.slotCount, kWebSlots, kMaxSlots);
+  for (int i = 0; i < shown; ++i) {
+    const SlotPatch &s = active_.slots[i];
     j.begin()
         .kvBool("present", s.present)
         .kv("type", s.instType)

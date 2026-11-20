@@ -98,7 +98,7 @@ void MeterServiceImpl::subscribe(const yyjson_val *meters) {
     yyjson_arr_foreach(s, i, n, it) {
       if (!yyjson_is_num(it)) continue;
       const double k = yyjson_get_num(it);
-      if (k >= 0 && k < 4 && k == std::floor(k)) slots_[static_cast<std::size_t>(k)] = true;
+      if (k >= 0 && k < RIG_MAX_SLOTS && k == std::floor(k)) slots_[static_cast<std::size_t>(k)] = true;
     }
   }
   if (yyjson_val *r = yyjson_obj_get(o, "rta"); r && yyjson_is_bool(r)) {

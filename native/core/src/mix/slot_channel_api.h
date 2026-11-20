@@ -25,7 +25,7 @@ struct SlotEqChange : Owned {
   bool step = false;  // fresh channel: set instantly
 };
 
-/** Send SetEq(spec, when, step) to the strip of channel `slot` (0..3) now. False when no strip is attached. */
+/** Send SetEq(spec, when, step) to the strip of channel `slot` (0..15) now. False when no strip is attached. */
 bool sendSlotEq(Model &m, int slot, const SlotEqSpec &spec, double when, bool step = false);
 /** Record the slot's stored EQ in its strip now (no audible change; what eqAudition 'on' restores). */
 bool sendSlotEqStored(Model &m, int slot, const SlotEqSpec &spec);

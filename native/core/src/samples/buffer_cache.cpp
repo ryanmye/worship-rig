@@ -308,6 +308,7 @@ std::size_t BufferCache::collect() {
 
 void BufferCache::evict(double incoming) {
   collect();
+  if (capWarned_ && static_cast<double>(bytes_) <= lowWaterBytes()) capWarned_ = false;  // T00c
   const double limit = static_cast<double>(cfg_.capBytes) - incoming;
   if (static_cast<double>(bytes_) <= limit) return;
   const double target = std::min(lowWaterBytes(), limit);
@@ -543,13 +544,24 @@ void BufferCache::finish(Done &d) {
       e = ex->second.get();
     } else {
       evict(static_cast<double>(b.bytes));  // make room first: decodedMB never passes the cap by the new buffer
-      b.lastUsed = ++tick_;
-      const std::uint64_t nb = b.bytes;
-      e = d.out.buffer.get();
-      entries_[key] = std::move(d.out.buffer);
-      if (key != d.url) longKeys_[d.url].insert(key);
-      bytes_ += nb;
-      sizes_[key] = static_cast<double>(nb);
+      if (cfg_.hardCapBytes && bytes_ + b.bytes > cfg_.hardCapBytes) {
+        // T00c hard cap: what is left is referenced / pinned / protected: refuse the buffer (retry window applies)
+        ++capRefused_;
+        failed_[d.url] = {now(), false};
+        if (!capWarned_ && cfg_.warnMemory) {
+          capWarned_ = true;
+          cfg_.warnMemory("sample cache full (" + std::to_string(cfg_.hardCapBytes / (1024 * 1024)) +
+                          " MB cap): " + d.url + " and later samples are not loaded until memory frees");
+        }
+      } else {
+        b.lastUsed = ++tick_;
+        const std::uint64_t nb = b.bytes;
+        e = d.out.buffer.get();
+        entries_[key] = std::move(d.out.buffer);
+        if (key != d.url) longKeys_[d.url].insert(key);
+        bytes_ += nb;
+        sizes_[key] = static_cast<double>(nb);
+      }
     }
   }
   if (e) ++e->refs;  // held while the callbacks run: an earlier callback cannot evict it from under a later one

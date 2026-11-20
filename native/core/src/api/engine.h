@@ -85,7 +85,15 @@ class Engine final : public CommandSink {
   /** `audio start|restart|output`: asks the host on the device thread (never blocks the control thread; R25) and
    *  arms the 5 s watchdog. Emits `state` before the caller's reply (G9). "" = accepted, else an error code
    *  (`busy` while a start is pending for restart/output, `unsupported` when the host has no audio_start). */
-  const char *requestAudio(const std::string &action, const std::string &deviceId, double latency);
+  const char *requestAudio(const std::string &action, const std::string &deviceId, double latency,
+                           std::uint32_t bufferFrames = 0);
+  /** T00c D2: host buffer size requested by `audio {bufferFrames}` (kept across restarts; default 128) and the size
+   *  the host granted (rig_device_info.buffer_frames; 0 = not reported yet). */
+  std::uint32_t bufferFramesRequested() const { return bufferReq_; }
+  std::uint32_t bufferFramesGranted() const { return bufferGrant_; }
+  /** Frames the 128-frame FIFO holds back for a host block of `b` frames: (128 - b mod 128) mod 128. */
+  static std::uint32_t fifoResidue(std::uint32_t b) { return (RIG_QUANTUM_FRAMES - b % RIG_QUANTUM_FRAMES) %
+                                                                RIG_QUANTUM_FRAMES; }
   /** `audio sleep|wake` (engine side: suspend/resume rendering after the Model's ramp). */
   bool sleepAudio(double ramp);
   bool wakeAudio(double ramp);
@@ -177,7 +185,9 @@ class Engine final : public CommandSink {
   std::chrono::steady_clock::time_point deadline_{};
   const char *devState_ = "suspended";  // control thread view (state event)
   std::string deviceId_ = "default", deviceName_;
-  double latencySec_ = 0;               // host-reported output latency
+  double latencySec_ = 0;               // host-reported output latency + FIFO residue of the granted size (D2)
+  std::uint32_t bufferReq_ = RIG_BUFFER_FRAMES_DEFAULT, bufferGrant_ = 0;  // T00c D2 (control thread)
+  bool bufferExplicit_ = false;         // an `audio {bufferFrames}` was received (fallback for 1.0 hosts)
   const char *sleepState_ = "awake";
   ClockMap clock_;
   MeterServiceImpl *meterSvc_ = nullptr;  // resolved once (services never change after Model construction)

@@ -26,7 +26,7 @@ namespace rig {
 using CommandQueue = SpscQueue<Command, 16384>;
 using EventQueue = SpscQueue<AudioEvent, 4096>;
 // INTERFACE-CHANGE(T08): Garbage never shares the event ring (SETUP_REVIEW 18, WAVE0B_REVIEW V13). Its own ring is
-// sized above every pointer that can be in flight (command ring 16384 + pending heap 8192 + 49 units); a full ring
+// sized above every pointer that can be in flight (command ring 16384 + pending heap 8192 + 105 units); a full ring
 // parks the pointer in a fixed stash retried every quantum, so a slow control thread delays frees but never leaks.
 using GarbageQueue = SpscQueue<AudioEvent, 32768>;
 
@@ -79,10 +79,16 @@ class Graph final : private EventSink {
   // INTERFACE-CHANGE(T08) begin: control-thread consumers of the reliable paths (SETUP_REVIEW 18).
   /** Control thread: next handed-back object (free it with freeGarbage / Model::onAudioEvent). */
   bool popGarbage(AudioEvent &e) { return garbage_.pop(e); }
-  /** Control thread: unit slots (bit = UnitSlot) whose VoiceEnded was lost to a full event ring since the last
-   *  call; the owner rescans those slots (Dropped event, "ended bits"). */
-  std::uint64_t takeEndedSlots() { return endedLost_.exchange(0, std::memory_order_acq_rel); }
+  /** Control thread: unit slots (bit = UnitSlot - 64 * word) whose VoiceEnded was lost to a full event ring since
+   *  the last call; the owner rescans those slots (Dropped event, "ended bits"). T00c: two words (105 unit slots). */
+  static constexpr unsigned kEndedWords = (kUnitSlots + 63) / 64;
+  std::uint64_t takeEndedSlots(unsigned word = 0) {
+    return word < kEndedWords ? endedLost_[word].exchange(0, std::memory_order_acq_rel) : 0;
+  }
   // INTERFACE-CHANGE(T08) end
+  /** INTERFACE-CHANGE(T00c) D3: slots of the committed song (1..16; 0 = none yet), copied into every meter
+   *  snapshot (rig_meters.slot_count). Set by the bridge after a commit. [any] */
+  void setSlotCount(std::uint32_t n) { slotCount_.store(n, std::memory_order_relaxed); }
   /** Host-side numbers folded into the next meter snapshot (audio thread). */
   void setHostStats(float cpu, std::uint32_t xruns) {
     cpu_ = cpu;
@@ -100,7 +106,8 @@ class Graph final : private EventSink {
   void addInject(std::uint32_t point, Bus &bus);
   bool injectOverlaps(std::uint32_t point) const;
   void flushGarbageStash();                              // INTERFACE-CHANGE(T08)
-  void slotMeter(std::size_t slot, const Bus *strip);    // INTERFACE-CHANGE(T08)
+  void slotAccumulate(std::size_t slot, const Bus &strip);  // INTERFACE-CHANGE(T00c) D3 / T08 #1
+  void slotMeters();                                         // INTERFACE-CHANGE(T00c)
 
   double sr_;
   std::atomic<double> requestedSr_;
@@ -131,9 +138,16 @@ class Graph final : private EventSink {
   static constexpr std::size_t kGarbageStash = 1024;
   AudioEvent stash_[kGarbageStash] = {};
   std::size_t stashN_ = 0;
-  std::atomic<std::uint64_t> endedLost_{0};
+  std::atomic<std::uint64_t> endedLost_[kEndedWords] = {};
   float slotPeakQ_[kChannels][2] = {};
   double slotSqQ_[kChannels][2] = {};
+  // INTERFACE-CHANGE(T00c) D3 / T08 #1: per-slot mono accumulator of this quantum (the slot's strip + its retiring
+  // strips, summed sample-wise, then peak / rms), the origin slot + 1 of each retiring strip (0 = none) and whether
+  // a retiring strip of that origin sounded this quantum (rig_meters.slot_retiring).
+  float slotAcc_[kChannels][kQ] = {};
+  bool slotHas_[kChannels] = {}, slotRetiring_[kChannels] = {};
+  std::uint8_t retireOrigin_[kRetiring] = {};
+  std::atomic<std::uint32_t> slotCount_{0};
 };
 
 }  // namespace rig

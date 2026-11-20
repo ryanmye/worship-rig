@@ -52,7 +52,7 @@ extern "C" {
 
 /** C API version (independent of the bridge protocol version, which is BRIDGE v1). */
 #define RIG_API_VERSION_MAJOR 1
-#define RIG_API_VERSION_MINOR 0
+#define RIG_API_VERSION_MINOR 1 /* 1: T00c (D1-D3) additions, all struct_size-gated */
 
 /** The bridge protocol this core speaks (`v` of every JSON message; contract 6.2). */
 #define RIG_BRIDGE_PROTOCOL 1
@@ -62,6 +62,12 @@ extern "C" {
 
 /** Maximum output channels the core renders (1-2 music, 3-4 aux click; contract 3.10). */
 #define RIG_MAX_OUTPUT_CHANNELS 4
+
+/** Sound slots per song (DECISIONS D3: 1..16; the web engine has 4). Added by T00c. */
+#define RIG_MAX_SLOTS 16
+
+/** Host buffer sizes the `audio` op can request (DECISIONS D2; default 128). Added by T00c. */
+#define RIG_BUFFER_FRAMES_DEFAULT 128
 
 /** Opaque engine handle. One per process is the normal case; several are allowed (tests render in parallel). */
 typedef struct rig_engine rig_engine;
@@ -191,7 +197,21 @@ typedef struct rig_host {
 
   /** Current host clock in ns, same timebase as rig_render()/rig_midi_in() timestamps (mach_absolute_time in ns). */
   uint64_t (*host_time_ns)(void *user);
+
+  /* ---- added by T00c (DECISIONS D2); read only when struct_size covers the member ---- */
+  /**
+   * Like audio_start, with the host buffer size the user picked (`audio {bufferFrames}`: 64 | 128 | 256 | 512).
+   * Used instead of audio_start when non-NULL. The host asks the OS for that size (macOS AUHAL
+   * kAudioDevicePropertyBufferFrameSize, iPad AVAudioSession setPreferredIOBufferDuration = frames / rate) and
+   * reports what it got in rig_device_info.buffer_frames (the OS may round it). Same threading as audio_start.
+   * Hosts without it get audio_start with latency_sec = buffer_frames / sample rate when `latency` was not given.
+   */
+  void (*audio_start_frames)(void *user, const char *device_id, double latency_sec, uint32_t channels,
+                             uint32_t buffer_frames);
 } rig_host;
+
+/** struct_size of a rig_host without the T00c members (hosts built against API 1.0). */
+#define RIG_HOST_SIZE_V1 (offsetof(rig_host, host_time_ns) + sizeof(void *))
 
 /** Engine configuration. Initialise with rig_config_init() and then override fields. */
 typedef struct rig_config {
@@ -291,7 +311,7 @@ typedef struct rig_device_info {
   const char *device_name;    /**< copied */
   double sample_rate;
   uint32_t channels;          /**< opened output channels (2 or 4) */
-  uint32_t buffer_frames;     /**< nominal frames per rig_render call */
+  uint32_t buffer_frames;     /**< nominal frames per rig_render call (the GRANTED size: `state.bufferFrames`) */
   double output_latency_sec;  /**< device + safety-offset + stream latency (contract latencyMs = base + output) */
 } rig_device_info;
 
@@ -368,9 +388,20 @@ typedef struct rig_meters {
   uint8_t pedal;            /**< effective sustain */
   uint8_t sleep_state;      /**< 0 awake, 1 sleeping, 2 asleep, 3 waking */
   uint16_t held;            /**< held physical notes */
+
+  /* ---- added by T00c (DECISIONS D3); filled only when the caller's struct_size covers them ---- */
+  uint32_t slot_count;               /**< slots of the committed song (0 before the first commit, else 1..16) */
+  float slot_peak_all[RIG_MAX_SLOTS]; /**< every slot; slot_peak above mirrors slots 0..3 for API 1.0 callers */
+  float slot_rms_all[RIG_MAX_SLOTS];
+  uint8_t slot_retiring[RIG_MAX_SLOTS]; /**< 1 while a retiring strip of that origin slot still sounds (T08 #1) */
 } rig_meters;
 
-/** Copy the latest snapshot (taken once per 128-frame quantum). Never blocks; retries on a torn read. [rt] */
+/** struct_size of a rig_meters without the T00c members. */
+#define RIG_METERS_SIZE_V1 (offsetof(rig_meters, held) + sizeof(uint16_t))
+
+/** Copy the latest snapshot (taken once per 128-frame quantum). Never blocks; retries on a torn read. Copies
+ *  min(out->struct_size, sizeof(rig_meters)) bytes and sets out->struct_size to the copied size (API 1.0 callers
+ *  pass RIG_METERS_SIZE_V1 and get the 4-slot layout). [rt] */
 RIG_API rig_status rig_get_meters(const rig_engine *e, rig_meters *out);
 
 /* -------------------------------------------------------------------------------------------------------------- */

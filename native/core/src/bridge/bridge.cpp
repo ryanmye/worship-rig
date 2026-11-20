@@ -114,7 +114,9 @@ void opAudio(Engine &e, Bridge &b, const Req &r) {
   const char *dev = getStr(r.m, "deviceId");
   yyjson_val *lat = yyjson_obj_get(r.m, "latency");  // 'interactive' | seconds (0 = interactive)
   const double latency = lat && yyjson_is_num(lat) ? yyjson_get_num(lat) : 0.0;
-  if (const char *err = e.requestAudio(a, dev ? dev : "", latency); *err)
+  // T00c D2: host buffer size (validated 64|128|256|512 by the schema; absent = keep the last request)
+  const auto frames = static_cast<std::uint32_t>(getNum(r.m, "bufferFrames", 0));
+  if (const char *err = e.requestAudio(a, dev ? dev : "", latency, frames); *err)
     return fail(e, r, err, std::string("audio ") + a + ": " +
                                (std::strcmp(err, "busy") == 0 ? "a device start is still pending"
                                                               : "the host has no audio output"));
@@ -145,6 +147,7 @@ void opCommit(Engine &e, const Req &r) {
   if (!e.model().commit(token, getWhen(r.m)))
     return fail(e, r, "superseded", "commit: token superseded by later prepares");
   if (b) b->committedToken_ = token;
+  e.graph().setSlotCount(static_cast<std::uint32_t>(e.model().patch().slotCount));  // T00c D3: rig_meters
   JsonOut j;
   j.begin().kvBool("committed", true).end();
   ok(e, r, j.take());
@@ -343,6 +346,10 @@ void opConfig(Engine &e, const Req &r) {
   }
   if (yyjson_val *v = yyjson_obj_get(r.m, "meters"); v && yyjson_is_obj(v)) m.subscribeMeters(v);
   if (yyjson_val *c = yyjson_obj_get(r.m, "midiClock"); c && yyjson_is_obj(c)) m.setClockPort(getStr(c, "port"));
+  if (yyjson_val *v = yyjson_obj_get(r.m, "polyphony"); v && yyjson_is_num(v)) {  // T00c D1 (schema: 32|64|128)
+    m.setPolyphony(static_cast<unsigned>(yyjson_get_num(v)));
+    j.kv("polyphony", m.polyphony());
+  }
   j.end();
   ok(e, r, j.take());
 }

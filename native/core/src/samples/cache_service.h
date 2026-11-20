@@ -80,6 +80,7 @@ class CacheServiceImpl final : public rig::CacheService {
   std::vector<rig::PatchSpec> parsePatches(const yyjson_val *patches) const;
   std::vector<std::string> currentKeys() const;
   void doPin(const std::vector<std::string> &keys, const std::string &pin);
+  std::vector<std::string> withinPinBudget(const std::vector<std::string> &keys, bool add);  // T00c
   void warnMsg(const std::string &m, const char *code);
   void build(const rig::EnginePaths &p);
 
@@ -94,6 +95,7 @@ class CacheServiceImpl final : public rig::CacheService {
   std::vector<std::string> lowResSavedPins_;
   bool lowRes_ = false, rewarming_ = false, rewarmInSync_ = false;
   std::size_t rewarmDone_ = 0;
+  int pinsDropped_ = 0;  // T00c pin budget
 };
 
 }  // namespace rig::samples

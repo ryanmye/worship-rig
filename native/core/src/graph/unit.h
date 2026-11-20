@@ -4,7 +4,7 @@
 // Op::AttachUnit. Nothing in graph/ changes when a module lands.
 //
 // Topology per quantum (graph.cpp, orchestrator-owned):
-//   for each channel c in {Inst0..3 + Strip0..3, RetireInst/RetireStrip 0..15}:
+//   for each channel c in {Inst0..15 + Strip0..15, RetireInst/RetireStrip 0..31}:   [T00c D3: 16 slots]
 //     inst  -> instBus (source: io.in = null)          [inject "slot0.strip" is added to slot 0's instBus]
 //     strip -> stripOut, += sends[Reverb|Delay|Chorus] [tap "slot0.pan"/"slot1.pan" = Strip0/1 out]
 //     sum += stripOut
@@ -64,25 +64,37 @@ struct Owned {
   virtual ~Owned() = default;
 };
 
-/** Fixed unit slots of the graph. Values are frozen (Command::target, test point table, ParamTarget). */
+/** Fixed unit slots of the graph. Values are frozen (Command::target, test point table, ParamTarget); code uses the
+ *  names and the helpers below, never the numbers.
+ *  INTERFACE-CHANGE(T00c) D3: 16 sound slots per song (DECISIONS D3). Was 4 slots (Inst 0..3, Strip 4..7) and 16
+ *  retiring channels (8..39), Drone 40 .. Count 49. The lost-VoiceEnded bits (Graph::takeEndedSlots) cover all of
+ *  them (two 64-bit words). */
 enum class UnitSlot : std::uint16_t {
-  Inst0 = 0,  // Inst0..Inst3 = 0..3: the instrument of slot i
-  Strip0 = 4,  // Strip0..Strip3 = 4..7: the SlotChannel (strip) of slot i
-  RetireInst0 = 8,  // 8..23: retiring channels' instruments (T13; contract 1.2 commit)
-  RetireStrip0 = 24,  // 24..39: retiring channels' strips
-  Drone = 40,
-  Reverb = 41,
-  Delay = 42,
-  Chorus = 43,
-  Lofi = 44,
-  MasterChain = 45,
-  Click = 46,
-  Meter = 47,     // sink: per-quantum peaks, slot taps, RTA (T08)
-  Recorder = 48,  // sink: rec ring (T08)
-  Count = 49
+  Inst0 = 0,          // Inst0..Inst15 = 0..15: the instrument of slot i
+  Strip0 = 16,        // Strip0..Strip15 = 16..31: the SlotChannel (strip) of slot i
+  RetireInst0 = 32,   // 32..63: retiring channels' instruments (T13; contract 1.2 commit)
+  RetireStrip0 = 64,  // 64..95: retiring channels' strips
+  Drone = 96,
+  Reverb = 97,
+  Delay = 98,
+  Chorus = 99,
+  Lofi = 100,
+  MasterChain = 101,
+  Click = 102,
+  Meter = 103,     // sink: per-quantum peaks, slot taps, RTA (T08)
+  Recorder = 104,  // sink: rec ring (T08)
+  Count = 105
 };
 inline constexpr std::size_t kUnitSlots = static_cast<std::size_t>(UnitSlot::Count);
-inline constexpr std::size_t kChannels = 4, kRetiring = 16;
+/** kChannels = sound slots per song (1..16 used; rig_engine.h RIG_MAX_SLOTS). kRetiring = retiring channels: two per
+ *  slot, so two back-to-back switches of full 16-slot songs (eight of 4-slot songs) still fade out gaplessly. */
+inline constexpr std::size_t kChannels = 16, kRetiring = 32;
+static_assert(kChannels == RIG_MAX_SLOTS, "rig_engine.h RIG_MAX_SLOTS");
+static_assert(static_cast<std::size_t>(UnitSlot::Strip0) == kChannels, "Inst0..15 then Strip0..15");
+static_assert(static_cast<std::size_t>(UnitSlot::RetireStrip0) ==
+                  static_cast<std::size_t>(UnitSlot::RetireInst0) + kRetiring, "RetireInst then RetireStrip");
+static_assert(static_cast<std::size_t>(UnitSlot::Drone) ==
+                  static_cast<std::size_t>(UnitSlot::RetireStrip0) + kRetiring, "globals after the channels");
 constexpr UnitSlot instSlot(std::size_t i) {
   return static_cast<UnitSlot>(static_cast<std::uint16_t>(UnitSlot::Inst0) + i);
 }
@@ -94,6 +106,18 @@ constexpr UnitSlot retireInstSlot(std::size_t i) {
 }
 constexpr UnitSlot retireStripSlot(std::size_t i) {
   return static_cast<UnitSlot>(static_cast<std::uint16_t>(UnitSlot::RetireStrip0) + i);
+}
+// INTERFACE-CHANGE(T00c) D3: slot-kind predicates (control and audio side).
+constexpr bool isInstSlot(UnitSlot s) {
+  return static_cast<std::size_t>(s) < kChannels;
+}
+constexpr bool isRetireInstSlot(UnitSlot s) {
+  const auto v = static_cast<std::size_t>(s), b = static_cast<std::size_t>(UnitSlot::RetireInst0);
+  return v >= b && v < b + kRetiring;
+}
+constexpr bool isRetireStripSlot(UnitSlot s) {
+  const auto v = static_cast<std::size_t>(s), b = static_cast<std::size_t>(UnitSlot::RetireStrip0);
+  return v >= b && v < b + kRetiring;
 }
 
 /** Command::target of the Param* ops: unit slot in the high 16 bits, the unit's own param index in the low 16. */

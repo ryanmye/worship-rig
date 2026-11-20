@@ -67,6 +67,10 @@ BufferCache::Config cacheConfig(const rig_config *c, rig::Model &m, std::functio
   BufferCache::Config cfg;
   const std::uint64_t mb = c && c->cache_mb ? c->cache_mb : (ipad(c) ? 320u : 700u);
   cfg.capBytes = mb * 1024ull * 1024ull;
+  // T00c (D3 memory budget, ARCHITECTURE section 7): hard cap = the cap on the iPad (jetsam: nothing above the
+  // budget), 1.5 x the cap on the desktop (referenced buffers may pass the soft cap, as in 1.x, but not without
+  // bound: 16 sampler slots can reference > 2 GB of float32 samples).
+  cfg.hardCapBytes = ipad(c) ? cfg.capBytes : cfg.capBytes / 2 * 3;
   cfg.storage = storageOf(c);
   cfg.engineRate = m.env().sampleRate;
   cfg.warn = std::move(warn);
@@ -93,7 +97,11 @@ CacheServiceImpl::CacheServiceImpl(rig::Model &m)
     : model_(m),
       runner_(makeRunner(cfgOf(m))),
       cache_(
-          cacheConfig(cfgOf(m), m, [this](const std::string &s) { warnMsg(s, "decode"); }),
+          [&] {
+            BufferCache::Config c = cacheConfig(cfgOf(m), m, [this](const std::string &s) { warnMsg(s, "decode"); });
+            c.warnMemory = [this](const std::string &s) { warnMsg(s, "memory"); };  // T00c
+            return c;
+          }(),
           [h = hostDecoder(cfgOf(m))](const LoadRequest &rq) { return loadSampleFile(rq, h); }, runner_.get()) {
   const rig_config *c = cfgOf(m);
   if (c && (c->flags & RIG_FLAG_TEST_API))
@@ -255,13 +263,46 @@ void CacheServiceImpl::protectSwitch(const rig::PatchSpec *playing, const rig::P
 
 // ---- pins --------------------------------------------------------------------------------------------------
 
+// T00c pin policy (D3 memory budget): pinned bytes stay within the pin budget (the low-water mark, 85 % of the
+// cap), so pins alone never fill the cache and the playing song always has room. Keys are taken in request order
+// (the first patch = the song that plays next) until the budget is spent; the rest stay unpinned (counted in
+// pinsDropped, one `memory` warning per preload). Low-resource mode pins the current song only, whatever its size.
+std::vector<std::string> CacheServiceImpl::withinPinBudget(const std::vector<std::string> &keys, bool add) {
+  const double budget = cache_.lowWaterBytes();
+  double used = add ? static_cast<double>(cache_.pinnedBytes()) : 0.0;
+  std::vector<std::string> out;
+  std::set<std::string> seen;
+  int dropped = 0;
+  for (const std::string &k : keys) {
+    if (!seen.insert(k).second) continue;
+    if (add && cache_.pins().count(k)) {  // already pinned and counted
+      out.push_back(k);
+      continue;
+    }
+    const double b = cache_.estimateBytes({k}).bytes;
+    if (used + b > budget) {
+      ++dropped;
+      continue;
+    }
+    used += b;
+    out.push_back(k);
+  }
+  if (dropped) {
+    pinsDropped_ += dropped;
+    warnMsg(std::to_string(dropped) + " sample(s) stay unpinned: pins are capped at " +
+                std::to_string(static_cast<long long>(budget / kMB)) + " MB (85 % of the sample cache)",
+            "memory");
+  }
+  return out;
+}
+
 void CacheServiceImpl::doPin(const std::vector<std::string> &keys, const std::string &pin) {
   if (lowRes_)
     cache_.setPins(currentKeys());  // low resource: pin policy 'current-only'
   else if (pin == "replace")
-    cache_.setPins(keys);
+    cache_.setPins(withinPinBudget(keys, false));
   else if (pin != "none")
-    cache_.pinAdd(keys);
+    cache_.pinAdd(withinPinBudget(keys, true));
 }
 
 void CacheServiceImpl::setLowResource(bool on) {
@@ -464,7 +505,10 @@ std::string CacheServiceImpl::statsFields() {
   j.kv("decodedMB", round1(cache_.decodedMB()))
       .kv("pinnedMB", round1(cache_.pinnedMB()))
       .kv("referencedMB", round1(static_cast<double>(cache_.referencedBytes()) / kMB))
-      .kv("capMB", round1(cache_.capMB()));
+      .kv("capMB", round1(cache_.capMB()))
+      .kv("hardCapMB", round1(static_cast<double>(cache_.hardCapBytes()) / kMB))  // T00c
+      .kv("pinsDropped", pinsDropped_)
+      .kv("capRefused", cache_.capRefused());
   std::string s = j.take();
   return s;
 }

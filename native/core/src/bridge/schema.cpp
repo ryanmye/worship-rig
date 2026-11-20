@@ -18,7 +18,8 @@ constexpr ArgSpec kHello[] = {{"protocol", T::Int, true}, {"app", T::String, tru
 constexpr ArgSpec kAudio[] = {{"action", T::Enum, true, "start|restart|output|sleep|wake"},
                               {"latency", T::NumberOrString, false},
                               {"deviceId", T::String, false},
-                              {"ramp", T::Number, false}};
+                              {"ramp", T::Number, false},
+                              {"bufferFrames", T::Int, false, "64|128|256|512"}};  // T00c D2
 constexpr ArgSpec kPrepare[] = {{"patch", T::Object, true}};
 constexpr ArgSpec kCommit[] = {{"token", T::Int, true}, {"when", T::Number, false}};
 constexpr ArgSpec kCache[] = {{"action", T::Enum, true, "preload|estimate|retainReverb"},
@@ -55,7 +56,8 @@ constexpr ArgSpec kClick[] = {{"action", T::Enum, true, "start|stop|config"},
                               {"when", T::Number, false}};
 constexpr ArgSpec kConfig[] = {{"mono", T::Bool, false},        {"lowResource", T::Bool, false},
                                {"eqAudition", T::Object, false}, {"meters", T::Object, false},
-                               {"midiClock", T::Object, false},  {"when", T::Number, false}};
+                               {"midiClock", T::Object, false},  {"when", T::Number, false},
+                               {"polyphony", T::Int, false, "32|64|128"}};  // T00c D1
 constexpr ArgSpec kGet[] = {{"what", T::Enum, true, "instruments|stats|devices|sampleStatus|state"},
                             {"reload", T::Bool, false},
                             {"patches", T::Array, false}};

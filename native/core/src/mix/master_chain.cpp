@@ -182,6 +182,7 @@ class MasterChain final : public Unit {
     eq_.setSampleRate(sr);
     glue_.setSampleRate(sr);
     catcher_.setSampleRate(sr);
+    clip_.reset();  // T03 O7 (T00c): no old-rate oversampler history after a rate change
   }
 
  private:
