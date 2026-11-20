@@ -10,6 +10,9 @@ import assert from 'node:assert/strict';
 import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.mjs';
 import { runImporterTests } from './importer.mjs';
 
+/** L11-9: the press-to-test result when the press arrives */
+const WORKS = 'Worship Rig gets it. If another app also reacts, pick another.';
+
 /**
  * The fake bridge (page init script). Registration: 'Control+Alt+Command+P' is "taken by another app"; everything
  * else registers. window.__fake holds the calls and lets the test push statuses / press a shortcut.
@@ -388,7 +391,7 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
       assert.deepEqual((await calls('testHotkey')).at(-1), ['nextSong', 'Control+Alt+Command+]']);
       assert.equal(await ev(() => document.documentElement.getAttribute('data-hotkey-capture')), 'test');
       assert.equal(await ev(() => window.__fake.pressHotkey('nextSong')), 'swallowed');
-      await until(() => document.querySelector('[data-testid="hotkey-result-nextSong"]').textContent === 'Works');
+      await until((w) => document.querySelector('[data-testid="hotkey-result-nextSong"]').textContent === w, WORKS);
       assert.equal(await ev(() => document.querySelector('[data-testid="hotkey-result-nextSong"]').dataset.phase),
         'works');
       await new Promise((r) => setTimeout(r, 200));
@@ -408,7 +411,7 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
         assert.equal(await result('prevSong'), '', 'the first test is replaced');
         assert.equal(await result('masterUp'), 'Press ⌃⌥⌘= in any app…');
         await until(() => window.__fake.testing === 'masterUp');
-        assert.equal(await result('nextSong'), 'Works', 'a finished result stays');
+        assert.equal(await result('nextSong'), WORKS, 'a finished result stays');
         // a late press of the replaced one reaches neither row
         await ev(() => window.__fake.pushTest({ id: 'prevSong', fired: true }));
         assert.equal(await result('prevSong'), '');

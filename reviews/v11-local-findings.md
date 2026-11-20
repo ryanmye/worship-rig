@@ -273,7 +273,8 @@ on Linux (RSS, not footprint).
 
 ## L11-9 press-to-test says "Works" when another app holds the same combination: macOS delivers it to both
 
-**Status:** open, needs a decision from Ryan (copy or behaviour). Press-to-test itself works as specified.
+**Status:** fixed, option (a) (Ryan 2026-11-20: "sure"). The `hotkeyWorks` copy is now "Worship Rig gets it. If another
+app also reacts, pick another." Unit 406 and settings 60/60 pass. Press-to-test itself works as specified.
 
 Mac run on `5f4c6d4`, source build with a fresh profile, driven over CDP. The presses were synthetic
 (`System Events keystroke "]" using {control, option, command}` sent from Finder), and they do reach Carbon global
@@ -329,3 +330,9 @@ times. The buffer assignment is the main-thread block that v11-memory defers whi
 An irAsync of 0 ms was an IR cache hit. So on this Mac a reverb build can delay a note by about 30 ms at most. Q25
 (reverb at the first 2 s pause) still holds, but the 100–400 ms stall it avoids is mostly a Linux number. The
 song-switch work, not the reverb, is what's left for the Mac latency question.
+
+## Locked-screen shell Electron run (L11-2 / L11-4): pass
+
+`node test/phase1/shell/run.mjs --only electron` with the screen locked (`IOConsoleLocked` = Yes from 02:42:01Z,
+run done 02:42:27Z): 22 pass, 0 fail, 1 skip (the WAV recording test: no running audio context while locked). L14
+passes. Together with the 3 unlocked 23/23 runs, L11-2 and L11-4 are closed on the Mac.

@@ -105,7 +105,7 @@ CONTRACT_CHANGES `## v11-*` and `## ci-*`.
 ## Added 2026-11-04 (cloud dev round 2: decisions, review fixes, memory)
 
 ### LOCAL checks
-- [ ] Full `node test/run-all.mjs` on the final dev tree (`accabe7` or later). Then shell `--only electron` once
+- [x] (29eb984 full run + L11-7; shell electron unlocked 23/23 ×3, locked 22 pass 1 skip) Full `node test/run-all.mjs` on the final dev tree (`accabe7` or later). Then shell `--only electron` once
       unlocked and once with the screen locked (L11-1/L11-2 fixes).
 - [ ] ⌃⌥⌘] / ⌃⌥⌘[ with the window hidden step a real setlist (held note + drone survive); first/last song is the
       end (no wrap).
