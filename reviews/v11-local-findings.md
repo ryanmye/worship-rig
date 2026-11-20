@@ -336,3 +336,17 @@ song-switch work, not the reverb, is what's left for the Mac latency question.
 `node test/phase1/shell/run.mjs --only electron` with the screen locked (`IOConsoleLocked` = Yes from 02:42:01Z,
 run done 02:42:27Z): 22 pass, 0 fail, 1 skip (the WAV recording test: no running audio context while locked). L14
 passes. Together with the 3 unlocked 23/23 runs, L11-2 and L11-4 are closed on the Mac.
+
+## Hardware batch (Ryan, 2026-11-20): items 1–3, then stopped
+
+- Global shortcuts with the window hidden (⌘H): ⌃⌥⌘] ×2 / ⌃⌥⌘[ step the setlist, and no Accessibility prompt
+  appears. Recording ⌃⌥⌘↑ reaches the page (⌃↑ itself is macOS's Mission Control, which apps never get). Pass.
+- Fit to my touch, Roland and Keystation: each keeps its own curve. "Quiet not quiet enough, loud not loud enough"
+  led to v11-dynamic-range (Range slider) and Q5 = 15 %. Pass with those.
+- Sustain pedal swells the drone: from −12 dB it rises about 12 dB in about 2 s and falls back, and the Drone level
+  fader follows while the pedal is held. Pass. Expression pedal not tested (only an on/off pedal).
+- Not tested, Ryan's call ("everything should be fine"): footswitch → Next scene, scene glide on the PA, far jump
+  + reverb at the pause, setlist end without wrap, Remember with two boards, MIDI Learn on the second keyboard,
+  click on Outputs 3–4 / in-ears, MIDI clock into a receiver (Start, Panic, restart), split-on-restart recording,
+  GarageBand import while playing, the Day paper EQ graph. These stay in the release notes' "Not yet checked on
+  real hardware".
