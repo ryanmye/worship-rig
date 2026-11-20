@@ -35,6 +35,11 @@ touch is saved on this Mac under the keyboard's name. It isn't included when you
 doesn't replace it. Sounds set to **Normal** response follow the keyboard's own touch. To give one sound its own curve,
 use the new **Own** choice in Edit's Response setting.
 
+**Range**, at the top of the same section, sets how far soft playing is from loud, for every keyboard on this Mac. At
+**1×** the sampled sounds respond as in 1.0. Move it right and soft notes get quieter while your hardest notes get
+louder than before (the master ceiling still keeps peaks in check). The line under it gives the span in dB. Synths and
+the organ keep their own response.
+
 ### Pedal
 
 Two new switches are in **Edit › Master › Wheels & pedal**. **Pedal curve › Log (fine when quiet)** gives an
@@ -54,9 +59,10 @@ the Worship Rig window hidden:
 
 To set your own keys, click a shortcut and press the new combination. macOS can't tell apps when another app
 (Rectangle, Magnet, Raycast…) uses a shortcut, so test each one once: click **Test** next to it, or just record new
-keys (the test starts by itself), then press the combination in any app. **Works** means the press came through, and
-a test press never does the action, so testing **Next song** doesn't change the song. If nothing comes through within
-5 seconds, Settings says another app may be using it, so pick another. The shortcuts are off until you switch them on.
+keys (the test starts by itself), then press the combination in any app. "Worship Rig gets it" means the press came
+through, and a test press never does the action, so testing **Next song** doesn't change the song. When two apps use
+the same combination, macOS gives the press to both, so if another app also reacts, pick another. If nothing comes
+through within 5 seconds, another app is taking it, so pick another. The shortcuts are off until you switch them on.
 
 ### Update check (Mac app)
 
@@ -96,6 +102,8 @@ own use on this Mac: Worship Rig never copies them into the app and never shares
   an even level.
 - **Panic** also stops the click and the count-in, and the MIDI clock sends Stop. The drone keeps going, as before.
 - Moving between piano songs uses less memory, because the same piano samples are no longer kept twice.
+- Hidden in the menu bar (low-resource mode), the app now gives memory back to the Mac: about 230 MB instead of about
+  1 GB on an M2 Pro.
 - In the Chrome version, a recording explains that Chrome only writes the file when you stop it.
 - Improved text contrast in Classic's Quick sheet and the menu-bar popover.
 
@@ -120,23 +128,13 @@ factory set back.
 
 ### Not yet checked on real hardware
 
-<!-- LOCAL: from reviews/v11-mac-checklist.md "LOCAL (Mac) checks". Delete each line once it is checked on the Mac,
-     and the whole section when it is empty. The "Before tagging" items (test runs, CI, build size) are not listed:
-     they must pass before the tag. -->
+Everything above was built and tested in software, and the Mac app was checked on a real Mac with two keyboards and a
+sustain pedal. These parts haven't been tried with real gear yet:
 
-Everything above was built and tested in software. These parts still need a real Mac, real hardware or real ears:
-
-- Global shortcuts from another app with the window hidden, which app wins when another app (for example Rectangle)
-  holds the same combination, what **Test** says for such a combination, and recording a ⌃⌥⌘ combination in
-  Settings.
-- The update check in the installed app: the "available" line, Download and the switch that turns it off.
-- Fit to my touch and Remember with two real keyboards plugged in.
-- An expression pedal on the Log curve, and how "Sustain pedal also swells the drone" sounds.
-- The longer theme wording in the top bar at 1024 px with the Mac's own font, Daylight Auto following a real
-  appearance change, and the Daylight Day EQ graph.
-- The importer with real GarageBand and Logic instruments: Homebrew ffmpeg found when the app is opened from Finder,
-  importing while Perform plays, Stop on a large piano, the Mac's own converter (.m4a), and quitting during an import.
-- A real footswitch (momentary and press-only) on Next scene, and how the half-second scene glide sounds on a PA.
-- Outputs 3–4 on a real 4-output interface, MIDI clock into a real drum machine or delay pedal, and how the click
+- **Remember** with two keyboards plugged in, and MIDI Learn on a second keyboard.
+- An expression pedal on the **Log** curve.
+- A real footswitch (momentary and press-only) on **Next scene**, and how the half-second scene glide sounds on a PA.
+- **Outputs 3–4** on a real 4-output interface, MIDI clock into a real drum machine or delay pedal, and how the click
   sounds and how loud it is in in-ears.
-- Still open from 1.0: splitting a recording when audio restarts, and MIDI Learn on a second keyboard.
+- Importing GarageBand instruments while Perform is playing.
+- Still open from 1.0: splitting a recording when audio restarts.

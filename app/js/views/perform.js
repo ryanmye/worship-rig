@@ -697,7 +697,7 @@ export function mountPerform(root, ctx) {
   revertBtn.setDisabled(true);
   const fadeLabel = h('span.fade-label', { text: 'Fade out' });
   const fadeBtn = btn('.btn-fade', fadeLabel, { title: 'Fade everything out over 6 s (⌘⇧F). Play any note to bring the sound back.', 'data-testid': 'fade-out' });
-  const panicBtn = btn('.btn-panic', [h('span.panic-l', { text: 'PANIC' }), h('small.panic-k', { text: 'Esc' })], { title: 'All notes off (Esc, ⌘.)', 'data-testid': 'panic', 'aria-label': 'Panic: all notes off' });
+  const panicBtn = btn('.btn-panic', [h('span.panic-l', { text: 'PANIC' }), h('small.panic-k', { text: 'Esc' })], { title: 'All notes off and the click stops (Esc, ⌘.)', 'data-testid': 'panic', 'aria-label': 'Panic: all notes off' });
   // Lock: one press locks; unlocking needs a 600 ms press-and-hold (UX S1). round2-ui #5 lives in holdButton.
   const lockText = h('span.lock-text', { text: 'Lock' });
   const lockSub = h('span.lock-sub', { text: '' });

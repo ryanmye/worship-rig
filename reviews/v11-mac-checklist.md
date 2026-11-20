@@ -64,6 +64,16 @@ CONTRACT_CHANGES `## v11-*` and `## ci-*`.
   exported, and not overwritten by a replace-import.
 - All other questions: still open.
 
+## Ryan's answers (2026-11-20, after the Mac checks)
+- Q5: soft playing fits to **15 %** (was 30 %), plus the new **Range** slider (v11-dynamic-range).
+- L11-9: the press-to-test result reads "Worship Rig gets it. If another app also reacts, pick another."
+- Everything else in v11-todo §3 as recommended ("yep do all of this"): Q1, Q2, Q4, Q6, Q8, Q9, Q11/Q12, Q14,
+  Q15, Q16, Q17, Q20, Q22–Q27 keep; Q13 later; Q19 1.1.x if wanted; **Q21 yes** (Panic tooltip: "All notes off and
+  the click stops (Esc, ⌘.)"); wash-wheel room size follows the wheel; song-switch latency in 1.2 after measuring on
+  the Mac; warm-theme press-to-test wording later. S1 (GitHub Support purge) stays Ryan's to send.
+- Release: tag v1.1.0 approved (Ryan 2026-11-20: "update my worship rig … after you push 1.1.0 … don't stop until
+  everything is good").
+
 ## Questions for Ryan
 
 **Electron**
