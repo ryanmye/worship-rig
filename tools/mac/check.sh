@@ -178,23 +178,51 @@ extract_errors() {
     "$log" 2>/dev/null | sed -e "s#$src/##g" -e "s#$work/##g" | awk '!seen[$0]++' | head -n 80 > "$dest" || true
 }
 
-# run_timeout <seconds> <log> cmd...: macOS has no timeout(1); returns the command's status (124 on timeout)
-run_timeout() {
-  local secs="$1" log="$2" pid wd rc
-  shift 2
-  "$@" >> "$log" 2>&1 &
+# ---- timeouts: macOS has no timeout(1) ---------------------------------------------------------------------------
+# a process and all its descendants (collected before any is killed: an orphan is re-parented and lost to pgrep -P)
+tree_pids() {
+  local p="$1" c
+  echo "$p"
+  for c in $(pgrep -P "$p" 2>/dev/null || true); do tree_pids "$c"; done
+}
+cur_job=""  # the pid tmo is waiting on, for the TERM/INT/HUP trap
+# tmo <seconds> cmd...: runs cmd with stdin from /dev/null (nothing can wait for input), kills its whole process tree
+# (xcodebuild -> swift-frontend, cmake -> ninja -> clang) after <seconds>; returns its status, 124 on timeout.
+# Output is the caller's: `tmo 600 cmake ... >> "$log" 2>&1`. A function as cmd runs in the background subshell.
+tmo() {
+  local secs="$1" pid wd rc=0
+  shift
+  "$@" < /dev/null &
   pid=$!
-  ( sleep "$secs"; kill -TERM "$pid" 2>/dev/null; sleep 5; kill -KILL "$pid" 2>/dev/null ) >/dev/null 2>&1 &
+  cur_job="$pid"
+  # shellcheck disable=SC2046  # the pid list is meant to split
+  ( sleep "$secs"; echo "timeout" > "$state/.tmo.$pid"; pids="$(tree_pids "$pid")"; kill -TERM $pids
+    sleep 5; kill -KILL $pids ) >/dev/null 2>&1 &
   wd=$!
-  rc=0
   wait "$pid" || rc=$?
-  pkill -P "$wd" 2>/dev/null || true  # its sleep, so no orphan outlives the run
-  kill "$wd" 2>/dev/null || true
-  wait "$wd" 2>/dev/null || true
-  if [ "$rc" -eq 143 ] || [ "$rc" -eq 137 ]; then
-    echo "check.sh: timed out after ${secs}s: $*" >> "$log"
+  cur_job=""
+  kill_quiet "$wd"
+  if [ -f "$state/.tmo.$pid" ]; then
+    rm -f "$state/.tmo.$pid"
+    echo "check.sh: timed out after ${secs}s: $*" >&2
     return 124
   fi
+  return "$rc"
+}
+kill_quiet() {  # the watchdog subshell and its sleep
+  local pids
+  pids="$(tree_pids "$1")"
+  # shellcheck disable=SC2086
+  kill $pids 2>/dev/null || true
+  wait "$1" 2>/dev/null || true
+}
+# in_dir <dir> cmd...: for tmo, instead of `(cd dir && cmd)` (exec: the timeout's TERM reaches cmd itself)
+in_dir() { cd "$1" && shift && exec "$@"; }
+# run_timeout <seconds> <log> cmd...: tmo with the output appended to <log>
+run_timeout() {
+  local secs="$1" log="$2" rc=0
+  shift 2
+  tmo "$secs" "$@" >> "$log" 2>&1 || rc=$?
   return "$rc"
 }
 
@@ -214,7 +242,18 @@ else
   [ -n "$cpu_desc" ] || cpu_desc="$(uname -m)"
 fi
 arch="$(uname -m)"
-v_xcode="$(have xcodebuild && xcodebuild -version 2>/dev/null | tr '\n' ' ' | sed 's/ *$//' || true)"
+v_xcode=""; xcode_note=""
+if [ "$IS_MAC" -eq 1 ]; then
+  # /usr/bin/xcodebuild is a shim that always exists; it fails without Xcode.app or before the license is accepted
+  xv="$(tmo 60 xcodebuild -version 2>&1 || true)"
+  v_xcode="$(printf '%s\n' "$xv" | grep -E '^(Xcode [0-9]|Build version)' | tr '\n' ' ' | sed 's/ *$//' || true)"
+  if [ -z "$v_xcode" ]; then
+    case "$xv" in
+      *icense*) xcode_note="Xcode license not accepted: Ryan runs 'sudo xcodebuild -license accept' once" ;;
+      *) xcode_note="Xcode not found: install Xcode 15.4+ and open it once ($(printf '%s\n' "$xv" | head -n 1))" ;;
+    esac
+  fi
+fi
 v_cmake="$(have cmake && first_line cmake --version || true)"
 v_ninja="$(have ninja && first_line ninja --version || true)"
 v_xcodegen="$(have xcodegen && first_line xcodegen --version || true)"
@@ -243,6 +282,80 @@ if [ -n "$missing_brew" ]; then
   else brew_line="install: $missing_brew (on the Mac: brew install $missing_brew)"; fi
 fi
 
+# ---- summary.json + table (also written when the run is interrupted) ----------------------------------------------
+summary="$out/summary.json"
+interrupted=""
+cur_stage=""  # the stage running now, for the trap
+probe_json="$out/probe.json"
+export_status="FAIL"; export_details="not reached"; export_secs=0
+src=""; work=""; sha=""
+finish() {
+  {
+    printf '{"tool":"tools/mac/check.sh","schema":1,"rev":%s,"sha":%s,"started":%s,"finished":%s,' \
+      "$(json_str "$rev")" "$(json_str "$sha")" "$(json_str "$started")" "$(json_str "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
+    printf '"host":{"os":%s,"arch":%s,"cpu":%s,"cores":%s,"xcode":%s,"cxx":%s,"cmake":%s,"ninja":%s,"xcodegen":%s,' \
+      "$(json_str "$os_desc")" "$(json_str "$arch")" "$(json_str "$cpu_desc")" "$(json_str "$cores_desc")" \
+      "$(json_str "$v_xcode")" "$(json_str "$v_cxx")" "$(json_str "$v_cmake")" "$(json_str "$v_ninja")" \
+      "$(json_str "$v_xcodegen")"
+    printf '"node":%s,"jobs":%s,"missing_brew":%s},' "$(json_str "$v_node")" "$jobs" "$(json_str "$brew_line")"
+    printf '"export":{"status":%s,"seconds":%s,"details":%s,"src":%s},' "$(json_str "$export_status")" \
+      "$export_secs" "$(json_str "$export_details")" "$(json_str "$src")"
+    printf '"out":%s,"interrupted":%s,"stages":{' "$(json_str "$out")" "$(json_str "$interrupted")"
+    firsts=1
+    for s in $ALL_STAGES; do
+      want "$s" || continue
+      [ -f "$state/$s.status" ] || continue
+      [ "$firsts" -eq 1 ] || printf ','
+      firsts=0
+      printf '%s:{"status":%s,"seconds":%s,"details":%s,"log":%s,"errors":' "$(json_str "$s")" \
+        "$(json_str "$(cat "$state/$s.status")")" "$(cat "$state/$s.seconds")" \
+        "$(json_str "$(cat "$state/$s.details")")" "$(json_str "$s.log")"
+      json_lines "$state/$s.errors"
+      ex="$(cat "$state/$s.extra" 2>/dev/null || true)"
+      [ -z "$ex" ] || printf ',%s' "$ex"
+      printf '}'
+    done
+    printf '},"probe":'
+    if want probe && [ -s "$probe_json" ]; then tr -d '\n' < "$probe_json"; else printf 'null'; fi
+    printf '}\n'
+  } > "$summary"
+
+  fails=0
+  echo
+  printf '%-10s %-8s %6s  %s\n' STAGE STATUS SECONDS DETAILS
+  printf '%-10s %-8s %6s  %s\n' export "$export_status" "$export_secs" "$export_details" | cut -c1-160
+  for s in $ALL_STAGES; do
+    want "$s" || continue
+    [ -f "$state/$s.status" ] || continue
+    st="$(cat "$state/$s.status")"
+    [ "$st" != FAIL ] || fails=$((fails + 1))
+    printf '%-10s %-8s %6s  %s\n' "$s" "$st" "$(cat "$state/$s.seconds")" "$(cat "$state/$s.details")" | cut -c1-160
+    if [ "$st" = FAIL ] && [ -s "$state/$s.errors" ]; then
+      head -n 3 "$state/$s.errors" | sed 's/^/             ! /' | cut -c1-160
+    fi
+  done
+  [ "$export_status" = PASS ] || fails=$((fails + 1))
+  echo
+  echo "summary: $summary"
+  [ "$fails" -eq 0 ]
+}
+on_signal() {  # TERM/INT/HUP (e.g. the push agent gives up): stop the running command, still write the summary
+  trap - TERM INT HUP
+  local pids
+  if [ -n "$cur_job" ]; then
+    pids="$(tree_pids "$cur_job")"
+    # shellcheck disable=SC2086
+    kill -TERM $pids 2>/dev/null || true
+  fi
+  interrupted="signal during ${cur_stage:-setup}"
+  if [ -n "$cur_stage" ] && [ ! -f "$state/$cur_stage.status" ]; then
+    record "$cur_stage" FAIL 0 "interrupted by a signal (partial log: $cur_stage.log)"
+  fi
+  finish || true
+  exit 143
+}
+trap on_signal TERM INT HUP
+
 if want tools; then
   t0=$SECONDS
   tl="$out/tools.log"
@@ -257,8 +370,8 @@ if want tools; then
     echo "node:     ${v_node:-MISSING (optional: unit.params-drift is not registered without it)}"
     if [ "$IS_MAC" -eq 1 ] && [ -n "$v_xcode" ]; then
       echo "xcode-select -p: $(xcode-select -p 2>/dev/null || echo '?')"
-      xcodebuild -showsdks 2>/dev/null | grep -E 'macosx|iphonesimulator|iphoneos' || true
-      if ! xcodebuild -checkFirstLaunchStatus >/dev/null 2>&1; then
+      tmo 60 xcodebuild -showsdks 2>/dev/null | grep -E 'macosx|iphonesimulator|iphoneos' || true
+      if ! tmo 60 xcodebuild -checkFirstLaunchStatus >/dev/null 2>&1; then
         echo "NOTE: xcodebuild -checkFirstLaunchStatus is not clean: Ryan runs 'sudo xcodebuild -runFirstLaunch' once"
       fi
     fi
@@ -276,8 +389,8 @@ if want tools; then
     esac
   fi
   if [ "$IS_MAC" -eq 1 ] && [ -z "$v_xcode" ]; then
-    st=FAIL; det="Xcode not found (install Xcode 15.4+ from the App Store); $det"
-    echo "Xcode not found: install Xcode 15.4+ and run it once" >> "$errs"
+    st=FAIL; det="$xcode_note; $det"
+    echo "$xcode_note" >> "$errs"
   fi
   record tools "$st" $((SECONDS - t0)) "$det" "$errs"
   cat "$tl"
@@ -293,8 +406,6 @@ if [ -z "$cache_root" ]; then
 fi
 mkdir -p "$cache_root"
 cache_root="$(cd "$cache_root" && pwd -P)"
-export_status="FAIL"; export_details=""; export_secs=0
-src=""; work=""; sha=""
 t0=$SECONDS
 if [ -n "$src_dir" ]; then
   # --src: an uncommitted tree (testing this script, or a change before it is pushed): copied, never built in place
@@ -344,7 +455,7 @@ else
       for p in $EXPORT_PATHS; do
         if git -C "$repo" cat-file -e "$sha:$p" 2>/dev/null; then paths+=("$p"); fi
       done
-      if git -C "$repo" archive --format=tar "$sha" -- ${paths[@]+"${paths[@]}"} | tar -x -C "$src.partial" \
+      if { git -C "$repo" archive --format=tar "$sha" -- ${paths[@]+"${paths[@]}"} | tar -x -C "$src.partial"; } \
           2> "$out/export.log"; then
         printf '%s' "$sha" > "$src.partial/.export-ok"
         mv "$src.partial" "$src"
@@ -356,9 +467,9 @@ else
     fi
     touch "$work"
     # keep the three most recent revisions (each holds an export plus its build trees)
-    # shellcheck disable=SC2012  # names are 7 hex digits
-    ls -1t "$cache_root" 2>/dev/null | tail -n +4 | while IFS= read -r old; do
-      case "$old" in *[!0-9a-f]*|"") ;; *) rm -rf "${cache_root:?}/$old" ;; esac
+    # shellcheck disable=SC2012  # names are 7 hex digits (local/ from --src and anything else are left alone)
+    ls -1t "$cache_root" 2>/dev/null | grep -E '^[0-9a-f]{7}$' | tail -n +4 | while IFS= read -r old; do
+      rm -rf "${cache_root:?}/$old"
     done
   fi
 fi
@@ -373,11 +484,13 @@ configure_tree() {  # the devhost tree, which also builds the core and its tests
   if [ -f "$tree/build.ninja" ] && grep -q '^DEVHOST_CORE_TESTS:BOOL=ON' "$tree/CMakeCache.txt" 2>/dev/null; then
     return 0
   fi
-  cmake -S "$src/native/devhost" -B "$tree" -G Ninja -DCMAKE_BUILD_TYPE=Release -DDEVHOST_CORE_TESTS=ON >> "$log" 2>&1
+  run_timeout 600 "$log" cmake -S "$src/native/devhost" -B "$tree" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    -DDEVHOST_CORE_TESTS=ON
 }
 
 # ---- core --------------------------------------------------------------------------------------------------------
 if want core; then
+  cur_stage=core
   log="$out/core.log"; : > "$log"
   if [ "$exported" -eq 0 ]; then skip core "no exported tree ($export_details)"
   elif [ "$core_tools_ok" -eq 0 ]; then skip core "needs cmake + ninja: $brew_line"
@@ -385,8 +498,8 @@ if want core; then
     t0=$SECONDS
     errs="$state/core.errlist"; : > "$errs"
     extra=""
-    if ! configure_tree "$log" || ! cmake --build "$tree" -j "$jobs" --target rig_tests rig_render rig-golden rig_bench \
-        >> "$log" 2>&1; then
+    if ! configure_tree "$log" || ! run_timeout 2400 "$log" cmake --build "$tree" -j "$jobs" \
+        --target rig_tests rig_render rig-golden rig_bench; then
       extract_errors "$log" "$errs"
       record core FAIL $((SECONDS - t0)) "configure/build failed ($(wc -l < "$errs" | tr -d ' ') errors)" "$errs"
     else
@@ -398,7 +511,7 @@ if want core; then
       fi
       ctl="$out/core.ctest.txt"
       rc=0
-      (cd "$tree" && ctest -LE "$exclude" -j "$jobs" --timeout 900 --output-on-failure) > "$ctl" 2>&1 || rc=$?
+      tmo 1800 in_dir "$tree" ctest -LE "$exclude" -j "$jobs" --timeout 900 --output-on-failure > "$ctl" 2>&1 || rc=$?
       cat "$ctl" >> "$log"
       # per test: "name status" from ctest's progress lines
       results="$state/core.results"
@@ -408,7 +521,7 @@ if want core; then
       if [ "$rc" -ne 0 ]; then
         # timing-sensitive tests on a busy machine: one serial rerun of the failures (the lanes' rule), noted as flaky
         rr="$out/core.rerun.txt"
-        (cd "$tree" && ctest --rerun-failed --timeout 900 --output-on-failure) > "$rr" 2>&1 || true
+        tmo 1200 in_dir "$tree" ctest --rerun-failed --timeout 900 --output-on-failure > "$rr" 2>&1 || true
         cat "$rr" >> "$log"
         while IFS=' ' read -r name status; do
           [ -n "$name" ] || continue
@@ -472,22 +585,22 @@ if want core; then
 fi
 
 # ---- probe -------------------------------------------------------------------------------------------------------
-probe_json="$out/probe.json"
 if want probe; then
+  cur_stage=probe
   log="$out/probe.log"; : > "$log"
   if [ "$exported" -eq 0 ]; then skip probe "no exported tree ($export_details)"
   elif [ "$core_tools_ok" -eq 0 ]; then skip probe "needs cmake + ninja: $brew_line"
   else
     t0=$SECONDS
     errs="$state/probe.errlist"; : > "$errs"
-    if ! configure_tree "$log" || ! cmake --build "$tree" -j "$jobs" --target rig-probe devhost_tests rig-devhost \
-        >> "$log" 2>&1; then
+    if ! configure_tree "$log" || ! run_timeout 2400 "$log" cmake --build "$tree" -j "$jobs" \
+        --target rig-probe devhost_tests rig-devhost; then
       extract_errors "$log" "$errs"
       record probe FAIL $((SECONDS - t0)) "devhost build failed" "$errs"
     else
       # the dev host's own tests first (null backend, ~15 s): the probe's plumbing on this machine's compiler
       dh_rc=0
-      (cd "$tree" && ctest -L devhost -j "$jobs" --timeout 300 --output-on-failure) >> "$log" 2>&1 || dh_rc=$?
+      run_timeout 900 "$log" in_dir "$tree" ctest -L devhost -j "$jobs" --timeout 300 --output-on-failure || dh_rc=$?
       [ "$dh_rc" -eq 0 ] || echo "devhost ctest failed (exit $dh_rc): see probe.log" >> "$errs"
       if [ "$IS_MAC" -eq 1 ]; then
         probe_args=(--out "$probe_json")
@@ -525,8 +638,10 @@ if [ "$IS_MAC" -eq 0 ]; then apple_skip_reason="not macOS ($OS): the Apple stage
 elif [ "$exported" -eq 0 ]; then apple_skip_reason="no exported tree ($export_details)"
 elif [ "$apple_tools_ok" -eq 0 ]; then
   apple_skip_reason="needs Xcode + cmake + ninja + xcodegen${brew_line:+: $brew_line}"
-  [ -n "$v_xcode" ] || apple_skip_reason="$apple_skip_reason (Xcode not found)"
+  [ -n "$v_xcode" ] || apple_skip_reason="$apple_skip_reason ($xcode_note)"
 fi
+
+platform_note="no iOS Simulator platform in this Xcode: Ryan decides on 'xcodebuild -downloadPlatform iOS' (several GB)"
 
 # xcode_build <stage> <scheme> <destination> <sdk> <log> [build settings...]: scheme build; XcodeGen writes no shared
 # schemes for this project.yml, so if xcodebuild has not auto-created one, fall back to a target build
@@ -534,15 +649,15 @@ xcode_build() {
   local stage="$1" scheme="$2" dest="$3" sdk="$4" log="$5"
   shift 5
   local rc=0
-  (cd "$src/native/apple" && xcodebuild -project WorshipRig.xcodeproj -scheme "$scheme" -configuration Debug \
-    -destination "$dest" -derivedDataPath "$work/dd-$stage" COMPILER_INDEX_STORE_ENABLE=NO "$@" build) \
-    >> "$log" 2>&1 || rc=$?
+  run_timeout 2400 "$log" in_dir "$src/native/apple" xcodebuild -project WorshipRig.xcodeproj -scheme "$scheme" \
+    -configuration Debug -destination "$dest" -derivedDataPath "$work/dd-$stage" COMPILER_INDEX_STORE_ENABLE=NO \
+    "$@" build || rc=$?
   if [ "$rc" -ne 0 ] && grep -q 'does not contain a scheme named' "$log"; then
     echo "check.sh: no scheme '$scheme'; building the target instead" >> "$log"
     rc=0
-    (cd "$src/native/apple" && xcodebuild -project WorshipRig.xcodeproj -target "$scheme" -configuration Debug \
-      -sdk "$sdk" -arch arm64 SYMROOT="$work/sym-$stage" OBJROOT="$work/obj-$stage" COMPILER_INDEX_STORE_ENABLE=NO \
-      "$@" build) >> "$log" 2>&1 || rc=$?
+    run_timeout 2400 "$log" in_dir "$src/native/apple" xcodebuild -project WorshipRig.xcodeproj -target "$scheme" \
+      -configuration Debug -sdk "$sdk" -arch arm64 SYMROOT="$work/sym-$stage" OBJROOT="$work/obj-$stage" \
+      COMPILER_INDEX_STORE_ENABLE=NO "$@" build || rc=$?
   fi
   return "$rc"
 }
@@ -551,18 +666,25 @@ apple_stage() {  # apple_stage <stage> <build-core flags> <scheme> <destination>
   local stage="$1" flags="$2" scheme="$3" dest="$4" sdk="$5"
   shift 5
   local log="$out/$stage.log" errs="$state/$stage.errlist" t0=$SECONDS step=""
+  cur_stage="$stage"
   : > "$log"; : > "$errs"
   step="build-core.sh $flags"
   # shellcheck disable=SC2086  # $flags is a word list
-  if (cd "$src/native/apple" && RIG_CMAKE_GENERATOR=Ninja RIG_JOBS="$jobs" bash scripts/build-core.sh $flags) \
-      >> "$log" 2>&1; then
+  if RIG_CMAKE_GENERATOR=Ninja RIG_JOBS="$jobs" run_timeout 2400 "$log" in_dir "$src/native/apple" \
+      bash scripts/build-core.sh $flags; then
     step="xcodegen"
-    if (cd "$src/native/apple" && xcodegen generate --spec project.yml) >> "$log" 2>&1; then
+    if run_timeout 300 "$log" in_dir "$src/native/apple" xcodegen generate --spec project.yml; then
       step="xcodebuild $scheme"
       if xcode_build "$stage" "$scheme" "$dest" "$sdk" "$log" "$@"; then
         local warn
         warn="$(grep -c ': warning: ' "$log" || true)"
         record "$stage" PASS $((SECONDS - t0)) "$scheme compiled and linked ($dest); $warn compiler warnings" "$errs"
+        return 0
+      fi
+      # Xcode 15+ ships the iOS platform (simulator runtime) as a separate download: without it the generic
+      # simulator destination does not resolve. That is a missing install, not a compile error.
+      if [ "$sdk" = iphonesimulator ] && grep -qE 'is not installed\. To use with Xcode, first download and install|Unable to find a destination matching' "$log"; then
+        record "$stage" SKIPPED $((SECONDS - t0)) "$platform_note" "$errs"
         return 0
       fi
     fi
@@ -577,61 +699,12 @@ if want apple-mac; then
 fi
 if want apple-sim; then
   if [ -n "$apple_skip_reason" ]; then skip apple-sim "$apple_skip_reason"
-  elif ! xcodebuild -showsdks 2>/dev/null | grep -q iphonesimulator; then
-    skip apple-sim "no iOS Simulator SDK in this Xcode: Ryan decides on 'xcodebuild -downloadPlatform iOS' (several GB)"
+  elif ! tmo 60 xcodebuild -showsdks 2>/dev/null | grep -q iphonesimulator; then
+    skip apple-sim "$platform_note"
   else
     apple_stage apple-sim "--sim --no-device" WorshipRig-iPad "generic/platform=iOS Simulator" iphonesimulator \
       CODE_SIGNING_ALLOWED=NO
   fi
 fi
 
-# ---- summary.json + table ----------------------------------------------------------------------------------------
-summary="$out/summary.json"
-{
-  printf '{"tool":"tools/mac/check.sh","schema":1,"rev":%s,"sha":%s,"started":%s,"finished":%s,' \
-    "$(json_str "$rev")" "$(json_str "$sha")" "$(json_str "$started")" "$(json_str "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
-  printf '"host":{"os":%s,"arch":%s,"cpu":%s,"cores":%s,"xcode":%s,"cxx":%s,"cmake":%s,"ninja":%s,"xcodegen":%s,' \
-    "$(json_str "$os_desc")" "$(json_str "$arch")" "$(json_str "$cpu_desc")" "$(json_str "$cores_desc")" \
-    "$(json_str "$v_xcode")" "$(json_str "$v_cxx")" "$(json_str "$v_cmake")" "$(json_str "$v_ninja")" \
-    "$(json_str "$v_xcodegen")"
-  printf '"node":%s,"jobs":%s,"missing_brew":%s},' "$(json_str "$v_node")" "$jobs" "$(json_str "$brew_line")"
-  printf '"export":{"status":%s,"seconds":%s,"details":%s,"src":%s},' "$(json_str "$export_status")" \
-    "$export_secs" "$(json_str "$export_details")" "$(json_str "$src")"
-  printf '"out":%s,"stages":{' "$(json_str "$out")"
-  firsts=1
-  for s in $ALL_STAGES; do
-    want "$s" || continue
-    [ -f "$state/$s.status" ] || continue
-    [ "$firsts" -eq 1 ] || printf ','
-    firsts=0
-    printf '%s:{"status":%s,"seconds":%s,"details":%s,"log":%s,"errors":' "$(json_str "$s")" \
-      "$(json_str "$(cat "$state/$s.status")")" "$(cat "$state/$s.seconds")" \
-      "$(json_str "$(cat "$state/$s.details")")" "$(json_str "$s.log")"
-    json_lines "$state/$s.errors"
-    ex="$(cat "$state/$s.extra" 2>/dev/null || true)"
-    [ -z "$ex" ] || printf ',%s' "$ex"
-    printf '}'
-  done
-  printf '},"probe":'
-  if want probe && [ -s "$probe_json" ]; then tr -d '\n' < "$probe_json"; else printf 'null'; fi
-  printf '}\n'
-} > "$summary"
-
-fails=0
-echo
-printf '%-10s %-8s %6s  %s\n' STAGE STATUS SECONDS DETAILS
-printf '%-10s %-8s %6s  %s\n' export "$export_status" "$export_secs" "$export_details" | cut -c1-160
-for s in $ALL_STAGES; do
-  want "$s" || continue
-  [ -f "$state/$s.status" ] || continue
-  st="$(cat "$state/$s.status")"
-  [ "$st" != FAIL ] || fails=$((fails + 1))
-  printf '%-10s %-8s %6s  %s\n' "$s" "$st" "$(cat "$state/$s.seconds")" "$(cat "$state/$s.details")" | cut -c1-160
-  if [ "$st" = FAIL ] && [ -s "$state/$s.errors" ]; then
-    head -n 3 "$state/$s.errors" | sed 's/^/             ! /' | cut -c1-160
-  fi
-done
-[ "$export_status" = PASS ] || fails=$((fails + 1))
-echo
-echo "summary: $summary"
-[ "$fails" -eq 0 ]
+finish

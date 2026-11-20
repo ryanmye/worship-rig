@@ -64,14 +64,15 @@ What it guarantees:
 |---|---|---|
 | (export) | `git archive` of the revision, ~145 MB | 5-15 s / 0 s |
 | `tools` | macOS, CPU (performance + efficiency cores), Xcode, Apple clang, cmake, ninja, xcodegen, node versions; SDK list; first-launch status | < 5 s |
-| `core` | `cmake -G Ninja -DCMAKE_BUILD_TYPE=Release` of `native/devhost` with `-DDEVHOST_CORE_TESTS=ON` (the core and its tests in the same tree the probe uses: the core compiles once), build `rig_tests rig_render rig-golden rig_bench`, `ctest -LE devhost -j<ncpu>`; failures are re-run once serially (timing tests) and reported as `flaky` if they pass. Golden tests are excluded when `native/golden/out` is absent (it is git-ignored, so always in an export): CI's `goldens` + `build-test` cover them on macos-15. `unit.samples_decode`, `unit.samples_process` and `unit.samples_service` read `tools/golden/decode-dump/data/raw*`, which is git-ignored too: without it their failures are listed as `NoData` and not counted (see "Known gaps"). Per-test results in `stages.core.tests`. | 3-5 min / 30-90 s |
-| `probe` | build `rig-probe` + the dev host tests in the same tree, `ctest -L devhost` (null backend), then `rig-probe` on the default output (below), killed after 300 s | 2.5-3.5 min / 2 min |
+| `core` | `cmake -G Ninja -DCMAKE_BUILD_TYPE=Release` of `native/devhost` with `-DDEVHOST_CORE_TESTS=ON` (the core and its tests in the same tree the probe uses: the core compiles once), build `rig_tests rig_render rig-golden rig_bench`, `ctest -LE devhost -j<ncpu>`; failures are re-run once serially (timing tests) and reported as `flaky` if they pass. Golden tests are excluded when `native/golden/out` is absent (it is git-ignored, so always in an export): CI's `goldens` + `build-test` cover them on macos-15. `unit.samples_decode`, `unit.samples_process` and `unit.samples_service` read `tools/golden/decode-dump/data/raw*`, which is git-ignored too: without it their failures are listed as `NoData` and not counted (see "Known gaps"). Per-test results in `stages.core.tests`. | 1.5-3 min / 30-60 s |
+| `probe` | build `rig-probe` + the dev host tests in the same tree, `ctest -L devhost` (null backend), then `rig-probe` on the default output (below), killed after 300 s | 2-3 min / 2 min |
 | `apple-mac` | `scripts/build-core.sh --mac-only` (Ninja), `xcodegen generate`, `xcodebuild -scheme WorshipRig-macOS -configuration Debug -destination 'platform=macOS' CODE_SIGN_IDENTITY=- build` (compile and link only) | 2-4 min / 1 min |
 | `apple-sim` | `scripts/build-core.sh --sim --no-device`, `xcodegen`, `xcodebuild -scheme WorshipRig-iPad -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build`; SKIPPED with a note if this Xcode has no iOS Simulator SDK | 2-4 min / 1 min |
 
-Estimated total: 10-15 min for a new revision, about 3 min for a rerun of the same one, 1-3 min for `--quick` after a
-Swift-only change. (The estimates are scaled from this 2-vCPU Linux box, where the core tree builds in ~17 min at
-`-j2`; the first real run replaces them: `summary.json` has `seconds` per stage.)
+Estimated total: 8-12 min for a new revision, about 3 min for a rerun of the same one, 1-3 min for `--quick` after a
+Swift-only change. Measured on the 2-vCPU Linux box (`--jobs 2`, clean export of e2b5219): export 1 s, core 153 s
+(build + 49 tests), probe 61 s (devhost build + tests + the probe in `--quick` mode on the null backend). The Apple
+stages are estimates; the first real run replaces them (`summary.json` has `seconds` per stage).
 
 If XcodeGen's project has no scheme that xcodebuild can auto-create, the Apple stages fall back to a target build
 (`-target <name> -sdk <sdk> -arch arm64`); the log says so.

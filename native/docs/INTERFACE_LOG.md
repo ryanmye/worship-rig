@@ -111,7 +111,7 @@ counter in the graph was not needed: the pools already hold the count.
 | 28 | `src/graph/graph.{h,cpp}` | `setVoiceLimit(total)` (any thread, atomic; 0 = off, the bare Graph's default), `voiceLimitRequested()`; `GraphStats::limitSteals`; `limitVoices()` after every NoteOn (targeted or kAllSlots) | D4 |
 | 29 | `src/model/model.{h,cpp}` | `CommandSink::setVoiceLimit(total)` (default no-op; `Engine` forwards to the graph); `Model::setVoiceLimit(int)` (`kVoiceLimitAuto` = -1, 0, 128, 256, 512), `voiceLimit()`, `voiceLimitEffective()` (auto from `env().config->profile`), `voiceLimitJson(JsonOut &)`; `stateJson` gains the two fields | D4 |
 | 30 | `src/api/engine.{h,cpp}` | `Engine::setVoiceLimit` override; the constructor sets the Model's default (auto) on the graph; `statsJson` + `voiceLimitSteals`, `voiceLimit` | D4 |
-| 31 | `src/bridge/bridge.cpp`, `src/bridge/schema.cpp` (T08 files, smallest edit) | `opConfig` parses `voiceLimit`; hello cap; schema row `voiceLimit` Enum `auto|128|256|512|0`, and an Enum now also matches an integral NUMBER whose decimal form is a member (a numeric STRING never matches: "128" is refused) | D4 |
+| 31 | `src/bridge/bridge.cpp`, `src/bridge/schema.cpp` (T08 files, smallest edit) | `opConfig` parses `voiceLimit`; hello cap; schema row `voiceLimit` Enum `auto|128|256|512|0`, and an Enum now also matches an integral NUMBER whose decimal form is a member (a numeric STRING never matches: "128" is refused; \|n\| ≥ 1e9 is refused before the cast, D4 review R2) | D4 |
 
 Contract (`native/contract`): `config.voiceLimit` `'auto'|128|256|512|0?`, reply `voiceLimit?`, `voiceLimitEffective?`,
 get state note; `engine-api.json` regenerated (`--check` clean). `app/js/engine-bridge/mock-native.js` answers
