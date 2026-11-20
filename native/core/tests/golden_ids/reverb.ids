@@ -1,0 +1,9 @@
+# T04 reverb fixtures (owner T04). reverb-dry renders digital silence (return gain 0): it passes without any reverb
+# code, so it proves nothing on its own. The other five are exactIfPrngPorted and match the golden to ~2e-8
+# (tests/test_reverb_golden.cpp checks the exact tier); this ctest compares at the manifest tier.
+reverb-dry
+reverb-room
+reverb-stage
+reverb-hall
+reverb-cathedral
+reverb-wash

@@ -35,6 +35,9 @@ enum MasterParam : std::uint32_t {
 enum class MasterOp : std::uint16_t {
   SetGlue = kOpBaseT03,  // a = amount (engage after 0.3 s, 30 ms crossfade; 0 = disengage)
   // T03 appends below.
+  // SetGlue: f.a = amount (0..1), f.b = `when` in engine seconds (the crossfade starts at when + 0.3; the compressor
+  // is connected from the quantum the op arrives in, as fx.js connects it at call time).
+  SetMono,  // f.a = 1 mono / 0 stereo, f.b = engine time of the 50 ms linear crossfade (fx.js setMono)
 };
 
 struct UnitEnv;

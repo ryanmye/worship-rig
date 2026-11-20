@@ -82,8 +82,14 @@ class ReverbPool final : public ReverbService {
   /** Seconds of player quiet (fx.js env.quietFor: 0 while keys are held / the pedal is down). Until T14 installs
    *  one, the player counts as always quiet (builds still wait for the time since the last build). */
   void setQuietProbe(std::function<double()> probe) { quietFor_ = std::move(probe); }
-  /** Gate builds by quiet in offline mode too (tests; JS gates realtime only). */
-  void setGateOffline(bool on) { gateOffline_ = on; }
+  /** Tests: run the realtime policy (async builds, quiet gate, deferral) in an offline engine; builds stay inline
+   *  (delivered at once instead of by the worker). */
+  void setSimulateRealtime(bool on) { offline_ = !on && inline_; }
+  /** Tests: build kernels with this instead of the IR generator (e.g. an identity IR). */
+  using BuildFn = std::function<KernelPtr(const std::string &key, double sampleRate, double size, double damp)>;
+  void setBuildOverride(BuildFn fn) { override_ = std::move(fn); }
+  /** Build a space into the pool without staging it (offline: now; realtime: on the worker). */
+  void ensureBuilt(double size, double damp);
 
   /** Deliver finished worker builds (also polled by a control timer every 20 ms while builds run). */
   std::size_t pump();
@@ -144,7 +150,8 @@ class ReverbPool final : public ReverbService {
   double t(double when) const;
   void at(double time, std::function<void(double)> fn);
   bool offline() const { return offline_; }
-  bool gateActive() const { return (!offline_ || gateOffline_) && static_cast<bool>(quietFor_); }
+  bool gateActive() const { return !offline_ && static_cast<bool>(quietFor_); }
+  KernelPtr buildKernel(const std::string &key, double sr, double size, double damp) const;
 
   KernelPtr cached(const std::string &key);
   KernelPtr unitSync(double size, double damp);
@@ -175,7 +182,9 @@ class ReverbPool final : public ReverbService {
 
   Model &m_;
   const void *patchKey_;
-  bool offline_ = true, gateOffline_ = false;
+  bool offline_ = true;  // policy: OfflineAudioContext rules (sync builds, no deferral, no quiet gate)
+  bool inline_ = true;   // builds run on the calling thread (offline engines), else on the IR worker
+  BuildFn override_;
   std::uint32_t seed_ = 1;
   double sr_ = 48000;
   unsigned maxUnits_ = 10;
@@ -187,6 +196,7 @@ class ReverbPool final : public ReverbService {
   std::set<std::string> songKeys_, keep_;
 
   bool unitBuilt_ = false;
+  ReverbUnit *building_ = nullptr;  // the unit buildUnit() is constructing (not attached yet)
   SlotMirror slots_[kReverbSlots];
   int active_ = -1;
   double size_ = 0.5, damp_ = 0.5, predelayV_ = 0.02;

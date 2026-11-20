@@ -37,6 +37,7 @@ constexpr double kInf = std::numeric_limits<double>::infinity();
 ReverbPool::ReverbPool(Model &m) : m_(m), patchKey_(&m.patch()) {
   const rig_config *cfg = m.env().config;
   offline_ = !cfg || cfg->mode == RIG_MODE_OFFLINE;
+  inline_ = offline_;
   seed_ = m.env().seed;
   sr_ = m.env().sampleRate;
   const bool ipad = cfg && cfg->profile == RIG_PROFILE_IPAD;
@@ -125,10 +126,14 @@ ReverbPool::KernelPtr ReverbPool::cached(const std::string &key) {
   return it->second.first;
 }
 
+ReverbPool::KernelPtr ReverbPool::buildKernel(const std::string &key, double sr, double size, double damp) const {
+  return override_ ? override_(key, sr, size, damp) : ReverbKernel::build(sr, seed_, size, damp);
+}
+
 ReverbPool::KernelPtr ReverbPool::unitSync(double size, double damp) {
   const std::string key = irKeyFor(size, damp);
   if (KernelPtr k = cached(key)) return k;
-  KernelPtr k = ReverbKernel::build(sr_, seed_, size, damp);
+  KernelPtr k = buildKernel(key, sr_, size, damp);
   ++builds_;
   newUnit(key, k);
   return k;
@@ -204,7 +209,7 @@ void ReverbPool::workerLoop() {
       jobs_.erase(jobs_.begin());
       ++running_;
     }
-    KernelPtr k = ReverbKernel::build(j.sr, j.seed, j.size, j.damp);
+    KernelPtr k = buildKernel(j.key, j.sr, j.size, j.damp);
     {
       std::lock_guard<std::mutex> lk(mu_);
       mailbox_.emplace_back(j.key, std::move(k));
@@ -216,6 +221,15 @@ void ReverbPool::workerLoop() {
 void ReverbPool::startJob(const std::string &key, double size, double damp) {
   if (jobKeys_.count(key)) return;
   jobKeys_.insert(key);
+  if (inline_) {  // offline engine (simulated realtime policy): build now, deliver as the worker would
+    KernelPtr k = buildKernel(key, sr_, size, damp);
+    {
+      std::lock_guard<std::mutex> lk(mu_);
+      mailbox_.emplace_back(key, std::move(k));
+    }
+    pump();
+    return;
+  }
   {
     std::lock_guard<std::mutex> lk(mu_);
     jobs_.push_back(Job{key, sr_, size, damp, seed_});
@@ -295,7 +309,7 @@ void ReverbPool::unitAsync(double size, double damp, double quiet, std::function
   e.seq = ++inflightSeq_;
   inflight_[key] = std::move(e);
   if (offline_) {
-    KernelPtr k = ReverbKernel::build(sr_, seed_, size, damp);
+    KernelPtr k = buildKernel(key, sr_, size, damp);
     ++builds_;
     inflight_[key].kernel = std::move(k);
     tryFinish(key);
@@ -441,15 +455,20 @@ Unit *ReverbPool::buildUnit(const UnitEnv &env, const UnitSpec &spec) {
     u->installInitial(cu);
     activate0(predelayV_);
   } else {
+    building_ = u;  // a build that completes inside this call (inline builds) installs directly
     unitAsync(size_, damp_, 0, nullptr, [this, activate0](KernelPtr k) {
       if (!k || active_ >= 0) return;  // a commit already activated something
       auto *cu = new ConvUnit(k, sr_);
       cu->slot = 0;
       cu->when = now();
       cu->predelay = predelayV_;
-      m_.sendOwned(UnitSlot::Reverb, opOf(ReverbOp::AttachKernel), cu, -1.0);
+      if (building_)
+        building_->installInitial(cu);
+      else
+        m_.sendOwned(UnitSlot::Reverb, opOf(ReverbOp::AttachKernel), cu, -1.0);
       activate0(predelayV_);
     });
+    building_ = nullptr;
   }
   return u;
 }
@@ -655,6 +674,13 @@ void ReverbPool::request(double size, double damp, double when, bool quiet) {
 void ReverbPool::setPredelay(double seconds, double when) {
   predelayV_ = clampPd(seconds);
   pdTo(active_, predelayV_, t(when));
+}
+
+void ReverbPool::ensureBuilt(double size, double damp) {
+  if (offline_)
+    unitSync(size, damp);
+  else
+    unitAsync(size, damp, 0, nullptr, [](KernelPtr) {});
 }
 
 void ReverbPool::warm(double size, double damp) {
