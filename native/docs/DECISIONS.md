@@ -34,7 +34,26 @@ Decisions that change 2.0's scope. Each names where it lands. Agents: treat thes
 - Parity: the web oracle stays at 4 slots for goldens; slots 4..15 are tested as copies of the slot-0 path (unit and
   bridge tests), plus a native-only fixture with 16 active slots for CPU and memory.
 
-## Open question for Ryan (T00c, 2026-11-20): a global voice ceiling across slots (D1 guard rail)
+## D4 — Total voice limit across slots: a Setting, Auto + manual (Ryan, 2026-11-20)
+Answers the T00c open question (its numbers are kept below). Ryan chose "add to settings", form "Auto + manual".
+- Settings › Sound gets **Total voice limit: Auto | 128 | 256 | 512 | Off** (default Auto), next to the per-slot
+  **Voices per sound: 32 | 64 | 128** (D1). Store key `settings.voiceLimit` ('auto' | 128 | 256 | 512 | 'off').
+- Engine: `config {voiceLimit: 'auto' | 128 | 256 | 512 | 0}` (0 = off), echoed with the effective number in
+  `get state.voiceLimit` / `state.voiceLimitEffective`. At the limit a note-on first applies the per-slot cap, then
+  steals the globally oldest released voice, then the globally oldest held voice, in any slot (retiring channels
+  included), with the usual 20 ms fade. Allocation-free on the audio thread.
+- Auto = a per-profile number sized so the render stays at or under about 60 % of the quantum with the measured
+  per-voice cost (desktop/Mac and iPad profiles; provisional values from the Linux bench until the Mac/iPad are
+  measured, which stays on the Mac list).
+- The web engine (1.x oracle) is unchanged: 16/32 voices, 4 slots; goldens unaffected.
+
+## Settings page restructure (Ryan, 2026-11-20; 2.0 only)
+Simplify Settings into **sidebar categories** (one visible at a time, like macOS System Settings; a horizontal tab
+strip on narrow/iPad portrait): Sound · Keyboards & MIDI · Sounds & Samples · Look · Library & Backup · Mac (Mac app
+only) · About. Every existing setting keeps working; rarely used ones move under an "Advanced" disclosure in their
+category. Lands on `v2-native` with the 2.0 Sound options (D1, D2, D4); 1.x keeps today's page.
+
+## T00c measurements behind D4 (was the open question)
 
 Not implemented: D1 as decided is per slot only. The numbers that make the question real (Linux box, 2 vCPU,
 g++ -O3, 48 kHz, 128-frame quantum = 2667 µs; ARCHITECTURE 7.1):
@@ -52,8 +71,7 @@ g++ -O3, 48 kHz, 128-frame quantum = 2667 µs; ARCHITECTURE 7.1):
 - Without it, the protection is the per-slot cap alone (16 × 32 = 512 voices at the lowest setting) plus the xrun
   counter in `stats`.
 
-Decide: (a) add the global ceiling (value set after the iPad measurement), (b) per-slot only, or (c) a ceiling only on
-the iPad profile.
+Decided 2026-11-20: a Setting, Auto + manual (D4 above).
 
 ## Scheduling
 - 2.0 only; 1.1 ships with 4 slots and today's limits.
