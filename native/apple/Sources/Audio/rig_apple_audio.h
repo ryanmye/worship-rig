@@ -27,6 +27,11 @@ typedef struct rig_apple_audio_request {
   double session_sample_rate;    /**< iPad: AVAudioSession.sampleRate after setActive */
   double session_latency_sec;    /**< iPad: outputLatency + ioBufferDuration */
   uint32_t session_buffer_frames;/**< iPad: ioBufferDuration * sampleRate */
+  /** T00c (DECISIONS D2), UNBUILT here: the `audio {bufferFrames}` request (64 | 128 | 256 | 512) from
+   *  rig_host.audio_start_frames; 0 = derive from latency_sec. macOS: kAudioDevicePropertyBufferFrameSize (clamped
+   *  to the device range; the granted size is read back). iPad: Swift asks setPreferredIOBufferDuration(frames /
+   *  rate) and reports session_buffer_frames. */
+  uint32_t buffer_frames;
 } rig_apple_audio_request;
 
 /** What was actually opened (maps to rig_device_info). Strings are NUL-terminated copies. */

@@ -20,6 +20,7 @@ namespace devhost {
 struct AudioOptions {
   std::string backend = "auto";       // auto | null | alsa | pulse | jack | coreaudio
   std::uint32_t periodFrames = 128;   // the "interactive" buffer (latency_sec 0)
+  std::uint32_t bufferFrames = 0;     // T00c D2 `--buffer N`: force this period (overrides `audio {bufferFrames}`)
   std::uint32_t periods = 2;
   std::uint32_t sampleRate = 0;       // 0 = the device's native rate (the core adopts it, contract 6.3)
   std::uint32_t maxBlockFrames = 4096;  // = rig_config.max_block_frames
@@ -56,7 +57,8 @@ class AudioHost {
   std::string devicesJson();
 
   // rig_host entry points (public for tests; normally called through the vtable on the core's host thread)
-  void start(const char *deviceId, double latencySec, std::uint32_t channels);
+  /** `bufferFrames` (T00c D2, rig_host.audio_start_frames): the `audio {bufferFrames}` request, 0 = none. */
+  void start(const char *deviceId, double latencySec, std::uint32_t channels, std::uint32_t bufferFrames = 0);
   void stop();
 
   /**

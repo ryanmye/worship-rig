@@ -73,6 +73,10 @@ class SynthInstrument final : public Instrument {
   std::uint64_t steals() const { return pool_.steals(); }
   /** Voices counted against the cap (held + released). */
   unsigned playingVoices() const { return pool_.playing(); }
+  /** Held or released voices playing `note`. */
+  unsigned playingNote(int note) const;
+  /** Id of the newest held / released voice of `note` (0xffffffff if none). */
+  VoiceId voiceIdOf(int note) const;
 
   /** Morph (InstrumentBase.morph) at engine time t. */
   void morph(double x, double t);

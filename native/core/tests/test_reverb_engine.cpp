@@ -302,11 +302,12 @@ TEST_SUITE("reverb") {
     CHECK(std::count(keys.begin(), keys.end(), active) == 1);  // the active space is never evicted
     CHECK(keys.back() == pool.irKeyFor(0.55, 0.5));           // the newest stays
     CHECK(!pool.has(pool.irKeyFor(0.2, 0.5)));                // the oldest idle went first
-    // bytes: the 8 s space alone is ~6 MB at 44.1 kHz; a 10 MB cap keeps the active room plus at most one big one
-    pool.setLimits(10, std::size_t(10) << 20);
+    // bytes: the 8 s space alone is ~6 MB at 44.1 kHz; a 12 MB cap keeps the active room (kernel + its slot state,
+    // ~3.6 MB, counted since T00c / T04 finding 1) plus at most one big one
+    pool.setLimits(10, std::size_t(12) << 20);
     pool.ensureBuilt(1.0, 0.25);
     pool.ensureBuilt(0.9, 0.35);
-    CHECK(pool.bytes() <= std::size_t(10) << 20);
+    CHECK(pool.bytes() <= std::size_t(12) << 20);
     keys = pool.keys();
     CHECK(std::count(keys.begin(), keys.end(), active) == 1);
     CHECK(keys.back() == pool.irKeyFor(0.9, 0.35));

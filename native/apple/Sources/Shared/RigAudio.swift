@@ -10,7 +10,7 @@ import AVFoundation
 final class RigAudio {
     private unowned let host: RigHost
     private var unit: OpaquePointer? // rig_apple_audio*
-    private var lastRequest: (deviceId: String?, latency: Double, channels: UInt32)?
+    private var lastRequest: (deviceId: String?, latency: Double, channels: UInt32, bufferFrames: UInt32)?
     /// True between rig_host.audio_start and rig_host.audio_stop: the core wants sound, so an interruption or a
     /// media-services reset is followed by a reopen. Only touched on `queue`.
     private var wantsRunning = false
@@ -32,10 +32,12 @@ final class RigAudio {
     /// rig_host.audio_start: open (or reopen) the device and report with rig_host_audio_started / _state.
     /// `async`: a device switch (AUHAL open, session activation) takes hundreds of ms and must not stall the core's
     /// control thread (SETUP_REVIEW 25); completion is reported by rig_host_audio_started / _state from `queue`.
-    func start(deviceId: String?, latency: Double, channels: UInt32) {
+    /// `bufferFrames` (T00c, DECISIONS D2; UNBUILT here): the Settings > Audio buffer size from
+    /// rig_host.audio_start_frames (64 | 128 | 256 | 512), 0 = from `latency` / 128 frames.
+    func start(deviceId: String?, latency: Double, channels: UInt32, bufferFrames: UInt32 = 0) {
         queue.async {
             self.wantsRunning = true
-            self.lastRequest = (deviceId, latency, channels)
+            self.lastRequest = (deviceId, latency, channels, bufferFrames)
             _ = self.reopen()
         }
     }
@@ -59,6 +61,7 @@ final class RigAudio {
         var r = rig_apple_audio_request()
         r.latency_sec = req.latency
         r.channels = req.channels
+        r.buffer_frames = req.bufferFrames // T00c D2: macOS sets kAudioDevicePropertyBufferFrameSize from it
         var status: Int32 = 0
         var info = rig_apple_audio_info()
         #if os(macOS)
@@ -75,7 +78,10 @@ final class RigAudio {
             // backing track from another app
             try session.setCategory(.playback, mode: .default,
                                     options: RigAudio.mixWithOthers ? [.mixWithOthers] : [])
-            try session.setPreferredIOBufferDuration(128.0 / max(session.sampleRate, 44100))
+            // T00c D2: the requested buffer (default 128 frames); the OS may round it, so the granted size is read
+            // back from ioBufferDuration below and reported (state.bufferFrames, latency)
+            let frames = Double(req.bufferFrames > 0 ? req.bufferFrames : 128)
+            try session.setPreferredIOBufferDuration(frames / max(session.sampleRate, 44100))
             try session.setActive(true)
         } catch {
             if !quiet { rig_host_audio_state(e, RIG_DEVICE_CLOSED, "AVAudioSession: \(error.localizedDescription)") }

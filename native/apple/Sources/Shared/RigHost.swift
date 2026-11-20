@@ -159,6 +159,11 @@ final class RigHost: NSObject, ObservableObject {
             RigHost.from(user).audio.start(deviceId: deviceId.map { String(cString: $0) }, latency: latency,
                                            channels: channels)
         }
+        // T00c D2 (UNBUILT here): the core prefers this over audio_start; it carries `audio {bufferFrames}`
+        host.audio_start_frames = { user, deviceId, latency, channels, frames in
+            RigHost.from(user).audio.start(deviceId: deviceId.map { String(cString: $0) }, latency: latency,
+                                           channels: channels, bufferFrames: frames)
+        }
         host.audio_stop = { user in RigHost.from(user).audio.stop() }
         host.audio_list_devices = { _, buf, cap in
             guard let buf else { return rig_apple_audio_list_devices(nil, 0) }

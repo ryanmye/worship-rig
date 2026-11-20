@@ -159,9 +159,11 @@ static double device_latency_sec(AudioDeviceID dev, double sr, UInt32 buffer_fra
   return ((double)lat + (double)safety + (double)stream_lat + (double)buffer_frames) / sr;
 }
 
-static UInt32 choose_buffer_frames(AudioDeviceID dev, double sr, double latency_sec) {
+static UInt32 choose_buffer_frames(AudioDeviceID dev, double sr, double latency_sec, uint32_t frames) {
   UInt32 want = 128;
-  if (latency_sec > 0) {
+  if (frames > 0) {  // T00c D2 (UNBUILT here): the user's buffer size as asked, 64 included (two calls/quantum)
+    want = frames;
+  } else if (latency_sec > 0) {
     UInt32 f = (UInt32)(latency_sec * sr + 0.5);
     want = ((f + 127) / 128) * 128;
     if (want < 128) want = 128;
@@ -215,7 +217,7 @@ rig_apple_audio *rig_apple_audio_open(rig_engine *engine, const rig_apple_audio_
                                  sizeof on)) != noErr) goto fail;
   if ((st = AudioUnitSetProperty(a->unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &dev,
                                  sizeof dev)) != noErr) goto fail;
-  UInt32 frames = choose_buffer_frames(dev, sr, req->latency_sec);
+  UInt32 frames = choose_buffer_frames(dev, sr, req->latency_sec, req->buffer_frames);
   if ((st = set_stream_format(a->unit, sr, ch)) != noErr) goto fail;
   if ((st = install_callback(a)) != noErr) goto fail;
   if ((st = AudioUnitInitialize(a->unit)) != noErr) goto fail;

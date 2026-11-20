@@ -29,6 +29,7 @@ native/core/build-t09/rig-devhost --backend null --port 0         # headless (CI
 | `--port N` / `--bind ADDR` | 8440 / 127.0.0.1 | one port for HTTP and the WebSocket (`/__rig/ws`); 0 = any free port |
 | `--backend` | auto | `null` renders on a timer thread at real-time pace (no device needed) |
 | `--period N` | 128 | frames per callback for `latency: 'interactive'`; a numeric latency sets `latency·rate/2` |
+| `--buffer N` | off | force N frames per callback (64, 128, 256 or 512; T00c / DECISIONS D2); without it the `audio {bufferFrames}` request sets the period (the core passes it through `rig_host.audio_start_frames`) |
 | `--rate HZ` | device | otherwise the device's native rate; the core adopts it (contract 6.3) |
 | `--recordings DIR` | `~/Music/Worship Rig` | `rig_config.recordings_dir` for `rec` takes (created) |
 | `--log FILE` | off | every bridge payload, both directions, as JSON lines (`{ms, dir:'in'\|'out', msg}`) |

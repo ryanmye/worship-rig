@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 #include "api/registry.h"
 #include "inst/synth.h"
@@ -69,7 +70,16 @@ std::string withParam(const std::string &json, std::string_view key, double v) {
 }  // namespace
 
 std::string_view catalogueJson() {
-  return std::string_view(kCatalogue, sizeof(kCatalogue) - 1);
+  static const std::string minified = [] {  // cmake re-serialises the list pretty-printed: re-write it compact
+    yyjson_doc *doc = yyjson_read(kCatalogue, sizeof(kCatalogue) - 1, 0);
+    std::size_t len = 0;
+    char *s = doc ? yyjson_write(doc, 0, &len) : nullptr;
+    std::string out = s ? std::string(s, len) : std::string("[]");
+    std::free(s);
+    yyjson_doc_free(doc);
+    return out;
+  }();
+  return minified;
 }
 
 const std::vector<CatalogueEntry> &catalogue() {

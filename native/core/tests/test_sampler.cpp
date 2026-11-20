@@ -518,7 +518,7 @@ TEST_SUITE("sampler") {
   }
 
   TEST_CASE("cost per 128-frame block (printed; no timing assertion on a shared box)") {
-    auto c4 = loadWav(fixtures() + "/test-keys/loud/C4.wav", 60);  // stereo? the test files are what they are
+    auto c4 = loadWav(fixtures() + "/test-keys/loud/C4.wav", 60);
     for (const bool multi : {false, true}) {
       for (const int voices : {1, 16, 64}) {
         auto *z = new rig::SamplerZones();
@@ -528,15 +528,15 @@ TEST_SUITE("sampler") {
         rig::SamplerInstrument u(s, z, kSR);
         u.setVoiceCap(128);
         UnitRig r(u);
-        for (int i = 0; i < voices; ++i) u.noteOn(40 + i % 40, 100, 100 / 127.0f, 0);
+        for (int i = 0; i < voices; ++i) u.noteOn(50 + i % 20, 100, 100 / 127.0f, 0);
         r.quantum();
-        const int blocks = 300;  // < 1 s: every voice still sounds (the 2.4 s file repitched at most 2x)
+        const int blocks = 300;  // 0.87 s: every voice still sounds (the 2.4 s file repitched at most 1.5x)
         const auto t0 = std::chrono::steady_clock::now();
         for (int b = 0; b < blocks; ++b) r.quantum();
         const double us =
             std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count() / blocks;
         CHECK(u.liveVoices() == static_cast<unsigned>(voices));
-        MESSAGE("sampler ", multi ? "multi-layer " : "single-layer (voice LPF) ", voices, " voices: ", us,
+        MESSAGE(std::string(multi ? "multi-layer " : "single-layer (voice LPF) "), voices, " voices: ", us,
                 " us per 128-frame block (", 100 * us / (128e6 / 48000), " % of a 48 kHz block)");
       }
     }

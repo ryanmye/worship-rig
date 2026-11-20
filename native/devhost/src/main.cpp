@@ -26,6 +26,7 @@ void usage() {
       "  --repo DIR          repository root (default: the one this binary was built from)\n"
       "  --backend NAME      auto | null | alsa | pulse | jack | coreaudio (default auto)\n"
       "  --period N          frames per callback for latency 'interactive' (default 128)\n"
+      "  --buffer N          force N frames per callback (64|128|256|512; overrides `audio {bufferFrames}`)\n"
       "  --rate HZ           device rate (default: the device's own)\n"
       "  --recordings DIR    folder for `rec` takes (default ~/Music/Worship Rig)\n"
       "  --seed N            engine seed (default: time-derived)\n"
@@ -64,6 +65,13 @@ int main(int argc, char **argv) {
       o.audio.backend = val();
     } else if (a == "--period") {
       o.audio.periodFrames = static_cast<std::uint32_t>(std::stoul(val()));
+    } else if (a == "--buffer") {  // T00c D2: measure the FIFO / xruns at a fixed host block
+      const unsigned long n = std::stoul(val());
+      if (n != 64 && n != 128 && n != 256 && n != 512) {
+        std::fprintf(stderr, "rig-devhost: --buffer must be 64, 128, 256 or 512\n");
+        return 2;
+      }
+      o.audio.bufferFrames = static_cast<std::uint32_t>(n);
     } else if (a == "--rate") {
       o.audio.sampleRate = static_cast<std::uint32_t>(std::stoul(val()));
     } else if (a == "--recordings") {

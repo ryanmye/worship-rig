@@ -353,7 +353,7 @@ TEST_SUITE("t00c") {
     }
   }
 
-  TEST_CASE("memory: per-profile cache caps and the pin budget (85 % of the cap, request order)") {
+  TEST_CASE("memory: per-profile cache caps and the pin budget (85 % of the hard cap, request order)") {
     for (bool ipad : {false, true}) {
       rig_config cfg;
       rig_config_init(&cfg);
@@ -375,7 +375,7 @@ TEST_SUITE("t00c") {
       CHECK(cs->cache().hardCapBytes() == (ipad ? cap : cap / 2 * 3));
       // unknown keys are estimated at the default sample size (1.75 MB f32, 0.875 MB int16)
       const double each = cs->cache().defaultSampleBytes();
-      const std::size_t fit = static_cast<std::size_t>(0.85 * static_cast<double>(cap) / each);
+      const std::size_t fit = static_cast<std::size_t>(0.85 * static_cast<double>(cs->cache().hardCapBytes()) / each);
       std::vector<std::string> keys;
       for (std::size_t i = 0; i < fit + 25; ++i) keys.push_back("/pins/s" + std::to_string(i) + ".wav");
       const auto kept = cs->withinPinBudget(keys, false);
@@ -519,7 +519,7 @@ TEST_SUITE("realtime") {
     h.audio_start = [](void *, const char *, double, uint32_t) { FakeHost::started(999); };  // must not be used
     h.audio_start_frames = [](void *, const char *, double, uint32_t, uint32_t frames) {
       FakeHost::asked = frames;
-      FakeHost::started(frames == 192 ? 256 : frames);  // an OS that rounds 192 up to 256
+      FakeHost::started(frames == 128 ? 256 : frames);  // an OS that rounds 128 up to 256 (iPad may)
     };
     h.audio_stop = [](void *) {};
     {
@@ -536,9 +536,9 @@ TEST_SUITE("realtime") {
       REQUIRE(rt.waitFor("\"restarted\":true"));
       CHECK(FakeHost::asked == 64);
       rt.clear();
-      rt.post(R"({"v":1,"op":"audio","action":"restart","id":4,"bufferFrames":192})");
+      rt.post(R"({"v":1,"op":"audio","action":"restart","id":4,"bufferFrames":128})");
       REQUIRE(rt.waitFor("\"restarted\":true"));
-      CHECK(FakeHost::asked == 192);
+      CHECK(FakeHost::asked == 128);
       CHECK(rt.waitFor("\"bufferFrames\":256"));  // the granted size, not the requested one
       CHECK(rt.waitFor("\"latencyMs\":3"));      // 256 is a multiple of 128: no FIFO residue
     }
@@ -622,11 +622,13 @@ TEST_SUITE("realtime") {
       const unsigned blocks[] = {64, 192, 256, 441, 512};
       std::vector<float> l(512), r(512);
       float *p[2] = {l.data(), r.data()};
+      bool changed = false;
       for (unsigned i = 0; !stop; ++i) {
         const unsigned n = blocks[(i / 16) % 5];
         rig_render(rt.e, p, 2, n, 0);
         frames += n;
-        if (i == 600) {
+        if (!changed && frames > 48000) {  // a device rate change mid-soak (lock-free hand-off)
+          changed = true;
           rig_device_info info{};
           info.struct_size = sizeof info;
           info.sample_rate = 44100;
@@ -642,7 +644,7 @@ TEST_SUITE("realtime") {
       rt.post(R"({"v":1,"op":"play","e":"on","vel":90,"n":)" + std::to_string(n) + "}");
       rt.post(R"({"v":1,"op":"set","path":"slots.)" + std::to_string(s) + R"(.pan","value":)" +
               std::to_string((k % 7) / 3.5 - 1) + "}");
-      if (k % 3 == 0) rt.post(R"({"v":1,"op":"play","e":"off","n":)" + std::to_string(n) + "}");
+      if (k) rt.post(R"({"v":1,"op":"play","e":"off","n":)" + std::to_string(40 + (k - 1) % 40) + "}");
       if (k % 50 == 25) rt.post(R"({"v":1,"op":"config","polyphony":32})");
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
@@ -656,6 +658,7 @@ TEST_SUITE("realtime") {
     const std::string st = rt.all.substr(at, 400);
     CHECK(contains(st, "\"eventsDropped\":0"));
     CHECK(contains(st, "\"heapDropped\":0"));
+    CHECK(contains(st, "\"rateChanges\":1"));
     MESSAGE("soak: " << frames.load() << " frames; " << st.substr(0, 200));
   }
 }

@@ -90,6 +90,14 @@ void randomWalk(Rng &rng, std::vector<float> &d) {
 }  // namespace
 
 unsigned familiesFor(PatchId id);
+
+namespace {
+/** softClipCurve(EP_CLIP_DB) WaveShaper, oversample 'none', mono (sub-bass, soft-keys). */
+std::unique_ptr<wa::WaveShaper> makeClip() {
+  return std::make_unique<wa::WaveShaper>(softClipCurve12(), kSoftClipPoints, wa::WaveShaper::Oversample::None, 1);
+}
+}  // namespace
+
 unsigned synthWaveFamilies(std::string_view id) {
   const PatchDef *p = findPatch(id);
   return p ? familiesFor(p->id) : kWaveAll;
@@ -156,11 +164,11 @@ SynthInstrument::SynthInstrument(const PatchDef &patch, double sampleRate, std::
   SynthShared &s = *sh_;
   const double *p = params_;
   s.bendCS.start(0);  // InstrumentBase: this.bendCS = sharedSource(ConstantSourceNode{offset: 0})
-  auto filterMod = [&](double base, bool withLfo, double morphCents, unsigned rate, unsigned depth) {
+  auto filterMod = [&](double base, bool withLfo, double morphCents, unsigned cutoff, unsigned rate,
+                       unsigned depth) {
     s.filterBase = base;  // initFilterMod
     s.hasFilterMod = true;
-    s.filterCS.offset().setValue(cents(p[patch_.id == PatchId::DroneOsc ? static_cast<unsigned>(dCutoff) : static_cast<unsigned>(wCutoff)] / base) +
-                                 morphX_ * morphCents);
+    s.filterCS.offset().setValue(cents(p[cutoff] / base) + morphX_ * morphCents);
     s.filterCS.start(0);
     if (withLfo) {
       s.hasLfo = true;
@@ -172,7 +180,7 @@ SynthInstrument::SynthInstrument(const PatchDef &patch, double sampleRate, std::
   };
   switch (patch_.id) {
     case PatchId::WarmPad:
-      filterMod(1800, true, 2400, wLfoRate, wLfoDepth);
+      filterMod(1800, true, 2400, wCutoff, wLfoRate, wLfoDepth);
       s.hpf.reinit(wa::BiquadType::Highpass, 120, butter2Q(), 0);
       s.useHpf = s.useMonoBelow = true;
       break;
@@ -201,13 +209,13 @@ SynthInstrument::SynthInstrument(const PatchDef &patch, double sampleRate, std::
       break;
     case PatchId::SubBass:
       s.h2CS.start(0);
-      s.clip = std::make_unique<wa::WaveShaper>(softClipCurve12(), kSoftClipPoints, wa::WaveShaper::Oversample::None, 1);
+      s.clip = makeClip();
       s.lpf.reinit(wa::BiquadType::Lowpass, p[bCutoff], butter2Q(), 0);
       morph(0, 0);  // setDrive(inst, 0)
       break;
     case PatchId::SoftKeys: {
       s.dc.reinit(wa::BiquadType::Highpass, 20, butter2Q(), 0);
-      s.clip = std::make_unique<wa::WaveShaper>(softClipCurve12(), kSoftClipPoints, wa::WaveShaper::Oversample::None, 1);
+      s.clip = makeClip();
       const double d = clampd(p[kTremolo] + morphX_, 0, 1) * 0.9;
       const double base = 1 - d / 2;
       s.tremL.gain().setValue(base);
@@ -226,7 +234,7 @@ SynthInstrument::SynthInstrument(const PatchDef &patch, double sampleRate, std::
     case PatchId::Bell:
       break;
     case PatchId::DroneOsc: {
-      filterMod(1400, true, 1200, dLfoRate, dLfoDepth);
+      filterMod(1400, true, 1200, dCutoff, dLfoRate, dLfoDepth);
       randomWalk(rng_, s.walkData);
       s.walk.channels = 1;
       s.walk.frames = s.walkData.size();
@@ -308,6 +316,26 @@ void SynthInstrument::fadeSlot(int s, double t, double fadeSec) {
   pool_.markKilled(s, t);
 }
 
+unsigned SynthInstrument::playingNote(int note) const {
+  unsigned n = 0;
+  for (unsigned i = 0; i < pool_.capacity(); ++i) {
+    const auto &m = pool_.meta(static_cast<int>(i));
+    if ((m.state == VoiceState::Held || m.state == VoiceState::Released) && m.note == note) ++n;
+  }
+  return n;
+}
+
+VoiceId SynthInstrument::voiceIdOf(int note) const {
+  int best = -1;
+  for (unsigned i = 0; i < pool_.capacity(); ++i) {
+    const auto &m = pool_.meta(static_cast<int>(i));
+    if ((m.state == VoiceState::Held || m.state == VoiceState::Released) && m.note == note &&
+        (best < 0 || m.seq > pool_.meta(best).seq))
+      best = static_cast<int>(i);
+  }
+  return best < 0 ? 0xffffffffu : pool_.idOf(best);
+}
+
 void SynthInstrument::noteOff(int note, std::int64_t frame, bool) {
   const double t = atTime(timeOf(frame));
   pool_.forEach([&](int s, SynthVoice &v) {
@@ -348,6 +376,7 @@ void SynthInstrument::legatoTo(int from, int to, std::int64_t frame, double) {
   SynthVoice &v = pool_.voice(best);
   const int n = std::clamp(to, 0, 127);
   v.setNote(n);
+  pool_.setNote(best, n);
   const int gi = glideIndex(patch_.id);
   const double dur = gi >= 0 ? params_[gi] : 0.03;  // inst.params.glide ?? 0.03
   const double f = noteToFreq(n);
@@ -608,6 +637,16 @@ void SynthInstrument::process(const RenderContext &ctx, UnitIO &io) {
   float tmp[kQuantum];
   switch (patch_.id) {
     case PatchId::GlassPad: {
+      // The chorus LFO feeds only the side oscillators' detune: pulled only while one of them plays.
+      bool pulled = false;
+      pool_.forEach([&](int, SynthVoice &v) {
+        pulled = pulled || v.srcActive(1, f0, sr, n) || v.srcActive(2, f0, sr, n);  // a, b
+      });
+      if (!pulled) {
+        s.bloomCS.process(f0, sr, s.bloom, n);
+        in.bloom = s.bloom;
+        break;
+      }
       s.chorusLfo.process(f0, sr, tmp, n);
       const float *src[1] = {tmp};
       float *p1[1] = {s.cPos}, *n1[1] = {s.cNeg};
@@ -624,6 +663,11 @@ void SynthInstrument::process(const RenderContext &ctx, UnitIO &io) {
       in.h2 = s.h2;
       break;
     case PatchId::DroneOsc: {
+      bool pulled = false;  // the unison LFO feeds only saw detunes (see GlassPad)
+      pool_.forEach([&](int, SynthVoice &v) {
+        for (unsigned i = 0; i < 4; ++i) pulled = pulled || v.srcActive(i, f0, sr, n);
+      });
+      if (!pulled) break;
       s.uniLfo.process(f0, sr, tmp, n);
       const float *src[1] = {tmp};
       float *p1[1] = {s.uPos}, *n1[1] = {s.uNeg};
@@ -711,7 +755,8 @@ Unit *makeSynth(const UnitEnv &env, const UnitSpec &spec) {
   const SlotPatch &sp = spec.patch->slots[ch];
   const PatchDef *pd = findPatch(sp.instId);
   if (!pd) return makeSynthExtra(env, spec);  // T15 hook (null while no synth-extra module is registered)
-  std::string name = "inst|" + std::to_string(spec.channel) + "|synth|" + sp.instId + "|" + std::to_string(spec.instSeq);
+  const std::string name =
+      "inst|" + std::to_string(spec.channel) + "|synth|" + sp.instId + "|" + std::to_string(spec.instSeq);
   const double rel = std::isfinite(sp.release) && sp.release > 0 ? sp.release : 0;
   return new SynthInstrument(*pd, env.sampleRate, env.seed, name, sp.paramsJson, rel);
 }

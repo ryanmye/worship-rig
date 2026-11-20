@@ -177,6 +177,33 @@ TEST_SUITE("devhost-audio") {
     rig_destroy(e);
   }
 
+  TEST_CASE("D2 (T00c): `audio {bufferFrames}` sets the period through audio_start_frames; --buffer overrides it") {
+    for (std::uint32_t forced : {0u, 512u}) {
+      devhost::AudioOptions o;
+      o.backend = "null";
+      o.bufferFrames = forced;  // rig-devhost --buffer N
+      devhost::AudioHost host(o);
+      std::string err;
+      REQUIRE(host.init(&err));
+      CHECK(host.vtable()->audio_start_frames != nullptr);
+      dht::Sink s;
+      rig_engine *e = makeEngine(s, host.vtable(), o.maxBlockFrames);
+      REQUIRE(e);
+      host.attach(e);
+      post(e, R"({"v":1,"op":"hello","protocol":1,"id":1})");
+      post(e, R"({"v":1,"op":"audio","action":"start","id":2,"bufferFrames":64})");
+      REQUIRE(s.waitFor("\"state\":\"running\""));
+      const std::uint32_t want = forced ? forced : 64u;
+      CHECK(host.stats().periodFrames == want);
+      CHECK(s.waitFor(("\"bufferFrames\":" + std::to_string(want)).c_str()));  // the granted size
+      std::this_thread::sleep_for(std::chrono::milliseconds(200));
+      CHECK(rig_engine_time(e) > 0.05);
+      host.shutdown();
+      host.attach(nullptr);
+      rig_destroy(e);
+    }
+  }
+
   TEST_CASE("unknown backend name is an init error") {
     devhost::AudioOptions o;
     o.backend = "nope";

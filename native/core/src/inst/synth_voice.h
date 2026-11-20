@@ -69,6 +69,7 @@ struct VoiceSrc {
   double stopAt = kInf;
   WaveKind kind = WaveKind::None;  // the oscillator's table (re-pointed by SynthInstrument::setWaves)
   std::uint8_t rot = 0;
+  double startT = 0;
 };
 
 class SynthVoice {
@@ -95,6 +96,11 @@ class SynthVoice {
   void scheduleStop(double t);
   /** Every source has finished (onended of the last one). */
   bool sourcesFinished() const;
+  /** Source i renders (and so pulls its AudioParam inputs) in the quantum [f0, f0 + n): Chromium
+   *  AudioScheduledSourceHandler::UpdateSchedulingInfo is non-silent (start frame rounded up < quantum end, end frame
+   *  rounded up > quantum start). A silent source returns before computing its params, so a shared LFO that only
+   *  feeds oscillator params is not pulled (its phase does not advance) in quanta where no consumer plays. */
+  bool srcActive(unsigned i, std::int64_t f0, double sr, std::size_t n) const;
   /** makeEnv on envG.gain at t; returns nothing (attackEnd kept). */
   void makeEnv(const EnvSpec &e, double t);
   /** env.release(rt, r): rampTo 0 with tau r/6.9; returns the kill time rt + 1.3 r. */

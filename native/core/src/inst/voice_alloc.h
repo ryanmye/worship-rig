@@ -148,6 +148,8 @@ class VoicePool {
     if (m.state != VoiceState::Killed && when < m.releasedAt) m.releasedAt = when;
     m.state = VoiceState::Killed;
   }
+  /** Legato retune: the voice now plays `note`. */
+  void setNote(int s, int note) { meta_[s].note = note; }
   void destroy(int s) {
     Meta &m = meta_[s];
     if (m.state == VoiceState::Free) return;
@@ -188,7 +190,8 @@ class VoicePool {
   }
 
  private:
-  static constexpr std::size_t kAlign = alignof(V) > alignof(std::max_align_t) ? alignof(V) : alignof(std::max_align_t);
+  static constexpr std::size_t kAlign =
+      alignof(V) > alignof(std::max_align_t) ? alignof(V) : alignof(std::max_align_t);
   static constexpr std::size_t kStride = (SlotBytes + kAlign - 1) / kAlign * kAlign;
 
   V *ptr(int s) { return std::launder(reinterpret_cast<V *>(storage_ + kStride * static_cast<std::size_t>(s))); }

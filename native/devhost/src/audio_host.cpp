@@ -94,6 +94,9 @@ AudioHost::AudioHost(AudioOptions o) : o_(std::move(o)), impl_(std::make_unique<
   vt_.audio_start = [](void *u, const char *id, double lat, std::uint32_t ch) {
     static_cast<AudioHost *>(u)->start(id, lat, ch);
   };
+  vt_.audio_start_frames = [](void *u, const char *id, double lat, std::uint32_t ch, std::uint32_t frames) {
+    static_cast<AudioHost *>(u)->start(id, lat, ch, frames);  // T00c D2: the bridge's bufferFrames
+  };
   vt_.audio_stop = [](void *u) { static_cast<AudioHost *>(u)->stop(); };
   vt_.audio_list_devices = [](void *u, char *buf, std::size_t cap) -> std::size_t {
     const std::string j = static_cast<AudioHost *>(u)->devicesJson();
@@ -213,7 +216,7 @@ void AudioHost::renderInterleaved(float *out, std::uint32_t frames) {
   if (dt > maxNs_.load(std::memory_order_relaxed)) maxNs_.store(dt, std::memory_order_relaxed);
 }
 
-void AudioHost::start(const char *deviceId, double latencySec, std::uint32_t channels) {
+void AudioHost::start(const char *deviceId, double latencySec, std::uint32_t channels, std::uint32_t bufferFrames) {
   std::lock_guard<std::mutex> lk(devMu_);
   rig_engine *e = engine_.load(std::memory_order_acquire);
   auto failed = [&](const std::string &msg) {
@@ -263,8 +266,11 @@ void AudioHost::start(const char *deviceId, double latencySec, std::uint32_t cha
   dc.playback.pDeviceID = haveId ? &chosen : nullptr;
   dc.sampleRate = o_.sampleRate;
   const double guessSr = o_.sampleRate ? o_.sampleRate : 48000.0;
-  const auto period = latencySec > 0 ? static_cast<std::uint32_t>(std::lround(latencySec * guessSr / o_.periods))
-                                     : o_.periodFrames;
+  // T00c D2: --buffer N wins, then the `audio {bufferFrames}` request, then a numeric latency, then --period
+  const auto period = o_.bufferFrames ? o_.bufferFrames
+                      : bufferFrames  ? bufferFrames
+                      : latencySec > 0 ? static_cast<std::uint32_t>(std::lround(latencySec * guessSr / o_.periods))
+                                       : o_.periodFrames;
   dc.periodSizeInFrames = std::clamp<std::uint32_t>(period, 32, o_.maxBlockFrames);
   dc.periods = o_.periods;
   dc.performanceProfile = ma_performance_profile_low_latency;

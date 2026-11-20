@@ -263,12 +263,15 @@ void CacheServiceImpl::protectSwitch(const rig::PatchSpec *playing, const rig::P
 
 // ---- pins --------------------------------------------------------------------------------------------------
 
-// T00c pin policy (D3 memory budget): pinned bytes stay within the pin budget (the low-water mark, 85 % of the
-// cap), so pins alone never fill the cache and the playing song always has room. Keys are taken in request order
+// T00c pin policy (D3 memory budget): pinned bytes stay within the pin budget, 85 % of the HARD cap (iPad 272 of
+// 320 MB; desktop 892 of the 1050 MB hard cap, above the controller's own 600 MB PIN_BUDGET_MB), so pins alone never
+// fill the cache and the playing song keeps room (its decodes also push other songs' pins out while it is
+// protected). Keys are taken in request order
 // (the first patch = the song that plays next) until the budget is spent; the rest stay unpinned (counted in
 // pinsDropped, one `memory` warning per preload). Low-resource mode pins the current song only, whatever its size.
 std::vector<std::string> CacheServiceImpl::withinPinBudget(const std::vector<std::string> &keys, bool add) {
-  const double budget = cache_.lowWaterBytes();
+  const double hard = static_cast<double>(cache_.hardCapBytes() ? cache_.hardCapBytes() : cache_.capBytes());
+  const double budget = 0.85 * hard;
   double used = add ? static_cast<double>(cache_.pinnedBytes()) : 0.0;
   std::vector<std::string> out;
   std::set<std::string> seen;
@@ -290,7 +293,7 @@ std::vector<std::string> CacheServiceImpl::withinPinBudget(const std::vector<std
   if (dropped) {
     pinsDropped_ += dropped;
     warnMsg(std::to_string(dropped) + " sample(s) stay unpinned: pins are capped at " +
-                std::to_string(static_cast<long long>(budget / kMB)) + " MB (85 % of the sample cache)",
+                std::to_string(static_cast<long long>(budget / kMB)) + " MB (85 % of the sample cache's hard cap)",
             "memory");
   }
   return out;

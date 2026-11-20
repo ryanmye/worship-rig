@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "dsp/oscillator_schedule.h"
 #include "num/js_math.h"
 #include "time/automation.h"
 
@@ -102,6 +103,7 @@ void SynthVoice::addSource(wa::Oscillator *o, double when, WaveKind kind, unsign
   s.osc = o;
   s.kind = kind;
   s.rot = static_cast<std::uint8_t>(rot);
+  s.startT = when;
   o->start(when);
   if (std::isfinite(stopAt_)) stopSource(nSrc_ - 1, stopAt_);
 }
@@ -109,6 +111,7 @@ void SynthVoice::addSource(wa::Oscillator *o, double when, WaveKind kind, unsign
 void SynthVoice::addSource(wa::BufferSource *b, double when, double offset) {
   VoiceSrc &s = srcs_[nSrc_++];
   s.buf = b;
+  s.startT = when;
   b->start(when, offset);
   if (std::isfinite(stopAt_)) stopSource(nSrc_ - 1, stopAt_);
 }
@@ -126,6 +129,18 @@ void SynthVoice::scheduleStop(double t) {
   if (!(t < stopAt_)) return;
   stopAt_ = t;
   for (unsigned i = 0; i < nSrc_; ++i) stopSource(i, t);
+}
+
+bool SynthVoice::srcActive(unsigned i, std::int64_t f0, double sr, std::size_t n) const {
+  if (i >= nSrc_ || f0 < 0) return false;
+  const VoiceSrc &s = srcs_[i];
+  const auto q0 = static_cast<std::uint64_t>(f0), q1 = q0 + n;
+  if (wa::sched::timeToSampleFrame(s.startT, sr, wa::sched::Rounding::Up) >= q1) return false;
+  if (std::isfinite(s.stopAt)) {
+    const double end = std::max(s.stopAt, startedAt_);
+    if (wa::sched::timeToSampleFrame(end, sr, wa::sched::Rounding::Up) <= q0) return false;
+  }
+  return true;
 }
 
 bool SynthVoice::sourcesFinished() const {

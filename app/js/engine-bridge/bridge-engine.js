@@ -9,6 +9,9 @@ import { BridgeLink, BridgeError, PROTOCOL } from './link.js';
 import { EngineClock } from './clock.js';
 import { webkitTransport, webkitAvailable } from './transports.js';
 import { isValidPath, SLOT_COUNT } from '../shared/params.js';
+
+/** Slots the native core takes (T00c, native DECISIONS D3: slots.0..15); the web PARAMS grammar has SLOT_COUNT. */
+const NATIVE_SLOT_COUNT = 16;
 import { readEq, eqResponseDb, bandFilter, cutFilters, rbjCoeffs, magDb } from '../shared/eq-math.js';
 import { detectKeyFromName } from '../shared/keydetect.js';
 
@@ -599,11 +602,11 @@ export class BridgeEngine extends EventTarget {
 
   // ----------------------------------------------------------------------------------------------- parameters
   setParam(path, value, { when, glide = 0 } = {}) {
-    if (!isValidPath(path)) {
+    if (!this._validPath(path)) {
       this._warn(`Unknown parameter "${path}"`);
       return false;
     }
-    const m = /^slots\.(\d)\./.exec(path);
+    const m = /^slots\.(\d+)\./.exec(path);
     if (m && this._patch && !this._patch.slots[Number(m[1])]) return false; // empty slot: nothing to set
     this._mirrorSet(path, value);
     const v = value === undefined ? null : value;
@@ -650,7 +653,7 @@ export class BridgeEngine extends EventTarget {
 
   eqAudition(slot, mode = 'on', { when } = {}) {
     const i = Number(slot);
-    if (!Number.isInteger(i) || i < 0 || i >= SLOT_COUNT) return false;
+    if (!Number.isInteger(i) || i < 0 || i >= NATIVE_SLOT_COUNT) return false;
     const eqAudition = { slot: i, mode: mode === 'bypass' ? 'bypass' : 'on' };
     this._send('config', { eqAudition, ...this._whenArg(when) });
     return true;
@@ -704,8 +707,25 @@ export class BridgeEngine extends EventTarget {
 
   _applyPatchMirror(patch) {
     const p = JSON.parse(JSON.stringify(patch || {}));
-    p.slots = Array.from({ length: SLOT_COUNT }, (_, i) => (p.slots && p.slots[i]) || null);
+    // T00c (D3): a song may carry up to NATIVE_SLOT_COUNT slots; the mirror keeps at least the web engine's 4
+    const n = Math.min(NATIVE_SLOT_COUNT, Math.max(SLOT_COUNT, Array.isArray(p.slots) ? p.slots.length : 0));
+    p.slots = Array.from({ length: n }, (_, i) => (p.slots && p.slots[i]) || null);
     this._patch = p;
+  }
+
+  /**
+   * The web PARAMS grammar (slots.0..3), plus slots.4..15 of the committed song (T00c, D3: the native core takes
+   * 16 slots; the UI wave moves the grammar itself).
+   * @param {string} path
+   * @returns {boolean}
+   */
+  _validPath(path) {
+    if (isValidPath(path)) return true;
+    const m = /^slots\.(\d+)\.(.+)$/.exec(path);
+    if (!m || String(Number(m[1])) !== m[1]) return false;
+    const i = Number(m[1]);
+    return i >= SLOT_COUNT && i < NATIVE_SLOT_COUNT && !!(this._patch && this._patch.slots[i]) &&
+      isValidPath(`slots.0.${m[2]}`);
   }
 
   _mirrorSet(path, value) {
@@ -978,7 +998,7 @@ export class BridgeEngine extends EventTarget {
   }
 
   slotLevel(i) {
-    if (!Number.isInteger(i) || i < 0 || i >= SLOT_COUNT || !this._started) return null;
+    if (!Number.isInteger(i) || i < 0 || i >= NATIVE_SLOT_COUNT || !this._started) return null;
     if (!this._patch || !this._patch.slots[i] || this._lowResource) return { peak: 0, rms: 0 };
     const now = this._now();
     const added = !this._slotRead[i];
