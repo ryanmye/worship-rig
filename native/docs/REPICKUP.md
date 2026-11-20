@@ -134,6 +134,13 @@ on the Mac and give it this prompt:
    macos-15 leg and the CI goldens job (never run on GitHub yet: the cloud proxy blocked the Chrome for Testing
    download).
 
+   **Mac testing is now one command** (`native/docs/MAC_CHECK.md`): CI's `mac-check` job (macos-15) compiles both
+   Apple targets on every push (tier 0, no Mac); on the Mac the push agent runs `bash tools/mac/check.sh` as a single
+   unattended `RUN` (tier 1: core ctest under Apple clang, the `rig-probe` audio measurement for D2/D4 with the output
+   muted, both Apple compiles) and writes `outbox/logs/<UTC>-check/summary.json` with the first 80 compiler errors per
+   stage; `--quick` is the compile-fix loop. Before the first RUN, add MAC_CHECK.md's allow-list line to PROTOCOL.md
+   and have Ryan run its one brew line. Ryan's own checklist (tier 2) waits until songs play (after T13/T14).
+
 ## 7. Files outside the repo (cloud session outputs, `v2/`)
 
 `REARM.md` (orchestration log), `ckpt.sh`, `progress.py`, `lane2.js`, `w2a.js`/`w2b.js` + `.json` (wave 2 args),

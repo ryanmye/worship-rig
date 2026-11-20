@@ -68,12 +68,34 @@ Devices: id = ALSA/PulseAudio name or Core Audio UID, else `<backend>:<index>` (
 (aux click) opens 4 channels only when the device has them. An unexpected device stop ->
 `rig_host_audio_state(INTERRUPTED)`; a reroute -> `rig_host_devices_changed`.
 
+## `rig-probe`: the muted audio measurement (DECISIONS D2, D4)
+
+`rig-probe` (built next to `rig-devhost`) drives the core through the same `AudioHost` on the default output device,
+**output muted** (the core renders and is timed, then zeros go to the device; volume and default device untouched),
+and writes one JSON report: per buffer size 64/128/256/512 the granted period, rate, latency, callbacks, late
+callbacks, the core's xruns and the callback time p50/p99/max; then a load sweep at 128 frames (16 slots of
+`warm-pad`, then of `upright-piano`, more held notes per step until p99 > 80 % of the quantum) with the per-voice cost,
+the voices at 60 % / 80 % and `auto_voice_limit_suggestion` (ARCHITECTURE 7.1's D4 formula). About 2 minutes; on the
+Mac it is the `probe` stage of `tools/mac/check.sh` (`native/docs/MAC_CHECK.md`).
+
+```sh
+native/core/build-t09/rig-probe --out probe.json                      # Core Audio / ALSA default output, muted
+native/core/build-t09/rig-probe --backend null --quick --out p.json   # no device (plumbing only)
+```
+
+Options: `--buffers 64,128,256,512|none`, `--seconds S` (10), `--kinds synth,sampler|none`, `--synth ID`,
+`--sampler ID`, `--notes 0,1,2,...`, `--step-seconds S` (1), `--settle S`, `--step-settle S`, `--quick`, `--quiet`,
+`--repo DIR`. `AudioHost` gained two probe hooks for it: `setMuted()` and `setCallbackLog()` (a preallocated
+per-callback timing log, single writer, allocation-free). The Core Audio latency query (`src/probe_apple.cpp`) is
+UNTESTED: written without a Mac.
+
 ## Tests
 
 - C++ (`ctest -L devhost`): `unit.devhost-ws` (SHA-1 FIPS vectors incl. padding boundaries, base64 RFC 4648,
   RFC 6455 accept key and frame examples, fragmentation, 16/64-bit lengths, every protocol error), `unit.devhost-http`
   (parsing, upgrade detection, traversal/symlink refusal), `unit.devhost-audio` (callback body allocation-free and
-  timed; null backend open/restart/4 channels/device list), `unit.devhost-relay` (the whole host in-process).
+  timed; null backend open/restart/4 channels/device list), `unit.devhost-relay` (the whole host in-process),
+  `probe.null` (`rig-probe` on the null backend for ~10 s; `tests/probe_check.cmake` validates the report's shape).
 - JS (`test/unit/engine-bridge/`, in `run-all --only unit`): `ws-transport.test.mjs`, `native-recorder.test.mjs`
   (replays `data/rec-session.jsonl`, recorded from this host by `record-devhost-log.mjs`), `devhost.test.mjs`
   (end to end, opt-in: `RIG_DEVHOST=1`).

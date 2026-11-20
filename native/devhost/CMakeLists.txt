@@ -70,7 +70,8 @@ foreach(suite devhost-ws devhost-http devhost-audio devhost-relay)
   set_tests_properties(unit.${suite} PROPERTIES LABELS "unit;devhost" TIMEOUT 120)
 endforeach()
 
-# rig-probe end to end on miniaudio's null backend (~3 s): the plumbing and the JSON shape, not the numbers
+# rig-probe end to end on miniaudio's null backend (~10 s, mostly the sampler preload): the plumbing and the JSON
+# shape, not the numbers
 add_test(NAME probe.null
          COMMAND ${CMAKE_COMMAND} -DPROBE=$<TARGET_FILE:rig-probe> -DOUT=${CMAKE_BINARY_DIR}/probe-null.json
                  -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/probe_check.cmake)

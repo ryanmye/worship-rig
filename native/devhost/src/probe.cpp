@@ -329,9 +329,7 @@ void fit(const std::vector<double> &x, const std::vector<double> &y, double *a, 
 }
 
 struct SweepResult {
-  std::string json;
   double perVoice = std::nan(""), fixedP99 = std::nan(""), fixedMean = std::nan("");
-  bool ok = false;
 };
 
 /** ARCHITECTURE 7.1 rounding: down to a multiple of 16 (a whole note across 16 slots), at least 16. */
@@ -536,8 +534,8 @@ bool runProbe(const ProbeOptions &o, std::string *json, std::string *err) {
       steps += "]";
       panic(pe);
       if (held > 0 && (vx.empty() || *std::max_element(vx.begin(), vx.end()) <= 0)) {
-        errors.push_back(kind + " sweep: no voices sounded with " + std::to_string(held) + " notes held in 16 slots of " +
-                         id + " (a silent instrument: the per-voice cost is meaningless)");
+        errors.push_back(kind + " sweep: no voices sounded with " + std::to_string(held) +
+                         " notes held in 16 slots of " + id + " (a silent instrument: the per-voice cost is meaningless)");
         vx.clear();
       }
       SweepResult r;

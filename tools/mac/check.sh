@@ -2,7 +2,7 @@
 # Worship Rig 2.0: every automatable Mac check in one unattended run (native/docs/MAC_CHECK.md, tier 1).
 #
 #   bash tools/mac/check.sh [--rev <ref>] [--stage tools,core,probe,apple-mac,apple-sim] [--out <dir>] [--quick]
-#                           [--jobs N] [--cache <dir>] [--repo <dir>]
+#                           [--jobs N] [--cache <dir>] [--repo <dir>] [--src <tree>]
 #
 # Stages (in this order; a failed stage does not stop the ones that do not depend on it):
 #   tools      versions of macOS, CPU, Xcode, cmake, ninja, xcodegen, node; missing ones -> the exact brew line
@@ -10,7 +10,8 @@
 #   probe      rig-probe on the default output device, OUTPUT MUTED (DECISIONS D2 64 frames, D4 'auto' voice limit)
 #   apple-mac  build-core.sh --mac-only, xcodegen, xcodebuild WorshipRig-macOS (Debug, ad-hoc), compile only
 #   apple-sim  build-core.sh --sim --no-device, xcodebuild WorshipRig-iPad for 'generic/platform=iOS Simulator'
-# --quick = core + apple-mac (the compile-fix loop).
+# --quick = core + apple-mac (the compile-fix loop). --src <tree> copies an uncommitted tree instead of exporting a
+# revision (testing this script; the copy, not the tree, is built).
 #
 # Rules it keeps: the user's working tree, index and branches are never touched (the revision is exported with
 # `git archive` into a cache dir and built there); nothing is installed; no admin rights; no UI (the app is never
@@ -21,8 +22,8 @@ set -euo pipefail
 
 ALL_STAGES="tools core probe apple-mac apple-sim"
 
-usage() {
-  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+usage() {  # the header comment above `set -euo pipefail`
+  awk 'NR > 1 && /^set -euo/ { exit } NR > 1' "$0" | sed 's/^# \{0,1\}//'
 }
 
 die_usage() {
@@ -39,9 +40,10 @@ quick=0
 jobs=""
 cache_root="${RIG_CHECK_CACHE:-}"
 repo=""
+src_dir=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --rev|--stage|--out|--jobs|--cache|--repo)
+    --rev|--stage|--out|--jobs|--cache|--repo|--src)
       [ $# -ge 2 ] && [ -n "$2" ] || die_usage "$1 needs a value"
       case "$1" in
         --rev) rev="$2" ;;
@@ -50,6 +52,7 @@ while [ $# -gt 0 ]; do
         --jobs) jobs="$2" ;;
         --cache) cache_root="$2" ;;
         --repo) repo="$2" ;;
+        --src) src_dir="$2" ;;
       esac
       shift 2 ;;
     --rev=*) rev="${1#*=}"; shift ;;
@@ -58,6 +61,7 @@ while [ $# -gt 0 ]; do
     --jobs=*) jobs="${1#*=}"; shift ;;
     --cache=*) cache_root="${1#*=}"; shift ;;
     --repo=*) repo="${1#*=}"; shift ;;
+    --src=*) src_dir="${1#*=}"; shift ;;
     --quick) quick=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die_usage "unknown argument '$1'" ;;
@@ -65,6 +69,11 @@ while [ $# -gt 0 ]; do
 done
 
 if [ "$quick" -eq 1 ] && [ -n "$stage_arg" ]; then die_usage "--quick and --stage cannot be combined"; fi
+if [ -n "$src_dir" ] && [ -n "$rev" ]; then die_usage "--src and --rev cannot be combined"; fi
+if [ -n "$src_dir" ]; then
+  [ -d "$src_dir/native/core" ] || die_usage "--src $src_dir has no native/core"
+  src_dir="$(cd "$src_dir" && pwd -P)"
+fi
 if [ "$quick" -eq 1 ]; then stage_arg="core,apple-mac"; fi
 [ -n "$stage_arg" ] || stage_arg="${ALL_STAGES// /,}"
 selected=" "
@@ -275,60 +284,86 @@ if want tools; then
 fi
 
 # ---- export the revision (read-only git) -------------------------------------------------------------------------
-if [ -z "$rev" ]; then
-  if git -C "$repo" rev-parse --verify -q refs/heads/v2-native >/dev/null; then rev="v2-native"
-  elif git -C "$repo" rev-parse --verify -q refs/remotes/origin/v2-native >/dev/null; then rev="origin/v2-native"
-  else rev="HEAD"; fi
+# only what the builds and tests read: the native tree, the web app (bundled by Xcode, read by tests), docs (bundled),
+# test/ (fixtures the core tests load), the golden tools
+EXPORT_PATHS="native app docs test tools/golden package.json"
+if [ -z "$cache_root" ]; then
+  if [ "$IS_MAC" -eq 1 ]; then cache_root="$HOME/Library/Caches/worship-rig-check"
+  else cache_root="${XDG_CACHE_HOME:-$HOME/.cache}/worship-rig-check"; fi
 fi
-sha="$(git -C "$repo" rev-parse --verify -q "$rev^{commit}" 2>/dev/null || true)"
+mkdir -p "$cache_root"
+cache_root="$(cd "$cache_root" && pwd -P)"
 export_status="FAIL"; export_details=""; export_secs=0
-src=""; work=""
-if [ -z "$sha" ]; then
-  export_details="revision '$rev' not found in $repo"
-else
-  sha7="${sha:0:7}"
-  if [ -z "$cache_root" ]; then
-    if [ "$IS_MAC" -eq 1 ]; then cache_root="$HOME/Library/Caches/worship-rig-check"
-    else cache_root="${XDG_CACHE_HOME:-$HOME/.cache}/worship-rig-check"; fi
-  fi
-  mkdir -p "$cache_root"
-  cache_root="$(cd "$cache_root" && pwd -P)"
-  work="$cache_root/$sha7"
+src=""; work=""; sha=""
+t0=$SECONDS
+if [ -n "$src_dir" ]; then
+  # --src: an uncommitted tree (testing this script, or a change before it is pushed): copied, never built in place
+  rev="(tree $src_dir)"
+  work="$cache_root/local"
   src="$work/src"
-  t0=$SECONDS
-  if [ -f "$src/.export-ok" ] && [ "$(cat "$src/.export-ok")" = "$sha" ]; then
-    export_status=PASS; export_details="reused $src"
-  else
-    rm -rf "$src" "$src.partial"
-    mkdir -p "$src.partial"
-    # only what the builds read: the native tree, the web app (bundled by Xcode, read by tests), docs (bundled),
-    # the golden tools; paths absent at older revisions are left out
-    paths=()
-    for p in native app docs tools/golden package.json; do
-      if git -C "$repo" cat-file -e "$sha:$p" 2>/dev/null; then paths+=("$p"); fi
-    done
-    if git -C "$repo" archive --format=tar "$sha" -- ${paths[@]+"${paths[@]}"} | tar -x -C "$src.partial" \
-        2> "$out/export.log"; then
-      printf '%s' "$sha" > "$src.partial/.export-ok"
-      mv "$src.partial" "$src"
-      export_status=PASS
-      export_details="exported $rev ($sha7) to $src ($(du -sk "$src" 2>/dev/null | cut -f1) KB)"
+  rm -rf "$src"
+  mkdir -p "$src"
+  ok=1
+  for p in $EXPORT_PATHS; do
+    [ -e "$src_dir/$p" ] || continue
+    mkdir -p "$src/$(dirname "$p")"
+    # build trees and other git-ignored bulk stay behind (native/core/build-*, native/apple/build, node_modules)
+    if [ -d "$src_dir/$p" ]; then
+      (cd "$src_dir" && tar -cf - --exclude='native/core/build*' --exclude='native/devhost/build*' \
+        --exclude='native/apple/build' --exclude='node_modules' --exclude='*.xcodeproj' --exclude='DerivedData' \
+        "$p") | tar -xf - -C "$src" || ok=0
     else
-      export_details="git archive $rev failed (see export.log)"
+      cp "$src_dir/$p" "$src/$p" || ok=0
     fi
+  done
+  if [ "$ok" -eq 1 ]; then
+    export_status=PASS
+    export_details="copied $src_dir to $src ($(du -sk "$src" 2>/dev/null | cut -f1) KB)"
+  else
+    export_details="copy of $src_dir failed"
   fi
-  export_secs=$((SECONDS - t0))
-  touch "$work"
-  # keep the three most recent revisions (each holds an export plus its build trees)
-  if [ -d "$cache_root" ]; then
+else
+  if [ -z "$rev" ]; then
+    if git -C "$repo" rev-parse --verify -q refs/heads/v2-native >/dev/null; then rev="v2-native"
+    elif git -C "$repo" rev-parse --verify -q refs/remotes/origin/v2-native >/dev/null; then rev="origin/v2-native"
+    else rev="HEAD"; fi
+  fi
+  sha="$(git -C "$repo" rev-parse --verify -q "$rev^{commit}" 2>/dev/null || true)"
+  if [ -z "$sha" ]; then
+    export_details="revision '$rev' not found in $repo"
+  else
+    sha7="${sha:0:7}"
+    work="$cache_root/$sha7"
+    src="$work/src"
+    if [ -f "$src/.export-ok" ] && [ "$(cat "$src/.export-ok")" = "$sha" ]; then
+      export_status=PASS; export_details="reused $src"
+    else
+      rm -rf "$src" "$src.partial"
+      mkdir -p "$src.partial"
+      paths=()  # paths absent at older revisions are left out
+      for p in $EXPORT_PATHS; do
+        if git -C "$repo" cat-file -e "$sha:$p" 2>/dev/null; then paths+=("$p"); fi
+      done
+      if git -C "$repo" archive --format=tar "$sha" -- ${paths[@]+"${paths[@]}"} | tar -x -C "$src.partial" \
+          2> "$out/export.log"; then
+        printf '%s' "$sha" > "$src.partial/.export-ok"
+        mv "$src.partial" "$src"
+        export_status=PASS
+        export_details="exported $rev ($sha7) to $src ($(du -sk "$src" 2>/dev/null | cut -f1) KB)"
+      else
+        export_details="git archive $rev failed (see export.log)"
+      fi
+    fi
+    touch "$work"
+    # keep the three most recent revisions (each holds an export plus its build trees)
     # shellcheck disable=SC2012  # names are 7 hex digits
     ls -1t "$cache_root" 2>/dev/null | tail -n +4 | while IFS= read -r old; do
       case "$old" in *[!0-9a-f]*|"") ;; *) rm -rf "${cache_root:?}/$old" ;; esac
     done
   fi
 fi
+export_secs=$((SECONDS - t0))
 say "export: $export_status ($export_details)"
-sha="${sha:-}"
 exported=0
 [ "$export_status" = PASS ] && exported=1
 
@@ -385,11 +420,23 @@ if want core; then
           fi
         done < <(sed -nE 's/^ *[0-9]+\/[0-9]+ Test +#[0-9]+: ([^ ]+) \.*[ *]*(Passed|Failed|Timeout|Exception|SEGFAULT|Subprocess aborted|Child aborted).*/\1 \2/p' "$rr")
       fi
+      # tests that read git-ignored generated data: without it their failure says nothing about this machine
+      nodata=""
+      if [ ! -d "$src/tools/golden/decode-dump/data/raw44100" ]; then
+        for t in unit.samples_decode unit.samples_process unit.samples_service; do
+          if grep -q "^$t " "$results" && ! grep -q "^$t Passed$" "$results"; then
+            nodata="${nodata:+$nodata }$t"
+            awk -v n="$t" '$1 == n { print n " NoData"; next } { print }' "$results" > "$results.tmp"
+            mv "$results.tmp" "$results"
+          fi
+        done
+      fi
       total="$(wc -l < "$results" | tr -d ' ')"
       npass="$(grep -c ' Passed$' "$results" || true)"
       nskip="$(grep -c ' Skipped$' "$results" || true)"
-      nfail=$((total - npass - nskip))
-      grep -v -E ' (Passed|Skipped)$' "$results" | sed 's/ /: /' > "$errs" || true
+      nnodata="$(grep -c ' NoData$' "$results" || true)"
+      nfail=$((total - npass - nskip - nnodata))
+      grep -v -E ' (Passed|Skipped|NoData)$' "$results" | sed 's/ /: /' > "$errs" || true
       # the doctest assertion lines of the failures, so the cloud sees what broke without the log
       if [ "$nfail" -gt 0 ]; then
         grep -E '(ERROR|FATAL ERROR|CHECK|REQUIRE).*(is NOT correct|failed|threw)|: ERROR: ' "$log" \
@@ -408,8 +455,15 @@ if want core; then
         tests_json="$tests_json$(json_str "$name"):$(json_str "$status")"
       done < "$results"
       tests_json="$tests_json}"
+      nodata_note=""
+      if [ -n "$nodata" ]; then
+        nodata_note="not counted, they need tools/golden/decode-dump/data/raw* (git-ignored; dump.mjs in Chromium)"
+        nodata_note="$nodata_note: $nodata"
+      fi
       extra="\"tests\":$tests_json,\"flaky\":$(json_str "$flaky"),\"golden\":$(json_str "$golden_note")"
-      det="$npass passed, $nfail failed, $nskip skipped of $total (Apple clang: ${v_cxx:-?}); $golden_note"
+      extra="$extra,\"no_data\":$(json_str "$nodata_note")"
+      det="$npass passed, $nfail failed, $nskip skipped of $total (${v_cxx:-?}); $golden_note"
+      [ -z "$nodata" ] || det="$det; $nodata_note"
       [ -z "$flaky" ] || det="$det; passed on the serial rerun (flaky): $flaky"
       if [ "$nfail" -eq 0 ]; then record core PASS $((SECONDS - t0)) "$det" "$errs" "$extra"
       else record core FAIL $((SECONDS - t0)) "$det" "$errs" "$extra"; fi
