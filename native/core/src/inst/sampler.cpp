@@ -99,7 +99,8 @@ void SamplerInstrument::deferGarbage(Owned *p) {
     garbage_[garbageN_++] = p;
     return;
   }
-  // never on a real path (one payload per command, drained every quantum); keep it rather than free here
+  // never on a real path (one payload per command, drained every quantum): more than 8 payloads in one quantum
+  // LEAK the previous last entry rather than free on the audio thread
   garbage_[garbageN_ - 1] = p;
 }
 

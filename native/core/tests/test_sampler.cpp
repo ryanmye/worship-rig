@@ -518,6 +518,28 @@ TEST_SUITE("sampler") {
     CHECK(db(rms(dbb, 0.6, 0.8)) > held - 6);
   }
 
+  TEST_CASE("ReleaseOverride is read at release: a change while the note is held applies to it (contract 2.3)") {
+    auto c4 = loadWav(fixtures() + "/test-keys/soft/C4.wav", 60);
+    auto *z = new rig::SamplerZones();
+    z->layers.push_back({0, 127, {{60, c4.get()}}});
+    rig::SamplerSetup s;
+    s.release = 0.12;  // own release: tau 0.12 s, -60 dB after 0.83 s
+    rig::SamplerInstrument u(s, z, kSR);
+    UnitRig r(u);
+    std::vector<float> L;
+    u.noteOn(60, 100, 100 / 127.0f, fr(0.05));
+    r.until(0.3, &L);
+    rig::Command c{};
+    c.op = rig::opOf(rig::SamplerOp::ReleaseOverride);
+    c.f.a = 0.05;  // slots.<i>.release set while the key is down
+    u.apply(c);
+    u.noteOff(60, fr(0.5), false);
+    r.until(1.0, &L);
+    const double held = db(rms(L, 0.3, 0.45)), after = db(rms(L, 0.6, 0.8));
+    INFO("held ", held, " after ", after);
+    CHECK(after < held - 60);  // the instrument's own release would still be within ~25 dB here
+  }
+
   TEST_CASE("cost per 128-frame block (printed; no timing assertion on a shared box)") {
     auto c4 = loadWav(fixtures() + "/test-keys/loud/C4.wav", 60);
     for (const bool multi : {false, true}) {
