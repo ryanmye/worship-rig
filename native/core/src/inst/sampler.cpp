@@ -145,6 +145,9 @@ void SamplerInstrument::releaseAt(int slot, double t) {
   pool_.markReleased(slot, t);
   Voice &v = pool_.voice(slot);
   if (v.ignoreRelease) return;  // undamped strings ring to the buffer end
+  // contract 2.3: slots.<i>.release is read AT RELEASE (audio.js _release sets voice.releaseOverride just before
+  // noteOff), so a change while the note is held applies to it; a retiring unit keeps the value it last got
+  if (relOverride_ > 0) v.releaseOverride = relOverride_;
   const double r = v.releaseOverride > 0 ? v.releaseOverride : v.release;
   prepParams(v);
   wa::rampTo(v.env.gain(), 0, t, wa::releaseTau(r));
@@ -197,7 +200,7 @@ void SamplerInstrument::noteOn(int note, int vel, float velGain, std::int64_t fr
   if (slot < 0) return;
   Voice &v = pool_.voice(slot);
   v.stopAt = kInf;
-  v.releaseOverride = relOverride_;
+  v.releaseOverride = 0;  // BasicVoice: unset until the release reads slots.<i>.release
   lastId_ = pool_.idOf(slot);
   v.src.playbackRate().setValue(js::pow(2, (n - s->midi) / 12.0));
   v.src.detune().setValue(bend_ * 100);

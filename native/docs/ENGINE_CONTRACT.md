@@ -542,8 +542,9 @@ dotted beat) + Start (first downbeat) / Stop to the sink with engine times.
   (shown in Settings and the latency hint). Native (T00c, D2): `latencyMs` = `tick.hostLatency` = the host's
   `output_latency_sec` (which includes the device buffer it granted) + the frames the 128-frame FIFO holds back for
   that block, `(128 − b mod 128) mod 128` (64 → 64 frames, 441 → 71, 128/256/512 → 0). `audio {bufferFrames}` asks
-  the host for 64 | 128 | 256 | 512 frames (`rig_host.audio_start_frames`; a 1.0 host gets `latency_sec = frames /
-  rate`); `state.bufferFrames` reports what the OS granted (iPad may round).
+  the host for 64 | 128 | 256 | 512 frames (`rig_host.audio_start_frames`, 0 until the UI asks: the host's own
+  default, 128 on Apple; a 1.0 host gets `latency_sec = frames / rate`); `state.bufferFrames` reports what the OS
+  granted (iPad may round), else the request (default 128).
 - **Status**: the engine has no status object; `controller.status` (`controller.js:259-297`) is fed by engine
   events: `audio` ('running'|'suspended'|'stalled'|'restarting'|'asleep'), `latencyMs`, `loading`, `ready`,
   `memory`, `lowResource`, `click{on,counting,available,output,midiClock,midiClockConnected}`, `pedal`.

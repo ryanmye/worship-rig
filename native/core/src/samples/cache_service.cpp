@@ -122,7 +122,12 @@ void CacheServiceImpl::setPcmOverride(const std::string &dir) {
     const std::size_t dot = rel.find_last_of('.');
     if (dot != std::string::npos) rel.resize(dot);
     for (std::size_t i = 0; (i = rel.find('/', i)) != std::string::npos;) rel.replace(i, 1, "__");
-    const std::string file = dir + "/raw" + std::to_string(static_cast<long>(rq.engineRate)) + "/" + rel + ".wav";
+    std::string file = dir + "/raw" + std::to_string(static_cast<long>(rq.engineRate)) + "/" + rel + ".wav";
+    if (!std::filesystem::exists(file)) {  // native/golden/pcm layout: <set>/<note>.wav at the file's own rate
+      std::string nested = rel;
+      for (std::size_t i = 0; (i = nested.find("__", i)) != std::string::npos;) nested.replace(i, 2, "/");
+      file = dir + "/" + nested + ".wav";
+    }
     io::WavData w;
     if (!std::filesystem::exists(file) || !io::readWav(file, w, nullptr) || w.ch.empty() || w.frames() == 0)
       return loadSampleFile(rq, host);

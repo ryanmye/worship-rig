@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <map>
+#include <vector>
 
 #include "bridge/json_out.h"
 #include "graph/builtin_units.h"
@@ -484,28 +486,75 @@ int Model::droneAttachFiles(const yyjson_val *files) {
 
 // ---- perform (skeleton: every note to every slot; T14 owns splits, pedal, mono, wheels) ---------------------------
 
-bool Model::noteOn(int note, int vel, double when, const yyjson_val *) {
+// ---- STOPGAP(T12) perform overlay, kept until T14 replaces it (T14 owns perform) ----
+// audio.js noteOn / noteOff / sustain for polyphonic slots: split on the physical note, sounding note = n + song
+// transpose + 12 octave + slot transpose, duplicate note-on = re-strike, pedal holds released notes of slots with
+// `sustain`, pedal up releases them. Linear velocity only (touch curves, mono, pedalHold, re-strike fade: T14).
+namespace {
+struct OvEntry {
+  int slot, sn;
+};
+struct OvPerform {
+  std::map<int, std::vector<OvEntry>> sounding;
+  std::vector<OvEntry> pedaled;
+  bool pedal = false;
+};
+std::map<const Model *, OvPerform> gOv;
+}  // namespace
+
+static Command ovNote(Op op, int slot, int sn, int vel, std::int64_t frame) {
   Command c{};
-  c.op = Op::NoteOn;
-  c.frame = frameFor(when);
-  c.target = kAllSlots;
-  c.aux = static_cast<std::uint32_t>(note & 0xff) | (static_cast<std::uint32_t>(std::clamp(vel, 0, 127)) << 8);
+  c.op = op;
+  c.frame = frame;
+  c.target = static_cast<std::uint32_t>(instSlot(static_cast<std::size_t>(slot)));
+  c.aux = static_cast<std::uint32_t>(sn & 0xff) | (static_cast<std::uint32_t>(std::clamp(vel, 0, 127)) << 8);
+  return c;
+}
+
+bool Model::noteOn(int note, int vel, double when, const yyjson_val *) {
+  if (!(vel > 0)) return noteOff(note, when);
+  OvPerform &P = gOv[this];
+  const int n = std::clamp(note, 0, 127);
+  if (P.sounding.count(n)) noteOff(n, when);
+  std::vector<OvEntry> entries;
+  for (std::size_t i = 0; i < std::size(active_.slots); ++i) {
+    const SlotPatch &sp = active_.slots[i];
+    if (!sp.present) continue;
+    if (n < sp.spec.lowNote || n > sp.spec.highNote) continue;
+    const int sn = n + song_.transpose + 12 * sp.octave + sp.transpose;
+    if (sn < 0 || sn > 127) continue;
+    send(ovNote(Op::NoteOn, static_cast<int>(i), sn, vel, frameFor(when)));
+    entries.push_back({static_cast<int>(i), sn});
+  }
+  P.sounding[n] = entries;
   ++stats_.notesOn;
-  return send(c);
+  return true;
 }
 
 bool Model::noteOff(int note, double when) {
-  Command c{};
-  c.op = Op::NoteOff;
-  c.frame = frameFor(when);
-  c.target = kAllSlots;
-  c.aux = static_cast<std::uint32_t>(note & 0xff);
+  OvPerform &P = gOv[this];
+  const int n = std::clamp(note, 0, 127);
+  auto it = P.sounding.find(n);
+  if (it != P.sounding.end()) {
+    for (const OvEntry &e : it->second) {
+      if (P.pedal && active_.slots[e.slot].sustain) P.pedaled.push_back(e);
+      else send(ovNote(Op::NoteOff, e.slot, e.sn, 0, frameFor(when)));
+    }
+    P.sounding.erase(it);
+  }
   ++stats_.notesOff;
-  return send(c);
+  return true;
 }
 
-bool Model::sustain(bool, double) {
-  return false;  // T14
+bool Model::sustain(bool down, double when) {
+  OvPerform &P = gOv[this];
+  if (down == P.pedal) return true;
+  P.pedal = down;
+  if (!down) {
+    for (const OvEntry &e : P.pedaled) send(ovNote(Op::NoteOff, e.slot, e.sn, 0, frameFor(when)));
+    P.pedaled.clear();
+  }
+  return true;
 }
 void Model::pitchBend(double, double) {}
 bool Model::setWheel(std::string_view, double, double, double) {

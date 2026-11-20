@@ -25,6 +25,18 @@ using rigtest::OfflineEngine;
 
 namespace {
 
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+constexpr bool kSanitized = true;
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
+constexpr bool kSanitized = true;
+#else
+constexpr bool kSanitized = false;
+#endif
+#else
+constexpr bool kSanitized = false;
+#endif
+
 rig::Engine &eng(OfflineEngine &e) {
   return *reinterpret_cast<rig::Engine *>(e.e);
 }
@@ -458,7 +470,7 @@ TEST_SUITE("t00c") {
     MESSAGE("us per quantum (budget " << budget << " us): 4 slots idle " << s4 << ", 16 slots idle " << s16
                                       << ", 16 slots x 8 test voices " << v16x8 << ", 16 x 64 test voices "
                                       << v16x64);
-    CHECK(s16 < budget);
+    if (!kSanitized) CHECK(s16 < budget);  // timing means nothing under ASan / TSan
   }
 }
 

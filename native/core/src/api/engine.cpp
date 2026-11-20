@@ -532,9 +532,9 @@ const char *Engine::requestAudio(const std::string &action, const std::string &d
   loadStart();
   const std::string dev = deviceId == "default" ? std::string() : deviceId;
   const unsigned ch = outCh_;
-  const std::uint32_t frames = bufferReq_;
+  const std::uint32_t frames = bufferExplicit_ ? bufferReq_ : 0;  // 0 = no request: the host's own default
   // T00c D2: a 1.0 host (no audio_start_frames) gets the size as a buffer duration when no latency was asked
-  const double lat = latency > 0 || !bufferExplicit_ ? latency : frames / sampleRate();
+  const double lat = latency > 0 || !bufferExplicit_ ? latency : bufferReq_ / sampleRate();
   const bool withFrames = host_.struct_size >= RIG_HOST_SIZE_V1 + sizeof(void *) && host_.audio_start_frames;
   hostCall([this, restart, dev, lat, ch, frames, withFrames] {
     if (restart && host_.audio_stop) host_.audio_stop(host_.user);

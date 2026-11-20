@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
 #include <map>
 #include <set>
 #include <string>
@@ -103,6 +104,10 @@ RunResult runFixture(const Fixture &f, const std::string &goldenDir, double sr) 
   cfg.seed = static_cast<uint32_t>(num(fx, "seed", 1));
   cfg.on_event = onEvent;
   cfg.event_user = &sink;
+  // T12 overlay: the app dir (sample manifest, gain trims) and the Chromium-decoded PCM (golden README "Sampler PCM")
+  const std::string appDir = goldenDir + "/../../app";
+  cfg.app_dir = appDir.c_str();
+  if (!std::getenv("RIG_SAMPLES_PCM_OVERRIDE")) setenv("RIG_SAMPLES_PCM_OVERRIDE", (goldenDir + "/pcm").c_str(), 1);
   rig_status st;
   rig_engine *e = rig_create(&cfg, &st);
   if (!e) {
