@@ -106,6 +106,9 @@ class SynthInstrument final : public Instrument {
   static constexpr unsigned kMaxGarbage = 8;
   Owned *garbage_[kMaxGarbage] = {};  // payloads handed back at the next process() (giveBack needs the context)
   unsigned garbageN_ = 0;
+  static constexpr unsigned kMaxPendingEnded = 16;
+  VoiceId pendingEnded_[kMaxPendingEnded] = {};  // voices evicted at note-on (pool full of fading voices)
+  unsigned pendingEndedN_ = 0;
   std::shared_ptr<const WaveBank> bank_;
   std::unique_ptr<SynthShared> sh_;
   VoicePool<SynthVoice, kVoicePoolSize + kVoiceSpare, kSynthVoiceBytes> pool_;

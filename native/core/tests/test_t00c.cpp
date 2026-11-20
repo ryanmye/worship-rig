@@ -30,18 +30,20 @@ rig::Engine &eng(OfflineEngine &e) {
 }
 
 /** A test-voice slot (sine, fast attack, long release) or a JSON null. */
-std::string slotJson(bool on, double gain = 0.9, double pan = 0.0, double rev = 0.0, double dly = 0.0) {
+std::string slotJson(bool on, double gain = 0.9, double pan = 0.0, double rev = 0.0, double dly = 0.0,
+                     double release = 0.2) {
   if (!on) return "null";
   return R"({"instrument":{"type":"test","id":"sine"},"gain":)" + std::to_string(gain) + R"(,"pan":)" +
          std::to_string(pan) + R"(,"sends":{"reverb":)" + std::to_string(rev) + R"(,"delay":)" +
-         std::to_string(dly) + R"(},"params":{"attack":0.002,"decay":0.3,"sustain":0.8,"release":0.2}})";
+         std::to_string(dly) + R"(},"params":{"attack":0.002,"decay":0.3,"sustain":0.8,"release":)" +
+         std::to_string(release) + "}}";
 }
 
 /** `n` slot entries; slot i sounds when bit i of `mask` is set. */
 std::string patch(int n, std::uint32_t mask, double gain = 0.9, double pan = 0.0, double rev = 0.0,
-                  double dly = 0.0) {
+                  double dly = 0.0, double release = 0.2) {
   std::string s = R"({"slots":[)";
-  for (int i = 0; i < n; ++i) s += (i ? "," : "") + slotJson((mask >> i) & 1u, gain, pan, rev, dly);
+  for (int i = 0; i < n; ++i) s += (i ? "," : "") + slotJson((mask >> i) & 1u, gain, pan, rev, dly, release);
   return s + "]}";
 }
 
@@ -612,7 +614,8 @@ TEST_SUITE("realtime") {
     rt.post(R"({"v":1,"op":"hello","protocol":1,"id":1})");
     rt.post(R"({"v":1,"op":"audio","action":"start","id":2})");
     REQUIRE(rt.waitFor("\"re\":2"));
-    rt.post(R"({"v":1,"op":"prepare","id":3,"patch":)" + patch(16, 0xffffu, 0.3) + "}");
+    // 16 sounding slots, short release tails (sanitizer builds render several times slower than real time)
+    rt.post(R"({"v":1,"op":"prepare","id":3,"patch":)" + patch(16, 0xffffu, 0.3, 0.0, 0.0, 0.0, 0.02) + "}");
     REQUIRE(rt.waitFor("\"token\":1"));
     rt.post(R"({"v":1,"op":"commit","id":4,"token":1})");
     REQUIRE(rt.waitFor("\"committed\":true"));
@@ -639,7 +642,9 @@ TEST_SUITE("realtime") {
         std::this_thread::sleep_for(std::chrono::microseconds(n * 4));
       }
     });
-    for (int k = 0; k < 150; ++k) {
+    // posts until 2 s of audio went through (any build speed), at most 40 s of wall time
+    const auto t0 = std::chrono::steady_clock::now();
+    for (int k = 0; frames < 96000 && std::chrono::steady_clock::now() - t0 < std::chrono::seconds(40); ++k) {
       const int n = 40 + k % 40, s = k % 16;
       rt.post(R"({"v":1,"op":"play","e":"on","vel":90,"n":)" + std::to_string(n) + "}");
       rt.post(R"({"v":1,"op":"set","path":"slots.)" + std::to_string(s) + R"(.pan","value":)" +

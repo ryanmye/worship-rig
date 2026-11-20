@@ -289,7 +289,9 @@ void SynthInstrument::noteOn(int note, int vel, float velGain, std::int64_t fram
   v01 = clampd(std::isfinite(v01) ? v01 : 0.8, 0, 1);
   pool_.makeRoom(t, [&](int s) { fadeSlot(s, t, kStealFade); });
   const BuildCtx b{*bank_, rng_, params_, sr_, t, v01, morphX_, n, &sh_->walk};
-  auto evicted = [](int) {};
+  auto evicted = [&](int slot) {  // its VoiceEnded goes out with the next quantum
+    if (pendingEndedN_ < kMaxPendingEnded) pendingEnded_[pendingEndedN_++] = pool_.idOf(slot);
+  };
   switch (patch_.id) {
     case PatchId::WarmPad: pool_.emplaceEvicting<WarmVoice>(evicted, n, t, b); break;
     case PatchId::GlassPad: pool_.emplaceEvicting<GlassVoice>(evicted, n, t, b); break;
@@ -610,6 +612,16 @@ void SynthInstrument::process(const RenderContext &ctx, UnitIO &io) {
   sr_ = sr;
   for (unsigned i = 0; i < garbageN_; ++i) giveBack(ctx, garbage_[i]);
   garbageN_ = 0;
+  for (unsigned i = 0; i < pendingEndedN_; ++i) {
+    if (!ctx.events) break;
+    AudioEvent e{};
+    e.frame = f0;
+    e.kind = EventKind::VoiceEnded;
+    e.f.a = static_cast<double>(ctx.self);
+    e.f.b = static_cast<double>(pendingEnded_[i]);
+    ctx.events->push(e);
+  }
+  pendingEndedN_ = 0;
   if (killAll_) {
     pool_.forEach([&](int s, SynthVoice &) {
       emitEnded(ctx, s);

@@ -101,7 +101,8 @@ const lines = [`# synth.js reference renders (tools/golden/vectors/dump-synth.mj
 for (const c of CASES) {
   // times on the frame grid: the native Model hands instruments frames (Model::frameFor), so a time whose t * sr is a
   // hair above an integer (0.02 + 7 * 0.01) would start Chromium's oscillators on the sub-sample path natively absent
-  const ev = c.ev.map(([t, ...rest]) => [Math.round(t * SR) / SR, ...rest]);
+  // and issued in time order (stable), as tools/golden/page.js does: allocator decisions depend on call order
+  const ev = c.ev.map(([t, ...rest]) => [Math.round(t * SR) / SR, ...rest]).sort((a, b) => a[0] - b[0]);
   const spec = { patch: c.patch, params: c.params || {}, trimDb: trims[c.patch] || 0, sr: SR, sec: c.sec,
     win: c.win, cap: c.cap || 0, ev, name: c.name };
   const b64 = await page.evaluate((s) => window.renderCase(s), spec);
