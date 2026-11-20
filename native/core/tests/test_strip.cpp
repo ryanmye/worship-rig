@@ -323,6 +323,47 @@ TEST_SUITE("strip") {
     CHECK(finite);
   }
 
+  TEST_CASE("SlotEq timers: 16 type fades during a chain switch (17 live timers) all complete (T02 review)") {
+    // 8 bells; a cut starts a switch (2 chains), then every band turns peak -> shelf in place on both chains
+    const char *bells = R"({"b1":{"type":"peak","hz":100,"db":6},"b2":{"on":true,"hz":200,"db":6},)"
+                        R"("b3":{"on":true,"hz":400,"db":6},"b4":{"on":true,"hz":800,"db":6},)"
+                        R"("b5":{"on":true,"hz":1600,"db":6},"b6":{"on":true,"hz":3200,"db":6},)"
+                        R"("b7":{"on":true,"hz":6400,"db":6},"b8":{"type":"peak","hz":12000,"db":6}})";
+    SlotEqSpec want = specOf(bells);
+    SlotEqChains eq(want);
+    const std::size_t n = 128 * 600;
+    std::vector<float> x = sine(700, 0.2, n);
+    std::int64_t f = 0;
+    auto step = [&](int quanta) {
+      for (int i = 0; i < quanta; ++i, f += 128) {
+        float *ch[1] = {x.data() + f};
+        eq.process(ch, 1, 128, f, kSr);
+      }
+    };
+    step(10);
+    want.cutHz = 60;
+    want.cutStored = true;
+    eq.set(want, f / kSr, false, f, kSr);
+    REQUIRE(eq.chains() == 2);
+    step(1);
+    for (int k = 0; k < kEqBands; ++k) want.bands[k].type = k % 2 ? EqHighshelf : EqLowshelf;
+    eq.set(want, f / kSr, false, f, kSr);
+    CHECK(eq.pendingTimers() == 17);
+    step(150);  // > 85 ms switch + the re-check switch + 2 x 30 ms fades
+    CHECK((eq.chains() == 1 && eq.pendingTimers() == 0));
+    // settled: the same output as a chain built directly at the target (no node left at 0 dB mid-fade)
+    SlotEqChains ref(want);
+    std::vector<float> y = sine(700, 0.2, n);
+    for (std::int64_t g = 0; g < f; g += 128) {
+      float *ch[1] = {y.data() + g};
+      ref.process(ch, 1, 128, g, kSr);
+    }
+    double d = 0;
+    for (std::int64_t i = f - 4096; i < f; ++i)
+      d = std::fmax(d, std::fabs(x[static_cast<std::size_t>(i)] - y[static_cast<std::size_t>(i)]));
+    CHECK(d < 1e-4);
+  }
+
   TEST_CASE("eqAudition: bypass plays the flat EQ, 'on' restores the stored one, repeated modes are no-ops") {
     const std::size_t n = 128 * 120;
     const std::vector<float> L = t02::input(0, n, kSr, 0.3);

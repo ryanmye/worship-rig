@@ -51,7 +51,7 @@ TEST_SUITE("devhost-ws") {
   }
 
   TEST_CASE("RFC 6455 1.3 handshake accept key") {
-    CHECK(devhost::wsAcceptKey("dGhlIHNhbXBsZSBub25jZQ==") == "s3pPLMBiTxaQ9kK+C5qWlo/YWo4=");
+    CHECK(devhost::wsAcceptKey("dGhlIHNhbXBsZSBub25jZQ==") == "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
   }
 
   TEST_CASE("server frames: RFC 6455 5.7 'Hello' and the 16/64-bit length forms") {

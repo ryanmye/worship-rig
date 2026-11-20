@@ -39,7 +39,7 @@ struct ServerStats {
 
 class Server {
  public:
-  Server(std::string wsPath, ServerHooks hooks) : wsPath_(std::move(wsPath)), hooks_(std::move(hooks)) {}
+  Server(std::string wsPath, ServerHooks hooks);
   ~Server();
   Server(const Server &) = delete;
   Server &operator=(const Server &) = delete;

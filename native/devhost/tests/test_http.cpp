@@ -2,6 +2,8 @@
 #include <filesystem>
 #include <fstream>
 
+#include <unistd.h>
+
 #include "doctest.h"
 #include "http.h"
 

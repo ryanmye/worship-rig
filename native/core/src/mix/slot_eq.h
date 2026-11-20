@@ -146,7 +146,8 @@ class SlotEqChains {
     std::uint32_t seq = 0;
     int side = -1, oldSide = -1, node = -1;
   };
-  static constexpr int kTimers = 16;
+  // live timers <= 1 switch + 16 type fades (8 identity bands x 2 chains); stale ones (superseded seq) are reused
+  static constexpr int kTimers = 32;
 
   Spec eqSpec(int id) const;
   int members(int out[kIds]) const;
@@ -158,6 +159,7 @@ class SlotEqChains {
   void applyParams(double when, bool step, std::int64_t nowFrame, double sr);
   void fadeType(int side, int node, wa::BiquadType web, double when, std::int64_t nowFrame, double sr);
   void at(double t, double sr, Timer tm);
+  bool stale(const Timer &tm) const;
   void runTimers(std::int64_t frame0, double sr);
   void fire(const Timer &tm, double tt, std::int64_t nowFrame, double sr);
 

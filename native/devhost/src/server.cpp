@@ -46,6 +46,8 @@ struct Server::Client {
   bool dead = false;
 };
 
+Server::Server(std::string wsPath, ServerHooks hooks) : wsPath_(std::move(wsPath)), hooks_(std::move(hooks)) {}
+
 Server::~Server() {
   for (auto &c : clients_) {
     if (c->fd >= 0) ::close(c->fd);

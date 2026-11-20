@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <condition_variable>
+#include <mutex>
 #include <thread>
 
 #include "devhost.h"
@@ -99,14 +101,22 @@ int main(int argc, char **argv) {
   std::printf("rig-devhost listening on http://%s:%u/ (ws %s, audio %s, %s)\n", o.bind.c_str(), host.port(),
               devhost::kWsPath, host.audio().backendName().c_str(), rig_version_string());
   std::fflush(stdout);
+  std::mutex mu;
+  std::condition_variable cv;
+  bool done = false;
   std::thread timer;
   if (exitAfter > 0) {
-    timer = std::thread([&host, exitAfter] {
-      std::this_thread::sleep_for(std::chrono::duration<double>(exitAfter));
-      host.stop();
+    timer = std::thread([&] {
+      std::unique_lock<std::mutex> lk(mu);
+      if (!cv.wait_for(lk, std::chrono::duration<double>(exitAfter), [&] { return done; })) host.stop();
     });
   }
   host.run();
+  {
+    std::lock_guard<std::mutex> lk(mu);
+    done = true;
+  }
+  cv.notify_all();
   if (timer.joinable()) timer.join();
   g_host = nullptr;
   host.close();

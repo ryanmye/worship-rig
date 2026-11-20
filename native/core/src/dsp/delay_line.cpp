@@ -66,7 +66,8 @@ void DelayLine::process(std::int64_t frame0, double sampleRate, const float *in,
   for (int m = 0; m < 4; ++m) lane[m] = wrapIdx(static_cast<std::int64_t>(pos_) + m);
   for (std::size_t l = 0; l < loops; ++l, k += 4) {
     for (int m = 0; m < 4; ++m) {
-      const float dt = std::max(times[k + m], 0.0f);
+      const float tv = times[k + m];
+      const float dt = tv > 0.0f ? tv : 0.0f;  // = std::max for every number; a NaN time reads 0, never out of bounds
       const float desired = dt * sr;
       float rp = static_cast<float>(lane[m]) + (lenF - desired);
       if (rp >= lenF) rp -= lenF;
@@ -106,7 +107,7 @@ float DelayLine::read(double delaySec, double sampleRate) const {
   const std::size_t w = pos_ == 0 ? len - 1 : pos_ - 1;  // the sample write() just stored
   const double maxFrames = static_cast<double>(len - Param::kQuantum);
   const double desired =
-      std::clamp(delaySec, 0.0, 1e300) * static_cast<double>(static_cast<float>(sampleRate));
+      (delaySec > 0.0 ? delaySec : 0.0) * static_cast<double>(static_cast<float>(sampleRate));  // NaN -> 0
   double rp = static_cast<double>(w) + static_cast<double>(len) - std::min(desired, maxFrames);
   if (rp >= static_cast<double>(len)) rp -= static_cast<double>(len);
   const std::size_t i1 = static_cast<std::size_t>(rp);

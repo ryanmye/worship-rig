@@ -19,7 +19,9 @@ namespace rig {
 namespace {
 
 constexpr double kTailSeconds = 6.0;
-constexpr int kPending = 16;
+// SetEq payloads between two quanta (one per stored EQ row write + the coalesced flush; 43 EQ rows per slot). A
+// payload past this bound is leaked (never freed on the audio thread).
+constexpr int kPending = 128;
 
 class SlotChannel final : public Unit {
  public:
@@ -36,6 +38,11 @@ class SlotChannel final : public Unit {
     Width::gainsFor(slotWidth_ * widthDefault_, n, w);
     width_.narrow() = wa::Param(n);
     width_.wide() = wa::Param(w);
+  }
+
+  // Units are deleted on the control thread (GarbageKind::Unit / graph teardown): payloads not handed back yet go here.
+  ~SlotChannel() override {
+    for (int i = 0; i < npending_; ++i) delete pending_[i];
   }
 
   void process(const RenderContext &ctx, UnitIO &io) override;
@@ -172,6 +179,7 @@ void SlotChannel::process(const RenderContext &ctx, UnitIO &io) {
 
 Unit *makeSlotChannel(const UnitEnv &env, const UnitSpec &spec) {
   if (!spec.patch || spec.channel < 0 || spec.channel > 3) return nullptr;
+  (void)defaultSlotEqSpec();  // its function-local static is built here, never first on the audio thread (audition)
   return new SlotChannel(spec.patch->slots[spec.channel], env.sampleRate);
 }
 

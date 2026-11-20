@@ -84,14 +84,14 @@ TEST_SUITE("devhost-relay") {
       Running run(h);
       dht::WsClient a;
       REQUIRE(a.open(h.port()));
-      CHECK(a.handshake.find("Sec-WebSocket-Accept: s3pPLMBiTxaQ9kK+C5qWlo/YWo4=") != std::string::npos);
+      CHECK(a.handshake.find("Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") != std::string::npos);
       a.text(R"({"v":1,"op":"hello","protocol":1,"app":"test","id":1})");
       const std::string hello = a.until("\"re\":1");
       CHECK(hello.find("\"protocol\":1") != std::string::npos);
       CHECK(hello.find("worship-rig-core") != std::string::npos);
       a.text(R"({"v":1,"op":"audio","action":"start","id":2})");
+      CHECK_FALSE(a.until("\"re\":2").empty());  // the reply precedes the device's `running` (G9 order)
       CHECK_FALSE(a.until("\"state\":\"running\"").empty());
-      CHECK_FALSE(a.until("\"re\":2").empty());
       CHECK_FALSE(a.until("\"ev\":\"tick\"").empty());
       // a batch (JSON array) goes through rig_post unchanged
       a.text(R"([{"v":1,"op":"get","what":"stats","id":3},{"v":1,"op":"get","what":"state","id":4}])");

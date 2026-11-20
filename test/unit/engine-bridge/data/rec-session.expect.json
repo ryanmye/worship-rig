@@ -1,0 +1,58 @@
+{
+  "states": [
+    "starting",
+    "recording:native",
+    "stopping",
+    "idle:ok",
+    "starting",
+    "recording:native",
+    "stopping",
+    "idle:ok"
+  ],
+  "levels": 16,
+  "maxPeak": 0.11704611033201218,
+  "warns": [],
+  "results": [
+    {
+      "sink": "native",
+      "path": true,
+      "durationSec": 1.3973333333333333,
+      "bytes": 268332,
+      "dataBytes": 268288,
+      "sampleRate": 48000,
+      "error": null
+    },
+    {
+      "sink": "native",
+      "filename": "Custom Take.wav",
+      "durationSec": 0.4,
+      "error": null
+    }
+  ],
+  "errors": [
+    "busy"
+  ],
+  "engineStart": "unsupported",
+  "committed": true,
+  "recordingFilename": "Custom Take.wav",
+  "start1": {
+    "ok": true,
+    "sink": "native",
+    "hasPath": true,
+    "filename": "Rig 2026-11-19 2325.wav"
+  },
+  "busyWhileRecording": true,
+  "elapsedBeforeStop": 1.3966084516666666,
+  "stopWhenIdle": null,
+  "nativeStopWhenIdle": {
+    "path": null,
+    "seconds": 0,
+    "bytes": 0
+  },
+  "start2": {
+    "ok": true,
+    "filename": "Custom Take.wav"
+  },
+  "finalState": "idle",
+  "wavFiles": 2
+}

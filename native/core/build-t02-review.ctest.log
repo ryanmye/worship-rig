@@ -58,3 +58,113 @@ TEST CASE:  the golden harness reports what it cannot do instead of pretending
       Start 11: unit.lofi
 11/45 Test #11: unit.lofi ........................   Passed    1.20 sec
       Start 12: unit.master
+12/45 Test #12: unit.master ......................   Passed    7.61 sec
+      Start 13: unit.master-dsp
+13/45 Test #13: unit.master-dsp ..................   Passed    0.76 sec
+      Start 14: unit.meter
+14/45 Test #14: unit.meter .......................   Passed    0.92 sec
+      Start 15: unit.midi
+15/45 Test #15: unit.midi ........................   Passed    0.02 sec
+      Start 16: unit.num
+16/45 Test #16: unit.num .........................   Passed    0.03 sec
+      Start 17: unit.offline
+17/45 Test #17: unit.offline .....................   Passed    2.07 sec
+      Start 18: unit.panner
+18/45 Test #18: unit.panner ......................   Passed    0.02 sec
+      Start 19: unit.param
+19/45 Test #19: unit.param .......................   Passed    0.00 sec
+      Start 20: unit.params
+20/45 Test #20: unit.params ......................   Passed    0.01 sec
+      Start 21: unit.queues
+21/45 Test #21: unit.queues ......................   Passed   11.00 sec
+      Start 22: rt.realtime
+22/45 Test #22: rt.realtime ......................   Passed    1.08 sec
+      Start 23: unit.rec
+23/45 Test #23: unit.rec .........................   Passed    2.18 sec
+      Start 24: unit.reverb
+24/45 Test #24: unit.reverb ......................   Passed   10.25 sec
+      Start 25: unit.reverb-worker
+25/45 Test #25: unit.reverb-worker ...............   Passed    0.49 sec
+      Start 26: unit.runtime
+26/45 Test #26: unit.runtime .....................   Passed   15.05 sec
+      Start 27: unit.samples_cache
+27/45 Test #27: unit.samples_cache ...............   Passed    0.01 sec
+      Start 28: unit.samples_decode
+28/45 Test #28: unit.samples_decode ..............   Passed   20.96 sec
+      Start 29: unit.samples_process
+29/45 Test #29: unit.samples_process .............   Passed    0.12 sec
+      Start 30: unit.samples_service
+30/45 Test #30: unit.samples_service .............   Passed    1.52 sec
+      Start 31: unit.soak
+31/45 Test #31: unit.soak ........................   Passed    4.11 sec
+      Start 32: unit.sources
+32/45 Test #32: unit.sources .....................***Failed    2.56 sec
+[doctest] doctest version is "2.4.11"
+[doctest] run with "--help" for options
+===============================================================================
+/home/claude/worship-rig/native/core/tests/test_sources.cpp:233:
+TEST SUITE: sources
+TEST CASE:  single-node renders match Chromium 157 OfflineAudioContext (<= 1e-5)
+
+/home/claude/worship-rig/native/core/tests/test_sources.cpp:272: ERROR: CHECK( maxd <= 1e-5 ) is NOT correct!
+  values: CHECK( 1.93415 <= 1e-05 )
+  logged: osc-detune-krate-ramp: max abs diff 1.93415
+
+/home/claude/worship-rig/native/core/tests/test_sources.cpp:272: ERROR: CHECK( maxd <= 1e-5 ) is NOT correct!
+  values: CHECK( 1.99921 <= 1e-05 )
+  logged: osc-detune-krate-input: max abs diff 1.99921
+
+/home/claude/worship-rig/native/core/tests/test_sources.cpp:272: ERROR: CHECK( maxd <= 1e-5 ) is NOT correct!
+  values: CHECK( 1.93597 <= 1e-05 )
+  logged: osc-detune-krate-timeline-input-subsample: max abs diff 1.93597
+
+/home/claude/worship-rig/native/core/tests/test_sources.cpp:272: ERROR: CHECK( maxd <= 1e-5 ) is NOT correct!
+  values: CHECK( 1.99966 <= 1e-05 )
+  logged: osc-freq-krate-input: max abs diff 1.99966
+
+===============================================================================
+[doctest] test cases:    3 |    2 passed | 1 failed | 232 skipped
+[doctest] assertions: 1386 | 1382 passed | 4 failed |
+[doctest] Status: FAILURE!
+
+      Start 33: unit.strip
+33/45 Test #33: unit.strip .......................   Passed    0.10 sec
+      Start 34: unit.t00b
+34/45 Test #34: unit.t00b ........................   Passed    0.01 sec
+      Start 35: unit.thirdparty
+35/45 Test #35: unit.thirdparty ..................   Passed    0.01 sec
+      Start 36: unit.time
+36/45 Test #36: unit.time ........................   Passed    0.02 sec
+      Start 37: unit.voice
+37/45 Test #37: unit.voice .......................   Passed    0.01 sec
+      Start 38: unit.wav
+38/45 Test #38: unit.wav .........................   Passed    0.01 sec
+      Start 39: unit.params-drift
+39/45 Test #39: unit.params-drift ................   Passed    0.08 sec
+      Start 40: golden.click
+40/45 Test #40: golden.click .....................   Passed    1.49 sec
+      Start 41: golden.eq
+41/45 Test #41: golden.eq ........................   Passed    7.80 sec
+      Start 42: golden.master
+42/45 Test #42: golden.master ....................   Passed    4.44 sec
+      Start 43: golden.reverb
+43/45 Test #43: golden.reverb ....................   Passed    5.63 sec
+      Start 44: golden.t02
+44/45 Test #44: golden.t02 .......................   Passed    3.77 sec
+      Start 45: golden.t05
+45/45 Test #45: golden.t05 .......................   Passed    6.89 sec
+
+93% tests passed, 3 tests failed out of 45
+
+Label Time Summary:
+golden    =  30.02 sec*proc (6 tests)
+rt        =   1.08 sec*proc (1 test)
+unit      =  94.46 sec*proc (38 tests)
+
+Total Test time (real) = 125.59 sec
+
+The following tests FAILED:
+	  6 - unit.clock (Failed)
+	 10 - unit.golden-analytic (Failed)
+	 32 - unit.sources (Failed)
+Errors while running CTest

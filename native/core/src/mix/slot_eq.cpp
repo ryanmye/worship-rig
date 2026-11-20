@@ -520,8 +520,24 @@ void SlotEqChains::at(double t, double sr, Timer tm) {  // AudioTimer.at (offlin
       return;
     }
   }
-  // Full (never in practice: one switch + one fade per node at most): fire at the next quantum.
-  timers_[kTimers - 1] = tm;
+  // Full: reuse a timer whose callback would return at once (superseded switch / fade, dropped chain). Live timers
+  // never exceed 17 (see kTimers), so one is always found.
+  for (Timer &slot : timers_) {
+    if (stale(slot)) {
+      slot = tm;
+      return;
+    }
+  }
+  timers_[kTimers - 1] = tm;  // unreachable
+}
+
+bool SlotEqChains::stale(const Timer &tm) const {  // fire() would return without effect
+  if (tm.kind == TimerKind::SwitchDone) return tm.seq != seq_;
+  if (tm.kind != TimerKind::FadeDone) return true;
+  const Side &sd = sides_[tm.side];
+  if (!sd.used || tm.node >= sd.count) return true;
+  const Node &nd = sd.nodes[tm.node];
+  return nd.dead || tm.seq != nd.fadeSeq;
 }
 
 int SlotEqChains::pendingTimers() const {

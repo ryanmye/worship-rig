@@ -76,4 +76,13 @@ TEST_SUITE("delay_line") {
     }
     CHECK(y == z);
   }
+
+  TEST_CASE("a NaN delay time reads as 0 (no out-of-bounds read; T02 review)") {
+    const double sr = 44100;
+    DelayLine dl(0.5, sr, 0.0);
+    CHECK_FALSE(dl.delayTime().setValueAtTime(std::nan(""), 0.0));  // the block form never sees one from its Param
+    for (int i = 0; i < 300; ++i) dl.write(static_cast<float>(i));
+    dl.write(7.0f);
+    CHECK(dl.read(std::nan(""), sr) == 7.0f);  // the sample form takes the owner's double as is
+  }
 }
