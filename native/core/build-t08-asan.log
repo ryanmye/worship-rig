@@ -20,3 +20,9 @@ ninja: Entering directory `build-t08-asan'
 [18/136] Building CXX object CMakeFiles/rig_core.dir/src/dsp/convolver.cpp.o
 [19/136] Building CXX object CMakeFiles/rig_core.dir/src/dsp/delay_line.cpp.o
 [20/136] Building CXX object CMakeFiles/rig_core.dir/src/dsp/gain.cpp.o
+[21/136] Building CXX object CMakeFiles/rig_core.dir/src/dsp/oscillator.cpp.o
+[22/136] Building CXX object CMakeFiles/rig_core.dir/src/dsp/panner.cpp.o
+[23/136] Building CXX object CMakeFiles/rig_core.dir/src/dsp/periodic_wave.cpp.o
+[24/136] Building CXX object CMakeFiles/rig_core.dir/src/dsp/resampler_updown.cpp.o
+[25/136] Building CXX object CMakeFiles/rig_core.dir/src/dsp/test_voice.cpp.o
+[26/136] Building CXX object CMakeFiles/rig_core.dir/src/dsp/waveshaper.cpp.o
