@@ -16,7 +16,9 @@
 #include <algorithm>
 #include <cfloat>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
+#include <limits>
 
 #include "num/js_math.h"
 
@@ -50,12 +52,98 @@ float ensureFinite(float x, float defaultValue) {
 float flushDenormal(float x) {  // DenormalDisabler::FlushDenormalFloatToZero
   return std::fabs(x) < FLT_MIN ? 0.0f : x;
 }
-// audio_utilities::DecibelsToLinear / LinearToDecibels (powf(10, .05 dB), 20 log10f(x)).
+// ---- glibc 2.39 log10f (what audio_utilities::LinearToDecibels calls on the golden machine) ------------------------
+// log10f: sysdeps/ieee754/flt-32/e_log10f.c, Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+//   Developed at SunPro, a Sun Microsystems, Inc. business. Permission to use, copy, modify, and distribute this
+//   software is freely granted, provided that this notice is preserved.
+// logf (called by it): sysdeps/ieee754/flt-32/e_logf.c = Arm optimized-routines math/logf.c, Copyright (c) 2017-2018
+//   Arm Limited, SPDX-License-Identifier: MIT (src/num/LICENSE.arm-optimized-routines).
+// Verified bit-identical to this box's glibc (x86-64, FMA ifunc variant of logf) on 7.1e8 positive floats (every
+// third bit pattern), with or without FMA in logf; a correctly rounded log10 differs, and its last-ulp differences
+// flip comparisons in KAtSlope (1e-5 output differences on the glue vectors).
+struct LogfEntry {
+  double invc, logc;
+};
+constexpr LogfEntry kLogfTab[16] = {
+    {0x1.661ec79f8f3bep+0, -0x1.57bf7808caadep-2}, {0x1.571ed4aaf883dp+0, -0x1.2bef0a7c06ddbp-2},
+    {0x1.49539f0f010bp+0, -0x1.01eae7f513a67p-2},  {0x1.3c995b0b80385p+0, -0x1.b31d8a68224e9p-3},
+    {0x1.30d190c8864a5p+0, -0x1.6574f0ac07758p-3}, {0x1.25e227b0b8eap+0, -0x1.1aa2bc79c81p-3},
+    {0x1.1bb4a4a1a343fp+0, -0x1.a4e76ce8c0e5ep-4}, {0x1.12358f08ae5bap+0, -0x1.1973c5a611cccp-4},
+    {0x1.0953f419900a7p+0, -0x1.252f438e10c1ep-5}, {0x1p+0, 0x0p+0},
+    {0x1.e608cfd9a47acp-1, 0x1.aa5aa5df25984p-5},  {0x1.ca4b31f026aap-1, 0x1.c5e53aa362eb4p-4},
+    {0x1.b2036576afce6p-1, 0x1.526e57720db08p-3},  {0x1.9c2d163a1aa2dp-1, 0x1.bc2860d22477p-3},
+    {0x1.886e6037841edp-1, 0x1.1058bc8a07ee1p-2},  {0x1.767dcf5534862p-1, 0x1.4043057b6ee09p-2},
+};
+constexpr double kLogfLn2 = 0x1.62e42fefa39efp-1;
+constexpr double kLogfA[3] = {-0x1.00ea348b88334p-2, 0x1.5575b0be00b6ap-2, -0x1.ffffef20a4123p-2};
+
+std::uint32_t asuint(float f) {
+  std::uint32_t u;
+  std::memcpy(&u, &f, 4);
+  return u;
+}
+float asfloat(std::uint32_t u) {
+  float f;
+  std::memcpy(&f, &u, 4);
+  return f;
+}
+
+float glibcLogf(float x) {
+  std::uint32_t ix = asuint(x);
+  if (ix == 0x3f800000u) return 0;
+  if (ix - 0x00800000u >= 0x7f800000u - 0x00800000u) {
+    if (ix * 2 == 0) return -HUGE_VALF;
+    if (ix == 0x7f800000u) return x;
+    if ((ix & 0x80000000u) || ix * 2 >= 0xff000000u) return std::numeric_limits<float>::quiet_NaN();
+    ix = asuint(x * 0x1p23f);  // subnormal: normalise
+    ix -= 23u << 23;
+  }
+  const std::uint32_t tmp = ix - 0x3f330000u;
+  const std::uint32_t i = (tmp >> (23 - 4)) % 16;
+  const int k = static_cast<std::int32_t>(tmp) >> 23;
+  const std::uint32_t iz = ix - (tmp & 0x1ffu << 23);
+  const double invc = kLogfTab[i].invc, logc = kLogfTab[i].logc;
+  const double z = static_cast<double>(asfloat(iz));
+  const double r = z * invc - 1;
+  const double y0 = logc + static_cast<double>(k) * kLogfLn2;
+  const double r2 = r * r;
+  double y = kLogfA[1] * r + kLogfA[2];
+  y = kLogfA[0] * r2 + y;
+  y = y * r2 + (y0 + r);
+  return static_cast<float>(y);
+}
+
+float glibcLog10f(float x) {
+  constexpr float two25 = 3.3554432000e+07f, ivln10 = 4.3429449201e-01f, log10_2hi = 3.0102920532e-01f,
+                  log10_2lo = 7.9034151668e-07f;
+  std::int32_t hx;
+  std::memcpy(&hx, &x, 4);
+  std::int32_t k = 0;
+  if (hx < 0x00800000) {
+    if ((hx & 0x7fffffff) == 0) return -two25 / std::fabs(x);  // log(+-0) = -inf
+    if (hx < 0) return std::numeric_limits<float>::quiet_NaN();
+    k -= 25;
+    x *= two25;  // subnormal: scale up
+    std::memcpy(&hx, &x, 4);
+  }
+  if (hx >= 0x7f800000) return x + x;
+  k += (hx >> 23) - 127;
+  const auto i = static_cast<std::int32_t>((static_cast<std::uint32_t>(k) & 0x80000000u) >> 31);
+  hx = (hx & 0x007fffff) | ((0x7f - i) << 23);
+  const auto y = static_cast<float>(k + i);
+  std::memcpy(&x, &hx, 4);
+  const float z = y * log10_2lo + ivln10 * glibcLogf(x);
+  return z + y * log10_2hi;
+}
+
+// audio_utilities::DecibelsToLinear / LinearToDecibels: powf(10, .05 dB) and 20 log10f(x). powf is the correctly
+// rounded pow rounded to float (glibc's powf differs in the last bit for ~6.5e-5 of the inputs: rate-level noise,
+// bit-identical on every vector case); log10f is the glibc port above.
 float decibelsToLinear(float db) {
   return static_cast<float>(rig::js::pow(10.0, static_cast<double>(0.05f * db)));
 }
 float linearToDecibels(float linear) {
-  return 20.0f * static_cast<float>(rig::js::log10(static_cast<double>(linear)));
+  return 20.0f * glibcLog10f(linear);
 }
 // fdlibm::powf / fdlibm::asinf (third_party/fdlibm/ieee754.cc: the double functions rounded to float).
 float fdlibmPowf(float x, float y) {

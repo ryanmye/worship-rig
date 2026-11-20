@@ -245,6 +245,31 @@ TEST_SUITE("reverb") {
     CHECK(m <= 1e-6);
   }
 
+  TEST_CASE("device rate change: the playing space is rebuilt at the new rate and replaced at once") {
+    OfflineEngine e(44100);
+    startReverb(e, 0.18, 0.5, 0.01, 1);
+    auto &pool = poolOf(e);
+    e.render(22050);
+    CHECK(pool.activeKey() == "1.5|0.5|44100");
+    rig_device_info d{};
+    d.struct_size = sizeof d;
+    d.device_id = "test";
+    d.device_name = "test";
+    d.sample_rate = 48000;
+    d.channels = 2;
+    d.buffer_frames = 256;
+    rig_host_audio_started(e.e, &d);
+    std::vector<float> imp(64, 0.0f);
+    imp[0] = 0.5f;
+    inject(e, imp, 0.8);
+    const auto out = e.render(48000);
+    CHECK(pool.activeKey() == "1.5|0.5|48000");
+    CHECK(pool.units() == 1);  // the 44.1 kHz space is dropped once it is idle
+    double peak = 0;
+    for (float v : out[0]) peak = std::max(peak, double(std::fabs(v)));
+    CHECK(peak > 0.005);
+  }
+
   TEST_CASE("reverbRetain: idle units outside the retained spaces are dropped") {
     OfflineEngine e(44100);
     startReverb(e, 0.3, 0.5, 0.02, 1);
@@ -307,7 +332,9 @@ TEST_SUITE("reverb") {
     pool.commitTo(&st, 0.02, m.now());
     pool.warm(0.42, 0.3);  // a neighbour warm-up queued meanwhile
     const std::string warmKey = pool.irKeyFor(0.42, 0.3);
-    auto renderTo = [&](double t) { e.render(static_cast<std::size_t>(t * sr) - static_cast<std::size_t>(m.now() * sr)); };
+    auto renderTo = [&](double t) {
+      e.render(static_cast<std::size_t>(t * sr) - static_cast<std::size_t>(m.now() * sr));
+    };
     renderTo(1.2);
     CHECK(pool.activeKey() == oldKey);  // held: deferred
     CHECK(!pool.has(st.key));

@@ -167,6 +167,8 @@ void ReverbPool::dropKernel(const std::string &key) {
 }
 
 void ReverbPool::evict() {
+  for (const std::string &k : keys())  // spaces built for an earlier device rate are never played again
+    if (pool_.at(k).first->sampleRate != sr_ && !busy(k)) dropKernel(k);
   if (retain_) {
     for (const std::string &k : keys())
       if (!busy(k) && !retain_->count(k) && !songKeys_.count(k)) dropKernel(k);
@@ -711,6 +713,7 @@ void ReverbPool::onRateChanged(double sampleRate) {
   if (!unitBuilt_) return;
   const double size = size_, damp = damp_;
   const Stage st{irKeyFor(size, damp), size, damp, false};
+  keep_ = {st.key};
   const std::uint32_t seq = ++reqSeq_;
   target_ = st.key;
   if (offline_) {

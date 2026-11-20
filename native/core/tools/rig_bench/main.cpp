@@ -1,11 +1,17 @@
-// rig_bench: render-throughput baseline (128-frame quanta per second) of the empty graph and of N test voices.
-//   rig_bench [seconds_of_audio_per_case=20] [sample_rate=48000]
+// rig_bench: render-throughput baseline (128-frame quanta per second) of the empty graph and of N test voices, and
+// the CPU cost of the reverb (T04, ARCHITECTURE 2.1 budgets; BUILD_PLAN T04: one unit <= 8 % of one core here).
+//   rig_bench [seconds_of_audio_per_case=20] [sample_rate=48000] [--reverb-only]
+// Exit status 1 when the reverb unit exceeds its budget on this machine.
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 
+#include "fx/reverb_unit.h"
+#include "num/prng.h"
 #include "rig/rig_engine.h"
 
 static void post(rig_engine *e, const std::string &m) {
@@ -52,11 +58,95 @@ static double run(const char *label, int voices, double seconds, double sr, bool
   return bps;
 }
 
+struct UnitCost {
+  double meanUs, p999Us, maxUs, pctCore;
+};
+
+/** The reverb render unit alone (HPF, LPF, predelay lines, convolvers, gains) fed continuous stereo noise:
+ *  `spaces` units rendering at once (2 = a unit crossfade), mean and worst microseconds per 128-frame quantum. */
+static UnitCost reverbUnit(const char *label, double sr, double seconds, const std::vector<double> &sizes) {
+  using namespace rig;
+  fx::ReverbUnit unit(sr, 1.0);
+  for (std::size_t i = 0; i < sizes.size(); ++i) {
+    auto *cu = new fx::ConvUnit(fx::ReverbKernel::build(sr, 1, sizes[i], 0.25), sr);
+    cu->slot = static_cast<unsigned>(i);
+    cu->predelay = 0.03;
+    if (i == 0) {
+      unit.installInitial(cu);
+    } else {  // a crossfade that never ends: both units fed, both rendering
+      cu->when = 0;
+      cu->fade = 1e6;
+      Command c{};
+      c.op = opOf(ReverbOp::AttachKernel);
+      c.sub = kSubOwnedPayload;
+      c.p.ptr = static_cast<Owned *>(cu);
+      unit.apply(c);
+    }
+  }
+  struct Sink final : EventSink {
+    bool push(const AudioEvent &e) override {
+      if (e.kind == EventKind::Garbage) delete static_cast<Owned *>(e.ptr);
+      return true;
+    }
+  } sink;
+  Mulberry32 rng(7);
+  Bus in, out;
+  in.channels = 2;
+  UnitIO io;
+  io.in = &in;
+  io.out = &out;
+  const long quanta = static_cast<long>(seconds * sr / 128);
+  double total = 0, worst = 0;
+  std::vector<double> each;
+  each.reserve(static_cast<std::size_t>(quanta));
+  for (long q = -64; q < quanta; ++q) {  // 64 warm-up quanta
+    for (int c = 0; c < 2; ++c)
+      for (std::size_t i = 0; i < kQ; ++i) in.ch[c][i] = static_cast<float>((rng.next() * 2 - 1) * 0.25);
+    const long f = q + 64;
+    RenderContext ctx{static_cast<std::int64_t>(f) * 128, sr, static_cast<std::uint64_t>(f), UnitSlot::Reverb, &sink};
+    const auto t0 = std::chrono::steady_clock::now();
+    unit.process(ctx, io);
+    const double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
+    if (q < 0) continue;
+    total += us;
+    worst = std::max(worst, us);
+    each.push_back(us);
+  }
+  std::sort(each.begin(), each.end());
+  const double p999 = each[std::min(each.size() - 1, each.size() * 999 / 1000)];
+  const double mean = total / static_cast<double>(quanta);
+  const double period = 128.0 / sr * 1e6;
+  std::printf("%-40s %6.2f us/quantum mean = %5.2f%% of one core; p99.9 %6.1f us (%4.1f%% of the %.0f us period), "
+              "max %6.1f us\n",
+              label, mean, 100.0 * mean / period, p999, 100.0 * p999 / period, period, worst);
+  return {mean, p999, worst, 100.0 * mean / period};
+}
+
 int main(int argc, char **argv) {
-  const double seconds = argc > 1 ? std::atof(argv[1]) : 20.0;
-  const double sr = argc > 2 ? std::atof(argv[2]) : 48000.0;
-  run("empty graph", 0, seconds, sr, false);
-  run("32 test voices (4 strips)", 32, seconds, sr, false);
-  run("32 test voices + EQ (hp80 + peak)", 32, seconds, sr, true);
-  return 0;
+  double seconds = 20.0, sr = 48000.0;
+  bool reverbOnly = false;
+  int pos = 0;
+  for (int i = 1; i < argc; ++i) {
+    if (!std::strcmp(argv[i], "--reverb-only")) {
+      reverbOnly = true;
+      continue;
+    }
+    (pos++ == 0 ? seconds : sr) = std::atof(argv[i]);
+  }
+  if (!reverbOnly) {
+    run("empty graph", 0, seconds, sr, false);
+    run("32 test voices (4 strips)", 32, seconds, sr, false);
+    run("32 test voices + EQ (hp80 + peak)", 32, seconds, sr, true);
+  }
+  const UnitCost room = reverbUnit("reverb unit, 1.5 s space (room)", sr, seconds, {0.18});
+  const UnitCost big = reverbUnit("reverb unit, 8 s space (wash, 10.6 s IR)", sr, seconds, {1.0});
+  const UnitCost xf = reverbUnit("reverb crossfade, 8 s + 6.5 s spaces", sr, seconds, {1.0, 0.65});
+  (void)room;
+  (void)xf;
+  const double budget = 8.0;  // BUILD_PLAN T04: one reverb unit <= 8 % of one core on this box at 48 kHz
+  // the max is preemption on a shared box; the p99.9 quantum is what the DSP itself costs at its worst phase
+  const bool ok = big.pctCore <= budget && big.p999Us <= 0.5 * 128.0 / sr * 1e6;
+  std::printf("reverb budget (8 s unit <= %.0f%% of one core, p99.9 quantum below 50%% of its period): %s\n", budget,
+              ok ? "PASS" : "FAIL");
+  return ok ? 0 : 1;
 }

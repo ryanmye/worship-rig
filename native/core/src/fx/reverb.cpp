@@ -180,9 +180,9 @@ void ReverbUnit::start(unsigned s, double when, double fade, double predelay, in
     wa::equalPowerFade(sl.out, 0, 1, when, fade);
   else
     wa::setNow(sl.out, 1, when);
-  if (fadeOutSlot >= 0 && static_cast<unsigned>(fadeOutSlot) < kReverbSlots && static_cast<unsigned>(fadeOutSlot) != s &&
-      slots_[fadeOutSlot].unit) {
-    Slot &o = slots_[fadeOutSlot];
+  const unsigned fo = static_cast<unsigned>(fadeOutSlot);
+  if (fadeOutSlot >= 0 && fo < kReverbSlots && fo != s && slots_[fo].unit) {
+    Slot &o = slots_[fo];
     wa::equalPowerFade(o.out, 1, 0, when, fade);
     // the JS timer at idleAt (AudioTimer: quantum k = ceil(t sr / 128 - 1e-6)) disconnects its input
     const double idleAt = when + fade + kIdleAfterFade;

@@ -6,8 +6,8 @@
 // 1024-frame ring, the knee curve, adaptive release polynomial and the automatic makeup (1/fullRangeGain)^0.6.
 //
 // Numerics: Chromium's `fdlibm::powf / asinf` are rig::fdlibm (the vendored Chromium fdlibm); its plain libm calls
-// (audio_utilities powf/log10f, sin, exp: glibc on the golden machine) use rig::js, the correctly rounded LLVM libc
-// functions, in double then rounded to float (glibc's are correctly rounded in all but rare last-ulp cases).
+// (glibc on the golden machine) are: log10f a port of glibc 2.39's (bit-identical, compressor.cpp), powf / sin / exp
+// rig::js (correctly rounded LLVM libc / glibc pow) rounded to float. All 10 Chromium vector cases are bit-exact.
 // The metering path (kParamReduction) is not computed: nothing reads it and it costs a log10 per frame.
 // Real-time safe: no allocation after construction.
 #pragma once
