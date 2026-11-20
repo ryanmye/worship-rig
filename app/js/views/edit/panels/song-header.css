@@ -119,9 +119,11 @@
 .ev2 .ev2-song-scenesec { margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--line, #2a2f37); min-height: 0;
   overflow-y: auto; }
 .ev2 .ev2-song-sceneshint { font-size: 12.5px; line-height: 1.35; }
-.ev2 .ev2-song-scenes { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
-.ev2 .ev2-song-scene { display: flex; align-items: center; gap: 6px; }
-.ev2 .ev2-song-scene b { min-width: 60px; font-size: 14px; }
+/* screenshot pass 2026-11-20: a scene row (label, Play, Save, ×) was 209 px in a 180 px column at 1440: clipped ×
+   and a scrollbar. Narrower label, and the row wraps rather than overflows */
+.ev2 .ev2-song-scenes { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.ev2 .ev2-song-scene { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; max-width: 100%; }
+.ev2 .ev2-song-scene b { min-width: 52px; font-size: 14px; }
 .ev2 .ev2-song-scenedel { min-width: 30px; padding: 0 8px; }
 .ev2 .ev2-song-scene.on b { color: var(--accent, #f5c84c); }
 .ev2 .ev2-song-scenesnone { font-size: 13px; color: var(--muted, #a3acb8); }

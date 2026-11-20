@@ -10,7 +10,7 @@
 // Writes go through store.setKeyboard (names contain dots, so they are not set() paths); notes through the controller.
 import {
   TOUCH_RANGE, normalizeTouch, compileTouch, touchAt, touchWord, fitTouch, FIT_NOTES, LINEAR_TOUCH, COMPUTER_KEYBOARD,
-  DYN_RANGE, velocityDb,
+  DYN_RANGE, velocityDb, FIT_SOFT_TARGET,
 } from '../shared/touch-curve.js';
 import { say } from './components/voice.js';
 
@@ -27,6 +27,9 @@ function h(tag, attrs = {}, ...kids) {
     if (k === 'text') e.textContent = String(v);
     else if (k === 'dataset') Object.assign(e.dataset, v);
     else if (k === 'on') for (const [t, fn] of Object.entries(v)) e.addEventListener(t, fn);
+    // add, never replace: btn() passes {class} on top of the tag's .ed-btn (screenshot pass 2026-11-20: every button
+    // in Your keyboards lost its styling)
+    else if (k === 'class') e.classList.add(...String(v).split(/\s+/).filter(Boolean));
     else e.setAttribute(k, v === true ? '' : String(v));
   }
   for (const c of kids.flat()) if (c !== null && c !== undefined && c !== false) e.append(c);
@@ -310,7 +313,7 @@ export function mountKeyboards({ store, controller, midi, listen, toast = () => 
     row.preview(r.touch, [r.soft, r.hard]);
     row.fitBox.replaceChildren(
       h('span.st-kb-result', { dataset: { result: 'ok' }, text: `Soft notes came in around ${Math.round(r.soft)}, hard `
-        + `around ${Math.round(r.hard)}. With this curve they play at about 30% and full volume.` }),
+        + `around ${Math.round(r.hard)}. With this curve they play at about ${pct(FIT_SOFT_TARGET)} and full volume.` }),
       btn('Use this', () => {
         stopFit();
         row.fitBox.replaceChildren();

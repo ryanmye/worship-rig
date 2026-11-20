@@ -335,6 +335,11 @@ async function runMode(mode, browser) {
       await play([96, 100, 98, 97, 99, 98]);
       await until((r) => document.querySelector(`${r} .st-kb-result`)?.dataset.result === 'ok', row);
       assert.match(await page.textContent(`${row} .st-kb-result`), /around 24, hard around 98/);
+      assert.match(await page.textContent(`${row} .st-kb-result`), /play at about 15% and full volume/, 'FIT_SOFT_TARGET');
+      // screenshot pass 2026-11-20: btn()'s {class} used to replace the tag's .ed-btn, leaving native grey buttons
+      const unstyled = await ev((r) => [...document.querySelectorAll(`.st-kbs button`)]
+        .filter((b) => !b.classList.contains('ed-btn')).map((b) => b.className), row);
+      assert.deepEqual(unstyled, [], 'every Your keyboards button keeps .ed-btn');
       await page.locator('.st-kbs').scrollIntoViewIfNeeded();
       await page.locator('.st-kbs').screenshot({ path: path.join(SHOTS, `${mode}-keyboards-fit.png`) });
       await page.click(`${row} .st-kb-use`);
