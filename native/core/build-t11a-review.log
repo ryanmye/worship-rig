@@ -69,3 +69,5 @@ ninja: Entering directory `build-t11a-review'
 [67/136] Building CXX object CMakeFiles/rig_core.dir/src/params/params.cpp.o
 [68/136] Building CXX object CMakeFiles/rig_core.dir/src/num/js_math_llvm.cpp.o
 [69/136] Building CXX object CMakeFiles/rig_core.dir/src/rec/rec_register.cpp.o
+[70/136] Building CXX object CMakeFiles/rig_core.dir/src/rec/rec.cpp.o
+[71/136] Building CXX object CMakeFiles/rig_core.dir/src/samples/cache_register.cpp.o
