@@ -16,6 +16,7 @@
 #include "fx/reverb_unit.h"
 #include "num/prng.h"
 #include "rig/rig_engine.h"
+#include "runtime/rt_guard.h"
 
 static void post(rig_engine *e, const std::string &m) {
   rig_post(e, m.data(), m.size());
@@ -118,7 +119,10 @@ static UnitCost reverbUnit(const char *label, double sr, double seconds, const s
     RenderContext ctx{static_cast<std::int64_t>(f) * 128, sr, static_cast<std::uint64_t>(f), UnitSlot::Reverb, &sink};
     const double c0 = threadCpuUs();
     const auto t0 = std::chrono::steady_clock::now();
-    unit.process(ctx, io);
+    {
+      rt::RenderScope fp;  // FTZ/DAZ and the render flag, as Graph::renderQuantum
+      unit.process(ctx, io);
+    }
     const double wus = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
     const double us = threadCpuUs() - c0;
     if (q < 0) continue;

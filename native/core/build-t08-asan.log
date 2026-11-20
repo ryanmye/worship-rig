@@ -97,3 +97,61 @@ ninja: Entering directory `build-t08-asan'
 [95/136] Building CXX object CMakeFiles/rig_tests.dir/tests/samples_cache.cpp.o
 [96/136] Building CXX object CMakeFiles/rig_tests.dir/tests/samples_process.cpp.o
 [97/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_biquad.cpp.o
+[98/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_bridge.cpp.o
+[99/136] Building CXX object CMakeFiles/rig_tests.dir/tests/samples_service.cpp.o
+[100/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_bridge_conformance.cpp.o
+[101/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_chorus.cpp.o
+[102/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_click_detector.cpp.o
+[103/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_click.cpp.o
+[104/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_click_metronome.cpp.o
+[105/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_clock.cpp.o
+[106/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_golden.cpp.o
+[107/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_delay.cpp.o
+[108/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_lofi.cpp.o
+[109/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_master_chain.cpp.o
+[110/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_main.cpp.o
+[111/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_master_dsp.cpp.o
+[112/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_meter.cpp.o
+[113/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_modules_init.cpp.o
+[114/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_offline.cpp.o
+[115/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_midi.cpp.o
+[116/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_param.cpp.o
+[117/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_panner.cpp.o
+[118/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_params.cpp.o
+[119/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_queues.cpp.o
+[120/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_realtime.cpp.o
+[121/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_reverb.cpp.o
+[122/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_rec.cpp.o
+FAILED: CMakeFiles/rig_tests.dir/tests/test_rec.cpp.o 
+/usr/bin/c++ -DRIG_REPO_DIR=\"/home/claude/worship-rig\" -DRIG_SOURCE_DIR=\"/home/claude/worship-rig/native/core\" -I/home/claude/worship-rig/native/core/third_party/doctest -I/home/claude/worship-rig/native/core/tools/common -I/home/claude/worship-rig/native/core/tests -I/home/claude/worship-rig/native/core/build-t08-asan/generated -I/home/claude/worship-rig/native/core/include -I/home/claude/worship-rig/native/core/src -I/home/claude/worship-rig/native/core/third_party/yyjson -I/home/claude/worship-rig/native/core/third_party/dr_libs -I/home/claude/worship-rig/native/core/third_party/pffft/include/pffft -O2 -g -DNDEBUG -std=c++20 -fPIE -fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all -Wall -Wextra -Wpedantic -Werror -ffp-contract=off -fno-finite-math-only -MD -MT CMakeFiles/rig_tests.dir/tests/test_rec.cpp.o -MF CMakeFiles/rig_tests.dir/tests/test_rec.cpp.o.d -o CMakeFiles/rig_tests.dir/tests/test_rec.cpp.o -c /home/claude/worship-rig/native/core/tests/test_rec.cpp
+In file included from /usr/include/c++/13/regex:50,
+                 from /home/claude/worship-rig/native/core/tests/test_rec.cpp:8:
+In constructor 'std::function<_Res(_ArgTypes ...)>::function(std::function<_Res(_ArgTypes ...)>&&) [with _Res = bool; _ArgTypes = {char}]',
+    inlined from 'std::__detail::_State<_Char_type>::_State(std::__detail::_State<_Char_type>&&) [with _Char_type = char]' at /usr/include/c++/13/bits/regex_automaton.h:149:4,
+    inlined from 'std::__detail::_StateIdT std::__detail::_NFA<_TraitsT>::_M_insert_alt(std::__detail::_StateIdT, std::__detail::_StateIdT, bool) [with _TraitsT = std::__cxx11::regex_traits<char>]' at /usr/include/c++/13/bits/regex_automaton.h:251:24,
+    inlined from 'void std::__detail::_Compiler<_TraitsT>::_M_disjunction() [with _TraitsT = std::__cxx11::regex_traits<char>]' at /usr/include/c++/13/bits/regex_compiler.tcc:103:18:
+/usr/include/c++/13/bits/std_function.h:405:42: error: '*(std::function<bool(char)>*)((char*)&__tmp + offsetof(std::__detail::_StateT, std::__detail::_State<char>::<unnamed>.std::__detail::_State_base::<unnamed>)).std::function<bool(char)>::_M_invoker' may be used uninitialized [-Werror=maybe-uninitialized]
+  405 |       : _Function_base(), _M_invoker(__x._M_invoker)
+      |                                      ~~~~^~~~~~~~~~
+In file included from /usr/include/c++/13/regex:65:
+/usr/include/c++/13/bits/regex_automaton.h: In member function 'void std::__detail::_Compiler<_TraitsT>::_M_disjunction() [with _TraitsT = std::__cxx11::regex_traits<char>]':
+/usr/include/c++/13/bits/regex_automaton.h:246:17: note: '__tmp' declared here
+  246 |         _StateT __tmp(_S_opcode_alternative);
+      |                 ^~~~~
+In member function 'bool std::_Function_base::_M_empty() const',
+    inlined from 'std::function<_Res(_ArgTypes ...)>::operator bool() const [with _Res = bool; _ArgTypes = {char}]' at /usr/include/c++/13/bits/std_function.h:574:25,
+    inlined from 'std::function<_Res(_ArgTypes ...)>::function(std::function<_Res(_ArgTypes ...)>&&) [with _Res = bool; _ArgTypes = {char}]' at /usr/include/c++/13/bits/std_function.h:407:6,
+    inlined from 'std::__detail::_State<_Char_type>::_State(std::__detail::_State<_Char_type>&&) [with _Char_type = char]' at /usr/include/c++/13/bits/regex_automaton.h:149:4,
+    inlined from 'std::__detail::_StateIdT std::__detail::_NFA<_TraitsT>::_M_insert_alt(std::__detail::_StateIdT, std::__detail::_StateIdT, bool) [with _TraitsT = std::__cxx11::regex_traits<char>]' at /usr/include/c++/13/bits/regex_automaton.h:251:24,
+    inlined from 'void std::__detail::_Compiler<_TraitsT>::_M_disjunction() [with _TraitsT = std::__cxx11::regex_traits<char>]' at /usr/include/c++/13/bits/regex_compiler.tcc:103:18:
+/usr/include/c++/13/bits/std_function.h:247:37: error: '*(const std::_Function_base*)((char*)&__tmp + offsetof(std::__detail::_StateT, std::__detail::_State<char>::<unnamed>.std::__detail::_State_base::<unnamed>)).std::_Function_base::_M_manager' may be used uninitialized [-Werror=maybe-uninitialized]
+  247 |     bool _M_empty() const { return !_M_manager; }
+      |                                     ^~~~~~~~~~
+/usr/include/c++/13/bits/regex_automaton.h: In member function 'void std::__detail::_Compiler<_TraitsT>::_M_disjunction() [with _TraitsT = std::__cxx11::regex_traits<char>]':
+/usr/include/c++/13/bits/regex_automaton.h:246:17: note: '__tmp' declared here
+  246 |         _StateT __tmp(_S_opcode_alternative);
+      |                 ^~~~~
+cc1plus: all warnings being treated as errors
+[123/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_reverb_engine.cpp.o
+ninja: build stopped: subcommand failed.
+EXIT 1

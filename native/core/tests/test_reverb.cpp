@@ -13,8 +13,10 @@
 #include "doctest.h"
 #include "dsp/convolver.h"
 #include "fx/ir_gen.h"
+#include "fx/reverb_unit.h"
 #include "num/js_math.h"
 #include "num/prng.h"
+#include "runtime/rt_guard.h"
 
 namespace {
 
@@ -299,5 +301,73 @@ TEST_SUITE("reverb") {
       ++cases;
     }
     CHECK(cases == 6);
+  }
+  TEST_CASE("idle skip: a silent unit stops rendering after line + tail, and its state was exactly zero") {
+    // ReverbUnit skips a slot whose input has been silent for longer than its predelay buffer plus the convolver
+    // tail. Rendered under rt::RenderScope (FTZ/DAZ, as Graph::renderQuantum): without it the HPF's float-valued
+    // recursion settles into a denormal limit cycle, the input never reads as silent and the slot never skips.
+    // Check: the skip starts only after the output has gone to exact zero, and a second impulse after the skip
+    // gives the first impulse's response again (the skipped state was all zeros).
+    using namespace rig;
+    struct Sink final : EventSink {
+      bool push(const AudioEvent &) override { return true; }
+    } sink;
+    const double sr = 48000;
+    fx::ReverbUnit unit(sr, 1.0);
+    auto *cu = new fx::ConvUnit(fx::ReverbKernel::build(sr, 1, 0.18, 0.5), sr);
+    cu->predelay = 0.03;
+    unit.installInitial(cu);
+    Bus in, out;
+    in.channels = 2;
+    UnitIO io;
+    io.in = &in;
+    io.out = &out;
+    std::int64_t q = 0;
+    auto step = [&](bool impulse) {
+      std::memset(in.ch, 0, sizeof in.ch);
+      if (impulse) in.ch[0][5] = in.ch[1][5] = 0.5f;
+      const RenderContext ctx{q * 128, sr, static_cast<std::uint64_t>(q), UnitSlot::Reverb, &sink};
+      {
+        rt::RenderScope fp;
+        unit.process(ctx, io);
+      }
+      ++q;
+    };
+    const std::size_t quiet = cu->line[0].length() + cu->conv[0]->tailFrames() + 2 * 128;
+    const std::int64_t respQ = static_cast<std::int64_t>((cu->kernel->length + cu->line[0].length()) / 128 + 2);
+    auto response = [&](std::int64_t &skipAt, std::int64_t &lastNz) {
+      std::vector<float> r;
+      skipAt = lastNz = -1;
+      for (std::int64_t k = 0; k < 4000 && skipAt < 0; ++k) {
+        step(k == 0);
+        for (int c = 0; c < 2; ++c)
+          for (std::size_t i = 0; i < 128; ++i)
+            if (out.ch[c][i] != 0.0f) lastNz = k;
+        if (k < respQ)
+          for (std::size_t i = 0; i < 128; ++i) r.push_back(out.ch[0][i]);
+        if (k > 0 && !unit.slotRendering(0)) skipAt = k;
+      }
+      return r;
+    };
+    for (int k = 0; k < 10; ++k) step(false);
+    std::int64_t skip1, nz1, skip2, nz2;
+    const std::vector<float> r1 = response(skip1, nz1);
+    REQUIRE(skip1 > 0);  // it does stop rendering
+    CHECK(nz1 < skip1);  // after the output had become exactly zero
+    // counted from the HPF / LPF output turning exactly zero (FTZ), about 0.1 s after the impulse
+    CHECK(static_cast<std::size_t>(skip1) * 128 > quiet);
+    CHECK(static_cast<std::size_t>(skip1) * 128 <= quiet + static_cast<std::size_t>(0.25 * sr));
+    for (int k = 0; k < 50; ++k) step(false);
+    CHECK_FALSE(unit.slotRendering(0));
+    const std::vector<float> r2 = response(skip2, nz2);
+    REQUIRE(r1.size() == r2.size());
+    double worst = 0, peak = 0;
+    for (std::size_t i = 0; i < r1.size(); ++i) {
+      worst = std::fmax(worst, std::fabs(double(r1[i]) - double(r2[i])));
+      peak = std::fmax(peak, std::fabs(double(r1[i])));
+    }
+    CHECK(peak > 1e-3);
+    CHECK(worst <= 1e-6 * peak);  // the convolver stage phases differ after the skip: float rounding only
+    CHECK(skip2 == skip1);
   }
 }
