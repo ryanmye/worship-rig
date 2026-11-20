@@ -2,7 +2,9 @@
 // sampleStatus, byte accounting against the JS engine for the factory songs (tools/golden/decode-dump/
 // cache-vectors.mjs), memory pressure, rate change.
 #include <algorithm>
+#include <atomic>
 #include <cstdio>
+#include <thread>
 #include <filesystem>
 #include <unistd.h>
 
@@ -195,9 +197,8 @@ TEST_SUITE("samples_service") {
     writeTone(dir + "/keys_C4.wav", 261.6);
     writeTone(dir + "/keys_A4.wav", 440);
     const std::string manifest = dir + "/manifest.json";
-    writeText(
-        manifest,
-        R"({"instruments":[{"id":"test-keys","name":"Keys",
+    writeText(manifest,
+              R"({"instruments":[{"id":"test-keys","name":"Keys",
         "layers":[{"files":{"C4":"keys_C4.wav","A4":"keys_A4.wav"}}]},
       {"id":"harp","widthDefault":0.5,"release":0.3,"layers":[{"notes":["C4"],"dir":"missing"}]}]})");
     Env e(RIG_REPO_DIR "/app", manifest);
@@ -534,5 +535,67 @@ TEST_SUITE("samples_service") {
     plain.svc->cache().requestJob(job, 1, false, [&](const rig::SampleBuffer *x) { p = x; });
     REQUIRE(p);
     CHECK(p->channels == b->channels);
+  }
+
+  TEST_CASE("realtime mode: decodes run on the worker pool, results are integrated by pump() on the control thread") {
+    const std::string dir = tmpDir("_rt");
+    std::string files;
+    const char *names[] = {"C3", "Db3", "D3", "Eb3", "E3", "F3", "Gb3", "G3", "Ab3", "A3", "Bb3", "B3"};
+    for (int i = 0; i < 12; ++i)
+      files += std::string(i ? "," : "") + "\"" + names[i] + "\":\"s" + std::to_string(i) + ".wav\"";
+    writeText(dir + "/manifest.json", R"({"instruments":[{"id":"w","layers":[{"files":{)" + files + "}}]}]}");
+    rig_config cfg;
+    rig_config_init(&cfg);
+    cfg.mode = RIG_MODE_REALTIME;
+    cfg.decode_threads = 2;
+    cfg.sample_rate = 44100;
+    rig::ensureModulesRegistered();
+    TestSink sink;
+    rig::UnitEnv env;
+    env.sampleRate = 44100;
+    env.config = &cfg;
+    rig::Model model(sink, env);
+    auto *svc = static_cast<CacheServiceImpl *>(model.service<rig::CacheService>());
+    REQUIRE(svc != nullptr);
+    rig::EnginePaths p;
+    p.appDir = RIG_REPO_DIR "/app";
+    p.userManifest = dir + "/manifest.json";
+    model.setPaths(p);
+    std::atomic<int> wakes{0};
+    std::atomic<std::thread::id> worker{};
+    svc->setWake([&] { ++wakes; });
+    svc->cache().setLoader([&](const rig::samples::LoadRequest &rq) {
+      worker = std::this_thread::get_id();
+      std::this_thread::sleep_for(std::chrono::milliseconds(2));
+      rig::samples::LoadOutcome o;
+      if (rq.url.find("s7.wav") != std::string::npos) {
+        o.status = rig::samples::LoadOutcome::Status::Permanent;
+        o.error = "corrupt";
+        return o;
+      }
+      rig::samples::Processed pr;
+      pr.channels = 1;
+      pr.frames = 1024;
+      pr.ch[0].assign(pr.frames, 0.2f);
+      pr.natural = pr.frames;
+      o.buffer = rig::samples::makeStored(pr, rq.engineRate, rq.storage);
+      o.status = rig::samples::LoadOutcome::Status::Ok;
+      return o;
+    });
+    yyjson_doc *pd = parse(R"([{"slots":[{"instrument":{"type":"sampler","id":"user:w"}},null,null,null]}])");
+    std::string reply;
+    svc->preloadAsync(yyjson_doc_get_root(pd), "add", [&](std::string j) { reply = std::move(j); });
+    CHECK(reply.empty());  // nothing is integrated before the control thread pumps
+    for (int i = 0; i < 5000 && reply.empty(); ++i) {
+      if (svc->pump() == 0) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    REQUIRE_FALSE(reply.empty());
+    CHECK(worker.load() != std::this_thread::get_id());  // decoded off the control thread
+    CHECK(wakes.load() >= 11);
+    CHECK(svc->cache().entryCount() == 11);
+    CHECK(svc->sampleStatus(yyjson_doc_get_root(pd)) == R"({"loaded":[true],"failed":[true]})");
+    CHECK(sink.saw("corrupt"));
+    yyjson_doc_free(pd);
+    std::filesystem::remove_all(dir);
   }
 }

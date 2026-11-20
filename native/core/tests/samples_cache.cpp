@@ -424,8 +424,8 @@ TEST_SUITE("samples_cache") {
   }
 
   TEST_CASE("worker pool: concurrent requests of one key decode once, callbacks run on pump()") {
-    ThreadPool pool(2);
-    Rig r(1000 * kK, Storage::F32, &pool);
+    auto pool = std::make_unique<ThreadPool>(2);  // joined before the cache goes away (as CacheServiceImpl does)
+    Rig r(1000 * kK, Storage::F32, pool.get());
     std::atomic<int> woke{0};
     int got = 0;
     const SampleBuffer *first = nullptr;
@@ -445,6 +445,7 @@ TEST_SUITE("samples_cache") {
     CHECK(got == 5);
     CHECK(r.fake.count("/s/p/0.mp3") == 1);
     CHECK(r.c->entryCount() == 2);
+    pool.reset();
     (void)woke;
   }
 }

@@ -6,6 +6,10 @@
 //   node tools/golden/render.mjs --smoke         the smoke subset only
 //   node tools/golden/render.mjs --repeat 1      skip the second render (no repeatability numbers)
 //   node tools/golden/render.mjs --no-spread     skip the seed-spread renders of PRNG-dependent fixtures
+//   node tools/golden/render.mjs --golden-dir <dir>   write manifest / WAVs / pcm there instead of native/golden (dry runs)
+//   node tools/golden/render.mjs --allow-chromium-change   merge or re-render although this Chromium differs from the
+//                                                manifest's pin (a FULL run then re-pins; --only keeps the old pin and
+//                                                stamps the entries, which compare.mjs then refuses)
 //   node tools/golden/render.mjs --out <dir> [--seed N]   render to <dir>/<id>.wav only (manifest untouched), e.g.
 //                                                with another engine seed: what a native engine that does not port
 //                                                the PRNG streams would produce (checks the statistical tolerances)
@@ -20,6 +24,7 @@ import crypto from 'node:crypto';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { dumpUrls, writeGitignore, COMMIT_CAP_BYTES } from './pcm.mjs';
 import { FIXTURES, SYNTH_IDS, ORGAN_IDS } from './fixtures.mjs';
 import { STIMULI, makeStimulus, GOLDEN_SR, STIM_LEAD_SEC, hashSeed } from './stimuli.mjs';
 import { encodeWavF32 } from './wav.mjs';
@@ -29,7 +34,9 @@ import {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
-const GOLD = path.join(ROOT, 'native/golden');
+const argvEarly = process.argv.slice(2);
+const GOLD = path.resolve(argvEarly.includes('--golden-dir') ? argvEarly[argvEarly.indexOf('--golden-dir') + 1]
+  : path.join(ROOT, 'native/golden'));
 const EXACT_REPEAT = 1e-5; // CLAUDE.md: Chromium's input-summing order moves renders by ≈ 1e-6
 
 // ---- args ---------------------------------------------------------------------------------------------------------
@@ -84,13 +91,14 @@ function startServer() {
 async function launch() {
   const args = ['--autoplay-policy=no-user-gesture-required'];
   try {
-    return await chromium.launch({ headless: true, args });
+    const browser = await chromium.launch({ headless: true, args });
+    return { browser, exe: chromium.executablePath() };
   } catch (e) {
     const roots = [process.env.GOLDEN_CHROMIUM, process.env.PLAYWRIGHT_BROWSERS_PATH, '/opt/pw-browsers',
       path.join(os.homedir(), '.cache/ms-playwright')].filter(Boolean);
     for (const r of roots) {
       if (fs.existsSync(r) && fs.statSync(r).isFile()) {
-        return chromium.launch({ headless: true, args, executablePath: r });
+        return { browser: await chromium.launch({ headless: true, args, executablePath: r }), exe: r };
       }
       if (!fs.existsSync(r)) continue;
       const dirs = fs.readdirSync(r).sort().reverse();
@@ -98,13 +106,34 @@ async function launch() {
         for (const sub of ['chrome-headless-shell-linux64/chrome-headless-shell', 'chrome-linux/headless_shell',
           'chrome-linux64/chrome', 'chrome-linux/chrome']) {
           const exe = path.join(r, d, sub);
-          if (fs.existsSync(exe)) return chromium.launch({ headless: true, args, executablePath: exe });
+          if (fs.existsSync(exe)) {
+            return { browser: await chromium.launch({ headless: true, args, executablePath: exe }), exe };
+          }
         }
       }
     }
     throw e;
   }
 }
+
+/**
+ * What identifies the Chromium that renders goldens (T17 task 4): the version (= the source tag the kernel ports must
+ * follow, SETUP_REVIEW 17), Playwright's build directory (its revision), the user agent and a hash of the binary.
+ */
+async function chromiumPin(browser, exe) {
+  const page = await browser.newPage();
+  const userAgent = await page.evaluate(() => navigator.userAgent);
+  await page.close();
+  const hash = crypto.createHash('sha256');
+  await new Promise((res, rej) => fs.createReadStream(exe).on('data', (c) => hash.update(c)).on('end', res).on('error', rej));
+  const m = /(chromium(?:_headless_shell)?-\d+)/.exec(exe);
+  return { version: browser.version(), product: /headless/.test(exe) ? 'chrome-headless-shell' : 'chromium',
+    playwrightBuild: m ? m[1] : path.basename(path.dirname(exe)), userAgent, executableSha256: hash.digest('hex'),
+    platform: `${os.platform()}-${os.arch()}` };
+}
+
+/** Same Chromium? Version is what decides (the binary hash is recorded for diagnosis). */
+export const samePin = (a, b) => !!a && !!b && a.version === b.version;
 
 function unb64(s) {
   const b = Buffer.from(s, 'base64');
@@ -126,6 +155,10 @@ async function openPage(browser, base) {
       const r = await page.evaluate((f) => window.__render(f), fx);
       return { ...r, chs: [unb64(r.L), unb64(r.R)], L: undefined, R: undefined, console: log.slice() };
     },
+    async decode(url, rate) {
+      const r = await page.evaluate(([u, sr]) => window.__decodePcm(u, sr), [url, rate]);
+      return { rate: r.rate, frames: r.frames, chs: r.channels.map(unb64) };
+    },
     async instruments() {
       return page.evaluate(async () => {
         const { AudioEngine } = await import('/js/engine/index.js');
@@ -138,6 +171,14 @@ async function openPage(browser, base) {
       });
     },
   };
+}
+
+/** One server + browser + page, for tools that only need the page (pcm.mjs). */
+export async function startBrowserPage() {
+  const server = await startServer();
+  const { browser } = await launch();
+  const page = await openPage(browser, `http://127.0.0.1:${server.address().port}`);
+  return { page, close: async () => { await browser.close(); server.close(); } };
 }
 
 // ---- randomness: which seeded streams a fixture audibly depends on ------------------------------------------------
@@ -256,6 +297,52 @@ function spreadTolerance(spread) {
   return { ...t, widened };
 }
 
+/**
+ * Honest tier record per fixture (T17 task 3; SETUP_REVIEW 7, 33): the tolerance actually in force, why it is that wide,
+ * and for a statistical fixture what makes it exact, so the promotion pass (promote.mjs) is mechanical.
+ */
+function tierOf(e) {
+  const t = e.tolerance;
+  if (e.classification === 'exact') return { class: 'exact', maxAbsDiff: t.maxAbsDiff, bandsDb: t.bandsDb, envCorr: t.envCorr };
+  const streams = [...new Set((e.randomness?.streams || []).map((x) => x.name.split('|')[0]))];
+  const blockers = [];
+  if (e.repeatMaxAbsDiff > EXACT_REPEAT) {
+    blockers.push(`not repeatable in Chromium itself (two renders differ by ${e.repeatMaxAbsDiff.toExponential(1)} > ` +
+      `${EXACT_REPEAT}: audio-rate FM / input-sum order); a PRNG port alone cannot make it exact`);
+  }
+  const widened = e.prngPortRecommended === true;
+  const seed = e.seedSpread;
+  return {
+    class: 'statistical',
+    bandsDb: t.bandsDb, envCorr: t.envCorr, envLagMs: t.envLagMs, rmsDb: t.rmsDb,
+    why: seed ? `1.25 x the spread of the same fixture under engine seeds ${seed.seeds.join(',')} ` +
+      `(bands ${seed.bandsDb} dB, env corr ${seed.envCorr}, rms ${seed.rmsDb} dB)${t.envCorr === -1 ? '; envelope check off (seeds decorrelate it)' : ''}`
+      : 'default statistical tolerance (not PRNG-dependent; Chromium run-to-run jitter above 1e-5)',
+    weakWithoutPort: widened,
+    exactIf: e.exactIfPrngPorted ? { port: 'mulberry32 + FNV-1a seeding + draw order of the listed streams', streams } : null,
+    blockers,
+    promote: e.exactIfPrngPorted ? 'node tools/golden/promote.mjs <native render dir> --apply' : null,
+  };
+}
+
+function tierSummary(fixtures) {
+  const st = fixtures.filter((e) => e.classification === 'statistical');
+  const range = (k) => {
+    const v = st.map((e) => e.tolerance[k]).filter((x) => x !== -1);
+    return { min: Math.min(...v), max: Math.max(...v) };
+  };
+  const worst = (k, f) => st.reduce((m, e) => (f(e.tolerance[k], m.v) ? { id: e.id, v: e.tolerance[k] } : m), { id: null, v: k === 'bandsDb' ? 0 : 9 });
+  return {
+    exact: fixtures.length - st.length, statistical: st.length,
+    exactIfPrngPorted: st.filter((e) => e.exactIfPrngPorted).length,
+    statisticalBandsDb: range('bandsDb'), statisticalEnvCorr: range('envCorr'), statisticalRmsDb: range('rmsDb'),
+    widestBands: worst('bandsDb', (x, y) => x > y), lowestEnvCorr: worst('envCorr', (x, y) => x !== -1 && x < y),
+    envelopeCheckOff: st.filter((e) => e.tolerance.envCorr === -1).map((e) => e.id),
+    note: 'ARCHITECTURE 8.2 states bands 1.5 dB / envelope 0.95 for the whole tier; the real per-fixture values are ' +
+      'fixtures[].tolerance (see native/golden/README.md, Honest tiers)',
+  };
+}
+
 function sha256(buf) {
   return crypto.createHash('sha256').update(buf).digest('hex');
 }
@@ -264,7 +351,9 @@ const round = (x, d = 6) => (Number.isFinite(x) ? Number(x.toPrecision(d)) : x);
 
 // ---- main -----------------------------------------------------------------------------------------------------
 async function main() {
-  let list = FIXTURES.filter((f) => (!SMOKE_ONLY || f.smoke) && (!ONLY || ONLY.some((o) => f.id.includes(o))));
+  // --extra <file.json>: ad-hoc fixtures (an array) for --out renders while developing a fixture; never in the manifest
+  const extra = OUT_DIR && arg('--extra', null) ? JSON.parse(fs.readFileSync(arg('--extra'), 'utf8')) : [];
+  let list = [...FIXTURES, ...extra.map((f) => ({ seed: 1, ...f }))].filter((f) => (!SMOKE_ONLY || f.smoke) && (!ONLY || ONLY.some((o) => f.id.includes(o))));
   if (!list.length) throw new Error('no fixtures selected');
   if (SEED !== null) list = list.map((f) => ({ ...f, seed: Number(SEED) >>> 0 }));
   if (OUT_DIR) return renderTo(list, path.resolve(OUT_DIR));
@@ -285,10 +374,25 @@ async function main() {
 
   const server = await startServer();
   const base = `http://127.0.0.1:${server.address().port}`;
-  const browser = await launch();
+  const { browser, exe } = await launch();
+  const pin = await chromiumPin(browser, exe);
+  const chromiumVersion = pin.version;
+  const manifestPath0 = path.join(GOLD, 'manifest.json');
+  const prev0 = fs.existsSync(manifestPath0) ? JSON.parse(fs.readFileSync(manifestPath0, 'utf8')) : null;
+  const prevPin = prev0 ? (prev0.chromiumPin || { version: prev0.chromium }) : null;
+  const fullRun = !ONLY && !SMOKE_ONLY;
+  const allowChange = argv.includes('--allow-chromium-change');
+  if (prevPin && !samePin(prevPin, pin) && !allowChange) {
+    console.error(`REFUSED: the manifest's goldens come from Chromium ${prevPin.version}, this browser is ` +
+      `${pin.version} (${exe}). Chromium-implemented nodes (compressor, convolver, wavetables, decode) can move between ` +
+      `versions: compare with compare.mjs first, then pass --allow-chromium-change${fullRun ? ' to re-pin' : ''}.`);
+    await browser.close();
+    server.close();
+    process.exit(3);
+  }
+  const keepPin = prevPin && !samePin(prevPin, pin) && !fullRun ? prevPin : pin;
   const pages = [];
   for (let i = 0; i < REPEAT; i++) pages.push(await openPage(browser, base));
-  const chromiumVersion = browser.version();
 
   // coverage check: every synth / organ in the registry has a fixture
   const refs = await pages[0].instruments();
@@ -328,6 +432,8 @@ async function main() {
       // statistical only because of seeded PRNG streams: exact once the native side ports mulberry32 + the streams
       exactIfPrngPorted: classification === 'statistical' && repeatable !== false,
       smoke: !!fx.smoke,
+      addedBy: fx.addedBy,
+      chromium: chromiumVersion,
       file,
       sha256: sha256(buf),
       sampleRate: a.sr,
@@ -367,6 +473,14 @@ async function main() {
       entry.tolerance = tol;
       entry.prngPortRecommended = widened;
     }
+    entry.tier = tierOf(entry);
+    const used = (a.resolved?.samplesUsed || []).filter((u) => u.url);
+    if (used.length) {
+      entry.needsPcm = true;
+      entry.pcm = { required: true, decoder: 'Chromium decodeAudioData', files: used.map((u) => ({
+        url: u.url.replace(/^\.\//, ''), engine: { frames: u.frames, rate: u.rate, channels: u.channels,
+          dualMono: u.dualMono, onsetTrimSec: u.onsetTrimSec, capped: u.capped, monoFix: u.monoFix } })) };
+    }
     if (runs.length > 1) {
       entry.repeatEnvCorr = round(envCorrelation(envelopeDb(a.chs, a.sr), envelopeDb(runs[1].chs, a.sr)));
       entry.repeatBandsDb = round(bandDiff(entry.bandsDb, thirdOctaveBands(runs[1].chs, a.sr)).worstDb, 4);
@@ -379,6 +493,22 @@ async function main() {
       (lv.peak === 0 && !/dry|none/.test(fx.id) ? '  SILENT' : ''));
   }
   const renderSec = (Date.now() - t0) / 1000;
+  // sampler PCM: dump what Chromium decodes for every sample a fixture plays (pcm.mjs documents format and size policy)
+  const pcmUrls = [...entries.values()].flatMap((e) => (e.pcm?.files || []).map((f) => f.url));
+  let pcmInfo = prev0?.pcm || null;
+  if (pcmUrls.length) {
+    const tp = Date.now();
+    const recs = await dumpUrls(pages[0], pcmUrls, GOLD);
+    const usage = new Map();
+    for (const e of entries.values()) for (const f of e.pcm?.files || []) usage.set(f.url, (usage.get(f.url) || 0) + 1);
+    const sel = writeGitignore(GOLD, recs, usage);
+    for (const e of entries.values()) {
+      for (const f of e.pcm?.files || []) Object.assign(f, recs.get(f.url), { committed: sel.committed.has(f.url) });
+    }
+    pcmInfo = { dir: 'pcm', format: 'WAV 32-bit float at the file rate + JSON sidecar {source, frames, rate, channels, sha256}',
+      files: recs.size, totalBytes: sel.totalBytes, committedBytes: sel.committedBytes, commitCapBytes: COMMIT_CAP_BYTES,
+      regenerate: 'node tools/golden/pcm.mjs', seconds: Math.round((Date.now() - tp) / 100) / 10 };
+  }
   await browser.close();
   server.close();
 
@@ -390,7 +520,9 @@ async function main() {
     schema: 1,
     generator: 'tools/golden/render.mjs',
     generatedAt: new Date().toISOString(),
-    chromium: chromiumVersion,
+    chromium: keepPin.version,
+    // T17: the goldens are only valid for this Chromium (compare.mjs refuses others without --allow-chromium-change)
+    chromiumPin: { ...keepPin, pinned: true },
     node: process.version,
     sampleRate: GOLDEN_SR,
     format: 'WAV 32-bit IEEE float, interleaved stereo (stimuli: mono unless channels 2)',
@@ -401,9 +533,12 @@ async function main() {
       fixtures: list.length, repeat: REPEAT, seconds: Math.round(renderSec * 10) / 10, cpus: os.cpus().length,
     },
     stimuli,
+    pcm: pcmInfo || undefined,
+    tiers: tierSummary(fixtures),
     fixtures,
   };
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 1)}\n`);
+  const committedPcm = pcmInfo ? pcmInfo.committedBytes : 0;
   const sizeOf = (d) => fs.readdirSync(path.join(GOLD, d))
     .reduce((s, f) => s + fs.statSync(path.join(GOLD, d, f)).size, 0);
   const by = (k) => fixtures.reduce((m, e) => ((m[e[k]] = (m[e[k]] || 0) + 1), m), {});
@@ -414,7 +549,9 @@ async function main() {
   const MB = (b) => (b / 1048576).toFixed(2);
   console.log(`sizes: smoke ${MB(sizeOf('smoke'))} MB, stimuli ${MB(sizeOf('stimuli'))} MB, ` +
     `out ${MB(sizeOf('out'))} MB, ` +
-    `manifest ${MB(fs.statSync(manifestPath).size)} MB`);
+    `manifest ${MB(fs.statSync(manifestPath).size)} MB, pcm ${MB(pcmInfo?.totalBytes || 0)} MB ` +
+    `(${MB(committedPcm)} MB committed)`);
+  console.log(`COMMITTED audio: ${MB(sizeOf('smoke') + sizeOf('stimuli') + committedPcm)} MiB (budget 14 MB)`);
   const weak = fixtures.filter((e) => e.prngPortRecommended).map((e) => e.id);
   console.log(`PRNG port recommended (seed spread exceeds the default statistical tolerance): ${weak.length}: ` +
     weak.join(' '));
@@ -427,9 +564,14 @@ async function main() {
 async function renderTo(list, dir) {
   fs.mkdirSync(dir, { recursive: true });
   const server = await startServer();
-  const browser = await launch();
+  const { browser, exe } = await launch();
+  const pin = await chromiumPin(browser, exe);
   const page = await openPage(browser, `http://127.0.0.1:${server.address().port}`);
   const t0 = Date.now();
+  // compare.mjs reads this to refuse comparing renders of one Chromium against goldens of another
+  fs.writeFileSync(path.join(dir, 'render-info.json'), `${JSON.stringify({ generator: 'tools/golden/render.mjs --out',
+    chromium: pin.version, chromiumPin: pin, seeds: [...new Set(list.map((f) => f.seed))], ids: list.map((f) => f.id) },
+  null, 1)}\n`);
   for (const fx of list) {
     const a = await page.render(fx);
     fs.writeFileSync(path.join(dir, `${fx.id}.wav`), encodeWavF32(a.chs, a.sr));
@@ -440,7 +582,9 @@ async function renderTo(list, dir) {
   server.close();
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

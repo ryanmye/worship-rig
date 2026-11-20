@@ -10,9 +10,12 @@ a declarative fixture list into reference WAVs. The native test runner replays t
 ```sh
 npm ci                                   # once (Playwright; Chromium comes from PLAYWRIGHT_BROWSERS_PATH or
                                          # ~/.cache/ms-playwright; GOLDEN_CHROMIUM=<exe> overrides)
-node tools/golden/render.mjs             # everything: 87 fixtures × 2 renders + seed-spread renders, manifest
+node tools/golden/render.mjs             # everything: every fixture × 2 renders + seed-spread renders, manifest, PCM dumps
 node tools/golden/render.mjs --only eq-,reverb-room    # a subset (ids containing a substring), merged into the manifest
 node tools/golden/render.mjs --smoke     # only the committed smoke subset
+node tools/golden/pcm.mjs                # (re)dump the Chromium-decoded sampler PCM (render.mjs does it too); --check verifies
+node tools/golden/coverage.mjs           # rewrite COVERAGE.md; node tools/golden/tiers.mjs rewrites the tier table below
+node tools/golden/promote.mjs <dir>      # which statistical fixtures a native render now passes exactly (--apply promotes)
 node tools/golden/compare.mjs --self-test                # comparator self-check
 node tools/golden/compare.mjs <dir>                      # <dir>/<id>.wav (e.g. native renders) vs the goldens
 node tools/golden/compare.mjs <id> <file.wav>            # one fixture
@@ -30,7 +33,9 @@ fixtures; `--no-spread` skips those). It needs no audio device.
 | `manifest.json` | every fixture: definition, stats, sha256, classification, tolerance, PRNG streams | yes |
 | `stimuli/*.wav` | the dry inputs effect fixtures inject (mono unless `channels: 2`) | yes (2.2 MB) |
 | `smoke/*.wav` | 11 smoke fixtures (one per DSP block family) | yes (8.6 MB) |
-| `out/*.wav` | the other 76 fixtures | no (`.gitignore`; ≈ 115 MB, regenerate) |
+| `out/*.wav` | every other fixture | no (`.gitignore`; regenerate) |
+| `pcm/<set>/<note>.{wav,json}` | Chromium-decoded sampler PCM + sidecars (see "Sampler PCM") | sidecars yes; `.wav` only the few listed in `pcm/.gitignore` (cap 2.5 MB) |
+| `COVERAGE.md` | contract rows and operations x fixtures, what is uncovered and why (generated) | yes |
 
 All WAVs are 32-bit IEEE float, 44100 Hz. Fixture renders are stereo. Slot-tap renders can exceed 0 dBFS (the
 calibrated sampler trims put a vel-120 Salamander note at +6.6 dBFS before the master −6 dB and the catcher), so the
@@ -49,6 +54,13 @@ events[]          {t, type, …} issued in time order, each with when = t (secon
   noteOn {note, vel, touch?}   noteOff {note}   pedal {down}   cc {cc, value}  (1 mod, 11 expr, 7 volume, 64 pedal)
   wheel {source, value, glide?}   bend {value}   param {path, value, glide?}   droneKey {pc, minor, fade?}
   clickStart {countIn?, quietAfter?}   clickStop   swell {start}
+  transpose {semis}   keyContext {pc, minor}   routing {routing}   panic   fadeOut {seconds}   monoOut {on}
+  eqAudition {slot, mode: bypass|on}   commit {next, retain?}   retainReverb {next}          (T17)
+setup.next        [patch, ...] prepare()d before the render starts; `commit {next: i}` swaps to patch i at its time
+setup.live        event types called at their time through the engine timer instead of up front (see below)
+patch top level   bend {mode: pitch|tape|morph|drone-swell|none, range}, swell {seconds, pedal?}, modWheel / expression /
+                  volume {target, min, max}: the routing block the engine normalizes
+needsPcm / pcm    fixture plays samplers: the native run needs the Chromium-decoded PCM (see "Sampler PCM")
 ```
 
 Order of operations the reference uses (`tools/golden/page.js renderFixture`), which the native runner must mirror:
@@ -57,7 +69,15 @@ Order of operations the reference uses (`tools/golden/page.js renderFixture`), w
 2. `start()`, then tempo, time signature, click settings; `prepare(patch)` and `commit(token, {when: 0})`;
 3. transpose, key context, drone `setKey` + `configure`, wheels (all at t 0);
 4. stimulus source started at `inject.start`; output re-pointed to the tap;
-5. every event in time order; render `seconds × 44100` frames (rounded up).
+5. every event in time order; render `seconds × 44100` frames (rounded up). Events are issued **up front** with
+   `{when: t}`, in time order, except the types listed in `setup.live`: those are called at their time by the engine's
+   own offline timer, i.e. at the first 128-frame quantum boundary >= t, with `when` = that boundary. This is needed
+   where the engine reads state at call time that a later event changes: `swell` is a state machine on timers (a stop
+   issued up front replaces the start before it ran) and `routing` swaps the bend / wheel mapping that `bend` and
+   `wheel` events read when they are called (issued up front they all see the first routing). A native runner must
+   treat `live` events the same way (apply at the quantum boundary, in event order) and everything else sample
+   accurately at `t`. Fixtures with `setup.next` call `prepare()` for every later patch before the render starts; a
+   `commit` event is then `commit(token, {when: t})` (with `retain`, `retainReverb([patch])` first).
 
 `kind: 'drone-freeze'` is different: it is the lowres2 frozen-drone loop (`engine/drone-freeze.js
 renderDroneLoop`) for `setup.key` / `setup.params`, `loopSec`, `prerollSec`, `seamSec` and an optional
@@ -146,10 +166,63 @@ stream also needs the same draw order inside each consumer.
 - **Realtime-only behaviour**: reverb builds deferred to a quiet pause, fx idle sleep, low-resource drone freeze
   swaps (the loop itself is captured via `renderDroneLoop`), the audio watchdog, latency.
 - **Song switches** (prepare/commit under held notes, channel retirement): every fixture is one committed patch.
-- **My Samples** packs and other bundled sampler sets: two bundled sets (Salamander piano, MusyngKite Rhodes) are
-  covered. Samples are MP3: the reference uses Chromium's decoder (FFmpeg) and its resampling; a native decoder
-  (e.g. minimp3/dr_mp3) can differ in priming/padding handling, so check sample-start alignment first if a sampler
-  fixture fails.
+- **My Samples** packs. All 23 bundled sets are rendered (`sampler-*`, `sampler-sweep-1..6`, and the structural fixtures
+  that use `ep-rhodes` / `ep-wurli`). Samples are MP3: the reference uses Chromium's decoder (FFmpeg) and, for 48 kHz
+  files, its resampling; feed the native sampler the PCM dumps below, and test decoder parity separately.
+- **Audio sleep / wake, low-resource freeze swap, files-mode drone, rate changes, meters, cache**: not renderable by an
+  offline context or not audio; COVERAGE.md lists each with the test that has to cover it.
 - Only 44.1 kHz. The engine's behaviour at 48 kHz (IR keys include the rate) is not rendered.
-- The references depend on the Chromium build (`manifest.chromium`). Rerunning on another build can move
-  Chromium-implemented nodes; compare a rerun with `compare.mjs` before replacing the goldens.
+- The references depend on the Chromium build: see "Chromium pin".
+
+## Sampler PCM (decoder independence)
+
+The sampler goldens come from MP3s decoded by Chromium; a native decoder (dr_mp3) differs in priming and rounding. So
+`render.mjs` (and `pcm.mjs`) dump, for every sample a fixture really plays (`manifest.fixtures[].pcm.files`, harvested
+from the buffers the render started), what Chromium decoded:
+
+```
+pcm/<set>/<note>.wav    32-bit IEEE float, interleaved, the FILE's native rate (no resampling), all decoder channels, full length
+pcm/<set>/<note>.json   {source, sourceSha256, sourceBytes, rate, channels, frames, sha256, engineRate, resampledByEngine, decoder}
+```
+
+`source` is the MP3's repo-relative path, `sha256` the hash of the `.wav`. The native runner loads this PCM through the
+`samples.pcmOverride` test hook instead of decoding the MP3; the sampler's own processing (onset trim, 2 ms fade-in, cap,
+dual-mono fold, mono-loss fix, +trim) still runs natively and is what the exact tier tests. Where `resampledByEngine`
+is true (48 kHz files, e.g. `upright-piano`) the reference engine's context was 44.1 kHz, so Chromium resampled
+during decode: the native side must resample the dump itself, and that step is not in the dump (a fixture on such a file
+is tested with the resampler's own tolerance, or you add a second dump at 44.1 kHz). Fixtures with `needsPcm: true` are
+the ones that need dumps (`pcm.required`); a missing `.wav` means "run `node tools/golden/pcm.mjs`" (about 10 s, needs
+Chromium; `--check` verifies hashes).
+
+Size cap: all dumps together are about 90 MB (one decoded sample is 1.1 MB: 3.1 s stereo float), so they are
+regenerated, not committed. `pcm/.gitignore` un-ignores only the most-used files up to **2.5 MB** (`COMMIT_CAP_BYTES`
+in `pcm.mjs`); sidecars are always committed so a regenerated dump can be verified. Committed golden audio is
+stimuli + smoke + that subset, kept under 14 MB (render.mjs prints the figure).
+
+## Chromium pin
+
+`manifest.chromiumPin` = `{version, product, playwrightBuild, userAgent, executableSha256, platform}`; `manifest.chromium`
+stays the plain version string, and every fixture entry carries `chromium` (the version that rendered it).
+
+- `render.mjs` refuses (exit 3) when this browser's version differs from the manifest's pin, for partial and full runs.
+  `--allow-chromium-change` overrides: a full run then re-pins, a partial `--only` run keeps the old pin and stamps its
+  entries (so the mix is caught below).
+- `compare.mjs` refuses (exit 2) when a golden entry's stamp differs from the pin, or when `<dir>/render-info.json`
+  (written by `render.mjs --out`) names another Chromium, or `--expect-chromium` disagrees; `--allow-chromium-mismatch`
+  compares anyway and prints a warning. Native renders carry no render-info.json and are never refused.
+- The version is the source tag the kernel ports (compressor, PeriodicWave, resamplers, AudioParam timeline, biquad)
+  must follow (SETUP_REVIEW 17): the goldens here are Chromium **157.0.8103.78**.
+
+## Honest tiers
+
+The architecture doc's "bands 1.5 dB, envelope corr 0.95" is the floor, not the tolerance of every statistical fixture:
+the manifest's `fixtures[].tolerance` is what is enforced, and `fixtures[].tier` records why and what would make a
+fixture exact (`exactIf.streams` = the PRNG streams to port: mulberry32 + FNV-1a seeding + the draw order inside each
+consumer; `blockers` = Chromium itself is not repeatable, so a port cannot help). `manifest.tiers` summarizes. Each
+PRNG-dependent tolerance is 1.25 x the spread of renders under other engine seeds, so it measures "as close as another
+seed would be", which is weak: after the port the fixture should be exact. Promotion is mechanical:
+`node tools/golden/promote.mjs <native render dir> --apply` re-tests every `exactIfPrngPorted` fixture against the exact
+tolerance and rewrites its classification (the old tolerance becomes `fallback`).
+
+<!-- tiers:begin -->
+<!-- tiers:end -->

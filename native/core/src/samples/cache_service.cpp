@@ -283,26 +283,31 @@ void CacheServiceImpl::setLowResource(bool on) {
 void CacheServiceImpl::rewarmPins() {
   if (rewarming_ || pinJobs_.empty()) return;
   rewarming_ = true;
-  // nearest-pinned first in preload order, while they fit without pushing anything pinned out
-  auto step = std::make_shared<std::function<void(std::size_t)>>();
-  *step = [this, step](std::size_t i) {
-    for (; i < pinJobs_.size(); ++i) {
-      const auto &[key, job] = pinJobs_[i];
-      if (!cache_.pins().count(key) && !cache_.pins().count(job.url)) continue;
-      if (cache_.has(key) || cache_.has(cache_.keyOf(job.url, job.midi, job.opts.maxSec))) continue;
-      if (!cache_.roomFor(cache_.estimateBytes({key}).bytes)) break;
-      const std::size_t nextI = i + 1;
-      bool sync = true, fired = false;
-      cache_.requestJob(job, 2, false, [&, nextI](const SampleBuffer *) {
-        fired = true;
-        if (!sync) (*step)(nextI);
-      });
-      sync = false;
-      if (!fired) return;  // asynchronous: the callback continues with the next job
-    }
-    rewarming_ = false;
-  };
-  (*step)(0);
+  rewarmFrom(0);
+}
+
+// Nearest-pinned first in preload order, while they fit without pushing anything pinned out. Each decode continues
+// with the next job from its callback (inline: from the loop below, without recursion).
+void CacheServiceImpl::rewarmFrom(std::size_t i) {
+  for (; i < pinJobs_.size(); ++i) {
+    const std::string key = pinJobs_[i].first;
+    const SampleJob job = pinJobs_[i].second;
+    if (!cache_.pins().count(key) && !cache_.pins().count(job.url)) continue;
+    if (cache_.has(key) || cache_.has(cache_.keyOf(job.url, job.midi, job.opts.maxSec))) continue;
+    if (!cache_.roomFor(cache_.estimateBytes({key}).bytes)) break;
+    rewarmInSync_ = true;
+    const std::size_t before = rewarmDone_;
+    cache_.requestJob(job, 2, false, [this, i](const SampleBuffer *) {
+      if (rewarmInSync_) {
+        ++rewarmDone_;  // finished inside requestJob: the loop carries on
+        return;
+      }
+      rewarmFrom(i + 1);  // asynchronous completion (pump): continue from here
+    });
+    rewarmInSync_ = false;
+    if (rewarmDone_ == before) return;  // a worker is decoding: its callback continues
+  }
+  rewarming_ = false;
 }
 
 // ---- preload -----------------------------------------------------------------------------------------------------

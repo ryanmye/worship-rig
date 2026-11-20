@@ -76,6 +76,7 @@ class CacheServiceImpl final : public rig::CacheService {
  private:
   struct PreloadOp;
   void advance(const std::shared_ptr<PreloadOp> &op);
+  void rewarmFrom(std::size_t i);
   std::vector<rig::PatchSpec> parsePatches(const yyjson_val *patches) const;
   std::vector<std::string> currentKeys() const;
   void doPin(const std::vector<std::string> &keys, const std::string &pin);
@@ -91,7 +92,8 @@ class CacheServiceImpl final : public rig::CacheService {
   std::vector<std::shared_ptr<PreloadOp>> ops_;
   std::vector<std::pair<std::string, SampleJob>> pinJobs_;
   std::vector<std::string> lowResSavedPins_;
-  bool lowRes_ = false, rewarming_ = false;
+  bool lowRes_ = false, rewarming_ = false, rewarmInSync_ = false;
+  std::size_t rewarmDone_ = 0;
 };
 
 }  // namespace rig::samples

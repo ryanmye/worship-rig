@@ -39,7 +39,8 @@ function samplesUsed(engine) {
   for (const [key, e] of engine.cache.entries) {
     if (!STARTED.has(e.buffer)) continue;
     const b = e.buffer;
-    const url = key.split('#max=')[0];
+    const raw = key.split('#max=')[0];
+    const url = /^https?:/.test(raw) ? new URL(raw).pathname : raw; // origin (a random port) is not part of the identity
     out.push({ key, url, frames: b.length, rate: b.sampleRate, channels: b.numberOfChannels,
       dualMono: !!b._dualMono, onsetTrimSec: b._onsetTrim, capped: !!b._capped, monoFix: b._monoFix || null });
   }
@@ -103,7 +104,19 @@ const TAP = {
   'slot1.pan': (e) => e.slots[1].strip.pan,
 };
 
-/** Apply one timed event. All events are issued up front in time order with {when} (as tools/lib/render-page.js). */
+/**
+ * Apply one timed event. Events are issued up front in time order with {when} (as tools/lib/render-page.js), EXCEPT
+ * the types a fixture lists in `setup.live`: those are called at their time by the engine's own AudioTimer (the
+ * offline timer suspends the render at the first 128-frame quantum boundary >= t and calls with when = that boundary).
+ * Needed where the engine reads state at call time that another event changes: `swell` is a state machine on timers
+ * (a later stop issued up front would replace the start before it ran), and `routing` changes `_routing` at call
+ * time while `bend` / `wheel` read it (issued up front they would all see the first routing).
+ */
+function dispatch(engine, ev, ctx, live) {
+  if (!live.has(ev.type)) return applyEvent(engine, ev, ctx);
+  engine.timer.at(ev.t, (tt) => applyEvent(engine, { ...ev, t: tt }, ctx));
+  return true;
+}
 function applyEvent(engine, ev, ctx) {
   const when = ev.t;
   switch (ev.type) {
@@ -287,7 +300,8 @@ export async function renderFixture(fx) {
     stimulus: stimDef,
   };
   const evs = [...(fx.events || [])].sort((a, b) => a.t - b.t);
-  for (const ev of evs) applyEvent(engine, ev, nextCtx);
+  const live = new Set(s.live || []);
+  for (const ev of evs) dispatch(engine, ev, nextCtx, live);
   const buf = await ctx.startRendering();
   resolved.stats = engine._debugStats();
   resolved.samplesUsed = samplesUsed(engine);

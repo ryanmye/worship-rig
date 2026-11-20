@@ -7,6 +7,9 @@
 //   node tools/golden/compare.mjs --self-test            goldens vs themselves (must pass) and vs perturbed copies
 //                                                        (must fail)
 //   options: --manifest <path> (default native/golden/manifest.json), --json (machine-readable rows)
+//   Chromium pin (T17): the goldens are only valid for manifest.chromiumPin.version. compare.mjs refuses (exit 2) when
+//   a golden entry is stamped with another version, or when <dir>/render-info.json (written by `render.mjs --out`)
+//   names another Chromium, unless --allow-chromium-mismatch is given (the run is then labelled in the output).
 //
 // Exit status 0 when every compared fixture passes, 1 otherwise (2 on usage errors). A fixture whose golden WAV is
 // absent (out/ not regenerated) is reported as 'missing' and does not fail the run unless --strict.
@@ -118,6 +121,27 @@ function selfTest(manifest, manifestDir) {
   return ok;
 }
 
+/** Reasons the comparison would mix Chromium versions (empty = fine). */
+export function checkPin(manifest, pin, argv, opt) {
+  const out = [];
+  const odd = manifest.fixtures.filter((e) => e.chromium && e.chromium !== pin).map((e) => e.id);
+  if (odd.length) out.push(`${odd.length} golden entries (${odd.slice(0, 3).join(', ')}${odd.length > 3 ? ', ...' : ''}) were ` +
+    `rendered by another Chromium than the pin ${pin}`);
+  const pos = argv.filter((a, i) => !a.startsWith('--') && !(i > 0 && argv[i - 1] === '--manifest'));
+  const dirs = [];
+  if (pos.length === 1 && fs.existsSync(pos[0]) && fs.statSync(pos[0]).isDirectory()) dirs.push(pos[0]);
+  if (opt('--test')) dirs.push(path.dirname(opt('--test')));
+  if (pos.length === 2) dirs.push(path.dirname(pos[1]));
+  for (const d of dirs) {
+    const f = path.join(d, 'render-info.json');
+    if (!fs.existsSync(f)) continue;
+    const info = JSON.parse(fs.readFileSync(f, 'utf8'));
+    if (info.chromium && info.chromium !== pin) out.push(`${d} was rendered by Chromium ${info.chromium}`);
+  }
+  if (opt('--expect-chromium') && opt('--expect-chromium') !== pin) out.push(`--expect-chromium ${opt('--expect-chromium')} != pin`);
+  return out;
+}
+
 function main() {
   const argv = process.argv.slice(2);
   const opt = (k) => {
@@ -129,6 +153,17 @@ function main() {
   const manifest = loadManifest(manifestPath);
   const byId = new Map(manifest.fixtures.map((e) => [e.id, e]));
   const json = argv.includes('--json');
+  const pin = manifest.chromiumPin?.version || manifest.chromium;
+  const mismatches = checkPin(manifest, pin, argv, opt);
+  if (mismatches.length) {
+    if (!argv.includes('--allow-chromium-mismatch')) {
+      console.error(`REFUSED: ${mismatches.join('; ')}.\nGoldens are pinned to Chromium ${pin}; another build can move ` +
+        'Chromium-implemented nodes (compressor, convolver, wavetables, decoder). Re-render the goldens with ' +
+        '`render.mjs --allow-chromium-change` or pass --allow-chromium-mismatch to compare anyway.');
+      process.exit(2);
+    }
+    console.error(`WARNING (--allow-chromium-mismatch): ${mismatches.join('; ')}`);
+  }
   const strict = argv.includes('--strict');
   if (argv.includes('--self-test')) process.exit(selfTest(manifest, manifestDir) ? 0 : 1);
   let rows;
