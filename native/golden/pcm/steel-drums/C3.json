@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/steel-drums/C3.mp3",
+ "sourceSha256": "f6c43c0cde413fd5893ee621fdd4a68c7dbbe459ea500e3105e9171fa9ee2c48",
+ "sourceBytes": 20412,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "05eeb7a9f4b9f3c6fcb120cf65877496947c61e67a34c2d5d4c2ac55cb82b3c3",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

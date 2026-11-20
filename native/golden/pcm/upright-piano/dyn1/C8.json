@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/upright-piano/dyn1/C8.mp3",
+ "sourceSha256": "8367794b442f6380ccc71d5cbf1cb471a43d7ea1422c879610178e7de61a4efb",
+ "sourceBytes": 29805,
+ "rate": 48000,
+ "channels": 2,
+ "frames": 68367,
+ "sha256": "3359e16657aed64ef47f2b5a1c2631be1c899ef05c0117a4e486e6e3911be7df",
+ "bytes": 546994,
+ "engineRate": 44100,
+ "resampledByEngine": true,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

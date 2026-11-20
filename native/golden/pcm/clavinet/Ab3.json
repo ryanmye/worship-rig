@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/clavinet/Ab3.mp3",
+ "sourceSha256": "4ca430186c324e7c279b190df136929cefb7a044ac049a88113ac936ec5ea689",
+ "sourceBytes": 23923,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "722a2c86dcccf99b582f684ec3b32470243786297d578281a1599f346cfa4cad",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

@@ -309,13 +309,15 @@ for (const slug of ['sunday-pad-piano', 'lofi-rhodes', 'gospel-stab-b3']) {
   });
 }
 
-// ======================================================================================================================
+//
+// ===================================================================================================================
 // T17 coverage fixtures (SETUP_REVIEW HIGH 7). Samplers (no PRNG, exact tier once the native side loads the same
 // PCM) carry the structural behaviour (pan, bend, mono, transpose, release, panic, switch); synths only where the
 // instrument path itself is the point. Every id below is listed in native/golden/COVERAGE.md with the contract rows
 // it touches. `needsPcm` = the fixture plays sampler sets, so the native run needs the Chromium-decoded PCM
 // (native/golden/pcm, tools/golden/pcm.mjs).
-// ======================================================================================================================
+//
+// ===================================================================================================================
 /** Fixtures added by the T17 coverage wave (render.mjs / coverage.mjs report before / after). */
 const addT = (f) => add({ addedBy: 'T17', ...f });
 const DRY = { reverb: 0, delay: 0, chorus: 0 };
@@ -323,7 +325,8 @@ const DRY = { reverb: 0, delay: 0, chorus: 0 };
 const sampSlot = (id, extra = {}) => ({ instrument: { type: 'sampler', id }, gain: 1, sends: { ...DRY }, ...extra });
 /** Everything after the slots silenced: the summed dry signal (no IR / echo / chorus return in `fx.sum`). */
 const NO_RETURNS = { reverb: { returnGain: 0 }, delay: { returnGain: 0 }, chorus: { returnGain: 0 } };
-const chordOn = (t, notes, vel = 80, dt = 0.01) => notes.map((n, j) => ({ t: r6(t + j * dt), type: 'noteOn', note: n, vel }));
+const chordOn = (t, notes, vel = 80, dt = 0.01) => notes.map((n, j) => ({ t: r6(t + j * dt), type: 'noteOn', note: n,
+  vel }));
 const chordOff = (t, notes) => notes.map((n) => ({ t, type: 'noteOff', note: n }));
 
 // ---- pan: both StereoPanner laws (mono source keeps the mono law, stereo source the stereo law) ------------------
@@ -331,7 +334,8 @@ const chordOff = (t, notes) => notes.map((n) => ({ t, type: 'noteOff', note: n }
 addT({ id: 'pan-stereo-src', kind: 'pan', seconds: 2,
   setup: { patch: soloPatch('sampler', 'ep-rhodes', { pan: -0.5 }),
     inject: { stimulus: 'stereo-noise', at: 'slot0.strip', start: START }, tap: 'slot0.pan' },
-  events: [{ t: 0.7, type: 'param', path: 'slots.0.pan', value: -1 }, { t: 1.0, type: 'param', path: 'slots.0.pan', value: 0.5 },
+  events: [{ t: 0.7, type: 'param', path: 'slots.0.pan', value: -1 }, { t: 1.0, type: 'param', path: 'slots.0.pan',
+    value: 0.5 },
     { t: 1.3, type: 'param', path: 'slots.0.pan', value: 1 }] });
 // mono: one sustained synth note (a synth voice is a single channel into the strip), pan swept through 5 positions
 addT({ id: 'pan-mono-src', kind: 'pan', seconds: 4.5,
@@ -341,12 +345,15 @@ addT({ id: 'pan-mono-src', kind: 'pan', seconds: 4.5,
 
 // ---- pitch bend: pitch (sampler: playbackRate; synth/organ: detune), tape, morph, drone-swell, none ----------------
 addT({ id: 'bend-pitch-sampler', kind: 'bend', seconds: 5.5, needsPcm: true,
-  setup: { patch: { slots: [sampSlot('ep-rhodes', { bendEnabled: true }), null, null, null], bend: { mode: 'pitch', range: 4 } },
+  setup: { patch: { slots: [sampSlot('ep-rhodes', { bendEnabled: true }), null, null, null], bend: { mode: 'pitch',
+    range: 4 } },
     tap: 'slot0.pan' },
   events: [...chordOn(0.1, [55, 60, 64]), { t: 0.5, type: 'bend', value: 1 }, { t: 1.0, type: 'bend', value: -0.5 },
     { t: 1.5, type: 'bend', value: 0 },
-    // a second chord struck while bent down; bendEnabled off freezes the slot at 0 semitones, back on re-applies the bend
-    ...chordOn(2.0, [67, 71, 76]), { t: 2.3, type: 'bend', value: -1 }, { t: 2.9, type: 'param', path: 'slots.0.bendEnabled', value: false },
+    // a second chord struck while bent down; bendEnabled off freezes the slot at 0 semitones, back on re-applies the
+    // bend
+    ...chordOn(2.0, [67, 71, 76]), { t: 2.3, type: 'bend', value: -1 }, { t: 2.9, type: 'param',
+      path: 'slots.0.bendEnabled', value: false },
     { t: 3.2, type: 'bend', value: 1 }, { t: 3.6, type: 'param', path: 'slots.0.bendEnabled', value: true },
     { t: 4.1, type: 'bend', value: 0 }, ...chordOff(4.4, [55, 60, 64, 67, 71, 76])] });
 addT({ id: 'bend-tape', kind: 'bend', seconds: 6.5, needsPcm: true,
@@ -357,19 +364,22 @@ addT({ id: 'bend-tape', kind: 'bend', seconds: 6.5, needsPcm: true,
     ...chordOn(3.0, [60, 67, 72]), { t: 3.6, type: 'bend', value: 0.7 }, { t: 4.4, type: 'bend', value: 0 },
     ...chordOff(5.0, [52, 59, 64, 60, 67, 72])] });
 addT({ id: 'bend-modes', kind: 'bend', seconds: 8,
-  setup: { patch: { slots: [{ instrument: { type: 'synth', id: 'warm-pad' }, gain: 1, sends: { ...DRY } }, null, null, null],
+  setup: { patch: { slots: [{ instrument: { type: 'synth', id: 'warm-pad' }, gain: 1, sends: { ...DRY } }, null,
+    null, null],
     fx: NO_RETURNS, bend: { mode: 'pitch', range: 2 } },
     drone: { ...DRONE, gain: 0.8, key: { pc: 7, minor: false } }, live: ['routing', 'bend'], tap: 'fx.sum' },
   events: [...chordOn(0.2, [55, 62, 67]), { t: 0.6, type: 'bend', value: 1 }, { t: 1.2, type: 'bend', value: 0 },
     { t: 1.6, type: 'routing', routing: { bend: { mode: 'morph', range: 2 } } }, { t: 2.0, type: 'bend', value: 1 },
-    { t: 2.8, type: 'bend', value: 0 }, { t: 3.2, type: 'routing', routing: { bend: { mode: 'drone-swell', range: 2 } } },
+    { t: 2.8, type: 'bend', value: 0 }, { t: 3.2, type: 'routing', routing: { bend: { mode: 'drone-swell',
+      range: 2 } } },
     { t: 3.6, type: 'bend', value: 1 }, { t: 5.0, type: 'bend', value: 0 },
     { t: 5.4, type: 'routing', routing: { bend: { mode: 'none', range: 2 } } }, { t: 5.8, type: 'bend', value: 1 },
     ...chordOff(6.5, [55, 62, 67])] });
 
 // ---- swell: the pedal swells the drone (routing swell.pedal), the swell button, and the way back -----------------
 addT({ id: 'swell-pedal-drone', kind: 'swell', seconds: 17,
-  setup: { patch: { slots: [{ instrument: { type: 'organ', id: 'soft-pad' }, gain: 0.7, sends: { ...DRY } }, null, null, null],
+  setup: { patch: { slots: [{ instrument: { type: 'organ', id: 'soft-pad' }, gain: 0.7, sends: { ...DRY } }, null,
+    null, null],
     fx: NO_RETURNS, modWheel: { target: 'drone.gain', min: 0, max: 1 }, swell: { seconds: 3, pedal: true } },
   drone: { ...DRONE, gain: 1, key: { pc: 2, minor: false } }, wheel: { mod: 0 }, live: ['swell'], tap: 'fx.sum' },
   events: [{ t: 0.5, type: 'swell', start: true }, { t: 5.0, type: 'swell', start: false },
@@ -380,22 +390,28 @@ addT({ id: 'swell-pedal-drone', kind: 'swell', seconds: 17,
 addT({ id: 'mono-legato', kind: 'mono', seconds: 9, needsPcm: true,
   setup: { patch: { slots: [sampSlot('ep-rhodes', { mono: 'lowest' }), null, null, null] }, tap: 'slot0.pan' },
   events: [
-    // lowest-note priority: 64 is ignored while 60 sounds; 55 takes over (legato); releasing 55 falls back to 60 then 64
+    // lowest-note priority: 64 is ignored while 60 sounds; 55 takes over (legato); releasing 55 falls back to 60 then
+    // 64
     { t: 0.1, type: 'noteOn', note: 60, vel: 80 }, { t: 0.4, type: 'noteOn', note: 64, vel: 90 },
-    { t: 0.8, type: 'noteOn', note: 55, vel: 70 }, { t: 1.2, type: 'noteOff', note: 55 }, { t: 1.6, type: 'noteOff', note: 60 },
+    { t: 0.8, type: 'noteOn', note: 55, vel: 70 }, { t: 1.2, type: 'noteOff', note: 55 }, { t: 1.6, type: 'noteOff',
+      note: 60 },
     { t: 2.2, type: 'noteOff', note: 64 },
     // pedal: the last key-up is held
     { t: 2.6, type: 'pedal', down: true }, ...held(67, 2.8, 3.1), { t: 3.6, type: 'noteOn', note: 71, vel: 80 },
     { t: 3.9, type: 'noteOff', note: 71 }, { t: 4.6, type: 'pedal', down: false },
     // switch to highest-note priority and sustain off (the pedal is ignored by the slot)
-    { t: 5.0, type: 'param', path: 'slots.0.mono', value: 'highest' }, { t: 5.0, type: 'param', path: 'slots.0.sustain', value: false },
+    { t: 5.0, type: 'param', path: 'slots.0.mono', value: 'highest' }, { t: 5.0, type: 'param',
+      path: 'slots.0.sustain', value: false },
     { t: 5.1, type: 'noteOn', note: 60, vel: 80 }, { t: 5.4, type: 'noteOn', note: 67, vel: 80 },
-    { t: 5.8, type: 'noteOn', note: 72, vel: 80 }, { t: 6.2, type: 'noteOff', note: 72 }, { t: 6.6, type: 'noteOff', note: 67 },
-    { t: 7.0, type: 'pedal', down: true }, { t: 7.1, type: 'noteOff', note: 60 }, { t: 7.8, type: 'pedal', down: false }] });
+    { t: 5.8, type: 'noteOn', note: 72, vel: 80 }, { t: 6.2, type: 'noteOff', note: 72 }, { t: 6.6, type: 'noteOff',
+      note: 67 },
+    { t: 7.0, type: 'pedal', down: true }, { t: 7.1, type: 'noteOff', note: 60 }, { t: 7.8, type: 'pedal',
+      down: false }] });
 
 // ---- transpose, octave, per-slot transpose, key change, play range -----------------------------------------------
 addT({ id: 'transpose-octave-range', kind: 'transpose', seconds: 9, needsPcm: true,
-  setup: { patch: { slots: [sampSlot('ep-rhodes', { octave: 1, transpose: 3, lowNote: 48, highNote: 84 }), null, null, null] },
+  setup: { patch: { slots: [sampSlot('ep-rhodes', { octave: 1, transpose: 3, lowNote: 48, highNote: 84 }), null,
+    null, null] },
     transpose: -2, keyContext: { pc: 0, minor: false }, tap: 'slot0.pan' },
   events: [
     ...[36, 41, 48, 55, 60, 67, 72, 79].flatMap((n, i) => held(n, r6(0.1 + i * 0.5), r6(0.4 + i * 0.5))),
@@ -405,10 +421,14 @@ addT({ id: 'transpose-octave-range', kind: 'transpose', seconds: 9, needsPcm: tr
 // ---- slot EQ: 8 bands with every type; a type / band change mid-sweep + audition bypass; the legacy rows --------
 addT({ id: 'eq-chain-8band', kind: 'effect', seconds: 3,
   setup: { patch: soloPatch('synth', 'warm-pad', { eq: {
-    b1: { on: true, type: 'lowcut', hz: 60, q: 0.707 }, b2: { on: true, type: 'lowshelf', hz: 150, db: 5, q: 0.8 },
-    b3: { on: true, type: 'peak', hz: 300, db: -6, q: 2 }, b4: { on: true, type: 'notch', hz: 900, db: 0, q: 6 },
-    b5: { on: true, type: 'peak', hz: 2000, db: 8, q: 3 }, b6: { on: true, type: 'highshelf', hz: 4500, db: -5, q: 0.9 },
-    b7: { on: true, type: 'peak', hz: 9000, db: 4, q: 1.5 }, b8: { on: true, type: 'highcut', hz: 14000, db: 0, q: 0.9 } } }),
+    // lowcut / highcut ignore db (a Web Audio highpass / lowpass has no gain): b1 and b8 carry one to prove it
+    b1: { on: true, type: 'lowcut', hz: 60, db: 3, q: 0.707 }, b2: { on: true, type: 'lowshelf', hz: 150, db: 5,
+      q: 0.8 },
+    b3: { on: true, type: 'peak', hz: 300, db: -6, q: 2 }, b4: { on: true, type: 'peak', hz: 900, db: 3, q: 4 },
+    b5: { on: true, type: 'notch', hz: 2000, db: 0, q: 3 }, b6: { on: true, type: 'lowshelf', hz: 4500, db: -5,
+      q: 0.9 },
+    b7: { on: true, type: 'highshelf', hz: 9000, db: 4, q: 1.5 }, b8: { on: true, type: 'highcut', hz: 14000, db: -4,
+      q: 0.9 } } }),
     inject: { stimulus: 'sweep', at: 'slot0.strip', start: START }, tap: 'slot0.pan' }, events: [] });
 addT({ id: 'eq-type-change', kind: 'effect', seconds: 3.4,
   setup: { patch: soloPatch('synth', 'warm-pad', { eq: { b1: { on: false }, b8: { on: false },
@@ -416,10 +436,14 @@ addT({ id: 'eq-type-change', kind: 'effect', seconds: 3.4,
     b5: { on: true, type: 'peak', hz: 3000, db: -7, q: 1.5 } } }),
     inject: { stimulus: 'sweep', at: 'slot0.strip', start: START }, tap: 'slot0.pan' },
   events: [{ t: 0.7, type: 'param', path: 'slots.0.eq.b3.type', value: 'notch' },
-    { t: 1.0, type: 'param', path: 'slots.0.eq.b3.hz', value: 1500 }, { t: 1.2, type: 'param', path: 'slots.0.eq.b3.type', value: 'highshelf' },
-    { t: 1.5, type: 'param', path: 'slots.0.eq.b5.on', value: false }, { t: 1.7, type: 'param', path: 'slots.0.eq.b4.on', value: true },
-    { t: 1.7, type: 'param', path: 'slots.0.eq.b4.type', value: 'highcut' }, { t: 1.7, type: 'param', path: 'slots.0.eq.b4.hz', value: 6000 },
-    { t: 2.0, type: 'param', path: 'slots.0.eq.b3.type', value: 'off' }, { t: 2.0, type: 'param', path: 'slots.0.eq.b2.db', value: -9 },
+    { t: 1.0, type: 'param', path: 'slots.0.eq.b3.hz', value: 1500 }, { t: 1.2, type: 'param',
+      path: 'slots.0.eq.b3.type', value: 'highshelf' },
+    { t: 1.5, type: 'param', path: 'slots.0.eq.b5.on', value: false }, { t: 1.7, type: 'param',
+      path: 'slots.0.eq.b4.on', value: true },
+    { t: 1.7, type: 'param', path: 'slots.0.eq.b4.type', value: 'highcut' }, { t: 1.7, type: 'param',
+      path: 'slots.0.eq.b4.hz', value: 6000 },
+    { t: 2.0, type: 'param', path: 'slots.0.eq.b3.type', value: 'off' }, { t: 2.0, type: 'param',
+      path: 'slots.0.eq.b2.db', value: -9 },
     { t: 2.4, type: 'eqAudition', slot: 0, mode: 'bypass' }, { t: 2.8, type: 'eqAudition', slot: 0, mode: 'on' }] });
 addT({ id: 'eq-legacy-rows', kind: 'effect', seconds: 3,
   setup: { patch: soloPatch('synth', 'warm-pad', { eq: { low: 5, high: -4, lowHz: 200, mid1: 6, mid1Hz: 800, mid1Q: 2,
@@ -436,49 +460,63 @@ addT({ id: 'panic-fadeout', kind: 'panic', seconds: 8, needsPcm: true,
 
 // ---- sustain: release param (every instrument type), pedalHold (numeric: ring, then fade over 25 %) -----------------
 addT({ id: 'release-pedalhold', kind: 'sustain', seconds: 11, needsPcm: true,
-  setup: { patch: { slots: [sampSlot('ep-rhodes', { release: 1.2, pedalHold: 2.5 }), null, null, null] }, tap: 'slot0.pan' },
+  setup: { patch: { slots: [sampSlot('ep-rhodes', { release: 1.2, pedalHold: 2.5 }), null, null, null] },
+    tap: 'slot0.pan' },
   events: [...held(60, 0.1, 0.6), { t: 2.5, type: 'pedal', down: true }, ...held(64, 2.6, 2.9),
     { t: 7.0, type: 'pedal', down: false }, ...held(67, 7.2, 7.5),
     { t: 8.0, type: 'param', path: 'slots.0.release', value: 0.05 }, ...held(71, 8.1, 8.3)] });
 
-// ---- song switch under held notes + reverb retain + scene jump (glide 0) ---------------------------------------------
+// ---- song switch under held notes + reverb retain + scene jump (glide 0)
+// ---------------------------------------------
 {
-  const A = { slots: [sampSlot('ep-rhodes', { gain: 0.9, sends: { reverb: 0.3, delay: 0, chorus: 0 } }), null, null, null],
+  const A = { slots: [sampSlot('ep-rhodes', { gain: 0.9, sends: { reverb: 0.3, delay: 0, chorus: 0 } }), null, null,
+    null],
     fx: { reverb: { size: 0.25, damp: 0.5, predelay: 0.01, returnGain: 1 } } };
-  const B = { slots: [sampSlot('ep-wurli', { gain: 0.9, sends: { reverb: 0.4, delay: 0, chorus: 0 } }), null, null, null],
+  const B = { slots: [sampSlot('ep-wurli', { gain: 0.9, sends: { reverb: 0.4, delay: 0, chorus: 0 } }), null, null,
+    null],
     fx: { reverb: { size: 0.8, damp: 0.6, predelay: 0.03, returnGain: 0.9 } } };
   addT({ id: 'switch-retire-retain', kind: 'switch', seconds: 10, needsPcm: true,
     setup: { patch: A, next: [B], tap: 'out' },
-    events: [{ t: 0.4, type: 'pedal', down: true }, ...chordOn(0.5, [60, 64, 67]), { t: 1.5, type: 'retainReverb', next: 0 },
+    events: [{ t: 0.4, type: 'pedal', down: true }, ...chordOn(0.5, [60, 64, 67]), { t: 1.5, type: 'retainReverb',
+      next: 0 },
       // held notes ring on the retiring channel while the new song's strip takes the next notes
       { t: 3.0, type: 'commit', next: 0, retain: true }, ...chordOn(3.6, [72, 76], 85), ...chordOff(4.4, [72, 76]),
       ...chordOff(4.8, [60, 64, 67]), { t: 5.0, type: 'pedal', down: false },
       // scene jump: instant (glide 0) level and send changes
-      { t: 6.0, type: 'param', path: 'slots.0.gain', value: 0.3 }, { t: 6.0, type: 'param', path: 'slots.0.sends.reverb', value: 1 },
+      { t: 6.0, type: 'param', path: 'slots.0.gain', value: 0.3 }, { t: 6.0, type: 'param',
+        path: 'slots.0.sends.reverb', value: 1 },
       ...held(65, 6.1, 6.6), { t: 7.2, type: 'param', path: 'slots.0.gain', value: 1.1 }, ...held(69, 7.3, 7.8)] });
 }
 
-// ---- one render that touches many FX / master / drone / slot rows (automation, setTarget and debounced IR swaps) -----
+// ---- one render that touches many FX / master / drone / slot rows (automation, setTarget and debounced IR swaps)
+// -----
 addT({ id: 'fx-row-sweep', kind: 'automation', seconds: 14, needsPcm: true,
-  setup: { patch: { slots: [sampSlot('ep-rhodes', { sends: { reverb: 0.5, delay: 0.5, chorus: 0.5 } }), null, null, null],
+  setup: { patch: { slots: [sampSlot('ep-rhodes', { sends: { reverb: 0.5, delay: 0.5, chorus: 0.5 } }), null, null,
+    null],
     fx: { lofi: { amount: 0.3, wow: 0.2, flutter: 0.2, crackle: 0.2, bits: 0.3, tone: 0.5, saturation: 0.3 } } },
   tempo: 100, drone: { ...DRONE, gain: 0.3, key: { pc: 5, minor: false } }, tap: 'out' },
   events: [...held(60, 0.1, 13), ...held(67, 0.1, 13), ...held(76, 0.1, 13),
     ...[
-      [1, 'fx.reverb.size', 0.15], [1.5, 'fx.reverb.damp', 0.9], [2, 'fx.reverb.predelay', 0.12], [2.5, 'fx.reverb.returnGain', 1.4],
-      [3, 'fx.delay.time', 0.3], [3.2, 'fx.delay.pingpong', true], [3.4, 'fx.delay.tone', 0.9], [3.6, 'fx.delay.returnGain', 1.3],
+      [1, 'fx.reverb.size', 0.15], [1.5, 'fx.reverb.damp', 0.9], [2, 'fx.reverb.predelay', 0.12], [2.5,
+        'fx.reverb.returnGain', 1.4],
+      [3, 'fx.delay.time', 0.3], [3.2, 'fx.delay.pingpong', true], [3.4, 'fx.delay.tone', 0.9], [3.6,
+        'fx.delay.returnGain', 1.3],
       [4, 'fx.delay.sync', '1/8d'], [4.5, 'fx.delay.feedback', 0.6],
       [5, 'fx.chorus.rate', 1.2], [5.2, 'fx.chorus.depth', 0.9], [5.4, 'fx.chorus.returnGain', 1.5],
       [6, 'fx.lofi.wow', 0.8], [6.2, 'fx.lofi.flutter', 0.7], [6.4, 'fx.lofi.crackle', 0.6], [6.6, 'fx.lofi.bits', 0.8],
       [6.8, 'fx.lofi.tone', 0.2], [7, 'fx.lofi.saturation', 0.9], [7.2, 'fx.lofi.amount', 0.7],
-      [8, 'fx.eq.low', 5], [8.1, 'fx.eq.mid', -4], [8.2, 'fx.eq.high', 6], [8.5, 'fx.comp.amount', 0.8], [9, 'master.volume', 0.9],
-      [9.5, 'slots.0.width', 1.5], [9.7, 'slots.0.sends.chorus', 0.1], [9.9, 'slots.0.eq.low', -8], [10.1, 'slots.0.eq.high', 7],
-      [10.5, 'drone.brightness', 0.9], [10.7, 'drone.movement', 0.9], [10.9, 'drone.width', 0.2], [11.1, 'drone.fade', 8],
+      [8, 'fx.eq.low', 5], [8.1, 'fx.eq.mid', -4], [8.2, 'fx.eq.high', 6], [8.5, 'fx.comp.amount', 0.8], [9,
+        'master.volume', 0.9],
+      [9.5, 'slots.0.width', 1.5], [9.7, 'slots.0.sends.chorus', 0.1], [9.9, 'slots.0.eq.low', -8], [10.1,
+        'slots.0.eq.high', 7],
+      [10.5, 'drone.brightness', 0.9], [10.7, 'drone.movement', 0.9], [10.9, 'drone.width', 0.2], [11.1,
+        'drone.fade', 8],
       [11.5, 'fx.reverb.size', 0.85],
     ].map(([t, path, value]) => ({ t, type: 'param', path, value })),
     { t: 12, type: 'monoOut', on: true }, { t: 12.8, type: 'monoOut', on: false }] });
 
-// ---- the other 21 sample sets: one note each (played 0, +1 or -1 semitone off a sample, so playbackRate ≠ 1) ----------
+// ---- the other 21 sample sets: one note each (played 0, +1 or -1 semitone off a sample, so playbackRate ≠ 1)
+// ----------
 // [id, sample note (MIDI), vel]: the smallest in-range file of the set (upright-piano: dyn1 C8, 48 kHz, resampled)
 const SWEEP_SETS = [
   ['upright-piano', 108, 40], ['bright-piano', 81, 60], ['honky-tonk', 83, 60], ['harpsichord', 63, 60],

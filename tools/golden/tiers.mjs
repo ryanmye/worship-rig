@@ -11,12 +11,16 @@ const m = JSON.parse(fs.readFileSync(path.join(GOLD, 'manifest.json'), 'utf8'));
 const st = m.fixtures.filter((e) => e.classification === 'statistical');
 const t = m.tiers;
 const L = [];
-L.push(`${m.fixtures.length} fixtures: **${t.exact} exact**, **${t.statistical} statistical** (${t.exactIfPrngPorted} become ` +
+L.push(`${m.fixtures.length} fixtures: **${t.exact} exact**, **${t.statistical} statistical** ` +
+  `(${t.exactIfPrngPorted} become ` +
   `exact once their PRNG streams are ported; ${t.statistical - t.exactIfPrngPorted} cannot, see "blockers").`, '',
   `Real statistical tolerances (not the 1.5 dB / 0.95 of ARCHITECTURE 8.2): bands **${t.statisticalBandsDb.min} to ` +
-  `${t.statisticalBandsDb.max} dB** (widest: \`${t.widestBands.id}\`), envelope correlation **${t.statisticalEnvCorr.min} to ` +
-  `${t.statisticalEnvCorr.max}** (lowest: \`${t.lowestEnvCorr.id}\`), RMS ${t.statisticalRmsDb.min} to ${t.statisticalRmsDb.max} dB; ` +
-  `envelope check OFF (corr -1, lag window +-200 ms) for ${t.envelopeCheckOff.map((x) => `\`${x}\``).join(', ') || 'none'}.`, '',
+  `${t.statisticalBandsDb.max} dB** (widest: \`${t.widestBands.id}\`), envelope correlation ` +
+    `**${t.statisticalEnvCorr.min} to ` +
+  `${t.statisticalEnvCorr.max}** (lowest: \`${t.lowestEnvCorr.id}\`), RMS ${t.statisticalRmsDb.min} to ` +
+    `${t.statisticalRmsDb.max} dB; ` +
+  `envelope check OFF (corr -1, lag window +-200 ms) for ` +
+    `${t.envelopeCheckOff.map((x) => `\`${x}\``).join(', ') || 'none'}.`, '',
   '| fixture | bands dB | env corr | lag ms | rms dB | exact if | blockers / note |', '|---|---|---|---|---|---|---|');
 for (const e of st) {
   const x = e.tolerance;

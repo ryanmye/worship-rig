@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/ep-rhodes/C5.mp3",
+ "sourceSha256": "07f7c81aad1bc4f3cc1e01f78a0928674c09cd40f5d9147414c4aaf416e6f9bb",
+ "sourceBytes": 17442,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "5736fac16bad1fa4d4d4d9252fe94dcf289fb2945ed43349b48f030837d3f0c0",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

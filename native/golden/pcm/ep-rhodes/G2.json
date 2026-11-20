@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/ep-rhodes/G2.mp3",
+ "sourceSha256": "e320b5041ac062c341ccef3d5528aed1534f4335d4b7f89235419a4e16d29f2c",
+ "sourceBytes": 17946,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "7d05d3e71a9a0f229c8d408cdb2c61aeb8f043870a93844bc4b35098b8770fe3",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

@@ -23,7 +23,8 @@ const flat = (o, pre = '', out = {}) => {
   }
   return out;
 };
-const same = (a, b) => (typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) < 1e-9 : a === b || String(a) === String(b));
+const same = (a, b) => (typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) < 1e-9 : a === b
+  || String(a) === String(b));
 const rowKey = (p) => p.replace(/^slots\.\d+\./, 'slots.<i>.');
 
 /** Concrete paths a fixture sets away from the default (or automates) -> Set of row keys. */
@@ -45,10 +46,12 @@ export function rowsTouched(fx, rows) {
   for (const [unit, vals] of Object.entries(patch.fx || {})) {
     for (const [k, v] of Object.entries(vals)) test(unit === 'master' ? `master.${k}` : `fx.${unit}.${k}`, v, false);
   }
-  for (const [k, v] of Object.entries(fx.setup?.drone || {})) if (k !== 'key' && k !== 'mode') test(`drone.${k}`, v, false);
+  for (const [k, v] of Object.entries(fx.setup?.drone || {})) if (k !== 'key' && k !== 'mode') test(`drone.${k}`, v,
+    false);
   for (const e of fx.events || []) if (e.type === 'param') test(e.path, e.value, true);
   const stimulusFx = fx.kind === 'drone-freeze';
-  if (stimulusFx) for (const k of Object.keys(fx.setup.params || {})) test(`drone.${k}`, (fx.setup.params || {})[k], false);
+  if (stimulusFx) for (const k of Object.keys(fx.setup.params || {})) test(`drone.${k}`, (fx.setup.params || {})[k],
+    false);
   return hit;
 }
 
@@ -58,7 +61,8 @@ const bendModes = (fx) => {
   const m = new Set();
   const p = fx.setup?.patch?.bend?.mode;
   if (has(fx, 'bend')) m.add(p || 'pitch');
-  for (const e of fx.events || []) if (e.type === 'routing' && e.routing?.bend?.mode && has(fx, 'bend')) m.add(e.routing.bend.mode);
+  for (const e of fx.events || []) if (e.type === 'routing' && e.routing?.bend?.mode && has(fx,
+    'bend')) m.add(e.routing.bend.mode);
   return m;
 };
 const anySlot = (fx, f) => slotsOf(fx).some(f);
@@ -82,7 +86,8 @@ export const OPS = [
   ['setTranspose', (f) => !!f.setup?.transpose || has(f, 'transpose')],
   ['setKeyContext', (f) => !!f.setup?.keyContext || has(f, 'keyContext')],
   ['setRouting (mid-render)', (f) => has(f, 'routing')],
-  ['patch routing: modWheel / expression / volume targets', (f) => !!(f.setup?.patch?.modWheel || f.setup?.patch?.expression)],
+  ['patch routing: modWheel / expression / volume targets', (f) => !!(f.setup?.patch?.modWheel
+    || f.setup?.patch?.expression)],
   ['setMono (mono output)', (f) => has(f, 'monoOut')],
   ['eqAudition', (f) => has(f, 'eqAudition')],
   ['prepare + commit at t 0', (f) => f.kind !== 'drone-freeze'],
@@ -94,10 +99,12 @@ export const OPS = [
   ['click start / stop / count-in', (f) => has(f, 'clickStart')],
   ['setTempo / sync delay', (f) => !!f.setup?.tempo],
   ['setTimeSig', (f) => !!f.setup?.timeSig],
-  ['slot mono lowest / highest', (f) => anySlot(f, (s) => s.mono && s.mono !== 'off') || has(f, 'param', (e) => /\.mono$/.test(e.path))],
+  ['slot mono lowest / highest', (f) => anySlot(f, (s) => s.mono && s.mono !== 'off') || has(f, 'param',
+    (e) => /\.mono$/.test(e.path))],
   ['slot octave / transpose', (f) => anySlot(f, (s) => s.octave || s.transpose)],
   ['slot lowNote / highNote range', (f) => anySlot(f, (s) => s.lowNote > 0 || s.highNote < 127)],
-  ['slot sustain off', (f) => anySlot(f, (s) => s.sustain === false) || has(f, 'param', (e) => /\.sustain$/.test(e.path))],
+  ['slot sustain off', (f) => anySlot(f, (s) => s.sustain === false) || has(f, 'param',
+    (e) => /\.sustain$/.test(e.path))],
   ['slot release / pedalHold', (f) => anySlot(f, (s) => s.release != null || s.pedalHold != null)],
   ['slot pan', (f) => anySlot(f, (s) => s.pan) || has(f, 'param', (e) => /\.pan$/.test(e.path))],
   ['slot width', (f) => anySlot(f, (s) => s.width != null) || has(f, 'param', (e) => /\.width$/.test(e.path))],
@@ -105,12 +112,14 @@ export const OPS = [
   ['slot EQ type change / band toggle mid-render', (f) => has(f, 'param', (e) => /eq\.b\d\.(type|on)$/.test(e.path))],
   ['slot EQ legacy rows (low/high/lowHz/mid*/highHz/cutHz/hiCutHz)', (f) => anySlot(f, (s) => s.eq &&
     Object.keys(s.eq).some((k) => !/^b\d$/.test(k)))],
-  ['velocityCurve soft / hard / fixed / custom', (f) => anySlot(f, (s) => s.velocityCurve && s.velocityCurve !== 'normal')],
+  ['velocityCurve soft / hard / fixed / custom', (f) => anySlot(f,
+    (s) => s.velocityCurve && s.velocityCurve !== 'normal')],
   ['per-note touch override', (f) => has(f, 'noteOn', (e) => e.touch)],
   ['instrument: synth', (f) => anySlot(f, (s) => s.instrument.type === 'synth')],
   ['instrument: organ', (f) => anySlot(f, (s) => s.instrument.type === 'organ')],
   ['instrument: sampler', (f) => anySlot(f, (s) => s.instrument.type === 'sampler')],
-  ['sampler velocity layers (3-layer sets)', (f) => anySlot(f, (s) => ['salamander-piano', 'upright-piano'].includes(s.instrument.id))
+  ['sampler velocity layers (3-layer sets)', (f) => anySlot(f, (s) => ['salamander-piano',
+    'upright-piano'].includes(s.instrument.id))
     && has(f, 'noteOn')],
   ['multi-slot patch (2+ slots)', (f) => slotsOf(f).length > 1],
   ['inject test point', (f) => !!f.setup?.inject],
@@ -119,20 +128,27 @@ export const OPS = [
 
 /** What no offline fixture can reach, and where it is covered instead. */
 export const UNCOVERED = [
-  ['audio sleep / wake (sleep(), wake(), queued notes during sleep)', 'AudioEngine.sleep() returns false for an OfflineAudioContext ' +
+  ['audio sleep / wake (sleep(), wake(), queued notes during sleep)',
+    'AudioEngine.sleep() returns false for an OfflineAudioContext ' +
     '(audio.js:1510): there is nothing to render. Behaviour is specified by contract quirks; test in T08 conformance ' +
     '(core state machine, silence while asleep, queued calls replayed on wake, ramp lengths 0.15 / 0.06 / 0.005 s).'],
-  ['setLowResource, drone freeze / thaw swap', 'the frozen loop is realtime only (drone.js:646 `!this.offline`): an offline ' +
-    'engine plays the live drone, so a fixture could not show the swap. The loop itself (renderDroneLoop) is rendered by ' +
+  ['setLowResource, drone freeze / thaw swap',
+    'the frozen loop is realtime only (drone.js:646 `!this.offline`): an offline ' +
+    'engine plays the live drone, so a fixture could not show the swap. The loop itself (renderDroneLoop) is ' +
+      'rendered by ' +
     'drone-freeze-*; the swap crossfade, cache trim and pin changes belong to T16 / T08 tests.'],
-  ['drone files mode, chordFollow', 'HTMLMediaElement playback is unavailable offline (drone.js:978); chordFollow needs the files mode.'],
+  ['drone files mode, chordFollow',
+    'HTMLMediaElement playback is unavailable offline (drone.js:978); chordFollow needs the files mode.'],
   ['click aux outputs 3-4, click record, MIDI clock out, MIDI direct route, recorder tap', 'not on the main output; ' +
     'conformance tests from engine-api.json (T07 / T08 / T13).'],
   ['meters, RTA, slotLevel, analysers', 'not audio: tick payloads, tested against the contract schema.'],
   ['cache / preload / estimate / pins / eviction', 'memory behaviour, not audio.'],
-  ['audio restart, sink change, device rate change (48 kHz)', 'the oracle renders 44.1 kHz offline only; T08 rate-change test (finding 16).'],
-  ['reverb build deferral (reverb.stage defer while playing), idle slot polling', 'realtime scheduling (audio.js:605, 790).'],
-  ['instrument params (`slots.<i>.params.*`, dynamic rows)', 'only cutoff / resonance (auto-filter-cutoff) are driven; the per-instrument ' +
+  ['audio restart, sink change, device rate change (48 kHz)',
+    'the oracle renders 44.1 kHz offline only; T08 rate-change test (finding 16).'],
+  ['reverb build deferral (reverb.stage defer while playing), idle slot polling',
+    'realtime scheduling (audio.js:605, 790).'],
+  ['instrument params (`slots.<i>.params.*`, dynamic rows)',
+    'only cutoff / resonance (auto-filter-cutoff) are driven; the per-instrument ' +
     'param tables belong to the instrument tasks (T11, T12) with fixtures of their own.'],
 ];
 
@@ -157,7 +173,8 @@ export function analyse(manifest, contract) {
 const short = (ids, n = 4) => (ids.length <= n ? ids.join(', ') : `${ids.slice(0, n).join(', ')}, +${ids.length - n}`);
 
 function sampleSets(manifest) {
-  const sets = JSON.parse(fs.readFileSync(path.join(ROOT, 'app/samples/manifest.json'), 'utf8')).instruments.map((i) => i.id);
+  const sets = JSON.parse(fs.readFileSync(path.join(ROOT, 'app/samples/manifest.json'),
+    'utf8')).instruments.map((i) => i.id);
   const used = new Map(sets.map((s) => [s, { before: [], after: [] }]));
   for (const f of manifest.fixtures.map((e) => e.fixture)) {
     if (!has(f, 'noteOn')) continue;
@@ -185,24 +202,29 @@ export function render(manifest, contract) {
   const L = [];
   L.push('# Golden coverage matrix', '',
     '<!-- generated by `node tools/golden/coverage.mjs`; do not edit by hand -->', '',
-    `${manifest.fixtures.length} fixtures (${manifest.fixtures.filter((e) => e.addedBy).length} added by the T17 wave). ` +
+    `${manifest.fixtures.length} fixtures (${manifest.fixtures.filter((e) => e.addedBy).length} added by the T17 ` +
+      `wave). ` +
     '"Before" = the fixtures that existed before T17.', '',
     '| measure | before | after |', '|---|---|---|',
-    `| contract PARAMS rows set to a non-default value or automated | ${nb} / ${rows.length} | **${na} / ${rows.length}** |`,
+    `| contract PARAMS rows set to a non-default value or automated | ${nb} / ${rows.length} | **${na} / ` +
+      `${rows.length}** |`,
     `| rows never touched | ${rows.length - nb} | ${rows.length - na} |`,
     `| bundled sample sets rendered | ${sb} / ${sets.size} | **${sa} / ${sets.size}** |`,
     `| operations / behaviours exercised (of ${ops.length} listed below) | ${ob} | ${oa} |`,
     `| fixtures | ${manifest.fixtures.filter((e) => !e.addedBy).length} | ${manifest.fixtures.length} |`, '');
   L.push('## Operations and behaviours', '', '| operation | fixtures | count (before) | ids |', '|---|---|---|---|');
-  for (const o of ops) L.push(`| ${o.name} | ${o.ids.length} | ${o.before.length} | ${o.ids.length ? short(o.ids) : '**none**'} |`);
+  for (const o of ops) L.push(`| ${o.name} | ${o.ids.length} | ${o.before.length} | ` +
+    `${o.ids.length ? short(o.ids) : '**none**'} |`);
   L.push('', '## Sample sets', '', '| set | before | ids |', '|---|---|---|');
   for (const [s, u] of sets) L.push(`| ${s} | ${u.before.length} | ${u.after.length ? short(u.after) : '**none**'} |`);
   L.push('', '## PARAMS rows (contract `params.rows`)', '',
-    'Count = fixtures that set the row away from its default or automate it; "new" = how many of them are T17 fixtures.', '',
+    'Count = fixtures that set the row away from its default or automate it; "new" = how many of them are T17 ' +
+      'fixtures.', '',
     '| row | count | new | fixtures |', '|---|---|---|---|');
   for (const r of rows) {
     const b = byRow.get(r.path);
-    L.push(`| \`${r.path}\` | ${b.after.length} | ${b.after.length - b.before.length} | ${b.after.length ? short(b.after, 5) : '**none**'} |`);
+    L.push(`| \`${r.path}\` | ${b.after.length} | ${b.after.length - b.before.length} | ` +
+      `${b.after.length ? short(b.after, 5) : '**none**'} |`);
   }
   const never = rows.filter((r) => !byRow.get(r.path).after.length);
   L.push('', '## What remains uncovered, and why', '');
@@ -210,26 +232,31 @@ export function render(manifest, contract) {
   if (never.length) {
     const groups = {};
     for (const r of never) (groups[r.path.replace(/\.(b\d)\..*/, '.$1.*')] ||= []).push(r.path);
-    for (const [g, ps] of Object.entries(groups)) L.push(`- \`${g}\`${ps.length > 1 && g === ps[0] ? '' : ps.length > 1 ? ` (${ps.length})` : ''}`);
-    L.push('', 'These are rows whose processing is already covered through a sibling row (a band whose type / Hz / dB / Q ' +
-      'were exercised on another band index runs the same code) or instrument-specific; the review asks for a row-level ' +
-      'proof only where the code path differs. Each unlisted-by-reason row is a candidate for a native unit test generated ' +
-      'from `engine-api.json` (T13).', '');
+    for (const [g,
+      ps] of Object.entries(groups)) L.push(`- ` +
+        `\`${g}\`${ps.length > 1 && g === ps[0] ? '' : ps.length > 1 ? ` (${ps.length})` : ''}`);
+    L.push('',
+      'Rows listed here share their code path with a covered sibling (another band index, same type / Hz / dB / Q ' +
+      'handling) or belong to an instrument; they are candidates for unit tests generated from `engine-api.json` ' +
+        '(T13).', '');
   }
   L.push('### Not renderable offline / not audio', '', '| area | reason and where it is tested instead |', '|---|---|');
   for (const [a, why] of UNCOVERED) L.push(`| ${a} | ${why} |`);
   L.push('', '### Open points in the oracle itself', '',
     '- Fixtures with `setup.live` call those event types at their time through the engine timer (first 128-frame ' +
     'boundary >= t); everything else is issued up front. See README, "Order of operations".',
-    '- Chromium sums node inputs in hash-set order; fixtures that run audio-rate FM are statistical for that reason alone.', '');
-  return { text: `${L.join('\n')}\n`, nb, na, sb, sa, ob, oa, total: rows.length, ops: ops.length, never: never.length, sets: sets.size };
+    '- Chromium sums node inputs in hash-set order; fixtures that run audio-rate FM are statistical for that reason ' +
+      'alone.', '');
+  return { text: `${L.join('\n')}\n`, nb, na, sb, sa, ob, oa, total: rows.length, ops: ops.length,
+    never: never.length, sets: sets.size };
 }
 
 function main() {
   const manifest = JSON.parse(fs.readFileSync(path.join(GOLD, 'manifest.json'), 'utf8'));
   const contract = JSON.parse(fs.readFileSync(path.join(ROOT, 'native/contract/engine-api.json'), 'utf8'));
   const r = render(manifest, contract);
-  console.log(`PARAMS rows touched: ${r.nb}/${r.total} -> ${r.na}/${r.total}; sample sets ${r.sb}/${r.sets} -> ${r.sa}/${r.sets}; ` +
+  console.log(`PARAMS rows touched: ${r.nb}/${r.total} -> ${r.na}/${r.total}; sample sets ${r.sb}/${r.sets} -> ` +
+    `${r.sa}/${r.sets}; ` +
     `ops ${r.ob}/${r.ops} -> ${r.oa}/${r.ops}; never-touched rows ${r.never}`);
   if (!process.argv.includes('--print')) {
     fs.writeFileSync(path.join(GOLD, 'COVERAGE.md'), r.text);

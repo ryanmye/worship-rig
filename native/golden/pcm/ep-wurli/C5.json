@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/ep-wurli/C5.mp3",
+ "sourceSha256": "e9914944347c128da69d16a59061e28ea3c2e52c1f200d710aa64b323f7ebd42",
+ "sourceBytes": 32151,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "e3aed7b3906cf6df1879e3658fa5c378330390afbc1386b611566573fc92ccbe",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

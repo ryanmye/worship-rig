@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/salamander-piano/v9/Eb5.mp3",
+ "sourceSha256": "589befccad132f080b62f5d56d5b29a53f841e65e10bf24a2fc91467f0e60be9",
+ "sourceBytes": 219885,
+ "rate": 48000,
+ "channels": 2,
+ "frames": 524344,
+ "sha256": "6b4360066b530bb2460401ca0e8a84ed0a4faafd00f8f90edd26f18de4132cb7",
+ "bytes": 4194810,
+ "engineRate": 44100,
+ "resampledByEngine": true,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

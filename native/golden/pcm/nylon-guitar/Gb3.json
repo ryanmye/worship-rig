@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/nylon-guitar/Gb3.mp3",
+ "sourceSha256": "8390eac53ed8047c966aa18d3cb1f77079a3a62d6ee21d98c403e4b6b7db6ac2",
+ "sourceBytes": 15570,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "3cca08663cd6661c364b551e70e84d29e59d543d3d6499923652a27dc719f516",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

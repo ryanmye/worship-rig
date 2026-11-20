@@ -78,20 +78,9 @@ TEST_SUITE("param") {
     CHECK(p.valueAt(5.0) == doctest::Approx(std::exp(-1.5)));
   }
 
-  TEST_CASE("a-rate block equals per-sample valueAt; k-rate equals the first sample") {
-    const double sr = 48000;
-    Param p(0.0);
-    p.setValueAtTime(0.0, 0.0);
-    p.linearRampToValueAtTime(1.0, 0.01);
-    p.setTargetAtTime(0.25, 0.01, 0.002);
-    Param ref = p;
-    float buf[128];
-    for (std::int64_t f0 : {0, 128, 256, 512}) {
-      p.processARate(f0, sr, buf, 128);
-      for (int i = 0; i < 128; ++i) CHECK(buf[i] == doctest::Approx(ref.valueAt((f0 + i) / sr)).epsilon(1e-6));
-      CHECK(p.processKRate(f0, sr) == doctest::Approx(ref.valueAt(f0 / sr)).epsilon(1e-6));
-    }
-  }
+  // "a-rate block equals per-sample valueAt" removed by the wave-0b verifier: it skipped quantum 384, which is
+  // invalid for Chromium's stateful setTarget recursion. Replaced by time_param_test.cpp "rendered a-rate values
+  // follow the spec formula" (every quantum) and time_automation_test.cpp (k-rate vs Chromium dumps).
 
   TEST_CASE("capacity: old events are folded, the timeline stays correct and nothing is dropped") {
     Param p(0.0);

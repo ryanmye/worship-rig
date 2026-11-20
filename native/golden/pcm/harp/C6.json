@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/harp/C6.mp3",
+ "sourceSha256": "cfb9061c5cf2ae1147a17d6b836cecd231ed38c33d3bcc75559960e6f8c2e632",
+ "sourceBytes": 15572,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "1639291a2d064846fb65592ab7c65020bb6b70edeb9af8c8d11866efa15268a8",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

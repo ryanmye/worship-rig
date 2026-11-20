@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/dulcimer/G3.mp3",
+ "sourceSha256": "acff595ac70ce3e76b38bba82188ec2bbc85f6f8490d21f918d6741df8df0d56",
+ "sourceBytes": 23509,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "41d85b6beb0b984f429a0f4ca808f6080340d97a12c201107a2879c173db11b8",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

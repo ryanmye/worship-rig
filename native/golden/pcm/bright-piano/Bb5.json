@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/bright-piano/Bb5.mp3",
+ "sourceSha256": "e9330ebe82a12f220d68fd337a3b922194e0682cf67ac44c91c8ee4a21de586d",
+ "sourceBytes": 31769,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "aa8596fcb42b11bfe5ca5f6471d88f870d7f05ac46d160b2784ba105d63f94ee",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/music-box/A5.mp3",
+ "sourceSha256": "51c2395f555194579dbad007b9cebce1cf7c13ddb2f766576fd6c23f1bd7fcb9",
+ "sourceBytes": 18202,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "e31d026e8ee360bcdb6c20f292db7a266e4ddeaccf3ca14ec55d5a96d7bf9fd6",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/glockenspiel/C6.mp3",
+ "sourceSha256": "cea4299ac4b3ebd0ef27d3eb0ad4303e4d192206d1b99c278f1fbad615a75bcc",
+ "sourceBytes": 17084,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "f56f883c348b1544de9950722e32a9e38b18eb788ede058224c90ea4e61f949b",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

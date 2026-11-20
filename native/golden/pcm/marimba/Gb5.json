@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/marimba/Gb5.mp3",
+ "sourceSha256": "d279c6eaee09521c8e15e935cf53b7bede33ed6d0168846c28d480971f39a2f7",
+ "sourceBytes": 14219,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "36bfb63365999f8705fcf9fd9ea4b0db6e77a929b94bddbda8624280044051dd",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

@@ -6,7 +6,8 @@
 //   node tools/golden/render.mjs --smoke         the smoke subset only
 //   node tools/golden/render.mjs --repeat 1      skip the second render (no repeatability numbers)
 //   node tools/golden/render.mjs --no-spread     skip the seed-spread renders of PRNG-dependent fixtures
-//   node tools/golden/render.mjs --golden-dir <dir>   write manifest / WAVs / pcm there instead of native/golden (dry runs)
+// node tools/golden/render.mjs --golden-dir <dir>   write manifest / WAVs / pcm there instead of native/golden (dry
+// runs)
 //   node tools/golden/render.mjs --allow-chromium-change   merge or re-render although this Chromium differs from the
 //                                                manifest's pin (a FULL run then re-pins; --only keeps the old pin and
 //                                                stamps the entries, which compare.mjs then refuses)
@@ -125,7 +126,8 @@ async function chromiumPin(browser, exe) {
   const userAgent = await page.evaluate(() => navigator.userAgent);
   await page.close();
   const hash = crypto.createHash('sha256');
-  await new Promise((res, rej) => fs.createReadStream(exe).on('data', (c) => hash.update(c)).on('end', res).on('error', rej));
+  await new Promise((res, rej) => fs.createReadStream(exe).on('data', (c) => hash.update(c)).on('end',
+    res).on('error', rej));
   const m = /(chromium(?:_headless_shell)?-\d+)/.exec(exe);
   return { version: browser.version(), product: /headless/.test(exe) ? 'chrome-headless-shell' : 'chromium',
     playwrightBuild: m ? m[1] : path.basename(path.dirname(exe)), userAgent, executableSha256: hash.digest('hex'),
@@ -298,12 +300,14 @@ function spreadTolerance(spread) {
 }
 
 /**
- * Honest tier record per fixture (T17 task 3; SETUP_REVIEW 7, 33): the tolerance actually in force, why it is that wide,
+ * Honest tier record per fixture (T17 task 3; SETUP_REVIEW 7, 33): the tolerance actually in force,
+   why it is that wide,
  * and for a statistical fixture what makes it exact, so the promotion pass (promote.mjs) is mechanical.
  */
 function tierOf(e) {
   const t = e.tolerance;
-  if (e.classification === 'exact') return { class: 'exact', maxAbsDiff: t.maxAbsDiff, bandsDb: t.bandsDb, envCorr: t.envCorr };
+  if (e.classification === 'exact') return { class: 'exact', maxAbsDiff: t.maxAbsDiff, bandsDb: t.bandsDb,
+    envCorr: t.envCorr };
   const streams = [...new Set((e.randomness?.streams || []).map((x) => x.name.split('|')[0]))];
   const blockers = [];
   if (e.repeatMaxAbsDiff > EXACT_REPEAT) {
@@ -316,10 +320,12 @@ function tierOf(e) {
     class: 'statistical',
     bandsDb: t.bandsDb, envCorr: t.envCorr, envLagMs: t.envLagMs, rmsDb: t.rmsDb,
     why: seed ? `1.25 x the spread of the same fixture under engine seeds ${seed.seeds.join(',')} ` +
-      `(bands ${seed.bandsDb} dB, env corr ${seed.envCorr}, rms ${seed.rmsDb} dB)${t.envCorr === -1 ? '; envelope check off (seeds decorrelate it)' : ''}`
+      `(bands ${seed.bandsDb} dB, env corr ${seed.envCorr}, rms ${seed.rmsDb} ` +
+        `dB)${t.envCorr === -1 ? '; envelope check off (seeds decorrelate it)' : ''}`
       : 'default statistical tolerance (not PRNG-dependent; Chromium run-to-run jitter above 1e-5)',
     weakWithoutPort: widened,
-    exactIf: e.exactIfPrngPorted ? { port: 'mulberry32 + FNV-1a seeding + draw order of the listed streams', streams } : null,
+    exactIf: e.exactIfPrngPorted ? { port: 'mulberry32 + FNV-1a seeding + draw order of the listed streams',
+      streams } : null,
     blockers,
     promote: e.exactIfPrngPorted ? 'node tools/golden/promote.mjs <native render dir> --apply' : null,
   };
@@ -331,7 +337,8 @@ function tierSummary(fixtures) {
     const v = st.map((e) => e.tolerance[k]).filter((x) => x !== -1);
     return { min: Math.min(...v), max: Math.max(...v) };
   };
-  const worst = (k, f) => st.reduce((m, e) => (f(e.tolerance[k], m.v) ? { id: e.id, v: e.tolerance[k] } : m), { id: null, v: k === 'bandsDb' ? 0 : 9 });
+  const worst = (k, f) => st.reduce((m, e) => (f(e.tolerance[k], m.v) ? { id: e.id, v: e.tolerance[k] } : m),
+    { id: null, v: k === 'bandsDb' ? 0 : 9 });
   return {
     exact: fixtures.length - st.length, statistical: st.length,
     exactIfPrngPorted: st.filter((e) => e.exactIfPrngPorted).length,
@@ -353,7 +360,8 @@ const round = (x, d = 6) => (Number.isFinite(x) ? Number(x.toPrecision(d)) : x);
 async function main() {
   // --extra <file.json>: ad-hoc fixtures (an array) for --out renders while developing a fixture; never in the manifest
   const extra = OUT_DIR && arg('--extra', null) ? JSON.parse(fs.readFileSync(arg('--extra'), 'utf8')) : [];
-  let list = [...FIXTURES, ...extra.map((f) => ({ seed: 1, ...f }))].filter((f) => (!SMOKE_ONLY || f.smoke) && (!ONLY || ONLY.some((o) => f.id.includes(o))));
+  let list = [...FIXTURES, ...extra.map((f) => ({ seed: 1, ...f }))].filter((f) => (!SMOKE_ONLY || f.smoke
+    ) && (!ONLY || ONLY.some((o) => f.id.includes(o))));
   if (!list.length) throw new Error('no fixtures selected');
   if (SEED !== null) list = list.map((f) => ({ ...f, seed: Number(SEED) >>> 0 }));
   if (OUT_DIR) return renderTo(list, path.resolve(OUT_DIR));
@@ -384,7 +392,8 @@ async function main() {
   const allowChange = argv.includes('--allow-chromium-change');
   if (prevPin && !samePin(prevPin, pin) && !allowChange) {
     console.error(`REFUSED: the manifest's goldens come from Chromium ${prevPin.version}, this browser is ` +
-      `${pin.version} (${exe}). Chromium-implemented nodes (compressor, convolver, wavetables, decode) can move between ` +
+      `${pin.version} (${exe}). Chromium-implemented nodes (compressor, convolver, wavetables, decode) can move ` +
+        `between ` +
       `versions: compare with compare.mjs first, then pass --allow-chromium-change${fullRun ? ' to re-pin' : ''}.`);
     await browser.close();
     server.close();
@@ -505,8 +514,10 @@ async function main() {
     for (const e of entries.values()) {
       for (const f of e.pcm?.files || []) Object.assign(f, recs.get(f.url), { committed: sel.committed.has(f.url) });
     }
-    pcmInfo = { dir: 'pcm', format: 'WAV 32-bit float at the file rate + JSON sidecar {source, frames, rate, channels, sha256}',
-      files: recs.size, totalBytes: sel.totalBytes, committedBytes: sel.committedBytes, commitCapBytes: COMMIT_CAP_BYTES,
+    pcmInfo = { dir: 'pcm',
+      format: 'WAV 32-bit float at the file rate + JSON sidecar {source, frames, rate, channels, sha256}',
+      files: recs.size, totalBytes: sel.totalBytes, committedBytes: sel.committedBytes,
+        commitCapBytes: COMMIT_CAP_BYTES,
       regenerate: 'node tools/golden/pcm.mjs', seconds: Math.round((Date.now() - tp) / 100) / 10 };
   }
   await browser.close();

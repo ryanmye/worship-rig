@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/kalimba/D5.mp3",
+ "sourceSha256": "6d4e9eb05f711546710fd8c928a2ab99ed950aed94d57c718445f27b041fee74",
+ "sourceBytes": 15155,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "6020cbdd8838ef84ff5c0227cd0e418346d2c63c207be650e18a3bcb2f00e8e0",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

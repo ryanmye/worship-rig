@@ -125,7 +125,8 @@ function selfTest(manifest, manifestDir) {
 export function checkPin(manifest, pin, argv, opt) {
   const out = [];
   const odd = manifest.fixtures.filter((e) => e.chromium && e.chromium !== pin).map((e) => e.id);
-  if (odd.length) out.push(`${odd.length} golden entries (${odd.slice(0, 3).join(', ')}${odd.length > 3 ? ', ...' : ''}) were ` +
+  if (odd.length) out.push(`${odd.length} golden entries ` +
+    `(${odd.slice(0, 3).join(', ')}${odd.length > 3 ? ', ...' : ''}) were ` +
     `rendered by another Chromium than the pin ${pin}`);
   const pos = argv.filter((a, i) => !a.startsWith('--') && !(i > 0 && argv[i - 1] === '--manifest'));
   const dirs = [];
@@ -138,7 +139,8 @@ export function checkPin(manifest, pin, argv, opt) {
     const info = JSON.parse(fs.readFileSync(f, 'utf8'));
     if (info.chromium && info.chromium !== pin) out.push(`${d} was rendered by Chromium ${info.chromium}`);
   }
-  if (opt('--expect-chromium') && opt('--expect-chromium') !== pin) out.push(`--expect-chromium ${opt('--expect-chromium')} != pin`);
+  if (opt('--expect-chromium'
+    ) && opt('--expect-chromium') !== pin) out.push(`--expect-chromium ${opt('--expect-chromium')} != pin`);
   return out;
 }
 
@@ -157,7 +159,8 @@ function main() {
   const mismatches = checkPin(manifest, pin, argv, opt);
   if (mismatches.length) {
     if (!argv.includes('--allow-chromium-mismatch')) {
-      console.error(`REFUSED: ${mismatches.join('; ')}.\nGoldens are pinned to Chromium ${pin}; another build can move ` +
+      console.error(`REFUSED: ${mismatches.join('; ')}.\nGoldens are pinned to Chromium ${pin}; another build can ` +
+        `move ` +
         'Chromium-implemented nodes (compressor, convolver, wavetables, decoder). Re-render the goldens with ' +
         '`render.mjs --allow-chromium-change` or pass --allow-chromium-mismatch to compare anyway.');
       process.exit(2);

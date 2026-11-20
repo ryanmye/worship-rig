@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/electric-grand/Bb3.mp3",
+ "sourceSha256": "89d73b70699e58c47faa20acc270628582dec8a8d2a73ad4dec8aae7e289ce19",
+ "sourceBytes": 27942,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "108a532644e718f30f2f689c715cf3d8aaf71f64dead4554277ac3eb0d71ae86",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

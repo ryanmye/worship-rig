@@ -72,6 +72,11 @@ targets:
         LSApplicationCategoryType: public.app-category.music
         NSHighResolutionCapable: true
         NSMicrophoneUsageDescription: Worship Rig does not record from a microphone.
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Worship Rig library backup
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.json]
     entitlements:
       path: Config/WorshipRig-macOS.entitlements
       properties: {}
@@ -94,7 +99,7 @@ targets:
     dependencies:
       - framework: build/RigCore.xcframework
         embed: false
-      - sdk: CoreAudio.framework
+      # no CoreAudio.framework here: it is macOS-only (SETUP_REVIEW 31); AudioToolbox pulls in CoreAudioTypes
       - sdk: AudioToolbox.framework
       - sdk: CoreMIDI.framework
       - sdk: AVFoundation.framework
@@ -115,7 +120,18 @@ targets:
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        UIBackgroundModes: [audio] # keep playing when the app is not frontmost
+        # Background audio: keep sounding when another app or the Home screen is in front, and when the screen locks.
+        # Needs AVAudioSession category .playback (RigAudio) and a running output unit; no entitlement file entry.
+        # With a free Apple ID this is accepted for a personal install; App Store review would want a justification.
+        UIBackgroundModes: [audio]
+        # Files app: Documents/ (Recordings, Backups) shows under On My iPad > Worship Rig
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Worship Rig library backup
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.json]
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         ITSAppUsesNonExemptEncryption: false

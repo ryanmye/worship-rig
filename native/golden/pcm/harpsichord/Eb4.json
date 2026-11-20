@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/harpsichord/Eb4.mp3",
+ "sourceSha256": "ce262cf67581f41cbc3a38aa88c217e5914f00d480261dfe516110209aa1929d",
+ "sourceBytes": 25941,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "6f06f0c9add5dcd06412e82484a0701633934b51acf0a2ce1b26612d8a87e153",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

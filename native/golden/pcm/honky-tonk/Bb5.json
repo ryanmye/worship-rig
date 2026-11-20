@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/honky-tonk/Bb5.mp3",
+ "sourceSha256": "89995f625df2cc7e951ce9133dde2e2f2c54b38761981084937b4063f3aecb65",
+ "sourceBytes": 23812,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "5844101b71791c80cc9ca9050007f3e313399ec97aa08d9129dddbab5adf4605",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/celesta/D3.mp3",
+ "sourceSha256": "9964abd83134aea51197f14e1be7f51a88e5a89f9f7f7227aab8031cdd0239a4",
+ "sourceBytes": 22087,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "821199d0ba70c73bd428e244b9e528cdd453077c817d97859b18ec90244afa01",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

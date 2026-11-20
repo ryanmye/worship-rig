@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/steel-guitar/B5.mp3",
+ "sourceSha256": "ef065817705599d129328daae0e6161420abdb1e6b4a0d92736bf8c1eb0197b3",
+ "sourceBytes": 18275,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "87785673ba7e17c5be425ca015e2c8bec9b7db9efdac3d172ed5ff74e7235a03",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

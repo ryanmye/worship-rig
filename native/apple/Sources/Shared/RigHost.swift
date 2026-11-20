@@ -4,8 +4,8 @@
 //   core event callback (control thread) --> pending batch --main--> window.__rigNative.receive([...])
 //   core --rig_host vtable--> RigAudio (AUHAL/RemoteIO, C render callback) and RigMIDI (CoreMIDI)
 //
-// What this deliberately does not do yet (native/docs/SHELL.md, "later tasks"): menu bar, hotkeys, window.rig,
-// importer, backups, pads, recordings folder UI, update check.
+// What this deliberately does not do yet (native/docs/SHELL.md, "later tasks"): menu bar, hotkeys, the rest of
+// window.rig (only backupNow/latestBackup/onMenu exist: RigLibrary), importer, pads, update check.
 import Foundation
 import SwiftUI
 import WebKit
@@ -15,8 +15,11 @@ final class RigHost: NSObject, ObservableObject {
     let webView: WKWebView
     private let scheme: RigSchemeHandler
     private let bridge: RigBridgeHandler
+    private let navigation: RigNavigationDelegate
+    let library: RigLibrary
     private(set) var audio: RigAudio!
     private(set) var midi: RigMIDI!
+    private var lifecycle: RigLifecycle?
 
     // C strings handed to rig_config / rig_host must outlive the engine.
     private var keep: [UnsafeMutablePointer<CChar>] = []
@@ -33,11 +36,16 @@ final class RigHost: NSObject, ObservableObject {
         let conf = WKWebViewConfiguration()
         let schemeHandler = RigSchemeHandler(root: RigPaths.appDir, docs: RigPaths.docsDir)
         let bridgeHandler = RigBridgeHandler()
+        let navDelegate = RigNavigationDelegate()
+        let libraryHandler = RigLibrary()
         scheme = schemeHandler
         bridge = bridgeHandler
+        navigation = navDelegate
+        library = libraryHandler
         conf.setURLSchemeHandler(schemeHandler, forURLScheme: RigSchemeHandler.scheme)
         let ucc = WKUserContentController()
         ucc.add(WeakScriptHandler(bridgeHandler), name: "rig")
+        ucc.addScriptMessageHandler(WeakReplyHandler(libraryHandler), contentWorld: .page, name: "rigShell")
         ucc.addUserScript(WKUserScript(source: RigHost.documentStartScript, injectionTime: .atDocumentStart,
                                        forMainFrameOnly: true))
         conf.userContentController = ucc
@@ -53,14 +61,37 @@ final class RigHost: NSObject, ObservableObject {
         wv.scrollView.pinchGestureRecognizer?.isEnabled = false // WEBKIT_AUDIT 6: inputs < 16 px zoom the page
         wv.scrollView.bounces = false
         #endif
+        wv.navigationDelegate = navDelegate
         webView = wv
         super.init()
         bridge.host = self
+        navigation.host = self
+        library.host = self
+        RigPaths.ensureDirectories()
         audio = RigAudio(host: self)
         midi = RigMIDI(host: self)
         createEngine()
+        lifecycle = RigLifecycle(host: self)
+        loadUI()
+    }
+
+    private func loadUI() {
         let url = URL(string: "\(RigSchemeHandler.scheme)://\(RigSchemeHandler.host)/index.html")!
         webView.load(URLRequest(url: url))
+    }
+
+    /// The web content process died (SETUP_REVIEW 27a). The core keeps running; the dead page can no longer release
+    /// its notes or stop its recording, so do that here, drop events addressed to the dead page, and load the UI again.
+    func webContentDidTerminate(loop: Bool) {
+        pumpLock.lock()
+        pending.removeAll()
+        pumpLock.unlock()
+        post(Data(#"[{"v":1,"op":"play","e":"panic"},{"v":1,"op":"rec","action":"stop"}]"#.utf8))
+        if loop {
+            webView.loadHTMLString(RigNavigationDelegate.crashLoopHTML, baseURL: nil)
+        } else {
+            loadUI() // reload() is unreliable here: webView.url may be nil after a termination
+        }
     }
 
     deinit {
@@ -75,8 +106,9 @@ final class RigHost: NSObject, ObservableObject {
     static let documentStartScript = """
     (function () {
       if (!window.__rigNative) window.__rigNative = { queue: [], receive: function (b) { this.queue.push(b); } };
-      window.__rigShell = { native: true, platform: '\(RigHost.platformName)', shellVersion: 1 };
+      window.__rigShell = { native: true, platform: '\(RigHost.platformName)', shellVersion: 2 };
     })();
+    \(RigLibrary.polyfill(platform: RigHost.platformName))
     """
 
     static var platformName: String {

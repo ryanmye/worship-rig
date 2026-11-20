@@ -30,7 +30,8 @@ const only = opt('--only')?.split(',');
 let promoted = 0;
 let tried = 0;
 for (const e of manifest.fixtures) {
-  if (e.classification !== 'statistical' || !e.exactIfPrngPorted || (only && !only.some((o) => e.id.includes(o)))) continue;
+  if (e.classification !== 'statistical' || !e.exactIfPrngPorted
+    || (only && !only.some((o) => e.id.includes(o)))) continue;
   if (e.tier?.blockers?.length) continue;
   const f = path.join(dir, `${e.id}.wav`);
   const ref = path.join(mdir, e.file);
@@ -42,7 +43,8 @@ for (const e of manifest.fixtures) {
     e.tolerance = { ...manifest.tolerances.exact, fallback: e.tolerance };
     e.classification = 'exact';
     delete e.prngPortRecommended;
-    e.tier = { class: 'exact', promotedFrom: 'statistical', maxAbsDiff: e.tolerance.maxAbsDiff, bandsDb: e.tolerance.bandsDb,
+    e.tier = { class: 'exact', promotedFrom: 'statistical', maxAbsDiff: e.tolerance.maxAbsDiff,
+      bandsDb: e.tolerance.bandsDb,
       envCorr: e.tolerance.envCorr };
     promoted++;
   }

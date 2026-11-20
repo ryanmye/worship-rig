@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/ep-wurli/Bb5.mp3",
+ "sourceSha256": "eb2df1ba29b70707ce552345a4e0a7cc4f7d72c84c53c7c5952ba292404984cb",
+ "sourceBytes": 31131,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "f195a06d184294abb8b1c205e56fbbef8dd1210b9a07fe86174858b39524f708",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

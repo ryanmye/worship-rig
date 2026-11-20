@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/vibes/E3.mp3",
+ "sourceSha256": "da9378804012ccd83714914358bc08180b58c5ad410049d0c1ef1c211ffc15bd",
+ "sourceBytes": 18991,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "2fec40bcb1b20ca1926ce9d66363935e3e3478efa3662c80fd305a9e57a83bad",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

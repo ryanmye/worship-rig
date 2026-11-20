@@ -40,7 +40,8 @@ function samplesUsed(engine) {
     if (!STARTED.has(e.buffer)) continue;
     const b = e.buffer;
     const raw = key.split('#max=')[0];
-    const url = /^https?:/.test(raw) ? new URL(raw).pathname : raw; // origin (a random port) is not part of the identity
+    // origin (a random port) is not part of the identity
+    const url = /^https?:/.test(raw) ? new URL(raw).pathname : raw;
     out.push({ key, url, frames: b.length, rate: b.sampleRate, channels: b.numberOfChannels,
       dualMono: !!b._dualMono, onsetTrimSec: b._onsetTrim, capped: !!b._capped, monoFix: b._monoFix || null });
   }

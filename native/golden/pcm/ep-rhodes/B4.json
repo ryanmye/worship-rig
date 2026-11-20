@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/ep-rhodes/B4.mp3",
+ "sourceSha256": "bb9e9f950cbf9146424c9b8fd11f65bb734a98271644a546dda7ad1128319566",
+ "sourceBytes": 17208,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "b77d57fe4d75450c7ad8d989f90450f96455bec6aabb4ce7c8b83a6a08223b72",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

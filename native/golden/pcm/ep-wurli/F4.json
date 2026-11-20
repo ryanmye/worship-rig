@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/ep-wurli/F4.mp3",
+ "sourceSha256": "3b39a4cd0bd15aa15feff40bcc09fae2fb575f46d912a408e9d17f41948ba919",
+ "sourceBytes": 32152,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "404dd818cd797a40a27080c1670c664d57c0b72406214af02a99863ccdbcf127",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

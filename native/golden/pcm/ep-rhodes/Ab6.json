@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/ep-rhodes/Ab6.mp3",
+ "sourceSha256": "b2e5e91e047e23edde61b9c2b6e1bb0c2a0e6de94eaac148425c9501283b4b5b",
+ "sourceBytes": 14661,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "51a624c1ad9d3f022be68a1e987bd19c3d181d0650b9caecb436b12ebd5c4543",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

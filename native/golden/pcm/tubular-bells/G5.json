@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/tubular-bells/G5.mp3",
+ "sourceSha256": "beaff9ecf63905374e6407e2c62cae16921072454cff2de1db1d0b2992153923",
+ "sourceBytes": 19478,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "2793500a703e06fb99a4f5a029cd3d102ae642d00f673b99427ae3f4b3ebc541",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

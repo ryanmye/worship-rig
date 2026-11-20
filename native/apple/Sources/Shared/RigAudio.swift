@@ -11,6 +11,9 @@ final class RigAudio {
     private unowned let host: RigHost
     private var unit: OpaquePointer? // rig_apple_audio*
     private var lastRequest: (deviceId: String?, latency: Double, channels: UInt32)?
+    /// True between rig_host.audio_start and rig_host.audio_stop: the core wants sound, so an interruption or a
+    /// media-services reset is followed by a reopen. Only touched on `queue`.
+    private var wantsRunning = false
     private let queue = DispatchQueue(label: "rig.audio.control")
     #if os(macOS)
     private var listener: AudioObjectPropertyListenerBlock?
@@ -27,15 +30,19 @@ final class RigAudio {
     }
 
     /// rig_host.audio_start: open (or reopen) the device and report with rig_host_audio_started / _state.
+    /// `async`: a device switch (AUHAL open, session activation) takes hundreds of ms and must not stall the core's
+    /// control thread (SETUP_REVIEW 25); completion is reported by rig_host_audio_started / _state from `queue`.
     func start(deviceId: String?, latency: Double, channels: UInt32) {
-        queue.sync {
-            lastRequest = (deviceId, latency, channels)
-            reopen()
+        queue.async {
+            self.wantsRunning = true
+            self.lastRequest = (deviceId, latency, channels)
+            _ = self.reopen()
         }
     }
 
     func stop() {
         queue.sync {
+            wantsRunning = false
             if let u = unit {
                 rig_apple_audio_close(u)
                 unit = nil
@@ -44,8 +51,10 @@ final class RigAudio {
         if let e = host.engine { rig_host_audio_state(e, RIG_DEVICE_SUSPENDED, nil) }
     }
 
-    private func reopen() {
-        guard let e = host.engine, let req = lastRequest else { return }
+    /// Reopens the output with the last request. `quiet`: do not report a failure to the core (a retry follows).
+    @discardableResult
+    private func reopen(quiet: Bool = false) -> Bool {
+        guard let e = host.engine, let req = lastRequest else { return false }
         if let u = unit { rig_apple_audio_close(u); unit = nil }
         var r = rig_apple_audio_request()
         r.latency_sec = req.latency
@@ -61,12 +70,16 @@ final class RigAudio {
         #else
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playback, mode: .default, options: [])
+            // playback: sound with the silent switch on, continues in the background (UIBackgroundModes audio),
+            // not mixable by default so a live rig owns the output; flip RigAudio.mixWithOthers to play over a
+            // backing track from another app
+            try session.setCategory(.playback, mode: .default,
+                                    options: RigAudio.mixWithOthers ? [.mixWithOthers] : [])
             try session.setPreferredIOBufferDuration(128.0 / max(session.sampleRate, 44100))
             try session.setActive(true)
         } catch {
-            rig_host_audio_state(e, RIG_DEVICE_CLOSED, "AVAudioSession: \(error.localizedDescription)")
-            return
+            if !quiet { rig_host_audio_state(e, RIG_DEVICE_CLOSED, "AVAudioSession: \(error.localizedDescription)") }
+            return false
         }
         r.session_sample_rate = session.sampleRate
         r.session_latency_sec = session.outputLatency + session.ioBufferDuration
@@ -74,8 +87,10 @@ final class RigAudio {
         let opened = rig_apple_audio_open(e, &r, &info, &status)
         #endif
         guard let opened else {
-            rig_host_audio_state(e, RIG_DEVICE_CLOSED, "could not open the output device (OSStatus \(status))")
-            return
+            if !quiet {
+                rig_host_audio_state(e, RIG_DEVICE_CLOSED, "could not open the output device (OSStatus \(status))")
+            }
+            return false
         }
         unit = opened
         let uid = withUnsafePointer(to: &info.device_uid) {
@@ -97,6 +112,7 @@ final class RigAudio {
                 rig_host_audio_started(e, &di)
             }
         }
+        return true
     }
 
     static func listDevices(into buf: UnsafeMutablePointer<CChar>, cap: Int) -> Int {
@@ -124,26 +140,68 @@ final class RigAudio {
         }
     }
     #else
+    /// Set to true to let other apps' audio keep playing next to the rig (AVAudioSessionCategoryOptionMixWithOthers).
+    static let mixWithOthers = false
+
+    private func closeUnit() { // on `queue`
+        if let u = unit {
+            rig_apple_audio_close(u)
+            unit = nil
+        }
+    }
+
+    /// After an interruption, a media-services reset or a return to the foreground: reopen if the core wants sound
+    /// and the unit is gone. Retries a few times: activating the session right after an interruption often fails
+    /// (AVAudioSessionErrorCodeCannotInterruptOthers / insufficient priority) for a fraction of a second.
+    func resumeIfNeeded(attempt: Int = 0) {
+        queue.async {
+            guard self.wantsRunning, self.unit == nil else { return }
+            if self.reopen(quiet: attempt < 3) { return }
+            if attempt < 3 {
+                self.queue.asyncAfter(deadline: .now() + 0.5) { self.resumeIfNeeded(attempt: attempt + 1) }
+            }
+        }
+    }
+
     private func installSessionObservers() {
         let nc = NotificationCenter.default
-        nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
+        let session = AVAudioSession.sharedInstance()
+        // phone call, Siri, another app took the session: the OS has stopped our unit already
+        nc.addObserver(forName: AVAudioSession.interruptionNotification, object: session,
+                       queue: .main) { [weak self] n in
             guard let self, let e = self.host.engine,
                   let raw = n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
                   let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
             if type == .began {
+                self.queue.async { self.closeUnit() }
                 rig_host_audio_state(e, RIG_DEVICE_INTERRUPTED, nil)
             } else {
-                self.queue.async { if self.unit != nil || self.lastRequest != nil { self.reopen() } }
+                // .shouldResume is only a hint; a rig should come back whenever it can, so try regardless
+                self.resumeIfNeeded()
             }
         }
-        nc.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] n in
+        // headphones / USB / Bluetooth / AirPlay changes. categoryChange is excluded: our own setCategory posts it.
+        nc.addObserver(forName: AVAudioSession.routeChangeNotification, object: session,
+                       queue: .main) { [weak self] n in
             guard let self, let e = self.host.engine else { return }
             rig_host_devices_changed(e)
             let why = (n.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt)
                 .flatMap { AVAudioSession.RouteChangeReason(rawValue: $0) }
-            if why == .oldDeviceUnavailable || why == .newDeviceAvailable {
-                self.queue.async { if self.unit != nil { self.reopen() } }
+            switch why {
+            case .newDeviceAvailable?, .oldDeviceUnavailable?, .override?:
+                // the new route may have another sample rate / latency: reopen so the core re-reads rig_device_info.
+                // Unplugging headphones keeps playing on the built-in speaker (open question: pause instead?)
+                self.queue.async { if self.wantsRunning, self.unit != nil { self.reopen() } }
+            default:
+                break
             }
+        }
+        // mediaserverd restarted: every AVAudioSession object and our audio unit are invalid
+        nc.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: session,
+                       queue: .main) { [weak self] _ in
+            guard let self else { return }
+            self.queue.async { self.closeUnit() }
+            self.resumeIfNeeded()
         }
     }
     #endif

@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/clean-guitar/Ab5.mp3",
+ "sourceSha256": "363f39878af043e1098e89fd3ccd7c71fed7710434cf5f4c0c76d36ccb0a6f59",
+ "sourceBytes": 32520,
+ "rate": 44100,
+ "channels": 2,
+ "frames": 137984,
+ "sha256": "58258de3c221fb9e0b768dd9ce7718794866406007cdec61e205fe7ba3d56590",
+ "bytes": 1103930,
+ "engineRate": 44100,
+ "resampledByEngine": false,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}
