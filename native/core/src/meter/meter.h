@@ -37,7 +37,8 @@ struct MeterShared {
   float takePeak(int ch);
 };
 
-/** The `meter` sink (UnitSlot::Meter, io.in = out). ~0.3 us per quantum with the RTA ring on (rig_bench). */
+/** The `meter` sink (UnitSlot::Meter, io.in = out). Measured 0.6 us per quantum, 1.4 us with the RTA ring on
+ *  (unit.meter, g++ Release on the loaded 2-CPU box: < 0.06 % of a 48 kHz quantum). */
 class MeterUnit final : public Unit {
  public:
   explicit MeterUnit(MeterShared *s) : s_(s) {}

@@ -162,7 +162,7 @@ function applyEvent(engine, ev, ctx) {
     case 'monoOut':
       return engine.setMono(!!ev.on);
     case 'eqAudition':
-      return engine.eqAudition(ev.slot, ev.mode, when);
+      return engine.eqAudition(ev.slot, ev.mode, { when });
     case 'commit': {
       // a song switch: patch `ev.next` of setup.next was prepare()d before the render started
       const tok = ctx.tokens[ev.next];

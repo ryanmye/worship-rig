@@ -33,7 +33,7 @@ struct RecShared {
   std::atomic<std::uint64_t> quanta{0};
 };
 
-/** The `rec` sink: ~0.2 us per quantum while armed (two 128-frame copies), a load and a counter when not. */
+/** The `rec` sink: measured 0.5 us per quantum while armed (unit.meter), a load and a counter when not. */
 class RecUnit final : public Unit {
  public:
   explicit RecUnit(RecShared *s) : s_(s) {}

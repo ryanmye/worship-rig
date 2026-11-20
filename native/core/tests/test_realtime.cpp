@@ -95,7 +95,11 @@ TEST_SUITE("realtime") {
     m.struct_size = sizeof m;
     CHECK(rig_get_meters(rt.e, &m) == RIG_OK);
     CHECK(m.frames >= static_cast<unsigned long long>(3 * 48000));
+#if defined(__SANITIZE_THREAD__)
+    MESSAGE("xruns under TSan (not a timing build): " << m.xruns);  // instrumented FX render runs below real time
+#else
     CHECK(m.xruns <= 3);  // wall-clock overrun count on a shared 2-CPU box: preemption can trip it once or twice
+#endif
   }
 
   TEST_CASE("rig_render before audio start writes silence and does not advance time") {
