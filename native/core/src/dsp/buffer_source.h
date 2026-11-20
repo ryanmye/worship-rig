@@ -45,6 +45,6 @@ class BufferSource {
   void updateLoopPoints();
   void clampGrain();
   float sampleAt(unsigned ch, std::uint64_t i) const;
-
+};
 
 }  // namespace rig::wa

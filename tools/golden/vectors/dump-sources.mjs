@@ -54,7 +54,7 @@ const richWave = { real: richReal, imag: richImag, dn: false };
 const CASES = [];
 const add = (name, spec) => CASES.push({ name, spec });
 
-// ---- oscillator: built-in types at 5 frequencies (one below 20 Hz) -------------------------------------------------
+// ---- oscillator: built-in types at 5 frequencies (one below 20 Hz) ----
 const FREQS = [7.3, 110, 440, 3951.07, 12345];
 for (const type of ['sine', 'square', 'sawtooth', 'triangle']) {
   for (const f of FREQS) add(`osc-${type}-${f}`, { k: 'osc', sr: 44100, frames: 4096, type, freq: f, start: 0 });
@@ -62,24 +62,29 @@ for (const type of ['sine', 'square', 'sawtooth', 'triangle']) {
 for (const type of ['square', 'sawtooth']) {
   for (const f of FREQS) add(`osc-${type}-48k-${f}`, { k: 'osc', sr: 48000, frames: 4096, type, freq: f, start: 0 });
 }
-for (const f of [2.5, 440, 9000]) add(`osc-sawtooth-96k-${f}`, { k: 'osc', sr: 96000, frames: 4096, type: 'sawtooth', freq: f, start: 0 });
-for (const f of [13, 1000]) add(`osc-triangle-22k-${f}`, { k: 'osc', sr: 22050, frames: 4096, type: 'triangle', freq: f, start: 0 });
-for (const f of [0.1, 0.5, 1.7, 3.2, 12]) add(`osc-sine-lowfreq-${f}`, { k: 'osc', sr: 44100, frames: 4096, type: 'sine', freq: f, start: 0 });
+for (const f of [2.5, 440, 9000]) add(`osc-sawtooth-96k-${f}`, { k: 'osc', sr: 96000, frames: 4096,
+  type: 'sawtooth', freq: f, start: 0 });
+for (const f of [13, 1000]) add(`osc-triangle-22k-${f}`, { k: 'osc', sr: 22050, frames: 4096,
+  type: 'triangle', freq: f, start: 0 });
+for (const f of [0.1, 0.5, 1.7, 3.2, 12]) add(`osc-sine-lowfreq-${f}`, { k: 'osc', sr: 44100, frames: 4096,
+  type: 'sine', freq: f, start: 0 });
 
-// ---- oscillator: custom PeriodicWaves ---------------------------------------------------------------------------------
+// ---- oscillator: custom PeriodicWaves ----
 for (const f of [0.4, 7.3, 110, 440, 5000]) {
-  add(`osc-chorus-wave-${f}`, { k: 'osc', sr: 44100, frames: 4096, type: 'custom', wave: chorusWave, freq: f, start: 0 });
+  add(`osc-chorus-wave-${f}`, { k: 'osc', sr: 44100, frames: 4096,
+  type: 'custom', wave: chorusWave, freq: f, start: 0 });
 }
 for (const f of [0.35, 5, 130.81, 1046.5, 6000]) {
   add(`osc-organ-wave-${f}`, { k: 'osc', sr: 48000, frames: 4096, type: 'custom', wave: organWave, freq: f, start: 0 });
 }
 for (const f of [3, 82.4, 440, 2093]) {
-  add(`osc-rich-normalized-${f}`, { k: 'osc', sr: 44100, frames: 4096, type: 'custom', wave: richWave, freq: f, start: 0 });
+  add(`osc-rich-normalized-${f}`, { k: 'osc', sr: 44100, frames: 4096,
+  type: 'custom', wave: richWave, freq: f, start: 0 });
 }
 add('osc-cos-wave-5', { k: 'osc', sr: 44100, frames: 4096, type: 'custom', wave: cosWave, freq: 5, start: 0 });
 add('osc-rich-96k-220', { k: 'osc', sr: 96000, frames: 4096, type: 'custom', wave: richWave, freq: 220, start: 0 });
 
-// ---- oscillator: params, scheduling ------------------------------------------------------------------------------------
+// ---- oscillator: params, scheduling ----
 add('osc-detune-700', { k: 'osc', sr: 44100, frames: 4096, type: 'sawtooth', freq: 220, detune: 700, start: 0 });
 add('osc-detune-neg1200', { k: 'osc', sr: 44100, frames: 4096, type: 'square', freq: 880, detune: -1200, start: 0 });
 add('osc-freq-negative', { k: 'osc', sr: 44100, frames: 4096, type: 'sawtooth', freq: -330, start: 0 });
@@ -105,7 +110,8 @@ add('osc-start-subsample-ramp', { k: 'osc', sr: 44100, frames: 4096, type: 'sawt
 add('osc-start-subsample-detune-ramp', { k: 'osc', sr: 44100, frames: 4096, type: 'sine', freq: 300, start: 0.00321,
   dEv: [['set', 0, 0], ['lin', 1200, 0.06]] });
 add('osc-start-stop', { k: 'osc', sr: 44100, frames: 4096, type: 'square', freq: 523.25, start: 0.0101, stop: 0.0502 });
-add('osc-stop-exact-quantum', { k: 'osc', sr: 44100, frames: 4096, type: 'sine', freq: 440, start: 0, stop: 256 / 44100 });
+add('osc-stop-exact-quantum', { k: 'osc', sr: 44100, frames: 4096, type: 'sine', freq: 440, start: 0,
+  stop: 256 / 44100 });
 add('osc-fm', { k: 'osc', sr: 44100, frames: 4096, type: 'sine', freq: 440, start: 0, fm: { f: 110, depth: 200 } });
 add('osc-fm-custom-48k', { k: 'osc', sr: 48000, frames: 4096, type: 'custom', wave: organWave, freq: 220, start: 0.0021,
   fm: { f: 5, depth: 30 } });
@@ -114,7 +120,7 @@ add('osc-long-sine-phase', { k: 'osc', sr: 44100, frames: 220500, type: 'sine', 
 add('osc-long-saw-lowfreq', { k: 'osc', sr: 48000, frames: 480000, type: 'sawtooth', freq: 7.37, start: 0,
   win: [477000, 479048] });
 
-// ---- buffer source -----------------------------------------------------------------------------------------------------
+// ---- buffer source ----
 const B = { bufCh: 1, bufLen: 3000, bufSeed: 1 };
 const S = { bufCh: 2, bufLen: 3000, bufSeed: 5 };
 const bs = (name, extra) => add(name, { k: 'buf', sr: 44100, frames: 4096, rate: 1, detune: 0, ...B, ...extra });
@@ -166,7 +172,7 @@ bs('buf-ended-stop', { start: 0, stop: 0.0301, loop: [0, 0], frames: 8192, track
 bs('buf-ended-exact-boundary', { start: 0, bufLen: 512, frames: 2048, trackEnd: true });
 bs('buf-ended-rate-2', { start: 0, rate: 2, frames: 4096, trackEnd: true });
 
-// ---- constant source -----------------------------------------------------------------------------------------------------
+// ---- constant source ----
 const cs = (name, extra) => add(name, { k: 'cs', sr: 44100, frames: 4096, offset: 1, start: 0, ...extra });
 cs('cs-constant', { offset: 0.5 });
 cs('cs-zero', { offset: 0 });

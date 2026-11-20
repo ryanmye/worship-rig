@@ -203,7 +203,10 @@ void BufferSource::process(std::int64_t frame0, double sampleRate, float *const 
       const int toEnd = static_cast<int>(endU - readIndex);
       const int fThis = std::clamp(toEnd, 0, framesToProcess);
       for (unsigned c = 0; c < nch; ++c)
-        for (int i = 0; i < fThis; ++i) out[c][w + static_cast<std::size_t>(i)] = sampleAt(c, readIndex + static_cast<unsigned>(i));
+        for (int i = 0; i < fThis; ++i) {
+          const auto u = static_cast<unsigned>(i);
+          out[c][w + u] = sampleAt(c, readIndex + u);
+        }
       w += static_cast<std::size_t>(fThis);
       readIndex += static_cast<unsigned>(fThis);
       framesToProcess -= fThis;
