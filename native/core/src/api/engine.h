@@ -46,6 +46,8 @@ class Engine final : public CommandSink {
   TimeBase timeBase() const override { return graph_.timeBase(); }
   void emit(std::string &&json) override;  // queue one message for the event callback (flushed per turn / offline)
   void at(double t, std::function<void(double)> fn) override;
+  /** INTERFACE-CHANGE(D4): the Model's effective engine-wide voice limit goes straight to the graph (lock-free). */
+  void setVoiceLimit(std::uint32_t total) override { graph_.setVoiceLimit(total); }
 
   /** Current engine rate (the rate of the time grid; changes with the device, contract 6.3). */
   double sampleRate() const { return graph_.timeBase().sampleRate; }

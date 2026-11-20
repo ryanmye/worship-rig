@@ -791,22 +791,31 @@ export function mountSettings(el, ctx) {
     renderLearn();
   }
 
-  colB.append(
-    h('section.st-section', { 'aria-label': 'MIDI' },
+  place('keyboards',
+    h('section.st-section', { 'aria-label': 'MIDI', 'data-section': 'midi' },
       h('h2.st-h2', { text: 'MIDI keyboard' }),
       row('Input', h('div.st-inline', {}, midiSelect, midiStatus)),
-      row('Touch', seg('velocitySens', VEL_OPTS, 'Touch sensitivity').el, 'How hard you have to play for full volume.'),
+      row('Touch', seg('velocitySens', VEL_OPTS, 'Touch sensitivity').el, null),
       velHint,
       keyboards.el,
-      row('Sustain pedal', h('div.st-inline', {}, tog('pedalInvert', 'Reversed').el), 'If notes hold when your foot is off the pedal, turn this on — or let the test below decide.'),
+      row('Sustain pedal', h('div.st-inline', {}, tog('pedalInvert', 'Reversed').el),
+        'On if notes hold with your foot off. The test below can decide.'),
       pedalBox,
-      row('Song buttons', tog('programChange', 'Keyboard picks songs').el, 'Lets the keyboard’s program/patch buttons choose songs: 1 = first song in the setlist, 2 = second, …'),
-      row('Clock out', clockSelect,
-        'While the click runs: MIDI clock, start and stop, so a drum machine or delay pedal follows the tempo.'),
-      h('h3.st-h3', { text: 'MIDI Learn' }),
-      h('p.st-hint', { text: 'Press Learn, then move a knob, fader or pedal, or press a key or pad. A hardware fader takes over once you move it past the current level. The sustain pedal can’t be mapped — it always sustains.' }),
-      h('table.st-learn-table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Control' }), h('th', { text: 'Mapped to' }), h('th', { text: '' }))), learnBody),
     ),
+  );
+  advanced('keyboards',
+    row('Song buttons', tog('programChange', 'Keyboard picks songs').el,
+      'The keyboard’s program buttons choose songs: 1 = the first song in the setlist, 2 = the second, …'),
+  );
+  advanced('sound',
+    row('Clock out', clockSelect, 'MIDI clock while the click runs, so a drum machine or delay pedal follows.'),
+  );
+  const learnSection = h('section.st-section', { 'aria-label': 'MIDI Learn', 'data-section': 'learn' },
+    h('h2.st-h2', { text: 'MIDI Learn' }),
+    h('p.st-hint', { text: 'Press Learn, then move a knob, fader or pedal, or press a key or pad. A fader takes over '
+      + 'once it passes the current level. The sustain pedal always sustains and can’t be mapped.' }),
+    h('table.st-learn-table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Control' }),
+      h('th', { text: 'Mapped to' }), h('th', { text: '' }))), learnBody),
   );
 
   // =============================================================================================================
@@ -1144,7 +1153,6 @@ export function mountSettings(el, ctx) {
     } else {
       rows.push(['Mode', 'Chrome'], ['Local server', location.host]);
     }
-    rows.push(['Library', 'Chrome and the Mac app keep separate libraries — use Export / Import to move songs between them.']);
     aboutBox.replaceChildren(...rows.flatMap(([k, v]) => [h('dt', { text: k }), h('dd', { text: v })]));
     backupBox.replaceChildren();
     if (isElectron) {
@@ -1159,17 +1167,18 @@ export function mountSettings(el, ctx) {
     } else backupBox.append(h('span.st-hint', { text: 'Automatic backups (last 10) run in the Mac app. In Chrome, use Export library.' }));
   }
 
-  colA.append(
-    h('section.st-section', { 'aria-label': 'My Pads' },
+  place('samples',
+    h('section.st-section', { 'aria-label': 'My Pads', 'data-section': 'pads' },
       h('h2.st-h2', { text: 'My Pads folder' }),
       padInfo,
       padButtons,
       padStatus,
-      h('p.st-hint', { text: 'Used when a song’s drone is set to My Pads. Put the key in each file name, e.g. “Pad - Eb.mp3” or “Warm Pad F#m.wav”.' }),
+      h('p.st-hint', { text: 'For songs whose drone is set to My Pads. Put the key in each file name, e.g. '
+        + '“Pad - Eb.mp3” or “Warm Pad F#m.wav”.' }),
     ),
-    h('section.st-section.st-samples', { 'aria-label': 'My Samples' },
+    h('section.st-section.st-samples', { 'aria-label': 'My Samples', 'data-section': 'samples' },
       h('h2.st-h2', { text: 'My Samples' }),
-      h('p.st-hint', { text: 'Extra sampled instruments on this Mac (for example GarageBand’s pianos). They appear in the instrument picker under “My Samples”.' }),
+      h('p.st-hint', { text: 'Extra sampled instruments on this Mac, such as GarageBand’s pianos.' }),
       samplesNote,
       samplesBtns,
       samplesStatus,
@@ -1191,35 +1200,50 @@ export function mountSettings(el, ctx) {
         docLink,
       ),
     ),
-    h('section.st-section', { 'aria-label': 'Perform view' },
-      h('h2.st-h2', { text: 'Perform view' }),
-      row('Chips per sound', performChips.el, 'Under each Perform fader. 2 = Space and Echo only, for a longer fader.'),
-    ),
-    h('section.st-section', { 'aria-label': 'Computer keyboard' },
+  );
+  const perfSection = h('section.st-section', { 'aria-label': 'Perform view', 'data-section': 'perform' },
+    h('h2.st-h2', { text: 'Perform view' }),
+    row('Chips per sound', performChips.el, 'Under each fader. 2 = Space and Echo only, for a longer fader.'),
+  );
+  place('look', perfSection);
+  place('keyboards',
+    h('section.st-section', { 'aria-label': 'Computer keyboard', 'data-section': 'keyboard' },
       h('h2.st-h2', { text: 'Computer keyboard' }),
       // onboarding O5: the whole map (controller KEY_MAP runs to K O L P ;), and where the notes start
-      row('Play notes', tog('computerKeyboard', 'Enabled').el, 'A W S E D F T G Y H U J K O L P ; = notes from middle C (A = C), '
-        + 'Z/X = octave, Space = sustain, ↑/↓ = mod wheel, ←/→ = previous / next song.'),
+      row('Play notes', tog('computerKeyboard', 'Enabled').el, null),
+      h('p.st-hint', { text: 'A W S E D F T G Y H U J K O L P ; = notes from middle C (A = C), Z/X = octave, '
+        + 'Space = sustain, ↑/↓ = mod wheel, ←/→ = previous / next song.' }),
     ),
-    h('section.st-section', { 'aria-label': 'Library' },
+    learnSection,
+  );
+  place('library',
+    h('section.st-section', { 'aria-label': 'Library', 'data-section': 'backups' },
       h('h2.st-h2', { text: 'Library & backups' }),
       h('div.st-inline', {},
         btn('Export library', () => download(`Worship Rig library ${new Date().toISOString().slice(0, 10)}.json`, store.exportJSON()), { class: 'st-export' }),
         btn('Import…', () => importInput.click(), { class: 'st-import' }),
         importInput,
       ),
+      h('p.st-hint', { text: 'Chrome and the Mac app keep separate libraries: Export in one, Import in the other.' }),
       storageNote,
       backupBox,
       restoreBox,
     ),
-    h('details.st-section.st-diag', { 'aria-label': 'Diagnostics' }, h('summary.st-h2', { text: 'Diagnostics' }), stats),
-    h('section.st-section', { 'aria-label': 'About' }, h('h2.st-h2', { text: 'About' }), aboutBox),
   );
+  const aboutSection = h('section.st-section', { 'aria-label': 'About', 'data-section': 'about' },
+    h('h2.st-h2', { text: 'About' }), aboutBox);
+  const diag = h('details.st-section.st-diag', { 'aria-label': 'Diagnostics', 'data-section': 'diagnostics' },
+    h('summary.st-h2', { text: 'Diagnostics' }), stats);
+  place('about', aboutSection, diag);
 
-  // v11-electron (Mac app only): the "update available" line under About, global shortcuts under Menu bar
+  // v11-electron (Mac app only): the "update available" line in About (its on/off switch in Mac), global shortcuts in
+  // Mac › Menu bar
   const macDeps = { store, rig, h, btn, row, toggle: C.toggle };
   const updates = rig && typeof rig.setUpdateCheck === 'function' ? mountUpdates(macDeps) : null;
-  if (updates) colA.querySelector('.st-section[aria-label="About"]').append(updates.el);
+  if (updates) {
+    updates.el.dataset.section = 'updates';
+    aboutSection.append(updates.el);
+  }
   const hotkeys = rig && typeof rig.setHotkeys === 'function' ? mountHotkeys(macDeps) : null;
   for (const p of [updates, hotkeys]) if (p) cleanups.push(() => p.destroy());
 
@@ -1354,28 +1378,38 @@ export function mountSettings(el, ctx) {
   const mbOpenMini = isElectron ? null : btn('Open mini panel', () => {
     window.open('mini.html', 'worship-rig-mini', 'popup,width=320,height=440');
   }, { class: 'st-mb-open-mini', 'data-testid': 'setting-mb-open-mini' });
-  colB.append(
-    h('section.st-section.st-menubar', { 'aria-label': 'Menu bar', 'data-testid': 'settings-menubar' },
-      h('h2.st-h2', { text: 'Menu bar' }),
-      row('Menu-bar mode', mbMode.el, isElectron
-        ? 'Closing the window keeps the sound running; switch modes from the menu-bar icon. Quit from its menu.'
-        : 'Used by the Mac app. In Chrome, keep this tab open and use the mini panel.'),
-      // onboarding O9: "Modes" defined where it first appears
-      row('Menu-bar songs', h('div.st-inline', {}, mbSetSelect),
-        'The songs (“modes”) the menu-bar icon lets you switch between, up to 6.'),
-      mbTrayHidden,
-      mbModes,
-      row('Low-resource', mbLow.el, 'Only the current song stays loaded and the meters stop. Sound is unchanged. '
-        + 'In menu-bar mode it is on by itself while the window is hidden.'),
-      mbLogin
-        ? row('Open at login', mbLogin.el, 'Start Worship Rig in the menu bar when you log in.')
-        : h('p.st-hint.st-mb-login-hint', { text: 'Open at login is available in the Mac app.' }),
-      mbOpenMini ? row('Mini panel', mbOpenMini, 'Mode buttons, master, drone and panic in a 320×440 window.') : null,
-      hotkeys ? hotkeys.el : null,
+  // 2.0 restructure: Settings › Mac in the Mac app; Chrome has no Mac category, so its Menu bar section (mini panel,
+  // menu-bar songs, low-resource) closes the Look category instead
+  const macCat = panels.has('mac') ? 'mac' : 'look';
+  place(macCat,
+    h('section.st-section.st-menubar', { 'aria-label': 'Menu bar', 'data-section': 'menubar',
+      'data-testid': 'settings-menubar' },
+    h('h2.st-h2', { text: 'Menu bar' }),
+    row('Menu-bar mode', mbMode.el, isElectron
+      ? 'Closing the window keeps the sound running; switch modes from the menu-bar icon. Quit from its menu.'
+      : 'Used by the Mac app. In Chrome, keep this tab open and use the mini panel.'),
+    // onboarding O9: "Modes" defined where it first appears
+    row('Menu-bar songs', h('div.st-inline', {}, mbSetSelect),
+      'The songs (“modes”) the menu-bar icon switches between, up to 6.'),
+    mbTrayHidden,
+    mbModes,
+    row('Low-resource', mbLow.el, 'Only the current song stays loaded and the meters stop; the sound is the same. '
+      + 'On by itself while the window is hidden in menu-bar mode.'),
+    mbLogin
+      ? row('Open at login', mbLogin.el, 'Start in the menu bar when you log in.')
+      : h('p.st-hint.st-mb-login-hint', { text: 'Open at login is available in the Mac app.' }),
+    mbOpenMini ? row('Mini panel', mbOpenMini, 'Mode buttons, master, drone and panic in a small window.') : null,
+    hotkeys ? hotkeys.el : null,
     ),
   );
+  if (updates) {
+    if (macCat === 'mac') {
+      place('mac', h('section.st-section', { 'aria-label': 'Updates', 'data-section': 'updates-check' },
+        h('h2.st-h2', { text: 'Updates' }), updates.toggleRow));
+    } else updates.el.prepend(updates.toggleRow); // a window.rig without isElectron: keep the switch by its line
+  }
   // onboarding O9: the live resource line is a diagnostic, not a setting
-  (colA.querySelector('.st-diag') || colB).append(mbResource);
+  diag.append(mbResource);
   renderMbSets();
 
   // =============================================================================================================
@@ -1479,18 +1513,99 @@ export function mountSettings(el, ctx) {
     h('div.st-control', {}, themeGrid)),
   lightRow);
   renderLight();
-  colA.insertBefore(appearance, colA.querySelector('.st-section[aria-label="Perform view"]'));
-  /** open({section}): bring that section into view and focus its first control (Quick › This Mac › Theme). */
+  panels.get('look').insertBefore(appearance, perfSection);
+
+  // =============================================================================================================
+  // Categories: selection, keyboard, deep links (open({section})), the remembered last category
+  // =============================================================================================================
+  const readLastCat = () => {
+    try {
+      return localStorage.getItem(LAST_CATEGORY_KEY);
+    } catch {
+      return null; // storage blocked: start at Sound
+    }
+  };
+  const writeLastCat = (id) => {
+    try {
+      localStorage.setItem(LAST_CATEGORY_KEY, id);
+    } catch {
+      /* storage blocked: the choice lasts until the page reloads */
+    }
+  };
+  let current = null;
+  /**
+   * Show one category. `remember`: a viewer's own pick (tab click / arrows), kept for the next open; deep links don't
+   * overwrite it. `focus`: move focus to the tab (keyboard navigation).
+   */
+  function showCategory(id, { remember = false, focus = false } = {}) {
+    const cat = tabs.has(id) ? id : cats[0].id;
+    if (cat !== current) {
+      current = cat;
+      for (const [k, t] of tabs) {
+        const on = k === cat;
+        t.setAttribute('aria-selected', String(on));
+        t.tabIndex = on ? 0 : -1;
+        t.classList.toggle('on', on);
+        panels.get(k).hidden = !on;
+      }
+      body.scrollTop = 0;
+      dialog.dataset.category = cat;
+      // the strip (narrow layout) scrolls the chosen tab into view; the sidebar always shows them all
+      const t = tabs.get(cat);
+      if (nav.scrollWidth > nav.clientWidth + 1) {
+        const left = t.offsetLeft - nav.offsetLeft;
+        if (left < nav.scrollLeft || left + t.offsetWidth > nav.scrollLeft + nav.clientWidth) {
+          nav.scrollLeft = Math.max(0, left - 16);
+        }
+      }
+    }
+    if (remember) writeLastCat(cat);
+    if (focus) tabs.get(cat).focus();
+    return cat;
+  }
+  listen(nav, 'keydown', (e) => {
+    const ids = [...tabs.keys()];
+    const i = ids.indexOf(e.target?.dataset?.cat);
+    if (i < 0) return;
+    const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+    const to = step ? (i + step + ids.length) % ids.length
+      : e.key === 'Home' ? 0 : e.key === 'End' ? ids.length - 1 : -1;
+    if (to < 0) return;
+    e.preventDefault();
+    e.stopPropagation(); // arrows are the mod wheel and previous / next song on the computer keyboard
+    showCategory(ids[to], { remember: true, focus: true });
+  });
+  /**
+   * open({section}) → the category and the [data-section] it names: a category id, a data-section of the page (the
+   * 1.x names: 'appearance', 'pads', 'backups', 'midi', …) or a SECTION_ALIASES name. Unknown → null.
+   */
+  function resolveSection(name) {
+    if (!name || typeof name !== 'string') return null;
+    if (tabs.has(name)) return { cat: name, sec: null };
+    if (name === 'mac') return { cat: macCat, sec: 'menubar' }; // Chrome: the Menu bar section in Look
+    const key = /^[\w-]+$/.test(name) ? name : '';
+    for (const n of [key, SECTION_ALIASES[key]]) {
+      const sec = n && body.querySelector(`[data-section="${n}"]`);
+      if (sec) return { cat: sec.closest('.st-panel').dataset.cat, sec };
+    }
+    return null;
+  }
+  /** open({section}): show its category, bring the section into view and focus its first control (Quick › Theme). */
   function revealSection(name) {
-    if (!name) return;
-    const sec = dialog.querySelector(`[data-section="${name}"]`);
-    if (!sec) return;
+    const r = resolveSection(name);
+    if (!r) return false;
+    showCategory(r.cat);
+    const sec = r.sec;
+    if (!sec) return true;
+    const adv = sec.closest('details.st-adv');
+    if (adv) adv.open = true;
     setTimeout(() => {
       if (!isOpen) return;
       sec.scrollIntoView({ block: 'start' });
       const f = sec.querySelector('[role=radio][tabindex="0"]') || sec.querySelector('button, select, input');
       f?.focus({ preventScroll: true });
     }, 0);
+    return true;
   }
 
   // ---- status (latency, MIDI)
@@ -1512,6 +1627,7 @@ export function mountSettings(el, ctx) {
               : 'No keyboard connected — plug one in (it connects by itself), or play the computer keys A–;.',
         );
         midiStatus.classList.toggle('warn', !m.connected);
+        renderSound2(st);
       }),
     );
   }
@@ -1531,7 +1647,10 @@ export function mountSettings(el, ctx) {
 
   // ---- open / close
   function open(opts = {}) {
-    if (isOpen) return revealSection(opts && opts.section);
+    if (isOpen) {
+      revealSection(opts && opts.section);
+      return;
+    }
     isOpen = true;
     prevFocus = document.activeElement;
     el.hidden = false;
@@ -1547,11 +1666,12 @@ export function mountSettings(el, ctx) {
     restoreIdle();
     if (updates) updates.refresh();
     if (hotkeys) hotkeys.refresh();
+    renderSound2();
+    if (!revealSection(opts && opts.section)) showCategory(readLastCat());
     markDialog('settings', true);
     statsTimer = setInterval(renderStats, 1000);
     queueMicrotask(() => closeBtn.focus());
     el.dispatchEvent(new CustomEvent('settings-open'));
-    revealSection(opts && opts.section);
   }
   function close() {
     if (!isOpen) return;
@@ -1585,6 +1705,7 @@ export function mountSettings(el, ctx) {
   renderPadInfo();
   populateOutputs(S().outputDeviceId, false);
   populateMidi();
+  showCategory(readLastCat());
 
   return {
     open,
@@ -1613,6 +1734,10 @@ export function mountSettings(el, ctx) {
       el.classList.remove('st-host', 'open');
       delete el.__rigCtx;
     },
-    _debug: { startPedalTest, toggleLearn, renderSamples, components: C.__source },
+    /** The category on show ('sound', 'keyboards', …). */
+    get category() {
+      return current;
+    },
+    _debug: { startPedalTest, toggleLearn, renderSamples, showCategory, resolveSection, components: C.__source },
   };
 }

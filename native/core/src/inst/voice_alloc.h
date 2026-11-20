@@ -48,11 +48,13 @@ inline constexpr double kStealFade = 0.02;         // voice.js STEAL_FADE (s)
 
 // ---- D4: engine-wide voice limit (total live voices across all slots, retiring channels included) ------------------
 // `config {voiceLimit}`: 'auto' | 128 | 256 | 512 | 0 (off). 'auto' = a per-profile number sized so a held-pedal worst
-// case (every voice held, the most expensive synth.js voice) renders in <= ~60 % of the 128-frame quantum:
-//   auto = floor16((0.60 * 2667 us - fixed16) / perVoice)
-// with fixed16 = 16 synth slots sounding nothing and perVoice = the costliest voice per quantum. PROVISIONAL: measured
-// on the 2-vCPU Linux box (ARCHITECTURE 7.1 "D4"); the iPad number assumes the oldest supported iPad core is 2x slower
-// than this box. Re-measure on the Mac and the iPad (Mac list) and replace both.
+// case (every voice held, the costliest voice) renders in <= ~60 % of the 128-frame quantum (2667 us at 48 kHz):
+//   auto = (0.60 * 2667 us - fixed16) / perVoice, rounded to a multiple of 16
+// fixed16 = 16 synth slots committed, nothing sounding; perVoice = the costliest voice per quantum (warm-pad).
+// Measured by unit.voice-limit-cpu (g++ Release, 2-vCPU Linux box, 3 runs): fixed16 212-221 us, warm-pad 9.0 / 9.4 /
+// 11.1 us per voice -> fit 154 / 147 / 125 -> desktop 128 (53 % at the median cost, 61 % at the worst run).
+// iPad: the same fit with an assumed 2x slower core, (1600 - 2 x 218) / (2 x 9.4) = 62 -> 64.
+// PROVISIONAL until the Mac and the oldest supported iPad are measured (Mac list; ARCHITECTURE 7.1 "D4").
 inline constexpr unsigned kAutoVoiceLimitDesktop = 128;
 inline constexpr unsigned kAutoVoiceLimitIpad = 64;
 /** The manual choices of Settings > Sound > Total voice limit (0 = Off). */

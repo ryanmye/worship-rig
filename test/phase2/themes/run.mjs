@@ -396,7 +396,8 @@ try {
     await T('Settings › Appearance: pickable themes only, current checked, click + arrows write settings.theme', async () => {
       const mark = errors.length;
       await storeTheme('studio');
-      await ev(() => window.__rig.ctx.openSettings());
+      // 2.0 Settings restructure: themes live in the Look category (one category at a time)
+      await ev(() => window.__rig.ctx.openSettings({ section: 'look' }));
       await page.waitForSelector('[data-testid="setting-theme"]', { state: 'visible' });
       const cards = await ev(() => [...document.querySelectorAll('[data-testid="setting-theme"] [role=radio]')]
         .map((c) => ({ id: c.dataset.themeId, checked: c.getAttribute('aria-checked'), tab: c.tabIndex,

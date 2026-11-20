@@ -8,6 +8,7 @@
 
 #include "bridge/json_out.h"
 #include "graph/builtin_units.h"
+#include "inst/voice_alloc.h"
 #include "mix/master_chain.h"
 #include "mix/slot_channel.h"
 #include "params/params.h"
@@ -181,6 +182,24 @@ bool Model::setPolyphony(unsigned cap) {  // INTERFACE-CHANGE(T00c) D1
   c.aux = cap;
   send(c);
   return true;
+}
+
+bool Model::setVoiceLimit(int limit) {  // INTERFACE-CHANGE(D4)
+  if (limit != kVoiceLimitAuto && limit != 0 && limit != 128 && limit != 256 && limit != 512) return false;
+  voiceLimit_ = limit;
+  sink_.setVoiceLimit(voiceLimitEffective());
+  return true;
+}
+
+std::uint32_t Model::voiceLimitEffective() const {  // INTERFACE-CHANGE(D4)
+  if (voiceLimit_ != kVoiceLimitAuto) return static_cast<std::uint32_t>(voiceLimit_);
+  return inst::autoVoiceLimit(env_.config && env_.config->profile == RIG_PROFILE_IPAD);
+}
+
+void Model::voiceLimitJson(JsonOut &j) const {  // INTERFACE-CHANGE(D4)
+  if (voiceLimit_ == kVoiceLimitAuto) j.kv("voiceLimit", "auto");
+  else j.kv("voiceLimit", voiceLimit_);
+  j.kv("voiceLimitEffective", voiceLimitEffective());
 }
 
 bool Model::sendUnitOp(UnitSlot slot, Command c, double when) {
@@ -666,6 +685,7 @@ std::string Model::stateJson() const {
   j.begin().kvBool("committed", committedAny_);
   // T00c: slotCount (D3; the array keeps at least the web engine's 4 entries) and the polyphony cap (D1)
   j.kv("slotCount", active_.slotCount).kv("polyphony", polyphony_);
+  voiceLimitJson(j);  // INTERFACE-CHANGE(D4)
   j.key("slots").beginArray();
   const int shown = std::clamp(active_.slotCount, kWebSlots, kMaxSlots);
   for (int i = 0; i < shown; ++i) {

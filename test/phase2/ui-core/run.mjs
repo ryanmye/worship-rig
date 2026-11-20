@@ -1960,6 +1960,7 @@ test('H-v2 two chips per strip (Settings › Perform view): Octave / Sustain bec
   await selectIndex(await richSongIndex());
   const throw4 = await page.evaluate(() => document.querySelector('[data-testid=slot-fader-0] input').getBoundingClientRect().height);
   await page.click('#btn-settings');
+  await page.click('[data-testid=settings-tab-look]'); // 2.0 Settings restructure: Perform view is under Look
   await page.click('[data-testid=setting-perform-chips] [data-value="2"]');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => document.getElementById('view-settings').hidden);

@@ -16,12 +16,14 @@
   // Minimal bootstrap (store → engine → midi/recorder → controller → Settings only) mirroring app/js/main.js, without
   // the top bar, Perform or Edit (test/phase2/settings/run.mjs "fixture" mode; hv2-edit-integrate moved it out of the
   // retired ui-edit suite). ?components=ui-core uses ui-core's components; default = the fallback set.
+  // ?engine=bridge-mock: the 2.0 BridgeEngine over MockNative (engine-bridge/boot-mock.js; the suite serves
+  // /__bridge/engine-api.json) instead of the Web Audio engine, for the Settings › Sound 2.0 controls.
   const q = new URLSearchParams(location.search);
   if (q.get('components') !== 'ui-core') globalThis.__RIG_FORCE_FALLBACK_COMPONENTS = true;
   const [{ createStore }, { FACTORY_SONGS }, { AudioEngine }, { MidiInput }, { Recorder }, { createController, engineLatency }] = await Promise.all([
     import('/app/js/store.js'),
     import('/app/js/presets.js'),
-    import('/app/js/engine/index.js'),
+    q.get('engine') === 'bridge-mock' ? import('/app/js/engine-bridge/boot-mock.js') : import('/app/js/engine/index.js'),
     import('/app/js/midi.js'),
     import('/app/js/recorder.js'),
     import('/app/js/controller.js'),
@@ -45,7 +47,7 @@
   const settingsEl = document.getElementById('view-settings');
   const ctx = {
     store, controller, engine, midi, recorder, toast,
-    openSettings: () => settingsView && settingsView.open(),
+    openSettings: (opts) => settingsView && settingsView.open(opts),
     closeSettings: () => settingsView && settingsView.close(),
     setView: () => true,
   };

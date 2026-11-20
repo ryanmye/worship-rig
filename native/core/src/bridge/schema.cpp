@@ -57,7 +57,8 @@ constexpr ArgSpec kClick[] = {{"action", T::Enum, true, "start|stop|config"},
 constexpr ArgSpec kConfig[] = {{"mono", T::Bool, false},        {"lowResource", T::Bool, false},
                                {"eqAudition", T::Object, false}, {"meters", T::Object, false},
                                {"midiClock", T::Object, false},  {"when", T::Number, false},
-                               {"polyphony", T::Int, false, "32|64|128"}};  // T00c D1
+                               {"polyphony", T::Int, false, "32|64|128"},  // T00c D1
+                               {"voiceLimit", T::Enum, false, "auto|128|256|512|0"}};  // D4
 constexpr ArgSpec kGet[] = {{"what", T::Enum, true, "instruments|stats|devices|sampleStatus|state"},
                             {"reload", T::Bool, false},
                             {"patches", T::Array, false}};
@@ -130,8 +131,15 @@ bool typeOk(const ArgSpec &a, yyjson_val *v) {
       return yyjson_is_obj(v);
     case T::Array:
       return yyjson_is_arr(v);
-    case T::Enum:
-      return yyjson_is_str(v) && inList(a.values, yyjson_get_str(v));
+    case T::Enum:  // D4: an integral number also matches a numeric member ("auto|128|...|0")
+      if (yyjson_is_num(v)) {
+        const double d = yyjson_get_num(v);
+        return std::isfinite(d) && d == std::floor(d) && inList(a.values, std::to_string(static_cast<long long>(d)));
+      }
+      if (!yyjson_is_str(v)) return false;
+      if (std::string_view(yyjson_get_str(v)).find_first_not_of("0123456789") == std::string_view::npos)
+        return false;  // "128" as a string is not the number 128
+      return inList(a.values, yyjson_get_str(v));
   }
   return false;
 }

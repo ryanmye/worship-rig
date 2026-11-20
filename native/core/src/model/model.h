@@ -26,6 +26,8 @@ struct yyjson_val;
 
 namespace rig {
 
+class JsonOut;
+
 /** What the Model needs from the engine. Implemented by Engine. */
 class CommandSink {
  public:
@@ -37,6 +39,9 @@ class CommandSink {
   virtual void emit(std::string &&json) = 0;
   /** Run fn on the control thread at engine time t (AudioTimer semantics, quantised; contract 0). */
   virtual void at(double t, std::function<void(double)> fn) = 0;
+  /** INTERFACE-CHANGE(D4): the engine-wide voice limit the graph enforces (total voices, 0 = off). Lock-free; the
+   *  audio thread adopts it at its next quantum. Default no-op (sinks without a graph). */
+  virtual void setVoiceLimit(std::uint32_t total) { (void)total; }
 };
 
 struct SetResult {
@@ -92,6 +97,17 @@ class Model {
   bool setPolyphony(unsigned cap);
   unsigned polyphony() const { return polyphony_; }
   static constexpr unsigned kPolyphonyDefault = 64;
+  // INTERFACE-CHANGE(D4): engine-wide voice limit (`config {voiceLimit}`: 'auto' | 128 | 256 | 512 | 0 = off; default
+  // 'auto' = inst::autoVoiceLimit(profile)). The graph steals the globally oldest released, then held voice once the
+  // voices of every slot and retiring channel exceed it (DECISIONS D4). False (unchanged) for any other value.
+  static constexpr int kVoiceLimitAuto = -1;
+  bool setVoiceLimit(int limit);
+  /** The mode as set: kVoiceLimitAuto, 0 (off) or 128 | 256 | 512. */
+  int voiceLimit() const { return voiceLimit_; }
+  /** The number the graph enforces: the profile's auto value, the manual one, 0 = off. */
+  std::uint32_t voiceLimitEffective() const;
+  /** Writes `"voiceLimit": "auto" | n, "voiceLimitEffective": n` (config reply, get state). */
+  void voiceLimitJson(JsonOut &j) const;
   bool droneSetKey(int pc, bool minor, double fade, double when);  // "drone" service
   void droneConfigure(const yyjson_val *cfg, double when);         // "drone" service
   int droneAttachFiles(const yyjson_val *files);                    // "drone" service; -1 unsupported
@@ -199,6 +215,7 @@ class Model {
   std::uint32_t instSeq_ = 0;
   ModelStats stats_;
   unsigned polyphony_ = kPolyphonyDefault;  // INTERFACE-CHANGE(T00c) D1
+  int voiceLimit_ = kVoiceLimitAuto;        // INTERFACE-CHANGE(D4)
 };
 
 }  // namespace rig

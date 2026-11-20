@@ -35,6 +35,8 @@ struct GraphStats {  // written on the audio thread, read anywhere (relaxed)
   std::atomic<std::uint64_t> quanta{0};
   // INTERFACE-CHANGE(T08): garbage parked because its ring was full / lost because the stash was full too
   std::atomic<std::uint32_t> garbageParked{0}, garbageLost{0};
+  // INTERFACE-CHANGE(D4): voices stolen by the engine-wide voice limit (not by the per-slot caps)
+  std::atomic<std::uint32_t> limitSteals{0};
 };
 
 /** Published once per quantum (seqlock): what the control side needs to map engine time <-> frames. */
@@ -90,6 +92,12 @@ class Graph final : private EventSink {
    *  snapshot (rig_meters.slot_count). Set by the bridge after a commit. [any] */
   void setSlotCount(std::uint32_t n) { slotCount_.store(n, std::memory_order_relaxed); }
   /** Host-side numbers folded into the next meter snapshot (audio thread). */
+  /** INTERFACE-CHANGE(D4): engine-wide voice limit, total voices counted by every instrument (slots + retiring
+   *  channels); 0 = off. Any thread, lock-free; the audio thread adopts it at the start of the next quantum (before
+   *  that quantum's commands), so a change applies live from the next note-on. Default off: the Engine sets the
+   *  Model's effective value (DECISIONS D4 'auto') at creation. */
+  void setVoiceLimit(std::uint32_t total) { voiceLimitReq_.store(total, std::memory_order_relaxed); }
+  std::uint32_t voiceLimitRequested() const { return voiceLimitReq_.load(std::memory_order_relaxed); }
   void setHostStats(float cpu, std::uint32_t xruns) {
     cpu_ = cpu;
     xruns_ = xruns;
@@ -108,6 +116,7 @@ class Graph final : private EventSink {
   void flushGarbageStash();                              // INTERFACE-CHANGE(T08)
   void slotAccumulate(std::size_t slot, const Bus &strip);  // INTERFACE-CHANGE(T00c) D3 / T08 #1
   void slotMeters();                                         // INTERFACE-CHANGE(T00c)
+  void limitVoices(Unit *played, std::int64_t frame);        // INTERFACE-CHANGE(D4)
 
   double sr_;
   std::atomic<double> requestedSr_;
@@ -148,6 +157,9 @@ class Graph final : private EventSink {
   bool slotHas_[kChannels] = {}, slotRetiring_[kChannels] = {};
   std::uint8_t retireOrigin_[kRetiring] = {};
   std::atomic<std::uint32_t> slotCount_{0};
+  // INTERFACE-CHANGE(D4): requested limit (any thread) and the audio thread's copy for this quantum (0 = off)
+  std::atomic<std::uint32_t> voiceLimitReq_{0};
+  std::uint32_t voiceLimit_ = 0;
 };
 
 }  // namespace rig

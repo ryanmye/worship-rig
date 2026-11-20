@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Settings Playwright suite (views/settings.js), moved out of the retired ui-edit suite (hv2-edit-integrate).
 //   node test/phase2/settings/run.mjs            → both modes
-//   SETTINGS_MODES=app|fixture|mac node …        → one mode
+//   SETTINGS_MODES=app|fixture|mac|bridge node … → one mode
 // Modes:
 //   app     — the real app (app/index.html + main.js: Perform, the H-v2 Edit and Settings) served by server.js at "/".
 //             The page switches to Edit first, so Settings is tested over the new Edit view (Esc ownership, focus).
@@ -9,6 +9,8 @@
 //             component set (exercises views/_fallback-components.js).
 //   mac     — the fixture with a fake window.rig (v11-electron, mac.mjs): global shortcuts and the update line, which
 //             only exist in the Mac app. Its own tests only.
+//   bridge  — the fixture on the 2.0 BridgeEngine over MockNative (sound2.mjs): Settings › Sound's voices, buffer
+//             size and voice limit reaching the engine as config / audio messages. Its own tests only.
 // Every mode: the 11 settings tests from ui-edit, zero console.error, screenshots at 1440×900 and 1024×700 →
 // test/phase2/settings/screenshots/<mode>-<size>-settings.png (+ settings.png for the app at 1440).
 import { createRequire } from 'node:module';
@@ -20,6 +22,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.mjs';
 import { runMac } from './mac.mjs';
+import { runBridge } from './sound2.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -30,7 +33,8 @@ const { createServer } = require(path.join(ROOT, 'server.js'));
 
 const haveApp = fs.existsSync(path.join(APP, 'index.html')) && fs.existsSync(path.join(APP, 'js', 'main.js')) &&
   /mountSettings/.test(fs.readFileSync(path.join(APP, 'js', 'main.js'), 'utf8'));
-const MODES = (process.env.SETTINGS_MODES || (haveApp ? 'app,fixture,mac' : 'fixture,mac')).split(',').map((s) => s.trim()).filter(Boolean);
+const ALL_MODES = haveApp ? 'app,fixture,mac,bridge' : 'fixture,mac,bridge';
+const MODES = (process.env.SETTINGS_MODES || ALL_MODES).split(',').map((s) => s.trim()).filter(Boolean);
 const VERBOSE = !!process.env.VERBOSE;
 
 fs.mkdirSync(SHOTS, { recursive: true });
@@ -138,6 +142,22 @@ async function runMode(mode, browser) {
       else await ev(() => window.__rig.ctx.openSettings());
       await until(() => !document.getElementById('view-settings').hidden && window.__rig.views.settings.isOpen);
     };
+    // 2.0 restructure: one category at a time, so a control is clickable only once its category is on show
+    const cat = async (id) => {
+      await page.click(`#view-settings [role=tab][data-cat="${id}"]`);
+      await until((c) => !document.querySelector(`#view-settings [role=tabpanel][data-cat="${c}"]`).hidden, id);
+    };
+    /** Show a category and open its "Advanced" disclosure (the rarely used rows). */
+    const adv = async (id) => {
+      await cat(id);
+      const d = `#view-settings [data-testid="settings-advanced-${id}"]`;
+      if ((await page.getAttribute(d, 'open')) === null) await page.click(`${d} > summary`);
+      await until((sel) => document.querySelector(sel).open, d);
+    };
+    const closeSettings = async () => {
+      await page.click('.st-close');
+      await until(() => document.getElementById('view-settings').hidden);
+    };
 
     await T('settings: open, outputs listed, screenshot, close button', async () => {
       await openSettings();
@@ -165,6 +185,7 @@ async function runMode(mode, browser) {
 
     await T('settings: latency change persists and restarts audio; sound after restart', async () => {
       await openSettings();
+      await cat('sound');
       await page.click('[data-bind="settings.latency"] button[data-value="balanced"]');
       await until(() => window.__rig.store.get().settings.latency === 'balanced');
       await until(() => window.__rig.engine.latency === 0.01 && window.__rig.controller.status.audio === 'running' && window.__rig.engine.ctx.state === 'running', null, 20000);
@@ -177,10 +198,12 @@ async function runMode(mode, browser) {
     });
 
     await T('settings: mono / velocity / program change / computer keyboard persist', async () => {
+      await adv('sound'); // Mono output is a Sound › Advanced row
       await page.click('[data-bind="settings.monoOutput"]');
       await until(() => window.__rig.store.get().settings.monoOutput === true && window.__rig.engine._monoOut === true);
       await page.click('[data-bind="settings.monoOutput"]');
       await until(() => window.__rig.store.get().settings.monoOutput === false && window.__rig.engine._monoOut === false);
+      await adv('keyboards'); // Song buttons (program change) is a Keyboards & MIDI › Advanced row
       await page.click('[data-bind="settings.velocitySens"] button[data-value="soft"]');
       await until(() => window.__rig.store.get().settings.velocitySens === 'soft');
       await page.click('[data-bind="settings.velocitySens"] button[data-value="normal"]');
@@ -198,6 +221,7 @@ async function runMode(mode, browser) {
     });
 
     await T('settings: MIDI Learn (CC fader with pickup, note button, clear) via midi._inject', async () => {
+      await cat('keyboards');
       await page.click('tr[data-control="slots.1.gain"] .st-learn');
       await until(() => window.__rig.midi.learning === 'slots.1.gain');
       assert.match(await page.textContent('tr[data-control="slots.1.gain"] .st-map'), /Move a knob/);
@@ -234,6 +258,7 @@ async function runMode(mode, browser) {
     const pedalStep = (step) => until((st) => !!document.querySelector(`.st-pedal-prompt[data-step="${st}"]`), step);
     const cc64 = (v) => ev((x) => window.__rig.midi._inject([0xb0, 64, x]), v);
     await T('settings: pedal polarity detector samples pressed + released, suggests invert and applies it', async () => {
+      await cat('keyboards');
       await page.click('.st-pedal-test');
       await until(() => /Press your sustain pedal now/.test(document.querySelector('.st-pedal').textContent));
       await pedalStep('press');
@@ -258,6 +283,7 @@ async function runMode(mode, browser) {
 
     await T('settings: pedal test — a quick tap asks again; a continuous pedal settles; the release step ignores '
       + '"still down" values; the pair rule; the plug-in-with-pedal-UP copy', async () => {
+      await cat('keyboards');
       // a switch pedal tapped (127 then 0 inside the settle window) ends on the released value: ask again
       await page.click('.st-pedal-test');
       await pedalStep('press');
@@ -294,6 +320,7 @@ async function runMode(mode, browser) {
 
 
     await T('settings: touch (velocity) copy in plain words', async () => {
+      await cat('keyboards');
       await page.click('[data-bind="settings.velocitySens"] button[data-value="hard"]');
       await until(() => /play firmly/.test(document.querySelector('.st-vel-hint').textContent));
       await page.click('[data-bind="settings.velocitySens"] button[data-value="normal"]');
@@ -304,6 +331,7 @@ async function runMode(mode, browser) {
     // v11-touch: Your keyboards — the on-screen keys row, the guided "play soft, then hard" fit (through the real
     // controller.captureTouch), the curve reaching engine.noteOn as {touch}, Back to standard, Remember / Forget
     await T('settings: Your keyboards — fit the on-screen keys to a soft/hard touch, use it, remember / forget', async () => {
+      await cat('keyboards');
       const row = '.st-kbs [data-keyboard="@computer"]';
       await until((r) => !!document.querySelector(r), row);
       assert.match(await page.textContent(`${row} .st-kb-name`), /On-screen & computer keys/);
@@ -387,6 +415,7 @@ async function runMode(mode, browser) {
     });
 
     await T('settings: MIDI Learn refuses the sustain pedal with a plain message', async () => {
+      await cat('keyboards');
       await page.click('tr[data-control="slots.0.gain"] .st-learn');
       await until(() => window.__rig.midi.learning === 'slots.0.gain');
       await ev(() => window.__rig.midi._inject([0xb0, 64, 127]));
@@ -422,6 +451,7 @@ async function runMode(mode, browser) {
       });
       await page.click('.st-close');
       await openSettings();
+      await cat('library');
       await page.click('.st-import-backup');
       assert.match(await page.textContent('.st-restore-q'), /Replace your whole library/);
       assert.equal(await ev(() => window.__restoreCalls), 0, 'nothing happens before confirm');
@@ -437,6 +467,7 @@ async function runMode(mode, browser) {
     });
 
     await T('settings: My Samples panel (folder, real rescan → live reload or Reload prompt) + GarageBand guide link', async () => {
+      await cat('samples');
       await until((d) => (document.querySelector('.st-samples-path')?.textContent || '').includes(d), userSamplesDir);
       assert.equal(await page.getAttribute('.st-doc-link', 'href'), 'docs/garageband-import.md');
       assert.match(await page.textContent('.st-howto'), /import-garageband\.mjs --import/);
@@ -532,6 +563,7 @@ async function runMode(mode, browser) {
     await T('settings: output latency > 60 ms shows the Bluetooth hint; × dismisses it for that device name only',
       async () => {
         await openSettings();
+        await cat('sound'); // the hint's box is measured below: its category must be on show
         try {
           await ev(() => {
             const md = navigator.mediaDevices;
@@ -608,6 +640,7 @@ async function runMode(mode, browser) {
     // C7 menubar-B (docs/menubar-mode.md): the "Menu bar" section
     await T('settings: Menu bar — mode toggle, set picker → modes, low-resource → controller + engine, resource line', async () => {
       await openSettings();
+      await cat('look'); // Chrome has no Mac category: its Menu bar section closes Look
       const sec = page.locator('[data-testid="settings-menubar"]');
       await sec.scrollIntoViewIfNeeded();
       assert.equal(await sec.locator('h2').textContent(), 'Menu bar');
@@ -669,6 +702,7 @@ async function runMode(mode, browser) {
     await T('settings: v11-metronome — Click output / Record the click → engine; MIDI clock out → timed clock, '
       + 'Start / Stop', async () => {
       await openSettings();
+      await adv('sound'); // Record the click and Clock out are Sound › Advanced rows
       const out = '[data-testid="setting-click-output"]';
       await page.locator(out).scrollIntoViewIfNeeded();
       assert.equal(await page.getAttribute(`${out} button[data-value="main"]`, 'aria-checked'), 'true');
@@ -752,6 +786,310 @@ async function runMode(mode, browser) {
       }, orig);
     });
 
+    // ------------------------------------------------------------------------------------------ 2.0 restructure
+    // native/docs/DECISIONS.md "Settings page restructure" + D1/D2/D4: sidebar categories, Advanced, deep links,
+    // narrow strip, the remembered category, and the three 2.0 Sound settings (stored only on the web engine)
+    const CHROME_TABS = ['Sound', 'Keyboards & MIDI', 'Sounds & Samples', 'Look', 'Library & Backup', 'About'];
+    const shown = () => ev(() => window.__rig.views.settings.category);
+
+    await T('2.0 settings: a sidebar tab list, one category at a time; every 1.x section lands in its category',
+      async () => {
+      await openSettings();
+      const r = await ev(() => {
+        const host = document.getElementById('view-settings');
+        const tabs = [...host.querySelectorAll('[role=tablist] [role=tab]')];
+        const panels = [...host.querySelectorAll('[role=tabpanel]')];
+        const where = {};
+        for (const sec of host.querySelectorAll('.st-section[aria-label]')) {
+          where[sec.getAttribute('aria-label')] = sec.closest('[role=tabpanel]')?.dataset.cat ?? null;
+        }
+        const advRows = {};
+        for (const d of host.querySelectorAll('details.st-adv')) {
+          advRows[d.dataset.adv] = [...d.querySelectorAll('[data-bind]')].map((b) => b.dataset.bind);
+        }
+        const ids = ['setting-click-output', 'setting-click-output-hint', 'setting-click-record', 'setting-midi-clock',
+          'setting-perform-chips', 'setting-theme', 'settings-appearance', 'settings-menubar', 'setting-mb-mode',
+          'setting-mb-set', 'setting-mb-modes', 'setting-mb-lowres', 'setting-mb-resource', 'setting-mb-open-mini',
+          'settings-latency-hint', 'setting-polyphony', 'setting-buffer-frames', 'setting-voice-limit',
+          'settings-engine-note'];
+        return {
+          labels: tabs.map((t) => t.textContent),
+          orientation: host.querySelector('[role=tablist]').getAttribute('aria-orientation'),
+          visible: panels.filter((p) => !p.hidden).length,
+          selected: tabs.filter((t) => t.getAttribute('aria-selected') === 'true').length,
+          tabbable: tabs.filter((t) => t.tabIndex === 0).length,
+          wired: tabs.every((t) => document.getElementById(t.getAttribute('aria-controls'))
+            ?.getAttribute('aria-labelledby') === t.id),
+          where, advRows,
+          testids: Object.fromEntries(ids.map((id) => [id, host.querySelectorAll(`[data-testid="${id}"]`).length])),
+        };
+      });
+      assert.deepEqual(r.labels, CHROME_TABS, 'no Mac category outside the Mac app');
+      assert.equal(r.orientation, 'vertical');
+      assert.deepEqual([r.visible, r.selected, r.tabbable, r.wired], [1, 1, 1, true]);
+      assert.deepEqual(r.where, {
+        Audio: 'sound', 'Voices and buffer': 'sound', Click: 'sound',
+        MIDI: 'keyboards', 'Computer keyboard': 'keyboards', 'MIDI Learn': 'keyboards',
+        'My Pads': 'samples', 'My Samples': 'samples',
+        Appearance: 'look', 'Perform view': 'look', 'Menu bar': 'look',
+        Library: 'library', About: 'about', Diagnostics: 'about',
+      });
+      assert.deepEqual(r.advRows, {
+        sound: ['settings.monoOutput', 'settings.voiceLimit', 'settings.click.record', 'settings.midiClockOut'],
+        keyboards: ['settings.programChange'],
+      });
+      for (const [id, n] of Object.entries(r.testids)) assert.equal(n, 1, `data-testid ${id} kept, once`);
+      // each tab shows its own panel and hides the others
+      for (const id of ['sound', 'keyboards', 'samples', 'look', 'library', 'about']) {
+        await cat(id);
+        const vis = await ev(() => [...document.querySelectorAll('#view-settings [role=tabpanel]')]
+          .filter((p) => !p.hidden).map((p) => p.dataset.cat));
+        assert.deepEqual(vis, [id]);
+        assert.equal(await page.getAttribute(`[data-testid="settings-tab-${id}"]`, 'aria-selected'), 'true');
+      }
+      await closeSettings();
+    });
+
+    await T('2.0 settings: arrow keys move and select (wrapping, Home / End), focus is visible, the computer keyboard '
+      + 'never sees them, Tab enters the panel', async () => {
+      await openSettings();
+      await cat('sound');
+      await ev(() => {
+        window.__arrowsSeen = 0;
+        window.__arrowSpy = (e) => {
+          if (/^Arrow|^Home$|^End$/.test(e.key)) window.__arrowsSeen += 1;
+        };
+        document.addEventListener('keydown', window.__arrowSpy); // where the controller listens (bubbling)
+      });
+      try {
+        await page.focus('[data-testid="settings-tab-sound"]');
+        const step = async (key, want) => {
+          await page.keyboard.press(key);
+          await until((c) => window.__rig.views.settings.category === c
+            && document.activeElement?.dataset?.cat === c, want);
+        };
+        await step('ArrowDown', 'keyboards');
+        const ring = await ev(() => {
+          const t = document.activeElement;
+          return { visible: t.matches(':focus-visible'), outline: getComputedStyle(t).outlineStyle,
+            width: parseFloat(getComputedStyle(t).outlineWidth) };
+        });
+        assert.ok(ring.visible && ring.outline !== 'none' && ring.width >= 2,
+          `visible focus (${JSON.stringify(ring)})`);
+        await step('ArrowRight', 'samples');
+        await step('ArrowUp', 'keyboards');
+        await step('ArrowLeft', 'sound');
+        await step('ArrowUp', 'about'); // wraps
+        await step('Home', 'sound');
+        await step('End', 'about');
+        await step('ArrowDown', 'sound');
+        assert.equal(await ev(() => window.__arrowsSeen), 0, 'arrows stay in the tab list (mod wheel / song keys)');
+        assert.equal(await ev(() => window.__rig.store.get().settings.currentSongId), await ev(() =>
+          window.__rig.controller.status.songId), 'no song change');
+        const tabbables = await ev(() => [...document.querySelectorAll('#view-settings [role=tab]')]
+          .filter((t) => t.tabIndex === 0).map((t) => t.dataset.cat));
+        assert.deepEqual(tabbables, ['sound'], 'roving tabindex follows the selection');
+        await page.keyboard.press('Tab');
+        assert.equal(await ev(() => document.activeElement?.closest('[role=tabpanel]')?.dataset.cat), 'sound',
+          'Tab goes from the tab list into the panel on show');
+      } finally {
+        await ev(() => document.removeEventListener('keydown', window.__arrowSpy));
+      }
+      await closeSettings();
+    });
+
+    await T('2.0 settings: deep links land on the right category (1.x names, aliases, while open, '
+      + 'rig-open-settings)', async () => {
+      const LINKS = [
+        ['pads', 'samples', 'My Pads'], ['appearance', 'look', 'Appearance'], ['backups', 'library', 'Library'],
+        ['midi', 'keyboards', 'MIDI'], ['theme', 'look', 'Appearance'], ['voices', 'sound', 'Voices and buffer'],
+        ['learn', 'keyboards', 'MIDI Learn'], ['menubar', 'look', 'Menu bar'], ['diagnostics', 'about', null],
+        ['library', 'library', null], ['about', 'about', null], // (About has nothing to focus in Chrome)
+      ];
+      for (const [section, want, label] of LINKS) {
+        await ev((sec) => window.__rig.ctx.openSettings({ section: sec }), section);
+        await until((c) => window.__rig.views.settings.isOpen && window.__rig.views.settings.category === c, want);
+        if (label) {
+          // focus lands in the named section (Quick › Theme focuses the checked card)
+          await until((l) => document.activeElement?.closest('.st-section')?.getAttribute('aria-label') === l, label);
+        }
+        await closeSettings();
+      }
+      // while open: main.js (and the fixture) pass the section to the open view
+      await ev(() => window.__rig.ctx.openSettings({ section: 'pads' }));
+      await until(() => window.__rig.views.settings.category === 'samples');
+      await ev(() => window.__rig.ctx.openSettings({ section: 'appearance' }));
+      await until(() => window.__rig.views.settings.category === 'look'
+        && document.activeElement?.getAttribute('role') === 'radio');
+      await closeSettings();
+      if (mode === 'app') {
+        // Quick › This Mac › Theme (quickSheet has no ctx) and perform.js's "pads" go through main.js
+        await ev(() => document.dispatchEvent(new CustomEvent('rig-open-settings',
+          { detail: { section: 'appearance' } })));
+        await until(() => window.__rig.views.settings.isOpen && window.__rig.views.settings.category === 'look');
+        await closeSettings();
+      }
+      // an unknown name opens where the viewer was last
+      await ev(() => localStorage.setItem('worship-rig.settings.category', 'library'));
+      await ev(() => window.__rig.ctx.openSettings({ section: 'no-such-thing' }));
+      await until(() => window.__rig.views.settings.category === 'library');
+      await closeSettings();
+    });
+
+    await T('2.0 settings: the last category is remembered per viewer (localStorage); deep links don\'t overwrite it; '
+      + 'blocked storage still opens', async () => {
+      await openSettings();
+      await cat('keyboards');
+      assert.equal(await ev(() => localStorage.getItem('worship-rig.settings.category')), 'keyboards');
+      await closeSettings();
+      await openSettings();
+      assert.equal(await shown(), 'keyboards');
+      await closeSettings();
+      await ev(() => window.__rig.ctx.openSettings({ section: 'pads' }));
+      await until(() => window.__rig.views.settings.category === 'samples');
+      await closeSettings();
+      assert.equal(await ev(() => localStorage.getItem('worship-rig.settings.category')), 'keyboards');
+      await openSettings();
+      assert.equal(await shown(), 'keyboards');
+      await closeSettings();
+      // storage blocked (private window, site data off): getItem / setItem throw; Settings still opens and switches
+      await ev(() => {
+        window.__lsGet = Storage.prototype.getItem;
+        window.__lsSet = Storage.prototype.setItem;
+        Storage.prototype.getItem = function () { throw new DOMException('blocked', 'SecurityError'); };
+        Storage.prototype.setItem = function () { throw new DOMException('blocked', 'SecurityError'); };
+      });
+      try {
+        await openSettings();
+        assert.equal(await shown(), 'sound', 'nothing remembered: the first category');
+        await cat('about');
+        assert.equal(await shown(), 'about');
+        await closeSettings();
+      } finally {
+        await ev(() => {
+          Storage.prototype.getItem = window.__lsGet;
+          Storage.prototype.setItem = window.__lsSet;
+        });
+      }
+      await ev(() => localStorage.setItem('worship-rig.settings.category', 'sound'));
+    });
+
+    await T('2.0 settings: narrow dialog (iPad portrait, narrow windows) → a horizontally scrolling tab strip on '
+      + 'top; wide → the sidebar; no page scroll sideways', async () => {
+      await openSettings();
+      const layout = () => ev(() => {
+        const nav = document.querySelector('#view-settings [role=tablist]');
+        const body = document.querySelector('#view-settings .st-body');
+        const tabs = [...nav.querySelectorAll('[role=tab]')].map((t) => t.getBoundingClientRect());
+        const n = nav.getBoundingClientRect();
+        const b = body.getBoundingClientRect();
+        return {
+          rows: new Set(tabs.map((t) => Math.round(t.top))).size,
+          cols: new Set(tabs.map((t) => Math.round(t.left))).size,
+          navAbove: n.bottom <= b.top + 1, navLeft: n.right <= b.left + 1, overflowX: getComputedStyle(nav).overflowX,
+          scrolls: nav.scrollWidth > nav.clientWidth + 1,
+          // sideways scrolling inside Settings: the dialog past the window, or a panel wider than its column (the
+          // page under the modal is the app's own business: Perform has a 1024 px minimum)
+          pageX: (() => {
+            const d = document.querySelector('#view-settings .st-dialog');
+            return d.getBoundingClientRect().right > innerWidth + 1 || d.scrollWidth > d.clientWidth + 1
+              || body.scrollWidth > body.clientWidth + 1;
+          })(),
+        };
+      });
+      try {
+        for (const [w, hgt] of [[820, 1180], [700, 900], [390, 844]]) {
+          await page.setViewportSize({ width: w, height: hgt });
+          await sleep(150);
+          const l = await layout();
+          assert.equal(l.rows, 1, `${w}: one row of tabs (${JSON.stringify(l)})`);
+          assert.ok(l.navAbove && !l.navLeft, `${w}: the strip sits on top`);
+          assert.equal(l.overflowX, 'auto', `${w}: the strip scrolls sideways`);
+          assert.equal(l.pageX, false, `${w}: nothing in Settings scrolls sideways`);
+          if (w === 390) {
+            assert.ok(l.scrolls, '390: more tabs than fit');
+            await cat('about'); // Playwright scrolls the strip to reach it; the view keeps it in sight
+            const inView = await ev(() => {
+              const nav = document.querySelector('#view-settings [role=tablist]').getBoundingClientRect();
+              const t = document.querySelector('[data-testid="settings-tab-about"]').getBoundingClientRect();
+              return t.left >= nav.left - 1 && t.right <= nav.right + 1;
+            });
+            assert.ok(inView, 'the selected tab is in view');
+            await cat('sound');
+          }
+        }
+        for (const [w, hgt] of [[1440, 900], [1024, 700]]) {
+          await page.setViewportSize({ width: w, height: hgt });
+          await sleep(150);
+          const l = await layout();
+          assert.ok(l.cols === 1 && l.rows === CHROME_TABS.length && l.navLeft,
+            `${w}: the sidebar (${JSON.stringify(l)})`);
+          assert.equal(l.pageX, false);
+        }
+      } finally {
+        await page.setViewportSize({ width: 1440, height: 900 });
+      }
+      await closeSettings();
+    });
+
+    await T('2.0 Sound: voices per sound / buffer size / total voice limit persist (device-local); the web engine '
+      + 'stores them only and says so', async () => {
+      await ev(() => window.__rig.ctx.openSettings({ section: 'voices' }));
+      await until(() => window.__rig.views.settings.category === 'sound');
+      const checked = (tid) => ev((t) => document.querySelector(`[data-testid="${t}"] [aria-checked="true"]`)
+        ?.dataset.value ?? null, tid);
+      assert.deepEqual([await checked('setting-polyphony'), await checked('setting-buffer-frames'),
+        await checked('setting-voice-limit')], ['64', '128', 'auto'], 'defaults: 64 / 128 / Auto');
+      assert.equal(await ev(() => ['polyphony', 'bufferFrames', 'voiceLimit']
+        .some((k) => k in window.__rig.store.get().settings)), false, 'absent until chosen');
+      // the web engine (1.x oracle) has no setters: a one-line note, nothing sent, no restart
+      assert.equal(await page.isVisible('[data-testid="settings-engine-note"]'), true);
+      assert.match(await page.textContent('[data-testid="settings-engine-note"]'), /apply with the 2\.0 engine/);
+      assert.equal(await ev(() => typeof window.__rig.engine.setPolyphony), 'undefined');
+      assert.equal(await ev(() => window.__rig.controller.status.audioConfig.native), false);
+      const ctx0 = await ev(() => { window.__ctx0 = window.__rig.engine.ctx; return true; });
+      assert.ok(ctx0);
+      await page.click('[data-testid="setting-polyphony"] button[data-value="128"]');
+      await page.click('[data-testid="setting-buffer-frames"] button[data-value="256"]');
+      await adv('sound');
+      await page.click('[data-testid="setting-voice-limit"] button[data-value="off"]');
+      await until(() => {
+        const s = window.__rig.store.get().settings;
+        return s.polyphony === 128 && s.bufferFrames === 256 && s.voiceLimit === 'off';
+      });
+      await until(() => /"polyphony":128/.test(localStorage.getItem('rig.v1') || '')
+        && /"bufferFrames":256/.test(localStorage.getItem('rig.v1') || '')
+        && /"voiceLimit":"off"/.test(localStorage.getItem('rig.v1') || ''), null, 5000);
+      assert.equal(await ev(() => window.__rig.engine.ctx === window.__ctx0 && window.__rig.controller.status.audio),
+        'running', 'no audio restart on the web engine');
+      await page.click('[data-testid="setting-voice-limit"] button[data-value="512"]');
+      await until(() => window.__rig.store.get().settings.voiceLimit === 512);
+      // off-list values are refused (never clamped); an export never carries this machine's choice
+      const r = await ev(() => {
+        const st = window.__rig.store;
+        st.set('settings.polyphony', 100);
+        st.set('settings.bufferFrames', 96);
+        st.set('settings.voiceLimit', 1000);
+        const exp = JSON.parse(st.exportJSON()).settings;
+        return { s: st.get().settings, exported: ['polyphony', 'bufferFrames', 'voiceLimit'].filter((k) => k in exp) };
+      });
+      assert.deepEqual([r.s.polyphony, r.s.bufferFrames, r.s.voiceLimit], [128, 256, 512]);
+      assert.deepEqual(r.exported, [], 'device-local: not exported');
+      // the UI follows the store (another window, an import)
+      await ev(() => window.__rig.store.set('settings.polyphony', 32));
+      await until(() => document.querySelector('[data-testid="setting-polyphony"] [aria-checked="true"]')
+        ?.dataset.value === '32');
+      // back to the defaults (absent)
+      const KEYS = ['polyphony', 'bufferFrames', 'voiceLimit'];
+      await ev((ks) => ks.forEach((k) => window.__rig.store.set(`settings.${k}`, null)), KEYS);
+      await until((ks) => !ks.some((k) => k in window.__rig.store.get().settings), KEYS);
+      assert.deepEqual([await checked('setting-polyphony'), await checked('setting-buffer-frames'),
+        await checked('setting-voice-limit')], ['64', '128', 'auto']);
+      await page.locator('[data-testid="settings-panel-sound"]')
+        .screenshot({ path: path.join(SHOTS, `${mode}-sound.png`) });
+      await closeSettings();
+    });
+
     // polish-1: the retired Edit's .ed-* rules are pruned; what remains is exactly what settings.js renders
     if (mode === 'app') {
       await T('settings: styles-settings.css keeps only the .ed-* classes Settings renders (polish-1)', async () => {
@@ -792,6 +1130,7 @@ const browser = await chromium.launch({ headless: true, args: ['--autoplay-polic
 try {
   for (const m of MODES) {
     if (m === 'mac') await runMac({ browser, createServer, ROOT, SHOTS, results });
+    else if (m === 'bridge') await runBridge({ browser, createServer, ROOT, SHOTS, results });
     else await runMode(m, browser);
   }
 } finally {

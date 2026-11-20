@@ -219,9 +219,18 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
       { timeout: 20000 });
     await waitRigReady(p, { timeout: 30000, what: `[${mode}] window.__rig.ready` });
   };
-  const openSettings = async (p = page) => {
-    await p.evaluate(() => window.__rig.ctx.openSettings());
+  // 2.0 restructure: one category at a time, so each test opens the one it works in (Mac: menu bar, shortcuts, the
+  // update switch; About: the update line; Sounds & Samples: the GarageBand import)
+  const openSettings = async (p = page, section = null) => {
+    await p.evaluate((sec) => window.__rig.ctx.openSettings(sec ? { section: sec } : undefined), section);
     await p.waitForFunction(() => window.__rig.views.settings.isOpen, null, { timeout: 5000 });
+    if (section) {
+      await p.waitForFunction((c) => window.__rig.views.settings.category === c, section, { timeout: 5000 });
+    }
+  };
+  const showCat = async (id) => {
+    await page.click(`[data-testid="settings-tab-${id}"]`);
+    await until((c) => window.__rig.views.settings.category === c, id);
   };
   const closeSettings = async () => {
     await page.click('.st-close');
@@ -266,8 +275,40 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
       assert.equal(await ev(() => 'hotkeys' in window.__rig.store.get().settings), false, 'absent until set');
     });
 
-    await T('global shortcuts: off by default; on → shown in Mac symbols; "taken" in plain words', async () => {
+    await T('2.0 settings (Mac app): a Mac category with the menu bar, shortcuts and the update switch; the update '
+      + 'line stays in About', async () => {
       await openSettings();
+      const r = await ev(() => {
+        const host = document.getElementById('view-settings');
+        const catOf = (sel) => host.querySelector(sel)?.closest('[role=tabpanel]')?.dataset.cat ?? null;
+        return {
+          tabs: [...host.querySelectorAll('[role=tab]')].map((t) => t.textContent),
+          menubar: catOf('[data-testid="settings-menubar"]'), hotkeys: catOf('[data-testid="settings-hotkeys"]'),
+          toggle: catOf('[data-testid="setting-update-check"]'), line: catOf('[data-testid="update-status"]'),
+          login: catOf('[data-testid="setting-mb-login"]'), lowres: catOf('[data-testid="setting-mb-lowres"]'),
+          gb: catOf('[data-testid="gb-open"]'), resource: catOf('[data-testid="setting-mb-resource"]'),
+        };
+      });
+      assert.deepEqual(r.tabs, ['Sound', 'Keyboards & MIDI', 'Sounds & Samples', 'Look', 'Library & Backup', 'Mac',
+        'About']);
+      assert.deepEqual({ ...r, tabs: undefined }, { tabs: undefined, menubar: 'mac', hotkeys: 'mac', toggle: 'mac',
+        line: 'about', login: 'mac', lowres: 'mac', gb: 'samples', resource: 'about' });
+      await closeSettings();
+      for (const [section, want] of [['mac', 'mac'], ['menubar', 'mac'], ['hotkeys', 'mac'], ['updates', 'about']]) {
+        await openSettings(page, null);
+        await ev((sec) => window.__rig.ctx.openSettings({ section: sec }), section);
+        await until((c) => window.__rig.views.settings.category === c, want);
+        await closeSettings();
+      }
+      await openSettings(page, 'mac');
+      await ev(() => document.activeElement?.blur?.());
+      await page.locator('[data-testid="settings-panel-mac"]')
+        .screenshot({ path: path.join(SHOTS, 'mac-category.png') });
+      await closeSettings();
+    });
+
+    await T('global shortcuts: off by default; on → shown in Mac symbols; "taken" in plain words', async () => {
+      await openSettings(page, 'mac');
       const sec = page.locator('[data-testid="settings-menubar"] [data-testid="settings-hotkeys"]');
       await sec.scrollIntoViewIfNeeded();
       assert.equal(await page.isHidden('[data-testid="hotkey-list"]'), true, 'quiet: the list only shows when on');
@@ -317,7 +358,7 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
       // a second Esc (nothing recording) closes Settings as before
       await page.keyboard.press('Escape');
       await until(() => !window.__rig.views.settings.isOpen);
-      await openSettings();
+      await openSettings(page, 'mac');
     });
 
     await T('global shortcuts: weak and duplicate combinations are refused in plain words; Delete clears one', async () => {
@@ -456,7 +497,7 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
       await closeSettings();
       await until(() => window.__fake.testing === null);
       await until(() => !document.documentElement.hasAttribute('data-hotkey-capture'));
-      await openSettings();
+      await openSettings(page, 'mac');
       assert.equal(await result('nextSong'), '', 'a closed Settings forgets the test');
       // recording a combination another app holds: no test, the row says "taken"
       await page.locator('[data-testid="settings-hotkeys"]').scrollIntoViewIfNeeded();
@@ -485,7 +526,7 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
     });
 
     await T('updates: quiet when up to date; "Version x is available" + Download opens the dmg; never outside Settings', async () => {
-      await openSettings();
+      await openSettings(page, 'about');
       const line = '[data-testid="update-status"]';
       await page.locator('[data-testid="settings-update"]').scrollIntoViewIfNeeded();
       await until((s) => document.querySelector(s).textContent !== '', line);
@@ -503,7 +544,7 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
         settingsHidden: document.getElementById('view-settings').hidden,
       }));
       assert.deepEqual(outside, { toasts: 0, dialog: '', settingsHidden: true });
-      await openSettings();
+      await openSettings(page, 'about');
       await page.locator('[data-testid="settings-update"]').scrollIntoViewIfNeeded();
       await until((s) => /1\.1\.1/.test(document.querySelector(s).textContent), line);
       assert.equal(await page.textContent(line), 'Version 1.1.1 is available. You have 1.0.1.');
@@ -526,17 +567,19 @@ export async function runMac({ browser, createServer, ROOT, SHOTS, results }) {
       await page.click('[data-testid="update-check-now"]');
       await until(() => window.__fake.calls.some((c) => c[0] === 'checkForUpdate'));
       await until((s) => /Couldn’t reach GitHub/.test(document.querySelector(s).textContent), line);
+      await showCat('mac'); // the switch is a Mac setting; its status line stays in About
       await page.click('[data-testid="setting-update-check"]');
       await until(() => window.__rig.store.get().settings.updateCheck === false);
       await until(() => window.__fake.calls.filter((c) => c[0] === 'setUpdateCheck').map((c) => c[1]).join() === 'true,false');
       await page.click('[data-testid="setting-update-check"]');
       await until(() => window.__rig.store.get().settings.updateCheck === true);
+      await showCat('about');
       await ev(() => window.__fake.pushUp({ state: 'unsupported', error: null }));
       await until((s) => document.querySelector(s).textContent === 'Update checks run in the installed Mac app.', line);
       assert.equal(await page.isHidden('[data-testid="update-check-now"]'), true);
       await closeSettings();
     });
-    await runImporterTests({ page, T, ev, until, openSettings, calls, SHOTS });
+    await runImporterTests({ page, T, ev, until, openSettings: () => openSettings(page, 'samples'), calls, SHOTS });
   } finally {
     await T('zero console.error', async () => {
       assert.deepEqual(errors, []);

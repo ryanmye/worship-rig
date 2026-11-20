@@ -76,6 +76,7 @@ Engine::Engine(const rig_config &cfg)
   paths.padsDir = padsDir_;
   paths.recordingsDir = recDir_;
   model_.setPaths(paths);
+  graph_.setVoiceLimit(model_.voiceLimitEffective());  // D4: the default ('auto' for this profile) from the start
   bridge_ = std::make_unique<Bridge>(*this);
   meterSvc_ = MeterServiceImpl::of(model_);
   recSvc_ = RecServiceImpl::of(model_);
@@ -707,6 +708,7 @@ std::string Engine::statsJson() {
   j.kv("rateChanges", g.rateChanges.load()).kv("eventsDropped", g.eventsDropped.load());
   j.kv("heapDropped", g.heapDropped.load()).kv("paramDropped", g.paramDropped.load());
   j.kv("voicesStolen", g.voicesStolen.load()).kv("voices", m.voices).kv("xruns", m.xruns);
+  j.kv("voiceLimitSteals", g.limitSteals.load()).kv("voiceLimit", graph_.voiceLimitRequested());  // D4
   j.kv("cmdDropped", model_.stats().droppedCommands).kv("midiDropped", midiDropped_.load());
   j.kv("midiReceived", midiRecv_.load()).kv("prepares", model_.stats().prepares);
   j.kv("commits", model_.stats().commits).kv("voicesEnded", model_.stats().voicesEnded).end();

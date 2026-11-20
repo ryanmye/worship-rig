@@ -100,6 +100,7 @@ void opHello(Engine &e, const Req &r) {
   j.begin().kv("protocol", RIG_BRIDGE_PROTOCOL).kv("minor", 1).kv("engine", rig_version_string());
   j.key("caps").beginArray().elemStr("when").elemStr("testVoice").elemStr("meters").elemStr("rta");
   j.elemStr("polyphony").elemStr("bufferFrames").elemStr("slots16");
+  j.elemStr("voiceLimit");  // D4 (additive; `minor` stays 1, see INTERFACE_LOG D4)
   if (e.model().service(RecService::kName)) j.elemStr("rec");
   j.endArray();
   j.kv("sampleRate", e.sampleRate()).kv("seed", e.seed()).end();
@@ -351,6 +352,10 @@ void opConfig(Engine &e, const Req &r) {
   if (yyjson_val *v = yyjson_obj_get(r.m, "polyphony"); v && yyjson_is_num(v)) {  // T00c D1 (schema: 32|64|128)
     m.setPolyphony(static_cast<unsigned>(yyjson_get_num(v)));
     j.kv("polyphony", m.polyphony());
+  }
+  if (yyjson_val *v = yyjson_obj_get(r.m, "voiceLimit"); v && !yyjson_is_null(v)) {  // D4 (schema: auto|128..|0)
+    m.setVoiceLimit(yyjson_is_str(v) ? Model::kVoiceLimitAuto : static_cast<int>(yyjson_get_num(v)));
+    m.voiceLimitJson(j);
   }
   j.end();
   ok(e, r, j.take());

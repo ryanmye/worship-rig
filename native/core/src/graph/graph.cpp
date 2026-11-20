@@ -5,6 +5,8 @@
 #include <cstring>
 
 #include "graph/test_points.h"
+#include "inst/instrument.h"
+#include "inst/voice_alloc.h"
 #include "runtime/rt_guard.h"
 #include "time/param.h"
 
@@ -80,6 +82,52 @@ std::uint32_t Graph::liveVoices() const {
   for (std::size_t i = 0; i < kRetiring; ++i)
     if (Unit *u = units_[idx(retireInstSlot(i))]) n += u->liveVoices();
   return n;
+}
+
+// INTERFACE-CHANGE(D4): engine-wide voice limit, after a note-on reached `played` (its per-slot cap already applied
+// inside noteOn, so the per-slot steal comes first and a note the instrument ignored never steals). While the voices
+// counted over every instrument (slots and retiring channels) exceed the limit: the globally earliest-released voice
+// (each instrument's own release policy, as its per-slot steal), else the globally oldest playing one, any slot,
+// faded with the instrument's 20 ms steal fade. Ties keep slot order but never prefer the instrument just played
+// (its newest voice is the note-on itself). Bounded: 48 virtual calls to count, at most kMaxLimitStealsPerNote steals
+// of one scan each (48 instruments x 160 pool slots); no allocation, no locks.
+void Graph::limitVoices(Unit *played, std::int64_t frame) {
+  Instrument *const target = played ? played->asInstrument() : nullptr;
+  if (voiceLimit_ == 0 || !target) return;
+  Instrument *insts[kChannels + kRetiring];
+  unsigned n = 0, total = 0;
+  const auto collect = [&](UnitSlot s) {
+    if (Unit *u = units_[idx(s)])
+      if (Instrument *i = u->asInstrument()) {
+        insts[n++] = i;
+        total += i->playingVoices();
+      }
+  };
+  for (std::size_t i = 0; i < kChannels; ++i) collect(instSlot(i));
+  for (std::size_t i = 0; i < kRetiring; ++i) collect(retireInstSlot(i));
+  for (unsigned k = 0; total > voiceLimit_ && k < inst::kMaxLimitStealsPerNote; ++k) {
+    Instrument *victim = nullptr;
+    VoiceId vid = 0;
+    double best = 0;
+    for (int pass = 0; pass < 2 && !victim; ++pass) {  // released first, then held
+      for (unsigned i = 0; i < n; ++i) {
+        double at = 0;
+        VoiceId id = 0;
+        if (!insts[i]->oldestVoice(pass == 0, frame, at, id)) continue;
+        if (!victim || at < best || (at == best && victim == target)) {
+          victim = insts[i];
+          vid = id;
+          best = at;
+        }
+      }
+    }
+    if (!victim) break;
+    const unsigned before = victim->playingVoices();
+    victim->releaseVoice(vid, frame, inst::kStealFade);
+    if (victim->playingVoices() >= before) break;  // the instrument kept it: never spin
+    total -= before - victim->playingVoices();
+    stats_.limitSteals.fetch_add(1, std::memory_order_relaxed);
+  }
 }
 
 bool Graph::push(const AudioEvent &e) {
@@ -257,12 +305,16 @@ void Graph::apply(const Command &c) {
     case Op::VoiceCap:  // INTERFACE-CHANGE(T00c) D1
       if (c.target == kAllSlots) {
         for (std::size_t i = 0; i < kChannels; ++i)
-          if (Unit *u = units_[idx(instSlot(i))]) u->apply(c);
+          if (Unit *u = units_[idx(instSlot(i))]) {
+            u->apply(c);
+            if (c.op == Op::NoteOn) limitVoices(u, c.frame);  // INTERFACE-CHANGE(D4)
+          }
         if (c.op != Op::NoteOn)  // retiring channels never get new notes
           for (std::size_t i = 0; i < kRetiring; ++i)
             if (Unit *u = units_[idx(retireInstSlot(i))]) u->apply(c);
       } else if (c.target < kUnitSlots && units_[c.target]) {
         units_[c.target]->apply(c);
+        if (c.op == Op::NoteOn) limitVoices(units_[c.target], c.frame);  // INTERFACE-CHANGE(D4)
       }
       return;
     case Op::TestTap:
@@ -374,6 +426,7 @@ void Graph::renderQuantum(float *const *out, unsigned channels) {
   const double want = requestedSr_.load(std::memory_order_acquire);
   if (want >= 8000.0 && want != sr_) adoptRate(want);
   drainCommands();
+  voiceLimit_ = voiceLimitReq_.load(std::memory_order_relaxed);  // INTERFACE-CHANGE(D4): live from this quantum
   const std::int64_t q0 = frame_, q1 = frame_ + static_cast<std::int64_t>(kQ);
   while (heapN_ > 0 && heap_[0].frame < q1) {
     std::pop_heap(heap_, heap_ + heapN_, later);
