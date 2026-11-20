@@ -164,6 +164,8 @@ export class BridgeEngine extends EventTarget {
     this._clock = new EngineClock(this._now);
     /** Engine/device state as native last reported it. ctx.state is 'running' at once (WEBKIT_AUDIT 6). */
     this._st = { state: 'running', sleep: 'awake', latencyMs: 0, sampleRate: 48000, deviceId: 'default', channels: 2 };
+    /** Count of `state` events seen; an `audio` reply's snapshot never overwrites a newer event (_audioReq). */
+    this._stSeq = 0;
     this._ctx = new ContextFacade(this);
     this.drone = new DroneFacade(this);
     this._started = false;
@@ -274,6 +276,20 @@ export class BridgeEngine extends EventTarget {
     return Math.max(0, (this._st.latencyMs || 0) / 1000);
   }
 
+  /**
+   * An `audio` request whose reply carries a state snapshot. The snapshot is applied only when no `state` event
+   * arrived after the request went out: the core emits a `state` event for every change, and an event delivered in
+   * the same batch/read as the reply (`[re:2 {state:'suspended'}]` then `{ev:'state', state:'running'}`) is
+   * dispatched before this continuation runs, so applying the older snapshot then would undo it (T09 review: ctx
+   * stuck at 'suspended' with the device running, seen against rig-devhost under Node's WebSocket).
+   */
+  async _audioReq(args) {
+    const seq = this._stSeq;
+    const r = await this._req('audio', args);
+    if (this._stSeq === seq) this._applyState(r);
+    return r;
+  }
+
   _applyState(s) {
     if (!s || typeof s !== 'object') return false;
     let changed = false;
@@ -326,6 +342,7 @@ export class BridgeEngine extends EventTarget {
   }
 
   _onState(m) {
+    this._stSeq += 1;
     const prevSleep = this._st.sleep;
     const changed = this._applyState(m);
     if (m.restarted) {
@@ -461,8 +478,7 @@ export class BridgeEngine extends EventTarget {
 
   async _doStart() {
     await this._ready();
-    const r = await this._req('audio', { action: 'start', latency: this._latency });
-    this._applyState(r);
+    await this._audioReq({ action: 'start', latency: this._latency });
     this._started = true;
     await this._refreshInstruments();
     return this;
@@ -476,16 +492,14 @@ export class BridgeEngine extends EventTarget {
     const args = { action: 'restart', latency: this._latency };
     if (typeof sinkId === 'string') args.deviceId = sinkId;
     this._clock.startRequested();
-    const r = await this._req('audio', args);
-    this._applyState(r);
+    await this._audioReq(args);
     this._started = true;
     return this;
   }
 
   async setSinkId(id) {
     await this._ready();
-    const r = await this._req('audio', { action: 'output', deviceId: id === 'default' ? '' : String(id ?? '') });
-    this._applyState(r);
+    await this._audioReq({ action: 'output', deviceId: id === 'default' ? '' : String(id ?? '') });
     return true;
   }
 

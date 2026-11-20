@@ -121,12 +121,13 @@ struct WsClient {
   ~WsClient() {
     if (fd >= 0) ::close(fd);
   }
-  bool open(std::uint16_t port, const std::string &path = "/__rig/ws") {
+  bool open(std::uint16_t port, const std::string &path = "/__rig/ws", const std::string &extraHeaders = "") {
     fd = connectTo(port);
     if (fd < 0) return false;
     sendAll(fd, "GET " + path +
                     " HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: keep-alive, Upgrade\r\n"
-                    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n");
+                    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n" +
+                    extraHeaders + "\r\n");
     const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(3);
     while (buf.find("\r\n\r\n") == std::string::npos && std::chrono::steady_clock::now() < end) fill(50);
     const auto e = buf.find("\r\n\r\n");

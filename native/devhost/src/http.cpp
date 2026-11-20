@@ -39,7 +39,43 @@ int hexVal(char c) {
   return -1;
 }
 
+/** Lower-case host of "host[:port]" or "[v6][:port]" ("" when malformed). */
+std::string hostOf(std::string_view hp) {
+  if (!hp.empty() && hp.front() == '[') {
+    const std::size_t e = hp.find(']');
+    return e == std::string_view::npos ? std::string() : lower(hp.substr(0, e + 1));
+  }
+  return lower(hp.substr(0, hp.find(':')));
+}
+
+bool isIpLiteral(const std::string &h) {
+  if (h.size() > 2 && h.front() == '[' && h.back() == ']') return true;
+  int dots = 0;
+  for (const char c : h) {
+    if (c == '.') {
+      ++dots;
+    } else if (c < '0' || c > '9') {
+      return false;
+    }
+  }
+  return dots == 3;
+}
+
 }  // namespace
+
+bool webSocketOriginAllowed(const std::string &origin, const std::string &host) {
+  if (origin.empty()) return true;
+  const std::string_view o = origin;
+  const std::size_t p = o.find("://");
+  if (p == std::string_view::npos) return false;
+  const std::string scheme = lower(o.substr(0, p));
+  if (scheme != "http" && scheme != "https") return false;
+  const std::string_view hp = o.substr(p + 3);
+  if (hp.empty() || hp.find('/') != std::string_view::npos) return false;
+  const std::string h = hostOf(hp);
+  if (h == "127.0.0.1" || h == "localhost" || h == "[::1]") return true;
+  return isIpLiteral(h) && lower(hp) == lower(trim(host));
+}
 
 bool HttpRequest::isWebSocketUpgrade() const {
   return method == "GET" && hasToken(header("connection"), "upgrade") && lower(header("upgrade")) == "websocket" &&
@@ -142,7 +178,8 @@ const char *mimeFor(std::string_view path) {
 
 std::string httpHead(int code, const char *contentType, std::size_t contentLength) {
   const char *reason = code == 200 ? "OK" : code == 204 ? "No Content" : code == 400 ? "Bad Request"
-                     : code == 404 ? "Not Found" : code == 405 ? "Method Not Allowed" : "Error";
+                     : code == 403 ? "Forbidden" : code == 404 ? "Not Found"
+                     : code == 405 ? "Method Not Allowed" : "Error";
   std::string h = "HTTP/1.1 " + std::to_string(code) + " " + reason + "\r\n";
   if (code != 204) {
     h += "Content-Type: ";

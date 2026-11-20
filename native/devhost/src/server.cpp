@@ -240,6 +240,13 @@ void Server::onHttp(Client &c) {
       c.closeAfterFlush = true;
       return;
     }
+    if (!webSocketOriginAllowed(req->header("origin"), req->header("host"))) {
+      std::fprintf(stderr, "devhost: refused a WebSocket from origin %s\n", req->header("origin").c_str());
+      const std::string body = "WebSocket origin not allowed";
+      c.out += httpHead(403, "text/plain; charset=utf-8", body.size()) + body;
+      c.closeAfterFlush = true;
+      return;
+    }
     c.out += "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n";
     c.out += "Sec-WebSocket-Accept: " + wsAcceptKey(req->header("sec-websocket-key")) + "\r\n\r\n";
     c.state = Client::Ws;

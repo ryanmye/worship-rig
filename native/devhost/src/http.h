@@ -38,6 +38,15 @@ std::optional<std::string> percentDecode(std::string_view s);
  */
 std::optional<std::string> resolveStatic(const std::string &root, const std::string &urlPath);
 
+/**
+ * Whether a WebSocket upgrade may become the page (cross-site WebSocket hijacking guard; browsers let any site open
+ * ws://127.0.0.1). Allowed: no Origin (not a browser: Node, the C++ tests), an http(s) loopback origin on any port
+ * (127.0.0.1, localhost, [::1]: rig-devhost itself, or server.js with ?devhost=), or the request's own Host when it
+ * is an IP literal (`--bind 0.0.0.0` from another machine). A DNS name that is not localhost never passes, so a
+ * rebound name cannot either. "null" (file://, sandboxed frames) is refused.
+ */
+bool webSocketOriginAllowed(const std::string &origin, const std::string &host);
+
 /** Content type by extension (text types carry charset=utf-8). */
 const char *mimeFor(std::string_view path);
 

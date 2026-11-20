@@ -1,5 +1,8 @@
 // The whole dev host in-process (null audio backend, ephemeral port): HTTP routes, the WebSocket relay to the core,
 // recording through the relay, page replacement and the panic/rec-stop cleanup for a page that goes away.
+#include <algorithm>
+#include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -105,6 +108,21 @@ TEST_SUITE("devhost-relay") {
         if (f.op < 0) break;
       }
       CHECK(pong);
+      // a page with a foreign Origin is refused (403) and does not replace the active page
+      {
+        dht::WsClient evil;
+        CHECK_FALSE(evil.open(h.port(), "/__rig/ws", "Origin: https://evil.example\r\n"));
+        CHECK(evil.handshake.rfind("HTTP/1.1 403", 0) == 0);
+        CHECK(h.serverStats().pages == 1);
+      }
+      // a sounding test voice, so the take below is not silence (T09 review: it used to record zeros only)
+      a.text(R"({"v":1,"op":"prepare","id":7,"patch":{"slots":[{"instrument":{"type":"test","id":"sine"},)"
+             R"("gain":1,"params":{"attack":0.002,"release":0.05}},null,null,null]}})");
+      CHECK_FALSE(a.until("\"re\":7").empty());
+      a.text(R"({"v":1,"op":"commit","id":8,"token":1})");
+      CHECK(a.until("\"re\":8").find("\"committed\":true") != std::string::npos);
+      a.text(R"({"v":1,"op":"play","e":"on","n":69,"vel":100,"id":9})");
+      CHECK_FALSE(a.until("\"re\":9").empty());
       // a take through the relay: the recordings folder of the dev host, a valid WAV with audio frames
       a.text(R"({"v":1,"op":"rec","action":"start","id":5})");
       const std::string started = a.until("\"re\":5");
@@ -115,14 +133,29 @@ TEST_SUITE("devhost-relay") {
       CHECK(stopped.find("\"seconds\":") != std::string::npos);
       std::size_t wavs = 0;
       std::uintmax_t bytes = 0;
+      fs::path wav;
       for (auto &f : fs::directory_iterator(dir / "rec")) {
         if (f.path().extension() == ".wav") {
           ++wavs;
           bytes = f.file_size();
+          wav = f.path();
         }
       }
       CHECK(wavs == 1);
       CHECK(bytes > 44 + 4 * 48000 / 4);  // > 0.25 s of 16-bit stereo at 48 kHz
+      // the A4 is in the file on both channels (16-bit stereo after the 44-byte header)
+      const std::string pcm = wavs == 1 ? slurp(wav) : std::string();
+      int peakL = 0, peakR = 0;
+      for (std::size_t i = 44; i + 3 < pcm.size(); i += 4) {
+        const auto s16 = [&](std::size_t k) {
+          return static_cast<std::int16_t>(static_cast<unsigned char>(pcm[k]) |
+                                           (static_cast<unsigned char>(pcm[k + 1]) << 8));
+        };
+        peakL = std::max(peakL, std::abs(static_cast<int>(s16(i))));
+        peakR = std::max(peakR, std::abs(static_cast<int>(s16(i + 2))));
+      }
+      CHECK(peakL > 300);  // > -40 dBFS
+      CHECK(peakR > 300);
 
       // a second page replaces the first: close 4000 to the old one, panic + rec stop posted for it
       dht::WsClient b;

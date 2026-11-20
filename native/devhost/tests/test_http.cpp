@@ -73,6 +73,24 @@ TEST_SUITE("devhost-http") {
     fs::remove_all(root);
   }
 
+  TEST_CASE("WebSocket origin guard: loopback or no Origin; an IP-literal Host only for itself; never a DNS name") {
+    using devhost::webSocketOriginAllowed;
+    CHECK(webSocketOriginAllowed("", "127.0.0.1:8440"));
+    CHECK(webSocketOriginAllowed("http://127.0.0.1:8440", "127.0.0.1:8440"));
+    CHECK(webSocketOriginAllowed("http://localhost:8437", "127.0.0.1:8440"));  // server.js page + ?devhost=
+    CHECK(webSocketOriginAllowed("HTTP://LocalHost", "127.0.0.1:8440"));
+    CHECK(webSocketOriginAllowed("http://[::1]:9000", "[::1]:8440"));
+    CHECK(webSocketOriginAllowed("http://192.168.1.20:8440", "192.168.1.20:8440"));  // --bind 0.0.0.0, LAN
+    CHECK_FALSE(webSocketOriginAllowed("http://192.168.1.20:8440", "127.0.0.1:8440"));
+    CHECK_FALSE(webSocketOriginAllowed("https://evil.example", "127.0.0.1:8440"));
+    CHECK_FALSE(webSocketOriginAllowed("http://evil.example:8440", "evil.example:8440"));  // DNS rebinding
+    CHECK_FALSE(webSocketOriginAllowed("http://localhost.evil.example", "127.0.0.1:8440"));
+    CHECK_FALSE(webSocketOriginAllowed("http://127.0.0.1.evil.example", "127.0.0.1:8440"));
+    CHECK_FALSE(webSocketOriginAllowed("null", "127.0.0.1:8440"));
+    CHECK_FALSE(webSocketOriginAllowed("chrome-extension://abc", "127.0.0.1:8440"));
+    CHECK_FALSE(webSocketOriginAllowed("http://127.0.0.1:8440/x", "127.0.0.1:8440"));
+  }
+
   TEST_CASE("MIME types and response heads") {
     CHECK(std::string(devhost::mimeFor("/js/main.js")) == "text/javascript; charset=utf-8");
     CHECK(std::string(devhost::mimeFor("/A.CSS")) == "text/css; charset=utf-8");

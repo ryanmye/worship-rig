@@ -184,7 +184,10 @@ void AudioHost::renderInterleaved(float *out, std::uint32_t frames) {
   std::uint64_t inRender = 0;
   rig_engine *e = engine_.load(std::memory_order_acquire);
   const std::uint32_t ch = channels_;
-  const std::uint64_t lat = latencyNs_.load(std::memory_order_relaxed);
+  // host time at which this callback's first frame is heard; piece k starts `done` frames later (rig_render's
+  // host_time_ns is per call, and a callback longer than maxBlockFrames is rendered in several calls)
+  const std::uint64_t ht0 = t0 + latencyNs_.load(std::memory_order_relaxed);
+  const double nsPerFrame = sr_ > 0 ? 1e9 / sr_ : 0.0;  // sr_ is written by start() before the device runs
   std::uint32_t done = 0;
   while (done < frames) {
     const std::uint32_t n = std::min(frames - done, o_.maxBlockFrames);
@@ -192,8 +195,7 @@ void AudioHost::renderInterleaved(float *out, std::uint32_t frames) {
     if (!e || stopping_.load(std::memory_order_relaxed)) {
       std::memset(dst, 0, sizeof(float) * n * ch);
     } else {
-      // host time at which this piece's first frame is heard (render timestamps -> engine/host clock map, T08)
-      const std::uint64_t ht = hostNowNs() + lat;
+      const std::uint64_t ht = ht0 + static_cast<std::uint64_t>(static_cast<double>(done) * nsPerFrame);
       const std::uint64_t r0 = hostNowNs();
       rig_render(e, planes_, ch, n, ht);
       inRender += hostNowNs() - r0;
