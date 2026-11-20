@@ -12,7 +12,11 @@ unattended command on the Mac). Tier 2 is one short checklist for Ryan, done onc
 
 Status: `tools/mac/check.sh` and `rig-probe` are tested on Linux (argument parsing and usage errors, `git archive`
 export and reuse, `--src`, the core stage from a clean export, the probe stage on the null audio backend, missing-tool
-and bad-revision paths, `summary.json` parsed back, Apple stages SKIPPED with a reason; shellcheck clean). The script
+and bad-revision paths, `summary.json` parsed back, Apple stages SKIPPED with a reason; shellcheck clean). The skeptic
+review (`native/docs/reviews/mackit.md`) also ran the macOS code paths on Linux behind stub `uname`/`xcodebuild`/
+`xcodegen`/`sw_vers`/`sysctl`/`libtool` commands (compile error capture, scheme fallback, simulator platform missing,
+Xcode license), the timeout watchdog and a TERM in the middle of the core build (summary still written, no process
+left behind). The script
 was written for `/bin/bash` 3.2 but only run under bash 5 here. The macOS-only
 parts (Core Audio probe run, `build-core.sh`, `xcodegen`, `xcodebuild`, the `mac-check` CI job) are written but have
 never run: the first tier-0 or tier-1 run is their test.
@@ -59,6 +63,11 @@ What it guarantees:
   Exit 0 = no stage FAILED (SKIPPED is not a failure), 1 = something failed, 2 = usage.
 - **It keeps going.** A failed stage does not stop the stages that do not depend on it (core, probe and the two Apple
   stages are independent; all need the export).
+- **It never waits forever.** Every external command that can take long runs under a timeout (macOS has no
+  `timeout(1)`: a watchdog kills the command's whole process tree): configure 10 min, each build 40 min, ctest 30 min
+  (900 s per test), the probe 5 min, xcodegen 5 min, each xcodebuild 40 min, the `xcodebuild -version/-showsdks`
+  queries 1 min. Every command gets stdin from `/dev/null`, so nothing can sit at a prompt. A timeout is a FAIL with
+  `check.sh: timed out after Ns` in the stage log.
 
 | stage | what | M-series estimate (first run / same sha again) |
 |---|---|---|
@@ -66,8 +75,8 @@ What it guarantees:
 | `tools` | macOS, CPU (performance + efficiency cores), Xcode, Apple clang, cmake, ninja, xcodegen, node versions; SDK list; first-launch status | < 5 s |
 | `core` | `cmake -G Ninja -DCMAKE_BUILD_TYPE=Release` of `native/devhost` with `-DDEVHOST_CORE_TESTS=ON` (the core and its tests in the same tree the probe uses: the core compiles once), build `rig_tests rig_render rig-golden rig_bench`, `ctest -LE devhost -j<ncpu>`; failures are re-run once serially (timing tests) and reported as `flaky` if they pass. Golden tests are excluded when `native/golden/out` is absent (it is git-ignored, so always in an export): CI's `goldens` + `build-test` cover them on macos-15. `unit.samples_decode`, `unit.samples_process` and `unit.samples_service` read `tools/golden/decode-dump/data/raw*`, which is git-ignored too: without it their failures are listed as `NoData` and not counted (see "Known gaps"). Per-test results in `stages.core.tests`. | 1.5-3 min / 30-60 s |
 | `probe` | build `rig-probe` + the dev host tests in the same tree, `ctest -L devhost` (null backend), then `rig-probe` on the default output (below), killed after 300 s | 2-3 min / 2 min |
-| `apple-mac` | `scripts/build-core.sh --mac-only` (Ninja), `xcodegen generate`, `xcodebuild -scheme WorshipRig-macOS -configuration Debug -destination 'platform=macOS' CODE_SIGN_IDENTITY=- build` (compile and link only) | 2-4 min / 1 min |
-| `apple-sim` | `scripts/build-core.sh --sim --no-device`, `xcodegen`, `xcodebuild -scheme WorshipRig-iPad -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build`; SKIPPED with a note if this Xcode has no iOS Simulator SDK | 2-4 min / 1 min |
+| `apple-mac` | `scripts/build-core.sh --mac-only` (Ninja), `xcodegen generate`, `xcodebuild -scheme WorshipRig-macOS -configuration Debug -destination 'platform=macOS' CODE_SIGN_IDENTITY=- ARCHS=arm64 build` (compile and link only; arm64 because the xcframework slices are arm64 only) | 2-4 min / 1 min |
+| `apple-sim` | `scripts/build-core.sh --sim --no-device`, `xcodegen`, `xcodebuild -scheme WorshipRig-iPad -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO ARCHS=arm64 build` (a generic destination otherwise also builds x86_64, which the arm64-only simulator slice cannot link); SKIPPED with a note if this Xcode has no iOS Simulator SDK | 2-4 min / 1 min |
 
 Estimated total: 8-12 min for a new revision, about 3 min for a rerun of the same one, 1-3 min for `--quick` after a
 Swift-only change. Measured on the 2-vCPU Linux box (`--jobs 2`, clean export of e2b5219): export 1 s, core 153 s
@@ -83,7 +92,7 @@ If XcodeGen's project has no scheme that xcodebuild can auto-create, the Apple s
 {"tool": "tools/mac/check.sh", "schema": 1, "rev": "v2-native", "sha": "<40 hex>", "started": "...Z", "finished": "...Z",
  "host": {"os", "arch", "cpu", "cores", "xcode", "cxx", "cmake", "ninja", "xcodegen", "node", "jobs", "missing_brew"},
  "export": {"status", "seconds", "details", "src"},
- "out": "<dir>",
+ "out": "<dir>", "interrupted": "\"\" or \"signal during <stage>\"",
  "stages": {"<name>": {"status": "PASS|FAIL|SKIPPED", "seconds": 0, "details": "...", "log": "<name>.log",
                        "errors": ["native/apple/Sources/Shared/RigHost.swift:42:9: error: ...", "..."]},
             "core": {"...": "...", "tests": {"unit.bridge": "Passed", "...": "..."}, "flaky": "", "golden": "..."}},
@@ -133,19 +142,30 @@ brew install cmake ninja xcodegen node
 (`node` is optional: only the core's `unit.params-drift` test needs it.) Xcode 15.4+ from the App Store, opened once
 (or `sudo xcodebuild -runFirstLaunch`, which also covers the license), and the iOS Simulator platform if Xcode did not
 install it (Xcode > Settings > Components, or `xcodebuild -downloadPlatform iOS`); without it `apple-sim` is SKIPPED,
-not failed.
+not failed (either `-showsdks` lists no simulator SDK, or xcodebuild says the iOS platform "is not installed").
+An unaccepted Xcode license shows up in `tools` as "Xcode license not accepted", not as a missing Xcode.
 
 ### PROTOCOL.md: the RUN allow-list line to add
 
 Add this line to the RUN allow-list in `~/Projects/worship-rig-v2/PROTOCOL.md`:
 
 ```
-- bash tools/mac/check.sh [--rev <v2-native|origin/v2-native|7-40 hex sha>] [--stage <comma list of tools,core,probe,apple-mac,apple-sim>] [--quick] [--out ~/Projects/worship-rig-v2/outbox/logs/<UTC>-check]   (cwd ~/Projects/worship-rig; read-only git; builds only under ~/Library/Caches/worship-rig-check; installs nothing; up to 20 min; reply with the exit code and the summary.json path)
+- bash -c "$(git -C ~/Projects/worship-rig show v2-native:tools/mac/check.sh)" check.sh --repo ~/Projects/worship-rig [--rev <v2-native|origin/v2-native|7-40 hex sha>] [--stage <comma list of tools,core,probe,apple-mac,apple-sim>] [--quick] [--out ~/Projects/worship-rig-v2/outbox/logs/<UTC>-check]   (read-only git; builds only under ~/Library/Caches/worship-rig-check; installs nothing; no sudo; 3-20 min, so start it with the Bash tool's run_in_background and wait for it: the foreground limit is 10 min; reply with the exit code and the summary.json path)
 ```
+
+Why this form and not `bash tools/mac/check.sh`: the script is read from the `v2-native` branch with `git show`
+(read-only), so the RUN works whatever branch `~/Projects/worship-rig` has checked out (it may be on a 1.x branch,
+where `tools/mac/` does not exist; the push agent only fast-forwards `v2-native`), and the script matches the
+revision it builds by default. When the
+working tree is on `v2-native`, `bash tools/mac/check.sh [flags]` from `~/Projects/worship-rig` is the same thing.
+
+Why in the background: a first run takes 8-15 min, and a Claude Code foreground Bash call is killed at 10 min.
+If the run is killed anyway (TERM/INT/HUP), `check.sh` stops the command it was running (the whole process tree) and
+still writes `summary.json`, with `"interrupted": "signal during <stage>"` and that stage FAILED; exit 143.
 
 The cloud then sends `inbox/<UTC>-RUN.md` (first line `VERB: RUN`, then the command exactly as above) and reads
 `outbox/logs/<UTC>-check/summary.json` back through the device tools. The loop for Swift compile errors is: read
-`stages.apple-*.errors`, fix, push, `RUN bash tools/mac/check.sh --quick` (or wait for CI's `mac-check`).
+`stages.apple-*.errors`, fix, push, RUN the same line with `--quick` (or wait for CI's `mac-check`).
 
 ## Tier 2: Ryan by hand (one checklist, deferred until songs play)
 

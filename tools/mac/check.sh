@@ -351,11 +351,12 @@ on_signal() {  # TERM/INT/HUP (e.g. the push agent gives up): stop the running c
   fi
   interrupted="signal during ${cur_stage:-setup}"
   if [ -n "$cur_stage" ] && [ ! -f "$state/$cur_stage.status" ]; then
-    record "$cur_stage" FAIL 0 "interrupted by a signal (partial log: $cur_stage.log)"
+    record "$cur_stage" FAIL 0 "interrupted by a signal (partial log: $cur_stage.log)" >&3 2>&4
   fi
-  finish || true
+  finish >&3 2>&4 || true  # the run's own stdout: the signal may land inside a `tmo ... >> log`
   exit 143
 }
+exec 3>&1 4>&2
 trap on_signal TERM INT HUP
 
 if want tools; then
@@ -700,15 +701,18 @@ apple_stage() {  # apple_stage <stage> <build-core flags> <scheme> <destination>
 
 if want apple-mac; then
   if [ -n "$apple_skip_reason" ]; then skip apple-mac "$apple_skip_reason"
-  else apple_stage apple-mac "--mac-only" WorshipRig-macOS "platform=macOS" macosx CODE_SIGN_IDENTITY=-; fi
+  # ARCHS=arm64: the xcframework has arm64 slices only (build-core.sh), so an x86_64 half could never link
+  else apple_stage apple-mac "--mac-only" WorshipRig-macOS "platform=macOS" macosx CODE_SIGN_IDENTITY=- ARCHS=arm64; fi
 fi
 if want apple-sim; then
   if [ -n "$apple_skip_reason" ]; then skip apple-sim "$apple_skip_reason"
   elif ! tmo 60 xcodebuild -showsdks 2>/dev/null | grep -q iphonesimulator; then
     skip apple-sim "$platform_note"
   else
+    # a generic simulator destination builds every arch in ARCHS (arm64 + x86_64), the xcframework's simulator slice
+    # is arm64 only
     apple_stage apple-sim "--sim --no-device" WorshipRig-iPad "generic/platform=iOS Simulator" iphonesimulator \
-      CODE_SIGNING_ALLOWED=NO
+      CODE_SIGNING_ALLOWED=NO ARCHS=arm64
   fi
 fi
 
