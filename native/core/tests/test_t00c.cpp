@@ -397,6 +397,13 @@ TEST_SUITE("t00c") {
       CHECK(kept.front() == keys.front());  // request order: the next song's samples first
       CHECK(kept.back() == keys[fit - 1]);
       CHECK(contains(cs->statsFields(), "\"pinsDropped\":25"));
+      // T00c review: pins whose decodes have not landed yet still count (back-to-back `preload {pin:'add'}`)
+      cs->cache().pinAdd(kept);
+      std::vector<std::string> more;
+      for (std::size_t i = 0; i < 8; ++i) more.push_back("/pins/more" + std::to_string(i) + ".wav");
+      CHECK(cs->withinPinBudget(more, true).empty());
+      CHECK(cs->withinPinBudget({keys.front()}, true).size() == 1);  // already pinned: kept, not counted twice
+      cs->cache().setPins({});
       const std::string hello = R"({"v":1,"op":"hello","protocol":1,"id":1})";
       rig_post(raw, hello.data(), hello.size());  // flushes the queued events
       bool warned = false;
@@ -428,22 +435,27 @@ TEST_SUITE("t00c") {
       for (int i = 0; i < static_cast<int>(s * 10); ++i) REQUIRE(rig_offline_render(raw, p, 2, 4800) == RIG_OK);
     };
     renderSec(0.2);
-    std::size_t worst = 0, worstKernels = 0, slotState = 0;
+    std::size_t worst = 0, worstKernels = 0, slotState = 0, worstFade = 0;
     const double sizes[] = {0.7, 0.85, 1.0, 0.7, 1.0, 0.85};
     for (double sz : sizes) {
       const rig::fx::ReverbPool::Stage st = pool->stage(sz, 0.5, false);
       pool->waitBuilds();
       pool->commitTo(&st, 0.02, en.model().now());
-      renderSec(1.2);  // 0.8 s fade + idle (0.05 s) + margin
+      for (int k = 0; k < 12; ++k) {  // 0.8 s fade + idle (0.05 s) + margin; sampled during the crossfade too
+        renderSec(0.1);
+        worstFade = std::max(worstFade, pool->bytes());
+      }
       worst = std::max(worst, pool->bytes());
       worstKernels = std::max(worstKernels, pool->kernelBytes());
       slotState = std::max(slotState, pool->bytes() - pool->kernelBytes());
     }
     MESSAGE("iPad reverb after each switch: worst total " << worst / 1048576.0 << " MB (kernels "
                                                           << worstKernels / 1048576.0 << " MB, slot state up to "
-                                                          << slotState / 1048576.0 << " MB), cap 32 MB");
+                                                          << slotState / 1048576.0 << " MB), cap 32 MB; during a crossfade "
+                                                          << worstFade / 1048576.0 << " MB");
     CHECK(slotState > 0);        // state is counted now
     CHECK(worst <= pool->maxBytes());
+    CHECK(worstFade <= pool->maxBytes());  // T00c review: also while two units crossfade (evict at the swap)
     rig_destroy(raw);
   }
 

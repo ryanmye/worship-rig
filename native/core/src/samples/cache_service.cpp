@@ -277,7 +277,10 @@ void CacheServiceImpl::protectSwitch(const rig::PatchSpec *playing, const rig::P
 std::vector<std::string> CacheServiceImpl::withinPinBudget(const std::vector<std::string> &keys, bool add) {
   const double hard = static_cast<double>(cache_.hardCapBytes() ? cache_.hardCapBytes() : cache_.capBytes());
   const double budget = 0.85 * hard;
-  double used = add ? static_cast<double>(cache_.pinnedBytes()) : 0.0;
+  // T00c review: what is pinned already is counted by its ESTIMATE (stored size once decoded), not pinnedBytes(),
+  // which sees decoded pins only: back-to-back `preload {pin:'add'}` calls land before their decodes do.
+  double used = 0.0;
+  if (add) used = cache_.estimateBytes(std::vector<std::string>(cache_.pins().begin(), cache_.pins().end())).bytes;
   std::vector<std::string> out;
   std::set<std::string> seen;
   int dropped = 0;

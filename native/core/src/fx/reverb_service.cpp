@@ -623,6 +623,10 @@ void ReverbPool::swapUnit(const std::string &key, KernelPtr k, const Stage &st, 
   cached(key);
   size_ = st.size;
   damp_ = st.damp;
+  // T00c review (T04 finding 1): the new slot's state is counted from now on, so make room at once (Idle slots LRU,
+  // then idle kernels) instead of only when the fading slot goes Idle: the crossfade itself stays within the cap
+  // whenever something is evictable.
+  evict();
 }
 
 void ReverbPool::sendSetPredelay(int slot, double p, double when, bool immediate) {

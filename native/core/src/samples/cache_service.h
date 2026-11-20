@@ -54,8 +54,9 @@ class CacheServiceImpl final : public rig::CacheService {
   void setLowResource(bool on);
   /** Decode pinned samples that were evicted for a switch's headroom (or deferred), while they fit. */
   void rewarmPins();
-  /** T00c pin policy: the prefix of `keys` (request order, deduplicated) whose estimated bytes fit the pin budget
-   *  (85 % of the hard cap; with `add`, on top of what is pinned already). Counts and warns about the rest. */
+  /** T00c pin policy: the keys of `keys` (request order, deduplicated; a key that does not fit is skipped and later
+   *  smaller ones may still fit) whose estimated bytes fit the pin budget (85 % of the hard cap; with `add`, on top
+   *  of the estimate of what is pinned already, decoded or not). Counts and warns about the rest. */
   std::vector<std::string> withinPinBudget(const std::vector<std::string> &keys, bool add);
 
   /** samples.pcmOverride test hook (SETUP_REVIEW 13): decoded PCM dumped from the golden Chromium
