@@ -355,6 +355,7 @@ void SynthInstrument::allNotesOff(std::int64_t frame) {
 }
 
 void SynthInstrument::kill() {
+  pool_.forEach([&](int s, SynthVoice &) { killSeq_ = std::max(killSeq_, pool_.meta(s).seq); });
   killAll_ = true;
 }
 
@@ -624,6 +625,7 @@ void SynthInstrument::process(const RenderContext &ctx, UnitIO &io) {
   pendingEndedN_ = 0;
   if (killAll_) {
     pool_.forEach([&](int s, SynthVoice &) {
+      if (pool_.meta(s).seq > killSeq_) return;  // a note-on after the Panic in the same quantum keeps sounding
       emitEnded(ctx, s);
       pool_.destroy(s);
     });

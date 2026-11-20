@@ -43,7 +43,8 @@ struct Case {
 
 std::vector<Case> loadCases() {
   std::vector<Case> cs;
-  std::ifstream f(std::string(RIG_REPO_DIR) + "/tools/golden/vectors/data/synth.txt");
+  const char *alt = std::getenv("T11_VECTORS");  // debugging aid: replay another dump-synth.mjs output instead
+  std::ifstream f(alt ? std::string(alt) : std::string(RIG_REPO_DIR) + "/tools/golden/vectors/data/synth.txt");
   std::string line;
   Case c;
   while (std::getline(f, line)) {
@@ -64,7 +65,7 @@ double num(yyjson_val *v) {
 TEST_SUITE("synth-vectors") {
   TEST_CASE("synth.js reference renders (dump-synth.mjs) at the exact tier") {
     const std::vector<Case> cases = loadCases();
-    REQUIRE(cases.size() >= 10);
+    REQUIRE(cases.size() >= (std::getenv("T11_VECTORS") ? 1u : 10u));
     for (const Case &cs : cases) {
       CAPTURE(cs.name);
       yyjson_doc *doc = yyjson_read(cs.spec.data(), cs.spec.size(), 0);

@@ -103,6 +103,7 @@ class SynthInstrument final : public Instrument {
   double morphX_ = 0, releaseOverride_ = 0;
   std::int64_t nextFrame_ = 0;  // first frame of the quantum being / about to be rendered ("currentTime")
   bool killAll_ = false;
+  std::uint64_t killSeq_ = 0;  // kill() hits the voices constructed up to here, not a note-on of the same quantum
   static constexpr unsigned kMaxGarbage = 8;
   Owned *garbage_[kMaxGarbage] = {};  // payloads handed back at the next process() (giveBack needs the context)
   unsigned garbageN_ = 0;

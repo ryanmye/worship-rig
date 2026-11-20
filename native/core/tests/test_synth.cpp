@@ -135,6 +135,12 @@ TEST_SUITE("synth") {
     out = d.run(1280);
     for (float v : out[0]) CHECK_MESSAGE(v == 0.0f, "kill(): silence from the next quantum (bell: no bus filter)");
     CHECK(s->liveVoices() == 0);
+    d.noteOn(72, 100, 0.83);  // Panic then a note-on applied in the same quantum: only the older voice dies
+    d.apply(op(rig::Op::Panic, 0.83, sr));
+    d.noteOn(74, 100, 0.83);
+    d.run(128);
+    CHECK(s->playingNote(72) == 0);
+    CHECK(s->playingNote(74) == 1);
     CHECK(d.rtAllocs == 0);
   }
 
