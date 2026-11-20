@@ -40,11 +40,17 @@ function spy(target, prefix, seen) {
 export class AudioEngine {
   constructor(opts = {}) {
     const status = (globalThis.__devhostStatus = []);
+    let engine = null;
     const transport = websocketTransport({
       url: devhostUrl(),
-      onStatus: (s, info) => status.push({ s, ...(info || {}), at: Date.now() }),
+      onStatus: (s, info) => {
+        status.push({ s, ...(info || {}), at: Date.now() });
+        // a lost socket is a dead native side: after the synthesized warn + state closed (same turn), close the link
+        // so in-flight requests (a 120 s prepare) reject now instead of at their timeout
+        if (s === 'closed' && engine) setTimeout(() => engine._link.close(), 0);
+      },
     });
-    const engine = new BridgeEngine({ transport, latency: opts.latency, app: 'worship-rig-ui (devhost)' });
+    engine = new BridgeEngine({ transport, latency: opts.latency, app: 'worship-rig-ui (devhost)' });
     globalThis.__bridgeRaw = engine;
     globalThis.__devhostTransport = transport;
     if (params.get('spy') !== '1') return engine;

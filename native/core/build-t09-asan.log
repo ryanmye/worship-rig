@@ -1,0 +1,17 @@
+[0/2] Re-checking globbed directories...
+[1/97] Building CXX object CMakeFiles/devhost_lib.dir/src/ws_codec.cpp.o
+[2/97] Building CXX object CMakeFiles/devhost_lib.dir/src/http.cpp.o
+[3/97] Building CXX object CMakeFiles/devhost_lib.dir/src/server.cpp.o
+[4/97] Building CXX object CMakeFiles/devhost_lib.dir/src/audio_host.cpp.o
+[5/97] Building CXX object CMakeFiles/devhost_lib.dir/src/devhost.cpp.o
+[6/97] Building CXX object CMakeFiles/rig-devhost.dir/src/main.cpp.o
+[7/97] Building C object CMakeFiles/devhost_miniaudio.dir/src/miniaudio_impl.c.o
+[8/97] Linking C static library libdevhost_miniaudio.a
+[9/97] Building CXX object CMakeFiles/devhost_tests.dir/tests/test_audio_host.cpp.o
+[10/97] Building CXX object CMakeFiles/devhost_tests.dir/tests/test_http.cpp.o
+[11/97] Building CXX object CMakeFiles/devhost_tests.dir/tests/main.cpp.o
+[12/97] Building CXX object CMakeFiles/devhost_tests.dir/tests/test_relay.cpp.o
+[13/97] Building CXX object CMakeFiles/devhost_tests.dir/home/claude/worship-rig/native/core/tests/alloc_trap.cpp.o
+[14/97] Building CXX object CMakeFiles/devhost_tests.dir/tests/test_ws_codec.cpp.o
+[15/97] Building C object core/CMakeFiles/rig_third_party.dir/third_party/pffft/src/pffft.c.o
+[16/97] Building C object core/CMakeFiles/rig_third_party.dir/third_party/pffft/src/pffft_common.c.o

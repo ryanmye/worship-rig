@@ -78,7 +78,7 @@ test('incoming frames: parsed, batches delivered whole, early batches replayed t
   assert.equal(t.stats.received, 2);
 });
 
-test('lost connection: pending requests fail fast as closed, and the page sees warn + state closed', async () => {
+test('lost connection: new requests fail fast as closed; the page sees warn + state closed', async () => {
   const t = websocketTransport({ url: 'ws://x', WebSocketImpl: FakeWS });
   const ws = FakeWS.last;
   const events = [];
@@ -86,8 +86,8 @@ test('lost connection: pending requests fail fast as closed, and the page sees w
   const p = link.request('get', { what: 'state' });
   ws.open();
   ws.drop(1006, '');
-  // the in-flight request still waits for its own timeout (the link has no transport-close hook) but every new
-  // one is refused at once
+  // an in-flight request waits for its own timeout (the link has no transport-close hook; boot-devhost.js closes
+  // the link on a lost socket, which rejects it) but every new one is refused at once
   await assert.rejects(link.request('hello'), (e) => e.code === 'closed');
   assert.deepEqual(events.map((e) => e.ev), ['warn', 'state']);
   assert.equal(events[0].code, 'device');
@@ -121,7 +121,8 @@ test('BridgeEngine over the transport: hello round trip, a lost host shows up as
   ws.open();
   const hello = JSON.parse(ws.sent[0]);
   assert.equal(hello.op, 'hello');
-  ws.recv({ v: 1, re: hello.id, ok: true, result: { protocol: 1, minor: 0, engine: 'fake', caps: [], sampleRate: 44100 } });
+  const result = { protocol: 1, minor: 0, engine: 'fake', caps: [], sampleRate: 44100 };
+  ws.recv({ v: 1, re: hello.id, ok: true, result });
   await tick();
   assert.equal(engine.ctx.sampleRate, 44100);
   ws.drop(1001, 'rig-devhost shutting down');

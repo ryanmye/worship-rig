@@ -329,6 +329,7 @@ AudioStats AudioHost::stats() const {
   s.totalNs = totalNs_.load();
   s.renderNs = renderNs_.load();
   s.maxNs = maxNs_.load();
+  std::lock_guard<std::mutex> lk(devMu_);  // written by start() on the host thread
   s.sampleRate = sr_;
   s.channels = channels_;
   s.periodFrames = period_;

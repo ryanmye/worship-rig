@@ -76,7 +76,7 @@ class AudioHost {
   rig_host vt_{};
   std::atomic<rig_engine *> engine_{nullptr};
   std::unique_ptr<Impl> impl_;
-  std::mutex devMu_;  // serialises open/close (host thread vs shutdown)
+  mutable std::mutex devMu_;  // serialises open/close (host thread vs shutdown) and the format fields for stats()
   std::vector<float> planar_;  // maxBlock * channels, preallocated before the device starts
   float *planes_[RIG_MAX_OUTPUT_CHANNELS] = {};
   std::uint32_t channels_ = 2;

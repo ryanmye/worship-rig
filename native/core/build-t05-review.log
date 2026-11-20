@@ -131,3 +131,8 @@
 [130/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_third_party.cpp.o
 [131/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_t00b_api.cpp.o
 [132/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_voice.cpp.o
+[133/136] Building CXX object CMakeFiles/rig_tests.dir/tests/test_wav.cpp.o
+[134/136] Building CXX object CMakeFiles/rig_tests.dir/tests/time_automation_test.cpp.o
+[135/136] Building CXX object CMakeFiles/rig_tests.dir/tests/time_param_test.cpp.o
+[136/136] Linking CXX executable rig_tests
+EXIT 0

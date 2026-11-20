@@ -154,8 +154,8 @@ test('native ends the take on its own (rate change): idle with the result and a 
 
 test('write error: while recording, and during our own stop (event before the reply)', async () => {
   const s = scripted((m) => (m.action === 'start' ? [{ result: { path: '/r/x.wav' } }]
-    : [recEvent({ state: 'error', path: '/r/x.wav', seconds: 3, bytes: 1000, message: 'rec: write failed (disk full?)' }),
-      { result: { path: '/r/x.wav', seconds: 3, bytes: 1000 } }]));
+    : [recEvent({ state: 'error', path: '/r/x.wav', seconds: 3, bytes: 1000,
+      message: 'rec: write failed (disk full?)' }), { result: { path: '/r/x.wav', seconds: 3, bytes: 1000 } }]));
   const restore = quiet();
   try {
     const rec = new NativeRecorder({ engine: s.engine });
