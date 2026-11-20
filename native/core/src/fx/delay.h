@@ -2,7 +2,7 @@
 // "delay" + set handler "fx.delay.".
 //
 // Contract 3.5: two lines (sync time from SongState::tempo, glide <= 5 %, else line switch/flush), ping-pong matrix,
-// tone LPF 1200*10^tone, feedback (4 gains, wash override), NO 128-frame feedback split (Q9), panic (feedback -> 0
+// tone LPF 1200*10^tone, feedback (4 gains, wash override), the JS Q split kept (fx/delay_unit.h), panic (feedback -> 0
 // for max(0.2 s, longest line + 50 ms)). Tap "fx.delay.output" = io.out, inject "fx.delay.input" = io.in.
 // Construction: from UnitSpec::patch->delay (DelayPatch) and UnitSpec::song->tempo.
 #pragma once

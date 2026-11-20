@@ -373,7 +373,9 @@ Two `DelayLine`s (only one fed). Per line: `input → gate → [pre Q = 128/sr] 
 (time − Q) → tone LPF (Butterworth, 1200·10^tone Hz) → { out → ret ; fb-matrix → delay }`. In-matrix: plain
 L→L, R→R; ping-pong `L ← .5L + .5R`, R ← 0. Feedback matrix: plain `fbLL = fbRR = f`; ping-pong `fbLR = fbRL = f`
 (`f ≤ 0.9`). Echo k lands at exactly `k·time` `[Q]`: the `Q` split exists only because Chromium runs a feedback
-cycle one render quantum late; **native: one delay of `time` in the loop, first echo at `time`, no Q.**
+cycle one render quantum late; **native: the same structure (pre-delay Q, d = time − Q, feedback reads the LPF
+output one quantum late); echo k lands at exactly k·time** (T05 review R1: this structure is what makes the echo
+fixtures bit-exact).
 Effective time: sync on and tempo ⇒ `beat·{1/4:1, 1/8d:.75, 1/8:.5}`, else `time`; clamp .02..1.9 s. Change ≤ 5 %
 ⇒ linear delay-time glide over `max(.5, 20·|Δ|)` s (pitch-shifts the tail ≤ 5 %); larger ⇒ the idle line takes the
 new time (gate τ 5 ms in, out set to 1, feedback τ 5 ms), the old line's gate closes τ 5 ms and it rings

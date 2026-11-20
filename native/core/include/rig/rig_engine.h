@@ -152,6 +152,11 @@ typedef struct rig_host {
   uint32_t struct_size;
   void *user;
 
+  /*
+   * Threading (T08): audio_start and audio_stop are called on the core's own device thread, one at a time, in the
+   * order the engine issued them (never on the control thread, never concurrently). Both must return: rig_destroy()
+   * joins that thread, so a host call that never returns blocks rig_destroy() (T08 review open item 3).
+   */
   /**
    * Open or reopen the output device and start calling rig_render(). `device_id` NULL/"" = system default.
    * `latency_sec` 0 = "interactive" (smallest stable buffer), else the requested buffer duration. `channels` is 2,

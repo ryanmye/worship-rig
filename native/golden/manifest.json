@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "generator": "tools/golden/render.mjs",
- "generatedAt": "2026-11-20T05:00:14.167Z",
+ "generatedAt": "2026-11-20T05:55:42.563Z",
  "chromium": "157.0.8103.78",
  "chromiumPin": {
   "version": "157.0.8103.78",
@@ -35,9 +35,9 @@
  },
  "measures": "tools/golden/analysis.mjs (definitions in its header and native/golden/README.md)",
  "lastRun": {
-  "fixtures": 2,
+  "fixtures": 1,
   "repeat": 2,
-  "seconds": 3.4,
+  "seconds": 1.5,
   "cpus": 2
  },
  "stimuli": {
@@ -164,11 +164,11 @@
   "committedBytes": 2207860,
   "commitCapBytes": 2500000,
   "regenerate": "node tools/golden/pcm.mjs",
-  "seconds": 8.1
+  "seconds": 6.1
  },
  "tiers": {
-  "exact": 62,
-  "statistical": 46,
+  "exact": 68,
+  "statistical": 40,
   "exactIfPrngPorted": 41,
   "statisticalBandsDb": {
    "min": 1.5,
@@ -10717,7 +10717,7 @@
   {
    "id": "reverb-room",
    "kind": "effect",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": true,
    "chromium": "157.0.8103.78",
@@ -10766,11 +10766,19 @@
    "repeatMaxAbsDiff": 0,
    "renderMs": 522,
    "tolerance": {
-    "bandsDb": 5.88,
-    "bandRangeDb": 50,
-    "envCorr": 0.944,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 5.88,
+     "bandRangeDb": 50,
+     "envCorr": 0.944,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "ConvolverNode"
@@ -11013,23 +11021,12 @@
     "lagMs": 0,
     "maxAbs": 0.01928
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 5.88,
-    "envCorr": 0.944,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 4.704 dB, env corr 0.9944, rms 0.01288 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "ir"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.0471
@@ -11037,7 +11034,7 @@
   {
    "id": "reverb-stage",
    "kind": "effect",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -11086,11 +11083,19 @@
    "repeatMaxAbsDiff": 0,
    "renderMs": 478,
    "tolerance": {
-    "bandsDb": 3.04,
-    "bandRangeDb": 50,
-    "envCorr": 0.944,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 3.04,
+     "bandRangeDb": 50,
+     "envCorr": 0.944,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "ConvolverNode"
@@ -11333,23 +11338,12 @@
     "lagMs": 0,
     "maxAbs": 0.01664
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 3.04,
-    "envCorr": 0.944,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 2.435 dB, env corr 0.9935, rms 0.04265 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "ir"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.04931
@@ -11357,7 +11351,7 @@
   {
    "id": "reverb-hall",
    "kind": "effect",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -11406,11 +11400,19 @@
    "repeatMaxAbsDiff": 0,
    "renderMs": 1067,
    "tolerance": {
-    "bandsDb": 3.53,
-    "bandRangeDb": 50,
-    "envCorr": 0.944,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 3.53,
+     "bandRangeDb": 50,
+     "envCorr": 0.944,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "ConvolverNode"
@@ -11653,23 +11655,12 @@
     "lagMs": 0,
     "maxAbs": 0.01491
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 3.53,
-    "envCorr": 0.944,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 2.824 dB, env corr 0.9943, rms 0.007362 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "ir"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.04785
@@ -11677,7 +11668,7 @@
   {
    "id": "reverb-cathedral",
    "kind": "effect",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -11726,11 +11717,19 @@
    "repeatMaxAbsDiff": 0,
    "renderMs": 1627,
    "tolerance": {
-    "bandsDb": 2.71,
-    "bandRangeDb": 50,
-    "envCorr": 0.945,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 2.71,
+     "bandRangeDb": 50,
+     "envCorr": 0.945,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "ConvolverNode"
@@ -11973,23 +11972,12 @@
     "lagMs": 0,
     "maxAbs": 0.0158
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 2.71,
-    "envCorr": 0.945,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 2.164 dB, env corr 0.9949, rms 0.01791 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "ir"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.04999
@@ -11997,7 +11985,7 @@
   {
    "id": "reverb-wash",
    "kind": "effect",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -12046,11 +12034,19 @@
    "repeatMaxAbsDiff": 0,
    "renderMs": 1817,
    "tolerance": {
-    "bandsDb": 3.59,
-    "bandRangeDb": 50,
-    "envCorr": 0.946,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 3.59,
+     "bandRangeDb": 50,
+     "envCorr": 0.946,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "ConvolverNode"
@@ -12293,23 +12289,12 @@
     "lagMs": 0,
     "maxAbs": 0.02009
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 3.59,
-    "envCorr": 0.946,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 2.87 dB, env corr 0.9957, rms 0.01082 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "ir"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.04954
@@ -14102,7 +14087,7 @@
   {
    "id": "chorus-default-sine",
    "kind": "effect",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": true,
    "chromium": "157.0.8103.78",
@@ -14151,11 +14136,19 @@
    "repeatMaxAbsDiff": 0,
    "renderMs": 771,
    "tolerance": {
-    "bandsDb": 2.04,
-    "bandRangeDb": 50,
-    "envCorr": -1,
-    "envLagMs": 200,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 2.04,
+     "bandRangeDb": 50,
+     "envCorr": -1,
+     "envLagMs": 200,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "DelayNode with audio-rate delayTime"
@@ -14396,23 +14389,12 @@
     "lagMs": 20,
     "maxAbs": 0.5998
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 2.04,
-    "envCorr": -1,
-    "envLagMs": 200,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 1.634 dB, env corr -0.3591, rms 0.006258 dB); envelope check off (seeds decorrelate it)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "chorus"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.003274
@@ -38943,24 +38925,24 @@
    "addedBy": "T17",
    "chromium": "157.0.8103.78",
    "file": "out/eq-type-change.wav",
-   "sha256": "4d070a3cc31ab21b3ce5d4d62a0cb245b3e600389dc89eb94e6e014c9df4a31f",
+   "sha256": "58161fc9e5d1fe6221c8d55a4e34ebcd01b2e3c6e688697ae4248b062aae213a",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 149940,
    "seconds": 3.4,
-   "peak": 0.288649,
-   "peakDb": -10.79,
-   "rms": 0.110689,
-   "rmsDb": -19.12,
+   "peak": 0.500538,
+   "peakDb": -6.011,
+   "rms": 0.154118,
+   "rmsDb": -16.24,
    "bandsDb": [
-    -48.29,
-    -46.47,
-    -47.45,
-    -48.08,
-    -48.22,
-    -44.79,
-    -44.11,
-    -41.37,
+    -33.4,
+    -31.67,
+    -32.99,
+    -34.46,
+    -37.72,
+    -41.33,
+    -44.09,
+    -41.36,
     -41.23,
     -40.52,
     -38.84,
@@ -38985,7 +38967,7 @@
     -80.61
    ],
    "repeatMaxAbsDiff": 0,
-   "renderMs": 583,
+   "renderMs": 1170,
    "tolerance": {
     "maxAbsDiff": 0.0002,
     "bandsDb": 0.25,
@@ -39387,7 +39369,7 @@
     "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
-   "repeatBandsDb": 0.004979
+   "repeatBandsDb": 0.004947
   },
   {
    "id": "eq-legacy-rows",

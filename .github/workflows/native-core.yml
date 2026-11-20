@@ -1,5 +1,9 @@
-# Native engine core (native/core): build + ctest on Linux and macOS, plus an ASan/UBSan job.
-# UNVERIFIED until pushed: written on a box without GitHub Actions, macOS or Apple clang (T00 skeleton).
+# Native engine core (native/core): build + ctest on Linux and macOS, plus an ASan/UBSan + TSan job.
+# The golden WAVs ctest compares against are git-ignored (native/golden/out/), so the `goldens` job regenerates the
+# ones the passing set needs (native/core/tests/golden_ids/*.ids) with the web engine in the pinned Chromium, caches
+# them by the manifest + id-list hash and hands them to the test jobs as an artifact (WAVE0B_REVIEW V11). Committed
+# audio (smoke/, stimuli/, pcm/) is used as checked in. UNVERIFIED until pushed: written on a box without GitHub
+# Actions; the YAML is parse-checked and `node tools/golden/ci-goldens.mjs --out-dir <dir>` was run locally.
 name: native-core
 
 on:
@@ -9,6 +13,7 @@ on:
       - 'native/golden/**'
       - 'native/contract/**'
       - 'tools/golden/**'
+      - 'app/js/engine/**'
       - '.github/workflows/native-core.yml'
   pull_request:
     paths:
@@ -16,20 +21,69 @@ on:
       - 'native/golden/**'
       - 'native/contract/**'
       - 'tools/golden/**'
+      - 'app/js/engine/**'
       - '.github/workflows/native-core.yml'
 
+env:
+  # must equal native/golden/manifest.json chromiumPin.version (ci-goldens.mjs refuses any other browser)
+  GOLDEN_CHROMIUM_VERSION: 157.0.8103.78
+
 jobs:
+  goldens:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Golden cache key (pinned Chromium + manifest + the ids ctest compares)
+        id: key
+        run: |
+          m='${{ hashFiles('native/golden/manifest.json') }}'
+          i='${{ hashFiles('native/core/tests/golden_ids/*.ids') }}'
+          echo "key=goldens-${GOLDEN_CHROMIUM_VERSION}-${m}-${i}" >> "$GITHUB_OUTPUT"
+      - name: Golden cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: native/golden/out
+          key: ${{ steps.key.outputs.key }}
+      - name: Install Playwright (no browser download) and the pinned Chrome for Testing headless shell
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          npm ci --ignore-scripts
+          npx playwright install-deps chromium
+          exe=$(npx --yes @puppeteer/browsers@3.2.6 install "chrome-headless-shell@${GOLDEN_CHROMIUM_VERSION}" \
+            --path "$RUNNER_TEMP/cft" --format '{{path}}' | tail -n 1)
+          test -x "$exe"
+          echo "GOLDEN_CHROMIUM=$exe" >> "$GITHUB_ENV"
+      - name: Render the goldens ctest needs
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          node tools/golden/ci-goldens.mjs --list
+          node tools/golden/ci-goldens.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goldens
+          path: native/golden/out
+          retention-days: 3
+
   build-test:
+    needs: goldens
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-14]
+        os: [ubuntu-latest, macos-15]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: goldens
+          path: native/golden/out
       - name: Install ninja
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
@@ -50,12 +104,17 @@ jobs:
           TMPDIR: ${{ runner.temp }}
 
   sanitizers:
+    needs: goldens
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: goldens
+          path: native/golden/out
       - name: Install ninja
         run: sudo apt-get update && sudo apt-get install -y ninja-build
       - name: ASan + UBSan
@@ -66,11 +125,12 @@ jobs:
         working-directory: native/core
         env:
           TMPDIR: ${{ runner.temp }}
-      - name: TSan (queues, offline, bridge, realtime)
+      - name: TSan (runtime suites)
         run: |
           cmake --preset tsan
           cmake --build build/tsan
-          cd build/tsan && ctest --output-on-failure -R "queues|offline|bridge|realtime"
+          cd build/tsan && ctest --output-on-failure \
+            -R "queues|offline|bridge|realtime|runtime|soak|clock|rec|meter|click-record|offline-midi"
         working-directory: native/core
         env:
           TMPDIR: ${{ runner.temp }}
