@@ -247,6 +247,15 @@ void SamplerInstrument::releaseVoice(VoiceId id, std::int64_t frame, double fade
   if (slot >= 0) fadeOut(slot, t, fadeSec);
 }
 
+bool SamplerInstrument::oldestVoice(bool released, std::int64_t frame, double &at, VoiceId &id) {
+  const double t = timeOf(frame);  // the time noteOn's own makeRoom would use
+  const int s = released ? pool_.oldestReleased(t) : pool_.oldestPlaying();
+  if (s < 0) return false;
+  at = released ? pool_.meta(s).releasedAt : pool_.meta(s).startedAt;
+  id = pool_.idOf(s);
+  return true;
+}
+
 void SamplerInstrument::setBend(double semis, std::int64_t frame) {
   bend_ = std::isfinite(semis) ? semis : 0;
   const double t = timeOf(frame);

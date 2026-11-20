@@ -313,6 +313,15 @@ void SynthInstrument::noteOn(int note, int vel, float velGain, std::int64_t fram
   }
 }
 
+bool SynthInstrument::oldestVoice(bool released, std::int64_t frame, double &at, VoiceId &id) {
+  const double t = atTime(timeOf(frame));  // the time noteOn's own makeRoom would use
+  const int s = released ? pool_.oldestReleased(t) : pool_.oldestPlaying();
+  if (s < 0) return false;
+  at = released ? pool_.meta(s).releasedAt : pool_.meta(s).startedAt;
+  id = pool_.idOf(s);
+  return true;
+}
+
 void SynthInstrument::releaseSlot(int s, double t) {
   if (pool_.meta(s).state != VoiceState::Held) return;
   pool_.markReleased(s, t);

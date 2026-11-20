@@ -68,6 +68,26 @@ class Instrument : public Unit {
   // no-op: an instrument that never allocates past its own fixed pool may ignore it.
   virtual void setVoiceCap(unsigned cap) { (void)cap; }
 
+  // INTERFACE-CHANGE(D4): engine-wide voice limit (DECISIONS D4). The Graph enforces it after each note-on: while the
+  // voices counted by every instrument (slots and retiring channels) exceed the limit, it asks each one for its
+  // oldest candidate and steals the globally oldest with releaseVoice(id, frame, kStealFade) (the instrument's own
+  // 20 ms steal fade). Released voices go first (by release time), then held ones (by start time). Defaults: an
+  // instrument that does not report its voices is neither counted nor stolen from.
+  /** Voices counted against the caps: held + released (fading steal victims do not count). Audio thread, O(1). */
+  virtual unsigned playingVoices() const { return 0; }
+  /** The instrument's oldest steal candidate for a note-on at `frame`: `released` = its earliest released voice
+   *  (the instrument's own release policy, as its per-slot steal), else its oldest playing voice. `at` = release /
+   *  start time in engine seconds (comparable across instruments). False = no candidate. */
+  virtual bool oldestVoice(bool released, std::int64_t frame, double &at, VoiceId &id) {
+    (void)released;
+    (void)frame;
+    (void)at;
+    (void)id;
+    return false;
+  }
+  /** The Graph's view of an instrument slot's unit (graph/unit.h Unit::asInstrument). */
+  Instrument *asInstrument() final { return this; }
+
  protected:
   virtual void applyModule(const Command &c) { (void)c; }
 };

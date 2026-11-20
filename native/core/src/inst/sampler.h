@@ -108,6 +108,10 @@ class SamplerInstrument final : public Instrument {
   void releaseVoice(VoiceId id, std::int64_t frame, double fadeSec) override;
   unsigned outputChannels() const override { return 2; }
   void setVoiceCap(unsigned cap) override;
+  /** D4: voices counted against the caps (held + released). */
+  unsigned playingVoices() const override { return pool_.playing(); }
+  /** D4: the pool's steal candidate (BasicAllocator policy: any released voice first). */
+  bool oldestVoice(bool released, std::int64_t frame, double &at, VoiceId &id) override;
 
   // Control-side reads (tests; before attach or after the graph gave the unit back)
   double paramValue(std::uint32_t index) const { return index == kSamplerRelease ? release_ : tone_; }

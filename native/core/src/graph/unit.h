@@ -28,6 +28,7 @@ namespace rig {
 namespace wa {
 class Param;
 }
+class Instrument;
 
 inline constexpr std::size_t kQ = RIG_QUANTUM_FRAMES;
 
@@ -195,6 +196,9 @@ class Unit {
   }
   /** Live voices (instruments) or 1 while a tail rings (FX); feeds meters/stats and retire polling. */
   virtual std::uint32_t liveVoices() const { return 0; }
+  /** INTERFACE-CHANGE(D4): the unit as an Instrument (inst/instrument.h overrides it), null for every other unit. The
+   *  Graph reaches the engine-wide voice limit's virtuals through it, without RTTI on the audio thread. */
+  virtual Instrument *asInstrument() { return nullptr; }
 };
 
 }  // namespace rig

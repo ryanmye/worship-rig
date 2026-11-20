@@ -6471,9 +6471,10 @@
           "meters": "{rate?, slots?, rta?}?",
           "midiClock": "{port: id|null}?",
           "when": "engine s?",
-          "polyphony": "32|64|128?"
+          "polyphony": "32|64|128?",
+          "voiceLimit": "'auto'|128|256|512|0?"
         },
-        "reply": "{lowResource?, eqAudition?, polyphony?}",
+        "reply": "{lowResource?, eqAudition?, polyphony?, voiceLimit?, voiceLimitEffective?}",
         "maps": [
           "setMono",
           "setLowResource",
@@ -6489,7 +6490,7 @@
           "reload": "bool?",
           "patches": "Patch[]?"
         },
-        "reply": "instruments [entry]; stats DebugStats; devices [{id, name, channels, default, sampleRates}]; sampleStatus {loaded, failed}; state EngineState",
+        "reply": "instruments [entry]; stats DebugStats; devices [{id, name, channels, default, sampleRates}]; sampleStatus {loaded, failed}; state EngineState (+ polyphony, voiceLimit, voiceLimitEffective: D1/D4)",
         "maps": [
           "listInstruments",
           "reloadManifests",

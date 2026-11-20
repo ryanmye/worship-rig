@@ -181,6 +181,11 @@ export class BridgeEngine extends EventTarget {
     this._transpose = 0;
     this._tempo = null;
     this._lowResource = false;
+    /** 2.0 Sound (native DECISIONS D1, D2, D4): the buffer to ask for at the next start/restart (null = host's). */
+    this._bufferFrames = null;
+    /** What native last reported (replies, `state` events); null = not reported yet. Emitted as `audioconfig`. */
+    this._audioCfg = { polyphony: null, bufferFrames: null, bufferRequested: null, voiceLimit: null,
+      voiceLimitEffective: null };
     this._instrumentsAll = [];
     this._instruments = [];
     this._samplers = new Map();
@@ -290,7 +295,48 @@ export class BridgeEngine extends EventTarget {
     const seq = this._stSeq;
     const r = await this._req('audio', args);
     if (this._stSeq === seq) this._applyState(r);
+    this._takeAudioCfg(r); // the granted buffer is the answer to this request, whatever events came first
     return r;
+  }
+
+  /**
+   * 2.0 Sound (D1, D2, D4): polyphony / bufferFrames / voiceLimit / voiceLimitEffective from a reply or a `state`
+   * event. Fields the message lacks keep their last value; a change is emitted as `audioconfig` (Settings shows the
+   * granted buffer and the Auto voice limit through the controller).
+   */
+  _takeAudioCfg(s) {
+    if (!s || typeof s !== 'object') return;
+    const c = this._audioCfg;
+    const next = { ...c };
+    if (Number.isFinite(s.polyphony) && s.polyphony > 0) next.polyphony = s.polyphony;
+    if (Number.isFinite(s.bufferFrames) && s.bufferFrames > 0) next.bufferFrames = s.bufferFrames;
+    if (s.voiceLimit === 0 || s.voiceLimit === 'off') next.voiceLimit = 'off';
+    else if (s.voiceLimit === 'auto' || (Number.isFinite(s.voiceLimit) && s.voiceLimit > 0)) {
+      next.voiceLimit = s.voiceLimit;
+    }
+    if (Number.isFinite(s.voiceLimitEffective) && s.voiceLimitEffective >= 0) {
+      next.voiceLimitEffective = s.voiceLimitEffective;
+    } else if (next.voiceLimit !== c.voiceLimit) {
+      // a new mode without the core's number: a fixed limit is its own number, Auto's is unknown until reported
+      next.voiceLimitEffective = next.voiceLimit === 'off' ? 0 : next.voiceLimit === 'auto' ? null : next.voiceLimit;
+    }
+    next.bufferRequested = this._bufferFrames;
+    if (Object.keys(next).every((k) => next[k] === c[k])) return;
+    this._audioCfg = next;
+    this._emit('audioconfig', { ...next });
+  }
+
+  /** A `config` request for one 2.0 Sound field; resolves with the audio settings after the reply (never rejects). */
+  async _configReq(args, assumed) {
+    try {
+      await this._ready();
+      const r = await this._req('config', args);
+      // a core that answers with an empty reply took the value as sent (contract: the reply echoes what it knows)
+      this._takeAudioCfg({ ...assumed, ...(r && typeof r === 'object' ? r : {}) });
+    } catch (err) {
+      this._warn(`engine.config ${Object.keys(args).join(',')} failed: ${err && err.message}`);
+    }
+    return { ...this._audioCfg };
   }
 
   _applyState(s) {
@@ -348,6 +394,7 @@ export class BridgeEngine extends EventTarget {
     this._stSeq += 1;
     const prevSleep = this._st.sleep;
     const changed = this._applyState(m);
+    this._takeAudioCfg(m); // D2: the granted buffer after a restart / device change
     if (m.restarted) {
       this._epoch += 1; // an in-flight prepare token is dead (contract 1.1 restart)
       this._tokens.clear();
@@ -481,7 +528,7 @@ export class BridgeEngine extends EventTarget {
 
   async _doStart() {
     await this._ready();
-    await this._audioReq({ action: 'start', latency: this._latency });
+    await this._audioReq({ action: 'start', latency: this._latency, ...this._bufferArg() });
     this._started = true;
     await this._refreshInstruments();
     return this;
@@ -492,7 +539,7 @@ export class BridgeEngine extends EventTarget {
     if (latency !== undefined) this._latency = latency;
     this._epoch += 1;
     this._tokens.clear();
-    const args = { action: 'restart', latency: this._latency };
+    const args = { action: 'restart', latency: this._latency, ...this._bufferArg() };
     if (typeof sinkId === 'string') args.deviceId = sinkId;
     this._clock.startRequested();
     await this._audioReq(args);
@@ -528,6 +575,61 @@ export class BridgeEngine extends EventTarget {
     this._send('config', { lowResource: v });
     if (v) this._slots = [null, null, null, null];
     return v;
+  }
+
+  /** `audio` start/restart: the requested buffer (D2), only once something asked for one (contract: 0 = host's). */
+  _bufferArg() {
+    return this._bufferFrames ? { bufferFrames: this._bufferFrames } : {};
+  }
+
+  /**
+   * 2.0 (native DECISIONS D1): voices per sound, 32 | 64 | 128. Sends `config {polyphony}`.
+   * @param {number} n
+   * @returns {Promise<object>} the audio settings native reported (see `audioconfig`); never rejects
+   */
+  setPolyphony(n) {
+    const v = Number(n);
+    if (![32, 64, 128].includes(v)) {
+      this._warn(`engine.setPolyphony: ${n} is not 32, 64 or 128`);
+      return Promise.resolve({ ...this._audioCfg });
+    }
+    return this._configReq({ polyphony: v }, { polyphony: v });
+  }
+
+  /**
+   * 2.0 (D4): total live voices across all sounds: 'auto' | 128 | 256 | 512 | 'off' (also 0). Sends
+   * `config {voiceLimit}` with 'off' as 0; the reply's voiceLimitEffective is the number Auto chose (0 = off).
+   * @param {'auto'|'off'|number} v
+   * @returns {Promise<object>} the audio settings native reported; never rejects
+   */
+  setVoiceLimit(v) {
+    const n = Number(v);
+    const wire = v === 'off' || v === 0 ? 0 : v === 'auto' ? 'auto' : [128, 256, 512].includes(n) ? n : null;
+    if (wire === null) {
+      this._warn(`engine.setVoiceLimit: ${v} is not auto, 128, 256, 512 or off`);
+      return Promise.resolve({ ...this._audioCfg });
+    }
+    return this._configReq({ voiceLimit: wire }, { voiceLimit: wire });
+  }
+
+  /**
+   * 2.0 (D2): the audio buffer to ask the device for, 64 | 128 | 256 | 512 frames. It travels as `audio {bufferFrames}`
+   * on the next start/restart; with {restart:true} (the default) a running engine restarts now. The controller passes
+   * {restart:false} and restarts through restartAudio(), which re-applies the song afterwards.
+   * @param {number} n
+   * @param {{restart?:boolean}} [opts]
+   * @returns {Promise<object>} the audio settings after the restart (bufferFrames = what the device granted)
+   */
+  async setBufferFrames(n, { restart = true } = {}) {
+    const v = Number(n);
+    if (![64, 128, 256, 512].includes(v)) {
+      this._warn(`engine.setBufferFrames: ${n} is not 64, 128, 256 or 512`);
+      return { ...this._audioCfg };
+    }
+    this._bufferFrames = v;
+    this._takeAudioCfg({}); // bufferRequested
+    if (restart && this._started) await this.restart();
+    return { ...this._audioCfg };
   }
 
   // ----------------------------------------------------------------------------------------------- songs, memory

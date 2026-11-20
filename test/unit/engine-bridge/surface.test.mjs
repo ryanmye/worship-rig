@@ -56,7 +56,10 @@ test('the constructor is the class itself, with hello as its bridge op', () => {
 test('no public member beyond the contract (underscore-prefixed helpers and EventTarget only)', () => {
   const e = makeEngine();
   const contract = new Set(members().map((m) => m.path.split('.')[0]));
-  const allowed = new Set(['removeEventListener', 'dispatchEvent', 'constructor']);
+  // + the 2.0 Settings › Sound setters (native DECISIONS D1, D2, D4): native-only, the web engine has no counterpart,
+  // so they are not in engine-api.json `methods`; they ride on the contracted `config` / `audio` ops
+  const allowed = new Set(['removeEventListener', 'dispatchEvent', 'constructor',
+    'setPolyphony', 'setVoiceLimit', 'setBufferFrames']);
   const names = new Set();
   for (let o = e; o && o !== EventTarget.prototype && o !== Object.prototype; o = Object.getPrototypeOf(o)) {
     for (const k of Object.getOwnPropertyNames(o)) names.add(k);

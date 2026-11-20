@@ -21,6 +21,11 @@
 // Voice ids (VoiceId, inst/instrument.h) are `generation << 8 | slot`: stable while the voice lives, never reused
 // for 2^24 constructions of the same slot, so a stale ReleaseVoice id is ignored.
 //
+// D4 (engine-wide voice limit, DECISIONS D4): `playing()` is a running count (O(1): the Graph sums it over every
+// instrument at each note-on while a limit is on), and `oldestReleased` / `oldestPlaying` expose the two steal
+// candidates of `makeRoom` so the Graph can pick the globally oldest across slots. Nothing else changes: the per-slot
+// policy and every existing call keep their behaviour (the goldens are byte-identical).
+//
 // Memory: the storage is one raw block of Capacity * sizeof(V) bytes from operator new: nothing is constructed or
 // touched until a slot is first used, so resident memory follows the voices actually played (the first use of a
 // slot touches its pages on the audio thread: a page fault, not an allocation).
@@ -40,6 +45,25 @@ inline constexpr unsigned kDefaultVoiceCap = 64;   // D1 default
 inline constexpr unsigned kWebVoiceCap = 16;       // voice.js MAX_VOICES (synth/organ), the goldens' polyphony
 inline constexpr unsigned kWebSamplerVoiceCap = 32;  // sampler.js SAMPLER_MAX_VOICES
 inline constexpr double kStealFade = 0.02;         // voice.js STEAL_FADE (s)
+
+// ---- D4: engine-wide voice limit (total live voices across all slots, retiring channels included) ------------------
+// `config {voiceLimit}`: 'auto' | 128 | 256 | 512 | 0 (off). 'auto' = a per-profile number sized so a held-pedal worst
+// case (every voice held, the most expensive synth.js voice) renders in <= ~60 % of the 128-frame quantum:
+//   auto = floor16((0.60 * 2667 us - fixed16) / perVoice)
+// with fixed16 = 16 synth slots sounding nothing and perVoice = the costliest voice per quantum. PROVISIONAL: measured
+// on the 2-vCPU Linux box (ARCHITECTURE 7.1 "D4"); the iPad number assumes the oldest supported iPad core is 2x slower
+// than this box. Re-measure on the Mac and the iPad (Mac list) and replace both.
+inline constexpr unsigned kAutoVoiceLimitDesktop = 128;
+inline constexpr unsigned kAutoVoiceLimitIpad = 64;
+/** The manual choices of Settings > Sound > Total voice limit (0 = Off). */
+inline constexpr unsigned kVoiceLimitChoices[] = {128, 256, 512};
+/** D4 'auto' for a profile (rig_engine.h RIG_PROFILE_IPAD -> `ipad`). */
+constexpr unsigned autoVoiceLimit(bool ipad) {
+  return ipad ? kAutoVoiceLimitIpad : kAutoVoiceLimitDesktop;
+}
+/** Steals one note-on may make for the limit: a live lowering (512 -> 128 with 400 voices sounding) converges over a
+ *  few note-ons instead of one burst of fades, and the audio thread's work per note-on stays bounded. */
+inline constexpr unsigned kMaxLimitStealsPerNote = 4;
 
 enum class VoiceState : std::uint8_t { Free, Held, Released, Killed };
 enum class StealPolicy : std::uint8_t { ReleasedByWhen, AnyReleased };
@@ -80,13 +104,8 @@ class VoicePool {
 
   /** Constructed voices (any state but Free). */
   unsigned live() const { return live_; }
-  /** Voices that count toward the cap (Held + Released). */
-  unsigned playing() const {
-    unsigned n = 0;
-    for (unsigned i = 0; i < Capacity; ++i)
-      if (meta_[i].state == VoiceState::Held || meta_[i].state == VoiceState::Released) ++n;
-    return n;
-  }
+  /** Voices that count toward the cap (Held + Released). D4: a running count, O(1). */
+  unsigned playing() const { return playing_; }
 
   /** Steal until one more voice fits under the cap; `fade(slot)` must fade the victim and call markKilled. */
   template <class Fade>
@@ -97,8 +116,7 @@ class VoicePool {
       const int victim = pickVictim(when);
       if (victim < 0) break;
       fade(victim);
-      if (meta_[victim].state == VoiceState::Held || meta_[victim].state == VoiceState::Released)
-        markKilled(victim, when);  // the callback may have done it already
+      if (counts(meta_[victim])) markKilled(victim, when);  // the callback may have done it already
       ++stolen;
       ++steals_;
       --n;
@@ -127,6 +145,7 @@ class VoicePool {
     m.seq = ++seq_;
     m.gen = (m.gen + 1) & 0xffffffu;
     ++live_;
+    ++playing_;
     ::new (static_cast<void *>(storage_ + kStride * static_cast<std::size_t>(s))) T(std::forward<A>(args)...);
     return s;
   }
@@ -146,6 +165,7 @@ class VoicePool {
     Meta &m = meta_[s];
     if (m.state == VoiceState::Free) return;
     if (m.state != VoiceState::Killed && when < m.releasedAt) m.releasedAt = when;
+    if (counts(m)) --playing_;
     m.state = VoiceState::Killed;
   }
   /** Legato retune: the voice now plays `note`. */
@@ -154,6 +174,7 @@ class VoicePool {
     Meta &m = meta_[s];
     if (m.state == VoiceState::Free) return;
     ptr(s)->~V();
+    if (counts(m)) --playing_;
     m.state = VoiceState::Free;
     m.note = -1;
     --live_;
@@ -172,6 +193,32 @@ class VoicePool {
     return static_cast<int>(s);
   }
   std::uint64_t steals() const { return steals_; }
+
+  /** D4: the released voice `makeRoom` would steal first at `when` (earliest release, this pool's policy), -1 if
+   *  none. */
+  int oldestReleased(double when) const {
+    int v = -1;
+    for (unsigned i = 0; i < Capacity; ++i) {
+      const Meta &m = meta_[i];
+      if (m.state != VoiceState::Released) continue;
+      if (policy_ == StealPolicy::ReleasedByWhen && !(m.releasedAt <= when)) continue;
+      if (v < 0 || m.releasedAt < meta_[v].releasedAt ||
+          (m.releasedAt == meta_[v].releasedAt && m.seq < meta_[v].seq))
+        v = static_cast<int>(i);
+    }
+    return v;
+  }
+  /** D4: the oldest voice that counts toward the cap (earliest start, then construction order), -1 if none. */
+  int oldestPlaying() const {
+    int v = -1;
+    for (unsigned i = 0; i < Capacity; ++i) {
+      const Meta &m = meta_[i];
+      if (!counts(m)) continue;
+      if (v < 0 || m.startedAt < meta_[v].startedAt || (m.startedAt == meta_[v].startedAt && m.seq < meta_[v].seq))
+        v = static_cast<int>(i);
+    }
+    return v;
+  }
 
   /** fn(slot, voice) for every constructed voice, slot order (the callback may destroy the slot it is given). */
   template <class F>
@@ -198,23 +245,8 @@ class VoicePool {
 
   bool counts(const Meta &m) const { return m.state == VoiceState::Held || m.state == VoiceState::Released; }
   int pickVictim(double when) const {
-    int v = -1;
-    for (unsigned i = 0; i < Capacity; ++i) {  // oldest released first
-      const Meta &m = meta_[i];
-      if (m.state != VoiceState::Released) continue;
-      if (policy_ == StealPolicy::ReleasedByWhen && !(m.releasedAt <= when)) continue;
-      if (v < 0 || m.releasedAt < meta_[v].releasedAt ||
-          (m.releasedAt == meta_[v].releasedAt && m.seq < meta_[v].seq))
-        v = static_cast<int>(i);
-    }
-    if (v >= 0) return v;
-    for (unsigned i = 0; i < Capacity; ++i) {  // else the oldest playing voice
-      const Meta &m = meta_[i];
-      if (!counts(m)) continue;
-      if (v < 0 || m.startedAt < meta_[v].startedAt || (m.startedAt == meta_[v].startedAt && m.seq < meta_[v].seq))
-        v = static_cast<int>(i);
-    }
-    return v;
+    const int v = oldestReleased(when);  // oldest released first, else the oldest playing voice
+    return v >= 0 ? v : oldestPlaying();
   }
   int freeSlot() const {
     for (unsigned i = 0; i < Capacity; ++i)
@@ -238,6 +270,7 @@ class VoicePool {
   Meta meta_[Capacity];
   unsigned cap_ = kDefaultVoiceCap;
   unsigned live_ = 0;
+  unsigned playing_ = 0;  // Held + Released (D4: kept by emplace / markKilled / destroy)
   std::uint64_t seq_ = 0, steals_ = 0;
   StealPolicy policy_;
 };

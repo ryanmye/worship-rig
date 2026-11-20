@@ -71,8 +71,10 @@ class SynthInstrument final : public Instrument {
   double paramValue(std::size_t index) const { return params_[index]; }
   unsigned voiceCap() const { return pool_.cap(); }
   std::uint64_t steals() const { return pool_.steals(); }
-  /** Voices counted against the cap (held + released). */
-  unsigned playingVoices() const { return pool_.playing(); }
+  /** Voices counted against the cap (held + released); also the D4 engine-wide count. */
+  unsigned playingVoices() const override { return pool_.playing(); }
+  /** D4: the pool's steal candidate at the note-on time of `frame` (voice.js policy: released by `when`). */
+  bool oldestVoice(bool released, std::int64_t frame, double &at, VoiceId &id) override;
   /** Held or released voices playing `note`. */
   unsigned playingNote(int note) const;
   /** Id of the newest held / released voice of `note` (0xffffffff if none). */

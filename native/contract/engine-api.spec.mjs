@@ -382,15 +382,19 @@ export const BRIDGE = {
         reply: 'start {t0, downbeat}|null; stop {wasRunning}; config {output, auxAvailable}',
       maps: ['clickStart', 'clickStop', 'setClick'] },
     // polyphony: T00c / DECISIONS D1 (voices per slot, default 64; echoed by get state)
+    // voiceLimit: DECISIONS D4 (total live voices across all slots, retiring channels included; 'auto' = the
+    // profile's number, 0 = off; default 'auto'). The reply and get state echo the mode and the effective number
+    // (voiceLimitEffective, 0 = off).
     { op: 'config', args: { mono: 'bool?', lowResource: 'bool?', eqAudition: '{slot, mode}?',
       meters: '{rate?, slots?, rta?}?',
-      midiClock: '{port: id|null}?', when: 'engine s?', polyphony: '32|64|128?' },
-      reply: '{lowResource?, eqAudition?, polyphony?}',
+      midiClock: '{port: id|null}?', when: 'engine s?', polyphony: '32|64|128?',
+      voiceLimit: "'auto'|128|256|512|0?" },
+      reply: '{lowResource?, eqAudition?, polyphony?, voiceLimit?, voiceLimitEffective?}',
       maps: ['setMono', 'setLowResource', 'eqAudition', 'slotLevel/analyser subscriptions', 'setClockSink'] },
     { op: 'get', args: { what: "'instruments'|'stats'|'devices'|'sampleStatus'|'state'", reload: 'bool?',
       patches: 'Patch[]?' },
       reply: 'instruments [entry]; stats DebugStats; devices [{id, name, channels, default, sampleRates}]; ' +
-          'sampleStatus {loaded, failed}; state EngineState',
+          'sampleStatus {loaded, failed}; state EngineState (+ polyphony, voiceLimit, voiceLimitEffective: D1/D4)',
       maps: ['listInstruments', 'reloadManifests', '_debugStats', 'enumerateDevices', 'cache/registry reach-in',
         'getState'] },
     { op: 'midi', args: { action: "'listen'|'route'|'send'", ids: 'string[]?', on: 'bool?', learn: 'object?',
