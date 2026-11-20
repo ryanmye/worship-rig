@@ -403,7 +403,10 @@ bool Model::eqAudition(int slot, std::string_view mode, double when) {
   Command c{};
   c.op = opOf(StripOp::EqAudition);
   c.aux = mode == "bypass" ? 1u : 0u;
-  return sendUnitOp(stripSlot(static_cast<std::size_t>(slot)), c, when);
+  // INTERFACE-CHANGE(T02): applied at call time with `when` as the automation time (audio.js eqAudition runs
+  // SlotEq.set(eq, when) when called, like every other EQ write); was: the whole op deferred to frameFor(when)
+  c.f.b = when >= 0.0 ? when : -1.0;
+  return sendUnitOp(stripSlot(static_cast<std::size_t>(slot)), c, -1.0);
 }
 bool Model::droneSetKey(int pc, bool minor, double fade, double when) {
   auto *s = service<DroneService>();

@@ -83,10 +83,14 @@ constexpr OpSpec kOps[] = {RIG_OP("hello", kHello),   RIG_OP("audio", kAudio),  
                            RIG_OP("midi", kMidi),     RIG_OP("rec", kRec)};
 #undef RIG_OP
 
-constexpr VariantSpec kVariants[] = {
-    {"play", "e", "on", "n|vel"},          {"play", "e", "off", "n"},           {"play", "e", "pedal", "down"},
-    {"play", "e", "wheel", "src|value"},   {"play", "e", "bend", "x"},          {"get", "what", "sampleStatus", "patches"},
-    {"midi", "action", "listen", "ids"},   {"midi", "action", "send", "port|data"}};
+constexpr VariantSpec kVariants[] = {{"play", "e", "on", "n|vel"},
+                                     {"play", "e", "off", "n"},
+                                     {"play", "e", "pedal", "down"},
+                                     {"play", "e", "wheel", "src|value"},
+                                     {"play", "e", "bend", "x"},
+                                     {"get", "what", "sampleStatus", "patches"},
+                                     {"midi", "action", "listen", "ids"},
+                                     {"midi", "action", "send", "port|data"}};
 
 bool inList(std::string_view list, std::string_view v) {
   while (!list.empty()) {

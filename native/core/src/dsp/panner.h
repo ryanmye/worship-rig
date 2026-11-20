@@ -25,6 +25,8 @@ class StereoPanner {
   void process(const float *const *in, unsigned nch, float *outL, float *outR, std::size_t n, std::int64_t frame0,
                double sampleRate);
 
+  /** Advance the pan param only (the node propagates silence). */
+  void advance(std::size_t n, std::int64_t frame0, double sampleRate);
   /** The two laws on one frame, double path (tests, diagnostics). */
   static void panSampleAccurate(float inL, float inR, unsigned nch, float pan, float &outL, float &outR);
 

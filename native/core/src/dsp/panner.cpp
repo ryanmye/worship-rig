@@ -40,6 +40,15 @@ void StereoPanner::panSampleAccurate(float inL, float inR, unsigned nch, float p
   }
 }
 
+void StereoPanner::advance(std::size_t n, std::int64_t frame0, double sr) {
+  if (pan_.hasSampleAccurateValues(frame0, sr)) {
+    float pv[Param::kQuantum];
+    pan_.processARate(frame0, sr, pv, n);
+  } else {
+    pan_.processKRate(frame0, sr);
+  }
+}
+
 void StereoPanner::process(const float *const *in, unsigned nch, float *outL, float *outR, std::size_t n,
                            std::int64_t frame0, double sr) {
   nch = nch >= 2 ? 2u : 1u;

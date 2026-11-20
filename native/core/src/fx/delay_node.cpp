@@ -73,4 +73,17 @@ void sumAndClip(float *v, const float *const *conns, unsigned nConns, float defa
   for (std::size_t i = 0; i < n; ++i) v[i] = std::min(std::max(v[i], lo), hi);
 }
 
+void biquadQuantum(wa::Biquad &f, wa::BiquadType type, const float *freq, const float *q, bool sampleAccurate,
+                   double sampleRate, const float *in, float *out) {
+  if (!sampleAccurate) {
+    f.set(type, freq[0], q[0], 0.0, sampleRate);
+    f.process(in, out, DelayNodeKernel::kQ);
+    return;
+  }
+  for (std::size_t i = 0; i < DelayNodeKernel::kQ; ++i) {
+    f.set(type, freq[i], q[i], 0.0, sampleRate);
+    f.process(in + i, out + i, 1);
+  }
+}
+
 }  // namespace rig::fx

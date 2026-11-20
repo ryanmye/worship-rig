@@ -14,7 +14,8 @@ class Model;
 
 /** StripOp::SetEq aux values (the payload type travelling in Command::p.ptr). */
 enum SlotEqChangeKind : std::uint32_t {
-  kEqChangeSet = 1,  // SlotEqChange: SlotEq.set(spec, when, step) (fx.js Channel.setEq)
+  kEqChangeSet = 1,    // SlotEqChange: SlotEq.set(spec, when, step) (fx.js Channel.setEq)
+  kEqChangeStore = 2,  // SlotEqChange: only record the slot's stored EQ (audio.js cfg.eq, read by eqAudition 'on')
 };
 
 /** Payload of StripOp::SetEq with aux = kEqChangeSet. Sent with frame kFrameNow (applied at call time, as the JS). */
@@ -26,6 +27,8 @@ struct SlotEqChange : Owned {
 
 /** Send SetEq(spec, when, step) to the strip of channel `slot` (0..3) now. False when no strip is attached. */
 bool sendSlotEq(Model &m, int slot, const SlotEqSpec &spec, double when, bool step = false);
+/** Record the slot's stored EQ in its strip now (no audible change; what eqAudition 'on' restores). */
+bool sendSlotEqStored(Model &m, int slot, const SlotEqSpec &spec);
 /** Send SetSlotWidth(width, when) to the strip of channel `slot` now. */
 bool sendSlotWidth(Model &m, int slot, double width, double when);
 /** Send SetWidthDefault(d) (instrument widthDefault; steps the effective width) to the strip of `slot` at `when`. */

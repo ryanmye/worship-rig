@@ -128,6 +128,12 @@ std::string build(const std::string &op, const std::map<std::string, std::string
   return s + "}";
 }
 
+std::string afterHello(const std::string &msg) {
+  OfflineEngine e;
+  e.hello();
+  return e.call(msg);
+}
+
 int count(const std::string &s, const std::string &needle) {
   int n = 0;
   for (std::size_t p = s.find(needle); p != std::string::npos; p = s.find(needle, p + 1)) ++n;
@@ -235,6 +241,7 @@ TEST_SUITE("bridge-conformance") {
         const std::string first = std::string(vs[v].need).substr(0, std::string(vs[v].need).find('|'));
         auto m = base;
         m[vs[v].key] = "\"" + std::string(vs[v].value) + "\"";
+        m.erase(first);
         const std::string r = eng.call(build(op.op, m, ++id));
         INFO(op.op << " " << vs[v].value << " without " << first << " -> " << r);
         CHECK(contains(r, "\"code\":\"bad-request\""));
@@ -265,11 +272,11 @@ TEST_SUITE("bridge-conformance") {
         {"bad-request", [] { OfflineEngine e; e.hello(); return e.call(R"({"v":1,"op":"click","id":1})"); }},
         {"unknown-op", [] { OfflineEngine e; e.hello(); return e.call(R"({"v":1,"op":"nope","id":1})"); }},
         {"unknown-param",
-         [] { OfflineEngine e; e.hello(); return e.call(R"({"v":1,"op":"set","path":"slots.0.zz","value":1,"id":1})"); }},
+         [] { return afterHello(R"({"v":1,"op":"set","path":"slots.0.zz","value":1,"id":1})"); }},
         {"not-started",  // a recording needs the audio graph (audio start or a first commit)
          [&] { OfflineEngine e; e.hello(); return e.call(R"({"v":1,"op":"rec","action":"start","dir":")" + dir +
                                                         R"(","id":1})"); }},
-        {"stale-token", [] { OfflineEngine e; e.hello(); return e.call(R"({"v":1,"op":"commit","token":42,"id":1})"); }},
+        {"stale-token", [] { return afterHello(R"({"v":1,"op":"commit","token":42,"id":1})"); }},
         {"superseded",
          [] {
            OfflineEngine e;
@@ -297,10 +304,17 @@ TEST_SUITE("bridge-conformance") {
            rig_destroy(e);
            return all;
          }},
-        {"device",
-         [] { OfflineEngine e; e.hello(); rig_host_audio_state(e.e, RIG_DEVICE_CLOSED, "unplugged"); return e.call("[]"),
-              std::string(e.msgs.empty() ? "" : e.msgs.back()); }},
-        {"unsupported", [] { OfflineEngine e; e.hello(); return e.call(R"({"v":1,"op":"play","e":"bend","x":1,"id":1})"); }},
+        {"device",  // the host reports a failed / vanished device
+         [] {
+           OfflineEngine e;
+           e.hello();
+           e.msgs.clear();
+           rig_host_audio_state(e.e, RIG_DEVICE_CLOSED, "unplugged");
+           std::string all;
+           for (const auto &m : e.msgs) all += m;
+           return all;
+         }},
+        {"unsupported", [] { return afterHello(R"({"v":1,"op":"play","e":"bend","x":1,"id":1})"); }},
         {"busy",  // a second take while recording
          [&] {
            OfflineEngine e;
@@ -357,7 +371,8 @@ TEST_SUITE("bridge-conformance") {
     all += e.call(R"({"v":1,"op":"rec","action":"start","dir":")" + dir + R"(","id":2})");
     e.render(4800);
     all += e.call(R"({"v":1,"op":"rec","action":"stop","id":3})");
-    for (const char *ev : {"state", "warn", "rec"}) CHECK(contains(all, (std::string("\"ev\":\"") + ev + "\"").c_str()));
+    for (const char *ev : {"state", "warn", "rec"})
+      CHECK(contains(all, (std::string("\"ev\":\"") + ev + "\"").c_str()));
     std::filesystem::remove_all(dir);
   }
 }

@@ -592,6 +592,19 @@ std::size_t SlotEqChains::filters() const {
   return active_ >= 0 ? static_cast<std::size_t>(sides_[active_].count) : 0;
 }
 
+void SlotEqChains::advance(std::size_t n, std::int64_t frame0, double sr) {
+  runTimers(frame0, sr);
+  const int order[2] = {active_, incoming_};
+  for (int si : order) {
+    if (si < 0) continue;
+    Side &sd = sides_[si];
+    for (int i = 0; i < sd.count; ++i) sd.nodes[i].bq.processParamsOnly(n, frame0, sr);
+    float g[wa::Param::kQuantum];
+    bool c;
+    sd.gain.values(g, &c, n, frame0, sr);
+  }
+}
+
 void SlotEqChains::process(float *const *ch, unsigned nch, std::size_t n, std::int64_t frame0, double sr) {
   runTimers(frame0, sr);
   nch = nch >= 2 ? 2u : 1u;

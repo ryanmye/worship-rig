@@ -11,6 +11,8 @@
 //   input <port>                        the lowres2 'input' wake signal
 //   noteon <note> <velocity> <channel> | noteoff <note> <velocity> <channel> | cc <cc> <value> <hex value01> <channel>
 //   bend <hex value> <raw> <channel>   | program <program> <channel>
+//   bendvalue <lsb> <msb> <hex>         bendValue()
+//   velsens <sens> <hex v> <out>        app/js/controller.js applyVelocitySens(v, sens) (the direct path's velocity)
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -89,6 +91,13 @@ for (let n = 0; n < 1200; n++) {
 // bendValue over the whole 14-bit range corners
 for (const [l, h] of [[0, 0], [127, 127], [0, 64], [127, 63], [1, 64], [0, 1], [100, 20]]) {
   lines.push(`bendvalue ${l} ${h} ${hex64(bendValue(l, h))}`);
+}
+const { applyVelocitySens } = await import(path.join(ROOT, 'app/js/controller.js'));
+for (const sens of ['soft', 'hard', 'normal', 'fixed']) {
+  const vs = [];
+  for (let v = 0; v <= 130; v++) vs.push(v);
+  for (let i = 0; i < 40; i++) vs.push(r() * 140 - 5);
+  for (const v of vs) lines.push(`velsens ${sens} ${hex64(v)} ${applyVelocitySens(v, sens)}`);
 }
 fs.writeFileSync(OUT, [...header, ...lines].join('\n') + '\n');
 console.log(`wrote ${OUT}: ${lines.length} lines`);

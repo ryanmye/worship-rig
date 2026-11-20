@@ -36,6 +36,8 @@ class ClickServiceImpl final : public ClickService, private click::Metronome::Ho
   using ClockObserver = std::function<void(const click::ClockMsg *msgs, std::size_t n)>;
   void setTickObserver(TickObserver f) { tickObs_ = std::move(f); }
   void setClockObserver(ClockObserver f) { clockObs_ = std::move(f); }
+  using ClearObserver = std::function<void(double t)>;
+  void setClearObserver(ClearObserver f) { clearObs_ = std::move(f); }
   /** The MIDI output the clock goes to now ("" = none). */
   std::string clockTarget() const;
 
@@ -71,6 +73,7 @@ class ClickServiceImpl final : public ClickService, private click::Metronome::Ho
   std::string clockPort_;
   TickObserver tickObs_;
   ClockObserver clockObs_;
+  ClearObserver clearObs_;
 };
 
 }  // namespace rig

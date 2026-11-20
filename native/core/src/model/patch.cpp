@@ -183,48 +183,10 @@ double numField(const yyjson_val *obj, const char *key, const char *rowPath, dou
   return r && !v ? r->def : fallback;
 }
 
+// INTERFACE-CHANGE(T02): the slot EQ is resolved by mix/slot_eq.cpp (fx.js resolveSlotEq incl. the legacy
+// low/mid/high rows and the stored-row bookkeeping later `set`s need); was: b-rows only.
 void parseEq(const yyjson_val *eq, SlotEqSpec &spec) {
-  spec = SlotEqSpec{};
-  for (int k = 1; k <= kEqBands; ++k) {
-    char p[48];
-    EqBand &b = spec.bands[k - 1];
-    std::snprintf(p, sizeof p, "slots.0.eq.b%d.on", k);
-    b.on = rowDefault(p) != 0.0;
-    std::snprintf(p, sizeof p, "slots.0.eq.b%d.type", k);
-    b.type = static_cast<int>(rowDefault(p));
-    std::snprintf(p, sizeof p, "slots.0.eq.b%d.hz", k);
-    b.hz = rowDefault(p);
-    std::snprintf(p, sizeof p, "slots.0.eq.b%d.db", k);
-    b.db = rowDefault(p);
-    std::snprintf(p, sizeof p, "slots.0.eq.b%d.q", k);
-    b.q = rowDefault(p);
-    if (!eq) continue;
-    char key[8];
-    std::snprintf(key, sizeof key, "b%d", k);
-    yyjson_val *bo = yyjson_obj_get(const_cast<yyjson_val *>(eq), key);
-    if (!bo || !yyjson_is_obj(bo)) continue;  // legacy low/mid/high rows: not read in T00
-    const char *fields[] = {"on", "type", "hz", "db", "q"};
-    for (const char *f : fields) {
-      yyjson_val *fv = yyjson_obj_get(bo, f);
-      if (!fv) continue;
-      std::snprintf(p, sizeof p, "slots.0.eq.b%d.%s", k, f);
-      const ParamRow *row = findParam(p);
-      double d;
-      if (!row || !jsonToParamValue(*row, fv, d)) continue;
-      if (!std::strcmp(f, "on"))
-        b.on = d != 0.0;
-      else if (!std::strcmp(f, "type"))
-        b.type = static_cast<int>(d);
-      else if (!std::strcmp(f, "hz"))
-        b.hz = d;
-      else if (!std::strcmp(f, "db"))
-        b.db = d;
-      else
-        b.q = d;
-    }
-  }
-  spec.cutHz = numField(eq, "cutHz", "slots.0.eq.cutHz", rowDefault("slots.0.eq.cutHz"));
-  spec.hiCutHz = numField(eq, "hiCutHz", "slots.0.eq.hiCutHz", rowDefault("slots.0.eq.hiCutHz"));
+  parseSlotEqJson(eq, spec);
 }
 
 }  // namespace

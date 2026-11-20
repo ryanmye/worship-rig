@@ -100,6 +100,8 @@ class SlotEqChains {
   /** Run due timers for the quantum at frame0, then filter `nch` channels in place. */
   void process(float *const *ch, unsigned nch, std::size_t n, std::int64_t frame0, double sr);
 
+  /** Silent input: run due timers and advance every param only (filter memory frozen, as Chromium's tail). */
+  void advance(std::size_t n, std::int64_t frame0, double sr);
   /** Wired filters of the live (active) chain. */
   std::size_t filters() const;
   /** Chains alive (1, or 2 while switching). */

@@ -1,0 +1,10 @@
+# T02 strip fixtures (owner T02). One golden id per line. eq-type-change is NOT listed: its committed golden was
+# rendered with page.js passing `when` positionally to eqAudition (the call ignored it and auditioned at time 0); the
+# native strip matches a corrected render bit-exactly. Add it here once tools/golden/page.js passes `{ when }` and
+# the golden is re-rendered (T02 report).
+eq-chain-8band
+eq-legacy-rows
+pan-stereo-src
+width-0
+width-50
+width-150

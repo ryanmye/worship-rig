@@ -74,6 +74,7 @@ void ClickServiceImpl::scheduleTick(double t, click::TickKind kind) {
 }
 
 void ClickServiceImpl::clearAfter(double t) {
+  if (clearObs_) clearObs_(t);
   Command c{};
   c.op = opOf(ClickOp::ClearAfter);
   c.f.a = t;

@@ -14,6 +14,8 @@
 #include <cstddef>
 #include <vector>
 
+#include "dsp/biquad.h"
+
 namespace rig::fx {
 
 /** audio_utilities::TimeToSampleFrame(time, rate, kRoundUp). */
@@ -49,5 +51,11 @@ class DelayNodeKernel {
  *  (in connection order), NaN -> default, clip to [lo, hi] (vector_math::Vclip). */
 void sumAndClip(float *values, const float *const *conns, unsigned nConns, float defaultValue, float lo, float hi,
                 std::size_t n);
+
+/** One quantum of a BiquadFilterNode whose frequency / Q are a-rate params (values already rendered):
+ *  per-sample coefficients when `sampleAccurate` (BiquadDSPKernel with HasSampleAccurateValues), else one set
+ *  from element 0 (FinalValue). Gain 0 (lowpass / highpass / bandpass ignore it). in may equal out. */
+void biquadQuantum(wa::Biquad &f, wa::BiquadType type, const float *freq, const float *q, bool sampleAccurate,
+                   double sampleRate, const float *in, float *out);
 
 }  // namespace rig::fx

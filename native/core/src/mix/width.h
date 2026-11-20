@@ -23,6 +23,8 @@ class Width {
   wa::Param &wide() { return wide_.gain(); }
   /** setWidth(w, when, step): step = setNow, else rampTo tau 15 ms. `nowFrame` = context frame of the call. */
   void setWidth(double w, double when, bool step, std::int64_t nowFrame, double sr);
+  /** Advance the params only (silent input). */
+  void advance(std::size_t n, std::int64_t frame0, double sr);
   /** In place over `nch` (1|2) channels. */
   void process(float *const *ch, unsigned nch, std::size_t n, std::int64_t frame0, double sr);
 

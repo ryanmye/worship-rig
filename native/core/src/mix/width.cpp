@@ -33,6 +33,14 @@ void Width::setWidth(double w, double when, bool step, std::int64_t nowFrame, do
   }
 }
 
+void Width::advance(std::size_t n, std::int64_t frame0, double sr) {
+  float g[wa::Param::kQuantum];
+  bool c;
+  narrow_.values(g, &c, n, frame0, sr);
+  wide_.values(g, &c, n, frame0, sr);
+  hp_.processParamsOnly(n, frame0, sr);
+}
+
 void Width::process(float *const *ch, unsigned nch, std::size_t n, std::int64_t frame0, double sr) {
   if (nch < 2) {
     // mono: S = x - x = 0, so wNarrow / wWide carry silence and wOut = x exactly; the params still advance

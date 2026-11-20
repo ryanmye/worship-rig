@@ -102,13 +102,14 @@ TEST_SUITE("reverb") {
     const long allocs = g_rtAllocs;
     for (const char *id :
          {"reverb-dry", "reverb-room", "reverb-stage", "reverb-hall", "reverb-cathedral", "reverb-wash"}) {
-      INFO(std::string(id));
+      const std::string sid = id;  // doctest prints a const char * as a pointer under clang
+      INFO(sid);
       const auto it = std::find_if(all.begin(), all.end(), [&](const auto &f) { return f.id == id; });
       REQUIRE(it != all.end());
       rig::io::WavData gold;
       if (!rig::io::readWav(kGolden + "/out/" + id + ".wav", gold) &&
           !rig::io::readWav(kGolden + "/smoke/" + id + ".wav", gold)) {
-        MESSAGE("golden WAV missing for " << id << " (node tools/golden/render.mjs --only " << id << "): skipped");
+        MESSAGE("golden WAV missing for " << sid << " (node tools/golden/render.mjs --only " << sid << "): skipped");
         continue;
       }
       const rig::tools::RunResult r = rig::tools::runFixture(*it, kGolden, 44100);
@@ -122,10 +123,10 @@ TEST_SUITE("reverb") {
         m = std::max(m, maxAbsDiff(r.channels[c], gold.ch[c]));
         for (float v : gold.ch[c]) peak = std::max(peak, double(std::fabs(v)));
       }
-      MESSAGE(id << ": max |native - golden| = " << m << ", golden peak " << peak);
+      MESSAGE(sid << ": max |native - golden| = " << m << ", golden peak " << peak);
       CHECK(m <= 2e-4);  // the exact tier
       CHECK(m <= 1e-6);  // what the port actually achieves (float rounding of the FFT convolution)
-      if (std::string(id) != "reverb-dry") CHECK(peak > 0.005);  // a silent golden proves nothing
+      if (sid != "reverb-dry") CHECK(peak > 0.005);  // a silent golden proves nothing
     }
     CHECK(g_rtAllocs == allocs);
   }

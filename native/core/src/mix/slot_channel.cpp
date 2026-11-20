@@ -91,10 +91,10 @@ void SlotChannel::apply(const Command &c) {
   const std::int64_t now = nowFrame(c);
   if (c.op == opOf(StripOp::SetEq)) {
     Owned *o = c.sub == kSubOwnedPayload ? static_cast<Owned *>(c.p.ptr) : nullptr;
-    if (c.aux == kEqChangeSet && o) {
+    if ((c.aux == kEqChangeSet || c.aux == kEqChangeStore) && o) {
       const auto *p = static_cast<const SlotEqChange *>(o);
       stored_ = p->spec;
-      setEq(stored_, p->when, p->step, now);
+      if (c.aux == kEqChangeSet) setEq(stored_, p->when, p->step, now);
     }
     if (o) {
       if (npending_ < kPending) pending_[npending_++] = o;  // handed back in process() (it has the event sink)
@@ -103,7 +103,7 @@ void SlotChannel::apply(const Command &c) {
     const bool bypass = c.aux == 1;
     if (bypass == audition_) return;
     audition_ = bypass;
-    setEq(stored_, static_cast<double>(c.frame) / sr_, false, now);
+    setEq(stored_, c.f.b >= 0.0 ? c.f.b : static_cast<double>(now) / sr_, false, now);
   } else if (c.op == opOf(StripOp::SetWidthDefault)) {
     widthDefault_ = c.f.a;
     width_.setWidth(slotWidth_ * widthDefault_, static_cast<double>(c.frame) / sr_, true, now, sr_);
@@ -131,16 +131,15 @@ void SlotChannel::process(const RenderContext &ctx, UnitIO &io) {
     if (tail_ > 0) --tail_;
   }
   float *ch[2] = {x[0], x[1]};
-  const bool render = io.in || tail_ > 0 || eq_.pendingTimers() > 0;
-  if (!render) {  // silent and rung out: params only (Chromium ProcessOnlyAudioParams), timers keep running
-    fader_.process(ch, ch, channels_, kQ, f0, sr);
-    wheel_.process(ch, ch, channels_, kQ, f0, sr);
-    width_.process(ch, channels_, kQ, f0, sr);
-    eq_.process(ch, channels_, kQ, f0, sr);
-    float l[kQ], r[kQ];
-    pan_.process(ch, channels_, l, r, kQ, f0, sr);
-    float *lr[2] = {l, r};
-    for (auto &s : send_) s.process(lr, lr, 2, kQ, f0, sr);
+  if (!io.in && tail_ <= 0) {  // silent and rung out: params only (Chromium ProcessOnlyAudioParams), timers run
+    float g[kQ];
+    bool constant;
+    fader_.values(g, &constant, kQ, f0, sr);
+    wheel_.values(g, &constant, kQ, f0, sr);
+    width_.advance(kQ, f0, sr);
+    eq_.advance(kQ, f0, sr);
+    pan_.advance(kQ, f0, sr);
+    for (auto &s : send_) s.values(g, &constant, kQ, f0, sr);
     out.clear(2);
     return;
   }
