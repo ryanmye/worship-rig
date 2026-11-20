@@ -185,6 +185,50 @@ TEST_SUITE("lofi") {
     }
   }
 
+  TEST_CASE("hold-only apply (Lofi.hold): engages at amount 0; mid-ramp it changes nothing else (bit-exact)") {
+    auto cmd = [](LofiState *s, double when, bool holdOnly) {
+      s->holdOnly = holdOnly;
+      s->when = when;
+      rig::Command c{};
+      c.op = rig::opOf(rig::LofiOp::Apply);
+      c.sub = rig::kSubOwnedPayload;
+      c.p.ptr = static_cast<rig::Owned *>(s);
+      return c;
+    };
+    const std::size_t n = 44032;
+    const auto in = sine(330, 0.4, n + 12800);
+    {  // amount 0: the hold alone engages and releases the wet chain
+      LofiUnit u(kSr, 1, LofiState::make(quietPatch(0)));
+      t05::Driver d(&u, kSr);
+      d.run(12800, in);
+      u.apply(cmd(LofiState::make(quietPatch(0), true), d.now(), true));
+      CHECK(u.engaged());
+      CHECK(u.wetConnected());
+      d.run(12800, in);
+      u.apply(cmd(LofiState::make(quietPatch(0), false), d.now(), true));
+      CHECK_FALSE(u.engaged());
+      d.run(12800, in);
+      freeGarbage(d);
+      CHECK_FALSE(u.wetConnected());
+    }
+    // engaged at 0.29 s with every curve ramping; a hold 256 frames later must not restart those ramps
+    rig::LofiPatch on;
+    on.amount = 0.7;
+    std::vector<std::vector<float>> out[2];
+    for (int k = 0; k < 2; ++k) {
+      LofiUnit u(kSr, 1, LofiState::make(quietPatch(0)));
+      t05::Driver d(&u, kSr);
+      d.run(12800, in);
+      u.apply(cmd(LofiState::make(on), d.now(), false));
+      d.run(256, in);
+      if (k == 1) u.apply(cmd(LofiState::make(on, true), d.now(), true));
+      out[k] = d.run(n, in);
+      freeGarbage(d);
+    }
+    CHECK(rigtest::maxAbsDiff(out[0][0], out[1][0]) == 0.0);
+    CHECK(rigtest::maxAbsDiff(out[0][1], out[1][1]) == 0.0);
+  }
+
   TEST_CASE("lofiHeadroom: +6 dBFS into the sum passes the engaged wet chain unclamped") {
     const std::size_t n = static_cast<std::size_t>(1.0 * kSr) / 128 * 128;
     LofiUnit u(kSr, 1, LofiState::make(quietPatch(0.001)));

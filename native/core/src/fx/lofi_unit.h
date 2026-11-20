@@ -60,6 +60,7 @@ struct LofiState final : Owned {
   std::shared_ptr<const LofiCurve> sat, quant;  // quant null = no quantiser (16 bits)
   bool held = false;        // Lofi.holds.size > 0 (T14 tape bend keeps the wet chain engaged at amount 0)
   bool tapeActive = false;  // Lofi.tapeActive (T14): wow/flutter/LPF moves are skipped while the tape bend owns them
+  bool holdOnly = false;    // Lofi.hold(name, on, when): engage/disengage only, no param moves (fx.js:1558)
   double when = 0;
   static LofiState *make(const LofiPatch &p, bool held = false, bool tapeActive = false);
 };

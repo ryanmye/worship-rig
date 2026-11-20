@@ -148,6 +148,10 @@ void LofiUnit::applyState(LofiState *s, double when) {
     // else: leaked (counted nowhere; at most 8 applies per quantum are buffered)
   }
   const double a = p.amount;
+  if (s->holdOnly) {  // JS hold() calls _engage only: re-issuing the ramps would restart their setTarget curves
+    engage(a > 0 || s->held, when);
+    return;
+  }
   if (!s->tapeActive) {
     wa::rampTo(wowDepth_, 0.002 * a * p.wow, when, 0.05);
     wa::rampTo(flutDepth_, 0.00003 * a * p.flutter, when, 0.05);

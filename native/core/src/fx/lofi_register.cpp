@@ -22,9 +22,10 @@ class LofiService final : public Service {
   void onRateChanged(double) override {
     if (attached(m_)) m_.attachUnit(UnitSlot::Lofi, kKindLofi, -1);  // crackle buffer and delay sized per rate
   }
-  void send(double when) {
+  void send(double when, bool holdOnly = false) {
     if (!attached(m_)) return;
     LofiState *s = LofiState::make(m_.patch().lofi, held_, tapeActive_);
+    s->holdOnly = holdOnly;
     s->when = m_.timeFor(when);
     m_.sendOwned(UnitSlot::Lofi, opOf(LofiOp::Apply), s, when);
   }
@@ -58,7 +59,7 @@ void lofiApply(Model &m, double when) {
 void lofiHold(Model &m, bool on, double when) {
   if (LofiService *s = svc(m)) {
     s->held_ = on;
-    s->send(when);
+    s->send(when, true);
   }
 }
 void lofiSetTapeActive(Model &m, bool on) {
