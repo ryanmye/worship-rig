@@ -23,6 +23,10 @@ enum class ReverbOp : std::uint16_t {
   AttachKernel = kOpBaseT04,  // ptr = kernel object (T04 type), crossfade per contract 3.4; old one -> Garbage
   SetPredelay,                // a = seconds (0.5 s equal-power crossfade between the two lines)
   // T04 appends below.
+  Reactivate,  // aux = slot: swap back to the unit still held in that slot (a = when, b = fade, c = predelay,
+               // d = slot to fade out or -1); T04 (fx/reverb_unit.h)
+  Release,     // aux = slot: hand the slot's unit back (pool eviction, memory trim); T04
+  Feed,        // aux = slot, a = 1 connect / 0 disconnect the slot's input (sleep / wake); T04
 };
 
 struct UnitEnv;
