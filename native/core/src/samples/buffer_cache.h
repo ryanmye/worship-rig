@@ -93,10 +93,10 @@ class BufferCache final : public BufferCacheApi {
     double engineRate = 48000;
     int retries = 2;
     int retryDelayMs = 400;
-    std::function<std::uint64_t()> graphEpoch;           // null: evicted buffers are freed at once
-    std::function<double()> nowMs;                         // null: steady clock
-    std::function<void(const std::string &)> warn;         // "Sample missing or undecodable, skipped: ..."
-    std::function<void()> wake;                            // a worker finished: the control thread should pump()
+    std::function<std::uint64_t()> graphEpoch;      // null: evicted buffers are freed at once
+    std::function<double()> nowMs;                  // null: steady clock
+    std::function<void(const std::string &)> warn;  // "Sample missing or undecodable, skipped: ..."
+    std::function<void()> wake;                     // a worker finished: the control thread should pump()
   };
   using Ready = BufferCacheApi::Ready;
 
@@ -116,6 +116,13 @@ class BufferCache final : public BufferCacheApi {
   double decodedMB() const override { return static_cast<double>(bytes_) / kMB; }
   double pinnedMB() const override { return static_cast<double>(pinnedBytes()) / kMB; }
   double capMB() const override { return static_cast<double>(cfg_.capBytes) / kMB; }
+
+  /** Epoch source of the graph; set once at startup (null = evicted buffers are freed at once, offline). */
+  void setEpochSource(std::function<std::uint64_t()> fn) { cfg_.graphEpoch = std::move(fn); }
+  /** Worker-finished notification; set once at startup, before the first request (workers read it). */
+  void setWake(std::function<void()> fn) { cfg_.wake = std::move(fn); }
+  /** Replace the decoder (tests; control thread, nothing in flight). */
+  void setLoader(LoadFn load) { load_ = std::move(load); }
 
   // ---- decode requests -----------------------------------------------------------------------------------------
   /** Register how a key's url is decoded for request(key) / acquire-by-key callers (midi, maxMonoLossDb). */

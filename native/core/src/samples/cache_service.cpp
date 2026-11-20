@@ -2,10 +2,14 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <filesystem>
 #include <set>
 #include <thread>
 
 #include "bridge/json_out.h"
+#include "io/wav.h"
+#include "samples/resampler.h"
 #include "model/model.h"
 #include "model/patch.h"
 #include "rig/rig_engine.h"
@@ -14,10 +18,16 @@
 namespace rig::samples {
 namespace {
 
-const rig_config *cfgOf(rig::Model &m) { return m.env().config; }
+const rig_config *cfgOf(rig::Model &m) {
+  return m.env().config;
+}
 
-bool realtime(const rig_config *c) { return c && c->mode == RIG_MODE_REALTIME; }
-bool ipad(const rig_config *c) { return c && c->profile == RIG_PROFILE_IPAD; }
+bool realtime(const rig_config *c) {
+  return c && c->mode == RIG_MODE_REALTIME;
+}
+bool ipad(const rig_config *c) {
+  return c && c->profile == RIG_PROFILE_IPAD;
+}
 
 Storage storageOf(const rig_config *c) {
   if (c && c->sample_storage == RIG_SAMPLES_F32) return Storage::F32;
@@ -63,7 +73,9 @@ BufferCache::Config cacheConfig(const rig_config *c, rig::Model &m, std::functio
   return cfg;
 }
 
-double round1(double x) { return std::floor(x * 10 + 0.5) / 10; }
+double round1(double x) {
+  return std::floor(x * 10 + 0.5) / 10;
+}
 
 }  // namespace
 
@@ -80,20 +92,61 @@ struct CacheServiceImpl::PreloadOp {
 CacheServiceImpl::CacheServiceImpl(rig::Model &m)
     : model_(m),
       runner_(makeRunner(cfgOf(m))),
-      cache_(cacheConfig(cfgOf(m), m, [this](const std::string &s) { warnMsg(s, "decode"); }),
-             [h = hostDecoder(cfgOf(m))](const LoadRequest &rq) { return loadSampleFile(rq, h); }, runner_.get()) {}
+      cache_(
+          cacheConfig(cfgOf(m), m, [this](const std::string &s) { warnMsg(s, "decode"); }),
+          [h = hostDecoder(cfgOf(m))](const LoadRequest &rq) { return loadSampleFile(rq, h); }, runner_.get()) {
+  const rig_config *c = cfgOf(m);
+  if (c && (c->flags & RIG_FLAG_TEST_API))
+    if (const char *dir = std::getenv("RIG_SAMPLES_PCM_OVERRIDE")) setPcmOverride(dir);
+}
+
+void CacheServiceImpl::setPcmOverride(const std::string &dir) {
+  HostDecodeFn host = hostDecoder(cfgOf(model_));
+  if (dir.empty()) {
+    cache_.setLoader([host](const LoadRequest &rq) { return loadSampleFile(rq, host); });
+    return;
+  }
+  cache_.setLoader([dir, host](const LoadRequest &rq) {
+    // key = path below ".../samples/" without extension, '/' -> "__" (tools/golden/decode-dump/dump.mjs)
+    std::string rel = rq.url;
+    const std::size_t at = rel.rfind("/samples/");
+    if (at != std::string::npos) rel = rel.substr(at + 9);
+    const std::size_t dot = rel.find_last_of('.');
+    if (dot != std::string::npos) rel.resize(dot);
+    for (std::size_t i = 0; (i = rel.find('/', i)) != std::string::npos;) rel.replace(i, 1, "__");
+    const std::string file = dir + "/raw" + std::to_string(static_cast<long>(rq.engineRate)) + "/" + rel + ".wav";
+    io::WavData w;
+    if (!std::filesystem::exists(file) || !io::readWav(file, w, nullptr) || w.ch.empty() || w.frames() == 0)
+      return loadSampleFile(rq, host);
+    Pcm pcm;
+    pcm.sampleRate = w.sampleRate;
+    pcm.channels = w.ch.size() >= 2 ? 2 : 1;
+    for (int c = 0; c < pcm.channels; ++c) {
+      if (w.sampleRate != rq.engineRate)
+        resampleChannel(w.ch[static_cast<std::size_t>(c)], w.sampleRate, rq.engineRate, pcm.ch[c]);
+      else
+        pcm.ch[c] = std::move(w.ch[static_cast<std::size_t>(c)]);
+    }
+    LoadOutcome o;
+    o.buffer =
+        makeStored(processSample(pcm.ch, pcm.channels, rq.engineRate, rq.midi, rq.opts), rq.engineRate, rq.storage);
+    o.status = LoadOutcome::Status::Ok;
+    return o;
+  });
+}
 
 CacheServiceImpl::~CacheServiceImpl() {
   runner_.reset();  // join the workers before the cache (their mailbox) goes away
 }
 
-void CacheServiceImpl::warnMsg(const std::string &m, const char *code) { model_.warn(m, code); }
+void CacheServiceImpl::warnMsg(const std::string &m, const char *code) {
+  model_.warn(m, code);
+}
 
 // ---- paths, manifests --------------------------------------------------------------------------------------
 
 void CacheServiceImpl::onPaths(const rig::EnginePaths &p) {
   const bool appChanged = !p.appDir.empty() && p.appDir != loadedApp_;
-  const bool userChanged = p.userManifest != paths_.userManifest;
   paths_ = p;
   auto warn = [this](const std::string &s) { warnMsg(s, "manifest"); };
   if (appChanged) {
@@ -106,7 +159,8 @@ void CacheServiceImpl::onPaths(const rig::EnginePaths &p) {
         for (const SampleRef &s : L.samples) cache_.declareSource(s.url, s.midi, kv.second.decodeOpts);
     return;
   }
-  if (userChanged) reloadManifests();
+  // rig_set_paths re-reads the user manifest even when the path is the same (the Settings rescan after an import)
+  if (!p.userManifest.empty()) reloadManifests();
 }
 
 bool CacheServiceImpl::reloadManifests() {
@@ -166,7 +220,9 @@ CacheServiceImpl::JobList CacheServiceImpl::sampleJobs(const std::vector<rig::Pa
   return out;
 }
 
-std::vector<std::string> CacheServiceImpl::currentKeys() const { return sampleJobs({model_.patch()}).keys; }
+std::vector<std::string> CacheServiceImpl::currentKeys() const {
+  return sampleJobs({model_.patch()}).keys;
+}
 
 std::vector<std::string> CacheServiceImpl::protectKeys(const std::vector<const rig::PatchSpec *> &patches) const {
   std::set<std::string> out;
@@ -200,9 +256,12 @@ void CacheServiceImpl::protectSwitch(const rig::PatchSpec *playing, const rig::P
 // ---- pins --------------------------------------------------------------------------------------------------
 
 void CacheServiceImpl::doPin(const std::vector<std::string> &keys, const std::string &pin) {
-  if (lowRes_) cache_.setPins(currentKeys());  // low resource: pin policy 'current-only'
-  else if (pin == "replace") cache_.setPins(keys);
-  else if (pin != "none") cache_.pinAdd(keys);
+  if (lowRes_)
+    cache_.setPins(currentKeys());  // low resource: pin policy 'current-only'
+  else if (pin == "replace")
+    cache_.setPins(keys);
+  else if (pin != "none")
+    cache_.pinAdd(keys);
 }
 
 void CacheServiceImpl::setLowResource(bool on) {
@@ -257,7 +316,8 @@ void CacheServiceImpl::advance(const std::shared_ptr<PreloadOp> &op) {
     // a warm-up decode never pushes another song's pinned buffers out: with no unpinned room left it waits for
     // rewarmPins (pinned) or is skipped (unpinned)
     const bool held = cache_.has(key) || (key == job.url && !cache_.longOf(job.url).empty());
-    if (cache_.hasProtect() && !cache_.isProtected(key) && !held && !cache_.roomFor(cache_.estimateBytes({key}).bytes)) {
+    if (cache_.hasProtect() && !cache_.isProtected(key) && !held &&
+        !cache_.roomFor(cache_.estimateBytes({key}).bytes)) {
       ++op->deferred;
       continue;
     }
@@ -278,8 +338,14 @@ void CacheServiceImpl::advance(const std::shared_ptr<PreloadOp> &op) {
     j.begin().kv("decodedMB", cache_.decodedMB()).kv("pinnedMB", cache_.pinnedMB()).kv("deferred", op->deferred).end();
     std::string reply = j.take();
     JsonOut ev;
-    ev.begin().kv("v", 1).kv("ev", "load").kv("phase", "preload").kv("decodedMB", cache_.decodedMB())
-        .kv("pinnedMB", cache_.pinnedMB()).kv("deferred", op->deferred).end();
+    ev.begin()
+        .kv("v", 1)
+        .kv("ev", "load")
+        .kv("phase", "preload")
+        .kv("decodedMB", cache_.decodedMB())
+        .kv("pinnedMB", cache_.pinnedMB())
+        .kv("deferred", op->deferred)
+        .end();
     model_.emit(ev.take());
     if (op->done) op->done(std::move(reply));
   }
@@ -292,7 +358,8 @@ void CacheServiceImpl::preloadAsync(const yyjson_val *patches, std::string_view 
   op->pin = pin.empty() || pin == "auto" ? (op->patches.size() > 2 ? "replace" : "add") : std::string(pin);
   op->done = std::move(done);
   JobList jl = sampleJobs(op->patches);
-  if (!lowRes_) { /* reverb warm-ups belong to the reverb service (preload hook, T04) */ }
+  if (!lowRes_) { /* reverb warm-ups belong to the reverb service (preload hook, T04) */
+  }
   doPin(jl.keys, op->pin);
   // remembered for rewarmPins (a pinned sample evicted for a switch's headroom comes back later)
   if (op->pin == "replace" || op->pin == "add") {
@@ -328,7 +395,7 @@ std::string CacheServiceImpl::preload(const yyjson_val *patches, std::string_vie
 
 std::size_t CacheServiceImpl::pump() {
   const std::size_t n = cache_.pump();
-  if (epochFn_) cache_.collect();
+  cache_.collect();
   ops_.erase(std::remove_if(ops_.begin(), ops_.end(), [](const auto &o) { return o->finished; }), ops_.end());
   return n;
 }
@@ -337,7 +404,12 @@ std::string CacheServiceImpl::estimate(const yyjson_val *patches) {
   const JobList jl = sampleJobs(parsePatches(patches));
   const BufferCache::Estimate e = cache_.estimateBytes(jl.keys);
   JsonOut j;
-  j.begin().kv("mb", e.bytes / kMB).kvBool("exact", e.unknown == 0).kv("samples", e.count).kv("capMB", cache_.capMB()).end();
+  j.begin()
+      .kv("mb", e.bytes / kMB)
+      .kvBool("exact", e.unknown == 0)
+      .kv("samples", e.count)
+      .kv("capMB", cache_.capMB())
+      .end();
   return j.take();
 }
 
@@ -374,9 +446,13 @@ void CacheServiceImpl::onCommit(const rig::PatchSpec &patch, double) {
   rewarmPins();
 }
 
-void CacheServiceImpl::onRateChanged(double sr) { cache_.setEngineRate(sr); }
+void CacheServiceImpl::onRateChanged(double sr) {
+  cache_.setEngineRate(sr);
+}
 
-void CacheServiceImpl::onMemoryPressure(int level) { cache_.trim(level); }
+void CacheServiceImpl::onMemoryPressure(int level) {
+  cache_.trim(level);
+}
 
 std::string CacheServiceImpl::statsFields() {
   JsonOut j;

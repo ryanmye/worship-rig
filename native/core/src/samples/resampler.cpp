@@ -17,7 +17,8 @@ constexpr int kRequestFrames = 512;  // Chromium: SincResampler::kDefaultRequest
 
 class Sinc {
  public:
-  explicit Sinc(double ioRatio) : ratio_(ioRatio), input_(static_cast<std::size_t>(kRequestFrames + kKernelSize), 0.0f) {
+  explicit Sinc(double ioRatio)
+      : ratio_(ioRatio), input_(static_cast<std::size_t>(kRequestFrames + kKernelSize), 0.0f) {
     initKernel();
     flush();
   }

@@ -10,14 +10,22 @@
 namespace rig::samples {
 namespace {
 
-double clampd(double x, double lo, double hi) { return std::min(hi, std::max(lo, x)); }
-int jsRoundInt(double x) { return static_cast<int>(std::floor(x + 0.5)); }
+double clampd(double x, double lo, double hi) {
+  return std::min(hi, std::max(lo, x));
+}
+int jsRoundInt(double x) {
+  return static_cast<int>(std::floor(x + 0.5));
+}
 
 const yyjson_val *get(const yyjson_val *o, const char *k) {
   return o && yyjson_is_obj(const_cast<yyjson_val *>(o)) ? yyjson_obj_get(const_cast<yyjson_val *>(o), k) : nullptr;
 }
-bool isArr(const yyjson_val *v) { return v && yyjson_is_arr(const_cast<yyjson_val *>(v)); }
-bool isObj(const yyjson_val *v) { return v && yyjson_is_obj(const_cast<yyjson_val *>(v)); }
+bool isArr(const yyjson_val *v) {
+  return v && yyjson_is_arr(const_cast<yyjson_val *>(v));
+}
+bool isObj(const yyjson_val *v) {
+  return v && yyjson_is_obj(const_cast<yyjson_val *>(v));
+}
 
 /** JS Number(x) for a JSON value; NaN when not convertible. */
 double toNumber(const yyjson_val *v) {
@@ -37,7 +45,9 @@ double toNumber(const yyjson_val *v) {
   }
   return NAN;
 }
-bool nullish(const yyjson_val *v) { return !v || yyjson_is_null(const_cast<yyjson_val *>(v)); }
+bool nullish(const yyjson_val *v) {
+  return !v || yyjson_is_null(const_cast<yyjson_val *>(v));
+}
 bool truthyStr(const yyjson_val *v) {
   auto *p = const_cast<yyjson_val *>(v);
   return v && yyjson_is_str(p) && yyjson_get_len(p) > 0;
@@ -63,8 +73,10 @@ std::string joinPath(const std::string &base, const std::string &rel) {
     if (j == std::string::npos) j = full.size();
     std::string seg = full.substr(i, j - i);
     if (seg == "..") {
-      if (!parts.empty() && parts.back() != "..") parts.pop_back();
-      else if (!abs) parts.push_back(seg);
+      if (!parts.empty() && parts.back() != "..")
+        parts.pop_back();
+      else if (!abs)
+        parts.push_back(seg);
     } else if (!seg.empty() && seg != ".") {
       parts.push_back(seg);
     }
@@ -76,11 +88,18 @@ std::string joinPath(const std::string &base, const std::string &rel) {
 }
 
 const char *categoryGroup(const std::string &cat) {
-  static const std::pair<const char *, const char *> kMap[] = {
-      {"piano", "Piano"},          {"ep", "Electric Piano"},   {"electric piano", "Electric Piano"},
-      {"electric-piano", "Electric Piano"}, {"keys", "Electric Piano"}, {"mallet", "Mallets & Bells"},
-      {"mallets", "Mallets & Bells"}, {"bells", "Mallets & Bells"}, {"bell", "Mallets & Bells"},
-      {"guitar", "Guitar"},        {"bass", "Bass"},           {"organ", "Organ"}};
+  static const std::pair<const char *, const char *> kMap[] = {{"piano", "Piano"},
+                                                               {"ep", "Electric Piano"},
+                                                               {"electric piano", "Electric Piano"},
+                                                               {"electric-piano", "Electric Piano"},
+                                                               {"keys", "Electric Piano"},
+                                                               {"mallet", "Mallets & Bells"},
+                                                               {"mallets", "Mallets & Bells"},
+                                                               {"bells", "Mallets & Bells"},
+                                                               {"bell", "Mallets & Bells"},
+                                                               {"guitar", "Guitar"},
+                                                               {"bass", "Bass"},
+                                                               {"organ", "Organ"}};
   for (const auto &m : kMap)
     if (cat == m.first) return m.second;
   return nullptr;
@@ -113,14 +132,29 @@ bool parseNoteName(std::string_view name, int &midi) {
   const char l = static_cast<char>(name[0] >= 'a' && name[0] <= 'g' ? name[0] - 32 : name[0]);
   int pc;
   switch (l) {
-    case 'C': pc = 0; break;
-    case 'D': pc = 2; break;
-    case 'E': pc = 4; break;
-    case 'F': pc = 5; break;
-    case 'G': pc = 7; break;
-    case 'A': pc = 9; break;
-    case 'B': pc = 11; break;
-    default: return false;
+    case 'C':
+      pc = 0;
+      break;
+    case 'D':
+      pc = 2;
+      break;
+    case 'E':
+      pc = 4;
+      break;
+    case 'F':
+      pc = 5;
+      break;
+    case 'G':
+      pc = 7;
+      break;
+    case 'A':
+      pc = 9;
+      break;
+    case 'B':
+      pc = 11;
+      break;
+    default:
+      return false;
   }
   std::size_t i = 1;
   if (name[i] == '#') {
@@ -131,9 +165,12 @@ bool parseNoteName(std::string_view name, int &midi) {
     ++i;
   } else if (name.size() >= i + 3 && static_cast<unsigned char>(name[i]) == 0xE2 &&
              static_cast<unsigned char>(name[i + 1]) == 0x99) {  // U+266F sharp / U+266D flat
-    if (static_cast<unsigned char>(name[i + 2]) == 0xAF) pc += 1;
-    else if (static_cast<unsigned char>(name[i + 2]) == 0xAD) pc -= 1;
-    else return false;
+    if (static_cast<unsigned char>(name[i + 2]) == 0xAF)
+      pc += 1;
+    else if (static_cast<unsigned char>(name[i + 2]) == 0xAD)
+      pc -= 1;
+    else
+      return false;
     i += 3;
   }
   if (i >= name.size()) return false;
@@ -193,7 +230,8 @@ std::vector<SamplerDef> normalizeManifest(const yyjson_val *json, const std::str
       Layer layer;
       if (isArr(vel)) {
         layer.lo = static_cast<int>(std::isnan(toNumber(yyjson_arr_get(const_cast<yyjson_val *>(vel), 0)))
-                                        ? 0 : toNumber(yyjson_arr_get(const_cast<yyjson_val *>(vel), 0)));
+                                        ? 0
+                                        : toNumber(yyjson_arr_get(const_cast<yyjson_val *>(vel), 0)));
         const yyjson_val *hi = yyjson_arr_get(const_cast<yyjson_val *>(vel), 1);
         layer.hi = static_cast<int>(nullish(hi) ? 127 : toNumber(hi));
       }
@@ -237,7 +275,8 @@ std::vector<SamplerDef> normalizeManifest(const yyjson_val *json, const std::str
     const double relRaw = std::isfinite(relV) && relV > 0 && !nullish(get(inst, "release")) ? relV : o.defaultRelease;
     d.release = clampd(relRaw, kReleaseMin, kReleaseMax);
     const yyjson_val *gt = get(inst, "gainTrim");
-    const double trimRaw = gt && yyjson_is_num(const_cast<yyjson_val *>(gt)) ? yyjson_get_num(const_cast<yyjson_val *>(gt)) : 0;
+    const double trimRaw =
+        gt && yyjson_is_num(const_cast<yyjson_val *>(gt)) ? yyjson_get_num(const_cast<yyjson_val *>(gt)) : 0;
     d.gainTrimDb = clampd(trimRaw, -kGainTrimMaxDb, kGainTrimMaxDb);
     if (o.warn && d.release != relRaw)
       o.warn("Sample manifest: " + id + " release " + std::to_string(relRaw) + " s clamped to " +
@@ -248,17 +287,20 @@ std::vector<SamplerDef> normalizeManifest(const yyjson_val *json, const std::str
     d.undampedFrom = !o.secondary && cat == "piano" ? kPianoUndampedFrom : -1;
     if (const yyjson_val *uf = get(inst, "undampedFrom")) {
       const double u = toNumber(uf);
-      const bool off = nullish(uf) || (yyjson_is_bool(const_cast<yyjson_val *>(uf)) &&
-                                       !yyjson_get_bool(const_cast<yyjson_val *>(uf))) || !std::isfinite(u);
+      const bool off =
+          nullish(uf) ||
+          (yyjson_is_bool(const_cast<yyjson_val *>(uf)) && !yyjson_get_bool(const_cast<yyjson_val *>(uf))) ||
+          !std::isfinite(u);
       d.undampedFrom = off ? -1 : static_cast<int>(clampd(jsRoundInt(u), 0, 128));
     }
-    const bool longCat = cat == "piano" || cat == "ep" || cat == "electric piano" || cat == "electric-piano" ||
-                         cat == "keys";
+    const bool longCat =
+        cat == "piano" || cat == "ep" || cat == "electric piano" || cat == "electric-piano" || cat == "keys";
     double maxSec = !o.secondary && longCat ? kKeysMaxSec : 0;
     if (const yyjson_val *ms = get(inst, "maxSec")) {
       const double m = toNumber(ms);
-      const bool off = nullish(ms) || (yyjson_is_bool(const_cast<yyjson_val *>(ms)) &&
-                                       !yyjson_get_bool(const_cast<yyjson_val *>(ms))) || !(m > 0);
+      const bool off =
+          nullish(ms) ||
+          (yyjson_is_bool(const_cast<yyjson_val *>(ms)) && !yyjson_get_bool(const_cast<yyjson_val *>(ms))) || !(m > 0);
       maxSec = off ? 0 : clampd(m, kMaxSecMin, kMaxSecMax);
     }
     d.maxSec = maxSec;
@@ -281,10 +323,14 @@ std::vector<SamplerDef> normalizeManifest(const yyjson_val *json, const std::str
     std::string grp = strOr(get(inst, "group"));
     const auto b = grp.find_first_not_of(" \t\r\n");
     grp = b == std::string::npos ? std::string() : grp.substr(b, grp.find_last_not_of(" \t\r\n") - b + 1);
-    if (!grp.empty()) d.group = grp;
-    else if (!o.group.empty()) d.group = o.group;
-    else if (const char *g = categoryGroup(cat)) d.group = g;
-    else d.group = "Piano";
+    if (!grp.empty())
+      d.group = grp;
+    else if (!o.group.empty())
+      d.group = o.group;
+    else if (const char *g = categoryGroup(cat))
+      d.group = g;
+    else
+      d.group = "Piano";
     d.license = strOr(get(inst, "license"));
     d.attribution = strOr(get(inst, "attribution"));
     out.push_back(std::move(d));
@@ -324,8 +370,9 @@ void SampleRegistry::loadFactory(const std::string &appDir, const Warn &warn) {
   yyjson_read_err e;
   yyjson_doc *doc = yyjson_read_file(path.c_str(), 0, nullptr, &e);
   if (!doc) {
-    if (warn) warn("Sample manifest unavailable (" + path + "): " + (e.msg ? e.msg : "unreadable") +
-                   ". Sampled instruments disabled.");
+    if (warn)
+      warn("Sample manifest unavailable (" + path + "): " + (e.msg ? e.msg : "unreadable") +
+           ". Sampled instruments disabled.");
   } else {
     NormalizeOptions no;
     no.warn = warn;
@@ -367,8 +414,9 @@ SampleRegistry::UserResult SampleRegistry::reloadUser(const std::string &path, c
       yyjson_read_err e;
       doc = yyjson_read_file(path.c_str(), 0, nullptr, &e);
       if (!doc) {
-        if (warn) warn(std::string("My Samples reload failed (") + (e.msg ? e.msg : "unreadable") + "); keeping the " +
-                       std::to_string(oldIds.size()) + " instrument(s) already loaded.");
+        if (warn)
+          warn(std::string("My Samples reload failed (") + (e.msg ? e.msg : "unreadable") + "); keeping the " +
+               std::to_string(oldIds.size()) + " instrument(s) already loaded.");
         return UserResult::Failed;
       }
     }

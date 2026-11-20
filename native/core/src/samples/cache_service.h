@@ -43,9 +43,9 @@ class CacheServiceImpl final : public rig::CacheService {
   /** Control loop: integrate finished decodes and advance preloads. Returns how many results were integrated. */
   std::size_t pump();
   /** Set by the shell/engine: runs on a worker when a decode finished (wake the control thread to pump()). */
-  void setWake(std::function<void()> wake) { wake_ = std::move(wake); }
+  void setWake(std::function<void()> wake) { cache_.setWake(std::move(wake)); }
   /** Epoch source of the graph (graph/epoch.h): evicted buffers are freed only after the graph passed it. */
-  void setEpochSource(std::function<std::uint64_t()> fn) { epochFn_ = std::move(fn); }
+  void setEpochSource(std::function<std::uint64_t()> fn) { cache_.setEpochSource(std::move(fn)); }
   /** Cache keys (both decode caps) of these patches' sampler samples: the BufferCache::protect set of a switch. */
   std::vector<std::string> protectKeys(const std::vector<const rig::PatchSpec *> &patches) const;
   /** prepare(): protect = playing + incoming song. nullptr entries are skipped. */
@@ -54,6 +54,12 @@ class CacheServiceImpl final : public rig::CacheService {
   void setLowResource(bool on);
   /** Decode pinned samples that were evicted for a switch's headroom (or deferred), while they fit. */
   void rewarmPins();
+
+  /** samples.pcmOverride test hook (SETUP_REVIEW 13): decoded PCM dumped from the golden Chromium
+   *  (tools/golden/decode-dump/dump.mjs) replaces the native decoder wherever a dump exists, so exact-tier sampler
+   *  fixtures test the sampler, not the decoder. `dir` holds raw<rate>/<key>.wav; also read from the environment
+   *  variable RIG_SAMPLES_PCM_OVERRIDE when the engine has RIG_FLAG_TEST_API. Empty dir = off. */
+  void setPcmOverride(const std::string &dir);
 
   BufferCache &cache() { return cache_; }
   SampleRegistry &registry() { return registry_; }
@@ -82,8 +88,6 @@ class CacheServiceImpl final : public rig::CacheService {
   BufferCache cache_;
   rig::EnginePaths paths_;
   std::string loadedApp_;
-  std::function<void()> wake_;
-  std::function<std::uint64_t()> epochFn_;
   std::vector<std::shared_ptr<PreloadOp>> ops_;
   std::vector<std::pair<std::string, SampleJob>> pinJobs_;
   std::vector<std::string> lowResSavedPins_;

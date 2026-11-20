@@ -22,6 +22,43 @@ function b64(f32) {
 
 const clone = (x) => JSON.parse(JSON.stringify(x ?? null));
 
+/** Sampler buffers (they carry processSample's `_onsetTrim`) that an AudioBufferSourceNode actually started. */
+const STARTED = new Set();
+{
+  const start = AudioBufferSourceNode.prototype.start;
+  AudioBufferSourceNode.prototype.start = function patchedStart(...a) {
+    const b = this.buffer;
+    if (b && b._onsetTrim !== undefined) STARTED.add(b);
+    return start.apply(this, a);
+  };
+}
+
+/** The cache entries (URL keys) whose buffers were started: the samples a fixture really plays. */
+function samplesUsed(engine) {
+  const out = [];
+  for (const [key, e] of engine.cache.entries) {
+    if (!STARTED.has(e.buffer)) continue;
+    const b = e.buffer;
+    const url = key.split('#max=')[0];
+    out.push({ key, url, frames: b.length, rate: b.sampleRate, channels: b.numberOfChannels,
+      dualMono: !!b._dualMono, onsetTrimSec: b._onsetTrim, capped: !!b._capped, monoFix: b._monoFix || null });
+  }
+  return out.sort((x, y) => (x.key < y.key ? -1 : 1));
+}
+
+/**
+ * Chromium's own decode of one sample file at the file's NATIVE rate (no resampling): what a decoder-independent
+ * native test feeds the sampler (tools/golden/pcm.mjs). `rate` comes from the MP3 header (node side).
+ */
+export async function decodePcm(url, rate) {
+  const ab = await (await fetch(url)).arrayBuffer();
+  const ctx = new OfflineAudioContext({ numberOfChannels: 2, length: 1, sampleRate: rate });
+  const buf = await ctx.decodeAudioData(ab);
+  const chs = [];
+  for (let c = 0; c < buf.numberOfChannels; c++) chs.push(b64(buf.getChannelData(c)));
+  return { rate: buf.sampleRate, frames: buf.length, channels: chs, bytes: ab.byteLength };
+}
+
 /**
  * Wrap a seeded Rng so its calls are counted per stream name (manifest `randomness`: which PRNG streams a fixture
  * actually consumes). Every method delegates to the original, so the values drawn are unchanged; forks are wrapped
@@ -67,7 +104,7 @@ const TAP = {
 };
 
 /** Apply one timed event. All events are issued up front in time order with {when} (as tools/lib/render-page.js). */
-function applyEvent(engine, ev) {
+function applyEvent(engine, ev, ctx) {
   const when = ev.t;
   switch (ev.type) {
     case 'noteOn':
@@ -97,6 +134,30 @@ function applyEvent(engine, ev) {
       return engine.clickStop({ when });
     case 'swell':
       return engine.swell(!!ev.start, { when });
+    // ---- T17 additions (calls without a `when` argument apply at call time; events are issued in time order) ----
+    case 'transpose':
+      return engine.setTranspose(ev.semis); // read by the next noteOn / noteOff call
+    case 'keyContext':
+      return engine.setKeyContext(ev.pc, !!ev.minor);
+    case 'routing':
+      return engine.setRouting(ev.routing, when);
+    case 'panic':
+      return engine.allNotesOff({ when });
+    case 'fadeOut':
+      return engine.fadeOutAll(ev.seconds, { when });
+    case 'monoOut':
+      return engine.setMono(!!ev.on);
+    case 'eqAudition':
+      return engine.eqAudition(ev.slot, ev.mode, when);
+    case 'commit': {
+      // a song switch: patch `ev.next` of setup.next was prepare()d before the render started
+      const tok = ctx.tokens[ev.next];
+      if (ev.retain) engine.retainReverb([ctx.nextPatches[ev.next]]);
+      if (!engine.commit(tok, { when })) throw new Error(`commit ${ev.next} refused`);
+      return true;
+    }
+    case 'retainReverb':
+      return engine.retainReverb([ctx.nextPatches[ev.next]]);
     default:
       throw new Error(`unknown event type ${ev.type}`);
   }
@@ -147,6 +208,7 @@ async function renderFreeze(fx, t0) {
 export async function renderFixture(fx) {
   const t0 = performance.now();
   if (fx.kind === 'drone-freeze') return renderFreeze(fx, t0);
+  STARTED.clear();
   const s = fx.setup || {};
   const sr = GOLDEN_SR;
   const ctx = new OfflineAudioContext({ numberOfChannels: 2, length: Math.ceil(fx.seconds * sr), sampleRate: sr });
@@ -177,6 +239,9 @@ export async function renderFixture(fx) {
   if (s.click) engine.setClick(s.click, { when: 0 });
   const tok = await engine.prepare(patch);
   if (!engine.commit(tok, { when: 0 })) throw new Error('commit refused');
+  // song switches (events type 'commit'): the later patches are prepared up front, committed at their event time
+  const nextCtx = { tokens: [], nextPatches: s.next || [] };
+  for (const np of nextCtx.nextPatches) nextCtx.tokens.push(await engine.prepare(np));
   engine.setTranspose(s.transpose || 0);
   if (s.keyContext) engine.setKeyContext(s.keyContext.pc, !!s.keyContext.minor);
   if (s.drone && s.drone.mode && s.drone.mode !== 'off') {
@@ -222,9 +287,11 @@ export async function renderFixture(fx) {
     stimulus: stimDef,
   };
   const evs = [...(fx.events || [])].sort((a, b) => a.t - b.t);
-  for (const ev of evs) applyEvent(engine, ev);
+  for (const ev of evs) applyEvent(engine, ev, nextCtx);
   const buf = await ctx.startRendering();
   resolved.stats = engine._debugStats();
+  resolved.samplesUsed = samplesUsed(engine);
+  resolved.finalPatch = s.next?.length ? clone(engine._patch) : undefined;
   resolved.rngCalls = draws;
   resolved.reverbKey = engine.fx.reverb.active?.key ?? null;
   engine.dispose();

@@ -13,9 +13,15 @@
 
 namespace samplestest {
 
-inline std::string repoDir() { return RIG_REPO_DIR; }
-inline std::string dumpDir() { return repoDir() + "/tools/golden/decode-dump/data"; }
-inline std::string appDir() { return repoDir() + "/app"; }
+inline std::string repoDir() {
+  return RIG_REPO_DIR;
+}
+inline std::string dumpDir() {
+  return repoDir() + "/tools/golden/decode-dump/data";
+}
+inline std::string appDir() {
+  return repoDir() + "/app";
+}
 
 /** Parsed decode-dump manifest (tools/golden/decode-dump/dump.mjs); doc is null when the dump was not generated. */
 struct Dump {
@@ -31,7 +37,9 @@ struct Dump {
   bool ok() const { return files != nullptr; }
 };
 
-inline const char *str(yyjson_val *o, const char *k) { return yyjson_get_str(yyjson_obj_get(o, k)); }
+inline const char *str(yyjson_val *o, const char *k) {
+  return yyjson_get_str(yyjson_obj_get(o, k));
+}
 inline double num(yyjson_val *o, const char *k, double d = 0) {
   yyjson_val *v = yyjson_obj_get(o, k);
   return v && yyjson_is_num(v) ? yyjson_get_num(v) : d;

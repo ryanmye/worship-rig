@@ -10,7 +10,9 @@ namespace rig::samples {
 namespace {
 
 // JS Math.round: round half toward +infinity.
-std::size_t jsRound(double x) { return static_cast<std::size_t>(std::floor(x + 0.5)); }
+std::size_t jsRound(double x) {
+  return static_cast<std::size_t>(std::floor(x + 0.5));
+}
 
 }  // namespace
 
@@ -96,20 +98,20 @@ Processed processSample(const std::vector<float> *in, int channels, double sr, i
   const std::size_t fo = capped ? std::min(len, jsRound(1.0 * sr)) : 0;
   for (int c = 0; c < used; ++c) {
     std::vector<float> &o = out.ch[c];
-    o.assign(in[c].begin() + static_cast<std::ptrdiff_t>(start), in[c].begin() + static_cast<std::ptrdiff_t>(start + len));
+    o.assign(in[c].begin() + static_cast<std::ptrdiff_t>(start),
+             in[c].begin() + static_cast<std::ptrdiff_t>(start + len));
     for (std::size_t i = 0; i < fi; ++i)
-      o[i] = static_cast<float>(static_cast<double>(o[i]) *
-                                (0.5 - 0.5 * js::cos(3.14159265358979323846 * static_cast<double>(i) /
-                                                     static_cast<double>(fi))));
+      o[i] = static_cast<float>(
+          static_cast<double>(o[i]) *
+          (0.5 - 0.5 * js::cos(3.14159265358979323846 * static_cast<double>(i) / static_cast<double>(fi))));
     for (std::size_t i = 0; i < fo; ++i)
-      o[len - 1 - i] = static_cast<float>(static_cast<double>(o[len - 1 - i]) *
-                                          (static_cast<double>(i) / static_cast<double>(fo)));
+      o[len - 1 - i] =
+          static_cast<float>(static_cast<double>(o[len - 1 - i]) * (static_cast<double>(i) / static_cast<double>(fo)));
   }
   if (used == 2 && opts.hasMaxMonoLoss && std::isfinite(opts.maxMonoLossDb) && opts.maxMonoLossDb > 0) {
     // measured on exactly what the legacy cap keeps (incl. its 1 s fade), so a long variant is the legacy buffer
     // plus a tail, not a re-balanced copy
-    const std::size_t legacyLen =
-        std::max<std::size_t>(1, std::min(length - start, jsRound(legacyCapSec(midi) * sr)));
+    const std::size_t legacyLen = std::max<std::size_t>(1, std::min(length - start, jsRound(legacyCapSec(midi) * sr)));
     const std::size_t legacyFade = len > legacyLen ? std::min(legacyLen, jsRound(1.0 * sr)) : 0;
     out.monoFix = limitMonoLoss(out.ch[0].data(), out.ch[1].data(), len, opts.maxMonoLossDb, legacyLen, legacyFade);
   }

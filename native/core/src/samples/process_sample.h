@@ -14,7 +14,9 @@ inline constexpr double kKeysMaxSec = 30;
 inline constexpr double kMaxSecMin = 1, kMaxSecMax = 60;
 
 /** The legacy decode cap (s): 10 s above middle C, 16 s at/below. */
-inline double legacyCapSec(int midi) { return midi > 60 ? 10.0 : 16.0; }
+inline double legacyCapSec(int midi) {
+  return midi > 60 ? 10.0 : 16.0;
+}
 
 struct DecodeOpts {
   double maxSec = 0;         // > 0: decode length cap (sustain); 0 = the legacy 10 s / 16 s rule
@@ -37,8 +39,8 @@ struct Processed {
   bool dualMono = false;
   double lrDiff = 0;  // max |L - R| of the kept range; infinity = stopped early (real stereo); NaN = mono input
   bool hasLrDiff = false;
-  double onsetTrim = 0;      // s
-  std::size_t natural = 0;   // frames after the onset trim (uncapped)
+  double onsetTrim = 0;     // s
+  std::size_t natural = 0;  // frames after the onset trim (uncapped)
   bool capped = false;
   MonoFix monoFix;
 };

@@ -4,7 +4,11 @@
 #include "samples/cache_service.h"
 
 namespace {
-rig::Service *makeCache(rig::Model &m) { return new rig::samples::CacheServiceImpl(m); }
+rig::Service *makeCache(rig::Model &m) {
+  return new rig::samples::CacheServiceImpl(m);
+}
 }  // namespace
 
-void rig_register_samples_cache(rig::Registry &r) { r.addService(rig::CacheService::kName, &makeCache); }
+void rig_register_samples_cache(rig::Registry &r) {
+  r.addService(rig::CacheService::kName, &makeCache);
+}

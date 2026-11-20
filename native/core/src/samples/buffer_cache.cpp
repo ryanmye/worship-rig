@@ -52,8 +52,8 @@ LoadOutcome loadSampleFile(const LoadRequest &rq, const HostDecodeFn &host) {
   LoadOutcome o;
   DecodeResult r = decodeFile(rq.url, host);
   if (!r.ok()) {
-    o.status = r.status == DecodeResult::Status::Transient ? LoadOutcome::Status::Transient
-                                                            : LoadOutcome::Status::Permanent;
+    o.status =
+        r.status == DecodeResult::Status::Transient ? LoadOutcome::Status::Transient : LoadOutcome::Status::Permanent;
     o.error = r.error;
     return o;
   }
@@ -86,8 +86,10 @@ std::string groupOf(const std::string &k) {
 }
 std::string numToKey(double m) {  // JS `${m}`: integers without a decimal point
   char b[40];
-  if (m == std::floor(m) && std::fabs(m) < 1e15) std::snprintf(b, sizeof b, "%.0f", m);
-  else std::snprintf(b, sizeof b, "%.15g", m);
+  if (m == std::floor(m) && std::fabs(m) < 1e15)
+    std::snprintf(b, sizeof b, "%.0f", m);
+  else
+    std::snprintf(b, sizeof b, "%.15g", m);
   return b;
 }
 }  // namespace
@@ -127,7 +129,9 @@ Stored *BufferCache::find(const std::string &key) {
   return it->second.get();
 }
 
-const Stored *BufferCache::peek(std::string_view key) const { return find(std::string(key)); }
+const Stored *BufferCache::peek(std::string_view key) const {
+  return find(std::string(key));
+}
 
 bool BufferCache::protectedKey(const std::string &key) const {
   if (!protect_) return true;
@@ -157,9 +161,13 @@ void BufferCache::adoptLong(const std::string &url) {
   supersededBy_[lk] = url;
 }
 
-bool BufferCache::has(std::string_view key) const { return find(std::string(key)) != nullptr; }
+bool BufferCache::has(std::string_view key) const {
+  return find(std::string(key)) != nullptr;
+}
 
-bool BufferCache::failed(std::string_view key) const { return failed_.count(urlOfKey(key)) > 0; }
+bool BufferCache::failed(std::string_view key) const {
+  return failed_.count(urlOfKey(key)) > 0;
+}
 
 bool BufferCache::skipped(const std::string &url) {
   auto it = failed_.find(url);
@@ -209,7 +217,8 @@ bool BufferCache::roomFor(double extra) const {
   double freeB = 0;
   for (const auto &kv : entries_) {
     const Stored &e = *kv.second;
-    if (e.refs == 0 && !isPinned(kv.first) && !(protect_ && protectedKey(kv.first))) freeB += static_cast<double>(e.bytes);
+    if (e.refs == 0 && !isPinned(kv.first) && !(protect_ && protectedKey(kv.first)))
+      freeB += static_cast<double>(e.bytes);
   }
   return static_cast<double>(bytes_) - freeB + extra <= static_cast<double>(cfg_.capBytes);
 }
@@ -337,7 +346,8 @@ std::uint64_t BufferCache::trimUnpinned() {
   const std::uint64_t before = bytes_;
   std::vector<std::string> victims;
   for (const auto &kv : entries_)
-    if (kv.second->refs == 0 && !isPinned(kv.first) && !(protect_ && protectedKey(kv.first))) victims.push_back(kv.first);
+    if (kv.second->refs == 0 && !isPinned(kv.first) && !(protect_ && protectedKey(kv.first)))
+      victims.push_back(kv.first);
   for (const auto &k : victims) deleteEntry(k);
   return before - bytes_;
 }
@@ -573,8 +583,10 @@ void BufferCache::unpin(const std::vector<std::string> &keys) {
 
 void BufferCache::pin(const std::string *keys, std::size_t n, std::string_view mode) {
   std::vector<std::string> v(keys, keys + n);
-  if (mode == "replace") setPins(v);
-  else if (mode != "none") pinAdd(v);
+  if (mode == "replace")
+    setPins(v);
+  else if (mode != "none")
+    pinAdd(v);
 }
 
 void BufferCache::protect(const std::string *keys, std::size_t n) {

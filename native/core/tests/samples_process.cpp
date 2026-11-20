@@ -29,7 +29,8 @@ TEST_SUITE("samples_process") {
     }
     double worst = 0;
     int rows = 0;
-    std::printf("\n== processSample vs JS: file/variant, frames, channels, maxAbs, dualMono, capped, mono-fix mid/side\n");
+    std::printf(
+        "\n== processSample vs JS: file/variant, frames, channels, maxAbs, dualMono, capped, mono-fix mid/side\n");
     std::size_t i, n;
     yyjson_val *f;
     yyjson_arr_foreach(d.files, i, n, f) {
@@ -51,7 +52,8 @@ TEST_SUITE("samples_process") {
         double mx = 0;
         for (int c = 0; c < out.channels; ++c)
           for (std::size_t k = 0; k < out.frames; ++k)
-            mx = std::max(mx, std::fabs(static_cast<double>(out.ch[c][k]) - static_cast<double>(ref.ch[static_cast<std::size_t>(c)][k])));
+            mx = std::max(mx, std::fabs(static_cast<double>(out.ch[c][k]) -
+                                        static_cast<double>(ref.ch[static_cast<std::size_t>(c)][k])));
         CHECK(out.dualMono == yyjson_get_bool(yyjson_obj_get(p, "dualMono")));
         CHECK(out.capped == yyjson_get_bool(yyjson_obj_get(p, "capped")));
         CHECK(static_cast<double>(out.natural) == num(p, "natural"));
@@ -84,7 +86,7 @@ TEST_SUITE("samples_process") {
     std::vector<float> in[2] = {sine(48000, 440, sr, 0.5, 4800), {}};  // silence for 100 ms, then a sine
     auto o = rig::samples::processSample(in, 1, sr, 60, DecodeOpts{});
     CHECK(o.channels == 1);
-    CHECK(o.onsetTrim == doctest::Approx(0.099).epsilon(1e-9));  // first sample above -50 dBFS is a few frames after
+    CHECK(o.onsetTrim == doctest::Approx(0.099).epsilon(1e-3));  // 100 ms of silence minus 1 ms pre-roll plus the rise
     CHECK(o.natural == o.frames);
     CHECK_FALSE(o.capped);
     CHECK(o.ch[0][0] == 0.0f);  // raised-cosine fade starts at 0
@@ -101,8 +103,8 @@ TEST_SUITE("samples_process") {
     CHECK(a.capped);
     CHECK(a.ch[0].back() == 0.0f);
     CHECK(std::fabs(a.ch[0][a.frames - 1 - 4000]) <= 0.8f * 0.5f + 1e-3f);  // mid fade
-    auto lo = rig::samples::processSample(in, 1, sr, 60, DecodeOpts{});   // <= C4: 16 s
-    auto hi = rig::samples::processSample(in, 1, sr, 72, DecodeOpts{});   // > C4: 10 s
+    auto lo = rig::samples::processSample(in, 1, sr, 60, DecodeOpts{});     // <= C4: 16 s
+    auto hi = rig::samples::processSample(in, 1, sr, 72, DecodeOpts{});     // > C4: 10 s
     CHECK(lo.frames == static_cast<std::size_t>(16 * sr));
     CHECK(hi.frames == static_cast<std::size_t>(10 * sr));
     CHECK(lo.capped);

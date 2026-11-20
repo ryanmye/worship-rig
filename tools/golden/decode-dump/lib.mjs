@@ -21,7 +21,9 @@ export async function launch() {
     const roots = [process.env.GOLDEN_CHROMIUM, process.env.PLAYWRIGHT_BROWSERS_PATH, '/opt/pw-browsers',
       path.join(os.homedir(), '.cache/ms-playwright')].filter(Boolean);
     for (const r of roots) {
-      if (fs.existsSync(r) && fs.statSync(r).isFile()) return chromium.launch({ headless: true, args, executablePath: r });
+      if (fs.existsSync(r) && fs.statSync(r).isFile()) {
+        return chromium.launch({ headless: true, args, executablePath: r });
+      }
       if (!fs.existsSync(r)) continue;
       for (const d of fs.readdirSync(r).sort().reverse()) {
         for (const sub of ['chrome-headless-shell-linux64/chrome-headless-shell', 'chrome-linux/headless_shell',
@@ -62,7 +64,11 @@ export async function openPage() {
   const page = await browser.newPage();
   page.on('pageerror', (e) => console.error('[page]', e.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
-  return { browser, page, server, version: browser.version(), close: async () => { await browser.close(); server.close(); } };
+  const close = async () => {
+    await browser.close();
+    server.close();
+  };
+  return { browser, page, server, version: browser.version(), close };
 }
 
 /**
@@ -79,7 +85,8 @@ export const SELECTION = [
   { set: 'ep-rhodes', layer: 'first', at: 0.8 },
   { set: 'vibes', layer: 'first', at: 0.2 }, { set: 'vibes', layer: 'first', at: 0.5, vec: 1 },
   { set: 'vibes', layer: 'first', at: 0.8 },
-  { set: 'harp', layer: 'first', at: 0.2 }, { set: 'harp', layer: 'first', at: 0.5 }, { set: 'harp', layer: 'first', at: 0.8 },
+  { set: 'harp', layer: 'first', at: 0.2 }, { set: 'harp', layer: 'first', at: 0.5 },
+  { set: 'harp', layer: 'first', at: 0.8 },
   { set: 'music-box', layer: 'first', at: 0.2 }, { set: 'music-box', layer: 'first', at: 0.5, vec: 1 },
   { set: 'music-box', layer: 'first', at: 0.8 },
 ];
@@ -101,8 +108,10 @@ export const PAGE_FN = async ([selection, rates]) => {
   const out = [];
   for (const sel of selection) {
     const def = defs.find((d) => d.id === sel.set);
-    const L = sel.layer === 'first' ? def.layers[0] : def.layers[def.layers.length - 1];
-    const smp = L.samples[Math.min(L.samples.length - 1, Math.floor(sel.at * L.samples.length))];
+    const L = sel.layerIdx != null ? def.layers[sel.layerIdx]
+      : sel.layer === 'first' ? def.layers[0] : def.layers[def.layers.length - 1];
+    const smp = sel.sampleIdx != null ? L.samples[sel.sampleIdx]
+      : L.samples[Math.min(L.samples.length - 1, Math.floor(sel.at * L.samples.length))];
     const ab = await (await fetch(smp.url)).arrayBuffer();
     const rec = { ...sel, url: new URL(smp.url, location.href).pathname, midi: smp.midi, opts: def.decodeOpts || null,
       mp3Bytes: ab.byteLength, raw: {}, proc: [] };
@@ -114,15 +123,30 @@ export const PAGE_FN = async ([selection, rates]) => {
       if (sr === 44100) at44 = buf;
     }
     if (sel.vec && at44) {
-      const variants = [['def', def.decodeOpts || {}], ['cap', { maxSec: 1.5, maxMonoLossDb: def.decodeOpts?.maxMonoLossDb ?? 3 }]];
+      const loss = def.decodeOpts?.maxMonoLossDb ?? 3;
+      const variants = [['def', def.decodeOpts || {}], ['cap', { maxSec: 1.5, maxMonoLossDb: loss }]];
       for (const [name, opts] of variants) {
         const o = processSample(at44, smp.midi, opts);
-        rec.proc.push({ variant: name, opts, ...dump(o), dualMono: o._dualMono, lrDiff: Number.isFinite(o._lrDiff) ? o._lrDiff : null,
+        const lrDiff = Number.isFinite(o._lrDiff) ? o._lrDiff : null;
+        rec.proc.push({ variant: name, opts, ...dump(o), dualMono: o._dualMono, lrDiff,
           onsetTrim: o._onsetTrim, natural: o._natural, capped: o._capped, monoFix: o._monoFix || null,
           channels: o.numberOfChannels });
       }
     }
     out.push(rec);
+  }
+  return out;
+};
+
+/** In-page: every sample of these instrument ids as {set, layerIdx, sampleIdx, midi, url} (dump.mjs --set). */
+export const LIST_FN = async (sets) => {
+  const { normalizeManifest } = await import('/js/engine/sampler.js');
+  const json = await (await fetch('/samples/manifest.json')).json();
+  const out = [];
+  for (const d of normalizeManifest(json, '/samples/manifest.json')) {
+    if (!sets.includes(d.id)) continue;
+    d.layers.forEach((L, layerIdx) => L.samples.forEach((smp, sampleIdx) =>
+      out.push({ set: d.id, layerIdx, sampleIdx, midi: smp.midi, url: smp.url })));
   }
   return out;
 };

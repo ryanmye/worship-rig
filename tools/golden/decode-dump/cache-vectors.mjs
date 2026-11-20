@@ -26,7 +26,8 @@ const res = await page.evaluate(async (n) => {
   await e.start();
   const songs = FACTORY_SONGS.map((s) => ({ id: s.id, patch: JSON.parse(JSON.stringify(s.patch)) }));
   for (const s of songs) {
-    s.samplers = [...new Set((s.patch.slots || []).filter((x) => x && x.instrument.type === 'sampler').map((x) => x.instrument.id))];
+    const samplers = (s.patch.slots || []).filter((x) => x && x.instrument.type === 'sampler');
+    s.samplers = [...new Set(samplers.map((x) => x.instrument.id))];
     s.fresh = await e.estimatePreloadMB([s.patch]);
   }
   const all = { fresh: await e.estimatePreloadMB(songs.map((s) => s.patch)) };
@@ -45,10 +46,14 @@ const res = await page.evaluate(async (n) => {
   for (const s of songs) s.after = await e.estimatePreloadMB([s.patch]);
   all.after = await e.estimatePreloadMB(songs.map((s) => s.patch));
   const sizes = {};
-  for (const [k, v] of e.cache.sizes) sizes[new URL(k, location.href).pathname + (k.includes('#') ? k.slice(k.indexOf('#')) : '')] = v;
+  for (const [k, v] of e.cache.sizes) {
+    sizes[new URL(k, location.href).pathname + (k.includes('#') ? k.slice(k.indexOf('#')) : '')] = v;
+  }
   return { songs, all, preloaded: picked.map((s) => s.id), sizes, decodedMB: e.cache.decodedMB };
 }, N);
 await close();
 fs.mkdirSync(OUT, { recursive: true });
-fs.writeFileSync(path.join(OUT, 'cache-vectors.json'), JSON.stringify({ chromium: version, sampleRate: 44100, ...res }, null, 1));
-console.log(`cache-vectors: ${res.songs.length} songs, preloaded ${res.preloaded.join(', ')}, decoded ${res.decodedMB.toFixed(1)} MB`);
+const doc = { chromium: version, sampleRate: 44100, ...res };
+fs.writeFileSync(path.join(OUT, 'cache-vectors.json'), JSON.stringify(doc, null, 1));
+console.log(`cache-vectors: ${res.songs.length} songs, preloaded ${res.preloaded.join(', ')}, ` +
+  `decoded ${res.decodedMB.toFixed(1)} MB`);
