@@ -2059,6 +2059,9 @@ export function createController(o) {
         rebuildTouch();
         applyRemembered();
         break;
+      case 'dynamicRange':
+        call('setDynamicRange', s.dynamicRange ?? 1);
+        break;
       case 'click':
         applyClickSettings(s);
         break;
@@ -2457,6 +2460,7 @@ export function createController(o) {
     if (r && typeof r.then === 'function') await r.catch((err) => warn(`audio start failed: ${err && err.message}`));
     const s = settings();
     if (s.monoOutput) call('setMono', true);
+    if (s.dynamicRange) call('setDynamicRange', s.dynamicRange); // absent = 1, the engine's default
     if (s.click) applyClickSettings(s); // v11-metronome: absent = the defaults the engine already has
     if (s.outputDeviceId && s.outputDeviceId !== 'default' && engine && typeof engine.setSinkId === 'function') {
       const sr = call('setSinkId', s.outputDeviceId);

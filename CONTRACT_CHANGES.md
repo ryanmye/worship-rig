@@ -6744,3 +6744,28 @@ slot…` (test 31): "Perform reads slot 3 once per clock frame or sleeps (0.25)"
 - Seen once in the simulation, not on CI: the last wait in the same test (back in Perform, `slotTapCount() >= 1`
   within 3 s) timed out. It passed in the 6 other simulated runs. Not changed. If CI ever shows it, a v11-reverb-quiet
   warm-up build landing in that window (6 s quiet after the note-off) is the first thing to check.
+
+## v11-dynamic-range (Ryan 2026-11-20, Mac hardware batch on his Roland; shared/touch-curve.js, engine sampler.js + instruments.js + audio.js, store.js, controller.js, views/settings-keyboards.js + settings.js, styles-settings.css)
+- **Why.** "Fit to my touch" on the Roland: "the quiet is not quiet enough and the loud is not loud enough". The fit
+  only decides how hard a note counts. The sampler's own span set the limit: multi-layer pianos −10 dB from velocity
+  0 to full, single-layer −24 dB, and full = 0 dB at most.
+- **Q5 answered: `FIT_SOFT_TARGET` 0.3 → 0.15.** Soft playing fits to 15 % of the output range. An average player
+  (soft ≈ 40, hard ≈ 127) now fits shape ≈ 1.65, near the 'hard' preset.
+- **`settings.dynamicRange`.** Optional and device-local (in `DEVICE_LOCAL_SETTINGS`). Absent means 1, today's
+  sound. 1..3, step 0.05, clamped. Setting 1 or null clears it, and anything else is refused.
+  - `shared/touch-curve.js`: `DYN_RANGE`, `DYN_PIVOT = 0.75` (velocity ≈ 96, where the sampler trims are
+    calibrated), `validDynRange`, and `velocityDb(v01, spanDb, range)`:
+    `-span·(1−v) + span·(range−1)·(v − 0.75)`. At range 1 this is exactly the old formula, and the pivot level
+    never moves. Pianos at 1.8×: soft (v 0.15) −13.3 dB, hardest +2.0 dB. At 3×: −20.5 / +5.0 dB. Single-layer
+    sounds at 3×: −49 / +12 dB. The master ceiling catches peaks.
+  - Engine: `AudioEngine.setDynamicRange(r)` writes `registry.dyn.range`. Each `SamplerInstrument` gets that shared
+    object (`dyn` option) and reads it per note, so a change takes effect on the next note and held notes keep their
+    gain. Synth, organ and synth-extra voices are unchanged.
+  - Controller: applies it at start (when set) and on every change (`onSetting 'dynamicRange'`).
+  - UI: Settings › MIDI keyboard › Your keyboards has a "Range" slider above the keyboard list, one for every
+    keyboard on this Mac, with a line that gives the soft-to-loud dB for pianos and other sounds.
+- **Tests:** `test/phase1/shell/dynamic-range.test.mjs` (new, 3: formula, store, controller). `touch-curve.test`
+  and settings "Your keyboards" now assert soft lands on 15 %. unit 406, engine 98/99 (the soft warning predates
+  this), settings 60/60, shell unit + browser pass.
+- **For 2.0:** if the native engine replaces the sampler, keep `velocityDb` as the one gain law (per-note, pivot
+  0.75, spans 10 / 24), and keep the setting device-local.

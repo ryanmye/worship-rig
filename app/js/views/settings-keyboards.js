@@ -10,6 +10,7 @@
 // Writes go through store.setKeyboard (names contain dots, so they are not set() paths); notes through the controller.
 import {
   TOUCH_RANGE, normalizeTouch, compileTouch, touchAt, touchWord, fitTouch, FIT_NOTES, LINEAR_TOUCH, COMPUTER_KEYBOARD,
+  DYN_RANGE, velocityDb,
 } from '../shared/touch-curve.js';
 import { say } from './components/voice.js';
 
@@ -94,10 +95,32 @@ const posOfShape = (s) => Math.log2(s);
  */
 export function mountKeyboards({ store, controller, midi, listen, toast = () => {} }) {
   const list = h('div.st-kb-list', { role: 'list' });
+  // Range (settings.dynamicRange, Ryan 2026-11-20): one slider for every keyboard on this Mac. 1× = the built-in spans;
+  // wider = soft quieter and hard louder (sampled instruments; synths and organ keep their own response)
+  const rangeIn = h('input', { type: 'range', min: DYN_RANGE.min, max: DYN_RANGE.max, step: DYN_RANGE.step,
+    'aria-label': 'Range: how far soft playing is from loud', dataset: { testid: 'setting-dynamic-range' } });
+  const rangeOut = h('output.st-kb-val', { dataset: { testid: 'dynamic-range-value' } });
+  const rangeSpan = h('small.st-hint', { dataset: { testid: 'dynamic-range-span' } });
+  rangeIn.addEventListener('input', () => store.set('settings.dynamicRange', Number(rangeIn.value)));
+  const rangeRow = h('div.st-kb-range', {},
+    h('label.st-kb-slider', {}, h('span', { text: 'Range' }), rangeIn, rangeOut),
+    rangeSpan);
   const el = h('div.st-kbs', { dataset: { testid: 'settings-keyboards' } },
     h('h3.st-h3', { text: 'Your keyboards' }),
     h('p.st-hint', { text: say('keyboardsHint') }), // v11-decisions: device-local, said so
+    rangeRow,
     list);
+  function renderRange() {
+    const r = store.get().settings.dynamicRange ?? 1;
+    if (document.activeElement !== rangeIn) rangeIn.value = String(r);
+    rangeOut.textContent = `${r.toFixed(2).replace(/0$/, '')}×`;
+    // pianos (two or more sample layers) and the rest, from the softest note to the hardest
+    const span = (s) => Math.round(velocityDb(1, s, r) - velocityDb(0, s, r));
+    const top = (s) => velocityDb(1, s, r);
+    const fmtTop = (s) => (top(s) > 0.05 ? `, hardest +${top(s).toFixed(1)} dB` : '');
+    rangeSpan.textContent = `Soft to loud: pianos ${span(10)} dB${fmtTop(10)}; other sampled sounds ${span(24)} dB`
+      + `${fmtTop(24)}. 1× is the standard response.`;
+  }
   /** @type {Map<string, ReturnType<typeof makeRow>>} */
   const rows = new Map();
   let openName = null;
@@ -299,6 +322,7 @@ export function mountKeyboards({ store, controller, midi, listen, toast = () => 
   }
 
   function render() {
+    renderRange();
     const want = names();
     const order = want.map((w) => w.name);
     for (const [n, r] of rows) {

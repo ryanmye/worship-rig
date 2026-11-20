@@ -356,6 +356,8 @@ export class InstrumentRegistry {
     this.useModules = useModules;
     this.gainTrimsUrl = gainTrimsUrl ?? new URL('./gain-trims.json', import.meta.url).href;
     this.samplers = new Map(); // id -> normalized def
+    /** settings.dynamicRange for every sampler this registry creates (AudioEngine.setDynamicRange) */
+    this.dyn = { range: 1 };
     this.synth = null; // {defs: Map<id, def & {_build}>}
     this.organ = null;
     this.gainTrims = { synth: {}, organ: {}, droneTrim: 0 };
@@ -622,7 +624,7 @@ export class InstrumentRegistry {
     const id = ref?.id;
     if (type === 'sampler') {
       const def = this.samplers.get(id);
-      if (def) return new SamplerInstrument(ctx, rng, def, params, { cache: this.cache, warn: this.warn, onProgress: opts.onProgress });
+      if (def) return new SamplerInstrument(ctx, rng, def, params, { cache: this.cache, warn: this.warn, onProgress: opts.onProgress, dyn: this.dyn });
       this.warn(`Unknown sampled instrument "${id}"; using a synth instead.`);
       return new FallbackSynth(ctx, rng, { id: 'soft-keys' }, {});
     }

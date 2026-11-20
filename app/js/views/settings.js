@@ -587,6 +587,7 @@ export function mountSettings(el, ctx) {
   const keyboards = mountKeyboards({ store, controller, midi, listen, toast });
   cleanups.push(() => keyboards.destroy());
   settingBinds.push({ key: 'keyboards', apply: () => keyboards.render() });
+  settingBinds.push({ key: 'dynamicRange', apply: () => keyboards.render() }); // the Range slider
 
   // MIDI Learn table
   const learnBody = h('tbody');

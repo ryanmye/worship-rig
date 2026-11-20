@@ -341,7 +341,8 @@ async function runMode(mode, browser) {
       await until(() => !!window.__rig.store.get().settings.keyboards?.['@computer']?.touch);
       const t = await ev(() => window.__rig.store.get().settings.keyboards['@computer'].touch);
       assert.equal(t.top, 98);
-      assert.ok(t.shape < 1, `a light touch fits a lighter curve (${t.shape})`);
+      // soft 24 of full-at-98 lands on FIT_SOFT_TARGET (0.15, Ryan Q5)
+      assert.ok(Math.abs(Math.pow(24 / 98, t.shape) - 0.15) < 0.01, `soft notes land on 15 % (${t.shape})`);
       await until((r) => /Own touch/.test(document.querySelector(`${r} .st-kb-sum`).textContent), row);
       // played notes now carry the curve; the velocity is raw (the Touch setting no longer applies to these keys)
       const call = await ev(() => {
