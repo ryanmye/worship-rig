@@ -141,10 +141,23 @@ void Engine::setPaths(const char *userManifest, const char *padsDir) {
   onControl([this, p] { model_.setPaths(p); });
 }
 
+void Engine::drainGarbage() {
+  AudioEvent ev;
+  while (graph_.popGarbage(ev)) {
+    model_.onAudioEvent(ev);  // Garbage only frees (and counts): safe from inside a Model call
+    garbageFreed_.fetch_add(1, std::memory_order_relaxed);
+  }
+}
+
 bool Engine::send(Command c) {
   c.seq = ++seq_;
+  // Bound the garbage in flight (V13): every pointer the graph hands back comes from a command, so draining the
+  // garbage ring every 1024 sends keeps it below ring + stash whatever the audio thread consumes meanwhile
+  // (<= 1024 + command ring 16384 + heap 8192 + units < 32768 + 1024).
+  if ((seq_ & 1023u) == 0) drainGarbage();
   if (cmdQ_.push(c)) return true;
   if (!realtime()) {  // offline: producer and consumer are the same thread, so make room by draining
+    drainGarbage();
     graph_.drainCommands();
     return cmdQ_.push(c);
   }
@@ -215,12 +228,9 @@ void Engine::postHostEvent(std::string &&json) {
 }
 
 void Engine::drainAudioEvents() {
-  AudioEvent ev;
   // Garbage first and from its own ring (never dropped; SETUP_REVIEW 18 / V13): frees run on this thread only.
-  while (graph_.popGarbage(ev)) {
-    model_.onAudioEvent(ev);
-    garbageFreed_.fetch_add(1, std::memory_order_relaxed);
-  }
+  drainGarbage();
+  AudioEvent ev;
   bool dropped = false;
   while (evQ_.pop(ev)) {
     dropped = dropped || ev.kind == EventKind::Dropped;

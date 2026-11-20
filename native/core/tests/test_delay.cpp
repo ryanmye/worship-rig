@@ -36,6 +36,14 @@ std::vector<std::vector<float>> impulseAt(std::size_t frame, std::size_t len, fl
   return in;
 }
 
+/** First sample in [a, b) with |x| > 1e-12: the onset of an echo (the causal tone LPF starts at the echo frame,
+ *  while its peak drifts by the filter's group delay on every pass). */
+std::size_t onset(const std::vector<float> &x, std::size_t a, std::size_t b) {
+  for (std::size_t i = a; i < b && i < x.size(); ++i)
+    if (std::fabs(x[i]) > 1e-12) return i;
+  return b;
+}
+
 std::size_t argmaxAbs(const std::vector<float> &x, std::size_t a, std::size_t b) {
   std::size_t k = a;
   for (std::size_t i = a; i < b && i < x.size(); ++i)
@@ -79,11 +87,10 @@ TEST_SUITE("delay") {
       std::size_t first = 0;
       for (std::size_t k = 1; k <= 4; ++k) {
         const std::size_t c = pp ? (k % 2 == 1 ? 0 : 1) : 0;
-        const std::size_t pk = argmaxAbs(out[c], at + k * T - 64, at + k * T + 64);
-        if (k == 1) first = pk;
-        CHECK(pk - first == (k - 1) * T);  // one delay of `time` per pass: Q is inside, not added (Q9)
-        CHECK(pk >= at + k * T);
-        CHECK(pk < at + k * T + 8);  // the 12 kHz Butterworth LPF peaks a few samples after the onset
+        const std::size_t on = onset(out[c], at + k * T - 64, at + k * T + 64);
+        if (k == 1) first = on;
+        CHECK(on - first == (k - 1) * T);  // one delay of `time` per pass: Q is inside, not added (Q9)
+        CHECK(on == at + k * T);
         if (pp) {  // the other channel carries nothing of this echo
           const double other = energy(out[1 - c], at + k * T - 64, at + k * T + 64);
           CHECK(other < 1e-12);
@@ -106,38 +113,57 @@ TEST_SUITE("delay") {
   TEST_CASE("time change > 5 %: line switch, old line rings out, flushes, goes idle; <= 5 %: glide") {
     DelayUnit u(kSr, patchOf(0.3, 0.5, false), 0);
     t05::Driver d(&u, kSr);
-    CHECK(u.activeLine() == 0);
+    // construction = Delay() + applyAll(0): .375 -> .3 is a 20 % change, so line B takes it at once (as in JS)
+    REQUIRE(u.activeLine() == 1);
+    CHECK(std::string(u.lineState(0)) == "ringing");
     d.run(22016);  // 0.4992 s
     u.updateTime(0.6, 0.5);
-    CHECK(u.activeLine() == 1);
-    CHECK(u.lineTime(1) == 0.6);
-    CHECK(std::string(u.lineState(0)) == "ringing");
-    // tail = min(8, .3 * ceil(ln .001 / ln .5) + .1) = 3.1 s -> RingEnd at 3.6 s -> flushing until 3.6 + .3 + .1
-    d.run(static_cast<std::size_t>(3.59 * kSr) / 128 * 128 - static_cast<std::size_t>(d.frame));
-    CHECK(std::string(u.lineState(0)) == "ringing");
-    d.run(static_cast<std::size_t>(0.02 * kSr) / 128 * 128);
-    CHECK(std::string(u.lineState(0)) == "flushing");
+    CHECK(u.activeLine() == 1);  // line A is still ringing (busy): flushed first
+    d.run(static_cast<std::size_t>(0.6 * kSr) / 128 * 128);
+    CHECK(u.activeLine() == 0);
+    CHECK(u.lineTime(0) == 0.6);
+    CHECK(std::string(u.lineState(1)) == "ringing");
+  }
+
+  TEST_CASE("line switch from idle: the old line rings min(8, time ceil(ln .001 / ln fb) + .1) s, then flushes") {
+    DelayUnit u(kSr, patchOf(0.3, 0.5, false), 0);
+    t05::Driver d(&u, kSr);
+    d.run(static_cast<std::size_t>(4.5 * kSr) / 128 * 128);  // line A (.375 s): rings 3.85 s, flushes .475 s
+    REQUIRE(u.activeLine() == 1);
+    REQUIRE(std::string(u.lineState(0)) == "idle");
+    const double t0 = d.now();
+    u.updateTime(0.6, t0);
+    REQUIRE(u.activeLine() == 0);
+    CHECK(u.lineTime(0) == 0.6);
+    CHECK(std::string(u.lineState(1)) == "ringing");
+    // tail = .3 * 10 + .1 = 3.1 s, then flushing for .3 + .1 s
+    d.run(static_cast<std::size_t>(3.08 * kSr) / 128 * 128);
+    CHECK(std::string(u.lineState(1)) == "ringing");
+    d.run(static_cast<std::size_t>(0.04 * kSr) / 128 * 128);
+    CHECK(std::string(u.lineState(1)) == "flushing");
     d.run(static_cast<std::size_t>(0.42 * kSr) / 128 * 128);
-    CHECK(std::string(u.lineState(0)) == "idle");
+    CHECK(std::string(u.lineState(1)) == "idle");
     // <= 5 %: same line, linear glide
     u.updateTime(0.62, d.now());
-    CHECK(u.activeLine() == 1);
-    CHECK(u.lineTime(1) == 0.62);
+    CHECK(u.activeLine() == 0);
+    CHECK(u.lineTime(0) == 0.62);
   }
 
   TEST_CASE("switch while the other line rings: it is flushed first (time + 60 ms), then takes the new time") {
-    DelayUnit u(kSr, patchOf(0.3, 0.5, false), 0);
+    DelayUnit u(kSr, patchOf(0.375, 0.5, false), 0);  // .375 = the line default: no switch at build
     t05::Driver d(&u, kSr);
+    REQUIRE(u.activeLine() == 0);
     d.run(22016);
-    u.updateTime(0.6, 0.5);  // line 1 active, line 0 ringing
-    d.run(8832);             // to ~0.7 s
+    u.updateTime(0.6, 0.5);  // line B active, line A ringing
+    REQUIRE(u.activeLine() == 1);
+    d.run(8832);  // to ~0.7 s
     const double t = d.now();
-    u.updateTime(0.3, t);  // line 0 is busy: flushing, retry at t + .3 + .06
+    u.updateTime(0.3, t);  // line A is busy: flushing, retry at t + .375 + .06
     CHECK(u.activeLine() == 1);
     CHECK(std::string(u.lineState(0)) == "flushing");
-    d.run(static_cast<std::size_t>(0.35 * kSr) / 128 * 128);
+    d.run(static_cast<std::size_t>(0.42 * kSr) / 128 * 128);
     CHECK(u.activeLine() == 1);
-    d.run(static_cast<std::size_t>(0.02 * kSr) / 128 * 128);
+    d.run(static_cast<std::size_t>(0.03 * kSr) / 128 * 128);
     CHECK(u.activeLine() == 0);
     CHECK(u.lineTime(0) == 0.3);
     CHECK(std::string(u.lineState(1)) == "ringing");
@@ -196,11 +222,8 @@ TEST_SUITE("delay") {
     REQUIRE(rig_test_inject(e.e, "fx.delay.input", ch, 2, static_cast<uint32_t>(x.size()), 0.5, 1.0f) == RIG_OK);
     const auto out = e.render(static_cast<std::size_t>(1.2 * kSr), 4410);
     const std::size_t at = static_cast<std::size_t>(0.5 * kSr), T = static_cast<std::size_t>(0.25 * kSr);
-    const std::size_t pk1 = argmaxAbs(out[0], at + T - 64, at + T + 64);
-    const std::size_t pk2 = argmaxAbs(out[0], at + 2 * T - 64, at + 2 * T + 64);
-    CHECK(pk2 - pk1 == T);
-    CHECK(pk1 >= at + T);
-    CHECK(pk1 < at + T + 16);
-    CHECK(std::fabs(out[0][pk1]) > 0.05);
+    CHECK(onset(out[0], at + T - 64, at + T + 64) == at + T);
+    CHECK(onset(out[0], at + 2 * T - 64, at + 2 * T + 64) == at + 2 * T);
+    CHECK(std::fabs(out[0][argmaxAbs(out[0], at + T - 64, at + T + 64)]) > 0.05);
   }
 }

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <vector>
 
+#include "api/engine.h"
 #include "bridge/json_out.h"
 #include "model/model.h"
 #include "num/js_number.h"
@@ -16,21 +17,40 @@ const rig_host *hostOf(const Model &m) {
   return c ? c->host : nullptr;
 }
 
+namespace {
+/** The Engine behind the Model (T08's clock map and port index), or null in a test harness with another sink. */
+const Engine *engineOf(Model &m) {
+  return dynamic_cast<const Engine *>(&m.sink());
+}
+}  // namespace
+
 std::uint64_t hostTimeFor(Model &m, double t) {
+  if (!std::isfinite(t) || t <= m.now()) return 0;
+  if (const Engine *e = engineOf(m); e && e->clockMap().valid()) return e->clockMap().hostTimeAt(t);
   const rig_host *h = hostOf(m);
-  if (!h || !h->host_time_ns || !std::isfinite(t)) return 0;
-  const double now = m.now();
-  if (t <= now) return 0;
-  return h->host_time_ns(h->user) + static_cast<std::uint64_t>(std::llround((t - now) * 1e9));
+  if (!h || !h->host_time_ns) return 0;
+  return h->host_time_ns(h->user) + static_cast<std::uint64_t>(std::llround((t - m.now()) * 1e9));
 }
 
 double engineTimeFor(Model &m, std::uint64_t hostNs) {
   const double now = m.now();
+  if (!hostNs) return now;
+  if (const Engine *e = engineOf(m); e && e->clockMap().valid())
+    return std::max(0.0, e->clockMap().engineTimeAt(hostNs));
   const rig_host *h = hostOf(m);
-  if (!hostNs || !h || !h->host_time_ns) return now;
+  if (!h || !h->host_time_ns) return now;
   const std::uint64_t hn = h->host_time_ns(h->user);
   const double ago = hn >= hostNs ? static_cast<double>(hn - hostNs) * 1e-9 : -static_cast<double>(hostNs - hn) * 1e-9;
   return std::max(0.0, now - ago);
+}
+
+std::string portIdOf(Model &m, const PortTable &t, std::uint16_t port) {
+  if (const Engine *e = engineOf(m)) {
+    std::string id = e->midiPortId(port);  // T08's MidiPortTable index (rig_midi_in)
+    if (!id.empty()) return id;
+  }
+  if (const Port *p = t.byWire(port)) return p->id;  // T00 hash of the id string
+  return std::to_string(port);
 }
 
 // ---- Perform: the Model's contract methods ------------------------------------------------------------------------
@@ -55,8 +75,8 @@ void MidiServiceImpl::bend(double value, double when) {
 
 void MidiServiceImpl::onBytes(std::uint16_t port, const std::uint8_t *bytes, std::size_t len, std::uint64_t hostNs) {
   if (!bytes || !len) return;
-  const Port *p = table_.byWire(port);
-  const std::string id = p ? p->id : std::to_string(port);  // no port table yet (offline tools, devhost)
+  const std::string id = portIdOf(m_, table_, port);
+  const Port *p = table_.byId(id);
   if (listenSet_ && !listening_.count(id)) {
     ++filtered_;
     return;

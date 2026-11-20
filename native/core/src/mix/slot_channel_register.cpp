@@ -64,7 +64,9 @@ bool setPanRow(Model &m, const SetRequest &r) {
   if (!hasStrip(m, r.slot)) return true;
   const int slot = r.slot;
   const double v = r.value;
-  auto apply = [&m, slot, v](double tt) { m.moveParam(stripSlot(static_cast<std::size_t>(slot)), kStripPan, v, tt, 0); };
+  auto apply = [&m, slot, v](double tt) {
+    m.moveParam(stripSlot(static_cast<std::size_t>(slot)), kStripPan, v, tt, 0);
+  };
   const double when = r.when >= 0 ? r.when : m.now();
   if (StripService *s = svc(m)) s->coalescer().push(key(slot, "pan"), when, apply);
   else apply(when);

@@ -102,7 +102,9 @@ class OfflineTimer {
     this.ctx.currentTime = (q * 128) / this.ctx.sampleRate;
     for (;;) {
       let best = null;
-      for (const e of this.items) if (e.k <= q && (!best || e.k < best.k || (e.k === best.k && e.id < best.id))) best = e;
+      for (const e of this.items) {
+        if (e.k <= q && (!best || e.k < best.k || (e.k === best.k && e.id < best.id))) best = e;
+      }
       if (!best) break;
       this.items.splice(this.items.indexOf(best), 1);
       if (!best.cancelled) best.cb(Math.max(best.t, this.ctx.currentTime));

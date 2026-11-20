@@ -107,6 +107,7 @@ class Engine final : public CommandSink {
   void controlLoop();
   void processMessage(const std::string &json);
   void drainAudioEvents();
+  void drainGarbage();
   void checkWatchdog();
   void pumpRec(bool offline);
   void hostCall(std::function<void()> fn);

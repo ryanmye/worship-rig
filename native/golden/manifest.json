@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "generator": "tools/golden/render.mjs",
- "generatedAt": "2026-11-20T01:58:59.442Z",
+ "generatedAt": "2026-11-20T02:27:31.162Z",
  "chromium": "157.0.8103.78",
  "chromiumPin": {
   "version": "157.0.8103.78",
@@ -35,9 +35,9 @@
  },
  "measures": "tools/golden/analysis.mjs (definitions in its header and native/golden/README.md)",
  "lastRun": {
-  "fixtures": 2,
+  "fixtures": 1,
   "repeat": 2,
-  "seconds": 8.6,
+  "seconds": 2.3,
   "cpus": 2
  },
  "stimuli": {
@@ -164,7 +164,7 @@
   "committedBytes": 2207860,
   "commitCapBytes": 2500000,
   "regenerate": "node tools/golden/pcm.mjs",
-  "seconds": 13.7
+  "seconds": 8.7
  },
  "tiers": {
   "exact": 62,
@@ -10764,7 +10764,7 @@
     -130.3
    ],
    "repeatMaxAbsDiff": 0,
-   "renderMs": 191,
+   "renderMs": 522,
    "tolerance": {
     "bandsDb": 5.88,
     "bandRangeDb": 50,

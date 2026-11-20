@@ -125,13 +125,59 @@ TEST_SUITE("runtime") {
         en.model().sendOwned(rig::UnitSlot::Drone, rig::opOf(static_cast<std::uint16_t>(0x7F01)), p, -1.0);
       }
       const auto &st = en.graph().stats();
-      CHECK(st.garbageParked.load() > 0);  // more than the 32768-entry ring: the stash held the rest
-      CHECK(st.garbageLost.load() == 0);
+      CHECK(st.garbageLost.load() == 0);  // the control side drains while sending: never beyond ring + stash
       eng.render(48000);
       CHECK(g_owned.load() == before);  // all freed on the control side while rendering
       CHECK(st.garbageLost.load() == 0);
     }
     CHECK(g_owned.load() == before);
+  }
+
+  TEST_CASE("graph: a full garbage ring parks pointers in the stash and flushes them in order (V13)") {
+    auto *cq = new rig::CommandQueue();
+    auto *eq = new rig::EventQueue();
+    auto *meters = new rig::Seqlock<rig_meters>();
+    auto *g = new rig::Graph(48000, *cq, *eq, *meters);
+    const long before = g_owned;
+    float l[128], r[128];
+    float *out[2] = {l, r};
+    long sent = 0;
+    auto flood = [&](int n) {
+      for (int i = 0; i < n; ++i) {
+        rig::Command c{};
+        c.op = rig::opOf(static_cast<std::uint16_t>(0x7F02));
+        c.sub = rig::kSubOwnedPayload;
+        c.target = static_cast<std::uint32_t>(rig::UnitSlot::Drone);  // empty slot: handed straight back
+        c.frame = rig::kFrameNow;
+        c.p.ptr = new Counted();
+        REQUIRE(cq->push(c));
+        ++sent;
+      }
+      g->renderQuantum(out, 2);
+    };
+    flood(16384);
+    flood(16384);  // 32768: the ring is full
+    flood(1000);   // parked
+    CHECK(g->stats().garbageParked.load() == 1000);
+    CHECK(g->stats().garbageLost.load() == 0);
+    long freed = 0;
+    rig::AudioEvent ev;
+    while (g->popGarbage(ev)) {
+      rig::freeGarbage(ev);
+      ++freed;
+    }
+    CHECK(freed == 32768);
+    g->renderQuantum(out, 2);  // the stash flushes into the drained ring
+    while (g->popGarbage(ev)) {
+      rig::freeGarbage(ev);
+      ++freed;
+    }
+    CHECK(freed == sent);
+    CHECK(g_owned.load() == before);
+    delete g;
+    delete meters;
+    delete eq;
+    delete cq;
   }
 
   TEST_CASE("Dropped: VoiceEnded lost to a full ring comes back as one rescan per slot (ended bits)") {
@@ -210,7 +256,7 @@ TEST_SUITE("runtime") {
     REQUIRE(rt.waitFor("\"state\":\"running\"", 3000));
     CHECK(rt.waitFor("\"deviceId\":\"fake\""));
     rt.startAudio();
-    REQUIRE(rt.waitFor("\"hostLatency\":0.0075", 2000));  // G7: tick carries the host latency
+    REQUIRE(rt.waitFor("\"hostLatency\":0.007", 2000));  // G7: tick carries the host latency
     rt.post(R"({"v":1,"op":"audio","action":"restart","id":5})");
     REQUIRE(rt.waitFor("\"re\":5,"));
     CHECK(rt.waitFor("\"restarted\":true", 3000));

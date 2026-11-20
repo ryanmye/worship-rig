@@ -1,0 +1,14 @@
+# T05 delay / chorus / lofi fixtures (owner T05), compared at the manifest tier by ctest golden.t05. echo-none
+# renders digital silence (return gain 0): it passes without any delay code and proves nothing. The exact tier is
+# checked in tests/test_delay.cpp, test_chorus.cpp, test_lofi.cpp (also for the statistical chorus-* and
+# lofi-tape-sine, which are reported for promotion).
+echo-none
+echo-slapback
+echo-quarter
+echo-dotted
+echo-ambient-echo
+echo-dotted-noise
+chorus-default-sine
+chorus-fast-deep-noise
+lofi-crush-sweep
+lofi-tape-sine

@@ -314,6 +314,23 @@ TEST_SUITE("reverb") {
     CHECK(pool.keys() == std::vector<std::string>{active});
   }
 
+  TEST_CASE("pool defaults: desktop 10 units / 160 MB, iPad profile 4 units / 32 MB (ARCHITECTURE 7)") {
+    for (const bool ipad : {false, true}) {
+      rig_config cfg;
+      rig_config_init(&cfg);
+      cfg.mode = RIG_MODE_OFFLINE;
+      cfg.sample_rate = 48000;
+      if (ipad) cfg.profile = RIG_PROFILE_IPAD;
+      rig_engine *raw = rig_create(&cfg, nullptr);
+      REQUIRE(raw != nullptr);
+      auto *p = dynamic_cast<rig::fx::ReverbPool *>(reinterpret_cast<rig::Engine *>(raw)->model().service("reverb"));
+      REQUIRE(p != nullptr);
+      CHECK(p->maxUnits() == (ipad ? 4u : 10u));
+      CHECK(p->maxBytes() == (ipad ? std::size_t(32) : std::size_t(160)) << 20);
+      rig_destroy(raw);
+    }
+  }
+
   TEST_CASE("reverbDeferWhilePlaying + reverbQuietGate: deferred space waits for 2 s of quiet, warm-ups 6 s") {
     const double sr = 44100;
     OfflineEngine e(sr);

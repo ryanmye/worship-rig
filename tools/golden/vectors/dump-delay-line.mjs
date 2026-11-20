@@ -48,7 +48,9 @@ const results = await page.evaluate(async (cases) => {
     const ctx = new OfflineAudioContext(1, spec.frames, spec.sr);
     const buf = new AudioBuffer({ numberOfChannels: 1, length: spec.frames, sampleRate: spec.sr });
     const d = buf.getChannelData(0);
-    for (let i = 0; i < spec.frames; i++) d[i] = spec.amp * (Math.sin(2 * Math.PI * 431 * i / spec.sr) + 0.5 * noise(i * 2));
+    for (let i = 0; i < spec.frames; i++) {
+      d[i] = spec.amp * (Math.sin(2 * Math.PI * 431 * i / spec.sr) + 0.5 * noise(i * 2));
+    }
     const src = new AudioBufferSourceNode(ctx, { buffer: buf });
     const dl = new DelayNode(ctx, { maxDelayTime: spec.max, delayTime: spec.delay });
     for (const [m, ...a] of spec.auto) dl.delayTime[m](...a);

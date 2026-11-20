@@ -9,6 +9,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <unistd.h>
 #include <vector>
 
 #include "bridge/schema.h"
@@ -228,7 +229,7 @@ TEST_SUITE("bridge-conformance") {
           const std::string r = eng.call(msg);
           INFO(msg << " -> " << r);
           CHECK(contains(r, "\"code\":\"bad-request\""));
-          CHECK(contains(r, "\"re\":" + std::to_string(id) + ","));
+          CHECK(contains(r, ("\"re\":" + std::to_string(id) + ",").c_str()));
           CHECK(contains(r, arg.name));  // the message names the field
           ++cases;
         }

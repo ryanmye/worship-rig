@@ -43,7 +43,8 @@ TEST_SUITE("panner") {
                   static_cast<std::int64_t>(q0), sr);
       }
       const std::vector<float> wl = t02::b64floats(cs.out);
-      const double d = std::fmax(t02::maxDiff(l, wl), t02::maxDiff(r, cs.out1 == "same" ? wl : t02::b64floats(cs.out1)));
+      const std::vector<float> wr = cs.out1 == "same" ? wl : t02::b64floats(cs.out1);
+      const double d = std::fmax(t02::maxDiff(l, wl), t02::maxDiff(r, wr));
       CHECK_MESSAGE(d <= 1e-6, cs.name << ": max diff " << d);
       worst = std::fmax(worst, d);
       exact += d == 0 ? 1 : 0;

@@ -74,7 +74,8 @@ function musicalMessage() {
 }
 
 const header = [
-  '# MIDI parser vectors from the real app/js/midi.js (tools/golden/vectors/dump-midi.mjs, node ' + process.version + ')',
+  '# MIDI parser vectors from the real app/js/midi.js (tools/golden/vectors/dump-midi.mjs, node ' +
+    process.version + ')',
 ];
 for (let n = 0; n < 1200; n++) {
   const port = r() < 0.7 ? 'a' : 'b';

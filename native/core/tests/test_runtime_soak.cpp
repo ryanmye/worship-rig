@@ -11,6 +11,7 @@
 #include <mutex>
 #include <random>
 #include <string>
+#include <unistd.h>
 #include <thread>
 #include <vector>
 

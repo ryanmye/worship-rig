@@ -24,6 +24,7 @@ using namespace rig;
 namespace {
 
 std::unique_ptr<Unit> makeUnit(double sr) {
+  ensureModulesRegistered();
   UnitEnv env;
   env.sampleRate = sr;
   UnitSpec spec;
@@ -119,7 +120,7 @@ TEST_SUITE("click") {
     }
     for (std::size_t i = table.size(); i < 8990; ++i) CHECK(out[i] == 0.0f);
     CHECK(out[9000] != 0.0f);
-    for (std::size_t i = 10000; i < 10100; ++i) CHECK(out[i] == 0.0f);
+    for (std::size_t i = 10920; i < 11900; ++i) CHECK(out[i] == 0.0f);  // the sub ends at 10920; no accent
     CHECK(u->liveVoices() == 0u);  // both ended
     // the level param is the bus gain
     REQUIRE(u->param(kClickLevel) != nullptr);
@@ -196,8 +197,10 @@ TEST_SUITE("click") {
         CHECK(buf[0] == buf[1]);
         CHECK(buf[0][f0 - 1] == 0.0f);
       }
-      r = post(R"({"v":1,"op":"click","action":"config","id":6,"record":true})");
-      CHECK(contains(r, R"("record":true)"));
+      post(R"({"v":1,"op":"click","action":"config","id":6,"record":true})");
+      auto *svc = dynamic_cast<ClickServiceImpl *>(reinterpret_cast<Engine *>(e)->model().service("click"));
+      REQUIRE(svc);
+      CHECK(svc->metronome().record());
       r = post(R"({"v":1,"op":"click","action":"stop","id":7})");
       CHECK(contains(r, R"("result":{"wasRunning":true})"));
       r = post(R"({"v":1,"op":"get","what":"stats","id":8})");
@@ -231,7 +234,7 @@ TEST_SUITE("click") {
     Engine &eng = *reinterpret_cast<Engine *>(e);
     const std::string ports = R"([{"id":"in1","name":"Keys","state":"connected","kind":"input"},
       {"id":"out7","name":"Synth","state":"connected","kind":"output"}])";
-    eng.model().midiPorts(ports.data(), ports.size());
+    REQUIRE(rig_host_midi_ports(e, ports.data(), ports.size()) == RIG_OK);
     post(R"({"v":1,"op":"config","id":3,"midiClock":{"port":"auto"}})");
     auto *svc = dynamic_cast<ClickServiceImpl *>(eng.model().service(ClickService::kName));
     REQUIRE(svc);
@@ -312,7 +315,7 @@ TEST_SUITE("click") {
     ev.f.a = 48000;
     ev.f.b = 48000;
     eng.model().onAudioEvent(ev);
-    CHECK(eng.model().stats().unitsAttached == attached + 1);
+    CHECK(eng.model().stats().unitsAttached > attached);  // the click unit (and other rate-dependent units)
     const auto out = e.render(48000);
     int onsets = 0;
     for (std::size_t i = 1; i < out[0].size(); ++i) onsets += out[0][i - 1] == 0.0f && out[0][i] != 0.0f;

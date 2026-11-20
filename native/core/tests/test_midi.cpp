@@ -1,6 +1,7 @@
 // T07: MIDI parser against the real midi.js (tools/golden/vectors/data/midi-parse.txt, tools/golden/vectors/
 // dump-midi.mjs), applyVelocitySens against controller.js, the port table, the direct perform path (controller.js
 // refcount / pedal / CC rules) and the "midi" service through the bridge and Model::midiBytes/midiPorts.
+#include <cstdlib>
 #include <cstring>
 #include <map>
 #include <sstream>
@@ -105,14 +106,26 @@ void configure(Router &r, FakePerform &p, const char *json) {
 
 std::vector<std::string> events(const std::vector<std::string> &msgs, const char *type) {
   std::vector<std::string> out;
+  auto one = [&](yyjson_val *v) {
+    const char *ev = yyjson_get_str(yyjson_obj_get(v, "ev"));
+    const char *ty = yyjson_get_str(yyjson_obj_get(v, "type"));
+    if (!ev || !ty || std::strcmp(ev, "midi") != 0 || std::strcmp(ty, type) != 0) return;
+    char *s = yyjson_val_write(v, 0, nullptr);
+    out.emplace_back(s);
+    std::free(s);
+  };
   for (const std::string &m : msgs) {
-    std::size_t p = 0;
-    while ((p = m.find("\"ev\":\"midi\"", p)) != std::string::npos) {
-      const std::size_t a = m.rfind('{', p), b = m.find('}', p);
-      const std::string one = m.substr(a, b - a + 1);
-      if (one.find(std::string("\"type\":\"") + type + "\"") != std::string::npos) out.push_back(one);
-      p = b;
+    yyjson_doc *d = yyjson_read(m.data(), m.size(), 0);
+    if (!d) continue;
+    yyjson_val *root = yyjson_doc_get_root(d);
+    if (yyjson_is_arr(root)) {
+      std::size_t i, n;
+      yyjson_val *v;
+      yyjson_arr_foreach(root, i, n, v) one(v);
+    } else {
+      one(root);
     }
+    yyjson_doc_free(d);
   }
   return out;
 }
@@ -258,7 +271,7 @@ TEST_SUITE("midi") {
     const std::string ports = R"([{"id":"k1","name":"Keys","state":"connected","kind":"input"},
       {"id":"o1","name":"Clock Out","state":"connected","kind":"output"}])";
     e.msgs.clear();
-    CHECK(m.midiPorts(ports.data(), ports.size()));
+    CHECK(rig_host_midi_ports(e.e, ports.data(), ports.size()) == RIG_OK);  // T08 interns, the service diffs
     eng.flush();
     REQUIRE(events(e.msgs, "ports").size() == 1);
     CHECK(contains(events(e.msgs, "ports")[0], R"("id":"o1","name":"Clock Out")"));
@@ -289,7 +302,7 @@ TEST_SUITE("midi") {
     CHECK(svc->router().sounding() == 1);
     // hot-plug: k1 disappears -> its note is released, a ports event goes out
     const std::string ports2 = R"([{"id":"o1","name":"Clock Out","state":"connected","kind":"output"}])";
-    m.midiPorts(ports2.data(), ports2.size());
+    rig_host_midi_ports(e.e, ports2.data(), ports2.size());
     CHECK(svc->router().sounding() == 0);
     // listen: only listed ids are forwarded
     r = e.call(R"({"v":1,"op":"midi","id":6,"action":"listen","ids":["k2"]})");

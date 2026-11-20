@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <regex>
 #include <string>
+#include <unistd.h>
 #include <thread>
 #include <vector>
 

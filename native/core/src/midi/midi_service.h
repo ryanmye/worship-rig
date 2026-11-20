@@ -24,11 +24,14 @@ namespace rig::midi {
 
 /** The platform callbacks (rig_config.host, copied by the Engine), or null (offline tools). */
 const rig_host *hostOf(const Model &m);
-/** Engine time t -> host clock ns for rig_host.midi_send (0 = now). Linear map through host_time_ns() and the
- *  engine's current time; T08's clock map (render timestamps + output latency) replaces it. */
+/** Engine time t -> host clock ns for rig_host.midi_send (0 = now or past): T08's ClockMap (render timestamps) when
+ *  it has an anchor, else a linear map through rig_host.host_time_ns() and the engine's current time. */
 std::uint64_t hostTimeFor(Model &m, double t);
 /** Host ns (rig_midi_in) -> engine seconds; 0 or no host clock = now. */
 double engineTimeFor(Model &m, std::uint64_t hostNs);
+/** The platform id of rig_midi_in's uint16: T08's MidiPortTable index (Engine::midiPortId), else the T00 string hash
+ *  looked up in `t`, else the number as text. */
+std::string portIdOf(Model &m, const PortTable &t, std::uint16_t port);
 
 class MidiServiceImpl final : public MidiService, private Perform {
  public:

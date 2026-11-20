@@ -68,11 +68,11 @@ TEST_SUITE("chorus") {
   TEST_CASE("input is mono 1/2 (L + R); a constant passes unchanged on both outputs") {
     ChorusUnit u(kSr, 1, patchOf(0.4, 1.0, 0.5));
     t05::Driver d(&u, kSr);
-    const std::size_t n = 44160;
+    const std::size_t n = 44160;  // from 0.2 s: the return gain's rampTo (tau 15 ms) is pinned at 0.18 s
     std::vector<std::vector<float>> in{std::vector<float>(n, 0.4f), std::vector<float>(n, 0.0f)};
     const auto out = d.run(n, in);
     for (int c = 0; c < 2; ++c)
-      for (std::size_t i = 4410; i < n; ++i) REQUIRE(out[static_cast<std::size_t>(c)][i] == doctest::Approx(0.1).epsilon(1e-6));
+      for (std::size_t i = 8820; i < n; ++i) REQUIRE(out[static_cast<std::size_t>(c)][i] == doctest::Approx(0.1).epsilon(1e-6));
   }
 
   TEST_CASE("delay modulation: 7 ms +- 2 ms x depth; rates r and 1.07 r; rate clamped to 1.5 Hz") {

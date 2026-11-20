@@ -96,7 +96,8 @@ TEST_SUITE("biquad") {
     const BiquadCoeffs c = biquadCoeffs(BiquadType::Peaking, 1000, 1, 9, sr);
     CHECK(magDb(c, 1000, sr) == doctest::Approx(9).epsilon(1e-6));  // A = 10^(g/40) rounded to float (fdlibm::expf)
     const double butter = 20 * std::log10(std::sqrt(0.5));
-    CHECK(magDb(biquadCoeffs(BiquadType::Lowpass, 2000, butter, 0, sr), 2000, sr) == doctest::Approx(-3.0103).epsilon(1e-4));
+    CHECK(magDb(biquadCoeffs(BiquadType::Lowpass, 2000, butter, 0, sr), 2000, sr) ==
+          doctest::Approx(-3.0103).epsilon(1e-4));
     CHECK(magDb(biquadCoeffs(BiquadType::Highpass, 150, butter, 0, sr), 150, sr) ==
           doctest::Approx(-3.0103).epsilon(1e-4));
     CHECK(magDb(biquadCoeffs(BiquadType::Highpass, 150, butter, 0, sr), 75, sr) < -11.5);  // 2-pole slope

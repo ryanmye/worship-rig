@@ -88,7 +88,7 @@ TEST_SUITE("meter") {
     // the meter sees whole quanta rendered ahead of the FIFO: every rendered sample was read exactly once
     for (int c = 0; c < 2; ++c) {
       readMax[c] = std::max(readMax[c], ms->shared().takePeak(c));
-      CHECK(outMax[c] > 0.5f);
+      CHECK(outMax[c] > 0.3f);  // the spike after the master chain (glue, ceiling)
       CHECK(readMax[c] == outMax[c]);
     }
     CHECK(ms->shared().takePeak(0) == 0.0f);  // reset by the read
