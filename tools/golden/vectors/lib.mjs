@@ -22,7 +22,9 @@ export async function launch() {
     const roots = [process.env.GOLDEN_CHROMIUM, process.env.PLAYWRIGHT_BROWSERS_PATH, '/opt/pw-browsers',
       path.join(os.homedir(), '.cache/ms-playwright')].filter(Boolean);
     for (const r of roots) {
-      if (fs.existsSync(r) && fs.statSync(r).isFile()) return chromium.launch({ headless: true, args, executablePath: r });
+      if (fs.existsSync(r) && fs.statSync(r).isFile()) {
+        return chromium.launch({ headless: true, args, executablePath: r });
+      }
       if (!fs.existsSync(r)) continue;
       for (const d of fs.readdirSync(r).sort().reverse()) {
         for (const sub of ['chrome-headless-shell-linux64/chrome-headless-shell', 'chrome-linux/headless_shell',

@@ -99,7 +99,7 @@ bool Param::linearRampToValueAtTime(double v, double t) {
 bool Param::exponentialRampToValueAtTime(double v, double t) {
   float f;
   if (!toFloat(v, f) || !std::isfinite(t) || !(t >= 0)) return false;
-  if (!f) return false;  // RangeError: target in (-denorm_min, denorm_min)
+  if (f == 0.0f) return false;  // RangeError: target in (-denorm_min, denorm_min)
   Event e;
   e.type = Type::Exp;
   e.value = f;
@@ -798,7 +798,7 @@ void Param::processARate(std::int64_t frame0, double sampleRate, float *out, std
   } else {
     fill(out, 0, n, finalValue(start, sampleRate));
   }
-  frame_ = start + kQuantum;  // the main thread sees the context after this quantum
+  frame_ = start + n;  // the main thread sees the context after this quantum (n = 128 in a graph)
 }
 
 float Param::processKRate(std::int64_t frame0, double sampleRate) {

@@ -62,11 +62,12 @@ class Sinc {
     for (int off = 0; off <= kKernelOffsetCount; ++off) {
       const double subsample = static_cast<double>(off) / kKernelOffsetCount;
       for (int i = 0; i < kKernelSize; ++i) {
-        const double preSinc = pi * (i - kKernelSize / 2 - subsample);
-        const double window = 0.42 - 0.5 * js::cos(2.0 * pi * i / kKernelSize) +
-                              0.08 * js::cos(4.0 * pi * i / kKernelSize);
+        // Blackman window (alpha .16) matching the offset of the sinc (Chromium: x = (i - subsample) / kKernelSize)
+        const float x = static_cast<float>((i - subsample) / kKernelSize);
+        const float window = static_cast<float>(0.42 - 0.5 * js::cos(2.0 * pi * x) + 0.08 * js::cos(4.0 * pi * x));
+        const float preSinc = static_cast<float>(pi * (i - kKernelSize / 2 - subsample));
         const double sinc = preSinc == 0 ? scale : js::sin(scale * preSinc) / preSinc;
-        kernel_[static_cast<std::size_t>(off * kKernelSize + i)] = static_cast<float>(sinc * window);
+        kernel_[static_cast<std::size_t>(off * kKernelSize + i)] = static_cast<float>(window * sinc);
       }
     }
   }
@@ -120,7 +121,8 @@ class Sinc {
 
 std::size_t resampledLength(std::size_t frames, double inRate, double outRate) {
   if (inRate == outRate) return frames;
-  return static_cast<std::size_t>(std::floor(static_cast<double>(frames) * outRate / inRate + 0.5));
+  // Blink AudioBus::CreateBySampleRateConverting: length / (source rate / destination rate), truncated
+  return static_cast<std::size_t>(static_cast<double>(frames) / (inRate / outRate));
 }
 
 void resampleChannel(const std::vector<float> &in, double inRate, double outRate, std::vector<float> &out) {

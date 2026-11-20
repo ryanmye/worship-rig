@@ -1,0 +1,2487 @@
+{
+ "chromium": "157.0.8103.78",
+ "sampleRate": 44100,
+ "songs": [
+  {
+   "id": "factory:sunday-pad-piano",
+   "patch": {
+    "slots": [
+     {
+      "instrument": {
+       "type": "sampler",
+       "id": "salamander-piano"
+      },
+      "gain": 0.8,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.25,
+       "delay": 0.1,
+       "chorus": 0
+      },
+      "params": {}
+     },
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "warm-pad"
+      },
+      "gain": 0.55,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": true,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.5,
+       "delay": 0.1,
+       "chorus": 0.35
+      },
+      "params": {}
+     },
+     null,
+     null
+    ],
+    "fx": {
+     "reverb": {
+      "size": 0.62,
+      "damp": 0.5,
+      "predelay": 0.025,
+      "returnGain": 1
+     },
+     "delay": {
+      "time": 0.42,
+      "feedback": 0.3,
+      "pingpong": false,
+      "tone": 0.4,
+      "sync": "off",
+      "returnGain": 0.8
+     },
+     "chorus": {
+      "rate": 0.4,
+      "depth": 0.5,
+      "returnGain": 1
+     },
+     "lofi": {
+      "amount": 0,
+      "wow": 0.5,
+      "flutter": 0.5,
+      "crackle": 0.3,
+      "bits": 0.5,
+      "tone": 0.5,
+      "saturation": 0.5
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "expression": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "drone-swell",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 8
+    }
+   },
+   "samplers": [
+    "salamander-piano"
+   ],
+   "fresh": {
+    "mb": 157.5,
+    "exact": false,
+    "samples": 90,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 332.9389877319336,
+    "exact": true,
+    "samples": 90,
+    "capMB": 700
+   }
+  },
+  {
+   "id": "factory:building-swell",
+   "patch": {
+    "slots": [
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "strings"
+      },
+      "gain": 0.7,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": true,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.45,
+       "delay": 0.1,
+       "chorus": 0
+      },
+      "params": {}
+     },
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "glass-pad"
+      },
+      "gain": 0.75,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": true,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.55,
+       "delay": 0.2,
+       "chorus": 0.45
+      },
+      "params": {}
+     },
+     null,
+     null
+    ],
+    "fx": {
+     "reverb": {
+      "size": 0.72,
+      "damp": 0.45,
+      "predelay": 0.03,
+      "returnGain": 1.05
+     },
+     "delay": {
+      "time": 0.5,
+      "feedback": 0.35,
+      "pingpong": false,
+      "tone": 0.45,
+      "sync": "off",
+      "returnGain": 0.8
+     },
+     "chorus": {
+      "rate": 0.3,
+      "depth": 0.5,
+      "returnGain": 1
+     },
+     "lofi": {
+      "amount": 0,
+      "wow": 0.5,
+      "flutter": 0.5,
+      "crackle": 0.3,
+      "bits": 0.5,
+      "tone": 0.5,
+      "saturation": 0.5
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "expression": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "pitch",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 12
+    }
+   },
+   "samplers": [],
+   "fresh": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   }
+  },
+  {
+   "id": "factory:prayer-wash",
+   "patch": {
+    "slots": [
+     null,
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "warm-pad"
+      },
+      "gain": 0.8,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": true,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.7,
+       "delay": 0.25,
+       "chorus": 0.4
+      },
+      "params": {}
+     },
+     null,
+     null
+    ],
+    "fx": {
+     "reverb": {
+      "size": 0.92,
+      "damp": 0.55,
+      "predelay": 0.04,
+      "returnGain": 1.25
+     },
+     "delay": {
+      "time": 0.6,
+      "feedback": 0.45,
+      "pingpong": false,
+      "tone": 0.35,
+      "sync": "off",
+      "returnGain": 0.7
+     },
+     "chorus": {
+      "rate": 0.2,
+      "depth": 0.55,
+      "returnGain": 1
+     },
+     "lofi": {
+      "amount": 0,
+      "wow": 0.5,
+      "flutter": 0.5,
+      "crackle": 0.3,
+      "bits": 0.5,
+      "tone": 0.5,
+      "saturation": 0.5
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "expression": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "drone-swell",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 10
+    }
+   },
+   "samplers": [],
+   "fresh": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   }
+  },
+  {
+   "id": "factory:organ-swell",
+   "patch": {
+    "slots": [
+     {
+      "instrument": {
+       "type": "organ",
+       "id": "gospel"
+      },
+      "gain": 0.75,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": false,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.2,
+       "delay": 0,
+       "chorus": 0
+      },
+      "params": {}
+     },
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "warm-pad"
+      },
+      "gain": 1.13,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": true,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.5,
+       "delay": 0.1,
+       "chorus": 0.3
+      },
+      "params": {}
+     },
+     null,
+     null
+    ],
+    "fx": {
+     "reverb": {
+      "size": 0.5,
+      "damp": 0.55,
+      "predelay": 0.02,
+      "returnGain": 0.9
+     },
+     "delay": {
+      "time": 0.375,
+      "feedback": 0.35,
+      "pingpong": false,
+      "tone": 0.5,
+      "sync": "off",
+      "returnGain": 0.6
+     },
+     "chorus": {
+      "rate": 0.4,
+      "depth": 0.5,
+      "returnGain": 1
+     },
+     "lofi": {
+      "amount": 0,
+      "wow": 0.5,
+      "flutter": 0.5,
+      "crackle": 0.3,
+      "bits": 0.5,
+      "tone": 0.5,
+      "saturation": 0.5
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "expression": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "morph",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 8
+    }
+   },
+   "samplers": [],
+   "fresh": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   }
+  },
+  {
+   "id": "factory:grand-piano",
+   "patch": {
+    "slots": [
+     {
+      "instrument": {
+       "type": "sampler",
+       "id": "salamander-piano"
+      },
+      "gain": 0.85,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.3,
+       "delay": 0.05,
+       "chorus": 0
+      },
+      "params": {}
+     },
+     null,
+     null,
+     null
+    ],
+    "fx": {
+     "reverb": {
+      "size": 0.5,
+      "damp": 0.45,
+      "predelay": 0.02,
+      "returnGain": 1
+     },
+     "delay": {
+      "time": 0.375,
+      "feedback": 0.35,
+      "pingpong": false,
+      "tone": 0.5,
+      "sync": "off",
+      "returnGain": 1
+     },
+     "chorus": {
+      "rate": 0.4,
+      "depth": 0.5,
+      "returnGain": 1
+     },
+     "lofi": {
+      "amount": 0,
+      "wow": 0.5,
+      "flutter": 0.5,
+      "crackle": 0.3,
+      "bits": 0.5,
+      "tone": 0.5,
+      "saturation": 0.5
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "fx.reverb.returnGain",
+     "min": 0.3,
+     "max": 1
+    },
+    "expression": {
+     "target": "master.volume",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "none",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 8
+    }
+   },
+   "samplers": [
+    "salamander-piano"
+   ],
+   "fresh": {
+    "mb": 157.5,
+    "exact": false,
+    "samples": 90,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 332.9389877319336,
+    "exact": true,
+    "samples": 90,
+    "capMB": 700
+   }
+  },
+  {
+   "id": "factory:rhodes",
+   "patch": {
+    "slots": [
+     {
+      "instrument": {
+       "type": "sampler",
+       "id": "ep-rhodes"
+      },
+      "gain": 0.85,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.25,
+       "delay": 0.1,
+       "chorus": 0.4
+      },
+      "params": {}
+     },
+     null,
+     null,
+     null
+    ],
+    "fx": {
+     "reverb": {
+      "size": 0.4,
+      "damp": 0.5,
+      "predelay": 0.015,
+      "returnGain": 0.9
+     },
+     "delay": {
+      "time": 0.375,
+      "feedback": 0.25,
+      "pingpong": false,
+      "tone": 0.35,
+      "sync": "off",
+      "returnGain": 0.7
+     },
+     "chorus": {
+      "rate": 0.5,
+      "depth": 0.45,
+      "returnGain": 1
+     },
+     "lofi": {
+      "amount": 0,
+      "wow": 0.5,
+      "flutter": 0.5,
+      "crackle": 0.3,
+      "bits": 0.5,
+      "tone": 0.5,
+      "saturation": 0.5
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "fx.reverb.returnGain",
+     "min": 0.3,
+     "max": 1
+    },
+    "expression": {
+     "target": "master.volume",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "none",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 8
+    }
+   },
+   "samplers": [
+    "ep-rhodes"
+   ],
+   "fresh": {
+    "mb": 140,
+    "exact": false,
+    "samples": 80,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 42.103431701660156,
+    "exact": true,
+    "samples": 80,
+    "capMB": 700
+   }
+  },
+  {
+   "id": "factory:felt-piano",
+   "patch": {
+    "slots": [
+     {
+      "instrument": {
+       "type": "sampler",
+       "id": "salamander-piano"
+      },
+      "gain": 0.9,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.5,
+       "delay": 0.1,
+       "chorus": 0
+      },
+      "params": {
+       "tone": 0.25
+      }
+     },
+     null,
+     null,
+     null
+    ],
+    "fx": {
+     "reverb": {
+      "size": 0.68,
+      "damp": 0.7,
+      "predelay": 0.03,
+      "returnGain": 1.1
+     },
+     "delay": {
+      "time": 0.5,
+      "feedback": 0.3,
+      "pingpong": false,
+      "tone": 0.25,
+      "sync": "off",
+      "returnGain": 0.6
+     },
+     "chorus": {
+      "rate": 0.4,
+      "depth": 0.5,
+      "returnGain": 1
+     },
+     "lofi": {
+      "amount": 0,
+      "wow": 0.5,
+      "flutter": 0.5,
+      "crackle": 0.3,
+      "bits": 0.5,
+      "tone": 0.5,
+      "saturation": 0.5
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "fx.reverb.returnGain",
+     "min": 0.3,
+     "max": 1
+    },
+    "expression": {
+     "target": "master.volume",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "none",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 8
+    }
+   },
+   "samplers": [
+    "salamander-piano"
+   ],
+   "fresh": {
+    "mb": 157.5,
+    "exact": false,
+    "samples": 90,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 332.9389877319336,
+    "exact": true,
+    "samples": 90,
+    "capMB": 700
+   }
+  },
+  {
+   "id": "factory:lofi-rhodes",
+   "patch": {
+    "slots": [
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "soft-keys"
+      },
+      "gain": 0.85,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.3,
+       "delay": 0.15,
+       "chorus": 0.25
+      },
+      "params": {}
+     },
+     null,
+     null,
+     null
+    ],
+    "fx": {
+     "reverb": {
+      "size": 0.45,
+      "damp": 0.65,
+      "predelay": 0.02,
+      "returnGain": 0.9
+     },
+     "delay": {
+      "time": 0.5625,
+      "feedback": 0.3,
+      "pingpong": false,
+      "tone": 0.3,
+      "sync": "1/8d",
+      "returnGain": 0.6
+     },
+     "chorus": {
+      "rate": 0.4,
+      "depth": 0.4,
+      "returnGain": 1
+     },
+     "lofi": {
+      "amount": 0.6,
+      "wow": 0.55,
+      "flutter": 0.4,
+      "crackle": 0.35,
+      "bits": 0.45,
+      "tone": 0.55,
+      "saturation": 0.5
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "fx.reverb.returnGain",
+     "min": 0.3,
+     "max": 1
+    },
+    "expression": {
+     "target": "master.volume",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "tape",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 8
+    }
+   },
+   "samplers": [],
+   "fresh": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   }
+  },
+  {
+   "id": "factory:dusty-piano",
+   "patch": {
+    "slots": [
+     {
+      "instrument": {
+       "type": "sampler",
+       "id": "salamander-piano"
+      },
+      "gain": 0.85,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.3,
+       "delay": 0.1,
+       "chorus": 0
+      },
+      "params": {}
+     },
+     null,
+     null,
+     null
+    ],
+    "fx": {
+     "reverb": {
+      "size": 0.4,
+      "damp": 0.7,
+      "predelay": 0.015,
+      "returnGain": 0.85
+     },
+     "delay": {
+      "time": 0.4,
+      "feedback": 0.25,
+      "pingpong": false,
+      "tone": 0.3,
+      "sync": "1/4",
+      "returnGain": 0.5
+     },
+     "chorus": {
+      "rate": 0.4,
+      "depth": 0.5,
+      "returnGain": 1
+     },
+     "lofi": {
+      "amount": 0.5,
+      "wow": 0.45,
+      "flutter": 0.35,
+      "crackle": 0.6,
+      "bits": 0.4,
+      "tone": 0.6,
+      "saturation": 0.45
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "fx.reverb.returnGain",
+     "min": 0.3,
+     "max": 1
+    },
+    "expression": {
+     "target": "master.volume",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "tape",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 8
+    }
+   },
+   "samplers": [
+    "salamander-piano"
+   ],
+   "fresh": {
+    "mb": 157.5,
+    "exact": false,
+    "samples": 90,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 332.9389877319336,
+    "exact": true,
+    "samples": 90,
+    "capMB": 700
+   }
+  },
+  {
+   "id": "factory:glass-ocean",
+   "patch": {
+    "slots": [
+     null,
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "glass-pad"
+      },
+      "gain": 0.7,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": true,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.6,
+       "delay": 0.25,
+       "chorus": 0.45
+      },
+      "params": {}
+     },
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "bell"
+      },
+      "gain": 0.5,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.5,
+       "delay": 0.55,
+       "chorus": 0.1
+      },
+      "params": {}
+     },
+     null
+    ],
+    "fx": {
+     "reverb": {
+      "size": 0.82,
+      "damp": 0.4,
+      "predelay": 0.035,
+      "returnGain": 1.1
+     },
+     "delay": {
+      "time": 0.625,
+      "feedback": 0.5,
+      "pingpong": true,
+      "tone": 0.45,
+      "sync": "1/8d",
+      "returnGain": 0.9
+     },
+     "chorus": {
+      "rate": 0.25,
+      "depth": 0.55,
+      "returnGain": 1
+     },
+     "lofi": {
+      "amount": 0,
+      "wow": 0.5,
+      "flutter": 0.5,
+      "crackle": 0.3,
+      "bits": 0.5,
+      "tone": 0.5,
+      "saturation": 0.5
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "expression": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "morph",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 10
+    }
+   },
+   "samplers": [],
+   "fresh": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   }
+  },
+  {
+   "id": "factory:sub-shimmer",
+   "patch": {
+    "slots": [
+     null,
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "glass-pad"
+      },
+      "gain": 0.65,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 48,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": true,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.6,
+       "delay": 0.2,
+       "chorus": 0.45
+      },
+      "params": {}
+     },
+     null,
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "sub-bass"
+      },
+      "gain": 0.75,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 59,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "lowest",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0,
+       "delay": 0,
+       "chorus": 0
+      },
+      "params": {}
+     }
+    ],
+    "fx": {
+     "reverb": {
+      "size": 0.78,
+      "damp": 0.45,
+      "predelay": 0.03,
+      "returnGain": 1.05
+     },
+     "delay": {
+      "time": 0.5,
+      "feedback": 0.4,
+      "pingpong": false,
+      "tone": 0.4,
+      "sync": "off",
+      "returnGain": 0.7
+     },
+     "chorus": {
+      "rate": 0.25,
+      "depth": 0.5,
+      "returnGain": 1
+     },
+     "lofi": {
+      "amount": 0,
+      "wow": 0.5,
+      "flutter": 0.5,
+      "crackle": 0.3,
+      "bits": 0.5,
+      "tone": 0.5,
+      "saturation": 0.5
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "expression": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "drone-swell",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 10
+    }
+   },
+   "samplers": [],
+   "fresh": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   }
+  },
+  {
+   "id": "factory:anthem",
+   "patch": {
+    "slots": [
+     {
+      "instrument": {
+       "type": "sampler",
+       "id": "salamander-piano"
+      },
+      "gain": 0.8,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.3,
+       "delay": 0.15,
+       "chorus": 0
+      },
+      "params": {}
+     },
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "supersaw-pad"
+      },
+      "gain": 0.6,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.5,
+       "delay": 0.3,
+       "chorus": 0.15
+      },
+      "params": {}
+     },
+     null,
+     null
+    ],
+    "fx": {
+     "reverb": {
+      "size": 0.42,
+      "damp": 0.5,
+      "predelay": 0.025,
+      "returnGain": 1
+     },
+     "delay": {
+      "time": 0.375,
+      "feedback": 0.38,
+      "pingpong": true,
+      "tone": 0.45,
+      "sync": "1/8d",
+      "returnGain": 0.9
+     },
+     "chorus": {
+      "rate": 0.4,
+      "depth": 0.5,
+      "returnGain": 1
+     },
+     "lofi": {
+      "amount": 0,
+      "wow": 0.5,
+      "flutter": 0.5,
+      "crackle": 0.3,
+      "bits": 0.5,
+      "tone": 0.5,
+      "saturation": 0.5
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "macro.intensity",
+     "min": 0,
+     "max": 1
+    },
+    "expression": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "none",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 12
+    }
+   },
+   "samplers": [
+    "salamander-piano"
+   ],
+   "fresh": {
+    "mb": 157.5,
+    "exact": false,
+    "samples": 90,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 332.9389877319336,
+    "exact": true,
+    "samples": 90,
+    "capMB": 700
+   }
+  },
+  {
+   "id": "factory:gospel-stab-b3",
+   "patch": {
+    "slots": [
+     {
+      "instrument": {
+       "type": "organ",
+       "id": "gospel"
+      },
+      "gain": 0.75,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": false,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.2,
+       "delay": 0.1,
+       "chorus": 0
+      },
+      "params": {}
+     },
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "poly-stab"
+      },
+      "gain": 0.85,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 60,
+      "highNote": 127,
+      "sustain": false,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.25,
+       "delay": 0.25,
+       "chorus": 0
+      },
+      "params": {}
+     },
+     null,
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "synth-bass"
+      },
+      "gain": 0.7,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 59,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "lowest",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0,
+       "delay": 0,
+       "chorus": 0
+      },
+      "params": {}
+     }
+    ],
+    "fx": {
+     "reverb": {
+      "size": 0.18,
+      "damp": 0.6,
+      "predelay": 0.01,
+      "returnGain": 0.7
+     },
+     "delay": {
+      "time": 0.11,
+      "feedback": 0.08,
+      "pingpong": false,
+      "tone": 0.55,
+      "sync": "off",
+      "returnGain": 0.7
+     },
+     "chorus": {
+      "rate": 0.4,
+      "depth": 0.5,
+      "returnGain": 1
+     },
+     "lofi": {
+      "amount": 0,
+      "wow": 0.5,
+      "flutter": 0.5,
+      "crackle": 0.3,
+      "bits": 0.5,
+      "tone": 0.5,
+      "saturation": 0.5
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "expression": {
+     "target": "master.volume",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "morph",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 8
+    }
+   },
+   "samplers": [],
+   "fresh": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   }
+  },
+  {
+   "id": "factory:upright-pad",
+   "patch": {
+    "slots": [
+     {
+      "instrument": {
+       "type": "sampler",
+       "id": "upright-piano"
+      },
+      "gain": 0.85,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.3,
+       "delay": 0.05,
+       "chorus": 0
+      },
+      "params": {}
+     },
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "warm-pad"
+      },
+      "gain": 0.5,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": true,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.5,
+       "delay": 0.1,
+       "chorus": 0.35
+      },
+      "params": {}
+     },
+     null,
+     null
+    ],
+    "fx": {
+     "reverb": {
+      "size": 0.42,
+      "damp": 0.5,
+      "predelay": 0.025,
+      "returnGain": 1
+     },
+     "delay": {
+      "time": 0.375,
+      "feedback": 0.35,
+      "pingpong": false,
+      "tone": 0.5,
+      "sync": "off",
+      "returnGain": 0
+     },
+     "chorus": {
+      "rate": 0.4,
+      "depth": 0.5,
+      "returnGain": 1
+     },
+     "lofi": {
+      "amount": 0,
+      "wow": 0.5,
+      "flutter": 0.5,
+      "crackle": 0.3,
+      "bits": 0.5,
+      "tone": 0.5,
+      "saturation": 0.5
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "expression": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "drone-swell",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 8
+    }
+   },
+   "samplers": [
+    "upright-piano"
+   ],
+   "fresh": {
+    "mb": 120.75,
+    "exact": false,
+    "samples": 69,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 235.94119262695312,
+    "exact": true,
+    "samples": 69,
+    "capMB": 700
+   }
+  },
+  {
+   "id": "factory:clav-funk",
+   "patch": {
+    "slots": [
+     {
+      "instrument": {
+       "type": "sampler",
+       "id": "clavinet"
+      },
+      "gain": 0.8,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": false,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.12,
+       "delay": 0.2,
+       "chorus": 0
+      },
+      "params": {}
+     },
+     {
+      "instrument": {
+       "type": "sampler",
+       "id": "ep-wurli"
+      },
+      "gain": 0.5,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.15,
+       "delay": 0.1,
+       "chorus": 0.25
+      },
+      "params": {}
+     },
+     null,
+     null
+    ],
+    "fx": {
+     "reverb": {
+      "size": 0.18,
+      "damp": 0.6,
+      "predelay": 0.01,
+      "returnGain": 0.5
+     },
+     "delay": {
+      "time": 0.11,
+      "feedback": 0.08,
+      "pingpong": false,
+      "tone": 0.55,
+      "sync": "off",
+      "returnGain": 0.7
+     },
+     "chorus": {
+      "rate": 0.4,
+      "depth": 0.5,
+      "returnGain": 1
+     },
+     "lofi": {
+      "amount": 0,
+      "wow": 0.5,
+      "flutter": 0.5,
+      "crackle": 0.3,
+      "bits": 0.5,
+      "tone": 0.5,
+      "saturation": 0.5
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "expression": {
+     "target": "master.volume",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "none",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 8
+    }
+   },
+   "samplers": [
+    "clavinet",
+    "ep-wurli"
+   ],
+   "fresh": {
+    "mb": 308,
+    "exact": false,
+    "samples": 176,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 308,
+    "exact": false,
+    "samples": 176,
+    "capMB": 700
+   }
+  },
+  {
+   "id": "factory:music-box-lullaby",
+   "patch": {
+    "slots": [
+     {
+      "instrument": {
+       "type": "sampler",
+       "id": "music-box"
+      },
+      "gain": 0.7,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 71,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.45,
+       "delay": 0.15,
+       "chorus": 0
+      },
+      "params": {}
+     },
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "glass-pad"
+      },
+      "gain": 0.5,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.55,
+       "delay": 0.15,
+       "chorus": 0.4
+      },
+      "params": {}
+     },
+     {
+      "instrument": {
+       "type": "sampler",
+       "id": "celesta"
+      },
+      "gain": 0.65,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 72,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.45,
+       "delay": 0.2,
+       "chorus": 0
+      },
+      "params": {}
+     },
+     null
+    ],
+    "fx": {
+     "reverb": {
+      "size": 0.9,
+      "damp": 0.35,
+      "predelay": 0.05,
+      "returnGain": 1.3
+     },
+     "delay": {
+      "time": 0.375,
+      "feedback": 0.35,
+      "pingpong": false,
+      "tone": 0.5,
+      "sync": "off",
+      "returnGain": 0
+     },
+     "chorus": {
+      "rate": 0.4,
+      "depth": 0.5,
+      "returnGain": 1
+     },
+     "lofi": {
+      "amount": 0,
+      "wow": 0.5,
+      "flutter": 0.5,
+      "crackle": 0.3,
+      "bits": 0.5,
+      "tone": 0.5,
+      "saturation": 0.5
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "expression": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "morph",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 10
+    }
+   },
+   "samplers": [
+    "music-box",
+    "celesta"
+   ],
+   "fresh": {
+    "mb": 308,
+    "exact": false,
+    "samples": 176,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 308,
+    "exact": false,
+    "samples": 176,
+    "capMB": 700
+   }
+  },
+  {
+   "id": "factory:dream-juno",
+   "patch": {
+    "slots": [
+     null,
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "juno-pad"
+      },
+      "gain": 0.7,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.6,
+       "delay": 0.25,
+       "chorus": 0.3
+      },
+      "params": {}
+     },
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "shimmer-pad"
+      },
+      "gain": 0.55,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.65,
+       "delay": 0.3,
+       "chorus": 0.2
+      },
+      "params": {}
+     },
+     null
+    ],
+    "fx": {
+     "reverb": {
+      "size": 1,
+      "damp": 0.25,
+      "predelay": 0.06,
+      "returnGain": 1.6
+     },
+     "delay": {
+      "time": 0.375,
+      "feedback": 0.6,
+      "pingpong": true,
+      "tone": 0.3,
+      "sync": "1/4",
+      "returnGain": 0.75
+     },
+     "chorus": {
+      "rate": 0.4,
+      "depth": 0.5,
+      "returnGain": 1
+     },
+     "lofi": {
+      "amount": 0,
+      "wow": 0.5,
+      "flutter": 0.5,
+      "crackle": 0.3,
+      "bits": 0.5,
+      "tone": 0.5,
+      "saturation": 0.5
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "macro.intensity",
+     "min": 0,
+     "max": 1
+    },
+    "expression": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "none",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 12
+    }
+   },
+   "samplers": [],
+   "fresh": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   }
+  },
+  {
+   "id": "factory:80s-ballad",
+   "patch": {
+    "slots": [
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "dx-epiano"
+      },
+      "gain": 0.8,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.35,
+       "delay": 0.1,
+       "chorus": 0.45
+      },
+      "params": {}
+     },
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "juno-pad"
+      },
+      "gain": 0.5,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": true,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.5,
+       "delay": 0.1,
+       "chorus": 0.5
+      },
+      "params": {}
+     },
+     null,
+     null
+    ],
+    "fx": {
+     "reverb": {
+      "size": 0.65,
+      "damp": 0.45,
+      "predelay": 0.035,
+      "returnGain": 1.15
+     },
+     "delay": {
+      "time": 0.375,
+      "feedback": 0.35,
+      "pingpong": false,
+      "tone": 0.5,
+      "sync": "off",
+      "returnGain": 0
+     },
+     "chorus": {
+      "rate": 0.6,
+      "depth": 0.65,
+      "returnGain": 1.25
+     },
+     "lofi": {
+      "amount": 0,
+      "wow": 0.5,
+      "flutter": 0.5,
+      "crackle": 0.3,
+      "bits": 0.5,
+      "tone": 0.5,
+      "saturation": 0.5
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "expression": {
+     "target": "slots.1.gain",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "pitch",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 8
+    }
+   },
+   "samplers": [],
+   "fresh": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   }
+  },
+  {
+   "id": "factory:synthwave",
+   "patch": {
+    "slots": [
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "analog-brass"
+      },
+      "gain": 0.7,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 48,
+      "highNote": 71,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "off",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.3,
+       "delay": 0.2,
+       "chorus": 0.2
+      },
+      "params": {}
+     },
+     null,
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "square-lead"
+      },
+      "gain": 1.2,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 72,
+      "highNote": 127,
+      "sustain": true,
+      "bendEnabled": true,
+      "mono": "highest",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0.3,
+       "delay": 0.35,
+       "chorus": 0
+      },
+      "params": {}
+     },
+     {
+      "instrument": {
+       "type": "synth",
+       "id": "808-sub"
+      },
+      "gain": 0.75,
+      "pan": 0,
+      "octave": 0,
+      "transpose": 0,
+      "lowNote": 0,
+      "highNote": 59,
+      "sustain": true,
+      "bendEnabled": false,
+      "mono": "lowest",
+      "velocityCurve": "normal",
+      "sends": {
+       "reverb": 0,
+       "delay": 0,
+       "chorus": 0
+      },
+      "params": {}
+     }
+    ],
+    "fx": {
+     "reverb": {
+      "size": 0.42,
+      "damp": 0.5,
+      "predelay": 0.025,
+      "returnGain": 1
+     },
+     "delay": {
+      "time": 0.375,
+      "feedback": 0.3,
+      "pingpong": false,
+      "tone": 0.5,
+      "sync": "1/4",
+      "returnGain": 0.8
+     },
+     "chorus": {
+      "rate": 0.4,
+      "depth": 0.5,
+      "returnGain": 1
+     },
+     "lofi": {
+      "amount": 0,
+      "wow": 0.5,
+      "flutter": 0.5,
+      "crackle": 0.3,
+      "bits": 0.5,
+      "tone": 0.5,
+      "saturation": 0.5
+     },
+     "master": {
+      "volume": 0.5011872336272722
+     }
+    },
+    "modWheel": {
+     "target": "macro.wash",
+     "min": 0,
+     "max": 1
+    },
+    "expression": {
+     "target": "master.volume",
+     "min": 0,
+     "max": 1
+    },
+    "volume": {
+     "target": "master.volume"
+    },
+    "bend": {
+     "mode": "pitch",
+     "range": 2
+    },
+    "swell": {
+     "seconds": 8
+    }
+   },
+   "samplers": [],
+   "fresh": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   },
+   "after": {
+    "mb": 0,
+    "exact": true,
+    "samples": 0,
+    "capMB": 700
+   }
+  }
+ ],
+ "all": {
+  "fresh": {
+   "mb": 1034.25,
+   "exact": false,
+   "samples": 591,
+   "capMB": 700
+  },
+  "after": {
+   "mb": 1226.9836120605469,
+   "exact": false,
+   "samples": 591,
+   "capMB": 700
+  }
+ },
+ "preloaded": [
+  "factory:upright-pad",
+  "factory:rhodes",
+  "factory:sunday-pad-piano"
+ ],
+ "sizes": {
+  "/samples/upright-piano/dyn1/A0.mp3": 5016136,
+  "/samples/upright-piano/dyn1/F1.mp3": 3250624,
+  "/samples/upright-piano/dyn1/Db1.mp3": 3757304,
+  "/samples/upright-piano/dyn1/A1.mp3": 4910432,
+  "/samples/upright-piano/dyn1/Db2.mp3": 5095384,
+  "/samples/upright-piano/dyn1/F2.mp3": 5644800,
+  "/samples/upright-piano/dyn1/Db3.mp3": 3026992,
+  "/samples/upright-piano/dyn1/A2.mp3": 5158856,
+  "/samples/upright-piano/dyn1/F3.mp3": 4202240,
+  "/samples/upright-piano/dyn1/A3.mp3": 4001648,
+  "/samples/upright-piano/dyn1/F4.mp3": 3046064,
+  "/samples/upright-piano/dyn1/Db4.mp3": 3528000,
+  "/samples/upright-piano/dyn1/A4.mp3": 2962640,
+  "/samples/upright-piano/dyn1/Db5.mp3": 3528000,
+  "/samples/upright-piano/dyn1/F5.mp3": 2579328,
+  "/samples/upright-piano/dyn1/A5.mp3": 3022456,
+  "/samples/upright-piano/dyn1/Db6.mp3": 2327208,
+  "/samples/upright-piano/dyn1/F6.mp3": 1737064,
+  "/samples/upright-piano/dyn1/A6.mp3": 1737976,
+  "/samples/upright-piano/dyn1/F7.mp3": 854752,
+  "/samples/upright-piano/dyn1/A7.mp3": 759480,
+  "/samples/upright-piano/dyn1/Db7.mp3": 1218544,
+  "/samples/upright-piano/dyn1/C8.mp3": 501216,
+  "/samples/upright-piano/dyn2/A0.mp3": 5644800,
+  "/samples/upright-piano/dyn2/F1.mp3": 4721984,
+  "/samples/upright-piano/dyn2/Db1.mp3": 5644800,
+  "/samples/upright-piano/dyn2/Db2.mp3": 5644800,
+  "/samples/upright-piano/dyn2/A1.mp3": 5489584,
+  "/samples/upright-piano/dyn2/F2.mp3": 5644800,
+  "/samples/upright-piano/dyn2/A2.mp3": 5640144,
+  "/samples/upright-piano/dyn2/Db3.mp3": 5234776,
+  "/samples/upright-piano/dyn2/F3.mp3": 4605104,
+  "/samples/upright-piano/dyn2/A3.mp3": 4246368,
+  "/samples/upright-piano/dyn2/Db4.mp3": 3528000,
+  "/samples/upright-piano/dyn2/A4.mp3": 2998168,
+  "/samples/upright-piano/dyn2/F4.mp3": 3528000,
+  "/samples/upright-piano/dyn2/Db5.mp3": 3118232,
+  "/samples/upright-piano/dyn2/Db6.mp3": 3473752,
+  "/samples/upright-piano/dyn2/A5.mp3": 2998920,
+  "/samples/upright-piano/dyn2/F5.mp3": 3528000,
+  "/samples/upright-piano/dyn2/F6.mp3": 3471912,
+  "/samples/upright-piano/dyn2/F7.mp3": 888672,
+  "/samples/upright-piano/dyn2/Db7.mp3": 1898632,
+  "/samples/upright-piano/dyn2/A7.mp3": 841736,
+  "/samples/upright-piano/dyn2/C8.mp3": 772792,
+  "/samples/upright-piano/dyn2/A6.mp3": 3004360,
+  "/samples/upright-piano/dyn3/F1.mp3": 5644800,
+  "/samples/upright-piano/dyn3/Db1.mp3": 5644800,
+  "/samples/upright-piano/dyn3/A0.mp3": 5644800,
+  "/samples/upright-piano/dyn3/A1.mp3": 5644800,
+  "/samples/upright-piano/dyn3/Db2.mp3": 5644800,
+  "/samples/upright-piano/dyn3/A2.mp3": 5644800,
+  "/samples/upright-piano/dyn3/F2.mp3": 5644800,
+  "/samples/upright-piano/dyn3/Db3.mp3": 5644800,
+  "/samples/upright-piano/dyn3/Db4.mp3": 3528000,
+  "/samples/upright-piano/dyn3/F3.mp3": 4979472,
+  "/samples/upright-piano/dyn3/A4.mp3": 3269624,
+  "/samples/upright-piano/dyn3/A3.mp3": 5644800,
+  "/samples/upright-piano/dyn3/Db5.mp3": 3270784,
+  "/samples/upright-piano/dyn3/F4.mp3": 3373912,
+  "/samples/upright-piano/dyn3/F5.mp3": 3528000,
+  "/samples/upright-piano/dyn3/F6.mp3": 3528000,
+  "/samples/upright-piano/dyn3/Db6.mp3": 3528000,
+  "/samples/upright-piano/dyn3/A5.mp3": 3528000,
+  "/samples/upright-piano/dyn3/Db7.mp3": 1235480,
+  "/samples/upright-piano/dyn3/A6.mp3": 1980760,
+  "/samples/upright-piano/dyn3/F7.mp3": 966000,
+  "/samples/upright-piano/dyn3/C8.mp3": 819064,
+  "/samples/upright-piano/dyn3/A7.mp3": 628496,
+  "/samples/ep-rhodes/C1.mp3": 551684,
+  "/samples/ep-rhodes/Db1.mp3": 551692,
+  "/samples/ep-rhodes/D1.mp3": 551700,
+  "/samples/ep-rhodes/Eb1.mp3": 551692,
+  "/samples/ep-rhodes/F1.mp3": 551708,
+  "/samples/ep-rhodes/Gb1.mp3": 551720,
+  "/samples/ep-rhodes/E1.mp3": 551712,
+  "/samples/ep-rhodes/G1.mp3": 551716,
+  "/samples/ep-rhodes/Ab1.mp3": 551724,
+  "/samples/ep-rhodes/Bb1.mp3": 551532,
+  "/samples/ep-rhodes/A1.mp3": 551492,
+  "/samples/ep-rhodes/B1.mp3": 551620,
+  "/samples/ep-rhodes/C2.mp3": 551608,
+  "/samples/ep-rhodes/Db2.mp3": 551612,
+  "/samples/ep-rhodes/Eb2.mp3": 551744,
+  "/samples/ep-rhodes/D2.mp3": 551752,
+  "/samples/ep-rhodes/E2.mp3": 551760,
+  "/samples/ep-rhodes/Gb2.mp3": 551752,
+  "/samples/ep-rhodes/F2.mp3": 551768,
+  "/samples/ep-rhodes/G2.mp3": 551744,
+  "/samples/ep-rhodes/Ab2.mp3": 551744,
+  "/samples/ep-rhodes/Bb2.mp3": 551936,
+  "/samples/ep-rhodes/A2.mp3": 551696,
+  "/samples/ep-rhodes/B2.mp3": 551936,
+  "/samples/ep-rhodes/Db3.mp3": 551728,
+  "/samples/ep-rhodes/C3.mp3": 551732,
+  "/samples/ep-rhodes/D3.mp3": 551736,
+  "/samples/ep-rhodes/F3.mp3": 551936,
+  "/samples/ep-rhodes/E3.mp3": 551936,
+  "/samples/ep-rhodes/Eb3.mp3": 551736,
+  "/samples/ep-rhodes/Gb3.mp3": 551936,
+  "/samples/ep-rhodes/G3.mp3": 551936,
+  "/samples/ep-rhodes/Bb3.mp3": 551936,
+  "/samples/ep-rhodes/B3.mp3": 551936,
+  "/samples/ep-rhodes/A3.mp3": 551936,
+  "/samples/ep-rhodes/Ab3.mp3": 551936,
+  "/samples/ep-rhodes/C4.mp3": 551936,
+  "/samples/ep-rhodes/Db4.mp3": 551936,
+  "/samples/ep-rhodes/D4.mp3": 551936,
+  "/samples/ep-rhodes/Eb4.mp3": 551936,
+  "/samples/ep-rhodes/E4.mp3": 551936,
+  "/samples/ep-rhodes/F4.mp3": 551936,
+  "/samples/ep-rhodes/Gb4.mp3": 551936,
+  "/samples/ep-rhodes/Ab4.mp3": 551936,
+  "/samples/ep-rhodes/G4.mp3": 551936,
+  "/samples/ep-rhodes/A4.mp3": 551936,
+  "/samples/ep-rhodes/Bb4.mp3": 551936,
+  "/samples/ep-rhodes/B4.mp3": 551936,
+  "/samples/ep-rhodes/D5.mp3": 551936,
+  "/samples/ep-rhodes/C5.mp3": 551936,
+  "/samples/ep-rhodes/Db5.mp3": 551936,
+  "/samples/ep-rhodes/E5.mp3": 551936,
+  "/samples/ep-rhodes/Eb5.mp3": 551936,
+  "/samples/ep-rhodes/Gb5.mp3": 551936,
+  "/samples/ep-rhodes/F5.mp3": 551936,
+  "/samples/ep-rhodes/Ab5.mp3": 551936,
+  "/samples/ep-rhodes/G5.mp3": 551936,
+  "/samples/ep-rhodes/A5.mp3": 551936,
+  "/samples/ep-rhodes/Bb5.mp3": 551936,
+  "/samples/ep-rhodes/B5.mp3": 551936,
+  "/samples/ep-rhodes/Db6.mp3": 551936,
+  "/samples/ep-rhodes/D6.mp3": 551936,
+  "/samples/ep-rhodes/C6.mp3": 551936,
+  "/samples/ep-rhodes/E6.mp3": 551936,
+  "/samples/ep-rhodes/Eb6.mp3": 551936,
+  "/samples/ep-rhodes/G6.mp3": 551936,
+  "/samples/ep-rhodes/Gb6.mp3": 551936,
+  "/samples/ep-rhodes/F6.mp3": 551936,
+  "/samples/ep-rhodes/Ab6.mp3": 551936,
+  "/samples/ep-rhodes/A6.mp3": 551936,
+  "/samples/ep-rhodes/Bb6.mp3": 551936,
+  "/samples/ep-rhodes/Db7.mp3": 551936,
+  "/samples/ep-rhodes/D7.mp3": 551936,
+  "/samples/ep-rhodes/E7.mp3": 551936,
+  "/samples/ep-rhodes/B6.mp3": 551936,
+  "/samples/ep-rhodes/C7.mp3": 551936,
+  "/samples/ep-rhodes/Eb7.mp3": 551936,
+  "/samples/ep-rhodes/F7.mp3": 551936,
+  "/samples/ep-rhodes/Gb7.mp3": 551936,
+  "/samples/ep-rhodes/G7.mp3": 551936,
+  "/samples/salamander-piano/v4/C1.mp3": 5644800,
+  "/samples/salamander-piano/v4/A0.mp3": 5644800,
+  "/samples/salamander-piano/v4/Eb1.mp3": 5644800,
+  "/samples/salamander-piano/v4/A1.mp3": 5644800,
+  "/samples/salamander-piano/v4/Gb1.mp3": 5644800,
+  "/samples/salamander-piano/v4/C2.mp3": 5644800,
+  "/samples/salamander-piano/v4/Gb2.mp3": 5644800,
+  "/samples/salamander-piano/v4/Eb2.mp3": 5644800,
+  "/samples/salamander-piano/v4/A2.mp3": 5534912,
+  "/samples/salamander-piano/v4/C3.mp3": 5107168,
+  "/samples/salamander-piano/v4/Eb3.mp3": 5176416,
+  "/samples/salamander-piano/v4/Gb3.mp3": 5410456,
+  "/samples/salamander-piano/v4/Eb4.mp3": 3528000,
+  "/samples/salamander-piano/v4/A3.mp3": 5404704,
+  "/samples/salamander-piano/v4/C4.mp3": 5460160,
+  "/samples/salamander-piano/v4/Gb4.mp3": 3051760,
+  "/samples/salamander-piano/v4/C5.mp3": 3226064,
+  "/samples/salamander-piano/v4/A4.mp3": 3528000,
+  "/samples/salamander-piano/v4/Eb5.mp3": 3150280,
+  "/samples/salamander-piano/v4/A5.mp3": 2418696,
+  "/samples/salamander-piano/v4/Gb5.mp3": 3415656,
+  "/samples/salamander-piano/v4/Eb6.mp3": 2315360,
+  "/samples/salamander-piano/v4/C6.mp3": 1918192,
+  "/samples/salamander-piano/v4/Gb6.mp3": 1949280,
+  "/samples/salamander-piano/v4/A6.mp3": 2234104,
+  "/samples/salamander-piano/v4/C7.mp3": 1428504,
+  "/samples/salamander-piano/v4/Eb7.mp3": 1700296,
+  "/samples/salamander-piano/v4/A7.mp3": 1357904,
+  "/samples/salamander-piano/v4/Gb7.mp3": 1676960,
+  "/samples/salamander-piano/v4/C8.mp3": 987888,
+  "/samples/salamander-piano/v9/A0.mp3": 5644800,
+  "/samples/salamander-piano/v9/C1.mp3": 5644800,
+  "/samples/salamander-piano/v9/Eb1.mp3": 5644800,
+  "/samples/salamander-piano/v9/A1.mp3": 5644800,
+  "/samples/salamander-piano/v9/Gb1.mp3": 5644800,
+  "/samples/salamander-piano/v9/C2.mp3": 5644800,
+  "/samples/salamander-piano/v9/Eb2.mp3": 5644800,
+  "/samples/salamander-piano/v9/A2.mp3": 5596040,
+  "/samples/salamander-piano/v9/Gb2.mp3": 5644800,
+  "/samples/salamander-piano/v9/C3.mp3": 5087192,
+  "/samples/salamander-piano/v9/Eb3.mp3": 5324512,
+  "/samples/salamander-piano/v9/Gb3.mp3": 5236664,
+  "/samples/salamander-piano/v9/A3.mp3": 5438600,
+  "/samples/salamander-piano/v9/Eb4.mp3": 3528000,
+  "/samples/salamander-piano/v9/C4.mp3": 5463824,
+  "/samples/salamander-piano/v9/Gb4.mp3": 3089016,
+  "/samples/salamander-piano/v9/A4.mp3": 3528000,
+  "/samples/salamander-piano/v9/C5.mp3": 3073984,
+  "/samples/salamander-piano/v9/Eb5.mp3": 3528000,
+  "/samples/salamander-piano/v9/Gb5.mp3": 3005400,
+  "/samples/salamander-piano/v9/A5.mp3": 3339248,
+  "/samples/salamander-piano/v9/C6.mp3": 2139944,
+  "/samples/salamander-piano/v9/Eb6.mp3": 2336928,
+  "/samples/salamander-piano/v9/Gb6.mp3": 2064544,
+  "/samples/salamander-piano/v9/A6.mp3": 2365544,
+  "/samples/salamander-piano/v9/Gb7.mp3": 1573744,
+  "/samples/salamander-piano/v9/Eb7.mp3": 1685568,
+  "/samples/salamander-piano/v9/C7.mp3": 1438464,
+  "/samples/salamander-piano/v9/A7.mp3": 1285776,
+  "/samples/salamander-piano/v9/C8.mp3": 1351576,
+  "/samples/salamander-piano/v14/C1.mp3": 5644800,
+  "/samples/salamander-piano/v14/A0.mp3": 5644800,
+  "/samples/salamander-piano/v14/Eb1.mp3": 5644800,
+  "/samples/salamander-piano/v14/Gb1.mp3": 5644800,
+  "/samples/salamander-piano/v14/A1.mp3": 5644800,
+  "/samples/salamander-piano/v14/C2.mp3": 5644800,
+  "/samples/salamander-piano/v14/Eb2.mp3": 5644800,
+  "/samples/salamander-piano/v14/A2.mp3": 5599800,
+  "/samples/salamander-piano/v14/Gb2.mp3": 5644800,
+  "/samples/salamander-piano/v14/C3.mp3": 5148520,
+  "/samples/salamander-piano/v14/Gb3.mp3": 5110360,
+  "/samples/salamander-piano/v14/Eb3.mp3": 5434232,
+  "/samples/salamander-piano/v14/C4.mp3": 5338240,
+  "/samples/salamander-piano/v14/A3.mp3": 5241264,
+  "/samples/salamander-piano/v14/Eb4.mp3": 3528000,
+  "/samples/salamander-piano/v14/A4.mp3": 3528000,
+  "/samples/salamander-piano/v14/Gb4.mp3": 3528000,
+  "/samples/salamander-piano/v14/C5.mp3": 3326464,
+  "/samples/salamander-piano/v14/Gb5.mp3": 2995520,
+  "/samples/salamander-piano/v14/Eb5.mp3": 3528000,
+  "/samples/salamander-piano/v14/A5.mp3": 3382160,
+  "/samples/salamander-piano/v14/C6.mp3": 2198680,
+  "/samples/salamander-piano/v14/Eb6.mp3": 2307584,
+  "/samples/salamander-piano/v14/Gb6.mp3": 2152896,
+  "/samples/salamander-piano/v14/C7.mp3": 1435512,
+  "/samples/salamander-piano/v14/A6.mp3": 2384112,
+  "/samples/salamander-piano/v14/Gb7.mp3": 1658320,
+  "/samples/salamander-piano/v14/Eb7.mp3": 1687840,
+  "/samples/salamander-piano/v14/A7.mp3": 1244168,
+  "/samples/salamander-piano/v14/C8.mp3": 1417632
+ },
+ "decodedMB": 610.9836120605469
+}

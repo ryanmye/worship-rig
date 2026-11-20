@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // T01 / SETUP_REVIEW finding 14: what does V8's Math.* compute in the Chromium that rendered the goldens?
-// Dumps Math.sin/cos/tan/exp/log/log2/log10/pow/tanh/atan/atan2/sqrt/cbrt/expm1 (+ sinh, used by eq-math) over
-// deterministic inputs as exact hex doubles (+ Math.round and Math.fround). The inputs mix generic coverage (random bit patterns per binade) with
-// the argument ranges the engine uses (oscillator / IR phases, dB to gain, filter prewarp, setTarget decay, cents).
+// Dumps Math.sin/cos/tan/exp/log/log2/log10/pow/tanh/atan/atan2/sqrt/cbrt/expm1 (+ sinh, used by eq-math, and
+// Math.round / Math.fround) over deterministic inputs as exact hex doubles. The inputs mix generic coverage (random
+// bit patterns per binade) with the argument ranges the engine uses (oscillator / IR phases, dB to gain, filter
+// prewarp, setTarget decay, cents).
 //
 //   node tools/golden/vectors/dump-math.mjs                       → tools/golden/vectors/data/math.txt (committed)
 //   node tools/golden/vectors/dump-math.mjs --n 100000 --out f    → a large investigation set (not committed)
@@ -18,8 +19,8 @@ const argv = process.argv.slice(2);
 const N = Number(arg(argv, '--n', 500));
 const OUT = arg(argv, '--out', path.join(DATA, 'math.txt'));
 
-const ONE = ['sin', 'cos', 'tan', 'exp', 'log', 'log2', 'log10', 'tanh', 'atan', 'sqrt', 'cbrt', 'expm1', 'sinh', 'round',
-  'fround'];
+const ONE = ['sin', 'cos', 'tan', 'exp', 'log', 'log2', 'log10', 'tanh', 'atan', 'sqrt', 'cbrt', 'expm1', 'sinh',
+  'round', 'fround'];
 const TWO = ['pow', 'atan2'];
 
 /** Random double with a uniformly chosen binade in [2^lo, 2^hi) and random mantissa bits (sign optional). */
@@ -66,15 +67,17 @@ ENGINE.cos = ENGINE.sin;
 /** Generic coverage: random binades across the function's useful domain, plus edge values. */
 const GENERIC = {
   sin: (r) => binade(r, -30, 20, true), cos: (r) => binade(r, -30, 20, true), tan: (r) => binade(r, -30, 20, true),
-  exp: (r) => uni(r, -745, 709.7), log: (r) => binade(r, -1074, 1024, false), log2: (r) => binade(r, -1000, 1000, false),
-  log10: (r) => binade(r, -1000, 1000, false), tanh: (r) => binade(r, -30, 5, true), atan: (r) => binade(r, -30, 30, true),
+  exp: (r) => uni(r, -745, 709.7), log: (r) => binade(r, -1074, 1024, false),
+  log2: (r) => binade(r, -1000, 1000, false), log10: (r) => binade(r, -1000, 1000, false),
+  tanh: (r) => binade(r, -30, 5, true), atan: (r) => binade(r, -30, 30, true),
   sqrt: (r) => binade(r, -1000, 1000, false), cbrt: (r) => binade(r, -1000, 1000, true),
   expm1: (r) => binade(r, -30, 9, true), sinh: (r) => binade(r, -30, 9, true),
   round: (r) => binade(r, -10, 60, true), fround: (r) => binade(r, -160, 130, true),
-  pow: (r) => [binade(r, -20, 20, false), uni(r, -40, 40)], atan2: (r) => [binade(r, -20, 20, true), binade(r, -20, 20, true)],
+  pow: (r) => [binade(r, -20, 20, false), uni(r, -40, 40)],
+  atan2: (r) => [binade(r, -20, 20, true), binade(r, -20, 20, true)],
 };
-const EDGES = [0, -0, 1, -1, 0.5, -0.5, 2.5, -2.5, 0.49999999999999994, 2 ** 52 + 1, 2, Math.PI, Math.PI / 2, Math.PI / 4, 1e-300, 5e-324, 710, -746, 1e300, Infinity,
-  -Infinity, NaN];
+const EDGES = [0, -0, 1, -1, 0.5, -0.5, 2.5, -2.5, 0.49999999999999994, 2 ** 52 + 1, 2, Math.PI, Math.PI / 2,
+  Math.PI / 4, 1e-300, 5e-324, 710, -746, 1e300, Infinity, -Infinity, NaN];
 
 function inputs(fn) {
   const r = mulberry32(0x5eed0000 + [...fn].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7));
@@ -83,8 +86,11 @@ function inputs(fn) {
   const nEngine = Math.ceil(N * 0.6);
   for (let i = 0; i < nEngine; i++) out.push(gens[i % gens.length](r));
   while (out.length < N) out.push(GENERIC[fn](r));
-  if (TWO.includes(fn)) for (const a of [0, 1, -1, 10, 2, 0.5]) for (const b of [0, 0.5, -0.5, 2, 1 / 3]) out.push([a, b]);
-  else for (const e of EDGES) out.push(e);
+  if (TWO.includes(fn)) {
+    for (const a of [0, 1, -1, 10, 2, 0.5]) for (const b of [0, 0.5, -0.5, 2, 1 / 3]) out.push([a, b]);
+  } else {
+    for (const e of EDGES) out.push(e);
+  }
   return out;
 }
 

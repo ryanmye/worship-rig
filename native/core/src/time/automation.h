@@ -1,10 +1,12 @@
 // Ports of the AudioParam helpers the engine is allowed to use (CLAUDE.md "No direct AudioParam automation"):
 // app/js/shared/automation.js (setNow, rampTo, glideTo, linearTo, holdAndFade, cancelAndHold, releaseTau,
 // stopAfterRelease, equalPowerCurve) and the engine helpers of app/js/engine/fx.js (linFrom, glideFrom, moveAt,
-// trackedMove, equalPowerFade with its 16 linear segments). Same calls in the same order on wa::Param as the JS makes on
-// an AudioParam, so a native render matches Chromium sample by sample (tests/time_automation_test.cpp replays
+// trackedMove, equalPowerFade with its 16 linear segments). Same calls in the same order on wa::Param as the JS makes
+// on an AudioParam, so a native render matches Chromium sample by sample (tests/time_automation_test.cpp replays
 // tools/golden/vectors/data/automation.txt). `when` is engine time; non-finite or <= 0 means "now" (0, clamped to the
 // render time by the Param, as Web Audio does). Return values follow the JS (false = rejected, nothing scheduled).
+// The helpers are templates over the param type: wa::Param, or any proxy with the same six timeline methods plus
+// intrinsic() (e.g. a Model-side object that turns each call into a Command for the audio thread).
 #pragma once
 #include <cmath>
 #include <cstddef>
@@ -23,7 +25,8 @@ inline constexpr double kExpFloor = 1e-4;      // EXP_FLOOR (automation.js:9)
 namespace detail {
 inline double t0(double when) { return std::isfinite(when) && when > 0 ? when : 0.0; }
 /** startValue(): the caller's `from` when finite, else param.value (the intrinsic value), else NaN. */
-inline double startValue(const Param &p, double from) {
+template <class P>
+inline double startValue(const P &p, double from) {
   if (std::isfinite(from)) return from;
   const double v = p.intrinsic();
   return std::isfinite(v) ? v : std::numeric_limits<double>::quiet_NaN();
@@ -34,10 +37,12 @@ inline double startValue(const Param &p, double from) {
 inline constexpr double kNoFrom = std::numeric_limits<double>::quiet_NaN();
 
 /** cancelAndHold(param, when) */
-inline void cancelAndHold(Param &p, double when) { p.cancelAndHoldAtTime(detail::t0(when)); }
+template <class P>
+inline void cancelAndHold(P &p, double when) { p.cancelAndHoldAtTime(detail::t0(when)); }
 
 /** setNow: cancelAndHold(t) + setValueAtTime(v, t). */
-inline bool setNow(Param &p, double value, double when) {
+template <class P>
+inline bool setNow(P &p, double value, double when) {
   if (!std::isfinite(value)) return false;
   const double t = detail::t0(when);
   cancelAndHold(p, t);
@@ -46,7 +51,8 @@ inline bool setNow(Param &p, double value, double when) {
 }
 
 /** rampTo: cancelAndHold(t) + setTargetAtTime(v, t, tc) + setValueAtTime(v, t + 12 tc) (the pinned end, Q2). */
-inline bool rampTo(Param &p, double value, double when, double timeConstant = kDefaultTc) {
+template <class P>
+inline bool rampTo(P &p, double value, double when, double timeConstant = kDefaultTc) {
   if (!std::isfinite(value)) return false;
   const double t = detail::t0(when);
   cancelAndHold(p, t);
@@ -60,7 +66,8 @@ inline bool rampTo(Param &p, double value, double when, double timeConstant = kD
 }
 
 /** linearTo(param, value, when, duration, {from}) */
-inline bool linearTo(Param &p, double value, double when, double duration, double from = kNoFrom) {
+template <class P>
+inline bool linearTo(P &p, double value, double when, double duration, double from = kNoFrom) {
   if (!std::isfinite(value)) return false;
   const double t = detail::t0(when);
   if (!(std::isfinite(duration) && duration > 0)) return setNow(p, value, t);
@@ -72,7 +79,8 @@ inline bool linearTo(Param &p, double value, double when, double duration, doubl
 }
 
 /** glideTo(param, value, when, duration, {from}): exponential, floor 1e-4, linear when either end is negative. */
-inline bool glideTo(Param &p, double value, double when, double duration, double from = kNoFrom) {
+template <class P>
+inline bool glideTo(P &p, double value, double when, double duration, double from = kNoFrom) {
   if (!std::isfinite(value)) return false;
   const double t = detail::t0(when);
   if (!(std::isfinite(duration) && duration > 0)) return setNow(p, value, t);
@@ -91,7 +99,8 @@ inline double releaseTau(double releaseSeconds) { return releaseSeconds > 0 ? re
 inline double stopAfterRelease(double when, double release) { return when + (release > 0 ? release : 0) * 1.3; }
 
 /** holdAndFade: rampTo(0) with τ = fadeSec / 4. */
-inline bool holdAndFade(Param &p, double when, double fadeSec) {
+template <class P>
+inline bool holdAndFade(P &p, double when, double fadeSec) {
   return rampTo(p, 0, when, (fadeSec > 0 ? fadeSec : 0) / 4);
 }
 
@@ -111,12 +120,14 @@ inline std::size_t equalPowerCurve(float *out, std::size_t n, bool fadeOut) {
 
 /** linFrom: setNow(from, when) then linearTo(to, when, dur, {from}) (cancelAndHold inserts no hold after a completed
  *  ramp, so the anchor is needed, fx.js:37). */
-inline bool linFrom(Param &p, double from, double to, double when, double dur) {
+template <class P>
+inline bool linFrom(P &p, double from, double to, double when, double dur) {
   setNow(p, from, when);
   return linearTo(p, to, when, dur, from);
 }
 /** glideFrom: setNow(from, when) then glideTo(to, when, dur, {from}). */
-inline bool glideFrom(Param &p, double from, double to, double when, double dur) {
+template <class P>
+inline bool glideFrom(P &p, double from, double to, double when, double dur) {
   setNow(p, from, when);
   return glideTo(p, to, when, dur, from);
 }
@@ -141,7 +152,8 @@ inline constexpr double kGlideSet = -1.0;
 
 /** trackedMove(param, m, to, when, glide, fallback): glide > 0 linear from the tracked value; 0 rampTo (τ 15 ms);
  *  kGlideSet setNow. Returns the move to record. */
-inline Move trackedMove(Param &p, const Move &m, double to, double when, double glide, double fallback) {
+template <class P>
+inline Move trackedMove(P &p, const Move &m, double to, double when, double glide, double fallback) {
   const double from = moveAt(m, when, fallback);
   Move r;
   r.valid = true;
@@ -164,7 +176,8 @@ inline Move trackedMove(Param &p, const Move &m, double to, double when, double 
 }
 
 /** equalPowerFade: piecewise-linear through sin (fade in) / cos (fade out), `segs` segments (default 16, Q4). */
-inline bool equalPowerFade(Param &p, double from, double to, double when, double dur, int segs = 16) {
+template <class P>
+inline bool equalPowerFade(P &p, double from, double to, double when, double dur, int segs = 16) {
   if (!(dur > 0)) return setNow(p, to, when);
   setNow(p, from, when);  // anchor (see linFrom)
   const bool up = to >= from;

@@ -9,8 +9,9 @@
 //
 // Format:
 //   case <name> sr <rate> frames <n> rate <a|k> init <offset> window <from> <to>
-//   call <frame> <op> <args...> [!throw]      op run when the context is at <frame> (0 = before rendering; others via
-//                                              suspend(frame/sr), multiples of 128); args are JS String(n), 'nan' = none
+//   call <frame> <op> <args...> [!throw]      op run when the context is at <frame> (0 = before rendering; others
+//                                              via suspend(frame/sr), multiples of 128); args are JS String(n),
+//                                              'nan' = none
 //   out <b64>                                  samples [from, to) as float32 bit patterns b[i]: d1 = b[i] - b[i-1],
 //                                              d2 = d1[i] - d1[i-1] (int32, mod 2^32; b and d1 are 0 before the
 //                                              first sample); LEB128 varints of 2·zigzag(d2) for d2 ≠ 0 and of
@@ -175,7 +176,8 @@ const results = await page.evaluate(async (cases) => {
     out.push(`case ${name} sr ${sr} frames ${frames} rate ${rate} init ${init} window ${w0} ${w1}`);
     calls.forEach((c, i) => {
       const [f, op, ...args] = c;
-      out.push(`call ${f} ${op} ${args.map((a) => (a === null ? 'nan' : String(a))).join(' ')}${threw.has(i) ? ' !throw' : ''}`);
+      const argText = args.map((a) => (a === null ? 'nan' : String(a))).join(' ');
+      out.push(`call ${f} ${op} ${argText}${threw.has(i) ? ' !throw' : ''}`);
     });
     out.push(`out ${btoa(bin)}`, 'end');
   }
@@ -184,6 +186,6 @@ const results = await page.evaluate(async (cases) => {
 await browser.close();
 server.close();
 fs.mkdirSync(DATA, { recursive: true });
-fs.writeFileSync(OUT, [`# AudioParam reference curves from Chromium ${version} (tools/golden/vectors/dump-automation.mjs)`,
-  ...results].join('\n') + '\n');
+const header = `# AudioParam reference curves from Chromium ${version} (tools/golden/vectors/dump-automation.mjs)`;
+fs.writeFileSync(OUT, [header, ...results].join('\n') + '\n');
 console.log(`wrote ${OUT}: ${CASES.length} cases, ${fs.statSync(OUT).size} bytes`);

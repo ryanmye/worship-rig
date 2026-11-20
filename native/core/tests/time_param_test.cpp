@@ -59,6 +59,31 @@ TEST_SUITE("time") {
     }
   }
 
+  TEST_CASE("rendered a-rate values follow the spec formula (valueAt) when every quantum is rendered") {
+    // Replacement for test_param.cpp "a-rate block equals per-sample valueAt": every quantum must be rendered (the
+    // setTarget recursion is stateful). k-rate is NOT the spec value at the quantum start when a setTarget begins
+    // mid-quantum: Chromium steps it from the previous quantum's value by a whole control period (here 0.395 instead
+    // of 0.787 at frame 512); time_automation_test.cpp checks k-rate against Chromium instead.
+    const double sr = 48000;
+    auto make = [] {
+      Param p(0.0);
+      p.setValueAtTime(0.0, 0.0);
+      p.linearRampToValueAtTime(1.0, 0.01);
+      p.setTargetAtTime(0.25, 0.01, 0.002);
+      return p;
+    };
+    Param a = make();
+    const Param ref = make();
+    float buf[128];
+    for (std::int64_t f0 = 0; f0 <= 1024; f0 += 128) {
+      a.processARate(f0, sr, buf, 128);
+      for (int i = 0; i < 128; ++i) CHECK(buf[i] == doctest::Approx(ref.valueAt((f0 + i) / sr)).epsilon(2e-6));
+    }
+    Param k = make();
+    CHECK(k.processKRate(0, sr) == 0.0f);
+    CHECK(k.processKRate(128, sr) == doctest::Approx(128.0 / 480).epsilon(1e-6));  // linear: exact at the start
+  }
+
   TEST_CASE("setTarget converges and snaps to the target after 10 tau") {
     Param p(1.0);
     p.setTargetAtTime(0, 0, 0.01);

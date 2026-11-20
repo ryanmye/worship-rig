@@ -12,7 +12,7 @@
 
 namespace rig::samples {
 
-/** Output length decodeAudioData produces: round(frames * outRate / inRate) (measured on the golden Chromium). */
+/** Output length decodeAudioData produces: floor(frames / (inRate / outRate)) (measured on the golden Chromium). */
 std::size_t resampledLength(std::size_t frames, double inRate, double outRate);
 
 /** Resample one channel. `out` is resized to resampledLength(). inRate == outRate copies. */

@@ -13,7 +13,9 @@
 
 namespace rigvec {
 
-inline std::string dataPath(const char *name) { return std::string(RIG_REPO_DIR) + "/tools/golden/vectors/data/" + name; }
+inline std::string dataPath(const char *name) {
+  return std::string(RIG_REPO_DIR) + "/tools/golden/vectors/data/" + name;
+}
 
 /** All non-comment lines of a vector file (empty when the file is missing: tests then REQUIRE a minimum count). */
 inline std::vector<std::string> lines(const char *name) {
