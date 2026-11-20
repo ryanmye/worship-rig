@@ -1,11 +1,37 @@
 ninja: Entering directory `build-t08-clang'
 [0/2] Re-checking globbed directories...
-[1/136] Building C object CMakeFiles/rig_third_party.dir/third_party/pffft/src/pffft.c.o
-[2/136] Building C object CMakeFiles/rig_third_party.dir/third_party/pffft/src/pffft_common.c.o
-[3/136] Building C object CMakeFiles/rig_third_party.dir/third_party/impl/dr_libs_impl.c.o
-[4/136] Building C object CMakeFiles/rig_third_party.dir/third_party/yyjson/yyjson.c.o
-[5/136] Linking C static library librig_third_party.a
-[6/136] Building CXX object CMakeFiles/rig_core.dir/src/api/registry.cpp.o
-[7/136] Building CXX object CMakeFiles/rig_core.dir/src/api/engine.cpp.o
-[8/136] Building CXX object CMakeFiles/rig_core.dir/src/api/rig_engine.cpp.o
-[9/136] Building CXX object CMakeFiles/rig_core.dir/src/bridge/schema.cpp.o
+[1/131] Building CXX object CMakeFiles/rig_core.dir/src/api/registry.cpp.o
+[2/131] Building CXX object CMakeFiles/rig_core.dir/src/api/rig_engine.cpp.o
+[3/131] Building CXX object CMakeFiles/rig_core.dir/src/api/engine.cpp.o
+[4/131] Building CXX object CMakeFiles/rig_core.dir/src/bridge/schema.cpp.o
+[5/131] Building CXX object CMakeFiles/rig_core.dir/src/click/click_math.cpp.o
+[6/131] Building CXX object CMakeFiles/rig_core.dir/src/bridge/bridge.cpp.o
+[7/131] Building CXX object CMakeFiles/rig_core.dir/src/click/click_register.cpp.o
+[8/131] Building CXX object CMakeFiles/rig_core.dir/src/click/click_unit.cpp.o
+[9/131] Building CXX object CMakeFiles/rig_core.dir/src/click/click_service.cpp.o
+[10/131] Building CXX object CMakeFiles/rig_core.dir/src/dsp/biquad.cpp.o
+[11/131] Building CXX object CMakeFiles/rig_core.dir/src/dsp/buffer_source.cpp.o
+[12/131] Building CXX object CMakeFiles/rig_core.dir/src/click/metronome.cpp.o
+[13/131] Building CXX object CMakeFiles/rig_core.dir/src/dsp/compressor.cpp.o
+[14/131] Building CXX object CMakeFiles/rig_core.dir/src/dsp/constant_source.cpp.o
+[15/131] Building CXX object CMakeFiles/rig_core.dir/src/dsp/delay_line.cpp.o
+[16/131] Building CXX object CMakeFiles/rig_core.dir/src/dsp/gain.cpp.o
+[17/131] Building CXX object CMakeFiles/rig_core.dir/src/dsp/convolver.cpp.o
+[18/131] Building CXX object CMakeFiles/rig_core.dir/src/dsp/oscillator.cpp.o
+[19/131] Building CXX object CMakeFiles/rig_core.dir/src/dsp/panner.cpp.o
+[20/131] Building CXX object CMakeFiles/rig_core.dir/src/dsp/resampler_updown.cpp.o
+[21/131] Building CXX object CMakeFiles/rig_core.dir/src/dsp/periodic_wave.cpp.o
+[22/131] Building CXX object CMakeFiles/rig_core.dir/src/dsp/test_voice.cpp.o
+[23/131] Building CXX object CMakeFiles/rig_core.dir/src/dsp/waveshaper.cpp.o
+[24/131] Building CXX object CMakeFiles/rig_core.dir/src/fx/chorus.cpp.o
+[25/131] Building CXX object CMakeFiles/rig_core.dir/src/fx/chorus_register.cpp.o
+[26/131] Building CXX object CMakeFiles/rig_core.dir/src/fx/delay.cpp.o
+[27/131] Building CXX object CMakeFiles/rig_core.dir/src/fx/delay_node.cpp.o
+[28/131] Building CXX object CMakeFiles/rig_core.dir/src/fx/ir_gen.cpp.o
+[29/131] Building CXX object CMakeFiles/rig_core.dir/src/fx/delay_register.cpp.o
+/home/claude/worship-rig/native/core/src/fx/delay_register.cpp:37:32: warning: unused variable 'kName' [-Wunused-const-variable]
+   37 |   static constexpr const char *kName = "delay";
+      |                                ^~~~~
+1 warning generated.
+[30/131] Building CXX object CMakeFiles/rig_core.dir/src/fx/lofi_register.cpp.o
+[31/131] Building CXX object CMakeFiles/rig_core.dir/src/fx/lofi.cpp.o

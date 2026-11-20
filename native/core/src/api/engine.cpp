@@ -105,6 +105,10 @@ Engine::~Engine() {
   }
   hostCv_.notify_all();
   if (hostThread_.joinable()) hostThread_.join();
+  // finalise an open recording (valid WAV, rig_destroy contract) while the event batch still exists; the rec
+  // service's own destructor would emit into members already destroyed
+  if (recSvc_) recSvc_->stop();
+  flush();
   // Free whatever the graph handed back or never consumed (the Graph destructor frees what it still holds).
   AudioEvent ev;
   while (evQ_.pop(ev)) freeGarbage(ev);
