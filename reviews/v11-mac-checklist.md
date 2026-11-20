@@ -15,11 +15,11 @@ CONTRACT_CHANGES `## v11-*` and `## ci-*`.
       modules packaged, nothing else from `tools/`.
 
 ### v11-electron (hotkeys + update check)
-- [ ] Global shortcuts fire from another app with the window hidden; macOS doesn't ask for Accessibility.
+- [ ] (from Finder with the window behind: yes, synthetic press; hidden window + no Accessibility prompt: Ryan, batch item 1) Global shortcuts fire from another app with the window hidden; macOS doesn't ask for Accessibility.
 - [x] (fails: L11-3, never detected on macOS) A combination held by another app (e.g. Rectangle on ⌃⌥⌘]) shows "Another app already uses this". It's not
       confirmed that `register()` returns false on macOS.
-- [ ] While recording a shortcut in Settings, ⌃⌥⌘ combinations reach the page, not Mission Control or the menu.
-- [ ] Nothing stays registered after Quit or after switching shortcuts off.
+- [x] (synthetic ⌃⌥⌘K recorded as Control+Alt+Command+K) While recording a shortcut in Settings, ⌃⌥⌘ combinations reach the page, not Mission Control or the menu.
+- [x] (off: the press no longer steps the song; after Quit no process left) Nothing stays registered after Quit or after switching shortcuts off.
 - [x] (status API, see findings) Packaged build: Settings › About shows the version line about 20 s after launch; Download opens the arm64 dmg;
       no request at all with `RIG_UPDATE_CHECK=0`.
 
@@ -29,7 +29,7 @@ CONTRACT_CHANGES `## v11-*` and `## ci-*`.
 
 ### v11-polish (themes + B)
 - [x] The longer theme words in the top bar in SF Pro at 1024 (they fit in Linux fonts); Ember title metrics.
-- [ ] Daylight "Auto" follows a real macOS appearance change; the Day paper EQ graph looks right.
+- [ ] (Auto: pass, raw CDP dark→stage, light→day, dark→stage; EQ graph eyeball: Ryan) Daylight "Auto" follows a real macOS appearance change; the Day paper EQ graph looks right.
 
 ### v11-importer
 - [x] Open the built app from Finder with Homebrew ffmpeg: the list shows the real GarageBand/Logic instruments and

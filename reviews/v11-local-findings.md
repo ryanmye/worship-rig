@@ -270,3 +270,38 @@ both pass.
 
 Visible-mode memory is also lower than 1.0.1 by about 140–230 MB after the loop, less than the −450–600 MB reported
 on Linux (RSS, not footprint).
+
+## L11-9 press-to-test says "Works" when another app holds the same combination: macOS delivers it to both
+
+**Status:** open, needs a decision from Ryan (copy or behaviour). Press-to-test itself works as specified.
+
+Mac run on `5f4c6d4`, source build with a fresh profile, driven over CDP. The presses were synthetic
+(`System Events keystroke "]" using {control, option, command}` sent from Finder), and they do reach Carbon global
+shortcuts.
+1. Test on Next song: the row reads "Press ⌃⌥⌘] in any app…". Pass.
+2. The press from Finder: "Works", and the song does not change (the press is swallowed). Pass.
+3. The next press outside a test steps the song. Pass.
+4. Clash: the L11-3 helper (`test/logs/hk`, a second Electron app) registered ⌃⌥⌘] first (`register()` → true),
+   then Worship Rig registered it too (`ok`). On the press, **both apps fire**: the helper logged `fired` for the
+   test press and the plain press, and Worship Rig showed "Works" and then stepped the song. So "which app gets the
+   press" is both. "Nothing came through" can only appear when the other app swallows the key (an event tap, or a
+   system shortcut), not when it uses the same `RegisterEventHotKey` API. That API covers Electron, and probably
+   Rectangle and Magnet. Raycast is unconfirmed.
+5. Esc during a test clears the row and leaves Settings open. Pass.
+
+Also: with shortcuts switched off, the press no longer steps the song. After Quit, no Electron process is left.
+While recording, a synthetic ⌃⌥⌘K reaches the page and is saved as `Control+Alt+Command+K`.
+
+Effect: a ⌃⌥⌘] that Rectangle also uses would step the setlist and run Rectangle's action, with "Works" showing.
+Options:
+- (a) Change the copy. "Works" becomes "Worship Rig gets it. If another app also reacts, pick another." The Mac hint
+  already says "Test each one once." Recommended.
+- (b) Keep it as is, and rely on the hardware batch with Rectangle or Raycast to see what real apps do.
+Ryan's batch item 1 (Rectangle or Raycast on the same keys) will show whether real apps behave like the helper.
+
+## Daylight Auto (checklist v11-polish): follows the Mac's appearance (pass)
+
+Raw CDP, with no Playwright emulation. Playwright's CDP connection forces `prefers-color-scheme: light`, so don't use
+it for this check. Theme Daylight with the Auto flag set: Mac dark → `daylight-stage`, set light → `daylight-day`
+within 2.5 s, set dark → `daylight-stage`. The Mac was left in dark mode as before. The Day paper EQ graph is still
+an eyeball check for Ryan.
