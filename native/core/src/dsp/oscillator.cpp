@@ -229,8 +229,12 @@ void Oscillator::process(std::int64_t frame0, double sampleRate, float *out, std
   float finalScale = rateScale;
   float frequency = 0;  // k-rate frequency after detune and clamping (0 while sample accurate, as in Chromium)
 
-  const bool freqSA = freq_.hasSampleAccurateValues(frame0, sampleRate) || freqMod != nullptr;
-  const bool detSA = detune_.hasSampleAccurateValues(frame0, sampleRate) || detuneMod != nullptr;
+  // `HasSampleAccurateValues() && IsAudioRate()`: a k-rate param (or one without automation in this quantum) uses
+  // FinalValue() = timeline value at the quantum start + first frame of the input sum, clipped to the param range.
+  const bool freqSA = freqRate_ == Param::Rate::ARate &&
+                      (freq_.hasSampleAccurateValues(frame0, sampleRate) || freqMod != nullptr);
+  const bool detSA = detuneRate_ == Param::Rate::ARate &&
+                     (detune_.hasSampleAccurateValues(frame0, sampleRate) || detuneMod != nullptr);
   float freqFinal = 0, detFinal = 0;
   // Chromium's frequency AudioParam has the nominal range [-Nyquist, Nyquist]: its timeline values, its FinalValue()
   // and the sum with connected inputs are clipped to it BEFORE the detune multiplier is applied (30 kHz at 48 kHz with
@@ -244,21 +248,26 @@ void Oscillator::process(std::int64_t frame0, double sampleRate, float *out, std
       for (std::size_t i = 0; i < n; ++i) pinc[i] += freqMod[i];
     for (std::size_t i = 0; i < n; ++i) pinc[i] = clampFrequency(pinc[i], nyq);
   } else {
-    freqFinal = clampFrequency(freq_.processKRate(frame0, sampleRate), nyq);
+    freqFinal = freq_.processKRate(frame0, sampleRate);
+    if (freqMod) freqFinal += freqMod[0];
+    freqFinal = clampFrequency(freqFinal, nyq);
     finalScale *= freqFinal;
   }
+  const float dLo = detune_.minValue(), dHi = detune_.maxValue();
+  auto clipDetune = [dLo, dHi](float v) { return v < dLo ? dLo : (v > dHi ? dHi : v); };
   if (detSA) {
     hasSA = true;
     float *dv = hasFreqChanges ? dvals : pinc;
     detune_.processARate(frame0, sampleRate, dv, n);
     if (detuneMod)
-      for (std::size_t i = 0; i < n; ++i) dv[i] += detuneMod[i];
+      for (std::size_t i = 0; i < n; ++i) dv[i] = clipDetune(dv[i] + detuneMod[i]);
     const float k = static_cast<float>(1.0 / 1200);
     for (std::size_t i = 0; i < n; ++i) dv[i] = std::exp2(dv[i] * k);
     if (hasFreqChanges)
       for (std::size_t i = 0; i < n; ++i) pinc[i] = dv[i] * pinc[i];
   } else {
     detFinal = detune_.processKRate(frame0, sampleRate);
+    if (detuneMod) detFinal = clipDetune(detFinal + detuneMod[0]);
     finalScale *= detuneToMultiplier(detFinal);
   }
   if (hasSA) {

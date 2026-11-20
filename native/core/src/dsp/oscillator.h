@@ -31,6 +31,11 @@ class Oscillator {
   // sample and then treats the param as sample accurate), n floats each, aligned to the quantum start.
   void process(std::int64_t frame0, double sampleRate, float *out, std::size_t n, const float *freqMod,
                const float *detuneMod);
+  // INTERFACE-CHANGE(T11a review): AudioParam.automationRate of frequency / detune (default a-rate). voice.js sets
+  // `detune.automationRate = 'k-rate'` and connects bend / vibrato / drift into it (contract Q6): a k-rate param takes
+  // its timeline value at the quantum start plus the FIRST frame of the connected-input sum, once per quantum.
+  void setFrequencyRate(Param::Rate r) { freqRate_ = r; }
+  void setDetuneRate(Param::Rate r) { detuneRate_ = r; }
 
  private:
   const PeriodicWave *wave_;
@@ -39,6 +44,7 @@ class Oscillator {
   double start_ = -1.0, stop_ = -1.0;
   bool finished_ = false;
   bool playing_ = false;  // INTERFACE-CHANGE(T11a): SCHEDULED -> PLAYING happened (start-phase offset applies once)
+  Param::Rate freqRate_ = Param::Rate::ARate, detuneRate_ = Param::Rate::ARate;  // INTERFACE-CHANGE(T11a review)
 };
 
 }  // namespace rig::wa

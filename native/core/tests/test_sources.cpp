@@ -8,6 +8,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "doctest.h"
@@ -125,7 +126,7 @@ Result render(yyjson_val *spec) {
   std::unique_ptr<PeriodicWave> wave, modWave;
   std::unique_ptr<Oscillator> osc, mod;
   std::unique_ptr<BufferSource> bsrc;
-  std::unique_ptr<ConstantSource> cs;
+  std::unique_ptr<ConstantSource> cs, fIn, dIn;  // fIn / dIn: inputs connected into frequency / detune
   std::vector<std::vector<float>> bdata;
   SampleBuffer sb;
   double fmDepth = 0;
@@ -144,8 +145,17 @@ Result render(yyjson_val *spec) {
     }
     REQUIRE(wave);
     osc = std::make_unique<Oscillator>(wave.get(), jnum(spec, "freq", 440), jnum(spec, "detune", 0));
+    if (jstr(spec, "fRate") == "k") osc->setFrequencyRate(Param::Rate::KRate);
+    if (jstr(spec, "dRate") == "k") osc->setDetuneRate(Param::Rate::KRate);
     applyEv(osc->frequency(), yyjson_obj_get(spec, "fEv"));
     applyEv(osc->detune(), yyjson_obj_get(spec, "dEv"));
+    for (auto [key, in] : {std::pair{"fIn", &fIn}, std::pair{"dIn", &dIn}}) {
+      if (yyjson_val *ev = yyjson_obj_get(spec, key)) {
+        *in = std::make_unique<ConstantSource>(0.0);
+        applyEv((*in)->offset(), ev);
+        (*in)->start(0);
+      }
+    }
     if (yyjson_val *fm = yyjson_obj_get(spec, "fm")) {
       modWave.reset(PeriodicWave::basic(PeriodicWave::Basic::Sine, sr));
       mod = std::make_unique<Oscillator>(modWave.get(), jnum(fm, "f", 1), 0.0);
@@ -185,7 +195,7 @@ Result render(yyjson_val *spec) {
   const long allocs0 = rigtest::g_rtAllocs;
   {
     rt::RenderScope scope;  // allocation trap on, FTZ/DAZ as in the engine
-    float modBuf[128], fmBuf[128];
+    float modBuf[128], fmBuf[128], dBuf[128];
     for (std::size_t f0 = 0; f0 < frames; f0 += kQ) {
       const std::size_t n = std::min(kQ, frames - f0);
       const auto fr = static_cast<std::int64_t>(f0);
@@ -193,7 +203,12 @@ Result render(yyjson_val *spec) {
         if (mod) {
           mod->process(fr, sr, modBuf, n);
           for (std::size_t i = 0; i < n; ++i) fmBuf[i] = modBuf[i] * static_cast<float>(fmDepth);
-          osc->process(fr, sr, chan[0].data() + f0, n, fmBuf, nullptr);
+        } else if (fIn) {
+          fIn->process(fr, sr, fmBuf, n);
+        }
+        if (dIn) dIn->process(fr, sr, dBuf, n);
+        if (mod || fIn || dIn) {
+          osc->process(fr, sr, chan[0].data() + f0, n, mod || fIn ? fmBuf : nullptr, dIn ? dBuf : nullptr);
         } else {
           osc->process(fr, sr, chan[0].data() + f0, n);
         }

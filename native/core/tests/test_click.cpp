@@ -330,24 +330,28 @@ TEST_SUITE("click") {
     auto u = makeUnit(sr);
     NullEvents ev;
     Bus bus;
+    std::int64_t frame = 0;
     auto run = [&](int quanta) {
       const auto t0 = std::chrono::steady_clock::now();
-      for (int q = 0; q < quanta; ++q) {
-        RenderContext ctx{static_cast<std::int64_t>(q) * 128, sr, static_cast<std::uint64_t>(q), UnitSlot::Click,
-                          &ev};
+      for (int q = 0; q < quanta; ++q, frame += 128) {
+        RenderContext ctx{frame, sr, static_cast<std::uint64_t>(frame / 128), UnitSlot::Click, &ev};
         UnitIO io;
         io.out = &bus;
         u->process(ctx, io);
       }
       return std::chrono::duration<double, std::nano>(std::chrono::steady_clock::now() - t0).count() / quanta;
     };
-    const double idle = run(20000);
-    u->apply(op(ClickOp::Schedule, 0.0, 0));
-    u->apply(op(ClickOp::Schedule, 0.01, 1));
-    const double busy = run(15);  // both voices sound for 40 ms = 15 quanta
+    // minimum over repetitions: a single preemption on a loaded box (2 CPUs, sanitizers) must not decide it
+    double idle = 1e18, busy = 1e18;
+    for (int rep = 0; rep < 20; ++rep) {
+      idle = std::min(idle, run(200));
+      u->apply(op(ClickOp::Schedule, static_cast<double>(frame) / sr, 0));
+      u->apply(op(ClickOp::Schedule, static_cast<double>(frame) / sr + 0.01, 1));
+      busy = std::min(busy, run(15));  // both voices sound within these 15 quanta (40 ms)
+    }
     const double budget = 128.0 / sr * 1e9;
     MESSAGE("click unit: idle " << idle << " ns/quantum, 2 sounding voices " << busy << " ns/quantum ("
-                                << 100.0 * busy / budget << " % of a core at 48 kHz)");
+                                << 100.0 * busy / budget << " % of a core at 48 kHz; min of 20 runs)");
     CHECK(busy < budget * 0.05);
   }
 }

@@ -1,0 +1,18 @@
+[0/2] Re-checking globbed directories...
+[1/136] Building C object CMakeFiles/rig_third_party.dir/third_party/pffft/src/pffft.c.o
+[2/136] Building C object CMakeFiles/rig_third_party.dir/third_party/pffft/src/pffft_common.c.o
+[3/136] Building C object CMakeFiles/rig_third_party.dir/third_party/impl/dr_libs_impl.c.o
+[4/136] Building C object CMakeFiles/rig_third_party.dir/third_party/yyjson/yyjson.c.o
+[5/136] Linking C static library librig_third_party.a
+[6/136] Building CXX object CMakeFiles/rig_core.dir/src/api/registry.cpp.o
+[7/136] Building CXX object CMakeFiles/rig_core.dir/src/api/engine.cpp.o
+[8/136] Building CXX object CMakeFiles/rig_core.dir/src/api/rig_engine.cpp.o
+[9/136] Building CXX object CMakeFiles/rig_core.dir/src/bridge/schema.cpp.o
+[10/136] Building CXX object CMakeFiles/rig_core.dir/src/click/click_math.cpp.o
+[11/136] Building CXX object CMakeFiles/rig_core.dir/src/click/click_register.cpp.o
+[12/136] Building CXX object CMakeFiles/rig_core.dir/src/bridge/bridge.cpp.o
+[13/136] Building CXX object CMakeFiles/rig_core.dir/src/click/click_unit.cpp.o
+[14/136] Building CXX object CMakeFiles/rig_core.dir/src/click/click_service.cpp.o
+[15/136] Building CXX object CMakeFiles/rig_core.dir/src/dsp/biquad.cpp.o
+[16/136] Building CXX object CMakeFiles/rig_core.dir/src/click/metronome.cpp.o
+[17/136] Building CXX object CMakeFiles/rig_core.dir/src/dsp/buffer_source.cpp.o

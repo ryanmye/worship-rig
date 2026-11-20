@@ -47,7 +47,8 @@ void BufferSource::setLoop(bool loop, double loopStartSec, double loopEndSec) {
   updateLoopPoints();
 }
 
-unsigned BufferSource::channels() const { return buf_ && buf_->channels ? buf_->channels : 1; }
+// SampleBuffer holds at most 2 channel pointers: never index f32[] / i16[] past them (T11a review).
+unsigned BufferSource::channels() const { return buf_ && buf_->channels ? std::min(buf_->channels, 2u) : 1; }
 
 float BufferSource::sampleAt(unsigned ch, std::uint64_t i) const {
   if (buf_->f32[ch]) return buf_->f32[ch][i];

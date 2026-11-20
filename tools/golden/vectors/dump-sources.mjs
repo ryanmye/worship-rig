@@ -21,7 +21,9 @@
 // Spec fields. Common: sr, frames, win:[from,to] (default the whole render), start (seconds), stop (seconds).
 //   osc: type ('sine'|'square'|'sawtooth'|'triangle'|'custom'), wave {real, imag, dn} (custom), freq, detune,
 //        fEv / dEv: [[op, value, time(, tau)]] with op set|lin|exp|target on frequency / detune,
-//        fm {f, depth}: a sine of f Hz through a GainNode(depth) into frequency
+//        fm {f, depth}: a sine of f Hz through a GainNode(depth) into frequency,
+//        fRate / dRate: 'k' sets automationRate = 'k-rate' on frequency / detune (voice.js: detune k-rate),
+//        fIn / dIn: [[op, value, time(, tau)]] on a ConstantSourceNode(offset 0) connected into frequency / detune
 //   buf: bufCh, bufLen, bufSr, bufSeed, rate, detune, rEv / dEv, loop [start, end] or null, offset, dur,
 //        trackEnd (suspend at every quantum to find when `onended` was seen)
 //   cs:  offset, ev: [[op, value, time(, tau)]]
@@ -125,6 +127,18 @@ add('osc-stop-exact-quantum', { k: 'osc', sr: 44100, frames: 4096, type: 'sine',
 add('osc-fm', { k: 'osc', sr: 44100, frames: 4096, type: 'sine', freq: 440, start: 0, fm: { f: 110, depth: 200 } });
 add('osc-fm-custom-48k', { k: 'osc', sr: 48000, frames: 4096, type: 'custom', wave: organWave, freq: 220, start: 0.0021,
   fm: { f: 5, depth: 30 } });
+// T11a review: automationRate k-rate (contract Q6) and inputs connected into detune / frequency (bend, vibrato)
+add('osc-detune-krate-ramp', { k: 'osc', sr: 44100, frames: 4096, type: 'square', freq: 440, start: 0, dRate: 'k',
+  dEv: [['set', 0, 0], ['lin', 1200, 0.06]] });
+add('osc-detune-krate-input', { k: 'osc', sr: 48000, frames: 4096, type: 'sine', freq: 1000, start: 0, dRate: 'k',
+  dIn: [['set', 0, 0], ['lin', 1200, 0.08]] });
+add('osc-detune-krate-timeline-input-subsample', { k: 'osc', sr: 44100, frames: 4096, type: 'sawtooth', freq: 220,
+  start: 0.0021, dRate: 'k', dEv: [['set', -50, 0], ['lin', 100, 0.07]],
+  dIn: [['set', 0, 0.01], ['lin', -300, 0.06]] });
+add('osc-freq-krate-input', { k: 'osc', sr: 48000, frames: 4096, type: 'sine', freq: 300, start: 0, fRate: 'k',
+  fIn: [['set', 0, 0], ['lin', 500, 0.07]] });
+add('osc-detune-arate-input', { k: 'osc', sr: 44100, frames: 4096, type: 'triangle', freq: 440, start: 0,
+  dIn: [['set', 0, 0], ['lin', 200, 0.05]] });
 add('osc-long-sine-phase', { k: 'osc', sr: 44100, frames: 220500, type: 'sine', freq: 440.123, start: 0,
   win: [218000, 220048] });
 add('osc-long-saw-lowfreq', { k: 'osc', sr: 48000, frames: 480000, type: 'sawtooth', freq: 7.37, start: 0,
@@ -239,8 +253,17 @@ const results = await page.evaluate(async (cases) => {
         opts.type = spec.type;
       }
       node = new OscillatorNode(ctx, opts);
+      if (spec.fRate === 'k') node.frequency.automationRate = 'k-rate';
+      if (spec.dRate === 'k') node.detune.automationRate = 'k-rate';
       applyEv(node.frequency, spec.fEv);
       applyEv(node.detune, spec.dEv);
+      for (const [key, param] of [['fIn', node.frequency], ['dIn', node.detune]]) {
+        if (!spec[key]) continue;
+        const c = new ConstantSourceNode(ctx, { offset: 0 });
+        applyEv(c.offset, spec[key]);
+        c.connect(param);
+        c.start(0);
+      }
       if (spec.fm) {
         const mod = new OscillatorNode(ctx, { frequency: spec.fm.f });
         const g = new GainNode(ctx, { gain: spec.fm.depth });
