@@ -153,7 +153,7 @@ if(RIG_BUILD_TESTS)
                COMMAND ${CMAKE_COMMAND} -DRENDER=$<TARGET_FILE:rig_render> -DREPO=${RIG_REPO_ROOT}
                        -DNODE=${NODE_EXECUTABLE} -DOUT=${CMAKE_BINARY_DIR}/golden-out/${_name} -DIDS=${_ids}
                        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_golden.cmake)
-      set_tests_properties(golden.${_name} PROPERTIES LABELS golden)
+      set_tests_properties(golden.${_name} PROPERTIES LABELS golden SKIP_REGULAR_EXPRESSION "GOLDEN-MISSING")
     endforeach()
   endif()
 endif()

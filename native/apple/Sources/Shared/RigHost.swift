@@ -62,6 +62,7 @@ final class RigHost: NSObject, ObservableObject {
         wv.scrollView.bounces = false
         #endif
         wv.navigationDelegate = navDelegate
+        wv.uiDelegate = navDelegate // target=_blank / window.open (RigNavigation)
         webView = wv
         super.init()
         bridge.host = self

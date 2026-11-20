@@ -37,16 +37,23 @@ final class RigLifecycle {
                                      queue: .main) { [weak self] _ in self?.host.audio.resumeIfNeeded() })
         #else
         let src = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
-        src.setEventHandler { [weak self, weak src] in
-            let critical = src?.data.contains(.critical) ?? false
-            self?.pressure(level: critical ? 2 : 1)
+        // read the event through self.source: `[weak src]` needs a class-bound protocol type, which
+        // DispatchSourceMemoryPressure is not guaranteed to be (WAVE0B_REVIEW S5)
+        src.setEventHandler { [weak self] in
+            guard let self, let s = self.source else { return }
+            self.pressure(level: s.data.contains(.critical) ? 2 : 1)
         }
         src.resume()
         source = src
         #endif
     }
 
-    deinit { tokens.forEach { NotificationCenter.default.removeObserver($0) } }
+    deinit {
+        tokens.forEach { NotificationCenter.default.removeObserver($0) }
+        #if os(macOS)
+        source?.cancel()
+        #endif
+    }
 
     func pressure(level: Int32) {
         NSLog("rig: memory pressure level %d", level)

@@ -1,10 +1,15 @@
 #include "fixture_runner.h"
 
+#include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <map>
 #include <set>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "io/wav.h"
 #include "rig/rig_engine.h"
@@ -185,6 +190,24 @@ RunResult runFixture(const Fixture &f, const std::string &goldenDir, double sr) 
     post("{\"v\":1,\"op\":\"commit\",\"id\":6,\"token\":" + std::to_string(token) + ",\"when\":0}");
     collectUnsupported();
   }
+  // song switches (T17 `setup.next` + events `commit`): the later patches are prepared up front (page.js)
+  std::vector<long> nextTokens;
+  std::vector<std::string> nextPatches;
+  if (yyjson_val *nx = yyjson_obj_get(setup, "next"); nx && yyjson_is_arr(nx)) {
+    size_t i2, n2;
+    yyjson_val *np;
+    yyjson_arr_foreach(nx, i2, n2, np) {
+      sink.msgs.clear();
+      post("{\"v\":1,\"op\":\"prepare\",\"id\":5,\"patch\":" + str(np) + "}");
+      long token = -1;
+      for (const auto &r : sink.msgs) {
+        const size_t p = r.find("\"token\":");
+        if (p != std::string::npos) token = std::strtol(r.c_str() + p + 8, nullptr, 10);
+      }
+      nextTokens.push_back(token);
+      nextPatches.push_back(str(np));
+    }
+  }
   if (yyjson_val *v = yyjson_obj_get(setup, "transpose"))
     postSkippable("{\"v\":1,\"op\":\"song\",\"id\":7,\"transpose\":" + str(v) + "}", "song transpose");
   if (yyjson_val *kc = yyjson_obj_get(setup, "keyContext"))
@@ -246,14 +269,29 @@ RunResult runFixture(const Fixture &f, const std::string &goldenDir, double sr) 
   const char *tap = "out";
   if (yyjson_val *t = yyjson_obj_get(setup, "tap")) tap = yyjson_get_str(t);
   if (rig_test_tap(e, tap) != RIG_OK) skipped.insert(std::string("tap ") + tap);
-  // 4. events (each with when = t; page.js applyEvent)
-  size_t i, n;
-  yyjson_val *ev;
-  yyjson_arr_foreach(events, i, n, ev) {
-    const char *type = yyjson_get_str(yyjson_obj_get(ev, "type"));
-    if (!type) continue;
-    const std::string when = ",\"when\":" + str(yyjson_obj_get(ev, "t")) + "}";
-    const std::string ty = type;
+  // 4. events, in time order (stable), each with when = t (page.js applyEvent). Types listed in `setup.live` are
+  // posted while rendering, at the first 128-frame boundary >= t with when = that boundary (page.js dispatch:
+  // engine.timer.at), because they read state at call time that other events change.
+  std::set<std::string> live;
+  if (yyjson_val *lv = yyjson_obj_get(setup, "live"); lv && yyjson_is_arr(lv)) {
+    size_t i2, n2;
+    yyjson_val *x;
+    yyjson_arr_foreach(lv, i2, n2, x) if (yyjson_is_str(x)) live.insert(yyjson_get_str(x));
+  }
+  std::vector<yyjson_val *> evs;
+  {
+    size_t i2, n2;
+    yyjson_val *x;
+    yyjson_arr_foreach(events, i2, n2, x) evs.push_back(x);
+  }
+  std::stable_sort(evs.begin(), evs.end(),
+                   [&](yyjson_val *a, yyjson_val *b) { return num(a, "t", 0.0) < num(b, "t", 0.0); });
+  auto nextIdx = [&](yyjson_val *ev) -> long {
+    const long k = static_cast<long>(num(ev, "next", -1));
+    return k >= 0 && k < static_cast<long>(nextTokens.size()) ? k : -1;
+  };
+  auto applyEvent = [&](yyjson_val *ev, const std::string &when) {
+    const std::string ty = yyjson_get_str(yyjson_obj_get(ev, "type"));
     const std::string play = "{\"v\":1,\"op\":\"play\",\"id\":10,\"e\":";
     auto wheel = [&](const char *src, double value) {
       postSkippable(play + "\"wheel\",\"src\":\"" + src + "\",\"value\":" + std::to_string(value) + when, "wheel");
@@ -308,15 +346,75 @@ RunResult runFixture(const Fixture &f, const std::string &goldenDir, double sr) 
       postSkippable(play + "\"swell\",\"start\":" + (yyjson_get_bool(yyjson_obj_get(ev, "start")) ? "true" : "false") +
                         when,
                     "swell");
-    else
+    else if (ty == "transpose")  // page.js: setTranspose(semis), read by the next note call
+      postSkippable("{\"v\":1,\"op\":\"song\",\"id\":13,\"transpose\":" + str(yyjson_obj_get(ev, "semis")) + "}",
+                    "event transpose");
+    else if (ty == "keyContext")
+      postSkippable("{\"v\":1,\"op\":\"song\",\"id\":13,\"key\":{\"pc\":" + str(yyjson_obj_get(ev, "pc")) +
+                        ",\"minor\":" + (yyjson_get_bool(yyjson_obj_get(ev, "minor")) ? "true" : "false") + "}}",
+                    "event keyContext");
+    else if (ty == "routing") {  // Model::setRouting is a T14 skeleton that cannot report "unimplemented": listed
+      postSkippable("{\"v\":1,\"op\":\"song\",\"id\":13,\"routing\":" + str(yyjson_obj_get(ev, "routing")) + when,
+                    "event routing");
+      skipped.insert("event routing (T14)");
+    } else if (ty == "panic")
+      post(play + "\"panic\"" + when);
+    else if (ty == "fadeOut")
+      postSkippable(play + "\"fade\",\"seconds\":" + str(yyjson_obj_get(ev, "seconds")) + when, "event fadeOut");
+    else if (ty == "monoOut")
+      postSkippable(std::string("{\"v\":1,\"op\":\"config\",\"id\":14,\"mono\":") +
+                        (yyjson_get_bool(yyjson_obj_get(ev, "on")) ? "true" : "false") + "}",
+                    "event monoOut");
+    else if (ty == "eqAudition") {
+      sink.msgs.clear();
+      post("{\"v\":1,\"op\":\"config\",\"id\":15,\"eqAudition\":{\"slot\":" + str(yyjson_obj_get(ev, "slot")) +
+           ",\"mode\":" + str(yyjson_obj_get(ev, "mode")) + "}" + when);
+      for (const auto &r : sink.msgs)
+        if (r.find("\"eqAudition\":true") == std::string::npos) skipped.insert("event eqAudition");
+    } else if (ty == "retainReverb" || ty == "commit") {
+      const long k = nextIdx(ev);
+      if (k < 0) {
+        skipped.insert("event " + ty + " (no setup.next)");
+        return;
+      }
+      if (ty == "retainReverb" || yyjson_get_bool(yyjson_obj_get(ev, "retain")))
+        postSkippable("{\"v\":1,\"op\":\"cache\",\"id\":16,\"action\":\"retainReverb\",\"patches\":[" +
+                          nextPatches[static_cast<size_t>(k)] + "]}",
+                      "event retainReverb");
+      if (ty == "commit")
+        postSkippable("{\"v\":1,\"op\":\"commit\",\"id\":17,\"token\":" +
+                          std::to_string(nextTokens[static_cast<size_t>(k)]) + when,
+                      "event commit");
+    } else
       skipped.insert("event " + ty);
+  };
+  std::vector<std::pair<std::int64_t, yyjson_val *>> deferred;  // (boundary frame, event) for `live` types
+  for (yyjson_val *ev : evs) {
+    const char *type = yyjson_get_str(yyjson_obj_get(ev, "type"));
+    if (!type) continue;
+    if (live.count(type)) {
+      const auto q = static_cast<std::int64_t>(RIG_QUANTUM_FRAMES);
+      const auto f0 = static_cast<std::int64_t>(std::ceil(num(ev, "t", 0.0) * sr - 1e-9));
+      deferred.emplace_back((f0 + q - 1) / q * q, ev);
+      continue;
+    }
+    applyEvent(ev, ",\"when\":" + str(yyjson_obj_get(ev, "t")) + "}");
   }
-  // 5. render
+  // 5. render (deferred `live` events are posted when the render reaches their boundary)
   const size_t frames = static_cast<size_t>(std::ceil(seconds * sr));
   res.channels.assign(2, std::vector<float>(frames));
   float *out[2] = {res.channels[0].data(), res.channels[1].data()};
+  size_t di = 0;
   for (size_t done = 0; done < frames;) {  // odd chunking on purpose: exercises the FIFO the same as one call
-    const size_t n2 = std::min<size_t>(frames - done, 4096);
+    while (di < deferred.size() && deferred[di].first <= static_cast<std::int64_t>(done)) {
+      char w[64];
+      std::snprintf(w, sizeof w, ",\"when\":%.17g}", static_cast<double>(deferred[di].first) / sr);
+      applyEvent(deferred[di].second, w);
+      ++di;
+    }
+    size_t n2 = std::min<size_t>(frames - done, 4096);
+    if (di < deferred.size())
+      n2 = std::min<size_t>(n2, static_cast<size_t>(deferred[di].first) - done);
     float *p[2] = {out[0] + done, out[1] + done};
     rig_offline_render(e, p, 2, static_cast<uint32_t>(n2));
     done += n2;

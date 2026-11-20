@@ -25,7 +25,7 @@ enum RigExternal {
     }
 }
 
-final class RigNavigationDelegate: NSObject, WKNavigationDelegate {
+final class RigNavigationDelegate: NSObject, WKNavigationDelegate, WKUIDelegate {
     weak var host: RigHost?
     private var terminations: [Date] = []
 
@@ -48,8 +48,20 @@ final class RigNavigationDelegate: NSObject, WKNavigationDelegate {
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         let now = Date()
         terminations = terminations.filter { now.timeIntervalSince($0) < 60 } + [now]
-        NSLog("rig: web content process terminated (%d in the last minute)", terminations.count)
+        NSLog("rig: web content process terminated (%ld in the last minute)", terminations.count)
         host?.webContentDidTerminate(loop: terminations.count >= 3)
+    }
+
+    /// New-window requests (target=_blank, window.open) that decidePolicyFor did not already cancel: never create a
+    /// second web view; http(s)/mailto open outside. Belt and braces for WebKit versions that skip the policy call
+    /// for new windows [verify on the Mac] (WAVE0B_REVIEW S6).
+    func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+                 for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+        let external = ["http", "https", "mailto"]
+        if let url = navigationAction.request.url, external.contains(url.scheme?.lowercased() ?? "") {
+            RigExternal.open(url)
+        }
+        return nil
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

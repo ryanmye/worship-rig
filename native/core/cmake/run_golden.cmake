@@ -12,6 +12,11 @@ foreach(id ${id_list})
   execute_process(COMMAND "${NODE}" "${REPO}/tools/golden/compare.mjs" "${id}" "${OUT}/${id}.wav"
                   RESULT_VARIABLE rc OUTPUT_VARIABLE o ERROR_VARIABLE o)
   message(STATUS "${o}")
+  # compare.mjs exits 0 for a fixture whose golden WAV is absent (native/golden/out/ is git-ignored): report it so
+  # ctest marks the test SKIPPED (SKIP_REGULAR_EXPRESSION in CMakeLists.txt) instead of a vacuous pass (WAVE0B V5)
+  if(o MATCHES "[ \t]missing[\r\n]")
+    message(STATUS "GOLDEN-MISSING ${id}: regenerate with `node tools/golden/render.mjs`")
+  endif()
   if(NOT rc EQUAL 0)
     message(FATAL_ERROR "golden compare failed for ${id}")
   endif()

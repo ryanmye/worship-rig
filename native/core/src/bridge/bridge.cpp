@@ -161,15 +161,26 @@ void opPlay(Engine &e, const Req &r) {
   const std::string k = ev;
   const double when = getWhen(r.m);
   bool done = false;
+  Model &m = e.model();
   if (k == "on")
-    done = e.model().noteOn(static_cast<int>(getNum(r.m, "n", 60)), static_cast<int>(getNum(r.m, "vel", 100)), when);
+    done = m.noteOn(static_cast<int>(getNum(r.m, "n", 60)), static_cast<int>(getNum(r.m, "vel", 100)), when,
+                    yyjson_obj_get(r.m, "touch"));
   else if (k == "off")
-    done = e.model().noteOff(static_cast<int>(getNum(r.m, "n", 60)), when);
+    done = m.noteOff(static_cast<int>(getNum(r.m, "n", 60)), when);
   else if (k == "panic") {
-    e.model().panic(when);
+    m.panic(when);
     done = true;
+  } else if (k == "pedal") {  // bool-returning skeletons answer {ok:false} until T14 implements them
+    done = m.sustain(yyjson_is_true(yyjson_obj_get(r.m, "down")), when);
+  } else if (k == "wheel") {
+    const char *src = getStr(r.m, "src");
+    done = m.setWheel(src ? src : "mod", getNum(r.m, "value", 0.0), when, getNum(r.m, "glide", 0.0));
+  } else if (k == "swell") {
+    yyjson_val *s = yyjson_obj_get(r.m, "start");
+    done = m.swell(s && yyjson_is_bool(s) ? (yyjson_get_bool(s) ? 1 : 0) : -1, when);
   } else {
-    return fail(e, r, "unsupported", "play: '" + k + "' is not implemented in the T00 skeleton (T14)");
+    // bend / fade / input: void Model skeletons (T14); kept `unsupported` so callers and the golden runner can tell
+    return fail(e, r, "unsupported", "play: '" + k + "' is not implemented yet (T14)");
   }
   ok(e, r, done ? "{\"ok\":true}" : "{\"ok\":false}");
 }
@@ -178,14 +189,153 @@ void opGet(Engine &e, const Req &r) {
   const char *what = getStr(r.m, "what");
   if (!what) return fail(e, r, "bad-request", "get: what required");
   const std::string w = what;
+  Model &m = e.model();
+  std::string res;
   if (w == "state")
-    ok(e, r, e.model().stateJson());
+    res = m.stateJson();
   else if (w == "stats")
-    ok(e, r, e.statsJson());
+    res = e.statsJson();
   else if (w == "devices")
-    ok(e, r, e.deviceListJson());
+    res = e.deviceListJson();
+  else if (w == "instruments") {
+    if (yyjson_is_true(yyjson_obj_get(r.m, "reload"))) m.reloadManifests();
+    res = m.listInstruments();
+  } else if (w == "sampleStatus")
+    res = m.sampleStatus(yyjson_obj_get(r.m, "patches"));
+  if (res.empty()) return fail(e, r, "unsupported", "get: '" + w + "' has no provider in this build");
+  ok(e, r, res);
+}
+
+// ---- ops whose bodies live in module services (WAVE0B_REVIEW V1: SETUP_REVIEW 1(f) "bridge op dispatch -> Model
+// methods, one per contract member"). An EMPTY Model result or a missing service = reply `unsupported`, so the
+// golden runner keeps reporting what is not implemented. T08 owns this file and refines it.
+
+/** Reply `unsupported` unless the named service is registered. */
+bool needService(Engine &e, const Req &r, const char *name) {
+  if (e.model().service(name)) return true;
+  fail(e, r, "unsupported", "op '" + r.op + "': no '" + std::string(name) + "' module in this build");
+  return false;
+}
+
+void opSong(Engine &e, const Req &r) {  // contract order: transpose, routing, tempo, timeSig, key
+  Model &m = e.model();
+  const double when = getWhen(r.m);
+  if (yyjson_val *v = yyjson_obj_get(r.m, "transpose"); v && yyjson_is_num(v))
+    m.setTranspose(static_cast<int>(std::lround(yyjson_get_num(v))));
+  if (yyjson_val *v = yyjson_obj_get(r.m, "routing"); v && yyjson_is_obj(v)) m.setRouting(v, when);
+  if (yyjson_val *v = yyjson_obj_get(r.m, "tempo")) {
+    if (yyjson_is_null(v))
+      m.setTempo(0);
+    else if (yyjson_is_num(v))
+      m.setTempo(yyjson_get_num(v));
+  }
+  if (const char *sig = getStr(r.m, "timeSig")) m.setTimeSig(sig, yyjson_is_true(yyjson_obj_get(r.m, "newBar")));
+  if (yyjson_val *k = yyjson_obj_get(r.m, "key"); k && yyjson_is_obj(k))
+    m.setKeyContext(static_cast<int>(getNum(k, "pc", 0)), yyjson_is_true(yyjson_obj_get(k, "minor")));
+  ok(e, r, "{}");
+}
+
+void opClick(Engine &e, const Req &r) {
+  const char *action = getStr(r.m, "action");
+  if (!action) return fail(e, r, "bad-request", "click: action required");
+  if (!needService(e, r, ClickService::kName)) return;
+  Model &m = e.model();
+  const std::string a = action;
+  const double when = getWhen(r.m);
+  std::string res;
+  if (a == "start")
+    res = m.clickStart(static_cast<int>(getNum(r.m, "countIn", 0)), yyjson_is_true(yyjson_obj_get(r.m, "quietAfter")),
+                       when);
+  else if (a == "stop")
+    res = std::string("{\"wasRunning\":") + (m.clickStop(when) ? "true" : "false") + "}";
+  else if (a == "config")
+    res = m.setClick(r.m, when);
   else
-    fail(e, r, "unsupported", "get: '" + w + "' is not implemented in the T00 skeleton");
+    return fail(e, r, "bad-request", "click: unknown action " + a);
+  if (res.empty()) return fail(e, r, "unsupported", "click: '" + a + "' not implemented");
+  ok(e, r, res);
+}
+
+void opDrone(Engine &e, const Req &r) {  // contract order: key, files, config
+  if (!needService(e, r, DroneService::kName)) return;
+  Model &m = e.model();
+  const double when = getWhen(r.m);
+  JsonOut j;
+  j.begin();
+  if (yyjson_val *k = yyjson_obj_get(r.m, "key"); k && yyjson_is_obj(k))
+    j.kvBool("changed", m.droneSetKey(static_cast<int>(getNum(k, "pc", 0)), yyjson_is_true(yyjson_obj_get(k, "minor")),
+                                      getNum(k, "fade", -1.0), when));
+  if (yyjson_val *f = yyjson_obj_get(r.m, "files"); f && yyjson_is_arr(f)) {
+    const int n = m.droneAttachFiles(f);
+    if (n < 0) return fail(e, r, "unsupported", "drone: files not implemented");
+    j.kv("files", n);
+  }
+  if (yyjson_val *c = yyjson_obj_get(r.m, "config"); c && yyjson_is_obj(c)) m.droneConfigure(c, when);
+  j.end();
+  ok(e, r, j.take());
+}
+
+void opCache(Engine &e, const Req &r) {
+  const char *action = getStr(r.m, "action");
+  if (!action) return fail(e, r, "bad-request", "cache: action required");
+  Model &m = e.model();
+  const std::string a = action;
+  yyjson_val *patches = yyjson_obj_get(r.m, "patches");
+  std::string res;
+  if (a == "preload") {
+    const char *pin = getStr(r.m, "pin");
+    res = m.preload(patches, pin ? pin : "auto");
+  } else if (a == "estimate") {
+    res = m.estimatePreloadMB(patches);
+  } else if (a == "retainReverb") {
+    if (!needService(e, r, ReverbService::kName)) return;
+    res = std::string("{\"ok\":") + (m.retainReverb(patches) ? "true" : "false") + "}";
+  } else {
+    return fail(e, r, "bad-request", "cache: unknown action " + a);
+  }
+  if (res.empty()) return fail(e, r, "unsupported", "cache: '" + a + "' has no provider in this build");
+  ok(e, r, res);
+}
+
+void opConfig(Engine &e, const Req &r) {
+  Model &m = e.model();
+  const double when = getWhen(r.m);
+  JsonOut j;
+  j.begin();
+  if (yyjson_val *v = yyjson_obj_get(r.m, "mono"); v && yyjson_is_bool(v)) m.setMono(yyjson_get_bool(v));
+  if (yyjson_val *v = yyjson_obj_get(r.m, "lowResource"); v && yyjson_is_bool(v))
+    j.kvBool("lowResource", m.setLowResource(yyjson_get_bool(v)));
+  if (yyjson_val *a = yyjson_obj_get(r.m, "eqAudition"); a && yyjson_is_obj(a)) {
+    const char *mode = getStr(a, "mode");
+    j.kvBool("eqAudition", m.eqAudition(static_cast<int>(getNum(a, "slot", -1)), mode ? mode : "off", when));
+  }
+  if (yyjson_val *v = yyjson_obj_get(r.m, "meters"); v && yyjson_is_obj(v)) m.subscribeMeters(v);
+  if (yyjson_val *c = yyjson_obj_get(r.m, "midiClock"); c && yyjson_is_obj(c)) m.setClockPort(getStr(c, "port"));
+  j.end();
+  ok(e, r, j.take());
+}
+
+void opRec(Engine &e, const Req &r) {
+  const char *action = getStr(r.m, "action");
+  if (!action) return fail(e, r, "bad-request", "rec: action required");
+  if (!needService(e, r, RecService::kName)) return;
+  const std::string a = action;
+  std::string res;
+  if (a == "start")
+    res = e.model().recStart(r.m);
+  else if (a == "stop")
+    res = e.model().recStop();
+  else
+    return fail(e, r, "bad-request", "rec: unknown action " + a);
+  if (res.empty()) return fail(e, r, "unsupported", "rec: '" + a + "' not implemented");
+  ok(e, r, res);
+}
+
+void opMidi(Engine &e, const Req &r) {
+  if (!needService(e, r, MidiService::kName)) return;
+  const std::string res = e.model().midiOp(r.m);
+  if (res.empty()) return fail(e, r, "unsupported", "midi: not implemented");
+  ok(e, r, res);
 }
 
 }  // namespace
@@ -235,9 +385,19 @@ bool Bridge::handle(const char *json, std::size_t len) {
     else if (r.op == "get")
       opGet(e_, r);
     else if (r.op == "config")
-      ok(e_, r, "{}");  // accepted, not acted on in T00
-    else if (r.op == "cache" || r.op == "song" || r.op == "drone" || r.op == "click" || r.op == "midi" || r.op == "rec")
-      fail(e_, r, "unsupported", "op '" + r.op + "' is not implemented in the T00 skeleton");
+      opConfig(e_, r);
+    else if (r.op == "song")
+      opSong(e_, r);
+    else if (r.op == "click")
+      opClick(e_, r);
+    else if (r.op == "drone")
+      opDrone(e_, r);
+    else if (r.op == "cache")
+      opCache(e_, r);
+    else if (r.op == "rec")
+      opRec(e_, r);
+    else if (r.op == "midi")
+      opMidi(e_, r);
     else
       fail(e_, r, "unknown-op", "unknown op '" + r.op + "'");
   };

@@ -2,6 +2,8 @@
 #include <initializer_list>
 #include <string>
 #include <vector>
+
+#include "api/engine.h"
 #include "doctest.h"
 #include "helpers.h"
 
@@ -89,14 +91,48 @@ TEST_SUITE("bridge") {
     CHECK(contains(b, "\"applied\":[true,false,true]"));
   }
 
-  TEST_CASE("ops that later tasks implement answer unsupported, not silence") {
+  TEST_CASE("ops whose module is missing answer unsupported, not silence") {
+    // WAVE0B_REVIEW V1: every op dispatches to the Model; a missing service / empty result = `unsupported`.
     OfflineEngine eng;
     eng.hello();
-    for (const char *op : {"cache", "song", "drone", "click", "midi", "rec"}) {
-      const std::string r = eng.call(std::string(R"({"v":1,"id":1,"op":")") + op + "\"}");
-      CHECK(contains(r, "\"code\":\"unsupported\""));
+    rig::Model &m = reinterpret_cast<rig::Engine *>(eng.e)->model();
+    const struct {
+      const char *msg, *service;
+    } cases[] = {{R"({"v":1,"id":1,"op":"drone","key":{"pc":2,"minor":false}})", "drone"},
+                 {R"({"v":1,"id":1,"op":"click","action":"start"})", "click"},
+                 {R"({"v":1,"id":1,"op":"midi","action":"listen","ids":[]})", "midi"},
+                 {R"({"v":1,"id":1,"op":"rec","action":"stop"})", "rec"},
+                 {R"({"v":1,"id":1,"op":"cache","action":"retainReverb","patches":[]})", "reverb"}};
+    for (const auto &c : cases) {
+      if (m.service(c.service)) continue;  // a module provides it in this build
+      INFO(c.msg);
+      CHECK(contains(eng.call(c.msg), "\"code\":\"unsupported\""));
     }
-    CHECK(contains(eng.call(R"({"v":1,"op":"play","e":"wheel","id":2})"), "\"code\":\"unsupported\""));
+    CHECK(contains(eng.call(R"({"v":1,"op":"play","e":"bend","x":0.5,"id":2})"), "\"code\":\"unsupported\""));
+    CHECK(contains(eng.call(R"({"v":1,"op":"click","id":3})"), "\"code\":\"bad-request\""));
+  }
+
+  TEST_CASE("song / config reach the Model") {
+    OfflineEngine eng;
+    eng.hello();
+    rig::Model &m = reinterpret_cast<rig::Engine *>(eng.e)->model();
+    const std::string r =
+        eng.call(R"({"v":1,"id":1,"op":"song","transpose":3,"tempo":96,"timeSig":"6/8","key":{"pc":9,"minor":true}})");
+    CHECK(contains(r, "\"ok\":true"));
+    CHECK(m.song().transpose == 3);
+    CHECK(m.song().tempo == 96);
+    CHECK(m.song().sigNum == 6);
+    CHECK(m.song().keyPc == 9);
+    CHECK(m.song().keyMinor);
+    CHECK(contains(eng.call(R"({"v":1,"id":2,"op":"song","tempo":null})"), "\"ok\":true"));
+    CHECK(m.song().tempo == 0);
+    CHECK(contains(eng.call(R"({"v":1,"id":3,"op":"config","mono":true,"lowResource":true})"),
+                   "\"lowResource\":true"));
+    CHECK(m.song().mono);
+    // the builtin strip has no audition: false until T02's SlotChannel lands
+    const std::string a = eng.call(R"({"v":1,"id":4,"op":"config","eqAudition":{"slot":0,"mode":"bypass"}})");
+    CHECK(contains(a, "\"eqAudition\":"));
+    CHECK(contains(eng.call(R"({"v":1,"id":5,"op":"play","e":"wheel","src":"mod","value":0.5})"), "\"ok\":true"));
   }
 
   TEST_CASE("audio start/sleep/wake and get state/stats/devices reply") {
