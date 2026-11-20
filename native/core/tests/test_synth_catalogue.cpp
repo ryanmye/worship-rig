@@ -33,18 +33,18 @@ struct Doc {
 
 TEST_SUITE("synth-catalogue") {
   TEST_CASE("listJson() equals engine-api.json instruments.list (deep JSON equality)") {
-    const Doc api(readFile(std::string(RIG_REPO_DIR) + "/native/contract/engine-api.json"));
+    const Doc api{readFile(std::string(RIG_REPO_DIR) + "/native/contract/engine-api.json")};
     REQUIRE(api.d);
     yyjson_val *list = yyjson_obj_get(yyjson_obj_get(api.root(), "instruments"), "list");
     REQUIRE(yyjson_is_arr(list));
-    const Doc mine(std::string(rig::inst::catalogueJson()));
+    const Doc mine{std::string(rig::inst::catalogueJson())};
     REQUIRE(mine.d);
     CHECK(yyjson_arr_size(mine.root()) == yyjson_arr_size(list));
     CHECK(yyjson_equals(mine.root(), list));
   }
 
   TEST_CASE("synth.js patch tables = catalogue entries (name, group, hidden, params, gainTrimDb)") {
-    const Doc mine(std::string(rig::inst::catalogueJson()));
+    const Doc mine{std::string(rig::inst::catalogueJson())};
     REQUIRE(mine.d);
     for (std::size_t k = 0; k < rig::inst::kPatchCount; ++k) {
       const rig::inst::PatchDef &p = rig::inst::patchDef(static_cast<rig::inst::PatchId>(k));
