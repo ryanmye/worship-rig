@@ -29,6 +29,13 @@ g++ ASan+UBSan.
 |---|---|---|
 | T07 review O1 (integrator) | `src/graph/graph.cpp` `renderQuantum` steps 6–7 | The 'main' click is no longer summed into `out` before the sinks. The meter unit and `rig_meters.out_peak` see `out` without the click (the JS analysers sit on `fx.out`); the recorder gets `out + click` only when `click {record:true}`, for main **and** aux (before: always for main, only aux honoured `record`); the device/destination still gets the click (the `out` tap, so goldens are unchanged: `golden.click` bit-exact). Test `unit.click-record`. |
 
+## Comment-only edits to frozen files
+
+- `include/rig/rig_engine.h` (integrator, T08 review item 5): `rig_host` threading note: `audio_start` /
+  `audio_stop` run on the core's device thread, one at a time, in issue order, and must return (`rig_destroy`
+  joins that thread). No ABI change.
+- `src/fx/delay.h` (integrator, T05 review R1): header comment describes the kept JS Q split.
+
 ## Appends in the marked regions of frozen module headers
 
 | task | header | appended |

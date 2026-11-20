@@ -175,8 +175,13 @@ a fixture that needs a wave-2/3 instrument (V8: `pan-mono-src` moved to T15).
 ### Wave 1 results (integrator pass, 2026-11-20)
 
 Integrated tree, fresh build dirs `native/core/build-int{,-clang,-asan}` (+ `-tsan` for the runtime suites):
-@@BUILDNUMBERS@@ All 108 fixtures through `rig_render` + `compare.mjs`: **50/108 pass**, all 50 also at the exact
-tier; g++ and clang renders byte-identical (per fixture: `PARITY.md`). Frozen-interface changes: `INTERFACE_LOG.md`.
+ctest **47/47** on g++ 13 Release, clang 18 Release and g++ ASan+UBSan (no sanitizer report; 243 doctest cases, 267 080
+assertions; 0 compiler warnings under `-Werror`), g++ TSan 16/16 runtime suites (`queues offline bridge realtime runtime
+soak clock rec meter click midi dummy-module` + the two new ones) with no TSan report, plus a 120 s TSan soak (25 833
+renders, 4126/4126 replies, 13 rate changes, 0 events dropped, 0 garbage parked); `node test/run-all.mjs --only unit`
+505 pass / 0 fail / 9 skip; `compare.mjs --self-test` OK; engine-api.json up to date. All 108 fixtures through
+`rig_render` + `compare.mjs`: **50/108 pass**, all 50 also at the exact tier; g++ and clang renders byte-identical
+(per fixture: `PARITY.md`). Frozen-interface changes: `INTERFACE_LOG.md`.
 
 | task | verdict | review | done fixtures (all pass) | open items → carried to |
 |---|---|---|---|---|
