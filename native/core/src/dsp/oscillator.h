@@ -26,6 +26,11 @@ class Oscillator {
 
   /** Writes n frames for time-grid frames [frame0, frame0+n) (zeros before start / after stop). */
   void process(std::int64_t frame0, double sampleRate, float *out, std::size_t n);
+  // INTERFACE-CHANGE(T11a): additive overload for FM. `freqMod` / `detuneMod` (null = none) are the audio-rate sums
+  // of whatever is connected to the frequency / detune AudioParams (Chromium adds them to the param timeline per
+  // sample and then treats the param as sample accurate), n floats each, aligned to the quantum start.
+  void process(std::int64_t frame0, double sampleRate, float *out, std::size_t n, const float *freqMod,
+               const float *detuneMod);
 
  private:
   const PeriodicWave *wave_;
@@ -33,6 +38,7 @@ class Oscillator {
   double phase_ = 0.0;  // in table samples (Chromium virtual read index)
   double start_ = -1.0, stop_ = -1.0;
   bool finished_ = false;
+  bool playing_ = false;  // INTERFACE-CHANGE(T11a): SCHEDULED -> PLAYING happened (start-phase offset applies once)
 };
 
 }  // namespace rig::wa

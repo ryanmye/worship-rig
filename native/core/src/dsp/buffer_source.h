@@ -38,6 +38,13 @@ class BufferSource {
   double loopStart_ = 0, loopEnd_ = 0, when_ = -1, offset_ = 0, duration_ = -1, stop_ = -1;
   double pos_ = 0;  // virtual read index (buffer frames)
   bool ended_ = false;
-};
+  // INTERFACE-CHANGE(T11a): Chromium 157 state of AudioBufferSourceHandler not covered by the fields above.
+  bool playing_ = false, isGrain_ = false, durationGiven_ = false;
+  double grainOffset_ = 0, grainDuration_ = 0, playedFrames_ = 0;
+  double loopStartFrame_ = 0, loopEndFrame_ = 0;  // effective loop points in buffer frames
+  void updateLoopPoints();
+  void clampGrain();
+  float sampleAt(unsigned ch, std::uint64_t i) const;
+
 
 }  // namespace rig::wa
