@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "generator": "tools/golden/render.mjs",
- "generatedAt": "2026-11-20T05:55:42.563Z",
+ "generatedAt": "2026-11-20T06:21:32.407Z",
  "chromium": "157.0.8103.78",
  "chromiumPin": {
   "version": "157.0.8103.78",
@@ -35,9 +35,9 @@
  },
  "measures": "tools/golden/analysis.mjs (definitions in its header and native/golden/README.md)",
  "lastRun": {
-  "fixtures": 1,
+  "fixtures": 24,
   "repeat": 2,
-  "seconds": 1.5,
+  "seconds": 94.2,
   "cpus": 2
  },
  "stimuli": {
@@ -164,12 +164,12 @@
   "committedBytes": 2207860,
   "commitCapBytes": 2500000,
   "regenerate": "node tools/golden/pcm.mjs",
-  "seconds": 6.1
+  "seconds": 5.6
  },
  "tiers": {
   "exact": 68,
   "statistical": 40,
-  "exactIfPrngPorted": 41,
+  "exactIfPrngPorted": 35,
   "statisticalBandsDb": {
    "min": 1.5,
    "max": 16.4
@@ -191,7 +191,6 @@
    "v": 0.73
   },
   "envelopeCheckOff": [
-   "chorus-default-sine",
    "drone-freeze-dry",
    "drone-freeze-wet"
   ],
@@ -206,12 +205,12 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/synth-warm-pad.wav",
-   "sha256": "c353f588d1356b1087c369a016f3fc3084103d0cb5ba873eb805d6ec7e10520d",
+   "sha256": "6a9a0f58297820819ffbb8327d6addbd03861b57e55be2c28b9dbd0ddafc4986",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 335160,
    "seconds": 7.6,
-   "peak": 0.538945,
+   "peak": 0.538946,
    "peakDb": -5.369,
    "rms": 0.0426328,
    "rmsDb": -27.41,
@@ -245,10 +244,10 @@
     -104.1,
     -117.5,
     -134.6,
-    -153
+    -152.9
    ],
-   "repeatMaxAbsDiff": 0.0000035762786865234375,
-   "renderMs": 3118,
+   "repeatMaxAbsDiff": 0.0000050067901611328125,
+   "renderMs": 1640,
    "tolerance": {
     "bandsDb": 2.04,
     "bandRangeDb": 50,
@@ -640,7 +639,7 @@
     "promote": "node tools/golden/promote.mjs <native render dir> --apply"
    },
    "repeatEnvCorr": 1,
-   "repeatBandsDb": 0.004677
+   "repeatBandsDb": 0.004678
   },
   {
    "id": "synth-glass-pad",
@@ -650,12 +649,12 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/synth-glass-pad.wav",
-   "sha256": "74a48713346f6aa3669e3e8d3507daf3c771279678c5defa8254cbd7653ea2ce",
+   "sha256": "582fc59a5adbbe7d1b764bbf49daac568360f61b5eede8b4b0c8554803031502",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 357210,
    "seconds": 8.1,
-   "peak": 0.517183,
+   "peak": 0.517185,
    "peakDb": -5.727,
    "rms": 0.0475166,
    "rmsDb": -26.46,
@@ -691,8 +690,8 @@
     -114.4,
     -137
    ],
-   "repeatMaxAbsDiff": 0.000004544854164123535,
-   "renderMs": 2840,
+   "repeatMaxAbsDiff": 0.000004187226295471191,
+   "renderMs": 1685,
    "tolerance": {
     "bandsDb": 8.75,
     "bandRangeDb": 50,
@@ -1059,7 +1058,7 @@
      4,
      5
     ],
-    "bandsDb": 7.003,
+    "bandsDb": 7.002,
     "envCorr": 0.9878,
     "rmsDb": 0.4315,
     "lagMs": 0,
@@ -1072,7 +1071,7 @@
     "envCorr": 0.938,
     "envLagMs": 10,
     "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 7.003 dB, env corr 0.9878, rms 0.4315 dB)",
+    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 7.002 dB, env corr 0.9878, rms 0.4315 dB)",
     "weakWithoutPort": true,
     "exactIf": {
      "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
@@ -1094,12 +1093,12 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/synth-strings.wav",
-   "sha256": "2a267792ef6af11ff71beadbd9c2c50bb9229a4b4e7fc9fcc8bcfd7ff96c4027",
+   "sha256": "354252e272add9a63cb211e3e7c057d1462b6b566d706d1f8db5f27a30c9d838",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 282240,
    "seconds": 6.4,
-   "peak": 0.534989,
+   "peak": 0.53499,
    "peakDb": -5.433,
    "rms": 0.0579089,
    "rmsDb": -24.75,
@@ -1135,8 +1134,8 @@
     -114.4,
     -148.3
    ],
-   "repeatMaxAbsDiff": 0.0000063478946685791016,
-   "renderMs": 2435,
+   "repeatMaxAbsDiff": 0.0000035315752029418945,
+   "renderMs": 1366,
    "tolerance": {
     "bandsDb": 5.31,
     "bandRangeDb": 50,
@@ -1528,7 +1527,7 @@
     "promote": "node tools/golden/promote.mjs <native render dir> --apply"
    },
    "repeatEnvCorr": 1,
-   "repeatBandsDb": 0.004852
+   "repeatBandsDb": 0.004851
   },
   {
    "id": "synth-sub-bass",
@@ -1538,7 +1537,7 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/synth-sub-bass.wav",
-   "sha256": "cc7a169483efdfdbb0bca386feafeb2d9c0b7782035347b34fbbcb61ee53e0d8",
+   "sha256": "23c15b3697ea8e3252f1cbd2f00ca7d50da101072374970ca9b03bce7ab6ae80",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 216091,
@@ -1572,7 +1571,7 @@
     -140.9,
     -147.7,
     -153.4,
-    -155.4,
+    -155.5,
     -155.1,
     -154.1,
     -153.1,
@@ -1580,7 +1579,7 @@
     -151.5
    ],
    "repeatMaxAbsDiff": 0.000001341104507446289,
-   "renderMs": 1336,
+   "renderMs": 773,
    "tolerance": {
     "bandsDb": 8.1,
     "bandRangeDb": 50,
@@ -1972,7 +1971,7 @@
     "promote": "node tools/golden/promote.mjs <native render dir> --apply"
    },
    "repeatEnvCorr": 1,
-   "repeatBandsDb": 0.004817
+   "repeatBandsDb": 0.004818
   },
   {
    "id": "synth-soft-keys",
@@ -1982,12 +1981,12 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/synth-soft-keys.wav",
-   "sha256": "ce34afa42195ba309bc53c9be9af200f0fafb0b62465c83418a1ebfd260ca425",
+   "sha256": "4f644d5ee95ae3763332e8096c634d04edabf1c031ad187ad30e8210cd2de379",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 216091,
    "seconds": 4.9,
-   "peak": 0.412834,
+   "peak": 0.412835,
    "peakDb": -7.684,
    "rms": 0.092435,
    "rmsDb": -20.68,
@@ -1996,7 +1995,7 @@
     -61.35,
     -63.5,
     -65.45,
-    -64.09,
+    -64.1,
     -62.65,
     -62.49,
     -36.3,
@@ -2023,8 +2022,8 @@
     -89.85,
     -91.05
    ],
-   "repeatMaxAbsDiff": 0.00005870498716831207,
-   "renderMs": 1634,
+   "repeatMaxAbsDiff": 0.00005205906927585602,
+   "renderMs": 949,
    "tolerance": {
     "bandsDb": 1.5,
     "bandRangeDb": 50,
@@ -2386,12 +2385,12 @@
     "weakWithoutPort": false,
     "exactIf": null,
     "blockers": [
-     "not repeatable in Chromium itself (two renders differ by 5.9e-5 > 0.00001: audio-rate FM / input-sum order); a PRNG port alone cannot make it exact"
+     "not repeatable in Chromium itself (two renders differ by 5.2e-5 > 0.00001: audio-rate FM / input-sum order); a PRNG port alone cannot make it exact"
     ],
     "promote": null
    },
    "repeatEnvCorr": 1,
-   "repeatBandsDb": 0.005089
+   "repeatBandsDb": 0.004928
   },
   {
    "id": "synth-bell",
@@ -2401,7 +2400,7 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/synth-bell.wav",
-   "sha256": "b15360c901f314c7ca120960d16f2a87fd7dd6fece8e59bae342a424f8bbb578",
+   "sha256": "9616c78cd9fd266ca97bc098c1cd4293c439b351940cb71fe8e0f6928c394f11",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 313110,
@@ -2443,7 +2442,7 @@
     -106.9
    ],
    "repeatMaxAbsDiff": 5.066394805908203e-7,
-   "renderMs": 2297,
+   "renderMs": 1185,
    "tolerance": {
     "bandsDb": 10.6,
     "bandRangeDb": 50,
@@ -2845,19 +2844,19 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/synth-supersaw-pad.wav",
-   "sha256": "75b9b1c3890cae3237e89ef98ce7855963ea7282014fcc533407a4a0ac4f21bc",
+   "sha256": "081181df795aa083a5e44b5f1573c5bdd71f1ede874b1a240524cd1ba3771edb",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 313110,
    "seconds": 7.1,
-   "peak": 0.532257,
+   "peak": 0.532255,
    "peakDb": -5.478,
    "rms": 0.0581276,
    "rmsDb": -24.71,
    "bandsDb": [
     -103.6,
     -96.56,
-    -86.4,
+    -86.39,
     -55.2,
     -48.25,
     -53.27,
@@ -2886,8 +2885,8 @@
     -120.1,
     -152.4
    ],
-   "repeatMaxAbsDiff": 0.00000286102294921875,
-   "renderMs": 2811,
+   "repeatMaxAbsDiff": 0.00000858306884765625,
+   "renderMs": 1550,
    "tolerance": {
     "bandsDb": 1.5,
     "bandRangeDb": 50,
@@ -3254,7 +3253,7 @@
      4,
      5
     ],
-    "bandsDb": 0.8068,
+    "bandsDb": 0.8069,
     "envCorr": 0.9939,
     "rmsDb": 0.2018,
     "lagMs": 0,
@@ -3267,7 +3266,7 @@
     "envCorr": 0.944,
     "envLagMs": 10,
     "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 0.8068 dB, env corr 0.9939, rms 0.2018 dB)",
+    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 0.8069 dB, env corr 0.9939, rms 0.2018 dB)",
     "weakWithoutPort": true,
     "exactIf": {
      "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
@@ -3279,7 +3278,7 @@
     "promote": "node tools/golden/promote.mjs <native render dir> --apply"
    },
    "repeatEnvCorr": 1,
-   "repeatBandsDb": 0.005217
+   "repeatBandsDb": 0.004965
   },
   {
    "id": "synth-juno-pad",
@@ -3289,12 +3288,12 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/synth-juno-pad.wav",
-   "sha256": "24eb18265613829da0c9ef51fd60c17f35a2662fd7262cccbfbb90630934b34e",
+   "sha256": "5e930b18607f9802337c033eb32ca3945b81650ac7699c9c825a5a4f1a1e28d7",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 291060,
    "seconds": 6.6,
-   "peak": 0.512069,
+   "peak": 0.51207,
    "peakDb": -5.813,
    "rms": 0.0723946,
    "rmsDb": -22.81,
@@ -3330,8 +3329,8 @@
     -130.8,
     -152.3
    ],
-   "repeatMaxAbsDiff": 0.000008106231689453125,
-   "renderMs": 2285,
+   "repeatMaxAbsDiff": 0.00000762939453125,
+   "renderMs": 1248,
    "tolerance": {
     "bandsDb": 1.74,
     "bandRangeDb": 50,
@@ -3723,7 +3722,7 @@
     "promote": "node tools/golden/promote.mjs <native render dir> --apply"
    },
    "repeatEnvCorr": 1,
-   "repeatBandsDb": 0.004821
+   "repeatBandsDb": 0.00482
   },
   {
    "id": "synth-shimmer-pad",
@@ -3733,12 +3732,12 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/synth-shimmer-pad.wav",
-   "sha256": "7cbcd7724d9bff4be8ea32f789e5ece5eca10cd985509e2a7c2c3afa22fd27bf",
+   "sha256": "14d171dc42606f09951c76a87a531b0762bed97d02e05aa38af4e9bc92987095",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 379260,
    "seconds": 8.6,
-   "peak": 0.43857,
+   "peak": 0.438568,
    "peakDb": -7.159,
    "rms": 0.0402434,
    "rmsDb": -27.91,
@@ -3774,8 +3773,8 @@
     -112.8,
     -135
    ],
-   "repeatMaxAbsDiff": 0.000002384185791015625,
-   "renderMs": 1562,
+   "repeatMaxAbsDiff": 0.0000021457672119140625,
+   "renderMs": 1611,
    "tolerance": {
     "bandsDb": 4.46,
     "bandRangeDb": 50,
@@ -4177,17 +4176,17 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/synth-dx-epiano.wav",
-   "sha256": "37334a67130d9573d37ab218a8a0c1e4a4e4dcf1d1ae8cf0a18cd2227fb7b447",
+   "sha256": "3575ab8bcc654402d8c10241e4d25fd7496c9b702aba7a48bf02860738396e11",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 220500,
    "seconds": 5,
-   "peak": 0.737701,
+   "peak": 0.737695,
    "peakDb": -2.642,
    "rms": 0.100546,
    "rmsDb": -19.95,
    "bandsDb": [
-    -74.8,
+    -74.79,
     -72.92,
     -71.76,
     -70.97,
@@ -4218,8 +4217,8 @@
     -77.3,
     -90.26
    ],
-   "repeatMaxAbsDiff": 0.00003910064697265625,
-   "renderMs": 865,
+   "repeatMaxAbsDiff": 0.00002574920654296875,
+   "renderMs": 900,
    "tolerance": {
     "bandsDb": 2.99,
     "bandRangeDb": 50,
@@ -4586,7 +4585,7 @@
      4,
      5
     ],
-    "bandsDb": 2.391,
+    "bandsDb": 2.393,
     "envCorr": 0.9953,
     "rmsDb": 0.03902,
     "lagMs": 0,
@@ -4599,16 +4598,16 @@
     "envCorr": 0.945,
     "envLagMs": 10,
     "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 2.391 dB, env corr 0.9953, rms 0.03902 dB)",
+    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 2.393 dB, env corr 0.9953, rms 0.03902 dB)",
     "weakWithoutPort": true,
     "exactIf": null,
     "blockers": [
-     "not repeatable in Chromium itself (two renders differ by 3.9e-5 > 0.00001: audio-rate FM / input-sum order); a PRNG port alone cannot make it exact"
+     "not repeatable in Chromium itself (two renders differ by 2.6e-5 > 0.00001: audio-rate FM / input-sum order); a PRNG port alone cannot make it exact"
     ],
     "promote": null
    },
    "repeatEnvCorr": 1,
-   "repeatBandsDb": 0.004955
+   "repeatBandsDb": 0.004881
   },
   {
    "id": "synth-pluck",
@@ -4660,7 +4659,7 @@
     -123.5
    ],
    "repeatMaxAbsDiff": 4.76837158203125e-7,
-   "renderMs": 868,
+   "renderMs": 863,
    "tolerance": {
     "bandsDb": 7.19,
     "bandRangeDb": 50,
@@ -5062,7 +5061,7 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/synth-poly-stab.wav",
-   "sha256": "65d5c24772d2ec61b63c9ab83bc9baaad2e04ab15a2c46a05b43036f69257aae",
+   "sha256": "4e76e508122a3de6627898ffb71dbcb05c0903c1a71b669f01cd48759c7f7fdd",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 216091,
@@ -5104,7 +5103,7 @@
     -128.3
    ],
    "repeatMaxAbsDiff": 4.76837158203125e-7,
-   "renderMs": 918,
+   "renderMs": 886,
    "tolerance": {
     "bandsDb": 9.43,
     "bandRangeDb": 50,
@@ -5506,12 +5505,12 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/synth-analog-brass.wav",
-   "sha256": "f6256754b8c5473887ff5d82dc6b7c43ae1404db2be4769ead297e5dec4754ad",
+   "sha256": "cf48c7c5bf772d0c7245a1b6c7b53b7315f86c60be255f9215a3992a25f3f651",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 220500,
    "seconds": 5,
-   "peak": 0.466971,
+   "peak": 0.46697,
    "peakDb": -6.614,
    "rms": 0.0685812,
    "rmsDb": -23.28,
@@ -5519,8 +5518,8 @@
     -100.2,
     -101.5,
     -99.75,
-    -98.71,
-    -99.11,
+    -98.7,
+    -99.1,
     -91.51,
     -80.58,
     -46.2,
@@ -5547,8 +5546,8 @@
     -132.9,
     -143
    ],
-   "repeatMaxAbsDiff": 0.00000476837158203125,
-   "renderMs": 896,
+   "repeatMaxAbsDiff": 0.000004291534423828125,
+   "renderMs": 865,
    "tolerance": {
     "bandsDb": 8.96,
     "bandRangeDb": 50,
@@ -5940,7 +5939,7 @@
     "promote": "node tools/golden/promote.mjs <native render dir> --apply"
    },
    "repeatEnvCorr": 1,
-   "repeatBandsDb": 0.004689
+   "repeatBandsDb": 0.004722
   },
   {
    "id": "synth-square-lead",
@@ -5950,7 +5949,7 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/synth-square-lead.wav",
-   "sha256": "808b7735a669299df139d80d580033aae0ba44ed7193729c2f549b1643f289f3",
+   "sha256": "eedaba5ae18902f4f5df05312f78ff2cb6450f66041f4d4148a84b7652da4ce8",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 211680,
@@ -5991,8 +5990,8 @@
     -103.6,
     -134.9
    ],
-   "repeatMaxAbsDiff": 0.0000057220458984375,
-   "renderMs": 830,
+   "repeatMaxAbsDiff": 4.76837158203125e-7,
+   "renderMs": 891,
    "tolerance": {
     "bandsDb": 10.1,
     "bandRangeDb": 50,
@@ -6394,7 +6393,7 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/synth-808-sub.wav",
-   "sha256": "e3023a5c5d255cae722ab1f489720a8f0406b2dec5ed01c78cb41d08a1d28567",
+   "sha256": "c6dc6d6bef4a47ef9952d42a8194ab35e3eb492ff89fdece1719affba699ba88",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 216091,
@@ -6436,7 +6435,7 @@
     -153.8
    ],
    "repeatMaxAbsDiff": 4.76837158203125e-7,
-   "renderMs": 766,
+   "renderMs": 790,
    "tolerance": {
     "maxAbsDiff": 0.0002,
     "bandsDb": 0.25,
@@ -6803,7 +6802,7 @@
     "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
-   "repeatBandsDb": 0.004457
+   "repeatBandsDb": 0.004458
   },
   {
    "id": "synth-synth-bass",
@@ -6813,7 +6812,7 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/synth-synth-bass.wav",
-   "sha256": "f6fe28aaf10137e88d2327a1473c3426d36ebb189ec912c5c86b7413b3571193",
+   "sha256": "0cb5b1ed5d2aa8caeb21434cfe6237ba09ba7689a0c0e9e8ab22369f5d239973",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 211680,
@@ -6854,8 +6853,8 @@
     -123.9,
     -124.8
    ],
-   "repeatMaxAbsDiff": 4.76837158203125e-7,
-   "renderMs": 834,
+   "repeatMaxAbsDiff": 0.000002384185791015625,
+   "renderMs": 837,
    "tolerance": {
     "bandsDb": 4.58,
     "bandRangeDb": 50,
@@ -7257,7 +7256,7 @@
    "smoke": true,
    "chromium": "157.0.8103.78",
    "file": "smoke/organ-gospel.wav",
-   "sha256": "83265ef442141509222b61407805b68a48d2bc9c7d4730cbd14203febe2f0222",
+   "sha256": "a5b5b1f2f409ecfbff30105d80c48499eddb10aef64de9981e552af6c7c53c3d",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 207270,
@@ -7299,7 +7298,7 @@
     -90.13
    ],
    "repeatMaxAbsDiff": 8.046627044677734e-7,
-   "renderMs": 793,
+   "renderMs": 912,
    "tolerance": {
     "bandsDb": 5.59,
     "bandRangeDb": 50,
@@ -7691,7 +7690,7 @@
     "promote": "node tools/golden/promote.mjs <native render dir> --apply"
    },
    "repeatEnvCorr": 1,
-   "repeatBandsDb": 0.004964
+   "repeatBandsDb": 0.004965
   },
   {
    "id": "organ-soft-pad",
@@ -7701,7 +7700,7 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/organ-soft-pad.wav",
-   "sha256": "90f6be66caeab3bfd65efb939a5d0c70c7ea7739efbf07d88cea41253ea07a75",
+   "sha256": "65ded61583831296fdc625a31406cbd28a0e4c114d6190ea7b09384c17a90138",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 211680,
@@ -7743,7 +7742,7 @@
     -98.94
    ],
    "repeatMaxAbsDiff": 7.450580596923828e-7,
-   "renderMs": 786,
+   "renderMs": 840,
    "tolerance": {
     "bandsDb": 7.66,
     "bandRangeDb": 50,
@@ -8145,7 +8144,7 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/organ-full.wav",
-   "sha256": "83a10a847004323ea09b83fc95542a4772bc56c51b5ac61c2626f122fa94240b",
+   "sha256": "bb74bfe068a216fd5960ca8fb875fe83f09815095b4b7961793a32eeff1e93af",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 207270,
@@ -8187,7 +8186,7 @@
     -93.69
    ],
    "repeatMaxAbsDiff": 6.258487701416016e-7,
-   "renderMs": 932,
+   "renderMs": 855,
    "tolerance": {
     "bandsDb": 3.16,
     "bandRangeDb": 50,
@@ -8589,7 +8588,7 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/organ-church.wav",
-   "sha256": "86bfbac88db80a05960d8f250c682a50231eca71ac38d5472e13226d3d1e7b3c",
+   "sha256": "a53d32e63685808e8d7d6cc9461988f71ab6104bbb428c94ea19e4c6cd3cfb62",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 269010,
@@ -8631,7 +8630,7 @@
     -88.57
    ],
    "repeatMaxAbsDiff": 0.0000028908252716064453,
-   "renderMs": 1000,
+   "renderMs": 1084,
    "tolerance": {
     "bandsDb": 8.58,
     "bandRangeDb": 50,
@@ -9023,7 +9022,7 @@
     "promote": "node tools/golden/promote.mjs <native render dir> --apply"
    },
    "repeatEnvCorr": 1,
-   "repeatBandsDb": 0.004965
+   "repeatBandsDb": 0.004967
   },
   {
    "id": "sampler-salamander-piano",
@@ -9033,7 +9032,7 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/sampler-salamander-piano.wav",
-   "sha256": "32d1975f37df1bdba023956bdad526a05dfd32a92af279d0ff33e113c3c24447",
+   "sha256": "eeabd7b47224f542fa8a70b7855269ad4a205be81ef761c5457fa2dc9a7f0ffa",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 374850,
@@ -9074,8 +9073,8 @@
     -119.8,
     -123.6
    ],
-   "repeatMaxAbsDiff": 1.7881393432617188e-7,
-   "renderMs": 6670,
+   "repeatMaxAbsDiff": 2.384185791015625e-7,
+   "renderMs": 7517,
    "tolerance": {
     "maxAbsDiff": 0.0002,
     "bandsDb": 0.25,
@@ -9431,7 +9430,7 @@
     },
     "samplesUsed": [
      {
-      "key": "http://127.0.0.1:43535/samples/salamander-piano/v14/C4.mp3",
+      "key": "http://127.0.0.1:39729/samples/salamander-piano/v14/C4.mp3",
       "url": "/samples/salamander-piano/v14/C4.mp3",
       "frames": 667280,
       "rate": 44100,
@@ -9446,7 +9445,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:43535/samples/salamander-piano/v14/Gb2.mp3#max=30",
+      "key": "http://127.0.0.1:39729/samples/salamander-piano/v14/Gb2.mp3#max=30",
       "url": "/samples/salamander-piano/v14/Gb2.mp3",
       "frames": 881712,
       "rate": 44100,
@@ -9461,7 +9460,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:43535/samples/salamander-piano/v4/C4.mp3",
+      "key": "http://127.0.0.1:39729/samples/salamander-piano/v4/C4.mp3",
       "url": "/samples/salamander-piano/v4/C4.mp3",
       "frames": 682520,
       "rate": 44100,
@@ -9476,7 +9475,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:43535/samples/salamander-piano/v4/Gb2.mp3#max=30",
+      "key": "http://127.0.0.1:39729/samples/salamander-piano/v4/Gb2.mp3#max=30",
       "url": "/samples/salamander-piano/v4/Gb2.mp3",
       "frames": 837158,
       "rate": 44100,
@@ -9491,7 +9490,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:43535/samples/salamander-piano/v9/C4.mp3",
+      "key": "http://127.0.0.1:39729/samples/salamander-piano/v9/C4.mp3",
       "url": "/samples/salamander-piano/v9/C4.mp3",
       "frames": 682978,
       "rate": 44100,
@@ -9506,7 +9505,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:43535/samples/salamander-piano/v9/Eb4.mp3#max=30",
+      "key": "http://127.0.0.1:39729/samples/salamander-piano/v9/Eb4.mp3#max=30",
       "url": "/samples/salamander-piano/v9/Eb4.mp3",
       "frames": 612948,
       "rate": 44100,
@@ -9521,7 +9520,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:43535/samples/salamander-piano/v9/Gb3.mp3",
+      "key": "http://127.0.0.1:39729/samples/salamander-piano/v9/Gb3.mp3",
       "url": "/samples/salamander-piano/v9/Gb3.mp3",
       "frames": 654583,
       "rate": 44100,
@@ -9774,7 +9773,7 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/sampler-ep-rhodes.wav",
-   "sha256": "b010b18ad90818d411d693f6b1485889fcaeacd5cf5976410af005e04be9a225",
+   "sha256": "24074b36eff9f2eec98cc014e7157a1d19af831c806a850d7df24ecd31130118",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 374850,
@@ -9816,7 +9815,7 @@
     -161
    ],
    "repeatMaxAbsDiff": 5.960464477539063e-8,
-   "renderMs": 1916,
+   "renderMs": 2078,
    "tolerance": {
     "maxAbsDiff": 0.0002,
     "bandsDb": 0.25,
@@ -10172,7 +10171,7 @@
     },
     "samplesUsed": [
      {
-      "key": "http://127.0.0.1:43535/samples/ep-rhodes/B3.mp3",
+      "key": "http://127.0.0.1:39729/samples/ep-rhodes/B3.mp3",
       "url": "/samples/ep-rhodes/B3.mp3",
       "frames": 137984,
       "rate": 44100,
@@ -10183,7 +10182,7 @@
       "monoFix": null
      },
      {
-      "key": "http://127.0.0.1:43535/samples/ep-rhodes/C4.mp3",
+      "key": "http://127.0.0.1:39729/samples/ep-rhodes/C4.mp3",
       "url": "/samples/ep-rhodes/C4.mp3",
       "frames": 137984,
       "rate": 44100,
@@ -10194,7 +10193,7 @@
       "monoFix": null
      },
      {
-      "key": "http://127.0.0.1:43535/samples/ep-rhodes/D4.mp3",
+      "key": "http://127.0.0.1:39729/samples/ep-rhodes/D4.mp3",
       "url": "/samples/ep-rhodes/D4.mp3",
       "frames": 137984,
       "rate": 44100,
@@ -10205,7 +10204,7 @@
       "monoFix": null
      },
      {
-      "key": "http://127.0.0.1:43535/samples/ep-rhodes/E4.mp3",
+      "key": "http://127.0.0.1:39729/samples/ep-rhodes/E4.mp3",
       "url": "/samples/ep-rhodes/E4.mp3",
       "frames": 137984,
       "rate": 44100,
@@ -10216,7 +10215,7 @@
       "monoFix": null
      },
      {
-      "key": "http://127.0.0.1:43535/samples/ep-rhodes/G2.mp3",
+      "key": "http://127.0.0.1:39729/samples/ep-rhodes/G2.mp3",
       "url": "/samples/ep-rhodes/G2.mp3",
       "frames": 137936,
       "rate": 44100,
@@ -10227,7 +10226,7 @@
       "monoFix": null
      },
      {
-      "key": "http://127.0.0.1:43535/samples/ep-rhodes/G3.mp3",
+      "key": "http://127.0.0.1:39729/samples/ep-rhodes/G3.mp3",
       "url": "/samples/ep-rhodes/G3.mp3",
       "frames": 137984,
       "rate": 44100,
@@ -24862,17 +24861,17 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/drone-synth-2keys.wav",
-   "sha256": "8c796d79da8f86a02cbf1434dac283d27f292b9de1863429c85af1ecc8984099",
+   "sha256": "bfde3f1380184b267ad3b0935bc03970f7dd1982d38357ae2d4e0780c8c3de1e",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 441000,
    "seconds": 10,
-   "peak": 0.242428,
+   "peak": 0.242429,
    "peakDb": -12.31,
    "rms": 0.0462823,
    "rmsDb": -26.69,
    "bandsDb": [
-    -110.5,
+    -110.4,
     -103.4,
     -76.23,
     -66.69,
@@ -24903,8 +24902,8 @@
     -148.4,
     -162.6
    ],
-   "repeatMaxAbsDiff": 0.000003632158041000366,
-   "renderMs": 1806,
+   "repeatMaxAbsDiff": 0.000003859400749206543,
+   "renderMs": 2166,
    "tolerance": {
     "bandsDb": 3.31,
     "bandRangeDb": 50,
@@ -25182,7 +25181,7 @@
     "promote": "node tools/golden/promote.mjs <native render dir> --apply"
    },
    "repeatEnvCorr": 1,
-   "repeatBandsDb": 0.004848
+   "repeatBandsDb": 0.004849
   },
   {
    "id": "drone-synth-stage",
@@ -25192,19 +25191,19 @@
    "smoke": false,
    "chromium": "157.0.8103.78",
    "file": "out/drone-synth-stage.wav",
-   "sha256": "8495d63008e16d8774ecbf448d6e4a79457b982419ff5b71c5e81817817ba4b3",
+   "sha256": "cb96d9d39685c8ea77967a5e045ea4fa6d022b936e5a1f4a5d67b8de50043934",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 352800,
    "seconds": 8,
-   "peak": 0.154709,
+   "peak": 0.154708,
    "peakDb": -16.21,
    "rms": 0.0176654,
    "rmsDb": -35.06,
    "bandsDb": [
     -111,
     -95.22,
-    -80.12,
+    -80.13,
     -79.44,
     -71.75,
     -62.45,
@@ -25233,8 +25232,8 @@
     -145.3,
     -160
    ],
-   "repeatMaxAbsDiff": 0.0000014307443052530289,
-   "renderMs": 1141,
+   "repeatMaxAbsDiff": 0.000001669861376285553,
+   "renderMs": 1232,
    "tolerance": {
     "bandsDb": 6.63,
     "bandRangeDb": 50,
@@ -25524,7 +25523,7 @@
     "promote": "node tools/golden/promote.mjs <native render dir> --apply"
    },
    "repeatEnvCorr": 1,
-   "repeatBandsDb": 0.006346
+   "repeatBandsDb": 0.006379
   },
   {
    "id": "drone-freeze-dry",
