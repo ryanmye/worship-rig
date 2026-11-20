@@ -20,7 +20,8 @@ const char *smoothingText(int idx) {
 const ParamRow *findParam(std::string_view path, int *slot, bool *dynamic) {
   if (dynamic) *dynamic = false;
   std::string norm(path);
-  // T00c D3: slots.<i> with i = 0..15 (decimal, no leading zero; was 0..3). engine-api.json params.grammar.path.
+  // INTERFACE-CHANGE(T00c) D3: slots.<i> with i = 0..15 (decimal, no leading zero; was 0..3).
+  // engine-api.json params.grammar.path.
   std::size_t digits = 0;
   int si = -1;
   if (path.size() > 8 && path.compare(0, 6, "slots.") == 0) {

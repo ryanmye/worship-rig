@@ -496,11 +496,11 @@ void Engine::emitState(const char *state, bool restarted) {
 const char *Engine::requestAudio(const std::string &action, const std::string &deviceId, double latency,
                                  std::uint32_t bufferFrames) {
   const bool restart = action == "restart" || action == "output";
-  if (bufferFrames) {  // T00c D2: kept across restarts; takes effect at the next (re)open
+  if (pending_ && restart) return "busy";  // contract 6.2 `busy`: a restart while the device is still opening
+  if (bufferFrames) {  // T00c D2: kept across restarts; takes effect at the next (re)open (not after a `busy`)
     bufferReq_ = bufferFrames;
     bufferExplicit_ = true;
   }
-  if (pending_ && restart) return "busy";  // contract 6.2 `busy`: a restart while the device is still opening
   if (pending_ || (action == "start" && started_.load(std::memory_order_acquire))) {
     emitState(devState_, false);  // start is idempotent (the JS start() promise is memoised): report, no new open
     return "";
@@ -600,7 +600,7 @@ void Engine::hostAudioStarted(const rig_device_info &info) {
   const std::string id = info.device_id ? info.device_id : "";
   const double lat = info.output_latency_sec > 0 ? info.output_latency_sec : 0.0;
   // T00c D2: the granted host block; the host's output latency includes its own buffering, the core adds what its
-  // 128-frame FIFO holds back for a block that is not a multiple of 128 (64 -> 64 frames, 441 -> 71, 256 -> 0)
+  // 128-frame FIFO holds back for a block that is not a multiple of 128 (64 -> 64 frames, 441 -> 127, 256 -> 0)
   const std::uint32_t grant = info.buffer_frames;  // in rig_device_info since API 1.0
   const double residue = grant ? fifoResidue(grant) / sr : 0.0;
   onControl([this, id, lat, sr, grant, residue] {

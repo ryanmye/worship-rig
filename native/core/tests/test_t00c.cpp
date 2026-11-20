@@ -322,7 +322,9 @@ TEST_SUITE("t00c") {
     CHECK(rig::Engine::fifoResidue(128) == 0);
     CHECK(rig::Engine::fifoResidue(192) == 64);
     CHECK(rig::Engine::fifoResidue(256) == 0);
-    CHECK(rig::Engine::fifoResidue(441) == 71);
+    CHECK(rig::Engine::fifoResidue(441) == 127);  // worst residue of the cycle, not the first one (71)
+    CHECK(rig::Engine::fifoResidue(96) == 96);
+    CHECK(rig::Engine::fifoResidue(0) == 0);
     CHECK(rig::Engine::fifoResidue(512) == 0);
   }
 
@@ -451,7 +453,8 @@ TEST_SUITE("t00c") {
     }
     MESSAGE("iPad reverb after each switch: worst total " << worst / 1048576.0 << " MB (kernels "
                                                           << worstKernels / 1048576.0 << " MB, slot state up to "
-                                                          << slotState / 1048576.0 << " MB), cap 32 MB; during a crossfade "
+                                                          << slotState / 1048576.0
+                                                          << " MB), cap 32 MB; during a crossfade "
                                                           << worstFade / 1048576.0 << " MB");
     CHECK(slotState > 0);        // state is counted now
     CHECK(worst <= pool->maxBytes());

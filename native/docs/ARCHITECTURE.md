@@ -309,14 +309,14 @@ Measured on the Linux box (2 vCPU, g++ 13 -O3, offline render, 48 kHz) unless ma
 | engine **pin budget** | 892 MB (85 % of hard; the controller's 600 MB binds first) | **272 MB** | `CacheServiceImpl::withinPinBudget`: request order, rest unpinned, `stats.pinsDropped` |
 | 16 sampler slots, worst case (est.) | 16 largest instruments = 1410 samples × 1.75 MB ≈ **2.47 GB** | ≈ **1.23 GB** int16 | above the hard cap: the later slots' samples are refused (silent notes + `warn memory`); 1.75 MB = T06's measured mean, the 30 s piano variants are larger (Mac/iPad: measure) |
 | 4 sampler slots, worst case (est.) | ≈ 620 MB | ≈ 310 MB | fits both profiles (1.x behaviour) |
-| reverb, kernels **+ slot state** (T04 finding 1) | 160 MB cap | **32 MB** cap; measured worst after hall/cathedral/wash switches: **27.7 MB** (19.0 MB kernels, ≤ 13.2 MB slot state) | `ReverbPool::bytes()` counts `ConvUnit::bytes()` of every occupied slot; over the cap, Idle slots are released (LRU) before kernels |
+| reverb, kernels **+ slot state** (T04 finding 1) | 160 MB cap | **32 MB** cap; measured worst after hall/cathedral/wash switches: **30.2 MB** (14.1 MB kernels, ≤ 16.1 MB slot state), also during the crossfades (T00c review: evict at the swap; 35.1 MB before) | `ReverbPool::bytes()` counts `ConvUnit::bytes()` of every occupied slot; over the cap, Idle slots are released (LRU) before kernels |
 | graph (fixed, all 105 unit slots, rings) | 1.63 MB (`sizeof(Graph)`) | same | command heap 512 KB, garbage ring 1 MB; slot accumulators 8 KB |
 | voice pools (D1: 128 per slot) | 16 slots × 128 voices × voice size; retiring channels add up to 32 more instruments | same | T11/T12: keep per-voice state small. The test voice (one `wa::Param`, 6.7 KB with its 64-event buffer) is 865 KB per instrument = 13.8 MB for 16 slots; a real voice with several 6.7 KB params would be tens of MB |
 | CPU: 4 slots, idle strips | 67-70 µs per 128-frame quantum (2.6 % of 2667 µs) | Mac/iPad list | |
 | CPU: 16 slots, idle strips | 90-100 µs (3.6 %) | Mac/iPad list | +2 µs per extra idle strip |
 | CPU: 16 slots × 8 test voices | 420-480 µs (17 %) | Mac/iPad list | test voice ≈ 2.2 µs per voice per quantum (sine + a-rate envelope) |
 | CPU: 16 slots × 64 test voices | **2430 µs (91 %)** | Mac/iPad list | real synth/sampler voices cost several test voices (T11/T12 bench): 16 × 64 cannot run on one core, hence the global ceiling question (DECISIONS D1, open) |
-| host buffer (D2) | 64 / 128 / 256 / 512 frames | same, OS may round | FIFO residue (128 − b mod 128) mod 128 frames added to the reported latency; at 64 every other callback renders a quantum (worst `rig_render` at 64 here: 450 µs of a 1333 µs callback under the test) |
+| host buffer (D2) | 64 / 128 / 256 / 512 frames | same, OS may round | FIFO residue (at most 128 − gcd(b, 128) frames) added to the reported latency; at 64 every other callback renders a quantum (worst `rig_render` at 64 here: 450 µs of a 1333 µs callback under the test) |
 
 Engine resident target on a 4 GB iPad stays ≤ 450 MB: 320 MB samples (hard) + 32 MB reverb + voice pools + graph +
 code; the voice pools are the open term (T11/T12 report their per-voice size).

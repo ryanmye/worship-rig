@@ -91,9 +91,18 @@ class Engine final : public CommandSink {
    *  the host granted (rig_device_info.buffer_frames; 0 = not reported yet). */
   std::uint32_t bufferFramesRequested() const { return bufferReq_; }
   std::uint32_t bufferFramesGranted() const { return bufferGrant_; }
-  /** Frames the 128-frame FIFO holds back for a host block of `b` frames: (128 - b mod 128) mod 128. */
-  static std::uint32_t fifoResidue(std::uint32_t b) { return (RIG_QUANTUM_FRAMES - b % RIG_QUANTUM_FRAMES) %
-                                                                RIG_QUANTUM_FRAMES; }
+  /** Most frames the 128-frame FIFO holds back after a host block of `b` frames: 128 - gcd(b, 128), 0 for a
+   *  multiple of 128 (64 -> 64, 192 -> 64, 441 -> 127; T00c review: the residue cycles through every multiple of the
+   *  gcd, so (128 - b mod 128) mod 128 is only its value after the first block). */
+  static std::uint32_t fifoResidue(std::uint32_t b) {
+    std::uint32_t g = RIG_QUANTUM_FRAMES;  // gcd(b, 128) by Euclid (b = 0: 128, no residue)
+    for (std::uint32_t x = b; x != 0;) {
+      const std::uint32_t t = g % x;
+      g = x;
+      x = t;
+    }
+    return (RIG_QUANTUM_FRAMES - g) % RIG_QUANTUM_FRAMES;
+  }
   /** `audio sleep|wake` (engine side: suspend/resume rendering after the Model's ramp). */
   bool sleepAudio(double ramp);
   bool wakeAudio(double ramp);
