@@ -221,3 +221,21 @@ The test wants music-box collapsed to 1 channel with L/R difference ≤ 1e-6. On
 with L and R up to 6.95e-5 apart, so it stays stereo. Probably a decoder difference (macOS vs Linux mp3 decode) on a
 file that is dual-mono at the source: the threshold may need to sit above decoder noise (about 1e-4), or the test
 should not require music-box specifically. Inaudible either way; it only costs the memory saving on that instrument.
+
+## L11-7 shell Electron: 4 failures when another Worship Rig holds port 8438 (environment; preflight added)
+
+**Status:** fixed locally (test-only). Mac full run on `29eb984` (2026-11-20): 14/15. Every suite but shell passed,
+including soak 12/12 (`peakDecodedMB` max 699.9 of 700, untouchable 509, pinned 370, max pinned 513.9 / 600). Shell
+had 4 failures, all from the installed 1.0.1 app (a login item) listening on 127.0.0.1:8438:
+- `boots…`, `window.rig bridge`, `zero console errors`: `8439 !== 8438`, because the test build fell back to 8439 (M5).
+- L14 ⌘H `windowVisibleAppHide`: `[false, true, false]` (an extra hide after `app.show()`), presumably the other app
+  taking activation back.
+
+With the installed app quit, `node test/phase1/shell/run.mjs --only electron` (screen unlocked) passed 23/23 in 3 of 3
+runs, so the ⌘H extra `false` only happens with a second Worship Rig running. It is not an app bug: two Rigs at once
+isn't a supported setup.
+
+Fix: `test/port-preflight.mjs`. `run-all` (8437, 8438) and the shell runner (8438, when the Electron files run) stop
+with exit 2 and a "quit the running Worship Rig" message instead of producing misleading failures.
+`RIG_ALLOW_BUSY_PORT=1` overrides. Checked with a port held (both exit 2, unit-only shell unaffected) and free
+(unit 406 pass).
