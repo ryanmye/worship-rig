@@ -223,6 +223,10 @@ TEST_SUITE("master-dsp") {
     CHECK(std::fabs(t[5] - 3.33) < 0.01);
     CHECK(std::fabs(20 * std::log10(m) - 1.10) < 0.01);
     CHECK(rig::master::glueRefDb(t, 0.35) == doctest::Approx(t[3] + (t[4] - t[3]) * 0.5).epsilon(1e-9));
+    // the pinned constants are exactly what the native measurement renders (the JS measures at 44.1 kHz always)
+    CHECK(rig::master::measureCompMakeup(44100.0) == m);
+    const auto live = rig::master::measureGlueRef(44100.0);
+    for (std::size_t k = 0; k < t.size(); ++k) CHECK(live[k] == t[k]);
   }
 
   TEST_CASE("compressor look-ahead and silence") {

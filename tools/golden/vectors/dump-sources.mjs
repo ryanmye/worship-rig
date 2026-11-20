@@ -90,6 +90,16 @@ add('osc-detune-neg1200', { k: 'osc', sr: 44100, frames: 4096, type: 'square', f
 add('osc-freq-negative', { k: 'osc', sr: 44100, frames: 4096, type: 'sawtooth', freq: -330, start: 0 });
 add('osc-freq-negative-low', { k: 'osc', sr: 44100, frames: 4096, type: 'triangle', freq: -2.1, start: 0 });
 add('osc-freq-above-nyquist', { k: 'osc', sr: 44100, frames: 4096, type: 'sine', freq: 30000, start: 0 });
+// T11a review: the frequency param is clipped to +-Nyquist BEFORE detune (k-rate, a-rate and the FM input sum)
+add('osc-freq-above-nyquist-detune', { k: 'osc', sr: 44100, frames: 4096, type: 'sawtooth', freq: 30000,
+  detune: -1200, start: 0 });
+add('osc-freq-above-nyquist-arate-detune', { k: 'osc', sr: 44100, frames: 4096, type: 'sine', freq: 18000,
+  start: 0, fEv: [['set', 18000, 0], ['lin', 40000, 0.05]], dEv: [['set', -1900, 0], ['lin', -1800, 0.09]] });
+add('osc-freq-above-nyquist-detune-ramp', { k: 'osc', sr: 44100, frames: 4096, type: 'sawtooth', freq: 30000,
+  start: 0, dEv: [['set', -1200, 0], ['lin', -1100, 0.09]] });
+// depth kept small: the modulator's own table error (2.4e-7 relative, FFT deviation) is integrated x depth
+add('osc-fm-above-nyquist-detune', { k: 'osc', sr: 48000, frames: 4096, type: 'sine', freq: 23500, start: 0,
+  dEv: [['set', -1200, 0], ['lin', -1150, 0.09]], fm: { f: 50, depth: 2000 } });
 add('osc-freq-ramp', { k: 'osc', sr: 44100, frames: 4096, type: 'sawtooth', freq: 100, start: 0,
   fEv: [['set', 100, 0], ['lin', 2000, 0.05]] });
 add('osc-freq-exp-ramp-sine', { k: 'osc', sr: 44100, frames: 4096, type: 'sine', freq: 50, start: 0,

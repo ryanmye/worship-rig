@@ -90,14 +90,25 @@ std::array<double, kGlueGrid + 1> measureGlueRef(double sr) {
   return out;
 }
 
+// The JS measures both at 44.1 kHz whatever the context rate, so on the native kernels they are constants. Pinned
+// here (measureCompMakeup(44100) / measureGlueRef(44100), bit-identical on g++ 13 and clang 18) instead of measured
+// at the first MasterChain construction: that runs on the control thread inside `audio start` and took ~0.28 s
+// (Release) / ~1 s (ASan) on the 2-CPU box, stalling every reply behind it. tests/test_master_dsp.cpp re-measures
+// and requires bit equality, so a kernel change (or another platform's libm) cannot drift silently.
+namespace {
+constexpr double kCompMakeup44k = 0x1.22b3fb3f31395p+0;
+constexpr std::array<double, kGlueGrid + 1> kGlueRef44k = {
+    -0x1.037c0fb725f7ep-13, 0x1.10b0f83b0cd44p-4, 0x1.c8f66e11c8ba5p-2, 0x1.3b982723a97dfp+0,
+    0x1.1cdb3cf50aa16p+1,   0x1.aa59d844fa055p+1, 0x1.20c4d20826cf7p+2, 0x1.6fdcbf8c481p+2,
+    0x1.c16729e36e65ap+2,   0x1.03e12d17886c5p+3, 0x1.0e11599f76b36p+3};
+}  // namespace
+
 double compMakeup() {
-  static const double m = measureCompMakeup(44100.0);  // the JS measures at 44.1 kHz whatever the context rate
-  return m;
+  return kCompMakeup44k;
 }
 
 const std::array<double, kGlueGrid + 1> &glueRefTable() {
-  static const std::array<double, kGlueGrid + 1> t = measureGlueRef(44100.0);
-  return t;
+  return kGlueRef44k;
 }
 
 double glueRefDb(const std::array<double, kGlueGrid + 1> &table, double a) {

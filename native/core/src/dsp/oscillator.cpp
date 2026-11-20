@@ -232,13 +232,19 @@ void Oscillator::process(std::int64_t frame0, double sampleRate, float *out, std
   const bool freqSA = freq_.hasSampleAccurateValues(frame0, sampleRate) || freqMod != nullptr;
   const bool detSA = detune_.hasSampleAccurateValues(frame0, sampleRate) || detuneMod != nullptr;
   float freqFinal = 0, detFinal = 0;
+  // Chromium's frequency AudioParam has the nominal range [-Nyquist, Nyquist]: its timeline values, its FinalValue()
+  // and the sum with connected inputs are clipped to it BEFORE the detune multiplier is applied (30 kHz at 48 kHz with
+  // detune -1200 plays 12 kHz in Chromium 157, not 15 kHz). freq_ is built without that range (the sample rate is not
+  // known at construction), so the clip is done here (T11a review).
+  const float nyq = sr / 2;
   if (freqSA) {
     hasSA = hasFreqChanges = true;
     freq_.processARate(frame0, sampleRate, pinc, n);
     if (freqMod)
       for (std::size_t i = 0; i < n; ++i) pinc[i] += freqMod[i];
+    for (std::size_t i = 0; i < n; ++i) pinc[i] = clampFrequency(pinc[i], nyq);
   } else {
-    freqFinal = freq_.processKRate(frame0, sampleRate);
+    freqFinal = clampFrequency(freq_.processKRate(frame0, sampleRate), nyq);
     finalScale *= freqFinal;
   }
   if (detSA) {
@@ -256,11 +262,10 @@ void Oscillator::process(std::int64_t frame0, double sampleRate, float *out, std
     finalScale *= detuneToMultiplier(detFinal);
   }
   if (hasSA) {
-    const float nyquist = sr / 2;
-    for (std::size_t i = 0; i < n; ++i) pinc[i] = clampFrequency(pinc[i], nyquist);
+    for (std::size_t i = 0; i < n; ++i) pinc[i] = clampFrequency(pinc[i], nyq);
     for (std::size_t i = 0; i < n; ++i) pinc[i] *= finalScale;
   } else {
-    frequency = clampFrequency(freqFinal * detuneToMultiplier(detFinal), sr / 2);
+    frequency = clampFrequency(freqFinal * detuneToMultiplier(detFinal), nyq);
   }
 
   double vri = phase_;

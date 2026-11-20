@@ -1,5 +1,6 @@
-// Master chain constants and the two start-up measurements of the JS engine (app/js/engine/fx.js), computed once per
-// process on the control side (never on the audio thread):
+// Master chain constants and the two start-up measurements of the JS engine (app/js/engine/fx.js). Both are fixed
+// at 44.1 kHz in the JS, so compMakeup() / glueRefTable() return the native measurement pinned as constants (no
+// render at construction); measureCompMakeup / measureGlueRef recompute them (tests check bit equality):
 //   compMakeup()   measureCompMakeup: the catcher's automatic makeup on a -30 dBFS 1 kHz sine (linear, ~ +1.10 dB)
 //   glueRefDb()    measureGlueRef: total glue gain (dB) on a 1 kHz sine at amplitude .1, amounts 0, .1, ..., 1
 //   clipCurve()    fx.js clipCurve(16384): soft ceiling at -0.3 dBFS over x in [-2, 2] (rig::js math, bit-exact)
