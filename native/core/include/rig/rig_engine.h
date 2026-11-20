@@ -201,9 +201,10 @@ typedef struct rig_host {
   /* ---- added by T00c (DECISIONS D2); read only when struct_size covers the member ---- */
   /**
    * Like audio_start, with the host buffer size the user picked (`audio {bufferFrames}`: 64 | 128 | 256 | 512; 0 =
-   * never asked: the host's default, as audio_start). Used instead of audio_start when non-NULL. The host asks the OS for that size (macOS AUHAL
-   * kAudioDevicePropertyBufferFrameSize, iPad AVAudioSession setPreferredIOBufferDuration = frames / rate) and
-   * reports what it got in rig_device_info.buffer_frames (the OS may round it). Same threading as audio_start.
+   * never asked: the host's default, as audio_start). Used instead of audio_start when non-NULL. The host asks the
+   * OS for that size (macOS AUHAL kAudioDevicePropertyBufferFrameSize, iPad AVAudioSession
+   * setPreferredIOBufferDuration = frames / rate) and reports what it got in rig_device_info.buffer_frames (the OS
+   * may round it). Same threading as audio_start.
    * Hosts without it get audio_start with latency_sec = buffer_frames / sample rate when `latency` was not given.
    */
   void (*audio_start_frames)(void *user, const char *device_id, double latency_sec, uint32_t channels,

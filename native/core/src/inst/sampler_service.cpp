@@ -153,10 +153,10 @@ Unit *SamplerService::build(const UnitEnv &env, const UnitSpec &spec) {
     yyjson_doc_free(doc);
   }
 
-  // an older unit of this channel is being replaced: its late samples are no longer wanted
-  for (auto &old : loads_)
-    if (old->channel == spec.channel) old->cancelled = true;
-
+  // Loads of an older unit on this channel are NOT cancelled here: a build may come from a prepare that is superseded
+  // or not committed yet, and the unit still playing must keep receiving its samples. A late table that reaches a
+  // newer unit is rejected by instSeq (SamplerOp::Zones) and comes back as Garbage; onCommit cancels the loads of
+  // channels that no longer hold a sampler.
   auto ld = std::make_shared<Load>();
   ld->instSeq = spec.instSeq;
   ld->channel = spec.channel;
