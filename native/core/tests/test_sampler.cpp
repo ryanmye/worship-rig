@@ -3,6 +3,7 @@
 // swap, VoiceEnded, bend, tone, the allocation trap). The fixture samples are the JS suite's own
 // (test/phase1/engine/fixtures: test-keys soft/loud C4 + A4 WAVs, test-mp3 C4), served from a temporary app dir whose
 // manifest names them by absolute path.
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
@@ -514,5 +515,30 @@ TEST_SUITE("sampler") {
     INFO("held ", held, " override ", db(rms(da, 0.6, 0.8)), " long ", db(rms(dbb, 0.6, 0.8)));
     CHECK(db(rms(da, 0.6, 0.8)) < held - 60);
     CHECK(db(rms(dbb, 0.6, 0.8)) > held - 6);
+  }
+
+  TEST_CASE("cost per 128-frame block (printed; no timing assertion on a shared box)") {
+    auto c4 = loadWav(fixtures() + "/test-keys/loud/C4.wav", 60);  // stereo? the test files are what they are
+    for (const bool multi : {false, true}) {
+      for (const int voices : {1, 16, 64}) {
+        auto *z = new rig::SamplerZones();
+        z->layers.push_back({0, 127, {{60, c4.get()}}});
+        rig::SamplerSetup s;
+        s.multiLayer = multi;  // single-layer sets run a per-voice velocity LPF
+        rig::SamplerInstrument u(s, z, kSR);
+        u.setVoiceCap(128);
+        UnitRig r(u);
+        for (int i = 0; i < voices; ++i) u.noteOn(40 + i % 40, 100, 100 / 127.0f, 0);
+        r.quantum();
+        const int blocks = 300;  // < 1 s: every voice still sounds (the 2.4 s file repitched at most 2x)
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int b = 0; b < blocks; ++b) r.quantum();
+        const double us =
+            std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count() / blocks;
+        CHECK(u.liveVoices() == static_cast<unsigned>(voices));
+        MESSAGE("sampler ", multi ? "multi-layer " : "single-layer (voice LPF) ", voices, " voices: ", us,
+                " us per 128-frame block (", 100 * us / (128e6 / 48000), " % of a 48 kHz block)");
+      }
+    }
   }
 }
