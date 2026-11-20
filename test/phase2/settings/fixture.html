@@ -23,7 +23,9 @@
   const [{ createStore }, { FACTORY_SONGS }, { AudioEngine }, { MidiInput }, { Recorder }, { createController, engineLatency }] = await Promise.all([
     import('/app/js/store.js'),
     import('/app/js/presets.js'),
-    q.get('engine') === 'bridge-mock' ? import('/app/js/engine-bridge/boot-mock.js') : import('/app/js/engine/index.js'),
+    q.get('engine') === 'bridge-mock'
+      ? import('/app/js/engine-bridge/boot-mock.js')
+      : import('/app/js/engine/index.js'),
     import('/app/js/midi.js'),
     import('/app/js/recorder.js'),
     import('/app/js/controller.js'),

@@ -472,11 +472,15 @@ try {
         await ev(() => window.__rig.theme.pending);
         await page.waitForFunction((tid) => document.documentElement.dataset.theme === tid, id);
         await ev(() => window.__rig.ctx.closeSettings());
+        // 2.0 Settings restructure: the theme cards now sit over Perform's setlist chips, so the pointer left on the
+        // card would compare a :hover chip; park it on the window's corner for every snapshot
+        await page.mouse.move(0, 0);
         await ev(() => document.fonts.ready);
         await sleep(400);
       };
       await storeTheme('classic');
       await ev(() => window.__rig.store.set('settings.view', 'perform'));
+      await page.mouse.move(0, 0);
       await sleep(400);
       const base = await look();
       assert.ok(Object.keys(base).length > 100, `walked ${Object.keys(base).length} entries`);

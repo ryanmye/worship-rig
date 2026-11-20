@@ -2,9 +2,9 @@
 // A modal panel over the current view. 2.0 (native DECISIONS "Settings page restructure"): one category at a time
 // behind a sidebar tab list (SETTINGS_CATEGORIES; a horizontal strip when the dialog is narrow), rarely used rows
 // under an "Advanced" disclosure at the end of their category. Everything persisted goes through
-// ctx.store.set('settings.*') (the controller reacts: latency → engine.restart, output → setSinkId, mono → setMono,
-// MIDI input → midi.select, 2.0 voices / buffer / voice limit → the bridge engine); transient actions (restart audio,
-// MIDI learn, pads) go through ctx.controller.
+// ctx.store.set('settings.*') (the controller reacts: latency → engine.restart, output → setSinkId,
+// mono → setMono, MIDI input → midi.select, 2.0 voices / buffer / voice limit → the bridge engine); transient
+// actions (restart audio, MIDI learn, pads) go through ctx.controller.
 import { loadComponents, markDialog } from './_fallback-components.js';
 import { LEARNABLE, ROLE_DEFAULTS } from '../shared/params.js';
 import { noteName } from '../shared/music.js';

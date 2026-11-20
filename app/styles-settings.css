@@ -303,4 +303,7 @@
 /* settings.dynamicRange (Ryan 2026-11-20): the Range slider above the keyboard list */
 .st-kb-range { display: grid; gap: 2px; margin: 8px 0 12px; }
 /* phones / very narrow windows: the dialog takes the whole width */
-@media (max-width: 600px) { .st-host { padding: 8px; } .st-dialog { max-height: calc(100vh - 16px); height: calc(100vh - 16px); } }
+@media (max-width: 600px) {
+  .st-host { padding: 8px; }
+  .st-dialog { max-height: calc(100vh - 16px); height: calc(100vh - 16px); }
+}
