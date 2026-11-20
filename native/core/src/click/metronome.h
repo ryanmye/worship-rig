@@ -92,8 +92,10 @@ class Metronome {
   const Stats &stats() const { return stats_; }
   /** The pump's horizon (end of the scheduled window). */
   double horizon() const { return horizon_; }
-  /** The engine re-attached the click unit (rate change): reschedule from now. */
-  void resetHorizon(double now) { horizon_ = now; }
+  /** The engine re-attached the click unit (rate change): the old unit's scheduled clicks went with it, so the
+   *  ticks of [now, horizon) are scheduled again on the new one. The horizon stays: the MIDI clock pulses of that
+   *  window were already sent and must not be sent twice. */
+  void rescheduleTicks(double now);
 
  private:
   void pump(double now);

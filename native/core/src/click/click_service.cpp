@@ -230,11 +230,11 @@ void ClickServiceImpl::onSongState(const SongState &s) {
 
 void ClickServiceImpl::onAudioEvent(const AudioEvent &e) {
   if (e.kind != EventKind::RateChanged || !attached()) return;
-  // The click tables are built at the unit's rate: rebuild the unit, restore its level, re-pump from now (the
-  // clicks the old unit had scheduled go back with it).
+  // The click tables are built at the unit's rate: rebuild the unit, restore its level and schedule the clicks
+  // the old unit had (they go back with it) again; the MIDI clock of that window is not re-sent.
   if (!m_.attachUnit(UnitSlot::Click, kKindClick, -1.0)) return;
   m_.setParamAt(UnitSlot::Click, kClickLevel, met_.level(), -1.0);
-  if (met_.running()) met_.resetHorizon(m_.now());
+  met_.rescheduleTicks(m_.now());
 }
 
 std::string ClickServiceImpl::statsFields() {

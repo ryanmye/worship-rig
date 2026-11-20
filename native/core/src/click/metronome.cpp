@@ -195,6 +195,16 @@ void Metronome::pump(double now) {
   });
 }
 
+void Metronome::rescheduleTicks(double now) {
+  live_.clear();
+  if (!grid_ || !(horizon_ > now)) return;
+  grid_->ticks(now, horizon_, [&](const Tick &k) {
+    if (quietAfter_ && !k.countIn) return;
+    h_.scheduleTick(k.t, k.kind);
+    live_.push_back(k.t);
+  });
+}
+
 std::size_t Metronome::liveCount() {
   const double now = h_.now();
   while (!live_.empty() && live_.front() + kClickLenSec <= now) live_.pop_front();

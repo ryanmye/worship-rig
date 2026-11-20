@@ -107,6 +107,10 @@ bool MidiServiceImpl::ports(const char *json, std::size_t len) {
   if (!table_.update(json, len, vanished)) return false;
   for (const std::string &id : vanished) {  // midi.js 'disconnected': release that input's notes and pedal
     router_.releaseSource(*this, id, -1.0);
+    // midi.js _parse.delete(id): the parser is keyed by rig_midi_in's uint16, which is T08's MidiPortTable index
+    // (its order can differ from this table's: it also interns ids rig_midi_in saw before any report)
+    for (std::size_t w = 0; w < kMaxPorts; ++w)
+      if (portIdOf(m_, table_, static_cast<std::uint16_t>(w)) == id) parser_.reset(static_cast<std::uint32_t>(w));
     parser_.reset(table_.wireId(id));
     parser_.reset(PortTable::legacyHash(id));
   }
