@@ -1,5 +1,7 @@
-// Settings (SPEC §10 Settings, §13). mountSettings(el, ctx) → { destroy, open(), close() }.
-// A modal panel over the current view. Everything persisted goes through ctx.store.set('settings.*') (the controller
+// Settings (SPEC §10 Settings, §13). mountSettings(el, ctx) → { destroy, open({section}), close() }.
+// A modal panel over the current view. 2.0 (native DECISIONS "Settings page restructure"): one category at a time
+// behind a sidebar tab list (SETTINGS_CATEGORIES; a horizontal strip when the dialog is narrow), rarely used rows
+// under an "Advanced" disclosure at the end of their category. Everything persisted goes through ctx.store.set('settings.*') (the controller
 // reacts: latency → engine.restart, output → setSinkId, mono → setMono, MIDI input → midi.select); transient actions
 // (restart audio, MIDI learn, pads) go through ctx.controller.
 import { loadComponents, markDialog } from './_fallback-components.js';
@@ -11,6 +13,7 @@ import { mountHotkeys, mountUpdates } from './settings-mac.js';
 import { mountKeyboards } from './settings-keyboards.js';
 import { clickSettingsOf } from '../shared/click-math.js';
 import { mountGarageBandImport } from './settings-import.js';
+import { POLYPHONY_CHOICES, BUFFER_FRAMES_CHOICES, VOICE_LIMIT_CHOICES, sound2Of } from '../store.js';
 
 const C = await loadComponents();
 
@@ -55,6 +58,37 @@ export const LEARN_MESSAGES = Object.freeze({
   'sustain-pedal-reserved': 'That’s the sustain pedal — it always sustains and can’t be mapped. Use another knob, fader, pedal or pad.',
 });
 export const GARAGEBAND_DOC = 'docs/garageband-import.md';
+
+/**
+ * 2.0 Settings categories, in sidebar order. `mac`: only in the Mac app (rig.isElectron); in Chrome its Menu bar
+ * section (mini panel, low-resource) sits in Look instead.
+ */
+export const SETTINGS_CATEGORIES = Object.freeze([
+  Object.freeze({ id: 'sound', label: 'Sound' }),
+  Object.freeze({ id: 'keyboards', label: 'Keyboards & MIDI' }),
+  Object.freeze({ id: 'samples', label: 'Sounds & Samples' }),
+  Object.freeze({ id: 'look', label: 'Look' }),
+  Object.freeze({ id: 'library', label: 'Library & Backup' }),
+  Object.freeze({ id: 'mac', label: 'Mac', mac: true }),
+  Object.freeze({ id: 'about', label: 'About' }),
+]);
+/**
+ * open({section}) names that are not a category id or a [data-section] of the page → the [data-section] they mean.
+ * Callers keep their old names (main.js 'backups', perform.js 'pads', quickSheet 'appearance', scenes 'midi' are
+ * data-sections already); these cover the rest of the 1.x vocabulary.
+ */
+export const SECTION_ALIASES = Object.freeze({
+  theme: 'appearance', themes: 'appearance', light: 'appearance', chips: 'perform', 'perform-view': 'perform',
+  backup: 'backups', import: 'backups', export: 'backups', restore: 'backups',
+  output: 'audio', latency: 'audio', voices: 'voices', polyphony: 'voices', buffer: 'voices', 'voice-limit': 'voices',
+  metronome: 'click', 'midi-clock': 'click', touch: 'midi', pedal: 'midi',
+  'computer-keyboard': 'keyboard', 'midi-learn': 'learn', 'my-pads': 'pads', 'my-samples': 'samples',
+  garageband: 'samples', menu: 'menubar', 'menu-bar': 'menubar', hotkeys: 'menubar', shortcuts: 'menubar',
+  'low-resource': 'menubar', lowresource: 'menubar', login: 'menubar', 'mini-panel': 'menubar',
+  update: 'updates', version: 'about', diag: 'diagnostics',
+});
+/** Last category a viewer picked (per browser profile and port, like the theme mirror). */
+export const LAST_CATEGORY_KEY = 'worship-rig.settings.category';
 
 /**
  * Settings › MIDI line while Web MIDI is not available (polish-2A, "## l3" UI follow-up). 'pending' is Chrome's
@@ -259,12 +293,49 @@ export function mountSettings(el, ctx) {
     if (isOpen) close();
   };
   const closeBtn = btn('Close', requestClose, { class: 'st-close', 'aria-label': 'Close settings' });
-  const colA = h('div.st-col');
-  const colB = h('div.st-col');
-  const body = h('div.st-body', {}, colA, colB);
+  // 2.0 restructure: a tab list (role=tablist, roving tabindex, arrows move and select) and one tabpanel per category
+  // inside the scrolling .st-body; only the selected panel is shown
+  const cats = SETTINGS_CATEGORIES.filter((c) => !c.mac || isElectron);
+  const uid = titleId.slice(9);
+  const nav = h('div.st-nav', { role: 'tablist', 'aria-label': 'Settings categories', 'aria-orientation': 'vertical',
+    'data-testid': 'settings-nav' });
+  const body = h('div.st-body');
+  const tabs = new Map(); // category id → tab button
+  const panels = new Map(); // category id → tabpanel
+  const advs = new Map(); // category id → its "Advanced" <details>
+  for (const c of cats) {
+    const tab = h('button.st-tab', {
+      type: 'button', role: 'tab', id: `st-tab-${c.id}-${uid}`, 'aria-selected': 'false',
+      'aria-controls': `st-panel-${c.id}-${uid}`, tabindex: -1, 'data-cat': c.id, 'data-testid': `settings-tab-${c.id}`,
+      on: { click: () => showCategory(c.id, { remember: true }) },
+    }, c.label);
+    const panel = h('div.st-panel', { role: 'tabpanel', id: `st-panel-${c.id}-${uid}`, 'aria-labelledby': tab.id,
+      'data-cat': c.id, 'data-testid': `settings-panel-${c.id}`, hidden: true });
+    tabs.set(c.id, tab);
+    panels.set(c.id, panel);
+    nav.append(tab);
+    body.append(panel);
+  }
+  /** Append to a category's panel, before its Advanced disclosure (which stays last). */
+  const place = (cat, ...nodes) => {
+    const panel = panels.get(cat);
+    const adv = advs.get(cat) || null;
+    for (const n of nodes.flat()) if (n) panel.insertBefore(n, adv);
+  };
+  /** Rows that are rarely changed go in one "Advanced" disclosure at the end of their category (closed each open). */
+  const advanced = (cat, ...nodes) => {
+    let d = advs.get(cat);
+    if (!d) {
+      d = h('details.st-adv', { 'data-adv': cat, 'data-testid': `settings-advanced-${cat}` },
+        h('summary.st-adv-sum', { text: 'Advanced' }), h('div.st-adv-body'));
+      advs.set(cat, d);
+      panels.get(cat).append(d);
+    }
+    d.lastElementChild.append(...nodes.flat().filter(Boolean));
+  };
   const dialog = h('div.st-dialog', { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId, tabindex: -1 },
     h('header.st-head', {}, h('h1.st-title', { id: titleId, text: 'Settings' }), closeBtn),
-    body,
+    h('div.st-main', {}, nav, body),
   );
   const backdrop = h('div.st-backdrop', { 'aria-hidden': 'true' });
   el.classList.add('st-host');
@@ -356,6 +427,7 @@ export function mountSettings(el, ctx) {
             : ''
           : 'Switching output restarts audio in this browser.',
     );
+    outputNote.hidden = !outputNote.textContent; // an empty line would still take a row gap
   }
   async function askLabels() {
     // Chrome only reveals output labels after a media permission; open and immediately stop a stream.
@@ -416,20 +488,75 @@ export function mountSettings(el, ctx) {
   settingBinds.push({ key: 'click', apply: renderClickSettings });
   settingBinds.push({ key: 'outputDeviceId', apply: () => renderClickSettings() });
 
-  colA.append(
-    h('section.st-section', { 'aria-label': 'Audio' },
+  // ---- 2.0 Sound (native DECISIONS D1, D2, D4): voices per sound, buffer size, total voice limit. Always stored; the
+  // controller sends them to the 2.0 engine (status.audioConfig.native) and the web engine ignores them, so there a
+  // one-line note says so. The granted buffer and Auto's number come back through controller.status.audioConfig.
+  const sound2Seg = (key, values, label, testid, name = String) => {
+    const c = C.segmented({ label, options: values.map((v) => ({ value: v, label: name(v) })),
+      onChange: (v) => store.set(`settings.${key}`, v) });
+    c.el.dataset.bind = `settings.${key}`;
+    c.el.dataset.testid = testid;
+    comps.push(c);
+    const apply = (s) => c.set(sound2Of(s)[key]);
+    settingBinds.push({ key, apply });
+    apply(S());
+    return c;
+  };
+  const polySeg = sound2Seg('polyphony', POLYPHONY_CHOICES, 'Voices per sound', 'setting-polyphony');
+  const bufSeg = sound2Seg('bufferFrames', BUFFER_FRAMES_CHOICES, 'Buffer size', 'setting-buffer-frames');
+  const limitSeg = sound2Seg('voiceLimit', VOICE_LIMIT_CHOICES, 'Total voice limit', 'setting-voice-limit',
+    (v) => (v === 'auto' ? 'Auto' : v === 'off' ? 'Off' : String(v)));
+  const engineNote = h('p.st-hint.st-engine-note', { 'data-testid': 'settings-engine-note', hidden: true,
+    text: 'Voices, buffer size and the voice limit apply with the 2.0 engine.' });
+  const bufInfo = h('span.st-status.st-buffer-info', { 'data-testid': 'setting-buffer-granted' });
+  const limitInfo = h('span.st-status.st-limit-info', { 'data-testid': 'setting-voice-limit-effective' });
+  /** @param {object} st controller.status */
+  function renderSound2(st = controller.status || {}) {
+    const a = st.audioConfig || {};
+    const native = !!a.native;
+    engineNote.hidden = native;
+    const want = sound2Of(S());
+    const got = native && Number.isFinite(a.bufferFrames) ? a.bufferFrames : null;
+    const rate = Number(engine?.ctx?.sampleRate) || 48000;
+    const ms = Number(st.latencyMs) || 0;
+    // D2: the OS may round the request (iPad), so the line shows what the device actually runs at
+    setText(bufInfo, got === null ? ''
+      : `${got === want.bufferFrames ? '' : `Device gave ${got}. `}${(got / rate * 1000).toFixed(1)} ms per buffer`
+        + `${ms ? ` · ${Math.round(ms)} ms to the speakers` : ''}`);
+    const eff = native && Number.isFinite(a.voiceLimitEffective) ? a.voiceLimitEffective : null;
+    setText(limitInfo, eff === null || want.voiceLimit !== 'auto' ? '' : eff === 0 ? 'Auto: no limit here'
+      : `Auto: ${eff} voices on this device`);
+  }
+  for (const key of ['bufferFrames', 'voiceLimit']) settingBinds.push({ key, apply: () => renderSound2() });
+
+  place('sound',
+    h('section.st-section', { 'aria-label': 'Audio', 'data-section': 'audio' },
       h('h2.st-h2', { text: 'Audio' }),
-      row('Latency', h('div.st-inline', {}, seg('latency', LATENCY_OPTS, 'Latency').el, latencyInfo), 'Lower = more responsive; raise it if you hear crackles. Changing it restarts audio for a moment.'),
-      latencyWarn.el,
-      row('Output device', h('div.st-inline', {}, outputSelect, labelsBtn), null),
+      row('Output', h('div.st-inline', {}, outputSelect, labelsBtn), null),
       outputNote,
-      row('Mono output', tog('monoOutput', 'Mono').el, 'Sum to mono for a single speaker or a mono PA feed.'),
-      row('Audio engine', restartBtn, 'Use if sound stops or after changing audio hardware.'),
+      row('Latency', h('div.st-inline', {}, seg('latency', LATENCY_OPTS, 'Latency').el, latencyInfo),
+        'Lower is snappier. Raise it if you hear crackles.'),
+      latencyWarn.el,
+      row('Audio engine', restartBtn, 'If sound stops, or after plugging in new audio gear.'),
       asleepNote,
-      row('Click output', clickOut.el, 'Where Perform’s Click plays.'),
-      clickOutHint,
-      row('Record the click', clickRec.el, 'Off: recordings have the music only.'),
     ),
+    h('section.st-section.st-voices', { 'aria-label': 'Voices and buffer', 'data-section': 'voices' },
+      h('h2.st-h2', { text: 'Voices and buffer' }),
+      engineNote,
+      row('Voices per sound', polySeg.el, 'Notes one sound can hold at once.'),
+      row('Buffer size', h('div.st-inline', {}, bufSeg.el, bufInfo), 'Frames. Smaller is snappier, larger is safer.'),
+    ),
+    h('section.st-section', { 'aria-label': 'Click', 'data-section': 'click' },
+      h('h2.st-h2', { text: 'Click' }),
+      row('Click output', clickOut.el, null),
+      clickOutHint,
+    ),
+  );
+  advanced('sound',
+    row('Mono output', tog('monoOutput', 'Mono').el, 'For a single speaker or a mono PA feed.'),
+    row('Total voice limit', h('div.st-inline', {}, limitSeg.el, limitInfo),
+      'All sounds together, so the audio never falls behind. Auto suits this device.'),
+    row('Record the click', clickRec.el, 'Off: recordings have the music only.'),
   );
 
   // =============================================================================================================

@@ -32,7 +32,7 @@
 // status.memory = {mode, decodedMB, pinnedMB, capMB, budgetMB, setMB, windowMB, pinnedSongs, note}.
 // l8 (local soak L-8): the ±radius window is a byte budget too. Current song first, then neighbours by distance while
 // the pinned total stays ≤ PIN_BUDGET_MB; one {pin:'replace'} per switch; a warn if pinnedMB ever passes capMB.
-import { transposeSemisOf, audioSleepSecOf, COMPUTER_KEYBOARD } from './store.js';
+import { transposeSemisOf, audioSleepSecOf, COMPUTER_KEYBOARD, sound2Of } from './store.js';
 import { compileTouch } from './shared/touch-curve.js';
 import { transposeSemis, mod12, keyName } from './shared/music.js';
 import { PARAMS, isValidPath, isLearnButton, faderTaper, inverseTaper, SLOT_COUNT } from './shared/params.js';
@@ -290,6 +290,11 @@ export function createController(o) {
     // v11-metronome: on = the click transport runs (counting = still in the count-in); available = the current song
     // has a tempo; output = the routing in effect ('main' | 'aux'); midiClock = the chosen output name (null = off)
     click: { on: false, counting: false, available: false, output: 'main', midiClock: null, midiClockConnected: false },
+    // 2.0 Sound (native DECISIONS D1, D2, D4): native = the engine takes voices / buffer / voice limit (the bridge
+    // engine); the rest is what it reported (bufferFrames = granted, voiceLimitEffective = Auto's number, 0 = off;
+    // null = not reported). The web engine leaves native false: the settings are stored only.
+    audioConfig: { native: false, polyphony: null, bufferFrames: null, bufferRequested: null, voiceLimit: null,
+      voiceLimitEffective: null },
   };
   function setStatus(patch) {
     let changed = false;
@@ -2034,9 +2039,51 @@ export function createController(o) {
     return name;
   }
 
+  // ---- 2.0 Sound (native DECISIONS D1, D2, D4)
+  // settings.polyphony / voiceLimit → config {polyphony} / {voiceLimit}; settings.bufferFrames →
+  // audio {bufferFrames}
+  // through restartAudio(), so the song is re-applied and a running take is split like any restart. Only the bridge
+  // engine has the setters; the web engine (the 1.x oracle: 16/32 voices, Web Audio's own buffer) must not change.
+  const SOUND2_SETTERS = Object.freeze({ polyphony: 'setPolyphony', voiceLimit: 'setVoiceLimit',
+    bufferFrames: 'setBufferFrames' });
+  const engineTakesSound2 = () => !!engine
+    && Object.values(SOUND2_SETTERS).every((n) => typeof engine[n] === 'function');
+  function takeAudioConfig(cfg) {
+    if (!cfg || typeof cfg !== 'object') return;
+    const next = { ...status.audioConfig, native: true };
+    for (const k of ['polyphony', 'bufferFrames', 'bufferRequested', 'voiceLimit', 'voiceLimitEffective']) {
+      if (k in cfg) next[k] = cfg[k] ?? null;
+    }
+    setStatus({ audioConfig: next });
+  }
+  /**
+   * Send one 2.0 Sound setting to the engine (a no-op on the web engine).
+   * @param {'polyphony'|'voiceLimit'|'bufferFrames'} key
+   * @param {object} s settings
+   * @param {{restart?:boolean}} [o] bufferFrames: restart audio now (false at start-up: engine.start() carries it)
+   */
+  function applySound2(key, s, { restart = true } = {}) {
+    if (secondary || !engineTakesSound2()) return;
+    const v = sound2Of(s)[key];
+    if (key === 'bufferFrames') {
+      optional('setBufferFrames', v, { restart: false }); // recorded synchronously; the restart sends it
+      if (restart) restartAudio();
+      return;
+    }
+    const r = optional(SOUND2_SETTERS[key], v);
+    if (r && typeof r.then === 'function') {
+      r.then(takeAudioConfig, (err) => warn(`engine.${SOUND2_SETTERS[key]} failed: ${err && err.message}`));
+    }
+  }
+
   // ---- settings reactions
   function onSetting(key, s) {
     switch (key) {
+      case 'polyphony':
+      case 'voiceLimit':
+      case 'bufferFrames':
+        applySound2(key, s);
+        break;
       case 'latency':
         restartAudio();
         break;
@@ -2439,6 +2486,7 @@ export function createController(o) {
       listen(engine, 'wheel', (e) => onEngineWheel(e.detail));
       listen(engine, 'sleep', (e) => onEngineSleep(e.detail || {})); // lowres2
       listen(engine, 'click', (e) => onEngineClick(e.detail)); // v11-metronome
+      listen(engine, 'audioconfig', (e) => takeAudioConfig(e.detail)); // 2.0 Sound: granted buffer, Auto's limit
       for (const type of ['wheel', 'notes', 'chord', 'loading', 'ready']) listen(engine, type, (e) => emit(type, e.detail));
       listen(engine, 'warn', (e) => emit('warn', { message: (e.detail && e.detail.message) || String(e.detail), source: 'engine' }));
     }
@@ -2456,9 +2504,15 @@ export function createController(o) {
     const libInfo = store.loadInfo;
     if (libInfo.status === 'corrupt' || libInfo.status === 'future-schema') secureUnreadableLibrary();
 
+    if (engineTakesSound2()) {
+      setStatus({ audioConfig: { ...status.audioConfig, native: true } });
+      applySound2('bufferFrames', settings(), { restart: false }); // 2.0 D2: the first start asks for it
+    }
     const r = call('start');
     if (r && typeof r.then === 'function') await r.catch((err) => warn(`audio start failed: ${err && err.message}`));
     const s = settings();
+    applySound2('polyphony', s); // 2.0 D1 / D4 (no-ops on the web engine)
+    applySound2('voiceLimit', s);
     if (s.monoOutput) call('setMono', true);
     if (s.dynamicRange) call('setDynamicRange', s.dynamicRange); // absent = 1, the engine's default
     if (s.click) applyClickSettings(s); // v11-metronome: absent = the defaults the engine already has

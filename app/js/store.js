@@ -68,7 +68,50 @@ export const DEVICE_LOCAL_SETTINGS = Object.freeze([
   'keyboards',
   // Ryan 2026-11-20 (hardware batch): the dynamic range is this player's keyboard and room, like the curves
   'dynamicRange',
+  // 2.0 (native DECISIONS D1, D2, D4): voices, buffer size and the voice limit are sized for this machine's CPU and
+  // audio device, so an imported library never carries another Mac's (or an iPad's) choice
+  'polyphony', 'bufferFrames', 'voiceLimit',
 ]);
+/** 2.0 settings.polyphony (D1): voices per sound (slot). Optional; absent = POLYPHONY_DEFAULT. */
+export const POLYPHONY_CHOICES = Object.freeze([32, 64, 128]);
+export const POLYPHONY_DEFAULT = 64;
+/** 2.0 settings.bufferFrames (D2): the audio buffer the host asks the device for. Optional; absent = the default. */
+export const BUFFER_FRAMES_CHOICES = Object.freeze([64, 128, 256, 512]);
+export const BUFFER_FRAMES_DEFAULT = 128;
+/** 2.0 settings.voiceLimit (D4): total live voices across all sounds. Optional; absent = 'auto'. */
+export const VOICE_LIMIT_CHOICES = Object.freeze(['auto', 128, 256, 512, 'off']);
+export const VOICE_LIMIT_DEFAULT = 'auto';
+const SOUND_2_CHOICES = Object.freeze({
+  polyphony: POLYPHONY_CHOICES, bufferFrames: BUFFER_FRAMES_CHOICES, voiceLimit: VOICE_LIMIT_CHOICES,
+});
+/**
+ * A valid value for one of the 2.0 Sound settings, else undefined. Numeric strings ("128", from a hand-edited or
+ * exported file) are accepted for the numeric choices; anything off the list is refused, never clamped (a buffer of
+ * 100 frames is not "almost 128").
+ * @param {'polyphony'|'bufferFrames'|'voiceLimit'} key
+ * @param {*} v
+ * @returns {number|string|undefined}
+ */
+export function validSound2(key, v) {
+  const list = SOUND_2_CHOICES[key];
+  if (!list) return undefined;
+  if (list.includes(v)) return v;
+  const n = typeof v === 'string' && /^\d+$/.test(v) ? Number(v) : NaN;
+  return list.includes(n) ? n : undefined;
+}
+/**
+ * The 2.0 Sound settings with their defaults filled in (the store keeps them absent until the user picks one).
+ * @param {object} settings
+ * @returns {{polyphony:number, bufferFrames:number, voiceLimit:(number|'auto'|'off')}}
+ */
+export function sound2Of(settings) {
+  const s = settings || {};
+  return {
+    polyphony: validSound2('polyphony', s.polyphony) ?? POLYPHONY_DEFAULT,
+    bufferFrames: validSound2('bufferFrames', s.bufferFrames) ?? BUFFER_FRAMES_DEFAULT,
+    voiceLimit: validSound2('voiceLimit', s.voiceLimit) ?? VOICE_LIMIT_DEFAULT,
+  };
+}
 /** v11-metronome: settings.midiClockOut (optional, absent = off) is a Web MIDI output name; ids change on re-plug. */
 export const MIDI_CLOCK_NAME_MAX = 120;
 /**
@@ -533,6 +576,13 @@ function normalizeSettings(raw, songs, setlists) {
     else delete out.click;
   }
   if (hasOwn(out, 'midiClockOut') && validMidiClockOut(out.midiClockOut) === undefined) delete out.midiClockOut;
+  // 2.0 Sound (D1, D2, D4): optional, absent = the default (no SCHEMA bump); a value off the list is dropped
+  for (const k of Object.keys(SOUND_2_CHOICES)) {
+    if (!hasOwn(out, k)) continue;
+    const v = validSound2(k, out[k]);
+    if (v === undefined) delete out[k];
+    else out[k] = v;
+  }
   return out;
 }
 
@@ -981,7 +1031,8 @@ export function createStore(opts = {}) {
         }
         // keyboards: device names may contain dots, so only the whole map is a path (store.setKeyboard)
         const whole = k === 'theme' || k === 'audioSleepSec' || k === 'hotkeys' || k === 'updateCheck'
-          || k === 'keyboards' || k === 'click' || k === 'midiClockOut' || k === 'dynamicRange';
+          || k === 'keyboards' || k === 'click' || k === 'midiClockOut' || k === 'dynamicRange'
+          || hasOwn(SOUND_2_CHOICES, k);
         return hasOwn(SETTINGS_VALIDATORS, k) || whole ? null : { segs, value: clone(value) };
       }
       // themes-setup: an unknown theme id is stored as the default (never an error, never a dead id)
@@ -1018,6 +1069,13 @@ export function createStore(opts = {}) {
       if (k === 'midiClockOut') {
         if (value === null || value === undefined) return { segs, value: undefined };
         const v = validMidiClockOut(value);
+        return v === undefined ? null : { segs, value: v };
+      }
+      // 2.0 Sound (D1, D2, D4): one of the listed choices (kept as set, the default included); null = back to the
+      // default (absent); anything else is refused
+      if (hasOwn(SOUND_2_CHOICES, k)) {
+        if (value === null || value === undefined) return { segs, value: undefined };
+        const v = validSound2(k, value);
         return v === undefined ? null : { segs, value: v };
       }
       const fn = hasOwn(SETTINGS_VALIDATORS, k) ? SETTINGS_VALIDATORS[k] : null;

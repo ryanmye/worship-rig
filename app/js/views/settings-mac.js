@@ -318,7 +318,7 @@ export function mountHotkeys(d) {
 /**
  * "Update available" (Settings › About). Mounted only when window.rig.setUpdateCheck exists (the Mac app).
  * @param {{store: object, rig: object, h: Function, btn: Function, row: Function, toggle: Function}} d
- * @returns {{el: HTMLElement, refresh: () => void, destroy: () => void}}
+ * @returns {{el: HTMLElement, toggleRow: HTMLElement, refresh: () => void, destroy: () => void}}
  */
 export function mountUpdates(d) {
   const { store, rig, h, btn, row } = d;
@@ -356,10 +356,11 @@ export function mountUpdates(d) {
     text: 'When the download has finished: quit Worship Rig, open the .dmg and drag Worship Rig to Applications '
       + '(replace the old one). Your songs stay.' });
   const buttons = h('div.st-inline', {}, download, notes, check);
-  const el = h('div.st-update', { 'data-testid': 'settings-update' },
-    row('Updates', onToggle.el, 'Once a day Worship Rig asks GitHub whether a newer version is out. It never installs '
-      + 'anything by itself.'),
-    line, buttons, how);
+  // 2.0 Settings restructure: the switch lives in Settings › Mac, the status line and its buttons in About
+  // (settings.js places toggleRow; el no longer contains it)
+  const toggleRow = row('Updates', onToggle.el, 'Once a day, from GitHub. Nothing installs by itself.');
+  toggleRow.dataset.section = 'updates-check';
+  const el = h('div.st-update', { 'data-testid': 'settings-update' }, line, buttons, how);
 
   function render() {
     const on = store.get().settings.updateCheck !== false;
@@ -400,6 +401,7 @@ export function mountUpdates(d) {
   render();
   return {
     el,
+    toggleRow,
     refresh() {
       if (typeof rig.getUpdateStatus === 'function') Promise.resolve(rig.getUpdateStatus()).then(setStatus, () => {});
       render();
