@@ -537,7 +537,8 @@ dotted beat) + Start (first downbeat) / Stop to the sink with engine times.
   count). A note-on first applies its slot's cap (above); if the total is then over the limit, the globally
   earliest-released voice (each instrument's own release rule, as for its cap), else the globally oldest held one,
   in any slot or retiring channel, is faded out like a steal (20 ms); at most 4 such steals per note-on, so lowering
-  the limit live converges over a few notes instead of cutting a burst. A change applies from the next note-on;
+  the limit live converges over later note-ons (net 3 voices per note-on) instead of cutting a burst. A change
+  applies from the next note-on;
   sounding voices are never cut by the change itself. 'auto' = desktop 128, iPad 64 (`RIG_PROFILE_IPAD`):
   PROVISIONAL numbers sized for <= ~60 % of the 128-frame quantum with every voice held (ARCHITECTURE 7.1 "D4").
   `get stats.voiceLimitSteals` counts its steals. The web engine (1.x) has no such limit.

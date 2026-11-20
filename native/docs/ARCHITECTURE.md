@@ -338,6 +338,17 @@ costs more than warm-pad it becomes perVoice. The manual choices (128 / 256 / 51
 voices (~5 ms per quantum here) overrun the audio thread on this box, which is what Off and the large values mean for a
 user who chooses them.
 
+The 60 % target is the steady state. Two transients sit on top of it (D4 review, scratch probe on this box, warm-pad,
+16 slots, limit 128): (1) stolen voices keep rendering their 20 ms steal fade (~8 quanta) and are not counted, so the
+voices rendered are the limit plus the steals of the last 20 ms. (2) Building a warm-pad voice at note-on costs about
+20-40 µs. A 10-note chord on 16 layered slots (160 note-ons, 160 steals) took 6.0-6.4 ms in its own quantum and
+2.7-3.0 ms (100-110 %) for the next ~8 quanta. With the limit at 512 (no steals, 288 voices) the same chord took 9.3 ms,
+then 6 ms per quantum. One new key per quantum on 16 slots (16 steals per quantum) settled at 3.4-3.9 ms. The limit
+caps the steady state; it does not bound the cost of a burst of note-ons. The Mac/iPad measurement should time a large
+layered chord as well as the held steady state. Lowering the limit live converges at a net 3 voices per note-on (4
+steals minus the new voice): one key on 16 layered slots removes 48, but one key on a single slot needs about 90 keys
+to go from 400 to 128.
+
 Engine resident target on a 4 GB iPad stays ≤ 450 MB: 320 MB samples (hard) + 32 MB reverb + voice pools + graph +
 code; the voice pools are the open term (T11/T12 report their per-voice size).
 

@@ -63,8 +63,9 @@ inline constexpr unsigned kVoiceLimitChoices[] = {128, 256, 512};
 constexpr unsigned autoVoiceLimit(bool ipad) {
   return ipad ? kAutoVoiceLimitIpad : kAutoVoiceLimitDesktop;
 }
-/** Steals one note-on may make for the limit: a live lowering (512 -> 128 with 400 voices sounding) converges over a
- *  few note-ons instead of one burst of fades, and the audio thread's work per note-on stays bounded. */
+/** Steals one note-on may make for the limit: a live lowering (512 -> 128 with 400 voices sounding) converges over
+ *  later note-ons (net 3 voices each) instead of one burst of fades, and the audio thread's work per note-on stays
+ *  bounded. */
 inline constexpr unsigned kMaxLimitStealsPerNote = 4;
 
 enum class VoiceState : std::uint8_t { Free, Held, Released, Killed };

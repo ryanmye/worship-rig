@@ -31,6 +31,9 @@ constexpr bool kSanitized = false;
 #endif
 
 constexpr double kQuantumUs = 128.0 / 48000 * 1e6;  // 2667 us
+// The budget assertion: the 60 % sizing target plus a margin for a shared 2-CPU box (measured 47-50 %). Asserting only
+// < 100 % would pass a limit sized twice too large (D4 review).
+constexpr double kBudgetUs = 0.70 * kQuantumUs;
 
 double threadUs() {
   timespec ts{};
@@ -126,11 +129,11 @@ TEST_SUITE("voice-limit-cpu") {
       rig::Engine &en = *reinterpret_cast<rig::Engine *>(e.e);
       playing = meters(e).voices;
       CHECK(en.graph().stats().limitSteals.load() == 256u - rig::inst::kAutoVoiceLimitDesktop);
-      if (kSanitized || us < kQuantumUs) break;
+      if (kSanitized || us < kBudgetUs) break;
     }
     CHECK(playing == rig::inst::kAutoVoiceLimitDesktop);  // the steal fades are long gone: live = playing
     MESSAGE("16 slots x warm-pad at the auto limit (" << playing << " voices): " << us << " us per quantum = "
                                                     << 100 * us / kQuantumUs << " % of the quantum (target <= 60 %)");
-    if (!kSanitized) CHECK(us < kQuantumUs);
+    if (!kSanitized) CHECK(us < kBudgetUs);
   }
 }

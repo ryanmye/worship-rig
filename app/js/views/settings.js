@@ -81,7 +81,7 @@ export const SETTINGS_CATEGORIES = Object.freeze([
 export const SECTION_ALIASES = Object.freeze({
   theme: 'appearance', themes: 'appearance', light: 'appearance', chips: 'perform', 'perform-view': 'perform',
   backup: 'backups', import: 'backups', export: 'backups', restore: 'backups',
-  output: 'audio', latency: 'audio', voices: 'voices', polyphony: 'voices', buffer: 'voices', 'voice-limit': 'voices',
+  output: 'audio', latency: 'audio', polyphony: 'voices', buffer: 'voices', voicelimit: 'voice-limit',
   metronome: 'click', 'midi-clock': 'click', touch: 'midi', pedal: 'midi',
   'computer-keyboard': 'keyboard', 'midi-learn': 'learn', 'my-pads': 'pads', 'my-samples': 'samples',
   garageband: 'samples', menu: 'menubar', 'menu-bar': 'menubar', hotkeys: 'menubar', shortcuts: 'menubar',
@@ -556,10 +556,13 @@ export function mountSettings(el, ctx) {
       clickOutHint,
     ),
   );
+  const limitRow = row('Total voice limit', h('div.st-inline', {}, limitSeg.el, limitInfo),
+    'All sounds together, so the audio never falls behind. Auto suits this device.');
+  // review: open({section:'voice-limit'}) lands on this row (and opens Advanced), not on Voices and buffer
+  limitRow.dataset.section = 'voice-limit';
   advanced('sound',
     row('Mono output', tog('monoOutput', 'Mono').el, 'For a single speaker or a mono PA feed.'),
-    row('Total voice limit', h('div.st-inline', {}, limitSeg.el, limitInfo),
-      'All sounds together, so the audio never falls behind. Auto suits this device.'),
+    limitRow,
     row('Record the click', clickRec.el, 'Off: recordings have the music only.'),
   );
 

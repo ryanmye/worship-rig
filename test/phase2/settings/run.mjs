@@ -922,6 +922,11 @@ async function runMode(mode, browser) {
       await ev(() => window.__rig.ctx.openSettings({ section: 'appearance' }));
       await until(() => window.__rig.views.settings.category === 'look'
         && document.activeElement?.getAttribute('role') === 'radio');
+      // review: a section with nothing to focus (Diagnostics) reached while open hides the focused theme card;
+      // focus stays in the dialog, on that category's tab, never on <body>
+      await ev(() => window.__rig.ctx.openSettings({ section: 'diagnostics' }));
+      await until(() => window.__rig.views.settings.category === 'about'
+        && document.activeElement?.dataset?.testid === 'settings-tab-about');
       await closeSettings();
       if (mode === 'app') {
         // Quick › This Mac › Theme (quickSheet has no ctx) and perform.js's "pads" go through main.js
@@ -934,6 +939,12 @@ async function runMode(mode, browser) {
       await ev(() => localStorage.setItem('worship-rig.settings.category', 'library'));
       await ev(() => window.__rig.ctx.openSettings({ section: 'no-such-thing' }));
       await until(() => window.__rig.views.settings.category === 'library');
+      await closeSettings();
+      // review: the voice limit is a Sound › Advanced row; its link opens Advanced and focuses the choice itself
+      await ev(() => window.__rig.ctx.openSettings({ section: 'voice-limit' }));
+      await until(() => window.__rig.views.settings.category === 'sound'
+        && document.querySelector('#view-settings [data-testid="settings-advanced-sound"]').open
+        && !!document.activeElement?.closest('[data-testid="setting-voice-limit"]'));
       await closeSettings();
     });
 
@@ -989,6 +1000,7 @@ async function runMode(mode, browser) {
           cols: new Set(tabs.map((t) => Math.round(t.left))).size,
           navAbove: n.bottom <= b.top + 1, navLeft: n.right <= b.left + 1, overflowX: getComputedStyle(nav).overflowX,
           scrolls: nav.scrollWidth > nav.clientWidth + 1,
+          orient: nav.getAttribute('aria-orientation'), // review: follows the layout (arrows work both ways)
           // sideways scrolling inside Settings: the dialog past the window, or a panel wider than its column (the
           // page under the modal is the app's own business: Perform has a 1024 px minimum)
           pageX: (() => {
@@ -1006,6 +1018,7 @@ async function runMode(mode, browser) {
           assert.equal(l.rows, 1, `${w}: one row of tabs (${JSON.stringify(l)})`);
           assert.ok(l.navAbove && !l.navLeft, `${w}: the strip sits on top`);
           assert.equal(l.overflowX, 'auto', `${w}: the strip scrolls sideways`);
+          assert.equal(l.orient, 'horizontal', `${w}: a row of tabs says so`);
           assert.equal(l.pageX, false, `${w}: nothing in Settings scrolls sideways`);
           if (w === 390) {
             assert.ok(l.scrolls, '390: more tabs than fit');
@@ -1026,6 +1039,7 @@ async function runMode(mode, browser) {
           assert.ok(l.cols === 1 && l.rows === CHROME_TABS.length && l.navLeft,
             `${w}: the sidebar (${JSON.stringify(l)})`);
           assert.equal(l.pageX, false);
+          assert.equal(l.orient, 'vertical', `${w}: the sidebar says so`);
         }
       } finally {
         await page.setViewportSize({ width: 1440, height: 900 });
