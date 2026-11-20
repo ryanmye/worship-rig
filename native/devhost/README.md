@@ -44,8 +44,10 @@ native/core/build-t09/rig-devhost --backend null --port 0         # headless (CI
 - `/__bridge/engine-api.json` (the contract), `/api/health` (`userSamples:false`, `devhost:true`),
   `/api/user-samples*` (empty), `/api/pads` (empty), `/api/heartbeat` and `/favicon.ico` (204). Other `/api/*`: 404.
   No pads folder, no My Samples, no MIDI ports, no AAC decode (`decode_file` NULL): those ops answer `unsupported`.
-- `/__rig/ws`: the BRIDGE v1 link. **The newest page wins**: a second page (reload, another tab) closes the older
-  socket with code 4000; for every page that goes away after `hello`, the relay posts
+- `/__rig/ws`: the BRIDGE v1 link. Upgrades from a browser page on another site are refused with 403 (any site may
+  open `ws://127.0.0.1`): allowed are no `Origin` (Node, tests), loopback origins on any port, and the request's own
+  `Host` when it is an IP literal (`--bind 0.0.0.0`). **The newest page wins**: a second page (reload, another tab)
+  closes the older socket with code 4000; for every page that goes away after `hello`, the relay posts
   `[{play panic}, {rec stop}]`, as `RigHost.webContentDidTerminate` does (SHELL.md). The page side reports a lost
   socket as a `warn` (code `device`) + `state {state:'closed'}` and closes its link; there is no reconnect (reload).
 
