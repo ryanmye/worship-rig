@@ -5,7 +5,6 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
-#include <regex>
 #include <string>
 #include <unistd.h>
 #include <thread>
@@ -28,6 +27,15 @@ std::string tmp(const char *name) {
   fs::remove_all(p);
   fs::create_directories(p);
   return p.string();
+}
+
+/** `Rig YYYY-MM-DD HHmm.wav` (no std::regex: g++ 13 -Werror=maybe-uninitialized trips on it under ASan) */
+bool defaultNamed(const std::string &n) {
+  const std::string pat = "Rig dddd-dd-dd dddd.wav";
+  if (n.size() != pat.size()) return false;
+  for (std::size_t i = 0; i < n.size(); ++i)
+    if (pat[i] == 'd' ? !(n[i] >= '0' && n[i] <= '9') : n[i] != pat[i]) return false;
+  return true;
 }
 
 std::string field(const std::string &json, const char *key) {
@@ -92,7 +100,7 @@ TEST_SUITE("rec") {
     REQUIRE(contains(r, "\"ok\":true"));
     const std::string path = field(r, "path");
     REQUIRE(!path.empty());
-    CHECK(std::regex_search(fs::path(path).filename().string(), std::regex(R"(^Rig \d{4}-\d\d-\d\d \d{4}\.wav$)")));
+    CHECK(defaultNamed(fs::path(path).filename().string()));
     e.call(R"({"v":1,"op":"play","e":"on","n":69,"vel":127,"when":0.01})");
     e.call(R"({"v":1,"op":"play","e":"off","n":69,"when":0.5})");
     std::vector<std::vector<float>> got(2);

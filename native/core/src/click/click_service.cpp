@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 
+#include "api/engine.h"
 #include "click/click.h"
 #include "midi/midi_service.h"
 #include "model/model.h"
@@ -95,6 +96,7 @@ void ClickServiceImpl::route(bool aux, bool record) {
 }
 
 unsigned ClickServiceImpl::outputChannels() {
+  if (const auto *e = dynamic_cast<const Engine *>(&m_.sink())) return e->outChannels();  // the device's, now
   const rig_config *c = m_.env().config;
   return c && c->output_channels >= 4 ? 4u : 2u;
 }
