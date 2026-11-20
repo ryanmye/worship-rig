@@ -14,6 +14,9 @@ on:
       - 'native/contract/**'
       - 'tools/golden/**'
       - 'app/js/engine/**'
+      - 'native/apple/**'
+      - 'native/devhost/**'
+      - 'tools/mac/**'
       - '.github/workflows/native-core.yml'
   pull_request:
     paths:
@@ -22,6 +25,9 @@ on:
       - 'native/contract/**'
       - 'tools/golden/**'
       - 'app/js/engine/**'
+      - 'native/apple/**'
+      - 'native/devhost/**'
+      - 'tools/mac/**'
       - '.github/workflows/native-core.yml'
 
 env:
@@ -134,3 +140,25 @@ jobs:
         working-directory: native/core
         env:
           TMPDIR: ${{ runner.temp }}
+
+  # Apple compile check, MAC_CHECK.md tier 0 (no Mac needed): the RigCore.xcframework slices (build-core.sh) and the
+  # Swift/C shell for WorshipRig-macOS and WorshipRig-iPad (iOS Simulator), compile only, through the same script the
+  # Mac push agent runs (tier 1). check-out/summary.json lists the first 80 compiler errors per stage, so the cloud can
+  # fix Swift without a Mac. The probe needs a real output device: it stays on Ryan's Mac. UNVERIFIED until pushed.
+  mac-check:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install xcodegen and ninja (cmake is on the image)
+        run: |
+          brew install xcodegen ninja
+          command -v cmake >/dev/null || brew install cmake
+      - name: tools/mac/check.sh --stage tools,apple-mac,apple-sim
+        run: bash tools/mac/check.sh --rev HEAD --stage tools,apple-mac,apple-sim --out check-out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mac-check
+          path: check-out
+          retention-days: 14

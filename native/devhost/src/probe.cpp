@@ -132,6 +132,26 @@ class ProbeEngine {
     }
     return {};
   }
+  /** Index of the next event (for waitEvent). */
+  std::size_t mark() {
+    std::lock_guard<std::mutex> lk(mu_);
+    return events_.size();
+  }
+  /** Waits for an event at or after `from` that contains `needle`. */
+  bool waitEvent(const char *needle, std::size_t from, double timeoutSec) {
+    const auto end = Clock::now() + std::chrono::duration<double>(timeoutSec);
+    while (Clock::now() < end) {
+      {
+        std::lock_guard<std::mutex> lk(mu_);
+        if (from > events_.size()) from = 0;
+        for (; from < events_.size(); ++from) {
+          if (events_[from].find(needle) != std::string::npos) return true;
+        }
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    return false;
+  }
   /** Fire and forget (notes). */
   void post(const std::string &m) { rig_post(e_, m.data(), m.size()); }
 
@@ -185,8 +205,19 @@ std::string instrumentJson(const std::string &kind, const std::string &id) {
   return "{\"type\":" + str(kind) + ",\"id\":" + str(id) + "}";
 }
 
-/** prepare + commit; "" on success, else what went wrong. */
+/**
+ * cache preload + prepare + commit; "" on success, else what went wrong. The preload comes first because a
+ * realtime engine integrates decodes started by `prepare` only on a cache pump() that its control loop does not run
+ * yet (found by this probe, 2026-11-20: api/engine.cpp controlLoop never pumps the cache service, so a sampler
+ * prepared cold stays silent in realtime). `cache preload` pumps until its decodes are done, and the prepare after it
+ * finds every buffer decoded. The app's controller preloads songs the same way, so this is also the real path.
+ */
 std::string loadSong(ProbeEngine &pe, const std::string &slots, double timeoutSec) {
+  const std::string pr = pe.call("\"op\":\"cache\",\"action\":\"preload\",\"pin\":\"add\",\"patches\":[{\"slots\":[" +
+                                 slots + "]}]", timeoutSec);
+  if (pr.empty() || !contains(pr, "\"ok\":true")) {
+    return "cache preload: " + (pr.empty() ? "no reply within " + num(timeoutSec, 0) + " s" : pr.substr(0, 300));
+  }
   const std::string r = pe.call("\"op\":\"prepare\",\"patch\":{\"slots\":[" + slots + "]}", timeoutSec);
   if (r.empty()) return "prepare: no reply within " + num(timeoutSec, 0) + " s";
   const long token = tokenOf(r);
@@ -334,24 +365,38 @@ bool runProbe(const ProbeOptions &o, std::string *json, std::string *err) {
     if (err) *err = "hello: no reply";
     return false;
   }
+  // `audio start|restart` replies at once; the device opens on the core's host thread and `state running` follows
+  auto openDevice = [&](const char *action, std::uint32_t frames, std::string *why) -> bool {
+    const std::size_t at = pe.mark();
+    const std::string r = pe.call("\"op\":\"audio\",\"action\":\"" + std::string(action) +
+                                  "\",\"bufferFrames\":" + std::to_string(frames), 20.0);
+    if (r.empty() || !contains(r, "\"ok\":true")) {
+      *why = std::string("audio ") + action + " " + std::to_string(frames) + ": " +
+             (r.empty() ? std::string("no reply") : r.substr(0, 300));
+      return false;
+    }
+    if (!pe.waitEvent("\"state\":\"running\"", at, 20.0) || !host.stats().running) {
+      *why = std::string("audio ") + action + " " + std::to_string(frames) + ": the device did not start";
+      return false;
+    }
+    return true;
+  };
   const std::uint32_t first = o.buffers.empty() ? o.sweepBuffer : o.buffers.front();
-  const std::string started =
-      pe.call("\"op\":\"audio\",\"action\":\"start\",\"bufferFrames\":" + std::to_string(first), 20.0);
-  if (!contains(started, "\"state\":\"running\"")) {
-    if (err) *err = "audio start: " + (started.empty() ? std::string("no reply") : started.substr(0, 300));
+  if (std::string why; !openDevice("start", first, &why)) {
+    if (err) *err = why;
     return false;
   }
   sleepSec(o.settleSeconds);
   const AppleOutputLatency hal0 = appleDefaultOutputLatency();
 
   auto restart = [&](std::uint32_t frames) -> bool {
-    const std::string r =
-        pe.call("\"op\":\"audio\",\"action\":\"restart\",\"bufferFrames\":" + std::to_string(frames), 20.0);
-    if (!contains(r, "\"state\":\"running\"")) {
-      errors.push_back("audio restart " + std::to_string(frames) + ": " + (r.empty() ? "no reply" : r.substr(0, 200)));
-      return false;
+    std::string why;
+    if (openDevice("restart", frames, &why)) {
+      sleepSec(o.settleSeconds);
+      return true;
     }
-    return true;
+    errors.push_back(why);
+    return false;
   };
 
   // ---- 1. buffer sizes, a typical 4-slot song holding a chord -----------------------------------------------------
@@ -490,6 +535,11 @@ bool runProbe(const ProbeOptions &o, std::string *json, std::string *err) {
       }
       steps += "]";
       panic(pe);
+      if (held > 0 && (vx.empty() || *std::max_element(vx.begin(), vx.end()) <= 0)) {
+        errors.push_back(kind + " sweep: no voices sounded with " + std::to_string(held) + " notes held in 16 slots of " +
+                         id + " (a silent instrument: the per-voice cost is meaningless)");
+        vx.clear();
+      }
       SweepResult r;
       double a = 0, b = 0;
       fit(vx, ymean, &a, &b);
