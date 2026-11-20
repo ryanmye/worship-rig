@@ -71,7 +71,10 @@ enum class Op : std::uint16_t {
   InstParam = 21,    // target = instrument slot, aux = param index (Instrument::paramIndex), a = value, b = time,
                      // c = glide / tau
   ReleaseVoice = 22,  // target = instrument slot, aux = voice id; f.a = fade seconds (pedalHold, steal, retire)
-  ClickRoute = 23     // graph: aux bit 0 = click on device channels 3-4 (else added to out 1-2), bit 1 = recorded
+  ClickRoute = 23,    // graph: aux bit 0 = click on device channels 3-4 (else added to out 1-2), bit 1 = recorded
+  // INTERFACE-CHANGE(T00c) D1: per-slot polyphony cap. target = instrument slot, aux = cap (32 | 64 | 128);
+  // decoded into Instrument::setVoiceCap. The Model sends it right after every instrument AttachUnit and on change.
+  VoiceCap = 24
 };
 
 /** A module opcode from its own enum (see the range table). */

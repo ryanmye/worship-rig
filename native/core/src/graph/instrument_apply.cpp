@@ -37,6 +37,9 @@ void Instrument::apply(const Command &c) {
     case Op::ReleaseVoice:
       releaseVoice(c.aux, c.frame, c.f.a);
       break;
+    case Op::VoiceCap:  // INTERFACE-CHANGE(T00c) D1
+      setVoiceCap(c.aux);
+      break;
     default:
       if (isModuleOp(c.op)) applyModule(c);
       break;
