@@ -223,10 +223,13 @@ TEST_SUITE("runtime") {
 
   TEST_CASE("audio_start runs off the control thread: a host that blocks 400 ms does not stall replies") {
     static std::atomic<rig_engine *> eng{nullptr};
+    static std::atomic<bool> hostReturned{false};
+    hostReturned = false;
     rig_host h{};
     h.struct_size = sizeof h;
     h.audio_start = [](void *, const char *, double, uint32_t) {
       std::this_thread::sleep_for(std::chrono::milliseconds(400));  // a synchronous AUHAL open (R25)
+      hostReturned = true;
       rig_device_info info{};
       info.struct_size = sizeof info;
       info.sample_rate = 48000;
@@ -239,11 +242,10 @@ TEST_SUITE("runtime") {
     RtEngine rt(&h);
     eng = rt.e;
     hello(rt);
-    const auto t0 = Clock::now();
     rt.post(R"({"v":1,"op":"audio","action":"start","id":2})");
     rt.post(R"({"v":1,"op":"get","what":"stats","id":3})");
     REQUIRE(rt.waitFor("\"re\":3,"));
-    CHECK(Clock::now() - t0 < std::chrono::milliseconds(300));  // answered while the host still blocks
+    CHECK(!hostReturned.load());  // answered while the host is still blocked in audio_start
     {
       std::lock_guard<std::mutex> lk(rt.mu);
       const auto ps = rt.all.find("\"ev\":\"state\""), pr = rt.all.find("\"re\":2,");
