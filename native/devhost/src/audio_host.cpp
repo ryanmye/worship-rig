@@ -89,6 +89,7 @@ void onNotify(const ma_device_notification *n) {
 }  // namespace
 
 AudioHost::AudioHost(AudioOptions o) : o_(std::move(o)), impl_(std::make_unique<Impl>()) {
+  muted_ = o_.muted;
   vt_.struct_size = sizeof(rig_host);
   vt_.user = this;
   vt_.audio_start = [](void *u, const char *id, double lat, std::uint32_t ch) {
@@ -208,7 +209,19 @@ void AudioHost::renderInterleaved(float *out, std::uint32_t frames) {
     }
     done += n;
   }
+  if (muted_.load(std::memory_order_relaxed)) std::memset(out, 0, sizeof(float) * frames * ch);  // rig-probe
   const std::uint64_t dt = hostNowNs() - t0;
+  if (CallbackLog *log = log_.load(std::memory_order_acquire)) {  // rig-probe timing window (single writer)
+    const std::size_t i = log->count.load(std::memory_order_relaxed);
+    if (i < log->busyNs.size()) {
+      auto u32 = [](std::uint64_t v) { return static_cast<std::uint32_t>(std::min<std::uint64_t>(v, UINT32_MAX)); };
+      log->busyNs[i] = u32(dt);
+      log->gapNs[i] = lastStartNs_ ? u32(t0 - lastStartNs_) : 0u;
+      log->frames[i] = frames;
+      log->count.store(i + 1, std::memory_order_release);
+    }
+  }
+  lastStartNs_ = t0;
   callbacks_.fetch_add(1, std::memory_order_relaxed);
   frames_.fetch_add(frames, std::memory_order_relaxed);
   totalNs_.fetch_add(dt, std::memory_order_relaxed);
@@ -290,6 +303,11 @@ void AudioHost::start(const char *deviceId, double latencySec, std::uint32_t cha
   latencyNs_ = static_cast<std::uint64_t>(latency * 1e9);
   impl_->devId = haveId ? id : std::string("default");
   impl_->devName = impl_->dev.playback.name;
+  periods_ = impl_->dev.playback.internalPeriods;
+  internalSr_ = static_cast<std::uint32_t>(internalSr);
+  latencySec_ = latency;
+  devName_ = impl_->devName;
+  lastStartNs_ = 0;  // the device is not running yet: no callback can race this
   rig_device_info info{};
   info.struct_size = sizeof info;
   info.device_id = impl_->devId.c_str();
@@ -342,6 +360,10 @@ AudioStats AudioHost::stats() const {
   s.channels = channels_;
   s.periodFrames = period_;
   s.running = running_.load();
+  s.periods = periods_;
+  s.internalSampleRate = internalSr_;
+  s.latencySec = latencySec_;
+  s.deviceName = devName_;
   return s;
 }
 

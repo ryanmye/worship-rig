@@ -1,0 +1,3 @@
+# local build trees and their logs (native/devhost/README.md builds into native/core/build-<task>)
+build-*/
+build-*.log

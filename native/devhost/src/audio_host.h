@@ -24,6 +24,21 @@ struct AudioOptions {
   std::uint32_t periods = 2;
   std::uint32_t sampleRate = 0;       // 0 = the device's native rate (the core adopts it, contract 6.3)
   std::uint32_t maxBlockFrames = 4096;  // = rig_config.max_block_frames
+  bool muted = false;                   // rig-probe: render as usual, then write zeros to the device (nothing audible)
+};
+
+/**
+ * Per-callback timing for rig-probe (MAC_CHECK.md): one entry per data callback while attached. Preallocated; the
+ * real-time thread is the only writer (no locks, no allocation). Protocol: setCallbackLog(&log) starts a window,
+ * setCallbackLog(nullptr) ends it; read `count` (acquire) only after the next callback has certainly run (the probe
+ * waits a few periods), then busyNs/gapNs/frames[0..count).
+ */
+struct CallbackLog {
+  explicit CallbackLog(std::size_t capacity) : busyNs(capacity), gapNs(capacity), frames(capacity) {}
+  std::vector<std::uint32_t> busyNs;  // wall time inside the callback (render + interleave + mute)
+  std::vector<std::uint32_t> gapNs;   // start-to-start distance to the previous callback (0 for the very first)
+  std::vector<std::uint32_t> frames;  // frames the device asked for
+  std::atomic<std::size_t> count{0};
 };
 
 /** Callback timing (the CPU cost figure of the report): wall time inside the data callback. */
@@ -33,6 +48,10 @@ struct AudioStats {
   double sampleRate = 0;
   std::uint32_t channels = 0, periodFrames = 0;
   bool running = false;
+  // the opened device (rig-probe): periods x period / internal rate = the latency the core is told
+  std::uint32_t periods = 0, internalSampleRate = 0;
+  double latencySec = 0;
+  std::string deviceName;
 };
 
 class AudioHost {
@@ -70,6 +89,10 @@ class AudioHost {
   void prepareBuffers(std::uint32_t channels);
   /** miniaudio device notification (ma_device_notification_type as int). */
   void notify(int type);
+  /** rig-probe: zero the device buffer after rendering (the render still runs and is timed). */
+  void setMuted(bool on) { muted_.store(on, std::memory_order_relaxed); }
+  /** rig-probe: start (log) or end (nullptr) a per-callback timing window; see CallbackLog. */
+  void setCallbackLog(CallbackLog *log) { log_.store(log, std::memory_order_release); }
 
   struct Impl;  // miniaudio objects (keeps miniaudio.h out of this header)
 
@@ -88,6 +111,12 @@ class AudioHost {
   double sr_ = 0;
   std::uint32_t period_ = 0;
   std::atomic<bool> running_{false};
+  std::atomic<bool> muted_{false};
+  std::atomic<CallbackLog *> log_{nullptr};
+  std::uint64_t lastStartNs_ = 0;  // RT thread only
+  std::uint32_t periods_ = 0, internalSr_ = 0;
+  double latencySec_ = 0;
+  std::string devName_;
 };
 
 /** Monotonic host clock in ns (rig_host.host_time_ns). */

@@ -40,15 +40,24 @@ if(APPLE)
 endif()
 
 # ---- first-party: warnings as the core (rig_target_defaults, -Werror) ----------------------------------------------
-add_library(devhost_lib STATIC src/ws_codec.cpp src/http.cpp src/server.cpp src/audio_host.cpp src/devhost.cpp)
+add_library(devhost_lib STATIC src/ws_codec.cpp src/http.cpp src/server.cpp src/audio_host.cpp src/devhost.cpp
+                               src/probe.cpp src/probe_apple.cpp)
 target_include_directories(devhost_lib PUBLIC src)
 target_link_libraries(devhost_lib PUBLIC rig_core devhost_miniaudio)
 target_compile_definitions(devhost_lib PUBLIC DEVHOST_REPO_DIR="${DEVHOST_REPO}")
 rig_target_defaults(devhost_lib)
 
+# probe_apple.cpp is Core Audio code written without a Mac (UNTESTED): an SDK deprecation must not fail the build
+set_source_files_properties(src/probe_apple.cpp PROPERTIES COMPILE_OPTIONS "-Wno-error")
+
 add_executable(rig-devhost src/main.cpp)
 target_link_libraries(rig-devhost PRIVATE devhost_lib)
 rig_target_defaults(rig-devhost)
+
+# rig-probe: muted device measurement for DECISIONS D2 / D4 (src/probe.h, native/docs/MAC_CHECK.md)
+add_executable(rig-probe src/probe_main.cpp)
+target_link_libraries(rig-probe PRIVATE devhost_lib)
+rig_target_defaults(rig-probe)
 
 # ---- tests (doctest; one ctest per TEST_SUITE, like the core: unit.devhost-*) -------------------------------------
 file(GLOB DEVHOST_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp)
@@ -60,3 +69,9 @@ foreach(suite devhost-ws devhost-http devhost-audio devhost-relay)
   add_test(NAME unit.${suite} COMMAND devhost_tests -ts=${suite})
   set_tests_properties(unit.${suite} PROPERTIES LABELS "unit;devhost" TIMEOUT 120)
 endforeach()
+
+# rig-probe end to end on miniaudio's null backend (~3 s): the plumbing and the JSON shape, not the numbers
+add_test(NAME probe.null
+         COMMAND ${CMAKE_COMMAND} -DPROBE=$<TARGET_FILE:rig-probe> -DOUT=${CMAKE_BINARY_DIR}/probe-null.json
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/probe_check.cmake)
+set_tests_properties(probe.null PROPERTIES LABELS "unit;devhost" TIMEOUT 180)
