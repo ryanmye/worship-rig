@@ -94,6 +94,6 @@ void sendDelayPanic(Model &m, double when) {
 
 void rig_register_fx_delay(rig::Registry &r) {
   r.addUnit(rig::kKindDelay, &rig::makeDelay);
-  r.addService("delay", &rig::fx::makeService);
+  r.addService(rig::fx::DelayService::kName, &rig::fx::makeService);
   r.addSetHandler("fx.delay.", &rig::fx::onSet);
 }

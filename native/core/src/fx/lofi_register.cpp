@@ -44,6 +44,8 @@ LofiService *svc(Model &m) {
 
 bool onSet(Model &m, const SetRequest &req) {
   if (!req.row) return false;
+  const rig_config *cfg = m.env().config;
+  if (cfg && (cfg->flags & RIG_FLAG_NO_LOFI)) return false;  // JS: `if (!F.lofi) return false`
   if (LofiService *s = svc(m)) s->send(req.when);  // stored in the patch already; not attached = applied at build
   return true;
 }

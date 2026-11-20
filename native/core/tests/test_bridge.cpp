@@ -143,7 +143,9 @@ TEST_SUITE("bridge") {
     eng.hello();
     const std::string st = eng.call(R"({"v":1,"op":"audio","action":"start","id":1})");
     CHECK(contains(st, "\"state\":\"running\""));
-    CHECK(st.find("\"ev\":\"state\"") < st.find("\"re\":1"));  // G9: state before the audio reply
+    CHECK(st.find("\"ev\":\"state\"") < st.find("\"phase\":\"start\""));  // G9: state before load start
+    CHECK(st.find("\"phase\":\"start\"") < st.find("\"re\":1"));             // ... and before the reply
+    CHECK(!contains(eng.call(R"({"v":1,"op":"audio","action":"start","id":11})"), "\"phase\""));  // once
     // contract 1.1: sleep is realtime only (offline answers done:false); wake is idempotent
     CHECK(contains(eng.call(R"({"v":1,"op":"audio","action":"sleep","id":2})"), "\"done\":false"));
     CHECK(contains(eng.call(R"({"v":1,"op":"audio","action":"wake","id":7})"), "\"done\":true"));

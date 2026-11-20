@@ -226,4 +226,35 @@ TEST_SUITE("delay") {
     CHECK(onset(out[0], at + 2 * T - 64, at + 2 * T + 64) == at + 2 * T);
     CHECK(std::fabs(out[0][argmaxAbs(out[0], at + T - 64, at + T + 64)]) > 0.05);
   }
+
+  TEST_CASE("device rate change: the service rebuilds the delay at the new rate (echo still at k * time)") {
+    OfflineEngine e(48000);
+    e.hello();
+    e.call(R"({"v":1,"op":"set","id":2,"path":"fx.delay.time","value":0.25})");
+    e.call(R"({"v":1,"op":"set","id":2,"path":"fx.delay.feedback","value":0.5})");
+    e.call(R"({"v":1,"op":"audio","action":"start","id":3})");
+    REQUIRE(rig_test_tap(e.e, "fx.delay.output") == RIG_OK);
+    e.render(24000);
+    rig_device_info dev{};
+    dev.struct_size = sizeof dev;
+    dev.device_id = "test";
+    dev.device_name = "test";
+    dev.sample_rate = 96000;
+    dev.channels = 2;
+    dev.buffer_frames = 256;
+    rig_host_audio_started(e.e, &dev);
+    e.render(9600);  // the graph adopts 96 kHz, the RateChanged event reaches the service, a new unit is attached
+    const double t0 = rig_engine_time(e.e) + 0.2;
+    std::vector<float> x(256, 0.0f);
+    x[0] = 0.5f;
+    const float *ch[2] = {x.data(), x.data()};
+    REQUIRE(rig_test_inject(e.e, "fx.delay.input", ch, 2, static_cast<uint32_t>(x.size()), t0, 1.0f) == RIG_OK);
+    const auto out = e.render(96000);
+    std::size_t imp = 0;  // the injected impulse is not in the tap: find the first echo, then the second
+    const std::size_t a = onset(out[0], 0, out[0].size());
+    REQUIRE(a < out[0].size());
+    imp = onset(out[0], a + 1000, out[0].size());
+    CHECK(imp - a == 24000);  // .25 s at 96 kHz between echoes
+  }
 }
+

@@ -480,9 +480,16 @@ const char *Engine::requestAudio(const std::string &action, const std::string &d
   if (realtime() && cfg_.host && !host_.audio_start) return "unsupported";
   model_.audioStarted(-1.0);  // global units (FX, master, click, drone, sinks) exist before the first sound
   if (!deviceId.empty() || action == "output") deviceId_ = deviceId.empty() ? "default" : deviceId;
+  // contract 1.1 start(): `ready {phase:'start'}` once, after the global graph exists; G9: after `state`
+  const auto loadStart = [this] {
+    if (loadStartSent_) return;
+    loadStartSent_ = true;
+    emit("{\"v\":1,\"ev\":\"load\",\"phase\":\"start\"}");
+  };
   if (!realtime() || !cfg_.host) {  // offline, or no host: the caller drives rig_render() itself (tests)
     started_ = true;
     emitState("running", restart);
+    loadStart();
     return "";
   }
   // audio_start runs on the device thread and must return at once anyway (rig_host contract; the Apple layer opens
@@ -493,7 +500,8 @@ const char *Engine::requestAudio(const std::string &action, const std::string &d
   deadline_ = std::chrono::steady_clock::now() +
               std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double>(
                   kWatchdogSec));
-  emitState("suspended", false);  // G9: a state event before the reply
+  emitState("suspended", false);  // G9: a state event before the reply (and before load start)
+  loadStart();
   const std::string dev = deviceId == "default" ? std::string() : deviceId;
   const unsigned ch = outCh_;
   hostCall([this, restart, dev, latency, ch] {

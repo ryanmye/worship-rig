@@ -46,7 +46,7 @@ double renderTail(double sr, std::size_t frames, float amp, const wa::DynamicsCo
 }  // namespace
 
 wa::DynamicsCompressor::Params glueSettings(double a) {
-  const double x = std::min(1.0, std::max(0.0, std::isfinite(a) ? a : 0.0));
+  const double x = std::min(1.0, std::max(0.0, std::isnan(a) ? 0.0 : a));  // Number(a) || 0: +-Infinity clamps
   wa::DynamicsCompressor::Params p;
   p.threshold = static_cast<float>(-24.0 * x);
   p.ratio = static_cast<float>(1.0 + (4.0 - 1.0) * x);

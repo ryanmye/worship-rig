@@ -89,9 +89,9 @@ class MasterChain final : public Unit {
     // glue compressor -> glueWet (a-rate) -> master input, while connected
     glueWet_.processARate(f0, sr, g, kQ);
     const float thr = glueThreshold_.processKRate(f0, sr), ratio = glueRatio_.processKRate(f0, sr);
-    if (glueConnected_ && detachFrame_ >= 0 && f0 >= detachFrame_) {
+    if (glueConnected_ && detachAt_ >= 0 && f0 >= timerFrame(detachAt_, sr)) {
       glueConnected_ = false;
-      detachFrame_ = -1;
+      detachAt_ = -1;
     }
     if (glueConnected_) {
       DynamicsCompressor::Params p = master::glueSettings(1);
@@ -205,7 +205,7 @@ class MasterChain final : public Unit {
   /** fx.js FxGraph.setGlue(a, when). */
   void setGlue(double a, double when) {
     if (!glueAvailable_) return;
-    const double x = std::min(1.0, std::max(0.0, std::isfinite(a) ? a : 0.0));
+    const double x = std::min(1.0, std::max(0.0, std::isnan(a) ? 0.0 : a));  // Number(a) || 0, then clamp
     if (x > 0) {
       const DynamicsCompressor::Params st = master::glueSettings(x);
       const double mk = rig::js::pow(10.0, -master::glueRefDb(glueRef_, x) / 20.0);
@@ -213,7 +213,7 @@ class MasterChain final : public Unit {
         wa::setNow(glueThreshold_, st.threshold, when);
         wa::setNow(glueRatio_, st.ratio, when);
         glueEngaged_ = true;
-        detachFrame_ = -1;  // ++_glueSeq: cancels a pending disconnect
+        detachAt_ = -1;  // ++_glueSeq: cancels a pending disconnect
         glueConnected_ = true;
         const double w = when + master::kGlueEngageDelay;
         const double from = glueDryAt(w);
@@ -242,10 +242,15 @@ class MasterChain final : public Unit {
     wa::linFrom(glueDry_, from, 1.0, when, master::kGlueXfade);  // ends exactly at 1: bit-exact dry afterwards
     wa::linFrom(glueWet_, (1 - from) * glueMk_, 0.0, when, master::kGlueXfade);
     xf_ = {when, master::kGlueXfade, from, 1.0};
-    // env.timer.at(when + 0.04): disconnect from the quantum the offline timer fires in
-    const double t = std::max(0.0, when + master::kGlueDetachAfter);
-    detachFrame_ = static_cast<std::int64_t>(std::ceil(t * sr_ / static_cast<double>(kQ) - 1e-6)) *
-                   static_cast<std::int64_t>(kQ);
+    // env.timer.at(when + 0.04): disconnect from the quantum the offline timer fires in. Kept in seconds and turned
+    // into a frame at the current rate in process(), so a rate change (frame' = ceil(frame new/old)) keeps the time.
+    detachAt_ = std::max(0.0, when + master::kGlueDetachAfter);
+  }
+
+  /** The first frame of the quantum an offline AudioTimer.at(t) fires in: k = ceil(t sr / 128 - 1e-6). */
+  static std::int64_t timerFrame(double t, double sr) {
+    return static_cast<std::int64_t>(std::ceil(t * sr / static_cast<double>(kQ) - 1e-6)) *
+           static_cast<std::int64_t>(kQ);
   }
 
   /** fx.js FxGraph.setMono(on, when): 50 ms linear crossfade from the previous target. */
@@ -274,7 +279,7 @@ class MasterChain final : public Unit {
   bool glueEngaged_ = false, glueConnected_ = false;
   double glueMk_ = 1.0;
   Xfade xf_;
-  std::int64_t detachFrame_ = -1;
+  double detachAt_ = -1;  // engine seconds of the pending glue disconnect, < 0 = none
   double monoV_ = 0.0;
   std::array<double, master::kGlueGrid + 1> glueRef_{};
   Bus x_, m_, w_;

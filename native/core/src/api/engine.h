@@ -170,6 +170,7 @@ class Engine final : public CommandSink {
   bool hostStop_ = false;
   bool pending_ = false;            // control thread: a start/restart waits for the host
   bool restartPending_ = false;
+  bool loadStartSent_ = false;
   std::chrono::steady_clock::time_point deadline_{};
   const char *devState_ = "suspended";  // control thread view (state event)
   std::string deviceId_ = "default", deviceName_;
