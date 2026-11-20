@@ -1,5 +1,5 @@
 // TestHooks: the golden TAP / INJECT name tables. FROZEN by T00b; must equal tools/golden/page.js `TAP` and `INJECT`
-// key for key (tests/test_test_points.cpp parses page.js and fails on any difference).
+// key for key (tests/test_t00b_api.cpp, `unit.t00b`, parses page.js and fails on any difference).
 //
 // A point is either a graph bus (`local == kGraphBus`: the graph copies/adds the bus itself) or a unit-local point of
 // the unit in `unit` (passed to Unit::process through UnitIO::tap / UnitIO::inject). rig_test_tap / rig_test_inject

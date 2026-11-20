@@ -271,12 +271,15 @@ host** (`native/devhost/`, ALSA/PulseAudio/null), so the realtime path (adapter,
 | AAC/M4A/ALAC | platform (`host.decode_file`) | — | no small GPL-compatible portable AAC decoder (fdk-aac licence is GPL-incompatible; faad2 is GPL-2+ but large) |
 | resampling | **Chromium `SincResampler` port** | BSD-3 | what `decodeAudioData` uses (verify) ⇒ sample parity |
 | Web Audio kernels | ports of Chromium `Biquad`, `DynamicsCompressorKernel`, `PeriodicWave`/`OscillatorNode` tables, `UpSampler`/`DownSampler`, `AudioParamTimeline` formulas | BSD-3 | parity (Q5, Q6, Q8, Q10, Q12, Q2) |
-| bit-exact math | **V8 `src/base/ieee754.cc`** subset (exp, log, sin, cos, pow, tanh) | BSD-3 + Sun fdlibm notice | V8's `Math.*` are these fdlibm ports ⇒ IR generator and curve tables bit-exact |
+| bit-exact math (JS `Math.*`) | **LLVM libc** `shared/math` subset (sin cos tan exp log log2 log10 expm1 cbrt atan atan2), ports of glibc 2.39 `__pow_fma` (= ARM optimized-routines pow) and `__tanh_fma`/`__expm1_fma` (fdlibm), V8 15.7 sinh (`src/num/`, T01) | Apache-2.0 WITH LLVM-exception; MIT (Arm); Sun fdlibm notice; BSD-3 | measured, not assumed (WAVE0B_REVIEW V10, `src/num/README.md`): Chromium 157 / V8 15.7 runs these, not fdlibm; 0 mismatches on 340 k fresh Chromium cases |
+| bit-exact math (Blink C++ `fdlibm::`) | **V8 12.4 `ieee754.cc`** = Chromium `third_party/fdlibm` (`rig::fdlibm`) | BSD-3 + Sun fdlibm notice | AudioParam exponential ramps (`fdlibm::pow`) and setTarget (`fdlibm::exp`); kernel ports use it wherever their Chromium source calls `fdlibm::` |
+| Chromium ports | `third_party/chromium/LICENSE` (tag 157.0.8103.78) | BSD-3 | every ported file names the tag and source path in its header (R17) |
 | JSON | **yyjson** | MIT | fast C, 2 files, mutable writer for replies/events; control thread only |
 | tests | **doctest** | MIT | single header, fast compile |
 | desktop device I/O (dev host, Windows later) | **miniaudio** | public domain / MIT-0 | one header; not linked into the Apple app |
 
-GPL-3 compatible throughout (BSD-3, MIT, MIT-0, public domain, Sun permissive). No JUCE, no FFmpeg, no Boost.
+GPL-3 compatible throughout (BSD-3, MIT, MIT-0, Apache-2.0 WITH LLVM-exception, public domain, Sun permissive).
+No JUCE, no FFmpeg, no Boost.
 `third_party/README.md` records upstream URL, commit and local modifications per library.
 
 ---------------------------------------------------------------------------------------------------------------------
@@ -321,19 +324,22 @@ GPL-3 compatible throughout (BSD-3, MIT, MIT-0, public domain, Sun permissive). 
 ### 8.2 What must be bit-close vs perceptually matched
 
 **Bit-exact or ≤ 1e-6 (unit tests, exact vectors dumped from JS):** `hashSeed`/`mulberry32`/`rngFor` streams and
-seed-string formatting; `instSeq`-dependent seeds; IR generator output (bit-exact with the V8 ieee754 port; ≤ 1e-6
+seed-string formatting; `instSeq`-dependent seeds; IR generator output (bit-exact with `rig::js` math, T01; ≤ 1e-6
 otherwise); click sample tables; clip and tanh/quantiser curves; `normalizePatch`/`clamp`; velocity/touch curves;
 chord names, key detection; `ClickGrid` beat and MIDI-clock times; Param timeline values (rel. 1e-6); biquad
 coefficients; delay-sync times; `getEqResponse` (must equal `shared/eq-math.js` exactly, the shim computes it).
 
-**Golden "exact" tier (maxAbsDiff 2e-4, 46 fixtures):** eq-* (18), width-* (3), master-eq, glue-* (3), limiter-* (3),
-echo-* (6), lofi-crush-sweep, reverb-dry, click-* (2), touch-* (5), sampler-* (2), synth-808-sub.
+**Golden "exact" tier (maxAbsDiff 2e-4; 62 of 108 fixtures after T17):** eq-* (18), width-* (3), master-eq,
+glue-* (3), limiter-* (3), echo-* (6), lofi-crush-sweep, reverb-dry, click-* (2), touch-* (5), sampler-* (2),
+synth-808-sub, plus 16 T17 fixtures (manifest `addedBy: 'T17'`; 13 of them need Chromium PCM, `needsPcm`).
+`reverb-dry` and `echo-none` render digital silence (return gain 0), so they pass before anything is implemented.
 
-**Golden "statistical" tier (bands 1.5 dB, envelope corr .95, 41 fixtures), to be promoted to exact where
-`exactIfPrngPorted` (36) once M5 is in:** synths and organs with random phase/detune, reverb-room..wash, chorus,
-drone, auto-*, scene-glide, songs. Stay perceptual for good: lofi-tape-sine (oversampler choice), synth-soft-keys and
-synth-dx-epiano (FM compensations Q11), song-lofi-rhodes, anything decoded from AAC, drone files (Q16, not
-offline-renderable in JS).
+**Golden "statistical" tier (46 fixtures; per-fixture tolerances in the manifest: bands 1.5–16.4 dB, envelope
+corr 0.73–0.95, envelope check off (−1) for `chorus-default-sine`, `drone-freeze-dry/-wet`; R33), promoted to exact
+where `exactIfPrngPorted` (41) by the owning task once its PRNG draw order matches:** synths and organs with
+random phase/detune, reverb-room..wash, chorus, drone, auto-*, scene-glide, songs. Stay perceptual for good:
+lofi-tape-sine (oversampler choice), synth-soft-keys and synth-dx-epiano (FM compensations Q11), song-lofi-rhodes,
+anything decoded from AAC, drone files (Q16, not offline-renderable in JS).
 
 ### 8.3 Porting the Web Audio semantics that matter
 

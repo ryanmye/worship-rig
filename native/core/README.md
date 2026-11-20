@@ -45,7 +45,8 @@ sub-quantum voice starts), BRIDGE v1 envelope + hello/audio/prepare/commit/set/p
 slot EQ chain, mono and stereo pan laws, WAV I/O, PARAMS table generated from the contract, FTZ/DAZ, allocation trap.
 All 18 `eq-*` golden fixtures pass the exact tier through this path.
 
-Stubs (answer `unsupported` or silence): `cache song drone click midi rec` ops, `play` pedal/wheel/bend/swell/fade/
-input, `get instruments|sampleStatus`, `rig_host_midi_ports`, MIDI parsing (bytes are queued and counted), every
+Every bridge op dispatches to its `Model` method (WAVE0B_REVIEW V1); ops whose module/service is not registered
+answer `unsupported` (`click drone midi rec`, `cache retainReverb`; `play bend/fade/input` until T14). Stubs:
+`rig_host_midi_ports`, MIDI parsing (bytes are queued and counted), every
 instrument except the test voice (`{"instrument":{"type":"test","id":"sine|saw"}}`), width, sends, FX, master chain,
 click, recorder, taps other than `out`/`slotN.pan`, injection other than `slot0.strip`.
