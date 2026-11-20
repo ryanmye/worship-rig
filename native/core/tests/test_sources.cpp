@@ -272,16 +272,16 @@ TEST_SUITE("sources") {
       CHECK_MESSAGE(maxd <= 1e-5, name << ": max abs diff " << maxd);
       if (refEnded != -2)
         CHECK_MESSAGE(r.endedBoundary == refEnded, name << ": ended at " << r.endedBoundary << " vs " << refEnded);
-      const bool silentOk = name.find("rate-fast-clamp") != std::string::npos ||
-                            name.find("too-fast") != std::string::npos || name.find("cs-zero") != std::string::npos ||
+      // references that are silence by construction (they test only the silence rule, nothing about content)
+      const bool silentOk = name.find("too-fast") != std::string::npos || name.find("cs-zero") != std::string::npos ||
                             name.find("beyond-end") != std::string::npos ||
-                            name.find("above-nyquist") != std::string::npos;  // sin(pi n) = 0 at Nyquist
+                            name == "osc-freq-above-nyquist";  // sin(pi n) = 0 at Nyquist
       CHECK_MESSAGE((peak > 0.01 || silentOk), name << ": reference is (near) silence");
       worst = std::fmax(worst, maxd);
       ++cases;
     }
     if (verbose) std::printf("  %d cases, worst %.3e\n", cases, worst);
-    CHECK(cases >= 130);
+    CHECK(cases >= 146);  // T11a review added 9 (Nyquist clip before detune, k-rate params, param inputs)
   }
 
   TEST_CASE("PeriodicWave: normalisation, band limiting, table selection") {

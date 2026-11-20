@@ -1,0 +1,60 @@
+Test project /home/claude/worship-rig/native/core/build-t02-review
+      Start  1: unit.biquad
+ 1/45 Test  #1: unit.biquad ......................   Passed    0.09 sec
+      Start  2: unit.bridge
+ 2/45 Test  #2: unit.bridge ......................   Passed    0.35 sec
+      Start  3: unit.bridge-conformance
+ 3/45 Test  #3: unit.bridge-conformance ..........   Passed    0.64 sec
+      Start  4: unit.chorus
+ 4/45 Test  #4: unit.chorus ......................   Passed    1.05 sec
+      Start  5: unit.click
+ 5/45 Test  #5: unit.click .......................   Passed    5.30 sec
+      Start  6: unit.clock
+ 6/45 Test  #6: unit.clock .......................***Failed    1.84 sec
+[doctest] doctest version is "2.4.11"
+[doctest] run with "--help" for options
+===============================================================================
+/home/claude/worship-rig/native/core/tests/test_clock.cpp:40:
+TEST SUITE: clock
+TEST CASE:  offline: a rate change mid-run keeps engine time monotonic and reschedules pending notes
+
+/home/claude/worship-rig/native/core/tests/test_clock.cpp:66: ERROR: CHECK( firstNonZero(all[0]) == expect ) is NOT correct!
+  values: CHECK( 72513 == 71937 )
+
+/home/claude/worship-rig/native/core/tests/test_clock.cpp:66: ERROR: CHECK( firstNonZero(all[0]) == expect ) is NOT correct!
+  values: CHECK( 40214 == 40022 )
+
+===============================================================================
+[doctest] test cases:  2 |  1 passed | 1 failed | 233 skipped
+[doctest] assertions: 20 | 18 passed | 2 failed |
+[doctest] Status: FAILURE!
+
+      Start  7: unit.delay
+ 7/45 Test  #7: unit.delay .......................   Passed    3.13 sec
+      Start  8: unit.delay_line
+ 8/45 Test  #8: unit.delay_line ..................   Passed    0.03 sec
+      Start  9: unit.dummy-module
+ 9/45 Test  #9: unit.dummy-module ................   Passed    0.01 sec
+      Start 10: unit.golden-analytic
+10/45 Test #10: unit.golden-analytic .............***Failed    0.89 sec
+[doctest] doctest version is "2.4.11"
+[doctest] run with "--help" for options
+===============================================================================
+/home/claude/worship-rig/native/core/tests/test_golden.cpp:108:
+TEST SUITE: golden-analytic
+TEST CASE:  the golden harness reports what it cannot do instead of pretending
+
+/home/claude/worship-rig/native/core/tests/test_golden.cpp:116: ERROR: CHECK( !r.skipped.empty() ) is NOT correct!
+  values: CHECK( false )
+
+/home/claude/worship-rig/native/core/tests/test_golden.cpp:117: ERROR: CHECK( *std::max_element(r.channels[0].begin(), r.channels[0].end()) == 0.0f ) is NOT correct!
+  values: CHECK( 0.5 == 0 )
+
+===============================================================================
+[doctest] test cases:  3 |  2 passed | 1 failed | 232 skipped
+[doctest] assertions: 23 | 21 passed | 2 failed |
+[doctest] Status: FAILURE!
+
+      Start 11: unit.lofi
+11/45 Test #11: unit.lofi ........................   Passed    1.20 sec
+      Start 12: unit.master
