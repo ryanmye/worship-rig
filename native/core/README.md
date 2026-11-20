@@ -38,15 +38,14 @@ Labels: `unit` (doctest suites + params drift), `golden` (render with `rig_rende
 
 ## What is real, what is a stub
 
-Real: C API incl. struct_size handling, offline and realtime modes, control thread, SPSC command/event queues, MPSC
-MIDI queue, seqlock meters, render FIFO for non-128 host blocks, sample-accurate command scheduling (pending heap,
-sub-quantum voice starts), BRIDGE v1 envelope + hello/audio/prepare/commit/set/play/get, the AudioParam timeline
-(set, linear, exponential, setTarget, cancelAndHold, pinned `rampTo`), quantised timers, Chromium biquad formulas,
-slot EQ chain, mono and stereo pan laws, WAV I/O, PARAMS table generated from the contract, FTZ/DAZ, allocation trap.
-All 18 `eq-*` golden fixtures pass the exact tier through this path.
+After wave 1 (BUILD_PLAN "Wave 1 results", `native/docs/PARITY.md`): real and golden-verified are the slot strip
+(SlotEq, width, StereoPanner; T02), the master chain (MasterEq, glue and limiter compressors, WaveShaper; T03), the
+reverb (convolver, IR generator, pool; T04), delay / chorus / lofi (T05), the click and MIDI services (T07), the
+bridge, runtime, meters and recorder (T08) and the Web Audio sources (Oscillator, PeriodicWave, BufferSource,
+ConstantSource; T11a), on top of T01's numerics / AudioParam timeline and T06's sample cache. 50 of the 108 golden
+fixtures pass, all at the exact tier.
 
-Every bridge op dispatches to its `Model` method (WAVE0B_REVIEW V1); ops whose module/service is not registered
-answer `unsupported` (`click drone midi rec`, `cache retainReverb`; `play bend/fade/input` until T14). Stubs:
-`rig_host_midi_ports`, MIDI parsing (bytes are queued and counted), every
-instrument except the test voice (`{"instrument":{"type":"test","id":"sine|saw"}}`), width, sends, FX, master chain,
-click, recorder, taps other than `out`/`slotN.pan`, injection other than `slot0.strip`.
+Still stubs (wave 2–3): every instrument except the test voice (`{"instrument":{"type":"test","id":"sine|saw"}}`):
+synth (T11), sampler (T12), synth-extra and organ (T15); the drone (T16); the Model's song/graph policy (T13) and
+perform logic (T14: `play bend/fade/input`, routing, wheels). Ops whose service is not registered answer
+`unsupported`.
