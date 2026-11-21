@@ -416,8 +416,8 @@ for 16 slots, the `config {dynamicRange}` bridge row (T12 O1), Settings review i
 D4) and the sidebar Settings already landed (Settings task above).
 
 **Mac** (push agent RUN / Ryan): install the iOS simulator platform and re-run `apple-sim`; time a large layered
-chord with the probe (D4 R1); iPad probe build (D4 iPad profile, D2 rounding); the first CI `mac-check` and
-`goldens` runs (unverified until pushed); T07 O6 jitter-free delay; T11 O4 libm check; Ryan's tier-2 checklist after
+chord with the probe (D4 R1); iPad probe build (D4 iPad profile, D2 rounding); read back the CI `mac-check` and
+`goldens` results; T07 O6 jitter-free delay; T11 O4 libm check; Ryan's tier-2 checklist after
 T14 (and after the realtime cache-pump fix, mackit O1).
 
 ## Wave 3: everything that plays (after T11, T12, T13: all done; see "Wave 3: how to start" above)

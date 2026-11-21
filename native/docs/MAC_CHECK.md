@@ -18,8 +18,9 @@ review (`native/docs/reviews/mackit.md`) also ran the macOS code paths on Linux 
 Xcode license), the timeout watchdog and a TERM in the middle of the core build (summary still written, no process
 left behind). The script
 was written for `/bin/bash` 3.2 but only run under bash 5 here. The macOS-only
-parts (Core Audio probe run, `build-core.sh`, `xcodegen`, `xcodebuild`, the `mac-check` CI job) are written but have
-never run: the first tier-0 or tier-1 run is their test.
+parts ran for the first time in Mac check #2 (tier 1, see Results: Core Audio probe, `build-core.sh`, `xcodegen` and
+the macOS `xcodebuild` PASS; the simulator build needs the iOS platform installed); no result of the `mac-check` CI job
+has been read back here yet.
 
 ## Results
 
@@ -45,7 +46,7 @@ What it settles and what it does not:
   box. Raising it is an orchestrator / Ryan decision (DECISIONS D4). The iPad profile (64) is still unmeasured.
 - Mac check #1 (earlier) failed the core build under Apple clang on an unused private field (`-Werror`); since then
   every gate also builds with clang++-20 `-Werror` on Linux as a stand-in.
-- Still open on the Mac: tier 2 (Ryan by hand, after T14), `apple-sim`, the iPad probe, the first CI `mac-check` run.
+- Still open on the Mac: tier 2 (Ryan by hand, after T14), `apple-sim`, the iPad probe, reading back the CI `mac-check` result.
 
 ## Tier 0: CI (no Mac)
 

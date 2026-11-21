@@ -135,8 +135,8 @@ on the Mac and give it this prompt:
 5. **UI wave** (parallel with wave 3, `app/**`): SCHEMA bump + 16-slot Perform/Edit, `config {dynamicRange}` bridge
    row + contract (T12 O1), Settings review items 1-4, `engine-api.json` methods for the 2.0 setters.
 6. **Mac/iPad** (push agent `RUN`, `MAC_CHECK.md`): install the iOS simulator platform and re-run `apple-sim`; time a
-   large layered chord with the probe (D4 R1); iPad probe (D4 iPad profile, D2 rounding); first CI `mac-check` /
-   `goldens` runs (never run on GitHub yet); T07 O6, T11 O4 (libm `exp2f`); Ryan's tier-2 checklist after T14 + item 4.
+   large layered chord with the probe (D4 R1); iPad probe (D4 iPad profile, D2 rounding); read back the CI `mac-check` /
+   `goldens` results; T07 O6, T11 O4 (libm `exp2f`); Ryan's tier-2 checklist after T14 + item 4.
    The rest of the "Verified only on the Mac or iPad" list (BUILD_PLAN) is unchanged.
 
 ## 7. Files outside the repo (cloud session outputs, `v2/`)
