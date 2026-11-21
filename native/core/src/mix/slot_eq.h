@@ -170,7 +170,6 @@ class SlotEqChains {
   bool dirty_ = false;
   Timer timers_[kTimers];
   std::uint64_t order_ = 0;
-  bool inTimers_ = false;
   float scratch_[2][wa::Param::kQuantum];
 };
 
