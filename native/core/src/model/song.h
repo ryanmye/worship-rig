@@ -58,7 +58,8 @@ struct Move {
   double at(double t) const;
 };
 
-/** One slot channel: instrument (+ its shell) and strip, live in Inst<i>/Strip<i> or retiring in RetireInst/Strip<j>. */
+/** One slot channel: instrument (+ its shell) and strip; live in Inst<i>/Strip<i>, or retiring in RetireInst/Strip<j>.
+ */
 struct Channel {
   bool live = false;
   std::uint32_t id = 0;  // unique per engine (> 0); note targets resolve through it (instUnitOf)
@@ -85,8 +86,6 @@ class SongGraph {
   /** Builds the plan (instruments + strips of fresh slots, reuse of matching ones); only the latest token commits. */
   std::uint32_t prepare(PatchSpec &&patch, std::uint32_t token);
   bool commit(std::uint32_t token, double when);
-  /** Global units are attached (audio start or first commit). */
-  void onGlobalsAttached();
 
   // ---- 1.3 rows the Model owns ---------------------------------------------------------------------------------
   /** `slots.<i>.*` rows without a module handler. Returns the JS boolean (false = slot empty / not applicable). */
@@ -123,6 +122,9 @@ class SongGraph {
   double factorFor(std::string_view target) const;
   double slotWheelFactor(int slot) const;
   double morphFor(const Channel &c) const;
+  /** audio.js _applyWheels(t, tc) for the strips (wheel gain rampTo tc) and the morph of the live channels. T14
+   *  extends it with the drone / reverb return / master wheels, macro.wash and the bend morph (coalesced 'wheels'). */
+  void applyWheels(double t, double tc);
   /** Called when a retiring channel is disposed (perform state drops its pedaled notes, audio.js _unpedal). */
   void setDisposeHook(std::function<void(std::uint32_t channelId)> fn) { onDispose_ = std::move(fn); }
   bool planPending() const { return plan_ != nullptr; }
@@ -171,7 +173,6 @@ class SongGraph {
   bool paramsMatch(const SlotPatch &have, const SlotPatch &want) const;
   void applyFresh(Channel &c, double when);
   void applyReused(Channel &c, const SlotPatch &cfg, const SlotPatch &prev, double when);
-  void applyWheels(double t, double tc);
   void faderMove(Channel &c, double to, double when, double glide, double fallback);
   void sendParamOps(UnitSlot u, std::uint32_t index, std::initializer_list<Command> cmds);
   void sendInstParam(const Channel &c, std::uint32_t index, double v, double t);

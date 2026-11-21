@@ -91,7 +91,9 @@ void songN(OfflineEngine &e, int n, const std::string &id) {
   e.call(R"({"v":1,"op":"audio","action":"start","id":2})");
   std::string p = R"({"slots":[)";
   for (int i = 0; i < n; ++i)
-    p += (i ? "," : "") + std::string(R"({"instrument":{"type":"synth","id":")") + id + R"("},"gain":0.2})";
+    p += (i ? "," : "") + std::string(R"({"instrument":{"type":"synth","id":")") + id +
+         R"("},"gain":0.2,"highNote":127,"mono":"off"})";  // T13: explicit, not the Bass role's 59 / 'lowest'
+
   p += "]}";
   const std::string r = e.call(R"({"v":1,"op":"prepare","id":3,"patch":)" + p + "}");
   REQUIRE(contains(r, "\"token\":"));

@@ -28,7 +28,7 @@ struct Eng {
     cfg.mode = RIG_MODE_OFFLINE;
     cfg.flags = RIG_FLAG_TEST_API;
     cfg.sample_rate = sr;
-    cfg.seed = 1;
+    cfg.seed = 7;  // suites.mjs mkEngine
     cfg.app_dir = app.empty() ? nullptr : app.c_str();
     cfg.on_event = [](void *u, const char *j, size_t n) { static_cast<Eng *>(u)->msgs.emplace_back(j, n); };
     cfg.event_user = this;
@@ -112,7 +112,8 @@ struct Eng {
 };
 
 /** A slot JSON: instrument type:id, gain, all sends explicit (0 unless given), optional extra fields. */
-inline std::string slot(const std::string &type, const std::string &id, double gain = 1, const std::string &extra = "") {
+inline std::string slot(const std::string &type, const std::string &id, double gain = 1,
+                        const std::string &extra = "") {
   return R"({"instrument":{"type":")" + type + R"(","id":")" + id + R"("},"gain":)" + Eng::num(gain) +
          R"(,"sends":{"reverb":0,"delay":0,"chorus":0})" + (extra.empty() ? "" : "," + extra) + "}";
 }

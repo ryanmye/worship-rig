@@ -500,8 +500,6 @@ bool SongGraph::commit(std::uint32_t token, double when) {
   return true;
 }
 
-void SongGraph::onGlobalsAttached() {}
-
 // ---- the Model's slot rows (audio.js _setSlotParam) ---------------------------------------------------------------
 
 bool SongGraph::setSlotRow(const ParamRow &row, int slot, double v, double glide, double when, double prevGain) {

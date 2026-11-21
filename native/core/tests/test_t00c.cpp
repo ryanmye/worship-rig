@@ -45,9 +45,11 @@ rig::Engine &eng(OfflineEngine &e) {
 std::string slotJson(bool on, double gain = 0.9, double pan = 0.0, double rev = 0.0, double dly = 0.0,
                      double release = 0.2) {
   if (!on) return "null";
+  // T13: every role-dependent row explicit (params.js defaultSlot: Pad/Extra sends, Bass highNote 59 + mono lowest)
   return R"({"instrument":{"type":"test","id":"sine"},"gain":)" + std::to_string(gain) + R"(,"pan":)" +
-         std::to_string(pan) + R"(,"sends":{"reverb":)" + std::to_string(rev) + R"(,"delay":)" +
-         std::to_string(dly) + R"(},"params":{"attack":0.002,"decay":0.3,"sustain":0.8,"release":)" +
+         std::to_string(pan) + R"(,"highNote":127,"mono":"off","sends":{"reverb":)" + std::to_string(rev) +
+         R"(,"delay":)" + std::to_string(dly) +
+         R"(,"chorus":0},"params":{"attack":0.002,"decay":0.3,"sustain":0.8,"release":)" +
          std::to_string(release) + "}}";
 }
 
