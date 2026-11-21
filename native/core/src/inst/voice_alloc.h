@@ -31,6 +31,7 @@
 // slot touches its pages on the audio thread: a page fault, not an allocation).
 #pragma once
 #include <cstddef>
+#include <cstring>
 #include <cstdint>
 #include <limits>
 #include <new>
@@ -45,6 +46,10 @@ inline constexpr unsigned kDefaultVoiceCap = 64;   // D1 default
 inline constexpr unsigned kWebVoiceCap = 16;       // voice.js MAX_VOICES (synth/organ), the goldens' polyphony
 inline constexpr unsigned kWebSamplerVoiceCap = 32;  // sampler.js SAMPLER_MAX_VOICES
 inline constexpr double kStealFade = 0.02;         // voice.js STEAL_FADE (s)
+// T13 (T11 review O1): pool slots written once by the constructor (control thread; since T13 instruments are built
+// at prepare), so the first chord of a fresh instrument never page-faults on the audio thread. freeSlot() hands out
+// the lowest free index, so ordinary playing stays inside them. 16 = one full chord (web MAX_VOICES).
+inline constexpr unsigned kPrefaultVoices = 16;
 
 // ---- D4: engine-wide voice limit (total live voices across all slots, retiring channels included) ------------------
 // `config {voiceLimit}`: 'auto' | 128 | 256 | 512 | 0 (off). 'auto' = a per-profile number sized so a held-pedal worst
@@ -89,8 +94,14 @@ class VoicePool {
     std::uint32_t gen = 0;
   };
 
-  explicit VoicePool(StealPolicy policy = StealPolicy::ReleasedByWhen) : policy_(policy) {
+  explicit VoicePool(StealPolicy policy = StealPolicy::ReleasedByWhen, unsigned prefaultSlots = kPrefaultVoices)
+      : policy_(policy) {
     storage_ = static_cast<unsigned char *>(::operator new(kStride * Capacity, std::align_val_t(kAlign)));
+    prefault(prefaultSlots);  // T13 (T11 O1)
+  }
+  /** Touch the storage of the first `slots` voices (control thread only; nothing is constructed). */
+  void prefault(unsigned slots) {
+    std::memset(storage_, 0, kStride * (slots < Capacity ? slots : Capacity));
   }
   ~VoicePool() {
     for (unsigned i = 0; i < Capacity; ++i)

@@ -116,7 +116,36 @@ double SongGraph::tOf(double when) const {
 }
 
 SongGraph::SongGraph(Model &m)
-    : m_(m), co_([&m](double at, std::function<void(double)> fn) { m.sink().at(at, std::move(fn)); }, 0.01) {}
+    : m_(m), co_([&m](double at, std::function<void(double)> fn) { m.sink().at(at, std::move(fn)); }, 0.01) {
+  for (std::int64_t &f : slotFrame_) f = kFrameNow;
+}
+
+void SongGraph::gate(Command &c, std::int64_t now) {
+  const std::int64_t f = c.frame == kFrameNow ? now : c.frame;
+  switch (c.op) {
+    case Op::AttachUnit:
+    case Op::DetachUnit:
+      if (c.target < kUnitSlots) slotFrame_[c.target] = std::max(slotFrame_[c.target], f);
+      return;
+    case Op::MoveUnit:
+      if (c.target < kUnitSlots) slotFrame_[c.target] = std::max(slotFrame_[c.target], f);
+      if (c.aux < kUnitSlots) slotFrame_[c.aux] = std::max(slotFrame_[c.aux], f);
+      return;
+    case Op::ParamSet:
+    case Op::ParamLinear:
+    case Op::ParamExp:
+    case Op::ParamTarget:
+    case Op::ParamCancelHold: {
+      const auto u = static_cast<std::size_t>(paramUnit(c.target));
+      if (u < kUnitSlots && slotFrame_[u] > now && f < slotFrame_[u]) c.frame = slotFrame_[u];
+      return;
+    }
+    default:
+      if (c.target < kUnitSlots && slotFrame_[c.target] > now && f < slotFrame_[c.target])
+        c.frame = slotFrame_[c.target];
+      return;
+  }
+}
 
 SongGraph::~SongGraph() {
   if (plan_) discard(*plan_);

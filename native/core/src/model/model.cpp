@@ -83,6 +83,7 @@ double Model::timeFor(double when) const {
 }
 
 bool Model::send(Command c) {
+  sg_->gate(c, sink_.timeBase().frame);  // T13: a command for a slot never reaches the unit a future commit replaces
   if (!sink_.send(c)) {
     ++stats_.droppedCommands;
     return false;

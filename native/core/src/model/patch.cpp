@@ -189,6 +189,36 @@ void parseEq(const yyjson_val *eq, SlotEqSpec &spec) {
   parseSlotEqJson(eq, spec);
 }
 
+// INTERFACE-CHANGE(T13): params.js defaultSlot(role) under normalizePatch: a slot's absent rows take its ROLE's
+// defaults (Keys / Pad / Extra / Bass = slots 0..3; native slots 4..15 are Keys like slot 0, DECISIONS D3), not the
+// PARAMS row default (NaN for the role-dependent rows, so they were left at 0 / off / 127 / false). Sends per role,
+// Bass highNote 59 and mono 'lowest', bendEnabled for synth and organ only.
+void applyRoleDefaults(const yyjson_val *patch, PatchSpec &out) {
+  struct Role {
+    double sends[3];
+    int highNote, mono;
+  };
+  static constexpr Role kRoles[4] = {
+      {{0.25, 0.1, 0}, 127, 0}, {{0.5, 0.15, 0.4}, 127, 0}, {{0.35, 0.2, 0.2}, 127, 0}, {{0, 0, 0}, 59, 1}};
+  yyjson_val *slots = at(patch, "slots");
+  for (int i = 0; i < kMaxSlots; ++i) {
+    SlotPatch &sp = out.slots[i];
+    if (!sp.present) continue;
+    const Role &r = kRoles[i < 4 ? i : 0];
+    yyjson_val *so = slots && yyjson_is_arr(slots) ? yyjson_arr_get(slots, static_cast<std::size_t>(i)) : nullptr;
+    const auto absent = [&](const char *k) {
+      yyjson_val *v = so ? at(so, k) : nullptr;
+      return !v || yyjson_is_null(v);
+    };
+    static const char *const kSends[3] = {"sends.reverb", "sends.delay", "sends.chorus"};
+    for (int k = 0; k < 3; ++k)
+      if (absent(kSends[k])) sp.sends[k] = r.sends[k];
+    if (absent("highNote")) sp.spec.highNote = r.highNote;
+    if (absent("mono")) sp.mono = r.mono;
+    if (absent("bendEnabled")) sp.bendEnabled = sp.instType == "synth" || sp.instType == "organ";
+  }
+}
+
 }  // namespace
 
 bool parsePatch(const yyjson_val *patch, PatchSpec &out, std::string *err) {
@@ -248,6 +278,7 @@ bool parsePatch(const yyjson_val *patch, PatchSpec &out, std::string *err) {
     if (ph && yyjson_is_num(ph)) sp.pedalHold = std::fmin(30.0, std::fmax(2.0, yyjson_get_num(ph)));
   }
   applyTable(p, out);
+  applyRoleDefaults(p, out);  // INTERFACE-CHANGE(T13)
   return true;
 }
 

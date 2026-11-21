@@ -127,6 +127,12 @@ class SongGraph {
   void setDisposeHook(std::function<void(std::uint32_t channelId)> fn) { onDispose_ = std::move(fn); }
   bool planPending() const { return plan_ != nullptr; }
 
+  /** Every Model command passes here (Model::send). Units change at a commit's frame, which may lie ahead (a commit
+   *  `when` in the future, e.g. an offline render posting the whole song up front); the Model's view of a unit slot
+   *  changes at once. So a command for a slot whose occupant changes at frame F > now is moved to F (after the
+   *  attach / move by submission order): it reaches the unit the Model meant (JS automates that very AudioParam).
+   *  Attach / Detach / MoveUnit record F for their slots. `now` = the published time-grid frame. */
+  void gate(Command &c, std::int64_t now);
   /** A device rate change: retiring synth.js instruments get the new rate's wavetables too (T11 O3). */
   void onRateChanged(double sampleRate);
   void statsFields(std::string &out) const;
@@ -184,6 +190,7 @@ class SongGraph {
   Routing routing_;
   WheelValues wheel_;
   Coalescer co_;
+  std::int64_t slotFrame_[kUnitSlots];  // frame from which the Model's current occupant of each unit slot plays
   std::uint32_t bypass_ = 0;  // eqAudition 'bypass' per slot (audio.js _eqBypass)
   double dynRange_ = 1;
   std::function<void(std::uint32_t)> onDispose_;

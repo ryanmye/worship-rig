@@ -229,6 +229,29 @@ add({ id: 'auto-master-volume', kind: 'automation', seconds: 4,
   setup: { patch: soloPatch('organ', 'soft-pad'), tap: 'out' },
   events: [...held(60, 0.1, 3.5), { t: 1.2, type: 'param', path: 'master.volume', value: 0.2 },
     { t: 2.2, type: 'param', path: 'master.volume', value: 1.2 }] });
+// T13: synth.js twins of the four automation fixtures above (organ / synth:pluck are T15's), so the Model's slot,
+// send and master rows are tested in wave 2: identical setups and events, instrument synth:warm-pad (T11, exact).
+add({ id: 'auto-slot-level-synth', kind: 'automation', addedBy: 'T13', seconds: 6.5,
+  setup: { patch: soloPatch('synth', 'warm-pad'), tap: 'slot0.pan' },
+  events: [...held(57, 0.1, 5.5), { t: 1.5, type: 'param', path: 'slots.0.gain', value: 0.3 },
+    { t: 2.5, type: 'param', path: 'slots.0.gain', value: 1.4, glide: 1.5 },
+    { t: 4.5, type: 'param', path: 'slots.0.gain', value: 0.5, glide: SCENE_GLIDE_SEC }] });
+add({ id: 'auto-reverb-send-synth', kind: 'automation', addedBy: 'T13', seconds: 6,
+  setup: { patch: { slots: [{ instrument: { type: 'synth', id: 'warm-pad' }, gain: 1, sends: { reverb: 0 } },
+    null, null, null],
+    fx: fxFromPaths(SPACE_PRESETS.find((p) => p.id === 'room').params) }, tap: 'out' },
+  events: [...held(60, 0.1, 4), { t: 1.5, type: 'param', path: 'slots.0.sends.reverb', value: 0.8 },
+    { t: 3, type: 'param', path: 'fx.reverb.returnGain', value: 0.2 }] });
+add({ id: 'auto-delay-send-synth', kind: 'automation', addedBy: 'T13', seconds: 5,
+  setup: { patch: { slots: [{ instrument: { type: 'synth', id: 'warm-pad' }, gain: 1, sends: { delay: 0 } },
+    null, null, null],
+    fx: fxFromPaths(ECHO_PRESETS.find((p) => p.id === 'slapback').params) }, tap: 'out' },
+  events: [...held(64, 0.1, 0.3), { t: 1, type: 'param', path: 'slots.0.sends.delay', value: 1 }, ...held(67, 1.2, 1.4),
+    { t: 2.2, type: 'param', path: 'fx.delay.feedback', value: 0.7 }, ...held(71, 2.4, 2.6)] });
+add({ id: 'auto-master-volume-synth', kind: 'automation', addedBy: 'T13', seconds: 4,
+  setup: { patch: soloPatch('synth', 'warm-pad'), tap: 'out' },
+  events: [...held(60, 0.1, 3.5), { t: 1.2, type: 'param', path: 'master.volume', value: 0.2 },
+    { t: 2.2, type: 'param', path: 'master.volume', value: 1.2 }] });
 add({ id: 'auto-modwheel-cc', kind: 'automation', seconds: 5,
   setup: { patch: { slots: [null, { instrument: { type: 'organ', id: 'soft-pad' }, gain: 1 }, null, null] },
     wheel: { mod: 1 }, tap: 'slot1.pan' },
