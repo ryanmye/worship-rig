@@ -1,6 +1,0 @@
-[0/2] Re-checking globbed directories...
-[1/4] Building CXX object core/CMakeFiles/rig_core.dir/src/fx/lofi.cpp.o
-[2/4] Linking CXX static library core/librig_core.a
-[3/4] Linking CXX executable devhost_tests
-[4/4] Linking CXX executable rig-devhost
-EXIT 0

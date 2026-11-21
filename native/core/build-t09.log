@@ -1,8 +1,0 @@
-[0/2] Re-checking globbed directories...
-[1/6] Building CXX object core/CMakeFiles/rig_core.dir/src/fx/delay.cpp.o
-[2/6] Building CXX object core/CMakeFiles/rig_core.dir/src/fx/lofi.cpp.o
-[3/6] Building CXX object core/CMakeFiles/rig_core.dir/src/fx/lofi_register.cpp.o
-[4/6] Linking CXX static library core/librig_core.a
-[5/6] Linking CXX executable devhost_tests
-[6/6] Linking CXX executable rig-devhost
-EXIT 0
