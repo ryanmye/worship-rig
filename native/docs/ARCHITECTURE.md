@@ -329,17 +329,18 @@ them the costliest voice measured (warm-pad), 16 slots, the render at or under a
     auto = (0.60 × 2667 µs − fixed16) / perVoice, rounded to a multiple of 16
 
 Linux box (g++ 13 Release, 2 vCPU shared with another build, three runs of `unit.voice-limit-cpu`): fixed16 =
-212-221 µs, perVoice = 9.0 / 9.4 / 11.1 µs → 154 / 147 / 125 voices. Desktop **128**: 53 % of the quantum at the median
-cost, 61 % at the worst run; the same test renders 16 warm-pad slots played to 256 note-ons at the limit in 1240-1320 µs
-(47-50 %). Mac (Mac check #2, M2 Pro): warm-pad 4.82 µs per voice, probe suggestion 256 (raw 271); the constant
-stays 128 until the burst below is timed on the Mac (DECISIONS D4: orchestrator / Ryan). iPad **64**: the same formula with an ASSUMED 2× slower core than this box, (1600 − 2 × 218) / (2 × 9.4) = 62
-→ 64. Both are PROVISIONAL: a Mac is likely faster than this box (128 is then conservative), and the oldest supported
-iPad has never been measured. Mac list: run `rig_tests -ts=voice-limit-cpu` on the Mac and an equivalent measurement on
-the iPad (no iPad test target exists yet), recompute with the formula, and replace `kAutoVoiceLimitDesktop` /
-`kAutoVoiceLimitIpad` (and the mock's `AUTO_VOICE_LIMIT`). T15's organ / synth-extra voices must be measured too: if one
-costs more than warm-pad it becomes perVoice. The manual choices (128 / 256 / 512 / Off) are not sized: 512 warm-pad
-voices (~5 ms per quantum here) overrun the audio thread on this box, which is what Off and the large values mean for a
-user who chooses them.
+212-221 µs, perVoice = 9.0 / 9.4 / 11.1 µs → 154 / 147 / 125 voices. Desktop **128**: 53 % of the quantum at the
+median cost, 61 % at the worst run; the same test renders 16 warm-pad slots played to 256 note-ons at the limit in
+1240-1320 µs (47-50 %). Mac (Mac check #2, M2 Pro): warm-pad 4.82 µs per voice, probe suggestion 256 (raw 271); the
+constant stays 128 until the burst below is timed on the Mac (DECISIONS D4: orchestrator / Ryan). iPad **64**: the
+same formula with an ASSUMED 2× slower core than this box, (1600 − 2 × 218) / (2 × 9.4) = 62 → 64. Both are
+PROVISIONAL: the Mac is measured about 1.9× faster per voice than this box (128 is conservative there), and the
+oldest supported iPad has never been measured. Mac list: time a large layered chord with the probe, run an
+equivalent measurement on the iPad (no iPad test target exists yet), recompute with the formula, and replace
+`kAutoVoiceLimitDesktop` / `kAutoVoiceLimitIpad` (and the mock's `AUTO_VOICE_LIMIT`). T15's organ / synth-extra
+voices must be measured too: if one costs more than warm-pad it becomes perVoice. The manual choices (128 / 256 /
+512 / Off) are not sized: 512 warm-pad voices (~5 ms per quantum here) overrun the audio thread on this box, which
+is what Off and the large values mean for a user who chooses them.
 
 The 60 % target is the steady state. Two transients sit on top of it (D4 review, scratch probe on this box, warm-pad,
 16 slots, limit 128): (1) stolen voices keep rendering their 20 ms steal fade (~8 quanta) and are not counted, so the

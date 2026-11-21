@@ -8,9 +8,10 @@ and how the pieces talk to each other. Everything it cites is on branch `v2-nati
 Route B: the existing web UI (`app/`) stays and runs in a system WebView (WKWebView on Mac and iPad); the Web Audio
 engine is replaced by a portable C++20 core (`native/core`) behind a JSON bridge (BRIDGE v1: 14 ops, 9 events;
 `native/docs/ENGINE_CONTRACT.md`). Swift is a thin shell (`native/apple`; no Xcode in the cloud: the macOS target first
-compiled and linked on Ryan's Mac in Mac check #2, never launched yet). The web engine stays as the reference oracle: deterministic OfflineAudioContext renders ("goldens",
-`native/golden`, `tools/golden`) that the native core must match per fixture (112 fixtures, tier exact or statistical).
-Windows is out of scope. iPad installs via Xcode + free Apple ID (7-day re-sign), no App Store.
+compiled and linked on Ryan's Mac in Mac check #2, never launched yet). The web engine stays as the reference oracle:
+deterministic OfflineAudioContext renders ("goldens", `native/golden`, `tools/golden`) that the native core must match
+per fixture (112 fixtures, tier exact or statistical). Windows is out of scope. iPad installs via Xcode + free Apple ID
+(7-day re-sign), no App Store.
 
 ## 2. Where it stands (paused before wave 3, 2026-11-21, at Ryan's request)
 
@@ -45,7 +46,14 @@ Numbers at the pause (wave-2 integrator, fresh build dirs, `-j2`, one at a time)
 - Fixtures: **73/112** (108 originals: **69**; T13's 4 synth.js twins: 4), g++ / clang / clang-20 renders
   byte-identical for all 112; tiers 78 exact / 34 statistical (six promotions in this pass). The other 39 wait for
   T14 / T15 / T16 (`PARITY.md` lists the task per fixture; `tools/golden/parity.mjs` regenerates it).
-- JS: see "JS at the pause" below (filled by the integrator's run).
+- JS (Playwright's Chromium 1194 mapped to the installed 1243 through a scratch `PLAYWRIGHT_BROWSERS_PATH`; nothing
+  installed): `node test/run-all.mjs --fast` 10/12 suites: unit 510 pass / 0 fail / 9 skip, instruments 143/143,
+  synth-extra 153/153, shell 250, ui-core 82, edit-v2 105, settings 78/78, mini 14/14, themes 58/58,
+  chrome-fallback 17/17; **eq 27/28** = the known pre-existing `L-21` ("1100 @system%: every cell's text fits"), the
+  only real failure; **engine 97/99** = `realtime.audioSleep` (3 forced-sleep ramps with 1-3 audio gaps under load)
+  + `offline.eqCpu` soft warning; `audioSleep` passes alone (load flake, web engine, untouched by wave 2).
+  `node --test test/unit/engine-bridge/*.test.mjs` 111 pass / 0 fail / 2 skip; `node test/phase2/settings/run.mjs`
+  78/78 again on its own. The themes suite rewrites `test/phase2/themes/coverage-*.json` (timestamps only).
 - Mac check #2 (`b0bf81a`): core 46/46 under Apple clang 21; probe: 64-512 frames granted exactly, 0 xruns, 64 safe;
   warm-pad 4.82 µs per voice (Auto suggestion 256; **kept at 128**, DECISIONS D4).
 - 1.1.0 (main `d01f286`) is merged into `v2-native`.

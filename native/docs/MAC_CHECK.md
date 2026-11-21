@@ -46,7 +46,8 @@ What it settles and what it does not:
   box. Raising it is an orchestrator / Ryan decision (DECISIONS D4). The iPad profile (64) is still unmeasured.
 - Mac check #1 (earlier) failed the core build under Apple clang on an unused private field (`-Werror`); since then
   every gate also builds with clang++-20 `-Werror` on Linux as a stand-in.
-- Still open on the Mac: tier 2 (Ryan by hand, after T14), `apple-sim`, the iPad probe, reading back the CI `mac-check` result.
+- Still open on the Mac: tier 2 (Ryan by hand, after T14), `apple-sim`, the iPad probe, reading back the CI
+  `mac-check` result.
 
 ## Tier 0: CI (no Mac)
 
