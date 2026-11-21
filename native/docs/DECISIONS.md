@@ -20,6 +20,10 @@ Decisions that change 2.0's scope. Each names where it lands. Agents: treat thes
 - Apple: AUHAL `kAudioDevicePropertyBufferFrameSize` on macOS, `AVAudioSession.setPreferredIOBufferDuration` on
   iPad (the OS may round it: show the actual value). Reported latency must follow the actual size.
 - Contract: the `audio` op gains `bufferFrames`; the `state` event reports the granted size.
+- **Measured (Mac check #2, 2026-11-21, `MAC_CHECK.md` Results):** Ryan's M2 Pro, Core Audio, a USB-C dock at
+  44.1 kHz: 64 / 128 / 256 / 512 frames granted exactly, 0 late callbacks and 0 xruns at every size, latency 2.9 / 5.8 /
+  11.6 / 23.2 ms; **64 frames measured safe** on the Mac (`d2_64_frames.safe`). The default stays 128. iPad
+  (AVAudioSession rounding) not measured yet.
 
 ## D3 — Up to 16 sound slots per song, scrolling (Ryan, 2026-11-20)
 - Today: exactly 4 slots (Keys, Pad, Extra, Bass): `shared/params.js` SLOT_COUNT = 4, fixed arrays in the store,
@@ -46,6 +50,12 @@ Answers the T00c open question (its numbers are kept below). Ryan chose "add to 
   per-voice cost (desktop/Mac and iPad profiles; provisional values from the Linux bench until the Mac/iPad are
   measured, which stays on the Mac list).
 - The web engine (1.x oracle) is unchanged: 16/32 voices, 4 slots; goldens unaffected.
+- **Measured (Mac check #2, 2026-11-21):** warm-pad costs **4.82 µs per voice per quantum** on Ryan's M2 Pro (Linux
+  box ≈ 9 µs); `rig-probe` suggests desktop Auto **256** (raw 271). **Desktop Auto stays 128 for now**
+  (`kAutoVoiceLimitDesktop`, `mock-native.js AUTO_VOICE_LIMIT`): the 60 % sizing covers the steady state only, the
+  burst of steal fades + voice construction (D4 review R1) is not measured on the Mac, and `unit.voice-limit-cpu`
+  holds the budget on the Linux box (fit 125-154 there). The Mac measurement supports 256: **orchestrator / Ryan
+  decision** (needs a timed large layered chord on the Mac first). iPad 64 stays PROVISIONAL (no iPad probe yet).
 
 ## Settings page restructure (Ryan, 2026-11-20; 2.0 only)
 Simplify Settings into **sidebar categories** (one visible at a time, like macOS System Settings; a horizontal tab

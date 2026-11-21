@@ -211,7 +211,8 @@ TEST_SUITE("t00c") {
     CHECK(contains(e.call(R"({"v":1,"op":"config","id":10,"polyphony":96})"), "bad-request"));
     CHECK(contains(e.call(R"({"v":1,"op":"audio","id":11,"action":"start","bufferFrames":100})"), "bad-request"));
     const std::string h = e.call(R"({"v":1,"op":"hello","protocol":1,"id":12})");
-    CHECK(contains(h, "\"minor\":1"));
+    // minor >= 1 carries the T00c caps (D4 bumped it to 2: a later additive bump must not break this check)
+    CHECK((contains(h, "\"minor\":") && !contains(h, "\"minor\":0")));
     CHECK(contains(h, "\"slots16\""));
     CHECK(contains(h, "\"polyphony\""));
     CHECK(contains(h, "\"bufferFrames\""));

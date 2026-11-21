@@ -117,6 +117,32 @@ Contract (`native/contract`): `config.voiceLimit` `'auto'|128|256|512|0?`, reply
 get state note; `engine-api.json` regenerated (`--check` clean). `app/js/engine-bridge/mock-native.js` answers
 `config {polyphony, voiceLimit}` and `get state` like the core (`AUTO_VOICE_LIMIT` per `profile` option).
 
+## T13: Model song & graph, marked `INTERFACE-CHANGE(T13)` (reviewed: `reviews/T13.md`, VERIFIED)
+
+Logged by the wave-2 integrator from the T13 report + review. No C API, bridge, opcode, `Command` / `AudioEvent` or
+`UnitSlot` change.
+
+| # | file(s) | change | why |
+|---|---|---|---|
+| 32 | `src/model/model.h`, `model.cpp` | `class SongGraph;` forward + `std::unique_ptr<SongGraph> sg_` (declared last, destroyed first, before the services), `friend class SongGraph`, `songGraph()` (const and non-const); `plans_` removed (the plan lives in `SongGraph`) | T13's song / graph policy (prepare, commit, retire, routing, the command gate, coalescing) lives in T13's own `model/song.{h,cpp}`; services (T11 O3: the instrument in a retiring channel) and T14 (note targets via `liveChannel(i)` / `instUnitOf(id)`) read it |
+| 33 | `src/model/model.h`, `model.cpp` | `setDynamicRange(double)` (1..3, invalid -> 1; returns the range used) / `dynamicRange()`: stored, sent to every live sampler (slots + retiring) and after every `inst.sampler` attach | T12 review O1 (`settings.dynamicRange`). The bridge row (`config {dynamicRange}`) + `engine-api.json` + contract row are still missing: owner orchestrator / T08 |
+| 34 | `src/model/patch.cpp` (`applyRoleDefaults`, called at the end of `parsePatch`) | an ABSENT slot row takes its ROLE default (params.js `defaultSlot`: sends per role, Bass `highNote` 59 + `mono` 'lowest', `bendEnabled` for synth / organ); slots 4..15 use the Keys role | before, the native parse left them at the PARAMS row defaults (0 / 127 / off / false), so every song without explicit sends had no reverb / delay. No passing fixture changed (their patches set every send they use); three T13 twins pass because of it |
+| 35 | `src/model/patch.cpp` (same function; wave-2 integrator) | an explicit JSON `null` is no longer treated as absent: it keeps the PARAMS row default, as JS (`{...base, ...s}` keeps the null, `clampParam(null)` = the PARAMS default; sends merge one level deeper). Test `unit.model` "role defaults: an absent row takes the role value, an explicit null the PARAMS default" (values checked against `engine/audio.js normalizePatch` in node) | T13 review O1. The store never writes null today, so no song changes; renders of all 112 fixtures byte-identical before / after |
+
+Outside the frozen table but noted for later tasks: `src/inst/voice_alloc.h` (T11's file) `kPrefaultVoices` = 16:
+`VoicePool`'s constructor touches the first 16 voice slots on the control thread (T11 review O1; +1.9 MB resident per
+synth.js instrument, +0.33 MB per sampler; ARCHITECTURE 7.1). T13 also edited `tests/test_bridge.cpp`,
+`test_t00c.cpp`, `test_voice_limit.cpp` (expectations that encoded the skeleton policy) and added four fixtures to
+`tools/golden/fixtures.mjs` + the manifest (`auto-*-synth`).
+
+## Wave-2 integrator (2026-11-21)
+
+| # | file(s) | change | why |
+|---|---|---|---|
+| 36 | `src/bridge/bridge.cpp` (`opHello`), `tests/test_t00c.cpp` | `hello.minor` 1 -> **2** (marked `INTERFACE-CHANGE(D4)`); the T00c test now accepts any minor >= 1 | contract README rule (additive change = bump minor + capability); D4 review R4. The JS shim never reads `minor`; `mock-native.js` still answers 0 (unchanged, as before) |
+| 37 | `include/rig/rig_engine.h`, `src/api/registry.h` | comment-only: the T00c lines carry the literal `INTERFACE-CHANGE(T00c)` marker | T00c review O1 |
+| 38 | `tests/samples_util.h` (T06 test helper) | `Dump::ok()` also requires `decode-dump/data/raw44100` and `raw48000` (git-ignored) | MAC_CHECK known gap 2 / mackit O2: in a clean checkout (CI `build-test`, `check.sh`) the three `unit.samples_*` dump cases now skip with a MESSAGE instead of failing |
+
 ## Notes for later tasks
 
 - T05 review R1 (closed by the integrator): the `src/fx/delay.h` header comment and ENGINE_CONTRACT §3.5 now

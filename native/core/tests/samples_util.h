@@ -2,6 +2,7 @@
 #pragma once
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -34,7 +35,13 @@ struct Dump {
   ~Dump() { yyjson_doc_free(doc); }
   Dump(const Dump &) = delete;
   Dump &operator=(const Dump &) = delete;
-  bool ok() const { return files != nullptr; }
+  // The raw Chromium dumps (data/raw44100, raw48000) are git-ignored while data/manifest.json is committed: a clean
+  // checkout (CI, tools/mac/check.sh) has the manifest but not the WAVs, so "generated" needs both (MAC_CHECK known
+  // gap 2, mackit review O2; wave-2 integrator).
+  bool ok() const {
+    return files != nullptr && std::filesystem::is_directory(dumpDir() + "/raw44100") &&
+           std::filesystem::is_directory(dumpDir() + "/raw48000");
+  }
 };
 
 inline const char *str(yyjson_val *o, const char *k) {

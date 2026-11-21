@@ -191,8 +191,9 @@ void parseEq(const yyjson_val *eq, SlotEqSpec &spec) {
 
 // INTERFACE-CHANGE(T13): params.js defaultSlot(role) under normalizePatch: a slot's absent rows take its ROLE's
 // defaults (Keys / Pad / Extra / Bass = slots 0..3; native slots 4..15 are Keys like slot 0, DECISIONS D3), not the
-// PARAMS row default (NaN for the role-dependent rows, so they were left at 0 / off / 127 / false). Sends per role,
-// Bass highNote 59 and mono 'lowest', bendEnabled for synth and organ only.
+// PARAMS row default (0 / 127 / 'off' / false for these rows). Sends per role, Bass highNote 59 and mono 'lowest',
+// bendEnabled for synth and organ only. Only an ABSENT row takes the role value: JS `{...base, ...s}` keeps an
+// explicit null, which clamp() then maps to the PARAMS default (wave-2 integrator, T13 review O1).
 void applyRoleDefaults(const yyjson_val *patch, PatchSpec &out) {
   struct Role {
     double sends[3];
@@ -208,7 +209,7 @@ void applyRoleDefaults(const yyjson_val *patch, PatchSpec &out) {
     yyjson_val *so = slots && yyjson_is_arr(slots) ? yyjson_arr_get(slots, static_cast<std::size_t>(i)) : nullptr;
     const auto absent = [&](const char *k) {
       yyjson_val *v = so ? at(so, k) : nullptr;
-      return !v || yyjson_is_null(v);
+      return !v;  // explicit null: applyTable skipped it, the PARAMS row default stays (= JS clamp(null))
     };
     static const char *const kSends[3] = {"sends.reverb", "sends.delay", "sends.chorus"};
     for (int k = 0; k < 3; ++k)

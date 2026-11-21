@@ -47,7 +47,7 @@ struct UnitEnv {
 /** What a factory builds from: the RESOLVED patch (model/patch.h) plus song state. Valid during the call only. */
 struct UnitSpec {
   UnitSlot slot = UnitSlot::Count;
-  int channel = -1;  // 0..15 for Inst*/Strip* (also the patch slot of a retiring channel), else -1 (T00c D3)
+  int channel = -1;  // 0..15 for Inst*/Strip* (also a retiring channel's patch slot), else -1 (INTERFACE-CHANGE(T00c))
   const PatchSpec *patch = nullptr;
   const SongState *song = nullptr;
   std::uint32_t instSeq = 0;  // instrument lifetime counter (contract 7.15) for seeds: rngFor(seed, "...#instSeq")
@@ -65,7 +65,7 @@ struct UnitInfo {
 struct SetRequest {
   const ParamRow *row;
   std::string_view path;  // concrete path ("slots.2.sends.reverb")
-  int slot;               // 0..15 for slots.<i>.*, else -1 (T00c D3)
+  int slot;               // 0..15 for slots.<i>.*, else -1 (INTERFACE-CHANGE(T00c) D3)
   double value;           // clamped numeric value (bool 0/1, enum index)
   double glide;           // s (0 = row's own smoothing)
   double when;            // engine time; < 0 = now

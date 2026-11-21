@@ -274,4 +274,35 @@ TEST_SUITE("model") {
     CHECK(e.model().dynamicRange() == 1.5);
     // drone files and the fade-out state are T16 / T14 (restartKeepsState's other halves)
   }
+
+  TEST_CASE("role defaults: an absent row takes the role value, an explicit null the PARAMS default (T13 O1)") {
+    // engine/audio.js normalizePatch: {...defaultSlot(role), ...s} keeps an explicit null and clampParam(null) gives
+    // the PARAMS default; sends merge one level deeper ({...base.sends, ...s.sends}). Values checked in node:
+    // Bass {highNote, mono, bendEnabled: null} -> 127 / 'off' / false; absent -> 59 / 'lowest' / true (synth);
+    // Keys sends {reverb: null} -> reverb 0, delay 0.1 (role).
+    const auto parse = [](const std::string &j) {
+      rig::PatchSpec p;
+      yyjson_doc *doc = yyjson_read(j.data(), j.size(), 0);
+      REQUIRE(doc);
+      REQUIRE(rig::parsePatch(yyjson_doc_get_root(doc), p, nullptr));
+      yyjson_doc_free(doc);
+      return p;
+    };
+    const std::string bass = R"({"instrument":{"type":"synth","id":"sub-bass"})";
+    const rig::PatchSpec a = parse(patch({"null", "null", "null", bass + "}"}));
+    REQUIRE(a.slots[3].present);
+    CHECK(a.slots[3].spec.highNote == 59);
+    CHECK(a.slots[3].mono == 1);  // 'lowest'
+    CHECK(a.slots[3].bendEnabled);
+    const rig::PatchSpec b = parse(patch(
+        {R"({"instrument":{"type":"synth","id":"warm-pad"},"sends":{"reverb":null}})", "null", "null",
+         bass + R"(,"highNote":null,"mono":null,"bendEnabled":null})"}));
+    REQUIRE(b.slots[3].present);
+    CHECK(b.slots[3].spec.highNote == 127);
+    CHECK(b.slots[3].mono == 0);  // 'off'
+    CHECK_FALSE(b.slots[3].bendEnabled);
+    REQUIRE(b.slots[0].present);
+    CHECK(b.slots[0].sends[0] == 0);
+    CHECK(b.slots[0].sends[1] == doctest::Approx(0.1));
+  }
 }

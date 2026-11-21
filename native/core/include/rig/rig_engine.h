@@ -52,7 +52,7 @@ extern "C" {
 
 /** C API version (independent of the bridge protocol version, which is BRIDGE v1). */
 #define RIG_API_VERSION_MAJOR 1
-#define RIG_API_VERSION_MINOR 1 /* 1: T00c (D1-D3) additions, all struct_size-gated */
+#define RIG_API_VERSION_MINOR 1 /* 1: T00c (D1-D3) additions, all struct_size-gated. INTERFACE-CHANGE(T00c) */
 
 /** The bridge protocol this core speaks (`v` of every JSON message; contract 6.2). */
 #define RIG_BRIDGE_PROTOCOL 1
@@ -63,10 +63,10 @@ extern "C" {
 /** Maximum output channels the core renders (1-2 music, 3-4 aux click; contract 3.10). */
 #define RIG_MAX_OUTPUT_CHANNELS 4
 
-/** Sound slots per song (DECISIONS D3: 1..16; the web engine has 4). Added by T00c. */
+/** Sound slots per song (DECISIONS D3: 1..16; the web engine has 4). Added by T00c. INTERFACE-CHANGE(T00c) */
 #define RIG_MAX_SLOTS 16
 
-/** Host buffer sizes the `audio` op can request (DECISIONS D2; default 128). Added by T00c. */
+/** Host buffer sizes the `audio` op can request (DECISIONS D2; default 128). Added by T00c. INTERFACE-CHANGE(T00c) */
 #define RIG_BUFFER_FRAMES_DEFAULT 128
 
 /** Opaque engine handle. One per process is the normal case; several are allowed (tests render in parallel). */
@@ -198,7 +198,7 @@ typedef struct rig_host {
   /** Current host clock in ns, same timebase as rig_render()/rig_midi_in() timestamps (mach_absolute_time in ns). */
   uint64_t (*host_time_ns)(void *user);
 
-  /* ---- added by T00c (DECISIONS D2); read only when struct_size covers the member ---- */
+  /* ---- INTERFACE-CHANGE(T00c): added by T00c (DECISIONS D2); read only when struct_size covers the member ---- */
   /**
    * Like audio_start, with the host buffer size the user picked (`audio {bufferFrames}`: 64 | 128 | 256 | 512; 0 =
    * never asked: the host's default, as audio_start). Used instead of audio_start when non-NULL. The host asks the
@@ -390,7 +390,7 @@ typedef struct rig_meters {
   uint8_t sleep_state;      /**< 0 awake, 1 sleeping, 2 asleep, 3 waking */
   uint16_t held;            /**< held physical notes */
 
-  /* ---- added by T00c (DECISIONS D3); filled only when the caller's struct_size covers them ---- */
+  /* ---- INTERFACE-CHANGE(T00c) (DECISIONS D3): filled only when the caller's struct_size covers them ---- */
   uint32_t slot_count;               /**< slots of the committed song (0 before the first commit, else 1..16) */
   float slot_peak_all[RIG_MAX_SLOTS]; /**< every slot; slot_peak above mirrors slots 0..3 for API 1.0 callers */
   float slot_rms_all[RIG_MAX_SLOTS];

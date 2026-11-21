@@ -21,6 +21,32 @@ was written for `/bin/bash` 3.2 but only run under bash 5 here. The macOS-only
 parts (Core Audio probe run, `build-core.sh`, `xcodegen`, `xcodebuild`, the `mac-check` CI job) are written but have
 never run: the first tier-0 or tier-1 run is their test.
 
+## Results
+
+### Mac check #2 (2026-11-21, tier 1, `b0bf81a`)
+
+Ryan's M2 Pro, macOS 26.4, Xcode 26.6, Apple clang 21; output through a ThinkPad USB-C dock at 44.1 kHz. Summary:
+`~/Projects/worship-rig-v2/outbox/logs/20261121T060249Z-check/summary.json` (on the Mac; numbers below as relayed
+by the orchestrator, not re-read from the file by the wave-2 integrator).
+
+| stage | result | numbers |
+|---|---|---|
+| `tools` | PASS | |
+| `core` | PASS | ctest **46/46** under Apple clang 21 (the 3 `unit.samples_*` dump cases absent in the export: known gap 2, fixed after this run: they now skip, `INTERFACE_LOG` 38; goldens excluded as designed) |
+| `probe` | PASS | Core Audio. **D2**: 64 / 128 / 256 / 512 frames granted exactly, 0 late callbacks, 0 xruns at every size, reported latency 2.9 / 5.8 / 11.6 / 23.2 ms; `d2_64_frames.safe` true. **D4**: synth warm-pad **4.82 µs per voice per quantum** (Linux box ≈ 9 µs); `auto_voice_limit_suggestion.desktop` **256** (raw 271) |
+| `apple-mac` | PASS | `WorshipRig-macOS` compiles and links, 0 warnings (first build of the Apple shell anywhere) |
+| `apple-sim` | FAIL (environment only) | the iOS 26.5 simulator platform is not installed and CoreSimulator is older than Xcode's. Not a code result: install the platform (Xcode > Settings > Components, or `xcodebuild -downloadPlatform iOS`) and re-run `--stage apple-sim`. The script should report this as SKIPPED (it matches only the "is not installed" wording today): `tools/mac/check.sh` follow-up |
+
+What it settles and what it does not:
+- D2: 64 frames is measured safe on this Mac with this device (a USB dock, not the built-in output; the probe note
+  above prefers the built-in output for latency figures). Default stays 128 (DECISIONS D2).
+- D4: the Mac supports a desktop Auto of 256, but `kAutoVoiceLimitDesktop` stays **128** for now: the burst caveat
+  (D4 review R1, ARCHITECTURE 7.1) is not measured on the Mac yet, and `unit.voice-limit-cpu` sizes against the Linux
+  box. Raising it is an orchestrator / Ryan decision (DECISIONS D4). The iPad profile (64) is still unmeasured.
+- Mac check #1 (earlier) failed the core build under Apple clang on an unused private field (`-Werror`); since then
+  every gate also builds with clang++-20 `-Werror` on Linux as a stand-in.
+- Still open on the Mac: tier 2 (Ryan by hand, after T14), `apple-sim`, the iPad probe, the first CI `mac-check` run.
+
 ## Tier 0: CI (no Mac)
 
 - `build-test` (matrix `ubuntu-latest`, `macos-15`): `cmake --preset release`, build, `ctest` incl. the golden
