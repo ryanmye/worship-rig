@@ -294,7 +294,18 @@ the marked `T13:` deltas). Fixtures (`tests/golden_ids/t13.ids`, ctest `golden.t
 `auto-delay-send-synth` 7.2e-7, `auto-master-volume-synth` 3.6e-6; rendered with `render.mjs --only`, promoted to exact
 with `promote.mjs --only`). The 67 fixtures that passed before render byte-identical WAVs. Tests: `unit.model` (the ten
 JS suites, ported where the native core has the parts) and `unit.song` (retire, the command gate, coalescing, 16
-slots, 32 retiring channels, eqAudition across a commit, D4 over retiring voices, dynamicRange, T11 O3, prefault, CPU).
+slots, 32 retiring channels, eqAudition across a commit, D4 over retiring voices, dynamicRange, T11 O3, prefault, CPU,
+a realtime switch loop for TSan). Gate (fresh dirs `build-t13{,-clang,-asan,-tsan,-clang20}`): ctest 60/60 on g++ 13
+Release, clang 18 Release, g++ ASan+UBSan and clang 20 Release (-Werror, 0 warnings); TSan 21/21 (runtime suites +
+model, song, t00c, voice-limit), no sanitizer report; 328 doctest cases / 342 731 assertions (g++); clang renders of
+all 112 fixtures byte-identical to g++; `node test/run-all.mjs --only unit` 510 pass / 0 fail / 9 skip (incl.
+`test/unit/engine-bridge`).
+
+Outside T13's globs (each marked in the file): `inst/voice_alloc.h` (T11 O1: the pool's constructor touches the first
+16 voice slots, `kPrefaultVoices`; resident +1.9 MB per synth.js instrument, +0.33 MB per sampler: ARCHITECTURE 7.1),
+`tests/test_bridge.cpp`, `tests/test_t00c.cpp`, `tests/test_voice_limit.cpp` (expectations that encoded the skeleton
+policy: a superseded token committed, set on an empty slot applied, strips on empty slots, a reused instrument
+re-capped, role-free slot defaults), `tools/golden/fixtures.mjs` (the four twins).
 
 Frozen-interface changes (INTERFACE_LOG to add): `model.h` INTERFACE-CHANGE(T13): `SongGraph` pimpl + `friend`,
 `songGraph()`, `setDynamicRange()` / `dynamicRange()`; `plans_` removed. `patch.cpp` INTERFACE-CHANGE(T13): role
