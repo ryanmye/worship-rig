@@ -160,7 +160,7 @@ class SongGraph {
   };
 
   // graph_build.cpp
-  BuiltChannel build(const PatchSpec &patch, int slot);
+  BuiltChannel build(const PatchSpec &patch, int slot, double sampleRate = 0);  // 0 = the engine's rate now
   void discard(Plan &plan);
   bool attachBuilt(UnitSlot slot, const std::string &kind, Unit *u, double when, int channel);
   void instrumentSetup(UnitSlot slot, const std::string &kind, std::int64_t frame);

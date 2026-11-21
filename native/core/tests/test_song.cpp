@@ -234,6 +234,29 @@ TEST_SUITE("song") {
     CHECK(t11::zeroCrossHz(out, 20000, 50000, 96000) == doctest::Approx(440).epsilon(5e-3));
   }
 
+  TEST_CASE("rate change between prepare and commit (T13 review): the plan's prebuilt units follow the new rate") {
+    // units are built at prepare since T13; a device rate change before the commit must not leave the incoming
+    // song on the old rate's wavetables (the InstrumentService re-points only the attached Inst0..15)
+    Eng e(true, 48000);
+    e.render(1280, 128);
+    const long tok = e.prepare(patch({slot("synth", "bell", 1, R"("params":{"index":0,"decay":12})")}));
+    REQUIRE(tok > 0);
+    rig_device_info info{};
+    info.struct_size = sizeof info;
+    info.sample_rate = 96000;
+    info.channels = 2;
+    rig_host_audio_started(e.e, &info);
+    e.render(1280, 128);  // the rate is adopted, RateChanged reaches the Model
+    REQUIRE(e.commit(tok));
+    e.on(69, 0);
+    std::vector<float> out;
+    for (int k = 0; k < 40; ++k) {
+      auto o = e.render(1280, 128);
+      out.insert(out.end(), o[0].begin(), o[0].end());
+    }
+    CHECK(t11::zeroCrossHz(out, 20000, 50000, 96000) == doctest::Approx(440).epsilon(5e-3));
+  }
+
   TEST_CASE("prefault (T11 O1): fresh instruments do not page-fault on the audio thread (cost printed)") {
     using clk = std::chrono::steady_clock;
     // the fault cost a note-on paid before (first touch of a fresh 19.2 MB pool's slots), moved to prepare now

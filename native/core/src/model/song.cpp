@@ -605,6 +605,17 @@ void SongGraph::onRateChanged(double sampleRate, double oldRate) {
     for (std::int64_t &f : slotFrame_)
       if (f != kFrameNow)
         f = static_cast<std::int64_t>(std::ceil(static_cast<double>(f) * sampleRate / oldRate - 1e-9));
+  // T13 review: a pending plan's units were built at prepare for the old rate (synth.js wavetables, sampler / FX
+  // state sized per rate) and nothing re-points an unattached unit: rebuild its fresh channels at the new rate
+  if (plan_ && sampleRate != oldRate)
+    for (int i = 0; i < kMaxSlots; ++i) {
+      PlanSlot &ps = plan_->slots[i];
+      if (ps.kind != PlanSlot::Fresh) continue;
+      delete ps.built.inst;
+      delete ps.built.strip;
+      ps.built = build(plan_->patch, i, sampleRate);
+      ps.kind = ps.built.inst ? PlanSlot::Fresh : PlanSlot::None;
+    }
   // T11 O3: InstrumentService re-points Inst0..15; the retiring synth.js instruments get the new rate's tables here
   // (never synth-extra units, which share kind inst.synth)
   for (std::size_t j = 0; j < kRetiring; ++j) {

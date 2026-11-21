@@ -12,13 +12,13 @@
 
 namespace rig {
 
-BuiltChannel SongGraph::build(const PatchSpec &patch, int slot) {
+BuiltChannel SongGraph::build(const PatchSpec &patch, int slot, double sampleRate) {
   BuiltChannel b;
   const SlotPatch &sp = patch.slots[slot];
   const std::string kind = "inst." + sp.instType;
   const Registry::UnitEntry *ie = Registry::global().unit(kind);
   const Registry::UnitEntry *se = Registry::global().unit(kKindStrip);
-  m_.env_.sampleRate = m_.sink_.timeBase().sampleRate;
+  m_.env_.sampleRate = sampleRate > 0 ? sampleRate : m_.sink_.timeBase().sampleRate;
   UnitSpec spec;
   spec.channel = slot;
   spec.patch = &patch;
