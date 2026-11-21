@@ -275,7 +275,7 @@ CPU) and `rt.realtime` (D2 host request, realtime FIFO at 64/192/256/441/512, so
 T11 publishes it; its cache-budget work follows T00c (D3). **T13 waits for T00c**: slot count, the `UnitSlot` table,
 `PatchSpec` arrays, retiring channels and the params grammar all change under prepare/commit/retire/routing.
 
-## Wave 2: instruments and the Model (T01, T02, T11a, T06 landed; T11 and T12 start now, T13 after T00c)
+## Wave 2: instruments and the Model (DONE 2026-11-21; results and carry-overs in "Wave 2 results" below)
 
 | task | owns | implements | done | deps | size | model | Linux ✔ | closes |
 |---|---|---|---|---|---|---|---|---|
@@ -283,7 +283,7 @@ T11 publishes it; its cache-budget work follows T00c (D3). **T13 waits for T00c*
 | **T12 sampler** | `src/inst/sampler*` | `Instrument` for `inst.sampler` | `sampler-salamander-piano`, `sampler-ep-rhodes` exact (with T06's `pcmOverride` where R13 requires it); T17's `sampler-sweep-1` … `-6` (21 sets, one note each; all `needsPcm`); JS `sampler` suite + `undampedOptIn` ported (the `touch-*` fixtures play `synth:808-sub`: moved to T14) | T06, T11 (allocator), T11a | M | sonnet | ✔ | R13 (consumer) |
 | **T13 Model: song & graph** (T00c done: read "What changed under T13") | `src/model/model.cpp` + the T13 globs | prepare/commit/tokens/instSeq, reuse and **retire** (RetireInst/RetireStrip slots), routing, setParam dispatch with 10 ms coalescing, transpose/tempo/timeSig/keyContext, low resource, reverb policy, stats, getState | `auto-slot-level`, `auto-reverb-send`, `auto-delay-send`, `auto-master-volume` exact (`exactIfPrngPorted`; they play organ / `synth:pluck`, so they pass only after T15, unless T17 adds synth.js twins first) + T17's `switch-retire-retain` (mid-render commit + retire + `retainReverb`, with T04) and `fx-row-sweep` (statistical; with T03 mono, T05, T16); JS `supersededPrepare`, `gaplessSwitch`, `paramResetOnReuse`, `freshStripWheel`, `switchHeadroom`, `washAcrossCommit`, `morphAtCommit`, `beforeStartNoThrow`, `lowResource`, `restartKeepsState` ported | **T00c**, T02–T05 landed, T11 interface, T12 (`switch-retire-retain`, `fx-row-sweep` play a sampler); carry-overs: T02 #2 (`endAudition` on reused strips) and #4, T03 O4, T04 findings 3–4, T08 #1 | L | opus | ✔ | R6 (test list), R8, R18 (Model side) |
 
-### T13 results (2026-11-21; builder report, not yet reviewed)
+### T13 results (2026-11-21; builder report, review [VERIFIED](reviews/T13.md))
 
 **Verdict: done for wave 2** (the organ / pluck `auto-*` originals close with T15; `fx-row-sweep` with T16). Files:
 `src/model/{model.cpp, song.h, song.cpp, graph_build.h, graph_build.cpp, retire.cpp, stats.cpp}` (T13) and
@@ -339,7 +339,88 @@ capacity for commits far ahead) stay notes: the Model commits at `when`, never d
 T16 (renders, fails: no drone); T03 O4 only matters if `fx-row-sweep` is ever promoted (blocker: Chromium does not
 repeat it within 1e-5).
 
-## Wave 3: everything that plays (after T11, T12, T13)
+### Wave 2 results (integrator pass, 2026-11-21)
+
+Integrated tree (v2-native `14ba75c` + this pass), fresh build dirs, `-j2`, one at a time:
+
+| config | build | ctest |
+|---|---|---|
+| g++ 13 Release `native/core/build-w2` | 0 warnings (-Werror) | **61/61** |
+| clang 18 Release `build-w2-clang` | 0 warnings | **61/61** |
+| clang++-20 Release -Werror `build-w2-clang20` (stand-in for Apple clang 21) | 0 warnings | **61/61** |
+| g++ ASan+UBSan `build-w2-asan` | 0 warnings | see REPICKUP §2 (filled by the gate) |
+| g++ TSan `build-w2-tsan` (runtime + model + song + t00c + voice-limit suites) | 0 warnings | see REPICKUP §2 |
+| `native/devhost` g++ `build-w2` / clang-20 -Werror `build-w2-clang20` | 0 warnings | see REPICKUP §2 |
+
+Fixtures (`PARITY.md`, regenerated from scratch with the new `tools/golden/parity.mjs`): **73 / 112** at the manifest
+tier (108 originals: **69**, wave 1: 50; T13's 4 twins: 4), g++ and clang renders byte-identical for all 112; tiers
+78 exact / 34 statistical after promoting `synth-warm-pad`, `-glass-pad`, `-strings`, `-sub-bass`, `-bell` and
+`switch-retire-retain` (all pass the exact tier on both compilers). The 39 failures all wait for T14 / T15 / T16
+(none is a parity defect). New ctest `golden.integ` (`tests/golden_ids/integ.ids`) guards the four T14 fixtures that
+already pass. Frozen-interface changes: `INTERFACE_LOG.md` 32-38.
+
+| task | verdict | review | done fixtures (all pass) | open items → carried to |
+|---|---|---|---|---|
+| T00c scale-out (D1-D3) | **done** (VERIFIED) | [T00c](reviews/T00c.md) | none of its own; the 50 wave-1 fixtures byte-identical | O1 closed (integrator, markers); O2 (`rig_meters.slot_count` set only by the bridge's `opCommit`) → **T14**; O3 (targeted `NoteOn` to a `RetireInst` slot is applied; make it a graph rule or reword) → **T14** + orchestrator `graph.cpp`; O4 (`rt.realtime` xrun limit under ASan + `-j2` load) → orchestrator (`RUN_SERIAL` or the TSan treatment); O6 (pin estimate double-counts stand-ins, conservative) → note |
+| T11 voice + synth.js | **done** (VERIFIED) | [T11](reviews/T11.md) | 6 `synth-*` (5 promoted to exact here; `synth-soft-keys` statistical, Q11) | O1 closed (T13 prefault); O3 closed (T13); **O2** (3-call `FinalValue` compensation lives in T11's `oscProcess`, not in `wa::Oscillator`) → **T15 first step** (re-check T05 `chorus-fast-deep-noise`), before T16 uses oscillators; O4 (`std::exp2f` from the platform libm on parity paths) → orchestrator / T01 port + **Mac** (CI macos-15 goldens); O5 (bounded side tables drop silently) → **T15** (works in `src/inst`); O6 (`WaveBank::trim` unused) → memory-pressure path, **Mac/iPad**; O7 ui-core re-run → T09 after **T14** |
+| T12 sampler | **done** (VERIFIED) | [T12](reviews/T12.md) | `sampler-salamander-piano`, `sampler-ep-rhodes`, `sampler-sweep-1..6` (exact) | O1: Model side done (T13); bridge row `config {dynamicRange}` + `engine-api.json` + contract → **UI wave** (orchestrator contract edit first); O2 closed (T13 ramps widthDefault on reused strips); **O3** (voice addressing: re-strike / pedalHold fade one voice; needs a `VoiceStarted` event or a per-note fade op, an interface decision) → **T14** (orchestrator decides the interface before T14 starts); O4 (`user:` sampler params get no `InstParam`) → **T15**; O5 closed (T13: `performForget`), the overlay itself → **T14** |
+| T13 Model: song & graph | **done** (VERIFIED, F1 fixed in review) | [T13](reviews/T13.md) | `switch-retire-retain` (promoted to exact here), `auto-slot-level-synth`, `-reverb-send-synth`, `-delay-send-synth`, `-master-volume-synth` (exact); the organ / pluck originals → T15, `fx-row-sweep` → T16 | O1 closed (integrator: explicit null keeps the PARAMS default, test in `unit.model`); O2 (instrument param stored only at the coalesced flush), O3 (reused-channel params outside the catalogue not re-sent), O4 (command gate delays a note-off that resolves to a retiring channel), O7 (`auto-filter-cutoff` passes: promote it) → **T14**; O5 closed (ARCHITECTURE 7.1 prefault row); **O6** (`setLowResource` no longer fans out to every service: the drone freeze has no notification path; `services.h` frozen) → orchestrator decides the hook, then **T16**; ReverbPool deferral / wash staging (`washAcrossCommit` not ported) → **T14** + T04 change (`ReverbPool::onCommit`, `setQuietProbe`); `BufferCache::protect` of an empty key list = "no protection" (JS: empty Set) → orchestrator (T06 files); T04 findings 3-4 stay notes |
+| D4 total voice limit | **done** (VERIFIED) | [D4core](reviews/D4core.md) | none (108/108 byte-identical: the default limit never engages) | **R1** (60 % sizing is steady state only: steal fades + voice construction burst to 100-110 % for ~8 quanta) → **Mac** (time a large layered chord) + orchestrator / Ryan (Auto formula); R4 closed (integrator: `hello.minor` 2); R6 (Auto rounds to nearest 16, not down) → when the **Mac/iPad** numbers replace the constants; R7 (`inst.test` not counted) → note; R8 (`kVoiceLimitChoices` unused; tracked `build-d4-clang.log2` and older tracked `build-*.log`: `git rm --cached` them) → orchestrator nit. Mac check #2: warm-pad 4.82 µs / voice, suggestion 256: **`kAutoVoiceLimitDesktop` stays 128** (DECISIONS D4) |
+| Settings restructure + 2.0 Sound options | **done** (VERIFIED) | [Settings](reviews/Settings.md) | `test/phase2/settings/run.mjs` 78/78 | 1 (a restart requested during a restart is dropped), 2 (`engine-api.json methods` lacks `setPolyphony` / `setVoiceLimit` / `setBufferFrames`; `surface.test.mjs` allow-lists them), 3 (`mock-native` omits `bufferFrames` in `audio` replies / `state`), 4 (view reads `engine.ctx.sampleRate`) → **UI wave**; 5 (themes coverage timestamps) → nit |
+| Mac check kit | **done** (PARTIAL in review → Mac check #2 PASS on the Mac, `MAC_CHECK.md` Results) | [mackit](reviews/mackit.md) | tier 1 ran: tools, core 46/46, probe, apple-mac PASS | O1 (realtime sampler silent without a `cache preload`: `api/engine.cpp` control loop never pumps the cache service) → orchestrator core fix (T08 files) **before Ryan's tier-2 checklist**; O2 closed (integrator: the three dump cases skip in a clean checkout); O3 (signing fallback), `apple-sim` (iOS 26.5 simulator platform not installed; `check.sh` should report CoreSimulator-too-old as SKIPPED) → **Mac**; O4 (no lock against two `check.sh` runs) → orchestrator; O5 (allow-list line) → done (check #2 ran) |
+
+Closed by the integrator: T13 O1 (`patch.cpp`, INTERFACE_LOG 35), D4 R4 (`hello.minor` 2, 36), T00c O1 (markers, 37),
+MAC_CHECK gap 2 / mackit O2 (`tests/samples_util.h`, 38), `golden.integ`, the six promotions, PARITY regenerated,
+ARCHITECTURE 7.1 (Mac per-voice cost, D2 buffer results, prefault resident cost), DECISIONS D2 / D4 measurement notes,
+MAC_CHECK Results. Pruned the reviewed build dirs of waves 0b-2 (the root volume had 32 MB free; 22 GB freed).
+
+### Wave 3: how to start (after the pause; Ryan resumes it)
+
+**Orchestrator decisions first** (each blocks part of a task; none blocks starting all three):
+1. T12 O3 voice addressing for T14 (re-strike / pedalHold fade one voice): a `VoiceStarted {slot, note, id}` audio
+   event the Model maps, or a per-instrument module op "fade held voices of note n over f s". Frozen `Instrument` /
+   `AudioEvent` side: decide and log in INTERFACE_LOG before T14 reaches `restrike` / `sustainPedalHold`.
+2. T13 O6 low-resource hook for the drone freeze (`services.h` frozen): e.g. `DroneService` reads
+   `Model::lowResource()` in `onSongState`, or `SongState` carries the flag. Before T16 ports `droneParkGain0`.
+3. Ryan: Q7 (`drone-freeze-*`: keep freeze or re-classify); D4 desktop Auto 128 vs 256 (after the Mac burst timing).
+
+**What each task can start with, in launch order** (all three run in parallel on disjoint files; at most 3 agents on
+the 2-CPU box, own build dirs, `-j2`):
+1. **T14 perform** (L, critical path R8): first move the STOPGAP perform overlay into Model state (`perform.cpp`,
+   keep `performChannelDisposed` / `performForget`); take `golden.integ` into `t14.ids` and promote
+   `auto-filter-cutoff`; then the four T14-only fixtures (`bend-pitch-sampler`, `bend-tape`, `mono-legato`,
+   `panic-fadeout`), wheels / macros (`setWheel` coalescing on key `wheels`, `applyWheels` extensions), reverb
+   deferral / wash with T04's `ReverbPool` change; carry-overs T13 O2/O3/O4, T00c O2/O3, T12 O3 (after decision 1),
+   T05 R6, T07 O7. `touch-*`, `auto-modwheel-cc`, `song-gospel-stab-b3` close when T15's 808-sub / organ land;
+   `song-sunday-pad-piano`, `bend-modes` with T16; `scene-glide`, `swell-pedal-drone` need all three.
+2. **T15 synth-extra + organ** (L, most fixtures: 19 wait for T15 alone): first T11 O2 (move the 3-call `FinalValue`
+   behaviour into `wa::Oscillator::process`, T11a's files, with the orchestrator reviewing the frozen header if it
+   changes; T11's `oscProcess` probe drops its compensation; re-check `chorus-fast-deep-noise`), because T15's and
+   T16's oscillators need it. Then `synth-808-sub` (unblocks the five `touch-*` with T14), the four organ presets +
+   rotary (also `auto-slot-level`, `auto-reverb-send`, `auto-master-volume`, `pan-mono-src`), `synth-pluck` (also
+   `auto-delay-send`), the rest of synth-extra. Register through T11's `inst.synth` dispatch hook (no new kind).
+   Carry-overs T11 O5, T12 O4. Measure per-voice cost of every new voice (D4: the costliest voice is perVoice).
+3. **T16 drone** (M): `drone-synth-2keys`, `drone-synth-stage` and T13's `fx-row-sweep` first (3 fixtures wait for
+   T16 alone), T11a O4 (rebuild PeriodicWaves on `RateChanged`), the drone `songChanged` / pedal swell at commit
+   (with T14), the low-resource hook after decision 2; `drone-freeze-*` only after Ryan's Q7. Start its oscillator
+   parity work after T15's O2 step lands (or rebase onto it).
+
+Conflict points between the three: `src/dsp/oscillator*` (T15 step 1; T16 rebases), `model/song.cpp` /
+`model.cpp` (T13's files, done: T14 owns perform-side edits, T16 asks the orchestrator for drone-at-commit hooks),
+`golden_ids` (each task its own file). The wave-3 integrator then re-gates all configs, regenerates PARITY
+(`parity.mjs` exits 1 on any failure not on its "waits for" list) and expects 112/112 if Q7 is answered (else 110).
+
+**UI wave** (separate from wave 3; can run in parallel with it, files under `app/**`): D1-D3 store SCHEMA bump
+(idempotent migration, 4-slot songs unchanged), 16-slot scrolling Perform / Edit, scenes / wheel / MIDI-learn targets
+for 16 slots, the `config {dynamicRange}` bridge row (T12 O1), Settings review items 1-4. The Sound options (D1 / D2 /
+D4) and the sidebar Settings already landed (Settings task above).
+
+**Mac** (push agent RUN / Ryan): install the iOS simulator platform and re-run `apple-sim`; time a large layered
+chord with the probe (D4 R1); iPad probe build (D4 iPad profile, D2 rounding); the first CI `mac-check` and
+`goldens` runs (unverified until pushed); T07 O6 jitter-free delay; T11 O4 libm check; Ryan's tier-2 checklist after
+T14 (and after the realtime cache-pump fix, mackit O1).
+
+## Wave 3: everything that plays (after T11, T12, T13: all done; see "Wave 3: how to start" above)
 
 | task | owns | implements | done | deps | size | model | Linux ✔ | closes |
 |---|---|---|---|---|---|---|---|---|

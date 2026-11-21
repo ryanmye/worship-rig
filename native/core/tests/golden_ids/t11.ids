@@ -1,6 +1,6 @@
 # T11 synth.js fixtures (owner T11), compared at the manifest tier by ctest golden.t11. All six are non-silent; the
 # exact tier (max |diff| <= 2e-4) is checked in tests/test_synth.cpp, and the five exactIfPrngPorted ones are
-# reported for promotion (synth-soft-keys stays statistical: Chromium does not repeat it within 1e-5, Q11).
+# promoted to exact (wave-2 integrator; synth-soft-keys stays statistical: Chromium does not repeat it, Q11).
 synth-warm-pad
 synth-glass-pad
 synth-strings

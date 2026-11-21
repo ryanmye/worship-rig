@@ -1,7 +1,7 @@
 # T13 Model (song & graph) fixtures, compared at the manifest tier by ctest golden.t13.
 # switch-retire-retain (T17): mid-render commit at 3 s, the pedalled chord of the old song retires and is released
 #   there at 5 s, retainReverb + the reverb crossfade (T04), gain / send rows on the new channel after the switch.
-#   Matches to 2.5e-7 (passes the exact tier too; statistical in the manifest, reported for promotion).
+#   Matches to 2.5e-7; promoted to exact by the wave-2 integrator (promote.mjs).
 # auto-*-synth (added by T13): synth.js twins (synth:warm-pad, T11) of auto-slot-level / -reverb-send / -delay-send /
 #   -master-volume (organ / synth:pluck = T15): slot gain rampTo + trackedMove glides, send rows, FX return rows,
 #   master volume; all <= 3.6e-6, promoted to exact. None of the five goldens is silent.

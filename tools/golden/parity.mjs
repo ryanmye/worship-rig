@@ -111,7 +111,8 @@ const result = (r) => {
   if (r.missing) return 'missing render/golden';
   if (r.pass) return r.silentGolden ? 'PASS (silent golden)' : 'PASS';
   const n = r.nativePeak < 1e-6 ? 'native silent' : `${r.fails[0]}`;
-  return `FAIL (${n}); waits for ${r.waits}`;
+  const u = r.note ? `; ${r.note.replace(/^UNIMPLEMENTED: /, 'unimplemented: ')}` : '';
+  return `FAIL (${n}${u}); waits for ${r.waits}`.replace(/\|/g, '\\|');
 };
 const out = [];
 const pass = rows.filter((r) => r.pass).length;
