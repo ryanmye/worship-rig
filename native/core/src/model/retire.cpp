@@ -25,10 +25,14 @@ int SongGraph::pickRetireIndex() {
       best = j;
       oldest = retiring_[j].id;
     }
-  if (best >= 0) {
-    if (onDispose_) onDispose_(retiring_[best].id);
+  if (best >= 0) {  // cut now (its units go back as Garbage); the move into these slots follows
+    const auto r = static_cast<std::size_t>(best);
+    m_.detachUnit(retireInstSlot(r), -1.0);
+    m_.detachUnit(retireStripSlot(r), -1.0);
+    const std::uint32_t id = retiring_[best].id;
     retiring_[best] = Channel{};
     ++n_.forcedRetire;
+    if (onDispose_) onDispose_(id);
   }
   return best < 0 ? 0 : best;
 }

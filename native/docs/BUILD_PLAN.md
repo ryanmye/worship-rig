@@ -283,6 +283,51 @@ T11 publishes it; its cache-budget work follows T00c (D3). **T13 waits for T00c*
 | **T12 sampler** | `src/inst/sampler*` | `Instrument` for `inst.sampler` | `sampler-salamander-piano`, `sampler-ep-rhodes` exact (with T06's `pcmOverride` where R13 requires it); T17's `sampler-sweep-1` … `-6` (21 sets, one note each; all `needsPcm`); JS `sampler` suite + `undampedOptIn` ported (the `touch-*` fixtures play `synth:808-sub`: moved to T14) | T06, T11 (allocator), T11a | M | sonnet | ✔ | R13 (consumer) |
 | **T13 Model: song & graph** (T00c done: read "What changed under T13") | `src/model/model.cpp` + the T13 globs | prepare/commit/tokens/instSeq, reuse and **retire** (RetireInst/RetireStrip slots), routing, setParam dispatch with 10 ms coalescing, transpose/tempo/timeSig/keyContext, low resource, reverb policy, stats, getState | `auto-slot-level`, `auto-reverb-send`, `auto-delay-send`, `auto-master-volume` exact (`exactIfPrngPorted`; they play organ / `synth:pluck`, so they pass only after T15, unless T17 adds synth.js twins first) + T17's `switch-retire-retain` (mid-render commit + retire + `retainReverb`, with T04) and `fx-row-sweep` (statistical; with T03 mono, T05, T16); JS `supersededPrepare`, `gaplessSwitch`, `paramResetOnReuse`, `freshStripWheel`, `switchHeadroom`, `washAcrossCommit`, `morphAtCommit`, `beforeStartNoThrow`, `lowResource`, `restartKeepsState` ported | **T00c**, T02–T05 landed, T11 interface, T12 (`switch-retire-retain`, `fx-row-sweep` play a sampler); carry-overs: T02 #2 (`endAudition` on reused strips) and #4, T03 O4, T04 findings 3–4, T08 #1 | L | opus | ✔ | R6 (test list), R8, R18 (Model side) |
 
+### T13 results (2026-11-21; builder report, not yet reviewed)
+
+**Verdict: done for wave 2** (the organ / pluck `auto-*` originals close with T15; `fx-row-sweep` with T16). Files:
+`src/model/{model.cpp, song.h, song.cpp, graph_build.h, graph_build.cpp, retire.cpp, stats.cpp}` (T13) and
+`src/model/perform.cpp` (T14 from now on: noteOn .. runtimeStateJson + the STOPGAP(T12) overlay moved unchanged, plus
+the marked `T13:` deltas). Fixtures (`tests/golden_ids/t13.ids`, ctest `golden.t13`): `switch-retire-retain` 2.46e-7
+(manifest tier statistical; passes the exact tier: report for promotion), and four synth.js twins T13 added to
+`tools/golden/fixtures.mjs` + the manifest (`auto-slot-level-synth` 3.0e-6, `auto-reverb-send-synth` 1.4e-6,
+`auto-delay-send-synth` 7.2e-7, `auto-master-volume-synth` 3.6e-6; rendered with `render.mjs --only`, promoted to exact
+with `promote.mjs --only`). The 67 fixtures that passed before render byte-identical WAVs. Tests: `unit.model` (the ten
+JS suites, ported where the native core has the parts) and `unit.song` (retire, the command gate, coalescing, 16
+slots, 32 retiring channels, eqAudition across a commit, D4 over retiring voices, dynamicRange, T11 O3, prefault, CPU).
+
+Frozen-interface changes (INTERFACE_LOG to add): `model.h` INTERFACE-CHANGE(T13): `SongGraph` pimpl + `friend`,
+`songGraph()`, `setDynamicRange()` / `dynamicRange()`; `plans_` removed. `patch.cpp` INTERFACE-CHANGE(T13): role
+defaults of `params.js defaultSlot` (sends per role, Bass highNote 59 + mono lowest, bendEnabled synth/organ) — the
+native parse left them at 0 / 127 / off / false, so every song without explicit sends had no reverb / delay.
+
+What T14 must know:
+- Channels: `SongGraph::liveChannel(i)` = JS `this.slots[i]`; a note records the channel **id** and resolves its target
+  at note-off / pedal-up with `instUnitOf(id)` (Inst<i> or RetireInst<j>, Count = disposed); `channelById(id)->cfg` is
+  the retired channel's own cfg (`sc.cfg`), a live channel's cfg is `model.patch().slots[i]`.
+  `performChannelDisposed` / `performForget` (perform.cpp) are the retire / ~Model hooks: keep them when the overlay
+  becomes Model state (T12 O5 is closed that way today).
+- `Model::send` gates every command (`SongGraph::gate`): a command for a unit slot whose occupant changes at a frame
+  ahead of the clock (a commit `when` in the future, an offline render posting the song up front) is moved to that
+  frame, so it reaches the unit the Model meant (JS automates that very AudioParam). Note-ons between such a commit
+  call and its `when` start at the commit frame (JS plays them silently on the fresh, fader-0 channel).
+- Wheels: `SongGraph::wheel()` holds the values (start {1, 1, 1}); `routing()`, `macro()`, `factorFor()`,
+  `slotWheelFactor()`, `morphFor()` (bend morph = 0 until T14) and `applyWheels(t, tc)` (strips + morph only) exist;
+  setWheel must coalesce on key `wheels` (`SongGraph::coalesce`) and extend applyWheels with the drone / reverb return
+  / master wheels, macro.wash (reverb request + delay washFb), `_neutralBend`, `_syncPedalSwell`.
+- The prepare-time reverb stage uses the plain size and never defers: wash-adjusted staging and "defer while keys are
+  held" need T14's wheels / `quietFor` (install `ReverbPool::setQuietProbe`) and a T04 change (`ReverbPool::onCommit`
+  re-stages the plain patch size instead of using the prepare stage). `washAcrossCommit` is therefore not ported.
+- `slots.<i>.bendEnabled` true in pitch mode (setBend(bend·range)) and the drone songChanged / pedal swell at commit
+  are T14 / T16.
+
+Open after T13 (owners): bridge row `config {dynamicRange}` + engine-api.json + contract (orchestrator / T08; the
+Model side exists, T12 O1); BufferCache::protect of an EMPTY key list resets to "no protection" (JS: an empty Set;
+T06); ReverbPool deferral / wash (T04 + T14, above); T04 finding 3 (five overlapping spaces) and 4 (`wa::Param`
+capacity for commits far ahead) stay notes: the Model commits at `when`, never debounced (as JS); `fx-row-sweep` needs
+T16 (renders, fails: no drone); T03 O4 only matters if `fx-row-sweep` is ever promoted (blocker: Chromium does not
+repeat it within 1e-5).
+
 ## Wave 3: everything that plays (after T11, T12, T13)
 
 | task | owns | implements | done | deps | size | model | Linux ✔ | closes |

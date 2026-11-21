@@ -600,7 +600,11 @@ std::string SongGraph::instIdAt(UnitSlot u) const {
   return {};
 }
 
-void SongGraph::onRateChanged(double sampleRate) {
+void SongGraph::onRateChanged(double sampleRate, double oldRate) {
+  if (oldRate > 0 && oldRate != sampleRate)  // Graph::adoptRate: frame' = ceil(frame * new / old)
+    for (std::int64_t &f : slotFrame_)
+      if (f != kFrameNow)
+        f = static_cast<std::int64_t>(std::ceil(static_cast<double>(f) * sampleRate / oldRate - 1e-9));
   // T11 O3: InstrumentService re-points Inst0..15; the retiring synth.js instruments get the new rate's tables here
   // (never synth-extra units, which share kind inst.synth)
   for (std::size_t j = 0; j < kRetiring; ++j) {

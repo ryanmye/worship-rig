@@ -9,6 +9,26 @@ renders of all 108 are byte-identical to the g++ ones. Goldens: Chromium 157.0.8
 WAV used here has the manifest's sha256 except the 22 instrument goldens noted below (not compared by any passing
 fixture).
 
+## T13 update (2026-11-21, builder; supersedes the counts below where they differ)
+
+All 112 fixtures (108 + the four T13 synth.js twins) rendered by `rig_render` from `native/core/build-t13` (g++ 13
+Release) and compared at the manifest tier: **73 / 112 pass**. Against the wave-2 baseline of this tree before T13
+(67 pass: the 64 of `golden_ids/*.ids` plus `auto-filter-cutoff`, `song-lofi-rhodes`, `transpose-octave-range`), those
+67 render **byte-identical** WAVs, and six more pass:
+
+| fixture | tier (manifest) | max\|diff\| | note |
+|---|---|---|---|
+| `switch-retire-retain` | statistical (exactIfPrngPorted) | 2.46e-7 | T13 done fixture; passes the exact tier: promote |
+| `auto-slot-level-synth` | exact (promoted) | 3.01e-6 | T13 twin of `auto-slot-level` (organ, T15) |
+| `auto-reverb-send-synth` | exact (promoted) | 1.43e-6 | twin of `auto-reverb-send` |
+| `auto-delay-send-synth` | exact (promoted) | 7.15e-7 | twin of `auto-delay-send` (`synth:pluck`, T15) |
+| `auto-master-volume-synth` | exact (promoted) | 3.58e-6 | twin of `auto-master-volume` |
+| `release-pedalhold` | exact | 3.9e-38 | T14's fixture; passes now (notes follow their channel, slots without a channel get no notes) |
+
+Still failing in the T13 list: the four organ / pluck `auto-*` originals (silent: T15) and `fx-row-sweep` (no drone:
+T16; band 158 Hz off 26.5 dB). The role-default fix in `parsePatch` (T13) changes no passing fixture: their patches
+set every send they use.
+
 ## Summary
 
 **50 / 108 pass** at the manifest tier, and all 50 also pass the exact tier. The other 58 are blocked by later

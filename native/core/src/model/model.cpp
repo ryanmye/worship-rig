@@ -543,7 +543,7 @@ void Model::onAudioEvent(const AudioEvent &e) {
       ++stats_.rateChanges;
       env_.sampleRate = e.f.a;
       forEachService([&](Service &s) { s.onRateChanged(e.f.a); });
-      sg_->onRateChanged(e.f.a);  // T13 (T11 O3): retiring synth.js instruments
+      sg_->onRateChanged(e.f.a, e.f.b);  // T13 (T11 O3): retiring synth.js instruments; the command gate
       break;
     default:
       break;

@@ -3,9 +3,12 @@
 // slot 0's rules), the 32 retiring channels, eqAudition across a commit (T02 #2 / #4), the voice limit over retiring
 // voices (D4 / D1), settings.dynamicRange (T12 O1), wavetables of retiring synths after a rate change (T11 O3), the
 // voice-pool prefault (T11 O1) and the CPU cost of the units T13 adds.
+#include <atomic>
 #include <chrono>
 #include <cstring>
+#include <mutex>
 #include <string>
+#include <thread>
 
 #include "inst/voice_alloc.h"
 #include "test_model_util.h"
@@ -271,5 +274,72 @@ TEST_SUITE("song") {
     const double us = std::chrono::duration<double, std::micro>(clk::now() - t0).count() / (t13::kSR / 128.0);
     MESSAGE("32 channels (16 slots + 16 retiring, 4 test voices each): " << us << " us per quantum");
     CHECK(e.sg().retiringCount() == 16);
+  }
+
+  TEST_CASE("realtime: switches with held notes while a host thread renders; the retire poll reads voices (TSan)") {
+    struct Rt {
+      rig_engine *e = nullptr;
+      std::mutex mu;
+      std::string all;
+      Rt() {
+        rig_config cfg;
+        rig_config_init(&cfg);
+        cfg.mode = RIG_MODE_REALTIME;
+        cfg.sample_rate = 48000;
+        cfg.on_event = [](void *u, const char *j, size_t n) {
+          auto *r = static_cast<Rt *>(u);
+          std::lock_guard<std::mutex> lk(r->mu);
+          r->all.append(j, n);
+        };
+        cfg.event_user = this;
+        e = rig_create(&cfg, nullptr);
+      }
+      ~Rt() { rig_destroy(e); }
+      void post(const std::string &m) { REQUIRE(rig_post(e, m.data(), m.size()) == RIG_OK); }
+      bool waitFor(const std::string &needle, int ms = 5000) {
+        for (int i = 0; i < ms; ++i) {
+          {
+            std::lock_guard<std::mutex> lk(mu);
+            if (all.find(needle) != std::string::npos) return true;
+          }
+          std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return false;
+      }
+    } rt;
+    REQUIRE(rt.e != nullptr);
+    rt.post(R"({"v":1,"op":"hello","protocol":1,"id":1})");
+    rt.post(R"({"v":1,"op":"audio","action":"start","id":2})");
+    REQUIRE(rt.waitFor("\"re\":2"));
+    std::atomic<bool> stop{false};
+    std::thread host([&] {
+      std::vector<float> l(256), r(256);
+      float *p[2] = {l.data(), r.data()};
+      while (!stop.load()) {
+        rig_render(rt.e, p, 2, 256, 0);
+        std::this_thread::sleep_for(std::chrono::microseconds(1500));
+      }
+    });
+    for (int k = 0; k < 6; ++k) {  // every switch a fresh instrument (another release), notes held across it
+      const std::string id = std::to_string(10 + 2 * k);
+      rt.post(R"({"v":1,"op":"prepare","id":)" + id + R"(,"patch":)" + patch({tv(0.3, 0.02 + 0.001 * k)}) + "}");
+      REQUIRE(rt.waitFor("\"token\":" + std::to_string(k + 1)));
+      rt.post(R"({"v":1,"op":"commit","id":)" + std::to_string(11 + 2 * k) + R"(,"token":)" +
+              std::to_string(k + 1) + "}");
+      rt.post(R"({"v":1,"op":"play","e":"on","n":)" + std::to_string(60 + k) + R"(,"vel":90})");
+      std::this_thread::sleep_for(std::chrono::milliseconds(60));
+      rt.post(R"({"v":1,"op":"play","e":"off","n":)" + std::to_string(60 + k) + "}");
+    }
+    // every retired channel ends: release 12 tau ~ 0.3 s, then 1 s of silence, polled every 0.25 s
+    bool drained = false;
+    for (int i = 0; i < 100 && !drained; ++i) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      rt.post(R"({"v":1,"op":"get","what":"stats","id":99})");
+      std::lock_guard<std::mutex> lk(rt.mu);
+      drained = rt.all.rfind("\"channelsDisposed\":5") != std::string::npos;  // 6 songs: 5 retired, all ended
+    }
+    stop = true;
+    host.join();
+    CHECK(drained);
   }
 }

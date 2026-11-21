@@ -135,8 +135,9 @@ class SongGraph {
    *  attach / move by submission order): it reaches the unit the Model meant (JS automates that very AudioParam).
    *  Attach / Detach / MoveUnit record F for their slots. `now` = the published time-grid frame. */
   void gate(Command &c, std::int64_t now);
-  /** A device rate change: retiring synth.js instruments get the new rate's wavetables too (T11 O3). */
-  void onRateChanged(double sampleRate);
+  /** A device rate change: retiring synth.js instruments get the new rate's wavetables too (T11 O3); the gate's
+   *  frames are rescaled like the graph's pending commands. */
+  void onRateChanged(double sampleRate, double oldRate);
   void statsFields(std::string &out) const;
   void stateFields(JsonOut &j) const;
 
