@@ -27,6 +27,7 @@ struct yyjson_val;
 namespace rig {
 
 class JsonOut;
+class SongGraph;  // INTERFACE-CHANGE(T13): model/song.h (song + graph policy state, T13-owned)
 
 /** What the Model needs from the engine. Implemented by Engine. */
 class CommandSink {
@@ -190,6 +191,16 @@ class Model {
   void warn(std::string_view message, std::string_view code);
   /** Instrument lifetime counter (contract 7.15): incremented per instrument unit built. */
   std::uint32_t instSeq() const { return instSeq_; }
+  // INTERFACE-CHANGE(T13): the song / graph policy behind prepare, commit, retire and the slot rows (model/song.h:
+  // live channels per slot, retiring channels, the plan, routing). Services read it (e.g. which instrument plays in
+  // a retiring channel, T11 O3); T14's perform code resolves note targets through it.
+  SongGraph &songGraph() { return *sg_; }
+  const SongGraph &songGraph() const { return *sg_; }
+  // INTERFACE-CHANGE(T13) T12 O1: settings.dynamicRange (JS engine.setDynamicRange, 1..3, default 1; invalid -> 1):
+  // stored here, sent to every live sampler (slots + retiring) and to every sampler attached later. Returns the range
+  // in use. Needs a bridge row (`config {dynamicRange}`, T08 / contract) to reach it from the UI.
+  double setDynamicRange(double range);
+  double dynamicRange() const;
 
  private:
   bool send(Command c);
@@ -201,10 +212,10 @@ class Model {
     std::string kind;
     bool module = false;
   };
+  friend class SongGraph;  // INTERFACE-CHANGE(T13): attaches prebuilt units, owns the plan (was plans_ here)
   CommandSink &sink_;
   UnitEnv env_;
   std::uint32_t nextToken_ = 1;
-  std::map<std::uint32_t, PatchSpec> plans_;
   PatchSpec active_;
   SongState song_;
   EnginePaths paths_;
@@ -216,6 +227,7 @@ class Model {
   ModelStats stats_;
   unsigned polyphony_ = kPolyphonyDefault;  // INTERFACE-CHANGE(T00c) D1
   int voiceLimit_ = kVoiceLimitAuto;        // INTERFACE-CHANGE(D4)
+  std::unique_ptr<SongGraph> sg_;           // INTERFACE-CHANGE(T13); destroyed first (before the services)
 };
 
 }  // namespace rig
