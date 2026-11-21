@@ -348,9 +348,9 @@ Integrated tree (v2-native `14ba75c` + this pass), fresh build dirs, `-j2`, one 
 | g++ 13 Release `native/core/build-w2` | 0 warnings (-Werror) | **61/61** |
 | clang 18 Release `build-w2-clang` | 0 warnings | **61/61** |
 | clang++-20 Release -Werror `build-w2-clang20` (stand-in for Apple clang 21) | 0 warnings | **61/61** |
-| g++ ASan+UBSan `build-w2-asan` | 0 warnings | see REPICKUP §2 (filled by the gate) |
-| g++ TSan `build-w2-tsan` (runtime + model + song + t00c + voice-limit suites) | 0 warnings | see REPICKUP §2 |
-| `native/devhost` g++ `build-w2` / clang-20 -Werror `build-w2-clang20` | 0 warnings | see REPICKUP §2 |
+| g++ ASan+UBSan `build-w2-asan` | 0 warnings | **61/61**, no sanitizer report (`rt.realtime`'s known load flake did not trip) |
+| g++ TSan `build-w2-tsan` (runtime + model + song + t00c + voice-limit suites) | 0 warnings | **21/21**, no ThreadSanitizer report |
+| `native/devhost` g++ `build-w2` / clang-20 -Werror `build-w2-clang20` | 0 warnings | **5/5** / **5/5** (g++: `probe.null` failed once under `ctest -j2`, "synth sweep has 1 steps" after a p99 spike on the first step, passed alone: load flake) |
 
 Fixtures (`PARITY.md`, regenerated from scratch with the new `tools/golden/parity.mjs`): **73 / 112** at the manifest
 tier (108 originals: **69**, wave 1: 50; T13's 4 twins: 4), g++ and clang renders byte-identical for all 112; tiers
