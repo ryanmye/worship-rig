@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <string>
@@ -22,6 +23,8 @@
 #include "model/graph_build.h"
 #include "model/patch.h"
 #include "time/coalescer.h"
+
+struct yyjson_val;
 
 namespace rig {
 
@@ -87,12 +90,17 @@ class SongGraph {
 
   // ---- 1.3 rows the Model owns ---------------------------------------------------------------------------------
   /** `slots.<i>.*` rows without a module handler. Returns the JS boolean (false = slot empty / not applicable). */
-  bool setSlotRow(const ParamRow &row, int slot, double v, double glide, double when);
+  bool setSlotRow(const ParamRow &row, int slot, double v, double glide, double when, double prevGain);
   /** audio.js eqAudition: true for any slot 0..15 (also empty, T02 #4); the strip hears it when it exists. */
   bool eqAudition(int slot, std::string_view mode, double when);
   bool auditioned(int slot) const { return slot >= 0 && slot < kMaxSlots && (bypass_ >> slot & 1u); }
   double setDynamicRange(double range);
   double dynamicRange() const { return dynRange_; }
+  /** The engine's 10 ms coalescer (fx.js Coalescer, contract 2.3 "co") for the Model's rows; `when` < 0 = now. */
+  bool coalesce(std::string_view key, double when, std::function<void(double)> fn) {
+    co_.push(key, tOf(when), std::move(fn));
+    return true;
+  }
 
   // ---- state for the Model, services and T14 ---------------------------------------------------------------------
   const Channel &channel(int slot) const { return slots_[slot]; }
@@ -100,11 +108,15 @@ class SongGraph {
   int retiringCount() const;
   /** Where the instrument of channel `id` plays now: Inst<i>, RetireInst<j>, or UnitSlot::Count (disposed). */
   UnitSlot instUnitOf(std::uint32_t channelId) const;
+  /** A live or retiring channel by id, or nullptr (disposed). */
+  const Channel *channelById(std::uint32_t id) const;
   /** The live channel of slot i, or nullptr (audio.js this.slots[i]). */
   const Channel *liveChannel(int slot) const { return slots_[slot].live ? &slots_[slot] : nullptr; }
   /** Instrument id of the channel whose instrument sits in `inst` (Inst* or RetireInst*), "" = none (T11 O3). */
   std::string instIdAt(UnitSlot inst) const;
   const Routing &routing() const { return routing_; }
+  /** audio.js setRouting(r, {when}): merged into the song routing, the wheel factors follow (tau 30 ms). */
+  void setRouting(const yyjson_val *r, double when);
   WheelValues &wheel() { return wheel_; }
   /** audio.js _macro / _factorFor / _slotWheelFactor / _morphFor over the current routing and wheel values. */
   std::optional<double> macro(std::string_view name) const;
@@ -159,6 +171,9 @@ class SongGraph {
   void sendInstParam(const Channel &c, std::uint32_t index, double v, double t);
   void sendRelease(const Channel &c, double release, double when);
   static void parseRouting(const std::string &json, Routing &r);
+  static void mergeRouting(const yyjson_val *r, Routing &into);
+  /** audio.js _t(when): `when` when it lies ahead of the engine clock, else now (automation times). */
+  double tOf(double when) const;
 
   Model &m_;
   std::unique_ptr<Plan> plan_;
@@ -174,6 +189,11 @@ class SongGraph {
   std::function<void(std::uint32_t)> onDispose_;
   Counters n_;
 };
+
+/** Implemented in model/perform.cpp (STOPGAP(T12) overlay, T14): a disposed channel's pedaled notes go; a Model's
+ *  perform state is forgotten when it is destroyed. */
+void performChannelDisposed(const Model &m, std::uint32_t channelId);
+void performForget(const Model &m);
 
 /** A slot of a patch that plays (audio.js normalizePatch: an instrument with type and id; null otherwise). */
 inline bool slotUsed(const SlotPatch &sp) {

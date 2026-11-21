@@ -175,8 +175,9 @@ TEST_SUITE("t00c") {
     CHECK(contains(e.call(R"({"v":1,"op":"set","id":9,"path":"slots.16.gain","value":0.2})"), "unknown-param"));
     song(e, patch(4, 0x3u), false);
     rig::Model &m = eng(e).model();
-    for (std::size_t i = 0; i < 4; ++i) CHECK(m.attachedKind(rig::stripSlot(i)) == "strip");
-    for (std::size_t i = 4; i < rig::kChannels; ++i) {
+    // T13: empty slots have no channel (audio.js: this.slots[i] = null); the outgoing ones retire
+    for (std::size_t i = 0; i < 2; ++i) CHECK(m.attachedKind(rig::stripSlot(i)) == "strip");
+    for (std::size_t i = 2; i < rig::kChannels; ++i) {
       CHECK(m.attachedKind(rig::stripSlot(i)).empty());
       CHECK(m.attachedKind(rig::instSlot(i)).empty());
     }
@@ -185,8 +186,9 @@ TEST_SUITE("t00c") {
     const std::size_t a = tick.find("\"slots\":[");
     REQUIRE(a != std::string::npos);
     CHECK(count(tick.substr(a, tick.find("]]", a) + 2 - a), "[") == 5);  // web layout: 4 pairs
-    song(e, patch(2, 0x1u), false);  // fewer than 4 entries: still the web engine's 4 channels
-    for (std::size_t i = 0; i < 4; ++i) CHECK(m.attachedKind(rig::stripSlot(i)) == "strip");
+    song(e, patch(2, 0x1u), false);  // fewer than 4 entries: the web engine's layout, slot 0 plays
+    CHECK(m.attachedKind(rig::stripSlot(0)) == "strip");
+    for (std::size_t i = 1; i < rig::kChannels; ++i) CHECK(m.attachedKind(rig::stripSlot(i)).empty());
   }
 
   TEST_CASE("D3 bridge validation: slot 0..15 everywhere, > 16 slots and out-of-range values are rejected") {
@@ -236,7 +238,9 @@ TEST_SUITE("t00c") {
     song(e, patch(16, 0xffffu), false);  // fresh instruments get the cap at attach (Op::VoiceCap after AttachUnit)
     e.render(256);
     playAll(30, 40);
-    CHECK(meters(e).voices == 16u * 32u);
+    // T13: slot 0 keeps its instance (same instrument and params, audio.js:617) with its 128 live voices; the 15
+    // fresh ones are capped at 32 from their attach
+    CHECK(meters(e).voices == 15u * 32u + 128u);
   }
 
   TEST_CASE("D1 allocator (test voice, the reference for T11/T12): free first, then oldest released, oldest held") {

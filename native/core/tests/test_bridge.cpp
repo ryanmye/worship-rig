@@ -73,7 +73,9 @@ TEST_SUITE("bridge") {
     CHECK(contains(r, "\"token\":1"));
     r = eng.call(R"({"v":1,"op":"prepare","id":2,"patch":{"slots":[]}})");
     CHECK(contains(r, "\"token\":2"));
-    CHECK(contains(eng.call(R"({"v":1,"op":"commit","id":3,"token":1,"when":0})"), "\"committed\":true"));
+    // T13: only the latest token commits (audio.js commit, contract 1.2: "false when stale/superseded")
+    CHECK(contains(eng.call(R"({"v":1,"op":"commit","id":3,"token":1,"when":0})"), "\"code\":\"superseded\""));
+    CHECK(contains(eng.call(R"({"v":1,"op":"commit","id":3,"token":2,"when":0})"), "\"committed\":true"));
     CHECK(contains(eng.call(R"({"v":1,"op":"commit","id":4,"token":77})"), "\"code\":\"stale-token\""));
     CHECK(contains(eng.call(R"({"v":1,"op":"commit","id":5})"), "\"code\":\"bad-request\""));
     CHECK(contains(eng.call(R"({"v":1,"op":"prepare","id":6,"patch":5})"), "\"code\":\"bad-request\""));
@@ -82,7 +84,9 @@ TEST_SUITE("bridge") {
   TEST_CASE("set: known row applies, unknown row errors, validated-but-unimplemented rows say applied:false") {
     OfflineEngine eng;
     eng.hello();
-    CHECK(contains(eng.call(R"({"v":1,"op":"set","id":1,"path":"slots.1.gain","value":0.5})"), "\"applied\":true"));
+    // T13: a slot row of an empty slot is not applied (audio.js _setSlotParam: no cfg -> false, contract 1.3)
+    CHECK(contains(eng.call(R"({"v":1,"op":"set","id":1,"path":"slots.1.gain","value":0.5})"), "\"applied\":false"));
+    CHECK(contains(eng.call(R"({"v":1,"op":"set","id":1,"path":"master.volume","value":0.5})"), "\"applied\":true"));
     CHECK(contains(eng.call(R"({"v":1,"op":"set","id":2,"path":"slots.1.bogus","value":1})"),
                    "\"code\":\"unknown-param\""));
     // a validated row whose module (T16 drone) is not in this wave: applied:false, not an error
@@ -91,7 +95,7 @@ TEST_SUITE("bridge") {
     CHECK(contains(d, "\"applied\":"));
     const std::string b =
         eng.call(R"({"v":1,"op":"set","id":4,"batch":[["slots.0.pan",0.5],["nope",1],["master.volume",0.4,0.1]]})");
-    CHECK(contains(b, "\"applied\":[true,false,true]"));
+    CHECK(contains(b, "\"applied\":[false,false,true]"));  // T13: slot 0 is empty
   }
 
   TEST_CASE("ops whose module is missing answer unsupported, not silence") {

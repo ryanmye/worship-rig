@@ -11,7 +11,9 @@
 #include "inst/voice_alloc.h"
 #include "mix/master_chain.h"
 #include "mix/slot_channel.h"
+#include "model/song.h"
 #include "params/params.h"
+#include "samples/cache_service.h"
 #include "time/automation.h"
 #include "yyjson.h"
 
@@ -36,6 +38,8 @@ constexpr GlobalUnit kGlobals[] = {
 }  // namespace
 
 Model::Model(CommandSink &sink, const UnitEnv &env) : sink_(sink), env_(env) {
+  sg_ = std::make_unique<SongGraph>(*this);  // INTERFACE-CHANGE(T13)
+  sg_->setDisposeHook([this](std::uint32_t id) { performChannelDisposed(*this, id); });
   const Registry &reg = Registry::global();
   for (const auto &e : reg.services()) {
     if (service(e.name)) continue;
@@ -45,7 +49,10 @@ Model::Model(CommandSink &sink, const UnitEnv &env) : sink_(sink), env_(env) {
   if (auto *cache = service<CacheService>()) env_.cache = cache->bufferCache();
 }
 
-Model::~Model() = default;
+Model::~Model() {
+  performForget(*this);  // T12 O5
+  sg_.reset();           // the plan's prebuilt units die while the services still exist
+}
 
 Service *Model::service(std::string_view name) const {
   for (const auto &s : services_)
@@ -285,51 +292,26 @@ std::string Model::sleepBlockersJson() const {
   return "[]";
 }
 bool Model::setLowResource(bool on) {
+  // audio.js setLowResource (contract 1.1): on = pins of the current song only (the old pins remembered), unpinned
+  // buffers trimmed, idle reverb units dropped (_trimReverbUnits = the pool's level-1 trim), slot taps released (the
+  // meter tick reads lowResource()); off = pins restored + the current song's. The drone freeze is T16's.
+  if (on == lowResource_) return on;
   lowResource_ = on;
-  forEachService([&](Service &s) { s.onMemoryPressure(on ? 1 : 0); });
-  return lowResource_;
+  if (auto *cs = dynamic_cast<samples::CacheServiceImpl *>(service<CacheService>())) cs->setLowResource(on);
+  if (on)
+    if (Service *rv = service(ReverbService::kName)) rv->onMemoryPressure(1);
+  return on;
 }
 
 // ---- song switching -----------------------------------------------------------------------------------------------
 
 std::uint32_t Model::prepare(PatchSpec &&patch) {
   ++stats_.prepares;
-  const std::uint32_t token = nextToken_++;
-  plans_[token] = std::move(patch);
-  while (plans_.size() > 8) plans_.erase(plans_.begin());  // superseded plans are dropped
-  return token;
+  return sg_->prepare(std::move(patch), nextToken_++);  // T13: model/song.cpp
 }
 
 bool Model::commit(std::uint32_t token, double when) {
-  auto it = plans_.find(token);
-  if (it == plans_.end()) return false;
-  active_ = it->second;
-  ++stats_.commits;
-  committedAny_ = true;
-  // Skeleton policy (T13 replaces: reuse, retire, crossfades): every channel gets a fresh instrument + strip.
-  // T00c D3: channels 0 .. max(slotCount, 4) - 1 (the web engine always has 4); the rest are detached.
-  const std::size_t used = static_cast<std::size_t>(std::clamp(active_.slotCount, kWebSlots, kMaxSlots));
-  for (std::size_t i = used; i < kChannels; ++i) {
-    detachUnit(instSlot(i), when);
-    detachUnit(stripSlot(i), when);
-  }
-  for (std::size_t i = 0; i < used; ++i) {
-    const SlotPatch &sp = active_.slots[i];
-    const int ch = static_cast<int>(i);
-    if (!sp.present || !attachUnit(instSlot(i), "inst." + sp.instType, when, ch)) {
-      detachUnit(instSlot(i), when);
-      if (sp.present && !Registry::global().unit("inst." + sp.instType))  // skeleton only: T13 owns the policy
-        warn("instrument type '" + sp.instType + "' is not available in this build (slot stays silent)",
-             "unsupported");
-    }
-    if (!attachUnit(stripSlot(i), kKindStrip, when, ch)) continue;
-    // Fresh channel: the fader is *set* to the slot gain at the commit instant (contract 3.1), not ramped.
-    setParamAt(stripSlot(i), kStripFader, sp.present ? sp.gain : 0.0, when);
-    setParamAt(stripSlot(i), kStripPan, sp.pan, when);
-  }
-  ensureGlobalUnits(when);
-  forEachService([&](Service &s) { s.onCommit(active_, when); });
-  return true;
+  return sg_->commit(token, when);  // T13: model/song.cpp (stats, global units and the services' onCommit inside)
 }
 
 std::string Model::preload(const yyjson_val *patches, std::string_view pin) {
@@ -359,49 +341,10 @@ std::string Model::sampleStatus(const yyjson_val *patches) {
 
 // ---- parameters ---------------------------------------------------------------------------------------------------
 
-bool Model::builtinSet(const ParamRow &row, std::string_view, int slot, double v, double glide, double when) {
-  const std::string_view rp(row.path);
-  if (rp == "slots.<i>.gain") {
-    if (attached_[idx(stripSlot(slot))].kind.empty()) return true;  // stored; applied at the next commit
-    moveParam(stripSlot(slot), kStripFader, v, when, glide);
-    return true;
-  }
-  if (rp == "slots.<i>.pan") {
-    if (attached_[idx(stripSlot(slot))].kind.empty()) return true;
-    moveParam(stripSlot(slot), kStripPan, v, when, 0.0);
-    return true;
-  }
-  if (rp == "master.volume") {
+bool Model::builtinSet(const ParamRow &row, std::string_view, int, double v, double glide, double when) {
+  // rows without a module handler outside slots.<i>.* (the slot rows are the SongGraph's)
+  if (std::string_view(row.path) == "master.volume") {  // T03 registers `master.`; this is the fallback without it
     moveParam(UnitSlot::MasterChain, kMasterVolume, v, when, glide);
-    return true;
-  }
-  if (rp.rfind("slots.<i>.eq.", 0) == 0) {
-    SlotEqSpec &eq = active_.slots[slot].spec.eq;
-    const std::string_view f = rp.substr(13);
-    if (f == "cutHz")
-      eq.cutHz = v;
-    else if (f == "hiCutHz")
-      eq.hiCutHz = v;
-    else if (f.size() > 3 && f[0] == 'b' && f[1] >= '1' && f[1] <= '8' && f[2] == '.') {
-      EqBand &b = eq.bands[f[1] - '1'];
-      const std::string_view k = f.substr(3);
-      if (k == "on")
-        b.on = v != 0.0;
-      else if (k == "type")
-        b.type = static_cast<int>(v);
-      else if (k == "hz")
-        b.hz = v;
-      else if (k == "db")
-        b.db = v;
-      else if (k == "q")
-        b.q = v;
-    } else {
-      return false;  // legacy low/mid/high rows: T02
-    }
-    if (!committedAny_ || attached_[idx(stripSlot(slot))].kind.empty()) return true;
-    auto *p = new SlotEqPayload();
-    p->spec = eq;
-    sendOwned(stripSlot(slot), opOf(StripOp::SetEq), p, when);  // step change; T02: glide / chain crossfade
     return true;
   }
   return false;
@@ -419,9 +362,22 @@ SetResult Model::set(std::string_view path, const yyjson_val *value, double glid
     const yyjson_val *mv = value;
     if (mv && yyjson_is_num(const_cast<yyjson_val *>(mv))) v = yyjson_get_num(const_cast<yyjson_val *>(mv));
     else if (mv && yyjson_is_bool(const_cast<yyjson_val *>(mv))) v = yyjson_get_bool(const_cast<yyjson_val *>(mv));
-    if (!h || !h->handler(*this, SetRequest{nullptr, path, slot, v, glide, when})) {
+    if (!h) {
       r.status = SetResult::NotApplied;
-      r.message = h ? "instrument param not applied" : "instrument params are not implemented yet";
+      r.message = "instrument params are not implemented yet";
+      return r;
+    }
+    // T13: audio.js _setSlotParam: false for an empty slot; else coalesced (10 ms per path) into the handler
+    if (slot < 0 || slot >= kMaxSlots || !slotUsed(active_.slots[slot])) {
+      r.status = SetResult::NotApplied;
+      r.message = "slot is empty";
+      return r;
+    }
+    if (!sg_->coalesce(path, when, [this, h, p = std::string(path), slot, v, glide](double tt) {
+          h->handler(*this, SetRequest{nullptr, p, slot, v, glide, tt});
+        })) {
+      r.status = SetResult::NotApplied;
+      r.message = "instrument param not applied";
     }
     return r;
   }
@@ -437,10 +393,19 @@ SetResult Model::set(std::string_view path, const yyjson_val *value, double glid
     return r;
   }
   ++stats_.sets;
+  const bool slotRow = std::string_view(row->path).rfind("slots.<i>.", 0) == 0;
+  if (slotRow && (slot < 0 || slot >= kMaxSlots || !slotUsed(active_.slots[slot]))) {
+    r.status = SetResult::NotApplied;  // T13: audio.js _setSlotParam `if (!cfg) return false` (nothing stored)
+    r.message = "slot is empty";
+    return r;
+  }
+  const double prevGain = slotRow ? active_.slots[slot].gain : 0.0;
   storeRow(active_, row->path, slot, v);  // the patch always holds the latest value (also before start/commit)
   bool applied;
   if (const Registry::SetEntry *h = reg.setHandler(row->path))
     applied = h->handler(*this, SetRequest{row, path, slot, v, glide, when});
+  else if (slotRow)
+    applied = sg_->setSlotRow(*row, slot, v, glide, when, prevGain);  // T13: model/song.cpp
   else
     applied = builtinSet(*row, path, slot, v, glide, when);
   if (!applied) {
@@ -454,7 +419,9 @@ void Model::setTranspose(int semis) {
   song_.transpose = std::clamp(semis, -48, 48);
   forEachService([&](Service &s) { s.onSongState(song_); });
 }
-void Model::setRouting(const yyjson_val *, double) {}  // T14
+void Model::setRouting(const yyjson_val *routing, double when) {
+  sg_->setRouting(routing, when);  // T13: state + slot wheel factors; bend neutralising and pedal swell: T14
+}
 void Model::setTempo(double bpm) {
   song_.tempo = bpm > 0 ? bpm : 0;
   forEachService([&](Service &s) { s.onSongState(song_); });
@@ -482,14 +449,13 @@ void Model::setMono(bool on) {
   forEachService([&](Service &s) { s.onSongState(song_); });
 }
 bool Model::eqAudition(int slot, std::string_view mode, double when) {
-  if (slot < 0 || slot >= kMaxSlots || !attachedIsModule(stripSlot(static_cast<std::size_t>(slot)))) return false;
-  Command c{};
-  c.op = opOf(StripOp::EqAudition);
-  c.aux = mode == "bypass" ? 1u : 0u;
-  // INTERFACE-CHANGE(T02): applied at call time with `when` as the automation time (audio.js eqAudition runs
-  // SlotEq.set(eq, when) when called, like every other EQ write); was: the whole op deferred to frameFor(when)
-  c.f.b = when >= 0.0 ? when : -1.0;
-  return sendUnitOp(stripSlot(static_cast<std::size_t>(slot)), c, -1.0);
+  return sg_->eqAudition(slot, mode, when);  // T13 (T02 #4: true for any slot 0..15, also an empty one)
+}
+double Model::setDynamicRange(double range) {  // INTERFACE-CHANGE(T13) T12 O1
+  return sg_->setDynamicRange(range);
+}
+double Model::dynamicRange() const {
+  return sg_->dynamicRange();
 }
 bool Model::droneSetKey(int pc, bool minor, double fade, double when) {
   auto *s = service<DroneService>();
@@ -501,103 +467,6 @@ void Model::droneConfigure(const yyjson_val *cfg, double when) {
 int Model::droneAttachFiles(const yyjson_val *files) {
   auto *s = service<DroneService>();
   return s ? s->attachFiles(files) : -1;
-}
-
-// ---- perform (skeleton: every note to every slot; T14 owns splits, pedal, mono, wheels) ---------------------------
-
-// ---- STOPGAP(T12) perform overlay, kept until T14 replaces it (T14 owns perform) ----
-// audio.js noteOn / noteOff / sustain for polyphonic slots: split on the physical note, sounding note = n + song
-// transpose + 12 octave + slot transpose, duplicate note-on = re-strike, pedal holds released notes of slots with
-// `sustain`, pedal up releases them. Linear velocity only (touch curves, mono, pedalHold, re-strike fade: T14).
-namespace {
-struct OvEntry {
-  int slot, sn;
-};
-struct OvPerform {
-  std::map<int, std::vector<OvEntry>> sounding;
-  std::vector<OvEntry> pedaled;
-  bool pedal = false;
-};
-std::map<const Model *, OvPerform> gOv;
-}  // namespace
-
-static Command ovNote(Op op, int slot, int sn, int vel, std::int64_t frame) {
-  Command c{};
-  c.op = op;
-  c.frame = frame;
-  c.target = static_cast<std::uint32_t>(instSlot(static_cast<std::size_t>(slot)));
-  c.aux = static_cast<std::uint32_t>(sn & 0xff) | (static_cast<std::uint32_t>(std::clamp(vel, 0, 127)) << 8);
-  return c;
-}
-
-bool Model::noteOn(int note, int vel, double when, const yyjson_val *) {
-  if (!(vel > 0)) return noteOff(note, when);
-  OvPerform &P = gOv[this];
-  const int n = std::clamp(note, 0, 127);
-  if (P.sounding.count(n)) noteOff(n, when);
-  std::vector<OvEntry> entries;
-  for (std::size_t i = 0; i < std::size(active_.slots); ++i) {
-    const SlotPatch &sp = active_.slots[i];
-    if (!sp.present) continue;
-    if (n < sp.spec.lowNote || n > sp.spec.highNote) continue;
-    const int sn = n + song_.transpose + 12 * sp.octave + sp.transpose;
-    if (sn < 0 || sn > 127) continue;
-    send(ovNote(Op::NoteOn, static_cast<int>(i), sn, vel, frameFor(when)));
-    entries.push_back({static_cast<int>(i), sn});
-  }
-  P.sounding[n] = entries;
-  ++stats_.notesOn;
-  return true;
-}
-
-bool Model::noteOff(int note, double when) {
-  OvPerform &P = gOv[this];
-  const int n = std::clamp(note, 0, 127);
-  auto it = P.sounding.find(n);
-  if (it != P.sounding.end()) {
-    for (const OvEntry &e : it->second) {
-      if (P.pedal && active_.slots[e.slot].sustain) P.pedaled.push_back(e);
-      else send(ovNote(Op::NoteOff, e.slot, e.sn, 0, frameFor(when)));
-    }
-    P.sounding.erase(it);
-  }
-  ++stats_.notesOff;
-  return true;
-}
-
-bool Model::sustain(bool down, double when) {
-  OvPerform &P = gOv[this];
-  if (down == P.pedal) return true;
-  P.pedal = down;
-  if (!down) {
-    for (const OvEntry &e : P.pedaled) send(ovNote(Op::NoteOff, e.slot, e.sn, 0, frameFor(when)));
-    P.pedaled.clear();
-  }
-  return true;
-}
-void Model::pitchBend(double, double) {}
-bool Model::setWheel(std::string_view, double, double, double) {
-  return false;
-}
-bool Model::swell(int, double) {
-  return false;
-}
-
-void Model::allNotesOff(double when) {
-  Command c{};
-  c.op = Op::Panic;  // T00 behaviour kept (hard kill); T14: AllNotesOff 30 ms fade + pedal/swell/bend/delay rules
-  c.frame = frameFor(when);
-  c.target = kAllSlots;
-  send(c);
-}
-
-void Model::fadeOutAll(double, double) {}
-void Model::noteInput(double) {}
-std::string Model::wheelValuesJson() const {
-  return R"({"mod":0,"expr":1,"vol":1,"owner":"hw","swelling":false})";
-}
-std::string Model::runtimeStateJson() const {
-  return R"({"wheel":{"mod":0,"expr":1,"vol":1},"modOwner":"hw","faded":false})";
 }
 
 // ---- click, meters, recording, MIDI -------------------------------------------------------------------------------
@@ -673,47 +542,12 @@ void Model::onAudioEvent(const AudioEvent &e) {
       ++stats_.rateChanges;
       env_.sampleRate = e.f.a;
       forEachService([&](Service &s) { s.onRateChanged(e.f.a); });
+      sg_->onRateChanged(e.f.a);  // T13 (T11 O3): retiring synth.js instruments
       break;
     default:
       break;
   }
   forEachService([&](Service &s) { s.onAudioEvent(e); });
-}
-
-std::string Model::stateJson() const {
-  JsonOut j;
-  j.begin().kvBool("committed", committedAny_);
-  // T00c: slotCount (D3; the array keeps at least the web engine's 4 entries) and the polyphony cap (D1)
-  j.kv("slotCount", active_.slotCount).kv("polyphony", polyphony_);
-  voiceLimitJson(j);  // INTERFACE-CHANGE(D4)
-  j.key("slots").beginArray();
-  const int shown = std::clamp(active_.slotCount, kWebSlots, kMaxSlots);
-  for (int i = 0; i < shown; ++i) {
-    const SlotPatch &s = active_.slots[i];
-    j.begin()
-        .kvBool("present", s.present)
-        .kv("type", s.instType)
-        .kv("id", s.instId)
-        .kv("gain", s.gain)
-        .kv("pan", s.pan);
-    j.end();
-  }
-  j.endArray();
-  j.kv("transpose", song_.transpose).kv("tempo", song_.tempo).kvBool("mono", song_.mono);
-  j.end();
-  return j.take();
-}
-
-std::string Model::statsJson() const {
-  std::string out = "\"unitsAttached\":" + std::to_string(stats_.unitsAttached) +
-                    ",\"unitsFreed\":" + std::to_string(stats_.unitsFreed) +
-                    ",\"rateChanges\":" + std::to_string(stats_.rateChanges) +
-                    ",\"memoryWarnings\":" + std::to_string(stats_.memoryWarnings);
-  forEachService([&](Service &s) {
-    const std::string f = s.statsFields();
-    if (!f.empty()) out += "," + f;
-  });
-  return out;
 }
 
 }  // namespace rig

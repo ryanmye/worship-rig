@@ -7,6 +7,7 @@
 
 #include "model/model.h"
 #include "model/song.h"
+#include "samples/cache_service.h"
 
 namespace rig {
 
@@ -44,7 +45,7 @@ void SongGraph::retire(int slot, double when) {
   retiring_[j] = std::move(c);
   c = Channel{};
   ++n_.retired;
-  armRetirePoll(m_.timeFor(when));
+  armRetirePoll(tOf(when));
 }
 
 void SongGraph::armRetirePoll(double t) {
@@ -55,18 +56,25 @@ void SongGraph::armRetirePoll(double t) {
 
 void SongGraph::pollRetiring(double tt) {
   pollArmed_ = false;
+  bool changed = false;
   for (int j = 0; j < static_cast<int>(kRetiring); ++j) {
     Channel &c = retiring_[j];
     if (!c.live) continue;
     const std::uint32_t live = c.shell ? c.shell->publishedVoices() : 0;
     if (live == 0) {
       if (std::isnan(c.zeroSince)) c.zeroSince = tt;
-      if (tt - c.zeroSince >= 1.0) dispose(j);
+      if (tt - c.zeroSince >= 1.0) {
+        dispose(j);
+        changed = true;
+      }
     } else {
       c.zeroSince = NAN;
     }
   }
-  if (retiringCount() > 0) armRetirePoll(tt);
+  const int left = retiringCount();
+  if (changed && left == 0)  // v11-memory: the old song's buffers are free now
+    if (auto *cs = dynamic_cast<samples::CacheServiceImpl *>(m_.service<CacheService>())) cs->rewarmPins();
+  if (left > 0) armRetirePoll(tt);
 }
 
 void SongGraph::dispose(int j) {
