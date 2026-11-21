@@ -63,6 +63,23 @@ strip on narrow/iPad portrait): Sound · Keyboards & MIDI · Sounds & Samples ·
 only) · About. Every existing setting keeps working; rarely used ones move under an "Advanced" disclosure in their
 category. Lands on `v2-native` with the 2.0 Sound options (D1, D2, D4); 1.x keeps today's page.
 
+## D5 — Drone freeze kept, with a Settings toggle (Ryan, 2026-11-21; answers Q7)
+- Keep 1.x's drone freeze (low-resource mode renders a short loop of the drone and plays it instead of the live
+  synth). `drone-freeze-dry/-wet` stay native fixtures and must pass (T16).
+- Settings › Sound › Advanced gets **Freeze drone to save CPU** (store `settings.droneFreeze`, default on = 1.x
+  behaviour: freeze whenever low-resource mode is on; off = always the live drone). Engine: `config {droneFreeze: bool}`
+  (T16, contract + bridge row); the toggle itself lands with the UI wave.
+- D4 follow-up (Ryan, 2026-11-21): desktop Auto stays **128**; 256/512 remain manual choices in Settings.
+
+## Orchestrator decisions for wave 3 (2026-11-21)
+- **O-W3-1 voice addressing (T12 O3):** additive `Instrument::fadeNote(int note, std::int64_t frame, float seconds)`
+  (default no-op) behind a core `Op::FadeNote` (note in `a`, seconds in `f`), implemented once in `VoicePool` and used
+  by synth, sampler, organ, synth-extra; no new audio event. T14 owns the Model side and lands the additive
+  frozen-header change (marked `INTERFACE-CHANGE(T14)`); T15 wires it into its instruments.
+- **O-W3-2 drone low-resource hook (T13 O6):** `SongState.lowResource` (additive, set by the Model before
+  `forEachService`, like `newBar`) plus `config {droneFreeze}`; `DroneService` reads both. T16 lands it
+  (`INTERFACE-CHANGE(T16)`).
+
 ## T00c measurements behind D4 (was the open question)
 
 Not implemented: D1 as decided is per slot only. The numbers that make the question real (Linux box, 2 vCPU,
