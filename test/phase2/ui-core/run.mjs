@@ -169,6 +169,16 @@ const HELPERS = () => {
       }
       return undefined;
     },
+    /** clicks the metronome scheduled (web: engine.metronome.stats.ticks; bridge: the core's stats.click.ticks) */
+    clickTicks() {
+      const e = window.__rig.engine;
+      return isBridge() && !e.metronome ? Number(stats().click?.ticks) || 0 : e.metronome.stats.ticks;
+    },
+    /** is the metronome running (web: engine.metronome.running; bridge: the contracted clickState().running) */
+    clickRunning() {
+      const e = window.__rig.engine;
+      return isBridge() && !e.metronome ? !!e.clickState()?.running : e.metronome.running;
+    },
     /** slot meter taps (web: engine.slotTapCount(); bridge: the core's stats.slotLevelTaps) */
     slotTaps() {
       return isBridge() ? Number(stats().slotLevelTaps) || 0 : window.__rig.engine.slotTapCount();
@@ -207,6 +217,24 @@ const HELPERS = () => {
     },
   };
 };
+
+/**
+ * UIC: rig-devhost serves one page at a time (the newest wins: native/devhost/README.md), so a test that boots the app
+ * in a second page leaves this suite's page without its engine for every later test (the rig-devhost run lost
+ * v11-polish / v11-metronome / v11-decisions that way). Against the bridge engine, reload the page so it is the
+ * newest again and re-install the in-page helpers; against the web engine (server.js serves any number of pages)
+ * nothing happens.
+ */
+async function reattachMainPage() {
+  const bridge = await page.evaluate(() => !!window.__t?.isBridge?.()).catch(() => false);
+  if (!bridge) return;
+  await page.reload();
+  await page.waitForFunction(() => !!window.__rig, null, { timeout: 20000 });
+  if (await page.isVisible('#overlay-start')) await page.click('#overlay-start');
+  await page.waitForFunction(() => window.__rig.controller.status.ready === true, null, { timeout: 90000 });
+  await page.evaluate(HELPERS);
+  await page.evaluate(HOLD_IN_PAGE);
+}
 
 /** Toasts are click-through overlays; clear them so screenshots show the controls underneath. */
 async function clearToasts() {
@@ -4279,6 +4307,7 @@ test('v11-polish FR-1: a fresh library at 1280×800 shows the Start card (Notes 
     await p2.waitForSelector(card, { state: 'visible', timeout: 10000 });
   } finally {
     await b2.close();
+    await reattachMainPage();
   }
   assert.deepEqual(errs, [], errs.join('\n'));
 });
@@ -4423,7 +4452,8 @@ test('v11-metronome: Perform Click chip — hidden without a tempo; count-in →
   assert.deepEqual(narrow, { num: true, word: false, text: '100', bpmLine: 'none', label: 'Click on (100 BPM)' });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.waitForTimeout(150);
-  const st1 = await ev(() => ({ ...window.__rig.engine.clickState(), ticks: window.__rig.engine.metronome.stats.ticks }));
+  await ev(() => window.__t.freshStats()); // bridge: a core stats sample from now (web: no wait)
+  const st1 = await ev(() => ({ ...window.__rig.engine.clickState(), ticks: window.__t.clickTicks() }));
   assert.equal(st1.running, true);
   assert.equal(st1.bpm, 100);
   assert.ok(st1.ticks >= 4, `count-in clicks scheduled (${st1.ticks})`);
@@ -4496,7 +4526,7 @@ test('v11-decisions: PANIC stops the click (during the count-in and after); the 
     await page.keyboard.press('Escape');
     await page.waitForFunction((c) => document.querySelector(c).getAttribute('aria-pressed') === 'false', chip);
     assert.equal(await ev(() => window.__rig.engine.clickState().running), false);
-    assert.equal(await ev(() => window.__rig.engine.metronome.running), false, 'no MIDI clock transport left running');
+    assert.equal(await ev(() => window.__t.clickRunning()), false, 'no MIDI clock transport left running');
     await ev(([s, t]) => window.__rig.store.set(`songs.${s}.tempo`, t), [id, orig]);
   });
 
