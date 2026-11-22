@@ -256,45 +256,58 @@ async function runMode(mode, browser) {
 
     await T('settings: MIDI Learn lists a level row per slot of the current song (UIC, UIA review O1)', async () => {
       await cat('keyboards');
-      const rowIds = () => ev(() => [...document.querySelectorAll('.st-learn-table tbody tr')].map((r) => r.dataset.control));
+      const rowIds = () => ev(() => [...document.querySelectorAll('.st-learn-table tbody tr')]
+        .map((r) => r.dataset.control));
       const before = await rowIds();
       assert.equal(before.length, 14, 'a 4-slot song: the 1.x rows');
       assert.equal(before.filter((id) => /^slots\.\d+\.gain$/.test(id)).length, 4);
       // grow the song to 6 slots (Sound 5 and 6 copy a filled slot so a learned fader has something to move)
-      await ev(() => {
-        const st = window.__rig.store;
-        const src = st.currentSong().patch.slots.find(Boolean);
-        while (st.currentSong().patch.slots.length < 6) st.addSlot(undefined, structuredClone(src));
-      });
-      await until(() => !!document.querySelector('tr[data-control="slots.5.gain"]'));
-      const grown = await rowIds();
-      assert.equal(grown.length, 16);
-      assert.deepEqual(grown.slice(0, 7), ['slots.0.gain', 'slots.1.gain', 'slots.2.gain', 'slots.3.gain', 'slots.4.gain',
-        'slots.5.gain', 'drone.gain'], 'the levels stay together');
-      assert.equal(await page.textContent('tr[data-control="slots.5.gain"] th'), 'Sound 6 level');
-      assert.equal(await page.getAttribute('tr[data-control="slots.5.gain"] .st-learn', 'aria-label'), 'Learn Sound 6 level');
-      // learn Sound 6 from the table and move it with the hardware fader (pickup: sweep up past the stored level)
-      await page.click('tr[data-control="slots.5.gain"] .st-learn');
-      await until(() => window.__rig.midi.learning === 'slots.5.gain');
-      await ev(() => window.__rig.midi._inject([0xb0, 22, 64]));
-      await until(() => window.__rig.store.get().settings.midiLearn['slots.5.gain']?.cc === 22);
-      await until(() => document.querySelector('tr[data-control="slots.5.gain"] .st-map').textContent === 'CC 22 · ch 1');
-      await ev(async () => {
-        for (let v = 0; v <= 127; v += 4) window.__rig.midi._inject([0xb0, 22, v]);
-        window.__rig.midi._inject([0xb0, 22, 127]);
-      });
-      await until(() => Math.abs(window.__rig.store.currentSong().patch.slots[5].gain - 2) < 1e-9);
-      // back to 4 slots: Sound 5 leaves the table, the mapped Sound 6 stays so it can still be cleared
-      await ev(() => {
+      const restore = () => ev(() => {
         const st = window.__rig.store;
         while (st.currentSong().patch.slots.length > 4) st.removeSlot();
+        if (st.get().settings.midiLearn['slots.5.gain']) st.setMidiLearn('slots.5.gain', null);
+        window.__rig.controller.cancelLearn?.();
       });
-      await until(() => !document.querySelector('tr[data-control="slots.4.gain"]'));
-      assert.ok(await page.$('tr[data-control="slots.5.gain"]'), 'a mapped level past the song stays listed');
-      await page.click('tr[data-control="slots.5.gain"] .st-clear');
-      await until(() => !window.__rig.store.get().settings.midiLearn['slots.5.gain']);
-      await until(() => !document.querySelector('tr[data-control="slots.5.gain"]'));
-      assert.deepEqual(await rowIds(), before, '4 slots again: the 1.x table');
+      try {
+        await ev(() => {
+          const st = window.__rig.store;
+          const src = st.currentSong().patch.slots.find(Boolean);
+          while (st.currentSong().patch.slots.length < 6) st.addSlot(undefined, structuredClone(src));
+        });
+        await until(() => !!document.querySelector('tr[data-control="slots.5.gain"]'));
+        const grown = await rowIds();
+        assert.equal(grown.length, 16);
+        assert.deepEqual(grown.slice(0, 7), ['slots.0.gain', 'slots.1.gain', 'slots.2.gain', 'slots.3.gain',
+          'slots.4.gain', 'slots.5.gain', 'drone.gain'], 'the levels stay together');
+        assert.equal(await page.textContent('tr[data-control="slots.5.gain"] th'), 'Sound 6 level');
+        const label = await page.getAttribute('tr[data-control="slots.5.gain"] .st-learn', 'aria-label');
+        assert.equal(label, 'Learn Sound 6 level');
+        // learn Sound 6 from the table and move it with the hardware fader (pickup: sweep up past the stored level)
+        await page.click('tr[data-control="slots.5.gain"] .st-learn');
+        await until(() => window.__rig.midi.learning === 'slots.5.gain');
+        await ev(() => window.__rig.midi._inject([0xb0, 22, 64]));
+        await until(() => window.__rig.store.get().settings.midiLearn['slots.5.gain']?.cc === 22);
+        await until(() => document.querySelector('tr[data-control="slots.5.gain"] .st-map')
+          .textContent === 'CC 22 · ch 1');
+        await ev(async () => {
+          for (let v = 0; v <= 127; v += 4) window.__rig.midi._inject([0xb0, 22, v]);
+          window.__rig.midi._inject([0xb0, 22, 127]);
+        });
+        await until(() => Math.abs(window.__rig.store.currentSong().patch.slots[5].gain - 2) < 1e-9);
+        // back to 4 slots: Sound 5 leaves the table, the mapped Sound 6 stays so it can still be cleared
+        await ev(() => {
+          const st = window.__rig.store;
+          while (st.currentSong().patch.slots.length > 4) st.removeSlot();
+        });
+        await until(() => !document.querySelector('tr[data-control="slots.4.gain"]'));
+        assert.ok(await page.$('tr[data-control="slots.5.gain"]'), 'a mapped level past the song stays listed');
+        await page.click('tr[data-control="slots.5.gain"] .st-clear');
+        await until(() => !window.__rig.store.get().settings.midiLearn['slots.5.gain']);
+        await until(() => !document.querySelector('tr[data-control="slots.5.gain"]'));
+        assert.deepEqual(await rowIds(), before, '4 slots again: the 1.x table');
+      } finally {
+        await restore(); // a failure here must not leave a 6-slot song for the later tests
+      }
     });
 
     // hardware-fixes: the test samples BOTH states (press → settle → release → settle) and decides from the pair

@@ -6834,3 +6834,47 @@ settings 84/84, eq 27/28 (the known L-21), mini 14/14 + mini-theme 13/14 in that
 timing under the ASan build's load; 14/14 + 14/14 alone after), themes 58/58, chrome-fallback 17/17;
 `node --test test/unit/engine-bridge/*.test.mjs` 118 / 0 / 2 skip. New node tests: `test/phase1/shell/uia-slots
 .test.mjs` (13). Zero console errors in every Playwright file.
+
+## UIB (2.0 UI wave items 4-7: Settings and bridge; native bridge `config {dynamicRange}`, `hello` minor 4; native/contract, engine-bridge/bridge-engine.js + mock-native.js, controller.js, store.js, views/settings.js)
+
+What changed (frozen-interface rows: `native/docs/INTERFACE_LOG.md` "## UIB", UIB-1..6; review `native/docs/reviews/
+UIB.md`):
+- **Bridge (additive, minor 4).** `config {dynamicRange: number}` → `Model::setDynamicRange` (clamped 1..3, 0.01
+  steps, non-finite = 1; the reply echoes the range in force; a non-number is `bad-request`). `hello` answers
+  **minor 4** with the capability `dynamicRange` (minor 1 = T00c polyphony / bufferFrames / slots16, 2 = voiceLimit,
+  3 = droneFreeze). The task named minor 3, written when the core answered 3; `native/contract/README.md` ("additive:
+  bump `minor`, add a capability") makes this change 4, and mock and core agree (`sound-settings.test.mjs` reads
+  `bridge.cpp` and fails if the minor or the caps diverge). Test `unit.bridge_dynrange`: ep-rhodes vel 40 at range 3
+  is 20.9 dB quieter than at range 1, whether the range is sent before the song or to the live sampler.
+- **Contract JSON** (`engine-api.spec.mjs` → `engine-api.json`): `config.args.dynamicRange: 'number?'`, reply
+  `dynamicRange?`; `methods` 63 → 68: `setDynamicRange` (the web engine's `audio.js` method) and the native-only
+  (`nativeOnly: true`) `setPolyphony`, `setVoiceLimit`, `setBufferFrames`, `setDroneFreeze`. `surface.test.mjs` no
+  longer allow-lists the three Sound setters (Settings review item 2).
+- **Shim** (`bridge-engine.js`): `setDynamicRange(range)` (validDynRange, else 1; `config {dynamicRange}`),
+  `setDroneFreeze(on)` (`config {droneFreeze}`; absent = true); `audioconfig` / `_audioCfg` carry `sampleRate`, so
+  Settings turns the granted buffer into ms without reading `engine.ctx` (Settings review item 4).
+- **Mock** (`mock-native.js`): `hello` answers `MOCK_MINOR` 4 and `MOCK_CAPS` (the core's list + 'mock'; it answered
+  minor 0 before, T11 O7); `audio` replies and `state` events carry `bufferFrames` (the request, kept across
+  restarts; `grantFrames` stands in for a rounding device; Settings review item 3); `config {droneFreeze,
+  dynamicRange}` echoed like the core; `get state.dynamicRange`.
+- **Controller** (`restartAudio`): a restart asked for during a restart is no longer dropped (Settings review item
+  1): it sets `restartAgain` and runs once more after a successful restart (cleared after a failed one, so a stale
+  flag cannot chain into an unrelated restart). UIB skeptic R1: the queued request resolves with the follow-up run's
+  result (it resolved `false` at once, so Settings › "Restart audio" pressed during a restart toasted "Audio restart
+  failed" for a restart that was in fact queued) and the follow-up uses the latest request's `opts` (auto or not).
+  `status.audioConfig.sampleRate`. `settings.droneFreeze` → `optional('setDroneFreeze', …)` on change and at start-up
+  when stored `false` (the web engine has no setter: nothing is sent).
+- **Store** (D5): `settings.droneFreeze`: optional boolean, absent = on; a non-boolean is dropped on load and refused
+  on set, `null` resets; device-local (not exported, kept on a replace-import).
+- **Settings** › Sound › Advanced "Freeze drone to save CPU" (deep link `drone-freeze`); on the web engine its note
+  says "With the 2.0 engine".
+
+Measured (UIB skeptic; fresh `native/core/build-uibsk*`, `-j2`, box shared with two builders): fixtures 112/112
+(`compare.mjs`), 110 at the exact tier, g++ / clang-20 renders byte-identical to each other and to the wave-3 renders
+(0/112 differ), `parity.mjs` exit 0; ctest clang++-20 `-Werror` 80/80 and ASan+UBSan 80/80 (no report), g++ 78/80
+under load 7-9 (`rt.realtime` xruns and `unit.runtime` idle ticks; both pass alone, A/B equal against the builder's
+build); `unit.bridge_dynrange` 3/3; `engine-api.json --check` up to date;
+`node --test test/unit/engine-bridge/*.test.mjs` 118 / 0 / 2 skip; `run-all --fast` 11/12 (eq 27/28 = the known
+L-21), settings 84/84. UI parity through
+rig-devhost (item 7): 25/77 raw, unchanged from 25/76 (see `native/docs/PARITY.md` "UI parity" and the UIC section
+below).

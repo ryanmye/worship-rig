@@ -6,7 +6,7 @@
 // mono → setMono, MIDI input → midi.select, 2.0 voices / buffer / voice limit → the bridge engine); transient
 // actions (restart audio, MIDI learn, pads) go through ctx.controller.
 import { loadComponents, markDialog } from './_fallback-components.js';
-import { LEARNABLE, ROLE_DEFAULTS } from '../shared/params.js';
+import { LEARNABLE, ROLE_DEFAULTS, SLOT_COUNT, MAX_SLOTS, slotGainIndex, slotName } from '../shared/params.js';
 import { noteName } from '../shared/music.js';
 import { pickableThemes, resolveThemeId, lightSiblings, byId as themeById, LIGHT_AUTO_KEY } from '../shared/themes.js';
 import { latencyHint } from './components/latencyHint.js';
@@ -37,6 +37,37 @@ export const LEARN_NAMES = Object.freeze({
 });
 /** Rows of the Learn table: params.LEARNABLE, plus 'swell' (the controller accepts it; see CONTRACT_CHANGES shell #4). */
 export const LEARN_ROWS = Object.freeze([...LEARNABLE, ...(LEARNABLE.includes('swell') ? [] : ['swell'])]);
+
+/**
+ * UIC (UIA review O1): the Learn table's rows for a song with `slotCount` slots. LEARN_ROWS (the 1.x rows, so a
+ * 4-slot song's table is unchanged), with 'slots.4.gain' … 'slots.<n-1>.gain' inserted after the Bass level so the
+ * levels stay together. `mapped` (settings.midiLearn) adds the level of a slot past the song's count that already
+ * has a mapping, so it can still be seen and cleared from a smaller song (mappings are per position and stay).
+ * @param {number} [slotCount=SLOT_COUNT] the current song's slot count
+ * @param {object} [mapped] settings.midiLearn
+ * @returns {string[]}
+ */
+export function learnRowsFor(slotCount = SLOT_COUNT, mapped = {}) {
+  const n = Number.isInteger(slotCount) ? Math.min(MAX_SLOTS, Math.max(SLOT_COUNT, slotCount)) : SLOT_COUNT;
+  const extra = [];
+  for (let i = SLOT_COUNT; i < MAX_SLOTS; i++) {
+    const id = `slots.${i}.gain`;
+    if (i < n || (mapped && mapped[id])) extra.push(id);
+  }
+  const at = LEARN_ROWS.indexOf(`slots.${SLOT_COUNT - 1}.gain`) + 1;
+  return [...LEARN_ROWS.slice(0, at), ...extra, ...LEARN_ROWS.slice(at)];
+}
+
+/**
+ * UIC: the Learn table's name for a control ('Keys level' … 'Sound 12 level', 'Next song').
+ * @param {string} id controlId
+ * @returns {string}
+ */
+export function learnName(id) {
+  if (LEARN_NAMES[id]) return LEARN_NAMES[id];
+  const i = slotGainIndex(id);
+  return i !== null ? `${slotName(i)} level` : id;
+}
 const LATENCY_OPTS = [
   { value: 'lowest', label: 'Lowest' },
   { value: 'balanced', label: 'Balanced' },
@@ -742,21 +773,45 @@ export function mountSettings(el, ctx) {
   settingBinds.push({ key: 'keyboards', apply: () => keyboards.render() });
   settingBinds.push({ key: 'dynamicRange', apply: () => keyboards.render() }); // the Range slider
 
-  // MIDI Learn table
+  // MIDI Learn table. UIC (UIA review O1): one level row per slot of the current song (learnRowsFor), rebuilt when
+  // the song, its slot count or a past-the-count mapping changes; a 4-slot song keeps the 1.x rows.
   const learnBody = h('tbody');
   const learnCells = new Map(); // id → {map, learnBtn}
   const learnNotes = new Map(); // id → message shown in the row for a few seconds (e.g. sustain pedal refused)
   let learningId = null;
-  for (const id of LEARN_ROWS) {
-    const map = h('td.st-map', { text: '—' });
-    const learnBtn = btn('Learn', () => toggleLearn(id), { class: 'st-learn', 'aria-label': `Learn ${LEARN_NAMES[id] || id}`, disabled: !midi });
-    const clearBtn = btn('Clear', () => {
-      if (typeof controller.clearLearn === 'function') controller.clearLearn(id);
-      else store.setMidiLearn(id, null);
-    }, { class: 'st-clear', 'aria-label': `Clear ${LEARN_NAMES[id] || id}` });
-    learnBody.append(h('tr', { dataset: { control: id } }, h('th', { scope: 'row', text: LEARN_NAMES[id] || id }), map, h('td.st-learn-btns', {}, learnBtn, clearBtn)));
-    learnCells.set(id, { map, learnBtn, clearBtn });
+  let learnKey = '';
+  function syncLearnRows(state = store.get()) {
+    const song = state.songs && state.songs[state.settings.currentSongId];
+    const n = song && song.patch && Array.isArray(song.patch.slots) ? song.patch.slots.length : SLOT_COUNT;
+    const ids = learnRowsFor(n, state.settings.midiLearn);
+    const key = ids.join('|');
+    if (key === learnKey) return false;
+    learnKey = key;
+    const rows = [];
+    for (const id of ids) {
+      let c = learnCells.get(id);
+      if (!c) {
+        const name = learnName(id);
+        const map = h('td.st-map', { text: '—' });
+        const learnBtn = btn('Learn', () => toggleLearn(id), { class: 'st-learn', 'aria-label': `Learn ${name}`, disabled: !midi });
+        const clearBtn = btn('Clear', () => {
+          if (typeof controller.clearLearn === 'function') controller.clearLearn(id);
+          else store.setMidiLearn(id, null);
+        }, { class: 'st-clear', 'aria-label': `Clear ${name}` });
+        const tr = h('tr', { dataset: { control: id } }, h('th', { scope: 'row', text: name }), map, h('td.st-learn-btns', {}, learnBtn, clearBtn));
+        c = { tr, map, learnBtn, clearBtn };
+        learnCells.set(id, c);
+      }
+      rows.push(c.tr);
+    }
+    // cells of rows that left the table are kept (cheap, at most 12) so a pending learn keeps its button
+    learnBody.replaceChildren(...rows);
+    return true;
   }
+  syncLearnRows();
+  cleanups.push(store.subscribe((state) => {
+    if (syncLearnRows(state)) renderLearn(state.settings);
+  }));
   function renderLearn(s = S()) {
     const ml = s.midiLearn || {};
     for (const [id, c] of learnCells) {
@@ -811,7 +866,7 @@ export function mountSettings(el, ctx) {
           }
         }, 6000);
         toast(msg, 'warn');
-      } else if (r) toast(`${LEARN_NAMES[id] || id} → ${mappingText(r)}`);
+      } else if (r) toast(`${learnName(id)} → ${mappingText(r)}`);
       else toast('Nothing was received — press Learn and try again', 'warn');
     }
     renderLearn();

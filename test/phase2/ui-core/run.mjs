@@ -44,24 +44,53 @@ function watchConsole(p, sink) {
   p.on('pageerror', (e) => sink.push(`pageerror: ${e.message}`));
 }
 
-/** In-page helpers (RMS via engine analysers, waits). */
+/**
+ * In-page helpers (RMS via engine analysers, waits).
+ * UIC (UIB review O1): the suite also runs against the 2.0 BridgeEngine (ui-core-devhost.mjs: the real UI on the
+ * native core). There the Web Audio internals the suite reads (`engine.slots`, AudioNode taps, `pedaled`, `sounding`)
+ * do not exist, so each helper below reads the CONTRACTED member instead when `engine.ctx` is not a
+ * BaseAudioContext (native/contract/engine-api.json `methods`): `getSlotPlayRange(i)` for "slot i is built",
+ * `slotLevel(i)` for a strip's level, `_debugStats()` (the core's 1 s stats: voices, sounding, pedaled) and the
+ * `notes` event for the held notes. Every web-engine branch is the suite's original read, unchanged.
+ */
 const HELPERS = () => {
+  const isBridge = () => {
+    const c = window.__rig.engine.ctx;
+    return !(typeof BaseAudioContext === 'function' && c instanceof BaseAudioContext);
+  };
+  // bridge: the analyser facade writes the latest tick peak at index 0 (contract 6.6), so the level is that peak in
+  // dBFS (an RMS over the 2048-sample buffer would read it 33 dB low)
   const rmsNow = () => {
     const e = window.__rig.engine;
+    const bridge = isBridge();
     let worst = -Infinity;
     for (const an of [e.analyserL, e.analyserR]) {
       if (!an) continue;
       const buf = new Float32Array(an.fftSize);
       an.getFloatTimeDomainData(buf);
-      let s = 0;
-      for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
-      const db = 10 * Math.log10(s / buf.length + 1e-20);
+      let db;
+      if (bridge) {
+        let pk = 0;
+        for (let i = 0; i < buf.length; i++) pk = Math.max(pk, Math.abs(buf[i]));
+        db = 20 * Math.log10(pk + 1e-10);
+      } else {
+        let s = 0;
+        for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
+        db = 10 * Math.log10(s / buf.length + 1e-20);
+      }
       if (db > worst) worst = db;
     }
     return worst;
   };
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  // bridge: the held notes as the core reports them (`notes` events); the web engine's own Set otherwise
+  let held = new Set();
+  window.__rig.engine.addEventListener('notes', (ev) => {
+    held = new Set((ev.detail && ev.detail.held) || []);
+  });
+  const stats = () => (typeof window.__rig.engine._debugStats === 'function' ? window.__rig.engine._debugStats() : {});
   window.__t = {
+    isBridge,
     rmsNow,
     sleep,
     /** max RMS (dBFS) seen over `ms` */
@@ -101,9 +130,45 @@ const HELPERS = () => {
     },
     slotVoices() {
       const e = window.__rig.engine;
+      if (isBridge()) return Number(stats().voices) || 0; // the core's live voice total
       let v = 0;
       for (const sc of [...e.slots, ...e.retiring]) if (sc) v += sc.inst.liveVoiceCount?.() || 0;
       return v;
+    },
+    /** notes held down on the pedal (web: engine.pedaled; bridge: the core's stats.pedaled) */
+    pedaled() {
+      return isBridge() ? Number(stats().pedaled) || 0 : window.__rig.engine.pedaled.size;
+    },
+    /** notes still sounding (web: engine.sounding; bridge: the core's stats.sounding) */
+    sounding() {
+      return isBridge() ? Number(stats().sounding) || 0 : window.__rig.engine.sounding.size;
+    },
+    /** is `n` held (web: engine.activeNotes; bridge: the core's last `notes` event) */
+    holds(n) {
+      return isBridge() ? held.has(n) : window.__rig.engine.activeNotes.has(n);
+    },
+    /** is `n` sounding (web: engine.sounding, held or ringing; bridge: held in the core's last `notes` event) */
+    soundingHas(n) {
+      return isBridge() ? held.has(n) : window.__rig.engine.sounding.has(n);
+    },
+    /**
+     * Bridge: resolve once the core's 1 s stats have refreshed `n` times (a stats read after an action then describes a
+     * moment after it, not up to 1 s before); the web engine's reads are live, so nothing to wait for.
+     */
+    async freshStats(n = 1, timeout = 4000) {
+      if (!isBridge()) return true;
+      const t0 = performance.now();
+      let seen = 0;
+      let last = stats().frames;
+      while (performance.now() - t0 < timeout) {
+        await sleep(25);
+        const f = stats().frames;
+        if (f !== last) {
+          last = f;
+          if (++seen >= n) return true;
+        }
+      }
+      return false;
     },
   };
 };
@@ -118,7 +183,12 @@ async function waitSong(id) {
     (sid) => {
       const r = window.__rig;
       const s = r.controller.status;
-      return !s.loading && s.songId === sid && r.store.get().settings.currentSongId === sid && r.engine.slots.some(Boolean);
+      if (s.loading || s.songId !== sid || r.store.get().settings.currentSongId !== sid) return false;
+      const e = r.engine;
+      // UIC: the bridge engine has no `slots` (a Web Audio internal); getSlotPlayRange(i) is non-null for a slot of the
+      // committed song (contracted), i.e. the same "a slot is built" question
+      if (!Array.isArray(e.slots)) return Array.from({ length: 16 }, (_, i) => e.getSlotPlayRange(i)).some(Boolean);
+      return e.slots.some(Boolean);
     },
     id,
     { timeout: 30000 },
@@ -163,13 +233,21 @@ async function assertSoundAndRelease(label) {
     const t = window.__t;
     const e = window.__rig.engine;
     const c = window.__rig.controller;
-    const taps = e.slots.filter(Boolean).map((sc) => {
+    // UIC: against the bridge engine the strips are the core's; the contracted engine.slotLevel(i) reports each
+    // filled slot's level (the core's per-slot meter, post fader, pre FX, like the web taps below)
+    const bridge = t.isBridge();
+    const live = bridge ? Array.from({ length: 16 }, (_, i) => i).filter((i) => e.getSlotPlayRange(i)) : [];
+    const taps = bridge ? [] : e.slots.filter(Boolean).map((sc) => {
       const an = new AnalyserNode(e.ctx, { fftSize: 2048 });
       sc.strip.pan.connect(an);
       return { an, sc };
     });
     const tapRms = () => {
       let worst = -Infinity;
+      if (bridge) {
+        for (const i of live) worst = Math.max(worst, 20 * Math.log10((e.slotLevel(i)?.rms || 0) + 1e-10));
+        return worst;
+      }
       const buf = new Float32Array(2048);
       for (const { an } of taps) {
         an.getFloatTimeDomainData(buf);
@@ -179,6 +257,10 @@ async function assertSoundAndRelease(label) {
       }
       return worst;
     };
+    if (bridge) {
+      tapRms(); // subscribes the slot meters (contract 6.6: a meter is streamed once read)
+      await t.sleep(150);
+    }
     const tapBefore = tapRms();
     c.perform.noteOn(60, 100);
     let mainPeak = -Infinity;
@@ -210,7 +292,8 @@ async function assertSoundAndRelease(label) {
         /* retired */
       }
     }
-    return { mainPeak, tapPeak, tapBefore, tookMs, sounding: e.sounding.size };
+    if (bridge) await t.freshStats(); // the core's stats come once a second
+    return { mainPeak, tapPeak, tapBefore, tookMs, sounding: t.sounding() };
   });
   assert.ok(r.mainPeak > -50, `${label}: output peak ${r.mainPeak.toFixed(1)} dBFS should exceed −50 dBFS`);
   assert.ok(r.tapPeak > -50, `${label}: the note reaches ${r.tapPeak.toFixed(1)} dBFS on the slot strips within 500 ms (expected > −50)`);
@@ -476,16 +559,19 @@ test('Panic cuts held + pedaled voices', async () => {
     await t.sleep(900);
     for (const n of [48, 55, 60, 64]) c.perform.noteOff(n);
     await t.sleep(200);
-    return { level: await t.level(200), voices: t.slotVoices(), pedaled: window.__rig.engine.pedaled.size };
+    const level = await t.level(200);
+    await t.freshStats(); // bridge: a core stats sample from after the keys went up (web: no wait)
+    return { level, voices: t.slotVoices(), pedaled: t.pedaled() };
   });
   assert.ok(held.voices > 0 && held.pedaled > 0, 'pedal holds the chord');
   await page.click('[data-testid=panic]');
   const r = await page.evaluate(async () => {
     const t = window.__t;
     await t.sleep(400);
+    await t.freshStats(); // bridge: the first core stats sample 400 ms or more after Panic (web: no wait)
     const v = t.slotVoices();
     await t.sleep(1100);
-    return { voices: v, level: await t.level(200), pedaled: window.__rig.engine.pedaled.size, pedal: window.__rig.engine.pedal };
+    return { voices: v, level: await t.level(200), pedaled: t.pedaled(), pedal: window.__rig.engine.pedal };
   });
   assert.equal(r.voices, 0, 'no live voices 400 ms after Panic');
   assert.equal(r.pedaled, 0);
@@ -1063,10 +1149,10 @@ test('on-screen keyboard plays through the controller and shows held notes + cho
   const b = await key.boundingBox();
   await page.mouse.move(b.x + b.width / 2, b.y + b.height * 0.85);
   await page.mouse.down();
-  await page.waitForFunction(() => window.__rig.engine.activeNotes.has(60));
+  await page.waitForFunction(() => window.__t.holds(60));
   assert.equal(await key.evaluate((el) => el.classList.contains('held')), true);
   await page.mouse.up();
-  await page.waitForFunction(() => !window.__rig.engine.activeNotes.has(60));
+  await page.waitForFunction(() => !window.__t.holds(60));
   // hold C-E-G for the screenshot: chord readout + highlighted keys
   await page.evaluate(() => [60, 64, 67].forEach((n) => window.__rig.controller.perform.noteOn(n, 90)));
   await page.waitForFunction(() => document.querySelector('.chord-name').textContent.trim() === 'C');
@@ -2213,7 +2299,13 @@ test('polish-2A responsive (ux-round2 L1 / #1, L-6): six windows — nothing cli
       for (let i = 0; i < 4; i++) if (!s.patch.slots[i]) r.store.set(`songs.${s.id}.patch.slots.${i}`, JSON.parse(JSON.stringify(filled[i % filled.length])));
       return { id: s.id, keep };
     });
-    await page.waitForFunction(() => window.__rig.engine.slots.filter(Boolean).length === 4 && !window.__rig.controller.status.loading, null, { timeout: 30000 });
+    await page.waitForFunction(() => {
+      const e = window.__rig.engine;
+      // UIC: the bridge engine has no `slots`; getSlotPlayRange(i) (contracted) is non-null for a built slot
+      const n = Array.isArray(e.slots) ? e.slots.filter(Boolean).length
+        : Array.from({ length: 16 }, (_, i) => e.getSlotPlayRange(i)).filter(Boolean).length;
+      return n === 4 && !window.__rig.controller.status.loading;
+    }, null, { timeout: 30000 });
     try {
       for (const [w, hgt] of [[1366, 768], [1440, 900], [1024, 700]]) {
         await page.setViewportSize({ width: w, height: hgt });
@@ -2341,7 +2433,7 @@ test('polish-2A banners (ux-round2 L2 / #2): one 32 px strip with a chevron; unf
     await page.keyboard.press('Escape');
     const afterEsc = await geo();
     assert.equal(afterEsc.expanded, 'false', 'Esc folds the strip');
-    assert.ok(await page.evaluate(() => window.__rig.engine.activeNotes.has(64)), 'that Esc did not panic');
+    assert.ok(await page.evaluate(() => window.__t.holds(64)), 'that Esc did not panic');
     await page.evaluate(() => window.__rig.controller.perform.noteOff(64));
     // one banner: no count; its action works from the folded strip
     await ui(() => { window.__rig.ui.setBanner('t-warn', null); window.__rig.ui.setBanner('t-info', null); });
@@ -4289,7 +4381,7 @@ test('v11-metronome: Perform Click chip — hidden without a tempo; count-in →
   await ev(() => window.__rig.controller.perform.noteOn(60, 100));
   await page.click('[data-testid=next-song]');
   await waitSong(ids[1]);
-  const st2 = await ev(() => ({ ...window.__rig.engine.clickState(), held: window.__rig.engine.sounding.has(60) }));
+  const st2 = await ev(() => ({ ...window.__rig.engine.clickState(), held: window.__t.soundingHas(60) }));
   assert.equal(st2.running, true, 'the click keeps running across the song switch');
   assert.equal(st2.bpm, 80);
   assert.equal(st2.sig, '3/4');
@@ -4343,7 +4435,7 @@ test('v11-decisions: PANIC stops the click (during the count-in and after); the 
       counting: window.__rig.controller.status.click.counting,
       cls: [...document.querySelector(c).classList].filter((x) => x === 'on' || x === 'counting'),
       word: document.querySelector(`${c} .click-l`).textContent.trim(),
-      held: window.__rig.engine.sounding.has(64),
+      held: window.__t.soundingHas(64),
       song: window.__rig.store.currentSong().id,
     }), chip);
     assert.deepEqual(a, { running: false, on: false, counting: false, cls: [], word: 'Click', held: false, song: id });

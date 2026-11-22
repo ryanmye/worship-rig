@@ -28,6 +28,13 @@ const METER_IDLE_MS = 2000; // a meter nobody reads for this long is unsubscribe
 const METER_RATE_ACTIVE = 30;
 const METER_RATE_IDLE = 4;
 const PEAK_FRESH_MS = 80; // a tick peak is re-served to a second read within this long (reads run at 60 Hz)
+/**
+ * UIC (UIB review O1, PARITY "UI parity"): a perform call changes the shim's mirror of the pedal / runtime at once, as
+ * the web engine's own state changes at once. A tick that disagrees within this long was built before native saw the
+ * call (30 Hz ticks, one in flight); after it, or once a tick agrees, the core's value rules again (a hardware pedal
+ * on native's direct MIDI path, a swell ramp, a glide).
+ */
+const OPTIMISTIC_MS = 400;
 
 const ZERO_STATS = Object.freeze({
   voices: 0, nodes: 0, retiring: 0, decodedMB: 0, pinnedMB: 0, referencedMB: 0, capMB: 0, sounding: 0, pedaled: 0,
@@ -205,6 +212,7 @@ export class BridgeEngine extends EventTarget {
     this._pedal = false;
     this._held = 0;
     this._runtime = DEFAULT_RUNTIME;
+    this._local = new Map(); // UIC: optimistic pedal / runtime fields: key -> {value, until} (OPTIMISTIC_MS)
     this._stats = ZERO_STATS;
     this._click = null;
     this._clockSink = null;
@@ -444,11 +452,43 @@ export class BridgeEngine extends EventTarget {
       this._rta.bytes = null;
     }
     if (Array.isArray(m.blockers)) this._blockers = m.blockers;
-    if (m.pedal !== undefined) this._pedal = !!m.pedal;
+    if (m.pedal !== undefined) this._pedal = this._reconcile('pedal', !!m.pedal);
     if (m.held !== undefined) this._held = m.held;
-    if (m.runtime) this._runtime = { ...DEFAULT_RUNTIME, ...m.runtime };
+    if (m.runtime) {
+      const r = { ...DEFAULT_RUNTIME, ...m.runtime };
+      const wheel = { ...DEFAULT_RUNTIME.wheel, ...(r.wheel || {}) };
+      for (const k of ['mod', 'expr', 'vol']) wheel[k] = this._reconcile(`wheel.${k}`, Number(wheel[k]));
+      r.wheel = wheel;
+      for (const k of ['modOwner', 'swelling', 'faded']) r[k] = this._reconcile(k, k === 'modOwner' ? r[k] : !!r[k]);
+      this._runtime = r;
+    }
     if (m.stats) this._stats = m.stats;
     if (Number.isFinite(m.hostLatency)) this._st.latencyMs = m.hostLatency * 1000;
+  }
+
+  /** UIC: a local perform change, mirrored at once until a tick confirms it or OPTIMISTIC_MS pass. */
+  _optimistic(key, value) {
+    this._local.set(key, { value, until: this._now() + OPTIMISTIC_MS });
+  }
+
+  /** UIC: the value to keep for `key` given a tick's: the local one while it is fresh and unconfirmed. */
+  _reconcile(key, fromTick) {
+    const l = this._local.get(key);
+    if (!l) return fromTick;
+    const same = typeof l.value === 'number' ? Math.abs(l.value - fromTick) < 1e-3 : l.value === fromTick;
+    if (same || this._now() >= l.until) {
+      this._local.delete(key);
+      return fromTick;
+    }
+    return l.value;
+  }
+
+  /** UIC: set runtime fields locally (wheelValues / getRuntimeState answer them before the next tick). */
+  _runtimeNow(fields, wheel) {
+    const r = { ...this._runtime, wheel: { ...this._runtime.wheel, ...(wheel || {}) }, ...(fields || {}) };
+    for (const [k, v] of Object.entries(fields || {})) this._optimistic(k, v);
+    for (const [k, v] of Object.entries(wheel || {})) this._optimistic(`wheel.${k}`, v);
+    this._runtime = r;
   }
 
   _onLoad(m) {
@@ -899,6 +939,7 @@ export class BridgeEngine extends EventTarget {
   noteOn(note, vel = 100, { when, touch } = {}) {
     if (!this._started) return false;
     if (!(Number(vel) > 0)) return this.noteOff(note, { when });
+    if (this._runtime.faded && !Number.isFinite(when)) this._runtimeNow({ faded: false }); // audio.js: a note un-fades
     this._send('play', {
       e: 'on', n: clampMidi(note), vel: clamp(Math.round(Number(vel)), 1, 127),
       ...(touch ? { touch } : {}), ...this._whenArg(when),
@@ -914,6 +955,10 @@ export class BridgeEngine extends EventTarget {
 
   sustain(down, { when } = {}) {
     if (!this._started) return false;
+    if (!Number.isFinite(when)) {
+      this._pedal = !!down; // UIC: answered at once like audio.js (`pedal`), confirmed by the next tick
+      this._optimistic('pedal', this._pedal);
+    }
     this._send('play', { e: 'pedal', down: !!down, ...this._whenArg(when) });
     return true;
   }
@@ -938,27 +983,50 @@ export class BridgeEngine extends EventTarget {
   setWheel(source, v, { when, glide } = {}) {
     if (!WHEEL_SOURCES.includes(source) || !this._started) return false;
     const g = source === 'virtual' && Number.isFinite(glide) && glide > 0 ? { glide } : {};
+    if (!Number.isFinite(when) && !g.glide) this._wheelNow(source, clamp(Number(v) || 0, 0, 1));
     this._send('play', { e: 'wheel', src: source, value: clamp(Number(v) || 0, 0, 1), ...g, ...this._whenArg(when) });
     return true;
   }
 
   swell(start, { when } = {}) {
     if (!this._started) return false;
+    // UIC: audio.js swell(undefined) starts unless an up-swell runs; a start makes `swelling` true at once
+    const up = start === undefined ? !this._runtime.swelling : !!start;
+    if (up && !Number.isFinite(when)) this._runtimeNow({ swelling: true, modOwner: 'virtual' });
     this._send('play', { e: 'swell', ...(start === undefined ? {} : { start: !!start }), ...this._whenArg(when) });
     return true;
   }
 
   allNotesOff({ when } = {}) {
+    if (!Number.isFinite(when)) {
+      // UIC: audio.js allNotesOff lifts the pedal and ends a swell at the call
+      this._pedal = false;
+      this._optimistic('pedal', false);
+      this._runtimeNow({ swelling: false });
+    }
     this._send('play', { e: 'panic', ...this._whenArg(when) });
   }
 
   fadeOutAll(seconds = 6, { when } = {}) {
     const s = Number.isFinite(Number(seconds)) ? Number(seconds) : 6;
+    if (!Number.isFinite(when)) this._runtimeNow({ faded: true }); // UIC: audio.js `_fade` is set at the call
     this._send('play', { e: 'fade', seconds: Math.max(0.05, s), ...this._whenArg(when) });
   }
 
   noteInput({ when } = {}) {
     this._send('play', { e: 'input', ...this._whenArg(when) });
+  }
+
+  /**
+   * UIC: the wheel as audio.js `_setWheel` leaves it, at once: virtual takes the mod wheel (and ends a swell); a
+   * hardware mod value counts only while the hardware owns the wheel (pickup is native's: the tick tells); expression
+   * and volume always.
+   */
+  _wheelNow(source, v) {
+    if (source === 'virtual') this._runtimeNow({ modOwner: 'virtual', swelling: false }, { mod: v });
+    else if (source === 'mod') {
+      if (this._runtime.modOwner !== 'virtual') this._runtimeNow(null, { mod: v });
+    } else this._runtimeNow(null, { [source]: v });
   }
 
   wheelValues() {
