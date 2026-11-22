@@ -299,6 +299,7 @@ internals from what the shim already knows. It is a diagnostic, not parity (`rev
 | UIC (builder, one run) | 70 | the suite side plus the shim side (below) |
 | **UIC skeptic** (3 runs, fresh `build-uicsk-devhost`) | **66-68** | status lamps now also checks that the pedal lamp is still lit 1 s later (it was lit only for the shim's 400 ms optimistic window: core defect, below), plus a cleanup that lifts the pedal when that test fails (its failure had also failed round2-ui #1). Runs: 68, 68 (before the cleanup; round2-ui #1 failed by that cascade), 66 (after it; 3 timing failures, below). The builder's 70 is one run of the same flaky set |
 | CORE2B (builder, fresh `native/devhost/build-core2b`, g++ Release) | **77, 77** (2 runs) | the 5 read-back tests (`get param`), Swell (tick `swelling`) and status lamps (tick `pedal` / `held`) pass; the tree also carried CORE2A's in-progress `prepare` / preload changes, so the factory-song and timing rows were not failing in this run either (CORE2A reports those). No bridge error reply, the two known warns, no sanitizer line |
+| **CORE2B skeptic** (fresh `native/devhost/build-c2bsk`, g++ Release) | **77, 77** (2 runs; the second next to an ASan build) | builder's count confirmed; same warns, no bridge error reply, `sanitizer: (none)`. `reviews/CORE2B.md` |
 
 UIC's run used a fresh `native/core/build-uic-devhost` (g++ Release). It returned no bridge error reply. It raised the
 same two warns as UIB's run ("No pad file for C; using the synth drone." and "Drone: too many overlapping layers; a

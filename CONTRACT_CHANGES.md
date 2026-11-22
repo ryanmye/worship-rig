@@ -7062,3 +7062,10 @@ never-filled snapshot, a tick `runtime` without `swelling`, `get` without `what:
   Swell and status lamps (pedal lamp still lit after 1 s) pass; no bridge error reply; the two known warns; no
   sanitizer line; "no console errors on the main page" passes. The factory-song and timing rows also passed, on
   CORE2A's files (their section has their numbers).
+
+**Skeptic** (`native/docs/reviews/CORE2B.md`, VERIFIED): the gate holds on fresh `build-c2bsk*` dirs (ui-core raw
+77/77 twice; 112/112 fixtures byte-identical to the pre-CORE2 renders); the C++ tests fail on the base behaviour
+(mutation runs). Correction: an absent `pedalHold` reads `'natural'` on the web engine too (`normalizePatch`), so the
+core's answer is right; `param-read.js` `patchParam` (the shim's answer before the core's, and the mock's) returned
+undefined for it and now returns `'natural'`. An absent `release` reads `null` on the web engine and undefined on the
+bridge (nit, no caller).
