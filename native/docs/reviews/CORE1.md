@@ -14,7 +14,7 @@ less. Another builder was running Playwright, run-all and ASan renders on the sa
 
 | config | build | ctest |
 |---|---|---|
-| g++ 13 Release | 0 warnings | 79/80 in the full `-j1` run: `rt.realtime` hit 4 xruns (limit 3) at load 7. It passed alone afterwards. The other 79 passed. |
+| g++ 13 Release | 0 warnings | Run 1 (`-j1`, load 7): 79/80. `rt.realtime` hit 4 xruns (limit 3). Run 2 (`-j2`, final test file, load 10): 78/80. `rt.realtime` hit 7 xruns and `unit.voice-limit-cpu` came in 0.2 % over its budget. Every failure was a timing check, and each one passed when re-run alone (see open item 3). |
 | clang++-20 Release (`-Werror` from `cmake/RigWarnings.cmake`) | 0 warnings | **80/80** |
 | g++ ASan+UBSan (`-fno-sanitize-recover=all`) | 0 warnings | **80/80**, no sanitizer report. `rt.realtime` alone reports 61 xruns as a MESSAGE. |
 | g++ TSan, CI regex (29 tests, `rig_tests` target) | 0 warnings | 28/29, **0 ThreadSanitizer reports**. `unit.runtime_cache` failed on a race in the test, not the engine (fixed below). After the fix it passed 3/3 alone. |
@@ -128,6 +128,14 @@ and the sweep still runs.
      only makes the existing finish/evict paths run in realtime without a preload.
 3. **(info, pre-existing) The Release `rt.realtime` limit (`xruns <= 3`) still flakes on this box under load.**
    - g++: 4 xruns at load 7 here. clang-20: 10 xruns in the builder's run. Both pass alone.
+   - I checked whether the pump makes this worse. `rt.realtime` uses only a test sine, so `pump()` has nothing to do
+     there.
+   - I ran 22 alternating runs each, at load 5 to 8, of the current binary and the scratch binary with no pump. They
+     failed equally often: the current binary 4 of 12 in the last batch, the no-pump binary 6 of 12.
+   - Combined counts (more than 3 xruns): 11 of 38 runs with the pump and 9 of 33 without. That is box noise, not
+     CORE1.
+   - My second full g++ run at load 10 failed `rt.realtime` (7 xruns) and `unit.voice-limit-cpu` (1871 us against a
+     1867 us budget). Both passed when re-run alone.
    - O4 scoped only ASan, and Release should keep asserting. If CI sees it, `RUN_SERIAL` on `rt.realtime` would be
      the next step (orchestrator: CMakeLists is frozen).
 4. **(docs, orchestrator)**
