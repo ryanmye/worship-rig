@@ -120,17 +120,10 @@ int oscFinalValueCalls() {
 
 void oscProcess(wa::Oscillator &o, bool active, bool detuneKRate, std::int64_t f0, double sr, float *out,
                 std::size_t n, const float *freqMod, const float *detuneMod) {
-  const int extra = kChromiumOscFinalValueCalls - oscFinalValueCalls();
-  if (active && extra > 0) {
-    const bool freqSA = freqMod != nullptr || o.frequency().hasSampleAccurateValues(f0, sr);
-    const bool detSA = !detuneKRate && (detuneMod != nullptr || o.detune().hasSampleAccurateValues(f0, sr));
-    if (!freqSA && !detSA) {
-      for (int k = 0; k < extra; ++k) {  // the FinalValue() pairs wa::Oscillator does not make
-        o.frequency().processKRate(f0, sr);
-        o.detune().processKRate(f0, sr);
-      }
-    }
-  }
+  // T11 O2 closed by T15: wa::Oscillator::process makes Chromium's three FinalValue() pairs itself (the probe
+  // oscFinalValueCalls() now finds 3), so no compensation is needed here any more.
+  (void)active;
+  (void)detuneKRate;
   o.process(f0, sr, out, n, freqMod, detuneMod);
 }
 

@@ -12,6 +12,7 @@
 #include "mix/master_chain.h"
 #include "mix/slot_channel.h"
 #include "model/song.h"
+#include "model/perform.h"  // T14
 #include "params/params.h"
 #include "samples/cache_service.h"
 #include "time/automation.h"
@@ -47,6 +48,7 @@ Model::Model(CommandSink &sink, const UnitEnv &env) : sink_(sink), env_(env) {
     if (Service *s = best->factory(*this)) services_.emplace_back(e.name, std::unique_ptr<Service>(s));
   }
   if (auto *cache = service<CacheService>()) env_.cache = cache->bufferCache();
+  perf_ = std::make_unique<Perform>(*this);  // INTERFACE-CHANGE(T14): after the services (installs the quiet probe)
 }
 
 Model::~Model() {
@@ -312,7 +314,10 @@ std::uint32_t Model::prepare(PatchSpec &&patch) {
 }
 
 bool Model::commit(std::uint32_t token, double when) {
-  return sg_->commit(token, when);  // T13: model/song.cpp (stats, global units and the services' onCommit inside)
+  const std::string oldBend = sg_->routing().bendMode;  // T14
+  if (!sg_->commit(token, when)) return false;  // T13: model/song.cpp (stats, global units, services' onCommit)
+  perf_->afterCommit(oldBend, when);            // T14: neutral bend, FX wheels, drone songChanged, pedal swell
+  return true;
 }
 
 std::string Model::preload(const yyjson_val *patches, std::string_view pin) {
@@ -421,7 +426,9 @@ void Model::setTranspose(int semis) {
   forEachService([&](Service &s) { s.onSongState(song_); });
 }
 void Model::setRouting(const yyjson_val *routing, double when) {
-  sg_->setRouting(routing, when);  // T13: state + slot wheel factors; bend neutralising and pedal swell: T14
+  const std::string oldBend = sg_->routing().bendMode;  // T14
+  sg_->setRouting(routing, when);  // T13: state + slot wheel factors
+  perf_->afterRouting(routing, oldBend, when);  // T14: neutral bend, the FX wheels, pedal swell
 }
 void Model::setTempo(double bpm) {
   song_.tempo = bpm > 0 ? bpm : 0;
@@ -544,6 +551,7 @@ void Model::onAudioEvent(const AudioEvent &e) {
       env_.sampleRate = e.f.a;
       forEachService([&](Service &s) { s.onRateChanged(e.f.a); });
       sg_->onRateChanged(e.f.a, e.f.b);  // T13 (T11 O3): retiring synth.js instruments; the command gate
+      perf_->onRateChanged();            // T14 (T05 R6): the rebuilt lofi gets the tape hold back
       break;
     default:
       break;

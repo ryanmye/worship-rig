@@ -270,11 +270,26 @@ void Oscillator::process(std::int64_t frame0, double sampleRate, float *out, std
     if (detuneMod) detFinal = clipDetune(detFinal + detuneMod[0]);
     finalScale *= detuneToMultiplier(detFinal);
   }
+  // T11 O2 (moved here by T15 from T11's oscProcess): without sample-accurate values Chromium 157 evaluates
+  // FinalValue() on frequency AND detune three times per quantum (CalculateSampleAccuratePhaseIncrements, Process
+  // before the kernel, ProcessKRate), and each call advances a running setTarget by one control step. Process()'s
+  // value (call 2) sets the sub-sample start phase, ProcessKRate's (call 3) the kernel frequency and table. The
+  // connected-input sum is the same in every call (the inputs render once per quantum).
+  float startFrequency = 0;
   if (hasSA) {
     for (std::size_t i = 0; i < n; ++i) pinc[i] = clampFrequency(pinc[i], nyq);
     for (std::size_t i = 0; i < n; ++i) pinc[i] *= finalScale;
   } else {
-    frequency = clampFrequency(freqFinal * detuneToMultiplier(detFinal), nyq);
+    auto finalFrequency = [&] {
+      float f = freq_.processKRate(frame0, sampleRate);
+      if (freqMod) f += freqMod[0];
+      f = clampFrequency(f, nyq);
+      float d = detune_.processKRate(frame0, sampleRate);
+      if (detuneMod) d = clipDetune(d + detuneMod[0]);
+      return clampFrequency(f * detuneToMultiplier(d), nyq);
+    };
+    startFrequency = finalFrequency();  // Process()
+    frequency = finalFrequency();       // ProcessKRate()
   }
 
   double vri = phase_;
@@ -284,9 +299,9 @@ void Oscillator::process(std::int64_t frame0, double sampleRate, float *out, std
   if (sfo > 0) {
     ++dst;
     --cnt;
-    vri += (1 - sfo) * frequency * rateScale;
+    vri += (1 - sfo) * startFrequency * rateScale;
   } else if (sfo < 0) {
-    vri = -sfo * frequency * rateScale;
+    vri = -sfo * startFrequency * rateScale;
   }
   if (hasSA) {
     vri = processARate(w, cnt, out + dst, vri, pinc);

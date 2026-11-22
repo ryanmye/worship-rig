@@ -182,6 +182,19 @@ class VoicePool {
     if (counts(m)) --playing_;
     m.state = VoiceState::Killed;
   }
+  /** INTERFACE-CHANGE(T14) O-W3-1 (Instrument::fadeNote): fade(slot) for every Held voice playing `note`, in slot
+   *  order; `fade` must fade the voice and call markKilled (done here if it did not). Returns the voices faded. */
+  template <class Fade>
+  unsigned fadeNote(int note, double when, Fade &&fade) {
+    unsigned n = 0;
+    for (unsigned i = 0; i < Capacity; ++i) {
+      if (meta_[i].state != VoiceState::Held || meta_[i].note != note) continue;
+      fade(static_cast<int>(i));
+      markKilled(static_cast<int>(i), when);
+      ++n;
+    }
+    return n;
+  }
   /** Legato retune: the voice now plays `note`. */
   void setNote(int s, int note) { meta_[s].note = note; }
   void destroy(int s) {

@@ -106,6 +106,7 @@ class SamplerInstrument final : public Instrument {
   void setBend(double semis, std::int64_t frame) override;
   void setParam(std::uint32_t index, double value, double time, double glide) override;
   void releaseVoice(VoiceId id, std::int64_t frame, double fadeSec) override;
+  void fadeNote(int note, std::int64_t frame, double seconds) override;  // INTERFACE-CHANGE(T14) O-W3-1
   unsigned outputChannels() const override { return 2; }
   void setVoiceCap(unsigned cap) override;
   /** D4: voices counted against the caps (held + released). */

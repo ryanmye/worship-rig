@@ -247,6 +247,11 @@ void SamplerInstrument::releaseVoice(VoiceId id, std::int64_t frame, double fade
   if (slot >= 0) fadeOut(slot, t, fadeSec);
 }
 
+void SamplerInstrument::fadeNote(int note, std::int64_t frame, double seconds) {  // INTERFACE-CHANGE(T14) O-W3-1
+  const double t = timeOf(frame);
+  pool_.fadeNote(note, t, [&](int s) { fadeOut(s, t, seconds); });
+}
+
 bool SamplerInstrument::oldestVoice(bool released, std::int64_t frame, double &at, VoiceId &id) {
   const double t = timeOf(frame);  // the time noteOn's own makeRoom would use
   const int s = released ? pool_.oldestReleased(t) : pool_.oldestPlaying();

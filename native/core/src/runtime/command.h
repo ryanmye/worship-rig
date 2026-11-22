@@ -80,7 +80,10 @@ enum class Op : std::uint16_t {
   // slot's instrument and strip into retiring channels at a commit (T13). The unit previously in `target` goes back
   // as Garbage; `aux` is left empty. A strip moved from Strip<i> into a RetireStrip slot keeps metering slot i
   // (rig_meters slot arrays); RetireStrip -> RetireStrip keeps its origin. Never allocates.
-  MoveUnit = 25
+  MoveUnit = 25,
+  // INTERFACE-CHANGE(T14) O-W3-1: fade the held voices of one sounding note (Instrument::fadeNote). target =
+  // instrument slot, aux = note (0..127), f.a = fade seconds. Re-strike of a pedaled note, pedalHold, mono retrigger.
+  FadeNote = 26
 };
 
 /** A module opcode from its own enum (see the range table). */

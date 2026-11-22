@@ -28,6 +28,7 @@ namespace rig {
 
 class JsonOut;
 class SongGraph;  // INTERFACE-CHANGE(T13): model/song.h (song + graph policy state, T13-owned)
+class Perform;    // INTERFACE-CHANGE(T14): model/perform.h (notes, pedal, mono, wheels, bend: T14-owned)
 
 /** What the Model needs from the engine. Implemented by Engine. */
 class CommandSink {
@@ -201,6 +202,10 @@ class Model {
   // in use. Needs a bridge row (`config {dynamicRange}`, T08 / contract) to reach it from the UI.
   double setDynamicRange(double range);
   double dynamicRange() const;
+  // INTERFACE-CHANGE(T14): the perform state (model/perform.h) behind noteOn .. runtimeStateJson: notes, pedal, mono,
+  // wheels, bend, fade. Replaces the STOPGAP(T12) overlay; services and tests read it (pedal, held notes, quietFor).
+  Perform &perform() { return *perf_; }
+  const Perform &perform() const { return *perf_; }
 
  private:
   bool send(Command c);
@@ -213,6 +218,7 @@ class Model {
     bool module = false;
   };
   friend class SongGraph;  // INTERFACE-CHANGE(T13): attaches prebuilt units, owns the plan (was plans_ here)
+  friend class Perform;    // INTERFACE-CHANGE(T14): sends its commands through the gate (send)
   CommandSink &sink_;
   UnitEnv env_;
   std::uint32_t nextToken_ = 1;
@@ -228,6 +234,7 @@ class Model {
   unsigned polyphony_ = kPolyphonyDefault;  // INTERFACE-CHANGE(T00c) D1
   int voiceLimit_ = kVoiceLimitAuto;        // INTERFACE-CHANGE(D4)
   std::unique_ptr<SongGraph> sg_;           // INTERFACE-CHANGE(T13); destroyed first (before the services)
+  std::unique_ptr<Perform> perf_;           // INTERFACE-CHANGE(T14); built last, destroyed before sg_
 };
 
 }  // namespace rig

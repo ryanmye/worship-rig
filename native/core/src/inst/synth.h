@@ -59,6 +59,7 @@ class SynthInstrument final : public Instrument {
   void legatoTo(int from, int to, std::int64_t frame, double glide) override;
   void setParam(std::uint32_t index, double value, double time, double glide) override;
   void releaseVoice(VoiceId id, std::int64_t frame, double fadeSec) override;
+  void fadeNote(int note, std::int64_t frame, double seconds) override;  // INTERFACE-CHANGE(T14) O-W3-1
   unsigned outputChannels() const override { return stereo_ ? 2u : 1u; }
   void setVoiceCap(unsigned cap) override { pool_.setCap(clampVoiceCap(cap)); }
 

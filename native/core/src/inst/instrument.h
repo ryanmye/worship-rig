@@ -4,7 +4,7 @@
 // "inst." + patch slot `instrument.type`, so a new instrument type is a new registration, nothing else.
 //
 // The graph routes the core perform opcodes (runtime/command.h NoteOn, NoteOff, Sustain, Bend, LegatoTo, InstParam,
-// ReleaseVoice, AllNotesOff, Panic) to Instrument::apply, which decodes them into the virtuals below
+// ReleaseVoice, AllNotesOff, Panic, FadeNote) to Instrument::apply, which decodes them into the virtuals below
 // (graph/instrument_apply.cpp). Frames are time-grid frames: the voice must start at exactly `frame` (sub-quantum
 // offsets are the instrument's job, ARCHITECTURE 3.3). Note numbers arrive SOUNDING (transpose/octave applied by
 // the Model) and velocity arrives as the touch-curved gain.
@@ -59,6 +59,16 @@ class Instrument : public Unit {
     (void)id;
     (void)frame;
     (void)fadeSec;
+  }
+  // INTERFACE-CHANGE(T14) O-W3-1 (DECISIONS "Orchestrator decisions for wave 3"; T12 review O3): fade every HELD
+  // voice playing sounding note `note` over `seconds` from `frame` (the instrument's own fadeOut, as a steal: the
+  // voice stops counting at once). The Model holds the pedal, so a pedaled note is still Held in the instrument:
+  // audio.js re-strike of a pedaled note (30 ms), `slots.<i>.pedalHold` (25 % of the hold) and the mono crossfade
+  // (30 ms) address exactly that voice. Op::FadeNote (aux = note, f.a = seconds). Default no-op.
+  virtual void fadeNote(int note, std::int64_t frame, double seconds) {
+    (void)note;
+    (void)frame;
+    (void)seconds;
   }
   /** Output channel count (1 or 2): decides the strip's pan law (contract 3.1). */
   virtual unsigned outputChannels() const = 0;

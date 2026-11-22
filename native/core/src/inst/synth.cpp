@@ -382,6 +382,11 @@ void SynthInstrument::releaseVoice(VoiceId id, std::int64_t frame, double fadeSe
   if (s >= 0) fadeSlot(s, atTime(timeOf(frame)), fadeSec > 0 ? fadeSec : 0.03);
 }
 
+void SynthInstrument::fadeNote(int note, std::int64_t frame, double seconds) {  // INTERFACE-CHANGE(T14) O-W3-1
+  const double t = atTime(timeOf(frame));
+  pool_.fadeNote(note, t, [&](int s) { fadeSlot(s, t, seconds > 0 ? seconds : 0.03); });
+}
+
 void SynthInstrument::setBend(double semis, std::int64_t frame) {
   const double s = std::isfinite(semis) ? semis : 0;
   wa::rampTo(sh_->bendCS.offset(), s * 100, atTime(timeOf(frame)), 0.008);

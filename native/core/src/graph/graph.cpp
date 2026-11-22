@@ -303,6 +303,7 @@ void Graph::apply(const Command &c) {
     case Op::InstParam:
     case Op::ReleaseVoice:
     case Op::VoiceCap:  // INTERFACE-CHANGE(T00c) D1
+    case Op::FadeNote:  // INTERFACE-CHANGE(T14) O-W3-1
       if (c.target == kAllSlots) {
         for (std::size_t i = 0; i < kChannels; ++i)
           if (Unit *u = units_[idx(instSlot(i))]) {

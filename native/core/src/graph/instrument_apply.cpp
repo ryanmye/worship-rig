@@ -40,6 +40,9 @@ void Instrument::apply(const Command &c) {
     case Op::VoiceCap:  // INTERFACE-CHANGE(T00c) D1
       setVoiceCap(c.aux);
       break;
+    case Op::FadeNote:  // INTERFACE-CHANGE(T14) O-W3-1
+      fadeNote(static_cast<int>(c.aux & 0xff), c.frame, c.f.a);
+      break;
     default:
       if (isModuleOp(c.op)) applyModule(c);
       break;
