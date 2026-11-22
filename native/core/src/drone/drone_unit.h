@@ -69,10 +69,17 @@ struct BufRef final : Owned {
   std::shared_ptr<const AudioBuf> buf;
 };
 
+/** The drone.js constructor's state: GainNode values and the automation it schedules at time 0. */
+struct DroneInit {
+  double level = 0.5011872336272722;  // new GainNode(ctx, {gain: Math.pow(10, -6 / 20)})
+  double width = 0.7;                 // _applyWidth(0): rampTo(wLL/wRR, (1+w)/2, 0, .02), rampTo(wLR/wRL, (1-w)/2, ..)
+  double trimGain = 1;                // setTrim(db): setNow(synthBus.gain, 10^(db/20), 0)
+};
+
 class DroneUnit final : public Unit {
  public:
-  /** `level` = drone.gain's intrinsic value, `widthA/B` the width matrix gains, `trim` the synth bus gain. */
-  DroneUnit(double sampleRate, double level, double widthA, double widthB, double trim);
+  /** Control thread; the time-0 automation of `init` is scheduled here (before the unit is attached). */
+  DroneUnit(double sampleRate, const DroneInit &init);
   ~DroneUnit() override;
 
   void process(const RenderContext &ctx, UnitIO &io) override;

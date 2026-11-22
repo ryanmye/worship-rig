@@ -90,6 +90,9 @@ struct SongState {
   // INTERFACE-CHANGE(T07): setTimeSig(sig, {newBar}) (controller.js song switch): true only while the Model runs
   // forEachService(onSongState) for that call, false at every other time (T07 review O2).
   bool newBar = false;
+  // INTERFACE-CHANGE(T16) O-W3-2 (DECISIONS "Orchestrator decisions for wave 3"): low-resource mode as the services
+  // see it (Model::setLowResource sets it, then offers onSongState); the drone service freezes on it (D5).
+  bool lowResource = false;
 };
 
 /** Resolve a JSON patch object against the PARAMS defaults and clamps. False + err on a non-object patch. */

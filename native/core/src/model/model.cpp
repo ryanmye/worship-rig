@@ -300,6 +300,8 @@ bool Model::setLowResource(bool on) {
   // meter tick reads lowResource()); off = pins restored + the current song's. The drone freeze is T16's.
   if (on == lowResource_) return on;
   lowResource_ = on;
+  song_.lowResource = on;  // INTERFACE-CHANGE(T16) O-W3-2: the drone freeze (D5) reads it in onSongState
+  if (Service *d = service(DroneService::kName)) d->onSongState(song_);
   if (auto *cs = dynamic_cast<samples::CacheServiceImpl *>(service<CacheService>())) cs->setLowResource(on);
   if (on)
     if (Service *rv = service(ReverbService::kName)) rv->onMemoryPressure(1);

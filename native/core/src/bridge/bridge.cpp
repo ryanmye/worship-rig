@@ -9,6 +9,7 @@
 #include "api/engine.h"
 #include "bridge/json_out.h"
 #include "bridge/schema.h"
+#include "drone/drone_service.h"  // T16: config {droneFreeze}
 #include "model/patch.h"
 #include "params/params.h"
 #include "yyjson.h"
@@ -365,6 +366,10 @@ void opConfig(Engine &e, const Req &r) {
   if (yyjson_val *v = yyjson_obj_get(r.m, "voiceLimit"); v && !yyjson_is_null(v)) {  // D4 (schema: auto|128..|0)
     m.setVoiceLimit(yyjson_is_str(v) ? Model::kVoiceLimitAuto : static_cast<int>(yyjson_get_num(v)));
     m.voiceLimitJson(j);
+  }
+  if (yyjson_val *v = yyjson_obj_get(r.m, "droneFreeze"); v && yyjson_is_bool(v)) {  // D5 (T16): default true
+    bool now = false;
+    if (drone::setDroneFreeze(m, yyjson_get_bool(v), &now)) j.kvBool("droneFreeze", now);
   }
   j.end();
   ok(e, r, j.take());

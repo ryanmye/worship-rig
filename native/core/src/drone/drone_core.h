@@ -80,9 +80,11 @@ class DroneHost {
   virtual std::uint32_t seed() const = 0;
   /** Offline context (no freeze; JS has no pad files offline either, the native drone has: see the header). */
   virtual bool offline() const = 0;
-  /** A DroneOp to the unit (frame kFrameNow: the unit's timelines take the times; drone.js calls AudioParams
-   *  immediately). */
-  virtual void send(Command c) = 0;
+  /** A DroneOp to the unit, delivered at the quantum of engine time `when` (< 0 or past: the next quantum). drone.js
+   *  calls AudioParams immediately; the core delivers its param timeline calls at the time of the call that made them
+   *  (`t`), so a fade scheduled ahead (an offline script) never meets the previous fade's events in one 64-event
+   *  wa::Param timeline (T04 finding 4); everything else goes at once. */
+  virtual void send(Command c, double when) = 0;
   /** AudioTimer.at(t, cb): cb(max(t, now)) on the control thread at the quantum of t. */
   virtual void at(double t, std::function<void(double)> fn) = 0;
   virtual void warn(const std::string &msg) = 0;
@@ -110,10 +112,8 @@ class DroneCore {
   DroneCore(const DroneCore &) = delete;
   DroneCore &operator=(const DroneCore &) = delete;
 
-  /** The unit's construction values (factory) and the constructor's automation (`_applyWidth(0)`): call once, right
-   *  after the unit is attached. */
-  double levelIntrinsic() const { return levelInit_; }
-  void unitAttached();
+  /** The unit's construction state (the drone.js constructor + setTrim(trimDb) at time 0). */
+  DroneInit unitInit(double trimDb);
   void setTrim(double db);
 
   bool setParam(std::string_view key, double value, double when, double glide = 0);
@@ -250,6 +250,18 @@ class DroneCore {
     double intrinsic() const;  // param.value: never read by drone.js helpers (every call passes `from`)
   };
   bool paramOp(std::uint32_t idx, ParamCall call, double v, double t, double tc);
+  /** The time of the outermost public call in progress (param ops are delivered at it). */
+  struct CallTime {
+    DroneCore &d;
+    bool outer;
+    CallTime(DroneCore &dc, double tt) : d(dc), outer(dc.callT_ < 0) {
+      if (outer) d.callT_ = tt;
+    }
+    ~CallTime() {
+      if (outer) d.callT_ = -1;
+    }
+  };
+  double callT_ = -1;
   PRef prm(std::uint32_t idx) { return PRef{this, idx}; }
   void op(DroneOp o, unsigned aux, double a = 0, double b = 0, double c = 0, std::uint16_t sub = 0);
   void opOwned(DroneOp o, unsigned aux, Owned *payload, double u0 = 0, double u1 = 0, double u2 = 0);
@@ -316,7 +328,6 @@ class DroneCore {
     std::string mode = "off";
     bool chordFollow = false, continueAcrossSongs = true, minorUsesRelativeMajorFile = true;
   } cfg_;
-  double levelInit_ = 0.5011872336272722;
   double trimDb_ = 0;
   std::optional<Key> key_;
   bool sounding_ = false, parked_ = false;

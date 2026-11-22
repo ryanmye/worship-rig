@@ -9,6 +9,7 @@
 #include <cstring>
 
 #include "num/js_math.h"
+#include "time/automation.h"
 
 namespace rig::drone {
 namespace {
@@ -38,14 +39,19 @@ bool DroneUnit::Events::push(const AudioEvent &e) {
   return next ? next->push(e) : false;
 }
 
-DroneUnit::DroneUnit(double sampleRate, double level, double widthA, double widthB, double trim)
+DroneUnit::DroneUnit(double sampleRate, const DroneInit &init)
     : sr_(sampleRate),
-      synthBus_(trim),
-      widthA_(widthA),
-      widthB_(widthB),
-      level_(level),
+      synthBus_(1.0),
+      widthA_(1.0),
+      widthB_(1.0),
+      level_(init.level),
       // drone.js: new BiquadFilterNode(ctx, {type: 'highpass', frequency: 80, Q: 20 * Math.log10(Math.SQRT1_2)})
-      hpf_(wa::BiquadType::Highpass, 80, 20 * js::log10(js::kSqrt1_2), 0) {}
+      hpf_(wa::BiquadType::Highpass, 80, 20 * js::log10(js::kSqrt1_2), 0) {
+  const double w = std::clamp(init.width, 0.0, 1.0);
+  wa::rampTo(widthA_.gain(), (1 + w) / 2, 0, 0.02);  // wLL, wRR
+  wa::rampTo(widthB_.gain(), (1 - w) / 2, 0, 0.02);  // wLR, wRL
+  wa::setNow(synthBus_.gain(), init.trimGain, 0);    // _afterRegistry -> setTrim(droneTrim)
+}
 
 DroneUnit::~DroneUnit() {
   // Control thread (the unit came back as Garbage, or was never attached): payloads die with it.
@@ -283,9 +289,6 @@ void DroneUnit::process(const RenderContext &ctx, UnitIO &io) {
   level_.process(c4, c4, nch, kQ, f0, sr);
   wheel_.process(c4, c4, nch, kQ, f0, sr);
   bend_.process(c4, c4, nch, kQ, f0, sr);
-  if (!anyLoop) {
-    // keep the 4-channel gains' timelines in step (they are evaluated for channels 0-1 above)
-  }
   if (io.out) {
     io.out->channels = 2;
     for (std::size_t i = 0; i < kQ; ++i) {

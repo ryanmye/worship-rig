@@ -58,7 +58,8 @@ constexpr ArgSpec kConfig[] = {{"mono", T::Bool, false},        {"lowResource", 
                                {"eqAudition", T::Object, false}, {"meters", T::Object, false},
                                {"midiClock", T::Object, false},  {"when", T::Number, false},
                                {"polyphony", T::Int, false, "32|64|128"},  // T00c D1
-                               {"voiceLimit", T::Enum, false, "auto|128|256|512|0"}};  // D4
+                               {"voiceLimit", T::Enum, false, "auto|128|256|512|0"},  // D4
+                               {"droneFreeze", T::Bool, false}};                       // D5 (T16)
 constexpr ArgSpec kGet[] = {{"what", T::Enum, true, "instruments|stats|devices|sampleStatus|state"},
                             {"reload", T::Bool, false},
                             {"patches", T::Array, false}};
