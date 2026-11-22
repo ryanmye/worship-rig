@@ -82,6 +82,24 @@
 .ev2 .ev2-missing { margin: 16px; padding: 14px 16px; border: 1px dashed var(--line-2, #3a414d); border-radius: 8px; color: var(--muted, #a3acb8); font-size: 13px; }
 
 /* ------------------------------------------------------------------ rig top bar */
+/* UIA: "Slots n" (add a slot / remove the last one) and its menu, a fixed popover like the ⋯ Song menu */
+.ev2 .ev2-slots { display: inline-flex; flex: none; }
+.ev2 .ev2-slotsbtn .ev2-slots-n { color: var(--text, #f1f4f8); font-variant-numeric: tabular-nums; }
+.ev2 .ev2-slotsbtn:disabled { opacity: .5; }
+.ev2 .ev2-slots-pop { position: fixed; z-index: 60; display: flex; flex-direction: column; gap: 2px; width: 300px; padding: 6px;
+  background: var(--panel-2, #1c2027); border: 1px solid var(--line-2, #3a414d); border-radius: 10px; box-shadow: 0 14px 40px #000c; }
+.ev2 .ev2-slots-pop[hidden] { display: none; }
+.ev2 .ev2-slots-mi { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-height: 44px; padding: 6px 10px;
+  border: 0; border-radius: 7px; background: transparent; color: var(--text, #f1f4f8); text-align: left; font-size: 14px; font-weight: 650; }
+.ev2 .ev2-slots-mi small { font-size: 12px; font-weight: 500; color: var(--muted, #a3acb8); }
+.ev2 .ev2-slots-mi:hover:not(:disabled), .ev2 .ev2-slots-mi:focus { background: var(--panel-3, #252a33); outline: none; }
+.ev2 .ev2-slots-mi:focus-visible { box-shadow: inset 0 0 0 2px var(--focus, #7cc4ff); }
+.ev2 .ev2-slots-mi:disabled { opacity: .5; }
+.ev2 .ev2-slots-mi.danger > span { color: #ff8a8c; }
+.ev2 .ev2-slots-note { margin: 4px 10px 4px; font-size: 12px; color: var(--ev2-faint); }
+.ev2 .ev2-slots-pop[role="alertdialog"] { padding: 12px 14px; gap: 10px; width: 340px; }
+.ev2 .ev2-slots-q { margin: 0; font-size: 14px; line-height: 1.4; }
+.ev2 .ev2-slots-qbtns { display: flex; gap: 8px; justify-content: flex-end; }
 .ev2 .ev2-rig-top { display: flex; align-items: center; gap: 12px; height: 34px; padding: 0 14px; flex: none; }
 .ev2 .ev2-rig-hint { font-size: 12.5px; color: var(--ev2-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .ev2 .ev2-wiretog { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 650; color: var(--muted, #a3acb8); border: 0; background: transparent; padding: 0; }
@@ -94,6 +112,15 @@
 /* ------------------------------------------------------------------ tabs: the selected tab opens into its panel */
 .ev2 .ev2-tabs { display: grid; grid-template-columns: var(--ev2-tab-cols); padding: 0 10px; flex: none; position: relative; }
 .ev2 .ev2-tabs::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--line-2, #3a414d); }
+/* UIA (native DECISIONS D3): the slot tabs share the first four columns' width (one 4fr cell = four 1fr columns, so a
+   4-slot song lays out as before); more than four scroll sideways, four tabs' width in view, the selected one
+   scrolled into view (shell.js revealTab). The 1px padding keeps the selected tab's join with its panel visible. */
+.ev2 .ev2-tabs { grid-template-columns: minmax(0, 4fr) minmax(0, 1fr) 18px repeat(2, minmax(0, .9fr)); }
+.ev2 .ev2-slottabs { display: flex; min-width: 0; }
+.ev2 .ev2-slottabs > .ev2-tab { flex: 1 1 0; }
+.ev2 .ev2-slottabs.scroll { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scroll-snap-type: x proximity;
+  scrollbar-width: thin; scrollbar-color: var(--line-2, #3a414d) transparent; padding-bottom: 1px; margin-bottom: -1px; }
+.ev2 .ev2-slottabs.scroll > .ev2-tab { flex: 0 0 calc(25% - 4px); scroll-snap-align: start; }
 .ev2 .ev2-tab {
   position: relative; z-index: 1; height: 60px; margin: 0 2px; border: 1px solid transparent; border-bottom: 0;
   border-radius: 10px 10px 0 0; background: transparent; text-align: left; padding: 7px 11px 0;

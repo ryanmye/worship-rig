@@ -12,7 +12,7 @@
 // song-bound fields, Esc stack, dialogs, instruments, held notes, the changed-since-loaded set). Panel modules own
 // everything inside their host element. See views/edit/CONTRACT.md.
 import { loadComponents, markDialog } from '../_fallback-components.js';
-import { describe, formatValue } from '../../shared/params.js';
+import { describe, formatValue, SLOT_COUNT, MAX_SLOTS, slotName } from '../../shared/params.js';
 import { SPACE_PRESETS, ECHO_PRESETS, matchPreset } from '../../shared/fx-presets.js';
 import { changedPaths, hasChange } from '../../shared/song-diff.js';
 import PANELS from './panels/index.js';
@@ -630,6 +630,155 @@ const LANES = Object.freeze([
 
 // ---------------------------------------------------------------------------------------------------------------
 /**
+ * UIA (native DECISIONS D3): "Slots n" in the rig bar, right over the slot tabs. One button, a two-item menu: add a
+ * slot (an empty one at the end, selected, its instrument picker open) or remove the last slot, which asks first (its
+ * sound and settings go with it). A song has 1..MAX_SLOTS slots; new songs start with 4. Only the last slot is
+ * removed here, so no other slot changes its name or colour (both follow the position).
+ * Menu / confirm follow CONTRACT §5 like the ⋯ Song menu: role=menu / alertdialog, Esc closes, an outside tap
+ * cancels, focus on Cancel, the dialog flag while open.
+ * @returns {{el:HTMLElement, render():void, close(focusBack?:boolean):boolean}}
+ */
+function slotControl(core, appCtx, editState) {
+  const { store } = appCtx;
+  const countEl = h('b.ev2-slots-n', { text: '4' });
+  const btn = h('button.ev2-linkbtn.ev2-slotsbtn', {
+    type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'data-testid': 'edit-slots',
+    title: 'Add a sound slot, or remove the last one (a song has 1 to 16)',
+  }, icon('plus', 15), 'Slots ', countEl);
+  const pop = h('div.ev2-slots-pop', { hidden: true });
+  let mode = null; // null | 'menu' | 'confirm'
+  let viaKeys = false;
+  const slotsOf = () => (core.song && Array.isArray(core.song.patch?.slots) ? core.song.patch.slots : []);
+  const place = () => {
+    const r = btn.getBoundingClientRect();
+    pop.style.top = `${Math.round(r.bottom + 6)}px`;
+    pop.style.right = `${Math.max(8, Math.round(window.innerWidth - r.right))}px`;
+  };
+  const close = (focusBack) => {
+    if (!mode) return false;
+    mode = null;
+    pop.hidden = true;
+    pop.replaceChildren();
+    for (const a of ['role', 'aria-label', 'aria-describedby']) pop.removeAttribute(a);
+    btn.setAttribute('aria-expanded', 'false');
+    markDialog('edit-slots', false);
+    if (focusBack) btn.focus();
+    return true;
+  };
+  const silentHint = () => {
+    const playable = typeof appCtx.controller?.engineSlots === 'function' ? appCtx.controller.engineSlots() : MAX_SLOTS;
+    return playable < MAX_SLOTS ? `Sounds ${playable + 1}–${MAX_SLOTS} are silent here: they play on the 2.0 engine.`
+      : '';
+  };
+  const item = (act, text, sub, fn, cls = '') => {
+    const b = h('button.ev2-slots-mi', { type: 'button', role: 'menuitem', tabindex: '-1', dataset: { act }, class: cls },
+      h('span', { text }), sub ? h('small', { text: sub }) : null);
+    b.addEventListener('click', (e) => {
+      viaKeys = e.detail === 0;
+      fn();
+    });
+    return b;
+  };
+  function openMenu(keys) {
+    const s = core.song;
+    if (!s) return;
+    close(false);
+    viaKeys = keys;
+    mode = 'menu';
+    const n = slotsOf().length;
+    const add = item('add', n < MAX_SLOTS ? `Add ${slotName(n)}` : 'Add a slot', n < MAX_SLOTS
+      ? `an empty slot after ${slotName(n - 1)}; pick its sound next` : `${MAX_SLOTS} is the most a song can have`, () => {
+      close(false);
+      const i = store.addSlot(s.id);
+      if (i < 0) return;
+      ctx0.toast?.(`Added ${slotName(i)}. Pick its sound.`, 'ok', { ms: 2500 });
+      // after the store's change event (microtask), so the new tab exists when it is selected
+      queueMicrotask(() => editState.select(`slot:${i}`, { focus: 'instrument' }));
+    });
+    add.disabled = n >= MAX_SLOTS;
+    const rm = item('remove', n > 1 ? `Remove ${slotName(n - 1)}…` : 'Remove a slot…', n > 1
+      ? 'the last slot, with its sound and settings' : 'a song keeps at least one slot', () => openConfirm(), 'danger');
+    rm.disabled = n <= 1;
+    const hint = silentHint();
+    pop.setAttribute('role', 'menu');
+    pop.setAttribute('aria-label', `Slots: ${n}`);
+    pop.dataset.kind = 'menu';
+    pop.replaceChildren(add, rm, hint && n >= SLOT_COUNT ? h('p.ev2-slots-note', { text: hint }) : null);
+    pop.hidden = false;
+    place();
+    btn.setAttribute('aria-expanded', 'true');
+    markDialog('edit-slots', true);
+    pop.querySelector('[role=menuitem]:not([disabled])')?.focus();
+  }
+  function openConfirm() {
+    const s = core.song;
+    const n = slotsOf().length;
+    if (!s || n <= 1) return;
+    const keys = viaKeys;
+    close(false);
+    viaKeys = keys;
+    mode = 'confirm';
+    const name = slotName(n - 1);
+    const last = slotsOf()[n - 1];
+    const what = last ? 'its sound and settings go with it' : 'it has no sound yet';
+    const q = h('p.ev2-slots-q', { id: 'ev2-slots-q', text: `Remove ${name} from “${s.name}”? ${what[0].toUpperCase()}${what.slice(1)}.` });
+    const go = h('button.ev2-btn.sm.danger', { type: 'button', dataset: { act: 'remove-go' } }, `Remove ${name}`);
+    const cancel = h('button.ev2-btn.sm', { type: 'button', dataset: { act: 'cancel' } }, 'Cancel');
+    go.addEventListener('click', () => {
+      close(viaKeys);
+      if (store.removeSlot(s.id, n - 1)) ctx0.toast?.(`Removed ${name}.`, 'ok', { ms: 2500 });
+      else ctx0.toast?.(`Could not remove ${name}.`, 'error');
+    });
+    cancel.addEventListener('click', () => close(viaKeys));
+    pop.setAttribute('role', 'alertdialog');
+    pop.setAttribute('aria-label', `Remove ${name}`);
+    pop.setAttribute('aria-describedby', 'ev2-slots-q');
+    pop.dataset.kind = 'confirm';
+    pop.replaceChildren(q, h('div.ev2-slots-qbtns', {}, go, cancel));
+    pop.hidden = false;
+    place();
+    btn.setAttribute('aria-expanded', 'false');
+    markDialog('edit-slots', true);
+    cancel.focus();
+  }
+  const ctx0 = { toast: core.toast };
+  btn.addEventListener('click', (e) => {
+    if (mode === 'menu') close(e.detail === 0);
+    else openMenu(e.detail === 0);
+  });
+  pop.addEventListener('keydown', (e) => {
+    const list = [...pop.querySelectorAll(mode === 'menu' ? '[role=menuitem]:not([disabled])' : 'button')];
+    const k = list.indexOf(document.activeElement);
+    const keysNext = mode === 'menu' ? ['ArrowDown', 'ArrowUp'] : ['ArrowRight', 'ArrowLeft'];
+    if (e.key === 'Tab' && mode === 'menu') return void close(false);
+    const dir = e.key === keysNext[0] ? 1 : e.key === keysNext[1] ? -1 : 0;
+    if (!dir || !list.length) return;
+    e.preventDefault();
+    e.stopPropagation(); // the arrows are Prev / Next song and the mod wheel outside
+    list[(k + dir + list.length) % list.length].focus();
+  });
+  core.escapes.push(() => close(true));
+  core.listen(document, 'pointerdown', (e) => {
+    if (!mode || pop.contains(e.target) || btn.contains(e.target)) return;
+    close(false);
+  }, true);
+  core.listen(window, 'resize', () => close(false));
+  core.leaveHooks.add(() => close(false)); // the menu and its question belong to the song they were opened on
+  core.viewHooks.add(() => close(false));
+  return {
+    el: h('span.ev2-slots', {}, btn, pop),
+    render() {
+      const n = slotsOf().length || SLOT_COUNT;
+      setText(countEl, String(n));
+      btn.disabled = !core.song;
+      btn.setAttribute('aria-label', `Slots: ${n}. Add a slot or remove the last one`);
+    },
+    close,
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+/**
  * Mount the H-v2 Edit view.
  * @param {HTMLElement} el
  * @param {{store, controller, engine, midi?, recorder?, toast?, openSettings?, getBaseline?:() => object|null}} ctx
@@ -652,7 +801,7 @@ export function mountEdit(el, ctx) {
     icon('keyboard', 15), 'Wheels & pedal');
   const wireBtn = h('button.ev2-wiretog', { type: 'button', role: 'switch', 'aria-checked': 'false' },
     h('span.ev2-switch', { 'aria-hidden': 'true' }), 'Show wiring');
-  const slotsCtl = slotControl(core, () => editState); // UIA: add / remove slots (rig bar, over the slot tabs)
+  const slotsCtl = slotControl(core, ctx, editState); // UIA: add / remove slots (rig bar, over the slot tabs)
   const rigTop = h('div.ev2-rig-top', {},
     h('span.ev2-cap', { text: 'Your rig' }),
     h('span.ev2-rig-hint', { text: say('editHint') }),
@@ -693,6 +842,7 @@ export function mountEdit(el, ctx) {
   /** UIA: the tabs for a song with `n` slots; a selection past them moves to the last slot. */
   function syncTabs(n) {
     if (n === tabCount) return;
+    const was = tabCount;
     tabCount = n;
     const next = new Map();
     const slotEls = [];
@@ -708,6 +858,12 @@ export function mountEdit(el, ctx) {
     const m = /^slot:(\d+)$/.exec(editState.selected);
     if (m && Number(m[1]) >= n) editState.select(`slot:${n - 1}`);
     if (!tabs.has(lastTab)) lastTab = 'slot:0';
+    // the Effects panel has one "goes in" chip per slot, Master one wheel target per slot: rebuild for the new count
+    if (was && cur && (cur.id === 'effects' || cur.id === 'master')) { // master: the wheel targets (slot levels)
+      cur.destroy();
+      cur = null;
+      showSelected();
+    }
   }
   const slotCountNow = () => {
     const n = core.song && Array.isArray(core.song.patch?.slots) ? core.song.patch.slots.length : SLOT_COUNT;
@@ -827,6 +983,14 @@ export function mountEdit(el, ctx) {
     if (!editState.wiring) return;
     const song = core.song;
     const grid = h('div.ev2-wire-grid');
+    // UIA: one column per slot. Four slots keep the tab columns (--ev2-tab-cols); another count spreads the slot
+    // columns over the same width (four columns' worth), then the drone, the gap and the two shared tabs.
+    const n = Math.max(SLOT_COUNT, slotCountNow());
+    if (n !== SLOT_COUNT) {
+      grid.style.gridTemplateColumns = `repeat(${n}, minmax(0, ${(4 / n).toFixed(4)}fr)) minmax(0, 1fr) 18px `
+        + 'repeat(2, minmax(0, .9fr))';
+      grid.classList.add('many');
+    }
     const val = (addr) => {
       const v = song ? getIn(song, relOf(addr)) : undefined;
       return v === undefined ? describe(addr)?.default : v;
@@ -834,8 +998,8 @@ export function mountEdit(el, ctx) {
     LANES.forEach((lane, r) => {
       const row = r + 1;
       const at = (col) => ({ gridRow: String(row), gridColumn: String(col) });
-      grid.append(h('span.ev2-wlane', { style: at('1 / 7'), dataset: { lane: lane.unit } }));
-      for (let i = 0; i < 4; i++) {
+      grid.append(h('span.ev2-wlane', { style: at(`1 / ${n + 3}`), dataset: { lane: lane.unit } }));
+      for (let i = 0; i < n; i++) {
         const slot = song ? song.patch.slots[i] : null;
         const cell = h('span.ev2-wdrop', { style: { ...at(i + 1), '--c': `var(--slot-${i})` } });
         if (slot) {
@@ -849,7 +1013,7 @@ export function mountEdit(el, ctx) {
         }
         grid.append(cell);
       }
-      const dr = h('span.ev2-wdrop', { style: { ...at(5), '--c': 'var(--drone, #e8d9a8)' } });
+      const dr = h('span.ev2-wdrop', { style: { ...at(n + 1), '--c': 'var(--drone, #e8d9a8)' } });
       if (r === 0 && song && song.drone?.mode !== 'off') {
         dr.append(h('span.ev2-wv.fixed', { text: 'fixed', dataset: { lane: lane.unit, drone: '1' } }));
       }
@@ -858,11 +1022,12 @@ export function mountEdit(el, ctx) {
       if (lane.unit === 'reverb') what = matchPreset(SPACE_PRESETS, val)?.name || 'song’s own';
       else if (lane.unit === 'delay') what = matchPreset(ECHO_PRESETS, val)?.name || 'song’s own';
       else what = chorusWord(Number(val('fx.chorus.depth')) || 0);
-      grid.append(h('span.ev2-wend', { style: at('7 / 9') },
+      grid.append(h('span.ev2-wend', { style: at(`${n + 3} / ${n + 5}`) },
         h('button.ev2-wn', { type: 'button', on: { click: () => editState.select('effects', { focus: lane.unit }) } },
           icon(lane.icon, 14), lane.name, h('span', { text: what }))));
     });
-    grid.append(h('span.ev2-wout', { style: { gridRow: '1 / 4', gridColumn: '8' } }, h('i.ev2-wout-br'), 'to Master'));
+    grid.append(h('span.ev2-wout', { style: { gridRow: '1 / 4', gridColumn: String(n + 4) } }, h('i.ev2-wout-br'),
+      'to Master'));
     wire.replaceChildren(
       h('p.ev2-wire-cap', {}, h('b', { text: 'Wiring.' }),
         ' Every sound goes straight to Master. The numbers are how much of each sound also goes into each shared'

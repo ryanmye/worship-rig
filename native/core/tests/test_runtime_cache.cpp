@@ -225,7 +225,8 @@ bool timeRuns(Rt &rt, int ms = 2000) {
 
 }  // namespace
 
-TEST_SUITE("runtime_cache")  // ctest unit.runtime_cache: the CI TSan regex ("runtime") covers it {
+// ctest unit.runtime_cache: the CI TSan regex ("runtime") covers it
+TEST_SUITE("runtime_cache") {
   TEST_CASE("mackit O1: 16 sampler slots prepared cold (no cache preload) sound in realtime: 8 notes = 128 voices") {
     // Before the fix the control loop never called the cache's pump(): decodes finished on the workers and sat in
     // the mailbox, `get sampleStatus` never reported loaded, and 8 held notes in 16 slots of ep-rhodes made 0 voices.

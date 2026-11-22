@@ -3,7 +3,7 @@
 // Fade out · PANIC.
 // Ported from views/edit.js "BOTTOM: keyboard + meter"; the keyboard plays through controller.perform (source 'ui').
 import { noteName } from '../../../shared/music.js';
-import { h, setText, BLOCKS } from '../lib.js';
+import { h, setText, slotBlock } from '../lib.js';
 
 const FROM = 36; // C2
 const TO = 96; // C7 (61 keys, like the Perform keyboard)
@@ -71,7 +71,7 @@ function filledSlots(song) {
   const out = [];
   slots.forEach((s, i) => {
     if (!s) return;
-    const b = BLOCKS[i];
+    const b = slotBlock(i); // UIA: slot:0..15
     out.push({
       i, role: b ? b.role : `Slot ${i + 1}`, color: b ? b.color : `var(--slot-${i})`,
       low: Number.isFinite(s.lowNote) ? s.lowNote : 0, high: Number.isFinite(s.highNote) ? s.highNote : 127,

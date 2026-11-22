@@ -26,10 +26,10 @@
 // emptiness or availability changes (ui-edit "store → view updates in place"). Views never call the engine (reads
 // only: listInstruments via ctx; the sparkline evaluates shared/touch-curve.js, the engine's own curve math).
 import {
-  h, setText, icon, getIn, relOf, hasParam, signed, pct, semitones, formatInstrumentParam, BLOCKS, changedDot,
+  h, setText, icon, getIn, relOf, hasParam, signed, pct, semitones, formatInstrumentParam, changedDot,
   changeText, editedSince, LEVEL_KEYS, createBinder, section, wordSlider, spaceNoun, forgetSections,
 } from '../lib.js';
-import { defaultSlot, describe, formatValue } from '../../../shared/params.js';
+import { defaultSlot, describe, formatValue, slotName, MAX_SLOTS } from '../../../shared/params.js';
 import { noteName, parseNoteName } from '../../../shared/music.js';
 import { SPACE_PRESETS, matchPreset } from '../../../shared/fx-presets.js';
 import { smartSlidersFor, slotPath, wordFor, formatSmart, describeSlot } from '../../../shared/smart-controls.js';
@@ -144,7 +144,9 @@ export default {
 function mountSlot(el, ctx, opts) {
   const C = ctx.C || {};
   let i = slotIndex(opts);
-  const role = () => BLOCKS[i].role;
+  const role = () => slotName(i); // UIA: Keys … Bass, then 'Sound 5' …
+  /** UIA: a slot past what the engine plays (slots 5..16 on the web engine): stored and shown, silent here. */
+  const silent = () => i >= (typeof ctx.controller?.engineSlots === 'function' ? ctx.controller.engineSlots() : MAX_SLOTS);
   const ROLE = () => role().toUpperCase();
   const P = (k) => `slots.${i}.${k}`;
   const REL = () => `patch.slots.${i}`;
@@ -320,7 +322,7 @@ function mountSlot(el, ctx, opts) {
     const song = u && ctx.store.get().songs[u.songId];
     const cur = song && song.patch.slots[u.i];
     if (!cur || refKey(cur.instrument) !== u.to) {
-      ctx.toast(`${BLOCKS[u.i].role} has changed since, so there is nothing to undo.`, 'info');
+      ctx.toast(`${slotName(u.i)} has changed since, so there is nothing to undo.`, 'info');
       return false;
     }
     const restored = { ...JSON.parse(JSON.stringify(cur)), instrument: u.instrument, params: u.params };
@@ -368,7 +370,7 @@ function mountSlot(el, ctx, opts) {
     if (!ctx.set(`slots.${i}`, null)) return;
     undo = captured;
     renderEmptyUndo();
-    const msg = `${name} removed from ${BLOCKS[captured.i].role}.`;
+    const msg = `${name} removed from ${slotName(captured.i)}.`;
     ctx.toast(msg, 'info', { ms: 8000, action: { label: 'Undo', run: () => doUndo(captured) } });
   }
   /** Write the captured slot back to the song it was removed from (songs.<id>.patch.slots.<i>). */
@@ -378,7 +380,7 @@ function mountSlot(el, ctx, opts) {
     const song = st.songs[u.songId];
     if (!song) return false;
     if (song.patch.slots[u.i]) {
-      ctx.toast(`${BLOCKS[u.i].role} has a sound again, so there is nothing to undo.`, 'info');
+      ctx.toast(`${slotName(u.i)} has a sound again, so there is nothing to undo.`, 'info');
       if (undo === u) undo = null;
       renderEmptyUndo();
       return false;
@@ -888,7 +890,8 @@ function mountSlot(el, ctx, opts) {
     }
     try {
       toneEq = C.eqKeyboard({
-        store: ctx.store, engine: ctx.engine, controller: ctx.controller, slotIndex: i,
+        // UIA: no engine for a slot it does not play (the editor then draws from the stored EQ, as without one)
+        store: ctx.store, engine: silent() ? null : ctx.engine, controller: ctx.controller, slotIndex: i,
         toast: (msg) => ctx.toast(msg, 'info'),
         compactBelowHeight: 1000, // polish-2B: full layout only where the table still fits under the graph
       });
@@ -1152,6 +1155,8 @@ function mountSlot(el, ctx, opts) {
       const what = `${type}${credit && shown !== meta.name ? ` (${credit[1]})` : ''}`;
       sub = `${[groupOf(meta), what].filter(Boolean).join(' · ')} · ${JUMP_HINT}`;
     }
+    // UIA: the one-line note on a slot the web engine does not play
+    if (silent()) sub = `${SILENT_SUB} · ${sub}`;
     const ic = (meta && GROUP_ICONS[meta.group]) || ROLE_ICONS[i] || 'piano';
     setText(chgLabel, slot ? 'Change instrument' : 'Add a sound');
     const key = JSON.stringify([parts, sub, ic, i]);
@@ -1296,11 +1301,13 @@ function mountSlot(el, ctx, opts) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-/** @param {{slot?:number}} o @returns {number} 0..3 */
+/** @param {{slot?:number}} o @returns {number} 0..MAX_SLOTS-1 (UIA) */
 function slotIndex(o) {
   const n = Math.round(Number(o && o.slot));
-  return Number.isInteger(n) && n >= 0 && n < BLOCKS.length && BLOCKS[n].panel === 'slot' ? n : 0;
+  return Number.isInteger(n) && n >= 0 && n < MAX_SLOTS ? n : 0;
 }
+/** UIA: the title's note on a slot the web engine does not play. */
+const SILENT_SUB = 'Silent here: it plays on the 2.0 engine';
 const formatAmount = (v) => (Number(v) > 0.0005 ? `${Math.round(Number(v) * 100)}%` : 'off');
 const formatOctave = (v) => (v > 0 ? `+${v}` : v < 0 ? `${MINUS}${-v}` : 'normal');
 const AMOUNT_FALLBACK = [1, 0.75, 0.5, 0.25, 0].map((v) => ({ value: v, label: v ? `${v * 100}%` : 'Off' }));

@@ -4,11 +4,11 @@
 // "Vibe" menu in the title bar and a "Tape & finish" footer link to the Master tab.
 // Logic copied from views/edit.js (presetPicker, the delay sync note, fxSec) so the old view keeps working untouched.
 import {
-  h, icon, setText, sentence, createBinder, section, wordSlider, getIn, relOf, hasParam, pct, BLOCKS, changedDot,
+  h, icon, setText, sentence, createBinder, section, wordSlider, getIn, relOf, hasParam, pct, changedDot,
   changeText, editedSince, sameVal, chorusWord, spaceNoun,
 } from '../lib.js';
 import { SPACE_PRESETS, ECHO_PRESETS, VIBE_PRESETS, matchPreset, applyPreset } from '../../../shared/fx-presets.js';
-import { describe, formatValue, SLOT_COUNT } from '../../../shared/params.js';
+import { describe, formatValue, SLOT_COUNT, slotName } from '../../../shared/params.js';
 
 // ---------------------------------------------------------------------------------------------------------------
 // copy (concept §5 4a: a word + a small hint; ms only appear in Edit)
@@ -150,6 +150,9 @@ export default {
 
     // ---- "How much of each sound goes in": the Perform strip's Space/Echo/Chorus chip, one per slot
     const who = { reverb: [], delay: [], chorus: [] };
+    // UIA (native DECISIONS D3): one chip per slot of the song (at least 4); the shell remounts this panel when the
+    // song's slot count changes, so the rows always match it
+    const nSlots = Math.max(SLOT_COUNT, ctx.song()?.patch?.slots?.length || 0);
     // v11-polish (ux-round2 leftover, hv2-edit-integrate "no mini curve"): a slot whose Tone EQ is shaped shows its
     // curve as a small picture in the corner of its "goes in" chip, so you see what goes into the room (hidden while
     // flat; the chip stays the control). eqMiniCurve({decorative}) is a span, aria-hidden, computed locally.
@@ -169,8 +172,8 @@ export default {
       const mods = h('div.ev2-fx-mods', {
         role: 'group', 'aria-label': `How much of each sound goes into ${u.name}`,
       });
-      for (let i = 0; i < SLOT_COUNT; i++) {
-        const role = BLOCKS[i].role;
+      for (let i = 0; i < nSlots; i++) {
+        const role = slotName(i);
         const rel = `patch.slots.${i}.sends.${u.unit}`;
         const chip = binder.ctl(`slots.${i}.sends.${u.unit}`, (onChange) => makeChip({
           label: role,
@@ -516,7 +519,7 @@ export default {
           const bs = b && b.patch && b.patch.slots ? b.patch.slots[i] : null;
           chip.setLoaded(bs ? Number(getIn(bs, `sends.${u.unit}`)) || 0 : undefined);
           if (u.unit === 'reverb') {
-            chip.setHint(`how much of the ${BLOCKS[i].role} goes into the ${spaceNoun(sp)}`);
+            chip.setHint(`how much of the ${slotName(i)} goes into the ${spaceNoun(sp)}`);
           }
         });
       }
@@ -530,7 +533,7 @@ export default {
         else it.removeAttribute('aria-current');
       }
       const senders = [];
-      for (let i = 0; i < SLOT_COUNT; i++) {
+      for (let i = 0; i < s.patch.slots.length; i++) {
         if (s.patch.slots[i] && Number(getIn(s, `patch.slots.${i}.sends.chorus`)) > 0.0005) senders.push(i);
       }
       const parts = [
@@ -542,7 +545,7 @@ export default {
       if (!chorusOn || !senders.length) {
         parts.push(', and no ', { text: 'chorus', control: () => depth.el });
       } else {
-        const names = senders.map((i) => BLOCKS[i].role).join(' + ');
+        const names = senders.map((i) => slotName(i)).join(' + ');
         parts.push(', and ', senders.length === 1 ? 'the ' : '', {
           text: names,
           control: () => who.chorus[senders[0]].el,

@@ -457,7 +457,11 @@ export function mountPerform(root, ctx) {
     const role = { name: slotName(i) };
     const ROLE = role.name.toUpperCase();
     const color = `var(--slot-${i})`;
-    const tile = use(onTile({ label: ROLE, color, testid: `slot-on-${i}`, onToggle: (on) => setMuted(i, !on) }));
+    // UIA: past the four roles the tile reads "SOUND 5"; a narrow strip keeps the number ("5 ON", styles.css)
+    const tile = use(onTile(i < SLOT_COUNT
+      ? { label: ROLE, color, testid: `slot-on-${i}`, onToggle: (on) => setMuted(i, !on) }
+      : { label: 'SOUND', sub: String(i + 1), className: 'xslot', title: `Tap to turn ${role.name} on or off`, color,
+        testid: `slot-on-${i}`, onToggle: (on) => setMuted(i, !on) }));
     const instIcon = h('span.slot-icon', {}, icon('wave', 20));
     const inst = h('span.slot-inst', { text: '—' });
     // "↻ wheel 60%": the word is its own span so a narrow strip can drop it (polish-2A, styles.css @container slot)
@@ -1660,8 +1664,8 @@ export function mountPerform(root, ctx) {
     const song = liveOf(store.currentSong()); // v11-review-fixes R-6: the playing scene's ON switches
     if (!song) return -1;
     // UIA: the slots the engine plays (slots 5..16 are silent on the web engine)
-    const n = Math.min(song.patch.slots.length, controller.engineSlots?.() ?? SLOT_COUNT);
-    for (let i = 0; i < n; i++) {
+    const k = Math.min(song.patch.slots.length, controller.engineSlots?.() ?? SLOT_COUNT);
+    for (let i = 0; i < k; i++) {
       const sl = song.patch.slots[i];
       if (!sl || slotMuteState(sl).muted) continue;
       const lo = Number.isFinite(sl.lowNote) ? sl.lowNote : 0;

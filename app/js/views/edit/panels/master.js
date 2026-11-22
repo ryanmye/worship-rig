@@ -8,13 +8,15 @@
 // Every control is bound through lib.createBinder, so store changes update values in place (ui-edit "store → view
 // updates in place") and nothing is rebuilt on a song switch. opts.focus ('wheels' | 'tape' | 'tone' | 'glue') opens
 // its section, scrolls to it and focuses its first control, on mount and in update() (CONTRACT §2 "focus ids").
-import { describe, formatValue } from '../../../shared/params.js';
+import { describe, formatValue, SLOT_COUNT, slotName, slotGainIndex } from '../../../shared/params.js';
 import { WHEEL_TARGETS, BEND_MODES } from '../../../presets.js';
 import {
   h, setText, button, createBinder, section, wordSlider, hasParam, pct, blockOf, changeText, editedSince, changedDot,
   TARGET_LABELS, BEND_LABELS,
 } from '../lib.js';
 
+/** UIA: a target TARGET_LABELS does not name ('slots.4.gain' → 'Sound 5 level'). */
+const wheelTargetName = (t) => (slotGainIndex(t) !== null ? `${slotName(slotGainIndex(t))} level` : t);
 // TARGET_LABELS / BEND_LABELS live in lib.js (hv2-edit-integrate); re-exported for existing importers.
 export { TARGET_LABELS, BEND_LABELS };
 
@@ -163,7 +165,13 @@ export default {
 
     // ---- Wheels & pedal (edit.js routing section; song.patch.* aliases)
     const C = ctx.C;
-    const targetOpts = WHEEL_TARGETS.map((t) => ({ value: t, label: TARGET_LABELS[t] || t }));
+    // UIA (native DECISIONS D3): the song's own slot levels (Sound 5 … too), then the rest; the shell remounts this
+    // panel when the slot count changes
+    const nSlots = ctx.song()?.patch?.slots?.length || SLOT_COUNT;
+    const targetOpts = [
+      ...Array.from({ length: nSlots }, (_, i) => `slots.${i}.gain`),
+      ...WHEEL_TARGETS.filter((t) => !t.startsWith('slots.')),
+    ].map((t) => ({ value: t, label: TARGET_LABELS[t] || wheelTargetName(t) }));
     const sel = (label, addr, options) => {
       const c = binder.ctl(addr, (onChange) => C.select({ label, options, onChange }));
       c.el.classList.add('ev2-master-sel');

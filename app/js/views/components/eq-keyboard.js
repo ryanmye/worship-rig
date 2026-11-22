@@ -24,7 +24,7 @@
 import { h, disposer } from './util.js';
 import { meterBlocked } from './meterClock.js';
 import * as M from '../../shared/eq-math.js';
-import { ROLE_DEFAULTS } from '../../shared/params.js';
+import { slotName as roleName } from '../../shared/params.js';
 import { readEqPalette, rgba, onThemeChange, SLOT_HEX, SLOT_INK } from './eq-palette.js';
 
 /**
@@ -195,7 +195,7 @@ export function eqKeyboard(o = {}) {
     dirty = dirtyKeys = true;
     if (!destroyed) kick();
   }));
-  const slotName = () => ROLE_DEFAULTS[slotIndex]?.name || `Slot ${slotIndex + 1}`;
+  const slotName = () => roleName(slotIndex); // UIA: 'Sound 5' … past the four roles
   const fs = () => engine?.ctx?.sampleRate || 48000;
 
   function instLabel(slot) {

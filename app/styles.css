@@ -957,6 +957,8 @@ body[data-view="edit"] .quick-btn { display: none; }
 .p-silent-note { flex: 0 0 30px; display: flex; align-items: center; justify-content: center; border-left: 1.5px dashed var(--line-2); }
 .p-silent-note[hidden] { display: none; }
 .slot.silent .slot-who, .slot.silent .slot-body { opacity: .55; }
+.ontile.xslot .ot-sub { font-weight: 800; letter-spacing: .04em; }
+@container slot (max-width: 165px) { .ontile.xslot .ot-name { display: none; } .ontile.xslot .ot-sub { font-size: 15px; } }
 /* empty slot: a narrow dashed column (neutral grey, not a fifth colour) */
 .slot.empty { flex: 0 0 60px; padding: 8px 4px; align-items: center; justify-content: center; background: transparent; border: 1.5px dashed var(--line-2); }
 .slot.empty > :not(.slot-empty) { display: none; }
