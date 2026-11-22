@@ -237,4 +237,18 @@ TEST_SUITE("wheels") {
     REQUIRE(e.use(patch({slot("test", "sine", 1)}, R"("fx":{"reverb":{"size":0.5}})")));
     CHECK(rp->targetKey() == rp->irKeyFor(0.5, 0.5));
   }
+
+  TEST_CASE("delayFeedback = Delay.effectiveFb(): the wash override while a wheel washes, else the patch (review F1)") {
+    Eng e;
+    const std::string wash = R"("modWheel":{"target":"macro.wash","min":0,"max":1},"fx":{"delay":{"feedback":0.3}})";
+    REQUIRE(e.use(patch({slot("test", "sine", 1)}, wash)));
+    e.call(R"({"v":1,"id":3,"op":"play","e":"wheel","src":"mod","value":0.5,"when":0.05})");
+    e.until(0.2);
+    CHECK(e.model().perform().delayFeedback() == doctest::Approx(0.3 + (0.75 - 0.3) * 0.5));
+    e.call(R"({"v":1,"id":3,"op":"play","e":"wheel","src":"mod","value":1,"when":0.3})");
+    e.until(0.4);
+    CHECK(e.model().perform().delayFeedback() == doctest::Approx(0.75));
+    REQUIRE(e.use(patch({slot("test", "sine", 1)}, R"("fx":{"delay":{"feedback":0.95}})")));
+    CHECK(e.model().perform().delayFeedback() == doctest::Approx(0.9));  // no wash: the patch value, clamped 0..0.9
+  }
 }

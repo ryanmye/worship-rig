@@ -3,6 +3,8 @@
 # transpose-octave-range, release-pedalhold.
 # release-pedalhold: its pedal-up event is posted up front with the others, so in BOTH engines the pedalHold timer at
 # 5.4 s finds the note already un-pedaled: the fixture proves release + sustain, not the pedalHold fade (unit.perform).
+# (Review: the drop to digital silence at 5.4-5.8 s is the end of the E4 sample, 3.16 s with a baked 0.4 s tail
+# fade, started at 2.6 s; it coincides with the 5.4 s timer but is not the fade.)
 auto-filter-cutoff
 song-lofi-rhodes
 transpose-octave-range

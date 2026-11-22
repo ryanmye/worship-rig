@@ -227,6 +227,13 @@ void Perform::applyFxWheels(double t, double tc) {
     }
 }
 
+double Perform::delayFeedback() {
+  const std::optional<double> W = m_.songGraph().macro("macro.wash");
+  const double fb = m_.patch().delay.feedback;
+  washFb_ = W ? lerp(fb, 0.75, *W) : NAN;  // audio.js _washFb()
+  return std::min(0.9, std::max(0.0, W ? washFb_ : fb));
+}
+
 double Perform::stageReverbSize(const Routing &r, double size) const {
   const std::optional<double> W = macroOf(r, const_cast<Model &>(m_).songGraph().wheel(), "macro.wash");
   return W ? lerp(size, 0.9, *W) : size;  // audio.js _stageReverbSize

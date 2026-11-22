@@ -121,6 +121,10 @@ class Perform {
   void bendEnabled(int slot, double when);
   /** audio.js _stageReverbSize under the plan's routing; `playing` = keys held or pedalled (prepare deferral). */
   double stageReverbSize(const Routing &r, double size) const;
+  /** fx.js Delay.effectiveFb(): clamp(washFb ?? feedback, 0, 0.9) at the current routing / wheels, recording washFb
+   *  as audio.js _applyFx and setParam('fx.delay.feedback') do (`F.delay.washFb = this._washFb()`). For the delay's
+   *  applyAll and feedback row (fx/delay_register.cpp sends the raw p.feedback today: reviews/T14.md F1). */
+  double delayFeedback();
   bool playing() const { return !sounding_.empty() || !pedaled_.empty(); }
 
   // ---- hooks --------------------------------------------------------------------------------------------------
