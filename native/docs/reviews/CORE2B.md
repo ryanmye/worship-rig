@@ -20,8 +20,8 @@ build dirs (fresh, real directories, `-j2` at most): `native/core/build-c2bsk` (
 |---|---|
 | ctest g++ 13 Release | **82/82** (`-j2`), 0 warnings |
 | ctest clang++-20 Release `-Werror` | **82/82** (`-j1`, next to another lane's ui-core run), 0 warnings |
-| ctest g++ ASan+UBSan | ASAN_RESULT |
-| TSan | TSAN_RESULT |
+| ctest g++ ASan+UBSan | **82/82** (`-j1`, `rt.realtime` included, next to this review's TSan build), 0 warnings, no sanitizer report (`-fno-sanitize-recover=all`) |
+| TSan (`rig_tests -ts=<suite>`) | core2b, realtime, runtime, meter, bridge, t00c, perform, perform_ports, model, wheels, sleep: all pass, **0** ThreadSanitizer warnings; 0 build warnings |
 | fixtures (`rig_render`, all 112, `compare.mjs`) | **112/112** |
 | g++ vs clang-20 renders | byte-identical, 112/112 (`cmp`) |
 | vs the UIC skeptic's g++ renders (`scratchpad/uicsk/r-gcc`, before CORE2A / CORE2B) | byte-identical, 112/112: no fixture moved |
