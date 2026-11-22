@@ -200,7 +200,10 @@ export async function runBridge({ browser, createServer, ROOT, SHOTS, results })
         .filter((m) => m.op === 'config' && key in m).map(({ v, id, ...m }) => m), k);
       assert.deepEqual(await cfg('droneFreeze'), [], 'absent = on = the core default: nothing sent at start-up');
       const tog = '[data-testid="setting-drone-freeze"]';
-      assert.equal(await page.getAttribute(tog, 'aria-checked'), 'true');
+      assert.equal(await ev((t) => {
+        const b = document.querySelector(t);
+        return b.getAttribute('aria-pressed') ?? b.getAttribute('aria-checked');
+      }, tog), 'true');
       assert.equal(await page.isVisible('[data-testid="setting-drone-freeze-note"]'), false);
       await page.click(tog);
       await until(() => globalThis.__bridgeMock.droneFreeze === false);

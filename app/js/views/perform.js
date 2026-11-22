@@ -5,6 +5,7 @@
 // H-v2 layout (design/H-v2/perform.png): song header (KEY ▾ → "Sing it in…"), Transpose, one-tap Space / Echo chips,
 // Chord; setlist row with Prev / Next; Wheel · four strips (ON tile = the mute, fader, Space · Echo · Octave · Sustain
 // chips) · Key & drone (the same ON tile) · Notes; keyboard with range bars · Revert (hold) · Fade out · PANIC · Lock.
+// UIA (native DECISIONS D3): a song has 1..16 strips; more than four scroll sideways (makeStrip / layoutStrips).
 // A white dot marks what changed since the song was loaded (shared/song-diff.js); Revert counts the dots.
 //
 // Lock rule (H-v2 concept §1.3, OK'd by Ryan; the LOCK table below): playing stays live, the song key and Revert need
@@ -586,8 +587,24 @@ export function mountPerform(root, ctx) {
     if (b.left >= a.left - 1 && b.right <= a.right + 1) return;
     el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
   };
-  d.listen(slotsEl, 'focusin', (e) => revealStrip(e.target.closest?.('.strip')));
-  d.listen(slotsEl, 'pointerdown', (e) => revealStrip(e.target.closest?.('.strip')));
+  // keyboard focus reveals at once; a touch / click reveals when it lets go, so a fader drag on a half-shown strip
+  // never has the row slide under the finger
+  let pressed = null;
+  d.listen(slotsEl, 'focusin', (e) => {
+    if (!pressed) revealStrip(e.target.closest?.('.strip'));
+  });
+  d.listen(slotsEl, 'pointerdown', (e) => {
+    pressed = e.target.closest?.('.strip') || null;
+  });
+  const letGo = () => {
+    const el = pressed;
+    pressed = null;
+    if (el) revealStrip(el);
+  };
+  d.listen(document, 'pointerup', letGo);
+  d.listen(document, 'pointercancel', () => {
+    pressed = null; // a pan took over (touch scroll): nothing to reveal
+  });
 
   // ---------------------------------------------------------------- key & drone
   // The drone uses the same ON tile (OPTIONS.md round-3 fix 1); the card keeps the title "Key & drone" because the

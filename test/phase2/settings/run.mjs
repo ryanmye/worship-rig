@@ -811,7 +811,7 @@ async function runMode(mode, browser) {
           'setting-perform-chips', 'setting-theme', 'settings-appearance', 'settings-menubar', 'setting-mb-mode',
           'setting-mb-set', 'setting-mb-modes', 'setting-mb-lowres', 'setting-mb-resource', 'setting-mb-open-mini',
           'settings-latency-hint', 'setting-polyphony', 'setting-buffer-frames', 'setting-voice-limit',
-          'settings-engine-note'];
+          'settings-engine-note', 'setting-drone-freeze', 'setting-drone-freeze-note'];
         return {
           labels: tabs.map((t) => t.textContent),
           orientation: host.querySelector('[role=tablist]').getAttribute('aria-orientation'),
@@ -835,7 +835,8 @@ async function runMode(mode, browser) {
         Library: 'library', About: 'about', Diagnostics: 'about',
       });
       assert.deepEqual(r.advRows, {
-        sound: ['settings.monoOutput', 'settings.voiceLimit', 'settings.click.record', 'settings.midiClockOut'],
+        sound: ['settings.monoOutput', 'settings.voiceLimit', 'settings.droneFreeze', 'settings.click.record',
+          'settings.midiClockOut'],
         keyboards: ['settings.programChange'],
       });
       for (const [id, n] of Object.entries(r.testids)) assert.equal(n, 1, `data-testid ${id} kept, once`);
@@ -1111,15 +1112,20 @@ async function runMode(mode, browser) {
       await until(() => window.__rig.views.settings.category === 'sound'
         && document.querySelector('[data-testid="settings-advanced-sound"]').open);
       const tog = '[data-testid="setting-drone-freeze"]';
+      // ui-core's toggle says aria-pressed, the fallback set's switch aria-checked
+      const on = () => ev((t) => {
+        const b = document.querySelector(t);
+        return b.getAttribute('aria-pressed') ?? b.getAttribute('aria-checked');
+      }, tog);
       await until((t) => document.activeElement === document.querySelector(t), tog);
-      assert.equal(await page.getAttribute(tog, 'aria-checked'), 'true', 'default on');
+      assert.equal(await on(), 'true', 'default on');
       assert.equal(await ev(() => 'droneFreeze' in window.__rig.store.get().settings), false, 'absent until chosen');
       assert.equal(await page.isVisible('[data-testid="setting-drone-freeze-note"]'), true);
       assert.match(await page.textContent('[data-testid="setting-drone-freeze-note"]'), /2\.0 engine/);
       assert.equal(await ev(() => typeof window.__rig.engine.setDroneFreeze), 'undefined', 'web engine: no setter');
       await page.click(tog);
       await until(() => window.__rig.store.get().settings.droneFreeze === false);
-      assert.equal(await page.getAttribute(tog, 'aria-checked'), 'false');
+      assert.equal(await on(), 'false');
       await until(() => /"droneFreeze":false/.test(localStorage.getItem('rig.v1') || ''), null, 5000);
       const r = await ev(() => {
         const st = window.__rig.store;
@@ -1128,7 +1134,10 @@ async function runMode(mode, browser) {
       });
       assert.deepEqual(r, { v: false, exported: false }, 'refuses non-booleans; device-local: not exported');
       await ev(() => window.__rig.store.set('settings.droneFreeze', null)); // back to the default (absent = on)
-      await until((t) => document.querySelector(t).getAttribute('aria-checked') === 'true', tog);
+      await until((t) => {
+        const b = document.querySelector(t);
+        return (b.getAttribute('aria-pressed') ?? b.getAttribute('aria-checked')) === 'true';
+      }, tog);
       assert.equal(await ev(() => 'droneFreeze' in window.__rig.store.get().settings), false);
       await closeSettings();
     });
