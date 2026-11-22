@@ -7,7 +7,7 @@
 //     Chromium. It makes no sound.
 // The contract JSON is passed in (`api`): Node tests read the file, the browser smoke fetches it.
 import { PROTOCOL } from './link.js';
-import { isValidPath } from '../shared/params.js';
+import { isValidPath, MAX_SLOTS, SLOT_COUNT } from '../shared/params.js';
 import { chordName } from '../shared/chords.js';
 import { validDynRange } from '../shared/touch-curve.js';
 
@@ -420,7 +420,8 @@ export class MockNative {
 
   op_set(m) {
     const one = (path, value) => {
-      if (!isValidPath(path)) {
+      // UIC (UIA review O2): the core takes slots.0..15 since T00c (params.cpp); the default bound was 1.x's 4
+      if (!isValidPath(path, MAX_SLOTS)) {
         this._find('unknown-param', m, { path });
         return false;
       }
@@ -431,7 +432,7 @@ export class MockNative {
       const applied = m.batch.map((e) => one(e[0], e[1]));
       return this._reply(m.id, true, { applied });
     }
-    if (!isValidPath(m.path)) return this._fail(m, 'unknown-param', `Unknown parameter "${m.path}"`);
+    if (!isValidPath(m.path, MAX_SLOTS)) return this._fail(m, 'unknown-param', `Unknown parameter "${m.path}"`);
     return this._reply(m.id, true, { applied: one(m.path, m.value) });
   }
 
@@ -628,7 +629,9 @@ export class MockNative {
     };
     if (this.meters.slots.length) {
       const on = (i) => this.meters.slots.includes(i);
-      tick.slots = [0, 1, 2, 3].map((i) => (on(i) ? [this.peak[0], this.peak[0] * 0.7] : [0, 0]));
+      // contract tick row: one pair per slot of the song, at least 4, at most 16 (UIC: was always 4)
+      const n = Math.min(MAX_SLOTS, Math.max(SLOT_COUNT, (this.patch && this.patch.slots && this.patch.slots.length) || 0));
+      tick.slots = Array.from({ length: n }, (_, i) => (on(i) ? [this.peak[0], this.peak[0] * 0.7] : [0, 0]));
     }
     if (this.meters.rta) {
       const bytes = new Uint8Array(2048);

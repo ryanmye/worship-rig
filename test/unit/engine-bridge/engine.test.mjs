@@ -353,4 +353,29 @@ test('16-slot songs (T00c, D3): slots 4..15 of the committed song are settable, 
   assert.deepEqual(e.slotLevel(12), { peak: 0, rms: 0 });
   await flush();
   assert.equal(ops(r, 'set').filter((m) => m.path === 'slots.12.gain').length, 1);
+  // UIC (UIA review O2): the mock takes slots.0..15 like the core (params.cpp) instead of 1.x's 4
+  assert.deepEqual(r.mock.findings.filter((f) => f.kind === 'unknown-param'), []);
+  assert.equal(r.mock.params.get('slots.12.gain'), 0.5);
+  assert.equal(e.setParam('slots.12.pan', -0.5), true);
+  await flush();
+  assert.equal(r.mock.params.get('slots.12.pan'), -0.5);
+  assert.deepEqual(r.mock.findings, []);
+});
+
+test('UIC: mock-native ticks carry one slot meter pair per song slot (at least 4, 16 here)', async () => {
+  const r = rig();
+  const e = r.engine;
+  await e.start();
+  const lastTick = () => r.log.toJs.flat().filter((m) => m && m.ev === 'tick').pop();
+  r.mock.meters.slots = [0];
+  r.mock.emitTick();
+  await flush();
+  assert.equal(lastTick().slots.length, 4, 'no song: the contract minimum');
+  const slots = Array.from({ length: 16 }, (_, i) => (i === 12 ? slot('salamander-piano') : null));
+  assert.ok(e.commit(await e.prepare({ slots })));
+  await flush();
+  r.mock.meters.slots = [12];
+  r.mock.emitTick();
+  await flush();
+  assert.equal(lastTick().slots.length, 16);
 });

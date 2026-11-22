@@ -1807,11 +1807,16 @@ export function createController(o) {
       ok = false;
       warn(`restarting audio failed: ${err && err.message}`);
     }
-    restarting = false;
     if (ok) {
       afterRestart();
       emit('statechange', { state: 'restarted', auto: !!opts.auto });
-      await resumeRecording(part);
+      // UIC (UIB review O4): `restarting` stays set until the split take has resumed, so a request in that window is
+      // queued (restartAgain) instead of starting a second restart that stops the take being resumed
+      try {
+        await resumeRecording(part);
+      } finally {
+        restarting = false;
+      }
       if (restartAgain) {
         restartAgain = false;
         const waiters = restartAgainWaiters;
@@ -1825,6 +1830,7 @@ export function createController(o) {
         return again;
       }
     } else {
+      restarting = false;
       restartAgain = false; // a failed restart does not chain into another (the user retries, or the watchdog)
       const waiters = restartAgainWaiters;
       restartAgainWaiters = [];
