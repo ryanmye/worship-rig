@@ -1062,6 +1062,8 @@ export class BridgeEngine extends EventTarget {
 
   clickStop({ when } = {}) {
     const was = !!(this._click && (this._click.running || this._click.counting));
+    // UIC: audio.js stops the metronome at the call, so clickState() says so at once; native's `click` event confirms
+    if (was && !Number.isFinite(when)) this._click = { ...this._click, running: false, counting: false };
     this._send('click', { action: 'stop', ...this._whenArg(when) });
     return was;
   }

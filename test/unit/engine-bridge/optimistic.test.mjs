@@ -79,3 +79,29 @@ test('UIC: wheels, swell, fade and panic answer wheelValues() / getRuntimeState(
   assert.equal(e.pedal, false);
   await flush();
 });
+
+test('UIC: clickStop() answers clickState().running false at once; native\'s click event confirms', async () => {
+  // messages are held until pump(): native has not answered the stop yet when clickState() is read
+  const q = [];
+  const r = rig({ schedule: (fn) => q.push(fn) });
+  const pump = async () => {
+    for (let i = 0; i < 20; i++) {
+      while (q.length) q.shift()();
+      await flush();
+    }
+  };
+  const e = r.engine;
+  const st = e.start();
+  await pump();
+  await st;
+  r.native.post({ v: 1, ev: 'click', running: true, counting: false, bpm: 100, sig: '4/4', output: 'main', level: 0.6,
+    record: false, downbeat: 1 });
+  await pump();
+  assert.equal(e.clickState().running, true);
+  assert.equal(e.clickStop(), true, 'it was running');
+  assert.equal(e.clickState().running, false, 'audio.js: stopped at the call, before native answers');
+  assert.equal(e.clickState().bpm, 100, 'the rest of the state is kept');
+  assert.equal(e.clickStop(), false, 'a second stop: nothing was running');
+  await pump();
+  assert.equal(e.clickState().running, false, 'native\'s click event agrees');
+});
