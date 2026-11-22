@@ -151,6 +151,9 @@ test('UIA (native DECISIONS D3): slots 4..15 in the grammar with an explicit bou
   for (const bad of ['slots.16.gain', 'slots.05.gain', 'slots.4.nope']) assert.equal(isValidPath(bad, MAX_SLOTS), false, bad);
   assert.equal(isValidPath('slots.5.gain', 6), true);
   assert.equal(isValidPath('slots.6.gain', 6), false);
+  // a bound under 4 reads as 4: safe as an Array callback (every(isValidPath) passes the index)
+  assert.ok(['slots.3.gain', 'slots.2.pan', 'slots.1.gain'].every(isValidPath));
+  assert.equal(isValidPath('slots.3.gain', 1), true);
   // every slot has the same rows: describe / clamp / formatValue work for 0..15
   assert.equal(describe('slots.4.gain').path, 'slots.<i>.gain');
   assert.equal(describe('slots.15.eq.b3.hz').path, 'slots.<i>.eq.b3.hz');

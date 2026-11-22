@@ -102,6 +102,12 @@
 .ev2 .ev2-slots-qbtns { display: flex; gap: 8px; justify-content: flex-end; }
 .ev2 .ev2-rig-top { display: flex; align-items: center; gap: 12px; height: 34px; padding: 0 14px; flex: none; }
 .ev2 .ev2-rig-hint { font-size: 12.5px; color: var(--ev2-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* the rig hint keeps its one line from 1280 up: under 1441 px the Slots pill drops its icon and the bar its gaps narrow */
+@media (max-width: 1440px) {
+  .ev2 .ev2-slotsbtn > .ev2-ic { display: none; }
+  .ev2 .ev2-slotsbtn { padding: 0 9px; }
+  .ev2 .ev2-rig-top { gap: 6px; }
+}
 .ev2 .ev2-wiretog { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 650; color: var(--muted, #a3acb8); border: 0; background: transparent; padding: 0; }
 .ev2 .ev2-wiretog.on { color: var(--text, #f1f4f8); }
 .ev2 .ev2-switch { width: 34px; height: 20px; border-radius: 10px; background: #3a414d; position: relative; flex: none; }

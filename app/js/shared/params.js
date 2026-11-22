@@ -177,19 +177,25 @@ const KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 /** A slot index as written in a path: no sign, no leading zero ('0'..'15'; '01' is not one). */
 const INDEX_RE = /^(0|[1-9]\d?)$/;
 const boundOf = (n) => (Number.isInteger(n) ? Math.min(MAX_SLOTS, Math.max(1, n)) : SLOT_COUNT);
+/**
+ * The grammar's bound: never under SLOT_COUNT (a song's own count is the store's check), so isValidPath / parsePath
+ * stay safe as an Array callback (`paths.every(isValidPath)` passes the index as the second argument).
+ */
+const grammarOf = (n) => Math.max(SLOT_COUNT, boundOf(n));
 
 /**
  * Normalise a concrete path to its table pattern.
  * @param {string} path
- * @param {number} [slotCount=SLOT_COUNT] slot indices below this are valid (1..MAX_SLOTS; UIA: the default stays the
- *   web engine's 4, so app/js/engine and the bridge shim see the grammar they were written for)
+ * @param {number} [slotCount=SLOT_COUNT] slot indices below this are valid (SLOT_COUNT..MAX_SLOTS; less reads as 4;
+ *   UIA: the default stays the web engine's 4, so app/js/engine and the bridge shim see the grammar they were
+ *   written for)
  * @returns {{pattern:string, slot:number|null, key:string|null}|null}
  */
 export function parsePath(path, slotCount = SLOT_COUNT) { // INTERFACE-CHANGE(UIA): + slotCount
   if (typeof path !== 'string') return null;
   const m = SLOT_RE.exec(path);
   if (!m) return !path.startsWith('slots.') && BY_PATTERN.has(path) ? { pattern: path, slot: null, key: null } : null;
-  if (!INDEX_RE.test(m[1]) || Number(m[1]) >= boundOf(slotCount)) return null;
+  if (!INDEX_RE.test(m[1]) || Number(m[1]) >= grammarOf(slotCount)) return null;
   const slot = Number(m[1]);
   const rest = m[2];
   if (rest.startsWith('params.')) {
@@ -227,7 +233,7 @@ export function isValidPath(path, slotCount = SLOT_COUNT) { // INTERFACE-CHANGE(
  * @returns {string[]}
  */
 export function expandPaths(slotCount = SLOT_COUNT) { // INTERFACE-CHANGE(UIA): + slotCount
-  const n = boundOf(slotCount);
+  const n = grammarOf(slotCount);
   const out = [];
   for (const e of PARAMS) {
     if (e.path.includes('<i>')) for (let i = 0; i < n; i++) out.push(e.path.replace('<i>', String(i)));
