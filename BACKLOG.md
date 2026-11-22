@@ -1,7 +1,7 @@
 # BACKLOG — ideas and deferred work (kept so nothing is lost)
 
 Owner: cloud session writes it; either side may propose lines via `.cloud-outbox/status.md` (`BACKLOG: …`) or an
-inbox file. Items move to COORDINATION.md "In flight" when scheduled. Last updated 2026-11-03 (v1 gate ticked
+inbox file. Items move to COORDINATION.md "In flight" when scheduled. Last updated 2026-11-22 (2.x section added; v1 gate ticked
 against the status log).
 
 Legend: **S/M/L** effort · **who** = which side is the natural owner (cloud = implementation, local = Mac/hardware).
@@ -60,6 +60,23 @@ Done in the cloud, waiting on the Mac checks and Ryan's answers in `reviews/v11-
       races.
 - [ ] Mac verification + CI green on macos-14 + version 1.1.0 + tag (Ryan's word).
 Not in v1.1: EQ simple mode, shimmer/choir, chord charts, stage display, Planning Center, daily hook, disk streaming.
+
+## 2.x — the big update after 2.0 (Ryan, 2026-11-22; nothing here gates 2.0)
+
+- [ ] **WorshipTools chart import.** Import a song's chart from WorshipTools. Pull out its tempo and its key, and its
+      sound or arrangement cues where the chart has them. Use them to add the song to a setlist with that tempo and
+      key, and suggest slot sounds. Open questions:
+      - What WorshipTools actually exports (ChordPro, PDF or an API) has not been checked yet. Find out first.
+      - Which "sounds" a chart carries. Probably only the key, tempo and time signature, plus any section or
+        instrument notes.
+
+      Related: the A-list items "Chord / lyric / chart display on Perform" (ChordPro import) and "Planning Center
+      Services import" share the parsing and the add-to-setlist path. **M–L, cloud**
+- [ ] **Smoother setlist UI and song switching.** Make moving between songs in a set quicker and less error-prone on
+      stage. Details still to be decided with Ryan. Builds on 2.0's background sample loading (CORE2A: the old song
+      plays until the new one is loaded; the newest switch wins), and could preload the next song in the set.
+      **M, cloud + Ryan hands-on**
+- [ ] More 2.x items: Ryan is still thinking. Add them here as they come.
 
 ## A. Features Ryan asked for or floated, not yet built — ALL v1.1+ (Ryan 2026-09-30: "don't make the app too complex"; nothing in A gates v1)
 - Menu-bar mode v1.1: global hotkeys (`globalShortcut`) for next/prev mode, panic, master ±; Touch Bar strip; multiple
