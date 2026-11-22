@@ -1,7 +1,7 @@
 // H-v2 Edit: shared helpers for the shell and every panel module (views/edit/CONTRACT.md §3).
 // Owned by the shell (hv2-edit-setup). Panel agents import from here and never edit it; ask the integrator for
 // additions. Pure DOM helpers only: no store/engine access (panels get those through their ctx).
-import { describe, faderTaper, inverseTaper, SLOT_COUNT } from '../../shared/params.js';
+import { describe, faderTaper, inverseTaper, SLOT_COUNT, MAX_SLOTS, slotName } from '../../shared/params.js';
 import { keyName } from '../../shared/music.js';
 import { sameValue } from '../../shared/song-diff.js';
 import { say } from '../components/voice.js';
@@ -254,18 +254,17 @@ export const safeName = (s) => String(s || 'song').replace(/[\\/:*?"<>|]+/g, '-'
 
 // ---------------------------------------------------------------------------------------------------------------
 // the rig's blocks (tabs) — the selection model's vocabulary (CONTRACT.md §2)
-const SLOT_ROLES = ['Keys', 'Pad', 'Extra', 'Bass'];
 /**
- * Block ids in tab order. `panel` = the registered panel module, `opts` = its mount options, `prefixes` = the
- * song-relative paths whose song-diff changes put a white dot on the tab.
- * @type {ReadonlyArray<{id:string, panel:string, opts:object, role:string, color:string, prefixes:string[],
- *   shared?:boolean}>}
+ * UIA (native DECISIONS D3): the block of slot `i` (0..MAX_SLOTS-1): 'Keys' … 'Bass', then 'Sound 5' …, coloured
+ * --slot-<i>. Built once per index.
  */
-export const BLOCKS = Object.freeze([
-  ...Array.from({ length: SLOT_COUNT }, (_, i) => Object.freeze({
-    id: `slot:${i}`, panel: 'slot', opts: Object.freeze({ slot: i }), role: SLOT_ROLES[i] || `Slot ${i + 1}`,
-    color: `var(--slot-${i})`, prefixes: Object.freeze([`patch.slots.${i}`]),
-  })),
+const SLOT_BLOCKS = Array.from({ length: MAX_SLOTS }, (_, i) => Object.freeze({
+  id: `slot:${i}`, panel: 'slot', opts: Object.freeze({ slot: i }), role: slotName(i),
+  color: `var(--slot-${i})`, prefixes: Object.freeze([`patch.slots.${i}`]),
+}));
+/** @param {number} i @returns {object|null} the block of slot i */
+export const slotBlock = (i) => SLOT_BLOCKS[i] || null;
+const SHARED_BLOCKS = Object.freeze([
   Object.freeze({
     id: 'drone', panel: 'drone', opts: Object.freeze({}), role: 'Drone', color: 'var(--drone, #e8d9a8)',
     prefixes: Object.freeze(['drone']),
@@ -283,6 +282,20 @@ export const BLOCKS = Object.freeze([
     ]),
   }),
 ]);
+/**
+ * Block ids in tab order for a song with `n` slots: its slot blocks, then drone, effects, master. `panel` = the
+ * registered panel module, `opts` = its mount options, `prefixes` = the song-relative paths whose song-diff changes put
+ * a white dot on the tab.
+ * @param {number} [n=SLOT_COUNT]
+ * @returns {ReadonlyArray<{id:string, panel:string, opts:object, role:string, color:string, prefixes:string[],
+ *   shared?:boolean}>}
+ */
+export function blocksFor(n = SLOT_COUNT) {
+  const k = Math.min(MAX_SLOTS, Math.max(1, Number.isInteger(n) ? n : SLOT_COUNT));
+  return Object.freeze([...SLOT_BLOCKS.slice(0, k), ...SHARED_BLOCKS]);
+}
+/** The blocks of a 4-slot song (Keys · Pad · Extra · Bass · Drone | Effects · Master), as before UIA. */
+export const BLOCKS = blocksFor(SLOT_COUNT);
 /** The 'song' block has no tab (header chips select it). */
 export const SONG_BLOCK = Object.freeze({
   id: 'song', panel: 'song', opts: Object.freeze({}), role: 'Song', color: 'var(--accent, #ffc94d)',
@@ -295,7 +308,7 @@ export const SONG_BLOCK = Object.freeze({
  */
 export function blockOf(id) {
   if (id === 'song') return SONG_BLOCK;
-  return BLOCKS.find((b) => b.id === id) || null;
+  return SHARED_BLOCKS.find((b) => b.id === id) || SLOT_BLOCKS.find((b) => b.id === id) || null; // UIA: slot:0..15
 }
 
 // ---------------------------------------------------------------------------------------------------------------

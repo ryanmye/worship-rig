@@ -9,7 +9,7 @@ import { makeStore, tick } from './helpers.mjs';
 
 test('store: hotkeys and updateCheck stay absent until set (schema stays 1)', () => {
   const s = makeStore();
-  assert.equal(SCHEMA, 1);
+  assert.equal(SCHEMA, 2); // UIA: 1 → 2 (16 slots); hotkeys / updateCheck still need no bump
   assert.equal('hotkeys' in s.get().settings, false);
   assert.equal('updateCheck' in s.get().settings, false);
 });

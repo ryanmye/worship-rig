@@ -16,6 +16,7 @@
 #include "helpers.h"
 
 using Clock = std::chrono::steady_clock;
+using rigtest::contains;
 
 namespace {
 
@@ -166,10 +167,13 @@ struct Rt {
   static void pause(int ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
 };
 
+/** n slots of sampler `id`, all full range and polyphonic: slot 3's Bass role defaults (highNote 59, mono 'lowest')
+ *  would otherwise play none of notes 60-67 (patch.cpp applyRoleDefaults). */
 std::string slotsOf(const char *id, int n) {
   std::string s;
   for (int i = 0; i < n; ++i)
-    s += std::string(i ? "," : "") + R"({"instrument":{"type":"sampler","id":")" + id + R"("},"gain":0.2})";
+    s += std::string(i ? "," : "") + R"({"instrument":{"type":"sampler","id":")" + id +
+         R"("},"gain":0.2,"highNote":127,"mono":"off"})";
   return s;
 }
 
@@ -221,7 +225,7 @@ bool timeRuns(Rt &rt, int ms = 2000) {
 
 }  // namespace
 
-TEST_SUITE("rt_cache") {
+TEST_SUITE("runtime_cache")  // ctest unit.runtime_cache: the CI TSan regex ("runtime") covers it {
   TEST_CASE("mackit O1: 16 sampler slots prepared cold (no cache preload) sound in realtime: 8 notes = 128 voices") {
     // Before the fix the control loop never called the cache's pump(): decodes finished on the workers and sat in
     // the mailbox, `get sampleStatus` never reported loaded, and 8 held notes in 16 slots of ep-rhodes made 0 voices.
@@ -261,11 +265,11 @@ TEST_SUITE("rt_cache") {
       notes += std::string(n ? "," : "") + R"({"v":1,"op":"play","e":"on","vel":100,"n":)" + std::to_string(60 + n) +
                "}";
     rt.post(notes + "]");
-    std::uint32_t v = 0;
+    std::uint32_t v = 0;  // the most voices seen (ep-rhodes notes decay: the count falls again after a while)
     for (const auto end = Clock::now() + std::chrono::seconds(kSanitized ? 30 : 5);
          v < 128 && Clock::now() < end;) {
-      Rt::pause(10);
-      v = rt.voices();
+      Rt::pause(5);
+      v = std::max(v, rt.voices());
     }
     MESSAGE("voices with 8 notes held in 16 slots of ep-rhodes: " << v);
     CHECK(v == 128);

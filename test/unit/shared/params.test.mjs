@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   PARAMS, SLOT_COUNT, INSTRUMENT_PARAM_ENTRY, parsePath, describe, isValidPath, expandPaths, clamp, faderTaper,
   inverseTaper, gainToDb, dbToGain, formatValue, LEARNABLE, isLearnable, isLearnButton, ROLE_DEFAULTS, defaultSlot,
-  EQ_BAND_COUNT, EQ_BAND_TYPES,
+  EQ_BAND_COUNT, EQ_BAND_TYPES, MAX_SLOTS, slotName, slotRole, learnTargets, slotGainIndex,
 } from '../../../app/js/shared/params.js';
 
 const UNITS = ['lin', 'dB-display', 'dB', 'Hz', 's', 'semis', 'midi', 'bool', 'enum'];
@@ -129,7 +129,7 @@ test('describe: concrete paths map to patterns', () => {
 
 test('describe: invalid paths → null', () => {
   for (const bad of [
-    'slots.4.gain', 'slots.-1.gain', 'slots.01.gain', 'slots.x.gain', 'slots.<i>.gain', 'slots.0.nope',
+    'slots.16.gain', 'slots.-1.gain', 'slots.01.gain', 'slots.x.gain', 'slots.<i>.gain', 'slots.0.nope',
     'slots.0.params.', 'slots.0.params.a.b', 'slots.0.params.1x', 'slots.0.sends', 'slots.0', 'fx.reverb',
     'fx.reverb.nope', 'nextSong', 'panic', '', 'master', 'drone.mode', 'slots..gain',
   ]) {
@@ -139,6 +139,45 @@ test('describe: invalid paths → null', () => {
   assert.equal(describe(null), null);
   assert.equal(describe(42), null);
   assert.equal(parsePath({}), null);
+});
+
+test('UIA (native DECISIONS D3): slots 4..15 in the grammar with an explicit bound; the default stays 4', () => {
+  assert.equal(MAX_SLOTS, 16);
+  assert.equal(SLOT_COUNT, 4, 'the web engine and new songs keep 4');
+  assert.equal(isValidPath('slots.4.gain'), false, 'default bound = the web grammar (app/js/engine, the bridge shim)');
+  assert.equal(parsePath('slots.15.gain'), null);
+  assert.deepEqual(parsePath('slots.15.gain', MAX_SLOTS), { pattern: 'slots.<i>.gain', slot: 15, key: null });
+  assert.deepEqual(parsePath('slots.12.params.tone', MAX_SLOTS), { pattern: 'slots.<i>.params.<key>', slot: 12, key: 'tone' });
+  for (const bad of ['slots.16.gain', 'slots.05.gain', 'slots.4.nope']) assert.equal(isValidPath(bad, MAX_SLOTS), false, bad);
+  assert.equal(isValidPath('slots.5.gain', 6), true);
+  assert.equal(isValidPath('slots.6.gain', 6), false);
+  // every slot has the same rows: describe / clamp / formatValue work for 0..15
+  assert.equal(describe('slots.4.gain').path, 'slots.<i>.gain');
+  assert.equal(describe('slots.15.eq.b3.hz').path, 'slots.<i>.eq.b3.hz');
+  assert.equal(clamp('slots.9.gain', 5), 2);
+  assert.equal(formatValue('slots.14.pan', -0.5), 'L 50');
+  const all = expandPaths(MAX_SLOTS);
+  const slotPatterns = PARAMS.filter((e) => e.path.includes('<i>')).length;
+  assert.equal(all.length, slotPatterns * MAX_SLOTS + (PARAMS.length - slotPatterns));
+  assert.ok(all.includes('slots.15.highNote'));
+});
+
+test('UIA: slot roles, names and learn targets past the four roles', () => {
+  assert.deepEqual([0, 1, 2, 3, 4, 15].map(slotName), ['Keys', 'Pad', 'Extra', 'Bass', 'Sound 5', 'Sound 16']);
+  assert.equal(slotRole(16), null);
+  assert.equal(slotRole(2), ROLE_DEFAULTS[2]);
+  const s5 = defaultSlot(4, { type: 'synth', id: 'warm-pad' });
+  assert.deepEqual(s5.sends, ROLE_DEFAULTS[2].sends, 'Sound 5.. take Extra\'s sends');
+  assert.equal(s5.mono, 'off');
+  assert.equal(s5.highNote, 127);
+  assert.deepEqual(defaultSlot(3, { type: 'synth', id: 'x' }), defaultSlot(3, { type: 'synth', id: 'x' }));
+  assert.ok(isLearnable('slots.9.gain') && !isLearnButton('slots.9.gain'), 'a learnable fader');
+  assert.ok(!isLearnable('slots.16.gain'));
+  assert.deepEqual(learnTargets(4), [...LEARNABLE]);
+  assert.deepEqual(learnTargets(6).slice(LEARNABLE.length), ['slots.4.gain', 'slots.5.gain']);
+  assert.equal(slotGainIndex('slots.12.gain'), 12);
+  assert.equal(slotGainIndex('slots.12.gain', 12), null);
+  assert.equal(slotGainIndex('slots.1.pan'), null);
 });
 
 test('parsePath details', () => {
@@ -378,7 +417,7 @@ test('defaultSlot: fresh, mutable, not aliased to defaults or input', () => {
 });
 
 test('defaultSlot: errors', () => {
-  assert.throws(() => defaultSlot(4, { type: 'synth', id: 'x' }), RangeError);
+  assert.throws(() => defaultSlot(16, { type: 'synth', id: 'x' }), RangeError); // UIA: 0..15 (was 0..3)
   assert.throws(() => defaultSlot(-1, { type: 'synth', id: 'x' }), RangeError);
   assert.throws(() => defaultSlot(1.5, { type: 'synth', id: 'x' }), RangeError);
   assert.throws(() => defaultSlot(0, null), TypeError);

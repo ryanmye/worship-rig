@@ -112,7 +112,7 @@ test('persist is debounced and writes the whole state', async () => {
   await new Promise((r) => setTimeout(r, 60));
   const saved = JSON.parse(storage.getItem(STORAGE_KEY));
   assert.equal(saved.songs[saved.settings.currentSongId].patch.slots[0].gain, 0.6);
-  assert.equal(saved.schema, 1);
+  assert.equal(saved.schema, 2); // UIA: SCHEMA 2
 });
 
 test('set(): current-song param grammar, clamping, canonical changed paths, batching', async () => {
@@ -270,7 +270,7 @@ test('export/import roundtrip: merge adds copies with new ids; replace restores 
   const json = a.exportJSON();
   const doc = JSON.parse(json);
   assert.equal(doc.app, 'worship-rig');
-  assert.equal(doc.schema, 1);
+  assert.equal(doc.schema, 2); // UIA: SCHEMA 2
 
   const b = makeStore({ idGen: (p) => `b_${p}_${Math.random().toString(36).slice(2)}` });
   const before = b.get().songOrder.length;
@@ -310,5 +310,5 @@ test('emptyState + seed:false leaves an empty library', () => {
   assert.equal(s.get().songOrder.length, 0);
   assert.equal(s.currentSong(), null);
   assert.equal(s.set('slots.0.gain', 1), false);
-  assert.equal(emptyState(0).schema, 1);
+  assert.equal(emptyState(0).schema, 2); // UIA: SCHEMA 2
 });

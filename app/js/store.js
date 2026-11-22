@@ -675,7 +675,8 @@ function entriesFromArray(arr, prefix) {
 /**
  * Migrate/normalise a raw state object to schema 2. Idempotent; unknown fields are preserved.
  * Schema 1 → 2 (UIA): every song keeps its 4 slots exactly as 1.x normalised them (`legacy`); nothing else changes.
- * A state without `schema` (hand-written files, the store's own drafts) is read as the current schema.
+ * A state without `schema` (hand-written files) is read as schema 1 for its slots (4 per song) and as the current
+ * schema otherwise; the store's own drafts carry SCHEMA.
  * @param {object} raw
  * @returns {object} normalised (not frozen) state
  * @throws {FutureSchemaError} schema newer than SCHEMA; {TypeError} not a state object
@@ -685,7 +686,8 @@ export function migrate(raw) {
   const schema = raw.schema === undefined ? SCHEMA : raw.schema;
   if (typeof schema !== 'number' || !Number.isFinite(schema)) throw new TypeError('migrate: bad schema');
   if (schema > SCHEMA) throw new FutureSchemaError(schema);
-  const legacy = schema < 2;
+  // UIA: schema 1, and a state without one (hand-written files, 1.x-era docs), keep exactly 4 slots per song
+  const legacy = raw.schema === undefined || schema < 2;
   const out = { ...raw, schema: SCHEMA };
   // songs: map (array accepted for hand-written files)
   const songs = {};
@@ -878,7 +880,24 @@ export function createStore(opts = {}) {
     state = deepFreeze(emptyState(now()));
   } else {
     try {
-      state = deepFreeze(migrate(JSON.parse(raw)));
+      const parsed = JSON.parse(raw);
+      state = deepFreeze(migrate(parsed));
+      // UIA: an older schema with songs in it keeps a copy of itself first (1.1 cannot read schema 2, and this copy is
+      // what it would need). Best effort: the upgrade goes ahead without it, and nothing here is shown as an error.
+      if (isObj(parsed) && typeof parsed.schema === 'number' && parsed.schema < SCHEMA && isObj(parsed.songs)
+        && Object.keys(parsed.songs).length) {
+        info.migratedFrom = parsed.schema;
+        const k = `${backupPrefix}${now()}`;
+        try {
+          storage.setItem(k, String(raw));
+          if (storage.getItem(k) === String(raw)) {
+            info.migrationBackupKey = k;
+            pruneBackups(BACKUPS_KEEP, k);
+          }
+        } catch (err) {
+          warn(`could not keep the schema-${parsed.schema} library before upgrading it: ${err && err.message}`);
+        }
+      }
     } catch (err) {
       info.status = err instanceof FutureSchemaError ? 'future-schema' : 'corrupt';
       unreadable = String(raw);
@@ -1031,7 +1050,7 @@ export function createStore(opts = {}) {
       if (field === 'scenes') {
         if (rest.length) return null;
         if (value !== null && value !== undefined && !Array.isArray(value)) return null;
-        return { segs, value: normalizeScenes(value) };
+        return { segs, value: normalizeScenes(value, song.patch.slots.length) }; // UIA: one entry per slot
       }
       if (rest.length) return { segs, value: clone(value) }; // unknown nested fields
       switch (field) {
@@ -1162,8 +1181,13 @@ export function createStore(opts = {}) {
     if (rest.length === 0) return { segs, value: normalizePatch(value) };
     const [k, a, b, ...more] = rest;
     if (k === 'slots') {
-      // UIA: a whole slots array sets the slot count too (1..MAX_SLOTS); wheel targets past it go back to default
-      if (rest.length === 1) return Array.isArray(value) ? { segs, value: normalizePatch({ ...song.patch, slots: value }).slots } : null;
+      // UIA: a whole slots array sets the slot count too (1..MAX_SLOTS); when the count changes the whole patch is
+      // written, so wheel targets past the new count go back to their default
+      if (rest.length === 1) {
+        if (!Array.isArray(value)) return null;
+        const next = normalizePatch({ ...song.patch, slots: value });
+        return next.slots.length === song.patch.slots.length ? { segs, value: next.slots } : { segs: segs.slice(0, -1), value: next };
+      }
       const i = Number(a);
       // UIA: only the song's own slots (addSlot / removeSlot change how many it has)
       if (!Number.isInteger(i) || i < 0 || i >= song.patch.slots.length || String(i) !== a) return null;
@@ -1595,6 +1619,57 @@ export function createStore(opts = {}) {
       return true;
     },
 
+    /**
+     * UIA (native DECISIONS D3): append a slot to a song (at most MAX_SLOTS). `slot` = a Slot to put there (normalised
+     * with that slot's role defaults, e.g. 'Sound 5'), or null / omitted for an empty slot. Nothing else in the song
+     * changes; the new slot's index is the old count.
+     * @param {string} [id] song id (default: the current song)
+     * @param {object|null} [slot]
+     * @returns {number} the new slot's index, or -1 (no such song, already MAX_SLOTS, a bad slot)
+     */
+    addSlot(id = state.settings.currentSongId, slot = null) {
+      const s = state.songs[id];
+      if (!s) return -1;
+      const i = s.patch.slots.length;
+      if (i >= MAX_SLOTS) return -1;
+      const v = slot === null || slot === undefined ? null : normalizeSlot(slot, i);
+      if (slot && !v) return -1;
+      changed([put(['songs', id, 'patch', 'slots'], [...s.patch.slots, v])]);
+      return i;
+    },
+
+    /**
+     * UIA: remove slot `i` from a song (it keeps at least one). Later slots move down one place (their role names and
+     * colours are positional: Bass after a removed Pad shows as the Pad); a wheel / pedal / knob target on the removed
+     * slot goes back to the song's default target ('none' when that slot is gone too), targets on later slots follow
+     * their slot, and every scene drops that slot's entry. MIDI-learn mappings are per position (settings) and stay.
+     * @param {string} [id] song id (default: the current song)
+     * @param {number} [i] slot index (default: the last slot)
+     * @returns {boolean}
+     */
+    removeSlot(id = state.settings.currentSongId, i) {
+      const s = state.songs[id];
+      if (!s) return false;
+      const n = s.patch.slots.length;
+      const at = i === undefined ? n - 1 : i;
+      if (n <= 1 || !Number.isInteger(at) || at < 0 || at >= n) return false;
+      const next = clone(s);
+      next.patch.slots.splice(at, 1);
+      const shift = (t) => {
+        const j = slotGainIndex(t);
+        if (j === null || j < at) return t;
+        return j === at ? undefined : `slots.${j - 1}.gain`; // undefined: normalizeWheel picks the default
+      };
+      for (const k of ['modWheel', 'expression', 'volume']) {
+        if (isObj(next.patch[k])) next.patch[k].target = shift(next.patch[k].target);
+      }
+      if (Array.isArray(next.scenes)) {
+        for (const sc of next.scenes) if (isObj(sc) && Array.isArray(sc.slots)) sc.slots.splice(at, 1);
+      }
+      changed([put(['songs', id], normalizeSong(next, id))]);
+      return true;
+    },
+
     // ---- setlists
     /** @returns {string} new setlist id */
     addSetlist(name = 'New Setlist', songIds = [], o = {}) {
@@ -1835,7 +1910,9 @@ export function createStore(opts = {}) {
           const s = doc.kind === 'song' ? doc.song : doc;
           if (!isObj(s)) return { ok: false, error: 'No song found in that file.' };
           if (typeof doc.schema === 'number' && doc.schema > SCHEMA) throw new FutureSchemaError(doc.schema);
-          lib = migrate({ songs: [{ ...s, id: s.id || 'import0' }] });
+          // UIA: a song file's schema decides its slot count (a 2.0 song keeps its 1..16 slots, a 1.x one its 4)
+          const sch = typeof doc.schema === 'number' ? { schema: doc.schema } : {};
+          lib = migrate({ ...sch, songs: [{ ...s, id: s.id || 'import0' }] });
         } else lib = migrate(doc);
       } catch (err) {
         if (err instanceof FutureSchemaError) return { ok: false, error: 'This file was made by a newer version of Worship Rig.' };

@@ -11,7 +11,7 @@
 // a 600 ms hold, soundcheck settings are frozen.
 import { keyName, transposeSemis, mod12 } from '../shared/music.js';
 import { transposeSemisOf } from '../store.js';
-import { ROLE_DEFAULTS, SLOT_COUNT, isValidPath, formatValue } from '../shared/params.js';
+import { SLOT_COUNT, MAX_SLOTS, isValidPath, formatValue, slotName } from '../shared/params.js';
 import { SPACE_PRESETS, ECHO_PRESETS, VIBE_PRESETS, matchPreset } from '../shared/fx-presets.js';
 import { changedPaths, hasChange, droneOnMode, sameValue } from '../shared/song-diff.js';
 import { h, setText, disposer, blurAfterPointer, rafCoalesce } from './components/util.js';
@@ -38,6 +38,8 @@ const HOLD_MS = 600;
 const PEDAL_STUCK_MS = 20000;
 const humanize = (id) => String(id || '').replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `${MINUS}${-n}` : '0');
+/** UIA: the one-line note before the strips the web engine does not play (slots 5..16; they play on the 2.0 engine). */
+export const SILENT_NOTE = 'Silent here · these play on the 2.0 engine';
 
 /**
  * What each Perform control does while Perform lock is on (H-v2 concept §1.3; OPTIONS.md decision 2, OK'd).
@@ -72,8 +74,8 @@ export function stepPanelNeed() {
 
 /** Wheel target → short label. */
 export function wheelTargetLabel(target) {
-  const m = /^slots\.(\d)\.gain$/.exec(target || '');
-  if (m) return `${ROLE_DEFAULTS[Number(m[1])]?.name || `Slot ${Number(m[1]) + 1}`} level`;
+  const m = /^slots\.(\d+)\.gain$/.exec(target || ''); // UIA: slots.0..15 ('Sound 5 level')
+  if (m) return `${slotName(Number(m[1]))} level`;
   return (
     {
       'drone.gain': 'Drone',
@@ -441,10 +443,18 @@ export function mountPerform(root, ctx) {
   const wheelPanel = h('section.panel.p-wheel', { 'data-testid': 'wheel-strip' }, wheel.el);
 
   // ---------------------------------------------------------------- strips
+  // UIA (native DECISIONS D3): a song has 1..16 slots. The first SLOT_COUNT strips are built here as before; more are
+  // built the first time a song needs them (makeStrip) and kept (hidden) after. Up to 4 strips share the row as
+  // always; with more the row scrolls sideways (.scroll: four strips' width visible, keyboard, wheel and touch), and
+  // a strip that takes focus or a touch scrolls fully into view. On the web engine (4 slots) a one-line note marks
+  // where the silent strips start: they are stored and shown, and play on the 2.0 engine.
   const slots = [];
+  let rbars = null; // the keyboard's range bars (built below; makeStrip adds a bar for each later strip)
   const slotsEl = h('section.p-slots', { 'aria-label': 'Instrument slots' });
-  for (let i = 0; i < SLOT_COUNT; i++) {
-    const role = ROLE_DEFAULTS[i];
+  const silentNote = h('div.p-silent-note', { hidden: true, role: 'note', 'data-testid': 'slots-silent-note' },
+    h('span.slot-vt', { text: SILENT_NOTE }));
+  function makeStrip(i) {
+    const role = { name: slotName(i) };
     const ROLE = role.name.toUpperCase();
     const color = `var(--slot-${i})`;
     const tile = use(onTile({ label: ROLE, color, testid: `slot-on-${i}`, onToggle: (on) => setMuted(i, !on) }));
@@ -540,7 +550,39 @@ export function mountPerform(root, ctx) {
       octave, sustain, empty, emptyWord, gain: null, muted: false,
     });
     slotsEl.append(elSlot);
+    if (rbars) {
+      const rb = h('i.rbar', { hidden: true, style: { '--c': color }, dataset: { slot: String(i) } });
+      rangeBars.push(rb);
+      rbars.append(rb);
+    }
   }
+  for (let i = 0; i < SLOT_COUNT; i++) makeStrip(i);
+  /** UIA: strips for a song with `n` slots (built once, never removed). */
+  function ensureStrips(n) {
+    while (slots.length < Math.min(MAX_SLOTS, n)) makeStrip(slots.length);
+  }
+  // keyboard (a focused row: ←/→ one strip, Home/End) and the strip in use scrolled into view. The arrows are Prev /
+  // Next song elsewhere, so the row keeps them while it has focus (the controller ignores defaultPrevented keys).
+  d.listen(slotsEl, 'keydown', (e) => {
+    if (e.target !== slotsEl || !slotsEl.classList.contains('scroll') || e.altKey || e.metaKey || e.ctrlKey) return;
+    const step = (slots[0]?.el.getBoundingClientRect().width || 120) + 8;
+    const dx = { ArrowLeft: -step, ArrowRight: step, PageUp: -4 * step, PageDown: 4 * step }[e.key];
+    if (dx !== undefined) slotsEl.scrollBy({ left: dx, behavior: 'smooth' });
+    else if (e.key === 'Home') slotsEl.scrollTo({ left: 0, behavior: 'smooth' });
+    else if (e.key === 'End') slotsEl.scrollTo({ left: slotsEl.scrollWidth, behavior: 'smooth' });
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  const revealStrip = (el) => {
+    if (!slotsEl.classList.contains('scroll') || !el) return;
+    const a = slotsEl.getBoundingClientRect();
+    const b = el.getBoundingClientRect();
+    if (b.left >= a.left - 1 && b.right <= a.right + 1) return;
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+  };
+  d.listen(slotsEl, 'focusin', (e) => revealStrip(e.target.closest?.('.strip')));
+  d.listen(slotsEl, 'pointerdown', (e) => revealStrip(e.target.closest?.('.strip')));
 
   // ---------------------------------------------------------------- key & drone
   // The drone uses the same ON tile (OPTIONS.md round-3 fix 1); the card keeps the title "Key & drone" because the
@@ -677,8 +719,9 @@ export function mountPerform(root, ctx) {
   piano.el.dataset.testid = 'piano';
   // range bars: where each sound plays (display only, from lowNote/highNote); an OFF sound's bar is grey
   const layout = new Map(keyLayout(PIANO_FROM, PIANO_TO).map((k) => [k.note, k]));
-  const rangeBars = Array.from({ length: SLOT_COUNT }, (_, i) => h('i.rbar', { hidden: true, style: { '--c': `var(--slot-${i})` }, dataset: { slot: String(i) } }));
-  const rbars = h('div.rbars', { 'aria-hidden': 'true', 'data-testid': 'range-bars' }, ...rangeBars);
+  // UIA: one bar per strip; strips built later (makeStrip) add theirs
+  const rangeBars = Array.from({ length: slots.length }, (_, i) => h('i.rbar', { hidden: true, style: { '--c': `var(--slot-${i})` }, dataset: { slot: String(i) } }));
+  rbars = h('div.rbars', { 'aria-hidden': 'true', 'data-testid': 'range-bars' }, ...rangeBars);
 
   const revertCount = h('span.rv-cnt-t', { text: '' });
   const revertBtn = use(
@@ -1283,8 +1326,17 @@ export function mountPerform(root, ctx) {
     const base = song && snap && snap.id === song.id ? snap.song : null;
     const spaceName = song ? matchPreset(SPACE_PRESETS, (p) => songFxValue(song, p))?.name : null;
     let bar = 0;
-    for (let i = 0; i < SLOT_COUNT; i++) {
+    const n = layoutStrips(song);
+    for (let i = 0; i < slots.length; i++) {
       const S = slots[i];
+      const rb = rangeBars[i];
+      if (i >= n) {
+        S.el.hidden = true; // UIA: a slot this song does not have
+        S.gain = null;
+        rb.hidden = true;
+        continue;
+      }
+      S.el.hidden = false;
       const slot = song ? song.patch.slots[i] : null;
       const empty = !slot;
       S.el.classList.toggle('empty', empty);
@@ -1292,7 +1344,6 @@ export function mountPerform(root, ctx) {
       S.fader.setDisabled(empty);
       for (const c of [S.space, S.echo, S.octave, S.sustain]) c.setDisabled(empty);
       S.tile.setDisabled(empty);
-      const rb = rangeBars[i];
       if (empty) {
         setText(S.inst, 'Empty');
         S.inst.title = 'Empty slot (add an instrument in Edit)';
@@ -1364,6 +1415,42 @@ export function mountPerform(root, ctx) {
         bar += 1;
       }
     }
+    // UIA: more than four bars share the strip's height (four rows of 6 px as before up to four)
+    rbars.classList.toggle('dense', bar > SLOT_COUNT);
+    if (bar > SLOT_COUNT) rbars.style.setProperty('--rstep', `${(23 / bar).toFixed(2)}px`);
+    else rbars.style.removeProperty('--rstep');
+  }
+
+  /**
+   * UIA: build / show the strips for the song's slot count; > 4 → the scrolling row; the silent-strip note on an
+   * engine that plays fewer slots than the song has. A song switch starts the row at its first strip.
+   * @returns {number} strips shown
+   */
+  let stripsFor = null;
+  function layoutStrips(song) {
+    const n = song ? Math.min(MAX_SLOTS, song.patch.slots.length) : SLOT_COUNT;
+    ensureStrips(n);
+    const scroll = n > SLOT_COUNT;
+    slotsEl.classList.toggle('scroll', scroll);
+    if (scroll) slotsEl.tabIndex = 0;
+    else slotsEl.removeAttribute('tabindex');
+    slotsEl.setAttribute('aria-label', scroll ? `Instrument slots (${n}; scroll sideways for more)` : 'Instrument slots');
+    const playable = typeof controller.engineSlots === 'function' ? controller.engineSlots() : SLOT_COUNT;
+    const silent = n > playable;
+    silentNote.hidden = !silent;
+    if (silent && silentNote.nextSibling !== slots[playable].el) slotsEl.insertBefore(silentNote, slots[playable].el);
+    for (let i = 0; i < slots.length; i++) {
+      const off = i >= playable && i < n;
+      slots[i].el.classList.toggle('silent', off);
+      if (off) slots[i].el.title = SILENT_NOTE;
+      else slots[i].el.removeAttribute('title');
+    }
+    const key = song ? song.id : null;
+    if (key !== stripsFor) {
+      stripsFor = key;
+      if (slotsEl.scrollLeft) slotsEl.scrollLeft = 0;
+    }
+    return n;
   }
 
   function renderWheel() {
@@ -1371,7 +1458,7 @@ export function mountPerform(root, ctx) {
     wheel.set({ value: w.mod, swelling: !!w.swelling, expr: seen.expr ? w.expr : null, vol: seen.vol ? w.vol : null });
     const song = store.currentSong();
     if (song) {
-      for (let i = 0; i < SLOT_COUNT; i++) {
+      for (let i = 0; i < slots.length; i++) {
         const S = slots[i];
         if (S.gain === null) continue;
         const f = slotWheelFactor(song.patch, i, w);
@@ -1572,7 +1659,9 @@ export function mountPerform(root, ctx) {
   function partOf(n) {
     const song = liveOf(store.currentSong()); // v11-review-fixes R-6: the playing scene's ON switches
     if (!song) return -1;
-    for (let i = 0; i < SLOT_COUNT; i++) {
+    // UIA: the slots the engine plays (slots 5..16 are silent on the web engine)
+    const n = Math.min(song.patch.slots.length, controller.engineSlots?.() ?? SLOT_COUNT);
+    for (let i = 0; i < n; i++) {
       const sl = song.patch.slots[i];
       if (!sl || slotMuteState(sl).muted) continue;
       const lo = Number.isFinite(sl.lowNote) ? sl.lowNote : 0;

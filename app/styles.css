@@ -16,6 +16,20 @@
   --slot-1: #3ddc84; /* Pad   — green  */
   --slot-2: #4aa8ff; /* Extra — blue   */
   --slot-3: #b784ff; /* Bass  — purple */
+  /* UIA (native DECISIONS D3): Sound 5..16 mix the theme's four role colours (oklch, so a theme that re-colours the
+     roles re-colours these too): halfway between neighbouring roles, then a quarter and three quarters of the way */
+  --slot-4: color-mix(in oklch, var(--slot-0), var(--slot-1));
+  --slot-5: color-mix(in oklch, var(--slot-1), var(--slot-2));
+  --slot-6: color-mix(in oklch, var(--slot-2), var(--slot-3));
+  --slot-7: color-mix(in oklch, var(--slot-3), var(--slot-0));
+  --slot-8: color-mix(in oklch, var(--slot-0) 75%, var(--slot-1));
+  --slot-9: color-mix(in oklch, var(--slot-1) 75%, var(--slot-2));
+  --slot-10: color-mix(in oklch, var(--slot-2) 75%, var(--slot-3));
+  --slot-11: color-mix(in oklch, var(--slot-3) 75%, var(--slot-0));
+  --slot-12: color-mix(in oklch, var(--slot-0) 25%, var(--slot-1));
+  --slot-13: color-mix(in oklch, var(--slot-1) 25%, var(--slot-2));
+  --slot-14: color-mix(in oklch, var(--slot-2) 25%, var(--slot-3));
+  --slot-15: color-mix(in oklch, var(--slot-3) 25%, var(--slot-0));
   --danger: #ff4d4f;
   --danger-ink: #fff;
   --warn: #ffb020;
@@ -931,6 +945,18 @@ body[data-view="edit"] .quick-btn { display: none; }
 .perform.pedal-down .slot:not(.empty) .sus-chip.on .mc-led { background: var(--text); box-shadow: 0 0 8px var(--text); }
 .perform.pedal-down .slot.muted .sus-chip.on { border-color: var(--muted); }
 .perform.pedal-down .slot.muted .sus-chip.on .mc-led { background: var(--muted); box-shadow: none; }
+/* UIA (native DECISIONS D3): more than four slots → the row scrolls sideways. Four filled strips keep today's width
+   (100% of the row less three gaps, over four), the rest sit to the right; wheel, trackpad, touch (scroll snap) and,
+   with the row focused, ←/→ / Home / End move it. Up to four strips nothing here applies. */
+.p-slots.scroll { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scroll-snap-type: x proximity;
+  scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; padding-bottom: 2px; border-radius: var(--radius); }
+.p-slots.scroll > .slot:not(.empty) { flex: 0 0 calc((100% - 3 * var(--p-gap)) / 4); scroll-snap-align: start; }
+.p-slots.scroll > .slot.empty { scroll-snap-align: start; }
+.p-slots.scroll:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* the web engine plays four slots: one vertical line marks where the silent strips start (they play on 2.0) */
+.p-silent-note { flex: 0 0 30px; display: flex; align-items: center; justify-content: center; border-left: 1.5px dashed var(--line-2); }
+.p-silent-note[hidden] { display: none; }
+.slot.silent .slot-who, .slot.silent .slot-body { opacity: .55; }
 /* empty slot: a narrow dashed column (neutral grey, not a fifth colour) */
 .slot.empty { flex: 0 0 60px; padding: 8px 4px; align-items: center; justify-content: center; background: transparent; border: 1.5px dashed var(--line-2); }
 .slot.empty > :not(.slot-empty) { display: none; }
@@ -1064,6 +1090,7 @@ body[data-view="edit"] .quick-btn { display: none; }
 .rbars { position: relative; height: 23px; flex: none; }
 .rbar { position: absolute; top: calc(var(--row, 0) * 6px); height: 5px; border-radius: 3px; background: var(--c); }
 .rbar.off { background: #4d5562; }
+.rbars.dense .rbar { top: calc(var(--row, 0) * var(--rstep, 6px)); height: max(1px, calc(var(--rstep, 6px) - 1px)); } /* UIA: > 4 bars */
 .rbar.open-l { border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .rbar.open-r { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .piano { position: relative; flex: 1 1 auto; min-height: 0; touch-action: none; }

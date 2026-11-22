@@ -35,7 +35,9 @@
 import { transposeSemisOf, audioSleepSecOf, COMPUTER_KEYBOARD, sound2Of } from './store.js';
 import { compileTouch } from './shared/touch-curve.js';
 import { transposeSemis, mod12, keyName } from './shared/music.js';
-import { PARAMS, isValidPath, isLearnButton, faderTaper, inverseTaper, SLOT_COUNT } from './shared/params.js';
+import {
+  PARAMS, isValidPath, isLearnButton, faderTaper, inverseTaper, SLOT_COUNT, MAX_SLOTS, slotGainIndex,
+} from './shared/params.js';
 import { detectKeyFromName } from './shared/keydetect.js';
 import { createBus, commandError } from './shared/bus.js';
 import { clickSettingsOf } from './shared/click-math.js';
@@ -142,8 +144,13 @@ export function songParam(song, path) {
   return o;
 }
 
-function structuralChange(pa, pb) {
-  for (let i = 0; i < SLOT_COUNT; i++) {
+/**
+ * UIA: a sound appeared, went or changed in one of the first `n` slots (the slots the engine plays). A slot added or
+ * removed past what the engine plays (slots 5..16 on the web engine) changes nothing it hears.
+ */
+function structuralChange(pa, pb, n = SLOT_COUNT) {
+  const len = Math.min(n, Math.max(pa.slots.length, pb.slots.length));
+  for (let i = 0; i < len; i++) {
     const a = pa.slots[i];
     const b = pb.slots[i];
     if (!a !== !b) return true;
@@ -233,8 +240,41 @@ export function createController(o) {
   };
 
   // ---- safe engine calls
+  /**
+   * UIA (native DECISIONS D3): how many slots the engine plays. The bridge engine (2.0 core) takes MAX_SLOTS; the web
+   * engine (app/js/engine, the 1.x oracle) stays at SLOT_COUNT, so slots 5..16 are stored and shown but never sent
+   * to it (engineSong / call's setParam guard). An engine may say its own number (`maxSlots`).
+   * @returns {number}
+   */
+  function engineSlots() {
+    if (!engine) return SLOT_COUNT;
+    if (Number.isInteger(engine.maxSlots)) return Math.min(MAX_SLOTS, Math.max(SLOT_COUNT, engine.maxSlots));
+    const native = ['setPolyphony', 'setVoiceLimit', 'setBufferFrames'].every((k) => typeof engine[k] === 'function');
+    return native ? MAX_SLOTS : SLOT_COUNT;
+  }
+  /** UIA: true for a slot address past what the engine plays ('slots.5.gain' on the web engine). */
+  function pastEngine(path) {
+    const m = /^slots\.(\d+)\./.exec(typeof path === 'string' ? path : '');
+    return !!m && Number(m[1]) >= engineSlots();
+  }
+  /**
+   * UIA: the patch as the engine gets it: its first engineSlots() slots, and a wheel / pedal / knob target on a slot
+   * it does not play becomes 'none'. A song the engine plays whole is passed through as it is.
+   */
+  function enginePatch(patch) {
+    const n = engineSlots();
+    if (!patch || !Array.isArray(patch.slots) || patch.slots.length <= n) return patch;
+    const out = { ...patch, slots: patch.slots.slice(0, n) };
+    for (const k of ['modWheel', 'expression', 'volume']) {
+      const t = patch[k] && patch[k].target;
+      if (slotGainIndex(t) !== null && slotGainIndex(t, n) === null) out[k] = { ...patch[k], target: 'none' };
+    }
+    return out;
+  }
+
   function call(name, ...args) {
     if (secondary) return undefined; // muted second window
+    if (name === 'setParam' && pastEngine(args[0])) return false; // UIA: never route slots >= 4 to the web engine
     const fn = engine && engine[name];
     if (typeof fn !== 'function') {
       warn(`engine.${name}() not available`, true);
@@ -319,8 +359,8 @@ export function createController(o) {
   function applySongLevel(song, prev, force, { drone = true } = {}) {
     const semis = transposeSemisOf(song);
     if (force || !prev || semis !== transposeSemisOf(prev)) call('setTranspose', semis);
-    const r = routingOf(song);
-    if (force || !prev || !same(r, routingOf(prev))) call('setRouting', r);
+    const r = routingOf({ patch: enginePatch(song.patch) }); // UIA: a target past the engine's slots = 'none'
+    if (force || !prev || !same(r, routingOf({ patch: enginePatch(prev.patch) }))) call('setRouting', r);
     if (drone) applyDrone(song, prev, force);
     if (force || !prev || song.tempo !== prev.tempo) call('setTempo', song.tempo ?? null);
     // v11-metronome: the time signature; a new song starts a new bar on the click's next free beat (never delays the
@@ -365,7 +405,9 @@ export function createController(o) {
 
   /** Param-level diff of the current song (no structural change). */
   function applyParamDiff(prev, next) {
-    for (let i = 0; i < SLOT_COUNT; i++) {
+    // UIA: the slots the engine plays (slots both songs have; a count change past them is no structural change)
+    const n = Math.min(engineSlots(), prev.patch.slots.length, next.patch.slots.length);
+    for (let i = 0; i < n; i++) {
       const a = prev.patch.slots[i];
       const b = next.patch.slots[i];
       if (!a || !b || a === b) continue;
@@ -411,7 +453,7 @@ export function createController(o) {
 
   function applyDiff(prev, next) {
     if (!prev || !next || prev === next) return;
-    if (structuralChange(prev.patch, next.patch)) {
+    if (structuralChange(prev.patch, next.patch, engineSlots())) {
       reprepare(next.id);
       return;
     }
@@ -426,7 +468,7 @@ export function createController(o) {
   }
 
   async function preparePatch(song) {
-    const r = call('prepare', song.patch);
+    const r = call('prepare', enginePatch(song.patch)); // UIA: the web engine gets the first 4 slots
     return r && typeof r.then === 'function' ? await r : r;
   }
 
@@ -670,7 +712,7 @@ export function createController(o) {
     const song = appliedId && targetId === appliedId ? store.getSong(appliedId) : null;
     const sc = sceneFor(song);
     if (!sc) return false;
-    const m = /^slots\.(\d)\./.exec(path);
+    const m = /^slots\.(\d+)\./.exec(path); // UIA: slots.0..15
     if (m ? !sc.slots[Number(m[1])] : path === 'drone.gain' ? !sc.drone : true) return false; // the song's own level
     if (song !== applied) applyDiff(applied, song);
     const from = levelsOf(live(applied));
@@ -715,7 +757,7 @@ export function createController(o) {
   let probing = false; // round4-controller C2: a setlist being sized (memMode 'large-set', reported as 'setlist')
   let memSetMB = null;
   const hasPreload = () => !secondary && !!engine && typeof engine.preload === 'function';
-  const patchesOf = (ids) => ids.map((id) => store.getSong(id)).filter(Boolean).map((s) => s.patch);
+  const patchesOf = (ids) => ids.map((id) => store.getSong(id)).filter(Boolean).map((s) => enginePatch(s.patch));
   /** True when a non-empty setlist drives navigation (store.navIds() is the setlist, not the library). */
   function inSetlist() {
     const sl = store.currentSetlist();
@@ -1209,7 +1251,7 @@ export function createController(o) {
 
   /** Hardware fader with pickup: ignored until it crosses the stored value (REVIEW 2.1). */
   function learnedFader(id, value01) {
-    if (!isValidPath(id)) return;
+    if (!isValidPath(id, MAX_SLOTS)) return; // UIA: a learned level of slot 5..16 (a song without it: no-op below)
     const cur = songParam(live(store.currentSong()), id); // v11-scenes: pick up the level as it sounds
     if (cur === undefined || cur === null) return;
     const pos = inverseTaper(cur);
@@ -3010,17 +3052,24 @@ export function createController(o) {
     /**
      * One slot's level for the strip meters (polish-1): engine.slotLevel, null-safe and silent (it is read every
      * frame while a meter shows). Views read levels here, never from the engine.
-     * @param {number} i slot 0..3
+     * @param {number} i slot 0..engineSlots()-1
      * @returns {{peak:number, rms:number}|null}
      */
     slotLevel: (i) => {
       if (secondary || !engine || typeof engine.slotLevel !== 'function') return null;
+      if (!(i >= 0 && i < engineSlots())) return null; // UIA: a slot the engine does not play has no level
       try {
         return engine.slotLevel(i);
       } catch {
         return null;
       }
     },
+    /**
+     * UIA (native DECISIONS D3): how many slots of a song the engine plays (16 on the 2.0 engine, 4 on the web
+     * engine: there slots 5..16 are stored and shown but silent). Views read it to say so.
+     * @returns {number}
+     */
+    engineSlots,
     cancelLearn: () => midi && midi.cancelLearn && midi.cancelLearn(),
     clearLearn: (controlId) => store.setMidiLearn(controlId, null),
     onMenu,

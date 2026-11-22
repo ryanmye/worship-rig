@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import { createRequire } from 'node:module';
-import { createStore, memoryStorage, migrate, STORAGE_KEY, BACKUPS_KEEP, PERSIST_RETRY_MS } from '../../../app/js/store.js';
+import { createStore, memoryStorage, migrate, STORAGE_KEY, BACKUPS_KEEP, PERSIST_RETRY_MS, SCHEMA } from '../../../app/js/store.js';
 import { createController, SECONDARY_MESSAGE } from '../../../app/js/controller.js';
 import { MidiInput } from '../../../app/js/midi.js';
 import { FACTORY_SONGS } from '../../../app/js/presets.js';
@@ -94,7 +94,7 @@ test('H1: corrupt library + failing backup write → the raw library is never ov
 });
 
 test('H1: future-schema library with a failing backup is kept too', () => {
-  const raw = JSON.stringify({ schema: 2, songs: {} });
+  const raw = JSON.stringify({ schema: SCHEMA + 1, songs: {} }); // UIA: SCHEMA is 2 now
   const st = memoryStorage({ [STORAGE_KEY]: raw });
   const setItem = st.setItem;
   st.setItem = (k, v) => (k.includes('.backup-') ? (() => { throw quotaError(); })() : setItem(k, v));

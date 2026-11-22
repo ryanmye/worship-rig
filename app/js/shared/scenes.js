@@ -12,7 +12,9 @@
 // Which scene plays is transient (controller), and every song starts on its own levels (no scene). Level moves made
 // while a scene plays (Perform's faders, ON tiles, a learned MIDI fader) are a transient tweak on top of it
 // (tweakScene): heard at once, kept by "Save as scene", dropped at the next scene change.
-import { SLOT_COUNT, clamp } from './params.js';
+// UIA (native DECISIONS D3): `slots` has one entry per slot of the song, at least SLOT_COUNT (so a 1.x scene keeps
+// its 4) and at most MAX_SLOTS; store.removeSlot drops a removed slot's entry from every scene.
+import { SLOT_COUNT, MAX_SLOTS, clamp } from './params.js';
 
 /** Scenes per song. */
 export const SCENE_MAX = 3;
@@ -31,17 +33,22 @@ function slotLevel(slot) {
   return { gain: muted ? (before ?? 0) : slot.gain, muted };
 }
 
+/** UIA: entries a scene's `slots` gets: the song's slot count (default SLOT_COUNT), never under SLOT_COUNT. */
+const entriesFor = (n) => Math.max(SLOT_COUNT, Math.min(MAX_SLOTS, Number.isInteger(n) ? n : SLOT_COUNT));
+
 /**
  * A scene in its stored form, or null when nothing in it is usable.
  * @param {*} raw
+ * @param {number} [slotCount] the song's slot count (UIA; default SLOT_COUNT: 1.x scenes, 4 entries)
  * @returns {{slots:Array<{gain:number, muted?:true}|null>, drone?:{gain:number}, wheel?:number}|null}
  */
-export function normalizeScene(raw) {
+export function normalizeScene(raw, slotCount) {
   if (!isObj(raw)) return null;
   const src = Array.isArray(raw.slots) ? raw.slots : [];
   const slots = [];
   let any = false;
-  for (let i = 0; i < SLOT_COUNT; i++) {
+  const n = entriesFor(slotCount);
+  for (let i = 0; i < n; i++) {
     const s = src[i];
     const g = isObj(s) ? gainOf(s.gain) : null;
     if (g === null) slots.push(null);
@@ -66,11 +73,12 @@ export function normalizeScene(raw) {
 /**
  * The stored `scenes` field: at most SCENE_MAX usable scenes, in order (unusable entries dropped).
  * @param {*} raw
+ * @param {number} [slotCount] the song's slot count (UIA)
  * @returns {object[]|undefined} undefined = no scenes (the field stays absent)
  */
-export function normalizeScenes(raw) {
+export function normalizeScenes(raw, slotCount) {
   if (!Array.isArray(raw)) return undefined;
-  const out = raw.map(normalizeScene).filter(Boolean).slice(0, SCENE_MAX);
+  const out = raw.map((sc) => normalizeScene(sc, slotCount)).filter(Boolean).slice(0, SCENE_MAX);
   return out.length ? out : undefined;
 }
 
@@ -92,7 +100,8 @@ const wheelRouted = (song) => {
 export function captureScene(song, { wheel = null } = {}) {
   if (!song || !song.patch) return null;
   const slots = [];
-  for (let i = 0; i < SLOT_COUNT; i++) {
+  const n = entriesFor(song.patch.slots.length);
+  for (let i = 0; i < n; i++) {
     const s = song.patch.slots[i];
     if (!s) slots.push(null);
     else {
@@ -102,7 +111,7 @@ export function captureScene(song, { wheel = null } = {}) {
   }
   const raw = { slots, drone: { gain: song.drone ? song.drone.gain : null } };
   if (fin(wheel) && wheelRouted(song)) raw.wheel = wheel;
-  return normalizeScene(raw);
+  return normalizeScene(raw, n);
 }
 
 /**
@@ -187,7 +196,7 @@ export function withoutScene(scenes, n) {
  * the scene until the next scene change, and "Save as scene" keeps it; the song's own levels and the saved scene stay
  * as they were. So building scenes one after another never rewrites the song's own levels (it always starts on them)
  * or the scene saved a moment ago.
- * @param {object|null} tweak  the moves so far: a partial scene ({slots:[…4], drone?}) or null
+ * @param {object|null} tweak  the moves so far: a partial scene ({slots:[…one per slot, at least 4], drone?}) or null
  * @param {object} live  the song as it sounds now (applyScene of the scene and the tweak)
  * @param {string} path  'slots.<i>.gain' | 'slots.<i>.muted' | 'drone.gain'
  * @param {number|boolean} value
@@ -195,15 +204,17 @@ export function withoutScene(scenes, n) {
  */
 export function tweakScene(tweak, live, path, value) {
   if (!live || !live.patch) return null;
-  const out = { slots: tweak && Array.isArray(tweak.slots) ? tweak.slots.slice() : [null, null, null, null] };
+  const n = entriesFor(live.patch.slots.length);
+  const out = { slots: tweak && Array.isArray(tweak.slots) ? tweak.slots.slice() : Array(n).fill(null) };
+  while (out.slots.length < n) out.slots.push(null);
   if (tweak && tweak.drone) out.drone = tweak.drone;
   if (path === 'drone.gain') {
     if (!fin(value)) return null;
     out.drone = { gain: clamp('drone.gain', value) };
     return out;
   }
-  const m = /^slots\.([0-3])\.(gain|muted)$/.exec(String(path));
-  const slot = m ? live.patch.slots[Number(m[1])] : null;
+  const m = /^slots\.(0|[1-9]\d?)\.(gain|muted)$/.exec(String(path));
+  const slot = m && Number(m[1]) < n ? live.patch.slots[Number(m[1])] : null;
   if (!slot) return null;
   const l = slotLevel(slot);
   let e;
@@ -224,7 +235,7 @@ export function tweakScene(tweak, live, path, value) {
 export function sceneMatches(scene, song) {
   const cur = captureScene(song);
   if (!scene || !cur) return false;
-  for (let i = 0; i < SLOT_COUNT; i++) {
+  for (let i = 0; i < Math.max(scene.slots.length, cur.slots.length); i++) {
     const a = scene.slots[i];
     const b = cur.slots[i];
     if (!a || !b) continue;

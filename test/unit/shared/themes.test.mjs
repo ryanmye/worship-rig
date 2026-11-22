@@ -165,7 +165,7 @@ test('store: settings.theme is optional, validated, falls back to the default, n
     storage: memoryStorage(settings ? { [STORAGE_KEY]: JSON.stringify({ schema: SCHEMA, songs: {}, setlists: {}, settings }) } : {}),
     warn: () => {}, requestIdle: null, autoFlush: false,
   });
-  assert.equal(SCHEMA, 1);
+  assert.equal(SCHEMA, 2); // UIA: 1 → 2 for 16 slots (themes still need no bump)
   const s = mk();
   assert.equal('theme' in s.get().settings, false, 'absent by default');
   s.set('settings.theme', 'ember');

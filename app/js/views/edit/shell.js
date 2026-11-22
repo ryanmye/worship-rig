@@ -16,7 +16,9 @@ import { describe, formatValue } from '../../shared/params.js';
 import { SPACE_PRESETS, ECHO_PRESETS, matchPreset } from '../../shared/fx-presets.js';
 import { changedPaths, hasChange } from '../../shared/song-diff.js';
 import PANELS from './panels/index.js';
-import { h, setText, icon, getIn, relOf, pct, BLOCKS, blockOf, sentence, droneKeyText, chorusWord } from './lib.js';
+import {
+  h, setText, icon, getIn, relOf, pct, blocksFor, blockOf, sentence, droneKeyText, chorusWord,
+} from './lib.js';
 import { say, onVoiceChange } from '../components/voice.js';
 
 const C = await loadComponents();
@@ -56,7 +58,7 @@ for (const p of PANELS) registerPanel(p.id, p);
 export class EditState extends EventTarget {
   constructor() {
     super();
-    /** @type {string} 'slot:0'..'slot:3' | 'drone' | 'effects' | 'master' | 'song' */
+    /** @type {string} 'slot:0'..'slot:15' (UIA: the song's slots) | 'drone' | 'effects' | 'master' | 'song' */
     this.selected = 'slot:0';
     /** @type {object} extra options of the last select() ({focus:'wheels'} …) */
     this.opts = {};
@@ -650,10 +652,11 @@ export function mountEdit(el, ctx) {
     icon('keyboard', 15), 'Wheels & pedal');
   const wireBtn = h('button.ev2-wiretog', { type: 'button', role: 'switch', 'aria-checked': 'false' },
     h('span.ev2-switch', { 'aria-hidden': 'true' }), 'Show wiring');
+  const slotsCtl = slotControl(core, () => editState); // UIA: add / remove slots (rig bar, over the slot tabs)
   const rigTop = h('div.ev2-rig-top', {},
     h('span.ev2-cap', { text: 'Your rig' }),
     h('span.ev2-rig-hint', { text: say('editHint') }),
-    h('span.ev2-sp'), wheelsBtn, wireBtn);
+    h('span.ev2-sp'), slotsCtl.el, wheelsBtn, wireBtn);
   // v11-polish: a theme switch re-words the hint and (through a 'changes' event) every panel's footer line
   core.cleanups.push(onVoiceChange(() => {
     setText(rigTop.querySelector('.ev2-rig-hint'), say('editHint'));
@@ -661,9 +664,14 @@ export function mountEdit(el, ctx) {
     editState.dispatchEvent(new CustomEvent('changes', { detail: { paths: editState.changes } }));
   }));
   const tablist = h('div.ev2-tabs', { role: 'tablist', 'aria-label': 'Your rig' });
-  const tabs = new Map();
-  for (const b of BLOCKS) {
-    if (b.id === 'effects') tablist.append(h('span.ev2-tab-gap', { 'aria-hidden': 'true' }));
+  // UIA (native DECISIONS D3): the slot tabs sit in their own row (.ev2-slottabs: four share the width of today's four
+  // columns; more scroll sideways like Perform's strips). A tab is made once per block and kept.
+  const slotTabs = h('div.ev2-slottabs', { role: 'presentation' });
+  tablist.append(slotTabs);
+  let tabs = new Map();
+  const tabRecs = new Map();
+  let tabCount = 0;
+  function makeTab(b) {
     const led = h('i.ev2-tab-led');
     const name = h('span.ev2-tab-name-text');
     const sub = h('small.ev2-tab-sub');
@@ -674,8 +682,45 @@ export function mountEdit(el, ctx) {
       class: b.shared ? 'fxt' : '', dataset: { block: b.id }, style: { '--tc': b.color },
     }, h('span.ev2-tab-role', {}, led, b.role.toUpperCase()), h('b.ev2-tab-name', {}, name, sub), cd);
     t.addEventListener('click', () => editState.select(b.id));
-    tabs.set(b.id, { el: t, led, name, sub, cd, block: b });
-    tablist.append(t);
+    const rec = { el: t, led, name, sub, cd, block: b };
+    tabRecs.set(b.id, rec);
+    return rec;
+  }
+  for (const b of blocksFor(0).filter((x) => x.panel !== 'slot')) {
+    if (b.id === 'effects') tablist.append(h('span.ev2-tab-gap', { 'aria-hidden': 'true' }));
+    tablist.append(makeTab(b).el);
+  }
+  /** UIA: the tabs for a song with `n` slots; a selection past them moves to the last slot. */
+  function syncTabs(n) {
+    if (n === tabCount) return;
+    tabCount = n;
+    const next = new Map();
+    const slotEls = [];
+    for (const b of blocksFor(n)) {
+      const r = tabRecs.get(b.id) || makeTab(b);
+      next.set(b.id, r);
+      if (b.panel === 'slot') slotEls.push(r.el);
+    }
+    tabs = next;
+    slotTabs.replaceChildren(...slotEls);
+    slotTabs.classList.toggle('scroll', n > SLOT_COUNT);
+    tablist.dataset.slots = String(n);
+    const m = /^slot:(\d+)$/.exec(editState.selected);
+    if (m && Number(m[1]) >= n) editState.select(`slot:${n - 1}`);
+    if (!tabs.has(lastTab)) lastTab = 'slot:0';
+  }
+  const slotCountNow = () => {
+    const n = core.song && Array.isArray(core.song.patch?.slots) ? core.song.patch.slots.length : SLOT_COUNT;
+    return Math.min(MAX_SLOTS, Math.max(1, n));
+  };
+  /** UIA: the selected slot tab fully in view (a selection from a key, the Perform strip, a new slot). */
+  function revealTab() {
+    const t = tabs.get(editState.selected);
+    if (!t || !slotTabs.classList.contains('scroll') || !slotTabs.contains(t.el)) return;
+    const a = slotTabs.getBoundingClientRect();
+    const b = t.el.getBoundingClientRect();
+    if (b.left >= a.left - 1 && b.right <= a.right + 1) return;
+    t.el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
   const wire = h('div.ev2-wire', { hidden: true, 'aria-label': 'Wiring' });
   const frame = panelFrame(core);
@@ -688,6 +733,8 @@ export function mountEdit(el, ctx) {
   // ---- tab row rendering
   function renderTabs() {
     const song = core.song;
+    syncTabs(slotCountNow());
+    slotsCtl.render();
     let textChanged = false;
     for (const [id, t] of tabs) {
       const def = registry.get(t.block.panel);
@@ -756,7 +803,7 @@ export function mountEdit(el, ctx) {
     }
   }
   tablist.addEventListener('keydown', (e) => {
-    const ids = BLOCKS.map((b) => b.id);
+    const ids = [...tabs.keys()];
     const k = ids.indexOf(e.target?.dataset?.block);
     if (k < 0) return;
     let n = -1;
@@ -848,6 +895,7 @@ export function mountEdit(el, ctx) {
   core.listen(editState, 'select', () => {
     showSelected();
     renderTabs();
+    revealTab();
   });
   core.listen(editState, 'wiring', renderWire);
   core.listen(editState, 'changes', renderTabs);
