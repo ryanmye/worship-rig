@@ -5,6 +5,7 @@
 #include "fx/delay_unit.h"
 #include "model/model.h"
 #include "model/patch.h"
+#include "model/perform.h"  // INTERFACE-CHANGE(W3A) T14 review F1: Perform::delayFeedback() (Delay.effectiveFb)
 #include "params/params.h"
 
 namespace rig::fx {
@@ -28,7 +29,9 @@ void sendOp(Model &m, DelayOp op, double when, double a = 0, double b = 0, doubl
 /** Delay.applyAll(when) + rampTo(ret, returnGain) (JS: applyAll includes the return gain). */
 void applyAll(Model &m, double when) {
   const DelayPatch &p = m.patch().delay;
-  sendOp(m, DelayOp::ApplyAll, when, delayEffectiveTime(p, m.song().tempo), p.feedback, p.tone, p.pingpong ? 1 : 0);
+  // INTERFACE-CHANGE(W3A) T14 review F1: fx.js applyAll sends effectiveFb() = clamp(washFb ?? feedback, 0, .9)
+  sendOp(m, DelayOp::ApplyAll, when, delayEffectiveTime(p, m.song().tempo), m.perform().delayFeedback(), p.tone,
+         p.pingpong ? 1 : 0);
   m.moveParam(UnitSlot::Delay, kDelayReturnGain, p.returnGain, when, 0.0);
 }
 
@@ -73,7 +76,8 @@ bool onSet(Model &m, const SetRequest &req) {
   if (path == "fx.delay.returnGain") {
     m.moveParam(UnitSlot::Delay, kDelayReturnGain, p.returnGain, req.when, 0.0);
   } else if (path == "fx.delay.feedback") {
-    sendOp(m, DelayOp::SetFeedback, req.when, p.feedback, 0.0);  // T14: lerp(fb, .75, wash) while a wheel washes
+    // INTERFACE-CHANGE(W3A) T14 review F1: audio.js setParam records washFb, then Delay.setParam sends effectiveFb
+    sendOp(m, DelayOp::SetFeedback, req.when, m.perform().delayFeedback(), 0.0);
   } else if (path == "fx.delay.time" || path == "fx.delay.sync") {
     sendOp(m, DelayOp::SetTime, req.when, delayEffectiveTime(p, m.song().tempo));
   } else if (path == "fx.delay.pingpong" || path == "fx.delay.tone") {

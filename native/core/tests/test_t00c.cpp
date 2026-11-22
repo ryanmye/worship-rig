@@ -6,6 +6,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <mutex>
 #include <string>
@@ -213,6 +214,11 @@ TEST_SUITE("t00c") {
     const std::string h = e.call(R"({"v":1,"op":"hello","protocol":1,"id":12})");
     // minor >= 1 carries the T00c caps (D4 bumped it to 2: a later additive bump must not break this check)
     CHECK((contains(h, "\"minor\":") && !contains(h, "\"minor\":0")));
+    // INTERFACE-CHANGE(W3B): minor 3 = config {droneFreeze} (D5, T16), with its capability string
+    const std::size_t mi = h.find("\"minor\":");
+    REQUIRE(mi != std::string::npos);
+    CHECK(std::strtol(h.c_str() + mi + 8, nullptr, 10) >= 3);
+    CHECK(contains(h, "\"droneFreeze\""));
     CHECK(contains(h, "\"slots16\""));
     CHECK(contains(h, "\"polyphony\""));
     CHECK(contains(h, "\"bufferFrames\""));

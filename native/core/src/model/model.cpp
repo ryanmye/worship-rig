@@ -8,6 +8,7 @@
 
 #include "bridge/json_out.h"
 #include "graph/builtin_units.h"
+#include "inst/organ.h"  // T15 review item 1: instEnumIndex
 #include "inst/voice_alloc.h"
 #include "mix/master_chain.h"
 #include "mix/slot_channel.h"
@@ -282,18 +283,7 @@ void Model::audioStarted(double when) {
   ensureGlobalUnits(when);
 }
 
-bool Model::sleep(double) {
-  return false;
-}
-bool Model::wake(double) {
-  return true;
-}
-const char *Model::sleepState() const {
-  return "awake";
-}
-std::string Model::sleepBlockersJson() const {
-  return "[]";
-}
+// sleep / wake / sleepState / sleepBlockersJson: model/sleep.cpp (T14 W3A)
 bool Model::setLowResource(bool on) {
   // audio.js setLowResource (contract 1.1): on = pins of the current song only (the old pins remembered), unpinned
   // buffers trimmed, idle reverb units dropped (_trimReverbUnits = the pool's level-1 trim), slot taps released (the
@@ -380,6 +370,21 @@ SetResult Model::set(std::string_view path, const yyjson_val *value, double glid
       r.status = SetResult::NotApplied;
       r.message = "slot is empty";
       return r;
+    }
+    if (mv && yyjson_is_str(const_cast<yyjson_val *>(mv))) {
+      // T15 review item 1 (W3B): an enum param arrives as its name (Edit view C.select: rotary = 'fast'); the index
+      // is what Op::InstParam and paramsJson carry. Not an enum row of this instrument: dropped (was: 0 = 'slow')
+      const std::size_t dot = path.find(".params.");
+      const int k = dot == std::string_view::npos
+                        ? -1
+                        : inst::instEnumIndex(active_.slots[slot], path.substr(dot + 8),
+                                              yyjson_get_str(const_cast<yyjson_val *>(mv)));
+      if (k < 0) {
+        r.status = SetResult::NotApplied;
+        r.message = "not an enum param of this instrument";
+        return r;
+      }
+      v = k;
     }
     if (!sg_->coalesce(path, when, [this, h, p = std::string(path), slot, v, glide](double tt) {
           h->handler(*this, SetRequest{nullptr, p, slot, v, glide, tt});

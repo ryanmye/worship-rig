@@ -14,6 +14,7 @@
 #pragma once
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <string_view>
@@ -28,6 +29,7 @@ struct yyjson_val;
 namespace rig {
 
 class Model;
+class Sleep;  // model/sleep.h (W3A): audio sleep / wake queueing
 struct Routing;
 struct Channel;
 
@@ -87,6 +89,8 @@ class Perform {
 
   // ---- contract 1.4 (perform.cpp) -------------------------------------------------------------------------------
   bool noteOn(int note, int vel, double when, const yyjson_val *touch);
+  /** noteOn with the keyboard's curve already compiled (null = linear): the sleep queue's replay. */
+  bool noteOnTouch(int note, int vel, double when, const Touch *kbd);
   bool noteOff(int note, double when);
   bool sustain(bool down, double when);
   void allNotesOff(double when);
@@ -100,8 +104,11 @@ class Perform {
   std::size_t pedaledCount() const { return pedaled_.size(); }
   bool faded() const { return fadeSeq_ != 0; }
   std::string runtimeStateJson() const;
-  /** `_debugStats` members: sounding, pedaled. */
+  /** `_debugStats` members: sounding, pedaled, audioSleep, lastWake. */
   void statsFields(std::string &out) const;
+  /** Audio sleep / wake and the perform queue while not awake (model/sleep.h, W3A). */
+  Sleep &sleeper() { return *sleep_; }
+  const Sleep &sleeper() const { return *sleep_; }
 
   // ---- wheels, bend, swell (wheels.cpp) ---------------------------------------------------------------------------
   void pitchBend(double x, double when);
@@ -164,6 +171,7 @@ class Perform {
     double t0, dur, from, to;
   };
   class ParamOut;
+  friend class Sleep;  // W3A: the `out` ramp (ParamOut), the voices blocker (sounding, pedaled, mono)
 
   bool send(const Command &c);
   double tOf(double when) const;
@@ -225,6 +233,7 @@ class Perform {
   std::vector<TapeSeg> tapeSegs_;
   std::uint32_t tapeSeq_ = 0;
   bool tapeHeld_ = false, pedalSwell_ = false;
+  std::unique_ptr<Sleep> sleep_;  // W3A
 };
 
 /** SongGraph -> perform (song.cpp): |bend| in morph mode (audio.js _morphFor). */

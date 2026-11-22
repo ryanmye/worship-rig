@@ -23,6 +23,11 @@
 #include "inst/synth_extra_host.h"
 #include "runtime/command.h"
 
+namespace rig {
+class Model;
+struct SlotPatch;
+}  // namespace rig
+
 namespace rig::inst {
 
 inline constexpr const char *kKindOrgan = "inst.organ";
@@ -49,6 +54,16 @@ const OrganPresetDef *findOrganPreset(std::string_view id);
 void organParams(const OrganPresetDef &p, std::string_view json, double *out);
 /** drawbarWaves(ctx, bars): the registration as 8 phase-rotated PeriodicWaves (disableNormalization). */
 void drawbarWaves(const double *bars, double sr, WaveArray &out);
+/** T15 review item 1: the index of enum value `s` of param `key` of the slot's instrument (Model::set: the Edit view
+ *  sends enum params as their names). organ `rotary`: slow / fast / off, an unlisted name = the preset's default
+ *  (voice.js coerceParam). -1 = not an enum param of this instrument (the request is dropped). */
+int instEnumIndex(const SlotPatch &sp, std::string_view key, std::string_view s);
+/** T15 review item 3: a `slots.<i>.params.drawbar*` change of an organ slot (instrument_service.cpp
+ *  setInstrumentParam). organ.js _scheduleWave: one rebuild per 30 ms burst (the first change at engine time `when`
+ *  arms it), then drawbarWaves() of the slot's current params on the control thread and T15Op::SetTables with only
+ *  `drawbars` set (the unit re-points its live voices). Control thread; the state is the "t15-tables" service's. */
+void organDrawbarsChanged(Model &m, int slot, double when);
+
 /** organ.js param indices. */
 namespace ok {
 enum : unsigned { kDrawbar1 = 0, kPercussion = 9, kClick, kDrive, kRotary, kRelease, kCount };
@@ -86,6 +101,9 @@ class OrganInstrument final : public XHost<kOrganVoiceBytes> {
                   std::string_view paramsJson, double releaseOverride);
   ~OrganInstrument() override;
   const OrganPresetDef &preset() const { return preset_; }
+  /** Tests: the rate the horn DelayNodes run at (T15 review item 4) and the drawbar table of rotation 0. */
+  double hornDelayRate() const;
+  const wa::PeriodicWave *drawbarWave0() const;
 
  protected:
   void applyModule(const Command &c) override;

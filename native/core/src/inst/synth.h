@@ -49,6 +49,10 @@ class SynthInstrument final : public Instrument {
   /** Control thread. `paramsJson` = slots.<i>.params (overrides, JS resolveParams); `rngSeedName` the rngFor name. */
   SynthInstrument(const PatchDef &patch, double sampleRate, std::uint32_t engineSeed, std::string_view rngName,
                   std::string_view paramsJson, double releaseOverride);
+  /** The same on a given stream (forked here, as InstrumentBase asRng does): instruments the registry does not seed
+   *  by a slot name (the drone's drone-osc layers, T16: rngFor(seed, 'drone').fork()). */
+  SynthInstrument(const PatchDef &patch, double sampleRate, Rng parent, std::string_view paramsJson,
+                  double releaseOverride);
   ~SynthInstrument() override;
 
   void noteOn(int note, int vel, float velGain, std::int64_t frame) override;

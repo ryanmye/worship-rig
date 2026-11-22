@@ -18,10 +18,6 @@ std::string droneOscParams(double movement);
 /** registry.create(ctx, parent.fork(), {synth, drone-osc}, paramsJson): draws one fork from `parent`. */
 std::unique_ptr<inst::SynthInstrument> makeDroneOsc(Rng &parent, double sampleRate, std::string_view paramsJson);
 
-/** A name `n` with rngFor(0, n) == Rng(state) (T11's SynthInstrument takes its stream as rngFor(seed, name).fork();
- *  this hands it an arbitrary parent stream until it takes an Rng: see the T16 report, "diff for T11"). */
-std::string rngNameFor(std::uint32_t state);
-
 /** drone-osc param indices (inst/synth_patches.h kDrone). */
 int droneOscParam(std::string_view key);
 /** drone-osc's own attack default (s): 2.5 (synth.js). */

@@ -44,6 +44,14 @@ class CommandSink {
   /** INTERFACE-CHANGE(D4): the engine-wide voice limit the graph enforces (total voices, 0 = off). Lock-free; the
    *  audio thread adopts it at its next quantum. Default no-op (sinks without a graph). */
   virtual void setVoiceLimit(std::uint32_t total) { (void)total; }
+  /** INTERFACE-CHANGE(W3A): audio sleep (model/sleep.h). Model::sleepState() has just changed. `render` false =
+   *  suspend rendering (ctx.suspend: engine time pauses, rig_render plays silence), true = render. The engine emits
+   *  its `state` event; after a wake (state "awake") with `wakeMs` and `queued` (>= 0; -1 = not a wake). Default
+   *  no-op (sinks without a device). */
+  virtual void sleepChanged(bool render, double wakeMs, int queued) { (void)render, (void)wakeMs, (void)queued; }
+  /** INTERFACE-CHANGE(W3A): device output latency in seconds (audio.js baseLatency: the sleep / wake ramps start
+   *  clamp(2 x, 10 ms, 40 ms) ahead of now). Default 0. */
+  virtual double outputLatency() const { return 0.0; }
 };
 
 struct SetResult {
@@ -66,10 +74,14 @@ class Model {
   // ---- 1.1 lifecycle ------------------------------------------------------------------------------------------
   /** The audio output started (bridge `audio start`): build the global units (FX, master, click, drone, sinks). */
   void audioStarted(double when);
-  bool sleep(double ramp);  // T08: realtime only; skeleton returns false
+  // Audio sleep (lowres2; bodies in model/sleep.cpp, T14 W3A). sleep: only from "awake", realtime only (the engine
+  // checks; an offline Model refuses unless a test pretends realtime): ramp `out` to 0, then suspend. wake: NaN or
+  // < 0 ramp = the default (60 ms, 5 ms when a note is queued); true when this call woke it. While not awake,
+  // noteOn / noteOff / sustain are queued and replayed in order at the wake ramp's start (audio.js _sleepHold).
+  bool sleep(double ramp);
   bool wake(double ramp);
-  const char *sleepState() const;
-  std::string sleepBlockersJson() const;  // ["voices", ...]
+  const char *sleepState() const;  // "awake" | "sleeping" | "asleep" | "waking"
+  std::string sleepBlockersJson() const;  // ["voices", "click", "pedal", "drone"]
   bool setLowResource(bool on);
   bool lowResource() const { return lowResource_; }
 

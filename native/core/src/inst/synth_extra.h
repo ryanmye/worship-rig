@@ -32,6 +32,8 @@ class SynthExtraInstrument final : public XHost<kExtraVoiceBytes> {
   ~SynthExtraInstrument() override;
 
   const XPatchDef &patch() const { return patch_; }
+  /** Tests: the rate the shared chorus DelayNodes run at (T15 review item 4); 0 = the patch has no chorus. */
+  double chorusDelayRate() const;
 
  protected:
   void applyModule(const Command &c) override;

@@ -4,7 +4,9 @@
 # drone-synth-stage: brightness .8 (the 9th), movement .7, the stage reverb, drone.gain 0.3 glide 1 s at 4 s.
 drone-synth-2keys
 drone-synth-stage
-# drone-freeze-dry / -wet (D5) pass (<= 3.7e-6) with the tools/common/fixture_runner.cpp diff in the T16 report (the
-# runner renders drone-freeze as silence today); add them here when it lands.
+# drone-freeze-dry / -wet (D5): the fixture runner posts drone {config: {__freezeTest: <setup>}} (test API) and taps
+# fx.sum: the loop renderDroneLoop makes, played alone from t = 0 (W3B landed the T16 runner diff).
+drone-freeze-dry
+drone-freeze-wet
 # fx-row-sweep (T13's): the drone part matches (<= 1.3e-5 from 7.5 s on); the first 3 s (lofi start-up) do not, so
 # it fails on rms by 0.01 dB: not T16's (report).

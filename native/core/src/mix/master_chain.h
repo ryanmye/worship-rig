@@ -30,6 +30,9 @@ enum MasterParam : std::uint32_t {
   kMasterMonoMix = 6,  // 0 stereo .. 1 mono (50 ms linear crossfade)
   kMasterGlueDry = 7,
   kMasterGlueWet = 8,
+  // INTERFACE-CHANGE(W3A): fx.js `out` (after the clip curve, before the click / meter / recorder taps): the audio
+  // sleep ramp (model/sleep.h; audio.js sleep() / wake() ramp fx.out.gain). 1 = identity (x * 1.0f is exact).
+  kMasterOut = 9,
 };
 
 enum class MasterOp : std::uint16_t {

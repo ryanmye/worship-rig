@@ -38,6 +38,12 @@ struct XChorus {
     dA.attach(bufA.data(), 0.02, sr);
     dB.attach(bufB.data(), 0.02, sr);
   }
+  /** T15 review item 4: both DelayNodes at a new device rate (same buffers; re-attach zeroes them). */
+  void setRate(double sr) {
+    if (bufA.empty()) return;  // no chorus on this patch
+    dA.attachFitting(bufA.data(), bufA.size(), 0.02, sr);
+    dB.attachFitting(bufB.data(), bufB.size(), 0.02, sr);
+  }
   void set(double amount, double t) {
     const double c = clampd(amount, 0, 1);
     const double depth = (0.4 + 1.6 * c) / 1000;  // +- seconds around 3.5 ms
@@ -535,6 +541,7 @@ void SynthExtraInstrument::applyModule(const Command &c) {
       for (wa::Oscillator *o : {&s.pwmLfo, &s.vibLfo, &s.tremLfoL}) o->setWave(w->bank->basicSine.get());
       s.tremLfoR.setWave(w->xbank->cosine.get());
       s.chorus.lfo.setWave(w->bank->basicTriangle.get());
+      if (w->sampleRate > 0) s.chorus.setRate(w->sampleRate);  // T15 review item 4
       std::swap(w->bank, bank_);  // the payload carries the old tables back (freed on the control thread)
       std::swap(w->xbank, xbank_);
     }
@@ -543,6 +550,10 @@ void SynthExtraInstrument::applyModule(const Command &c) {
 }
 
 // ---- rendering ---------------------------------------------------------------------------------------------
+
+double SynthExtraInstrument::chorusDelayRate() const {
+  return sh_->chorus.bufA.empty() ? 0.0 : static_cast<double>(sh_->chorus.dA.sampleRate());
+}
 
 void SynthExtraInstrument::sharedPass(XIn &in) {
   XShared &s = *sh_;

@@ -143,11 +143,7 @@ RunResult runFixture(const Fixture &f, const std::string &goldenDir, double sr) 
     yyjson_val *k = yyjson_obj_get(fx, "kind");
     return k && yyjson_is_str(k) ? std::string(yyjson_get_str(k)) : std::string();
   }();
-  if (kindStr == "drone-freeze") {
-    // renderDroneLoop in page.js (key, params, reverb, loopSec, prerollSec, seamSec): no bridge equivalent until T16
-    // decides question 7; rendered as silence and reported.
-    skipped.insert("drone-freeze");
-  }
+  const bool droneFreeze = kindStr == "drone-freeze";
   // 1. fx / master rows before start (page.js: start() builds reverb/delay/lofi/glue for the song's values)
   if (patch) {
     yyjson_val *fxo = yyjson_obj_get(patch, "fx");
@@ -219,7 +215,14 @@ RunResult runFixture(const Fixture &f, const std::string &goldenDir, double sr) 
     postSkippable("{\"v\":1,\"op\":\"song\",\"id\":7,\"key\":{\"pc\":" + str(yyjson_obj_get(kc, "pc")) +
                       ",\"minor\":" + (yyjson_get_bool(yyjson_obj_get(kc, "minor")) ? "true" : "false") + "}}",
                   "song key");
-  if (yyjson_val *d = yyjson_obj_get(setup, "drone"); d && kindStr != "drone-freeze") {
+  if (droneFreeze) {
+    // page.js renderFreeze: renderDroneLoop(key, params, reverb, loopSec, prerollSec, seamSec) -> the loop buffer.
+    // T16 (DECISIONS D5): the drone service renders the same loop (test hook) and plays it alone at unit level from
+    // t = 0; tapped at fx.sum it is the loop itself.
+    postSkippable("{\"v\":1,\"op\":\"drone\",\"id\":8,\"config\":{\"__freezeTest\":" + str(setup) + "},\"when\":0}",
+                  "drone-freeze");
+  }
+  if (yyjson_val *d = yyjson_obj_get(setup, "drone"); d && !droneFreeze) {
     yyjson_val *mode = yyjson_obj_get(d, "mode");
     if (mode && yyjson_is_str(mode) && std::strcmp(yyjson_get_str(mode), "off") != 0) {
       yyjson_val *key = yyjson_obj_get(d, "key");
@@ -271,7 +274,7 @@ RunResult runFixture(const Fixture &f, const std::string &goldenDir, double sr) 
                                          num(inj, "start", 0.0), static_cast<float>(num(inj, "gain", 1.0)));
     if (s != RIG_OK) skipped.insert(std::string("inject ") + at);
   }
-  const char *tap = "out";
+  const char *tap = droneFreeze ? "fx.sum" : "out";
   if (yyjson_val *t = yyjson_obj_get(setup, "tap")) tap = yyjson_get_str(t);
   if (rig_test_tap(e, tap) != RIG_OK) skipped.insert(std::string("tap ") + tap);
   // 4. events, in time order (stable), each with when = t (page.js applyEvent). Types listed in `setup.live` are

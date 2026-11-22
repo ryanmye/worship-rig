@@ -6,6 +6,7 @@
 #include <cstdlib>
 
 #include "api/registry.h"
+#include "inst/organ.h"
 #include "inst/sampler.h"
 #include "inst/synth.h"
 #include "inst/synth_dispatch.h"
@@ -157,7 +158,11 @@ bool setInstrumentParam(Model &m, const SetRequest &req) {
   c.f.a = v;
   c.f.b = m.timeFor(req.when);
   c.f.c = req.glide;
-  return m.sendUnitOp(u, c, req.when);
+  const bool sent = m.sendUnitOp(u, c, req.when);
+  // T15 review item 3 (W3B): organ.js _applyParam -> _scheduleWave: a drawbar change rebuilds the drawbar waves
+  // (30 ms debounce) on the control thread, the "t15-tables" service's job (inst/synth_extra_tables.h)
+  if (sp.instType == "organ" && key.rfind("drawbar", 0) == 0) organDrawbarsChanged(m, req.slot, req.when);
+  return sent;
 }
 
 }  // namespace rig::inst

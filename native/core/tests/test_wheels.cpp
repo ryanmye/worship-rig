@@ -251,4 +251,70 @@ TEST_SUITE("wheels") {
     REQUIRE(e.use(patch({slot("test", "sine", 1)}, R"("fx":{"delay":{"feedback":0.95}})")));
     CHECK(e.model().perform().delayFeedback() == doctest::Approx(0.9));  // no wash: the patch value, clamped 0..0.9
   }
+  TEST_CASE("a song switch with a wash wheel up keeps the washed delay feedback (review F1, Delay.applyAll)") {
+    // song A and song B share a macro.wash routing and feedback 0.3; the wheel at 1 washes it to 0.75. Before F1 the
+    // delay's applyAll (commit) sent the raw 0.3 and applyFxWheels saw an unchanged washFb, so B's echoes decayed
+    // at 0.3 until the wheel moved. The reference song plays feedback 0.75 with no wash: the tails must match.
+    auto sine = [](double delaySend) {
+      return R"({"instrument":{"type":"test","id":"sine"},"gain":1,"sends":{"reverb":0,"delay":)" +
+             Eng::num(delaySend) + R"(,"chorus":0}})";
+    };
+    const std::string wash = R"("modWheel":{"target":"macro.wash","min":0,"max":1},)";
+    auto fx = [](double fb) {
+      return R"("fx":{"delay":{"time":0.2,"sync":"off","feedback":)" + Eng::num(fb) + R"(,"tone":1}})";
+    };
+    auto tail = [&](bool washed) {
+      Eng e;
+      REQUIRE(e.use(patch({sine(1)}, washed ? wash + fx(0.3) : fx(0.75))));
+      if (washed) e.call(R"({"v":1,"id":3,"op":"play","e":"wheel","src":"mod","value":1,"when":0.02})");
+      e.until(0.3);
+      REQUIRE(e.use(patch({sine(1)}, washed ? wash + fx(0.3) : fx(0.75))));  // the song switch under test
+      if (washed) CHECK(e.model().perform().delayFeedback() == doctest::Approx(0.75));
+      e.on(69, 0.4);
+      e.off(69, 0.45);
+      e.until(2.5);
+      return t13::db(t13::rms(e.L, 1.4, 2.4));  // echoes 5..10 after the note (0.75^5 = -12.5 dB, 0.3^5 = -52 dB)
+    };
+    const double ref = tail(false), got = tail(true);
+    MESSAGE("echo tail 1.4-2.4 s: washed song switch " << got << " dB, plain feedback 0.75 " << ref << " dB");
+    CHECK(ref > -60);
+    CHECK(std::fabs(got - ref) < 1.0);
+  }
+  TEST_CASE("tapeBendStream: a stream of lagged tape bends keeps the delay timeline monotonic (no spikes)") {
+    // suites.mjs tapeBendStream: sub-bass (tri 0, tone 1), lofi amount 0.001, bend mode tape; from 0.8 s a bend every
+    // `step` s, each posted from a timer at T with when = T + lag, ramping -0.2 .. -0.8, then 0 after 0.1 s. The
+    // second difference of the output in 0.8 .. 1.9 s never exceeds 10x the steady note's (0.3 .. 0.79 s).
+    auto run = [](double lag, double step, double &baseD2, double &maxD2) {
+      Eng e;
+      const std::string sub = slot("synth", "sub-bass", 1, R"("params":{"tri":0,"tone":1})");
+      REQUIRE(e.use(patch({sub}, R"("fx":{"lofi":{"amount":0.001,"crackle":0,"wow":0,"flutter":0,"saturation":0}},)"
+                                  R"("bend":{"mode":"tape","range":2})")));
+      e.on(57, 0.05, 120);
+      rig::Model &m = e.model();
+      const int n = static_cast<int>(std::lround(0.6 / step));
+      for (int k = 0; k < n; ++k)
+        m.sink().at(0.8 + k * step, [&m, k, n, lag](double T) { m.pitchBend(-(0.2 + (0.6 * k) / n), T + lag); });
+      m.sink().at(0.8 + n * step + 0.1, [&m](double T) { m.pitchBend(0, T); });
+      e.until(2.0);
+      const std::vector<float> &d = e.L;
+      auto d2 = [&](std::size_t i) { return std::fabs(d[i] - 2.0 * d[i - 1] + d[i - 2]); };
+      baseD2 = 0;
+      for (auto i = static_cast<std::size_t>(0.3 * kSR); i < static_cast<std::size_t>(0.79 * kSR); ++i)
+        baseD2 = std::max(baseD2, d2(i));
+      int spikes = 0;
+      maxD2 = 0;
+      for (auto i = static_cast<std::size_t>(0.8 * kSR); i < static_cast<std::size_t>(1.9 * kSR); ++i) {
+        maxD2 = std::max(maxD2, d2(i));
+        if (d2(i) > 10 * baseD2) ++spikes;
+      }
+      return spikes;
+    };
+    double b1 = 0, m1 = 0, b2 = 0, m2 = 0;
+    const int s1 = run(0.003, 0.003, b1, m1), s2 = run(0.003, 0.012, b2, m2);
+    MESSAGE("lag 3 ms every 3 ms: spikes " << s1 << " baseD2 " << b1 << " maxD2 " << m1 << "; every 12 ms: spikes "
+                                           << s2 << " baseD2 " << b2 << " maxD2 " << m2);
+    CHECK(b1 > 1e-5);  // the note plays
+    CHECK(s1 == 0);
+    CHECK(s2 == 0);
+  }
 }

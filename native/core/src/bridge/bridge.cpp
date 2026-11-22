@@ -99,10 +99,12 @@ void opHello(Engine &e, const Req &r) {
   JsonOut j;
   // T00c: minor 1 = D1-D3 (config.polyphony, audio.bufferFrames, 16 slots), each with a capability string.
   // INTERFACE-CHANGE(D4): minor 2 = config.voiceLimit (contract README rule; D4 review R4, wave-2 integrator)
-  j.begin().kv("protocol", RIG_BRIDGE_PROTOCOL).kv("minor", 2).kv("engine", rig_version_string());
+  // INTERFACE-CHANGE(W3B): minor 3 = config.droneFreeze (D5, T16), capability "droneFreeze"
+  j.begin().kv("protocol", RIG_BRIDGE_PROTOCOL).kv("minor", 3).kv("engine", rig_version_string());
   j.key("caps").beginArray().elemStr("when").elemStr("testVoice").elemStr("meters").elemStr("rta");
   j.elemStr("polyphony").elemStr("bufferFrames").elemStr("slots16");
   j.elemStr("voiceLimit");  // D4 (additive, minor 2)
+  j.elemStr("droneFreeze");  // D5 / T16 (additive, minor 3)
   if (e.model().service(RecService::kName)) j.elemStr("rec");
   j.endArray();
   j.kv("sampleRate", e.sampleRate()).kv("seed", e.seed()).end();

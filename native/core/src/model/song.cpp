@@ -9,6 +9,7 @@
 #include "bridge/json_out.h"
 #include "fx/reverb_service.h"
 #include "inst/instrument_service.h"
+#include "inst/organ.h"  // T15 review item 2: OrganOp
 #include "inst/sampler.h"
 #include "inst/synth.h"
 #include "mix/slot_channel.h"
@@ -339,6 +340,7 @@ void SongGraph::sendRelease(const Channel &c, double release, double when) {
   Command cmd{};
   if (c.kind == inst::kKindSynth) cmd.op = opOf(inst::SynthOp::ReleaseOverride);
   else if (c.kind == kKindSampler) cmd.op = opOf(SamplerOp::ReleaseOverride);
+  else if (c.kind == inst::kKindOrgan) cmd.op = opOf(inst::OrganOp::ReleaseOverride);  // T15 review item 2 (W3B)
   else return;
   cmd.f.a = std::isfinite(release) && release > 0 ? release : 0;
   const UnitSlot u = c.retire >= 0 ? retireInstSlot(static_cast<std::size_t>(c.retire))
@@ -363,6 +365,7 @@ void SongGraph::applyFresh(Channel &c, double when) {
     Command cmd{};
     if (c.kind == inst::kKindSynth) cmd.op = opOf(inst::SynthOp::Morph);
     else if (c.kind == kKindSampler) cmd.op = opOf(SamplerOp::Morph);
+    else if (c.kind == inst::kKindOrgan) cmd.op = opOf(inst::OrganOp::Morph);  // T15 review item 2 (W3B)
     if (cmd.op != Op::None) {
       cmd.f.a = mo;
       cmd.f.b = t;
@@ -431,6 +434,7 @@ void SongGraph::applyWheels(double t, double tc) {
       Command cmd{};
       if (c.kind == inst::kKindSynth) cmd.op = opOf(inst::SynthOp::Morph);
       else if (c.kind == kKindSampler) cmd.op = opOf(SamplerOp::Morph);
+      else if (c.kind == inst::kKindOrgan) cmd.op = opOf(inst::OrganOp::Morph);  // T15 review item 2 (W3B)
       if (cmd.op != Op::None) {
         cmd.f.a = mo;
         cmd.f.b = t;

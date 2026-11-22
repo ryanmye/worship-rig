@@ -153,10 +153,14 @@ void resolveParams(const PatchDef &p, std::string_view json, double *out) {
 
 SynthInstrument::SynthInstrument(const PatchDef &patch, double sampleRate, std::uint32_t engineSeed,
                                  std::string_view rngName, std::string_view paramsJson, double releaseOverride)
+    : SynthInstrument(patch, sampleRate, rngFor(engineSeed, rngName), paramsJson, releaseOverride) {}
+
+SynthInstrument::SynthInstrument(const PatchDef &patch, double sampleRate, Rng parent, std::string_view paramsJson,
+                                 double releaseOverride)
     : patch_(patch),
       sr_(sampleRate),
       stereo_(patch.id != PatchId::SubBass && patch.id != PatchId::Bell),
-      rng_(rngFor(engineSeed, rngName).fork()),  // InstrumentBase: asRng(prng) forks the registry's stream
+      rng_(parent.fork()),  // InstrumentBase: asRng(prng) forks the registry's stream
       releaseOverride_(releaseOverride > 0 ? releaseOverride : 0),
       sh_(std::make_unique<SynthShared>()) {
   pool_.setCap(kDefaultVoiceCap);

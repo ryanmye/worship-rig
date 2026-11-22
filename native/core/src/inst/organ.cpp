@@ -57,6 +57,12 @@ int rotaryEnum(std::size_t i, std::string_view s) {
   return s == "slow" ? 0 : s == "fast" ? 1 : s == "off" ? 2 : -1;
 }
 
+int rotaryDefault(std::string_view instId) {
+  const OrganPresetDef *pd = findOrganPreset(instId);
+  if (!pd) pd = &organPresetDef(OrganPreset::Gospel);  // makeOrgan: unknown preset -> gospel
+  return static_cast<int>(pd->params[ok::kRotary].def);
+}
+
 double drawbarAmp(double d) {
   return d != 0 ? js::pow(10, (-3 * (8 - d)) / 20) : 0;
 }
@@ -74,6 +80,12 @@ void drawbarWaves(const double *bars, double sr, WaveArray &out) {
 void organParams(const OrganPresetDef &p, std::string_view json, double *out) {
   resolveParamsJson(p.params, p.nParams, json, out, &rotaryEnum);
   for (unsigned i = 0; i < 9; ++i) out[i] = js::round(out[i]);  // step 1
+}
+
+int instEnumIndex(const SlotPatch &sp, std::string_view key, std::string_view s) {
+  if (sp.instType != "organ" || key != "rotary") return -1;  // the only enum row of any instrument (organ.js)
+  const int k = rotaryEnum(ok::kRotary, s);
+  return k >= 0 ? k : rotaryDefault(sp.instId);  // coerceParam: an unlisted value -> p.default
 }
 
 const OrganPresetDef &organPresetDef(OrganPreset id) {
@@ -115,6 +127,11 @@ struct OrganRotor {
       amG[c].gain().setValue((1 + g) / 2);
       amD[c].gain().setValue((1 - g) / 2);
     }
+  }
+  /** T15 review item 4: the horn DelayNodes at a new device rate (the buffers stay; re-attach zeroes them). */
+  void setRate(double sr) {
+    if (!withDelay) return;
+    for (int c = 0; c < 2; ++c) dl[c].attachFitting(buf[c].data(), buf[c].size(), 0.01, sr);
   }
   /** x (mono, after the crossover) -> += merger L / R. */
   void process(const float *x, float *l, float *r, std::int64_t f0, double sr) {
@@ -353,8 +370,17 @@ void OrganInstrument::applyModule(const Command &c) {
   if (static_cast<std::uint16_t>(c.op) == static_cast<std::uint16_t>(T15Op::SetTables) && c.sub == kSubOwnedPayload &&
       c.p.ptr) {
     auto *w = static_cast<XTablesPayload *>(static_cast<Owned *>(c.p.ptr));
-    if (w->bank && w->xbank && w->drawbars[0]) {
-      OrganShared &s = *sh_;
+    OrganShared &s = *sh_;
+    if (!w->bank && !w->xbank && w->drawbars[0] && w->sampleRate == sr_) {
+      // T15 review item 3: organ.js _scheduleWave's swap (new registration, same rate): every live voice's
+      // oscillator gets the new drawbar table of its rotation (phase kept); the sine bank / rotor tables stay
+      pool_.forEach([&](int, XVoice &v) {
+        v.retable([&](const wa::PeriodicWave *t) {
+          return mapTable(t, *bank_, *xbank_, &s.waves, *bank_, *xbank_, &w->drawbars);
+        });
+      });
+      std::swap(w->drawbars, s.waves);  // the old tables travel back in the payload (freed on the control thread)
+    } else if (w->bank && w->xbank && w->drawbars[0]) {
       pool_.forEach([&](int, XVoice &v) {
         v.retable([&](const wa::PeriodicWave *t) {
           return mapTable(t, *bank_, *xbank_, &s.waves, *w->bank, *w->xbank, &w->drawbars);
@@ -363,6 +389,7 @@ void OrganInstrument::applyModule(const Command &c) {
       for (OrganRotor *r : {&s.horn, &s.drum}) {
         r->sin.setWave(w->bank->basicSine.get());
         r->cos.setWave(w->xbank->rotorCos.get());
+        if (w->sampleRate > 0) r->setRate(w->sampleRate);  // T15 review item 4
       }
       std::swap(w->bank, bank_);
       std::swap(w->xbank, xbank_);
@@ -371,6 +398,14 @@ void OrganInstrument::applyModule(const Command &c) {
   }
   applyCommon(static_cast<std::uint16_t>(c.op), static_cast<std::uint16_t>(OrganOp::Morph),
               static_cast<std::uint16_t>(OrganOp::ReleaseOverride), c);
+}
+
+double OrganInstrument::hornDelayRate() const {
+  return sh_->horn.dl[0].sampleRate();
+}
+
+const wa::PeriodicWave *OrganInstrument::drawbarWave0() const {
+  return sh_->waves[0].get();
 }
 
 void OrganInstrument::sharedPass(XIn &in) {

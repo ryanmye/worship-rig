@@ -70,6 +70,7 @@ class XDelay {
   /** One quantum: `delayIn` = connected-input sum (null = none) added to the intrinsic `delay` (s). */
   void process(const float *in, float *out, float delay, const float *delayIn);
   double maxDelay() const { return max_; }
+  double sampleRate() const { return sr_; }
 
  private:
   float *buf_ = nullptr;
@@ -100,6 +101,10 @@ struct XTablesPayload final : Owned {
   std::shared_ptr<const WaveBank> bank;
   std::shared_ptr<const XWaveBank> xbank;
   std::array<std::unique_ptr<wa::PeriodicWave>, kRotations> drawbars;
+  // T15 review item 4: the rate the tables were built for. With `bank` set (a device rate change) the unit's shared
+  // DelayNodes (synth-extra chorus, organ horn) re-attach at it; 0 = leave them. A drawbars-only payload (item 3,
+  // bank / xbank null) is applied only at this rate (a rate change in between rebuilds every table anyway).
+  double sampleRate = 0;
 };
 using WaveArray = std::array<std::unique_ptr<wa::PeriodicWave>, kRotations>;
 /** The table at the position `w` holds in the old tables, taken from the new ones (w itself if not found). */

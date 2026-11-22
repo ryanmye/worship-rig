@@ -142,6 +142,9 @@ class MasterChain final : public Unit {
     for (int c = 0; c < 2; ++c)
       for (std::size_t i = 0; i < kQ; ++i) out.ch[c][i] *= clipPre_;
     clip_.process(dst, 2, kQ);
+    // INTERFACE-CHANGE(W3A): out (sleep ramp, model/sleep.h). Exactly 1 unless a sleep / wake ramp ran: bit-exact.
+    out_.processARate(f0, sr, g, kQ);
+    mulInPlace(out, g);
   }
 
   void apply(const Command &c) override {
@@ -172,6 +175,8 @@ class MasterChain final : public Unit {
         return &glueDry_;
       case kMasterGlueWet:
         return &glueWet_;
+      case kMasterOut:  // INTERFACE-CHANGE(W3A)
+        return &out_;
       default:
         return nullptr;
     }
@@ -269,6 +274,7 @@ class MasterChain final : public Unit {
   MasterEq eq_;
   wa::Param volume_;
   wa::Param wheel_{1.0}, fade_{1.0}, monoMix_{0.0}, glueDry_{1.0}, glueWet_{0.0};
+  wa::Param out_{1.0};  // INTERFACE-CHANGE(W3A): the sleep ramp
   wa::Param glueThreshold_, glueRatio_;
   DynamicsCompressor glue_, catcher_;
   float clipPre_;

@@ -16,6 +16,7 @@
 #include "mix/master_chain.h"
 #include "model/model.h"
 #include "model/perform_internal.h"
+#include "model/sleep.h"
 #include "model/song.h"
 #include "num/js_math.h"
 #include "num/js_number.h"
@@ -111,7 +112,7 @@ bool hasLegato(const std::string &kind) {
 
 // ---- Perform: plumbing -------------------------------------------------------------------------------------------
 
-Perform::Perform(Model &m) : m_(m) {
+Perform::Perform(Model &m) : m_(m), sleep_(std::make_unique<Sleep>(m, *this)) {
   // v11-reverb-quiet: reverb builds wait for a pause (audio.js fx.env.quietFor = () => this.quietFor())
   if (auto *rp = dynamic_cast<fx::ReverbPool *>(m_.service<ReverbService>()))
     rp->setQuietProbe([this] { return quietFor(); });
@@ -175,7 +176,14 @@ void Perform::warnOnce(const std::string &message) {
 // ---- notes (audio.js noteOn / noteOff / sustain) -----------------------------------------------------------------
 
 bool Perform::noteOn(int note, int vel, double when, const yyjson_val *touch) {
+  const Touch kbd = keyboardTouch(touch);
+  return noteOnTouch(note, vel, when, touch ? &kbd : nullptr);
+}
+
+bool Perform::noteOnTouch(int note, int vel, double when, const Touch *kbdTouch) {
   noteInput(when);
+  SleepCall held{SleepCall::NoteOn, note, vel, false, kbdTouch != nullptr, kbdTouch ? *kbdTouch : Touch{}};
+  if (sleep_->hold(held)) return true;  // lowres2 (W3A): played at the wake ramp's start
   if (!(vel > 0)) return noteOff(note, when);  // MIDI convention: velocity 0 = note-off
   const double t = tOf(when);
   const int n = std::clamp(note, 0, 127);
@@ -186,7 +194,7 @@ bool Perform::noteOn(int note, int vel, double when, const yyjson_val *touch) {
   }
   if (sounding_.count(n)) noteOff(n, t);  // duplicate note-on = re-strike
   held_.insert(n);
-  const Touch kbd = keyboardTouch(touch);
+  const Touch kbd = kbdTouch ? *kbdTouch : Touch::preset(1);
   std::vector<Entry> entries;
   const SongGraph &sg = m_.songGraph();
   for (int i = 0; i < kMaxSlots; ++i) {
@@ -237,6 +245,7 @@ bool Perform::noteOn(int note, int vel, double when, const yyjson_val *touch) {
 
 bool Perform::noteOff(int note, double when) {
   noteInput(when);
+  if (sleep_->hold(SleepCall{SleepCall::NoteOff, note, 0, false, false, Touch{}})) return true;  // W3A: in order
   const double t = tOf(when);
   const int n = std::clamp(note, 0, 127);
   held_.erase(n);
@@ -291,6 +300,7 @@ void Perform::unpedalAll() {
 }
 
 bool Perform::sustain(bool down, double when) {
+  if (sleep_->hold(SleepCall{SleepCall::Sustain, 0, 0, down, false, Touch{}})) return true;  // lowres2 (W3A)
   noteInput(when);
   const double t = tOf(when);
   if (down == pedal_) return true;
@@ -528,6 +538,7 @@ std::string Perform::runtimeStateJson() const {
 
 void Perform::statsFields(std::string &out) const {
   out += ",\"sounding\":" + std::to_string(sounding_.size()) + ",\"pedaled\":" + std::to_string(pedaled_.size());
+  sleep_->statsFields(out);  // W3A: audioSleep, lastWake
 }
 
 void Perform::channelDisposed(std::uint32_t channelId) {
