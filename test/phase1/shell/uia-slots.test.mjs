@@ -281,3 +281,29 @@ test('controller, bridge engine: every slot is sent (prepare, setParam, routing)
   assert.deepEqual(glides().slice(n).map((x) => x[2]), [0.25], 'scene 1 glides Sound 16 back to 0.25');
   c.dispose?.();
 });
+
+test('a learned MIDI fader on Sound 6 moves that slot of the song (pickup); a song without it ignores it', async () => {
+  const { MidiInput } = await import('../../../app/js/midi.js');
+  const { fakeDoc, fakeTimers } = await import('./helpers.mjs');
+  const store = makeStore();
+  const engine = fakeEngine();
+  const midi = new MidiInput({ nav: null, warn: () => {} });
+  midi.access = {};
+  const c = createController({ store, engine, midi, doc: fakeDoc(), nav: null, win: new EventTarget(), rig: null,
+    timers: fakeTimers(), now: () => 0 });
+  await c.start();
+  const id = store.get().settings.currentSongId;
+  store.setMidiLearn('slots.5.gain', { cc: 21, channel: null });
+  midi._inject([0xb0, 21, 127]); // a 4-slot song: nothing to move, nothing written
+  assert.equal(store.getSong(id).patch.slots.length, 4);
+  store.addSlot(id, slot());
+  store.addSlot(id, slot('soft-keys'));
+  store.set('slots.5.gain', 0.25); // fader position 0.5
+  await tick();
+  midi._inject([0xb0, 21, 64]); // ≈ 0.504: picks up
+  midi._inject([0xb0, 21, 100]);
+  await tick();
+  assert.ok(Math.abs(store.getSong(id).patch.slots[5].gain - 2 * (100 / 127) ** 3) < 1e-9);
+  for (const [, p] of callsOf(engine, 'setParam')) assert.ok(!p.startsWith('slots.5.'), 'the web engine hears nothing');
+  c.dispose?.();
+});

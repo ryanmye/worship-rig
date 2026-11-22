@@ -243,7 +243,7 @@ export function createController(o) {
   /**
    * UIA (native DECISIONS D3): how many slots the engine plays. The bridge engine (2.0 core) takes MAX_SLOTS; the web
    * engine (app/js/engine, the 1.x oracle) stays at SLOT_COUNT, so slots 5..16 are stored and shown but never sent
-   * to it (engineSong / call's setParam guard). An engine may say its own number (`maxSlots`).
+   * to it (enginePatch / call()'s setParam guard). An engine may say its own number (`maxSlots`).
    * @returns {number}
    */
   function engineSlots() {
