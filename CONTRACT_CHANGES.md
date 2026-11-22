@@ -6780,7 +6780,9 @@ What changed (frozen-interface rows: `native/docs/INTERFACE_LOG.md` "## UIA", UI
   none = a new song's 4). Idempotent; unknown fields kept. `STORAGE_KEY` stays `rig.v1`. Loading a schema-1
   library that has songs first writes its text to `rig.v1.backup-<ts>` (best effort; `loadInfo.migratedFrom`,
   `loadInfo.migrationBackupKey`), because 1.1 refuses schema 2 (FutureSchemaError → its own backup + a fresh
-  library). Exports say `schema: 2`; a song file's own schema decides its slot count on import.
+  library). Exports say `schema: 2`; a song file's own schema decides its slot count on import. UIA skeptic: once
+  that copy is written the library is saved back as schema 2 at load (before, an unedited 1.x library stayed schema 1
+  on disk, so every launch wrote another copy and the third pruned older backups of other kinds, `BACKUPS_KEEP` 3).
 - **Slot count API.** `store.addSlot(id?, slot?)` appends an empty slot (or a Slot, normalised with that slot's role
   defaults), at most 16, and returns its index; `store.removeSlot(id?, i?)` removes slot i (default the last; at
   least one stays): later slots move down, a wheel / pedal / knob target on the removed slot goes back to the
@@ -6815,7 +6817,9 @@ What changed (frozen-interface rows: `native/docs/INTERFACE_LOG.md` "## UIA", UI
   there, so no other slot changes name or colour. Effects' "goes in" chips, Master's wheel targets, the wiring strip
   and the keyboard legend follow the count. A silent slot's title says so.
 - **Colours.** `--slot-4` … `--slot-15` in styles.css mix the theme's four role colours in oklch (halfway between
-  neighbours, then a quarter / three quarters), so every theme re-colours them with no theme change.
+  neighbours, then a quarter / three quarters), so every theme re-colours them with no theme change. UIA skeptic:
+  declared on `:root, body` (Ember and Nave set `--slot-0..3` on body; on `:root` alone the mixes resolved there,
+  with Classic's colours, under those themes).
 
 Not changed: app/js/engine (the oracle), app/js/engine-bridge, presets.js, Settings (its Learn table still lists the
 1.x rows; slot levels past 4 are learnable through `controller.learn('slots.<i>.gain')`).
