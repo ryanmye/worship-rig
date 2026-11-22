@@ -2,9 +2,10 @@
 // context the ui-core suite opens). The ui-core suite reads a few Web Audio engine INTERNALS that are not engine
 // contract (native/contract/engine-api.json `notContract`, PARITY "UI parity"): `engine.slots` / `retiring` (its
 // waitSong helper waits for `slots.some(Boolean)`; voice counts via `slots[i].inst.liveVoiceCount()`), `getParam`,
-// `pedaled`, `transpose`, `activeNotes` / `sounding`, `fx.reverb.settled()`, `drone.getState()`. This adapter answers them on the BridgeEngine INSTANCE from
-// what the shim already knows (the committed patch mirror, the values it sent, the 1 s `stats` of the tick), so a
-// UI test fails on what the UI or the core does, not on a missing internal. It never touches the class (the contract
+// `pedaled`, `transpose`, `activeNotes` / `sounding`, `fx.reverb.settled()`, `drone.getState()`. This adapter
+// answers them on the BridgeEngine INSTANCE from what the shim already knows (the committed patch mirror, the values
+// it sent, the 1 s `stats` of the tick, the `notes` events), so a UI test fails on what the UI or the core does, not
+// on a missing internal. It never touches the class (the contract
 // surface test still sees exactly the contracted members) and nothing under app/ loads it.
 // Not adapted (no page-side equivalent against a native core): `slots[i].strip.pan` (AnalyserNode taps on a Web Audio
 // strip), `metronome` internals. Opt out: ui-core-devhost.mjs --no-adapter (RIG_UICORE_NO_ADAPTER=1).

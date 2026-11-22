@@ -136,6 +136,30 @@ test('6 slots: the row scrolls, four strips’ width in view; Sound 5 / 6 named,
   assert.deepEqual(errors, []);
 });
 
+test('Sound 5..16 colours mix the theme’s own role colours, also where a theme sets them on body (Ember)', async () => {
+  // UIA skeptic: --slot-4..15 were declared on :root only, so a theme that colours the roles on body (Ember, Nave)
+  // got Classic's mixes; the colour of strip i must equal the mix of the role colours as that strip sees them
+  const probe = () => ev(() => {
+    const el = document.querySelector('[data-testid=slot-on-4]');
+    const i = document.createElement('i');
+    el.append(i);
+    i.style.color = 'var(--slot-4)';
+    const got = getComputedStyle(i).color;
+    i.style.color = 'color-mix(in oklch, var(--slot-0), var(--slot-1))';
+    const want = getComputedStyle(i).color;
+    i.remove();
+    return { got, want, theme: document.documentElement.dataset.theme };
+  });
+  if ((await row()).strips < 5) await setCount(6);
+  for (const th of ['ember', 'classic']) {
+    await ev((t) => window.__rig.store.set('settings.theme', t), th);
+    await until((t) => document.documentElement.dataset.theme === t, th, 20000);
+    const c = await probe();
+    assert.equal(c.got, c.want, `${th}: Sound 5 = the mix of this theme's Keys and Pad`);
+  }
+  assert.deepEqual(errors, []);
+});
+
 test('keyboard: the focused row scrolls with ←/→/End/Home and keeps the song; focus reveals a strip', async () => {
   const song = await ev(() => window.__rig.store.get().settings.currentSongId);
   await ev(() => document.querySelector('.p-slots').focus());

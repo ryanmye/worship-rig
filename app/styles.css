@@ -16,20 +16,6 @@
   --slot-1: #3ddc84; /* Pad   — green  */
   --slot-2: #4aa8ff; /* Extra — blue   */
   --slot-3: #b784ff; /* Bass  — purple */
-  /* UIA (native DECISIONS D3): Sound 5..16 mix the theme's four role colours (oklch, so a theme that re-colours the
-     roles re-colours these too): halfway between neighbouring roles, then a quarter and three quarters of the way */
-  --slot-4: color-mix(in oklch, var(--slot-0), var(--slot-1));
-  --slot-5: color-mix(in oklch, var(--slot-1), var(--slot-2));
-  --slot-6: color-mix(in oklch, var(--slot-2), var(--slot-3));
-  --slot-7: color-mix(in oklch, var(--slot-3), var(--slot-0));
-  --slot-8: color-mix(in oklch, var(--slot-0) 75%, var(--slot-1));
-  --slot-9: color-mix(in oklch, var(--slot-1) 75%, var(--slot-2));
-  --slot-10: color-mix(in oklch, var(--slot-2) 75%, var(--slot-3));
-  --slot-11: color-mix(in oklch, var(--slot-3) 75%, var(--slot-0));
-  --slot-12: color-mix(in oklch, var(--slot-0) 25%, var(--slot-1));
-  --slot-13: color-mix(in oklch, var(--slot-1) 25%, var(--slot-2));
-  --slot-14: color-mix(in oklch, var(--slot-2) 25%, var(--slot-3));
-  --slot-15: color-mix(in oklch, var(--slot-3) 25%, var(--slot-0));
   --danger: #ff4d4f;
   --danger-ink: #fff;
   --warn: #ffb020;
@@ -52,6 +38,24 @@
   --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   color-scheme: dark;
+}
+/* UIA (native DECISIONS D3): Sound 5..16 mix the theme's four role colours (oklch): halfway between neighbouring
+   roles, then a quarter and three quarters of the way. Declared on body too (UIA skeptic): Ember and Nave set
+   --slot-0..3 on body, and a custom property's var() resolves where it is declared, so on :root alone these
+   mixed Classic's colours under every theme that colours the roles on body. */
+:root, body {
+  --slot-4: color-mix(in oklch, var(--slot-0), var(--slot-1));
+  --slot-5: color-mix(in oklch, var(--slot-1), var(--slot-2));
+  --slot-6: color-mix(in oklch, var(--slot-2), var(--slot-3));
+  --slot-7: color-mix(in oklch, var(--slot-3), var(--slot-0));
+  --slot-8: color-mix(in oklch, var(--slot-0) 75%, var(--slot-1));
+  --slot-9: color-mix(in oklch, var(--slot-1) 75%, var(--slot-2));
+  --slot-10: color-mix(in oklch, var(--slot-2) 75%, var(--slot-3));
+  --slot-11: color-mix(in oklch, var(--slot-3) 75%, var(--slot-0));
+  --slot-12: color-mix(in oklch, var(--slot-0) 25%, var(--slot-1));
+  --slot-13: color-mix(in oklch, var(--slot-1) 25%, var(--slot-2));
+  --slot-14: color-mix(in oklch, var(--slot-2) 25%, var(--slot-3));
+  --slot-15: color-mix(in oklch, var(--slot-3) 25%, var(--slot-0));
 }
 
 * { box-sizing: border-box; }
