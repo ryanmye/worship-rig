@@ -208,13 +208,15 @@ compiled but never been launched; it is part B.
    `~/Library/Caches/worship-rig-check/<sha7>/build/rig-devhost --log ~/Desktop/rig-bridge.jsonl`
    Open `http://127.0.0.1:8440/` in Chrome (one tab only: a second tab takes the engine over). Click once to start
    audio. Look for: the page loads, the top bar reaches Ready, no red banner.
-2. **Your library.** In the 1.x app beforehand: Settings › Library & Backup › **Export library**. In the 2.0 page:
-   Settings › Library & Backup › **Import…** and pick that file. Look for: "Imported N songs", your setlist as in 1.x.
+2. **Your library.** In the 1.x app beforehand: Settings › Library & Backup › **Export library**. In the 2.0
+   page: Settings › Library & Backup › **Import…** and pick that file. Look for: "Imported N songs", your setlist as
+   in 1.x.
 3. **MIDI keyboard.** Plug it in; allow MIDI if Chrome asks. Play fast repeated notes on one key, then a chord held
    with the pedal, pedal up. Listen for: no lag or flams compared to 1.x, nothing stuck after pedal-up. Look for: the
    Perform pedal lamp stays lit the whole time the pedal is down and goes dark on release.
 4. **Buffer size.** Settings › Sound › Buffer size **128** (the line next to it shows the size the Mac gave). Play a
-   pad song with a piano for one minute: no clicks, crackles or dropouts. Then **64**, the same minute; then back to 128.
+   pad song with a piano for one minute: no clicks, crackles or dropouts. Then **64**, the same minute; then back to
+   128.
 5. **Switching songs while playing (the main thing to check).** Hold a chord with the pedal down and press **Next**
    (or click the next chip in the setlist) while still holding; keep playing for 10 s. Do it through the whole set,
    then once more backwards with Prev, and once with a jump to a song you have not opened in this session (its samples

@@ -66,9 +66,10 @@ run them one at a time; `run-all` does that for you.
   ctx, DOM/CSS rules and the test harness. main.js mounts `edit/shell.js` (`mountEdit`); the old `views/edit.js`
   is gone.
 - **Shell** (`shell.js`): the layout, one block tab per slot plus Drone | Effects · Master (`lib.js` `blocksFor(n)`;
-  a 4-slot song shows the 1.x 7 tabs Keys · Pad · Extra · Bass · Drone | Effects · Master; UIA: up to 16, scrolling,
-  "Slots n" adds / removes) with summaries and changed dots, Show wiring, and one ctx per mounted panel. Everything a panel registers through its
-  ctx (subscriptions, listeners, Esc handlers, leave-song hooks) is released when it unmounts.
+  a 4-slot song shows the 1.x 7 tabs Keys · Pad · Extra · Bass · Drone | Effects · Master; UIA: up to 16,
+  scrolling, "Slots n" adds / removes) with summaries and changed dots, Show wiring, and one ctx per mounted panel.
+  Everything a panel registers through its ctx (subscriptions, listeners, Esc handlers, leave-song hooks) is released
+  when it unmounts.
 - **Panels** (`panels/*.js`, one CSS file each): `slot` (Keys/Pad/Extra/Bass), `drone`, `effects`, `master` (incl.
   Wheels & pedal), `song` (Easy Transpose, tempo, notes; opened by the header chips), and the regions
   `song-header`, `setlist`, `bottom`. Panels write through `ctx.set` / store helpers / `controller.*` only.
