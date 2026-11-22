@@ -1104,8 +1104,11 @@ test('Next shows the next song name + key; the current chip stays in view; End o
   assert.equal(back, true, 'the next two songs are visible after the current one');
 });
 
-test('status lamps: pedal, drone readout / key grid outline when off, Fade-out "Faded" chip, expression row, Ready text', async () => {
+test('status lamps: pedal, drone readout / key grid outline when off, Fade-out "Faded" chip, expression row, Ready text', async (t) => {
   await clearToasts();
+  // UIC skeptic: a failure while the pedal is down must not leave it down (controller.status.pedal stayed true and
+  // round2-ui #1's "Space up = pedal up" failed for it in the rig-devhost runs); the passing path lifts it anyway
+  t.after(() => page.evaluate(() => window.__rig.controller.perform.sustain(false)));
   // pedal
   await page.evaluate(() => window.__rig.controller.perform.sustain(true));
   await page.waitForFunction(() => document.querySelector('[data-testid=pedal-lamp]').classList.contains('down'), null, { timeout: 2000 });

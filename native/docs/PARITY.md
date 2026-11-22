@@ -296,7 +296,8 @@ internals from what the shim already knows. It is a diagnostic, not parity (`rev
 | after T11 | 25 / 76 | |
 | UIB (builder and skeptic) | **25** | the suite gained UIA's `slots.mjs` (77 tests). With the adapter: 63 and 66 |
 | UIC, suite side, base shim | **65** | A/B: this tree's suite, with `bridge-engine.js` from `35b6e43` served by the same `rig-devhost` |
-| **UIC** | **70** | the suite side plus the shim side (below) |
+| UIC (builder, one run) | 70 | the suite side plus the shim side (below) |
+| **UIC skeptic** (3 runs, fresh `build-uicsk-devhost`) | **66-68** | status lamps now also checks that the pedal lamp is still lit 1 s later (it was lit only for the shim's 400 ms optimistic window: core defect, below), plus a cleanup that lifts the pedal when that test fails (its failure had also failed round2-ui #1). Runs: 68, 68 (before the cleanup; round2-ui #1 failed by that cascade), 66 (after it; 3 timing failures, below). The builder's 70 is one run of the same flaky set |
 
 UIC's run used a fresh `native/core/build-uic-devhost` (g++ Release). It returned no bridge error reply. It raised the
 same two warns as UIB's run ("No pad file for C; using the synth drone." and "Drone: too many overlapping layers; a
@@ -310,7 +311,9 @@ fading one was cut."), and it produced no sanitizer line.
 - Panic, the meters and the metronome read `_debugStats()` (the core's 1 s stats: `voices`, `pedaled`, `sounding`,
   `slotLevelTaps`, `click.ticks`). The suite waits for a stats sample taken after the action before it reads them.
 - Held notes come from the core's `notes` events.
-- The drone mode comes from `drone.cfg`.
+- The drone mode comes from `drone.cfg`: like the transpose below, the shim's applied value, not the core's (UIC
+  skeptic). Likewise `clickRunning` reads `clickState().running`, which `clickStop()` now sets at the call, and
+  `soundingHas(n)` is "held" only (the web engine's `sounding` also counts ringing notes).
 - The transpose comes from `getSlotPlayRange(i).transpose`. That value is the shim's applied transpose: it proves the
   call reached the engine, as `engine.transpose` does on the web engine, not what the core did with it.
 - Three hooks keep one failure from cascading:
@@ -320,9 +323,13 @@ fading one was cut."), and it produced no sanitizer line.
     the newest page, so the old page had lost its engine, and the v11-polish, v11-metronome and v11-decisions tests
     had failed on that.
 
-**Shim side** (`bridge-engine.js`). These five tests pass only with the new shim (the A/B above): status lamps (pedal
+**Shim side** (`bridge-engine.js`). The builder's A/B credited five tests to the new shim: status lamps (pedal
 lamp within 2 s), round2-ui #1 (Space = sustain), critics-fix performance #3 (a wheel held still writes nothing),
-v11-polish (strip pedal light) and v11-decisions (`clickState()` after Esc). The shim changes:
+v11-polish (strip pedal light) and v11-decisions (`clickState()` after Esc). UIC skeptic: two of those are not shim
+wins. Status lamps and v11-polish pass only because they read the lamp inside the shim's 400 ms optimistic window
+(v11-polish reads it at exactly 400 ms); the core's tick never reports the pedal (below), so the lamp goes dark 0.4 s
+after the pedal goes down. round2-ui #1 failed in the base-shim run only as a cascade: status lamps failed with the
+pedal down, and controller.status.pedal was still true in round2-ui #1 (fixed: a cleanup hook). The shim changes:
 - `sustain`, the wheels, `swell`, `fadeOutAll`, the note that un-fades and `allNotesOff` set `pedal`, `wheelValues()`
   and `getRuntimeState()` at the call, as audio.js does. A tick that disagrees within 400 ms was built before native
   saw the call, and the shim ignores it. Once a tick agrees, or after 400 ms, the core's value applies again.
@@ -332,13 +339,16 @@ v11-polish (strip pedal light) and v11-decisions (`clickState()` after Esc). The
   trailed the UI's own calls until the next tick. This is inferred from the mutations the test recorded, not traced.
   critics-fix performance #2 (meters while silent) passes with both shims.
 
-The 7 tests left (UIC run), each with its true cause and owner:
+The tests left, each with its true cause and owner (the first three rows: the builder's 7; the last two rows: UIC
+skeptic):
 
 | test(s) | cause | owner |
 |---|---|---|
 | every factory song (Anthem) | `cache preload` blocks the core's control thread until the samples are decoded. `CacheServiceImpl::preload` busy-waits on `pump()`. During that time the control thread sends no ticks and handles no `play`. In the UIC run, each of the 11 tick gaps over 400 ms (0.5 to 3.1 s) contains a `cache preload`, and so does the 1.8 s gap at the first song. A note played in that window sounds that late, and the meter facade reads 0 because no tick arrives. This is a real 2.0 defect: a song switch to cold samples freezes live input. | core (T06 cache service / T08 bridge): answer `cache preload` asynchronously (`preloadAsync`, reply on completion) and keep the control loop running |
 | slot fader drag; Revert; header Space / Echo chips; H-v2 ON tile; H-v2 strip chips | No contracted read-back of a param. `engine-api.json` lists `getParam` as `notContract` ("tests only"), and the core's `get state` carries only `slots[i].gain` / `pan` | contract (orchestrator): make `getParam` contracted, answered by a `get param` op (T08) or from `get state`. Until then these 5 stay red on the bridge |
 | Swell (`swelling`) | The core's tick `runtime` has no `swelling`. `Perform::runtimeStateJson` writes `wheel`, `modOwner` and `faded`. The contract's tick row (6.5) lists `swelling`, and `wheelValuesJson` has it. The shim's own value lasts only until the first tick after 400 ms, and the core's missing field reads as false | core (T14 / T08): add `swelling` to the tick's `runtime` |
+| status lamps (pedal lamp still lit after 1 s) | **UIC skeptic.** The core's tick always says `pedal: false, held: 0`. `Engine::buildTick` (`api/engine.cpp`) writes `m.pedal` / `m.held` from the `rig_meters` snapshot, and `Graph` (`graph/graph.cpp`, the snapshot fill) never sets either field ("T14 fills the snapshot's pedal/held": it does not). Probe on `rig-devhost` with a note and the pedal held: `engine.pedal` true at 0.2 and 0.4 s, false from 0.6 s on; `held` 0 throughout. On 2.0 the Perform pedal lamp and the strips' pedal lights (`perform.js` `readRuntime` reads `engine.pedal`) go dark 0.4 s after the pedal goes down | core (T14 / T08): fill the tick's `pedal` / `held` from `Perform` (`pedal()`, the held set) on the control thread, or fill `rig_meters.pedal` / `held` |
+| polish-2A banners ("that Esc did not panic"), v11-metronome (bpm 100, expected 80, after Next), v11-decisions (30 s wait) | **UIC skeptic: timing, not stable.** They passed in 3 of 4 full runs (builder's and two of the skeptic's) and failed together in one. On the bridge the suite reads held notes and the click from the core's events (`notes`, `click`), which arrive late while a `cache preload` blocks the control thread (each of the 9 tick gaps over 400 ms in that run contains one). Inferred from the gaps, not traced per test | core (the `cache preload` row above) |
 
 Environment notes (not defects): Playwright 1.56 pins Chromium build 1194; this box only has `/opt/pw-browsers/*-1243`
 (Chrome for Testing 157.0.8103.78, the golden pin). `render.mjs` falls back to it by itself.
