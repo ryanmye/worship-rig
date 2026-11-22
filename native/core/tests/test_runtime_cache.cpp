@@ -283,7 +283,9 @@ TEST_SUITE("runtime_cache") {
 
   TEST_CASE("mackit O1: a decode that finishes while the engine is destroyed wakes nobody") {
     // The decode workers belong to the cache service, which dies with the Model after the Engine's wake semaphore:
-    // ~Engine unhooks the workers' wake first (WakeLink). ASan / TSan report the old use-after-destroy here.
+    // ~Engine unhooks the workers' wake first (WakeLink). A wake that captured the Engine itself would touch the
+    // destroyed semaphore when a decode finishes in that window; this case exercises the window under ASan / TSan
+    // (a guard: the window is narrow, so a passing run alone does not prove the link is needed).
     for (int round = 0; round < 3; ++round) {
       Rt rt;
       rt.post(R"({"v":1,"op":"hello","protocol":1,"id":1})");

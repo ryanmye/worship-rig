@@ -73,18 +73,35 @@ function findChromium() {
   return null;
 }
 
+// UIB (T09 / T11 O7): the suite reads a few Web Audio engine internals (engine.slots, getParam, pedaled, ...);
+// ui-core-devhost.adapter.js answers them on the BridgeEngine instance in every page (RIG_UICORE_NO_ADAPTER=1: off)
+const ADAPTER = process.env.RIG_UICORE_NO_ADAPTER === '1' ? null
+  : fs.readFileSync(path.join(__dirname, 'ui-core-devhost.adapter.js'), 'utf8');
+function withAdapter(browser) {
+  if (!ADAPTER || !browser || browser.__uiCoreAdapter) return browser;
+  browser.__uiCoreAdapter = true;
+  const newContext = browser.newContext.bind(browser);
+  browser.newContext = async (...a) => {
+    const ctx = await newContext(...a);
+    await ctx.addInitScript({ content: ADAPTER });
+    return ctx;
+  };
+  browser.newPage = async (...a) => (await browser.newContext(...a)).newPage();
+  return browser;
+}
+
 // The suite launches `channel: 'chromium'`; never `playwright install` here, so fall back to what is installed.
 try {
   const { chromium } = require(require.resolve('playwright', { paths: [REPO] }));
   const launch = chromium.launch.bind(chromium);
   chromium.launch = async (o = {}) => {
     try {
-      return await launch(o);
+      return withAdapter(await launch(o));
     } catch (e) {
       const exe = process.env.BRIDGE_CHROMIUM || findChromium();
       if (!exe || !/Executable doesn't exist/.test(String(e && e.message))) throw e;
       const { channel, ...rest } = o;
-      return launch({ ...rest, executablePath: exe });
+      return withAdapter(await launch({ ...rest, executablePath: exe }));
     }
   };
 } catch {

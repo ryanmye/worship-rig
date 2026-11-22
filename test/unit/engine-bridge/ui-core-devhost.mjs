@@ -4,7 +4,9 @@
 // the page, the assertions) is the suite's own. NOT in run-all (it needs the C++ build and the native modules that
 // later waves land; until then most failures say what the core does not do yet, not what the shim gets wrong).
 //   node test/unit/engine-bridge/ui-core-devhost.mjs [--bin path/to/rig-devhost] [--grep <regex>] [--json]
-//        [--out report.json] [--timeout-min 40] [--keep-log]
+//        [--out report.json] [--timeout-min 40] [--keep-log] [--no-adapter]
+// --no-adapter: without ui-core-devhost.adapter.js (the Web Audio internals the suite reads: engine.slots, getParam,
+// pedaled, ...), i.e. the raw count.
 // Exit 0 when every selected test passes. The report lists each test (ok / FAIL / skip, ms, first error line) and
 // the bridge's error replies and warn events (from the devhost log), grouped by op.
 import fs from 'node:fs';
@@ -93,7 +95,7 @@ async function main() {
   if (opt('--grep')) nodeArgs.push(`--test-name-pattern=${opt('--grep')}`);
   nodeArgs.push(path.join(REPO, 'test/phase2/ui-core/run.mjs'));
   const env = { ...process.env, RIG_DEVHOST_BIN: bin, RIG_DEVHOST_LOG: logFile, RIG_DEVHOST_STDERR: errFile,
-    RIG_DEVHOST_RECORDINGS: work };
+    RIG_DEVHOST_RECORDINGS: work, ...(flag('--no-adapter') ? { RIG_UICORE_NO_ADAPTER: '1' } : {}) };
   const t0 = Date.now();
   const child = spawn(process.execPath, nodeArgs, { cwd: REPO, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let tap = '';
