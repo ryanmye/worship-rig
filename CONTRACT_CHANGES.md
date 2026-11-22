@@ -6938,3 +6938,10 @@ report, `rt.realtime` included); all 112 fixtures rendered with g++ and clang-20
 143/143, synth-extra 153/153, shell 265, ui-core 90 (web engine, every assertion as before), edit-v2 109, settings
 86/86 (app, fixture, mac, bridge), eq 27/28 (the known L-21 only), mini 14/14, themes 58/58, chrome-fallback 17/17;
 zero console errors. UI parity on `rig-devhost` (no adapter): 70/77 (suite side alone 65/77; UIB 25/77).
+
+UIC skeptic (`native/docs/reviews/UIC.md`): the core's tick never reports the pedal or held notes (`rig_meters.pedal`
+/ `held` are never filled), so on 2.0 `engine.pedal` and the Perform pedal lamp drop 0.4 s after the pedal goes down,
+once the shim's optimistic window ends. ui-core status lamps now also checks that the lamp is still lit 1 s later
+(passes on the web engine, fails on the bridge with that cause) and lifts the pedal in a cleanup hook (its failure
+had also failed round2-ui #1). Raw UI parity on `rig-devhost` over three runs: 68, 68, 66 / 77 (the builder's 70 was
+one run; the spread is timing behind `cache preload`). Owners in `PARITY.md` "UI parity".
