@@ -111,6 +111,7 @@ attached later. No new audio-thread code.
   `attachedKind` and posts `SamplerOp::DynamicRange`, while "before" goes through `instrumentSetup`.
 - **O4** (pre-existing, not UIB): `restartAudio` clears `restarting` before `await resumeRecording(part)`, so a
   request in that window starts a second restart instead of queueing. Harmless today (no overlap in `call`), noted.
-- Themes `coverage-*.json`: rewritten again (timestamps only) by the sibling skeptic's run and this one; restored
-  from `HEAD` content at the end of this review where the permission system allowed it (see the final report).
+- Themes `coverage-*.json` (builder's hand-off): closed. The suite rewrites their `generated` timestamps on every run
+  (the only changed lines); after this review's themes run they match `HEAD` and `47aa596` (`git diff` empty), so
+  nothing is left to revert. Settings review item 5 (make the suite stop rewriting them) stays a nit.
 - Build dirs to prune: `native/core/build-uib*` (builder) and `build-uibsk*` (this review).
