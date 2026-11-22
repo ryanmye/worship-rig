@@ -15,6 +15,16 @@ using t13::Eng;
 using t13::patch;
 using t13::slot;
 
+// T16 review O5: clang (CI / Mac ASan) defines neither __SANITIZE_ADDRESS__ nor __SANITIZE_THREAD__; ask
+// __has_feature too, so a sanitizer build only reports the timings instead of asserting them.
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+#define RIG_TEST_SANITIZED 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
+#define RIG_TEST_SANITIZED 1
+#endif
+#endif
+
 namespace {
 
 constexpr double kSR = t13::kSR;
@@ -205,7 +215,7 @@ TEST_SUITE("wheels") {
     const double base = perQuantum(false, false), lofi = perQuantum(true, false), tape = perQuantum(true, true);
     MESSAGE("per 128-frame quantum: test voice " << base << " us; + lofi engaged " << lofi - base
                                                  << " us; + lofi with a tape-bend ramp " << tape - base << " us");
-#if !defined(__SANITIZE_ADDRESS__) && !defined(__SANITIZE_THREAD__)
+#if !defined(RIG_TEST_SANITIZED)
     CHECK(tape - base < 400);  // loose sanity bound (2-CPU shared box, Release); the numbers go into the T14 report
 #endif
     Eng e;

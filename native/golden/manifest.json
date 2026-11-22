@@ -167,8 +167,8 @@
   "seconds": 7.2
  },
  "tiers": {
-  "exact": 88,
-  "statistical": 24,
+  "exact": 104,
+  "statistical": 8,
   "exactIfPrngPorted": 39,
   "statisticalBandsDb": {
    "min": 1.5,
@@ -3268,7 +3268,7 @@
   {
    "id": "synth-juno-pad",
    "kind": "synth",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -3317,11 +3317,19 @@
    "repeatMaxAbsDiff": 0.00000762939453125,
    "renderMs": 1248,
    "tolerance": {
-    "bandsDb": 1.74,
-    "bandRangeDb": 50,
-    "envCorr": 0.947,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 1.74,
+     "bandRangeDb": 50,
+     "envCorr": 0.947,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables"
@@ -3688,23 +3696,12 @@
     "lagMs": 0,
     "maxAbs": 0.8019
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 1.74,
-    "envCorr": 0.947,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 1.394 dB, env corr 0.9971, rms 0.2086 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "inst"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.00482
@@ -3712,7 +3709,7 @@
   {
    "id": "synth-shimmer-pad",
    "kind": "synth",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -3761,11 +3758,19 @@
    "repeatMaxAbsDiff": 0.0000021457672119140625,
    "renderMs": 1611,
    "tolerance": {
-    "bandsDb": 4.46,
-    "bandRangeDb": 50,
-    "envCorr": 0.938,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 4.46,
+     "bandRangeDb": 50,
+     "envCorr": 0.938,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables"
@@ -4132,23 +4137,12 @@
     "lagMs": 0,
     "maxAbs": 0.6515
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 4.46,
-    "envCorr": 0.938,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 3.568 dB, env corr 0.9877, rms 0.7438 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "inst"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.00494
@@ -4597,7 +4591,7 @@
   {
    "id": "synth-pluck",
    "kind": "synth",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -4646,11 +4640,19 @@
    "repeatMaxAbsDiff": 4.76837158203125e-7,
    "renderMs": 863,
    "tolerance": {
-    "bandsDb": 7.19,
-    "bandRangeDb": 50,
-    "envCorr": 0.946,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 7.19,
+     "bandRangeDb": 50,
+     "envCorr": 0.946,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables"
@@ -5017,23 +5019,12 @@
     "lagMs": 0,
     "maxAbs": 1.167
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 7.19,
-    "envCorr": 0.946,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 5.752 dB, env corr 0.9964, rms 0.09492 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "inst"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.004871
@@ -5041,7 +5032,7 @@
   {
    "id": "synth-poly-stab",
    "kind": "synth",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -5090,11 +5081,19 @@
    "repeatMaxAbsDiff": 4.76837158203125e-7,
    "renderMs": 886,
    "tolerance": {
-    "bandsDb": 9.43,
-    "bandRangeDb": 50,
-    "envCorr": 0.904,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 9.43,
+     "bandRangeDb": 50,
+     "envCorr": 0.904,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables"
@@ -5461,23 +5460,12 @@
     "lagMs": 0,
     "maxAbs": 0.7675
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 9.43,
-    "envCorr": 0.904,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 7.544 dB, env corr 0.9541, rms 0.3663 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "inst"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.00477
@@ -5485,7 +5473,7 @@
   {
    "id": "synth-analog-brass",
    "kind": "synth",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -5534,11 +5522,19 @@
    "repeatMaxAbsDiff": 0.000004291534423828125,
    "renderMs": 865,
    "tolerance": {
-    "bandsDb": 8.96,
-    "bandRangeDb": 50,
-    "envCorr": 0.902,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 8.96,
+     "bandRangeDb": 50,
+     "envCorr": 0.902,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables"
@@ -5905,23 +5901,12 @@
     "lagMs": 0,
     "maxAbs": 0.7133
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 8.96,
-    "envCorr": 0.902,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 7.167 dB, env corr 0.9525, rms 0.6833 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "inst"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.004722
@@ -5929,7 +5914,7 @@
   {
    "id": "synth-square-lead",
    "kind": "synth",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -5978,11 +5963,19 @@
    "repeatMaxAbsDiff": 4.76837158203125e-7,
    "renderMs": 891,
    "tolerance": {
-    "bandsDb": 10.1,
-    "bandRangeDb": 50,
-    "envCorr": 0.945,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 10.1,
+     "bandRangeDb": 50,
+     "envCorr": 0.945,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables"
@@ -6349,23 +6342,12 @@
     "lagMs": 0,
     "maxAbs": 0.4764
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 10.1,
-    "envCorr": 0.945,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 8.107 dB, env corr 0.995, rms 0.0972 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "inst"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.004999
@@ -6792,7 +6774,7 @@
   {
    "id": "synth-synth-bass",
    "kind": "synth",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -6841,11 +6823,19 @@
    "repeatMaxAbsDiff": 0.000002384185791015625,
    "renderMs": 837,
    "tolerance": {
-    "bandsDb": 4.58,
-    "bandRangeDb": 50,
-    "envCorr": 0.928,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 4.58,
+     "bandRangeDb": 50,
+     "envCorr": 0.928,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables"
@@ -7212,23 +7202,12 @@
     "lagMs": 0,
     "maxAbs": 1.376
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 4.58,
-    "envCorr": 0.928,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 3.665 dB, env corr 0.9783, rms 0.4539 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "inst"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.004983
@@ -7236,7 +7215,7 @@
   {
    "id": "organ-gospel",
    "kind": "organ",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": true,
    "chromium": "157.0.8103.78",
@@ -7285,11 +7264,19 @@
    "repeatMaxAbsDiff": 8.046627044677734e-7,
    "renderMs": 912,
    "tolerance": {
-    "bandsDb": 5.59,
-    "bandRangeDb": 50,
-    "envCorr": 0.933,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 5.59,
+     "bandRangeDb": 50,
+     "envCorr": 0.933,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables"
@@ -7656,23 +7643,12 @@
     "lagMs": 0,
     "maxAbs": 0.919
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 5.59,
-    "envCorr": 0.933,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 4.472 dB, env corr 0.9828, rms 0.3012 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "inst"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.004965
@@ -7680,7 +7656,7 @@
   {
    "id": "organ-soft-pad",
    "kind": "organ",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -7729,11 +7705,19 @@
    "repeatMaxAbsDiff": 7.450580596923828e-7,
    "renderMs": 840,
    "tolerance": {
-    "bandsDb": 7.66,
-    "bandRangeDb": 50,
-    "envCorr": 0.946,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 7.66,
+     "bandRangeDb": 50,
+     "envCorr": 0.946,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables"
@@ -8100,23 +8084,12 @@
     "lagMs": 0,
     "maxAbs": 0.5604
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 7.66,
-    "envCorr": 0.946,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 6.127 dB, env corr 0.9961, rms 0.003711 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "inst"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.004962
@@ -8124,7 +8097,7 @@
   {
    "id": "organ-full",
    "kind": "organ",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -8173,11 +8146,19 @@
    "repeatMaxAbsDiff": 6.258487701416016e-7,
    "renderMs": 855,
    "tolerance": {
-    "bandsDb": 3.16,
-    "bandRangeDb": 50,
-    "envCorr": 0.946,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 3.16,
+     "bandRangeDb": 50,
+     "envCorr": 0.946,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables"
@@ -8544,23 +8525,12 @@
     "lagMs": 0,
     "maxAbs": 0.8502
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 3.16,
-    "envCorr": 0.946,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 2.529 dB, env corr 0.9959, rms 0.1573 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "inst"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.004975
@@ -8568,7 +8538,7 @@
   {
    "id": "organ-church",
    "kind": "organ",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -8617,11 +8587,19 @@
    "repeatMaxAbsDiff": 0.0000028908252716064453,
    "renderMs": 1084,
    "tolerance": {
-    "bandsDb": 8.58,
-    "bandRangeDb": 50,
-    "envCorr": 0.94,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 8.58,
+     "bandRangeDb": 50,
+     "envCorr": 0.94,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables"
@@ -8988,23 +8966,12 @@
     "lagMs": 0,
     "maxAbs": 0.8749
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 8.58,
-    "envCorr": 0.94,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 6.865 dB, env corr 0.99, rms 0.2883 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "inst"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.004967
@@ -25793,7 +25760,7 @@
   {
    "id": "auto-slot-level",
    "kind": "automation",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -25842,11 +25809,19 @@
    "repeatMaxAbsDiff": 0,
    "renderMs": 991,
    "tolerance": {
-    "bandsDb": 16.4,
-    "bandRangeDb": 50,
-    "envCorr": 0.948,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 16.4,
+     "bandRangeDb": 50,
+     "envCorr": 0.948,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables"
@@ -26144,23 +26119,12 @@
     "lagMs": 0,
     "maxAbs": 0.5118
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 16.4,
-    "envCorr": 0.948,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 13.09 dB, env corr 0.9984, rms 0.001445 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "inst"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.004815
@@ -26549,7 +26513,7 @@
   {
    "id": "auto-reverb-send",
    "kind": "automation",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -26598,11 +26562,19 @@
    "repeatMaxAbsDiff": 2.421438694000244e-7,
    "renderMs": 493,
    "tolerance": {
-    "bandsDb": 6.48,
-    "bandRangeDb": 50,
-    "envCorr": 0.941,
-    "envLagMs": 10,
-    "rmsDb": 2.88
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 6.48,
+     "bandRangeDb": 50,
+     "envCorr": 0.941,
+     "envLagMs": 10,
+     "rmsDb": 2.88
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables",
@@ -26910,24 +26882,12 @@
     "lagMs": 0,
     "maxAbs": 0.211
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 6.48,
-    "envCorr": 0.941,
-    "envLagMs": 10,
-    "rmsDb": 2.88,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 5.185 dB, env corr 0.9913, rms 2.306 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "inst",
-      "ir"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.004485
@@ -26935,7 +26895,7 @@
   {
    "id": "auto-delay-send",
    "kind": "automation",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -26984,11 +26944,19 @@
    "repeatMaxAbsDiff": 2.384185791015625e-7,
    "renderMs": 928,
    "tolerance": {
-    "bandsDb": 1.51,
-    "bandRangeDb": 50,
-    "envCorr": 0.904,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 1.51,
+     "bandRangeDb": 50,
+     "envCorr": 0.904,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables",
@@ -27321,24 +27289,12 @@
     "lagMs": 0,
     "maxAbs": 0.294
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 1.51,
-    "envCorr": 0.904,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 1.21 dB, env corr 0.9541, rms 0.3156 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "inst",
-      "ir"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.004635
@@ -27346,7 +27302,7 @@
   {
    "id": "auto-master-volume",
    "kind": "automation",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -27395,11 +27351,19 @@
    "repeatMaxAbsDiff": 2.4586915969848633e-7,
    "renderMs": 715,
    "tolerance": {
-    "bandsDb": 5.54,
-    "bandRangeDb": 50,
-    "envCorr": 0.905,
-    "envLagMs": 10,
-    "rmsDb": 3.08
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 5.54,
+     "bandRangeDb": 50,
+     "envCorr": 0.905,
+     "envLagMs": 10,
+     "rmsDb": 3.08
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables",
@@ -27697,24 +27661,12 @@
     "lagMs": 0,
     "maxAbs": 0.4189
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 5.54,
-    "envCorr": 0.905,
-    "envLagMs": 10,
-    "rmsDb": 3.08,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 4.428 dB, env corr 0.9547, rms 2.465 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "inst",
-      "ir"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.004883
@@ -35758,7 +35710,7 @@
   {
    "id": "pan-mono-src",
    "kind": "pan",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "addedBy": "T17",
@@ -35808,11 +35760,19 @@
    "repeatMaxAbsDiff": 0,
    "renderMs": 798,
    "tolerance": {
-    "bandsDb": 16.4,
-    "bandRangeDb": 50,
-    "envCorr": 0.948,
-    "envLagMs": 10,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 16.4,
+     "bandRangeDb": 50,
+     "envCorr": 0.948,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables"
@@ -36121,23 +36081,12 @@
     "lagMs": 0,
     "maxAbs": 0.7312
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 16.4,
-    "envCorr": 0.948,
-    "envLagMs": 10,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 13.09 dB, env corr 0.9978, rms 0.001556 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "inst"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.004936

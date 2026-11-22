@@ -12,6 +12,16 @@
 #include "runtime/rt_guard.h"
 #include "time/timer.h"
 
+// T16 review O5: clang (CI / Mac ASan) defines neither __SANITIZE_ADDRESS__ nor __SANITIZE_THREAD__; ask
+// __has_feature too, so a sanitizer build only reports the timings instead of asserting them.
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+#define RIG_TEST_SANITIZED 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
+#define RIG_TEST_SANITIZED 1
+#endif
+#endif
+
 namespace {
 
 class Host final : public rig::drone::DroneHost {
@@ -100,7 +110,7 @@ TEST_SUITE("drone_cpu") {
                                          << " (quantum " << q << " us)");
     std::printf("[drone_cpu] 1 layer %.1f us, crossfade %.1f us, 9th %.1f us per quantum (%.1f%%, %.1f%%, %.1f%%)\n",
                 one, two, nine, 100 * one / q, 100 * two / q, 100 * nine / q);
-#if !defined(__SANITIZE_THREAD__) && !defined(__SANITIZE_ADDRESS__)  // sanitizers: report only (5-15x slower)
+#if !defined(RIG_TEST_SANITIZED)  // sanitizers: report only (5-15x slower)
     CHECK(one < 0.5 * q);
     CHECK(two < 0.5 * q);
 #endif
@@ -118,7 +128,7 @@ TEST_SUITE("drone_cpu") {
     d2.playLoopTest(r, 0);
     const double frozen = run(h2, u2, 0, 1000);
     std::printf("[drone_cpu] frozen loop %.1f us per quantum (%.1f%%)\n", frozen, 100 * frozen / q);
-#if !defined(__SANITIZE_THREAD__) && !defined(__SANITIZE_ADDRESS__)
+#if !defined(RIG_TEST_SANITIZED)
     CHECK(frozen < one);
 #endif
     CHECK(rigtest::g_rtAllocs == alloc0);  // DroneUnit::process: no allocation (T16 review)
