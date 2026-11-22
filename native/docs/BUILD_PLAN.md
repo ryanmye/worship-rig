@@ -456,11 +456,16 @@ then `compare.mjs` again at the exact tier on all three: 112/112). Left statisti
 `synth-supersaw-pad` (passes the exact tier; the T15 row above keeps it statistical, Q11: owner / orchestrator
 decision), `chorus-fast-deep-noise` (1.98e-4 = 99 % of the limit, T05 R2), `song-lofi-rhodes` (Q11),
 `synth-soft-keys`, `lofi-tape-sine`, `fx-row-sweep` (Chromium does not repeat them), `synth-dx-epiano` and
-`bend-modes` (fail the exact tier). ctest `golden.*`
-compares all 112 now (the integrator added the 5 `touch-*` and `bend-modes` to `t14.ids`). Blocked fixtures: none
-(`parity.mjs` "waits for" list emptied).
+`bend-modes` (fail the exact tier). ctest `golden.*` compares all 112 now (the integrator added the 5 `touch-*`
+and `bend-modes` to `t14.ids`). Blocked fixtures: none (`parity.mjs` "waits for" list emptied).
 
-JS (Playwright's Chromium 1194 mapped to the installed 1243 through a scratch `PLAYWRIGHT_BROWSERS_PATH`): @@JS@@
+JS (Playwright's Chromium 1194 mapped to the installed 1243 through a scratch `PLAYWRIGHT_BROWSERS_PATH`):
+`node test/run-all.mjs --fast` 11/12 suites in 25 min 40 s: unit 510 pass / 0 fail / 9 skip, **engine 99/99**
+(wave 2: 97/99 with two load flakes), instruments 143/143, synth-extra 153/153, shell 250, ui-core 82, edit-v2
+105, settings 78/78, mini 14/14, themes 58/58, chrome-fallback 17/17; **eq 27/28** = the known pre-existing `L-21`
+("1100 @system%: every cell's text fits"), the only failure. `node --test test/unit/engine-bridge/*.test.mjs` 111 pass /
+0 fail / 2 skip; `node test/phase2/settings/run.mjs` 78/78 again on its own. (The themes suite rewrites
+`test/phase2/themes/coverage-*.json`, timestamps only: restored.)
 
 | task | verdict | review | done fixtures (all pass) | open items → carried to |
 |---|---|---|---|---|

@@ -45,7 +45,11 @@ Numbers (wave-3 integrator, fresh build dirs `native/core/build-w2*`, `-j2`, one
   112; 110 at the exact tier (not `synth-dx-epiano`, Q11, nor `bend-modes`, T14 O3); tiers **104 exact / 8
   statistical** after 16 promotions in this pass; ctest `golden.*` compares all 112; no blocked fixture
   (`tools/golden/parity.mjs` regenerates PARITY and exits 1 on any failure).
-- @@JS@@
+- JS: `node test/run-all.mjs --fast` 11/12 suites (unit 510 / 0 / 9 skip, engine 99/99, instruments 143/143,
+  synth-extra 153/153, shell 250, ui-core 82, edit-v2 105, settings 78/78, mini 14/14, themes 58/58,
+  chrome-fallback 17/17); **eq 27/28** = the known pre-existing `L-21` ("1100 @system%"), the only failure;
+  `node --test test/unit/engine-bridge/*.test.mjs` 111 / 0 / 2 skip; `test/phase2/settings/run.mjs` 78/78 alone
+  (Playwright's Chromium 1194 mapped to the installed 1243 through a scratch `PLAYWRIGHT_BROWSERS_PATH`).
 - Mac check #2 (`b0bf81a`, before wave 3): core 46/46 under Apple clang 21; probe: 64-512 frames granted exactly,
   0 xruns, 64 safe; warm-pad 4.82 µs per voice. Desktop Auto voice limit stays **128** (Ryan, D5 follow-up); the
   costliest voices are now dx-epiano / supersaw-pad (~14 µs on this box vs warm-pad 9: ARCHITECTURE 7.1).
