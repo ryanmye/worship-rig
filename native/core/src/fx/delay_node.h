@@ -33,6 +33,10 @@ class DelayNodeKernel {
   /** One quantum. `delayTimes` are the a-rate values (already clipped to [0, max] by the AudioParam). in and out
    *  may not alias. */
   void process(const float *const *in, float *const *out, unsigned channels, const float *delayTimes);
+  /** T14: one delay-time array per channel. Chromium's DelayHandler runs one DelayDSPKernel per channel and each
+   *  kernel evaluates delayTime (CalculateSampleAccurateValues) itself, so the second channel sees the timeline's
+   *  second evaluation of the quantum (differs right after cancelAndHold + setValue + linearRamp: the tape bend). */
+  void process(const float *const *in, float *const *out, unsigned channels, const float *const *delayTimes);
   /** Skip a quantum whose input is known silent while the buffer is all zeros: the write index advances (it enters
    *  the float read position) and nothing is copied. */
   void advanceSilent();

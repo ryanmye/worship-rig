@@ -115,7 +115,8 @@ TEST_SUITE("bridge") {
       INFO(c.msg);
       CHECK(contains(eng.call(c.msg), "\"code\":\"unsupported\""));
     }
-    CHECK(contains(eng.call(R"({"v":1,"op":"play","e":"bend","x":0.5,"id":2})"), "\"code\":\"unsupported\""));
+    // T14: play bend / fade / input reach the Model (pitchBend / fadeOutAll / noteInput) and answer ok
+    CHECK(contains(eng.call(R"({"v":1,"op":"play","e":"bend","x":0.5,"id":2})"), "\"ok\":true"));
     CHECK(contains(eng.call(R"({"v":1,"op":"click","id":3})"), "\"code\":\"bad-request\""));
   }
 

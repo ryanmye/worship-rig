@@ -14,6 +14,7 @@
 #include "mix/slot_channel.h"
 #include "mix/slot_channel_api.h"
 #include "model/model.h"
+#include "model/perform.h"  // T14
 #include "num/js_math.h"
 #include "params/params.h"
 #include "samples/cache_service.h"
@@ -233,7 +234,7 @@ double SongGraph::slotWheelFactor(int slot) const {
 
 double SongGraph::morphFor(const Channel &c) const {
   const std::optional<double> I = macro("macro.intensity");
-  const double bendMorph = 0;  // routing bend 'morph' x |bend|: the bend lives in perform (T14)
+  const double bendMorph = performBendMorph(m_);  // T14: routing bend 'morph' x |bend| (the bend lives in perform)
   const bool pad = padLike(c.cfg.instType, c.cfg.instId);
   return std::max(bendMorph, pad && I ? *I : 0.0);
 }
@@ -265,10 +266,15 @@ std::uint32_t SongGraph::prepare(PatchSpec &&patch, std::uint32_t token) {
   if (auto *cs = dynamic_cast<samples::CacheServiceImpl *>(m_.service<CacheService>()))
     cs->protectSwitch(&m_.active_, &plan->patch);
   // the reverb space for the new song, staged now (realtime: built on the IR worker while the old song plays). The
-  // size is the song's own; the wash-adjusted size needs the wheels (T14). Deferral while keys are held: T04 / T14.
+  // size is the EFFECTIVE one (T14: lerp(size, .9, wash) under the new routing at the current wheel values); while
+  // keys are held or pedalled (realtime) a space not built yet is built at the next pause (audio.js prepare)
   if (!m_.attachedKind(UnitSlot::Reverb).empty())
-    if (auto *rp = dynamic_cast<fx::ReverbPool *>(m_.service<ReverbService>()))
-      rp->stage(plan->patch.reverb.size, plan->patch.reverb.damp, false);
+    if (auto *rp = dynamic_cast<fx::ReverbPool *>(m_.service<ReverbService>())) {
+      const rig_config *cfg = m_.env().config;
+      const bool offline = !cfg || cfg->mode == RIG_MODE_OFFLINE;
+      rp->stage(m_.perform().stageReverbSize(plan->routing, plan->patch.reverb.size), plan->patch.reverb.damp,
+                m_.perform().playing() && !offline);
+    }
   for (int i = 0; i < kMaxSlots; ++i) {
     const SlotPatch &s = plan->patch.slots[i];
     PlanSlot &ps = plan->slots[i];
@@ -517,11 +523,13 @@ bool SongGraph::setSlotRow(const ParamRow &row, int slot, double v, double glide
     return true;
   }
   if (key == "bendEnabled") {
-    if (c.live && c.hasInst && v == 0.0) {  // false -> inst.setBend(0); true in pitch mode: the bend is T14's
+    if (c.live && c.hasInst && v == 0.0) {  // false -> inst.setBend(0)
       Command b{};
       b.op = Op::Bend;
       b.f.a = 0;
       m_.sendUnitOp(instSlot(static_cast<std::size_t>(slot)), b, when);
+    } else if (v != 0.0) {
+      m_.perform().bendEnabled(slot, when);  // T14: true in pitch mode -> inst.setBend(bend * range)
     }
     return true;
   }

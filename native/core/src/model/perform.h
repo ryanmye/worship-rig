@@ -19,6 +19,7 @@
 #include <string_view>
 #include <vector>
 
+#include "graph/unit.h"
 #include "model/patch.h"
 #include "runtime/command.h"
 
@@ -138,6 +139,7 @@ class Perform {
   struct MonoNote {
     int phys, sn;
     double v;
+    int vel;  // raw velocity (the instrument's velocity layers)
   };
   struct Mono {  // audio.js sc.mono
     std::vector<MonoNote> notes;  // Map insertion order
@@ -171,7 +173,7 @@ class Perform {
   void unpedal(std::size_t i);
   void unpedalAll();
   Mono &mono(std::uint32_t ch);
-  void monoOn(const Channel &c, int phys, int sn, double v, double t);
+  void monoOn(const Channel &c, int phys, int sn, double v, int vel, double t);
   void monoOff(std::uint32_t ch, int phys, double t);
   void monoSwitch(std::uint32_t ch, const MonoNote &target, double t);
   bool monoTarget(std::uint32_t ch, const SlotPatch &cfg, MonoNote &out);
@@ -182,6 +184,8 @@ class Perform {
   // wheels.cpp
   bool setWheelAt(std::string_view source, double v, double t, bool fromSwell);
   void glideWheel(double to, double t, double dur);
+  void glideStep(std::uint32_t seq, double tt);
+  void applyFxWheels(double t, double tc);
   void swellStep(std::uint32_t seq, double tt, double tStart);
   void applyBend(double t, const std::string &mode);
   void neutralBend(const std::string &oldMode, double t);

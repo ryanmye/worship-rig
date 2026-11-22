@@ -32,6 +32,37 @@ void DelayNodeKernel::advanceSilent() {
   if (w_ >= len_) w_ -= len_;
 }
 
+void DelayNodeKernel::process(const float *const *in, float *const *out, unsigned channels,
+                              const float *const *dts) {  // T14: per-channel delay times (see delay_node.h)
+  for (unsigned c = 0; c < channels; ++c) {
+    float *b = buf_[c].data();
+    const std::size_t first = std::min(kQ, len_ - w_);
+    std::memcpy(b + w_, in[c], first * sizeof(float));
+    if (first < kQ) std::memcpy(b, in[c] + first, (kQ - first) * sizeof(float));
+  }
+  const float lenF = static_cast<float>(len_);
+  const long len = static_cast<long>(len_);
+  for (unsigned c = 0; c < channels; ++c) {
+    const float *dt = dts[c];
+    for (std::size_t i = 0; i < kQ; ++i) {
+      long wi = static_cast<long>(w_ + i);
+      if (wi >= len) wi -= len;
+      const float desired = std::max(dt[i], 0.0f) * sr_;
+      float rp = static_cast<float>(wi) + (lenF - desired);
+      if (rp >= lenF) rp -= lenF;
+      long i1 = static_cast<long>(rp);
+      if (i1 >= len) i1 -= len;
+      long i2 = i1 + 1;
+      if (i2 >= len) i2 -= len;
+      const float f = rp - static_cast<float>(i1);
+      const float s1 = buf_[c][static_cast<std::size_t>(i1)], s2 = buf_[c][static_cast<std::size_t>(i2)];
+      out[c][i] = s1 + f * (s2 - s1);
+    }
+  }
+  w_ += kQ;
+  if (w_ >= len_) w_ -= len_;
+}
+
 void DelayNodeKernel::process(const float *const *in, float *const *out, unsigned channels, const float *dt) {
   // CopyToCircularBuffer: the quantum goes into the buffer before any read (reads of < 128 frames see it)
   for (unsigned c = 0; c < channels; ++c) {

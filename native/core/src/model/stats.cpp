@@ -5,6 +5,7 @@
 #include "bridge/json_out.h"
 #include "model/model.h"
 #include "model/song.h"
+#include "model/perform.h"  // T14
 
 namespace rig {
 
@@ -34,6 +35,7 @@ std::string Model::stateJson() const {
   j.key("keyContext").begin().kv("pc", song_.keyPc < 0 ? 0 : song_.keyPc).kvBool("minor", song_.keyMinor).end();
   j.kvBool("lowResource", lowResource_);
   sg_->stateFields(j);
+  j.kvRaw("runtime", perf_->runtimeStateJson());  // T14: audio.js getState().runtime
   j.end();
   return j.take();
 }
@@ -46,6 +48,7 @@ std::string Model::statsJson() const {
   out += ",\"lowResource\":" + std::string(lowResource_ ? "true" : "false") + ",\"instSeq\":" +
          std::to_string(instSeq_);
   sg_->statsFields(out);  // T13: retiring (audio.js _debugStats.retiring), channel counters
+  perf_->statsFields(out);  // T14: sounding, pedaled
   forEachService([&](Service &s) {
     const std::string f = s.statsFields();
     if (!f.empty()) out += "," + f;

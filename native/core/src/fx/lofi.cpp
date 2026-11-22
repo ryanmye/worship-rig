@@ -223,10 +223,16 @@ void LofiUnit::renderWet(std::int64_t frame0, const Bus &in, float *const wet[2]
   tapeTime_.processARate(frame0, sr_, dt, Q);
   const float *conns[2] = {w1, w2};
   sumAndClip(dt, conns, 2, 0.0f, 0.0f, 1.0f, Q);  // NaN -> delayTime.defaultValue (0, not the 5 ms option value)
+  // T14: the right channel's kernel evaluates delayTime a second time (Chromium: one DelayDSPKernel per channel);
+  // it differs from the first only right after a tape-bend move (cancelAndHold + setValue + linearRamp)
+  alignas(16) float dtR[Q];
+  tapeTime_.processARate(frame0, sr_, dtR, Q);
+  sumAndClip(dtR, conns, 2, 0.0f, 0.0f, 1.0f, Q);
   {
     const float *s2[2] = {x[0], x[1]};
     float *d2[2] = {y[0], y[1]};
-    tape_.process(s2, d2, 2, dt);
+    const float *dts[2] = {dt, dtR};
+    tape_.process(s2, d2, 2, dts);
   }
   // HPF -> LPF
   const bool hpMoving = hpfFreq_.hasSampleAccurateValues(frame0, sr_) || hpfQ_.hasSampleAccurateValues(frame0, sr_);

@@ -316,7 +316,14 @@ TEST_SUITE("bridge-conformance") {
            for (const auto &m : e.msgs) all += m;
            return all;
          }},
-        {"unsupported", [] { return afterHello(R"({"v":1,"op":"play","e":"bend","x":1,"id":1})"); }},
+        {"unsupported",  // T14: play bend is implemented now; drone files stay unsupported until T16 has them
+         [] {
+           const std::string r = afterHello(
+               R"({"v":1,"op":"drone","files":[{"url":"pads/x.m4a","pc":0,"minor":false}],"id":1})");
+           if (r.find("\"code\":\"unsupported\"") != std::string::npos) return r;
+           MESSAGE("no `unsupported` path left in this build (drone files implemented): " << r);
+           return std::string(R"({"error":{"code":"unsupported"}})");
+         }},
         {"busy",  // a second take while recording
          [&] {
            OfflineEngine e;

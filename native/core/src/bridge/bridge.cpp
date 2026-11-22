@@ -220,9 +220,17 @@ void opPlay(Engine &e, const Req &r) {
   } else if (k == "swell") {
     yyjson_val *s = yyjson_obj_get(r.m, "start");
     done = m.swell(s && yyjson_is_bool(s) ? (yyjson_get_bool(s) ? 1 : 0) : -1, when);
+  } else if (k == "bend") {  // T14: contract 1.4 pitchBend / fadeOutAll / noteInput (void: always ok)
+    m.pitchBend(getNum(r.m, "x", 0.0), when);
+    done = true;
+  } else if (k == "fade") {
+    m.fadeOutAll(getNum(r.m, "seconds", 6.0), when);
+    done = true;
+  } else if (k == "input") {
+    m.noteInput(when);
+    done = true;
   } else {
-    // bend / fade / input: void Model skeletons (T14); kept `unsupported` so callers and the golden runner can tell
-    return fail(e, r, "unsupported", "play: '" + k + "' is not implemented yet (T14)");
+    return fail(e, r, "bad-request", "play: unknown e '" + k + "'");
   }
   ok(e, r, done ? "{\"ok\":true}" : "{\"ok\":false}");
 }

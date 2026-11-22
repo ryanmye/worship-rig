@@ -1,0 +1,641 @@
+# T14 perform touch vectors (dump-perform.mjs). hex = IEEE-754 double, big-endian
+named soft 1 3fabfd309107283c
+named soft 2 3fb53632c8b52500
+named soft 3 3fbb0dcedc6addd6
+named soft 4 3fc01352212525fb
+named soft 5 3fc260e47af5ce3d
+named soft 6 3fc480c7ef95ecf9
+named soft 7 3fc67d66d1345446
+named soft 8 3fc85da8f1e039f6
+named soft 9 3fca266c83be095d
+named soft 10 3fcbdb4893f6d763
+named soft 11 3fcd7efad9e2e149
+named soft 12 3fcf13aa108bf649
+named soft 13 3fd04d881e7c52b7
+named soft 14 3fd10b4b65577135
+named soft 15 3fd1c3b4f457539f
+named soft 16 3fd2774323179723
+named soft 17 3fd32661888ed6b0
+named soft 18 3fd3d16cb2212cb7
+named soft 19 3fd478b4f4316f9c
+named soft 20 3fd51c809532e578
+named soft 21 3fd5bd0d7f951dc3
+named soft 22 3fd65a92997716f2
+named soft 23 3fd6f540d81effad
+named soft 24 3fd78d441f1fa0f0
+named soft 25 3fd822c3f6dd34e5
+named soft 26 3fd8b5e42329be01
+named soft 27 3fd946c5208ecd8a
+named soft 28 3fd9d5848d4d5d28
+named soft 29 3fda623d81f7805f
+named soft 30 3fdaed08dcad298b
+named soft 31 3fdb75fd8160544f
+named soft 32 3fdbfd309107283c
+named soft 33 3fdc82b59941d65e
+named soft 34 3fdd069ebdaebeb2
+named soft 35 3fdd88fcdbec7f5e
+named soft 36 3fde09dfab1b0abf
+named soft 37 3fde8955d787e0c4
+named soft 38 3fdf076d1b13e633
+named soft 39 3fdf843252c970a1
+named soft 40 3fdfffb19205be3e
+named soft 41 3fe03cfb19c4a0f3
+named soft 42 3fe07985745a9a9f
+named soft 43 3fe0b57ce39918df
+named soft 44 3fe0f0e62a995b23
+named soft 45 3fe12bc5ca3e8f81
+named soft 46 3fe1662006313583
+named soft 47 3fe19ff8e960fecd
+named soft 48 3fe1d9544a1b15d6
+named soft 49 3fe21235cdc0d9e8
+named soft 50 3fe24aa0ec298df1
+named soft 51 3fe28298f2b82121
+named soft 52 3fe2ba21072d1347
+named soft 53 3fe2f13c2a3b7b7e
+named soft 54 3fe327ed39e75f4d
+named soft 55 3fe35e36f3b2cd63
+named soft 56 3fe3941bf69e8d62
+named soft 57 3fe3c99ec502a995
+named soft 58 3fe3fec1c6429d2b
+named soft 59 3fe43387486086bc
+named soft 60 3fe467f181726190
+named soft 61 3fe49c0290fbf609
+named soft 62 3fe4cfbc812fe9bc
+named soft 63 3fe50321481a1823
+named soft 64 3fe53632c8b52500
+named soft 65 3fe568f2d3ed07c8
+named soft 66 3fe59b63299023aa
+named soft 67 3fe5cd85793058a4
+named soft 68 3fe5ff5b62f5576c
+named soft 69 3fe630e6786162f9
+named soft 70 3fe662283d098eec
+named soft 71 3fe693222742712a
+named soft 72 3fe6c3d5a0c22706
+named soft 73 3fe6f44407387a64
+named soft 74 3fe7246eacdde149
+named soft 75 3fe75456d8fa0260
+named soft 76 3fe783fdc8625a4a
+named soft 77 3fe7b364adf1909a
+named soft 78 3fe7e28cb2f7ff80
+named soft 79 3fe81176f7a5e650
+named soft 80 3fe84024936fb588
+named soft 81 3fe86e96956cda01
+named soft 82 3fe89cce04b16500
+named soft 83 3fe8cacbe0a2e791
+named soft 84 3fe8f8912148d0f4
+named soft 85 3fe9261eb79899ba
+named soft 86 3fe953758dbdffd6
+named soft 87 3fe98096875f92aa
+named soft 88 3fe9ad8281dfc97f
+named soft 89 3fe9da3a549adac0
+named soft 90 3fea06bed1218624
+named soft 91 3fea3310c37100b5
+named soft 92 3fea5f30f2282e02
+named soft 93 3fea8b201eba4f1a
+named soft 94 3feab6df059f4ce4
+named soft 95 3feae26e5e81c0fa
+named soft 96 3feb0dcedc6addd5
+named soft 97 3feb39012dec54c6
+named soft 98 3feb6405fd485664
+named soft 99 3feb8eddf097c81c
+named soft 100 3febb989a9eec7da
+named soft 101 3febe409c77f952c
+named soft 102 3fec0e5ee3bbf5d1
+named soft 103 3fec388995752a3c
+named soft 104 3fec628a6ffa853b
+named soft 105 3fec8c620336b8ee
+named soft 106 3fecb610dbcbea01
+named soft 107 3fecdf97832e9910
+named soft 108 3fed08f67fbf7147
+named soft 109 3fed322e54e40a56
+named soft 110 3fed5b3f831eaafc
+named soft 111 3fed842a882518b5
+named soft 112 3fedacefdef68051
+named soft 113 3fedd58ffff0829c
+named soft 114 3fedfe0b60e36f84
+named soft 115 3fee26627525b9bf
+named soft 116 3fee4e95ada6ac2b
+named soft 117 3fee76a5790069e1
+named soft 118 3fee9e924389413b
+named soft 119 3feec65c776459c7
+named soft 120 3feeee047c91c493
+named soft 121 3fef158ab8fdf5f6
+named soft 122 3fef3cef9090af7d
+named soft 123 3fef6433653b6064
+named soft 124 3fef8b5697070295
+named soft 125 3fefb259842179ef
+named soft 126 3fefd93c88ea7b3d
+named soft 127 3ff0000000000000
+named normal 1 3f80204081020408
+named normal 2 3f90204081020408
+named normal 3 3f983060c183060c
+named normal 4 3fa0204081020408
+named normal 5 3fa42850a142850a
+named normal 6 3fa83060c183060c
+named normal 7 3fac3870e1c3870e
+named normal 8 3fb0204081020408
+named normal 9 3fb2244891224489
+named normal 10 3fb42850a142850a
+named normal 11 3fb62c58b162c58b
+named normal 12 3fb83060c183060c
+named normal 13 3fba3468d1a3468d
+named normal 14 3fbc3870e1c3870e
+named normal 15 3fbe3c78f1e3c78f
+named normal 16 3fc0204081020408
+named normal 17 3fc1224489122449
+named normal 18 3fc2244891224489
+named normal 19 3fc3264c993264ca
+named normal 20 3fc42850a142850a
+named normal 21 3fc52a54a952a54b
+named normal 22 3fc62c58b162c58b
+named normal 23 3fc72e5cb972e5cc
+named normal 24 3fc83060c183060c
+named normal 25 3fc93264c993264d
+named normal 26 3fca3468d1a3468d
+named normal 27 3fcb366cd9b366ce
+named normal 28 3fcc3870e1c3870e
+named normal 29 3fcd3a74e9d3a74f
+named normal 30 3fce3c78f1e3c78f
+named normal 31 3fcf3e7cf9f3e7d0
+named normal 32 3fd0204081020408
+named normal 33 3fd0a142850a1428
+named normal 34 3fd1224489122449
+named normal 35 3fd1a3468d1a3469
+named normal 36 3fd2244891224489
+named normal 37 3fd2a54a952a54a9
+named normal 38 3fd3264c993264ca
+named normal 39 3fd3a74e9d3a74ea
+named normal 40 3fd42850a142850a
+named normal 41 3fd4a952a54a952a
+named normal 42 3fd52a54a952a54b
+named normal 43 3fd5ab56ad5ab56b
+named normal 44 3fd62c58b162c58b
+named normal 45 3fd6ad5ab56ad5ab
+named normal 46 3fd72e5cb972e5cc
+named normal 47 3fd7af5ebd7af5ec
+named normal 48 3fd83060c183060c
+named normal 49 3fd8b162c58b162c
+named normal 50 3fd93264c993264d
+named normal 51 3fd9b366cd9b366d
+named normal 52 3fda3468d1a3468d
+named normal 53 3fdab56ad5ab56ad
+named normal 54 3fdb366cd9b366ce
+named normal 55 3fdbb76eddbb76ee
+named normal 56 3fdc3870e1c3870e
+named normal 57 3fdcb972e5cb972e
+named normal 58 3fdd3a74e9d3a74f
+named normal 59 3fddbb76eddbb76f
+named normal 60 3fde3c78f1e3c78f
+named normal 61 3fdebd7af5ebd7af
+named normal 62 3fdf3e7cf9f3e7d0
+named normal 63 3fdfbf7efdfbf7f0
+named normal 64 3fe0204081020408
+named normal 65 3fe060c183060c18
+named normal 66 3fe0a142850a1428
+named normal 67 3fe0e1c3870e1c38
+named normal 68 3fe1224489122449
+named normal 69 3fe162c58b162c59
+named normal 70 3fe1a3468d1a3469
+named normal 71 3fe1e3c78f1e3c79
+named normal 72 3fe2244891224489
+named normal 73 3fe264c993264c99
+named normal 74 3fe2a54a952a54a9
+named normal 75 3fe2e5cb972e5cb9
+named normal 76 3fe3264c993264ca
+named normal 77 3fe366cd9b366cda
+named normal 78 3fe3a74e9d3a74ea
+named normal 79 3fe3e7cf9f3e7cfa
+named normal 80 3fe42850a142850a
+named normal 81 3fe468d1a3468d1a
+named normal 82 3fe4a952a54a952a
+named normal 83 3fe4e9d3a74e9d3a
+named normal 84 3fe52a54a952a54b
+named normal 85 3fe56ad5ab56ad5b
+named normal 86 3fe5ab56ad5ab56b
+named normal 87 3fe5ebd7af5ebd7b
+named normal 88 3fe62c58b162c58b
+named normal 89 3fe66cd9b366cd9b
+named normal 90 3fe6ad5ab56ad5ab
+named normal 91 3fe6eddbb76eddbb
+named normal 92 3fe72e5cb972e5cc
+named normal 93 3fe76eddbb76eddc
+named normal 94 3fe7af5ebd7af5ec
+named normal 95 3fe7efdfbf7efdfc
+named normal 96 3fe83060c183060c
+named normal 97 3fe870e1c3870e1c
+named normal 98 3fe8b162c58b162c
+named normal 99 3fe8f1e3c78f1e3c
+named normal 100 3fe93264c993264d
+named normal 101 3fe972e5cb972e5d
+named normal 102 3fe9b366cd9b366d
+named normal 103 3fe9f3e7cf9f3e7d
+named normal 104 3fea3468d1a3468d
+named normal 105 3fea74e9d3a74e9d
+named normal 106 3feab56ad5ab56ad
+named normal 107 3feaf5ebd7af5ebd
+named normal 108 3feb366cd9b366ce
+named normal 109 3feb76eddbb76ede
+named normal 110 3febb76eddbb76ee
+named normal 111 3febf7efdfbf7efe
+named normal 112 3fec3870e1c3870e
+named normal 113 3fec78f1e3c78f1e
+named normal 114 3fecb972e5cb972e
+named normal 115 3fecf9f3e7cf9f3e
+named normal 116 3fed3a74e9d3a74f
+named normal 117 3fed7af5ebd7af5f
+named normal 118 3fedbb76eddbb76f
+named normal 119 3fedfbf7efdfbf7f
+named normal 120 3fee3c78f1e3c78f
+named normal 121 3fee7cf9f3e7cf9f
+named normal 122 3feebd7af5ebd7af
+named normal 123 3feefdfbf7efdfbf
+named normal 124 3fef3e7cf9f3e7d0
+named normal 125 3fef7efdfbf7efe0
+named normal 126 3fefbf7efdfbf7f0
+named normal 127 3ff0000000000000
+named hard 1 3f3c359bc89858ea
+named hard 2 3f5560f4b21957ad
+named hard 3 3f647341a8a16930
+named hard 4 3f7033b9944dc17c
+named hard 5 3f77276c729872af
+named hard 6 3f7eff2a3bd8949c
+named hard 7 3f83d564c08ee78b
+named hard 8 3f888ec67eddf5e0
+named hard 9 3f8da687227ac006
+named hard 10 3f918c25a7c9da51
+named hard 11 3f94702ccf6ad082
+named hard 12 3f977dbb026dd45e
+named hard 13 3f9ab363f97d0069
+named hard 14 3f9e0fe3b8ca9b51
+named hard 15 3fa0c90bbc8af44d
+named hard 16 3fa29c7c1b4e3389
+named hard 17 3fa481cb3786d1bd
+named hard 18 3fa6788b5f23997f
+named hard 19 3fa88057911cee65
+named hard 20 3faa98d25f3e1b0b
+named hard 21 3facc1a50176a458
+named hard 22 3faefa7e90240799
+named hard 23 3fb0a189aeb3af22
+named hard 24 3fb1cd8e33bf3721
+named hard 25 3fb3012b6fbc49e6
+named hard 26 3fb43c41e0528f7f
+named hard 27 3fb57eb3baee5a20
+named hard 28 3fb6c864c52e0d9c
+named hard 29 3fb8193a322ca5a0
+named hard 30 3fb9711a83ea2b48
+named hard 31 3fbacfed7035bd26
+named hard 32 3fbc359bc89858ec
+named hard 33 3fbda20f64d59030
+named hard 34 3fbf15330fa8fc96
+named hard 35 3fc047793abacb3e
+named hard 36 3fc1079d0a53ddc6
+named hard 37 3fc1cafb97ca2235
+named hard 38 3fc2918bdfd3779d
+named hard 39 3fc35b4534dc7995
+named hard 40 3fc4281f39b704f0
+named hard 41 3fc4f811dcbd6908
+named hard 42 3fc5cb15535da63d
+named hard 43 3fc6a1221601bce4
+named hard 44 3fc77a30dc4b7438
+named hard 45 3fc8563a999b302d
+named hard 46 3fc9353879da71d0
+named hard 47 3fca1723de837d37
+named hard 48 3fcafbf65be06184
+named hard 49 3fcbe3a9b67c4636
+named hard 50 3fccce37e0c272ae
+named hard 51 3fcdbb9af8c702d2
+named hard 52 3fceabcd4635aaa7
+named hard 53 3fcf9ec938634b1d
+named hard 54 3fd04a44b23fb7d8
+named hard 55 3fd0c68441f18b98
+named hard 56 3fd14420b93d3622
+named hard 57 3fd1c31796a3a655
+named hard 58 3fd24366687d5921
+named hard 59 3fd2c50acc519f74
+named hard 60 3fd348026e37aacc
+named hard 61 3fd3cc4b0840a7d0
+named hard 62 3fd451e261ea3eec
+named hard 63 3fd4d8c64f98e186
+named hard 64 3fd560f4b21957af
+named hard 65 3fd5ea6b76290e02
+named hard 66 3fd675289404ae23
+named hard 67 3fd7012a0efc95f7
+named hard 68 3fd78e6df50eca77
+named hard 69 3fd81cf25e860aca
+named hard 70 3fd8acb56d9dafb2
+named hard 71 3fd93db54e2a099d
+named hard 72 3fd9cff03544f5d2
+named hard 73 3fda636460fe686a
+named hard 74 3fdaf8101810add7
+named hard 75 3fdb8df1a9982b1d
+named hard 76 3fdc25076cce6808
+named hard 77 3fdcbd4fc0c8325e
+named hard 78 3fdd56c90c36acbd
+named hard 79 3fddf171bd2b1e87
+named hard 80 3fde8d4848dd5da5
+named hard 81 3fdf2a4b2b74ad43
+named hard 82 3fdfc878e7d2ef45
+named hard 83 3fe033e803b10430
+named hard 84 3fe084278cf1ac79
+named hard 85 3fe0d4fa5aa09744
+named hard 86 3fe1265fbab109f8
+named hard 87 3fe17856fdfef396
+named hard 88 3fe1cadf783a4f26
+named hard 89 3fe21df87fd352be
+named hard 90 3fe271a16de76113
+named hard 91 3fe2c5d99e2eb3e8
+named hard 92 3fe31aa06eeab67f
+named hard 93 3fe36ff540d50788
+named hard 94 3fe3c5d7770f1aac
+named hard 95 3fe41c467712721e
+named hard 96 3fe47341a8a16932
+named hard 97 3fe4cac875b88950
+named hard 98 3fe522da4a8062ea
+named hard 99 3fe57b76953fe48e
+named hard 100 3fe5d49cc64f2a78
+named hard 101 3fe62e4c500ac137
+named hard 102 3fe68884a6c75690
+named hard 103 3fe6e34540c5d3a4
+named hard 104 3fe73e8d9627dbf7
+named hard 105 3fe79a5d20e4ad0e
+named hard 106 3fe7f6b35cbe5a7e
+named hard 107 3fe8538fc73762b8
+named hard 108 3fe8b0f1df8898c6
+named hard 109 3fe90ed926975f8c
+named hard 110 3fe96d451eec3357
+named hard 111 3fe9cc354ca97e6a
+named hard 112 3fea2ba93582b5b2
+named hard 113 3fea8ba060b3bac2
+named hard 114 3feaec1a56f88052
+named hard 115 3feb4d16a284eebe
+named hard 116 3febae94cefd0614
+named hard 117 3fec1094696d3b3e
+named hard 118 3fec731500430e3f
+named hard 119 3fecd6162345d725
+named hard 120 3fed3997638fc7d9
+named hard 121 3fed9d98538720c4
+named hard 122 3fee021886d79670
+named hard 123 3fee6717926be66c
+named hard 124 3feecc950c6799b4
+named hard 125 3fef32908c20f2fa
+named hard 126 3fef9909aa1b075f
+named hard 127 3ff0000000000000
+named fixed 1 3fe93264c993264d
+named fixed 2 3fe93264c993264d
+named fixed 3 3fe93264c993264d
+named fixed 4 3fe93264c993264d
+named fixed 5 3fe93264c993264d
+named fixed 6 3fe93264c993264d
+named fixed 7 3fe93264c993264d
+named fixed 8 3fe93264c993264d
+named fixed 9 3fe93264c993264d
+named fixed 10 3fe93264c993264d
+named fixed 11 3fe93264c993264d
+named fixed 12 3fe93264c993264d
+named fixed 13 3fe93264c993264d
+named fixed 14 3fe93264c993264d
+named fixed 15 3fe93264c993264d
+named fixed 16 3fe93264c993264d
+named fixed 17 3fe93264c993264d
+named fixed 18 3fe93264c993264d
+named fixed 19 3fe93264c993264d
+named fixed 20 3fe93264c993264d
+named fixed 21 3fe93264c993264d
+named fixed 22 3fe93264c993264d
+named fixed 23 3fe93264c993264d
+named fixed 24 3fe93264c993264d
+named fixed 25 3fe93264c993264d
+named fixed 26 3fe93264c993264d
+named fixed 27 3fe93264c993264d
+named fixed 28 3fe93264c993264d
+named fixed 29 3fe93264c993264d
+named fixed 30 3fe93264c993264d
+named fixed 31 3fe93264c993264d
+named fixed 32 3fe93264c993264d
+named fixed 33 3fe93264c993264d
+named fixed 34 3fe93264c993264d
+named fixed 35 3fe93264c993264d
+named fixed 36 3fe93264c993264d
+named fixed 37 3fe93264c993264d
+named fixed 38 3fe93264c993264d
+named fixed 39 3fe93264c993264d
+named fixed 40 3fe93264c993264d
+named fixed 41 3fe93264c993264d
+named fixed 42 3fe93264c993264d
+named fixed 43 3fe93264c993264d
+named fixed 44 3fe93264c993264d
+named fixed 45 3fe93264c993264d
+named fixed 46 3fe93264c993264d
+named fixed 47 3fe93264c993264d
+named fixed 48 3fe93264c993264d
+named fixed 49 3fe93264c993264d
+named fixed 50 3fe93264c993264d
+named fixed 51 3fe93264c993264d
+named fixed 52 3fe93264c993264d
+named fixed 53 3fe93264c993264d
+named fixed 54 3fe93264c993264d
+named fixed 55 3fe93264c993264d
+named fixed 56 3fe93264c993264d
+named fixed 57 3fe93264c993264d
+named fixed 58 3fe93264c993264d
+named fixed 59 3fe93264c993264d
+named fixed 60 3fe93264c993264d
+named fixed 61 3fe93264c993264d
+named fixed 62 3fe93264c993264d
+named fixed 63 3fe93264c993264d
+named fixed 64 3fe93264c993264d
+named fixed 65 3fe93264c993264d
+named fixed 66 3fe93264c993264d
+named fixed 67 3fe93264c993264d
+named fixed 68 3fe93264c993264d
+named fixed 69 3fe93264c993264d
+named fixed 70 3fe93264c993264d
+named fixed 71 3fe93264c993264d
+named fixed 72 3fe93264c993264d
+named fixed 73 3fe93264c993264d
+named fixed 74 3fe93264c993264d
+named fixed 75 3fe93264c993264d
+named fixed 76 3fe93264c993264d
+named fixed 77 3fe93264c993264d
+named fixed 78 3fe93264c993264d
+named fixed 79 3fe93264c993264d
+named fixed 80 3fe93264c993264d
+named fixed 81 3fe93264c993264d
+named fixed 82 3fe93264c993264d
+named fixed 83 3fe93264c993264d
+named fixed 84 3fe93264c993264d
+named fixed 85 3fe93264c993264d
+named fixed 86 3fe93264c993264d
+named fixed 87 3fe93264c993264d
+named fixed 88 3fe93264c993264d
+named fixed 89 3fe93264c993264d
+named fixed 90 3fe93264c993264d
+named fixed 91 3fe93264c993264d
+named fixed 92 3fe93264c993264d
+named fixed 93 3fe93264c993264d
+named fixed 94 3fe93264c993264d
+named fixed 95 3fe93264c993264d
+named fixed 96 3fe93264c993264d
+named fixed 97 3fe93264c993264d
+named fixed 98 3fe93264c993264d
+named fixed 99 3fe93264c993264d
+named fixed 100 3fe93264c993264d
+named fixed 101 3fe93264c993264d
+named fixed 102 3fe93264c993264d
+named fixed 103 3fe93264c993264d
+named fixed 104 3fe93264c993264d
+named fixed 105 3fe93264c993264d
+named fixed 106 3fe93264c993264d
+named fixed 107 3fe93264c993264d
+named fixed 108 3fe93264c993264d
+named fixed 109 3fe93264c993264d
+named fixed 110 3fe93264c993264d
+named fixed 111 3fe93264c993264d
+named fixed 112 3fe93264c993264d
+named fixed 113 3fe93264c993264d
+named fixed 114 3fe93264c993264d
+named fixed 115 3fe93264c993264d
+named fixed 116 3fe93264c993264d
+named fixed 117 3fe93264c993264d
+named fixed 118 3fe93264c993264d
+named fixed 119 3fe93264c993264d
+named fixed 120 3fe93264c993264d
+named fixed 121 3fe93264c993264d
+named fixed 122 3fe93264c993264d
+named fixed 123 3fe93264c993264d
+named fixed 124 3fe93264c993264d
+named fixed 125 3fe93264c993264d
+named fixed 126 3fe93264c993264d
+named fixed 127 3fe93264c993264d
+custom 1 0 1 127 1 3f80204081020408
+custom 1 0 1 127 7 3fac3870e1c3870e
+custom 1 0 1 127 20 3fc42850a142850a
+custom 1 0 1 127 33 3fd0a142850a1428
+custom 1 0 1 127 64 3fe0204081020408
+custom 1 0 1 127 90 3fe6ad5ab56ad5ab
+custom 1 0 1 127 100 3fe93264c993264d
+custom 1 0 1 127 111 3febf7efdfbf7efe
+custom 1 0 1 127 126 3fefbf7efdfbf7f0
+custom 1 0 1 127 127 3ff0000000000000
+custom 0.6 0 1 127 1 3fabfd309107283c
+custom 0.6 0 1 127 7 3fc67d66d1345446
+custom 0.6 0 1 127 20 3fd51c809532e578
+custom 0.6 0 1 127 33 3fdc82b59941d65e
+custom 0.6 0 1 127 64 3fe53632c8b52500
+custom 0.6 0 1 127 90 3fea06bed1218624
+custom 0.6 0 1 127 100 3febb989a9eec7da
+custom 0.6 0 1 127 111 3fed842a882518b5
+custom 0.6 0 1 127 126 3fefd93c88ea7b3d
+custom 0.6 0 1 127 127 3ff0000000000000
+custom 1.6 0.1 0.9 100 1 3fb9baae2a871bfc
+custom 1.6 0.1 0.9 100 7 3fbc81dd152716f3
+custom 1.6 0.1 0.9 100 20 3fc498ed035ae002
+custom 1.6 0.1 0.9 100 33 3fce2cc61b520898
+custom 1.6 0.1 0.9 100 64 3fdf785f7be8a19e
+custom 1.6 0.1 0.9 100 90 3fe8d41dbb33c485
+custom 1.6 0.1 0.9 100 100 3feccccccccccccd
+custom 1.6 0.1 0.9 100 111 3feccccccccccccd
+custom 1.6 0.1 0.9 100 126 3feccccccccccccd
+custom 1.6 0.1 0.9 100 127 3feccccccccccccd
+custom 2.5 0.8 0.2 64 1 3fc99a3333333334
+custom 2.5 0.8 0.2 64 7 3fc9e7629529b420
+custom 2.5 0.8 0.2 64 20 3fcdcae9a21136f2
+custom 2.5 0.8 0.2 64 33 3fd4218c72239a03
+custom 2.5 0.8 0.2 64 64 3fe999999999999a
+custom 2.5 0.8 0.2 64 90 3fe999999999999a
+custom 2.5 0.8 0.2 64 100 3fe999999999999a
+custom 2.5 0.8 0.2 64 111 3fe999999999999a
+custom 2.5 0.8 0.2 64 126 3fe999999999999a
+custom 2.5 0.8 0.2 64 127 3fe999999999999a
+custom 0.25 0 1 20 1 3fde4383e8245268
+custom 0.25 0 1 20 7 3fe89cf69f3f7dd8
+custom 0.25 0 1 20 20 3ff0000000000000
+custom 0.25 0 1 20 33 3ff0000000000000
+custom 0.25 0 1 20 64 3ff0000000000000
+custom 0.25 0 1 20 90 3ff0000000000000
+custom 0.25 0 1 20 100 3ff0000000000000
+custom 0.25 0 1 20 111 3ff0000000000000
+custom 0.25 0 1 20 126 3ff0000000000000
+custom 0.25 0 1 20 127 3ff0000000000000
+custom 4 0.3 0.3 127 1 3fd3333333333333
+custom 4 0.3 0.3 127 7 3fd3333333333333
+custom 4 0.3 0.3 127 20 3fd3333333333333
+custom 4 0.3 0.3 127 33 3fd3333333333333
+custom 4 0.3 0.3 127 64 3fd3333333333333
+custom 4 0.3 0.3 127 90 3fd3333333333333
+custom 4 0.3 0.3 127 100 3fd3333333333333
+custom 4 0.3 0.3 127 111 3fd3333333333333
+custom 4 0.3 0.3 127 126 3fd3333333333333
+custom 4 0.3 0.3 127 127 3fd3333333333333
+custom 1.65 0.05 1 112 1 3fa9cd5d0f972bfb
+custom 1.65 0.05 1 112 7 3fae9d37a0af3704
+custom 1.65 0.05 1 112 20 3fbaf9046ea0de7d
+custom 1.65 0.05 1 112 33 3fc697474b411672
+custom 1.65 0.05 1 112 64 3fdb5939a05b2699
+custom 1.65 0.05 1 112 90 3fe6caa70fc1e624
+custom 1.65 0.05 1 112 100 3fead0b662727a24
+custom 1.65 0.05 1 112 111 3fef8dae7e2f091a
+custom 1.65 0.05 1 112 126 3ff0000000000000
+custom 1.65 0.05 1 112 127 3ff0000000000000
+custom 0.1 -1 2 300 1 3fd3108d7f8952be
+custom 0.1 -1 2 300 7 3fdf0297b981bb05
+custom 0.1 -1 2 300 20 3fe4288e635b2e20
+custom 0.1 -1 2 300 33 3fe6d8cf4edc141b
+custom 0.1 -1 2 300 64 3feaf624d3ee9b1e
+custom 0.1 -1 2 300 90 3fed5c39045c2449
+custom 0.1 -1 2 300 100 3fee24d4d88eca4d
+custom 0.1 -1 2 300 111 3feef0d01e23d820
+custom 0.1 -1 2 300 126 3fefefd380842a80
+custom 0.1 -1 2 300 127 3ff0000000000000
+custom 1 0.5 1 90.4 1 3fe02d82d82d82d8
+custom 1 0.5 1 90.4 7 3fe13e93e93e93e9
+custom 1 0.5 1 90.4 20 3fe38e38e38e38e4
+custom 1 0.5 1 90.4 33 3fe5ddddddddddde
+custom 1 0.5 1 90.4 64 3feb60b60b60b60c
+custom 1 0.5 1 90.4 90 3ff0000000000000
+custom 1 0.5 1 90.4 100 3ff0000000000000
+custom 1 0.5 1 90.4 111 3ff0000000000000
+custom 1 0.5 1 90.4 126 3ff0000000000000
+custom 1 0.5 1 90.4 127 3ff0000000000000
+pedal 0 0 0000000000000000
+pedal 0 0.05 3fa999999999999a
+pedal 0 0.1 3fb999999999999a
+pedal 0 0.15 3fc3333333333333
+pedal 0 0.2 3fc999999999999a
+pedal 0 0.25 3fd0000000000000
+pedal 0 0.3 3fd3333333333333
+pedal 0 0.35 3fd6666666666666
+pedal 0 0.4 3fd999999999999a
+pedal 0 0.45 3fdccccccccccccd
+pedal 0 0.5 3fe0000000000000
+pedal 0 0.55 3fe199999999999a
+pedal 0 0.6 3fe3333333333333
+pedal 0 0.65 3fe4cccccccccccd
+pedal 0 0.7 3fe6666666666666
+pedal 0 0.75 3fe8000000000000
+pedal 0 0.8 3fe999999999999a
+pedal 0 0.85 3feb333333333333
+pedal 0 0.9 3feccccccccccccd
+pedal 0 0.95 3fee666666666666
+pedal 0 1 3ff0000000000000
+pedal 1 0 0000000000000000
+pedal 1 0.05 3f656ce895e6e8cf
+pedal 1 0.1 3f7832ffe8496084
+pedal 1 0.15 3f8496bf95266d7d
+pedal 1 0.2 3f8f46b4c942b5f8
+pedal 1 0.25 3f965d895905a209
+pedal 1 0.3 3f9ed5a31139719c
+pedal 1 0.35 3fa4bf8e8f83f967
+pedal 1 0.4 3fab75a92477a4f7
+pedal 1 0.45 3fb1f4500989d4db
+pedal 1 0.5 3fb745d1745d1746
+pedal 1 0.55 3fbdf7da23354008
+pedal 1 0.6 3fc332d8b2c579cb
+pedal 1 0.65 3fc8812077669012
+pedal 1 0.7 3fcf2f19b7f83d5c
+pedal 1 0.75 3fd3cbea34bacb17
+pedal 1 0.8 3fd916fa47db2cd5
+pedal 1 0.85 3fdfc0e6907c3d93
+pedal 1 0.9 3fe41243e5566a03
+pedal 1 0.95 3fe95a1e3a77ecf8
+pedal 1 1 3ff0000000000000
