@@ -635,7 +635,10 @@ test('REC start/stop changes state, runs the timer and saves (OPFS fallback in h
   if (d) assert.match(d.suggestedFilename(), /^Rig .*\.wav$/);
 });
 
-test('views: Edit switch shows #view-edit; Settings opens/closes; Perform lock (H-v2 LOCK table): live / hold / frozen', async () => {
+test('views: Edit switch shows #view-edit; Settings opens/closes; Perform lock (H-v2 LOCK table): live / hold / frozen', async (t) => {
+  // UIC: a failure inside must not leave Perform locked (it disabled Settings, Edit and the drone for every later
+  // test: one failure was reported as nine in the rig-devhost run); the passing path ends unlocked anyway
+  t.after(() => page.evaluate(() => window.__rig.store.set('settings.performLock', false)));
   await page.click('[data-testid=view-switch] [data-value="edit"]');
   await page.waitForFunction(() => !document.getElementById('view-edit').hidden && document.getElementById('view-perform').hidden);
   assert.equal(await page.evaluate(() => window.__rig.store.get().settings.view), 'edit');
@@ -1881,8 +1884,14 @@ async function selectIndex(i) {
   await page.waitForTimeout(80);
 }
 
-test('H-v2 ON tile = the mute: reflects the store both ways; ON = solid slot colour, OFF = grey + struck through', async () => {
+test('H-v2 ON tile = the mute: reflects the store both ways; ON = solid slot colour, OFF = grey + struck through', async (t) => {
   await selectIndex(0);
+  // UIC: a failure between the tap and the store write below must not leave Sound 1 muted for the later tests (the
+  // muted copy made polish-2A's four-strip probe fail on its wider "OFF" tiles in the rig-devhost run)
+  t.after(() => page.evaluate(() => {
+    const s = window.__rig.store.currentSong();
+    if (s && s.patch.slots[0] && s.patch.slots[0].muted) window.__rig.store.set(`songs.${s.id}.patch.slots.0.muted`, false);
+  }));
   const look = (i) =>
     page.evaluate((x) => {
       const t = document.querySelector(`[data-testid=slot-on-${x}]`);
