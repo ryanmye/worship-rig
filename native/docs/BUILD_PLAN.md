@@ -374,7 +374,7 @@ MAC_CHECK gap 2 / mackit O2 (`tests/samples_util.h`, 38), `golden.integ`, the si
 ARCHITECTURE 7.1 (Mac per-voice cost, D2 buffer results, prefault resident cost), DECISIONS D2 / D4 measurement notes,
 MAC_CHECK Results. Pruned the reviewed build dirs of waves 0b-2 (the root volume had 32 MB free; 22 GB freed).
 
-### Wave 3: how to start (after the pause; Ryan resumes it)
+### Wave 3: how to start (DONE 2026-11-22: kept for the record; results in "Wave 3 results" below)
 
 **Orchestrator decisions first** (each blocks part of a task; none blocks starting all three):
 1. T12 O3 voice addressing for T14 (re-strike / pedalHold fade one voice): a `VoiceStarted {slot, note, id}` audio
@@ -420,7 +420,7 @@ chord with the probe (D4 R1); iPad probe build (D4 iPad profile, D2 rounding); r
 `goldens` results; T07 O6 jitter-free delay; T11 O4 libm check; Ryan's tier-2 checklist after
 T14 (and after the realtime cache-pump fix, mackit O1).
 
-## Wave 3: everything that plays (after T11, T12, T13: all done; see "Wave 3: how to start" above)
+## Wave 3: everything that plays (DONE 2026-11-22; results and the UI-wave start below the table)
 
 | task | owns | implements | done | deps | size | model | Linux ✔ | closes |
 |---|---|---|---|---|---|---|---|---|
@@ -430,6 +430,8 @@ T14 (and after the realtime cache-pump fix, mackit O1).
 
 Critical path: T00b → T01 → T04 → T00c → T13 → T14 (R8), with T11a → T11 → T13 in parallel; `song-lofi-rhodes`
 (statistical for good; it plays `synth:soft-keys`) closes with T14 + T11 + T05.
+
+@@W3RESULTS@@
 
 ## Orchestrator-only items (not a task)
 
