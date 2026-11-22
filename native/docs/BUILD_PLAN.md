@@ -431,7 +431,105 @@ T14 (and after the realtime cache-pump fix, mackit O1).
 Critical path: T00b → T01 → T04 → T00c → T13 → T14 (R8), with T11a → T11 → T13 in parallel; `song-lofi-rhodes`
 (statistical for good; it plays `synth:soft-keys`) closes with T14 + T11 + T05.
 
-@@W3RESULTS@@
+### Wave 3 results (integrator pass, 2026-11-22)
+
+Integrated tree (v2-native `ee3c18b` = T14, T15, T16 + follow-ups W3A / W3B, all reviewed, + this pass), fresh build
+dirs, `-j2`, one at a time on the otherwise idle box:
+
+| config | build | ctest |
+|---|---|---|
+| g++ 13 Release `native/core/build-w2` | 0 warnings (-Werror) | **78/78** |
+| clang 18 Release `build-w2-clang` | 0 warnings | **78/78** |
+| clang++-20 Release -Werror `build-w2-clang20` (stand-in for Apple clang 21) | 0 warnings | **78/78** |
+| g++ ASan+UBSan `build-w2-asan` | 0 warnings | **78/78**, no sanitizer report (`rt.realtime`, the known ASan load flake T00c O4, did not trip under `-j2`) |
+| g++ TSan `build-w2-tsan` (27 suites: queues, offline, offline-midi, bridge, bridge-conformance, realtime, runtime, soak, clock, rec, meter, click-record + model, song, t00c, voice-limit, voice-limit-cpu, sleep, perform, perform_carry, perform_ports, wheels, drone, drone_cpu, drone_files, drone_freeze, drone_vectors) | 0 warnings | **27/27**, no ThreadSanitizer report |
+| `native/devhost` g++ `build-w2` / clang-20 -Werror `build-w2-clang20` | 0 warnings | **5/5** / **5/5** on re-run. clang-20: `probe.null` failed under `ctest -j2` and in 2 of 9 runs alone on the idle box ("sampler sweep has 1 steps": a 3.4 ms p99 spike on the first, zero-note sampler step stops the sweep), the VM-jitter flake wave 2 saw on g++ (there on the synth sweep) → orchestrator (stop a sweep only after two over-budget steps, or relax the null-backend check) |
+
+Fixtures (`PARITY.md`, regenerated from scratch): **112 / 112** at the manifest tier on g++ 13, clang 18 and
+clang++-20 (wave 2: 73), the three compilers' renders **byte-identical for all 112**, and byte-identical to the
+W3A / W3B reviewers' renders from before this pass. 110 pass the exact tier (not `synth-dx-epiano`, Q11, and
+`bend-modes`, T14 O3). Tiers **104 exact / 8 statistical** (wave 2: 78 / 34) after promoting 16 that pass the exact
+tier on g++ and clang++-20 and whose owner allows it: `synth-juno-pad`, `-shimmer-pad`, `-pluck`, `-poly-stab`,
+`-analog-brass`, `-square-lead`, `-synth-bass`, `organ-gospel`, `-soft-pad`, `-full`, `-church`, `pan-mono-src`,
+`auto-slot-level`, `auto-reverb-send`, `auto-delay-send`, `auto-master-volume` (`promote.mjs --apply --only <id>`,
+then `compare.mjs` again at the exact tier on all three: 112/112). Left statistical on purpose:
+`synth-supersaw-pad` (passes the exact tier; the T15 row above keeps it statistical, Q11: owner / orchestrator
+decision), `chorus-fast-deep-noise` (1.98e-4 = 99 % of the limit, T05 R2), `song-lofi-rhodes` (Q11),
+`synth-soft-keys`, `lofi-tape-sine`, `fx-row-sweep` (Chromium does not repeat them), `synth-dx-epiano` and
+`bend-modes` (fail the exact tier). ctest `golden.*`
+compares all 112 now (the integrator added the 5 `touch-*` and `bend-modes` to `t14.ids`). Blocked fixtures: none
+(`parity.mjs` "waits for" list emptied).
+
+JS (Playwright's Chromium 1194 mapped to the installed 1243 through a scratch `PLAYWRIGHT_BROWSERS_PATH`): @@JS@@
+
+| task | verdict | review | done fixtures (all pass) | open items → carried to |
+|---|---|---|---|---|
+| T14 perform | **done** (PARTIAL in review; every finding closed by W3A, VERIFIED) | [T14](reviews/T14.md), [W3A](reviews/W3A.md) | 14 T14 fixtures + the 5 `touch-*` (`bend-pitch-sampler`, `bend-tape`, `mono-legato`, `panic-fadeout`, `auto-filter-cutoff`, `release-pedalhold`, `transpose-octave-range`, `auto-modwheel-cc`, `scene-glide`, `song-sunday-pad-piano`, `song-gospel-stab-b3`, `swell-pedal-drone` exact; `song-lofi-rhodes`, `bend-modes` statistical) | closed: F1 (W3A-7), O1 (the ten JS ports, sleep / wake queueing, T00c O2 / O3, T13 O2 / O3 / O4, T07 O7: W3A), O2 (INTERFACE_LOG W3-1..3), the five promotions (W3A). Open: **monoSwitch legato on a stolen voice** (low: JS retriggers when the current voice is not Held; native sends a no-op `LegatoTo`) → **T14 follow-up**; tape realtime lead 20 ms vs JS `min(50 ms, baseLatency + 10 ms)` (nit) → T14; **O3** `bend-modes` exact-tier miss (6.5e-4 at the first morph ramp, inference: warm-pad `filterCS` a-rate biquad) → T11 / T02 note; `release-pedalhold` does not prove the pedalHold fade (its pedal-up is posted up front, so both engines' 5.4 s timer finds the note un-pedaled) → **orchestrator: a T17-style fixture** with the pedal-up as a live event after the pedalHold timer (unit-tested meanwhile in `unit.perform`) |
+| T15 synth-extra + organ | **done** (PARTIAL in review; items 1-4 closed by W3B, VERIFIED) | [T15](reviews/T15.md), [W3B](reviews/W3B.md), [O2 landed](reviews/T15-O2-landed.md) | 10 synth-extra, 4 organ, `pan-mono-src`, T13's 4 organ / pluck `auto-*` (16 promoted to exact here; `synth-supersaw-pad`, `synth-dx-epiano` statistical, Q11) | closed: item 1 rotary string (W3B-4) and the reuse half **N1** (integrator W3I-1, test `unit.organ` "W3B review N1"), item 2 morph / release (W3B-5), item 3 drawbars heard (W3B-6), item 4 DelayNodes on a rate change (W3B-7), item 5 = fadeNote (`XHost::fadeNote` covers organ and synth-extra: confirmed, tested), T11 O2 (oscillator, landed first), T12 O4 (`user:` params, W3A-8). Open: **T11 O5** (`pendingEnded_` 32 entries: > 32 evictions in one quantum drop VoiceEnded silently in `synth.cpp`; size it `kVoicePoolSize + kVoiceSpare` or emit at eviction) → **T11 / T15 follow-up**; note 6 (`synth-dx-epiano` bands 2.90 of 2.99 dB, deterministic) → note; note 7 (idle organ rotary 19-42 µs per instrument; an idle skip changes output after the tail) → **orchestrator decision**; note 8 / D4 Auto with the costliest voice now dx-epiano / supersaw-pad at ~14 µs (ARCHITECTURE 7.1) → **Mac** (Ryan keeps desktop Auto 128, DECISIONS D5) |
+| T16 drone | **done** (PARTIAL in review; O1-O3, O6 closed by W3B, VERIFIED) | [T16](reviews/T16.md), [W3B](reviews/W3B.md) | `drone-synth-2keys`, `drone-synth-stage`, `drone-freeze-dry`, `drone-freeze-wet` (exact), T13's `fx-row-sweep` (statistical) | closed: O1 runner diff (W3B-1, ids in `t16.ids`), O2 fx-row-sweep root cause (lofi / delay at call time, W3B-8 / -9), O3 rng ctor (W3B-3), O6 promotions (W3B), `hello.minor` 3 + capability `droneFreeze` (W3B-2), **O5** sanitizer guards (integrator: `test_drone_cpu.cpp` and `test_wheels.cpp` also ask `__has_feature`, so clang ASan / TSan report the timings instead of asserting them), the narrower low-resource hook (accepted, INTERFACE_LOG W3-4). Open: **O4** `DroneUnit::later` drops a payload past 64 per quantum (worst constructible ~34; make it a stat or a `static_assert`ed cap) → **T16 follow-up**; W3A R6 (native drone reference has one click-detector hit at 6.78 s, drone content) → note |
+| W3A perform follow-ups | **done** (VERIFIED) | [W3A](reviews/W3A.md) | moves no fixture (proved by the reviewer) | **R1** `audio restart` / `output` while asleep: the Model stays asleep until the next perform call (JS starts awake) → **T08 + T14** (`hostAudioStarted` → `Model::wake(0)` or a contract line); R2 (FadeNote / mono NoteOn to a retiring channel between a commit call and its later `when` still gated; unreachable today) → T14 info; R3 (stray `noteOffFrom`) → info; R4 (`MasterChain` evaluates `out_` a-rate always; constant fast path) → T03 nit; R5 (`user:` samplers: a key missing from the new song is not reset) → **T12 / T13** |
+| W3B organ + drone follow-ups | **done** (VERIFIED) | [W3B](reviews/W3B.md) | `drone-freeze-dry / -wet` (silence → 2.8e-6 / 3.7e-6), `fx-row-sweep` (1.22e-1 → 3.2e-5) | **N1 closed** (integrator W3I-1). Open: wash `SetFeedback` still sent at `frameOf(t)` while every other `DelayOp` goes at call time (`model/wheels.cpp`; send with `kFrameNow`, keep `f.e = t`) → **T14 follow-up** (low); `LofiUnit` drops a state past 32 applies per quantum silently (unreachable; add a counter) → T05 (low); organ drawbar timer reads params at fire time in JS vs per call native (agree live, no fixture) → note |
+
+Orchestrator notes for this pass, confirmed: O-W3-1 overrides in organ and synth-extra (one `XHost::fadeNote`, used by
+both, tests in `unit.organ` / `unit.synth_extra`); T15 review items 1-4 each with a test that fails without the fix
+(W3B review); the T16 diffs applied verbatim (W3B review compared them against the saved copies), both freeze ids in
+`t16.ids`, `hello.minor` 3 with `droneFreeze`; T14 F1 (W3A-7); W3B N1 fixed here (`unit.organ` "W3B review N1": the
+test fails on the old code with the channel reused and 0.35 off a fresh `'off'` build, passes with < 1e-5; `'fast'`
+against the stored index `1` still reuses; fixtures byte-identical). The builders' 112/112 and 110 exact reproduce;
+their ctest 78/78 reproduces on g++, clang 18 and clang 20; ASan 78/78 here (their 77/78 was the `rt.realtime`
+load flake, which did not trip this time); TSan now also covers the perform / sleep / wheels / drone suites (27/27).
+
+Closed by the integrator: W3B N1 (W3I-1), T16 O5 (test guards), `golden.t14` + 6 ids (W3I-3), `parity.mjs` (W3I-2),
+the 16 promotions, PARITY regenerated, INTERFACE_LOG "Wave 3 tasks" (W3-1..5) + "Wave-3 integrator" (W3I-1..3),
+ARCHITECTURE 7.1 per-voice cost of every instrument kind, CI `sanitizers` TSan step also runs the model / song / t00c /
+voice-limit / sleep / perform / wheels / drone suites (`.github/workflows/native-core.yml`; unverified until pushed).
+
+### UI wave: how to start (next; Ryan resumes it)
+
+Everything that plays is in the core; the UI wave is the next step (files under `app/**`, plus the contract / bridge
+rows it names). Do not change `native/core` behaviour in it except for the bridge rows listed. Items, each with its
+owner:
+
+**UI wave** (one builder + skeptic review, or two on disjoint files: Perform / Edit vs Settings / store):
+1. **Store SCHEMA bump** 1 → 2 with an idempotent `migrate()` (4-slot songs unchanged, unknown fields kept), D1-D3.
+2. **16-slot scrolling Perform and Edit** (D3: 1..16 slots per song, horizontal scroll beyond 4; the web oracle stays
+   at 4 slots).
+3. **Scenes, wheel targets and MIDI-learn targets for 16 slots** (`slots.<i>.*` for i < 16).
+4. **Settings › Sound › Advanced "Freeze drone to save CPU"** (D5: `settings.droneFreeze`, default on) →
+   `config {droneFreeze}` (bridge row, schema and contract row exist: T16).
+5. **`config {dynamicRange}` bridge row** + `engine-api.json` + contract row (T12 O1; the Model side exists:
+   `Model::setDynamicRange`, INTERFACE_LOG 33). Orchestrator writes the contract row first.
+6. **Settings review items 1-4** ([Settings](reviews/Settings.md)): a restart requested during a restart is dropped;
+   `engine-api.json methods` lacks `setPolyphony` / `setVoiceLimit` / `setBufferFrames` (`surface.test.mjs`
+   allow-lists them); `mock-native` omits `bufferFrames` in `audio` replies / `state`; the view reads
+   `engine.ctx.sampleRate`. Item 5 (themes coverage timestamps) stays a nit.
+7. **T09 / T11 O7**: re-run `node test/unit/engine-bridge/ui-core-devhost.mjs` (25 / 76 after T11; T14 now provides
+   `play input`, fade and bend) and record it in PARITY "UI parity"; `mock-native.js` still answers `hello.minor` 0
+   (the shim never reads it).
+
+**Core, before Ryan's hands-on Mac session (tier 2)** (orchestrator, T08 files; not UI work, can run in parallel):
+- **mackit O1**: a realtime song opened without `cache preload` plays silent samplers: `api/engine.cpp`
+  `controlLoop` never calls the cache service's `pump()` and nobody calls `setWake`. Pump the cache in the control
+  loop and set the wake to its semaphore; test: `rig-probe` on the null backend, 16 slots of `ep-rhodes`, 8 notes
+  held, no preload → 128 voices (today 0). Still open after wave 3 (checked: no `pump` / `setWake` call in
+  `engine.cpp`).
+- W3A R1 (audio restart / output while asleep) with it (same files).
+
+**Core follow-ups (non-blocking; a small "core follow-ups" task or the next integrator)**: T14 monoSwitch legato on a
+stolen voice, wash `SetFeedback` frame (W3B), tape lead nit; T11 / T15 O5 `pendingEnded_`; T16 O4 `DroneUnit::later`;
+T05 `LofiUnit` counter, T05 R4 / R5; T12 / T13 W3A R5 (`user:` sampler defaults); T06 `BufferCache::protect` of an
+empty list = "no protection" (JS: empty Set); T11a bit-exact custom PeriodicWave (then promote
+`chorus-fast-deep-noise`, T05 R2); orchestrator: T00c O4 (`rt.realtime` ASan load flake: `RUN_SERIAL` or the TSan
+treatment), D4 R8 nits (`kVoiceLimitChoices` unused; tracked `build-*.log` files: `git rm --cached`), mackit O4 (lock
+against two `check.sh` runs), T15 note 7 (idle organ rotary skip), T17-style fixtures (pedalHold fade with a live
+pedal-up, T02 #3, T05 R3 `echo-time-switch` / `echo-panic` / `lofi-toggle`).
+
+**Mac / iPad** (push agent `RUN`, `MAC_CHECK.md`; unchanged unless named): install the iOS simulator platform and
+re-run `apple-sim` (and report CoreSimulator-too-old as SKIPPED, mackit O3); time a large layered chord with the
+probe (D4 R1) and measure **dx-epiano / supersaw-pad** per voice there (the costliest voices now, ~14 µs on this box);
+iPad probe build (D4 iPad profile, D2 rounding); read back the CI `mac-check`, `goldens` and sanitizer results (the
+extended TSan regex); T07 O6 jitter-free delay; T11 O4 libm `exp2f`; T11 O6 `WaveBank::trim` under memory pressure;
+Ryan's **tier-2 checklist after mackit O1** (T14 has landed).
 
 ## Orchestrator-only items (not a task)
 

@@ -222,8 +222,9 @@ of the app would be the next step: launch, load, `hello`, quit, all from `check.
 
 ## Known gaps found while building this (owners: core / orchestrator)
 
-- **Realtime sampler without a preload is silent.** `api/engine.cpp` `controlLoop` never calls the cache service's
-  `pump()` and nobody calls `setWake`, so decodes started by a cold `prepare` in realtime mode are never integrated
+- **Realtime sampler without a preload is silent** (still open after wave 3, checked by the wave-3 integrator
+  2026-11-22; BUILD_PLAN "UI wave: how to start" schedules it before tier 2). `api/engine.cpp` `controlLoop`
+  never calls the cache service's `pump()` and nobody calls `setWake`, so decodes started by a cold `prepare` in realtime mode are never integrated
   (`sampler_service.cpp`: "realtime on a later pump()"). Shown by `rig-probe` on the null backend: 16 slots of
   `ep-rhodes`, 8 notes held, 0 voices; with a `cache preload` first, 128 voices. The probe preloads; the core should
   pump the cache in its control loop (and set the wake to its semaphore).
