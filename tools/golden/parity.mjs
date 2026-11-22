@@ -57,19 +57,11 @@ const MODULES = [
 ];
 const moduleOf = (id) => MODULES.find(([, f]) => f(id))[0];
 
-// What a fixture that does not pass yet still waits for (tasks after wave 2). From the wave-1 PARITY classification
-// with T11, T12 and T13 removed (all done); a failing fixture not listed here is reported as UNEXPECTED.
-const WAITS = {
-  'auto-slot-level': 'T15 (organ)', 'auto-reverb-send': 'T15 (organ)', 'auto-master-volume': 'T15 (organ)',
-  'auto-delay-send': 'T15 (synth:pluck)', 'fx-row-sweep': 'T16 (synth drone)',
-  'drone-synth-2keys': 'T16', 'drone-synth-stage': 'T16', 'drone-freeze-dry': 'T16 + Ryan Q7',
-  'drone-freeze-wet': 'T16 + Ryan Q7',
-  'auto-modwheel-cc': 'T14, T15', 'scene-glide': 'T14, T15, T16', 'song-sunday-pad-piano': 'T14, T16',
-  'song-gospel-stab-b3': 'T14, T15', 'bend-pitch-sampler': 'T14', 'bend-tape': 'T14', 'bend-modes': 'T14, T16',
-  'swell-pedal-drone': 'T14, T15, T16', 'mono-legato': 'T14', 'panic-fadeout': 'T14',
-};
-const waitsFor = (id) => WAITS[id] ?? (id.startsWith('touch-') ? 'T14, T15 (808-sub)'
-  : /^(synth-|organ-)/.test(id) || id === 'pan-mono-src' ? 'T15' : null);
+// What a fixture that does not pass yet still waits for. Wave 3 (T14, T15, T16 + W3A / W3B) closed every task the
+// wave-2 list named, so the list is empty: any failing fixture is reported as UNEXPECTED (a regression, or a new
+// fixture to classify) and the script exits 1. Add an entry here only for a new fixture whose module is not built.
+const WAITS = {};
+const waitsFor = (id) => WAITS[id] ?? null;
 
 const rows = [];
 for (const e of manifest.fixtures) {

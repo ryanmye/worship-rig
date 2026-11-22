@@ -20,3 +20,12 @@ scene-glide
 song-sunday-pad-piano
 song-gospel-stab-b3
 swell-pedal-drone
+# Wave-3 integrator (2026-11-22): the last T14 fixtures no golden_ids list compared (all pass at the manifest tier
+# on g++ and clang): the touch-* velocity curves on synth:808-sub (exact) and bend-modes (statistical; exact tier
+# missed at 6.5e-4 on the first morph ramp, T14 review O3). With them ctest compares all 112 fixtures.
+touch-soft
+touch-hard
+touch-fixed
+touch-custom
+touch-keyboard
+bend-modes
