@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
-#include <regex>
 #include <set>
 
 #include "model/perform.h"  // chordName (shared/chords.js, T14)
@@ -154,23 +153,50 @@ bool isMinorQuality(const std::string &q) {
   return q == "m" || q == "m7" || lower(q).rfind("min", 0) == 0;
 }
 
-const std::regex &singleRe() {
-  static const std::regex re(
-      "^([A-G])(#|\xE2\x99\xAF|b|\xE2\x99\xAD|sharp|flat)?"
-      "(maj7|Maj7|M7|min7|m7|minor|Minor|major|Major|min|Min|maj|Maj|m|M)?$");
-  return re;
+bool ieq(const std::string &a, const char *b) {
+  return lower(a) == b;
 }
-const std::regex &octaveRe() {
-  static const std::regex re("^([A-G])(#|\xE2\x99\xAF|b|\xE2\x99\xAD)?(-?[0-9])$");
-  return re;
+
+/** The JS regex /^([A-G])(#|♯|b|♭|sharp|flat)?(maj7|...|m|M)?$/ with its backtracking order: the first accidental
+ *  (then none) and quality (then none) that make the whole token match. */
+bool singleMatch(const std::string &t, char &letter, std::string &acc, std::string &quality) {
+  static const char *const kAcc[] = {"#", "\xE2\x99\xAF", "b", "\xE2\x99\xAD", "sharp", "flat", ""};
+  static const char *const kQual[] = {"maj7", "Maj7", "M7",  "min7", "m7",  "minor", "Minor", "major",
+                                      "Major", "min", "Min", "maj",  "Maj", "m",     "M",     ""};
+  if (t.empty() || t[0] < 'A' || t[0] > 'G') return false;
+  const std::string rest = t.substr(1);
+  for (const char *a : kAcc) {
+    const std::string as(a);
+    if (rest.compare(0, as.size(), as) != 0) continue;
+    const std::string r2 = rest.substr(as.size());
+    for (const char *q : kQual)
+      if (r2 == q) {
+        letter = t[0];
+        acc = as;
+        quality = q;
+        return true;
+      }
+  }
+  return false;
 }
-const std::regex &accWordRe() {
-  static const std::regex re("^(flat|sharp)$", std::regex::icase);
-  return re;
-}
-const std::regex &qualityWordRe() {
-  static const std::regex re("^(minor|min|major|maj)$", std::regex::icase);
-  return re;
+
+/** /^([A-G])(#|♯|b|♭)?(-?\d)$/ */
+bool octaveMatch(const std::string &t, char &letter, std::string &acc) {
+  static const char *const kAcc[] = {"#", "\xE2\x99\xAF", "b", "\xE2\x99\xAD", ""};
+  if (t.empty() || t[0] < 'A' || t[0] > 'G') return false;
+  const std::string rest = t.substr(1);
+  for (const char *a : kAcc) {
+    const std::string as(a);
+    if (rest.compare(0, as.size(), as) != 0) continue;
+    std::string r2 = rest.substr(as.size());
+    if (!r2.empty() && r2[0] == '-') r2 = r2.substr(1);
+    if (r2.size() == 1 && r2[0] >= '0' && r2[0] <= '9') {
+      letter = t[0];
+      acc = as;
+      return true;
+    }
+  }
+  return false;
 }
 
 struct KeyExpr {
@@ -182,21 +208,22 @@ struct KeyExpr {
 
 std::optional<KeyExpr> parseKeyExpr(const std::vector<std::string> &tok, std::size_t i) {
   if (i >= tok.size()) return std::nullopt;
-  std::smatch m;
-  if (!std::regex_match(tok[i], m, singleRe())) return std::nullopt;
-  std::string acc = m[2].matched ? m[2].str() : std::string();
-  std::string quality = m[3].matched ? m[3].str() : std::string();
+  char letter = 'C';
+  std::string acc, quality;
+  if (!singleMatch(tok[i], letter, acc, quality)) return std::nullopt;
   std::size_t len = 1;
-  if (acc.empty() && i + len < tok.size() && std::regex_match(tok[i + len], accWordRe())) {
+  if (acc.empty() && i + len < tok.size() && (ieq(tok[i + len], "flat") || ieq(tok[i + len], "sharp"))) {
     acc = tok[i + len];
     ++len;
   }
-  if (quality.empty() && i + len < tok.size() && std::regex_match(tok[i + len], qualityWordRe())) {
+  if (quality.empty() && i + len < tok.size() &&
+      (ieq(tok[i + len], "minor") || ieq(tok[i + len], "min") || ieq(tok[i + len], "major") ||
+       ieq(tok[i + len], "maj"))) {
     quality = tok[i + len];
     ++len;
   }
   KeyExpr k;
-  k.letter = m[1].str()[0];
+  k.letter = letter;
   k.pc = (((letterPc(k.letter) + accidentalOffset(acc)) % 12) + 12) % 12;
   k.explicit_ = !acc.empty() || !quality.empty();
   k.minor = !quality.empty() && isMinorQuality(quality);
@@ -211,8 +238,17 @@ std::vector<std::string> tokenizeName(std::string_view name) {
   std::string base(name);
   const std::size_t slash = base.find_last_of("\\/");
   if (slash != std::string::npos) base = base.substr(slash + 1);
-  static const std::regex ext("\\.[A-Za-z0-9]{1,5}$");
-  base = std::regex_replace(base, ext, "");
+  // .replace(/\.[A-Za-z0-9]{1,5}$/, '')
+  const std::size_t dot = base.find_last_of('.');
+  if (dot != std::string::npos) {
+    const std::size_t n = base.size() - dot - 1;
+    bool alnum = n >= 1 && n <= 5;
+    for (std::size_t i = dot + 1; alnum && i < base.size(); ++i) {
+      const char c = base[i];
+      alnum = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
+    }
+    if (alnum) base.resize(dot);
+  }
   std::vector<std::string> out;
   std::string cur;
   auto sep = [](char c) {
@@ -262,11 +298,10 @@ std::optional<DetectedKey> detectKeyFromName(std::string_view name) {
       i += k->len;
       continue;
     }
-    std::smatch o;
-    if (std::regex_match(tok[i], o, octaveRe())) {
-      const std::string acc = o[2].matched ? o[2].str() : std::string();
-      octave.push_back({(((letterPc(o[1].str()[0]) + accidentalOffset(acc)) % 12) + 12) % 12, false, 1, i, false});
-    }
+    char letter = 'C';
+    std::string acc;
+    if (octaveMatch(tok[i], letter, acc))
+      octave.push_back({(((letterPc(letter) + accidentalOffset(acc)) % 12) + 12) % 12, false, 1, i, false});
     ++i;
   }
   long lastPos = -1;
