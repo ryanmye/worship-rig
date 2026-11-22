@@ -337,7 +337,7 @@ TEST_SUITE("perform_ports") {
     constexpr double T = 6.0;
     struct Out {
       double before, after;
-      std::size_t clicks;
+      std::vector<double> clickAt;
     };
     auto run = [&](const std::string &how) {
       Eng e;
@@ -359,25 +359,37 @@ TEST_SUITE("perform_ports") {
       }
       e.until(T + 3);
       const std::vector<float> d = mono(e);
-      const auto cl = rigtest::clicks(d, kSR, T - 0.2, T + 1);
-      for (const auto &c : cl) MESSAGE(how << " click at " << c.t << " dd " << c.dd << " lm " << c.lm);
-      return Out{db(rms(d, T - 0.7, T)), db(rms(d, T + 2.1, T + 2.9)), cl.size()};
+      Out o{db(rms(d, T - 0.7, T)), db(rms(d, T + 2.1, T + 2.9)), {}};
+      for (const auto &c : rigtest::clicks(d, kSR, T - 0.2, T + 1)) o.clickAt.push_back(c.t);
+      return o;
     };
     const Out ref = run("reference"), scene = run("scene"), fader = run("fader"), song = run("song"),
               down = run("down");
+    // The native drone itself moves about 1.7 dB between the two windows and has one click-detector hit at 6.78 s
+    // in the REFERENCE too (no pedal, no move: drone-osc content, T16's; the JS harness plays the fallback preset):
+    // so each case is compared with the reference, window for window, and only clicks the reference lacks count.
+    auto extraClicks = [&](const Out &x) {
+      std::size_t n = 0;
+      for (double t : x.clickAt)
+        if (std::none_of(ref.clickAt.begin(), ref.clickAt.end(), [t](double r) { return std::fabs(r - t) < 0.002; }))
+          ++n;
+      return n;
+    };
     auto ok = [&](const Out &x, const char *name) {
-      INFO(name << ": before " << x.before << " after " << x.after << " clicks " << x.clicks << " (ref after "
-                << ref.after << ")");
-      CHECK(std::fabs(x.after - x.before) < 1);
-      CHECK(std::fabs(x.after - ref.after) < 1.5);
-      CHECK(x.clicks == 0);
+      INFO(name << ": before " << x.before << " after " << x.after << " (ref " << ref.before << " / " << ref.after
+                << "), clicks " << x.clickAt.size());
+      CHECK(std::fabs(x.before - ref.before) < 0.5);  // swelled to full before the move (JS effBefore > 0.97)
+      CHECK(std::fabs(x.after - ref.after) < 0.5);    // full after it, never above (JS effMax <= 1.001)
+      CHECK(extraClicks(x) == 0);
     };
     ok(scene, "scene");
     ok(fader, "fader");
     ok(song, "song");
-    MESSAGE("reference: before " << ref.before << " after " << ref.after << "; down: before " << down.before << " after " << down.after << " (ref " << ref.after << ")");
-    CHECK(down.after - ref.after == doctest::Approx(20 * std::log10(0.4)).epsilon(0.1));
-    CHECK(down.clicks == 0);
+    MESSAGE("reference: before " << ref.before << " after " << ref.after << "; down: before " << down.before
+                                 << " after " << down.after);
+    CHECK(std::fabs(down.before - ref.before) < 0.5);
+    CHECK(down.after - ref.after == doctest::Approx(20 * std::log10(0.4)).epsilon(0.05));  // its own swell: x4
+    CHECK(extraClicks(down) == 0);
   }
 
   TEST_CASE("intensityMacroAndBrightness: macro.intensity at 0 -> slot wheel 0.35, reverb return x0.8, no morph") {
@@ -432,13 +444,22 @@ TEST_SUITE("perform_ports") {
     e.until(0.1);
     REQUIRE(e.sg().liveChannel(0));
     CHECK(e.sg().liveChannel(0)->morph == 0);
+    // listInstruments().find(pluck).calibWindow[1] === 1 (synth-extra's calibration window, read by calibrate.mjs)
     const std::string list = e.model().listInstruments();
-    const std::size_t at = list.find(R"("id":"pluck")");
-    REQUIRE(at != std::string::npos);
-    const std::size_t cw = list.find("\"calibWindow\"", at);
-    REQUIRE(cw != std::string::npos);
-    INFO(list.substr(cw, 40));
-    const std::size_t comma = list.find(',', cw);
-    CHECK(std::strtod(list.c_str() + comma + 1, nullptr) == 1);
+    yyjson_doc *doc = yyjson_read(list.data(), list.size(), 0);
+    REQUIRE(doc);
+    double calib1 = -1;
+    yyjson_val *root = yyjson_doc_get_root(doc), *it = nullptr;
+    yyjson_arr_iter ai;
+    if (yyjson_arr_iter_init(root, &ai))
+      while ((it = yyjson_arr_iter_next(&ai))) {
+        yyjson_val *ref = yyjson_obj_get(it, "ref");
+        yyjson_val *id = ref ? yyjson_obj_get(ref, "id") : nullptr;
+        if (!id || !yyjson_equals_str(id, "pluck")) continue;
+        yyjson_val *cw = yyjson_obj_get(it, "calibWindow");
+        if (cw && yyjson_is_arr(cw) && yyjson_arr_size(cw) == 2) calib1 = yyjson_get_num(yyjson_arr_get(cw, 1));
+      }
+    yyjson_doc_free(doc);
+    CHECK(calib1 == 1);
   }
 }

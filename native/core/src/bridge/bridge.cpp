@@ -154,7 +154,8 @@ void opCommit(Engine &e, const Req &r) {
   if (!e.model().commit(token, getWhen(r.m)))
     return fail(e, r, "superseded", "commit: token superseded by later prepares");
   if (b) b->committedToken_ = token;
-  // T00c D3 rig_meters.slot_count: set by Model::commit through CommandSink::setSlotCount (W3A, T00c review O2)
+  // INTERFACE-CHANGE(W3A) T00c review O2: rig_meters.slot_count is set by Model::commit (CommandSink::setSlotCount)
+  // for every commit, not only this one
   JsonOut j;
   j.begin().kvBool("committed", true).end();
   ok(e, r, j.take());

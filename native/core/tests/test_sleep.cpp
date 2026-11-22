@@ -149,7 +149,6 @@ TEST_SUITE("sleep") {
     const std::string st = s.m().statsJson();
     CHECK(rigtest::contains(st, R"("audioSleep":"awake")"));
     CHECK(rigtest::contains(st, R"("lastWake":{"ms":)"));
-    MESSAGE(st.substr(st.find("\"audioSleep\"")));
     CHECK(rigtest::contains(st, R"("queued":0,"ramp":0.06,)"));
   }
 

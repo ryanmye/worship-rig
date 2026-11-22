@@ -57,7 +57,7 @@ std::string portIdOf(Model &m, const PortTable &t, std::uint16_t port) {
 // ---- Perform: the Model's contract methods ------------------------------------------------------------------------
 
 void MidiServiceImpl::noteOn(int note, int vel, double when, const yyjson_val *touch) {
-  // W3A T07 review O7: the direct path joins the app's per-pitch count in the Model (Perform::noteOnFrom)
+  // INTERFACE-CHANGE(W3A) T07 review O7: the direct path joins the app's per-pitch count (Perform::noteOnFrom)
   m_.perform().noteOnFrom(rig::Perform::kSrcDirect, note, vel, when, touch);
 }
 void MidiServiceImpl::noteOff(int note, double when) {

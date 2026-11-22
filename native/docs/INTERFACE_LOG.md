@@ -148,3 +148,28 @@ synth.js instrument, +0.33 MB per sampler; ARCHITECTURE 7.1). T13 also edited `t
 - T05 review R1 (closed by the integrator): the `src/fx/delay.h` header comment and ENGINE_CONTRACT §3.5 now
   describe the kept JS Q split (pre-delay Q, d = time − Q), which is what makes the echo fixtures bit-exact.
 - D1–D3 (`DECISIONS.md`) landed as T00c (section above).
+
+## W3A: T14 follow-ups (perform review F1 / O1, sleep, carry-overs), marked `INTERFACE-CHANGE(W3A)`
+
+Builder W3A (2026-11-21). No C API, bridge op / event shape, opcode, `Command` / `AudioEvent` or `UnitSlot` change.
+Numbered W3A-n so they do not collide with the W3B builder's rows of the same wave.
+
+| # | file(s) | change | why |
+|---|---|---|---|
+| W3A-1 | `src/model/model.h` (`CommandSink`) | three virtuals with no-op defaults: `sleepChanged(bool render, double wakeMs, int queued)` (the Model's sleep state changed: suspend / resume rendering + the engine's `state` event), `outputLatency()` (s; the sleep / wake ramp lead `clamp(2x, 10, 40 ms)` = audio.js `_rampLead`), `setSlotCount(n)` (rig_meters.slot_count) | audio sleep moved into the Model (`model/sleep.{h,cpp}`, T14-owned); T00c review O2 |
+| W3A-2 | `src/model/model.h` (comments), `model.cpp` | `sleep` / `wake` / `sleepState` / `sleepBlockersJson` bodies moved from the T13 stub in `model.cpp` to `model/sleep.cpp` (same signatures); `setLowResource(false)` and `clickStart` call `wake(NaN)` (audio.js lowres2: leaving low-resource and the click wake the audio; no-op when awake); `Model::commit` calls `sink_.setSlotCount(slotCount)`; `Model::set` stores `slots.<i>.params.<key>` before coalescing the send (T13 O2) | contract 1.1 sleep / wake rows, audio.js `_sleepHold`; T00c O2; T13 O2 |
+| W3A-3 | `src/api/engine.{h,cpp}` (T08) | `Engine` overrides the three virtuals (`awake_ = render`, `state` event with `sleep: Model::sleepState()`, after a wake `wakeMs` + the real `queued`; `outputLatency()` = `latencySec_`; `setSlotCount` -> `Graph::setSlotCount`). `sleepAudio` = realtime + started check, then `Model::sleep`; `wakeAudio` = `Model::wake` (NaN ramp = the Model's 60 / 5 ms default). The engine's own `sleepState_` is gone (its two readers use `model_.sleepState()`) | one state machine (the Model's), so a `play` while asleep queues, wakes and is replayed (it used to play into a suspended engine, `queued` was always 0) |
+| W3A-4 | `src/mix/master_chain.{h,cpp}` (T03; frozen header) | `MasterParam::kMasterOut = 9`: fx.js `out` after the clip curve (before the click, meter and recorder taps), an a-rate `wa::Param` at 1 multiplied in place | the sleep / wake ramp (`audio.js linFrom(fx.out.gain, …)`); `x * 1.0f` is exact, so every render is byte-identical while no sleep runs |
+| W3A-5 | `src/bridge/bridge.cpp` (T08) | `opCommit` no longer calls `Graph::setSlotCount` (Model::commit does, W3A-2) | T00c review O2 |
+| W3A-6 | `src/graph/graph.cpp` (frozen) | comment only: the rule that a TARGETED `NoteOn` reaches its unit also on a `RetireInst` slot (the Model's mono line of a retiring channel, audio.js `_monoOff -> _monoSwitch`); `kAllSlots` NoteOns still skip retiring channels | T00c review O3 (option "make it a graph rule"); test `unit.perform` "graph rule (T00c O3)" |
+| W3A-7 | `src/fx/delay_register.cpp` (T05) | `applyAll` and the `fx.delay.feedback` row send `m.perform().delayFeedback()` (= fx.js `Delay.effectiveFb()`: `clamp(washFb ?? feedback, 0, .9)`) instead of the raw `p.feedback`; includes `model/perform.h` | T14 review F1 (the exact two-line diff). Preconditions checked: `SongGraph::commit` sets `routing_` before the services' `onCommit`; `perf_` exists before any `applyAll` (only `onCommit` / `onSet` call it, never service construction). Test `unit.wheels` "a song switch with a wash wheel up keeps the washed delay feedback" (before: 21 dB lower echo tail) |
+| W3A-8 | `src/inst/instrument_service.{h,cpp}` (T11) | `resolveInstrumentParam(sp, key, v)` (the catalogue index / `user:` sampler index and clamp, factored out of `setInstrumentParam`, which is unchanged in effect) and `storeInstrumentParam(m, slot, path, v)` | T13 review O2 (store at call time); T13 O3 (the reused-channel loop needs the index of non-catalogue keys) |
+| W3A-9 | `src/model/song.{h,cpp}` (T13) | `SongGraph::occupantFrame(UnitSlot)` (read-only view of the gate's `slotFrame_`); `applyReused` second loop: `cfg.params` keys with no catalogue meta that differ from the previous song's are sent (audio.js `_applySlotCfg`) | T13 O4 (below), T13 O3 |
+| W3A-10 | `src/drone/drone_service.{h,cpp}` (T16) | `DroneServiceImpl::wake()` override (DroneHost) = `Model::wake(NaN)` | audio.js drone env `wake`: a drone layer that starts wakes the audio (lowres2) |
+| W3A-11 | `src/midi/midi_service.cpp` (T07) | the direct path's note-on / note-off go to `Perform::noteOnFrom / noteOffFrom(kSrcDirect, …)`; `Model::noteOn / noteOff` (bridge `play`) use `kSrcApp` | T07 review O7: one count per pitch across the two paths, as controller.js `heldCount` across its sources (a pitch held by both starts once and ends when the last holder lets go); one path alone is unchanged (a repeated `play on` is still a re-strike) |
+
+T14-owned (no marker needed, listed for the reviewer): `model/perform.h` gains `noteOnTouch`, `noteOnFrom`,
+`noteOffFrom`, `NoteSrc`, `sleeper()`, `sendOff` (private; T13 O4: a note-off posted between a commit call and its
+future `when` goes to `Inst<slot>` at its own frame, past the gate, instead of waiting for the move to `RetireInst<j>`);
+`model/sleep.{h,cpp}` (new). `_debugStats` gains `audioSleep` and `lastWake` (audio.js names);
+`sleepBlockersJson` answers `["no-audio"]` on an offline engine (was `[]`), as audio.js.
