@@ -307,3 +307,19 @@ test('a learned MIDI fader on Sound 6 moves that slot of the song (pickup); a so
   for (const [, p] of callsOf(engine, 'setParam')) assert.ok(!p.startsWith('slots.5.'), 'the web engine hears nothing');
   c.dispose?.();
 });
+
+test('an unedited 1.x library is saved as schema 2 at load: one copy, not one per launch (UIA skeptic)', async () => {
+  const storage = memoryStorage({ [STORAGE_KEY]: V1_TEXT, [`${STORAGE_KEY}.backup-1`]: 'an older backup' });
+  let t = 100;
+  for (let k = 0; k < 4; k++) {
+    const s = makeStore({ storage, now: () => (t += 1000), debounceMs: 0 });
+    s.seedFactory(FACTORY_SONGS); // main.js: a no-op on a seeded library
+    await tick();
+    s.persistNow();
+    assert.equal(JSON.parse(storage.getItem(STORAGE_KEY)).schema, 2, `launch ${k}`);
+  }
+  const backups = [];
+  for (let i = 0; i < storage.length; i++) if (storage.key(i).includes('.backup-')) backups.push(storage.key(i));
+  assert.deepEqual(backups.sort(), [`${STORAGE_KEY}.backup-1`, `${STORAGE_KEY}.backup-1100`]);
+  assert.equal(storage.getItem(`${STORAGE_KEY}.backup-1100`), V1_TEXT);
+});

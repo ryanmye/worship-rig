@@ -2,7 +2,7 @@
 // context the ui-core suite opens). The ui-core suite reads a few Web Audio engine INTERNALS that are not engine
 // contract (native/contract/engine-api.json `notContract`, PARITY "UI parity"): `engine.slots` / `retiring` (its
 // waitSong helper waits for `slots.some(Boolean)`; voice counts via `slots[i].inst.liveVoiceCount()`), `getParam`,
-// `pedaled`, `fx.reverb.settled()`, `drone.getState()`. This adapter answers them on the BridgeEngine INSTANCE from
+// `pedaled`, `transpose`, `activeNotes` / `sounding`, `fx.reverb.settled()`, `drone.getState()`. This adapter answers them on the BridgeEngine INSTANCE from
 // what the shim already knows (the committed patch mirror, the values it sent, the 1 s `stats` of the tick), so a
 // UI test fails on what the UI or the core does, not on a missing internal. It never touches the class (the contract
 // surface test still sees exactly the contracted members) and nothing under app/ loads it.
@@ -61,6 +61,16 @@
     Object.defineProperty(e, 'pedaled', {
       configurable: true, get: () => ({ size: Number((e._stats && e._stats.pedaled) || 0) }),
     });
+    // audio.js `transpose` (the shim keeps it as `_transpose`) and `activeNotes` / `sounding` (Sets): the held notes
+    // the core reports in `notes` events (`sounding` also counts released, still-ringing notes on the web engine;
+    // native reports held ones only, so a test of a ringing tail can still fail here)
+    Object.defineProperty(e, 'transpose', { configurable: true, get: () => e._transpose });
+    let held = new Set();
+    e.addEventListener('notes', (ev) => {
+      held = new Set((ev.detail && ev.detail.held) || []);
+    });
+    Object.defineProperty(e, 'activeNotes', { configurable: true, get: () => held });
+    Object.defineProperty(e, 'sounding', { configurable: true, get: () => held });
     if (!e.fx) e.fx = { reverb: { settled: () => Promise.resolve(true) } };
     if (e.drone && typeof e.drone.getState !== 'function') {
       e.drone.getState = () => ({ mode: e.drone.cfg && e.drone.cfg.mode, key: e.drone.key });

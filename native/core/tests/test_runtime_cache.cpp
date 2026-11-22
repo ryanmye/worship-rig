@@ -356,4 +356,26 @@ TEST_SUITE("runtime_cache") {
     rt.stopAudio();
     g_eng = nullptr;
   }
+
+  TEST_CASE("W3A R1: with no host (the caller renders), audio restart / output while asleep wakes the engine too") {
+    // CORE1 skeptic: the requestAudio no-host branch has its own wake (engine.cpp); the case above covers the host one
+    Rt rt;
+    rt.post(R"({"v":1,"op":"hello","protocol":1,"id":1})");
+    REQUIRE(!rt.reply(1).empty());
+    rt.post(R"({"v":1,"op":"audio","action":"start","id":2})");
+    REQUIRE(!rt.reply(2).empty());
+    rt.startAudio();
+    REQUIRE(timeRuns(rt));
+    int id = 10;
+    for (const char *action : {"restart", "output"}) {
+      sleepNow(rt, id++);
+      const std::size_t at = rt.mark();
+      rt.post(std::string(R"({"v":1,"op":"audio","action":")") + action + R"(","id":)" + std::to_string(id) + "}");
+      REQUIRE(!rt.reply(id++).empty());
+      CHECK(rt.waitAfter("\"sleep\":\"awake\"", at, 2000));
+      CHECK(impl(rt.e).awake());
+      CHECK(timeRuns(rt));
+    }
+    rt.stopAudio();
+  }
 }

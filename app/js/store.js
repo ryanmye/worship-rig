@@ -1979,6 +1979,9 @@ export function createStore(opts = {}) {
 
   if (info.status !== 'ok' && opts.seed !== false) api.seedFactory();
   else if (info.status !== 'ok') schedulePersist();
+  // UIA skeptic: a schema-1 library whose copy was kept is saved back as schema 2 now. Left on disk as schema 1 until
+  // the first edit, every launch made another copy and the third pruned older backups (BACKUPS_KEEP) of other kinds.
+  else if (info.migrationBackupKey) schedulePersist();
   pending.clear(); // nobody is subscribed yet; the initial state is not a change
   return api;
 }

@@ -6819,3 +6819,14 @@ What changed (frozen-interface rows: `native/docs/INTERFACE_LOG.md` "## UIA", UI
 
 Not changed: app/js/engine (the oracle), app/js/engine-bridge, presets.js, Settings (its Learn table still lists the
 1.x rows; slot levels past 4 are learnable through `controller.learn('slots.<i>.gain')`).
+
+Measured (2-CPU box shared with other builders; fresh build dirs `native/core/build-uia`, `-clang20`, `-asan`):
+ctest 80/80 on g++ 13 Release, clang++-20 Release (-Werror, 0 warnings) and g++ ASan+UBSan (no report); the 112
+fixtures pass `compare.mjs` / `parity.mjs` (exit 0; 110 at the exact tier as before), g++ and clang++-20 renders
+byte-identical to each other and to the wave-3 integrator's g++ renders (112/112 `cmp`). `node test/run-all.mjs
+--fast`: unit 519 / 0 / 9 skip, engine 98/99 + 1 soft warning (PASS), instruments 143/143, synth-extra 153/153, shell
+263, ui-core 89 (incl. the new `ui-core/slots.mjs`, 6), edit-v2 109 (incl. the new `panels/slots.test.mjs`, 4),
+settings 84/84, eq 27/28 (the known L-21), mini 14/14 + mini-theme 13/14 in that run (a 1654 ms > 1 s re-theme
+timing under the ASan build's load; 14/14 + 14/14 alone after), themes 58/58, chrome-fallback 17/17;
+`node --test test/unit/engine-bridge/*.test.mjs` 118 / 0 / 2 skip. New node tests: `test/phase1/shell/uia-slots
+.test.mjs` (13). Zero console errors in every Playwright file.
