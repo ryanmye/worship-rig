@@ -1,8 +1,0 @@
-# Wave-2 integrator regression guard (orchestrator-owned): fixtures that already pass through T11 / T12 / T13 code
-# but belong to T14's done list (BUILD_PLAN wave 3). Compared at the manifest tier by ctest golden.integ. T14 moves
-# them into its own t14.ids (and deletes this file) when it lands; until then T14 / T15 / T16 must keep them green.
-# auto-filter-cutoff passes the exact tier too (4.3e-6, exactIfPrngPorted): T14 promotes it.
-auto-filter-cutoff
-song-lofi-rhodes
-transpose-octave-range
-release-pedalhold

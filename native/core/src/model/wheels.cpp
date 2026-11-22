@@ -19,6 +19,7 @@
 #include "model/perform_internal.h"
 #include "model/song.h"
 #include "num/js_math.h"
+#include "num/js_number.h"
 #include "rig/rig_engine.h"
 #include "time/automation.h"
 
@@ -103,7 +104,8 @@ bool Perform::setWheelAt(std::string_view source, double value01, double t, bool
       pickupHasLast_ = true;
       if (!crossed) {
         JsonOut j;
-        j.begin().kv("v", 1).kv("ev", "wheel").kv("source", "mod").kv("value", cur).kv("hardware", v);
+        j.begin().kv("v", 1).kv("ev", "wheel").kv("source", "mod").kvRaw("value", js::numberToString(cur));
+        j.kvRaw("hardware", js::numberToString(v));
         j.kvBool("pickup", true).end();
         m_.emit(j.take());
         return false;
@@ -127,14 +129,15 @@ bool Perform::setWheelAt(std::string_view source, double value01, double t, bool
 
 void Perform::emitWheel(std::string_view source, double value) {
   JsonOut j;
-  j.begin().kv("v", 1).kv("ev", "wheel").kv("source", source).kv("value", value).end();
+  j.begin().kv("v", 1).kv("ev", "wheel").kv("source", source).kvRaw("value", js::numberToString(value)).end();
   m_.emit(j.take());
 }
 
 std::string Perform::wheelValuesJson() const {
   const WheelValues &w = const_cast<Model &>(m_).songGraph().wheel();
   JsonOut j;
-  j.begin().kv("mod", w.mod).kv("expr", w.expr).kv("vol", w.vol).kv("owner", modVirtual_ ? "virtual" : "hw");
+  j.begin().kvRaw("mod", js::numberToString(w.mod)).kvRaw("expr", js::numberToString(w.expr));
+  j.kvRaw("vol", js::numberToString(w.vol)).kv("owner", modVirtual_ ? "virtual" : "hw");
   j.kvBool("swelling", swellActive_ != 0).end();
   return j.take();
 }

@@ -4,11 +4,12 @@
 //     f.Q)`) with optional audio inputs on detune (linkFilter: filterCS) and optional automation of each param
 //     (pluck's frequency sweep, the filter envelopes on detune, resonance on Q). biquad_dsp_kernel.cc
 //     UpdateCoefficientsIfNecessary: while any param HasSampleAccurateValues (a connection counts) the coefficients
-//     are recomputed every quantum, by EVERY channel kernel, from FinalValue() (k-rate: timeline value at the quantum
-//     start + first frame of the connected-input sum; the a-rate gain is constant 0); NormalizeFrequency multiplies
-//     f / nyquist by exp2(detune / 1200) (float exp2). Otherwise they are recomputed only when a value changed.
-//     A k-rate param running a setTarget advances one control step per FinalValue() call, so a stereo filter steps
-//     its envelope twice per quantum (kernel 1 sees the second step): `perKernel` (default true) reproduces that.
+//     are recomputed every quantum from FinalValue() (k-rate: timeline value at the quantum start + first frame of
+//     the connected-input sum; the a-rate gain is constant 0); NormalizeFrequency multiplies f / nyquist by
+//     exp2(detune / 1200) (float exp2). Otherwise they are recomputed only when a value changed. ONE evaluation per
+//     quantum serves both channel kernels: measured against the goldens, a k-rate setTarget on detune steps once
+//     per quantum in a stereo filter (poly-stab / analog-brass: 1.7e-6 / 6.9e-6 with one evaluation, 0.23 / 0.10
+//     with one per kernel). `perKernel` keeps the other reading for probes.
 //   * XDelay: a DelayNode (a-rate delayTime = intrinsic + connected inputs, clipped to [0, maxDelayTime]) over a
 //     caller-owned buffer of the exact Chromium length 128 + ceil(max * rate) (T05 fx/delay_node.cpp kernel: SSE2
 //     float read position).
@@ -39,7 +40,7 @@ class XFilter {
             wa::Param *detune = nullptr, bool linked = true);
   /** In place, nch channels. `detuneIn` = first frame of the detune connections (linkFilter), 0 if none. */
   void process(float *const *ch, unsigned nch, std::size_t n, std::int64_t frame0, double sr, float detuneIn);
-  bool perKernel = true;
+  bool perKernel = false;
 
  private:
   wa::BiquadCoeffs coeffs(std::int64_t frame0, double sr, float detuneIn);
@@ -60,6 +61,11 @@ class XDelay {
   static std::size_t lengthFor(double maxDelaySec, double sr);
   /** `buf` holds at least lengthFor(max, sr) floats; it is zeroed here (Delay::Delay). */
   void attach(float *buf, double maxDelaySec, double sr);
+  /** attach() into a buffer of `cap` floats: maxDelaySec shrinks to fit (only after a rate increase). */
+  void attachFitting(float *buf, std::size_t cap, double maxDelaySec, double sr) {
+    if (buf && lengthFor(maxDelaySec, sr) > cap) maxDelaySec = static_cast<double>(cap - kQ - 2) / sr;
+    if (buf) attach(buf, maxDelaySec, sr);
+  }
   /** One quantum: `delayIn` = connected-input sum (null = none) added to the intrinsic `delay` (s). */
   void process(const float *in, float *out, float delay, const float *delayIn);
   double maxDelay() const { return max_; }

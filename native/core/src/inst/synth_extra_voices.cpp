@@ -127,6 +127,12 @@ const XPatchDef *findXPatch(std::string_view id) {
   return nullptr;
 }
 
+int xParamIndex(const XPatchDef &p, std::string_view key) {
+  for (std::size_t i = 0; i < p.nParams; ++i)
+    if (key == p.params[i].key) return static_cast<int>(i);
+  return -1;
+}
+
 double pwmMaxDelay(double f) {
   return clampd(2.2 / f, 0.004, 1);
 }
@@ -355,9 +361,7 @@ LeadVoice::LeadVoice(const XBuild &b) : XVoice(b.note, b.t, (0.5 + 0.5 * b.vel) 
   const double f = noteToFreq(b.note);
   xosc(*this, saw, b.bank.saw[pick(b)].get(), f, 0, b.t);
   periodG.gain().setValue(1 / f);  // pwmPulse(inst, v, saw, f, 0.4)
-  double mx = pwmMaxDelay(f);
-  if (XDelay::lengthFor(mx, b.sr) > b.delayCap) mx = static_cast<double>(b.delayCap - XDelay::kQ - 1) / b.sr;
-  dl.attach(b.delayBuf, mx, b.sr);
+  // the DelayNode (maxDelayTime pwmMaxDelay(f)) gets its buffer from the instrument right after construction
   xosc(*this, sub, b.xb.square[pick(b)].get(), f / 2, 0, b.t);
   subG.gain().setValue(p[leSub] * 0.4);
   wa::setNow(vibG.gain(), 0, b.t + p[leVibDelay]);
@@ -404,9 +408,7 @@ JunoVoice::JunoVoice(const XBuild &b) : XVoice(b.note, b.t, (0.55 + 0.45 * b.vel
   const double f = noteToFreq(b.note);
   xosc(*this, saw, b.bank.saw[pick(b)].get(), f, 0, b.t);
   periodG.gain().setValue(1 / f);  // pwmPulse(inst, v, saw, f, 0.32)
-  double mx = pwmMaxDelay(f);
-  if (XDelay::lengthFor(mx, b.sr) > b.delayCap) mx = static_cast<double>(b.delayCap - XDelay::kQ - 1) / b.sr;
-  dl.attach(b.delayBuf, mx, b.sr);
+  // the DelayNode (maxDelayTime pwmMaxDelay(f)) gets its buffer from the instrument right after construction
   xosc(*this, sub, b.xb.square[pick(b)].get(), f / 2, 0, b.t);
   subG.gain().setValue(p[jSub] * 0.35);
   hpf.init(wa::BiquadType::Highpass, 60, butter2Q(), nullptr, nullptr, nullptr, false);

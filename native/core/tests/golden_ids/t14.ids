@@ -1,0 +1,13 @@
+# T14 Model perform (BUILD_PLAN wave 3): fixtures that pass at their manifest tier through rig_render + compare.mjs.
+# Taken over from golden.integ (wave-2 integrator): auto-filter-cutoff (promoted to exact by T14), song-lofi-rhodes,
+# transpose-octave-range, release-pedalhold.
+# release-pedalhold: its pedal-up event is posted up front with the others, so in BOTH engines the pedalHold timer at
+# 5.4 s finds the note already un-pedaled: the fixture proves release + sustain, not the pedalHold fade (unit.perform).
+auto-filter-cutoff
+song-lofi-rhodes
+transpose-octave-range
+release-pedalhold
+bend-pitch-sampler
+bend-tape
+mono-legato
+panic-fadeout

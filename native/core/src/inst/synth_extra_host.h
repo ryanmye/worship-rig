@@ -33,6 +33,7 @@ struct XIn : VoiceIn {
   const float *duty = nullptr;   // dutyCS (+ pwmG) into every PWM periodG (juno-pad, square-lead)
   const float *oct = nullptr;    // octCS (shimmer-pad)
   const float *bright = nullptr, *tine = nullptr;  // brightCS / tineCS (dx-epiano)
+  float *click = nullptr;                          // organ: the shared key-click band-pass input (voices add)
 };
 
 /** SynthVoice + the hooks a T15 voice needs (onRelease, more tracked params, PWM period params). */

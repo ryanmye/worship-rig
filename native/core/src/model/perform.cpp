@@ -18,6 +18,7 @@
 #include "model/perform_internal.h"
 #include "model/song.h"
 #include "num/js_math.h"
+#include "num/js_number.h"
 #include "time/automation.h"
 #include "yyjson.h"
 
@@ -519,7 +520,8 @@ void Perform::notesChanged(double t) {
 std::string Perform::runtimeStateJson() const {
   const WheelValues &w = const_cast<Model &>(m_).songGraph().wheel();
   JsonOut j;
-  j.begin().key("wheel").begin().kv("mod", w.mod).kv("expr", w.expr).kv("vol", w.vol).end();
+  j.begin().key("wheel").begin().kvRaw("mod", js::numberToString(w.mod)).kvRaw("expr", js::numberToString(w.expr));
+  j.kvRaw("vol", js::numberToString(w.vol)).end();
   j.kv("modOwner", modVirtual_ ? "virtual" : "hw").kvBool("faded", fadeSeq_ != 0).end();
   return j.take();
 }

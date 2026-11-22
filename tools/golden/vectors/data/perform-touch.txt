@@ -1,4 +1,4 @@
-# T14 perform touch vectors (dump-perform.mjs). hex = IEEE-754 double, big-endian
+# T14 perform touch vectors (dump-perform.mjs, 157.0.8103.78). hex = IEEE-754 double, big-endian
 named soft 1 3fabfd309107283c
 named soft 2 3fb53632c8b52500
 named soft 3 3fbb0dcedc6addd6
@@ -20,13 +20,13 @@ named soft 18 3fd3d16cb2212cb7
 named soft 19 3fd478b4f4316f9c
 named soft 20 3fd51c809532e578
 named soft 21 3fd5bd0d7f951dc3
-named soft 22 3fd65a92997716f2
+named soft 22 3fd65a92997716f1
 named soft 23 3fd6f540d81effad
 named soft 24 3fd78d441f1fa0f0
 named soft 25 3fd822c3f6dd34e5
 named soft 26 3fd8b5e42329be01
-named soft 27 3fd946c5208ecd8a
-named soft 28 3fd9d5848d4d5d28
+named soft 27 3fd946c5208ecd8b
+named soft 28 3fd9d5848d4d5d27
 named soft 29 3fda623d81f7805f
 named soft 30 3fdaed08dcad298b
 named soft 31 3fdb75fd8160544f
@@ -66,24 +66,24 @@ named soft 64 3fe53632c8b52500
 named soft 65 3fe568f2d3ed07c8
 named soft 66 3fe59b63299023aa
 named soft 67 3fe5cd85793058a4
-named soft 68 3fe5ff5b62f5576c
+named soft 68 3fe5ff5b62f5576b
 named soft 69 3fe630e6786162f9
 named soft 70 3fe662283d098eec
 named soft 71 3fe693222742712a
 named soft 72 3fe6c3d5a0c22706
-named soft 73 3fe6f44407387a64
+named soft 73 3fe6f44407387a63
 named soft 74 3fe7246eacdde149
 named soft 75 3fe75456d8fa0260
-named soft 76 3fe783fdc8625a4a
+named soft 76 3fe783fdc8625a49
 named soft 77 3fe7b364adf1909a
 named soft 78 3fe7e28cb2f7ff80
 named soft 79 3fe81176f7a5e650
 named soft 80 3fe84024936fb588
 named soft 81 3fe86e96956cda01
-named soft 82 3fe89cce04b16500
+named soft 82 3fe89cce04b164ff
 named soft 83 3fe8cacbe0a2e791
 named soft 84 3fe8f8912148d0f4
-named soft 85 3fe9261eb79899ba
+named soft 85 3fe9261eb79899b9
 named soft 86 3fe953758dbdffd6
 named soft 87 3fe98096875f92aa
 named soft 88 3fe9ad8281dfc97f
@@ -92,7 +92,7 @@ named soft 90 3fea06bed1218624
 named soft 91 3fea3310c37100b5
 named soft 92 3fea5f30f2282e02
 named soft 93 3fea8b201eba4f1a
-named soft 94 3feab6df059f4ce4
+named soft 94 3feab6df059f4ce3
 named soft 95 3feae26e5e81c0fa
 named soft 96 3feb0dcedc6addd5
 named soft 97 3feb39012dec54c6
@@ -279,8 +279,8 @@ named hard 23 3fb0a189aeb3af22
 named hard 24 3fb1cd8e33bf3721
 named hard 25 3fb3012b6fbc49e6
 named hard 26 3fb43c41e0528f7f
-named hard 27 3fb57eb3baee5a20
-named hard 28 3fb6c864c52e0d9c
+named hard 27 3fb57eb3baee5a21
+named hard 28 3fb6c864c52e0d9d
 named hard 29 3fb8193a322ca5a0
 named hard 30 3fb9711a83ea2b48
 named hard 31 3fbacfed7035bd26
@@ -298,7 +298,7 @@ named hard 42 3fc5cb15535da63d
 named hard 43 3fc6a1221601bce4
 named hard 44 3fc77a30dc4b7438
 named hard 45 3fc8563a999b302d
-named hard 46 3fc9353879da71d0
+named hard 46 3fc9353879da71cf
 named hard 47 3fca1723de837d37
 named hard 48 3fcafbf65be06184
 named hard 49 3fcbe3a9b67c4636
@@ -315,7 +315,7 @@ named hard 59 3fd2c50acc519f74
 named hard 60 3fd348026e37aacc
 named hard 61 3fd3cc4b0840a7d0
 named hard 62 3fd451e261ea3eec
-named hard 63 3fd4d8c64f98e186
+named hard 63 3fd4d8c64f98e185
 named hard 64 3fd560f4b21957af
 named hard 65 3fd5ea6b76290e02
 named hard 66 3fd675289404ae23
@@ -328,7 +328,7 @@ named hard 72 3fd9cff03544f5d2
 named hard 73 3fda636460fe686a
 named hard 74 3fdaf8101810add7
 named hard 75 3fdb8df1a9982b1d
-named hard 76 3fdc25076cce6808
+named hard 76 3fdc25076cce6807
 named hard 77 3fdcbd4fc0c8325e
 named hard 78 3fdd56c90c36acbd
 named hard 79 3fddf171bd2b1e87
@@ -357,13 +357,13 @@ named hard 101 3fe62e4c500ac137
 named hard 102 3fe68884a6c75690
 named hard 103 3fe6e34540c5d3a4
 named hard 104 3fe73e8d9627dbf7
-named hard 105 3fe79a5d20e4ad0e
+named hard 105 3fe79a5d20e4ad0d
 named hard 106 3fe7f6b35cbe5a7e
 named hard 107 3fe8538fc73762b8
 named hard 108 3fe8b0f1df8898c6
-named hard 109 3fe90ed926975f8c
+named hard 109 3fe90ed926975f8d
 named hard 110 3fe96d451eec3357
-named hard 111 3fe9cc354ca97e6a
+named hard 111 3fe9cc354ca97e69
 named hard 112 3fea2ba93582b5b2
 named hard 113 3fea8ba060b3bac2
 named hard 114 3feaec1a56f88052
@@ -579,7 +579,7 @@ custom 1.65 0.05 1 112 126 3ff0000000000000
 custom 1.65 0.05 1 112 127 3ff0000000000000
 custom 0.1 -1 2 300 1 3fd3108d7f8952be
 custom 0.1 -1 2 300 7 3fdf0297b981bb05
-custom 0.1 -1 2 300 20 3fe4288e635b2e20
+custom 0.1 -1 2 300 20 3fe4288e635b2e21
 custom 0.1 -1 2 300 33 3fe6d8cf4edc141b
 custom 0.1 -1 2 300 64 3feaf624d3ee9b1e
 custom 0.1 -1 2 300 90 3fed5c39045c2449

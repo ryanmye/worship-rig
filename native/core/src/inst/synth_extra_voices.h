@@ -29,6 +29,8 @@ struct XPatchDef {
 };
 const XPatchDef &xpatchDef(XPatch id);
 const XPatchDef *findXPatch(std::string_view id);
+/** Index of `key` in the patch's params, -1 if absent. */
+int xParamIndex(const XPatchDef &p, std::string_view key);
 
 /** Param indices per patch (positions in the PATCHES lists; checked against the catalogue by the tests). */
 namespace xk {
