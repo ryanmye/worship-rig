@@ -205,7 +205,9 @@ TEST_SUITE("wheels") {
     const double base = perQuantum(false, false), lofi = perQuantum(true, false), tape = perQuantum(true, true);
     MESSAGE("per 128-frame quantum: test voice " << base << " us; + lofi engaged " << lofi - base
                                                  << " us; + lofi with a tape-bend ramp " << tape - base << " us");
-    CHECK(tape - base < 400);  // loose sanity bound (2-CPU shared box); the numbers go into the T14 report
+#if !defined(__SANITIZE_ADDRESS__) && !defined(__SANITIZE_THREAD__)
+    CHECK(tape - base < 400);  // loose sanity bound (2-CPU shared box, Release); the numbers go into the T14 report
+#endif
     Eng e;
     REQUIRE(e.use(patch({probe(), probe(R"("mono":"lowest")"), probe(), probe(R"("highNote":127)")})));
     const double c0 = threadUs();
