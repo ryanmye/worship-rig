@@ -103,6 +103,7 @@ class OrganInstrument final : public XHost<kOrganVoiceBytes> {
   int rotaryTarget() const;  // ok::kSlow / kFast, -1 = off
   void setRotarySpeed(int speed, double t);
   void setDrive(double t);
+  void syncOversample();
 
   const OrganPresetDef &preset_;
   std::shared_ptr<const WaveBank> bank_;

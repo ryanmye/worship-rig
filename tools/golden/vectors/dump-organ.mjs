@@ -20,6 +20,9 @@ const CASES = [
     ev: [[0.05, 'on', 48, 110], [0.05, 'on', 60, 110], [0.4, 'off', 48]] },
   { name: 'church-48k', patch: 'church', sr: 48000, sec: 0.8, win: [0.05, 0.8],
     ev: [[0.05, 'on', 57, 90], [0.3, 'param', 'release', 0.2], [0.4, 'off', 57]] },
+  // T15 review: drive raised past .5 while no voice exists -> _syncOversample switches the shaper to 2x
+  { name: 'soft-drive-switch', patch: 'soft-pad', sec: 0.7, win: [0.05, 0.7],
+    ev: [[0.02, 'param', 'drive', 0.9], [0.05, 'on', 48, 110], [0.05, 'on', 60, 110], [0.4, 'off', 48]] },
 ];
 
 await dumpCases(path.join(DATA, 'organ.txt'), 'organ.js reference renders', 'organ', CASES);

@@ -150,7 +150,10 @@ struct OrganShared {
   wa::BiquadFilter clickBpf{wa::BiquadType::Bandpass, 2830, 1.41, 0};
   wa::Gain clickG{1.0};
   wa::Gain pre{1.0}, post{1.0}, dryG{1.0}, rotG{1.0};
-  std::unique_ptr<wa::WaveShaper> shaper;
+  // organ.js _syncOversample switches shaper.oversample ('none' | '2x' at drive > .5) while no voice exists: both
+  // shapers are built here (the 2x one allocates its Up/DownSamplers), the audio thread only re-points `shaper`
+  std::unique_ptr<wa::WaveShaper> shaperNone, shaperX2;
+  wa::WaveShaper *shaper = nullptr;
   wa::BiquadFilter lo{wa::BiquadType::Lowpass, kCrossover, 0, 0}, hi{wa::BiquadType::Highpass, kCrossover, 0, 0};
   OrganRotor horn, drum;
   wa::Gain output{1.0}, ceilPre{0.25};
@@ -238,9 +241,10 @@ OrganInstrument::OrganInstrument(const OrganPresetDef &preset, double sampleRate
   s.clickBpf.reinit(wa::BiquadType::Bandpass, 2830, 1.41, 0);
   s.clickG.gain().setValue(params_[ok::kClick] * 1.5);
   const double drive = params_[ok::kDrive];
-  s.shaper = std::make_unique<wa::WaveShaper>(
-      softClipCurve12(), kSoftClipPoints,
-      drive > 0.5 ? wa::WaveShaper::Oversample::X2 : wa::WaveShaper::Oversample::None, 1);
+  s.shaperNone =
+      std::make_unique<wa::WaveShaper>(softClipCurve12(), kSoftClipPoints, wa::WaveShaper::Oversample::None, 1);
+  s.shaperX2 = std::make_unique<wa::WaveShaper>(softClipCurve12(), kSoftClipPoints, wa::WaveShaper::Oversample::X2, 1);
+  s.shaper = drive > 0.5 ? s.shaperX2.get() : s.shaperNone.get();  // overdriveOversample(params.drive)
   setDrive(0);
   const bool off = static_cast<int>(params_[ok::kRotary]) == ok::kOff;
   s.dryG.gain().setValue(off ? 1 : 0);
@@ -280,6 +284,14 @@ void OrganInstrument::setDrive(double t) {
   wa::rampTo(sh_->post.gain(), (js::tanh(clipG) / k) * (1 - 0.3 * d), t, 0.02);
 }
 
+void OrganInstrument::syncOversample() {
+  // organ.js _syncOversample: apply a pending oversample change only while nothing sounds through the shaper
+  // (alloc.size === 0: every constructed voice, fading ones included = pool live count)
+  OrganShared &s = *sh_;
+  wa::WaveShaper *want = params_[ok::kDrive] > 0.5 ? s.shaperX2.get() : s.shaperNone.get();
+  if (want != s.shaper && pool_.live() == 0) s.shaper = want;
+}
+
 bool OrganInstrument::keyDownAt(double t) {
   bool down = false;
   pool_.forEach([&](int s, XVoice &) {
@@ -299,6 +311,7 @@ double OrganInstrument::percLevel(double t) {
 
 void OrganInstrument::buildVoice(int note, double, double t) {
   OrganShared &s = *sh_;
+  syncOversample();  // _buildVoice: before the voice joins alloc
   const auto rot = static_cast<unsigned>(rng_.integer(0, kRotations - 1));
   const double lv = params_[ok::kPercussion] != 0 ? percLevel(t) : 0;
   const SampleBuffer *click = nullptr;
@@ -319,6 +332,7 @@ void OrganInstrument::applyParam(std::uint32_t key, double val, double t) {
     // takes effect when the instrument is rebuilt (T15 report: needs a control-side rebuild op)
   } else if (key == ok::kDrive) {
     setDrive(t);
+    syncOversample();
   } else if (key == ok::kClick) {
     wa::rampTo(s.clickG.gain(), val * 1.5, t);
   } else if (key == ok::kRotary) {
