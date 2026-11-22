@@ -188,7 +188,8 @@ TEST_SUITE("sleep") {
     CHECK(s.st() == "awake");  // the sleep's timer found a newer seq: no suspend
     CHECK(s.m().perform().pedaledCount() >= 1);
     CHECK(s.m().sleepBlockersJson().find("\"pedal\"") != std::string::npos);
-    // audio: the 5 ms wake ramp (no noteOn queued: 60 ms) took `out` back from mid-ramp, the note still sounds
+    // audio: the wake ramp (60 ms: only a sustain was queued, no noteOn) took `out` back from mid-ramp, the note
+    // still sounds
     CHECK(t13::rms(s.e.L, t0 + 0.3, t0 + 0.5) > 1e-3);
   }
 
@@ -214,6 +215,8 @@ TEST_SUITE("sleep") {
     Rt rt;
     rt.post(R"({"v":1,"op":"hello","protocol":1,"app":"t","id":1})");
     REQUIRE(rt.waitFor("\"re\":1,"));
+    // W3A review: realtime but before `audio start` (no master chain: JS !this.fx) -> ['no-audio'], not []
+    CHECK(reinterpret_cast<rig::Engine *>(rt.e)->model().sleepBlockersJson() == R"(["no-audio"])");
     rt.post(R"({"v":1,"op":"audio","action":"start","id":2})");
     REQUIRE(rt.waitFor("\"re\":2,"));
     rt.startAudio();

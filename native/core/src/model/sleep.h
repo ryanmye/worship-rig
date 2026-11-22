@@ -51,7 +51,8 @@ class Sleep {
   /** audio.js _sleepHold: while not awake (and not offline) the call is queued and wakes the engine. True = held
    *  (the caller returns at once; the call is played at the wake ramp's start). */
   bool hold(const SleepCall &c);
-  /** audio.js sleepBlockers(): 'voices', 'click', 'pedal', 'drone'; ['no-audio'] on an offline engine. */
+  /** audio.js sleepBlockers(): 'voices', 'click', 'pedal', 'drone'; ['no-audio'] on an offline engine or before
+   *  `audio start` (no master chain yet: JS !this.fx). */
   std::string blockersJson() const;
   /** `_debugStats` members: audioSleep (state), audioSleeps, audioWakes, lastWake {ms, queued, ramp, at, leadMs}. */
   void statsFields(std::string &out) const;

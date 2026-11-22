@@ -125,7 +125,8 @@ bool Sleep::hold(const SleepCall &c) {
 }
 
 std::string Sleep::blockersJson() const {
-  if (offline()) return "[\"no-audio\"]";
+  // JS: !ctx || offline || !fx. W3A review: a realtime engine before `audio start` has no master chain (no fx) yet
+  if (offline() || m_.attachedKind(UnitSlot::MasterChain).empty()) return "[\"no-audio\"]";
   JsonOut j;
   j.beginArray();
   // 'voices': held / sounding and pedaled notes, the live voices of every slot and retiring channel, a mono line
