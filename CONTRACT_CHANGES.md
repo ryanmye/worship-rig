@@ -6928,3 +6928,13 @@ What changed (rows: `native/docs/INTERFACE_LOG.md` "## UIC"). Each item has a te
 - **`CONTRACT_CHANGES` "## UIB"** (UIB review O2) is written above from INTERFACE_LOG UIB-1..6 (minor 4).
 
 Not changed: `app/js/engine` (the oracle), `native/core`, `engine-api.json`, every assertion of the ui-core suite.
+
+Measured (fresh `native/core/build-uic`, `-clang20`, `-asan`, `-devhost`; `-j2`, one at a time, box otherwise idle):
+ctest **80/80** on g++ 13 Release, clang++-20 Release (`-Werror`, 0 warnings) and g++ ASan+UBSan (no sanitizer
+report, `rt.realtime` included); all 112 fixtures rendered with g++ and clang-20 are byte-identical to each other
+(112/112 `cmp`), `compare.mjs` 112/112, `parity.mjs --twin` exit 0 (110 at the exact tier, no unexpected failure).
+`node --test test/unit/engine-bridge/*.test.mjs` 123 / 0 / 2 skip (125 / 0 / 0 with `RIG_DEVHOST` set).
+`node test/run-all.mjs --fast` 11/12: unit 524 / 0 / 9 skip, engine 98/99 + 1 soft warning (PASS), instruments
+143/143, synth-extra 153/153, shell 265, ui-core 90 (web engine, every assertion as before), edit-v2 109, settings
+86/86 (app, fixture, mac, bridge), eq 27/28 (the known L-21 only), mini 14/14, themes 58/58, chrome-fallback 17/17;
+zero console errors. UI parity on `rig-devhost` (no adapter): 70/77 (suite side alone 65/77; UIB 25/77).
