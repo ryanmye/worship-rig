@@ -15,7 +15,7 @@ at the same time on the same box.
 | g++ 13 Release `build-w3a-rv` | 0 warnings | **78/78** |
 | clang++-20 Release `-Werror` `build-w3a-rv-clang20` | 0 warnings | **78/78** |
 | g++ ASan+UBSan `build-w3a-rv-asan` | 0 warnings | **78/78** (`-j2`, next to the other builder's compile; `rt.realtime` passed there and 3/3 alone); 0 sanitizer reports |
-| g++ TSan `build-w3a-rv-tsan` (sleep, runtime, model, song, t00c, voice-limit, perform, perform_carry, wheels) | see below | see below |
+| g++ TSan `build-w3a-rv-tsan` (sleep, runtime, model, song, t00c, voice-limit, perform, perform_carry, wheels) | 0 warnings | **96/96** cases (139 342 assertions), 0 ThreadSanitizer reports |
 
 JS: `node test/run-all.mjs --only unit` gives 510 pass / 0 fail / 9 skip. `node --test
 test/unit/engine-bridge/*.test.mjs` gives 111 pass / 0 fail / 2 skip.
