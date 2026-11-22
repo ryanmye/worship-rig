@@ -8,7 +8,7 @@ unattended command on the Mac). Tier 2 is one short checklist for Ryan, done onc
 |---|---|---|---|---|
 | 0 | GitHub Actions `macos-15` (`.github/workflows/native-core.yml`) | CI, on every push touching native/ or tools/mac/ | none | core build + ctest + goldens under Apple clang (`build-test`), Apple compile of both targets (`mac-check`) |
 | 1 | Ryan's Mac, `bash tools/mac/check.sh` | the push agent, one `RUN` | none after the one-time setup below | tier 0 again on the real Mac, plus the audio probe on the real output device (D2, D4 numbers) |
-| 2 | Ryan's Mac and iPad, by hand | Ryan | about 20 minutes, once, after T13/T14 | what needs ears, hands, a MIDI keyboard, his real library, an iPad |
+| 2 | Ryan's Mac and iPad, by hand | Ryan | about 25 minutes, once, after the tier-1 re-run on the integration commit | what needs ears, hands, a MIDI keyboard, his real library, an iPad |
 
 Status: `tools/mac/check.sh` and `rig-probe` are tested on Linux (argument parsing and usage errors, `git archive`
 export and reuse, `--src`, the core stage from a clean export, the probe stage on the null audio backend, missing-tool
@@ -46,8 +46,8 @@ What it settles and what it does not:
   box. Raising it is an orchestrator / Ryan decision (DECISIONS D4). The iPad profile (64) is still unmeasured.
 - Mac check #1 (earlier) failed the core build under Apple clang on an unused private field (`-Werror`); since then
   every gate also builds with clang++-20 `-Werror` on Linux as a stand-in.
-- Still open on the Mac: tier 2 (Ryan by hand, after T14), `apple-sim`, the iPad probe, reading back the CI
-  `mac-check` result.
+- Still open on the Mac: a tier-1 re-run on the integration commit (engine + UI wave + CORE1 / CORE2), then tier 2
+  (Ryan's hands-on checklist below), `apple-sim`, the iPad probe, reading back the CI `mac-check` result.
 
 ## Tier 0: CI (no Mac)
 
@@ -155,11 +155,9 @@ Audio transport, `bltn` = built-in; Bluetooth output has its own large latency a
 On Linux the same binary runs on miniaudio's null backend (`ctest probe.null`, ~10 s): that proves the plumbing and the
 JSON, not the numbers.
 
-The probe preloads each song (`cache preload`) before `prepare`. Reason, found while building it: in realtime mode
-the engine's control loop never calls the cache service's `pump()`, so samples requested by a cold `prepare` are
-decoded but never delivered and a sampler stays silent (the dev host and the Apple shell both run realtime). Owner:
-core (`api/engine.cpp` `controlLoop`, `samples/cache_service` `setWake`/`pump`). The app's controller preloads songs,
-which hides it in normal use, but a song opened without a preload would be silent.
+The probe preloads each song (`cache preload`) before `prepare`; `--no-preload` skips that and exercises the cold
+path. (When the probe was built, a cold realtime `prepare` left samplers silent because the control loop never pumped
+the cache; CORE1 fixed that, see "Known gaps".)
 
 ### One-time setup on the Mac (Ryan, once, before the first RUN)
 
@@ -195,26 +193,62 @@ The cloud then sends `inbox/<UTC>-RUN.md` (first line `VERB: RUN`, then the comm
 `outbox/logs/<UTC>-check/summary.json` back through the device tools. The loop for Swift compile errors is: read
 `stages.apple-*.errors`, fix, push, RUN the same line with `--quick` (or wait for CI's `mac-check`).
 
-## Tier 2: Ryan by hand (one checklist, deferred until songs play)
+## Tier 2: Ryan hands-on checklist (integrator, 2026-11-22: engine and UI wave done)
 
-Do this once, after T13/T14 (song model and perform) land and tier 1 is green; until then there is nothing to hear.
-About 20 minutes with the MIDI keyboard and the iPad at hand. Write the results into `native/docs/SHELL.md`.
+**When:** after the push agent's tier-1 `check.sh` RUN on the integration commit shows `core`, `probe` and
+`apple-mac` PASS (`apple-sim` may stay FAILED/SKIPPED for the missing iOS platform). About 25 minutes, MIDI keyboard
+with a sustain pedal, headphones or the usual speakers. The 2.0 UI runs in Chrome on top of the native engine through
+`rig-devhost` (the dev host: real UI, real C++ engine, Core Audio output, Chrome's Web MIDI). The Apple app itself has
+compiled but never been launched; it is part B.
 
-1. **Launch** the macOS build: `open ~/Library/Caches/worship-rig-check/<sha7>/dd-apple-mac/Build/Products/Debug/Worship\
-   Rig.app` (the last check's build), or Product > Run in Xcode: the window opens, the page loads from `rig://app/`,
-   no blank window.
-2. **MIDI keyboard** (CoreMIDI timing): play fast repeated notes and a chord with the pedal; notes start without
-   audible lag or flams, pedal holds and releases.
-3. **Sound at 128 frames**: Settings > Sound > buffer 128 (the granted size shows); play a pad and a piano for a
-   minute: no clicks or dropouts. Try 64 if the probe said `safe: true`.
-4. **Themes**: switch through the six themes; each renders (colours, `light-dark()`).
-5. **Library**: first launch offers the Electron library import; Yes brings the songs over (Electron origin
-   127.0.0.1:8438 -> `rig://app`); then Settings > Library & Backup > import latest backup works too. Relaunch: the
-   library is still there.
-6. **A GarageBand-imported sample** (My Samples): one real GarageBand/Logic instrument imports and plays.
-7. **iPad install** (`native/apple/README.md` steps 7-10): build for the device with the free Apple ID team, trust
-   the developer on the iPad, the app opens, plays through the speaker and over headphones, keeps playing with the
-   screen locked.
+**Part A: 2.0 in Chrome on the M2 Pro (`rig-devhost`)**
+
+1. **Start.** Quit the 1.x app. In Terminal (keep it open; `<sha7>` = the commit the check built, the folder name under
+   `~/Library/Caches/worship-rig-check/`):
+   `~/Library/Caches/worship-rig-check/<sha7>/build/rig-devhost --log ~/Desktop/rig-bridge.jsonl`
+   Open `http://127.0.0.1:8440/` in Chrome (one tab only: a second tab takes the engine over). Click once to start
+   audio. Look for: the page loads, the top bar reaches Ready, no red banner.
+2. **Your library.** In the 1.x app beforehand: Settings › Library & Backup › **Export library**. In the 2.0 page:
+   Settings › Library & Backup › **Import…** and pick that file. Look for: "Imported N songs", your setlist as in 1.x.
+3. **MIDI keyboard.** Plug it in; allow MIDI if Chrome asks. Play fast repeated notes on one key, then a chord held
+   with the pedal, pedal up. Listen for: no lag or flams compared to 1.x, nothing stuck after pedal-up. Look for: the
+   Perform pedal lamp stays lit the whole time the pedal is down and goes dark on release.
+4. **Buffer size.** Settings › Sound › Buffer size **128** (the line next to it shows the size the Mac gave). Play a
+   pad song with a piano for one minute: no clicks, crackles or dropouts. Then **64**, the same minute; then back to 128.
+5. **Switching songs while playing (the main thing to check).** Hold a chord with the pedal down and press **Next**
+   (or click the next chip in the setlist) while still holding; keep playing for 10 s. Do it through the whole set,
+   then once more backwards with Prev, and once with a jump to a song you have not opened in this session (its samples
+   load cold). Listen for: the old song lets go cleanly, the new one sounds within about a second, no slot stays
+   silent (a piano that never comes in), notes you play during the switch are not late or swallowed. Look for: the
+   meters keep moving during the switch.
+6. **Perform controls.** On a few songs: Swell (rises; press again returns), mod wheel / expression pedal, Fade-out,
+   transpose − / +, the Click chip on a song with a tempo, drone on / off and a key change, Panic (Esc) silences
+   everything. Each does what 1.x does.
+7. **More than 4 sounds.** In Edit, use **Slots** (rig bar) › add a slot until the song has 8; give Sound 5-8
+   different instruments; in Perform the strips scroll sideways and all 8 play and meter.
+8. **By ear against 1.x.** Pick 3 songs you know well; play each in 1.x and in 2.0 back to back (quit one before
+   starting the other). Note anything clearly louder, quieter, duller or different.
+9. **Stop** with Ctrl-C in Terminal.
+
+Not in part A (the dev host does not serve them, so they do not count as failures here): pad files (the drone uses
+the synth drone; the warning "No pad file for C" is expected), My Samples / GarageBand instruments, recording files,
+CoreMIDI timing (Chrome's Web MIDI adds a hop that the app will not have).
+
+**Part B: the Mac app (`WorshipRig-macOS`), when the Mac check build launches**
+
+1. Open the build `check.sh` made: `open ~/Library/Caches/worship-rig-check/<sha7>/dd-apple-mac/Build/Products/Debug/`
+   and double-click the app there (or Product › Run in Xcode). The window opens and the page loads (`rig://app/`),
+   not a blank window.
+2. Repeat part A steps 3-5 there (CoreMIDI is the app's own path).
+3. Switch through the six themes: each renders.
+4. One real GarageBand / Logic instrument through Settings › My Samples imports and plays.
+
+The iPad install (`native/apple/README.md` steps 7-10) comes after part B.
+
+**How to report.** For each step number: **OK**, or **not OK** + one line (what you heard or saw, which song, the
+clock time). Send that list in the chat with the cloud session, with `~/Desktop/rig-bridge.jsonl` and the last ~50
+lines of the Terminal window attached (the bridge log has every message with a timestamp, so a glitch at a given clock
+time can be traced). A screenshot for anything visual.
 
 Everything else on the README's "Mac / iPad verification list" (WebContent crash recovery, memory-pressure simulation,
 AVAudioSession interruptions) is optional for Ryan; it can be scripted into tier 1 later (a UI-less `--self-test` mode
@@ -222,17 +256,13 @@ of the app would be the next step: launch, load, `hello`, quit, all from `check.
 
 ## Known gaps found while building this (owners: core / orchestrator)
 
-- **Realtime sampler without a preload is silent** (still open after wave 3, checked by the wave-3 integrator
-  2026-11-22; BUILD_PLAN "UI wave: how to start" schedules it before tier 2). `api/engine.cpp` `controlLoop`
-  never calls the cache service's `pump()` and nobody calls `setWake`, so decodes started by a cold `prepare` in realtime mode are never integrated
-  (`sampler_service.cpp`: "realtime on a later pump()"). Shown by `rig-probe` on the null backend: 16 slots of
-  `ep-rhodes`, 8 notes held, 0 voices; with a `cache preload` first, 128 voices. The probe preloads; the core should
-  pump the cache in its control loop (and set the wake to its semaphore).
-- **Three core tests fail in any clean checkout** (CI's `build-test` included): `unit.samples_decode`,
-  `unit.samples_process` and `unit.samples_service` (`pcmOverride` case) need `tools/golden/decode-dump/data/raw44100`
-  / `raw48000`, which `.gitignore` excludes while `data/manifest.json` is committed, so `Dump::ok()` is true and the
-  tests REQUIRE files that are not there. They should skip when the raw dumps are missing (as the goldens do), or CI
-  should generate them. `check.sh` reports them as `NoData` meanwhile.
+- **Realtime sampler without a preload was silent: closed** (CORE1, `reviews/CORE1.md`). The control loop pumps the
+  cache every turn and the decode workers wake it; `unit.runtime_cache` gets 128 voices cold. `rig-probe
+  --no-preload` gives 121 voices with the probe's default role layout (slot 3 takes the Bass range), 128 with every
+  slot full range. Since CORE2A, `cache preload` is also answered asynchronously, so a cold song switch no longer
+  stops ticks or live input (`reviews/CORE2A.md`).
+- **Three core tests failed in any clean checkout: closed** (INTERFACE_LOG 38): `unit.samples_decode`,
+  `unit.samples_process` and `unit.samples_service` now skip when `tools/golden/decode-dump/data/raw*` is absent.
 
 ## Mapping of the old Mac/iPad list
 

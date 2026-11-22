@@ -43,7 +43,8 @@ run them one at a time; `run-all` does that for you.
   controller (store→engine diff) and the UI all read it. To add a param, add the row and implement it in
   `engine.setParam`. The store and controller pick it up without changes; there are tests for exactly that
   (`test/phase1/shell/shell3.test.mjs`).
-- **Store schema** is `SCHEMA = 1`. `migrate()` is idempotent and keeps unknown fields. Optional fields (slot
+- **Store schema** is `SCHEMA = 2` (2.0, UIA: 1..16 slots per song, `slots.0..15`; a schema-1 library migrates with
+  its 4-slot songs unchanged). `migrate()` is idempotent and keeps unknown fields. Optional fields (slot
   `width`/`eq`/`release`/`pedalHold`, `fx.eq`, `fx.comp`) stay absent until they are set.
 - **Factory songs** (`presets.js`) keep stable ids `factory:<slug>`. To add a song:
   1. Append it to `DEFS` with `since: <n>`.
@@ -64,8 +65,9 @@ run them one at a time; `run-all` does that for you.
 - `views/edit/CONTRACT.md` is the reference: module map, the selection model (`ctx.editState`), the panel API and
   ctx, DOM/CSS rules and the test harness. main.js mounts `edit/shell.js` (`mountEdit`); the old `views/edit.js`
   is gone.
-- **Shell** (`shell.js`): the layout, 7 block tabs (Keys · Pad · Extra · Bass · Drone | Effects · Master) with
-  summaries and changed dots, Show wiring, and one ctx per mounted panel. Everything a panel registers through its
+- **Shell** (`shell.js`): the layout, one block tab per slot plus Drone | Effects · Master (`lib.js` `blocksFor(n)`;
+  a 4-slot song shows the 1.x 7 tabs Keys · Pad · Extra · Bass · Drone | Effects · Master; UIA: up to 16, scrolling,
+  "Slots n" adds / removes) with summaries and changed dots, Show wiring, and one ctx per mounted panel. Everything a panel registers through its
   ctx (subscriptions, listeners, Esc handlers, leave-song hooks) is released when it unmounts.
 - **Panels** (`panels/*.js`, one CSS file each): `slot` (Keys/Pad/Extra/Bass), `drone`, `effects`, `master` (incl.
   Wheels & pedal), `song` (Easy Transpose, tempo, notes; opened by the header chips), and the regions
