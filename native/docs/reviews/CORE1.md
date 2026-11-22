@@ -2,8 +2,9 @@
 
 Verdict: **VERIFIED.** All three items are done: mackit O1, W3A R1 and T00c O4. Each has a test, and the O1 and R1
 tests fail when the fix is reverted (I checked this with scratch-linked binaries). Every builder claim I re-ran holds.
-I made one change, to a test file the task owns: a test case for the no-host restart wake, which nothing covered
-before. CORE1 moves no fixture. All 112 renders are byte-identical to the wave-3 `build-w2` renders and to clang-20.
+I made two changes, both to the test file the task owns. The first fixes a timing race in the test's sleep helper
+that TSan exposed. The second adds a test case for the no-host restart wake, which nothing covered before. CORE1 moves
+no fixture. All 112 renders are byte-identical to the wave-3 `build-w2` renders and to clang-20.
 No frozen file changed.
 
 ## What I re-ran
@@ -16,7 +17,7 @@ less. Another builder was running Playwright, run-all and ASan renders on the sa
 | g++ 13 Release | 0 warnings | 79/80 in the full `-j1` run: `rt.realtime` hit 4 xruns (limit 3) at load 7. It passed alone afterwards. The other 79 passed. |
 | clang++-20 Release (`-Werror` from `cmake/RigWarnings.cmake`) | 0 warnings | **80/80** |
 | g++ ASan+UBSan (`-fno-sanitize-recover=all`) | 0 warnings | **80/80**, no sanitizer report. `rt.realtime` alone reports 61 xruns as a MESSAGE. |
-| g++ TSan, CI regex (29 tests) | 0 warnings | see the summary below |
+| g++ TSan, CI regex (29 tests, `rig_tests` target) | 0 warnings | 28/29, **0 ThreadSanitizer reports**. `unit.runtime_cache` failed on a race in the test, not the engine (fixed below). After the fix it passed 3/3 alone. |
 | devhost g++ | 0 warnings | **5/5** (`probe.null` included) |
 
 - `node --test test/unit/engine-bridge/*.test.mjs` with `RIG_DEVHOST` set to my devhost gives **120 pass, 0 fail, 0
@@ -88,14 +89,23 @@ and the sweep still runs.
   allocation is not poisoned by ASan (use-after-dtor is an MSan-only check). The builder's reworded comment already
   says the case is only a guard. The link is still correct, and it costs almost nothing.
 
-## Fix made (task-owned test file)
+## Fixes made (task-owned test file `tests/test_runtime_cache.cpp`)
 
-- `tests/test_runtime_cache.cpp` gets a new case: *"W3A R1: with no host (the caller renders), audio restart / output
+- **Flake in `sleepNow`, found under TSan.** The helper read `t0` as soon as `awake()` turned false, then checked that
+  engine time stood still. A render that had read `awake_` before the flip could still finish one more quantum.
+  - TSan showed this twice in the restart case: `0.056 == 0.0533` and `0.1307 == 0.128`. Each gap is exactly 128
+    frames.
+  - The helper now waits for two more completed audio blocks before it reads `t0`.
+  - The engine behaves correctly here. The sleep takes effect on the next quantum, as the contract allows.
+  - After the fix the case passed 3/3 on each of g++, clang-20, ASan and TSan.
+- New test case: *"W3A R1: with no host (the caller renders), audio restart / output
   while asleep wakes the engine too"*.
   - The `requestAudio` no-host wake (`if (realtime()) model_.wake(0.0)`) had no test. It is now covered for both
     `restart` and `output`.
-  - It fails when that wake is reverted and passes on g++, clang-20 and ASan.
-  - It is 5 runs of 5 green on g++ Release.
+  - It fails when that wake is reverted.
+  - It passes on g++, clang-20, ASan and TSan.
+- **(note) Cold load times under TSan were 42 to 92 s.** The sanitized timeout is 180 s, so the margin is about 2x on
+  this box when it is loaded.
 
 ## Open items
 
