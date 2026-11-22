@@ -143,6 +143,41 @@ const HELPERS = () => {
     sounding() {
       return isBridge() ? Number(stats().sounding) || 0 : window.__rig.engine.sounding.size;
     },
+    /**
+     * A param's value in the engine (web: engine.getParam, a test hook). The bridge engine has no contracted read-back
+     * (engine-api.json `notContract`: getParam "tests only"), so there it is undefined unless the engine grows one
+     * (the test then fails on the value, with no page error).
+     */
+    param(path) {
+      const e = window.__rig.engine;
+      return isBridge() && typeof e.getParam !== 'function' ? undefined : e.getParam(path);
+    },
+    /**
+     * The engine's transpose (web: engine.transpose). The bridge engine has no `transpose` member; its contracted
+     * getSlotPlayRange(i).transpose is the engine transpose + 12 × the slot's octave + the slot's own transpose, so the
+     * engine's part is read off the first filled slot (the shim's applied value: it proves the call reached the
+     * engine, as engine.transpose does on the web engine).
+     */
+    transposeNow() {
+      const e = window.__rig.engine;
+      if (!isBridge() || typeof e.transpose === 'number') return e.transpose;
+      const song = window.__rig.store.currentSong();
+      for (let i = 0; i < 16; i++) {
+        const r = e.getSlotPlayRange(i);
+        const sl = song && song.patch.slots[i];
+        if (r && sl) return r.transpose - 12 * (Number(sl.octave) || 0) - (Number(sl.transpose) || 0);
+      }
+      return undefined;
+    },
+    /** slot meter taps (web: engine.slotTapCount(); bridge: the core's stats.slotLevelTaps) */
+    slotTaps() {
+      return isBridge() ? Number(stats().slotLevelTaps) || 0 : window.__rig.engine.slotTapCount();
+    },
+    /** the drone's mode in the engine (web: drone.getState(); bridge: the contracted drone.cfg) */
+    droneMode() {
+      const d = window.__rig.engine.drone;
+      return isBridge() && typeof d.getState !== 'function' ? d.cfg.mode : d.getState().mode;
+    },
     /** is `n` held (web: engine.activeNotes; bridge: the core's last `notes` event) */
     holds(n) {
       return isBridge() ? held.has(n) : window.__rig.engine.activeNotes.has(n);
@@ -403,7 +438,7 @@ test('slot fader drag → engine.getParam(slots.1.gain) + store + localStorage; 
   const ids = await page.evaluate(() => window.__rig.store.navIds());
   await page.click('[data-testid=setlist] .setlist-chip[data-index="0"]');
   await waitSong(ids[0]);
-  const before = await page.evaluate(() => window.__rig.engine.getParam('slots.1.gain'));
+  const before = await page.evaluate(() => window.__t.param('slots.1.gain'));
   const box = await page.locator('[data-testid=slot-fader-1] input').boundingBox();
   const x = box.x + box.width / 2;
   await page.mouse.move(x, box.y + box.height * 0.5);
@@ -413,7 +448,7 @@ test('slot fader drag → engine.getParam(slots.1.gain) + store + localStorage; 
   await page.waitForTimeout(150);
   const r = await page.evaluate(() => {
     const s = window.__rig.store.currentSong();
-    return { engine: window.__rig.engine.getParam('slots.1.gain'), store: s.patch.slots[1].gain, id: s.id, label: document.querySelector('[data-testid=slot-fader-1] .fader-value').textContent };
+    return { engine: window.__t.param('slots.1.gain'), store: s.patch.slots[1].gain, id: s.id, label: document.querySelector('[data-testid=slot-fader-1] .fader-value').textContent };
   });
   assert.notEqual(r.engine, before, 'engine gain changed');
   assert.ok(r.engine > before, `dragging up raises the gain (${before} → ${r.engine})`);
@@ -428,10 +463,10 @@ test('slot fader drag → engine.getParam(slots.1.gain) + store + localStorage; 
   // focus released after the drag (computer keyboard keeps playing)
   assert.equal(await page.evaluate(() => document.activeElement?.type === 'range'), false);
   // double-click in Perform does NOT reset (UX B2: a double-tap must not jump the level)
-  const beforeDbl = await page.evaluate(() => window.__rig.engine.getParam('slots.1.gain'));
+  const beforeDbl = await page.evaluate(() => window.__t.param('slots.1.gain'));
   await page.dblclick('[data-testid=slot-fader-1] input');
   await page.waitForTimeout(100);
-  assert.equal(await page.evaluate(() => window.__rig.engine.getParam('slots.1.gain')), beforeDbl, 'dblclick leaves the level alone in Perform');
+  assert.equal(await page.evaluate(() => window.__t.param('slots.1.gain')), beforeDbl, 'dblclick leaves the level alone in Perform');
   await page.evaluate(() => window.__rig.store.set(`songs.${window.__rig.store.currentSong().id}.patch.slots.1.gain`, 0.8));
   await page.waitForTimeout(50);
   // the ON tile is the mute (H-v2): toggles to 0 and back (remembering the level); Slot.muted is first-class
@@ -440,7 +475,7 @@ test('slot fader drag → engine.getParam(slots.1.gain) + store + localStorage; 
   const mutedState = await page.evaluate(() => {
     const sl = window.__rig.store.currentSong().patch.slots[1];
     const f = document.querySelector('[data-testid=slot-fader-1]');
-    return { gain: window.__rig.engine.getParam('slots.1.gain'), muted: sl.muted, before: sl.gainBeforeMute ?? sl.mutedGain, color: getComputedStyle(f).getPropertyValue('--fader-color').trim(), card: document.querySelector('[data-testid=slot-1]').classList.contains('muted'), shown: f.querySelector('.fader-value').textContent };
+    return { gain: window.__t.param('slots.1.gain'), muted: sl.muted, before: sl.gainBeforeMute ?? sl.mutedGain, color: getComputedStyle(f).getPropertyValue('--fader-color').trim(), card: document.querySelector('[data-testid=slot-1]').classList.contains('muted'), shown: f.querySelector('.fader-value').textContent };
   });
   assert.equal(mutedState.gain, 0);
   assert.equal(mutedState.muted, true, 'store keeps Slot.muted');
@@ -451,7 +486,7 @@ test('slot fader drag → engine.getParam(slots.1.gain) + store + localStorage; 
   assert.equal(await page.getAttribute('[data-testid=slot-on-1]', 'aria-pressed'), 'false', 'the tile reads OFF');
   await page.click('[data-testid=slot-on-1]');
   await page.waitForTimeout(80);
-  assert.equal(await page.evaluate(() => window.__rig.engine.getParam('slots.1.gain')), 0.8);
+  assert.equal(await page.evaluate(() => window.__t.param('slots.1.gain')), 0.8);
   assert.equal(await page.evaluate(() => window.__rig.store.currentSong().patch.slots[1].muted), undefined, 'unmuted: no mute fields');
   // keyboard: focused fader + ArrowUp nudges, and ← doesn't change the song
   const song = (await currentSong()).id;
@@ -459,7 +494,7 @@ test('slot fader drag → engine.getParam(slots.1.gain) + store + localStorage; 
   await page.keyboard.press('ArrowUp');
   await page.keyboard.press('ArrowLeft');
   await page.waitForTimeout(80);
-  const k = await page.evaluate(() => window.__rig.engine.getParam('slots.1.gain'));
+  const k = await page.evaluate(() => window.__t.param('slots.1.gain'));
   assert.equal((await currentSong()).id, song, 'arrows on a focused fader do not switch songs');
   assert.ok(Math.abs(k - 0.8) < 1e-9, 'up then left (down) returns to 0.8');
   await page.evaluate(() => document.activeElement.blur());
@@ -530,7 +565,7 @@ test('transpose −/+ updates the displayed key, the song and engine.transpose',
   const s0 = await currentSong();
   assert.equal(s0.hearIn, s0.playIn);
   await page.click('[data-testid=transpose-up]');
-  await page.waitForFunction(() => window.__rig.engine.transpose === 1);
+  await page.waitForFunction(() => window.__t.transposeNow() === 1);
   assert.equal((await page.textContent('[data-testid=transpose-val]')).trim(), '+1');
   assert.equal((await page.textContent('[data-testid=song-key]')).trim(), 'Db');
   assert.equal(await page.isVisible('[data-testid=song-playin]'), true, 'shows "you play …" when transposed');
@@ -538,11 +573,11 @@ test('transpose −/+ updates the displayed key, the song and engine.transpose',
   assert.equal(await page.isVisible('[data-testid=song-bpm]'), false, 'the "you play X · BPM" line gives way to the pill');
   await page.click('[data-testid=transpose-down]');
   await page.click('[data-testid=transpose-down]');
-  await page.waitForFunction(() => window.__rig.engine.transpose === -1);
+  await page.waitForFunction(() => window.__t.transposeNow() === -1);
   assert.equal((await page.textContent('[data-testid=transpose-val]')).trim(), '−1');
   assert.equal((await page.textContent('[data-testid=song-key]')).trim(), 'B');
   await page.click('[data-testid=transpose-up]');
-  await page.waitForFunction(() => window.__rig.engine.transpose === 0);
+  await page.waitForFunction(() => window.__t.transposeNow() === 0);
   assert.equal(await page.isVisible('[data-testid=song-playin]'), false);
 });
 
@@ -667,7 +702,7 @@ test('views: Edit switch shows #view-edit; Settings opens/closes; Perform lock (
   await page.click('[data-testid=transpose-up]');
   await page.waitForTimeout(120);
   assert.equal(await page.evaluate(() => window.__rig.store.currentSong().hearIn), keyBefore, 'a tap cannot re-key the song while locked');
-  assert.equal(await page.evaluate(() => window.__rig.engine.transpose), 0, 'a tap on Transpose does nothing while locked');
+  assert.equal(await page.evaluate(() => window.__t.transposeNow()), 0, 'a tap on Transpose does nothing while locked');
   assert.equal(await page.evaluate(() => document.querySelector('.drone-lockline').classList.contains('hint')), true, 'the short tap flashes the hold hint');
   // a 250 ms press is not enough
   await hold(`[data-testid=key-grid] [data-pc="${other}"]`, 250);
@@ -675,7 +710,7 @@ test('views: Edit switch shows #view-edit; Settings opens/closes; Perform lock (
   await hold(`[data-testid=key-grid] [data-pc="${other}"]`);
   await page.waitForFunction((k) => window.__rig.store.currentSong().hearIn === k && window.__rig.engine.drone?.key?.pc === k, other, { timeout: 3000 });
   await hold('[data-testid=transpose-up]');
-  await page.waitForFunction(() => window.__rig.engine.transpose === 1);
+  await page.waitForFunction(() => window.__t.transposeNow() === 1);
   await clearToasts();
   await page.mouse.move(700, 450);
   await page.screenshot({ path: path.join(shots, 'perform-locked.png') });
@@ -684,7 +719,7 @@ test('views: Edit switch shows #view-edit; Settings opens/closes; Perform lock (
   await page.screenshot({ path: path.join(shots, 'perform-locked-1024.png') });
   await page.setViewportSize({ width: 1440, height: 900 });
   await hold('[data-testid=transpose-down]');
-  await page.waitForFunction(() => window.__rig.engine.transpose === 0);
+  await page.waitForFunction(() => window.__t.transposeNow() === 0);
   await hold(`[data-testid=key-grid] [data-pc="${keyBefore}"]`);
   await page.waitForFunction((k) => window.__rig.store.currentSong().hearIn === k, keyBefore);
   // Major/Minor holds too
@@ -937,7 +972,7 @@ test('Revert: counts the changed switches (not faders / mutes), needs a 600 ms h
   // the key (hearIn + playIn) counts once
   await page.click(`[data-testid=key-grid] [data-pc="${(s0.hearIn + 2) % 12}"]`);
   await page.waitForTimeout(120);
-  const changed = await page.evaluate((i) => ({ gain: window.__rig.engine.getParam(`slots.${i}.gain`), hearIn: window.__rig.store.currentSong().hearIn }), s0.i);
+  const changed = await page.evaluate((i) => ({ gain: window.__t.param(`slots.${i}.gain`), hearIn: window.__rig.store.currentSong().hearIn }), s0.i);
   assert.notEqual(changed.gain, s0.gain);
   assert.notEqual(changed.hearIn, s0.hearIn);
   assert.equal(await count(), '2 changed');
@@ -949,7 +984,7 @@ test('Revert: counts the changed switches (not faders / mutes), needs a 600 ms h
   await page.waitForTimeout(150);
   const r = await page.evaluate((i) => {
     const s = window.__rig.store.currentSong();
-    return { gain: s.patch.slots[i].gain, reverb: s.patch.slots[i].sends.reverb, engine: window.__rig.engine.getParam(`slots.${i}.gain`), hearIn: s.hearIn, mode: s.drone.mode };
+    return { gain: s.patch.slots[i].gain, reverb: s.patch.slots[i].sends.reverb, engine: window.__t.param(`slots.${i}.gain`), hearIn: s.hearIn, mode: s.drone.mode };
   }, s0.i);
   assert.equal(r.gain, s0.gain, 'fader restored');
   assert.ok(Math.abs(r.engine - s0.gain) < 1e-9, 'engine follows');
@@ -969,7 +1004,7 @@ test('header Space / Echo chips apply presets; Vibes sit behind "…"; "Song’s
   await page.waitForTimeout(150);
   const fx = await page.evaluate(() => {
     const s = window.__rig.store.currentSong();
-    return { size: s.patch.fx.reverb.size, ret: s.patch.fx.reverb.returnGain, eng: window.__rig.engine.getParam('fx.reverb.size'), delay: s.patch.fx.delay.returnGain };
+    return { size: s.patch.fx.reverb.size, ret: s.patch.fx.reverb.returnGain, eng: window.__t.param('fx.reverb.size'), delay: s.patch.fx.delay.returnGain };
   });
   assert.equal(fx.size, 0.65);
   assert.equal(fx.ret, 1.15);
@@ -1780,13 +1815,17 @@ test('polish-1: strip level meters follow the slot, sit beside the fader, stop r
     .querySelector(`[data-testid="slot-level-${i}"] .lvl-cover`)?.style.transform.replace(/[^0-9.]/g, '') || 1)));
   assert.ok(lv.some((c) => c < 0.9), `a sounding slot lifts its bar (covers ${lv.join(', ')})`);
   await page.evaluate(() => window.__rig.controller.perform.noteOff(60));
-  assert.ok(await page.evaluate(() => window.__rig.engine.slotTapCount()) >= 2, 'the engine tapped the read slots');
+  await page.evaluate(() => window.__t.freshStats()); // bridge: a core stats sample from now (web: no wait)
+  assert.ok(await page.evaluate(() => window.__t.slotTaps()) >= 2, 'the engine tapped the read slots');
   const edit = await measure('edit', 'effects');
   assert.deepEqual(edit.per, [0, 0, 0, 0], 'no slot meter reads while Perform is hidden and Edit shows no slot');
-  await page.waitForFunction(() => window.__rig.engine.slotTapCount() === 0, null, { timeout: 5000 });
+  // bridge: a meter nobody reads is unsubscribed after 2 s (+ the 1 s sweep, contract 6.6) and the core's stats come
+  // once a second, so it gets 8 s there; the web engine keeps its 5 s
+  const tapIdle = (await page.evaluate(() => window.__t.isBridge())) ? 8000 : 5000;
+  await page.waitForFunction(() => window.__t.slotTaps() === 0, null, { timeout: tapIdle });
   await page.evaluate(() => window.__rig.ctx.setView('perform'));
   await page.waitForFunction(() => !document.getElementById('view-perform').hidden);
-  await page.waitForFunction(() => window.__rig.engine.slotTapCount() >= 1, null, { timeout: 3000 });
+  await page.waitForFunction(() => window.__t.slotTaps() >= 1, null, { timeout: tapIdle === 5000 ? 3000 : 6000 });
 });
 
 test('round2-ui #12: arrows on the focused notes panel scroll it and never reach the mod wheel / song nav', async () => {
@@ -1862,7 +1901,7 @@ test('H-v2 ON tile = the mute: reflects the store both ways; ON = solid slot col
   assert.equal(on.state, 'ON');
   // tap → muted in the store and the engine
   await page.click('[data-testid=slot-on-0]');
-  await page.waitForFunction(() => window.__rig.store.currentSong().patch.slots[0].muted === true && window.__rig.engine.getParam('slots.0.gain') === 0);
+  await page.waitForFunction(() => window.__rig.store.currentSong().patch.slots[0].muted === true && window.__t.param('slots.0.gain') === 0);
   const off = await look(0);
   assert.deepEqual({ pressed: off.pressed, bg: off.bg, strike: off.strike, state: off.state, stripOff: off.stripOff }, { pressed: 'false', bg: 'rgb(39, 43, 50)', strike: 'line-through', state: 'OFF', stripOff: true });
   // the range bar over the keyboard goes grey with it
@@ -1905,7 +1944,7 @@ test('H-v2 strip chips write sends.reverb / sends.delay / octave / sustain; "as 
   assert.equal(s1.sends.delay, ec, 'Echo → slots.1.sends.delay');
   assert.equal(s1.octave, -1, 'Octave → slots.1.octave');
   assert.equal(s1.sustain, !s0.sustain, 'Sustain → slots.1.sustain');
-  assert.equal(await page.evaluate(() => window.__rig.engine.getParam('slots.1.octave')), -1, 'engine follows');
+  assert.equal(await page.evaluate(() => window.__t.param('slots.1.octave')), -1, 'engine follows');
   assert.match(await page.textContent('[data-testid=slot-octave-1]'), /Octave\s*−1/);
   // the panel marks the value the song was loaded with, and the chip carries the changed dot
   await page.click('[data-testid=slot-octave-1]');
@@ -1955,7 +1994,7 @@ test('H-v2 Sing it in…: the band hears the tapped key, the hands stay in Play-
   await selectIndex(0);
   const song = () => page.evaluate(() => {
     const s = window.__rig.store.currentSong();
-    return { hearIn: s.hearIn, playIn: s.playIn, drone: window.__rig.engine.drone?.key?.pc, t: window.__rig.engine.transpose };
+    return { hearIn: s.hearIn, playIn: s.playIn, drone: window.__rig.engine.drone?.key?.pc, t: window.__t.transposeNow() };
   });
   // start from D / D like the mockup
   await page.evaluate(() => {
@@ -1984,7 +2023,7 @@ test('H-v2 Sing it in…: the band hears the tapped key, the hands stay in Play-
   s = await song();
   assert.deepEqual({ hearIn: s.hearIn, playIn: s.playIn, t: s.t }, { hearIn: 11, playIn: 2, t: -3 }, 'D → B = −3');
   await page.click('[data-testid=sing-back]');
-  await page.waitForFunction(() => window.__rig.engine.transpose === 0 && window.__rig.store.currentSong().hearIn === 2);
+  await page.waitForFunction(() => window.__t.transposeNow() === 0 && window.__rig.store.currentSong().hearIn === 2);
   await page.keyboard.press('Escape');
   await page.waitForSelector('[data-testid=sing-it-in]', { state: 'detached' });
   await hold('[data-testid=revert-song]');
@@ -3241,7 +3280,7 @@ test('round4-perform P10: "Sing it in…" and "Back to" keep a saved octave; +7 
       await page.click('[data-testid=key-button]');
       await page.waitForSelector('[data-testid=sing-it-in]');
       await page.click('[data-testid=sing-back]');
-      await page.waitForFunction(() => window.__rig.engine.transpose === 0);
+      await page.waitForFunction(() => window.__t.transposeNow() === 0);
       s = await song();
       assert.deepEqual([s.hearIn, s.oct, s.revert], [2, 0, true]);
       await page.keyboard.press('Escape');
@@ -3790,7 +3829,8 @@ test('idle-cpu-ui: silent → the meter loop stops (rAF ≤ 1/s, ≤ 5 style rec
   await selectByName('Sunday Pad + Piano', 'synth');
   // ci-3: the switch starts v11-memory's reverb warm-ups for the neighbours' spaces (conv.buffer = blocks the main
   // thread 120–190 ms per unit here, 5–7× on the macos-14 runner): measure the meters once they have landed
-  await page.evaluate(() => Promise.race([window.__rig.engine.fx.reverb.settled(),
+  // UIC: the reverb builds are a web-engine internal (the bridge engine has no `fx`): nothing to wait for there
+  await page.evaluate(() => Promise.race([window.__rig.engine.fx?.reverb.settled() ?? Promise.resolve(),
     new Promise((res) => setTimeout(res, 20000))]));
   await metersRun(10, 10000);
   const droneOn = await uiRates(2000, true);
@@ -3871,7 +3911,8 @@ test('idle-cpu-ui: silent → the meter loop stops (rAF ≤ 1/s, ≤ 5 style rec
   await page.evaluate(() => window.__rig.controller.setLowResource(false));
   await page.waitForFunction(() => !document.documentElement.hasAttribute('data-low-resource'));
   // ci-3: leaving low-resource rebuilds what its trim dropped (reverb units: conv.buffer = on the main thread)
-  await page.evaluate(() => Promise.race([window.__rig.engine.fx.reverb.settled(),
+  // UIC: the reverb builds are a web-engine internal (the bridge engine has no `fx`): nothing to wait for there
+  await page.evaluate(() => Promise.race([window.__rig.engine.fx?.reverb.settled() ?? Promise.resolve(),
     new Promise((res) => setTimeout(res, 20000))]));
   // the bare attribute (as the Mac test set it) works the same, and removing it resumes without a reload
   await page.evaluate(() => document.documentElement.setAttribute('data-low-resource', '1'));
@@ -3974,7 +4015,7 @@ test('L-24: a focus loss never toggles the focused drone tile or commits a hold 
   await page.evaluate(() => window.__rig.ctx.setView('perform'));
   await selectByName('Sunday Pad + Piano', 'synth');
   const mode = () => page.evaluate(() => ({ store: window.__rig.store.currentSong().drone.mode,
-    engine: window.__rig.engine.drone.getState().mode }));
+    engine: window.__t.droneMode() }));
   const setOn = () => page.evaluate(() => window.__rig.store.set(`songs.${window.__rig.store.currentSong().id}.drone.mode`,
     'synth'));
   const focusTile = async () => {
