@@ -92,6 +92,30 @@ double paramOf(const std::string &json, std::string_view key, double def, bool *
   return v;
 }
 
+/** W3B review N1: the effective value of catalogue param `p` in `sp.paramsJson`, as the reuse path compares and sends
+ *  it. An ENUM row (organ `rotary`: the catalogue gives it no min / max, so min == max == 0) is its index: a name
+ *  through inst::instEnumIndex (an unlisted name = the preset's default, voice.js coerceParam), a number (the Model
+ *  stores the index since W3B-4) rounded, absent the preset's default. Without this every rotary value clamped to
+ *  [0, 0] and compared equal, so a switch between two songs that differ only in rotary kept the first one's
+ *  (audio.js:617 / _applySlotCfg compare 'fast' !== 'off'). Every other row: clamped to [min, max] as before. */
+double instParamValue(const SlotPatch &sp, const inst::CatalogueParam &p) {
+  if (p.min >= p.max && inst::instEnumIndex(sp, p.key, "") >= 0) {
+    double v = NAN;
+    if (yyjson_doc *doc = yyjson_read(sp.paramsJson.data(), sp.paramsJson.size(), 0)) {
+      yyjson_val *root = yyjson_doc_get_root(doc);
+      if (yyjson_val *x = root && yyjson_is_obj(root) ? yyjson_obj_get(root, p.key.c_str()) : nullptr) {
+        if (yyjson_is_str(x))
+          v = inst::instEnumIndex(sp, p.key, std::string_view(yyjson_get_str(x), yyjson_get_len(x)));
+        else if (yyjson_is_num(x)) v = js::round(yyjson_get_num(x));
+        if (v < 0 || v > static_cast<double>(inst::ok::kOff)) v = NAN;  // rotary is the only enum row: slow / fast / off
+      }
+      yyjson_doc_free(doc);
+    }
+    return std::isfinite(v) ? v : inst::instEnumIndex(sp, p.key, "");
+  }
+  return std::min(p.max, std::max(p.min, paramOf(sp.paramsJson, p.key, p.def)));
+}
+
 Command paramCmd(Op op, std::uint32_t target, double a, double b, double c) {
   Command cmd{};
   cmd.op = op;
@@ -246,8 +270,7 @@ bool SongGraph::paramsMatch(const SlotPatch &have, const SlotPatch &want) const 
   const inst::CatalogueEntry *e = inst::findCatalogue(want.instType, want.instId);
   if (!e) return have.paramsJson == want.paramsJson;  // no metas (test voice, user samplers): the params text decides
   for (const inst::CatalogueParam &p : e->params) {
-    const double w = std::min(p.max, std::max(p.min, paramOf(want.paramsJson, p.key, p.def)));
-    const double h = std::min(p.max, std::max(p.min, paramOf(have.paramsJson, p.key, p.def)));
+    const double w = instParamValue(want, p), h = instParamValue(have, p);  // W3B review N1 (enum rows)
     if (!sameVal(h, w)) return false;
   }
   return true;
@@ -401,8 +424,7 @@ void SongGraph::applyReused(Channel &c, const SlotPatch &cfg, const SlotPatch &p
     if (const inst::CatalogueEntry *e = inst::findCatalogue(cfg.instType, cfg.instId)) {
       for (std::size_t k = 0; k < e->params.size(); ++k) {
         const inst::CatalogueParam &p = e->params[k];
-        const double w = std::min(p.max, std::max(p.min, paramOf(cfg.paramsJson, p.key, p.def)));
-        const double h = std::min(p.max, std::max(p.min, paramOf(prev.paramsJson, p.key, p.def)));
+        const double w = instParamValue(cfg, p), h = instParamValue(prev, p);  // W3B review N1 (enum rows)
         if (!sameVal(h, w)) sendInstParam(c, static_cast<std::uint32_t>(k), w, t);
       }
     }

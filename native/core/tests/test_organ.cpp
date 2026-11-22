@@ -1,6 +1,7 @@
 // T15: organ.js (kind inst.organ). Golden fixtures at the exact tier (the four presets, pan-mono-src and T13's organ
 // automation originals), the preset tables against the engine-api.json catalogue (bool / enum rows included), the
 // registry kind, and the voice bookkeeping with the allocation trap on.
+#include <cstdlib>
 #include <memory>
 #include <string>
 
@@ -178,6 +179,39 @@ TEST_SUITE("organ") {
     CHECK(rig::inst::instEnumIndex(sp, "rotary", "off") == rig::inst::ok::kOff);
     CHECK(rig::inst::instEnumIndex(sp, "rotary", "?") == rig::inst::ok::kFast);  // gospel's default
     CHECK(rig::inst::instEnumIndex(sp, "drive", "slow") == -1);
+  }
+
+  TEST_CASE("W3B review N1: a song switch that changes only the organ rotary changes it (reuse path)") {
+    // song A: gospel rotary 'fast'; song B: the same preset, rotary 'off' (song.cpp paramsMatch / applyReused used to
+    // clamp the enum row into [0, 0], so every rotary compared equal, the channel was reused and stayed 'fast')
+    auto reused = [](Eng &e) {
+      const std::string r = e.call(R"({"v":1,"op":"get","what":"stats","id":99})");
+      const std::size_t at = r.find("\"channelsReused\":");
+      REQUIRE(at != std::string::npos);
+      return std::strtol(r.c_str() + at + 17, nullptr, 10);
+    };
+    const std::string fast = R"("params":{"rotary":"fast"})", off = R"("params":{"rotary":"off"})";
+    Eng sw, ref, keep, same;
+    REQUIRE(sw.use(t13::patch({t13::slot("organ", "gospel", 1, fast)})));
+    REQUIRE(ref.use(t13::patch({t13::slot("organ", "church", 1)})));  // another preset: a fresh channel at 0.2 s
+    REQUIRE(keep.use(t13::patch({t13::slot("organ", "gospel", 1, fast)})));
+    REQUIRE(same.use(t13::patch({t13::slot("organ", "gospel", 1, fast)})));
+    for (Eng *e : {&sw, &ref, &keep, &same}) e->until(0.2);
+    const long r0 = reused(sw), k0 = reused(same);
+    REQUIRE(sw.use(t13::patch({t13::slot("organ", "gospel", 1, off)})));
+    REQUIRE(ref.use(t13::patch({t13::slot("organ", "gospel", 1, off)})));
+    // the stored index of the same value ('fast' = 1, W3B-4) still matches: that switch reuses the channel
+    REQUIRE(same.use(t13::patch({t13::slot("organ", "gospel", 1, R"("params":{"rotary":1})")})));
+    CHECK(reused(sw) == r0);       // was r0 + 1
+    CHECK(reused(same) == k0 + 1);
+    for (Eng *e : {&sw, &ref, &keep, &same}) {
+      for (int n : {48, 55, 64}) e->on(n, 0.5);
+      e->until(1.5);
+    }
+    CHECK(t13::rms(sw.L, 0.7, 1.5) > 1e-3);
+    CHECK(diffIn(sw, ref, 0.7, 1.5) < 1e-5);   // was 0.131 (W3B probe)
+    CHECK(diffIn(sw, keep, 0.7, 1.5) > 1e-2);  // 'off' is audibly not 'fast'
+    CHECK(diffIn(same, keep, 0, 1.5) == 0);    // reused 'fast' = never switched
   }
 
   TEST_CASE("T15 review 2: macro.intensity (morph) and slots.<i>.release reach an organ") {
