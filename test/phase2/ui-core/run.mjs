@@ -1109,6 +1109,11 @@ test('status lamps: pedal, drone readout / key grid outline when off, Fade-out "
   // pedal
   await page.evaluate(() => window.__rig.controller.perform.sustain(true));
   await page.waitForFunction(() => document.querySelector('[data-testid=pedal-lamp]').classList.contains('down'), null, { timeout: 2000 });
+  // UIC skeptic: the lamp stays lit while the pedal is held, not only for the bridge shim's 400 ms optimistic window
+  // (the rig-devhost run lit it and dropped it after 0.4 s: the core's tick reports `pedal: false` throughout)
+  await page.waitForTimeout(1000);
+  assert.equal(await page.evaluate(() => document.querySelector('[data-testid=pedal-lamp]').classList.contains('down')),
+    true, 'the pedal lamp stays lit while the pedal is held (1 s)');
   await page.evaluate(() => window.__rig.controller.perform.sustain(false));
   await page.waitForFunction(() => !document.querySelector('[data-testid=pedal-lamp]').classList.contains('down'), null, { timeout: 2000 });
   // drone readout + grid outline (the tile shows the key the drone plays)
