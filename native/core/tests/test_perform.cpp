@@ -473,7 +473,7 @@ TEST_SUITE("perform") {
   }
   TEST_CASE("graph rule (T00c O3): a retiring channel's mono line retriggers with a targeted NoteOn on RetireInst") {
     // audio.js _monoOff -> _monoSwitch(sc) on the retiring channel: the next held note starts there. The test voice
-    // has no legatoTo, so the switch is a 30 ms fade + a NoteOn targeted at RetireInst<j>, which the graph applies.
+    // has no legatoTo, so the switch is a FadeNote + a NoteOn targeted at RetireInst<j>, which the graph applies.
     Eng e;
     REQUIRE(e.use(patch({slot("test", "sine", 1, R"("mono":"lowest")")})));
     e.on(60, 0.05);
@@ -495,7 +495,9 @@ TEST_SUITE("perform") {
     };
     const double f60 = 440 * std::pow(2.0, (60 - 69) / 12.0), f72 = 2 * f60;
     CHECK(level(f60, 0.2, 0.35) > 10 * level(f72, 0.2, 0.35));  // before: the low note
-    CHECK(level(f72, 0.5, 0.75) > 10 * level(f60, 0.5, 0.75));  // after: the retiring channel plays 72
+    // after: the retiring channel plays 72 (the targeted NoteOn reached RetireInst<0>). The test voice has no
+    // FadeNote, so its 60 keeps sounding: only the arrival of 72 is checked.
+    CHECK(level(f72, 0.5, 0.75) > 30 * level(f72, 0.2, 0.35));
     CHECK(e.model().songGraph().retiringCount() == 1);
   }
 }

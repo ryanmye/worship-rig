@@ -7,6 +7,7 @@
 #include "api/engine.h"
 #include "bridge/json_out.h"
 #include "model/model.h"
+#include "model/perform.h"  // W3A T07 O7
 #include "num/js_number.h"
 #include "yyjson.h"
 
@@ -56,10 +57,11 @@ std::string portIdOf(Model &m, const PortTable &t, std::uint16_t port) {
 // ---- Perform: the Model's contract methods ------------------------------------------------------------------------
 
 void MidiServiceImpl::noteOn(int note, int vel, double when, const yyjson_val *touch) {
-  m_.noteOn(note, vel, when, touch);
+  // W3A T07 review O7: the direct path joins the app's per-pitch count in the Model (Perform::noteOnFrom)
+  m_.perform().noteOnFrom(rig::Perform::kSrcDirect, note, vel, when, touch);
 }
 void MidiServiceImpl::noteOff(int note, double when) {
-  m_.noteOff(note, when);
+  m_.perform().noteOffFrom(rig::Perform::kSrcDirect, note, when);  // W3A T07 O7: kept while the app holds the pitch
 }
 void MidiServiceImpl::sustain(bool down, double when) {
   m_.sustain(down, when);

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <iterator>
 #include <string>
 
 #include "bridge/json_out.h"
@@ -180,6 +181,28 @@ bool Perform::noteOn(int note, int vel, double when, const yyjson_val *touch) {
   return noteOnTouch(note, vel, when, touch ? &kbd : nullptr);
 }
 
+bool Perform::noteOnFrom(std::uint8_t src, int note, int vel, double when, const yyjson_val *touch) {
+  if (!(vel > 0)) return noteOffFrom(src, note, when);
+  std::uint8_t &h = holders_[std::clamp(note, 0, 127)];
+  const bool other = (h & ~src) != 0;
+  h = static_cast<std::uint8_t>(h | src);
+  if (other) {  // controller.js noteOnFrom: c > 0, the pitch already sounds for another source
+    noteInput(when);
+    return true;
+  }
+  return noteOn(note, vel, when, touch);
+}
+
+bool Perform::noteOffFrom(std::uint8_t src, int note, double when) {
+  std::uint8_t &h = holders_[std::clamp(note, 0, 127)];
+  h = static_cast<std::uint8_t>(h & ~src);
+  if (h != 0) {  // still held from the other path
+    noteInput(when);
+    return true;
+  }
+  return noteOff(note, when);
+}
+
 bool Perform::noteOnTouch(int note, int vel, double when, const Touch *kbdTouch) {
   noteInput(when);
   SleepCall held{SleepCall::NoteOn, note, vel, false, kbdTouch != nullptr, kbdTouch ? *kbdTouch : Touch{}};
@@ -268,7 +291,30 @@ bool Perform::noteOff(int note, double when) {
 
 void Perform::release(const Entry &e, double t) {
   // audio.js _release: the slot's `release` reaches the instrument as its release override (T13 sendRelease)
-  sendNote(Op::NoteOff, m_.songGraph().instUnitOf(e.ch), e.sn, 0, t);
+  sendOff(e.ch, e.sn, t);
+}
+
+void Perform::sendOff(std::uint32_t ch, int sn, double t) {
+  // W3A T13 review O4: a note-off posted between a commit call and its future `when` (out of order) resolves to
+  // RetireInst<j>, where the instrument arrives only at the move frame; the gate would hold the release until then.
+  // The note is in Inst<slot> until that frame, so it goes there, past the gate (the gate's hold is meant for
+  // commands to the NEW occupant of Inst<slot>, which attaches at the same frame).
+  const SongGraph &sg = m_.songGraph();
+  const UnitSlot u = sg.instUnitOf(ch);
+  const Channel *c = sg.channelById(ch);
+  if (c && c->retire >= 0 && u != UnitSlot::Count) {
+    const std::int64_t f = frameOf(t), now = m_.sink().timeBase().frame;
+    if (sg.occupantFrame(u) > std::max(f, now)) {
+      Command x{};
+      x.op = Op::NoteOff;
+      x.frame = std::max(f, now);
+      x.target = static_cast<std::uint32_t>(instSlot(static_cast<std::size_t>(c->slot)));
+      x.aux = static_cast<std::uint32_t>(sn & 0xff);
+      m_.sink().send(x);  // ungated: the old occupant still holds the note at this frame
+      return;
+    }
+  }
+  sendNote(Op::NoteOff, u, sn, 0, t);
 }
 
 void Perform::pedalHold(Entry &e, double t) {
@@ -312,7 +358,7 @@ bool Perform::sustain(bool down, double when) {
     unpedalAll();
     for (auto &[ch, mo] : mono_) {
       if (!(mo.pedalHold && mo.notes.empty() && mo.cur)) continue;
-      sendNote(Op::NoteOff, m_.songGraph().instUnitOf(ch), mo.curSn, 0, t);
+      sendOff(ch, mo.curSn, t);
       mo.cur = false;
       mo.pedalHold = false;
     }
@@ -413,7 +459,7 @@ void Perform::monoOff(std::uint32_t ch, int phys, double t) {
     }
     return;
   }
-  sendNote(Op::NoteOff, m_.songGraph().instUnitOf(ch), M.curSn, 0, t);
+  sendOff(ch, M.curSn, t);
   M.cur = false;
 }
 
@@ -434,6 +480,7 @@ void Perform::allNotesOff(double when) {
   sounding_.clear();
   unpedalAll();
   held_.clear();
+  std::fill(std::begin(holders_), std::end(holders_), std::uint8_t{0});  // W3A T07 O7 (controller panic clears too)
   pedal_ = false;
   syncPedalSwell(t);
   swellActive_ = 0;
@@ -552,10 +599,10 @@ void Perform::channelDisposed(std::uint32_t channelId) {
 // ---- Model contract 1.4 members ------------------------------------------------------------------------------------
 
 bool Model::noteOn(int note, int vel, double when, const yyjson_val *touch) {
-  return perf_->noteOn(note, vel, when, touch);
+  return perf_->noteOnFrom(Perform::kSrcApp, note, vel, when, touch);  // W3A T07 O7
 }
 bool Model::noteOff(int note, double when) {
-  return perf_->noteOff(note, when);
+  return perf_->noteOffFrom(Perform::kSrcApp, note, when);
 }
 bool Model::sustain(bool down, double when) {
   return perf_->sustain(down, when);

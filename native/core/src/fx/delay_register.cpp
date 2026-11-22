@@ -23,7 +23,10 @@ void sendOp(Model &m, DelayOp op, double when, double a = 0, double b = 0, doubl
   cmd.f.b = b;
   cmd.f.c = c;
   cmd.f.e = m.timeFor(when);
-  m.sendUnitOp(UnitSlot::Delay, cmd, when);
+  // W3B (fx-row-sweep): fx.js runs Delay.updateTime / _switchTo / setFeedback at CALL time with `when` for the
+  // automation, so a later call already sees the line switch an earlier call made (and its timers read the latest
+  // p.feedback). The unit gets the op now and schedules at f.e (DelayUnit::apply), as the lofi state.
+  m.sendUnitOp(UnitSlot::Delay, cmd, -1.0);
 }
 
 /** Delay.applyAll(when) + rampTo(ret, returnGain) (JS: applyAll includes the return gain). */

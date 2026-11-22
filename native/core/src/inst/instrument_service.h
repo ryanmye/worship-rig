@@ -13,6 +13,7 @@
 namespace rig {
 class Model;
 struct SetRequest;
+struct SlotPatch;  // W3A: resolveInstrumentParam
 }  // namespace rig
 
 namespace rig::inst {

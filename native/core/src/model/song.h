@@ -107,6 +107,8 @@ class SongGraph {
   int retiringCount() const;
   /** Where the instrument of channel `id` plays now: Inst<i>, RetireInst<j>, or UnitSlot::Count (disposed). */
   UnitSlot instUnitOf(std::uint32_t channelId) const;
+  /** W3A (T13 review O4): the frame from which the Model's current occupant of `u` plays (the gate's slotFrame). */
+  std::int64_t occupantFrame(UnitSlot u) const { return slotFrame_[static_cast<std::size_t>(u)]; }
   /** A live or retiring channel by id, or nullptr (disposed). */
   const Channel *channelById(std::uint32_t id) const;
   /** The live channel of slot i, or nullptr (audio.js this.slots[i]). */

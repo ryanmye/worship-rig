@@ -143,6 +143,7 @@ RunResult runFixture(const Fixture &f, const std::string &goldenDir, double sr) 
     yyjson_val *k = yyjson_obj_get(fx, "kind");
     return k && yyjson_is_str(k) ? std::string(yyjson_get_str(k)) : std::string();
   }();
+  // INTERFACE-CHANGE(W3B): the T16 runner diff (review O1): kind drone-freeze renders the D5 loop, no longer silence
   const bool droneFreeze = kindStr == "drone-freeze";
   // 1. fx / master rows before start (page.js: start() builds reverb/delay/lofi/glue for the song's values)
   if (patch) {
@@ -274,7 +275,7 @@ RunResult runFixture(const Fixture &f, const std::string &goldenDir, double sr) 
                                          num(inj, "start", 0.0), static_cast<float>(num(inj, "gain", 1.0)));
     if (s != RIG_OK) skipped.insert(std::string("inject ") + at);
   }
-  const char *tap = droneFreeze ? "fx.sum" : "out";
+  const char *tap = droneFreeze ? "fx.sum" : "out";  // INTERFACE-CHANGE(W3B): the freeze loop is fx.sum alone
   if (yyjson_val *t = yyjson_obj_get(setup, "tap")) tap = yyjson_get_str(t);
   if (rig_test_tap(e, tap) != RIG_OK) skipped.insert(std::string("tap ") + tap);
   // 4. events, in time order (stable), each with when = t (page.js applyEvent). Types listed in `setup.live` are

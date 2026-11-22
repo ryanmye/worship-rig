@@ -89,6 +89,15 @@ class Perform {
 
   // ---- contract 1.4 (perform.cpp) -------------------------------------------------------------------------------
   bool noteOn(int note, int vel, double when, const yyjson_val *touch);
+  /** T07 review O7 (W3A): one refcount per pitch across the two note paths, as controller.js heldCount does across
+   *  its sources. kSrcApp = the bridge `play` ops (Model::noteOn / noteOff: the shim already nets the UI, computer
+   *  keyboard and Web MIDI sources), kSrcDirect = the native MIDI direct path (midi/midi_route.cpp, which nets its
+   *  own ports / channels). A note-on while the OTHER path holds the pitch only joins (no second engine noteOn); a
+   *  note-off releases only when no other path still holds it. One path alone behaves as before (a repeated note-on
+   *  from the same path is a re-strike). */
+  enum NoteSrc : std::uint8_t { kSrcApp = 1, kSrcDirect = 2 };
+  bool noteOnFrom(std::uint8_t src, int note, int vel, double when, const yyjson_val *touch);
+  bool noteOffFrom(std::uint8_t src, int note, double when);
   /** noteOn with the keyboard's curve already compiled (null = linear): the sleep queue's replay. */
   bool noteOnTouch(int note, int vel, double when, const Touch *kbd);
   bool noteOff(int note, double when);
@@ -181,6 +190,8 @@ class Perform {
   const SlotPatch *cfgOf(std::uint32_t ch) const;
   std::string kindOf(std::uint32_t ch) const;
   void release(const Entry &e, double t);
+  /** NoteOff of sounding note `sn` on channel `ch` at t, to the unit that holds it AT t (T13 review O4). */
+  void sendOff(std::uint32_t ch, int sn, double t);
   void pedalHold(Entry &e, double t);
   void unpedal(std::size_t i);
   void unpedalAll();
@@ -234,6 +245,7 @@ class Perform {
   std::uint32_t tapeSeq_ = 0;
   bool tapeHeld_ = false, pedalSwell_ = false;
   std::unique_ptr<Sleep> sleep_;  // W3A
+  std::uint8_t holders_[128] = {};  // W3A T07 O7: NoteSrc bits holding each physical pitch
 };
 
 /** SongGraph -> perform (song.cpp): |bend| in morph mode (audio.js _morphFor). */
