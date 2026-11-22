@@ -20,7 +20,7 @@ existing 1194 → 1243 mapping (`scratchpad/uisk/pw`); nothing installed.
 |---|---|
 | ctest g++ 13 Release | **80/80** (`-j2`), 0 warnings |
 | ctest clang++-20 Release `-Werror` | **80/80** (`-j1`), 0 warnings |
-| ctest g++ ASan+UBSan | ASAN_RESULT |
+| ctest g++ ASan+UBSan | **80/80** (`-j1`, `rt.realtime` included), 0 warnings, no sanitizer report |
 | fixtures (`rig_render`, all 112, `compare.mjs`) | **112/112** |
 | g++ vs clang-20 renders | byte-identical, 112/112 (`cmp`) |
 | vs the builder's g++ renders (`scratchpad/uic/r-gcc`) | byte-identical, 112/112: no fixture moved |
