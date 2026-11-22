@@ -10,6 +10,12 @@ env-corr 0.999, rms 0.1 dB). Goldens: Chromium 157.0.8103.78 (manifest pin); eve
 Sampler fixtures use the git-ignored `native/golden/pcm` overrides of the **working tree** (an archive without them
 decodes MP3 natively and 17 renders differ: D4 review). Re-run after every change with the commands at the end.
 
+**Re-checked by the 2.0 integrator (2026-11-22, `a8cb4d1`: UI wave + CORE1 + CORE2A / CORE2B):** fresh
+`native/core/build-int` (g++ 13 Release) and `build-int-clang20` (clang++-20 Release, `-Werror`) renders of all 112
+are byte-identical to each other and to the UIC, CORE2A and CORE2B skeptics' g++ renders (`cmp`, 112/112: no fixture
+moved since wave 3); `compare.mjs` 112/112; `parity.mjs --twin <clang-20>` exit 0, 110 at the exact tier, no
+unexpected failure. No number in the fixture tables below changed.
+
 ## Summary
 
 **112 / 112 pass** at the manifest tier on g++ 13, clang 18 and clang++-20; the three compilers' renders are
@@ -283,7 +289,7 @@ velocity curve (T14); `song-lofi-rhodes` plays `synth:soft-keys` (T11; passes, s
 `switch-retire-retain` play `sampler:ep-rhodes`; 10 of the 16 `synth-*` ids are synth-extra patches under instrument
 type `synth`, so T15 registers into T11's `inst.synth` dispatch hook.
 
-## UI parity through rig-devhost (T09 baseline; UIB re-run; UIC fixes, 2026-11-22)
+## UI parity through rig-devhost (T09 baseline; UIB re-run; UIC fixes; integrator, 2026-11-22)
 
 `node test/unit/engine-bridge/ui-core-devhost.mjs --no-adapter` runs the `ui-core` Perform suite against `rig-devhost`:
 the real UI in headless Chromium, the native core on the null backend, and nothing standing in for the engine. **The
@@ -301,6 +307,7 @@ internals from what the shim already knows. It is a diagnostic, not parity (`rev
 | CORE2B (builder, fresh `native/devhost/build-core2b`, g++ Release) | **77, 77** (2 runs) | the 5 read-back tests (`get param`), Swell (tick `swelling`) and status lamps (tick `pedal` / `held`) pass; the tree also carried CORE2A's in-progress `prepare` / preload changes, so the factory-song and timing rows were not failing in this run either (CORE2A reports those). No bridge error reply, the two known warns, no sanitizer line |
 | **CORE2B skeptic** (fresh `native/devhost/build-c2bsk`, g++ Release) | **77, 77** (2 runs; the second next to an ASan build) | builder's count confirmed; same warns, no bridge error reply, `sanitizer: (none)`. `reviews/CORE2B.md` |
 | **CORE2A skeptic** (fresh `native/devhost/build-c2sk`, g++ Release) | **76, 77** (2 runs) | the CORE2A builder's 77 / 76 confirmed. Run 1 failed polish-2A banners only ("that Esc did not panic"; the core emitted `notes [64]` 0.1 ms after the `play`, no panic or note-off reached it; the test passes alone 4 of 4: suite-side race, below). Tick gaps over 400 ms: 1 and 3 (max 438 / 618 ms; UIC: 10-11, max 2.6-3.1 s), none with a `cache preload` in flight (182 preloads per run, all answered). Every gap over 150 ms starts within 35 ms of a `prepare` with synth / organ slots: the control thread builds those units inside `Model::prepare` (not a sample decode; owner T11 / T15 / T13, `reviews/CORE2A.md` O2). Same warns, no bridge error reply, `sanitizer: (none)` |
+| **Integrator** (fresh `native/devhost/build-int`, g++ Release, `v2-native` `a8cb4d1` = UIA + UIB + UIC + CORE1 + CORE2A + CORE2B; idle box, one run at a time) | **77, 75, 77** (3 runs); with the adapter **76** (1 run) | **The parity number: 75-77 / 77 raw.** Run 2 failed v11-metronome and v11-decisions; the adapter run failed v11-decisions only. Both are suite-side, not core defects (remaining-failure table below): v11-metronome read `clickState().bpm` before the core's `click {bpm:80}` event (it came 4 ms after the `song {tempo:80}` send, with the commit reply), and its failure left the click running, so v11-decisions' first chip click stopped it instead of starting the count-in (30 s wait: a cascade). v11-decisions passed 5 of 5 alone (`--grep`, 3 with the adapter, 2 raw). No bridge error reply in any run; the two known warns; `sanitizer: (none)`; "no console errors on the main page" passed in all 4. Tick gaps (`--keep-log`, 3 raw runs): over 400 ms **0, 0, 0**; max 315 / 283 / 329 ms; over 150 ms 6 / 5 / 6, of which 16 of 17 start within 40 ms of a `prepare` with synth / organ slots (CORE2A O2, still open); 182 / 180 / 182 `cache preload`s, all answered (longest 8.5-8.9 s, ticks kept flowing) |
 
 UIC's run used a fresh `native/core/build-uic-devhost` (g++ Release). It returned no bridge error reply. It raised the
 same two warns as UIB's run ("No pad file for C; using the synth drone." and "Drone: too many overlapping layers; a
@@ -342,16 +349,31 @@ pedal down, and controller.status.pedal was still true in round2-ui #1 (fixed: a
   trailed the UI's own calls until the next tick. This is inferred from the mutations the test recorded, not traced.
   critics-fix performance #2 (meters while silent) passes with both shims.
 
-The tests left, each with its true cause and owner (the first three rows: the builder's 7; the last two rows: UIC
-skeptic):
+The tests left (integrator, 2026-11-22: 3 raw runs + 1 adapter run on `build-int`, plus `--grep` re-runs). None is
+a core defect; all three are suite-side reads of state that on the bridge arrives by a core event, one page round trip
+or a few ms after the call that caused it, where the web engine changes it synchronously:
 
-| test(s) | cause | owner |
-|---|---|---|
-| every factory song (Anthem) | `cache preload` blocks the core's control thread until the samples are decoded. `CacheServiceImpl::preload` busy-waits on `pump()`. During that time the control thread sends no ticks and handles no `play`. In the UIC run, each of the 11 tick gaps over 400 ms (0.5 to 3.1 s) contains a `cache preload`, and so does the 1.8 s gap at the first song. A note played in that window sounds that late, and the meter facade reads 0 because no tick arrives. This is a real 2.0 defect: a song switch to cold samples freezes live input. | core (T06 cache service / T08 bridge): answer `cache preload` asynchronously (`preloadAsync`, reply on completion) and keep the control loop running. **CORE2A (builder, unreviewed): done**, plus the realtime `prepare` reply after the decodes (as audio.js); passes in 2 of 2 runs, no tick gap with a preload in flight (CONTRACT_CHANGES "## CORE2A") |
-| slot fader drag; Revert; header Space / Echo chips; H-v2 ON tile; H-v2 strip chips | No contracted read-back of a param. `engine-api.json` lists `getParam` as `notContract` ("tests only"), and the core's `get state` carries only `slots[i].gain` / `pan` | contract (orchestrator): make `getParam` contracted, answered by a `get param` op (T08) or from `get state`. Until then these 5 stay red on the bridge. **Fixed (CORE2B):** `get {what:'param', path}` (minor 5) + the shim's mirror (`getParam`), `CONTRACT_CHANGES.md` "## CORE2B" |
-| Swell (`swelling`) | The core's tick `runtime` has no `swelling`. `Perform::runtimeStateJson` writes `wheel`, `modOwner` and `faded`. The contract's tick row (6.5) lists `swelling`, and `wheelValuesJson` has it. The shim's own value lasts only until the first tick after 400 ms, and the core's missing field reads as false | core (T14 / T08): add `swelling` to the tick's `runtime`. **Fixed (CORE2B):** `Perform::tickRuntimeJson` (tick `runtime.swelling`) |
-| status lamps (pedal lamp still lit after 1 s) | **UIC skeptic.** The core's tick always says `pedal: false, held: 0`. `Engine::buildTick` (`api/engine.cpp`) writes `m.pedal` / `m.held` from the `rig_meters` snapshot, and `Graph` (`graph/graph.cpp`, the snapshot fill) never sets either field ("T14 fills the snapshot's pedal/held": it does not). Probe on `rig-devhost` with a note and the pedal held: `engine.pedal` true at 0.2 and 0.4 s, false from 0.6 s on; `held` 0 throughout. On 2.0 the Perform pedal lamp and the strips' pedal lights (`perform.js` `readRuntime` reads `engine.pedal`) go dark 0.4 s after the pedal goes down | core (T14 / T08): fill the tick's `pedal` / `held` from `Perform` (`pedal()`, the held set) on the control thread, or fill `rig_meters.pedal` / `held`. **Fixed (CORE2B):** `buildTick` reads `Perform::pedal()` / `held()`; `rig_meters.pedal` / `held` filled (`Graph::setPerformMeters`) |
-| polish-2A banners ("that Esc did not panic"), v11-metronome (bpm 100, expected 80, after Next), v11-decisions (30 s wait) | **UIC skeptic: timing, not stable.** They passed in 3 of 4 full runs (builder's and two of the skeptic's) and failed together in one. On the bridge the suite reads held notes and the click from the core's events (`notes`, `click`), which arrive late while a `cache preload` blocks the control thread (each of the 9 tick gaps over 400 ms in that run contains one). Inferred from the gaps, not traced per test | core (the `cache preload` row above). **CORE2A:** v11-metronome and v11-decisions passed in 2 of 2 runs; polish-2A banners failed once in 2, with the core answering at once (the `notes` event for n 64 went out 0 ms after the `play`, next tick 4 ms later, no panic sent): a suite-side race (noteOn, Esc and the `holds(64)` read within three page round trips), owner ui-core suite |
+| test | failed in | true cause | owner |
+|---|---|---|---|
+| v11-metronome ("keeps running over Next (held note kept, new tempo)") | 1 of 4 full runs here (run 2: "Expected values to be strictly equal"); UIC skeptic 1 of 3 ("bpm 100, expected 80") | Read race. After `waitSong(ids[1])` the test reads `engine.clickState()` at once. On the bridge `clickState().bpm` / `sig` come from the core's `click` event, which went out with the commit reply 4 ms after `song {tempo:80}` / `{timeSig:'3/4'}` (bridge log, run 2); `waitSong` checks the controller status and `getSlotPlayRange`, both of which can be true before that event lands. The web engine sets them synchronously. Not user-visible: the core switched the tempo at the commit and the chip reads the controller's status. Inferred from the log (the page-side order was not traced) | **ui-core suite**: on the bridge, `waitForFunction(() => engine.clickState().bpm === 80 && engine.clickState().sig === '3/4')` before the assertions; a `t.after` hook that stops the click when the test fails |
+| v11-decisions ("PANIC stops the click") | 2 of 4: run 2 (30 s `waitForFunction`) and the adapter run ("strictly deep-equal", 244 ms) | Run 2: **cascade** of the row above. v11-metronome failed with the click still running; v11-decisions' first chip click therefore sent `click stop` (bridge log: `click stop` 67 ms after the test's `song {tempo:90}`; no `click start` follows) instead of starting a count-in, and the wait for `counting` timed out. Adapter run: no log kept; the deep-equal reads `held` (core `notes` event) and the click state one round trip after Panic: the same read-race class as CORE2A O1 (inferred). Passes 5 of 5 alone (3 adapter, 2 raw) | **ui-core suite**: the v11-metronome cleanup hook; wait for `!__t.holds(64)` and `!engine.clickState().running` before the deep-equal |
+| polish-2A banners ("that Esc did not panic") | 0 of 4 here; 1 of 2 in each CORE2A run (builder, skeptic) | Read race (CORE2A O1): the page reads `holds(64)` (core `notes` event) right after `noteOn` + Esc | **ui-core suite**: `await page.waitForFunction(() => window.__t.holds(64))` after the `noteOn` |
+
+Closed since UIC (the rows of the former table; history in the run table above):
+- every factory song (Anthem) and the timing row (v11-metronome bpm / v11-decisions waits behind `cache preload`):
+  `cache preload` no longer blocks the control thread (**CORE2A**: `preloadAsync`, realtime `prepare` answered once
+  its samples are decoded; 0 tick gaps over 400 ms with a preload in flight in 5 of 5 runs since). The remaining
+  > 150 ms gaps (max 283-329 ms here) are synth / organ units built inside `Model::prepare` on the control thread:
+  **CORE2A O2, owner T11 / T15 / T13** (not a ui-core failure on this box; a note played during such a switch is
+  that late);
+- slot fader drag, Revert, header Space / Echo chips, H-v2 ON tile, H-v2 strip chips (no param read-back):
+  **CORE2B** `get {what:'param'}` (contract minor 5) and the shim's mirror;
+- Swell: **CORE2B** tick `runtime.swelling`;
+- status lamps (pedal lamp after 1 s) and v11-polish's strip pedal light: **CORE2B** tick `pedal` / `held` from
+  `Perform`, `rig_meters.pedal` / `held` filled.
+
+Weaker reads on the bridge that pass (not parity proof, UIC skeptic): transpose, drone mode and `clickRunning` read
+the shim's applied value; `soundingHas(n)` is "held" only.
 
 Environment notes (not defects): Playwright 1.56 pins Chromium build 1194; this box only has `/opt/pw-browsers/*-1243`
 (Chrome for Testing 157.0.8103.78, the golden pin). `render.mjs` falls back to it by itself.

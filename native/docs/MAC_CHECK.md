@@ -208,8 +208,8 @@ compiled but never been launched; it is part B.
    `~/Library/Caches/worship-rig-check/<sha7>/build/rig-devhost --log ~/Desktop/rig-bridge.jsonl`
    Open `http://127.0.0.1:8440/` in Chrome (one tab only: a second tab takes the engine over). Click once to start
    audio. Look for: the page loads, the top bar reaches Ready, no red banner.
-2. **Your library.** In the 1.x app beforehand: Settings › Library & Backup › **Export library**. In the 2.0
-   page: Settings › Library & Backup › **Import…** and pick that file. Look for: "Imported N songs", your setlist as
+2. **Your library.** In the 1.x app beforehand: **Export library** in Settings (its library / backup section). In
+   the 2.0 page: Settings › Library & Backup › **Import…** and pick that file. Look for: "Imported N songs", your setlist as
    in 1.x.
 3. **MIDI keyboard.** Plug it in; allow MIDI if Chrome asks. Play fast repeated notes on one key, then a chord held
    with the pedal, pedal up. Listen for: no lag or flams compared to 1.x, nothing stuck after pedal-up. Look for: the
@@ -222,7 +222,9 @@ compiled but never been launched; it is part B.
    then once more backwards with Prev, and once with a jump to a song you have not opened in this session (its samples
    load cold). Listen for: the old song lets go cleanly, the new one sounds within about a second, no slot stays
    silent (a piano that never comes in), notes you play during the switch are not late or swallowed. Look for: the
-   meters keep moving during the switch.
+   meters keep moving during the switch. Known: switching *to* a song with synth or organ sounds builds them on the
+   engine's control thread, which held input back by up to ~0.3 s on the Linux box (open item CORE2A O2); say
+   whether you can feel it on the Mac.
 6. **Perform controls.** On a few songs: Swell (rises; press again returns), mod wheel / expression pedal, Fade-out,
    transpose − / +, the Click chip on a song with a tempo, drone on / off and a key change, Panic (Esc) silences
    everything. Each does what 1.x does.

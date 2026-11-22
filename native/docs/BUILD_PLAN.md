@@ -489,7 +489,7 @@ the 16 promotions, PARITY regenerated, INTERFACE_LOG "Wave 3 tasks" (W3-1..5) + 
 ARCHITECTURE 7.1 per-voice cost of every instrument kind, CI `sanitizers` TSan step also runs the model / song / t00c /
 voice-limit / sleep / perform / wheels / drone suites (`.github/workflows/native-core.yml`; unverified until pushed).
 
-### UI wave: how to start (next; Ryan resumes it)
+### UI wave: how to start (DONE 2026-11-22: kept for the record; results in "UI wave + CORE1 / CORE2 results" below)
 
 Everything that plays is in the core; the UI wave is the next step (files under `app/**`, plus the contract / bridge
 rows it names). Do not change `native/core` behaviour in it except for the bridge rows listed. Items, each with its
@@ -535,6 +535,65 @@ probe (D4 R1) and measure **dx-epiano / supersaw-pad** per voice there (the cost
 iPad probe build (D4 iPad profile, D2 rounding); read back the CI `mac-check`, `goldens` and sanitizer results (the
 extended TSan regex); T07 O6 jitter-free delay; T11 O4 libm `exp2f`; T11 O6 `WaveBank::trim` under memory pressure;
 Ryan's **tier-2 checklist after mackit O1** (T14 has landed).
+
+### UI wave + CORE1 / CORE2 results (integrator pass, 2026-11-22)
+
+Every item of "UI wave: how to start" is done, and the core fixes that the UI parity runs exposed are in. Reviews:
+[UIA](reviews/UIA.md) (items 1-3; PARTIAL, both defects fixed there, O1 / O2 closed by UIC),
+[UIB](reviews/UIB.md) (items 4-7; PARTIAL, O1 / O2 / O4 closed by UIC), [UIC](reviews/UIC.md) (UI-wave follow-ups;
+VERIFIED; found the tick pedal defect), [CORE1](reviews/CORE1.md) (mackit O1 cache pump, W3A R1 restart while asleep,
+T00c O4; VERIFIED), [CORE2A](reviews/CORE2A.md) (asynchronous `cache preload`, realtime `prepare` answered after its
+samples, song-switch priority; VERIFIED), [CORE2B](reviews/CORE2B.md) (tick `pedal` / `held` / `swelling`, contracted
+`get {what:'param'}`, contract minor 5; VERIFIED). `app/js/engine` and `native/golden` are unchanged since the
+wave-3 integration (`git diff 47aa596` empty).
+
+Integrated tree `v2-native` `a8cb4d1` (+ this pass's docs), fresh build dirs, `-j2` at most, the box otherwise idle:
+
+| check | result |
+|---|---|
+| ctest g++ 13 Release `native/core/build-int` | **82/82** (`-j2`), 0 warnings (`-Werror`) |
+| ctest clang++-20 Release `-Werror` `build-int-clang20` (stand-in for Apple clang 21) | **82/82** (`-j2`), 0 warnings |
+| ctest g++ ASan+UBSan `build-int-asan` (`-fno-sanitize-recover=all`) | **82/82** (`-j1`, `rt.realtime` included, next to the TSan run), 0 warnings, no sanitizer report |
+| g++ TSan `build-int-tsan`: the CI regex (`.github/workflows/native-core.yml`) + `samples_ \| sampler \| core2b \| cache` | **36/36** (`unit.runtime_cache`, `unit.runtime_preload`, `unit.core2b`, the `samples_*` / `sampler` suites, `rt.realtime` included), **0** ThreadSanitizer warnings, 0 build warnings |
+| `native/devhost` g++ Release `native/devhost/build-int` | 0 warnings; ctest **5/5** (`probe.null` included) |
+| fixtures | **112/112** (`compare.mjs`); g++ = clang-20 byte-identical 112/112; byte-identical to the UIC / CORE2A / CORE2B skeptics' renders (no fixture moved); `parity.mjs --twin` exit 0, 110 at the exact tier |
+| `engine-api.json` | `build-engine-api.mjs --check`: up to date |
+| `node --test test/unit/engine-bridge/*.test.mjs`, `RIG_DEVHOST` = `build-int` | **131 / 0 / 0** |
+| `node test/run-all.mjs --fast` | **11/12** (24 min 53 s): unit 529 / 0 / 10 skip, engine 98/99 + 1 soft warning (`offline.eqCpu` "absolute numbers outside ±30 % (box load?)": PASS), instruments 143/143, synth-extra 153/153, shell 265, ui-core 90/0, edit-v2 109, **settings 86/86** (app, fixture, mac, bridge), mini 14/14, themes 58/58, chrome-fallback 17/17; **eq 27/28 = the known pre-existing `L-21`** only; zero console errors. The themes run rewrote the 7 `coverage-*.json` timestamps (the only change; committed by a checkpoint) |
+| ui-core on `rig-devhost`, raw (`--no-adapter`) | **77, 75, 77 / 77**; with the adapter **76 / 77**. The failures are suite-side read races + one cascade (PARITY "UI parity"); 0 tick gaps over 400 ms (max 283-329 ms); no bridge error reply, the two known warns, `sanitizer: (none)` |
+
+**Open items by owner** (everything else from the UI wave, CORE1 and CORE2 is closed):
+- **Ryan / Mac** (next): tier-1 `check.sh` RUN on the integration commit, then the **hands-on checklist**
+  (`MAC_CHECK.md` "Tier 2", part A through `rig-devhost` in Chrome, part B the app), then the iPad. Also on the Mac:
+  install the iOS simulator platform and re-run `apple-sim` (mackit O3: report as SKIPPED); D4 R1 chord burst and
+  dx-epiano / supersaw-pad per voice; T07 O6, T11 O4 (`exp2f`), T11 O6; read back CI `mac-check` / `goldens` /
+  `sanitizers`; the iPad probe (D4 iPad profile, D2 rounding).
+- **T10 Apple shell**: the macOS app compiled and linked (Mac check #2) but has never been launched; the
+  `SHELL.md` follow-ups (WebContent recovery, Electron library migration, memory pressure, AVAudioSession) are unbuilt.
+- **T11 / T15 / T13 (core): CORE2A O2**: synth / organ units are built inside `Model::prepare` on the control thread,
+  so a switch to such a song stalls ticks and live input for up to ~0.3 s on this box (16 of 17 tick gaps over
+  150 ms in this pass). Build off the control thread or cache the tables. The one user-audible core item left.
+- **ui-core suite** (`test/phase2/ui-core/run.mjs`): the three read races in PARITY "UI parity" (v11-metronome:
+  wait for the core's `click` event after the switch + a cleanup hook that stops the click; v11-decisions: wait for
+  `!holds(64)` / `!clickState().running`; polish-2A banners: CORE2A O1).
+- **T08 / T06 / T12 (core, nits)**: CORE2A O3 (`prepare` also waits for reused sampler slots still loading), O4
+  (a sampler load finishing after a commit whose `when` is ahead reaches the old unit; unreachable from the shim),
+  O5 (`ThreadPool::pending()` overcount); CORE1 open 2 (`setEpochSource` never set on the realtime cache: safe by
+  reading, untested); CORE2B N1-N4 (absent `release` reads `undefined` vs web `null`; refused paths re-sent; catalogue
+  re-parse per read; `getParam` test hook races the control thread).
+- **Contract (orchestrator)**: CORE1 open 1, record in ENGINE_CONTRACT's sleep line that a restart while asleep
+  emits `state {sleep:'awake'}` and counts in `audioWakes` (JS does neither).
+- **Shim / UI nits**: UIC O5 (`swell()` with no argument decides from its own `swelling`; `clickStop()`'s optimistic
+  `running:false` has no expiry); UIA O4 (wiring strip columns vs the scrolling tab row, cosmetic), O6 (Edit at
+  820×1180 overflows sideways, pre-existing); `shared/hotkeys.js:212` comment still says "schema stays 1"; Settings
+  review item 5 (themes suite rewrites coverage timestamps); eq `L-21` (pre-existing).
+- **Core follow-ups, unchanged from wave 3** ("UI wave: how to start", "Core follow-ups"): T14 monoSwitch legato on a
+  stolen voice, wash `SetFeedback` frame, tape lead; T11 / T15 O5 `pendingEnded_`; T16 O4; T05 `LofiUnit` counter,
+  R4 / R5; T12 / T13 W3A R5; T06 `protect([])`; T11a PeriodicWave (then `chorus-fast-deep-noise`).
+- **Orchestrator**: CORE1 open 3 (`rt.realtime` Release xrun limit flakes under load; `RUN_SERIAL` if CI sees it),
+  CORE1 open 4 (`probe.null.cold` devhost ctest, T09), D4 R8 nits, mackit O4 (`check.sh` lock), T15 note 7, the
+  T17-style fixtures; prune the leftover review build dirs (`native/core/build-ui-*`, `build-uicsk*`,
+  `native/devhost/build-ui`: about 3.5 GB).
 
 ## Orchestrator-only items (not a task)
 
