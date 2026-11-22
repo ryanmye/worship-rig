@@ -283,34 +283,62 @@ velocity curve (T14); `song-lofi-rhodes` plays `synth:soft-keys` (T11; passes, s
 `switch-retire-retain` play `sampler:ep-rhodes`; 10 of the 16 `synth-*` ids are synth-extra patches under instrument
 type `synth`, so T15 registers into T11's `inst.synth` dispatch hook.
 
-## UI parity through rig-devhost (T09 baseline; re-run by UIB, 2026-11-22)
+## UI parity through rig-devhost (T09 baseline; UIB re-run; UIC fixes, 2026-11-22)
 
-`node test/unit/engine-bridge/ui-core-devhost.mjs` (the `ui-core` Perform suite against `rig-devhost`, real UI in
-headless Chromium): **21 / 76** at the wave-1 baseline, **25 / 76** after T11. **UIB re-run** (fresh `rig-devhost`,
-g++ Release `native/core/build-uib-devhost`, tree = wave 3 + the UI-wave work in progress, suite now 77 tests with
-UIA's `slots.mjs`):
+`node test/unit/engine-bridge/ui-core-devhost.mjs --no-adapter` runs the `ui-core` Perform suite against `rig-devhost`:
+the real UI in headless Chromium, the native core on the null backend, and nothing standing in for the engine. **The
+parity number is this raw count.** The adapter run (`ui-core-devhost.adapter.js`, the default) answers Web Audio
+internals from what the shim already knows. It is a diagnostic, not parity (`reviews/UIB.md`).
 
-| run | pass / 77 | note |
+| run | raw / 77 | what changed |
 |---|---|---|
-| `--no-adapter` (the suite as it is) | **25** | 39 of the 52 failures are one line: the suite's `waitSong` helper waits for `engine.slots.some(Boolean)`, a Web Audio engine internal (not contract), so every test that switches songs stops there |
-| with `ui-core-devhost.adapter.js` (default since UIB) | **63** (49 before `transpose` / `activeNotes` were added) | the adapter answers the internals the suite reads (`slots`, `retiring`, `getParam`, `pedaled`, `transpose`, `activeNotes` / `sounding`, `fx.reverb.settled`, `drone.getState`) on the BridgeEngine instance from what the shim knows (patch mirror, values sent, tick `stats`, `notes` events); class and contract surface unchanged, nothing under `app/` loads it |
+| wave-1 baseline (T09) | 21 / 76 | |
+| after T11 | 25 / 76 | |
+| UIB (builder and skeptic) | **25** | the suite gained UIA's `slots.mjs` (77 tests). With the adapter: 63 and 66 |
+| UIC, suite side, base shim | **65** | A/B: this tree's suite, with `bridge-engine.js` from `35b6e43` served by the same `rig-devhost` |
+| **UIC** | **70** | the suite side plus the shim side (below) |
 
-UIB skeptic re-run (fresh `native/core/build-uibsk-devhost`, tree with the core fix CORE1 and UIA landed): **25 / 77**
-raw and **66 / 77** with the adapter; the three layout / timing rows below (`boots`, Quick sheet geometry,
-`performance #2`) passed this time, the other 11 fail as listed. The parity number is the raw one (the adapter
-stands in for Web Audio internals: see `reviews/UIB.md`).
+UIC's run used a fresh `native/core/build-uic-devhost` (g++ Release). It returned no bridge error reply. It raised the
+same two warns as UIB's run ("No pad file for C; using the synth drone." and "Drone: too many overlapping layers; a
+fading one was cut."), and it produced no sanitizer line.
 
-No bridge error reply in either run; warns: one "No pad file for C; using the synth drone." and one "Drone: too many
-overlapping layers; a fading one was cut."; no sanitizer report. The 14 left (adapter run), with owners:
+**Suite side** (`test/phase2/ui-core/run.mjs`). The suite now reads contracted members when `engine.ctx` is not a
+`BaseAudioContext`. Every web-engine read is unchanged.
+- `waitSong` checks `getSlotPlayRange(i)` instead of `engine.slots`. That one line had stopped 39 tests.
+- The sound check reads `slotLevel(i)` (the core's per-slot meter) instead of AnalyserNode taps on Web Audio strips.
+  For the main output it reads the analyser facade's tick peak.
+- Panic, the meters and the metronome read `_debugStats()` (the core's 1 s stats: `voices`, `pedaled`, `sounding`,
+  `slotLevelTaps`, `click.ticks`). The suite waits for a stats sample taken after the action before it reads them.
+- Held notes come from the core's `notes` events.
+- The drone mode comes from `drone.cfg`.
+- The transpose comes from `getSlotPlayRange(i).transpose`. That value is the shim's applied transpose: it proves the
+  call reached the engine, as `engine.transpose` does on the web engine, not what the core did with it.
+- Three hooks keep one failure from cascading:
+  - The Perform-lock test always unlocks.
+  - The ON-tile test always unmutes Sound 1. A muted copy had made polish-2A's four-strip probe fail.
+  - After the FR-1 test's second page, the suite reloads its own page against the bridge. `rig-devhost` serves only
+    the newest page, so the old page had lost its engine, and the v11-polish, v11-metronome and v11-decisions tests
+    had failed on that.
+
+**Shim side** (`bridge-engine.js`). These five tests pass only with the new shim (the A/B above): status lamps (pedal
+lamp within 2 s), round2-ui #1 (Space = sustain), critics-fix performance #3 (a wheel held still writes nothing),
+v11-polish (strip pedal light) and v11-decisions (`clickState()` after Esc). The shim changes:
+- `sustain`, the wheels, `swell`, `fadeOutAll`, the note that un-fades and `allNotesOff` set `pedal`, `wheelValues()`
+  and `getRuntimeState()` at the call, as audio.js does. A tick that disagrees within 400 ms was built before native
+  saw the call, and the shim ignores it. Once a tick agrees, or after 400 ms, the core's value applies again.
+- `clickStop()` sets `clickState().running` to false at the call.
+- critics-fix performance #3 (a wheel held still) passes only with the new shim. With the base shim, a still wheel
+  rewrote the wheel input's style and `aria-valuetext` and the fader indicator. The likely cause: `wheelValues()`
+  trailed the UI's own calls until the next tick. This is inferred from the mutations the test recorded, not traced.
+  critics-fix performance #2 (meters while silent) passes with both shims.
+
+The 7 tests left (UIC run), each with its true cause and owner:
 
 | test(s) | cause | owner |
 |---|---|---|
-| every factory song; next / prev | the sound check taps `slots[i].strip.pan` with Web Audio `AnalyserNode`s (no page-side audio against a native core) | ui-core suite (UIA / T09): use the contracted `engine.slotLevel(i)` when `engine.ctx` is not a `BaseAudioContext` |
-| polish-1 strip meters | `engine.slotTapCount()` (internal) | ui-core suite or adapter (T09) |
-| v11-metronome Click chip; v11-decisions PANIC stops the click | `engine.metronome.*` internals (`running`, `stats.ticks`) | adapter / suite (T09) |
-| Panic (pedal holds the chord); Swell (`swelling`); status lamps (pedal lamp within 2 s); round2-ui #1 (Space = sustain) | the shim answers `pedaled` / `runtime` / `pedal` from the 30 Hz tick and the 1 s `stats`; the web engine answers at once | T09 shim (optimistic local mirror confirmed by the next tick) + T08 (per-tick `pedaled` count) |
-| critics-fix performance #2 / #3 (meters / still wheel keep writing while silent) | the tick keeps delivering non-zero peaks and wheel values while nothing plays (null backend; drone / reverb tail?) | T09 (analyser facade, wheel echo) / T08; needs a look |
-| boots (song name 39.8 px ≥ 40), H-v2 Quick sheet geometry, v11-polish (timeout) | layout / timing; all pass on the web engine in the same tree; `boots` passed in 2 of 3 devhost runs | re-run after UIA's Perform work lands (16-slot strip row in progress during this run) |
+| every factory song (Anthem) | `cache preload` blocks the core's control thread until the samples are decoded. `CacheServiceImpl::preload` busy-waits on `pump()`. During that time the control thread sends no ticks and handles no `play`. In the UIC run, each of the 11 tick gaps over 400 ms (0.5 to 3.1 s) contains a `cache preload`, and so does the 1.8 s gap at the first song. A note played in that window sounds that late, and the meter facade reads 0 because no tick arrives. This is a real 2.0 defect: a song switch to cold samples freezes live input. | core (T06 cache service / T08 bridge): answer `cache preload` asynchronously (`preloadAsync`, reply on completion) and keep the control loop running |
+| slot fader drag; Revert; header Space / Echo chips; H-v2 ON tile; H-v2 strip chips | No contracted read-back of a param. `engine-api.json` lists `getParam` as `notContract` ("tests only"), and the core's `get state` carries only `slots[i].gain` / `pan` | contract (orchestrator): make `getParam` contracted, answered by a `get param` op (T08) or from `get state`. Until then these 5 stay red on the bridge |
+| Swell (`swelling`) | The core's tick `runtime` has no `swelling`. `Perform::runtimeStateJson` writes `wheel`, `modOwner` and `faded`. The contract's tick row (6.5) lists `swelling`, and `wheelValuesJson` has it. The shim's own value lasts only until the first tick after 400 ms, and the core's missing field reads as false | core (T14 / T08): add `swelling` to the tick's `runtime` |
 
 Environment notes (not defects): Playwright 1.56 pins Chromium build 1194; this box only has `/opt/pw-browsers/*-1243`
 (Chrome for Testing 157.0.8103.78, the golden pin). `render.mjs` falls back to it by itself.

@@ -6878,3 +6878,53 @@ build); `unit.bridge_dynrange` 3/3; `engine-api.json --check` up to date;
 L-21), settings 84/84. UI parity through
 rig-devhost (item 7): 25/77 raw, unchanged from 25/76 (see `native/docs/PARITY.md` "UI parity" and the UIC section
 below).
+
+## UIC (UI-wave review follow-ups: UIA O1 / O2, UIB O1 / O2 / O4; views/settings.js, engine-bridge/bridge-engine.js + mock-native.js, controller.js, test/phase2/ui-core/run.mjs)
+
+What changed (rows: `native/docs/INTERFACE_LOG.md` "## UIC"). Each item has a test that fails without the fix. The
+"fails without" column was checked against the base file (`35b6e43`, or HEAD for later additions).
+- **Settings › MIDI Learn lists every slot of the current song** (UIA review O1). `settings.learnRowsFor(slotCount,
+  midiLearn)` returns the 1.x `LEARN_ROWS` with `slots.4.gain` … `slots.<n-1>.gain` inserted after the Bass level, so
+  the levels stay together. It also includes the level of a slot past the song's count that already has a mapping, so
+  that mapping can still be seen and cleared (mappings are per position). `learnName(id)` gives the row names
+  ('Sound 6 level'). The table is rebuilt when the song, its slot count or such a mapping changes. A song with 4
+  slots or fewer keeps the 1.x table (14 rows). Test: settings `run.mjs` "MIDI Learn lists a level row per slot of
+  the current song". It grows the song to 6 slots, learns Sound 6 from the table, moves it with the CC (pickup) to
+  +6 dB, shrinks the song back, clears the row and gets the 1.x table back. It fails without the fix: the Sound 6 row
+  never appears.
+- **mock-native takes slots.0..15** (UIA review O2), as the core does (T00c). `set` and `param` use
+  `isValidPath(path, MAX_SLOTS)`. `tick.slots` carries one pair per slot of the song, at least 4 and at most 16, as
+  the contract's tick row says (it was always 4). Tests: engine-bridge `engine.test.mjs` "16-slot songs" (now also no
+  `unknown-param` finding) and "mock-native ticks carry one slot meter pair per song slot".
+- **`restartAudio` queues a request made while the split take resumes** (UIB review O4). `restarting` now stays set
+  until `resumeRecording(part)` has finished (`try/finally`). Before, a request in that window started a second
+  restart, which stopped the take being resumed. A failed restart clears the flag before it reports 'stalled'. Test:
+  `test/phase1/shell/uic-restart.test.mjs`. A restart is asked for while the first restart's `recorder.start` is
+  pending. The test expects no second engine restart, the resuming take not stopped, and the queued request resolving
+  `true` after its own run.
+- **Bridge shim answers the pedal, runtime and click at the call** (UIB review O1, shim side). `sustain`, `setWheel`
+  / `modWheel` (only while the hardware owns the wheel; pickup is native's) / `expression` / `volumeCC`, `swell`
+  (start), `fadeOutAll`, `noteOn` (un-fades) and `allNotesOff` (pedal up, swell ended) update `pedal`,
+  `wheelValues()` and `getRuntimeState()` at once, as audio.js does. A tick that disagrees within `OPTIMISTIC_MS`
+  (400 ms) was built before native saw the call, and the shim ignores it. Once a tick agrees, or after 400 ms, the
+  core's value applies again, for example a hardware pedal on native's direct MIDI path. `clickStop()` sets
+  `clickState().running` and `counting` to false at once. Calls with `{when}` are not mirrored. Tests:
+  `test/unit/engine-bridge/optimistic.test.mjs` (4).
+- **ui-core suite on the bridge engine** (UIB review O1, suite side). Against the bridge engine, when `engine.ctx` is
+  not a `BaseAudioContext`, the in-page helpers read contracted members:
+  - `getSlotPlayRange(i)` for "the song is built" (`waitSong`, the four-strip wait);
+  - `slotLevel(i)` and the analyser facade's peak for the sound check;
+  - `_debugStats()` for voices, `pedaled`, `sounding`, `slotLevelTaps` and `click.ticks`, after a fresh stats sample;
+  - the `notes` events for held notes;
+  - `drone.cfg` for the drone mode;
+  - `getSlotPlayRange(i).transpose` for the transpose.
+
+  Every web-engine read is the suite's original one. Three cleanups stop one failure from cascading: the lock test
+  always unlocks, the ON-tile test always unmutes, and the page reloads after FR-1's second page on the bridge.
+  Measured raw (no adapter) against `rig-devhost`: **25/77 → 70/77**. The suite side alone reaches 65 (A/B with the
+  base shim), and the shim adds the other 5. The 7 left are listed with cause and owner in `native/docs/PARITY.md`
+  "UI parity": 1 core `cache preload` blocking the control thread, 5 with no contracted param read-back, and 1 core
+  tick without `runtime.swelling`.
+- **`CONTRACT_CHANGES` "## UIB"** (UIB review O2) is written above from INTERFACE_LOG UIB-1..6 (minor 4).
+
+Not changed: `app/js/engine` (the oracle), `native/core`, `engine-api.json`, every assertion of the ui-core suite.
