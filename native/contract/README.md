@@ -23,7 +23,8 @@ is engine time (absent = next block).
 JS → native ops: `hello`, `audio` (start/restart/output/sleep/wake), `prepare`, `commit`, `cache`
 (preload/estimate/retainReverb), `set` (params, batchable), `song` (transpose/routing/tempo/timeSig/key), `drone`
 (key/files/config), `play` (on/off/pedal/wheel/bend/swell/panic/fade/input), `click`, `config`
-(mono/lowResource/eqAudition/meters/midiClock), `get` (instruments/stats/devices/sampleStatus/state), `midi`
+(mono/lowResource/eqAudition/meters/midiClock/polyphony/voiceLimit/droneFreeze/dynamicRange), `get`
+(instruments/stats/devices/sampleStatus/state), `midi`
 (listen/route/send), `rec`.
 
 Native → JS events: `state`, `tick` (clock + meters, 30 Hz default), `notes`, `wheel`, `load`, `click`, `warn`,

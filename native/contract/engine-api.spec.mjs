@@ -11,7 +11,8 @@ const WHEN = a('when', 'number', { units: 'engine s', optional: true, note: 'abs
 
 /**
  * Engine methods/properties the app uses (section 1). `bridge` = how the native shim serves it:
- * {op, action?} message, or {local: '...'} answered in the shim (section 6.6).
+ * {op, action?} message, or {local: '...'} answered in the shim (section 6.6). `nativeOnly: true` (UIB) = a 2.0
+ * member the web engine (the 1.x oracle) does not have; the controller calls it only when the engine has it.
  */
 export const METHODS = [
   // 1.1 lifecycle / device

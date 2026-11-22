@@ -1781,14 +1781,19 @@ export function createController(o) {
   /**
    * New AudioContext + graph (engine re-applies its state). A running take is split into a new file. A restart asked
    * for while one runs is not dropped (Settings review item 1, UIB): it runs once more right after, so a buffer /
-   * latency pick that lands after the first request went out still reaches the engine.
+   * latency pick that lands after the first request went out still reaches the engine. Such a request resolves with
+   * the result of that follow-up run (UIB skeptic: it used to resolve false at once, so Settings' "Restart audio"
+   * pressed during a restart said "Audio restart failed" while the restart was in fact queued).
    */
   let restartAgain = false;
+  let restartAgainOpts = {};
+  let restartAgainWaiters = [];
   async function restartAudio(opts = {}) {
     if (secondary) return false;
     if (restarting) {
       restartAgain = true;
-      return false;
+      restartAgainOpts = opts; // the latest request's own flags (auto or not) go with the follow-up run
+      return new Promise((resolve) => restartAgainWaiters.push(resolve));
     }
     restarting = true;
     setAudio('restarting');
@@ -1809,10 +1814,21 @@ export function createController(o) {
       await resumeRecording(part);
       if (restartAgain) {
         restartAgain = false;
-        return restartAudio(opts);
+        const waiters = restartAgainWaiters;
+        restartAgainWaiters = [];
+        let again = false;
+        try {
+          again = await restartAudio(restartAgainOpts);
+        } finally {
+          for (const w of waiters) w(again); // never left pending, even if the follow-up throws
+        }
+        return again;
       }
     } else {
       restartAgain = false; // a failed restart does not chain into another (the user retries, or the watchdog)
+      const waiters = restartAgainWaiters;
+      restartAgainWaiters = [];
+      for (const w of waiters) w(false);
       lastT = null;
       stuckTicks = 0;
       setAudio('stalled');

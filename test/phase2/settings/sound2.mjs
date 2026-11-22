@@ -150,6 +150,14 @@ export async function runBridge({ browser, createServer, ROOT, SHOTS, results })
       await until(() => window.__rig.controller.status.audio === 'restarting');
       await page.waitForTimeout(60);
       await page.click('[data-testid="setting-buffer-frames"] button[data-value="512"]'); // during the restart
+      // UIB skeptic: a request made during the restart ("Restart audio", the menu) is queued with the pick and
+      // resolves with the follow-up run's result (true), not false at once ("Audio restart failed")
+      const queued = await ev(() => {
+        const ctl = window.__rig.controller;
+        if (ctl.status.audio !== 'restarting') return 'not restarting';
+        return ctl.restartAudio();
+      });
+      assert.equal(queued, true, 'a restart asked for during a restart resolves true once the follow-up ran');
       await until(() => globalThis.__bridgeLog.toNative.filter((m) => m.op === 'audio' && m.action === 'restart')
         .length >= 2 && window.__rig.controller.status.audio === 'running'
         && window.__rig.controller.status.audioConfig.bufferFrames === 512, null, 10000);
