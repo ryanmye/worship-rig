@@ -14,6 +14,7 @@ import { isValidPath, SLOT_COUNT } from '../shared/params.js';
 const NATIVE_SLOT_COUNT = 16;
 import { readEq, eqResponseDb, bandFilter, cutFilters, rbjCoeffs, magDb } from '../shared/eq-math.js';
 import { detectKeyFromName } from '../shared/keydetect.js';
+import { validDynRange } from '../shared/touch-curve.js';
 
 export { BridgeError, PROTOCOL };
 
@@ -184,8 +185,13 @@ export class BridgeEngine extends EventTarget {
     /** 2.0 Sound (native DECISIONS D1, D2, D4): the buffer to ask for at the next start/restart (null = host's). */
     this._bufferFrames = null;
     /** What native last reported (replies, `state` events); null = not reported yet. Emitted as `audioconfig`. */
+    // sampleRate rides along so Settings can turn the granted buffer into ms without reading engine.ctx (Settings
+    // review item 4)
     this._audioCfg = { polyphony: null, bufferFrames: null, bufferRequested: null, voiceLimit: null,
-      voiceLimitEffective: null };
+      voiceLimitEffective: null, sampleRate: null };
+    /** settings.dynamicRange (T12 O1) and settings.droneFreeze (D5) as last sent; native keeps them across restarts. */
+    this._dynRange = 1;
+    this._droneFreeze = true;
     this._instrumentsAll = [];
     this._instruments = [];
     this._samplers = new Map();
@@ -310,6 +316,7 @@ export class BridgeEngine extends EventTarget {
     const next = { ...c };
     if (Number.isFinite(s.polyphony) && s.polyphony > 0) next.polyphony = s.polyphony;
     if (Number.isFinite(s.bufferFrames) && s.bufferFrames > 0) next.bufferFrames = s.bufferFrames;
+    if (Number.isFinite(s.sampleRate) && s.sampleRate > 0) next.sampleRate = s.sampleRate;
     if (s.voiceLimit === 0 || s.voiceLimit === 'off') next.voiceLimit = 'off';
     else if (s.voiceLimit === 'auto' || (Number.isFinite(s.voiceLimit) && s.voiceLimit > 0)) {
       next.voiceLimit = s.voiceLimit;
@@ -751,6 +758,34 @@ export class BridgeEngine extends EventTarget {
 
   setMono(on) {
     this._send('config', { mono: !!on });
+  }
+
+  /**
+   * settings.dynamicRange (T12 O1; audio.js setDynamicRange): how far the sampled instruments spread soft from loud,
+   * 1..3 (1 = the built-in spans). Validated like the web engine (validDynRange; a non-number = 1) and sent as
+   * `config {dynamicRange}`; native clamps the same way and keeps it for samplers built later.
+   * @param {number} range
+   * @returns {number} the range in use
+   */
+  setDynamicRange(range) {
+    const v = validDynRange(range) ?? 1;
+    this._dynRange = v;
+    this._send('config', { dynamicRange: v });
+    return v;
+  }
+
+  /**
+   * 2.0 (native DECISIONS D5): settings.droneFreeze. true (default) = the drone plays a frozen loop while low-resource
+   * mode is on (1.x); false = always the live drone. Sends `config {droneFreeze}`; the web engine has no counterpart
+   * (it always freezes in low-resource mode), so the controller calls this only when the engine has it.
+   * @param {boolean} on
+   * @returns {boolean} the new state
+   */
+  setDroneFreeze(on) {
+    const v = on !== false;
+    this._droneFreeze = v;
+    this._send('config', { droneFreeze: v });
+    return v;
   }
 
   eqAudition(slot, mode = 'on', { when } = {}) {

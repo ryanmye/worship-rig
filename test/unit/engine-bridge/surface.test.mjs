@@ -25,9 +25,11 @@ function members() {
 const has = (obj, name) => name in obj;
 const resolve = (obj, p) => p.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
 
-test('the contract lists 63 entries and the shim expands them to members', () => {
-  assert.equal(api.methods.length, 63);
-  assert.ok(members().length >= 63);
+test('the contract lists 68 entries and the shim expands them to members', () => {
+  // 63 + setDynamicRange (T12 O1) + the native-only setPolyphony / setVoiceLimit / setBufferFrames / setDroneFreeze
+  // (Settings review item 2, UIB: contracted instead of allow-listed below)
+  assert.equal(api.methods.length, 68);
+  assert.ok(members().length >= 68);
 });
 
 test('every contracted method, getter and property exists with the right kind', () => {
@@ -56,10 +58,8 @@ test('the constructor is the class itself, with hello as its bridge op', () => {
 test('no public member beyond the contract (underscore-prefixed helpers and EventTarget only)', () => {
   const e = makeEngine();
   const contract = new Set(members().map((m) => m.path.split('.')[0]));
-  // + the 2.0 Settings › Sound setters (native DECISIONS D1, D2, D4): native-only, the web engine has no counterpart,
-  // so they are not in engine-api.json `methods`; they ride on the contracted `config` / `audio` ops
-  const allowed = new Set(['removeEventListener', 'dispatchEvent', 'constructor',
-    'setPolyphony', 'setVoiceLimit', 'setBufferFrames']);
+  // the 2.0 Settings › Sound setters (D1, D2, D4, D5) are in engine-api.json `methods` (nativeOnly) since UIB
+  const allowed = new Set(['removeEventListener', 'dispatchEvent', 'constructor']);
   const names = new Set();
   for (let o = e; o && o !== EventTarget.prototype && o !== Object.prototype; o = Object.getPrototypeOf(o)) {
     for (const k of Object.getOwnPropertyNames(o)) names.add(k);

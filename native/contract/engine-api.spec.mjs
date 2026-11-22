@@ -104,6 +104,31 @@ export const METHODS = [
       field: 'key' } },
   { name: 'setMono', kind: 'method', sync: true, ref: 'audio.js:509', args: [a('on', 'boolean')],
     callers: ['controller.js'], bridge: { op: 'config', field: 'mono' } },
+  // UIB (T12 O1): settings.dynamicRange; the web engine has had it since the hardware batch (controller.js calls it
+  // through call(), so an engine without it is skipped), the bridge sends config {dynamicRange}
+  { name: 'setDynamicRange', kind: 'method', sync: true, returns: 'number (the range in force, 1..3)',
+    idempotent: true, ref: 'audio.js:1426', args: [a('range', 'number 1..3 (absent/invalid = 1)')],
+    callers: ['controller.js'], bridge: { op: 'config', field: 'dynamicRange' } },
+  // 2.0 Settings › Sound (native DECISIONS D1, D2, D4, D5): native-only. The web engine (the 1.x oracle) has none of
+  // them, so the controller sends them only when the engine has the setters (engineTakesSound2 / optional()).
+  // Settings review item 2 (UIB): listed here instead of allow-listed in surface.test.mjs.
+  { name: 'setPolyphony', kind: 'method', sync: false, nativeOnly: true,
+    returns: 'Promise<audioConfig> (never rejects)', ref: 'engine-bridge/bridge-engine.js',
+    args: [a('n', '32|64|128')], callers: ['controller.js'], bridge: { op: 'config', field: 'polyphony' } },
+  { name: 'setVoiceLimit', kind: 'method', sync: false, nativeOnly: true,
+    returns: 'Promise<audioConfig> (never rejects)', ref: 'engine-bridge/bridge-engine.js',
+    args: [a('v', "'auto'|128|256|512|'off' ('off' = 0 on the wire)")], callers: ['controller.js'],
+    bridge: { op: 'config', field: 'voiceLimit' } },
+  { name: 'setBufferFrames', kind: 'method', sync: false, nativeOnly: true,
+    returns: 'Promise<audioConfig> (bufferFrames = what the device granted)', ref: 'engine-bridge/bridge-engine.js',
+    args: [a('n', '64|128|256|512'), a('o', 'object', { fields: { restart: 'bool = true' } })],
+    callers: ['controller.js'], effect: 'recorded synchronously; travels with the next audio start/restart',
+    bridge: { op: 'audio', action: 'restart', field: 'bufferFrames' } },
+  { name: 'setDroneFreeze', kind: 'method', sync: true, nativeOnly: true, returns: 'boolean (new state)',
+    idempotent: true, ref: 'engine-bridge/bridge-engine.js', args: [a('on', 'boolean (default true)')],
+    callers: ['controller.js'], effect: 'true = the drone plays a frozen loop while low-resource is on (1.x); ' +
+        'false = always the live drone (DECISIONS D5)',
+    bridge: { op: 'config', field: 'droneFreeze' } },
   { name: 'eqAudition', kind: 'method', sync: true, returns: 'boolean', ref: 'audio.js:1272',
     args: [a('slot', 'int 0..15'), a('mode', "'bypass'|'on'"), WHEN], callers: ['eq-keyboard.js'],
     bridge: { op: 'config', field: 'eqAudition' } },
@@ -387,16 +412,21 @@ export const BRIDGE = {
     // (voiceLimitEffective, 0 = off).
     // droneFreeze: DECISIONS D5 (T16): true (default) = the drone plays a frozen loop whenever lowResource is on (1.x),
     // false = always the live drone; the reply echoes it.
+    // dynamicRange: T12 O1 / UIB (minor 4, capability 'dynamicRange'): settings.dynamicRange 1..3 (absent = 1),
+    // how far the sampled instruments spread soft from loud (shared/touch-curve.js velocityDb); clamped and rounded to
+    // 0.01 like validDynRange (non-finite = 1), kept for samplers built later; the reply and get state echo the range.
     { op: 'config', args: { mono: 'bool?', lowResource: 'bool?', eqAudition: '{slot, mode}?',
       meters: '{rate?, slots?, rta?}?',
       midiClock: '{port: id|null}?', when: 'engine s?', polyphony: '32|64|128?',
-      voiceLimit: "'auto'|128|256|512|0?", droneFreeze: 'bool?' },
-      reply: '{lowResource?, eqAudition?, polyphony?, voiceLimit?, voiceLimitEffective?, droneFreeze?}',
-      maps: ['setMono', 'setLowResource', 'eqAudition', 'slotLevel/analyser subscriptions', 'setClockSink'] },
+      voiceLimit: "'auto'|128|256|512|0?", droneFreeze: 'bool?', dynamicRange: 'number?' },
+      reply: '{lowResource?, eqAudition?, polyphony?, voiceLimit?, voiceLimitEffective?, droneFreeze?, dynamicRange?}',
+      maps: ['setMono', 'setLowResource', 'eqAudition', 'slotLevel/analyser subscriptions', 'setClockSink',
+        'setDynamicRange', 'setPolyphony', 'setVoiceLimit', 'setDroneFreeze'] },
     { op: 'get', args: { what: "'instruments'|'stats'|'devices'|'sampleStatus'|'state'", reload: 'bool?',
       patches: 'Patch[]?' },
       reply: 'instruments [entry]; stats DebugStats; devices [{id, name, channels, default, sampleRates}]; ' +
-          'sampleStatus {loaded, failed}; state EngineState (+ polyphony, voiceLimit, voiceLimitEffective: D1/D4)',
+          'sampleStatus {loaded, failed}; state EngineState (+ polyphony, voiceLimit, voiceLimitEffective: D1/D4; ' +
+          'dynamicRange)',
       maps: ['listInstruments', 'reloadManifests', '_debugStats', 'enumerateDevices', 'cache/registry reach-in',
         'getState'] },
     { op: 'midi', args: { action: "'listen'|'route'|'send'", ids: 'string[]?', on: 'bool?', learn: 'object?',

@@ -12,6 +12,7 @@
 #include "meter/meter.h"
 #include "num/hash_seed.h"
 #include "rec/rec.h"
+#include "samples/cache_service.h"
 #include "yyjson.h"
 
 namespace rig {
@@ -61,6 +62,19 @@ Engine::Engine(const rig_config &cfg)
     host_.struct_size = static_cast<std::uint32_t>(n);
   }
   cfg_.host = cfg.host ? &host_ : nullptr;
+  // mackit O1: a realtime cache decodes on worker threads and integrates the results only in pump(); the control
+  // loop pumps every turn and a finished decode wakes it at once (before this, nothing pumped: a song prepared
+  // without `cache preload` kept silent samplers). Set before setPaths below and before the first request, as
+  // BufferCache::setWake asks (workers read it). Offline, decodes run inline and need neither.
+  cacheSvc_ = dynamic_cast<samples::CacheServiceImpl *>(model_.service<CacheService>());
+  if (cacheSvc_ && cfg_.mode == RIG_MODE_REALTIME) {
+    wakeLink_ = std::make_shared<WakeLink>();
+    wakeLink_->e = this;
+    cacheSvc_->setWake([link = wakeLink_] {  // a decode worker (never the audio thread)
+      std::lock_guard<std::mutex> lk(link->mu);
+      if (link->e) link->e->wakeControl();
+    });
+  }
   auto keep = [](const char *s, std::string &store, const char *&ptr) {
     if (s) store = s;
     ptr = s ? store.c_str() : nullptr;
@@ -101,6 +115,10 @@ Engine *Engine::create(const rig_config &cfg, rig_status *err) {
 }
 
 Engine::~Engine() {
+  if (wakeLink_) {  // mackit O1: decode workers outlive wake_ (they die with model_): unhook them first
+    std::lock_guard<std::mutex> lk(wakeLink_->mu);
+    wakeLink_->e = nullptr;
+  }
   if (control_.joinable()) {
     stop_ = true;
     wakeControl();
@@ -287,6 +305,7 @@ void Engine::controlLoop() {
     for (auto &h : hostEv) emit(std::move(h));
     for (auto &fn : calls) fn();
     for (const auto &m : batch) processMessage(m);
+    pumpCache();  // mackit O1: finished decodes -> sampler zone tables (SamplerOp::Zones), preload replies, pins
     drainAudioEvents();
     timers_.runDue(graph_.timeBase().frame / Q);
     drainMidi();
@@ -360,6 +379,12 @@ void Engine::emitTick() {
 
 void Engine::pumpRec(bool offline) {
   if (RecServiceImpl *r = recSvc_) r->pump(offline, graph_.timeBase().time());
+}
+
+void Engine::pumpCache() {
+  // Control thread. Cheap when idle (one mailbox lock, the graveyard scan). The callbacks it runs (sampler loads,
+  // preload ops, pin re-warms) send commands and emit events like any other control-thread call.
+  if (samples::CacheServiceImpl *c = cacheSvc_) c->pump();
 }
 
 void Engine::renderOne() {
@@ -517,6 +542,7 @@ const char *Engine::requestAudio(const std::string &action, const std::string &d
   };
   if (!realtime() || !cfg_.host) {  // offline, or no host: the caller drives rig_render() itself (tests)
     started_ = true;
+    if (realtime()) model_.wake(0.0);  // W3A R1: the restarted "device" starts awake (see hostAudioStarted)
     emitState("running", restart);
     loadStart();
     return "";
@@ -599,6 +625,7 @@ void Engine::hostAudioStarted(const rig_device_info &info) {
   const double residue = grant ? fifoResidue(grant) / sr : 0.0;
   onControl([this, id, lat, sr, grant, residue] {
     const bool restarted = restartPending_ || std::strcmp(devState_, "running") == 0;
+    const bool requested = pending_;  // an `audio start|restart|output` of the bridge, not a host-initiated reopen
     pending_ = false;
     restartPending_ = false;
     if (!id.empty()) deviceId_ = id;
@@ -606,6 +633,13 @@ void Engine::hostAudioStarted(const rig_device_info &info) {
     bufferGrant_ = grant;
     // the state event announces the rate the audio thread is about to adopt (RateChanged follows from the graph)
     devState_ = "running";
+    // W3A R1: audio.js restart() (also setSinkId's fallback = `output`) builds a new context, and a new context starts
+    // awake (_resetState). The Model's sleep state outlived the device, so a restart while asleep rendered silence
+    // until the next perform call. Wake it at once (no ramp: JS's new `out` gain is 1 from the start); the wake's own
+    // `state` event (sleep "awake", wakeMs, queued 0) precedes the `running` one below. A reopen the host starts by
+    // itself (route change, interruption end) keeps the state, as a suspended AudioContext stays suspended across a
+    // device change: the next perform call wakes it (W3A).
+    if (requested) model_.wake(0.0);  // no-op when awake
     std::string f = stateFieldsJson("running", sr);
     f.pop_back();
     std::string m = "{\"v\":1,\"ev\":\"state\"," + f.substr(1);

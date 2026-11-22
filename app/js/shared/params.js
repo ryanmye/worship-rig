@@ -3,12 +3,21 @@
 import { noteName } from './music.js';
 import { TOUCH_RANGE } from './touch-curve.js';
 
-/** Number of fixed slots per patch. */
+/**
+ * Slots of a new song, and the slots the web engine (app/js/engine, the 1.x oracle) plays: 4 (Keys, Pad, Extra, Bass).
+ * Also the default bound of parsePath / isValidPath / expandPaths, which the web engine, the bridge shim and its mock
+ * read unchanged (UIA, native DECISIONS D3: the web oracle stays at 4 slots).
+ */
 export const SLOT_COUNT = 4;
+/**
+ * UIA (native DECISIONS D3): a 2.0 song has 1..MAX_SLOTS slots; the native core takes all of them. Pass it as the
+ * `slotCount` of parsePath / isValidPath / expandPaths for the song grammar (store, controller, UI).
+ */
+export const MAX_SLOTS = 16;
 
 /**
  * @typedef {object} ParamEntry
- * @property {string} path     pattern; `<i>` = slot index 0..3, `<key>` = instrument param key
+ * @property {string} path     pattern; `<i>` = slot index 0..MAX_SLOTS-1, `<key>` = instrument param key
  * @property {number} [min]
  * @property {number} [max]
  * @property {number|boolean|string|null} default
@@ -165,17 +174,22 @@ export const INSTRUMENT_PARAM_ENTRY = Object.freeze({
 const BY_PATTERN = new Map(PARAMS.map((e) => [e.path, e]));
 const SLOT_RE = /^slots\.(\d+)\.(.+)$/;
 const KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+/** A slot index as written in a path: no sign, no leading zero ('0'..'15'; '01' is not one). */
+const INDEX_RE = /^(0|[1-9]\d?)$/;
+const boundOf = (n) => (Number.isInteger(n) ? Math.min(MAX_SLOTS, Math.max(1, n)) : SLOT_COUNT);
 
 /**
  * Normalise a concrete path to its table pattern.
  * @param {string} path
+ * @param {number} [slotCount=SLOT_COUNT] slot indices below this are valid (1..MAX_SLOTS; UIA: the default stays the
+ *   web engine's 4, so app/js/engine and the bridge shim see the grammar they were written for)
  * @returns {{pattern:string, slot:number|null, key:string|null}|null}
  */
-export function parsePath(path) {
+export function parsePath(path, slotCount = SLOT_COUNT) {
   if (typeof path !== 'string') return null;
   const m = SLOT_RE.exec(path);
   if (!m) return !path.startsWith('slots.') && BY_PATTERN.has(path) ? { pattern: path, slot: null, key: null } : null;
-  if (!/^[0-3]$/.test(m[1])) return null;
+  if (!INDEX_RE.test(m[1]) || Number(m[1]) >= boundOf(slotCount)) return null;
   const slot = Number(m[1]);
   const rest = m[2];
   if (rest.startsWith('params.')) {
@@ -187,32 +201,36 @@ export function parsePath(path) {
 }
 
 /**
- * Table entry for a concrete path ('slots.1.gain' → the 'slots.<i>.gain' entry).
+ * Table entry for a concrete path ('slots.1.gain' → the 'slots.<i>.gain' entry). Every slot index below MAX_SLOTS
+ * has the same rows (UIA), so clamp / formatValue work for slots.0..15.
  * @param {string} path
  * @returns {ParamEntry|null}
  */
 export function describe(path) {
-  const p = parsePath(path);
+  const p = parsePath(path, MAX_SLOTS);
   if (!p) return null;
   return p.pattern === INSTRUMENT_PARAM_ENTRY.path ? INSTRUMENT_PARAM_ENTRY : BY_PATTERN.get(p.pattern);
 }
 
 /**
  * @param {string} path
+ * @param {number} [slotCount=SLOT_COUNT] see parsePath (MAX_SLOTS = the 2.0 song grammar)
  * @returns {boolean} true when the path is a valid parameter address (controlIds like 'panic' are not)
  */
-export function isValidPath(path) {
-  return parsePath(path) !== null;
+export function isValidPath(path, slotCount = SLOT_COUNT) {
+  return parsePath(path, slotCount) !== null;
 }
 
 /**
- * Every concrete non-dynamic path (slot patterns expanded for 0..3), in table order.
+ * Every concrete non-dynamic path (slot patterns expanded for 0..slotCount-1), in table order.
+ * @param {number} [slotCount=SLOT_COUNT]
  * @returns {string[]}
  */
-export function expandPaths() {
+export function expandPaths(slotCount = SLOT_COUNT) {
+  const n = boundOf(slotCount);
   const out = [];
   for (const e of PARAMS) {
-    if (e.path.includes('<i>')) for (let i = 0; i < SLOT_COUNT; i++) out.push(e.path.replace('<i>', String(i)));
+    if (e.path.includes('<i>')) for (let i = 0; i < n; i++) out.push(e.path.replace('<i>', String(i)));
     else out.push(e.path);
   }
   return out;
@@ -356,20 +374,47 @@ export function formatValue(path, value) {
   }
 }
 
-/** MIDI-learnable controlIds (SPEC §4). Buttons: note-on or CC ≥ 64; faders: pickup mode. */
+/**
+ * MIDI-learnable controlIds (SPEC §4), the 1.x list in its order (Settings' Learn table rows). UIA: the level of any
+ * slot below MAX_SLOTS is learnable too (isLearnable, learnTargets): a learned fader acts on that slot of whichever
+ * song plays, and does nothing in a song without it.
+ */
 export const LEARNABLE = Object.freeze([
   'slots.0.gain', 'slots.1.gain', 'slots.2.gain', 'slots.3.gain',
   'drone.gain', 'fx.reverb.returnGain', 'master.volume',
   'nextSong', 'prevSong', 'panic', 'fadeOutAll', 'swell',
   'nextScene', 'prevScene', // v11-scenes: a footswitch steps the song's scenes
 ]);
+const SLOT_GAIN_RE = /^slots\.(0|[1-9]\d?)\.gain$/;
+
+/**
+ * UIA: the slot index of a 'slots.<i>.gain' id with i < slotCount, else null (wheel targets, learn ids).
+ * @param {string} id
+ * @param {number} [slotCount=MAX_SLOTS]
+ * @returns {number|null}
+ */
+export function slotGainIndex(id, slotCount = MAX_SLOTS) {
+  const m = SLOT_GAIN_RE.exec(typeof id === 'string' ? id : '');
+  return m && Number(m[1]) < boundOf(slotCount) ? Number(m[1]) : null;
+}
+
+/**
+ * Learnable controlIds for a song with `slotCount` slots: LEARNABLE, then 'slots.4.gain' … for the slots past 4.
+ * @param {number} [slotCount=SLOT_COUNT]
+ * @returns {string[]}
+ */
+export function learnTargets(slotCount = SLOT_COUNT) {
+  const out = [...LEARNABLE];
+  for (let i = SLOT_COUNT; i < boundOf(slotCount); i++) out.push(`slots.${i}.gain`);
+  return out;
+}
 
 /**
  * @param {string} controlId
  * @returns {boolean}
  */
 export function isLearnable(controlId) {
-  return LEARNABLE.includes(controlId);
+  return LEARNABLE.includes(controlId) || slotGainIndex(controlId) !== null;
 }
 
 /**
@@ -378,7 +423,7 @@ export function isLearnable(controlId) {
  *   false for faders
  */
 export function isLearnButton(controlId) {
-  return isLearnable(controlId) && !isValidPath(controlId);
+  return isLearnable(controlId) && !isValidPath(controlId, MAX_SLOTS);
 }
 
 /** Per-role slot defaults (roles 0 Keys, 1 Pad, 2 Extra, 3 Bass). */
@@ -390,15 +435,36 @@ export const ROLE_DEFAULTS = Object.freeze([
 ]);
 
 /**
+ * UIA: the role of slot `i`: Keys, Pad, Extra, Bass, then 'Sound 5' … 'Sound 16' with Extra's defaults (a layer
+ * that sits in the mix: some Space and Echo, no mono, the whole keyboard). Its colour is the CSS var --slot-<i>
+ * (styles.css: slots 5..16 mix the four role colours of the theme).
+ * @param {number} i 0..MAX_SLOTS-1
+ * @returns {{name:string, color:string, sustain?:boolean, mono?:string, highNote?:number, sends:object}|null}
+ */
+export function slotRole(i) {
+  if (!Number.isInteger(i) || i < 0 || i >= MAX_SLOTS) return null;
+  return ROLE_DEFAULTS[i] || Object.freeze({ ...ROLE_DEFAULTS[2], name: `Sound ${i + 1}`, color: `slot-${i}` });
+}
+
+/**
+ * UIA: the display name of slot `i` ('Keys' … 'Bass', then 'Sound 5' …).
+ * @param {number} i
+ * @returns {string}
+ */
+export function slotName(i) {
+  return slotRole(i)?.name || `Sound ${Number(i) + 1}`;
+}
+
+/**
  * Fresh, fully-populated Slot for a role.
- * @param {number} roleIndex 0..3
+ * @param {number} roleIndex 0..MAX_SLOTS-1 (UIA: 4.. take slotRole's 'Sound n' defaults)
  * @param {{type:'sampler'|'synth'|'organ', id:string}} instrumentRef
  * @returns {object} Slot (SPEC §2)
  * @throws {RangeError} bad role; {TypeError} bad instrumentRef
  */
 export function defaultSlot(roleIndex, instrumentRef) {
-  const role = ROLE_DEFAULTS[roleIndex];
-  if (!Number.isInteger(roleIndex) || !role) throw new RangeError(`defaultSlot: roleIndex must be 0..3, got ${roleIndex}`);
+  const role = slotRole(roleIndex);
+  if (!role) throw new RangeError(`defaultSlot: roleIndex must be 0..${MAX_SLOTS - 1}, got ${roleIndex}`);
   if (!instrumentRef || typeof instrumentRef.type !== 'string' || typeof instrumentRef.id !== 'string') {
     throw new TypeError('defaultSlot: instrumentRef must be {type, id}');
   }

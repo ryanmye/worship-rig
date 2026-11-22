@@ -1105,6 +1105,34 @@ async function runMode(mode, browser) {
       await closeSettings();
     });
 
+    await T('2.0 Sound (D5, UIB): "Freeze drone to save CPU" in Advanced, on by default (absent), persists '
+      + '(device-local); the web engine always freezes, so it is stored only and the row says so', async () => {
+      await ev(() => window.__rig.ctx.openSettings({ section: 'drone-freeze' })); // deep link opens Advanced
+      await until(() => window.__rig.views.settings.category === 'sound'
+        && document.querySelector('[data-testid="settings-advanced-sound"]').open);
+      const tog = '[data-testid="setting-drone-freeze"]';
+      await until((t) => document.activeElement === document.querySelector(t), tog);
+      assert.equal(await page.getAttribute(tog, 'aria-checked'), 'true', 'default on');
+      assert.equal(await ev(() => 'droneFreeze' in window.__rig.store.get().settings), false, 'absent until chosen');
+      assert.equal(await page.isVisible('[data-testid="setting-drone-freeze-note"]'), true);
+      assert.match(await page.textContent('[data-testid="setting-drone-freeze-note"]'), /2\.0 engine/);
+      assert.equal(await ev(() => typeof window.__rig.engine.setDroneFreeze), 'undefined', 'web engine: no setter');
+      await page.click(tog);
+      await until(() => window.__rig.store.get().settings.droneFreeze === false);
+      assert.equal(await page.getAttribute(tog, 'aria-checked'), 'false');
+      await until(() => /"droneFreeze":false/.test(localStorage.getItem('rig.v1') || ''), null, 5000);
+      const r = await ev(() => {
+        const st = window.__rig.store;
+        st.set('settings.droneFreeze', 'no'); // refused: a boolean or null only
+        return { v: st.get().settings.droneFreeze, exported: 'droneFreeze' in JSON.parse(st.exportJSON()).settings };
+      });
+      assert.deepEqual(r, { v: false, exported: false }, 'refuses non-booleans; device-local: not exported');
+      await ev(() => window.__rig.store.set('settings.droneFreeze', null)); // back to the default (absent = on)
+      await until((t) => document.querySelector(t).getAttribute('aria-checked') === 'true', tog);
+      assert.equal(await ev(() => 'droneFreeze' in window.__rig.store.get().settings), false);
+      await closeSettings();
+    });
+
     // polish-1: the retired Edit's .ed-* rules are pruned; what remains is exactly what settings.js renders
     if (mode === 'app') {
       await T('settings: styles-settings.css keeps only the .ed-* classes Settings renders (polish-1)', async () => {

@@ -635,6 +635,122 @@
       }
     },
     {
+      "name": "setDynamicRange",
+      "kind": "method",
+      "sync": true,
+      "returns": "number (the range in force, 1..3)",
+      "idempotent": true,
+      "ref": "audio.js:1426",
+      "args": [
+        {
+          "name": "range",
+          "type": "number 1..3 (absent/invalid = 1)"
+        }
+      ],
+      "callers": [
+        "controller.js"
+      ],
+      "bridge": {
+        "op": "config",
+        "field": "dynamicRange"
+      }
+    },
+    {
+      "name": "setPolyphony",
+      "kind": "method",
+      "sync": false,
+      "nativeOnly": true,
+      "returns": "Promise<audioConfig> (never rejects)",
+      "ref": "engine-bridge/bridge-engine.js",
+      "args": [
+        {
+          "name": "n",
+          "type": "32|64|128"
+        }
+      ],
+      "callers": [
+        "controller.js"
+      ],
+      "bridge": {
+        "op": "config",
+        "field": "polyphony"
+      }
+    },
+    {
+      "name": "setVoiceLimit",
+      "kind": "method",
+      "sync": false,
+      "nativeOnly": true,
+      "returns": "Promise<audioConfig> (never rejects)",
+      "ref": "engine-bridge/bridge-engine.js",
+      "args": [
+        {
+          "name": "v",
+          "type": "'auto'|128|256|512|'off' ('off' = 0 on the wire)"
+        }
+      ],
+      "callers": [
+        "controller.js"
+      ],
+      "bridge": {
+        "op": "config",
+        "field": "voiceLimit"
+      }
+    },
+    {
+      "name": "setBufferFrames",
+      "kind": "method",
+      "sync": false,
+      "nativeOnly": true,
+      "returns": "Promise<audioConfig> (bufferFrames = what the device granted)",
+      "ref": "engine-bridge/bridge-engine.js",
+      "args": [
+        {
+          "name": "n",
+          "type": "64|128|256|512"
+        },
+        {
+          "name": "o",
+          "type": "object",
+          "fields": {
+            "restart": "bool = true"
+          }
+        }
+      ],
+      "callers": [
+        "controller.js"
+      ],
+      "effect": "recorded synchronously; travels with the next audio start/restart",
+      "bridge": {
+        "op": "audio",
+        "action": "restart",
+        "field": "bufferFrames"
+      }
+    },
+    {
+      "name": "setDroneFreeze",
+      "kind": "method",
+      "sync": true,
+      "nativeOnly": true,
+      "returns": "boolean (new state)",
+      "idempotent": true,
+      "ref": "engine-bridge/bridge-engine.js",
+      "args": [
+        {
+          "name": "on",
+          "type": "boolean (default true)"
+        }
+      ],
+      "callers": [
+        "controller.js"
+      ],
+      "effect": "true = the drone plays a frozen loop while low-resource is on (1.x); false = always the live drone (DECISIONS D5)",
+      "bridge": {
+        "op": "config",
+        "field": "droneFreeze"
+      }
+    },
+    {
       "name": "eqAudition",
       "kind": "method",
       "sync": true,
@@ -6473,15 +6589,20 @@
           "when": "engine s?",
           "polyphony": "32|64|128?",
           "voiceLimit": "'auto'|128|256|512|0?",
-          "droneFreeze": "bool?"
+          "droneFreeze": "bool?",
+          "dynamicRange": "number?"
         },
-        "reply": "{lowResource?, eqAudition?, polyphony?, voiceLimit?, voiceLimitEffective?, droneFreeze?}",
+        "reply": "{lowResource?, eqAudition?, polyphony?, voiceLimit?, voiceLimitEffective?, droneFreeze?, dynamicRange?}",
         "maps": [
           "setMono",
           "setLowResource",
           "eqAudition",
           "slotLevel/analyser subscriptions",
-          "setClockSink"
+          "setClockSink",
+          "setDynamicRange",
+          "setPolyphony",
+          "setVoiceLimit",
+          "setDroneFreeze"
         ]
       },
       {
@@ -6491,7 +6612,7 @@
           "reload": "bool?",
           "patches": "Patch[]?"
         },
-        "reply": "instruments [entry]; stats DebugStats; devices [{id, name, channels, default, sampleRates}]; sampleStatus {loaded, failed}; state EngineState (+ polyphony, voiceLimit, voiceLimitEffective: D1/D4)",
+        "reply": "instruments [entry]; stats DebugStats; devices [{id, name, channels, default, sampleRates}]; sampleStatus {loaded, failed}; state EngineState (+ polyphony, voiceLimit, voiceLimitEffective: D1/D4; dynamicRange)",
         "maps": [
           "listInstruments",
           "reloadManifests",

@@ -3,6 +3,9 @@
 // (?engine=bridge-mock, engine-bridge/boot-mock.js) instead of the Web Audio engine; the loopback transport's log
 // (globalThis.__bridgeLog.toNative) shows exactly what the controller sent: config {polyphony}, config {voiceLimit}
 // ('off' → 0) and audio {bufferFrames} on start / restart. Called by run.mjs; results go into its table.
+// UIB (UI wave items 4-6): Freeze drone to save CPU → config {droneFreeze}; the Range slider → config {dynamicRange};
+// a buffer pick during a slow restart is not dropped (Settings review item 1); the granted-size line is shown from
+// mock-native's own bufferFrames (item 3) and the engine's sampleRate (item 4).
 import path from 'node:path';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -105,22 +108,62 @@ export async function runBridge({ browser, createServer, ROOT, SHOTS, results })
       assert.equal(s.filter((m) => m.op === 'audio').length, 1, `one restart (${JSON.stringify(s)})`);
       assert.equal(await ev(() => window.__rig.controller.status.audioConfig.bufferRequested), 512);
       assert.equal(await ev(() => window.__rig.controller.status.songId), songId, 'same song after the restart');
-      const granted = await ev(() => window.__rig.controller.status.audioConfig.bufferFrames);
-      if (Number.isFinite(granted)) {
-        await until(() => /ms per buffer/.test(document.querySelector('[data-testid="setting-buffer-granted"]')
-          .textContent));
-      } else {
-        notes.push('mock-native does not report bufferFrames yet: the granted-size line stays empty');
-        assert.equal(await page.textContent('[data-testid="setting-buffer-granted"]'), '');
-      }
+      // Settings review item 3: mock-native reports the grant like the core (audio reply + state event); item 4:
+      // the ms come from the sample rate the engine reported (status.audioConfig.sampleRate), not engine.ctx
+      await until(() => window.__rig.controller.status.audioConfig.bufferFrames === 512);
+      assert.equal(await ev(() => window.__rig.controller.status.audioConfig.sampleRate), 48000);
+      await until(() => /^10\.7 ms per buffer/.test(document.querySelector('[data-testid="setting-buffer-granted"]')
+        .textContent));
       // a granted size other than the request (the iPad rounds it) is said plainly; pushed as a state event
       await ev(() => globalThis.__bridgeMock._emit('state', globalThis.__bridgeMock._state({ bufferFrames: 256 })));
       await until(() => window.__rig.controller.status.audioConfig.bufferFrames === 256);
       await until(() => /^Device gave 256\. 5\.3 ms per buffer/.test(
         document.querySelector('[data-testid="setting-buffer-granted"]').textContent));
+      // a 44.1 kHz device: the line follows the rate the engine reports
+      await ev(() => globalThis.__bridgeMock._emit('state', globalThis.__bridgeMock._state({ bufferFrames: 256,
+        sampleRate: 44100 })));
+      await until(() => /^Device gave 256\. 5\.8 ms per buffer/.test(
+        document.querySelector('[data-testid="setting-buffer-granted"]').textContent));
+      await ev(() => globalThis.__bridgeMock._emit('state', globalThis.__bridgeMock._state({})));
       await page.click('[data-testid="setting-buffer-frames"] button[data-value="128"]');
       await until(() => globalThis.__bridgeLog.toNative.some((m) => m.op === 'audio' && m.action === 'restart'
         && m.bufferFrames === 128) && window.__rig.controller.status.audio === 'running');
+    });
+
+    await T('Settings review item 1: a buffer pick made while a (slow) restart runs is not dropped: one more '
+      + 'restart follows and the engine ends on the stored size', async () => {
+      // the mock answers restarts after 400 ms, as a real device reopen may take
+      await ev(() => {
+        const m = globalThis.__bridgeMock;
+        m.__opAudio = m.__opAudio || m.op_audio;
+        m.op_audio = function slow(msg) {
+          if (msg.action !== 'restart') return m.__opAudio.call(m, msg);
+          setTimeout(() => {
+            m.__opAudio.call(m, msg);
+            m._flush();
+          }, 400);
+          return undefined;
+        };
+      });
+      const n = await mark();
+      await page.click('[data-testid="setting-buffer-frames"] button[data-value="256"]');
+      await until(() => window.__rig.controller.status.audio === 'restarting');
+      await page.waitForTimeout(60);
+      await page.click('[data-testid="setting-buffer-frames"] button[data-value="512"]'); // during the restart
+      await until(() => globalThis.__bridgeLog.toNative.filter((m) => m.op === 'audio' && m.action === 'restart')
+        .length >= 2 && window.__rig.controller.status.audio === 'running'
+        && window.__rig.controller.status.audioConfig.bufferFrames === 512, null, 10000);
+      const restarts = (await sentSince(n)).filter((m) => m.op === 'audio');
+      assert.deepEqual(restarts.map((m) => m.bufferFrames), [256, 512], JSON.stringify(restarts));
+      assert.equal(await ev(() => globalThis.__bridgeMock.bufferFrames), 512, 'the engine runs the stored size');
+      assert.equal(await ev(() => window.__rig.store.get().settings.bufferFrames), 512);
+      await ev(() => {
+        const m = globalThis.__bridgeMock;
+        m.op_audio = m.__opAudio;
+      });
+      await page.click('[data-testid="setting-buffer-frames"] button[data-value="128"]');
+      await until(() => window.__rig.controller.status.audioConfig.bufferFrames === 128
+        && window.__rig.controller.status.audio === 'running');
     });
 
     await T('Total voice limit (Advanced) → config {voiceLimit}: Off = 0, a number, Auto; Auto shows the engine\'s '
@@ -149,10 +192,62 @@ export async function runBridge({ browser, createServer, ROOT, SHOTS, results })
         === 'Auto: 384 voices on this device');
       await page.locator('[data-testid="settings-panel-sound"]')
         .screenshot({ path: path.join(SHOTS, 'bridge-sound.png') });
+    });
+
+    await T('Freeze drone to save CPU (D5, Advanced) → config {droneFreeze}; on by default, nothing sent at boot; '
+      + 'no "2.0 engine" note on the 2.0 engine', async () => {
+      const cfg = (k) => ev((key) => globalThis.__bridgeLog.toNative
+        .filter((m) => m.op === 'config' && key in m).map(({ v, id, ...m }) => m), k);
+      assert.deepEqual(await cfg('droneFreeze'), [], 'absent = on = the core default: nothing sent at start-up');
+      const tog = '[data-testid="setting-drone-freeze"]';
+      assert.equal(await page.getAttribute(tog, 'aria-checked'), 'true');
+      assert.equal(await page.isVisible('[data-testid="setting-drone-freeze-note"]'), false);
+      await page.click(tog);
+      await until(() => globalThis.__bridgeMock.droneFreeze === false);
+      assert.equal(await ev(() => window.__rig.store.get().settings.droneFreeze), false);
+      await page.click(tog);
+      await until(() => globalThis.__bridgeMock.droneFreeze === true);
+      assert.deepEqual(await cfg('droneFreeze'), [{ op: 'config', droneFreeze: false },
+        { op: 'config', droneFreeze: true }]);
+      await page.locator('[data-testid="settings-advanced-sound"]')
+        .screenshot({ path: path.join(SHOTS, 'bridge-sound-advanced.png') });
       await close();
-      for (const k of ['polyphony', 'bufferFrames', 'voiceLimit']) {
+      for (const k of ['polyphony', 'bufferFrames', 'voiceLimit', 'droneFreeze']) {
         await ev((key) => window.__rig.store.set(`settings.${key}`, null), k);
       }
+    });
+
+    await T('Range (settings.dynamicRange, Keyboards & MIDI) → config {dynamicRange}; the mock answers the range in '
+      + 'force like the core', async () => {
+      const cfg = () => ev(() => globalThis.__bridgeLog.toNative
+        .filter((m) => m.op === 'config' && 'dynamicRange' in m).map((m) => m.dynamicRange));
+      assert.deepEqual(await cfg(), [], 'absent = 1 = the core default: nothing sent at start-up');
+      await ev(() => window.__rig.ctx.openSettings({ section: 'keyboards' }));
+      await until(() => window.__rig.views.settings.category === 'keyboards');
+      await page.locator('[data-testid="setting-dynamic-range"]').fill('2'); // the slider's input event
+      await until(() => globalThis.__bridgeMock.dynamicRange === 2);
+      await ev(() => window.__rig.store.set('settings.dynamicRange', null)); // back to today's sound
+      await until(() => globalThis.__bridgeMock.dynamicRange === 1);
+      assert.deepEqual(await cfg(), [2, 1]);
+      await close();
+    });
+
+    await T('boot with Freeze off and a Range stored: the start-up sends config {droneFreeze:false} and '
+      + '{dynamicRange}', async () => {
+      await ev(() => {
+        window.__rig.store.set('settings.droneFreeze', false);
+        window.__rig.store.set('settings.dynamicRange', 2.5);
+      });
+      await until(() => /"droneFreeze":false/.test(localStorage.getItem('rig.v1') || ''), null, 5000);
+      await page.reload();
+      await until(() => !!(window.__rig && window.__rig.views && window.__rig.views.settings), null, 20000);
+      await waitRigReady(page, { timeout: 30000, what: `[${mode}] window.__rig.ready after reload` });
+      await until(() => globalThis.__bridgeMock.droneFreeze === false && globalThis.__bridgeMock.dynamicRange === 2.5);
+      await ev(() => {
+        window.__rig.store.set('settings.droneFreeze', null);
+        window.__rig.store.set('settings.dynamicRange', null);
+      });
+      await until(() => globalThis.__bridgeMock.droneFreeze === true && globalThis.__bridgeMock.dynamicRange === 1);
     });
   } finally {
     await T('zero console.error', async () => {

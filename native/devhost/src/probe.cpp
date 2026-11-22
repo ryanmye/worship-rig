@@ -206,15 +206,18 @@ std::string instrumentJson(const std::string &kind, const std::string &id) {
 }
 
 /**
- * cache preload + prepare + commit; "" on success, else what went wrong. The preload comes first because a
- * realtime engine integrates decodes started by `prepare` only on a cache pump() that its control loop does not run
- * yet (found by this probe, 2026-11-20: api/engine.cpp controlLoop never pumps the cache service, so a sampler
- * prepared cold stays silent in realtime). `cache preload` pumps until its decodes are done, and the prepare after it
- * finds every buffer decoded. The app's controller preloads songs the same way, so this is also the real path.
+ * cache preload + prepare + commit; "" on success, else what went wrong. The app's controller preloads songs the
+ * same way, so this is the real path; the preload also keeps decode time out of the measured windows.
+ * With `preload` false (--no-preload, the mackit O1 check) the song is prepared cold: the samples reach the sampler
+ * only through the realtime control loop's cache pump (before CORE1 nothing pumped: found by this probe, 2026-11-20,
+ * a cold sampler song stayed silent). The caller waits for them with waitSamples().
  */
-std::string loadSong(ProbeEngine &pe, const std::string &slots, double timeoutSec) {
-  const std::string pr = pe.call("\"op\":\"cache\",\"action\":\"preload\",\"pin\":\"add\",\"patches\":[{\"slots\":[" +
-                                 slots + "]}]", timeoutSec);
+std::string loadSong(ProbeEngine &pe, const std::string &slots, double timeoutSec, bool preload = true) {
+  const std::string pr =
+      !preload ? std::string("\"ok\":true")
+               : pe.call("\"op\":\"cache\",\"action\":\"preload\",\"pin\":\"add\",\"patches\":[{\"slots\":[" + slots +
+                             "]}]",
+                         timeoutSec);
   if (pr.empty() || !contains(pr, "\"ok\":true")) {
     return "cache preload: " + (pr.empty() ? "no reply within " + num(timeoutSec, 0) + " s" : pr.substr(0, 300));
   }
@@ -225,6 +228,27 @@ std::string loadSong(ProbeEngine &pe, const std::string &slots, double timeoutSe
   const std::string c = pe.call("\"op\":\"commit\",\"token\":" + std::to_string(token));
   if (!contains(c, "\"committed\":true")) return "commit: " + (c.empty() ? std::string("no reply") : c.substr(0, 300));
   return {};
+}
+
+/**
+ * --no-preload: polls `get sampleStatus` for the song until every sampler slot reports loaded. "" when loaded, else
+ * the error (the caller records it and goes on, so the report shows what a cold song plays: 0 voices before CORE1).
+ */
+std::string waitSamples(ProbeEngine &pe, const std::string &slots, double timeoutSec, double *seconds) {
+  const auto t0 = Clock::now();
+  const auto end = t0 + std::chrono::duration<double>(timeoutSec);
+  std::string last;
+  while (Clock::now() < end) {
+    last = pe.call("\"op\":\"get\",\"what\":\"sampleStatus\",\"patches\":[{\"slots\":[" + slots + "]}]");
+    if (contains(last, "\"loaded\":[true]")) {
+      *seconds = std::chrono::duration<double>(Clock::now() - t0).count();
+      return {};
+    }
+    sleepSec(0.05);
+  }
+  *seconds = std::nan("");
+  return "samples not loaded " + num(timeoutSec, 0) + " s after a cold commit (no cache preload): " +
+         (last.empty() ? std::string("no sampleStatus reply") : last.substr(0, 200));
 }
 
 /** One batch of note-ons (each sounds in every slot of the song). */
@@ -406,9 +430,16 @@ bool runProbe(const ProbeOptions &o, std::string *json, std::string *err) {
                         "{\"instrument\":" + instrumentJson("synth", "strings") + ",\"gain\":0.3}," +
                         "{\"instrument\":" + instrumentJson("synth", "sub-bass") + ",\"gain\":0.3}";
     if (!o.buffers.empty()) {
-      const std::string e = loadSong(pe, slots, o.prepareTimeoutSeconds);
+      const std::string e = loadSong(pe, slots, o.prepareTimeoutSeconds, o.preload);
       if (!e.empty()) errors.push_back("typical song: " + e);
       typicalLoaded = e.empty();
+      double sec = 0;
+      if (typicalLoaded && !o.preload) {
+        if (std::string w = waitSamples(pe, slots, o.prepareTimeoutSeconds, &sec); !w.empty())
+          errors.push_back("typical song: " + w);
+        else
+          say(v, "typical song: samples loaded %.2f s after a cold commit", sec);
+      }
     }
   }
   bool d2Measured = false, d2Safe = false;
@@ -473,11 +504,19 @@ bool runProbe(const ProbeOptions &o, std::string *json, std::string *err) {
       for (int i = 0; i < 16; ++i) {
         slots += (i ? "," : "") + ("{\"instrument\":" + instrumentJson(kind, id) + ",\"gain\":0.2}");
       }
-      std::string e = loadSong(pe, slots, o.prepareTimeoutSeconds);
+      std::string e = loadSong(pe, slots, o.prepareTimeoutSeconds, o.preload);
       if (e.empty() && !contains(pe.call(R"("op":"config","polyphony":128,"voiceLimit":0)"), "\"ok\":true")) {
         e = "config polyphony 128 / voiceLimit 0 refused";
       }
       std::string kj = str(kind) + ":{\"instrument\":" + str(id);
+      if (e.empty() && !o.preload && kind == "sampler") {  // --no-preload: the cold song's samples, via the pump
+        double sec = std::nan("");
+        if (std::string w = waitSamples(pe, slots, o.prepareTimeoutSeconds, &sec); !w.empty())
+          errors.push_back(kind + " sweep: " + w);  // recorded; the sweep runs and shows what plays (0 voices)
+        else
+          say(v, "%s %s: samples loaded %.2f s after a cold commit", kind.c_str(), id.c_str(), sec);
+        kj += ",\"samples_loaded_sec\":" + num(sec, 3);
+      }
       if (!e.empty()) {
         errors.push_back(kind + " sweep: " + e);
         kindsJson += (ki ? "," : "") + kj + ",\"error\":" + str(e) + "}";
@@ -606,7 +645,8 @@ bool runProbe(const ProbeOptions &o, std::string *json, std::string *err) {
   const AudioStats fin = host.stats();
   const double total = std::chrono::duration<double>(Clock::now() - tStart).count();
   *json = "{\"tool\":\"rig-probe\",\"schema\":1,\"core\":" + str(rig_version_string()) +
-          ",\"backend\":" + str(host.backendName()) + ",\"muted\":true,\"device\":{\"name\":" + str(fin.deviceName) +
+          ",\"backend\":" + str(host.backendName()) + ",\"muted\":true,\"preload\":" + (o.preload ? "true" : "false") +
+          ",\"device\":{\"name\":" + str(fin.deviceName) +
           ",\"sample_rate\":" + num(fin.sampleRate, 0) + ",\"core_audio\":" + halJson + "},\"buffers\":" +
           buffersJson + ",\"d2_64_frames\":{\"measured\":" + (d2Measured ? "true" : "false") +
           ",\"safe\":" + (d2Measured ? (d2Safe ? "true" : "false") : "null") + ",\"reason\":" + str(d2Reason) +

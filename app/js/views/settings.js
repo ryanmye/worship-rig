@@ -82,6 +82,7 @@ export const SECTION_ALIASES = Object.freeze({
   theme: 'appearance', themes: 'appearance', light: 'appearance', chips: 'perform', 'perform-view': 'perform',
   backup: 'backups', import: 'backups', export: 'backups', restore: 'backups',
   output: 'audio', latency: 'audio', polyphony: 'voices', buffer: 'voices', voicelimit: 'voice-limit',
+  dronefreeze: 'drone-freeze', 'freeze-drone': 'drone-freeze',
   metronome: 'click', 'midi-clock': 'click', touch: 'midi', pedal: 'midi',
   'computer-keyboard': 'keyboard', 'midi-learn': 'learn', 'my-pads': 'pads', 'my-samples': 'samples',
   garageband: 'samples', menu: 'menubar', 'menu-bar': 'menubar', hotkeys: 'menubar', shortcuts: 'menubar',
@@ -514,6 +515,18 @@ export function mountSettings(el, ctx) {
     text: 'Voices, buffer size and the voice limit apply with the 2.0 engine.' });
   const bufInfo = h('span.st-status.st-buffer-info', { 'data-testid': 'setting-buffer-granted' });
   const limitInfo = h('span.st-status.st-limit-info', { 'data-testid': 'setting-voice-limit-effective' });
+  // UIB (native DECISIONS D5): settings.droneFreeze, absent = on (1.x: in low-resource mode the drone plays a short
+  // frozen loop instead of the live synth). The controller sends it to the 2.0 engine only; the web engine always
+  // freezes in low-resource mode, so there the row says it applies with the 2.0 engine.
+  const freezeTog = C.toggle({ label: 'Freeze', onChange: (v) => store.set('settings.droneFreeze', !!v) });
+  freezeTog.el.dataset.bind = 'settings.droneFreeze';
+  freezeTog.el.dataset.testid = 'setting-drone-freeze';
+  comps.push(freezeTog);
+  const applyFreeze = (st) => freezeTog.set(st.droneFreeze !== false);
+  settingBinds.push({ key: 'droneFreeze', apply: applyFreeze });
+  applyFreeze(S());
+  const freezeInfo = h('span.st-status.st-freeze-info', { 'data-testid': 'setting-drone-freeze-note',
+    text: 'With the 2.0 engine' });
   /** @param {object} st controller.status */
   function renderSound2(st = controller.status || {}) {
     const a = st.audioConfig || {};
@@ -521,7 +534,8 @@ export function mountSettings(el, ctx) {
     engineNote.hidden = native;
     const want = sound2Of(S());
     const got = native && Number.isFinite(a.bufferFrames) ? a.bufferFrames : null;
-    const rate = Number(engine?.ctx?.sampleRate) || 48000;
+    // Settings review item 4 (UIB): the rate comes with the engine's report (controller.status), not engine.ctx
+    const rate = Number(a.sampleRate) || 48000;
     const ms = Number(st.latencyMs) || 0;
     // D2: the OS may round the request (iPad), so the line shows what the device actually runs at
     setText(bufInfo, got === null ? ''
@@ -530,6 +544,7 @@ export function mountSettings(el, ctx) {
     const eff = native && Number.isFinite(a.voiceLimitEffective) ? a.voiceLimitEffective : null;
     setText(limitInfo, eff === null || want.voiceLimit !== 'auto' ? '' : eff === 0 ? 'Auto: no limit here'
       : `Auto: ${eff} voices on this device`);
+    freezeInfo.hidden = native;
   }
   for (const key of ['bufferFrames', 'voiceLimit']) settingBinds.push({ key, apply: () => renderSound2() });
 
@@ -560,9 +575,13 @@ export function mountSettings(el, ctx) {
     'All sounds together, so the audio never falls behind. Auto suits this device.');
   // review: open({section:'voice-limit'}) lands on this row (and opens Advanced), not on Voices and buffer
   limitRow.dataset.section = 'voice-limit';
+  const freezeRow = row('Freeze drone to save CPU', h('div.st-inline', {}, freezeTog.el, freezeInfo),
+    'In low-resource mode the drone plays a short recorded loop instead of the live synth. Off: always live.');
+  freezeRow.dataset.section = 'drone-freeze';
   advanced('sound',
     row('Mono output', tog('monoOutput', 'Mono').el, 'For a single speaker or a mono PA feed.'),
     limitRow,
+    freezeRow,
     row('Record the click', clickRec.el, 'Off: recordings have the music only.'),
   );
 

@@ -25,6 +25,7 @@ void usage() {
       "  --settle S            seconds after a device open / chord before measuring (default 0.5)\n"
       "  --step-settle S       seconds after a sweep step's note-ons before measuring (default 0.4)\n"
       "  --quick               --seconds 3 --step-seconds 0.5 (about a minute)\n"
+      "  --no-preload          load songs cold: prepare + commit without `cache preload` (mackit O1 check)\n"
       "  --quiet               no progress lines\n",
       stderr);
 }
@@ -121,6 +122,8 @@ int main(int argc, char **argv) {
     } else if (a == "--quick") {
       o.bufferSeconds = 3;
       o.stepSeconds = 0.5;
+    } else if (a == "--no-preload") {
+      o.preload = false;
     } else if (a == "--quiet") {
       o.verbose = false;
     } else if (a == "-h" || a == "--help") {

@@ -36,6 +36,9 @@ struct ProbeOptions {
   double targetFraction = 0.60;                // D4: the render at or under ~60 % of the quantum
   double stopFraction = 0.80;                  // the sweep stops once p99 is above this share of the period
   double prepareTimeoutSeconds = 120.0;        // a sampler prepare decodes the whole instrument first
+  // CORE1 test hook (mackit O1): false = load each song cold, prepare + commit with no `cache preload`, then wait for
+  // `get sampleStatus` (the realtime control loop must pump the cache). A timeout is an error; the sweep still runs.
+  bool preload = true;
   bool verbose = true;                         // progress lines on stderr
 };
 

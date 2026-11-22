@@ -14,6 +14,18 @@
 #include "doctest.h"
 #include "rig/rig_engine.h"
 
+// T00c O4: g++ defines __SANITIZE_*__, clang answers __has_feature (as test_drone_cpu.cpp / test_wheels.cpp ask)
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+#define RIG_RT_SANITIZED 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
+#define RIG_RT_SANITIZED 1
+#endif
+#endif
+#ifndef RIG_RT_SANITIZED
+#define RIG_RT_SANITIZED 0
+#endif
+
 TEST_SUITE("realtime") {
   struct Rt {
     rig_engine *e = nullptr;
@@ -95,8 +107,10 @@ TEST_SUITE("realtime") {
     m.struct_size = sizeof m;
     CHECK(rig_get_meters(rt.e, &m) == RIG_OK);
     CHECK(m.frames >= static_cast<unsigned long long>(3 * 48000));
-#if defined(__SANITIZE_THREAD__)
-    MESSAGE("xruns under TSan (not a timing build): " << m.xruns);  // instrumented FX render runs below real time
+#if RIG_RT_SANITIZED
+    // T00c O4: instrumented renders (TSan, ASan) are not a timing build: under `ctest -j2` the ASan build overran 14
+    // times with no defect (passes alone). Reported, not asserted; every Release / RelWithDebInfo build still checks.
+    MESSAGE("xruns under a sanitizer (not a timing build): " << m.xruns);
 #else
     CHECK(m.xruns <= 3);  // wall-clock overrun count on a shared 2-CPU box: preemption can trip it once or twice
 #endif

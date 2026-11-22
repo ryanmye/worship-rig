@@ -293,8 +293,9 @@ export function createController(o) {
     // 2.0 Sound (native DECISIONS D1, D2, D4): native = the engine takes voices / buffer / voice limit (the bridge
     // engine); the rest is what it reported (bufferFrames = granted, voiceLimitEffective = Auto's number, 0 = off;
     // null = not reported). The web engine leaves native false: the settings are stored only.
+    // UIB (Settings review item 4): sampleRate = the engine's rate, so Settings shows ms per buffer without engine.ctx
     audioConfig: { native: false, polyphony: null, bufferFrames: null, bufferRequested: null, voiceLimit: null,
-      voiceLimitEffective: null },
+      voiceLimitEffective: null, sampleRate: null },
   };
   function setStatus(patch) {
     let changed = false;
@@ -1735,9 +1736,18 @@ export function createController(o) {
     return false;
   }
 
-  /** New AudioContext + graph (engine re-applies its state). A running take is split into a new file. */
+  /**
+   * New AudioContext + graph (engine re-applies its state). A running take is split into a new file. A restart asked
+   * for while one runs is not dropped (Settings review item 1, UIB): it runs once more right after, so a buffer /
+   * latency pick that lands after the first request went out still reaches the engine.
+   */
+  let restartAgain = false;
   async function restartAudio(opts = {}) {
-    if (restarting || secondary) return false;
+    if (secondary) return false;
+    if (restarting) {
+      restartAgain = true;
+      return false;
+    }
     restarting = true;
     setAudio('restarting');
     const part = await stopForRestart();
@@ -1755,7 +1765,12 @@ export function createController(o) {
       afterRestart();
       emit('statechange', { state: 'restarted', auto: !!opts.auto });
       await resumeRecording(part);
+      if (restartAgain) {
+        restartAgain = false;
+        return restartAudio(opts);
+      }
     } else {
+      restartAgain = false; // a failed restart does not chain into another (the user retries, or the watchdog)
       lastT = null;
       stuckTicks = 0;
       setAudio('stalled');
@@ -2051,7 +2066,8 @@ export function createController(o) {
   function takeAudioConfig(cfg) {
     if (!cfg || typeof cfg !== 'object') return;
     const next = { ...status.audioConfig, native: true };
-    for (const k of ['polyphony', 'bufferFrames', 'bufferRequested', 'voiceLimit', 'voiceLimitEffective']) {
+    for (const k of ['polyphony', 'bufferFrames', 'bufferRequested', 'voiceLimit', 'voiceLimitEffective',
+      'sampleRate']) {
       if (k in cfg) next[k] = cfg[k] ?? null;
     }
     setStatus({ audioConfig: next });
@@ -2108,6 +2124,9 @@ export function createController(o) {
         break;
       case 'dynamicRange':
         call('setDynamicRange', s.dynamicRange ?? 1);
+        break;
+      case 'droneFreeze': // UIB (DECISIONS D5): the 2.0 engine only; the web engine always freezes in low-resource
+        optional('setDroneFreeze', s.droneFreeze !== false);
         break;
       case 'click':
         applyClickSettings(s);
@@ -2515,6 +2534,7 @@ export function createController(o) {
     applySound2('voiceLimit', s);
     if (s.monoOutput) call('setMono', true);
     if (s.dynamicRange) call('setDynamicRange', s.dynamicRange); // absent = 1, the engine's default
+    if (s.droneFreeze === false) optional('setDroneFreeze', false); // UIB (D5): absent = on, the 2.0 engine's default
     if (s.click) applyClickSettings(s); // v11-metronome: absent = the defaults the engine already has
     if (s.outputDeviceId && s.outputDeviceId !== 'default' && engine && typeof engine.setSinkId === 'function') {
       const sr = call('setSinkId', s.outputDeviceId);

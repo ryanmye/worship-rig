@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // Settings screenshots for reviews (not a test): the real app (Chrome mode) with Settings open, one PNG per category
 // at 1440×900 and 820×1180 (iPad portrait) → native/docs/reviews/settings-shots/<tag>-<category>-<w>x<h>.png.
-//   node test/phase2/settings/shots.mjs [--tag after] [--mac]
+//   node test/phase2/settings/shots.mjs [--tag after] [--mac] [--out <dir>] [--only <cat,...>] [--advanced]
 // --mac stands in a minimal fake window.rig ({isElectron:true}) so the Mac category shows. A page without category
 // tabs (the 1.x single page) is captured as consecutive scroll positions of .st-body instead (<tag>-page-<n>-…).
+// UIB: --out writes elsewhere (native/docs/reviews/<id>-shots/), --only limits the categories, --advanced opens each
+// category's Advanced disclosure and scrolls it into view before the shot.
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -14,7 +16,10 @@ import { waitRigReady, pinTheme } from '../../integration/lib.mjs';
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../../..');
-const OUT = path.join(ROOT, 'native/docs/reviews/settings-shots');
+const argOf = (k) => (process.argv.includes(k) ? process.argv[process.argv.indexOf(k) + 1] : null);
+const OUT = argOf('--out') ? path.resolve(argOf('--out')) : path.join(ROOT, 'native/docs/reviews/settings-shots');
+const ONLY = argOf('--only') ? new Set(argOf('--only').split(',')) : null;
+const ADVANCED = process.argv.includes('--advanced');
 const { createServer } = require(path.join(ROOT, 'server.js'));
 const argv = process.argv.slice(2);
 const TAG = argv.includes('--tag') ? argv[argv.indexOf('--tag') + 1] : 'after';
@@ -52,14 +57,20 @@ try {
       .filter((t) => !t.hidden).map((t) => t.dataset.cat));
     if (cats.length) {
       for (const c of cats) {
+        if (ONLY && !ONLY.has(c)) continue;
         await page.click(`#view-settings [role=tab][data-cat="${c}"]`);
-        await page.evaluate(() => {
+        await page.evaluate(({ cat, adv }) => {
           const b = document.querySelector('#view-settings .st-body');
           if (b) b.scrollTop = 0;
-        });
+          const d = adv && document.querySelector(`#view-settings details.st-adv[data-adv="${cat}"]`);
+          if (d) {
+            d.open = true;
+            d.scrollIntoView({ block: 'start' });
+          }
+        }, { cat: c, adv: ADVANCED });
         await clean();
         await page.waitForTimeout(150);
-        const file = path.join(OUT, `${TAG}-${c}-${w}x${h}.png`);
+        const file = path.join(OUT, `${TAG}-${c}${ADVANCED ? '-advanced' : ''}-${w}x${h}.png`);
         await page.screenshot({ path: file });
         written.push(file);
       }

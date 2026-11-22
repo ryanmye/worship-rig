@@ -1,7 +1,7 @@
 // Worship Rig state model + persistence (SPEC §2, REVIEW 4.9, 6.9). Pure ES module: no DOM, no Web Audio.
 //
-// State shape (schema 1):
-//   { schema:1,
+// State shape (schema 2; UIA, native DECISIONS D3):
+//   { schema:2,
 //     songs: { [id]: Song }, songOrder: [id],            // library (map + display order)
 //     setlists: { [id]: Setlist }, setlistOrder: [id],
 //     settings: Settings,                                 // SPEC §2 + setlistIndex (position in current setlist)
@@ -26,10 +26,18 @@
 //   could not be written, or a second window — setReadOnly()); onInfo(fn) reports loadInfo changes.
 // subscribe((state, changedPaths) => …) is batched per microtask; changedPaths are canonical entity paths
 // ('songs.<id>.patch.slots.1.gain', 'songs.<id>.drone.gain', 'settings.view', …).
+// Schema 2 (UIA, native DECISIONS D3): Song.patch.slots has 1..MAX_SLOTS (16) entries (a Slot, or null = an empty
+//   slot); its length is the song's slot count. Schema 1 had exactly 4, so migrate() keeps a 1.x song's 4 entries
+//   byte for byte (a schema-1 array of another length is padded / cut to 4, as 1.x did); new songs start with 4.
+//   Slot paths ('slots.<i>…') address i < that song's slot count; addSlot / removeSlot change the count (removeSlot
+//   moves later slots down and re-points wheel targets and scenes). Loading a schema-1 library that has songs first
+//   keeps a copy of it under a backup key (1.1 cannot read schema 2).
 import { mod12, transposeSemis } from './shared/music.js';
 import { isValidId as isThemeId, DEFAULT_THEME_ID } from './shared/themes.js';
 import { normalizeHotkeys } from './shared/hotkeys.js';
-import { PARAMS, clamp, describe, isValidPath, parsePath, defaultSlot, SLOT_COUNT } from './shared/params.js';
+import {
+  PARAMS, clamp, describe, isValidPath as isValidPath4, defaultSlot, SLOT_COUNT, MAX_SLOTS, slotGainIndex,
+} from './shared/params.js';
 import { normalizeTouch, PEDAL_CURVES, COMPUTER_KEYBOARD, validDynRange } from './shared/touch-curve.js';
 import { normalizeClick, validTimeSig } from './shared/click-math.js';
 import { normalizeScenes } from './shared/scenes.js';
@@ -38,7 +46,10 @@ import {
   blankSong, factoryById,
 } from './presets.js';
 
-export const SCHEMA = 1;
+// UIA: the store speaks the 2.0 song grammar (slots.0..15); which of them a song has is its patch.slots.length
+const isValidPath = (p) => isValidPath4(p, MAX_SLOTS);
+
+export const SCHEMA = 2; // UIA: 1 → 2 (1..16 slots per song, native DECISIONS D3)
 export const STORAGE_KEY = 'rig.v1';
 export const INSTRUMENT_TYPES = Object.freeze(['sampler', 'synth', 'organ']);
 export const LATENCIES = Object.freeze(['lowest', 'balanced', 'safe']);
@@ -71,6 +82,8 @@ export const DEVICE_LOCAL_SETTINGS = Object.freeze([
   // 2.0 (native DECISIONS D1, D2, D4): voices, buffer size and the voice limit are sized for this machine's CPU and
   // audio device, so an imported library never carries another Mac's (or an iPad's) choice
   'polyphony', 'bufferFrames', 'voiceLimit',
+  // UIB (DECISIONS D5): "Freeze drone to save CPU" is about this machine's CPU, like the voices above
+  'droneFreeze',
 ]);
 /** 2.0 settings.polyphony (D1): voices per sound (slot). Optional; absent = POLYPHONY_DEFAULT. */
 export const POLYPHONY_CHOICES = Object.freeze([32, 64, 128]);
@@ -401,30 +414,63 @@ export function normalizeFx(raw) {
   return out;
 }
 
-function normalizeWheel(raw, defTarget) {
+/**
+ * UIA: a wheel / pedal / volume-knob target for a song with `n` slots: presets.WHEEL_TARGETS without its four slot
+ * levels, plus 'slots.<i>.gain' for every i < n. With 4 slots that is exactly WHEEL_TARGETS (1.x).
+ * @param {*} t
+ * @param {number} [n=SLOT_COUNT]
+ * @returns {boolean}
+ */
+export function isWheelTarget(t, n = SLOT_COUNT) {
+  if (typeof t !== 'string') return false;
+  if (t.startsWith('slots.')) return slotGainIndex(t, n) !== null;
+  return WHEEL_TARGETS.includes(t);
+}
+/** A valid target for n slots: `t`, else `def`, else 'none' (a 1-slot song has no 'slots.1.gain'). */
+const wheelTarget = (t, def, n) => (isWheelTarget(t, n) ? t : isWheelTarget(def, n) ? def : 'none');
+
+function normalizeWheel(raw, defTarget, n = SLOT_COUNT) {
   const w = isObj(raw) ? raw : {};
   const out = {
-    ...w, target: oneOf(w.target, WHEEL_TARGETS, defTarget), min: num(w.min, 0, 1, 0), max: num(w.max, 0, 1, 1),
+    ...w, target: wheelTarget(w.target, defTarget, n), min: num(w.min, 0, 1, 0), max: num(w.max, 0, 1, 1),
   };
   // v11-touch: expression.curve is optional ('linear' | 'log'; absent = linear); an unknown value is dropped
   if (out.curve !== undefined && !PEDAL_CURVES.includes(out.curve)) delete out.curve;
   return out;
 }
 
-export function normalizePatch(raw) {
+/**
+ * UIA: how many slots a stored `slots` value gives a song. Schema 2: its length, 1..MAX_SLOTS (more are cut; none or an
+ * empty array = a new song's SLOT_COUNT). Schema 1 (`legacy`): always SLOT_COUNT, padded or cut as 1.x did.
+ * @param {*} slots
+ * @param {boolean} [legacy]
+ * @returns {number}
+ */
+export function slotCountOf(slots, legacy = false) {
+  if (legacy || !Array.isArray(slots) || slots.length === 0) return SLOT_COUNT;
+  return Math.min(MAX_SLOTS, slots.length);
+}
+
+/**
+ * @param {*} raw
+ * @param {{legacy?:boolean}} [o] legacy: the patch comes from a schema-1 library (exactly 4 slots)
+ * @returns {object}
+ */
+export function normalizePatch(raw, { legacy = false } = {}) {
   const p = isObj(raw) ? raw : {};
   const r = defaultRouting();
   const slots = Array.isArray(p.slots) ? p.slots : [];
   const bend = isObj(p.bend) ? p.bend : {};
   const swell = isObj(p.swell) ? p.swell : {};
   const vol = isObj(p.volume) ? p.volume : {};
+  const n = slotCountOf(p.slots, legacy);
   return {
     ...p,
-    slots: Array.from({ length: SLOT_COUNT }, (_, i) => normalizeSlot(slots[i], i)),
+    slots: Array.from({ length: n }, (_, i) => normalizeSlot(slots[i], i)),
     fx: normalizeFx(p.fx),
-    modWheel: normalizeWheel(p.modWheel, r.modWheel.target),
-    expression: normalizeWheel(p.expression, r.expression.target),
-    volume: { ...vol, target: oneOf(vol.target, WHEEL_TARGETS, r.volume.target) },
+    modWheel: normalizeWheel(p.modWheel, r.modWheel.target, n),
+    expression: normalizeWheel(p.expression, r.expression.target, n),
+    volume: { ...vol, target: wheelTarget(vol.target, r.volume.target, n) },
     bend: { ...bend, mode: oneOf(bend.mode, BEND_MODES, r.bend.mode), range: int(bend.range, 0, 24, r.bend.range) },
     swell: normalizeSwell(swell, r.swell.seconds),
   };
@@ -447,7 +493,13 @@ export function normalizeDrone(raw) {
   return out;
 }
 
-export function normalizeSong(raw, id) {
+/**
+ * @param {*} raw
+ * @param {string} [id]
+ * @param {{legacy?:boolean}} [o] legacy: from a schema-1 library (UIA: exactly 4 slots, as 1.x stored them)
+ * @returns {object|null}
+ */
+export function normalizeSong(raw, id, { legacy = false } = {}) {
   if (!isObj(raw)) return null;
   const out = { ...raw };
   out.id = typeof id === 'string' && id ? id : typeof raw.id === 'string' && raw.id ? raw.id : null;
@@ -460,11 +512,11 @@ export function normalizeSong(raw, id) {
   out.tempo = raw.tempo === null || raw.tempo === undefined ? null : num(raw.tempo, 30, 300, null);
   // v11-metronome: song.timeSig is optional (absent = 4/4); an unknown signature is dropped
   if (hasOwn(out, 'timeSig') && validTimeSig(out.timeSig) === undefined) delete out.timeSig;
-  out.patch = normalizePatch(raw.patch);
+  out.patch = normalizePatch(raw.patch, { legacy });
   out.drone = normalizeDrone(raw.drone);
   // v11-scenes: optional (absent until a scene is saved); an empty or unusable list is dropped, so migrate stays
   // idempotent
-  const scenes = normalizeScenes(raw.scenes);
+  const scenes = normalizeScenes(raw.scenes, out.patch.slots.length); // UIA: one entry per slot (at least 4)
   if (scenes) out.scenes = scenes;
   else delete out.scenes;
   return out;
@@ -563,6 +615,8 @@ function normalizeSettings(raw, songs, setlists) {
     else out.hotkeys = v;
   }
   if (hasOwn(out, 'updateCheck') && typeof out.updateCheck !== 'boolean') delete out.updateCheck;
+  // UIB (D5): settings.droneFreeze optional, absent = on (1.x behaviour); a non-boolean is dropped
+  if (hasOwn(out, 'droneFreeze') && typeof out.droneFreeze !== 'boolean') delete out.droneFreeze;
   // settings.dynamicRange: optional (absent = 1, today's sound); a bad value is dropped, 1 is stored as absent
   if (hasOwn(out, 'dynamicRange')) {
     const v = validDynRange(out.dynamicRange);
@@ -619,7 +673,9 @@ function entriesFromArray(arr, prefix) {
 }
 
 /**
- * Migrate/normalise a raw state object to schema 1. Idempotent; unknown fields are preserved.
+ * Migrate/normalise a raw state object to schema 2. Idempotent; unknown fields are preserved.
+ * Schema 1 → 2 (UIA): every song keeps its 4 slots exactly as 1.x normalised them (`legacy`); nothing else changes.
+ * A state without `schema` (hand-written files, the store's own drafts) is read as the current schema.
  * @param {object} raw
  * @returns {object} normalised (not frozen) state
  * @throws {FutureSchemaError} schema newer than SCHEMA; {TypeError} not a state object
@@ -629,13 +685,14 @@ export function migrate(raw) {
   const schema = raw.schema === undefined ? SCHEMA : raw.schema;
   if (typeof schema !== 'number' || !Number.isFinite(schema)) throw new TypeError('migrate: bad schema');
   if (schema > SCHEMA) throw new FutureSchemaError(schema);
+  const legacy = schema < 2;
   const out = { ...raw, schema: SCHEMA };
   // songs: map (array accepted for hand-written files)
   const songs = {};
   const srcSongs = Array.isArray(raw.songs) ? entriesFromArray(raw.songs, 'song') : isObj(raw.songs) ? raw.songs : {};
   for (const [id, s] of Object.entries(srcSongs)) {
     if (!id || id === 'undefined' || isReservedKey(id)) continue;
-    const n = normalizeSong(s, id);
+    const n = normalizeSong(s, id, { legacy });
     if (n) songs[id] = n;
   }
   out.songs = songs;
@@ -660,7 +717,7 @@ export function migrate(raw) {
   return out;
 }
 
-/** Empty (unseeded) schema-1 state. */
+/** Empty (unseeded) state at the current SCHEMA. */
 export function emptyState(now = Date.now()) {
   return migrate({ schema: SCHEMA, songs: {}, setlists: {}, settings: {}, meta: { factorySeeded: false, createdAt: now } });
 }
@@ -1032,7 +1089,7 @@ export function createStore(opts = {}) {
         // keyboards: device names may contain dots, so only the whole map is a path (store.setKeyboard)
         const whole = k === 'theme' || k === 'audioSleepSec' || k === 'hotkeys' || k === 'updateCheck'
           || k === 'keyboards' || k === 'click' || k === 'midiClockOut' || k === 'dynamicRange'
-          || hasOwn(SOUND_2_CHOICES, k);
+          || k === 'droneFreeze' || hasOwn(SOUND_2_CHOICES, k);
         return hasOwn(SETTINGS_VALIDATORS, k) || whole ? null : { segs, value: clone(value) };
       }
       // themes-setup: an unknown theme id is stored as the default (never an error, never a dead id)
@@ -1054,6 +1111,10 @@ export function createStore(opts = {}) {
         return v === null ? null : { segs, value: v };
       }
       if (k === 'updateCheck') return typeof value === 'boolean' ? { segs, value } : null;
+      if (k === 'droneFreeze') { // UIB (D5): a boolean; null = back to the default (absent = on)
+        if (value === null || value === undefined) return { segs, value: undefined };
+        return typeof value === 'boolean' ? { segs, value } : null;
+      }
       if (k === 'dynamicRange') {
         if (value === null || value === undefined) return { segs, value: undefined };
         const v = validDynRange(value); // a number, clamped to 1..3; 1 = absent (today's sound)
@@ -1101,9 +1162,11 @@ export function createStore(opts = {}) {
     if (rest.length === 0) return { segs, value: normalizePatch(value) };
     const [k, a, b, ...more] = rest;
     if (k === 'slots') {
+      // UIA: a whole slots array sets the slot count too (1..MAX_SLOTS); wheel targets past it go back to default
       if (rest.length === 1) return Array.isArray(value) ? { segs, value: normalizePatch({ ...song.patch, slots: value }).slots } : null;
       const i = Number(a);
-      if (!Number.isInteger(i) || i < 0 || i >= SLOT_COUNT || String(i) !== a) return null;
+      // UIA: only the song's own slots (addSlot / removeSlot change how many it has)
+      if (!Number.isInteger(i) || i < 0 || i >= song.patch.slots.length || String(i) !== a) return null;
       if (rest.length === 2) return { segs, value: value === null ? null : normalizeSlot(value, i) ?? INVALID };
       const slot = song.patch.slots[i];
       if (!slot) return null;
@@ -1147,9 +1210,10 @@ export function createStore(opts = {}) {
       }
       return isValidPath(p) ? null : { segs, value: clone(value) };
     }
+    const n = song.patch.slots.length; // UIA: the targets this song has (isWheelTarget)
     if (k === 'modWheel' || k === 'expression') {
-      if (rest.length === 1) return { segs, value: normalizeWheel(value, defaultRouting()[k].target) };
-      if (a === 'target') return WHEEL_TARGETS.includes(value) ? { segs, value } : null;
+      if (rest.length === 1) return { segs, value: normalizeWheel(value, defaultRouting()[k].target, n) };
+      if (a === 'target') return isWheelTarget(value, n) ? { segs, value } : null;
       if (a === 'min' || a === 'max') return finite(value) ? { segs, value: num(value, 0, 1, 0) } : null;
       if (a === 'curve' && rest.length === 2) {
         // v11-touch: 'linear' is the default, so it is stored as absent
@@ -1159,8 +1223,8 @@ export function createStore(opts = {}) {
       return { segs, value: clone(value) };
     }
     if (k === 'volume') {
-      if (rest.length === 1) return isObj(value) && WHEEL_TARGETS.includes(value.target) ? { segs, value: { ...value } } : null;
-      if (a === 'target') return WHEEL_TARGETS.includes(value) ? { segs, value } : null;
+      if (rest.length === 1) return isObj(value) && isWheelTarget(value.target, n) ? { segs, value: { ...value } } : null;
+      if (a === 'target') return isWheelTarget(value, n) ? { segs, value } : null;
       return { segs, value: clone(value) };
     }
     if (k === 'bend') {

@@ -28,6 +28,9 @@ namespace rig {
 class Bridge;
 class MeterServiceImpl;
 class RecServiceImpl;
+namespace samples {
+class CacheServiceImpl;
+}
 
 struct MidiIn {
   std::uint64_t hostTimeNs;
@@ -135,6 +138,8 @@ class Engine final : public CommandSink {
   void drainGarbage();
   void checkWatchdog();
   void pumpRec(bool offline);
+  /** mackit O1: integrate finished sample decodes (realtime control loop; offline decodes run inline). */
+  void pumpCache();
   void hostCall(std::function<void()> fn);
   void hostCallLoop();
   void fifoRead(float *const *out, uint32_t channels, uint32_t frames, bool offline);
@@ -208,6 +213,15 @@ class Engine final : public CommandSink {
   ClockMap clock_;
   MeterServiceImpl *meterSvc_ = nullptr;  // resolved once (services never change after Model construction)
   RecServiceImpl *recSvc_ = nullptr;
+  samples::CacheServiceImpl *cacheSvc_ = nullptr;
+  /** mackit O1: the decode workers' wake (BufferCache::Config::wake) reaches wakeControl() through this link. The
+   *  workers belong to the cache service, which dies with model_, after wake_ / wakePending_ (declared later, destroyed
+   *  first): ~Engine clears `e` under `mu` before anything else, so a decode finishing during teardown wakes nobody. */
+  struct WakeLink {
+    std::mutex mu;
+    Engine *e = nullptr;
+  };
+  std::shared_ptr<WakeLink> wakeLink_;
   MidiPortTable midiPorts_;
   std::chrono::steady_clock::time_point lastTick_{}, lastStats_{};
   std::atomic<std::uint32_t> garbageFreed_{0}, endedRescans_{0};

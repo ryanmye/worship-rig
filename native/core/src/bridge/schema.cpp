@@ -59,7 +59,9 @@ constexpr ArgSpec kConfig[] = {{"mono", T::Bool, false},        {"lowResource", 
                                {"midiClock", T::Object, false},  {"when", T::Number, false},
                                {"polyphony", T::Int, false, "32|64|128"},  // T00c D1
                                {"voiceLimit", T::Enum, false, "auto|128|256|512|0"},  // D4
-                               {"droneFreeze", T::Bool, false}};                       // D5 (T16)
+                               {"droneFreeze", T::Bool, false},                        // D5 (T16)
+                               // INTERFACE-CHANGE(UIB): T12 O1 settings.dynamicRange 1..3 (Model clamps, bad -> 1)
+                               {"dynamicRange", T::Number, false}};
 constexpr ArgSpec kGet[] = {{"what", T::Enum, true, "instruments|stats|devices|sampleStatus|state"},
                             {"reload", T::Bool, false},
                             {"patches", T::Array, false}};

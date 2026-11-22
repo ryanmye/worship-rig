@@ -9,8 +9,16 @@
 import { PROTOCOL } from './link.js';
 import { isValidPath } from '../shared/params.js';
 import { chordName } from '../shared/chords.js';
+import { validDynRange } from '../shared/touch-curve.js';
 
-const MINOR = 0;
+/**
+ * hello.minor and caps as the core answers them (native/core/src/bridge/bridge.cpp opHello): minor 1 = T00c
+ * (polyphony, bufferFrames, slots16), 2 = voiceLimit (D4), 3 = droneFreeze (D5 / T16), 4 = dynamicRange (T12 O1 /
+ * UIB). T11 O7 / UI wave item 7: the mock used to answer 0; the shim does not read it, a host feature check may.
+ */
+export const MOCK_MINOR = 4;
+export const MOCK_CAPS = Object.freeze(['when', 'testVoice', 'meters', 'rta', 'polyphony', 'bufferFrames', 'slots16',
+  'voiceLimit', 'droneFreeze', 'dynamicRange', 'mock']);
 /** DECISIONS D4 'auto' per resource profile: mirrors native/core/src/inst/voice_alloc.h kAutoVoiceLimitDesktop/Ipad
  *  (provisional numbers from the Linux bench, ARCHITECTURE 7.1). */
 export const AUTO_VOICE_LIMIT = Object.freeze({ desktop: 128, ipad: 64 });
@@ -120,6 +128,13 @@ export class MockNative {
     this.profile = o.profile === 'ipad' ? 'ipad' : 'desktop';
     this.polyphony = 64;
     this.voiceLimit = 'auto';
+    // D2: audio {bufferFrames} as requested (kept across restarts, 0 / absent = the host's 128), echoed as the grant
+    // in audio replies and state events (Settings review item 3); a test can set `grantFrames` to stand in for a
+    // device that rounds the request (iPad)
+    this.bufferFrames = 128;
+    this.grantFrames = null;
+    this.droneFreeze = true; // D5 (config {droneFreeze}, default true)
+    this.dynamicRange = 1; // T12 O1 (config {dynamicRange}, 1..3, default 1)
     this.meters = { rate: 4, slots: [], rta: false };
     this.click = { running: false, counting: false, bpm: null, sig: '4/4', output: 'main', level: 0.5, record: false,
       downbeat: null };
@@ -296,7 +311,8 @@ export class MockNative {
   _state(extra = {}) {
     return {
       state: this.audio.started ? 'running' : 'suspended', sleep: this.st.sleep, latencyMs: 12,
-      sampleRate: this.sampleRate, deviceId: this.st.deviceId, channels: this.channels, ...extra,
+      sampleRate: this.sampleRate, deviceId: this.st.deviceId, channels: this.channels,
+      bufferFrames: this.grantFrames ?? this.bufferFrames, ...extra,
     };
   }
 
@@ -304,7 +320,7 @@ export class MockNative {
     if (m.protocol !== PROTOCOL) return this._fail(m, 'protocol', `protocol ${m.protocol} not supported`);
     this.helloDone = true;
     return this._reply(m.id, true, {
-      protocol: PROTOCOL, minor: MINOR, engine: 'worship-rig-core mock 0.0', caps: ['mock'],
+      protocol: PROTOCOL, minor: MOCK_MINOR, engine: 'worship-rig-core mock 0.0', caps: [...MOCK_CAPS],
       sampleRate: this.sampleRate, seed: this.seed,
     });
   }
@@ -317,6 +333,7 @@ export class MockNative {
         if (restarted) this.audio.epoch += 1;
         if (m.deviceId !== undefined) this.st.deviceId = m.deviceId || 'default';
         if (m.latency !== undefined) this.st.latency = m.latency;
+        if (m.bufferFrames !== undefined) this.bufferFrames = m.bufferFrames || 128;
         const first = !this.audio.started;
         this.audio.started = true;
         this.st.sleep = 'awake';
@@ -519,6 +536,9 @@ export class MockNative {
       this.voiceLimit = m.voiceLimit;
       Object.assign(r, this._voiceLimitFields());
     }
+    if (typeof m.droneFreeze === 'boolean') r.droneFreeze = this.droneFreeze = m.droneFreeze;
+    // bridge.cpp opConfig -> Model::setDynamicRange: validDynRange, a non-finite number = 1
+    if (typeof m.dynamicRange === 'number') r.dynamicRange = this.dynamicRange = validDynRange(m.dynamicRange) ?? 1;
     if (m.meters) {
       this.meters = {
         rate: m.meters.rate ?? this.meters.rate, slots: m.meters.slots ?? this.meters.slots,
@@ -551,7 +571,7 @@ export class MockNative {
         return this._reply(m.id, true, {
           patch: this.patch, routing: {}, transpose: 0, tempo: this.tempo, timeSig: this.click.sig, keyContext: null,
           drone: {}, mono: false, runtime: this._runtime(), click: { ...this.click }, sleep: this.st.sleep,
-          polyphony: this.polyphony, ...this._voiceLimitFields(),
+          polyphony: this.polyphony, ...this._voiceLimitFields(), dynamicRange: this.dynamicRange,
         });
       default:
         return this._fail(m, 'bad-request', `get ${m.what}`);
