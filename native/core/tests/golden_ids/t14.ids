@@ -13,3 +13,10 @@ bend-pitch-sampler
 bend-tape
 mono-legato
 panic-fadeout
+# W3A (2026-11-21): the joint T14 fixtures, promoted to exact (promote.mjs --apply --only, each one) after they passed
+# the exact tier on g++ 13 and clang++-20 (byte-identical renders): need T15 (808-sub / organ) and T16 (drone).
+auto-modwheel-cc
+scene-glide
+song-sunday-pad-piano
+song-gospel-stab-b3
+swell-pedal-drone
