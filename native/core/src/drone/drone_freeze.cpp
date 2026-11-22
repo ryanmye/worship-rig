@@ -11,6 +11,7 @@
 #include "drone/drone_core.h"
 #include "fx/reverb_unit.h"
 #include "num/js_math.h"
+#include "runtime/rt_guard.h"
 #include "time/timer.h"
 
 namespace rig::drone {
@@ -167,6 +168,7 @@ LoopResult renderDroneLoop(const LoopRequest &req) {
     out[0].assign(total, 0.0f);
     out[1].assign(total, 0.0f);
     NullEvents events;
+    events.garbage.reserve(256);  // pushed inside the render scope below: no allocation there
     Bus droneOut, send, rvOut;
     const std::size_t quanta = (total + kQ - 1) / kQ;
     for (std::size_t q = 0; q < quanta; ++q) {
@@ -179,13 +181,18 @@ LoopResult renderDroneLoop(const LoopRequest &req) {
       UnitIO io;
       io.out = &droneOut;
       io.sends[kSendReverb] = &send;
-      unit.process(ctx, io);
-      if (rv) {
-        UnitIO rio;
-        rio.in = &send;
-        rio.out = &rvOut;
-        ctx.self = UnitSlot::Reverb;
-        rv->process(ctx, rio);
+      {
+        // T04 review finding 2: every direct caller of Unit::process renders under FTZ/DAZ (as Chromium's offline
+        // rendering thread does); the scope also arms the tests' allocation trap for the unit's render path
+        rt::RenderScope scope;
+        unit.process(ctx, io);
+        if (rv) {
+          UnitIO rio;
+          rio.in = &send;
+          rio.out = &rvOut;
+          ctx.self = UnitSlot::Reverb;
+          rv->process(ctx, rio);
+        }
       }
       const std::size_t n = std::min<std::size_t>(kQ, total - q * kQ);
       for (std::size_t i = 0; i < n; ++i) {

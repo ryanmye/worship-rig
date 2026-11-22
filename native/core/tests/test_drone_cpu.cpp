@@ -1,6 +1,6 @@
 // T16: CPU of the drone unit per 128-frame quantum (44.1 kHz) on this box, printed for the report: a static synth
 // layer (3 drone-osc voices), a key-change crossfade (two layers, 7 voices), the brightness 9th (4 voices), a frozen
-// loop alone and a pad file alone. The bound is loose (a 2-CPU box shared with other builds); the numbers matter.
+// loop alone. The bound is loose (a 2-CPU box shared with other builds); the numbers matter.
 #include <chrono>
 #include <cstdio>
 #include <functional>
@@ -9,6 +9,7 @@
 #include "drone/drone_core.h"
 #include "drone/drone_unit.h"
 #include "helpers.h"
+#include "runtime/rt_guard.h"
 #include "time/timer.h"
 
 namespace {
@@ -63,7 +64,10 @@ double run(Host &h, rig::drone::DroneUnit &u, std::int64_t q0, std::int64_t quan
     send.clear(2);
     io.sends[rig::kSendReverb] = &send;
     const auto t0 = std::chrono::steady_clock::now();
-    u.process(ctx, io);
+    {
+      rig::rt::RenderScope scope;  // FTZ/DAZ as on the audio thread (T04 review finding 2); arms the allocation trap
+      u.process(ctx, io);
+    }
     us += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
   }
   return us / static_cast<double>(quanta);
@@ -73,6 +77,7 @@ double run(Host &h, rig::drone::DroneUnit &u, std::int64_t q0, std::int64_t quan
 
 TEST_SUITE("drone_cpu") {
   TEST_CASE("drone unit cost per quantum") {
+    const long alloc0 = rigtest::g_rtAllocs;
     Host h;
     rig::drone::DroneCore d(h, rig::rngFor(1, "drone"));
     rig::drone::DroneUnit u(44100, d.unitInit(-8.5));
@@ -116,5 +121,6 @@ TEST_SUITE("drone_cpu") {
 #if !defined(__SANITIZE_THREAD__) && !defined(__SANITIZE_ADDRESS__)
     CHECK(frozen < one);
 #endif
+    CHECK(rigtest::g_rtAllocs == alloc0);  // DroneUnit::process: no allocation (T16 review)
   }
 }

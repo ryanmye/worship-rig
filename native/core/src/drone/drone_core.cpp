@@ -162,6 +162,8 @@ std::optional<DroneCore::InstEntry> DroneCore::buildInst() {
       if (!(*it)->dead) continue;
       slot = (*it)->pe.slot;
       op(DroneOp::DropInst, static_cast<unsigned>(slot));
+      // T16 review: its fade-out timers still hold the layer; without a slot they leave the reused one alone
+      (*it)->pe.slot = -1;
       layers_.erase(it);
       break;
     }
@@ -497,10 +499,10 @@ void DroneCore::fadeOutLayer(const LayerP &L, double tt, double fade) {
   wa::equalPowerFade(g, from, 0, tt, fade);
   std::weak_ptr<bool> alive = alive_;
   h_.at(tt + fade + 0.02, [this, alive, L](double t2) {
-    if (alive.expired()) return;
+    if (alive.expired() || L->pe.slot < 0) return;  // slot < 0: cut by buildInst, its slot belongs to another layer
     op(DroneOp::AllOff, static_cast<unsigned>(L->pe.slot), 0, t2);  // inst.allOff(tt, 0.05) under a 0 gain
     h_.at(t2 + 0.3, [this, alive, L](double) {
-      if (alive.expired()) return;
+      if (alive.expired() || L->pe.slot < 0) return;
       layers_.erase(std::remove(layers_.begin(), layers_.end(), L), layers_.end());
       returnInst(L->pe);
     });

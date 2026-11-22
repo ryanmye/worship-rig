@@ -319,4 +319,26 @@ TEST_SUITE("drone") {
     rig_test_query(e.e, "stats", buf, sizeof buf);
     CHECK(rigtest::contains(buf, "\"rateChanges\":1"));
   }
+
+  TEST_CASE("slot pool full: a cut fading layer's timers leave its reused slot alone (T16 review)") {
+    // 30 key changes 0.1 s apart under a 6 s fade: 24 slots fill, the last 6 layers cut the oldest fading ones and
+    // take their slots; when those cut layers' fade-end timers fire (~6.1-6.9 s) the live layer must keep sounding
+    t13::Eng e;
+    droneConfig(e, R"({"mode":"synth","gain":1,"fade":6})", 0);
+    std::string log;
+    for (int i = 0; i < 30; ++i) {
+      const double t = 0.1 * i;
+      e.until(t);
+      for (const auto &m : e.msgs) log += m;
+      log += droneKey(e, i % 12, (i / 12) % 2 == 1, t);
+    }
+    e.until(9.5);
+    for (const auto &m : e.msgs) log += m;
+    const std::vector<float> d = mono(e);
+    CHECK(t13::minWindowDb(d, 7.0, 9.4) > -60);
+    const rig::drone::DroneUnit *u = service(e)->unitForTests();
+    REQUIRE(u);
+    CHECK(u->liveVoices() >= 3);
+    CHECK(rigtest::contains(log, "too many overlapping layers"));  // the cut path ran
+  }
 }

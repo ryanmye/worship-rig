@@ -52,9 +52,11 @@ rig::drone::LoopRequest request(bool wet) {
 
 TEST_SUITE("drone_freeze") {
   TEST_CASE("renderDroneLoop: 4 s loop, seamless wrap, deterministic, dry and wet") {
+    const long alloc0 = rigtest::g_rtAllocs;
     const rig::drone::LoopResult dry = rig::drone::renderDroneLoop(request(false));
     const rig::drone::LoopResult dry2 = rig::drone::renderDroneLoop(request(false));
     const rig::drone::LoopResult wet = rig::drone::renderDroneLoop(request(true));
+    CHECK(rigtest::g_rtAllocs == alloc0);  // the unit / reverb quanta render under rt::RenderScope (T16 review)
     REQUIRE(dry.buffer);
     REQUIRE(wet.buffer);
     CHECK(dry.buffer->sb.frames == 176400);
