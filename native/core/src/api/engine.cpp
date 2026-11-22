@@ -10,6 +10,8 @@
 #include "graph/test_points.h"
 #include "bridge/json_out.h"
 #include "meter/meter.h"
+#include "model/param_read.h"  // CORE2B: rig_test_query getParam:<path>
+#include "model/perform.h"  // CORE2B: tick pedal / held / runtime
 #include "num/hash_seed.h"
 #include "rec/rec.h"
 #include "samples/cache_service.h"
@@ -34,6 +36,13 @@ std::uint32_t computeSeed(const rig_config &cfg) {
   if (seed == 0 && cfg.mode == RIG_MODE_REALTIME)
     seed = static_cast<std::uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count()) | 1u;
   return seed;
+}
+
+/** CORE2B (UIC S1): hand Perform's pedal / held count to the graph's meter snapshot (rig_meters.pedal / held, for
+ *  rig_get_meters callers). Control thread (realtime) or the caller's thread (offline); one relaxed store. */
+void publishPerformMeters(Graph &g, const Model &m) {
+  const Perform &p = m.perform();
+  g.setPerformMeters(p.pedal(), static_cast<std::uint32_t>(p.held().size()));
 }
 
 }  // namespace
@@ -311,6 +320,7 @@ void Engine::controlLoop() {
     drainMidi();
     checkWatchdog();
     pumpRec(false);
+    publishPerformMeters(graph_, model_);  // CORE2B
     emitTick();
     flush();
   }
@@ -348,8 +358,12 @@ std::string Engine::buildTick(bool withStats) {
   }
   if (ms && ms->rtaOn()) j.kv("rta", ms->rtaBase64());
   j.kvRaw("blockers", model_.sleepBlockersJson());
-  j.kvBool("pedal", m.pedal != 0).kv("held", m.held);  // T14 fills the snapshot's pedal/held
-  j.kvRaw("runtime", model_.runtimeStateJson());
+  // CORE2B (UIC S1 / O2): pedal / held read from Perform here on the control thread (the snapshot's copy lags it by
+  // up to a quantum; before CORE2B nothing filled it and every tick said pedal:false, held:0); `runtime` carries
+  // `swelling` (contract 6.5 tick row)
+  const Perform &perf = model_.perform();
+  j.kvBool("pedal", perf.pedal()).kv("held", static_cast<double>(perf.held().size()));
+  j.kvRaw("runtime", perf.tickRuntimeJson());
   j.kv("cpu", m.cpu_load);
   if (latencySec_ > 0) j.kv("hostLatency", latencySec_);  // G7
   if (withStats) j.kvRaw("stats", statsJson());
@@ -394,6 +408,7 @@ void Engine::renderOne() {
     drainAudioEvents();
     drainMidi();  // T07 review O5
     timers_.runDue(graph_.frame() / Q);
+    publishPerformMeters(graph_, model_);  // CORE2B: offline, the caller's thread is the control thread
     graph_.renderQuantum(ptrs, outCh_);
     pumpRec(true);  // the offline recorder writes inline, per quantum (no threads offline)
   } else {
@@ -813,7 +828,10 @@ std::size_t Engine::testQuery(const char *what, char *buf, std::size_t cap) {
     out = statsJson();
   else if (w == "getState")
     out = model_.stateJson();
-  else
+  else if (w.rfind("getParam:", 0) == 0) {  // CORE2B: the header's documented hook, = `get param` (null = undefined)
+    const ParamRead pr = readParam(model_, std::string_view(w).substr(9));
+    out = pr.defined ? pr.json : "null";
+  } else
     out = "null";
   if (buf && cap) {
     const std::size_t n = std::min(out.size(), cap - 1);

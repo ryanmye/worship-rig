@@ -113,6 +113,10 @@ class Perform {
   std::size_t pedaledCount() const { return pedaled_.size(); }
   bool faded() const { return fadeSeq_ != 0; }
   std::string runtimeStateJson() const;
+  /** CORE2B (PARITY "UI parity" row 3, UIC O2): the tick's `runtime` (contract 6.5): runtimeStateJson plus `swelling`
+   *  (audio.js wheelValues().swelling = !!_swell; the shim answers wheelValues() from it). `get state` keeps the
+   *  audio.js getRuntimeState() shape (no swelling). */
+  std::string tickRuntimeJson() const;
   /** `_debugStats` members: sounding, pedaled, audioSleep, lastWake. */
   void statsFields(std::string &out) const;
   /** Audio sleep / wake and the perform queue while not awake (model/sleep.h, W3A). */

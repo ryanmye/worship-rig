@@ -41,13 +41,13 @@ test('contract (Settings review item 2): the native-only Sound setters and setDy
   assert.doesNotMatch(surface, /'setPolyphony', 'setVoiceLimit', 'setBufferFrames'/);
 });
 
-test('hello: the mock answers minor and caps as the core does (minor 4: dynamicRange; 3: droneFreeze)', async () => {
+test('hello: the mock answers minor and caps as the core does (5: getParam; 4: dynamicRange; 3: droneFreeze)', async () => {
   const r = rig();
   const h = await r.engine._hello;
   assert.equal(h.minor, MOCK_MINOR);
-  assert.equal(MOCK_MINOR, 4);
+  assert.equal(MOCK_MINOR, 5); // CORE2B: get {what:'param'}
   assert.ok(h.minor >= 3, 'droneFreeze is minor 3');
-  for (const c of ['polyphony', 'bufferFrames', 'slots16', 'voiceLimit', 'droneFreeze', 'dynamicRange']) {
+  for (const c of ['polyphony', 'bufferFrames', 'slots16', 'voiceLimit', 'droneFreeze', 'dynamicRange', 'getParam']) {
     assert.ok(h.caps.includes(c), c);
   }
   assert.deepEqual(h.caps, [...MOCK_CAPS]);

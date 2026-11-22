@@ -43,6 +43,7 @@ struct SamplerService::Load {
   std::uint32_t instSeq = 0;
   int channel = 0;
   int pending = 0;
+  std::uint64_t commitsAtBuild = 0;  // CORE2A: SamplerService::commits_ when the unit was built
   bool issued = false, cancelled = false;
   std::string name;
   std::vector<std::pair<int, int>> layers;  // lo, hi (def order: sorted by lo)
@@ -67,6 +68,7 @@ SamplerService::~SamplerService() {
   leases_->detach();
   for (auto &ld : loads_) ld->cancelled = true;
   loads_.clear();
+  unattached_.clear();
 }
 
 SamplerService *SamplerService::forEnv(const UnitEnv *env) {
@@ -124,6 +126,10 @@ void SamplerService::finish(const std::shared_ptr<Load> &ld) {
     for (auto &e : ld->entries) leases_->release(e.buf), e.buf = nullptr;
     return;
   }
+  if (ld->commitsAtBuild == commits_) {  // CORE2A: its unit is not attached yet (prepared, not committed)
+    unattached_.push_back(ld);
+    return;
+  }
   SamplerZones *z = makeTable(*ld, true);
   ++lateTables_;
   m_.sendOwned(instSlot(static_cast<std::size_t>(ld->channel)), opOf(SamplerOp::Zones), z, -1.0, ld->instSeq);
@@ -159,6 +165,7 @@ Unit *SamplerService::build(const UnitEnv &env, const UnitSpec &spec) {
   // newer unit is rejected by instSeq (SamplerOp::Zones) and comes back as Garbage; onCommit cancels the loads of
   // channels that no longer hold a sampler.
   auto ld = std::make_shared<Load>();
+  ld->commitsAtBuild = commits_;
   ld->instSeq = spec.instSeq;
   ld->channel = spec.channel;
   ld->name = d->name;
@@ -215,6 +222,22 @@ void SamplerService::onCommit(const PatchSpec &patch, double when) {
   for (auto &ld : loads_) {
     const auto ch = static_cast<std::size_t>(ld->channel);
     if (ch >= slots || !patch.slots[ch].present || patch.slots[ch].instType != "sampler") ld->cancelled = true;
+  }
+  // CORE2A: the units of this commit are attached now. Tables of loads that finished before go out at the commit's
+  // time (after its AttachUnit commands); one whose unit was not part of this commit (a superseded prepare) is
+  // refused by instSeq and comes back as Garbage.
+  ++commits_;
+  std::vector<std::shared_ptr<Load>> done;
+  done.swap(unattached_);
+  for (auto &ld : done) {
+    const auto ch = static_cast<std::size_t>(ld->channel);
+    if (ch >= slots || !patch.slots[ch].present || patch.slots[ch].instType != "sampler") {
+      for (auto &e : ld->entries) leases_->release(e.buf), e.buf = nullptr;
+      continue;
+    }
+    SamplerZones *z = makeTable(*ld, true);
+    ++lateTables_;
+    m_.sendOwned(instSlot(ch), opOf(SamplerOp::Zones), z, when, ld->instSeq);
   }
   // audio.js _effWidth: the strip's effective width is the slot width x the instrument's widthDefault, set on a
   // fresh channel at the commit instant (setWidth(.., t, true))

@@ -14,6 +14,7 @@
 // on the control thread. Buffers handed out by acquire() stay valid until released AND the graph passed the epoch
 // given to release() (graph/epoch.h): evicted buffers wait in a graveyard until then.
 #pragma once
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -138,6 +139,10 @@ class BufferCache final : public BufferCacheApi {
    *  returns) with the buffer, or null on failure. With `takeRef` the callback's buffer carries a reference (JS
    *  `acquire(url, ctx, midi, owner, opts)`): release() it. */
   void requestJob(const SampleJob &job, int priority, bool takeRef, Ready ready);
+  /** CORE2A: `done` runs (control thread) once none of `keys` is in flight any more: at once when none is, else from
+   *  the pump() that integrates the last of them (after their other waiters). Requests nothing and takes no
+   *  reference. Used to answer `prepare` when the new song's samples are decoded (audio.js prepare awaits them). */
+  void whenSettled(const std::vector<std::string> &keys, std::function<void()> done);
   /** Drain finished decodes (control thread; call when `wake` fired, or each loop turn). Returns how many. */
   std::size_t pump();
   /** Decodes submitted and not yet integrated. */
@@ -239,6 +244,15 @@ class BufferCache final : public BufferCacheApi {
   JobRunner *runner_;
   std::unordered_map<std::string, std::unique_ptr<Stored>> entries_;
   std::map<std::string, std::vector<Waiter>> inflight_;  // key -> waiters
+  // CORE2A: the decode job of each key in flight. A later request for a key whose job no worker has taken yet posts
+  // the same job again at its own priority (the pool runs the newest first): the first copy a worker takes claims
+  // the decode, any other copy returns at once. So the newest song switch / preload is never queued behind an
+  // older request of the same key.
+  struct Queued {
+    std::shared_ptr<std::atomic<bool>> claimed;
+    std::function<void()> work;
+  };
+  std::map<std::string, Queued> queued_;
   std::set<std::string> pinned_;
   std::map<std::string, Failure> failed_;
   std::map<std::string, double> sizes_;  // stored bytes per key, kept after eviction

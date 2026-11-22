@@ -66,6 +66,11 @@ class SamplerService final : public Service {
   Model &m_;
   std::shared_ptr<SamplerLeases> leases_;
   std::vector<std::shared_ptr<Load>> loads_;  // decodes still in flight (realtime)
+  // CORE2A: loads that finished before their unit was attached (a prepared unit is attached at commit: a table sent
+  // to its slot before then reached the old unit, was refused by instSeq, and the new sampler kept its partial
+  // table for good). They are sent at the next commit, at the commit's time, after its AttachUnit commands.
+  std::vector<std::shared_ptr<Load>> unattached_;
+  std::uint64_t commits_ = 0;
   std::uint64_t built_ = 0, lateTables_ = 0;
 };
 

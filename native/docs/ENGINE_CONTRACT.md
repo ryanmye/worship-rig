@@ -92,6 +92,7 @@ E = `views/components/eq-keyboard.js`, R = `recorder.js`, K = `midi-clock.js`, V
 | member | signature / units | returns | sync | effect | callers |
 |---|---|---|---|---|---|
 | `setParam(path, value, {when, glide=0})` | path grammar 2.1; value per row; glide s (scenes: `slots.<i>.gain`, `drone.gain` only) | boolean (false = unknown path, warned once; or slot empty) | sync | stores into the engine's patch even before start; smoothing per row (2.3). Never throws. `audio.js:1100-1219` | C (diff, scenes with `{glide: 0.5}` = `SCENE_GLIDE_SEC`, `shared/scenes.js:20`) |
+| `getParam(path)` | path grammar 2.1 | the value the engine holds, PARAMS value space (number, boolean, enum name, `'natural'`); `undefined` for an invalid path, an empty slot or an unset optional row (`release`) | sync | CORE2B (minor 5; was not contract, "tests only"): what audio.js reads from its own patch: slot rows from the committed song as `setParam` left them (clamped), slot EQ b-rows resolved (`resolveSlotEq`), instrument params stored or the catalogue default, `drone.*` from the live drone. Bridge: `get {what:'param', path}`; the shim answers synchronously from a mirror (6.6). `audio.js:1221` | tests (`test/phase2/ui-core` `__t.param`) |
 | `setTranspose(semis)` | integer −48..48 (rounded, clamped) | — | sync | song transpose; evaluated at the next noteOn (held notes keep their pitch). `audio.js:1681` | C |
 | `setRouting(r, {when})` | `{modWheel?, expression?, volume?, bend?, swell?}` (2.2) | — | sync | merges (sub-objects replaced), neutralises the old bend mode on a mode change, wheels τ 30 ms, pedal swell sync. `audio.js:1762` | C |
 | `setTempo(bpm)` | > 0 or null | — | sync | delay sync time (`updateTime`), metronome retime from its next free beat; no tempo stops a running click. `audio.js:1685` | C |
@@ -176,7 +177,7 @@ the controller's `getCtx`).
 ### 1.7 Exists but is NOT part of the contract
 
 Test/tool hooks (keep in the native *test* API, not in the bridge): `at(when, cb)` (31 test files; the golden
-renderer needs an equivalent: timed script entries), `getParam`, `getState`, `applyState` (restart-internal),
+renderer needs an equivalent: timed script entries), `getState`, `applyState` (restart-internal),
 `heldChord`, `activeNotes`, `quietFor`, `slotTapCount`, `offline`, `dispose`, `_setDroneFreezeOptions`,
 `_droneFreezeEnv`, `_teardown`, `_slotTouch`, `_sampleJobs`, `_rewarmPins`, `_trimReverbUnits`, `_disposeChannel`,
 `_factorFor` (mirrored in `perform.js:90`, not called). Unused by anyone: event `stats`, `swapTo`, `registry` methods
@@ -620,7 +621,9 @@ and still forwards each message flagged `handled` so the UI, learn and activity 
 `hello` must be the first message; native replies `{protocol: 1, minor, engine: 'worship-rig-core <semver>', caps:
 [...], sampleRate, seed}`. Rules: unknown fields are ignored both ways; additive changes bump `minor` and add a
 capability string (minor 1 = T00c `polyphony` / `bufferFrames` / `slots16`, 2 = `voiceLimit`, 3 = `droneFreeze`,
-4 = `dynamicRange`); a breaking change bumps `v`; a native that receives another `v` replies `{ok:false, error:{code:
+4 = `dynamicRange`, 5 = `getParam`: `get {what:'param'}`, CORE2B; a minor-5 core also has CORE2A's timing, no
+shape change: `cache preload` answered without blocking the control loop, a realtime `prepare` answered once its
+samples are decoded); a breaking change bumps `v`; a native that receives another `v` replies `{ok:false, error:{code:
 'protocol'}}` and ignores the message; the JS shim refuses a major mismatch (the app shows the engine as
 unavailable). Error codes: `protocol`, `bad-request` (schema), `unknown-op`, `unknown-param`, `not-started`,
 `stale-token`, `superseded`, `decode` (sample/pad file), `device` (audio device open/route), `unsupported` (cap
@@ -661,7 +664,7 @@ texts where `main.js` matches them (`engine.<name> failed`, `No pad file for <ke
 | `play` | `{e:'on', n, vel, touch?}` \| `{e:'off', n}` \| `{e:'pedal', down}` \| `{e:'wheel', src:'mod'\|'expr'\|'vol'\|'virtual', value, glide?}` \| `{e:'bend', x}` \| `{e:'swell', start?}` \| `{e:'panic'}` \| `{e:'fade', seconds?}` \| `{e:'input'}` — each with optional `when` | `{ok: bool}` | `noteOn/noteOff/sustain/modWheel/expression/volumeCC/setWheel/pitchBend/swell/allNotesOff/fadeOutAll/noteInput` |
 | `click` | `{action:'start'\|'stop'\|'config', countIn?, quietAfter?, level?, record?, output?, when?}` | start `{t0, downbeat}\|null`; stop `{wasRunning}`; config `{output, auxAvailable}` | `clickStart`, `clickStop`, `setClick` |
 | `config` | `{mono?, lowResource?, eqAudition?:{slot, mode}, meters?:{rate?, slots?:[i…], rta?: bool}, midiClock?:{port: id\|null}, polyphony?: 32\|64\|128, voiceLimit?: 'auto'\|128\|256\|512\|0, droneFreeze?: bool, dynamicRange?: number}` (T00c, D1: voices per slot, default 64; D4: total voices, 0 = off, default 'auto'; D5 / T16: `droneFreeze` true (default) = the drone plays a frozen loop while `lowResource` is on, as 1.x; false = always the live drone; T12 O1 / UIB, minor 4, capability `dynamicRange`: `settings.dynamicRange` 1..3, default 1, clamped and rounded to 0.01 like `validDynRange` (a non-finite number = 1, a non-number = `bad-request`), kept for samplers built later) | `{lowResource?, eqAudition?: bool, polyphony?, voiceLimit?, voiceLimitEffective?, droneFreeze?, dynamicRange?}` | `setMono`, `setLowResource`, `eqAudition`, meter/slot-tap/RTA subscriptions, `setClockSink`, `setDynamicRange`, the native-only Sound setters |
-| `get` | `{what:'instruments', reload?: bool}` \| `{what:'stats'}` \| `{what:'devices'}` \| `{what:'sampleStatus', patches}` \| `{what:'state'}` | instruments `[entry + range?]`; stats `_debugStats`; devices `[{id, name, channels, default, sampleRates}]`; sampleStatus `{loaded: bool[], failed: bool[]}`; state `{patch, routing, transpose, tempo, timeSig, keyContext, drone, mono, runtime, click, sleep}` (+ native `polyphony`, `voiceLimit`, `voiceLimitEffective`: D1, D4; `dynamicRange`) | `listInstruments`, `reloadManifests`, `_debugStats`, `enumerateDevices`, `cache`/`registry` reach-in, `getState` |
+| `get` | `{what:'instruments', reload?: bool}` \| `{what:'stats'}` \| `{what:'devices'}` \| `{what:'sampleStatus', patches}` \| `{what:'state'}` \| `{what:'param', path}` (CORE2B, minor 5) | instruments `[entry + range?]`; stats `_debugStats`; devices `[{id, name, channels, default, sampleRates}]`; sampleStatus `{loaded: bool[], failed: bool[]}`; state `{patch, routing, transpose, tempo, timeSig, keyContext, drone, mono, runtime, click, sleep}` (+ native `polyphony`, `voiceLimit`, `voiceLimitEffective`: D1, D4; `dynamicRange`); param `{path, value?}` (`value` absent = undefined; a path outside the grammar = `unknown-param`, no `path` = `bad-request`) | `listInstruments`, `reloadManifests`, `_debugStats`, `enumerateDevices`, `cache`/`registry` reach-in, `getState`, `getParam` |
 | `midi` | `{action:'listen', ids:[…]}` \| `{action:'route', on, learn:{…}, pedalInvert, velocitySens, touch:{deviceName: spec}, jitterFree?}` \| `{action:'send', port, data, when?}` | `{ports?}` | Web MIDI access (`midi.js` adapter), the direct perform path |
 | `rec` | `{action:'start', dir?, filename?, bits?: 16}` \| `{action:'stop'}` | start `{path}`; stop `{path, seconds, bytes}` | `recordTap` + `recorder.js` worklet/sinks |
 
@@ -692,7 +695,11 @@ on `load {phase:'instruments'}`), `wheelValues`/`getRuntimeState`/`pedal`/`sleep
 peak at index 0 and zeros elsewhere — enough for `meter.js`; `getFloatFrequencyData` decodes the RTA, subscribing on
 the first read and unsubscribing after 2 s without one), `ctx` facade (`state`, `currentTime` per 6.3, `sampleRate`,
 `baseLatency`/`outputLatency` from `latencyMs`, `resume()` → `audio start|wake`), `applyRuntimeState` (no-op: native
-state survives device restarts), `drone.cfg/key/files` (mirrors of what was sent).
+state survives device restarts), `drone.cfg/key/files` (mirrors of what was sent), `getParam` (CORE2B: a mirror;
+per path, the core's last `get param` answer unless a later `setParam` of that path or a `commit` overtook it,
+else the shim's own PARAMS-clamped `setParam` value since the last commit, else the committed patch
+(`engine-bridge/param-read.js`); a read that is not a core answer sends one `get param`, queued behind the pending
+`set`s, so the next read returns the core's value; `drone.configure` drops the `drone.*` entries).
 
 ---------------------------------------------------------------------------------------------------------------------
 

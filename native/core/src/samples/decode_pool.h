@@ -13,7 +13,8 @@ namespace rig::samples {
 class JobRunner {
  public:
   virtual ~JobRunner() = default;
-  /** Lower `priority` first (0 = song switch, 1 = preload, 2 = re-warm). */
+  /** Lower `priority` first (0 = song switch, 1 = preload, 2 = re-warm); within a priority the NEWEST job first
+   *  (CORE2A: the latest song switch / preload supersedes older ones still queued, which run after it). */
   virtual void post(int priority, std::function<void()> job) = 0;
   /** True when post() runs the job before returning (offline mode, tests). */
   virtual bool inlineMode() const = 0;
@@ -38,7 +39,9 @@ class ThreadPool final : public JobRunner {
   void loop();
   mutable std::mutex m_;
   std::condition_variable cv_;
-  std::multimap<int, std::function<void()>> q_;
+  // key (priority, -sequence): begin() = the lowest priority, newest first (CORE2A)
+  std::map<std::pair<int, long long>, std::function<void()>> q_;
+  long long seq_ = 0;
   std::size_t running_ = 0;
   bool stop_ = false;
   std::vector<std::thread> threads_;

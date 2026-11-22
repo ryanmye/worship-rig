@@ -25,11 +25,11 @@ function members() {
 const has = (obj, name) => name in obj;
 const resolve = (obj, p) => p.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
 
-test('the contract lists 68 entries and the shim expands them to members', () => {
+test('the contract lists 69 entries and the shim expands them to members', () => {
   // 63 + setDynamicRange (T12 O1) + the native-only setPolyphony / setVoiceLimit / setBufferFrames / setDroneFreeze
-  // (Settings review item 2, UIB: contracted instead of allow-listed below)
-  assert.equal(api.methods.length, 68);
-  assert.ok(members().length >= 68);
+  // (Settings review item 2, UIB: contracted instead of allow-listed below) + getParam (CORE2B, was notContract)
+  assert.equal(api.methods.length, 69);
+  assert.ok(members().length >= 69);
 });
 
 test('every contracted method, getter and property exists with the right kind', () => {

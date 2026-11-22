@@ -7,18 +7,20 @@
 //     Chromium. It makes no sound.
 // The contract JSON is passed in (`api`): Node tests read the file, the browser smoke fetches it.
 import { PROTOCOL } from './link.js';
-import { isValidPath, MAX_SLOTS, SLOT_COUNT } from '../shared/params.js';
+import { isValidPath, MAX_SLOTS, SLOT_COUNT, clamp as clampParam, describe } from '../shared/params.js';
+import { patchParam } from './param-read.js';
 import { chordName } from '../shared/chords.js';
 import { validDynRange } from '../shared/touch-curve.js';
 
 /**
  * hello.minor and caps as the core answers them (native/core/src/bridge/bridge.cpp opHello): minor 1 = T00c
  * (polyphony, bufferFrames, slots16), 2 = voiceLimit (D4), 3 = droneFreeze (D5 / T16), 4 = dynamicRange (T12 O1 /
- * UIB). T11 O7 / UI wave item 7: the mock used to answer 0; the shim does not read it, a host feature check may.
+ * UIB), 5 = getParam (`get {what:'param'}`, CORE2B). T11 O7 / UI wave item 7: the mock used to answer 0; the shim
+ * reads it only to skip `get param` on a core older than minor 5.
  */
-export const MOCK_MINOR = 4;
+export const MOCK_MINOR = 5;
 export const MOCK_CAPS = Object.freeze(['when', 'testVoice', 'meters', 'rta', 'polyphony', 'bufferFrames', 'slots16',
-  'voiceLimit', 'droneFreeze', 'dynamicRange', 'mock']);
+  'voiceLimit', 'droneFreeze', 'dynamicRange', 'getParam', 'mock']);
 /** DECISIONS D4 'auto' per resource profile: mirrors native/core/src/inst/voice_alloc.h kAutoVoiceLimitDesktop/Ipad
  *  (provisional numbers from the Linux bench, ARCHITECTURE 7.1). */
 export const AUTO_VOICE_LIMIT = Object.freeze({ desktop: 128, ipad: 64 });
@@ -399,6 +401,7 @@ export class MockNative {
     if (ok) {
       this.committedToken = m.token;
       this.patch = this._plans.get(m.token);
+      this.params.clear(); // CORE2B: `get param` reads the committed patch until the next set
     }
     return this._reply(m.id, true, { committed: ok });
   }
@@ -567,6 +570,22 @@ export class MockNative {
       case 'sampleStatus': {
         const ps = m.patches || [];
         return this._reply(m.id, true, { loaded: ps.map(() => true), failed: ps.map(() => false) });
+      }
+      case 'param': {
+        // CORE2B: like the core (model/param_read.cpp): the latest set (clamped as PARAMS clamps it; instrument
+        // params as sent), else the committed patch; `value` absent = undefined; outside the grammar = unknown-param
+        if (typeof m.path !== 'string') return this._fail(m, 'bad-request', "get param: 'path' is required");
+        if (!isValidPath(m.path, MAX_SLOTS)) return this._fail(m, 'unknown-param', `Unknown parameter "${m.path}"`);
+        let value;
+        if (this.params.has(m.path)) {
+          const raw = this.params.get(m.path);
+          try {
+            value = describe(m.path)?.dynamic ? raw : clampParam(m.path, raw);
+          } catch {
+            value = raw;
+          }
+        } else value = patchParam(this.patch, m.path, this.api.instruments.list);
+        return this._reply(m.id, true, value === undefined ? { path: m.path } : { path: m.path, value });
       }
       case 'state':
         return this._reply(m.id, true, {

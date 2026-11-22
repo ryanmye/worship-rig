@@ -219,6 +219,9 @@ TEST_SUITE("t00c") {
     REQUIRE(mi != std::string::npos);
     CHECK(std::strtol(h.c_str() + mi + 8, nullptr, 10) >= 3);
     CHECK(contains(h, "\"droneFreeze\""));
+    // INTERFACE-CHANGE(CORE2B): minor 5 = get {what:'param'} (engine.getParam), capability "getParam"
+    CHECK(std::strtol(h.c_str() + mi + 8, nullptr, 10) >= 5);
+    CHECK(contains(h, "\"getParam\""));
     CHECK(contains(h, "\"slots16\""));
     CHECK(contains(h, "\"polyphony\""));
     CHECK(contains(h, "\"bufferFrames\""));

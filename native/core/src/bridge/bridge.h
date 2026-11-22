@@ -2,6 +2,9 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace rig {
 
@@ -23,6 +26,13 @@ class Bridge {
   // token bookkeeping for `stale-token` vs `superseded` (contract 6.2): every token up to maxToken_ was issued;
   // tokens <= restartFloor_ were prepared before an `audio restart` (contract 1.1: restart invalidates them).
   std::uint32_t maxToken_ = 0, restartFloor_ = 0, committedToken_ = 0;
+  // CORE2A: `prepare` replies waiting for their samples to decode (control thread only). A newer prepare sends the
+  // ones still waiting at once (superseded); the cache's callback sends the rest.
+  struct PendingReply {
+    bool sent = false;
+    std::string text;
+  };
+  std::vector<std::shared_ptr<PendingReply>> pendingPrepares_;
 };
 
 }  // namespace rig

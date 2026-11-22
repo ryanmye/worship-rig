@@ -11,8 +11,16 @@
 | `cache_service.{h,cpp}`, `cache_register.cpp` | the `cache` service: preload / estimate / sampleStatus / reloadManifests, pcmOverride |
 
 Rules: all cache state is control-thread only; workers only decode (own data) and push into a mailbox that `pump()`
-drains. Nothing here runs on the audio thread. Byte unit = STORED bytes (float32 x4, int16 x2); `capMB`, `decodedMB`,
-`pinnedMB`, `estimate.mb` and the 1.75 MB default per unknown sample (scaled by storage) all use it.
+drains. Nothing here runs on the audio thread, and the bridge never waits for a decode (CORE2A; the frozen
+synchronous `preload()` still pumps until its decodes are done, and the bridge no longer calls it): the realtime
+control loop calls `pump()` every turn (a finished decode wakes it), `cache preload` is answered from there
+(`preloadAsync`), and `prepare` is answered once its samples settled (`whenSettled`). The pool runs priority 0
+(song switch) before 1 (preload) before 2 (re-warm) and, within a priority, the newest job first; a request that joins
+a key still queued re-posts its job (claimed once), so the newest song switch never waits behind older preloads or a
+superseded switch. Workers run at utility QoS (Apple) / nice 10 (Linux).
+
+Byte unit = STORED bytes (float32 x4, int16 x2); `capMB`, `decodedMB`, `pinnedMB`, `estimate.mb` and the 1.75 MB
+default per unknown sample (scaled by storage) all use it.
 
 Tests: `tests/samples_*` (suites `samples_decode`, `samples_process`, `samples_cache`, `samples_service`). The
 Chromium-side data comes from `tools/golden/decode-dump/{dump,cache-vectors}.mjs` into

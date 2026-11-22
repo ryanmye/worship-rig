@@ -233,6 +233,18 @@ CacheServiceImpl::JobList CacheServiceImpl::sampleJobs(const std::vector<rig::Pa
   return out;
 }
 
+std::vector<std::string> CacheServiceImpl::samplerLoadKeys(const rig::PatchSpec &patch) const {
+  std::vector<std::string> out;
+  for (const auto &s : patch.slots) {
+    if (!s.present || s.instType != "sampler") continue;
+    const SamplerDef *def = registry_.find(s.instId);
+    if (!def) continue;
+    for (const Layer &L : def->layers)
+      for (const SampleRef &smp : L.samples) out.push_back(cache_.keyOf(smp.url, smp.midi, def->decodeOpts.maxSec));
+  }
+  return out;
+}
+
 std::vector<std::string> CacheServiceImpl::currentKeys() const {
   return sampleJobs({model_.patch()}).keys;
 }

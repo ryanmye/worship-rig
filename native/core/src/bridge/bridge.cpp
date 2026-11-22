@@ -10,8 +10,10 @@
 #include "bridge/json_out.h"
 #include "bridge/schema.h"
 #include "drone/drone_service.h"  // T16: config {droneFreeze}
+#include "model/param_read.h"  // INTERFACE-CHANGE(CORE2B): get param
 #include "model/patch.h"
 #include "params/params.h"
+#include "samples/cache_service.h"  // CORE2A: preloadAsync, the prepare reply after its samples decoded
 #include "yyjson.h"
 
 namespace rig {
@@ -101,12 +103,17 @@ void opHello(Engine &e, const Req &r) {
   // INTERFACE-CHANGE(D4): minor 2 = config.voiceLimit (contract README rule; D4 review R4, wave-2 integrator)
   // INTERFACE-CHANGE(W3B): minor 3 = config.droneFreeze (D5, T16), capability "droneFreeze"
   // INTERFACE-CHANGE(UIB): minor 4 = config.dynamicRange (T12 O1, settings.dynamicRange), capability "dynamicRange"
-  j.begin().kv("protocol", RIG_BRIDGE_PROTOCOL).kv("minor", 4).kv("engine", rig_version_string());
+  // INTERFACE-CHANGE(CORE2B): minor 5 = `get {what:'param', path}` (engine.getParam contracted), capability
+  // "getParam"; the tick now fills `pedal` / `held` and `runtime.swelling` (contract 6.5 rows that were unfilled).
+  // A minor-5 core also has CORE2A's timing (no shape change, no capability): `cache preload` answered from the
+  // control loop, a realtime `prepare` answered once its samples are decoded.
+  j.begin().kv("protocol", RIG_BRIDGE_PROTOCOL).kv("minor", 5).kv("engine", rig_version_string());
   j.key("caps").beginArray().elemStr("when").elemStr("testVoice").elemStr("meters").elemStr("rta");
   j.elemStr("polyphony").elemStr("bufferFrames").elemStr("slots16");
   j.elemStr("voiceLimit");  // D4 (additive, minor 2)
   j.elemStr("droneFreeze");  // D5 / T16 (additive, minor 3)
   j.elemStr("dynamicRange");  // T12 O1 / UIB (additive, minor 4)
+  j.elemStr("getParam");  // INTERFACE-CHANGE(CORE2B) (additive, minor 5)
   if (e.model().service(RecService::kName)) j.elemStr("rec");
   j.endArray();
   j.kv("sampleRate", e.sampleRate()).kv("seed", e.seed()).end();
@@ -137,11 +144,33 @@ void opPrepare(Engine &e, const Req &r) {
   PatchSpec p;
   std::string err;
   if (!parsePatch(yyjson_obj_get(r.m, "patch"), p, &err)) return fail(e, r, "bad-request", "prepare: " + err);
+  // CORE2A (PARITY UI row 1): audio.js prepare resolves once the new song's samples are decoded, while the old song
+  // plays on, and the controller commits only then. The reply therefore waits until none of the samples the new
+  // sampler units requested is still decoding (the control loop keeps running: the reply goes out from its pump()).
+  // A newer prepare supersedes: replies still waiting are sent at once (their tokens can no longer commit).
+  // Offline (inline decodes) nothing is in flight and the reply goes out here, as before.
+  Bridge *b = bridgeOf(e);
+  auto *cs = dynamic_cast<samples::CacheServiceImpl *>(e.model().service<CacheService>());
+  std::vector<std::string> keys = cs && r.hasId ? cs->samplerLoadKeys(p) : std::vector<std::string>();
   const std::uint32_t token = e.model().prepare(std::move(p));
-  if (Bridge *b = bridgeOf(e)) b->maxToken_ = std::max(b->maxToken_, token);
+  if (b) b->maxToken_ = std::max(b->maxToken_, token);
   JsonOut j;
   j.begin().kv("token", token).end();
-  ok(e, r, j.take());
+  if (!b || !cs || !r.hasId) return ok(e, r, j.take());
+  for (auto &w : b->pendingPrepares_) {
+    if (w->sent) continue;
+    w->sent = true;
+    e.emit(std::move(w->text));
+  }
+  b->pendingPrepares_.clear();
+  auto w = std::make_shared<Bridge::PendingReply>();
+  w->text = envelopeHead(r, true) + ",\"result\":" + j.take() + "}";
+  b->pendingPrepares_.push_back(w);
+  cs->whenSettled(keys, [&e, w] {
+    if (w->sent) return;
+    w->sent = true;
+    e.emit(std::move(w->text));
+  });
 }
 
 void opCommit(Engine &e, const Req &r) {
@@ -258,6 +287,15 @@ void opGet(Engine &e, const Req &r) {
     res = m.listInstruments();
   } else if (w == "sampleStatus")
     res = m.sampleStatus(yyjson_obj_get(r.m, "patches"));
+  else if (w == "param") {  // INTERFACE-CHANGE(CORE2B): engine.getParam; {path, value} (value absent = undefined)
+    const char *path = getStr(r.m, "path");
+    const ParamRead pr = readParam(m, path ? path : "");
+    if (!pr.known) return fail(e, r, "unknown-param", std::string("Unknown parameter \"") + (path ? path : "") + "\"");
+    JsonOut j;
+    j.begin().kv("path", path);
+    if (pr.defined) j.kvRaw("value", pr.json);
+    res = j.end().take();
+  }
   reply(e, r, res, "get " + w);
 }
 
@@ -338,6 +376,14 @@ void opCache(Engine &e, const Req &r) {
   std::string res;
   if (a == "preload") {
     const char *pin = getStr(r.m, "pin");
+    // CORE2A (PARITY UI row 1): answered when its decodes are done, from the control loop's pump() (the frozen
+    // Model::preload pumps in a loop until then, which held up every tick and `play` for 0.5-3 s per cold song).
+    // Offline the decodes run inline and the reply goes out before this returns, as before.
+    if (auto *cs = dynamic_cast<samples::CacheServiceImpl *>(m.service<CacheService>())) {
+      const Req q{nullptr, r.hasId, r.id, r.op};  // r.m dies with this message
+      cs->preloadAsync(patches, pin ? pin : "auto", [&e, q](std::string out) { reply(e, q, out, "cache preload"); });
+      return;
+    }
     res = m.preload(patches, pin ? pin : "auto");
   } else if (a == "estimate") {
     res = m.estimatePreloadMB(patches);

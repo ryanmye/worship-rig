@@ -62,9 +62,11 @@ constexpr ArgSpec kConfig[] = {{"mono", T::Bool, false},        {"lowResource", 
                                {"droneFreeze", T::Bool, false},                        // D5 (T16)
                                // INTERFACE-CHANGE(UIB): T12 O1 settings.dynamicRange 1..3 (Model clamps, bad -> 1)
                                {"dynamicRange", T::Number, false}};
-constexpr ArgSpec kGet[] = {{"what", T::Enum, true, "instruments|stats|devices|sampleStatus|state"},
+// INTERFACE-CHANGE(CORE2B): what 'param' + `path` (engine.getParam read-back; minor 5)
+constexpr ArgSpec kGet[] = {{"what", T::Enum, true, "instruments|stats|devices|sampleStatus|state|param"},
                             {"reload", T::Bool, false},
-                            {"patches", T::Array, false}};
+                            {"patches", T::Array, false},
+                            {"path", T::String, false}};
 constexpr ArgSpec kMidi[] = {{"action", T::Enum, true, "listen|route|send"},
                              {"ids", T::Array, false},
                              {"on", T::Bool, false},
@@ -95,6 +97,7 @@ constexpr VariantSpec kVariants[] = {{"play", "e", "on", "n|vel"},
                                      {"play", "e", "wheel", "src|value"},
                                      {"play", "e", "bend", "x"},
                                      {"get", "what", "sampleStatus", "patches"},
+                                     {"get", "what", "param", "path"},  // INTERFACE-CHANGE(CORE2B)
                                      {"midi", "action", "listen", "ids"},
                                      {"midi", "action", "send", "port|data"}};
 

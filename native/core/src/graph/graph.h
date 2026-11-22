@@ -91,6 +91,12 @@ class Graph final : private EventSink {
   /** INTERFACE-CHANGE(T00c) D3: slots of the committed song (1..16; 0 = none yet), copied into every meter
    *  snapshot (rig_meters.slot_count). Set by the bridge after a commit. [any] */
   void setSlotCount(std::uint32_t n) { slotCount_.store(n, std::memory_order_relaxed); }
+  /** INTERFACE-CHANGE(CORE2B) (PARITY "UI parity" row 2, UIC S1): the Model's effective sustain and its count of held
+   *  physical notes (Perform::pedal() / held(), control thread), copied into every meter snapshot (rig_meters.pedal /
+   *  held). One relaxed atomic word: [held:16 | pedal:1]. Any thread, lock-free, wait-free on the audio thread. */
+  void setPerformMeters(bool pedal, std::uint32_t held) {
+    perfMeters_.store(((held < 0xffffu ? held : 0xffffu) << 1) | (pedal ? 1u : 0u), std::memory_order_relaxed);
+  }
   /** Host-side numbers folded into the next meter snapshot (audio thread). */
   /** INTERFACE-CHANGE(D4): engine-wide voice limit, total voices counted by every instrument (slots + retiring
    *  channels); 0 = off. Any thread, lock-free; the audio thread adopts it at the start of the next quantum (before
@@ -157,6 +163,7 @@ class Graph final : private EventSink {
   bool slotHas_[kChannels] = {}, slotRetiring_[kChannels] = {};
   std::uint8_t retireOrigin_[kRetiring] = {};
   std::atomic<std::uint32_t> slotCount_{0};
+  std::atomic<std::uint32_t> perfMeters_{0};  // INTERFACE-CHANGE(CORE2B): setPerformMeters
   // INTERFACE-CHANGE(D4): requested limit (any thread) and the audio thread's copy for this quantum (0 = off)
   std::atomic<std::uint32_t> voiceLimitReq_{0};
   std::uint32_t voiceLimit_ = 0;

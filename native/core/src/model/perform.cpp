@@ -583,6 +583,17 @@ std::string Perform::runtimeStateJson() const {
   return j.take();
 }
 
+std::string Perform::tickRuntimeJson() const {
+  // CORE2B: same members as runtimeStateJson + swelling (wheelValuesJson's rule), one object for the tick
+  const WheelValues &w = const_cast<Model &>(m_).songGraph().wheel();
+  JsonOut j;
+  j.begin().key("wheel").begin().kvRaw("mod", js::numberToString(w.mod)).kvRaw("expr", js::numberToString(w.expr));
+  j.kvRaw("vol", js::numberToString(w.vol)).end();
+  j.kv("modOwner", modVirtual_ ? "virtual" : "hw").kvBool("faded", fadeSeq_ != 0);
+  j.kvBool("swelling", swellActive_ != 0).end();
+  return j.take();
+}
+
 void Perform::statsFields(std::string &out) const {
   out += ",\"sounding\":" + std::to_string(sounding_.size()) + ",\"pedaled\":" + std::to_string(pedaled_.size());
   sleep_->statsFields(out);  // W3A: audioSleep, lastWake

@@ -472,6 +472,10 @@ void BufferCache::requestJob(const SampleJob &job, int priority, bool takeRef, R
   auto it = inflight_.find(key);
   if (it != inflight_.end()) {
     it->second.push_back({takeRef, std::move(ready)});
+    // CORE2A: not started yet: queue it again as this (newer) request, which may also be a better priority
+    auto q = queued_.find(key);
+    if (q != queued_.end() && runner_ && !q->second.claimed->load(std::memory_order_acquire))
+      runner_->post(priority, q->second.work);
     return;
   }
   inflight_[key].push_back({takeRef, std::move(ready)});
@@ -482,7 +486,9 @@ void BufferCache::requestJob(const SampleJob &job, int priority, bool takeRef, R
   rq.opts = job.opts;
   rq.engineRate = cfg_.engineRate;
   rq.storage = cfg_.storage;
-  auto work = [this, key, job, rq] {
+  auto claimed = std::make_shared<std::atomic<bool>>(false);
+  auto work = [this, key, job, rq, claimed] {
+    if (claimed->exchange(true, std::memory_order_acq_rel)) return;  // another copy of this job took it (CORE2A)
     Done d;
     d.key = key;
     d.url = job.url;
@@ -495,6 +501,7 @@ void BufferCache::requestJob(const SampleJob &job, int priority, bool takeRef, R
     if (cfg_.wake) cfg_.wake();
   };
   if (runner_) {
+    if (!runner_->inlineMode()) queued_[key] = {claimed, work};
     runner_->post(priority, work);
     if (runner_->inlineMode()) pump();
   } else {
@@ -513,6 +520,25 @@ std::size_t BufferCache::pump() {
   return batch.size();
 }
 
+void BufferCache::whenSettled(const std::vector<std::string> &keys, std::function<void()> done) {
+  struct Left {
+    std::size_t n = 1;  // + one per waiter; the last one runs `done`
+    std::function<void()> done;
+  };
+  auto left = std::make_shared<Left>();
+  left->done = std::move(done);
+  auto one = [left](const SampleBuffer *) {
+    if (--left->n == 0 && left->done) left->done();
+  };
+  for (const std::string &k : keys) {
+    auto it = inflight_.find(k);
+    if (it == inflight_.end()) continue;
+    ++left->n;
+    it->second.push_back({false, one});
+  }
+  one(nullptr);
+}
+
 void BufferCache::waitIdle() {
   while (!inflight_.empty()) {
     if (pump() == 0) std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -521,6 +547,7 @@ void BufferCache::waitIdle() {
 
 void BufferCache::finish(Done &d) {
   std::vector<Waiter> waiters;
+  queued_.erase(d.key);
   auto it = inflight_.find(d.key);
   if (it != inflight_.end()) {
     waiters = std::move(it->second);

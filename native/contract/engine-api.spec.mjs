@@ -139,6 +139,14 @@ export const METHODS = [
     callers: ['eq-keyboard.js'], bridge: { local: 'shared/eq-math.js eqResponseDb at engine sampleRate' } },
   { name: 'getSlotPlayRange', kind: 'method', sync: true, returns: 'PlayRange | null', ref: 'audio.js:1295',
     args: [a('slot', 'int')], callers: ['eq-keyboard.js'], bridge: { local: 'patch + transpose + instrument.range' } },
+  // CORE2B (PARITY "UI parity" row 1, UIC O4): contracted read-back of a param (was notContract "tests only"). Sync
+  // like audio.js; the shim answers from its mirror (the value native last answered to `get param`, else its own
+  // clamped setParam value, else the committed patch) and reconciles every unconfirmed read with one `get param`.
+  { name: 'getParam', kind: 'method', sync: true, returns: 'PARAMS value | undefined', ref: 'audio.js:1221',
+    args: [a('path', 'ParamPath')], callers: ['tests (test/phase2/ui-core: __t.param)'],
+    effect: 'the value the engine holds (PARAMS value space: number, boolean, enum name, \'natural\'); undefined for ' +
+      'an empty slot or an unset optional row',
+    bridge: { op: 'get', what: 'param', local: 'mirror reconciled by get param' } },
   { name: 'drone.setKey', kind: 'method', sync: true, returns: 'boolean', ref: 'drone.js:405',
     args: [a('pc', 'int'), a('o', 'object', { fields: { minor: 'bool', fade: 's', when: 'engine s' } })],
     callers: ['controller.js'], bridge: { op: 'drone', field: 'key' } },
@@ -227,7 +235,7 @@ export const METHODS = [
 /** Exists on AudioEngine but is not part of the contract (section 1.7). */
 export const NOT_CONTRACT = [
   { name: 'at', reason: 'test hook (31 test files); golden scripts use timed messages instead' },
-  { name: 'getParam', reason: 'tests only' }, { name: 'getState', reason: 'restart-internal + tests' },
+  { name: 'getState', reason: 'restart-internal + tests' },
   { name: 'applyState', reason: 'restart-internal + tests' }, { name: 'heldChord', reason: 'tests' },
   { name: 'activeNotes', reason: 'tests' }, { name: 'quietFor', reason: 'internal (reverb quiet builds) + tests' },
   { name: 'slotTapCount', reason: 'tests' }, { name: 'offline', reason: 'tests' }, { name: 'dispose', reason: 'tests' },
@@ -423,13 +431,15 @@ export const BRIDGE = {
       reply: '{lowResource?, eqAudition?, polyphony?, voiceLimit?, voiceLimitEffective?, droneFreeze?, dynamicRange?}',
       maps: ['setMono', 'setLowResource', 'eqAudition', 'slotLevel/analyser subscriptions', 'setClockSink',
         'setDynamicRange', 'setPolyphony', 'setVoiceLimit', 'setDroneFreeze'] },
-    { op: 'get', args: { what: "'instruments'|'stats'|'devices'|'sampleStatus'|'state'", reload: 'bool?',
-      patches: 'Patch[]?' },
+    // param: CORE2B (minor 5, capability 'getParam'): the value the Model holds for `path` (PARAMS value space);
+    // `value` absent = undefined (empty slot, unset optional row); a path outside the grammar = error unknown-param
+    { op: 'get', args: { what: "'instruments'|'stats'|'devices'|'sampleStatus'|'state'|'param'", reload: 'bool?',
+      patches: 'Patch[]?', path: 'ParamPath?' },
       reply: 'instruments [entry]; stats DebugStats; devices [{id, name, channels, default, sampleRates}]; ' +
           'sampleStatus {loaded, failed}; state EngineState (+ polyphony, voiceLimit, voiceLimitEffective: D1/D4; ' +
-          'dynamicRange)',
+          'dynamicRange); param {path, value?}',
       maps: ['listInstruments', 'reloadManifests', '_debugStats', 'enumerateDevices', 'cache/registry reach-in',
-        'getState'] },
+        'getState', 'getParam'] },
     { op: 'midi', args: { action: "'listen'|'route'|'send'", ids: 'string[]?', on: 'bool?', learn: 'object?',
       pedalInvert: 'bool?',
       velocitySens: 'any?', touch: '{deviceName: spec}?', jitterFree: 'bool?', port: 'string?', data: 'int[]?',
@@ -444,7 +454,7 @@ export const BRIDGE = {
       maps: ['statechange', 'sleep', 'ctx.state', 'latencyMs', 'sleepState', 'clickOutputs'] },
     { ev: 'tick',
       data: '{t, frames, out:[peakL, peakR], slots?:[[peak, rms] x max(4, song slots), <= 16], rta?:base64, ' +
-        'blockers, pedal, held, runtime, cpu, hostLatency?, stats?}',
+        'blockers, pedal, held, runtime:{wheel, modOwner, faded, swelling}, cpu, hostLatency?, stats?}',
       rate: 'config.meters.rate (default 30 Hz; 4 Hz with no meter subscribed; none while asleep)',
       maps: ['currentTime', 'analyserL/R', 'slotLevel', 'sleepBlockers', 'pedal', 'wheelValues', 'getRuntimeState',
         '_debugStats'] },

@@ -831,6 +831,28 @@
       }
     },
     {
+      "name": "getParam",
+      "kind": "method",
+      "sync": true,
+      "returns": "PARAMS value | undefined",
+      "ref": "audio.js:1221",
+      "args": [
+        {
+          "name": "path",
+          "type": "ParamPath"
+        }
+      ],
+      "callers": [
+        "tests (test/phase2/ui-core: __t.param)"
+      ],
+      "effect": "the value the engine holds (PARAMS value space: number, boolean, enum name, 'natural'); undefined for an empty slot or an unset optional row",
+      "bridge": {
+        "op": "get",
+        "what": "param",
+        "local": "mirror reconciled by get param"
+      }
+    },
+    {
       "name": "drone.setKey",
       "kind": "method",
       "sync": true,
@@ -1535,10 +1557,6 @@
     {
       "name": "at",
       "reason": "test hook (31 test files); golden scripts use timed messages instead"
-    },
-    {
-      "name": "getParam",
-      "reason": "tests only"
     },
     {
       "name": "getState",
@@ -6608,18 +6626,20 @@
       {
         "op": "get",
         "args": {
-          "what": "'instruments'|'stats'|'devices'|'sampleStatus'|'state'",
+          "what": "'instruments'|'stats'|'devices'|'sampleStatus'|'state'|'param'",
           "reload": "bool?",
-          "patches": "Patch[]?"
+          "patches": "Patch[]?",
+          "path": "ParamPath?"
         },
-        "reply": "instruments [entry]; stats DebugStats; devices [{id, name, channels, default, sampleRates}]; sampleStatus {loaded, failed}; state EngineState (+ polyphony, voiceLimit, voiceLimitEffective: D1/D4; dynamicRange)",
+        "reply": "instruments [entry]; stats DebugStats; devices [{id, name, channels, default, sampleRates}]; sampleStatus {loaded, failed}; state EngineState (+ polyphony, voiceLimit, voiceLimitEffective: D1/D4; dynamicRange); param {path, value?}",
         "maps": [
           "listInstruments",
           "reloadManifests",
           "_debugStats",
           "enumerateDevices",
           "cache/registry reach-in",
-          "getState"
+          "getState",
+          "getParam"
         ]
       },
       {
@@ -6674,7 +6694,7 @@
       },
       {
         "ev": "tick",
-        "data": "{t, frames, out:[peakL, peakR], slots?:[[peak, rms] x max(4, song slots), <= 16], rta?:base64, blockers, pedal, held, runtime, cpu, hostLatency?, stats?}",
+        "data": "{t, frames, out:[peakL, peakR], slots?:[[peak, rms] x max(4, song slots), <= 16], rta?:base64, blockers, pedal, held, runtime:{wheel, modOwner, faded, swelling}, cpu, hostLatency?, stats?}",
         "rate": "config.meters.rate (default 30 Hz; 4 Hz with no meter subscribed; none while asleep)",
         "maps": [
           "currentTime",

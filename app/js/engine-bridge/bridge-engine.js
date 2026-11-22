@@ -8,7 +8,8 @@
 import { BridgeLink, BridgeError, PROTOCOL } from './link.js';
 import { EngineClock } from './clock.js';
 import { webkitTransport, webkitAvailable } from './transports.js';
-import { isValidPath, SLOT_COUNT } from '../shared/params.js';
+import { isValidPath, SLOT_COUNT, clamp as clampParam, describe } from '../shared/params.js';
+import { patchParam } from './param-read.js';
 
 /** Slots the native core takes (T00c, native DECISIONS D3: slots.0..15); the web PARAMS grammar has SLOT_COUNT. */
 const NATIVE_SLOT_COUNT = 16;
@@ -137,6 +138,7 @@ class DroneFacade {
     }
     if ('mode' in d && ['off', 'synth', 'files'].includes(d.mode)) this.cfg.mode = d.mode;
     this._e._send('drone', { config: { ...d }, ...this._e._whenArg(when) });
+    this._e._paramsDrop('drone.'); // CORE2B: drone.js configure sets its params from the config (getParam re-asks)
   }
 
   attachFiles(list = []) {
@@ -213,6 +215,16 @@ export class BridgeEngine extends EventTarget {
     this._held = 0;
     this._runtime = DEFAULT_RUNTIME;
     this._local = new Map(); // UIC: optimistic pedal / runtime fields: key -> {value, until} (OPTIMISTIC_MS)
+    /**
+     * CORE2B: getParam mirror. path -> {value, confirmed}: confirmed = the core's `get param` answer; unconfirmed =
+     * this shim's clamped setParam value, re-asked at the next read. `_paramGen` (per path, bumped by setParam) and
+     * `_paramEpoch` (bumped by commit) drop an answer that a later write overtook; one `get param` in flight per path
+     * and write.
+     */
+    this._params = new Map();
+    this._paramAsk = new Map(); // path -> 'epoch:gen' of the `get param` in flight
+    this._paramGen = new Map();
+    this._paramEpoch = 0;
     this._stats = ZERO_STATS;
     this._click = null;
     this._clockSink = null;
@@ -699,6 +711,7 @@ export class BridgeEngine extends EventTarget {
     if (!ok) return false;
     e.committed = true;
     this._applyPatchMirror(e.patch);
+    this._paramsDrop(''); // CORE2B: every slot / fx value now comes from the committed patch
     for (const t of this._tokens.keys()) if (t <= token) this._tokens.delete(t);
     this._tokens.set(token, e);
     this._req('commit', { token, ...this._whenArg(when) }).then(
@@ -758,6 +771,7 @@ export class BridgeEngine extends EventTarget {
     const m = /^slots\.(\d+)\./.exec(path);
     if (m && this._patch && !this._patch.slots[Number(m[1])]) return false; // empty slot: nothing to set
     this._mirrorSet(path, value);
+    this._paramLocal(path, value);
     const v = value === undefined ? null : value;
     const g = Number.isFinite(glide) && glide > 0 ? glide : 0;
     if (Number.isFinite(when)) {
@@ -771,6 +785,77 @@ export class BridgeEngine extends EventTarget {
       queueMicrotask(() => this._flushSets());
     }
     return true;
+  }
+
+  /**
+   * CORE2B (PARITY "UI parity" row 1): the value the engine holds for `path`, synchronously like audio.js getParam
+   * (contracted since minor 5; native answers `get {what:'param', path}`). Answered from the mirror, in this order:
+   * the core's last answer for the path (unless a later setParam or commit overtook it), else this shim's clamped
+   * setParam value since the last commit, else the committed patch (`patchParam`). Every read that is not a core
+   * answer sends one `get param` (FIFO behind the pending sets), so the next read returns the core's value.
+   * @param {string} path
+   * @returns {*} PARAMS value space; undefined for an invalid path, an empty slot or an unset optional row
+   */
+  getParam(path) {
+    if (!this._validPath(path)) return undefined;
+    const e = this._params.get(path);
+    if (!e || !e.confirmed) this._askParam(path);
+    return e ? e.value : patchParam(this._patch, path, this._instrumentsAll);
+  }
+
+  /** CORE2B: setParam's value as the core will hold it (PARAMS clamp; instrument params as sent), unconfirmed. */
+  _paramLocal(path, value) {
+    let v = value;
+    if (!describe(path)?.dynamic) {
+      try {
+        v = clampParam(path, value);
+      } catch {
+        v = value;
+      }
+    }
+    this._paramGen.set(path, (this._paramGen.get(path) || 0) + 1);
+    this._params.set(path, { value: v, confirmed: false });
+  }
+
+  /** CORE2B: forget mirrored values under `prefix` ('' = all) so getParam asks the core again. */
+  _paramsDrop(prefix) {
+    if (!prefix) {
+      this._paramEpoch++;
+      this._params.clear();
+      return;
+    }
+    for (const k of [...this._params.keys()]) {
+      if (k.startsWith(prefix)) {
+        this._params.delete(k);
+        this._paramGen.set(k, (this._paramGen.get(k) || 0) + 1);
+      }
+    }
+  }
+
+  /** CORE2B: one `get param` for `path`; its answer is kept unless a setParam / commit came after the request. */
+  _askParam(path) {
+    if (!this._started || this._unavailable) return;
+    if (this._info && Number(this._info.minor) < 5) return; // a core before CORE2B has no `get param`: mirror only
+    const gen = this._paramGen.get(path) || 0;
+    const epoch = this._paramEpoch;
+    const tag = `${epoch}:${gen}`;
+    if (this._paramAsk.get(path) === tag) return; // this write's answer is on its way (an older one is not enough)
+    this._paramAsk.set(path, tag);
+    const done = () => {
+      if (this._paramAsk.get(path) === tag) this._paramAsk.delete(path);
+    };
+    this._req('get', { what: 'param', path }).then(
+      (r) => {
+        done();
+        if (!r || r.path !== path || epoch !== this._paramEpoch || gen !== (this._paramGen.get(path) || 0)) return;
+        this._params.set(path, { value: r.value, confirmed: true });
+      },
+      (err) => {
+        done();
+        // an older core (minor < 5) refuses `what: 'param'`: keep the mirror, say so once
+        this._warn(`engine.getParam failed: ${err && err.message}`);
+      },
+    );
   }
 
   setTranspose(semis) {

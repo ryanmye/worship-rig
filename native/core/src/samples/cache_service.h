@@ -28,8 +28,9 @@ class CacheServiceImpl final : public rig::CacheService {
   void onMemoryPressure(int level) override;
   void onPaths(const rig::EnginePaths &paths) override;
   std::string statsFields() override;
-  // CacheService (frozen, synchronous). In realtime mode preload blocks the control thread until the workers are
-  // done: bridges that must not block use preloadAsync.
+  // CacheService (frozen, synchronous). In realtime mode preload blocks the calling thread until the workers are
+  // done (pumping meanwhile): the bridge answers `cache preload` through preloadAsync instead (CORE2A), so the
+  // control loop keeps handling input and sending ticks while samples decode.
   std::string preload(const yyjson_val *patches, std::string_view pin) override;
   std::string estimate(const yyjson_val *patches) override;
   std::string sampleStatus(const yyjson_val *patches) override;
@@ -40,6 +41,13 @@ class CacheServiceImpl final : public rig::CacheService {
   /** `done(json)` runs on the control thread when every decode finished: {decodedMB, pinnedMB, deferred}. Inline
    *  (offline) it runs before this returns. */
   void preloadAsync(const yyjson_val *patches, std::string_view pin, std::function<void(std::string)> done);
+  /** CORE2A: the cache keys the sampler units of `patch` request when they are built (SamplerService::build: every
+   *  sample of a known sampler slot at its instrument's own decode cap). Call before the patch is prepared. */
+  std::vector<std::string> samplerLoadKeys(const rig::PatchSpec &patch) const;
+  /** CORE2A: `done` runs on the control thread once none of `keys` is still decoding (BufferCache::whenSettled). */
+  void whenSettled(const std::vector<std::string> &keys, std::function<void()> done) {
+    cache_.whenSettled(keys, std::move(done));
+  }
   /** Control loop: integrate finished decodes and advance preloads. Returns how many results were integrated. */
   std::size_t pump();
   /** Set by the shell/engine: runs on a worker when a decode finished (wake the control thread to pump()). */

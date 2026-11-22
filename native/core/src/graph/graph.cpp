@@ -618,6 +618,9 @@ void Graph::renderQuantum(float *const *out, unsigned channels) {
   }
   m.slot_count = slotCount_.load(std::memory_order_relaxed);
   m.voices = liveVoices();
+  const std::uint32_t pm = perfMeters_.load(std::memory_order_relaxed);  // INTERFACE-CHANGE(CORE2B): was never set
+  m.pedal = static_cast<std::uint8_t>(pm & 1u);
+  m.held = static_cast<std::uint16_t>(pm >> 1);
   m.cpu_load = cpu_;
   m.xruns = xruns_;
   meters_.write(m);

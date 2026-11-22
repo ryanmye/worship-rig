@@ -144,9 +144,9 @@ const HELPERS = () => {
       return isBridge() ? Number(stats().sounding) || 0 : window.__rig.engine.sounding.size;
     },
     /**
-     * A param's value in the engine (web: engine.getParam, a test hook). The bridge engine has no contracted read-back
-     * (engine-api.json `notContract`: getParam "tests only"), so there it is undefined unless the engine grows one
-     * (the test then fails on the value, with no page error).
+     * A param's value in the engine (web: engine.getParam, a test hook). The bridge engine answers it from its mirror
+     * of the core's `get {what:'param'}` (CORE2B, contract minor 5); an engine without getParam gives undefined (the
+     * test then fails on the value, with no page error).
      */
     param(path) {
       const e = window.__rig.engine;

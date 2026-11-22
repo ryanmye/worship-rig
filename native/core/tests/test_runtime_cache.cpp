@@ -245,7 +245,8 @@ TEST_SUITE("runtime_cache") {
     rt.startAudio();
     const std::string slots = slotsOf("ep-rhodes", 16);
     rt.post(R"({"v":1,"op":"prepare","id":3,"patch":{"slots":[)" + slots + "]}}");
-    const std::string pr = rt.reply(3, 20000);
+    // CORE2A: the prepare reply comes once the samples are decoded (audio.js prepare), from the pumped control loop
+    const std::string pr = rt.reply(3, kSanitized ? 180000 : 60000);
     REQUIRE(contains(pr, "\"token\":"));
     const long token = std::strtol(pr.c_str() + pr.find("\"token\":") + 8, nullptr, 10);
     rt.post(R"({"v":1,"op":"commit","id":4,"token":)" + std::to_string(token) + "}");
@@ -299,8 +300,10 @@ TEST_SUITE("runtime_cache") {
       rt.post(R"({"v":1,"op":"audio","action":"start","id":2})");
       REQUIRE(!rt.reply(2).empty());
       rt.post(R"({"v":1,"op":"prepare","id":3,"patch":{"slots":[)" + slotsOf("salamander-piano", 2) + "]}}");
-      REQUIRE(contains(rt.reply(3, 20000), "\"token\":"));
-      Rt::pause(20 * round);  // destroyed while the workers are still decoding
+      // CORE2A: the prepare reply now waits for the decodes, so the test no longer waits for it: the control loop
+      // takes the prepare within a few ms, then the engine is destroyed while the workers are still decoding
+      Rt::pause(30 + 20 * round);
+      CHECK(rt.reply(3, 1).empty());  // still decoding (salamander's 90 samples take seconds)
     }
   }
 

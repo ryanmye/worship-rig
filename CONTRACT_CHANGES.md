@@ -6945,3 +6945,120 @@ once the shim's optimistic window ends. ui-core status lamps now also checks tha
 (passes on the web engine, fails on the bridge with that cause) and lifts the pedal in a cleanup hook (its failure
 had also failed round2-ui #1). Raw UI parity on `rig-devhost` over three runs: 68, 68, 66 / 77 (the builder's 70 was
 one run; the spread is timing behind `cache preload`). Owners in `PARITY.md` "UI parity".
+
+## CORE2A (2.0 native core: asynchronous sample loading; native/core/src/samples/**, src/bridge/bridge.{h,cpp}, src/inst/sampler_service.{h,cpp}; no op or reply shape changed)
+
+**Required behaviour (the 1.x web engine, `app/js/engine/audio.js` + `controller.js`).** Decoding never blocks the
+thread that handles input and meters: `decodeAudioData` runs off the main thread. A song switch is `prepare` →
+`commit`: `prepare` builds the new instruments and resolves only when their samples are decoded (`inst.ready`,
+6 parallel decodes per sampler), and the controller commits after that. Until the commit the **old song keeps
+playing**, every note played meanwhile sounds on it at once, scenes and live moves go to it, and the meters keep
+running; the new song takes effect at the commit, complete (no partially loaded sampler). A newer switch supersedes:
+only the latest token commits; the older `prepare` still resolves (the controller drops it, `my !== seq`).
+`preload(patches, {pin})` (neighbours, setlist) runs in the background, resolves when its decodes are done and is
+never dropped; the controller sequences pins (`pinSeq`, `winSeq`, `preloadSeq`) and relies on each preload having
+decoded its songs (`probeSetlist`'s exact estimate, `warmRest`).
+
+**2.0 before.** The bridge answered `cache preload` with `Model::preload` → `CacheServiceImpl::preload`, which pumped
+the cache in a loop on the core's control thread until the workers finished: no tick, no `play`, no `set` for
+0.5-3.1 s per cold song (UIC logs: 10-11 tick gaps over 400 ms per ui-core run, max 2.6-3.1 s, each with a preload in
+flight). `prepare` was answered at once, so the shim committed a sampler whose zone table was partial (often empty).
+
+**2.0 now.**
+- `cache preload` is answered from the control loop's `pump()` (`preloadAsync`); the loop keeps running.
+- realtime `prepare` is answered when none of the new song's sampler samples is still decoding (offline unchanged);
+  a newer `prepare` answers the older waiting ones at once.
+- Decode pool: lowest priority first (0 song switch, 1 preload, 2 re-warm), newest first within a priority; a request
+  that joins a key still queued re-posts its job (claimed once), so the newest switch never waits behind a preload or
+  a superseded switch. Workers run at utility QoS (Apple) / nice 10 (Linux), ARCHITECTURE section 3.
+- A sampler load that finishes before its unit is attached sends its table at the commit (it used to reach the old
+  unit, be refused by instSeq, and leave the new sampler partial for good).
+
+**Numbers (this box, 2 CPUs).** `unit.runtime_preload` (synthetic decoder, 25 ms per sample): a 178-sample preload
+took 4.5 s; before, the largest tick gap was 4.5 s (one tick) and a `play` sent 0.4 s in was answered after 4.1 s;
+now the largest gap is 36 ms (136 ticks at 30 Hz) and the `play` is answered in 0.15 ms. A cold salamander-piano
+`prepare` is answered after 2.3 s with every sample loaded (largest gap 37 ms; before: at once, samples missing). A
+superseded `prepare` is answered at once; vibes (88 samples) prepared 0.3 s after salamander is ready 2.25 s later
+(salamander still loading). ui-core on `rig-devhost --no-adapter`: **77/77 and 76/77** (with CORE2B's tree);
+tick gaps over 400 ms 4-5 per run (were 10-11), max 0.75 s (was 2.6-3.1 s), none with a preload in flight: every
+remaining gap over 150 ms starts within 80 ms of a `prepare` of synth / organ slots (first-use table builds inside
+`Model::prepare`: glass-pad + sub-bass 0.73-0.82 s, gospel + warm-pad 0.48 s, then ~0.1 s for gospel each time; same
+on the base build).
+
+## CORE2B (2.0 native core: tick pedal / held / swelling and param read-back; native/core/src/model/perform*, param_read.*, api/engine.cpp, graph/graph.{h,cpp} (meter lines), bridge/{bridge,schema}.cpp, native/contract/**, engine-bridge/bridge-engine.js + mock-native.js + param-read.js)
+
+What changed (rows: `native/docs/INTERFACE_LOG.md` "## CORE2B"; PARITY "UI parity" rows 2-4, UIC review S1 / O1 / O2 /
+O4).
+
+**Required behaviour (the 1.x web engine).** `engine.pedal` is the effective sustain for as long as the pedal is down
+(`perform.js` `readRuntime` lights the Perform pedal lamp and the strips' pedal lights from it);
+`wheelValues().swelling` is `!!this._swell` until the swell ends or a panic drops it; `engine.getParam(path)` returns
+synchronously what the engine holds for a PARAMS path (`audio.js:1221`: the slot's stored value, the resolved EQ
+band, an instrument param or its catalogue default, `drone.p[key]`, undefined for an empty slot).
+
+**2.0 before.** `Engine::buildTick` wrote `pedal` / `held` from the `rig_meters` snapshot, which nothing filled
+("T14 fills the snapshot's pedal/held" was never done): every tick said `pedal:false, held:0`, so the lamp went dark
+0.4 s after pedal down (when the shim's optimistic window ended; UIC skeptic probe). The tick's `runtime` had no
+`swelling` (contract 6.5 lists it). `getParam` was `notContract` ("tests only"): the bridge had no read-back.
+
+**2.0 now.**
+- **Tick `pedal` / `held`** come from `Perform::pedal()` / `held().size()` (the held physical notes) on the control
+  thread, where the tick is built. `rig_meters.pedal` / `held` are filled too: the control thread publishes both in
+  one relaxed atomic (`Graph::setPerformMeters`, once per control-loop pass and before each offline quantum), and
+  the snapshot fill copies it (wait-free on the audio thread). An API 1.0 caller (`RIG_METERS_SIZE_V1`) gets them.
+- **Tick `runtime.swelling`**: `Perform::tickRuntimeJson()` = `runtimeStateJson()` + `swelling` (the
+  `wheelValuesJson` rule). `get state`'s `runtime` keeps audio.js `getRuntimeState()`'s shape (no `swelling`).
+- **`get {what:'param', path}`** (bridge minor **5**, capability `getParam`): reply `{path, value?}`, `value`
+  absent = undefined; a path outside the grammar = `unknown-param`; no `path` = `bad-request` (schema variant).
+  `model/param_read.cpp` reads the Model's resolved patch in the PARAMS value space: enum rows as member names,
+  booleans, `pedalHold` 0 = `'natural'`, `release` NaN = undefined; slot EQ b-rows / cuts resolved, legacy rows
+  stored or default; instrument params stored (a number written in JS form, not withParam's `900.0`; organ `rotary`
+  index -> name; a boolean row stored as 0/1 -> boolean), else the catalogue's own `default` literal (`percussion:
+  true`, `rotary: "fast"`); `drone.*` from the live `DroneCore`, else the patch. `rig_test_query("getParam:<path>")`
+  (documented in `rig_engine.h`, never implemented) answers the same (`null` = undefined).
+- **Shim `getParam(path)`** (synchronous, as the UI tests read it): a per-path mirror. Order: the core's last `get
+  param` answer, unless a later `setParam` of that path (per-path generation) or a `commit` (epoch) overtook it; else
+  the shim's own `setParam` value since the commit, clamped by `shared/params.js` `clamp` (instrument params as
+  sent); else the committed patch (`engine-bridge/param-read.js` `patchParam`, the audio.js reading). A read that is
+  not a core answer sends one `get param` (one per path and write in flight; `_req` flushes the pending `set`s
+  first, so the core answers after applying them); the next read returns the core's value. `drone.configure` drops
+  the `drone.*` entries (drone.js `configure` sets its params). A core before minor 5: mirror only.
+- Contract: `getParam` moves from `notContract` to `methods` (68 -> 69); the `get` op gains `'param'` / `path`;
+  ENGINE_CONTRACT 1.x row, 1.7, 6.2 (minor 5; a minor-5 core also has CORE2A's preload / prepare timing, which has no
+  shape change of its own), 6.4, 6.6. The mock core answers `get param` like the core and reports minor 5.
+
+**Tests** (not re-run against a base build; each asserts what the base code never produces: a tick `pedal` from the
+never-filled snapshot, a tick `runtime` without `swelling`, `get` without `what:'param'`, a shim without `getParam`):
+- `unit.core2b` (new `tests/test_core2b.cpp`, 7 cases): pedal + two keys -> tick `"pedal":true,"held":2` and
+  `rig_meters` 1 / 2; one key released under the pedal -> `true / 1` at every 0.1 s step from 0.2 to 1.6 s (the UIC
+  probe saw `false` from 0.6 s), `pedaled` 1; pedal up + key up -> `false / 0`; panic lifts the pedal; a V1-sized
+  `rig_meters`; swell -> tick `swelling:true` (and `wheelValuesJson`), `get state` without `swelling`, panic ->
+  false; hello minor 5 + `getParam`; `get param` over 30 paths (slot rows, enums, optional rows, empty slot, EQ
+  resolved / legacy, instrument params stored / catalogue default incl. organ `percussion` / `rotary`, `drone.*`,
+  `rig_test_query`); `unknown-param` / `bad-request` / a commit replaces values; realtime (null host, 256-frame
+  blocks): every tick between the pedal-down and pedal-up replies says `"pedal":true,"held":1` (10 of 10 ticks over
+  1.2 s here), the last tick after pedal up says `false / 0`.
+- `unit.t00c` accepts minor 5 + `getParam`.
+- `test/unit/engine-bridge/get-param.test.mjs` (6): mirror order, one request per path, clamping (`slots.1.gain` 5 ->
+  2, octave -1.4 -> -1, mono 2 -> 'highest'), the set goes out before the `get`, an answer overtaken by a write or a
+  commit is dropped, the mock's replies and errors, `patchParam`; opt-in on `rig-devhost` (`RIG_DEVHOST`): hello minor
+  5, the core confirms clamped values, `engine.pedal` true and `held` 1 at 0.6 / 1.0 / 1.5 s after `sustain(true)`,
+  false / 0 after pedal up, `wheelValues().swelling` true 1 s after `swell(true)` and false after panic.
+  `sound-settings.test.mjs` (mock minor 5 = the core's `kv("minor", 5)`, caps equal) and `surface.test.mjs` (69
+  methods) follow.
+
+**Numbers / gate** (own build dirs, `-j2`, the tree also carrying CORE2A's in-progress files):
+- ctest **82/82** on g++ 13 Release (`build-core2b`, twice: before and after the last CORE2A edits), clang++-20 Release
+  `-Werror` (`build-core2b-clang20`: 82/82; after the last CORE2A edits 81/82 in a `-j2` run next to another
+  lane's ctest, `unit.runtime` "active ticks in 2 s: 40 >= 45", 60 alone twice, `--rerun-failed` passes) and g++
+  ASan+UBSan (82/82, `-j2`, `rt.realtime` included, no sanitizer report; built before CORE2A's last two edits);
+  0 compiler warnings. TSan (`RIG_SANITIZE=thread`): core2b, realtime, runtime,
+  runtime_cache, meter, model, t00c, perform, perform_carry, perform_ports, wheels, sleep, bridge all pass, no report.
+- Fixtures: all 112 g++ renders byte-identical to the UIC skeptic's (`scratchpad/uicsk/r-gcc`, 112/112 `cmp`) and to
+  clang-20's; `compare.mjs` 112/112; `parity.mjs --twin` exit 0 (110 at the exact tier, no unexpected failure).
+- `node --test test/unit/engine-bridge/*.test.mjs`: 128 / 0 / 3 skip; **131 / 0 / 0** with `RIG_DEVHOST` = this
+  build's `rig-devhost`. Settings `SETTINGS_MODES=bridge` 9/9 (zero console.error).
+- UI parity, `ui-core-devhost.mjs --no-adapter`: **77/77, 77/77** (two runs; UIC skeptic 66-68). The 5 read-back tests,
+  Swell and status lamps (pedal lamp still lit after 1 s) pass; no bridge error reply; the two known warns; no
+  sanitizer line; "no console errors on the main page" passes. The factory-song and timing rows also passed, on
+  CORE2A's files (their section has their numbers).
