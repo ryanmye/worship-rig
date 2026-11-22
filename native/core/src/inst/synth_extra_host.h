@@ -173,7 +173,9 @@ class XHost : public Instrument {
   }
   void setParam(std::uint32_t index, double value, double time, double) override {
     if (index >= nDefs_) return;
-    const double v = coerceParamValue(defs_[index], value);
+    double v = coerceParamValue(defs_[index], value);
+    // voice.js coerceParam: a numeric bool row is `value >= 0.5` (0.3 = false; a clamp alone kept 0.3 = "on")
+    if (std::string_view(defs_[index].unit) == "bool") v = value >= 0.5 ? 1 : 0;
     params_[index] = v;
     applyParam(index, v, atTime(time));
   }

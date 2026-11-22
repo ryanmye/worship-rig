@@ -87,6 +87,12 @@ TEST_SUITE("organ") {
     CHECK(o->paramValue(rig::inst::ok::kPercussion) == 0);
     CHECK(o->paramValue(8) == 8);  // step 1
     CHECK(o->paramValue(rig::inst::ok::kDrive) == doctest::Approx(0.9));
+    // T15 review: a numeric bool param is coerceParam's `value >= 0.5`, not a clamp
+    o->setParam(rig::inst::ok::kPercussion, 0.3, 0, 0);
+    CHECK(o->paramValue(rig::inst::ok::kPercussion) == 0);
+    o->setParam(rig::inst::ok::kPercussion, 0.7, 0, 0);
+    CHECK(o->paramValue(rig::inst::ok::kPercussion) == 1);
+    o->setParam(rig::inst::ok::kPercussion, 0, 0, 0);
     t11::Driver d(o, 48000);
     rig::Command cap{};
     cap.op = rig::Op::VoiceCap;
