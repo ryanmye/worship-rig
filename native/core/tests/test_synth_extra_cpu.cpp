@@ -89,8 +89,9 @@ TEST_SUITE("synth-extra-cpu") {
         t8 = perQuantum(e, 8);
       }
       const double per = (t8 - t0) / 128;
-      MESSAGE(std::string(k.type) + ":" + k.id << ": 16 slots idle " << t0 << " us, 16 x 8 held " << t8
-                                               << " us per quantum -> " << per << " us per voice");
+      const std::string name = std::string(k.type) + ":" + k.id;
+      MESSAGE(name << ": 16 slots idle " << t0 << " us, 16 x 8 held " << t8 << " us per quantum -> " << per
+                   << " us per voice");
       if (per > worst) {
         worst = per;
         worstId = k.id;
