@@ -630,7 +630,8 @@ export class MockNative {
     if (this.meters.slots.length) {
       const on = (i) => this.meters.slots.includes(i);
       // contract tick row: one pair per slot of the song, at least 4, at most 16 (UIC: was always 4)
-      const n = Math.min(MAX_SLOTS, Math.max(SLOT_COUNT, (this.patch && this.patch.slots && this.patch.slots.length) || 0));
+      const songSlots = (this.patch && this.patch.slots && this.patch.slots.length) || 0;
+      const n = Math.min(MAX_SLOTS, Math.max(SLOT_COUNT, songSlots));
       tick.slots = Array.from({ length: n }, (_, i) => (on(i) ? [this.peak[0], this.peak[0] * 0.7] : [0, 0]));
     }
     if (this.meters.rta) {

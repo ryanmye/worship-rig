@@ -20,7 +20,8 @@ async function started() {
   return r;
 }
 
-test('UIC: sustain() sets engine.pedal at once; a stale tick does not undo it; a confirming tick hands it back', async () => {
+test('UIC: sustain() sets engine.pedal at once; a stale tick does not undo it; a confirming tick hands it back',
+  async () => {
   const r = await started();
   const e = r.engine;
   assert.equal(e.pedal, false);
@@ -56,7 +57,8 @@ test('UIC: wheels, swell, fade and panic answer wheelValues() / getRuntimeState(
   assert.equal(e.wheelValues().expr, 0.5);
   assert.equal(e.wheelValues().vol, 0.25);
   e.setWheel('virtual', 0.7);
-  assert.deepEqual(e.getRuntimeState(), { wheel: { mod: 0.7, expr: 0.5, vol: 0.25 }, modOwner: 'virtual', faded: false });
+  assert.deepEqual(e.getRuntimeState(),
+    { wheel: { mod: 0.7, expr: 0.5, vol: 0.25 }, modOwner: 'virtual', faded: false });
   // hardware mod while the virtual value owns the wheel: pickup is native's, so the mirror waits for the tick
   e.modWheel(0.1);
   assert.equal(e.wheelValues().mod, 0.7);
