@@ -171,6 +171,7 @@ std::optional<DroneCore::InstEntry> DroneCore::buildInst() {
   box->inst = makeDroneOsc(rng_, h_.sampleRate(), droneOscParams(p_.movement));
   opOwned(DroneOp::SetInst, static_cast<unsigned>(slot), box);
   slotUsed_[slot] = true;
+  ++builds_;
   return InstEntry{slot, false};
 }
 
@@ -762,6 +763,7 @@ std::pair<DroneCore::ElP, double> DroneCore::grab() {
 }
 
 void DroneCore::releaseEl(const ElP &e) {
+  if (e->busy && e->started && elLevel(*e, h_.now()) > 0.05) ++hardCuts_;  // an audible element cut (REVIEW #3)
   e->seq++;
   op(DroneOp::PadStop, e->idx);
   PRef g = prm(kParamPadGain0 + e->idx);
@@ -1234,6 +1236,12 @@ void DroneCore::rateChanged(double sampleRate) {
   padCache_.clear();  // decoded at the old rate (playing pads keep theirs: BufferSource resamples them)
   padLru_.clear();
   fz_.last.reset();  // a kept loop is at the old rate
+}
+
+std::vector<DroneCore::ElInfo> DroneCore::pool() const {
+  std::vector<ElInfo> out;
+  for (const ElP &e : pool_) out.push_back(ElInfo{e->idx, e->busy, e->started, e->fileCopy.name});
+  return out;
 }
 
 std::string DroneCore::freezeStatsJson() const {

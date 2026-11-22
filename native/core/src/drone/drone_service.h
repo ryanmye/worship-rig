@@ -88,6 +88,8 @@ class DroneServiceImpl final : public DroneService, public PerformDrone, public 
   DroneCore *core() { return core_.get(); }
   double trimDb() const { return trimDb_; }
   std::string stateJson() const;
+  /** Tests (offline engines only: the audio thread owns it in realtime). */
+  const DroneUnit *unitForTests() const { return unit_; }
 
  private:
   void applyFreeze();
@@ -96,6 +98,7 @@ class DroneServiceImpl final : public DroneService, public PerformDrone, public 
 
   Model &m_;
   std::unique_ptr<DroneCore> core_;
+  DroneUnit *unit_ = nullptr;  // the last unit built (tests)
   double trimDb_ = 0;
   bool freezeCfg_ = true, lowRes_ = false, pretendRealtime_ = false, pollArmed_ = false;
   std::string padsDir_;

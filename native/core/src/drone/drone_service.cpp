@@ -163,6 +163,7 @@ Unit *DroneServiceImpl::buildUnit(const UnitEnv &env, const UnitSpec &) {
   }
   core_ = std::make_unique<DroneCore>(*this, rngFor(env.seed, "drone"));
   auto *u = new DroneUnit(env.sampleRate, core_->unitInit(trimDb_));
+  unit_ = u;
   if (!prevCfg.empty()) {
     std::weak_ptr<bool> alive = alive_;
     at(now(), [this, alive, prevCfg, hadKey, prevPc, prevMinor, prevMode](double t) {

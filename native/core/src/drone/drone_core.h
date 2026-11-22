@@ -166,6 +166,15 @@ class DroneCore {
   std::vector<double> debugTargets() const;
   const PadFile *fileFor(int pc, bool minor) const;
   void setMinorUsesRelativeMajorFile(bool v) { cfg_.minorUsesRelativeMajorFile = v; }
+  /** Tests: drone-osc instruments built so far; pad players released while still audible (> 0.05, REVIEW #3). */
+  unsigned instBuilds() const { return builds_; }
+  unsigned hardCuts() const { return hardCuts_; }
+  struct ElInfo {
+    unsigned idx;
+    bool busy, started;
+    std::string name;
+  };
+  std::vector<ElInfo> pool() const;
   /** freezeStats() as `"k":v,...` (_debugStats members). */
   std::string freezeStatsJson() const;
   /** getState() as JSON. */
@@ -382,6 +391,7 @@ class DroneCore {
     std::optional<Last> last;
     std::optional<unsigned> rerunSeq;
   } fz_;
+  unsigned builds_ = 0, hardCuts_ = 0;
   std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);  // async results check it
 };
 
