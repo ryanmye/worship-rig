@@ -22,12 +22,12 @@ sibling skeptic's 1194 → 1243 mapping in the session scratchpad (`uisk/pw`); n
 | `parity.mjs` (twin = this review's clang-20 renders) | exit 0, "unexpected failures: none" |
 | ctest g++ Release | 78/80 in the `-j1` run under load 7-9 (two other builders): `rt.realtime` (xruns 13 > 3) and `unit.runtime` (idle ticks 9 < 12). Alone: `unit.runtime` passes; `rt.realtime` failed once more alone (18 > 3) and then passed. A/B against the builder's own `build-uib/rig_tests -ts=realtime` back to back: both failed once and both passed once, so load, not this change (neither file is touched by UIB) |
 | ctest clang++-20 `-Werror` | **80/80**, 0 warnings |
-| ctest ASan+UBSan | see below (filled in at the end of the run) |
+| ctest ASan+UBSan | **80/80** in one `-j1` run (incl. `rt.realtime` and `unit.runtime`), no sanitizer report, 0 build warnings |
 | `unit.bridge_dynrange` | 3/3; ep-rhodes vel 40: range 1 −37.89 dB, range 3 −58.77 dB sent before the song and to the live sampler (−20.88 dB), back to 1 = −37.89 dB |
 | `engine-api.json --check` | up to date (before and after this review's comment edits) |
 | `node --test test/unit/engine-bridge/*.test.mjs` | **118 pass / 0 fail / 2 skip** |
 | `run-all --fast` (sibling skeptic's run on `7ce6737`, same UIB code) | 11/12: unit 519 · **engine 98/99 + 1 soft warning, PASS** (`offline.eqCpu` is a soft warn this time: "absolute numbers outside ±30 % (box load?)") · instruments 143 · synth-extra 153 · shell 264 · ui-core 90 · edit-v2 109 · settings 84/84 · **eq 27/28** (the known `L-21`) · mini 14 · themes 58 · chrome-fallback 17 |
-| after R1 (this review's controller edit) | `run-all --fast --only unit,shell,ui-core,settings,edit-v2,chrome-fallback`: **6/6** (519 · 264 · 90 · 109 · **84/84** · 17); mini / themes / eq: see below |
+| after R1 (this review's controller edit) | `run-all --fast --only unit,shell,ui-core,settings,edit-v2,chrome-fallback`: **6/6** (519 · 264 · 90 · 109 · **84/84** · 17); `--only mini,themes,eq`: 14/14 · 58/58 · eq 27/28 (`L-21` only) |
 
 The builder's open gate item "engine 98/99, `offline.eqCpu` failed" does not reproduce as a failure: the suite
 passes with eqCpu as a soft warning (its ratios `eq2` 1.04, `eq5` 1.11 vs plain biquads are in range; only the
@@ -96,7 +96,10 @@ attached later. No new audio-thread code.
   / runtime answered from the 30 Hz tick and the 1 s stats; meters and wheel echo while silent) are owned by "T09",
   but the shim is this task's file. Not a regression: the UI's own pedal lamp reads controller status (set on input),
   not the engine, so the lag is in what the *tests* read. Left open (O1).
-- Devhost re-run here: see the table at the end.
+- Devhost re-run here (fresh `build-uibsk-devhost`, g++ Release, 0 warnings): **25/77** `--no-adapter`, **66/77**
+  with the adapter; no bridge error reply, no sanitizer line. The 11 adapter-run failures are the builder's list
+  minus `boots`, the Quick sheet geometry and `performance #2`, which passed this time (layout / timing, as the
+  builder said). Recorded in PARITY "UI parity".
 
 ## Open items
 

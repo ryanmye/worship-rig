@@ -295,6 +295,11 @@ UIA's `slots.mjs`):
 | `--no-adapter` (the suite as it is) | **25** | 39 of the 52 failures are one line: the suite's `waitSong` helper waits for `engine.slots.some(Boolean)`, a Web Audio engine internal (not contract), so every test that switches songs stops there |
 | with `ui-core-devhost.adapter.js` (default since UIB) | **63** (49 before `transpose` / `activeNotes` were added) | the adapter answers the internals the suite reads (`slots`, `retiring`, `getParam`, `pedaled`, `transpose`, `activeNotes` / `sounding`, `fx.reverb.settled`, `drone.getState`) on the BridgeEngine instance from what the shim knows (patch mirror, values sent, tick `stats`, `notes` events); class and contract surface unchanged, nothing under `app/` loads it |
 
+UIB skeptic re-run (fresh `native/core/build-uibsk-devhost`, tree with the core fix CORE1 and UIA landed): **25 / 77**
+raw and **66 / 77** with the adapter; the three layout / timing rows below (`boots`, Quick sheet geometry,
+`performance #2`) passed this time, the other 11 fail as listed. The parity number is the raw one (the adapter
+stands in for Web Audio internals: see `reviews/UIB.md`).
+
 No bridge error reply in either run; warns: one "No pad file for C; using the synth drone." and one "Drone: too many
 overlapping layers; a fading one was cut."; no sanitizer report. The 14 left (adapter run), with owners:
 
