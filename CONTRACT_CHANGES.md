@@ -6769,3 +6769,53 @@ slot…` (test 31): "Perform reads slot 3 once per clock frame or sleeps (0.25)"
   this), settings 60/60, shell unit + browser pass.
 - **For 2.0:** if the native engine replaces the sampler, keep `velocityDb` as the one gain law (per-note, pivot
   0.75, spans 10 / 24), and keep the setting device-local.
+
+## UIA (2.0 UI wave items 1-3, native DECISIONS D3: 1..16 slots per song; store.js, shared/params.js + scenes.js, controller.js, views/perform.js, views/edit/**, views/components/eq-keyboard.js, styles.css)
+
+What changed (frozen-interface rows: `native/docs/INTERFACE_LOG.md` "## UIA", UIA-1..5):
+- **Store SCHEMA 1 → 2.** A song's `patch.slots` has 1..16 entries (a Slot or null = empty); its length is the slot
+  count. `migrate()` reads schema 1 (and a state without `schema`: hand-written files) exactly as 1.x did, 4 slots
+  per song, padded / cut, so every 1.x song migrates byte for byte (test: the 19 songs of a real 1.x export,
+  `test/phase1/shell/fixtures/uia/library-1x.json`, and every factory song). Schema 2 keeps 1..16 (more are cut;
+  none = a new song's 4). Idempotent; unknown fields kept. `STORAGE_KEY` stays `rig.v1`. Loading a schema-1
+  library that has songs first writes its text to `rig.v1.backup-<ts>` (best effort; `loadInfo.migratedFrom`,
+  `loadInfo.migrationBackupKey`), because 1.1 refuses schema 2 (FutureSchemaError → its own backup + a fresh
+  library). Exports say `schema: 2`; a song file's own schema decides its slot count on import.
+- **Slot count API.** `store.addSlot(id?, slot?)` appends an empty slot (or a Slot, normalised with that slot's role
+  defaults), at most 16, and returns its index; `store.removeSlot(id?, i?)` removes slot i (default the last; at
+  least one stays): later slots move down, a wheel / pedal / knob target on the removed slot goes back to the
+  song's default target (`'none'` when that is gone too), targets on later slots follow their slot, scenes drop
+  the entry. Slot paths (`slots.<i>…`, `songs.<id>.patch.slots.<i>…`) address i < the song's count only; wheel
+  targets are `isWheelTarget(t, n)` (= presets.WHEEL_TARGETS at n = 4). A whole `slots` array of another length
+  writes the whole patch (targets re-checked).
+- **Grammar.** `params.MAX_SLOTS = 16`. `parsePath` / `isValidPath` / `expandPaths` take the slot bound as a second
+  argument, default `SLOT_COUNT` (4): app/js/engine, the bridge shim and its mock call them unchanged and see the
+  grammar they were built for (the engine-bridge tests pin `slots.9.gain` before a 16-slot commit as invalid).
+  The store, controller and views pass `MAX_SLOTS`. `describe` / `clamp` / `formatValue` take 0..15. Names past
+  the four roles: `slotName(i)` = 'Sound 5' … 'Sound 16' (`slotRole(i)`: Extra's defaults); `defaultSlot` 0..15.
+  Learn: `isLearnable('slots.<i>.gain')` for i < 16, `learnTargets(n)`; `LEARNABLE` (the Settings rows) unchanged.
+- **Engines.** `controller.engineSlots()` = 16 on the bridge engine (it has the 2.0 setters, or an engine's own
+  `maxSlots`), 4 on the web engine. The web engine never sees a slot past 4: `prepare` / `preload` / estimates /
+  `retainReverb` get the first 4 slots (a 4-slot song's patch object is passed through untouched), a wheel target
+  on a silent slot becomes `'none'` in `setRouting`, and `call('setParam', 'slots.<i>…')` with i ≥ 4 is dropped.
+  The bridge engine gets everything (prepare carries up to 16 slots; T00c already takes them).
+- **Scenes** hold one entry per slot (at least 4, so a 1.x scene keeps its 4).
+- **Perform.** Up to 4 slots: today's row, untouched (pixel-identical: `native/docs/reviews/UIA-shots/`, before vs
+  after at 1440×900 and 820×1180 differ only in the top bar's live meter). Fewer than 4: only the song's strips.
+  More than 4: the row scrolls sideways with four filled strips' width in view (wheel / trackpad, touch with
+  scroll snap, a sideways swipe over a vertical fader pans the row, ←/→/Home/End/PageUp/PageDown on the focused
+  row, which keeps the arrows from switching songs), with a soft edge on the side(s) it can still scroll to; a
+  strip that gets keyboard focus scrolls into view at once, a
+  touched one when the finger lets go; a song switch starts at the first strip. Sound 5.. tiles read "SOUND 5"
+  ("5" in a narrow strip). On the web engine a one-line vertical note before Sound 5 says "Silent here · these play
+  on the 2.0 engine" and those strips dim. Range bars: more than four share the four rows' 23 px.
+- **Edit.** Tabs per song (`lib.blocksFor(n)`); more than four slot tabs scroll the same way, the selected one in
+  view. "Slots n" in the rig bar (over the tabs): Add Sound n+1 (empty, selected, picker open) / Remove the last
+  slot… (asks: "Remove Sound 6 from “Song”? Its sound and settings go with it."). Only the last slot is removed
+  there, so no other slot changes name or colour. Effects' "goes in" chips, Master's wheel targets, the wiring strip
+  and the keyboard legend follow the count. A silent slot's title says so.
+- **Colours.** `--slot-4` … `--slot-15` in styles.css mix the theme's four role colours in oklch (halfway between
+  neighbours, then a quarter / three quarters), so every theme re-colours them with no theme change.
+
+Not changed: app/js/engine (the oracle), app/js/engine-bridge, presets.js, Settings (its Learn table still lists the
+1.x rows; slot levels past 4 are learnable through `controller.learn('slots.<i>.gain')`).
