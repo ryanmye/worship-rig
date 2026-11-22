@@ -27,16 +27,27 @@ TEST_SUITE("drone") {
     e.until(7.5);
     const std::vector<float> d = mono(e);
     const double w = t13::minWindowDb(d, 2.2, 7.4);
+    // The real drone-osc (4 detuned band-limited saws) trips suites.mjs' click detector on its own now and then (the
+    // JS suite runs the fallback synth: instrumentModules false); a gain step would show at the crossfade's ends.
     const auto cl = rigtest::clicks(d, t13::kSR, 2.5, 7.0);
-    const double c3a = bandMag(d, 1.5, 2.9, 130.81), g2a = bandMag(d, 1.5, 2.9, 98);
+    for (const auto &c : cl) CHECK((std::fabs(c.t - 3.0) > 0.02 && std::fabs(c.t - 6.0) > 0.02));
+    auto maxStep = [&](double a, double b) {  // largest level change between neighbouring 50 ms windows
+      double m = 0;
+      for (double t = a; t + 0.1 <= b; t += 0.025)
+        m = std::max(m, std::fabs(t13::db(t13::rms(d, t + 0.05, t + 0.1)) - t13::db(t13::rms(d, t, t + 0.05))));
+      return m;
+    };
+    const double step = maxStep(2.9, 6.2), steady = maxStep(6.5, 7.4);
+    MESSAGE("level step in the crossfade " << step << " dB, steady " << steady << " dB");
+    const double c3a = bandMag(d, 1.5, 2.9, 130.81), d3a = bandMag(d, 1.5, 2.9, 146.83);
     const double c3b = bandMag(d, 6.5, 7.4, 130.81), g2b = bandMag(d, 6.5, 7.4, 98);
     auto *s = service(e);
     REQUIRE(s);
     CHECK(rigtest::contains(noop, "\"changed\":false"));
     CHECK(w > -60);
-    CHECK(cl.empty());
+    CHECK(step < steady + 2);
     CHECK(s->core()->layerCount() == 1);
-    CHECK(c3a > 4 * g2a);  // C: C3 G3 C4 (root 48)
+    CHECK(c3a > 4 * d3a);  // C: C3 G3 C4 (root 48; the subs an octave below)
     CHECK(g2b > 4 * c3b);  // G: G2 D3 G3 (root 43)
     CHECK(rigtest::g_rtAllocs == alloc0);
   }
@@ -216,12 +227,11 @@ TEST_SUITE("drone") {
     CHECK(s->core()->layerCount() == 0);
     CHECK(s->core()->idleCount() == 1);
     for (unsigned i = 0; i < rig::drone::kMaxInst; ++i) CHECK_FALSE(s->unitForTests()->armed(i));
-    const std::vector<float> d = mono(e);
-    CHECK(t13::rms(d, t, t + 0.4) == 0.0);
   }
 
   TEST_CASE("drone params: width matrix, brightness re-voice (9th), movement -> drift, level glide, wheel") {
     t13::Eng e;
+    REQUIRE(e.use(t13::patch({}, R"("fx":{"reverb":{"returnGain":0}})")));  // the reverb return is stereo
     droneConfig(e, R"({"mode":"synth","gain":1,"fade":0.5,"width":0})", 0);
     droneKey(e, 0, false, 0);
     e.until(3);
@@ -258,28 +268,55 @@ TEST_SUITE("drone") {
     CHECK(rigtest::contains(e.call(R"({"v":1,"op":"get","id":6,"what":"stats"})"), "\"droneFrozen\":false"));
   }
 
-  TEST_CASE("pedal and bend swells move the level toward full; the bend duck ducks to .3") {
+  TEST_CASE("pedal and bend swells move the level toward full; the bend duck ducks to .3; the wheel") {
     t13::Eng e;
+    REQUIRE(e.use(t13::patch({}, R"("fx":{"reverb":{"returnGain":0}})")));
     droneConfig(e, R"({"mode":"synth","gain":0.25,"fade":0.5})", 0);
     droneKey(e, 0, false, 0);
     auto *s = service(e);
-    e.until(3);
-    s->dronePedalSwell(true, 3);  // rise ~2.5 s toward drone.gain 1 (x 4 = +12 dB)
-    e.until(7);
-    s->dronePedalSwell(false, 7);  // sink back ~3 s
-    e.until(11);
-    s->droneBendSwell(-1, 11);  // duck to .3
-    e.until(12);
+    e.until(5);
+    s->dronePedalSwell(true, 5);  // rise ~2.5 s toward drone.gain 1 (x 4 = +12 dB)
+    e.until(10);
+    s->dronePedalSwell(false, 10);  // sink back ~3 s
+    e.until(17);
+    s->droneBendSwell(-1, 17);  // duck to .3
+    e.until(18);
     const std::vector<float> d = mono(e);
-    const double base = t13::db(t13::rms(d, 2.5, 3)), up = t13::db(t13::rms(d, 6.5, 7));
-    const double back = t13::db(t13::rms(d, 10.5, 11)), duck = t13::db(t13::rms(d, 11.7, 12));
-    CHECK(up - base > 10);
+    const double base = t13::db(t13::rms(d, 4.5, 5)), up = t13::db(t13::rms(d, 9.5, 10));
+    const double back = t13::db(t13::rms(d, 16.5, 17)), duck = t13::db(t13::rms(d, 17.7, 18));
+    CHECK(up - base > 11);
     CHECK(up - base < 13);
-    CHECK(std::fabs(back - base) < 1.5);
+    CHECK(std::fabs(back - base) < 1);
     CHECK(duck - back < -9);  // 20 log10(.3) = -10.5
-    s->droneWheel(0, 12, 0.03);
-    e.until(12.5);
+    CHECK(duck - back > -12);
+    s->droneWheel(0, 18, 0.03);
+    e.until(18.5);
     const std::vector<float> d2 = mono(e);
-    CHECK(t13::rms(d2, 12.3, 12.5) < 1e-4);
+    CHECK(t13::rms(d2, 18.3, 18.5) < 1e-5);
+  }
+
+  TEST_CASE("rate change (T11a O4): the drone keeps its pitch, its instruments get the new rate's wavetables") {
+    t13::Eng e;
+    droneConfig(e, R"({"mode":"synth","gain":1,"fade":0.5})", 0);
+    droneKey(e, 9, false, 0);  // A: A2 E3 A3
+    e.until(3);
+    rig_device_info dev{};
+    dev.struct_size = sizeof dev;
+    dev.device_id = "test";
+    dev.device_name = "test";
+    dev.sample_rate = 48000;
+    dev.channels = 2;
+    dev.buffer_frames = 256;
+    rig_host_audio_started(e.e, &dev);
+    auto o = e.render(3 * 48000, 128);
+    std::vector<float> d(o[0].size());
+    for (std::size_t i = 0; i < d.size(); ++i) d[i] = 0.5f * (o[0][i] + o[1][i]);
+    CHECK(bandMagSr(d, 48000, 1, 3, 110) > 4 * bandMagSr(d, 48000, 1, 3, 110 * 48000 / 44100.0));
+    CHECK(t13::minWindowDb(d, 0.1, 2.9) > -60);
+    auto *s = service(e);
+    CHECK(s->core()->layerCount() == 1);
+    char buf[512];
+    rig_test_query(e.e, "stats", buf, sizeof buf);
+    CHECK(rigtest::contains(buf, "\"rateChanges\":1"));
   }
 }

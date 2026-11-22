@@ -445,7 +445,10 @@ not offline-renderable (warn → synth). Width matrix `L' = aL + bR`, `a = (1+w)
 function in its doc comment) with 1.2 s bend glides (24 steps) or 1.5/2 s layer swaps. Park after 10 s at gain 0;
 resume 50 ms. Frozen loop (low-resource): the static drone + its reverb rendered offline into a 20 s seamless loop
 (preroll 4 s, seam 1.5 s, swap 1.5 s, debounce 2 s, ≤ 12 MB; `drone-freeze.js`) — a CPU workaround for the Web Audio
-cost; see open question 7.
+cost; kept natively (DECISIONS D5): rendered on a worker thread, gated by `config {droneFreeze}` (default true) and
+`SongState.lowResource` (O-W3-2). Native pads (T16): decoded to the engine rate on a worker and played from memory
+(WAV / MP3 in the core, AAC / M4A through `host.decode_file`), so files mode also renders offline and the loop
+crossfade is sample-exact.
 
 ### 3.10 Click (`metronome.js`)
 
@@ -654,7 +657,7 @@ texts where `main.js` matches them (`engine.<name> failed`, `No pad file for <ke
 | `drone` | `{key?:{pc, minor, fade?}, config?:{song.drone}, files?:[{name, path}]}` | `{files?: count, changed?: bool}` | `drone.setKey`, `drone.configure`, `drone.attachFiles` (applied key → files → config) |
 | `play` | `{e:'on', n, vel, touch?}` \| `{e:'off', n}` \| `{e:'pedal', down}` \| `{e:'wheel', src:'mod'\|'expr'\|'vol'\|'virtual', value, glide?}` \| `{e:'bend', x}` \| `{e:'swell', start?}` \| `{e:'panic'}` \| `{e:'fade', seconds?}` \| `{e:'input'}` — each with optional `when` | `{ok: bool}` | `noteOn/noteOff/sustain/modWheel/expression/volumeCC/setWheel/pitchBend/swell/allNotesOff/fadeOutAll/noteInput` |
 | `click` | `{action:'start'\|'stop'\|'config', countIn?, quietAfter?, level?, record?, output?, when?}` | start `{t0, downbeat}\|null`; stop `{wasRunning}`; config `{output, auxAvailable}` | `clickStart`, `clickStop`, `setClick` |
-| `config` | `{mono?, lowResource?, eqAudition?:{slot, mode}, meters?:{rate?, slots?:[i…], rta?: bool}, midiClock?:{port: id\|null}, polyphony?: 32\|64\|128, voiceLimit?: 'auto'\|128\|256\|512\|0}` (T00c, D1: voices per slot, default 64; D4: total voices, 0 = off, default 'auto') | `{lowResource?, eqAudition?: bool, polyphony?, voiceLimit?, voiceLimitEffective?}` | `setMono`, `setLowResource`, `eqAudition`, meter/slot-tap/RTA subscriptions, `setClockSink` |
+| `config` | `{mono?, lowResource?, eqAudition?:{slot, mode}, meters?:{rate?, slots?:[i…], rta?: bool}, midiClock?:{port: id\|null}, polyphony?: 32\|64\|128, voiceLimit?: 'auto'\|128\|256\|512\|0, droneFreeze?: bool}` (T00c, D1: voices per slot, default 64; D4: total voices, 0 = off, default 'auto'; D5 / T16: `droneFreeze` true (default) = the drone plays a frozen loop while `lowResource` is on, as 1.x; false = always the live drone) | `{lowResource?, eqAudition?: bool, polyphony?, voiceLimit?, voiceLimitEffective?, droneFreeze?}` | `setMono`, `setLowResource`, `eqAudition`, meter/slot-tap/RTA subscriptions, `setClockSink` |
 | `get` | `{what:'instruments', reload?: bool}` \| `{what:'stats'}` \| `{what:'devices'}` \| `{what:'sampleStatus', patches}` \| `{what:'state'}` | instruments `[entry + range?]`; stats `_debugStats`; devices `[{id, name, channels, default, sampleRates}]`; sampleStatus `{loaded: bool[], failed: bool[]}`; state `{patch, routing, transpose, tempo, timeSig, keyContext, drone, mono, runtime, click, sleep}` (+ native `polyphony`, `voiceLimit`, `voiceLimitEffective`: D1, D4) | `listInstruments`, `reloadManifests`, `_debugStats`, `enumerateDevices`, `cache`/`registry` reach-in, `getState` |
 | `midi` | `{action:'listen', ids:[…]}` \| `{action:'route', on, learn:{…}, pedalInvert, velocitySens, touch:{deviceName: spec}, jitterFree?}` \| `{action:'send', port, data, when?}` | `{ports?}` | Web MIDI access (`midi.js` adapter), the direct perform path |
 | `rec` | `{action:'start', dir?, filename?, bits?: 16}` \| `{action:'stop'}` | start `{path}`; stop `{path, seconds, bytes}` | `recordTap` + `recorder.js` worklet/sinks |

@@ -131,7 +131,7 @@ class DroneUnit final : public Unit {
   static constexpr unsigned kMaxGarbage = 64;
   Owned *garbage_[kMaxGarbage] = {};
   unsigned garbageN_ = 0;
-  alignas(16) float a_[2][kQ], b_[2][kQ], c_[4][kQ], g_[kQ];
+  alignas(16) float a_[2][kQ], b_[2][kQ], c_[4][kQ];
 };
 
 /** Registry factory (kind "drone"): built from the engine's drone service state (drone/drone_service.h). */

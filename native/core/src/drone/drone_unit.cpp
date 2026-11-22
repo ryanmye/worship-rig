@@ -84,7 +84,8 @@ wa::Param *DroneUnit::param(std::uint32_t index) {
     case kParamFilesMode: return &filesMode_.gain();
     default: break;
   }
-  if (index >= kParamInstGain0 && index < kParamInstGain0 + kMaxInst) return &inst_[index - kParamInstGain0].gain.gain();
+  if (index >= kParamInstGain0 && index < kParamInstGain0 + kMaxInst)
+    return &inst_[index - kParamInstGain0].gain.gain();
   if (index >= kParamPadGain0 && index < kParamPadGain0 + kMaxPads) return &pads_[index - kParamPadGain0].gain.gain();
   if (index >= kParamLoopGain0 && index < kParamLoopGain0 + kMaxLoops)
     return &loops_[index - kParamLoopGain0].gain.gain();

@@ -6472,9 +6472,10 @@
           "midiClock": "{port: id|null}?",
           "when": "engine s?",
           "polyphony": "32|64|128?",
-          "voiceLimit": "'auto'|128|256|512|0?"
+          "voiceLimit": "'auto'|128|256|512|0?",
+          "droneFreeze": "bool?"
         },
-        "reply": "{lowResource?, eqAudition?, polyphony?, voiceLimit?, voiceLimitEffective?}",
+        "reply": "{lowResource?, eqAudition?, polyphony?, voiceLimit?, voiceLimitEffective?, droneFreeze?}",
         "maps": [
           "setMono",
           "setLowResource",

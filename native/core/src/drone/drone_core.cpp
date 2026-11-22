@@ -651,7 +651,7 @@ std::vector<double> DroneCore::debugTargets() const {
   return out;
 }
 
-// ---- bend 'drone-swell', pedal swell, wheel --------------------------------------------------------------------------
+// ---- bend 'drone-swell', pedal swell, wheel ------------------------------------------------------------------------
 
 void DroneCore::bendSwell(double x, double when) {
   const double tt = t(when);

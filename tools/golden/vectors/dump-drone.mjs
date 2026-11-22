@@ -11,7 +11,9 @@ const { staticVoicing, followVoicing, Drone } = await imp('app/js/engine/drone.j
 const { detectKeyFromName } = await imp('app/js/shared/keydetect.js');
 
 const out = { static: [], follow: [], region: [], key: [] };
-for (let pc = -13; pc <= 25; pc++) for (const b of [0, 0.5, 0.6, 0.61, 1]) out.static.push([pc, b, staticVoicing(pc, b)]);
+for (let pc = -13; pc <= 25; pc++) {
+  for (const b of [0, 0.5, 0.6, 0.61, 1]) out.static.push([pc, b, staticVoicing(pc, b)]);
+}
 
 let seed = 777;
 const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32);
@@ -40,4 +42,5 @@ const names = ['Pad - C.mp3', 'Ambient_Pad_-_F#m.mp3', 'Pad E flat.mp3', 'random
 for (const n of names) out.key.push([n, detectKeyFromName(n)]);
 
 fs.writeFileSync(path.join(DATA, 'drone.json'), JSON.stringify(out) + '\n');
-console.log(`static ${out.static.length}, follow ${out.follow.length}, region ${out.region.length}, key ${out.key.length}`);
+const { static: st, follow, region, key } = out;
+console.log(`static ${st.length}, follow ${follow.length}, region ${region.length}, key ${key.length}`);

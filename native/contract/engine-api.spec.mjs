@@ -385,11 +385,13 @@ export const BRIDGE = {
     // voiceLimit: DECISIONS D4 (total live voices across all slots, retiring channels included; 'auto' = the
     // profile's number, 0 = off; default 'auto'). The reply and get state echo the mode and the effective number
     // (voiceLimitEffective, 0 = off).
+    // droneFreeze: DECISIONS D5 (T16): true (default) = the drone plays a frozen loop whenever lowResource is on (1.x),
+    // false = always the live drone; the reply echoes it.
     { op: 'config', args: { mono: 'bool?', lowResource: 'bool?', eqAudition: '{slot, mode}?',
       meters: '{rate?, slots?, rta?}?',
       midiClock: '{port: id|null}?', when: 'engine s?', polyphony: '32|64|128?',
-      voiceLimit: "'auto'|128|256|512|0?" },
-      reply: '{lowResource?, eqAudition?, polyphony?, voiceLimit?, voiceLimitEffective?}',
+      voiceLimit: "'auto'|128|256|512|0?", droneFreeze: 'bool?' },
+      reply: '{lowResource?, eqAudition?, polyphony?, voiceLimit?, voiceLimitEffective?, droneFreeze?}',
       maps: ['setMono', 'setLowResource', 'eqAudition', 'slotLevel/analyser subscriptions', 'setClockSink'] },
     { op: 'get', args: { what: "'instruments'|'stats'|'devices'|'sampleStatus'|'state'", reload: 'bool?',
       patches: 'Patch[]?' },

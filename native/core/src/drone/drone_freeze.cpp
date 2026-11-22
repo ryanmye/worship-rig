@@ -41,8 +41,8 @@ void makeSeamlessLoop(float *c, std::size_t start, std::size_t loopLen, std::siz
   for (std::size_t i = 0; i < n; ++i) {
     const double x = static_cast<double>(i) * w;
     const double g = 1 / std::sqrt(1 + rho * js::sin(2 * x));
-    c[start + i] = static_cast<float>(
-        (static_cast<double>(c[start + i]) * js::sin(x) + static_cast<double>(c[start + loopLen + i]) * js::cos(x)) * g);
+    const double head = c[start + i], tail = c[start + loopLen + i];
+    c[start + i] = static_cast<float>((head * js::sin(x) + tail * js::cos(x)) * g);
   }
 }
 

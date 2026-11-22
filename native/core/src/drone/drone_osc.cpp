@@ -31,36 +31,39 @@ std::string num17(double v) {
 
 std::string rngNameFor(std::uint32_t state) {
   // hashSeed is FNV-1a: h = (h ^ c) * P with P odd, so each byte step can be undone. Meet in the middle on 4 free
-  // bytes after a fixed prefix: 2 forward from the prefix, 2 backward from the target (65536 x 65536 pairs, ~1
-  // expected match per tag byte; a few tags are tried).
+  // bytes after a fixed prefix: 2 forward from the prefix (65536 states, bucketed by their high 16 bits), 2 backward
+  // from the target (65536 candidates): ~1 expected match per tag byte, a few tags are tried (~1 ms each).
   const std::string base = "drone-osc#";
-  std::vector<std::uint64_t> fwd(65536);
+  std::vector<std::uint32_t> fwdH(65536), order(65536), start(65537);
   for (unsigned tag = 0; tag < 256; ++tag) {
     std::string prefix = base;
     prefix += static_cast<char>(tag);
     const std::uint32_t h0 = hashSeed("0|" + prefix);
-    for (unsigned b1 = 0; b1 < 256; ++b1) {
-      const std::uint32_t h1 = (h0 ^ b1) * kFnvPrime;
-      for (unsigned b2 = 0; b2 < 256; ++b2) {
-        const std::uint32_t h2 = (h1 ^ b2) * kFnvPrime;
-        fwd[b1 << 8 | b2] = static_cast<std::uint64_t>(h2) << 16 | (b1 << 8 | b2);
-      }
+    std::fill(start.begin(), start.end(), 0u);
+    for (unsigned b12 = 0; b12 < 65536; ++b12) {
+      const std::uint32_t h2 = (((h0 ^ (b12 >> 8)) * kFnvPrime) ^ (b12 & 0xffu)) * kFnvPrime;
+      fwdH[b12] = h2;
+      ++start[(h2 >> 16) + 1];
     }
-    std::sort(fwd.begin(), fwd.end());
+    for (unsigned k = 0; k < 65536; ++k) start[k + 1] += start[k];
+    {
+      std::vector<std::uint32_t> fill(start.begin(), start.end() - 1);
+      for (unsigned b12 = 0; b12 < 65536; ++b12) order[fill[fwdH[b12] >> 16]++] = b12;
+    }
     for (unsigned b4 = 0; b4 < 256; ++b4) {
       const std::uint32_t h3 = (state * kFnvPrimeInv) ^ b4;
       for (unsigned b3 = 0; b3 < 256; ++b3) {
         const std::uint32_t h2 = (h3 * kFnvPrimeInv) ^ b3;
-        const std::uint64_t key = static_cast<std::uint64_t>(h2) << 16;
-        auto it = std::lower_bound(fwd.begin(), fwd.end(), key);
-        if (it == fwd.end() || (*it >> 16) != h2) continue;
-        const unsigned b12 = static_cast<unsigned>(*it & 0xffffu);
-        std::string name = prefix;
-        name += static_cast<char>(b12 >> 8);
-        name += static_cast<char>(b12 & 0xff);
-        name += static_cast<char>(b3);
-        name += static_cast<char>(b4);
-        return name;
+        for (std::uint32_t k = start[h2 >> 16]; k < start[(h2 >> 16) + 1]; ++k) {
+          const unsigned b12 = order[k];
+          if (fwdH[b12] != h2) continue;
+          std::string name = prefix;
+          name += static_cast<char>(b12 >> 8);
+          name += static_cast<char>(b12 & 0xff);
+          name += static_cast<char>(b3);
+          name += static_cast<char>(b4);
+          return name;
+        }
       }
     }
   }
