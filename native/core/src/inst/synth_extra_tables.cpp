@@ -5,6 +5,7 @@
 #include <string>
 
 #include "inst/organ.h"
+#include "inst/synth.h"
 #include "inst/synth_extra.h"
 #include "model/model.h"
 

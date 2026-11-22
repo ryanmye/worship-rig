@@ -342,6 +342,10 @@ void DroneServiceImpl::warn(const std::string &msg) {
   m_.warn(msg, "drone");
 }
 
+void DroneServiceImpl::wake() {
+  m_.wake(NAN);  // INTERFACE-CHANGE(W3A): no-op while awake (model/sleep.h)
+}
+
 FreezeEnv DroneServiceImpl::freezeEnv() {
   // audio.js _droneFreezeEnv: {ir, irKey, predelay, wet: ret.gain.value * wheel.gain.value} of the live reverb
   FreezeEnv e;

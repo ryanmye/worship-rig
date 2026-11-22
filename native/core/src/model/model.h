@@ -52,6 +52,9 @@ class CommandSink {
   /** INTERFACE-CHANGE(W3A): device output latency in seconds (audio.js baseLatency: the sleep / wake ramps start
    *  clamp(2 x, 10 ms, 40 ms) ahead of now). Default 0. */
   virtual double outputLatency() const { return 0.0; }
+  /** INTERFACE-CHANGE(W3A) T00c O2: the committed song's slot count (1..16), set by Model::commit for every commit
+   *  (bridge, fixture runner, tests, internal); Engine copies it into rig_meters.slot_count. Default no-op. */
+  virtual void setSlotCount(std::uint32_t n) { (void)n; }
 };
 
 struct SetResult {

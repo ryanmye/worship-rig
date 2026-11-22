@@ -90,7 +90,7 @@ class LofiUnit final : public Unit {
 
   double sr_;
   LofiState *state_ = nullptr;
-  Owned *garbage_[8] = {};
+  Owned *garbage_[32] = {};  // W3B: every apply now arrives at once (lofi_register.cpp send), so a burst lands here
   unsigned garbageN_ = 0;
   // nodes
   wa::Param dry_{1.0}, wet_{0.0};

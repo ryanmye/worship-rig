@@ -471,4 +471,31 @@ TEST_SUITE("perform") {
     REQUIRE(t14::callsOf('N', 15).size() == 1);
     CHECK(t14::callsOf('N', 15)[0].note == 61);
   }
+  TEST_CASE("graph rule (T00c O3): a retiring channel's mono line retriggers with a targeted NoteOn on RetireInst") {
+    // audio.js _monoOff -> _monoSwitch(sc) on the retiring channel: the next held note starts there. The test voice
+    // has no legatoTo, so the switch is a 30 ms fade + a NoteOn targeted at RetireInst<j>, which the graph applies.
+    Eng e;
+    REQUIRE(e.use(patch({slot("test", "sine", 1, R"("mono":"lowest")")})));
+    e.on(60, 0.05);
+    e.on(72, 0.1);  // higher: held, silent (mono lowest)
+    e.until(0.3);
+    REQUIRE(e.use(patch({probe()})));  // a different kind: fresh channel, the sine retires with both keys held
+    e.off(60, 0.4);                     // -> 72 on the retiring channel
+    e.until(0.8);
+    auto level = [&](double hz, double a, double b) {  // Goertzel magnitude of e.L in [a, b)
+      const auto i0 = static_cast<std::size_t>(a * kSR), i1 = static_cast<std::size_t>(b * kSR);
+      const double w = 2 * M_PI * hz / kSR, cw = 2 * std::cos(w);
+      double s1 = 0, s2 = 0;
+      for (std::size_t i = i0; i < i1; ++i) {
+        const double s0 = e.L[i] + cw * s1 - s2;
+        s2 = s1;
+        s1 = s0;
+      }
+      return std::sqrt(s1 * s1 + s2 * s2 - cw * s1 * s2) / static_cast<double>(i1 - i0);
+    };
+    const double f60 = 440 * std::pow(2.0, (60 - 69) / 12.0), f72 = 2 * f60;
+    CHECK(level(f60, 0.2, 0.35) > 10 * level(f72, 0.2, 0.35));  // before: the low note
+    CHECK(level(f72, 0.5, 0.75) > 10 * level(f60, 0.5, 0.75));  // after: the retiring channel plays 72
+    CHECK(e.model().songGraph().retiringCount() == 1);
+  }
 }

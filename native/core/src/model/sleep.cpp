@@ -18,6 +18,7 @@
 #include "model/perform_internal.h"
 #include "model/song.h"
 #include "num/js_math.h"
+#include "num/js_number.h"
 #include "rig/rig_engine.h"
 #include "time/automation.h"
 
@@ -159,8 +160,9 @@ void Sleep::statsFields(std::string &out) const {
     return;
   }
   JsonOut j;
-  j.begin().kv("ms", last_.ms).kv("queued", static_cast<std::uint32_t>(last_.queued)).kv("ramp", last_.ramp);
-  j.kv("at", last_.at).kv("leadMs", last_.leadMs).end();
+  auto n = [](double v) { return js::numberToString(v); };  // JS number formatting (0.06, not 0.0599..)
+  j.begin().kvRaw("ms", n(last_.ms)).kv("queued", static_cast<std::uint32_t>(last_.queued));
+  j.kvRaw("ramp", n(last_.ramp)).kvRaw("at", n(last_.at)).kvRaw("leadMs", n(last_.leadMs)).end();
   out += j.take();
 }
 

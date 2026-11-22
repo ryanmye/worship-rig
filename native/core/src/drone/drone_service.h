@@ -78,6 +78,8 @@ class DroneServiceImpl final : public DroneService, public PerformDrone, public 
   void send(Command c, double when) override;
   void at(double t, std::function<void(double)> fn) override;
   void warn(const std::string &msg) override;
+  /** INTERFACE-CHANGE(W3A) lowres2: a drone that starts wakes the audio (audio.js drone env wake -> this.wake()). */
+  void wake() override;
   FreezeEnv freezeEnv() override;
   void decodePad(const std::string &path, std::function<void(std::shared_ptr<const AudioBuf>)> done) override;
   void renderLoop(const LoopRequest &req, std::function<void(LoopResult)> done) override;

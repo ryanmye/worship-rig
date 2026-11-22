@@ -8,5 +8,7 @@ drone-synth-stage
 # fx.sum: the loop renderDroneLoop makes, played alone from t = 0 (W3B landed the T16 runner diff).
 drone-freeze-dry
 drone-freeze-wet
-# fx-row-sweep (T13's): the drone part matches (<= 1.3e-5 from 7.5 s on); the first 3 s (lofi start-up) do not, so
-# it fails on rms by 0.01 dB: not T16's (report).
+# fx-row-sweep (T13's, closes with the drone): the drone part matched from 7.5 s on; the first 3 s needed the lofi
+# curves at call time (W3B: fx.js Lofi.apply swaps its WaveShaper curves when called, the golden page calls every
+# event up front; tests/test_lofi_calltime.cpp).
+fx-row-sweep

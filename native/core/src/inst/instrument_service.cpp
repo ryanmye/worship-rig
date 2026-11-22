@@ -122,6 +122,42 @@ void InstrumentServiceImpl::onRateChanged(double sampleRate) {
   }
 }
 
+/** The catalogue index of `key` (-1 = none) and the clamped value: shared by the store and the send half. */
+int resolveInstrumentParam(const SlotPatch &sp, std::string_view key, double &v) {
+  const CatalogueEntry *e = findCatalogue(sp.instType, sp.instId);
+  int index = -1;
+  if (e) {
+    for (std::size_t k = 0; k < e->params.size(); ++k) {
+      if (e->params[k].key != key) continue;
+      index = static_cast<int>(k);
+      if (std::isfinite(v) && e->params[k].min < e->params[k].max)
+        v = std::min(e->params[k].max, std::max(e->params[k].min, v));
+      break;
+    }
+  } else if (sp.instType == "sampler") {
+    index = samplerParamIndex(key);
+    if (index == kSamplerRelease && std::isfinite(v))
+      v = std::min(samples::kReleaseMax, std::max(samples::kReleaseMin, v));
+    if (index == kSamplerTone && std::isfinite(v)) v = std::min(1.0, std::max(0.0, v));
+  }
+  return index;
+}
+
+bool storeInstrumentParam(Model &m, int slot, std::string_view path, double value) {
+  // INTERFACE-CHANGE(W3A) T13 review O2: the store half of setInstrumentParam (same clamping), run by Model::set at
+  // call time; the coalesced handler re-stores the same latest value (idempotent) and sends.
+  const std::size_t slots = sizeof(m.patch().slots) / sizeof(m.patch().slots[0]);
+  if (slot < 0 || static_cast<std::size_t>(slot) >= slots) return false;
+  SlotPatch &sp = m.patchMut().slots[slot];
+  const std::size_t dot = path.find(".params.");
+  if (!sp.present || dot == std::string_view::npos) return false;
+  const std::string_view key = path.substr(dot + 8);
+  double v = value;
+  resolveInstrumentParam(sp, key, v);
+  sp.paramsJson = withParam(sp.paramsJson, key, v);
+  return true;
+}
+
 bool setInstrumentParam(Model &m, const SetRequest &req) {
   const std::size_t slots = sizeof(m.patch().slots) / sizeof(m.patch().slots[0]);
   if (req.slot < 0 || static_cast<std::size_t>(req.slot) >= slots) return false;

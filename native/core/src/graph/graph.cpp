@@ -314,6 +314,10 @@ void Graph::apply(const Command &c) {
           for (std::size_t i = 0; i < kRetiring; ++i)
             if (Unit *u = units_[idx(retireInstSlot(i))]) u->apply(c);
       } else if (c.target < kUnitSlots && units_[c.target]) {
+        // INTERFACE-CHANGE(W3A) T00c review O3, graph rule: a TARGETED NoteOn reaches its unit, also a RetireInst
+        // one. The only sender is the Model's mono line of a retiring channel (model/perform.cpp monoSwitch: audio.js
+        // _monoOff -> _monoSwitch on the retiring sc plays the next held note there); the Model never starts any
+        // other note on a retiring channel (note-ons resolve through SongGraph::liveChannel). kAllSlots skips them.
         units_[c.target]->apply(c);
         if (c.op == Op::NoteOn) limitVoices(units_[c.target], c.frame);  // INTERFACE-CHANGE(D4)
       }

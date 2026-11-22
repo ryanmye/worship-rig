@@ -9,6 +9,7 @@
 #include "bridge/json_out.h"
 #include "graph/builtin_units.h"
 #include "inst/organ.h"  // T15 review item 1: instEnumIndex
+#include "inst/instrument_service.h"  // W3A T13 O2: storeInstrumentParam
 #include "inst/voice_alloc.h"
 #include "mix/master_chain.h"
 #include "mix/slot_channel.h"
@@ -295,6 +296,7 @@ bool Model::setLowResource(bool on) {
   if (auto *cs = dynamic_cast<samples::CacheServiceImpl *>(service<CacheService>())) cs->setLowResource(on);
   if (on)
     if (Service *rv = service(ReverbService::kName)) rv->onMemoryPressure(1);
+  if (!on) wake(NAN);  // W3A lowres2-scope: audio sleep belongs to low-resource mode; leaving it wakes the audio
   return on;
 }
 
@@ -309,6 +311,7 @@ bool Model::commit(std::uint32_t token, double when) {
   const std::string oldBend = sg_->routing().bendMode;  // T14
   if (!sg_->commit(token, when)) return false;  // T13: model/song.cpp (stats, global units, services' onCommit)
   perf_->afterCommit(oldBend, when);            // T14: neutral bend, FX wheels, drone songChanged, pedal swell
+  sink_.setSlotCount(static_cast<std::uint32_t>(active_.slotCount));  // W3A T00c O2: rig_meters (was the bridge's)
   return true;
 }
 
@@ -386,6 +389,9 @@ SetResult Model::set(std::string_view path, const yyjson_val *value, double glid
       }
       v = k;
     }
+    // W3A T13 review O2: JS _setSlotParam stores cfg.params[key] at call time and coalesces only the instrument
+    // call, so `get state` / a prepare's paramsMatch / a commit inside the 10 ms window see the new value
+    inst::storeInstrumentParam(*this, slot, path, v);
     if (!sg_->coalesce(path, when, [this, h, p = std::string(path), slot, v, glide](double tt) {
           h->handler(*this, SetRequest{nullptr, p, slot, v, glide, tt});
         })) {
@@ -488,6 +494,7 @@ int Model::droneAttachFiles(const yyjson_val *files) {
 
 std::string Model::clickStart(int countIn, bool quietAfter, double when) {
   auto *s = service<ClickService>();
+  if (s) wake(NAN);  // W3A lowres2: the click wakes the audio (no-op when awake)
   return s ? s->start(countIn, quietAfter, when) : std::string();
 }
 bool Model::clickStop(double when) {

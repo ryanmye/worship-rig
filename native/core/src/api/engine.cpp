@@ -478,7 +478,7 @@ void Engine::hostCall(std::function<void()> fn) {
 
 std::string Engine::stateFieldsJson(const char *state, double sr) const {
   JsonOut j;
-  j.begin().kv("state", state).kv("sleep", sleepState_).kv("latencyMs", latencySec_ * 1000.0);
+  j.begin().kv("state", state).kv("sleep", model_.sleepState()).kv("latencyMs", latencySec_ * 1000.0);
   j.kv("sampleRate", sr > 0 ? sr : sampleRate()).kv("deviceId", deviceId_).kv("channels", outCh_.load());
   j.kv("bufferFrames", bufferGrant_ ? bufferGrant_ : bufferReq_).end();  // T00c D2: granted (else requested)
   return j.take();
@@ -558,37 +558,30 @@ void Engine::checkWatchdog() {
 }
 
 bool Engine::sleepAudio(double ramp) {
-  // contract 1.1 sleep: realtime only, only from awake and running. The Model ramps `out` (T14, sleep*); the
-  // engine suspends rendering once the ramp has played (time pauses, like ctx.suspend()).
-  if (!realtime() || !started_.load(std::memory_order_acquire) || std::strcmp(sleepState_, "awake") != 0)
-    return false;
-  const double r = std::isfinite(ramp) && ramp >= 0 ? ramp : 0.15;
-  model_.sleep(r);
-  sleepState_ = "sleeping";
-  emitState(devState_, false);
-  const double lead = std::clamp(2.0 * latencySec_, 0.01, 0.04);
-  at(graph_.timeBase().time() + lead + r, [this](double) {
-    if (std::strcmp(sleepState_, "sleeping") != 0) return;
-    awake_ = false;
-    sleepState_ = "asleep";
-    emitState(devState_, false);
-  });
-  return true;
+  // contract 1.1 sleep: realtime only, only from awake and running. INTERFACE-CHANGE(W3A): the Model owns the state
+  // machine, the `out` ramp and the queue (model/sleep.h); it calls sleepChanged() to suspend rendering once the
+  // ramp has played (time pauses, like ctx.suspend()) and to resume it on a wake.
+  if (!realtime() || !started_.load(std::memory_order_acquire)) return false;
+  return model_.sleep(std::isfinite(ramp) && ramp >= 0 ? ramp : 0.15);
 }
 
 bool Engine::wakeAudio(double ramp) {
-  if (std::strcmp(sleepState_, "awake") == 0) return true;  // idempotent
-  const auto t0 = std::chrono::steady_clock::now();
-  awake_ = true;
-  model_.wake(std::isfinite(ramp) && ramp >= 0 ? ramp : 0.06);
-  sleepState_ = "awake";
+  model_.wake(std::isfinite(ramp) && ramp >= 0 ? ramp : NAN);  // idempotent (no-op when awake); NaN = the default
+  return true;
+}
+
+void Engine::sleepChanged(bool render, double wakeMs, int queued) {
+  // INTERFACE-CHANGE(W3A): Model sleep (model/sleep.h) -> render on / off + the `state` event (sleep field)
+  awake_ = render;
+  if (wakeMs < 0 || queued < 0) {
+    emitState(devState_, false);
+    return;
+  }
   std::string f = stateFieldsJson(devState_);
   f.pop_back();
-  const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
   JsonOut tail;
-  tail.raw(",").kv("wakeMs", ms).kv("queued", 0);
+  tail.raw(",").kv("wakeMs", wakeMs).kv("queued", queued);
   emit("{\"v\":1,\"ev\":\"state\"," + f.substr(1) + tail.take() + "}");
-  return true;
 }
 
 void Engine::hostAudioStarted(const rig_device_info &info) {
@@ -644,7 +637,7 @@ void Engine::hostAudioState(rig_device_state s, const char *msg) {
 void Engine::hostDevicesChanged() {
   onControl([this] {
     JsonOut j;
-    j.begin().kv("v", 1).kv("ev", "state").kv("state", devState_).kv("sleep", sleepState_);
+    j.begin().kv("v", 1).kv("ev", "state").kv("state", devState_).kv("sleep", model_.sleepState());
     j.kvBool("devicesChanged", true).end();
     emit(j.take());
   });

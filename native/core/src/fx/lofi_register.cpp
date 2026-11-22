@@ -27,7 +27,11 @@ class LofiService final : public Service {
     LofiState *s = LofiState::make(m_.patch().lofi, held_, tapeActive_);
     s->holdOnly = holdOnly;
     s->when = m_.timeFor(when);
-    m_.sendOwned(UnitSlot::Lofi, opOf(LofiOp::Apply), s, when);
+    // W3B (fx-row-sweep): fx.js Lofi.apply(when) runs at CALL time: _updateCurves assigns sat.curve / quant.curve
+    // at once (a WaveShaper curve is not an AudioParam) and only the ramps / engage wait for `when`. So the state
+    // goes to the unit now and LofiUnit::apply schedules its ramps at s->when; sent at `when`, a later call's
+    // curves (issued earlier, as the golden page issues every event up front) were stepped late.
+    m_.sendOwned(UnitSlot::Lofi, opOf(LofiOp::Apply), s, -1.0);
   }
   bool held_ = false, tapeActive_ = false;
 

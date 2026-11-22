@@ -406,6 +406,29 @@ void SongGraph::applyReused(Channel &c, const SlotPatch &cfg, const SlotPatch &p
         if (!sameVal(h, w)) sendInstParam(c, static_cast<std::uint32_t>(k), w, t);
       }
     }
+    // W3A T13 review O3: _applySlotCfg's second loop, cfg.params keys with no meta (instruments outside the
+    // catalogue: `user:` samplers) sent when they differ from the previous song's (`prev.params[k] !== v`)
+    const inst::CatalogueEntry *e = inst::findCatalogue(cfg.instType, cfg.instId);
+    if (yyjson_doc *doc = yyjson_read(cfg.paramsJson.data(), cfg.paramsJson.size(), 0)) {
+      yyjson_val *root = yyjson_doc_get_root(doc), *k = nullptr, *v = nullptr;
+      yyjson_obj_iter it;
+      if (root && yyjson_obj_iter_init(root, &it))
+        while ((k = yyjson_obj_iter_next(&it))) {
+          v = yyjson_obj_iter_get_val(k);
+          const std::string_view key(yyjson_get_str(k), yyjson_get_len(k));
+          if (e && std::any_of(e->params.begin(), e->params.end(), [&](const auto &p) { return p.key == key; }))
+            continue;  // a meta: the first loop
+          if (!yyjson_is_num(v) && !yyjson_is_bool(v)) continue;
+          const double raw = yyjson_is_num(v) ? yyjson_get_num(v) : (yyjson_get_bool(v) ? 1.0 : 0.0);
+          bool had = false;
+          const double was = paramOf(prev.paramsJson, key, NAN, &had);
+          if (had && was == raw) continue;
+          double w = raw;
+          const int idx = inst::resolveInstrumentParam(cfg, key, w);
+          if (idx >= 0) sendInstParam(c, static_cast<std::uint32_t>(idx), w, t);
+        }
+      yyjson_doc_free(doc);
+    }
     if (prev.bendEnabled && !cfg.bendEnabled) {
       Command b{};
       b.op = Op::Bend;

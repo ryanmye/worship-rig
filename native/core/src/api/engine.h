@@ -48,6 +48,11 @@ class Engine final : public CommandSink {
   void at(double t, std::function<void(double)> fn) override;
   /** INTERFACE-CHANGE(D4): the Model's effective engine-wide voice limit goes straight to the graph (lock-free). */
   void setVoiceLimit(std::uint32_t total) override { graph_.setVoiceLimit(total); }
+  /** INTERFACE-CHANGE(W3A): the Model's audio sleep (model/sleep.h) suspends / resumes rendering; `state` event. */
+  void sleepChanged(bool render, double wakeMs, int queued) override;
+  double outputLatency() const override { return latencySec_; }
+  /** INTERFACE-CHANGE(W3A) T00c O2: Model::commit -> rig_meters.slot_count. */
+  void setSlotCount(std::uint32_t n) override { graph_.setSlotCount(n); }
 
   /** Current engine rate (the rate of the time grid; changes with the device, contract 6.3). */
   double sampleRate() const { return graph_.timeBase().sampleRate; }
@@ -199,7 +204,7 @@ class Engine final : public CommandSink {
   double latencySec_ = 0;               // host-reported output latency + FIFO residue of the granted size (D2)
   std::uint32_t bufferReq_ = RIG_BUFFER_FRAMES_DEFAULT, bufferGrant_ = 0;  // T00c D2 (control thread)
   bool bufferExplicit_ = false;         // an `audio {bufferFrames}` was received (fallback for 1.0 hosts)
-  const char *sleepState_ = "awake";
+  // W3A: the sleep state is the Model's (Model::sleepState(), model/sleep.h)
   ClockMap clock_;
   MeterServiceImpl *meterSvc_ = nullptr;  // resolved once (services never change after Model construction)
   RecServiceImpl *recSvc_ = nullptr;

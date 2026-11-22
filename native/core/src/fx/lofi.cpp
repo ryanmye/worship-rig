@@ -145,7 +145,7 @@ void LofiUnit::applyState(LofiState *s, double when) {
     quant_->setCurve(s->quant ? s->quant->v.data() : nullptr, s->quant ? s->quant->v.size() : 0);
   if (old) {
     if (garbageN_ < std::size(garbage_)) garbage_[garbageN_++] = old;  // handed back from process()
-    // else: leaked (counted nowhere; at most 8 applies per quantum are buffered)
+    // else: leaked (counted nowhere; at most 32 applies per quantum are buffered)
   }
   const double a = p.amount;
   if (s->holdOnly) {  // JS hold() calls _engage only: re-issuing the ramps would restart their setTarget curves

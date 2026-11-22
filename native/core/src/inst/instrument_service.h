@@ -46,5 +46,11 @@ class InstrumentServiceImpl final : public InstrumentService {
 
 /** Set handler of the dynamic rows `slots.<i>.params.<key>` (Model::set). */
 bool setInstrumentParam(Model &m, const SetRequest &req);
+/** INTERFACE-CHANGE(W3A) T13 review O2: store `slots.<i>.params.<key>` = value (clamped as setInstrumentParam) in
+ *  the patch now; Model::set calls it before coalescing the send (JS stores at call time). False = not stored. */
+bool storeInstrumentParam(Model &m, int slot, std::string_view path, double value);
+/** INTERFACE-CHANGE(W3A): the InstParam index of `key` for this slot's instrument (catalogue row, or a `user:`
+ *  sampler's samplerParamIndex; -1 = none) and `v` clamped as setInstrumentParam clamps it. */
+int resolveInstrumentParam(const SlotPatch &sp, std::string_view key, double &v);
 
 }  // namespace rig::inst
