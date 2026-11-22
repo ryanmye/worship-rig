@@ -61,6 +61,31 @@ Done in the cloud, waiting on the Mac checks and Ryan's answers in `reviews/v11-
 - [ ] Mac verification + CI green on macos-14 + version 1.1.0 + tag (Ryan's word).
 Not in v1.1: EQ simple mode, shimmer/choir, chord charts, stage display, Planning Center, daily hook, disk streaming.
 
+## 2.0.x — sound library expansion (Ryan, 2026-11-22: after 2.0 ships, not in 2.0)
+
+- [ ] **Optional sound packs: strings, brass, woodwinds, acoustic bass.** Only CC0 sources, verified 2026-11-22:
+      - **VSCO 2 Community Edition.** Strings, woodwinds and brass. "Creative Commons 0 (i.e. public domain)";
+        github.com/sgossner/VSCO-2-CE says CC0-1.0.
+      - **Karoryfer CC0 libraries** (license as listed on sfzinstruments.github.io): String Cyborgs (violin family),
+        Bigcat Cello, Meatbass and D. Smolken Double Bass (double bass), and Ergo (electric upright bass).
+      - **VCSL** (CC0), for anything the above miss.
+
+      Not used:
+      - University of Iowa MIS. It says "used for any projects, without restrictions" but names no license and grants
+        no redistribution. Only with the authors' written OK.
+      - Anything marked commercial or CC Sampling Plus, and every Karoryfer library whose license isn't confirmed.
+- [ ] **Not in the default download (Ryan).** The app ships with today's 23 sets. The site's download page gets a
+      checkbox per pack, so people pick which packs to download. The packs install like a My Samples pack. Building
+      on the A-list "optional extra packs" line:
+      - Each pack is a Release asset.
+      - The site page is static, so either each ticked box starts its own download or the page builds one zip.
+      - Decide: whether the app can also install a downloaded pack itself (Settings › My Samples › Add pack, or drag
+        onto the window), and the iPad path (Files app).
+- [ ] **Per pack:** a sampler manifest row per instrument, plus sustain loops or long samples (see D: looped
+      ~3 s GM samples sounded bad). Trim and encode to a per-pack size target, level-match with `tools/calibrate.mjs`,
+      run an audition pass, and have Ryan listen. Ensemble string and brass swells built from solo samples need
+      layering. Judge them by ear before shipping. **M per pack, cloud + Ryan's ears**
+
 ## 2.x — the big update after 2.0 (Ryan, 2026-11-22; nothing here gates 2.0)
 
 - [ ] **WorshipTools chart import.** Import a song's chart from WorshipTools. Pull out its tempo and its key, and its
