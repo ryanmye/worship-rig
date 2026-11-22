@@ -11,6 +11,8 @@
 #include "fx/ir_gen.h"
 #include "model/model.h"
 #include "model/patch.h"
+#include "model/perform.h"  // T14: wash-adjusted size, deferral while playing
+#include "model/song.h"
 #include "rig/rig_engine.h"
 #include "yyjson.h"
 
@@ -726,7 +728,10 @@ void ReverbPool::warm(double size, double damp) {
 void ReverbPool::onCommit(const PatchSpec &patch, double when) {
   if (!unitBuilt_) return;  // the unit is built from this patch when it is attached
   const double tt = t(when);
-  const Stage st = stage(patch.reverb.size, patch.reverb.damp, false);  // T13: stage in prepare (defer while held)
+  // T14 (audio.js prepare/commit): the EFFECTIVE size (lerp(size, .9, wash) under the committed routing, at the
+  // current wheel values), the same space SongGraph::prepare staged; deferred while keys are held (realtime only)
+  const double size = m_.perform().stageReverbSize(m_.songGraph().routing(), patch.reverb.size);
+  const Stage st = stage(size, patch.reverb.damp, m_.perform().playing() && !offline_);
   commitTo(&st, patch.reverb.predelay, tt);
   m_.moveParam(UnitSlot::Reverb, kReverbReturnGain, patch.reverb.returnGain, when, 0.0);  // rampTo(ret.gain, …)
 }

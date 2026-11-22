@@ -45,6 +45,10 @@ struct OrganPresetDef {
 };
 const OrganPresetDef &organPresetDef(OrganPreset id);
 const OrganPresetDef *findOrganPreset(std::string_view id);
+/** resolveParams of a preset from slots.<i>.params JSON (drawbars rounded: step 1). Control thread. */
+void organParams(const OrganPresetDef &p, std::string_view json, double *out);
+/** drawbarWaves(ctx, bars): the registration as 8 phase-rotated PeriodicWaves (disableNormalization). */
+void drawbarWaves(const double *bars, double sr, WaveArray &out);
 /** organ.js param indices. */
 namespace ok {
 enum : unsigned { kDrawbar1 = 0, kPercussion = 9, kClick, kDrive, kRotary, kRelease, kCount };

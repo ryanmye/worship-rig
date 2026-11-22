@@ -137,12 +137,11 @@ double pwmMaxDelay(double f) {
   return clampd(2.2 / f, 0.004, 1);
 }
 
-void xosc(SynthVoice &v, wa::Oscillator &o, const wa::PeriodicWave *w, double freq, double detune, double t) {
-  o.setWave(w);
+void xosc(XVoice &v, wa::Oscillator &o, const wa::PeriodicWave *w, double freq, double detune, double t) {
   o.frequency().setValue(freq);
   o.detune().setValue(detune);
   o.setDetuneRate(wa::Param::Rate::KRate);  // InstrumentBase.osc: detune k-rate, bendCS linked
-  v.addSource(&o, t, WaveKind::None, 0);
+  v.addOsc(o, w, t);
 }
 
 void LpfPair::init(double freq, double q2, wa::Param *fa, wa::Param *qb, wa::Param *fb, wa::Param *da,

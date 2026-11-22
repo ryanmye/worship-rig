@@ -165,7 +165,9 @@ SynthExtraInstrument::SynthExtraInstrument(const XPatchDef &patch, double sample
       setChorus(p[dxChorus], 0);
       s.headCh = 2;
       break;
-    case XPatch::Pluck: filterMod(4500, 0); break;
+    case XPatch::Pluck:
+      filterMod(4500, 0);
+      break;
     case XPatch::PolyStab:
       filterMod(900, 0);
       s.headCh = 2;
@@ -188,13 +190,16 @@ SynthExtraInstrument::SynthExtraInstrument(const XPatchDef &patch, double sample
       s.vibD.gain().setValue(p[leVibDepth]);
       break;
     case XPatch::Sub808:
-      s.shaper = std::make_unique<wa::WaveShaper>(softClipCurve12(), kSoftClipPoints, wa::WaveShaper::Oversample::None,
-                                                  1);
+      s.shaper =
+          std::make_unique<wa::WaveShaper>(softClipCurve12(), kSoftClipPoints, wa::WaveShaper::Oversample::None, 1);
       s.lpf.reinit(wa::BiquadType::Lowpass, 6000, butter2Q(), 0);
       setDrive808(0);
       break;
-    case XPatch::SynthBass: filterMod(320, 2400); break;
-    default: break;
+    case XPatch::SynthBass:
+      filterMod(320, 2400);
+      break;
+    default:
+      break;
   }
   // initOut: head -> trimG (level * gainTrim / CEIL_RANGE) -> ceiling -> output (2 channels, explicit)
   s.trimG.gain().setValue((patch_.level * js::pow(10, patch_.gainTrim / 20)) / kExtraCeilRange);
@@ -276,18 +281,26 @@ double SynthExtraInstrument::releaseParam() const {
 }
 
 void SynthExtraInstrument::buildVoice(int note, double vel, double t) {
-  XBuild b{*bank_, *xbank_, rng_, params_, sr_, t, vel, morphX_, static_cast<double>(nextFrame_) / sr_, note,
-           nullptr, delayStride_};
+  XBuild b{*bank_, *xbank_, rng_,        params_, sr_, t, vel, morphX_, static_cast<double>(nextFrame_) / sr_,
+           note,   nullptr, delayStride_};
   int slot = -1;
   switch (patch_.id) {
-    case XPatch::SupersawPad: slot = emplaceVoice<SupersawVoice>(note, t, b); break;
-    case XPatch::JunoPad: slot = emplaceVoice<JunoVoice>(note, t, b); break;
-    case XPatch::ShimmerPad: slot = emplaceVoice<ShimmerVoice>(note, t, b); break;
+    case XPatch::SupersawPad:
+      slot = emplaceVoice<SupersawVoice>(note, t, b);
+      break;
+    case XPatch::JunoPad:
+      slot = emplaceVoice<JunoVoice>(note, t, b);
+      break;
+    case XPatch::ShimmerPad:
+      slot = emplaceVoice<ShimmerVoice>(note, t, b);
+      break;
     case XPatch::DxEpiano:
       b.dxTine = params_[dxTone] * (1 + 1.5 * morphX_);
       slot = emplaceVoice<DxVoice>(note, t, b);
       break;
-    case XPatch::Pluck: slot = emplaceVoice<PluckVoice>(note, t, b); break;
+    case XPatch::Pluck:
+      slot = emplaceVoice<PluckVoice>(note, t, b);
+      break;
     case XPatch::PolyStab:
       b.q2 = q2Poly();
       b.envCents = clampd(params_[poEnvAmount] + 0.5 * morphX_, 0, 1.4) * 3600 * (0.5 + 0.5 * vel);
@@ -297,10 +310,17 @@ void SynthExtraInstrument::buildVoice(int note, double vel, double t) {
       b.envCents = clampd(params_[brEnvAmount] + 0.45 * morphX_, 0, 1.4) * 3600 * (0.6 + 0.4 * vel);
       slot = emplaceVoice<BrassVoice>(note, t, b);
       break;
-    case XPatch::SquareLead: slot = emplaceVoice<LeadVoice>(note, t, b); break;
-    case XPatch::Sub808: slot = emplaceVoice<Sub808Voice>(note, t, b); break;
-    case XPatch::SynthBass: slot = emplaceVoice<BassVoice>(note, t, b); break;
-    default: break;
+    case XPatch::SquareLead:
+      slot = emplaceVoice<LeadVoice>(note, t, b);
+      break;
+    case XPatch::Sub808:
+      slot = emplaceVoice<Sub808Voice>(note, t, b);
+      break;
+    case XPatch::SynthBass:
+      slot = emplaceVoice<BassVoice>(note, t, b);
+      break;
+    default:
+      break;
   }
   if (slot < 0) return;
   if (patch_.id == XPatch::JunoPad) {
@@ -331,93 +351,131 @@ void SynthExtraInstrument::applyParam(std::uint32_t key, double val, double t) {
   auto each = [&](auto &&fn) { forVoices([&](int, XVoice &v) { fn(v); }); };
   switch (patch_.id) {
     case XPatch::SupersawPad:
-      if (key == ssCutoff) updateFilterMod(t);
-      else if (key == ssWidth) setWidth(t);
-      else if (key == ssResonance) each([&](XVoice &v) {
-        wa::rampTo(static_cast<SupersawVoice &>(v).qb, qDb(1.31 + val * 4.7), t);
-      });
-      else if (key == ssSub) each([&](XVoice &v) { wa::rampTo(static_cast<SupersawVoice &>(v).subG.gain(), val * 0.5, t); });
-      else if (key == ssDetune) each([&](XVoice &xv) {
-        auto &v = static_cast<SupersawVoice &>(xv);
-        for (int i = 0; i < 7; ++i) wa::rampTo(v.saw[i].detune(), SupersawVoice::kOffs[i] * val + v.jit[i], t);
-      });
+      if (key == ssCutoff)
+        updateFilterMod(t);
+      else if (key == ssWidth)
+        setWidth(t);
+      else if (key == ssResonance)
+        each([&](XVoice &v) { wa::rampTo(static_cast<SupersawVoice &>(v).qb, qDb(1.31 + val * 4.7), t); });
+      else if (key == ssSub)
+        each([&](XVoice &v) { wa::rampTo(static_cast<SupersawVoice &>(v).subG.gain(), val * 0.5, t); });
+      else if (key == ssDetune)
+        each([&](XVoice &xv) {
+          auto &v = static_cast<SupersawVoice &>(xv);
+          for (int i = 0; i < 7; ++i) wa::rampTo(v.saw[i].detune(), SupersawVoice::kOffs[i] * val + v.jit[i], t);
+        });
       break;
     case XPatch::JunoPad:
-      if (key == jCutoff) updateFilterMod(t);
-      else if (key == jPwmRate) wa::rampTo(s.pwmLfo.frequency(), val, t);
-      else if (key == jPwmDepth) wa::rampTo(s.pwmG.gain(), val * 0.42, t);
-      else if (key == jChorus) setChorus(clampd(params_[jChorus] + 0.4 * morphX_, 0, 1), t);
-      else if (key == jChorusRate) wa::rampTo(s.chorus.lfo.frequency(), val, t);
-      else if (key == jResonance) each([&](XVoice &v) { wa::rampTo(static_cast<JunoVoice &>(v).qb, qDb(0.8 + val * 4), t); });
-      else if (key == jSub) each([&](XVoice &v) { wa::rampTo(static_cast<JunoVoice &>(v).subG.gain(), val * 0.35, t); });
+      if (key == jCutoff)
+        updateFilterMod(t);
+      else if (key == jPwmRate)
+        wa::rampTo(s.pwmLfo.frequency(), val, t);
+      else if (key == jPwmDepth)
+        wa::rampTo(s.pwmG.gain(), val * 0.42, t);
+      else if (key == jChorus)
+        setChorus(clampd(params_[jChorus] + 0.4 * morphX_, 0, 1), t);
+      else if (key == jChorusRate)
+        wa::rampTo(s.chorus.lfo.frequency(), val, t);
+      else if (key == jResonance)
+        each([&](XVoice &v) { wa::rampTo(static_cast<JunoVoice &>(v).qb, qDb(0.8 + val * 4), t); });
+      else if (key == jSub)
+        each([&](XVoice &v) { wa::rampTo(static_cast<JunoVoice &>(v).subG.gain(), val * 0.35, t); });
       break;
     case XPatch::ShimmerPad:
-      if (key == shCutoff) updateFilterMod(t);
-      else if (key == shOctave) wa::rampTo(s.octCS.offset(), clampd(params_[shOctave] + morphX_, 0, 1) * 0.7, t, 0.05);
+      if (key == shCutoff)
+        updateFilterMod(t);
+      else if (key == shOctave)
+        wa::rampTo(s.octCS.offset(), clampd(params_[shOctave] + morphX_, 0, 1) * 0.7, t, 0.05);
       else if (key == shTremRate) {
         wa::rampTo(s.tremLfoL.frequency(), val, t);
         wa::rampTo(s.tremLfoR.frequency(), val, t);
       } else if (key == shTremDepth) {
         for (wa::Gain *g : {&s.tremGL, &s.tremGR}) wa::rampTo(g->gain(), 1 - val * 0.5, t);
         for (wa::Gain *g : {&s.tremDL, &s.tremDR}) wa::rampTo(g->gain(), val * 0.5, t);
-      } else if (key == shDetune) each([&](XVoice &xv) {
-        auto &v = static_cast<ShimmerVoice &>(xv);
-        wa::rampTo(v.a.detune(), -val, t);
-        wa::rampTo(v.b.detune(), 0.6 * val, t);
-      });
+      } else if (key == shDetune)
+        each([&](XVoice &xv) {
+          auto &v = static_cast<ShimmerVoice &>(xv);
+          wa::rampTo(v.a.detune(), -val, t);
+          wa::rampTo(v.b.detune(), 0.6 * val, t);
+        });
       break;
     case XPatch::DxEpiano:
-      if (key == dxTone) onMorph(t);
-      else if (key == dxChorus) setChorus(val, t);
-      else if (key == dxDetune) each([&](XVoice &xv) {
-        auto &v = static_cast<DxVoice &>(xv);
-        wa::rampTo(v.B.car.detune(), val, t);
-        wa::rampTo(v.B.mod.detune(), val, t);
-      });
+      if (key == dxTone)
+        onMorph(t);
+      else if (key == dxChorus)
+        setChorus(val, t);
+      else if (key == dxDetune)
+        each([&](XVoice &xv) {
+          auto &v = static_cast<DxVoice &>(xv);
+          wa::rampTo(v.B.car.detune(), val, t);
+          wa::rampTo(v.B.mod.detune(), val, t);
+        });
       break;
     case XPatch::Pluck:
-      if (key == plCutoff) updateFilterMod(t);
-      else if (key == plSquare) each([&](XVoice &v) { wa::rampTo(static_cast<PluckVoice &>(v).sqG.gain(), val * 0.6, t); });
-      else if (key == plResonance) each([&](XVoice &v) { wa::rampTo(static_cast<PluckVoice &>(v).qb, qDb(1.0 + val * 4), t); });
-      else if (key == plDecay) redecayPluck(t);
+      if (key == plCutoff)
+        updateFilterMod(t);
+      else if (key == plSquare)
+        each([&](XVoice &v) { wa::rampTo(static_cast<PluckVoice &>(v).sqG.gain(), val * 0.6, t); });
+      else if (key == plResonance)
+        each([&](XVoice &v) { wa::rampTo(static_cast<PluckVoice &>(v).qb, qDb(1.0 + val * 4), t); });
+      else if (key == plDecay)
+        redecayPluck(t);
       break;
     case XPatch::PolyStab:
-      if (key == poCutoff) updateFilterMod(t);
-      else if (key == poResonance) each([&](XVoice &v) { wa::rampTo(static_cast<PolyVoice &>(v).qb, qDb(q2Poly()), t); });
-      else if (key == poDetune) each([&](XVoice &xv) {
-        auto &v = static_cast<PolyVoice &>(xv);
-        wa::rampTo(v.s1.detune(), -val, t);
-        wa::rampTo(v.s2.detune(), val, t);
-      });
+      if (key == poCutoff)
+        updateFilterMod(t);
+      else if (key == poResonance)
+        each([&](XVoice &v) { wa::rampTo(static_cast<PolyVoice &>(v).qb, qDb(q2Poly()), t); });
+      else if (key == poDetune)
+        each([&](XVoice &xv) {
+          auto &v = static_cast<PolyVoice &>(xv);
+          wa::rampTo(v.s1.detune(), -val, t);
+          wa::rampTo(v.s2.detune(), val, t);
+        });
       break;
     case XPatch::AnalogBrass:
-      if (key == brCutoff) updateFilterMod(t);
-      else if (key == brVibRate) wa::rampTo(s.vibLfo.frequency(), val, t);
-      else if (key == brVibDepth) wa::rampTo(s.vibD.gain(), val, t);
-      else if (key == brEnvAmount) resustainBrass(t);
-      else if (key == brDetune) each([&](XVoice &xv) {
-        auto &v = static_cast<BrassVoice &>(xv);
-        wa::rampTo(v.saw[1].detune(), -val, t);
-        wa::rampTo(v.saw[2].detune(), val, t);
-      });
+      if (key == brCutoff)
+        updateFilterMod(t);
+      else if (key == brVibRate)
+        wa::rampTo(s.vibLfo.frequency(), val, t);
+      else if (key == brVibDepth)
+        wa::rampTo(s.vibD.gain(), val, t);
+      else if (key == brEnvAmount)
+        resustainBrass(t);
+      else if (key == brDetune)
+        each([&](XVoice &xv) {
+          auto &v = static_cast<BrassVoice &>(xv);
+          wa::rampTo(v.saw[1].detune(), -val, t);
+          wa::rampTo(v.saw[2].detune(), val, t);
+        });
       break;
     case XPatch::SquareLead:
-      if (key == leCutoff) updateFilterMod(t);
-      else if (key == lePwm) wa::rampTo(s.dutyCS.offset(), 0.5 - 0.4 * clampd(params_[lePwm] + 0.6 * morphX_, 0, 1), t);
-      else if (key == leSub) each([&](XVoice &v) { wa::rampTo(static_cast<LeadVoice &>(v).subG.gain(), val * 0.4, t); });
-      else if (key == leResonance) each([&](XVoice &v) { wa::rampTo(static_cast<LeadVoice &>(v).qb, qDb(1.0 + val * 4), t); });
-      else if (key == leVibRate) wa::rampTo(s.vibLfo.frequency(), val, t);
-      else if (key == leVibDepth) wa::rampTo(s.vibD.gain(), val, t);
+      if (key == leCutoff)
+        updateFilterMod(t);
+      else if (key == lePwm)
+        wa::rampTo(s.dutyCS.offset(), 0.5 - 0.4 * clampd(params_[lePwm] + 0.6 * morphX_, 0, 1), t);
+      else if (key == leSub)
+        each([&](XVoice &v) { wa::rampTo(static_cast<LeadVoice &>(v).subG.gain(), val * 0.4, t); });
+      else if (key == leResonance)
+        each([&](XVoice &v) { wa::rampTo(static_cast<LeadVoice &>(v).qb, qDb(1.0 + val * 4), t); });
+      else if (key == leVibRate)
+        wa::rampTo(s.vibLfo.frequency(), val, t);
+      else if (key == leVibDepth)
+        wa::rampTo(s.vibD.gain(), val, t);
       break;
     case XPatch::Sub808:
       if (key == suDrive) setDrive808(t);
       break;
     case XPatch::SynthBass:
-      if (key == baCutoff) updateFilterMod(t);
-      else if (key == baSquare) each([&](XVoice &v) { wa::rampTo(static_cast<BassVoice &>(v).sqG.gain(), val, t); });
-      else if (key == baResonance) each([&](XVoice &v) { wa::rampTo(static_cast<BassVoice &>(v).qb, qDb(0.9 + val * 4), t); });
+      if (key == baCutoff)
+        updateFilterMod(t);
+      else if (key == baSquare)
+        each([&](XVoice &v) { wa::rampTo(static_cast<BassVoice &>(v).sqG.gain(), val, t); });
+      else if (key == baResonance)
+        each([&](XVoice &v) { wa::rampTo(static_cast<BassVoice &>(v).qb, qDb(0.9 + val * 4), t); });
       break;
-    default: break;
+    default:
+      break;
   }
 }
 
@@ -439,23 +497,48 @@ void SynthExtraInstrument::onMorph(double t) {
       wa::rampTo(s.brightCS.offset(), params_[dxTone] * (1 + 0.4 * morphX_), t);
       wa::rampTo(s.tineCS.offset(), params_[dxTone] * (1 + 1.5 * morphX_), t);
       break;
-    case XPatch::Pluck: redecayPluck(t); break;
+    case XPatch::Pluck:
+      redecayPluck(t);
+      break;
     case XPatch::PolyStab:
       forVoices([&](int, XVoice &v) { wa::rampTo(static_cast<PolyVoice &>(v).qb, qDb(q2Poly()), t); });
       break;
-    case XPatch::AnalogBrass: resustainBrass(t); break;
+    case XPatch::AnalogBrass:
+      resustainBrass(t);
+      break;
     case XPatch::SquareLead:
       updateFilterMod(t);
       wa::rampTo(s.dutyCS.offset(), 0.5 - 0.4 * clampd(params_[lePwm] + 0.6 * morphX_, 0, 1), t);
       break;
-    case XPatch::Sub808: setDrive808(t); break;
-    case XPatch::SynthBass: updateFilterMod(t); break;
-    default: break;
+    case XPatch::Sub808:
+      setDrive808(t);
+      break;
+    case XPatch::SynthBass:
+      updateFilterMod(t);
+      break;
+    default:
+      break;
   }
 }
 
 void SynthExtraInstrument::applyModule(const Command &c) {
   const auto op = static_cast<std::uint16_t>(c.op);
+  if (op == static_cast<std::uint16_t>(T15Op::SetTables) && c.sub == kSubOwnedPayload && c.p.ptr) {
+    auto *w = static_cast<XTablesPayload *>(static_cast<Owned *>(c.p.ptr));
+    if (w->bank && w->xbank) {  // re-point every oscillator to the new rate's table at the same position
+      pool_.forEach([&](int, XVoice &v) {
+        v.retable([&](const wa::PeriodicWave *t) {
+          return mapTable(t, *bank_, *xbank_, nullptr, *w->bank, *w->xbank, nullptr);
+        });
+      });
+      XShared &s = *sh_;
+      for (wa::Oscillator *o : {&s.pwmLfo, &s.vibLfo, &s.tremLfoL}) o->setWave(w->bank->basicSine.get());
+      s.tremLfoR.setWave(w->xbank->cosine.get());
+      s.chorus.lfo.setWave(w->bank->basicTriangle.get());
+      std::swap(w->bank, bank_);  // the payload carries the old tables back (freed on the control thread)
+      std::swap(w->xbank, xbank_);
+    }
+  }
   applyCommon(op, static_cast<std::uint16_t>(SynthOp::Morph), static_cast<std::uint16_t>(SynthOp::ReleaseOverride), c);
 }
 
@@ -511,7 +594,8 @@ void SynthExtraInstrument::sharedPass(XIn &in) {
       in.bright = s.bright;
       in.tine = s.tine;
       break;
-    default: break;
+    default:
+      break;
   }
 }
 
@@ -572,7 +656,8 @@ void SynthExtraInstrument::postChain(const XIn &in, float *l, float *r, Bus &out
       s.post.process(ch, ch, 1, n, f0, sr);
       s.lpf.process(ch, 1, n, f0, sr);
       break;
-    default: break;
+    default:
+      break;
   }
   const unsigned nch = s.headCh;
   s.trimG.process(ch, ch, nch, n, f0, sr);

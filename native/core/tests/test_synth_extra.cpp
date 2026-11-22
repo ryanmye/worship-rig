@@ -145,6 +145,35 @@ TEST_SUITE("synth-extra") {
     }
   }
 
+  TEST_CASE("rate change: T15Op::SetTables re-points the oscillators to the new rate's tables (pitch kept)") {
+    for (bool swap : {false, true}) {
+      auto *inst = makeX("808-sub", 44100, R"({"pitchDrop":0})");
+      t11::Driver d(inst, 44100);
+      d.noteOn(57, 100, 0.01);
+      d.run(44100 / 5);
+      inst->setSampleRate(48000);
+      d.sr = 48000;
+      d.frame = static_cast<std::int64_t>(std::ceil(double(d.frame) * 48000 / 44100 - 1e-9));
+      if (swap) {
+        auto *w = new rig::inst::XTablesPayload();
+        w->bank = rig::inst::WaveBank::get(48000, rig::inst::kWaveSaw | rig::inst::kWaveBasic);
+        w->xbank = rig::inst::XWaveBank::get(48000, true, false);
+        rig::Command c{};
+        c.op = rig::opOf(rig::inst::T15Op::SetTables);
+        c.sub = rig::kSubOwnedPayload;
+        c.p.ptr = static_cast<rig::Owned *>(w);
+        d.apply(c);
+      }
+      const auto out = d.run(48000 / 5);
+      const double hz = t11::zeroCrossHz(out[0], 960, out[0].size(), 48000);
+      CAPTURE(swap);
+      if (swap) CHECK(hz == doctest::Approx(220).epsilon(0.002));
+      else CHECK(hz == doctest::Approx(220 * 48000.0 / 44100).epsilon(0.002));  // old tables: x new / old
+      CHECK(d.count(rig::EventKind::Garbage) == (swap ? 1u : 0u));
+      CHECK(d.rtAllocs == 0);
+    }
+  }
+
   TEST_CASE("T11 O2: wa::Oscillator evaluates frequency / detune FinalValue three times per k-rate quantum") {
     CHECK(rig::inst::oscFinalValueCalls() == rig::inst::kChromiumOscFinalValueCalls);
     std::unique_ptr<rig::wa::PeriodicWave> w(rig::wa::PeriodicWave::basic(rig::wa::PeriodicWave::Basic::Sine, 48000));

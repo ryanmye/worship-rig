@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "fx/reverb_service.h"
 #include "model/perform.h"
 #include "test_model_util.h"
 #include "test_perform_probe.h"
@@ -213,5 +214,25 @@ TEST_SUITE("wheels") {
       e.model().noteOff(40 + i % 40, -1);
     }
     MESSAGE("Model::noteOn + noteOff (4 slots, control thread, incl. events): " << (threadUs() - c0) / 500 << " us");
+  }
+  TEST_CASE("washAcrossCommit: macro.wash moves the reverb size; a commit lands on the washed space (T14 + T04)") {
+    Eng e;
+    const std::string wash = R"("modWheel":{"target":"macro.wash","min":0,"max":1},"fx":{"reverb":{"size":0.3}})";
+    REQUIRE(e.use(patch({slot("test", "sine", 1)}, wash)));
+    auto *rp = dynamic_cast<rig::fx::ReverbPool *>(e.model().service<rig::ReverbService>());
+    REQUIRE(rp);
+    e.call(R"({"v":1,"id":3,"op":"play","e":"wheel","src":"mod","value":0,"when":0.05})");
+    e.until(0.5);
+    CHECK(rp->targetKey() == rp->irKeyFor(0.3, 0.5));
+    e.call(R"({"v":1,"id":3,"op":"play","e":"wheel","src":"mod","value":1,"when":0.6})");
+    e.until(1.5);  // Reverb.request: 300 ms debounce, then build + crossfade
+    CHECK(rp->targetKey() == rp->irKeyFor(0.9, 0.5));
+    // the next song with the same wash routing: prepare stages and commit lands on lerp(0.5, .9, 1) = 0.9 directly
+    const std::string wash2 = R"("modWheel":{"target":"macro.wash","min":0,"max":1},"fx":{"reverb":{"size":0.5}})";
+    REQUIRE(e.use(patch({slot("test", "saw", 1)}, wash2)));
+    CHECK(rp->targetKey() == rp->irKeyFor(0.9, 0.5));
+    // a song without wash: its own size
+    REQUIRE(e.use(patch({slot("test", "sine", 1)}, R"("fx":{"reverb":{"size":0.5}})")));
+    CHECK(rp->targetKey() == rp->irKeyFor(0.5, 0.5));
   }
 }

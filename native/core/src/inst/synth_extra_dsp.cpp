@@ -170,6 +170,30 @@ void rotatedWaves(std::array<std::unique_ptr<wa::PeriodicWave>, kRotations> &out
   }
 }
 
+const wa::PeriodicWave *mapTable(const wa::PeriodicWave *w, const WaveBank &ob, const XWaveBank &ox,
+                                 const WaveArray *od, const WaveBank &nb, const XWaveBank &nx, const WaveArray *nd) {
+  auto inArr = [&](const WaveArray &o, const WaveArray &n, const wa::PeriodicWave *&out) {
+    for (std::size_t i = 0; i < o.size(); ++i)
+      if (o[i].get() == w) {
+        out = n[i].get();
+        return true;
+      }
+    return false;
+  };
+  const wa::PeriodicWave *r = nullptr;
+  if (inArr(ob.saw, nb.saw, r) || inArr(ob.glass, nb.glass, r) || inArr(ob.sine, nb.sine, r) ||
+      inArr(ob.tri, nb.tri, r) || inArr(ox.square, nx.square, r) || inArr(ox.shimmer, nx.shimmer, r))
+    return r ? r : w;
+  if (od && nd && inArr(*od, *nd, r)) return r ? r : w;
+  for (std::size_t i = 0; i < ox.fmAdv.size(); ++i)
+    if (ox.fmAdv[i].get() == w && nx.fmAdv[i]) return nx.fmAdv[i].get();
+  if (w == ob.basicSine.get()) return nb.basicSine.get();
+  if (w == ob.basicTriangle.get()) return nb.basicTriangle.get();
+  if (w == ox.cosine.get()) return nx.cosine.get();
+  if (w == ox.rotorCos.get()) return nx.rotorCos.get();
+  return w;
+}
+
 wa::PeriodicWave *fmModWave(double adv, double sr) {
   const double k = js::round(adv / 0.002);
   const double e = k * 0.002;

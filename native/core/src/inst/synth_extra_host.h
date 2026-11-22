@@ -26,6 +26,11 @@
 
 namespace rig::inst {
 
+/** T15 module opcodes shared by the synth-extra and organ units (OrganOp, inst/organ.h, takes the first two). */
+enum class T15Op : std::uint16_t {
+  SetTables = kOpBaseT15 + 0x10,  // sub = kSubOwnedPayload, p.ptr = XTablesPayload* (a device rate change, T11a O4)
+};
+
 /** Per-quantum signals of the instrument-level nodes a T15 voice reads (extends T11's VoiceIn). */
 struct XIn : VoiceIn {
   const float *zeros = nullptr;  // an input that was not pulled this quantum
@@ -60,6 +65,22 @@ class XVoice : public SynthVoice {
     for (unsigned i = 0; i < nTracked; ++i) tracked[i].glide(f * tracked[i].mult, t, dur);
     for (unsigned i = 0; i < nPeriods; ++i) periods[i].glide(periods[i].mult / f, t, dur);
     freq = f;
+  }
+  /** The PeriodicWave each oscillator source reads (recorded when the source is added; re-pointed on a rate change). */
+  const wa::PeriodicWave *tab[kMaxSrc] = {};
+  void addOsc(wa::Oscillator &o, const wa::PeriodicWave *w, double t) {
+    tab[nSrc_] = w;
+    o.setWave(w);
+    addSource(&o, t, WaveKind::None, 0);
+  }
+  /** Re-point every oscillator: tab = map(old tab) (SetPeriodicWave keeps the phase, as Chromium). */
+  template <class Map>
+  void retable(Map &&map) {
+    for (unsigned i = 0; i < nSrc_; ++i)
+      if (srcs_[i].osc && tab[i]) {
+        tab[i] = map(tab[i]);
+        srcs_[i].osc->setWave(tab[i]);
+      }
   }
   /** voice.js `_stopSource` by source index, public for the instrument (percussion, tine). */
   void stopSrc(unsigned i, double t) { stopSource(i, t); }

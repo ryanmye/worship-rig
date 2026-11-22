@@ -22,6 +22,7 @@
 
 #include "dsp/biquad.h"
 #include "dsp/periodic_wave.h"
+#include "graph/unit.h"
 #include "inst/synth_dsp.h"
 #include "time/param.h"
 
@@ -92,6 +93,18 @@ struct XWaveBank {
   ~XWaveBank();
   static std::shared_ptr<const XWaveBank> get(double sampleRate, bool squares, bool shimmer, bool dx = false);
 };
+
+/** T15Op::SetTables payload (a device rate change): the new rate's banks (+ an organ's drawbar waves). The unit swaps
+ *  them in, so the payload carries the old ones back to the control thread (Unit::giveBack). */
+struct XTablesPayload final : Owned {
+  std::shared_ptr<const WaveBank> bank;
+  std::shared_ptr<const XWaveBank> xbank;
+  std::array<std::unique_ptr<wa::PeriodicWave>, kRotations> drawbars;
+};
+using WaveArray = std::array<std::unique_ptr<wa::PeriodicWave>, kRotations>;
+/** The table at the position `w` holds in the old tables, taken from the new ones (w itself if not found). */
+const wa::PeriodicWave *mapTable(const wa::PeriodicWave *w, const WaveBank &ob, const XWaveBank &ox,
+                                 const WaveArray *od, const WaveBank &nb, const XWaveBank &nx, const WaveArray *nd);
 
 /** voice.js rotatedWaves(ctx, key, sin, 8) with sin[] already rounded as the JS array type holds it. */
 void rotatedWaves(std::array<std::unique_ptr<wa::PeriodicWave>, kRotations> &out, const double *sin, std::size_t h1,

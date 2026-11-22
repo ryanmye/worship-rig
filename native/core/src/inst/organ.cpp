@@ -19,6 +19,8 @@ namespace {
 
 constexpr unsigned kHarmonics[9] = {1, 3, 2, 4, 6, 8, 10, 12, 16};  // DRAWBAR_HARMONICS (relative to f/2)
 constexpr const char *kFootages[9] = {"16′", "5⅓′", "8′", "4′", "2⅔′", "2′", "1⅗′", "1⅓′", "1′"};
+constexpr const char *kDrawbarKeys[9] = {"drawbar1", "drawbar2", "drawbar3", "drawbar4", "drawbar5",
+                                         "drawbar6", "drawbar7", "drawbar8", "drawbar9"};
 constexpr double kVoiceGain = 0.1;
 constexpr double kPercLevel = 0.9, kPercTau = 0.2;
 constexpr double kHornTau = 0.3, kDrumTau = 1.5, kCrossover = 800, kHornDelay = 0.001, kHornDelayDepth = -0.00035;
@@ -30,9 +32,7 @@ struct Bars {
 constexpr Bars presetParams(const char *bars, bool perc, double click, double drive, unsigned rotary, double rel) {
   Bars b{};
   for (unsigned i = 0; i < 9; ++i)
-    b.p[i] = {i == 0 ? "drawbar1" : i == 1 ? "drawbar2" : i == 2 ? "drawbar3" : i == 3 ? "drawbar4" : i == 4 ? "drawbar5"
-              : i == 5 ? "drawbar6" : i == 6 ? "drawbar7" : i == 7 ? "drawbar8" : "drawbar9",
-              kFootages[i], 0, 8, static_cast<double>(bars[i] - '0'), "lin", "lin"};
+    b.p[i] = {kDrawbarKeys[i], kFootages[i], 0, 8, static_cast<double>(bars[i] - '0'), "lin", "lin"};
   b.p[ok::kPercussion] = {"percussion", "Percussion", 0, 1, perc ? 1.0 : 0.0, "bool", "lin"};
   b.p[ok::kClick] = {"click", "Key click", 0, 1, click, "lin", "lin"};
   b.p[ok::kDrive] = {"drive", "Drive", 0, 1, drive, "lin", "lin"};
@@ -62,6 +62,19 @@ double drawbarAmp(double d) {
 }
 
 }  // namespace
+
+void drawbarWaves(const double *bars, double sr, WaveArray &out) {
+  float amp[17] = {};  // Float32Array(17): amp[DRAWBAR_HARMONICS[i]] += drawbarAmp(bars[i])
+  for (unsigned i = 0; i < 9; ++i) amp[kHarmonics[i]] = static_cast<float>(amp[kHarmonics[i]] + drawbarAmp(bars[i]));
+  double a[17];
+  for (int h = 0; h < 17; ++h) a[h] = amp[h];
+  rotatedWaves(out, a, 17, sr, true);
+}
+
+void organParams(const OrganPresetDef &p, std::string_view json, double *out) {
+  resolveParamsJson(p.params, p.nParams, json, out, &rotaryEnum);
+  for (unsigned i = 0; i < 9; ++i) out[i] = js::round(out[i]);  // step 1
+}
 
 const OrganPresetDef &organPresetDef(OrganPreset id) {
   return kPresets[static_cast<std::size_t>(id)];
@@ -151,16 +164,14 @@ struct OrganShared {
 OrganVoice::OrganVoice(const OrganBuild &b) : XVoice(b.note, b.t, kVoiceGain) {
   const double f = noteToFreq(b.note);
   rot = b.rot;
-  o.setWave(b.waves[rot].get());  // one oscillator at f/2 (16' fundamental), random phase
-  o.frequency().setValue(f / 2);
+  o.frequency().setValue(f / 2);  // one oscillator at f/2 (16' fundamental), random phase
   o.setDetuneRate(wa::Param::Rate::KRate);
-  addSource(&o, b.t, WaveKind::None, 0);
+  addOsc(o, b.waves[rot].get(), b.t);
   if (b.percLevel > 0) {  // 3rd harmonic (2 2/3' = harmonic 6 of f/2; rotation 6 rot keeps it on the tonewheel)
     hasPerc = true;
-    perc.setWave(b.bank.sine[(6 * rot) % 8].get());
     perc.frequency().setValue(3 * f);
     perc.setDetuneRate(wa::Param::Rate::KRate);
-    addSource(&perc, b.t, WaveKind::Sine, (6 * rot) % 8);
+    addOsc(perc, b.bank.sine[(6 * rot) % 8].get(), b.t);
     wa::setNow(pg.gain(), 0, b.t);
     wa::linearTo(pg.gain(), b.percLevel, b.t, 0.001, 0);
     wa::rampTo(pg.gain(), 0, b.t + 0.001, kPercTau);
@@ -203,18 +214,11 @@ OrganInstrument::OrganInstrument(const OrganPresetDef &preset, double sampleRate
     : XHost(sampleRate, engineSeed, rngName, releaseOverride, true, preset.params, preset.nParams),
       preset_(preset),
       sh_(std::make_unique<OrganShared>()) {
-  resolveParamsJson(preset_.params, preset_.nParams, paramsJson, params_, &rotaryEnum);
-  for (unsigned i = 0; i < 9; ++i) params_[i] = js::round(params_[i]);  // step 1
+  organParams(preset_, paramsJson, params_);
   bank_ = WaveBank::get(sr_, kWaveSine | kWaveBasic);
   xbank_ = XWaveBank::get(sr_, false, false);
   OrganShared &s = *sh_;
-  {  // drawbarWaves(ctx, bars): Float32Array(17) amplitudes, 8 rotations, disableNormalization
-    float amp[17] = {};
-    for (unsigned i = 0; i < 9; ++i) amp[kHarmonics[i]] = static_cast<float>(amp[kHarmonics[i]] + drawbarAmp(params_[i]));
-    double a[17];
-    for (int h = 0; h < 17; ++h) a[h] = amp[h];
-    rotatedWaves(s.waves, a, 17, sr_, true);
-  }
+  drawbarWaves(params_, sr_, s.waves);
   {  // clickBuffers(ctx, rng): 4 Hann-windowed noise bursts of 4 ms
     const double lenD = std::max(8.0, js::round(0.004 * sr_));
     const auto len = static_cast<std::size_t>(lenD);
@@ -235,8 +239,8 @@ OrganInstrument::OrganInstrument(const OrganPresetDef &preset, double sampleRate
   s.clickG.gain().setValue(params_[ok::kClick] * 1.5);
   const double drive = params_[ok::kDrive];
   s.shaper = std::make_unique<wa::WaveShaper>(
-      softClipCurve12(), kSoftClipPoints, drive > 0.5 ? wa::WaveShaper::Oversample::X2 : wa::WaveShaper::Oversample::None,
-      1);
+      softClipCurve12(), kSoftClipPoints,
+      drive > 0.5 ? wa::WaveShaper::Oversample::X2 : wa::WaveShaper::Oversample::None, 1);
   setDrive(0);
   const bool off = static_cast<int>(params_[ok::kRotary]) == ok::kOff;
   s.dryG.gain().setValue(off ? 1 : 0);
@@ -332,6 +336,25 @@ void OrganInstrument::onMorph(double t) {
 }
 
 void OrganInstrument::applyModule(const Command &c) {
+  if (static_cast<std::uint16_t>(c.op) == static_cast<std::uint16_t>(T15Op::SetTables) && c.sub == kSubOwnedPayload &&
+      c.p.ptr) {
+    auto *w = static_cast<XTablesPayload *>(static_cast<Owned *>(c.p.ptr));
+    if (w->bank && w->xbank && w->drawbars[0]) {
+      OrganShared &s = *sh_;
+      pool_.forEach([&](int, XVoice &v) {
+        v.retable([&](const wa::PeriodicWave *t) {
+          return mapTable(t, *bank_, *xbank_, &s.waves, *w->bank, *w->xbank, &w->drawbars);
+        });
+      });
+      for (OrganRotor *r : {&s.horn, &s.drum}) {
+        r->sin.setWave(w->bank->basicSine.get());
+        r->cos.setWave(w->xbank->rotorCos.get());
+      }
+      std::swap(w->bank, bank_);
+      std::swap(w->xbank, xbank_);
+      std::swap(w->drawbars, s.waves);
+    }
+  }
   applyCommon(static_cast<std::uint16_t>(c.op), static_cast<std::uint16_t>(OrganOp::Morph),
               static_cast<std::uint16_t>(OrganOp::ReleaseOverride), c);
 }

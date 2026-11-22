@@ -63,9 +63,9 @@ struct XBuild {
   double envCents = 0, q2 = 0, dxBright = 1, dxTine = 1;  // patch helpers computed by the instrument
 };
 
-/** One saw / square / shimmer oscillator source with its table kind for rate changes (XWaveBank tables are not
- *  re-pointed: synth-extra units keep their tables across a rate change, as T11 O3 notes). */
-void xosc(SynthVoice &v, wa::Oscillator &o, const wa::PeriodicWave *w, double freq, double detune, double t);
+/** InstrumentBase.osc(v, wave, freq, detune, t): k-rate detune (bendCS linked by the voice's render), started, a
+ *  voice source; the table is recorded for a rate change (XVoice::retable). */
+void xosc(XVoice &v, wa::Oscillator &o, const wa::PeriodicWave *w, double freq, double detune, double t);
 
 /** lpfPair: two lowpass biquads (linear Q .5412 / q2 as dB), both linkFilter'ed (k-rate, filterCS on detune). */
 struct LpfPair {
