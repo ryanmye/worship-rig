@@ -167,8 +167,8 @@
   "seconds": 7.2
  },
  "tiers": {
-  "exact": 79,
-  "statistical": 33,
+  "exact": 83,
+  "statistical": 29,
   "exactIfPrngPorted": 39,
   "statisticalBandsDb": {
    "min": 1.5,
@@ -24841,7 +24841,7 @@
   {
    "id": "drone-synth-2keys",
    "kind": "drone",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -24890,11 +24890,19 @@
    "repeatMaxAbsDiff": 0.000003859400749206543,
    "renderMs": 2166,
    "tolerance": {
-    "bandsDb": 3.31,
-    "bandRangeDb": 50,
-    "envCorr": 0.889,
-    "envLagMs": 60,
-    "rmsDb": 1
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 3.31,
+     "bandRangeDb": 50,
+     "envCorr": 0.889,
+     "envLagMs": 60,
+     "rmsDb": 1
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables"
@@ -25147,23 +25155,12 @@
     "lagMs": 50,
     "maxAbs": 0.3383
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 3.31,
-    "envCorr": 0.889,
-    "envLagMs": 60,
-    "rmsDb": 1,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 2.649 dB, env corr 0.9392, rms 0.3452 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "drone"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.004849
@@ -25171,7 +25168,7 @@
   {
    "id": "drone-synth-stage",
    "kind": "drone",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -25220,11 +25217,19 @@
    "repeatMaxAbsDiff": 0.000001669861376285553,
    "renderMs": 1232,
    "tolerance": {
-    "bandsDb": 6.63,
-    "bandRangeDb": 50,
-    "envCorr": 0.901,
-    "envLagMs": 50,
-    "rmsDb": 2.33
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 6.63,
+     "bandRangeDb": 50,
+     "envCorr": 0.901,
+     "envLagMs": 50,
+     "rmsDb": 2.33
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables",
@@ -25488,24 +25493,12 @@
     "lagMs": 40,
     "maxAbs": 0.2001
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 6.63,
-    "envCorr": 0.901,
-    "envLagMs": 50,
-    "rmsDb": 2.33,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 5.301 dB, env corr 0.9512, rms 1.865 dB)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "drone",
-      "ir"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.006379
@@ -25513,7 +25506,7 @@
   {
    "id": "drone-freeze-dry",
    "kind": "drone-freeze",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -25562,11 +25555,19 @@
    "repeatMaxAbsDiff": 0.000003841705620288849,
    "renderMs": 463,
    "tolerance": {
-    "bandsDb": 5.06,
-    "bandRangeDb": 50,
-    "envCorr": -1,
-    "envLagMs": 200,
-    "rmsDb": 1.27
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 5.06,
+     "bandRangeDb": 50,
+     "envCorr": -1,
+     "envLagMs": 200,
+     "rmsDb": 1.27
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables",
@@ -25630,23 +25631,12 @@
     "lagMs": -140,
     "maxAbs": 0.3085
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 5.06,
-    "envCorr": -1,
-    "envLagMs": 200,
-    "rmsDb": 1.27,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 4.049 dB, env corr -0.1322, rms 1.014 dB); envelope check off (seeds decorrelate it)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "drone-freeze"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.004436
@@ -25654,7 +25644,7 @@
   {
    "id": "drone-freeze-wet",
    "kind": "drone-freeze",
-   "classification": "statistical",
+   "classification": "exact",
    "exactIfPrngPorted": true,
    "smoke": false,
    "chromium": "157.0.8103.78",
@@ -25703,11 +25693,19 @@
    "repeatMaxAbsDiff": 0.0000031441450119018555,
    "renderMs": 1177,
    "tolerance": {
-    "bandsDb": 6.78,
-    "bandRangeDb": 50,
-    "envCorr": -1,
-    "envLagMs": 200,
-    "rmsDb": 3.55
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 6.78,
+     "bandRangeDb": 50,
+     "envCorr": -1,
+     "envLagMs": 200,
+     "rmsDb": 3.55
+    }
    },
    "chromiumNodes": [
     "OscillatorNode/PeriodicWave wavetables",
@@ -25782,24 +25780,12 @@
     "lagMs": -90,
     "maxAbs": 0.3528
    },
-   "prngPortRecommended": true,
    "tier": {
-    "class": "statistical",
-    "bandsDb": 6.78,
-    "envCorr": -1,
-    "envLagMs": 200,
-    "rmsDb": 3.55,
-    "why": "1.25 x the spread of the same fixture under engine seeds 2,3,4,5 (bands 5.425 dB, env corr -0.1034, rms 2.841 dB); envelope check off (seeds decorrelate it)",
-    "weakWithoutPort": true,
-    "exactIf": {
-     "port": "mulberry32 + FNV-1a seeding + draw order of the listed streams",
-     "streams": [
-      "drone-freeze",
-      "ir"
-     ]
-    },
-    "blockers": [],
-    "promote": "node tools/golden/promote.mjs <native render dir> --apply"
+    "class": "exact",
+    "promotedFrom": "statistical",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.005395

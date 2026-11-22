@@ -74,7 +74,7 @@ TEST_SUITE("perform_carry") {
     std::ofstream(dir / "user.json") << R"({"instruments":[{"id":"keys","name":"keys","ext":"wav","release":0.12,)"
                                         R"("category":"strings","layers":[{"vel":[0,127],"files":{"G6":")" +
                                             url + R"("}}]}]})";
-    auto run = [&](bool setBetween) {
+    auto run = [&](bool setBetween, bool commitB = true) {
       rig_config cfg;
       rig_config_init(&cfg);
       cfg.mode = RIG_MODE_OFFLINE;
@@ -99,7 +99,7 @@ TEST_SUITE("perform_carry") {
       std::vector<float> l(4410), r(4410);
       float *p[2] = {l.data(), r.data()};
       rig_offline_render(e, p, 2, 2205);  // the set's 10 ms flush
-      post(R"({"v":1,"op":"commit","id":7,"token":2,"when":0.1})");
+      if (commitB) post(R"({"v":1,"op":"commit","id":7,"token":2,"when":0.1})");
       post(R"({"v":1,"op":"play","e":"on","n":91,"vel":100,"when":0.15})");
       post(R"({"v":1,"op":"play","e":"off","n":91,"when":0.6})");
       std::vector<float> out;
@@ -111,12 +111,13 @@ TEST_SUITE("perform_carry") {
       // level 0.4 s after the note-off against the held level (out starts at 0.05 s)
       return t13::db(t13::rms(out, 0.95, 1.05)) - t13::db(t13::rms(out, 0.4, 0.5));
     };
-    const double plain = run(false), afterSet = run(true);
+    const double plain = run(false), afterSet = run(true), held3s = run(true, false);
     std::error_code ec;
     std::filesystem::remove_all(dir, ec);
-    MESSAGE("decay 0.4 s after note-off: plain release 0.2 " << plain << " dB, after a set of 3 s + reuse "
-                                                             << afterSet << " dB");
-    CHECK(plain < -30);
+    MESSAGE("decay 0.4 s after note-off: release 0.2 " << plain << " dB; set to 3 s, no switch " << held3s
+                                                       << " dB; set to 3 s, then the reused commit " << afterSet
+                                                       << " dB");
+    CHECK(held3s > plain + 10);  // the set is heard (the control)
     CHECK(std::fabs(afterSet - plain) < 1.5);  // the reused channel plays the new song's release again
   }
 
