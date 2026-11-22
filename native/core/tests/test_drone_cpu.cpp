@@ -95,8 +95,10 @@ TEST_SUITE("drone_cpu") {
                                          << " (quantum " << q << " us)");
     std::printf("[drone_cpu] 1 layer %.1f us, crossfade %.1f us, 9th %.1f us per quantum (%.1f%%, %.1f%%, %.1f%%)\n",
                 one, two, nine, 100 * one / q, 100 * two / q, 100 * nine / q);
+#if !defined(__SANITIZE_THREAD__) && !defined(__SANITIZE_ADDRESS__)  // sanitizers: report only (5-15x slower)
     CHECK(one < 0.5 * q);
     CHECK(two < 0.5 * q);
+#endif
 
     // a frozen loop alone (the low-resource drone): one looping buffer source
     rig::drone::LoopRequest r;
@@ -111,6 +113,8 @@ TEST_SUITE("drone_cpu") {
     d2.playLoopTest(r, 0);
     const double frozen = run(h2, u2, 0, 1000);
     std::printf("[drone_cpu] frozen loop %.1f us per quantum (%.1f%%)\n", frozen, 100 * frozen / q);
+#if !defined(__SANITIZE_THREAD__) && !defined(__SANITIZE_ADDRESS__)
     CHECK(frozen < one);
+#endif
   }
 }
