@@ -143,6 +143,34 @@ synth.js instrument, +0.33 MB per sampler; ARCHITECTURE 7.1). T13 also edited `t
 | 37 | `include/rig/rig_engine.h`, `src/api/registry.h` | comment-only: the T00c lines carry the literal `INTERFACE-CHANGE(T00c)` marker | T00c review O1 |
 | 38 | `tests/samples_util.h` (T06 test helper) | `Dump::ok()` also requires `decode-dump/data/raw44100` and `raw48000` (git-ignored) | MAC_CHECK known gap 2 / mackit O2: in a clean checkout (CI `build-test`, `check.sh`) the three `unit.samples_*` dump cases now skip with a MESSAGE instead of failing |
 
+## W3B: organ + drone follow-ups (wave 3), marked `INTERFACE-CHANGE(W3B)` where the file is frozen
+
+Numbered W3B-n (the orchestrator renumbers when it merges with W3A). Renders of all 112 fixtures: byte-identical
+before / after except the three meant to move (`drone-freeze-dry`, `drone-freeze-wet`: silence -> the loop;
+`fx-row-sweep`: 1.22e-1 -> 3.2e-5); g++ 13 and clang++-20 renders byte-identical for all 112.
+
+| # | file(s) | change | why |
+|---|---|---|---|
+| W3B-1 | `tools/common/fixture_runner.cpp` (frozen, orchestrator) | the T16 runner diff: kind `drone-freeze` posts `drone {config: {__freezeTest: <setup>}}` (test API) and taps `fx.sum`; no longer skipped as silence | T16 review O1 (D5); `drone-freeze-dry` / `-wet` in `golden_ids/t16.ids` |
+| W3B-2 | `src/bridge/bridge.cpp` (`opHello`, T08), `tests/test_t00c.cpp` | `hello.minor` 2 -> **3**, capability `"droneFreeze"` (config `{droneFreeze}`, D5 / T16); the T00c test checks minor >= 3 and the capability | contract README rule (additive change = minor + capability). `mock-native.js` unchanged (still 0, as before) |
+| W3B-3 | `src/inst/synth.{h,cpp}` (T11; header not frozen) | T16's additive constructor `SynthInstrument(const PatchDef &, double sr, Rng parent, std::string_view params, double release)` (forks `parent`, as InstrumentBase asRng); the old one delegates to it. `drone/drone_osc.cpp` `makeDroneOsc` uses it; `rngNameFor` (the FNV-1a preimage search, ~768 KB / ~1 ms per tried tag) is deleted | T16 review O3. The four drone fixtures render byte-identical before / after |
+| W3B-4 | `src/model/model.cpp` (`Model::set`, dynamic `slots.<i>.params.` branch; T13 file) | a STRING value becomes `inst::instEnumIndex(slot, key, s)` (new, `inst/organ.h`): organ `rotary` slow / fast / off, an unlisted name = the preset's default (voice.js coerceParam); -1 (not an enum row of the slot's instrument) = not applied | T15 review item 1 (HIGH): the Edit view sends `rotary = 'fast'`, which arrived as 0 = slow. NOTE: the review text said "dropped" for an invalid name; JS applies the default, so native does too. A string for a NUMERIC row is dropped (JS: `Number(s)`), unchanged in practice (the UI sends numbers) |
+| W3B-5 | `src/model/song.cpp` (`sendRelease`, `applyFresh`, `applyWheels`; T13 file) | `kKindOrgan` -> `OrganOp::ReleaseOverride` / `OrganOp::Morph` | T15 review item 2 (HIGH): `macro.intensity` / bend morph and a run-time `slots.<i>.release` never reached an organ |
+| W3B-6 | `src/inst/instrument_service.cpp` (`setInstrumentParam`, T11 file) | after the `Op::InstParam` of an organ `drawbar*` key: `inst::organDrawbarsChanged(m, slot, when)` (new, `inst/organ.h`) | T15 review item 3 (MEDIUM): organ.js `_scheduleWave`. The "t15-tables" service (now `inst/synth_extra_tables.{h,cpp}`, class `T15TablesService`, same registry name) arms one 30 ms timer per slot, then sends `T15Op::SetTables` with only `drawbars` (built on the control thread from the slot's current params) |
+| W3B-7 | `src/inst/synth_extra_dsp.h` (T15) | `XTablesPayload::sampleRate` (0 = keep the DelayNodes); `XDelay::sampleRate()` | T15 review items 3 / 4: a drawbars-only payload is applied only at the unit's rate; a rate-change payload re-attaches the organ horn and synth-extra chorus DelayNodes (`attachFitting`, same buffers) |
+| W3B-8 | `src/fx/lofi_register.cpp`, `src/fx/lofi_unit.h`, `src/fx/lofi.cpp` (comment) (T05 files) | the lofi service sends `LofiOp::Apply` NOW (command frame) with `s->when` = the call's time (`LofiUnit::apply` schedules ramps / engage there); the unit's garbage buffer 8 -> 32 | fx-row-sweep root cause (below). fx.js `Lofi.apply(when)` runs at call time: `_updateCurves` assigns the WaveShaper curves at once. Test `unit.lofi-calltime` |
+| W3B-9 | `src/fx/delay_register.cpp` (`sendOp`, T05 file) | every `DelayOp` is sent NOW with `f.e` = the call's time (`DelayUnit::apply` already schedules at `f.e`) | fx-row-sweep 4.5-7.5 s residual (5.3e-4 -> 3.2e-5): fx.js `updateTime` / `_switchTo` / `setFeedback` run at call time, so the feedback row at 4.5 s acts on the line that is active at CALL time and the switch retry timer reads the latest `p.feedback` |
+
+**fx-row-sweep root cause.** The golden page issues every event up front (`dispatch` before `startRendering`), and
+fx.js applies part of a call at CALL time: `Lofi.apply` swaps `sat.curve` / `quant.curve` (not AudioParams) at once,
+so the curves of the LAST lofi rows (saturation .9 at 7.0 s, amount .7 at 7.2 s: drive 9 dB, 11 bits) shape the
+whole golden from t = 0. That made the golden 1.7-2.3 dB quieter in 0-3 s, and 11-bit quantisation rounds the
+-100 dB drone fade-in before the 0.1 s note to exact zeros (frames 4000-4400). The native lofi service sent its state
+at `when`, so its curves changed at 7 s. Found by rendering the fixture without its param rows (web = native to
+3e-5), then each row alone (only `fx.lofi.saturation` / `fx.lofi.amount` move the first second). The same pattern in
+the delay (time 3.0 + sync 4.0 + feedback 4.5 together) left 5.3e-4 in 4.5-7.5 s. Live use is unaffected (the
+controller calls with when = now). No tolerance changed.
+
 ## Notes for later tasks
 
 - T05 review R1 (closed by the integrator): the `src/fx/delay.h` header comment and ENGINE_CONTRACT §3.5 now
