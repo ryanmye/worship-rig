@@ -580,6 +580,20 @@ export function mountPerform(root, ctx) {
     e.preventDefault();
     e.stopPropagation();
   });
+  // a soft edge on the side(s) the row can still scroll to, so more strips read as "there is more"
+  const edges = rafCoalesce(() => {
+    const on = slotsEl.classList.contains('scroll');
+    const max = slotsEl.scrollWidth - slotsEl.clientWidth;
+    slotsEl.classList.toggle('more-l', on && slotsEl.scrollLeft > 2);
+    slotsEl.classList.toggle('more-r', on && slotsEl.scrollLeft < max - 2);
+  });
+  d.add(() => edges.cancel());
+  d.listen(slotsEl, 'scroll', () => edges.push(), { passive: true });
+  if (typeof ResizeObserver === 'function') {
+    const ro = new ResizeObserver(() => edges.push());
+    ro.observe(slotsEl);
+    d.add(() => ro.disconnect());
+  }
   const revealStrip = (el) => {
     if (!slotsEl.classList.contains('scroll') || !el) return;
     const a = slotsEl.getBoundingClientRect();
@@ -1472,6 +1486,7 @@ export function mountPerform(root, ctx) {
       stripsFor = key;
       if (slotsEl.scrollLeft) slotsEl.scrollLeft = 0;
     }
+    edges.push();
     return n;
   }
 

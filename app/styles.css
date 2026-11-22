@@ -953,6 +953,14 @@ body[data-view="edit"] .quick-btn { display: none; }
 .p-slots.scroll > .slot:not(.empty) { flex: 0 0 calc((100% - 3 * var(--p-gap)) / 4); scroll-snap-align: start; }
 .p-slots.scroll > .slot.empty { scroll-snap-align: start; }
 .p-slots.scroll:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* a soft edge where the row can still scroll (perform.js toggles more-l / more-r) */
+.p-slots.scroll.more-r { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); }
+.p-slots.scroll.more-l { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent); }
+.p-slots.scroll.more-l.more-r {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
 /* touch: a sideways swipe over a vertical fader scrolls the row; an up / down drag still moves the fader */
 .p-slots.scroll .fader.vertical input[type="range"] { touch-action: pan-x; }
 /* the web engine plays four slots: one vertical line marks where the silent strips start (they play on 2.0) */

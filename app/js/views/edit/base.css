@@ -127,6 +127,13 @@
 .ev2 .ev2-slottabs.scroll { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scroll-snap-type: x proximity;
   scrollbar-width: thin; scrollbar-color: var(--line-2, #3a414d) transparent; padding-bottom: 1px; margin-bottom: -1px; }
 .ev2 .ev2-slottabs.scroll > .ev2-tab { flex: 0 0 calc(25% - 4px); scroll-snap-align: start; }
+.ev2 .ev2-slottabs.scroll.more-r { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+.ev2 .ev2-slottabs.scroll.more-l { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); }
+.ev2 .ev2-slottabs.scroll.more-l.more-r {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
 .ev2 .ev2-tab {
   position: relative; z-index: 1; height: 60px; margin: 0 2px; border: 1px solid transparent; border-bottom: 0;
   border-radius: 10px 10px 0 0; background: transparent; text-align: left; padding: 7px 11px 0;

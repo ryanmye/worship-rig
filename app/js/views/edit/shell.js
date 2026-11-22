@@ -859,6 +859,7 @@ export function mountEdit(el, ctx) {
     slotTabs.replaceChildren(...slotEls);
     slotTabs.classList.toggle('scroll', n > SLOT_COUNT);
     tablist.dataset.slots = String(n);
+    edges();
     const m = /^slot:(\d+)$/.exec(editState.selected);
     if (m && Number(m[1]) >= n) editState.select(`slot:${n - 1}`);
     if (!tabs.has(lastTab)) lastTab = 'slot:0';
@@ -873,6 +874,20 @@ export function mountEdit(el, ctx) {
     const n = core.song && Array.isArray(core.song.patch?.slots) ? core.song.patch.slots.length : SLOT_COUNT;
     return Math.min(MAX_SLOTS, Math.max(1, n));
   };
+  // a soft edge on the side(s) the tab row can still scroll to
+  let edgeRaf = 0;
+  const edges = () => {
+    if (edgeRaf) return;
+    edgeRaf = requestAnimationFrame(() => {
+      edgeRaf = 0;
+      const on = slotTabs.classList.contains('scroll');
+      const max = slotTabs.scrollWidth - slotTabs.clientWidth;
+      slotTabs.classList.toggle('more-l', on && slotTabs.scrollLeft > 2);
+      slotTabs.classList.toggle('more-r', on && slotTabs.scrollLeft < max - 2);
+    });
+  };
+  slotTabs.addEventListener('scroll', edges, { passive: true });
+  core.cleanups.push(() => cancelAnimationFrame(edgeRaf));
   /** UIA: the selected slot tab fully in view (a selection from a key, the Perform strip, a new slot). */
   function revealTab() {
     const t = tabs.get(editState.selected);
@@ -948,7 +963,10 @@ export function mountEdit(el, ctx) {
       for (const t of tight) t.el.classList.add('nosub');
     });
   }
-  const tabsRo = typeof ResizeObserver === 'function' ? new ResizeObserver(() => fitTabs()) : null;
+  const tabsRo = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
+    fitTabs();
+    edges();
+  }) : null;
   tabsRo?.observe(tablist);
   let lastTab = 'slot:0';
   function renderLeds() {
