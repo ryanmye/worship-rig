@@ -283,13 +283,29 @@ velocity curve (T14); `song-lofi-rhodes` plays `synth:soft-keys` (T11; passes, s
 `switch-retire-retain` play `sampler:ep-rhodes`; 10 of the 16 `synth-*` ids are synth-extra patches under instrument
 type `synth`, so T15 registers into T11's `inst.synth` dispatch hook.
 
-## UI parity through rig-devhost (T09 baseline)
+## UI parity through rig-devhost (T09 baseline; re-run by UIB, 2026-11-22)
 
 `node test/unit/engine-bridge/ui-core-devhost.mjs` (the `ui-core` Perform suite against `rig-devhost`, real UI in
-headless Chromium): **21 / 76** at the wave-1 baseline, **25 / 76** reported after T11 (`get instruments`); not
-re-run by the T11, T12, T13 reviews or this pass (23 min, and most remaining failures need T14 `play input`, fade,
-bend, or a ui-core adapter for Web Audio internals: `strip.pan`, `AnalyserNode`, `getParam`). Owner: T09 re-run, now
-possible (T14 done): UI wave.
+headless Chromium): **21 / 76** at the wave-1 baseline, **25 / 76** after T11. **UIB re-run** (fresh `rig-devhost`,
+g++ Release `native/core/build-uib-devhost`, tree = wave 3 + the UI-wave work in progress, suite now 77 tests with
+UIA's `slots.mjs`):
+
+| run | pass / 77 | note |
+|---|---|---|
+| `--no-adapter` (the suite as it is) | **25** | 39 of the 52 failures are one line: the suite's `waitSong` helper waits for `engine.slots.some(Boolean)`, a Web Audio engine internal (not contract), so every test that switches songs stops there |
+| with `ui-core-devhost.adapter.js` (default since UIB) | **63** (49 before `transpose` / `activeNotes` were added) | the adapter answers the internals the suite reads (`slots`, `retiring`, `getParam`, `pedaled`, `transpose`, `activeNotes` / `sounding`, `fx.reverb.settled`, `drone.getState`) on the BridgeEngine instance from what the shim knows (patch mirror, values sent, tick `stats`, `notes` events); class and contract surface unchanged, nothing under `app/` loads it |
+
+No bridge error reply in either run; warns: one "No pad file for C; using the synth drone." and one "Drone: too many
+overlapping layers; a fading one was cut."; no sanitizer report. The 14 left (adapter run), with owners:
+
+| test(s) | cause | owner |
+|---|---|---|
+| every factory song; next / prev | the sound check taps `slots[i].strip.pan` with Web Audio `AnalyserNode`s (no page-side audio against a native core) | ui-core suite (UIA / T09): use the contracted `engine.slotLevel(i)` when `engine.ctx` is not a `BaseAudioContext` |
+| polish-1 strip meters | `engine.slotTapCount()` (internal) | ui-core suite or adapter (T09) |
+| v11-metronome Click chip; v11-decisions PANIC stops the click | `engine.metronome.*` internals (`running`, `stats.ticks`) | adapter / suite (T09) |
+| Panic (pedal holds the chord); Swell (`swelling`); status lamps (pedal lamp within 2 s); round2-ui #1 (Space = sustain) | the shim answers `pedaled` / `runtime` / `pedal` from the 30 Hz tick and the 1 s `stats`; the web engine answers at once | T09 shim (optimistic local mirror confirmed by the next tick) + T08 (per-tick `pedaled` count) |
+| critics-fix performance #2 / #3 (meters / still wheel keep writing while silent) | the tick keeps delivering non-zero peaks and wheel values while nothing plays (null backend; drone / reverb tail?) | T09 (analyser facade, wheel echo) / T08; needs a look |
+| boots (song name 39.8 px ≥ 40), H-v2 Quick sheet geometry, v11-polish (timeout) | layout / timing; all pass on the web engine in the same tree; `boots` passed in 2 of 3 devhost runs | re-run after UIA's Perform work lands (16-slot strip row in progress during this run) |
 
 Environment notes (not defects): Playwright 1.56 pins Chromium build 1194; this box only has `/opt/pw-browsers/*-1243`
 (Chrome for Testing 157.0.8103.78, the golden pin). `render.mjs` falls back to it by itself.
