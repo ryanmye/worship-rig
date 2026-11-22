@@ -207,6 +207,12 @@ void sleepNow(Rt &rt, int id) {
   const auto end = Clock::now() + std::chrono::seconds(kSanitized ? 10 : 3);
   while (impl(rt.e).awake() && Clock::now() < end) Rt::pause(2);
   REQUIRE(!impl(rt.e).awake());  // the engine's atomic (the Model's sleep state is control-thread data)
+  // CORE1 skeptic: a render that read awake_ before the flip may still finish one more quantum (seen under TSan:
+  // time moved 128 frames after t0). Two more completed blocks guarantee a render that started after the flip.
+  const long b0 = rt.blocks.load();
+  for (const auto end2 = Clock::now() + std::chrono::seconds(kSanitized ? 10 : 3);
+       rt.blocks.load() < b0 + 2 && Clock::now() < end2;)
+    Rt::pause(1);
   const double t0 = rig_engine_time(rt.e);
   Rt::pause(80);
   CHECK(rig_engine_time(rt.e) == t0);  // asleep: rig_render writes silence and time stands still
