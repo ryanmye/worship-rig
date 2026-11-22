@@ -319,7 +319,12 @@ TEST_SUITE("runtime_preload") {
     CHECK(contains(rt.reply(14).second, "\"committed\":true"));
   }
 
-  TEST_CASE("CORE2A: a newer preload is served before an older one still loading; both answer") {
+  // CORE2A review: the builder asserted "the newer finishes first". It does, but only by ~3 % (4.40 vs 4.53 s here):
+  // a preload keeps at most 6 decodes queued and posts the next as one finishes, and that follow-up is the NEWEST job
+  // in the pool, so two preloads interleave (newest-first holds per job, not per preload; prepare posts all its jobs
+  // at once, so a song switch does go first). 1.x orders nothing here either (parallel decodeAudioData). Checked
+  // instead: both answer while the other is still loading or after, nothing is dropped, ticks keep flowing.
+  TEST_CASE("CORE2A: a second preload while the first is loading: both answer, nothing dropped, ticks flow") {
     g_sleepMs = 25;
     Rt rt;
     rt.boot();
@@ -331,13 +336,60 @@ TEST_SUITE("runtime_preload") {
     rt.post(R"({"v":1,"op":"cache","action":"preload","pin":"add","id":11,"patches":[)" + patchOf("celesta") + "]}");
     const auto b = rt.reply(11, kSanitized ? 120000 : 30000);
     REQUIRE(!b.second.empty());
-    CHECK(!rt.replied(10));  // the older one still has samples to decode: the newer went first
     const auto a = rt.reply(10, kSanitized ? 120000 : 30000);
     REQUIRE(!a.second.empty());  // and it is not dropped (1.x: every preload resolves with its songs decoded)
-    CHECK(a.first > b.first);
     rt.post(R"({"v":1,"op":"get","what":"sampleStatus","id":12,"patches":[)" + patchOf("celesta") + "," +
             patchOf("salamander-piano") + "]}");
     CHECK(contains(rt.reply(12).second, "\"loaded\":[true,true]"));
     CHECK(rt.maxGapMs(t0, a.first) < kMaxGapMs);
+    MESSAGE("newer preload answered " << ms(t0, b.first) << " ms, older " << ms(t0, a.first) << " ms after the first");
+  }
+
+  // CORE2A skeptic: the design's claim "a song switch never waits behind a preload" had no test of its own.
+  TEST_CASE("CORE2A review: a song switch during a big preload is decoded first; the preload still answers") {
+    g_sleepMs = 25;
+    Rt rt;
+    rt.boot();
+    const auto t0 = Clock::now();
+    rt.post(R"({"v":1,"op":"cache","action":"preload","pin":"add","id":10,"patches":[)" + patchOf("salamander-piano") +
+            "," + patchOf("vibes") + "]}");
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    REQUIRE(!rt.replied(10));
+    // celesta is in no preload: its 88 samples are requested by the prepare alone (priority 0)
+    const auto t1 = Clock::now();
+    rt.post(R"({"v":1,"op":"prepare","id":11,"patch":)" + patchOf("celesta") + "}");
+    const auto p = rt.reply(11, kSanitized ? 120000 : 30000);
+    REQUIRE(tokenOf(p.second) > 0);
+    CHECK(!rt.replied(10));  // the preload (178 samples) is still loading: the switch did not wait behind it
+    const auto a = rt.reply(10, kSanitized ? 120000 : 30000);
+    REQUIRE(!a.second.empty());
+    MESSAGE("prepare answered " << ms(t1, p.first) << " ms after it was sent; preload answered " << ms(t0, a.first)
+                                << " ms after its own");
+    CHECK(rt.maxGapMs(t0, a.first) < kMaxGapMs);
+    rt.post(R"({"v":1,"op":"commit","id":12,"token":)" + std::to_string(tokenOf(p.second)) + "}");
+    CHECK(contains(rt.reply(12).second, "\"committed\":true"));
+  }
+
+  TEST_CASE("CORE2A review: a song switch to an instrument a preload has queued jumps the queue (joined keys)") {
+    g_sleepMs = 25;
+    Rt rt;
+    rt.boot();
+    const auto t0 = Clock::now();
+    // salamander first, then vibes: the preload reaches vibes' samples last
+    rt.post(R"({"v":1,"op":"cache","action":"preload","pin":"add","id":10,"patches":[)" + patchOf("salamander-piano") +
+            "," + patchOf("vibes") + "]}");
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    const auto t1 = Clock::now();
+    rt.post(R"({"v":1,"op":"prepare","id":11,"patch":)" + patchOf("vibes") + "}");
+    const auto p = rt.reply(11, kSanitized ? 120000 : 30000);
+    REQUIRE(tokenOf(p.second) > 0);
+    rt.post(R"({"v":1,"op":"get","what":"sampleStatus","id":12,"patches":[)" + patchOf("vibes") + "," +
+            patchOf("salamander-piano") + "]}");
+    const std::string st = rt.reply(12).second;
+    MESSAGE("vibes prepare answered " << ms(t1, p.first) << " ms after it was sent; status then " << st);
+    CHECK(contains(st, "\"loaded\":[true,false]"));
+    CHECK(!rt.replied(10));
+    REQUIRE(!rt.reply(10, kSanitized ? 120000 : 30000).second.empty());
+    CHECK(rt.maxGapMs(t0, Clock::now()) < kMaxGapMs);
   }
 }
