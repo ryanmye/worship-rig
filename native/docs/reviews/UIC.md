@@ -26,7 +26,7 @@ existing 1194 → 1243 mapping (`scratchpad/uisk/pw`); nothing installed.
 | vs the builder's g++ renders (`scratchpad/uic/r-gcc`) | byte-identical, 112/112: no fixture moved |
 | `parity.mjs --twin <clang-20>` | exit 0; 110 at the exact tier; "unexpected failures: none" |
 | `node --test test/unit/engine-bridge/*.test.mjs` | **123 / 0 / 2 skip**; **125 / 0 / 0** with `RIG_DEVHOST` = this review's devhost |
-| `node test/run-all.mjs --fast` (after this review's edits) | RUNALL_RESULT |
+| `node test/run-all.mjs --fast` (after this review's edits) | **11/12** (25 min): unit 524 / 0 / 9 skip, engine 98/99 + 1 soft warning (PASS), instruments 143/143, synth-extra 153/153, shell 265, **ui-core 90/0** (web engine, with the S1 / S2 edits), edit-v2 109, settings **86/86** (app, fixture, mac, bridge), **eq 27/28 = the known L-21** only, mini 14/14, themes 58/58, chrome-fallback 17/17; zero console errors. The themes run rewrote the 7 coverage JSONs' timestamps only; restored from HEAD |
 | ui-core on `rig-devhost`, `--no-adapter` (raw) | **68, 68, 66 / 77** (below) |
 
 No file under `app/js/engine` or `native/core` changed (`git diff 35b6e43 -- app/js/engine native/core` is empty).
