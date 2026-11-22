@@ -561,6 +561,7 @@ export function mountPerform(root, ctx) {
     }
   }
   for (let i = 0; i < SLOT_COUNT; i++) makeStrip(i);
+  slotsEl.append(silentNote); // hidden (display: none) until a song has slots the engine does not play
   /** UIA: strips for a song with `n` slots (built once, never removed). */
   function ensureStrips(n) {
     while (slots.length < Math.min(MAX_SLOTS, n)) makeStrip(slots.length);

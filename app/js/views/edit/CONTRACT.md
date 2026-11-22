@@ -35,7 +35,7 @@ app/js/views/edit/
   base.css              tokens, layout, tabs, wiring, panel frame, shared widgets
   CONTRACT.md           this file
   panels/index.js       the registered list (integrator-owned)
-  panels/slot.js   + slot.css          block 'slot:0'..'slot:3'   (sound panel; Advanced = ctx.C.eqKeyboard + Sustain)
+  panels/slot.js   + slot.css          block 'slot:0'..'slot:15'  (sound panel; Advanced = ctx.C.eqKeyboard + Sustain)
   panels/drone.js  + drone.css         block 'drone'
   panels/effects.js + effects.css      block 'effects'
   panels/master.js + master.css        block 'master'             (incl. Wheels & pedal)
@@ -65,6 +65,16 @@ test/phase2/edit-v2/
 
 - **Blocks** (`lib.BLOCKS`, in tab order):
   - `slot:0` Keys, `slot:1` Pad, `slot:2` Extra, `slot:3` Bass. Panel `slot`, opts `{slot:i}`.
+  - UIA (native DECISIONS D3): a song has 1..16 slots, so the slot blocks are `slot:0` .. `slot:<n-1>` for the
+    song's n (`lib.blocksFor(n)`; `lib.BLOCKS` = the 4-slot list; `lib.slotBlock(i)`; `blockOf` knows
+    `slot:0`..`slot:15`). Past the four roles a slot is 'Sound 5' … 'Sound 16' (`params.slotName`), coloured
+    `--slot-<i>` (styles.css mixes the theme's four role colours). The shell rebuilds the tab row when the count
+    changes (a selection past it moves to the last slot) and remounts the Effects and Master panels, whose
+    "goes in" chips / wheel targets are one per slot. More than four slot tabs scroll sideways (`.ev2-slottabs.scroll`),
+    the selected one scrolled into view. "Slots n" in the rig bar adds a slot (empty, selected with
+    `{focus:'instrument'}`) or removes the last one after a question (store `addSlot` / `removeSlot`). On an engine
+    that plays fewer slots (`controller.engineSlots()`, the web engine: 4), the slot panel's title says the slot is
+    silent here and plays on the 2.0 engine.
   - `drone`
   - `effects` and `master`. These are "shared" and styled neutral steel (`--fx`).
 - `lib.SONG_BLOCK` is `song`. It has no tab.

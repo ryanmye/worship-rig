@@ -949,10 +949,12 @@ body[data-view="edit"] .quick-btn { display: none; }
    (100% of the row less three gaps, over four), the rest sit to the right; wheel, trackpad, touch (scroll snap) and,
    with the row focused, ←/→ / Home / End move it. Up to four strips nothing here applies. */
 .p-slots.scroll { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scroll-snap-type: x proximity;
-  scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; padding-bottom: 2px; border-radius: var(--radius); }
+  scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; border-radius: var(--radius); }
 .p-slots.scroll > .slot:not(.empty) { flex: 0 0 calc((100% - 3 * var(--p-gap)) / 4); scroll-snap-align: start; }
 .p-slots.scroll > .slot.empty { scroll-snap-align: start; }
 .p-slots.scroll:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* touch: a sideways swipe over a vertical fader scrolls the row; an up / down drag still moves the fader */
+.p-slots.scroll .fader.vertical input[type="range"] { touch-action: pan-x; }
 /* the web engine plays four slots: one vertical line marks where the silent strips start (they play on 2.0) */
 .p-silent-note { flex: 0 0 30px; display: flex; align-items: center; justify-content: center; border-left: 1.5px dashed var(--line-2); }
 .p-silent-note[hidden] { display: none; }

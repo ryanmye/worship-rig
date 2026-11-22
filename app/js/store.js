@@ -49,7 +49,7 @@ import {
 // UIA: the store speaks the 2.0 song grammar (slots.0..15); which of them a song has is its patch.slots.length
 const isValidPath = (p) => isValidPath4(p, MAX_SLOTS);
 
-export const SCHEMA = 2; // UIA: 1 → 2 (1..16 slots per song, native DECISIONS D3)
+export const SCHEMA = 2; // INTERFACE-CHANGE(UIA): 1 → 2 (1..16 slots per song, native DECISIONS D3)
 export const STORAGE_KEY = 'rig.v1';
 export const INSTRUMENT_TYPES = Object.freeze(['sampler', 'synth', 'organ']);
 export const LATENCIES = Object.freeze(['lowest', 'balanced', 'safe']);
@@ -1186,7 +1186,8 @@ export function createStore(opts = {}) {
       if (rest.length === 1) {
         if (!Array.isArray(value)) return null;
         const next = normalizePatch({ ...song.patch, slots: value });
-        return next.slots.length === song.patch.slots.length ? { segs, value: next.slots } : { segs: segs.slice(0, -1), value: next };
+        if (next.slots.length === song.patch.slots.length) return { segs, value: next.slots };
+        return { segs: segs.slice(0, -1), value: next };
       }
       const i = Number(a);
       // UIA: only the song's own slots (addSlot / removeSlot change how many it has)

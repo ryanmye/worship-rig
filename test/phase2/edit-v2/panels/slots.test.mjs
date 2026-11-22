@@ -117,7 +117,10 @@ test('16 slots: the slot tabs scroll (four in view), arrows reveal the selected 
   assert.ok(opts.includes('slots.15.gain') && opts.includes('none'), opts.join());
   assert.equal(await t.ev(() => [...document.querySelectorAll('#view-edit [data-route="modWheel"] select option')].find((o) => o.value === 'slots.15.gain').textContent), 'Sound 16 level');
   await t.click('#view-edit .ev2-wiretog');
-  await t.until(() => document.querySelectorAll('#view-edit .ev2-wv[data-lane="reverb"][data-slot]').length === 16);
+  // one number per filled slot (Extra and Bass are empty in this song), Sound 16's in the 16th column
+  await t.until(() => document.querySelectorAll('#view-edit .ev2-wv[data-lane="reverb"][data-slot]').length
+    === window.__rig.store.currentSong().patch.slots.filter(Boolean).length);
+  assert.equal(await t.ev(() => document.querySelector('#view-edit .ev2-wv[data-lane="reverb"][data-slot="15"]').parentElement.style.gridColumn), '16');
   await t.screenshot('slots-16-wiring');
   await t.click('#view-edit .ev2-wiretog');
   await t.select('effects');

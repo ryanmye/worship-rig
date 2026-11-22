@@ -110,6 +110,18 @@ export default {
           ? 'every key' : rangeText(x.low, x.high)}`,
       }, h('i'), h('b.ev2-kb-role', { text: x.role }), h('span.ev2-kb-rng', { text: rangeText(x.low, x.high) }))));
       bars.style.setProperty('--rows', String(list.length));
+      // UIA: more than four sounds share the four rows' height (26 px); the legend scrolls
+      const dense = list.length > 4;
+      bars.classList.toggle('dense', dense);
+      legend.classList.toggle('dense', dense);
+      if (dense) {
+        const step = 26 / list.length;
+        bars.style.setProperty('--kb-step', `${step.toFixed(2)}px`);
+        bars.style.setProperty('--kb-bar', `${Math.max(1, step - 0.5).toFixed(2)}px`);
+      } else {
+        bars.style.removeProperty('--kb-step');
+        bars.style.removeProperty('--kb-bar');
+      }
       bars.replaceChildren(...list.map((x, row) => {
         const g = barGeometry(x.low, x.high);
         return h('div.ev2-kb-bar', {

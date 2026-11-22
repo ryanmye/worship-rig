@@ -671,8 +671,9 @@ function slotControl(core, appCtx, editState) {
       : '';
   };
   const item = (act, text, sub, fn, cls = '') => {
-    const b = h('button.ev2-slots-mi', { type: 'button', role: 'menuitem', tabindex: '-1', dataset: { act }, class: cls },
-      h('span', { text }), sub ? h('small', { text: sub }) : null);
+    const b = h('button.ev2-slots-mi', {
+      type: 'button', role: 'menuitem', tabindex: '-1', dataset: { act }, class: cls,
+    }, h('span', { text }), sub ? h('small', { text: sub }) : null);
     b.addEventListener('click', (e) => {
       viaKeys = e.detail === 0;
       fn();
@@ -686,8 +687,9 @@ function slotControl(core, appCtx, editState) {
     viaKeys = keys;
     mode = 'menu';
     const n = slotsOf().length;
-    const add = item('add', n < MAX_SLOTS ? `Add ${slotName(n)}` : 'Add a slot', n < MAX_SLOTS
-      ? `an empty slot after ${slotName(n - 1)}; pick its sound next` : `${MAX_SLOTS} is the most a song can have`, () => {
+    const addSub = n < MAX_SLOTS ? `an empty slot after ${slotName(n - 1)}; pick its sound next`
+      : `${MAX_SLOTS} is the most a song can have`;
+    const add = item('add', n < MAX_SLOTS ? `Add ${slotName(n)}` : 'Add a slot', addSub, () => {
       close(false);
       const i = store.addSlot(s.id);
       if (i < 0) return;
@@ -721,7 +723,9 @@ function slotControl(core, appCtx, editState) {
     const name = slotName(n - 1);
     const last = slotsOf()[n - 1];
     const what = last ? 'its sound and settings go with it' : 'it has no sound yet';
-    const q = h('p.ev2-slots-q', { id: 'ev2-slots-q', text: `Remove ${name} from “${s.name}”? ${what[0].toUpperCase()}${what.slice(1)}.` });
+    const q = h('p.ev2-slots-q', {
+      id: 'ev2-slots-q', text: `Remove ${name} from “${s.name}”? ${what[0].toUpperCase()}${what.slice(1)}.`,
+    });
     const go = h('button.ev2-btn.sm.danger', { type: 'button', dataset: { act: 'remove-go' } }, `Remove ${name}`);
     const cancel = h('button.ev2-btn.sm', { type: 'button', dataset: { act: 'cancel' } }, 'Cancel');
     go.addEventListener('click', () => {

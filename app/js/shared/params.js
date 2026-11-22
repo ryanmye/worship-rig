@@ -13,7 +13,7 @@ export const SLOT_COUNT = 4;
  * UIA (native DECISIONS D3): a 2.0 song has 1..MAX_SLOTS slots; the native core takes all of them. Pass it as the
  * `slotCount` of parsePath / isValidPath / expandPaths for the song grammar (store, controller, UI).
  */
-export const MAX_SLOTS = 16;
+export const MAX_SLOTS = 16; // INTERFACE-CHANGE(UIA): new
 
 /**
  * @typedef {object} ParamEntry
@@ -185,7 +185,7 @@ const boundOf = (n) => (Number.isInteger(n) ? Math.min(MAX_SLOTS, Math.max(1, n)
  *   web engine's 4, so app/js/engine and the bridge shim see the grammar they were written for)
  * @returns {{pattern:string, slot:number|null, key:string|null}|null}
  */
-export function parsePath(path, slotCount = SLOT_COUNT) {
+export function parsePath(path, slotCount = SLOT_COUNT) { // INTERFACE-CHANGE(UIA): + slotCount
   if (typeof path !== 'string') return null;
   const m = SLOT_RE.exec(path);
   if (!m) return !path.startsWith('slots.') && BY_PATTERN.has(path) ? { pattern: path, slot: null, key: null } : null;
@@ -207,7 +207,7 @@ export function parsePath(path, slotCount = SLOT_COUNT) {
  * @returns {ParamEntry|null}
  */
 export function describe(path) {
-  const p = parsePath(path, MAX_SLOTS);
+  const p = parsePath(path, MAX_SLOTS); // INTERFACE-CHANGE(UIA): slots 0..15
   if (!p) return null;
   return p.pattern === INSTRUMENT_PARAM_ENTRY.path ? INSTRUMENT_PARAM_ENTRY : BY_PATTERN.get(p.pattern);
 }
@@ -217,7 +217,7 @@ export function describe(path) {
  * @param {number} [slotCount=SLOT_COUNT] see parsePath (MAX_SLOTS = the 2.0 song grammar)
  * @returns {boolean} true when the path is a valid parameter address (controlIds like 'panic' are not)
  */
-export function isValidPath(path, slotCount = SLOT_COUNT) {
+export function isValidPath(path, slotCount = SLOT_COUNT) { // INTERFACE-CHANGE(UIA): + slotCount
   return parsePath(path, slotCount) !== null;
 }
 
@@ -226,7 +226,7 @@ export function isValidPath(path, slotCount = SLOT_COUNT) {
  * @param {number} [slotCount=SLOT_COUNT]
  * @returns {string[]}
  */
-export function expandPaths(slotCount = SLOT_COUNT) {
+export function expandPaths(slotCount = SLOT_COUNT) { // INTERFACE-CHANGE(UIA): + slotCount
   const n = boundOf(slotCount);
   const out = [];
   for (const e of PARAMS) {
@@ -414,6 +414,7 @@ export function learnTargets(slotCount = SLOT_COUNT) {
  * @returns {boolean}
  */
 export function isLearnable(controlId) {
+  // INTERFACE-CHANGE(UIA): also 'slots.<i>.gain' for i < 16
   return LEARNABLE.includes(controlId) || slotGainIndex(controlId) !== null;
 }
 
@@ -463,7 +464,7 @@ export function slotName(i) {
  * @throws {RangeError} bad role; {TypeError} bad instrumentRef
  */
 export function defaultSlot(roleIndex, instrumentRef) {
-  const role = slotRole(roleIndex);
+  const role = slotRole(roleIndex); // INTERFACE-CHANGE(UIA): roles 0..15 (was 0..3)
   if (!role) throw new RangeError(`defaultSlot: roleIndex must be 0..${MAX_SLOTS - 1}, got ${roleIndex}`);
   if (!instrumentRef || typeof instrumentRef.type !== 'string' || typeof instrumentRef.id !== 'string') {
     throw new TypeError('defaultSlot: instrumentRef must be {type, id}');
