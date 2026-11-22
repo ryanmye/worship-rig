@@ -21,13 +21,13 @@ JS stand-in for native (`mock-native.js`) still rejects `slots.4..15` (O2).
 |---|---|
 | ctest g++ 13 Release (`build-uisk`) | 80/80, 0 warnings |
 | ctest clang++-20 Release `-Werror` (`build-uisk-clang20`) | 80/80, 0 warnings |
-| ctest g++ ASan+UBSan (`build-uisk-asan`) | GATE_ASAN |
+| ctest g++ ASan+UBSan (`build-uisk-asan`) | 79/80 in the full run (load average ~9): the one failure, `unit.runtime_cache` W3A R1 "time stops while asleep" (one 128-frame quantum late), is the core fix's test, edited by its skeptic after this build; rebuilt and re-run alone with `rt.realtime`: 2/2. 0 sanitizer reports, 0 warnings |
 | fixtures (`rig_render` all 112, `compare.mjs`) | 112/112 at the manifest tier |
 | `parity.mjs --twin <clang renders>` | exit 0; 110 at the exact tier; silent goldens reverb-dry, echo-none; no unexpected failure |
 | g++ vs clang++-20 renders | byte-identical, 112/112 (`cmp`) |
 | renders vs the wave-3 integrator's (`build-w2/golden-out`) | byte-identical, 112/112: no fixture moved |
 | `node --test test/unit/engine-bridge/*.test.mjs` | 118 pass / 0 fail / 2 skip |
-| `node test/run-all.mjs --fast` | GATE_RUNALL |
+| `node test/run-all.mjs --fast` | 11/12 (44 min, shared box): unit 519 / 0 / 9 skip, engine 98/99 + 1 soft warning, instruments 143/143, synth-extra 153/153, shell 264, ui-core 90, edit-v2 109 (12/12 files), settings 84/84, mini 14/14, themes 58/58, chrome-fallback 17/17; **eq 27/28 = the known `L-21`** only |
 | `test/phase2/ui-core/slots.mjs` alone (with the new F2 test) | 7/7, zero console errors |
 | `test/phase2/edit-v2/panels/slots.test.mjs` alone | 4/4 |
 | `test/phase1/shell/uia-slots.test.mjs` (with the new F1 test) | 14/14 |
