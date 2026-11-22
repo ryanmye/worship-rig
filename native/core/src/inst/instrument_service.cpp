@@ -6,10 +6,12 @@
 #include <cstdlib>
 
 #include "api/registry.h"
+#include "inst/sampler.h"
 #include "inst/synth.h"
 #include "inst/synth_dispatch.h"
 #include "model/model.h"
 #include "model/patch.h"
+#include "samples/manifest.h"
 #include "yyjson.h"
 
 namespace rig::inst {
@@ -134,9 +136,16 @@ bool setInstrumentParam(Model &m, const SetRequest &req) {
     for (std::size_t k = 0; k < e->params.size(); ++k) {
       if (e->params[k].key != key) continue;
       index = static_cast<int>(k);
-      if (std::isfinite(v)) v = std::min(e->params[k].max, std::max(e->params[k].min, v));
+      // T15: an enum row (organ `rotary`) has no min / max in the catalogue: the instrument clamps its index
+      if (std::isfinite(v) && e->params[k].min < e->params[k].max)
+        v = std::min(e->params[k].max, std::max(e->params[k].min, v));
       break;
     }
+  } else if (sp.instType == "sampler") {  // T12 O4 (T15): `user:` samplers are not in the static catalogue
+    index = samplerParamIndex(key);
+    if (index == kSamplerRelease && std::isfinite(v))
+      v = std::min(samples::kReleaseMax, std::max(samples::kReleaseMin, v));
+    if (index == kSamplerTone && std::isfinite(v)) v = std::min(1.0, std::max(0.0, v));
   }
   sp.paramsJson = withParam(sp.paramsJson, key, v);  // cfg.params[key] = v (kept for a rebuild of the unit)
   if (index < 0) return true;  // JS: stored; the instrument warns "unknown param" and ignores it

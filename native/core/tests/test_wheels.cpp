@@ -2,6 +2,7 @@
 // (model/wheels.cpp) through the bridge on an offline engine. Ports of the JS suites bendPitch, bendModes (pitch /
 // morph neutralising), macrosAndWheel, sceneWheelGlide, the swell half of exprCurveAndPedalSwell, getRuntimeState.
 #include <cmath>
+#include <ctime>
 #include <string>
 #include <vector>
 
@@ -180,5 +181,37 @@ TEST_SUITE("wheels") {
     e.call(R"({"v":1,"op":"play","e":"wheel","src":"vol","value":0.5,"when":1.0})");
     e.until(1.5);
     CHECK(t13::rms(e.L, 1.3, 1.5) / full == doctest::Approx(0.25).epsilon(0.05));
+  }
+  TEST_CASE("CPU: lofi with the tape-bend delay timeline (2 evaluations per quantum), perform control calls") {
+    auto threadUs = [] {
+      timespec ts{};
+      clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+      return static_cast<double>(ts.tv_sec) * 1e6 + static_cast<double>(ts.tv_nsec) / 1e3;
+    };
+    auto perQuantum = [&](bool lofi, bool tape) {
+      Eng e;
+      const std::string fx = lofi ? R"("fx":{"lofi":{"amount":0.5}},"bend":{"mode":"tape","range":2})" : "";
+      REQUIRE(e.use(patch({slot("test", "sine", 1)}, fx)));
+      e.on(69, 0.01);
+      if (tape) e.call(R"({"v":1,"id":3,"op":"play","e":"bend","x":-0.5,"when":0.05})");
+      e.until(0.2);
+      std::vector<float> l(128), r(128);
+      float *p2[2] = {l.data(), r.data()};
+      const double t0 = threadUs();
+      for (int i = 0; i < 400; ++i) rig_offline_render(e.e, p2, 2, 128);
+      return (threadUs() - t0) / 400;
+    };
+    const double base = perQuantum(false, false), lofi = perQuantum(true, false), tape = perQuantum(true, true);
+    MESSAGE("per 128-frame quantum: test voice " << base << " us; + lofi engaged " << lofi - base
+                                                 << " us; + lofi with a tape-bend ramp " << tape - base << " us");
+    CHECK(tape - base < 400);  // loose sanity bound (2-CPU shared box); the numbers go into the T14 report
+    Eng e;
+    REQUIRE(e.use(patch({probe(), probe(R"("mono":"lowest")"), probe(), probe(R"("highNote":127)")})));
+    const double c0 = threadUs();
+    for (int i = 0; i < 500; ++i) {
+      e.model().noteOn(40 + i % 40, 90, -1);
+      e.model().noteOff(40 + i % 40, -1);
+    }
+    MESSAGE("Model::noteOn + noteOff (4 slots, control thread, incl. events): " << (threadUs() - c0) / 500 << " us");
   }
 }

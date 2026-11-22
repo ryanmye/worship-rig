@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 
+#include "inst/voice_alloc.h"
 #include "model/perform.h"
 #include "num/js_math.h"
 #include "test_model_util.h"
@@ -423,6 +424,39 @@ TEST_SUITE("perform") {
     CHECK(p.perf().quietFor() == 0);
     p.e.until(32);  // a pedal down for 30 s stops counting (PEDAL_STUCK_SEC)
     CHECK(p.perf().quietFor() > 30);
+  }
+
+  TEST_CASE("VoicePool::fadeNote fades only the HELD voices of that note (O-W3-1)") {
+    rig::inst::VoicePool<int> pool;
+    const int a = pool.emplace(60, 0.0, 1), b = pool.emplace(60, 0.1, 2), c = pool.emplace(64, 0.2, 3);
+    pool.markReleased(b, 0.3);
+    std::vector<int> faded;
+    CHECK(pool.fadeNote(60, 0.5, [&](int s) { faded.push_back(s); }) == 1);
+    REQUIRE(faded.size() == 1);
+    CHECK(faded[0] == a);
+    CHECK(pool.meta(a).state == rig::inst::VoiceState::Killed);
+    CHECK(pool.meta(b).state == rig::inst::VoiceState::Released);
+    CHECK(pool.meta(c).state == rig::inst::VoiceState::Held);
+    CHECK(pool.playing() == 2);
+    CHECK(pool.fadeNote(61, 0.5, [&](int) { FAIL("no voice plays 61"); }) == 0);
+  }
+
+  TEST_CASE("re-strike under the pedal on a synth.js instrument: the old voice is gone after its 30 ms fade") {
+    Eng e;
+    REQUIRE(e.use(patch({slot("synth", "strings", 1)})));
+    e.pedal(true, 0.05);
+    e.on(60, 0.1);
+    e.off(60, 0.3);
+    e.until(0.9);
+    CHECK(e.meters().voices == 1);
+    e.on(60, 1.0);
+    e.until(1.3);
+    CHECK(e.meters().voices == 1);  // without FadeNote the pedaled voice would still sound next to the new one
+    e.on(64, 1.4);
+    e.off(64, 1.5);
+    e.on(64, 1.6);  // a second pedaled re-strike: 60 (pedaled) + the new 64
+    e.until(1.8);
+    CHECK(e.meters().voices == 2);
   }
 
   TEST_CASE("slots 4..15 play like slot 0 (DECISIONS D3)") {

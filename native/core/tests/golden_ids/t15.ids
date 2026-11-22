@@ -1,0 +1,22 @@
+# T15 synth-extra + organ fixtures (owner T15), compared at the manifest tier by ctest golden.t15. None is silent.
+# The exact tier (max |diff| <= 2e-4) is checked in tests/test_synth_extra.cpp / test_organ.cpp for all but
+# synth-dx-epiano (statistical, Q11: the FM stacks of the golden page start up to 7 quanta before the note).
+synth-supersaw-pad
+synth-juno-pad
+synth-shimmer-pad
+synth-dx-epiano
+synth-pluck
+synth-poly-stab
+synth-analog-brass
+synth-square-lead
+synth-808-sub
+synth-synth-bass
+organ-gospel
+organ-soft-pad
+organ-full
+organ-church
+pan-mono-src
+auto-slot-level
+auto-reverb-send
+auto-delay-send
+auto-master-volume

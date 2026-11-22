@@ -47,7 +47,9 @@ void song16(OfflineEngine &e, const std::string &id, const std::string &limit) {
   e.call(R"({"v":1,"op":"audio","action":"start","id":2})");
   std::string p = R"({"slots":[)";
   for (int i = 0; i < 16; ++i)
-    p += (i ? "," : "") + std::string(R"({"instrument":{"type":"synth","id":")") + id + R"("},"gain":0.3})";
+    // T14: "mono":"off" — slot 3 takes the Bass role's mono 'lowest' (params.js defaultSlot), which perform obeys now
+    p += (i ? "," : "") + std::string(R"({"instrument":{"type":"synth","id":")") + id +
+         R"("},"gain":0.3,"mono":"off"})";
   p += "]}";
   const std::string r = e.call(R"({"v":1,"op":"prepare","id":3,"patch":)" + p + "}");
   REQUIRE(contains(r, "\"token\":"));
