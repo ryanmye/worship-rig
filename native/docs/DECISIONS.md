@@ -105,3 +105,9 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
 - These change frozen interfaces, so they land as one serial step **T00c (scale-out amendment)** after the wave-1
   integrator and before wave 2 (T11/T12/T13 build on the amended interfaces). UI work for D3 is a separate task in
   the UI wave.
+
+## Away-week decisions (tier 2, orchestrator; AWAY_WEEK_PLAN §1; easy to reverse)
+- **O-AW-1 (Lane C, 2026-11-23): chart import = ChordPro + plain chord-over-lyrics text, plus an optional
+  WorshipTools song-list CSV.** WorshipTools has no public API and no bulk export; songs come out as ChordPro, one at a
+  time, from Planning's editor (`lanes/C1-worshiptools.md`). So there is no WorshipTools-specific format, and no
+  account, key or terms are involved. `{key}`/`{tempo}` are optional on import; a missing tempo is asked for.
