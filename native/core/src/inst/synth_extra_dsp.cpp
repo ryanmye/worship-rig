@@ -219,19 +219,23 @@ const wa::PeriodicWave *XWaveBank::fmModFor(double adv) const {
 }
 
 std::shared_ptr<const XWaveBank> XWaveBank::get(double sampleRate, bool squares, bool shimmer, bool dx) {
-  std::lock_guard<std::mutex> lock(g_mu);
-  for (auto it = g_banks.rbegin(); it != g_banks.rend(); ++it) {
-    const XWaveBank &b = **it;
-    if (b.sampleRate == sampleRate && (!squares || b.square[0]) && (!shimmer || b.shimmer[0]) && (!dx || b.fmAdv[0]))
-      return *it;
-  }
+  // CORE3: built OUTSIDE the mutex, as WaveBank::get (inst/synth_dsp.cpp): a song switch never waits for a
+  // utility-priority neighbour prebuild that is building a bank; two threads may both build, with the same tables.
+  auto covers = [sampleRate](const XWaveBank &b, bool sq, bool sh, bool fm) {
+    return b.sampleRate == sampleRate && (!sq || b.square[0]) && (!sh || b.shimmer[0]) && (!fm || b.fmAdv[0]);
+  };
   bool wantSq = squares, wantSh = shimmer, wantDx = dx;
-  for (const auto &b : g_banks)
-    if (b->sampleRate == sampleRate) {
-      wantSq = wantSq || b->square[0] != nullptr;
-      wantSh = wantSh || b->shimmer[0] != nullptr;
-      wantDx = wantDx || b->fmAdv[0] != nullptr;
-    }
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    for (auto it = g_banks.rbegin(); it != g_banks.rend(); ++it)
+      if (covers(**it, squares, shimmer, dx)) return *it;
+    for (const auto &b : g_banks)
+      if (b->sampleRate == sampleRate) {
+        wantSq = wantSq || b->square[0] != nullptr;
+        wantSh = wantSh || b->shimmer[0] != nullptr;
+        wantDx = wantDx || b->fmAdv[0] != nullptr;
+      }
+  }
   auto bank = std::make_shared<XWaveBank>();
   bank->sampleRate = sampleRate;
   if (wantSq) {  // squareWaves: Float32Array(512), odd k: 4 / (pi k)
@@ -253,8 +257,14 @@ std::shared_ptr<const XWaveBank> XWaveBank::get(double sampleRate, bool squares,
     const float re[2] = {0, 1}, im[2] = {0, 0};
     bank->rotorCos.reset(wa::PeriodicWave::create(re, im, 2, true, sampleRate));
   }
-  for (auto it = g_banks.begin(); it != g_banks.end();)
-    it = (*it)->sampleRate == sampleRate ? g_banks.erase(it) : std::next(it);
+  std::lock_guard<std::mutex> lock(g_mu);
+  for (auto it = g_banks.rbegin(); it != g_banks.rend(); ++it)  // another thread finished a bank that covers ours
+    if (covers(**it, wantSq, wantSh, wantDx)) return *it;
+  for (auto it = g_banks.begin(); it != g_banks.end();)  // ours covers every same-rate bank it replaces
+    it = covers(*bank, (*it)->square[0] != nullptr, (*it)->shimmer[0] != nullptr, (*it)->fmAdv[0] != nullptr) &&
+                 (*it)->sampleRate == sampleRate
+             ? g_banks.erase(it)
+             : std::next(it);
   g_banks.push_back(bank);
   while (g_banks.size() > 2) g_banks.erase(g_banks.begin());
   return bank;

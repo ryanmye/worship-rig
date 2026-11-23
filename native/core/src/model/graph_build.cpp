@@ -157,9 +157,18 @@ void SongGraph::startFresh(Plan &plan, int slot) {
   const SlotPatch &sp = plan.patch.slots[slot];
   const double sr = m_.sink_.timeBase().sampleRate;
   ps.kind = PlanSlot::Fresh;
-  if (std::shared_ptr<BuildJob> j = takePrebuilt(buildKey(sp, slot, sr))) {
+  const std::string key = buildKey(sp, slot, sr);
+  std::shared_ptr<BuildJob> j = takePrebuilt(key);
+  // a prebuilt unit (done), or one still queued (it moves to the switch lane), or one the switch lane is building
+  // (a superseded switch's): adopted. One the prebuild lane is building right now is not waited for (a utility-
+  // priority thread, starved on a busy box): the switch builds its own in its lane, and that one stays prebuilt.
+  if (j && !worker().promote(j)) {
+    keepPrebuilt(key, std::move(j));
+    ++n_.prebuildBusy;
+    j.reset();
+  }
+  if (j) {
     ++n_.prebuildHits;
-    if (!j->done()) worker().reprioritize(j, 0);  // still queued behind other prebuilds: a switch goes first
     ps.job = std::move(j);
   } else {
     ps.job = makeJob(sp, slot, sr);

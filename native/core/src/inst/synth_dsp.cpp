@@ -140,18 +140,29 @@ std::vector<std::shared_ptr<WaveBank>> g_banks;  // newest last
 WaveBank::~WaveBank() = default;
 
 std::shared_ptr<const WaveBank> WaveBank::get(double sampleRate, unsigned families) {
-  std::lock_guard<std::mutex> lock(g_bankMu);
-  for (auto it = g_banks.rbegin(); it != g_banks.rend(); ++it) {
-    if ((*it)->sampleRate == sampleRate && ((*it)->families & families) == families) return *it;
-  }
+  // CORE3: the bank is built OUTSIDE the mutex (80-300 ms cold). Song switches build on one thread and neighbour
+  // prebuilds on a utility-priority one (model/build_worker.h): holding the mutex while building made a switch (or
+  // the control thread at a rate change) wait for a starved low-priority build. Two threads that miss at once may
+  // both build; the tables depend only on (rate, families), so either result is the same, and the cache keeps the
+  // larger one.
   unsigned want = families;
-  for (const auto &b : g_banks)
-    if (b->sampleRate == sampleRate) want |= b->families;  // grow: the new bank replaces the smaller one
+  {
+    std::lock_guard<std::mutex> lock(g_bankMu);
+    for (auto it = g_banks.rbegin(); it != g_banks.rend(); ++it) {
+      if ((*it)->sampleRate == sampleRate && ((*it)->families & families) == families) return *it;
+    }
+    for (const auto &b : g_banks)
+      if (b->sampleRate == sampleRate) want |= b->families;  // grow: the new bank replaces the smaller one
+  }
   auto bank = std::make_shared<WaveBank>();
   bank->sampleRate = sampleRate;
   build(*bank, want);
-  for (auto it = g_banks.begin(); it != g_banks.end();)
-    it = (*it)->sampleRate == sampleRate ? g_banks.erase(it) : std::next(it);
+  std::lock_guard<std::mutex> lock(g_bankMu);
+  for (auto it = g_banks.rbegin(); it != g_banks.rend(); ++it)  // another thread finished a bank that covers ours
+    if ((*it)->sampleRate == sampleRate && ((*it)->families & want) == want) return *it;
+  for (auto it = g_banks.begin(); it != g_banks.end();)  // ours covers every same-rate bank it replaces
+    it = (*it)->sampleRate == sampleRate && ((*it)->families & want) == (*it)->families ? g_banks.erase(it)
+                                                                                      : std::next(it);
   g_banks.push_back(bank);
   while (g_banks.size() > 2) g_banks.erase(g_banks.begin());  // keep the two most recent rates
   return bank;

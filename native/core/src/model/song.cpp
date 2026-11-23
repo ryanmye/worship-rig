@@ -707,7 +707,8 @@ void SongGraph::statsFields(std::string &out) const {
          ",\"buildsOffThread\":" + std::to_string(n_.offThread) + ",\"buildsAtCommit\":" +
          std::to_string(n_.atCommit) + ",\"prebuildHits\":" + std::to_string(n_.prebuildHits) +
          ",\"prebuildPosted\":" + std::to_string(n_.prebuildPosted) + ",\"prebuildEvicted\":" +
-         std::to_string(n_.prebuildEvicted) + ",\"prebuilt\":" + std::to_string(prebuilt_.size()) +
+         std::to_string(n_.prebuildEvicted) + ",\"prebuildBusy\":" + std::to_string(n_.prebuildBusy) +
+         ",\"prebuilt\":" + std::to_string(prebuilt_.size()) +
          ",\"prebuiltMB\":" + std::to_string(prebuiltBytes() / (1024 * 1024)) + ",\"prebuiltDone\":" +
          std::to_string(std::count_if(prebuilt_.begin(), prebuilt_.end(),
                                       [](const Prebuilt &p) { return p.job->done(); })) +

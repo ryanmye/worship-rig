@@ -39,18 +39,20 @@ void BuildJob::run() {
   buildMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
 }
 
+std::atomic<int> BuildWorker::testPrebuildDelayMs{0};
+
 BuildWorker::BuildWorker(std::function<void()> wake) : wake_(std::move(wake)) {
-  thread_ = std::thread([this] { loop(); });
+  for (int l = 0; l < kLanes; ++l) threads_[l] = std::thread([this, l] { loop(l); });
 }
 
 BuildWorker::~BuildWorker() {
   {
     std::lock_guard<std::mutex> l(mu_);
     stop_ = true;
-    q_.clear();  // queued jobs are dropped (their owners free them); a running one finishes first
+    for (auto &q : q_) q.clear();  // queued jobs are dropped (their owners free them); a running one finishes first
   }
-  cv_.notify_all();
-  thread_.join();
+  for (auto &cv : cv_) cv.notify_all();
+  for (auto &t : threads_) t.join();
 }
 
 void BuildWorker::setWake(std::function<void()> wake) {
@@ -59,34 +61,43 @@ void BuildWorker::setWake(std::function<void()> wake) {
 }
 
 void BuildWorker::post(const std::shared_ptr<BuildJob> &job, int priority) {
+  const int lane = priority <= 0 ? 0 : 1;
   {
     std::lock_guard<std::mutex> l(mu_);
-    job->priority = priority;
-    if (priority == 0) {  // after the other priority-0 jobs, before every prebuild
-      auto it = q_.begin();
-      while (it != q_.end() && (*it)->priority == 0) ++it;
-      q_.insert(it, job);
-    } else {
-      q_.push_back(job);
-    }
+    job->priority = lane;
+    q_[lane].push_back(job);
   }
-  cv_.notify_one();
+  cv_[lane].notify_one();
 }
 
 void BuildWorker::reprioritize(const std::shared_ptr<BuildJob> &job, int priority) {
+  const int lane = priority <= 0 ? 0 : 1;
   {
     std::lock_guard<std::mutex> l(mu_);
-    auto it = std::find(q_.begin(), q_.end(), job);
-    if (it == q_.end() || job->priority == priority) return;
-    q_.erase(it);
+    auto &from = q_[1 - lane];
+    auto it = std::find(from.begin(), from.end(), job);
+    if (it == from.end()) return;
+    from.erase(it);
   }
-  post(job, priority);
+  post(job, lane);
+}
+
+bool BuildWorker::promote(const std::shared_ptr<BuildJob> &job) {
+  {
+    std::lock_guard<std::mutex> l(mu_);
+    if (job->done()) return true;
+    auto it = std::find(q_[1].begin(), q_[1].end(), job);
+    if (it == q_[1].end()) return job->runLane != 1;  // lane 0 has it (queued or building), or no lane popped it
+    q_[1].erase(it);
+  }
+  post(job, 0);
+  return true;
 }
 
 bool BuildWorker::buildHere(BuildJob &job) {
   int expected = BuildJob::Queued;
   if (!job.state.compare_exchange_strong(expected, BuildJob::Running, std::memory_order_acq_rel)) return false;
-  // the worker never started it: build it here (a commit takes effect at once); the worker skips it later
+  // no worker started it: build it here (a commit takes effect at once); the workers skip it later
   job.builtOnControl = true;
   job.run();
   job.state.store(BuildJob::Done, std::memory_order_release);
@@ -101,24 +112,31 @@ void BuildWorker::finish(BuildJob &job) {
 
 std::size_t BuildWorker::pending() const {
   std::lock_guard<std::mutex> l(mu_);
-  return q_.size() + running_;
+  return q_[0].size() + q_[1].size() + running_;
 }
 
-void BuildWorker::loop() {
-  lowerThreadPriority();
+void BuildWorker::loop(int lane) {
+  if (lane == 1) lowerThreadPriority();  // lane 0 keeps the default priority: a switch is waited for
   for (;;) {
     std::shared_ptr<BuildJob> job;
     {
       std::unique_lock<std::mutex> l(mu_);
-      cv_.wait(l, [this] { return stop_ || !q_.empty(); });
+      cv_[lane].wait(l, [this, lane] { return stop_ || !q_[lane].empty(); });
       if (stop_) return;
-      job = std::move(q_.front());
-      q_.pop_front();
+      job = std::move(q_[lane].front());
+      q_[lane].pop_front();
+      job->runLane = lane;
       ++running_;
     }
     int expected = BuildJob::Queued;
     const bool mine = !job->unwanted.load(std::memory_order_acquire) &&
                       job->state.compare_exchange_strong(expected, BuildJob::Running, std::memory_order_acq_rel);
+    if (mine && lane == 1) {
+      if (const int d = testPrebuildDelayMs.load(std::memory_order_relaxed); d > 0) {
+        std::unique_lock<std::mutex> l(mu_);
+        cv_[lane].wait_for(l, std::chrono::milliseconds(d), [this] { return stop_; });
+      }
+    }
     if (mine) job->run();
     std::function<void()> wake;
     {

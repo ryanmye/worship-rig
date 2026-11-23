@@ -163,13 +163,17 @@ void opPrepare(Engine &e, const Req &r) {
   JsonOut j;
   j.begin().kv("token", token).end();
   SongGraph &sg = e.model().songGraph();
-  if (!b || !r.hasId || (!cs && sg.planBuilt())) return ok(e, r, j.take());
-  for (auto &w : b->pendingPrepares_) {
-    if (w->sent) continue;
-    w->sent = true;
-    e.emit(std::move(w->text));
+  // superseded: replies still waiting go out now, also when this prepare has no id (CORE3 finish pass: the plan's
+  // whenBuilt callback died with the superseded plan, so a reply still waiting would never have been sent)
+  if (b) {
+    for (auto &w : b->pendingPrepares_) {
+      if (w->sent) continue;
+      w->sent = true;
+      e.emit(std::move(w->text));
+    }
+    b->pendingPrepares_.clear();
   }
-  b->pendingPrepares_.clear();
+  if (!b || !r.hasId || (!cs && sg.planBuilt())) return ok(e, r, j.take());
   auto w = std::make_shared<Bridge::PendingReply>();
   w->text = envelopeHead(r, true) + ",\"result\":" + j.take() + "}";
   w->waits = cs ? 2 : 1;

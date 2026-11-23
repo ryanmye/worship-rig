@@ -177,6 +177,8 @@ class SongGraph {
     // CORE3: instruments built on the worker, built inline by a commit that came before its build, adopted from the
     // prebuilt set, prebuild jobs posted, prebuilt units evicted (LRU / cap / memory pressure / rate change)
     std::uint32_t offThread = 0, atCommit = 0, prebuildHits = 0, prebuildPosted = 0, prebuildEvicted = 0;
+    // a switch needed a unit the prebuild lane was building at that moment and built its own instead (not waited for)
+    std::uint32_t prebuildBusy = 0;
   };
   const Counters &counters() const { return n_; }
 
@@ -185,7 +187,8 @@ class SongGraph {
     enum Kind { None, Reuse, Fresh } kind = None;
     std::uint32_t reuseId = 0;
     BuiltChannel built;
-    std::shared_ptr<BuildJob> job;  // CORE3: the instrument, built off the control thread (built.inst null until commit)
+    std::shared_ptr<BuildJob> job;  // CORE3: the instrument, built off the control thread (built.inst null until
+                                    // commit)
   };
   struct Plan {
     std::uint32_t token = 0;

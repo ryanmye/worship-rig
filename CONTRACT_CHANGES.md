@@ -7118,3 +7118,48 @@ switch is 33-41 ms (30 Hz ticks; before up to 304 ms). `unit.core3`, a 16-organ 
 answered in 0.1 ms (base core: 1588 ms), largest tick gap 36-39 ms (base: 1619 ms), reply after 1.0-1.4 s of
 off-thread building; a prebuilt 10-organ neighbour is answered in 3.5-5.8 ms (base: 930 ms; with prebuilds disabled:
 1897 ms). ui-core on `rig-devhost --no-adapter`: see PARITY "UI parity" (CORE3 row).
+
+**Finish pass (CORE3 builder, new cloud session, 2026-11-23).** The old session stopped the builder before its
+review (`native/docs/reviews/CORE3-handoff.md`). Three defects were found and fixed, and the test flake was resolved.
+- **A switch was queued behind a prebuild, and starved on a busy box.** One utility-priority worker (Linux nice 10)
+  served both. A switch's jobs went first in the queue, but they waited for the prebuild in progress. They also ran
+  at utility priority. Next to two busy threads on this 2-CPU box, a 16-organ switch took **13-14 s** instead of 1.1 s.
+  Now the worker has two lanes. Lane 0 runs switches at the default thread priority; lane 1 runs prebuilds at utility
+  priority. A prebuilt unit still queued moves to lane 0. A unit the prebuild lane is building at that moment is not
+  waited for: the switch builds its own copy, and the other copy stays in the prebuilt set (stat `prebuildBusy`).
+  A superseded switch's queued units move to lane 1. Measured on the same box with two busy threads: the 16-organ
+  switch takes 2.1-2.3 s. With a starved prebuild in flight (`unit.core3`, a test hook that holds every lane-1 job
+  5 s), a 4-organ switch is answered in 0.29-0.50 s; the one-lane worker took 5.24 s. Asking for the neighbour that
+  is being prebuilt is answered in 0.61-0.69 s (10 organs, one rebuilt); the one-lane worker took 5.61 s.
+- **The wavetable bank mutex was held while a bank was built.** `WaveBank::get` and `XWaveBank::get` build cold
+  banks in 80-300 ms. The prebuild lane building one held the mutex, so a switch's build, or the control thread at a
+  rate change, waited for a low-priority thread. Now the bank is built outside the mutex. Two threads that miss at once
+  both build the same tables, and the cache keeps the larger bank. No render changed (below).
+- **A `prepare` without an `id` that superseded a waiting one left that one unanswered for good.** The superseded
+  plan's `whenBuilt` callback died with the plan. Now the waiting replies are sent whether or not the newer `prepare`
+  has an id.
+- **The `unit.core3` flake** (macOS CI run 45098812476: `145.813 < 80` at test_core3.cpp:344; the old session's
+  local runs failed 3 of 6) was the test, not the engine. That check timed the superseded prepare C from **before**
+  a 30 ms test-thread sleep and the post of D. C's reply is sent by D's `prepare`, so it cannot go out before D is
+  posted. The control loop was not held: in the same window the tick-gap check (< 100 ms over the whole C / D
+  sequence) passed, and 9 of C's 10 units were already built when D was answered, so D reached the engine late. The
+  145 ms was the runner's late sleep and test thread. The bound is now timed
+  from D's post, and D is posted once a stats round trip shows C prepared. Under TSan, posting D straight behind C put
+  C's own parsing (~130-250 ms) inside the bound. Local failures under load came from the 50 ms switch gap: the idle
+  loop alone shows 48-65 ms gaps next to two busy threads (CFS). The bound is now 50 ms, or 1.3 x the loop's own
+  largest gap over an idle second when that is larger. Still meaningful: before CORE3 that gap was 1.1-1.6 s. Every
+  timing check still fails on the pre-CORE3 build path (mutation M1: inline builds, no prebuild), e.g. the
+  superseded reply 705 ms, `play` mid-switch 1111 ms, switch gap 1141 ms.
+- New `unit.core3` cases:
+  - a switch with a starved prebuild in flight, for an unrelated song and for the very neighbour (fails with the
+    one-lane worker, mutation M2: 5243 / 5614 ms);
+  - a superseding `prepare` without an id (fails without the bridge fix, M3: never answered);
+  - the cap. Two 10-organ neighbours asked for (120 MB): desktop keeps 10 units / 60 MB and evicts 10; the iPad
+    profile keeps 5 / 30 MB and evicts 15. Naming a song again re-orders the set (LRU). Evicted queued jobs are
+    skipped (`buildsPending` reaches 0). Memory pressure empties the set.
+- Where long `prepare` replies come from in ui-core: in a 77/77 run (`--no-adapter`, `--keep-log`), the 6 replies
+  over 150 ms were all sampler songs: salamander piano + warm-pad, 0.5-2.3 s, waiting for their sample decodes
+  (CORE2A). The longest reply of a song with only synth / organ slots was 126 ms (gospel + poly-stab +
+  synth-bass). Tick gaps: max 136 ms, none over 150 ms (CORE2 integration: max 283-329 ms; the CORE3 builder's run
+  ui2: 658 ms).
+

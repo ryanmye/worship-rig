@@ -21,6 +21,7 @@
 
 #include "doctest.h"
 #include "helpers.h"
+#include "model/build_worker.h"  // BuildWorker::testPrebuildDelayMs (a starved prebuild, deterministic)
 #include "rig/rig_engine.h"
 
 using Clock = std::chrono::steady_clock;
@@ -48,6 +49,13 @@ constexpr double kMaxGapMs = kSanitized ? 250.0 : 50.0;
  *  ~0.6-1.6 s for these songs before CORE3). The bound runtime_preload uses. */
 constexpr double kLongGapMs = kSanitized ? 250.0 : 100.0;
 
+/** The tick-gap bound of a switch: kMaxGapMs, or the loop's own largest gap over an idle second times 1.3 when the
+ *  box is loaded (CORE3 finish pass: next to two busy threads on this 2-CPU box the idle loop alone shows 48-65 ms
+ *  gaps, CFS slices, with no switch at all). Before CORE3 a switch to these songs held the loop 0.6-1.6 s. */
+double gapBound(double idleGapMs) {
+  return std::max(kMaxGapMs, idleGapMs * 1.3);
+}
+
 double ms(Clock::time_point a, Clock::time_point b) {
   return std::chrono::duration<double, std::milli>(b - a).count();
 }
@@ -66,10 +74,11 @@ struct Rt {
   std::thread audio;
   int nextId = 100;
 
-  Rt() {
+  explicit Rt(rig_profile profile = RIG_PROFILE_DESKTOP) {
     rig_config cfg;
     rig_config_init(&cfg);
     cfg.mode = RIG_MODE_REALTIME;
+    cfg.profile = profile;
     cfg.sample_rate = 48000;
     cfg.app_dir = RIG_REPO_DIR "/app";
     cfg.on_event = [](void *u, const char *j, size_t n) {
@@ -212,6 +221,11 @@ TEST_SUITE("core3") {
     rt.boot();
     rt.switchTo(lightSong());
     rt.post(R"({"v":1,"op":"play","e":"on","n":60,"vel":90})");  // held over the switch: the old song plays on
+    const auto ti = Clock::now();
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    const double idleGap = rt.maxGapMs(ti, Clock::now());
+    const double bound = gapBound(idleGap);
+    MESSAGE("idle loop: largest tick gap " << idleGap << " ms; switch bound " << bound << " ms");
     const double built0 = rt.stat("buildsOffThread");
 
     const auto t0 = Clock::now();
@@ -226,7 +240,7 @@ TEST_SUITE("core3") {
     const double playMs = ms(tPlay, pl.first);
     const bool replyBeforePlay = rt.replied(pid);
     MESSAGE("play sent 30 ms into the switch answered after " << playMs << " ms");
-    CHECK(playMs < kMaxGapMs);
+    CHECK(playMs < bound);
     CHECK(!replyBeforePlay);  // the song was still being built (the reply waits for it)
     CHECK(rt.voices() > 0);   // the old song sounds meanwhile
 
@@ -236,7 +250,7 @@ TEST_SUITE("core3") {
     const double gap = rt.maxGapMs(t0, pr.first);
     MESSAGE("16 organs built off the control thread in " << buildMs << " ms; largest tick gap " << gap << " ms");
     CHECK(buildMs > 200);  // it really was a heavy build (~1 s in Release on this box)
-    CHECK(gap < kMaxGapMs);
+    CHECK(gap < bound);
     const auto tc = Clock::now();
     const std::string c = rt.call("\"op\":\"commit\",\"token\":" + std::to_string(Rt::tokenOf(pr.second)));
     CHECK(contains(c, "\"committed\":true"));
@@ -260,7 +274,8 @@ TEST_SUITE("core3") {
     rt.boot();
     rt.switchTo(lightSong());
     // controller.js preloadNeighbors: [prev, next] with pin 'add'
-    const std::string pre = rt.call(R"("op":"cache","action":"preload","pin":"add","patches":[)" + heavySong(1, 10) + "," +
+    const std::string pre = rt.call(R"("op":"cache","action":"preload","pin":"add","patches":[)" + heavySong(1, 10) +
+                                        "," +
                                         lightSong() + "]",
                                     30000);
     REQUIRE(contains(pre, "\"ok\":true"));
@@ -322,32 +337,158 @@ TEST_SUITE("core3") {
                    "\"committed\":true"));
     // B's 10 jobs (built or still building) joined the prebuilt set: a switch back to B adopts them
     CHECK(rt.stat("prebuilt") == 10);
-    const double hits0 = rt.stat("prebuildHits");
+    const double hits0 = rt.stat("prebuildHits"), busy0 = rt.stat("prebuildBusy");
     const auto t2 = Clock::now();
     const std::string r2 = rt.call("\"op\":\"prepare\",\"patch\":" + heavySong(3, 10), kSanitized ? 300000 : 60000);
     REQUIRE(Rt::tokenOf(r2) > 0);
-    CHECK(rt.stat("prebuildHits") - hits0 == 10);
+    // adopted, except at most the one the prebuild lane is building at this moment (the switch builds its own)
+    const double hits = rt.stat("prebuildHits") - hits0, busy = rt.stat("prebuildBusy") - busy0;
+    MESSAGE("switch back to B: " << hits << " adopted, " << busy << " in the prebuild lane's hands");
+    CHECK(hits + busy == 10);
+    CHECK(busy <= 1);
     CHECK(contains(rt.call("\"op\":\"commit\",\"token\":" + std::to_string(Rt::tokenOf(r2))), "\"committed\":true"));
     CHECK(rt.maxGapMs(t0, Clock::now()) < kLongGapMs);
     MESSAGE("switch back to B answered after " << ms(t2, Clock::now()) << " ms");
 
-    // two unbuilt songs: C superseded by D; D is built first (C's queued jobs drop to prebuild priority)
+    // two unbuilt songs: C superseded by D; D is built first (C's queued jobs move to the prebuild lane). D is posted
+    // once C is prepared (a stats round trip): the bound is measured from D's post, not from C's (CORE3 finish
+    // pass: the macOS CI runner failed `ms(t3, rc) < 30 + 50` at 145.8 ms with C measured from before a 30 ms
+    // test-thread sleep; the tick gap over the same window stayed under 100 ms, so the control loop was not held:
+    // the sleep / test thread was late).
     const int pc = rt.nextId++, pd = rt.nextId++;
     const auto t3 = Clock::now();
     rt.post("{\"v\":1,\"op\":\"prepare\",\"id\":" + std::to_string(pc) + ",\"patch\":" + heavySong(4, 10) + "}");
-    std::this_thread::sleep_for(std::chrono::milliseconds(30));
-    rt.post("{\"v\":1,\"op\":\"prepare\",\"id\":" + std::to_string(pd) + ",\"patch\":" + heavySong(5, 10) + "}");
+    const std::string dBody = "{\"v\":1,\"op\":\"prepare\",\"id\":" + std::to_string(pd) + ",\"patch\":" +
+                              heavySong(5, 10) + "}";
+    CHECK(rt.stat("buildsPending") > 0);  // answered after C (FIFO): C is prepared, its units are building
+    const bool cOpen = !rt.replied(pc);  // C is still building (10 organs: >= 0.2 s anywhere)
+    const auto tD = Clock::now();
+    rt.post(dBody);
     const auto rc = rt.reply(pc, 10000);
     const auto rd = rt.reply(pd, kSanitized ? 300000 : 60000);
     REQUIRE(Rt::tokenOf(rc.second) > 0);
     REQUIRE(Rt::tokenOf(rd.second) > 0);
-    CHECK(ms(t3, rc.first) < 30 + kMaxGapMs);
-    const double cDone = rt.stat("prebuiltDone");
-    MESSAGE("D (newest) built after " << ms(t3, rd.first) << " ms; C's units done then: " << cDone << " of 10");
-    CHECK(cDone < 10);  // D did not wait for the rest of C
+    REQUIRE(cOpen);
+    MESSAGE("C answered " << ms(tD, rc.first) << " ms after D's prepare was posted (" << ms(t3, rc.first)
+                          << " ms after its own)");
+    CHECK(ms(tD, rc.first) < kMaxGapMs);  // before CORE3: after C's inline build, 0.6 s on this box
+    MESSAGE("D (newest) built after " << ms(tD, rd.first) << " ms; C's units done then: " << rt.stat("prebuiltDone")
+                                      << " of 10");
+    // C's 10 units (built, building, or queued in the prebuild lane) are kept for a switch back. That D never waits
+    // for them is the "prebuild in flight" case below (deterministic there).
+    CHECK(rt.stat("prebuilt") == 10);
     CHECK(contains(rt.call("\"op\":\"commit\",\"token\":" + std::to_string(Rt::tokenOf(rd.second))),
                    "\"committed\":true"));
     CHECK(rt.maxGapMs(t3, Clock::now()) < kLongGapMs);
+  }
+
+  TEST_CASE("CORE3: a switch is never queued behind a neighbour prebuild in flight; its reply is bounded by its own "
+            "build") {
+    // CORE3 finish pass (handoff: a 5.4 s prepare reply and 658 ms gaps in ui-core run ui2). A prebuild runs on a
+    // utility-priority thread, which a busy box starves (two busy threads here: 16 organs took 13-14 s instead of
+    // 1.1 s). The hook makes every prebuild lane job sleep before it builds: a starved prebuild, deterministically.
+    struct DelayGuard {
+      explicit DelayGuard(int d) { rig::BuildWorker::testPrebuildDelayMs = d; }
+      ~DelayGuard() { rig::BuildWorker::testPrebuildDelayMs = 0; }
+    };
+    const int delayMs = kSanitized ? 60000 : 5000;
+    Rt rt;
+    rt.boot();
+    rt.switchTo(lightSong());
+    // reference: a fresh 4-organ switch with nothing else in flight
+    auto t = Clock::now();
+    std::string r = rt.call("\"op\":\"prepare\",\"patch\":" + heavySong(10, 4), kSanitized ? 300000 : 60000);
+    const double refMs = ms(t, Clock::now());
+    REQUIRE(Rt::tokenOf(r) > 0);
+    REQUIRE(contains(rt.call("\"op\":\"commit\",\"token\":" + std::to_string(Rt::tokenOf(r))), "\"committed\":true"));
+
+    DelayGuard guard(delayMs);
+    REQUIRE(contains(rt.call(R"("op":"cache","action":"preload","pin":"add","patches":[)" + heavySong(12, 10) + "]",
+                             30000),
+                     "\"ok\":true"));
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));  // the prebuild lane has claimed its first job
+    CHECK(rt.stat("prebuiltDone") == 0);
+
+    // (a) an unrelated song: its 4 organs are built in the switch lane, never behind the prebuild
+    t = Clock::now();
+    r = rt.call("\"op\":\"prepare\",\"patch\":" + heavySong(11, 4), kSanitized ? 300000 : 60000);
+    const double aMs = ms(t, Clock::now());
+    REQUIRE(Rt::tokenOf(r) > 0);
+    MESSAGE("reference 4-organ switch " << refMs << " ms; the same size with a prebuild in flight " << aMs << " ms");
+    // the deterministic bound: well below the prebuild in flight (before: >= delayMs, the switch queued behind it);
+    // the reference bound is loose because a loaded box varies the build time itself 2-3x
+    CHECK(aMs < delayMs / 2);
+    CHECK(aMs < 4 * refMs + 500);
+    REQUIRE(contains(rt.call("\"op\":\"commit\",\"token\":" + std::to_string(Rt::tokenOf(r))), "\"committed\":true"));
+
+    // (b) the very neighbour being prebuilt: the unit the prebuild lane holds is built again in the switch lane, the
+    // nine still queued move to the switch lane
+    const double hits0 = rt.stat("prebuildHits"), busy0 = rt.stat("prebuildBusy");
+    t = Clock::now();
+    r = rt.call("\"op\":\"prepare\",\"patch\":" + heavySong(12, 10), kSanitized ? 300000 : 60000);
+    const double bMs = ms(t, Clock::now());
+    REQUIRE(Rt::tokenOf(r) > 0);
+    MESSAGE("the neighbour being prebuilt: " << bMs << " ms (10 organs)");
+    CHECK(bMs < delayMs / 2);
+    CHECK(bMs < 10 * refMs + 1000);  // 10 organs (2.5 references), the switch lane alone
+    CHECK(rt.stat("prebuildBusy") - busy0 == 1);
+    CHECK(rt.stat("prebuildHits") - hits0 == 9);
+    CHECK(contains(rt.call("\"op\":\"commit\",\"token\":" + std::to_string(Rt::tokenOf(r))), "\"committed\":true"));
+  }
+
+  TEST_CASE("CORE3: a newer prepare without an id still answers the older one at once") {
+    Rt rt;
+    rt.boot();
+    rt.switchTo(lightSong());
+    const int pc = rt.nextId++;
+    rt.post("{\"v\":1,\"op\":\"prepare\",\"id\":" + std::to_string(pc) + ",\"patch\":" + heavySong(13, 10) + "}");
+    CHECK(rt.stat("buildsPending") > 0);  // C is prepared
+    const bool cOpen = !rt.replied(pc);
+    const auto tD = Clock::now();
+    rt.post("{\"v\":1,\"op\":\"prepare\",\"patch\":" + heavySong(14, 4) + "}");  // no id: no reply of its own
+    const auto rc = rt.reply(pc, kSanitized ? 300000 : 20000);
+    REQUIRE(cOpen);
+    REQUIRE(Rt::tokenOf(rc.second) > 0);
+    MESSAGE("older prepare answered " << ms(tD, rc.first) << " ms after the newer one (no id) was posted");
+    CHECK(ms(tD, rc.first) < kMaxGapMs);  // before: never (its build callback died with the superseded plan)
+    rt.switchTo(lightSong());
+  }
+
+  TEST_CASE("CORE3: the prebuilt set stays within its cap (64 MB desktop, 32 MB iPad), LRU; memory pressure empties "
+            "it") {
+    // charged 6 MB per organ (measured RSS 5.8 MB per instance with warm banks): 2 x 10 organs = 120 MB asked for
+    for (const rig_profile prof : {RIG_PROFILE_DESKTOP, RIG_PROFILE_IPAD}) {
+      const double capMB = prof == RIG_PROFILE_IPAD ? 32 : 64;
+      Rt rt(prof);
+      rt.boot();
+      rt.switchTo(lightSong());
+      REQUIRE(contains(rt.call(R"("op":"cache","action":"preload","pin":"add","patches":[)" + heavySong(15, 10) + "," +
+                                   heavySong(16, 10) + "]",
+                               30000),
+                       "\"ok\":true"));
+      const double mb = rt.stat("prebuiltMB"), n = rt.stat("prebuilt"), ev = rt.stat("prebuildEvicted");
+      MESSAGE("profile " << prof << ": " << n << " units kept, " << mb << " MB charged, " << ev << " evicted");
+      CHECK(rt.stat("prebuildPosted") == 20);
+      CHECK(mb <= capMB);
+      CHECK(n == std::floor(capMB / 6));
+      CHECK(ev == 20 - n);
+      // LRU: naming the first song again (the controller's next window) keeps it and evicts the other's units
+      rt.call(R"("op":"cache","action":"preload","pin":"add","patches":[)" + heavySong(15, 10) + "]", 30000);
+      CHECK(rt.stat("prebuiltMB") <= capMB);
+      for (const auto end = Clock::now() + std::chrono::seconds(kSanitized ? 300 : 60);
+           rt.stat("buildsPending") > 0 && Clock::now() < end;)
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      CHECK(rt.stat("buildsPending") == 0);  // evicted queued jobs were skipped, nothing left behind
+      rig_host_memory_pressure(rt.e, 1);
+      double left = -1;
+      for (const auto end = Clock::now() + std::chrono::seconds(5); left != 0 && Clock::now() < end;) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        left = rt.stat("prebuilt");
+      }
+      CHECK(left == 0);
+      // a switch afterwards simply builds (nothing adopted)
+      rt.switchTo(heavySong(15, 4));
+    }
   }
 
   TEST_CASE("CORE3: a commit sent before the prepare reply takes effect at once (builds what is left inline); the "
