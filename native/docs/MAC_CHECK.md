@@ -24,6 +24,21 @@ has been read back here yet.
 
 ## Results
 
+### Mac check #3 (2026-11-22, tier 1, `b9a0c27`, the CORE2 integration commit)
+
+Ryan's M2 Pro, Apple clang 21.0.0 (clang-2100.1.1.101). The run started at 23:36:09Z and failed (exit 1) at
+23:40:14Z. Logs are in `~/Projects/worship-rig-v2/outbox/logs/20261122T233551Z-check/`.
+
+| stage | result |
+|---|---|
+| `export`, `tools` | PASS |
+| `core` | **FAIL, 68/70.** <ul><li>`unit.synth` fails at `test_synth.cpp:260-261`: the reply for `synth:juno-pad` contains neither the instrument name nor `"code":"unsupported"`.</li><li>`unit.synth-extra` fails at `test_synth_extra.cpp:86`: `REQUIRE(synthExtraFactory() != nullptr)`; the factory is null.</li></ul>So on the Mac the synth-extra instruments are not registered, and every synth-extra sound would be silent in the app. Linux passes 82/82. Owner: **MACFIX** (likely cause: static-initializer registration dropped by ld64). The Mac ran 70 tests and Linux runs 82; MACFIX explains why. |
+| `probe` | PASS: 64 frames safe; desktop auto voice-limit suggestion 288. |
+| `apple-mac` | PASS, 0 warnings |
+| `apple-sim` | FAIL, environment only: the iOS 26.5 simulator platform is not installed. |
+
+Hands-on: **on hold** until MACFIX and CORE3 land and Mac check #4 passes `core`.
+
 ### Mac check #2 (2026-11-21, tier 1, `b0bf81a`)
 
 Ryan's M2 Pro, macOS 26.4, Xcode 26.6, Apple clang 21; output through a ThinkPad USB-C dock at 44.1 kHz. Summary:
