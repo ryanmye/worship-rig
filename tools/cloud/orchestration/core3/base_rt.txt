@@ -1,0 +1,64 @@
+
+### pass 1 (cold process)
+| song | play held (ms) | prepare reply (ms) | commit (ms) | max tick gap (ms) | synth/organ builds (ms) | unit builds on the control thread (ms) |
+|---|---|---|---|---|---|---|
+| factory:sunday-pad-piano   |    81.3 |   1749.4 |    0.2 |   81.3 |   79.6 | sampler 0.5, strip 0.6 (x2), warm-pad 79.6 |
+| factory:building-swell     |   149.0 |    149.0 |    3.5 |  149.0 |  148.0 | glass-pad 146.9, strings 1.1, strip 0.5 (x2) |
+| factory:prayer-wash        |     1.8 |      1.8 |    0.1 |   37.1 |    1.2 | strip 0.3, warm-pad 1.2 |
+| factory:organ-swell        |   279.1 |    279.1 |    2.8 |  279.1 |  278.4 | gospel 278.4, strip 0.2 |
+| factory:grand-piano        |     1.4 |      1.4 |    0.2 |   37.1 |    0.0 | sampler 0.3, strip 0.3 |
+| factory:rhodes             |     1.9 |   1172.7 |    3.6 |   38.6 |    0.0 | sampler 0.4, strip 0.4 |
+| factory:felt-piano         |     0.8 |      0.8 |    0.7 |   34.6 |    0.0 | sampler 0.1, strip 0.1 |
+| factory:lofi-rhodes        |     5.2 |      5.2 |    0.9 |   35.3 |    3.4 | soft-keys 3.4, strip 0.2 |
+| factory:dusty-piano        |     1.6 |      1.6 |    0.8 |   33.6 |    0.0 | sampler 0.3, strip 0.1 |
+| factory:glass-ocean        |     4.4 |      4.4 |    0.2 |   34.2 |    3.2 | bell 1.7, glass-pad 1.5, strip 0.3 (x2) |
+| factory:sub-shimmer        |   304.4 |    304.4 |    4.4 |  304.4 |  303.7 | strip 0.3, sub-bass 303.7 |
+| factory:anthem             |    91.9 |     91.9 |    3.7 |   91.9 |   91.0 | sampler 0.2, strip 0.2 (x2), supersaw-pad 91.0 |
+| factory:gospel-stab-b3     |    74.1 |     74.1 |    1.8 |   74.1 |   73.3 | gospel 70.5, poly-stab 1.4, strip 0.3 (x3), synth-bass 1.4 |
+| factory:upright-pad        |     1.5 |   1121.1 |    0.5 |   37.4 |    0.5 | sampler 0.2, strip 0.4 (x2), warm-pad 0.5 |
+| factory:clav-funk          |     1.7 |   2631.8 |    1.2 |   38.8 |    0.0 | sampler 0.6 (x2), strip 0.2 (x2) |
+| factory:music-box-lullaby  |     2.3 |   2487.4 |    0.7 |   39.9 |    0.3 | glass-pad 0.3, sampler 0.8 (x2), strip 0.3 (x3) |
+| factory:dream-juno         |   136.0 |    136.0 |    1.2 |  136.0 |  135.2 | juno-pad 0.3, shimmer-pad 134.9, strip 0.2 (x2) |
+| factory:80s-ballad         |   159.5 |    159.5 |    1.0 |  159.5 |  158.7 | dx-epiano 158.7, strip 0.1 |
+| factory:synthwave          |     5.0 |      5.0 |    0.2 |   33.3 |    4.3 | 808-sub 1.6, analog-brass 1.3, square-lead 1.4, strip 0.4 (x3) |
+| test:heavy16               |   294.1 |    294.1 |    3.9 |  294.1 |  285.6 | analog-brass 1.5, bell 1.4, church 67.1, dx-epiano 1.8, full 66.1, glass-pad 0.4, gospel 64.9, juno-pad 3.1, poly-stab 2.7, shimmer-pad 1.6, soft-pad 65.5, strings 2.7, strip 7.9 (x16), sub-bass 1.3, supersaw-pad 3.3, synth-bass 1.9, warm-pad 0.3 |
+| factory:grand-piano        |     2.1 |   1361.8 |    0.6 |   38.0 |    0.0 | sampler 0.8, strip 0.1 |
+| test:heavy16b              |   280.7 |    280.7 |    0.1 |  280.7 |  274.7 | analog-brass 1.3, bell 1.2, church 62.7, dx-epiano 1.2, full 61.4, glass-pad 0.6, gospel 66.6, juno-pad 1.2, poly-stab 1.8, shimmer-pad 1.6, soft-pad 67.6, strings 2.2, strip 4.4 (x16), sub-bass 1.5, supersaw-pad 1.2, synth-bass 2.3, warm-pad 0.2 |
+
+### pass 2 (warm)
+| song | play held (ms) | prepare reply (ms) | commit (ms) | max tick gap (ms) | synth/organ builds (ms) | unit builds on the control thread (ms) |
+|---|---|---|---|---|---|---|
+| factory:sunday-pad-piano   |     1.0 |      1.0 |    0.3 |   37.2 |    0.0 | sampler 0.2, strip 0.2 |
+| factory:building-swell     |     1.4 |      1.4 |    0.3 |   33.1 |    0.6 | glass-pad 0.3, strings 0.3, strip 0.2 (x2) |
+| factory:prayer-wash        |     1.0 |      1.0 |    3.7 |   34.7 |    0.6 | strip 0.1, warm-pad 0.6 |
+| factory:organ-swell        |    61.9 |     61.9 |    0.1 |   61.9 |   61.5 | gospel 61.5, strip 0.1 |
+| factory:grand-piano        |     1.0 |      1.0 |    0.6 |   36.1 |    0.0 | sampler 0.3, strip 0.1 |
+| factory:rhodes             |     2.4 |    921.2 |    1.5 |   39.2 |    0.0 | sampler 0.5, strip 0.3 |
+| factory:felt-piano         |     1.5 |      1.5 |    0.9 |   33.1 |    0.0 | sampler 0.3, strip 0.1 |
+| factory:lofi-rhodes        |     1.0 |      1.0 |    0.3 |   33.3 |    0.3 | soft-keys 0.3, strip 0.1 |
+| factory:dusty-piano        |     0.9 |      0.9 |    0.4 |   33.1 |    0.0 | sampler 0.2, strip 0.1 |
+| factory:glass-ocean        |     1.5 |      1.5 |    3.8 |   33.4 |    0.6 | bell 0.3, glass-pad 0.3, strip 0.2 (x2) |
+| factory:sub-shimmer        |     1.0 |      1.0 |    1.1 |   33.6 |    0.4 | strip 0.1, sub-bass 0.4 |
+| factory:anthem             |     1.6 |      1.6 |    1.3 |   33.4 |    0.4 | sampler 0.3, strip 0.2 (x2), supersaw-pad 0.4 |
+| factory:gospel-stab-b3     |    68.0 |     68.0 |    0.6 |   68.0 |   66.7 | gospel 66.1, poly-stab 0.3, strip 0.3 (x3), synth-bass 0.3 |
+| factory:upright-pad        |     5.1 |   1009.4 |    0.5 |   37.2 |    3.2 | sampler 0.6, strip 0.2 (x2), warm-pad 3.2 |
+| factory:clav-funk          |     1.6 |   2448.2 |    0.8 |   38.9 |    0.0 | sampler 0.5 (x2), strip 0.2 (x2) |
+| factory:music-box-lullaby  |     2.2 |   2439.9 |    0.4 |   39.8 |    0.3 | glass-pad 0.3, sampler 0.6 (x2), strip 0.3 (x3) |
+| factory:dream-juno         |     2.2 |      2.2 |    0.4 |   36.4 |    1.4 | juno-pad 1.1, shimmer-pad 0.3, strip 0.2 (x2) |
+| factory:80s-ballad         |     1.0 |      1.0 |    1.3 |   37.3 |    0.3 | dx-epiano 0.3, strip 0.1 |
+| factory:synthwave          |     2.0 |      2.0 |    1.0 |   34.8 |    1.0 | 808-sub 0.3, analog-brass 0.4, square-lead 0.3, strip 0.3 (x3) |
+| test:heavy16               |   240.2 |    240.2 |    4.3 |  240.2 |  238.0 | analog-brass 0.5, bell 0.2, church 56.5, dx-epiano 0.3, full 56.3, glass-pad 0.3, gospel 60.0, juno-pad 1.1, poly-stab 1.1, shimmer-pad 0.3, soft-pad 58.8, strings 0.3, strip 1.9 (x16), sub-bass 0.2, supersaw-pad 0.3, synth-bass 1.3, warm-pad 0.3 |
+| factory:grand-piano        |     1.4 |   1423.1 |    0.5 |   37.6 |    0.0 | sampler 0.5, strip 0.1 |
+| test:heavy16b              |   273.1 |    273.1 |    0.3 |  273.1 |  268.2 | analog-brass 2.6, bell 2.6, church 66.4, dx-epiano 1.8, full 60.7, glass-pad 0.3, gospel 62.9, juno-pad 1.3, poly-stab 1.6, shimmer-pad 2.1, soft-pad 59.8, strings 1.0, strip 3.7 (x16), sub-bass 1.5, supersaw-pad 1.8, synth-bass 1.6, warm-pad 0.3 |
+
+### RSS per instance (warm banks, 6 instances each)
+| instrument | RSS KB each |
+|---|---|
+| organ gospel | 5924 |
+| synth warm-pad | 2178 |
+| synth glass-pad | 2178 |
+| synth supersaw-pad | 2634 |
+| synth juno-pad | 2645 |
+| synth dx-epiano | 2641 |
+| synth shimmer-pad | 2634 |
+| synth sub-bass | 2178 |

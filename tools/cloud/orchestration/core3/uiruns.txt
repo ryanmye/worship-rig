@@ -1,0 +1,30 @@
+ui2 315 {"total":77,"pass":77,"fail":0,"skip":0} [] {"errors":{},"warns":{"No pad file for C; using the synth drone.":1,"Drone: too many overlapping layers; a fading one was cut.":1}} []
+ticks 9176; gaps >100 ms 27, >150 ms 3, >400 ms 2; max 658 ms
+top gaps:
+  658 ms at 187780
+  436 ms at 137150
+  371 ms at 297521
+  147 ms at 185941
+  145 ms at 243895
+  136 ms at 244645
+  136 ms at 244040
+  131 ms at 244781
+prepares 101 (88 with synth/organ); reply latency of those: max 5362 ms, median 1 ms
+ui3 332 {"total":77,"pass":74,"fail":3,"skip":0} [
+  'polish-2A banners (ux-round2 L2 / \\#2): one 32 px strip with: that Esc did not panic',
+  'v11-metronome: Perform Click chip — hidden without a tempo; : Expected values to be strictly equal:',
+  'v11-decisions: PANIC stops the click (during the count-in an: page.waitForFunction: Timeout 30000ms exceeded.'
+] {"errors":{},"warns":{"No pad file for C; using the synth drone.":1,"Drone: too many overlapping layers; a fading one was cut.":1}} []
+ticks 9872; gaps >100 ms 4, >150 ms 2, >400 ms 0; max 235 ms
+top gaps:
+  235 ms at 4225
+  164 ms at 235848
+  118 ms at 312805
+  114 ms at 315705
+  96 ms at 264297
+  88 ms at 315096
+  85 ms at 315586
+  85 ms at 315990
+prepares 100 (87 with synth/organ); reply latency of those: max 2479 ms, median 1 ms
+gaps >150 ms during a synth/organ prepare: 0 of 2; largest such: 63 ms
+DONE
