@@ -26,6 +26,13 @@ rig::inst::SynthExtraInstrument *makeX(const char *id, double sr = 48000, const 
 }  // namespace
 
 TEST_SUITE("synth-extra") {
+  // MACFIX skeptic: first case of this ctest process (doctest runs a file's cases in line order), so the hook is read
+  // before any rig_create, with or without native/golden/out. Fails if synthExtraFactory() stops registering by itself
+  // (Mac check #3: there the golden case below skipped and created no engine; on Linux it masked the bug).
+  TEST_CASE("the synth-extra hook is set when read before any engine exists") {
+    CHECK(rig::inst::synthExtraFactory() != nullptr);
+  }
+
   TEST_CASE("golden fixtures at the exact tier (dx-epiano: statistical, Q11)") {
     for (const char *id : {"synth-808-sub", "synth-pluck", "synth-synth-bass", "synth-poly-stab", "synth-analog-brass",
                            "synth-square-lead", "synth-juno-pad", "synth-supersaw-pad", "synth-shimmer-pad",

@@ -51,31 +51,8 @@ double rms(const std::vector<float> &x, std::size_t from, std::size_t to) {
 }  // namespace
 
 TEST_SUITE("registry-link") {
-  TEST_CASE("every synth-extra id and the organ sound through rig_create + the bridge alone") {
-    // no direct factory or hook call before the engines: the registration has to come from rig_create
-    struct Case {
-      const char *type, *id;
-    };
-    std::vector<Case> cases;
-    for (const char *id : rig::inst::kSynthExtraIds) cases.push_back({"synth", id});
-    cases.push_back({"synth", "warm-pad"});
-    cases.push_back({"organ", "organ-gospel"});
-    for (const Case &c : cases) {
-      CAPTURE(c.id);
-      rigtest::OfflineEngine e(44100);
-      e.hello();
-      e.call(R"({"v":1,"op":"audio","action":"start","id":3})");
-      const std::string r =
-          commitSlot0(e, std::string(R"({"type":")") + c.type + R"(","id":")" + c.id + R"("})");
-      CHECK_FALSE(rigtest::contains(r, "unsupported"));
-      CHECK_FALSE(rigtest::contains(r, "not available"));
-      e.call(R"({"v":1,"op":"play","id":7,"e":"on","n":60,"vel":100})");
-      const auto out = e.render(22050);
-      CHECK(rms(out[0], 2205, 22050) > 1e-4);  // pluck / 808-sub decay: the first half second is enough
-    }
-    CHECK(rig::inst::synthExtraFactory() != nullptr);
-  }
-
+  // First in the file (doctest runs a suite's cases in file / line order): nothing has read the synth-extra hook yet
+  // (its getter registers by itself), so only rig_create can have filled the registry here.
   TEST_CASE("after rig_create the registry holds every unit kind, service and set handler of the core") {
     { rigtest::OfflineEngine e(48000); }
     const rig::Registry &reg = rig::Registry::global();
@@ -98,6 +75,31 @@ TEST_SUITE("registry-link") {
                             "slots.<i>.eq.low", "slots.<i>.sends.reverb"}) {
       CAPTURE(row);
       CHECK(reg.setHandler(row) != nullptr);
+    }
+    CHECK(rig::inst::synthExtraFactory() != nullptr);
+  }
+
+  TEST_CASE("every synth-extra id and the organ sound through rig_create + the bridge alone") {
+    // no direct factory or hook call before the engines: the registration has to come from rig_create
+    struct Case {
+      const char *type, *id;
+    };
+    std::vector<Case> cases;
+    for (const char *id : rig::inst::kSynthExtraIds) cases.push_back({"synth", id});
+    cases.push_back({"synth", "warm-pad"});
+    cases.push_back({"organ", "organ-gospel"});
+    for (const Case &c : cases) {
+      CAPTURE(c.id);
+      rigtest::OfflineEngine e(44100);
+      e.hello();
+      e.call(R"({"v":1,"op":"audio","action":"start","id":3})");
+      const std::string r =
+          commitSlot0(e, std::string(R"({"type":")") + c.type + R"(","id":")" + c.id + R"("})");
+      CHECK_FALSE(rigtest::contains(r, "unsupported"));
+      CHECK_FALSE(rigtest::contains(r, "not available"));
+      e.call(R"({"v":1,"op":"play","id":7,"e":"on","n":60,"vel":100})");
+      const auto out = e.render(22050);
+      CHECK(rms(out[0], 2205, 22050) > 1e-4);  // pluck / 808-sub decay: the first half second is enough
     }
     CHECK(rig::inst::synthExtraFactory() != nullptr);
   }

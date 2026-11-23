@@ -83,15 +83,18 @@ void BuildWorker::reprioritize(const std::shared_ptr<BuildJob> &job, int priorit
   post(job, priority);
 }
 
-void BuildWorker::finish(BuildJob &job) {
+bool BuildWorker::buildHere(BuildJob &job) {
   int expected = BuildJob::Queued;
-  if (job.state.compare_exchange_strong(expected, BuildJob::Running, std::memory_order_acq_rel)) {
-    // the worker never started it: build it here (a commit takes effect at once); the worker skips it later
-    job.builtOnControl = true;
-    job.run();
-    job.state.store(BuildJob::Done, std::memory_order_release);
-    return;
-  }
+  if (!job.state.compare_exchange_strong(expected, BuildJob::Running, std::memory_order_acq_rel)) return false;
+  // the worker never started it: build it here (a commit takes effect at once); the worker skips it later
+  job.builtOnControl = true;
+  job.run();
+  job.state.store(BuildJob::Done, std::memory_order_release);
+  return true;
+}
+
+void BuildWorker::finish(BuildJob &job) {
+  if (buildHere(job)) return;
   std::unique_lock<std::mutex> l(mu_);
   doneCv_.wait(l, [&job] { return job.done(); });
 }

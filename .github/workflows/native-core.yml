@@ -132,13 +132,14 @@ jobs:
         env:
           TMPDIR: ${{ runner.temp }}
       # runtime suites + the Model's control / audio thread pairs (wave-3 integrator: model, song, t00c, voice-limit,
-      # sleep, perform, perform_carry, perform_ports, wheels, drone*), as the integrators run TSan locally
+      # sleep, perform, perform_carry, perform_ports, wheels, drone*; CORE3: core3, the build worker), as the integrators
+      # run TSan locally
       - name: TSan (runtime + model suites)
         run: |
           cmake --preset tsan
           cmake --build build/tsan
           cd build/tsan && ctest --output-on-failure \
-            -R "queues|offline|bridge|realtime|runtime|soak|clock|rec|meter|click-record|offline-midi|model|song|t00c|voice-limit|sleep|perform|wheels|drone"
+            -R "queues|offline|bridge|realtime|runtime|soak|clock|rec|meter|click-record|offline-midi|model|song|t00c|voice-limit|sleep|perform|wheels|drone|core3"
         working-directory: native/core
         env:
           TMPDIR: ${{ runner.temp }}

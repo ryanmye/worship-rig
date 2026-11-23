@@ -80,6 +80,8 @@ class BuildWorker {
   /** Make the job Done now (control thread): claim and build it inline if the worker has not started it, else wait
    *  for the worker to finish it. Returns at once for a Done job. */
   void finish(BuildJob &job);
+  /** Claim the job if no one has (control thread) and build it here; false when the worker has it (or it is done). */
+  bool buildHere(BuildJob &job);
   /** Jobs queued or running (tests, stats). */
   std::size_t pending() const;
 

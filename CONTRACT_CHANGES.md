@@ -7069,3 +7069,52 @@ never-filled snapshot, a tick `runtime` without `swelling`, `get` without `what:
 core's answer is right; `param-read.js` `patchParam` (the shim's answer before the core's, and the mock's) returned
 undefined for it and now returns `'natural'`. An absent `release` reads `null` on the web engine and undefined on the
 bridge (nit, no caller).
+
+## CORE3 (2.0 native core: synth / organ units built off the control thread, neighbour prebuilds; native/core/src/model/{build_worker.*,song.*,graph_build.cpp}, src/bridge/bridge.{h,cpp}, src/api/engine.cpp; no op or reply shape changed)
+
+**Required behaviour (1.x, `audio.js` prepare + `controller.js`).** `prepare` builds the new song's instruments while
+the old song plays; the page's main thread (input, scenes, meters) stays responsive; `prepare` resolves once the song
+is built and its samples are decoded; the controller commits then; a newer switch supersedes (only the latest token
+commits, an older prepare still resolves); `commit` connects only. Ryan (CORE2A O2): "play live while loading
+asynchronously, or load neighbouring songs ahead of time". Both are done.
+
+**Where the time went (measured, CORE3 builder, g++ Release, realtime engine at 48 kHz on the null-paced audio
+thread, a `play` posted right after each `prepare`; this 2-CPU box).** Before, the control thread built every fresh
+instrument inside `Model::prepare`:
+- an **organ** costs 60-70 ms every time (`drawbarWaves`: 8 PeriodicWaves of 36 x 4096 floats, 7.8 ms each);
+- the **first use of a wavetable family** per process and rate costs 80-300 ms (`WaveBank::get` grows by rebuilding
+  every family it holds: 262 ms for all of them; `XWaveBank` 201 ms): warm-pad 80, glass-pad 147, sub-bass 304,
+  supersaw-pad 91, shimmer-pad 135, dx-epiano 159 ms in a fresh process;
+- a warm synth 0.3-3 ms, a strip 0.1-0.6 ms, a sampler factory < 1 ms (its decodes are already off-thread, CORE2A),
+  commit 0.1-4.4 ms (FX, drone `songChanged`, wheels), the reverb space is staged on the IR worker;
+- a 16-slot song with 4 organs + 12 synths: 240-294 ms; 16 organs ~1.0-1.6 s.
+So the CORE2A / integrator ui-core gaps (0.3-0.6 s) were cold banks plus organs, on a box busy with Chromium.
+
+**2.0 now (realtime only; offline every unit is still built inline at prepare and no worker thread exists, so
+renders are unchanged).**
+- `SongGraph::prepare` posts each fresh `synth` / `organ` instrument to a build worker (one thread, utility priority)
+  and builds the strips inline; the plan is built when every job is done. The bridge's `prepare` reply waits for the
+  samples (CORE2A) and for the builds; the control loop runs meanwhile (`pumpBuilds` sends the reply, the worker wakes
+  the loop). `commit` takes the units; a commit sent before the reply (a raw client; the shim never does) builds
+  whatever the worker has not started inline and waits for the one it is building: it takes effect at once, as
+  before. A newer `prepare` answers the older at once (CORE2A) and the superseded plan's jobs drop to prebuild
+  priority, so the newest switch is built first; they stay in the prebuilt set for a switch back.
+- Ahead of time: a `cache preload` with a pin (`add`, `replace`, `auto`) of at most 5 songs is what controller.js
+  sends for the songs around the current one after every switch (`pinWindow`: current +-1 in the library, +-2 in a
+  large setlist, `replace`; `preloadNeighbors`: prev / next of a setlist that fits, `add`). The core then also
+  prebuilds those songs' synth / organ units (priority below any switch), skipping slots the playing song would reuse.
+  A switch to one adopts them and builds nothing. Kept LRU in a set capped at **64 MB** (iPad profile 32 MB), charged
+  6 MB per organ and 2.7 MB per synth (measured RSS per instance with warm banks: organ 5.8 MB, synth.js 2.1 MB,
+  synth-extra 2.6 MB): two to four typical neighbours (1-3 heavy slots, 3-18 MB each) or one 16-slot neighbour of 4
+  organs + 12 synths (56 MB). Dropped on memory pressure and on a rate change.
+- Nothing new on the audio thread: units attach through the existing `AttachUnit` path, a never-attached unit is
+  freed by its last owner (worker or control thread).
+- `_debugStats` gains `buildsOffThread`, `buildsAtCommit`, `prebuildHits`, `prebuildPosted`, `prebuildEvicted`,
+  `prebuilt`, `prebuiltMB`, `prebuiltDone`, `buildsPending`.
+
+**Numbers.** Same harness after the change: the `play` posted with each `prepare` is answered in 0.3-12 ms (before:
+up to 304 ms cold, 61-68 ms for every organ song warm, 240-294 ms for the 16-slot song), the largest tick gap per
+switch is 33-41 ms (30 Hz ticks; before up to 304 ms). `unit.core3`, a 16-organ switch during a held note: `play`
+answered in 0.1 ms (base core: 1588 ms), largest tick gap 36-39 ms (base: 1619 ms), reply after 1.0-1.4 s of
+off-thread building; a prebuilt 10-organ neighbour is answered in 3.5-5.8 ms (base: 930 ms; with prebuilds disabled:
+1897 ms). ui-core on `rig-devhost --no-adapter`: see PARITY "UI parity" (CORE3 row).

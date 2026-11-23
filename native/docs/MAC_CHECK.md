@@ -53,12 +53,17 @@ before any engine exists. Then:
   registered T15 over that override, so the warning never came.
 
 On Linux, `./rig_tests -ts=synth-extra -tc='inst.synth dispatch*'` and `-ts=synth -tc='synth-extra ids*'` reproduce
-both failures exactly, and so does the full Mac-like run (export without `native/golden/out`). Fix:
+both failures exactly, and so do the two suites in a Mac-like tree (`git archive` of `b9a0c27`, no
+`native/golden/out`, the `check.sh` devhost configuration). After the fix that tree passes 71/71 (`-LE devhost|golden`)
+with g++ 13 and clang++-20. Fix:
 `synthExtraFactory()` / `makeSynthExtra()` run `ensureModulesRegistered()` first. `test_synth` registers before it
 overrides. The new suite `unit.registry-link` covers the rest: it fails if `rig_create` stops registering or a module
 drops out (checked by mutation). The count: Linux registers 82 ctests = 70 + 12 `golden.*`; `check.sh` runs
 `-LE devhost|golden` without `native/golden/out`, so 70. No suite is missing, and the golden-WAV cases inside the
 unit suites skip too. `check.sh` now states the excluded count. Details: `INTERFACE_LOG.md` "MACFIX".
+Skeptic (`reviews/MACFIX.md`): VERIFIED. A new first case of `unit.synth-extra` reads the hook before any engine
+exists, so the Linux gate (goldens present) now fails if the fix is reverted. Expected at Mac check #4 on the tree
+with CORE3: **72** core ctests (70 + `unit.registry-link` + `unit.core3`), 12 `golden.*` not run.
 
 ### Mac check #2 (2026-11-21, tier 1, `b0bf81a`)
 

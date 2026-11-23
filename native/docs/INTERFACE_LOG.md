@@ -320,3 +320,22 @@ renders unchanged. Details and numbers: root `CONTRACT_CHANGES.md` "## CORE3".
 | CORE3-5 | `src/api/engine.cpp` (T08) | the control loop calls `songGraph().pumpBuilds()` after `pumpCache()`; the build worker wakes the loop through the CORE2A `WakeLink` (created for realtime even without a cache service); `memoryPressure` drops the prebuilt set first | prompt prepare replies; teardown safety as CORE2A |
 | CORE3-6 | `tests/test_core3.cpp` (new, `unit.core3`) | 5 cases: switch to a 16-organ song during live play (tick gap, `play` mid-switch, reply after the build, commit), prebuilt neighbour switch with no build, supersede with prebuilt and unbuilt songs (+ switch back adopts the superseded units, newest built first), commit before the reply, offline unchanged | |
 | CORE3-7 | `native/docs/ENGINE_CONTRACT.md` 6.2 | the minor-5 timing sentence names CORE3's timing (no shape change) | |
+| CORE3-8 | `native/core/CMakeLists.txt`, `.github/workflows/native-core.yml` | `unit.core3` runs `RUN_SERIAL` (its 50 ms tick-gap bound is not meant to hold next to the CPU benchmark suites under `ctest -j2`: 72 ms seen there at load 5); `core3` joins the CI TSan regex | |
+
+## MACFIX: Mac check #3 `unit.synth` / `unit.synth-extra` (test-order bug, not a link bug)
+
+Builder MACFIX (2026-11-22). No frozen file changed, so there is no `INTERFACE-CHANGE` marker. No op, reply, C API or
+registry change. One behaviour change in a T11 module interface (MACFIX-1). Root cause and evidence:
+`MAC_CHECK.md` "Mac check #3". In short, nothing registers from a static initializer.
+`ensureModulesRegistered()` (frozen `api/registry.cpp`) calls every generated `rig_register_*` by name, and
+`rig_create` calls it. Two tests read or overrode the T15 hook before the first `rig_create` of their ctest process.
+That only happens when `native/golden/out` is absent, because the golden-fixture cases that normally create the
+first engine skip.
+
+| # | file(s) | change | why |
+|---|---|---|---|
+| MACFIX-1 | `src/inst/synth_dispatch.{h,cpp}` (T11) | `synthExtraFactory()` and `makeSynthExtra()` call `ensureModulesRegistered()` before they read the hook (once per process; afterwards one atomic check). Header comments: an override must follow the registration; never read the hook from a `rig_register_*` function (`std::call_once` is not reentrant; none does). | A read before any engine existed saw nullptr (`test_synth_extra.cpp:86`). An override made then was replaced by the next `rig_create`'s registration (`test_synth.cpp:260-261`). |
+| MACFIX-2 | `tests/test_synth.cpp` | The T15-absent case calls `rig::ensureModulesRegistered()` and `REQUIRE`s a non-null hook before it saves and overrides the hook. | Makes the order explicit. |
+| MACFIX-3 | `tests/test_registry_link.cpp` (new, `unit.registry-link`) | Two cases, no golden files needed. (a) After one `rig_create`, the registry holds every unit kind (13), service (15) and set-handler prefix (11) of the core, and the T15 hook is set. (b) Through the bridge alone, the 10 synth-extra ids, `warm-pad` and `organ-gospel` commit without `unsupported` and sound (RMS > 1e-4). | Fails when `rig_create` skips the registration (mutation: 38 assertions in (a)), or when T15's `registerSynthExtra` call is removed (mutation: 32 assertions, both cases). Passes in any test order, because it is its own ctest process. |
+| MACFIX-4 | `tools/mac/check.sh` | `core` stage: the golden note gives the number of `golden.*` tests not run (`ctest -N -L golden`) and says that the golden-WAV cases inside `unit.*` skip too. | Mac 70 vs Linux 82 is the 12 `golden.*` tests, excluded by design when `native/golden/out` is absent. No suite was missing. |
+| MACFIX-5 (skeptic) | `tests/test_synth_extra.cpp` | New first case of `unit.synth-extra`: "the synth-extra hook is set when read before any engine exists" (one `CHECK`). | MACFIX-3 passes with the b9a0c27 hook code, and on Linux the golden case of this suite creates an engine first, so nothing in the Linux gate caught a revert of MACFIX-1. This case does (mutation: fails with `native/golden/out` present). `reviews/MACFIX.md`. |

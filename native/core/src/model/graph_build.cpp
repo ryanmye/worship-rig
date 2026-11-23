@@ -6,7 +6,6 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <cstdlib>
 #include <string>
 
 #include "api/registry.h"
@@ -194,7 +193,11 @@ void SongGraph::whenBuilt(std::uint32_t token, std::function<void()> fn) {
 }
 
 void SongGraph::takeBuilt(Plan &plan) {
-  // commit: every instrument now (a job the worker has not started is built here; one it is building is waited for)
+  // commit: every instrument now. First every job the worker has not started is built here (the worker meanwhile
+  // goes on with its own: both cores work), then the ones it was building are waited for. (Waiting slot by slot
+  // instead let the worker claim each next job while the control thread slept: all 16 built serially.)
+  for (PlanSlot &ps : plan.slots)
+    if (ps.job && !ps.job->done()) worker().buildHere(*ps.job);
   for (PlanSlot &ps : plan.slots) {
     if (!ps.job) continue;
     if (!ps.job->done()) worker().finish(*ps.job);
@@ -271,7 +274,7 @@ void SongGraph::dropPrebuilt() {
 }
 
 void SongGraph::prebuild(const std::vector<PatchSpec> &patches) {
-  if (!realtime() || std::getenv("CORE3_MUTANT")) return;
+  if (!realtime()) return;
   const double sr = m_.sink_.timeBase().sampleRate;
   std::vector<std::pair<std::string, int>> want;  // key -> instances this request needs (two songs, same unit)
   for (const PatchSpec &p : patches)
