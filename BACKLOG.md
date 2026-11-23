@@ -77,10 +77,19 @@ Not in v1.1: EQ simple mode, shimmer/choir, chord charts, stage display, Plannin
 - [ ] **Not in the default download (Ryan).** The app ships with today's 23 sets. The site's download page gets a
       checkbox per pack, so people pick which packs to download. The packs install like a My Samples pack. Building
       on the A-list "optional extra packs" line:
-      - Each pack is a Release asset.
       - The site page is static, so either each ticked box starts its own download or the page builds one zip.
-      - Decide: whether the app can also install a downloaded pack itself (Settings › My Samples › Add pack, or drag
-        onto the window), and the iPad path (Files app).
+      - **The app installs a downloaded pack itself (Ryan: yes).**
+        - Mac: Settings › My Samples › Add pack…, or drag the pack file onto the window.
+        - iPad: the same Add pack button opens the Files picker, and a pack can also be opened from the Files app.
+      - **Maybe:** a button in the app that downloads packs straight from the same pages, as a checklist inside the
+        app (Ryan: "idk", undecided). It would reuse the site's pack list; decide before building.
+      - **Where the packs are hosted is undecided.** The rule below keeps the samples out of the git repository.
+        GitHub Release assets are not in the repository, but check with Ryan before uploading any.
+- [ ] **Rule (Ryan, 2026-11-22): the pack sample files never go into the git repository.**
+      - Claude may download the CC0 libraries listed above for Ryan's own use and to build the packs: into
+        `sound-packs/` (git-ignored, like `user-samples/`), or onto Ryan's Mac under `~/Music/Worship Rig/Samples/`.
+      - Only code, manifests and docs are committed: pack build scripts, per-pack manifest rows, `LICENSES.md`
+        attribution, and the site's pack list. The sample audio is never committed, in any format.
 - [ ] **Per pack:** a sampler manifest row per instrument, plus sustain loops or long samples (see D: looped
       ~3 s GM samples sounded bad). Trim and encode to a per-pack size target, level-match with `tools/calibrate.mjs`,
       run an audition pass, and have Ryan listen. Ensemble string and brass swells built from solo samples need

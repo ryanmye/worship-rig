@@ -105,6 +105,13 @@ run them one at a time; `run-all` does that for you.
     modules are packaged, the rest of `tools/` is not).
   - **GarageBand/Logic conversions are Apple-licensed personal content. Never commit them, package them or copy them
     into `app/`.** `.gitignore` and electron-builder `files` both exclude `user-samples/`.
+- Optional sound packs (2.0.x, BACKLOG "2.0.x"):
+  - These are the CC0 libraries VSCO 2 CE, Karoryfer and VCSL. Download and build them under `sound-packs/`
+    (git-ignored), or onto Ryan's Mac under `~/Music/Worship Rig/Samples/`.
+  - **The sample audio never goes into the git repository**, in any format (Ryan, 2026-11-22). Commit only the build
+    scripts, the manifest rows, `LICENSES.md` attribution and the site's pack list.
+  - The packs are not in the default download. Ask Ryan before uploading any pack anywhere, including GitHub Release
+    assets.
 - Electron env overrides for tests: `RIG_APP_DIR`, `RIG_PORT`, `RIG_PADS_DIR`, `RIG_USER_DATA`,
   `RIG_RECORDINGS_DIR`, `RIG_USER_SAMPLES`, `RIG_GB_LIBRARY` (importer library roots), `RIG_SELFTEST=1`,
   `RIG_DEBUG_PERMS=1`.

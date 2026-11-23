@@ -8,6 +8,9 @@ test/**/screenshots/
 # "My Samples": personal GarageBand/Logic conversions and your own packs. Apple-licensed content —
 # never commit or package it (also excluded from electron-builder's files in package.json)
 user-samples/
+# 2.0.x optional sound packs (CC0 libraries: VSCO 2 CE, Karoryfer, VCSL): downloads and build output.
+# Ryan 2026-11-22: the sample audio never goes into the git repository (BACKLOG "2.0.x").
+sound-packs/
 
 # local-only scratch (old sample trees moved aside on the Mac)
 _to_delete/
