@@ -32,12 +32,33 @@ Ryan's M2 Pro, Apple clang 21.0.0 (clang-2100.1.1.101). The run started at 23:36
 | stage | result |
 |---|---|
 | `export`, `tools` | PASS |
-| `core` | **FAIL, 68/70.** <ul><li>`unit.synth` fails at `test_synth.cpp:260-261`: the reply for `synth:juno-pad` contains neither the instrument name nor `"code":"unsupported"`.</li><li>`unit.synth-extra` fails at `test_synth_extra.cpp:86`: `REQUIRE(synthExtraFactory() != nullptr)`; the factory is null.</li></ul>So on the Mac the synth-extra instruments are not registered, and every synth-extra sound would be silent in the app. Linux passes 82/82. Owner: **MACFIX** (likely cause: static-initializer registration dropped by ld64). The Mac ran 70 tests and Linux runs 82; MACFIX explains why. |
+| `core` | **FAIL, 68/70.** <ul><li>`unit.synth` fails at `test_synth.cpp:260-261`: the reply for `synth:juno-pad` contains neither the instrument name nor `"code":"unsupported"`.</li><li>`unit.synth-extra` fails at `test_synth_extra.cpp:86`: `REQUIRE(synthExtraFactory() != nullptr)`; the factory is null.</li></ul>Linux passes 82/82. Owner: **MACFIX**, fixed (below): a test-order bug, not a Mac or linker bug; the app was never affected. The 70 vs 82 is the 12 `golden.*` tests, excluded by design. |
 | `probe` | PASS: 64 frames safe; desktop auto voice-limit suggestion 288. |
 | `apple-mac` | PASS, 0 warnings |
 | `apple-sim` | FAIL, environment only: the iOS 26.5 simulator platform is not installed. |
 
 Hands-on: **on hold** until MACFIX and CORE3 land and Mac check #4 passes `core`.
+
+**MACFIX (root cause, reproduced on Linux).** The "ld64 drops a static-initializer registration" hypothesis is
+wrong. Nothing in `native/core` registers from a static initializer. `api/registry.cpp`'s `ensureModulesRegistered()`
+calls every `rig_register_*` by name (from the generated `rig_modules.inc`), and `rig_create` calls it, so a linker
+that pulls `rig_create` pulls every register object. A public-API-only program linked against `librig_core.a` with
+`ld.lld --gc-sections` plays all ten synth-extra ids and the organ, and keeps all 17 `rig_register_*`. The real cause:
+the registration runs at the **first `rig_create`** in the process, and ctest runs each suite as its own process
+(`rig_tests -ts=<suite>`). In `unit.synth-extra` and `unit.synth`, the cases that normally create the first engine are
+the golden-fixture cases. Without `native/golden/out` (git-ignored, so absent from the check's export) they `continue`
+before any engine exists. Then:
+- `test_synth_extra.cpp:86` read the hook before any engine existed, so it saw nullptr.
+- `test_synth.cpp:255` saved the hook (nullptr) and set nullptr for the "T15 absent" path. The next `rig_create`
+  registered T15 over that override, so the warning never came.
+
+On Linux, `./rig_tests -ts=synth-extra -tc='inst.synth dispatch*'` and `-ts=synth -tc='synth-extra ids*'` reproduce
+both failures exactly, and so does the full Mac-like run (export without `native/golden/out`). Fix:
+`synthExtraFactory()` / `makeSynthExtra()` run `ensureModulesRegistered()` first. `test_synth` registers before it
+overrides. The new suite `unit.registry-link` covers the rest: it fails if `rig_create` stops registering or a module
+drops out (checked by mutation). The count: Linux registers 82 ctests = 70 + 12 `golden.*`; `check.sh` runs
+`-LE devhost|golden` without `native/golden/out`, so 70. No suite is missing, and the golden-WAV cases inside the
+unit suites skip too. `check.sh` now states the excluded count. Details: `INTERFACE_LOG.md` "MACFIX".
 
 ### Mac check #2 (2026-11-21, tier 1, `b0bf81a`)
 

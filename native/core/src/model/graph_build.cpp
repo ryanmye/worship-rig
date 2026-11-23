@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
 #include <string>
 
 #include "api/registry.h"
@@ -270,7 +271,7 @@ void SongGraph::dropPrebuilt() {
 }
 
 void SongGraph::prebuild(const std::vector<PatchSpec> &patches) {
-  if (!realtime()) return;
+  if (!realtime() || std::getenv("CORE3_MUTANT")) return;
   const double sr = m_.sink_.timeBase().sampleRate;
   std::vector<std::pair<std::string, int>> want;  // key -> instances this request needs (two songs, same unit)
   for (const PatchSpec &p : patches)

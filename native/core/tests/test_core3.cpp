@@ -262,9 +262,11 @@ TEST_SUITE("core3") {
     REQUIRE(contains(pre, "\"ok\":true"));
     CHECK(rt.stat("prebuildPosted") == 10);  // light song: slot 0 is the playing warm-pad (reused, skipped)
     const auto tw = Clock::now();
-    while (rt.stat("prebuiltDone") < 10 && Clock::now() - tw < std::chrono::seconds(kSanitized ? 300 : 60))
+    // (a core without prebuilds has no such stat: -1, no wait; the timing check below then fails on its own)
+    const auto waitEnd = tw + std::chrono::seconds(kSanitized ? 300 : 60);
+    for (double d = rt.stat("prebuiltDone"); d >= 0 && d < 10 && Clock::now() < waitEnd; d = rt.stat("prebuiltDone"))
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    REQUIRE(rt.stat("prebuiltDone") == 10);
+    CHECK(rt.stat("prebuiltDone") == 10);
     CHECK(rt.stat("buildsPending") == 0);
     const double hits0 = rt.stat("prebuildHits"), commit0 = rt.stat("buildsAtCommit");
     const double built0 = rt.stat("channelsBuilt");
