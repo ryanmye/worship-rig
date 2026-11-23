@@ -111,3 +111,12 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
   WorshipTools song-list CSV.** WorshipTools has no public API and no bulk export; songs come out as ChordPro, one at a
   time, from Planning's editor (`lanes/C1-worshiptools.md`). So there is no WorshipTools-specific format, and no
   account, key or terms are involved. `{key}`/`{tempo}` are optional on import; a missing tempo is asked for.
+
+## D6: Setlist switching is "Cue, then Go" (Ryan, 2026-11-22; Lane S, tier 1)
+- Of the three mockups (<https://claude.ai/artifact/QcJTbknF8qXJ9sb47THV6e>), Ryan picked **C. Cue, then Go**.
+- How it works:
+  - Tapping a song cues it, and nothing changes until **Go**. Go is a large button or a footswitch.
+  - Each song shows its load state: playing, cued, ready, loading or not loaded.
+  - Go waits until the cued song is ready.
+- Ryan does not like the rest of the mockup UI around it. The visual design gets a separate pass later, with Ryan.
+  Lane S builds the cue/go behaviour and its state first, and keeps the look provisional.
