@@ -1,0 +1,146 @@
+[
+{
+"order": 1,
+"area": "Setup and engine contract",
+"group": "Engine",
+"pct": 100,
+"weight": 5,
+"status": "done",
+"detail": "Contract, golden fixtures, frozen interfaces"
+},
+{
+"order": 2,
+"area": "Wave 1: core modules",
+"group": "Engine",
+"pct": 100,
+"weight": 15,
+"status": "done",
+"detail": "Filters, master chain, reverb, delay, click, bridge, dev host"
+},
+{
+"order": 3,
+"area": "Scale-out: 16 slots, voices, buffer, voice limit",
+"group": "Engine",
+"pct": 100,
+"weight": 5,
+"status": "done",
+"detail": "T00c and D4, reviewed VERIFIED"
+},
+{
+"order": 4,
+"area": "Wave 2: synth, sampler, song model",
+"group": "Engine",
+"pct": 100,
+"weight": 15,
+"status": "done",
+"detail": "T11, T12, T13, integrated"
+},
+{
+"order": 5,
+"area": "Wave 3: perform, organ, synth-extra, drone",
+"group": "Engine",
+"pct": 100,
+"weight": 15,
+"status": "done",
+"detail": "112 of 112 fixtures match the web engine"
+},
+{
+"order": 6,
+"area": "Fix before the Mac session (silent samplers)",
+"group": "Engine",
+"pct": 100,
+"weight": 3,
+"status": "done",
+"detail": "Reviewed VERIFIED"
+},
+{
+"order": 7,
+"area": "Settings categories and Sound options",
+"group": "UI",
+"pct": 100,
+"weight": 4,
+"status": "done",
+"detail": "Sidebar categories, voices, buffer, voice limit"
+},
+{
+"order": 8,
+"area": "16 slots in Perform and Edit",
+"group": "UI",
+"pct": 100,
+"weight": 6,
+"status": "done",
+"detail": "Store migration, scrolling, MIDI-learn rows; reviewed VERIFIED"
+},
+{
+"order": 9,
+"area": "Drone freeze, dynamic range, Settings fixes",
+"group": "UI",
+"pct": 100,
+"weight": 3,
+"status": "done",
+"detail": "Built"
+},
+{
+"order": 10,
+"area": "Engine fixes found by the UI tests",
+"group": "Engine",
+"pct": 100,
+"weight": 4,
+"status": "done",
+"detail": "Background sample loading, pedal and Swell status, setting read-back; both reviewed VERIFIED"
+},
+{
+"order": 11,
+"area": "Final check before the Mac session",
+"group": "UI",
+"pct": 100,
+"weight": 4,
+"status": "done",
+"detail": "All green on fresh builds; hands-on GO once the Mac check passes"
+},
+{
+"order": 12,
+"area": "Song switch to synth/organ songs (no hold-up)",
+"group": "Engine",
+"pct": 50,
+"weight": 3,
+"status": "in progress",
+"detail": "Built; final memory-checker test pass, then review (02:15Z)"
+},
+{
+"order": 13,
+"area": "Mac test-order bug (app was fine)",
+"group": "Engine",
+"pct": 100,
+"weight": 2,
+"status": "done",
+"detail": "Reviewed VERIFIED: test order only, app unaffected; new registry test; Mac expects 71/71"
+},
+{
+"order": 14,
+"area": "Mac app (Xcode build, audio probe)",
+"group": "Mac and iPad",
+"pct": 40,
+"weight": 10,
+"status": "in progress",
+"detail": "Mac check #3: compiles (0 warnings), audio probe passes (64 frames safe); core 68/70 on the Mac; app never launched"
+},
+{
+"order": 15,
+"area": "Ryan's hands-on session",
+"group": "Mac and iPad",
+"pct": 0,
+"weight": 8,
+"status": "next",
+"detail": "About 25 minutes, checklist ready (MAC_CHECK.md, Tier 2); after the Mac check"
+},
+{
+"order": 16,
+"area": "iPad",
+"group": "Mac and iPad",
+"pct": 0,
+"weight": 7,
+"status": "blocked",
+"detail": "Needs the iOS 26.5 Simulator platform in Xcode"
+}
+]

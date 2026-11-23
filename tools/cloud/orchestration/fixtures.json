@@ -1,0 +1,67 @@
+[
+{
+"module": "Filters and strip",
+"pass": 25,
+"total": 25
+},
+{
+"module": "Master chain",
+"pass": 7,
+"total": 7
+},
+{
+"module": "Reverb",
+"pass": 6,
+"total": 6
+},
+{
+"module": "Delay, chorus, lo-fi",
+"pass": 10,
+"total": 10
+},
+{
+"module": "Click",
+"pass": 2,
+"total": 2
+},
+{
+"module": "Synth",
+"pass": 6,
+"total": 6
+},
+{
+"module": "Sampler",
+"pass": 8,
+"total": 8
+},
+{
+"module": "Song model",
+"pass": 10,
+"total": 10
+},
+{
+"module": "Synth-extra",
+"pass": 10,
+"total": 10
+},
+{
+"module": "Organ",
+"pass": 5,
+"total": 5
+},
+{
+"module": "Drone",
+"pass": 4,
+"total": 4
+},
+{
+"module": "Touch curves",
+"pass": 5,
+"total": 5
+},
+{
+"module": "Perform",
+"pass": 14,
+"total": 14
+}
+]

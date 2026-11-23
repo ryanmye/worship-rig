@@ -1,0 +1,27 @@
+[
+{
+"check": "Engine tests (g++, clang 20, memory and thread checkers)",
+"result": "82 / 82",
+"state": "ok"
+},
+{
+"check": "Reference fixtures vs web engine",
+"result": "112 / 112",
+"state": "ok"
+},
+{
+"check": "UI tests on the 2.0 engine",
+"result": "75-77 / 77 (test-timing races only)",
+"state": "ok"
+},
+{
+"check": "App test suites",
+"result": "11 / 12 (known EQ layout test)",
+"state": "warn"
+},
+{
+"check": "Mac check on M2 Pro",
+"result": "#3: core 68 / 70 (test-order bug, app unaffected; fix in review)",
+"state": "warn"
+}
+]

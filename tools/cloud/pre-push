@@ -1,0 +1,16 @@
+#!/bin/bash
+# Cloud push guard (Ryan's push rules; AWAY_WEEK_PLAN §0.2). Not committed.
+z=0000000000000000000000000000000000000000
+while read lref lsha rref rsha; do
+  [ "$rref" = "refs/heads/v2-native" ] || { echo "pre-push: only refs/heads/v2-native may be pushed (got $rref)"; exit 1; }
+  [ "$lsha" = "$z" ] && { echo "pre-push: deleting v2-native is not allowed"; exit 1; }
+  if [ "$rsha" != "$z" ]; then
+    git merge-base --is-ancestor "$rsha" "$lsha" 2>/dev/null || { echo "pre-push: not a fast-forward of $rsha"; exit 1; }
+    range="$rsha..$lsha"
+  else range="$lsha"; fi
+  bad=$(git diff --name-only ${rsha/$z/4b825dc642cb6eb9a060e54bf8d69288fbee4904} "$lsha" | grep -E '(^|/)(user-samples|sound-packs)/|\.(exs|caf|aif|aiff)$' )
+  [ -n "$bad" ] && { echo "pre-push: forbidden paths: $bad"; exit 1; }
+  big=$(git rev-list --objects $range | while read o p; do [ "$(git cat-file -t $o)" = blob ] && [ "$(git cat-file -s $o)" -gt 20000000 ] && echo "$p"; done)
+  [ -n "$big" ] && { echo "pre-push: blobs over 20 MB: $big"; exit 1; }
+done
+exit 0

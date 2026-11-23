@@ -1,0 +1,234 @@
+<meta name="dash-one-writer">
+<style>
+  .rp { display: flex; flex-direction: column; gap: var(--cds-gap-xl); font-family: var(--font-anthropic-sans); color: var(--color-fg); }
+  .rp h1 { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
+  .rp h2 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0 0 var(--cds-gap-sm); }
+  .rp p { margin: 0; max-width: 68ch; line-height: 1.5; }
+  .rp .muted { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .rp-head { display: flex; flex-direction: column; gap: var(--cds-gap-sm); }
+  .rp-hero { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: var(--cds-gap-lg); align-items: center;
+    background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); }
+  .rp-big { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: 3.2rem; line-height: 1; font-variant-numeric: tabular-nums; }
+  .rp-meter { height: 14px; border-radius: 7px; background: var(--cds-chart-grid); overflow: hidden; }
+  .rp-meter > i { display: block; height: 100%; border-radius: 7px; }
+  .rp-hero-note { display: flex; flex-direction: column; gap: var(--cds-gap-sm); min-width: 0; }
+  .rp-tablewrap { overflow-x: auto; }
+  .rp table { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-body); }
+  .rp th { text-align: left; font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); font-size: var(--cds-font-size-caption);
+    text-transform: uppercase; letter-spacing: .04em; padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); }
+  .rp td { padding: var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); vertical-align: middle; }
+  .rp td.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  .rp .bar { position: relative; height: 8px; min-width: 90px; border-radius: 4px; background: var(--cds-chart-grid); overflow: hidden; }
+  .rp .bar > i { position: absolute; inset: 0 auto 0 0; border-radius: 4px; }
+  .rp .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: var(--cds-font-size-caption); white-space: nowrap;
+    border: 1px solid currentColor; }
+  .rp .s-done { color: var(--color-ok); }
+  .rp .s-review, .rp .s-in-progress { color: var(--color-warn); }
+  .rp .s-next { color: var(--color-fg-muted); }
+  .rp .s-blocked { color: var(--color-bad); }
+  .rp .grp td { background: var(--color-panel); font-weight: var(--cds-font-weight-medium); font-size: var(--cds-font-size-caption);
+    text-transform: uppercase; letter-spacing: .04em; color: var(--color-fg-muted); }
+  .rp-chart { position: relative; min-height: 340px; }
+  .rp-chart svg text { fill: var(--cds-text-secondary); font-size: var(--cds-font-size-caption); }
+  .rp-tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border);
+    box-shadow: var(--cds-shadow-popover); border-radius: var(--cds-radius); padding: var(--cds-pad-xs) var(--cds-pad-sm);
+    font-size: var(--cds-font-size-caption); white-space: nowrap; }
+  .rp-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: var(--cds-gap-xl); }
+  .rp-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); min-width: 0; }
+  @media (max-width: 520px) { .rp-hero { grid-template-columns: 1fr; } .rp .hide-narrow { display: none; } }
+</style>
+
+<div class="rp">
+  <header class="rp-head" id="summary">
+    <h1>Worship Rig 2.0</h1>
+    <p data-read lang="en">2.0 is about <b data-draw="overall" data-source="overall">—</b> done.
+      <b data-draw="fixpass" data-source="fixtotals" data-field="pass" data-row="0">—</b> of
+      <b data-draw="fixtotal" data-source="fixtotals" data-field="total" data-row="0">—</b> reference sounds match the
+      current app. What remains is mostly testing on Ryan's Mac and iPad.</p>
+  </header>
+
+  <section class="rp-hero" id="overall-card" aria-label="Overall progress">
+    <div class="rp-big" data-draw="overallbig" data-source="overall">—</div>
+    <div class="rp-hero-note">
+      <div class="rp-meter" data-draw="overallbar" data-source="overall" role="img" aria-label="Overall progress"></div>
+      <p class="muted">Weighted estimate across the steps below. Engine and UI steps are measured by passing builds and reviews;
+        the Mac and iPad steps are estimates, since the app has not been launched yet.</p>
+    </div>
+  </section>
+
+  <section id="steps">
+    <h2>Steps</h2>
+    <div class="rp-tablewrap">
+      <table data-source="progress" data-row-key="area">
+        <thead><tr>
+          <th data-field="area">Step</th>
+          <th data-field="pct" style="width: 22%">Progress</th>
+          <th data-field="pct" class="num">%</th>
+          <th data-field="status">Status</th>
+          <th data-field="detail" class="hide-narrow">Where it stands</th>
+        </tr></thead>
+        <tbody data-draw="steps"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="rp-cols">
+    <section class="rp-card" id="fixtures">
+      <h2>Reference sounds matching the current app</h2>
+      <p class="muted">Each module's fixtures render the same notes through the 2.0 engine and the current web engine and compare the audio.</p>
+      <div class="rp-chart" data-draw="fixchart" data-source="fixtures"></div>
+    </section>
+
+    <section class="rp-card" id="checks">
+      <h2>Latest checks</h2>
+      <div class="rp-tablewrap">
+        <table data-source="checks" data-row-key="check">
+          <thead><tr>
+            <th data-field="check">Check</th>
+            <th data-field="result" class="num">Result</th>
+          </tr></thead>
+          <tbody data-draw="checks"></tbody>
+        </table>
+      </div>
+      <p class="muted" style="margin-top: var(--cds-gap-sm)">The app suite's one failure is an EQ layout test that already failed before 2.0.
+        The Mac check's missing stage is the iPad simulator build, which needs the iOS Simulator platform installed in Xcode.</p>
+    </section>
+  </div>
+</div>
+
+<script>
+  dash.calc('overall', {
+    title: 'Overall progress',
+    description: 'Average of each step\'s progress, weighted by its size.',
+    inputs: ['progress'],
+    fn: (progress) => {
+      let w = 0, s = 0;
+      for (const r of progress) { const wt = +r.weight || 0; w += wt; s += wt * (+r.pct || 0); }
+      return w ? Math.round(s / w) : null;
+    },
+  });
+  dash.calc('fixtotals', {
+    title: 'Reference sounds passing',
+    description: 'Sum of passing and total fixtures over all modules.',
+    inputs: ['fixtures'],
+    fn: (fixtures) => [{
+      pass: d3.sum(fixtures, (r) => +r.pass),
+      total: d3.sum(fixtures, (r) => +r.total),
+    }],
+  });
+
+  const pctText = (v) => (v == null ? '—' : v + '%');
+  const ov = () => dash.data('overall');
+
+  dash.draw('overall', (el) => { const o = ov(); el.textContent = o.status === 'ok' ? pctText(o.data) : '—'; });
+  dash.draw('overallbig', (el) => { const o = ov(); el.textContent = o.status === 'ok' ? pctText(o.data) : '—'; });
+  dash.draw('overallbar', (el) => {
+    const o = ov();
+    const v = o.status === 'ok' && o.data != null ? o.data : 0;
+    el.replaceChildren();
+    const i = document.createElement('i');
+    i.style.width = v + '%';
+    i.style.background = dash.colors[0];
+    el.appendChild(i);
+    el.setAttribute('aria-label', 'Overall progress ' + v + ' percent');
+  });
+  dash.draw('fixpass', (el) => { const f = dash.data('fixtotals'); el.textContent = f.status === 'ok' && f.data[0] ? f.data[0].pass : '—'; });
+  dash.draw('fixtotal', (el) => { const f = dash.data('fixtotals'); el.textContent = f.status === 'ok' && f.data[0] ? f.data[0].total : '—'; });
+
+  dash.draw('steps', (tb) => {
+    const p = dash.data('progress');
+    tb.replaceChildren();
+    if (p.status === 'error') {
+      const tr = tb.insertRow(); const td = tr.insertCell(); td.colSpan = 5; td.textContent = 'The step list could not be loaded.'; return;
+    }
+    if (p.status !== 'ok') return;
+    const rows = p.data.slice().sort((a, b) => (+a.order) - (+b.order));
+    let group = null;
+    for (const r of rows) {
+      if (r.group !== group) {
+        group = r.group;
+        const g = tb.insertRow(); g.className = 'grp';
+        const c = g.insertCell(); c.colSpan = 5; c.textContent = group;
+      }
+      const tr = tb.insertRow();
+      tr.dataset.key = encodeURIComponent(r.area);
+      tr.insertCell().textContent = r.area;
+      const barCell = tr.insertCell();
+      const bar = document.createElement('div'); bar.className = 'bar';
+      const fill = document.createElement('i');
+      fill.style.width = (+r.pct || 0) + '%';
+      fill.style.background = r.status === 'done' ? 'var(--color-ok)' : r.status === 'blocked' ? 'var(--color-bad)' : dash.colors[0];
+      bar.appendChild(fill); barCell.appendChild(bar);
+      const pc = tr.insertCell(); pc.className = 'num'; pc.textContent = (+r.pct || 0) + '%';
+      const sc = tr.insertCell();
+      const pill = document.createElement('span');
+      pill.className = 'pill s-' + String(r.status).replace(/\s+/g, '-');
+      pill.textContent = r.status;
+      sc.appendChild(pill);
+      const dc = tr.insertCell(); dc.className = 'hide-narrow muted'; dc.textContent = r.detail;
+    }
+  });
+
+  dash.draw('checks', (tb) => {
+    const c = dash.data('checks');
+    tb.replaceChildren();
+    if (c.status === 'error') {
+      const tr = tb.insertRow(); const td = tr.insertCell(); td.colSpan = 2; td.textContent = 'The checks could not be loaded.'; return;
+    }
+    if (c.status !== 'ok') return;
+    for (const r of c.data) {
+      const tr = tb.insertRow();
+      tr.dataset.key = encodeURIComponent(r.check);
+      tr.insertCell().textContent = r.check;
+      const rc = tr.insertCell(); rc.className = 'num';
+      const pill = document.createElement('span');
+      pill.className = 'pill ' + (r.state === 'ok' ? 's-done' : r.state === 'bad' ? 's-blocked' : 's-review');
+      pill.textContent = r.result;
+      rc.appendChild(pill);
+    }
+  });
+
+  dash.draw('fixchart', (el) => {
+    const f = dash.data('fixtures');
+    el.replaceChildren();
+    if (f.status === 'error') { el.textContent = 'The fixture counts could not be loaded.'; return; }
+    if (f.status !== 'ok') { el.textContent = '—'; return; }
+    const rows = f.data.map((r) => ({ module: r.module, pass: +r.pass, total: +r.total }));
+    const W = Math.max(260, el.clientWidth || 320);
+    const rowH = 22, top = 4;
+    const H = top + rows.length * rowH + 4;
+    const svg = d3.select(el).append('svg')
+      .attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`)
+      .attr('role', 'img')
+      .attr('aria-label', 'Passing reference sounds per module, ' + rows.map((r) => r.module + ' ' + r.pass + ' of ' + r.total).join(', '));
+    // measure the widest module label for the left margin
+    const probe = svg.append('text').attr('x', -9999);
+    let labelW = 0;
+    for (const r of rows) { probe.text(r.module); labelW = Math.max(labelW, probe.node().getComputedTextLength()); }
+    probe.remove();
+    const left = Math.ceil(labelW) + 10, right = 48;
+    const maxT = d3.max(rows, (r) => r.total) || 1;
+    const x = d3.scaleLinear().domain([0, maxT]).range([left, W - right]);
+    const tip = document.createElement('div'); tip.className = 'rp-tip'; tip.hidden = true; el.appendChild(tip);
+    const g = svg.selectAll('g.r').data(rows).join('g').attr('class', 'r')
+      .attr('transform', (d, i) => `translate(0,${top + i * rowH})`);
+    g.append('text').attr('x', left - 8).attr('y', rowH / 2).attr('dy', '0.35em').attr('text-anchor', 'end').text((d) => d.module);
+    g.append('rect').attr('x', left).attr('y', 5).attr('height', rowH - 10).attr('rx', 3)
+      .attr('width', (d) => x(d.total) - left).style('fill', 'var(--cds-chart-grid)');
+    g.append('rect').attr('x', left).attr('y', 5).attr('height', rowH - 10).attr('rx', 3)
+      .attr('width', (d) => x(d.pass) - left)
+      .style('fill', (d) => (d.pass === d.total ? 'var(--color-ok)' : dash.colors[0]));
+    g.append('text').attr('x', (d) => x(d.total) + 6).attr('y', rowH / 2).attr('dy', '0.35em')
+      .text((d) => d.pass + '/' + d.total);
+    g.append('rect').attr('x', 0).attr('y', 0).attr('width', W).attr('height', rowH).style('fill', 'transparent')
+      .on('pointermove', (ev, d) => {
+        tip.hidden = false;
+        tip.textContent = `${d.module}: ${d.pass} of ${d.total} match`;
+        const box = el.getBoundingClientRect();
+        const tx = Math.min(ev.clientX - box.left + 12, box.width - tip.offsetWidth - 4);
+        tip.style.left = Math.max(0, tx) + 'px';
+        tip.style.top = (ev.clientY - box.top + 12) + 'px';
+      })
+      .on('pointerleave', () => { tip.hidden = true; });
+  });
+</script>

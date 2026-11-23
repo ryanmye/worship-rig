@@ -3,6 +3,37 @@
 Read this first if you are a new session (cloud or Mac) resuming 2.0. It says where things stand, what to run next,
 and how the pieces talk to each other. Everything it cites is on branch `v2-native` on GitHub (ryanmye/worship-rig).
 
+## 0. Handoff to a new cloud session (2026-11-23; read first)
+
+Ryan is away from his Mac the week of 2026-11-23, and the Mac will be off. The old Cowork cloud session could not
+push to GitHub: its git proxy did not include this repo in the session's authorized repositories, and the proxy
+ignores personal tokens. A new cloud session started with `ryanmye/worship-rig` attached
+(`https://claude.ai/code?repositories=ryanmye/worship-rig`) can push. Steps:
+
+1. **Set up the toolchain.** Run `bash tools/cloud/setup.sh`. It installs g++ 13 and clang++-20, runs `npm ci`, builds
+   the Playwright browser mapping (export the `PLAYWRIGHT_BROWSERS_PATH` it prints), and installs the push guard as
+   `.git/hooks/pre-push`.
+2. **Push rules** (the guard enforces them; the proxy alone does not limit branches):
+   - only `v2-native`, fast-forward only;
+   - never `main`, tags, releases, a force push or a delete;
+   - no samples (`user-samples/`, `sound-packs/`, `.exs`, `.caf`, `.aif`) and no file over 20 MB.
+
+   Push directly with `git push origin v2-native`. The Mac bundle protocol in §5 only applies while the Mac is on.
+3. **The plan and the decision tiers** are in `native/docs/AWAY_WEEK_PLAN.md`. Only tier-1 questions go to Ryan.
+4. **Work in flight at handoff:**
+   - **CORE3** builds synth/organ instruments off the control thread and pre-builds the setlist neighbours. It runs
+     builder, then skeptic, in the old session. Its review goes to `native/docs/reviews/CORE3.md`. If that file is
+     missing or not VERIFIED, re-run the CORE3 skeptic on the committed work-in-progress.
+   - **MACFIX** is VERIFIED (`reviews/MACFIX.md`).
+   - **The scoped re-check of both comes next.** Ryan's rule is "only check affected sections".
+     `tools/cloud/orchestration/integ4.js` is that check.
+5. **Orchestration helpers** (workflow scripts, the progress probe and the checkpoint script) are in
+   `tools/cloud/orchestration/`. Edit the paths at the top of each before use.
+6. **Progress dashboard** (Artifact, data type): https://claude.ai/artifact/5nNh2nGFtLtnTxjLSi8Ccc
+   - Datasets `progress`, `checks` and `fixtures` each point at an uploaded JSON blob.
+   - To update one: upload a new blob, set the dataset's `source.url` with `if_version`, then delete the old blob.
+   - A new session may not be able to write to it. If not, report progress in the chat.
+
 ## 1. What 2.0 is (one paragraph)
 
 Route B: the existing web UI (`app/`) stays and runs in a system WebView (WKWebView on Mac and iPad); the Web Audio
