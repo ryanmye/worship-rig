@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "graph/unit.h"
+#include "model/build_worker.h"  // CORE3
 #include "model/graph_build.h"
 #include "model/patch.h"
 #include "time/coalescer.h"
@@ -131,6 +132,34 @@ class SongGraph {
   void setDisposeHook(std::function<void(std::uint32_t channelId)> fn) { onDispose_ = std::move(fn); }
   bool planPending() const { return plan_ != nullptr; }
 
+  // ---- CORE3 (CORE2A O2): synth / organ builds off the control thread, neighbour prebuilds ----------------------
+  // Realtime only (offline every unit is built inline at prepare, as before: renders are unchanged). prepare posts
+  // the instruments of kinds offThreadKind() to the build worker (model/build_worker.h) and builds the strips inline;
+  // the plan is "built" once every job is done. commit finishes a job still pending (claims and builds it inline, or
+  // waits for the worker), so a commit always takes effect at once.
+  /** Control loop, every turn: runs the pending plan's whenBuilt callbacks once its builds are all done. */
+  void pumpBuilds();
+  /** fn runs on the control thread once the plan of `token` has every unit built: at once when it has, when the
+   *  token is not the pending plan's (committed, superseded), and at the latest at its commit. Dropped (never run)
+   *  when the plan is superseded or destroyed: the bridge has answered those prepares already. */
+  void whenBuilt(std::uint32_t token, std::function<void()> fn);
+  /** True when the pending plan (if any) has no build in flight. */
+  bool planBuilt() const;
+  /** The worker's wake (any thread; Engine: wakeControl through its WakeLink). */
+  void setBuildWake(std::function<void()> fn);
+  /** `cache preload` with a pin (contract 1.2; controller.js pinWindow / preloadNeighbors: the songs around the
+   *  current one): prebuild the synth / organ units of these patches in the background, so a switch to one of them
+   *  adopts them and builds nothing. LRU, capped at prebuildCapBytes(); slots the playing song would reuse are
+   *  skipped. Realtime only. */
+  void prebuild(const std::vector<PatchSpec> &patches);
+  /** Memory pressure / tests: drop every prebuilt unit. */
+  void dropPrebuilt();
+  std::size_t prebuiltCount() const { return prebuilt_.size(); }
+  std::size_t prebuiltBytes() const;
+  std::size_t prebuildCapBytes() const;
+  /** Build jobs queued or running on the worker (tests). */
+  std::size_t buildsPending() const { return worker_ ? worker_->pending() : 0; }
+
   /** Every Model command passes here (Model::send). Units change at a commit's frame, which may lie ahead (a commit
    *  `when` in the future, e.g. an offline render posting the whole song up front); the Model's view of a unit slot
    *  changes at once. So a command for a slot whose occupant changes at frame F > now is moved to F (after the
@@ -145,6 +174,9 @@ class SongGraph {
 
   struct Counters {
     std::uint32_t built = 0, reused = 0, retired = 0, disposed = 0, discarded = 0, forcedRetire = 0, prefaulted = 0;
+    // CORE3: instruments built on the worker, built inline by a commit that came before its build, adopted from the
+    // prebuilt set, prebuild jobs posted, prebuilt units evicted (LRU / cap / memory pressure / rate change)
+    std::uint32_t offThread = 0, atCommit = 0, prebuildHits = 0, prebuildPosted = 0, prebuildEvicted = 0;
   };
   const Counters &counters() const { return n_; }
 
@@ -153,12 +185,20 @@ class SongGraph {
     enum Kind { None, Reuse, Fresh } kind = None;
     std::uint32_t reuseId = 0;
     BuiltChannel built;
+    std::shared_ptr<BuildJob> job;  // CORE3: the instrument, built off the control thread (built.inst null until commit)
   };
   struct Plan {
     std::uint32_t token = 0;
     PatchSpec patch;
     PlanSlot slots[kMaxSlots];
     Routing routing;
+    std::vector<std::function<void()>> onBuilt;  // CORE3: whenBuilt callbacks
+  };
+  struct Prebuilt {  // CORE3: a neighbour's instrument, built (or being built) ahead of its song switch
+    std::string key;
+    std::shared_ptr<BuildJob> job;
+    std::uint64_t used = 0;
+    std::size_t bytes = 0;
   };
 
   // graph_build.cpp
@@ -166,6 +206,19 @@ class SongGraph {
   void discard(Plan &plan);
   bool attachBuilt(UnitSlot slot, const std::string &kind, Unit *u, double when, int channel);
   void instrumentSetup(UnitSlot slot, const std::string &kind, std::int64_t frame);
+  // CORE3 (graph_build.cpp)
+  bool realtime() const;
+  bool offThreadKind(const SlotPatch &sp) const;
+  Unit *buildStrip(const PatchSpec &patch, int slot, double sampleRate);
+  std::shared_ptr<BuildJob> makeJob(const SlotPatch &sp, int slot, double sampleRate);
+  void startFresh(Plan &plan, int slot);
+  void takeBuilt(Plan &plan);
+  void fireBuilt(Plan &plan);
+  BuildWorker &worker();
+  static std::string buildKey(const SlotPatch &sp, int slot, double sampleRate);
+  std::shared_ptr<BuildJob> takePrebuilt(const std::string &key);
+  void keepPrebuilt(const std::string &key, std::shared_ptr<BuildJob> job);
+  void evictPrebuilt(std::size_t capBytes);
   // retire.cpp
   void retire(int slot, double when);
   int pickRetireIndex();
@@ -199,6 +252,10 @@ class SongGraph {
   double dynRange_ = 1;
   std::function<void(std::uint32_t)> onDispose_;
   Counters n_;
+  std::vector<Prebuilt> prebuilt_;  // CORE3: LRU by `used`
+  std::uint64_t useClock_ = 0;
+  std::function<void()> buildWake_;
+  std::unique_ptr<BuildWorker> worker_;  // CORE3: created on first realtime use; declared last = joined first
 };
 
 /** Implemented in model/perform.cpp (STOPGAP(T12) overlay, T14): a disposed channel's pedaled notes go; a Model's

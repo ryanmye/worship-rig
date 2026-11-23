@@ -623,7 +623,9 @@ and still forwards each message flagged `handled` so the UI, learn and activity 
 capability string (minor 1 = T00c `polyphony` / `bufferFrames` / `slots16`, 2 = `voiceLimit`, 3 = `droneFreeze`,
 4 = `dynamicRange`, 5 = `getParam`: `get {what:'param'}`, CORE2B; a minor-5 core also has CORE2A's timing, no
 shape change: `cache preload` answered without blocking the control loop, a realtime `prepare` answered once its
-samples are decoded); a breaking change bumps `v`; a native that receives another `v` replies `{ok:false, error:{code:
+samples are decoded; and CORE3's: a realtime `prepare` builds its synth / organ units off the control loop and is
+answered once they are built too, a pinned `cache preload` of at most 5 songs prebuilds their synth / organ units in
+the background so a switch to one builds nothing); a breaking change bumps `v`; a native that receives another `v` replies `{ok:false, error:{code:
 'protocol'}}` and ignores the message; the JS shim refuses a major mismatch (the app shows the engine as
 unavailable). Error codes: `protocol`, `bad-request` (schema), `unknown-op`, `unknown-param`, `not-started`,
 `stale-token`, `superseded`, `decode` (sample/pad file), `device` (audio device open/route), `unsupported` (cap

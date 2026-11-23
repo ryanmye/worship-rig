@@ -12,6 +12,7 @@
 #include "meter/meter.h"
 #include "model/param_read.h"  // CORE2B: rig_test_query getParam:<path>
 #include "model/perform.h"  // CORE2B: tick pedal / held / runtime
+#include "model/song.h"     // CORE3: pumpBuilds, the build worker wake, dropPrebuilt
 #include "num/hash_seed.h"
 #include "rec/rec.h"
 #include "samples/cache_service.h"
@@ -80,6 +81,17 @@ Engine::Engine(const rig_config &cfg)
     wakeLink_ = std::make_shared<WakeLink>();
     wakeLink_->e = this;
     cacheSvc_->setWake([link = wakeLink_] {  // a decode worker (never the audio thread)
+      std::lock_guard<std::mutex> lk(link->mu);
+      if (link->e) link->e->wakeControl();
+    });
+  }
+  // CORE3: the synth / organ build worker wakes the control loop the same way (a prepare reply waits for it)
+  if (cfg_.mode == RIG_MODE_REALTIME) {
+    if (!wakeLink_) {
+      wakeLink_ = std::make_shared<WakeLink>();
+      wakeLink_->e = this;
+    }
+    model_.songGraph().setBuildWake([link = wakeLink_] {  // the build worker (never the audio thread)
       std::lock_guard<std::mutex> lk(link->mu);
       if (link->e) link->e->wakeControl();
     });
@@ -173,7 +185,10 @@ void Engine::wakeControl() {
 }
 
 void Engine::memoryPressure(int level) {
-  onControl([this, level] { model_.memoryPressure(level); });
+  onControl([this, level] {
+    model_.songGraph().dropPrebuilt();  // CORE3: neighbours' prebuilt units go first (rebuilt on demand)
+    model_.memoryPressure(level);
+  });
 }
 
 void Engine::setPaths(const char *userManifest, const char *padsDir) {
@@ -315,6 +330,7 @@ void Engine::controlLoop() {
     for (auto &fn : calls) fn();
     for (const auto &m : batch) processMessage(m);
     pumpCache();  // mackit O1: finished decodes -> sampler zone tables (SamplerOp::Zones), preload replies, pins
+    model_.songGraph().pumpBuilds();  // CORE3: a plan whose off-thread builds are done -> its prepare reply
     drainAudioEvents();
     timers_.runDue(graph_.timeBase().frame / Q);
     drainMidi();

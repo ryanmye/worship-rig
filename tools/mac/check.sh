@@ -512,7 +512,9 @@ if want core; then
       golden_note="goldens compared"
       if [ ! -d "$src/native/golden/out" ]; then
         exclude="devhost|golden"
-        golden_note="golden.* not run: native/golden/out is git-ignored, so absent in the export (CI's goldens job renders them for macos-15)"
+        # MACFIX: say how many, so "70 of 70" here is not read as suites missing against Linux's 82 (70 + 12 golden.*)
+        ngold="$(in_dir "$tree" ctest -N -L golden 2>/dev/null | grep -c 'Test *#' || true)"
+        golden_note="${ngold:-?} golden.* tests not run: native/golden/out is git-ignored, so absent in the export (CI's goldens job renders them for macos-15); the golden-WAV cases inside unit.* suites skip too"
       fi
       ctl="$out/core.ctest.txt"
       rc=0

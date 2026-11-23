@@ -12,6 +12,7 @@
 #include "drone/drone_service.h"  // T16: config {droneFreeze}
 #include "model/param_read.h"  // INTERFACE-CHANGE(CORE2B): get param
 #include "model/patch.h"
+#include "model/song.h"  // CORE3: whenBuilt, prebuild
 #include "params/params.h"
 #include "samples/cache_service.h"  // CORE2A: preloadAsync, the prepare reply after its samples decoded
 #include "yyjson.h"
@@ -106,7 +107,9 @@ void opHello(Engine &e, const Req &r) {
   // INTERFACE-CHANGE(CORE2B): minor 5 = `get {what:'param', path}` (engine.getParam contracted), capability
   // "getParam"; the tick now fills `pedal` / `held` and `runtime.swelling` (contract 6.5 rows that were unfilled).
   // A minor-5 core also has CORE2A's timing (no shape change, no capability): `cache preload` answered from the
-  // control loop, a realtime `prepare` answered once its samples are decoded.
+  // control loop, a realtime `prepare` answered once its samples are decoded. CORE3 (no shape change either): the
+  // synth / organ units of a realtime `prepare` are built off the control loop (the reply waits for them too), and
+  // a pinned `cache preload` also prebuilds its songs' synth / organ units in the background.
   j.begin().kv("protocol", RIG_BRIDGE_PROTOCOL).kv("minor", 5).kv("engine", rig_version_string());
   j.key("caps").beginArray().elemStr("when").elemStr("testVoice").elemStr("meters").elemStr("rta");
   j.elemStr("polyphony").elemStr("bufferFrames").elemStr("slots16");
@@ -149,6 +152,9 @@ void opPrepare(Engine &e, const Req &r) {
   // sampler units requested is still decoding (the control loop keeps running: the reply goes out from its pump()).
   // A newer prepare supersedes: replies still waiting are sent at once (their tokens can no longer commit).
   // Offline (inline decodes) nothing is in flight and the reply goes out here, as before.
+  // CORE3 (CORE2A O2): the same holds for the synth / organ units the plan builds off the control thread: the reply
+  // waits until both the samples are decoded and those units are built (audio.js prepare builds them before it
+  // resolves), and the control loop keeps handling input, scenes and ticks meanwhile.
   Bridge *b = bridgeOf(e);
   auto *cs = dynamic_cast<samples::CacheServiceImpl *>(e.model().service<CacheService>());
   std::vector<std::string> keys = cs && r.hasId ? cs->samplerLoadKeys(p) : std::vector<std::string>();
@@ -156,7 +162,8 @@ void opPrepare(Engine &e, const Req &r) {
   if (b) b->maxToken_ = std::max(b->maxToken_, token);
   JsonOut j;
   j.begin().kv("token", token).end();
-  if (!b || !cs || !r.hasId) return ok(e, r, j.take());
+  SongGraph &sg = e.model().songGraph();
+  if (!b || !r.hasId || (!cs && sg.planBuilt())) return ok(e, r, j.take());
   for (auto &w : b->pendingPrepares_) {
     if (w->sent) continue;
     w->sent = true;
@@ -165,12 +172,15 @@ void opPrepare(Engine &e, const Req &r) {
   b->pendingPrepares_.clear();
   auto w = std::make_shared<Bridge::PendingReply>();
   w->text = envelopeHead(r, true) + ",\"result\":" + j.take() + "}";
+  w->waits = cs ? 2 : 1;
   b->pendingPrepares_.push_back(w);
-  cs->whenSettled(keys, [&e, w] {
-    if (w->sent) return;
+  auto done = [&e, w] {
+    if (w->sent || --w->waits > 0) return;
     w->sent = true;
     e.emit(std::move(w->text));
-  });
+  };
+  if (cs) cs->whenSettled(keys, done);
+  sg.whenBuilt(token, done);
 }
 
 void opCommit(Engine &e, const Req &r) {
@@ -367,6 +377,25 @@ void opDrone(Engine &e, const Req &r) {  // contract order: key, files, config
   ok(e, r, j.take());
 }
 
+/** CORE3: the songs a pinned `cache preload` names are the ones around the current song (controller.js pinWindow:
+ *  current +-1 in the library, +-2 in a large setlist, 'replace'; preloadNeighbors: prev / next of a setlist, 'add').
+ *  Their synth / organ units are prebuilt in the background too, so a Next / Prev switch to one builds nothing. Left
+ *  out: 'none' (warming a large set's rest: not neighbours) and requests of more than kPrebuildMaxSongs songs (a whole
+ *  setlist pinned at once; its neighbours come with the 'add' after each switch). Realtime only (SongGraph). */
+constexpr std::size_t kPrebuildMaxSongs = 5;  // LARGE_SET_PIN_RADIUS 2: current +- 2
+void prebuildNeighbours(Engine &e, yyjson_val *patches, std::string_view pin) {
+  if (!e.realtime() || pin == "none" || !patches || !yyjson_is_arr(patches)) return;
+  if (yyjson_arr_size(patches) == 0 || yyjson_arr_size(patches) > kPrebuildMaxSongs) return;
+  std::vector<PatchSpec> specs;
+  std::size_t i, n;
+  yyjson_val *p;
+  yyjson_arr_foreach(patches, i, n, p) {
+    PatchSpec s;
+    if (parsePatch(p, s, nullptr)) specs.push_back(std::move(s));
+  }
+  e.model().songGraph().prebuild(specs);
+}
+
 void opCache(Engine &e, const Req &r) {
   const char *action = getStr(r.m, "action");
   if (!action) return fail(e, r, "bad-request", "cache: action required");
@@ -379,6 +408,7 @@ void opCache(Engine &e, const Req &r) {
     // CORE2A (PARITY UI row 1): answered when its decodes are done, from the control loop's pump() (the frozen
     // Model::preload pumps in a loop until then, which held up every tick and `play` for 0.5-3 s per cold song).
     // Offline the decodes run inline and the reply goes out before this returns, as before.
+    prebuildNeighbours(e, patches, pin ? pin : "auto");  // CORE3
     if (auto *cs = dynamic_cast<samples::CacheServiceImpl *>(m.service<CacheService>())) {
       const Req q{nullptr, r.hasId, r.id, r.op};  // r.m dies with this message
       cs->preloadAsync(patches, pin ? pin : "auto", [&e, q](std::string out) { reply(e, q, out, "cache preload"); });

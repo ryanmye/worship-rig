@@ -31,6 +31,7 @@ class Bridge {
   struct PendingReply {
     bool sent = false;
     std::string text;
+    int waits = 1;  // CORE3: samples settled + plan built (each callback counts one down; the last one sends)
   };
   std::vector<std::shared_ptr<PendingReply>> pendingPrepares_;
 };

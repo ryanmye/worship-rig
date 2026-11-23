@@ -252,7 +252,12 @@ TEST_SUITE("synth") {
     REQUIRE(rig::inst::kSynthExtraCount == 10);
     CHECK(rig::inst::isSynthExtraId("juno-pad"));
     CHECK_FALSE(rig::inst::isSynthExtraId("warm-pad"));
+    // MACFIX: the override must come after the module registration, else the next rig_create's registration replaces
+    // it. synthExtraFactory() registers by itself now; the explicit call keeps the order visible. Mac check #3 failed
+    // here: without native/golden/out no earlier case of this suite had created an engine.
+    rig::ensureModulesRegistered();
     const rig::UnitFactory saved = rig::inst::synthExtraFactory();
+    REQUIRE(saved != nullptr);  // T15 is linked into rig_core
     rig::inst::registerSynthExtra(nullptr);
     {
       rigtest::OfflineEngine e(44100);

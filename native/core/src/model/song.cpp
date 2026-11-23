@@ -311,10 +311,15 @@ std::uint32_t SongGraph::prepare(PatchSpec &&patch, std::uint32_t token) {
       ps.reuseId = cur.id;
       continue;
     }
+    if (offThreadKind(s)) {  // CORE3: realtime synth / organ: built on the worker (or adopted, prebuilt)
+      startFresh(*plan, i);
+      continue;
+    }
     ps.built = build(plan->patch, i);
     ps.kind = ps.built.inst ? PlanSlot::Fresh : PlanSlot::None;
   }
   plan_ = std::move(plan);
+  if (worker_) evictPrebuilt(prebuildCapBytes());  // CORE3: a superseded plan's units joined the set above
   return token;
 }
 
@@ -492,6 +497,7 @@ void SongGraph::applyWheels(double t, double tc) {
 
 bool SongGraph::commit(std::uint32_t token, double when) {
   if (!plan_ || plan_->token != token || token != latestToken_) return false;  // stale / superseded / committed
+  takeBuilt(*plan_);  // CORE3: every off-thread instrument now (inline if its build has not started)
   std::unique_ptr<Plan> plan = std::move(plan_);
   const double t = tOf(when);
   // round3-eq M1: pending coalesced song writes captured the old song's values and channels
@@ -670,9 +676,17 @@ void SongGraph::onRateChanged(double sampleRate, double oldRate) {
       if (ps.kind != PlanSlot::Fresh) continue;
       delete ps.built.inst;
       delete ps.built.strip;
+      if (ps.job) {  // CORE3: a new job at the new rate (the timebase already has it: startFresh reads it)
+        ps.job->unwanted.store(true);
+        ps.job.reset();
+        ps.built = BuiltChannel{};
+        startFresh(*plan_, i);
+        continue;
+      }
       ps.built = build(plan_->patch, i, sampleRate);
       ps.kind = ps.built.inst ? PlanSlot::Fresh : PlanSlot::None;
     }
+  if (sampleRate != oldRate) dropPrebuilt();  // CORE3: built for the old rate
   // T11 O3: InstrumentService re-points Inst0..15; the retiring synth.js instruments get the new rate's tables here
   // (never synth-extra units, which share kind inst.synth)
   for (std::size_t j = 0; j < kRetiring; ++j) {
@@ -688,7 +702,16 @@ void SongGraph::statsFields(std::string &out) const {
   out += ",\"retiring\":" + std::to_string(retiringCount()) + ",\"channelsBuilt\":" + std::to_string(n_.built) +
          ",\"channelsReused\":" + std::to_string(n_.reused) + ",\"channelsRetired\":" + std::to_string(n_.retired) +
          ",\"channelsDisposed\":" + std::to_string(n_.disposed) + ",\"plansDiscarded\":" +
-         std::to_string(n_.discarded) + ",\"retireForced\":" + std::to_string(n_.forcedRetire);
+         std::to_string(n_.discarded) + ",\"retireForced\":" + std::to_string(n_.forcedRetire) +
+         // CORE3: off-thread builds and the prebuilt neighbour set
+         ",\"buildsOffThread\":" + std::to_string(n_.offThread) + ",\"buildsAtCommit\":" +
+         std::to_string(n_.atCommit) + ",\"prebuildHits\":" + std::to_string(n_.prebuildHits) +
+         ",\"prebuildPosted\":" + std::to_string(n_.prebuildPosted) + ",\"prebuildEvicted\":" +
+         std::to_string(n_.prebuildEvicted) + ",\"prebuilt\":" + std::to_string(prebuilt_.size()) +
+         ",\"prebuiltMB\":" + std::to_string(prebuiltBytes() / (1024 * 1024)) + ",\"prebuiltDone\":" +
+         std::to_string(std::count_if(prebuilt_.begin(), prebuilt_.end(),
+                                      [](const Prebuilt &p) { return p.job->done(); })) +
+         ",\"buildsPending\":" + std::to_string(buildsPending());
 }
 
 void SongGraph::stateFields(JsonOut &j) const {
