@@ -84,6 +84,8 @@ export const DEVICE_LOCAL_SETTINGS = Object.freeze([
   'polyphony', 'bufferFrames', 'voiceLimit',
   // UIB (DECISIONS D5): "Freeze drone to save CPU" is about this machine's CPU, like the voices above
   'droneFreeze',
+  // Chart view (D7, hidden): a preview switch for this machine; a replace-import never turns it on or off
+  'chartView',
 ]);
 /** 2.0 settings.polyphony (D1): voices per sound (slot). Optional; absent = POLYPHONY_DEFAULT. */
 export const POLYPHONY_CHOICES = Object.freeze([32, 64, 128]);
@@ -125,6 +127,50 @@ export function sound2Of(settings) {
     voiceLimit: validSound2('voiceLimit', s.voiceLimit) ?? VOICE_LIMIT_DEFAULT,
   };
 }
+/**
+ * Chart view (D7, hidden; CONTRACT_CHANGES "Chart view (D7, hidden)"): song.chart is optional (absent until a chart is
+ * added) = `{text, format?, key?, name?}`. `text` is the raw source (ChordPro or plain chord-over-lyrics) and is the
+ * only thing stored: the parsed model is derived at view time (views/chart/logic.js). `format` is 'chordpro' | 'plain'
+ * (absent = detect at view time), `key` the key the chart is written in when its source names none, `name` the file
+ * it came from. Unknown fields are kept. CHART_MAX_CHARS caps `text` (UTF-16 units, what localStorage counts).
+ */
+export const CHART_MAX_CHARS = 65536;
+export const CHART_FORMATS = Object.freeze(['chordpro', 'plain']);
+const CHART_KEY_RE = /^[A-G][#b]?m?$/;
+const CHART_NAME_MAX = 200;
+
+/**
+ * Normalise a song.chart value (migrate, store writes). Idempotent.
+ * @param {*} raw
+ * @returns {object|null} null = no usable chart (not an object, empty or over CHART_MAX_CHARS)
+ */
+export function normalizeChart(raw) {
+  if (!isObj(raw) || typeof raw.text !== 'string' || !raw.text.trim() || raw.text.length > CHART_MAX_CHARS) return null;
+  const out = {};
+  for (const [k, v] of Object.entries(raw)) if (!isReservedKey(k)) out[k] = clone(v);
+  if (!CHART_FORMATS.includes(out.format)) delete out.format;
+  if (hasOwn(out, 'key') && !(typeof out.key === 'string' && CHART_KEY_RE.test(out.key))) delete out.key;
+  if (hasOwn(out, 'name')) {
+    if (typeof out.name === 'string' && out.name.trim()) out.name = out.name.trim().slice(0, CHART_NAME_MAX);
+    else delete out.name;
+  }
+  return out;
+}
+
+/**
+ * Why a chart can't be stored, in words for the user (null = it can).
+ * @param {*} raw
+ * @returns {string|null}
+ */
+export function chartError(raw) {
+  if (!isObj(raw) || typeof raw.text !== 'string' || !raw.text.trim()) return 'The chart is empty.';
+  if (raw.text.length > CHART_MAX_CHARS) {
+    return `That chart is too large (${Math.ceil(raw.text.length / 1024)} KB). A chart can be at most `
+      + `${CHART_MAX_CHARS / 1024} KB.`;
+  }
+  return null;
+}
+
 /** v11-metronome: settings.midiClockOut (optional, absent = off) is a Web MIDI output name; ids change on re-plug. */
 export const MIDI_CLOCK_NAME_MAX = 120;
 /**
@@ -519,6 +565,12 @@ export function normalizeSong(raw, id, { legacy = false } = {}) {
   const scenes = normalizeScenes(raw.scenes, out.patch.slots.length); // UIA: one entry per slot (at least 4)
   if (scenes) out.scenes = scenes;
   else delete out.scenes;
+  // Chart view (D7): optional, absent until a chart is added; an unusable or oversized one is dropped (idempotent)
+  if (hasOwn(out, 'chart')) {
+    const chart = normalizeChart(out.chart);
+    if (chart) out.chart = chart;
+    else delete out.chart;
+  }
   return out;
 }
 
@@ -630,6 +682,8 @@ function normalizeSettings(raw, songs, setlists) {
     else delete out.click;
   }
   if (hasOwn(out, 'midiClockOut') && validMidiClockOut(out.midiClockOut) === undefined) delete out.midiClockOut;
+  // Chart view (D7, hidden): settings.chartView is true or absent (off); anything else is dropped
+  if (hasOwn(out, 'chartView') && out.chartView !== true) delete out.chartView;
   // 2.0 Sound (D1, D2, D4): optional, absent = the default (no SCHEMA bump); a value off the list is dropped
   for (const k of Object.keys(SOUND_2_CHOICES)) {
     if (!hasOwn(out, k)) continue;
@@ -1022,6 +1076,16 @@ export function createStore(opts = {}) {
     return segs;
   }
 
+  /**
+   * Chart view (D7): would storing `chart` on song `id` push the library past LIBRARY_MAX_CHARS (security S2's cap,
+   * which keeps every later save inside localStorage)? Only chart writes pay for the JSON size.
+   */
+  function chartOverflows(id, chart) {
+    const old = state.songs[id] && state.songs[id].chart;
+    const size = JSON.stringify(state).length - (old ? JSON.stringify(old).length : 0) + JSON.stringify(chart).length;
+    return size > LIBRARY_MAX_CHARS;
+  }
+
   /** @returns {{segs:string[], value:*}|null} */
   function validate(segs, value) {
     const [root, id, field, ...rest] = segs;
@@ -1051,6 +1115,14 @@ export function createStore(opts = {}) {
         if (rest.length) return null;
         if (value !== null && value !== undefined && !Array.isArray(value)) return null;
         return { segs, value: normalizeScenes(value, song.patch.slots.length) }; // UIA: one entry per slot
+      }
+      // Chart view (D7): written whole (store.setChart says why a write is refused); null / undefined removes it
+      if (field === 'chart') {
+        if (rest.length) return null;
+        if (value === null || value === undefined) return { segs, value: undefined };
+        const chart = normalizeChart(value);
+        if (!chart || chartOverflows(id, chart)) return null;
+        return { segs, value: chart };
       }
       if (rest.length) return { segs, value: clone(value) }; // unknown nested fields
       switch (field) {
@@ -1108,7 +1180,7 @@ export function createStore(opts = {}) {
         // keyboards: device names may contain dots, so only the whole map is a path (store.setKeyboard)
         const whole = k === 'theme' || k === 'audioSleepSec' || k === 'hotkeys' || k === 'updateCheck'
           || k === 'keyboards' || k === 'click' || k === 'midiClockOut' || k === 'dynamicRange'
-          || k === 'droneFreeze' || hasOwn(SOUND_2_CHOICES, k);
+          || k === 'droneFreeze' || k === 'chartView' || hasOwn(SOUND_2_CHOICES, k);
         return hasOwn(SETTINGS_VALIDATORS, k) || whole ? null : { segs, value: clone(value) };
       }
       // themes-setup: an unknown theme id is stored as the default (never an error, never a dead id)
@@ -1130,6 +1202,10 @@ export function createStore(opts = {}) {
         return v === null ? null : { segs, value: v };
       }
       if (k === 'updateCheck') return typeof value === 'boolean' ? { segs, value } : null;
+      if (k === 'chartView') { // Chart view (D7, hidden): true = on; false / null = absent (off)
+        if (value === null || value === undefined || value === false) return { segs, value: undefined };
+        return value === true ? { segs, value } : null;
+      }
       if (k === 'droneFreeze') { // UIB (D5): a boolean; null = back to the default (absent = on)
         if (value === null || value === undefined) return { segs, value: undefined };
         return typeof value === 'boolean' ? { segs, value } : null;
@@ -1829,6 +1905,26 @@ export function createStore(opts = {}) {
       const next = { ...(state.settings.click || {}), ...fields };
       for (const k of Object.keys(next)) if (next[k] === null || next[k] === undefined) delete next[k];
       return api.set('settings.click', next);
+    },
+
+    /**
+     * Chart view (D7): store, replace or remove (null) a song's chart, with the reason in words when it is refused
+     * (empty, over CHART_MAX_CHARS, or a library that would no longer fit LIBRARY_MAX_CHARS).
+     * @param {string} id song id
+     * @param {{text:string, format?:string, key?:string, name?:string}|null} chart
+     * @returns {{ok:true, changed:boolean} | {ok:false, error:string}}
+     */
+    setChart(id, chart) {
+      if (!state.songs[id]) return { ok: false, error: 'That song is no longer in the library.' };
+      if (chart === null || chart === undefined) return { ok: true, changed: api.set(`songs.${id}.chart`, null) };
+      const err = chartError(chart);
+      if (err) return { ok: false, error: err };
+      const n = normalizeChart(chart);
+      if (chartOverflows(id, n)) {
+        return { ok: false, error: 'The library is full (about 2 MB), so the chart was not saved. Remove a chart or a '
+          + 'song first.' };
+      }
+      return { ok: true, changed: api.set(`songs.${id}.chart`, n) };
     },
 
     // ---- factory / import / export

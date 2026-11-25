@@ -946,6 +946,41 @@ $('btn-quick').addEventListener('click', () => {
   performView.toggleQuick();
 });
 
+// Chart view (D7, hidden; views/chart/, CONTRACT_CHANGES "Chart view (D7, hidden)"). While settings.chartView is absent
+// nothing of it is loaded, drawn or listened to. Turned on or off by __rig.setChartView(true|false) (DevTools) or by
+// opening the app with ?chart=1 / ?chart=0; it applies at once and is remembered on this machine.
+let chartView = null;
+let chartPending = null;
+function setChartView(on) {
+  store.set('settings.chartView', on ? true : null);
+  return applyChartView();
+}
+function applyChartView() {
+  const on = store.get().settings.chartView === true;
+  if (!on) {
+    chartView?.destroy();
+    chartView = null;
+    return Promise.resolve(false);
+  }
+  if (chartView) return Promise.resolve(true);
+  chartPending ||= loadModule('./views/chart/index.js', 'mountChartView').then((mount) => {
+    chartPending = null;
+    if (!mount || chartView || store.get().settings.chartView !== true) return !!chartView;
+    try {
+      chartView = mount(ctx, performView.chartMounts);
+    } catch (err) {
+      console.warn('[ui] mountChartView failed', err);
+    }
+    return !!chartView;
+  });
+  return chartPending;
+}
+{
+  const q = new URLSearchParams(location.search).get('chart');
+  if (q === '1' || q === '0') store.set('settings.chartView', q === '1' ? true : null);
+  if (store.get().settings.chartView === true) applyChartView();
+}
+
 function placeholder(el, text) {
   el.replaceChildren(h('div.view-placeholder', { text }));
 }
@@ -1197,5 +1232,8 @@ mirrorShellSettings({ store, rig });
 // test / debugging handle (not an API)
 globalThis.__rig = { store, engine, controller, midi, recorder, ctx, views: { perform: performView, get edit() { return editView; }, get settings() { return settingsView; } }, ready: started, viewsReady, ui: { setBanner, plainMessage, toast } };
 globalThis.__rig.diag = diag;
+// Chart view (D7, hidden): the switch, and the mounted view (null while off)
+globalThis.__rig.setChartView = setChartView;
+Object.defineProperty(globalThis.__rig.views, 'chart', { get: () => chartView, enumerable: true });
 globalThis.__rig.meters = { stats: meterClockStats, wake: wakeMeters }; // idle-cpu-ui test hook
 globalThis.__rig.theme = { apply: applyTheme, get current() { return themeApplied; }, get pending() { return themePending; } };

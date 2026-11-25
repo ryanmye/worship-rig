@@ -1,0 +1,75 @@
+/* Chart view (D7, hidden; app/js/views/chart/). Linked by views/chart/index.js only while settings.chartView is on,
+   and removed with the view. Every selector is scoped under .chv-*. Provisional look: theme tokens only (Ryan designs
+   the real one later). */
+
+/* the panel covers Perform's stage row (.p-main); the head, setlist row and keys stay as they are */
+.p-main.chv-host { position: relative; }
+.chv-panel {
+  position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; min-height: 0;
+  background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--radius); overflow: hidden;
+}
+.chv-panel[hidden] { display: none; }
+.chv-head {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 12px;
+  border-bottom: 1px solid var(--line); background: var(--panel-2); flex: none;
+}
+.chv-info { display: flex; align-items: baseline; gap: 12px; min-width: 0; flex: 1 1 220px; }
+.chv-title { font-weight: 700; font-size: 16px; color: var(--text); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+.chv-key { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.chv-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.chv-group { display: inline-flex; align-items: center; gap: 4px; }
+.chv-btn { min-height: 44px; min-width: 44px; padding: 0 10px; font-size: 13px; } /* skeptic V7: 44 px targets */
+.chv-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.chv-speed { min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; color: var(--muted);
+  font-size: 13px; }
+.chv-close { font-size: 18px; }
+.song-sub .chv-toggle { margin-left: auto; min-height: 36px; }
+@media (max-width: 1340px) { .song-sub .notes-btn ~ .chv-toggle { margin-left: 0; } }
+
+.chv-body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 18px 40vh; overscroll-behavior: contain; }
+.chv-sheet { --chv-size: 24px; font-family: var(--mono); font-size: var(--chv-size); line-height: 1.15;
+  color: var(--text); }
+.chv-sheet[hidden], .chv-empty[hidden] { display: none; }
+.chv-sec { margin: 0 0 .9em; }
+.chv-sec-h { font-family: var(--font); font-size: .62em; font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--accent-text, var(--accent)); margin: 0 0 .3em; }
+.chv-line { display: flex; flex-wrap: wrap; align-items: flex-end; margin: 0 0 .35em; }
+.chv-seg { display: inline-flex; flex-direction: column; white-space: pre; }
+/* skeptic V6: the accent AS TEXT (themes/README hook): Daylight Day's --accent is a fill, 1.7:1 on its paper */
+.chv-ch { color: var(--accent-text, var(--accent)); font-weight: 700; padding-right: 1ch; }
+.chv-ch.annot { color: var(--muted); font-style: italic; font-weight: 400; }
+.chv-ly { white-space: pre; }
+.chv-comment { font-family: var(--font); font-style: italic; color: var(--muted); font-size: .7em; margin: 0 0 .35em; }
+.chv-raw { white-space: pre; color: var(--muted); }
+.chv-empty { font-family: var(--font); color: var(--muted); display: flex; flex-direction: column; gap: 10px;
+  align-items: flex-start; }
+
+/* the Add chart dialog */
+.chv-dlg-host { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--bg) 70%, transparent); }
+.chv-dlg { width: min(720px, 94vw); max-height: 90vh; overflow: auto; display: flex; flex-direction: column; gap: 10px;
+  padding: 16px 18px; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--radius);
+  color: var(--text); box-shadow: 0 10px 40px #000c; }
+.chv-dlg-h { margin: 0; font-size: 18px; }
+.chv-dlg-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.chv-file { color: var(--muted); font-size: 13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chv-text { width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: 13px; color: var(--text);
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px;
+  resize: vertical; }
+.chv-select, .chv-num { background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); min-height: 44px; padding: 0 6px; }
+.chv-num { width: 80px; }
+.chv-review { display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.chv-review p { margin: 0; }
+.chv-cap, .chv-note, .chv-was { color: var(--muted); }
+.chv-offers { display: flex; flex-direction: column; gap: 4px; }
+.chv-offer, .chv-field { display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
+.chv-offer input[type="checkbox"] { width: 22px; height: 22px; margin: 0; flex: none; }
+.chv-list { margin: 4px 0 0; padding-left: 20px; color: var(--muted); font-size: 13px; }
+.chv-warn summary { cursor: pointer; color: var(--warn); }
+.chv-error { margin: 0; color: var(--danger); font-size: 14px; }
+.chv-error[hidden] { display: none; }
+.chv-dlg-foot { display: flex; justify-content: flex-end; gap: 8px; }
+.chv-btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.chv-btn.primary:disabled { opacity: .5; }

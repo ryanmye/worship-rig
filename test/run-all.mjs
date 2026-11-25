@@ -50,6 +50,8 @@ const SUITES = [
   { name: 'eq', groups: ['phase2'], cmd: [node, 'test/phase2/eq/run.mjs'], timeout: 10 * MIN },
   // menu-bar popover (app/mini.html) + the real app, two pages over BroadcastChannel (C7 menubar-B)
   { name: 'mini', groups: ['phase2'], cmd: [node, 'test/phase2/mini/run.mjs'], timeout: 10 * MIN },
+  // Chart view (D7, hidden): flag off = nothing; flag on = import, transpose follow, scroll, song switch
+  { name: 'chart', groups: ['phase2'], cmd: [node, 'test/phase2/chart/run.mjs'], timeout: 5 * MIN },
   // themes-setup: every registered theme boots flash-free, switches at runtime, picker/Quick, selector coverage
   // (writes test/phase2/themes/coverage-<id>.json for the theme agents)
   { name: 'themes', groups: ['phase2'], cmd: [node, 'test/phase2/themes/run.mjs'], timeout: 25 * MIN },

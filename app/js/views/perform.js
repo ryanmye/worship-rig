@@ -1898,6 +1898,8 @@ export function mountPerform(root, ctx) {
     },
     openQuick,
     closeQuick: () => quick.close(),
+    /** Chart view (D7, hidden; views/chart/index.js): its toggle goes after Notes, its panel over the stage row. */
+    chartMounts: { after: notesBtn, stage: main },
     get quickOpen() {
       return quick.isOpen;
     },

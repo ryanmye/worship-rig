@@ -7163,3 +7163,89 @@ review (`native/docs/reviews/CORE3-handoff.md`). Three defects were found and fi
   synth-bass). Tick gaps: max 136 ms, none over 150 ms (CORE2 integration: max 283-329 ms; the CORE3 builder's run
   ui2: 658 ms).
 
+
+## Chart view (D7, hidden)
+
+Planned for 2.1 (native DECISIONS D7). Built now behind a hidden switch that is off by default. Parser:
+`shared/chart-parse.js` (Lane C2, unchanged here). The UI is provisional: Ryan designs it later.
+
+- **`song.chart`** (store.js). Optional and absent until a chart is added: `{text, format?, key?, name?}`.
+  - `text` is the raw ChordPro or chord-over-lyrics source. It is the only content stored. The parsed model is
+    derived at view time and never stored.
+  - `format` is `'chordpro' | 'plain'`; absent means detect at view time.
+  - `key` is the key the chart is written in, kept only when the source names none. The importer always stores one
+    (default: the song's key).
+  - `name` is the file it came from (≤ 200 characters). Unknown fields are kept.
+  - Written whole only (`songs.<id>.chart`). Nested paths are refused, and null removes it.
+  - `normalizeChart` runs in `normalizeSong`. It drops an empty, non-object or oversized chart, so `migrate()`
+    stays idempotent. **No SCHEMA bump**: the field is optional and older apps keep it as an unknown field.
+  - Charts travel with library export and import (merge and replace), song export, and `duplicateSong`, because they
+    are a song field. Revert (controller `revertSong`) and the changed dots (`song-diff`) don't watch the field.
+- **Size cap.** `CHART_MAX_CHARS = 65536` UTF-16 units (what localStorage counts). `chartError(chart)` gives the
+  message, e.g. "That chart is too large (65 KB). A chart can be at most 64 KB." A chart that would push the
+  library past `LIBRARY_MAX_CHARS` (2 M characters, security S2) is also refused.
+- **`store.setChart(id, chart|null)`** returns `{ok, changed}` or `{ok:false, error}` (the words for the user). New
+  exports: `CHART_MAX_CHARS`, `CHART_FORMATS`, `normalizeChart`, `chartError`.
+- **`settings.chartView`**: `true` or absent (off). False and null are stored as absent; anything else is refused
+  or dropped. It is in `DEVICE_LOCAL_SETTINGS`: not exported, kept across a replace-import, and not an edit.
+  - Switch: `__rig.setChartView(true|false)` (DevTools; the Mac app's View › Toggle Developer Tools), or open
+    the app with `?chart=1` / `?chart=0` (Chrome). It applies at once. There is no Settings row, so with the flag off
+    Settings is unchanged too.
+  - Off: main.js parses the query string and checks the flag once at boot. Nothing else runs: no module or
+    stylesheet is fetched, and there is no DOM, listener or subscription (the chart suite checks the requests).
+- **Perform mount point** (perform.js, 2 lines): the returned view has
+  `chartMounts: { after: notesBtn, stage: main }`. main.js lazy-imports `views/chart/index.js` `mountChartView(ctx,
+  chartMounts)` while the flag is on. The view puts a "Chart" toggle after Notes and an absolutely positioned panel
+  over `.p-main`, so the head, the setlist row and the keys stay visible. `__rig.views.chart` is the mounted view
+  (`state()`, `open()`, `close()`, `openImport()`) or null.
+- **The key on show** (`views/chart/logic.js` `chartView`) is recomputed on every store change to the current song.
+  - The source key comes from the chart's `{key}`, else `chart.key`, else the song's Play In key.
+  - Mode **Heard** (default) shows the chart in `hearIn`, so Perform's Transpose −/+ and Edit's Hear In move the
+    chords.
+  - Mode **Hands** shows the chart in `playIn`.
+  - Spelling comes from `transposeChart`'s target key: G → Ab gives Db/F and Eb; G → A gives F#m and D/F#.
+- **Song switch.** The chart follows `settings.currentSongId`, the committed song. A cue (lane-s, D6) does not
+  change it, so cueing never swaps the chart. A switch stops auto-scroll and goes back to the top.
+- **Auto-scroll pace.** It covers the scrollable height in the song's length: lines × `BARS_PER_LINE` (2) bars of the
+  song's meter at its tempo (`meterOf`: 6/8 is 2 felt beats a bar), divided by the multiplier (×0.5 to ×2). A song
+  with no tempo scrolls at 72 BPM.
+  - Comment lines don't count. A bare `{chorus}` counts that chorus's lines again.
+  - A manual scroll during auto-scroll moves the position and doesn't stop it. It stops at the end.
+  - Example: 10 lines at 120 BPM in 4/4 last 40 s; over 800 px that is 20 px/s.
+- **Import** (`views/chart/import.js`). Choose a file (`.cho .chopro .chordpro .chord .crd .pro .txt .csv`, ≤ 1 MB) or
+  paste text, then review: the parser's warnings and a summary.
+  - Title, key, tempo and time signature are **offered** as unticked checkboxes when they differ from the song.
+    Nothing is applied unless it is ticked.
+  - A key offer sets Hear In and keeps the Easy Transpose amount (Play In moves with it), like the drone key grid.
+  - Values the song can't hold are not offered, and a note says why: tempo outside 30–300, or a time signature not
+    in `TIME_SIGS`.
+  - A missing tempo is asked for (O-AW-1). A missing key is asked for as "written in".
+  - A WorshipTools song-list CSV adds placeholder songs to the library for titles not already in it (by name). The
+    notes field gets the artist and the CCLI number.
+  - Add, Replace and Remove are frozen under Perform lock. Remove needs a second tap within 3 s.
+  - Esc closes the dialog without a Panic (overlay.js).
+- **View preferences** (open, type step 16–56 px, speed step, mode) belong to this machine, in
+  `localStorage['worship-rig.chart']`, like Edit's section state.
+- Skeptic pass (native/docs/reviews/chart-view.md, V1-V8):
+  - **Mode mismatch** (`chartShift`): when the chart's mode differs from the song's, its tonic is neither Play In nor
+    Hear In, and its relative key is one of them, the chart is matched through its relative key. An Em chart on a song
+    set to G now shows Em C G D, where before it showed Gm Eb Bb F over a G drone. A parallel mismatch (Em on E) keeps
+    the tonic match. Both modes use one pitch class, so Heard − Hands is always the Easy Transpose amount (checked for
+    all 12 × 12 × 2 songs).
+  - Chords and section headings read `--accent-text` before `--accent` (themes/README hook). Daylight Day's chords
+    went from 1.7:1 to 6.1:1. Every pickable theme is now ≥ 4.5:1 for lyric, chord, heading, comment and key text.
+  - Panel buttons, dialog buttons and selects are at least 44 × 44 px, and offer rows are 44 px tall. The Chart toggle
+    stays at 36 px, like Notes and Click in the same row.
+  - The import dialog keeps Tab inside it. A keyboard-opened dialog gives focus back on close, and a tapped one
+    doesn't, so Space = sustain and Esc = Panic stay armed.
+  - Lock coming on closes an open dialog, and `save()` refuses under Lock. `openImport` re-checks after its
+    `await import()`, so a flag-off, song switch or Lock in that window opens no orphan dialog.
+  - The review no longer shows the word "null" when the parser has no warnings (`Element.append(null)`).
+- Tests:
+  - `test/phase1/shell/chart-store.test.mjs` (9): storage, migration, the cap (multi-byte too), export and import,
+    and the flag.
+  - `test/unit/charts/chart-view.test.mjs` (13): keys, the transpose-follow mapping (and mode mismatch), segments,
+    pace, offers and CSV.
+  - `test/phase2/chart/run.mjs` (15, Playwright, the real app; new `chart` suite in run-all). The Esc test counts the
+    controller's `action` panic events, with a positive control. Wrapping `controller.panic` counted nothing, because
+    the Esc handler calls the inner `panic()`.
