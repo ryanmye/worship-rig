@@ -120,3 +120,12 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
   - Go waits until the cued song is ready.
 - Ryan does not like the rest of the mockup UI around it. The visual design gets a separate pass later, with Ryan.
   Lane S builds the cue/go behaviour and its state first, and keeps the look provisional.
+
+## D7: Chart view ships in 2.1, built ahead of time behind a hidden setting (Ryan, 2026-11-25)
+- **2.0 scope is unchanged.** The chart view is the first 2.x feature.
+- **Two steps:**
+  1. A chord-chart view with transpose that follows Easy Transpose, auto-scroll and big type.
+  2. PDF attachments.
+- **Real notation (MusicXML) goes to the backlog.**
+- The view is built now behind a hidden setting, off by default, so it can't affect 2.0.
+- **The UI is provisional.** Ryan wants to design it together later; the build covers behaviour and plumbing only.
