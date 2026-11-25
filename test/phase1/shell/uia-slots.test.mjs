@@ -86,8 +86,8 @@ test('the store loads a 1.x library: songs unchanged, a copy of the 1.x text kep
   const s = makeStore({ storage, now: () => 4242, debounceMs: 0 });
   assert.equal(s.loadInfo.status, 'ok');
   assert.equal(s.loadInfo.migratedFrom, 1);
-  assert.equal(s.loadInfo.migrationBackupKey, `${STORAGE_KEY}.backup-4242`);
-  assert.equal(storage.getItem(`${STORAGE_KEY}.backup-4242`), V1_TEXT, 'the 1.x text byte for byte');
+  assert.equal(s.loadInfo.migrationBackupKey, `${STORAGE_KEY}.kept-4242.migration.s1`); // D8: a kept copy
+  assert.equal(storage.getItem(`${STORAGE_KEY}.kept-4242.migration.s1`), V1_TEXT, 'the 1.x text byte for byte');
   for (const [id, song] of Object.entries(V1.songs)) assert.equal(JSON.stringify(s.getSong(id)), JSON.stringify(song));
   s.set('settings.view', 'edit');
   s.persistNow();
@@ -95,11 +95,11 @@ test('the store loads a 1.x library: songs unchanged, a copy of the 1.x text kep
   assert.equal(saved.schema, 2);
   const again = makeStore({ storage, now: () => 5000 });
   assert.equal(again.loadInfo.migratedFrom, undefined, 'a schema-2 library is not backed up again');
-  assert.equal(storage.getItem(`${STORAGE_KEY}.backup-5000`), null);
+  assert.equal(storage.getItem(`${STORAGE_KEY}.kept-5000.migration.s1`), null);
   // an empty 1.x library (a fresh profile, a test's pinned theme) is not worth a copy
   const st2 = memoryStorage({ [STORAGE_KEY]: JSON.stringify({ schema: 1, songs: {}, settings: { theme: 'classic' } }) });
   makeStore({ storage: st2, now: () => 7 });
-  assert.equal(st2.getItem(`${STORAGE_KEY}.backup-7`), null);
+  assert.deepEqual(st2.keys().filter((k) => /\.(backup|kept)-/.test(k)), []);
 });
 
 test('a 2.0 song file keeps its slots; a 1.x one keeps 4; a newer schema is refused', () => {
@@ -319,7 +319,8 @@ test('an unedited 1.x library is saved as schema 2 at load: one copy, not one pe
     assert.equal(JSON.parse(storage.getItem(STORAGE_KEY)).schema, 2, `launch ${k}`);
   }
   const backups = [];
-  for (let i = 0; i < storage.length; i++) if (storage.key(i).includes('.backup-')) backups.push(storage.key(i));
-  assert.deepEqual(backups.sort(), [`${STORAGE_KEY}.backup-1`, `${STORAGE_KEY}.backup-1100`]);
-  assert.equal(storage.getItem(`${STORAGE_KEY}.backup-1100`), V1_TEXT);
+  for (let i = 0; i < storage.length; i++) if (/\.(backup|kept)-/.test(storage.key(i))) backups.push(storage.key(i));
+  // D8: the 1.x copy is a kept copy; the unreadable older backup stays in the rotation
+  assert.deepEqual(backups.sort(), [`${STORAGE_KEY}.backup-1`, `${STORAGE_KEY}.kept-1100.migration.s1`]);
+  assert.equal(storage.getItem(`${STORAGE_KEY}.kept-1100.migration.s1`), V1_TEXT);
 });

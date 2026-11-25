@@ -1,0 +1,402 @@
+diff --git a/CONTRACT_CHANGES.md b/CONTRACT_CHANGES.md
+index 25d721f..98ce3e3 100644
+--- a/CONTRACT_CHANGES.md
++++ b/CONTRACT_CHANGES.md
+@@ -6769,3 +6769,19 @@ slot…` (test 31): "Perform reads slot 3 once per clock frame or sleeps (0.25)"
+   this), settings 60/60, shell unit + browser pass.
+ - **For 2.0:** if the native engine replaces the sampler, keep `velocityDb` as the one gain law (per-note, pivot
+   0.75, spans 10 / 24), and keep the setting device-local.
++
++## 1.1.1: a newer library is never touched (2.0 DECISIONS D8, review E5 M4)
++
++- **What changed.** `createStore` checks the main key (`rig.v1`) before loading. When it holds a library with a schema
++  newer than `SCHEMA` (2.0 Chrome writes schema 2 there on the same origin), the store reads and writes
++  `rig.v1.1x` (`SEPARATE_LIBRARY_SUFFIX`) instead, and `loadInfo.newerLibrary = {schema, key}`. `loadInfo.status`
++  then describes the separate library ('fresh' the first time, 'ok' after).
++- **Why.** 1.1.0 backed the 2.0 text up under `rig.v1.backup-<ts>` and seeded `rig.v1`. Each side added a backup key
++  per launch, and `BACKUPS_KEEP = 3` pruned both libraries after two round trips. Now 1.1.1 writes no backup key,
++  prunes nothing and never writes `rig.v1` while it holds the newer library.
++- **UI.** main.js shows one danger banner, "This library was saved by Worship Rig 2.0 …", with **Use a separate 1.x
++  library** (dismiss) and **Quit** (`window.close()`, then a toast if the browser keeps the tab). Settings › Backups
++  says a separate 1.x library is in use.
++- **Unchanged.** An unreadable (corrupt) library still takes the H1 path; `importJSON` still refuses a newer file.
++- Tests: store.test.mjs (2 new, replacing "future schema is refused"), fixes.test.mjs (H1 future-schema rewritten),
++  browser.pw.mjs (the real app, two launches). The store and fixes tests fail on the 1.1.0 store.
+diff --git a/app/js/main.js b/app/js/main.js
+index 48df28a..ffad5fc 100644
+--- a/app/js/main.js
++++ b/app/js/main.js
+@@ -998,6 +998,30 @@ const info = store.loadInfo;
+ layoutBanners();
+ if (info.status === 'corrupt') toast('Your saved library could not be read, so the factory songs were loaded. The old data was kept as a backup.', 'error', { ms: 14000 });
+ else if (info.status === 'future-schema') toast('Your library was saved by a newer version of Worship Rig. It was kept as a backup and the factory songs were loaded.', 'error', { ms: 14000 });
++// 1.1.1 (D8): the main library was saved by 2.0 and is left exactly as it is (store.js SEPARATE_LIBRARY_SUFFIX).
++// One message, two choices: keep using the separate 1.x library this window opened, or quit.
++if (info.newerLibrary) {
++  const by = info.newerLibrary.schema === 2 ? 'Worship Rig 2.0' : 'a newer version of Worship Rig';
++  const quit = () => {
++    window.close();
++    // a browser tab the page did not open stays open; say so instead of looking stuck
++    setTimeout(() => toast('You can close this window now. Nothing was changed.', 'info', { ms: 14000 }), 400);
++  };
++  setBanner('newer-library', {
++    kind: 'danger',
++    short: `This library was saved by ${by}`,
++    text: `This library was saved by ${by}, and Worship Rig 1.1 cannot open it. It is kept untouched: open it again `
++      + `in ${by}. Here you can use a separate 1.x library${info.status === 'fresh' ? ' (the factory songs)' : ''}, `
++      + 'or quit.',
++    actions: [
++      {
++        label: 'Use a separate 1.x library', testid: 'newer-library-separate',
++        run: () => setBanner('newer-library', null),
++      },
++      { label: 'Quit', testid: 'newer-library-quit', run: quit },
++    ],
++  });
++}
+ 
+ let overlayArmed = false;
+ function audioRunning() {
+diff --git a/app/js/store.js b/app/js/store.js
+index f57d2a6..e86ab78 100644
+--- a/app/js/store.js
++++ b/app/js/store.js
+@@ -150,6 +150,21 @@ export const isReservedKey = (k) => typeof k !== 'string' || RESERVED_KEYS.has(k
+ const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+ /** How many `rig.v1.backup-<ts>` keys are kept in localStorage. */
+ export const BACKUPS_KEEP = 3;
++/**
++ * 1.1.1 (2.0 DECISIONS D8, review E5 M4): where 1.x keeps its own library while the main key holds one saved by a
++ * newer Worship Rig (2.0 Chrome writes schema 2 under the same `rig.v1` key on the same origin).
++ */
++export const SEPARATE_LIBRARY_SUFFIX = '.1x';
++/** 1.1.1 (D8): the schema of a stored library newer than this app, else null (unreadable text is not "newer"). */
++function newerSchemaOf(raw) {
++  if (typeof raw !== 'string') return null;
++  try {
++    const doc = JSON.parse(raw);
++    return isObj(doc) && typeof doc.schema === 'number' && doc.schema > SCHEMA ? doc.schema : null;
++  } catch {
++    return null;
++  }
++}
+ /**
+  * security S2: the largest library (compact JSON characters) an import may leave behind. Chromium's localStorage holds
+  * ~5.2 M characters per origin (measured), shared with the backup copies; a bigger library makes every later save
+@@ -681,7 +696,7 @@ function defaultIdGen(prefix) {
+ export function createStore(opts = {}) {
+   const storage = opts.storage || defaultStorage();
+   const now = opts.now || (() => Date.now());
+-  const key = opts.key || STORAGE_KEY;
++  let key = opts.key || STORAGE_KEY;
+   const debounceMs = opts.debounceMs ?? 300;
+   const factory = opts.factory || FACTORY_SONGS;
+   const idGen = opts.idGen || defaultIdGen;
+@@ -714,6 +729,18 @@ export function createStore(opts = {}) {
+   }
+ 
+   // ---- load
++  // 1.1.1 (D8): a library saved by a newer version is never backed up here (that backup pruned the oldest backups,
++  // and after two 1.1 <-> 2.0 round trips both libraries were gone), never overwritten and never pruned. This store
++  // reads and writes a separate 1.x library under `<key>.1x` instead; loadInfo.newerLibrary tells the UI.
++  try {
++    const schema = newerSchemaOf(storage.getItem(key));
++    if (schema !== null) {
++      info.newerLibrary = { schema, key };
++      key = `${key}${SEPARATE_LIBRARY_SUFFIX}`;
++    }
++  } catch {
++    /* unreadable storage: the read below warns */
++  }
+   const backupPrefix = `${key}.backup-`;
+   function backupKeys() {
+     const out = [];
+@@ -1244,7 +1271,8 @@ export function createStore(opts = {}) {
+     get: () => state,
+     /**
+      * Load/persist status: {status:'ok'|'fresh'|'corrupt'|'future-schema', backupKey, backupError, lastSavedAt,
+-     * persistError, persistFailures, readOnly, readOnlyReason}
++     * persistError, persistFailures, readOnly, readOnlyReason, newerLibrary?:{schema, key}} (1.1.1: present when
++     * `key` holds a newer version's library, left untouched; status then describes the separate 1.x library)
+      */
+     /**
+      * Incremented each time the whole library is replaced (importJSON {replace:true}, reload()), before subscribers
+diff --git a/app/js/views/settings.js b/app/js/views/settings.js
+index 076d60a..829a195 100644
+--- a/app/js/views/settings.js
++++ b/app/js/views/settings.js
+@@ -834,6 +834,11 @@ export function mountSettings(el, ctx) {
+   const li = store.loadInfo || {};
+   if (li.status === 'corrupt') setText(storageNote, `The saved library could not be read, so the factory songs were restored. The old data was kept (${li.backupKey}).`);
+   else if (li.status === 'future-schema') setText(storageNote, `Your library was saved by a newer version of Worship Rig; it was kept (${li.backupKey}) and a fresh library started.`);
++  // 1.1.1 (D8)
++  if (li.newerLibrary) {
++    setText(storageNote, 'A library saved by a newer version of Worship Rig is kept untouched on this computer. '
++      + 'This is a separate 1.x library.');
++  }
+ 
+   const backupBox = h('div.st-inline');
+   const restoreBox = h('div.st-restore');
+diff --git a/docs/release-notes-1.1.1.md b/docs/release-notes-1.1.1.md
+new file mode 100644
+index 0000000..59bd3b9
+--- /dev/null
++++ b/docs/release-notes-1.1.1.md
+@@ -0,0 +1,17 @@
++Worship Rig 1.1.1 is a safety fix for anyone who also tries Worship Rig 2.0 in the same Chrome. Nothing else changes.
++
++### A 2.0 library is never touched by 1.1
++
++Worship Rig 2.0 in Chrome keeps its library in the same place in the browser as 1.1. Until now, when 1.1 opened
++after 2.0 had saved there, it set the 2.0 library aside as a hidden backup and started again from the factory songs.
++Going back and forth twice deleted those hidden copies, so both libraries could be lost.
++
++1.1.1 never overwrites, moves or deletes a library saved by 2.0. When it finds one, it shows one message:
++"This library was saved by Worship Rig 2.0 …", with two choices:
++
++- **Use a separate 1.x library.** 1.1.1 keeps its own library next to the 2.0 one. The first time, it starts from the
++  factory songs, and after that it opens the same separate library each time. Settings › Import… still brings in a
++  1.x export.
++- **Quit.** Nothing is changed. Open the library again in Worship Rig 2.0.
++
++The 2.0 library stays exactly as 2.0 saved it, and 2.0 opens it as before.
+diff --git a/package-lock.json b/package-lock.json
+index b5d7113..fd7dc23 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,12 +1,12 @@
+ {
+   "name": "worship-rig",
+-  "version": "1.1.0",
++  "version": "1.1.1",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "worship-rig",
+-      "version": "1.1.0",
++      "version": "1.1.1",
+       "license": "UNLICENSED",
+       "devDependencies": {
+         "electron": "^44.4.5",
+diff --git a/package.json b/package.json
+index f41e3d3..efdd694 100644
+--- a/package.json
++++ b/package.json
+@@ -2,7 +2,7 @@
+   "name": "worship-rig",
+   "productName": "Worship Rig",
+   "private": true,
+-  "version": "1.1.0",
++  "version": "1.1.1",
+   "description": "Live MIDI keys, pads and key drones for worship, ambient and lofi. Electron app + Chrome fallback.",
+   "author": "Ryan Ye",
+   "license": "GPL-3.0-only",
+diff --git a/test/phase1/shell/browser.pw.mjs b/test/phase1/shell/browser.pw.mjs
+index 97262a2..8727a30 100644
+--- a/test/phase1/shell/browser.pw.mjs
++++ b/test/phase1/shell/browser.pw.mjs
+@@ -250,3 +250,105 @@ test('L-3: real app — __rig.ready resolves while requestMIDIAccess never answe
+     await srv.close();
+   }
+ });
++
++test('1.1.1 (D8): real app on an origin holding a 2.0 library — one message, two choices, the 2.0 library untouched', async () => {
++  const srv = createServer({ appDir: path.join(repoRoot, 'app'), port: 0 });
++  const info = await srv.listen();
++  const origin = `http://127.0.0.1:${info.port}`;
++  const ctx = await browser.newContext();
++  await ctx.grantPermissions([...MIDI_PERMISSIONS], { origin });
++  const v2 = JSON.stringify({ schema: 2, songs: { a: { id: 'a', name: 'Saved by 2.0' } }, songOrder: ['a'] });
++  const backups = { 'rig.v1.backup-1': 'b1', 'rig.v1.backup-2': 'b2', 'rig.v1.backup-3': 'b3' };
++  const p = await ctx.newPage();
++  const errors = [];
++  p.on('console', (m) => {
++    if (m.type() === 'error') errors.push(m.text());
++  });
++  p.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
++  try {
++    await p.goto(`${origin}/api/health`); // a page of the origin, to seed its localStorage before the app runs
++    await p.evaluate(([lib, b]) => {
++      localStorage.clear();
++      localStorage.setItem('rig.v1', lib);
++      for (const [k, v] of Object.entries(b)) localStorage.setItem(k, v);
++    }, [v2, backups]);
++    const snapshot = () => p.evaluate(() => Object.fromEntries(Object.keys(localStorage).sort()
++      .filter((k) => k.startsWith('rig.v1')).map((k) => [k, localStorage.getItem(k)])));
++    for (let launch = 0; launch < 2; launch++) {
++      await p.goto(`${origin}/`);
++      await waitRigReady(p, { timeout: 30000, what: `real app on a 2.0 origin, launch ${launch + 1}` });
++      const banner = p.getByTestId('banner-newer-library');
++      await banner.waitFor({ state: 'attached', timeout: 10000 });
++      const text = await banner.getAttribute('title');
++      assert.match(text, /^This library was saved by Worship Rig 2\.0/);
++      assert.equal(await p.getByTestId('newer-library-separate').count(), 1);
++      assert.equal(await p.getByTestId('newer-library-quit').count(), 1);
++      assert.equal(await p.evaluate(() => window.__rig.store.loadInfo.newerLibrary.schema), 2);
++      // an edit in the separate library, flushed as on window close
++      await p.evaluate(() => {
++        window.__rig.store.set('settings.view', 'edit');
++        window.__rig.store.persistNow();
++      });
++      await p.getByTestId('newer-library-separate').evaluate((b) => b.click());
++      assert.equal(await p.getByTestId('banner-newer-library').count(), 0, 'the choice dismisses the message');
++      const ls = await snapshot();
++      assert.equal(ls['rig.v1'], v2, 'the 2.0 library byte for byte');
++      for (const [k, v] of Object.entries(backups)) assert.equal(ls[k], v, `${k} kept (nothing pruned)`);
++      assert.deepEqual(Object.keys(ls), ['rig.v1', 'rig.v1.1x', ...Object.keys(backups)].sort());
++      assert.equal(JSON.parse(ls['rig.v1.1x']).schema, 1);
++    }
++    assert.deepEqual(errors, []);
++  } finally {
++    await ctx.close();
++    await srv.close();
++  }
++});
++
++test('1.1.1 (D8): Quit — a window the page may close closes; one it may not says so; nothing is written', async () => {
++  const srv = createServer({ appDir: path.join(repoRoot, 'app'), port: 0 });
++  const info = await srv.listen();
++  const origin = `http://127.0.0.1:${info.port}`;
++  const ctx = await browser.newContext();
++  await ctx.grantPermissions([...MIDI_PERMISSIONS], { origin });
++  const v2 = JSON.stringify({ schema: 2, songs: { a: { id: 'a', name: 'Saved by 2.0' } }, songOrder: ['a'] });
++  const errors = [];
++  const watch = (p) => {
++    p.on('console', (m) => {
++      if (m.type() === 'error') errors.push(m.text());
++    });
++    p.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
++  };
++  try {
++    const seed = await ctx.newPage();
++    watch(seed);
++    await seed.goto(`${origin}/api/health`);
++    await seed.evaluate((lib) => {
++      localStorage.clear();
++      localStorage.setItem('rig.v1', lib);
++    }, v2);
++    // (a) a tab with history the page did not open: window.close() is ignored, so a toast says it can be closed
++    await seed.goto(`${origin}/`);
++    await waitRigReady(seed, { timeout: 30000, what: '1.1.1 Quit, tab with history' });
++    await seed.getByTestId('newer-library-quit').evaluate((b) => b.click());
++    await seed.waitForTimeout(800);
++    assert.equal(seed.isClosed(), false, 'Chromium keeps a tab with history open');
++    const toasts = await seed.evaluate(() => document.body.innerText);
++    assert.match(toasts, /You can close this window now\. Nothing was changed\./);
++    assert.equal(await seed.evaluate(() => localStorage.getItem('rig.v1')), v2);
++    // (b) a window the page opened (as serve.mjs's app window is closable): it closes
++    const [popup] = await Promise.all([
++      ctx.waitForEvent('page'),
++      seed.evaluate((u) => window.open(u, '_blank', 'popup'), `${origin}/`),
++    ]);
++    watch(popup);
++    await waitRigReady(popup, { timeout: 30000, what: '1.1.1 Quit, script-opened window' });
++    const closed = popup.waitForEvent('close', { timeout: 10000 });
++    await popup.getByTestId('newer-library-quit').evaluate((b) => b.click());
++    await closed;
++    assert.equal(await seed.evaluate(() => localStorage.getItem('rig.v1')), v2, 'the 2.0 library byte for byte');
++    assert.deepEqual(errors, []);
++  } finally {
++    await ctx.close();
++    await srv.close();
++  }
++});
+diff --git a/test/phase1/shell/fixes.test.mjs b/test/phase1/shell/fixes.test.mjs
+index a49c893..2833448 100644
+--- a/test/phase1/shell/fixes.test.mjs
++++ b/test/phase1/shell/fixes.test.mjs
+@@ -93,16 +93,21 @@ test('H1: corrupt library + failing backup write → the raw library is never ov
+   assert.equal(JSON.parse(st.getItem(STORAGE_KEY)).songOrder.length, FACTORY_SONGS.length);
+ });
+ 
+-test('H1: future-schema library with a failing backup is kept too', () => {
++test('H1 / 1.1.1 (D8): a future-schema library is kept, with no backup written (none can fail or prune)', () => {
+   const raw = JSON.stringify({ schema: 2, songs: {} });
+   const st = memoryStorage({ [STORAGE_KEY]: raw });
+   const setItem = st.setItem;
+-  st.setItem = (k, v) => (k.includes('.backup-') ? (() => { throw quotaError(); })() : setItem(k, v));
++  const removeItem = st.removeItem;
++  const touched = [];
++  st.setItem = (k, v) => (k.includes('.backup-') ? (() => { throw quotaError(); })() : (touched.push(k), setItem(k, v)));
++  st.removeItem = (k) => (touched.push(`rm ${k}`), removeItem(k));
+   const s = createStore({ storage: st, idGen: idGen(), requestIdle: null, warn: () => {}, autoFlush: false });
+-  assert.equal(s.loadInfo.status, 'future-schema');
++  assert.equal(s.loadInfo.newerLibrary.schema, 2);
++  assert.equal(s.loadInfo.readOnly, false, 'nothing to lock: the newer library is never a write target');
+   s.set('settings.view', 'edit');
+   s.persistNow();
+   assert.equal(st.getItem(STORAGE_KEY), raw);
++  assert.deepEqual([...new Set(touched)], [`${STORAGE_KEY}.1x`]);
+ });
+ 
+ test(`H1: backup keys are capped at ${BACKUPS_KEEP}; on quota the oldest are pruned and the write retried`, () => {
+diff --git a/test/phase1/shell/store.test.mjs b/test/phase1/shell/store.test.mjs
+index fa160a5..94a1caa 100644
+--- a/test/phase1/shell/store.test.mjs
++++ b/test/phase1/shell/store.test.mjs
+@@ -1,6 +1,9 @@
+ import { test } from 'node:test';
+ import assert from 'node:assert/strict';
+-import { createStore, memoryStorage, migrate, FutureSchemaError, STORAGE_KEY, SCHEMA, transposeSemisOf, emptyState } from '../../../app/js/store.js';
++import {
++  createStore, memoryStorage, migrate, FutureSchemaError, STORAGE_KEY, SCHEMA, SEPARATE_LIBRARY_SUFFIX, transposeSemisOf,
++  emptyState,
++} from '../../../app/js/store.js';
+ import { FACTORY_SONGS } from '../../../app/js/presets.js';
+ import { makeStore, idGen } from './helpers.mjs';
+ 
+@@ -82,15 +85,47 @@ test('migrate fills defaults, clamps, drops dangling ids, and is idempotent on m
+   assert.deepEqual(migrate(JSON.parse(JSON.stringify(m))), m);
+ });
+ 
+-test('future schema is refused: raw string backed up, app starts fresh', () => {
++test('1.1.1 (D8): a newer library is left untouched; a separate 1.x library is used under <key>.1x', async () => {
+   const future = JSON.stringify({ schema: SCHEMA + 1, songs: { x: { name: 'From the future' } } });
+-  const storage = memoryStorage({ [STORAGE_KEY]: future });
++  const old = { [`${STORAGE_KEY}.backup-1`]: 'b1', [`${STORAGE_KEY}.backup-2`]: 'b2', [`${STORAGE_KEY}.backup-3`]: 'b3' };
++  const storage = memoryStorage({ [STORAGE_KEY]: future, ...old });
+   assert.throws(() => migrate(JSON.parse(future)), FutureSchemaError);
+-  const s = createStore({ storage, now: () => 1234, idGen: idGen(), warn: () => {}, requestIdle: null, autoFlush: false });
+-  assert.equal(s.loadInfo.status, 'future-schema');
+-  assert.equal(s.loadInfo.backupKey, `${STORAGE_KEY}.backup-1234`);
+-  assert.equal(storage.getItem(`${STORAGE_KEY}.backup-1234`), future, 'raw string kept byte-for-byte');
++  const sep = `${STORAGE_KEY}${SEPARATE_LIBRARY_SUFFIX}`;
++  const s = createStore({ storage, now: () => 1234, idGen: idGen(), warn: () => {}, requestIdle: null, autoFlush: false, debounceMs: 0 });
++  assert.deepEqual(s.loadInfo.newerLibrary, { schema: SCHEMA + 1, key: STORAGE_KEY });
++  assert.equal(s.loadInfo.status, 'fresh', 'the separate 1.x library starts as a factory seed');
+   assert.equal(s.get().songOrder.length, FACTORY_SONGS.length);
++  s.set('settings.view', 'edit');
++  s.addSong(null, { name: 'Made in 1.1.1' });
++  s.persistNow();
++  s.dispose();
++  // the newer library and every backup key are exactly as they were: nothing backed up, pruned or overwritten
++  assert.equal(storage.getItem(STORAGE_KEY), future);
++  for (const [k, v] of Object.entries(old)) assert.equal(storage.getItem(k), v, k);
++  assert.deepEqual(storage.keys().sort(), [STORAGE_KEY, sep, ...Object.keys(old)].sort());
++  assert.equal(JSON.parse(storage.getItem(sep)).schema, SCHEMA);
++  // the next launch opens the same separate library (not another fresh one), and still leaves the newer one alone
++  const again = createStore({ storage, now: () => 5678, idGen: idGen(), warn: () => {}, requestIdle: null, autoFlush: false, debounceMs: 0 });
++  assert.equal(again.loadInfo.status, 'ok');
++  assert.ok(again.loadInfo.newerLibrary);
++  assert.ok(Object.values(again.get().songs).some((x) => x.name === 'Made in 1.1.1'));
++  again.set('settings.view', 'perform');
++  again.persistNow();
++  again.dispose();
++  assert.equal(storage.getItem(STORAGE_KEY), future);
++  // reload() (another window let go of the instance lock) reads the separate library too
++  const r = createStore({ storage, idGen: idGen(), warn: () => {}, requestIdle: null, autoFlush: false });
++  assert.equal(r.reload(), false);
++  assert.equal(storage.getItem(STORAGE_KEY), future);
++});
++
++test('1.1.1 (D8): a 1.x library, an unreadable one and a schema-less one are not "newer"', () => {
++  for (const raw of [JSON.stringify({ schema: SCHEMA, songs: {} }), '{"songs": [unterminated', '{"songs":{}}', '42']) {
++    const storage = memoryStorage({ [STORAGE_KEY]: raw });
++    const s = createStore({ storage, now: () => 7, idGen: idGen(), warn: () => {}, requestIdle: null, autoFlush: false });
++    assert.equal(s.loadInfo.newerLibrary, undefined, raw);
++    assert.equal(storage.getItem(`${STORAGE_KEY}${SEPARATE_LIBRARY_SUFFIX}`), null, raw);
++  }
+ });
+ 
+ test('corrupt storage → factory reset with backup', () => {

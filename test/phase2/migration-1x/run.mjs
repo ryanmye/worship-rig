@@ -14,7 +14,7 @@ const argv = process.argv.slice(2);
 const only = argv.includes('--only') ? argv[argv.indexOf('--only') + 1] : null;
 const suites = [
   { name: 'unit', files: fs.readdirSync(here).filter((f) => f.endsWith('.test.mjs')).sort().map((f) => path.join(here, f)), timeout: 180000 },
-  { name: 'browser', files: [path.join(here, 'browser.pw.mjs')], timeout: 300000 },
+  { name: 'browser', files: [path.join(here, 'browser.pw.mjs'), path.join(here, 'quota.pw.mjs')], timeout: 600000 },
 ];
 let failed = 0;
 for (const s of suites) {

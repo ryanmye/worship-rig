@@ -1,12 +1,13 @@
 // Lane E5 skeptic (native/docs/reviews/E5-migration.md): attempts to lose data on the 1.x → 2.0 import paths.
 // M1 / M2 are fixed in controller.importLatestBackup and fail without the fix; the rest pin behaviour that already
-// held (each would catch a regression), and the one open defect (M3) is a todo test.
+// held (each would catch a regression). M3 was a todo test; D9 fixed it (here, and kept.test.mjs for the size warning).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  createStore, memoryStorage, migrate, STORAGE_KEY, LIBRARY_MAX_CHARS, DEVICE_LOCAL_SETTINGS,
+  createStore, memoryStorage, migrate, STORAGE_KEY, LIBRARY_MAX_CHARS, LIBRARY_RESTORE_MAX_CHARS,
+  DEVICE_LOCAL_SETTINGS,
 } from '../../../app/js/store.js';
 import { createController } from '../../../app/js/controller.js';
 import { MidiInput } from '../../../app/js/midi.js';
@@ -295,10 +296,7 @@ test('size cap: a library at the cap imports; this machine’s kept settings may
   assert.deepEqual(plain(t.get()), before0);
 });
 
-test('M3 (open, pre-existing S2): a library grown past the cap by edits can still restore its own backup', {
-  todo: 'the store lets ordinary edits (notes) grow a library past LIBRARY_MAX_CHARS, and importJSON then refuses '
-    + 'its backup as too large. Decision for the S2 owner / Ryan (E5-migration.md M3).',
-}, () => {
+test('M3 (D9): a library grown past the cap by edits is saved, warned about, and restores its own backup', () => {
   const st = JSON.parse(v1('huge').replace(/^\{"origin":"[^"]+",/, '{'));
   const g = makeStore();
   assert.equal(g.importJSON(JSON.stringify(st), { replace: true }).ok, true);
@@ -306,7 +304,20 @@ test('M3 (open, pre-existing S2): a library grown past the cap by edits can stil
   for (let i = 0; i < 12; i++) g.set(`songs.${order[i]}.notes`, 'n'.repeat(10000));
   assert.ok(JSON.stringify(g.get()).length > LIBRARY_MAX_CHARS, 'grown past the cap by ordinary writes');
   const backup = `{"origin":"rig://app",${g.exportJSON({ pretty: false }).slice(1)}`;
+  assert.ok(backup.length <= LIBRARY_RESTORE_MAX_CHARS, `${backup.length} chars: inside the 1.25× restore limit`);
   assert.equal(makeStore().importJSON(backup, { replace: true }).ok, true);
+  assert.equal(makeStore().importJSON(g.exportJSON(), { replace: true }).ok, true, 'and its pretty export');
+  // the save itself is not refused; it raises one size notice (the controller toasts it: kept.test.mjs)
+  const storage = memoryStorage();
+  const h = makeStore({ storage, debounceMs: 0 });
+  const notices = [];
+  h.onNotice((n) => notices.push(n.type));
+  assert.equal(h.importJSON(JSON.stringify(g.get()), { replace: true }).ok, true);
+  assert.equal(h.persistNow(), true);
+  assert.equal(storage.getItem(STORAGE_KEY).length, JSON.stringify(h.get()).length);
+  assert.deepEqual(notices, ['library-size']);
+  // a merge past the cap is still refused (only a replace / restore gets the 1.25×)
+  assert.match(makeStore().importJSON(backup).error, /too large/);
 });
 
 // ===================================================================================== factory songs + top-up

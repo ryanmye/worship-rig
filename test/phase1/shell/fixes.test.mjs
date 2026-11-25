@@ -97,7 +97,8 @@ test('H1: future-schema library with a failing backup is kept too', () => {
   const raw = JSON.stringify({ schema: SCHEMA + 1, songs: {} }); // UIA: SCHEMA is 2 now
   const st = memoryStorage({ [STORAGE_KEY]: raw });
   const setItem = st.setItem;
-  st.setItem = (k, v) => (k.includes('.backup-') ? (() => { throw quotaError(); })() : setItem(k, v));
+  // D8: a newer library is a kept copy (`.kept-`), not a rotation backup
+  st.setItem = (k, v) => (/\.(backup|kept)-/.test(k) ? (() => { throw quotaError(); })() : setItem(k, v));
   const s = createStore({ storage: st, idGen: idGen(), requestIdle: null, warn: () => {}, autoFlush: false });
   assert.equal(s.loadInfo.status, 'future-schema');
   s.set('settings.view', 'edit');

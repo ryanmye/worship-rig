@@ -14,15 +14,26 @@ const REF = 'v1.1.0';
 const has = spawnSync('git', ['-C', ROOT, 'rev-parse', '--verify', '--quiet', `${REF}^{commit}`]).status === 0;
 let dir = null;
 let S1 = null;
+let S111 = null; // D8: 1.1.0 + native/docs/patches/v1.1.1-prep.diff (the unpublished 1.1.1 patch)
+const PATCH = path.join(ROOT, 'native/docs/patches/v1.1.1-prep.diff');
 before(async () => {
   if (!has) return;
   dir = tmpDir('v11');
   const r = spawnSync('bash', ['-c', `git -C "${ROOT}" archive ${REF} app/js | tar -x -C "${dir}"`]);
   assert.equal(r.status, 0, String(r.stderr));
   S1 = await import(path.join(dir, 'app/js/store.js'));
+  if (fs.existsSync(PATCH)) {
+    const d2 = path.join(dir, 'p111');
+    fs.mkdirSync(d2);
+    const r2 = spawnSync('bash', ['-c', `git -C "${ROOT}" archive ${REF} app/js | tar -x -C "${d2}" && cd "${d2}" `
+      + `&& git apply --include='app/js/store.js' "${PATCH}"`]);
+    assert.equal(r2.status, 0, String(r2.stderr));
+    S111 = await import(path.join(d2, 'app/js/store.js'));
+  }
 });
 after(() => dir && fs.rmSync(dir, { recursive: true, force: true }));
 const skip = has ? false : `tag ${REF} not in this clone (git fetch origin tag ${REF})`;
+const skip111 = skip || (fs.existsSync(PATCH) ? false : 'no native/docs/patches/v1.1.1-prep.diff');
 
 let n = 0;
 const opts = (S, extra = {}) => ({
@@ -117,4 +128,107 @@ test('the recorded in-app downgrade run (1.1 UI): no page errors, the library un
   assert.equal(rep.cases.localStorageSchema2.status, 'future-schema');
   assert.equal(rep.cases.localStorageSchema2.keptIsSchema2, true);
   assert.equal(rep.cases.schemaEditedTo1.sixSlotSongSlots, 4);
+});
+
+// ===================================================================================== D8: same-profile ping-pong
+// One Chrome profile (one localStorage), the versions taking turns: 2.0 → 1.1 → 2.0 → 1.1 → 2.0. Every library that
+// ever existed (a snapshot at each window close) must still be in storage and restorable by 2.0. Each launch is a
+// user session with one edit (a song named after it), so every snapshot is a different library.
+const namesOf = (lib) => Object.values(lib.songs || {}).map((x) => x.name).sort();
+/** Can a 2.0 store on a copy of this storage get back a library with exactly these song names? */
+function restorable(storage, names, label) {
+  const keys = storage.keys();
+  const copy = () => S2.memoryStorage(Object.fromEntries(keys.map((k) => [k, storage.getItem(k)])));
+  const want = JSON.stringify(names);
+  const live = S2.createStore(opts(S2, { storage: copy() }));
+  if (live.loadInfo.status === 'ok' && JSON.stringify(namesOf(live.get())) === want) return 'rig.v1';
+  for (const row of live.keptLibraries()) {
+    const t = S2.createStore(opts(S2, { storage: copy() }));
+    const r = t.restoreKept(row.key);
+    if (r.ok && JSON.stringify(namesOf(t.get())) === want) return row.key;
+  }
+  assert.fail(`${label}: lost (${names.length} songs, e.g. ${names.filter((n) => /^Session/.test(n)).join(', ')})`);
+  return null;
+}
+function pingPong({ v11, edit1x = true }) {
+  const storage = S2.memoryStorage({ [S2.STORAGE_KEY]: fixture(REF, 'rich.localstorage.json') });
+  const snaps = [{ label: 'the 1.x library before 2.0', names: namesOf(JSON.parse(storage.getItem(S2.STORAGE_KEY))) }];
+  let t = Date.UTC(2026, 10, 1);
+  const order = ['2.0', '1.1', '2.0', '1.1', '2.0'];
+  const log = [];
+  order.forEach((v, i) => {
+    t += 86400000;
+    const S = v === '2.0' ? S2 : v11;
+    const s = S.createStore(opts(S, { storage, now: () => t, debounceMs: 0 }));
+    if (v === '2.0') {
+      // the user finds their 2.0 library in "Restore previous library…" when 1.x set it aside (newest first)
+      const set = s.keptLibraries().find((e) => e.kind === 'downgrade' && e.schema === 2 && e.restorable);
+      if (set && i > 0 && storage.getItem(S2.STORAGE_KEY) && JSON.parse(storage.getItem(S2.STORAGE_KEY)).schema === 1) {
+        if (!s.pristine) assert.equal(s.keepCurrent().ok, true);
+        assert.equal(s.restoreKept(set.key).ok, true);
+        log.push(`${v}: restored ${set.key}`);
+      }
+    }
+    if (v === '2.0' || edit1x) s.addSong(null, { name: `Session ${i + 1} (${v})` });
+    s.persistNow();
+    s.dispose();
+    // an untouched 1.x factory seed holds nothing of the user's: it is not a library to keep (D8)
+    if (!s.pristine) snaps.push({ label: `after session ${i + 1} (${v})`, names: namesOf(s.get()) });
+    for (const sn of snaps) restorable(storage, sn.names, `${sn.label}, checked after session ${i + 1}`);
+  });
+  return { storage, snaps, log };
+}
+
+test('D8: 2.0 ↔ 1.1.0 in one profile, twice: no library is ever lost, each one restores in 2.0', { skip }, () => {
+  const { storage, log } = pingPong({ v11: S1 });
+  assert.equal(log.length, 2, log.join('; '));
+  // 1.1.0 still adds its rotation keys; none of them holds a library any more (each moved to a kept copy)
+  const kept = storage.keys().filter((k) => k.includes('.kept-'));
+  assert.ok(kept.length >= 6, kept.join(', '));
+  for (const k of storage.keys().filter((x) => x.includes('.backup-'))) {
+    assert.throws(() => S2.migrate(JSON.parse(storage.getItem(k))), `${k} would have been moved`);
+  }
+});
+
+test('D8: 2.0 ↔ 1.1.0, with no edits in 1.1: 2.0 opens the 1.x seed, and the set-aside 2.0 library restores', { skip }, () => {
+  const { log } = pingPong({ v11: S1, edit1x: false });
+  assert.equal(log.length, 2, log.join('; '));
+});
+
+test('D8: 2.0 ↔ 1.1.1 in one profile, twice: 1.1.1 never writes the 2.0 key; its separate library restores in 2.0', { skip: skip111 }, () => {
+  const storage = S2.memoryStorage({ [S2.STORAGE_KEY]: fixture(REF, 'rich.localstorage.json') });
+  let t = Date.UTC(2026, 10, 1);
+  let v2text = null;
+  for (let i = 0; i < 5; i++) {
+    t += 86400000;
+    const v = i % 2 ? '1.1.1' : '2.0';
+    const S = v === '2.0' ? S2 : S111;
+    const writes = [];
+    const set = storage.setItem;
+    const rm = storage.removeItem;
+    storage.setItem = (k, val) => (writes.push(k), set(k, val));
+    storage.removeItem = (k) => (writes.push(`rm ${k}`), rm(k));
+    const s = S.createStore(opts(S, { storage, now: () => t, debounceMs: 0 }));
+    s.addSong(null, { name: `Session ${i + 1} (${v})` });
+    s.persistNow();
+    s.dispose();
+    storage.setItem = set;
+    storage.removeItem = rm;
+    if (v === '1.1.1') {
+      assert.deepEqual(s.loadInfo.newerLibrary, { schema: 2, key: S2.STORAGE_KEY });
+      assert.equal(storage.getItem(S2.STORAGE_KEY), v2text, 'the 2.0 library byte for byte');
+      assert.deepEqual([...new Set(writes)], [`${S2.STORAGE_KEY}${S2.SEPARATE_1X_SUFFIX}`], 'only its own key');
+    } else {
+      v2text = storage.getItem(S2.STORAGE_KEY);
+      assert.equal(JSON.parse(v2text).schema, 2);
+      assert.ok(namesOf(s.get()).includes('Session 1 (2.0)'), 'one 2.0 library, never replaced');
+    }
+  }
+  const s = S2.createStore(opts(S2, { storage }));
+  const sep = s.keptLibraries().find((e) => e.kind === 'separate');
+  assert.ok(sep && sep.restorable);
+  assert.equal(s.keepCurrent().ok, true);
+  assert.equal(s.restoreKept(sep.key).ok, true);
+  assert.ok(namesOf(s.get()).includes('Session 4 (1.1.1)'));
+  assert.ok(namesOf(s.get()).includes('Session 2 (1.1.1)'));
 });

@@ -33,7 +33,7 @@
 // l8 (local soak L-8): the ±radius window is a byte budget too. Current song first, then neighbours by distance while
 // the pinned total stays ≤ PIN_BUDGET_MB; one {pin:'replace'} per switch; a warn if pinnedMB ever passes capMB.
 import {
-  transposeSemisOf, audioSleepSecOf, COMPUTER_KEYBOARD, sound2Of, programChangeOf, DEVICE_LOCAL_SETTINGS,
+  transposeSemisOf, audioSleepSecOf, COMPUTER_KEYBOARD, sound2Of, programChangeOf, DEVICE_LOCAL_SETTINGS, SCHEMA,
 } from './store.js';
 import { compileTouch } from './shared/touch-curve.js';
 import { transposeSemis, mod12, keyName } from './shared/music.js';
@@ -2715,6 +2715,100 @@ export function createController(o) {
     return [st.songs, st.songOrder, st.setlists, st.setlistOrder, ...settings];
   }
   const samePartsAs = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+  /**
+   * E5: the replaced library must exist somewhere first. A failed backup (disk full, the shell gone, a secondary
+   * window) used to go ahead and replace it anyway. (A pristine seed has nothing of the user's in it: callers skip.)
+   * E5 skeptic M1: backupNow() serialises the library, then waits for the shell to write it. An edit in that wait
+   * (a MIDI fader, a scene, a menu-bar command) was in neither the backup nor the imported library. Back up again
+   * until a backup holds the library as it is when it is replaced (the parts are frozen, so === is exact).
+   * @returns {Promise<{ok:true} | {ok:false, error:'backup failed'}>}
+   */
+  async function backUpBeforeReplace() {
+    let saved = null;
+    let settled = false;
+    for (let i = 0; i < 3 && !settled; i++) {
+      const parts = backedUpPartsOf(store.get());
+      saved = await backupNow();
+      if (!saved || saved.error || !saved.path) break;
+      settled = samePartsAs(parts, backedUpPartsOf(store.get()));
+    }
+    if (!saved || saved.error || !saved.path) {
+      warn('Your current library could not be backed up first, so it was not replaced. Export it from Settings, '
+        + 'then try again.');
+      return { ok: false, error: 'backup failed' };
+    }
+    if (!settled) {
+      warn('Your library kept changing while it was being backed up, so it was not replaced. Try again.');
+      return { ok: false, error: 'backup failed' };
+    }
+    return { ok: true };
+  }
+  /**
+   * D8: the libraries this browser profile keeps for "Restore previous library…" (store.keptLibraries), newest first.
+   * @param {{check?:boolean}} [opts] check:false skips the per-copy restore check (restorable/error left out)
+   * @returns {object[]}
+   */
+  function listPreviousLibraries(opts) {
+    return typeof store.keptLibraries === 'function' ? store.keptLibraries(opts) : [];
+  }
+  /**
+   * D8: replace the library with a kept copy (Settings › Restore previous library…). E5 rules: the file is checked
+   * first; an edited library is backed up first (the shell's disk backup where there is one, then always a kept copy
+   * in this profile, taken in the same task as the replace so it is exact), and nothing is replaced when that fails.
+   * One import at a time: it shares importLatestBackup's single-flight guard (E5 skeptic M2).
+   * @param {string} key a key from listPreviousLibraries()
+   * @returns {Promise<{ok:boolean, error?:string, songIds?:string[], keptKey?:string}>}
+   */
+  function restorePreviousLibrary(key) {
+    if (importRunning) return importRunning;
+    importRunning = restorePreviousLibraryOnce(key).finally(() => {
+      importRunning = null;
+    });
+    return importRunning;
+  }
+  async function restorePreviousLibraryOnce(key) {
+    if (typeof store.restoreKept !== 'function') return { ok: false, error: 'not available' };
+    if (secondary || store.loadInfo.readOnly) {
+      warn('This window is not saving changes, so the library was not replaced.');
+      return { ok: false, error: 'read-only' };
+    }
+    const check = store.restoreKept(key, { dryRun: true });
+    if (!check.ok) {
+      warn(`Restore failed: ${check.error}`);
+      return check;
+    }
+    let keptKey = null;
+    if (!store.pristine) {
+      if (rig && typeof rig.backupNow === 'function') {
+        const saved = await backUpBeforeReplace();
+        if (!saved.ok) return saved;
+      }
+      // D8 skeptic K1: making room for this copy must never remove the copy being restored
+      const kept = store.keepCurrent('restore', { protect: key });
+      if (!kept.ok) {
+        warn('Your current library could not be kept first, so it was not replaced. Export it from Settings, '
+          + 'then try again.');
+        return { ok: false, error: 'backup failed' };
+      }
+      keptKey = kept.key;
+    }
+    const r = store.restoreKept(key);
+    if (r.ok) emit('action', { type: 'restoreLibrary', key, songs: r.songIds.length, keptKey });
+    else warn(`Restore failed: ${r.error}`);
+    return keptKey && r.ok ? { ...r, keptKey } : r;
+  }
+  /**
+   * D8 (review E5 M4): 1.x in the same Chrome profile set a 2.0 library aside and seeded the factory songs. Opened
+   * here, that seed is pristine; say once where the 2.0 library is.
+   */
+  function offerSetAsideLibrary() {
+    if (!store.pristine || typeof store.keptLibraries !== 'function') return;
+    const set = store.keptLibraries().find((e) => e.kind === 'downgrade' && e.schema === SCHEMA && e.restorable);
+    if (!set) return;
+    const when = set.savedAt ? new Date(set.savedAt).toLocaleString() : 'earlier';
+    warn(`Your Worship Rig 2.0 library (${set.songs} songs, from ${when}) was set aside by Worship Rig 1.x. To get it `
+      + 'back, open Settings › Library & backups › Restore previous library….', true);
+  }
   async function importLatestBackupOnce({ replace = true } = {}) {
     if (!rig || typeof rig.latestBackup !== 'function') return { ok: false, error: 'not available' };
     const b = await rig.latestBackup();
@@ -2728,28 +2822,8 @@ export function createController(o) {
       return check;
     }
     if (replace && !store.pristine) {
-      // E5: the replaced library must exist somewhere first. A failed backup (disk full, the shell gone, a
-      // secondary window) used to go ahead and replace it anyway. A pristine seed has nothing of the user's in it.
-      // E5 skeptic M1: backupNow() serialises the library, then waits for the shell to write it. An edit in that wait
-      // (a MIDI fader, a scene, a menu-bar command) was in neither the backup nor the imported library. Back up again
-      // until a backup holds the library as it is when it is replaced (the parts are frozen, so === is exact).
-      let saved = null;
-      let settled = false;
-      for (let i = 0; i < 3 && !settled; i++) {
-        const parts = backedUpPartsOf(store.get());
-        saved = await backupNow();
-        if (!saved || saved.error || !saved.path) break;
-        settled = samePartsAs(parts, backedUpPartsOf(store.get()));
-      }
-      if (!saved || saved.error || !saved.path) {
-        warn('Your current library could not be backed up first, so it was not replaced. Export it from Settings, '
-          + 'then try again.');
-        return { ok: false, error: 'backup failed' };
-      }
-      if (!settled) {
-        warn('Your library kept changing while it was being backed up, so it was not replaced. Try again.');
-        return { ok: false, error: 'backup failed' };
-      }
+      const saved = await backUpBeforeReplace();
+      if (!saved.ok) return saved;
     }
     const r = store.importJSON(b.text, { replace });
     if (r.ok) {
@@ -2940,6 +3014,8 @@ export function createController(o) {
       cleanups.push(store.onInfo(onStoreInfo));
       onStoreInfo(store.loadInfo);
     }
+    // D8/D9: the store's notices (a library past the size cap, kept copies removed for space) are toasted
+    if (typeof store.onNotice === 'function') cleanups.push(store.onNotice((n) => n && n.message && warn(n.message)));
     if (!(await requestInstanceLock(false))) {
       enterSecondary();
       return;
@@ -2990,6 +3066,7 @@ export function createController(o) {
     installShellHook();
     const libInfo = store.loadInfo;
     if (libInfo.status === 'corrupt' || libInfo.status === 'future-schema') secureUnreadableLibrary();
+    offerSetAsideLibrary(); // D8
 
     if (engineTakesSound2()) {
       setStatus({ audioConfig: { ...status.audioConfig, native: true } });
@@ -3479,6 +3556,8 @@ export function createController(o) {
     restoreChromePads,
     backupNow,
     importLatestBackup,
+    listPreviousLibraries,
+    restorePreviousLibrary,
     rescanUserSamples,
     revertSong,
     scenes,

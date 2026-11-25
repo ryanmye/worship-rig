@@ -535,6 +535,41 @@ async function runMode(mode, browser) {
       assert.equal(await page.$('.st-import-backup'), null, 'hidden in Chrome (no disk backups)');
     });
 
+    await T('settings: Restore previous library… (D8) lists the kept copies; confirm keeps the current one, restores', async () => {
+      const k = await ev(() => {
+        const st = window.__rig.store;
+        st.addSong(null, { name: 'D8 before' });
+        const r = st.keepCurrent('downgrade'); // stands in for a 2.0 library 1.x set aside
+        st.addSong(null, { name: 'D8 after' });
+        return r.key;
+      });
+      assert.ok(k, 'kept');
+      await page.click('.st-close');
+      await openSettings();
+      await cat('library');
+      await page.click('.st-restore-previous');
+      await until(() => document.querySelectorAll('.st-previous-row').length > 0);
+      const row = page.locator(`.st-previous-row[data-key="${k}"]`);
+      assert.match(await row.textContent(), /2\.0 library · .* · \d+ songs, \d+ setlists? · set aside/);
+      await row.locator('.st-previous-restore').click();
+      assert.match(await page.textContent('.st-previous .st-restore-q'), /Replace your whole library/);
+      assert.equal(await ev(() => Object.values(window.__rig.store.get().songs).some((x) => x.name === 'D8 after')), true,
+        'nothing happens before confirm');
+      await page.click('.st-previous-confirm');
+      await until(() => !Object.values(window.__rig.store.get().songs).some((x) => x.name === 'D8 after')
+        && !!document.querySelector('.st-restore-previous'));
+      const kinds = await ev(() => window.__rig.controller.listPreviousLibraries().map((e) => e.kind));
+      assert.ok(kinds.includes('restore'), `the replaced library was kept first: ${kinds}`);
+      // put the test's library back the same way (the newest 'restore' copy)
+      const back = await ev(async () => {
+        const c = window.__rig.controller;
+        const r = c.listPreviousLibraries().find((e) => e.kind === 'restore');
+        return (await c.restorePreviousLibrary(r.key)).ok;
+      });
+      assert.equal(back, true);
+      assert.equal(await ev(() => Object.values(window.__rig.store.get().songs).some((x) => x.name === 'D8 after')), true);
+    });
+
     await T('settings: My Samples panel (folder, real rescan → live reload or Reload prompt) + GarageBand guide link', async () => {
       await cat('samples');
       await until((d) => (document.querySelector('.st-samples-path')?.textContent || '').includes(d), userSamplesDir);

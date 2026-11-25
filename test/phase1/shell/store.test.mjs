@@ -88,8 +88,9 @@ test('future schema is refused: raw string backed up, app starts fresh', () => {
   assert.throws(() => migrate(JSON.parse(future)), FutureSchemaError);
   const s = createStore({ storage, now: () => 1234, idGen: idGen(), warn: () => {}, requestIdle: null, autoFlush: false });
   assert.equal(s.loadInfo.status, 'future-schema');
-  assert.equal(s.loadInfo.backupKey, `${STORAGE_KEY}.backup-1234`);
-  assert.equal(storage.getItem(`${STORAGE_KEY}.backup-1234`), future, 'raw string kept byte-for-byte');
+  // D8: a newer library is a kept copy (never rotated), not a `.backup-` key
+  assert.equal(s.loadInfo.backupKey, `${STORAGE_KEY}.kept-1234.downgrade.s${SCHEMA + 1}`);
+  assert.equal(storage.getItem(s.loadInfo.backupKey), future, 'raw string kept byte-for-byte');
   assert.equal(s.get().songOrder.length, FACTORY_SONGS.length);
 });
 

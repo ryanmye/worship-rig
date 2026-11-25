@@ -31,7 +31,14 @@
 //   byte for byte (a schema-1 array of another length is padded / cut to 4, as 1.x did); new songs start with 4.
 //   Slot paths ('slots.<i>…') address i < that song's slot count; addSlot / removeSlot change the count (removeSlot
 //   moves later slots down and re-points wheel targets and scenes). Loading a schema-1 library that has songs first
-//   keeps a copy of it under a backup key (1.1 cannot read schema 2).
+//   keeps a copy of it (1.1 cannot read schema 2).
+// Kept copies (D8, review E5 M4): `<key>.kept-<ts>.<kind>.s<schema>` hold whole libraries that must never be rotated
+//   away: the 1.x text kept at an upgrade ('migration'), a newer library set aside here or by 1.x ('downgrade'; 1.x
+//   puts it in the `.backup-` rotation, and the next load moves it here) and the library a restore replaced
+//   ('restore'). No count limit; only when storage is full is an earlier state of a still-kept library removed (all
+//   its songs and setlists are in a newer copy of its version; D8 skeptic K2), with a notice. keptLibraries() lists
+//   them (plus 1.1.1's separate `<key>.1x` library) for "Restore previous library…". onNotice(fn) reports what the
+//   UI should say (that, and D9's size warning).
 import { mod12, transposeSemis } from './shared/music.js';
 import { isValidId as isThemeId, DEFAULT_THEME_ID } from './shared/themes.js';
 import { normalizeHotkeys } from './shared/hotkeys.js';
@@ -292,6 +299,19 @@ export const BACKUPS_KEEP = 3;
  * fail (QuotaExceededError) until the offending song is deleted. A real library is ~2 KB per song.
  */
 export const LIBRARY_MAX_CHARS = 2000000;
+/**
+ * D9 (review E5 M3): a replace / restore import may bring a library up to 1.25× LIBRARY_MAX_CHARS. Saves are not
+ * capped (a library grown past the cap by notes is warned about, not refused), so its own backup must still restore.
+ */
+export const LIBRARY_RESTORE_MAX_CHARS = Math.round(LIBRARY_MAX_CHARS * 1.25);
+/** D9: a save past the cap warns once per store (session), then again at each further 10 % of growth. */
+export const SIZE_WARN_STEP = 1.1;
+/** D8: the key 1.1.1 keeps its separate 1.x library under while the main key holds a 2.0 library. */
+export const SEPARATE_1X_SUFFIX = '.1x';
+/** D8: kinds of kept copies (never rotated). */
+export const KEPT_KINDS = Object.freeze(['migration', 'downgrade', 'restore']);
+/** D8: 'schema 1 → "1.x"', 'schema 2 → "2.0"' (which app version wrote a library). */
+export const versionOfSchema = (schema) => (schema === 1 ? '1.x' : schema === 2 ? '2.0' : `schema ${schema}`);
 /** E5: top-level fields of an export file / disk backup that are not library state (importJSON drops them). */
 export const IMPORT_ENVELOPE_KEYS = Object.freeze(['app', 'kind', 'exportedAt', 'origin']);
 /** security S2: deepest nesting an import may have (real exports reach ~8: songs.<id>.patch.slots.<i>.eq.b3.hz). */
@@ -934,9 +954,12 @@ export function createStore(opts = {}) {
     const ts = (k) => Number(k.slice(backupPrefix.length)) || 0;
     return out.sort((a, b) => ts(a) - ts(b) || a.localeCompare(b));
   }
-  /** Delete the oldest backup keys so that at most `keep` remain (never `except`). */
+  /**
+   * Delete the oldest backup keys so that at most `keep` remain (never `except`). D8: a readable whole library in the
+   * rotation is never pruned (load moves it to a kept copy; one is left here only when that move did not fit).
+   */
   function pruneBackups(keep, except = null) {
-    const ks = backupKeys().filter((k) => k !== except);
+    const ks = backupKeys().filter((k) => k !== except && librarySchemaOf(storage.getItem(k)) === null);
     const room = Math.max(0, keep - (except ? 1 : 0));
     for (const k of ks.slice(0, Math.max(0, ks.length - room))) {
       try {
@@ -966,6 +989,202 @@ export function createStore(opts = {}) {
     warn(`could not write backup ${k}: ${info.backupError}`);
     return false;
   }
+
+  // ---- kept copies (D8)
+  const keptPrefix = `${key}.kept-`;
+  const KEPT_RE = /^(\d+)\.(migration|downgrade|restore)\.s(\d+)(?:\.\d+)?$/;
+  const notices = [];
+  const noticeListeners = new Set();
+  /** Tell the UI (the controller toasts `message`); held until the first onNotice subscriber (load-time notices). */
+  function notice(n) {
+    if (!noticeListeners.size) {
+      notices.push(n);
+      return;
+    }
+    for (const fn of [...noticeListeners]) {
+      try {
+        fn(n);
+      } catch (err) {
+        warn(`notice listener failed: ${err && err.message}`);
+      }
+    }
+  }
+  function allKeys() {
+    try {
+      const n = typeof storage.length === 'number' ? storage.length : 0;
+      return typeof storage.keys === 'function' ? storage.keys() : Array.from({ length: n }, (_, i) => storage.key(i));
+    } catch {
+      return [];
+    }
+  }
+  /** @returns {{key:string, savedAt:number, kind:string, schema:number}[]} oldest first */
+  function keptEntries() {
+    const out = [];
+    for (const k of allKeys()) {
+      if (typeof k !== 'string' || !k.startsWith(keptPrefix)) continue;
+      const m = KEPT_RE.exec(k.slice(keptPrefix.length));
+      if (m) out.push({ key: k, savedAt: Number(m[1]), kind: m[2], schema: Number(m[3]) });
+    }
+    return out.sort((a, b) => a.savedAt - b.savedAt || a.key.localeCompare(b.key));
+  }
+  /** Schema of a readable whole library (absent = 1, as migrate() reads it), else null (unreadable / not a library). */
+  function librarySchemaOf(text) {
+    let doc;
+    try {
+      doc = JSON.parse(text);
+    } catch {
+      return null;
+    }
+    if (!isObj(doc) || !(isObj(doc.songs) || Array.isArray(doc.songs))) return null;
+    return typeof doc.schema === 'number' ? doc.schema : 1;
+  }
+  /** Song and setlist ids of a whole-library text, or null when it is not one (D8 skeptic K2: lineage proxy). */
+  function idsOf(text) {
+    let doc;
+    try {
+      doc = typeof text === 'string' ? JSON.parse(text) : text;
+    } catch {
+      return null;
+    }
+    if (!isObj(doc)) return null;
+    const out = new Set();
+    if (Array.isArray(doc.songs)) for (const x of doc.songs) out.add(`s:${isObj(x) ? x.id : x}`);
+    else if (isObj(doc.songs)) for (const k of Object.keys(doc.songs)) out.add(`s:${k}`);
+    else return null;
+    if (isObj(doc.setlists)) for (const k of Object.keys(doc.setlists)) out.add(`l:${k}`);
+    return out;
+  }
+  const covers = (big, small) => !!big && !!small && [...small].every((x) => big.has(x));
+  /**
+   * D8 quota policy: free space by removing ONE kept copy, oldest first, that is an earlier state of a library that is
+   * still kept: every song and setlist it has is in a newer kept copy of the same version (schema), or, for a 2.0
+   * copy, in the library saved under the main key and in memory. The newest copy of every version is never removed,
+   * and neither is `protect` (the copy a restore is about to bring back).
+   * D8 skeptic K2: "superseded" was "any newer copy of the same schema", so a set-aside 2.0 library of 300 songs was
+   * removed to make room while a later factory-seed copy of the same version stayed.
+   * D8 skeptic K1: without `protect`, keeping the current library before a restore could remove the copy being
+   * restored. @returns {object|null} the removed entry
+   */
+  function removeOneSuperseded(except = null, { protect = null } = {}) {
+    const all = keptEntries().filter((e) => e.key !== except);
+    const newest = new Map();
+    for (const e of all) newest.set(e.schema, e.key); // sorted oldest first: the last one wins
+    const ids = new Map();
+    const idsAt = (k) => {
+      if (!ids.has(k)) {
+        let t = null;
+        try {
+          t = storage.getItem(k);
+        } catch {
+          t = null;
+        }
+        ids.set(k, idsOf(t));
+      }
+      return ids.get(k);
+    };
+    // the main library: what is stored and what will be stored (a failed write leaves the stored one)
+    let main = idsAt(key);
+    if (main && state) {
+      const live = idsOf(state);
+      main = new Set([...main].filter((x) => live && live.has(x)));
+    }
+    const victim = all.find((e, i) => {
+      if (e.key === protect || newest.get(e.schema) === e.key) return false;
+      const mine = idsAt(e.key);
+      if (!mine) return false;
+      if (e.schema === SCHEMA && covers(main, mine)) return true;
+      return all.slice(i + 1).some((o) => o.schema === e.schema && covers(idsAt(o.key), mine));
+    });
+    if (!victim) return null;
+    try {
+      storage.removeItem(victim.key);
+    } catch {
+      return null;
+    }
+    return victim;
+  }
+  function noticeRemoved(removed, why) {
+    if (!removed.length) return;
+    const list = removed.map((e) => `${versionOfSchema(e.schema)} from ${new Date(e.savedAt).toLocaleDateString()}`);
+    const n = removed.length;
+    notice({
+      type: 'kept-removed',
+      removed: removed.map((e) => ({ key: e.key, schema: e.schema, savedAt: e.savedAt, kind: e.kind })),
+      message: `Browser storage was full, so ${n === 1 ? 'an older kept copy' : `${n} older kept copies`} of your `
+        + `library (${list.join(', ')}) ${n === 1 ? 'was' : 'were'} removed to ${why}. Every song in `
+        + `${n === 1 ? 'it' : 'them'} is in a newer kept copy or your current library. Export your library from `
+        + 'Settings to be safe.',
+    });
+  }
+  /**
+   * Store `text` as a kept copy. On a quota error, superseded copies (removeOneSuperseded) are removed one at a time
+   * (with a notice) until it fits; the newest copy of each version stays.
+   * @returns {string|null} the key, or null when it could not be kept
+   */
+  function keepRaw(text, kind, schema, ts = now(), { protect = null } = {}) {
+    let k = `${keptPrefix}${ts}.${kind}.s${schema}`;
+    for (let i = 2; storage.getItem(k) !== null; i++) k = `${keptPrefix}${ts}.${kind}.s${schema}.${i}`;
+    const removed = [];
+    let lastErr = null;
+    for (;;) {
+      try {
+        storage.setItem(k, text);
+        if (storage.getItem(k) !== text) throw new Error('kept copy did not read back');
+        noticeRemoved(removed, 'keep a new one');
+        return k;
+      } catch (err) {
+        lastErr = err;
+        try {
+          storage.removeItem(k);
+        } catch {
+          /* ignore */
+        }
+        const gone = removeOneSuperseded(k, { protect });
+        if (!gone) break;
+        removed.push(gone);
+      }
+    }
+    noticeRemoved(removed, 'keep a new one');
+    warn(`could not keep a copy of the ${versionOfSchema(schema)} library: ${(lastErr && lastErr.message) || lastErr}`);
+    return null;
+  }
+  /**
+   * D8: a whole library in the ordinary `.backup-` rotation (1.x sets a 2.0 library aside there, and 1.x and 2.0
+   * before D8 kept migration copies there; 1.1.0 prunes it to 3 per launch) moves to a kept copy, keeping its time.
+   * The rotation keeps what is not a readable library (a corrupt text). A text already kept is not kept twice.
+   */
+  function adoptRotationLibraries() {
+    const have = new Set();
+    for (const e of keptEntries()) {
+      try {
+        have.add(storage.getItem(e.key));
+      } catch {
+        /* ignore */
+      }
+    }
+    for (const k of backupKeys()) {
+      let text;
+      try {
+        text = storage.getItem(k);
+      } catch {
+        continue;
+      }
+      if (typeof text !== 'string') continue;
+      const schema = librarySchemaOf(text);
+      if (schema === null) continue;
+      const ts = Number(k.slice(backupPrefix.length)) || now();
+      const kept = have.has(text) ? true : keepRaw(text, schema < SCHEMA ? 'migration' : 'downgrade', schema, ts);
+      if (!kept) continue; // stays in the rotation; keepRaw warned
+      have.add(text);
+      try {
+        storage.removeItem(k);
+      } catch {
+        /* the copy is kept; a leftover rotation key is harmless */
+      }
+      info.adopted = (info.adopted || 0) + 1;
+    }
+  }
+  adoptRotationLibraries(); // D8: before anything below can rotate the `.backup-` keys
   let raw = null;
   let unreadable = null; // the raw string we could not load (kept in memory for an Electron disk backup)
   try {
@@ -982,24 +1201,22 @@ export function createStore(opts = {}) {
       state = deepFreeze(migrate(parsed));
       // UIA: an older schema with songs in it keeps a copy of itself first (1.1 cannot read schema 2, and this copy is
       // what it would need). Best effort: the upgrade goes ahead without it, and nothing here is shown as an error.
+      // D8: the copy is a kept copy (never rotated; 1.1.0 prunes the `.backup-` keys). An untouched 1.x factory seed
+      // (1.x seeds one when it sets a 2.0 library aside) holds nothing of the user's and is not kept.
       if (isObj(parsed) && typeof parsed.schema === 'number' && parsed.schema < SCHEMA && isObj(parsed.songs)
-        && Object.keys(parsed.songs).length) {
+        && Object.keys(parsed.songs).length && !(isObj(parsed.meta) && parsed.meta.edited === false)) {
         info.migratedFrom = parsed.schema;
-        const k = `${backupPrefix}${now()}`;
-        try {
-          storage.setItem(k, String(raw));
-          if (storage.getItem(k) === String(raw)) {
-            info.migrationBackupKey = k;
-            pruneBackups(BACKUPS_KEEP, k);
-          }
-        } catch (err) {
-          warn(`could not keep the schema-${parsed.schema} library before upgrading it: ${err && err.message}`);
-        }
+        const k = keepRaw(String(raw), 'migration', parsed.schema);
+        if (k) info.migrationBackupKey = k;
+        else warn(`could not keep the schema-${parsed.schema} library before upgrading it`);
       }
     } catch (err) {
       info.status = err instanceof FutureSchemaError ? 'future-schema' : 'corrupt';
       unreadable = String(raw);
-      if (backupRaw(unreadable)) {
+      // D8: a newer version's library (a downgrade) is a kept copy, never rotated; a corrupt text goes to the rotation
+      const keptKey = err instanceof FutureSchemaError ? keepRaw(unreadable, 'downgrade', err.schema) : null;
+      if (keptKey) info.backupKey = keptKey;
+      if (keptKey || (!(err instanceof FutureSchemaError) && backupRaw(unreadable))) {
         warn(`${info.status === 'corrupt' ? 'saved library is unreadable' : err.message}; starting fresh (backup kept as ${info.backupKey})`);
       } else {
         // H1: never overwrite the only copy. Nothing is written until allowOverwrite() (after an export/disk backup).
@@ -1052,8 +1269,29 @@ export function createStore(opts = {}) {
     if (!dirty) return true;
     if (readOnlyReason !== null) return false; // dirty stays; written after allowOverwrite()/setReadOnly(false)
     clearRetry();
+    const json = JSON.stringify(state);
     try {
-      storage.setItem(key, JSON.stringify(state));
+      try {
+        storage.setItem(key, json);
+      } catch (err) {
+        // D8 quota policy: an older kept copy that a newer copy of its version supersedes makes room for the library
+        const removed = [];
+        for (let gone = removeOneSuperseded(); gone; gone = removeOneSuperseded()) {
+          removed.push(gone);
+          try {
+            storage.setItem(key, json);
+            noticeRemoved(removed, 'save your changes');
+            break;
+          } catch {
+            /* remove another */
+          }
+        }
+        if (!removed.length || storage.getItem(key) !== json) {
+          noticeRemoved(removed, 'save your changes');
+          throw err;
+        }
+      }
+      checkSize(json.length);
       dirty = false;
       info.lastSavedAt = now();
       const hadError = info.persistError !== null;
@@ -1076,6 +1314,19 @@ export function createStore(opts = {}) {
       infoChanged();
       return false;
     }
+  }
+  // D9 (review E5 M3): saves are not capped. Past the cap the user is told once per session, then at +10 % steps.
+  let sizeWarnedAt = 0;
+  function checkSize(chars) {
+    if (chars <= LIBRARY_MAX_CHARS || (sizeWarnedAt && chars < sizeWarnedAt * SIZE_WARN_STEP)) return;
+    sizeWarnedAt = chars;
+    const mb = (n) => (n / 1e6).toFixed(1);
+    notice({
+      type: 'library-size', chars, cap: LIBRARY_MAX_CHARS,
+      message: `Your library is now ${mb(chars)} MB, more than the ${mb(LIBRARY_MAX_CHARS)} MB it is meant to hold. `
+        + `It is still saved, but a backup over ${mb(LIBRARY_RESTORE_MAX_CHARS)} MB cannot be restored. Remove charts `
+        + 'or long notes you no longer need, and export the library from Settings.',
+    });
   }
   function schedulePersist() {
     dirty = true;
@@ -1547,6 +1798,102 @@ export function createStore(opts = {}) {
       return () => infoListeners.delete(fn);
     },
     /**
+     * D8/D9: things the user should be told, `{type, message, …}`: 'library-size' (a save past LIBRARY_MAX_CHARS,
+     * D9), 'kept-removed' (storage was full and superseded kept copies were removed, D8). Notices from before the
+     * first subscriber (load time) are delivered to it. The controller toasts `message`.
+     * @param {(n:{type:string, message:string}) => void} fn @returns {() => void} unsubscribe
+     */
+    onNotice(fn) {
+      noticeListeners.add(fn);
+      for (const n of notices.splice(0)) {
+        try {
+          fn(n);
+        } catch (err) {
+          warn(`notice listener failed: ${err && err.message}`);
+        }
+      }
+      return () => noticeListeners.delete(fn);
+    },
+    /**
+     * D8: the previous libraries this browser profile keeps, newest first: kept copies (1.x text kept at an upgrade,
+     * a 2.0 library set aside by 1.x or here, the library a restore replaced) and 1.1.1's separate 1.x library.
+     * @returns {{key:string, kind:'migration'|'downgrade'|'restore'|'separate', savedAt:number|null, schema:number,
+     *   version:string, songs:number, setlists:number, chars:number, restorable:boolean, error?:string}[]}
+     *   (check:false skips the dry-run restore of each copy: restorable is then undefined)
+     */
+    keptLibraries({ check: dry = true } = {}) {
+      const rows = keptEntries().map((e) => ({ ...e }));
+      const sep = `${key}${SEPARATE_1X_SUFFIX}`;
+      let sepText = null;
+      try {
+        sepText = storage.getItem(sep);
+      } catch {
+        /* ignore */
+      }
+      if (typeof sepText === 'string') {
+        const schema = librarySchemaOf(sepText);
+        if (schema !== null) rows.push({ key: sep, savedAt: null, kind: 'separate', schema });
+      }
+      const out = [];
+      for (const r of rows) {
+        let text = null;
+        try {
+          text = storage.getItem(r.key);
+        } catch {
+          /* ignore */
+        }
+        if (typeof text !== 'string') continue;
+        let doc = null;
+        try {
+          doc = JSON.parse(text);
+        } catch {
+          doc = null;
+        }
+        const list = doc && doc.songs;
+        const songs = Array.isArray(list) ? list.length : isObj(list) ? Object.keys(list).length : 0;
+        const row = {
+          key: r.key, kind: r.kind, savedAt: r.savedAt, schema: r.schema, version: versionOfSchema(r.schema), songs,
+          setlists: doc && isObj(doc.setlists) ? Object.keys(doc.setlists).length : 0, chars: text.length,
+        };
+        if (dry) {
+          const check = doc ? api.importJSON(doc, { replace: true, dryRun: true }) : { ok: false };
+          row.restorable = check.ok === true;
+          if (!check.ok) row.error = check.error || 'That copy cannot be read.';
+        }
+        out.push(row);
+      }
+      return out.sort((a, b) => (b.savedAt ?? Infinity) - (a.savedAt ?? Infinity) || a.key.localeCompare(b.key));
+    },
+    /**
+     * D8: keep the current library as a kept copy ('restore': before a restore replaces it). Synchronous, so the copy
+     * is the library exactly as it is replaced. `protect`: a kept key that making room must not remove (the copy the
+     * restore brings back; D8 skeptic K1). @returns {{ok:true, key:string} | {ok:false, error:string}}
+     */
+    keepCurrent(kind = 'restore', { protect = null } = {}) {
+      if (!KEPT_KINDS.includes(kind)) return { ok: false, error: 'unknown kind' };
+      const k = keepRaw(JSON.stringify(state), kind, SCHEMA, now(), { protect });
+      if (!k) return { ok: false, error: 'Browser storage is full, so the library could not be kept.' };
+      return { ok: true, key: k };
+    },
+    /**
+     * D8: replace the library with a kept copy (or 1.1.1's separate library). The copy itself stays kept. The caller
+     * (controller.restorePreviousLibrary) keeps the current library first.
+     * @returns {{ok:true, songIds:string[], setlistIds:string[]} | {ok:false, error:string}}
+     */
+    restoreKept(k, { dryRun = false } = {}) {
+      const ok = typeof k === 'string' && (k === `${key}${SEPARATE_1X_SUFFIX}` || (k.startsWith(keptPrefix)
+        && KEPT_RE.test(k.slice(keptPrefix.length))));
+      if (!ok) return { ok: false, error: 'That is not a kept library.' };
+      let text = null;
+      try {
+        text = storage.getItem(k);
+      } catch {
+        text = null;
+      }
+      if (typeof text !== 'string') return { ok: false, error: 'That library is no longer kept.' };
+      return api.importJSON(text, { replace: true, dryRun });
+    },
+    /**
      * Read-only mode: edits stay in memory, nothing is written. Used for a second window (H2).
      * setReadOnly(false) writes pending changes (unless the load-time 'backup-failed' lock is still on).
      */
@@ -1584,11 +1931,20 @@ export function createStore(opts = {}) {
       }
       if (r === null || r === undefined) return false;
       let next;
+      let parsed;
       try {
-        next = migrate(JSON.parse(r));
+        parsed = JSON.parse(r);
+        next = migrate(parsed);
       } catch (err) {
         warn(`reload: stored library unreadable (${err && err.message}); keeping the current one`);
         return false;
+      }
+      // D8 skeptic K3: a second window takes over after a 1.x window saved here; that 1.x library is kept too, as at
+      // load (the upgrade below is saved over it). An untouched seed, or a text already kept, is not.
+      if (isObj(parsed) && typeof parsed.schema === 'number' && parsed.schema < SCHEMA && isObj(parsed.songs)
+        && Object.keys(parsed.songs).length && !(isObj(parsed.meta) && parsed.meta.edited === false)
+        && !keptEntries().some((e) => storage.getItem(e.key) === r)) {
+        keepRaw(r, 'migration', parsed.schema);
       }
       const paths = diffPaths(state, next);
       if (!paths.length) return false;
@@ -2053,8 +2409,10 @@ export function createStore(opts = {}) {
      */
     importJSON(text, { replace = false, replacePristine = false, dryRun = false } = {}) {
       const tooBig = { ok: false, error: 'That file is too large to import: the library can hold about 2 MB of songs.' };
-      // security S2: a pretty-printed export is ~2–3× its compact size; anything far beyond the cap isn't even parsed
-      if (typeof text === 'string' && text.length > 4 * LIBRARY_MAX_CHARS) return tooBig;
+      // security S2: a pretty-printed export is ~2–3× its compact size; anything far beyond the cap isn't parsed.
+      // D9: a replace may bring up to LIBRARY_RESTORE_MAX_CHARS (1.25×), so its text may be that much larger too.
+      const textCap = 4 * (replace || replacePristine ? LIBRARY_RESTORE_MAX_CHARS : LIBRARY_MAX_CHARS);
+      if (typeof text === 'string' && text.length > textCap) return tooBig;
       // security S2: deep nesting made clone/deepFreeze throw RangeError out of importJSON (uncaught in the UI), and a
       // merge could leave earlier songs half-written into the state with no change event
       const notOurs = { ok: false, error: 'That file is not a Worship Rig library or song.' };
@@ -2094,9 +2452,11 @@ export function createStore(opts = {}) {
       // seed is the factory songs, and device-local settings are kept), so its setlists and settings come along
       const asReplace = replace || (replacePristine && wholeLibrary && lib.songOrder.length > 0 && api.pristine);
       if (!lib.songOrder.length && !asReplace) return { ok: false, error: 'No songs found in that file.' };
-      // security S2: the library after the import must still fit localStorage (unknown fields are kept, uncapped)
+      // security S2: the library after the import must still fit localStorage (unknown fields are kept, uncapped).
+      // D9 (review E5 M3): a whole library replacing this one (a restore) may be up to 1.25× the cap, so a library
+      // grown past the cap by edits can still restore its own backup; a merge or a song file still has to fit the cap.
       const after = JSON.stringify(lib).length + (asReplace ? 0 : JSON.stringify(state).length);
-      if (after > LIBRARY_MAX_CHARS) return tooBig;
+      if (after > (asReplace && wholeLibrary ? LIBRARY_RESTORE_MAX_CHARS : LIBRARY_MAX_CHARS)) return tooBig;
       if (asReplace) {
         const keep = Object.fromEntries(DEVICE_LOCAL_SETTINGS.map((k) => [k, state.settings[k]]));
         // an imported library is the user's data, whatever it says (round2-shell #2)

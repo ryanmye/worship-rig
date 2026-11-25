@@ -1137,6 +1137,73 @@ export function mountSettings(el, ctx) {
   }
   restoreIdle();
 
+  // ---- restore previous library (D8: controller.restorePreviousLibrary; the kept copies of this browser profile)
+  const previousBox = h('div.st-restore.st-previous');
+  const KEPT_LABEL = {
+    migration: 'kept when 2.0 upgraded it',
+    downgrade: 'set aside when an older version opened',
+    restore: 'replaced by a restore',
+    separate: 'the separate library of Worship Rig 1.1.1',
+  };
+  function previousIdle() {
+    previousBox.replaceChildren();
+    if (typeof controller.listPreviousLibraries !== 'function') return;
+    let n = 0;
+    try {
+      n = controller.listPreviousLibraries({ check: false }).length; // (each copy is only checked when listed)
+    } catch (err) {
+      console.warn('[settings] listPreviousLibraries', err);
+    }
+    if (!n) return;
+    previousBox.append(btn('Restore previous library…', previousList, {
+      class: 'st-restore-previous',
+      title: 'Replace your library with a copy this browser kept (1.x, 2.0, or before a restore)',
+    }));
+  }
+  function previousList() {
+    const rows = controller.listPreviousLibraries();
+    const items = rows.map((e) => {
+      const when = e.savedAt ? new Date(e.savedAt).toLocaleString() : 'in use';
+      const plural = (k, w) => `${k} ${w}${k === 1 ? '' : 's'}`;
+      const what = `${e.version} library · ${when} · ${plural(e.songs, 'song')}, ${plural(e.setlists, 'setlist')} · `
+        + `${KEPT_LABEL[e.kind] || e.kind}`;
+      return h('li.st-previous-row', { 'data-key': e.key },
+        h('span.st-previous-what', { text: what }),
+        e.restorable
+          ? btn('Restore', () => previousAsk(e, what), { class: 'st-previous-restore' })
+          : h('span.st-hint', { text: e.error || 'Cannot be restored here.' }));
+    });
+    previousBox.replaceChildren(
+      h('span.st-restore-q', { text: 'Libraries this browser kept, newest first:' }),
+      h('ul.st-previous-list', {}, ...items),
+      btn('Cancel', previousIdle, { class: 'st-previous-cancel' }),
+    );
+    queueMicrotask(() => previousBox.querySelector('.st-previous-cancel')?.focus());
+  }
+  function previousAsk(e, what) {
+    previousBox.replaceChildren(
+      h('span.st-restore-q', { text: `Replace your whole library with this one (${what})? Your current library is `
+        + 'kept first, so you can restore it the same way.' }),
+      btn('Replace library', () => previousRun(e), { class: 'ed-danger st-previous-confirm' }),
+      btn('Cancel', previousIdle, { class: 'st-previous-cancel' }),
+    );
+    queueMicrotask(() => previousBox.querySelector('.st-previous-cancel')?.focus());
+  }
+  async function previousRun(e) {
+    previousBox.replaceChildren(h('span.st-hint', { text: 'Restoring…' }));
+    let r = null;
+    try {
+      r = await controller.restorePreviousLibrary(e.key);
+    } catch (err) {
+      console.warn('[settings] restorePreviousLibrary', err);
+      r = { ok: false, error: 'failed' };
+    }
+    // a failure is already explained by the controller's warning (toasted by main.js)
+    if (r && r.ok) toast(`Library restored: ${(r.songIds || []).length} songs (${e.version}).`);
+    previousIdle();
+  }
+  previousIdle();
+
   // ---- My Samples (user sample instruments; shell: /api/user-samples, rig.openUserSamplesFolder/rescanUserSamples)
   // onboarding O9: the raw folder path sits inside the "Bringing GarageBand instruments over" disclosure with the
   // Terminal steps; outside it only a plain sentence (samplesNote)
@@ -1347,7 +1414,7 @@ export function mountSettings(el, ctx) {
       h('p.st-hint', { text: 'Chrome and the Mac app keep separate libraries: Export in one, Import in the other.' }),
       storageNote,
       backupBox,
-      restoreBox,
+      h('div.st-inline.st-restores', {}, restoreBox, previousBox),
     ),
   );
   const aboutSection = h('section.st-section', { 'aria-label': 'About', 'data-section': 'about' },
@@ -1793,6 +1860,7 @@ export function mountSettings(el, ctx) {
     renderAbout();
     renderSamples();
     restoreIdle();
+    previousIdle();
     if (updates) updates.refresh();
     if (hotkeys) hotkeys.refresh();
     renderSound2();

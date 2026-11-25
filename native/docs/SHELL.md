@@ -167,6 +167,18 @@ the Settings "import latest backup" button.
   - A Playwright file does the same in the real app through `__rigShell.menu('importLatestBackup')` after Swift's
     readyProbe.
   - Fixed on the way: CONTRACT_CHANGES "Lane E5".
+- **D8/D9 (2026-11-25): migration copies and the cap** (CONTRACT_CHANGES "D8/D9").
+  - Kept copies, `rig.v1.kept-<ts>.<kind>.s<schema>` in the page's localStorage, are never rotated. They are the 1.x
+    text kept at an upgrade ('migration'), a newer library set aside ('downgrade': by 2.0, or by 1.x in its
+    `.backup-` rotation and moved out by the next 2.0 load), and the library a restore replaced ('restore').
+  - Settings › Restore previous library… (`controller.restorePreviousLibrary`) restores one. It follows
+    `importLatestBackup`'s rules: the copy is checked first, an edited library is backed up first (this shell's
+    `backupNow`, then a kept copy), nothing is replaced if that fails, and one import runs at a time.
+  - Quota: only an older copy of a schema that has a newer copy is removed, and only when a write does not fit
+    (with a toast).
+  - D9: saves past `LIBRARY_MAX_CHARS` warn and are not refused; a replace / restore import is allowed up to 1.25×.
+  - Native and Electron 2.0 use their own origin, so the 1.x ping-pong does not happen there. The kept copies and
+    the action work the same in `rig://app`. WebKit's quota with kept copies is not measured.
 - Still unverified: the Swift side itself. Nothing below has run.
   - The NSAlert first-launch prompt and its UserDefaults key.
   - `electronEntries()`'s scan of Application Support (the Electron userData folder name is still [verify on the

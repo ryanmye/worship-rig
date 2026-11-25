@@ -113,13 +113,16 @@ test('the 2.0 store loads each 1.x localStorage library: unchanged, the 1.x text
     const raw = JSON.parse(fx.text);
     assert.equal(store.loadInfo.status, 'ok');
     assert.deepEqual(lossy(jsonDiff(raw, plain(store.get()))), [], `${fx.ref} ${fx.name}`);
-    if (raw.songOrder.length) {
+    // D8: an untouched 1.x factory seed holds nothing of the user's, so no copy is kept of it
+    const kept = raw.songOrder.length > 0 && !(raw.meta && raw.meta.edited === false);
+    if (kept) {
       assert.equal(store.loadInfo.migratedFrom, 1);
+      assert.match(store.loadInfo.migrationBackupKey, /^rig\.v1\.kept-\d+\.migration\.s1$/);
       assert.equal(storage.getItem(store.loadInfo.migrationBackupKey), fx.text, `${fx.name}: exact 1.x text kept`);
-    } else assert.equal(store.loadInfo.migrationBackupKey, undefined, 'an empty library needs no copy');
+    } else assert.equal(store.loadInfo.migrationBackupKey, undefined, 'an empty library or a 1.x seed needs no copy');
     store.dispose();
-    // an empty 1.x library is left as it is until the first edit (nothing to upgrade, 1.x can still read it)
-    assert.equal(JSON.parse(storage.getItem(STORAGE_KEY)).schema, raw.songOrder.length ? 2 : 1, fx.name);
+    // an empty 1.x library (or an untouched seed) is left as it is until the first edit (1.x can still read it)
+    assert.equal(JSON.parse(storage.getItem(STORAGE_KEY)).schema, kept ? 2 : 1, fx.name);
   }
 });
 

@@ -7485,3 +7485,114 @@ Review: `native/docs/reviews/E5-migration.md` (M1, M2). controller.js only; no s
   `latestAnywhere()` (the staged file is served once), so it could replace the picked library with an older backup.
 - Tests: `test/phase2/migration-1x/skeptic.test.mjs` (17: 16 pass, 1 todo = M3). The two M1 tests and the M2 test
   fail without the change.
+
+## D8/D9: migration copies and cap
+
+Decisions D8 and D9 (native/docs/DECISIONS.md), from review E5 M4 and M3. These changes touch store.js,
+controller.js and views/settings.js. SCHEMA does not change.
+
+**D8: kept copies (store.js).**
+- **Keys.** Whole libraries that must never be rotated away live in `<key>.kept-<ts>.<kind>.s<schema>[.n]`. 1.1.0
+  prunes `rig.v1.backup-*` to 3 per launch, and this prefix is outside that.
+  - `migration`: the 1.x text, kept before an upgrade. It was a `.backup-` key, so `loadInfo.migrationBackupKey`
+    now names a kept key. An untouched 1.x factory seed (`meta.edited === false`) is no longer copied. 1.x seeds one
+    when it sets a 2.0 library aside, and it holds nothing of the user's.
+  - `downgrade`: a newer-schema library that 2.0 finds (`loadInfo.backupKey`). It was a `.backup-` key.
+  - `restore`: the library that a restore replaced.
+- **Adoption.** At load, before anything can rotate, every readable whole library found in the `.backup-` rotation
+  moves to a kept copy and keeps its timestamp. These are 1.x's set-aside 2.0 libraries and pre-D8 migration copies.
+  A text that is already kept is not stored twice. The rotation then holds only unreadable text, and `BACKUPS_KEEP = 3`
+  still applies to it. `pruneBackups` never deletes a readable library, even when the move did not fit.
+- **Quota policy (tier 2).** There is no count limit. Copies are removed only when a write throws: a new kept copy,
+  or the library save in `persistNow`. Then one kept copy is removed at a time, oldest first, and only one that a
+  newer copy of the same schema supersedes
+  (narrowed by the D8/D9 skeptic, K2 below: "supersedes" means it holds no song or setlist the newer copy lacks). The newest copy of each schema always stays. Each removal raises a
+  `kept-removed` notice. If nothing is superseded, the write fails as before: `keepCurrent` returns `ok:false`, and
+  the save keeps its retry and warning.
+- **API.**
+  - `keptLibraries({check=true})`: newest first, including 1.1.1's separate `<key>.1x` library as kind
+    `separate`. Each row is `{key, kind, savedAt, schema, version:'1.x'|'2.0', songs, setlists, chars, restorable,
+    error?}`. `restorable` comes from a dry-run replace.
+  - `keepCurrent(kind='restore')`: synchronous.
+  - `restoreKept(key, {dryRun})`: only kept keys and `.1x`. It is a replace import, and the copy stays kept.
+  - `onNotice(fn)`: notices raised before the first subscriber are delivered to it.
+  - Exports: `LIBRARY_RESTORE_MAX_CHARS`, `SIZE_WARN_STEP`, `SEPARATE_1X_SUFFIX`, `KEPT_KINDS`, `versionOfSchema`.
+
+**D8: controller.js and Settings.**
+- `listPreviousLibraries(opts)`.
+- `restorePreviousLibrary(key)` follows the E5 rules:
+  1. The copy is dry-run checked first.
+  2. An edited library is backed up first. Where a shell exists, `backUpBeforeReplace()` runs (the E5/M1 loop, now
+     shared with `importLatestBackup`). Then `keepCurrent()` always runs, in the same task as the replace, so the
+     copy is exact.
+  3. If either backup fails, it returns `{ok:false, error:'backup failed'}` and replaces nothing.
+  4. A pristine library is replaced without a backup.
+  5. A read-only or second window refuses with `read-only`.
+  6. It shares `importLatestBackup`'s single-flight promise (M2).
+- `store.onNotice` messages become `warn` toasts.
+- `offerSetAsideLibrary()`: on start, a pristine library with a restorable schema-2 `downgrade` copy gets one
+  warning. It names Settings › Library & backups › Restore previous library….
+- Settings › Library & backups adds **Restore previous library…** next to Import latest backup…. It is shown
+  whenever a copy is kept, Chrome included, and refreshed on open. It lists each copy as "version · date · songs,
+  setlists · how it was kept", then asks to confirm with "Replace library".
+
+**D9: the cap (store.js).**
+- Saves are not capped. A save of more than `LIBRARY_MAX_CHARS` (2 000 000) raises a `library-size` notice
+  `{chars, cap}`: once per store (session), then again whenever the size reaches 1.1× the last warned size.
+- `importJSON` accepts a whole-library replace (`replace`, or `replacePristine` onto a seed) up to
+  `LIBRARY_RESTORE_MAX_CHARS` = 2 500 000. That covers Import latest backup, Restore previous library…, and the
+  user's own exports and backups. A merge or a song file still has to fit 2 000 000. The pre-parse text check is 4×
+  the applicable cap.
+- `setChart`'s D7 refusal is unchanged (tier-2 choice: D9 covers saves, and D7 is an explicit chart rule).
+
+**Tests.**
+- `test/phase2/migration-1x/kept.test.mjs` (new, 16 tests): never rotated, adoption, the rotation never pruning a
+  library, the quota policy (3), the listing, the restore action (5: exact pre-restore copy, refusals, shell backup,
+  pristine, single flight and read-only), the set-aside warning, and D9 (3).
+- `skeptic.test.mjs`: the M3 todo is now a real test (17/17, 0 todo).
+- `downgrade.test.mjs` (+3) uses the real 1.1.0 store on one storage, 2.0 → 1.1 → 2.0 → 1.1 → 2.0, with and without
+  edits in 1.1. After every session, every library snapshot so far must still be restorable in 2.0. It also runs the
+  same sequence with 1.1.1 (`native/docs/patches/v1.1.1-prep.diff` applied to `git archive v1.1.0`).
+- Updated for the key names: phase1 `store`, `fixes` and `uia-slots`; `migrate.test`, where a 1.x seed is not kept.
+- Settings Playwright: +1 test (list → confirm → restored → undo).
+- Results:
+  - migration-1x: 70/70 unit (was 50 + 1 todo) and 3/3 browser.
+  - shell: 291/291 unit and 13/13 browser.
+  - `run-all --only unit`: 663 pass.
+  - settings: 88/88 across 4 modes.
+  - ui-core: 78 + 7 + 6 pass.
+  - Zero console.error.
+
+**Measured.** A `huge` library grown by 12 notes is about 2.02 M characters. Its origin-tagged backup restores under
+the 2.5 M limit, and a merge of it is still refused. Not measured: Chromium's ~5.2 M quota holding a library and its
+kept copies (the quota tests use a stand-in), and WebKit's quota.
+
+## D8/D9 skeptic: lineage-aware quota removal, restore target protected, takeover keeps the 1.x text
+
+Review `native/docs/reviews/D8-D9.md` (K1–K3). store.js and controller.js; SCHEMA unchanged.
+
+- **K2: what "superseded" means.** Before: any older kept copy of a schema with a newer copy of that schema could be
+  removed when a write hit the quota. Copies of one schema are often different libraries (1.1.0 seeds the factory
+  songs each time it sets a 2.0 library aside), so a 300-song 2.0 library could go while a newer factory-seed copy
+  stayed. Now a copy is removable only when every song id and setlist id it holds is also in a newer kept copy of the
+  same schema, or, for a schema-2 copy, in the main library both as stored and as about to be saved. It is then an
+  earlier state of a library that is still kept. The newest copy of each schema still always stays. When nothing
+  qualifies, the write fails as before: `keepCurrent` returns `ok:false` and nothing is replaced, or the save keeps
+  its retry and warning, and the main key keeps the last good save.
+- **K1: the restore target.** `keepCurrent(kind, {protect})`. `restorePreviousLibrary(key)` passes the target, so
+  making room for the pre-restore copy can no longer remove the copy being restored. Before, under quota, it removed
+  it, and the restore then failed with "That library is no longer kept."
+- **K3: `reload()`** (a second window taking over) keeps a `migration` copy of a schema-1 text that 1.1 saved
+  meanwhile, as load does. The 2.0 upgrade is then saved over it. A seed or a text that is already kept is not kept
+  again.
+- **Tests.**
+  - `test/phase2/migration-1x/d8-skeptic.test.mjs` (12 tests): 240 seeded random 1.1.0 / 1.1.1 / 2.0 sequences on
+    one storage, with edits, deletes, crashes and restores (every saved library is still reachable in 2.0 after each
+    session); K1, K2, K3; K4 (open, 1.1.0 only: a waiting 1.1.0 window that takes over saves over 2.0's later
+    edits; 1.1.1 does not); random quota fills (60 seeds); adoption with 40 rotation keys over 4 loads; restore crash
+    points, read-only and second windows, undo; a restore near 2.5 M under a 5.2 M and a 3 M quota; D9 saves and
+    toasts; 1.1.1 = 1.1.0 on 7 profiles without a 2.0 library.
+  - `quota.pw.mjs` (real Chromium, quota measured at 5 241 856 characters): K2 at real size, a 2.47 M restore over an
+    edited library.
+  - `kept.test.mjs`: the two quota-policy tests now use a grown copy of the same library as the newer copy.
+
