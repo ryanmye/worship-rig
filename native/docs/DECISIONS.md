@@ -156,3 +156,18 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
     `pristine`, and that is persisted. What a pristine library can hold is factory songs (re-addable from Edit ›
     Factory…), navigation, device-local settings (kept) and the theme. The theme is the one 2.0 choice the replace
     overwrites; the release notes say so.
+
+## D8: 1.1 ↔ 2.0 in one Chrome profile: fix in 2.0, plus a 1.1.1 patch (Ryan, 2026-11-25; review E5 M4)
+- **The problem.** Switching back and forth between 1.1 and 2.0 in one browser profile hides each version's library
+  in a backup key. After two round trips, both copies are pruned.
+- **The 2.0 fix:**
+  - a migration copy is never pruned;
+  - a "Restore previous library" action;
+  - a warning in the release notes.
+- **The 1.1.1 patch.** 1.x refuses to overwrite a library with a newer schema, and offers to keep it.
+- **Not yet approved: publishing the patch.** Pushing `main`, tagging and releasing 1.1.1 each still need Ryan's OK.
+  Until then, the patch is prepared on a local branch.
+
+## D9: The library size cap warns and still allows restores (Ryan, 2026-11-25; review E5 M3)
+- **Saves.** A save that pushes the library past 2,000,000 characters warns but is not refused.
+- **Imports.** An import or restore of the library's own backup is allowed up to 1.25× the cap.
