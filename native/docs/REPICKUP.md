@@ -80,9 +80,9 @@ Numbers (scoped integrator, 2026-11-24, `f4869e3`, fresh build dirs `native/core
   `parity.mjs --twin` exit 0, 110 at the exact tier (not `synth-dx-epiano`, Q11, nor `bend-modes`, T14 O3).
 - JS: `run-all --only unit` **648 / 0** (10 skip); shell unit **261/261**, browser **13/13**; settings **86/86**;
   `node --test test/unit/engine-bridge/*.test.mjs` with `RIG_DEVHOST` **131 / 0 / 0**.
-- **UI parity** (ui-core on `rig-devhost`, raw): **76, 76, 75 / 77**; the failures are the known suite-side read races
-  (owner: ui-core suite). **Tick gaps max 128 / 113 / 129 ms, none over 150 ms** (CORE2 integration: 283-329 ms,
-  from CORE2A O2, now closed); next to a synth / organ `prepare` at most 73 ms.
+- **UI parity** (ui-core on `rig-devhost`, raw): **76, 76, 75 / 77**; the failures were the known suite-side read races
+  (closed by E3: 78/78 x 3 on devhost). **Tick gaps max 128 / 113 / 129 ms, none over 150 ms** (CORE2 integration:
+  283-329 ms, from CORE2A O2, now closed); next to a synth / organ `prepare` at most 73 ms.
 - CI `native-core` all green at `650df77` and `f4869e3` (macos-15 ctest 84/84, `mac-check` tools / apple-mac /
   apple-sim PASS, ASan 84/84, TSan 38/38).
 - Mac check #3 (`b9a0c27`): `core` 68/70 (fixed by MACFIX), `probe` PASS (64 frames safe; auto voice-limit
@@ -175,8 +175,7 @@ on the Mac and give it this prompt:
    OK with the bridge log attached.
 4. **iPad**: install via Xcode + free Apple ID (`native/apple/README.md` steps 7-10), then the iPad probe (D4 iPad
    profile, D2 rounding; the CORE3 prebuild cap is 32 MB there, about 5 organ units).
-5. **In parallel on the cloud box** (small tasks, BUILD_PLAN "CORE3 + MACFIX results", open items by owner): the
-   three ui-core read races (suite; v11-decisions failed in 3 of 3 full runs in the scoped re-check), the T10
+5. **In parallel on the cloud box** (small tasks, BUILD_PLAN "CORE3 + MACFIX results", open items by owner): the T10
    `SHELL.md` follow-ups (library migration before Ryan uses the app for real), CORE3 O6 (cold `cache estimate` on
    the control thread, T06), the CORE3 O2 margin (T13), then the core follow-ups and nits listed there. Chart work
    waits for the D7 design pass with Ryan and a real WorshipTools export (C2 O7).

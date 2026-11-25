@@ -234,6 +234,7 @@ async function reattachMainPage() {
   await page.waitForFunction(() => window.__rig.controller.status.ready === true, null, { timeout: 90000 });
   await page.evaluate(HELPERS);
   await page.evaluate(HOLD_IN_PAGE);
+  await installEventDelay();
 }
 
 /** Toasts are click-through overlays; clear them so screenshots show the controls underneath. */
@@ -256,6 +257,69 @@ async function waitSong(id) {
     id,
     { timeout: 30000 },
   );
+}
+
+/**
+ * E3: wait for engine state that on the bridge arrives by a core event (`notes`, `click`) some ms after the call that
+ * caused it (the web engine changes it synchronously, so there it is true at once). Bounded; the failure says what
+ * never came true, not just "waitForFunction timed out".
+ * @param {string} what  the state, for the failure message
+ * @param {Function} fn  evaluated in the page; truthy when the state holds
+ * @param {*} [arg]
+ * @param {number} [timeout]
+ */
+async function waitState(what, fn, arg, timeout = 5000) {
+  try {
+    await page.waitForFunction(fn, arg, { timeout });
+  } catch (e) {
+    const snap = await page.evaluate(() => ({
+      click: window.__rig.engine.clickState?.() ?? null,
+      holds60: window.__t.holds(60),
+      holds64: window.__t.holds(64),
+    })).catch(() => null);
+    const first = e.message.split('\n')[0];
+    throw new Error(`still not true after ${timeout} ms: ${what} (${JSON.stringify(snap)}): ${first}`);
+  }
+}
+
+/**
+ * E3 stress knobs (bridge only; unset = off). They deliver some of the core's events late, in order, which is what a
+ * loaded box does to the page's read-after-action races, so a test that reads such state without waiting for it fails
+ * here every time:
+ *   RIG_TEST_EVENT_DELAY_MS    `click` events and the `notes` events that release every key (Panic, noteOff)
+ *   RIG_TEST_NOTE_ON_DELAY_MS  the `notes` events that report a held key
+ */
+const EVENT_DELAY_MS = Number(process.env.RIG_TEST_EVENT_DELAY_MS) || 0;
+const NOTE_ON_DELAY_MS = Number(process.env.RIG_TEST_NOTE_ON_DELAY_MS) || 0;
+const DELAY_IN_PAGE = ([ms, onMs]) => {
+  const e = window.__rig.engine;
+  if (!(ms || onMs) || typeof e._onEvent !== 'function') return 'off';
+  if (e.__eventDelay) return 'on';
+  e.__eventDelay = true;
+  const orig = e._onEvent.bind(e);
+  const delayOf = (m) => {
+    if (!m) return 0;
+    if (m.ev === 'click') return ms;
+    if (m.ev === 'notes') return m.held && m.held.length ? onMs : ms;
+    return 0;
+  };
+  // later events queue behind a delayed one, so the order the core sent them in is kept
+  let last = 0;
+  e._onEvent = (m) => {
+    const d = delayOf(m);
+    if (!d && last <= performance.now()) return orig(m);
+    last = Math.max(last, performance.now() + d);
+    setTimeout(() => orig(m), last - performance.now());
+    return undefined;
+  };
+  return 'on';
+};
+/** E3 skeptic: says whether the knobs took, so a run that sets them never passes on knobs that did nothing. */
+async function installEventDelay() {
+  if (!(EVENT_DELAY_MS || NOTE_ON_DELAY_MS)) return;
+  const r = await page.evaluate(DELAY_IN_PAGE, [EVENT_DELAY_MS, NOTE_ON_DELAY_MS]);
+  const how = r === 'on' ? 'on' : 'off: not the bridge engine';
+  console.log(`# E3 event delay knobs (${EVENT_DELAY_MS} / ${NOTE_ON_DELAY_MS} ms): ${how}`);
 }
 
 /**
@@ -402,6 +466,7 @@ before(async () => {
   await page.waitForFunction(() => !!window.__rig, null, { timeout: 20000 });
   await page.evaluate(HELPERS);
   await page.evaluate(HOLD_IN_PAGE);
+  await installEventDelay();
 });
 
 after(async () => {
@@ -2612,9 +2677,15 @@ test('polish-2A banners (ux-round2 L2 / #2): one 32 px strip with a chevron; unf
     assert.ok(btn.height >= 44, `unfolded buttons are 44 px (${btn.height})`);
     await page.screenshot({ path: path.join(shots, 'banner-strip-open-1024.png') });
     await page.evaluate(() => window.__rig.controller.perform.noteOn(64, 90));
+    // E3: the bridge reports a held note by the core's `notes` event, after the call; Esc before it has landed would
+    // test nothing, and the read after it would race the event (CORE2A O1)
+    await waitState('note 64 held (core `notes` event) before Esc', () => window.__t.holds(64));
     await page.keyboard.press('Escape');
     const afterEsc = await geo();
     assert.equal(afterEsc.expanded, 'false', 'Esc folds the strip');
+    // a panic would reach the page as `notes {held: []}`, ahead of any core stats frame built after it. Two frames
+    // (E3 skeptic): the first one can have been built before the core read the Esc and still be in flight
+    assert.ok(await page.evaluate(() => window.__t.freshStats(2)), 'core stats frames after Esc');
     assert.ok(await page.evaluate(() => window.__t.holds(64)), 'that Esc did not panic');
     await page.evaluate(() => window.__rig.controller.perform.noteOff(64));
     // one banner: no count; its action works from the folded strip
@@ -4513,12 +4584,30 @@ test('v11-polish: strip pedal light, no EXPERIMENTAL tag on stage, aria-disabled
 });
 
 test('v11-metronome: Perform Click chip — hidden without a tempo; count-in → on; keeps running over Next (held note '
-  + 'kept, new tempo); live under Lock; a song without a tempo stops it', async () => {
+  + 'kept, new tempo); live under Lock; a song without a tempo stops it', async (t) => {
   await selectIndex(0);
   const ids = await page.evaluate(() => window.__rig.store.navIds());
   const ev = (fn, arg) => page.evaluate(fn, arg);
   const chip = '[data-testid=click-toggle]';
   const orig = await ev((x) => x.map((id) => window.__rig.store.getSong(id).tempo), ids.slice(0, 2));
+  // E3: runs on pass and on fail. A failure used to leave the click running and the tempos edited, which made
+  // v11-decisions' first chip click STOP the click instead of starting a count-in (a 30 s cascade)
+  t.after(async () => {
+    await ev(([[a, b], [ta, tb]]) => {
+      const e = window.__rig.engine;
+      const s = window.__rig.store;
+      e.clickStop?.();
+      window.__rig.controller.perform.noteOff(60);
+      window.__rig.controller.perform.noteOff(64);
+      s.setClick({ countIn: null });
+      s.set('settings.performLock', false);
+      s.set(`songs.${a}.tempo`, ta);
+      s.set(`songs.${b}.tempo`, tb);
+      s.set(`songs.${b}.timeSig`, null);
+    }, [ids, orig]);
+    await waitState('click stopped (cleanup)', () => !window.__rig.engine.clickState()?.running);
+    await selectIndex(0);
+  });
   await ev(([a, b]) => {
     const s = window.__rig.store;
     s.set('settings.performLock', false);
@@ -4558,6 +4647,8 @@ test('v11-metronome: Perform Click chip — hidden without a tempo; count-in →
   assert.deepEqual(narrow, { num: true, word: false, text: '100', bpmLine: 'none', label: 'Click on (100 BPM)' });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.waitForTimeout(150);
+  await waitState('click running at 100 BPM (core `click` event)',
+    () => { const c = window.__rig.engine.clickState(); return !!c && c.running === true && c.bpm === 100; });
   await ev(() => window.__t.freshStats()); // bridge: a core stats sample from now (web: no wait)
   const st1 = await ev(() => ({ ...window.__rig.engine.clickState(), ticks: window.__t.clickTicks() }));
   assert.equal(st1.running, true);
@@ -4567,6 +4658,12 @@ test('v11-metronome: Perform Click chip — hidden without a tempo; count-in →
   await ev(() => window.__rig.controller.perform.noteOn(60, 100));
   await page.click('[data-testid=next-song]');
   await waitSong(ids[1]);
+  // E3: the tempo / meter come back in the core's `click` event, the held note in its `notes` event; waitSong sees
+  // neither (the controller status and the slot range can be true first)
+  await waitState('click at 80 BPM, 3/4 and note 60 still held after Next', () => {
+    const c = window.__rig.engine.clickState();
+    return !!c && c.bpm === 80 && c.sig === '3/4' && window.__t.soundingHas(60);
+  });
   const st2 = await ev(() => ({ ...window.__rig.engine.clickState(), held: window.__t.soundingHas(60) }));
   assert.equal(st2.running, true, 'the click keeps running across the song switch');
   assert.equal(st2.bpm, 80);
@@ -4586,23 +4683,25 @@ test('v11-metronome: Perform Click chip — hidden without a tempo; count-in →
   await page.waitForFunction(() => window.__rig.controller.status.click.on === true);
   await ev((b) => window.__rig.store.set(`songs.${b}.tempo`, null), ids[1]);
   await page.waitForFunction((c) => document.querySelector(c).hidden && !window.__rig.engine.clickState().running, chip);
-  await ev(([[a, b], [ta, tb]]) => {
-    const s = window.__rig.store;
-    s.setClick({ countIn: null });
-    s.set(`songs.${a}.tempo`, ta);
-    s.set(`songs.${b}.tempo`, tb);
-    s.set(`songs.${b}.timeSig`, null);
-  }, [ids, orig]);
-  await selectIndex(0);
 });
 
 test('v11-decisions: PANIC stops the click (during the count-in and after); the chip reads off; held notes go too',
-  async () => {
+  async (t) => {
     await selectIndex(0);
     const ev = (fn, arg) => page.evaluate(fn, arg);
     const chip = '[data-testid=click-toggle]';
     const id = await ev(() => window.__rig.store.currentSong().id);
     const orig = await ev((a) => window.__rig.store.getSong(a).tempo, id);
+    // E3: a failure here must not leave the click running or the tempo edited for the tests after it
+    t.after(async () => {
+      await ev(([s, tempo]) => {
+        window.__rig.engine.clickStop?.();
+        window.__rig.controller.perform.noteOff(64);
+        window.__rig.store.setClick({ countIn: null });
+        window.__rig.store.set(`songs.${s}.tempo`, tempo);
+      }, [id, orig]);
+      await waitState('click stopped (cleanup)', () => !window.__rig.engine.clickState()?.running);
+    });
     await ev((a) => {
       const s = window.__rig.store;
       s.set('settings.performLock', false);
@@ -4613,8 +4712,14 @@ test('v11-decisions: PANIC stops the click (during the count-in and after); the 
     await page.click(chip);
     await page.waitForFunction((c) => document.querySelector(c).classList.contains('counting'), chip);
     await ev(() => window.__rig.controller.perform.noteOn(64, 90));
+    await waitState('note 64 held (core `notes` event) before Panic', () => window.__t.holds(64));
     await page.click('[data-testid=panic]');
-    await page.waitForFunction((c) => document.querySelector(c).getAttribute('aria-pressed') === 'false', chip);
+    // E3 skeptic: bounded and named (a Panic that leaves the click on used to fail as a bare 30 s timeout)
+    await waitState('Panic turned the click chip off (aria-pressed false)',
+      (c) => document.querySelector(c).getAttribute('aria-pressed') === 'false', chip);
+    // E3: aria-pressed is the page's own state; the core's `notes {held: []}` and `click {running: false}` follow it
+    await waitState('Panic released note 64 and stopped the click (core `notes` / `click` events)',
+      () => !window.__t.holds(64) && !window.__rig.engine.clickState()?.running);
     const a = await ev((c) => ({
       running: window.__rig.engine.clickState().running,
       on: window.__rig.controller.status.click.on,
@@ -4630,10 +4735,11 @@ test('v11-decisions: PANIC stops the click (during the count-in and after); the 
     await page.click(chip);
     await page.waitForFunction((c) => document.querySelector(c).classList.contains('on'), chip);
     await page.keyboard.press('Escape');
-    await page.waitForFunction((c) => document.querySelector(c).getAttribute('aria-pressed') === 'false', chip);
+    await waitState('Esc (the Panic key) turned the click chip off (aria-pressed false)',
+      (c) => document.querySelector(c).getAttribute('aria-pressed') === 'false', chip);
+    await waitState('Esc stopped the click (core `click` event)', () => !window.__t.clickRunning());
     assert.equal(await ev(() => window.__rig.engine.clickState().running), false);
     assert.equal(await ev(() => window.__t.clickRunning()), false, 'no MIDI clock transport left running');
-    await ev(([s, t]) => window.__rig.store.set(`songs.${s}.tempo`, t), [id, orig]);
   });
 
 test('no console errors on the main page', () => {

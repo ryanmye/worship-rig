@@ -574,9 +574,8 @@ Integrated tree `v2-native` `a8cb4d1` (+ this pass's docs), fresh build dirs, `-
   so a switch to such a song stalls ticks and live input for up to ~0.3 s on this box (16 of 17 tick gaps over
   150 ms in this pass). Build off the control thread or cache the tables. The one user-audible core item left.
   **Closed by CORE3** ("CORE3 + MACFIX results" below).
-- **ui-core suite** (`test/phase2/ui-core/run.mjs`): the three read races in PARITY "UI parity" (v11-metronome:
-  wait for the core's `click` event after the switch + a cleanup hook that stops the click; v11-decisions: wait for
-  `!holds(64)` / `!clickState().running`; polish-2A banners: CORE2A O1).
+- **ui-core suite**: the three read races are **closed by E3** (suite only, no app change; PARITY "UI parity": 78/78 on
+  devhost `--no-adapter` x 3 and on the web engine x 3).
 - **T08 / T06 / T12 (core, nits)**: CORE2A O3 (`prepare` also waits for reused sampler slots still loading), O4
   (a sampler load finishing after a commit whose `when` is ahead reaches the old unit; unreachable from the shim),
   O5 (`ThreadPool::pending()` overcount); CORE1 open 2 (`setEpochSource` never set on the realtime cache: safe by
@@ -645,9 +644,8 @@ unchanged); the mutation runs (CORE3 M1-M3 and MACFIX M1-M3 were run in their re
   now says what to listen for with neighbour prebuild). Part B needs `apple-mac` on the same commit. Unchanged: the iOS
   simulator platform (`apple-sim`; it passes on CI's `macos-15`), D4 R1 chord burst, dx-epiano / supersaw-pad per
   voice, T07 O6, T11 O4, T11 O6, the iPad probe.
-- **ui-core suite**: the three read races. v11-decisions now failed in 3 of 3 full runs (traced: the deep-equal reads
-  `soundingHas(64)` before the core's `notes {held: []}`, sent 0.1 ms after `panic`): wait for `!__t.holds(64)` and
-  `!engine.clickState().running` before the deep-equal; the v11-metronome `bpm` wait + cleanup hook; polish-2A.
+- **ui-core suite**: the three read races, **closed by E3** (bounded `waitState` on the core's `click` / `notes` events,
+  `t.after` cleanup hooks in v11-metronome and v11-decisions; reproduced with `RIG_TEST_EVENT_DELAY_MS`, then green).
 - **T13 (core)**: CORE3 O2 follow-up (an idle-box 16-slot switch gap reaches 47 of the 50 ms bound: build the 16
   strips off the control thread too if CI trips it); CORE3 O5 nit (the build key leaves out the engine seed).
 - **T06 / CORE2A (core)**: CORE3 O6, the first `cache estimate` of a sampler patch held the loop 148 ms in the CORE3
