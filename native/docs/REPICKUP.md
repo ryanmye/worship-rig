@@ -26,7 +26,8 @@ ignores personal tokens. A new cloud session started with `ryanmye/worship-rig` 
      missing or not VERIFIED, re-run the CORE3 skeptic on the committed work-in-progress.
    - **MACFIX** is VERIFIED (`reviews/MACFIX.md`).
    - **The scoped re-check of both comes next.** Ryan's rule is "only check affected sections".
-     `tools/cloud/orchestration/integ4.js` is that check.
+     `tools/cloud/orchestration/integ4.js` is that check. (Done 2026-11-24: CORE3 VERIFIED, scoped re-check green;
+     see section 2.)
 5. **Orchestration helpers** (workflow scripts, the progress probe and the checkpoint script) are in
    `tools/cloud/orchestration/`. Edit the paths at the top of each before use.
 6. **Progress dashboard** (Artifact, data type): https://claude.ai/artifact/5nNh2nGFtLtnTxjLSi8Ccc
@@ -44,15 +45,19 @@ deterministic OfflineAudioContext renders ("goldens", `native/golden`, `tools/go
 per fixture (112 fixtures, tier exact or statistical). Windows is out of scope. iPad installs via Xcode + free Apple ID
 (7-day re-sign), no App Store.
 
-## 2. Where it stands (engine + UI wave done and integrated, 2026-11-22; next: Mac check, Ryan hands-on, iPad)
+## 2. Where it stands (CORE3 + MACFIX integrated, 2026-11-24; next: Mac check #4, Ryan hands-on, iPad)
 
 The engine and the UI are done on Linux: everything that plays is in the core (waves 0-3), the UI wave (SCHEMA 2,
 1..16 slots in Perform / Edit / scenes / wheels / MIDI-learn, Settings items, `config {dynamicRange}`) is in, and the
 core fixes the UI parity runs exposed are in (CORE1: realtime cache pump, restart while asleep; CORE2A: asynchronous
 `cache preload`, realtime `prepare` answered after its samples; CORE2B: tick `pedal` / `held` / `swelling`, contracted
-`get {what:'param'}`, contract minor 5). The integrator's tree is `v2-native` `a8cb4d1` plus docs; the orchestrator
-commits it (check `git log origin/v2-native -3`). Nothing has run on the Mac since Mac check #2 (`b0bf81a`, before
-wave 3), and the Apple app has never been launched.
+`get {what:'param'}`, contract minor 5). Since the CORE2 integration (`b9a0c27`), **CORE3** builds synth / organ
+units off the control thread and prebuilds the setlist neighbours (closes CORE2A O2, the last user-audible core
+item), **MACFIX** fixed Mac check #3's two `core` failures (test order, not the linker; the app was never affected),
+and the chart lanes (C2 parser, D7 chart view hidden behind `settings.chartView`) landed in `app/`. The scoped
+re-check of those (BUILD_PLAN "CORE3 + MACFIX results") passed on `v2-native` `f4869e3`; the integrator's doc edits
+go on top. Mac check #3 (`b9a0c27`) ran on the Mac: `core` 68/70 (MACFIX), `probe` and `apple-mac` PASS. CI's macOS
+jobs are green at `650df77` and `f4869e3` (MAC_CHECK "CI Mac check"). The Apple app has never been launched.
 
 | step | state | evidence |
 |---|---|---|
@@ -60,26 +65,32 @@ wave 3), and the Apple app has never been launched.
 | Waves 1-3 (DSP modules, T00c scale-out, instruments + Model, perform / synth-extra / organ / drone, W3A / W3B) | done, integrated | BUILD_PLAN "Wave 1 / 2 / 3 results", `reviews/T*.md`, `W3A.md`, `W3B.md` |
 | UI wave: UIA (store SCHEMA 2, 16 slots), UIB (Settings, bridge rows, devhost parity run), UIC (follow-ups) | done (UIA / UIB PARTIAL, closed by UIC, VERIFIED) | `reviews/UIA.md`, `UIB.md`, `UIC.md` |
 | Core fixes CORE1 (mackit O1 cache pump, W3A R1, T00c O4), CORE2A (async preload), CORE2B (tick pedal / held / swelling, `get param`) | done, VERIFIED | `reviews/CORE1.md`, `CORE2A.md`, `CORE2B.md` |
-| **2.0 integration** | **done** (this file's state) | BUILD_PLAN "UI wave + CORE1 / CORE2 results" (gate + every open item by owner), `PARITY.md` |
-| T10 Apple shell | macOS target compiles and links (Mac check #2); never launched; iPad sim build not run (platform missing); `SHELL.md` follow-ups unbuilt | `MAC_CHECK.md` |
+| **2.0 integration** (CORE2, `b9a0c27`) | done: full gate | BUILD_PLAN "UI wave + CORE1 / CORE2 results" (gate + every open item by owner), `PARITY.md` |
+| CORE3 (off-thread synth / organ builds, neighbour prebuild; CORE2A O2), MACFIX (Mac check #3 `core`) | done, VERIFIED | `reviews/CORE3.md`, `MACFIX.md` |
+| Chart lanes: C2 parser, D7 chart view (hidden, `settings.chartView`) | done (C2 PARTIAL: no real export tested; chart view VERIFIED) | `reviews/C2-parser.md`, `chart-view.md` |
+| **Scoped re-check** (CORE3 + MACFIX + chart view, `f4869e3`) | **done** (this file's state) | BUILD_PLAN "CORE3 + MACFIX results" (numbers, what was skipped, open items by owner), `PARITY.md` "UI parity" |
+| T10 Apple shell | macOS + iPad-sim targets compile and link (Mac check #3 `apple-mac`; CI `mac-check` at `f4869e3` both); never launched; `SHELL.md` follow-ups unbuilt | `MAC_CHECK.md` |
 
-Numbers (integrator, fresh build dirs `native/core/build-int[-clang20|-asan|-tsan]`, `native/devhost/build-int`,
-`-j2` at most, one heavy job at a time):
-- ctest **82/82** on g++ 13 Release, clang++-20 Release `-Werror` (stand-in for Apple clang 21) and g++ ASan+UBSan (no
-  sanitizer report); g++ TSan **36/36** (CI regex + cache / sampler / core2b suites; no report); devhost **5/5**;
-  0 compiler warnings everywhere.
-- Fixtures: **112/112** at the manifest tier, 110 at the exact tier (not `synth-dx-epiano`, Q11, nor `bend-modes`,
-  T14 O3); g++ = clang-20 byte-identical for all 112, and identical to the renders before the UI wave and CORE2:
-  no fixture moved. `parity.mjs --twin` exits 0.
-- JS: `node test/run-all.mjs --fast` **11/12** (the only failure: eq `L-21`, pre-existing); settings 86/86 (all four
-  modes); `node --test test/unit/engine-bridge/*.test.mjs` with `RIG_DEVHOST` **131 / 0 / 0**.
-- **UI parity** (ui-core on `rig-devhost`, raw): **77, 75, 77 / 77** (adapter 76); the failures are suite-side read
-  races (owner: ui-core suite). No tick gap over 400 ms; the largest (~0.3 s) come from synth / organ units built in
-  `Model::prepare` (CORE2A O2, owner T11 / T15 / T13: the one user-audible core item left).
-- Mac check #2 (`b0bf81a`, before wave 3): core 46/46 under Apple clang 21; probe: 64-512 frames granted exactly,
-  0 xruns, 64 safe; warm-pad 4.82 µs per voice. Desktop Auto voice limit stays **128** (Ryan, D5 follow-up).
+Numbers (scoped integrator, 2026-11-24, `f4869e3`, fresh build dirs `native/core/build-int[-clang20|-asan|-tsan]`,
+`native/devhost/build-int`, `-j2`, one heavy job at a time; full-gate numbers at `b9a0c27` in BUILD_PLAN):
+- ctest **84/84** on g++ 13 Release and clang++-20 Release `-Werror` (82 + `unit.registry-link` + `unit.core3`;
+  clang's first `-j2` run 83/84, `unit.runtime_preload` timing, passed alone and on the re-run); ASan+UBSan and TSan
+  on the 11 affected suites **11/11** each, no report; devhost **5/5**; 0 compiler warnings.
+- Fixtures: all **112 byte-identical to `b9a0c27`** (base built with `native/contract`), g++ = clang-20 112/112,
+  `parity.mjs --twin` exit 0, 110 at the exact tier (not `synth-dx-epiano`, Q11, nor `bend-modes`, T14 O3).
+- JS: `run-all --only unit` **648 / 0** (10 skip); shell unit **261/261**, browser **13/13**; settings **86/86**;
+  `node --test test/unit/engine-bridge/*.test.mjs` with `RIG_DEVHOST` **131 / 0 / 0**.
+- **UI parity** (ui-core on `rig-devhost`, raw): **76, 76, 75 / 77**; the failures are the known suite-side read races
+  (owner: ui-core suite). **Tick gaps max 128 / 113 / 129 ms, none over 150 ms** (CORE2 integration: 283-329 ms,
+  from CORE2A O2, now closed); next to a synth / organ `prepare` at most 73 ms.
+- CI `native-core` all green at `650df77` and `f4869e3` (macos-15 ctest 84/84, `mac-check` tools / apple-mac /
+  apple-sim PASS, ASan 84/84, TSan 38/38).
+- Mac check #3 (`b9a0c27`): `core` 68/70 (fixed by MACFIX), `probe` PASS (64 frames safe; auto voice-limit
+  suggestion 288), `apple-mac` PASS, `apple-sim` environment only. Mac check #2 (`b0bf81a`): warm-pad 4.82 µs per
+  voice. Desktop Auto voice limit stays **128** (Ryan, D5 follow-up).
 
-Docs to read, in order: `BUILD_PLAN.md` ("UI wave + CORE1 / CORE2 results": the gate and every open item by owner),
+Docs to read, in order: `BUILD_PLAN.md` ("CORE3 + MACFIX results", then "UI wave + CORE1 / CORE2 results": the gates
+and every open item by owner),
 `PARITY.md`, `DECISIONS.md` (D1-D5, O-W3-1 / O-W3-2), `INTERFACE_LOG.md` (1-38, W3B-1..9, W3A-1..11, W3-1..5,
 W3I-1..3), `reviews/*.md`, `ARCHITECTURE.md` §7.1 (budgets; per-voice cost of every instrument kind), `MAC_CHECK.md`.
 
@@ -150,20 +161,25 @@ on the Mac and give it this prompt:
 
 ## 6. What to do next (in order)
 
-1. **Commit + push** the integration tree (`ckpt.sh`, bundle, PUSH; section 5). (The integrator's themes run
-   rewrote the timestamps in `test/phase2/themes/coverage-*.json`; a checkpoint committed them: harmless.)
-2. **Mac check on the M2 Pro** (push agent `RUN`, `MAC_CHECK.md` tier 1): `check.sh` on the pushed commit, all
-   stages. Expect `core`, `probe`, `apple-mac` PASS; `apple-sim` needs the iOS platform installed (Xcode › Settings ›
-   Components). Read `summary.json` back; also read the CI `mac-check`, `goldens` and `sanitizers` results.
+1. **Commit + push** the scoped integrator's doc edits (BUILD_PLAN, PARITY, MAC_CHECK, this file) on top of
+   `f4869e3`: `git push origin v2-native` from the cloud session (section 0), or the bundle protocol (section 5) once
+   the Mac is on.
+2. **Mac check #4 on the M2 Pro** when the Mac is back on (push agent `RUN`, `MAC_CHECK.md` Tier 1, "Mac check #4:
+   the stages it needs"): `--stage tools,core,probe` on the pushed commit, plus `apple-mac` only if Ryan does
+   hands-on part B in the same sitting. Expect `core` **72/72** (12 `golden.*` not run), `probe` PASS. Read
+   `summary.json` back. CI's macOS jobs are already green at `f4869e3` (MAC_CHECK "CI Mac check").
 3. **Ryan hands-on** (`MAC_CHECK.md` "Tier 2: Ryan hands-on checklist", ~25 min): part A runs the 2.0 UI in Chrome on
-   the native engine through `rig-devhost` from the check's build tree, with his own library, MIDI keyboard and pedal;
-   the main check is switching songs while playing. Part B is the Mac app (needs its first launch). Ryan reports per
-   step OK / not OK with the bridge log attached.
+   the native engine through `rig-devhost` from the check's build tree, with his own library, MIDI keyboard and pedal.
+   The main check is switching songs while playing; step 5 says what to listen for now that neighbours are prebuilt
+   and a jump builds on a build lane. Part B is the Mac app (needs its first launch). Ryan reports per step OK / not
+   OK with the bridge log attached.
 4. **iPad**: install via Xcode + free Apple ID (`native/apple/README.md` steps 7-10), then the iPad probe (D4 iPad
-   profile, D2 rounding).
-5. **In parallel on the cloud box** (small tasks, BUILD_PLAN open items by owner): CORE2A O2 (build synth / organ
-   units off the control thread: T11 / T15 / T13), the three ui-core read races (suite), the T10 `SHELL.md`
-   follow-ups (library migration before Ryan uses the app for real), then the core follow-ups and nits listed there.
+   profile, D2 rounding; the CORE3 prebuild cap is 32 MB there, about 5 organ units).
+5. **In parallel on the cloud box** (small tasks, BUILD_PLAN "CORE3 + MACFIX results", open items by owner): the
+   three ui-core read races (suite; v11-decisions failed in 3 of 3 full runs in the scoped re-check), the T10
+   `SHELL.md` follow-ups (library migration before Ryan uses the app for real), CORE3 O6 (cold `cache estimate` on
+   the control thread, T06), the CORE3 O2 margin (T13), then the core follow-ups and nits listed there. Chart work
+   waits for the D7 design pass with Ryan and a real WorshipTools export (C2 O7).
 
 ## 7. Files outside the repo (cloud session outputs, `v2/`)
 

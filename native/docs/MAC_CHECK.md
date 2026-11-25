@@ -19,10 +19,33 @@ Xcode license), the timeout watchdog and a TERM in the middle of the core build 
 left behind). The script
 was written for `/bin/bash` 3.2 but only run under bash 5 here. The macOS-only
 parts ran for the first time in Mac check #2 (tier 1, see Results: Core Audio probe, `build-core.sh`, `xcodegen` and
-the macOS `xcodebuild` PASS; the simulator build needs the iOS platform installed); no result of the `mac-check` CI job
-has been read back here yet.
+the macOS `xcodebuild` PASS; the simulator build needs the iOS platform installed). The `mac-check` CI job was first
+read back by the scoped integrator (2026-11-24, "CI Mac check" below).
 
 ## Results
+
+### CI Mac check (GitHub Actions `native-core`, `650df77` and `f4869e3`; read back 2026-11-24)
+
+Read with `env -u GH_TOKEN gh run list -R ryanmye/worship-rig -b v2-native` and `gh run view --job ... --log`. Both
+runs are push runs on `v2-native` and concluded **success**, every job green. This is CI's `macos-15` runner (Apple
+clang from the runner's Xcode), not Ryan's Mac: no Core Audio device, no probe, no launch.
+
+| job | `650df77` (run 45113813640, CORE3 builder finish pass) | `f4869e3` (run 45543732316, CORE3 VERIFIED, HEAD) |
+|---|---|---|
+| `goldens` (renders the non-committed goldens with the pinned Chromium) | success | success |
+| `build-test (macos-15)` | success, ctest **84/84** | success, ctest **84/84** |
+| `build-test (ubuntu-latest)` | success | success |
+| `mac-check` (`check.sh --rev HEAD --stage tools,apple-mac,apple-sim`) | success: `tools` PASS, `apple-mac` PASS (0 compiler warnings), `apple-sim` PASS (1 compiler warning) | success: `tools` PASS, `apple-mac` PASS (0 compiler warnings), `apple-sim` PASS (1 compiler warning) |
+| `sanitizers` (Linux) | success: ASan 84/84, TSan 31/31 | success: ASan 84/84, TSan 38/38 (regex + `core3\|synth\|organ`) |
+
+What it shows: the core with MACFIX and CORE3 builds and passes all 84 ctests (goldens included) under Apple clang on
+macOS, and both Apple targets compile and link from a `check.sh` export. The `apple-sim` warning was not read here
+(one warning, both runs). Not shown: anything on Ryan's M2 Pro (the probe, Core Audio, the app's first launch).
+The commits between the two (`9b96f13`..`db15e0e`: docs, the chart lanes in `app/`) have no run of their own. The
+three CORE3 / MACFIX checkpoints before `650df77` (`6045199`, `a26c191`, `7f2e9a8`) failed `build-test (macos-15)`;
+at `7f2e9a8` the one failure was `unit.core3`'s old tick-gap bound (`test_core3.cpp:344`, 145.8 ms vs 80), the bound
+the finish pass and CORE3 review O2 reworked. So the macOS runner is a place where `unit.core3`'s timing bounds can
+trip (CORE3 O2 follow-up, T13).
 
 ### Mac check #3 (2026-11-22, tier 1, `b9a0c27`, the CORE2 integration commit)
 
@@ -37,7 +60,9 @@ Ryan's M2 Pro, Apple clang 21.0.0 (clang-2100.1.1.101). The run started at 23:36
 | `apple-mac` | PASS, 0 warnings |
 | `apple-sim` | FAIL, environment only: the iOS 26.5 simulator platform is not installed. |
 
-Hands-on: **on hold** until MACFIX and CORE3 land and Mac check #4 passes `core`.
+Hands-on: **on hold** until MACFIX and CORE3 land and Mac check #4 passes `core`. (2026-11-24: both landed and
+VERIFIED, scoped re-check green, CI Mac check green at `f4869e3`; Mac check #4 is next: "Mac check #4: the stages it
+needs" under Tier 1.)
 
 **MACFIX (root cause, reproduced on Linux).** The "ld64 drops a static-initializer registration" hypothesis is
 wrong. Nothing in `native/core` registers from a static initializer. `api/registry.cpp`'s `ensureModulesRegistered()`
@@ -155,6 +180,36 @@ stages are estimates; the first real run replaces them (`summary.json` has `seco
 If XcodeGen's project has no scheme that xcodebuild can auto-create, the Apple stages fall back to a target build
 (`-target <name> -sdk <sdk> -arch arm64`); the log says so.
 
+### Mac check #4: the stages it needs (scoped integrator, 2026-11-24)
+
+Ryan's rule is "only check affected sections", so Mac check #4 runs only the stages that `git diff b9a0c27..f4869e3`
+(the Mac check #3 commit to HEAD) affects:
+
+```sh
+bash tools/mac/check.sh --rev f4869e3 --stage tools,core,probe
+```
+
+(Or the PROTOCOL.md RUN line with `--stage tools,core,probe`.)
+
+- `core`: affected. CORE3 and MACFIX changed `native/core` (the build worker, graph_build, song, the bridge, synth
+  dispatch, the catalogue configure check). This is the stage that failed in Mac check #3. Expect **72/72**
+  (`-LE devhost|golden`): the 70 from Mac check #3, plus `unit.registry-link`, plus `unit.core3`. The note says "12
+  golden.* tests not run" (the 4-line `check.sh` change). Linux runs the same 72 plus 12 goldens: 84/84, and so does
+  CI's `macos-15`. `unit.core3` is a timing test (`RUN_SERIAL`). If it fails only on its gap bound and passes on the
+  serial re-run, it is reported as `flaky`: record the numbers for T13 (CORE3 O2 follow-up).
+- `tools`: affected, because `tools/mac/check.sh` changed. It is also the first stage and costs under 5 s.
+- `probe`: affected. It builds `rig-devhost` and `rig-probe` against the changed core. The probe's D2 / D4 songs go
+  through the realtime `prepare` that CORE3 changed: a synth song's units are now built on a build lane, and the reply
+  waits for them. Hands-on part A runs that same `rig-devhost` from `<cache>/<sha7>/build/` (only this stage builds it).
+- `apple-mac`: not affected.
+  - `native/apple` is unchanged, and so is the link layout. The core gained one object (`model/build_worker.o`) in the
+    same `librig_core.a`. There are no new libraries and no link-line change. `std::thread` is in libc++, and MACFIX
+    confirmed that every register object is still pulled through `rig_create`.
+  - CI's `mac-check` compiled and linked `WorshipRig-macOS` at `f4869e3`.
+  - Add it (`--stage tools,core,probe,apple-mac`) only if Ryan does hands-on part B in the same sitting. Part B opens
+    the app from this commit's `dd-apple-mac` build directory.
+- `apple-sim`: not affected. It still needs the iOS platform installed, and CI's `macos-15` builds it.
+
 ### summary.json
 
 ```json
@@ -236,10 +291,11 @@ The cloud then sends `inbox/<UTC>-RUN.md` (first line `VERB: RUN`, then the comm
 
 ## Tier 2: Ryan hands-on checklist (integrator, 2026-11-22: engine and UI wave done)
 
-**When:** after the push agent's tier-1 `check.sh` RUN on the integration commit shows `core`, `probe` and
-`apple-mac` PASS (`apple-sim` may stay FAILED/SKIPPED for the missing iOS platform). About 25 minutes, MIDI keyboard
-with a sustain pedal, headphones or the usual speakers. The 2.0 UI runs in Chrome on top of the native engine through
-`rig-devhost` (the dev host: real UI, real C++ engine, Core Audio output, Chrome's Web MIDI). The Apple app itself has
+**When:** after Mac check #4 (`--stage tools,core,probe`, see "Mac check #4: the stages it needs" above) shows
+`core` and `probe` PASS. Part A needs only those (`rig-devhost` is built by the `probe` stage). Part B opens the app
+from that commit's `apple-mac` build directory, so it also needs `--stage apple-mac` on the same commit (`apple-sim`
+may stay FAILED/SKIPPED for the missing iOS platform). About 25 minutes, MIDI keyboard with a sustain pedal,
+headphones or the usual speakers. The 2.0 UI runs in Chrome on top of the native engine through `rig-devhost` (the dev host: real UI, real C++ engine, Core Audio output, Chrome's Web MIDI). The Apple app itself has
 compiled but never been launched; it is part B.
 
 **Part A: 2.0 in Chrome on the M2 Pro (`rig-devhost`)**
@@ -263,9 +319,20 @@ compiled but never been launched; it is part B.
    then once more backwards with Prev, and once with a jump to a song you have not opened in this session (its samples
    load cold). Listen for: the old song lets go cleanly, the new one sounds within about a second, no slot stays
    silent (a piano that never comes in), notes you play during the switch are not late or swallowed. Look for: the
-   meters keep moving during the switch. Known: switching *to* a song with synth or organ sounds builds them on the
-   engine's control thread, which held input back by up to ~0.3 s on the Linux box (open item CORE2A O2); say
-   whether you can feel it on the Mac.
+   meters keep moving during the switch. Since CORE3 (`reviews/CORE3.md`) synth and organ sounds are built off the
+   engine's control thread, and the songs next to the current one in the setlist (Next, Prev and one further each
+   way) are built ahead of time, so the old "input held back up to ~0.3 s" (CORE2A O2) is gone on the Linux box
+   (scoped integrator, 3 ui-core runs: no tick gap over 150 ms; next to a synth / organ switch at most 73 ms). Say
+   whether anything still feels held on the Mac. What to listen for now:
+   - **Next / Prev** into a synth / organ song: the new sound is there at once (it was built ahead).
+   - **A jump** to a song that is not a neighbour (a setlist chip further away, or a song from the library): its synth
+     / organ sounds are built when you switch, so the new song may take a moment to come in (up to ~1.5 s for a
+     16-organ song on the Linux box; a 4-slot song is ~0.1 s), but the old song and the notes you play meanwhile must
+     stay on time. Say if a jump is ever late by more than a second, or if a note is swallowed.
+   - Sampler songs that have not been loaded this session still load cold (CORE2A, unchanged): up to ~2 s before the
+     piano comes in; the rest of the song plays meanwhile.
+   - Rare: the first time a sampler song's size is estimated, the engine can pause for ~0.15 s (CORE3 review O6, open).
+     If you hear one small hitch right after selecting a sampler song for the first time, note the clock time.
 6. **Perform controls.** On a few songs: Swell (rises; press again returns), mod wheel / expression pedal, Fade-out,
    transpose − / +, the Click chip on a song with a tempo, drone on / off and a key change, Panic (Esc) silences
    everything. Each does what 1.x does.

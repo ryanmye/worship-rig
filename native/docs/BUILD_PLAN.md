@@ -573,6 +573,7 @@ Integrated tree `v2-native` `a8cb4d1` (+ this pass's docs), fresh build dirs, `-
 - **T11 / T15 / T13 (core): CORE2A O2**: synth / organ units are built inside `Model::prepare` on the control thread,
   so a switch to such a song stalls ticks and live input for up to ~0.3 s on this box (16 of 17 tick gaps over
   150 ms in this pass). Build off the control thread or cache the tables. The one user-audible core item left.
+  **Closed by CORE3** ("CORE3 + MACFIX results" below).
 - **ui-core suite** (`test/phase2/ui-core/run.mjs`): the three read races in PARITY "UI parity" (v11-metronome:
   wait for the core's `click` event after the switch + a cleanup hook that stops the click; v11-decisions: wait for
   `!holds(64)` / `!clickState().running`; polish-2A banners: CORE2A O1).
@@ -594,6 +595,76 @@ Integrated tree `v2-native` `a8cb4d1` (+ this pass's docs), fresh build dirs, `-
   CORE1 open 4 (`probe.null.cold` devhost ctest, T09), D4 R8 nits, mackit O4 (`check.sh` lock), T15 note 7, the
   T17-style fixtures; prune the leftover review build dirs (`native/core/build-ui-*`, `build-uicsk*`,
   `native/devhost/build-ui`: about 3.5 GB).
+
+### CORE3 + MACFIX results (scoped integrator, 2026-11-24)
+
+Reviews: [CORE3](reviews/CORE3.md) (synth / organ units built on a build lane off the control thread, setlist
+neighbours prebuilt within a memory cap; CORE2A O2; VERIFIED, review O1-O3 fixed) and [MACFIX](reviews/MACFIX.md)
+(Mac check #3 `unit.synth` / `unit.synth-extra`: a test-order bug, explicit registration before the hook is read;
+VERIFIED). Ryan's rule "only check affected sections": the full gate passed at `b9a0c27`, and this pass checks only
+what `git diff --stat b9a0c27 -- native app tools test` touches on `v2-native` `f4869e3`:
+- `native/core`: api/engine, bridge, the synth / synth-extra / dispatch sources, model (song, graph_build, the new
+  build_worker), CMakeLists (`unit.core3` RUN_SERIAL), `inst/catalogue.cmake` (O3: configure fails without
+  `native/contract`), and tests (`test_core3`, `test_registry_link` new; `test_synth`, `test_synth_extra`).
+- `tools/mac/check.sh`: 4 lines, the excluded golden count.
+- `app/`: C2's chart parser and the hidden D7 chart view (`views/chart/*`, `store.js`, `main.js`, 2 lines of
+  `perform.js`).
+- `test/`: chart suites and the `run-all` row.
+- `tools/cloud/*`: orchestration only.
+- Untouched: `app/js/engine`, `native/golden`, `native/contract`, `native/devhost`, `native/apple`.
+
+Fresh build dirs (none existed), `-j2`, one heavy job at a time; the box was shared with one other agent (load
+0.6-2.6):
+
+| check | result |
+|---|---|
+| ctest g++ 13 Release `native/core/build-int` | **84/84** (`-j2`), 0 warnings (`-Werror`). 84 = 82 + `unit.registry-link` + `unit.core3` |
+| ctest clang++-20 Release `-Werror` `native/core/build-int-clang20` | **84/84** on the second `-j2` run, 0 warnings. The first `-j2` run was 83/84: `unit.runtime_preload` (a CORE2A test, unchanged) tick-gap bound 170 / 361 ms vs 100 next to a neighbour suite; it passed alone 2 of 2 (timing; the CORE3 review saw the same under load) |
+| g++ ASan+UBSan `build-int-asan` (`-fno-sanitize-recover=all`), the suites whose files changed or that run the changed code: `unit.{core3, registry-link, synth, synth-extra, synth-catalogue, organ, model, song, bridge, bridge-conformance, runtime_preload}` | **11/11**, no sanitizer report, 0 build warnings |
+| g++ TSan `build-int-tsan`, the same 11 suites | **11/11**, **0** ThreadSanitizer warnings, 0 build warnings |
+| `native/devhost` g++ Release `native/devhost/build-int` | 0 warnings; ctest **5/5** |
+| fixtures | All 112 rendered (110 of them go through `prepare` / `commit`, so through the changed `graph_build` / `song` / bridge path; the other 2, `drone-freeze-*`, came free). **112/112 byte-identical to `b9a0c27`** (base built from `git archive b9a0c27 native/core native/contract`; its embedded instrument catalogue `cmp`-equal to HEAD's, so not CORE3 O3's empty-catalogue false alarm); **g++ = clang-20 112/112**; `compare.mjs` 112/112; `parity.mjs --twin` **exit 0**, 110 at the exact tier (not `synth-dx-epiano`, `bend-modes`), "unexpected failures: none"; `auto-filter-cutoff` exact, max\|diff\| 4.3e-6 |
+| `node --test test/unit/engine-bridge/*.test.mjs`, `RIG_DEVHOST` = `native/devhost/build-int` | **131 / 0 / 0** |
+| ui-core on `rig-devhost`, raw (`--no-adapter`), 3 runs | **76, 76, 75 / 77**: only the known suite read races (v11-decisions in all 3, v11-metronome once; PARITY "UI parity"). **Tick gaps max 128 / 113 / 129 ms, 0 over 150 ms** (CORE2 integration: 315 / 283 / 329); outside the suite's own 4 Hz meter window max 65 / 74 / 108 ms; largest next to a synth / organ `prepare` 57 / 57 / 73 ms. No bridge error reply, the two known warns, `sanitizer: (none)` |
+| `node test/run-all.mjs --only unit` (app changed) | **648 / 0 / 10 skip** (529 at the CORE2 integration + 119 chart tests) |
+| shell (`test/phase1/shell/run.mjs`) unit + browser | unit **261/261** (chart-store included), browser **13/13** |
+| settings (`test/phase2/settings/run.mjs`) | **86/86** (app, fixture, mac, bridge), zero console errors |
+| CI (GitHub Actions `native-core`) | green at `650df77` and at `f4869e3`: `build-test` (ubuntu-latest, macos-15; 84/84 on macos-15 both times), `mac-check` (tools, apple-mac, apple-sim PASS), `goldens`, `sanitizers` (ASan 84/84 both; TSan 31/31 at `650df77`, 38/38 at `f4869e3` with `core3\|synth\|organ` added). MAC_CHECK "CI Mac check" |
+
+Skipped, and why: ASan / TSan on the 73 other suites (no file of theirs changed and they do not run the changed code;
+CI's sanitizer job ran ASan 84/84 and TSan 38/38 at `f4869e3`); the ui-core adapter run (a diagnostic, not parity);
+`run-all` edit-v2, eq, mini, themes, chrome-fallback, instruments, synth-extra, engine (no file of theirs changed; the
+chart view is behind a setting that is off by default and was checked flag-off-pure in its own review); the chart
+suite (`test/phase2/chart`, 15/15 twice in its lane's review, nothing changed since); Electron suites (Linux box,
+the chart lane's flag-off path is the same code in both shells); `build-engine-api.mjs --check` (`native/contract`
+unchanged); the mutation runs (CORE3 M1-M3 and MACFIX M1-M3 were run in their reviews).
+
+**Open items by owner** (the UI-wave list above still applies except CORE2A O2):
+- **Ryan / Mac** (next): Mac check #4, `--stage tools,core,probe` (MAC_CHECK "Mac check #4"); expect `core`
+  **72/72** (12 `golden.*` not run in the export); then the **hands-on checklist** part A (MAC_CHECK "Tier 2"; step 5
+  now says what to listen for with neighbour prebuild). Part B needs `apple-mac` on the same commit. Unchanged: the iOS
+  simulator platform (`apple-sim`; it passes on CI's `macos-15`), D4 R1 chord burst, dx-epiano / supersaw-pad per
+  voice, T07 O6, T11 O4, T11 O6, the iPad probe.
+- **ui-core suite**: the three read races. v11-decisions now failed in 3 of 3 full runs (traced: the deep-equal reads
+  `soundingHas(64)` before the core's `notes {held: []}`, sent 0.1 ms after `panic`): wait for `!__t.holds(64)` and
+  `!engine.clickState().running` before the deep-equal; the v11-metronome `bpm` wait + cleanup hook; polish-2A.
+- **T13 (core)**: CORE3 O2 follow-up (an idle-box 16-slot switch gap reaches 47 of the 50 ms bound: build the 16
+  strips off the control thread too if CI trips it); CORE3 O5 nit (the build key leaves out the engine seed).
+- **T06 / CORE2A (core)**: CORE3 O6, the first `cache estimate` of a sampler patch held the loop 148 ms in the CORE3
+  review (here the longest estimate was 25 ms); CORE3 builder item 2, decode workers at utility priority (sampler
+  `prepare` replies 1.5-1.8 s here); CORE2A O3-O5 unchanged.
+- **T15 (core)**: CORE3 builder item 3, a drawbar change rebuilds 8 PeriodicWaves (~60 ms) on the control thread (not
+  measured); CORE3 O4 nit (two same-rate banks).
+- **T11 (core, nits)**: MACFIX N2 (`synth_dispatch.cpp:6` comment; `test_synth` restores the hook only on its normal
+  path).
+- **`tools/mac/check.sh` (next touch)**: MACFIX N1 (the `?` fallback never fires); mackit O4 (lock).
+- **Orchestrator**: `unit.runtime_preload` flaked once at `-j2` here (clang-20, tick-gap bound): `RUN_SERIAL` like
+  `unit.core3` if CI sees it (with CORE1 open 3, `rt.realtime`); prune this pass's build dirs when done
+  (`native/core/build-int{,-clang20,-asan,-tsan}`, `native/devhost/build-int`).
+- **Chart lanes (Ryan / D7 design pass)**: C2 parser O1-O9 (PARTIAL: O7 needs a real WorshipTools / SongSelect
+  export from Ryan's account); chart view O1-O9 (O1 PANIC covered by the import dialog: Ryan's call). Hidden behind
+  `settings.chartView`, so none of it is in Ryan's hands-on.
+- **T10 Apple shell, contract, shim / UI nits, core follow-ups**: unchanged from the UI-wave list above.
 
 ## Orchestrator-only items (not a task)
 
