@@ -22,6 +22,8 @@ final class RigSchemeHandler: NSObject, WKURLSchemeHandler {
     private let queue = DispatchQueue(label: "rig.scheme", qos: .userInitiated, attributes: .concurrent)
     private let lock = NSLock()
     private var stopped = Set<ObjectIdentifier>()
+    /// Every response's URL and status, on the main thread (the self-test counts the ones >= 400, E4). nil normally.
+    var onStatus: ((String, Int) -> Void)?
 
     init(root: URL, docs: URL, patchMain: Bool = true) {
         self.root = root.standardizedFileURL
@@ -143,6 +145,7 @@ final class RigSchemeHandler: NSObject, WKURLSchemeHandler {
             task.didReceive(resp)
             task.didReceive(body)
             task.didFinish()
+            self.onStatus?(url.absoluteString, status)
         }
     }
 }

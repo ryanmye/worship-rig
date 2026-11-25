@@ -84,6 +84,9 @@ enum RigBackups {
         }
     }
 
+    /// False in the self-test (E4): only RIG_ELECTRON_BACKUPS is read, never the real Application Support.
+    static var scanApplicationSupport = true
+
     /// macOS: rotation files of the Electron app. Its userData folder is named after the app (productName "Worship
     /// Rig" when packaged, possibly "worship-rig" or "Electron" in dev: [verify on the Mac]), so scan every folder in
     /// Application Support that has a backups/ child, except ours. RIG_ELECTRON_BACKUPS overrides (tests).
@@ -93,6 +96,7 @@ enum RigBackups {
         if let o = ProcessInfo.processInfo.environment["RIG_ELECTRON_BACKUPS"], !o.isEmpty {
             return list(URL(fileURLWithPath: o, isDirectory: true))
         }
+        guard scanApplicationSupport else { return [] }
         let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let kids = (try? fm.contentsOfDirectory(at: base, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
         return kids.filter { $0.lastPathComponent != RigPaths.supportDirName }
@@ -129,6 +133,12 @@ final class RigLibrary: NSObject, WKScriptMessageHandlerWithReply {
     weak var host: RigHost?
     private var staged: [String: Any]?
     private var didOffer = false
+    /// The first-launch offer runs by itself after the first rig:// load (false in the self-test, which starts it).
+    var autoOffer = true
+    /// The answer is stored in UserDefaults (false in the self-test: Ryan's real first-launch offer stays intact).
+    var persistAnswer = true
+    /// Non-nil: every dialog of this class is answered with this value instead of being shown (self-test, E4).
+    var autoAnswer: Bool?
     private let io = DispatchQueue(label: "rig.library.io", qos: .utility)
     private static let migrationKey = "rig.electronImportAnswered.v1"
     #if os(iOS)
@@ -219,37 +229,52 @@ final class RigLibrary: NSObject, WKScriptMessageHandlerWithReply {
     return false;
     """
 
-    func offerFirstLaunchImport() {
-        guard !didOffer, !UserDefaults.standard.bool(forKey: Self.migrationKey) else { return }
+    /// `done` (self-test) gets the outcome on the main thread: "staged" (Yes: the import was handed to the
+    /// controller), "declined", "no-backup", "not-pristine" (or the UI never got ready), "probe-failed: …",
+    /// "already-offered", "already-answered", "stage-failed: …". Without `done` this only runs when `autoOffer`.
+    func offerFirstLaunchImport(done: ((String) -> Void)? = nil) {
+        guard autoOffer || done != nil else { return }
+        let report: (String) -> Void = { s in done?(s) }
+        if didOffer { return report("already-offered") }
+        if persistAnswer, UserDefaults.standard.bool(forKey: Self.migrationKey) { return report("already-answered") }
         didOffer = true
         io.async { [weak self] in
-            guard let newest = RigBackups.electronEntries().first else { return } // none on iPad: Files/AirDrop path
-            DispatchQueue.main.async { self?.askIfPristine(newest) }
+            guard let newest = RigBackups.electronEntries().first else { // none on iPad: Files/AirDrop path
+                return DispatchQueue.main.async { report("no-backup") }
+            }
+            DispatchQueue.main.async { self?.askIfPristine(newest, report) }
         }
     }
 
-    private func askIfPristine(_ e: RigBackups.Entry) {
+    private func askIfPristine(_ e: RigBackups.Entry, _ report: @escaping (String) -> Void) {
         host?.webView.callAsyncJavaScript(Self.readyProbe, arguments: [:], in: nil, in: .page) { [weak self] r in
-            guard let self, case .success(let v) = r, (v as? Bool) == true else { return }
+            guard let self else { return }
+            guard case .success(let v) = r else {
+                if case .failure(let err) = r { report("probe-failed: \(err.localizedDescription)") }
+                return
+            }
+            guard (v as? Bool) == true else { return report("not-pristine") }
             let when = DateFormatter.localizedString(from: e.mtime, dateStyle: .medium, timeStyle: .short)
             self.confirm("Import your Worship Rig library?",
                          "Found a library saved by the previous Worship Rig on \(when). Import it into this app? "
                          + "This app's current library is empty. You can also import later from the Settings button "
                          + "or File > Import Library Backup.",
                          ok: "Import") { yes in
-                UserDefaults.standard.set(true, forKey: Self.migrationKey)
-                if yes { self.stageNewestAndImport() }
+                if self.persistAnswer { UserDefaults.standard.set(true, forKey: Self.migrationKey) }
+                if yes { self.stageNewestAndImport(report) } else { report("declined") }
             }
         }
     }
 
-    private func stageNewestAndImport() {
+    private func stageNewestAndImport(_ report: @escaping (String) -> Void) {
         io.async { [weak self] in
             let r = RigBackups.latestAnywhere()
             DispatchQueue.main.async {
-                guard let self, r["error"] == nil else { return }
+                guard let self else { return }
+                if let err = r["error"] { return report("stage-failed: \(err)") }
                 self.staged = r
                 self.emitMenu("importLatestBackup")
+                report("staged")
             }
         }
     }
@@ -301,6 +326,7 @@ final class RigLibrary: NSObject, WKScriptMessageHandlerWithReply {
 
     private func confirm(_ title: String, _ message: String, ok: String, cancel: String? = "Not now",
                          _ done: @escaping (Bool) -> Void) {
+        if let a = autoAnswer { return done(a) } // self-test: no modal on a runner nobody watches
         #if os(macOS)
         let a = NSAlert()
         a.messageText = title

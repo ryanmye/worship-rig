@@ -13,7 +13,7 @@ on:
       - 'native/golden/**'
       - 'native/contract/**'
       - 'tools/golden/**'
-      - 'app/js/engine/**'
+      - 'app/**'
       - 'native/apple/**'
       - 'native/devhost/**'
       - 'tools/mac/**'
@@ -24,7 +24,7 @@ on:
       - 'native/golden/**'
       - 'native/contract/**'
       - 'tools/golden/**'
-      - 'app/js/engine/**'
+      - 'app/**'
       - 'native/apple/**'
       - 'native/devhost/**'
       - 'tools/mac/**'
@@ -162,6 +162,33 @@ jobs:
           command -v cmake >/dev/null || brew install cmake
       - name: tools/mac/check.sh --stage tools,apple-mac,apple-sim
         run: bash tools/mac/check.sh --rev HEAD --stage tools,apple-mac,apple-sim --out check-out
+      # E4: the app's first launch, UI-less (`Worship Rig --self-test`, MAC_CHECK.md "Self-test"): it launches the app
+      # the step above built (same revision, same cache dir), with the null audio output and the migration fixture.
+      # A second check.sh run, so the compile result above keeps its own pass/fail. continue-on-error while the
+      # self-test is new (its first runs are the app's first launches anywhere): a failure shows as an ::error
+      # annotation and a failed step, not a red job. Drop continue-on-error once it has passed on v2-native.
+      - name: tools/mac/check.sh --stage selftest (app first launch)
+        id: selftest
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: bash tools/mac/check.sh --rev HEAD --stage selftest --out check-out/selftest
+      - name: Self-test result
+        if: ${{ !cancelled() }}
+        env:
+          SELFTEST_OUTCOME: ${{ steps.selftest.outcome }}
+        run: |
+          d=check-out/selftest
+          echo "outcome: $SELFTEST_OUTCOME"
+          if [ -s "$d/selftest.json" ]; then cat "$d/selftest.json"; else echo "no selftest.json (see $d/selftest.log)"; fi
+          [ ! -f "$d/selftest.log" ] || tail -n 60 "$d/selftest.log"
+          if [ "$SELFTEST_OUTCOME" != success ]; then
+            first="$(grep -m1 -E '^selftest: FAIL ' "$d/selftest.log" 2>/dev/null || true)"
+            echo "::error title=Mac app self-test::${first:-the self-test did not pass; see the mac-check artifact}"
+          elif [ ! -s "$d/selftest.json" ]; then
+            # SKIPPED (no built app: the compile step failed) exits 0; say so rather than look green (E4 review E8)
+            echo "::warning title=Mac app self-test::did not run (SKIPPED: see stages.selftest in $d/summary.json)"
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:

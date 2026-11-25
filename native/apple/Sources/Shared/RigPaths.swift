@@ -24,12 +24,17 @@ enum RigPaths {
     /// ~/Library/Application Support/Worship Rig (or worship-rig) and the migration scan must not read our own files.
     static let supportDirName = "Worship Rig Native"
 
+    /// Self-test (E4): the folders the shell writes (recordings, backups) go under this temporary root instead, so a
+    /// run on Ryan's Mac leaves his real folders alone. nil in the normal app.
+    static var overrideRoot: URL?
+
     private static var documents: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
 
     /// Where the core's `rec` writer puts WAV files (rig_config.recordings_dir). The shell never writes these files.
     static var recordingsDir: URL {
+        if let r = overrideRoot { return r.appendingPathComponent("Recordings", isDirectory: true) }
         #if os(macOS)
         let music = FileManager.default.urls(for: .musicDirectory, in: .userDomainMask).first
             ?? documents
@@ -41,6 +46,7 @@ enum RigPaths {
 
     /// The rotation of library backups written for window.rig.backupNow.
     static var backupsDir: URL {
+        if let r = overrideRoot { return r.appendingPathComponent("Backups", isDirectory: true) }
         #if os(macOS)
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return base.appendingPathComponent(supportDirName, isDirectory: true)

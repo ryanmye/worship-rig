@@ -1,7 +1,19 @@
 // App entry, shared by the macOS and iPadOS targets. UNBUILT on Linux (no Swift toolchain here).
 import SwiftUI
 
+/// Entry point: `--self-test` / RIG_SELFTEST=1 runs the UI-less check of RigSelfTest.swift (macOS only, E4) instead
+/// of the SwiftUI app; everything else starts the app as before.
 @main
+@MainActor // App.main() is main-actor isolated in current SDKs; the entry point runs on the main thread anyway
+enum RigEntry {
+    static func main() {
+        #if os(macOS)
+        if RigSelfTest.requested { RigSelfTest.run() }
+        #endif
+        WorshipRigApp.main()
+    }
+}
+
 struct WorshipRigApp: App {
     @StateObject private var host = RigHost()
 

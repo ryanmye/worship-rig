@@ -49,6 +49,7 @@ final class RigNavigationDelegate: NSObject, WKNavigationDelegate, WKUIDelegate 
         let now = Date()
         terminations = terminations.filter { now.timeIntervalSince($0) < 60 } + [now]
         NSLog("rig: web content process terminated (%ld in the last minute)", terminations.count)
+        host?.selfTest?.contentTerminated?()
         host?.webContentDidTerminate(loop: terminations.count >= 3)
     }
 
@@ -65,16 +66,20 @@ final class RigNavigationDelegate: NSObject, WKNavigationDelegate, WKUIDelegate 
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        // first successful load of the app: the one-time Electron library offer (RigLibrary)
+        host?.selfTest?.pageFinished?(webView.url)
+        // first successful load of the app: the one-time Electron library offer (RigLibrary; not in the self-test,
+        // which starts it itself)
         if webView.url?.scheme == RigSchemeHandler.scheme { host?.library.offerFirstLaunchImport() }
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         NSLog("rig: navigation failed: %@", error.localizedDescription)
+        host?.selfTest?.pageFailed?(error.localizedDescription)
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         NSLog("rig: provisional navigation failed: %@", error.localizedDescription)
+        host?.selfTest?.pageFailed?("provisional: \(error.localizedDescription)")
     }
 
     static let crashLoopHTML = """

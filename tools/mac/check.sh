@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Worship Rig 2.0: every automatable Mac check in one unattended run (native/docs/MAC_CHECK.md, tier 1).
 #
-#   bash tools/mac/check.sh [--rev <ref>] [--stage tools,core,probe,apple-mac,apple-sim] [--out <dir>] [--quick]
+#   bash tools/mac/check.sh [--rev <ref>] [--stage tools,core,probe,apple-mac,selftest,apple-sim] [--out <dir>]
+#                           [--quick]
 #                           [--jobs N] [--cache <dir>] [--repo <dir>] [--src <tree>]
 #
 # Stages (in this order; a failed stage does not stop the ones that do not depend on it):
@@ -9,18 +10,21 @@
 #   core       native/core: cmake Release (Ninja) + build + ctest -j<ncpu> with Apple clang, pass/fail per test
 #   probe      rig-probe on the default output device, OUTPUT MUTED (DECISIONS D2 64 frames, D4 'auto' voice limit)
 #   apple-mac  build-core.sh --mac-only, xcodegen, xcodebuild WorshipRig-macOS (Debug, ad-hoc), compile only
+#   selftest   launch the app apple-mac built with --self-test (no visible window, null audio output, temporary data;
+#              MAC_CHECK.md "Self-test"): load rig://app/, bridge hello, boot, audio frames, library, migration probe
 #   apple-sim  build-core.sh --sim --no-device, xcodebuild WorshipRig-iPad for 'generic/platform=iOS Simulator'
 # --quick = core + apple-mac (the compile-fix loop). --src <tree> copies an uncommitted tree instead of exporting a
 # revision (testing this script; the copy, not the tree, is built).
 #
 # Rules it keeps: the user's working tree, index and branches are never touched (the revision is exported with
-# `git archive` into a cache dir and built there); nothing is installed; no admin rights; no UI (the app is never
-# launched, the probe writes zeros to the device and never changes the volume or the default device).
+# `git archive` into a cache dir and built there); nothing is installed; no admin rights; no UI (the app is launched
+# only by `selftest`, with a transparent window, no audio device and nothing written outside a temp dir; the probe
+# writes zeros to the device and never changes the volume or the default device).
 # Output: <out>/summary.json + one log per stage. Exit 0 = no stage FAILED (SKIPPED is not a failure), 1 = a stage
 # failed, 2 = usage. Written for /bin/bash 3.2 (macOS): no mapfile, no associative arrays, guarded empty arrays.
 set -euo pipefail
 
-ALL_STAGES="tools core probe apple-mac apple-sim"
+ALL_STAGES="tools core probe apple-mac selftest apple-sim"
 
 usage() {  # the header comment above `set -euo pipefail` (when run as a file; see MAC_CHECK.md for `bash -c`)
   if [ -f "$0" ]; then awk 'NR > 1 && /^set -euo/ { exit } NR > 1' "$0" | sed 's/^# \{0,1\}//'
@@ -706,6 +710,80 @@ if want apple-mac; then
   # ARCHS=arm64: the xcframework has arm64 slices only (build-core.sh), so an x86_64 half could never link
   else apple_stage apple-mac "--mac-only" WorshipRig-macOS "platform=macOS" macosx CODE_SIGN_IDENTITY=- ARCHS=arm64; fi
 fi
+# ---- selftest (E4): the app's first launch, UI-less --------------------------------------------------------------
+# Runs the app apple-mac built (this run or an earlier one on the same revision: the build stays in the cache) as
+# `Worship Rig --self-test`. The app prints one JSON line (`"tool":"worship-rig-selftest"`) and exits 0/1 within its
+# own 60 s budget; the stage adds an outer 120 s timeout for a launch that never reaches its watchdog.
+# RIG_ELECTRON_BACKUPS points at the exported fixture, so the RigLibrary first-launch import runs too (answered Yes
+# without a dialog, into the self-test's non-persistent store).
+if want selftest; then
+  cur_stage=selftest
+  log="$out/selftest.log"; : > "$log"
+  st_json="$out/selftest.json"; rm -f "$st_json"
+  app=""
+  for cand in "$work/dd-apple-mac/Build/Products/Debug/Worship Rig.app" "$work/sym-apple-mac/Debug/Worship Rig.app"; do
+    if [ -n "$work" ] && [ -x "$cand/Contents/MacOS/Worship Rig" ]; then app="$cand"; break; fi
+  done
+  if [ "$IS_MAC" -eq 0 ]; then skip selftest "not macOS ($OS): the app runs on macOS only"
+  elif [ "$exported" -eq 0 ]; then skip selftest "no exported tree ($export_details)"
+  elif want apple-mac && [ "$(cat "$state/apple-mac.status" 2>/dev/null || true)" != PASS ]; then
+    skip selftest "apple-mac did not pass, so there is no app to launch"
+  elif [ -z "$app" ]; then skip selftest "no built app under $work (run --stage apple-mac on this revision first)"
+  else
+    t0=$SECONDS
+    errs="$state/selftest.errlist"; : > "$errs"
+    : > "$state/selftest.start"
+    exe="$app/Contents/MacOS/Worship Rig"
+    fixture="$src/native/apple/selftest/electron-backups"
+    echo "check.sh: $exe --self-test (RIG_ELECTRON_BACKUPS=$fixture)" >> "$log"
+    rc=0
+    tmo 120 env RIG_SELFTEST=1 RIG_ELECTRON_BACKUPS="$fixture" "$exe" --self-test > "$out/selftest.stdout" 2>> "$log" \
+      || rc=$?
+    line="$(grep -F '"tool":"worship-rig-selftest"' "$out/selftest.stdout" | tail -n 1 || true)"
+    # every check, as the app logged it, in this run's own output (the CI log)
+    grep '^selftest: ' "$log" | sed 's/^/  /' || true
+    grep -E '^selftest: FAIL ' "$log" | sed 's/^selftest: FAIL //' | head -n 40 > "$errs" || true
+    warns="$(grep -E '^selftest: warn ' "$log" | sed -E 's/^selftest: warn ([^:]+):.*/\1/' | tr '\n' ' ' \
+      | sed 's/ *$//' || true)"
+    extra=""
+    case "$line" in
+      "{"*"}") printf '%s\n' "$line" > "$st_json"; extra="\"result\":$line" ;;
+      *) line="" ;;
+    esac
+    secs="$(printf '%s' "$line" | sed -nE 's/.*"seconds":([0-9.]+).*/\1/p')"
+    nchecks="$(printf '%s' "$line" | grep -o '"required":' | wc -l | tr -d ' ' || true)"
+    # a crash leaves a report; keep it with the logs (CI uploads the out dir)
+    crash=""
+    reports="$HOME/Library/Logs/DiagnosticReports"
+    # ReportCrash writes the .ips a moment after the process dies: give it a few seconds after a signal exit
+    if [ "$rc" -gt 128 ]; then sleep 5; fi
+    if [ -d "$reports" ]; then
+      while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        cp "$f" "$out/" 2>/dev/null && crash="${crash:+$crash }$(basename "$f")"
+      done < <(find "$reports" -maxdepth 1 -name 'Worship Rig*' -newer "$state/selftest.start" 2>/dev/null)
+    fi
+    # the stderr tail when the app logged no FAIL line (a crash, a hang, no result), before the crash note (E4 review)
+    if [ ! -s "$errs" ] && { [ "$rc" -ne 0 ] || [ -z "$line" ]; }; then tail -n 20 "$log" > "$errs"; fi
+    [ -z "$crash" ] || echo "crash report(s) copied: $crash" >> "$errs"
+    case "$line" in *'"pass":true'*) passed=1 ;; *) passed=0 ;; esac
+    if [ "$rc" -eq 0 ] && [ "$passed" -eq 1 ]; then
+      det="$nchecks checks, every required one passed, in ${secs:-?} s (app $app)"
+      [ -z "$warns" ] || det="$det; not required, did not pass: $warns"
+      record selftest PASS $((SECONDS - t0)) "$det" "$errs" "$extra"
+    else
+      if [ "$rc" -eq 124 ]; then det="no exit within 120 s (the app's own 60 s watchdog never fired)"
+      elif [ -z "$line" ] && [ "$rc" -gt 128 ]; then det="crashed (signal $((rc - 128))) before printing a result"
+      elif [ -z "$line" ]; then det="exit $rc and no result line (stderr in selftest.log)"
+      elif [ "$passed" -eq 1 ]; then det="every check passed, but the app exited $rc on the way out (a crash at quit?)"
+      else det="$(wc -l < "$errs" | tr -d ' ') required check(s) failed (exit $rc, ${secs:-?} s)"; fi
+      if [ ! -s "$errs" ]; then tail -n 20 "$log" > "$errs"; fi  # pass:false with no FAIL line and exit 0
+      record selftest FAIL $((SECONDS - t0)) "$det" "$errs" "$extra"
+    fi
+    if [ -n "$line" ]; then say "selftest result: $line"; fi
+  fi
+fi
+
 if want apple-sim; then
   if [ -n "$apple_skip_reason" ]; then skip apple-sim "$apple_skip_reason"
   elif ! tmo 60 xcodebuild -showsdks 2>/dev/null | grep -q iphonesimulator; then

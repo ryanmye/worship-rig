@@ -6,7 +6,7 @@ unattended command on the Mac). Tier 2 is one short checklist for Ryan, done onc
 
 | tier | where | who | cost to Ryan | covers |
 |---|---|---|---|---|
-| 0 | GitHub Actions `macos-15` (`.github/workflows/native-core.yml`) | CI, on every push touching native/ or tools/mac/ | none | core build + ctest + goldens under Apple clang (`build-test`), Apple compile of both targets (`mac-check`) |
+| 0 | GitHub Actions `macos-15` (`.github/workflows/native-core.yml`) | CI, on every push touching native/ or tools/mac/ | none | core build + ctest + goldens under Apple clang (`build-test`), Apple compile of both targets and the macOS app's UI-less first launch, `--self-test` (`mac-check`) |
 | 1 | Ryan's Mac, `bash tools/mac/check.sh` | the push agent, one `RUN` | none after the one-time setup below | tier 0 again on the real Mac, plus the audio probe on the real output device (D2, D4 numbers) |
 | 2 | Ryan's Mac and iPad, by hand | Ryan | about 25 minutes, once, after the tier-1 re-run on the integration commit | what needs ears, hands, a MIDI keyboard, his real library, an iPad |
 
@@ -120,7 +120,9 @@ What it settles and what it does not:
 - `build-test` (matrix `ubuntu-latest`, `macos-15`): `cmake --preset release`, build, `ctest` incl. the golden
   comparisons (the `goldens` job renders them with the pinned Chromium).
 - `mac-check` (`macos-15`): `bash tools/mac/check.sh --rev HEAD --stage tools,apple-mac,apple-sim --out check-out`,
-  uploaded as the `mac-check` artifact. It builds the xcframework slices, generates the project and compiles
+  then `bash tools/mac/check.sh --rev HEAD --stage selftest --out check-out/selftest` (E4, "Self-test" below;
+  `continue-on-error` while new, with an `::error` annotation and a "Self-test result" step that prints the JSON),
+  all uploaded as the `mac-check` artifact. It builds the xcframework slices, generates the project and compiles
   `WorshipRig-macOS` and `WorshipRig-iPad` (iOS Simulator). `summary.json` carries the first 80 compiler errors per
   stage (`file:line: error: ...`, repo-relative), so the cloud can fix Swift from the artifact alone.
 - The workflow triggers on `native/core`, `native/golden`, `native/contract`, `native/apple`, `native/devhost`,
@@ -131,12 +133,12 @@ When tier 0 is green, tier 1 is mostly a confirmation on Ryan's machine plus the
 ## Tier 1: `tools/mac/check.sh` through the push agent (one RUN, unattended)
 
 ```sh
-bash tools/mac/check.sh [--rev <ref>] [--stage tools,core,probe,apple-mac,apple-sim] [--out <dir>] [--quick]
+bash tools/mac/check.sh [--rev <ref>] [--stage tools,core,probe,apple-mac,selftest,apple-sim] [--out <dir>] [--quick]
                         [--jobs N] [--cache <dir>] [--repo <dir>] [--src <tree>]
 ```
 
 Run from `~/Projects/worship-rig`. Defaults: `--rev` = the local branch `v2-native` (the push agent fast-forwards it),
-else `origin/v2-native`; all five stages; `--out` = `~/Projects/worship-rig-v2/outbox/logs/<UTC>-check/` (when the
+else `origin/v2-native`; all six stages; `--out` = `~/Projects/worship-rig-v2/outbox/logs/<UTC>-check/` (when the
 outbox exists, else `./mac-check-<UTC>/`); `--jobs` = all CPUs. `--quick` = `core` + `apple-mac`, the compile-fix loop.
 `--src <tree>` copies an uncommitted tree (minus build dirs) into `<cache>/local/src` instead of exporting a revision:
 for testing the script itself, or a change before it is pushed.
@@ -150,7 +152,8 @@ What it guarantees:
   most recent revisions (about 1-2 GB each) and deletes older ones; nothing else is deleted.
 - **Nothing is installed, no admin rights, no UI.** Missing tools are reported with the exact brew line and the stages
   that need them are SKIPPED. If `xcode-select` points at the Command Line Tools while `/Applications/Xcode.app`
-  exists, the script sets `DEVELOPER_DIR` for its own process only. The app is never launched. The probe opens the
+  exists, the script sets `DEVELOPER_DIR` for its own process only. The app is launched only by `selftest`
+  (transparent window, no audio device opened, nothing kept: "Self-test" below). The probe opens the
   default output device and writes zeros to it; it never changes the volume or the default device (the I/O buffer
   size it asks for, 64-512 frames, is Core Audio's per-client setting and ends with the process).
 - **One machine-readable result.** `<out>/summary.json` plus one log per stage; a one-screen table at the end.
@@ -170,6 +173,7 @@ What it guarantees:
 | `core` | `cmake -G Ninja -DCMAKE_BUILD_TYPE=Release` of `native/devhost` with `-DDEVHOST_CORE_TESTS=ON` (the core and its tests in the same tree the probe uses: the core compiles once), build `rig_tests rig_render rig-golden rig_bench`, `ctest -LE devhost -j<ncpu>`; failures are re-run once serially (timing tests) and reported as `flaky` if they pass. Golden tests are excluded when `native/golden/out` is absent (it is git-ignored, so always in an export): CI's `goldens` + `build-test` cover them on macos-15. `unit.samples_decode`, `unit.samples_process` and `unit.samples_service` read `tools/golden/decode-dump/data/raw*`, which is git-ignored too: without it their failures are listed as `NoData` and not counted (see "Known gaps"). Per-test results in `stages.core.tests`. | 1.5-3 min / 30-60 s |
 | `probe` | build `rig-probe` + the dev host tests in the same tree, `ctest -L devhost` (null backend), then `rig-probe` on the default output (below), killed after 300 s | 2-3 min / 2 min |
 | `apple-mac` | `scripts/build-core.sh --mac-only` (Ninja), `xcodegen generate`, `xcodebuild -scheme WorshipRig-macOS -configuration Debug -destination 'platform=macOS' CODE_SIGN_IDENTITY=- ARCHS=arm64 build` (compile and link only; arm64 because the xcframework slices are arm64 only) | 2-4 min / 1 min |
+| `selftest` | runs the app `apple-mac` built (this run or an earlier one on the same sha: it stays in `<cache>/<sha7>/dd-apple-mac`) as `Worship Rig --self-test` with `RIG_ELECTRON_BACKUPS` = the exported fixture, killed after 120 s; `selftest.json` + `stages.selftest.result` in `summary.json`; crash reports copied. SKIPPED without a built app ("Self-test" below) | 10-20 s (guess) |
 | `apple-sim` | `scripts/build-core.sh --sim --no-device`, `xcodegen`, `xcodebuild -scheme WorshipRig-iPad -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO ARCHS=arm64 build` (a generic destination otherwise also builds x86_64, which the arm64-only simulator slice cannot link); SKIPPED with a note if this Xcode has no iOS Simulator SDK | 2-4 min / 1 min |
 
 Estimated total: 8-12 min for a new revision, about 3 min for a rerun of the same one, 1-3 min for `--quick` after a
@@ -272,7 +276,7 @@ An unaccepted Xcode license shows up in `tools` as "Xcode license not accepted",
 Add this line to the RUN allow-list in `~/Projects/worship-rig-v2/PROTOCOL.md`:
 
 ```
-- bash -c "$(git -C ~/Projects/worship-rig show v2-native:tools/mac/check.sh)" check.sh --repo ~/Projects/worship-rig [--rev <v2-native|origin/v2-native|7-40 hex sha>] [--stage <comma list of tools,core,probe,apple-mac,apple-sim>] [--quick] [--out ~/Projects/worship-rig-v2/outbox/logs/<UTC>-check]   (read-only git; builds only under ~/Library/Caches/worship-rig-check; installs nothing; no sudo; 3-20 min, so start it with the Bash tool's run_in_background and wait for it: the foreground limit is 10 min; reply with the exit code and the summary.json path)
+- bash -c "$(git -C ~/Projects/worship-rig show v2-native:tools/mac/check.sh)" check.sh --repo ~/Projects/worship-rig [--rev <v2-native|origin/v2-native|7-40 hex sha>] [--stage <comma list of tools,core,probe,apple-mac,selftest,apple-sim>] [--quick] [--out ~/Projects/worship-rig-v2/outbox/logs/<UTC>-check]   (read-only git; builds only under ~/Library/Caches/worship-rig-check; installs nothing; no sudo; 3-20 min, so start it with the Bash tool's run_in_background and wait for it: the foreground limit is 10 min; reply with the exit code and the summary.json path)
 ```
 
 Why this form and not `bash tools/mac/check.sh`: the script is read from the `v2-native` branch with `git show`
@@ -363,8 +367,98 @@ lines of the Terminal window attached (the bridge log has every message with a t
 time can be traced). A screenshot for anything visual.
 
 Everything else on the README's "Mac / iPad verification list" (WebContent crash recovery, memory-pressure simulation,
-AVAudioSession interruptions) is optional for Ryan; it can be scripted into tier 1 later (a UI-less `--self-test` mode
-of the app would be the next step: launch, load, `hello`, quit, all from `check.sh`).
+AVAudioSession interruptions) is optional for Ryan; it can be scripted into tier 1 later on top of the `--self-test` mode ("Self-test" below), which
+now covers launch, load, `hello`, boot and quit from `check.sh`.
+
+## Self-test (`Worship Rig --self-test`, E4)
+
+A UI-less launch of the macOS app (`native/apple/Sources/Shared/RigSelfTest.swift`), so that the app's first launch
+can happen on CI without Ryan. **UNBUILT as written:** none of the Swift had been compiled when this section was
+written; the first `mac-check` run after it lands is its first build and first launch, and is the test of this text.
+
+Run: `"<app>/Contents/MacOS/Worship Rig" --self-test` (or `RIG_SELFTEST=1`). `check.sh --stage selftest` does it
+for the app the `apple-mac` stage built. Options (environment): `RIG_ELECTRON_BACKUPS=<dir>` adds the migration
+step; `RIG_SELFTEST_IMPORT_MARKER` changes the song name it looks for (default "E4 self-test import", the fixture's);
+`RIG_SELFTEST_SHOW=1` makes the window visible (debugging on a Mac).
+
+What the run is like:
+- `NSApplication` with the `.accessory` policy (no Dock icon, no menu bar), no SwiftUI scene. A borderless 1280×800
+  window at the screen origin holds the web view, with alpha 0 and mouse events ignored: WebKit throttles timers and
+  `requestAnimationFrame` in windowless or occluded views, and an off-screen window counts as occluded (a guess about
+  WebKit, not measured; the result records `document.visibilityState` in `boot.visibility`).
+- Audio: the core runs in realtime mode as in the app, but `rig_host.audio_start[_frames]` start
+  `rig_apple_null_sink` (a pthread calling `rig_render` at 48 kHz, 128 frames, paced to the wall clock, output
+  thrown away after measuring it). No Core Audio device is opened; the runner has none.
+- Isolation, so a run on Ryan's Mac leaves nothing behind: a non-persistent `WKWebsiteDataStore` (no localStorage in
+  the app's real store), backups and recordings under `$TMPDIR/worship-rig-selftest-<pid>` (deleted at the end),
+  the migration answer not written to UserDefaults, Application Support never scanned (only
+  `RIG_ELECTRON_BACKUPS`), every RigLibrary dialog answered Yes without being shown. CoreMIDI is created as in the
+  app (a client and two ports; no source is connected).
+- Budget: 60 s inside the app (a watchdog thread prints a `timedOut` result and `_exit(1)`); `check.sh` adds 120 s
+  outside it. A normal run should take about 5-15 s (a guess).
+
+Checks, in order (`required: false` ones are reported, not gated):
+
+| check | passes when |
+|---|---|
+| `engine` | `rig_create` returned an engine |
+| `load` | `didFinish` for `rig://app/index.html` within 20 s (no navigation failure, no WebContent crash) |
+| `hello` | the page's `hello` (seen on `webkit.messageHandlers.rig`) got `ok:true`, `protocol` 1, `minor` ≥ 5 within 15 s |
+| `boot` | `await window.__rig.ready` resolved within 25 s and `__rig.engine` is a `BridgeEngine` (the scheme handler's `main.js` patch worked, so the page uses the native core, not Web Audio) |
+| `store` | `__rig.store` exists, `get().schema === 2`, at least one song, `loadInfo.status` `ok` or `fresh` |
+| `audio` | the page's `audio start` reached the shell: ≥ 12000 frames on the null output within 5 s, 0 render errors, a `state` event `running` |
+| `note` (not required) | `play {e:'input'}` + note 60 vel 100 through `rig_post` on the song the page committed: peak > -100 dBFS within 0.6 s |
+| `migration` (with `RIG_ELECTRON_BACKUPS`) | `RigLibrary.offerFirstLaunchImport` (newest backup there, pristine library, auto Yes) staged the file, `controller.onMenu('importLatestBackup')` imported it, and a song named the marker is in the library with schema 2 within 10 s |
+| `midi` (not required) | `MIDIClientCreateWithBlock` returned 0 |
+| `webcontent` | no WebContent process termination |
+| `console` | zero page errors: `console.error` calls, uncaught errors, failed resource loads, unhandled rejections, CSP violations (a document-start hook posts each one to `rigSelfTest`) |
+| `http` | zero rig:// responses with status ≥ 400 (`RigSchemeHandler.onStatus`) |
+
+Exit 0 only when every required check passed and nothing timed out. `check.sh` also fails the stage when the JSON
+says pass but the process exited non-zero: the self-test quits with `exit()`, the path `NSApp.terminate` takes, so
+a crash in the core's or WebKit's teardown shows up here (the null output is stopped first).
+
+The result (one line on stdout, keys sorted; check.sh copies it to `selftest.json`):
+
+```json
+{"audio":{"engineTime":0,"frames":0,"lateBlocks":0,"renderErrors":0,"sinkStarts":1,"stateRunning":true,"states":[]},
+ "boot":{"engineKind":"BridgeEngine","loadStatus":"fresh","ms":0,"phase":"ok","pristine":true,"schema":2,"songs":19,
+         "store":true,"userAgent":"...","visibility":"visible"},
+ "checks":[{"detail":"...","ms":0,"name":"engine","ok":true,"required":true}],
+ "failed":[],"hello":{"caps":[],"engine":"worship-rig-core ...","minor":5,"protocol":1,"sampleRate":48000,"seed":0},
+ "host":{"apiVersion":65537,"app":"2.0.0 (1)","core":"...","os":"macOS 15.x","tempRoot":"...","webkit":"..."},
+ "migration":{"dir":"...","outcome":"staged","probe":{"hit":true,"schema":2,"songs":2}},
+ "note":{"peak":0,"peakDb":0},"page":{"errorCount":0,"errors":[],"http":[],"httpResponses":0},
+ "pass":true,"schema":1,"seconds":0,"timedOut":false,"tool":"worship-rig-selftest"}
+```
+
+Each check is also logged to stderr as `selftest: ok|FAIL|warn <name>: <detail>` (in `selftest.log`; `check.sh`
+echoes them into its own output, so they are in the CI log).
+
+What it covers that nothing else did: the app's first launch (SwiftUI entry point, bundle resources, `rig://`
+scheme handler, ES modules over a custom scheme, the `main.js` engine patch, the `window.rig` polyfill and the
+document-start scripts, localStorage on `rig://app`), the BRIDGE v1 round trip through `WKScriptMessageHandler` and
+`evaluateJavaScript`, the realtime core rendering inside the app process, the controller's boot on the native
+engine, the RigLibrary first-launch import end to end against a fixture, and a clean quit.
+
+What it cannot cover (stays on the Tier 2 list):
+- **Real audio**: AUHAL, the device rate, buffer sizes, xruns, latency (RigAudio.swift and rig_apple_audio.c never
+  run; the probe stage covers them on Ryan's Mac).
+- **MIDI**: no device, so no CoreMIDI input, timestamps or hot-plug.
+- **Ryan's ears**: whether anything sounds right; the `note` check only says "not silence".
+- **His real library**: the fixture is a synthetic 1.x-shaped backup (two factory songs), not a real export (Lane E 5);
+  the real scan of `~/Library/Application Support/*/backups` and the native dialog are skipped.
+- **The visible UI**: themes, layout, input; the window is transparent.
+- The SwiftUI scene path itself (`WindowGroup`, `RigWebView`, `.onOpenURL`, the menu commands): the self-test builds
+  its own window around the same `RigHost`.
+- The iPad target (the mode is macOS only).
+
+Verified before CI (Linux, 2026-11-25): `rig_apple_null_sink` against the realtime core
+(`native/apple/selftest/run-null-sink-test.sh`, gcc 13 / clang 20 `-Werror`, TSan clean); the three JS bodies, the
+fixture and its import (`node --test "test/unit/selftest/*.test.mjs"`, 9 tests); the stage's bash paths behind stub
+macOS tools and a fake app (shellcheck 0.11 clean); the workflow (actionlint clean). A tree-sitter Swift parse of the
+changed files finds no syntax error beyond the grammar's known `#if`-inside-a-type gap (also in the unchanged files).
+Not verified: anything that needs the Swift compiler, AppKit or WebKit.
 
 ## Known gaps found while building this (owners: core / orchestrator)
 
@@ -385,4 +479,5 @@ of the app would be the next step: launch, load, `hello`, quit, all from `check.
 | AUHAL at 64/128 frames, granted size, xruns, CPU per voice, D4 'auto' | 1 (`probe`, through miniaudio's Core Audio backend, which uses AUHAL) |
 | T07 O6 jitter-free delay = device buffer + one quantum: device latency figures | 1 (`probe.device.core_audio`: device, safety-offset, stream latency frames) |
 | CoreMIDI timestamps, real sound, themes, Electron localStorage migration, GarageBand content, iPad install and AVAudioSession | 2 |
+| App launch, `rig://` load, bridge `hello`, boot on the native core, library schema, first-launch migration against a fixture, zero console errors / 404s | 0 (`mac-check` `selftest`, E4) and 1 (`selftest`) |
 | iPad CPU per voice (D4 iPad profile) | open: needs an iPad build of the probe (no iOS test target yet) |

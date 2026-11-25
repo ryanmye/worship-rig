@@ -12,10 +12,12 @@ final class RigMIDI {
     private var refCons: [Int32: UnsafeMutablePointer<CChar>] = [:] // every id string ever handed out (kept for life)
     private var wanted = Set<String>()
     private let lock = NSLock()
+    /// MIDIClientCreateWithBlock's result (0 = ok); the self-test reports it (E4).
+    private(set) var clientStatus: OSStatus = 0
 
     init(host: RigHost) {
         self.host = host
-        MIDIClientCreateWithBlock("Worship Rig" as CFString, &client) { [weak self] note in
+        clientStatus = MIDIClientCreateWithBlock("Worship Rig" as CFString, &client) { [weak self] note in
             // setup changed: a device appeared or went away
             if note.pointee.messageID == .msgSetupChanged || note.pointee.messageID == .msgObjectAdded
                 || note.pointee.messageID == .msgObjectRemoved {

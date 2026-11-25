@@ -1,6 +1,7 @@
 # Shell and bridge client (2.0)
 
-Owner: bridge-and-shell. Apple code is UNBUILT. Contract: `ENGINE_CONTRACT.md`, `engine-api.json`.
+Owner: bridge-and-shell. Apple code compiles and links on CI (`mac-check`) but has not been launched yet; the
+E4 self-test (below) is its first launch. Contract: `ENGINE_CONTRACT.md`, `engine-api.json`.
 
 ## Architecture
 
@@ -167,6 +168,23 @@ The call is direct: the header declares it (T00b); an older core fails at link t
 - `rig_host.audio_start` now returns immediately (`queue.async`, finding 25); completion through
   `rig_host_audio_started`.
 - CoreAudio.framework dropped from the iPad target (macOS only); the iPad plist gains file sharing and document types.
+
+### Self-test mode (E4; UNBUILT until CI's `mac-check` builds it)
+
+`Worship Rig --self-test` / `RIG_SELFTEST=1` (macOS): `RigEntry` (the `@main` now, WorshipRigApp.swift) runs
+`RigSelfTest.run()` instead of the SwiftUI scene. It builds the same `RigHost`, passing `RigSelfTestHooks`. Steps,
+checks and the JSON line: `MAC_CHECK.md` "Self-test". What the hooks change in the shell, and nothing else:
+- `RigHost`: `WKWebsiteDataStore.nonPersistent()`; a `rigSelfTest` message handler plus a document-start hook script,
+  added before the `__rigNative` / `window.rig` script, that reports console errors, uncaught errors, rejections,
+  resource and CSP errors; `audio_start[_frames]` / `audio_stop` drive `rig_apple_null_sink` (C, Sources/Audio)
+  instead of `RigAudio`; the page's posts and the core's batches are mirrored to the hooks (used to find the `hello`
+  reply and the `state` events).
+- `RigPaths.overrideRoot`: backups and recordings in a temp dir. `RigBackups.scanApplicationSupport = false`.
+- `RigLibrary`: `autoOffer = false` (the runner starts the offer itself, after boot), `persistAnswer = false` (the
+  `rig.electronImportAnswered.v1` default is never written), `autoAnswer = true` (no `NSAlert`).
+  `offerFirstLaunchImport(done:)` reports the outcome. The normal app's flow is unchanged.
+- `RigSchemeHandler.onStatus` (every rig:// status), `RigNavigationDelegate` (didFinish, failures, WebContent
+  termination), `RigMIDI.clientStatus`.
 
 ### Needed from the core / contract (for the orchestrator)
 

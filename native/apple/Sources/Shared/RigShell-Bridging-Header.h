@@ -2,3 +2,4 @@
 #include <rig/rig_engine.h>
 #include "rig_apple_audio.h"
 #include "rig_apple_midi.h"
+#include "rig_apple_null_sink.h" /* self-test output (E4) */

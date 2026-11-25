@@ -7372,3 +7372,59 @@ comes later. No engine change (`app/js/engine` untouched); no store SCHEMA bump.
     fails without the fix).
   - `native/docs/SHELL.md` G5 now records the `sampleStatus` shape and how the shim polls it; G8 counts the extra
     `get` traffic.
+
+## E4: Mac self-test (2.0 Apple shell: `Worship Rig --self-test`; native/apple/Sources/**, tools/mac/check.sh, .github/workflows/native-core.yml; no bridge op, reply or app/js change)
+
+- **What it is.** A UI-less launch mode of the macOS app, for the GitHub Actions `macos-15` runner (no audio device,
+  no MIDI, nobody watching): `"Worship Rig.app/Contents/MacOS/Worship Rig" --self-test`, or `RIG_SELFTEST=1` (the
+  Electron convention). It loads `rig://app/`, waits for the bridge `hello` reply, `__rig.ready`, frames on a null
+  output, a note, the library and (with `RIG_ELECTRON_BACKUPS`) the first-launch migration, prints one JSON line on
+  stdout and exits 0 / 1 within 60 s. Details: `native/docs/MAC_CHECK.md` "Self-test". UNBUILT: no Swift here has
+  been compiled before CI runs it.
+- **Shell interfaces that changed** (Swift-internal; nothing the page or the core sees):
+  - `@main` moved from `WorshipRigApp` to a new `@MainActor enum RigEntry` (WorshipRigApp.swift), which runs
+    `RigSelfTest.run()` (macOS) when asked and `WorshipRigApp.main()` otherwise.
+  - `RigHost.init(selfTest: RigSelfTestHooks? = nil)` replaces `override init()`; `RigHost()` still means the normal
+    app. With hooks: `WKWebsiteDataStore.nonPersistent()`, the `rigSelfTest` message handler and its document-start
+    hook script (first user script), and `rig_host.audio_start[_frames]` / `audio_stop` go to
+    `rig_apple_null_sink` instead of `RigAudio`. New members `selfTest`, `stopNullSink(report:)`, `nullSinkStats()`,
+    `nullSinkPeak(reset:)`. The page's posts and the core's batches pass through `selfTest?.outgoing` /
+    `selfTest?.incoming` (nil in the app: one optional check each).
+  - `RigLibrary`: `autoOffer`, `persistAnswer`, `autoAnswer` (all default to the old behaviour);
+    `offerFirstLaunchImport(done:)` reports its outcome (`staged`, `declined`, `no-backup`, `not-pristine`, …).
+    Without `done`, it runs only when `autoOffer`, exactly as before (one offer, answer stored in UserDefaults
+    `rig.electronImportAnswered.v1`). `RigBackups.scanApplicationSupport` (default true).
+  - `RigPaths.overrideRoot` (nil in the app): recordings and backups under a temporary root.
+  - `RigSchemeHandler.onStatus(url, status)` after every rig:// response; `RigMIDI.clientStatus`.
+  - `RigNavigationDelegate` reports didFinish / didFail / WebContent termination to the hooks.
+- **New C** `native/apple/Sources/Audio/rig_apple_null_sink.{h,c}` (both Apple targets; bridging header): a pthread
+  calls `rig_render(e, planes, 2, block, 0)` once per block duration at 48 kHz (no catch-up after a stall), after
+  reporting `rig_host_audio_started` (id `selftest-null`, latency one block), and counts frames, render errors, late
+  blocks and peak |x|. Measured on the Linux box against the realtime core (`native/apple/selftest/
+  run-null-sink-test.sh`, g++ 13 and clang 20 `-Werror`): hello minor 5, `state running`, 24064 frames in 0.5 s
+  (expected 24000 + one block), 0 late, `audio restart` (stop + start on the device thread) 14336 frames in 0.3 s,
+  silent once stopped, `rig_destroy` 0.7 ms; TSan clean (test harness and sink; the core lib from `build-int-tsan`).
+- **check.sh** gains the stage `selftest` (after `apple-mac`, in the default list; `--quick` unchanged). It launches
+  the app the `apple-mac` stage built in the cache (this run or an earlier one on the same revision), with
+  `RIG_ELECTRON_BACKUPS=<export>/native/apple/selftest/electron-backups`, under an outer 120 s timeout, copies the
+  JSON line to `<out>/selftest.json` and into `summary.json` (`stages.selftest.result`), lists failing checks in
+  `errors`, and copies any new `~/Library/Logs/DiagnosticReports/Worship Rig*` crash report. FAIL also when every
+  check passed but the process exited non-zero (a crash at quit), or crashed before printing. SKIPPED off macOS,
+  without an exported tree, or without a built app. Exercised on Linux with stub `uname`/`xcodebuild`/… and a fake
+  app (pass, required failure, crash at quit, crash before the result, no app, not macOS); shellcheck 0.11 clean.
+- **CI** (`mac-check`): a second `check.sh --stage selftest --out check-out/selftest` step after the compile step,
+  `continue-on-error: true` while new, plus a "Self-test result" step that prints `selftest.json` and the log tail
+  and raises an `::error` annotation on failure. actionlint clean. Expected log line: `selftest   PASS ... N checks,
+  every required one passed, in S s` and `selftest result: {"audio":…,"pass":true,…,"tool":"worship-rig-selftest"}`.
+- **Fixture**: `native/apple/selftest/electron-backups/rig-20261101-120000.json`, a synthetic 1.x-shaped Electron
+  rotation backup (origin tag `http://127.0.0.1:8438`, schema 1, two 4-slot songs derived from factory songs, the
+  first renamed "E4 self-test import", one setlist). Not a real 1.x export (Lane E 5 owns those).
+- Tests: `test/unit/selftest/selftest-scripts.test.mjs` (9): the three JS bodies lifted from the Swift raw strings
+  (page hook counting and inertness, boot probe against the real store, import probe), the fixture's name / origin /
+  schema, and its import through `store.importJSON({replace:true})` (2 songs, schema 2, 4 slots kept, not pristine).
+- **Skeptic review fixes** (`native/docs/reviews/E4-selftest.md`): `RigHost.stopNullSink(report:closing:)`
+  (`closing: true` from the runner's finish refuses any later `audio_start`, E5); `RigSelfTest.run()` is
+  `@MainActor` (E3); the runner holds a `ProcessInfo.beginActivity` token (no App Nap, E4) and sets the window
+  `isRestorable = false`; a non-finite `note` peak is reported, not serialised (E6). check.sh waits 5 s for
+  ReportCrash after a signal exit and keeps the stderr tail next to a crash note (E9). CI: `!cancelled()` instead of
+  `always()`, and a `::warning` when the self-test was SKIPPED (E8).
