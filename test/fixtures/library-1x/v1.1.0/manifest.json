@@ -1,0 +1,223 @@
+{
+  "ref": "v1.1.0",
+  "commit": "c8704a77f3b6de8442f20c19bf1a8eb12924a030",
+  "generator": "tools/gen-library-1x-fixtures.mjs",
+  "origin": "http://127.0.0.1:41135",
+  "scenarios": {
+    "rich": {
+      "files": {
+        "backup": {
+          "file": "rich.backup.json",
+          "chars": 37448,
+          "bytes": 37454
+        },
+        "export": {
+          "file": "rich.export.json",
+          "chars": 70259,
+          "bytes": 70265
+        },
+        "localstorage": {
+          "file": "rich.localstorage.json",
+          "chars": 38111,
+          "bytes": 38117
+        }
+      },
+      "songs": 20,
+      "setlists": 3,
+      "pristine": false,
+      "backupWritten": true,
+      "consoleErrors": [
+        "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+        "The AudioContext encountered an error from the audio device or the WebAudio renderer."
+      ],
+      "detail": {
+        "edited": "song_mwvokz2q015y5l6",
+        "deleted": [
+          "song_mwvokz2s04oghj5",
+          "song_mwvokz2w0jlp4bv"
+        ],
+        "u": "song_mwvol2ar0lxqcqw",
+        "dup": "song_mwvol2b40m6l20r",
+        "tpl": "song_mwvol2b50n1nsup",
+        "sunday": "set_mwvol2bt0oruyhe",
+        "youth": "set_mwvol2bt0pfzd2x",
+        "extras": {
+          "velocityCurve": true,
+          "bendEnabled": false,
+          "width": true,
+          "eqLow": true,
+          "eqHigh": true,
+          "eqB2": true,
+          "eqB7": true,
+          "release": true,
+          "pedalHold": true,
+          "touch": true,
+          "sustain": true,
+          "mono": true,
+          "fxEq": true,
+          "fxComp": true,
+          "lofi": true,
+          "chordFollow": true,
+          "modWheel": true,
+          "timeSig": true,
+          "sceneLearn": true,
+          "audioSleep": true,
+          "updateCheck": true,
+          "hotkeys": true,
+          "midiClockOut": true,
+          "dynamicRange": true
+        },
+        "has": {
+          "scenes": true,
+          "keyboards": true,
+          "click": true
+        }
+      }
+    },
+    "pristine": {
+      "files": {
+        "export": {
+          "file": "pristine.export.json",
+          "chars": 62469,
+          "bytes": 62469
+        },
+        "localstorage": {
+          "file": "pristine.localstorage.json",
+          "chars": 34122,
+          "bytes": 34122
+        }
+      },
+      "songs": 19,
+      "setlists": 1,
+      "pristine": true,
+      "backupWritten": false,
+      "consoleErrors": [],
+      "detail": {
+        "pristine": true
+      }
+    },
+    "empty": {
+      "files": {
+        "backup": {
+          "file": "empty.backup.json",
+          "chars": 569,
+          "bytes": 569
+        },
+        "export": {
+          "file": "empty.export.json",
+          "chars": 690,
+          "bytes": 690
+        },
+        "localstorage": {
+          "file": "empty.localstorage.json",
+          "chars": 585,
+          "bytes": 585
+        }
+      },
+      "songs": 0,
+      "setlists": 0,
+      "pristine": false,
+      "backupWritten": true,
+      "consoleErrors": [],
+      "detail": {
+        "songs": 0,
+        "setlists": 0
+      }
+    },
+    "unicode": {
+      "files": {
+        "backup": {
+          "file": "unicode.backup.json",
+          "chars": 43854,
+          "bytes": 44028
+        },
+        "export": {
+          "file": "unicode.export.json",
+          "chars": 81509,
+          "bytes": 81683
+        },
+        "localstorage": {
+          "file": "unicode.localstorage.json",
+          "chars": 43921,
+          "bytes": 44098
+        }
+      },
+      "songs": 25,
+      "setlists": 3,
+      "pristine": false,
+      "backupWritten": true,
+      "consoleErrors": [],
+      "detail": {
+        "ids": [
+          "song_mwvolf6d0lfue76",
+          "song_mwvolf6f0mwt2kz",
+          "song_mwvolf6g0nbw5gu",
+          "song_mwvolf6g0oqg801",
+          "song_mwvolf6g0pclo5n",
+          "song_mwvolf6g0qeoskf"
+        ]
+      }
+    },
+    "deleted-factory": {
+      "files": {
+        "backup": {
+          "file": "deleted-factory.backup.json",
+          "chars": 25244,
+          "bytes": 25244
+        },
+        "export": {
+          "file": "deleted-factory.export.json",
+          "chars": 46261,
+          "bytes": 46261
+        },
+        "localstorage": {
+          "file": "deleted-factory.localstorage.json",
+          "chars": 25260,
+          "bytes": 25260
+        }
+      },
+      "songs": 14,
+      "setlists": 1,
+      "pristine": false,
+      "backupWritten": true,
+      "consoleErrors": [],
+      "detail": {
+        "killedFactoryIds": [
+          "factory:sunday-pad-piano",
+          "factory:prayer-wash",
+          "factory:lofi-rhodes",
+          "factory:synthwave",
+          "factory:dream-juno"
+        ]
+      }
+    },
+    "huge": {
+      "files": {
+        "backup": {
+          "file": "huge.backup.json.gz",
+          "chars": 1938520,
+          "bytes": 21381
+        },
+        "export": {
+          "file": "huge.export.json.gz",
+          "chars": 2242590,
+          "bytes": 23871
+        },
+        "localstorage": {
+          "file": "huge.localstorage.json.gz",
+          "chars": 1938536,
+          "bytes": 21365
+        }
+      },
+      "songs": 200,
+      "setlists": 2,
+      "pristine": false,
+      "backupWritten": true,
+      "consoleErrors": [],
+      "detail": {
+        "added": 181,
+        "chars": 1938486
+      }
+    }
+  }
+}

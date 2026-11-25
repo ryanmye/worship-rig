@@ -1,0 +1,100 @@
+{
+  "ref": "v1.0.0",
+  "commit": "b3d07581cf64a6d154e87eeefdd679ef02a80a80",
+  "generator": "tools/gen-library-1x-fixtures.mjs",
+  "origin": "http://127.0.0.1:44905",
+  "scenarios": {
+    "rich": {
+      "files": {
+        "backup": {
+          "file": "rich.backup.json",
+          "chars": 37376,
+          "bytes": 37382
+        },
+        "export": {
+          "file": "rich.export.json",
+          "chars": 69696,
+          "bytes": 69702
+        },
+        "localstorage": {
+          "file": "rich.localstorage.json",
+          "chars": 37462,
+          "bytes": 37468
+        }
+      },
+      "songs": 20,
+      "setlists": 3,
+      "pristine": false,
+      "backupWritten": true,
+      "consoleErrors": [
+        "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+        "The AudioContext encountered an error from the audio device or the WebAudio renderer."
+      ],
+      "detail": {
+        "edited": "song_mwvom3eb0137ylu",
+        "deleted": [
+          "song_mwvom3ed04wg9b8",
+          "song_mwvom3ei0jl5f6d"
+        ],
+        "u": "song_mwvom6iv0lk6gxy",
+        "dup": "song_mwvom6ix0mxen0m",
+        "tpl": "song_mwvom6ix0nxng4c",
+        "sunday": "set_mwvom6j30og9kwq",
+        "youth": "set_mwvom6j30pogus0",
+        "extras": {
+          "velocityCurve": true,
+          "bendEnabled": false,
+          "width": true,
+          "eqLow": true,
+          "eqHigh": true,
+          "eqB2": true,
+          "eqB7": true,
+          "release": true,
+          "pedalHold": true,
+          "touch": true,
+          "sustain": true,
+          "mono": true,
+          "fxEq": true,
+          "fxComp": true,
+          "lofi": true,
+          "chordFollow": true,
+          "modWheel": true,
+          "timeSig": true,
+          "sceneLearn": true,
+          "audioSleep": true,
+          "updateCheck": true,
+          "hotkeys": true,
+          "midiClockOut": true,
+          "dynamicRange": true
+        },
+        "has": {
+          "scenes": false,
+          "keyboards": false,
+          "click": false
+        }
+      }
+    },
+    "pristine": {
+      "files": {
+        "export": {
+          "file": "pristine.export.json",
+          "chars": 62469,
+          "bytes": 62469
+        },
+        "localstorage": {
+          "file": "pristine.localstorage.json",
+          "chars": 34122,
+          "bytes": 34122
+        }
+      },
+      "songs": 19,
+      "setlists": 1,
+      "pristine": true,
+      "backupWritten": false,
+      "consoleErrors": [],
+      "detail": {
+        "pristine": true
+      }
+    }
+  }
+}

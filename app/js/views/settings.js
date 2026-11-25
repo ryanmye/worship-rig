@@ -1079,8 +1079,12 @@ export function mountSettings(el, ctx) {
     const f = importInput.files && importInput.files[0];
     importInput.value = '';
     if (!f) return;
-    const r = store.importJSON(await f.text());
-    toast(r.ok ? `Imported ${r.songIds.length} songs` : r.error || 'That file could not be imported.', r.ok ? 'info' : 'error');
+    // E5: a whole library (a 1.x export) imported into the untouched factory library replaces it, setlists and
+    // settings included; into an edited library it is merged, as before
+    const r = store.importJSON(await f.text(), { replacePristine: true });
+    const n = r.ok ? r.songIds.length : 0;
+    const okText = r.replaced ? `Library imported: ${n} songs, ${r.setlistIds.length} setlists` : `Imported ${n} songs`;
+    toast(r.ok ? okText : r.error || 'That file could not be imported.', r.ok ? 'info' : 'error');
   });
   const storageNote = h('p.st-hint');
   const li = store.loadInfo || {};

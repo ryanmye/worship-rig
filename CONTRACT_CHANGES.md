@@ -7428,3 +7428,60 @@ comes later. No engine change (`app/js/engine` untouched); no store SCHEMA bump.
   `isRestorable = false`; a non-finite `note` peak is reported, not serialised (E6). check.sh waits 5 s for
   ReportCrash after a signal exit and keeps the stderr tail next to a crash note (E9). CI: `!cancelled()` instead of
   `always()`, and a `::warning` when the self-test was SKIPPED (E8).
+
+## Lane E5: 1.x → 2.0 library migration (store.js importJSON, controller.js importLatestBackup, views/settings.js Import…)
+
+This lane verified, with real 1.x exports (`test/fixtures/library-1x`, made by v1.1.0 `c8704a7` and v1.0.0
+`b3d0758`), every path a 1.x library takes into 2.0:
+- the Electron backup file through "Import latest backup";
+- the Settings import of an exported file;
+- the native RigLibrary first-launch route (RigLibrary.swift's contract, run in JS);
+- the iPad Files-picker replace.
+
+Suite: `test/phase2/migration-1x` (34 node:test + 3 Playwright), in run-all as `migration-1x`. Each behaviour change
+below has a test that fails without it.
+
+1. **The import envelope is not kept in the state.** `importJSON` now drops a library file's `app`, `kind`,
+   `exportedAt` and `origin` (`IMPORT_ENVELOPE_KEYS`). Before, a replace import stored them as unknown top-level
+   fields. They were never exported again, so the cruft was harmless, but an export → re-import was never
+   deep-equal (`exportedAt` changed). Unknown fields inside songs, slots, setlists, settings and meta are still kept.
+2. **A JSON object that is not a library is refused.** It needs `songs` (an object or array) or
+   `kind:'library'`; otherwise it gets "That file is not a Worship Rig library or song." Before, `migrate({})` made
+   an empty library, so a replace import of the wrong `.json` (the iPad Files picker offers any `.json`) emptied the
+   library. The current library had been backed up first, but the user saw an empty rig.
+3. **`importJSON(text, {dryRun:true})`** runs every check and changes nothing.
+4. **`importJSON(text, {replacePristine:true})`**: a whole library with songs replaces a pristine factory seed.
+   Settings › Import… passes it and toasts "Library imported: N songs, M setlists". See DECISIONS O-AW-E5.
+5. **`controller.importLatestBackup` checks the file before it backs up.** A truncated, non-JSON, newer-schema or
+   non-library backup now returns `{ok:false, error}` and writes no rotation file.
+   - Before, each failed try wrote a backup of the current library, and the rotation then deleted the oldest good
+     backup. That is main.js's newest 10, and only the newest 3 in the native shell.
+   - Test: [good, good, truncated] in a native folder, 3 tries. Before: both good backups were deleted. Now: the
+     folder is unchanged.
+6. **`controller.importLatestBackup` refuses to replace an edited library it could not back up.** It returns
+   `{ok:false, error:'backup failed'}` and warns "Your current library could not be backed up first, so it was not
+   replaced…". Before, the result of `backupNow()` was ignored: a full disk or a missing shell lost the edits. A
+   pristine seed is still replaced, since there is nothing of the user's in it.
+
+What a 1.x file never carried: 1.x leaves device-local settings out of every backup and export (S3 / Q7). These
+settings stay behind, by design, and the release notes say so:
+- keyboards (touch curves), hotkeys, click, MIDI clock out, dynamic range, audio sleep;
+- MIDI input/output choice, pad folder, menu-bar mode, update check.
+
+## Lane E5 skeptic: importLatestBackup backs up the library as it is replaced, one import at a time
+
+Review: `native/docs/reviews/E5-migration.md` (M1, M2). controller.js only; no store or SCHEMA change.
+- **M1: an edit made during the pre-import backup is backed up.** `backupNow()` serialises the library, then waits for
+  the shell (an IPC round trip in Electron, a `WKScriptMessageHandlerWithReply` reply in the native shell). Before,
+  an edit in that wait (a learned MIDI fader, a scene, a menu-bar command) was in neither the backup nor the imported
+  library. Now the backup is written again while the library content changed under it, up to 3 times.
+  - Content means songs, songOrder, setlists, setlistOrder and every setting that is not device-local, compared by
+    reference (the state is frozen). A device-local write (MIDI input chosen) does not count: no backup carries it and
+    the replace keeps it.
+  - Still changing after 3 backups: `{ok:false, error:'backup failed'}` and the warning "Your library kept changing
+    while it was being backed up, so it was not replaced. Try again." Nothing is replaced.
+- **M2: one `importLatestBackup` at a time.** A call while one runs returns the running call's promise. Before, a
+  second run wrote a second pre-import backup (native rotation: 3), and in the native shell it got
+  `latestAnywhere()` (the staged file is served once), so it could replace the picked library with an older backup.
+- Tests: `test/phase2/migration-1x/skeptic.test.mjs` (17: 16 pass, 1 todo = M3). The two M1 tests and the M2 test
+  fail without the change.

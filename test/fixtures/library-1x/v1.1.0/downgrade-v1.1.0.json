@@ -1,0 +1,52 @@
+{
+  "from": "this checkout (schema 2): the 1.1 rich backup imported (replace), plus a 6-slot song, programChangeAction \"cue\" and a chart",
+  "cases": {
+    "settingsImport": {
+      "toast": "This file was made by a newer version of Worship Rig.",
+      "libraryUnchanged": true,
+      "errors": []
+    },
+    "importLatestBackup": {
+      "result": {
+        "ok": false,
+        "error": "This file was made by a newer version of Worship Rig."
+      },
+      "libraryUnchanged": true,
+      "errors": []
+    },
+    "localStorageSchema2": {
+      "status": "future-schema",
+      "backupKey": "rig.v1.backup-<ts>",
+      "songs": 19,
+      "keptCopyBytes": 39029,
+      "keptIsSchema2": true,
+      "errors": []
+    },
+    "schemaEditedTo1": {
+      "ok": true,
+      "error": null,
+      "sixSlotSongSlots": 4,
+      "chartKept": true,
+      "programChangeAction": "cue",
+      "errors": []
+    }
+  },
+  "summary": {
+    "settingsImport": {
+      "crashed": false,
+      "changed": false
+    },
+    "importLatestBackup": {
+      "crashed": false,
+      "changed": false
+    },
+    "localStorageSchema2": {
+      "crashed": false,
+      "changed": false
+    },
+    "schemaEditedTo1": {
+      "crashed": false,
+      "changed": false
+    }
+  }
+}

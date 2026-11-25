@@ -144,9 +144,43 @@ the Settings "import latest backup" button.
   `.onOpenURL`) which asks to replace, then stages and imports. Get the file from the Mac's
   `~/Library/Application Support/<Worship Rig>/backups/` (newest `rig-*.json`) or Electron's Rig menu >
   Open Backups Folder.
-- Caveat: the Electron backup is as fresh as its last write (every edit + 30 s, and window close). Quit the old app
+- Caveat: the Electron backup is as fresh as its last write (window close; ≥ 60 s after a session's first edit,
+  then at most every 10 min; 30 s after launch. E5 skeptic: "every edit + 30 s" was wrong). Quit the old app
   once before migrating. A pristine library is never backed up, so a never-edited Electron install has nothing
   to import.
+- **Verified in JS (Lane E5, 2026-11-25).** `test/phase2/migration-1x` runs the real store and controller against
+  real 1.x exports. The exports were made by v1.1.0 and v1.0.0 themselves (`test/fixtures/library-1x`).
+  - It covers this section's contract with a JS stand-in: `lib.mjs` `nativeShell` (polyfill shape, own rotation 3 /
+    unreadable 5, staged-once `latestBackup`, newest of ours + Electron's by mtime, the pristine probe, the remembered
+    answer, picker / AirDrop staging), and main.js's (`electronHost`).
+  - Proven:
+    - The first-launch import gives the 1.x library field by field (4 slots, factory ids, scenes, setlists, settings,
+      unknown fields). Program Change stays 'switch' (O-AW-3).
+    - The Electron folder is never written or pruned.
+    - A pristine seed is not backed up.
+    - The picker replace backs the current library up first, and that file restores it exactly.
+    - A truncated, newer-schema or non-library file changes nothing, on disk or in the library.
+    - A failed `backupNow` blocks the replace.
+    - (E5 skeptic M1/M2) An edit made while the pre-import backup is written is in a backup (it is written again),
+      and a second `importLatestBackup` while one runs gets the running one's result (the staged file is served
+      once, so a second run used to import `latestAnywhere()` instead).
+  - A Playwright file does the same in the real app through `__rigShell.menu('importLatestBackup')` after Swift's
+    readyProbe.
+  - Fixed on the way: CONTRACT_CHANGES "Lane E5".
+- Still unverified: the Swift side itself. Nothing below has run.
+  - The NSAlert first-launch prompt and its UserDefaults key.
+  - `electronEntries()`'s scan of Application Support (the Electron userData folder name is still [verify on the
+    Mac]).
+  - `WKScriptMessageHandlerWithReply` round trips.
+  - The iPad `UIDocumentPickerViewController` (asCopy) and `.onOpenURL` / AirDrop on a device.
+  - WebKit's localStorage quota with a near-cap (~1.9 M character) library.
+- Findings for the Swift side (not changed here: another lane owns native/apple):
+  - `latestAnywhere()` returns the newest readable file even if it is truncated JSON. JS now refuses it safely, but
+    the older good Electron backups are never offered. Skipping files that do not parse would import the newest
+    good one.
+  - The native rotation keeps 3 files where main.js keeps 10 (`BACKUPS_KEEP = 10`; this section said 3). Three more
+    automatic backups push the pre-import backup out. The controller writes one at most every 10 minutes of
+    editing (`backupIntervalMs`), plus one on window close.
 
 ### Memory pressure (SETUP_REVIEW 21a)
 

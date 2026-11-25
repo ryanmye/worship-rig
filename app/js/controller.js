@@ -32,7 +32,9 @@
 // status.memory = {mode, decodedMB, pinnedMB, capMB, budgetMB, setMB, windowMB, pinnedSongs, note}.
 // l8 (local soak L-8): the ±radius window is a byte budget too. Current song first, then neighbours by distance while
 // the pinned total stays ≤ PIN_BUDGET_MB; one {pin:'replace'} per switch; a warn if pinnedMB ever passes capMB.
-import { transposeSemisOf, audioSleepSecOf, COMPUTER_KEYBOARD, sound2Of, programChangeOf } from './store.js';
+import {
+  transposeSemisOf, audioSleepSecOf, COMPUTER_KEYBOARD, sound2Of, programChangeOf, DEVICE_LOCAL_SETTINGS,
+} from './store.js';
 import { compileTouch } from './shared/touch-curve.js';
 import { transposeSemis, mod12, keyName } from './shared/music.js';
 import {
@@ -2689,14 +2691,66 @@ export function createController(o) {
   }
   /**
    * Import the newest disk backup (Electron). Default: replace the library (device settings kept) after backing up
-   * the current one first — the backup is a whole library, so merging would duplicate every song.
+   * the current one first — the backup is a whole library, so merging would duplicate every song. Nothing happens
+   * when the file cannot be imported, or when the current (edited) library could not be backed up (E5).
+   * Also the native shell's path (RigLibrary.swift: first-launch import, File › Import Library Backup…, AirDrop).
+   * One import at a time: a second call while one runs gets the first one's result (E5 skeptic M2).
    * @returns {Promise<{ok:boolean, error?:string, songIds?:string[]}>}
    */
-  async function importLatestBackup({ replace = true } = {}) {
+  function importLatestBackup(opts) {
+    // E5 skeptic M2: a menu fired twice (or a double click) ran two imports. Each wrote a pre-import backup (the
+    // native rotation keeps 3), and in the native shell the second one got latestAnywhere() instead of the staged
+    // file (it is served once), so it could replace the picked library with an older backup.
+    if (importRunning) return importRunning;
+    importRunning = importLatestBackupOnce(opts).finally(() => {
+      importRunning = null;
+    });
+    return importRunning;
+  }
+  let importRunning = null;
+  /** The library content a backup holds (device-local settings are never in one), for M1 below. */
+  function backedUpPartsOf(st) {
+    const settings = Object.keys(st.settings).filter((k) => !DEVICE_LOCAL_SETTINGS.includes(k))
+      .map((k) => st.settings[k]);
+    return [st.songs, st.songOrder, st.setlists, st.setlistOrder, ...settings];
+  }
+  const samePartsAs = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+  async function importLatestBackupOnce({ replace = true } = {}) {
     if (!rig || typeof rig.latestBackup !== 'function') return { ok: false, error: 'not available' };
     const b = await rig.latestBackup();
     if (!b || b.error || typeof b.text !== 'string') return { ok: false, error: (b && b.error) || 'no backup found' };
-    if (replace) await backupNow(); // the backup we are about to replace from stays the newest source of truth
+    // E5: check the file first. A truncated / unreadable / newer-schema backup used to be "backed up over": each
+    // failed try wrote one more rotation file, and the rotation (main.js 10, the native shell 3) then deleted the
+    // oldest good backups. Now a file that cannot be imported changes nothing, on disk or in the library.
+    const check = store.importJSON(b.text, { replace, dryRun: true });
+    if (!check.ok) {
+      warn(`Import failed: ${check.error}`);
+      return check;
+    }
+    if (replace && !store.pristine) {
+      // E5: the replaced library must exist somewhere first. A failed backup (disk full, the shell gone, a
+      // secondary window) used to go ahead and replace it anyway. A pristine seed has nothing of the user's in it.
+      // E5 skeptic M1: backupNow() serialises the library, then waits for the shell to write it. An edit in that wait
+      // (a MIDI fader, a scene, a menu-bar command) was in neither the backup nor the imported library. Back up again
+      // until a backup holds the library as it is when it is replaced (the parts are frozen, so === is exact).
+      let saved = null;
+      let settled = false;
+      for (let i = 0; i < 3 && !settled; i++) {
+        const parts = backedUpPartsOf(store.get());
+        saved = await backupNow();
+        if (!saved || saved.error || !saved.path) break;
+        settled = samePartsAs(parts, backedUpPartsOf(store.get()));
+      }
+      if (!saved || saved.error || !saved.path) {
+        warn('Your current library could not be backed up first, so it was not replaced. Export it from Settings, '
+          + 'then try again.');
+        return { ok: false, error: 'backup failed' };
+      }
+      if (!settled) {
+        warn('Your library kept changing while it was being backed up, so it was not replaced. Try again.');
+        return { ok: false, error: 'backup failed' };
+      }
+    }
     const r = store.importJSON(b.text, { replace });
     if (r.ok) {
       setStatus({ otherLibrary: null });

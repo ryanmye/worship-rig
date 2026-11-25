@@ -141,3 +141,18 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
   loaded". After each preload the shim asks `get sampleStatus` and fills `_loaded`. The core emitting the event, as
   the contract requires, is an open core item that is done after CORE3 lands; the shim fallback stays as a
   belt-and-braces measure.
+- **O-AW-E5 (Lane E5, 2026-11-25): Settings › Import… of a whole library into the untouched factory library
+  replaces it.** Before this it merged. A 1.x export then became 19 + N songs (the 1.x factory copies doubled), its
+  setlists were renamed "(imported)", and its settings were dropped: MIDI Learn, Program Change, theme, touch and
+  pedal. The rule:
+  - Only a library file with songs counts, and only into a `pristine` seed (meta.edited false). Device-local
+    settings are kept, as in every replace.
+  - Into an edited library, Import… still merges.
+  - Edit's setlist-panel Import is unchanged (merge).
+  - It is a store option, `importJSON(text, {replacePristine:true})`, so this is easy to reverse.
+  - No SCHEMA bump.
+  - E5 skeptic (reviews/E5-migration.md): tier 2 confirmed. No backup is written on this path, and none is needed:
+    every write of library content (songs, orders, setlists, MIDI Learn, Program Change, latency, view…) clears
+    `pristine`, and that is persisted. What a pristine library can hold is factory songs (re-addable from Edit ›
+    Factory…), navigation, device-local settings (kept) and the theme. The theme is the one 2.0 choice the replace
+    overwrites; the release notes say so.

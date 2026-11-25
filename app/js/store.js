@@ -292,6 +292,8 @@ export const BACKUPS_KEEP = 3;
  * fail (QuotaExceededError) until the offending song is deleted. A real library is ~2 KB per song.
  */
 export const LIBRARY_MAX_CHARS = 2000000;
+/** E5: top-level fields of an export file / disk backup that are not library state (importJSON drops them). */
+export const IMPORT_ENVELOPE_KEYS = Object.freeze(['app', 'kind', 'exportedAt', 'origin']);
 /** security S2: deepest nesting an import may have (real exports reach ~8: songs.<id>.patch.slots.<i>.eq.b3.hz). */
 export const IMPORT_MAX_DEPTH = 64;
 
@@ -2041,9 +2043,15 @@ export function createStore(opts = {}) {
      * Import a library / song / array of songs.
      * merge (default): songs added with NEW ids; setlists added with remapped ids; settings ignored.
      * replace: the whole library is replaced (device-local settings kept).
-     * @returns {{ok:true, songIds:string[], setlistIds:string[]} | {ok:false, error:string}}
+     * replacePristine (Lane E5): a whole-library file with songs replaces an untouched factory seed (`pristine`)
+     *   instead of merging into it. Merging a 1.x export into a fresh 2.0 seed doubled every factory song, renamed
+     *   its setlists "(imported)" and dropped its settings (MIDI Learn, Program Change, theme, …).
+     * dryRun (Lane E5): every check, nothing changes (the controller checks a backup before it backs up / replaces).
+     * The export envelope (`app`, `kind`, `exportedAt`, the backup's `origin` tag) is not library content and is not
+     * kept in the state (E5: it was, so an export → re-import was never deep-equal).
+     * @returns {{ok:true, songIds:string[], setlistIds:string[], replaced?:true} | {ok:false, error:string}}
      */
-    importJSON(text, { replace = false } = {}) {
+    importJSON(text, { replace = false, replacePristine = false, dryRun = false } = {}) {
       const tooBig = { ok: false, error: 'That file is too large to import: the library can hold about 2 MB of songs.' };
       // security S2: a pretty-printed export is ~2–3× its compact size; anything far beyond the cap isn't even parsed
       if (typeof text === 'string' && text.length > 4 * LIBRARY_MAX_CHARS) return tooBig;
@@ -2059,6 +2067,7 @@ export function createStore(opts = {}) {
       }
       if (nestsDeeperThan(doc, IMPORT_MAX_DEPTH)) return notOurs;
       let lib;
+      let wholeLibrary = false;
       try {
         if (Array.isArray(doc)) lib = migrate({ songs: doc.map((s, i) => ({ ...s, id: s?.id || `import${i}` })) });
         else if (isObj(doc) && (doc.kind === 'song' || (!doc.songs && isObj(doc.patch)))) {
@@ -2068,24 +2077,39 @@ export function createStore(opts = {}) {
           // UIA: a song file's schema decides its slot count (a 2.0 song keeps its 1..16 slots, a 1.x one its 4)
           const sch = typeof doc.schema === 'number' ? { schema: doc.schema } : {};
           lib = migrate({ ...sch, songs: [{ ...s, id: s.id || 'import0' }] });
-        } else lib = migrate(doc);
+        } else {
+          // E5: any other JSON object (the iPad Files picker offers every .json) is not a library. migrate() makes
+          // an empty library out of `{}`, so a replace import of a wrong file emptied the whole library.
+          if (!isObj(doc) || !(isObj(doc.songs) || Array.isArray(doc.songs) || doc.kind === 'library')) return notOurs;
+          lib = migrate(doc);
+          wholeLibrary = true;
+          // E5: the export envelope / backup origin tag (controller.libraryJSON) are not library state
+          for (const k of IMPORT_ENVELOPE_KEYS) delete lib[k];
+        }
       } catch (err) {
         if (err instanceof FutureSchemaError) return { ok: false, error: 'This file was made by a newer version of Worship Rig.' };
         return { ok: false, error: 'That file is not a Worship Rig library or song.' };
       }
-      if (!lib.songOrder.length && !replace) return { ok: false, error: 'No songs found in that file.' };
+      // E5: a whole library dropped onto an untouched factory seed replaces it (nothing of the user's is lost: the
+      // seed is the factory songs, and device-local settings are kept), so its setlists and settings come along
+      const asReplace = replace || (replacePristine && wholeLibrary && lib.songOrder.length > 0 && api.pristine);
+      if (!lib.songOrder.length && !asReplace) return { ok: false, error: 'No songs found in that file.' };
       // security S2: the library after the import must still fit localStorage (unknown fields are kept, uncapped)
-      const after = JSON.stringify(lib).length + (replace ? 0 : JSON.stringify(state).length);
+      const after = JSON.stringify(lib).length + (asReplace ? 0 : JSON.stringify(state).length);
       if (after > LIBRARY_MAX_CHARS) return tooBig;
-      if (replace) {
+      if (asReplace) {
         const keep = Object.fromEntries(DEVICE_LOCAL_SETTINGS.map((k) => [k, state.settings[k]]));
         // an imported library is the user's data, whatever it says (round2-shell #2)
         const meta = { ...lib.meta, factorySeeded: true, edited: true };
         const next = migrate({ ...lib, settings: { ...lib.settings, ...keep }, meta });
+        const res = { ok: true, songIds: next.songOrder.slice(), setlistIds: next.setlistOrder.slice() };
+        if (!replace) res.replaced = true;
+        if (dryRun) return res;
         generation += 1; // round2-shell #3: read by the controller's onStore (revert snapshot)
         commit(deepFreeze(next), diffPaths(state, next));
-        return { ok: true, songIds: next.songOrder.slice(), setlistIds: next.setlistOrder.slice() };
+        return res;
       }
+      if (dryRun) return { ok: true, songIds: lib.songOrder.slice(), setlistIds: lib.setlistOrder.slice() };
       const map = new Map();
       const paths = [];
       const songIds = [];

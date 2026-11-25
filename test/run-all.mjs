@@ -52,6 +52,8 @@ const SUITES = [
   { name: 'mini', groups: ['phase2'], cmd: [node, 'test/phase2/mini/run.mjs'], timeout: 10 * MIN },
   // Chart view (D7, hidden): flag off = nothing; flag on = import, transpose follow, scroll, song switch
   { name: 'chart', groups: ['phase2'], cmd: [node, 'test/phase2/chart/run.mjs'], timeout: 5 * MIN },
+  // Lane E5: real 1.x libraries (test/fixtures/library-1x) → 2.0 on every import path, the 1.1 downgrade, the 2.0 app
+  { name: 'migration-1x', groups: ['phase2'], cmd: [node, 'test/phase2/migration-1x/run.mjs'], timeout: 8 * MIN },
   // themes-setup: every registered theme boots flash-free, switches at runtime, picker/Quick, selector coverage
   // (writes test/phase2/themes/coverage-<id>.json for the theme agents)
   { name: 'themes', groups: ['phase2'], cmd: [node, 'test/phase2/themes/run.mjs'], timeout: 25 * MIN },
