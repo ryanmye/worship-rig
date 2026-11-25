@@ -308,6 +308,14 @@ void SongGraph::prebuild(const std::vector<PatchSpec> &patches) {
       keepPrebuilt(key, std::move(j));
       ++n_.prebuildPosted;
     }
+  // CORE3 review O1: a `replace` window names the most wanted song first (controller.js pinWindow /
+  // windowCandidates: current, next, prev, next2, prev2). Stamped in request order, the cap evicted the Next song's
+  // units before prev2's. Re-stamped in reverse, the first-named units are the most recently used.
+  for (auto w = want.rbegin(); w != want.rend(); ++w) {
+    int k = 0;
+    for (Prebuilt &e : prebuilt_)
+      if (e.key == w->first && k++ < w->second) e.used = ++useClock_;
+  }
   evictPrebuilt(prebuildCapBytes());
 }
 

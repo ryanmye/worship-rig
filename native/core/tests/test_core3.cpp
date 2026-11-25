@@ -49,11 +49,16 @@ constexpr double kMaxGapMs = kSanitized ? 250.0 : 50.0;
  *  ~0.6-1.6 s for these songs before CORE3). The bound runtime_preload uses. */
 constexpr double kLongGapMs = kSanitized ? 250.0 : 100.0;
 
-/** The tick-gap bound of a switch: kMaxGapMs, or the loop's own largest gap over an idle second times 1.3 when the
- *  box is loaded (CORE3 finish pass: next to two busy threads on this 2-CPU box the idle loop alone shows 48-65 ms
- *  gaps, CFS slices, with no switch at all). Before CORE3 a switch to these songs held the loop 0.6-1.6 s. */
+/** An idle box: the loop's own largest gap is one 30 Hz tick (33 ms) plus scheduling jitter (37 ms on this box). */
+constexpr double kIdleLoopMs = 40;
+/** The tick-gap bound of a switch: kMaxGapMs on an idle box; on a loaded one 1.5 x the loop's own largest gap over
+ *  two idle seconds (CORE3 finish pass: next to two busy threads on this 2-CPU box the idle loop alone shows 48-65 ms
+ *  gaps, CFS slices, with no switch at all). CORE3 review: the finish pass's 1.3 x one idle second failed 1 of 2
+ *  loaded runs (switch gap 72.9 ms, bound 72.8): the switch window is 4 s there, and the switch lane is one more
+ *  runnable thread. Before CORE3 a switch to these songs held the loop for the whole build, 1.1-1.6 s idle and
+ *  ~4 s loaded, so the bound stays an order of magnitude below a held loop. */
 double gapBound(double idleGapMs) {
-  return std::max(kMaxGapMs, idleGapMs * 1.3);
+  return idleGapMs <= kIdleLoopMs ? kMaxGapMs : std::max(kMaxGapMs, idleGapMs * 1.5);
 }
 
 double ms(Clock::time_point a, Clock::time_point b) {
@@ -222,7 +227,7 @@ TEST_SUITE("core3") {
     rt.switchTo(lightSong());
     rt.post(R"({"v":1,"op":"play","e":"on","n":60,"vel":90})");  // held over the switch: the old song plays on
     const auto ti = Clock::now();
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     const double idleGap = rt.maxGapMs(ti, Clock::now());
     const double bound = gapBound(idleGap);
     MESSAGE("idle loop: largest tick gap " << idleGap << " ms; switch bound " << bound << " ms");
@@ -472,8 +477,11 @@ TEST_SUITE("core3") {
       CHECK(mb <= capMB);
       CHECK(n == std::floor(capMB / 6));
       CHECK(ev == 20 - n);
-      // LRU: naming the first song again (the controller's next window) keeps it and evicts the other's units
+      // the first-named song is the one kept (controller.js pinWindow names the Next song before the ones further
+      // away; CORE3 review O1: request-order stamps evicted it first): naming it again posts only what the cap left
+      // out (desktop nothing, iPad its last 5 slots)
       rt.call(R"("op":"cache","action":"preload","pin":"add","patches":[)" + heavySong(15, 10) + "]", 30000);
+      CHECK(rt.stat("prebuildPosted") == 20 + (10 - n));
       CHECK(rt.stat("prebuiltMB") <= capMB);
       for (const auto end = Clock::now() + std::chrono::seconds(kSanitized ? 300 : 60);
            rt.stat("buildsPending") > 0 && Clock::now() < end;)
@@ -486,9 +494,61 @@ TEST_SUITE("core3") {
         left = rt.stat("prebuilt");
       }
       CHECK(left == 0);
+      // LRU across requests (CORE3 review): X and Y fit, X is named again, then Z overflows the cap by `over` units:
+      // those come out of Y (the least recently named), X stays whole
+      const int u = prof == RIG_PROFILE_IPAD ? 2 : 4, over = prof == RIG_PROFILE_IPAD ? 1 : 2;  // 3u x 6 MB
+      auto preload = [&](int variant) {
+        rt.call(R"("op":"cache","action":"preload","pin":"add","patches":[)" + heavySong(variant, u) + "]", 30000);
+        return rt.stat("prebuildPosted");
+      };
+      const double ev0 = rt.stat("prebuildEvicted");
+      preload(17);
+      const double posted = preload(18);
+      CHECK(preload(17) == posted);  // X named again: all there, nothing posted, X is now the newest
+      CHECK(preload(19) == posted + u);
+      CHECK(rt.stat("prebuildEvicted") - ev0 == over);
+      CHECK(preload(17) == posted + u);         // X kept whole
+      CHECK(preload(18) == posted + u + over);  // Y lost `over` units
       // a switch afterwards simply builds (nothing adopted)
       rt.switchTo(heavySong(15, 4));
     }
+  }
+
+  TEST_CASE("CORE3 review: a rate change while a switch is building: the reply still comes, the units are rebuilt at "
+            "the new rate, the prebuilt set is dropped") {
+    Rt rt;
+    rt.boot();
+    rt.switchTo(lightSong());
+    REQUIRE(contains(rt.call(R"("op":"cache","action":"preload","pin":"add","patches":[)" + heavySong(20, 4) + "]",
+                             30000),
+                     "\"ok\":true"));
+    CHECK(rt.stat("prebuilt") == 4);
+    const double off0 = rt.stat("buildsOffThread"), at0 = rt.stat("buildsAtCommit");
+    const int pid = rt.nextId++;
+    rt.post("{\"v\":1,\"op\":\"prepare\",\"id\":" + std::to_string(pid) + ",\"patch\":" + heavySong(21, 10) + "}");
+    CHECK(rt.stat("buildsPending") > 0);  // answered after the prepare (FIFO): its units are queued or building
+    const bool open = !rt.replied(pid);
+    rig_device_info info{};
+    info.struct_size = sizeof info;
+    info.sample_rate = 44100;
+    info.channels = 2;
+    info.output_latency_sec = 0.005;
+    rig_host_audio_started(rt.e, &info);  // a route change to a 44.1 kHz device (rebuilds the plan's units)
+    const auto pr = rt.reply(pid, kSanitized ? 300000 : 60000);
+    REQUIRE(open);
+    REQUIRE(Rt::tokenOf(pr.second) > 0);
+    CHECK(rt.stat("prebuilt") == 0);  // built for 48 kHz: dropped
+    CHECK(contains(rt.call("\"op\":\"commit\",\"token\":" + std::to_string(Rt::tokenOf(pr.second))),
+                   "\"committed\":true"));
+    CHECK(rt.stat("buildsOffThread") - off0 + rt.stat("buildsAtCommit") - at0 == 10);  // the 44.1 kHz jobs only
+    CHECK(rt.stat("buildsPending") == 0);
+    rt.post(R"({"v":1,"op":"play","e":"on","n":67,"vel":90})");
+    std::uint32_t v = 0;
+    for (const auto end = Clock::now() + std::chrono::milliseconds(2000); v == 0 && Clock::now() < end;) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      v = rt.voices();
+    }
+    CHECK(v > 0);
   }
 
   TEST_CASE("CORE3: a commit sent before the prepare reply takes effect at once (builds what is left inline); the "

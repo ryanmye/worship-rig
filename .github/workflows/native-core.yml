@@ -139,7 +139,7 @@ jobs:
           cmake --preset tsan
           cmake --build build/tsan
           cd build/tsan && ctest --output-on-failure \
-            -R "queues|offline|bridge|realtime|runtime|soak|clock|rec|meter|click-record|offline-midi|model|song|t00c|voice-limit|sleep|perform|wheels|drone|core3"
+            -R "queues|offline|bridge|realtime|runtime|soak|clock|rec|meter|click-record|offline-midi|model|song|t00c|voice-limit|sleep|perform|wheels|drone|core3|synth|organ"
         working-directory: native/core
         env:
           TMPDIR: ${{ runner.temp }}

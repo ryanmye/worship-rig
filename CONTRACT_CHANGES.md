@@ -7163,6 +7163,22 @@ review (`native/docs/reviews/CORE3-handoff.md`). Three defects were found and fi
   synth-bass). Tick gaps: max 136 ms, none over 150 ms (CORE2 integration: max 283-329 ms; the CORE3 builder's run
   ui2: 658 ms).
 
+**Skeptic review (2026-11-24, `native/docs/reviews/CORE3.md`: VERIFIED).** The switch path, supersede, commit,
+teardown and audio-thread claims hold; M1-M3 fail the tests. Three changes, no op or reply shape changed:
+- **Prebuild eviction order (O1).** A pinned `cache preload` names the most wanted song first (controller.js
+  `pinWindow`: current, next, prev, next2, prev2). The prebuilt set stamped its LRU in request order, so over the cap
+  it evicted the Next song's units before prev2's. Now the request's units are stamped in reverse order: the
+  first-named song is kept longest. Measured RSS per prebuilt unit (warm banks, 48 kHz): organ 5.81 MB, synth.js
+  2.14 MB, synth-extra 2.58-2.59 MB, all under the 6 / 2.7 MB charged, so the 64 / 32 MB caps bound real memory.
+- **`unit.core3` timing bound (O2).** The switch tick-gap bound is 50 ms on an idle box (the loop's own largest gap
+  over 2 s <= 40 ms) and 1.5 x that gap on a loaded one (the finish pass's 1.3 x over 1 s failed 1 of 2 runs next to
+  two busy threads: 72.88 vs 72.81 ms). Inline builds (M1) still fail it 18x over on a loaded box (4723 ms).
+- **Instrument catalogue (O3).** The builder report's "`auto-filter-cutoff` depends on binary layout" was an empty
+  catalogue: `inst/catalogue.cmake` embeds `native/contract/engine-api.json` and only warned when it was missing (a
+  `git archive native/core` export), so `findCatalogue` found nothing and every `set slots.<i>.params.*` stopped
+  before the instrument. With the contract present, `b9a0c27` renders all 112 fixtures byte-identical to CORE3.
+  A missing or list-less `engine-api.json` now stops configure.
+
 
 ## Chart view (D7, hidden)
 
