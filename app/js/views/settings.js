@@ -14,7 +14,7 @@ import { mountHotkeys, mountUpdates } from './settings-mac.js';
 import { mountKeyboards } from './settings-keyboards.js';
 import { clickSettingsOf } from '../shared/click-math.js';
 import { mountGarageBandImport } from './settings-import.js';
-import { POLYPHONY_CHOICES, BUFFER_FRAMES_CHOICES, VOICE_LIMIT_CHOICES, sound2Of } from '../store.js';
+import { POLYPHONY_CHOICES, BUFFER_FRAMES_CHOICES, VOICE_LIMIT_CHOICES, sound2Of, programChangeOf } from '../store.js';
 
 const C = await loadComponents();
 
@@ -34,6 +34,9 @@ export const LEARN_NAMES = Object.freeze({
   swell: 'Swell',
   nextScene: 'Next scene', // v11-scenes
   prevScene: 'Previous scene',
+  go: 'Go (play the cued song)', // Lane S (D6)
+  cueNext: 'Cue next song',
+  cuePrev: 'Cue previous song',
 });
 /** Rows of the Learn table: params.LEARNABLE, plus 'swell' (the controller accepts it; see CONTRACT_CHANGES shell #4). */
 export const LEARN_ROWS = Object.freeze([...LEARNABLE, ...(LEARNABLE.includes('swell') ? [] : ['swell'])]);
@@ -884,9 +887,41 @@ export function mountSettings(el, ctx) {
       pedalBox,
     ),
   );
+  // Lane S (DECISIONS D6): what a Program Change does and the one channel it listens on. O-AW-3: both choices are
+  // written explicitly (absent reads 'switch' while PC is on, a 1.x library); turning PC on writes 'cue' (store.set)
+  const pcAction = C.segmented({
+    label: 'Program buttons',
+    options: [
+      { value: 'cue', label: 'Cue (Go plays it)' },
+      { value: 'switch', label: 'Switch now' },
+    ],
+    onChange: (v) => store.set('settings.programChangeAction', v === 'switch' ? 'switch' : 'cue'),
+  });
+  pcAction.el.dataset.bind = 'settings.programChangeAction';
+  pcAction.el.dataset.testid = 'setting-pc-action';
+  comps.push(pcAction);
+  const applyPcAction = (s) => pcAction.set(programChangeOf(s).action);
+  settingBinds.push({ key: 'programChangeAction', apply: applyPcAction });
+  settingBinds.push({ key: 'programChange', apply: applyPcAction }); // O-AW-3: an absent action reads per on/off
+  pcAction.set(programChangeOf(S()).action);
+  const pcChannel = h('select.ed-select.st-pc-channel', {
+    'aria-label': 'Program Change channel', 'data-testid': 'setting-pc-channel',
+  }, h('option', { value: '', text: 'Any channel' }),
+  ...Array.from({ length: 16 }, (_, i) => h('option', { value: String(i), text: `Channel ${i + 1}` })));
+  pcChannel.dataset.bind = 'settings.programChangeChannel';
+  listen(pcChannel, 'change', () => store.set('settings.programChangeChannel',
+    pcChannel.value === '' ? null : Number(pcChannel.value)));
+  const applyPcChannel = (s) => {
+    const ch = programChangeOf(s).channel;
+    pcChannel.value = ch === null ? '' : String(ch);
+  };
+  settingBinds.push({ key: 'programChangeChannel', apply: applyPcChannel });
+  applyPcChannel(S());
   advanced('keyboards',
     row('Song buttons', tog('programChange', 'Keyboard picks songs').el,
       'The keyboard’s program buttons choose songs: 1 = the first song in the setlist, 2 = the second, …'),
+    row('Program buttons', pcAction.el, 'Cue: the song waits for Go (a footswitch, Enter or the Go button).'),
+    row('Program channel', pcChannel, 'Only this channel picks songs, so another keyboard’s patch change can’t.'),
   );
   advanced('sound',
     row('Clock out', clockSelect, 'MIDI clock while the click runs, so a drum machine or delay pedal follows.'),

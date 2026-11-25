@@ -3345,7 +3345,10 @@
       "fadeOutAll",
       "swell",
       "nextScene",
-      "prevScene"
+      "prevScene",
+      "go",
+      "cueNext",
+      "cuePrev"
     ],
     "roleDefaults": [
       {

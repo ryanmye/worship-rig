@@ -3,13 +3,18 @@
 import { h, setText, disposer } from './util.js';
 
 /**
- * @param {{onSelect?:(id:string, index:number)=>void, onReorder?:(from:number, to:number)=>void, label?:string,
- *          dragNeedsAlt?:boolean}} o   dragNeedsAlt: mouse-drag reordering only with Alt held (Perform, UX S2)
- * set({ songs:[{id,name,key?}], currentId, currentIndex?, gap?, loadingId?, reorderable? })
+ * @param {{onSelect?:(id:string, index:number, how:{key:boolean})=>void, onReorder?:(from:number, to:number)=>void,
+ *          label?:string, dragNeedsAlt?:boolean}} o   dragNeedsAlt: mouse-drag reordering only with Alt held (Perform, UX S2)
+ * set({ songs:[{id,name,key?}], currentId, currentIndex?, gap?, loadingId?, reorderable?, states? })
  *   gap: index where the current entry was removed (store "setlist gap": Next plays songs[gap]); null = no gap.
+ *   states (Lane S, DECISIONS D6): per entry {load:'playing'|'loading'|'ready'|'cold', cued:boolean} (controller
+ *   songState), shown as data-load + a dot, `.cued` and a "Cued" tag; the chip's label says it in words.
  *   While set, no chip is current (not even a reprise of the removed song) and a marker shows the position.
  * One tab stop (the current chip); ←/→ move focus between chips, Enter/Space selects, Alt+←/→ reorders.
  */
+/** Lane S: a chip's load state in words (its aria-label; D6 "playing / cued / ready / loading / not loaded"). */
+const LOAD_WORDS = Object.freeze({ playing: 'playing', loading: 'loading', ready: 'ready', cold: 'not loaded' });
+
 export function setlistStrip(o = {}) {
   const d = disposer();
   const list = h('ol.setlist-list');
@@ -33,12 +38,32 @@ export function setlistStrip(o = {}) {
       const num = h('span.chip-num', { text: String(i + 1) });
       const name = h('span.chip-name', { text: s.name || 'Untitled' });
       const key = h('span.chip-key', { text: s.key || '' });
-      const btn = h('button.setlist-chip', { type: 'button', dataset: { id: s.id, index: String(i) }, title: s.name }, num, name, key, h('span.chip-spinner', { 'aria-hidden': 'true' }));
+      // Lane S: the load dot (ready / not loaded) and the "Cued" tag; the spinner stays the loading sign
+      const dot = h('span.chip-dot', { 'aria-hidden': 'true' });
+      const tag = h('span.chip-cue', { 'aria-hidden': 'true', text: 'Cued' });
+      const btn = h('button.setlist-chip', { type: 'button', dataset: { id: s.id, index: String(i) }, title: s.name },
+        num, name, key, dot, tag, h('span.chip-spinner', { 'aria-hidden': 'true' }));
+      // S-review S7: tell onSelect whether Enter / Space activated the chip (a key keeps the focus on it, so a
+      // second Enter is a deliberate "go", not a toggle). Set by the key itself, not ev.detail: a scripted click()
+      // has detail 0 too.
+      let byKey = false;
       btn.addEventListener('click', (ev) => {
-        if (typeof o.onSelect === 'function') o.onSelect(s.id, i);
+        const key = byKey;
+        byKey = false;
+        if (typeof o.onSelect === 'function') o.onSelect(s.id, i, { key });
         if (ev.detail > 0) queueMicrotask(() => btn.blur());
       });
+      btn.addEventListener('pointerdown', () => {
+        byKey = false;
+      });
+      btn.addEventListener('keyup', (ev) => {
+        if (ev.key === ' ') byKey = true; // Space activates on keyup, before the click
+      });
+      btn.addEventListener('blur', () => {
+        byKey = false;
+      });
       btn.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' && !ev.altKey && !ev.metaKey && !ev.ctrlKey) byKey = true; // the click follows
         if (!ev.altKey && !ev.metaKey && !ev.ctrlKey && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight' || ev.key === 'Home' || ev.key === 'End')) {
           const j = ev.key === 'Home' ? 0 : ev.key === 'End' ? chips.length - 1 : i + (ev.key === 'ArrowLeft' ? -1 : 1);
           ev.preventDefault();
@@ -115,7 +140,17 @@ export function setlistStrip(o = {}) {
       c.btn.classList.toggle('current', cur);
       if (cur) c.btn.setAttribute('aria-current', 'true');
       else c.btn.removeAttribute('aria-current');
-      c.btn.classList.toggle('loading', !!state.loadingId && s.id === state.loadingId && (cur || ci < 0));
+      const st = Array.isArray(state.states) ? state.states[i] : null;
+      const load = st && st.load ? st.load : null;
+      const cued = !!(st && st.cued);
+      const loading = (!!state.loadingId && s.id === state.loadingId && (cur || ci < 0)) || load === 'loading';
+      c.btn.classList.toggle('loading', loading);
+      c.btn.classList.toggle('cued', cued);
+      if (load) c.btn.dataset.load = load;
+      else delete c.btn.dataset.load;
+      const word = cued ? `cued, ${LOAD_WORDS[load] || 'ready'}` : LOAD_WORDS[load] || '';
+      const label = `${i + 1}. ${s.name || 'Untitled'}${s.key ? `, key ${s.key}` : ''}${word ? `: ${word}` : ''}`;
+      if (c.btn.getAttribute('aria-label') !== label) c.btn.setAttribute('aria-label', label);
       c.btn.draggable = !!state.reorderable;
       if (!focusInside) c.btn.tabIndex = cur || (ci < 0 && i === 0) ? 0 : -1;
     });

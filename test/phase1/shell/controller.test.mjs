@@ -44,7 +44,7 @@ test('start(): engine.start then selectSong sequence: prepare → commit → tra
   assert.equal(ctl.status.songId, song.id);
 });
 
-test('selectSong race: double-tap Next → only the latest commits; old keeps playing meanwhile', async () => {
+test('selectSong race: double-tap Next never skips a song (Lane S, S1 risk 1); the latest request commits', async () => {
   const { engine, store, ctl } = await setup({ engineOpts: { manual: true }, noAwait: true });
   await tick();
   engine.pending.shift().resolve(); // initial song
@@ -52,14 +52,18 @@ test('selectSong race: double-tap Next → only the latest commits; old keeps pl
   engine.clear();
   const ids = store.navIds();
   const p1 = ctl.nextSong();
-  const p2 = ctl.nextSong();
-  assert.equal(store.get().settings.currentSongId, ids[2], 'selection moves immediately (UI shows loading)');
+  const p2 = ctl.nextSong(); // during the load: steps from the song you hear, i.e. the one already on its way
+  assert.equal(p2, p1, 'the second press is the same request');
+  assert.equal(store.get().settings.currentSongId, ids[1], 'selection moves immediately (UI shows loading)');
   assert.equal(ctl.status.loading, true);
+  assert.equal(engine.pending.length, 1, 'one prepare');
+  // a newer, different request (an Edit row) while it loads: the newest wins
+  const p3 = ctl.selectSong(ids[2], { index: 2 });
   const [a, b] = engine.pending.splice(0);
   assert.equal(a.patch, store.getSong(ids[1]).patch);
   assert.equal(b.patch, store.getSong(ids[2]).patch);
   b.resolve(); // newer finishes first
-  assert.equal(await p2, true);
+  assert.equal(await p3, true);
   a.resolve(); // stale one finishes later → must not commit
   assert.equal(await p1, false);
   const commits = engine.of('commit');
@@ -241,11 +245,17 @@ test('learned controls: button on CC ≥ 64 (edge), note-mapped button, fader pi
   await tick();
   assert.equal(store.get().settings.currentSongId, before, 'ignored when disabled');
   store.set('settings.programChange', true);
+  midi._inject([0xc0, 5]); // Lane S (D6): a PC cues by default; GO switches
+  await tick();
+  assert.equal(store.get().settings.currentSongId, before, 'cued, not switched');
+  assert.deepEqual(ctl.status.cue, { id: ids[5], index: 5 });
+  store.set('settings.programChangeAction', 'switch'); // the 1.x behaviour, by choice
   midi._inject([0xc0, 5]);
   await tick();
   await tick();
   assert.equal(store.get().settings.currentSongId, ids[5]);
   assert.equal(ctl.status.songId, ids[5]);
+  assert.equal(ctl.status.cue, null, 'switching to the cued entry spends the cue');
 });
 
 test('computer keyboard: notes C4..E5, z/x octave, repeat ignored, focus rules, space sustain, blur releases', async () => {

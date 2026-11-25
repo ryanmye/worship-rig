@@ -357,7 +357,9 @@ test('LEARNABLE', () => {
   assert.deepEqual([...LEARNABLE], [
     'slots.0.gain', 'slots.1.gain', 'slots.2.gain', 'slots.3.gain', 'drone.gain', 'fx.reverb.returnGain',
     'master.volume', 'nextSong', 'prevSong', 'panic', 'fadeOutAll', 'swell', 'nextScene', 'prevScene',
+    'go', 'cueNext', 'cuePrev', // Lane S (D6)
   ]);
+  assert.ok(['go', 'cueNext', 'cuePrev'].every(isLearnButton), 'Lane S: footswitch buttons');
   assert.ok(isLearnButton('nextScene') && isLearnButton('prevScene'), 'v11-scenes: footswitch buttons');
   assert.ok(Object.isFrozen(LEARNABLE));
   assert.ok(isLearnable('panic'));

@@ -174,6 +174,40 @@ export function chartError(raw) {
 /** v11-metronome: settings.midiClockOut (optional, absent = off) is a Web MIDI output name; ids change on re-plug. */
 export const MIDI_CLOCK_NAME_MAX = 120;
 /**
+ * Lane S (DECISIONS D6): what a Program Change does when settings.programChange is on: 'cue' (the song waits for GO)
+ * or 'switch' (the 1.x jump). settings.programChangeAction is optional. DECISIONS O-AW-3 (review S-cue-go S6): absent
+ * with PC on (every 1.x library) = 'switch', so a program-button player keeps the behaviour they had; turning PC on
+ * in 2.0 (store.set false → true while absent) writes PC_ACTION_DEFAULT ('cue') explicitly, so new users get cue.
+ */
+export const PC_ACTIONS = Object.freeze(['cue', 'switch']);
+export const PC_ACTION_DEFAULT = 'cue';
+/** O-AW-3: what an absent settings.programChangeAction means while PC is on (a 1.x library). */
+export const PC_ACTION_LEGACY = 'switch';
+/**
+ * Lane S: settings.programChangeChannel (optional; absent = any channel) is the one MIDI channel, 0..15 (shown 1..16),
+ * whose Program Change picks songs, so another keyboard's patch change can't (S1 audit risk 8).
+ * @param {*} v @returns {number|undefined} the valid channel, undefined when `v` is not one
+ */
+export function validPcChannel(v) {
+  return Number.isInteger(v) && v >= 0 && v <= 15 ? v : undefined;
+}
+/**
+ * Lane S: the effective Program Change settings. An absent action reads 'switch' while PC is on (O-AW-3: a 1.x
+ * library) and 'cue' while it is off (what turning it on will write, so Settings shows that).
+ * @param {object} settings
+ * @returns {{on:boolean, channel:number|null, action:'cue'|'switch'}}
+ */
+export function programChangeOf(settings) {
+  const s = settings || {};
+  const on = !!s.programChange;
+  return {
+    on,
+    channel: validPcChannel(s.programChangeChannel) ?? null,
+    action: PC_ACTIONS.includes(s.programChangeAction) ? s.programChangeAction
+      : on ? PC_ACTION_LEGACY : PC_ACTION_DEFAULT,
+  };
+}
+/**
  * lowres2: settings.audioSleepSec (optional; absent = AUDIO_SLEEP_DEFAULT_SEC): suspend the audio after this many
  * seconds with nothing to play and no input; 0 = never. Whole seconds 0..AUDIO_SLEEP_MAX_SEC. lowres2-scope (Ryan
  * 2026-09-30): the low-resource idle window only (the controller never sleeps outside low-resource); no Settings UI.
@@ -684,6 +718,14 @@ function normalizeSettings(raw, songs, setlists) {
   if (hasOwn(out, 'midiClockOut') && validMidiClockOut(out.midiClockOut) === undefined) delete out.midiClockOut;
   // Chart view (D7, hidden): settings.chartView is true or absent (off); anything else is dropped
   if (hasOwn(out, 'chartView') && out.chartView !== true) delete out.chartView;
+  // Lane S: optional Program Change channel / action; a bad value is dropped (absent = any channel; the action as
+  // programChangeOf reads it, O-AW-3). Never filled in here: an imported 1.x library with PC on stays 'switch'.
+  if (hasOwn(out, 'programChangeChannel') && validPcChannel(out.programChangeChannel) === undefined) {
+    delete out.programChangeChannel;
+  }
+  if (hasOwn(out, 'programChangeAction') && !PC_ACTIONS.includes(out.programChangeAction)) {
+    delete out.programChangeAction;
+  }
   // 2.0 Sound (D1, D2, D4): optional, absent = the default (no SCHEMA bump); a value off the list is dropped
   for (const k of Object.keys(SOUND_2_CHOICES)) {
     if (!hasOwn(out, k)) continue;
@@ -1180,7 +1222,8 @@ export function createStore(opts = {}) {
         // keyboards: device names may contain dots, so only the whole map is a path (store.setKeyboard)
         const whole = k === 'theme' || k === 'audioSleepSec' || k === 'hotkeys' || k === 'updateCheck'
           || k === 'keyboards' || k === 'click' || k === 'midiClockOut' || k === 'dynamicRange'
-          || k === 'droneFreeze' || k === 'chartView' || hasOwn(SOUND_2_CHOICES, k);
+          || k === 'droneFreeze' || k === 'chartView' || k === 'programChangeChannel'
+          || k === 'programChangeAction' || hasOwn(SOUND_2_CHOICES, k);
         return hasOwn(SETTINGS_VALIDATORS, k) || whole ? null : { segs, value: clone(value) };
       }
       // themes-setup: an unknown theme id is stored as the default (never an error, never a dead id)
@@ -1209,6 +1252,16 @@ export function createStore(opts = {}) {
       if (k === 'droneFreeze') { // UIB (D5): a boolean; null = back to the default (absent = on)
         if (value === null || value === undefined) return { segs, value: undefined };
         return typeof value === 'boolean' ? { segs, value } : null;
+      }
+      // Lane S: a channel 0..15 / 'cue' | 'switch'; null = absent (any channel / the action programChangeOf reads)
+      if (k === 'programChangeChannel') {
+        if (value === null || value === undefined) return { segs, value: undefined };
+        const v = validPcChannel(value);
+        return v === undefined ? null : { segs, value: v };
+      }
+      if (k === 'programChangeAction') {
+        if (value === null || value === undefined) return { segs, value: undefined };
+        return PC_ACTIONS.includes(value) ? { segs, value } : null;
       }
       if (k === 'dynamicRange') {
         if (value === null || value === undefined) return { segs, value: undefined };
@@ -1563,8 +1616,13 @@ export function createStore(opts = {}) {
         return false;
       }
       if (deepEqual(getIn(state, v.segs), v.value)) return false;
-      const p = put(v.segs, v.value);
-      changed([p]);
+      // O-AW-3: Program Change turned on (off → on) with no action stored writes 'cue', so a new 2.0 user gets the
+      // safe one; a 1.x library that already has PC on keeps an absent action (= 'switch', programChangeOf)
+      const pcOn = v.segs.length === 2 && v.segs[0] === 'settings' && v.segs[1] === 'programChange'
+        && v.value === true && !state.settings.programChange && !hasOwn(state.settings, 'programChangeAction');
+      const paths = [put(v.segs, v.value)];
+      if (pcOn) paths.push(put(['settings', 'programChangeAction'], PC_ACTION_DEFAULT));
+      changed(paths);
       return true;
     },
 

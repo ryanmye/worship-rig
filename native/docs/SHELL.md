@@ -52,10 +52,22 @@ recordTap, reloadManifests, sleepBlockers, volumeCC (need MIDI, pads, recorder, 
 - G2 (closed in SETUP_REVIEW): `set` path/value are optional in the spec (required unless `batch` is given).
 - G3: clickStart is sync in the contract (`{t0, downbeat}`); native cannot answer sync. Shim returns an estimate.
 - G4: setClockSink(fn) has no port id but `config.midiClock.port` needs one. Shim sends `fn.portId ?? 'auto'`.
-- G5: `get sampleStatus` shape is ambiguous. Shim relies on `load{phase:'samples', loaded:{id:bool}}` events.
+- G5 (shape settled; shim updated by Lane S, DECISIONS O-AW-4): `get sampleStatus {patches}` answers
+  `{loaded: bool[], failed: bool[]}`, one entry per patch (ENGINE_CONTRACT §6.4 `get`). The core never emits
+  `load{phase:'samples'}`, so the shim asks instead (`bridge-engine.js` `_refreshSampleStatus`): after every
+  `cache preload` reply (before `preload()` resolves), after a `prepare` for samplers not yet known decoded (not
+  delaying the token), and after `reloadManifests` for every sampler it knows. Each request sends one one-slot patch
+  per distinct sampler id, so the answer is per instrument. One request is in flight at a time, and ids asked for
+  meanwhile ride one follow-up. The `samples` event is still honoured (mock-native, a core that adds it later).
+  Measured on `rig-devhost` (S-cue-go "Re-check"): at most one `get sampleStatus` per preload (fewer when
+  preloads overlap: 5 for 7 while an 8-song set pinned), round trip ≤ 3.4 ms, `preload()` resolves 3–24 ms later.
+  Known gap: a buffer the core evicts later still reads decoded until a preload names its sampler again.
 - G6: 4 Hz idle tick equals the 0.25 s clock cap; shim raises the rate to 30 Hz on first meter read.
 - G7: `hostLatency` is in the tick prose but not in engine-api.json. Shim honours it if present.
-- G8: chatty traffic (play:input 24 for 6 note-ons; cache preload/estimate 11 each at boot). Dedupe later.
+- G8: chatty traffic (play:input 24 for 6 note-ons; cache preload/estimate 11 each at boot). Dedupe later. Lane S
+  (G5) adds at most one `get sampleStatus` per `cache preload` and per `prepare` with an unknown sampler: a warm
+  switch costs 1 more request (1 preload + 1 sampleStatus), and pinning an 8-song set 5 more (for 7 preloads, 11
+  estimates).
 - G9: shim needs native to emit `state` before `load{start}` and before the `audio start` reply.
 - G10: decided, see "Recording ownership" below. recorder.js still needs the JS `NativeRecorder` adapter (T09) and the
   core `rec` op (M17); until both exist, recording is unavailable under the bridge.

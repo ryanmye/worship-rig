@@ -652,6 +652,15 @@ let readyTimer = null;
 function songsLoaded() {
   const ids = store.navIds();
   let done = 0;
+  // Lane S: the per-song answer lives in the controller now (the setlist chips show it too); same cache reads
+  if (typeof controller.songReady === 'function') {
+    for (const id of ids) {
+      const r = controller.songReady(id);
+      if (r === null) return null;
+      if (r) done += 1;
+    }
+    return { done, total: ids.length };
+  }
   try {
     const cache = engine.cache;
     const samplers = engine.registry?.samplers;
@@ -885,6 +894,12 @@ function focusedControl() {
   if (!el || el === document.body || el === document.documentElement) return null;
   return el.matches?.('button, input, select, textarea, summary, [role="button"], [role="radio"], [role="slider"], [role="spinbutton"], [contenteditable=""], [contenteditable="true"], [tabindex]') ? el : null;
 }
+// S-review S7: Enter = GO (controller) only on Perform with no dialog open; the controller checks the view and
+// body.settings-open itself, this covers the other dialogs (a stray Enter with nothing focused in one never GOes)
+document.addEventListener('keydown', (e) => {
+  if ((e.key !== 'Enter' && e.code !== 'NumpadEnter') || e.defaultPrevented) return;
+  if (popupOpen() && !focusedControl()) e.preventDefault();
+});
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
   const view = store.get().settings.view;

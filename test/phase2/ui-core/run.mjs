@@ -258,6 +258,15 @@ async function waitSong(id) {
   );
 }
 
+/**
+ * Lane S (DECISIONS D6): a setlist chip cues its song and GO plays it. "Go to song i from the strip" is therefore a tap
+ * on the chip, then GO when that left a cue (the chip of the playing song cues nothing).
+ */
+async function pickChip(i) {
+  await page.click(`[data-testid=setlist] .setlist-chip[data-index="${i}"]`);
+  if (await page.evaluate(() => !!window.__rig.controller.status.cue)) await page.click('[data-testid=next-song]');
+}
+
 async function currentSong() {
   return page.evaluate(() => {
     const s = window.__rig.store.currentSong();
@@ -432,7 +441,7 @@ test('every factory song: select from the setlist strip → sound on noteOn(60) 
   const ids = await page.evaluate(() => window.__rig.store.navIds());
   const names = [];
   for (let i = 0; i < ids.length; i++) {
-    await page.click(`[data-testid=setlist] .setlist-chip[data-index="${i}"]`);
+    await pickChip(i);
     await waitSong(ids[i]);
     const s = await currentSong();
     assert.equal(s.index, i);
@@ -445,7 +454,7 @@ test('every factory song: select from the setlist strip → sound on noteOn(60) 
 });
 
 test('next / prev buttons step through the setlist and play', async () => {
-  await page.click('[data-testid=setlist] .setlist-chip[data-index="0"]');
+  await pickChip(0);
   const ids = await page.evaluate(() => window.__rig.store.navIds());
   await waitSong(ids[0]);
   assert.equal(await page.isDisabled('[data-testid=prev-song]'), true, 'prev disabled on the first song');
@@ -462,9 +471,98 @@ test('next / prev buttons step through the setlist and play', async () => {
   assert.equal(await page.evaluate(() => document.activeElement === document.body), true);
 });
 
+test('Lane S (D6): a chip tap cues (nothing changes), GO plays it; ✕ / cued chip clear; Lock cues; PC cues; Enter = GO',
+  async () => {
+    const ids = await page.evaluate(() => window.__rig.store.navIds());
+    await pickChip(0);
+    await waitSong(ids[0]);
+    const ev = (fn, arg) => page.evaluate(fn, arg);
+    const cue = () => ev(() => window.__rig.controller.status.cue);
+    const name0 = (await page.textContent('[data-testid=song-name]')).trim();
+    const seq0 = await ev(() => window.__rig.controller._debug().seq);
+    const chip = (i) => `[data-testid=setlist] .setlist-chip[data-index="${i}"]`;
+    const name2 = await ev((id) => window.__rig.store.getSong(id).name, ids[2]);
+    await page.click(chip(2));
+    assert.deepEqual(await cue(), { id: ids[2], index: 2 });
+    assert.equal(await ev(() => window.__rig.store.get().settings.currentSongId), ids[0], 'the store keeps the song');
+    assert.equal((await page.textContent('[data-testid=song-name]')).trim(), name0, 'Perform keeps the song');
+    assert.equal(await ev(() => window.__rig.controller._debug().seq), seq0, 'no prepare on a cue');
+    assert.equal(await page.getAttribute(chip(0), 'aria-current'), 'true');
+    await page.waitForFunction((sel) => document.querySelector(sel).classList.contains('cued'), chip(2));
+    assert.match(await page.getAttribute(chip(2), 'aria-label'), /: cued, (ready|loading|not loaded)$/);
+    assert.equal(await page.getAttribute(chip(0), 'data-load'), 'playing');
+    const loads = await ev(() => [...document.querySelectorAll('[data-testid=setlist] .setlist-chip')]
+      .map((c) => c.dataset.load));
+    assert.ok(loads.every((l) => ['playing', 'ready', 'loading', 'cold'].includes(l)), `load states ${loads}`);
+    assert.equal(await page.getAttribute('[data-testid=next-song]', 'data-mode'), 'cued');
+    assert.ok((await page.getAttribute('[data-testid=next-song]', 'aria-label'))
+      .startsWith(`Go to cued song: ${name2}`));
+    assert.equal(await page.isVisible('[data-testid=clear-cue]'), true);
+    // the cued chip again clears the cue; so does ✕
+    await page.click(chip(2));
+    assert.equal(await cue(), null);
+    await page.waitForFunction(() => document.querySelector('[data-testid=clear-cue]').hidden);
+    assert.equal(await page.getAttribute('[data-testid=next-song]', 'data-mode'), 'next');
+    await page.click(chip(3));
+    await page.click('[data-testid=clear-cue]');
+    assert.equal(await cue(), null);
+    // Lock: chips still cue (harmless), GO is the deliberate action
+    await ev(() => window.__rig.store.set('settings.performLock', true));
+    try {
+      await page.click(chip(2));
+      assert.deepEqual(await cue(), { id: ids[2], index: 2 });
+      await page.click('[data-testid=next-song]');
+      await waitSong(ids[2]);
+      assert.equal(await cue(), null, 'the cue is spent');
+      assert.equal(await page.getAttribute(chip(2), 'aria-current'), 'true');
+      await page.waitForFunction(() => !window.__rig.controller.status.go);
+      assert.equal(await page.getAttribute('[data-testid=next-song]', 'data-mode'), 'next');
+    } finally {
+      await ev(() => window.__rig.store.set('settings.performLock', false));
+    }
+    // Program Change cues (turning it on writes 'cue', O-AW-3); Enter (nothing focused) is GO
+    await ev(() => window.__rig.store.set('settings.programChange', true));
+    try {
+      await ev(() => window.__rig.midi._inject([0xc0, 4]));
+      assert.deepEqual(await cue(), { id: ids[4], index: 4 });
+      assert.equal(await ev(() => window.__rig.store.get().settings.currentSongId), ids[2]);
+      await ev(() => document.activeElement?.blur());
+      await page.keyboard.press('Enter');
+      await waitSong(ids[4]);
+    } finally {
+      await ev(() => window.__rig.store.set('settings.programChange', false));
+    }
+    // Shift+→ walks the cue, ← / → stay Prev / Next
+    await page.keyboard.press('Shift+ArrowRight');
+    assert.deepEqual(await cue(), { id: ids[5], index: 5 });
+    await page.keyboard.press('ArrowLeft');
+    await waitSong(ids[3]);
+    assert.equal(await cue(), null, 'Prev replaced the cue');
+    // S-review S7: Enter on a focused chip cues it; a second Enter on that still-focused chip GOes (not un-cue)
+    await page.focus(chip(5));
+    await page.keyboard.press('Enter');
+    assert.deepEqual(await cue(), { id: ids[5], index: 5 });
+    await page.keyboard.press('Enter');
+    await waitSong(ids[5]);
+    assert.equal(await cue(), null, 'the second Enter played the cue');
+    // S7: Enter in Edit never changes the song, even with a cue set and nothing focused
+    await ev((id) => window.__rig.controller.cueSong(id, { index: 1 }), ids[1]);
+    await ev(() => window.__rig.store.set('settings.view', 'edit'));
+    try {
+      await ev(() => document.activeElement?.blur());
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(300);
+      assert.equal(await ev(() => window.__rig.store.get().settings.currentSongId), ids[5], 'Edit: Enter is not GO');
+    } finally {
+      await ev(() => window.__rig.store.set('settings.view', 'perform'));
+      await ev(() => window.__rig.controller.clearCue());
+    }
+    assert.deepEqual(consoleErrors, []);
+  });
+
 test('slot fader drag → engine.getParam(slots.1.gain) + store + localStorage; no double-click reset in Perform', async () => {
   const ids = await page.evaluate(() => window.__rig.store.navIds());
-  await page.click('[data-testid=setlist] .setlist-chip[data-index="0"]');
+  await pickChip(0);
   await waitSong(ids[0]);
   const before = await page.evaluate(() => window.__t.param('slots.1.gain'));
   const box = await page.locator('[data-testid=slot-fader-1] input').boundingBox();
@@ -530,7 +628,7 @@ test('slot fader drag → engine.getParam(slots.1.gain) + store + localStorage; 
 
 test('key grid → song key (store) → engine.drone.key; displayed key updates', async () => {
   const ids = await page.evaluate(() => window.__rig.store.navIds());
-  await page.click('[data-testid=setlist] .setlist-chip[data-index="0"]');
+  await pickChip(0);
   await waitSong(ids[0]);
   await page.click('[data-testid=key-grid] [data-pc="7"]');
   await page.waitForFunction(() => window.__rig.engine.drone?.key?.pc === 7, null, { timeout: 3000 });
@@ -612,7 +710,7 @@ test('transpose −/+ updates the displayed key, the song and engine.transpose',
 test('Panic cuts held + pedaled voices', async () => {
   const ids = await page.evaluate(() => window.__rig.store.navIds());
   const idx = await page.evaluate(() => window.__rig.store.navIds().findIndex((id) => window.__rig.store.getSong(id).name === 'Building Swell'));
-  await page.click(`[data-testid=setlist] .setlist-chip[data-index="${idx}"]`);
+  await pickChip(idx);
   await waitSong(ids[idx]);
   const held = await page.evaluate(async () => {
     const c = window.__rig.controller;
@@ -792,7 +890,7 @@ const gainPos = (g) => Math.cbrt(Math.max(0, g) / 2);
 
 test('relative-drag faders: a tap never jumps; movement is a delta; Shift = fine; wheel too', async () => {
   const ids = await page.evaluate(() => window.__rig.store.navIds());
-  await page.click('[data-testid=setlist] .setlist-chip[data-index="0"]');
+  await pickChip(0);
   await waitSong(ids[0]);
   const gain = () => page.evaluate(() => window.__rig.store.currentSong().patch.slots[0].gain);
   const box = await page.locator('[data-testid=slot-fader-0] input').boundingBox();
@@ -974,7 +1072,7 @@ test('banners: stalled sound (48 px Restart), second window, library not saving,
 
 test('Revert: counts the changed switches (not faders / mutes), needs a 600 ms hold, restores fader, key and drone', async () => {
   const ids = await page.evaluate(() => window.__rig.store.navIds());
-  await page.click('[data-testid=setlist] .setlist-chip[data-index="2"]');
+  await pickChip(2);
   await waitSong(ids[2]);
   const s0 = await page.evaluate(() => {
     const s = window.__rig.store.currentSong();
@@ -1072,7 +1170,7 @@ test('header Space / Echo chips apply presets; Vibes sit behind "…"; "Song’s
 
 test('Next shows the next song name + key; the current chip stays in view; End of set', async () => {
   const ids = await page.evaluate(() => window.__rig.store.navIds());
-  await page.click('[data-testid=setlist] .setlist-chip[data-index="0"]');
+  await pickChip(0);
   await waitSong(ids[0]);
   const exp = await page.evaluate((id) => {
     const s = window.__rig.store.getSong(id);
@@ -1082,7 +1180,7 @@ test('Next shows the next song name + key; the current chip stays in view; End o
   assert.ok(nt.startsWith(`${exp} · `), `Next label "${nt}" names "${exp}" and its key`);
   assert.match(await page.getAttribute('[data-testid=next-song]', 'aria-label'), new RegExp(`Next song: ${exp.replace(/[+()]/g, '\\$&')}`));
   const last = ids.length - 1;
-  await page.click('[data-testid=setlist] .setlist-chip[data-index="0"]');
+  await pickChip(0);
   await page.evaluate((i) => window.__rig.controller.selectSong(window.__rig.store.navIds()[i], { index: i }), last);
   await waitSong(ids[last]);
   await page.waitForTimeout(100);
@@ -1094,7 +1192,7 @@ test('Next shows the next song name + key; the current chip stays in view; End o
   assert.equal(v.inView, true, 'current chip scrolled into view');
   assert.equal(v.next, 'End of set');
   assert.equal(v.disabled, true);
-  await page.click('[data-testid=setlist] .setlist-chip[data-index="0"]');
+  await pickChip(0);
   await waitSong(ids[0]);
   const back = await page.evaluate(() => {
     const strip = document.querySelector('[data-testid=setlist]').getBoundingClientRect();
@@ -1217,7 +1315,7 @@ test('contrast: tokens and live elements meet the stage thresholds', async () =>
 
 test('on-screen keyboard plays through the controller and shows held notes + chord', async () => {
   const ids = await page.evaluate(() => window.__rig.store.navIds());
-  await page.click('[data-testid=setlist] .setlist-chip[data-index="0"]');
+  await pickChip(0);
   await waitSong(ids[0]);
   const key = page.locator('[data-testid=piano] .pkey[data-note="60"]');
   const b = await key.boundingBox();

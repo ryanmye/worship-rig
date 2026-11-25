@@ -51,7 +51,8 @@ export const SILENT_NOTE = 'Silent here · these play on the 2.0 engine';
 export const LOCK = Object.freeze({
   live: Object.freeze([
     'slot faders', 'ON tiles', 'drone ON tile', 'drone level', 'wheel', 'Swell', 'strip chips', 'header Space / Echo',
-    'Quick › This song', 'Quick › restart audio', 'Prev / Next / setlist tap', 'Fade out', 'PANIC', 'Click',
+    'Quick › This song', 'Quick › restart audio', 'Prev / Next-Go / setlist tap (cues)', 'Clear cue', 'Fade out',
+    'PANIC', 'Click',
     'pad folder Rescan (Mac app, pads loaded)', 'Notes toggle', 'top bar: master volume / REC / Quick',
     'banner: Restart sound / Not now', 'scene numbers', // v11-scenes
   ]),
@@ -405,20 +406,38 @@ export function mountPerform(root, ctx) {
   const prevBtn = btn('.nav-btn.prev', '◀ Prev', { 'aria-label': 'Previous song', 'data-testid': 'prev-song', 'data-overlay-pass': '' });
   const nextName = h('b.nav-next-name', { 'data-testid': 'next-name', text: '' });
   const nextCap = h('small.nav-next-cap', { text: say('nextCap') });
+  // Lane S (DECISIONS D6, "Cue, then Go"): the Next button is the GO control. Nothing cued: it plays the next song
+  // (1.x). A cued song: "Go" + its name + its load state; a cold one is waited for. The look is provisional (D6).
+  const goLoad = h('small.nav-load', { 'data-testid': 'go-load', text: '' });
   const nextBtn = h(
     'button.btn.nav-btn.next',
     { type: 'button', 'aria-label': 'Next song', 'data-testid': 'next-song', 'data-overlay-pass': '' },
-    h('span.nav-next-text', {}, nextCap, nextName),
+    h('span.nav-next-text', {}, h('span.nav-next-caprow', {}, nextCap, goLoad), nextName),
     icon('chevron', 22),
   );
   blurAfterPointer(nextBtn, d);
+  const clearCueBtn = btn('.cue-clear', '✕', {
+    'aria-label': 'Clear cue', title: 'Clear cue', 'data-testid': 'clear-cue', 'data-overlay-pass': '', hidden: true,
+  });
+  const goBox = h('div.nav-go', {}, nextBtn, clearCueBtn);
   d.listen(prevBtn, 'click', () => controller.prevSong());
-  d.listen(nextBtn, 'click', () => controller.nextSong());
+  d.listen(nextBtn, 'click', () => (controller.go ? controller.go() : controller.nextSong()));
+  d.listen(clearCueBtn, 'click', () => controller.clearCue());
+  /**
+   * Lane S: a chip tap cues (also under Lock: GO is the deliberate action); tapping the cued chip again clears the
+   * cue. S-review S7: Enter / Space on the cued chip GOes instead: the key keeps the focus on the chip, so the
+   * second Enter is "go", not "un-cue" (a pointer tap blurs the chip, so taps keep the toggle).
+   */
+  const tapChip = (id, index, how) => {
+    if (typeof controller.cueSong !== 'function') return controller.selectSong(id, { index });
+    if (controller.songState(id, index)?.cued) return how && how.key ? controller.go() : controller.clearCue();
+    return controller.cueSong(id, { index });
+  };
   const setlist = use(
     setlistStrip({
       label: 'Setlist',
       dragNeedsAlt: true, // a sloppy click-drag must not reorder the service (UX S2)
-      onSelect: (id, index) => controller.selectSong(id, { index }),
+      onSelect: tapChip,
       onReorder: (from, to) => {
         if (isLocked()) return;
         const st = store.get();
@@ -430,7 +449,7 @@ export function mountPerform(root, ctx) {
   );
   setlist.el.classList.add('panel');
   setlist.el.dataset.testid = 'setlist';
-  const nav = h('div.p-nav', {}, prevBtn, setlist.el, nextBtn);
+  const nav = h('div.p-nav', {}, prevBtn, setlist.el, goBox);
 
   // ---------------------------------------------------------------- wheel strip
   const wheel = use(
@@ -1188,24 +1207,14 @@ export function mountPerform(root, ctx) {
       gap: gapOf(store.neighbors()),
       loadingId: status.loading ? status.songId : null,
       reorderable: !locked,
+      states: chipStates(ids),
     });
     const nb = store.neighbors();
     prevBtn.disabled = !nb.prev;
     // v11-polish: Daylight's "Start of set" on the first song (Classic keeps "◀ Prev", greyed)
     setText(prevBtn, nb.prev ? '◀ Prev' : say('prevStart'));
-    nextBtn.disabled = !nb.next;
     atSetEnd = !nb.next && !!st.currentSetlistId && ids.length > 1;
-    const ns = nb.next ? state.songs[nb.next.id] : null;
-    if (ns) {
-      const k = keyName(ns.hearIn, ns.minor);
-      nextName.replaceChildren(`${ns.name} · `, h('em', { text: k }));
-      nextBtn.title = `${ns.name} · ${k}`;
-      nextBtn.setAttribute('aria-label', `Next song: ${ns.name}, key ${k}`);
-    } else {
-      setText(nextName, 'End of set');
-      nextBtn.title = '';
-      nextBtn.setAttribute('aria-label', 'Next song (end of set)');
-    }
+    renderGo(state);
     // strips (v11-scenes: levels and ON tiles as they sound, the playing scene on top)
     perform.classList.toggle('chips-2', st.performChips === 2);
     const live = liveOf(song);
@@ -1258,6 +1267,76 @@ export function mountPerform(root, ctx) {
     perform.classList.toggle('locked', locked);
     renderQuick();
   }
+
+  /** Lane S: each nav entry's {load, cued} from the controller (D6 load states); null without the cue API. */
+  function chipStates(ids) {
+    if (typeof controller.songState !== 'function') return null;
+    return ids.map((id, i) => controller.songState(id, i) || null);
+  }
+  const LOAD_TEXT = { ready: 'Ready', loading: 'Loading…', cold: 'Not loaded', playing: '' };
+  /**
+   * Lane S: the GO control. A GO under way names its song ("goes when ready" while its samples load); a cue shows
+   * "Go" + the cued song + its load state; otherwise it is 1.x's Next (the next song after the one you hear).
+   */
+  function renderGo(state = store.get()) {
+    const g = status.go || null;
+    const t = g ? { id: g.id, index: g.index, cued: true }
+      : typeof controller.goTarget === 'function' ? controller.goTarget()
+        : (() => {
+          const n = store.neighbors().next;
+          return n ? { ...n, cued: false } : null;
+        })();
+    const ts = t ? state.songs[t.id] : null;
+    const ss = ts && typeof controller.songState === 'function' ? controller.songState(t.id, t.index) : null;
+    const mode = g ? 'going' : ts && t.cued ? 'cued' : 'next';
+    nextBtn.classList.toggle('cued', mode === 'cued');
+    nextBtn.classList.toggle('going', mode === 'going');
+    nextBtn.dataset.mode = mode;
+    if (ss) nextBtn.dataset.load = ss.load;
+    else delete nextBtn.dataset.load;
+    clearCueBtn.hidden = !status.cue;
+    goBox.classList.toggle('has-cue', !!status.cue);
+    nextBtn.disabled = !ts;
+    setText(nextCap, mode === 'next' ? say('nextCap') : 'Go');
+    const loadText = mode === 'going' ? (g.waiting ? 'Loading… goes when ready' : 'Switching…')
+      : ss ? LOAD_TEXT[ss.load] || '' : '';
+    setText(goLoad, loadText);
+    if (ts) {
+      const k = keyName(ts.hearIn, ts.minor);
+      nextName.replaceChildren(`${ts.name} · `, h('em', { text: k }));
+      nextBtn.title = `${ts.name} · ${k}${loadText ? ` · ${loadText}` : ''}`;
+      const what = mode === 'next' ? 'Next song' : mode === 'cued' ? 'Go to cued song' : 'Going to';
+      nextBtn.setAttribute('aria-label', `${what}: ${ts.name}, key ${k}${loadText ? `. ${loadText}` : ''}`);
+    } else {
+      setText(nextName, 'End of set');
+      nextBtn.title = '';
+      nextBtn.setAttribute('aria-label', 'Next song (end of set)');
+    }
+  }
+  /** Lane S: chips + GO only (status / cue / load changes), without the whole renderSong. */
+  function renderCue() {
+    const st = store.get();
+    setlist.set({ states: chipStates(store.navIds()) });
+    renderGo(st);
+    pollLoads();
+  }
+  // Lane S: the engine has no per-song "decoded" event, so the chips' load states are re-read every 500 ms while the
+  // set is still loading or a cue / GO warms a song, and not at all once everything is ready (idle-cpu-ui)
+  let loadPoll = null;
+  function pollLoads() {
+    const states = chipStates(store.navIds()) || [];
+    const busy = !!status.go || states.some((x) => x && x.load === 'loading')
+      || (!status.ready && states.some((x) => x && x.load === 'cold'));
+    if (busy && !loadPoll) loadPoll = setInterval(renderCue, 500);
+    else if (!busy && loadPoll) {
+      clearInterval(loadPoll);
+      loadPoll = null;
+    }
+  }
+  d.add(() => {
+    if (loadPoll) clearInterval(loadPoll);
+    loadPoll = null;
+  });
 
   function renderLock(locked) {
     lockBtn.el.classList.toggle('on', locked);
@@ -1756,6 +1835,7 @@ export function mountPerform(root, ctx) {
         const st = store.get();
         setlist.set({ loadingId: s.loading ? s.songId : null, currentId: st.settings.currentSongId, currentIndex: store.currentIndex(), gap: gapOf(store.neighbors()) });
       }
+      renderCue(); // Lane S: cue / GO / load states (cheap: the chips patch their classes in place)
       if (quick.isOpen) renderQuick();
     }),
   );

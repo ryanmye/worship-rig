@@ -206,6 +206,14 @@ export class BridgeEngine extends EventTarget {
     this._samplers = new Map();
     this._loaded = new Map(); // pseudo sample url -> true
     this._failed = new Set();
+    /**
+     * O-AW-4 / review S-cue-go S3: the core answers `get sampleStatus` but never emits `load {phase:'samples'}`, so
+     * after each preload / prepare the shim asks for the sampler ids it touched. One request in flight; ids asked
+     * for meanwhile ride the next one (`_ssWant`), so concurrent preloads / prepares cost at most one more trip.
+     */
+    this._ssWant = new Set();
+    this._ssNext = null; // the queued round's promise (null = none queued)
+    this._ssBusy = null; // the round in flight
     this._warned = new Set();
     this._pendingSets = [];
     this._setScheduled = false;
@@ -515,17 +523,7 @@ export class BridgeEngine extends EventTarget {
         return this._refreshInstruments().then(() => this._emit('instruments', { count: this._instruments.length }),
           (err) => this._warn(`engine.listInstruments failed: ${err && err.message}`));
       case 'samples': {
-        for (const [id, ok] of Object.entries(m.loaded || {})) {
-          const url = this._sampleUrl(id);
-          if (ok) {
-            this._loaded.set(url, true);
-            this._cacheFacade.entries.set(url, true);
-            this._failed.delete(url);
-          } else {
-            this._loaded.delete(url);
-            this._cacheFacade.entries.delete(url);
-          }
-        }
+        for (const [id, ok] of Object.entries(m.loaded || {})) this._markSamples(id, !!ok, false);
         return undefined;
       }
       default: return undefined;
@@ -534,6 +532,76 @@ export class BridgeEngine extends EventTarget {
 
   _sampleUrl(id) {
     return `native-sample:${id}`;
+  }
+
+  /** One sampler's decoded state in the cache facade (a `samples` event or a `get sampleStatus` answer). */
+  _markSamples(id, ok, failed) {
+    const url = this._sampleUrl(id);
+    if (ok) {
+      this._loaded.set(url, true);
+      this._cacheFacade.entries.set(url, true);
+    } else {
+      this._loaded.delete(url);
+      this._cacheFacade.entries.delete(url);
+    }
+    if (failed) this._failed.add(url);
+    else if (ok) this._failed.delete(url);
+  }
+
+  /** The distinct sampler instrument ids of `patches`. */
+  _samplerIdsOf(patches) {
+    const ids = new Set();
+    for (const p of patches || []) {
+      for (const s of (p && p.slots) || []) {
+        const inst = s && s.instrument;
+        if (inst && inst.type === 'sampler' && typeof inst.id === 'string') ids.add(inst.id);
+      }
+    }
+    return [...ids];
+  }
+
+  /**
+   * O-AW-4 (review S-cue-go S3): fill the cache facade from `get sampleStatus` for these sampler ids, so
+   * `cache.has` (controller songReady, main.js "Loading n of N") is right on a core that sends no `samples` event.
+   * Coalesced: one request in flight, later ids join the next one. Never rejects (a failure is a warn).
+   * @param {string[]} ids
+   * @returns {Promise<void>} settles once a round that asked for every id in `ids` has been answered
+   */
+  _refreshSampleStatus(ids) {
+    if (!ids.length) return Promise.resolve();
+    for (const id of ids) this._ssWant.add(id);
+    if (!this._ssNext) {
+      const after = this._ssBusy || Promise.resolve();
+      this._ssNext = after.then(() => {
+        this._ssNext = null;
+        const list = [...this._ssWant];
+        this._ssWant.clear();
+        const run = this._sampleStatusRound(list);
+        this._ssBusy = run;
+        return run.then(() => {
+          if (this._ssBusy === run) this._ssBusy = null;
+        });
+      });
+    }
+    return this._ssNext;
+  }
+
+  /** One `get sampleStatus` for `list`: a one-slot patch per sampler, so the answer is per instrument. */
+  _sampleStatusRound(list) {
+    if (!list.length) return Promise.resolve();
+    const patches = list.map((id) => ({ slots: [{ instrument: { type: 'sampler', id } }] }));
+    return this._req('get', { what: 'sampleStatus', patches }).then(
+      (r) => {
+        const loaded = r && Array.isArray(r.loaded) ? r.loaded : null;
+        const failed = r && Array.isArray(r.failed) ? r.failed : [];
+        if (!loaded || loaded.length !== list.length) {
+          this._warn('engine sampleStatus: the reply does not match the request');
+          return;
+        }
+        list.forEach((id, i) => this._markSamples(id, loaded[i] === true, failed[i] === true));
+      },
+      (err) => this._warn(`engine sampleStatus failed: ${err && err.message}`),
+    );
   }
 
   async _refreshInstruments(reload = false) {
@@ -701,6 +769,9 @@ export class BridgeEngine extends EventTarget {
     for (const [t, e] of this._tokens) if (t < token) e.superseded = true;
     this._tokens.set(token, { patch, epoch, committed: false, superseded: epoch !== this._epoch });
     this._latestToken = Math.max(this._latestToken, token);
+    // O-AW-4: a prepare is answered once its samples are decoded; ask only for samplers not known decoded yet, and
+    // don't hold the token back for it (the switch is the hot path)
+    this._refreshSampleStatus(this._samplerIdsOf([patch]).filter((id) => !this._loaded.has(this._sampleUrl(id))));
     return token;
   }
 
@@ -726,6 +797,8 @@ export class BridgeEngine extends EventTarget {
   async preload(patches, { pin = 'auto' } = {}) {
     await this.start();
     await this._req('cache', { action: 'preload', patches: patches || [], pin });
+    // O-AW-4: resolve once the facade knows what this preload decoded (a deferred or evicted sampler reads false)
+    await this._refreshSampleStatus(this._samplerIdsOf(patches));
     return true;
   }
 
@@ -743,7 +816,13 @@ export class BridgeEngine extends EventTarget {
 
   async reloadManifests() {
     await this.start();
-    return this._refreshInstruments(true);
+    const r = await this._refreshInstruments(true);
+    // S re-check R1: a rescan drops the core's buffers of every user sample path (CacheServiceImpl::reloadManifests,
+    // cache_.invalidate), so a `true` the shim holds may be stale now: ask again for every sampler it knows about
+    const pre = this._sampleUrl('');
+    const known = new Set([...this._loaded.keys(), ...this._failed].map((u) => String(u).slice(pre.length)));
+    await this._refreshSampleStatus([...known]);
+    return r;
   }
 
   listInstruments() {

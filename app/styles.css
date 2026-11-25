@@ -856,6 +856,30 @@ body[data-view="edit"] .quick-btn { display: none; }
 .setlist-chip.loading .chip-spinner { display: inline-block; }
 .setlist-chip.loading:not(.current) .chip-spinner { border-color: var(--accent); border-top-color: transparent; }
 .setlist-chip.dragging { opacity: .5; }
+/* Lane S (DECISIONS D6, "Cue, then Go"): provisional look in the theme tokens; the visual pass comes later with Ryan */
+.chip-dot { display: none; flex: none; width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box; }
+.setlist-chip[data-load="ready"] .chip-dot { display: inline-block; background: var(--ok); }
+.setlist-chip[data-load="cold"] .chip-dot { display: inline-block; border: 2px dashed var(--muted); }
+.setlist-chip.current .chip-dot { display: none; }
+/* S-review S4: the cue marks read --accent-text first (the theme hook for "accent as text / a line": Daylight Day's
+   --accent is a pale fill, 1.74:1 on a chip; its --accent-text is 6.1:1) */
+.chip-cue { display: none; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--accent-text, var(--accent)); }
+.setlist-chip.cued { box-shadow: inset 0 0 0 3px var(--accent-text, var(--accent)); }
+.setlist-chip.cued .chip-cue { display: inline; }
+.setlist-chip.current.cued .chip-cue { color: var(--accent-ink); }
+.nav-go { position: relative; display: grid; min-width: 0; min-height: 0; }
+.nav-next-caprow { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+.nav-load { font-size: 11px; font-weight: 700; color: var(--muted); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+.nav-btn.next[data-load="ready"] .nav-load { color: var(--ok); }
+.perform .nav-btn.next.cued, .perform .nav-btn.next.going { border: 2px solid var(--accent-text, var(--accent)); }
+.nav-btn.next.cued .nav-next-cap, .nav-btn.next.going .nav-next-cap { color: var(--accent-text, var(--accent)); }
+.nav-go.has-cue .nav-btn.next { padding-right: 54px; }
+.nav-go.has-cue .nav-btn.next .ic { visibility: hidden; }
+.perform .cue-clear { position: absolute; top: 50%; right: 5px; transform: translateY(-50%); width: 44px; height: 44px;
+  min-height: 44px; padding: 0; font-size: 16px; color: var(--muted); background: var(--panel-2); }
+.perform .cue-clear:active:not(:disabled) { transform: translateY(calc(-50% + 1px)); }
 .setlist-item.gap-before::before, .setlist-item.gap-after::after { /* round2-ui #4: where the removed entry was */
   content: ''; position: absolute; top: 2px; bottom: 2px; width: 0; border-left: 3px dashed var(--warn); }
 .setlist-item.gap-before::before { left: -5px; }

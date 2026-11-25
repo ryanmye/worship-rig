@@ -32,7 +32,7 @@
 // status.memory = {mode, decodedMB, pinnedMB, capMB, budgetMB, setMB, windowMB, pinnedSongs, note}.
 // l8 (local soak L-8): the ±radius window is a byte budget too. Current song first, then neighbours by distance while
 // the pinned total stays ≤ PIN_BUDGET_MB; one {pin:'replace'} per switch; a warn if pinnedMB ever passes capMB.
-import { transposeSemisOf, audioSleepSecOf, COMPUTER_KEYBOARD, sound2Of } from './store.js';
+import { transposeSemisOf, audioSleepSecOf, COMPUTER_KEYBOARD, sound2Of, programChangeOf } from './store.js';
 import { compileTouch } from './shared/touch-curve.js';
 import { transposeSemis, mod12, keyName } from './shared/music.js';
 import {
@@ -63,7 +63,7 @@ export const KEY_MAP = Object.freeze({
 });
 /** Momentary learnable actions (note-on or CC ≥ 64). */
 export const BUTTON_CONTROLS = Object.freeze(['nextSong', 'prevSong', 'panic', 'fadeOutAll', 'swell', 'nextScene',
-  'prevScene']);
+  'prevScene', 'go', 'cueNext', 'cuePrev']);
 /** Web Lock name for the single-instance guard (H2). */
 export const INSTANCE_LOCK = 'rig-instance';
 export const SECONDARY_MESSAGE = 'Another Worship Rig window is open — this one is read-only and muted. Close the other window to play here.';
@@ -315,6 +315,10 @@ export function createController(o) {
     ready: false,
     recording: false,
     songId: null,
+    // Lane S (D6): cue = the entry GO plays ({id, index}); go = a GO under way ({id, index, waiting}: waiting = for
+    // its samples, before the switch starts). Both null when idle.
+    cue: null,
+    go: null,
     wakeLock: false,
     pedal: false, // effective sustain (MIDI CC64 after pedalInvert, Space, on-screen) for the UI indicator
     instance: 'primary', // 'primary' | 'secondary' (H2)
@@ -529,7 +533,22 @@ export function createController(o) {
    * @param {{index?:number, when?:number}} [opts]
    * @returns {Promise<boolean>} true when this request was committed
    */
-  async function selectSong(id, opts = {}) {
+  function selectSong(id, opts = {}) {
+    dropPendingGo(); // Lane S: a direct switch (Edit row, store, start-up) wins over a GO still waiting for its song
+    return trackSelect(id, opts);
+  }
+  /** selectSong without dropping a waiting GO (go()'s own switch); remembers the request for goTo()'s dedupe. */
+  function trackSelect(id, opts = {}, dir = 0) {
+    const p = applySong(id, opts);
+    const mine = { id, index: opts.index, promise: p, dir };
+    inflight = mine;
+    const done = () => {
+      if (inflight === mine) inflight = null;
+    };
+    p.then(done, done);
+    return p;
+  }
+  async function applySong(id, opts = {}) {
     const retried = !!opts._retried;
     const song = store.getSong(id);
     if (!song) {
@@ -563,7 +582,7 @@ export function createController(o) {
     if (call('commit', token, opts.when !== undefined ? { when: opts.when } : {}) === false) {
       // engine-core #18: the engine refused the commit (e.g. restart() re-applied its state during our prepare, so our
       // token is stale). Prepare again, once; otherwise go back to what the engine is playing.
-      if (!retried) return selectSong(id, { ...opts, _retried: true });
+      if (!retried) return applySong(id, { ...opts, _retried: true });
       warn(`could not switch to "${song.name}": the audio engine refused the change`);
       // round2-shell #10: with nothing applied yet the store keeps this song selected, so status follows it
       setStatus({ loading: false, songId: appliedId || id });
@@ -585,6 +604,9 @@ export function createController(o) {
     // round2-shell #4: snapshot the song as committed (catchUp just sent edits made while it loaded), not as requested
     const committed = store.getSong(id) || song;
     selected = { id, song: committed };
+    // Lane S: the cue is spent once its entry plays (a cue on another song stays: GO is still to come)
+    if (cue && sameEntry(cue, id, appliedIndex)) cue = null;
+    publishCue();
     emit('song', { id });
     emitActivity('song'); // idle-cpu-ui: the new song's drone may start sounding now
     emit('songSelected', { id, patchSnapshot: clone(committed.patch), songSnapshot: clone(committed) });
@@ -1228,6 +1250,9 @@ export function createController(o) {
     if (!pressed || prev) return;
     if (id === 'nextSong') nextSong();
     else if (id === 'prevSong') prevSong();
+    else if (id === 'go') go(); // Lane S (D6): a footswitch
+    else if (id === 'cueNext') cueStep(1);
+    else if (id === 'cuePrev') cueStep(-1);
     else if (id === 'panic') panic();
     else if (id === 'fadeOutAll') fadeOutAll();
     else if (id === 'nextScene') stepSceneBy(1); // v11-scenes: a learned footswitch
@@ -1325,10 +1350,20 @@ export function createController(o) {
     },
     bend: (e) => call('pitchBend', e.detail.value),
     program: (e) => {
-      if (!settings().programChange) return;
+      // Lane S: an optional channel filter (S1 risk 8), and PC cues by default (D6: GO is the deliberate action)
+      const pc = programChangeOf(settings());
+      if (!pc.on) return;
+      if (pc.channel !== null && e.detail.channel !== pc.channel) return;
       const ids = store.navIds();
       const p = e.detail.program;
-      if (p >= 0 && p < ids.length) selectSong(ids[p], { index: p });
+      if (!(p >= 0 && p < ids.length)) return;
+      if (pc.action === 'switch') {
+        if (cue) {
+          cue = null;
+          publishCue();
+        }
+        goTo({ id: ids[p], index: p });
+      } else cueSong(ids[p], { index: p });
     },
     disconnected: (e) => releaseSource(e.detail.inputId),
     devices: (e) => {
@@ -1386,6 +1421,15 @@ export function createController(o) {
     return !el || (doc && (el === doc.body || el === doc.documentElement)) || !el.tagName;
   }
 
+  /** S-review S7: Enter = GO here? Perform, Settings not open (main.js marks body.settings-open), a GO target. */
+  function enterGoes() {
+    if (settings().view !== 'perform') return false;
+    const body = doc && doc.body;
+    if (body && body.classList && typeof body.classList.contains === 'function'
+      && body.classList.contains('settings-open')) return false;
+    return !!goTarget();
+  }
+
   function onKeyDown(e) {
     if (e.defaultPrevented) return;
     const el = activeEl(e);
@@ -1425,9 +1469,20 @@ export function createController(o) {
         if (onButton) return;
         e.preventDefault();
         if (!e.repeat) {
-          if (e.code === 'ArrowLeft') prevSong();
+          // Lane S: Shift+←/→ walks the cue; ←/→ stay Prev / Next (1.x)
+          if (e.shiftKey) cueStep(e.code === 'ArrowLeft' ? -1 : 1);
+          else if (e.code === 'ArrowLeft') prevSong();
           else nextSong();
         }
+        return;
+      case 'Enter':
+      case 'NumpadEnter':
+        // Lane S: Enter = GO, only with nothing focused (a focused button keeps its own Enter). S-review S7: only on
+        // Perform with Settings closed, and only when the GO control shows a target, so a stray Enter in Edit or
+        // Settings (after a dialog closed, say) never changes the song.
+        if (!nothingFocused(el) || !enterGoes()) return;
+        e.preventDefault();
+        if (!e.repeat) go();
         return;
       case 'ArrowUp':
         e.preventDefault();
@@ -1542,16 +1597,310 @@ export function createController(o) {
     setVirtualWheel(Math.max(0, Math.min(1, Math.round((virtualWheel + delta) * 100) / 100)));
   }
 
-  // ---- actions
-  function nextSong() {
-    const n = store.neighbors().next;
-    if (!n) return Promise.resolve(false);
-    return selectSong(n.id, { index: n.index });
+  // ---- Lane S (native DECISIONS D6): "Cue, then Go"
+  // A cue is controller state only (not persisted): which setlist entry GO plays next. Cueing changes nothing you hear
+  // or see about the playing song; it warms the cued song's samples (engine.preload {pin:'none'}). GO switches to the
+  // cue (none: the next song). A GO on a song whose samples aren't decoded yet waits for them first (`going`, not
+  // started), so the screen keeps the playing song until the switch is quick. Next / Prev are "cue the neighbour of
+  // the song you hear, and GO" (1.x muscle memory: one press switches). S1 audit risk 1: a second Next during a load
+  // is the same request (stepSong), so it never skips one.
+  const GO_WAIT_MAX_MS = 30000; // a decode that takes longer switches anyway (the old song plays until it's ready)
+  const WARM_MAX_MS = GO_WAIT_MAX_MS; // S-review S8: a warm-up that never settles stops reading "loading"
+  let cue = null; // {id, index}
+  let going = null; // {id, index, started, promise}: a GO waiting for its song (started = its selectSong runs)
+  let goSeq = 0;
+  let inflight = null; // {id, index, promise}: the newest selectSong request (trackSelect)
+  const warming = new Map(); // song id → engine.preload promise (cue / GO warm-up)
+  const warmTimers = new Set(); // S-review S8: each warm-up's WARM_MAX_MS cap ({timer}), cleared on dispose
+  let cueDisposed = false; // dispose(): a late warm-up settling publishes nothing
+
+  /** Nav position of `id`, preferring `index` when it points at that song (setlists may repeat a song). */
+  function entryOf(id, index) {
+    const ids = store.navIds();
+    const at = Number.isInteger(index) && index >= 0 && ids[index] === id ? index : ids.indexOf(id);
+    return { id, index: at };
   }
+  /**
+   * True when `ref` ({id, index}) is the entry (id, index). An index that no longer points at its song (the list
+   * was edited) is ignored, so the song id decides.
+   */
+  function sameEntry(ref, id, index) {
+    if (!ref || ref.id !== id) return false;
+    const ids = store.navIds();
+    const refOk = Number.isInteger(ref.index) && ref.index >= 0 && ids[ref.index] === ref.id;
+    const idxOk = Number.isInteger(index) && index >= 0 && ids[index] === id;
+    return !(refOk && idxOk) || ref.index === index;
+  }
+  /** A switch is in flight: the store already shows its target while the applied song still plays. */
+  const switching = () => !!appliedId && targetId !== appliedId;
+  const isPlaying = (id, index) => !!appliedId && sameEntry({ id: appliedId, index: appliedIndex }, id, index);
+
+  /**
+   * Are all of a song's samples decoded? Reads the engine's decoded-sample cache the way main.js's Ready light did
+   * (engine.cache.has, cache.failed, registry.samplers; the web engine and the bridge both expose them).
+   * @param {string} id
+   * @returns {boolean|null} null when the engine can't say (no cache, a secondary window, unknown song)
+   */
+  function songReady(id) {
+    const song = store.getSong(id);
+    if (!song || secondary || !engine) return null;
+    try {
+      const cache = engine.cache;
+      const samplers = engine.registry && engine.registry.samplers;
+      if (!cache || !cache.entries || !samplers) return null;
+      const held = (u) => (typeof cache.has === 'function' ? cache.has(u) : cache.entries.has(u));
+      const failed = (u) => !!(cache.failed && typeof cache.failed.has === 'function' && cache.failed.has(u));
+      for (const sl of enginePatch(song.patch).slots) {
+        if (!sl || sl.instrument.type !== 'sampler') continue;
+        const def = samplers.get(sl.instrument.id);
+        if (!def) continue;
+        for (const L of def.layers || []) {
+          for (const smp of L.samples || []) if (!held(smp.url) && !failed(smp.url)) return false;
+        }
+      }
+      return true;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * One setlist entry's state for the chips and the GO control (D6: playing / cued / loading / ready / not loaded).
+   * `load` is the sound side alone ('cold' = not loaded); `state` puts playing, then cued, first.
+   * @param {string} id
+   * @param {number} [index] nav position (setlists may repeat a song)
+   * @returns {{state:'playing'|'cued'|'loading'|'ready'|'cold', load:'playing'|'loading'|'ready'|'cold',
+   *   cued:boolean, going:boolean}|null}
+   */
+  function songState(id, index) {
+    if (!id || !store.getSong(id)) return null;
+    const playing = isPlaying(id, index);
+    const cued = !playing && sameEntry(cue, id, index);
+    const isGoing = !playing && !!going && sameEntry(going, id, index);
+    let load;
+    if (playing) load = 'playing';
+    else if (warming.has(id) || isGoing || (status.loading && targetId === id)) load = 'loading';
+    else load = songReady(id) === false ? 'cold' : 'ready';
+    return { state: playing ? 'playing' : cued ? 'cued' : load, load, cued, going: isGoing };
+  }
+
+  /**
+   * Decode a song's samples unpinned (cue / GO). S-review S8: a preload that never settles is given up after
+   * WARM_MAX_MS (= the GO cap), so the song falls back to what songReady says (not loaded) instead of "loading" for
+   * good, and a later cue or GO asks again instead of waiting on the stuck promise.
+   * @returns {Promise|null} null when there is nothing to wait for
+   */
+  function warm(id) {
+    if (warming.has(id)) return warming.get(id);
+    if (songReady(id) !== false || !hasPreload()) return null;
+    const w = { timer: null };
+    const cap = new Promise((r) => {
+      w.timer = timers.setTimeout(() => {
+        w.timer = null;
+        r();
+      }, WARM_MAX_MS);
+    });
+    const pre = engineCall('preload', patchesOf([id]), { pin: 'none' })
+      .catch((err) => warn(`could not load the cued song: ${err && err.message}`));
+    const p = Promise.race([pre, cap]).then(() => {
+      if (w.timer !== null) timers.clearTimeout(w.timer);
+      w.timer = null;
+      warmTimers.delete(w);
+      if (warming.get(id) === p) warming.delete(id);
+      if (!cueDisposed) publishCue(true); // S re-check R2: a warm-up settling after dispose() emits nothing
+    });
+    // a preload that settles after the cap: the chips re-read (its samples may be decoded now)
+    pre.then(() => {
+      if (!cueDisposed && !warming.has(id)) publishCue(true);
+    });
+    warmTimers.add(w);
+    warming.set(id, p);
+    return p;
+  }
+
+  /** status.cue / status.go (a 'status' event when they change); `force` re-emits for a load-state-only change. */
+  function publishCue(force = false) {
+    const c = cue ? { id: cue.id, index: cue.index } : null;
+    const g = going ? { id: going.id, index: going.index, waiting: !going.started } : null;
+    if (force && same(status.cue, c) && same(status.go, g)) emit('status', { ...status });
+    else setStatus({ cue: c, go: g });
+  }
+  /** A GO still waiting for its song is dropped (one already switching runs on: the engine keeps the newest). */
+  function dropPendingGo() {
+    if (!going || going.started) return;
+    if (going.timer !== null) timers.clearTimeout(going.timer); // S-review S2: no 30 s cap left behind
+    going = null;
+    goSeq++;
+    publishCue();
+  }
+  /**
+   * S-review S1: a cue (or a GO still waiting) on an entry that left the nav list (removed from the setlist, the song
+   * deleted, another setlist made current) is dropped, so GO never plays a song outside the set the screen shows.
+   */
+  function dropStaleCue() {
+    const ids = store.navIds();
+    const gone = (r) => !!r && (!store.getSong(r.id) || !ids.includes(r.id));
+    if (gone(going)) dropPendingGo();
+    if (gone(cue)) {
+      cue = null;
+      publishCue();
+    }
+  }
+
+  /**
+   * Cue a song: GO will play it. Changes nothing audible; starts decoding it. Cueing the song that plays clears the
+   * cue; cueing the cued entry again keeps it. A new cue drops a GO that is still waiting for its song.
+   * @param {string} id
+   * @param {{index?:number}} [opts]
+   * @returns {boolean} true when a cue is set
+   */
+  function cueSong(id, opts = {}) {
+    if (!store.getSong(id)) return false;
+    const e = entryOf(id, opts.index);
+    if (isPlaying(e.id, e.index)) {
+      clearCue();
+      return false;
+    }
+    if (!(going && sameEntry(going, e.id, e.index))) dropPendingGo();
+    cue = e;
+    warm(id);
+    publishCue();
+    return true;
+  }
+  /** Forget the cue (and a GO still waiting for it). */
+  function clearCue() {
+    cue = null;
+    dropPendingGo();
+    publishCue();
+  }
+
+  /**
+   * What GO plays now: the cue, else what Next would play (stepSong(1): the next song, or the one already on its way
+   * when a Next is loading).
+   * @returns {{id:string, index:number, cued:boolean}|null}
+   */
+  function goTarget() {
+    if (cue && store.getSong(cue.id)) return { ...entryOf(cue.id, cue.index), cued: true };
+    const way = going || (switching() ? inflight : null);
+    const n = !way ? store.neighbors().next : way.dir === 1 ? way : neighborOf(way, 1);
+    return n ? { id: n.id, index: entryOf(n.id, n.index).index, cued: false } : null;
+  }
+
+  /** Switch to an entry, waiting for its samples first when they are known not to be decoded. */
+  function goTo(t, dir = 0) {
+    if (going && sameEntry(going, t.id, t.index)) return going.promise; // second press while it waits / loads
+    if (inflight && switching() && sameEntry(inflight, t.id, t.index)) return inflight.promise;
+    dropPendingGo();
+    const my = ++goSeq;
+    const g = { id: t.id, index: t.index, started: false, promise: null, dir, timer: null };
+    going = g;
+    const run = () => {
+      if (g.timer !== null) timers.clearTimeout(g.timer);
+      g.timer = null;
+      if (my !== goSeq || going !== g) return false;
+      g.started = true;
+      publishCue();
+      const p = trackSelect(t.id, { index: t.index }, dir);
+      const done = () => {
+        if (going === g) {
+          going = null;
+          publishCue();
+        }
+      };
+      p.then(done, done);
+      return p;
+    };
+    const w = warm(t.id);
+    if (!w) {
+      g.promise = run(); // nothing to wait for: switch now, as 1.x did
+      return g.promise;
+    }
+    publishCue();
+    const cap = new Promise((r) => {
+      g.timer = timers.setTimeout(r, GO_WAIT_MAX_MS);
+    });
+    g.promise = Promise.race([w, cap]).then(run);
+    return g.promise;
+  }
+
+  /**
+   * GO: switch to the cued song (none cued: the next song). A cued song that isn't loaded yet is waited for; the
+   * playing song stays on screen and in your ears meanwhile. A second GO while it waits does nothing new.
+   * @returns {Promise<boolean>} true when the switch committed
+   */
+  function go() {
+    if (!cue || !store.getSong(cue.id)) return stepSong(1);
+    return goTo(entryOf(cue.id, cue.index));
+  }
+  /** The entry `dir` steps from `ref` in the nav list (a ref no longer in it: the store's own neighbours). */
+  function neighborOf(ref, dir) {
+    const ids = store.navIds();
+    const pos = entryOf(ref.id, ref.index).index;
+    if (pos < 0) {
+      const n = store.neighbors();
+      return dir > 0 ? n.next : n.prev;
+    }
+    const j = pos + dir;
+    return j >= 0 && j < ids.length ? { id: ids[j], index: j } : null;
+  }
+  /**
+   * Next / Prev (a cue is replaced). S1 audit risk 1: while a step is on its way (a GO waiting for its samples, or its
+   * switch loading), another step in the same direction is that same request, so a double-tap never skips a song.
+   * A step the other way goes from the song on its way (what the GO control and, once it loads, the screen show), so
+   * Next then Prev comes back; back onto the playing song before anything started just drops the waiting GO.
+   * @param {1|-1} dir
+   */
+  function stepSong(dir) {
+    const way = going || (switching() ? inflight : null);
+    if (way && way.dir === dir) return way.promise;
+    const t = way ? neighborOf(way, dir) : (dir > 0 ? store.neighbors().next : store.neighbors().prev);
+    if (!t) return Promise.resolve(false);
+    if (cue) {
+      cue = null;
+      publishCue();
+    }
+    if (going && !going.started && isPlaying(t.id, t.index)) {
+      dropPendingGo();
+      return Promise.resolve(false);
+    }
+    return goTo(t, dir);
+  }
+  /**
+   * Cue the next / previous entry: from the cue, else from the song on its way (a GO or switch), else from the song
+   * that plays. Walking onto the playing song clears the cue.
+   * @param {1|-1} dir
+   * @returns {boolean} true when a cue is set
+   */
+  function cueStep(dir) {
+    const base = cue || going;
+    let t;
+    if (base) {
+      const ids = store.navIds();
+      const pos = entryOf(base.id, base.index).index;
+      const j = pos < 0 ? (dir > 0 ? 0 : -1) : pos + dir;
+      t = j >= 0 && j < ids.length ? { id: ids[j], index: j } : null;
+    } else {
+      const n = store.neighbors(); // during a switch the store is at the song on its way
+      t = dir > 0 ? n.next : n.prev;
+    }
+    if (!t) return false;
+    return cueSong(t.id, { index: t.index });
+  }
+
+  // ---- actions
+  /**
+   * Next: every Next (the learned `nextSong`, →, ⌘→, the menu, the bus, the global hotkey) GOes the cue when one is
+   * set, so it plays the song the GO control shows (DECISIONS O-AW-2, review S-cue-go S5); none cued: the next song
+   * (D6, 1.x). A press while the cued GO waits or loads is that same request, so it never lands one past the cue.
+   * @returns {Promise<boolean>}
+   */
+  function nextSong() {
+    if (cue && store.getSong(cue.id)) return go();
+    return stepSong(1);
+  }
+  /** Prev: clears a cue (stepSong) and steps back from the song you hear, or from the one on its way (O-AW-2). */
   function prevSong() {
-    const p = store.neighbors().prev;
-    if (!p) return Promise.resolve(false);
-    return selectSong(p.id, { index: p.index });
+    return stepSong(-1);
   }
   function panic() {
     call('allNotesOff');
@@ -2382,6 +2731,7 @@ export function createController(o) {
     // idle-cpu-ui: an edit of the current song (drone, master, levels, key) may make sound; background writes to other
     // songs (preload bookkeeping, imports) must not wake the meters
     if (cur && entityChanged && paths.some((p) => p.startsWith(`songs.${cur}.`))) emitActivity('edit');
+    if (navChanged) dropStaleCue(); // S-review S1: before a selectSong below, which would also drop a waiting GO
     if (cur && cur !== targetId) {
       selectSong(cur, { index: state.settings.setlistIndex });
     } else if (cur && cur === appliedId && targetId === appliedId) {
@@ -2672,6 +3022,12 @@ export function createController(o) {
   }
 
   function dispose() {
+    goSeq++; // Lane S: a GO still waiting for its song never switches after dispose
+    if (going && going.timer !== null) timers.clearTimeout(going.timer); // S-review S2
+    going = null;
+    for (const w of warmTimers) if (w.timer !== null) timers.clearTimeout(w.timer); // S-review S8
+    warmTimers.clear();
+    cueDisposed = true;
     for (const c of cleanups.splice(0)) {
       try {
         c();
@@ -3043,6 +3399,15 @@ export function createController(o) {
     selectSong,
     nextSong,
     prevSong,
+    // Lane S (D6): Cue, then Go
+    cueSong,
+    clearCue,
+    go,
+    cueNext: () => cueStep(1),
+    cuePrev: () => cueStep(-1),
+    songState,
+    songReady,
+    goTarget,
     panic,
     fadeOutAll,
     toggleView,
@@ -3154,6 +3519,9 @@ export function createController(o) {
       appliedId,
       targetId,
       seq,
+      cue: cue && { ...cue },
+      going: going && { id: going.id, index: going.index, started: going.started },
+      warming: [...warming.keys()],
       pickups: Object.fromEntries(pickups),
       wheels: { ...wheelState },
       heldBySrc: Object.fromEntries([...heldBySrc].map(([k, v]) => [k, [...v]])),

@@ -208,7 +208,20 @@ async function runMode(mode, browser) {
       await until(() => window.__rig.store.get().settings.velocitySens === 'soft');
       await page.click('[data-bind="settings.velocitySens"] button[data-value="normal"]');
       await page.click('[data-bind="settings.programChange"]');
-      await until(() => window.__rig.store.get().settings.programChange === true);
+      // Lane S (D6) + O-AW-3: turning PC on writes 'cue' (absent with PC on = the 1.x 'switch'); both actions are
+      // stored explicitly; a channel is an explicit choice, Any = absent
+      await until(() => window.__rig.store.get().settings.programChange === true
+        && window.__rig.store.get().settings.programChangeAction === 'cue');
+      assert.equal(await page.getAttribute('[data-testid="setting-pc-action"] button[data-value="cue"]',
+        'aria-checked'), 'true');
+      await page.click('[data-testid="setting-pc-action"] button[data-value="switch"]');
+      await until(() => window.__rig.store.get().settings.programChangeAction === 'switch');
+      await page.click('[data-testid="setting-pc-action"] button[data-value="cue"]');
+      await until(() => window.__rig.store.get().settings.programChangeAction === 'cue');
+      await page.selectOption('[data-testid="setting-pc-channel"]', '15');
+      await until(() => window.__rig.store.get().settings.programChangeChannel === 15);
+      await page.selectOption('[data-testid="setting-pc-channel"]', '');
+      await until(() => !('programChangeChannel' in window.__rig.store.get().settings));
       await page.click('[data-bind="settings.programChange"]');
       await page.click('[data-bind="settings.computerKeyboard"]');
       await until(() => window.__rig.store.get().settings.computerKeyboard === false);
@@ -259,7 +272,7 @@ async function runMode(mode, browser) {
       const rowIds = () => ev(() => [...document.querySelectorAll('.st-learn-table tbody tr')]
         .map((r) => r.dataset.control));
       const before = await rowIds();
-      assert.equal(before.length, 14, 'a 4-slot song: the 1.x rows');
+      assert.equal(before.length, 17, 'a 4-slot song: the 1.x rows + Lane S go / cueNext / cuePrev');
       assert.equal(before.filter((id) => /^slots\.\d+\.gain$/.test(id)).length, 4);
       // grow the song to 6 slots (Sound 5 and 6 copy a filled slot so a learned fader has something to move)
       const restore = () => ev(() => {
@@ -276,7 +289,7 @@ async function runMode(mode, browser) {
         });
         await until(() => !!document.querySelector('tr[data-control="slots.5.gain"]'));
         const grown = await rowIds();
-        assert.equal(grown.length, 16);
+        assert.equal(grown.length, 19);
         assert.deepEqual(grown.slice(0, 7), ['slots.0.gain', 'slots.1.gain', 'slots.2.gain', 'slots.3.gain',
           'slots.4.gain', 'slots.5.gain', 'drone.gain'], 'the levels stay together');
         assert.equal(await page.textContent('tr[data-control="slots.5.gain"] th'), 'Sound 6 level');
@@ -893,7 +906,7 @@ async function runMode(mode, browser) {
       assert.deepEqual(r.advRows, {
         sound: ['settings.monoOutput', 'settings.voiceLimit', 'settings.droneFreeze', 'settings.click.record',
           'settings.midiClockOut'],
-        keyboards: ['settings.programChange'],
+        keyboards: ['settings.programChange', 'settings.programChangeAction', 'settings.programChangeChannel'],
       });
       for (const [id, n] of Object.entries(r.testids)) assert.equal(n, 1, `data-testid ${id} kept, once`);
       // each tab shows its own panel and hides the others

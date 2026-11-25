@@ -65,7 +65,10 @@ async function boot() {
   const idx = await page.evaluate(() => [...document.querySelectorAll('[data-testid=setlist] .setlist-chip')]
     .findIndex((c) => /Sunday Pad \+ Piano/.test(c.textContent)));
   if (idx >= 0) await page.click(`[data-testid=setlist] .setlist-chip[data-index="${idx}"]`);
-  await page.waitForFunction(() => !window.__rig.controller.status.loading, null, { timeout: 240000, polling: 500 });
+  // Lane S (D6): the chip cues the song; GO plays it
+  if (await page.evaluate(() => !!window.__rig.controller.status.cue)) await page.click('[data-testid=next-song]');
+  await page.waitForFunction(() => !window.__rig.controller.status.loading && !window.__rig.controller.status.go,
+    null, { timeout: 240000, polling: 500 });
   await page.evaluate(() => document.fonts.ready);
   // perform.js fits the song name on a resize of the song block, not on a font swap: a 1 px nudge refits it
   await page.setViewportSize({ width: W - 1, height: H });

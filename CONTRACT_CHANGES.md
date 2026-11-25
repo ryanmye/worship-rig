@@ -7265,3 +7265,110 @@ Planned for 2.1 (native DECISIONS D7). Built now behind a hidden switch that is 
   - `test/phase2/chart/run.mjs` (15, Playwright, the real app; new `chart` suite in run-all). The Esc test counts the
     controller's `action` panic events, with a positive control. Wrapping `controller.panic` counted nothing, because
     the Esc handler calls the inner `panic()`.
+
+## Lane S: cue then go (native DECISIONS D6, "Cue, then Go"; controller.js, store.js, shared/params.js, views/perform.js, views/components/setlist.js, views/settings.js, main.js, styles.css; native/contract/engine-api.json regenerated)
+
+Ryan picked mockup C (D6): a setlist tap **cues** a song, and nothing about the playing song changes until **GO**. GO
+comes from the big button, a learned footswitch or Enter. The look is provisional (theme tokens only); a visual pass
+comes later. No engine change (`app/js/engine` untouched); no store SCHEMA bump.
+
+- **Controller (new API).** `cueSong(id, {index})` → bool, `clearCue()`, `go()` → Promise<bool>, `cueNext()`,
+  `cuePrev()`, `songState(id, index)` → `{state, load, cued, going}` (`state`: playing | cued | loading | ready |
+  cold; `load` is the sound side only), `songReady(id)` → true | false | null (null = the engine can't say: no
+  `cache` / `registry.samplers`, a secondary window), `goTarget()` → `{id, index, cued}` | null. `status.cue`
+  (`{id, index}` | null) and `status.go` (`{id, index, waiting}` | null) ride the `status` event. The cue is
+  controller state, not persisted.
+- **Cue.** Changes nothing audible or in the store. It decodes the cued song unpinned (`engine.preload([patch],
+  {pin:'none'})`) when `songReady` says it isn't decoded. Cueing the playing entry clears the cue; a cue is spent when
+  its entry commits (a cue on another song survives a direct switch). A new cue drops a GO that is still waiting.
+- **GO.** Plays the cue (none: the next song after the one you hear). A song that `songReady` reports as not decoded
+  is waited for first (`status.go.waiting`); the store, the screen and the sound stay on the playing song meanwhile,
+  so S1 audit risk 5 (faders showing the new song during a cold load) no longer happens on a GO. The wait is capped
+  at 30 s (`GO_WAIT_MAX_MS`); then it switches anyway (the engine keeps the old song until `prepare` resolves). A
+  warm or unknown song switches in the same tick, exactly as 1.x did, so engines without a cache (the shell fakes)
+  see no change. A direct `selectSong` (Edit row, store, start-up) drops a waiting GO.
+- **Next / Prev** (button, ←/→, menu, learned `nextSong` / `prevSong`, bus) = "GO the neighbour" and replace the
+  cue; GO with nothing cued is Next. **S1 risk 1 fixed:** while a step is on its way (a GO waiting for its samples,
+  or its switch loading), another step in the **same** direction is that same request (same promise, no second
+  prepare), so a double-tap never skips a song. A step the **other** way goes from the song on its way, so Next then
+  Prev comes back (the settings `mac` "global shortcuts" case relies on it); a Prev while a Next still waits for its
+  samples just drops that GO. The `selectSong race` shell test asserted the old skip; it now asserts the fix.
+  (Superseded for Next with a cue set by O-AW-2: see "Follow-ups" below.)
+- **Keys.** Enter / NumpadEnter = GO when nothing is focused (narrowed by S7, "Follow-ups"); Shift+←/→ = cue
+  previous / next (walks from the cue, else the song on its way, else the playing song; walking onto the playing song
+  clears the cue).
+- **Learn.** `LEARNABLE` / `BUTTON_CONTROLS` gain `go`, `cueNext`, `cuePrev` (the Settings Learn table: 14 → 17 rows
+  for a 4-slot song). `engine-api.json` `learnable` regenerated (`build-engine-api.mjs --check` passes).
+- **Program Change.** Two optional settings (absent until set, like `droneFreeze`; not device-local, like
+  `programChange`): `settings.programChangeAction` 'cue' | 'switch' (absent = 'cue': **a PC now cues by default**;
+  'switch' is the 1.x jump; the absent reading is superseded by O-AW-3, "Follow-ups") and
+  `settings.programChangeChannel` 0..15 (absent = any; S1 risk 8). `null` removes
+  either. `store.programChangeOf(settings)` → `{on, channel, action}`. Settings › Keyboards & MIDI › Advanced shows
+  both under "Song buttons".
+- **Perform.** Chips cue (also under Lock: cueing is harmless, GO is the deliberate action); tapping the cued chip
+  again clears it; a ✕ on the GO control clears it too. Each chip carries `data-load` (playing / loading / ready /
+  cold), a dot (ready: `--ok`; not loaded: dashed), `.cued` + a "Cued" tag, and an aria-label with the state in words.
+  The Next button is the GO control (`data-testid=next-song` kept): `data-mode` next | cued | going, `.nav-load`
+  with the target's load state ("Ready", "Not loaded", "Loading… goes when ready"). Chip states are re-read every
+  500 ms only while something loads (or the set isn't ready yet), since the engine has no per-song decoded event.
+- **main.js** `songsLoaded()` (the top bar's "Loading n of N") now counts with `controller.songReady` (same cache
+  reads; it now looks only at the slots the engine plays, `enginePatch`).
+- Tests: `test/phase1/shell/cue-go.test.mjs` (12 node:test cases: cue / GO / Next state machine with a cached fake
+  engine, double Next during a decode and during a prepare, Prev correcting a Next, GO while the cued song loads,
+  the 30 s cap, clear / new cue / direct switch dropping a waiting GO, reprise entries, PC channel + action, learned
+  go / cueNext / cuePrev, Enter / Shift+→); ui-core "Lane S (D6)" (chip cues, GO plays, clear, Lock, PC → cue, Enter, Shift+→, Prev).
+  ui-core's other chip taps go through `pickChip(i)` (tap, then GO when that left a cue).
+- **Skeptic fixes** (native/docs/reviews/S-cue-go.md). S1: a cue, or a GO still waiting for its samples, whose song
+  leaves the nav list (removed from the setlist, deleted, another setlist made current) is dropped on that store
+  change (`dropStaleCue`); before, GO then played a song outside the set (`currentIndex()` −1) and a deleted cue left
+  `status.cue` stale. S2: a dropped or disposed GO clears its 30 s cap timer. S4: the cue marks (ring, "Cued" tag,
+  the GO control's border and caption) read `--accent-text` first (Daylight Day: 1.74:1 → 6.1:1). Tests:
+  `test/phase1/shell/cue-go-review.test.mjs` (8).
+- **Follow-ups** (review S3, S5–S8; DECISIONS O-AW-2, O-AW-3, O-AW-4; builder, pending the skeptic's re-check).
+  - **O-AW-4 / S3, bridge shim** (`engine-bridge/bridge-engine.js`; `app/js/engine` untouched). The core answers
+    `get {what:'sampleStatus', patches}` → `{loaded: bool[], failed: bool[]}` (ENGINE_CONTRACT §6 `get` row,
+    `cache_service.cpp`) but never sends `load {phase:'samples'}`. After each `cache preload` reply the shim now asks
+    `sampleStatus` for that preload's distinct sampler ids (one one-slot patch per id, so the answer is per
+    instrument and indices can't shift) and fills `_loaded` / `cache.entries` / `cache.failed`; `preload()` resolves
+    after that answer, so `controller.songReady` and main.js "Loading n of N" read the decoded state. After a
+    `prepare` reply it asks, without delaying the token, only for samplers not already known decoded. One request
+    in flight; ids asked for meanwhile ride a single follow-up request (deduped). Nothing per tick, chip or read.
+    A short or failed reply is a `warn`, and preload still resolves. The `samples` event is still honoured (mock,
+    a future core). A stale `true` (eviction) is corrected at the next preload that names the song; the core
+    emitting the event stays an open core item (O-AW-4). Test: `test/unit/engine-bridge/sample-status.test.mjs` (5,
+    a core-like fake with no `samples` event).
+  - **O-AW-2 / S5.** With a cue set, `nextSong()` = `go()`: the learned `nextSong`, → / ⌘→, the app menu, the bus
+    `nextSong` (global hotkeys, menu-bar popover) all play the cue the GO control shows. A Next while that GO waits
+    or loads is the same promise (no landing one past the cue). Nothing cued: Next = the next song (D6). `prevSong`
+    with a cue set clears it and steps back (as before). The `cue-go` "Next replaces a cue" test asserted the old
+    behaviour; it now asserts Next GOes the cue.
+  - **O-AW-3 / S6, store.** `programChangeOf`: an absent `programChangeAction` reads `'switch'` while
+    `programChange` is on (every 1.x library keeps the jump) and `'cue'` while it is off (what turning it on writes).
+    `store.set('settings.programChange', true)` from off with no action stored also writes `programChangeAction:
+    'cue'` (one change, both paths notified); a stored choice is never overwritten, and `update()`, import and
+    `migrate()` never fill it in (absent stays absent; `migrate` idempotent). Settings › "Program buttons" writes
+    `'cue'` / `'switch'` explicitly (was `null` for Cue) and re-reads on `programChange` too. New
+    `PC_ACTION_LEGACY = 'switch'` export. No SCHEMA bump.
+  - **S7, Enter.** The controller's Enter = GO now needs `settings.view === 'perform'`, no `body.settings-open`
+    and a `goTarget()`; otherwise the key is left alone (not `preventDefault`ed). main.js `preventDefault`s Enter
+    with a dialog open and nothing focused (`popupOpen`). setlist.js passes `onSelect(id, index, {key})` (set by the
+    chip's own Enter keydown / Space keyup, not `ev.detail`, so a scripted `click()` is still a tap); Perform's
+    `tapChip` GOes on a key activation of the cued chip instead of clearing it (pointer taps keep the toggle).
+  - **S8, warm-up cap.** `warm()` races its `preload {pin:'none'}` against `WARM_MAX_MS` (= `GO_WAIT_MAX_MS`,
+    30 s). On the cap the entry leaves `warming`, so the song reads what `songReady` says (`cold`), and the next cue
+    or GO starts a new preload instead of awaiting the stuck promise. A late settle re-publishes the chip states.
+    The cap timer is cleared when the preload settles and on `dispose()`. A GO on a cold song now holds two 30 s
+    timers (its GO cap and the warm-up cap); the review's S2 test counts both.
+  - Tests: `test/phase1/shell/cue-go-followup.test.mjs` (9). Shell unit 272 → 281, `run-all --only unit` 529 → 534
+    pass (0 fail, 10 skip). Browser-only, written but not run here: ui-core "Lane S" gained the double-Enter chip
+    and Enter-in-Edit checks; settings expects `programChangeAction: 'cue'` after the toggle and after "Cue".
+- **Re-check fixes** (skeptic, `reviews/S-cue-go.md` "Re-check"; numbers there).
+  - **R1, bridge shim.** `reloadManifests()` (a My Samples rescan) now re-asks `get sampleStatus` for every sampler
+    id the shim holds as decoded or failed, before it resolves. The core's rescan invalidates user-sample buffers
+    (`CacheServiceImpl::reloadManifests`), and `prepare` only asks about unknown ids, so a `true` stayed stale until a
+    preload named the song again. Test: `sample-status.test.mjs` (+1, fails without the fix).
+  - **R2, controller.** A cue warm-up whose preload settles after `dispose()` no longer emits a `status` event
+    (`cueDisposed` was checked on the late-settle path only). Test: `test/phase1/shell/cue-go-recheck.test.mjs` (1,
+    fails without the fix).
+  - `native/docs/SHELL.md` G5 now records the `sampleStatus` shape and how the shim polls it; G8 counts the extra
+    `get` traffic.
