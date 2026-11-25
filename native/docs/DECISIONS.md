@@ -129,3 +129,15 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
 - **Real notation (MusicXML) goes to the backlog.**
 - The view is built now behind a hidden setting, off by default, so it can't affect 2.0.
 - **The UI is provisional.** Ryan wants to design it together later; the build covers behaviour and plumbing only.
+- **O-AW-2 (Lane S, 2026-11-25): with a cue set, a learned `nextSong`, → and the menu/global Next also GO the cue.**
+  Before this, only the on-screen GO played the cue; a 1.x footswitch mapped to `nextSong` played the neighbour of the
+  playing song and silently dropped the cue (review S-cue-go S5). `prevSong` clears the cue and steps back.
+- **O-AW-3 (Lane S, 2026-11-25): existing 1.x Program Change users keep "switch".** A library with
+  `programChange: true` and no `programChangeAction` is treated as `'switch'`. Turning PC on in 2.0 writes `'cue'`.
+  Review S6: a silent change to cueing would leave program-button users with no GO within reach mid-service. No SCHEMA
+  bump.
+- **O-AW-4 (Lane S / core, 2026-11-25): song load state on 2.0 comes from a shim fallback for now.** The native core
+  never emits `load {phase:'samples'}` (ENGINE_CONTRACT §6, review S-cue-go S3), so every sampler song read "not
+  loaded". After each preload the shim asks `get sampleStatus` and fills `_loaded`. The core emitting the event, as
+  the contract requires, is an open core item that is done after CORE3 lands; the shim fallback stays as a
+  belt-and-braces measure.
