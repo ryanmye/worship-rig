@@ -1,6 +1,10 @@
 # Lane E4 (Mac app `--self-test`, check.sh `selftest` stage, CI step): skeptic review, 2026-11-25
 
-Verdict: **VERIFIED-PENDING-CI.** Everything that runs off a Mac was run here and passes. That covers the null sink
+Verdict: **VERIFIED** (upgraded by the orchestrator on 2026-11-25 from CI run 45556580456 at 3e1d006: apple-mac
+PASS, 0 warnings; apple-sim PASS, 1 warning as before; the self-test PASS, 12/12 checks in 10.81 s: hello minor 5,
+`visibility visible` (E7 settled), 58240 frames, 0 render errors, `state running`, note peak -3.2 dBFS, migration
+imported 2 songs at schema 2, 0 page errors, 90 rig:// responses with none >= 400, 0 WebContent terminations.
+124 late null-sink blocks are informational. `continue-on-error` dropped.) It was **VERIFIED-PENDING-CI**: Everything that runs off a Mac was run here and passes. That covers the null sink
 on the real realtime core (gcc 13, clang 20 `-Werror -Weverything`, TSan, ASan+UBSan), the JS bodies and the
 fixture, the check.sh stage behind stubs (pass, fail, hang, crash, crash at quit, garbage, no app, not macOS),
 shellcheck, actionlint and a tree-sitter Swift parse. A line-by-line reading finds the default (non-self-test) path

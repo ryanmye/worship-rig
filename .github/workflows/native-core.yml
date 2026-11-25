@@ -164,13 +164,11 @@ jobs:
         run: bash tools/mac/check.sh --rev HEAD --stage tools,apple-mac,apple-sim --out check-out
       # E4: the app's first launch, UI-less (`Worship Rig --self-test`, MAC_CHECK.md "Self-test"): it launches the app
       # the step above built (same revision, same cache dir), with the null audio output and the migration fixture.
-      # A second check.sh run, so the compile result above keeps its own pass/fail. continue-on-error while the
-      # self-test is new (its first runs are the app's first launches anywhere): a failure shows as an ::error
-      # annotation and a failed step, not a red job. Drop continue-on-error once it has passed on v2-native.
+      # A second check.sh run, so the compile result above keeps its own pass/fail. First green on v2-native at
+      # 3e1d006 (run 45556580456, 12/12 checks in 10.8 s), so a failure now fails the job.
       - name: tools/mac/check.sh --stage selftest (app first launch)
         id: selftest
         if: ${{ !cancelled() }}
-        continue-on-error: true
         timeout-minutes: 5
         run: bash tools/mac/check.sh --rev HEAD --stage selftest --out check-out/selftest
       - name: Self-test result
