@@ -286,3 +286,12 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
 - **Menu bar:** a mini Perform.
 - **iPad:** mirrors the Mac in landscape and portrait, as a standalone rig.
 - **Recording ideas:** moves to 2.y, after the instrument controls get simpler.
+
+## D15: Modular UI; all sounds are equal instruments (Ryan, 2026-11-26)
+- There are no role labels outside the instrument chooser: no Keys/Pad/Extra/Bass and no "pad underneath".
+- Every layer is the same instrument card, and the shared cards sit beside the layers.
+- Cards can be arranged: show/hide, reorder and resize, with the layout saved.
+- Perform, the menu bar and the iPad all use the same modules.
+- Each card is a self-contained component.
+- This supersedes the role-specific "Pad underneath" card in the first Perform design pass.
+- Details are in DESIGN_PHILOSOPHY.md, "Modularity".

@@ -31,6 +31,22 @@ changes it.
 - **What Ryan does at the desk:** practises freely, plays with pads and drone underneath, and plays along with songs.
   Recording ideas waits for 2.y.
 
+## Modularity (Ryan, 2026-11-26; D15)
+
+- **Every sound is an instrument, and all instruments are equal.**
+  - Piano, pad, bass, lead, strings and organ are all one kind of thing: an instrument layer.
+  - Layers are never labelled by role, so there is no "pad underneath" card and no Keys / Pad / Extra / Bass slots in
+    the UI.
+  - Categories appear only in the instrument chooser, as filters for finding a sound.
+- **Every layer uses the same card:** name, on/off, level, Change instrument, and that layer's tweaks. Add a layer,
+  remove one, reorder them.
+- **Cards you can arrange.** Instrument cards and the shared cards (Space, Tone, Drone, Sustain, Transpose, Volume)
+  can be shown, hidden, reordered and resized on Perform. The layout is saved.
+- **The same modules everywhere.** Perform, the menu-bar mini Perform and the iPad render the same card set. They
+  differ only in which cards are shown and how they are arranged.
+- **Modular code.** Each card is a self-contained component with one interface: props from the store, actions through
+  the controller. New cards plug in without touching the others: arpeggiator, chart, recorder, Song bank.
+
 ## Principles
 
 1. **One sound, front and centre.**
