@@ -496,7 +496,8 @@ try {
       && document.querySelector('.v6e-rt[data-block="slot:0"] .v6e-rt-cd').hidden);
   });
 
-  await T('Range: the 88-key bar drag writes lowNote in Edit (one end, one write); Set highest by playing; Esc',
+  await T('Range: the 88-key bar drag writes lowNote in Edit (only that end, live, final value as dragged); Set '
+    + 'highest by playing; Esc',
     async () => {
     await choose('range');
     await ev(() => {
@@ -514,7 +515,9 @@ try {
       await page.mouse.move(k.l + 1, hd.cy, { steps: 10 });
       await page.mouse.up();
     });
-    assert.deepEqual(w, ['slots.0.lowNote']);
+    // D24.2 (UI6-U5a review R1a): the drag writes live (≤ 1 per 50 ms) and its final value on release, so there may
+    // be several writes, all of slots.0.lowNote
+    assert.ok(w.length >= 1 && w.every((p) => p === 'slots.0.lowNote'), `writes: ${w}`);
     const s = await song();
     assert.deepEqual([s.patch.slots[0].lowNote, s.patch.slots[0].highNote], [48, 84]);
     // Set highest by playing: arm, then a key (the controller's held notes)
@@ -551,6 +554,210 @@ try {
       const ref = { type: 'sampler', id: 'salamander-piano' };
       store.set(`songs.${store.currentSong().id}.patch.slots.0.instrument`, ref);
     });
+  });
+
+  // ---- after the rebase onto lane-moveui (native/docs/reviews/UI6-U5a.md R1–R3)
+  /** Slot ranges of a song (default: the shown one). */
+  const ranges = (id) => ev((sid) => {
+    const { store } = window.__rig;
+    const s = sid ? store.getSong(sid) : store.currentSong();
+    return s.patch.slots.map((x) => (x ? [x.lowNote, x.highNote] : null));
+  }, id || null);
+  const names3 = () => ev(() => window.__rig.store.currentSong().patch.slots
+    .map((x) => (x ? `${x.instrument.type}:${x.instrument.id}` : null)));
+  /** Press slot k's low handle and drag it to key 48 (≥ one live write), keeping the button down. */
+  async function holdLowAt48(k) {
+    await choose('range');
+    await until((kk) => !!document.querySelector(`[data-testid="v6e-range-kbd-hlo-${kk}"]`), k);
+    const key = await rectOf('.v6-kbd-range .pkey[data-note="48"]');
+    const hd = await rectOf(tid(`v6e-range-kbd-hlo-${k}`));
+    await page.mouse.move(hd.cx, hd.cy);
+    await page.mouse.down();
+    await page.mouse.move(key.l + 1, hd.cy, { steps: 10 });
+    await page.waitForTimeout(150); // the trailing live write (LIVE_MS 50)
+    await until((kk) => window.__rig.store.currentSong().patch.slots[kk].lowNote === 48, k);
+  }
+  const R1_SET = () => ev(() => {
+    const { store } = window.__rig;
+    const id = store.currentSong().id;
+    for (const [i, lo, hi] of [[0, 36, 84], [1, 40, 90], [2, 28, 60]]) {
+      store.set(`songs.${id}.patch.slots.${i}.lowNote`, lo);
+      store.set(`songs.${id}.patch.slots.${i}.highNote`, hi);
+    }
+  });
+  const selectSlot = async (k) => {
+    await ev((kk) => window.__rig.views.edit.editState.select(`slot:${kk}`), k);
+    await until((kk) => window.__rig.views.edit._debug.instance()?._debug.slot() === kk, k);
+  };
+
+  await T('R1: a live range drag dropped by an instrument switch, a song switch, leaving Edit or a slot move puts '
+    + 'the start value back on its own instrument', async () => {
+    await setSlots(3);
+    await toEdit();
+    await selectSlot(0);
+    await R1_SET();
+    // (a) instrument switch mid-drag: slot 0's range comes back, slot 1's is untouched
+    await holdLowAt48(0);
+    await selectSlot(1);
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    assert.deepEqual((await ranges()).slice(0, 3), [[36, 84], [40, 90], [28, 60]], 'instrument switch');
+    // (b) song switch mid-drag: the restore goes into the song the drag wrote, never into the next one
+    await selectSlot(0);
+    const ids = await ev(() => {
+      const { store } = window.__rig;
+      const cur = store.currentSong().id;
+      const other = Object.keys(store.get().songs).find((x) => x !== cur && store.getSong(x).patch.slots[0]);
+      return { cur, other };
+    });
+    assert.ok(ids.other, 'a second song with an instrument');
+    const otherBefore = await ranges(ids.other);
+    await holdLowAt48(0);
+    await ev((o) => window.__rig.controller.selectSong(o), ids.other);
+    await until((o) => window.__rig.store.get().settings.currentSongId === o, ids.other);
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    assert.deepEqual((await ranges(ids.cur)).slice(0, 3), [[36, 84], [40, 90], [28, 60]], 'song switch: old song');
+    assert.deepEqual(await ranges(ids.other), otherBefore, 'song switch: the next song is untouched');
+    await settled();
+    await ev((c) => window.__rig.controller.selectSong(c), ids.cur);
+    await until((c) => window.__rig.store.get().settings.currentSongId === c, ids.cur);
+    await settled();
+    // (c) leaving Edit mid-drag (⌘E without a pointer: setView)
+    await selectSlot(0);
+    await holdLowAt48(0);
+    await ev(() => window.__rig.ctx.setView('perform'));
+    await until(() => document.body.dataset.view === 'perform');
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    assert.deepEqual((await ranges()).slice(0, 3), [[36, 84], [40, 90], [28, 60]], 'leaving Edit');
+    await toEdit();
+    // (d) the instrument moves mid-drag (store.moveSlot, as the v6 Perform's ⋯ Later): the restore follows it to its
+    // new place, and the selected tab follows too
+    await selectSlot(0);
+    await holdLowAt48(0);
+    const order0 = await names3();
+    assert.ok(await ev(() => {
+      const { store } = window.__rig;
+      return store.moveSlot(store.currentSong().id, 0, 1);
+    }));
+    await until(() => window.__rig.views.edit.editState.selected === 'slot:1');
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    assert.deepEqual((await names3()).slice(0, 3), [order0[1], order0[0], order0[2]]);
+    assert.deepEqual((await ranges()).slice(0, 3), [[40, 90], [36, 84], [28, 60]], 'slot move');
+    assert.equal(await ev(() => window.__rig.views.edit._debug.instance()._debug.slot()), 1);
+    await ev(() => {
+      const { store } = window.__rig;
+      store.moveSlot(store.currentSong().id, 1, 0);
+    });
+    await until(() => window.__rig.views.edit.editState.selected === 'slot:0');
+  });
+
+  await T('R2: in Edit the strip’s name opens Range for its instrument (not remembered); no ⠿ grip', async () => {
+    await setSlots(3);
+    await selectSlot(1);
+    await choose('sound');
+    const who = `[data-testid="v6e-stage"] ${tid('v6-who-1')}`;
+    const a = await ev((sel) => {
+      const el = document.querySelector(sel);
+      const grip = document.querySelector('[data-testid="v6e-stage"] [data-testid="v6-grip-1"]');
+      return { role: el.getAttribute('role'), pressed: el.getAttribute('aria-pressed'), title: el.title,
+        grip: grip ? getComputedStyle(grip).display : 'absent' };
+    }, who);
+    assert.equal(a.role, 'button');
+    assert.equal(a.pressed, null, 'no toggle state: Edit never picks a bar');
+    assert.match(a.title, /Range/);
+    assert.equal(a.grip, 'none');
+    await page.click(who);
+    await until(() => document.querySelector('[data-testid="v6e-ccont"]')?.dataset.cat === 'range');
+    assert.equal(await ev(() => window.__rig.views.edit.editState.selected), 'slot:1');
+    assert.equal(await ev(() => window.__rig.views.edit._debug.prefs().cat), 'sound', 'a jump is not remembered');
+    // the keyboard way: Enter on the focused name
+    await choose('sound');
+    await page.focus(who);
+    await page.keyboard.press('Enter');
+    await until(() => document.querySelector('[data-testid="v6e-ccont"]')?.dataset.cat === 'range');
+    await choose('sound');
+  });
+
+  await T('R3: the selected tab follows its instrument through a move; Remove / Change instrument → move → Undo '
+    + 'lands on the right instrument', async () => {
+    await setSlots(3);
+    await toEdit();
+    const sid = await ev(() => window.__rig.store.currentSong().id);
+    const mv = (from, to) => ev(([f, t]) => window.__rig.store.moveSlot(window.__rig.store.currentSong().id, f, t),
+      [from, to]);
+    const clearToasts = () => ev(() => document.getElementById('toasts')?.replaceChildren());
+    const undoToast = async () => {
+      await until(() => !!document.querySelector('#toasts .toast-action'));
+      await ev(() => [...document.querySelectorAll('#toasts .toast-action')].pop().click());
+    };
+    // (a) select instrument 2, move it (as the v6 Perform's ⋯ Earlier) → Edit still shows it
+    await selectSlot(1);
+    const n0 = await names3();
+    assert.ok(await mv(1, 0));
+    await until(() => window.__rig.views.edit.editState.selected === 'slot:0');
+    await until(() => window.__rig.views.edit._debug.instance()?._debug.slot() === 0);
+    assert.equal((await names3())[0], n0[1]);
+    assert.equal(await ev(() => document.querySelector('.v6e-rt[aria-selected="true"]')?.dataset.block), 'slot:0');
+    // a move of other instruments shifts it too: 0 → 2 moves the shown one (now at 0) to 2
+    assert.ok(await mv(0, 2));
+    await until(() => window.__rig.views.edit.editState.selected === 'slot:2');
+    await setSlots(3);
+    // (b) Remove → move → Undo: the sound comes back into its own (moved) place, not onto its neighbour
+    await selectSlot(1);
+    const before = await names3();
+    await clearToasts();
+    await page.click(tid('v6e-change'));
+    await page.click('[data-testid="v6e-imenu"] .v6e-mi-remove');
+    await page.click('.v6e-confirm .v6e-remove');
+    await until(() => window.__rig.store.currentSong().patch.slots[1] === null);
+    assert.ok(await mv(1, 2)); // the empty place goes last; the third instrument comes to 1
+    await until(() => window.__rig.views.edit.editState.selected === 'slot:2');
+    await until(() => {
+      const b = document.querySelector('[data-testid="v6e-ccont"] .v6e-undo-btn');
+      return b && b.offsetParent !== null;
+    });
+    await undoToast();
+    await until(() => !!window.__rig.store.currentSong().patch.slots[2]);
+    assert.deepEqual((await names3()).slice(0, 3), [before[0], before[2], before[1]], 'Remove → move → Undo');
+    // (c) Change instrument → move → Undo: the old instrument comes back on the moved slot
+    await setSlots(3);
+    await selectSlot(0);
+    const was = await names3();
+    await clearToasts();
+    await page.click(tid('v6e-change'));
+    const target = await ev(() => [...document.querySelectorAll('[data-testid="v6e-imenu"] .v6e-mi[data-value]')]
+      .map((b) => b.dataset.value).find((v) => v !== 'sampler:salamander-piano'));
+    await page.click(`[data-testid="v6e-imenu"] .v6e-mi[data-value="${target}"]`);
+    await until((t) => {
+      const x = window.__rig.store.currentSong().patch.slots[0].instrument;
+      return `${x.type}:${x.id}` === t;
+    }, target);
+    assert.ok(await mv(0, 2));
+    await undoToast();
+    await until(() => window.__rig.store.currentSong().patch.slots[2].instrument.id === 'salamander-piano');
+    assert.deepEqual((await names3()).slice(0, 3), [was[1], was[2], was[0]], 'Change → move → Undo');
+    // the removed-since branch: Change, then remove that instrument, then Undo → refused, nothing written
+    await setSlots(3);
+    await selectSlot(0);
+    await clearToasts();
+    await page.click(tid('v6e-change'));
+    await page.click(`[data-testid="v6e-imenu"] .v6e-mi[data-value="${target}"]`);
+    await until((t) => {
+      const x = window.__rig.store.currentSong().patch.slots[0].instrument;
+      return `${x.type}:${x.id}` === t;
+    }, target);
+    await ev(() => window.__rig.store.removeSlot(window.__rig.store.currentSong().id, 0));
+    const after = await names3();
+    await undoToast();
+    await page.waitForTimeout(150);
+    assert.deepEqual(await names3(), after, 'Undo of a removed instrument writes nothing');
+    assert.equal(sid, await ev(() => window.__rig.store.currentSong().id));
+    await clearToasts();
+    await setSlots(3);
+    await selectSlot(0);
   });
 
   await T('Tone EQ: today’s eqKeyboard mounts on open and is destroyed on leave; no leaked store listeners',

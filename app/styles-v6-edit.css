@@ -169,6 +169,9 @@
 /* Change is the panel's own "Change instrument ▾", and the rig tabs pick the instrument: the strip's Change / ⋯ row
    is left out here, as the mockup's (mock_edit.css .col1 .strip) */
 .v6.v6-edit .v6e-stage .v6-btns { display: none; }
+/* UI6-U5a review R2: the ⠿ reorder grip (D23.2) needs the v6 Perform's strips-row drag, which Edit's one strip has
+   not; Edit's rig tabs are not reordered yet (D23 leaves that for later) */
+.v6.v6-edit .v6e-stage .v6-grip { display: none; }
 
 /* the keyboard row (today's Edit one until the v6 keyboard row comes to Edit). Its legend names the roles
    (Keys / Pad / Extra / Bass), which v6 never shows (D15): left out, as today's ≤ 1250 px layout does */

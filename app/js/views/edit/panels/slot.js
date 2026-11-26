@@ -142,16 +142,17 @@ export default {
 };
 
 /** How long the Undo toasts of Remove and of an instrument change stay (round3-edit m3). */
-const UNDO_MS = 8000;
+export const UNDO_MS = 8000;
 /**
  * D23 (U-MOVE-store review O1): an Undo record holds the index of the slot it was made for, and an instrument move,
  * insert or remove (the v6 Perform's ⋯ / drag, while this Edit stays mounted) inside the Undo's 8 s would put it back
  * into another instrument. The record follows its slot through store.onSlotMap (`u.i` → the new index, -1 when that
  * slot itself was removed) until its toast is gone.
  * @param {object} store
+ * Exported for the v6 Edit's copies of these Undos (views/v6/edit/instrument.js; UI6-U5a review R3).
  * @param {{songId:string, i:number}} u
  */
-function followSlot(store, u) {
+export function followSlot(store, u) {
   if (typeof store?.onSlotMap !== 'function') return;
   const off = store.onSlotMap(({ id, order }) => {
     if (id === u.songId && u.i >= 0) u.i = order.indexOf(u.i);

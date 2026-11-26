@@ -194,6 +194,12 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   its "Keys plays…" summary (F3, D15), the library's setlist head overlapping (F4). ui-v6-edit 18/18, edit-v2 14/14
   (117), ui-v6 54/54, settings 94/94. **Rebase onto lane-moveui needs R1–R3** (live range writes vs `update()`'s
   cancel; the strip's name button and grip in Edit; slot-move following + Undo `followSlot` in the v6 Edit).
+- **Rebased onto v2-native acfa900 (2026-11-26), R1–R3 done** (CONTRACT_CHANGES "## UI v6 U5a", "After the
+  rebase"): a cancelled live range drag restores into its own song and instrument (instrument switch, song switch,
+  leaving Edit, slot move); the strip's name opens Range and the ⠿ grip is hidden in Edit; the selected tab and the
+  8 s Undos follow a move. ui-v6-edit 21/21, ui-v6 68/68 (its "U-MOVE Edit" check runs on both Edits now), edit-v2
+  14/14 (117), settings 94/94, flag-off purity vs acfa900 identical. Not pushed or merged; no skeptic pass after the
+  rebase yet.
 
 - Built: `app/js/views/v6/edit/edit.js` (`mountEditV6`, mountEdit's interface), `views/v6/edit/instrument.js` (the
   instrument panel), `app/styles-v6-edit.css`; main.js mounts / swaps it with `settings.uiV6`; `views/edit/shell.js`

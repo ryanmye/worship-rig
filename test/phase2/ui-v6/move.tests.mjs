@@ -340,17 +340,29 @@ export async function moveTests(x) {
     }
   });
 
-  await T('U-MOVE Edit: the selected instrument tab and the 8 s Undo follow a move', async () => {
+  // UI6-U5a (rebase onto lane-moveui, review R3/R4): with the flag on, Edit is the v6 Edit (views/v6/edit), which
+  // follows a move through its own ports of mountEdit's onSlotMap handler and slot.js followSlot; today's Edit is the
+  // flag-off one. Both run the same steps (store.moveSlot stands in for the v6 Perform's ⋯ / drag).
+  const EDITS = {
+    v6: { chg: tid('v6e-change'), remove: '[data-testid="v6e-imenu"] .v6e-mi-remove', go: '.v6e-confirm .v6e-remove',
+      menu: '[data-testid="v6e-imenu"] [role="menuitemradio"]' },
+    today: { chg: '.ev2-slot-chg', remove: '.ev2-slot-mi-remove', go: '.ev2-slot-remove',
+      menu: '.ev2-slot-menu [role="menuitemradio"]' },
+  };
+  async function editFollowsMove(kind) {
+    const S = EDITS[kind];
     await setSlots(3);
     const a = await ids();
     const id = (await song()).id;
+    await clearToasts();
     await ev(() => window.__rig.ctx.setView('edit'));
     await until(() => document.body.dataset.view === 'edit');
+    assert.equal(await ev(() => !!window.__rig.views.edit._debug.v6), kind === 'v6', `${kind} Edit is mounted`);
     await ev(() => window.__rig.views.edit.editState.select('slot:2'));
     // Remove this sound… → Remove → the toast's Undo (8 s)
-    await page.click('.ev2-slot-chg');
-    await page.click('.ev2-slot-mi-remove');
-    await page.click('.ev2-slot-remove');
+    await page.click(S.chg);
+    await page.click(S.remove);
+    await page.click(S.go);
     await until(() => window.__rig.store.currentSong().patch.slots[2] === null);
     await until(() => !!document.querySelector('#toasts .toast-action'));
     // the v6 Perform moves the empty slot 2 to the front (e.g. ⋯ Earlier twice), Edit still mounted
@@ -358,19 +370,19 @@ export async function moveTests(x) {
     await until(() => window.__rig.views.edit.editState.selected === 'slot:0');
     await page.click('#toasts .toast-action');
     await until(() => !!window.__rig.store.currentSong().patch.slots[0]);
-    assert.deepEqual(await ids(), [a[2], a[0], a[1]], 'the sound came back to its own (moved) slot');
+    assert.deepEqual(await ids(), [a[2], a[0], a[1]], `${kind}: the sound came back to its own (moved) slot`);
     // an instrument change's Undo follows too
     await clearToasts();
     await ev(() => window.__rig.views.edit.editState.select('slot:1'));
-    await page.click('.ev2-slot-chg');
-    const pickOther = await ev(() => {
+    await page.click(S.chg);
+    const pickOther = await ev((sel) => {
       const cur = window.__rig.store.currentSong().patch.slots[1].instrument;
-      const b = [...document.querySelectorAll('.ev2-slot-menu [role="menuitemradio"]')]
+      const b = [...document.querySelectorAll(sel)]
         .find((x2) => x2.getAttribute('aria-checked') !== 'true' && x2.dataset.value
           && x2.dataset.value !== `${cur.type}:${cur.id}`);
       b.click();
       return b.dataset.value;
-    });
+    }, S.menu);
     await until((v) => {
       const s = window.__rig.store.currentSong().patch.slots[1].instrument;
       return `${s.type}:${s.id}` === v;
@@ -380,10 +392,23 @@ export async function moveTests(x) {
     await until(() => window.__rig.views.edit.editState.selected === 'slot:2');
     await page.click('#toasts .toast-action');
     await until((w) => window.__rig.store.currentSong().patch.slots[2].instrument.id === w, a[0]);
-    assert.deepEqual(await ids(), [a[2], a[1], a[0]]);
+    assert.deepEqual(await ids(), [a[2], a[1], a[0]], kind);
     await clearToasts();
     await toPerform();
-  });
+  }
+
+  await T('U-MOVE Edit: the selected instrument tab and the 8 s Undo follow a move (v6 Edit; today’s, flag off)',
+    async () => {
+      await editFollowsMove('v6');
+      assert.equal(await ev(() => window.__rig.setUiV6(false)), false);
+      try {
+        await editFollowsMove('today');
+      } finally {
+        await ev(() => window.__rig.setUiV6(true));
+        await until(() => !!document.querySelector('[data-testid="v6-perform"]'));
+        await toPerform();
+      }
+    });
 
   await T('D23.1 PANIC is one tap; Lock: one tap locks, unlocking needs the hold (as today’s Perform)', async () => {
     await armPanics();

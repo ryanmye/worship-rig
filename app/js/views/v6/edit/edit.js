@@ -149,9 +149,19 @@ export function mountEditV6(el, ctx) {
     moveSlot(from, to) {
       const id = shownId();
       if (!id || isLocked() || typeof store.moveSlot !== 'function') return false;
+      // the selected tab follows the instrument through store.onSlotMap (below); a store without it: by hand
       const ok = store.moveSlot(id, from, to);
-      if (ok && editState.selected === `slot:${from}`) queueMicrotask(() => editState.select(`slot:${to}`));
+      if (ok && typeof store.onSlotMap !== 'function' && editState.selected === `slot:${from}`) {
+        queueMicrotask(() => editState.select(`slot:${to}`));
+      }
       return ok;
+    },
+    /**
+     * UI6-U5a review R2: the strip's name is a button on every pointer since D24.3 (on Perform it picks the range bar).
+     * Edit's strip is the selected instrument's, and its "pick" is the Range category for that instrument.
+     */
+    pickRange(i) {
+      if (!isLocked()) editState.select(`slot:${i}`, { focus: 'range' });
     },
   };
 
@@ -446,6 +456,23 @@ export function mountEditV6(el, ctx) {
     tabRecs.get(editState.selected)?.el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   });
   core.listen(editState, 'changes', renderTabs);
+  // UI6-U5a review R3 (ported from today's mountEdit, D23 / U-MOVE-store O1): the selected tab is positional
+  // ('slot:<i>'). A move, insert or remove of the shown song's slots (the v6 Perform's ⋯ / drag while Edit stays
+  // mounted, or Edit's own strip) keeps it on the same instrument: after the store's change notification (a
+  // microtask, so the tabs exist for the new count), slot:<i> → its new index. The selected slot itself removed: the
+  // count clamp in syncTabs applies, as before.
+  if (typeof store.onSlotMap === 'function') {
+    core.cleanups.push(store.onSlotMap(({ id, order }) => {
+      const m = /^slot:(\d+)$/.exec(editState.selected);
+      if (id !== core.songId || !m) return;
+      const was = editState.selected;
+      const j = order.indexOf(Number(m[1]));
+      if (j < 0 || j === Number(m[1])) return;
+      queueMicrotask(() => {
+        if (editState.selected === was) editState.select(`slot:${j}`); // no focus: nothing opens by itself
+      });
+    }));
+  }
   // instruments arrive once the engine starts (a My Samples rescan adds more): the names follow (the core then
   // runs the store hooks, so the tabs re-render)
   core.listen(editState, 'instruments', () => names.refresh());

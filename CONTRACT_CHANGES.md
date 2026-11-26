@@ -8557,10 +8557,10 @@ folded"). Behind `settings.uiV6` like U1–U4. No store, controller, engine or `
   - Sound: the three `smartSlidersFor` word sliders (shelf ones through `readEq` / `shelfWrites` → `slots.<i>.eq.*`).
   - Tone EQ: today's `eqKeyboard`, mounted when the category opens and destroyed when it closes / the instrument or
     slot changes / unmount (no leaked store listeners, tested over 3 cycles).
-  - Range: U2's `rangeKeyboard({size:'range'})` (88 keys, one bar; drag writes `slots.<i>.lowNote|highNote` once on
-    release, its keys play through `controller.perform`), the note boxes (`ctx.songField`, "C3" / MIDI number), Whole
-    keyboard (0 / 127), Set lowest / highest by playing (one-shot on the next held note; Esc / outside tap disarms),
-    Octave stepper (`slots.<i>.octave`).
+  - Range: U2's `rangeKeyboard({size:'range'})` (88 keys, one bar; a drag writes `slots.<i>.lowNote|highNote` live
+    since D24.2, see "After the rebase" below; its keys play through `controller.perform`), the note boxes
+    (`ctx.songField`, "C3" / MIDI number), Whole keyboard (0 / 127), Set lowest / highest by playing (one-shot on the
+    next held note; Esc / outside tap disarms), Octave stepper (`slots.<i>.octave`).
   - Touch: `velocityCurve` (Light / Normal / Heavy / Fixed / Own) + Own's `touch.shape|min|max|top` sliders.
   - Sustain: the pedal switch `slots.<i>.sustain` + Release (pedal up) `slots.<i>.release` / Pedal hold
     `slots.<i>.pedalHold` (today's tracks and null-on-default rules) and its sentence.
@@ -8580,3 +8580,30 @@ folded"). Behind `settings.uiV6` like U1–U4. No store, controller, engine or `
 - Tests: `node test/phase2/ui-v6-edit/run.mjs` (16 checks; in run-all as `ui-v6-edit`). ui-v6's U4 iPad check now
   expects the v6 Edit's `min-width: 0` at 820 px (it asserted today's Edit's 1024 px with the flag on).
   Screenshots `u5-edit-{sound,eq,range}-1280.png`, `u5-edit-library-folded-1280.png`, `u5-edit-ipad-portrait-820.png`.
+- **After the rebase onto v2-native acfa900** (lane-moveui: D23 moves, D24.2 live range writes, D24.3 pick first;
+  `native/docs/reviews/UI6-U5a.md` R1–R4). Only the docs conflicted (appends, both kept). Behaviour changes:
+  - R1 (live range writes): `instrument.js`'s `onRange` takes `(i, field, note, phase, expect)` and names the song in
+    every write (`songs.<id>.patch.slots.<i>.<f>`, as the v6 Perform's `setRange`). A `cancel` restores into the
+    song the drag wrote, at the drag's (remapped) index, and only while that slot still holds `expect`. `update()`
+    cancels a range or fader drag before it changes `i`. Before, the restore was refused (`k !== i`) and the old
+    instrument kept the half-dragged range. A song switch mid-drag wrote the restore through a §4 `slots.<i>` address,
+    which resolves to the store's current song, already the next one when the leave-song hook runs. Measured with the
+    old cancel: the old song kept 48 (start 36).
+  - R2 (strip): Edit's `stripV.pickRange(i)` selects `slot:<i>` with `{focus:'range'}` (the Range category, not
+    remembered). The name has no `aria-pressed` in Edit (it never picks a bar) and the title "Change which keys play
+    this instrument (Range)". The ⠿ grip is hidden under `.v6e-stage` (no strips-row drag in Edit). Earlier / Later
+    on the rig tabs: not added (the tabs have no context menu; D23 leaves Edit's reordering for later).
+  - R3 (following a move): `mountEditV6` has mountEdit's `store.onSlotMap` handler (the selected `slot:<i>` follows
+    its instrument, after the change notification). `instrument.js`'s Change instrument / Remove Undos use
+    `slot.js`'s `followSlot` (now exported with `UNDO_MS`), with its `u.i < 0` branches. On a slot map the panel
+    remaps a range drag (`remapDrag`), ends the strip's fader drag and chip panels, and cancels the range drag a
+    microtask later. `stripV.moveSlot` selects by hand only on a store without `onSlotMap`.
+  - Tests: ui-v6-edit 21 checks. "Range: … (only that end, live, final value as dragged)" replaces "one end, one
+    write". New: "R1" (instrument switch, song switch, leaving Edit, slot move mid-drag), "R2", "R3" (tab follows;
+    Remove → move → Undo; Change → move → Undo; Undo of a removed instrument writes nothing). R1–R3 fail on the
+    rebased code without these changes. ui-v6's "U-MOVE Edit" check now runs on the v6 Edit (flag on) and on today's
+    Edit (flag off): with the flag on, Edit is the v6 Edit since U5a, so the check as moveui wrote it timed out on
+    `.ev2-slot-chg` and left the page in Edit for the next five checks.
+  - Gates: ui-v6-edit 21/21, ui-v6 68/68, edit-v2 14/14 files (117/117), settings 94/94. Flag-off purity vs acfa900:
+    identical (asserted by both suites; the counts are not printed). Zero console.error. engine / store / controller /
+    shared unchanged; `slot.js` only gains two `export`s.

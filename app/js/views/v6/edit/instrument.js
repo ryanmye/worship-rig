@@ -24,7 +24,7 @@ import {
 import { readEq, shelfWrites, eqSummary as mathSummary } from '../../../shared/eq-math.js';
 import { PEDAL_HOLD_TRACK } from '../../../shared/learn.js';
 import { hasChange } from '../../../shared/song-diff.js';
-import { groupOf, groupOrder, parseKey, TOUCH_LABELS } from '../../edit/panels/slot.js';
+import { groupOf, groupOrder, parseKey, TOUCH_LABELS, followSlot, UNDO_MS } from '../../edit/panels/slot.js';
 import { rangeKeyboard, rangeText } from '../keyboard.js';
 import { createStrip } from '../strip.js';
 import { slotColor } from '../lib.js';
@@ -273,6 +273,13 @@ export function mountInstrument(host, ctx, opts, env) {
     strip = null;
     if (!editShown()) return;
     strip = createStrip(env.stripV, i);
+    // R2: the name is a button (D24.3) that opens Range here (stripV.pickRange). Edit never picks a bar, so it is a
+    // plain action: no pressed state, and a title that says what it does in Edit
+    const who = strip.el.querySelector('.v6-who');
+    if (who) {
+      who.removeAttribute('aria-pressed');
+      who.title = 'Change which keys play this instrument (Range)';
+    }
     stageCol.append(strip.el);
   }
   function dropStrip() {
@@ -460,11 +467,28 @@ export function mountInstrument(host, ctx, opts, env) {
 
   // ---- Range: U2's rangeKeyboard 'range' size + note boxes + Whole keyboard + Set by playing + Octave ----
   function buildRange(binder, slot) {
+    // D24.2: the bar writes live while dragged ('live', then 'end'; ←/→ 'key'). Every write names the song it is for
+    // (as the v6 Perform's setRange): a §4 'slots.<i>' address resolves to the store's current song, which a song
+    // switch has already moved on by the time the leave-song hook cancels the drag (UI6-U5a review R1).
+    let dragSong = null;
     const kb = rangeKeyboard({
       size: 'range', testid: 'v6e-range-kbd', label: 'Keyboard range (A0–C8)',
-      onRange: (k, f, n) => {
-        if (k !== i || (f !== 'lowNote' && f !== 'highNote') || !Number.isInteger(n)) return false;
-        return ctx.set(P(f), n);
+      onRange: (k, f, n, phase, expect) => {
+        if ((f !== 'lowNote' && f !== 'highNote') || !Number.isInteger(n)) return false;
+        if (phase === 'cancel') {
+          // a dropped drag puts its start value back into the song and instrument it wrote (k follows a slot move,
+          // remapDrag), and only while that slot still holds the value it last wrote (`expect`), so a restore never
+          // lands on another instrument (R1)
+          const id = dragSong || ctx.songId();
+          dragSong = null;
+          const sl = id ? ctx.store.getSong?.(id)?.patch.slots[k] : null;
+          if (!sl || sl[f] !== expect) return false;
+          return ctx.set(`songs.${id}.patch.slots.${k}.${f}`, n);
+        }
+        const id = ctx.songId();
+        if (k !== i || !id || !slotOf(ctx.store.getSong?.(id))) return false;
+        dragSong = phase === 'live' ? id : null;
+        return ctx.set(`songs.${id}.patch.slots.${i}.${f}`, n);
       },
       // the keys play (as Perform's): playing one also answers "Set lowest / highest by playing"
       onNoteOn: (n, vel) => ctx.controller?.perform?.noteOn?.(n, Number.isFinite(vel) ? vel : 100),
@@ -933,14 +957,19 @@ export function mountInstrument(host, ctx, opts, env) {
         instrument: JSON.parse(JSON.stringify(slot.instrument)), params: JSON.parse(JSON.stringify(slot.params || {})),
       };
       if (!ctx.set(P('instrument'), ref)) return;
+      followSlot(ctx.store, captured); // R3 (as slot.js, D23): the record follows its instrument through a move
       const next = slotOf(ctx.store.getSong?.(s.id) || ctx.song());
       const toName = next ? displayName(next, metaOf(next)) : ref.id;
       ctx.toast(`${toName} replaces ${captured.name}.`, 'info', {
-        ms: 8000, action: { label: 'Undo', run: () => undoInstrument(captured) },
+        ms: UNDO_MS, action: { label: 'Undo', run: () => undoInstrument(captured) },
       });
     }
   }
   function undoInstrument(u) {
+    if (u && u.i < 0) { // R3: that instrument was removed since (followSlot)
+      ctx.toast('That sound is no longer in this song, so there is nothing to undo.', 'info');
+      return false;
+    }
     const song = u && ctx.store.get().songs[u.songId];
     const cur = song && song.patch.slots[u.i];
     if (!cur || refKey(cur.instrument) !== u.to) {
@@ -989,13 +1018,19 @@ export function mountInstrument(host, ctx, opts, env) {
     const captured = { songId: s.id, i, slot: JSON.parse(JSON.stringify(slot)), name };
     if (!ctx.set(`slots.${i}`, null)) return;
     undo = captured;
+    followSlot(ctx.store, captured); // R3: the empty place's Undo follows it through a move
     renderEmptyUndo();
-    ctx.toast(`${name} removed.`, 'info', { ms: 8000, action: { label: 'Undo', run: () => doUndo(captured) } });
+    ctx.toast(`${name} removed.`, 'info', { ms: UNDO_MS, action: { label: 'Undo', run: () => doUndo(captured) } });
   }
   function doUndo(u = undo) {
     if (!u) return false;
     const song = ctx.store.get().songs[u.songId];
     if (!song) return false;
+    if (u.i < 0) { // R3 (as slot.js): that (empty) place was removed since (followSlot)
+      if (undo === u) undo = null;
+      renderEmptyUndo();
+      return false;
+    }
     if (song.patch.slots[u.i]) {
       ctx.toast('That place has a sound again, so there is nothing to undo.', 'info');
       if (undo === u) undo = null;
@@ -1176,6 +1211,20 @@ export function mountInstrument(host, ctx, opts, env) {
     pane?.ctl.kb?.cancelDrag();
     dropStrip();
   });
+  // UI6-U5a review R3 (as the v6 Perform, D23): a move, insert or remove of the shown song's slots (store.onSlotMap,
+  // synchronous in the write) re-orders what each index holds. A range drag follows its instrument (remapDrag: its
+  // restore goes there, or nowhere when it was removed), then ends, with the strip's fader drag and chip panels, after
+  // the store's change notification (no store write from inside the store's own call). The selected tab follows the
+  // instrument in edit.js, which then calls update() with the new index.
+  const offSlotMap = typeof ctx.store?.onSlotMap === 'function'
+    ? ctx.store.onSlotMap(({ id, order }) => {
+      if (id !== ctx.songId()) return;
+      pane?.ctl.kb?.remapDrag?.(order);
+      strip?.cancelDrag();
+      strip?.closePanels();
+      queueMicrotask(() => pane?.ctl.kb?.cancelDrag());
+    })
+    : () => {};
   ctx.onEscape(() => {
     if (cancelConfirm(true)) return true;
     if (closeMenu(true)) return true;
@@ -1218,6 +1267,10 @@ export function mountInstrument(host, ctx, opts, env) {
         closeMenu(false);
         cancelConfirm(false);
         disarm();
+        // UI6-U5a review R1: drop a range / fader drag while `i` still names its instrument, so the live-written
+        // range's restore (keyboard.js 'cancel') goes to that instrument and is not refused as another one's
+        pane?.ctl.kb?.cancelDrag();
+        strip?.cancelDrag();
         i = ni;
         paint();
         makeStrip();
@@ -1229,6 +1282,7 @@ export function mountInstrument(host, ctx, opts, env) {
       applyFocus(next.focus);
     },
     destroy() {
+      offSlotMap();
       clearTimeout(flashTimer);
       closeMenu(false);
       cancelConfirm(false);
