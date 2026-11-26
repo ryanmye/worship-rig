@@ -469,6 +469,30 @@ export async function sidebarTests(x) {
       await ev(({ id, n0 }) => window.__rig.store.set(`songs.${id}.notes`, n0), { id, n0 });
     });
 
+  await T('U3 skeptic F1: ⟩ / ⟨ / a rail icon pressed from the keyboard keep the focus in the sidebar', async () => {
+    // a keyboard press on a button that hides itself moved the focus to the page
+    await resetSidebar();
+    const act = () => ev(() => (document.activeElement === document.body ? 'body'
+      : document.activeElement?.dataset.testid || document.activeElement?.tagName));
+    await page.focus(tid('v6-sb-collapse'));
+    await page.keyboard.press('Enter');
+    assert.equal(await isRail(), true);
+    assert.equal(await act(), 'v6-sb-open', '⟩ (Enter) → ⟨');
+    await page.keyboard.press('Enter');
+    assert.equal(await isRail(), false);
+    assert.equal(await act(), 'v6-sb-tab-drone', '⟨ (Enter) → the open tab');
+    await page.focus(tid('v6-sb-collapse'));
+    await page.keyboard.press('Space');
+    await page.focus(tid('v6-rb-notes'));
+    await page.keyboard.press('Enter');
+    assert.deepEqual([await mounted(), await act()], ['notes', 'v6-sb-tab-notes'], 'a rail icon (Enter) → its tab');
+    // a pointer click does not put the focus on ⟨ (Space stays the pedal on the page)
+    await page.click(tid('v6-sb-collapse'));
+    await page.waitForTimeout(100);
+    assert.notEqual(await act(), 'v6-sb-open');
+    await page.click(tid('v6-sb-open'));
+  });
+
   await T('U3 screenshots: 1280×800 Sanctuary, sidebar open / collapsed / wide', async () => {
     await resetSidebar();
     await ev(() => {

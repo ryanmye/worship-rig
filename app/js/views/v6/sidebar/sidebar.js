@@ -202,12 +202,26 @@ export function rightSidebar(v, o = {}) {
     selectTab(id);
     tabBtns.get(id)?.focus();
   });
+  // skeptic UI6-U3 F1: ⟩, ⟨ and the rail icons hide themselves, so a keyboard press on them dropped the focus to the
+  // page (the player had to Tab in from the top again). Pressed from the keyboard (a click with detail 0), the focus
+  // goes on to ⟨ / the open tab, as → on the grip already does. A pointer click leaves it alone: Chrome then drops it
+  // to the page, where Space stays the sustain pedal (a focused ⟨ would take Space and reopen the sidebar).
+  const byKeys = (e) => e.detail === 0;
+  const focusTab = () => tabBtns.get(prefs.tab)?.focus({ preventScroll: true });
   d.listen(railList, 'click', (e) => {
     const b = e.target.closest('button[data-id]');
-    if (b) open(b.dataset.id);
+    if (!b) return;
+    open(b.dataset.id);
+    if (byKeys(e)) focusTab();
   });
-  d.listen(railOpen, 'click', () => open());
-  d.listen(xBtn, 'click', () => collapse());
+  d.listen(railOpen, 'click', (e) => {
+    open();
+    if (byKeys(e)) focusTab();
+  });
+  d.listen(xBtn, 'click', (e) => {
+    collapse();
+    if (byKeys(e)) railOpen.focus({ preventScroll: true });
+  });
 
   // ---------------------------------------------------------------- the shown module
   let cur = null; // {id, inst}
