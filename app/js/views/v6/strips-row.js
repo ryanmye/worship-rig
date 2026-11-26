@@ -130,7 +130,7 @@ export function stripsRow(v) {
     if (commit && g.started && g.to !== g.from && !locked) v.moveSlot?.(g.from, g.to);
   }
   d.listen(row, 'pointerdown', (ev) => {
-    const grip = ev.target?.closest?.('.v6-grip');
+    const grip = ev.target?.closest?.('.v6-grip, .v6-arr-grip'); // U7c: Arrange's big handle is a grip too
     if (!grip || re || locked || n < 2 || (ev.pointerType === 'mouse' && ev.button !== 0)) return;
     const from = Number(grip.dataset.slot);
     if (!Number.isInteger(from) || from >= n) return;
@@ -307,6 +307,10 @@ export function stripsRow(v) {
     /** Focus strip i's ⋯ (after a keyboard Earlier / Later, the focus follows the instrument). */
     focusMore(i) {
       strips[i]?.moreBtn?.focus();
+    },
+    /** U7c Arrange: focus strip i's ◀ / ▶. */
+    focusArr(i, which) {
+      strips[i]?.focusArr(which);
     },
     /** U2: the strip whose range the coarse pointer is changing (null: none). */
     setPicked(i) {

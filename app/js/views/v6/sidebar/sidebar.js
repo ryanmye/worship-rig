@@ -354,7 +354,9 @@ export function rightSidebar(v, o = {}) {
   }
   let lastState = v.store.get();
 
-  const save = () => savePrefs(prefs);
+  // U7c Arrange: the sidebar is held open while arranging; what is saved is the open state it had before
+  let arranging = null; // {wasOpen, pd} while Arrange shows the customize list in place of the module
+  const save = () => savePrefs(arranging ? { ...prefs, open: arranging.wasOpen } : prefs);
   // U7b: only registered modules show (a late one keeps its place in prefs.order while it is absent)
   const shown = () => prefs.order.filter((id) => byId.has(id) && !prefs.hidden.includes(id));
   /** A module showing itself elsewhere (U7b: the chart on the stage), so the sidebar does not land on it. */
@@ -562,7 +564,9 @@ export function rightSidebar(v, o = {}) {
       grip.setAttribute('aria-valuetext', `${w} px wide`);
     }
     const tab = tabNow();
-    if (prefs.open) mount(tab);
+    if (arranging) {
+      // U7c: the customize list stays in the body until Arrange ends
+    } else if (prefs.open) mount(tab);
     else unmount();
     for (const [id, b] of tabBtns) {
       const on = id === tab;
@@ -705,6 +709,41 @@ export function rightSidebar(v, o = {}) {
     return customizeList(pb, pd, { mods, prefs: () => prefs, commit: commitPrefs });
   }
 
+  /**
+   * U7c Arrange (views/v6/arrange.js): the body shows the customize list (the ⋯ popover's rows: drag ⠿ or ↑ ↓ to
+   * order the tabs, the switch shows / hides a module) and the tabs get an outline; a folded sidebar opens for it and
+   * folds again after (that open is never saved). Off puts the module back.
+   * @param {boolean} on
+   */
+  function arrange(on) {
+    if (!!on === !!arranging) return;
+    if (on) {
+      czPop?.close();
+      endDrag(false);
+      const pd = disposer();
+      arranging = { wasOpen: prefs.open, pd };
+      unmount();
+      prefs.open = true;
+      const box = h('div.v6-sb-arr-list');
+      customizeList(box, pd, { mods, prefs: () => prefs, commit: commitPrefs, heading: false });
+      body.dataset.module = 'arrange';
+      body.setAttribute('aria-label', 'Arrange the sidebar');
+      body.replaceChildren(h('div.v6-sb-arr', { 'data-testid': 'v6-sb-arrange' },
+        h('p.v6-pop-p', { text: 'Drag ⠿ or use ↑ ↓ to put the tabs in order; the switch shows or hides one.' }),
+        box));
+      el.classList.add('arranging');
+    } else {
+      const a = arranging;
+      arranging = null;
+      a.pd.dispose();
+      body.replaceChildren();
+      delete body.dataset.module;
+      prefs.open = a.wasOpen;
+      el.classList.remove('arranging');
+    }
+    applyLayout();
+  }
+
   // ---------------------------------------------------------------- badges (the drone's live dot + key)
   function renderBadges(state) {
     for (const id of shown()) {
@@ -842,6 +881,11 @@ export function rightSidebar(v, o = {}) {
     /** The registered module ids, in registry order. */
     get modules() {
       return ids();
+      },
+    arrange,
+    /** U7c: Arrange shows the customize list in the body. */
+    get arranging() {
+      return !!arranging;
     },
     get prefs() {
       return JSON.parse(JSON.stringify(prefs));
@@ -855,6 +899,7 @@ export function rightSidebar(v, o = {}) {
     destroy() {
       destroyed = true;
       if (live === me) live = null;
+      if (arranging) arrange(false);
       czPop?.close();
       endDrag(false);
       unmount();

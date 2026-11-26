@@ -11,6 +11,7 @@ import { transposeSemisOf } from '../../store.js';
 import { SPACE_PRESETS, matchPreset } from '../../shared/fx-presets.js';
 import { singItInShift, songFxValue } from '../perform.js';
 import { button, popover, icon, signed, HOLD_MS, MINUS } from './lib.js';
+import { songMenu } from './song-menu.js';
 
 /**
  * @param {object} v  the v6 shell's view context
@@ -27,6 +28,12 @@ export function songBar(v, host, snapChip) {
   const lockedHold = () => v.isLocked();
 
   const songName = h('b.v6-song', { 'data-testid': 'v6-song-name', text: '—', 'aria-live': 'polite' });
+  // U7c: the song menu (song-menu.js: Rename…, Duplicate, Add to setlist, Export, Reset to as saved, Delete)
+  const menu = songMenu(v);
+  const menuBtn = button(d, '.v6-songmenu-btn', '⋯', { 'aria-haspopup': 'true', 'aria-expanded': 'false',
+    'aria-label': 'Song menu', title: 'Song: Rename, Duplicate, Add to setlist, Export, Reset, Delete',
+    'data-testid': 'v6-songmenu-btn' });
+  d.listen(menuBtn, 'click', () => menu.open(menuBtn));
   const keyText = h('b.v6-key-t', { text: '' });
   const keyBtn = use(holdButton({
     content: [keyText, icon('down', 16)], ms: HOLD_MS, requireHold: lockedHold, className: 'v6-keybtn',
@@ -60,7 +67,7 @@ export function songBar(v, host, snapChip) {
     'aria-pressed': 'false', 'data-testid': 'v6-setlist', title: 'Show the setlist in the sidebar',
   });
   const el = h('section.v6-songbar', { 'data-testid': 'v6-songbar', 'aria-label': 'Current song' },
-    songName,
+    songName, menuBtn,
     h('span.v6-cap', { text: 'Key' }), keyBtn.el, playIn,
     h('div.v6-trn', { role: 'group', 'aria-label': 'Transpose' }, h('span.v6-cap', { text: 'Transpose' }), tDown.el,
       tVal, tUp.el),
@@ -182,6 +189,7 @@ export function songBar(v, host, snapChip) {
       setText(tVal, '0');
       setText(spaceText, '—');
     }
+    menuBtn.disabled = !song;
     keyBtn.setDisabled(!song);
     tDown.setDisabled(!song);
     tUp.setDisabled(!song);
@@ -212,9 +220,13 @@ export function songBar(v, host, snapChip) {
     },
     closePops() {
       for (const p of [keyPop, spacePop]) p?.close();
+      menu.close();
     },
+    /** U7c: the song menu (tests). */
+    menu,
     destroy() {
       for (const p of [keyPop, spacePop]) p?.close();
+      menu.destroy();
       d.dispose();
       for (const c of comps.splice(0)) c.destroy();
       el.remove();

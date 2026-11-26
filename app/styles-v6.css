@@ -7,6 +7,7 @@
 @import url('./styles-v6-sidebar.css'); /* U3: the right sidebar and its modules (views/v6/sidebar/) */
 @import url('./styles-v6-left.css'); /* U4: the left panel (Quick + wheel) and the Quick panel (views/v6/left.js) */
 @import url('./styles-v6-bank.css'); /* U7a: the Song bank browser and the Trying banner (views/v6/bank/) */
+@import url('./styles-v6-dialogs.css'); /* U7c: MIDI Learn on Perform, Arrange, Save snapshot, the song menu */
 
 .v6 {
   /* positions 4..6 of the mockup's POS_COL (the first four are the theme's --slot-0..3): views/v6/lib.js slotColor */

@@ -16,6 +16,7 @@ import { h, setText, disposer, rafCoalesce } from '../components/util.js';
 import { byId as themeById, resolveThemeId, lightSiblings, LIGHT_AUTO_KEY } from '../../shared/themes.js';
 import { customizeList, sidebarLayout } from './sidebar/sidebar.js';
 import { snapsFolded, setSnapsFolded } from './snapshots.js';
+import { learnOnPerform } from './learn-mode.js';
 import {
   soundSummary, keyboardsSummary, learnSummary, samplesSummary, layoutSummary, lookSummary, librarySummary, macSummary,
   aboutSummary,
@@ -216,6 +217,16 @@ function enhance(api, d) {
     nodes.learnSection.scrollIntoView({ block: 'start' });
     b?.focus({ preventScroll: true });
   }, { class: 'v6-st-learnbtn', 'data-testid': 'settings-learn-new' });
+  // U7c: "Learn on Perform": Settings closes and the v6 Perform's MIDI Learn mode starts (views/v6/learn-mode.js: move
+  // a knob, then tap what it should change). Learn… above stays today's table.
+  const learnPerform = button('Learn on Perform', () => {
+    const c = api.ctx;
+    if (!c || typeof c.closeSettings !== 'function') return;
+    c.closeSettings();
+    if (store.get().settings.view !== 'perform' && c.setView && !c.setView('perform')) return;
+    learnOnPerform();
+  }, { class: 'v6-st-learnbtn v6-st-learnperf', 'data-testid': 'settings-learn-perform',
+    title: 'Close Settings, move a knob, then tap what it should change on Perform' });
   const learned = h('section.st-section.v6-st-learned', { 'aria-label': 'Learned controls',
     'data-section': 'learned' },
   h('h2.st-h2', { text: 'Learned controls' }),
@@ -223,9 +234,9 @@ function enhance(api, d) {
   lrnList,
   h('div.v6-st-learnbox', {},
     h('b', { text: 'Learn a new control' }),
-    h('small', { text: 'Press Learn beside what it should move (the list below), then move a knob, fader or pedal, '
-      + 'or press a key or pad. Any slider in Edit: right-click it.' }),
-    learnFirst));
+    h('small', { text: 'Learn on Perform: move a knob, fader or pad, then tap what it should change. Or press Learn '
+      + 'beside a row of the list below. Any slider in Edit: right-click it.' }),
+    h('span.v6-st-learnbtns', {}, learnPerform, learnFirst)));
   insert(learned, learnPanel);
   move(nodes.learnSection, learnPanel, null);
   const learnRowOf = (id) => [...nodes.learnSection.querySelectorAll('tr[data-control]')]

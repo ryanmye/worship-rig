@@ -23,6 +23,8 @@ import { leftPanel } from './left.js';
 import { songBank } from './bank/bank.js';
 import { trialBanner } from './bank/banner.js';
 import { PORTRAIT_MQ } from './sidebar/sidebar.js';
+import { learnMode } from './learn-mode.js';
+import { arrangeMode } from './arrange.js';
 
 /** The v6 stylesheet; linked only while the v6 Perform is mounted (removed again by destroy()). */
 export const V6_CSS_HREF = './styles-v6.css';
@@ -91,8 +93,13 @@ export function mountPerformV6(root, ctx) {
 
   /** The view context every v6 module gets (lib.js / strip.js / … document what they use). */
   const v = {
-    store, controller, engine, ctx, toast, isLocked,
+    store, controller, engine, ctx, toast, isLocked, names,
     snap: () => snap,
+    /** U7c (the song menu's Reset): nothing differs from the Revert snapshot. */
+    isSaved: () => {
+      const s = shownId && store.getSong(shownId);
+      return !s || !snap || snap.id !== s.id || savedJSON(s) === snap.json;
+    },
     sceneLevel,
     liveOf,
     /** U3: the song bar's Setlist / Notes buttons open the sidebar on that module. */
@@ -153,6 +160,8 @@ export function mountPerformV6(root, ctx) {
     },
     /** After a keyboard Earlier / Later: the focus follows the instrument (its ⋯ at the new place). */
     focusMore: (i) => row.focusMore(i),
+    /** U7c Arrange: after a keyboard ◀ / ▶ the focus follows the instrument. */
+    focusArr: (i, which) => row.focusArr(i, which),
     removeSlot(i) {
       const s = shownId && store.getSong(shownId);
       if (!s || isLocked()) return;
@@ -208,6 +217,7 @@ export function mountPerformV6(root, ctx) {
   v.host = el; // popovers go here, outside the strips' scroller
   let quickPlaced = null; // the sheet's re-anchoring (placeQuick below), once the sheet exists
   const snaps = snapshotsRow(v, {
+    onArrange: () => v.arrange?.enter(), // U7c
     onFold: (f) => {
       el.classList.toggle('snaps-folded', f);
       // skeptic UI6-U4 F1: the board (and the left Quick) moved up or down under an open sheet (not while mounting:
@@ -258,6 +268,13 @@ export function mountPerformV6(root, ctx) {
   // first use; the left panel, the keyboard row and PANIC stay live beside / under it)
   const banner = trialBanner(v);
   d.add(() => banner.destroy());
+  // U7c: MIDI Learn on Perform and Arrange, each a bar under the song bar (learn-mode.js, arrange.js)
+  const learn = learnMode(v);
+  v.learn = learn;
+  d.add(() => learn.destroy());
+  const arrange = arrangeMode(v, { sidebar: side });
+  v.arrange = arrange;
+  d.add(() => arrange.destroy());
   let bank = null;
   const placeBank = () => {
     if (!bank || !bank.isOpen) return;
@@ -282,7 +299,7 @@ export function mountPerformV6(root, ctx) {
     placeBank();
   }
   d.listen(window, 'resize', placeBank);
-  el.append(bar.el, snaps.el, banner.el, board, bottom.el, quick.el);
+  el.append(bar.el, snaps.el, banner.el, learn.el, arrange.el, board, bottom.el, quick.el);
   root.classList.remove('locked');
   root.replaceChildren(el);
 
@@ -640,6 +657,12 @@ export function mountPerformV6(root, ctx) {
       return bank;
     },
     banner,
+    /** U7c: MIDI Learn on Perform, Arrange, the song menu. */
+    learn,
+    arrange,
+    get songMenu() {
+      return bar.menu;
+    },
     destroy() {
       // U7a: a trial is a v6 Perform thing; leaving the v6 Perform (the flag going off) goes back from it
       if (typeof controller.trial === 'function' && controller.trial()) controller.backFromTrial();

@@ -1,0 +1,111 @@
+/* UI v6 U7c: MIDI Learn on Perform, Arrange, Save snapshot, the song menu (views/v6/learn-mode.js, arrange.js,
+   dialogs.js, song-menu.js; mockup native/docs/design/mockups/dialogs.html, mock_dialogs.css). Imported by
+   styles-v6.css, so it is linked only while the v6 Perform is. Theme tokens only. The learn outlines use
+   body.v6-learning: the master fader they also mark sits in the top bar, outside .v6. */
+
+/* ---- the gold bar (learn) and the arrange bar (mock_dialogs.css .learnbar / .learnbar.arr) */
+.v6 .v6-learnbar { flex: none; display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 4px 10px;
+  border-radius: 12px; border: 1px solid var(--accent); min-width: 0;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
+.v6 .v6-learnbar[hidden] { display: none; }
+.v6 .v6-learnbar > b { font: 800 18px var(--v6-book); white-space: nowrap; }
+.v6 .v6-ldot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+  animation: v6-lpulse 1.4s ease-in-out infinite; }
+@keyframes v6-lpulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 6%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .v6 .v6-ldot { animation: none; } }
+.v6 .v6-lstep { flex: none; font-size: 13px; font-weight: 700; border-radius: 14px; padding: 4px 10px;
+  border: 1px solid var(--line-2); color: var(--muted); white-space: nowrap; }
+.v6 .v6-lstep.on { border-color: var(--accent); color: var(--accent-text, var(--accent)); }
+.v6 .v6-lstep.done { color: var(--ok, #9ccf66); border-color: color-mix(in srgb, var(--ok, #9ccf66) 45%, transparent); }
+.v6 .v6-lhint { flex: 1 1 auto; min-width: 0; color: var(--muted); font-size: 13px; white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; }
+.v6 .v6-learn-done, .v6 .v6-arr-done { flex: none; min-width: 88px; font-weight: 800;
+  background: linear-gradient(var(--plate-top, var(--accent)), var(--plate-bot, var(--accent)));
+  color: var(--accent-ink);
+  border-color: transparent; }
+.v6 .v6-arrbar { border-color: var(--line-2); background: var(--panel); }
+
+/* ---- learnable controls (dashed), the tapped one (solid, green), learned ones (badge) */
+body.v6-learning .v6-learnable { outline: 2px dashed var(--accent); outline-offset: 3px; border-radius: 8px;
+  position: relative; cursor: pointer; }
+body.v6-learning .v6-learnable.v6-lmiss { outline-color: color-mix(in srgb, var(--muted) 45%, transparent);
+  cursor: not-allowed; }
+body.v6-learning .v6-learnable.v6-lpicked { outline-style: solid; outline-color: var(--ok, #9ccf66); }
+body.v6-learning .v6-learnable[data-v6-badge]::after { content: attr(data-v6-badge); position: absolute; top: -10px;
+  right: -6px; z-index: 3; padding: 1px 6px; border-radius: 9px; background: var(--accent); color: var(--accent-ink);
+  font: 800 11px/1.4 var(--font); letter-spacing: 0; pointer-events: none; white-space: nowrap; }
+/* the tapped strip keeps its controls from acting: no thumbs or step panels move while learning */
+body.v6-learning .v6-learnable input[type="range"] { pointer-events: none; }
+
+/* ---- Arrange: the strips' handle bar (mock_dialogs.css .arrbar / .grip2 / .ab), dashed strips and sidebar tabs */
+.v6 .v6-arrbar-s { display: none; }
+.v6.arranging .v6-arrbar-s { display: flex; gap: 4px; align-items: center; margin: -2px 0 2px; }
+.v6.arranging .v6-strip { border-style: dashed; border-color: var(--line-2); }
+.v6.arranging .v6-grip { display: none; }
+.v6 .v6-arr-grip { flex: 1 1 auto; min-width: 0; min-height: 40px; display: flex; align-items: center;
+  justify-content: center; border: 1px dashed var(--line-2); border-radius: 8px; color: var(--muted); font-size: 12px;
+  font-weight: 700; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+  white-space: nowrap; }
+.v6 .v6-arr-grip:hover { color: var(--text); border-color: var(--accent); }
+.v6 .v6-arrbar-s .v6-arr-b { flex: none; min-width: 40px; min-height: 40px; padding: 0; border-radius: 8px; }
+.v6 .v6-arrbar-s .v6-arr-x { color: var(--danger-text, #ffb3ad); }
+.v6 .v6-arrbar-s .v6-arr-b:disabled { opacity: .35; }
+.v6 .v6-right.arranging .v6-sb-tab { outline: 1px dashed var(--line-2); outline-offset: -3px; }
+.v6 .v6-right.arranging :is(.v6-sb-x, .v6-sb-grip) { visibility: hidden; }
+.v6 .v6-sb-arr { display: flex; flex-direction: column; gap: 10px; padding: 12px; overflow: auto; min-height: 0; }
+.v6 .v6-arrange:disabled { opacity: .5; }
+
+/* ---- snapshot names (D25): long names end in an ellipsis */
+.v6 .v6-snap:not(.v6-snap-save) { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v6 .v6-snapchip-n { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- modal dialogs (dialogs.js; mock_dialogs.css .dlg / .namebox) */
+.v6 .v6-dlg-back { position: absolute; inset: 0; z-index: 40; display: flex; align-items: center;
+  justify-content: center; background: color-mix(in srgb, #000 45%, transparent); border-radius: var(--radius); }
+.v6 .v6-dlg { width: min(520px, calc(100% - 32px)); max-height: calc(100% - 32px); overflow: auto; padding: 18px;
+  border-radius: 14px; background: var(--v6-sheet); border: 1px solid var(--v6-sheet-line);
+  box-shadow: 0 24px 60px var(--sh, #000c); display: flex; flex-direction: column; gap: 14px; }
+.v6 .v6-dlg-namebox { display: flex; flex-direction: column; gap: 4px; }
+.v6 .v6-dlg-name { min-height: 48px; border-radius: 10px; border: 1px solid var(--accent); background: var(--well,
+  var(--panel)); color: var(--text); font: 700 18px var(--v6-book); padding: 0 12px; outline: none; }
+.v6 .v6-dlg-name:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+.v6 .v6-dlg-namebox small { color: var(--muted); font-size: 13px; min-height: 1em; }
+.v6 .v6-keeps { display: flex; flex-direction: column; gap: 6px; }
+.v6 .v6-keeps-r { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 10px;
+  background: var(--panel-2); border: 1px solid var(--line); }
+.v6 .v6-keeps-r > span:last-child { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.v6 .v6-keeps-r small { color: var(--muted); font-size: 13px; }
+.v6 .v6-keeps-r.off { opacity: .6; }
+.v6 .v6-keeps-ck { flex: none; width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center;
+  justify-content: center; font-weight: 800; background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent-text, var(--accent)); }
+.v6 .v6-keeps-r.off .v6-keeps-ck { background: var(--panel-3, var(--panel)); color: var(--muted); }
+.v6 .v6-keeps-not { margin: 2px 0 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.v6 .v6-dlg-btns { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.v6 .v6-dlg-btns .btn { padding: 0 16px; font-weight: 700; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.v6 .v6-dlg-btns .btn:disabled { opacity: .5; }
+.v6 .v6-dlg .btn.plate { background: linear-gradient(var(--plate-top, var(--accent)), var(--plate-bot, var(--accent)));
+  color: var(--accent-ink); border-color: transparent; }
+
+/* ---- the song menu (mock_dialogs.css .songmenu / .mi) */
+.v6 .v6-songmenu-btn { flex: none; min-width: 44px; padding: 0; font-size: 20px; font-weight: 800; line-height: 1; }
+.v6 .v6-songmenu-btn.open { color: var(--accent-ink);
+  background: linear-gradient(var(--plate-top, var(--accent)), var(--plate-bot, var(--accent))); }
+.v6 .v6-songmenu { width: 300px; }
+.v6 .v6-mlist { display: flex; flex-direction: column; gap: 4px; }
+.v6 .v6-mi { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px;
+  min-height: 48px; padding: 4px 12px; text-align: left; border-radius: 9px; width: 100%; }
+.v6 .v6-mi b { font-weight: 700; }
+.v6 .v6-mi small { color: var(--muted); font-size: 12.5px; font-weight: 400; }
+.v6 .v6-mi:disabled { opacity: .5; }
+.v6 .v6-mi.warn2 b { color: var(--danger-text, #ffb3ad); }
+/* narrow strips (iPad portrait, 1024 with a sidebar): the handle is ⠿ alone */
+@media (max-width: 1100px) { .v6 .v6-arr-w { display: none; } }
+/* the two hold items read like the others: ring on the left, words left-aligned */
+.v6 .hold-btn.v6-mi { flex-direction: row; justify-content: flex-start; gap: 10px; }
+.v6 .hold-btn.v6-mi .hb-body { align-items: flex-start; text-align: left; }
+/* Arrange's ✕: no ring beside it (40 px); the rising fill shows the hold */
+.v6 .v6-arrbar-s .hold-btn.v6-arr-x .hb-ring { display: none; }

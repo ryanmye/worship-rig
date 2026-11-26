@@ -123,9 +123,34 @@ export function createStrip(v, i) {
     title: 'Drag to move this instrument (or ⋯ › Earlier / Later)', text: '⠿',
   });
 
+  // U7c Arrange (views/v6/arrange.js; mockup dialogs.html "Arrange"): shown only while the shell is .arranging. The big
+  // "⠿ drag" handle is a grip for strips-row.js's own drag; ◀ / ▶ = ⋯ Earlier / Later; ✕ = Remove (hold)
+  const arrGrip = h('span.v6-arr-grip', {
+    'aria-hidden': 'true', 'data-testid': `v6-arr-grip-${i}`, dataset: { slot: String(i) },
+    title: 'Drag to move this instrument',
+  }, h('span', { text: '⠿' }), h('span.v6-arr-w', { text: ' drag' }));
+  const arrMove = (to, which) => (ev) => {
+    if (v.moveSlot(i, to) && ev && ev.detail === 0) queueMicrotask(() => v.focusArr?.(to, which));
+  };
+  const arrEarlier = button(d, '.v6-arr-b.v6-arr-earlier', '◀', {
+    'data-testid': `v6-arr-earlier-${i}`, 'aria-label': 'Move this instrument one place to the left',
+  });
+  const arrLater = button(d, '.v6-arr-b.v6-arr-later', '▶', {
+    'data-testid': `v6-arr-later-${i}`, 'aria-label': 'Move this instrument one place to the right',
+  });
+  d.listen(arrEarlier, 'click', (ev) => arrMove(i - 1, 'earlier')(ev));
+  d.listen(arrLater, 'click', (ev) => arrMove(i + 1, 'later')(ev));
+  const arrRemove = use(holdButton({
+    label: '✕', ms: HOLD_MS, requireHold: true, className: 'v6-arr-b v6-arr-x', testid: `v6-arr-remove-${i}`,
+    ariaLabel: 'Remove this instrument (press and hold)', title: 'Press and hold to remove this instrument',
+    onActivate: () => v.removeSlot(i),
+  }));
+  const arrBar = h('div.v6-arrbar-s', { 'data-testid': `v6-arr-${i}` }, arrGrip, arrEarlier, arrLater, arrRemove.el);
+
   const el = h(
     'div.panel.slot.strip.v6-strip',
     { dataset: { slot: String(i) }, 'data-testid': `v6-strip-${i}`, style: { '--c': color } },
+    arrBar,
     who,
     grip,
     pickFlag,
@@ -227,6 +252,10 @@ export function createStrip(v, i) {
     setText(changeBtn, empty ? 'Choose' : 'Change');
     changeBtn.disabled = x.locked; // Edit is frozen under Perform lock (LOCK table)
     grip.hidden = x.locked || x.n < 2; // no reorder under Lock (D23.2 task) or with nothing to swap with
+    arrGrip.hidden = grip.hidden;
+    arrEarlier.disabled = x.locked || i <= 0;
+    arrLater.disabled = x.locked || i >= x.n - 1;
+    arrRemove.setDisabled(x.locked || x.n <= 1);
     changeBtn.title = x.locked ? 'Perform lock is on: unlock to change the instrument' : 'Choose another instrument';
     if (empty) {
       // skeptic UI6-U1 F1: an empty slot shows no level and no sends. The strip is reused by position, so without
@@ -292,6 +321,10 @@ export function createStrip(v, i) {
     },
     /** The ⋯ button (focus after a keyboard Earlier / Later). */
     moreBtn,
+    /** U7c Arrange: focus ◀ or ▶ (after a keyboard move the focus follows the instrument). */
+    focusArr(which) {
+      (which === 'earlier' ? arrEarlier : arrLater).focus();
+    },
     closePanels() {
       for (const c of chips) c.close();
       menu?.close();
