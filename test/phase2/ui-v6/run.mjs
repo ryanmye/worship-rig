@@ -447,6 +447,12 @@ try {
     // a level move while the scene plays → "edited"
     await page.click(tid('v6-on-0'));
     await until(() => !document.querySelector('[data-testid="v6-snap-dirty"]').hidden);
+    // skeptic UI6-U1 F4: Update / Save as new are 44 px targets like the rest of the stage
+    const linkSizes = await ev(() => ['v6-snap-update', 'v6-snap-new'].map((t) => {
+      const r = document.querySelector(`[data-testid="${t}"]`).getBoundingClientRect();
+      return r.width >= 43.5 && r.height >= 43.5 ? 'ok' : `${t} ${r.width}x${r.height}`;
+    }));
+    assert.deepEqual(linkSizes, ['ok', 'ok']);
     // Update saves it into scene 1; the line goes
     await page.click(tid('v6-snap-update'));
     await until(() => document.querySelector('[data-testid="v6-snap-dirty"]').hidden);

@@ -28,8 +28,9 @@
 .v6 .chip.plate { background: linear-gradient(var(--plate-top, var(--accent)), var(--plate-bot, var(--accent)));
   color: var(--accent-ink); border-color: transparent; }
 .v6 .chip.dash { border-style: dashed; background: transparent; }
+/* skeptic UI6-U1 F4: Update / Save as new were 36 px tall; every stage target is 44 px (DESIGN_PHILOSOPHY) */
 .v6 .link { background: none; border: 0; color: var(--accent-text, var(--accent)); text-decoration: underline;
-  min-height: 36px;
+  min-height: 44px; min-width: 44px;
   padding: 0 4px; font-weight: 600; }
 .v6 .link:disabled { opacity: .5; text-decoration: none; }
 .v6 .ghost { min-height: 44px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line-2);
