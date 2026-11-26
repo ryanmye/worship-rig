@@ -174,3 +174,8 @@
 /* a wide sidebar never squeezes a strip below its minimum: the strips scroll instead */
 .board .strips{overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
 .board .strip:not(.add){min-width:150px}.board .strip.add.slim{min-width:52px}
+/* foldable snapshots row */
+.snapx{min-width:40px;min-height:44px}
+.snapchip{min-height:44px;padding:0 12px;border-radius:10px;border:1px solid var(--accent);background:#3a2a1c;color:var(--text);
+  font-weight:700;display:flex;align-items:center;gap:8px;white-space:nowrap}
+.snapchip .edot{width:8px;height:8px;border-radius:50%;background:var(--accent)}

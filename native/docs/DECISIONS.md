@@ -314,6 +314,8 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
   PANIC / Lock, and the menu bar popover unchanged.
 - **The right sidebar is resizable** (Ryan, same day): drag its left edge, between 200 px and 62 % of the stage;
   dragging below 200 px folds it to the rail. Strips never shrink below 150 px; past that they scroll.
+- **The snapshots row folds** (Ryan, same day): ⌃ folds it into one "Snapshot: <name> ▾" chip in the song bar
+  (gold dot when edited); ▾ brings the row back. With it and the right sidebar folded, the strips get the most room.
 - **Chart placement is the player's choice** (Ryan, same day): on the stage (instruments become live mini faders) or
   as a sidebar tab; "⇥ Sidebar" / "⤢ Stage" in the chart header switches it, remembered per device.
   Mockup: `native/docs/design/mockups/chart.html`.

@@ -129,10 +129,11 @@ def topbar(narrow=False):
   <button class="tb rec">● REC</button>{'' if narrow else '<div class="mvol"><span>Master</span><div class="hfader"><i style="width:68%"></i><em style="left:68%"></em></div></div>'}</div>'''
 
 
-def songbar(narrow=False):
+def songbar(narrow=False, snap_chip=False):
   return f'''<div class="songbar"><b class="song">Piano + Warm Pad</b><span class="keylab">KEY</span><button class="keybtn">C ▾</button>
   <div class="trn"><span class="keylab">TRANSPOSE</span><button class="sq">−</button><b>0</b><button class="sq">+</button></div>
   <button class="spc"><span class="keylab">SPACE</span>Hall ▾</button>
+  {'<button class="snapchip" aria-label="Snapshots: show the row"><span class="keylab">SNAPSHOT</span>Piano + Warm Pad<span class="edot" title="edited since saved"></span>▾</button>' if snap_chip else ''}
   {'' if narrow else '<span class="chord">CHORD <b>D</b></span>'}<button class="btn">Notes</button>
   <button class="setbtn">Setlist<small>My Set · not in use</small></button></div>'''
 
@@ -143,7 +144,7 @@ def snaps():
   <button class="chip">Felt piano, dry</button><button class="chip">Upright + drone</button><button class="chip">Full band</button>
   <button class="chip dash">+ Save</button>
   <span class="dirty">edited · <button class="link">Update</button> · <button class="link">Save as new</button></span>
-  <button class="btn arr">Arrange</button></div>'''
+  <button class="btn arr">Arrange</button><button class="sb-x snapx" aria-label="Fold snapshots into the song bar">⌃</button></div>'''
 
 
 WHITE = 'CDEFGAB'
@@ -228,8 +229,8 @@ def stage(n, more=None, port=False, side=None, quick=False):
           f'{sidebar(wide=port, **(side or {}))}</div>')
 
 
-def mac(n, more=None, w=1280, h=800, narrow=False, side=None, quick=False):
-  return (f'<div class="frame" style="width:{w}px;height:{h}px">{topbar(narrow)}{songbar()}{snaps()}'
+def mac(n, more=None, w=1280, h=800, narrow=False, side=None, quick=False, folded=False):
+  return (f'<div class="frame" style="width:{w}px;height:{h}px">{topbar(narrow)}{songbar(snap_chip=folded)}{"" if folded else snaps()}'
           f'{stage(n, more, side=side, quick=quick)}{bottom(n)}</div>')
 
 
@@ -269,6 +270,8 @@ def build():
     ('seven', 'Mac · 7 (scrolls)', mac(7)),
     ('tweak', 'Mac · ⋯ open', mac(5, more='Warm Pad')),
     ('quick', 'Left · Quick open', mac(5, quick=True)),
+    ('folded', 'Snapshots folded', mac(5, folded=True)),
+    ('allfold', 'Everything folded', mac(5, folded=True, side={'collapsed': True})),
     ('collapsed', 'Sidebar collapsed · 5', mac(5, side={'collapsed': True})),
     ('collapsed7', 'Sidebar collapsed · 7', mac(7, side={'collapsed': True})),
     ('sideset', 'Sidebar · Setlist', mac(5, side={'tab': 'setlist'})),
@@ -291,7 +294,7 @@ def build():
   <header class="pg"><h1>Perform v6: the strips are the main screen</h1>
   <p>Quick HTML mockups in the app's Sanctuary v2 colours and fonts; nothing is wired up. The instrument strips fill the
   screen, as in Sunday Keys, with today's Wheel column and a Quick button in a left sidebar (Quick opens over the strips, like today's sheet, so nothing moves while you play), and a sidebar on the right. The sidebar collapses to a thin rail (⟩), shows one module at a time as tabs, drag its left edge to make it wider or narrower, and ⋯ picks and orders which modules it holds: Drone, Setlist, Notes, Tone or Snapshots. The bottom keyboard is today's, with a range bar per instrument. Transpose and Space moved into the song bar and snapshots
-  got their own row, so the strips get the room. Colours go by position, not by kind of sound. With 6 or more
+  got their own row (⌃ folds it into a chip in the song bar, ▾ brings it back), so the strips get the room. Colours go by position, not by kind of sound. With 6 or more
   instruments the strips keep the 5-across width and the row scrolls sideways; the coloured pills above it show every instrument and which ones are on screen (tap one to jump to it). In this page you can scroll the 7-instrument views.</p>
   <nav class="tabs" role="tablist">{tabs}</nav></header>
   <main>{secs}</main>
