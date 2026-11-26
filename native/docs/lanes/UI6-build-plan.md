@@ -117,7 +117,13 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 - Known: below 1024 px wide the whole app still has `body { min-width: 1024px }` (today's), so 820 px portrait scrolls
   sideways; U8 owns the iPad layouts.
 
-## U4 status (builder, 2026-11-26; lane-u4 from lane-u3 28544f2, awaiting the skeptic)
+## U4 status (builder, 2026-11-26; lane-u4 from lane-u3 28544f2, rebased onto ee94331; skeptic pass done)
+
+- **Skeptic (2026-11-26): VERIFIED after fixes.** The review is `native/docs/reviews/UI6-U4.md`. Fixed: an open Quick
+  sheet stayed put when its opener moved on a resize / rotation / snapshots fold (F1), and the Quick screenshots were
+  taken mid fade-in (F2, test). ui-v6 is 49/49, ui-core 78/78; flag-off purity vs ee94331 identical. U3's O1 (1024 px
+  crowding) is unchanged by U4; at 820 px portrait the page no longer scrolls sideways, but the strips now scroll in
+  their row (U8).
 
 - Built: `app/js/views/v6/left.js` (`leftPanel`), `app/styles-v6-left.css` (imported by styles-v6.css); perform.js
   mounts it in `.v6-left` and opens the one Quick sheet from either button; suite part

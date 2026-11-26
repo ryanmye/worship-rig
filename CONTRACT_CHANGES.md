@@ -8340,6 +8340,11 @@ change; `views/perform.js` and `components/quickSheet.js` are untouched.
   except the `body:has(… .v6-perform)` page-width rule.
 - **Flag off:** unchanged (purity probe against 966b0b4: 103 requests, 14 store listeners, 4 intervals, 2528 elements,
   identical).
-- Tests: `test/phase2/ui-v6/left.tests.mjs` (run by run.mjs): 8 checks. `run.mjs` also takes `UI6_ONLY=<regex>` to run
+- **Skeptic (UI6-U4, 2026-11-26):** `openQuick` now places the sheet through `placeQuick(from)`, which runs again
+  (rAF-coalesced, only while the sheet is open) on window `resize` and on the snapshots fold, so an open sheet stays
+  beside / under its opener after a resize or rotation (F1). The listener exists only while the v6 Perform is mounted.
+  Flag-off purity re-measured against the rebased base ee94331: 105 requests, 15 store listeners, 4 intervals, 2529
+  elements, identical.
+- Tests: `test/phase2/ui-v6/left.tests.mjs` (run by run.mjs): 8 checks, plus "U4 skeptic F1". `run.mjs` also takes `UI6_ONLY=<regex>` to run
   a subset (the boot tests and the console check always run). Screenshots `u4-{1280x800,1024x700,820x1180}.png` and
   `u4-quick-*.png`.
