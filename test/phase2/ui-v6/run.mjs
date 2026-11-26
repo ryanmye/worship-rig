@@ -800,6 +800,78 @@ try {
     assert.equal(await page.getAttribute(tid(`${KB}-hhi-0`), 'tabindex'), '0');
   });
 
+  await T('U2 skeptic: a slot shift or a hidden view drops a drag; a one-key range never moves the wrong way',
+    async () => {
+      // F3: removing slot 0 mid-drag of slot 2's end used to write that end into the old slot 3
+      await setSlots(4);
+      await setRange(0, 36, 96);
+      await setRange(1, 40, 80);
+      await setRange(2, 48, 72);
+      await setRange(3, 60, 84);
+      await until(() => document.querySelectorAll('.v6-kbd .v6-rbar').length === 4);
+      const before = (await song()).patch.slots.map((s) => [s.lowNote, s.highNote]);
+      const h2 = await rectOf(page, tid(`${KB}-hhi-2`));
+      const k65 = await keyRect(page, 65);
+      await page.mouse.move(h2.cx, h2.cy);
+      await page.mouse.down();
+      await page.mouse.move(k65.r, h2.cy, { steps: 6 });
+      await ev(() => {
+        const { store } = window.__rig;
+        store.removeSlot(store.currentSong().id, 0);
+      });
+      await page.waitForTimeout(100);
+      assert.equal(await ev(() => document.querySelector('.v6-kbd').classList.contains('dragging')), false,
+        'the drag is dropped');
+      await page.mouse.move(k65.r + 3, h2.cy);
+      await page.mouse.up();
+      await page.waitForTimeout(150);
+      assert.deepEqual((await song()).patch.slots.map((s) => [s.lowNote, s.highNote]), before.slice(1),
+        'no range written');
+      // F4: a view switch mid-drag; the release used to write 0 / 127 (the hidden keys measure 0 px)
+      await setSlots(3);
+      await setRange(1, 40, 80);
+      const h1 = await rectOf(page, tid(`${KB}-hhi-1`));
+      const k70 = await keyRect(page, 70);
+      await page.mouse.move(h1.cx, h1.cy);
+      await page.mouse.down();
+      await page.mouse.move(k70.r, h1.cy, { steps: 6 });
+      await ev(() => window.__rig.ctx.setView('edit'));
+      await until(() => document.body.dataset.view === 'edit');
+      await page.mouse.move(k70.r - 40, h1.cy, { steps: 3 });
+      await page.mouse.up();
+      await page.waitForTimeout(150);
+      assert.deepEqual(await rangeOf(1), [40, 80], 'nothing written by the hidden drag');
+      await ev(() => window.__rig.ctx.setView('perform'));
+      await until(() => document.body.dataset.view === 'perform');
+      assert.equal(await ev(() => document.querySelector('.v6-kbd').classList.contains('dragging')), false);
+      // F5: a stored one-key range (today's Edit allows it): → on its lowest end, ← on its highest and a short
+      // inward drag change nothing (they used to move the end a key the other way); valuenow stays within min..max
+      await setRange(2, 60, 60);
+      await page.focus(tid(`${KB}-hlo-2`));
+      await page.keyboard.press('ArrowRight');
+      await page.focus(tid(`${KB}-hhi-2`));
+      await page.keyboard.press('ArrowLeft');
+      await page.waitForTimeout(150);
+      assert.deepEqual(await rangeOf(2), [60, 60]);
+      const aria = await ev(() => ['lo', 'hi'].map((e) => {
+        const x = document.querySelector(`[data-testid="v6-kbd-h${e}-2"]`);
+        return ['valuemin', 'valuenow', 'valuemax'].map((k) => Number(x.getAttribute(`aria-${k}`)));
+      }));
+      assert.ok(aria.every(([a, n, b]) => a <= n && n <= b), JSON.stringify(aria));
+      await ev(() => document.activeElement.blur());
+      const l2 = await rectOf(page, tid(`${KB}-hlo-2`));
+      await page.mouse.move(l2.cx, l2.cy);
+      await page.mouse.down();
+      await page.mouse.move(l2.cx + 8, l2.cy, { steps: 3 });
+      await page.mouse.up();
+      await page.waitForTimeout(150);
+      assert.deepEqual(await rangeOf(2), [60, 60]);
+      await page.focus(tid(`${KB}-hlo-2`));
+      await page.keyboard.press('ArrowLeft'); // outward still works
+      await rangeIs(2, 59, 60);
+      await ev(() => document.activeElement.blur());
+    });
+
   await T('U2 Edit › Range size (harness): 88 keys A0–C8, one bar, outside dimmed, shorter, drag, arrows', async () => {
     const hp = await context.newPage();
     hp.on('console', (m) => {

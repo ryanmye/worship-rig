@@ -65,6 +65,7 @@ export function mountPerformV6(root, ctx) {
   const isLocked = () => !!store.get().settings.performLock;
   const names = instrumentNames(engine);
   let shownId = null;
+  let rangeSig = ''; // song id + slot count: a change drops a range drag / pick (skeptic UI6-U2 F3)
   let snap = null; // {id, song, json}: the Revert snapshot, as perform.js
   const takeSnapshot = (song) => {
     snap = song ? { id: song.id, song, json: savedJSON(song) } : null;
@@ -222,6 +223,23 @@ export function mountPerformV6(root, ctx) {
       row.cancelDrags();
       row.closePanels();
       bar.closePops();
+      bottom.kb.cancelDrag();
+      bottom.kb.pick(null);
+    }
+    // skeptic UI6-U2 F3: an Add / Remove (here, in Edit, by any store write) moves which instrument sits at each
+    // position; a range drag or the iPad pick held by index would then write / outline the neighbour (removing slot 0
+    // mid-drag of slot 2's end wrote the old slot 3's range). As U1 F2 does for menus: drop both when the count moves.
+    const sig = song ? `${song.id}:${song.patch.slots.length}` : '';
+    if (sig !== rangeSig) {
+      if (rangeSig && newId === shownId) {
+        bottom.kb.cancelDrag();
+        bottom.kb.pick(null);
+      }
+      rangeSig = sig;
+    }
+    // skeptic UI6-U2 F4: a drag that the view hides (⌘E, a MIDI view switch) must not write on its release: the
+    // hidden keyboard measures 0 px wide, so the end snapped to 0 / 127 ("every key") and that was written
+    if (st.view !== 'perform') {
       bottom.kb.cancelDrag();
       bottom.kb.pick(null);
     }

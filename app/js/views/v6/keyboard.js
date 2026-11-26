@@ -151,7 +151,12 @@ export function rangeKeyboard(o = {}) {
     }
     return best;
   }
-  const clampEnd = (end, n, lo, hi) => (end === 'lo' ? clamp(n, MIN_NOTE, hi - 1) : clamp(n, lo + 1, MAX_NOTE));
+  /**
+   * Keep lowest < highest. `was` (where that end started) widens the bound for a stored one-key range (today's Edit
+   * allows lo === hi): skeptic UI6-U2 F5, without it → on its lowest end moved it down a key, ← on its highest up.
+   */
+  const clampEnd = (end, n, lo, hi, was) => (end === 'lo' ? clamp(n, MIN_NOTE, Math.max(hi - 1, was ?? MIN_NOTE))
+    : clamp(n, Math.min(lo + 1, was ?? MAX_NOTE), MAX_NOTE));
 
   // ------------------------------------------------------------------ bars
   function ensure(i) {
@@ -195,7 +200,9 @@ export function rangeKeyboard(o = {}) {
     v.el.classList.toggle('open-l', x.clipL);
     v.el.classList.toggle('open-r', x.clipR);
     const live = !locked && (!pickMode() || picked === v.i);
-    for (const [hd, end, val, min, max] of [[v.lo, 'lo', lo, MIN_NOTE, hi - 1], [v.hi, 'hi', hi, lo + 1, MAX_NOTE]]) {
+    const loMax = Math.max(hi - 1, lo); // a one-key range: valuenow never above valuemax (F5)
+    const hiMin = Math.min(lo + 1, hi);
+    for (const [hd, end, val, min, max] of [[v.lo, 'lo', lo, MIN_NOTE, loMax], [v.hi, 'hi', hi, hiMin, MAX_NOTE]]) {
       const out = end === 'lo' ? x.clipL : x.clipR;
       hd.classList.toggle('beyond', out);
       hd.setAttribute('aria-label', `${v.b.name}: ${end === 'lo' ? 'lowest' : 'highest'} note`);
@@ -415,9 +422,11 @@ export function rangeKeyboard(o = {}) {
     }
     if (ev.pointerId !== drag.pid) return;
     if (!drag.moved && Math.abs(ev.clientX - drag.x0) < DRAG_SLOP) return;
-    drag.moved = true;
     const { x, W } = local(ev);
-    const n = clampEnd(drag.end, snap(drag.end, x - drag.off, W), drag.lo, drag.hi);
+    if (W <= 1) return; // the keyboard is not laid out (its view was hidden mid-drag): no 0 / 127 from a 0 px width
+    drag.moved = true;
+    const n = clampEnd(drag.end, snap(drag.end, x - drag.off, W), drag.lo, drag.hi,
+      drag.end === 'lo' ? drag.lo0 : drag.hi0);
     if (drag.end === 'lo' ? n === drag.lo : n === drag.hi) return;
     if (drag.end === 'lo') drag.lo = n;
     else drag.hi = n;
@@ -482,7 +491,7 @@ export function rangeKeyboard(o = {}) {
     if (!v) return;
     const { lo, hi } = v.b;
     const cur = end === 'lo' ? lo : hi;
-    const n = clampEnd(end, cur + dir * (ev.shiftKey ? 12 : 1), lo, hi);
+    const n = clampEnd(end, cur + dir * (ev.shiftKey ? 12 : 1), lo, hi, cur);
     if (n !== cur) o.onRange?.(i, end === 'lo' ? 'lowNote' : 'highNote', n);
   }
 
