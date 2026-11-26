@@ -79,6 +79,9 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 - **Polish (U5b open Q4, orchestrator):** Perform's Change opens the instrument chooser over Perform (no switch to
   Edit), so the sound changes where you play (D14 single sound at the desk). U5b Q1–Q3 kept as built: live moves
   don't dot (today's rule), Edit's range bars display only, Lock from Edit goes to Perform and locks.
+- **Polish (UI6-U5b O2/O3/O5):** chooser: ←/→ must not change the song while it is open; "not available" line for
+  an instrument missing from the engine list; kinds list fit at 1024×700. O1 (Edit range bars draggable) waits for
+  Ryan; O4/O6 noted.
 - **Polish (UI6-U5a P1):** the range keyboard's always-visible label (`showTip`) forces a reflow on every live
   write (~10 ms at 6× CPU); measure it in a requestAnimationFrame (shared with Perform).
 - **Polish (UI6-move O2/O3, orchestrator):** Enter on a strip name (pick) moves focus to the picked bar's low
