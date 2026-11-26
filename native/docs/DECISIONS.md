@@ -428,3 +428,13 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
 3. **The metronome click and the "Loading…" state go in the right sidebar**: a Metronome module (click on/off,
    tempo, Tap) and the song's load state shown in the sidebar (Setlist rows already mark loading songs; the current
    song's "Loading n of m" goes in the sidebar header).
+
+## D24: More v6 answers (Ryan, 2026-11-26)
+1. **Lock does not block snapshots**: Save / Update stay live under Lock (as today's Quick sheet).
+2. **A range drag is heard while dragging**: write the range during the drag (throttled, e.g. ≤ 1 write per 50 ms,
+   plus the final value on release), so the split is audible live. Supersedes U2's write-on-release.
+3. **Tap the instrument first on every pointer**, Mac mouse included (U2's coarse-pointer pick mode becomes the
+   only mode on Perform; Edit › Range keeps its single live bar).
+4. **A new song from the setlist's "+ Add song" is not selected** (as U3 built).
+5. **Notes / Setlist in the song bar only open the sidebar**, never close it (as U3 built).
+6. **The drone's Bright / Move show a percentage** beside the word, as today's card.
