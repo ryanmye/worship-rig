@@ -153,6 +153,8 @@
   .v6 .v6-bank-acts.lib { grid-template-columns: 2fr 1fr; }
   .v6 .v6-bank-acts .v6-bank-try, .v6 .v6-bank-acts.lib .v6-bank-set { grid-column: auto; }
   .v6 .v6-board.bank-open > .v6-left { visibility: hidden; }
-  .v6 .v6-trybar { flex-wrap: wrap; }
-  .v6 .v6-try-text { flex-basis: 100%; }
+  .v6 .v6-trybar { flex-wrap: wrap; padding: 6px 10px; }
+  .v6 .v6-try-text { flex-basis: calc(100% - 20px); }
+  .v6 .v6-try-meta { display: inline; }
+  .v6 .v6-try-keep, .v6 .v6-try-set { flex: 1 1 auto; }
 }

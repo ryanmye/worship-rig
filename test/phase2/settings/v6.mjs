@@ -359,7 +359,7 @@ export async function runV6({ browser, createServer, ROOT, SHOTS, results }) {
     await T('deep links land where they did (1.x names, aliases) and on the new categories', async () => {
       const want = {
         learn: 'midilearn', 'midi-learn': 'midilearn', midilearn: 'midilearn', layout: 'layout', appearance: 'look',
-        theme: 'look', menubar: 'look', perform: 'look', pads: 'samples', bank: 'samples', samples: 'samples',
+        theme: 'look', menubar: 'look', perform: 'look', pads: 'samples', bank: null, samples: 'samples',
         backups: 'library', 'voice-limit': 'sound', midi: 'keyboards', keyboard: 'keyboards', 'esc-panics': null,
         about: 'about', diagnostics: 'about',
       };
@@ -372,6 +372,11 @@ export async function runV6({ browser, createServer, ROOT, SHOTS, results }) {
       await open('voice-limit');
       assert.equal(await ev(() => document.querySelector('[data-testid="settings-advanced-sound"]').open), true);
       await close();
+      // U7a (D17): with the v6 Perform, 'bank' is the Song bank browser over the stage; Settings stays closed
+      await ev(() => window.__rig.ctx.openSettings({ section: 'bank' }));
+      await until(() => window.__rig.views.v6?.bank?.isOpen === true);
+      assert.equal(await ev(() => window.__rig.views.settings.isOpen), false);
+      await ev(() => window.__rig.views.v6.bank.close());
     });
 
     await T('Look: theme preview cards apply themes (and Daylight’s Day / Stage / Auto stays)', async () => {

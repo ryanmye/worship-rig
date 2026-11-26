@@ -585,6 +585,7 @@ try {
 
   await T('screens: setlist entry 1280×800; 1180×820; iPad portrait 820×1180 (filters on top, detail under)',
     async () => {
+      await closeBank();
       await page.click(tid('v6-sb-tab-setlist'));
       await page.click(tid('v6-sl-add'));
       await until(() => !!document.querySelector('[data-testid="v6-addsong"]'));
