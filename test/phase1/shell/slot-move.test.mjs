@@ -296,3 +296,50 @@ test('controller: a scene’s live level move travels with its instrument; Rever
   assert.equal(c.scenes.state().n, null, 'Revert goes back to the song’s own levels (as before D23)');
   c.dispose?.();
 });
+
+// ---- U-MOVE skeptic (reviews/U-MOVE-store.md)
+
+test('skeptic F1: a long fader drag after a move does not push the Revert layout out of the lineage', () => {
+  let t = 0;
+  const s = makeStore({ now: () => t });
+  const id = s.get().settings.currentSongId;
+  ['soft-keys', 'warm-pad', 'soft-keys', 'warm-pad'].forEach((x, i) => s.set(`slots.${i}`, slot(x)));
+  for (let i = 0; i < 4; i++) s.set(`slots.${i}.gain`, 0.1 * (i + 1));
+  s.set(`songs.${id}.scenes`, [{ slots: [{ gain: 0.11 }, { gain: 0.22 }, { gain: 0.33 }, { gain: 0.44 }] }]);
+  const drag = (i, n) => {
+    for (let k = 0; k < n; k++) {
+      t += 16; // ~60 writes a second
+      s.set(`slots.${i}.gain`, 0.3 + (k % 50) / 100);
+    }
+    t += 3000;
+  };
+  // 1. snapshot at song select, a move, then 600 drag writes (≈ 10 s, 2.3 × the history)
+  t += 5000;
+  let snap = structuredClone(s.getSong(id));
+  t += 5000;
+  assert.ok(s.moveSlot(id, 0, 3));
+  t += 2000;
+  drag(1, 600);
+  s.set(`songs.${id}.patch`, snap.patch);
+  assert.deepEqual(s.getSong(id), snap, 'scenes back on their instruments');
+  // 2. a snapshot in the middle of a run (Edit left after some drags), more drags, a move, more drags
+  drag(2, 400);
+  t += 4000;
+  snap = structuredClone(s.getSong(id));
+  t += 4000;
+  drag(0, 400);
+  assert.ok(s.moveSlot(id, 2, 0));
+  drag(3, 400);
+  s.set(`songs.${id}.patch`, snap.patch);
+  assert.deepEqual(s.getSong(id), snap);
+  // 3. same clock instant everywhere (a script): the layout right before the move is a run's end, always kept
+  const u = makeStore({ now: () => 0 });
+  const uid = u.get().settings.currentSongId;
+  ['soft-keys', 'warm-pad', 'soft-keys', 'warm-pad'].forEach((x, i) => u.set(`slots.${i}`, slot(x)));
+  u.set(`songs.${uid}.scenes`, [{ slots: [{ gain: 0.11 }, { gain: 0.22 }, { gain: 0.33 }, { gain: 0.44 }] }]);
+  const usnap = structuredClone(u.getSong(uid));
+  assert.ok(u.moveSlot(uid, 1, 2));
+  for (let k = 0; k < 700; k++) u.set('slots.0.gain', (k % 90) / 100);
+  u.set(`songs.${uid}.patch`, usnap.patch);
+  assert.deepEqual(u.getSong(uid), usnap);
+});

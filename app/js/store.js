@@ -1057,9 +1057,9 @@ export function createStore(opts = {}) {
   let state;
   const listeners = new Set();
   // D23 slot lineage (see noteLayout)
-  const SLOT_HISTORY = 256; // layouts kept per song (a drag writes ~60/s; a Revert older than this is positional)
+  const SLOT_HISTORY = 256; // layouts kept per song (evictLayout drops a drag's in-between values first)
   const SLOT_DROPPED = 64; // removed slots whose scene entries are kept for a Revert
-  const slotLines = new Map(); // songId → {tokens:number[], seen:Array<{slots, tokens}>, dropped:Map<token, entries>}
+  const slotLines = new Map(); // songId → {tokens:number[], seen:Array<{slots, tokens, at}>, dropped:Map<token, entries>}
   let slotToken = 0;
   const slotMapListeners = new Set();
   const pending = new Set();
@@ -1565,8 +1565,28 @@ export function createStore(opts = {}) {
     }
     const last = line.seen[line.seen.length - 1];
     if (last && last.slots === slots && last.tokens === line.tokens) return;
-    line.seen.push({ slots, tokens: line.tokens });
-    if (line.seen.length > SLOT_HISTORY) line.seen.shift();
+    line.seen.push({ slots, tokens: line.tokens, at: now() });
+    if (line.seen.length > SLOT_HISTORY) evictLayout(line.seen);
+  }
+  /**
+   * U-MOVE skeptic F1: one recorded layout goes when the history is full. Every slot write records one (a fader drag
+   * ≈ 60/s, a learned CC sweep 128), so dropping the oldest lost the pre-move layout after a few seconds of dragging
+   * and a Revert was positional again (scenes on the wrong instruments). Kept: the first and last layout of each
+   * token run (right after / right before a re-order: what a Revert snapshot most often is) and the newest; of the
+   * rest, the one that was current for the shortest time goes (a drag's in-between values), the oldest on a tie.
+   */
+  function evictLayout(seen) {
+    let best = -1;
+    let life = Infinity;
+    for (let k = 1; k < seen.length - 1; k++) {
+      if (seen[k - 1].tokens !== seen[k].tokens || seen[k + 1].tokens !== seen[k].tokens) continue; // a run's end
+      const l = seen[k + 1].at - seen[k].at;
+      if (l < life) {
+        life = l;
+        best = k;
+      }
+    }
+    seen.splice(best < 0 ? 0 : best, 1);
   }
   /** The song's slot tokens now (recording its layout first). */
   function tokensOf(id) {
@@ -1586,7 +1606,7 @@ export function createStore(opts = {}) {
       line.dropped.set(droppedEntries.token, droppedEntries.entries);
       if (line.dropped.size > SLOT_DROPPED) line.dropped.delete(line.dropped.keys().next().value);
     }
-    line.seen[line.seen.length - 1] = { slots: state.songs[id].patch.slots, tokens: line.tokens };
+    line.seen[line.seen.length - 1] = { slots: state.songs[id].patch.slots, tokens: line.tokens, at: now() };
   }
   function emitSlotMap(id, order) {
     for (const fn of [...slotMapListeners]) {
@@ -2320,7 +2340,7 @@ export function createStore(opts = {}) {
             song.patch.slots.length)));
         }
         line.tokens = re.tokens; // exactly the earlier layout's tokens (a removed slot's comes back as itself)
-        line.seen[line.seen.length - 1] = { slots: state.songs[sid].patch.slots, tokens: line.tokens };
+        line.seen[line.seen.length - 1] = { slots: state.songs[sid].patch.slots, tokens: line.tokens, at: now() };
       }
       if (pcOn) paths.push(put(['settings', 'programChangeAction'], PC_ACTION_DEFAULT));
       if (v.segs[0] === 'settings' && DEVICE_BLOCK_SETTINGS.includes(v.segs[1])) noteDeviceWrites(prev, state); // DS1
