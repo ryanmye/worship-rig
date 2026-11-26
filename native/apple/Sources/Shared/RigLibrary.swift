@@ -130,7 +130,11 @@ enum RigBackups {
     /// `RigLibrary.stage(fileURL:)` checks, and be a whole library the UI can import (store.importJSON's library
     /// branch): `songs` an object or array, or `kind` "library"; not a song file; `schema` absent or a number no newer
     /// than `maxSchema`. A truncated write, a newer app's backup or a stray .json is skipped, not served.
+    /// Review F1 open item 3 (lane F2): a leading UTF-8 BOM is refused too, as store.importJSON refuses it (JSON.parse:
+    /// "That file is not valid JSON."; main.js's utf8 read keeps the BOM). JSONSerialization skips it, so the file
+    /// used to be served and then refused. Checked on the bytes, whether or not String(data:) keeps the BOM.
     static func isLibrary(_ data: Data) -> Bool {
+        if data.starts(with: [0xEF, 0xBB, 0xBF]) { return false }
         guard let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return false }
         if (obj["kind"] as? String) == "song" { return false }
         let songs = obj["songs"]
@@ -359,7 +363,10 @@ final class RigLibrary: NSObject, WKScriptMessageHandlerWithReply {
     private func stage(fileURL url: URL) {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        // review F2: a leading UTF-8 BOM is refused here too, as isLibrary and store.importJSON refuse it, so a
+        // picked file is never imported or refused depending on whether String(data:) strips the BOM
         guard let data = try? Data(contentsOf: url), data.count <= RigBackups.maxBytes,
+              !data.starts(with: [0xEF, 0xBB, 0xBF]),
               let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let text = String(data: data, encoding: .utf8) else {
             return confirm("Not a library file", "\(url.lastPathComponent) is not a Worship Rig library backup.",

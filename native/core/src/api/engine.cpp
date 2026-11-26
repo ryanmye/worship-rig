@@ -170,6 +170,7 @@ void Engine::at(double t, std::function<void(double)> fn) {
 void Engine::onControl(std::function<void()> fn) {
   if (!realtime()) {
     fn();
+    if (cacheSvc_) cacheSvc_->emitSampleChanges();  // Lane F2: offline, a host call is the tick (memory pressure)
     flush();
     return;
   }
@@ -260,6 +261,7 @@ rig_status Engine::post(const char *json, std::size_t len) {
   if (!realtime()) {
     drainMidi();  // offline: rig_midi_in bytes reach the midi service at the next post or quantum (T07 review O5)
     const bool ok = bridge_->handle(json, len);
+    if (cacheSvc_) cacheSvc_->emitSampleChanges();  // Lane F2: offline, a post is the tick
     flush();
     return ok ? RIG_OK : RIG_E_INVALID;
   }
@@ -337,6 +339,7 @@ void Engine::controlLoop() {
     checkWatchdog();
     pumpRec(false);
     publishPerformMeters(graph_, model_);  // CORE2B
+    if (cacheSvc_) cacheSvc_->emitSampleChanges();  // Lane F2: at most one eviction / trim / rate `samples` per tick
     emitTick();
     flush();
   }

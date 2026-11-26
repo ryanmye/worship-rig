@@ -241,6 +241,18 @@ test('picker: a JSON file that is not a library (E5) is refused; before, it repl
   assert.equal(shell.pick(bad), 'not a library', 'the shell itself refuses non-JSON');
 });
 
+test('picker: a BOM\'d library (review F2) is refused by the shell, as isLibrary and store.importJSON refuse it',
+  async () => {
+    // stage(fileURL:) now checks the BOM bytes, so whether String(data:) strips the BOM no longer decides the outcome
+    const shell = nativeShell({ ownDir: mk('own'), platform: 'ipados' });
+    const { store } = await setup({ rig: shell.rig });
+    const mine = edited(store);
+    const file = writeAged(path.join(mk('inbox'), 'rig-20261120-101010.json'), `﻿${v1('rich')}`);
+    assert.equal(shell.pick(file), 'not a library');
+    assert.deepEqual(plain(store.get()), mine, 'library unchanged');
+    assert.deepEqual(shell.ownList(), [], 'and no backup rotated');
+  });
+
 // ================================================================================================ 4. corrupt input
 test('a truncated 1.x library in localStorage → rig-unreadable-* (exact text) on disk, a fresh seed, nothing partial', async () => {
   for (const [label, raw] of [['truncated', v1('rich', 'localstorage').slice(0, 20000)],
@@ -281,6 +293,29 @@ test('a truncated newest backup (E5): never served; the newest good one is impor
   assert.equal(Object.keys(after).length, 4, 'plus the pre-import backup');
   assert.ok(!warns.some((w) => /Import failed/.test(w)));
 });
+
+test('a BOM\'d newest backup (review F1 open item 3): the store refuses it, so the shell skips it like Swift now does',
+  async () => {
+    // Lane F2: JSONSerialization accepted a leading UTF-8 BOM, so RigBackups.isLibrary served the file and
+    // store.importJSON then refused it (JSON.parse: not valid JSON; main.js's utf8 read keeps the BOM too). Swift now
+    // refuses the BOM bytes; the stand-in (Buffer utf8 + JSON.parse) always did. Both agree with the store here.
+    const good = v1('deleted-factory');
+    const bom = `\uFEFF${v1('rich')}`;
+    const probe = makeStore();
+    assert.equal(probe.importJSON(bom, { replace: true, dryRun: true }).error, 'That file is not valid JSON.');
+    assert.equal(probe.importJSON(bom.slice(1), { replace: true, dryRun: true }).ok, true, 'the same file without it');
+    const own = mk('own');
+    writeAged(rotationName(own), good);
+    const f = writeAged(rotationName(own), bom);
+    assert.deepEqual([...fs.readFileSync(f).subarray(0, 3)], [0xef, 0xbb, 0xbf], 'the file really starts with a BOM');
+    const shell = nativeShell({ ownDir: own });
+    const { store, ctl, warns } = await setup({ rig: shell.rig });
+    edited(store);
+    const r = await ctl.importLatestBackup();
+    assert.equal(r.ok, true, r.error);
+    assertIs1x(store, 'deleted-factory', 'the older good backup, not the BOM\'d one');
+    assert.ok(!warns.some((w) => /Import failed/.test(w)), 'the BOM\'d file never reached importJSON');
+  });
 
 test('only bad backups (truncated, newer schema, not a library): import refused, library and folder as they were',
   async () => {

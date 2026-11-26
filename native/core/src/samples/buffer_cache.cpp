@@ -281,6 +281,7 @@ void BufferCache::deleteEntry(const std::string &key) {
   std::unique_ptr<Stored> e = std::move(it->second);
   entries_.erase(it);
   bytes_ -= e->bytes;
+  dropped_.insert(urlOfKey(key));  // Lane F2 (O-AW-F2): a sampler reading `loaded` may have changed
   auto l = supersededBy_.find(key);
   if (l != supersededBy_.end()) {
     superseded_.erase(l->second);
@@ -382,6 +383,7 @@ void BufferCache::setEngineRate(double sr) {
     } else {  // a live instrument still reads it: keep it, off the lookup path, until released
       stale_.push_back(std::move(it->second));
       entries_.erase(it);
+      dropped_.insert(urlOfKey(key));  // Lane F2: off the lookup path = no longer `loaded`
     }
   }
   superseded_.clear();
@@ -554,6 +556,7 @@ void BufferCache::finish(Done &d) {
     inflight_.erase(it);
   }
   if (posted_ > 0) --posted_;
+  ++landed_;  // Lane F2
   Stored *e = nullptr;
   if (d.out.status != LoadOutcome::Status::Ok || !d.out.buffer) {
     const bool first = failed_.find(d.url) == failed_.end();
@@ -653,6 +656,10 @@ BufferCache::Invalidated BufferCache::invalidate(const std::vector<std::string> 
   for (const auto &u : urls) set.insert(urlOfKey(u));
   for (const auto &u : set) {
     r.failed += static_cast<int>(failed_.erase(u));
+    // review F2 K1/K2: every invalidated url counts as dropped, not only those whose entry goes: a cleared failure
+    // mark (it read as settled) or a url a rescan added to a sampler can turn that sampler not loaded with no entry
+    // leaving the cache
+    dropped_.insert(u);
     meta_.erase(u);  // a re-imported file may differ in length
   }
   for (auto i = sizes_.begin(); i != sizes_.end();) i = set.count(urlOfKey(i->first)) ? sizes_.erase(i) : std::next(i);

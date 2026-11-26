@@ -144,6 +144,20 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
   - Lane F1 (2026-11-25): the core now emits it (after a preload's decodes, once a prepare's samples settle, after
     a pin re-warm pass), with no contract minor bump: the shape was already in ENGINE_CONTRACT 6.5 and the shim
     treats the event as optional. The fallback stays. CONTRACT_CHANGES "Lane F1", INTERFACE_LOG "F1".
+- **O-AW-F2 (orchestrator, tier 2, Lane F2, 2026-11-25): the core reports eviction, trim and rate changes with
+  `load {phase:'samples'}`.** Review F1 open item 1: a sampler evicted at the cache cap or trimmed by
+  `rig_host_memory_pressure` kept a setlist chip "ready", and a rate change left one "loading", until the next preload
+  or prepare. The other option was a shim re-ask on a `state` sampleRate change, which covers rate changes only.
+  Decided:
+  - the core emits the samples event whenever a known sampler's loaded state changes because of eviction, a trim or
+    a rate change, naming only the ids whose state changed ("known" = the core already told the shim about it, by an
+    event or a one-sampler `get sampleStatus` answer);
+  - coalesced, at most one such event per control tick;
+  - sent from the control thread, with no lock added on the audio path;
+  - the shim's `sampleStatus` fallback stays as it is.
+
+  No contract minor bump: same event, same shape (ENGINE_CONTRACT 6.5). CONTRACT_CHANGES "Lane F2", INTERFACE_LOG
+  "F2", SHELL.md G5.
 - **O-AW-F1 (Lane F1, 2026-11-25): the native shell keeps the newest 10 library backups, as main.js does
   (was 3).** Review E5 open item 4: after a replace import, the debounce backup of the imported library plus two
   more pushed the pre-import backup out. The other option was a `rig-preimport-*` file kept apart from the

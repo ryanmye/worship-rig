@@ -463,6 +463,68 @@ TEST_SUITE("runtime_preload") {
     CHECK(rt.maxGapMs(t0, Clock::now()) < rt.bound);  // emitting changed nothing on the control loop's cadence
   }
 
+  TEST_CASE("Lane F2: rig_host_memory_pressure and a rate change each send one samples event, changed ids only") {
+    g_sleepMs = 5;
+    Rt rt;
+    rt.boot();
+    auto samplesAfter = [&](Clock::time_point from) {
+      std::vector<std::string> out;
+      std::lock_guard<std::mutex> lk(rt.mu);
+      for (const Ev &v : rt.evs) {
+        if (v.at < from) continue;
+        // a payload is one message or a batch: one entry per samples message
+        for (std::size_t at = v.text.find("\"phase\":\"samples\""); at != std::string::npos;
+             at = v.text.find("\"phase\":\"samples\"", at + 1)) {
+          const std::size_t open = v.text.find("\"loaded\":", at);
+          out.push_back(v.text.substr(open, v.text.find('}', open) - open + 1));
+        }
+      }
+      return out;
+    };
+    const int wait = kSanitized ? 120000 : 30000;
+    rt.post(R"({"v":1,"op":"cache","action":"preload","pin":"add","id":10,"patches":[)" + patchOf("vibes") + "]}");
+    REQUIRE(!rt.reply(10, wait).second.empty());
+    rt.post(R"({"v":1,"op":"cache","action":"preload","pin":"none","id":11,"patches":[)" + patchOf("celesta") + "]}");
+    REQUIRE(!rt.reply(11, wait).second.empty());
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // warning level: the unpinned celesta goes, the pinned vibes stays: one event, celesta only
+    auto t0 = Clock::now();
+    rig_host_memory_pressure(rt.e, 1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(kSanitized ? 1500 : 400));
+    auto ev = samplesAfter(t0);
+    REQUIRE(ev.size() == 1);
+    CHECK(ev[0] == R"("loaded":{"celesta":false})");
+    // nothing left to trim: no event
+    t0 = Clock::now();
+    rig_host_memory_pressure(rt.e, 1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(kSanitized ? 1500 : 400));
+    CHECK(samplesAfter(t0).empty());
+    // a route change to 44.1 kHz: every buffer leaves the lookup path; vibes changes (celesta was false already)
+    t0 = Clock::now();
+    rig_device_info info{};
+    info.struct_size = sizeof info;
+    info.sample_rate = 44100;
+    info.channels = 2;
+    info.output_latency_sec = 0.005;
+    rig_host_audio_started(rt.e, &info);
+    std::this_thread::sleep_for(std::chrono::milliseconds(kSanitized ? 2000 : 600));
+    ev = samplesAfter(t0);
+    REQUIRE(ev.size() == 1);
+    CHECK(ev[0] == R"("loaded":{"vibes":false})");
+    // the events agree with `get sampleStatus`
+    rt.post(R"({"v":1,"op":"get","what":"sampleStatus","id":20,"patches":[)" + patchOf("vibes") + "," +
+            patchOf("celesta") + "]}");
+    CHECK(contains(rt.reply(20).second, "\"loaded\":[false,false]"));
+    // a preload at the new rate brings vibes back: its own event, and no second one from the tick
+    t0 = Clock::now();
+    rt.post(R"({"v":1,"op":"cache","action":"preload","pin":"add","id":21,"patches":[)" + patchOf("vibes") + "]}");
+    REQUIRE(!rt.reply(21, wait).second.empty());
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    ev = samplesAfter(t0);
+    REQUIRE(ev.size() == 1);
+    CHECK(ev[0] == R"("loaded":{"vibes":true})");
+  }
+
   TEST_CASE("CORE2A review: a song switch to an instrument a preload has queued jumps the queue (joined keys)") {
     g_sleepMs = 25;
     Rt rt;

@@ -53,7 +53,7 @@ recordTap, reloadManifests, sleepBlockers, volumeCC (need MIDI, pads, recorder, 
 - G2 (closed in SETUP_REVIEW): `set` path/value are optional in the spec (required unless `batch` is given).
 - G3: clickStart is sync in the contract (`{t0, downbeat}`); native cannot answer sync. Shim returns an estimate.
 - G4: setClockSink(fn) has no port id but `config.midiClock.port` needs one. Shim sends `fn.portId ?? 'auto'`.
-- G5 (closed in the core by lane F1; shim updated by Lane S, DECISIONS O-AW-4): `get sampleStatus {patches}` answers
+- G5 (closed in the core by lanes F1 and F2; shim updated by Lane S, DECISIONS O-AW-4, O-AW-F2): `get sampleStatus {patches}` answers
   `{loaded: bool[], failed: bool[]}`, one entry per patch (ENGINE_CONTRACT §6.4 `get`). **Since lane F1 the core
   emits `load {phase:'samples', loaded:{<id>: bool}}`** (contract 6.5; `true` = every sample decoded or failed, the
   `sampleStatus` `loaded` rule): once per `cache preload` after its decodes (before its `load {phase:'preload'}` and
@@ -70,8 +70,18 @@ recordTap, reloadManifests, sleepBlockers, volumeCC (need MIDI, pads, recorder, 
   meanwhile ride one follow-up. The `samples` event is still honoured (mock-native, a core that adds it later).
   Measured on `rig-devhost` (S-cue-go "Re-check"): at most one `get sampleStatus` per preload (fewer when
   preloads overlap: 5 for 7 while an 8-song set pinned), round trip ≤ 3.4 ms, `preload()` resolves 3–24 ms later.
-  Known gap: a buffer the core evicts later still reads decoded until a preload, a prepare (lane F1: its event) or
-  a re-warm pass names its sampler again. Eviction itself sends no event.
+  **Lane F2 (DECISIONS O-AW-F2): eviction, trim and rate changes are reported too.** Once per control tick (realtime;
+  offline: after each post or host call) the core re-reads the samplers it has already told the shim about (an event,
+  or a one-sampler `get sampleStatus` answer) whose buffers left the cache since the last tick (eviction at the cap,
+  `rig_host_memory_pressure` trim, low-resource trim, a My Samples rescan), and after a rate change every such sampler
+  at each tick a decode lands, until none is in flight. It sends one `samples` event naming only the ids whose
+  `loaded` differs from the last word (none when nothing changed; a buffer dropped and decoded again within one tick
+  gives none). Control thread only, no lock, no audio-thread work. The former known gap (a sampler evicted later read
+  "ready" until a preload, prepare or re-warm named it; "loading" after a rate change until the next one) is closed.
+  The fallback stays unchanged. Still not reported by this path: an ordinary decode outside a preload / prepare /
+  re-warm pass (none exists in the app today). Review F2: a transient failure's 30 s window is not a gap (`failed()`
+  holds until a request clears the mark, and that request's preload / prepare / re-warm reports it); a My Samples
+  rescan that clears failure marks or changes a manifest is reported (every invalidated url counts as dropped).
 - G6: 4 Hz idle tick equals the 0.25 s clock cap; shim raises the rate to 30 Hz on first meter read.
 - G7: `hostLatency` is in the tick prose but not in engine-api.json. Shim honours it if present.
 - G8: chatty traffic (play:input 24 for 6 note-ons; cache preload/estimate 11 each at boot). Dedupe later. Lane S
@@ -79,6 +89,8 @@ recordTap, reloadManifests, sleepBlockers, volumeCC (need MIDI, pads, recorder, 
   switch costs 1 more request (1 preload + 1 sampleStatus), and pinning an 8-song set 5 more (for 7 preloads, 11
   estimates). Lane F1 adds one event (no reply) per preload with a sampler, per prepare with a sampler and per
   re-warm pass that decoded something; a prepare whose samplers the event made known asks no `sampleStatus`.
+  Lane F2 adds at most one more per control tick, only when a known sampler's state changed (eviction, trim, rate
+  change); an idle tick costs two compares.
 - G9: shim needs native to emit `state` before `load{start}` and before the `audio start` reply.
 - G10: decided, see "Recording ownership" below. recorder.js still needs the JS `NativeRecorder` adapter (T09) and the
   core `rec` op (M17); until both exist, recording is unavailable under the bridge.
@@ -149,7 +161,8 @@ the Settings "import latest backup" button.
   `__rigShell.menu('importLatestBackup')`, which `controller.onMenu` handles. The answer is stored either way.
 - `latestBackup()` = a staged file (once) else the newest (mtime, then name) of our own backups and the Electron
   ones that parses as a library no newer than schema 2 (`RigBackups.isLibrary`, lane F1). A truncated, newer-schema
-  or non-library file is skipped, so an older good one is served. `via` says which (D11 below).
+  or non-library file is skipped, so an older good one is served. Lane F2: so is a file that starts with a UTF-8 BOM
+  (JSONSerialization skips it, store.importJSON's JSON.parse refuses it). `via` says which (D11 below).
 - iPad (no access to another app's files): Files picker (File > Import Library Backup..., Cmd-Shift-I, or the
   Settings button after a picker choice), or AirDrop / Files "Open in" of a `rig-*.json`
   (CFBundleDocumentTypes public.json,

@@ -627,7 +627,9 @@ samples are decoded; and CORE3's: a realtime `prepare` builds its synth / organ 
 answered once they are built too, a pinned `cache preload` of at most 5 songs prebuilds their synth / organ units in
 the background so a switch to one builds nothing; and lane F1's: the core sends the 6.5 `load {phase:'samples'}`
 event after a preload's decodes, once a prepare's samples settle (before either reply) and after a pin re-warm pass,
-already in v1, no shape change; the shim keeps `get sampleStatus` as a fallback); a breaking change bumps `v`; a native that receives another `v` replies `{ok:false, error:{code:
+already in v1, no shape change; the shim keeps `get sampleStatus` as a fallback; and lane F2's: the same event, at
+most once per control tick, for the already-reported samplers whose state an eviction, a memory-pressure / low-resource
+trim or a rate change changed, naming those ids only); a breaking change bumps `v`; a native that receives another `v` replies `{ok:false, error:{code:
 'protocol'}}` and ignores the message; the JS shim refuses a major mismatch (the app shows the engine as
 unavailable). Error codes: `protocol`, `bad-request` (schema), `unknown-op`, `unknown-param`, `not-started`,
 `stale-token`, `superseded`, `decode` (sample/pad file), `device` (audio device open/route), `unsupported` (cap

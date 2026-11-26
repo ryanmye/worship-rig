@@ -334,3 +334,48 @@ test('F1 on rig-devhost: the core\'s samples events alone fill _loaded (preload,
       await host.stop();
     }
   });
+
+test('F2 on rig-devhost: a cache trim (low resource, the memory-pressure trim as an op) turns the trimmed song\'s '
+  + 'songReady false, by one event naming it alone', { skip }, async () => {
+  const host = await startDevhost({ extra: ['--seed', '3'] });
+  const engine = new BridgeEngine({ transport: websocketTransport({ url: host.wsUrl }), app: 'lane-f2' });
+  const events = [];
+  const onLoad = engine._onLoad.bind(engine);
+  engine._onLoad = (m) => {
+    if (m.phase === 'samples') events.push(m);
+    return onLoad(m);
+  };
+  const samplesSince = (n) => events.slice(n).map((e) => e.loaded);
+  try {
+    await engine._hello;
+    await engine.start().catch(() => {});
+    engine._started = true;
+    if (!engine.registry.samplers.size) await engine._refreshInstruments();
+    const playing = song(sampler('vibes'), null, null, null);
+    const other = song(sampler('celesta'), null, null, null);
+    const tok = await engine.prepare(playing);
+    assert.equal(engine.commit(tok), true);
+    await engine.preload([other], { pin: 'none' }); // decoded, unpinned: what a trim gives back
+    await wait(100);
+    assert.equal(ready(engine, playing), true);
+    assert.equal(ready(engine, other), true, 'before: the chip reads ready');
+    const n = events.length;
+    // Model::setLowResource -> CacheServiceImpl::setLowResource -> BufferCache::trimUnpinned, the same trim as
+    // rig_host_memory_pressure(1) (which the devhost has no op for)
+    engine.setLowResource(true);
+    for (let i = 0; i < 100 && !samplesSince(n).length; i++) await wait(20);
+    await wait(150); // nothing else follows
+    assert.deepEqual(samplesSince(n), [{ celesta: false }], 'one event, the changed sampler only');
+    assert.equal(ready(engine, other), false, 'after: the trimmed song\'s chip is not ready (was: stale ready)');
+    assert.equal(ready(engine, playing), true, 'the playing song keeps its samples');
+    const st = await engine._req('get', { what: 'sampleStatus', patches: [playing, other] });
+    assert.deepEqual(st.loaded, [true, false], 'the event agrees with the core');
+    const m = events.length;
+    engine.setLowResource(false); // restores pins, drops nothing: no event
+    await wait(200);
+    assert.deepEqual(samplesSince(m), []);
+  } finally {
+    engine._dispose?.();
+    await host.stop();
+  }
+});

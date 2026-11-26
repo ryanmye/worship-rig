@@ -2,7 +2,9 @@
 // (contract 1.2, 6.4 `cache`, `get sampleStatus`), plus the hooks T08/T13 need (see the T06 report).
 #pragma once
 #include <functional>
+#include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -69,8 +71,16 @@ class CacheServiceImpl final : public rig::CacheService {
   std::vector<std::string> samplerIds(const std::vector<rig::PatchSpec> &patches) const;
   /** O-AW-4: emit `load {phase:'samples', loaded:{<id>: bool}}` for these sampler ids. true = every sample of the
    *  instrument is decoded or failed: the rule of `get sampleStatus` `loaded` for a one-slot patch. Nothing for an
-   *  empty list. Control thread only (Model::emit); reads the cache, changes nothing (no LRU touch, no lock). */
+   *  empty list. Control thread only (Model::emit); reads the cache, changes nothing there (no LRU touch, no lock);
+   *  records each value as the shim's last word for that id (Lane F2, emitSampleChanges). */
   void emitSamples(const std::vector<std::string> &ids);
+  /** Lane F2 (O-AW-F2, review F1 open 1): once per control tick (Engine: the realtime control loop, after each
+   *  offline post / host call). For the samplers already reported to the shim (a samples event, or a one-sampler
+   *  `get sampleStatus` answer), one `load {phase:'samples'}` naming only those whose `loaded` now differs from
+   *  the last word, when buffers left the cache (eviction at the cap, memory-pressure trim, low-resource trim,
+   *  rescan) or after a rate change (until the decodes in flight then have landed). Nothing when nothing changed.
+   *  Control thread only; reads the cache, no lock, no audio-thread work. */
+  void emitSampleChanges();
   /** T00c pin policy: the keys of `keys` (request order, deduplicated; a key that does not fit is skipped and later
    *  smaller ones may still fit) whose estimated bytes fit the pin budget (85 % of the hard cap; with `add`, on top
    *  of the estimate of what is pinned already, decoded or not). Counts and warns about the rest. */
@@ -119,6 +129,14 @@ class CacheServiceImpl final : public rig::CacheService {
   bool lowRes_ = false, rewarming_ = false, rewarmInSync_ = false;
   std::size_t rewarmDone_ = 0;
   std::size_t rewarmRequested_ = 0;  // O-AW-4: decodes the current rewarm pass requested (0 = no samples event)
+  // Lane F2 (O-AW-F2): the last `loaded` the shim was told per sampler id (events and one-sampler sampleStatus
+  // answers): the "known" samplers and the baseline emitSampleChanges diffs against
+  std::map<std::string, bool> reported_;
+  bool rateWatch_ = false;  // Lane F2: a rate change happened and decodes may still land at the new rate
+  bool rateDirty_ = false;  // Lane F2: re-read every known sampler at the next tick (set by a rate change)
+  std::uint64_t seenLanded_ = 0;  // Lane F2: cache_.landed() at the last tick (a decode landed since: re-read)
+  bool usesAny(const std::string &id, const std::set<std::string> &urls) const;
+  bool loadedOf(const std::string &id) const;
   int pinsDropped_ = 0;  // T00c pin budget
 };
 

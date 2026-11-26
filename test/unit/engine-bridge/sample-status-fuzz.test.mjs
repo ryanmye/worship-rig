@@ -4,6 +4,9 @@
 // when the page's microtasks run. Invariant at quiescence: for every sampler id the shim's `_loaded` equals the last
 // word the core sent about it (and so the core's truth when every change was reported). A control run with the
 // lane-F1 re-ask disabled must diverge on some seed, so the fuzz is not vacuous.
+// Lane F2 (O-AW-F2): the core also reports eviction, trim and rate changes, once per control tick, naming only the
+// samplers whose state differs from the last word it sent (CacheServiceImpl::emitSampleChanges). The `ticks` mode
+// models that: changes land silently and the adversary picks when the tick's diff goes out.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { BridgeEngine } from '../../../app/js/engine-bridge/bridge-engine.js';
@@ -59,6 +62,19 @@ class FuzzCore extends MockNative {
     this._reply(m.id, true, { loaded, failed: ids.map(() => false) });
   }
 
+  /** Lane F2: one control tick's diff, as the core sends it: only the known ids whose truth moved. */
+  tick() {
+    const loaded = {};
+    for (const [id, word] of this.lastWord) {
+      if (this.truth.get(id) !== word) loaded[id] = this.truth.get(id);
+    }
+    const ids = Object.keys(loaded);
+    if (!ids.length) return;
+    for (const id of ids) this.lastWord.set(id, loaded[id]);
+    log(this.seed, 'core tick', JSON.stringify(loaded));
+    this._emit('load', { phase: 'samples', loaded });
+  }
+
   change(id, value, event, also) {
     this.truth.set(id, value);
     if (!event) return log(this.seed, 'core silent', id, value);
@@ -72,7 +88,7 @@ class FuzzCore extends MockNative {
   }
 }
 
-async function runSeed(seed, { silent, disableFix }) {
+async function runSeed(seed, { silent, disableFix, ticks = false, noTick = false }) {
   const rnd = prng(seed);
   const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
   const subset = () => IDS.filter(() => rnd() < 0.4);
@@ -101,13 +117,18 @@ async function runSeed(seed, { silent, disableFix }) {
     else if (r < 0.26) inflight.push(engine.prepare(song(subset().slice(0, 4))).catch(() => {}));
     else if (r < 0.46) {
       if (core.pendingSS.length) core.answer();
-    } else if (r < 0.66) core.change(pick(IDS), rnd() < 0.7, !silent || rnd() < 0.75, subset());
-    else if (r < 0.82) core._flush();
+    } else if (r < 0.66) {
+      // ticks: a preload / prepare / re-warm event names its ids (30 %); eviction, trim, rate changes are silent
+      core.change(pick(IDS), rnd() < 0.7, ticks ? rnd() < 0.3 : !silent || rnd() < 0.75, subset());
+    } else if (ticks && r < 0.74) {
+      if (!noTick) core.tick();
+    } else if (r < 0.82) core._flush();
     else if (r < 0.92) for (let k = Math.floor(rnd() * 4); k >= 0; k--) await null; // a few microtasks only
     else await flush(); // a macrotask: every pending microtask runs
   }
   // quiesce: the core answers everything, nothing more changes
   for (let i = 0; i < 500; i++) {
+    if (ticks && !noTick) core.tick(); // the control loop keeps ticking
     while (core.pendingSS.length) core.answer();
     core._flush();
     await flush();
@@ -119,7 +140,8 @@ async function runSeed(seed, { silent, disableFix }) {
   const want = new Map(IDS.map((id) => [id, core.lastWord.get(id) === true]));
   engine._dispose?.();
   core.close();
-  return { got, want, truth: core.truth, warns };
+  const known = new Map([...core.lastWord.keys()].map((id) => [id, core.truth.get(id)]));
+  return { got, want, truth: core.truth, known, lastWord: core.lastWord, warns };
 }
 
 const differs = (a, b) => [...a.keys()].filter((k) => a.get(k) !== b.get(k));
@@ -134,7 +156,8 @@ test(`F1 skeptic: ${SEEDS} seeded interleavings, every change reported: _loaded 
   }
 });
 
-test(`F1 skeptic: ${SEEDS} seeded interleavings with unreported changes (eviction): _loaded = the core's last word`,
+test(`F1 skeptic: ${SEEDS} seeded interleavings with unreported changes (a core before lane F2): _loaded = the core's `
+  + 'last word',
   async () => {
     for (let seed = 1; seed <= SEEDS; seed++) {
       const { got, want } = await runSeed(seed + 100000, { silent: true, disableFix: false });
@@ -151,4 +174,24 @@ test('F1 skeptic: control, the re-ask disabled: the same fuzz finds a stale `_lo
       if (differs(got, truth).length) bad += 1;
     }
     assert.ok(bad > 0, 'without the lane-F1 re-ask some interleaving must leave an older reply as the last word');
+  });
+
+test(`F2: ${SEEDS} seeded interleavings, silent changes reported by per-tick diffs: every known sampler = the truth`,
+  async () => {
+    for (let seed = 1; seed <= SEEDS; seed++) {
+      const { got, want, known, lastWord, warns } = await runSeed(seed + 200000, { ticks: true });
+      assert.deepEqual(differs(got, want), [], `seed ${seed + 200000}: last word`);
+      assert.deepEqual(differs(lastWord, known), [], `seed ${seed + 200000}: a known sampler left stale`);
+      assert.deepEqual(warns, [], `seed ${seed + 200000}: no warn`);
+    }
+  });
+
+test('F2: control, the tick diff disabled: the same fuzz leaves a known sampler stale (the test can fail)',
+  async () => {
+    let bad = 0;
+    for (let seed = 1; seed <= SEEDS; seed++) {
+      const { known, lastWord } = await runSeed(seed + 200000, { ticks: true, noTick: true });
+      if (differs(lastWord, known).length) bad += 1;
+    }
+    assert.ok(bad > 0, 'without the lane-F2 tick an evicted / trimmed sampler keeps its last word');
   });

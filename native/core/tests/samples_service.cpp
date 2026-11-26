@@ -3,7 +3,11 @@
 // cache-vectors.mjs), memory pressure, rate change.
 #include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <map>
+#include <random>
 #include <cstdio>
+#include <cstdlib>
 #include <thread>
 #include <filesystem>
 #include <unistd.h>
@@ -38,10 +42,12 @@ struct Env {
   TestSink sink;
   std::unique_ptr<rig::Model> model;
   CacheServiceImpl *svc = nullptr;
-  explicit Env(const std::string &app = RIG_REPO_DIR "/app", const std::string &user = {}, double sr = 44100) {
+  explicit Env(const std::string &app = RIG_REPO_DIR "/app", const std::string &user = {}, double sr = 44100,
+               rig_mode mode = RIG_MODE_OFFLINE, std::uint32_t cacheMb = 0) {
     rig::ensureModulesRegistered();
     rig_config_init(&cfg);
-    cfg.mode = RIG_MODE_OFFLINE;
+    cfg.cache_mb = cacheMb;  // review F2 stress: a small cap so the hard cap refuses decodes
+    cfg.mode = mode;  // Lane F2: realtime = decodes on the pool, integrated by svc->pump() (the control loop's)
     cfg.sample_rate = sr;
     rig::UnitEnv env;
     env.sampleRate = sr;
@@ -503,6 +509,403 @@ TEST_SUITE("samples_service") {
     yyjson_doc_free(B);
     yyjson_doc_free(S);
     std::filesystem::remove_all(dir);
+  }
+
+  // Lane F2 (O-AW-F2, review F1 open item 1): eviction, trim and rate changes report the samplers they change.
+  // Offline Env: the Engine calls emitSampleChanges once per control tick (after each offline post); here by hand.
+  struct F2 {
+    std::string dir;
+    std::unique_ptr<Env> e;
+    std::vector<yyjson_doc *> docs;
+    explicit F2(const char *tag, rig_mode mode = RIG_MODE_OFFLINE) : dir(tmpDir(tag)) {
+      std::string list;
+      for (const char *id : {"a", "b", "c", "d", "p"}) {
+        if (!list.empty()) list += ",";
+        list += std::string("{\"id\":\"") + id + "\",\"layers\":[{\"files\":{\"C4\":\"" + id + "1.wav\",\"D4\":\"" +
+                id + "2.wav\",\"E4\":\"" + id + "3.wav\"}}]}";
+      }
+      writeText(dir + "/manifest.json", "{\"instruments\":[" + list + "]}");
+      e = std::make_unique<Env>(RIG_REPO_DIR "/app", dir + "/manifest.json", 44100, mode);
+      e->svc->cache().setLoader([](const rig::samples::LoadRequest &rq) {
+        rig::samples::LoadOutcome o;
+        rig::samples::Processed p;
+        p.channels = 1;
+        p.frames = 2560;  // 10 KiB float32 per sample, 30 KiB per instrument
+        p.ch[0].assign(p.frames, 0.1f);
+        p.natural = p.frames;
+        o.buffer = rig::samples::makeStored(p, rq.engineRate, rq.storage);
+        o.status = rig::samples::LoadOutcome::Status::Ok;
+        return o;
+      });
+    }
+    ~F2() {
+      for (yyjson_doc *d : docs) yyjson_doc_free(d);
+      std::filesystem::remove_all(dir);
+    }
+    F2(const F2 &) = delete;
+    F2 &operator=(const F2 &) = delete;
+    const yyjson_val *song(const char *id) {
+      docs.push_back(parse(std::string(R"([{"slots":[{"instrument":{"type":"sampler","id":"user:)") + id +
+                           R"("}},null,null,null]}])"));
+      return yyjson_doc_get_root(docs.back());
+    }
+    std::vector<std::string> samples() const {
+      std::vector<std::string> out;
+      for (const auto &v : e->sink.events)
+        if (v.find("\"phase\":\"samples\"") != std::string::npos) out.push_back(v);
+      return out;
+    }
+    /** Decode every sample of sampler `id` outside a preload (as a sampler unit's own load does). */
+    void decode(const char *id, int priority = 1) {
+      const auto *def = e->svc->registry().find(std::string("user:") + id);
+      REQUIRE(def != nullptr);
+      for (const auto &L : def->layers)
+        for (const auto &smp : L.samples)
+          e->svc->cache().requestJob({smp.url, smp.midi, def->decodeOpts}, priority, false, nullptr);
+    }
+    /** One control tick's samples events (cleared before). */
+    std::vector<std::string> tick() {
+      e->sink.events.clear();
+      e->svc->emitSampleChanges();
+      return samples();
+    }
+  };
+  std::string samplesEv(const char *loaded) {
+    return std::string(R"({"v":1,"ev":"load","phase":"samples","loaded":)") + loaded + "}";
+  }
+
+  TEST_CASE("Lane F2: eviction at the cache cap reports only the evicted sampler, once, in the next tick") {
+    F2 f("_f2evict");
+    auto &c = f.e->svc->cache();
+    c.setCapBytes(75 * 1024);
+    f.e->svc->preload(f.song("p"), "add");  // pinned: never an eviction victim
+    f.e->svc->preload(f.song("a"), "none");
+    CHECK(f.tick().empty());  // nothing left the cache yet
+    CHECK(f.e->svc->sampleStatus(f.song("c")) == R"({"loaded":[false],"failed":[false]})");  // c known: false
+    f.e->sink.events.clear();
+    // b's three decodes push two of a's (LRU, unpinned) out: its preload says b, the tick after it says a
+    f.e->svc->preload(f.song("b"), "none");
+    REQUIRE(f.samples().size() == 1);
+    CHECK(f.samples()[0] == samplesEv(R"({"user:b":true})"));
+    const auto t = f.tick();
+    REQUIRE(t.size() == 1);
+    CHECK(t[0] == samplesEv(R"({"user:a":false})"));  // not p (pinned, held), not b, not c (unchanged false)
+    CHECK(f.e->svc->sampleStatus(f.song("a")) == R"({"loaded":[false],"failed":[false]})");  // the event's truth
+    CHECK(f.tick().empty());  // said once
+    // a sampler the shim was never told about is never named, even when its buffers go: d decoded by hand, then
+    // pushed out by a's re-decode (d unpinned, older)
+    f.decode("d");
+    f.e->sink.events.clear();
+    f.e->svc->preload(f.song("a"), "none");
+    REQUIRE(f.samples().size() == 1);
+    CHECK(f.samples()[0] == samplesEv(R"({"user:a":true})"));
+    const auto t2 = f.tick();  // a's decodes evicted b's samples (and d's): b only, d unknown
+    REQUIRE(t2.size() == 1);
+    CHECK(t2[0] == samplesEv(R"({"user:b":false})"));
+  }
+
+  TEST_CASE("Lane F2: memory pressure reports the trimmed samplers in one event; a trim that changes nothing sends "
+            "none") {
+    F2 f("_f2mem");
+    f.e->svc->preload(f.song("p"), "add");
+    f.e->svc->preload(f.song("a"), "none");
+    f.e->svc->preload(f.song("b"), "none");
+    CHECK(f.tick().empty());
+    f.e->model->memoryPressure(1);  // unpinned buffers go: a and b, in one event; p stays
+    auto t = f.tick();
+    REQUIRE(t.size() == 1);
+    CHECK(t[0] == samplesEv(R"({"user:a":false,"user:b":false})"));
+    f.e->model->memoryPressure(1);  // nothing left to trim: no event
+    CHECK(f.tick().empty());
+    f.e->model->memoryPressure(2);  // critical: pins beyond the current song go too (no song plays here)
+    t = f.tick();
+    REQUIRE(t.size() == 1);
+    CHECK(t[0] == samplesEv(R"({"user:p":false})"));
+    CHECK(f.e->svc->cache().pins().size() == 3);  // the pins stay (a later re-warm decodes them again)
+  }
+
+  TEST_CASE("Lane F2: a rate change reports the samplers it unloaded, then each one a new-rate decode brings back") {
+    // realtime mode without an Engine: decodes run on the pool and land when svc->pump() integrates them (the
+    // control loop's pumpCache), so a decode can be in flight across ticks
+    F2 f("_f2rate", RIG_MODE_REALTIME);
+    auto &c = f.e->svc->cache();
+    auto settle = [&] {
+      for (int i = 0; i < 20000 && c.inflight(); ++i) {
+        if (f.e->svc->pump() == 0) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      }
+      REQUIRE(c.inflight() == 0);
+    };
+    f.e->svc->preload(f.song("a"), "add");
+    f.e->svc->preload(f.song("b"), "add");
+    CHECK(f.e->svc->sampleStatus(f.song("c")) == R"({"loaded":[false],"failed":[false]})");
+    f.decode("d");
+    settle();
+    CHECK(f.tick().empty());
+    // the rate change; in the same control call a's unit asks for its samples again at the new rate (as
+    // SongGraph::onRateChanged rebuilds a pending plan's samplers right after the services' onRateChanged)
+    f.e->svc->onRateChanged(48000);
+    f.decode("a", 0);
+    REQUIRE(c.inflight() > 0);
+    auto t = f.tick();
+    REQUIRE(t.size() == 1);
+    CHECK(t[0] == samplesEv(R"({"user:a":false,"user:b":false})"));  // c was false already; d was never reported
+    // a's decodes land on a later tick: re-read, reported once
+    settle();
+    t = f.tick();
+    REQUIRE(t.size() == 1);
+    CHECK(t[0] == samplesEv(R"({"user:a":true})"));
+    CHECK(c.engineRate() == 48000);
+    CHECK(f.tick().empty());
+    // the watch ended with the last decode in flight: a later ordinary decode is the preload's / prepare's to report
+    f.decode("c");
+    settle();
+    CHECK(f.tick().empty());
+    // and a rate change with nothing in flight: one event, the watch ends at once
+    f.e->svc->onRateChanged(44100);
+    t = f.tick();
+    REQUIRE(t.size() == 1);
+    CHECK(t[0] == samplesEv(R"({"user:a":false})"));  // b false already, c decoded but last reported false
+    f.decode("b");
+    settle();
+    CHECK(f.tick().empty());
+  }
+
+  // Review F2 (skeptic; K1/K2): a seeded random walk over everything that changes a sampler's `loaded`: preloads
+  // with each pin mode, one-sampler sampleStatus, soft-cap changes, memory pressure 1 and 2, rate changes with a
+  // rebuilt unit's decodes in flight, low resource, the playing song + protect, the hard cap refusing decodes, a
+  // sampler with a permanently failing sample and one whose every sample fails, My Samples rescans that clear failure
+  // marks or change the manifest, a unit holding decoded buffers across a rate change. A shim model applies every
+  // event and answer; after each step's ticks every sampler the core told the shim about must read the truth,
+  // computed here from the cache's own lookups (not statusOf), and each tick event must name only known ids whose
+  // value moved.
+  void f2Stress(rig_mode mode, std::uint32_t seed0, int seeds, int steps) {
+    if (const char *n = std::getenv("RIG_F2_STRESS_SEEDS")) seeds = std::max(1, std::atoi(n));  // longer local runs
+    const char *ids[] = {"a", "b", "c", "d", "e", "f", "g", "h"};
+    const std::string dir = tmpDir(mode == RIG_MODE_REALTIME ? "_f2stress_rt" : "_f2stress_off");
+    // variant 1 (a rescan after an edit): h is gone and e has a 4th sample
+    auto writeManifest = [&](int variant) {
+      std::string list;
+      for (const char *id : ids) {
+        if (variant && id[0] == 'h') continue;
+        if (!list.empty()) list += ",";
+        list += std::string("{\"id\":\"") + id + "\",\"layers\":[{\"files\":{\"C4\":\"" + id + "1.wav\",\"D4\":\"" +
+                id + "2.wav\",\"E4\":\"" + id + "3.wav\"" +
+                (variant && id[0] == 'e' ? std::string(",\"F4\":\"e4.wav\"") : std::string()) + "}}]}";
+      }
+      writeText(dir + "/manifest.json", "{\"instruments\":[" + list + "]}");
+    };
+    int failures = 0;
+    long tickEvents = 0, otherEvents = 0, falseNow = 0, failedNow = 0, refused = 0;
+    for (std::uint32_t seed = seed0; seed < seed0 + static_cast<std::uint32_t>(seeds) && failures < 3; ++seed) {
+      std::mt19937 rng(seed);
+      auto pick = [&](int n) { return static_cast<int>(rng() % static_cast<std::uint32_t>(n)); };
+      // 1 MB cap: hard cap 1.5 MB, pin budget 1.27 MB; 8 samplers x 3 samples x 160 KiB = 3.75 MB
+      int variant = 0;
+      writeManifest(variant);
+      Env e(RIG_REPO_DIR "/app", dir + "/manifest.json", 44100, mode, 1);
+      auto &c = e.svc->cache();
+      auto fixed = std::make_shared<std::atomic<bool>>(false);
+      c.setLoader([fixed](const rig::samples::LoadRequest &rq) {
+        rig::samples::LoadOutcome o;
+        const std::string base = std::filesystem::path(rq.url).filename().string();
+        if (!fixed->load() && (base == "f2.wav" || base[0] == 'g')) {
+          // a partial decode failure (f's 2nd sample) and a sampler whose every sample fails (g: reads settled)
+          o.status = rig::samples::LoadOutcome::Status::Permanent;
+          o.error = "bad file";
+          return o;
+        }
+        rig::samples::Processed p;
+        p.channels = 1;
+        p.frames = 40960;
+        p.ch[0].assign(p.frames, 0.1f);
+        p.natural = p.frames;
+        o.buffer = rig::samples::makeStored(p, rq.engineRate, rq.storage);
+        o.status = rig::samples::LoadOutcome::Status::Ok;
+        return o;
+      });
+      std::vector<yyjson_doc *> docs;
+      auto songs = [&](const std::vector<int> &which) {
+        std::string j = "[";
+        for (std::size_t i = 0; i < which.size(); ++i)
+          j += std::string(i ? "," : "") + R"({"slots":[{"instrument":{"type":"sampler","id":"user:)" +
+               ids[which[i]] + R"("}},null,null,null]})";
+        docs.push_back(parse(j + "]"));
+        return yyjson_doc_get_root(docs.back());
+      };
+      std::map<std::string, bool> shim;
+      std::string where;
+      auto applyLoaded = [&](const std::string &ev, bool isTick) {
+        yyjson_doc *d = parse(ev);
+        yyjson_val *ld = yyjson_obj_get(yyjson_doc_get_root(d), "loaded");
+        std::size_t i, n;
+        yyjson_val *k, *v;
+        yyjson_obj_foreach(ld, i, n, k, v) {
+          const std::string id = yyjson_get_str(k);
+          const bool val = yyjson_get_bool(v);
+          if (isTick) {
+            auto it = shim.find(id);
+            if (it == shim.end() || it->second == val) {
+              ++failures;
+              MESSAGE("seed " << seed << " " << where << ": tick event names " << id
+                              << (it == shim.end() ? " (never reported)" : " (unchanged)"));
+            }
+          }
+          shim[id] = val;
+        }
+        yyjson_doc_free(d);
+      };
+      auto drainEvents = [&](bool isTick) {
+        int n = 0;
+        for (const auto &ev : e.sink.events)
+          if (ev.find("\"phase\":\"samples\"") != std::string::npos) {
+            applyLoaded(ev, isTick);
+            ++n;
+            ++(isTick ? tickEvents : otherEvents);
+          }
+        e.sink.events.clear();
+        return n;
+      };
+      auto tick = [&] {
+        e.sink.events.clear();
+        e.svc->emitSampleChanges();
+        if (drainEvents(true) > 1) {
+          ++failures;
+          MESSAGE("seed " << seed << " " << where << ": more than one samples event in a tick");
+        }
+      };
+      auto truth = [&](const std::string &id) {
+        const auto *def = e.svc->registry().find(id);
+        if (!def) return true;
+        for (const auto &L : def->layers)
+          for (const auto &smp : L.samples)
+            if (!c.has(smp.url) && c.longOf(smp.url).empty() && !c.failed(smp.url)) return false;
+        return true;
+      };
+      double rate = 44100;
+      std::vector<const rig::SampleBuffer *> held;
+      for (int step = 0; step < steps && failures < 3; ++step) {
+        const int op = pick(14);
+        where = "step " + std::to_string(step) + " op " + std::to_string(op);
+        switch (op) {
+          case 0:
+          case 1:
+          case 2: {  // preload of 1-3 songs, any pin mode
+            std::vector<int> w;
+            for (int k = 1 + pick(3); k > 0; --k) w.push_back(pick(8));
+            const char *pins[] = {"add", "none", "replace", "auto"};
+            e.svc->preload(songs(w), pins[pick(4)]);
+            break;
+          }
+          case 3: {  // the shim's own sampleStatus round for one sampler
+            const int i = pick(8);
+            const std::string r = e.svc->sampleStatus(songs({i}));
+            shim[std::string("user:") + ids[i]] = r.rfind(R"({"loaded":[true])", 0) == 0;
+            break;
+          }
+          case 4: {
+            const std::uint64_t caps[] = {300 * 1024, 600 * 1024, 1024 * 1024};
+            c.setCapBytes(caps[pick(3)]);
+            break;
+          }
+          case 5:
+            e.model->memoryPressure(1 + pick(2));
+            break;
+          case 6: {  // rate change; half the time a rebuilt unit asks again at the new rate in the same turn
+            rate = rate == 44100 ? 48000 : 44100;
+            e.svc->onRateChanged(rate);
+            if (pick(2)) {
+              const auto *def = e.svc->registry().find(std::string("user:") + ids[pick(8)]);
+              if (def)
+                for (const auto &L : def->layers)
+                  for (const auto &smp : L.samples)
+                    c.requestJob({smp.url, smp.midi, def->decodeOpts}, 0, false, nullptr);
+            }
+            break;
+          }
+          case 7:
+            e.svc->setLowResource(pick(2) == 0);
+            break;
+          case 8: {  // the playing song changes (commit: protect + low-resource pins + rewarm)
+            auto &live = e.model->patchMut().slots[0];
+            live.present = pick(4) != 0;
+            live.instType = "sampler";
+            live.instId = std::string("user:") + ids[pick(8)];
+            e.svc->onCommit(e.model->patch(), 0);
+            break;
+          }
+          case 9: {  // a switch's protect set (playing + incoming), or none
+            if (pick(3) == 0) {
+              c.protect(nullptr, 0);
+            } else {
+              rig::PatchSpec in;
+              in.slots[0].present = true;
+              in.slots[0].instType = "sampler";
+              in.slots[0].instId = std::string("user:") + ids[pick(8)];
+              e.svc->protectSwitch(&e.model->patch(), &in);
+            }
+            break;
+          }
+          case 10:  // My Samples rescan; sometimes the bad file was fixed meanwhile, sometimes the manifest changed
+            if (pick(2)) fixed->store(!fixed->load());
+            if (pick(2)) writeManifest(variant ^= 1);
+            e.svc->reloadManifests();
+            break;
+          case 11:
+            e.svc->rewarmPins();
+            break;
+          case 12: {  // a playing unit holds (or lets go of) buffers already decoded: referenced = never evicted,
+                      // and a rate change moves them to stale_ (no decode here: acquire takes held buffers only)
+            if (pick(3) == 0) {
+              for (const auto *b : held) c.release(b, 0);
+              held.clear();
+            } else {
+              const auto *def = e.svc->registry().find(std::string("user:") + ids[pick(8)]);
+              if (def)
+                for (const auto &L : def->layers)
+                  for (const auto &smp : L.samples)
+                    if (const auto *b = c.acquire(smp.url)) held.push_back(b);
+            }
+            break;
+          }
+          default:  // an idle tick
+            break;
+        }
+        drainEvents(false);
+        // control turns until nothing is in flight: pump (integrate decodes), then the tick
+        for (int guard = 0; guard < 20000; ++guard) {
+          const std::size_t n = e.svc->pump();
+          drainEvents(false);  // preload / rewarm completions emit from pump
+          tick();
+          if (!c.inflight()) break;
+          if (n == 0) std::this_thread::sleep_for(std::chrono::microseconds(200));
+        }
+        tick();
+        for (const auto &kv : shim) falseNow += !kv.second;
+        failedNow += c.failed(dir + "/f2.wav");
+        for (const auto &kv : shim)
+          if (kv.second != truth(kv.first)) {
+            ++failures;
+            MESSAGE("seed " << seed << " " << where << ": " << kv.first << " shim " << kv.second << " truth "
+                            << !kv.second);
+          }
+      }
+      refused += c.capRefused();
+      for (const auto *b : held) c.release(b, 0);
+      for (yyjson_doc *d : docs) yyjson_doc_free(d);
+    }
+    std::filesystem::remove_all(dir);
+    MESSAGE("F2 stress: " << tickEvents << " tick events, " << otherEvents << " other samples events, " << falseNow
+                          << " known-false readings, f2 failed at " << failedNow << " steps, " << refused
+                          << " hard-cap refusals");
+    CHECK(failures == 0);
+  }
+
+  TEST_CASE("review F2: seeded stress, offline: every known sampler converges to the truth after each step") {
+    f2Stress(RIG_MODE_OFFLINE, 1, 60, 150);
+  }
+
+  TEST_CASE("review F2: seeded stress, realtime (decodes on the pool, in flight across ticks)") {
+    f2Stress(RIG_MODE_REALTIME, 1001, 25, 120);
   }
 
   TEST_CASE("live instruments are keyed at their long cap, others at the legacy cap (sustain pin budget)") {

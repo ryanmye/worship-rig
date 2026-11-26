@@ -7765,3 +7765,91 @@ Review `native/docs/reviews/D8-D9.md` (K1–K3). store.js and controller.js; SCH
   `[hidden]` now hides it (`.st-restore`'s `display: flex` beat the attribute).
 - Tests: `device-settings.test.mjs` +4 (DS1 ×2, DS2, DS3), `downgrade.test.mjs` +1 (real 1.1.0 stores a block, 2.0
   loads without it), the patched-1.1.1 browser test (no block by default, the block with the toggle).
+
+## Lane F2: `load {phase:'samples'}` on eviction, trim and rate changes; Swift `isLibrary` refuses a BOM (native/core/src/samples/buffer_cache.*, cache_service.*, src/api/engine.cpp, native/apple/Sources/Shared/RigLibrary.swift; no op, reply, event-shape or contract-minor change)
+
+- **What changed (core; DECISIONS O-AW-F2, review F1 open item 1, SHELL.md G5).** The F1 event is now also sent when
+  a sampler's `loaded` state changes because buffers left the cache or the rate changed:
+  - `BufferCache` records the url of every entry that leaves the lookup path (`deleteEntry`: eviction at the cap,
+    `trim`, `trimUnpinned`, `invalidate`, `supersede`; `setEngineRate`'s move to `stale_`) and counts `finish()`
+    calls (`landed()`).
+  - `CacheServiceImpl` keeps `reported_`, the last `loaded` the shim was told per sampler id (every `emitSamples`,
+    and `get sampleStatus` for a one-sampler patch, the shim's request shape). These are the "known" samplers.
+  - `emitSampleChanges()` runs once per control-loop turn (before `emitTick`), and offline after each post and each
+    host call. It re-reads the known samplers that use a dropped url, or after `onRateChanged` all of them at every
+    turn where a decode landed, until none is in flight. It sends **one** event naming only the ids whose value
+    moved. An idle turn costs two compares; a buffer dropped and decoded again within one turn sends nothing.
+  - Control thread only (the cache is control-thread state). No lock, nothing on the audio thread or the decode
+    workers. No eviction, pin, LRU or decode rule changed: the status is read only.
+- **Why "known" ids only.** A sampler the shim never heard about reads not-loaded there anyway; naming it would add
+  facade entries no preload asked for. The fuzz below checks that the core's per-tick diff against its own last word
+  leaves every known sampler at the truth.
+- **Not reported by this path (by design).** An ordinary decode outside a preload, prepare or re-warm pass (those
+  send their own event; nothing else in the app decodes) and the end of a transient failure's 30 s retry window. A
+  rate change leaves every sampler not loaded at the new rate until something decodes it; that is now reported, but
+  nothing re-warms the pins on a rate change (unchanged, as before F2).
+- **Shim.** Unchanged (the fallback stays, as decided). Its F1 re-ask rule already covers an event that overtakes a
+  `sampleStatus` round.
+- **Apple shell (review F1 open item 3; unbuilt here, CI `mac-check` builds it).** `RigBackups.isLibrary` returns
+  false for data that starts with EF BB BF. Checked here: `store.importJSON('﻿' + library)` answers
+  `{ok:false, error:'That file is not valid JSON.'}` (JSON.parse), the same file without the BOM imports, and main.js
+  (`fsp.readFile(…, 'utf8')`) and the JS stand-in keep the BOM, so they refuse it too. JSONSerialization skipped it, so
+  Swift served a file the store then refused. The check is on the bytes, so it holds whether or not
+  `String(data:encoding:.utf8)` keeps the BOM (not verified here). `stage(fileURL:)` (the iPad picker, an explicit
+  user choice) is unchanged: a BOM'd file picked there is either refused by the store's dry run with that message,
+  before anything is written, or imported if Foundation strips the BOM from the text; which one is unverified.
+- **Tests.**
+  - `samples_service`: eviction at a 75 KiB cap (b's preload says `{b:true}`, the next tick `{a:false}` only; pinned
+    p, unchanged-false c and never-reported d are never named; said once); memory pressure (level 1:
+    `{a:false,b:false}` in one event, level 1 again: none, level 2: `{p:false}`, pins kept); rate change in realtime
+    mode without an Engine (decodes on the pool, `pump()` by hand): `{a:false,b:false}` at the rate tick, `{a:true}`
+    on the later tick where a's new-rate decodes land, then none; a second rate change with nothing in flight: one
+    event, watch ended at once.
+  - `runtime_preload` (real Engine, realtime): `rig_host_memory_pressure(1)` → one `{celesta:false}` (pinned vibes
+    stays), again → none, `rig_host_audio_started` at 44.1 kHz → one `{vibes:false}`, `get sampleStatus` agrees, a
+    preload after it → its own `{vibes:true}` and no second event.
+  - `sample-status.test.mjs` on `RIG_DEVHOST`: playing vibes + an unpinned preloaded celesta; `config
+    {lowResource:true}` (the same `trimUnpinned` as memory-pressure level 1; the devhost has no memory-pressure op)
+    gives exactly `[{celesta:false}]`, celesta's songReady (the controller's own reading of the facade) turns false,
+    vibes stays true, `sampleStatus` agrees; `lowResource:false` sends none.
+  - `sample-status-fuzz.test.mjs`: `ticks` mode, 600 seeds (silent changes plus a per-tick diff of the known ids):
+    `_loaded` = the core's last word and every known sampler = the truth; its control (tick off) leaves a known
+    sampler stale, so the fuzz can fail.
+  - `migration-1x/paths.test.mjs`: the store's BOM refusal, and the stand-in skipping a BOM'd newest backup for the
+    older good one.
+  - Mutation: with the `dropped_` insert in `deleteEntry` removed, both service cases, the `runtime_preload` case and
+    the devhost case fail; md5 restored.
+- **Numbers (2 CPUs shared with another agent, load 2.5-4.4, `-j2`, one heavy step at a time).**
+  - ctest g++ 13 Release (`build-f2`, devhost tree with core tests): **77/77** run (72 core + 5 devhost), 12
+    `golden.*` skipped (no golden WAVs in the worktree; the renders below cover them).
+  - clang++-20 Release `-Werror`: **72/72**, 0 warnings.
+  - ASan+UBSan and TSan, the 11 touched suites (`bridge`, `bridge-conformance`, `core2b`, `core3`, `offline`,
+    `runtime_cache`, `runtime_preload`, `samples_cache`, `samples_service`, `t00c`, `rt.realtime`): **11/11** each,
+    no sanitizer report. One known tick-gap bound per build missed once under load, in cases with no sampler
+    eviction or rate change (ASan `core3` 384 > 250 ms; TSan `runtime_preload` CORE2A cold prepare 340 > 250 ms, as
+    in F1) and passed alone.
+  - Fixtures: all **112 byte-identical to `e3af65b`** (baseline `rig_render` built from `git archive e3af65b`).
+    `parity.mjs --twin` (the main repo's, read-only goldens): exit 0, 112 pass at the manifest tier, 110 exact (not
+    `synth-dx-epiano`, `bend-modes`, as before).
+  - JS: `node --test test/unit/engine-bridge/*.test.mjs` with `RIG_DEVHOST` **146 / 0 / 0** (143 + 2 fuzz + 1
+    devhost); `run-all --only unit` **672 pass / 0 fail / 12 skip**; migration-1x **90 / 0** (paths 16/16).
+  - ui-core on `rig-devhost --no-adapter` (once): **78/78**, no bridge error reply, the two known warns, sanitizer
+    none, 3087 inbound requests (F1: 3095).
+- **Skeptic review (`native/docs/reviews/F2.md`, VERIFIED-PENDING-CI).**
+  - **K1 (fixed).** `invalidate` erased failure marks without recording the url. A sampler whose every sample failed
+    (read `true`) turned `false` with nothing reported.
+  - **K2 (fixed).** A rescan that adds a url to a sampler, or removes the sampler, was missed. Now every invalidated
+    url goes into `dropped_`, and `usesAny` re-reads an id the registry no longer knows.
+  - **Correction.** The transient-failure 30 s window is not a gap. `failed()` does not expire on time; the mark goes
+    only in `requestJob`'s `skipped()`, and that request's preload / prepare / re-warm reports the result.
+  - **Swift.** `stage(fileURL:)` refuses a leading UTF-8 BOM too, so `String(data:)`'s BOM handling never decides an
+    import.
+  - **Stress tests.** Two seeded stresses in `samples_service` (offline 60 × 150 steps, realtime 25 × 120;
+    `RIG_F2_STRESS_SEEDS` for longer runs, 1500 + 1500 seeds run with 0 failures) check that every known sampler
+    converges to the truth after each step, and that each tick sends at most one event naming only the ids that
+    moved. They fail on K1, on each half of K2, and on a `sampleStatus` without the `reported_` update (which no
+    other test catches).
+  - **Numbers.** Idle `emitSampleChanges` costs 3.7 ns. A full re-read of the factory set (23 samplers, 1999 samples)
+    costs 0.78 ms.
+  - **Gate.** Fixtures 112/112 byte-identical to `e3af65b`. g++ 77/77, clang-20 `-Werror` 72/72, ASan 11/11. TSan
+    gave no report, and core3's gap bound flakes under external load with or without F2 (A/B).

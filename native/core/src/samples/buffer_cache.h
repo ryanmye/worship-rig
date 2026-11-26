@@ -25,6 +25,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "model/buffer_cache_api.h"
@@ -204,6 +205,13 @@ class BufferCache final : public BufferCacheApi {
   const Stored *peek(std::string_view key) const;
   bool skipped(const std::string &url);
   std::size_t entryCount() const { return entries_.size(); }
+  /** Lane F2 (O-AW-F2): the urls whose buffer left the lookup path (eviction, trim, invalidate, rate change) since
+   *  the last call, then forgets them. CacheServiceImpl reads it once per control tick to report the samplers whose
+   *  loaded state changed. Control thread only, like the rest of this class. */
+  std::set<std::string> takeDropped() { return std::exchange(dropped_, {}); }
+  bool anyDropped() const { return !dropped_.empty(); }
+  /** Lane F2: decodes integrated so far (stored, failed or dropped for a stale rate). Control thread. */
+  std::uint64_t landed() const { return landed_; }
 
  private:
   struct Meta {
@@ -263,6 +271,8 @@ class BufferCache final : public BufferCacheApi {
   std::optional<std::set<std::string>> protect_;
   std::vector<std::unique_ptr<Stored>> graveyard_;  // evicted, waiting for the graph epoch (Stored::freeAfterEpoch)
   std::vector<std::unique_ptr<Stored>> stale_;      // referenced buffers of the previous engine rate
+  std::uint64_t landed_ = 0;       // Lane F2: finish() calls
+  std::set<std::string> dropped_;  // Lane F2: urls of entries removed since takeDropped() (bounded by the url count)
   std::uint64_t bytes_ = 0, tick_ = 0;
   int evictedPinned_ = 0;
   int capRefused_ = 0;     // T00c

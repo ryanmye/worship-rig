@@ -520,6 +520,9 @@ std::string CacheServiceImpl::sampleStatus(const yyjson_val *patches) {
     const auto st = statusOf(p);
     loaded.elemBool(st.first);
     failed.elemBool(st.second);
+    // Lane F2: a one-sampler patch (the shim's request shape) tells the shim that sampler's state: it is known now
+    const std::vector<std::string> ids = samplerIds({p});
+    if (ids.size() == 1) reported_[ids[0]] = st.first;
   }
   loaded.endArray();
   failed.endArray();
@@ -544,21 +547,62 @@ std::vector<std::string> CacheServiceImpl::samplerIds(const std::vector<rig::Pat
   return out;
 }
 
+bool CacheServiceImpl::loadedOf(const std::string &id) const {
+  rig::PatchSpec one;  // a one-slot patch: the shim's own `get sampleStatus` request shape
+  one.slots[0].present = true;
+  one.slots[0].instType = "sampler";
+  one.slots[0].instId = id;
+  return statusOf(one).first;
+}
+
 void CacheServiceImpl::emitSamples(const std::vector<std::string> &ids) {
   if (ids.empty()) return;
   JsonOut loaded;
   loaded.begin();
-  rig::PatchSpec one;  // a one-slot patch per id: the shim's own `get sampleStatus` request shape
-  one.slots[0].present = true;
-  one.slots[0].instType = "sampler";
   for (const std::string &id : ids) {
-    one.slots[0].instId = id;
-    loaded.kvBool(id, statusOf(one).first);
+    const bool ok = loadedOf(id);
+    reported_[id] = ok;  // Lane F2: the shim's last word for this sampler
+    loaded.kvBool(id, ok);
   }
   loaded.end();
   JsonOut ev;
   ev.begin().kv("v", 1).kv("ev", "load").kv("phase", "samples").kvRaw("loaded", loaded.view()).end();
   model_.emit(ev.take());
+}
+
+// ---- Lane F2 (O-AW-F2): `samples` events for eviction, trim and rate changes -----------------------------------
+// Review F1 open item 1: a buffer evicted at the cache cap, trimmed under memory pressure or dropped by a rate change
+// left the shim's facade on the last `true` (a setlist chip "ready" over cold samples), and a decode that landed
+// after a rate change on the last `false` ("loading" until the next preload / prepare). The BufferCache records the
+// urls whose entries left the lookup path (deleteEntry, setEngineRate); once per control tick this re-reads the
+// known samplers that use one of them (after a rate change: every known sampler, at each tick a decode landed,
+// until none is in flight) and reports only those whose state differs from what the shim was last told. Many drops
+// in one tick give one event; a buffer dropped and decoded again within the tick gives none. Only the control thread
+// runs this (the cache is control-thread state); the audio thread and the decode workers are not involved.
+
+bool CacheServiceImpl::usesAny(const std::string &id, const std::set<std::string> &urls) const {
+  if (urls.empty()) return false;
+  const SamplerDef *def = registry_.find(id);
+  // review F2 K2: an id a rescan removed reads true now (unknown = settled): re-read it, the diff decides
+  if (!def) return true;
+  for (const Layer &L : def->layers)
+    for (const SampleRef &smp : L.samples)
+      if (urls.count(smp.url)) return true;
+  return false;
+}
+
+void CacheServiceImpl::emitSampleChanges() {
+  const bool landed = cache_.landed() != seenLanded_;  // a decode at the new rate may have landed
+  seenLanded_ = cache_.landed();
+  const bool all = rateWatch_ && (rateDirty_ || landed);
+  rateDirty_ = false;
+  if (rateWatch_ && cache_.inflight() == 0) rateWatch_ = false;  // every decode of the new rate has landed
+  if (!all && !cache_.anyDropped()) return;  // the idle tick: two compares
+  const std::set<std::string> urls = cache_.takeDropped();
+  std::vector<std::string> changed;
+  for (const auto &kv : reported_)
+    if ((all || usesAny(kv.first, urls)) && loadedOf(kv.first) != kv.second) changed.push_back(kv.first);
+  emitSamples(changed);
 }
 
 // ---- events from the engine ------------------------------------------------------------------------------------
@@ -572,6 +616,9 @@ void CacheServiceImpl::onCommit(const rig::PatchSpec &patch, double) {
 
 void CacheServiceImpl::onRateChanged(double sr) {
   cache_.setEngineRate(sr);
+  // Lane F2: every buffer left the lookup path; decodes that land from now on (a pending plan's samplers rebuilt at
+  // the new rate) are re-read too, until none is in flight
+  rateWatch_ = rateDirty_ = true;
 }
 
 void CacheServiceImpl::onMemoryPressure(int level) {
