@@ -178,3 +178,96 @@ The box had 2 CPUs, shared with the lane-moveui skeptic (load average 2–6). I 
 Not verified: the Mac app and WKWebView (Chromium only); a real MIDI keyboard (notes came through
 `controller.perform`); touch input on the Range keyboard; the Daylight theme; screen-reader output (I checked the
 ARIA attributes only); behaviour after the rebase onto lane-moveui (R1–R3 come from reading the diff).
+
+## After the rebase (focused pass)
+
+Scope: lane-u5 rebased onto v2-native acfa900 (move instruments + live range writes, UI6-move.md), plus 6f671a4
+(R1–R3). Earlier U5a findings are not re-reviewed. Probes ran on the 2-CPU box with lane-u6's suites running (load
+1.3–2.8).
+
+**Verdict: VERIFIED after F1 and F2.** R1–R3 hold. One defect (F1, Esc) and one drift risk (F2) are fixed. One perf
+note (P1) and one unreachable case (O8) stay open.
+
+What I checked, beyond the builder's tests:
+
+- **Every cancel path of an Edit range drag restores the start value on its own instrument**, probed with a held mouse
+  button after at least one live write:
+  - Pointercancel, leaving Edit (`setView`), and a flag flip mid-drag (`setUiV6(false)`, so the v6 Edit unmounts).
+  - A song switch where the next song's instrument 1 is the same instrument, so the pane is not rebuilt and the same
+    `dragSong` closure survives. The old song is restored and the next one is untouched.
+  - A move of another instrument that shifts ours (2 → 0, ours 0 → 1). The restore lands at 1 and the tab follows.
+  - The dragged instrument removed mid-drag: nothing is written onto the one that takes index 0.
+- **Learned knob mid-drag.** `slots.0.gain` was written every 20 ms during the drag. Both commit and cancel came out
+  right. Range fields cannot be learned (`isLearnablePath` rejects step-1 rows), so a knob can't fight the drag over
+  `lowNote` or `highNote`.
+- **The microtask window on a slot map.** Live writes come only from pointermove tasks and the trailing
+  `setTimeout`, never between the store's synchronous `onSlotMap` and its microtasks. A pointermove dispatched in the
+  same task as `moveSlot` is refused (`k !== i`). The only write is the restore, onto the moved instrument (tested).
+  Strip fader `cancelDrag()` inside the store's call writes nothing (`fader.js` only drops the emitter), so it is safe.
+- **`dragSong` after a commit with no 'end' write** keeps the old id. That is harmless: every successful live write
+  resets it, and a cancel needs one.
+- **followSlot.** Both Undos register it after their write. The `u.i < 0` branches match slot.js. Change → remove →
+  Undo refuses (R3 test).
+- **R2 semantics.**
+  - The name is `role=button` with `tabindex 0`. Its accessible name is the instrument's name (the icon is
+    `aria-hidden`), and the title is its description. Enter and Space work. There is no `aria-pressed`.
+  - `setCoarse` and `setPicked` would put Perform's title and pressed state back, but only Perform's strips-row calls
+    them, never Edit's strip.
+  - Focus moves into the Range pane.
+- **Lock while Edit shows.** See O8.
+- **Throttle at 6× CPU** (CDP). The ≤ 1 per 50 ms rule holds: 24 writes in a 30–40 step sweep, minimum gap 123 ms,
+  because pointer delivery itself slows. The final value is right, and a cancel under throttle restores. See P1 for
+  the cost.
+
+Findings:
+
+- **F1 (low, fixed in 8b3e9a4) An Esc during an Edit range drag did nothing to the drag.**
+  - The drag kept writing live and committed on release. The Esc went to the panel's other handlers (confirm, menu,
+    Set-by-playing).
+  - The v6 Perform's pick Esc already cancels mid-drag (UI6-move F2). In Edit, Esc never panics.
+  - Fix: the instrument panel's `onEscape` cancels a drag in progress first, which puts the start value back.
+  - Test: ui-v6-edit "skeptic after the rebase F1" (Esc, pointercancel, same-task move + pointermove, removed
+    instrument). It fails at the Esc check on 6f671a4.
+- **F2 (drift risk, fixed in f81a8ba) mountEditV6 had a verbatim copy of mountEdit's `onSlotMap` tab-follow handler.**
+  - Fix: one function, shell.js `followSelectedSlot` (exported as `editFollowSelectedSlot`), used by both. The
+    subscription is the same, and a store without `onSlotMap` gets a no-op cleanup.
+  - Covered by ui-v6-edit R3, ui-v6 "U-MOVE Edit" (flag on and off), edit-v2, and flag-off purity vs acfa900.
+- **P1 (open, perf) A live range write costs about 3× more in Edit than in the v6 Perform.**
+  - Measured at 6× throttle, 4 instruments, samples loaded, 30 writes each followed by a task turn:
+
+    | View | Median | p95 | Long tasks in a drag |
+    |---|---|---|---|
+    | Edit | 40–42 ms | 59–72 ms | 6 (≤ 77 ms) |
+    | v6 Perform | 13.6 ms | 28.5 ms | 0 |
+
+  - A hand-like sweep with live writes took 1.9 s, against 1.1 s with the writes refused. The first, cold sweep took
+    6.0 s.
+  - The largest single cost is the 'range' size's always-shown label. `showTip` reads `offsetWidth` / `clientWidth`
+    after the render's DOM writes, which forces a reflow: about 10 ms per write at 6×. The Edit core's fan-out is about
+    17 ms, and the hidden v6 Perform's re-render adds more.
+  - `renderKb` runs twice per event, once from its binder and once from the panel's catch-all subscribe. I tried a
+    memo to skip the second run. It changed nothing measurable (42 → 40 ms), so I reverted it.
+  - At 1× this is about 7 ms per write, ≤ 14 % of a CPU at 20 writes per second, so it is not a defect on the Mac.
+  - Suggestion for U5b or polish: measure the tip in a rAF (keyboard.js, shared with Perform).
+- **O8 (open, not reachable) Lock coming on while Edit shows.**
+  - Lock is set only by the two Perform Lock buttons. There is no hotkey or menu item, and main.js bounces only a
+    view *change* into Edit.
+  - Through a store write, Edit stays open and the drag goes on and commits: Edit's range keyboard passes
+    `locked:false`. Today's Edit behaves the same, so this is not a U5a change.
+- A move of a *different* instrument also ends the user's drag (with its restore), as on the v6 Perform. That is
+  intended.
+
+Gates (lane-u5 at f81a8ba, one suite at a time):
+
+| Suite | Result |
+|---|---|
+| ui-v6-edit (`UI6_PURITY_BASE=acfa900`) | 22/22 (flag-off purity vs acfa900: pass) |
+| ui-v6 | 68/68 |
+| edit-v2 | 14/14 files, 117/117 tests |
+| console.error / HTTP ≥ 400 | 0 in every suite and probe |
+
+I did not run these:
+- Settings (no settings code touched).
+- A real touch device or iPad.
+- Electron on the Mac.
+- An actual screen reader (DOM semantics only).
