@@ -488,6 +488,26 @@ test('Electron auto-backup of the library via rig.backupNow', async () => {
   assert.equal(backups[0].songs[store.navIds()[0]].name, 'Changed');
 });
 
+test('UI6-U6 skeptic F4: lastBackupAt() is the last backup written, not a failed attempt (read only)', async () => {
+  let fail = true;
+  let t = 1000;
+  const rig = { isElectron: true, onMenu: () => () => {},
+    backupNow: async () => (fail ? { error: 'disk full' } : { path: '/x' }) };
+  const { ctl, store, timers } = await setup({ rig, now: () => t });
+  assert.equal(ctl.lastBackupAt(), null, 'none yet');
+  store.set(`songs.${store.navIds()[0]}.name`, 'Changed');
+  await tick();
+  timers.runTimeouts();
+  await tick();
+  assert.equal(ctl.lastBackupAt(), null, 'a failed backup is not "backed up just now"');
+  fail = false;
+  t = 5000;
+  await ctl.backupNow();
+  assert.equal(ctl.lastBackupAt(), 5000);
+  t = 9000;
+  assert.equal(ctl.lastBackupAt(), 5000, 'reading it changes nothing');
+});
+
 test('missing engine methods degrade to a single warning (no throw)', async () => {
   const engine = fakeEngine();
   delete engine.drone;

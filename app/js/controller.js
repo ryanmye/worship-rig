@@ -2862,6 +2862,7 @@ export function createController(o) {
   // ---- backups (Electron)
   let backupTimer = null;
   let lastBackup = -Infinity;
+  let lastBackupDone = null; // UI6-U6 skeptic F4: the last backup that was written (lastBackup = the last attempt)
   /** Library JSON tagged with this page's origin (M5: backups from another port can be offered for import). */
   function libraryJSON() {
     const json = store.exportJSON({ pretty: false });
@@ -2877,6 +2878,7 @@ export function createController(o) {
     try {
       const r = await rig.backupNow(libraryJSON());
       if (r && r.error) warn(`backup failed: ${r.error}`);
+      else if (r) lastBackupDone = now();
       return r;
     } catch (err) {
       warn(`backup failed: ${err && err.message}`);
@@ -3993,8 +3995,11 @@ export function createController(o) {
     reloadPads,
     restoreChromePads,
     backupNow,
-    /** UI v6 U6 (Settings › Library & Backup summary): when this page last wrote an automatic backup, or null. */
-    lastBackupAt: () => (Number.isFinite(lastBackup) ? lastBackup : null),
+    /**
+     * UI v6 U6 (Settings › Library & Backup summary): when this page last wrote an automatic backup, or null. A failed
+     * or refused one does not count (UI6-U6 skeptic F4: the summary said "backed up just now" after a failure).
+     */
+    lastBackupAt: () => lastBackupDone,
     importLatestBackup,
     applyDeviceSettings,
     inspectDeviceSettings,
