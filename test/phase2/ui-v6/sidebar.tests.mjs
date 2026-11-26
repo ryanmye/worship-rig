@@ -57,9 +57,10 @@ export async function sidebarTests(x) {
       body: document.querySelector('[data-testid="v6-sb-body"]').childElementCount,
     }));
     assert.deepEqual(r, {
-      tabs: [['drone', 'true'], ['setlist', 'false'], ['notes', 'false']], drone: true, placeholder: false, body: 1,
+      tabs: [['drone', 'true'], ['setlist', 'false'], ['notes', 'false'], ['metronome', 'false']], drone: true,
+      placeholder: false, body: 1,
     });
-    for (const id of ['setlist', 'notes', 'drone']) {
+    for (const id of ['setlist', 'notes', 'metronome', 'drone']) {
       await page.click(tid(`v6-sb-tab-${id}`));
       assert.equal(await mounted(), id);
       assert.equal(await ev(() => document.querySelector('[data-testid="v6-sb-body"]').childElementCount), 1);
@@ -97,7 +98,7 @@ export async function sidebarTests(x) {
     const s = await song();
     const keyName = await ev((sg) => document.querySelector('.v6-key-t').textContent, s);
     assert.deepEqual({ ...r, strips: r.strips > before }, {
-      rail: ['drone', 'setlist', 'notes'], live: true, key: keyName, w: 64, strips: true,
+      rail: ['drone', 'setlist', 'notes', 'metronome'], live: true, key: keyName, w: 64, strips: true,
     });
     // the drone off: no dot, no key
     await ev((sid) => window.__rig.store.set(`songs.${sid}.drone.mode`, 'off'), id);
@@ -182,24 +183,27 @@ export async function sidebarTests(x) {
     await page.click(tid('v6-sb-customize'));
     await until(() => !!document.querySelector('[data-testid="v6-sb-cz"]'));
     const rows = () => ev(() => [...document.querySelectorAll('.v6-cz')].map((r) => r.dataset.id));
-    assert.deepEqual(await rows(), ['drone', 'setlist', 'notes']);
+    assert.deepEqual(await rows(), ['drone', 'setlist', 'notes', 'metronome']);
     // hide Notes (the shown tab): its tab and rail icon go, the sidebar shows the first module
     await page.click(tid('v6-cz-show-notes'));
-    assert.deepEqual(await tabIds(), ['drone', 'setlist']);
+    assert.deepEqual(await tabIds(), ['drone', 'setlist', 'metronome']);
     assert.equal(await mounted(), 'drone');
     await page.click(tid('v6-cz-show-setlist'));
+    await page.click(tid('v6-cz-show-metronome'));
     assert.deepEqual(await tabIds(), ['drone']);
     assert.equal(await page.isDisabled(tid('v6-cz-show-drone')), true, 'the last shown module stays');
     await page.click(tid('v6-cz-show-setlist'));
     await page.click(tid('v6-cz-show-notes'));
-    assert.deepEqual(await tabIds(), ['drone', 'setlist', 'notes']);
+    await page.click(tid('v6-cz-show-metronome'));
+    assert.deepEqual(await tabIds(), ['drone', 'setlist', 'notes', 'metronome']);
     // ↓ / ↑
     await page.click(tid('v6-cz-dn-drone'));
-    assert.deepEqual(await rows(), ['setlist', 'drone', 'notes']);
-    assert.deepEqual(await tabIds(), ['setlist', 'drone', 'notes']);
+    assert.deepEqual(await rows(), ['setlist', 'drone', 'notes', 'metronome']);
+    assert.deepEqual(await tabIds(), ['setlist', 'drone', 'notes', 'metronome']);
     assert.equal(await page.isDisabled(tid('v6-cz-up-setlist')), true);
+    assert.equal(await page.isDisabled(tid('v6-cz-dn-metronome')), true);
     await page.click(tid('v6-cz-up-drone'));
-    assert.deepEqual(await tabIds(), ['drone', 'setlist', 'notes']);
+    assert.deepEqual(await tabIds(), ['drone', 'setlist', 'notes', 'metronome']);
     // drag Notes' ⠿ above Drone
     const g = await rect(`${tid('v6-cz-notes')} .v6-cz-grip`);
     const top = await rect(tid('v6-cz-drone'));
@@ -207,9 +211,9 @@ export async function sidebarTests(x) {
     await page.mouse.down();
     await page.mouse.move(g.cx, top.t + 4, { steps: 8 });
     await page.mouse.up();
-    assert.deepEqual(await rows(), ['notes', 'drone', 'setlist']);
-    assert.deepEqual(await tabIds(), ['notes', 'drone', 'setlist']);
-    assert.deepEqual((await prefs()).order, ['notes', 'drone', 'setlist']);
+    assert.deepEqual(await rows(), ['notes', 'drone', 'setlist', 'metronome']);
+    assert.deepEqual(await tabIds(), ['notes', 'drone', 'setlist', 'metronome']);
+    assert.deepEqual((await prefs()).order, ['notes', 'drone', 'setlist', 'metronome']);
     // Starts
     await page.click(tid('v6-sb-starts-collapsed'));
     assert.equal((await prefs()).starts, 'collapsed');
@@ -234,8 +238,8 @@ export async function sidebarTests(x) {
       await page.keyboard.press('Escape');
       const saved = await ev((k) => JSON.parse(localStorage.getItem(k)), KEY);
       assert.deepEqual(saved, {
-        open: true, starts: 'collapsed', width: 280, tab: 'setlist', order: ['notes', 'drone', 'setlist'],
-        hidden: ['notes'],
+        open: true, starts: 'collapsed', width: 280, tab: 'setlist',
+        order: ['notes', 'drone', 'setlist', 'metronome'], hidden: ['notes'],
       });
       // never in the library or its export
       const lib = await ev(() => window.__rig.store.exportJSON());
@@ -248,11 +252,11 @@ export async function sidebarTests(x) {
       // Starts: Collapsed → the app starts on the rail, the rest as left
       assert.equal(await isRail(), true);
       assert.deepEqual(await ev(() => [...document.querySelectorAll('.v6-rb[data-id]')].map((b) => b.dataset.id)),
-        ['drone', 'setlist']);
+        ['drone', 'setlist', 'metronome']);
       await page.click(tid('v6-sb-open'));
       assert.equal(await mounted(), 'setlist');
       assert.ok(near(await sideW(), 280));
-      assert.deepEqual(await tabIds(), ['drone', 'setlist']);
+      assert.deepEqual(await tabIds(), ['drone', 'setlist', 'metronome']);
       // Starts: Open
       await page.click(tid('v6-sb-customize'));
       await page.click(tid('v6-sb-starts-open'));
@@ -263,8 +267,8 @@ export async function sidebarTests(x) {
       await settled();
       assert.equal(await isRail(), false);
       // a garbled value falls back to the defaults
-      await ev((k) => localStorage.setItem(k, '{"order":["zzz"],"hidden":["drone","setlist","notes"],"width":5}'),
-        KEY);
+      await ev((k) => localStorage.setItem(k,
+        '{"order":["zzz"],"hidden":["drone","setlist","notes","metronome"],"width":5}'), KEY);
       await ev(async () => {
         await window.__rig.setUiV6(false);
         await window.__rig.setUiV6(true);
@@ -272,7 +276,7 @@ export async function sidebarTests(x) {
       await until(() => !!document.querySelector('[data-testid="v6-perform"] .v6-side'));
       const p = await prefs();
       assert.deepEqual({ order: p.order, hidden: p.hidden, width: p.width, tab: p.tab },
-        { order: ['drone', 'setlist', 'notes'], hidden: [], width: null, tab: 'drone' });
+        { order: ['drone', 'setlist', 'notes', 'metronome'], hidden: [], width: null, tab: 'drone' });
       await resetSidebar();
     });
 
@@ -530,6 +534,150 @@ export async function sidebarTests(x) {
     await ev((sid) => window.__rig.controller.selectSong(sid), id);
     await settled();
     await ev(({ sid, m }) => window.__rig.store.set(`songs.${sid}.drone.mode`, m), { sid: id, m: mode0 });
+  });
+
+  // ---------------------------------------------------------------- U-METRO (D23.3): Click module + load state
+  const clickOn = () => ev(() => !!window.__rig.engine.clickState?.()?.running);
+  const tempo = async () => (await song()).tempo;
+  await T('U-METRO Click: today’s chip (toggleClick, count-in / on); tempo − / + (held repeats) / Tap write '
+    + 'songs.<id>.tempo; live under Lock, Count-in & level… opens Edit › Song', async () => {
+    await resetSidebar();
+    await ev(() => window.__rig.controller.scenes?.go(null));
+    const id = (await song()).id;
+    const tempo0 = await tempo();
+    await page.click(tid('v6-sb-tab-metronome'));
+    assert.equal(await mounted(), 'metronome');
+    // no tempo: the tile and − / + wait for one; Tap sets it
+    await ev((sid) => window.__rig.store.set(`songs.${sid}.tempo`, null), id);
+    await until(() => document.querySelector('[data-testid="v6-click-bpm"]').textContent === '—');
+    assert.deepEqual(await ev(() => ['v6-click-on', 'v6-click-down', 'v6-click-up', 'v6-click-tap']
+      .map((t) => document.querySelector(`[data-testid="${t}"]`).disabled)), [true, true, true, false]);
+    // Tap: 4 taps 500 ms apart (the Quick sheet's rule: mean of the last ≤ 4 intervals, rounded; timing on this
+    // loaded box is loose, so a band)
+    await ev(async () => {
+      const b = document.querySelector('[data-testid="v6-click-tap"]');
+      for (let k = 0; k < 4; k++) {
+        b.click();
+        if (k < 3) await new Promise((r) => setTimeout(r, 500));
+      }
+    });
+    const tapped = await tempo();
+    assert.ok(Number.isInteger(tapped) && tapped >= 95 && tapped <= 125, `tapped ${tapped}`);
+    await until((t) => document.querySelector('[data-testid="v6-click-bpm"]').textContent === String(t), tapped);
+    // − / +: one press = 1 BPM; Enter on a focused + = 1 BPM; held, it repeats
+    await page.click(tid('v6-click-down'));
+    assert.equal(await tempo(), tapped - 1);
+    await page.click(tid('v6-click-up'));
+    await page.click(tid('v6-click-up'));
+    assert.equal(await tempo(), tapped + 1);
+    await page.focus(tid('v6-click-up'));
+    await page.keyboard.press('Enter');
+    assert.equal(await tempo(), tapped + 2);
+    await page.locator(tid('v6-click-up')).hover();
+    await page.mouse.down();
+    await page.waitForTimeout(900);
+    await page.mouse.up();
+    const held = await tempo();
+    assert.ok(held >= tapped + 5, `held + repeats (${tapped + 2} → ${held})`);
+    await page.waitForTimeout(300);
+    assert.equal(await tempo(), held, 'the repeat stops on release');
+    await ev(({ sid }) => window.__rig.store.set(`songs.${sid}.tempo`, 300), { sid: id });
+    await until(() => document.querySelector('[data-testid="v6-click-up"]').disabled);
+    await ev(({ sid }) => window.__rig.store.set(`songs.${sid}.tempo`, 96), { sid: id });
+    // the tile = today's chip: controller.toggleClick() (start with the count-in, stop)
+    await page.click(tid('v6-click-on'));
+    await until(() => window.__rig.controller.status.click.on === true);
+    assert.equal(await clickOn(), true);
+    await until(() => document.querySelector('[data-testid="v6-click-on"]').getAttribute('aria-pressed') === 'true');
+    assert.equal(await ev(() => document.querySelector('[data-testid="v6-sb-tab-metronome"] .v6-live').hidden), false,
+      'the tab dot while the click runs');
+    await page.click(tid('v6-click-on'));
+    await until(() => window.__rig.controller.status.click.on === false);
+    assert.equal(await clickOn(), false);
+    assert.equal(await ev(() => document.querySelector('[data-testid="v6-sb-tab-metronome"] .v6-live').hidden), true);
+    // Lock: the click, − / + and Tap stay live (today's chip and Quick › This song); Edit is frozen
+    await ev(() => window.__rig.store.set('settings.performLock', true));
+    await until(() => document.querySelector('[data-testid="v6-click-edit"]').disabled);
+    await page.click(tid('v6-click-up'));
+    assert.equal(await tempo(), 97);
+    assert.equal(await page.isDisabled(tid('v6-click-tap')), false);
+    await page.click(tid('v6-click-on'));
+    await until(() => window.__rig.controller.status.click.on === true);
+    await page.click(tid('v6-click-on'));
+    await until(() => window.__rig.controller.status.click.on === false);
+    await ev(() => window.__rig.store.set('settings.performLock', false));
+    await until(() => !document.querySelector('[data-testid="v6-click-edit"]').disabled);
+    assert.match(await page.textContent(tid('v6-click-setup')), /4\/4 · count-in (none|\d bars?)/);
+    await page.click(tid('v6-click-edit'));
+    await until(() => document.body.dataset.view === 'edit');
+    assert.equal(await ev(() => window.__rig.views.edit.editState.selected), 'song');
+    // back to Edit's first tab: the song panel mounts other listeners than slot:0's (the on / off cycles check
+    // compares the store's listener count with boot's)
+    await ev(() => window.__rig.views.edit.editState.select('slot:0'));
+    await ev(() => window.__rig.ctx.setView('perform'));
+    await until(() => document.body.dataset.view === 'perform');
+    await ev(({ sid, t }) => window.__rig.store.set(`songs.${sid}.tempo`, t), { sid: id, t: tempo0 });
+  });
+
+  await T('U-METRO load state: “Loading…” / “Preparing n of m” at the top of the sidebar, a spinner on the rail',
+    async () => {
+      const fake = (patch) => ev((p) => {
+        const c = window.__rig.controller;
+        c.dispatchEvent(new CustomEvent('status', { detail: { ...c.status, ...p } }));
+      }, patch);
+      const line = () => ev(() => {
+        const l = document.querySelector('[data-testid="v6-sb-load"]');
+        const r = document.querySelector('[data-testid="v6-rail-load"]');
+        return { line: l.hidden ? null : l.textContent, lineShown: !!l.offsetParent, rail: !r.hidden,
+          railShown: !!r.offsetParent };
+      });
+      assert.deepEqual(await line(), { line: null, lineShown: false, rail: false, railShown: false }, 'idle: nothing');
+      const h0 = await ev(() => document.querySelector('[data-testid="v6-sb-body"]').getBoundingClientRect().top);
+      await fake({ loading: true });
+      assert.deepEqual(await line(), { line: 'Loading…', lineShown: true, rail: true, railShown: false });
+      // at the default width the line sits beside ⋯ ⟩ (the tabs have their own row): the module does not move
+      const h1 = await ev(() => document.querySelector('[data-testid="v6-sb-body"]').getBoundingClientRect().top);
+      assert.ok(Math.abs(h1 - h0) < 0.5, `the module stays put (${h0} → ${h1})`);
+      await clearToasts();
+      await page.screenshot({ path: path.join(SHOTS, 'umetro-loading-1280.png') });
+      await page.click(tid('v6-sb-collapse'));
+      assert.deepEqual(await line(), { line: 'Loading…', lineShown: false, rail: true, railShown: true });
+      await page.screenshot({ path: path.join(SHOTS, 'umetro-rail-loading-1280.png') });
+      await fake({ loading: false, ready: false });
+      await page.click(tid('v6-sb-open'));
+      const r = await line();
+      assert.match(r.line || '', /^Preparing \d+ of \d+$/);
+      await fake({ loading: false, ready: true });
+      assert.deepEqual(await line(), { line: null, lineShown: false, rail: false, railShown: false });
+    });
+
+  await T('U-METRO: a layout saved before Click gets it appended and shown; ⋯ customize lists it', async () => {
+    await ev((k) => localStorage.setItem(k, JSON.stringify({ open: true, starts: 'open', width: null, tab: 'notes',
+      order: ['notes', 'drone', 'setlist'], hidden: [] })), KEY);
+    await ev(async () => {
+      await window.__rig.setUiV6(false);
+      await window.__rig.setUiV6(true);
+    });
+    await until(() => !!document.querySelector('[data-testid="v6-perform"] .v6-side'));
+    assert.deepEqual(await tabIds(), ['notes', 'drone', 'setlist', 'metronome']);
+    assert.equal(await mounted(), 'notes');
+    await page.click(tid('v6-sb-customize'));
+    assert.equal(await page.getAttribute(tid('v6-cz-show-metronome'), 'aria-checked'), 'true');
+    await page.keyboard.press('Escape');
+    // four tabs fit (44 px each) without overflowing the header
+    const fit = await ev(() => {
+      const t = document.querySelector('.v6-sb-tabs');
+      return { over: t.scrollWidth - t.clientWidth,
+        min: Math.min(...[...t.children].map((b) => b.getBoundingClientRect().width)) };
+    });
+    assert.ok(fit.over <= 0 && fit.min >= 43.5, JSON.stringify(fit));
+    await page.click(tid('v6-sb-tab-metronome'));
+    await clearToasts();
+    await ev(() => document.activeElement?.blur?.());
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(SHOTS, 'umetro-click-1280.png') });
+    await resetSidebar();
   });
 
   await T('U3 screenshots: 1280×800 Sanctuary, sidebar open / collapsed / wide', async () => {

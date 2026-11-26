@@ -9,6 +9,7 @@
 // (Chart in 2.1, Tone) is a row in modules.js, nothing here or in the other modules changes. Only the shown module is
 // mounted; folding the sidebar or switching tabs destroys it (its listeners go with it).
 import { h, setText, disposer, nextId } from '../../components/util.js';
+import { say, onVoiceChange } from '../../components/voice.js';
 import { button, popover } from '../lib.js';
 import { SIDEBAR_MODULES } from './modules.js';
 
@@ -153,8 +154,16 @@ export function rightSidebar(v, o = {}) {
     'aria-label': 'Open sidebar', 'data-testid': 'v6-sb-open', title: 'Open the sidebar',
   });
   const railList = h('div.v6-rail-list', { role: 'group', 'aria-label': 'Sidebar modules' });
-  const rail = h('div.v6-sb-rail', { 'data-testid': 'v6-sb-rail' }, railOpen, railList);
-  el.append(grip, h('div.v6-sb-h', {}, tabs, czBtn, xBtn), body, rail);
+  // U-METRO (D23.3): the song's load state at the top of the sidebar, a spinner on the rail while folded
+  const loadLine = h('div.v6-sb-load', { role: 'status', 'data-testid': 'v6-sb-load', hidden: true },
+    h('span.v6-spin', { 'aria-hidden': 'true' }), h('span.v6-sb-load-t'));
+  const railLoad = h('span.v6-rail-load', { 'data-testid': 'v6-rail-load', hidden: true, role: 'img' },
+    h('span.v6-spin', { 'aria-hidden': 'true' }));
+  const rail = h('div.v6-sb-rail', { 'data-testid': 'v6-sb-rail' }, railLoad, railOpen, railList);
+  // the load line sits in the header: beside ⋯ ⟩ when the tabs have their own row (the default 280 px with four
+  // modules), so it never pushes the module down; above the tabs when they share a row with ⋯ ⟩
+  const head = h('div.v6-sb-h', {}, tabs, loadLine, czBtn, xBtn);
+  el.append(grip, head, body, rail);
 
   // ---------------------------------------------------------------- tabs + rail (rebuilt when the shown list changes)
   let tabBtns = new Map();
@@ -165,6 +174,7 @@ export function rightSidebar(v, o = {}) {
     const sig = list.join(',');
     if (sig === builtFor) return;
     builtFor = sig;
+    head.dataset.tabs = String(list.length); // styles-v6-sidebar.css gives 4+ tabs their own row when narrow
     tabBtns = new Map();
     railBtns = new Map();
     tabs.replaceChildren(...list.map((id) => {
@@ -559,9 +569,66 @@ export function rightSidebar(v, o = {}) {
     }
   }
 
+  // ---------------------------------------------------------------- load state (U-METRO, D23.3)
+  // Today's words: "Loading…" while the current song is being prepared (perform.js song block, onboarding O2), else
+  // "Preparing n of m" while the rest of the set loads behind it (main.js renderReady, say('loading'), counted with
+  // controller.songReady as main.js songsLoaded does). The count has no event of its own: main.js polls it every
+  // 500 ms while not ready, and so does this, only while it shows.
+  let status = v.controller.status || {};
+  let loadTimer = 0;
+  function setCount() {
+    const ids = v.store.navIds();
+    if (typeof v.controller.songReady !== 'function') return null;
+    let done = 0;
+    for (const id of ids) {
+      const r = v.controller.songReady(id);
+      if (r === null) return null;
+      if (r) done += 1;
+    }
+    return { done, total: ids.length };
+  }
+  function renderLoad() {
+    clearTimeout(loadTimer);
+    loadTimer = 0;
+    let text = '';
+    let title = '';
+    if (status.instance !== 'secondary') {
+      if (status.loading) {
+        text = 'Loading…';
+        title = 'Loading this song’s sounds. It plays as soon as this goes.';
+      } else if (!status.ready) {
+        const c = setCount();
+        text = say('loading', c && c.total ? { done: Math.min(c.done, c.total), total: c.total } : {});
+        title = c && c.total
+          ? `Loading the songs in the set (${Math.min(c.done, c.total)} of ${c.total} ready). You can play now.`
+          : 'Loading sounds.';
+        loadTimer = setTimeout(renderLoad, 500);
+      }
+    }
+    loadLine.hidden = !text;
+    railLoad.hidden = !text;
+    el.classList.toggle('loading', !!text);
+    if (loadLine.lastChild.textContent !== text) setText(loadLine.lastChild, text);
+    loadLine.title = title;
+    railLoad.setAttribute('aria-label', text || 'Loaded');
+    railLoad.title = text ? `${text} ${title}` : '';
+  }
+  d.add(() => clearTimeout(loadTimer));
+  d.add(v.controller.onStatus((s) => {
+    const was = `${status.loading}|${status.ready}|${status.instance}|${status.click?.on}|${status.click?.counting}`;
+    status = s || {};
+    if (was === `${status.loading}|${status.ready}|${status.instance}|${status.click?.on}|${status.click?.counting}`) {
+      return;
+    }
+    renderLoad();
+    renderBadges(lastState); // the Click module's dot follows the click (controller status, not the store)
+  }));
+  d.add(onVoiceChange(() => renderLoad()));
+
   buildHeads();
   applyLayout();
   renderBadges(lastState);
+  renderLoad();
   save();
   // the width is clamped against the board, which holds `el` only after the view has put it there
   let destroyed = false;

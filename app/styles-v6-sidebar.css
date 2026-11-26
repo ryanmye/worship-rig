@@ -9,7 +9,7 @@
   border-radius: 12px; container: v6side / inline-size; }
 .v6 .v6-side.resizing { user-select: none; -webkit-user-select: none; }
 .v6 .v6-side.will-fold { opacity: .55; }
-.v6 .v6-sb-h { flex: none; display: flex; align-items: center; gap: 4px; }
+.v6 .v6-sb-h { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; row-gap: 6px; }
 .v6 .v6-sb-tabs { flex: 1 1 auto; min-width: 0; display: flex; gap: 2px; padding: 3px; border-radius: 10px;
   background: var(--well, var(--bg)); }
 .v6 .v6-sb-tab { flex: 1 1 auto; min-width: 44px; min-height: 44px; padding: 0 3px; letter-spacing: 0; border: 0;
@@ -24,10 +24,37 @@
   font-weight: 800; }
 .v6 .v6-sb-c.open { background: linear-gradient(var(--plate-top, var(--accent)), var(--plate-bot, var(--accent)));
   color: var(--accent-ink); }
-/* a narrow sidebar (< 240 px) gives the tabs their own row, so every tab keeps a 44 px target */
+/* a narrow sidebar (< 240 px) gives the tabs their own row, so every tab keeps a 44 px target. U-METRO: four tabs
+   (+ ⋯ and ⟩) need 304 px in one row (4 × 44 + gaps + the tablist's padding + 2 × 44 + the sidebar's padding), five
+   need 350 */
 @container v6side (max-width: 239px) {
-  .v6 .v6-sb-h { flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; }
+  .v6 .v6-sb-h { justify-content: flex-end; }
   .v6 .v6-sb-tabs { flex: 1 0 100%; }
+  .v6 .v6-sb-load { flex: 1 1 auto; order: 0; min-width: 0; }
+}
+@container v6side (max-width: 309px) {
+  .v6 .v6-sb-h[data-tabs="4"] { justify-content: flex-end; }
+  .v6 .v6-sb-h[data-tabs="4"] .v6-sb-tabs { flex: 1 0 100%; }
+  .v6 .v6-sb-h[data-tabs="4"] .v6-sb-load { flex: 1 1 auto; order: 0; min-width: 0; }
+}
+@container v6side (max-width: 359px) {
+  .v6 .v6-sb-h:is([data-tabs="5"], [data-tabs="6"], [data-tabs="7"]) { justify-content: flex-end; }
+  .v6 .v6-sb-h:is([data-tabs="5"], [data-tabs="6"], [data-tabs="7"]) .v6-sb-tabs { flex: 1 0 100%; }
+  .v6 .v6-sb-h:is([data-tabs="5"], [data-tabs="6"], [data-tabs="7"]) .v6-sb-load { flex: 1 1 auto; order: 0;
+    min-width: 0; }
+}
+.v6 .v6-sb-tab[data-id="metronome"] .v6-live { background: var(--accent); }
+
+/* ---- the song's load state (U-METRO, D23.3): today's "Loading…" / "Preparing n of m", at the top while it lasts */
+.v6 .v6-spin { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--accent);
+  border-top-color: transparent; animation: spin .8s linear infinite; }
+.v6 .v6-sb-load { flex: 1 0 100%; order: -1; display: flex; align-items: center; gap: 7px; min-height: 22px; padding: 0 4px;
+  font-size: 13px; font-weight: 800; color: var(--accent-text, var(--accent)); white-space: nowrap; overflow: hidden; }
+.v6 .v6-sb-load > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.v6 .v6-sb-load[hidden], .v6 .v6-rail-load[hidden] { display: none; }
+.v6 .v6-rail-load { flex: none; display: flex; align-items: center; justify-content: center; min-height: 22px; }
+@media (prefers-reduced-motion: reduce) {
+  .v6 .v6-spin { animation: none; border-top-color: var(--accent); opacity: .7; }
 }
 .v6 .v6-sb-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden auto;
   container: v6sb / inline-size; }
@@ -62,6 +89,8 @@
 .v6 .v6-rb-k { position: absolute; top: 3px; right: 5px; font-style: normal; font-size: 11px; font-weight: 800;
   color: var(--drone); }
 .v6 .v6-rb-k[hidden] { display: none; }
+.v6 .v6-rb[data-id="metronome"].live { border-color: var(--accent); }
+.v6 .v6-rb[data-id="metronome"].live .ic { color: var(--accent); }
 
 /* ---- shared bits of the modules */
 .v6 .v6-side .v6-qb { min-height: 44px; padding: 2px 8px; display: flex; flex-direction: column; align-items: center;
@@ -169,6 +198,32 @@
 .v6 .v6-notes { display: flex; flex-direction: column; gap: 8px; }
 .v6 .v6-side .v6-notes-t { flex: 1 1 auto; min-height: 60px; max-height: none; }
 .v6 .v6-notes-chart { flex: none; }
+
+/* ---- Click (the metronome, U-METRO): ON tile · − BPM + · Tap · hint · setup line · Count-in & level… */
+.v6 .v6-metro { display: flex; flex-direction: column; gap: 8px; }
+.v6 .v6-mt-on .ontile { width: 100%; }
+.v6 .v6-mt-on .ontile.counting { animation: click-count 1s ease-in-out infinite; }
+.v6 .v6-mt-tempo { display: grid; grid-template-columns: 52px minmax(0, 1fr) 52px; align-items: center; gap: 6px; }
+.v6 .v6-mt-step { min-height: 52px; min-width: 44px; padding: 0; font-size: 22px; font-weight: 800;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.v6 .v6-mt-bpm { display: flex; align-items: baseline; justify-content: center; gap: 5px; min-width: 0; }
+.v6 .v6-mt-n { font: 800 32px/1 var(--v6-book); font-variant-numeric: tabular-nums; }
+.v6 .v6-mt-bpm small { font-size: 12px; font-weight: 700; color: var(--muted); }
+.v6 .v6-mt-tap { min-height: 52px; font-size: 16px; font-weight: 800; letter-spacing: .06em; }
+.v6 .v6-mt-tap.flash { animation: qs-flash .25s ease-out; }
+.v6 .v6-mt-hint, .v6 .v6-mt-setup { margin: 0; font-size: 12.5px; line-height: 1.35; color: var(--muted); }
+.v6 .v6-mt-setup { padding-top: 6px; border-top: 1px solid var(--line); }
+.v6 .v6-mt-edit { flex: none; }
+@media (prefers-reduced-motion: reduce) {
+  .v6 .v6-mt-on .ontile.counting, .v6 .v6-mt-tap.flash { animation: none; }
+}
+@container v6sb (min-width: 600px) {
+  .v6 .v6-metro { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(240px, 1.4fr) minmax(200px, 1fr);
+    grid-template-areas: 'on tempo setup' 'on tap edit' 'hint hint hint'; gap: 8px 16px; align-content: start; }
+  .v6 .v6-mt-on { grid-area: on; } .v6 .v6-mt-tempo { grid-area: tempo; } .v6 .v6-mt-tap { grid-area: tap; }
+  .v6 .v6-mt-hint { grid-area: hint; } .v6 .v6-mt-setup { grid-area: setup; border-top: 0; padding-top: 0; }
+  .v6 .v6-mt-edit { grid-area: edit; }
+}
 
 /* ---- ⋯ customize (mock_v6.css .czpop / .cz / .sw) */
 .v6 .v6-czpop { width: 320px; gap: 8px; }

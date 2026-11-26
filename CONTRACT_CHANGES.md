@@ -8348,3 +8348,39 @@ change; `views/perform.js` and `components/quickSheet.js` are untouched.
 - Tests: `test/phase2/ui-v6/left.tests.mjs` (run by run.mjs): 8 checks, plus "U4 skeptic F1". `run.mjs` also takes `UI6_ONLY=<regex>` to run
   a subset (the boot tests and the console check always run). Screenshots `u4-{1280x800,1024x700,820x1180}.png` and
   `u4-quick-*.png`.
+
+## UI v6 U-METRO: Click module + load state in the sidebar (D23.3)
+Native DECISIONS D23.3; UI6-build-plan "Queued small tasks" U-METRO. Behind `settings.uiV6` like U1–U3. No store,
+controller or engine change.
+- **`views/v6/sidebar/metronome.js`** (module id `metronome`, tab label **Click**, today's chip icon), appended to
+  `SIDEBAR_MODULES` (`[drone, setlist, notes, metronome]`). A device's saved layout without it gets it at the end,
+  shown (`normalizePrefs`, unchanged); ⋯ customize lists it like the others.
+- **What it does = today's Click chip** (views/perform.js song block): the ON tile calls `controller.toggleClick()`
+  (start with `settings.click`'s count-in, or stop); its state comes from `controller.status.click` (`on`,
+  `counting` → the sub says "Count-in", as the chip). Without a tempo the tile is disabled (today the chip hides).
+  The tab gets a dot and the rail icon an accent border while the click runs (`badge(state, v)` reads
+  `v.controller.status.click`; the sidebar now re-runs the badges on controller status changes).
+- **Tempo** writes `songs.<id>.tempo`, the path today's Quick sheet writes: **Tap** = the Quick sheet's rule
+  (`tapBpm` imported from `components/quickSheet.js`; a gap > 2 s starts over, last ≤ 4 taps, 30–300, rounded;
+  exported as `tapper()`); **− / +** = 1 BPM a press, held: first repeat after 450 ms, then every 70 ms; Enter /
+  Space on a focused one step once. Disabled with no tempo (Tap sets one) and at 30 / 300.
+- **Read only**: the Quick sheet's echo-sync line, and a setup line `4/4 · count-in 1 bar, then clicking · with the
+  music` (time signature, `settings.click` count-in / after / level, output from status). **Count-in & level…** opens
+  Edit › Song on its click column (`ctx.setView('edit', {block: 'song', focus: 'click'})`), where today's chip title
+  points. Nothing new is settable from the sidebar beyond today's chip + the Quick tempo.
+- **Lock** (perform.js LOCK): the tile (= 'Click'), − / + and Tap (= 'Quick › This song') stay live; Count-in & level…
+  is disabled (Edit is frozen).
+- **Load state** (sidebar.js): today's words, `Loading…` while `controller.status.loading` (the song block's
+  onboarding O2 line) else `Preparing n of m` (`say('loading')`) while `!status.ready` (main.js renderReady, counted with
+  `controller.songReady` over `store.navIds()` as main.js `songsLoaded`, re-counted every 500 ms only while it shows);
+  nothing for a secondary window. Shown as `.v6-sb-load` (role=status) in the sidebar header and, folded, a spinner
+  `.v6-rail-load` at the top of the rail. Placement: with the tabs on their own row (below) it sits left of ⋯ ⟩, so the
+  module never moves when it comes and goes; in a sidebar wide enough for one header row (≥ 310 px with 4 tabs) it is
+  a line above the tabs (the module moves down 28 px while it shows).
+- **Header with four tabs:** 4 × 44 px tabs + ⋯ + ⟩ need 304 px; below 310 px (default 280 px, 220 px ≤ 1240 px
+  windows) the tabs take their own row (U3 did this below 240 px for three), `.v6-sb-h[data-tabs]` + container
+  queries. Cost: the module area is ~50 px shorter at the default width; the Drone module scrolls a little sooner.
+  A player who hides one module (⋯) gets the single row back.
+- CSS: `styles-v6-sidebar.css` (`.v6-metro`, `.v6-mt-*`, `.v6-sb-load`, `.v6-rail-load`, `.v6-spin`; reduced motion
+  stops the spinner and the count-in pulse). Tests: ui-v6 `sidebar.tests.mjs` + 3 checks (Click writes / Lock / Edit
+  link, load state incl. "the module stays put", old layout appended); U3 checks updated for the fourth tab.

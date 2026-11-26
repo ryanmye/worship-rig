@@ -83,7 +83,9 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 - **Small-window fit (UI6-U3 O1, orchestrator tier 2):** at ≤ 1100 px wide the sidebar starts folded unless the
   player opened it there before; the Add tile goes slim from 4 instruments (not 5). Goal: 4 strips at 1024×700
   without sideways scroll.
-- **U-METRO (D23):** Metronome sidebar module (today's click chip behaviour) + load state in the sidebar header.
+- ~~**U-METRO (D23):**~~ **Done (lane-small, builder; skeptic pending):** sidebar module "Click" (today's chip:
+  on / off with the count-in, tempo − / + / Tap, setup read only, Count-in & level… → Edit › Song) + "Loading…" /
+  "Preparing n of m" in the sidebar header and a spinner on the rail. CONTRACT_CHANGES "## UI v6 U-METRO".
 
 - **Preview switch for Ryan (U1 review O3):** `?ui6=1` only works in Chrome; the Mac app needs a visible way to turn
   v6 on for the U9 review. Add "Try the new layout (preview)" in Settings (today's Settings, Look or Mac category),
