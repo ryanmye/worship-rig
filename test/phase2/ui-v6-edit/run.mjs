@@ -21,6 +21,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.mjs';
 import { u5bTests } from './u5b.tests.mjs';
+import { skepticU5bTests } from './skeptic-u5b.tests.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -1095,6 +1096,7 @@ try {
     T, page, ev, until, tid, song, setSlots, toEdit, writesOf, assert, HERE, chooserPick, changeInstrument,
     todayShared: () => todayShared,
   });
+  await skepticU5bTests({ T, page, ev, until, tid, toEdit, assert, settled });
 
   await T('zero console.error, no HTTP ≥ 400', async () => {
     assert.deepEqual(errors, []);

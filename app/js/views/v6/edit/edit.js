@@ -481,7 +481,9 @@ export function mountEditV6(el, ctx) {
     let inst = null;
     try {
       inst = mountInstrument(host, pctx, opts, {
-        prefs: instPrefs, changes: v6Changes, stripV, live: liveOf, dialogHost: root,
+        prefs: instPrefs, changes: v6Changes, stripV, live: liveOf,
+        // skeptic UI6-U5b F1: over the body, not the root, so the bottom row's PANIC / Lock / keys stay live
+        dialogHost: body,
       });
     } catch (err) {
       console.warn('[v6 edit] instrument panel failed to mount', err);

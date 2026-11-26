@@ -244,7 +244,7 @@ export function v6SentenceParts(slot, meta, o) {
  * @param {{prefs:{cat:string, setCat(id:string):void}, changes:() => Set<string>, stripV:object,
  *          live?:(song:object) => object, dialogHost?:HTMLElement}} env
  *   changes: the v6 changed set (song-relative paths, V6_DIFF_WATCH); stripV: the view context strip.js expects;
- *   dialogHost: where the instrument chooser opens (the Edit view's root, U5b)
+ *   dialogHost: where the instrument chooser opens (the Edit view's body, above the bottom row; U5b)
  * @returns {{update(opts:object):void, destroy():void, _debug:object}}
  */
 export function mountInstrument(host, ctx, opts, env) {
@@ -904,6 +904,7 @@ export function mountInstrument(host, ctx, opts, env) {
   // openMenu / closeMenu keep U5a's names (every caller: the button, the empty place, the sentence's instrument word,
   // focus 'instrument' from Perform's Change, Esc, a song / instrument switch, leaving Edit)
   let chooser = null;
+  let chooserFor = ''; // the instrument the open chooser is for ('' = an empty place)
   let menuOpen = false;
   function openMenu() {
     cancelConfirm();
@@ -912,6 +913,7 @@ export function mountInstrument(host, ctx, opts, env) {
     const slot = curSlot();
     const host = env.dialogHost || root;
     menuOpen = true;
+    chooserFor = slot ? refKey(slot.instrument) : '';
     chgBtn.setAttribute('aria-expanded', 'true');
     chgBtn.classList.add('open');
     chooser = openChooser({
@@ -1176,6 +1178,9 @@ export function mountInstrument(host, ctx, opts, env) {
       queueMicrotask(revealCat); // after this event's redraw, with the view laid out again
     }
     const slot = slotOf(e.song);
+    // skeptic UI6-U5b F6: Revert (the bottom row stays live under the chooser, F1) or Undo swapped this place's
+    // instrument: the open chooser's "playing now", title and note were for the old one
+    if (chooser && (slot ? refKey(slot.instrument) : '') !== chooserFor) closeMenu(false);
     const key = `${cat}|${slotKey(slot)}|${i}`;
     if (key !== paneKey) buildPane();
     renderEmptyUndo();

@@ -44,7 +44,7 @@ export function chooserKinds(list) {
 /**
  * Open the chooser.
  * @param {object} o
- * @param {HTMLElement} o.host            the Edit view's root (the dialog covers it)
+ * @param {HTMLElement} o.host            the Edit view's body (the dialog covers it; the bottom row stays live)
  * @param {() => object[]} o.instruments  the engine's list (ctx.instruments)
  * @param {number} o.slot                 the instrument's place (0-based)
  * @param {{instrument:object}|null} o.current  the slot (null: an empty place)
@@ -118,13 +118,17 @@ export function openChooser(o) {
         type: 'button', role: 'tab', 'aria-selected': String(on), 'aria-controls': tiles.id, tabindex: on ? '0' : '-1',
         class: on ? 'on' : '', dataset: { kind: k.label }, disabled: !!q && !n,
       }, h('span', { text: k.label }), h('small', { text: String(n) }));
-      b.addEventListener('click', () => {
+      b.addEventListener('click', (e) => {
         kind = k.label;
         if (query) {
           query = '';
           search.value = '';
         }
         render();
+        // skeptic UI6-U5b F2: the render replaced this button; a keyboard press (Enter / Space) keeps the focus on
+        // the kind, else it fell to <body>, where ← / → are Prev / Next song under the open dialog. A pointer click
+        // leaves nothing focused, as every Edit button (shell.js blur)
+        if (e.detail === 0) cats.querySelector(`[data-kind="${CSS.escape(k.label)}"]`)?.focus();
       });
       return b;
     }));

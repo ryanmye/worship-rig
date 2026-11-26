@@ -250,9 +250,12 @@
 .v6.v6-edit .v6e-msel { min-width: 0; }
 .v6.v6-edit .v6e-ceiling { border-left: 3px solid var(--line-2); padding-left: 8px; }
 
-/* ---- U5b: the instrument chooser (chooser.js; mockup "Change instrument") over the whole Edit view */
+/* ---- U5b: the instrument chooser (chooser.js; mockup "Change instrument") over Edit's body. Skeptic UI6-U5b F1: the
+   mockup dims only the body (.frame.dimmed .ebody); the bottom row (keys, PANIC, Lock) stays live under no backdrop.
+   The body is positioned only while the chooser is in it, so the iPad drawer keeps its own containing block */
+.v6.v6-edit .v6e-body:has(> .v6e-ch-back) { position: relative; }
 .v6.v6-edit .v6e-ch-back { position: absolute; inset: 0; z-index: 60; display: flex; align-items: center;
-  justify-content: center; padding: 24px; background: color-mix(in srgb, #000 55%, transparent);
+  justify-content: center; padding: 16px 24px; background: color-mix(in srgb, #000 55%, transparent);
   border-radius: var(--radius, 10px); }
 .v6.v6-edit .v6e-chooser { width: min(900px, 100%); max-height: 100%; min-height: 0; display: flex;
   flex-direction: column; gap: 12px; padding: 14px 16px; background: var(--v6-sheet); color: var(--text);
