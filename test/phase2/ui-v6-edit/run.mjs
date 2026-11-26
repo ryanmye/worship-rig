@@ -20,6 +20,7 @@ import os from 'node:os';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.mjs';
+import { u5bTests } from './u5b.tests.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -167,6 +168,32 @@ const choose = async (cat) => {
   await page.click(tid(`v6e-cat-${cat}`));
   await until((c) => document.querySelector('[data-testid="v6e-ccont"]')?.dataset.cat === c, cat);
 };
+/**
+ * U5b: in the open instrument chooser, show the kind that holds `value` ('type:id') and click its tile (null: the
+ * first tile that is not `not`). Returns the value clicked.
+ */
+const chooserPick = (value, not) => ev(({ v, n }) => {
+  const dlg = document.querySelector('[data-testid="v6e-chooser"]');
+  for (const c of dlg.querySelectorAll('.v6e-ch-cat:not([disabled])')) {
+    c.click();
+    const tiles = [...document.querySelectorAll('[data-testid="v6e-chooser"] .v6e-ch-tile')];
+    const t = v ? tiles.find((x) => x.dataset.value === v) : tiles.find((x) => x.dataset.value !== n);
+    if (t) {
+      t.click();
+      return t.dataset.value;
+    }
+  }
+  return null;
+}, { v: value || null, n: not || null });
+/** Open the chooser on the shown instrument, pick `value` (or any other sound) and press Use. */
+async function changeInstrument(value, not) {
+  await page.click(tid('v6e-change'));
+  await until(() => !!document.querySelector('[data-testid="v6e-chooser"]'));
+  const v = await chooserPick(value, not);
+  await page.click(tid('v6e-ch-use'));
+  await until(() => !document.querySelector('[data-testid="v6e-chooser"]'));
+  return v;
+}
 /** The store writes a function causes, as song-relative paths (store.set wrapped for the duration). */
 async function writesOf(fn) {
   await ev(() => {
@@ -192,6 +219,8 @@ const rectOf = (sel) => ev((s) => {
 }, sel);
 
 let todayBinds = [];
+/** U5b: today's Drone / Effects / Master panels' bound addresses (flag off), the reference for the v6 panels. */
+const todayShared = {};
 let baseListeners = 0;
 try {
   await T('flag off: today’s Edit; nothing of the v6 Edit fetched, drawn or linked', async () => {
@@ -226,6 +255,13 @@ try {
       window.__rig.ctx.setView('perform');
     });
     assert.ok(todayBinds.length >= 15, todayBinds.join());
+    for (const b of ['drone', 'effects', 'master']) {
+      await ev((id) => window.__rig.views.edit.editState.select(id), b);
+      await until((id) => !!document.querySelector(`#view-edit [data-panel="${id}"] [data-bind]`), b);
+      todayShared[b] = await ev(() => [...new Set([...document.querySelectorAll('#ev2-panel [data-bind]')]
+        .map((e) => e.dataset.bind))].sort());
+    }
+    await ev(() => window.__rig.views.edit.editState.select('slot:0'));
     baseListeners = await ev(() => window.__storeListeners.size);
   });
 
@@ -315,18 +351,19 @@ try {
       assert.ok(v6EditFetches.some((u) => u.endsWith('/styles-v6-edit.css')));
     });
 
-  await T('external interface: setView(edit, {block, focus}) selects; Drone / Effects / Master / Song panels mount '
-    + 'in the v6 frame; Perform’s Change opens the picker', async () => {
+  await T('external interface: setView(edit, {block, focus}) selects; Drone / Effects / Master (U5b: category '
+    + 'panels) and Song mount in the v6 frame; Perform’s Change opens the chooser', async () => {
     await ev(() => window.__rig.ctx.setView('edit', { block: 'slot:1', focus: 'instrument' }));
     await until(() => window.__rig.views.edit.editState.selected === 'slot:1'
-      && !document.querySelector('[data-testid="v6e-imenu"]').hidden);
-    assert.equal(await ev(() => document.activeElement?.closest('[data-testid="v6e-imenu"]') !== null), true);
+      && !!document.querySelector('[data-testid="v6e-chooser"]'));
+    assert.equal(await ev(() => document.activeElement?.closest('[data-testid="v6e-chooser"]') !== null), true);
     await page.keyboard.press('Escape');
-    await until(() => document.querySelector('[data-testid="v6e-imenu"]').hidden);
+    await until(() => !document.querySelector('[data-testid="v6e-chooser"]'));
     for (const id of ['drone', 'effects', 'master', 'song']) {
       await ev((b) => window.__rig.views.edit.editState.select(b), id);
       const want = id;
-      await until((b) => document.querySelector(`.v6e-legacy [data-panel="${b}"]`), want);
+      await until((b) => (b === 'song' ? document.querySelector(`.v6e-legacy [data-panel="${b}"]`)
+        : document.querySelector(`.v6e-host[data-panel="${b}"] [data-testid="v6e-${b}"]`)), want);
       const tabOn = await ev((b) => document.querySelector(`.v6e-rt[data-block="${b}"]`)?.classList.contains('on')
         ?? null, id);
       assert.equal(tabOn, id === 'song' ? null : true, id);
@@ -341,8 +378,9 @@ try {
     await until(() => document.body.dataset.view === 'perform');
     await page.click(tid('v6-change-2'));
     await until(() => document.body.dataset.view === 'edit' && window.__rig.views.edit.editState.selected === 'slot:2'
-      && !document.querySelector('[data-testid="v6e-imenu"]').hidden);
+      && !!document.querySelector('[data-testid="v6e-chooser"]'));
     await page.keyboard.press('Escape');
+    await until(() => !document.querySelector('[data-testid="v6e-chooser"]'));
     await ev(() => window.__rig.views.edit.editState.select('slot:0'));
   });
 
@@ -533,22 +571,21 @@ try {
     assert.equal(await page.getAttribute(tid('v6e-arm-low'), 'aria-pressed'), 'false');
   });
 
-  await T('Change instrument ▾: grouped picker writes slots.<i>.instrument with Undo; Esc closes it', async () => {
-    await page.click(tid('v6e-change'));
-    await until(() => !document.querySelector('[data-testid="v6e-imenu"]').hidden);
-    const target = await ev(() => {
-      const items = [...document.querySelectorAll('[data-testid="v6e-imenu"] .v6e-mi[aria-checked="false"]')];
-      return items.find((b) => b.dataset.value === 'synth:warm-pad')?.dataset.value || items[0].dataset.value;
+  await T('Change instrument ▾ (U5b: the chooser) writes slots.<i>.instrument with Undo; Esc closes it', async () => {
+    let target = null;
+    const w = await writesOf(async () => {
+      target = await changeInstrument('synth:warm-pad');
     });
-    const w = await writesOf(() => page.click(`[data-testid="v6e-imenu"] .v6e-mi[data-value="${target}"]`));
+    assert.equal(target, 'synth:warm-pad');
     assert.deepEqual(w, ['slots.0.instrument']);
     const s = await song();
     assert.equal(`${s.patch.slots[0].instrument.type}:${s.patch.slots[0].instrument.id}`, target);
     await until((t) => document.querySelector('.v6e-rt[data-block="slot:0"] .v6e-rt-name').textContent
       === document.querySelector('[data-testid="v6e-sentence"] .ev2-tok').textContent, target);
     await page.click(tid('v6e-change'));
+    await until(() => !!document.querySelector('[data-testid="v6e-chooser"]'));
     await page.keyboard.press('Escape');
-    await until(() => document.querySelector('[data-testid="v6e-imenu"]').hidden);
+    await until(() => !document.querySelector('[data-testid="v6e-chooser"]'));
     await ev(() => {
       const { store } = window.__rig;
       const ref = { type: 'sampler', id: 'salamander-piano' };
@@ -710,7 +747,7 @@ try {
     const before = await names3();
     await clearToasts();
     await page.click(tid('v6e-change'));
-    await page.click('[data-testid="v6e-imenu"] .v6e-mi-remove');
+    await page.click(tid('v6e-ch-remove'));
     await page.click('.v6e-confirm .v6e-remove');
     await until(() => window.__rig.store.currentSong().patch.slots[1] === null);
     assert.ok(await mv(1, 2)); // the empty place goes last; the third instrument comes to 1
@@ -727,10 +764,7 @@ try {
     await selectSlot(0);
     const was = await names3();
     await clearToasts();
-    await page.click(tid('v6e-change'));
-    const target = await ev(() => [...document.querySelectorAll('[data-testid="v6e-imenu"] .v6e-mi[data-value]')]
-      .map((b) => b.dataset.value).find((v) => v !== 'sampler:salamander-piano'));
-    await page.click(`[data-testid="v6e-imenu"] .v6e-mi[data-value="${target}"]`);
+    const target = await changeInstrument(null, 'sampler:salamander-piano');
     await until((t) => {
       const x = window.__rig.store.currentSong().patch.slots[0].instrument;
       return `${x.type}:${x.id}` === t;
@@ -743,8 +777,7 @@ try {
     await setSlots(3);
     await selectSlot(0);
     await clearToasts();
-    await page.click(tid('v6e-change'));
-    await page.click(`[data-testid="v6e-imenu"] .v6e-mi[data-value="${target}"]`);
+    await changeInstrument(target);
     await until((t) => {
       const x = window.__rig.store.currentSong().patch.slots[0].instrument;
       return `${x.type}:${x.id}` === t;
@@ -851,7 +884,7 @@ try {
       await page.click(tid('v6e-add'));
       await until((n) => window.__rig.store.currentSong().patch.slots.length === n + 1, n0);
       await until((n) => window.__rig.views.edit.editState.selected === `slot:${n}`
-        && !document.querySelector('[data-testid="v6e-imenu"]').hidden, n0);
+        && !!document.querySelector('[data-testid="v6e-chooser"]'), n0);
       assert.equal(await ev((n) => document.querySelector(`.v6e-rt[data-block="slot:${n}"] .v6e-rt-name`).textContent,
         n0), 'Empty');
       await page.keyboard.press('Escape');
@@ -1056,6 +1089,12 @@ try {
       }
       await page.setViewportSize({ width: 1280, height: 800 });
     });
+
+  // ---------------------------------------------------------------- U5b (u5b.tests.mjs)
+  await u5bTests({
+    T, page, ev, until, tid, song, setSlots, toEdit, writesOf, assert, HERE, chooserPick, changeInstrument,
+    todayShared: () => todayShared,
+  });
 
   await T('zero console.error, no HTTP ≥ 400', async () => {
     assert.deepEqual(errors, []);
