@@ -1,8 +1,8 @@
 diff --git a/CONTRACT_CHANGES.md b/CONTRACT_CHANGES.md
-index 25d721f..98ce3e3 100644
+index 25d721f..78c2fef 100644
 --- a/CONTRACT_CHANGES.md
 +++ b/CONTRACT_CHANGES.md
-@@ -6769,3 +6769,19 @@ slot…` (test 31): "Perform reads slot 3 once per clock frame or sleeps (0.25)"
+@@ -6769,3 +6769,49 @@ slot…` (test 31): "Perform reads slot 3 once per clock frame or sleeps (0.25)"
    this), settings 60/60, shell unit + browser pass.
  - **For 2.0:** if the native engine replaces the sampler, keep `velocityDb` as the one gain law (per-note, pivot
    0.75, spans 10 / 24), and keep the setting device-local.
@@ -22,6 +22,55 @@ index 25d721f..98ce3e3 100644
 +- **Unchanged.** An unreadable (corrupt) library still takes the H1 path; `importJSON` still refuses a newer file.
 +- Tests: store.test.mjs (2 new, replacing "future schema is refused"), fixes.test.mjs (H1 future-schema rewritten),
 +  browser.pw.mjs (the real app, two launches). The store and fixes tests fail on the 1.1.0 store.
++
++## 1.1.1: device-local settings go into backups and exports, for 2.0 (2.0 DECISIONS D11)
++
++- **What changed.** `store.exportJSON({device: true})` adds an optional top-level block, `deviceSettings` =
++  `{v: 1, install, settings}`. `settings` holds every `DEVICE_LOCAL_SETTINGS` key the library has (13 keys; optional
++  ones that were never set stay absent). The automatic and "Back up now" backups (`controller.libraryJSON`, Settings)
++  pass `device: true`. Settings › Export library passes it only while its toggle **With this computer's device
++  settings** (`data-testid="export-device"`, off by default, not saved) is on (D11 skeptic DS4). The Edit view's
++  setlist export never does. `exportJSON()` without it is byte-for-byte 1.1.0's file.
++- **Machine marker.** `install` is `store.installId()`: 32 random hex digits (`crypto.getRandomValues`), made on first
++  use and kept in localStorage under `rig.install` (`INSTALL_ID_KEY`, outside the library and outside the `rig.v1*`
++  keys the rotation and the D8 guard look at). No host, user or device name. 2.0 only compares it, to tell "this
++  computer" from "another". It is per origin, like the library: Chrome (:8437) and the Mac app (:8438) have
++  different ids. If storage refuses the write, the id lasts for the session.
++- **Why.** 1.x left these settings out of every file (security S3, checklist Q7), so the move to 2.0 lost the touch
++  curves, click, MIDI clock, hotkeys, devices, pad folder, menu-bar mode and the rest. D11 (Ryan) asks 1.1.1 to write
++  them, and 2.0 to take them in.
++- **Backward compatible, no SCHEMA bump.** The file stays schema 1. 1.1.0 keeps an unknown top-level field and never
++  reads it (tested in 2.0's `migration-1x/downgrade.test.mjs` with `git archive v1.1.0`). 1.1.1's own `importJSON`
++  drops the block, so a replace still keeps this machine's own device settings and the block never enters the
++  library state.
++- **Privacy (S3, changed on purpose by D11).** The library's `settings` still hold no device-local value, but the
++  block does: the pad folder's path (which names the account on a Mac) and the MIDI / audio device names. Backups
++  stay on this computer, so they always carry it. An exported library is the file people share, so it carries the
++  block only when the toggle is on (DS4, review `native/docs/reviews/D11.md`). The other choice, writing the pad path
++  with `~` for the home folder, still named the devices and needed 2.0 to expand it.
++- Tests: `browser.pw.mjs` (the real Export library button: no block by default, the block with the toggle on).
++- Tests: `test/phase1/shell/device-settings.test.mjs` (5: block shape, defaults, the marker, import drops it,
++  `backupNow` writes it with the origin tag); `browser.pw.mjs` 1 (the real Export library button, see DS4). The S3 test
++  (`security.test.mjs`) is unchanged and passes: `exportJSON()` without `device` is still clean.
+diff --git a/app/js/controller.js b/app/js/controller.js
+index ab550fb..8601101 100644
+--- a/app/js/controller.js
++++ b/app/js/controller.js
+@@ -2135,9 +2135,12 @@ export function createController(o) {
+   // ---- backups (Electron)
+   let backupTimer = null;
+   let lastBackup = -Infinity;
+-  /** Library JSON tagged with this page's origin (M5: backups from another port can be offered for import). */
++  /**
++   * Library JSON tagged with this page's origin (M5: backups from another port can be offered for import). 1.1.1
++   * (2.0 DECISIONS D11): with this machine's device-local settings in the `deviceSettings` block, for 2.0.
++   */
+   function libraryJSON() {
+-    const json = store.exportJSON({ pretty: false });
++    const json = store.exportJSON({ pretty: false, device: true });
+     const origin = loc && loc.origin && loc.origin !== 'null' ? loc.origin : null;
+     return origin && json.startsWith('{') ? `{"origin":${JSON.stringify(origin)},${json.slice(1)}` : json;
+   }
 diff --git a/app/js/main.js b/app/js/main.js
 index 48df28a..ffad5fc 100644
 --- a/app/js/main.js
@@ -58,10 +107,10 @@ index 48df28a..ffad5fc 100644
  let overlayArmed = false;
  function audioRunning() {
 diff --git a/app/js/store.js b/app/js/store.js
-index f57d2a6..e86ab78 100644
+index f57d2a6..958cc44 100644
 --- a/app/js/store.js
 +++ b/app/js/store.js
-@@ -150,6 +150,21 @@ export const isReservedKey = (k) => typeof k !== 'string' || RESERVED_KEYS.has(k
+@@ -150,6 +150,43 @@ export const isReservedKey = (k) => typeof k !== 'string' || RESERVED_KEYS.has(k
  const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
  /** How many `rig.v1.backup-<ts>` keys are kept in localStorage. */
  export const BACKUPS_KEEP = 3;
@@ -80,10 +129,32 @@ index f57d2a6..e86ab78 100644
 +    return null;
 +  }
 +}
++/**
++ * 1.1.1 (2.0 DECISIONS D11): backups (and Settings › Export library, when its toggle is on: D11 skeptic DS4) carry
++ * this machine's device-local settings in an optional top-level block, `deviceSettings` = {v, install, settings}, so
++ * Worship Rig 2.0 can bring them over. The library's own `settings` stay without them (security S3), and nothing in
++ * 1.x reads the block: 1.1.0 keeps it as an unknown top-level field, and 1.1.1's importJSON drops it.
++ */
++export const DEVICE_SETTINGS_KEY = 'deviceSettings';
++export const DEVICE_SETTINGS_VERSION = 1;
++/**
++ * D11: the machine marker is a random id made once per origin and kept in localStorage under this key (outside the
++ * library). It is never a host, user or device name: 2.0 only compares it, to tell "this computer" from "another".
++ */
++export const INSTALL_ID_KEY = 'rig.install';
++const INSTALL_ID_RE = /^[0-9a-f]{32}$/;
++/** D11: 32 random hex digits (crypto.getRandomValues; Math.random only where no crypto exists). */
++function newInstallId() {
++  const bytes = new Uint8Array(16);
++  const c = globalThis.crypto;
++  if (c && typeof c.getRandomValues === 'function') c.getRandomValues(bytes);
++  else for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
++  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
++}
  /**
   * security S2: the largest library (compact JSON characters) an import may leave behind. Chromium's localStorage holds
   * ~5.2 M characters per origin (measured), shared with the backup copies; a bigger library makes every later save
-@@ -681,7 +696,7 @@ function defaultIdGen(prefix) {
+@@ -681,7 +718,7 @@ function defaultIdGen(prefix) {
  export function createStore(opts = {}) {
    const storage = opts.storage || defaultStorage();
    const now = opts.now || (() => Date.now());
@@ -92,7 +163,15 @@ index f57d2a6..e86ab78 100644
    const debounceMs = opts.debounceMs ?? 300;
    const factory = opts.factory || FACTORY_SONGS;
    const idGen = opts.idGen || defaultIdGen;
-@@ -714,6 +729,18 @@ export function createStore(opts = {}) {
+@@ -696,6 +733,7 @@ export function createStore(opts = {}) {
+   let persistTimer = null;
+   let dirty = false;
+   let generation = 0; // round2-shell #3: whole-library replacements (see api.generation)
++  let installId = null; // 1.1.1 (D11): api.installId(), read or made on first use
+   let retryTimer = null;
+   let retryIdx = 0;
+   let readOnlyReason = null; // null | 'backup-failed' | 'second-window' | string
+@@ -714,6 +752,18 @@ export function createStore(opts = {}) {
    }
  
    // ---- load
@@ -111,7 +190,7 @@ index f57d2a6..e86ab78 100644
    const backupPrefix = `${key}.backup-`;
    function backupKeys() {
      const out = [];
-@@ -1244,7 +1271,8 @@ export function createStore(opts = {}) {
+@@ -1244,7 +1294,8 @@ export function createStore(opts = {}) {
      get: () => state,
      /**
       * Load/persist status: {status:'ok'|'fresh'|'corrupt'|'future-schema', backupKey, backupError, lastSavedAt,
@@ -121,11 +200,88 @@ index f57d2a6..e86ab78 100644
       */
      /**
       * Incremented each time the whole library is replaced (importJSON {replace:true}, reload()), before subscribers
+@@ -1666,18 +1717,58 @@ export function createStore(opts = {}) {
+       return ids;
+     },
+ 
+-    /** Whole library as JSON (for export files and Electron auto-backups). */
+-    exportJSON({ pretty = true } = {}) {
++    /**
++     * Whole library as JSON (for export files and Electron auto-backups).
++     * @param {{pretty?:boolean, device?:boolean}} [o] device (1.1.1, D11): also write the `deviceSettings` block
++     *   (backups; Settings › Export library only with its toggle on, DS4). Without it the file is exactly 1.1.0's.
++     * @returns {string}
++     */
++    exportJSON({ pretty = true, device = false } = {}) {
+       const { songs, songOrder, setlists, setlistOrder, meta } = state;
+-      // security S3: device-local settings stay on this machine. The pad folder's absolute path carries the account
+-      // name (/Users/<name>/…), and the MIDI/audio device names/ids identify the hardware. Nothing reads them back:
+-      // a replace-import keeps this machine's values, a merge ignores settings.
++      // security S3: device-local settings stay out of the library's settings. The pad folder's absolute path carries
++      // the account name (/Users/<name>/…), and the MIDI/audio device names/ids identify the hardware. A replace-
++      // import keeps this machine's values, a merge ignores settings. D11: only the opt-in block below carries them.
+       const settings = Object.fromEntries(
+         Object.entries(state.settings).filter(([k]) => !DEVICE_LOCAL_SETTINGS.includes(k)),
+       );
+       const doc = { app: 'worship-rig', kind: 'library', schema: SCHEMA, exportedAt: new Date(now()).toISOString(), songs, songOrder, setlists, setlistOrder, settings, meta };
++      if (device) doc[DEVICE_SETTINGS_KEY] = api.deviceSettings();
+       return JSON.stringify(doc, null, pretty ? 2 : 0);
+     },
++    /**
++     * 1.1.1 (D11): this machine's device-local settings as the export block: {v, install, settings}. `settings` holds
++     * every DEVICE_LOCAL_SETTINGS key the library has (absent optional ones stay absent); `install` is installId().
++     * @returns {{v:number, install:string, settings:object}}
++     */
++    deviceSettings() {
++      const out = {};
++      for (const k of DEVICE_LOCAL_SETTINGS) if (hasOwn(state.settings, k) && state.settings[k] !== undefined) out[k] = clone(state.settings[k]);
++      return { v: DEVICE_SETTINGS_VERSION, install: api.installId(), settings: out };
++    },
++    /**
++     * 1.1.1 (D11): the random machine marker of this origin, made on first use and kept under INSTALL_ID_KEY. When
++     * storage refuses the write (quota, blocked), the id lasts for this session only.
++     * @returns {string} 32 hex digits
++     */
++    installId() {
++      if (installId) return installId;
++      let id = null;
++      try {
++        id = storage.getItem(INSTALL_ID_KEY);
++      } catch {
++        id = null;
++      }
++      if (typeof id !== 'string' || !INSTALL_ID_RE.test(id)) {
++        id = newInstallId();
++        try {
++          storage.setItem(INSTALL_ID_KEY, id);
++        } catch {
++          /* this session's id only */
++        }
++      }
++      installId = id;
++      return id;
++    },
+     /** One song as JSON (share a sound). */
+     exportSong(id, { pretty = true } = {}) {
+       const s = state.songs[id];
+@@ -1714,7 +1805,11 @@ export function createStore(opts = {}) {
+           if (!isObj(s)) return { ok: false, error: 'No song found in that file.' };
+           if (typeof doc.schema === 'number' && doc.schema > SCHEMA) throw new FutureSchemaError(doc.schema);
+           lib = migrate({ songs: [{ ...s, id: s.id || 'import0' }] });
+-        } else lib = migrate(doc);
++        } else {
++          lib = migrate(doc);
++          // 1.1.1 (D11): the device block is for 2.0, not library content; 1.x keeps this machine's own values
++          delete lib[DEVICE_SETTINGS_KEY];
++        }
+       } catch (err) {
+         if (err instanceof FutureSchemaError) return { ok: false, error: 'This file was made by a newer version of Worship Rig.' };
+         return { ok: false, error: 'That file is not a Worship Rig library or song.' };
 diff --git a/app/js/views/settings.js b/app/js/views/settings.js
-index 076d60a..829a195 100644
+index 076d60a..6ed0775 100644
 --- a/app/js/views/settings.js
 +++ b/app/js/views/settings.js
-@@ -834,6 +834,11 @@ export function mountSettings(el, ctx) {
+@@ -834,6 +834,20 @@ export function mountSettings(el, ctx) {
    const li = store.loadInfo || {};
    if (li.status === 'corrupt') setText(storageNote, `The saved library could not be read, so the factory songs were restored. The old data was kept (${li.backupKey}).`);
    else if (li.status === 'future-schema') setText(storageNote, `Your library was saved by a newer version of Worship Rig; it was kept (${li.backupKey}) and a fresh library started.`);
@@ -134,16 +290,51 @@ index 076d60a..829a195 100644
 +    setText(storageNote, 'A library saved by a newer version of Worship Rig is kept untouched on this computer. '
 +      + 'This is a separate 1.x library.');
 +  }
++
++  // D11 skeptic (DS4): an exported library is the file people share, so it carries this computer's device settings
++  // (device names, the pad folder's path with the account name) only when asked, for this export. Backups always do.
++  const exportDevice = C.toggle({ label: 'With this computer’s device settings',
++    title: 'For moving to Worship Rig 2.0 on another computer' });
++  exportDevice.el.dataset.testid = 'export-device';
++  comps.push(exportDevice);
++  const exportDeviceHint = h('p.st-hint', { text: 'Turn on to move to Worship Rig 2.0 on another computer: the file '
++    + 'then also names your MIDI and audio devices and your pad folder. Backups always include them.' });
  
    const backupBox = h('div.st-inline');
    const restoreBox = h('div.st-restore');
+@@ -1023,7 +1037,8 @@ export function mountSettings(el, ctx) {
+     if (isElectron) {
+       backupBox.append(
+         btn('Back up now', async () => {
+-          const r = await rig.backupNow(store.exportJSON({ pretty: false }));
++          // 1.1.1 (D11): a backup carries this machine's device settings for 2.0, as the automatic ones do
++          const r = await rig.backupNow(store.exportJSON({ pretty: false, device: true }));
+           if (r && r.error) console.warn('[settings] backupNow', r.error);
+           toast(r && !r.error ? 'Backup saved' : 'The backup could not be saved.', r && !r.error ? 'info' : 'error');
+         }),
+@@ -1077,10 +1092,13 @@ export function mountSettings(el, ctx) {
+     h('section.st-section', { 'aria-label': 'Library' },
+       h('h2.st-h2', { text: 'Library & backups' }),
+       h('div.st-inline', {},
+-        btn('Export library', () => download(`Worship Rig library ${new Date().toISOString().slice(0, 10)}.json`, store.exportJSON()), { class: 'st-export' }),
++        btn('Export library', () => download(`Worship Rig library ${new Date().toISOString().slice(0, 10)}.json`,
++          store.exportJSON({ device: exportDevice.get() })), { class: 'st-export' }),
+         btn('Import…', () => importInput.click(), { class: 'st-import' }),
+         importInput,
++        exportDevice.el,
+       ),
++      exportDeviceHint,
+       storageNote,
+       backupBox,
+       restoreBox,
 diff --git a/docs/release-notes-1.1.1.md b/docs/release-notes-1.1.1.md
 new file mode 100644
-index 0000000..59bd3b9
+index 0000000..ce8b003
 --- /dev/null
 +++ b/docs/release-notes-1.1.1.md
-@@ -0,0 +1,17 @@
-+Worship Rig 1.1.1 is a safety fix for anyone who also tries Worship Rig 2.0 in the same Chrome. Nothing else changes.
+@@ -0,0 +1,29 @@
++Worship Rig 1.1.1 is a safety fix for anyone who also tries Worship Rig 2.0 in the same Chrome, and it gets your
++settings ready for the move to 2.0. Nothing else changes.
 +
 +### A 2.0 library is never touched by 1.1
 +
@@ -160,6 +351,17 @@ index 0000000..59bd3b9
 +- **Quit.** Nothing is changed. Open the library again in Worship Rig 2.0.
 +
 +The 2.0 library stays exactly as 2.0 saved it, and 2.0 opens it as before.
++
++### Your settings come along to Worship Rig 2.0
++
++1.1.1 also saves this computer's own settings with its backups, so Worship Rig 2.0 can bring them over: each
++keyboard's touch curve, the dynamic range, the click, MIDI clock, global hotkeys, the update check, the MIDI input,
++audio output and My Pads folder, menu-bar mode and low-resource mode. 1.1 itself still keeps its own settings when it
++imports a library, as before.
++
++Settings › Export library leaves them out unless you turn on **With this computer's device settings** next to the
++button. Turn it on when you move to Worship Rig 2.0 on another computer. That file then names your MIDI keyboard,
++your audio output and where your pad folder is, so don't share it; to give songs to someone else, share single songs.
 diff --git a/package-lock.json b/package-lock.json
 index b5d7113..fd7dc23 100644
 --- a/package-lock.json
@@ -193,10 +395,18 @@ index f41e3d3..efdd694 100644
    "author": "Ryan Ye",
    "license": "GPL-3.0-only",
 diff --git a/test/phase1/shell/browser.pw.mjs b/test/phase1/shell/browser.pw.mjs
-index 97262a2..8727a30 100644
+index 97262a2..796a16a 100644
 --- a/test/phase1/shell/browser.pw.mjs
 +++ b/test/phase1/shell/browser.pw.mjs
-@@ -250,3 +250,105 @@ test('L-3: real app — __rig.ready resolves while requestMIDIAccess never answe
+@@ -3,6 +3,7 @@ import { test, before, after } from 'node:test';
+ import assert from 'node:assert/strict';
+ import { createRequire } from 'node:module';
+ import { chromium } from 'playwright';
++import fs from 'node:fs';
+ import path from 'node:path';
+ import { buildFixture, repoRoot } from './fixture.mjs';
+ import { MIDI_PERMISSIONS, waitRigReady } from '../../integration/lib.mjs';
+@@ -250,3 +251,159 @@ test('L-3: real app — __rig.ready resolves while requestMIDIAccess never answe
      await srv.close();
    }
  });
@@ -301,6 +511,216 @@ index 97262a2..8727a30 100644
 +    await ctx.close();
 +    await srv.close();
 +  }
++});
++
++test('1.1.1 (D11): real app — Settings › Export library writes the deviceSettings block only when asked; rig.install is the marker', async () => {
++  const srv = createServer({ appDir: path.join(repoRoot, 'app'), port: 0 });
++  const info = await srv.listen();
++  const origin = `http://127.0.0.1:${info.port}`;
++  const ctx = await browser.newContext({ acceptDownloads: true });
++  await ctx.grantPermissions([...MIDI_PERMISSIONS], { origin });
++  const p = await ctx.newPage();
++  const errors = [];
++  p.on('console', (m) => {
++    if (m.type() === 'error') errors.push(m.text());
++  });
++  p.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
++  try {
++    await p.goto(`${origin}/`);
++    await waitRigReady(p, { timeout: 30000, what: 'real app (D11 export)' });
++    await p.evaluate(() => {
++      const s = window.__rig.store;
++      s.set('settings.midiInputName', 'Stage Piano MIDI Out');
++      // (no outputDeviceId here: a made-up sink id makes the real AudioContext log a device error)
++      s.set('settings.padFolder', { kind: 'fsa', name: 'Pads' });
++      s.set('settings.menuBarMode', true);
++      s.setKeyboard('Stage Piano MIDI Out', { remember: true });
++    });
++    await p.click('#btn-settings');
++    await p.waitForSelector('#view-settings.open', { timeout: 15000 });
++    const btn = p.locator('.st-export').first();
++    await btn.scrollIntoViewIfNeeded();
++    // D11 skeptic DS4: by default the exported file (the one people share) has no device settings, as in 1.1.0
++    const [dl0] = await Promise.all([p.waitForEvent('download', { timeout: 15000 }), btn.click()]);
++    const plainDoc = JSON.parse(fs.readFileSync(await dl0.path(), 'utf8'));
++    assert.equal('deviceSettings' in plainDoc, false, 'default export: no block');
++    assert.equal(JSON.stringify(plainDoc).includes('Stage Piano'), false, 'no device name anywhere');
++    const tog = p.getByTestId('export-device');
++    assert.match(await tog.textContent(), /device settings/);
++    await tog.click();
++    const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 15000 }), btn.click()]);
++    const doc = JSON.parse(fs.readFileSync(await dl.path(), 'utf8'));
++    const b = doc.deviceSettings;
++    assert.equal(b.v, 1);
++    assert.equal(b.install, await p.evaluate(() => localStorage.getItem('rig.install')));
++    assert.match(b.install, /^[0-9a-f]{32}$/);
++    assert.equal(b.settings.midiInputName, 'Stage Piano MIDI Out');
++    assert.deepEqual(b.settings.padFolder, { kind: 'fsa', name: 'Pads' });
++    assert.equal(b.settings.menuBarMode, true);
++    assert.deepEqual(b.settings.keyboards, { 'Stage Piano MIDI Out': { remember: true } });
++    assert.equal('midiInputName' in doc.settings, false, 'S3: the library settings stay without them');
++    assert.equal(doc.schema, 1);
++    assert.deepEqual(errors, []);
++  } finally {
++    await ctx.close();
++    await srv.close();
++  }
++});
+diff --git a/test/phase1/shell/device-settings.test.mjs b/test/phase1/shell/device-settings.test.mjs
+new file mode 100644
+index 0000000..9c54fe8
+--- /dev/null
++++ b/test/phase1/shell/device-settings.test.mjs
+@@ -0,0 +1,150 @@
++// 1.1.1 (2.0 DECISIONS D11): backups and Settings › Export library carry this machine's device-local settings in the
++// optional top-level `deviceSettings` block {v, install, settings}, for Worship Rig 2.0. The library's own settings
++// stay without them (security S3), and 1.x never reads the block back.
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import {
++  memoryStorage, DEVICE_LOCAL_SETTINGS, DEVICE_SETTINGS_KEY, DEVICE_SETTINGS_VERSION, INSTALL_ID_KEY, SCHEMA,
++} from '../../../app/js/store.js';
++import { createController } from '../../../app/js/controller.js';
++import { MidiInput } from '../../../app/js/midi.js';
++import { makeStore, fakeEngine, fakeTimers, fakeDoc, tick } from './helpers.mjs';
++
++/** Every 1.x device-local setting set to a non-default value (made-up names; no real user data). */
++function withDevices(store) {
++  const s = store;
++  assert.equal(s.set('settings.outputDeviceId', 'dev-0xabc'), true);
++  assert.equal(s.set('settings.padFolder', { kind: 'electron', path: '/Volumes/Rig/Pads' }), true);
++  assert.equal(s.set('settings.midiInputId', 'input-0x1f2e'), true);
++  assert.equal(s.set('settings.midiInputName', 'Stage Piano MIDI Out'), true);
++  assert.equal(s.set('settings.menuBarMode', true), true);
++  assert.equal(s.set('settings.lowResource', true), true);
++  assert.equal(s.set('settings.audioSleepSec', 120), true);
++  assert.equal(s.set('settings.hotkeys', { on: true, keys: { panic: 'F13' } }), true);
++  assert.equal(s.set('settings.updateCheck', false), true);
++  assert.equal(s.set('settings.midiClockOut', 'IAC Driver Bus 1'), true);
++  assert.equal(s.set('settings.dynamicRange', 1.4), true);
++  s.setKeyboard('Stage Piano MIDI Out', { touch: { shape: 1.4, min: 0.05, max: 1, top: 118 }, remember: true });
++  s.setClick({ level: 0.5, countIn: 1 });
++  s.set('settings.pedalInvert', true); // library content, not device-local
++  return s;
++}
++
++test('D11: exportJSON({device:true}) adds the block: {v, install, settings} with every device-local setting set', () => {
++  const s = withDevices(makeStore());
++  const doc = JSON.parse(s.exportJSON({ device: true }));
++  const b = doc[DEVICE_SETTINGS_KEY];
++  assert.deepEqual(Object.keys(b).sort(), ['install', 'settings', 'v']);
++  assert.equal(b.v, DEVICE_SETTINGS_VERSION);
++  assert.match(b.install, /^[0-9a-f]{32}$/, 'a random id: no host, user or device name');
++  assert.deepEqual(Object.keys(b.settings).sort(), [...DEVICE_LOCAL_SETTINGS].sort(), 'all 13 1.x keys');
++  for (const k of DEVICE_LOCAL_SETTINGS) assert.deepEqual(b.settings[k], s.get().settings[k], k);
++  // S3 still holds for the library's own settings; the file is otherwise 1.1.0's
++  for (const k of DEVICE_LOCAL_SETTINGS) assert.equal(k in doc.settings, false, k);
++  assert.equal(doc.settings.pedalInvert, true);
++  assert.equal(doc.schema, SCHEMA, 'no SCHEMA bump');
++  const plainDoc = JSON.parse(s.exportJSON());
++  assert.equal(DEVICE_SETTINGS_KEY in plainDoc, false, 'without device:true there is no block');
++  delete doc[DEVICE_SETTINGS_KEY];
++  delete doc.exportedAt;
++  delete plainDoc.exportedAt;
++  assert.deepEqual(doc, plainDoc, 'the block is the only difference');
++  s.dispose();
++});
++
++test('D11: an untouched library has a block with the default device settings only (optional ones absent)', () => {
++  const s = makeStore();
++  const b = s.deviceSettings();
++  assert.deepEqual(b.settings, {
++    outputDeviceId: 'default', padFolder: null, midiInputId: 'first', midiInputName: null, menuBarMode: false,
++    lowResource: false,
++  });
++  s.dispose();
++});
++
++test('D11: the install id is made once per storage (rig.install), reused by later stores, remade when invalid', () => {
++  const storage = memoryStorage();
++  const a = makeStore({ storage });
++  assert.equal(storage.getItem(INSTALL_ID_KEY), null, 'not written until a block is made');
++  const id = a.installId();
++  assert.equal(storage.getItem(INSTALL_ID_KEY), id);
++  assert.equal(a.installId(), id);
++  a.dispose();
++  const b = makeStore({ storage });
++  assert.equal(b.deviceSettings().install, id, 'a later launch on the same origin: same marker');
++  b.dispose();
++  const other = makeStore();
++  assert.notEqual(other.installId(), id, 'another origin / machine: another marker');
++  other.dispose();
++  storage.setItem(INSTALL_ID_KEY, 'my-macbook.local');
++  const c = makeStore({ storage });
++  const fresh = c.installId();
++  assert.match(fresh, /^[0-9a-f]{32}$/);
++  assert.notEqual(fresh, 'my-macbook.local');
++  c.dispose();
++  // storage that refuses writes: an id for this session, nothing thrown
++  const ro = memoryStorage();
++  ro.setItem = () => {
++    throw Object.assign(new Error('quota'), { name: 'QuotaExceededError' });
++  };
++  const d = makeStore({ storage: ro });
++  assert.match(d.installId(), /^[0-9a-f]{32}$/);
++  assert.equal(d.installId(), d.installId());
++  d.dispose();
++});
++
++test('D11: 1.1.1 never reads the block back: replace and merge drop it and keep this machine\'s settings', () => {
++  const a = withDevices(makeStore());
++  const text = a.exportJSON({ device: true });
++  const b = makeStore();
++  b.set('settings.outputDeviceId', 'usb-b');
++  assert.equal(b.importJSON(text, { replace: true }).ok, true);
++  assert.equal(DEVICE_SETTINGS_KEY in b.get(), false, 'not kept in the state');
++  assert.equal(b.get().settings.outputDeviceId, 'usb-b');
++  assert.equal(b.get().settings.midiInputName, null);
++  assert.equal(b.get().settings.keyboards, undefined);
++  assert.equal(b.get().settings.pedalInvert, true);
++  assert.deepEqual(b.get().songs, a.get().songs);
++  const c = makeStore();
++  const r = c.importJSON(text);
++  assert.equal(r.ok, true);
++  assert.equal(DEVICE_SETTINGS_KEY in c.get(), false);
++  assert.equal(c.get().settings.padFolder, null);
++  for (const s of [a, b, c]) s.dispose();
++});
++
++test('D11: controller.backupNow writes the block, tagged with the origin, with the same install id each time', async () => {
++  const backups = [];
++  const rig = { isElectron: true, onMenu: () => () => {}, backupNow: async (json) => (backups.push(json), { path: '/x' }) };
++  const store = withDevices(makeStore());
++  const midi = new MidiInput({ nav: null, warn: () => {} });
++  midi.access = {};
++  const savedLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
++  Object.defineProperty(globalThis, 'location', { value: { origin: 'http://127.0.0.1:8438' }, configurable: true });
++  let ctl;
++  try {
++    ctl = createController({
++      store, engine: fakeEngine(), midi, recorder: null, doc: fakeDoc(), nav: null, win: new EventTarget(), rig,
++      timers: fakeTimers(), now: () => 0,
++    });
++  } finally {
++    if (savedLocation) Object.defineProperty(globalThis, 'location', savedLocation);
++    else delete globalThis.location;
++  }
++  await ctl.start();
++  await tick();
++  await ctl.backupNow();
++  await ctl.backupNow();
++  assert.equal(backups.length >= 2, true);
++  const docs = backups.map((t) => JSON.parse(t));
++  for (const [i, d] of docs.entries()) {
++    assert.ok(backups[i].startsWith('{"origin":"http://127.0.0.1:8438",'), 'M5 origin tag first, as before');
++    assert.equal(d.app, 'worship-rig');
++    assert.equal(d[DEVICE_SETTINGS_KEY].install, store.installId());
++    assert.equal(d[DEVICE_SETTINGS_KEY].settings.midiInputName, 'Stage Piano MIDI Out');
++    assert.deepEqual(d[DEVICE_SETTINGS_KEY].settings.padFolder, { kind: 'electron', path: '/Volumes/Rig/Pads' });
++    for (const k of DEVICE_LOCAL_SETTINGS) assert.equal(k in d.settings, false, k);
++  }
++  ctl.dispose?.();
++  store.dispose();
 +});
 diff --git a/test/phase1/shell/fixes.test.mjs b/test/phase1/shell/fixes.test.mjs
 index a49c893..2833448 100644

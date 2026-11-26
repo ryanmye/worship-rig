@@ -3,6 +3,12 @@
 //
 //   node tools/gen-library-1x-fixtures.mjs [--ref v1.1.0] [--ref v1.0.0] [--out test/fixtures/library-1x]
 //                                          [--only rich,huge] [--headed]
+//   node tools/gen-library-1x-fixtures.mjs --from <worktree> [--label v1.1.1] [--only rich]
+//
+// --from (D11): take the 1.x code from a worktree as it is on disk, uncommitted changes included (the unpublished
+// 1.1.1 patch lives uncommitted on its branch), instead of `git archive <ref>`. The output folder is --label
+// (default: v<package.json version of the worktree>), and the manifest records the worktree's HEAD and whether it was
+// dirty (never its path).
 //
 // For each ref: `git archive <ref>` into a temp dir (no checkout), start THAT ref's server.js on a random port, open
 // its web app in headless Chromium (Playwright) and build libraries through its real UI and store / controller APIs.
@@ -29,7 +35,11 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, '..');
 const argv = process.argv.slice(2);
 const many = (name) => argv.flatMap((a, i) => (a === name ? [argv[i + 1]] : []));
-const refs = many('--ref').length ? many('--ref') : ['v1.1.0', 'v1.0.0'];
+const fromDir = many('--from')[0] ? path.resolve(many('--from')[0]) : null;
+const fromLabel = fromDir
+  ? many('--label')[0] || `v${JSON.parse(fs.readFileSync(path.join(fromDir, 'package.json'), 'utf8')).version}`
+  : null;
+const refs = fromDir ? [fromLabel] : many('--ref').length ? many('--ref') : ['v1.1.0', 'v1.0.0'];
 const out = path.resolve(repo, many('--out')[0] || 'test/fixtures/library-1x');
 const only = new Set((many('--only')[0] || '').split(',').filter(Boolean));
 const headed = argv.includes('--headed');
@@ -38,6 +48,8 @@ const MAX_PLAIN = 200 * 1024;
 /** Scenarios per ref; v1.0.0 has no scenes / keyboards / hotkeys / click, so `rich` feature-detects. */
 const PLAN = {
   'v1.1.0': ['rich', 'pristine', 'empty', 'unicode', 'deleted-factory', 'huge'],
+  // D11: 1.1.1 adds the deviceSettings block to backups and exports; `devices` sets all 13 device-local settings
+  'v1.1.1': ['rich', 'pristine', 'devices'],
   default: ['rich', 'pristine'],
 };
 
@@ -222,6 +234,37 @@ const SCENARIOS = {
     return { ...ids, has };
   },
 
+  /**
+   * D11: every 1.x device-local setting, an Electron pad folder (a made-up path outside any home folder) and one user
+   * song (so a backup is written). Only 1.1.1 writes these into its files.
+   */
+  async devices(page) {
+    return page.evaluate(() => {
+      const s = window.__rig.store;
+      const u = s.addSong(null, { name: 'Device test song' });
+      s.selectSongId(u);
+      const w = (p, v) => {
+        if (!s.set(p, v)) throw new Error(`1.x refused ${p}=${JSON.stringify(v)}`);
+      };
+      w('settings.midiInputId', 'input-0x1f2e');
+      w('settings.midiInputName', 'Stage Piano MIDI Out');
+      w('settings.outputDeviceId', 'dev-0xabc');
+      w('settings.padFolder', { kind: 'electron', path: '/Volumes/Rig/Pads' });
+      w('settings.menuBarMode', true);
+      w('settings.lowResource', true);
+      w('settings.audioSleepSec', 300);
+      w('settings.updateCheck', false);
+      w('settings.hotkeys', { on: true, keys: { nextSong: 'Control+Alt+Command+]', panic: 'F13' } });
+      w('settings.midiClockOut', 'IAC Driver Bus 1');
+      w('settings.dynamicRange', 1.6);
+      s.setKeyboard('Stage Piano MIDI Out', { touch: { shape: 1.4, min: 0.05, max: 1, top: 118 }, remember: true });
+      s.setKeyboard('Computer keyboard', { touch: { shape: 0.8, min: 0.2, max: 0.9, top: 127 } });
+      s.setClick({ level: 0.5, countIn: 1, after: 'quiet', output: 'aux' });
+      s.set('settings.pedalInvert', true); // library content, for contrast
+      return { u, install: typeof s.installId === 'function' ? s.installId() : null };
+    });
+  },
+
   /** An untouched factory seed: 1.x writes no backup of it (round2-shell #2), only an export exists. */
   async pristine(page) {
     return page.evaluate(() => ({ pristine: window.__rig.store.pristine }));
@@ -310,9 +353,20 @@ const SCENARIOS = {
 
 // ---------------------------------------------------------------------------------------------
 async function runRef(ref) {
-  const commit = sh('git', ['-C', repo, 'rev-parse', `${ref}^{commit}`]).trim();
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `rig-${ref}-`));
-  sh('bash', ['-c', `git -C "${repo}" archive "${ref}" app server.js package.json docs | tar -x -C "${tmp}"`]);
+  let commit;
+  let source;
+  if (fromDir) {
+    // D11: the worktree as it is on disk (its uncommitted patch included); only the files a ref would give
+    commit = sh('git', ['-C', fromDir, 'rev-parse', 'HEAD']).trim();
+    const dirty = sh('git', ['-C', fromDir, 'status', '--porcelain', '--', 'app', 'server.js', 'package.json']).trim();
+    source = { kind: 'worktree', head: commit, uncommitted: dirty ? dirty.split('\n').map((l) => l.trim()) : [] };
+    sh('bash', ['-c', `tar -C "${fromDir}" -c app server.js package.json docs | tar -x -C "${tmp}"`]);
+  } else {
+    commit = sh('git', ['-C', repo, 'rev-parse', `${ref}^{commit}`]).trim();
+    source = { kind: 'git archive', ref };
+    sh('bash', ['-c', `git -C "${repo}" archive "${ref}" app server.js package.json docs | tar -x -C "${tmp}"`]);
+  }
   const require = createRequire(import.meta.url);
   const { createServer } = require(path.join(tmp, 'server.js'));
   const server = createServer({ appDir: path.join(tmp, 'app'), port: 0, reuse: false, docsDir: path.join(tmp, 'docs') });
@@ -321,7 +375,7 @@ async function runRef(ref) {
   const browser = await chromium.launch({ headless: !headed, args: ['--autoplay-policy=no-user-gesture-required'] });
   const dir = path.join(out, ref);
   fs.mkdirSync(dir, { recursive: true });
-  const manifest = { ref, commit, generator: 'tools/gen-library-1x-fixtures.mjs', origin, scenarios: {} };
+  const manifest = { ref, commit, source, generator: 'tools/gen-library-1x-fixtures.mjs', origin, scenarios: {} };
   const scenarios = (PLAN[ref] || PLAN.default).filter((n) => !only.size || only.has(n));
   try {
     for (const name of scenarios) {
@@ -421,6 +475,13 @@ async function openApp(browser, origin, { init } = {}) {
       await ui.settings(async () => {
         const btn = page.locator('.st-export').first();
         await btn.scrollIntoViewIfNeeded();
+        // D11 skeptic DS4: 1.1.1 writes the device block into an export only with this toggle on (the move to 2.0
+        // on another computer); the fixtures are that file. 1.1.0 / 1.0.0 have no such toggle.
+        const dev = page.getByTestId('export-device');
+        if (await dev.count()) {
+          const on = async (a) => (await dev.getAttribute(a)) === 'true';
+          if (!(await on('aria-pressed')) && !(await on('aria-checked'))) await dev.click();
+        }
         const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 15000 }), btn.click()]);
         text = fs.readFileSync(await dl.path(), 'utf8');
       });

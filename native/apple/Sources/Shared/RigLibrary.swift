@@ -7,7 +7,8 @@
 // existing "import latest backup" path (controller.importLatestBackup -> window.rig.latestBackup()) reads one.
 // This file provides a minimal window.rig (isElectron:false) over a WKScriptMessageHandlerWithReply named `rigShell`:
 //     backupNow(json, kind)  -> {path} | {error}       writes the same rotation into RigPaths.backupsDir
-//     latestBackup()         -> {path, origin, savedAt, text} | {error}
+//     latestBackup()         -> {path, origin, savedAt, text, via} | {error}   (via, D11: 'backups' | 'first-launch'
+//                               | 'picked'; 'files' = the iPad's Backups folder)
 //                               a staged file (picker / AirDrop) wins once, else the newest library file that
 //                               parses among our own backups and, on macOS, the Electron app's backups
 //     onMenu(cb)             -> unsubscribe            the shell calls cb('importLatestBackup') from Swift
@@ -233,7 +234,14 @@ final class RigLibrary: NSObject, WKScriptMessageHandlerWithReply {
                 return replyHandler(s, nil)
             }
             io.async {
-                let r = RigBackups.latestAnywhere()
+                var r = RigBackups.latestAnywhere()
+                // D11: say how the file was found; JS applies a 1.1.1 device block only from this Mac's folders.
+                // The iPad's Backups folder is open in Files (anything can be put there): never "this machine".
+                #if os(macOS)
+                if r["error"] == nil { r["via"] = "backups" }
+                #else
+                if r["error"] == nil { r["via"] = "files" }
+                #endif
                 DispatchQueue.main.async { replyHandler(r, nil) }
             }
         default:
@@ -305,7 +313,11 @@ final class RigLibrary: NSObject, WKScriptMessageHandlerWithReply {
     private func stageOfferedAndImport(_ e: RigBackups.Entry, _ report: @escaping (String) -> Void) {
         io.async { [weak self] in
             let gone: [String: Any] = ["error": "\(e.url.lastPathComponent) is no longer a library"]
-            let r = RigBackups.payload(e) ?? gone
+            var p = RigBackups.payload(e) ?? gone
+            // D11: this Mac's own backups folder (device settings apply). Set here, not in the main-queue block:
+            // that block is @Sendable in current SDKs, where mutating a captured var warns.
+            if p["error"] == nil { p["via"] = "first-launch" }
+            let r = p
             DispatchQueue.main.async {
                 guard let self else { return }
                 if let err = r["error"] { return report("stage-failed: \(err)") }
@@ -354,7 +366,8 @@ final class RigLibrary: NSObject, WKScriptMessageHandlerWithReply {
                            ok: "OK", cancel: nil) { _ in }
         }
         let tag: Any = (obj["origin"] as? String).map { $0 as Any } ?? NSNull()
-        staged = ["path": url.path, "origin": tag,
+        // D11 "via": a picked / received file may come from another computer (its device block is not applied)
+        staged = ["path": url.path, "origin": tag, "via": "picked",
                   "savedAt": Date().timeIntervalSince1970 * 1000, "text": text]
         emitMenu("importLatestBackup") // controller.importLatestBackup() -> window.rig.latestBackup() -> `staged`
     }

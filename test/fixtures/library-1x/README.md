@@ -8,6 +8,11 @@ UI and its store and controller APIs, and written exactly as that build writes t
 |---|---|---|
 | `v1.1.0/` | v1.1.0 | `c8704a77f3b6de8442f20c19bf1a8eb12924a030` |
 | `v1.0.0/` | v1.0.0 | `b3d07581cf64a6d154e87eeefdd679ef02a80a80` |
+| `v1.1.1/` | v1.1.0 + the uncommitted 1.1.1 patch (`native/docs/patches/v1.1.1-prep.diff`), run with `--from` | `c8704a77f3b6de8442f20c19bf1a8eb12924a030` + patch |
+
+`v1.1.1/` was made from the v1.1.1-prep worktree as it is on disk (`--from`), because 1.1.1 is not committed or
+tagged. Its manifest says so (`source.kind: 'worktree'`, the HEAD and the changed files). Its backups and exports
+carry the D11 `deviceSettings` block.
 
 The generator is `tools/gen-library-1x-fixtures.mjs`, as of lane-e5, based on v2-native `10c3ec7`.
 
@@ -38,6 +43,9 @@ The generator is `tools/gen-library-1x-fixtures.mjs`, as of lane-e5, based on v2
     dynamic range; device-local settings.
   - Unknown fields on the song, slot, setlist, settings and meta.
   - v1.0.0 has no scenes, keyboards or click, so those parts are skipped there.
+- `devices` (v1.1.1 only, D11): every 1.x device-local setting (MIDI input `Stage Piano MIDI Out`, audio output
+  `dev-0xabc`, the Electron pad folder `/Volumes/Rig/Pads`, MIDI clock `IAC Driver Bus 1`, two keyboards, click,
+  hotkeys, menu-bar mode, low-resource, audio sleep, update check, dynamic range) and one user song. All made up.
 - `pristine`: an untouched factory seed. 1.x writes no backup of it (round2-shell #2), so it has no `.backup.json`.
 - `empty`: every song and setlist deleted.
 - `unicode`: CJK, RTL with combining marks, ZWJ emoji, quotes, backslashes, U+2028 and a soft hyphen in a keyboard
@@ -54,6 +62,7 @@ No samples, no user data, no Apple content: every name and note is made up by th
 git fetch --depth=50 origin tag v1.1.0 tag v1.0.0   # if the tags are missing
 export PLAYWRIGHT_BROWSERS_PATH=/root/.cache/rig-pw  # in the cloud container
 node tools/gen-library-1x-fixtures.mjs               # both tags; or --ref v1.1.0 --only rich,huge
+node tools/gen-library-1x-fixtures.mjs --from <wt-111>  # v1.1.1/ from the v1.1.1-prep worktree (label: its version)
 node test/phase2/migration-1x/run.mjs                # the suite reads the fixtures by content, not by id
 ```
 

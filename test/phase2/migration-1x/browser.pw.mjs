@@ -60,10 +60,13 @@ const POLYFILL = (text) => {
   };
 };
 
-async function open(text) {
+async function open(text, { via, install } = {}) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.grantPermissions([...MIDI_PERMISSIONS], { origin });
   await context.addInitScript(POLYFILL, text);
+  // D11: how the shell found the staged file, and 1.1.1's marker already on this origin (same-origin Chrome)
+  if (via) await context.addInitScript((v) => { if (window.__disk.staged) window.__disk.staged.via = v; }, via);
+  if (install) await context.addInitScript((id) => localStorage.setItem('rig.install', id), install);
   const page = await context.newPage();
   const errors = [];
   page.on('console', (m) => {
@@ -170,6 +173,90 @@ test('Settings › Import… with the 1.1 export into the untouched library: rep
   await until(page, () => [...document.querySelectorAll('#toasts > *')].some((t) => /Library imported: 20 songs, 3 setlists/.test(t.textContent)));
   await closeSettings(page);
   await assertShows1x(page, 'Settings import');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+// ============================================================================================ D11: device settings
+const DEV_BACKUP = fixture('v1.1.1', 'devices.backup.json');
+const DEV_EXPORT = fixture('v1.1.1', 'devices.export.json');
+const DEV = JSON.parse(DEV_EXPORT).deviceSettings;
+const settingsNow = (page) => page.evaluate(() => JSON.parse(JSON.stringify(window.__rig.store.get().settings)));
+/** The 1.1.1 settings that need no device here (the MIDI input, clock port and audio output are not in CI). */
+const PORTABLE = ['menuBarMode', 'audioSleepSec', 'hotkeys', 'updateCheck', 'click', 'keyboards', 'dynamicRange'];
+
+test('D11 native first launch: a 1.1.1 backup (via first-launch) also brings its device settings; missing devices are noted', async () => {
+  const { context, page, errors } = await open(DEV_BACKUP, { via: 'first-launch' });
+  await page.evaluate(() => {
+    window.__toastLog = [];
+    new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => window.__toastLog.push(n.textContent))))
+      .observe(document.getElementById('toasts'), { childList: true });
+  });
+  const r = await page.evaluate(() => window.__rig.controller.importLatestBackup());
+  assert.equal(r.ok, true, r.error);
+  const st = await settingsNow(page);
+  for (const k of PORTABLE) assert.deepEqual(st[k], DEV.settings[k], k);
+  assert.equal(st.outputDeviceId, 'default', 'a made-up audio output is not found here: skipped');
+  assert.equal(st.padFolder, null);
+  assert.ok(r.device.skipped.includes('outputDeviceId'));
+  await until(page, () => window.__toastLog.some((t) => /Not found on this computer/.test(t)));
+  assert.deepEqual(await page.evaluate(() => window.__rig.store.machineMarkers()), [DEV.install]);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+async function importWithOffer(page, file) {
+  if (!(await page.evaluate(() => !!document.querySelector('#view-settings.open')))) {
+    await openSettings(page);
+    await cat(page, 'library');
+  }
+  await page.setInputFiles('input[type=file][aria-label="Import library file"]', file);
+  await page.getByTestId('import-device-offer').waitFor({ state: 'visible', timeout: 10000 });
+  return page.getByTestId('import-device-check');
+}
+
+test('D11 Settings › Import… of a 1.1.1 export from this computer: the box is ticked, Import uses the settings', async () => {
+  const { context, page, errors } = await open(null, { install: DEV.install });
+  const file = path.join(tmp, 'Worship Rig library 2026-11-26.json');
+  fs.writeFileSync(file, DEV_EXPORT);
+  const before = await settingsNow(page);
+  const box = await importWithOffer(page, file);
+  assert.equal(await box.isChecked(), true);
+  assert.match(await page.getByTestId('import-device-offer').textContent(), /this computer had in Worship Rig 1\.x/);
+  assert.deepEqual(await settingsNow(page), before, 'nothing happens before Import');
+  await page.getByTestId('import-device-go').click();
+  await until(page, () => [...document.querySelectorAll('#toasts > *')].some((t) => /Device settings used: \d+/.test(t.textContent)));
+  const st = await settingsNow(page);
+  for (const k of PORTABLE) assert.deepEqual(st[k], DEV.settings[k], k);
+  assert.equal(await page.evaluate(() => window.__rig.store.get().songOrder.length), 20, 'the library came too');
+  await closeSettings(page);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('D11 Settings › Import… of a 1.1.1 export from another computer: the box is unticked; the library alone comes in', async () => {
+  const { context, page, errors } = await open(null);
+  const file = path.join(tmp, 'Worship Rig library other.json');
+  fs.writeFileSync(file, DEV_EXPORT);
+  const before = await settingsNow(page);
+  const box = await importWithOffer(page, file);
+  assert.equal(await box.isChecked(), false);
+  assert.match(await page.getByTestId('import-device-offer').textContent(), /from another computer/);
+  await page.getByTestId('import-device-go').click();
+  await until(page, () => [...document.querySelectorAll('#toasts > *')].some((t) => /Library imported: 20 songs/.test(t.textContent)));
+  const st = await settingsNow(page);
+  for (const k of [...PORTABLE, 'midiInputId', 'outputDeviceId', 'padFolder', 'lowResource']) {
+    assert.deepEqual(st[k], before[k], `${k}: not applied`);
+  }
+  assert.equal(await page.getByTestId('import-device-offer').isHidden(), true);
+  // a second file, ticked by hand this time: then it is used (only unset ones)
+  await page.evaluate(() => window.__rig.store.set('settings.audioSleepSec', 15));
+  const box2 = await importWithOffer(page, file);
+  await box2.check();
+  await page.getByTestId('import-device-go').click();
+  await until(page, () => window.__rig.store.get().settings.menuBarMode === true);
+  assert.equal((await settingsNow(page)).audioSleepSec, 15, 'a setting changed here stays');
+  await closeSettings(page);
   assert.deepEqual(errors, []);
   await context.close();
 });

@@ -90,6 +90,11 @@ const V = { '1.1.0': () => S1, '1.1.1': () => S111, '2.0': () => S2 };
  */
 function sequence(seed, { sessions = 10 } = {}) {
   const r = rng(seed);
+  // D11: a second stream, so the D8 sequences stay exactly what they were: 1.1.1 sessions export with the device
+  // block (writing rig.install), 2.0 sessions take the newest such export's block in (device-local writes only)
+  const r2 = rng(seed * 7919 + 1);
+  let exported = null;
+  let marker = null;
   const pick = (a) => a[Math.floor(r() * a.length)];
   const start = pick(['empty', 'rich-1x', 'unicode-1x', 'deleted-factory-1x']);
   const init = start === 'empty' ? {} : { [S2.STORAGE_KEY]: fixture(REF, `${start.replace(/-1x$/, '')}.localstorage.json`) };
@@ -131,6 +136,22 @@ function sequence(seed, { sessions = 10 } = {}) {
         }
       }
     }
+    if (v === '1.1.1' && r2() < 0.6) {
+      exported = s.exportJSON({ pretty: false, device: true });
+      const b = JSON.parse(exported).deviceSettings;
+      if (marker) assert.equal(b.install, marker, `seed ${seed}: one marker per profile`);
+      marker = b.install;
+      step.push('export+device');
+    }
+    if (v === '2.0' && exported && r2() < 0.5) {
+      const dry = s.importJSON(exported, { replace: true, dryRun: true });
+      assert.equal(dry.ok, true, `seed ${seed}: 1.1.1 export`);
+      const d = S2.readDeviceSettings(dry.deviceSettings);
+      assert.deepEqual(d.dropped, [], `seed ${seed}: every 1.1.1 value valid in 2.0`);
+      s.applyDeviceSettings(d.settings);
+      assert.deepEqual(s.machineMarkers(), [marker], `seed ${seed}: same origin, same marker`);
+      step.push('device-in');
+    }
     const crash = r() < 0.12;
     if (!crash) s.persistNow();
     step.push(crash ? 'crash' : 'close');
@@ -143,6 +164,7 @@ function sequence(seed, { sessions = 10 } = {}) {
       saved.push({ label: `session ${i + 1} ${step.join(' ')}`, names: namesOf(lib), v: v === '2.0' ? '2.0' : '1.x' });
     }
     trace.push(step.join(' '));
+    if (marker) assert.equal(storage.getItem(S2.INSTALL_ID_KEY), marker, `seed ${seed}: rig.install never changes`);
     const reach = reachableIn20(storage);
     for (const sv of saved) {
       if (!reach.has(sv.names)) {
@@ -153,8 +175,8 @@ function sequence(seed, { sessions = 10 } = {}) {
   return trace;
 }
 
-test('D8 skeptic: 240 random 1.1.0 / 1.1.1 / 2.0 sequences on one storage: every saved library stays reachable in 2.0', { skip, timeout: 600000 }, () => {
-  const counts = { '1.1.0': 0, '1.1.1': 0, '2.0': 0, restore: 0, crash: 0, after111: 0 };
+test('D8 skeptic: 240 random 1.1.0 / 1.1.1 / 2.0 sequences on one storage: every saved library stays reachable in 2.0 (D11: with device exports)', { skip, timeout: 600000 }, () => {
+  const counts = { '1.1.0': 0, '1.1.1': 0, '2.0': 0, restore: 0, crash: 0, after111: 0, deviceOut: 0, deviceIn: 0 };
   for (let seed = 1; seed <= 240; seed++) {
     const tr = sequence(seed);
     for (let i = 1; i < tr.length; i++) {
@@ -162,6 +184,8 @@ test('D8 skeptic: 240 random 1.1.0 / 1.1.1 / 2.0 sequences on one storage: every
       counts[v] += 1;
       if (/restore/.test(tr[i])) counts.restore += 1;
       if (/crash/.test(tr[i])) counts.crash += 1;
+      if (/export\+device/.test(tr[i])) counts.deviceOut += 1;
+      if (/device-in/.test(tr[i])) counts.deviceIn += 1;
       if (v === '1.1.0' && /^1\.1\.1/.test(tr[i - 1] || '')) counts.after111 += 1;
     }
   }

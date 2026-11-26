@@ -22,14 +22,22 @@ const DEVICE_LOCAL = new Set(DEVICE_LOCAL_SETTINGS);
 /**
  * Differences that lose nothing: a setting the file does not carry gets its default (1.x does the same on load:
  * device-local defaults in a backup, and 2.0's hotkeys rows filled in for a v1.0.0 library that has the field).
+ * D11 skeptic DS3: migrate() drops 1.1.1's `deviceSettings` block (importJSON hands it to the caller from the file).
  */
-const lossy = (diffs) => diffs.filter((d) => !d.startsWith('schema:') && !/^settings\.[^:]+: undefined -> /.test(d));
+const lossy = (diffs) => diffs.filter((d) => !d.startsWith('schema:') && !/^settings\.[^:]+: undefined -> /.test(d)
+  && !/^deviceSettings: .* -> undefined$/.test(d));
 
-test('fixtures: both 1.x tags, every scenario, all three forms, each file under 200 KB', () => {
+test('fixtures: both 1.x tags and 1.1.1, every scenario, all three forms, each file under 200 KB', () => {
   const ms = manifests();
-  assert.deepEqual(ms.map((m) => m.ref).sort(), ['v1.0.0', 'v1.1.0']);
+  assert.deepEqual(ms.map((m) => m.ref).sort(), ['v1.0.0', 'v1.1.0', 'v1.1.1']);
   const v11 = ms.find((m) => m.ref === 'v1.1.0');
   assert.deepEqual(Object.keys(v11.scenarios).sort(), ['deleted-factory', 'empty', 'huge', 'pristine', 'rich', 'unicode']);
+  // D11: 1.1.1 is the uncommitted v1.1.1-prep worktree (generator --from), on top of v1.1.0
+  const v111 = ms.find((m) => m.ref === 'v1.1.1');
+  assert.deepEqual(Object.keys(v111.scenarios).sort(), ['devices', 'pristine', 'rich']);
+  assert.equal(v111.source.kind, 'worktree');
+  assert.equal(v111.source.head, v11.commit);
+  assert.ok(v111.source.uncommitted.some((l) => /app\/js\/store\.js$/.test(l)), 'made by the patched store');
   for (const m of ms) {
     assert.match(m.commit, /^[0-9a-f]{40}$/);
     for (const [name, sc] of Object.entries(m.scenarios)) {

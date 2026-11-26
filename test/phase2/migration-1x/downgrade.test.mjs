@@ -232,3 +232,79 @@ test('D8: 2.0 ↔ 1.1.1 in one profile, twice: 1.1.1 never writes the 2.0 key; i
   assert.ok(namesOf(s.get()).includes('Session 4 (1.1.1)'));
   assert.ok(namesOf(s.get()).includes('Session 2 (1.1.1)'));
 });
+
+// ============================================================================================ D11: the device block
+const f111 = (file) => fixture('v1.1.1', file);
+test('D11: 1.1.0 ignores 1.1.1\'s deviceSettings block (replace, merge, backup tag); its own device settings stay', { skip }, () => {
+  for (const file of ['devices.export.json', 'devices.backup.json', 'rich.export.json']) {
+    const s1 = S1.createStore(opts(S1));
+    s1.set('settings.outputDeviceId', 'usb-here');
+    s1.set('settings.midiInputName', 'Keys here');
+    const mine = plain(s1.get().settings);
+    const r = s1.importJSON(f111(file), { replace: true });
+    assert.equal(r.ok, true, `${file}: ${r.error}`);
+    for (const k of S1.DEVICE_LOCAL_SETTINGS) assert.deepEqual(s1.get().settings[k], mine[k], `${file} ${k}`);
+    assert.equal('deviceSettings' in JSON.parse(s1.exportJSON()), false, '1.1.0 never writes the block on');
+    const m = S1.createStore(opts(S1));
+    assert.equal(m.importJSON(f111(file)).ok, true, `${file} merge`);
+    assert.equal(m.get().settings.midiInputName, null);
+    s1.dispose();
+    m.dispose();
+  }
+});
+
+test('D11 skeptic DS3: the block 1.1.0 stores after importing a 1.1.1 file never enters 2.0 on the same origin', { skip }, () => {
+  const storage = S1.memoryStorage();
+  const s1 = S1.createStore(opts(S1, { storage }));
+  assert.equal(s1.importJSON(f111('devices.export.json'), { replace: true }).ok, true);
+  s1.persistNow();
+  s1.dispose();
+  const raw = JSON.parse(storage.getItem(S1.STORAGE_KEY));
+  assert.ok(raw.deviceSettings, '1.1.0 keeps the block in rig.v1 (unknown top-level field)');
+  const s2 = S2.createStore(opts(S2, { storage }));
+  assert.equal('deviceSettings' in s2.get(), false);
+  assert.equal(s2.get().settings.menuBarMode ?? false, false, 'nothing of it applied');
+  assert.equal(s2.get().songOrder.length, raw.songOrder.length, 'the library itself came over');
+  s2.dispose();
+});
+
+test('D11: an older 2.0 build (v2-native HEAD, before D11) keeps the block as an unknown field and uses none of it', async () => {
+  const has2 = spawnSync('git', ['-C', ROOT, 'cat-file', '-e', 'HEAD:app/js/store.js']).status === 0;
+  const d = tmpDir('old2');
+  try {
+    assert.equal(has2, true);
+    const r0 = spawnSync('bash', ['-c', `git -C "${ROOT}" archive HEAD app/js | tar -x -C "${d}"`]);
+    assert.equal(r0.status, 0, String(r0.stderr));
+    const Old = await import(path.join(d, 'app/js/store.js'));
+    if (typeof Old.readDeviceSettings === 'function') return; // HEAD already has D11 (after commit): nothing to test
+    const s = Old.createStore(opts(Old));
+    const before = plain(s.get().settings);
+    const r = s.importJSON(f111('devices.backup.json'), { replace: true });
+    assert.equal(r.ok, true, r.error);
+    assert.deepEqual(plain(s.get().deviceSettings), JSON.parse(f111('devices.backup.json')).deviceSettings);
+    for (const k of Old.DEVICE_LOCAL_SETTINGS) assert.deepEqual(s.get().settings[k], before[k], k);
+    assert.equal('deviceSettings' in JSON.parse(s.exportJSON()), false);
+    s.dispose();
+  } finally {
+    fs.rmSync(d, { recursive: true, force: true });
+  }
+});
+
+test('D11: the patched 1.1.1 store (the diff in this branch) writes the block that this 2.0 reads', { skip: skip111 }, () => {
+  const storage = S111.memoryStorage();
+  const s = S111.createStore(opts(S111, { storage }));
+  s.set('settings.midiClockOut', 'IAC Driver Bus 1');
+  s.setKeyboard('Stage Piano MIDI Out', { remember: true });
+  const text = s.exportJSON({ device: true });
+  const block = JSON.parse(text).deviceSettings;
+  assert.equal(block.install, storage.getItem(S111.INSTALL_ID_KEY));
+  const s2 = S2.createStore(opts(S2, { storage }));
+  const r = s2.importJSON(text, { replacePristine: true });
+  assert.equal(r.ok, true);
+  const d = S2.readDeviceSettings(r.deviceSettings);
+  assert.deepEqual(d.dropped, []);
+  assert.equal(d.settings.midiClockOut, 'IAC Driver Bus 1');
+  assert.deepEqual(s2.machineMarkers(), [block.install], 'same origin (Chrome): 2.0 reads 1.1.1\'s marker');
+  s.dispose();
+  s2.dispose();
+});

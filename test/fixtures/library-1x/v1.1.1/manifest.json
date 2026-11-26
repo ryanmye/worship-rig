@@ -1,0 +1,138 @@
+{
+  "ref": "v1.1.1",
+  "commit": "c8704a77f3b6de8442f20c19bf1a8eb12924a030",
+  "source": {
+    "kind": "worktree",
+    "head": "c8704a77f3b6de8442f20c19bf1a8eb12924a030",
+    "uncommitted": [
+      "M app/js/controller.js",
+      "M app/js/main.js",
+      "M app/js/store.js",
+      "M app/js/views/settings.js",
+      "M package.json"
+    ]
+  },
+  "generator": "tools/gen-library-1x-fixtures.mjs",
+  "origin": "http://127.0.0.1:41349",
+  "scenarios": {
+    "rich": {
+      "files": {
+        "backup": {
+          "file": "rich.backup.json",
+          "chars": 38305,
+          "bytes": 38311
+        },
+        "export": {
+          "file": "rich.export.json",
+          "chars": 71659,
+          "bytes": 71665
+        },
+        "localstorage": {
+          "file": "rich.localstorage.json",
+          "chars": 38111,
+          "bytes": 38117
+        }
+      },
+      "songs": 20,
+      "setlists": 3,
+      "pristine": false,
+      "backupWritten": true,
+      "consoleErrors": [],
+      "detail": {
+        "edited": "song_mwwu7por01r0iqz",
+        "deleted": [
+          "song_mwwu7pos04k0wyz",
+          "song_mwwu7pow0ju6afv"
+        ],
+        "u": "song_mwwu7tyl0ld18z9",
+        "dup": "song_mwwu7tyn0mqafdn",
+        "tpl": "song_mwwu7tyn0n14gib",
+        "sunday": "set_mwwu7tys0o0mugx",
+        "youth": "set_mwwu7tys0pwvlxm",
+        "extras": {
+          "velocityCurve": true,
+          "bendEnabled": false,
+          "width": true,
+          "eqLow": true,
+          "eqHigh": true,
+          "eqB2": true,
+          "eqB7": true,
+          "release": true,
+          "pedalHold": true,
+          "touch": true,
+          "sustain": true,
+          "mono": true,
+          "fxEq": true,
+          "fxComp": true,
+          "lofi": true,
+          "chordFollow": true,
+          "modWheel": true,
+          "timeSig": true,
+          "sceneLearn": true,
+          "audioSleep": true,
+          "updateCheck": true,
+          "hotkeys": true,
+          "midiClockOut": true,
+          "dynamicRange": true
+        },
+        "has": {
+          "scenes": true,
+          "keyboards": true,
+          "click": true
+        }
+      }
+    },
+    "pristine": {
+      "files": {
+        "export": {
+          "file": "pristine.export.json",
+          "chars": 62757,
+          "bytes": 62757
+        },
+        "localstorage": {
+          "file": "pristine.localstorage.json",
+          "chars": 34122,
+          "bytes": 34122
+        }
+      },
+      "songs": 19,
+      "setlists": 1,
+      "pristine": true,
+      "backupWritten": false,
+      "consoleErrors": [],
+      "detail": {
+        "pristine": true
+      }
+    },
+    "devices": {
+      "files": {
+        "backup": {
+          "file": "devices.backup.json",
+          "chars": 36479,
+          "bytes": 36479
+        },
+        "export": {
+          "file": "devices.export.json",
+          "chars": 66906,
+          "bytes": 66906
+        },
+        "localstorage": {
+          "file": "devices.localstorage.json",
+          "chars": 36285,
+          "bytes": 36285
+        }
+      },
+      "songs": 20,
+      "setlists": 1,
+      "pristine": false,
+      "backupWritten": true,
+      "consoleErrors": [
+        "The AudioContext encountered an error from the audio device or the WebAudio renderer."
+      ],
+      "detail": {
+        "u": "song_mwwu86pr0lp4dar",
+        "install": "1d1bb458c7d673b13945caebacc4060c"
+      }
+    }
+  }
+}

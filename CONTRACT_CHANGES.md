@@ -7691,3 +7691,77 @@ Review `native/docs/reviews/D8-D9.md` (K1–K3). store.js and controller.js; SCH
     gave 8 xruns and passed the old check at 5+ late wakeups (allowance 9 under two `yes` loops, 46 under four); a
     4 ms stall every 32nd quantum (35 xruns) passed it under four `yes` loops (allowance 36-44). Clean runs: 0-2
     xruns, 0-1 note xruns, idle, under two and under four `yes` loops.
+
+## D11: 1.x device-local settings come over from 1.1.1 (store.js, controller.js, views/settings.js, RigLibrary.swift)
+
+- **The block.** 1.1.1 writes an optional top-level `deviceSettings` = `{v: 1, install, settings}` into its backups
+  and Settings › Export library (its CONTRACT_CHANGES "1.1.1: device-local settings…"; the patch is
+  `native/docs/patches/v1.1.1-prep.diff`). `settings` = 1.1's 13 `DEVICE_LOCAL_SETTINGS`; `install` = 32 random hex
+  digits kept per origin in localStorage `rig.install`. The file stays schema 1; **no SCHEMA bump** on either side.
+- **store.js.**
+  - `importJSON` (whole-library path) takes the block out of the library like the envelope keys and returns it as
+    `result.deviceSettings` (replace, pristine replace, merge and `dryRun` alike). It never enters the state, and
+    2.0 never writes a block (2.0 has no newer machine to move to; its own backups stay as before).
+  - `DEVICE_BLOCK_SETTINGS` (the 13 1.x keys), `DEVICE_SELECTIONS` (outputDeviceId, padFolder, midiInputId,
+    midiInputName, midiClockOut), `validDeviceSetting(k, v)` (2.0's own `SETTINGS_VALIDATORS` / `normalizeSettings`;
+    2.0-only keys such as `polyphony` are refused), `readDeviceSettings(raw)` → `{v, install, settings, dropped}` or
+    null (not an object, no settings, `v` ≠ 1), `deviceSettingUnset(settings, k)` (absent or the default; the MIDI
+    input pair is unset while `midiInputId` is 'first').
+  - `applyDeviceSettings(values)` writes only unset settings, checked again at write time; `keyboards` merges per
+    name (this machine's entry wins). Device-local writes are not edits: a pristine library stays pristine.
+  - `machineMarkers()` = this origin's `rig.install` (1.1.1 Chrome on the same origin) plus the remembered ones in
+    `rig.install.known` (newest first, at most 8); `rememberMachineMarker(id)`. 2.0 never creates `rig.install`.
+- **controller.js.**
+  - `applyDeviceSettings(raw, {sameMachine})`: validates (unknown / invalid keys dropped, one warning naming them),
+    skips selections this machine already has (no check, no note), then checks the rest: the MIDI input by name,
+    then id, among connected inputs (stored with this app's id for it); the clock output by name; the audio output
+    in `enumerateDevices()`; an Electron pad folder only when `rig.getInfo().padsRoot` is that path; an FSA pad
+    folder never (its handle belongs to the origin that picked it). Missing ones are skipped with one warning line
+    ("Not found on this computer, so left as they are: …"). `sameMachine` remembers the marker. Read-only or
+    secondary windows apply nothing.
+  - `importLatestBackup` applies the block after a successful import when the file came from this machine's backups
+    (`backupFromThisMachine`: `via` 'backups' or 'first-launch', or Electron with no `via`). Otherwise (`via`
+    'picked', or a shell that does not say) it applies nothing and warns once to use Settings › Import…. The result
+    carries `device: {ok, applied, kept, skipped, dropped, error?}`.
+  - `inspectDeviceSettings(raw)` → `{ok, sameMachine, keys, dropped}` for the Settings offer.
+- **views/settings.js.** Import… runs a dry run first. A file with a block shows one row: what it holds, a checkbox
+  "Also use its device settings here (only ones not set on this computer yet)", **Import** and **Cancel**. The box is
+  ticked only when the marker is this computer's. Nothing is applied before Import, and never without the box.
+  Files without a block import exactly as before.
+- **RigLibrary.swift (unbuilt).** `latestBackup` payloads say how they were found: `via` = 'backups' (its own or the
+  Electron folder), 'first-launch' (the first-launch stage) or 'picked' (File › Import Library Backup…, AirDrop,
+  Open in). `lib.mjs nativeShell` mirrors it.
+- **Fixtures.** `tools/gen-library-1x-fixtures.mjs --from <worktree>` runs a worktree's code as it is on disk
+  (uncommitted patch included). `test/fixtures/library-1x/v1.1.1/` = `rich`, `pristine` and the new `devices` (all 13
+  settings, an Electron pad folder `/Volumes/Rig/Pads`), made by the v1.1.1-prep worktree on v1.1.0 `c8704a7`. Every
+  file is under 72 KB.
+- **Limits.** The marker is per origin: a 1.1.1 Chrome export reads as "another computer" in the native app unless
+  that app already imported a backup from the same origin. (The "set back to default" limit is closed by DS1 below.)
+- **Tests.** `migration-1x/device-settings.test.mjs` (13), `downgrade.test.mjs` +3 (1.1.0 ignores the block; the
+  pre-D11 2.0 build keeps it as an unknown field; the patched 1.1.1 store's block reads here), `d8-skeptic.test.mjs`
+  random sequences now also export with the block in 1.1.1 and take it in in 2.0 (second RNG stream, so the D8
+  sequences are unchanged), `browser.pw.mjs` +3 (native first launch with a 1.1.1 backup; Settings › Import… ticked
+  for this computer, unticked for another, ticked by hand).
+
+## D11 skeptic fixes (review `native/docs/reviews/D11.md`)
+
+- **DS1, no overwrite after "back to the default".** `store.set` / `store.update` record each device-local setting
+  this machine changes (not `midiInputName`, which the controller writes for the chosen input) in localStorage
+  `rig.device.touched` (`DEVICE_TOUCHED_KEY`, outside the library, per origin; a keyboard counts per name as
+  `keyboards:<name>`). `deviceSettingUnset(settings, k, touched?)` is false for a touched key, and
+  `store.applyDeviceSettings` / `controller.applyDeviceSettings` pass `store.deviceSettingsTouched()`. A keyboard
+  changed or deleted here is never added back. A read-only window keeps the record in memory only. Limit: changes
+  made before this build (pre-D11 2.0) were not recorded.
+- **DS2, iPad.** The iPad's Backups folder is open in Files, so anything can be put there. RigLibrary.swift tags
+  `latestAnywhere()` there as `via: 'files'` (macOS stays 'backups'), and `backupFromThisMachine` refuses any payload
+  while `rig.platform === 'ipados'` (1.1.1 never runs on an iPad). `lib.mjs nativeShell` mirrors the Swift change.
+- **DS3, a stored block.** 1.1.0 and pre-D11 2.0 keep an imported 1.1.1 file's block as an unknown top-level field,
+  so a stored `rig.v1` (or a kept copy) could hold one. `migrate()` now drops `deviceSettings`, so it never enters the
+  state on load, `reload()`, `update()` or `restoreKept()`. `importJSON` reads the block from the file itself.
+- **DS4, privacy (1.1.1 side).** 1.1.1's Settings › Export library writes the block only while its new toggle **With
+  this computer's device settings** is on (off by default). Backups always carry it. The fixture generator turns the
+  toggle on, so `v1.1.1/*.export.json` is that opted-in file (regenerated).
+- **DS5, UI.** The Import… offer row has 44 px targets (the label row around the checkbox, Import, Cancel) and
+  `[hidden]` now hides it (`.st-restore`'s `display: flex` beat the attribute).
+- Tests: `device-settings.test.mjs` +4 (DS1 ×2, DS2, DS3), `downgrade.test.mjs` +1 (real 1.1.0 stores a block, 2.0
+  loads without it), the patched-1.1.1 browser test (no block by default, the block with the toggle).

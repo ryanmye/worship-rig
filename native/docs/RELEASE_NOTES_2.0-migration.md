@@ -19,18 +19,37 @@ Also:
 Program Change keeps working exactly as in 1.x: a program button jumps straight to the song. Turning it on fresh in
 2.0 gives the new "cue, then Go" behaviour instead.
 
-## What does not move, and why
+## Your own computer's settings (they come over from 1.1.1)
 
-1.x never wrote these into its backups or exports, because they belong to one machine and one keyboard (the same rule
-2.0 follows). Set them again once in 2.0:
+Some settings belong to one computer and one keyboard rather than to the library:
 - each keyboard's touch curve, and "remember this keyboard";
 - the dynamic range;
 - the click (level, count-in, output) and MIDI clock out;
 - global hotkeys, and the update check;
 - the chosen MIDI input, audio output and My Pads folder;
-- menu-bar mode and low-resource;
-- the My Samples packs themselves. Songs keep pointing at them: put the packs back in
-  `~/Music/Worship Rig/Samples/` (Mac).
+- menu-bar mode and low-resource.
+
+1.1.0 and older never wrote these into backups or exports. **Worship Rig 1.1.1 does** (*verified* in JS with
+libraries made by the 1.1.1 code, `test/phase2/migration-1x/device-settings.test.mjs`):
+- **From this Mac's backups** (the first-launch import, and Settings › Import latest backup…, which reads the old
+  app's backups folder), 2.0 takes them over by itself.
+- **From a file** (Settings › Import…), 2.0 asks first: "Also use its device settings here". The box is ticked when
+  the file was saved on this computer and unticked when it came from another one. A file you pick in File › Import
+  Library Backup… or receive by AirDrop brings the library only; import it with Settings › Import… to choose. On the
+  iPad nothing is taken over by itself, not even from its own Backups folder.
+- 1.1.1's Settings › Export library includes these settings only when you turn on **With this computer's device
+  settings** next to its button. Its backups always include them.
+- Either way, 2.0 only fills in what you have not set in 2.0 yet. A setting you changed in 2.0 stays, even if you
+  changed it back to how it started.
+- A MIDI keyboard, MIDI clock port, audio output or pad folder that is not there right now is skipped, and one line
+  says which. Choose it again in Settings. A pad folder chosen in Chrome always has to be chosen again.
+- A setting that 2.0 cannot use is left out, with a warning.
+
+With a backup or export from 1.1.0 or older, set these once again in 2.0.
+
+Also not moved, from any version: the My Samples packs themselves. Songs keep pointing at them: put the packs back
+in `~/Music/Worship Rig/Samples/` (Mac). And 2.0's own per-computer settings (voices, buffer size, voice limit,
+drone freeze) are never taken from a file.
 
 ## Steps: Mac
 
@@ -111,6 +130,8 @@ still has to fit the 2 MB.
 - The native first-launch prompt itself (NSAlert, the remembered answer) and its scan of `~/Library/Application
   Support/*/backups/`. The Electron folder name is still to be checked on the Mac.
 - The iPad Files picker and AirDrop / "Open in" on a real iPad.
+- The `via` tag the Mac app adds to each backup it hands over (1.1.1 settings), and the settings themselves on a real
+  Mac with a real keyboard, audio interface and pad folder.
 - WebKit's storage limit with a library near the 2 MB cap, and with kept copies next to it.
 - One known gap: if the newest 1.x backup is damaged, the first-launch import fails safely but does not fall back to
   the next older one (the Swift side picks only the newest). Use File › Import Library Backup… and pick an older

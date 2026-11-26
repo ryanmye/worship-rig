@@ -316,6 +316,104 @@ export const versionOfSchema = (schema) => (schema === 1 ? '1.x' : schema === 2 
 export const IMPORT_ENVELOPE_KEYS = Object.freeze(['app', 'kind', 'exportedAt', 'origin']);
 /** security S2: deepest nesting an import may have (real exports reach ~8: songs.<id>.patch.slots.<i>.eq.b3.hz). */
 export const IMPORT_MAX_DEPTH = 64;
+/**
+ * D11: Worship Rig 1.1.1 writes this machine's device-local settings into its backups and exports as an optional
+ * top-level block, `deviceSettings` = {v, install, settings}. importJSON never keeps it in the state: it hands it to
+ * the caller (`result.deviceSettings`), and controller.applyDeviceSettings consumes it (CONTRACT_CHANGES "D11").
+ */
+export const DEVICE_SETTINGS_KEY = 'deviceSettings';
+/**
+ * D11: the 1.x device-local settings a block may bring: 1.1's DEVICE_LOCAL_SETTINGS. 2.0's own additions (voices,
+ * buffer, voice limit, drone freeze, chart view) are about this machine's CPU and are never taken from a file.
+ */
+export const DEVICE_BLOCK_SETTINGS = Object.freeze([
+  'outputDeviceId', 'padFolder', 'midiInputId', 'midiInputName', 'menuBarMode', 'lowResource', 'audioSleepSec',
+  'hotkeys', 'updateCheck', 'click', 'midiClockOut', 'keyboards', 'dynamicRange',
+]);
+/** D11: the device selections of a block; they apply only when the device or folder is found here (controller). */
+export const DEVICE_SELECTIONS = Object.freeze(['outputDeviceId', 'padFolder', 'midiInputId', 'midiInputName',
+  'midiClockOut']);
+/**
+ * D11: the machine marker. 1.1.1 makes a random id once per origin under this key (outside the library). 2.0 Chrome
+ * on the same origin reads the same key; native / Electron 2.0 also remember the markers of blocks they took on a
+ * same-machine path (KNOWN_INSTALLS_KEY, newest first, at most KNOWN_INSTALLS_MAX).
+ */
+export const INSTALL_ID_KEY = 'rig.install';
+export const KNOWN_INSTALLS_KEY = 'rig.install.known';
+export const KNOWN_INSTALLS_MAX = 8;
+const INSTALL_ID_RE = /^[0-9a-f]{32}$/;
+/** @param {*} v @returns {boolean} `v` is a machine marker as 1.1.1 writes it */
+export const validInstallId = (v) => typeof v === 'string' && INSTALL_ID_RE.test(v);
+
+/**
+ * D11: one device-local value from a block, checked with this store's own validators. Unknown keys, and values the
+ * store would refuse or drop, give undefined. A value equal to the default (or absent) is valid: nothing to apply.
+ * @param {string} k
+ * @param {*} v
+ * @returns {*} the value as the store keeps it, or undefined (invalid)
+ */
+export function validDeviceSetting(k, v) {
+  if (!DEVICE_BLOCK_SETTINGS.includes(k) || v === undefined) return undefined;
+  const fn = SETTINGS_VALIDATORS[k];
+  if (fn) {
+    const r = fn(v);
+    if (r === INVALID) return undefined;
+    // an Electron pad folder needs its path, an FSA one its name (nothing else can be checked or shown)
+    if (k === 'padFolder' && r && r.kind === 'electron' && !(typeof r.path === 'string' && r.path)) return undefined;
+    return r;
+  }
+  const out = normalizeSettings({ [k]: v }, {}, {});
+  if (hasOwn(out, k)) return out[k];
+  return k === 'dynamicRange' && v === 1 ? 1 : undefined; // 1 is stored as absent (the default)
+}
+
+/**
+ * D11: read a `deviceSettings` block. Never throws.
+ * @param {*} raw
+ * @returns {{v:number, install:(string|null), settings:object, dropped:string[]}|null} null = no usable block
+ *   (not an object, no settings map, or a version this build does not know). `dropped` = unknown / invalid keys.
+ */
+export function readDeviceSettings(raw) {
+  if (!isObj(raw) || !Number.isInteger(raw.v) || raw.v < 1 || raw.v > 1 || !isObj(raw.settings)) return null;
+  const settings = {};
+  const dropped = [];
+  for (const [k, v] of Object.entries(raw.settings)) {
+    const ok = isReservedKey(k) ? undefined : validDeviceSetting(k, v);
+    if (ok === undefined) dropped.push(String(k).slice(0, 40));
+    else settings[k] = ok;
+  }
+  return { v: raw.v, install: validInstallId(raw.install) ? raw.install : null, settings, dropped };
+}
+
+/**
+ * D11 skeptic (DS1): the device-local settings changed on this machine, kept outside the library (per origin, like
+ * rig.install) as a JSON array: setting keys, and `keyboards:<name>` per keyboard entry. A value set back to its
+ * default looks unset in the library, so this is what keeps a 1.1.1 block from overwriting it.
+ */
+export const DEVICE_TOUCHED_KEY = 'rig.device.touched';
+/** @param {string} name a keyboard name @returns {string} its DEVICE_TOUCHED_KEY entry */
+export const touchedKeyboard = (name) => `keyboards:${name}`;
+
+/**
+ * D11: is device-local setting `k` still unset in `settings` (absent, or its default) and never changed on this
+ * machine? Only these are filled in from a block: a setting changed here is never overwritten, also when it was set
+ * back to its default (DS1: `touched`, from store.deviceSettingsTouched()).
+ * @param {object} settings
+ * @param {string} k
+ * @param {Iterable<string>} [touched] the device-local keys changed on this machine
+ * @returns {boolean}
+ */
+export function deviceSettingUnset(settings, k, touched = null) {
+  const s = settings || {};
+  if (touched) {
+    const t = touched instanceof Set ? touched : new Set(touched);
+    if (t.has(k === 'midiInputName' ? 'midiInputId' : k)) return false;
+  }
+  if (k === 'midiInputId' || k === 'midiInputName') return (s.midiInputId ?? 'first') === 'first';
+  if (hasOwn(DEFAULT_SETTINGS, k)) return deepEqual(s[k] ?? DEFAULT_SETTINGS[k], DEFAULT_SETTINGS[k]);
+  if (k === 'dynamicRange') return s.dynamicRange === undefined || s.dynamicRange === 1;
+  return s[k] === undefined;
+}
 
 /** Iterative (no recursion, so a hostile file can't blow the stack): does `v` nest deeper than `max`? */
 function nestsDeeperThan(v, max) {
@@ -807,6 +905,10 @@ export function migrate(raw) {
   // UIA: schema 1, and a state without one (hand-written files, 1.x-era docs), keep exactly 4 slots per song
   const legacy = raw.schema === undefined || schema < 2;
   const out = { ...raw, schema: SCHEMA };
+  // D11 skeptic (DS3): 1.1.0 and pre-D11 2.0 keep an imported 1.1.1 file's device block as an unknown top-level field,
+  // so it can sit in a stored library (rig.v1, a kept copy). It is another computer's device data, never library
+  // state: importJSON reads it from the file itself, and every other path drops it here.
+  delete out[DEVICE_SETTINGS_KEY];
   // songs: map (array accepted for hand-written files)
   const songs = {};
   const srcSongs = Array.isArray(raw.songs) ? entriesFromArray(raw.songs, 'song') : isObj(raw.songs) ? raw.songs : {};
@@ -926,6 +1028,7 @@ export function createStore(opts = {}) {
   let retryTimer = null;
   let retryIdx = 0;
   let readOnlyReason = null; // null | 'backup-failed' | 'second-window' | string
+  let deviceTouched = null; // D11 skeptic DS1: Set of DEVICE_TOUCHED_KEY entries, read on first use
   const info = { status: 'ok', backupKey: null, backupError: null, lastSavedAt: null, persistError: null, persistFailures: 0, readOnly: false, readOnlyReason: null };
   const infoListeners = new Set();
   function infoChanged() {
@@ -1226,6 +1329,48 @@ export function createStore(opts = {}) {
         warn(`${info.status === 'corrupt' ? 'saved library is unreadable' : err.message} and no backup could be written; the saved data is left untouched and changes are NOT saved`);
       }
       state = deepFreeze(emptyState(now()));
+    }
+  }
+
+  // ---- D11 skeptic DS1: which device-local settings were changed on this machine (outside the library)
+  function touchedSet() {
+    if (deviceTouched) return deviceTouched;
+    deviceTouched = new Set();
+    try {
+      const a = JSON.parse(storage.getItem(DEVICE_TOUCHED_KEY) || '[]');
+      if (Array.isArray(a)) for (const x of a) if (typeof x === 'string' && x.length <= 80) deviceTouched.add(x);
+    } catch {
+      /* unreadable: nothing known */
+    }
+    return deviceTouched;
+  }
+  /**
+   * Record the device-local settings a set()/update() changed. midiInputName is not a choice (the controller writes
+   * the chosen input's name); a keyboard counts per name, so deleting one here also keeps it deleted.
+   */
+  function noteDeviceWrites(before, after) {
+    const b = (before && before.settings) || {};
+    const a = (after && after.settings) || {};
+    const t = touchedSet();
+    const n = t.size;
+    for (const k of DEVICE_BLOCK_SETTINGS) {
+      if (k === 'midiInputName' || deepEqual(b[k], a[k])) continue;
+      if (k !== 'keyboards') {
+        t.add(k);
+        continue;
+      }
+      const kb = isObj(b.keyboards) ? b.keyboards : {};
+      const ka = isObj(a.keyboards) ? a.keyboards : {};
+      for (const name of new Set([...Object.keys(kb), ...Object.keys(ka)])) {
+        if (!deepEqual(kb[name], ka[name])) t.add(touchedKeyboard(name));
+      }
+    }
+    if (t.size === n || readOnlyReason !== null) return; // a read-only window's changes are not saved either
+    try {
+      const cap = DEVICE_BLOCK_SETTINGS.length + KEYBOARDS_MAX * 2;
+      storage.setItem(DEVICE_TOUCHED_KEY, JSON.stringify([...t].slice(-cap)));
+    } catch {
+      /* storage full: this session still knows */
     }
   }
 
@@ -1978,8 +2123,10 @@ export function createStore(opts = {}) {
       // safe one; a 1.x library that already has PC on keeps an absent action (= 'switch', programChangeOf)
       const pcOn = v.segs.length === 2 && v.segs[0] === 'settings' && v.segs[1] === 'programChange'
         && v.value === true && !state.settings.programChange && !hasOwn(state.settings, 'programChangeAction');
+      const prev = state;
       const paths = [put(v.segs, v.value)];
       if (pcOn) paths.push(put(['settings', 'programChangeAction'], PC_ACTION_DEFAULT));
+      if (v.segs[0] === 'settings' && DEVICE_BLOCK_SETTINGS.includes(v.segs[1])) noteDeviceWrites(prev, state); // DS1
       changed(paths);
       return true;
     },
@@ -1999,6 +2146,7 @@ export function createStore(opts = {}) {
         return false;
       }
       const paths = diffPaths(state, next);
+      if (paths.some((p) => p === 'settings' || p.startsWith('settings.'))) noteDeviceWrites(state, next); // DS1
       return commit(deepFreeze(next), paths);
     },
 
@@ -2426,6 +2574,7 @@ export function createStore(opts = {}) {
       if (nestsDeeperThan(doc, IMPORT_MAX_DEPTH)) return notOurs;
       let lib;
       let wholeLibrary = false;
+      let deviceBlock;
       try {
         if (Array.isArray(doc)) lib = migrate({ songs: doc.map((s, i) => ({ ...s, id: s?.id || `import${i}` })) });
         else if (isObj(doc) && (doc.kind === 'song' || (!doc.songs && isObj(doc.patch)))) {
@@ -2439,6 +2588,9 @@ export function createStore(opts = {}) {
           // E5: any other JSON object (the iPad Files picker offers every .json) is not a library. migrate() makes
           // an empty library out of `{}`, so a replace import of a wrong file emptied the whole library.
           if (!isObj(doc) || !(isObj(doc.songs) || Array.isArray(doc.songs) || doc.kind === 'library')) return notOurs;
+          // D11: 1.1.1's device block goes to the caller (applyDeviceSettings), never into the library state (migrate
+          // drops it)
+          if (hasOwn(doc, DEVICE_SETTINGS_KEY)) deviceBlock = doc[DEVICE_SETTINGS_KEY];
           lib = migrate(doc);
           wholeLibrary = true;
           // E5: the export envelope / backup origin tag (controller.libraryJSON) are not library state
@@ -2464,12 +2616,14 @@ export function createStore(opts = {}) {
         const next = migrate({ ...lib, settings: { ...lib.settings, ...keep }, meta });
         const res = { ok: true, songIds: next.songOrder.slice(), setlistIds: next.setlistOrder.slice() };
         if (!replace) res.replaced = true;
+        if (deviceBlock !== undefined) res.deviceSettings = deviceBlock;
         if (dryRun) return res;
         generation += 1; // round2-shell #3: read by the controller's onStore (revert snapshot)
         commit(deepFreeze(next), diffPaths(state, next));
         return res;
       }
-      if (dryRun) return { ok: true, songIds: lib.songOrder.slice(), setlistIds: lib.setlistOrder.slice() };
+      const withBlock = (r) => (deviceBlock !== undefined ? { ...r, deviceSettings: deviceBlock } : r);
+      if (dryRun) return withBlock({ ok: true, songIds: lib.songOrder.slice(), setlistIds: lib.setlistOrder.slice() });
       const map = new Map();
       const paths = [];
       const songIds = [];
@@ -2492,7 +2646,100 @@ export function createStore(opts = {}) {
       if (setlistIds.length) paths.push(put(['setlistOrder'], [...state.setlistOrder, ...setlistIds]));
       if (!state.settings.currentSongId && songIds[0]) paths.push(put(['settings', 'currentSongId'], songIds[0]));
       changed(paths);
-      return { ok: true, songIds, setlistIds };
+      return withBlock({ ok: true, songIds, setlistIds });
+    },
+
+    /**
+     * D11: fill in device-local settings from a 1.1.1 block. Every value is checked again (validDeviceSetting), and
+     * only a setting that is still unset here is written (deviceSettingUnset): a setting changed on this machine is
+     * never overwritten. `keyboards` merges per keyboard name (an existing entry wins). Device selections must
+     * already have been checked by the caller (controller.applyDeviceSettings). Device-local writes are not edits,
+     * so a pristine library stays pristine.
+     * @param {object} values {key: value} (DEVICE_BLOCK_SETTINGS keys only)
+     * @returns {{applied:string[], kept:string[], dropped:string[]}} kept = already set here; dropped = invalid
+     */
+    applyDeviceSettings(values) {
+      const out = { applied: [], kept: [], dropped: [] };
+      if (!isObj(values) || readOnlyReason !== null) return out;
+      const paths = [];
+      const cur = state.settings;
+      const touched = touchedSet(); // DS1: changed here, also back to the default
+      for (const [k, raw] of Object.entries(values)) {
+        const v = isReservedKey(k) ? undefined : validDeviceSetting(k, raw);
+        if (v === undefined) {
+          out.dropped.push(k);
+          continue;
+        }
+        if (k === 'keyboards') {
+          const have = isObj(cur.keyboards) ? cur.keyboards : {};
+          // DS1: a keyboard changed or deleted on this machine is never brought back or changed
+          const add = Object.entries(v).filter(([name]) => !hasOwn(have, name) && !touched.has(touchedKeyboard(name)));
+          const room = Math.max(0, KEYBOARDS_MAX - Object.keys(have).length);
+          if (!add.length || !room) {
+            out.kept.push(k);
+            continue;
+          }
+          paths.push(put(['settings', 'keyboards'], { ...have, ...Object.fromEntries(add.slice(0, room)) }));
+          out.applied.push(k);
+          continue;
+        }
+        if (!deviceSettingUnset(cur, k, touched)) {
+          out.kept.push(k);
+          continue;
+        }
+        const def = hasOwn(DEFAULT_SETTINGS, k) ? DEFAULT_SETTINGS[k] : k === 'dynamicRange' ? 1 : undefined;
+        if (v === null || deepEqual(v, def)) continue; // the default: nothing to bring
+        paths.push(put(['settings', k], v));
+        out.applied.push(k);
+      }
+      if (paths.length) changed(paths);
+      return out;
+    },
+    /**
+     * D11 skeptic DS1: the device-local settings changed on this machine (DEVICE_TOUCHED_KEY entries).
+     * @returns {string[]}
+     */
+    deviceSettingsTouched() {
+      return [...touchedSet()];
+    },
+    /**
+     * D11: the machine markers that mean "this computer": this origin's own id (INSTALL_ID_KEY, which 1.1.1 Chrome
+     * on the same origin wrote) and the ones remembered from same-machine imports. Never creates an id.
+     * @returns {string[]}
+     */
+    machineMarkers() {
+      const out = [];
+      try {
+        const own = storage.getItem(INSTALL_ID_KEY);
+        if (validInstallId(own)) out.push(own);
+        const known = JSON.parse(storage.getItem(KNOWN_INSTALLS_KEY) || '[]');
+        if (Array.isArray(known)) for (const id of known) if (validInstallId(id) && !out.includes(id)) out.push(id);
+      } catch {
+        /* unreadable: no markers */
+      }
+      return out;
+    },
+    /**
+     * D11: remember a block's marker as "this computer" (a same-machine import). Newest first, capped.
+     * @param {string} id
+     * @returns {boolean} stored
+     */
+    rememberMachineMarker(id) {
+      if (!validInstallId(id)) return false;
+      let known = [];
+      try {
+        const k = JSON.parse(storage.getItem(KNOWN_INSTALLS_KEY) || '[]');
+        if (Array.isArray(k)) known = k.filter(validInstallId);
+      } catch {
+        known = [];
+      }
+      const next = [id, ...known.filter((x) => x !== id)].slice(0, KNOWN_INSTALLS_MAX);
+      try {
+        storage.setItem(KNOWN_INSTALLS_KEY, JSON.stringify(next));
+        return true;
+      } catch {
+        return false;
+      }
     },
 
     /** Stop timers (tests). Persists pending changes. */

@@ -173,6 +173,13 @@
 .st-map-note { color: var(--warn, #ffb020) !important; white-space: normal; }
 .st-restore { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .st-restore-q { flex: 1 1 100%; font-size: 13.5px; }
+/* D11 skeptic (DS5): Settings › Import… device-settings offer; the whole row is the checkbox's 44 px target */
+.st-import-offer { margin: 4px 0; }
+.st-import-offer[hidden] { display: none; } /* .st-restore's display: flex would beat the hidden attribute */
+.st-import-device-row { flex: 1 1 100%; display: flex; align-items: center; gap: 10px; min-height: 44px;
+  cursor: pointer; font-size: 13.5px; color: var(--text, #f1f4f8); }
+.st-import-device { flex: none; width: 22px; height: 22px; margin: 0; accent-color: var(--accent, #ffc94d); }
+.st-import-offer .ed-btn { min-height: 44px; }
 .st-samples-path { overflow-wrap: anywhere; }
 .st-samples-status { margin: 0; font-size: 13px; }
 .st-howto > summary, .st-diag > summary { cursor: pointer; }

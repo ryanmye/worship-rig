@@ -1075,17 +1075,64 @@ export function mountSettings(el, ctx) {
   }
 
   const importInput = h('input', { type: 'file', accept: '.json,application/json', hidden: true, 'aria-label': 'Import library file' });
+  // D11: a 1.1.1 file can hold the device settings of the computer it was saved on. They are offered before the
+  // import, with a checkbox: ticked when the file's marker is this computer's, unticked otherwise; never silently.
+  const importOffer = h('div.st-restore.st-import-offer', { hidden: true, 'data-testid': 'import-device-offer' });
   listen(importInput, 'change', async () => {
     const f = importInput.files && importInput.files[0];
     importInput.value = '';
     if (!f) return;
+    const text = await f.text();
+    const check = store.importJSON(text, { replacePristine: true, dryRun: true });
+    const canOffer = typeof controller.inspectDeviceSettings === 'function';
+    const info = check.ok && check.deviceSettings !== undefined && canOffer
+      ? controller.inspectDeviceSettings(check.deviceSettings) : null;
+    if (info && info.ok && info.keys.length) offerDeviceSettings(text, info);
+    else runImport(text, false);
+  });
+  function offerDeviceSettings(text, info) {
+    const box = h('input', { type: 'checkbox', 'data-testid': 'import-device-check', class: 'st-import-device' });
+    box.checked = info.sameMachine;
+    const done = () => {
+      importOffer.replaceChildren();
+      importOffer.hidden = true;
+    };
+    importOffer.replaceChildren(
+      h('span.st-restore-q', { text: info.sameMachine
+        ? 'This file also holds the device settings this computer had in Worship Rig 1.x: MIDI input, audio output, '
+          + 'pad folder, keyboards, click and more.'
+        : 'This file also holds device settings from another computer: MIDI input, audio output, pad folder, '
+          + 'keyboards, click and more.' }),
+      h('label.st-import-device-row', {}, box,
+        h('span', { text: ' Also use its device settings here (only ones not set on this computer yet)' })),
+      btn('Import', () => {
+        const use = box.checked;
+        done();
+        runImport(text, use);
+      }, { class: 'st-import-device-go', 'data-testid': 'import-device-go' }),
+      btn('Cancel', done, { class: 'st-import-device-cancel' }),
+    );
+    importOffer.hidden = false;
+  }
+  async function runImport(text, withDevice) {
     // E5: a whole library (a 1.x export) imported into the untouched factory library replaces it, setlists and
     // settings included; into an edited library it is merged, as before
-    const r = store.importJSON(await f.text(), { replacePristine: true });
+    const r = store.importJSON(text, { replacePristine: true });
     const n = r.ok ? r.songIds.length : 0;
     const okText = r.replaced ? `Library imported: ${n} songs, ${r.setlistIds.length} setlists` : `Imported ${n} songs`;
     toast(r.ok ? okText : r.error || 'That file could not be imported.', r.ok ? 'info' : 'error');
-  });
+    if (!r.ok || !withDevice || r.deviceSettings === undefined) return;
+    let d = null;
+    try {
+      d = await controller.applyDeviceSettings(r.deviceSettings, { sameMachine: false });
+    } catch (err) {
+      console.warn('[settings] applyDeviceSettings', err);
+    }
+    if (d && d.ok) {
+      toast(d.applied.length ? `Device settings used: ${d.applied.length}` : 'No device settings were needed: this '
+        + 'computer already has its own.');
+    }
+  }
   const storageNote = h('p.st-hint');
   const li = store.loadInfo || {};
   if (li.status === 'corrupt') setText(storageNote, `The saved library could not be read, so the factory songs were restored. The old data was kept (${li.backupKey}).`);
@@ -1411,6 +1458,7 @@ export function mountSettings(el, ctx) {
         btn('Import…', () => importInput.click(), { class: 'st-import' }),
         importInput,
       ),
+      importOffer,
       h('p.st-hint', { text: 'Chrome and the Mac app keep separate libraries: Export in one, Import in the other.' }),
       storageNote,
       backupBox,

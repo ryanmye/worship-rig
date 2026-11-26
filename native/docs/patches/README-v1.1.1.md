@@ -1,7 +1,8 @@
 # Worship Rig 1.1.1 (prepared, NOT published)
 
 `v1.1.1-prep.diff` is `git -C <wt-111> diff` of local branch `v1.1.1-prep` (from tag `v1.1.0`, c8704a7). Nothing is
-committed, tagged or pushed. DECISIONS D8; review E5 M4.
+committed, tagged or pushed. DECISIONS D8, D11; review E5 M4.
+Regenerate with `git -C <wt-111> add -N <new files>` then `git -C <wt-111> diff > v1.1.1-prep.diff`.
 
 ## What it does
 
@@ -19,6 +20,18 @@ committed, tagged or pushed. DECISIONS D8; review E5 M4.
   - **Quit** runs `window.close()`. If the browser keeps the tab open, a toast says it can be closed and that nothing
     was changed.
 - **settings.js.** The Backups note says that a separate 1.x library is in use.
+- **Device settings for 2.0 (D11).** `store.exportJSON({device: true})` adds an optional top-level block
+  `deviceSettings` = `{v: 1, install, settings}`: the 13 `DEVICE_LOCAL_SETTINGS` the library has, and a machine
+  marker. The marker (`store.installId()`) is 32 random hex digits, made once per origin and kept in localStorage
+  `rig.install`; it is never a host, user or device name.
+  - Written by every backup (`controller.libraryJSON`, Settings › Back up now). Settings › Export library writes it
+    only while its toggle **With this computer's device settings** is on (off by default; D11 skeptic DS4).
+    `exportJSON()` without the option is 1.1.0's file, so the S3 test still holds for the library's own settings.
+  - 1.1.1's `importJSON` drops the block (a replace keeps this machine's settings, as before). 1.1.0 keeps it as an
+    unknown top-level field and never reads it. No SCHEMA bump: the file stays schema 1.
+  - Trade-off (D11 over S3): a backup, and an export with the toggle on, names the MIDI / audio devices and the pad
+    folder's path (the account name on a Mac). A plain export does not. The release notes say not to share the
+    opted-in file.
 - **Version and docs.** `package.json` and `package-lock.json` go to 1.1.1. The server and the About box read
   `package.json`. Adds `docs/release-notes-1.1.1.md` (1.x keeps its changelog as release notes) and a
   CONTRACT_CHANGES section.
@@ -31,11 +44,31 @@ committed, tagged or pushed. DECISIONS D8; review E5 M4.
     "You can close this window now. Nothing was changed." shows. A window the page opened closes. `rig.v1` is
     unchanged and there are zero console errors.
   - The store and fixes tests fail on the 1.1.0 store.
+  - D11: `device-settings.test.mjs` (5: block shape, an untouched library's block, the marker, import drops the
+    block, `backupNow` writes it after the origin tag) and `browser.pw.mjs` +1 (the real Export library button:
+    no block by default; with the toggle on the download holds the block, its marker is
+    `localStorage['rig.install']`; zero console errors).
 - **2.0 side.** 2.0 lists `rig.v1.1x` under Restore previous library… ("the separate library of Worship Rig 1.1.1").
   `test/phase2/migration-1x/downgrade.test.mjs` applies this diff to `git archive v1.1.0` and runs
   2.0 → 1.1.1 → 2.0 → 1.1.1 → 2.0 on one storage (pass).
 
-## Test results (Linux container, 2 CPUs, another heavy job running)
+## D11 re-run (2026-11-26, after the device-settings change)
+
+`xvfb-run -a node test/run-all.mjs --only unit,shell,ui-core,settings,electron-full`, one at a time:
+
+| Suite | Result |
+| --- | --- |
+| unit | 399 pass, 7 skip |
+| shell | 281 pass, 1 skip (unit 243, browser 16, electron 22 + 1 skip) |
+| ui-core | 82/82 |
+| settings | 60/60 |
+| electron-full | 28/28 |
+
+The 2.0 side reads files made by this code: `test/fixtures/library-1x/v1.1.1` (generator `--from` this worktree).
+Not re-run for D11: engine, instruments, synth-extra, edit-v2, eq, mini, themes, chrome-fallback, build-lint (none
+touches the store's export or the Settings Library section beyond the one button).
+
+## Test results before D11 (Linux container, 2 CPUs, another heavy job running)
 
 `xvfb-run -a node test/run-all.mjs --skip soak` (29 min):
 

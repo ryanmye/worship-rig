@@ -8,6 +8,8 @@
 //                       `RigBackups.isLibrary`; truncated, newer-schema and non-library files are skipped); the macOS
 //                       first-launch offer (pristine probe, the answer remembered); the picker / AirDrop stage
 //                       (JSON-parsed first, as `stage(fileURL:)`).
+//                       D11: every payload says how it was found (`via`: 'backups' | 'first-launch' | 'picked'), as
+//                       RigLibrary.swift does.
 // Both write real files in a temp dir, with an explicit, increasing mtime so "newest" is deterministic.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -179,7 +181,8 @@ export function nativeShell({ ownDir, electronDirs = [], platform = 'darwin', co
   const latestAnywhere = () => {
     for (const e of [...list(ownDir), ...electronEntries()].sort(newerFirst)) {
       const p = payload(e);
-      if (p) return p;
+      // D11: how the shell found it (RigLibrary.swift); the iPad's Backups folder is open in Files: 'files'
+      if (p) return { ...p, via: platform === 'ipados' ? 'files' : 'backups' };
     }
     return { error: 'no backup found' };
   };
@@ -237,7 +240,7 @@ export function nativeShell({ ownDir, electronDirs = [], platform = 'darwin', co
       // review F1: the file the offer dated, not latestAnywhere() (which also reads our own, maybe newer, rotation)
       const r = payload(newest) || { error: `${path.basename(newest.path)} is no longer a library` };
       if (r.error) return r.error;
-      staged = r;
+      staged = { ...r, via: 'first-launch' };
       shell.menu('importLatestBackup');
       return 'imported';
     },
@@ -255,7 +258,8 @@ export function nativeShell({ ownDir, electronDirs = [], platform = 'darwin', co
         ask('Not a library file', `${path.basename(file)} is not a Worship Rig library backup.`);
         return 'not a library';
       }
-      staged = { path: file, origin: typeof obj.origin === 'string' ? obj.origin : null, savedAt: Date.now(), text };
+      staged = { path: file, origin: typeof obj.origin === 'string' ? obj.origin : null, via: 'picked', savedAt: Date.now(),
+        text };
       shell.menu('importLatestBackup');
       return 'staged';
     },

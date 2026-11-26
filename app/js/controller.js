@@ -34,6 +34,7 @@
 // the pinned total stays ≤ PIN_BUDGET_MB; one {pin:'replace'} per switch; a warn if pinnedMB ever passes capMB.
 import {
   transposeSemisOf, audioSleepSecOf, COMPUTER_KEYBOARD, sound2Of, programChangeOf, DEVICE_LOCAL_SETTINGS, SCHEMA,
+  readDeviceSettings, deviceSettingUnset, DEVICE_SELECTIONS,
 } from './store.js';
 import { compileTouch } from './shared/touch-curve.js';
 import { transposeSemis, mod12, keyName } from './shared/music.js';
@@ -2809,6 +2810,143 @@ export function createController(o) {
     warn(`Your Worship Rig 2.0 library (${set.songs} songs, from ${when}) was set aside by Worship Rig 1.x. To get it `
       + 'back, open Settings › Library & backups › Restore previous library….', true);
   }
+  // ---- D11: the 1.x device-local settings of a 1.1.1 backup / export (`deviceSettings` block)
+  /**
+   * D11: a backup from this computer's own backups folders, not a file someone picked or sent. The native shell says
+   * how it got the file (`via`: 'backups' = its own or the Electron app's folder, 'first-launch' = the first-launch
+   * import of that folder, 'picked' = File › Import Library Backup… / AirDrop / Open in). Electron's main.js only
+   * ever serves its own backups folder.
+   * @param {object} b a latestBackup() payload
+   * @returns {boolean}
+   */
+  function backupFromThisMachine(b) {
+    // D11 skeptic DS2: 1.1.1 never runs on an iPad, so a block there always came from another computer (and the
+    // iPad's Backups folder is open to Files: anything can be dropped into it)
+    if (rig && rig.platform === 'ipados') return false;
+    if (b && typeof b.via === 'string') return b.via === 'backups' || b.via === 'first-launch';
+    return isElectron;
+  }
+  /**
+   * D11: what a device block holds, for Settings › Import… (the checkbox is ticked only for this computer's block).
+   * @param {*} raw the block (importJSON's `result.deviceSettings`)
+   * @returns {{ok:boolean, sameMachine:boolean, keys:string[], dropped:string[]}}
+   */
+  function inspectDeviceSettings(raw) {
+    const d = readDeviceSettings(raw);
+    if (!d) return { ok: false, sameMachine: false, keys: [], dropped: [] };
+    const markers = typeof store.machineMarkers === 'function' ? store.machineMarkers() : [];
+    return { ok: true, sameMachine: d.install !== null && markers.includes(d.install), keys: Object.keys(d.settings),
+      dropped: d.dropped };
+  }
+  /** D11: plain words for a skipped device selection (one line lists them all). */
+  function deviceLabel(k, v) {
+    if (k === 'midiInputId') return v ? `the MIDI input "${v}"` : 'the MIDI input';
+    if (k === 'midiClockOut') return `the MIDI clock output "${v}"`;
+    if (k === 'outputDeviceId') return 'the audio output';
+    return 'the My Pads folder';
+  }
+  /**
+   * D11: fill in this machine's unset device-local settings from a 1.1.1 block. Every value goes through the store's
+   * validators (unknown and invalid ones are dropped, with one warning); a setting already set here is never changed
+   * (store.applyDeviceSettings decides at write time). Device selections apply only if found here: the MIDI input
+   * (by name, then id) and the clock output among the connected ports, the audio output among enumerateDevices(),
+   * an Electron pad folder only when it is the folder the shell serves now (getInfo().padsRoot); an FSA pad folder
+   * never (its handle belongs to the origin that picked it). Missing ones are skipped with one line.
+   * @param {*} raw the block
+   * @param {{sameMachine?:boolean}} [o] sameMachine: remember the block's marker as this computer's
+   * @returns {Promise<{ok:boolean, error?:string, applied:string[], kept:string[], skipped:string[],
+   *   dropped:string[]}>}
+   */
+  async function applyDeviceSettings(raw, { sameMachine = false } = {}) {
+    const res = { ok: false, applied: [], kept: [], skipped: [], dropped: [] };
+    const d = readDeviceSettings(raw);
+    if (!d) {
+      warn('The device settings saved with that library could not be read, so none were used.');
+      return { ...res, error: 'unreadable' };
+    }
+    if (secondary || store.loadInfo.readOnly) {
+      warn('This window is not saving changes, so the saved device settings were not used.');
+      return { ...res, error: 'read-only' };
+    }
+    res.dropped = d.dropped.slice();
+    const values = { ...d.settings };
+    const cur = settings();
+    const touched = typeof store.deviceSettingsTouched === 'function' ? store.deviceSettingsTouched() : null; // DS1
+    const missing = [];
+    const skip = (keys, label) => {
+      for (const k of keys) delete values[k];
+      res.skipped.push(keys[0]);
+      missing.push(label);
+    };
+    // a selection this machine already has is kept as it is, and needs no check (and no note)
+    for (const k of DEVICE_SELECTIONS) {
+      if (k in values && !deviceSettingUnset(cur, k, touched)) {
+        delete values[k];
+        if (k !== 'midiInputName') res.kept.push(k);
+      }
+    }
+    if ('midiInputId' in values || 'midiInputName' in values) {
+      const id = values.midiInputId;
+      const name = values.midiInputName || null;
+      delete values.midiInputId;
+      delete values.midiInputName;
+      if (id === 'all') values.midiInputId = 'all';
+      else if (id && id !== 'first') {
+        const live = ((midi && midi.inputs) || []).filter((i) => i.state !== 'disconnected');
+        const hit = (name && live.find((i) => i.name === name)) || live.find((i) => i.id === id);
+        if (hit) {
+          values.midiInputId = hit.id; // this app's id for the device (ids differ between apps)
+          values.midiInputName = hit.name;
+        } else skip(['midiInputId'], deviceLabel('midiInputId', name));
+      }
+    }
+    if (typeof values.midiClockOut === 'string') {
+      const outs = (typeof midiClock.outputs === 'function' ? midiClock.outputs() : []) || [];
+      if (!outs.some((o) => o.name === values.midiClockOut && o.state !== 'disconnected')) {
+        skip(['midiClockOut'], deviceLabel('midiClockOut', values.midiClockOut));
+      }
+    }
+    if (typeof values.outputDeviceId === 'string' && values.outputDeviceId !== 'default') {
+      let found = false;
+      try {
+        const md = nav && nav.mediaDevices;
+        const devs = md && typeof md.enumerateDevices === 'function' ? await md.enumerateDevices() : [];
+        found = devs.some((x) => x.kind === 'audiooutput' && x.deviceId === values.outputDeviceId);
+      } catch {
+        found = false;
+      }
+      if (!found) skip(['outputDeviceId'], deviceLabel('outputDeviceId'));
+    }
+    if (values.padFolder) {
+      const pf = values.padFolder;
+      let found = false;
+      if (pf.kind === 'electron' && rig && typeof rig.getInfo === 'function') {
+        try {
+          const info = await rig.getInfo();
+          found = !!info && typeof info.padsRoot === 'string' && info.padsRoot === pf.path;
+        } catch {
+          found = false;
+        }
+      }
+      if (!found) skip(['padFolder'], deviceLabel('padFolder'));
+    }
+    const w = store.applyDeviceSettings(values);
+    res.applied = w.applied;
+    res.kept.push(...w.kept);
+    res.dropped.push(...w.dropped);
+    res.ok = true;
+    if (res.dropped.length) {
+      warn(`Some saved device settings were not valid here and were left out: ${res.dropped.join(', ')}.`);
+    }
+    if (missing.length) {
+      warn(`Not found on this computer, so left as they are: ${missing.join(', ')}. You can choose them in Settings.`);
+    }
+    if (sameMachine && d.install && typeof store.rememberMachineMarker === 'function') {
+      store.rememberMachineMarker(d.install);
+    }
+    emit('action', { type: 'deviceSettings', applied: res.applied.slice(), skipped: res.skipped.slice() });
+    return res;
+  }
   async function importLatestBackupOnce({ replace = true } = {}) {
     if (!rig || typeof rig.latestBackup !== 'function') return { ok: false, error: 'not available' };
     const b = await rig.latestBackup();
@@ -2829,6 +2967,18 @@ export function createController(o) {
     if (r.ok) {
       setStatus({ otherLibrary: null });
       emit('action', { type: 'importBackup', path: b.path, songs: r.songIds.length });
+      // D11: a 1.1.1 backup from this computer's backups folder brings its device settings (unset ones only); a
+      // file that was picked or sent may come from another computer, so it is only offered (Settings › Import…)
+      if (r.deviceSettings !== undefined) {
+        const block = r.deviceSettings;
+        delete r.deviceSettings;
+        if (backupFromThisMachine(b)) r.device = await applyDeviceSettings(block, { sameMachine: true });
+        else {
+          r.device = { ok: false, error: 'other machine', applied: [], kept: [], skipped: [], dropped: [] };
+          warn('That backup also holds the device settings (MIDI, audio, pads) of the computer it came from. They '
+            + 'were not used. To choose, import the file with Settings › Library & backups › Import….');
+        }
+      }
     } else warn(`Import failed: ${r.error}`);
     return r;
   }
@@ -3556,6 +3706,8 @@ export function createController(o) {
     restoreChromePads,
     backupNow,
     importLatestBackup,
+    applyDeviceSettings,
+    inspectDeviceSettings,
     listPreviousLibraries,
     restorePreviousLibrary,
     rescanUserSamples,

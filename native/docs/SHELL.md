@@ -149,7 +149,7 @@ the Settings "import latest backup" button.
   `__rigShell.menu('importLatestBackup')`, which `controller.onMenu` handles. The answer is stored either way.
 - `latestBackup()` = a staged file (once) else the newest (mtime, then name) of our own backups and the Electron
   ones that parses as a library no newer than schema 2 (`RigBackups.isLibrary`, lane F1). A truncated, newer-schema
-  or non-library file is skipped, so an older good one is served.
+  or non-library file is skipped, so an older good one is served. `via` says which (D11 below).
 - iPad (no access to another app's files): Files picker (File > Import Library Backup..., Cmd-Shift-I, or the
   Settings button after a picker choice), or AirDrop / Files "Open in" of a `rig-*.json`
   (CFBundleDocumentTypes public.json,
@@ -191,6 +191,20 @@ the Settings "import latest backup" button.
   - D9: saves past `LIBRARY_MAX_CHARS` warn and are not refused; a replace / restore import is allowed up to 1.25×.
   - Native and Electron 2.0 use their own origin, so the 1.x ping-pong does not happen there. The kept copies and
     the action work the same in `rig://app`. WebKit's quota with kept copies is not measured.
+- **D11 (2.0, 2026-11-26): 1.x device settings** (CONTRACT_CHANGES "D11").
+  - 1.1.1 backups (and its exports, when asked) carry `deviceSettings` = `{v, install, settings}` (the 13 1.x
+    device-local settings and a random per-origin marker). `importJSON` hands the block to the caller and never
+    keeps it.
+  - `latestBackup()` payloads carry `via`: 'backups' (`latestAnywhere()` on macOS: own or Electron folder), 'files'
+    (`latestAnywhere()` on the iPad, whose Backups folder is open in Files), 'first-launch' (the first-launch stage)
+    or 'picked' (`stage(fileURL:)`: File › Import Library Backup…, AirDrop, Open in). The JS side also refuses every
+    payload on `platform: 'ipados'` (D11 skeptic DS2).
+    `controller.importLatestBackup` applies the block only for 'backups' / 'first-launch' (or Electron, whose
+    main.js serves only its own folder). A picked file brings the library alone, with a note to use Settings ›
+    Import…, which offers the block with a checkbox (ticked only for this computer's marker).
+  - Only unset settings are filled in; MIDI input / clock port / audio output / pad folder only when found here.
+  - Verified in JS with the `nativeShell` stand-in (`device-settings.test.mjs`) and in the real page with the
+    polyfill (`browser.pw.mjs`). The Swift `via` lines themselves are unbuilt.
 - Still unverified: the Swift side itself. Nothing below has run.
   - The NSAlert first-launch prompt and its UserDefaults key.
   - `electronEntries()`'s scan of Application Support (the Electron userData folder name is still [verify on the
