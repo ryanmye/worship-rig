@@ -10,6 +10,9 @@ loaded by the app.
 | `song-bank.html` | Song bank (O-AW-PP bank packs) as a browser over the stage: filters, detail, Try it, Add to library / setlist; opened from Setlist › + Add song. Proposal, not yet approved |
 | `edit.html` (+ `img/`) | Edit in the v6 language: instrument tabs by name, the same strip as Perform, Effects with a sends table, the instrument chooser, library folding. Proposal, not yet approved |
 | `settings.html` | Settings: category list with current state, search, MIDI Learn, Perform layout, Song bank entry, theme previews. Proposal |
-| `mock_v6.py`, `mock_chart.py`, `mock_bank.py`, `mock_edit.py`, `mock_settings.py` + CSS | Generators. Run with `python3`; the `OUT` and CSS paths at the top point at the session scratch folder, so adjust them first. |
+| `dialogs.html` | MIDI Learn on Perform, Arrange, Save snapshot, Song menu, Edit chart. Proposal |
+| `mock_v6.py`, `mock_chart.py`, `mock_bank.py`, `mock_edit.py`, `mock_settings.py`, `mock_dialogs.py` + CSS | Generators. Run with `python3`; the `OUT` and CSS paths at the top point at the session scratch folder, so adjust them first. |
 
 Open the HTML files in a browser; the tabs at the top switch frames. The chart mockup's song and words are invented.
+
+All of these are proposals until Ryan reviews the real UI on his Mac (D19).

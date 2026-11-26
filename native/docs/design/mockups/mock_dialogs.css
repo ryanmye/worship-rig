@@ -1,0 +1,29 @@
+/* MIDI Learn, Arrange, dialogs */
+.learnbar{display:flex;align-items:center;gap:10px;min-height:52px;border-radius:12px;border:1px solid var(--accent);background:#2e2016;padding:4px 10px}
+.learnbar b{font:800 18px var(--book)}.learnbar small{color:var(--muted);flex:1}
+.step{font-size:13px;font-weight:700;border-radius:14px;padding:4px 10px;border:1px solid var(--line-2);color:var(--muted)}
+.step.on{border-color:var(--accent);color:var(--accent)}.step.done{color:#9ccf66;border-color:#9ccf6666}
+.learnable{outline:2px dashed var(--accent);outline-offset:3px;border-radius:8px}
+.fwrap.learnable{position:relative}.fwrap.picked2{outline-style:solid;outline-color:#9ccf66}
+.lbadge{position:absolute;top:-10px;right:-6px;background:var(--accent);color:var(--ink);font-size:11px;font-weight:800;border-radius:9px;padding:1px 6px;z-index:2}
+.ltoast{position:absolute;left:50%;bottom:120px;transform:translateX(-50%);background:#000d;border:1px solid #9ccf66;border-radius:20px;padding:8px 18px;font-size:14px;z-index:8;white-space:nowrap}
+.learnbar.arr{border-color:var(--line-2);background:var(--panel)}
+.arrbar{display:flex;gap:4px;align-items:center;margin:-2px 0 2px}
+.grip2{flex:1;min-height:36px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--line-2);border-radius:8px;color:var(--muted);font-size:12px;font-weight:700;cursor:grab}
+.ab{min-width:36px;min-height:36px;border-radius:8px;border:1px solid var(--line);background:var(--panel-3)}.ab.x{color:#ffb3ad}
+.arranging .strip:not(.add){border-style:dashed;border-color:var(--line-2)}
+.arrtabs button{border:1px dashed var(--line-2)!important}
+.namebox{display:flex;flex-direction:column;gap:4px}
+.namebox input{min-height:48px;border-radius:10px;border:1px solid var(--accent);background:var(--well);color:var(--text);font:700 18px var(--book);padding:0 12px;outline:none}
+.namebox small{color:var(--muted)}
+.songmenu{left:300px;top:120px;width:300px;right:auto;z-index:8}
+.mi.warn2 b{color:#ffb3ad}
+.btn.act2{min-width:44px;padding:0;background:linear-gradient(var(--pt),var(--pb));color:var(--ink)}
+.dlg.cedit{width:1040px;top:52%}
+.ce-b{display:grid;grid-template-columns:1fr 1fr;gap:12px;height:440px}
+.ce-src{display:flex;flex-direction:column;gap:8px;min-height:0}
+.ce-tools{display:flex;gap:6px}.ce-tools .seg,.ce-tools .ghost{min-height:38px;font-size:13px}
+.ce-src pre{flex:1;margin:0;background:var(--well);border:1px solid var(--line-2);border-radius:10px;padding:12px;font:500 14px/1.6 'JetBrains Mono',monospace;color:var(--text);overflow:hidden;white-space:pre-wrap}
+.ce-prev{display:flex;min-height:0}.ce-prev .chart{flex:1}
+.board.dim>.dlg{z-index:6}
+.ce-prev .chgrp,.ce-prev .chs,.ce-prev .jumps{display:none}.ce-prev .chh{grid-template-columns:1fr}.ce-prev .cht b{display:inline;margin-right:8px}
