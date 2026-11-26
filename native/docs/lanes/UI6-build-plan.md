@@ -82,6 +82,9 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 - **Polish (UI6-U5b O2/O3/O5):** chooser: ←/→ must not change the song while it is open; "not available" line for
   an instrument missing from the engine list; kinds list fit at 1024×700. O1 (Edit range bars draggable) waits for
   Ryan; O4/O6 noted.
+- **Polish (UI6-U7a O1–O4):** Edit's single-song Export refuses a trial song (or tells the player to Keep it
+  first) — no `trial:` id in any file; Esc in the bank's search box clears first; Back when the replaced entry was
+  removed; Edit v6's "Song bank…" title text.
 - **Polish (UI6-U5a P1):** the range keyboard's always-visible label (`showTip`) forces a reflow on every live
   write (~10 ms at 6× CPU); measure it in a requestAnimationFrame (shared with Perform).
 - **Polish (UI6-move O2/O3, orchestrator):** Enter on a strip name (pick) moves focus to the picked bar's low
