@@ -266,6 +266,32 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   timing flake), edit-v2 14/14, shell unit 363/363. Screenshots: `/home/claude/design-out/u6/` (`u6-<category>-1280.png`,
   `u6-search-1280.png`, `u6-ipad-list-820.png`, `u6-ipad-look-820.png`, `u6-*-sanctuary-day.png`, `u6-mac-1280.png`).
 
+## U5b status (builder, 2026-11-26; lane-u5b from v2-native 4c485f5; no skeptic pass yet)
+
+- Built: `app/js/views/v6/edit/catpanel.js` (the D18 category-list frame), `drone.js`, `effects.js`, `master.js`,
+  `chooser.js` (Change instrument), `bottom.js` (the v6 Perform's bottom row in Edit); `edit.js` / `instrument.js`
+  wire them; `views/v6/bottom.js` gains `{prefix}` and a `toggleLock` hook; `styles-v6-edit.css`. Suite part
+  `test/phase2/ui-v6-edit/u5b.tests.mjs`. Interface notes: CONTRACT_CHANGES "## UI v6 U5b".
+- Wired: Drone (Key & sound = the sidebar's Drone module + Width; My Pads; Behaviour), Effects (Space, Echo, Chorus,
+  Sends table; Vibe; Tape & finish link), Master (Volume & output, Tape, Master EQ, Glue, Wheels & pedal), all on
+  today's addresses; every category and rig-tab dot = changed since the song began (live moves never); the v6
+  Perform bottom row (Revert / Fade out / PANIC / Lock) in Edit with its own test ids, mounted only while Edit shows;
+  the chooser (kinds from the engine, playing now, search, Use + 8 s Undo, Cancel, Remove) from Change instrument ▾,
+  + Add, the sentence and Perform's Change; U5a O3–O6.
+- Not in today's app, so not drawn: the chooser's ▶ preview (no audition of a sound outside a slot), a "Strings"
+  kind (the Strings synth is in the engine's Synth Pads group), a "Safety limiter" switch (the output ceiling is
+  always on: a line of text), an output picker in Edit (it is per computer: read only + Settings › Audio), the
+  drone's "Follow the song key" (the drone always plays the song key), Echo's "Follow tempo" switch (today's Timing
+  choice instead), Wheels' sustain-pedal lamp and "Reversed" (per computer: Perform's left panel and Settings).
+- Added beyond the mockup (kept from today's panels): Effects › Chorus, Master › Tape.
+- Choices to confirm with Ryan: live moves never dot (instrument level / ON, drone Level / ON, master volume); a key
+  change dots Drone › Key & sound; Edit's bottom-row range bars are display only (Range has the editor); Lock in Edit
+  returns to Perform locked; Perform's Change still switches to Edit (the chooser could open over Perform instead).
+- Gates: ui-v6-edit 29/29, ui-v6 68/68, edit-v2 14/14 (117), settings 94/94, shell unit 357/357; flag-off purity
+  identical; engine / store / controller / shared / main.js unchanged.
+- Known: at iPad portrait the bottom row's keyboard is ~260 px wide (the v6 Perform's row as it is; U8 does the iPad
+  layouts); U5a's stage strip still carries Perform's strip test ids (scoped by `v6e-stage`).
+
 ## Open questions carried into the build (decide, log in DECISIONS, tell Ryan)
 
 - **Snapshots vs today's scenes.** Today: up to 3 scenes per song, levels / ON / drone level / wheel only. The v6

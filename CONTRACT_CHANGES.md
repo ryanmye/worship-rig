@@ -8695,3 +8695,94 @@ change.
   - `.v6-st` reads the accent fill on the dialog (`--v6s-fill`, `--v6s-fill-top`), because Daylight re-points
     `--accent` to its text amber inside `.ed-btn` (F5: Learn… was 2.6:1).
   - Settings suite v6 mode: 17 checks. Flag-off purity and the 119 / 139 control-count proof are unchanged.
+
+## UI v6 U5b
+The second half of the v6 Edit (native DECISIONS D15, D18; `native/docs/lanes/UI6-build-plan.md` "U5b"; mockup
+`native/docs/design/mockups/edit.html` "Effects · Space", "Effects · Sends", "Drone", "Master · Wheels & pedal",
+"Master · Volume & output", "Change instrument"). Behind `settings.uiV6` like U1–U5a. No store, controller, engine,
+`shared/`, `main.js`, today's Edit (`views/edit/*`) or v6 sidebar / snapshots change; flag off is unchanged.
+- **Drone / Effects / Master in the category-list frame** (`views/v6/edit/catpanel.js` `catPanel`: the instrument
+  panel's shell and class names — sentence with jump words, `role=tablist` category list with each row's state and a
+  dot, the chosen category in the middle; no strip column). `edit.js` mounts `drone.js` / `effects.js` / `master.js`
+  for those blocks (`.v6e-host[data-panel]`); the Song block stays today's panel in the v6 frame. Focus ids are
+  today's (`effects` reverb / delay / chorus; `master` wheels / tape / tone | eq / glue; `drone` source / level /
+  sound / options) and pick a category without remembering it. The chosen category is per device:
+  `localStorage['worship-rig.v6.edit'].cats = {drone, effects, master}` (unknown ids fall back to the first).
+  - **Drone**: Key & sound = the v6 sidebar's Drone module itself (`views/v6/sidebar/drone.js`, D15; its wide layout
+    by container query `v6sb` on `.v6e-dmod`; its Keep / Follow toggles and pad line are hidden here because they are
+    Behaviour / My Pads; its test ids are renamed `v6e-…` at mount) + today's Width (`drone.width`). My Pads =
+    `song.drone.mode` Synth / My Pads, the pad-folder status and button (Rescan in the Mac app, else Settings › My
+    Pads, as the module), the file-naming hint, `song.drone.minorUsesRelativeMajorFile`. Behaviour = Key fade
+    (`drone.fade`), `song.drone.continueAcrossSongs`, `song.drone.chordFollow` (off with My Pads, as today).
+  - **Effects**: Space (the SPACE_PRESETS choices + Song's own, `applyPreset` / whole-object `patch.fx.reverb`
+    write; Size, Darkness, Pre-delay, Level), Echo (ECHO_CHIPS + Song's own; Timing `fx.delay.sync` with today's
+    BPM / ms note, Time, Repeats, Tone, Level, Ping-pong), **Chorus** (not in the mockup, kept from today's tab: Depth,
+    Speed, Level, and each instrument's `slots.<i>.sends.chorus`), **Sends** (one row per instrument, its position
+    colour and name, Space `slots.<i>.sends.reverb` and Echo `slots.<i>.sends.delay`: the strip chips' paths). The Vibe
+    menu (VIBE_PRESETS) is in the head; "Tape & finish on Master ▸" under the list.
+  - **Master**: Volume & output (`master.volume`; the output and its latency are this computer's, shown read only
+    with "Audio output…" → Settings › Audio; one line says the engine's output ceiling is always on: there is no
+    "Safety limiter" switch to show), **Tape** (not in the mockup, kept: `fx.lofi.*`), Master EQ (`fx.eq.*`) and Glue
+    (`fx.comp.amount`) only when the PARAMS table has them (it does), Wheels & pedal (today's: mod wheel / expression /
+    volume knob targets with From / To, pedal curve, Pitch-bend wheel mode + range — the mockup's "Pitch wheel" —,
+    Swell time, "Sustain pedal also swells the drone"). Wheel targets name the instrument ("Warm Pad level", D15)
+    where today's panel says "Pad level"; the values written are the same.
+- **Every category dot = "changed since the song began"** (orchestrator; UI6-U5a O1): all of the category's paths
+  compared with `ctx.getBaseline()` (song-diff `sameValue`, a leaf's PARAMS default when absent, so an optional field
+  set back to its default does not dot). Instrument (`instrument.js` `instCatChanges`): Sound = the instrument + its
+  smart sliders' values (shelves through `readEq`), Tone EQ = `readEq(eq)`, Range = lowNote / highNote / octave,
+  Touch = velocityCurve / touch, Sustain = sustain / release / pedalHold, Space & Echo = sends, Advanced = pan / width
+  / transpose / mono / bendEnabled + the instrument's own params outside Sound; an instrument added or removed since:
+  Sound only. Drone (`droneChanges`): Key & sound = hearIn / playIn / minor / brightness / movement / width + the
+  source Synth ↔ My Pads; My Pads = minorUsesRelativeMajorFile; Behaviour = fade / continueAcrossSongs / chordFollow.
+  Effects (`effectsChanges`): Space / Echo = `patch.fx.reverb` / `.delay`; Chorus = `patch.fx.chorus` + the chorus
+  sends; Sends = the reverb / delay sends. Master (`masterChanges`): Tape / Master EQ / Glue / Wheels (`modWheel`,
+  `expression`, `volume`, `bend`, `swell`). **Live moves never dot** (today's rule): an instrument's level and ON tile
+  (in no category), the drone's Level and ON tile, the master volume (the top bar's fader). A rig tab's dot = its
+  V6_DIFF_WATCH change (U5a) or any of its categories' dots (memoised on the song / baseline objects).
+- **The bottom row is the v6 Perform's** (`views/v6/edit/bottom.js` `editBottom` over `views/v6/bottom.js`
+  `bottomRow`): range-bar keyboard (`size:'perform'`; its keys play through `controller.perform`, held notes and
+  computer-key letters as on Perform), Revert (hold; puts back SAVED_FIELDS from Edit's baseline = Perform's Revert
+  snapshot, scene back to Own, as Perform's), Fade out, PANIC, Lock. Mounted only while Edit shows (as U5a's strip);
+  `bottomRow(v, {prefix})` gives it its own test ids (`v6e-kbd`, `v6e-piano`, `v6e-revert`, `v6e-fade`, `v6e-panic`,
+  `v6e-lock`, `v6e-bottom`; Perform keeps `v6-…`), so the two rows never share an id (U5a's stage strip keeps
+  Perform's strip ids, scoped by `v6e-stage`: the only duplicates). Its range bars are display only: a bar is changed
+  after picking its instrument (D24.3), which in Edit is the Range category's own 88-key editor (the strip's name
+  opens it, UI6-U5a R2). **Lock** from Edit goes back to Perform and locks it (`v.toggleLock`; Perform lock freezes
+  Edit). Today's Edit keyboard row (`bottom` module) is no longer mounted in the v6 Edit (`_debug.mounted()` still
+  lists 'bottom'). At ≤ 820 px tall windows the row is 84 px in Edit (96 on Perform).
+- **Instrument chooser** (`views/v6/edit/chooser.js` `openChooser`; mockup "Change instrument"; D15: the only place
+  kinds of sound appear): a modal dialog over the whole v6 Edit (`role=dialog`, `aria-modal`, Tab kept inside, Esc /
+  Cancel / a tap on the dim backdrop close it and focus goes back to the opener). Kinds on the left = the groups the
+  engine's list really has (slot.js `groupOf` / `groupOrder`, in plural words: Pianos, Electric pianos, Organs, Pads,
+  Synth keys, Brass & leads, Mallets & bells, Guitars & plucks — 'Guitar' and 'Guitar & Plucks' share it —, Bass, My
+  Samples, Other), each with its count; tiles of the chosen kind ("sampled" / "synth" / "organ"), the current one
+  marked "playing now"; a search box (names across all kinds); "Use <name>" (off until another sound is chosen) /
+  Cancel; Enter on a chosen tile or a double-click uses it. **No ▶ preview**: today's picker, the controller and the
+  engine have no audition of an instrument that is not in a slot. Use = today's picker write (`instrument.js`
+  `pickInstrument`: `slots.<i>.instrument`, or `slots.<i>` = `defaultSlot` into an empty place) with today's 8 s Undo;
+  the note "Keeps its level, Space and Echo, range and Sustain; its own sound settings start fresh." is what
+  store.js does (an instrument write keeps the slot and resets only `params`; tested). "Remove this sound…" moved
+  from U5a's menu into the chooser's footer (today's confirm + Undo). Opens from Change instrument ▾, the empty
+  place's "Choose a sound", the sentence's instrument word, `focus:'instrument'` (+ Add, and the v6 Perform strip's
+  Change, which switches to Edit as before). U5a's grouped menu is gone.
+- **U5a open items**: O3 the rig `tablist` (`v6e-rtablist`) holds only the tabs; "+ Add" and the separator sit beside
+  it in the scrolling row (`v6e-rtabs`), the tablist is `display: contents` and CSS `order` keeps the U5a layout
+  (Chromium's accessibility tree still exposes the tablist with its tabs: tested over CDP). O4 Touch › Feel shows a
+  word (`touchWord`), as today's. O5 a ‹ / › (`v6e-rmore-l|r`, `aria-hidden`, pointer only: ←/→ already move along
+  the tabs) shows at each end with hidden tabs and scrolls; read in a requestAnimationFrame, never while Perform
+  shows. O6 Song bank… shows only when `controller.patchPacks()` has Song bank songs (re-read on 'user-patches').
+- Cost: a range write in Edit (4 instruments, Range open) median 12.5–13.9 ms vs 12.2–13.8 ms on 4c485f5 (2-CPU box,
+  2 runs each; noise level).
+- Tests: `test/phase2/ui-v6-edit/u5b.tests.mjs` (run by run.mjs; 8 checks): the panels' data-bind union equals
+  today's panels' (captured flag off; the Drone module checked by real writes), real preset / Sends / wheel writes;
+  dots per category incl. Sound / Tone EQ / Touch / Advanced, live moves never, rig tabs, Revert clears; the bottom
+  row (no duplicate test id or id outside the stage strip, PANIC / Fade out actions, keys play, Revert count, Lock →
+  Perform, unmounted while Perform shows); the chooser (kinds = the engine's groups, counts, playing now, focus,
+  search, Cancel / Esc / backdrop write nothing, Use writes only `slots.0.instrument` and keeps level / sends / range
+  / Sustain, Undo, Enter, empty place, Remove, Perform's Change); O3–O6; no sideways scroll and every category row in
+  sight at 1280×800, 1024×700, 820×1180; screenshots (`/home/claude/design-out/u5b/` or `UI6E5B_SHOTS`). U5a's checks
+  now go through the chooser; ui-v6's "U-MOVE Edit" picks through it.
+- Gates: ui-v6-edit 29/29, ui-v6 68/68, edit-v2 14/14 files (117/117), settings 94/94, shell unit 357/357. Flag-off
+  purity vs 4c485f5: identical (105 requests, 15 store listeners, 4 intervals, 2529 elements, 1047 in Edit). Zero
+  console.error.
