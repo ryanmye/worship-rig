@@ -1,4 +1,16 @@
-# Worship Rig 1.1.1 (prepared, NOT published)
+# Worship Rig 1.1.1 (PUBLISHED 2026-11-26)
+
+Published 2026-11-26.
+- **Code:** main at 261ea8d. The 1.1.1 code itself landed in 1e390c2, then a site link fix (cc48b19) and a change to
+  `release.yml` so it can handle a release published from the web (261ea8d).
+- **Release:** Ryan published it from the GitHub web UI. That created the tag, which this cloud session's git proxy
+  could not push. `release.yml` built both architectures and attached five assets: arm64 dmg and zip, x64 dmg and
+  zip, and the starter library.
+- **Download sizes** (dmg): 192 MB arm64, 197 MB x64.
+- **Update check:** `/releases/latest` is now v1.1.1.
+- **Not yet verified:** opening the packaged app on a real Mac.
+
+The rest of this file is the prep record.
 
 `v1.1.1-prep.diff` is `git -C <wt-111> diff` of local branch `v1.1.1-prep` (from tag `v1.1.0`, c8704a7). Nothing is
 committed, tagged or pushed. DECISIONS D8, D11; review E5 M4.
