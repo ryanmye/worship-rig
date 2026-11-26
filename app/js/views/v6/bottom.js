@@ -15,39 +15,44 @@ const KEY_LABELS = Object.entries(KEY_MAP).map(([code, off]) => [off, code === '
 
 /**
  * @param {object} v  the v6 shell's view context (uses setRange, onRangePick, onCoarse for the range bars)
+ * @param {{prefix?:string}} [o]  prefix: the test ids' prefix ('v6' on Perform; the v6 Edit mounts its own row with
+ *   'v6e', U5b, so the two rows never share a test id while the hidden Perform keeps its row mounted)
  * @returns {{el:HTMLElement, keysEl:HTMLElement, render(x:object):void, setHeld(held:any):void,
  *            setLetters(on:boolean, oct:number):void, setFaded(b:boolean):void, releaseAll():void, kb:object,
  *            destroy():void}}
  */
-export function bottomRow(v) {
+export function bottomRow(v, o = {}) {
   const { store, controller } = v;
+  const pre = o.prefix || 'v6';
   const d = disposer();
   const comps = [];
   const use = (c) => (comps.push(c), c);
 
   const kb = use(rangeKeyboard({
     size: 'perform',
+    testid: `${pre}-kbd`,
     onNoteOn: (n, vel) => controller.perform.noteOn(n, vel),
     onNoteOff: (n) => controller.perform.noteOff(n),
     onRange: (i, field, note, phase, expect) => v.setRange(i, field, note, phase, expect),
     onPick: (i) => v.onRangePick?.(i),
     onCoarse: (c) => v.onCoarse?.(c),
   }));
-  kb.keysEl.dataset.testid = 'v6-piano';
-  const keysEl = h('section.panel.v6-keys', { 'data-testid': 'v6-keys' }, kb.el);
+  kb.keysEl.dataset.testid = `${pre}-piano`;
+  const keysEl = h('section.panel.v6-keys', { 'data-testid': `${pre}-keys` }, kb.el);
 
   const revertCount = h('span.rv-cnt-t', { text: '' });
   const revertBtn = use(holdButton({
     content: [h('span.rv-l', { text: '↺ Revert' }),
       h('span.rv-cnt', {}, h('i.rv-dot', { 'aria-hidden': 'true' }), revertCount)],
-    ms: HOLD_MS, requireHold: true, className: 'btn-revert v6-act', testid: 'v6-revert',
+    ms: HOLD_MS, requireHold: true, className: 'btn-revert v6-act', testid: `${pre}-revert`,
     title: 'Press and hold: put this song back the way it was when you selected it (levels, key, effects).',
     onActivate: () => v.revertSong(),
   }));
   revertBtn.setDisabled(true);
   const fadeLabel = h('span.fade-label', { text: 'Fade out' });
   const fadeBtn = button(d, '.btn-fade.v6-act', fadeLabel, {
-    title: 'Fade everything out over 6 s (⌘⇧F). Play any note to bring the sound back.', 'data-testid': 'v6-fade',
+    title: 'Fade everything out over 6 s (⌘⇧F). Play any note to bring the sound back.',
+    'data-testid': `${pre}-fade`,
   });
   d.listen(fadeBtn, 'click', () => {
     controller.fadeOutAll();
@@ -57,7 +62,7 @@ export function bottomRow(v) {
   // once). Esc and ⌘. are unchanged (main.js / controller).
   const panicBtn = button(d, '.btn-panic.v6-act', [h('span.panic-l', { text: 'PANIC' }),
     h('small.panic-k', { text: 'or Esc' })], {
-    'data-testid': 'v6-panic', 'aria-label': 'Panic: all notes off (or Esc)',
+    'data-testid': `${pre}-panic`, 'aria-label': 'Panic: all notes off (or Esc)',
     title: 'All notes off and the click stops (Esc, ⌘.)',
   });
   d.listen(panicBtn, 'click', () => controller.panic());
@@ -67,13 +72,15 @@ export function bottomRow(v) {
   const lockSub = h('span.lock-sub', { text: '' });
   const lockBtn = use(holdButton({
     content: [h('span.lock-l', {}, icon('lock', 18), lockText), lockSub],
-    ms: HOLD_MS, requireHold: () => v.isLocked(), className: 'lock-toggle v6-act', testid: 'v6-lock',
+    ms: HOLD_MS, requireHold: () => v.isLocked(), className: 'lock-toggle v6-act', testid: `${pre}-lock`,
     holdText: 'keep holding… (0.6 s)',
     title: 'Perform lock: playing stays live; the key, transpose and Revert need a hold; Edit, Settings and library '
       + 'changes are frozen. Tap to lock, hold to unlock.',
-    onActivate: () => store.set('settings.performLock', !v.isLocked()),
+    // U5b: the v6 Edit's row locks through v.toggleLock (back to Perform first: Perform lock freezes Edit)
+    onActivate: () => (v.toggleLock ? v.toggleLock() : store.set('settings.performLock', !v.isLocked())),
   }));
-  const el = h('div.v6-bottom', { 'data-testid': 'v6-bottom' }, keysEl, revertBtn.el, fadeBtn, panicBtn, lockBtn.el);
+  const el = h('div.v6-bottom', { 'data-testid': `${pre}-bottom` }, keysEl, revertBtn.el, fadeBtn, panicBtn,
+    lockBtn.el);
 
   let lettersKey = '';
   return {
