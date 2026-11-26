@@ -26,6 +26,13 @@
 .v6.v6-edit .v6e-fold, .v6.v6-edit .v6e-unfold { min-height: 36px; min-width: 36px; padding: 0 8px; }
 .v6.v6-edit .v6e-libmod { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .v6.v6-edit .v6e-libmod .ev2-list-add { grid-template-columns: 1fr 1fr; }
+/* skeptic UI6-U5a F4: in the library column (200–244 px), today's setlist head ("Setlist" + Setlist · Rename ·
+   Delete, ~250 px of nowrap text) squeezed its buttons below their text, which then overlapped ("+ SetliRenamDelete"
+   at 1024 px): the caption takes its own line above the three buttons */
+.v6.v6-edit .v6e-libmod .ev2-list-sethead { display: grid; grid-template-columns: repeat(3, auto);
+  justify-content: start; row-gap: 2px; }
+.v6.v6-edit .v6e-libmod .ev2-list-sethead > .ev2-cap { grid-column: 1 / -1; }
+.v6.v6-edit .v6e-libmod .ev2-list-sethead > .ev2-sp { display: none; }
 .v6.v6-edit .v6e-librail { display: flex; flex-direction: column; align-items: center; padding: 8px 0;
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
 .v6.v6-edit .v6e-unfold { display: flex; flex-direction: column; align-items: center; gap: 10px; height: auto;

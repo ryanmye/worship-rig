@@ -767,6 +767,30 @@ try {
     }
   });
 
+  // skeptic UI6-U5a F4: the library column's setlist head at 1024 px squeezed + Setlist / Rename / Delete below their
+  // text (overlapping words "+ SetliRenamDelete"); at 1280 they ran 2–4 px past their boxes
+  await T('skeptic U5a F4: the library’s setlist buttons keep their text inside, without overlap (1024, 1280)',
+    async () => {
+      await toEdit();
+      for (const [w, hgt] of [[1024, 700], [1280, 800]]) {
+        await page.setViewportSize({ width: w, height: hgt });
+        await page.waitForTimeout(200);
+        const r = await ev(() => {
+          const bs = [...document.querySelectorAll('[data-testid="v6e-lib"] .ev2-list-setbtn')];
+          const rects = bs.map((b) => b.getBoundingClientRect());
+          return {
+            n: bs.length,
+            clipped: bs.filter((b) => b.scrollWidth > b.clientWidth).map((b) => b.textContent),
+            overlap: rects.some((a, k) => k > 0 && a.left < rects[k - 1].right - 0.5 && a.top < rects[k - 1].bottom),
+            inside: rects.every((a) => a.right <= document.querySelector('[data-testid="v6e-lib"]')
+              .getBoundingClientRect().right),
+          };
+        });
+        assert.deepEqual(r, { n: 3, clipped: [], overlap: false, inside: true }, `${w}: ${JSON.stringify(r)}`);
+      }
+      await page.setViewportSize({ width: 1280, height: 800 });
+    });
+
   await T('zero console.error, no HTTP ≥ 400', async () => {
     assert.deepEqual(errors, []);
   });
