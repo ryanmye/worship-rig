@@ -149,6 +149,10 @@
 .v6.v6-edit .v6e-advrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .v6.v6-edit .v6e-params { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .v6.v6-edit .v6e-tonehost { min-height: 0; }
+/* skeptic UI6-U5a F3 / D15: the eqKeyboard's own summary line ("Keys plays Grand Piano from A0 to C8 …") names the
+   slot's role, which v6 never shows, and costs the pane a row; the pane's line above it says the EQ's state
+   (eqSummary), the A / B buttons say which is heard and Range says where the instrument plays */
+.v6.v6-edit .v6e-tonehost .eqk-summary { display: none; }
 
 /* the strip: the very same component as Perform (D15), one column tall */
 .v6.v6-edit .v6e-stage { display: flex; flex-direction: column; gap: 8px; min-height: 0; padding-left: 12px;
@@ -172,6 +176,13 @@
   .v6.v6-edit .v6e-rig-h small { display: none; }
   .v6.v6-edit .v6e-sent .ev2-sent { font-size: 16px; }
   .v6.v6-edit .v6e-bottom { flex-basis: 72px; }
+  /* skeptic UI6-U5a F3: Tone EQ in a ~400 px pane (1024 × 700). The eqKeyboard was laid out for today's full-width
+     Advanced: its A / B toggle ran 86 px past the pane and the band table (500 px) 115 px, so the pane scrolled
+     sideways and clipped them. The head wraps, the band list goes above its side panel, and only the table scrolls */
+  .v6.v6-edit .v6e-tonehost .eqk-head { flex-wrap: wrap; row-gap: 6px; }
+  .v6.v6-edit .v6e-tonehost .eqk-sp { display: none; }
+  .v6.v6-edit .v6e-tonehost .eqk-lower { grid-template-columns: minmax(0, 1fr); }
+  .v6.v6-edit .v6e-tonehost .eqk-table-wrap { overflow-x: auto; scrollbar-width: thin; }
 }
 @media (max-height: 820px) {
   .v6.v6-edit .v6e-rt { min-height: 44px; }

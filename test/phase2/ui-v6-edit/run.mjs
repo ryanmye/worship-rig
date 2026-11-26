@@ -662,14 +662,23 @@ try {
       await page.waitForTimeout(500);
       await page.screenshot({ path: path.join(SHOTS, `u5-edit-${c}-1280.png`) });
     }
-    // nothing scrolls sideways at 1280 or 1024
+    // nothing scrolls sideways at 1280 or 1024, in any category (skeptic UI6-U5a F3: only Range was checked, and
+    // Tone EQ's pane scrolled 115 px sideways at 1024 × 700, its A / B toggle and band table clipped)
     for (const [w, hgt] of [[1280, 800], [1024, 700]]) {
       await page.setViewportSize({ width: w, height: hgt });
-      await page.waitForTimeout(300);
-      const over = await ev(() => [document.scrollingElement, ...document.querySelectorAll('.v6-edit, .v6e-main, '
-        + '.v6e-inst, .v6e-ccont')].filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.className || 'page'));
-      assert.deepEqual(over, [], `${w}×${hgt}`);
+      for (const c of ['sound', 'eq', 'range', 'touch', 'sustain', 'sends', 'adv']) {
+        await choose(c);
+        await page.waitForTimeout(c === 'eq' ? 400 : 150);
+        const over = await ev(() => [document.scrollingElement, ...document.querySelectorAll('.v6-edit, .v6e-main, '
+          + '.v6e-inst, .v6e-ccont')].filter((e) => e.scrollWidth > e.clientWidth + 1)
+          .map((e) => `${e.className || 'page'} +${e.scrollWidth - e.clientWidth}`));
+        assert.deepEqual(over, [], `${w}×${hgt} ${c}`);
+      }
+      // the eqKeyboard's summary names the slot's role ("Keys plays …", D15): not shown in the v6 Edit
+      await choose('eq');
+      assert.equal(await ev(() => !!document.querySelector('.v6e-tonehost .eqk-summary')?.offsetParent), false);
     }
+    await choose('range');
     await page.setViewportSize({ width: 1280, height: 800 });
   });
 
