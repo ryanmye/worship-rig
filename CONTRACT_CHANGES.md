@@ -8384,3 +8384,25 @@ controller or engine change.
 - CSS: `styles-v6-sidebar.css` (`.v6-metro`, `.v6-mt-*`, `.v6-sb-load`, `.v6-rail-load`, `.v6-spin`; reduced motion
   stops the spinner and the count-in pulse). Tests: ui-v6 `sidebar.tests.mjs` + 3 checks (Click writes / Lock / Edit
   link, load state incl. "the module stays put", old layout appended); U3 checks updated for the fourth tab.
+
+## Esc always panics (D24.7)
+Native DECISIONS D24.7 ("or add to settings"); UI6-build-plan queued "Esc setting".
+- **`settings.escPanics`** (store.js): `true` or absent, exactly like `uiV6` / `chartView` (false / null stored as
+  absent; anything else refused; `migrate` drops non-`true`). In `DEVICE_LOCAL_SETTINGS`: not exported, kept across a
+  replace-import, never taken from a file; not an edit. Not in `DEVICE_BLOCK_SETTINGS` (1.x never had it).
+- **Settings › Keyboards & MIDI › Computer keyboard › "Esc always panics"** (`setting-esc-panics`, row
+  `setting-row-esc-panics`), off by default.
+- **main.js `escPanicKey`**: a window keydown capture listener, added / removed from the existing settings
+  subscription (`onSettings`) only while the setting is on, so with it absent there is no listener and Esc is today's
+  (flag-off purity holds). On: Escape without ⌘ / Ctrl / Alt, on the Perform view (today's or v6), Settings closed,
+  not recording a hotkey / in the GarageBand import → `controller.panic()` once per press (auto-repeat ignored) and
+  `preventDefault()`, so the controller's own Esc and main.js's "first Esc lets go of a focused control" stand down.
+- **Choice: panic and still close.** overlay.js is untouched: the top overlay (a strip's step panel, the ⋯ / Sing it
+  in / Space / customize popovers, the Quick sheet, the v6 range pick) still closes on the same press. Reason: the
+  overlay's edits are already written, so closing loses nothing, and leaving it open would leave no key that closes
+  it. Edit and Settings keep their Esc (cancel / close, never panic); ⌘. / Ctrl+. unchanged.
+- Order fix: Settings' Esc listener (window capture, registered at boot) closes Settings before `escPanicKey` runs
+  when the setting was turned on after boot; it marks that event (`escClosedSettings`) so it never panics.
+- Tests: `test/phase1/shell/esc-panics-store.test.mjs`; settings suite (app + fixture) "D24.7 …" (toggle, device-local,
+  Settings' Esc over Edit and Perform, today's Perform with the Quick sheet: on → panic + close, off → close only);
+  ui-v6 "D24.7 …" (v6 popover, Quick sheet, focused control, auto-repeat, Edit / Settings, off again).

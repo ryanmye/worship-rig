@@ -120,8 +120,12 @@ async function purityBoot(base) {
         ael: window.__probe.ael,
         intervals: window.__probe.intervals,
         store: window.__storeListeners ? window.__storeListeners.size : null,
-        // toasts come and go on their own clock (MIDI / wake-lock notes), so they are left out
-        dom: [...document.body.querySelectorAll('*')].filter((e) => !e.closest('#toasts > *')).map(shape).join('\n'),
+        // toasts come and go on their own clock (MIDI / wake-lock notes), so they are left out. The two Settings rows
+        // added on purpose after U3 (lane-small: "Esc always panics" D24.7, the v6 preview switch U1 O3) are left out
+        // too: they are the only intended flag-off DOM change (a base that has them has them on both sides).
+        dom: [...document.body.querySelectorAll('*')].filter((e) => !e.closest('#toasts > *')
+          && !e.closest('[data-testid="setting-row-esc-panics"], [data-testid="setting-row-ui-v6"]'))
+          .map(shape).join('\n'),
         css: [...document.querySelectorAll('link[rel=stylesheet]')].map((l) => l.getAttribute('href')),
         rig: Object.keys(window.__rig).sort(),
       };
@@ -1160,6 +1164,77 @@ try {
   });
 
   // ---------------------------------------------------------------- U3: the right sidebar (sidebar.tests.mjs)
+  // D24.7 (lane-small): Settings › Keyboards & MIDI › "Esc always panics", per device; main.js listens only while on
+  await T('D24.7 Esc always panics: on, Esc on the v6 Perform panics at once with a popover / the Quick sheet open '
+    + '(and still closes it); Edit and Settings keep their Esc; off = today', async () => {
+    await ev(() => window.__rig.ctx.setView('perform'));
+    await until(() => document.body.dataset.view === 'perform');
+    await ev(() => document.activeElement?.blur?.());
+    const held = () => ev(() => window.__rig.controller._debug().held.length);
+    const sing = async () => {
+      await page.click(tid('v6-key'));
+      await until(() => !!document.querySelector('[data-testid="v6-sing"]'));
+    };
+    // off (absent): today's rule, Esc closes the popover first, the next Esc panics
+    assert.equal(await ev(() => 'escPanics' in window.__rig.store.get().settings), false);
+    await armPanics();
+    await sing();
+    await page.keyboard.press('Escape');
+    await until(() => !document.querySelector('[data-testid="v6-sing"]'));
+    assert.equal(await ev(() => window.__panics), 0);
+    await ev(() => document.activeElement?.blur?.());
+    await page.keyboard.press('Escape');
+    await until(() => window.__panics === 1);
+    // on: one Esc = a panic, and the popover still closes
+    await ev(() => window.__rig.store.set('settings.escPanics', true));
+    try {
+      await armPanics();
+      await sing();
+      await ev(() => window.__rig.controller.perform.noteOn(62, 100));
+      assert.equal(await held(), 1);
+      await page.keyboard.press('Escape');
+      await until(() => window.__panics === 1 && !document.querySelector('[data-testid="v6-sing"]'));
+      assert.equal(await held(), 0, 'the held note is let go');
+      // the Quick sheet open (non-modal; Esc closes it today without a panic)
+      await page.click('#btn-quick');
+      await until(() => window.__rig.views.perform.quickOpen === true);
+      await page.keyboard.press('Escape');
+      await until(() => window.__panics === 2 && window.__rig.views.perform.quickOpen === false);
+      // a focused control: today the first Esc only lets go of it
+      await page.focus(tid('v6-transpose-up'));
+      await page.keyboard.press('Escape');
+      await until(() => window.__panics === 3);
+      // a held-down Esc (auto-repeat) is one panic
+      await page.keyboard.down('Escape');
+      await page.keyboard.down('Escape');
+      await page.keyboard.up('Escape');
+      await until(() => window.__panics === 4);
+      await page.waitForTimeout(150);
+      assert.equal(await ev(() => window.__panics), 4);
+      // Edit and Settings keep their Esc
+      await ev(() => window.__rig.ctx.setView('edit'));
+      await until(() => document.body.dataset.view === 'edit');
+      await page.keyboard.press('Escape');
+      await ev(() => window.__rig.ctx.setView('perform'));
+      await until(() => document.body.dataset.view === 'perform');
+      await ev(() => window.__rig.ctx.openSettings());
+      await until(() => !document.getElementById('view-settings').hidden);
+      await page.keyboard.press('Escape');
+      await until(() => document.getElementById('view-settings').hidden);
+      assert.equal(await ev(() => window.__panics), 4, 'no panic from Edit or Settings');
+    } finally {
+      // off again: today's rule is back
+      await ev(() => window.__rig.store.set('settings.escPanics', null));
+      await ev(() => window.__rig.ctx.setView('perform'));
+    }
+    await armPanics();
+    await sing();
+    await page.keyboard.press('Escape');
+    await until(() => !document.querySelector('[data-testid="v6-sing"]'));
+    await page.waitForTimeout(100);
+    assert.equal(await ev(() => window.__panics), 0);
+  });
+
   await sidebarTests({ T, page, browser, origin, ev, until, tid, song, settled, hold, setSlots, SHOTS, assert });
 
   // ---------------------------------------------------------------- U4: the left panel (left.tests.mjs)

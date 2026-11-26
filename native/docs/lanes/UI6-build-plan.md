@@ -79,7 +79,9 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   (and in Edit's rig tabs later); PANIC and Lock back to a tap.
 - **U-TWEAKS (D24):** live throttled range writes during a drag; pick-first mode on all pointers; drone Bright /
   Move percentages.
-- **Esc setting (D24.7):** "Esc always panics" toggle, per device, read by the v6 Esc handling (and today's).
+- ~~**Esc setting (D24.7):**~~ **Done (lane-small, builder; skeptic pending):** Settings › Keyboards & MIDI ›
+  "Esc always panics" (`settings.escPanics`, per device, absent = off). On: Esc on Perform (today's and v6) panics at
+  once and the open overlay still closes. CONTRACT_CHANGES "## Esc always panics (D24.7)".
 - **Small-window fit (UI6-U3 O1, orchestrator tier 2):** at ≤ 1100 px wide the sidebar starts folded unless the
   player opened it there before; the Add tile goes slim from 4 instruments (not 5). Goal: 4 strips at 1024×700
   without sideways scroll.

@@ -1566,6 +1566,13 @@ export function mountSettings(el, ctx) {
     h('h2.st-h2', { text: 'Perform view' }),
     row('Chips per sound', performChips.el, 'Under each fader. 2 = Space and Echo only, for a longer fader.'),
   );
+  // D24.7: settings.escPanics, per device, absent = off (today's rule: Esc closes what is open first). main.js
+  // listens for it only while it is on
+  const escTog = tog('escPanics', 'On');
+  escTog.el.dataset.testid = 'setting-esc-panics';
+  const escRow = row('Esc always panics', escTog.el, 'Off: on Perform, Esc first closes what is open (a menu, the '
+    + 'Quick sheet), the next Esc panics. On: every Esc on Perform panics at once. ⌘. (Ctrl+.) always panics.');
+  escRow.dataset.testid = 'setting-row-esc-panics';
   place('look', perfSection);
   place('keyboards',
     h('section.st-section', { 'aria-label': 'Computer keyboard', 'data-section': 'keyboard' },
@@ -1574,6 +1581,7 @@ export function mountSettings(el, ctx) {
       row('Play notes', tog('computerKeyboard', 'Enabled').el, null),
       h('p.st-hint', { text: 'A W S E D F T G Y H U J K O L P ; = notes from middle C (A = C), Z/X = octave, '
         + 'Space = sustain, ↑/↓ = mod wheel, ←/→ = previous / next song.' }),
+      escRow,
     ),
     learnSection,
   );

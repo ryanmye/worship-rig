@@ -1296,6 +1296,73 @@ async function runMode(mode, browser) {
       await closeSettings();
     });
 
+    // lane-small: D24.7 "Esc always panics"
+    const pressed = (t) => ev((sel) => {
+      const b = document.querySelector(sel);
+      return b.getAttribute('aria-pressed') ?? b.getAttribute('aria-checked');
+    }, t);
+    await T('D24.7 Keyboards & MIDI › Esc always panics: off by default (absent), device-local; on, Esc on Perform '
+      + 'panics at once with the Quick sheet open (and closes it); Settings keeps its Esc', async () => {
+      await openSettings();
+      await cat('keyboards');
+      const tog = '[data-testid="setting-esc-panics"]';
+      assert.equal(await ev(() => document.querySelector('[data-testid="setting-row-esc-panics"]')
+        .closest('.st-section').dataset.section), 'keyboard', 'in the Computer keyboard section');
+      assert.equal(await pressed(tog), 'false');
+      assert.equal(await ev(() => 'escPanics' in window.__rig.store.get().settings), false, 'absent until chosen');
+      await page.click(tog);
+      await until(() => window.__rig.store.get().settings.escPanics === true);
+      assert.equal(await pressed(tog), 'true');
+      assert.equal(await ev(() => 'escPanics' in JSON.parse(window.__rig.store.exportJSON()).settings), false,
+        'device-local: not exported');
+      if (mode === 'app') {
+        // Settings' Esc closes Settings, never panics
+        await ev(() => window.__rig.controller.perform.noteOn(62, 100));
+        await page.keyboard.press('Escape');
+        await until(() => document.getElementById('view-settings').hidden);
+        assert.ok(await ev(() => window.__rig.controller._debug().held.some(([n]) => n === 62)), 'no panic');
+        await ev(() => window.__rig.controller.perform.noteOff(62));
+        // today's Perform: the Quick sheet open, a held note, one Esc → panic + the sheet closes
+        await page.click('#view-switch button[data-value="perform"]');
+        await until(() => document.body.dataset.view === 'perform');
+        // over Perform too (Settings' own Esc listener runs before main.js's escPanicKey when the setting was
+        // turned on after boot)
+        await openSettings();
+        await ev(() => window.__rig.controller.perform.noteOn(63, 100));
+        await page.keyboard.press('Escape');
+        await until(() => document.getElementById('view-settings').hidden);
+        await sleep(100);
+        assert.ok(await ev(() => window.__rig.controller._debug().held.some(([n]) => n === 63)), 'no panic (Perform)');
+        await ev(() => window.__rig.controller.perform.noteOff(63));
+        await page.click('#btn-quick');
+        await until(() => window.__rig.views.perform.quickOpen === true);
+        await ev(() => window.__rig.controller.perform.noteOn(64, 100));
+        await page.keyboard.press('Escape');
+        await until(() => window.__rig.views.perform.quickOpen === false
+          && !window.__rig.controller._debug().held.some(([n]) => n === 64));
+        // off again (the Settings toggle writes false = absent): today's rule, the sheet closes without a panic
+        await openSettings();
+        await cat('keyboards');
+        await page.click(tog);
+        await until(() => !('escPanics' in window.__rig.store.get().settings));
+        await closeSettings();
+        await page.click('#btn-quick');
+        await until(() => window.__rig.views.perform.quickOpen === true);
+        await ev(() => window.__rig.controller.perform.noteOn(65, 100));
+        await page.keyboard.press('Escape');
+        await until(() => window.__rig.views.perform.quickOpen === false);
+        await sleep(100);
+        assert.ok(await ev(() => window.__rig.controller._debug().held.some(([n]) => n === 65)), 'off: no panic');
+        await ev(() => window.__rig.controller.perform.noteOff(65));
+        await page.click('#view-switch button[data-value="edit"]');
+        await until(() => document.body.dataset.view === 'edit');
+      } else {
+        await page.click(tog);
+        await until(() => !('escPanics' in window.__rig.store.get().settings));
+        await closeSettings();
+      }
+    });
+
     // polish-1: the retired Edit's .ed-* rules are pruned; what remains is exactly what settings.js renders
     if (mode === 'app') {
       await T('settings: styles-settings.css keeps only the .ed-* classes Settings renders (polish-1)', async () => {

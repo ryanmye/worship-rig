@@ -715,8 +715,31 @@ controller.addEventListener('menu', (e) => {
 let lastView = null;
 let lastLock = null;
 let lastSongId;
+// D24.7 "Esc always panics" (settings.escPanics, per device; absent = off). Off is today's rule: Esc closes what is
+// open on Perform first (overlay.js), lets go of a focused control (below), and only then panics (controller). On:
+// one Esc on Perform panics at once, whatever is open there (a strip's step panel, a v6 popover, the Quick sheet, the
+// range pick, a focused control), and that overlay still closes as today: the press does both. Settings and the Edit
+// view keep their Esc (close / cancel, never panic); ⌘. / Ctrl+. are unchanged. A window capture listener that runs
+// before overlay.js's and is only there while the setting is on, so with it absent the app is today's (no listener).
+let escPanicsOn = false;
+let escClosedSettings = null; // the Esc that just closed Settings (its window listener can run before this one)
+function escPanicKey(e) {
+  if (e.key !== 'Escape' || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (settingsOpen || e === escClosedSettings || store.get().settings.view !== 'perform') return;
+  const html = document.documentElement;
+  if (html.hasAttribute('data-hotkey-capture') || html.hasAttribute('data-gb-import')) return;
+  // the controller's Esc and the blur-first rule below stand down (one panic per press); overlay.js still closes
+  e.preventDefault();
+  if (!e.repeat) controller.panic();
+}
+function applyEscPanics(on) {
+  if (on === escPanicsOn) return;
+  escPanicsOn = on;
+  window[on ? 'addEventListener' : 'removeEventListener']('keydown', escPanicKey, true);
+}
 function onSettings(state) {
   const st = state.settings;
+  applyEscPanics(st.escPanics === true);
   if (st.performLock !== lastLock) {
     lastLock = st.performLock;
     document.body.classList.toggle('perform-locked', !!st.performLock);
@@ -931,6 +954,7 @@ window.addEventListener(
     const owned = html.hasAttribute('data-hotkey-capture') || html.hasAttribute('data-gb-import');
     if (settingsOpen && e.key === 'Escape' && !owned) {
       e.preventDefault();
+      escClosedSettings = e; // D24.7: this Esc was Settings' (escPanicKey may run after this listener)
       closeSettings();
     }
   },
