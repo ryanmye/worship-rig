@@ -379,3 +379,5 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
 - Plan: `native/docs/lanes/UI6-build-plan.md` (U1–U9). Built behind `settings.uiV6` (true or absent, like
   chartView) so today's UI keeps working and stays the default until Ryan flips it after seeing it on his Mac (U9,
   tier 1). Builder then skeptic per task; flag-off purity is a gate.
+- No 1.2 with the new UI (Ryan, same day): it depends on 2.0-only pieces (UIA slots, patch packs, Cue-then-Go,
+  MIDI learn any param). The new UI ships in 2.0.
