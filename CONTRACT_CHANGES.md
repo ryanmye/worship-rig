@@ -8036,3 +8036,46 @@ stored format and their behaviour are unchanged, `SCHEMA` stays 2, and `migrate(
   an NRPN knob learned CC 99, a constant, and a program-change pedal's bank select could be learned as a fader.
 - Tests: `learn.test.mjs` +1 (one assertion changed: `valueToCc(pedalHold, 'natural')` is now 1), and
   `learn-any.test.mjs` +4 (C1, S1, M1, L1). `settings/run.mjs` saves `<mode>-learn-custom.png`.
+
+## UI v6 U1
+
+The v6 Perform shell and strip (native DECISIONS D16–D22; `native/docs/lanes/UI6-build-plan.md` U1; mockup
+`native/docs/design/mockups/perform-v6.html`). Built behind a hidden switch that is off by default; Edit and Settings
+are today's.
+
+- **`settings.uiV6`** (store.js): `true` or absent, exactly like `settings.chartView`. False and null are stored as
+  absent; anything else is refused or dropped. It is in `DEVICE_LOCAL_SETTINGS`: not exported, kept across a
+  replace-import. No SCHEMA change.
+- **Switch** (main.js): open the app with `?ui6=1` / `?ui6=0`, or `__rig.setUiV6(true|false)` (returns a promise of
+  whether v6 is on). It applies at once and is remembered on this machine. `__rig.views.v6` is the mounted v6 view
+  (null while off); `__rig.views.perform` is now a getter that returns whichever Perform is mounted.
+- **Off = today's app.** main.js reads the query string and the flag once before mounting Perform; nothing of
+  `views/v6/` or `styles-v6.css` is fetched. Measured by the ui-v6 suite against the base build (966b0b4, same
+  server, 1280×800): 103 non-sample requests, 14 store listeners, 4 `setInterval`s, the same window / document
+  listeners by type, the same stylesheets, and 2528 elements with the same tag / id / testid shape (toasts excluded).
+  The only difference is the `__rig.setUiV6` key.
+- **On:** main.js imports `views/v6/perform.js`, waits for `styles-v6.css` (`loadV6Css()`, `link[data-v6-css]`),
+  destroys today's Perform (if mounted) and mounts `mountPerformV6(#view-perform, ctx)`. Off again destroys it (the
+  stylesheet link goes too) and mounts `mountPerform` afresh. The hidden chart view (D7) is taken down and put back on
+  the new Perform's `chartMounts`. A failed import falls back to today's Perform. Three on / off cycles leave the
+  store's listener count where it was at boot.
+- **`mountPerformV6(root, ctx)`** keeps `mountPerform`'s interface for main.js: `savedSnapshot` (Edit's
+  `getBaseline`), `changedPaths`, `toggleQuick` / `openQuick` / `closeQuick` / `quickOpen` (the top-bar Quick button
+  opens today's quickSheet), `chartMounts: {after: Notes button, stage: board}`, `destroy()`. Extra test hooks:
+  `strips`, `snapshots`.
+- **Writes** are today's: `store.set` on the same paths perform.js writes (`slots.<i>.gain` via
+  `controller.scenes.adjust` first, `.muted`, `.sends.reverb`, `.sends.delay`, `.octave`, `.sustain`; the Space
+  room's preset params; Revert's SAVED_FIELDS), `store.addSlot` (Add instrument: an empty slot, then Edit's picker;
+  Duplicate: a copy, appended at the end), `store.removeSlot` (Remove, after a 600 ms hold), `controller.*` for
+  transpose / Sing it in / cue / GO / Prev / Fade out / PANIC / scenes, `ctx.setView('edit', {block, focus})` for
+  Change and Open in Edit. No new store or controller API.
+- **Not wired (shown disabled, title "Coming…")**: ⋯ Earlier / Later. The store has no slot move that carries wheel
+  targets and scenes with the instrument; a whole-array write would leave them on the old position.
+- **Behaviour that differs from today's Perform, by the mockup:** PANIC and Lock need a 600 ms hold both ways (Esc and
+  ⌘. still panic at once); the strip's ON tile shows ● ON / OFF with the instrument's name above it (no role label).
+- **Snapshots** are today's scenes (shared/scenes.js, max 3), shown as "Own levels" + "Scene n". "edited" =
+  a scene plays and `sceneMatches(scene, controller.scenes.view(song))` is false; Update = `scenes.save(n)`, Save as
+  new = `scenes.save(count)`. The fold is per device: `localStorage['worship-rig.v6.snapshots'] = 'folded'`.
+- **Colours by position:** `--slot-0..3`, then `--v6-pos-4..6` (#e46aa0, #c9d867, #6f9cf0, the mockup's POS_COL),
+  repeating every 7 (`views/v6/lib.js slotColor`).
+- Tests: `node test/phase2/ui-v6/run.mjs` (14 checks, ~75 s idle; in run-all as `ui-v6`, phase2). Engine untouched.

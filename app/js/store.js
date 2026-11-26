@@ -99,6 +99,8 @@ export const DEVICE_LOCAL_SETTINGS = Object.freeze([
   'droneFreeze',
   // Chart view (D7, hidden): a preview switch for this machine; a replace-import never turns it on or off
   'chartView',
+  // UI v6 (D22, hidden until Ryan flips it): the same kind of preview switch as chartView
+  'uiV6',
 ]);
 /** 2.0 settings.polyphony (D1): voices per sound (slot). Optional; absent = POLYPHONY_DEFAULT. */
 export const POLYPHONY_CHOICES = Object.freeze([32, 64, 128]);
@@ -846,6 +848,8 @@ function normalizeSettings(raw, songs, setlists) {
   if (hasOwn(out, 'midiClockOut') && validMidiClockOut(out.midiClockOut) === undefined) delete out.midiClockOut;
   // Chart view (D7, hidden): settings.chartView is true or absent (off); anything else is dropped
   if (hasOwn(out, 'chartView') && out.chartView !== true) delete out.chartView;
+  // UI v6 (D22, UI6-build-plan U1): settings.uiV6 is true or absent (off), exactly like chartView
+  if (hasOwn(out, 'uiV6') && out.uiV6 !== true) delete out.uiV6;
   // Lane S: optional Program Change channel / action; a bad value is dropped (absent = any channel; the action as
   // programChangeOf reads it, O-AW-3). Never filled in here: an imported 1.x library with PC on stays 'switch'.
   if (hasOwn(out, 'programChangeChannel') && validPcChannel(out.programChangeChannel) === undefined) {
@@ -1650,7 +1654,7 @@ export function createStore(opts = {}) {
         // keyboards: device names may contain dots, so only the whole map is a path (store.setKeyboard)
         const whole = k === 'theme' || k === 'audioSleepSec' || k === 'hotkeys' || k === 'updateCheck'
           || k === 'keyboards' || k === 'click' || k === 'midiClockOut' || k === 'dynamicRange'
-          || k === 'droneFreeze' || k === 'chartView' || k === 'programChangeChannel'
+          || k === 'droneFreeze' || k === 'chartView' || k === 'uiV6' || k === 'programChangeChannel'
           || k === 'programChangeAction' || hasOwn(SOUND_2_CHOICES, k);
         return hasOwn(SETTINGS_VALIDATORS, k) || whole ? null : { segs, value: clone(value) };
       }
@@ -1673,7 +1677,8 @@ export function createStore(opts = {}) {
         return v === null ? null : { segs, value: v };
       }
       if (k === 'updateCheck') return typeof value === 'boolean' ? { segs, value } : null;
-      if (k === 'chartView') { // Chart view (D7, hidden): true = on; false / null = absent (off)
+      // Chart view (D7) / UI v6 (D22), both hidden: true = on; false / null = absent (off)
+      if (k === 'chartView' || k === 'uiV6') {
         if (value === null || value === undefined || value === false) return { segs, value: undefined };
         return value === true ? { segs, value } : null;
       }

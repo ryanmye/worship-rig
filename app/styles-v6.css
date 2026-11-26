@@ -1,0 +1,255 @@
+/* UI v6 Perform (D16–D22; native/docs/lanes/UI6-build-plan.md U1; mockup native/docs/design/mockups/perform-v6.html,
+   mock_v6.py / mock_v5.css / mock_v6.css). Linked only while settings.uiV6 is on (views/v6/perform.js loadV6Css), and
+   every selector sits under .v6. Colours are the theme's tokens (Sanctuary v2 is the reference; the fallbacks are
+   Classic's), so the view follows every theme. The shared components (ON tile, fader, chips, hold buttons, keys) keep
+   their own styles.css / theme rules; this file lays them out. */
+
+.v6 {
+  /* positions 4..6 of the mockup's POS_COL (the first four are the theme's --slot-0..3): views/v6/lib.js slotColor */
+  --v6-pos-4: #e46aa0; --v6-pos-5: #c9d867; --v6-pos-6: #6f9cf0;
+  --v6-gap: 10px;
+  --v6-cap: var(--label, var(--muted));
+  --v6-book: var(--font-book, var(--font-display));
+  --v6-sheet: var(--sheet, var(--panel-2));
+  --v6-sheet-line: var(--line-sheet, var(--line-2));
+  height: 100%; display: flex; flex-direction: column; gap: var(--v6-gap); padding: var(--v6-gap) 14px 12px;
+  position: relative; min-height: 0;
+}
+.v6.locked { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--warn) 70%, transparent);
+  border-radius: var(--radius); }
+.v6 .ic { display: block; flex: none; }
+.v6 .btn, .v6 .seg, .v6 .key-btn { min-height: 44px; }
+.v6 .v6-cap { color: var(--v6-cap); font: 650 13px var(--v6-book); font-variant-caps: all-small-caps;
+  letter-spacing: .05em;
+  text-transform: lowercase; white-space: nowrap; }
+.v6 .chip { min-height: 44px; padding: 4px 14px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--panel-2);
+  font-weight: 600; white-space: nowrap; position: relative; }
+.v6 .chip.plate { background: linear-gradient(var(--plate-top, var(--accent)), var(--plate-bot, var(--accent)));
+  color: var(--accent-ink); border-color: transparent; }
+.v6 .chip.dash { border-style: dashed; background: transparent; }
+.v6 .link { background: none; border: 0; color: var(--accent-text, var(--accent)); text-decoration: underline;
+  min-height: 36px;
+  padding: 0 4px; font-weight: 600; }
+.v6 .link:disabled { opacity: .5; text-decoration: none; }
+.v6 .ghost { min-height: 44px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line-2);
+  background: transparent;
+  font-size: 13.5px; font-weight: 600; }
+.v6 .ghost.warn { color: var(--danger); }
+.v6 .ghost:disabled { opacity: .45; }
+
+/* ---- song bar */
+.v6 .v6-songbar { flex: none; display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 6px 12px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+.v6 .v6-song { font: 800 26px/1.15 var(--v6-book); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 300px; min-width: 60px; flex: 0 1 auto; }
+.v6 .hold-btn.v6-keybtn { min-height: 44px; padding: 0 12px; border-radius: 10px; display: inline-flex;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel-2));
+  color: var(--accent-text, var(--accent)); }
+.v6 .v6-keybtn .hb-body { display: inline-flex; flex-direction: row; align-items: center; gap: 4px; }
+.v6 .v6-key-t { font: 800 22px/1 var(--v6-book); }
+.v6 .v6-playin { color: var(--accent-text, var(--accent)); font-weight: 700; font-size: 14px; white-space: nowrap; }
+.v6 .v6-playin[hidden] { display: none; }
+.v6 .v6-trn { display: flex; align-items: center; gap: 6px; }
+.v6 .hold-btn.v6-sq { min-width: 44px; min-height: 44px; padding: 0; border-radius: 10px; font-size: 22px;
+  font-weight: 700; }
+.v6 .v6-tval { width: 34px; text-align: center; font: 800 20px/1 var(--font-display);
+  font-variant-numeric: tabular-nums; }
+.v6 .v6-tval.shift { color: var(--accent-text, var(--accent)); }
+.v6 .v6-spc, .v6 .v6-snapchip { display: inline-flex; align-items: center; gap: 7px; padding: 0 12px;
+  font-weight: 700; white-space: nowrap; }
+.v6 .v6-snapchip { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--panel-2)); }
+.v6 .v6-snapchip[hidden] { display: none; }
+.v6 .v6-edot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.v6 .v6-edot[hidden] { display: none; }
+.v6 .v6-gap { flex: 1 1 0; min-width: 0; }
+.v6 .v6-chord { flex-direction: row; align-items: baseline; gap: 6px; padding: 0 6px; }
+.v6 .v6-chord .chord-caption { color: var(--v6-cap); }
+.v6 .v6-chord .chord-name { font-size: 22px; min-width: 2.2ch; }
+.v6 .v6-notes-btn { display: inline-flex; align-items: center; gap: 6px; }
+.v6 .v6-notes-btn.has-notes::after { content: ''; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); }
+.v6 .v6-setbtn { display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+  padding: 3px 12px;
+  line-height: 1.2; max-width: 210px; }
+.v6 .v6-setbtn small { color: var(--muted); font-weight: 500; font-size: 12px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 100%; }
+
+/* ---- snapshots row */
+.v6 .v6-snaps { flex: none; display: flex; align-items: center; gap: 8px; min-height: 48px; min-width: 0; }
+.v6 .v6-snaps[hidden] { display: none; }
+.v6 .v6-snap-list { display: contents; }
+.v6 .v6-dirty { margin-left: auto; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.v6 .v6-dirty[hidden] { display: none; }
+.v6 .v6-dirty[hidden] + .v6-fold { margin-left: auto; }
+.v6 .v6-fold { min-width: 44px; padding: 0; font-weight: 800; }
+
+/* ---- board: left panel slot · strips · right sidebar slot */
+.v6 .v6-board { flex: 1 1 auto; display: flex; gap: var(--v6-gap); min-height: 0; position: relative; }
+.v6 .v6-slot-ph { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px;
+  border: 1.5px dashed var(--line-2); border-radius: 12px; color: var(--faint); font-size: 12.5px; font-weight: 600;
+  text-align: center; padding: 8px; }
+.v6 .v6-slot-ph small { font-size: 11.5px; }
+.v6 .v6-left { width: 84px; }
+.v6 .v6-right { width: 280px; }
+.v6 .v6-stripsarea { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.v6 .v6-sfade { flex: 1 1 auto; min-height: 0; display: flex; position: relative; }
+.v6 .v6-strips { flex: 1 1 auto; display: flex; gap: var(--v6-gap); min-width: 0; min-height: 0;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.v6 .v6-stripsarea.scroll .v6-strips { scroll-snap-type: x proximity; padding-bottom: 8px;
+  overscroll-behavior-x: contain; }
+.v6 .v6-stripsarea.scroll .v6-sfade::after { content: ''; position: absolute; top: 0; bottom: 8px; right: 0;
+  width: 48px;
+  pointer-events: none; background: linear-gradient(90deg, transparent, var(--bg)); transition: opacity .2s; }
+.v6 .v6-stripsarea.scroll.atend .v6-sfade::after { opacity: 0; }
+
+/* the strip: today's channel strip (styles.css .slot), in the mockup's order */
+.v6 .v6-strip { flex: 1 1 0; min-width: 150px; max-width: 230px; gap: 8px; padding: 10px; }
+.v6 .v6-stripsarea.few .v6-strip { max-width: 300px; }
+.v6 .v6-stripsarea.scroll .v6-strip { flex: 0 0 calc((100% - 4 * var(--v6-gap) - 70px) / 5); max-width: none;
+  scroll-snap-align: start; }
+.v6 .v6-strips > .v6-strip[hidden] { display: none; }
+.v6 .v6-strips .fader.vertical input[type="range"] { touch-action: pan-x; }
+.v6 .v6-who { display: flex; align-items: center; gap: 7px; min-height: 24px; min-width: 0; }
+.v6 .v6-ico { flex: none; width: 8px; height: 22px; border-radius: 3px; background: var(--c); }
+.v6 .v6-nm { font: 700 17px/1.15 var(--v6-book); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0; }
+.v6 .v6-strip .ontile .ot-label { display: none; } /* the tile reads ● ON / OFF; the strip's name is above it (D15) */
+.v6 .v6-strip .ontile .ot-state { margin-left: 4px; font-size: 14px; }
+.v6 .v6-body { flex: 1 1 auto; min-height: 0; display: flex; }
+.v6 .v6-mods { gap: 6px; }
+.v6 .v6-mods .mchip { min-height: 44px; }
+.v6 .v6-btns { display: grid; grid-template-columns: 1fr 44px; gap: 6px; }
+.v6 .v6-btns .btn { padding: 0 8px; }
+.v6 .v6-more { font-size: 20px; font-weight: 800; line-height: 1; }
+.v6 .v6-more.open { background: linear-gradient(var(--plate-top, var(--accent)), var(--plate-bot, var(--accent)));
+  color: var(--accent-ink); }
+/* the step panel opens below the name + ON tile, so the tile stays a one-tap mute (perform.js polish-2A) */
+.v6 .v6-strip > .step-panel, .v6 .v6-strip > .step-panel[data-dir="cover"] { top: 90px; }
+.v6 .v6-strip.empty-v6 .v6-nm { color: var(--faint); font-style: italic; }
+.v6 .v6-strip.empty-v6 :is(.ontile, .v6-body, .v6-mods) { opacity: .35; }
+.v6 .v6-strip.muted .v6-who { opacity: .7; }
+.v6 .v6-strip.silent .v6-who, .v6 .v6-strip.silent .v6-body { opacity: .55; }
+/* the sustain pedal shows on every strip it holds (perform.js v11-polish L4) */
+.v6.pedal-down .v6-strip:not(.empty-v6) .sus-chip.on { border-color: var(--text); color: var(--text); }
+.v6.pedal-down .v6-strip:not(.empty-v6) .sus-chip.on .mc-led { background: var(--text);
+  box-shadow: 0 0 8px var(--text); }
+.v6.pedal-down .v6-strip.muted .sus-chip.on { border-color: var(--muted); }
+
+.v6 .v6-add { flex: 0 0 120px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px;
+  border: 1.5px dashed var(--line-2); border-radius: 12px; background: transparent; color: var(--muted);
+  font-weight: 600;
+  text-align: center; padding: 8px; }
+.v6 .v6-add-plus { color: var(--text); }
+.v6 .v6-add.slim { flex: 0 0 56px; padding: 0; }
+.v6 .v6-add.slim .v6-add-t { display: none; }
+.v6 .v6-stripsarea.few .v6-add { flex: 1 1 0; max-width: 300px; }
+.v6 .v6-add[hidden] { display: none; }
+
+/* > 5 instruments: name pills (lit = on screen; tap = scroll to it). The button is the 44 px target; the pill inside
+   is the mockup's 28 px .mmp. */
+.v6 .v6-pills { flex: none; display: flex; align-items: center; gap: 4px; height: 44px; margin: -8px 0 -6px;
+  min-width: 0;
+  overflow: hidden; }
+.v6 .v6-pills[hidden] { display: none; }
+.v6 .v6-pill { flex: 0 1 auto; min-width: 44px; height: 44px; padding: 0; border: 0; background: none; display: flex;
+  align-items: center; overflow: hidden; }
+.v6 .v6-pill-t { display: block; height: 28px; line-height: 26px; padding: 0 10px; border-radius: 14px;
+  white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  border: 1px solid color-mix(in srgb, var(--c) 40%, var(--line));
+  color: color-mix(in srgb, var(--c) 70%, var(--text)); font-size: 12px; font-weight: 700; opacity: .7; }
+.v6 .v6-pill.vis .v6-pill-t { background: color-mix(in srgb, var(--c) 22%, var(--panel-2)); border-color: var(--c);
+  opacity: 1; }
+.v6 .v6-pill[hidden] { display: none; }
+.v6 .v6-pills-h { margin-left: auto; flex: none; color: var(--muted); font-size: 12px; white-space: nowrap; }
+
+/* ---- bottom row: keyboard · Revert · Fade out · PANIC · Lock */
+.v6 .v6-bottom { flex: none; height: 96px; display: grid; grid-template-columns: minmax(0, 1fr) 128px 112px 128px 118px;
+  gap: var(--v6-gap); }
+.v6 .v6-keys { padding: 7px 9px 8px; display: flex; flex-direction: column; gap: 4px; min-height: 0; min-width: 0; }
+.v6 .v6-bottom .btn, .v6 .v6-bottom .hold-btn { height: 100%; min-height: 44px; border-radius: var(--radius);
+  font-size: 16px;
+  font-weight: 700; padding: 0 8px; }
+.v6 .v6-bottom .hold-btn .hb-cap { top: auto; bottom: calc(100% + 8px); }
+.v6 .v6-bottom .hold-btn .hb-ring { display: none; }
+.v6 .btn-panic .panic-k { font-size: 11.5px; }
+.v6 .hold-btn.holding { color: var(--warn); }
+.v6 .btn-panic.holding { color: #fff; }
+
+/* ---- popovers (⋯, Sing it in, Space, Notes, Setlist) */
+.v6 .v6-pop { position: absolute; z-index: 25; width: 300px; padding: 12px; border-radius: 12px;
+  background: var(--v6-sheet);
+  border: 1px solid var(--v6-sheet-line); box-shadow: 0 18px 40px var(--sh, #000c); display: flex;
+  flex-direction: column;
+  gap: 10px; text-align: left; }
+.v6 .v6-pop-h { font: 800 18px var(--v6-book); }
+.v6 .v6-pop-h span { color: var(--muted); font: 400 14px var(--font); }
+.v6 .v6-pop-p { margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.4; }
+.v6 .v6-pop-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13.5px;
+  color: var(--muted); }
+.v6 .v6-pop-foot b { color: var(--text); }
+.v6 .v6-pop-foot .btn { margin-left: auto; }
+.v6 .v6-prow { display: flex; gap: 8px; }
+.v6 .v6-prow > * { flex: 1 1 0; }
+/* the strip's ⋯ menu opens beside its strip (mockup .pop; lib.js popover `beside`) */
+.v6 .v6-more-pop { width: 280px; }
+.v6 .v6-keypop { width: 430px; }
+.v6 .v6-keypop .key-btn.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.v6 .v6-rooms { display: flex; flex-direction: column; gap: 4px; }
+.v6 .v6-room { display: flex; flex-direction: column; align-items: flex-start; text-align: left; padding: 6px 10px;
+  gap: 1px;
+  line-height: 1.25; }
+.v6 .v6-room small { font-size: 12px; color: var(--muted); font-weight: 400; }
+.v6 .v6-room.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.v6 .v6-spacepop { width: 340px; }
+.v6 .v6-notespop { width: 360px; }
+.v6 .v6-notes-t { max-height: 320px; overflow: auto; white-space: pre-wrap; font-size: 15px; line-height: 1.5;
+  background: var(--well, var(--panel)); border-radius: 10px; padding: 10px 12px; user-select: text;
+  -webkit-user-select: text; }
+.v6 .v6-notes-t.empty { color: var(--faint); font-style: italic; }
+.v6 .v6-setpop { width: 340px; }
+.v6 .v6-slist { display: flex; flex-direction: column; gap: 4px; max-height: 360px; overflow: auto; }
+.v6 .v6-sl { min-height: 44px; display: grid; grid-template-columns: 22px 1fr auto; column-gap: 6px;
+  align-items: center;
+  text-align: left; padding: 3px 10px; }
+.v6 .v6-sl .n { color: var(--faint); font-size: 12px; }
+.v6 .v6-sl b { font: 700 15px var(--v6-book); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v6 .v6-sl .k { color: var(--accent-text, var(--accent)); font-weight: 800; }
+.v6 .v6-sl small { grid-column: 2 / 4; font-size: 11px; color: var(--muted); }
+.v6 .v6-sl small:empty { display: none; }
+.v6 .v6-sl.now { background: linear-gradient(var(--plate-top, var(--accent)), var(--plate-bot, var(--accent)));
+  color: var(--accent-ink); border-color: transparent; }
+.v6 .v6-sl.now :is(.n, .k, small) { color: var(--accent-ink); }
+.v6 .v6-sl.cued { border-color: var(--accent); }
+.v6 .v6-go { flex: 2 1 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+  text-align: left;
+  min-height: 52px; padding: 4px 10px; min-width: 0; }
+.v6 .v6-go small { font-size: 11px; font-weight: 800; color: var(--ok); }
+.v6 .v6-go b { font: 700 14px var(--v6-book); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%; }
+.v6 .v6-go.cued { border: 2px solid var(--accent); }
+
+/* ---- the hidden chart view (D7) on the v6 board */
+.v6 .v6-board.chv-host { position: relative; }
+
+/* the folded snapshots chip shares the song bar: below 1366 px its caption and the chord's give the song name room */
+@media (max-width: 1366px) {
+  .v6.snaps-folded :is(.v6-snapchip .v6-cap, .v6-chord .chord-caption) { display: none; }
+}
+
+/* ---- narrower windows (iPad landscape 1180, 1024): the side columns give way first (U8 does the real iPad layout) */
+@media (max-width: 1240px) {
+  .v6 .v6-right { width: 220px; }
+  .v6 .v6-song { max-width: 220px; font-size: 22px; }
+  .v6 .v6-chord .chord-caption { display: none; }
+}
+@media (max-width: 1100px) {
+  .v6 .v6-left { width: 64px; }
+  .v6 .v6-right { width: 160px; }
+  .v6 .v6-setbtn small { display: none; }
+}

@@ -958,11 +958,20 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 // ------------------------------------------------------------------------------------------ mount views
-const performView = mountPerform(els.perform, ctx);
+// UI v6 (D22, native/docs/lanes/UI6-build-plan.md U1; hidden): while settings.uiV6 is absent this is today's Perform
+// and nothing of views/v6/ is loaded, drawn or listened to. ?ui6=1 / ?ui6=0 or __rig.setUiV6(true|false) turn it on
+// or off; it applies at once and is remembered on this machine. On, views/v6/perform.js replaces Perform (Edit and
+// Settings stay today's).
+{
+  const q = new URLSearchParams(location.search).get('ui6');
+  if (q === '1' || q === '0') store.set('settings.uiV6', q === '1' ? true : null);
+}
+let performView = store.get().settings.uiV6 === true ? null : mountPerform(els.perform, ctx);
+let performIsV6 = false;
 // Quick settings sheet (H-v2): Perform only; the sheet is non-modal, so the keys keep playing while it is open
 $('btn-quick').addEventListener('click', () => {
   if (store.get().settings.view !== 'perform') return;
-  performView.toggleQuick();
+  performView?.toggleQuick();
 });
 
 // Chart view (D7, hidden; views/chart/, CONTRACT_CHANGES "Chart view (D7, hidden)"). While settings.chartView is absent
@@ -984,9 +993,10 @@ function applyChartView() {
   if (chartView) return Promise.resolve(true);
   chartPending ||= loadModule('./views/chart/index.js', 'mountChartView').then((mount) => {
     chartPending = null;
-    if (!mount || chartView || store.get().settings.chartView !== true) return !!chartView;
+    const mounts = performView?.chartMounts; // UI v6 (U1): none while Perform is being swapped
+    if (!mount || chartView || store.get().settings.chartView !== true || !mounts) return !!chartView;
     try {
-      chartView = mount(ctx, performView.chartMounts);
+      chartView = mount(ctx, mounts);
     } catch (err) {
       console.warn('[ui] mountChartView failed', err);
     }
@@ -997,8 +1007,59 @@ function applyChartView() {
 {
   const q = new URLSearchParams(location.search).get('chart');
   if (q === '1' || q === '0') store.set('settings.chartView', q === '1' ? true : null);
+  if (store.get().settings.chartView === true && performView) applyChartView();
+}
+
+// UI v6 (D22, U1): swap Perform for views/v6/perform.js and back. The chart view (mounted on Perform's mount points)
+// is taken down first and put back on the new Perform.
+let v6Pending = null;
+function setUiV6(on) {
+  store.set('settings.uiV6', on ? true : null);
+  return applyUiV6();
+}
+function swapPerform(mount, isV6) {
+  chartView?.destroy();
+  chartView = null;
+  performView?.destroy();
+  performView = null;
+  try {
+    performView = mount(els.perform, ctx);
+    performIsV6 = isV6;
+  } catch (err) {
+    console.warn('[ui] Perform mount failed', err);
+    if (isV6) {
+      performView = mountPerform(els.perform, ctx); // never leave the stage empty
+      performIsV6 = false;
+    }
+  }
   if (store.get().settings.chartView === true) applyChartView();
 }
+function applyUiV6() {
+  const on = store.get().settings.uiV6 === true;
+  if (!on) {
+    if (performIsV6 || !performView) swapPerform(mountPerform, false);
+    return Promise.resolve(false);
+  }
+  if (performIsV6) return Promise.resolve(true);
+  v6Pending ||= import('./views/v6/perform.js').then(async (mod) => {
+    await mod.loadV6Css();
+    return mod.mountPerformV6;
+  }).catch((err) => {
+    console.warn(`[ui] ./views/v6/perform.js not available: ${err && err.message}`);
+    return null;
+  }).then((mount) => {
+    v6Pending = null;
+    if (store.get().settings.uiV6 !== true) {
+      if (!performView) swapPerform(mountPerform, false);
+      return performIsV6;
+    }
+    if (performIsV6) return true;
+    swapPerform(mount || mountPerform, !!mount);
+    return performIsV6;
+  });
+  return v6Pending;
+}
+if (!performView) applyUiV6();
 
 function placeholder(el, text) {
   el.replaceChildren(h('div.view-placeholder', { text }));
@@ -1254,10 +1315,13 @@ mirrorMenuBarMode(store.get());
 mirrorShellSettings({ store, rig });
 
 // test / debugging handle (not an API)
-globalThis.__rig = { store, engine, controller, midi, recorder, ctx, views: { perform: performView, get edit() { return editView; }, get settings() { return settingsView; } }, ready: started, viewsReady, ui: { setBanner, plainMessage, toast } };
+globalThis.__rig = { store, engine, controller, midi, recorder, ctx, views: { get perform() { return performView; }, get edit() { return editView; }, get settings() { return settingsView; } }, ready: started, viewsReady, ui: { setBanner, plainMessage, toast } };
 globalThis.__rig.diag = diag;
 // Chart view (D7, hidden): the switch, and the mounted view (null while off)
 globalThis.__rig.setChartView = setChartView;
 Object.defineProperty(globalThis.__rig.views, 'chart', { get: () => chartView, enumerable: true });
+// UI v6 (D22, U1, hidden): the switch, and the mounted v6 Perform (null while off)
+globalThis.__rig.setUiV6 = setUiV6;
+Object.defineProperty(globalThis.__rig.views, 'v6', { get: () => (performIsV6 ? performView : null), enumerable: true });
 globalThis.__rig.meters = { stats: meterClockStats, wake: wakeMeters }; // idle-cpu-ui test hook
 globalThis.__rig.theme = { apply: applyTheme, get current() { return themeApplied; }, get pending() { return themePending; } };

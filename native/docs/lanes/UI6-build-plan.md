@@ -34,6 +34,20 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 | U8 | iPad layouts (landscape = Mac; portrait stacks), edge states (loading, MIDI off, audio stalled, first run, Lock), all 8 themes incl. the two day themes (contrast audit via tools/themes/shoot.mjs). Menu bar popover unchanged. | all | U1–U7 |
 | U9 | Ryan's review on his Mac, finishing touches, then flip the default and retire the old views (tier 1: Ryan says when). | — | U8 |
 
+## U1 status (builder, 2026-11-26; lane-u1, awaiting the skeptic)
+
+- Built: `settings.uiV6` + `?ui6=1` / `__rig.setUiV6`; `app/js/views/v6/` (`perform.js` shell, `songbar.js`,
+  `snapshots.js`, `strips-row.js`, `strip.js`, `bottom.js`, `lib.js`) and `app/styles-v6.css`; suite
+  `test/phase2/ui-v6/run.mjs` (in run-all). Interface notes: CONTRACT_CHANGES "## UI v6 U1".
+- Wired: every strip control (today's calls), Change / Open in Edit (Edit's picker), Duplicate (appends at the end),
+  Remove (hold), Add instrument, > 5 scroll + name pills, snapshots (today's scenes) with Update / Save as new and the
+  fold, song bar (key / Sing it in, "you play", transpose, Space room, chord, Notes, Setlist cue + GO), today's
+  keyboard with range bars, Revert / Fade out / PANIC / Lock, the top-bar Quick sheet.
+- Placeholders: the left panel (U4) and the right sidebar (U3) are empty dashed columns, so the drone, wheel and
+  setlist modules are not on the v6 stage yet. ⋯ Earlier / Later are disabled ("Coming"): no store slot move.
+- For U2: `bottom.js` holds the keyboard; replace its display-only range bars. For U3 / U4: mount into
+  `.v6-right` / `.v6-left` (perform.js `right` / `left`).
+
 ## Open questions carried into the build (decide, log in DECISIONS, tell Ryan)
 
 - **Snapshots vs today's scenes.** Today: up to 3 scenes per song, levels / ON / drone level / wheel only. The v6
