@@ -261,6 +261,40 @@ try {
     assert.equal(await bankOpen(), true, 'a tap outside does not close it');
   });
 
+  // skeptic (UI6-U7a): D24.7 with the browser open. Off: Esc closes it first (no panic), the next Esc panics. On
+  // ("Esc always panics"): one Esc panics and closes it. Typing in its search keeps the Esc (closes, never panics).
+  await T('Esc: closes the browser first, then panics; "Esc always panics" does both; search keeps its Esc',
+    async () => {
+    const panics = () => ev(() => window.__panics);
+    await page.click(tid('v6-bank-count'));
+    const p0 = await panics();
+    await page.keyboard.press('Escape');
+    assert.equal(await bankOpen(), false, 'the first Esc closes the browser');
+    assert.equal(await panics(), p0, '… and does not panic');
+    await page.keyboard.press('Escape');
+    await until((n) => window.__panics === n + 1, p0);
+    await ev(() => window.__rig.store.set('settings.escPanics', true));
+    try {
+      await ev(() => window.__rig.ctx.openBank({}));
+      await page.click(tid('v6-bank-count'));
+      const p1 = await panics();
+      await page.keyboard.press('Escape');
+      await until((n) => window.__panics === n + 1, p1);
+      assert.equal(await bankOpen(), false, 'on: the same Esc closes it');
+      await ev(() => window.__rig.ctx.openBank({}));
+      await page.fill(tid('v6-bank-search'), 'river');
+      const p2 = await panics();
+      await page.keyboard.press('Escape');
+      assert.equal(await bankOpen(), false);
+      assert.equal(await panics(), p2, 'typing in the search: Esc never panics');
+    } finally {
+      await ev(() => window.__rig.store.set('settings.escPanics', null));
+    }
+    await ev(() => window.__rig.ctx.openBank({}));
+    await page.fill(tid('v6-bank-search'), '');
+    assert.equal(await bankOpen(), true);
+  });
+
   await T('filters: search (title / artist, accents), key, tempo bands, feel tags (any of), packs, clear', async () => {
     const set = (f) => ev((x) => window.__rig.views.v6.bank.setFilter(x), f);
     await page.fill(tid('v6-bank-search'), 'river');
