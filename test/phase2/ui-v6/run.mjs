@@ -443,7 +443,10 @@ try {
     // back to five: no scroll, no pills
     await setSlots(5);
     await until(() => !document.querySelector('.v6-stripsarea').classList.contains('scroll'));
-    assert.equal(await ev(() => document.querySelector('[data-testid="v6-pills"]').hidden), true);
+    // skeptic UI6-U3: since U3 the pills also follow the measured overflow, which the row re-reads on the next frame
+    // (strips-row.js `visible`); asserting in the same frame as the class change raced it under load (1 of 3 runs)
+    await until(() => document.querySelector('[data-testid="v6-pills"]').hidden, null, 5000);
+    assert.equal(await ev(() => document.querySelector('.v6-stripsarea').classList.contains('overflow')), false);
   });
 
   await T('snapshots: + Save, chips play, edited · Update · Save as new, Own levels', async () => {
