@@ -8972,3 +8972,20 @@ The chord chart (D7, still the hidden 2.1 feature) in the v6 layout: a right-sid
   ui-v6's D24.7 Esc check now types into the v6 Edit chart dialog (on the v6 Perform the chart is the v6 one).
 - Gates: chart 33/33, ui-v6 68/68 (flag-off purity vs 8bd0d2f identical), ui-v6-edit 32/32, settings 111/111,
   shell unit 364/364, unit 685 pass / 0 fail. Engine unchanged.
+- **Skeptic (native/docs/reviews/UI6-U7b.md), orchestrator decisions (tier 2):**
+  - **(a) Default placement = the stage.** `chart.js` `CHART_PLACEMENT_DEFAULT = 'stage'`: a device with no stored
+    `placement` shows the chart on the stage (the Chart tab / rail icon / Notes' Chart put it up there). `placement` is
+    now written only by ⇥ Sidebar / ⤢ Stage (`setPlacement`), never by a size, mode or speed save, so "never chose"
+    stays "never chose". Was: 'side', written with every save.
+  - **(b) Kept as built:** the snapshots row on the stage (foldable), separate stage / sidebar text sizes (100 % /
+    75 %), the Chart tab / rail behaviour (`take()` / `away()`).
+- **Skeptic fixes:** F1 `panel.js`: the chart body lets go of a pointer focus (`:focus-visible` false → blur), so a
+  tap keeps Space = sustain and Esc = Panic; Tab focus and ↑ ↓ PgUp PgDn Home End scrolling are unchanged. F2
+  `panel.js`: a pinch counts only touches that started on the chart (`e.touches` filtered by `wrap.contains(target)`).
+  F3 `edit.js`: no preview over `CHART_MAX_CHARS` ("Too large to show", status "Too large to save"). F4 `edit.js` /
+  `import.js chartReview`: on a trial song (`isTrialId`) the dialog says "trying this song: Keep it to save the chart"
+  and Save toasts "Chart set for this try. Keep it to save it with the song." F5 CSS: Heard / Hands, A / % / A / Fit,
+  ⇥ / ⤢, Edit chart… and the dialog's format buttons ≥ 44 × 44 (wells lose their 2 px padding). Tests: chart suite
+  "U7b skeptic F1…F5" (each fails on e414a0b) and the default-placement checks in "U7b both on".
+- Gates after the skeptic: chart 38/38, ui-v6 68/68, ui-v6-edit 32/32, ui-v6-bank 16/16, settings 111/111, shell unit
+  377/377, chart unit 123/123.
