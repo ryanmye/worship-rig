@@ -534,6 +534,18 @@ export async function u5bTests(x) {
       return { bank: p ? p.bankSongs : null, hidden: document.querySelector('[data-testid="v6e-bank"]').hidden };
     });
     assert.deepEqual(o6, { bank: 0, hidden: true });
+    // with bank songs (a stubbed patch-pack read + the controller's 'user-patches' event) it shows
+    const shown = await ev(() => {
+      const c = window.__rig.controller;
+      const orig = c.patchPacks;
+      c.patchPacks = () => ({ ...orig.call(c), enabled: true, bankSongs: 2 });
+      c.dispatchEvent(new CustomEvent('user-patches', { detail: {} }));
+      const on = !document.querySelector('[data-testid="v6e-bank"]').hidden;
+      c.patchPacks = orig;
+      c.dispatchEvent(new CustomEvent('user-patches', { detail: {} }));
+      return { on, off: document.querySelector('[data-testid="v6e-bank"]').hidden };
+    });
+    assert.deepEqual(shown, { on: true, off: true });
   });
 
   // ---------------------------------------------------------------- fit + screenshots
