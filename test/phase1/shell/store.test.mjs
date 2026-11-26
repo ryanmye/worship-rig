@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createStore, memoryStorage, migrate, FutureSchemaError, STORAGE_KEY, SCHEMA, transposeSemisOf, emptyState } from '../../../app/js/store.js';
+import {
+  createStore, memoryStorage, migrate, FutureSchemaError, STORAGE_KEY, SCHEMA, SEPARATE_LIBRARY_SUFFIX, transposeSemisOf,
+  emptyState,
+} from '../../../app/js/store.js';
 import { FACTORY_SONGS } from '../../../app/js/presets.js';
 import { makeStore, idGen } from './helpers.mjs';
 
@@ -82,15 +85,47 @@ test('migrate fills defaults, clamps, drops dangling ids, and is idempotent on m
   assert.deepEqual(migrate(JSON.parse(JSON.stringify(m))), m);
 });
 
-test('future schema is refused: raw string backed up, app starts fresh', () => {
+test('1.1.1 (D8): a newer library is left untouched; a separate 1.x library is used under <key>.1x', async () => {
   const future = JSON.stringify({ schema: SCHEMA + 1, songs: { x: { name: 'From the future' } } });
-  const storage = memoryStorage({ [STORAGE_KEY]: future });
+  const old = { [`${STORAGE_KEY}.backup-1`]: 'b1', [`${STORAGE_KEY}.backup-2`]: 'b2', [`${STORAGE_KEY}.backup-3`]: 'b3' };
+  const storage = memoryStorage({ [STORAGE_KEY]: future, ...old });
   assert.throws(() => migrate(JSON.parse(future)), FutureSchemaError);
-  const s = createStore({ storage, now: () => 1234, idGen: idGen(), warn: () => {}, requestIdle: null, autoFlush: false });
-  assert.equal(s.loadInfo.status, 'future-schema');
-  assert.equal(s.loadInfo.backupKey, `${STORAGE_KEY}.backup-1234`);
-  assert.equal(storage.getItem(`${STORAGE_KEY}.backup-1234`), future, 'raw string kept byte-for-byte');
+  const sep = `${STORAGE_KEY}${SEPARATE_LIBRARY_SUFFIX}`;
+  const s = createStore({ storage, now: () => 1234, idGen: idGen(), warn: () => {}, requestIdle: null, autoFlush: false, debounceMs: 0 });
+  assert.deepEqual(s.loadInfo.newerLibrary, { schema: SCHEMA + 1, key: STORAGE_KEY });
+  assert.equal(s.loadInfo.status, 'fresh', 'the separate 1.x library starts as a factory seed');
   assert.equal(s.get().songOrder.length, FACTORY_SONGS.length);
+  s.set('settings.view', 'edit');
+  s.addSong(null, { name: 'Made in 1.1.1' });
+  s.persistNow();
+  s.dispose();
+  // the newer library and every backup key are exactly as they were: nothing backed up, pruned or overwritten
+  assert.equal(storage.getItem(STORAGE_KEY), future);
+  for (const [k, v] of Object.entries(old)) assert.equal(storage.getItem(k), v, k);
+  assert.deepEqual(storage.keys().sort(), [STORAGE_KEY, sep, ...Object.keys(old)].sort());
+  assert.equal(JSON.parse(storage.getItem(sep)).schema, SCHEMA);
+  // the next launch opens the same separate library (not another fresh one), and still leaves the newer one alone
+  const again = createStore({ storage, now: () => 5678, idGen: idGen(), warn: () => {}, requestIdle: null, autoFlush: false, debounceMs: 0 });
+  assert.equal(again.loadInfo.status, 'ok');
+  assert.ok(again.loadInfo.newerLibrary);
+  assert.ok(Object.values(again.get().songs).some((x) => x.name === 'Made in 1.1.1'));
+  again.set('settings.view', 'perform');
+  again.persistNow();
+  again.dispose();
+  assert.equal(storage.getItem(STORAGE_KEY), future);
+  // reload() (another window let go of the instance lock) reads the separate library too
+  const r = createStore({ storage, idGen: idGen(), warn: () => {}, requestIdle: null, autoFlush: false });
+  assert.equal(r.reload(), false);
+  assert.equal(storage.getItem(STORAGE_KEY), future);
+});
+
+test('1.1.1 (D8): a 1.x library, an unreadable one and a schema-less one are not "newer"', () => {
+  for (const raw of [JSON.stringify({ schema: SCHEMA, songs: {} }), '{"songs": [unterminated', '{"songs":{}}', '42']) {
+    const storage = memoryStorage({ [STORAGE_KEY]: raw });
+    const s = createStore({ storage, now: () => 7, idGen: idGen(), warn: () => {}, requestIdle: null, autoFlush: false });
+    assert.equal(s.loadInfo.newerLibrary, undefined, raw);
+    assert.equal(storage.getItem(`${STORAGE_KEY}${SEPARATE_LIBRARY_SUFFIX}`), null, raw);
+  }
 });
 
 test('corrupt storage → factory reset with backup', () => {

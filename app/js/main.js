@@ -998,6 +998,30 @@ const info = store.loadInfo;
 layoutBanners();
 if (info.status === 'corrupt') toast('Your saved library could not be read, so the factory songs were loaded. The old data was kept as a backup.', 'error', { ms: 14000 });
 else if (info.status === 'future-schema') toast('Your library was saved by a newer version of Worship Rig. It was kept as a backup and the factory songs were loaded.', 'error', { ms: 14000 });
+// 1.1.1 (D8): the main library was saved by 2.0 and is left exactly as it is (store.js SEPARATE_LIBRARY_SUFFIX).
+// One message, two choices: keep using the separate 1.x library this window opened, or quit.
+if (info.newerLibrary) {
+  const by = info.newerLibrary.schema === 2 ? 'Worship Rig 2.0' : 'a newer version of Worship Rig';
+  const quit = () => {
+    window.close();
+    // a browser tab the page did not open stays open; say so instead of looking stuck
+    setTimeout(() => toast('You can close this window now. Nothing was changed.', 'info', { ms: 14000 }), 400);
+  };
+  setBanner('newer-library', {
+    kind: 'danger',
+    short: `This library was saved by ${by}`,
+    text: `This library was saved by ${by}, and Worship Rig 1.1 cannot open it. It is kept untouched: open it again `
+      + `in ${by}. Here you can use a separate 1.x library${info.status === 'fresh' ? ' (the factory songs)' : ''}, `
+      + 'or quit.',
+    actions: [
+      {
+        label: 'Use a separate 1.x library', testid: 'newer-library-separate',
+        run: () => setBanner('newer-library', null),
+      },
+      { label: 'Quit', testid: 'newer-library-quit', run: quit },
+    ],
+  });
+}
 
 let overlayArmed = false;
 function audioRunning() {

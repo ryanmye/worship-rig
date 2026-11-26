@@ -2135,9 +2135,12 @@ export function createController(o) {
   // ---- backups (Electron)
   let backupTimer = null;
   let lastBackup = -Infinity;
-  /** Library JSON tagged with this page's origin (M5: backups from another port can be offered for import). */
+  /**
+   * Library JSON tagged with this page's origin (M5: backups from another port can be offered for import). 1.1.1
+   * (2.0 DECISIONS D11): with this machine's device-local settings in the `deviceSettings` block, for 2.0.
+   */
   function libraryJSON() {
-    const json = store.exportJSON({ pretty: false });
+    const json = store.exportJSON({ pretty: false, device: true });
     const origin = loc && loc.origin && loc.origin !== 'null' ? loc.origin : null;
     return origin && json.startsWith('{') ? `{"origin":${JSON.stringify(origin)},${json.slice(1)}` : json;
   }

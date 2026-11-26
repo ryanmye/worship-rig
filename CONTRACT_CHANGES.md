@@ -6769,3 +6769,49 @@ slot…` (test 31): "Perform reads slot 3 once per clock frame or sleeps (0.25)"
   this), settings 60/60, shell unit + browser pass.
 - **For 2.0:** if the native engine replaces the sampler, keep `velocityDb` as the one gain law (per-note, pivot
   0.75, spans 10 / 24), and keep the setting device-local.
+
+## 1.1.1: a newer library is never touched (2.0 DECISIONS D8, review E5 M4)
+
+- **What changed.** `createStore` checks the main key (`rig.v1`) before loading. When it holds a library with a schema
+  newer than `SCHEMA` (2.0 Chrome writes schema 2 there on the same origin), the store reads and writes
+  `rig.v1.1x` (`SEPARATE_LIBRARY_SUFFIX`) instead, and `loadInfo.newerLibrary = {schema, key}`. `loadInfo.status`
+  then describes the separate library ('fresh' the first time, 'ok' after).
+- **Why.** 1.1.0 backed the 2.0 text up under `rig.v1.backup-<ts>` and seeded `rig.v1`. Each side added a backup key
+  per launch, and `BACKUPS_KEEP = 3` pruned both libraries after two round trips. Now 1.1.1 writes no backup key,
+  prunes nothing and never writes `rig.v1` while it holds the newer library.
+- **UI.** main.js shows one danger banner, "This library was saved by Worship Rig 2.0 …", with **Use a separate 1.x
+  library** (dismiss) and **Quit** (`window.close()`, then a toast if the browser keeps the tab). Settings › Backups
+  says a separate 1.x library is in use.
+- **Unchanged.** An unreadable (corrupt) library still takes the H1 path; `importJSON` still refuses a newer file.
+- Tests: store.test.mjs (2 new, replacing "future schema is refused"), fixes.test.mjs (H1 future-schema rewritten),
+  browser.pw.mjs (the real app, two launches). The store and fixes tests fail on the 1.1.0 store.
+
+## 1.1.1: device-local settings go into backups and exports, for 2.0 (2.0 DECISIONS D11)
+
+- **What changed.** `store.exportJSON({device: true})` adds an optional top-level block, `deviceSettings` =
+  `{v: 1, install, settings}`. `settings` holds every `DEVICE_LOCAL_SETTINGS` key the library has (13 keys; optional
+  ones that were never set stay absent). The automatic and "Back up now" backups (`controller.libraryJSON`, Settings)
+  pass `device: true`. Settings › Export library passes it only while its toggle **With this computer's device
+  settings** (`data-testid="export-device"`, off by default, not saved) is on (D11 skeptic DS4). The Edit view's
+  setlist export never does. `exportJSON()` without it is byte-for-byte 1.1.0's file.
+- **Machine marker.** `install` is `store.installId()`: 32 random hex digits (`crypto.getRandomValues`), made on first
+  use and kept in localStorage under `rig.install` (`INSTALL_ID_KEY`, outside the library and outside the `rig.v1*`
+  keys the rotation and the D8 guard look at). No host, user or device name. 2.0 only compares it, to tell "this
+  computer" from "another". It is per origin, like the library: Chrome (:8437) and the Mac app (:8438) have
+  different ids. If storage refuses the write, the id lasts for the session.
+- **Why.** 1.x left these settings out of every file (security S3, checklist Q7), so the move to 2.0 lost the touch
+  curves, click, MIDI clock, hotkeys, devices, pad folder, menu-bar mode and the rest. D11 (Ryan) asks 1.1.1 to write
+  them, and 2.0 to take them in.
+- **Backward compatible, no SCHEMA bump.** The file stays schema 1. 1.1.0 keeps an unknown top-level field and never
+  reads it (tested in 2.0's `migration-1x/downgrade.test.mjs` with `git archive v1.1.0`). 1.1.1's own `importJSON`
+  drops the block, so a replace still keeps this machine's own device settings and the block never enters the
+  library state.
+- **Privacy (S3, changed on purpose by D11).** The library's `settings` still hold no device-local value, but the
+  block does: the pad folder's path (which names the account on a Mac) and the MIDI / audio device names. Backups
+  stay on this computer, so they always carry it. An exported library is the file people share, so it carries the
+  block only when the toggle is on (DS4, review `native/docs/reviews/D11.md`). The other choice, writing the pad path
+  with `~` for the home folder, still named the devices and needed 2.0 to expand it.
+- Tests: `browser.pw.mjs` (the real Export library button: no block by default, the block with the toggle on).
+- Tests: `test/phase1/shell/device-settings.test.mjs` (5: block shape, defaults, the marker, import drops it,
+  `backupNow` writes it with the origin tag); `browser.pw.mjs` 1 (the real Export library button, see DS4). The S3 test
+  (`security.test.mjs`) is unchanged and passes: `exportJSON()` without `device` is still clean.

@@ -3,6 +3,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
+import fs from 'node:fs';
 import path from 'node:path';
 import { buildFixture, repoRoot } from './fixture.mjs';
 import { MIDI_PERMISSIONS, waitRigReady } from '../../integration/lib.mjs';
@@ -245,6 +246,162 @@ test('L-3: real app — __rig.ready resolves while requestMIDIAccess never answe
       [true, true, 'Roland Digital Piano', null, false, true],
     );
     assert.equal(got.act && got.act.inputId, 'kb', 'a note from the late-attached port reaches the controller');
+  } finally {
+    await ctx.close();
+    await srv.close();
+  }
+});
+
+test('1.1.1 (D8): real app on an origin holding a 2.0 library — one message, two choices, the 2.0 library untouched', async () => {
+  const srv = createServer({ appDir: path.join(repoRoot, 'app'), port: 0 });
+  const info = await srv.listen();
+  const origin = `http://127.0.0.1:${info.port}`;
+  const ctx = await browser.newContext();
+  await ctx.grantPermissions([...MIDI_PERMISSIONS], { origin });
+  const v2 = JSON.stringify({ schema: 2, songs: { a: { id: 'a', name: 'Saved by 2.0' } }, songOrder: ['a'] });
+  const backups = { 'rig.v1.backup-1': 'b1', 'rig.v1.backup-2': 'b2', 'rig.v1.backup-3': 'b3' };
+  const p = await ctx.newPage();
+  const errors = [];
+  p.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  p.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  try {
+    await p.goto(`${origin}/api/health`); // a page of the origin, to seed its localStorage before the app runs
+    await p.evaluate(([lib, b]) => {
+      localStorage.clear();
+      localStorage.setItem('rig.v1', lib);
+      for (const [k, v] of Object.entries(b)) localStorage.setItem(k, v);
+    }, [v2, backups]);
+    const snapshot = () => p.evaluate(() => Object.fromEntries(Object.keys(localStorage).sort()
+      .filter((k) => k.startsWith('rig.v1')).map((k) => [k, localStorage.getItem(k)])));
+    for (let launch = 0; launch < 2; launch++) {
+      await p.goto(`${origin}/`);
+      await waitRigReady(p, { timeout: 30000, what: `real app on a 2.0 origin, launch ${launch + 1}` });
+      const banner = p.getByTestId('banner-newer-library');
+      await banner.waitFor({ state: 'attached', timeout: 10000 });
+      const text = await banner.getAttribute('title');
+      assert.match(text, /^This library was saved by Worship Rig 2\.0/);
+      assert.equal(await p.getByTestId('newer-library-separate').count(), 1);
+      assert.equal(await p.getByTestId('newer-library-quit').count(), 1);
+      assert.equal(await p.evaluate(() => window.__rig.store.loadInfo.newerLibrary.schema), 2);
+      // an edit in the separate library, flushed as on window close
+      await p.evaluate(() => {
+        window.__rig.store.set('settings.view', 'edit');
+        window.__rig.store.persistNow();
+      });
+      await p.getByTestId('newer-library-separate').evaluate((b) => b.click());
+      assert.equal(await p.getByTestId('banner-newer-library').count(), 0, 'the choice dismisses the message');
+      const ls = await snapshot();
+      assert.equal(ls['rig.v1'], v2, 'the 2.0 library byte for byte');
+      for (const [k, v] of Object.entries(backups)) assert.equal(ls[k], v, `${k} kept (nothing pruned)`);
+      assert.deepEqual(Object.keys(ls), ['rig.v1', 'rig.v1.1x', ...Object.keys(backups)].sort());
+      assert.equal(JSON.parse(ls['rig.v1.1x']).schema, 1);
+    }
+    assert.deepEqual(errors, []);
+  } finally {
+    await ctx.close();
+    await srv.close();
+  }
+});
+
+test('1.1.1 (D8): Quit — a window the page may close closes; one it may not says so; nothing is written', async () => {
+  const srv = createServer({ appDir: path.join(repoRoot, 'app'), port: 0 });
+  const info = await srv.listen();
+  const origin = `http://127.0.0.1:${info.port}`;
+  const ctx = await browser.newContext();
+  await ctx.grantPermissions([...MIDI_PERMISSIONS], { origin });
+  const v2 = JSON.stringify({ schema: 2, songs: { a: { id: 'a', name: 'Saved by 2.0' } }, songOrder: ['a'] });
+  const errors = [];
+  const watch = (p) => {
+    p.on('console', (m) => {
+      if (m.type() === 'error') errors.push(m.text());
+    });
+    p.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  };
+  try {
+    const seed = await ctx.newPage();
+    watch(seed);
+    await seed.goto(`${origin}/api/health`);
+    await seed.evaluate((lib) => {
+      localStorage.clear();
+      localStorage.setItem('rig.v1', lib);
+    }, v2);
+    // (a) a tab with history the page did not open: window.close() is ignored, so a toast says it can be closed
+    await seed.goto(`${origin}/`);
+    await waitRigReady(seed, { timeout: 30000, what: '1.1.1 Quit, tab with history' });
+    await seed.getByTestId('newer-library-quit').evaluate((b) => b.click());
+    await seed.waitForTimeout(800);
+    assert.equal(seed.isClosed(), false, 'Chromium keeps a tab with history open');
+    const toasts = await seed.evaluate(() => document.body.innerText);
+    assert.match(toasts, /You can close this window now\. Nothing was changed\./);
+    assert.equal(await seed.evaluate(() => localStorage.getItem('rig.v1')), v2);
+    // (b) a window the page opened (as serve.mjs's app window is closable): it closes
+    const [popup] = await Promise.all([
+      ctx.waitForEvent('page'),
+      seed.evaluate((u) => window.open(u, '_blank', 'popup'), `${origin}/`),
+    ]);
+    watch(popup);
+    await waitRigReady(popup, { timeout: 30000, what: '1.1.1 Quit, script-opened window' });
+    const closed = popup.waitForEvent('close', { timeout: 10000 });
+    await popup.getByTestId('newer-library-quit').evaluate((b) => b.click());
+    await closed;
+    assert.equal(await seed.evaluate(() => localStorage.getItem('rig.v1')), v2, 'the 2.0 library byte for byte');
+    assert.deepEqual(errors, []);
+  } finally {
+    await ctx.close();
+    await srv.close();
+  }
+});
+
+test('1.1.1 (D11): real app — Settings › Export library writes the deviceSettings block only when asked; rig.install is the marker', async () => {
+  const srv = createServer({ appDir: path.join(repoRoot, 'app'), port: 0 });
+  const info = await srv.listen();
+  const origin = `http://127.0.0.1:${info.port}`;
+  const ctx = await browser.newContext({ acceptDownloads: true });
+  await ctx.grantPermissions([...MIDI_PERMISSIONS], { origin });
+  const p = await ctx.newPage();
+  const errors = [];
+  p.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  p.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  try {
+    await p.goto(`${origin}/`);
+    await waitRigReady(p, { timeout: 30000, what: 'real app (D11 export)' });
+    await p.evaluate(() => {
+      const s = window.__rig.store;
+      s.set('settings.midiInputName', 'Stage Piano MIDI Out');
+      // (no outputDeviceId here: a made-up sink id makes the real AudioContext log a device error)
+      s.set('settings.padFolder', { kind: 'fsa', name: 'Pads' });
+      s.set('settings.menuBarMode', true);
+      s.setKeyboard('Stage Piano MIDI Out', { remember: true });
+    });
+    await p.click('#btn-settings');
+    await p.waitForSelector('#view-settings.open', { timeout: 15000 });
+    const btn = p.locator('.st-export').first();
+    await btn.scrollIntoViewIfNeeded();
+    // D11 skeptic DS4: by default the exported file (the one people share) has no device settings, as in 1.1.0
+    const [dl0] = await Promise.all([p.waitForEvent('download', { timeout: 15000 }), btn.click()]);
+    const plainDoc = JSON.parse(fs.readFileSync(await dl0.path(), 'utf8'));
+    assert.equal('deviceSettings' in plainDoc, false, 'default export: no block');
+    assert.equal(JSON.stringify(plainDoc).includes('Stage Piano'), false, 'no device name anywhere');
+    const tog = p.getByTestId('export-device');
+    assert.match(await tog.textContent(), /device settings/);
+    await tog.click();
+    const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 15000 }), btn.click()]);
+    const doc = JSON.parse(fs.readFileSync(await dl.path(), 'utf8'));
+    const b = doc.deviceSettings;
+    assert.equal(b.v, 1);
+    assert.equal(b.install, await p.evaluate(() => localStorage.getItem('rig.install')));
+    assert.match(b.install, /^[0-9a-f]{32}$/);
+    assert.equal(b.settings.midiInputName, 'Stage Piano MIDI Out');
+    assert.deepEqual(b.settings.padFolder, { kind: 'fsa', name: 'Pads' });
+    assert.equal(b.settings.menuBarMode, true);
+    assert.deepEqual(b.settings.keyboards, { 'Stage Piano MIDI Out': { remember: true } });
+    assert.equal('midiInputName' in doc.settings, false, 'S3: the library settings stay without them');
+    assert.equal(doc.schema, 1);
+    assert.deepEqual(errors, []);
   } finally {
     await ctx.close();
     await srv.close();

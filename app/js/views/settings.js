@@ -834,6 +834,20 @@ export function mountSettings(el, ctx) {
   const li = store.loadInfo || {};
   if (li.status === 'corrupt') setText(storageNote, `The saved library could not be read, so the factory songs were restored. The old data was kept (${li.backupKey}).`);
   else if (li.status === 'future-schema') setText(storageNote, `Your library was saved by a newer version of Worship Rig; it was kept (${li.backupKey}) and a fresh library started.`);
+  // 1.1.1 (D8)
+  if (li.newerLibrary) {
+    setText(storageNote, 'A library saved by a newer version of Worship Rig is kept untouched on this computer. '
+      + 'This is a separate 1.x library.');
+  }
+
+  // D11 skeptic (DS4): an exported library is the file people share, so it carries this computer's device settings
+  // (device names, the pad folder's path with the account name) only when asked, for this export. Backups always do.
+  const exportDevice = C.toggle({ label: 'With this computer’s device settings',
+    title: 'For moving to Worship Rig 2.0 on another computer' });
+  exportDevice.el.dataset.testid = 'export-device';
+  comps.push(exportDevice);
+  const exportDeviceHint = h('p.st-hint', { text: 'Turn on to move to Worship Rig 2.0 on another computer: the file '
+    + 'then also names your MIDI and audio devices and your pad folder. Backups always include them.' });
 
   const backupBox = h('div.st-inline');
   const restoreBox = h('div.st-restore');
@@ -1023,7 +1037,8 @@ export function mountSettings(el, ctx) {
     if (isElectron) {
       backupBox.append(
         btn('Back up now', async () => {
-          const r = await rig.backupNow(store.exportJSON({ pretty: false }));
+          // 1.1.1 (D11): a backup carries this machine's device settings for 2.0, as the automatic ones do
+          const r = await rig.backupNow(store.exportJSON({ pretty: false, device: true }));
           if (r && r.error) console.warn('[settings] backupNow', r.error);
           toast(r && !r.error ? 'Backup saved' : 'The backup could not be saved.', r && !r.error ? 'info' : 'error');
         }),
@@ -1077,10 +1092,13 @@ export function mountSettings(el, ctx) {
     h('section.st-section', { 'aria-label': 'Library' },
       h('h2.st-h2', { text: 'Library & backups' }),
       h('div.st-inline', {},
-        btn('Export library', () => download(`Worship Rig library ${new Date().toISOString().slice(0, 10)}.json`, store.exportJSON()), { class: 'st-export' }),
+        btn('Export library', () => download(`Worship Rig library ${new Date().toISOString().slice(0, 10)}.json`,
+          store.exportJSON({ device: exportDevice.get() })), { class: 'st-export' }),
         btn('Import…', () => importInput.click(), { class: 'st-import' }),
         importInput,
+        exportDevice.el,
       ),
+      exportDeviceHint,
       storageNote,
       backupBox,
       restoreBox,

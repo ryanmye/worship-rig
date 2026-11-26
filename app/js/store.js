@@ -151,6 +151,43 @@ const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 /** How many `rig.v1.backup-<ts>` keys are kept in localStorage. */
 export const BACKUPS_KEEP = 3;
 /**
+ * 1.1.1 (2.0 DECISIONS D8, review E5 M4): where 1.x keeps its own library while the main key holds one saved by a
+ * newer Worship Rig (2.0 Chrome writes schema 2 under the same `rig.v1` key on the same origin).
+ */
+export const SEPARATE_LIBRARY_SUFFIX = '.1x';
+/** 1.1.1 (D8): the schema of a stored library newer than this app, else null (unreadable text is not "newer"). */
+function newerSchemaOf(raw) {
+  if (typeof raw !== 'string') return null;
+  try {
+    const doc = JSON.parse(raw);
+    return isObj(doc) && typeof doc.schema === 'number' && doc.schema > SCHEMA ? doc.schema : null;
+  } catch {
+    return null;
+  }
+}
+/**
+ * 1.1.1 (2.0 DECISIONS D11): backups (and Settings › Export library, when its toggle is on: D11 skeptic DS4) carry
+ * this machine's device-local settings in an optional top-level block, `deviceSettings` = {v, install, settings}, so
+ * Worship Rig 2.0 can bring them over. The library's own `settings` stay without them (security S3), and nothing in
+ * 1.x reads the block: 1.1.0 keeps it as an unknown top-level field, and 1.1.1's importJSON drops it.
+ */
+export const DEVICE_SETTINGS_KEY = 'deviceSettings';
+export const DEVICE_SETTINGS_VERSION = 1;
+/**
+ * D11: the machine marker is a random id made once per origin and kept in localStorage under this key (outside the
+ * library). It is never a host, user or device name: 2.0 only compares it, to tell "this computer" from "another".
+ */
+export const INSTALL_ID_KEY = 'rig.install';
+const INSTALL_ID_RE = /^[0-9a-f]{32}$/;
+/** D11: 32 random hex digits (crypto.getRandomValues; Math.random only where no crypto exists). */
+function newInstallId() {
+  const bytes = new Uint8Array(16);
+  const c = globalThis.crypto;
+  if (c && typeof c.getRandomValues === 'function') c.getRandomValues(bytes);
+  else for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+/**
  * security S2: the largest library (compact JSON characters) an import may leave behind. Chromium's localStorage holds
  * ~5.2 M characters per origin (measured), shared with the backup copies; a bigger library makes every later save
  * fail (QuotaExceededError) until the offending song is deleted. A real library is ~2 KB per song.
@@ -681,7 +718,7 @@ function defaultIdGen(prefix) {
 export function createStore(opts = {}) {
   const storage = opts.storage || defaultStorage();
   const now = opts.now || (() => Date.now());
-  const key = opts.key || STORAGE_KEY;
+  let key = opts.key || STORAGE_KEY;
   const debounceMs = opts.debounceMs ?? 300;
   const factory = opts.factory || FACTORY_SONGS;
   const idGen = opts.idGen || defaultIdGen;
@@ -696,6 +733,7 @@ export function createStore(opts = {}) {
   let persistTimer = null;
   let dirty = false;
   let generation = 0; // round2-shell #3: whole-library replacements (see api.generation)
+  let installId = null; // 1.1.1 (D11): api.installId(), read or made on first use
   let retryTimer = null;
   let retryIdx = 0;
   let readOnlyReason = null; // null | 'backup-failed' | 'second-window' | string
@@ -714,6 +752,18 @@ export function createStore(opts = {}) {
   }
 
   // ---- load
+  // 1.1.1 (D8): a library saved by a newer version is never backed up here (that backup pruned the oldest backups,
+  // and after two 1.1 <-> 2.0 round trips both libraries were gone), never overwritten and never pruned. This store
+  // reads and writes a separate 1.x library under `<key>.1x` instead; loadInfo.newerLibrary tells the UI.
+  try {
+    const schema = newerSchemaOf(storage.getItem(key));
+    if (schema !== null) {
+      info.newerLibrary = { schema, key };
+      key = `${key}${SEPARATE_LIBRARY_SUFFIX}`;
+    }
+  } catch {
+    /* unreadable storage: the read below warns */
+  }
   const backupPrefix = `${key}.backup-`;
   function backupKeys() {
     const out = [];
@@ -1244,7 +1294,8 @@ export function createStore(opts = {}) {
     get: () => state,
     /**
      * Load/persist status: {status:'ok'|'fresh'|'corrupt'|'future-schema', backupKey, backupError, lastSavedAt,
-     * persistError, persistFailures, readOnly, readOnlyReason}
+     * persistError, persistFailures, readOnly, readOnlyReason, newerLibrary?:{schema, key}} (1.1.1: present when
+     * `key` holds a newer version's library, left untouched; status then describes the separate 1.x library)
      */
     /**
      * Incremented each time the whole library is replaced (importJSON {replace:true}, reload()), before subscribers
@@ -1666,17 +1717,57 @@ export function createStore(opts = {}) {
       return ids;
     },
 
-    /** Whole library as JSON (for export files and Electron auto-backups). */
-    exportJSON({ pretty = true } = {}) {
+    /**
+     * Whole library as JSON (for export files and Electron auto-backups).
+     * @param {{pretty?:boolean, device?:boolean}} [o] device (1.1.1, D11): also write the `deviceSettings` block
+     *   (backups; Settings › Export library only with its toggle on, DS4). Without it the file is exactly 1.1.0's.
+     * @returns {string}
+     */
+    exportJSON({ pretty = true, device = false } = {}) {
       const { songs, songOrder, setlists, setlistOrder, meta } = state;
-      // security S3: device-local settings stay on this machine. The pad folder's absolute path carries the account
-      // name (/Users/<name>/…), and the MIDI/audio device names/ids identify the hardware. Nothing reads them back:
-      // a replace-import keeps this machine's values, a merge ignores settings.
+      // security S3: device-local settings stay out of the library's settings. The pad folder's absolute path carries
+      // the account name (/Users/<name>/…), and the MIDI/audio device names/ids identify the hardware. A replace-
+      // import keeps this machine's values, a merge ignores settings. D11: only the opt-in block below carries them.
       const settings = Object.fromEntries(
         Object.entries(state.settings).filter(([k]) => !DEVICE_LOCAL_SETTINGS.includes(k)),
       );
       const doc = { app: 'worship-rig', kind: 'library', schema: SCHEMA, exportedAt: new Date(now()).toISOString(), songs, songOrder, setlists, setlistOrder, settings, meta };
+      if (device) doc[DEVICE_SETTINGS_KEY] = api.deviceSettings();
       return JSON.stringify(doc, null, pretty ? 2 : 0);
+    },
+    /**
+     * 1.1.1 (D11): this machine's device-local settings as the export block: {v, install, settings}. `settings` holds
+     * every DEVICE_LOCAL_SETTINGS key the library has (absent optional ones stay absent); `install` is installId().
+     * @returns {{v:number, install:string, settings:object}}
+     */
+    deviceSettings() {
+      const out = {};
+      for (const k of DEVICE_LOCAL_SETTINGS) if (hasOwn(state.settings, k) && state.settings[k] !== undefined) out[k] = clone(state.settings[k]);
+      return { v: DEVICE_SETTINGS_VERSION, install: api.installId(), settings: out };
+    },
+    /**
+     * 1.1.1 (D11): the random machine marker of this origin, made on first use and kept under INSTALL_ID_KEY. When
+     * storage refuses the write (quota, blocked), the id lasts for this session only.
+     * @returns {string} 32 hex digits
+     */
+    installId() {
+      if (installId) return installId;
+      let id = null;
+      try {
+        id = storage.getItem(INSTALL_ID_KEY);
+      } catch {
+        id = null;
+      }
+      if (typeof id !== 'string' || !INSTALL_ID_RE.test(id)) {
+        id = newInstallId();
+        try {
+          storage.setItem(INSTALL_ID_KEY, id);
+        } catch {
+          /* this session's id only */
+        }
+      }
+      installId = id;
+      return id;
     },
     /** One song as JSON (share a sound). */
     exportSong(id, { pretty = true } = {}) {
@@ -1714,7 +1805,11 @@ export function createStore(opts = {}) {
           if (!isObj(s)) return { ok: false, error: 'No song found in that file.' };
           if (typeof doc.schema === 'number' && doc.schema > SCHEMA) throw new FutureSchemaError(doc.schema);
           lib = migrate({ songs: [{ ...s, id: s.id || 'import0' }] });
-        } else lib = migrate(doc);
+        } else {
+          lib = migrate(doc);
+          // 1.1.1 (D11): the device block is for 2.0, not library content; 1.x keeps this machine's own values
+          delete lib[DEVICE_SETTINGS_KEY];
+        }
       } catch (err) {
         if (err instanceof FutureSchemaError) return { ok: false, error: 'This file was made by a newer version of Worship Rig.' };
         return { ok: false, error: 'That file is not a Worship Rig library or song.' };

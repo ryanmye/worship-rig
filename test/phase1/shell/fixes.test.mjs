@@ -93,16 +93,21 @@ test('H1: corrupt library + failing backup write → the raw library is never ov
   assert.equal(JSON.parse(st.getItem(STORAGE_KEY)).songOrder.length, FACTORY_SONGS.length);
 });
 
-test('H1: future-schema library with a failing backup is kept too', () => {
+test('H1 / 1.1.1 (D8): a future-schema library is kept, with no backup written (none can fail or prune)', () => {
   const raw = JSON.stringify({ schema: 2, songs: {} });
   const st = memoryStorage({ [STORAGE_KEY]: raw });
   const setItem = st.setItem;
-  st.setItem = (k, v) => (k.includes('.backup-') ? (() => { throw quotaError(); })() : setItem(k, v));
+  const removeItem = st.removeItem;
+  const touched = [];
+  st.setItem = (k, v) => (k.includes('.backup-') ? (() => { throw quotaError(); })() : (touched.push(k), setItem(k, v)));
+  st.removeItem = (k) => (touched.push(`rm ${k}`), removeItem(k));
   const s = createStore({ storage: st, idGen: idGen(), requestIdle: null, warn: () => {}, autoFlush: false });
-  assert.equal(s.loadInfo.status, 'future-schema');
+  assert.equal(s.loadInfo.newerLibrary.schema, 2);
+  assert.equal(s.loadInfo.readOnly, false, 'nothing to lock: the newer library is never a write target');
   s.set('settings.view', 'edit');
   s.persistNow();
   assert.equal(st.getItem(STORAGE_KEY), raw);
+  assert.deepEqual([...new Set(touched)], [`${STORAGE_KEY}.1x`]);
 });
 
 test(`H1: backup keys are capped at ${BACKUPS_KEEP}; on quota the oldest are pruned and the write retried`, () => {
