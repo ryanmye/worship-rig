@@ -9028,8 +9028,8 @@ SCHEMA change, no engine change. Flag off: the ui-v6 purity probe against f46bac
     tiles and the wheel are not). Outlines: `.v6-learnable` (dashed), `.v6-lpicked` (solid), `.v6-lmiss` (a key / pad
     or a pedal switch was heard: only actions fit); badge `data-v6-badge` ("CC21", "N36") on learned ones. Body class
     `v6-learning` (the master fader is outside `.v6`).
-  - While learning, a press / click / Enter on a target only picks it (document capture listeners; PANIC does not
-    panic, a fader does not move, no step panel opens); everything else plays.
+  - While learning, a press / click / Enter on a target only picks it (document capture listeners; a fader does not
+    move, no step panel opens; PANIC panics and picks, skeptic F1 below); everything else plays.
   - Entry: v6 Settings › MIDI Learn › **Learn on Perform** (closes Settings, shows Perform; Learn… still goes to
     today's table) and a right-click / Ctrl-click (a Chromium long-press) on a target, which picks it. Toast: "CC 21 →
     Warm Pad level ✓ · moves stick; Revert undoes them" (D20) for a fader, "… → PANIC ✓" for an action, "(it was …)"
@@ -9088,3 +9088,15 @@ SCHEMA change, no engine change. Flag off: the ui-v6 purity probe against f46bac
   are not in a learn order); no long-press of our own on iPad (Safari sends no contextmenu: Settings › Learn on
   Perform is the way there, skeptic O-AW-ML O1 stays open); tabs are not dragged themselves in Arrange (the list in the
   sidebar body orders them); "Knob 3" / "K1" in the mockup are CC numbers here ("CC 21", "CC21").
+- **Skeptic (native/docs/reviews/UI6-U7c.md).**
+  - **F1, PANIC always works while learning.**
+    - `midi.learn(id, {pass})` takes an optional `pass({cc|note, channel}) → boolean`. A matching note or CC is
+      never taken and is delivered normally.
+    - `controller.learnCapture()` passes the live PANIC mapping (channel null = any), so the PANIC footswitch or pad
+      still panics during a capture. Re-learning that control goes through Settings' table, which has no `pass`.
+    - On Perform, a tap / click / Enter on PANIC in learn mode panics, then picks it. A right-click only picks.
+  - **F2.** A key or pedal switch heard, then a fader tapped: the fader stays picked, the key is forgotten and the
+    capture waits again. A key heard while a fader is picked is refused the same way.
+  - **F3.** `openOverlay({underModal: true})`: the Esc that closes Settings or clears its search (main.js marks it
+    `e.rigSettingsEsc`) leaves such an entry open. Only learn mode and Arrange use it, so flag off is unchanged.
+  - Tests: scene-names.test.mjs +1; ui-v6 76 (+2).

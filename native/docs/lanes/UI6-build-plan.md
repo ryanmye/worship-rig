@@ -397,6 +397,18 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   78/78, shell unit 383/383 (+6 in `scene-names.test.mjs`), edit-v2 learn 1/1; engine untouched. Screenshots:
   `/home/claude/design-out/u7c/` (`u7c-learn-1280.png`, `u7c-learn-done-1280.png`, `u7c-arrange-1280.png`,
   `u7c-savesnap-1280.png`, `u7c-songmenu-1280.png`, `u7c-*-820.png`).
+- **Skeptic (2026-11-26, `native/docs/reviews/UI6-U7c.md`): VERIFIED after fixes.**
+  - Fixes:
+    - F1 (medium): PANIC works while learning. A tap panics and picks, and the learned PANIC footswitch is never
+      captured.
+    - F2 (low): no dead end after a key is heard.
+    - F3 (low): the Esc that closes Settings no longer ends learn mode or Arrange.
+  - Open:
+    - The 820 px song bar overflows (U8).
+    - For Ryan: whether CC1 / 11 should be capturable, reassign vs add on a learned knob, and the tap-on-PANIC
+      choice.
+  - Gates: ui-v6 76/76 (purity identical), ui-v6-bank 17/17, ui-v6-edit 32/32, shell unit 384/384, migration-1x unit
+    107/107, settings 111/111, ui-core 78/78, edit-v2 117/117 (14 files).
 
 ## Open questions carried into the build (decide, log in DECISIONS, tell Ryan)
 
