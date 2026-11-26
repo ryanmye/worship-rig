@@ -1138,8 +1138,12 @@ function applyEditV6() {
   });
   return editSwap;
 }
+/** Swap Perform and (U5a) Edit for the flag; resolves, once both are in place, to whether the v6 Perform is on. */
 function applyUiV6() {
-  applyEditV6();
+  const edit = applyEditV6();
+  return Promise.all([edit, applyPerformV6()]).then(([, perform]) => perform);
+}
+function applyPerformV6() {
   const on = store.get().settings.uiV6 === true;
   if (!on) {
     if (performIsV6 || !performView) swapPerform(mountPerform, false);

@@ -445,10 +445,11 @@ export async function leftTests(x) {
         assert.ok(qs.r <= 820 && qs.b <= 1180 && qs.scroll === 0, JSON.stringify(qs));
         await settledAnim(p);
         await p.screenshot({ path: path.join(SHOTS, 'u4-quick-820x1180.png') });
-        // Edit (today's) keeps today's minimum width: the override is the v6 Perform's only
+        // U5a: with the flag on, Edit is the v6 Edit, which has its own iPad portrait layout (no sideways scroll
+        // either); today's Edit (flag off) keeps today's 1024 px minimum (test/phase2/ui-v6-edit)
         await p.evaluate(() => window.__rig.ctx.setView('edit'));
-        await p.waitForFunction(() => document.body.dataset.view === 'edit');
-        assert.equal(await p.evaluate(() => getComputedStyle(document.body).minWidth), '1024px');
+        await p.waitForFunction(() => document.body.dataset.view === 'edit' && !!window.__rig.views.edit?._debug?.v6);
+        assert.equal(await p.evaluate(() => getComputedStyle(document.body).minWidth), '0px');
         assert.deepEqual(errs, []);
       } finally {
         await c.close();

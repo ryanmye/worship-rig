@@ -251,14 +251,27 @@ export function mountInstrument(host, ctx, opts, env) {
   host.replaceChildren(root);
 
   // ---------------------------------------------------------------- the strip (D15: the same component as Perform)
+  // The strip exists only while Edit shows: Perform's strips are the same component with the same test ids and
+  // classes, and a second, hidden strip of slot i would double them (and run its meter) behind the stage.
   let strip = null;
+  const editShown = () => ctx.store.get()?.settings?.view === 'edit';
   function makeStrip() {
     strip?.destroy();
+    strip = null;
+    if (!editShown()) return;
     strip = createStrip(env.stripV, i);
     stageCol.append(strip.el);
   }
+  function dropStrip() {
+    strip?.destroy();
+    strip = null;
+  }
   function renderStrip() {
-    if (!strip) return;
+    if (!editShown()) {
+      dropStrip();
+      return;
+    }
+    if (!strip) makeStrip();
     const s = ctx.song();
     const slot = slotOf(env.live ? env.live(s) : s);
     const meta = metaOf(slot);
@@ -1071,7 +1084,19 @@ export function mountInstrument(host, ctx, opts, env) {
 
   // ---------------------------------------------------------------- wiring
   // registered before any pane binder, so a rebuild replaces the binder before the old one's subscription runs
+  // While Perform shows, nothing here is drawn (the strip is gone, see editShown): the store events only mark the
+  // panel stale, and the first event with the view back on Edit (the 'settings.view' write itself) redraws it all.
+  let stale = false;
   ctx.subscribe((e) => {
+    if (!editShown()) {
+      stale = true;
+      dropStrip();
+      return;
+    }
+    if (stale) {
+      stale = false;
+      renderSentence(true);
+    }
     const slot = slotOf(e.song);
     const key = `${cat}|${slotKey(slot)}|${i}`;
     if (key !== paneKey) buildPane();
@@ -1082,6 +1107,10 @@ export function mountInstrument(host, ctx, opts, env) {
     pane?.renderKb?.(); // the bar's changed dot follows the baseline too
   });
   ctx.listen(ctx.editState, 'changes', () => {
+    if (!editShown()) {
+      stale = true;
+      return;
+    }
     renderSentence();
     renderNav();
     renderStrip();
@@ -1109,8 +1138,8 @@ export function mountInstrument(host, ctx, opts, env) {
   });
   ctx.onLeaveView?.(() => {
     closeMenu(false);
-    strip?.closePanels();
     pane?.ctl.kb?.cancelDrag();
+    dropStrip();
   });
   ctx.onEscape(() => {
     if (cancelConfirm(true)) return true;

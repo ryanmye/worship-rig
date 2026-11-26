@@ -496,7 +496,8 @@ try {
       && document.querySelector('.v6e-rt[data-block="slot:0"] .v6e-rt-cd').hidden);
   });
 
-  await T('Range: the 88-key bar drag writes lowNote in Edit (one end, one write); Set highest by playing; Esc disarms', async () => {
+  await T('Range: the 88-key bar drag writes lowNote in Edit (one end, one write); Set highest by playing; Esc',
+    async () => {
     await choose('range');
     await ev(() => {
       const { store } = window.__rig;
@@ -634,6 +635,11 @@ try {
       await until(() => !window.__rig.views.edit._debug.v6 && !window.__rig.views.v6);
       await page.waitForTimeout(300);
       assert.equal(await ev(() => window.__storeListeners.size), baseListeners);
+      // today's Edit keeps today's 1024 px page minimum at iPad portrait (the v6 Edit's portrait rule is its own)
+      await page.setViewportSize({ width: 820, height: 1180 });
+      await toEdit();
+      assert.equal(await ev(() => getComputedStyle(document.body).minWidth), '1024px');
+      await page.setViewportSize({ width: 1280, height: 800 });
       await ev(() => window.__rig.setUiV6(true));
       await until(() => !!window.__rig.views.edit?._debug?.v6 && !!window.__rig.views.v6);
     });

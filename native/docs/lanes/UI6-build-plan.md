@@ -187,6 +187,27 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 - Known: at 820 px the top bar (today's) still overlaps itself (U8); the sheet can reach over the keyboard's left part
   at 1280×800 (it is ~555 px tall, the board 488 px), as the mockup's does.
 
+## U5a status (builder, 2026-11-26; lane-u5 from v2-native 715b936; skeptic pass pending)
+
+- Built: `app/js/views/v6/edit/edit.js` (`mountEditV6`, mountEdit's interface), `views/v6/edit/instrument.js` (the
+  instrument panel), `app/styles-v6-edit.css`; main.js mounts / swaps it with `settings.uiV6`; `views/edit/shell.js`
+  exports its core (`createEditCore`, `editPanelFrame`, `editDefaultTab`; no behaviour change). Suite
+  `test/phase2/ui-v6-edit/run.mjs` (16 checks, in run-all). Interface notes: CONTRACT_CHANGES "## UI v6 U5a".
+- Wired: library column (today's setlist module + Song bank…, ⟨ fold to a rail, per device), song header (today's
+  module + Time + Chart while the chart view is on), rig tabs by instrument (position colour, dB, changed dot incl.
+  range) + Add + Drone / Effects / Master, the instrument panel (sentence with jump words, Change instrument ▾ =
+  today's picker, the D18 category list with state + dots, remembered per device; Sound, Tone EQ (today's
+  eqKeyboard, mount on open / destroy on leave), Range (U2's 88-key rangeKeyboard + boxes + Whole keyboard + Set by
+  playing + Octave), Touch, Sustain, Space & Echo, Advanced, all on today's slot-panel paths), the v6 strip on the
+  right, iPad portrait (tabs row, no strip, library as a drawer from ☰ Songs).
+- Placeholders: Drone / Effects / Master / Song are today's panels in the v6 card (U5b); the keyboard row is today's
+  Edit one (role legend hidden); Song bank… opens today's list in Settings (U7); Chart opens the chart on Perform.
+- Gates: ui-v6-edit 16/16, edit-v2 14/14 files (117 tests), ui-v6 54/54 (U4's iPad check updated: Edit at 820 px is
+  the v6 Edit now, `min-width: 0`), settings 94/94; engine / shared / store / controller / v6 Perform files unchanged;
+  flag-off purity vs 715b936 identical (105 requests, 15 store listeners, 4 intervals, 2529 elements, 1047 in Edit).
+- Open for Ryan / U5b: category dots follow today's rule (V6_DIFF_WATCH), so Sound, Tone EQ, Touch and Advanced never
+  dot (the mockup shows a dot on Tone EQ); the eqKeyboard's own header still says "Keys plays…" (a role word, D15).
+
 ## Open questions carried into the build (decide, log in DECISIONS, tell Ryan)
 
 - **Snapshots vs today's scenes.** Today: up to 3 scenes per song, levels / ON / drone level / wheel only. The v6

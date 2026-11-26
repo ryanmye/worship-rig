@@ -302,7 +302,6 @@ export function mountEditV6(el, ctx) {
   }
   function renderTabs() {
     syncTabs();
-    names.refresh(); // instruments arrive once the engine starts (My Samples rescans add more)
     const song = core.song;
     const ch = v6Changes();
     const live = liveOf(song);
@@ -447,6 +446,9 @@ export function mountEditV6(el, ctx) {
     tabRecs.get(editState.selected)?.el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   });
   core.listen(editState, 'changes', renderTabs);
+  // instruments arrive once the engine starts (a My Samples rescan adds more): the names follow (the core then
+  // runs the store hooks, so the tabs re-render)
+  core.listen(editState, 'instruments', () => names.refresh());
   core.onStoreHooks.push(() => renderTabs());
   // the library as a drawer (iPad portrait; today's ☰ Songs): Esc and an outside tap close it, as in today's Edit
   core.listen(editState, 'drawer', (e) => root.classList.toggle('drawer-open', !!e.detail.open));

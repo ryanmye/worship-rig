@@ -8513,3 +8513,70 @@ no SCHEMA change.
     (also with "Esc always panics" on). The pick overlay's Esc now cancels the drag (start value back), as the grip's
     Esc and every other cancel do. Test: the D24.2 cancel-path check gains Esc and Esc + escPanics.
   - Timing at 6× CPU throttle: one live write + render median 7.5 ms, p95 18 ms (4 instruments); 9.3 / 25 ms with 16.
+
+## UI v6 U5a
+The v6 Edit's shell and instrument panel (native DECISIONS D15, D18; `native/docs/lanes/UI6-build-plan.md` U5;
+mockup `native/docs/design/mockups/edit.html` "Instrument · Sound / Tone EQ / Range / iPad portrait", "Library
+folded"). Behind `settings.uiV6` like U1–U4. No store, controller, engine or `shared/` change; `views/edit/panels/*`,
+`components/*` and the v6 Perform files are untouched.
+- **main.js**: with the flag on, Edit is `views/v6/edit/edit.js` `mountEditV6(#view-edit, ctx)` (after
+  `loadV6EditCss()`: `styles-v6-edit.css` as `link[data-v6-edit-css]`, plus U1's `styles-v6.css`); off, today's
+  `views/edit/shell.js` `mountEdit`, loaded exactly as before. A flag flip swaps Edit too (`applyEditV6`; destroy, then
+  mount the other); `applyUiV6()` (and so `__rig.setUiV6`) now resolves once both Perform and Edit are swapped. A v6
+  Edit that fails to load falls back to today's. `__rig.views.edit._debug.v6` is true for the v6 Edit.
+- **Same external interface as mountEdit**: `{el, editState, destroy(), _debug}`. `setView('edit', {block, focus})` →
+  `editState.select(block, opts)` with today's block ids (`slot:0..15`, `drone`, `effects`, `master`, `song`) and
+  focus ids (`instrument` opens the picker, `range` the Range category); the changed dots use `ctx.getBaseline()`.
+- **shell.js** exports its core for reuse (exports only, no behaviour change): `createEditCore` (createCore: store
+  fan-out, Revert baseline + `changes`, Esc stack, instruments, held notes, per-panel ctx, `mountModule`),
+  `editPanelFrame` (panelFrame), `editDefaultTab` (defaultTab).
+- **Layout**: root `div.v6.v6-edit.ev2` (`.ev2` so today's widgets / reused panels keep their styles-edit-v2.css look;
+  styles-v6-edit.css undoes the `.ev2` grid). Library column = today's `setlist` module + **Song bank…**
+  (`ctx.openSettings({section:'bank'})`, today's list) with a ⟨ fold to a 56 px rail (⟩), per device in
+  `localStorage['worship-rig.v6.edit'] = {cat, lib:'folded'}` (never in the library). Song header = today's
+  `song-header` module (LIVE, name + rename, KEY + "you play", BPM + Tap, Notes, ⋯ Song) + **Time** (`song.timeSig`
+  select, the song panel's write: 4/4 → null) + **Chart** (only while `settings.chartView` is on; switches to Perform
+  and opens the chart there). Rig tabs: one per instrument (`--c` = `slotColor(i)`, the instrument's name, its dB or
+  "off", "Empty · choose a sound"), changed dot = any V6_DIFF_WATCH change under `patch.slots.<i>`; **+ Add** =
+  `store.addSlot` then the new tab with its picker; Drone / Effects / Master tabs with today's summaries and dots.
+  Keyboard row = today's Edit `bottom` module, its role legend hidden (D15).
+- **Drone / Effects / Master / Song**: today's panels, mounted in today's panel frame inside the v6 card
+  (`.v6e-legacy`), unchanged (U5b gives them the category list).
+- **Instrument panel** (`views/v6/edit/instrument.js` `mountInstrument`): sentence from `describeSlot` with the role
+  dropped and the instrument's name first (D15), its words jump to their category; **Change instrument ▾** = today's
+  grouped picker (same writes: `slots.<i>` = `defaultSlot` into an empty place, else `slots.<i>.instrument`, 8 s Undo;
+  Remove this sound… → `slots.<i>` = null with Undo); the category list (`role=tablist`, ↑/↓ Home/End; a row of tabs
+  at iPad portrait) with each row's state in words and a dot; the chosen category in the middle; the v6 Perform strip
+  (`views/v6/strip.js` `createStrip`, the same component, D15) on the right, mounted only while Edit shows (a hidden
+  second strip would double Perform's test ids and run its meter). Its Change / ⋯ row is hidden in Edit (the mockup's).
+  The strip's writes are the v6 Perform's (gain through `controller.scenes.adjust` while a scene plays, muted,
+  sends, octave, sustain); its ⋯ Duplicate (if shown later) inserts the copy next to the original (`store.insertSlot`,
+  D23).
+- **Categories and their paths** (all today's slot-panel paths; the suite compares the data-bind union with today's
+  slot panel's):
+  - Sound: the three `smartSlidersFor` word sliders (shelf ones through `readEq` / `shelfWrites` → `slots.<i>.eq.*`).
+  - Tone EQ: today's `eqKeyboard`, mounted when the category opens and destroyed when it closes / the instrument or
+    slot changes / unmount (no leaked store listeners, tested over 3 cycles).
+  - Range: U2's `rangeKeyboard({size:'range'})` (88 keys, one bar; drag writes `slots.<i>.lowNote|highNote` once on
+    release, its keys play through `controller.perform`), the note boxes (`ctx.songField`, "C3" / MIDI number), Whole
+    keyboard (0 / 127), Set lowest / highest by playing (one-shot on the next held note; Esc / outside tap disarms),
+    Octave stepper (`slots.<i>.octave`).
+  - Touch: `velocityCurve` (Light / Normal / Heavy / Fixed / Own) + Own's `touch.shape|min|max|top` sliders.
+  - Sustain: the pedal switch `slots.<i>.sustain` + Release (pedal up) `slots.<i>.release` / Pedal hold
+    `slots.<i>.pedalHold` (today's tracks and null-on-default rules) and its sentence.
+  - Space & Echo: `sends.reverb|delay|chorus` word sliders + a link to the Effects tab.
+  - Advanced: pan, width, transpose, voices (`mono`), pitch bend, the instrument's own params (+ Reset).
+- **Changed dots**: against `ctx.getBaseline()` with v6 Perform's `V6_DIFF_WATCH` (today's DIFF_WATCH + `lowNote` /
+  `highNote`): Range (lowNote, highNote, octave), Sustain (sustain), Space & Echo (sends) can dot; Sound, Tone EQ, Touch
+  and Advanced never do under today's rule (faders / tone sliders never dot, CONTRACT §3.6).
+- **Category memory**: the chosen category is per device (`cat` above); a jump from a sentence word or `focus:'range'`
+  shows a category without remembering it.
+- **iPad portrait** (`(orientation: portrait) and (max-width: 1024px)`): no library column; the header's ☰ Songs
+  (today's song-header button, `editState.drawer`) opens it over the view (Esc / outside tap close); the categories
+  are a row of tabs; the strip is hidden; `body:has(… .v6-edit) { min-width: 0 }` so 820 px does not scroll
+  sideways (today's Edit, flag off, keeps 1024 px: tested).
+- **Flag off**: unchanged (ui-v6 and ui-v6-edit purity probes vs 715b936: 105 requests, 15 store listeners,
+  4 intervals, 2529 elements of which 1047 in Edit, identical).
+- Tests: `node test/phase2/ui-v6-edit/run.mjs` (16 checks; in run-all as `ui-v6-edit`). ui-v6's U4 iPad check now
+  expects the v6 Edit's `min-width: 0` at 820 px (it asserted today's Edit's 1024 px with the flag on).
+  Screenshots `u5-edit-{sound,eq,range}-1280.png`, `u5-edit-library-folded-1280.png`, `u5-edit-ipad-portrait-820.png`.
