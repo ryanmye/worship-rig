@@ -74,6 +74,10 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 
 ## Queued small tasks
 
+- **Polish (UI6-move O2/O3, orchestrator):** Enter on a strip name (pick) moves focus to the picked bar's low
+  handle; the small-window "opened here" memory counts only a deliberate open of the sidebar (⟨ / rail), not the
+  Notes / Setlist chips, and is keyed by orientation so an iPad rotated to portrait is not held folded.
+
 - **U5b (orchestrator tier 2 answers to the U5a builder's questions):** every Edit category dot means "changed
   since the song began" (compare against the baseline for all of the category's paths, so Sound / Tone EQ / Touch /
   Advanced dot too, as the mockup shows); v6 Edit uses the v6 Perform bottom row (range bars + Revert / Fade out /
