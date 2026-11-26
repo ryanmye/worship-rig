@@ -205,6 +205,38 @@ export async function dialogTests(x) {
     await ev(() => window.__rig.store.set('settings.midiLearn', {}));
   });
 
+  await T('U7c skeptic F3: the Esc that closes Settings (or clears its search) does not end MIDI Learn or Arrange; '
+    + 'the next Esc does', async () => {
+    await toPerform();
+    await armPanics();
+    for (const mode of ['learn', 'arrange']) {
+      await ev((m) => window.__rig.views.v6[m].enter(), mode);
+      await ev(() => window.__rig.ctx.openSettings({ section: 'midilearn' }));
+      await until(() => document.body.classList.contains('settings-open'));
+      await page.keyboard.press('Escape');
+      await until(() => !document.body.classList.contains('settings-open'));
+      assert.equal(await ev((m) => window.__rig.views.v6[m].active, mode), true, `${mode} stays on`);
+      if (mode === 'learn') assert.equal(await ev(() => window.__rig.midi.learning), '(capture)');
+      await page.keyboard.press('Escape');
+      await until((m) => !window.__rig.views.v6[m].active, mode);
+    }
+    // Settings' search: the first Esc clears it, Settings stays, learn mode stays
+    await ev(() => window.__rig.views.v6.learn.enter());
+    await ev(() => window.__rig.ctx.openSettings());
+    await until(() => !!document.querySelector('#view-settings input[type="search"]')?.getClientRects().length);
+    await page.fill('#view-settings input[type="search"]', 'midi');
+    await page.focus('#view-settings input[type="search"]');
+    await page.keyboard.press('Escape');
+    assert.equal(await ev(() => document.body.classList.contains('settings-open')), true);
+    assert.equal(await ev(() => window.__rig.views.v6.learn.active), true);
+    await page.keyboard.press('Escape');
+    await until(() => !document.body.classList.contains('settings-open'));
+    assert.equal(await ev(() => window.__rig.views.v6.learn.active), true);
+    await page.click(tid('v6-learn-done'));
+    await until(() => !window.__rig.views.v6.learn.active);
+    assert.equal(await ev(() => window.__panics), 0);
+  });
+
   await T('U7c Arrange: strips get handles (◀ ▶ ✕ hold, ⠿ drag = the strip drag), the sidebar its customize list; '
     + 'Done / Esc; Lock; a folded sidebar opens for it and folds back', async () => {
     await toPerform();

@@ -40,7 +40,7 @@ export function arrangeMode(v, o) {
     v.host.classList.add('arranging');
     o.sidebar.arrange(true);
     closeEsc = openOverlay({
-      el, anchors: [], closeOnOutside: false, group: 'v6-arrange',
+      el, anchors: [], closeOnOutside: false, underModal: true, group: 'v6-arrange',
       onClose: (reason) => {
         closeEsc = null;
         if (reason !== 'api') exit();

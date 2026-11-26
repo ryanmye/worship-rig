@@ -1003,6 +1003,9 @@ window.addEventListener(
     // UI v6 U6: while the v6 Settings search box holds text, Esc clears it first (views/v6/settings.js)
     const owned = html.hasAttribute('data-hotkey-capture') || html.hasAttribute('data-gb-import')
       || html.hasAttribute('data-settings-search');
+    // skeptic UI6-U7c F3: an Esc while Settings is open is Settings' alone; overlay.js lets the Perform modes that
+    // stay open under Settings (v6 MIDI Learn, Arrange: `underModal`) keep it (only an expando, nothing else reads it)
+    if (settingsOpen && e.key === 'Escape') e.rigSettingsEsc = true;
     if (settingsOpen && e.key === 'Escape' && !owned) {
       e.preventDefault();
       escClosedSettings = e; // D24.7: this Esc was Settings' (escPanicKey may run after this listener)

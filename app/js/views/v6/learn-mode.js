@@ -277,7 +277,7 @@ export function learnMode(v) {
       document.body.classList.add('v6-learning');
       v.host.classList.add('learning');
       closeEsc = openOverlay({
-        el, anchors: [], closeOnOutside: false, group: 'v6-learn',
+        el, anchors: [], closeOnOutside: false, underModal: true, group: 'v6-learn',
         onClose: (reason) => {
           closeEsc = null;
           if (reason !== 'api') exit(reason);

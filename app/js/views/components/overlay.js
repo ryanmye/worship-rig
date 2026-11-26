@@ -30,6 +30,9 @@ function onKey(e) {
   if (e.key !== 'Escape' || !stack.length || e.metaKey || e.ctrlKey || e.altKey) return;
   const top = pruneHidden();
   if (!top) return;
+  // skeptic UI6-U7c F3: a mode that stays open under Settings (v6 MIDI Learn / Arrange) is not ended by the Esc that
+  // closes Settings (main.js marks it) or clears its search; that Esc is Settings' alone
+  if (top.underModal && (e.rigSettingsEsc || document.body.classList.contains('settings-open'))) return;
   e.preventDefault();
   e.stopPropagation();
   top.close('escape');
@@ -77,6 +80,7 @@ function listen(on) {
  * @param {boolean} [o.closeOnOutside=true]  false: only Esc / the caller closes it (the Quick sheet: keep playing)
  * @param {string} [o.passThrough=PASS_THROUGH]
  * @param {string} [o.group]            opening an overlay closes the open ones of the same group
+ * @param {boolean} [o.underModal=false] stays open under Settings: an Esc for Settings never closes it (U7c F3)
  * @returns {(reason?:string) => void}
  */
 export function openOverlay(o) {
@@ -88,6 +92,7 @@ export function openOverlay(o) {
     outside: o.closeOnOutside !== false,
     passThrough: o.passThrough || PASS_THROUGH,
     group: o.group || null,
+    underModal: !!o.underModal,
     closed: false,
     close(reason = 'api') {
       if (entry.closed) return;
