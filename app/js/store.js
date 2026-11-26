@@ -2337,7 +2337,9 @@ export function createStore(opts = {}) {
         if (Array.isArray(song.scenes)) {
           const fill = (j, _sc) => {
             const kept = line.dropped.get(re.tokens[j]);
-            return kept ? kept[song.scenes.indexOf(_sc)] ?? null : null;
+            // skeptic F3: kept by scene index, so only while the song has as many scenes as at the removal (a scene
+            // deleted since would hand scene 1's level to scene 2)
+            return kept && kept.length === song.scenes.length ? kept[song.scenes.indexOf(_sc)] ?? null : null;
           };
           paths.push(put(['songs', sid, 'scenes'], normalizeScenes(scenesBy(song.scenes, re.order, fill),
             song.patch.slots.length)));

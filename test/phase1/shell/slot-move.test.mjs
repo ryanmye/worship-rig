@@ -370,3 +370,24 @@ test('skeptic F2: Revert after a Duplicate at the end cuts the copy’s scene en
   t.addSlot(tid, slot('soft-keys'));
   assert.equal(t.getSong(tid).scenes[0].slots[4] ?? null, null);
 });
+
+test('skeptic F3: a removed slot’s kept scene entries come back only while the scene count is the same', () => {
+  const s = makeStore();
+  const id = s.get().settings.currentSongId;
+  ['soft-keys', 'warm-pad', 'soft-keys', 'warm-pad'].forEach((x, i) => s.set(`slots.${i}`, slot(x)));
+  const two = [{ slots: [{ gain: 0.1 }, { gain: 0.2 }, { gain: 0.3 }, { gain: 0.4 }] },
+    { slots: [{ gain: 0.5 }, { gain: 0.6 }, { gain: 0.7 }, { gain: 0.8 }] }];
+  s.set(`songs.${id}.scenes`, two);
+  const snap = structuredClone(s.getSong(id));
+  assert.ok(s.removeSlot(id, 1));
+  s.set(`songs.${id}.scenes`, [s.getSong(id).scenes[1]]); // the first scene deleted
+  s.set(`songs.${id}.patch`, snap.patch);
+  assert.deepEqual(s.getSong(id).scenes, [{ slots: [{ gain: 0.5 }, null, { gain: 0.7 }, { gain: 0.8 }] }],
+    'the slot is back uncovered, never with the deleted scene’s level');
+  // the same count: the entries come back (the builder's removeSlot + Revert)
+  s.set(`songs.${id}.scenes`, two);
+  const snap2 = structuredClone(s.getSong(id));
+  assert.ok(s.removeSlot(id, 2));
+  s.set(`songs.${id}.patch`, snap2.patch);
+  assert.deepEqual(s.getSong(id), snap2);
+});
