@@ -24,38 +24,45 @@
   font-weight: 800; }
 .v6 .v6-sb-c.open { background: linear-gradient(var(--plate-top, var(--accent)), var(--plate-bot, var(--accent)));
   color: var(--accent-ink); }
-/* a narrow sidebar (< 240 px) gives the tabs their own row, so every tab keeps a 44 px target. U-METRO: four tabs
-   (+ ⋯ and ⟩) need 304 px in one row (4 × 44 + gaps + the tablist's padding + 2 × 44 + the sidebar's padding), five
-   need 350 */
-@container v6side (max-width: 239px) {
-  .v6 .v6-sb-h { justify-content: flex-end; }
-  .v6 .v6-sb-tabs { flex: 1 0 100%; }
-  .v6 .v6-sb-load { flex: 1 1 auto; order: 0; min-width: 0; }
-}
-@container v6side (max-width: 309px) {
-  .v6 .v6-sb-h[data-tabs="4"] { justify-content: flex-end; }
-  .v6 .v6-sb-h[data-tabs="4"] .v6-sb-tabs { flex: 1 0 100%; }
-  .v6 .v6-sb-h[data-tabs="4"] .v6-sb-load { flex: 1 1 auto; order: 0; min-width: 0; }
-}
-@container v6side (max-width: 359px) {
-  .v6 .v6-sb-h:is([data-tabs="5"], [data-tabs="6"], [data-tabs="7"]) { justify-content: flex-end; }
-  .v6 .v6-sb-h:is([data-tabs="5"], [data-tabs="6"], [data-tabs="7"]) .v6-sb-tabs { flex: 1 0 100%; }
-  .v6 .v6-sb-h:is([data-tabs="5"], [data-tabs="6"], [data-tabs="7"]) .v6-sb-load { flex: 1 1 auto; order: 0;
-    min-width: 0; }
-}
-.v6 .v6-sb-tab[data-id="metronome"] .v6-live { background: var(--accent); }
-
-/* ---- the song's load state (U-METRO, D23.3): today's "Loading…" / "Preparing n of m", at the top while it lasts */
+/* ---- the song's load state (U-METRO, D23.3): today's "Loading…" / "Preparing n of m", at the top while it lasts.
+   The base rule comes before the container queries below so their (equally specific) "beside ⋯ ⟩" rules win
+   (skeptic UI6-small F3: after them, it overrode the < 240 px rule for three tabs) */
 .v6 .v6-spin { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--accent);
   border-top-color: transparent; animation: spin .8s linear infinite; }
-.v6 .v6-sb-load { flex: 1 0 100%; order: -1; display: flex; align-items: center; gap: 7px; min-height: 22px; padding: 0 4px;
-  font-size: 13px; font-weight: 800; color: var(--accent-text, var(--accent)); white-space: nowrap; overflow: hidden; }
+.v6 .v6-sb-load { flex: 1 0 100%; order: -1; display: flex; align-items: center; gap: 7px; min-height: 22px;
+  padding: 0 4px; font-size: 13px; font-weight: 800; color: var(--accent-text, var(--accent)); white-space: nowrap;
+  overflow: hidden; }
 .v6 .v6-sb-load > span:last-child { overflow: hidden; text-overflow: ellipsis; }
 .v6 .v6-sb-load[hidden], .v6 .v6-rail-load[hidden] { display: none; }
 .v6 .v6-rail-load { flex: none; display: flex; align-items: center; justify-content: center; min-height: 22px; }
 @media (prefers-reduced-motion: reduce) {
   .v6 .v6-spin { animation: none; border-top-color: var(--accent); opacity: .7; }
 }
+
+/* a narrow sidebar (< 240 px) gives the tabs their own row, so every tab keeps a 44 px target. U-METRO: four tabs
+   (+ ⋯ and ⟩) need 304 px in one row (4 × 44 + gaps + the tablist's padding + 2 × 44 + the sidebar's padding), five
+   need 350. With the tabs on their own row the load line sits beside ⋯ ⟩: skeptic UI6-small F3, it takes the room
+   left (flex-basis 0; with its text width as the basis, "Preparing 10 of 19" + ⋯ + ⟩ need 246 px, so at 220 px ⟩
+   wrapped onto a third row and pushed the module down 50 px) and its words wrap onto two short lines in that row */
+@container v6side (max-width: 239px) {
+  .v6 .v6-sb-h { justify-content: flex-end; }
+  .v6 .v6-sb-tabs { flex: 1 0 100%; }
+  .v6 .v6-sb-h .v6-sb-load { flex: 1 1 0; order: 0; min-width: 0; max-height: 44px; font-size: 12px;
+    line-height: 1.15; white-space: normal; }
+}
+@container v6side (max-width: 309px) {
+  .v6 .v6-sb-h[data-tabs="4"] { justify-content: flex-end; }
+  .v6 .v6-sb-h[data-tabs="4"] .v6-sb-tabs { flex: 1 0 100%; }
+  .v6 .v6-sb-h[data-tabs="4"] .v6-sb-load { flex: 1 1 0; order: 0; min-width: 0; max-height: 44px; font-size: 12px;
+    line-height: 1.15; white-space: normal; }
+}
+@container v6side (max-width: 359px) {
+  .v6 .v6-sb-h:is([data-tabs="5"], [data-tabs="6"], [data-tabs="7"]) { justify-content: flex-end; }
+  .v6 .v6-sb-h:is([data-tabs="5"], [data-tabs="6"], [data-tabs="7"]) .v6-sb-tabs { flex: 1 0 100%; }
+  .v6 .v6-sb-h:is([data-tabs="5"], [data-tabs="6"], [data-tabs="7"]) .v6-sb-load { flex: 1 1 0; order: 0;
+    min-width: 0; max-height: 44px; font-size: 12px; line-height: 1.15; white-space: normal; }
+}
+.v6 .v6-sb-tab[data-id="metronome"] .v6-live { background: var(--accent); }
 .v6 .v6-sb-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden auto;
   container: v6sb / inline-size; }
 .v6 .v6-sb-body > * { flex: 1 1 auto; min-height: 0; }

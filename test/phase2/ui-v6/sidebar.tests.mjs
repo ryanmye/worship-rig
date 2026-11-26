@@ -670,6 +670,36 @@ export async function sidebarTests(x) {
       assert.match(r.line || '', /^Preparing \d+ of \d+$/);
       await fake({ loading: false, ready: true });
       assert.deepEqual(await line(), { line: null, lineShown: false, rail: false, railShown: false });
+      // skeptic UI6-small F3: at 1024 × 700 (a 220 px sidebar) "Preparing n of m" sits beside ⋯ ⟩ too (it wrapped ⟩
+      // onto a third row and pushed the module down 50 px), and at 240–270 px
+      const vp = page.viewportSize();
+      try {
+        for (const [w, h, side] of [[1024, 700, null], [1280, 800, 250]]) {
+          await page.setViewportSize({ width: w, height: h });
+          if (side) await ev((px) => { document.querySelector('.v6-side').style.width = `${px}px`; }, side);
+          await page.waitForTimeout(300);
+          const geo = () => ev(() => {
+            const r = (s) => document.querySelector(s).getBoundingClientRect();
+            return { body: Math.round(r('[data-testid="v6-sb-body"]').top),
+              x: Math.round(r('[data-testid="v6-sb-collapse"]').top),
+              c: Math.round(r('[data-testid="v6-sb-customize"]').top), w: Math.round(r('.v6-side').width) };
+          });
+          const g0 = await geo();
+          await fake({ loading: false, ready: false });
+          await until(() => !document.querySelector('[data-testid="v6-sb-load"]').hidden);
+          const g1 = await geo();
+          const t = await ev(() => document.querySelector('[data-testid="v6-sb-load"]').textContent);
+          assert.match(t, /^Preparing/);
+          assert.equal(g1.body, g0.body, `${w}×${h} (${g0.w} px sidebar): the module stays put `
+            + JSON.stringify([g0, g1]));
+          assert.equal(g1.x, g1.c, `${w}×${h}: ⋯ and ⟩ share a row ${JSON.stringify(g1)}`);
+          await fake({ loading: false, ready: true });
+          if (side) await ev(() => { document.querySelector('.v6-side').style.width = ''; });
+        }
+      } finally {
+        await page.setViewportSize(vp);
+        await page.waitForTimeout(300);
+      }
     });
 
   await T('U-METRO: a layout saved before Click gets it appended and shown; ⋯ customize lists it', async () => {
