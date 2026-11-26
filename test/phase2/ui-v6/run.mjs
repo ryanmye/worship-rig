@@ -1197,6 +1197,9 @@ try {
     await ev(() => window.__rig.ctx.setView('perform'));
     await until(() => document.body.dataset.view === 'perform');
     await ev(() => document.activeElement?.blur?.());
+    // skeptic UI6-move F1: since D24.3 the U2 checks above leave a range pick open (pick first on a mouse too), and
+    // the pick is an overlay that takes an Esc of its own: start from nothing open
+    await ev(() => window.__rig.views.v6?.kb.pick(null));
     const held = () => ev(() => window.__rig.controller._debug().held.length);
     const sing = async () => {
       await page.click(tid('v6-key'));
