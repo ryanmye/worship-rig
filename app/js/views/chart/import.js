@@ -18,72 +18,53 @@ const WARN_SHOWN = 12;
 const REVIEW_DEBOUNCE_MS = 250;
 
 /**
- * Open the dialog for one song.
+ * The review under the chart text, shared by today's "Add chart…" dialog and the v6 Edit chart dialog (U7b): the
+ * parser's summary and warnings, the title / key / tempo / time signature OFFERED as unticked updates to the song
+ * (never applied silently), "written in" when the chart names no key, the tempo when neither has one, and a
+ * WorshipTools song list's placeholder songs. save() stores the source (store.setChart) and writes only what is ticked.
  * @param {{store:object, toast?:Function}} ctx
  * @param {string} songId
- * @param {{onClose?:() => void, opener?:Element|null}} [o] opener: focus goes back to it on close
- * @returns {{el:HTMLElement, close:() => void}}
+ * @returns {{review:HTMLElement, error:HTMLElement, showError(msg?:string):void,
+ *   update(src:string, o?:{fileName?:string, format?:string}):{canSave:boolean, label:string},
+ *   save(src:string, o?:{fileName?:string, keepKey?:string|null}):{done:boolean, error?:string},
+ *   readonly result:object|null}}
  */
-export function openChartImport(ctx, songId, o = {}) {
+export function chartReview(ctx, songId) {
   const { store } = ctx;
   const song = () => store.getSong(songId);
-  const token = {};
-  let fileName = '';
   let result = null; // readImport result for the current text
-  let reviewTimer = null;
-
-  const fileInput = h('input', { type: 'file', accept: CHART_ACCEPT, hidden: true, 'data-testid': 'chart-file' });
-  const fileBtn = h('button.btn.chv-btn', { type: 'button', text: 'Choose file…' });
-  const fileLabel = h('span.chv-file', { text: '' });
-  const text = h('textarea.chv-text', {
-    rows: 10, spellcheck: 'false', 'aria-label': 'Chart text', 'data-testid': 'chart-paste',
-    placeholder: 'Or paste a chart here: ChordPro ([G]lyrics) or chords over lyrics',
-  });
-  const format = h('select.chv-select', { 'aria-label': 'Format', 'data-testid': 'chart-format' },
-    h('option', { value: 'auto', text: 'Format: detect' }), h('option', { value: 'chordpro', text: 'ChordPro' }),
-    h('option', { value: 'plain', text: 'Chords over lyrics' }));
+  let fileName = '';
   const review = h('div.chv-review', { 'data-testid': 'chart-review', 'aria-live': 'polite' });
   const error = h('p.chv-error', { role: 'alert', hidden: true, 'data-testid': 'chart-error' });
-  const cancelBtn = h('button.btn.chv-btn', { type: 'button', text: 'Cancel' });
-  const saveBtn = h('button.btn.chv-btn.primary', { type: 'button', text: 'Save chart', disabled: true,
-    'data-testid': 'chart-save' });
-  const title = h('h2.chv-dlg-h', {});
-  setText(title, `Add a chart to “${song()?.name ?? ''}”`);
-  const dlg = h('div.chv-dlg', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Add chart', tabindex: -1,
-    'data-testid': 'chart-import' },
-  title,
-  h('div.chv-dlg-row', {}, fileBtn, fileLabel, fileInput, format),
-  text, error, review,
-  h('div.chv-dlg-foot', {}, cancelBtn, saveBtn));
-  const host = h('div.chv-dlg-host', {}, dlg);
-  document.body.append(host);
-  markDialog(token, true);
-
   const showError = (msg) => {
     error.hidden = !msg;
     setText(error, msg || '');
   };
-
-  // ---- review
   let offerBoxes = []; // [{offer, box}]
   let keySel = null;
   let tempoIn = null;
   // skeptic V8: Element.append(null) inserts the text "null" (warnList gives null when there are no warnings)
   const add = (...nodes) => review.append(...nodes.filter((n) => n !== null && n !== undefined && n !== false));
-  function renderReview() {
+  function warnList(warnings) {
+    if (!warnings || !warnings.length) return null;
+    const shown = warnings.slice(0, WARN_SHOWN);
+    return h('details.chv-warn', { 'data-testid': 'chart-warnings' },
+      h('summary', { text: `${warnings.length} note${warnings.length === 1 ? '' : 's'} from the parser` }),
+      h('ul.chv-list', {}, shown.map((w) => h('li', { text: w })),
+        warnings.length > WARN_SHOWN ? h('li', { text: `…and ${warnings.length - WARN_SHOWN} more` }) : null));
+  }
+  function update(src, o = {}) {
     const s = song();
+    fileName = o.fileName || '';
     review.replaceChildren();
     offerBoxes = [];
     keySel = null;
     tempoIn = null;
-    saveBtn.textContent = 'Save chart';
-    const src = text.value;
     if (!s || !src.trim()) {
       result = null;
-      saveBtn.disabled = true;
-      return;
+      return { canSave: false, label: 'Save chart' };
     }
-    result = readImport(src, { name: fileName, format: format.value });
+    result = readImport(src, { name: fileName, format: o.format || 'auto' });
     if (result.kind === 'csv') {
       const p = csvPlaceholders(result.songs, store.songsInOrder().map((x) => x.name));
       add(
@@ -92,10 +73,10 @@ export function openChartImport(ctx, songId, o = {}) {
           + (p.skipped.length ? ` (${p.skipped.length} already there).` : '.') }),
         p.add.length ? h('ul.chv-list', {}, p.add.slice(0, 20).map((x) => h('li', { text: x.name }))) : null,
         warnList(result.warnings));
-      saveBtn.textContent = p.add.length ? `Add ${p.add.length} song${p.add.length === 1 ? '' : 's'}`
-        : 'Nothing to add';
-      saveBtn.disabled = !p.add.length;
-      return;
+      return {
+        canSave: !!p.add.length,
+        label: p.add.length ? `Add ${p.add.length} song${p.add.length === 1 ? '' : 's'}` : 'Nothing to add',
+      };
     }
     const m = result.model;
     const lines = songLineCount(m);
@@ -118,15 +99,17 @@ export function openChartImport(ctx, songId, o = {}) {
     }
     for (const n of notes) review.append(h('p.chv-note', { text: n }));
     if (!m.key) {
-      // the key it is written in, so Easy Transpose can move it; default = the song's key (stored as chart.key)
+      // the key it is written in, so Easy Transpose can move it; default = the key it was stored with (U7b's Edit
+      // chart), else the song's key (stored as chart.key)
       keySel = h('select.chv-select', { 'aria-label': 'Chart is written in', 'data-testid': 'chart-written-in' });
-      const cur = songKeyName(s);
+      const cur = o.writtenIn || songKeyName(s);
       for (const minor of [false, true]) {
         for (let pc = 0; pc < 12; pc++) {
           const k = keyName(pc, minor);
           keySel.append(h('option', { value: k, text: k, selected: k === cur }));
         }
       }
+      if (o.onWrittenIn) keySel.addEventListener('change', () => o.onWrittenIn(keySel.value));
       review.append(h('label.chv-field', {}, h('span', { text: 'No key in the chart. It is written in ' }), keySel));
     }
     if (askTempo) {
@@ -136,15 +119,99 @@ export function openChartImport(ctx, songId, o = {}) {
         + 'auto-scroll pace; optional): ' }), tempoIn));
     }
     showError(err);
-    saveBtn.disabled = !!err;
+    return { canSave: !err, label: 'Save chart' };
   }
-  function warnList(warnings) {
-    if (!warnings || !warnings.length) return null;
-    const shown = warnings.slice(0, WARN_SHOWN);
-    return h('details.chv-warn', { 'data-testid': 'chart-warnings' },
-      h('summary', { text: `${warnings.length} note${warnings.length === 1 ? '' : 's'} from the parser` }),
-      h('ul.chv-list', {}, shown.map((w) => h('li', { text: w })),
-        warnings.length > WARN_SHOWN ? h('li', { text: `…and ${warnings.length - WARN_SHOWN} more` }) : null));
+  /** The key the chart is written in when it names none (the "written in" choice), else null. */
+  const writtenIn = () => (keySel ? keySel.value : null);
+  function save(src) {
+    const s = song();
+    if (!s || !result) return { done: false };
+    if (store.get().settings.performLock) { // skeptic V4: Perform lock freezes library changes
+      const msg = 'Perform is locked, so the chart was not saved. Unlock first.';
+      showError(msg);
+      return { done: false, error: msg };
+    }
+    if (result.kind === 'csv') {
+      const p = csvPlaceholders(result.songs, store.songsInOrder().map((x) => x.name));
+      for (const x of p.add) {
+        const id = store.addSong(null, { name: x.name, setlistId: null });
+        if (x.notes) store.set(`songs.${id}.notes`, x.notes);
+      }
+      ctx.toast?.(`Added ${p.add.length} placeholder song${p.add.length === 1 ? '' : 's'} to the library.`, 'ok',
+        { ms: 4000 });
+      return { done: true };
+    }
+    const chart = { text: src, format: result.format };
+    if (fileName) chart.name = fileName;
+    if (keySel) chart.key = keySel.value;
+    const r = store.setChart(songId, chart);
+    if (!r.ok) {
+      showError(r.error);
+      return { done: false, error: r.error };
+    }
+    const ticked = offerBoxes.filter((x) => x.box.checked).map((x) => x.offer);
+    const writes = offerWrites(ticked, s);
+    const t = tempoIn && tempoIn.value.trim() ? Math.round(Number(tempoIn.value)) : null;
+    if (Number.isFinite(t) && t !== null) writes.push(['tempo', Math.max(30, Math.min(300, t))]);
+    for (const [p, v] of writes) store.set(`songs.${songId}.${p}`, v);
+    ctx.toast?.('Chart saved.', 'ok', { ms: 2500 });
+    return { done: true };
+  }
+  return {
+    review, error, showError, update, save, writtenIn,
+    get result() {
+      return result;
+    },
+  };
+}
+
+/**
+ * Open the dialog for one song.
+ * @param {{store:object, toast?:Function}} ctx
+ * @param {string} songId
+ * @param {{onClose?:() => void, opener?:Element|null}} [o] opener: focus goes back to it on close
+ * @returns {{el:HTMLElement, close:() => void}}
+ */
+export function openChartImport(ctx, songId, o = {}) {
+  const { store } = ctx;
+  const song = () => store.getSong(songId);
+  const token = {};
+  let fileName = '';
+  let reviewTimer = null;
+  const rv = chartReview(ctx, songId);
+  const { review, error, showError } = rv;
+
+  const fileInput = h('input', { type: 'file', accept: CHART_ACCEPT, hidden: true, 'data-testid': 'chart-file' });
+  const fileBtn = h('button.btn.chv-btn', { type: 'button', text: 'Choose file…' });
+  const fileLabel = h('span.chv-file', { text: '' });
+  const text = h('textarea.chv-text', {
+    rows: 10, spellcheck: 'false', 'aria-label': 'Chart text', 'data-testid': 'chart-paste',
+    placeholder: 'Or paste a chart here: ChordPro ([G]lyrics) or chords over lyrics',
+  });
+  const format = h('select.chv-select', { 'aria-label': 'Format', 'data-testid': 'chart-format' },
+    h('option', { value: 'auto', text: 'Format: detect' }), h('option', { value: 'chordpro', text: 'ChordPro' }),
+    h('option', { value: 'plain', text: 'Chords over lyrics' }));
+  const cancelBtn = h('button.btn.chv-btn', { type: 'button', text: 'Cancel' });
+  const saveBtn = h('button.btn.chv-btn.primary', { type: 'button', text: 'Save chart', disabled: true,
+    'data-testid': 'chart-save' });
+  const title = h('h2.chv-dlg-h', {});
+  setText(title, `Add a chart to “${song()?.name ?? ''}”`);
+  const dlg = h('div.chv-dlg', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Add chart', tabindex: -1,
+    'data-testid': 'chart-import' },
+  title,
+  h('div.chv-dlg-row', {}, fileBtn, fileLabel, fileInput, format),
+  text, error, review,
+  h('div.chv-dlg-foot', {}, cancelBtn, saveBtn));
+  const host = h('div.chv-dlg-host', {}, dlg);
+  document.body.append(host);
+  markDialog(token, true);
+
+  // ---- review
+  function renderReview() {
+    saveBtn.textContent = 'Save chart';
+    const r = rv.update(text.value, { fileName, format: format.value });
+    saveBtn.textContent = r.label;
+    saveBtn.disabled = !r.canSave;
   }
   const scheduleReview = () => {
     clearTimeout(reviewTimer);
@@ -163,38 +230,7 @@ export function openChartImport(ctx, songId, o = {}) {
       renderReview();
       return;
     }
-    const s = song();
-    if (!s || !result) return;
-    if (store.get().settings.performLock) { // skeptic V4: Perform lock freezes library changes
-      showError('Perform is locked, so the chart was not saved. Unlock first.');
-      return;
-    }
-    if (result.kind === 'csv') {
-      const p = csvPlaceholders(result.songs, store.songsInOrder().map((x) => x.name));
-      for (const x of p.add) {
-        const id = store.addSong(null, { name: x.name, setlistId: null });
-        if (x.notes) store.set(`songs.${id}.notes`, x.notes);
-      }
-      ctx.toast?.(`Added ${p.add.length} placeholder song${p.add.length === 1 ? '' : 's'} to the library.`, 'ok',
-        { ms: 4000 });
-      close();
-      return;
-    }
-    const chart = { text: text.value, format: result.format };
-    if (fileName) chart.name = fileName;
-    if (keySel) chart.key = keySel.value;
-    const r = store.setChart(songId, chart);
-    if (!r.ok) {
-      showError(r.error);
-      return;
-    }
-    const ticked = offerBoxes.filter((x) => x.box.checked).map((x) => x.offer);
-    const writes = offerWrites(ticked, s);
-    const t = tempoIn && tempoIn.value.trim() ? Math.round(Number(tempoIn.value)) : null;
-    if (Number.isFinite(t) && t !== null) writes.push(['tempo', Math.max(30, Math.min(300, t))]);
-    for (const [p, v] of writes) store.set(`songs.${songId}.${p}`, v);
-    ctx.toast?.('Chart saved.', 'ok', { ms: 2500 });
-    close();
+    if (rv.save(text.value).done) close();
   }
 
   // ---- wiring (every listener lives on the dialog's own nodes, so removing it releases them)

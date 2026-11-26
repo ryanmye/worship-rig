@@ -9,23 +9,16 @@
 // localStorage like Edit's section state. Provisional UI: plain styling on the theme tokens (D7).
 import { h, setText, disposer, blurAfterPointer } from '../components/util.js';
 import {
-  chartView, songLineCount, autoScrollRate, stepIndex, CHART_FONT_STEPS, CHART_FONT_DEFAULT, CHART_SPEED_STEPS,
-  CHART_SPEED_DEFAULT, CHART_MODES, FALLBACK_TEMPO,
+  stepIndex, CHART_FONT_STEPS, CHART_FONT_DEFAULT, CHART_SPEED_STEPS, CHART_SPEED_DEFAULT, CHART_MODES, FALLBACK_TEMPO,
 } from './logic.js';
-import { renderChart } from './render.js';
+import { createChartCore, CHART_PREFS_KEY, readStoredPrefs, writeStoredPrefs } from './core.js';
 
-export const CHART_PREFS_KEY = 'worship-rig.chart';
+export { CHART_PREFS_KEY };
 export const CHART_CSS_HREF = './styles-chart.css';
 const REMOVE_CONFIRM_MS = 3000;
-const PAGE_FRACTION = 0.8;
 
 function readPrefs() {
-  let p = {};
-  try {
-    p = JSON.parse(globalThis.localStorage?.getItem(CHART_PREFS_KEY) || '{}') || {};
-  } catch {
-    p = {};
-  }
+  const p = readStoredPrefs();
   const idx = (v, steps, def) => (Number.isInteger(v) && v >= 0 && v < steps.length ? v : def);
   return {
     open: p.open === true,
@@ -46,13 +39,7 @@ export function mountChartView(ctx, mounts) {
   const { store } = ctx;
   const d = disposer();
   const prefs = readPrefs();
-  const savePrefs = () => {
-    try {
-      globalThis.localStorage?.setItem(CHART_PREFS_KEY, JSON.stringify(prefs));
-    } catch {
-      /* private window / full storage: the preferences just don't stick */
-    }
-  };
+  const savePrefs = () => writeStoredPrefs(prefs);
   // the stylesheet is loaded with the view and removed with it (nothing is fetched while the flag is off)
   let css = document.querySelector('link[data-chart-css]');
   const ownCss = !css;
@@ -107,14 +94,30 @@ export function mountChartView(ctx, mounts) {
   mounts.stage.append(panel);
 
   // ---- state
-  let renderedKey = null;
-  let view = null; // last chartView() result
-  let lineCount = 0;
   let removeArmed = 0;
   let removeTimer = null;
   let importDlg = null;
   const song = () => store.currentSong();
   const locked = () => !!store.get().settings.performLock;
+  // U7b: the render cache, auto-scroll and paging are shared with the v6 chart (core.js)
+  const core = createChartCore({
+    store, panel, body, sheet, empty,
+    mode: () => prefs.mode,
+    speed: () => prefs.speed,
+    onTools: () => renderTools(),
+    onView: (view, s) => {
+      if (!view) {
+        setText(titleEl, s ? s.name : '—');
+        setText(keyEl, '');
+        return;
+      }
+      setText(titleEl, view.model.title || s.name);
+      const written = view.shift ? ` · written in ${view.sourceKey}` : '';
+      const capo = view.model.capo ? ` · capo ${view.model.capo}` : '';
+      setText(keyEl, `Key ${view.shownKey}${prefs.mode === 'play' ? ' (your hands)' : ''}${written}${capo}`);
+    },
+  });
+  const render = (force) => core.render(force);
 
   function renderTools() {
     const s = song();
@@ -126,7 +129,7 @@ export function mountChartView(ctx, mounts) {
     setText(speedVal, `×${CHART_SPEED_STEPS[prefs.speed]}`);
     speedDown.disabled = prefs.speed === 0;
     speedUp.disabled = prefs.speed === CHART_SPEED_STEPS.length - 1;
-    autoBtn.setAttribute('aria-pressed', String(auto));
+    autoBtn.setAttribute('aria-pressed', String(core.auto));
     autoBtn.disabled = !has;
     // Perform lock freezes library changes (perform.js LOCK.frozen); reading and scrolling stay live
     addBtn.disabled = !s || locked();
@@ -137,39 +140,6 @@ export function mountChartView(ctx, mounts) {
     setText(removeBtn, removeArmed ? 'Remove? Tap again' : 'Remove');
     const t = s && s.tempo ? '' : ` · no tempo, scrolls at ${FALLBACK_TEMPO} BPM`;
     autoBtn.title = `Scroll through the song at its tempo${t}`;
-  }
-
-  function render(force = false) {
-    const s = song();
-    const k = s ? [s.id, s.chart, s.hearIn, s.playIn, s.minor, prefs.mode] : [null];
-    const same = !force && renderedKey && k.length === renderedKey.length && k.every((v, i) => v === renderedKey[i]);
-    renderTools();
-    if (same) return;
-    const songChanged = !renderedKey || renderedKey[0] !== k[0];
-    renderedKey = k;
-    view = s ? chartView(s, prefs.mode) : null;
-    if (songChanged) {
-      stopAuto();
-      body.scrollTop = 0;
-    }
-    if (!view) {
-      sheet.replaceChildren();
-      sheet.hidden = true;
-      empty.hidden = false;
-      lineCount = 0;
-      setText(titleEl, s ? s.name : '—');
-      setText(keyEl, '');
-      return;
-    }
-    sheet.hidden = false;
-    empty.hidden = true;
-    renderChart(sheet, view.model);
-    lineCount = songLineCount(view.model);
-    setText(titleEl, view.model.title || s.name);
-    const written = view.shift ? ` · written in ${view.sourceKey}` : '';
-    const capo = view.model.capo ? ` · capo ${view.model.capo}` : '';
-    setText(keyEl, `Key ${view.shownKey}${prefs.mode === 'play' ? ' (your hands)' : ''}${written}${capo}`);
-    sheet.dataset.key = view.shownKey;
   }
 
   // ---- open / close
@@ -183,7 +153,7 @@ export function mountChartView(ctx, mounts) {
       savePrefs();
     }
     if (on) render(true);
-    else stopAuto();
+    else core.stopAuto();
   }
   d.listen(toggle, 'click', () => setOpen(!isOpen()));
   d.listen(closeBtn, 'click', () => setOpen(false));
@@ -211,61 +181,11 @@ export function mountChartView(ctx, mounts) {
   };
   d.listen(speedDown, 'click', () => stepSpeed(-1));
   d.listen(speedUp, 'click', () => stepSpeed(1));
-  const page = (dir) => {
-    const by = Math.max(40, body.clientHeight * PAGE_FRACTION) * dir;
-    body.scrollTop = Math.max(0, Math.min(body.scrollHeight - body.clientHeight, body.scrollTop + by));
-    pos = body.scrollTop;
-  };
-  d.listen(pageUp, 'click', () => page(-1));
-  d.listen(pageDown, 'click', () => page(1));
+  d.listen(pageUp, 'click', () => core.page(-1));
+  d.listen(pageDown, 'click', () => core.page(1));
 
-  // ---- auto-scroll: one rAF loop, only while on and the panel is on screen
-  let auto = false;
-  let raf = 0;
-  let last = 0;
-  let pos = 0;
-  const scrollPx = () => Math.max(0, body.scrollHeight - body.clientHeight);
-  const rate = () => {
-    const s = song();
-    return autoScrollRate({ tempo: s ? s.tempo : null, timeSig: s ? s.timeSig : undefined, lines: lineCount,
-      scrollPx: scrollPx(), multiplier: CHART_SPEED_STEPS[prefs.speed] });
-  };
-  function frame(t) {
-    raf = 0;
-    if (!auto) return;
-    if (!panel.isConnected || panel.hidden || panel.offsetParent === null) {
-      stopAuto();
-      return;
-    }
-    const dt = last ? Math.min(0.1, (t - last) / 1000) : 0;
-    last = t;
-    if (Math.abs(body.scrollTop - Math.round(pos)) > 2) pos = body.scrollTop; // a manual scroll wins
-    const max = scrollPx();
-    pos = Math.min(max, pos + rate() * dt);
-    body.scrollTop = pos;
-    if (pos >= max - 0.5) {
-      stopAuto(); // the end of the chart
-      return;
-    }
-    raf = requestAnimationFrame(frame);
-  }
-  function startAuto() {
-    if (auto || !view) return;
-    auto = true;
-    last = 0;
-    pos = body.scrollTop;
-    raf = requestAnimationFrame(frame);
-    renderTools();
-  }
-  function stopAuto() {
-    if (raf) cancelAnimationFrame(raf);
-    raf = 0;
-    if (!auto) return;
-    auto = false;
-    renderTools();
-  }
-  d.add(stopAuto);
-  d.listen(autoBtn, 'click', () => (auto ? stopAuto() : startAuto()));
+  d.add(() => core.destroy());
+  d.listen(autoBtn, 'click', () => core.toggleAuto());
 
   // ---- chart add / replace / remove (frozen under Perform lock)
   let destroyed = false;
@@ -312,7 +232,7 @@ export function mountChartView(ctx, mounts) {
     }
     if (state.settings.performLock) importDlg?.close(); // skeptic V4: Lock freezes Add / Replace, even mid-dialog
     if (isOpen()) render();
-    else renderedKey = null;
+    else core.invalidate();
   });
   d.add(unsub);
 
@@ -329,9 +249,9 @@ export function mountChartView(ctx, mounts) {
     /** Test/debug: what the panel shows. */
     state() {
       return {
-        open: isOpen(), songId: song()?.id ?? null, hasChart: !!view, shownKey: view?.shownKey ?? null,
-        sourceKey: view?.sourceKey ?? null, shift: view?.shift ?? 0, mode: prefs.mode, auto, lines: lineCount,
-        rate: rate(), font: CHART_FONT_STEPS[prefs.font], speed: CHART_SPEED_STEPS[prefs.speed],
+        open: isOpen(), songId: song()?.id ?? null, hasChart: !!core.view, shownKey: core.view?.shownKey ?? null,
+        sourceKey: core.view?.sourceKey ?? null, shift: core.view?.shift ?? 0, mode: prefs.mode, auto: core.auto,
+        lines: core.lines, rate: core.rate(), font: CHART_FONT_STEPS[prefs.font], speed: CHART_SPEED_STEPS[prefs.speed],
       };
     },
     destroy() {

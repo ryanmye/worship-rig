@@ -1066,9 +1066,15 @@ function applyChartView() {
     return Promise.resolve(false);
   }
   if (chartView) return Promise.resolve(true);
-  chartPending ||= loadModule('./views/chart/index.js', 'mountChartView').then((mount) => {
+  // UI v6 U7b: on the v6 Perform the chart is views/v6/chart/ (a sidebar module or the stage); today's view otherwise
+  const v6 = performIsV6;
+  chartPending ||= (v6 ? loadModule('./views/v6/chart/chart.js', 'mountChartV6')
+    : loadModule('./views/chart/index.js', 'mountChartView')).then((mount) => {
     chartPending = null;
     const mounts = performView?.chartMounts; // UI v6 (U1): none while Perform is being swapped
+    if (mount && mounts && !!mounts.v6 !== v6 && store.get().settings.chartView === true && !chartView) {
+      return applyChartView(); // Perform was swapped while the module loaded: the other one
+    }
     if (!mount || chartView || store.get().settings.chartView !== true || !mounts) return !!chartView;
     try {
       chartView = mount(ctx, mounts);

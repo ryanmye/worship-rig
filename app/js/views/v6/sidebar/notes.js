@@ -33,10 +33,23 @@ export default {
       e.preventDefault(); // the controller ignores defaultPrevented keys
       e.stopPropagation();
     });
-    const chart = button(d, '.v6-qb.v6-notes-chart', [h('b', { text: 'Chart' }),
-      h('small', { text: 'coming in 2.1' })], {
+    const chartSub = h('small', { text: 'coming in 2.1' });
+    const chart = button(d, '.v6-qb.v6-notes-chart', [h('b', { text: 'Chart' }), chartSub], {
       disabled: true, title: 'Chord charts come in 2.1',
     });
+    // U7b: with the hidden chart view on (settings.chartView), this opens the Chart module (or the chart on the stage)
+    d.listen(chart, 'click', () => m.openSidebar?.('chart'));
+    let chartOn = false;
+    const renderChart = () => {
+      const on = store.get().settings.chartView === true;
+      if (on === chartOn) return;
+      chartOn = on;
+      chart.disabled = !on;
+      setText(chartSub, on ? 'open the chord chart' : 'coming in 2.1');
+      chart.title = on ? 'Open this song’s chord chart' : 'Chord charts come in 2.1';
+      if (on) chart.dataset.testid = 'v6-notes-chart';
+      else delete chart.dataset.testid;
+    };
     const root = h('div.v6-notes', { 'data-testid': 'v6-notes-mod' }, text, chart);
     el.append(root);
 
@@ -49,7 +62,11 @@ export default {
       setText(text, notes || say('notesEmpty'));
       text.scrollTop = 0;
     }
-    d.add(store.subscribe(() => render()));
+    d.add(store.subscribe(() => {
+      render();
+      renderChart();
+    }));
+    renderChart();
     d.add(onVoiceChange(() => {
       shown = null; // the empty-notes wording follows the voice
       render();

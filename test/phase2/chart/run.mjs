@@ -4,7 +4,10 @@
 //   dialog (a file written for this test, never real lyrics), offers unticked except what we tick, the chart renders,
 //   Perform's Transpose re-keys the chords, big type, auto-scroll, a committed song switch swaps the chart, the flag
 //   off again removes everything; zero console.error and no HTTP ≥ 400.
+//   UI v6 U7b (v6.tests.mjs, both flags on and the combinations): the Chart sidebar module and the stage with mini
+//   faders, text size in %, the Edit chart dialog, iPad layouts (screenshots u7b-*.png, or U7B_SHOTS=<dir>).
 //   node test/phase2/chart/run.mjs      (screenshot → test/phase2/chart/screenshots/chart.png)
+//   CHART_ONLY_TODAY=1 skips the v6 part; CHART_V6_ONLY=<regex> runs only the matching v6 tests (+ the console check)
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -12,6 +15,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.mjs';
+import { v6Tests } from './v6.tests.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -30,7 +34,9 @@ const CHART = ['{title: Paper Boats}', '{key: G}', '{tempo: 76}', verse(1),
   verse(2), '{chorus}', verse(3), '{chorus}', verse(4)].join('\n');
 
 const results = [];
+const V6_ONLY = process.env.CHART_V6_ONLY ? new RegExp(process.env.CHART_V6_ONLY) : null;
 const T = async (name, fn) => {
+  if (V6_ONLY && !(name.startsWith('U7b') && (V6_ONLY.test(name) || /zero console/.test(name)))) return;
   const t0 = Date.now();
   try {
     await fn();
@@ -370,6 +376,11 @@ try {
   await T('zero console.error, no HTTP ≥ 400', async () => {
     assert.deepEqual(errors, []);
   });
+
+  // UI v6 U7b: the chart in the v6 layout (both flags on), its own context (v6.tests.mjs)
+  if (!process.env.CHART_ONLY_TODAY) {
+    await v6Tests({ T, browser, origin, ROOT, APP, createServer, assert, SHOTS });
+  }
 } finally {
   await context.close();
   await browser.close();

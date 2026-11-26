@@ -613,8 +613,12 @@ export function mountPerformV6(root, ctx) {
     get quickOpen() {
       return quick.isOpen;
     },
-    /** The hidden chart view (D7): its toggle goes after Notes, its panel over the board. */
-    chartMounts: { after: bar.notesBtn, stage: board },
+    /**
+     * The hidden chart view (D7): today's toggle goes after Notes and its panel over the board; U7b's v6 chart
+     * (views/v6/chart/, main.js mounts it instead while this Perform is on) uses `v6`: the view context, the sidebar
+     * (a Chart module), the board and the strips area (the chart on the stage), the instrument names.
+     */
+    chartMounts: { after: bar.notesBtn, stage: board, v6: { v, side, board, strips: row.el, names } },
     /** Test hooks. */
     get strips() {
       return row.strips;

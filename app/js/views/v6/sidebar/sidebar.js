@@ -6,8 +6,11 @@
 // (localStorage SIDEBAR_KEY), never in the library. iPad portrait (PORTRAIT_MQ): a wide panel under the strips, no
 // grip.
 // Modules (D15) are self-contained: {id, label, blurb, icon, badge?(state), mount(el, ctx) → {destroy()}}; adding one
-// (Chart in 2.1, Tone) is a row in modules.js, nothing here or in the other modules changes. Only the shown module is
-// mounted; folding the sidebar or switching tabs destroys it (its listeners go with it).
+// (Tone) is a row in modules.js, nothing here or in the other modules changes. Only the shown module is mounted;
+// folding the sidebar or switching tabs destroys it (its listeners go with it).
+// U7b: a module that is loaded with its own flag (Chart, settings.chartView) is added after the sidebar mounts
+// (addModule) and taken away with the flag (removeModule); its place in a saved layout is kept meanwhile
+// (LATE_MODULE_IDS). Such a module may also show itself elsewhere (the chart on the stage): take() / away().
 import { h, setText, disposer, nextId } from '../../components/util.js';
 import { say, onVoiceChange } from '../../components/voice.js';
 import { button, popover } from '../lib.js';
@@ -15,6 +18,12 @@ import { SIDEBAR_MODULES } from './modules.js';
 
 /** localStorage key of the per-device sidebar layout (never exported with the library). */
 export const SIDEBAR_KEY = 'worship-rig.v6.sidebar';
+/**
+ * Modules added after the sidebar mounts (U7b: 'chart', loaded only while settings.chartView is on). A saved layout
+ * keeps their place, hidden state and tab while they are absent; they are never added to a layout that never had them
+ * until they are registered.
+ */
+export const LATE_MODULE_IDS = Object.freeze(['chart']);
 /** Narrowest open sidebar (D16); a drag below it folds the sidebar to the rail. */
 export const SIDEBAR_MIN = 200;
 /** Widest sidebar, as a share of the board (D16: "62 % of the stage"). */
@@ -45,29 +54,39 @@ export function defaultPrefs(ids) {
 /**
  * Stored prefs → valid prefs for these modules: unknown ids dropped, new modules appended (shown), at least one module
  * shown, the tab a shown module, a width ≥ SIDEBAR_MIN or null (default); `smallOpen: true` (opened in a small
- * window before) kept, absent otherwise.
+ * window before) kept, absent otherwise. U7b: ids in `late` (registered later, LATE_MODULE_IDS) keep their place in
+ * the order, their hidden state and the tab when the stored layout has them, but are not added, and never count as the
+ * shown module the sidebar keeps.
  * @param {unknown} raw  parsed localStorage value (anything)
- * @param {string[]} ids
+ * @param {string[]} ids  the registered modules
+ * @param {ReadonlyArray<string>} [late]  modules that may be registered later
  * @returns {ReturnType<typeof defaultPrefs>}
  */
-export function normalizePrefs(raw, ids) {
+export function normalizePrefs(raw, ids, late = []) {
   const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-  const known = new Set(ids);
+  const known = new Set([...ids, ...late]);
   const uniq = (a) => (Array.isArray(a) ? a.filter((x, i) => known.has(x) && a.indexOf(x) === i) : []);
   const order = uniq(o.order);
   for (const id of ids) if (!order.includes(id)) order.push(id); // a module added in a later version goes last
   let hidden = uniq(o.hidden);
-  if (hidden.length >= order.length) hidden = []; // never an empty sidebar
+  if (ids.every((x) => hidden.includes(x))) hidden = hidden.filter((x) => !ids.includes(x)); // never an empty sidebar
   const shown = order.filter((x) => !hidden.includes(x));
+  const reg = shown.filter((x) => ids.includes(x));
   const out = {
     open: typeof o.open === 'boolean' ? o.open : true,
     starts: o.starts === 'collapsed' ? 'collapsed' : 'open',
     width: Number.isFinite(o.width) && o.width >= SIDEBAR_MIN ? Math.round(o.width) : null,
-    tab: shown.includes(o.tab) ? o.tab : shown[0],
+    tab: shown.includes(o.tab) ? o.tab : reg[0],
     order,
     hidden,
   };
   if (o.smallOpen === true) out.smallOpen = true;
+  // U7b: a module's own width (a module with `width`, e.g. Chart), kept only once the player has dragged it
+  if (o.widths && typeof o.widths === 'object' && !Array.isArray(o.widths)) {
+    const w = Object.fromEntries(Object.entries(o.widths)
+      .filter(([k, x]) => known.has(k) && Number.isFinite(x) && x >= SIDEBAR_MIN).map(([k, x]) => [k, Math.round(x)]));
+    if (Object.keys(w).length) out.widths = w;
+  }
   return out;
 }
 
@@ -84,7 +103,7 @@ export function clampWidth(w, stage) {
 
 function loadPrefs(ids) {
   try {
-    return normalizePrefs(JSON.parse(localStorage.getItem(SIDEBAR_KEY) || 'null'), ids);
+    return normalizePrefs(JSON.parse(localStorage.getItem(SIDEBAR_KEY) || 'null'), ids, LATE_MODULE_IDS);
   } catch {
     return defaultPrefs(ids);
   }
@@ -103,14 +122,17 @@ function savePrefs(prefs) {
  * @param {ReturnType<typeof defaultPrefs>} prefs
  * @param {string} id
  * @param {boolean} on
+ * @param {string[]} [ids]  the registered modules (U7b: a late module absent now never counts as the one shown);
+ *   default: every id in the order
  * @returns {ReturnType<typeof defaultPrefs>|null}
  */
-export function prefsWithShown(prefs, id, on) {
+export function prefsWithShown(prefs, id, on, ids = prefs.order) {
   const hidden = prefs.hidden.filter((x) => x !== id);
   if (!on) hidden.push(id);
-  if (hidden.length >= prefs.order.length) return null;
+  const reg = prefs.order.filter((x) => ids.includes(x) && !hidden.includes(x));
+  if (!reg.length) return null;
   const next = { ...prefs, hidden };
-  if (!on && next.tab === id) next.tab = next.order.filter((x) => !hidden.includes(x))[0];
+  if (!on && next.tab === id) next.tab = reg[0];
   return next;
 }
 
@@ -126,9 +148,12 @@ let live = null;
 export function sidebarLayout(mods = SIDEBAR_MODULES) {
   const ids = mods.map((m) => m.id);
   return {
-    mods,
+    /** The live sidebar's modules (U7b: incl. a late one such as Chart), else `mods`. */
+    get mods() {
+      return live ? live.mods() : mods;
+    },
     prefs: () => (live ? live.prefs() : loadPrefs(ids)),
-    commit: (next) => (live ? live.commit(next) : savePrefs(normalizePrefs(next, ids))),
+    commit: (next) => (live ? live.commit(next) : savePrefs(normalizePrefs(next, ids, LATE_MODULE_IDS))),
     get live() {
       return !!live;
     },
@@ -149,6 +174,14 @@ export function customizeList(pb, pd, api) {
   const byId = new Map(api.mods.map((m) => [m.id, m]));
   const ids = api.mods.map((m) => m.id);
   const P = () => api.prefs();
+  // U7b: the order may hold a late module that is absent now (LATE_MODULE_IDS); the list shows the modules there are,
+  // and a reorder keeps the absent one where it was
+  const listed = (order) => order.filter((x) => byId.has(x));
+  const merged = (visible) => {
+    const order = P().order.slice();
+    let k = 0;
+    return order.map((x) => (byId.has(x) ? visible[k++] : x));
+  };
   const list = h('div.v6-cz-list', { role: 'list', 'aria-label': 'Modules, in order' });
   const startOpen = button(pd, '.v6-cz-start', 'Open', { 'data-value': 'open', 'data-testid': 'v6-sb-starts-open' });
   const startCol = button(pd, '.v6-cz-start', 'Collapsed', {
@@ -173,17 +206,17 @@ export function customizeList(pb, pd, api) {
     renderCz();
   };
   const move = (id, by) => {
-    const order = P().order.slice();
+    const order = listed(P().order);
     const i = order.indexOf(id);
     const j = i + by;
     if (i < 0 || j < 0 || j >= order.length) return;
     order.splice(i, 1);
     order.splice(j, 0, id);
-    commit(order);
+    commit(merged(order));
     list.querySelector(`[data-id="${id}"] .v6-cz-${by < 0 ? 'up' : 'dn'}:not(:disabled)`)?.focus();
   };
   const setShown = (id, on) => {
-    const next = prefsWithShown(P(), id, on);
+    const next = prefsWithShown(P(), id, on, ids);
     if (!next) return; // the last shown module stays
     api.commit(next);
     renderCz();
@@ -237,7 +270,7 @@ export function customizeList(pb, pd, api) {
         stop();
         row.classList.remove('dragging');
         const order = [...list.children].map((r) => r.dataset.id);
-        if (order.join() !== P().order.join()) commit(order);
+        if (order.join() !== listed(P().order).join()) commit(merged(order));
       };
       dragStop?.();
       dragStop = stop;
@@ -249,10 +282,11 @@ export function customizeList(pb, pd, api) {
   }
   function renderCz() {
     const prefs = P();
-    const n = prefs.order.length;
-    const vis = prefs.order.filter((x) => !prefs.hidden.includes(x));
-    list.replaceChildren(...prefs.order.map((id) => rows.get(id).row));
-    prefs.order.forEach((id, i) => {
+    const order = listed(prefs.order);
+    const n = order.length;
+    const vis = order.filter((x) => !prefs.hidden.includes(x));
+    list.replaceChildren(...order.map((id) => rows.get(id).row));
+    order.forEach((id, i) => {
       const r = rows.get(id);
       r.up.disabled = i === 0;
       r.dn.disabled = i === n - 1;
@@ -300,15 +334,16 @@ let startedThisPage = false;
  * @param {object} v  the v6 shell's view context (store, controller, engine, ctx, toast, isLocked, snap, sceneLevel,
  *   liveOf, host)
  * @param {{modules?:object[], onChange?:(s:{open:boolean, tab:string, portrait:boolean}) => void}} [o]
- * @returns {{el:HTMLElement, render(state:object):void, open(id?:string):void, collapse():void,
+ * @returns {{el:HTMLElement, render(state:object):void, open(id?:string):void, collapse(tab?:string):void,
+ *            addModule(m:object):void, removeModule(id:string):void, refreshBadges():void,
  *            readonly prefs:object, readonly mounted:string|null, readonly portrait:boolean, destroy():void}}
  */
 export function rightSidebar(v, o = {}) {
-  const mods = o.modules || SIDEBAR_MODULES;
+  const mods = (o.modules || SIDEBAR_MODULES).slice(); // U7b: addModule / removeModule change it
   const byId = new Map(mods.map((m) => [m.id, m]));
-  const ids = mods.map((m) => m.id);
+  const ids = () => mods.map((m) => m.id);
   const d = disposer();
-  let prefs = loadPrefs(ids);
+  let prefs = loadPrefs(ids());
   const mq = typeof window.matchMedia === 'function' ? window.matchMedia(PORTRAIT_MQ) : null;
   let portrait = !!mq?.matches;
   if (!startedThisPage) {
@@ -320,7 +355,34 @@ export function rightSidebar(v, o = {}) {
   let lastState = v.store.get();
 
   const save = () => savePrefs(prefs);
-  const shown = () => prefs.order.filter((id) => !prefs.hidden.includes(id));
+  // U7b: only registered modules show (a late one keeps its place in prefs.order while it is absent)
+  const shown = () => prefs.order.filter((id) => byId.has(id) && !prefs.hidden.includes(id));
+  /** A module showing itself elsewhere (U7b: the chart on the stage), so the sidebar does not land on it. */
+  const isAway = (id) => {
+    try {
+      return !!byId.get(id)?.away?.();
+    } catch {
+      return false;
+    }
+  };
+  /** The module the sidebar shows: the chosen tab while it is there and not away, else the first that is. */
+  const tabNow = () => {
+    const list = shown();
+    if (list.includes(prefs.tab) && !isAway(prefs.tab)) return prefs.tab;
+    return list.find((id) => !isAway(id)) || list[0];
+  };
+  /**
+   * The player asked for module `id` (a tab, a rail icon, the song bar): a module that shows itself elsewhere does so
+   * (U7b: the chart on the stage) and the sidebar is left as it is.
+   */
+  const taken = (id) => {
+    try {
+      return !!byId.get(id)?.take?.();
+    } catch (err) {
+      console.warn('[ui] sidebar module take failed', err);
+      return false;
+    }
+  };
   /**
    * New prefs from the customize list (the ⋯ popover or Settings › Perform layout, U6): stored, then the tabs / rail
    * rebuilt and the layout applied when the order or the shown modules changed (Starts only applies at the next start).
@@ -335,7 +397,7 @@ export function rightSidebar(v, o = {}) {
     renderBadges(lastState);
     applyLayout();
   }
-  const me = { prefs: () => prefs, commit: commitPrefs };
+  const me = { prefs: () => prefs, commit: commitPrefs, mods: () => mods.slice() };
   live = me;
 
   // ---------------------------------------------------------------- DOM
@@ -422,7 +484,7 @@ export function rightSidebar(v, o = {}) {
   // goes on to ⟨ / the open tab, as → on the grip already does. A pointer click leaves it alone: Chrome then drops it
   // to the page, where Space stays the sustain pedal (a focused ⟨ would take Space and reopen the sidebar).
   const byKeys = (e) => e.detail === 0;
-  const focusTab = () => tabBtns.get(prefs.tab)?.focus({ preventScroll: true });
+  const focusTab = () => tabBtns.get(tabNow())?.focus({ preventScroll: true });
   d.listen(railList, 'click', (e) => {
     const b = e.target.closest('button[data-id]');
     if (!b) return;
@@ -469,6 +531,22 @@ export function rightSidebar(v, o = {}) {
 
   // ---------------------------------------------------------------- layout: open / rail / width / portrait
   const stageWidth = () => el.parentElement?.clientWidth || window.innerWidth;
+  // U7b (mockup chart.html "Chart in the sidebar": the sidebar widens while Chart is the open tab): a module with a
+  // `width` (px) gets its own width while it shows, the player's drag on it is kept for it (prefs.widths[id])
+  const ownWidth = () => {
+    const m = prefs.open ? byId.get(tabNow()) : null;
+    return m && Number.isFinite(m.width) ? m : null;
+  };
+  const wantWidth = () => {
+    const m = ownWidth();
+    if (m) return prefs.widths?.[m.id] ?? m.width;
+    return prefs.width ?? sidebarDefaultWidth();
+  };
+  const setWidth = (px) => {
+    const m = ownWidth();
+    if (m) prefs.widths = { ...prefs.widths, [m.id]: px };
+    else prefs.width = px;
+  };
   function applyLayout() {
     el.classList.toggle('rail', !prefs.open);
     el.classList.toggle('wide', portrait);
@@ -477,25 +555,26 @@ export function rightSidebar(v, o = {}) {
       el.style.removeProperty('width');
     } else {
       const sw = stageWidth();
-      const w = clampWidth(prefs.width ?? sidebarDefaultWidth(), sw);
+      const w = clampWidth(wantWidth(), sw);
       el.style.width = `${w}px`;
       grip.setAttribute('aria-valuenow', String(w));
       grip.setAttribute('aria-valuemax', String(clampWidth(Infinity, sw)));
       grip.setAttribute('aria-valuetext', `${w} px wide`);
     }
-    if (prefs.open) mount(prefs.tab);
+    const tab = tabNow();
+    if (prefs.open) mount(tab);
     else unmount();
     for (const [id, b] of tabBtns) {
-      const on = id === prefs.tab;
+      const on = id === tab;
       b.classList.toggle('on', on);
       b.setAttribute('aria-selected', String(on));
       b.tabIndex = on ? 0 : -1;
     }
-    for (const [id, b] of railBtns) b.classList.toggle('act', id === prefs.tab);
-    o.onChange?.({ open: prefs.open, tab: prefs.tab, portrait });
+    for (const [id, b] of railBtns) b.classList.toggle('act', id === tab);
+    o.onChange?.({ open: prefs.open, tab, portrait });
   }
   function selectTab(id) {
-    if (!shown().includes(id)) return;
+    if (!shown().includes(id) || taken(id)) return;
     prefs.tab = id;
     save();
     applyLayout();
@@ -503,6 +582,7 @@ export function rightSidebar(v, o = {}) {
   /** Open the sidebar (on module `id`, shown again if the player had hidden it). */
   function open(id) {
     if (id && byId.has(id)) {
+      if (taken(id)) return;
       if (prefs.hidden.includes(id)) {
         prefs.hidden = prefs.hidden.filter((x) => x !== id);
         buildHeads();
@@ -515,8 +595,10 @@ export function rightSidebar(v, o = {}) {
     save();
     applyLayout();
   }
-  function collapse() {
+  /** Fold to the rail; `tab` (U7b) also makes that module the one ⟨ opens. */
+  function collapse(tab) {
     czPop?.close();
+    if (tab && byId.has(tab)) prefs.tab = tab;
     prefs.open = false;
     save();
     applyLayout();
@@ -551,12 +633,12 @@ export function rightSidebar(v, o = {}) {
     drag = null;
     el.classList.remove('resizing', 'will-fold');
     if (commit && g.fold) {
-      prefs.width = Math.max(SIDEBAR_MIN, Math.round(g.w0));
+      setWidth(Math.max(SIDEBAR_MIN, Math.round(g.w0)));
       collapse();
       return;
     }
     if (commit && Math.abs(g.w - g.w0) >= 1) {
-      prefs.width = g.w;
+      setWidth(g.w);
       save();
     }
     applyLayout();
@@ -567,7 +649,7 @@ export function rightSidebar(v, o = {}) {
   d.listen(grip, 'keydown', (e) => {
     if (portrait || !prefs.open || e.altKey || e.metaKey || e.ctrlKey) return;
     const sw = stageWidth();
-    const w = clampWidth(prefs.width ?? sidebarDefaultWidth(), sw);
+    const w = clampWidth(wantWidth(), sw);
     const step = e.shiftKey ? BIG_STEP : STEP;
     let next = null;
     if (e.key === 'ArrowLeft') next = w + step;
@@ -582,7 +664,7 @@ export function rightSidebar(v, o = {}) {
       railOpen.focus();
       return;
     }
-    prefs.width = clampWidth(next, sw);
+    setWidth(clampWidth(next, sw));
     save();
     applyLayout();
   });
@@ -713,6 +795,33 @@ export function rightSidebar(v, o = {}) {
     if (!destroyed && prefs.open && !portrait) applyLayout();
   });
 
+  /**
+   * U7b: register a module after mounting (one loaded with its own flag). A layout that had it gets it back in its
+   * place; one that never had it gets it at the end, shown.
+   * @param {object} m  a module ({id, label, …, mount}); ignored when one with that id is there
+   */
+  function addModule(m) {
+    if (!m || !m.id || byId.has(m.id) || destroyed) return;
+    mods.push(m);
+    byId.set(m.id, m);
+    prefs = normalizePrefs(prefs, ids(), LATE_MODULE_IDS);
+    save();
+    buildHeads();
+    renderBadges(lastState);
+    applyLayout();
+  }
+  /** U7b: take a module away (its flag went off); its place in the layout is kept for when it comes back. */
+  function removeModule(id) {
+    if (!byId.has(id) || destroyed) return;
+    if (mods.length <= 1) return;
+    if (cur?.id === id) unmount();
+    mods.splice(mods.findIndex((m) => m.id === id), 1);
+    byId.delete(id);
+    buildHeads();
+    renderBadges(lastState);
+    applyLayout();
+  }
+
   return {
     el,
     render(state) {
@@ -722,6 +831,18 @@ export function rightSidebar(v, o = {}) {
     },
     open,
     collapse,
+    addModule,
+    removeModule,
+    /** U7b: a module's badge changed outside the store (the chart moved to / from the stage). */
+    refreshBadges: () => renderBadges(lastState),
+    /** The module the sidebar shows (or would show when opened). */
+    get tab() {
+      return tabNow();
+    },
+    /** The registered module ids, in registry order. */
+    get modules() {
+      return ids();
+    },
     get prefs() {
       return JSON.parse(JSON.stringify(prefs));
     },

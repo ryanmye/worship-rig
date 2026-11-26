@@ -332,6 +332,35 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   edits, Back / saved position; pack update during a trial; Keep removes fields; Next from a trial steps from the
   replaced entry). Open: O1 Esc in the search closes the browser, O2 Back can't restore a gap, O5 choices to confirm.
 
+## U7b status (builder, 2026-11-26; lane-u7b from v2-native 8bd0d2f; no skeptic pass yet)
+
+- Built: the chart in the v6 layout, only while `settings.uiV6` and `settings.chartView` are both on.
+  `app/js/views/v6/chart/` (`chart.js` mountChartV6: placement, the sidebar module, the stage, ⌘ keys; `panel.js` the
+  one chart panel; `minis.js` mini faders; `edit.js` the Edit chart dialog), `app/styles-v6-chart.css`; shared
+  `views/chart/core.js` (today's render cache / auto-scroll / paging, now used by today's view too) and
+  `import.js chartReview` (today's review + save); `logic.js` percent / Fit / jump helpers; sidebar late modules
+  (`addModule` / `removeModule`, `take` / `away` / `width`). Interface notes: CONTRACT_CHANGES "## UI v6 U7b (chart)".
+- Wired: Chart as a sidebar tab (540 px while it shows, own drag width) and on the stage (strips → live mini faders,
+  sidebar folded with Chart lit, ▤ Strips, ⇥ Sidebar / ⤢ Stage, per device); key on show incl. D12, Heard / Hands,
+  auto-scroll + speed, jumps, reading line; text size in % (steps, % / ⌘0 → 100, Fit, ⌘+ / ⌘−, ⌘-scroll, pinch,
+  "Text 150%" readout, per place, px index migrated once); Edit chart (source / live preview / status line / offers
+  unticked / Save / Cancel / Remove / Add a chart); Lock rules; iPad landscape = Mac, portrait = music stand; the
+  Notes module's Chart button; the v6 Edit's Chart button.
+- Not drawn (deviations from the mockups): the snapshots row stays on the stage (the mockup drops it there; the player
+  can fold it); ▤ Strips also in landscape (the mockup has no way back there); Edit chart… also in the sidebar (after
+  the scroll controls); the Edit dialog's "Paste…" (paste works in the box) is "Choose file…", Insert section is a
+  select, and the review (offers) sits under the text; chords are the lyric's size (today's sheet; the mockup draws
+  them at 90 %); the readout is "Text 150%" without the hint line; no level meters on the mini faders.
+- Choices to confirm with Ryan: the default placement is the sidebar (a new tab behaves like every tab); the rail's
+  Chart / the Chart tab put it up on the stage when that is where this device shows it; the stage and the sidebar
+  keep separate sizes (100 % / 75 %); the migration fills the stage size only; one jump row that scrolls sideways.
+- Gates: chart 33/33 (today's 15 + U7b 18), ui-v6 68/68 (purity vs 8bd0d2f identical), ui-v6-edit 32/32, settings
+  111/111, shell unit 364/364, unit 685/685 (12 skipped as before); engine / store / controller / shared unchanged.
+  Screenshots: `/home/claude/design-out/u7b/` (`u7b-stage-1280`, `u7b-sidebar-1280`, `u7b-wide-sidebar-1280`,
+  `u7b-150-1280`, `u7b-edit-1280`, `u7b-stage-1180`, `u7b-stage-820`; mockups in `mock/`).
+- Not verified: the Mac app (⌘+ / ⌘− reach the page because the app menu has no zoom roles; ⌘-scroll on a real
+  trackpad), a real iPad (pinch was CDP touch emulation), VoiceOver.
+
 ## Open questions carried into the build (decide, log in DECISIONS, tell Ryan)
 
 - **Snapshots vs today's scenes.** Today: up to 3 scenes per song, levels / ON / drone level / wheel only. The v6

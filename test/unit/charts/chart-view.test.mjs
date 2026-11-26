@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import {
   keyInfo, chartSourceKey, chartShift, chartView, parseStoredChart, lineSegments, songLineCount, secondsPerLine,
   autoScrollRate, stepIndex, importOffers, offerWrites, readImport, csvPlaceholders, FALLBACK_TEMPO, BARS_PER_LINE,
-  CHART_FONT_STEPS, CHART_SPEED_STEPS, CHART_SPEED_DEFAULT,
+  CHART_FONT_STEPS, CHART_SPEED_STEPS, CHART_SPEED_DEFAULT, CHART_PCT_STEPS, CHART_BASE_PX, CHART_SIDE_PCT, pctFromPx,
+  validPct, stepPct, pctPx, lineWidthCh, longestLineCh, fitPct, jumpLabel, parseStoredChart as parsed,
 } from '../../../app/js/views/chart/logic.js';
 import { createStore, memoryStorage } from '../../../app/js/store.js';
 
@@ -245,4 +246,53 @@ test('shift: a relative-key chart keeps the song’s key signature; a parallel o
       }
     }
   }
+});
+
+// ---------------------------------------------------------------- UI v6 U7b: text size in percent, Fit, jumps (D16)
+
+test('U7b percent steps: 100 % is today’s default px; the px index migrates to the nearest step', () => {
+  assert.deepEqual([...CHART_PCT_STEPS], [50, 60, 75, 90, 100, 110, 125, 150, 175, 200]);
+  assert.equal(CHART_BASE_PX, 24);
+  assert.equal(CHART_SIDE_PCT, 75);
+  assert.deepEqual(CHART_FONT_STEPS.map(pctFromPx), [60, 90, 100, 110, 150, 175, 200, 200]);
+  assert.equal(pctFromPx(NaN), 100);
+  assert.deepEqual([pctPx(100), pctPx(75), pctPx(50), pctPx(200), pctPx(33)], [24, 18, 12, 48, 24]);
+  assert.deepEqual([validPct(110), validPct(111), validPct('100'), validPct(undefined, 75)], [110, 100, 100, 75]);
+});
+
+test('U7b stepPct: one step up / down, clamped at 50 / 200; between steps goes to the next one that way', () => {
+  assert.deepEqual([stepPct(100, 1), stepPct(100, -1), stepPct(200, 1), stepPct(50, -1)], [110, 90, 200, 50]);
+  assert.deepEqual([stepPct(80, 1), stepPct(80, -1), stepPct(NaN, 1)], [90, 75, 100]);
+  let p = 50;
+  const up = [];
+  while (p < 200) up.push((p = stepPct(p, 1)));
+  assert.deepEqual(up, [60, 75, 90, 100, 110, 125, 150, 175, 200]);
+});
+
+test('U7b Fit: the longest drawn line in character cells, then the biggest step that fits', () => {
+  const text = '{c: V}\n[G]Hi [D/F#]there\n[Em]A much longer lyric line here\n{c: soft}\n';
+  const m = parsed({ text, format: 'chordpro' });
+  const lines = m.sections.flatMap((s) => s.lines);
+  // "Hi " (3) under G+gap (2) → 3; "there" (5) under D/F#+gap (5) → 5
+  assert.equal(lineWidthCh(lines.find((l) => /there/.test(l.lyric))), 8);
+  assert.equal(longestLineCh(m), 'A much longer lyric line here'.length);
+  assert.equal(lineWidthCh({ comment: true, lyric: 'soft' }), 4);
+  assert.equal(lineWidthCh({ lyric: '', chords: [{ at: 0, chord: 'G' }, { at: 0, chord: 'D' }] }), 4);
+  // 40 cells of 14.4 px (24 px mono ≈ .6 em): 576 px at 100 %
+  assert.equal(fitPct(40, 14.4, 576), 100);
+  assert.equal(fitPct(40, 14.4, 575), 90);
+  assert.equal(fitPct(40, 14.4, 2000), 200);
+  assert.equal(fitPct(40, 14.4, 100), 50, 'the smallest when even that does not fit');
+  assert.equal(fitPct(0, 14.4, 500), 100, 'nothing to fit');
+});
+
+test('U7b jump labels: kind letter + number (V1, C, B), else the name’s first word', () => {
+  assert.equal(jumpLabel({ kind: 'verse', name: 'Verse 2' }), 'V2');
+  assert.equal(jumpLabel({ kind: 'verse', name: 'Verse' }), 'V');
+  assert.equal(jumpLabel({ kind: 'chorus', name: 'Chorus' }), 'C');
+  assert.equal(jumpLabel({ kind: 'bridge', name: '' }), 'B');
+  assert.equal(jumpLabel({ kind: 'prechorus', name: 'Pre-chorus 1' }), 'PC1');
+  assert.equal(jumpLabel({ kind: 'intro', name: 'Intro 2' }), 'Intro');
+  assert.equal(jumpLabel({ kind: 'other', name: 'Ending vamp' }), 'Ending');
+  assert.equal(jumpLabel({ kind: 'other', name: '' }, 3), '4');
 });

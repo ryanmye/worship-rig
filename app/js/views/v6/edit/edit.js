@@ -309,10 +309,12 @@ export function mountEditV6(el, ctx) {
   });
   chartBtn.addEventListener('click', () => {
     if (!ctx.setView?.('perform')) return;
-    // the chart lives on Perform (views/chart, D7); open it there (U7 brings the chart editor)
+    // the chart lives on Perform (views/chart, D7); open it there. U7b: on the v6 Perform it is the sidebar's Chart
+    // (its rail button opens the sidebar on it, or puts it up on the stage when that is where this device shows it)
     queueMicrotask(() => {
       const t = document.querySelector('#view-perform [data-testid="chart-toggle"]');
       if (t && t.getAttribute('aria-pressed') !== 'true') t.click();
+      else if (!t) document.querySelector('#view-perform [data-testid="v6-rb-chart"]')?.click();
     });
   });
   const headRow = headHost.querySelector('.ev2-song-head') || headHost;

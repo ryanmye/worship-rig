@@ -16,6 +16,14 @@ export const CHART_ACCEPT = '.cho,.chopro,.chordpro,.chord,.crd,.pro,.txt,.csv,t
 /** Chart type sizes in px (big-type steps); CHART_FONT_DEFAULT is the index of the default. */
 export const CHART_FONT_STEPS = Object.freeze([16, 20, 24, 28, 34, 40, 48, 56]);
 export const CHART_FONT_DEFAULT = 2;
+/**
+ * UI v6 U7b (D16 "Chart text size is one tap away, in percent"): the text size is a percent of CHART_BASE_PX, the
+ * default type size above (100 % = CHART_FONT_STEPS[CHART_FONT_DEFAULT]); the sidebar opens at CHART_SIDE_PCT.
+ */
+export const CHART_BASE_PX = CHART_FONT_STEPS[CHART_FONT_DEFAULT];
+export const CHART_PCT_STEPS = Object.freeze([50, 60, 75, 90, 100, 110, 125, 150, 175, 200]);
+export const CHART_PCT_DEFAULT = 100;
+export const CHART_SIDE_PCT = 75;
 /** Auto-scroll speed multipliers; CHART_SPEED_DEFAULT is the index of ×1. */
 export const CHART_SPEED_STEPS = Object.freeze([0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2]);
 export const CHART_SPEED_DEFAULT = 5;
@@ -324,4 +332,117 @@ export function csvPlaceholders(songs, existingNames) {
     add.push({ name, notes: bits.join(' · ') });
   }
   return { add, skipped };
+}
+
+// ---------------------------------------------------------------- UI v6 U7b: text size in percent, Fit, jumps
+
+/**
+ * The nearest percent step to a size in px (ties go to the smaller step). U7b migrates today's px index
+ * (CHART_FONT_STEPS, localStorage 'worship-rig.chart' `font`) to a percent with this, once.
+ * @param {number} px
+ * @returns {number} one of CHART_PCT_STEPS
+ */
+export function pctFromPx(px) {
+  const want = (Number(px) / CHART_BASE_PX) * 100;
+  if (!Number.isFinite(want)) return CHART_PCT_DEFAULT;
+  let best = CHART_PCT_STEPS[0];
+  for (const s of CHART_PCT_STEPS) if (Math.abs(s - want) < Math.abs(best - want) - 1e-9) best = s;
+  return best;
+}
+
+/**
+ * A stored percent → a valid step (anything else → `def`).
+ * @param {unknown} v
+ * @param {number} [def=CHART_PCT_DEFAULT]
+ * @returns {number}
+ */
+export const validPct = (v, def = CHART_PCT_DEFAULT) => (CHART_PCT_STEPS.includes(v) ? v : def);
+
+/**
+ * The next percent step up or down from `pct` (clamped at 50 / 200). A value between steps goes to the next step in
+ * that direction.
+ * @param {number} pct
+ * @param {number} dir −1 / +1
+ * @returns {number}
+ */
+export function stepPct(pct, dir) {
+  const p = Number(pct);
+  const S = CHART_PCT_STEPS;
+  if (!Number.isFinite(p)) return CHART_PCT_DEFAULT;
+  if (dir > 0) return S.find((s) => s > p + 1e-9) ?? S[S.length - 1];
+  if (dir < 0) return [...S].reverse().find((s) => s < p - 1e-9) ?? S[0];
+  return validPct(p);
+}
+
+/** Type size in px for a percent. @param {number} pct */
+export const pctPx = (pct) => (CHART_BASE_PX * validPct(pct)) / 100;
+
+/**
+ * How wide a model line is drawn, in character cells (render.js: monospace; a segment is as wide as its lyric piece
+ * or its chord plus the 1ch gap after it, whichever is wider). Comments and tab / grid lines count their text.
+ * @param {object} line model line
+ * @param {boolean} [raw=false] a tab / grid section line (drawn as text)
+ * @returns {number}
+ */
+export function lineWidthCh(line, raw = false) {
+  if (!line) return 0;
+  if (line.comment || raw) return typeof line.lyric === 'string' ? line.lyric.length : 0;
+  const segs = lineSegments(line);
+  const hasChords = segs.some((s) => s.chord);
+  return segs.reduce((n, s) => n + Math.max(s.text.length, hasChords && s.chord ? s.chord.length + 1 : 0), 0);
+}
+
+/**
+ * The widest line of a chart, in character cells (lineWidthCh). Fit sizes the text so this line fits.
+ * @param {object|null} model
+ * @returns {number}
+ */
+export function longestLineCh(model) {
+  let n = 0;
+  for (const s of (model && model.sections) || []) {
+    if (!s) continue;
+    const raw = s.kind === 'tab' || s.kind === 'grid';
+    for (const l of s.lines || []) n = Math.max(n, lineWidthCh(l, raw));
+  }
+  return n;
+}
+
+/**
+ * Fit (D16): the biggest percent step whose longest line fits the width.
+ * @param {number} chars longest line in character cells (longestLineCh)
+ * @param {number} chPx width of one character cell at 100 %, px
+ * @param {number} width the room for a line, px
+ * @returns {number} a CHART_PCT_STEPS value (the smallest when even that does not fit; 100 % with nothing to fit)
+ */
+export function fitPct(chars, chPx, width) {
+  const c = Number(chars);
+  const w = Number(width);
+  const cw = Number(chPx);
+  if (!(c > 0) || !(cw > 0) || !(w > 0)) return CHART_PCT_DEFAULT;
+  let best = CHART_PCT_STEPS[0];
+  for (const s of CHART_PCT_STEPS) if (c * cw * (s / 100) <= w + 0.5) best = s;
+  return best;
+}
+
+const JUMP_SHORT = Object.freeze({
+  verse: 'V', chorus: 'C', prechorus: 'PC', bridge: 'B', tag: 'Tag', intro: 'Intro', outro: 'Outro',
+  interlude: 'Int', instrumental: 'Inst', tab: 'Tab', grid: 'Grid',
+});
+
+/**
+ * A section jump button's short label (mockup chart.html: Intro · V1 · C · V2 · C · B): the kind's letter plus the
+ * number in the section's name ("Verse 2" → V2); a named section of another kind keeps its first word (≤ 6 letters).
+ * @param {{kind?:string, name?:string}} s
+ * @param {number} i its index (the fallback label is i + 1)
+ * @returns {string}
+ */
+export function jumpLabel(s, i = 0) {
+  const name = s && typeof s.name === 'string' ? s.name.trim() : '';
+  const short = s && JUMP_SHORT[s.kind];
+  if (short) {
+    const num = name.match(/(\d+)\s*$/);
+    return num && short.length <= 2 ? `${short}${num[1]}` : short;
+  }
+  if (name) return name.split(/\s+/)[0].slice(0, 6);
+  return String(i + 1);
 }

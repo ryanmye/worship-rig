@@ -8879,3 +8879,96 @@ today's (Settings' Song bank list, no browser). No SCHEMA change, no engine chan
   - F4: `store.neighbors()` from a trial song steps from the replaced entry (Next no longer goes to the first song).
   - Gates: bank-trial 8/8 (incl. a 3600-step property against a reference library), shell unit 377/377,
     ui-v6-bank 16/16, ui-v6 68/68, settings 111/111, ui-core 78/78, migration-1x 107 + 8, patch-packs.pw 5/5.
+
+## UI v6 U7b (chart)
+
+The chord chart (D7, still the hidden 2.1 feature) in the v6 layout: a right-sidebar module and "on the stage"
+(native DECISIONS D12, D16 "Chart placement is the player's choice" + "Chart text size is one tap away, in percent";
+`native/docs/lanes/UI6-build-plan.md` U7; mockups `chart.html`, `dialogs.html` "Edit chart"). Only while
+`settings.uiV6` **and** `settings.chartView` are on. No store, controller, engine or `shared/` change; no new setting.
+
+- **Flag combinations.** v6 off + chart on = today's hidden chart view, unchanged (`views/chart/index.js`; its
+  15 checks pass as before). v6 on + chart off = nothing chart-related is fetched, drawn or listened to (tested
+  against the base build's v6: 135 requests, 16 store listeners, 2014 elements, identical). Both on = this.
+  - main.js `applyChartView` (5 lines): on the v6 Perform it lazy-imports `views/v6/chart/chart.js`
+    `mountChartV6(ctx, chartMounts)` instead of `views/chart/index.js`; a Perform swapped while the module loaded
+    retries with the other one. `__rig.views.chart` is the mounted one (the v6 one has `state()` with `v6: true`,
+    `show()`, `setPlacement(p)`, `closeStage()`, `openEdit()`, `panel`, `editor`).
+  - `views/v6/perform.js` `chartMounts` gains `v6: {v, side, board, strips, names}` (one line).
+- **Shared chart core** (refactor, no behaviour change for today's view): `views/chart/core.js`
+  `createChartCore({store, panel, body, sheet, empty, mode, speed, onTools, onView})` = today's render cache (song,
+  chart, keys, mode), auto-scroll loop (rate from `autoScrollRate`), paging and `scrollTo`; plus
+  `CHART_PREFS_KEY` / `readStoredPrefs()` / `writeStoredPrefs(prefs)`. index.js uses it; its saves now merge into
+  the stored object, so the v6 fields survive today's view (and the reverse). `views/chart/import.js`
+  `chartReview(ctx, songId)` = today's review (summary, warnings, unticked offers, "written in", tempo ask, song-list
+  placeholders) and save (`store.setChart` + only the ticked offers, refused under Lock); `openChartImport` builds the
+  same dialog around it (same DOM and test ids).
+- **Pure additions** (`views/chart/logic.js`): `CHART_BASE_PX` (24 = today's default step),
+  `CHART_PCT_STEPS` (50 60 75 90 100 110 125 150 175 200), `CHART_PCT_DEFAULT` (100), `CHART_SIDE_PCT` (75),
+  `pctFromPx`, `validPct`, `stepPct`, `pctPx`, `lineWidthCh`, `longestLineCh`, `fitPct`, `jumpLabel`.
+- **Sidebar module API, late modules** (`views/v6/sidebar/sidebar.js`): `rightSidebar` gains `addModule(m)`,
+  `removeModule(id)`, `refreshBadges()`, `collapse(tab?)`, getters `tab` / `modules`. A module may have
+  `take()` (asked for by a tab / rail icon / `open(id)`: true = it showed itself elsewhere, the sidebar is left as it
+  is), `away()` (showing elsewhere: the sidebar does not land on it) and `width` (px while it shows; a drag on it is
+  kept in `prefs.widths[id]`). `LATE_MODULE_IDS = ['chart']`: `normalizePrefs(raw, ids, late)` keeps a late module's
+  place, hidden state and tab while it is absent and never adds it to a layout that never had it (so a device that
+  never turned the chart on stores exactly what it did); `prefsWithShown(prefs, id, on, ids)` counts registered
+  modules only; `customizeList` lists the registered modules and keeps an absent one's place on reorder;
+  `sidebarLayout().mods` is the live sidebar's list (Settings › Perform layout lists Chart while it is there).
+  With the default two arguments every function behaves as before.
+- **Placement** (`views/v6/chart/chart.js`), per device in today's key `localStorage['worship-rig.chart']`, beside
+  today's fields: `placement` ('side' default | 'stage'), `stage` (up on the stage), `pct` (stage %), `sidePct`
+  (sidebar %, default 75), shared `mode` / `speed`. Never in the library (tested).
+  - **Sidebar**: the Chart module (`blurb` "chord chart, follows the key", note icon), `width: 540` (mockup
+    `.chartw`); its header wraps (title + key line; Heard / Hands · text size · ⤢ Stage; ▶ Scroll − 1.0× + · Edit
+    chart…; jumps).
+  - **Stage**: the strips area hides (`.v6-board.v6-chart-on`), `.v6-chstage` = mini faders + the chart; the sidebar
+    folds to its rail, the rail's Chart lit (badge `live`, accent plate). The Chart tab / rail icon puts it up
+    there; ▤ Strips (`v6-chart-strips`) brings the strips back; ⇥ Sidebar moves it (sidebar opened on Chart);
+    ⤢ Stage moves it back. The Drone etc. icons still open the sidebar beside the stage chart.
+  - **Mini faders** (`views/v6/chart/minis.js`): per instrument ON tile + level fader (dB) + name, through the same
+    view-context calls as the strip (`v.setMuted` → `slots.<i>.muted`, `v.setSlotGain` → `slots.<i>.gain`, via
+    `controller.scenes.adjust` while a snapshot plays); live under Lock; a song switch or slot map ends a drag. Four
+    columns wide (three ≤ 1240 px), then they scroll.
+  - **iPad portrait** (sidebar.js `PORTRAIT_MQ`): "music stand": the mini faders in a row above the chart
+    (horizontal faders) with ▤ Strips at its end; the wheel column and the sidebar panel hide while it is up. A
+    rotation rebuilds the faders. Landscape (1180 × 820) is the Mac layout. At ≤ 1100 px landscape (the Mac's
+    1024 × 700 minimum) two fader columns and "⇥" without its word keep the stage's tools on one row (tested).
+- **Panel** (`views/v6/chart/panel.js`, one component for both places): title + "Key C · written in G · 72 bpm · 4/4"
+  (D12: an Em chart on a G song shows "Key Em", matched through the relative key), Heard / Hands, the text size group,
+  Edit chart…, the placement button, ▶ Scroll / speed, section jump buttons (`jumpLabel`: V1 C V2 C B …; one row,
+  scrolling sideways), the sheet (today's `render.js`) under a reading line at 38 % of its height: the line at it is
+  lit (`.now`), its section is current (heading accent, jump button lit); a jump puts the section's first line on it.
+  ↑ ↓ PgUp PgDn Home End scroll the focused chart (never the mod wheel).
+- **Text size in percent** (D16): 100 % = 24 px (today's default); small A / % / big A always visible, tapping the %
+  or ⌘0 = 100 %; Fit = `fitPct(longestLineCh, one mono cell at 100 %, the body's inner width)`; ⌘+ (= / + / numpad)
+  and ⌘− (Ctrl too) on the shown chart, only on Perform with Settings and every on-screen modal closed and no text
+  field focused; ⌘- or Ctrl-scroll / trackpad pinch (a wheel with ctrlKey) = a step per 60 px of delta; two-finger
+  touch pinch = a step per 18 % change in the fingers' distance (touchmove prevented while pinching; the body is
+  `touch-action: pan-x pan-y`); "Text 150%" shows for 1.3 s. A size change keeps the line at the reading line in
+  place. Stage and sidebar each keep their own percent.
+  - **Migration (once)**: no `pct` stored → today's px index (`font`) becomes the nearest step (16 → 60, 20 → 90,
+    24 → 100, 28 → 110, 34 → 150, 40 → 175, 48 / 56 → 200) and is written; later index changes don't move it. Today's
+    view keeps reading and writing its `font`.
+- **Edit chart** (`views/v6/chart/edit.js` `openChartEditor`, lazy on first use, appended in the v6 view):
+  ChordPro / Chords over words (how the text is read; detected until chosen), Insert section ▾, Choose file… (same
+  limits as today), the text; under it today's review (`chartReview`: offers unticked, never applied unless ticked);
+  on the right the chart as it will show (`chartView` of a draft, live 200 ms after typing); the foot line
+  "Written in G · shown in C (the song’s key) · n problems" (parser warnings + a size error), Remove chart (a second
+  tap within 3 s), Cancel, Save chart. Save with an edit not yet previewed shows the preview first (as today's).
+  Empty song: "Add a chart" (the same dialog, empty). Modal (`aria-modal`; Tab stays inside; Esc closes without a
+  Panic). Lock (chart-view V4): Edit chart… / Add a chart… disabled, `openEdit` refused, Lock coming on closes the
+  dialog, Save / Remove refuse; reading, scrolling, Heard / Hands, the size and the placement stay live.
+- **Elsewhere**: the Notes module's "Chart · coming in 2.1" becomes "Chart · open the chord chart"
+  (`v6-notes-chart`) while the chart flag is on (unchanged while off). The v6 Edit's Chart button clicks the rail's
+  Chart when today's toggle is not there.
+- **CSS**: `app/styles-v6-chart.css` (every selector under `.v6`), linked by chart.js with today's
+  `styles-chart.css` (the sheet's classes) and removed with it. Contrast ≥ 4.5:1 for the sheet, header, jumps and
+  mini names on every pickable theme (tested; the lit jump button is accent text on the plain button: a tinted fill
+  was 4.25:1 on Sanctuary Day).
+- Tests: `test/phase2/chart/v6.tests.mjs` (18 checks, run by `chart/run.mjs` after today's 15 in its own 1280 × 800
+  Sanctuary context; `CHART_V6_ONLY=<regex>`, `CHART_ONLY_TODAY=1`, `U7B_SHOTS=<dir>`); chart suite timeout 9 min
+  in run-all. `test/unit/charts/chart-view.test.mjs` + 4 (percent steps / migration, stepPct, Fit, jump labels).
+  ui-v6's D24.7 Esc check now types into the v6 Edit chart dialog (on the v6 Perform the chart is the v6 one).
+- Gates: chart 33/33, ui-v6 68/68 (flag-off purity vs 8bd0d2f identical), ui-v6-edit 32/32, settings 111/111,
+  shell unit 364/364, unit 685 pass / 0 fail. Engine unchanged.
