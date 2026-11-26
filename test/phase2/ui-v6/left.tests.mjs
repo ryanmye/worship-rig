@@ -9,6 +9,15 @@ import path from 'node:path';
 import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.mjs';
 
 /**
+ * Wait for the sheet's open animation (the theme's fade, e.g. Sanctuary's 160 ms sanct-fade): a screenshot taken at
+ * once showed the sheet half transparent over the strips (skeptic UI6-U4 F2).
+ * @param {import('playwright').Page} p
+ */
+const settledAnim = (p) => p.evaluate(() => Promise.all(document.querySelector('.qs').getAnimations({ subtree: true })
+  .filter((a) => Number.isFinite(a.effect?.getComputedTiming().endTime))
+  .map((a) => a.finished.catch(() => {}))));
+
+/**
  * @param {object} x  run.mjs's helpers: {T, page, browser, origin, ev, until, tid, song, settled, setSlots, SHOTS,
  *   assert}
  */
@@ -378,6 +387,7 @@ export async function leftTests(x) {
         const qs = await rect('.qs');
         assert.ok(qs.b <= h && qs.r <= w, `${w}×${h}: the sheet stays in the window (${qs.r}, ${qs.b})`);
         await clearToasts();
+        await settledAnim(page);
         if (n !== 4) await page.screenshot({ path: path.join(SHOTS, `u4-quick-${w}x${h}.png`) });
         await page.click(tid('v6-quick'));
         await until(() => window.__rig.views.v6.quickOpen === false);
@@ -433,6 +443,7 @@ export async function leftTests(x) {
           return { r: b.right, b: b.bottom, scroll: document.documentElement.scrollWidth - 820 };
         });
         assert.ok(qs.r <= 820 && qs.b <= 1180 && qs.scroll === 0, JSON.stringify(qs));
+        await settledAnim(p);
         await p.screenshot({ path: path.join(SHOTS, 'u4-quick-820x1180.png') });
         // Edit (today's) keeps today's minimum width: the override is the v6 Perform's only
         await p.evaluate(() => window.__rig.ctx.setView('edit'));
