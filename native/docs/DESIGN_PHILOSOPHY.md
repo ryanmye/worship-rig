@@ -20,6 +20,17 @@ changes it.
 - **Recording ideas** waits for 2.y. The instrument controls need to get simpler first. Keep the thread open in
   BACKLOG.
 
+## Clarifications (Ryan, 2026-11-26, second round)
+
+- **Saving: both.**
+  - The living setup sticks: whatever Ryan last set up is there next time.
+  - He can also save named snapshots and flip between them.
+- **Stage use: other people too.** At worship and fellowship nights, someone who didn't set it up may run it.
+  - The main controls must be obvious without explanation.
+  - The dangerous ones (Panic, Lock, delete) must be hard to hit by accident.
+- **What Ryan does at the desk:** practises freely, plays with pads and drone underneath, and plays along with songs.
+  Recording ideas waits for 2.y.
+
 ## Principles
 
 1. **One sound, front and centre.**
