@@ -3,9 +3,11 @@
 //                       newest BACKUPS_KEEP = 10; rig-unreadable-*.json newest 5; newest by mtime, then name.
 //   nativeShell({...})  RigLibrary.swift's contract (RigBackups + RigLibrary): the window.rig polyfill
 //                       {isElectron:false, platform, backupNow, latestBackup, onMenu} + __rigShell.menu; own rotation
-//                       newest 3 / unreadable 5; latestBackup = a staged file once, else the newest of our own and the
-//                       Electron backups; the macOS first-launch offer (pristine probe, the answer remembered); the
-//                       picker / AirDrop stage (JSON-parsed first, as `stage(fileURL:)`).
+//                       newest 10 (lane F1, O-AW-F1) / unreadable 5; latestBackup = a staged file once, else the
+//                       newest of our own and the Electron backups that parses as a library (lane F1:
+//                       `RigBackups.isLibrary`; truncated, newer-schema and non-library files are skipped); the macOS
+//                       first-launch offer (pristine probe, the answer remembered); the picker / AirDrop stage
+//                       (JSON-parsed first, as `stage(fileURL:)`).
 // Both write real files in a temp dir, with an explicit, increasing mtime so "newest" is deterministic.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -152,16 +154,30 @@ export function nativeShell({ ownDir, electronDirs = [], platform = 'darwin', co
     },
     menuReady: () => menu.length > 0,
   };
-  const electronEntries = () => electronDirs.flatMap((d) => list(d)).sort((x, y) => y.mtime - x.mtime);
+  const newerFirst = (x, y) => y.mtime - x.mtime || y.name.localeCompare(x.name); // RigBackups.newerFirst
+  const electronEntries = () => electronDirs.flatMap((d) => list(d)).sort(newerFirst);
+  /** RigBackups.isLibrary (lane F1, review E5 open item 3): a JSON object that is a whole library, schema <= 2. */
+  const isLibrary = (text) => {
+    let o;
+    try {
+      o = JSON.parse(text);
+    } catch {
+      return false;
+    }
+    if (!o || typeof o !== 'object' || Array.isArray(o) || o.kind === 'song') return false;
+    if (!((o.songs && typeof o.songs === 'object') || o.kind === 'library')) return false;
+    return !('schema' in o) || (typeof o.schema === 'number' && Number.isFinite(o.schema) && o.schema <= 2);
+  };
   const payload = (e) => {
     const buf = fs.readFileSync(e.path);
     if (buf.length > 16 * 1024 * 1024) return null;
-    const text = buf.toString('utf8'); // String(data:encoding:.utf8): any UTF-8 file, valid JSON or not
+    const text = buf.toString('utf8');
+    if (!isLibrary(text)) return null;
     const m = /^\{"origin":"([^"]+)"/.exec(text.slice(0, 200));
     return { path: e.path, origin: m ? m[1] : null, savedAt: e.mtime, text };
   };
   const latestAnywhere = () => {
-    for (const e of [...list(ownDir), ...electronEntries()].sort((x, y) => y.mtime - x.mtime)) {
+    for (const e of [...list(ownDir), ...electronEntries()].sort(newerFirst)) {
       const p = payload(e);
       if (p) return p;
     }
@@ -184,7 +200,7 @@ export function nativeShell({ ownDir, electronDirs = [], platform = 'darwin', co
         return { path: f };
       }
       const f = writeAged(rotationName(ownDir), text);
-      rotate(ownDir, null, 3);
+      rotate(ownDir, null, 10); // RigBackups.keepLibrary (lane F1, O-AW-F1; was 3)
       return { path: f };
     },
     async latestBackup() {
@@ -209,16 +225,17 @@ export function nativeShell({ ownDir, electronDirs = [], platform = 'darwin', co
     dialogs,
     defaults,
     ownList: () => list(ownDir),
-    /** macOS offerFirstLaunchImport → askIfPristine (readyProbe) → stageNewestAndImport. @returns {Promise<string>} */
+    /** macOS offerFirstLaunchImport → askIfPristine (readyProbe) → stageOfferedAndImport. @returns {Promise<string>} */
     async firstLaunch(store) {
       if (defaults.get(KEY)) return 'answered before';
-      const newest = electronEntries()[0];
+      const newest = electronEntries().find((e) => payload(e)); // lane F1: the newest Electron library; staged below
       if (!newest) return 'no electron backup';
       if (!(store && shell.menuReady() && store.pristine === true)) return 'not pristine';
       const yes = ask('Import your Worship Rig library?', 'Found a library saved by the previous Worship Rig');
       defaults.set(KEY, true);
       if (!yes) return 'declined';
-      const r = latestAnywhere();
+      // review F1: the file the offer dated, not latestAnywhere() (which also reads our own, maybe newer, rotation)
+      const r = payload(newest) || { error: `${path.basename(newest.path)} is no longer a library` };
       if (r.error) return r.error;
       staged = r;
       shell.menu('importLatestBackup');

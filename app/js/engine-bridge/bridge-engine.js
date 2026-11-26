@@ -207,13 +207,19 @@ export class BridgeEngine extends EventTarget {
     this._loaded = new Map(); // pseudo sample url -> true
     this._failed = new Set();
     /**
-     * O-AW-4 / review S-cue-go S3: the core answers `get sampleStatus` but never emits `load {phase:'samples'}`, so
-     * after each preload / prepare the shim asks for the sampler ids it touched. One request in flight; ids asked
-     * for meanwhile ride the next one (`_ssWant`), so concurrent preloads / prepares cost at most one more trip.
+     * O-AW-4 / review S-cue-go S3: the shim asks `get sampleStatus` for the sampler ids a preload / prepare
+     * touched (before lane F1 the core never emitted `load {phase:'samples'}`; now it does, and this stays as the
+     * fallback). One request in flight; ids asked for meanwhile ride the next one (`_ssWant`), so concurrent
+     * preloads / prepares cost at most one more trip.
      */
     this._ssWant = new Set();
     this._ssNext = null; // the queued round's promise (null = none queued)
     this._ssBusy = null; // the round in flight
+    // O-AW-4: id -> rounds in flight that asked for it; a `samples` event for one re-asks it. Counted, not one
+    // round's Set: a round can start while another is in flight (review F1: a transport that delivers a queued
+    // event inside post() re-enters _refreshSampleStatus before `_ssBusy` is set), and the later round's Set used to
+    // replace the earlier one's, so an event behind the earlier round's older reply was not re-asked
+    this._ssAsking = new Map();
     this._warned = new Set();
     this._pendingSets = [];
     this._setScheduled = false;
@@ -523,7 +529,16 @@ export class BridgeEngine extends EventTarget {
         return this._refreshInstruments().then(() => this._emit('instruments', { count: this._instruments.length }),
           (err) => this._warn(`engine.listInstruments failed: ${err && err.message}`));
       case 'samples': {
-        for (const [id, ok] of Object.entries(m.loaded || {})) this._markSamples(id, !!ok, false);
+        // O-AW-4: the core sends this itself now (after a preload's / prepare's decodes, after a pin re-warm). A
+        // `get sampleStatus` round in flight for one of these ids may hold an OLDER snapshot that is applied after
+        // this event (its reply is handled in a microtask, after the rest of its batch), so those ids ride one more
+        // round: the last word is always the newest answer.
+        const again = [];
+        for (const [id, ok] of Object.entries(m.loaded || {})) {
+          this._markSamples(id, !!ok, false);
+          if (this._ssAsking.has(id)) again.push(id);
+        }
+        if (again.length) this._refreshSampleStatus(again);
         return undefined;
       }
       default: return undefined;
@@ -590,8 +605,18 @@ export class BridgeEngine extends EventTarget {
   _sampleStatusRound(list) {
     if (!list.length) return Promise.resolve();
     const patches = list.map((id) => ({ slots: [{ instrument: { type: 'sampler', id } }] }));
+    // O-AW-4: until this round's answer is applied, a `samples` event for one of these ids re-asks it (`_onLoad`)
+    for (const id of list) this._ssAsking.set(id, (this._ssAsking.get(id) || 0) + 1);
+    const answered = () => {
+      for (const id of list) {
+        const n = (this._ssAsking.get(id) || 1) - 1;
+        if (n > 0) this._ssAsking.set(id, n);
+        else this._ssAsking.delete(id);
+      }
+    };
     return this._req('get', { what: 'sampleStatus', patches }).then(
       (r) => {
+        answered();
         const loaded = r && Array.isArray(r.loaded) ? r.loaded : null;
         const failed = r && Array.isArray(r.failed) ? r.failed : [];
         if (!loaded || loaded.length !== list.length) {
@@ -600,7 +625,10 @@ export class BridgeEngine extends EventTarget {
         }
         list.forEach((id, i) => this._markSamples(id, loaded[i] === true, failed[i] === true));
       },
-      (err) => this._warn(`engine sampleStatus failed: ${err && err.message}`),
+      (err) => {
+        answered();
+        this._warn(`engine sampleStatus failed: ${err && err.message}`);
+      },
     );
   }
 

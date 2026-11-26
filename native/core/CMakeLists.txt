@@ -129,13 +129,16 @@ if(RIG_BUILD_TESTS)
   foreach(suite ${_suites})
     if(suite STREQUAL "realtime")
       add_test(NAME rt.realtime COMMAND rig_tests -ts=realtime)
-      set_tests_properties(rt.realtime PROPERTIES LABELS rt)
+      # Lane F1 (CORE1 open 3): xrun and render-time bounds; alone under `ctest -j`, not next to the heavy suites
+      set_tests_properties(rt.realtime PROPERTIES LABELS rt RUN_SERIAL TRUE)
     else()
       add_test(NAME unit.${suite} COMMAND rig_tests -ts=${suite})
       set_tests_properties(unit.${suite} PROPERTIES LABELS unit)
-      if(suite STREQUAL "core3")
-        # CORE3: asserts tick gaps <= 50 ms on the realtime control loop; not next to the CPU benchmark suites
-        set_tests_properties(unit.core3 PROPERTIES RUN_SERIAL TRUE)
+      if(suite STREQUAL "core3" OR suite MATCHES "^runtime")
+        # CORE3 / Lane F1: tick-gap bounds on the realtime control loop (core3, runtime_preload), `active` counts
+        # (runtime); not next to the CPU benchmark suites. CI runs ctest serially anyway: there the tests' own
+        # idle-relative bounds carry the load (test_core3.cpp, test_runtime_preload.cpp gapBound)
+        set_tests_properties(unit.${suite} PROPERTIES RUN_SERIAL TRUE)
       endif()
     endif()
   endforeach()

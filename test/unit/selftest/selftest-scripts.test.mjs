@@ -35,6 +35,29 @@ function swiftConst(name) {
   return m[1];
 }
 
+/**
+ * The fixture file RigBackups.latestAnywhere serves: the newest (mtime, then name: `newerFirst`; a git export gives
+ * both the same mtime) that parses as a library. Mirrors `RigBackups.isLibrary` (review E5 open item 3).
+ * @returns {string} file name
+ */
+function servedFixture() {
+  const names = fs.readdirSync(fixtureDir).filter((f) => /^rig-\d{8}-\d{6}(-\d+)?\.json$/.test(f)).sort().reverse();
+  for (const n of names) {
+    let doc;
+    try {
+      doc = JSON.parse(fs.readFileSync(path.join(fixtureDir, n), 'utf8'));
+    } catch {
+      continue;
+    }
+    if (!doc || typeof doc !== 'object' || Array.isArray(doc) || doc.kind === 'song') continue;
+    const songs = doc.songs && typeof doc.songs === 'object';
+    if (!songs && doc.kind !== 'library') continue;
+    if ('schema' in doc && !(typeof doc.schema === 'number' && doc.schema <= SCHEMA)) continue;
+    return n;
+  }
+  return null;
+}
+
 function makeStore() {
   return createStore({ storage: memoryStorage(), requestIdle: null, warn: () => {}, autoFlush: false });
 }
@@ -157,10 +180,11 @@ test('bootProbe: a rejected __rig.ready, a page that never sets __rig, and a rea
 });
 
 test('fixture: a 1.x Electron rotation backup that RigBackups accepts', () => {
-  const files = fs.readdirSync(fixtureDir).filter((f) => f.endsWith('.json'));
-  assert.equal(files.length, 1);
+  const files = fs.readdirSync(fixtureDir).filter((f) => f.endsWith('.json')).sort();
+  assert.deepEqual(files, ['rig-20261101-120000.json', 'rig-20261201-120000.json']);
   // RigBackups.nameRE and origin(of:) in RigLibrary.swift
-  assert.match(files[0], /^rig-\d{8}-\d{6}(-\d+)?\.json$/);
+  for (const f of files) assert.match(f, /^rig-\d{8}-\d{6}(-\d+)?\.json$/);
+  assert.equal(servedFixture(), files[0], 'the good, older file is the one latestAnywhere serves');
   const text = fs.readFileSync(path.join(fixtureDir, files[0]), 'utf8');
   const m = /^\{"origin":"([^"]+)"/.exec(text.slice(0, 200));
   assert.equal(m && m[1], 'http://127.0.0.1:8438');
@@ -172,7 +196,7 @@ test('fixture: a 1.x Electron rotation backup that RigBackups accepts', () => {
 
 test('migration: the fixture through store.importJSON (as importLatestBackup does), then importProbe', async () => {
   const marker = swiftConst('defaultMarker');
-  const file = fs.readdirSync(fixtureDir).find((f) => f.endsWith('.json'));
+  const file = servedFixture();
   const text = fs.readFileSync(path.join(fixtureDir, file), 'utf8');
   const store = makeStore();
   const win = { __rig: { store } };
@@ -194,9 +218,32 @@ test('migration: the fixture through store.importJSON (as importLatestBackup doe
   assert.equal(st.setlistOrder.length, 1);
 });
 
+test('fixture (review E5 item 3): the newer rotation file is truncated; served, it would fail the migration step',
+  () => {
+    const newest = fs.readdirSync(fixtureDir).filter((f) => f.endsWith('.json')).sort().at(-1);
+    assert.notEqual(newest, servedFixture());
+    const text = fs.readFileSync(path.join(fixtureDir, newest), 'utf8');
+    assert.throws(() => JSON.parse(text), SyntaxError, 'not JSON: the Swift JSONSerialization check skips it');
+    const good = fs.readFileSync(path.join(fixtureDir, servedFixture()), 'utf8');
+    assert.ok(good.startsWith(text), 'a cut-off copy of the good file (a write interrupted half-way)');
+    const store = makeStore();
+    const r = store.importJSON(text, { replace: true });
+    assert.equal(r.ok, false, 'importLatestBackup would refuse it, and the marker would never arrive');
+    assert.equal(store.pristine, true);
+  });
+
+test('RigBackups constants track the JS side: maxSchema = store SCHEMA, keepLibrary = main.js BACKUPS_KEEP', () => {
+  const lib = fs.readFileSync(path.join(root, 'native/apple/Sources/Shared/RigLibrary.swift'), 'utf8');
+  const num = (name) => Number((new RegExp(`static let ${name} = (\\d+)`).exec(lib) || [])[1]);
+  assert.equal(num('maxSchema'), SCHEMA);
+  const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+  assert.equal(num('keepLibrary'), Number(/const BACKUPS_KEEP = (\d+);/.exec(main)[1]));
+  assert.match(lib, /prune\(dir, prefix: nil, keep: keepLibrary\)/);
+});
+
 test('importProbe: waits for the import to land', async () => {
   const marker = swiftConst('defaultMarker');
-  const file = fs.readdirSync(fixtureDir).find((f) => f.endsWith('.json'));
+  const file = servedFixture();
   const text = fs.readFileSync(path.join(fixtureDir, file), 'utf8');
   const store = makeStore();
   setTimeout(() => store.importJSON(text, { replace: true }), 250);

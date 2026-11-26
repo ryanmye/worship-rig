@@ -7596,3 +7596,98 @@ Review `native/docs/reviews/D8-D9.md` (K1–K3). store.js and controller.js; SCH
     edited library.
   - `kept.test.mjs`: the two quota-policy tests now use a grown copy of the same library as the newer copy.
 
+
+## Lane F1: the native core emits `load {phase:'samples'}`; native backups skip bad files and keep 10 (native/core/src/samples/cache_service.*, src/bridge/bridge.cpp, app/js/engine-bridge/bridge-engine.js, native/apple/Sources/Shared/RigLibrary.swift; no op, reply or contract-minor change)
+
+- **What changed (core, O-AW-4; ENGINE_CONTRACT 6.5 `load`, SHELL.md G5, review S-cue-go S3 / R7).** The core sends
+  `{"v":1,"ev":"load","phase":"samples","loaded":{<sampler id>: bool}}` itself, from the control thread:
+  - once per `cache preload` whose patches have a sampler, when its decodes are done (before `load {phase:'preload'}`
+    and before the reply; a deferred sampler reads `false`);
+  - once per `prepare` with a sampler slot, when its samples have settled (before the CORE2A / CORE3 reply; at once
+    when they are warm);
+  - at the end of a pin re-warm pass that decoded anything, for every pinned sampler (R7: a pinned decode deferred at
+    the cache cap reads "ready" when it lands, with no further preload).
+
+  `true` means what `get sampleStatus` `loaded` means for a one-slot patch: every sample decoded or failed. No lock,
+  nothing on the audio path, no change to what is decoded or pinned (the status is read only).
+- **Why no minor bump.** The shape was already contract v1 (6.5 and `engine-api.json` `bridge.events`); only the
+  mock sent it. The shim accepts it with or without the event, so a UI does not need to know which core it has.
+- **Shim (bridge-engine.js).** The `get sampleStatus` fallback stays (DECISIONS O-AW-4), with one fix: a `samples`
+  event for an id whose round is in flight re-asks that id once. The round's reply is applied in a microtask, after
+  the rest of its batch, so a reply computed before a decode landed, batched ahead of that decode's event, used to
+  win with the older `false`. A prepare whose samplers the event made known now sends no `sampleStatus` (one fewer
+  request per cold switch).
+- **Apple shell (review E5 open items 3, 4; unbuilt here, CI `mac-check` builds it).** `RigBackups.latestAnywhere()`
+  serves the newest file that passes `isLibrary` (parses as a JSON object, as `stage(fileURL:)` checks; a whole
+  library; `schema` absent or ≤ 2). Truncated, newer-schema and non-library files are skipped, so an older good one
+  is offered; the first-launch offer dates that same file; ties in mtime go to the later name. The library rotation
+  keeps 10 (`keepLibrary`, as main.js `BACKUPS_KEEP`; was 3): DECISIONS O-AW-F1 (tier 2, over a separate pre-import
+  file). The E4 self-test fixture has a newer truncated `rig-20261201-120000.json`, so its `migration` step fails if
+  that file is served.
+- **Numbers (2 CPUs shared with another agent, load 3-4, `-j2`, one heavy step at a time).**
+  - ctest g++ 13 Release **72/72** run (the 12 `golden.*` skip: no golden WAVs in this worktree; the renders below
+    cover them). clang++-20 Release `-Werror` **72/72**: `unit.core3`'s 16-organ tick gap read 80 ms > 50 ms once
+    under `-j2` and passed alone (no sampler in that case, so this code does not run there). 0 warnings either way.
+  - ASan+UBSan and TSan on the 10 touched suites (`bridge`, `bridge-conformance`, `core2b`, `core3`, `offline`,
+    `runtime_cache`, `runtime_preload`, `samples_cache`, `samples_service`, `t00c`): **10/10** each, no sanitizer
+    report. One tick-gap bound per build missed once at load ~4 (ASan `core3` 364 > 250 ms; TSan `runtime_preload`'s
+    CORE2A prepare case 287 > 250 ms) and passed on the re-run.
+  - Fixtures: all **112 byte-identical to `4d4f477`** (g++), g++ = clang-20 **112/112**, `parity.mjs --twin` exit 0
+    (112 at the manifest tier, 110 exact: not `synth-dx-epiano`, `bend-modes`, as before).
+  - JS: `node --test test/unit/engine-bridge/*.test.mjs` with `RIG_DEVHOST` **140 / 0 / 0**; `run-all --only unit`
+    **667 pass / 0 fail / 11 skip**; migration-1x **51 + 1 todo / 0**, browser **3 / 0**; selftest-scripts 11/11.
+  - ui-core on `rig-devhost --no-adapter` (once): **78/78**, no bridge error reply, the two known warns, sanitizer
+    none, 3089 inbound requests (3093 at the S re-check).
+- **Timing bounds (tests and CMake only; no engine code, no fixture moved).** On CI's shared `macos-15` runner, where
+  ctest runs serially, `unit.runtime_preload` failed 2 of the last 4 `v2-native` runs: 103 and 125 ms against 100 ms,
+  both in the longest windows (6.7 s and 7.5 s of decoding). The same runs' shorter windows read 43-60 ms. Once,
+  `rt.realtime` failed too, with 6 xruns against 3. Linux passed. These were box noise, not a held loop, so both
+  bounds now scale with the box's own noise (the CORE3 O2 pattern):
+  - `test_runtime_preload.cpp` `gapBound`. `boot()` measures the loop's largest tick gap over 2 idle s. The bound is
+    the stated 100 ms (250 ms sanitized) when that gap is at most 40 ms. Otherwise it is **k = 3 ×** the idle gap,
+    clamped to [100, **250**] ms ([250, 1000] sanitized). The 100 ms rule is itself 3 ticks, so k = 3 reads as "at most
+    two of the loop's own worst ticks missed". CORE3 used 1.5, but these windows run 2-12 s against a 2 s sample, and
+    the tail grows with the window. At macOS gaps of 43-60 ms, k = 3 gives 129-180 ms. The cap keeps a 300 ms hold
+    failing on any box. The bound also covers the input-latency checks (`play` and superseded-prepare replies) and all
+    10 checks, including the O-AW-4 case.
+  - `test_realtime.cpp`. The test now allows `3 + lateWakes` xruns, capped at 50. `lateWakes` counts the host
+    thread's 1.5 ms sleeps that ended more than one quantum (2.67 ms) late. They are counted on the same thread over
+    the same 3 s, but outside `rig_render`, so neither a slow render nor a blocking one can raise the allowance. k is
+    1: a stall must land inside the sub-ms render to cost an xrun, but anywhere in the 1.5 ms sleep to make a wakeup
+    late.
+    - Measured here, idle: xruns 0, late 0-1. Under two `yes` loops: xruns 0-1, late 2-7.
+    - Why not an idle baseline taken first: it misses load that changes during the 3 s.
+    - Why not only `RUN_SERIAL`: CI's ctest is already serial.
+  - CMake: `rt.realtime`, `unit.runtime`, `unit.runtime_cache` and `unit.runtime_preload` are `RUN_SERIAL`, like
+    `unit.core3`. This matters only under local `ctest -j2`.
+  - **Mutations** (env-gated, built in `build-f1`, then reverted: `bridge.cpp` and `engine.cpp` md5 back to their
+    pre-mutation values). Each run was done idle and under two `yes` loops.
+    - A 300 ms sleep in `opPrepare`: the 5 cases that prepare in their window fail, idle (301-324 ms against 100) and
+      loaded (302-318 against 144).
+    - The same sleep in `cache preload`: the other 2 cases fail too (300-302 ms). So every case fails under at least
+      one of the two.
+    - A render that sleeps 3 ms per quantum: 1125-1129 xruns against an allowance of 3-5.
+    - A 4 ms stall every 32nd quantum: 35-36 xruns against 4-5.
+  - **Unmutated runs.** `runtime_preload` and `realtime` pass 5/5 idle (idle gap 34-40 ms, bound 100-121 ms) and 3/3
+    under two `yes` loops (idle gap 44-56 ms, bound 132-168 ms; switch gaps 45-48 ms).
+  - **ctest at `-j2`.** g++ 13 Release: 72/72 run, 12 `golden.*` skipped, twice. clang++-20 Release `-Werror`: 72/72,
+    0 warnings.
+  - **Fixtures.** All 112 `rig_render` outputs are byte-identical to `build-f1/golden-out`. Six clang-20 renders
+    match g++.
+  - **Not verified on macOS here.** Both tests print the idle gap and bound, or the late wakeups and allowance, as a
+    `MESSAGE`. CI's `--output-on-failure` shows them whenever the suite fails, which gives the runner's numbers.
+- **Skeptic review (native/docs/reviews/F1.md), fixes on top.** No op, reply, event shape or engine code changed.
+  - Shim: `_ssAsking` is now a per-id count of rounds in flight (`Map`), not one round's `Set`. A transport that
+    delivers a queued event inside `post()` (the sync loopback; the core's own transports never do) re-entered
+    `_refreshSampleStatus` before `_ssBusy` was set, so two rounds ran at once and the later round's Set replaced the
+    earlier one's: an event behind the earlier round's older reply was not re-asked. Found by the new seeded fuzz
+    (`test/unit/engine-bridge/sample-status-fuzz.test.mjs`, 2 × 600 interleavings; both modes failed before the fix,
+    first at seeds 174 and 100258; 0 after; a control run with the re-ask disabled diverges).
+  - Swift: Yes on the first-launch offer stages the Electron file the dialog dated (`stageOfferedAndImport`), not
+    `latestAnywhere()`, which also reads the app's own rotation; `payload` skips a file whose size is over `maxBytes`
+    before reading it. JS stand-in and a migration-1x test (fails on the old stand-in) updated.
+  - `test_realtime.cpp`: the xrun allowance cap is 20 (was 50), and a separate check allows at most 4 of the 8
+    note-on render calls (and the next two) to carry an xrun, whatever the load. Measured: a 4 ms block per note-on
+    gave 8 xruns and passed the old check at 5+ late wakeups (allowance 9 under two `yes` loops, 46 under four); a
+    4 ms stall every 32nd quantum (35 xruns) passed it under four `yes` loops (allowance 36-44). Clean runs: 0-2
+    xruns, 0-1 note xruns, idle, under two and under four `yes` loops.

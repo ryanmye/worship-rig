@@ -408,7 +408,7 @@ Checks, in order (`required: false` ones are reported, not gated):
 | `store` | `__rig.store` exists, `get().schema === 2`, at least one song, `loadInfo.status` `ok` or `fresh` |
 | `audio` | the page's `audio start` reached the shell: ≥ 12000 frames on the null output within 5 s, 0 render errors, a `state` event `running` |
 | `note` (not required) | `play {e:'input'}` + note 60 vel 100 through `rig_post` on the song the page committed: peak > -100 dBFS within 0.6 s |
-| `migration` (with `RIG_ELECTRON_BACKUPS`) | `RigLibrary.offerFirstLaunchImport` (newest backup there, pristine library, auto Yes) staged the file, `controller.onMenu('importLatestBackup')` imported it, and a song named the marker is in the library with schema 2 within 10 s |
+| `migration` (with `RIG_ELECTRON_BACKUPS`) | `RigLibrary.offerFirstLaunchImport` (newest backup there that parses: the fixture's newer truncated file is skipped, review E5 item 3; pristine library, auto Yes) staged the file, `controller.onMenu('importLatestBackup')` imported it, and a song named the marker is in the library with schema 2 within 10 s |
 | `midi` (not required) | `MIDIClientCreateWithBlock` returned 0 |
 | `webcontent` | no WebContent process termination |
 | `console` | zero page errors: `console.error` calls, uncaught errors, failed resource loads, unhandled rejections, CSP violations (a document-start hook posts each one to `rigSelfTest`) |

@@ -1,8 +1,10 @@
 // Realtime mode: control thread + a fake host thread calling rig_render with odd block sizes. Run under ASan/UBSan
 // and TSAN (presets asan / tsan) as the "TSAN soak"; this is the short version (3 s of audio).
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -76,18 +78,48 @@ TEST_SUITE("realtime") {
     std::atomic<bool> stop{false};
     std::atomic<long> frames{0};
     std::atomic<float> peak{0};
+    std::atomic<int> lateWakes{0};
+    // Review F1: the xruns of the render calls where a note-on landed (`voices` rose in the call's meter snapshot), so
+    // a render that blocks once per note fails however many late wakeups the box shows. A note's window is its call and
+    // the next two (the quantum's overrun reaches the snapshot one quantum later, and a short call may render none).
+    std::atomic<int> notesLanded{0}, noteXruns{0};
     std::thread host([&] {  // the platform audio thread: 441-frame blocks, paced at ~5x realtime
       const unsigned blocks[] = {441, 256, 128, 441, 100, 512};
       std::vector<float> l(1024), r(1024);
       float *p[2] = {l.data(), r.data()};
+      rig_meters hm{};
+      std::uint32_t prevVoices = 0, prevXruns = 0;
+      int window = 0;
+      bool hit = false;
       for (unsigned i = 0; !stop; ++i) {
         const unsigned n = blocks[i % 6];
         REQUIRE(rig_render(rt.e, p, 2, n, 0) == RIG_OK);
+        hm.struct_size = RIG_METERS_SIZE_V1;
+        if (rig_get_meters(rt.e, &hm) == RIG_OK) {
+          if (hm.voices > prevVoices) {
+            ++notesLanded;
+            window = 3;
+            hit = false;
+          }
+          if (window > 0) {
+            if (hm.xruns > prevXruns && !hit) {
+              hit = true;
+              ++noteXruns;
+            }
+            --window;
+          }
+          prevVoices = hm.voices;
+          prevXruns = hm.xruns;
+        }
         float m = peak.load();
         for (unsigned k = 0; k < n; ++k) m = std::fmax(m, std::fabs(l[k]));
         peak = m;
         frames += n;
+        const auto s0 = std::chrono::steady_clock::now();
         std::this_thread::sleep_for(std::chrono::microseconds(1500));
+        // Lane F1 timing bounds: this thread kept off its CPU for over one quantum, outside rig_render (box noise)
+        const auto over = std::chrono::steady_clock::now() - s0 - std::chrono::microseconds(1500);
+        if (over > std::chrono::nanoseconds(static_cast<long long>(128 * 1e9 / 48000))) ++lateWakes;
       }
     });
     for (int n = 0; n < 8; ++n) {
@@ -112,7 +144,27 @@ TEST_SUITE("realtime") {
     // times with no defect (passes alone). Reported, not asserted; every Release / RelWithDebInfo build still checks.
     MESSAGE("xruns under a sanitizer (not a timing build): " << m.xruns);
 #else
-    CHECK(m.xruns <= 3);  // wall-clock overrun count on a shared 2-CPU box: preemption can trip it once or twice
+    // Lane F1 timing bounds. `xruns` counts quanta whose render took over 2.67 ms of wall clock, so a quantum the
+    // scheduler interrupted counts as one; the stated 3 failed on CI's shared macos-15 runner (6, serial ctest). The
+    // allowance is 3 plus the host thread's own late wakeups (a 1.5 ms sleep over one quantum late), counted on the
+    // same thread over the same 3 s but outside rig_render, so neither a slow nor a blocking render can raise it.
+    // k = 1: a stall has to land in the sub-ms render to cost an xrun but anywhere in the 1.5 ms sleep to make a
+    // wakeup late, so noise xruns should not outnumber late wakeups (here under two `yes` loops: xruns 0-1, late
+    // 3-7; idle 0 and 0). Capped at 20 (review F1; was 50): a render slower than realtime overruns all ~1125 quanta,
+    // one that stalls every 32nd quantum 35-36. Under four `yes` loops the box shows 24-56 late wakeups with 0-1
+    // noise xruns, so with the cap at 50 that stall passed (allowance 36-44); CI's worst noise reading is 6.
+    const unsigned allowed = std::min(3u + static_cast<unsigned>(lateWakes.load()), 20u);
+    MESSAGE("xruns " << m.xruns << " over " << frames.load() / 128 << " quanta; host late wakeups " << lateWakes.load()
+                     << "; allowed " << allowed << "; note-on calls " << notesLanded.load() << ", with an xrun "
+                     << noteXruns.load());
+    CHECK(m.xruns <= allowed);
+    // Review F1: not scaled by the box's noise. At most half the note-ons may share their window with an xrun: noise
+    // lands in a 3-call window with p ~ 3 x noise xruns / ~460 calls (20 noise xruns: P(>= 5 of 8) ~ 0.2 %; measured
+    // 0-1 of 8 idle, under two and under four `yes` loops), while a render that blocks 4 ms per note-on hits 8 of 8
+    // and passed the total above whenever the box showed >= 5 late wakeups (review F1 mutation: allowance 9 under two
+    // `yes` loops, 46 under four)
+    CHECK(notesLanded.load() >= 6);  // the detector saw the notes (8 note-ons, one voice each)
+    CHECK(noteXruns.load() <= 4);
 #endif
   }
 

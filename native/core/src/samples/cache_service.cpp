@@ -1,5 +1,6 @@
 #include "samples/cache_service.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -347,6 +348,7 @@ void CacheServiceImpl::setLowResource(bool on) {
 void CacheServiceImpl::rewarmPins() {
   if (rewarming_ || pinJobs_.empty()) return;
   rewarming_ = true;
+  rewarmRequested_ = 0;
   rewarmFrom(0);
 }
 
@@ -360,6 +362,7 @@ void CacheServiceImpl::rewarmFrom(std::size_t i) {
     if (cache_.has(key) || cache_.has(cache_.keyOf(job.url, job.midi, job.opts.maxSec))) continue;
     if (!cache_.roomFor(cache_.estimateBytes({key}).bytes)) break;
     rewarmInSync_ = true;
+    ++rewarmRequested_;
     const std::size_t before = rewarmDone_;
     cache_.requestJob(job, 2, false, [this, i](const SampleBuffer *) {
       if (rewarmInSync_) {
@@ -372,6 +375,12 @@ void CacheServiceImpl::rewarmFrom(std::size_t i) {
     if (rewarmDone_ == before) return;  // a worker is decoding: its callback continues
   }
   rewarming_ = false;
+  // O-AW-4 (review S-cue-go R7: a pinned decode deferred at the cache cap): a pass that decoded anything reports the
+  // pinned samplers, so a song whose samples came back reads "ready" without another preload naming it
+  if (rewarmRequested_) {
+    rewarmRequested_ = 0;
+    emitSamples(pinIds_);
+  }
 }
 
 // ---- preload -----------------------------------------------------------------------------------------------------
@@ -403,6 +412,9 @@ void CacheServiceImpl::advance(const std::shared_ptr<PreloadOp> &op) {
     // collapses to the plain URL, which is where its buffer was stored)
     doPin(sampleJobs(op->patches).keys, op->pin);
     if (op->deferred) rewarmPins();
+    // O-AW-4: the per-instrument state first, so the shim's facade is filled when `preload()` resolves (a deferred
+    // sampler reads false here; the rewarm pass that decodes it later sends its own `samples` event)
+    emitSamples(samplerIds(op->patches));
     JsonOut j;
     j.begin().kv("decodedMB", cache_.decodedMB()).kv("pinnedMB", cache_.pinnedMB()).kv("deferred", op->deferred).end();
     std::string reply = j.take();
@@ -432,7 +444,12 @@ void CacheServiceImpl::preloadAsync(const yyjson_val *patches, std::string_view 
   doPin(jl.keys, op->pin);
   // remembered for rewarmPins (a pinned sample evicted for a switch's headroom comes back later)
   if (op->pin == "replace" || op->pin == "add") {
-    if (op->pin == "replace") pinJobs_.clear();
+    if (op->pin == "replace") {
+      pinJobs_.clear();
+      pinIds_.clear();
+    }
+    for (const std::string &id : samplerIds(op->patches))
+      if (std::find(pinIds_.begin(), pinIds_.end(), id) == pinIds_.end()) pinIds_.push_back(id);
     for (std::size_t i = 0; i < jl.jobs.size(); ++i) {
       bool found = false;
       for (auto &pj : pinJobs_)
@@ -482,28 +499,66 @@ std::string CacheServiceImpl::estimate(const yyjson_val *patches) {
   return j.take();
 }
 
+std::pair<bool, bool> CacheServiceImpl::statusOf(const rig::PatchSpec &patch) const {
+  const JobList jl = sampleJobs({patch});
+  bool ok = true, bad = false;
+  for (std::size_t i = 0; i < jl.jobs.size(); ++i) {
+    const std::string &url = jl.jobs[i].url;
+    const bool isFailed = cache_.failed(url);
+    const bool held = cache_.has(jl.keys[i]) || cache_.has(url) || !cache_.longOf(url).empty();
+    if (!held && !isFailed) ok = false;
+    if (isFailed) bad = true;
+  }
+  return {ok, bad};
+}
+
 std::string CacheServiceImpl::sampleStatus(const yyjson_val *patches) {
   JsonOut loaded, failed;
   loaded.beginArray();
   failed.beginArray();
   for (const auto &p : parsePatches(patches)) {
-    const JobList jl = sampleJobs({p});
-    bool ok = true, bad = false;
-    for (std::size_t i = 0; i < jl.jobs.size(); ++i) {
-      const std::string &url = jl.jobs[i].url;
-      const bool isFailed = cache_.failed(url);
-      const bool held = cache_.has(jl.keys[i]) || cache_.has(url) || !cache_.longOf(url).empty();
-      if (!held && !isFailed) ok = false;
-      if (isFailed) bad = true;
-    }
-    loaded.elemBool(ok);
-    failed.elemBool(bad);
+    const auto st = statusOf(p);
+    loaded.elemBool(st.first);
+    failed.elemBool(st.second);
   }
   loaded.endArray();
   failed.endArray();
   JsonOut j;
   j.begin().kvRaw("loaded", loaded.view()).kvRaw("failed", failed.view()).end();
   return j.take();
+}
+
+// ---- O-AW-4: `load {phase:'samples'}` --------------------------------------------------------------------------
+// ENGINE_CONTRACT 6.5 `load` row (SHELL.md G5, review S-cue-go S3): the core pushes per-instrument decoded flags so
+// the shim's cache facade (controller.songReady, main.js "Loading n of N") follows the decodes without asking. Sent
+// when a preload's decodes are done (before its `load {phase:'preload'}` and its reply), when a prepare's samples
+// have settled (bridge opPrepare) and when a rewarm pass of pinned samples ends. Everything runs on the control
+// thread (pump / the op handlers); the audio thread is not involved and nothing here takes a lock.
+
+std::vector<std::string> CacheServiceImpl::samplerIds(const std::vector<rig::PatchSpec> &patches) const {
+  std::vector<std::string> out;
+  for (const auto &p : patches)
+    for (const auto &s : p.slots)
+      if (s.present && s.instType == "sampler" && std::find(out.begin(), out.end(), s.instId) == out.end())
+        out.push_back(s.instId);
+  return out;
+}
+
+void CacheServiceImpl::emitSamples(const std::vector<std::string> &ids) {
+  if (ids.empty()) return;
+  JsonOut loaded;
+  loaded.begin();
+  rig::PatchSpec one;  // a one-slot patch per id: the shim's own `get sampleStatus` request shape
+  one.slots[0].present = true;
+  one.slots[0].instType = "sampler";
+  for (const std::string &id : ids) {
+    one.slots[0].instId = id;
+    loaded.kvBool(id, statusOf(one).first);
+  }
+  loaded.end();
+  JsonOut ev;
+  ev.begin().kv("v", 1).kv("ev", "load").kv("phase", "samples").kvRaw("loaded", loaded.view()).end();
+  model_.emit(ev.take());
 }
 
 // ---- events from the engine ------------------------------------------------------------------------------------

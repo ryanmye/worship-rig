@@ -53,22 +53,32 @@ recordTap, reloadManifests, sleepBlockers, volumeCC (need MIDI, pads, recorder, 
 - G2 (closed in SETUP_REVIEW): `set` path/value are optional in the spec (required unless `batch` is given).
 - G3: clickStart is sync in the contract (`{t0, downbeat}`); native cannot answer sync. Shim returns an estimate.
 - G4: setClockSink(fn) has no port id but `config.midiClock.port` needs one. Shim sends `fn.portId ?? 'auto'`.
-- G5 (shape settled; shim updated by Lane S, DECISIONS O-AW-4): `get sampleStatus {patches}` answers
-  `{loaded: bool[], failed: bool[]}`, one entry per patch (ENGINE_CONTRACT §6.4 `get`). The core never emits
-  `load{phase:'samples'}`, so the shim asks instead (`bridge-engine.js` `_refreshSampleStatus`): after every
+- G5 (closed in the core by lane F1; shim updated by Lane S, DECISIONS O-AW-4): `get sampleStatus {patches}` answers
+  `{loaded: bool[], failed: bool[]}`, one entry per patch (ENGINE_CONTRACT §6.4 `get`). **Since lane F1 the core
+  emits `load {phase:'samples', loaded:{<id>: bool}}`** (contract 6.5; `true` = every sample decoded or failed, the
+  `sampleStatus` `loaded` rule): once per `cache preload` after its decodes (before its `load {phase:'preload'}` and
+  its reply), once per `prepare` with a sampler when its samples settle (before the reply; at once when warm), and
+  at the end of a pin re-warm pass that decoded anything (all pinned samplers; review S-cue-go R7). Control thread
+  only; no lock and nothing on the audio path. No contract minor bump: the shape was already in 6.5. The shim keeps
+  its fallback, unchanged except for one rule: a `samples` event for an id whose `sampleStatus` round is in flight
+  re-asks that id, because the round's reply is applied in a microtask and may be older than the event it was
+  batched with. Before lane F1 the core never emitted the event, so the shim asks (`bridge-engine.js`
+  `_refreshSampleStatus`): after every
   `cache preload` reply (before `preload()` resolves), after a `prepare` for samplers not yet known decoded (not
   delaying the token), and after `reloadManifests` for every sampler it knows. Each request sends one one-slot patch
   per distinct sampler id, so the answer is per instrument. One request is in flight at a time, and ids asked for
   meanwhile ride one follow-up. The `samples` event is still honoured (mock-native, a core that adds it later).
   Measured on `rig-devhost` (S-cue-go "Re-check"): at most one `get sampleStatus` per preload (fewer when
   preloads overlap: 5 for 7 while an 8-song set pinned), round trip ≤ 3.4 ms, `preload()` resolves 3–24 ms later.
-  Known gap: a buffer the core evicts later still reads decoded until a preload names its sampler again.
+  Known gap: a buffer the core evicts later still reads decoded until a preload, a prepare (lane F1: its event) or
+  a re-warm pass names its sampler again. Eviction itself sends no event.
 - G6: 4 Hz idle tick equals the 0.25 s clock cap; shim raises the rate to 30 Hz on first meter read.
 - G7: `hostLatency` is in the tick prose but not in engine-api.json. Shim honours it if present.
 - G8: chatty traffic (play:input 24 for 6 note-ons; cache preload/estimate 11 each at boot). Dedupe later. Lane S
   (G5) adds at most one `get sampleStatus` per `cache preload` and per `prepare` with an unknown sampler: a warm
   switch costs 1 more request (1 preload + 1 sampleStatus), and pinning an 8-song set 5 more (for 7 preloads, 11
-  estimates).
+  estimates). Lane F1 adds one event (no reply) per preload with a sampler, per prepare with a sampler and per
+  re-warm pass that decoded something; a prepare whose samplers the event made known asks no `sampleStatus`.
 - G9: shim needs native to emit `state` before `load{start}` and before the `audio start` reply.
 - G10: decided, see "Recording ownership" below. recorder.js still needs the JS `NativeRecorder` adapter (T09) and the
   core `rec` op (M17); until both exist, recording is unavailable under the bridge.
@@ -129,15 +139,17 @@ first launch looks empty. No app/js change is needed: `RigLibrary` (Sources/Shar
 `backupNow` (30 s debounce, tagged `{"origin":...}`), `importLatestBackup` (replace, current library backed up first),
 the Settings "import latest backup" button.
 - Own backups: `RigPaths.backupsDir` (macOS `~/Library/Application Support/Worship Rig Native/backups`, iPad
-  `Documents/Backups`), same names and rotation as main.js (`rig-YYYYMMDD-HHMMSS[-n].json`, newest 3; `rig-unreadable-*`
-  newest 5).
+  `Documents/Backups`), same names and rotation as main.js (`rig-YYYYMMDD-HHMMSS[-n].json`, newest 10 since lane F1,
+  was 3 (DECISIONS O-AW-F1); `rig-unreadable-*` newest 5).
 - macOS first launch: after the first `rig://` load, if no answer is recorded (UserDefaults
   `rig.electronImportAnswered.v1`) and a backup exists in any `~/Library/Application Support/*/backups/` (the Electron
   userData folder is named by the app, so scan, excluding our own folder; `RIG_ELECTRON_BACKUPS=<dir>` overrides), the
   shell waits for `__rig.store` and the controller's `onMenu` registration, checks `store.pristine === true`, and asks
   natively "Import your Worship Rig library?". Yes -> `latestBackup` serves the newest file once and the shell calls
   `__rigShell.menu('importLatestBackup')`, which `controller.onMenu` handles. The answer is stored either way.
-- `latestBackup()` = a staged file (once) else the newest by mtime of our own backups and the Electron ones.
+- `latestBackup()` = a staged file (once) else the newest (mtime, then name) of our own backups and the Electron
+  ones that parses as a library no newer than schema 2 (`RigBackups.isLibrary`, lane F1). A truncated, newer-schema
+  or non-library file is skipped, so an older good one is served.
 - iPad (no access to another app's files): Files picker (File > Import Library Backup..., Cmd-Shift-I, or the
   Settings button after a picker choice), or AirDrop / Files "Open in" of a `rig-*.json`
   (CFBundleDocumentTypes public.json,
@@ -150,7 +162,7 @@ the Settings "import latest backup" button.
   to import.
 - **Verified in JS (Lane E5, 2026-11-25).** `test/phase2/migration-1x` runs the real store and controller against
   real 1.x exports. The exports were made by v1.1.0 and v1.0.0 themselves (`test/fixtures/library-1x`).
-  - It covers this section's contract with a JS stand-in: `lib.mjs` `nativeShell` (polyfill shape, own rotation 3 /
+  - It covers this section's contract with a JS stand-in: `lib.mjs` `nativeShell` (polyfill shape, own rotation 10 /
     unreadable 5, staged-once `latestBackup`, newest of ours + Electron's by mtime, the pristine probe, the remembered
     answer, picker / AirDrop staging), and main.js's (`electronHost`).
   - Proven:
@@ -186,13 +198,15 @@ the Settings "import latest backup" button.
   - `WKScriptMessageHandlerWithReply` round trips.
   - The iPad `UIDocumentPickerViewController` (asCopy) and `.onOpenURL` / AirDrop on a device.
   - WebKit's localStorage quota with a near-cap (~1.9 M character) library.
-- Findings for the Swift side (not changed here: another lane owns native/apple):
-  - `latestAnywhere()` returns the newest readable file even if it is truncated JSON. JS now refuses it safely, but
-    the older good Electron backups are never offered. Skipping files that do not parse would import the newest
-    good one.
-  - The native rotation keeps 3 files where main.js keeps 10 (`BACKUPS_KEEP = 10`; this section said 3). Three more
-    automatic backups push the pre-import backup out. The controller writes one at most every 10 minutes of
-    editing (`backupIntervalMs`), plus one on window close.
+- Findings for the Swift side (E5), **addressed by lane F1, pending CI** (Swift is built only by CI's `mac-check`;
+  the E4 self-test fixture now has a newer truncated file the `migration` step must skip):
+  - `latestAnywhere()` returned the newest readable file even if it was truncated JSON. JS refused it safely, but
+    the older good Electron backups were never offered. It now skips files that `RigBackups.isLibrary` rejects
+    (JSON object as `stage(fileURL:)` checks, a whole library, schema ≤ 2) and serves the next one; the first-launch
+    offer names that file's date.
+  - The native rotation kept 3 files where main.js keeps 10 (`BACKUPS_KEEP = 10`). Three more automatic backups
+    pushed the pre-import backup out. It keeps 10 now (`RigBackups.keepLibrary`; DECISIONS O-AW-F1, tier 2, over a
+    separate pre-import file).
 
 ### Memory pressure (SETUP_REVIEW 21a)
 

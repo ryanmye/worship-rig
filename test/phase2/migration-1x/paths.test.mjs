@@ -113,9 +113,10 @@ test('native shell (macOS): "Import latest backup" finds the Electron app’s ba
   const before = snapshot(eDir);
   const { store, ctl } = await setup({ rig: shell.rig });
   edited(store);
-  for (let i = 0; i < 5; i++) assert.equal((await ctl.importLatestBackup()).ok, true); // own rotation fills (3)
+  // own rotation fills (lane F1, O-AW-F1: 10, as main.js; it was 3)
+  for (let i = 0; i < 12; i++) assert.equal((await ctl.importLatestBackup()).ok, true);
   assert.deepEqual(snapshot(eDir), before);
-  assert.equal(shell.ownList().length, 3);
+  assert.equal(shell.ownList().length, 10);
 });
 
 // ================================================================================================ 2. first launch
@@ -137,6 +138,25 @@ test('native first launch: pristine → asked once → the newest Electron backu
   assert.equal(await nativeShell({ ownDir: own, electronDirs: [eDir], defaults: shell.defaults }).firstLaunch(again.store),
     'answered before');
 });
+
+test('native first launch (review F1): Yes imports the Electron file the offer dated, not a newer own backup',
+  async () => {
+    // a truncated newest Electron file is skipped (E5 item 3); our own rotation holds a newer good library (a site
+    // data reset left the page pristine again). Before review F1, Yes staged latestAnywhere(): the own file, which
+    // the dialog ("saved by the previous Worship Rig on <date of the Electron file>") never named.
+    const t = v1('rich');
+    const eDir = mk('electron');
+    writeAged(rotationName(eDir), t);
+    writeAged(rotationName(eDir), t.slice(0, Math.floor(t.length / 2)));
+    const own = mk('own');
+    writeAged(rotationName(own), v1('unicode'));
+    const shell = nativeShell({ ownDir: own, electronDirs: [eDir] });
+    const { store } = await setup({ rig: shell.rig });
+    assert.equal(await shell.firstLaunch(store), 'imported');
+    const [r] = await shell.shell.settled;
+    assert.equal(r.ok, true, r.error);
+    assertIs1x(store, 'rich', 'the dated Electron library');
+  });
 
 test('native first launch: declined, or the library already edited → nothing changes', async () => {
   const eDir = electronFolder(v1('rich'));
@@ -241,9 +261,9 @@ test('a truncated 1.x library in localStorage → rig-unreadable-* (exact text) 
   }
 });
 
-test('a truncated newest backup (E5): import refused, library unchanged, the older good backups NOT rotated away', async () => {
-  // native rotation keeps 3: [good, good, truncated]. Before E5 the failed try wrote the current library first and
-  // the rotation deleted the oldest good backup; three tries left nothing but copies of the current library.
+test('a truncated newest backup (E5): never served; the newest good one is imported, nothing pruned', async () => {
+  // E5 open item 3 (lane F1): RigBackups.latestAnywhere used to serve the newest readable file, truncated or not, so
+  // the import was refused while the older good backups were never offered. It now skips what does not parse.
   const own = mk('own');
   writeAged(rotationName(own), v1('unicode'));
   writeAged(rotationName(own), v1('deleted-factory'));
@@ -251,17 +271,35 @@ test('a truncated newest backup (E5): import refused, library unchanged, the old
   writeAged(rotationName(own), t.slice(0, Math.floor(t.length * 0.6)));
   const shell = nativeShell({ ownDir: own });
   const { store, ctl, warns } = await setup({ rig: shell.rig });
-  const mine = edited(store);
+  edited(store);
   const disk = snapshot(own);
-  for (let i = 0; i < 3; i++) {
-    const r = await ctl.importLatestBackup();
-    assert.equal(r.ok, false);
-    assert.match(r.error, /not valid JSON/);
-  }
-  assert.deepEqual(plain(store.get()), mine, 'no partial import');
-  assert.deepEqual(snapshot(own), disk, 'no file written, none deleted');
-  assert.ok(warns.some((w) => /Import failed/.test(w)));
+  const r = await ctl.importLatestBackup();
+  assert.equal(r.ok, true, r.error);
+  assertIs1x(store, 'deleted-factory', 'the newest good backup');
+  const after = snapshot(own);
+  for (const [n, text] of Object.entries(disk)) assert.equal(after[n], text, `${n} kept (rotation 10)`);
+  assert.equal(Object.keys(after).length, 4, 'plus the pre-import backup');
+  assert.ok(!warns.some((w) => /Import failed/.test(w)));
 });
+
+test('only bad backups (truncated, newer schema, not a library): import refused, library and folder as they were',
+  async () => {
+    const own = mk('own');
+    const t = v1('rich');
+    writeAged(rotationName(own), JSON.stringify({ ...JSON.parse(t), schema: 3 }));
+    writeAged(rotationName(own), '{"name":"x","version":"1.0.0"}');
+    writeAged(rotationName(own), JSON.stringify({ kind: 'song', schema: 2, song: { name: 'one song' } }));
+    writeAged(rotationName(own), t.slice(0, 5000));
+    const shell = nativeShell({ ownDir: own });
+    const { store, ctl, warns } = await setup({ rig: shell.rig });
+    const mine = edited(store);
+    const disk = snapshot(own);
+    const r = await ctl.importLatestBackup();
+    assert.equal(r.ok, false, 'nothing that parses as a library: "no backup found"');
+    assert.deepEqual(plain(store.get()), mine, 'no partial import');
+    assert.deepEqual(snapshot(own), disk, 'no file written, none deleted');
+    assert.equal(warns.filter((w) => /Import failed/.test(w)).length, 0, 'none of them reached importJSON');
+  });
 
 test('Electron host: a truncated or newer-schema newest backup leaves library and folder as they were', async () => {
   const t = v1('rich');

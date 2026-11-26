@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "model/services.h"
@@ -60,8 +61,16 @@ class CacheServiceImpl final : public rig::CacheService {
   void protectSwitch(const rig::PatchSpec *playing, const rig::PatchSpec *incoming);
   /** Low-resource mode: pins = current song only (old pins remembered), unpinned buffers trimmed; off restores. */
   void setLowResource(bool on);
-  /** Decode pinned samples that were evicted for a switch's headroom (or deferred), while they fit. */
+  /** Decode pinned samples that were evicted for a switch's headroom (or deferred), while they fit. When the pass
+   *  requested any decode, it ends with a `load {phase:'samples'}` for the pinned songs' samplers (O-AW-4). */
   void rewarmPins();
+  /** O-AW-4 (ENGINE_CONTRACT 6.5 `load`, review S-cue-go S3): the distinct sampler instrument ids of `patches`, in
+   *  slot order. */
+  std::vector<std::string> samplerIds(const std::vector<rig::PatchSpec> &patches) const;
+  /** O-AW-4: emit `load {phase:'samples', loaded:{<id>: bool}}` for these sampler ids. true = every sample of the
+   *  instrument is decoded or failed: the rule of `get sampleStatus` `loaded` for a one-slot patch. Nothing for an
+   *  empty list. Control thread only (Model::emit); reads the cache, changes nothing (no LRU touch, no lock). */
+  void emitSamples(const std::vector<std::string> &ids);
   /** T00c pin policy: the keys of `keys` (request order, deduplicated; a key that does not fit is skipped and later
    *  smaller ones may still fit) whose estimated bytes fit the pin budget (85 % of the hard cap; with `add`, on top
    *  of the estimate of what is pinned already, decoded or not). Counts and warns about the rest. */
@@ -92,6 +101,8 @@ class CacheServiceImpl final : public rig::CacheService {
   std::vector<rig::PatchSpec> parsePatches(const yyjson_val *patches) const;
   std::vector<std::string> currentKeys() const;
   void doPin(const std::vector<std::string> &keys, const std::string &pin);
+  /** {loaded, failed} of one patch, as `get sampleStatus` answers it (loaded = every sample held or failed). */
+  std::pair<bool, bool> statusOf(const rig::PatchSpec &patch) const;
   void warnMsg(const std::string &m, const char *code);
   void build(const rig::EnginePaths &p);
 
@@ -103,9 +114,11 @@ class CacheServiceImpl final : public rig::CacheService {
   std::string loadedApp_;
   std::vector<std::shared_ptr<PreloadOp>> ops_;
   std::vector<std::pair<std::string, SampleJob>> pinJobs_;
+  std::vector<std::string> pinIds_;  // O-AW-4: sampler ids of the pinned songs (pinJobs_'s instruments), for rewarm
   std::vector<std::string> lowResSavedPins_;
   bool lowRes_ = false, rewarming_ = false, rewarmInSync_ = false;
   std::size_t rewarmDone_ = 0;
+  std::size_t rewarmRequested_ = 0;  // O-AW-4: decodes the current rewarm pass requested (0 = no samples event)
   int pinsDropped_ = 0;  // T00c pin budget
 };
 

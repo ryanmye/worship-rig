@@ -625,7 +625,9 @@ capability string (minor 1 = T00c `polyphony` / `bufferFrames` / `slots16`, 2 = 
 shape change: `cache preload` answered without blocking the control loop, a realtime `prepare` answered once its
 samples are decoded; and CORE3's: a realtime `prepare` builds its synth / organ units off the control loop and is
 answered once they are built too, a pinned `cache preload` of at most 5 songs prebuilds their synth / organ units in
-the background so a switch to one builds nothing); a breaking change bumps `v`; a native that receives another `v` replies `{ok:false, error:{code:
+the background so a switch to one builds nothing; and lane F1's: the core sends the 6.5 `load {phase:'samples'}`
+event after a preload's decodes, once a prepare's samples settle (before either reply) and after a pin re-warm pass,
+already in v1, no shape change; the shim keeps `get sampleStatus` as a fallback); a breaking change bumps `v`; a native that receives another `v` replies `{ok:false, error:{code:
 'protocol'}}` and ignores the message; the JS shim refuses a major mismatch (the app shows the engine as
 unavailable). Error codes: `protocol`, `bad-request` (schema), `unknown-op`, `unknown-param`, `not-started`,
 `stale-token`, `superseded`, `decode` (sample/pad file), `device` (audio device open/route), `unsupported` (cap

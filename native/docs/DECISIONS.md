@@ -141,6 +141,25 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
   loaded". After each preload the shim asks `get sampleStatus` and fills `_loaded`. The core emitting the event, as
   the contract requires, is an open core item that is done after CORE3 lands; the shim fallback stays as a
   belt-and-braces measure.
+  - Lane F1 (2026-11-25): the core now emits it (after a preload's decodes, once a prepare's samples settle, after
+    a pin re-warm pass), with no contract minor bump: the shape was already in ENGINE_CONTRACT 6.5 and the shim
+    treats the event as optional. The fallback stays. CONTRACT_CHANGES "Lane F1", INTERFACE_LOG "F1".
+- **O-AW-F1 (Lane F1, 2026-11-25): the native shell keeps the newest 10 library backups, as main.js does
+  (was 3).** Review E5 open item 4: after a replace import, the debounce backup of the imported library plus two
+  more pushed the pre-import backup out. The other option was a `rig-preimport-*` file kept apart from the
+  rotation. Chosen: 10, because:
+  - it is the rule the Electron app already uses and that SHELL.md promised ("same rotation as main.js"), so the
+    two shells and the JS stand-in (`test/phase2/migration-1x/lib.mjs`) stay one contract;
+  - it needs no app/js change. A separate pre-import file needs a new `backupNow` kind from the controller, the
+    Electron side to match, and a rule for when that file is pruned and how `latestAnywhere` ranks it;
+  - the pre-import backup now survives 9 more backups. The controller writes at most one per 10 minutes of editing
+    plus one per window close, so that is about 1.5 hours of continuous editing (less with many window closes),
+    where 3 was about 20 minutes;
+  - the cost is small: a library is at most ~2 MB (the store cap), so 10 files are ≤ ~20 MB, in Application Support
+    on the Mac and in the app's Documents/Backups on the iPad.
+
+  Easy to reverse: one constant, `RigBackups.keepLibrary`. A dedicated pre-import file can still be added later if
+  Ryan wants a restore point that never rotates.
 - **O-AW-E5 (Lane E5, 2026-11-25): Settings › Import… of a whole library into the untouched factory library
   replaces it.** Before this it merged. A 1.x export then became 19 + N songs (the 1.x factory copies doubled), its
   setlists were renamed "(imported)", and its settings were dropped: MIDI Learn, Program Change, theme, touch and

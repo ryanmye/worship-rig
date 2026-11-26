@@ -193,12 +193,20 @@ It cannot be changed, and 1.1 never sees 2.0's native backup folder.
 1. **M3** (S2 owner / Ryan): over-cap libraries and backups that cannot be restored.
 2. **M4** (Ryan): Chrome same-origin 1.1 ↔ 2.0 ping-pong prunes both hidden copies. 2.0 has no restore UI for
    `rig.v1.backup-*` keys.
-3. **Swift `RigBackups.latestAnywhere()`** (E4/Apple lane; `native/apple` was not touched here):
+3. **Addressed by lane F1, pending CI** (Swift is not compiled on Linux; the macOS `mac-check` job builds it and the
+   E4 self-test exercises it). `RigBackups.payload` now requires `isLibrary`: a JSON object (`JSONSerialization`, as
+   `stage(fileURL:)`), a whole library (`songs` object / array or `kind` "library", not a song file) and `schema`
+   absent or ≤ `maxSchema` (2, store.js `SCHEMA`). `latestAnywhere()` serves the newest such file (mtime, then name)
+   and the first-launch offer dates the same file. The self-test fixture gained a newer truncated
+   `rig-20261201-120000.json`, so the `migration` step fails if it is served. JS stand-in and tests updated
+   (`lib.mjs`, `paths.test.mjs`, `selftest-scripts.test.mjs`). The original finding:
    - It returns the newest *readable* file even when it is truncated JSON. JS now refuses it safely, but the older
      good Electron backups are never offered.
    - It should skip files that `JSONSerialization` cannot parse, as `stage(fileURL:)` already does, and then serve
      the next one.
-4. **Native rotation keeps 3** (E4/Apple, the builder's finding, confirmed). After a replace, the debounce timer's
+4. **Addressed by lane F1, pending CI: the native rotation keeps 10** (`RigBackups.keepLibrary`, as main.js;
+   DECISIONS O-AW-F1, tier 2: chosen over a separate pre-import file). The original finding: **native rotation keeps
+   3** (E4/Apple, the builder's finding, confirmed). After a replace, the debounce timer's
    backup of the imported library plus two more push the pre-import backup out. With M2 fixed, one import now writes
    one backup. Consider keeping 10, as main.js does, or keeping a `rig-preimport-*` file apart from the rotation.
 5. **Not run here (needs the Mac or iPad):**

@@ -369,7 +369,10 @@ not a defect, because the suite passes on either content. Commit whatever the la
 ### Still open
 
 - The core should emit `load {phase:'samples'}` (O-AW-4, after CORE3). Once it does, the shim's polling becomes a
-  fallback only.
-- R7: a pinned decode deferred at the cache cap (core).
+  fallback only. **Done by lane F1 (2026-11-25)**: per preload, per prepare, per pin re-warm pass; the shim's
+  fallback stays and re-asks an id whose event overlaps a round in flight (CONTRACT_CHANGES "Lane F1").
+- R7: a pinned decode deferred at the cache cap (core). Lane F1: the re-warm pass that later decodes it now sends a
+  `samples` event, so the chip turns "ready" without another preload. Why the decode was deferred (pins not
+  evicting unpinned buffers at the cap) is not changed and still wants a look in the cache lane.
 - R5: Enter auto-repeat on a chip (unverified).
 - From the first review: S9, and the D6 visual pass (GO name truncation, a dot legend).

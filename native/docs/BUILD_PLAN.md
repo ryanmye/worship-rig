@@ -590,7 +590,9 @@ Integrated tree `v2-native` `a8cb4d1` (+ this pass's docs), fresh build dirs, `-
 - **Core follow-ups, unchanged from wave 3** ("UI wave: how to start", "Core follow-ups"): T14 monoSwitch legato on a
   stolen voice, wash `SetFeedback` frame, tape lead; T11 / T15 O5 `pendingEnded_`; T16 O4; T05 `LofiUnit` counter,
   R4 / R5; T12 / T13 W3A R5; T06 `protect([])`; T11a PeriodicWave (then `chorus-fast-deep-noise`).
-- **Orchestrator**: CORE1 open 3 (`rt.realtime` Release xrun limit flakes under load; `RUN_SERIAL` if CI sees it),
+- **Orchestrator**: ~~CORE1 open 3 (`rt.realtime` Release xrun limit flakes under load; `RUN_SERIAL` if CI sees
+  it)~~ **closed by Lane F1** (CI `macos-15` saw it: 6 > 3. The allowance is now 3 + the host thread's own late
+  wakeups, the test is `RUN_SERIAL`, and the mutations still fail; CONTRACT_CHANGES "Lane F1" timing bounds),
   CORE1 open 4 (`probe.null.cold` devhost ctest, T09), D4 R8 nits, mackit O4 (`check.sh` lock), T15 note 7, the
   T17-style fixtures; prune the leftover review build dirs (`native/core/build-ui-*`, `build-uicsk*`,
   `native/devhost/build-ui`: about 3.5 GB).
@@ -656,8 +658,11 @@ unchanged); the mutation runs (CORE3 M1-M3 and MACFIX M1-M3 were run in their re
 - **T11 (core, nits)**: MACFIX N2 (`synth_dispatch.cpp:6` comment; `test_synth` restores the hook only on its normal
   path).
 - **`tools/mac/check.sh` (next touch)**: MACFIX N1 (the `?` fallback never fires); mackit O4 (lock).
-- **Orchestrator**: `unit.runtime_preload` flaked once at `-j2` here (clang-20, tick-gap bound): `RUN_SERIAL` like
-  `unit.core3` if CI sees it (with CORE1 open 3, `rt.realtime`); prune this pass's build dirs when done
+- **Orchestrator**: ~~`unit.runtime_preload` flaked once at `-j2` here (clang-20, tick-gap bound): `RUN_SERIAL`
+  like `unit.core3` if CI sees it (with CORE1 open 3, `rt.realtime`)~~ **closed by Lane F1**. CI `macos-15` saw it
+  under serial ctest (103 and 125 ms against 100). The gap bound is now the stated 100 ms, or 3 × the loop's own
+  2 s idle gap, capped at 250 ms. `rt.realtime` and `unit.runtime*` are `RUN_SERIAL`, and a 300 ms control-thread
+  hold still fails, idle and loaded (CONTRACT_CHANGES "Lane F1" timing bounds). Prune this pass's build dirs when done
   (`native/core/build-int{,-clang20,-asan,-tsan}`, `native/devhost/build-int`).
 - **Chart lanes (Ryan / D7 design pass)**: C2 parser O1-O9 (PARTIAL: O7 needs a real WorshipTools / SongSelect
   export from Ryan's account); chart view O1-O9 (O1 PANIC covered by the import dialog: Ryan's call). Hidden behind

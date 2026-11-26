@@ -423,6 +423,88 @@ TEST_SUITE("samples_service") {
     std::filesystem::remove_all(dir);
   }
 
+  // O-AW-4 (ENGINE_CONTRACT 6.5 `load`, review S-cue-go S3 / R7): the core pushes `load {phase:'samples'}` itself.
+  TEST_CASE("O-AW-4: samples events after a preload (before its preload event) and after a rewarm of deferred pins") {
+    const std::string dir = tmpDir("_samplesev");
+    auto manifest = [&](const char *id, const char *tag) {
+      return std::string("{\"id\":\"") + id + "\",\"layers\":[{\"files\":{\"C4\":\"" + tag + "1.wav\",\"D4\":\"" + tag +
+             "2.wav\",\"E4\":\"" + tag + "3.wav\"}}]}";
+    };
+    writeText(dir + "/manifest.json", "{\"instruments\":[" + manifest("a", "a") + "," + manifest("b", "b") + "]}");
+    Env e(RIG_REPO_DIR "/app", dir + "/manifest.json");
+    auto &c = e.svc->cache();
+    c.setLoader([](const rig::samples::LoadRequest &rq) {
+      rig::samples::LoadOutcome o;
+      rig::samples::Processed p;
+      p.channels = 1;
+      p.frames = 2560;  // 10 KiB
+      p.ch[0].assign(p.frames, 0.1f);
+      p.natural = p.frames;
+      o.buffer = rig::samples::makeStored(p, rq.engineRate, rq.storage);
+      o.status = rig::samples::LoadOutcome::Status::Ok;
+      return o;
+    });
+    c.setCapBytes(45 * 1024);
+    auto at = [&](const char *needle, std::size_t from = 0) {
+      for (std::size_t i = from; i < e.sink.events.size(); ++i)
+        if (e.sink.events[i].find(needle) != std::string::npos) return static_cast<long>(i);
+      return -1L;
+    };
+    auto patchOf = [&](const char *id) {
+      return parse(std::string("[{\"slots\":[{\"instrument\":{\"type\":\"sampler\",\"id\":\"user:") + id +
+                   "\"}},{\"instrument\":{\"type\":\"synth\",\"id\":\"warm-pad\"}},null,null]}]");
+    };
+    yyjson_doc *A = patchOf("a"), *B = patchOf("b");
+    // a song with no sampler sends none (nothing to report)
+    yyjson_doc *S = parse(R"([{"slots":[{"instrument":{"type":"synth","id":"warm-pad"}},null,null,null]}])");
+    e.svc->preload(yyjson_doc_get_root(S), "none");
+    CHECK(at("\"phase\":\"samples\"") == -1);
+    CHECK(at("\"phase\":\"preload\"") >= 0);
+    e.sink.events.clear();
+
+    e.svc->preload(yyjson_doc_get_root(A), "replace");
+    const long evA = at("\"phase\":\"samples\"");
+    REQUIRE(evA >= 0);
+    CHECK(e.sink.events[static_cast<std::size_t>(evA)] ==
+          R"({"v":1,"ev":"load","phase":"samples","loaded":{"user:a":true}})");  // the contract 6.5 shape, ids only
+    CHECK(evA < at("\"phase\":\"preload\""));  // before the `preload` event (and so before the reply)
+    // the event says what `get sampleStatus` says
+    CHECK(e.svc->sampleStatus(yyjson_doc_get_root(A)) == R"({"loaded":[true],"failed":[false]})");
+    e.sink.events.clear();
+
+    rig::PatchSpec pa, pb;
+    std::string err;
+    REQUIRE(rig::parsePatch(yyjson_arr_get_first(yyjson_doc_get_root(A)), pa, &err));
+    REQUIRE(rig::parsePatch(yyjson_arr_get_first(yyjson_doc_get_root(B)), pb, &err));
+    e.svc->onCommit(pa, 0);
+    // A has nothing to re-warm: no event from that commit's rewarm pass
+    CHECK(at("\"phase\":\"samples\"") == -1);
+    // B: room for one sample only, two deferred -> B reads false (as sampleStatus does)
+    const std::string reply = e.svc->preload(yyjson_doc_get_root(B), "add");
+    CHECK(reply.find("\"deferred\":2") != std::string::npos);
+    const long evB = at("\"phase\":\"samples\"");
+    REQUIRE(evB >= 0);
+    CHECK(e.sink.events[static_cast<std::size_t>(evB)].find(R"("loaded":{"user:b":false})") != std::string::npos);
+    CHECK(e.svc->sampleStatus(yyjson_doc_get_root(B)) == R"({"loaded":[false],"failed":[false]})");
+    e.sink.events.clear();
+    // the setlist moves on (review S-cue-go R7: a pinned decode deferred at the cache cap): the rewarm pass that
+    // decodes B's missing samples ends with a samples event for the pinned samplers, B now true
+    c.unpin(e.svc->sampleJobs({pa}).keys);
+    e.svc->onCommit(pb, 1);
+    for (const auto &k : e.svc->sampleJobs({pb}).keys) CHECK(c.has(k));
+    const long evR = at("\"phase\":\"samples\"");
+    REQUIRE(evR >= 0);
+    const std::string &rw = e.sink.events[static_cast<std::size_t>(evR)];
+    MESSAGE("rewarm event: " << rw);
+    CHECK(rw.find("\"user:b\":true") != std::string::npos);
+    CHECK(rw.find("\"user:a\":") != std::string::npos);  // every pinned sampler of the set, read now
+    CHECK(at("\"phase\":\"samples\"", static_cast<std::size_t>(evR) + 1) == -1);  // one event per pass
+    yyjson_doc_free(A);
+    yyjson_doc_free(B);
+    yyjson_doc_free(S);
+    std::filesystem::remove_all(dir);
+  }
+
   TEST_CASE("live instruments are keyed at their long cap, others at the legacy cap (sustain pin budget)") {
     Env e;
     yyjson_doc *pd = parse(R"([{"slots":[{"instrument":{"type":"sampler","id":"salamander-piano"}},null,null,null]}])");

@@ -95,7 +95,7 @@ Follow-up work (this pass):
    and 3 kills in 60 s show the Reload page. A click on an http(s) link opens the browser and the app stays on `rig://`.
 2. `RigPaths` folders exist after launch; iPad Files app shows On My iPad > Worship Rig > Recordings and Backups.
 3. `window.rig` exists in the page console (`isElectron === false`); `rig.backupNow('{"a":1}')` writes a `rig-*.json`;
-   the rotation keeps 3; `rig.latestBackup()` returns `{path, origin, savedAt, text}`.
+   the rotation keeps 10 (as main.js; lane F1); `rig.latestBackup()` returns `{path, origin, savedAt, text}`.
 4. macOS import: with Electron backups present, first launch asks once; Yes loads the library (current empty one
    backed up
    first); No never asks again but Settings "import latest backup" works. Confirm the Electron userData folder name on

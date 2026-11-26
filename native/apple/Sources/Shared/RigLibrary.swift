@@ -2,14 +2,14 @@
 //
 // Why: the UI keeps the whole library in localStorage under the page origin. Electron's origin was
 // http://127.0.0.1:8438 (the port can differ), the native app's is rig://app, so a new install looks empty.
-// The Electron app already writes `rig-YYYYMMDD-HHMMSS[-n].json` rotation files (newest 3, tagged
+// The Electron app already writes `rig-YYYYMMDD-HHMMSS[-n].json` rotation files (newest 10, tagged
 // `{"origin":"...",...library}`) to <userData>/backups on every edit (30 s debounce) and on window close; the UI's
 // existing "import latest backup" path (controller.importLatestBackup -> window.rig.latestBackup()) reads one.
 // This file provides a minimal window.rig (isElectron:false) over a WKScriptMessageHandlerWithReply named `rigShell`:
 //     backupNow(json, kind)  -> {path} | {error}       writes the same rotation into RigPaths.backupsDir
 //     latestBackup()         -> {path, origin, savedAt, text} | {error}
-//                               a staged file (picker / AirDrop) wins once, else the newest of our own backups and,
-//                               on macOS, the Electron app's backups
+//                               a staged file (picker / AirDrop) wins once, else the newest library file that
+//                               parses among our own backups and, on macOS, the Electron app's backups
 //     onMenu(cb)             -> unsubscribe            the shell calls cb('importLatestBackup') from Swift
 // No app/js file changes. isElectron stays false, so recording, menus and shortcuts keep their non-Electron paths.
 import Foundation
@@ -23,9 +23,19 @@ import UIKit
 
 enum RigBackups {
     static let maxBytes = 16 * 1024 * 1024
+    /// Library rotation files kept, as main.js (`BACKUPS_KEEP = 10`). Review E5 open item 4: with 3, the debounce
+    /// backup of an imported library plus two more pushed the pre-import backup out (DECISIONS O-AW-F1).
+    static let keepLibrary = 10
+    /// app/js/store.js `SCHEMA`: a newer file is never offered by latestAnywhere (test/unit/selftest checks the pair).
+    static let maxSchema = 2
     private static let nameRE = try! NSRegularExpression(pattern: #"^rig-\d{8}-\d{6}(-\d+)?\.json$"#)
 
     struct Entry { let url: URL; let mtime: Date }
+
+    /// Newer mtime first, then the later name: a git export gives every fixture file the same mtime.
+    static func newerFirst(_ a: Entry, _ b: Entry) -> Bool {
+        a.mtime != b.mtime ? a.mtime > b.mtime : a.url.lastPathComponent > b.url.lastPathComponent
+    }
 
     static func isRotationName(_ n: String) -> Bool {
         nameRE.firstMatch(in: n, range: NSRange(n.startIndex..., in: n)) != nil
@@ -41,7 +51,7 @@ enum RigBackups {
             guard prefix.map({ n.hasPrefix($0) && n.hasSuffix(".json") }) ?? isRotationName(n) else { return nil }
             let t = (try? u.resourceValues(forKeys: Set(keys)).contentModificationDate) ?? .distantPast
             return Entry(url: u, mtime: t)
-        }.sorted { $0.mtime != $1.mtime ? $0.mtime > $1.mtime : $0.url.lastPathComponent > $1.url.lastPathComponent }
+        }.sorted(by: newerFirst)
     }
 
     private static func stamp() -> String {
@@ -55,7 +65,8 @@ enum RigBackups {
         for e in list(dir, prefix: prefix).dropFirst(keep) { try? FileManager.default.removeItem(at: e.url) }
     }
 
-    /// window.rig.backupNow: 'library' rotates (newest 3), 'unreadable' keeps the newest 5 separately (as main.js).
+    /// window.rig.backupNow: 'library' rotates (newest `keepLibrary`), 'unreadable' keeps the newest 5 separately
+    /// (as main.js).
     static func write(_ text: String, kind: String) -> [String: Any] {
         guard !text.isEmpty, text.utf8.count <= maxBytes else { return ["error": "backup too large or empty"] }
         let dir = RigPaths.backupsDir
@@ -77,7 +88,7 @@ enum RigBackups {
                 i += 1
             }
             try text.write(to: url, atomically: true, encoding: .utf8)
-            prune(dir, prefix: nil, keep: 3)
+            prune(dir, prefix: nil, keep: keepLibrary)
             return ["path": url.path]
         } catch {
             return ["error": error.localizedDescription]
@@ -101,7 +112,7 @@ enum RigBackups {
         let kids = (try? fm.contentsOfDirectory(at: base, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
         return kids.filter { $0.lastPathComponent != RigPaths.supportDirName }
             .flatMap { list($0.appendingPathComponent("backups", isDirectory: true)) }
-            .sorted { $0.mtime > $1.mtime }
+            .sorted(by: newerFirst)
         #else
         return []
         #endif
@@ -114,16 +125,36 @@ enum RigBackups {
         return String(head[r].dropFirst(11).dropLast())
     }
 
+    /// Review E5 open item 3: a file `latestAnywhere` may offer. It must parse as a JSON object, as
+    /// `RigLibrary.stage(fileURL:)` checks, and be a whole library the UI can import (store.importJSON's library
+    /// branch): `songs` an object or array, or `kind` "library"; not a song file; `schema` absent or a number no newer
+    /// than `maxSchema`. A truncated write, a newer app's backup or a stray .json is skipped, not served.
+    static func isLibrary(_ data: Data) -> Bool {
+        guard let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return false }
+        if (obj["kind"] as? String) == "song" { return false }
+        let songs = obj["songs"]
+        guard songs is [String: Any] || songs is [Any] || (obj["kind"] as? String) == "library" else { return false }
+        if let sch = obj["schema"] {
+            // JSON true / false also arrive as NSNumber (CFBoolean); the store refuses a non-number schema
+            guard let n = sch as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(), n.doubleValue.isFinite,
+                  n.doubleValue <= Double(maxSchema) else { return false }
+        }
+        return true
+    }
+
     static func payload(_ e: Entry) -> [String: Any]? {
-        guard let data = try? Data(contentsOf: e.url), data.count <= maxBytes,
+        // review F1: latestAnywhere now walks past bad files, so a huge stray rotation-named file is not read whole
+        if let size = (try? e.url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size > maxBytes { return nil }
+        guard let data = try? Data(contentsOf: e.url), data.count <= maxBytes, isLibrary(data),
               let text = String(data: data, encoding: .utf8) else { return nil }
         let tag: Any = origin(of: text).map { $0 as Any } ?? NSNull()
         return ["path": e.url.path, "origin": tag, "savedAt": e.mtime.timeIntervalSince1970 * 1000, "text": text]
     }
 
-    /// Newest of our own backups and (macOS) the Electron ones.
+    /// Newest library file that parses (`payload`) among our own backups and (macOS) the Electron ones; older good
+    /// files are offered when newer ones are bad. Order: `newerFirst`.
     static func latestAnywhere() -> [String: Any] {
-        let all = (list(RigPaths.backupsDir) + electronEntries()).sorted { $0.mtime > $1.mtime }
+        let all = (list(RigPaths.backupsDir) + electronEntries()).sorted(by: newerFirst)
         for e in all { if let p = payload(e) { return p } }
         return ["error": "no backup found"]
     }
@@ -239,7 +270,9 @@ final class RigLibrary: NSObject, WKScriptMessageHandlerWithReply {
         if persistAnswer, UserDefaults.standard.bool(forKey: Self.migrationKey) { return report("already-answered") }
         didOffer = true
         io.async { [weak self] in
-            guard let newest = RigBackups.electronEntries().first else { // none on iPad: Files/AirDrop path
+            // the newest Electron file that passes isLibrary; Yes stages this same file (stageOfferedAndImport), so
+            // the date asked about is the date imported; none on iPad: Files/AirDrop path
+            guard let newest = RigBackups.electronEntries().first(where: { RigBackups.payload($0) != nil }) else {
                 return DispatchQueue.main.async { report("no-backup") }
             }
             DispatchQueue.main.async { self?.askIfPristine(newest, report) }
@@ -261,14 +294,18 @@ final class RigLibrary: NSObject, WKScriptMessageHandlerWithReply {
                          + "or File > Import Library Backup.",
                          ok: "Import") { yes in
                 if self.persistAnswer { UserDefaults.standard.set(true, forKey: Self.migrationKey) }
-                if yes { self.stageNewestAndImport(report) } else { report("declined") }
+                if yes { self.stageOfferedAndImport(e, report) } else { report("declined") }
             }
         }
     }
 
-    private func stageNewestAndImport(_ report: @escaping (String) -> Void) {
+    /// Stages the very file the offer dated. Review F1: this used to stage `latestAnywhere()`, which also reads our
+    /// own rotation, so with an own backup newer than the Electron one (site data reset, library pristine again) Yes
+    /// imported a file the dialog never named. A file that no longer parses fails ("stage-failed"), never a substitute.
+    private func stageOfferedAndImport(_ e: RigBackups.Entry, _ report: @escaping (String) -> Void) {
         io.async { [weak self] in
-            let r = RigBackups.latestAnywhere()
+            let gone: [String: Any] = ["error": "\(e.url.lastPathComponent) is no longer a library"]
+            let r = RigBackups.payload(e) ?? gone
             DispatchQueue.main.async {
                 guard let self else { return }
                 if let err = r["error"] { return report("stage-failed: \(err)") }

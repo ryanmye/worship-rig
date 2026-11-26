@@ -46,6 +46,26 @@ constexpr bool kSanitized = false;
  *  30 Hz, 33 ms). Sanitized builds run the control loop several times slower. */
 constexpr double kMaxGapMs = kSanitized ? 250.0 : 100.0;
 
+/** A quiet box: the loop's own largest gap over two idle seconds is one 30 Hz tick (33 ms) plus jitter (35-38 ms
+ *  here idle; CI's macos-15 runner showed 43-60 ms in its shorter decode windows). Same threshold as test_core3.cpp. */
+constexpr double kIdleLoopMs = 40;
+/** Lane F1 (timing bounds; the CORE3 O2 pattern). On CI's shared macos-15 runner (serial ctest) the stated 100 ms
+ *  failed 2 of 4 runs, 103 and 125 ms, both in the longest windows (6.7 s and 7.5 s of decoding; the same runs' shorter
+ *  windows read 43-60 ms): box noise, not the loop being held. So past kIdleLoopMs the bound is k = 3 x the loop's own
+ *  largest idle gap: the stated 100 ms is itself 3 ticks, i.e. "miss at most two of the loop's own worst-case ticks".
+ *  k = 3, not CORE3's 1.5: these windows are 2-12 s against a 2 s idle sample (CORE3: 4 s), and the tail grows with
+ *  the window; at macOS gaps of 43-60 ms 3 x gives 129-180 ms, over both CI failures. kCapMs keeps it from going
+ *  vacuous: a loop held for a 300 ms build or decode (the defect this file guards; before CORE2A a cold preload held
+ *  it for the whole 1-3 s decode) always fails. A box whose idle loop already misses two ticks (> 83 ms) cannot tell
+ *  that from noise, and failing there is the honest answer. */
+constexpr double kGapK = 3.0;
+constexpr double kCapMs = kSanitized ? 1000.0 : 250.0;
+
+/** The tick-gap (and input-latency) bound for a box whose idle loop showed `idleGapMs`. */
+double gapBound(double idleGapMs) {
+  return idleGapMs <= kIdleLoopMs ? kMaxGapMs : std::clamp(idleGapMs * kGapK, kMaxGapMs, kCapMs);
+}
+
 rig::Engine &impl(rig_engine *e) {
   return *reinterpret_cast<rig::Engine *>(e);
 }
@@ -83,6 +103,9 @@ struct Rt {
   std::atomic<bool> stop{false};
   std::atomic<long> blocks{0};
   std::thread audio;
+  /** Set by boot(): the loop's own largest tick gap over two idle seconds, and the bound it gives (gapBound). */
+  double idleGapMs = 0;
+  double bound = kMaxGapMs;
 
   Rt() {
     rig_config cfg;
@@ -189,6 +212,12 @@ struct Rt {
     while (ticks(t0, Clock::now()).size() < 3 && Clock::now() - t0 < std::chrono::seconds(10))
       std::this_thread::sleep_for(std::chrono::milliseconds(5));
     REQUIRE(ticks(t0, Clock::now()).size() >= 3);
+    // Lane F1 timing bounds: measure the box before loading anything (nothing decodes or builds in this window)
+    const auto ti = Clock::now();
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    idleGapMs = maxGapMs(ti, Clock::now());
+    bound = gapBound(idleGapMs);
+    MESSAGE("idle loop: largest tick gap " << idleGapMs << " ms; bound " << bound << " ms");
   }
 };
 
@@ -228,7 +257,7 @@ TEST_SUITE("runtime_preload") {
     REQUIRE(!pr.second.empty());
     const double playMs = ms(tPlay, pr.first);
     MESSAGE("play reply during the preload after " << playMs << " ms");
-    CHECK(playMs < kMaxGapMs);
+    CHECK(playMs < rt.bound);
     CHECK(!rt.replied(10));  // the play was answered while the samples were still decoding
     rt.post(R"({"v":1,"op":"play","e":"off","n":60})");
     const auto done = rt.reply(10, kSanitized ? 120000 : 30000);
@@ -240,7 +269,7 @@ TEST_SUITE("runtime_preload") {
     MESSAGE("preload of " << (g_loads.load() - before) << " samples took " << loadMs << " ms; largest tick gap "
                           << gap << " ms over " << rt.ticks(t0, done.first).size() << " ticks");
     CHECK(loadMs > 1000);  // it really was slow
-    CHECK(gap < kMaxGapMs);
+    CHECK(gap < rt.bound);
     // the `load {phase:'preload'}` event comes with it, and the samples are there
     rt.post(R"({"v":1,"op":"get","what":"sampleStatus","id":12,"patches":[)" + patchOf("salamander-piano") + "]}");
     CHECK(contains(rt.reply(12).second, "\"loaded\":[true]"));
@@ -265,7 +294,7 @@ TEST_SUITE("runtime_preload") {
     rt.post(R"({"v":1,"op":"play","e":"on","n":64,"vel":90,"id":21})");
     const auto pr = rt.reply(21, 5000);
     REQUIRE(!pr.second.empty());
-    CHECK(ms(tPlay, pr.first) < kMaxGapMs);
+    CHECK(ms(tPlay, pr.first) < rt.bound);
     std::uint32_t v = 0;
     for (const auto end = Clock::now() + std::chrono::milliseconds(kSanitized ? 2000 : 500);
          v == 0 && Clock::now() < end;) {
@@ -282,7 +311,7 @@ TEST_SUITE("runtime_preload") {
     const double gap = rt.maxGapMs(t0, p1.first);
     MESSAGE("prepare of a cold salamander-piano answered after " << loadMs << " ms; largest tick gap " << gap << " ms");
     CHECK(loadMs > 1000);
-    CHECK(gap < kMaxGapMs);
+    CHECK(gap < rt.bound);
     // every sample is there when the reply comes (the commit lands on a complete instrument, as in 1.x)
     rt.post(R"({"v":1,"op":"get","what":"sampleStatus","id":22,"patches":[)" + patchOf("salamander-piano") + "]}");
     CHECK(contains(rt.reply(22).second, "\"loaded\":[true]"));
@@ -303,7 +332,7 @@ TEST_SUITE("runtime_preload") {
     rt.post(R"({"v":1,"op":"prepare","id":11,"patch":)" + patchOf("vibes") + "}");
     const auto a = rt.reply(10, 5000);  // superseded: answered now, not after its ~2 s of decodes
     REQUIRE(tokenOf(a.second) > 0);
-    CHECK(ms(t1, a.first) < kMaxGapMs);
+    CHECK(ms(t1, a.first) < rt.bound);
     const auto b = rt.reply(11, kSanitized ? 120000 : 30000);
     REQUIRE(tokenOf(b.second) > tokenOf(a.second));
     // the newest switch went first: vibes (88 samples) did not wait for the rest of salamander's 90
@@ -312,7 +341,7 @@ TEST_SUITE("runtime_preload") {
     const std::string st = rt.reply(12).second;
     MESSAGE("vibes ready " << ms(t1, b.first) << " ms after its prepare; status then " << st);
     CHECK(contains(st, "\"loaded\":[true,false]"));
-    CHECK(rt.maxGapMs(t0, b.first) < kMaxGapMs);
+    CHECK(rt.maxGapMs(t0, b.first) < rt.bound);
     rt.post(R"({"v":1,"op":"commit","id":13,"token":)" + std::to_string(tokenOf(a.second)) + "}");
     CHECK(contains(rt.reply(13).second, "\"ok\":false"));  // superseded token
     rt.post(R"({"v":1,"op":"commit","id":14,"token":)" + std::to_string(tokenOf(b.second)) + "}");
@@ -341,7 +370,7 @@ TEST_SUITE("runtime_preload") {
     rt.post(R"({"v":1,"op":"get","what":"sampleStatus","id":12,"patches":[)" + patchOf("celesta") + "," +
             patchOf("salamander-piano") + "]}");
     CHECK(contains(rt.reply(12).second, "\"loaded\":[true,true]"));
-    CHECK(rt.maxGapMs(t0, a.first) < kMaxGapMs);
+    CHECK(rt.maxGapMs(t0, a.first) < rt.bound);
     MESSAGE("newer preload answered " << ms(t0, b.first) << " ms, older " << ms(t0, a.first) << " ms after the first");
   }
 
@@ -365,9 +394,73 @@ TEST_SUITE("runtime_preload") {
     REQUIRE(!a.second.empty());
     MESSAGE("prepare answered " << ms(t1, p.first) << " ms after it was sent; preload answered " << ms(t0, a.first)
                                 << " ms after its own");
-    CHECK(rt.maxGapMs(t0, a.first) < kMaxGapMs);
+    CHECK(rt.maxGapMs(t0, a.first) < rt.bound);
     rt.post(R"({"v":1,"op":"commit","id":12,"token":)" + std::to_string(tokenOf(p.second)) + "}");
     CHECK(contains(rt.reply(12).second, "\"committed\":true"));
+  }
+
+  // O-AW-4 (ENGINE_CONTRACT 6.5 `load`, SHELL.md G5, review S-cue-go S3): the core itself sends
+  // `load {phase:'samples', loaded:{id: bool}}` once a preload's or a prepare's decodes are done, before the reply.
+  TEST_CASE("O-AW-4: a samples event per preload and per prepare, after the decodes and before the reply") {
+    g_sleepMs = 15;
+    Rt rt;
+    rt.boot();
+    auto samplesAfter = [&](Clock::time_point from) {
+      std::vector<Ev> out;
+      std::lock_guard<std::mutex> lk(rt.mu);
+      for (const Ev &v : rt.evs)
+        if (v.at >= from && v.text.find("\"phase\":\"samples\"") != std::string::npos) out.push_back(v);
+      return out;
+    };
+    // a cold preload of two samplers: one event naming both, true, once the decodes are done, before the reply
+    const auto t0 = Clock::now();
+    rt.post(R"({"v":1,"op":"cache","action":"preload","pin":"add","id":10,"patches":[)" + patchOf("salamander-piano") +
+            "," + patchOf("vibes") + "]}");
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    REQUIRE(!rt.replied(10));
+    CHECK(samplesAfter(t0).empty());  // nothing claimed while decoding
+    const auto a = rt.reply(10, kSanitized ? 120000 : 30000);
+    REQUIRE(!a.second.empty());
+    auto ev = samplesAfter(t0);
+    REQUIRE(ev.size() == 1);
+    CHECK(contains(ev[0].text, R"("loaded":{"salamander-piano":true,"vibes":true})"));
+    // same batch or earlier: the payload that carries the event is time-stamped no later than the reply's, and in a
+    // shared batch the event comes first
+    CHECK(ev[0].at <= a.first);
+    if (ev[0].text == a.second) CHECK(ev[0].text.find("\"phase\":\"samples\"") < ev[0].text.find("\"re\":10,"));
+
+    // a cold prepare: the event once its samples are decoded, before the (CORE2A-delayed) prepare reply
+    const auto t1 = Clock::now();
+    rt.post(R"({"v":1,"op":"prepare","id":20,"patch":)" + patchOf("celesta") + "}");
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    REQUIRE(!rt.replied(20));
+    CHECK(samplesAfter(t1).empty());
+    const auto p = rt.reply(20, kSanitized ? 120000 : 30000);
+    REQUIRE(tokenOf(p.second) > 0);
+    ev = samplesAfter(t1);
+    REQUIRE(ev.size() == 1);
+    CHECK(contains(ev[0].text, R"("loaded":{"celesta":true})"));
+    CHECK(ev[0].at <= p.first);
+    if (ev[0].text == p.second) CHECK(ev[0].text.find("\"phase\":\"samples\"") < ev[0].text.find("\"re\":20,"));
+
+    // a warm prepare (no decode): the event at once, still before the reply; a prepare without a sampler: none
+    const auto t2 = Clock::now();
+    rt.post(R"({"v":1,"op":"prepare","id":30,"patch":)" + patchOf("vibes") + "}");
+    const auto w = rt.reply(30);
+    REQUIRE(tokenOf(w.second) > 0);
+    ev = samplesAfter(t2);
+    REQUIRE(ev.size() == 1);
+    CHECK(contains(ev[0].text, R"("loaded":{"vibes":true})"));
+    const auto t3 = Clock::now();
+    rt.post(R"({"v":1,"op":"prepare","id":31,"patch":)" + synthPatch() + "}");
+    REQUIRE(tokenOf(rt.reply(31).second) > 0);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    CHECK(samplesAfter(t3).empty());
+    // the event agrees with `get sampleStatus`
+    rt.post(R"({"v":1,"op":"get","what":"sampleStatus","id":40,"patches":[)" + patchOf("salamander-piano") + "," +
+            patchOf("vibes") + "," + patchOf("celesta") + "]}");
+    CHECK(contains(rt.reply(40).second, "\"loaded\":[true,true,true]"));
+    CHECK(rt.maxGapMs(t0, Clock::now()) < rt.bound);  // emitting changed nothing on the control loop's cadence
   }
 
   TEST_CASE("CORE2A review: a song switch to an instrument a preload has queued jumps the queue (joined keys)") {
@@ -390,6 +483,6 @@ TEST_SUITE("runtime_preload") {
     CHECK(contains(st, "\"loaded\":[true,false]"));
     CHECK(!rt.replied(10));
     REQUIRE(!rt.reply(10, kSanitized ? 120000 : 30000).second.empty());
-    CHECK(rt.maxGapMs(t0, Clock::now()) < kMaxGapMs);
+    CHECK(rt.maxGapMs(t0, Clock::now()) < rt.bound);
   }
 }

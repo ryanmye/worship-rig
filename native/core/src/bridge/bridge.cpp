@@ -157,9 +157,14 @@ void opPrepare(Engine &e, const Req &r) {
   // resolves), and the control loop keeps handling input, scenes and ticks meanwhile.
   Bridge *b = bridgeOf(e);
   auto *cs = dynamic_cast<samples::CacheServiceImpl *>(e.model().service<CacheService>());
-  std::vector<std::string> keys = cs && r.hasId ? cs->samplerLoadKeys(p) : std::vector<std::string>();
+  // O-AW-4: the prepare's samplers get a `load {phase:'samples'}` once their decodes settle (with or without an id)
+  std::vector<std::string> ids = cs ? cs->samplerIds({p}) : std::vector<std::string>();
+  std::vector<std::string> keys = cs && (r.hasId || !ids.empty()) ? cs->samplerLoadKeys(p) : std::vector<std::string>();
   const std::uint32_t token = e.model().prepare(std::move(p));
   if (b) b->maxToken_ = std::max(b->maxToken_, token);
+  // registered before the reply's waiter on the same keys, so the event goes out first (the shim then knows these
+  // samplers and asks no `get sampleStatus` after the reply); warm samples: at once, here
+  if (!ids.empty()) cs->whenSettled(keys, [cs, ids = std::move(ids)] { cs->emitSamples(ids); });
   JsonOut j;
   j.begin().kv("token", token).end();
   SongGraph &sg = e.model().songGraph();

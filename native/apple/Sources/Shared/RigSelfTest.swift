@@ -14,7 +14,9 @@
 //   audio      the page's `audio start` reached the shell and the null output rendered frames without errors
 //   note       (not required) a note-on through the core made signal on the null output (peak > -100 dBFS)
 //   migration  (only with RIG_ELECTRON_BACKUPS) the RigLibrary first-launch offer against that folder, answered Yes
-//              without a dialog, replaced the library with the backup (marker song present, schema 2)
+//              without a dialog, replaced the library with the backup (marker song present, schema 2). The fixture
+//              folder also holds a newer, truncated rotation file: RigBackups.latestAnywhere must skip it and serve
+//              the older good one (review E5 open item 3); serving it would leave the marker out and fail this step
 //   midi       (not required) the CoreMIDI client was created
 //   webcontent the WebContent process did not terminate
 //   console    zero console.error / uncaught errors / unhandled rejections / resource or CSP errors on the page

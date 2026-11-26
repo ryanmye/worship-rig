@@ -7,6 +7,8 @@ import { BridgeEngine } from '../../../app/js/engine-bridge/bridge-engine.js';
 import { MockNative } from '../../../app/js/engine-bridge/mock-native.js';
 import { loopbackPair } from '../../../app/js/engine-bridge/transports.js';
 import { api, fakeEnv, flush } from './helpers.mjs';
+import { websocketTransport } from '../../../app/js/engine-bridge/ws-transport.js';
+import { startDevhost, devhostBinary } from './devhost-proc.mjs';
 
 /** Like native/core: no `samples` events; `get sampleStatus` answers from `decoded` / `bad` (sampler ids). */
 class CoreLikeNative extends MockNative {
@@ -182,4 +184,153 @@ test('S re-check R1: reloadManifests (a My Samples rescan) re-asks every known s
     await fresh.engine.reloadManifests();
     assert.equal(fresh.core.asked.length, 0, 'nothing known: no request');
     assert.equal(r.core.asked.length, n);
+  });
+
+// ---- lane F1 (O-AW-4): the core emits `load {phase:'samples'}` itself; the sampleStatus fallback stays --------------
+/** native/core after lane F1: a `samples` event before each preload reply and before each prepare reply. */
+class EmittingCore extends CoreLikeNative {
+  _emitSamples(patches) {
+    const loaded = {};
+    for (const p of patches) {
+      for (const id of this._samplerIds(p)) loaded[id] = this.decoded.has(id) || this.bad.has(id);
+    }
+    if (Object.keys(loaded).length) this._emit('load', { phase: 'samples', loaded });
+  }
+
+  op_prepare(m) {
+    for (const id of this._samplerIds(m.patch)) this.decoded.add(id); // a realtime prepare decodes, then answers
+    return super.op_prepare(m);
+  }
+}
+
+function emittingRig() {
+  const env = fakeEnv();
+  const { js, native, log } = loopbackPair({ schedule: 'sync' });
+  const core = new EmittingCore({ api, transport: native, now: env.now, timers: env.timers });
+  const engine = new BridgeEngine({ transport: js, now: env.now, timers: env.timers });
+  const warns = [];
+  engine.addEventListener('warn', (e) => warns.push(e.detail.message));
+  return { env, core, engine, log, warns, native };
+}
+
+test('F1: with the core\'s samples events the facade is filled from them; a prepare then asks nothing', async () => {
+  const r = emittingRig();
+  await r.engine.start();
+  const a = song(sampler('salamander-piano'), synth('warm-pad'), null, null);
+  await r.engine.preload([a]);
+  assert.equal(ready(r.engine, a), true);
+  assert.deepEqual(r.core.asked, [['salamander-piano']], 'the fallback still asks once per preload (belt and braces)');
+  const b = song(sampler('vibes'), null, null, null);
+  const tok = await r.engine.prepare(b);
+  await flush();
+  assert.equal(ready(r.engine, b), true, 'filled from the prepare\'s event');
+  assert.equal(r.core.asked.length, 1, 'the event made the sampler known: no sampleStatus after the prepare');
+  assert.equal(r.engine.commit(tok), true);
+  // proof that the events alone fill it: the fallback switched off
+  const q = emittingRig();
+  await q.engine.start();
+  q.engine._refreshSampleStatus = () => Promise.resolve();
+  await q.engine.preload([a]);
+  assert.equal(ready(q.engine, a), true, 'from the preload event alone');
+  assert.equal(ready(q.engine, b), false);
+  await q.engine.prepare(b);
+  assert.equal(ready(q.engine, b), true, 'from the prepare event alone');
+  assert.equal(sampleGets(q.log).length, 0);
+  assert.equal(r.warns.length + q.warns.length, 0);
+});
+
+test('F1: an event behind an older sampleStatus reply in one batch: the reply cannot have the last word', async () => {
+  const r = emittingRig();
+  await r.engine.start();
+  const a = song(sampler('salamander-piano'), null, null, null);
+  r.core.hold = () => {}; // round 1's reply is sent by hand below
+  const p = r.engine.preload([a]);
+  await flush();
+  const gets = sampleGets(r.log);
+  assert.equal(gets.length, 1, 'round 1 in flight');
+  r.core.hold = null;
+  // the core answered round 1 while the decode was still running (false); in the same control turn the decode
+  // lands and its event goes out in the same batch, after the reply. The reply's handler runs in a microtask, after
+  // the event: without the re-ask the older `false` would be the last word.
+  r.core.decoded.delete('salamander-piano');
+  r.core._reply(gets[0].id, true, { loaded: [false], failed: [false] });
+  r.core.decoded.add('salamander-piano');
+  r.core._emit('load', { phase: 'samples', loaded: { 'salamander-piano': true } });
+  r.core._flush();
+  await p;
+  await flush();
+  assert.equal(sampleGets(r.log).length, 2, 'one more round for the overlapping id');
+  assert.equal(ready(r.engine, a), true, 'the newest answer wins');
+  // the other order (event, then a newer reply) needs nothing more; an event with no round in flight asks nothing
+  r.native.post({ v: 1, ev: 'load', phase: 'samples', loaded: { vibes: true } });
+  await flush();
+  assert.equal(sampleGets(r.log).length, 2);
+  assert.equal(ready(r.engine, song(sampler('vibes'))), true);
+  assert.equal(r.warns.length, 0);
+});
+
+// ---- the real core (opt-in like devhost.test.mjs: RIG_DEVHOST=1 or a rig-devhost path) ---------------------------
+const enabled = !!process.env.RIG_DEVHOST && !!devhostBinary();
+const skip = enabled ? false : 'opt-in: set RIG_DEVHOST=1 (or a rig-devhost path) after building native/devhost';
+const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+
+test('F1 on rig-devhost: the core\'s samples events alone fill _loaded (preload, cold and warm prepare)', { skip },
+  async () => {
+    const host = await startDevhost({ extra: ['--seed', '3'] });
+    const engine = new BridgeEngine({ transport: websocketTransport({ url: host.wsUrl }), app: 'lane-f1' });
+    const events = [];
+    const onLoad = engine._onLoad.bind(engine);
+    engine._onLoad = (m) => {
+      if (m.phase === 'samples' || m.phase === 'preload') events.push({ ...m, at: Date.now() });
+      return onLoad(m);
+    };
+    const asked = [];
+    const fallback = engine._refreshSampleStatus.bind(engine);
+    engine._refreshSampleStatus = (ids) => {
+      asked.push(ids);
+      return Promise.resolve(); // switched off: whatever _loaded holds now came from the core's events
+    };
+    const url = (id) => engine._sampleUrl(id);
+    try {
+      const info = await engine._hello;
+      assert.ok(info.minor >= 5, `hello minor ${info.minor}`);
+      await engine.start().catch(() => {});
+      engine._started = true;
+      assert.equal(engine._loaded.size, 0);
+      // a cold preload (real MP3 decodes): one samples event, before the preload event, naming the sampler true
+      await engine.preload([song(sampler('vibes'), synth('warm-pad'), null, null)], { pin: 'add' });
+      const ev = events.filter((e) => e.phase === 'samples');
+      assert.equal(ev.length, 1, JSON.stringify(events));
+      assert.deepEqual(ev[0].loaded, { vibes: true });
+      assert.ok(events.indexOf(ev[0]) < events.findIndex((e) => e.phase === 'preload'), 'before load {preload}');
+      assert.equal(engine._loaded.has(url('vibes')), true, 'filled from the event');
+      // a cold prepare: its event once the samples are decoded (the CORE2A reply comes after them)
+      const tok = await engine.prepare(song(sampler('celesta'), null, null, null));
+      assert.equal(engine._loaded.has(url('celesta')), true, 'filled from the prepare event before the token');
+      assert.equal(engine.commit(tok), true);
+      // a warm prepare: an event again, still true
+      const n = events.length;
+      await engine.prepare(song(sampler('vibes'), null, null, null));
+      await wait(50);
+      assert.deepEqual(events.slice(n).filter((e) => e.phase === 'samples').map((e) => e.loaded), [{ vibes: true }]);
+      // the events agree with the core's own answer
+      const st = await engine._req('get', { what: 'sampleStatus', patches: [song(sampler('vibes')),
+        song(sampler('celesta')), song(sampler('salamander-piano'))] });
+      assert.deepEqual(st.loaded, [true, true, false]);
+      assert.equal(engine._loaded.has(url('salamander-piano')), false, 'never named: never claimed');
+      // the fallback back on: a prepare of samplers the events made known asks nothing; a preload still asks once
+      engine._refreshSampleStatus = (ids) => {
+        asked.push(ids);
+        return fallback(ids);
+      };
+      asked.length = 0;
+      await engine.prepare(song(sampler('celesta'), sampler('vibes'), null, null));
+      assert.deepEqual(asked, [[]], 'no id to ask about after a prepare');
+      await engine.preload([song(sampler('vibes'))], { pin: 'none' });
+      assert.deepEqual(asked.at(-1), ['vibes'], 'belt and braces after a preload');
+      assert.equal(engine._loaded.has(url('vibes')), true);
+    } finally {
+      engine._dispose?.();
+      await host.stop();
+    }
   });
