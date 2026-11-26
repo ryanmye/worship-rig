@@ -13,8 +13,12 @@
 //    starts again at step 1; leaving Perform (Edit, the flag off) leaves learn mode.
 //  - Esc leaves learn mode and never panics (an overlay, like the range pick). With "Esc always panics" on (D24.7) one
 //    Esc panics and leaves learn mode, as it does with any other open overlay on Perform.
-//  - While learning, a tap / click / Enter on a learnable control only picks it (its own action does not run: PANIC
-//    does not panic, a fader does not move); everything else plays as usual (keys, the wheel, other buttons).
+//  - While learning, a tap / click / Enter on a learnable control only picks it (its own action does not run: a fader
+//    does not move, Fade out does not fade); everything else plays as usual (keys, the wheel, other buttons). PANIC is
+//    the exception (skeptic UI6-U7c F1): a tap on it panics and picks it, and the footswitch learned to PANIC is never
+//    captured (controller.learnCapture), so a stuck note can always be stopped, learning or not; a panic loses nothing.
+//  - A key / pad or a pedal switch heard, then a fader tapped (they cannot go together): the tap stays picked and the
+//    capture waits again for a knob (skeptic UI6-U7c F2: no dead end where only Done gets out).
 // Targets are found by the v6 controls' test ids (and the top bar's master fader), so no module needed a change.
 import { h, setText, disposer, rafCoalesce } from '../components/util.js';
 import { openOverlay } from '../components/overlay.js';
@@ -180,6 +184,12 @@ export function learnMode(v) {
         + 'knob, fader or pad.' : 'That control can’t be learned. Try another one.', 'warn');
       return void arm();
     }
+    if (st.picked && !fits(res, st.picked.id)) {
+      // skeptic UI6-U7c F2: the tapped fader stays picked; the key / pedal switch is not kept, the capture waits again
+      v.toast(`${Number.isInteger(res.note) ? 'A key or pad' : 'A pedal switch'} can’t move ${st.picked.label}: move `
+        + 'a knob or fader for it.', 'warn', { ms: 3500 });
+      return void arm();
+    }
     st.heard = res;
     paint();
     if (st.picked) complete();
@@ -229,13 +239,24 @@ export function learnMode(v) {
   function pick(t) {
     if (!st || st.busy) return;
     if (st.heard && !fits(st.heard, t.id)) {
-      v.toast(`${Number.isInteger(st.heard.note) ? 'A key or pad' : 'A pedal switch'} can’t move ${t.label}: tap `
-        + 'an outlined control, or move a knob first.', 'warn', { ms: 3500 });
+      // skeptic UI6-U7c F2: keep the tap, forget the key / pedal and wait for a knob (the capture ended when the key
+      // came; without this only an action or Done got out of it)
+      v.toast(`${Number.isInteger(st.heard.note) ? 'A key or pad' : 'A pedal switch'} can’t move ${t.label}: move `
+        + 'a knob or fader for it now.', 'warn', { ms: 3500 });
+      st.heard = null;
+      st.picked = { id: t.id, label: t.label };
+      paint();
+      arm();
       return;
     }
     st.picked = { id: t.id, label: t.label };
     paint();
     if (st.heard) complete();
+  }
+  /** A press on a target: PANIC still panics while learning (skeptic UI6-U7c F1), then the press picks. */
+  function press(t) {
+    if (t.id === 'panic') controller.panic?.();
+    pick(t);
   }
 
   // ---------------------------------------------------------------- enter / exit
@@ -297,7 +318,7 @@ export function learnMode(v) {
     e.preventDefault();
     e.stopPropagation();
     swallowClick = t.el;
-    pick(t);
+    press(t);
   };
   const onClick = (e) => {
     if (!st) return;
@@ -306,7 +327,7 @@ export function learnMode(v) {
     e.preventDefault();
     e.stopPropagation();
     // a click with no press first (a keyboard / AT activation) picks too
-    if (t && swallowClick !== t.el) pick(t);
+    if (t && swallowClick !== t.el) press(t);
     swallowClick = null;
   };
   const onKey = (e) => {
@@ -315,7 +336,7 @@ export function learnMode(v) {
     if (!t) return;
     e.preventDefault();
     e.stopPropagation();
-    if (!e.repeat) pick(t);
+    if (!e.repeat) press(t);
   };
   let mo = null;
   function listen(on) {

@@ -82,7 +82,8 @@ export async function dialogTests(x) {
     await until(() => !!window.__rig.store.get().settings.midiLearn?.['slots.0.sends.reverb']);
     assert.deepEqual((await ml())['slots.0.sends.reverb'], { cc: 22, channel: 0 });
     assert.equal((await song()).patch.slots[0].sends.reverb, r0);
-    // a pad (note): faders are not outlined as fits, a tap on one is refused; PANIC takes it and does not panic
+    // a pad (note): faders are not outlined as fits, a tap on one is refused (skeptic UI6-U7c F2: the fader stays
+    // picked and the capture waits for a knob again); PANIC takes the pad, and the tap on PANIC panics (F1)
     await armPanics();
     await until(() => window.__rig.midi.learning === '(capture)');
     await inject([0x99, 36, 100]);
@@ -95,10 +96,32 @@ export async function dialogTests(x) {
     await page.click(tid('v6-fader-0'));
     await until(() => /A key or pad can’t move/.test(document.getElementById('toasts').innerText));
     assert.equal((await ml())['slots.0.gain'], undefined);
+    // F2: no dead end: the fader stays picked, the pad is forgotten, a capture waits again
+    await until(() => window.__rig.views.v6.learn.state?.picked === 'slots.0.gain'
+      && window.__rig.views.v6.learn.state?.heard === null && window.__rig.midi.learning === '(capture)');
+    // the pad again on the picked fader: refused, the fader stays picked
+    await clearToasts();
+    await inject([0x99, 36, 100]);
+    await until(() => /A key or pad can’t move/.test(document.getElementById('toasts').innerText));
+    await inject([0x89, 36, 0]);
+    assert.equal((await learnState()).picked, 'slots.0.gain');
+    await until(() => window.__rig.midi.learning === '(capture)');
+    // F1: a tap on PANIC panics (a stuck note can always be stopped) and picks it; the pad then learns to it
     await page.click(tid('v6-panic'));
+    await until(() => window.__panics === 1 && window.__rig.views.v6.learn.state?.picked === 'panic');
+    await inject([0x99, 36, 100]);
     await until(() => !!window.__rig.store.get().settings.midiLearn?.panic);
     assert.deepEqual((await ml()).panic, { note: 36, channel: 9 });
-    assert.equal(await ev(() => window.__panics), 0, 'the tap on PANIC only picked it');
+    assert.equal((await ml())['slots.0.gain'], undefined);
+    assert.equal(await ev(() => window.__panics), 1, 'the captured pad did not panic; the tap did, once');
+    await inject([0x89, 36, 0]);
+    // F1: the pad learned to PANIC is never captured while learning: it panics, the capture keeps waiting
+    await until(() => window.__rig.views.v6.learn.state?.heard === null && window.__rig.midi.learning === '(capture)');
+    await inject([0x99, 36, 100]);
+    await until(() => window.__panics === 2);
+    await inject([0x89, 36, 0]);
+    assert.deepEqual(await learnState(), { heard: null, picked: null });
+    assert.equal(await ev(() => window.__rig.midi.learning), '(capture)');
     // the learned knob, after learn mode: it moves Warm Pad's level (and the learned pad panics)
     await page.click(tid('v6-learn-done'));
     await until(() => !window.__rig.views.v6.learn.active);
@@ -111,7 +134,7 @@ export async function dialogTests(x) {
     await inject([0xb0, 21, 127]);
     await until((g) => window.__rig.store.currentSong().patch.slots[1].gain !== g, g0);
     await inject([0x99, 36, 100]);
-    await until(() => window.__panics === 1);
+    await until(() => window.__panics === 3);
     await inject([0x89, 36, 0]);
     // put the level back
     await ev((g) => window.__rig.store.set(`songs.${window.__rig.store.currentSong().id}.patch.slots.1.gain`, g), g0);
@@ -522,6 +545,66 @@ export async function dialogTests(x) {
     } finally {
       await ev(() => window.__rig.store.set('settings.performLock', false));
     }
+    await clearToasts();
+  });
+
+  await T('U7c song menu (skeptic checks): a song switch closes it (its items act on the song it was opened on); '
+    + 'Delete in the Mac app (simulated): a failed backup deletes nothing, a good one deletes after it', async () => {
+    await toPerform();
+    await settled();
+    const s0 = await song();
+    await page.click(tid('v6-songmenu-btn'));
+    await until(() => !!document.querySelector('[data-testid="v6-songmenu"]'));
+    await ev(() => window.__rig.controller.nextSong());
+    await until((id) => window.__rig.store.currentSong().id !== id, s0.id);
+    await until(() => !document.querySelector('[data-testid="v6-songmenu"]'));
+    await ev((id) => window.__rig.controller.selectSong(id), s0.id);
+    await until((id) => window.__rig.store.currentSong().id === id, s0.id);
+    await settled();
+    // the Mac app's backup, simulated: ctx.rig.backupNow present, controller.backupNow failing then working
+    const copyId = await ev((id) => window.__rig.store.duplicateSong(id), s0.id);
+    await ev((id) => window.__rig.controller.selectSong(id), copyId);
+    await until((id) => window.__rig.store.currentSong().id === id, copyId);
+    await settled();
+    await ev(() => {
+      const { ctx, controller } = window.__rig;
+      window.__u7cRig = { had: 'rig' in ctx, rig: ctx.rig, bn: controller.backupNow, calls: 0, fail: true };
+      ctx.rig = { ...(ctx.rig || {}), backupNow: async () => ({ ok: true }) };
+      controller.backupNow = async () => {
+        window.__u7cRig.calls += 1;
+        return window.__u7cRig.fail ? { error: 'disk full' } : { ok: true, file: 'x.json' };
+      };
+    });
+    try {
+      await page.click(tid('v6-songmenu-btn'));
+      await until(() => !!document.querySelector('[data-testid="v6-songmenu"]'));
+      assert.match(await page.textContent(tid('v6-sm-delete')), /a backup of the library is made first/);
+      await clearToasts();
+      await hold(tid('v6-sm-delete'));
+      await until(() => /Could not make a backup first/.test(document.getElementById('toasts').innerText));
+      assert.equal(await ev(() => window.__u7cRig.calls), 1);
+      assert.ok(await ev((id) => !!window.__rig.store.getSong(id), copyId), 'nothing deleted without the backup');
+      await ev(() => {
+        window.__u7cRig.fail = false;
+      });
+      await page.click(tid('v6-songmenu-btn'));
+      await until(() => !!document.querySelector('[data-testid="v6-songmenu"]'));
+      await hold(tid('v6-sm-delete'));
+      await until((id) => !window.__rig.store.getSong(id), copyId);
+      assert.equal(await ev(() => window.__u7cRig.calls), 2);
+      await until(() => /Import latest backup/.test(document.getElementById('toasts').innerText));
+    } finally {
+      await ev(() => {
+        const { ctx, controller } = window.__rig;
+        const o = window.__u7cRig;
+        if (o.had) ctx.rig = o.rig;
+        else delete ctx.rig;
+        controller.backupNow = o.bn;
+      });
+    }
+    await ev((id) => window.__rig.controller.selectSong(id), s0.id);
+    await until((id) => window.__rig.store.currentSong().id === id, s0.id);
+    await settled();
     await clearToasts();
   });
 
