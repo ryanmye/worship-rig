@@ -74,6 +74,42 @@ def instrument_panel():
     <details class="adv"><summary>Advanced <small>Width 100% · Transpose 0 · Voices all · Pitch bend off · Sustain row</small><span>Just as the song began</span></summary></details></div>'''
 
 
+CATS = [('sound', 'Sound', 'Bright · Neutral · Natural', False), ('eq', 'Tone EQ', '2 bands', True),
+        ('range', 'Range', 'every key', False), ('touch', 'Touch', 'Normal', False),
+        ('sustain', 'Sustain', 'pedal holds · 0.1 s', False), ('sends', 'Space & Echo', '45% · 10%', True),
+        ('adv', 'Advanced', 'Width 100% · Transpose 0', False)]
+
+
+def cat_content(sec):
+  keys = ''.join(f'<i class="{"in" if 8 <= k <= 44 else ""}"></i>' for k in range(52))
+  if sec == 'sound':
+    return ('<h4>Sound <small>how this instrument itself sounds</small></h4>'
+            + wslider('Brightness', 'Bright · 100%', 92, 'darker', 'brighter') + wslider('Warmth', 'Neutral · 0 dB', 50, 'thinner', 'fuller')
+            + wslider('Ring-out', 'Natural · 0.12 s', 38, 'short', 'long'))
+  if sec == 'eq':
+    return '<h4>Tone EQ <small>2 bands · drag a point, or double-tap to add one</small></h4><img class="eqimg" src="img/eq-today.png" alt="Tone EQ">'
+  if sec == 'range':
+    return (f'<h4>Range <small>which keys play it</small></h4><div class="mkb big">{keys}</div>'
+            '<div class="hrow"><button class="sel-box">C-1</button><span>to</span><button class="sel-box">G9</button><button class="btn">Whole keyboard</button></div>'
+            '<div class="hrow"><button class="btn grow">Set lowest by playing</button><button class="btn grow">Set highest by playing</button></div>'
+            '<div class="hrow"><span class="lab">Octave</span><button class="sq">−</button><b>0</b><button class="sq">+</button></div>')
+  return '<h4>…</h4>'
+
+
+def instrument_panel_nav(sec='sound'):
+  # Each instrument's edit gets a short category list on its left, so it is clear what is being edited
+  # (Ryan, 2026-11-26). The strip stays on the right.
+  c = m.POS_COL[0]
+  nav = ''.join(f'''<button class="cn{" on" if k == sec else ""}"><b>{lab}{"<span class=cd2></span>" if chg else ""}</b><small>{sub}</small></button>'''
+                for k, lab, sub, chg in CATS)
+  sentence = ('<p class="sent"><b class="sn">Grand Piano</b> plays on <u>every key</u>, <u>a little</u> into the '
+              '<u>Hall</u>, with sustain <u>on</u>.</p>')
+  return f'''<div class="ipanel" style="--c:{c}"><div class="ip-h"><span class="ico" style="background:{c}"></span>{sentence}
+      <button class="btn chgi">Change instrument ▾</button></div>
+    <div class="ncols"><nav class="cnav" aria-label="What to edit">{nav}</nav><section class="ccont">{cat_content(sec)}</section>
+      <section class="col1"><h4>On stage</h4>{m.strip(0, m.ALL[0])}</section></div></div>'''
+
+
 def fx_panel():
   rooms = ''.join(f'<button class="room{" sel" if t == "Hall" else ""}"><b>{t}</b><small>{d}</small></button>' for t, d in [
     ('Dry', 'no room'), ('Room', 'small, close'), ('Stage', 'medium'), ('Hall', 'big, warm'), ('Cathedral', 'huge, long'),
@@ -127,7 +163,11 @@ def frame(main, w=1280, h=800, narrow=False, lib=True, n=3, cls=''):
 CSS = ''.join(open(f'/home/claude/scratch/{f}').read() for f in
               ('mock_v5.css', 'mock_v6.css', 'mock_chart.css', 'mock_bank.css', 'mock_edit.css'))
 frames = [
-  ('inst', 'Edit · an instrument', frame(rig_tabs() + instrument_panel())),
+  ('nav', 'Instrument · Sound', frame(rig_tabs() + instrument_panel_nav('sound'))),
+  ('naveq', 'Instrument · Tone EQ', frame(rig_tabs() + instrument_panel_nav('eq'))),
+  ('navrange', 'Instrument · Range', frame(rig_tabs() + instrument_panel_nav('range'))),
+  ('navipp', 'Instrument · iPad portrait', frame(rig_tabs() + instrument_panel_nav('sound'), 820, 1180, True, lib=False, cls='port')),
+  ('inst', 'Earlier: three columns', frame(rig_tabs() + instrument_panel())),
   ('fx', 'Edit · Effects', frame(rig_tabs('fx') + fx_panel())),
   ('eq', 'Edit · Tone EQ', frame(rig_tabs() + eq_panel())),
   ('choose', 'Change instrument', frame(rig_tabs() + instrument_panel() + chooser(), cls='dimmed')),
@@ -147,7 +187,7 @@ def build():
 <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@700;800&family=Figtree:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>{CSS}</style></head><body>
 <header class="pg"><h1>Edit: quick mockups</h1>
-<p>Today's Edit, carried into the Perform v6 language. Kept: the library on the left (now foldable), the song header,
+<p><b>New:</b> each instrument's edit has a short list of categories on its left (Sound, Tone EQ, Range, Touch, Sustain, Space &amp; Echo, Advanced), each with its current setting under the name and a dot when it changed; the chosen one fills the middle, the strip stays on the right. The earlier three-column version is kept as a tab. Today's Edit, carried into the Perform v6 language. Kept: the library on the left (now foldable), the song header,
 the plain-English sentence with tappable words, the three columns (on stage · the sound · where it plays), Advanced and
 the Tone EQ. Changed: tabs are named by instrument with their position colour, never Keys / Pad / Extra / Bass (D15);
 the "On stage" column is the very same strip as Perform; the keyboard row is Perform's. The instrument chooser is

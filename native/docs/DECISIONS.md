@@ -334,3 +334,11 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
 - **Try it replaces** what is playing, as a trial: nothing is saved, and a banner offers Keep it (add to library),
   Add to setlist, or Back to the previous song (restored exactly, like Revert).
 - Data is the existing O-AW-PP bank metadata; no schema change is implied by the design.
+
+## D18: Each instrument's edit has a short category list (Ryan, 2026-11-26)
+- Mockup: `native/docs/design/mockups/edit.html`, tabs "Instrument · …" (artifact "Edit mockups").
+- In Edit, the selected instrument's panel gets a category list on its left: Sound, Tone EQ, Range, Touch, Sustain,
+  Space & Echo, Advanced. Each row shows its current setting under the name and a dot when it changed since the song
+  began; the chosen category fills the middle, the Perform strip stays on the right. On iPad portrait the list
+  becomes a row of tabs. Purpose: always visible what is being edited.
+- (An earlier reading, a per-instrument edit sidebar on Perform, was reverted at Ryan's request.)

@@ -87,3 +87,23 @@
 .col1 .strip .fwrap{min-height:120px}.col1 .strip{gap:6px;padding:8px}
 .frame.edit.port .col1 .strip{height:auto}.frame.edit.port .ipanel{overflow:auto}
 .frame.edit.port .cols{flex:none}
+/* per-instrument category list (left) + content + strip */
+.ncols{flex:1;min-height:0;display:grid;grid-template-columns:200px 1fr 190px;gap:12px}
+.cnav{display:flex;flex-direction:column;gap:4px;border-right:1px solid var(--line);padding-right:10px;overflow:hidden}
+.cn{position:relative;display:flex;flex-direction:column;align-items:flex-start;min-height:46px;border-radius:10px;border:1px solid transparent;background:transparent;padding:4px 10px;text-align:left}
+.cn b{font-weight:700;font-size:15px;display:flex;align-items:center;gap:6px}.cn small{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.cn.on{background:color-mix(in srgb,var(--c) 18%,var(--panel-2));border-color:var(--c)}
+.cn.on::before{content:'';position:absolute;left:-1px;top:8px;bottom:8px;width:4px;border-radius:2px;background:var(--c)}
+.cd2{width:7px;height:7px;border-radius:50%;background:var(--chg)}
+.ccont{display:flex;flex-direction:column;gap:12px;min-height:0;overflow:hidden}
+.ccont h4,.ncols .col1 h4{margin:0;font:700 15px var(--book);color:var(--label);font-variant-caps:all-small-caps;letter-spacing:.03em}
+.ccont h4 small{font:400 12px var(--sans);color:var(--muted);font-variant-caps:normal;margin-left:6px}
+.ccont .ws{gap:8px}.ccont .hfader{flex:none;height:12px}
+.ncols .col1{display:flex;flex-direction:column;gap:8px;min-height:0;border-left:1px solid var(--line);padding-left:12px;overflow:hidden}
+.mkb.big{height:56px}
+.ccont .eqimg{flex:1;min-height:0;object-fit:contain;object-position:top left}
+.frame.edit.port .ncols{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+.frame.edit.port .cnav{flex-direction:row;flex-wrap:wrap;border-right:0;padding-right:0;border-bottom:1px solid var(--line);padding-bottom:8px}
+.frame.edit.port .cn{flex:0 0 auto;min-height:44px}.frame.edit.port .cn small{display:none}
+.frame.edit.port .cn.on::before{display:none}
+.frame.edit.port .ncols .col1{display:none}
