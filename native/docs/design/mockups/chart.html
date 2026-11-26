@@ -1,0 +1,506 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chart view mockups</title>
+<link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@700;800&family=Figtree:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>/* VOICE: a calm review board  IDEA: the app's own stage, drawn quickly  PICTURE: full-size frames of the screen
+   COLOUR/TYPE: Sanctuary v2 night tokens; Alegreya (book) + Figtree (sans)  LAYOUT: tabs, one frame scaled to fit */
+:root{color-scheme:dark;--bg:#160913;--panel:#21111c;--panel-2:#2a1a25;--panel-3:#352530;--line:#33232e;--line-2:#4a3a45;
+--well:#1b0c17;--text:#f5ecd8;--muted:#cec1aa;--faint:#ab9d87;--label:#d3bf94;--accent:#e6ba65;--pt:#efc878;--pb:#dfb05a;
+--ink:#1c1406;--track:#3a2935;--thumb:#f4ecdc;--drone:#edd9a6;--danger:#ef5b4f;--panic-bg:#54121a;--panic-text:#ffd0cc;--chg:#fff4dc;
+--book:'Alegreya',Georgia,serif;--sans:'Figtree',system-ui,sans-serif}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:#0f060d;color:var(--text);font:15px/1.4 var(--sans)}
+.pg{max-width:1320px;margin:0 auto;padding:24px 20px 8px}.pg h1{font:800 34px/1.1 var(--book);margin:0 0 8px}
+.pg p{color:var(--muted);max-width:80ch;margin:0 0 12px}
+.tabs{display:flex;flex-wrap:wrap;gap:8px}
+.tabs button{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--text);font:600 14px var(--sans);cursor:pointer}
+.tabs button[aria-selected=true]{background:linear-gradient(var(--pt),var(--pb));color:var(--ink)}
+main{max-width:1320px;margin:0 auto;padding:16px 20px 40px}main>section{display:none}main>section.on{display:block}
+.scale{position:relative;overflow:hidden}.scale>.frame{transform-origin:0 0}
+button{font:inherit;color:inherit;cursor:pointer}
+.frame{background:radial-gradient(120% 80% at 20% 0%,#2a1420,var(--bg) 55%);border-radius:14px;border:1px solid var(--line);
+  padding:0 14px 12px;display:flex;flex-direction:column;gap:10px;overflow:hidden}
+.top{height:56px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);margin:0 -14px;padding:0 14px}
+.logo{font-size:22px}.seg2{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg2 button{min-height:44px;padding:0 16px;border:0;background:var(--panel);font-weight:600}.seg2 .on{background:linear-gradient(var(--pt),var(--pb));color:var(--ink)}
+.tb{min-height:44px;min-width:44px;border-radius:10px;border:1px solid var(--line);background:var(--panel)}
+.tb.rec{padding:0 14px;color:#ffb3ad}
+.status{flex:1;display:flex;gap:8px;align-items:center;justify-content:center;color:var(--muted);font-size:13px}
+.status i{width:9px;height:9px;border-radius:50%;background:#9ccf66;display:inline-block}.status span{color:var(--accent)}
+.mvol{display:flex;align-items:center;gap:8px;width:200px;color:var(--label);font:650 13px var(--book);font-variant-caps:all-small-caps}
+.songbar{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px;min-height:62px}
+.song{font:800 26px var(--book);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px}
+.keylab,.chord{color:var(--label);font:650 13px var(--book);font-variant-caps:all-small-caps}.chord b{font-size:20px;color:var(--text);margin-left:4px}
+.keybtn{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid #6a5226;background:#3a2a1c;color:var(--accent);font:800 22px var(--book)}
+.btn{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);font-weight:600}
+.songbar .chord{margin-left:auto}
+.setbtn{min-height:44px;padding:4px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);display:flex;flex-direction:column;align-items:flex-start;font-weight:700}
+.setbtn small{color:var(--muted);font-weight:400}
+.stage{flex:1;display:grid;grid-template-columns:auto 1fr;gap:10px;min-height:0}
+.strips{display:flex;gap:10px;align-items:stretch}
+.strip{position:relative;width:150px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px;align-items:stretch}
+.s-name{font:700 17px var(--book);display:flex;gap:6px;align-items:center;min-height:24px;line-height:1.1}
+.s-name .ico{width:8px;height:22px;border-radius:3px;background:var(--c)}
+.tile{min-height:44px;border-radius:10px;border:1px solid var(--line-2);background:var(--panel-3);font-weight:800;letter-spacing:.06em;display:flex;align-items:center;gap:8px;padding:0 10px}
+.tile .dot{width:14px;height:14px;border-radius:50%;border:2px solid currentColor}
+.tile.on{background:var(--c);color:#1c1406;border-color:transparent}.tile.on .dot{background:#fff8}
+.tile.cand{--c:var(--drone)}
+.fwrap{flex:1;display:flex;justify-content:center;gap:10px;padding:6px 0;min-height:120px}
+.ftrack{position:relative;width:16px;border-radius:8px;background:var(--track)}
+.ftrack i{position:absolute;left:0;right:0;bottom:0;border-radius:8px;background:var(--c)}
+.ftrack em{position:absolute;left:50%;width:46px;height:28px;margin-left:-23px;margin-bottom:-14px;border-radius:7px;background:linear-gradient(#fbf5e8,#e3d6bd);box-shadow:0 2px 6px #000a}
+.meter{width:6px;border-radius:3px;background:var(--well);position:relative}.meter i{position:absolute;bottom:0;left:0;right:0;background:var(--c);border-radius:3px;opacity:.8}
+.db{text-align:center;font-weight:700;font-variant-numeric:tabular-nums}
+.s-btns{display:grid;grid-template-columns:1fr 44px;gap:6px}.s-btns .btn{padding:0 8px}
+.more.act{background:linear-gradient(var(--pt),var(--pb));color:var(--ink)}
+.strip.add{border-style:dashed;background:transparent;justify-content:center;align-items:center;color:var(--muted);width:96px;font-weight:600;text-align:center}
+.strip.add span{font-size:28px;color:var(--text);display:block}
+.pop{position:absolute;left:calc(100% + 10px);top:120px;width:300px;z-index:5;background:#261421;border:1px solid #533c4c;border-radius:12px;padding:12px;box-shadow:0 18px 40px #000c;display:flex;flex-direction:column;gap:10px}
+.pop-h{font:800 18px var(--book)}.pop-h span{color:var(--muted);font:400 14px var(--sans)}
+.prow{display:flex;align-items:center;gap:8px}.prow.col{flex-wrap:wrap}.prow .lab{width:84px}
+.prow small{color:var(--muted)}
+.lab{color:var(--label);font:650 14px var(--book);font-variant-caps:all-small-caps}
+.sq{min-width:44px;min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);font-size:20px}
+.seg{min-height:44px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2)}.seg.sel{border-color:var(--accent);color:var(--accent)}
+.ghost{min-height:44px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:transparent;font-size:13px}.ghost.warn{color:#ffb3ad}
+.cards{display:flex;flex-direction:column;gap:10px;min-height:0}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.card h3{margin:0;font:700 15px var(--book);color:var(--label);font-variant-caps:all-small-caps;letter-spacing:.03em}
+.card h3 span{font:400 13px var(--sans);color:var(--muted);font-variant-caps:normal;margin-left:6px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{min-height:44px;padding:4px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);font-weight:600;display:flex;flex-direction:column;justify-content:center;position:relative}
+.chip small{color:var(--muted);font-weight:400;font-size:12px}.chip.sel{border-color:var(--accent);background:#3a2433}
+.chip.plate{background:linear-gradient(var(--pt),var(--pb));color:var(--ink);border-color:transparent}
+.chip.dash{border-style:dashed;background:transparent}
+.chg{position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--ink)}
+.dirty{font-size:13px;color:var(--muted)}.link{background:none;border:0;color:var(--accent);text-decoration:underline;min-height:32px;padding:0 2px}
+.sp .chip{flex:1}
+.hrow{display:flex;align-items:center;gap:10px}.hrow.c{justify-content:center}.hrow b{white-space:nowrap}.num{font-size:26px;width:60px;text-align:center}
+.hfader{position:relative;flex:1;height:10px;border-radius:5px;background:var(--track)}
+.hfader i{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--thumb);opacity:.85}
+.hfader em{position:absolute;top:50%;width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:8px;background:linear-gradient(#fbf5e8,#e3d6bd);box-shadow:0 2px 6px #000a}
+.hfader.big{height:12px}
+.sel-box{min-height:44px;flex:1;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);text-align:left;padding:0 12px;font-weight:700}
+.hold{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2)}
+.hold b{margin-left:auto;color:var(--muted);font-weight:600}.hold .dot{width:10px;height:10px;border-radius:50%}
+.card .hold+.hold{margin-top:0}
+.bottom{display:grid;grid-template-columns:1fr repeat(4,118px);gap:10px;height:84px}
+.keys{border-radius:12px;border:1px solid var(--line);background:repeating-linear-gradient(90deg,#efe6d4 0 21px,#b9ae9b 21px 22px);position:relative}
+.keys::after{content:'';position:absolute;inset:0 0 40% 0;background:repeating-linear-gradient(90deg,transparent 0 14px,#1c1015 14px 26px,transparent 26px 44px,#1c1015 44px 56px,transparent 56px 88px,#1c1015 88px 100px,transparent 100px 154px);opacity:.95;border-radius:12px 12px 0 0}
+.act{border-radius:12px;border:1px solid var(--line);background:var(--panel);font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.act small{color:var(--muted);font-weight:400;font-size:12px}
+.act.panic{background:var(--danger);color:#fff;font-size:20px;border-color:transparent}.act.panic small{color:#ffe6e3}
+/* portrait */
+.port .stage{grid-template-columns:1fr}.strips.p{flex-wrap:wrap;height:auto}.strips.p .strip{height:380px;width:200px}.strips.p .strip.add{width:120px}
+.port .bottom{grid-template-columns:repeat(4,1fr);grid-template-rows:84px 84px;height:178px}.port .keys{grid-column:1/-1}
+/* menu bar */
+.mb{padding:10px;gap:8px}.mb-h{display:flex;align-items:center;gap:8px;font:800 16px var(--book)}.mb-h span{color:var(--muted);font:400 13px var(--sans);flex:1}
+.mbs{gap:8px}.strip.sm{width:150px;height:220px;padding:8px}.strip.sm .s-name{font-size:15px}.strip.sm .fwrap{min-height:70px}
+.mbrow{display:flex;align-items:center;gap:8px}.mbc .chip{min-height:40px;font-size:13px;padding:2px 10px}
+.tile.sm2{min-height:40px;padding:0 10px}.act.wide{min-height:52px;width:100%}
+.chip.hchip{flex-direction:row;align-items:center;gap:8px}.chip.hchip small{margin-left:4px}
+.chip.hchip .dot{width:10px;height:10px;border-radius:50%}
+.cards{overflow:hidden}
+.card{padding:8px 12px;gap:6px}.cards{gap:8px}.stage{gap:8px}
+.chips .dirty{align-self:center;margin-left:auto}
+.strips.p .strip{height:310px}
+.port .bottom{grid-template-rows:72px 72px;height:152px}
+.strip.sm{height:auto}.strip.sm .s-btns{display:none}.strip.sm .fwrap{min-height:100px}
+.mb .strips{flex:0 0 auto}
+.strips.p .strip{height:340px}
+/* quick buttons on each strip, as in today's Perform (Space/Echo sends with fill, Octave, Sustain) */
+.strip{width:176px}
+.qgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.qb{position:relative;overflow:hidden;min-height:44px;border-radius:9px;border:1px solid var(--line-2);background:var(--panel-2);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2px 4px;line-height:1.15}
+.qb b{font-size:13px;font-weight:700}.qb small{font-size:12px;color:var(--muted)}
+.qb.send{background:color-mix(in srgb,var(--c) 18%,var(--panel-2));border-color:color-mix(in srgb,var(--c) 45%,var(--line))}
+.qb.send b{color:color-mix(in srgb,var(--c) 70%,#fff)}
+.qb.send i{position:absolute;left:0;bottom:0;height:3px;background:var(--c)}
+.qb.alt small{color:var(--accent)}
+.qb.sus{flex-direction:row;gap:6px}.qb.sus .dot{width:10px;height:10px;border-radius:50%;border:2px solid var(--muted)}
+.qb.sus.lit{background:color-mix(in srgb,var(--c) 18%,var(--panel-2));border-color:color-mix(in srgb,var(--c) 45%,var(--line))}
+.qb.sus.lit .dot{background:var(--c);border-color:var(--c)}
+.strip.sm .qgrid{display:none}
+.strips.p .strip{height:400px}
+/* v6: strips fill the stage; drone panel at the side (Sunday Keys-style main screen) */
+.songbar{gap:10px;min-height:58px;padding:6px 12px}
+.songbar .btn:first-of-type{margin-left:auto}
+.songbar .chord{margin-left:auto}.songbar .chord+.btn{margin-left:0}
+.trn{display:flex;align-items:center;gap:6px}.trn b{width:26px;text-align:center;font-size:20px}
+.trn .sq{min-width:40px;min-height:40px}
+.spc{min-height:44px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);font-weight:700;display:flex;gap:8px;align-items:center}
+.setbtn{align-items:flex-start}
+.snaps{display:flex;align-items:center;gap:8px;min-height:52px}
+.snaps .chip{min-height:44px}.snaps .dirty{margin-left:auto}.snaps .arr{margin-left:4px}
+.board{flex:1;display:flex;gap:10px;min-height:0}
+.board .strips{flex:1;display:flex;gap:10px;min-width:0}
+.board .strip{flex:1 1 0;width:auto;max-width:230px}
+.board .strip.add{flex:0 0 120px}.board .strip.add.slim{flex:0 0 52px;padding:0}
+.board .fwrap{min-height:0}
+.s-name .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.board.dense .strips{gap:8px}.board.dense .strip{padding:8px}
+.board.dense .strip .qgrid{gap:4px}
+.board.dense .strip .qb{min-height:40px;padding:2px}.board.dense .strip .qb b{font-size:12px}.board.dense .strip .qb small{font-size:11px}
+.board.dense .strip .qb.sus{flex-direction:column;gap:1px}
+.board.dense .drone{flex-basis:236px}.board.dense .s-btns .btn{font-size:13px;padding:0 4px}
+.board.dense .s-name{font-size:15px}
+.board.dense .s-btns{grid-template-columns:1fr 40px}
+.board.dense .tile{padding:0 8px}
+.board.mid .qb b{font-size:12px}
+/* drone panel */
+.drone{flex:0 0 268px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:9px}
+.d-h{display:flex;align-items:center;gap:8px;font:700 17px var(--book)}.d-h .seg2{margin-left:auto}
+.d-h .ico{width:8px;height:22px;border-radius:3px;background:var(--drone)}
+.seg2.sm button{min-height:36px;padding:0 10px;font-size:13px}
+.d-row{display:flex;gap:8px}.d-row>*{flex:1}.d-row .seg2{display:flex}.d-row .seg2 button{flex:1;min-height:44px}
+.drone .tile.on{background:var(--drone)}
+.dkeys{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.dkeys .k{min-height:40px;border-radius:9px;border:1px solid var(--line-2);background:var(--panel-2);font-weight:700}
+.dkeys .k.sel{background:#3a2e1c;border-color:var(--drone);color:var(--drone)}
+.d-sl{display:flex;flex-direction:column;gap:12px;padding:4px 0}
+.dsl{display:grid;grid-template-columns:52px 1fr 48px;align-items:center;gap:8px}.dsl small{color:var(--muted);font-size:12px;text-align:right}
+.drone .qb.sus.lit .dot{background:var(--drone);border-color:var(--drone)}
+.drone .qb{min-height:44px}
+/* portrait: strips on top, drone as a wide panel under them */
+.board.port{flex-direction:column}.board.port .strips{flex:1}
+.drone.wide{flex:0 0 auto;display:grid;grid-template-columns:220px 1fr 220px;grid-template-rows:auto auto auto;column-gap:14px}
+.drone.wide .d-h{grid-column:1/-1}
+.drone.wide .dkeys{grid-template-columns:repeat(6,1fr);grid-row:2/4;grid-column:2}
+.drone.wide .d-row:nth-of-type(2){grid-column:1;grid-row:2;flex-direction:column}
+.drone.wide .d-sl{grid-column:3;grid-row:2/4;padding:0}
+.drone.wide>.d-row:last-child{grid-column:1;grid-row:3}
+.port .bottom{grid-template-rows:72px 72px;height:152px}
+.board.mid .strip .qb.sus{flex-direction:column;gap:1px}
+.chip,.btn,.setbtn,.spc,.keybtn{white-space:nowrap}
+.port .songbar{flex-wrap:wrap;row-gap:8px}.port .song{max-width:none;flex:1 0 100%}
+.port .songbar .btn:first-of-type{margin-left:auto}
+.port .snaps{flex-wrap:wrap;row-gap:8px}.port .snaps .dirty{margin-left:0}.port .snaps .arr{margin-left:auto}
+.board.few .strip{max-width:300px}.board.few .strip.add{flex:1 1 0;max-width:none}
+/* >5 instruments: horizontal scroll with a minimap of every instrument */
+.scrollwrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.minimap{display:flex;gap:4px;align-items:center;height:26px}
+.mmp{height:26px;padding:0 10px;border-radius:13px;border:1px solid color-mix(in srgb,var(--c) 40%,var(--line));
+  background:transparent;color:color-mix(in srgb,var(--c) 75%,#fff);font-size:12px;font-weight:700}
+.mmp.vis{background:color-mix(in srgb,var(--c) 22%,var(--panel-2));border-color:var(--c)}
+.mmh{margin-left:auto;color:var(--muted);font-size:12px}
+.sfade{flex:1;min-height:0;display:flex;position:relative}
+.sfade::after{content:'';position:absolute;top:0;bottom:12px;right:0;width:56px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,var(--bg));border-radius:0 12px 12px 0;transition:opacity .2s}
+.scrollwrap.atend .sfade::after{opacity:0}
+.board.scroll .strips{overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity;padding-bottom:10px;
+  scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+.board.scroll .strip{flex:0 0 calc((100% - 40px - 48px) / 5);max-width:none;scroll-snap-align:start}
+.board.scroll .strip.add.slim{flex:0 0 60px}
+.mmp:not(.vis){opacity:.55}
+/* today's bottom keyboard: range bars + C2–C7 keys with labels */
+.bottom{height:96px}.port .bottom{grid-template-rows:96px 72px;height:176px}
+.keys2{border-radius:12px;border:1px solid var(--line);background:#1e0f19;padding:6px 8px 6px;display:flex;flex-direction:column;gap:5px;min-width:0}
+.rbars{position:relative;height:calc(var(--n) * 5px + (var(--n) - 1) * 2px);max-height:26px;flex:0 0 auto}
+.rbars i{position:absolute;height:calc((100% - (var(--n) - 1) * 2px) / var(--n));background:var(--c);border-radius:2px}
+.rbars i:nth-child(1){top:0}
+.kb{position:relative;flex:1;display:flex;gap:1px;min-height:44px}
+.wk{flex:1;background:linear-gradient(#cfc6b2,#b6ad98);border-radius:0 0 4px 4px;position:relative;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding-bottom:3px}
+.wk.held{background:linear-gradient(#f7d27a,#eab64f)}
+.wk i,.wk em{font-style:normal;font-size:10px;font-weight:700;color:#3a2d22;line-height:1}
+.wk em{font-size:11px;color:#1c1406}
+.wk i{position:absolute;left:2px;bottom:3px}.wk em+i{display:none}
+.bk{position:absolute;top:0;height:58%;background:linear-gradient(#2a1a22,#120a0e);border-radius:0 0 3px 3px;z-index:1;display:flex;align-items:flex-end;justify-content:center;padding-bottom:2px}
+.bk.held{background:linear-gradient(#e0a94a,#b88430)}
+.bk em{font-style:normal;font-size:10px;font-weight:800;color:#f5ecd8}
+/* right sidebar: tabs of chosen modules, collapsible to a rail */
+.drone{flex:none;background:none;border:0;padding:0;border-radius:0}
+.side{flex:0 0 280px;position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 10px 10px;display:flex;flex-direction:column;gap:9px;min-height:0}
+.sb-h{display:flex;align-items:center;gap:4px}
+.sbtabs{display:flex;flex:1;gap:2px;background:var(--well);border-radius:10px;padding:3px}
+.sbtabs button{flex:1;min-height:38px;border:0;border-radius:8px;background:transparent;font-size:13px;font-weight:700;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:5px;padding:0 4px}
+.sbtabs button.on{background:var(--panel-3);color:var(--text)}
+.sbtabs .live{width:7px;height:7px;border-radius:50%;background:var(--drone)}
+.sb-c,.sb-x{min-width:36px;min-height:44px;border-radius:9px;border:1px solid var(--line);background:var(--panel-2);font-weight:800}
+.sb-c.act{background:linear-gradient(var(--pt),var(--pb));color:var(--ink)}
+.side .d-h .lab{width:auto;margin-right:auto}
+.sb-body{display:flex;flex-direction:column;gap:9px;flex:1;min-height:0}
+.slist{display:flex;flex-direction:column;gap:4px;flex:1;overflow:hidden}
+.sl{min-height:44px;border-radius:9px;border:1px solid var(--line);background:var(--panel-2);display:grid;grid-template-columns:22px 1fr auto;column-gap:6px;align-items:center;text-align:left;padding:3px 10px}
+.sl .n{color:var(--faint);font-size:12px}.sl b{font:700 15px var(--book);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sl .k{color:var(--accent);font-weight:800}.sl small{grid-column:2/4;font-size:11px;color:var(--muted);margin-top:-2px}
+.sl.now{background:linear-gradient(var(--pt),var(--pb));color:var(--ink);border-color:transparent}.sl.now .k,.sl.now small,.sl.now .n{color:var(--ink)}
+.sl.cued{border-color:var(--accent)}.sl.cued small{color:var(--accent)}
+.go{flex:2!important;min-height:52px;border-radius:10px;border:1px solid var(--accent);background:#2e2016;text-align:left;padding:4px 10px;display:flex;flex-direction:column}
+.go small{color:#9ccf66;font-size:11px;font-weight:800}.go b{font:700 15px var(--book);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.notes{flex:1;background:var(--well);border-radius:10px;padding:10px 12px;font-size:14px;color:var(--muted)}.notes p{margin:0 0 10px}.notes b{color:var(--text)}
+.qb.dis{opacity:.55}.hint{color:var(--muted);font-size:13px;margin:4px 0 0}
+.side .dsl .hfader i{background:var(--thumb)}
+.czpop{left:auto;right:10px;top:58px;width:300px}
+.cz{display:flex;align-items:center;gap:10px;min-height:44px;border-bottom:1px solid var(--line);font-weight:700}
+.cz small{color:var(--muted);font-weight:400;font-size:12px;flex:1}.grip{color:var(--faint);cursor:grab}
+.sw{width:40px;height:24px;border-radius:12px;background:var(--track);position:relative}
+.sw::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--thumb)}
+.sw.on{background:var(--accent)}.sw.on::after{left:19px}
+.side.rail{flex:0 0 64px;padding:6px;align-items:stretch;gap:6px}
+.rb{min-height:58px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--muted);position:relative}
+.rb span{font-size:18px;color:var(--text)}.rb em{position:absolute;top:4px;right:6px;font-style:normal;font-size:11px;color:var(--drone)}
+.rb.live{border-color:var(--drone)}.rb.live span{color:var(--drone)}
+.side.rail .sb-x{min-height:40px}
+/* portrait: sidebar becomes a wide bottom panel */
+.side.wide{flex:0 0 auto}
+.side.wide .drone.wide{display:grid}
+.port .keys2{grid-column:1/-1}
+/* today's menu-bar popover */
+.mb2{padding:10px 8px 6px;gap:6px;border-radius:16px}
+.mh{display:grid;grid-template-columns:32px 1fr 32px;align-items:center;text-align:center;padding:2px 0 4px}
+.mh b{display:block;font:800 17px var(--sans)}.mh small{color:var(--muted);font-size:12px}.mh em{font-style:normal;color:var(--accent);font-weight:800;margin-right:6px}
+.ar{border:0;background:none;font-size:24px;color:var(--muted);min-height:40px}
+.md{min-height:59px;border-radius:12px;border:1px solid var(--line-2);background:transparent;display:flex;align-items:center;gap:12px;padding:0 12px;font-size:15px;font-weight:600;text-align:left}
+.md .mn{width:22px;height:22px;border-radius:6px;border:1px solid var(--line-2);display:grid;place-items:center;font-size:12px;color:var(--muted)}
+.md .mk{margin-left:auto;color:var(--muted)}
+.md.on{background:#3a2a1c;border-color:var(--accent)}.md.on .mn{background:var(--accent);color:var(--ink);border-color:transparent}.md.on .mk{color:var(--accent)}
+.mmaster{border:1px solid var(--line-2);border-radius:12px;padding:8px 12px 12px;display:flex;flex-direction:column;gap:10px}
+.mmhd{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}.mmhd b{color:var(--text)}
+.mrow{display:grid;gap:6px}.mrow.r1{grid-template-columns:1.25fr .65fr 1.1fr 1.3fr}.mrow.r2{grid-template-columns:2.1fr 1fr 1fr}
+.mbt,.pill{min-height:44px;border-radius:10px;border:1px solid var(--line-2);background:var(--panel);font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px}
+.pill{border-radius:22px}.pill.on{border-color:var(--accent);background:#2e2016}.pill .dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}.pill em{font-style:normal;color:var(--accent)}
+.mbt.pan{background:#c4413a;color:#fff;border:0;flex-direction:column;gap:0;font-weight:800;line-height:1.1}.mbt.pan small{font-weight:500}
+.rd{width:10px;height:10px;border-radius:50%;border:2px solid #e0716a}
+.tg{width:22px;height:13px;border-radius:7px;background:var(--track);position:relative}.tg::after{content:'';position:absolute;left:2px;top:2px;width:9px;height:9px;border-radius:50%;background:var(--thumb)}
+.mstat{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;padding:0 4px}.mstat .dot{width:7px;height:7px;border-radius:50%;background:#e6a54a}
+.mmaster .hfader{flex:none;height:6px}
+/* left panel: wheel & pedal (today's left column) */
+.wheel{flex:0 0 84px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;display:flex;flex-direction:column;align-items:stretch;gap:8px;text-align:center}
+.wh-h{display:flex;align-items:center;justify-content:space-between}.wh-h .lab{width:auto}
+.sb-x.sm{min-width:28px;min-height:28px;font-size:12px;padding:0}
+.wbar{flex:1;min-height:80px;border-radius:8px;background:var(--well);border:1px solid var(--line-2);position:relative;overflow:hidden;margin:0 6px}
+.wbar i{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(#d9b56a,#9c7a3a)}
+.wbar i::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--chg)}
+.wv{font-size:17px}.wt{font-size:11px;color:var(--muted);line-height:1.2;margin-top:-6px}
+.qb.swell{min-height:44px}.ped{display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--muted);text-transform:uppercase;min-height:24px}
+.ped .dot{width:9px;height:9px;border-radius:50%;background:var(--track)}
+.toprow{flex:1;display:flex;gap:10px;min-height:0}
+.wheel{position:relative}
+.qk{min-height:52px;border-radius:10px;border:1px solid var(--line-2);background:var(--panel-2);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;font-weight:800}
+.qk span{font-size:16px;color:var(--accent)}.qk.act{background:linear-gradient(var(--pt),var(--pb));color:var(--ink)}.qk.act span{color:var(--ink)}
+.qpanel{position:absolute;left:calc(100% + 10px);top:0;width:330px;z-index:6;background:#261421;border:1px solid #533c4c;border-radius:12px;
+  padding:12px;box-shadow:0 18px 40px #000c;display:flex;flex-direction:column;gap:10px;text-align:left}
+.qpanel .pop-h{display:flex;align-items:center;gap:6px}.qx{margin-left:auto;min-width:36px;min-height:36px;border-radius:9px;border:1px solid var(--line);background:var(--panel-2);font-size:18px}
+.qpanel section{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:8px}
+.qpanel h4{margin:0;font:700 14px var(--book);color:var(--label);font-variant-caps:all-small-caps}.qpanel h4 small{font:400 12px var(--sans);color:var(--muted);font-variant-caps:normal;margin-left:6px}
+.qpanel .prow .lab{width:72px}.qpanel .prow.col{flex-direction:column;align-items:stretch}
+.bpm{font-size:24px}.tap{margin-left:auto;min-width:88px;min-height:44px;border-radius:10px;border:1px solid var(--accent);background:#3a2a1c;color:var(--accent);font-weight:800;letter-spacing:.08em}
+.touch{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}.touch .seg{padding:0 4px;font-size:13px}
+.lamp{width:14px;height:14px;border-radius:50%;background:var(--track);border:2px solid var(--line-2)}
+.okd{width:10px;height:10px;border-radius:50%;background:#9ccf66}
+.qpanel .link{align-self:flex-start}
+/* chart view mockups */
+.chart{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;overflow:hidden}
+.side .chart{border:0;background:none;border-radius:0}
+.chh{display:grid;grid-template-columns:auto 1fr auto;grid-template-rows:auto auto;gap:8px 12px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}
+.cht b{font:800 22px var(--book);display:block;line-height:1.1}.cht small{color:var(--muted);font-size:13px}.cht em{font-style:normal;color:var(--accent);font-weight:800}
+.chgrp{display:flex;gap:6px;align-items:center;justify-self:center}.chs{display:flex;gap:6px;align-items:center}
+.chs b{min-width:40px;text-align:center}
+.sq.sm{min-width:40px;min-height:40px;font-size:15px;font-weight:700}
+.play{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--accent);background:#3a2a1c;color:var(--accent);font-weight:800}
+.jumps{grid-column:1/-1;display:flex;gap:6px}
+.jp{min-width:44px;min-height:36px;border-radius:9px;border:1px solid var(--line-2);background:var(--panel-2);font-weight:700;font-size:13px}
+.jp.on{border-color:var(--accent);color:var(--accent);background:#3a2a1c}
+.sheet{flex:1;overflow:hidden;position:relative;padding:8px 20px 40px;background:var(--well);
+  --fs:24px;font-family:'JetBrains Mono',ui-monospace,monospace}
+.sz-s .sheet{--fs:17px;padding:6px 12px}.sz-l .sheet{--fs:28px}
+.csec{margin:0 0 calc(var(--fs) * .6)}
+.csec h5{margin:6px 0 4px;font:800 calc(var(--fs) * .62) var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--label)}
+.csec.cur h5{color:var(--accent)}
+.cl{display:flex;flex-wrap:wrap;line-height:1.15;margin-bottom:calc(var(--fs) * .35);border-radius:6px}
+.cs{display:inline-flex;flex-direction:column;white-space:pre}
+.ch{color:var(--accent);font-weight:700;font-size:calc(var(--fs) * .9);min-height:1.15em;padding-right:.4em}
+.ly{color:var(--text);font-size:var(--fs)}
+.cl.now{background:color-mix(in srgb,var(--accent) 10%,transparent);box-shadow:-8px 0 0 color-mix(in srgb,var(--accent) 10%,transparent),8px 0 0 color-mix(in srgb,var(--accent) 10%,transparent)}
+.readline{position:absolute;left:0;right:0;top:38%;height:2px;background:linear-gradient(90deg,var(--accent),transparent 70%);opacity:.6;pointer-events:none}
+/* sidebar version: wider while the Chart tab is open */
+.side.chartw{flex-basis:540px}
+.side.chartw .chh{grid-template-columns:1fr auto;padding:8px 2px}.side.chartw .chgrp{justify-self:end}
+.side.chartw .chs{grid-column:1/-1}.side.chartw .jumps{flex-wrap:wrap}
+.side.chartw .sheet{border-radius:10px}
+.rb.act{background:linear-gradient(var(--pt),var(--pb));color:var(--ink)}.rb.act span{color:var(--ink)}
+/* mini strips: still live while the chart has the stage */
+.minis{display:flex;gap:6px}
+.mini{width:68px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 6px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.mon{width:44px;height:44px;border-radius:10px;border:0;background:var(--c);display:grid;place-items:center}
+.mon .dot{width:12px;height:12px;border-radius:50%;border:2px solid #1c1406;background:#fff8}
+.mini .fwrap{flex:1;min-height:60px;padding:4px 0}
+.mini .ftrack{width:12px}.mini .ftrack em{width:40px;height:24px;margin-left:-20px;margin-bottom:-12px}
+.mdb{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+.mnm{font-size:11px;color:var(--muted);text-align:center;line-height:1.1;max-height:2.3em;overflow:hidden}
+.minis.row{flex:1}.minis.row .mini{flex:1;width:auto;flex-direction:row;padding:8px 10px;height:80px}
+.minis.row .mini .fwrap{min-height:0;height:100%;padding:0}
+.minis.row .mnm{flex:1;text-align:left;font-size:13px;color:var(--text);font-weight:700}
+.chartport .toprow{flex:0 0 auto;align-items:stretch}
+.backto{min-width:96px;border-radius:12px;border:1px solid var(--line);background:var(--panel-2);font-weight:700}
+.board.port.chartport{flex-direction:column}
+/* add-chart dialog */
+.board.dim{position:relative}.board.dim::after{content:'';position:absolute;inset:0;background:#0009;border-radius:12px;z-index:5}
+.dlg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:640px;z-index:6;background:#261421;border:1px solid #533c4c;border-radius:14px;padding:16px;
+  box-shadow:0 24px 60px #000d;display:flex;flex-direction:column;gap:12px}
+.srcrow{display:flex;gap:8px;align-items:center}.srcrow small{color:var(--muted);font-size:12px;margin-left:4px}
+.paste{background:var(--well);border:1px solid var(--line-2);border-radius:10px;padding:10px 12px}
+.paste pre{margin:0;font:500 13px/1.5 'JetBrains Mono',monospace;color:var(--muted);white-space:pre-wrap}
+.found{font-size:14px}.warn1{display:block;color:#ffcf8a;font-size:13px;margin-top:4px}
+.offers{display:flex;flex-direction:column;gap:6px}.offers .lab{width:auto}
+.offer{display:flex;align-items:center;gap:10px;min-height:40px;font-weight:600}.offer small{color:var(--muted);font-weight:400}
+.cb{width:22px;height:22px;border-radius:6px;border:2px solid var(--line-2)}.cb.on{background:var(--accent);border-color:var(--accent)}
+.dlgb{display:flex;justify-content:flex-end;gap:8px}.savebtn{background:linear-gradient(var(--pt),var(--pb));color:var(--ink);border:0;padding:0 20px}
+.chh{grid-template-columns:1fr auto}
+.cht{grid-column:1;grid-row:1}.chgrp{grid-column:2;grid-row:1;justify-self:end}
+.jumps{grid-column:1;grid-row:2}.chs{grid-column:2;grid-row:2;justify-self:end}
+.side.chartw .jumps{grid-column:1/-1;grid-row:3}.side.chartw .chs{grid-column:1/-1;grid-row:2;justify-self:start}
+</style></head><body>
+<header class="pg"><h1>Chart view: quick mockups</h1>
+<p>The chord chart (D7, ships in 2.1) inside the Perform v6 layout. Two ways to place it: the chart takes the stage
+while the instruments shrink to live mini faders, or the chart is a wider tab in the right sidebar. Chords follow the song's key: this chart was written in G and the song is in C, so it shows in C. <b>Heard</b> shows the key
+the band hears, <b>Hands</b> the key your hands play when Easy Transpose is on. The gold line is where
+auto-scroll reads; the section buttons jump. The song and words are made up for the mockup. Nothing is wired up.</p>
+<nav class="tabs" role="tablist"><button role="tab" data-t="stage" aria-selected="true">Chart takes the stage</button><button role="tab" data-t="beside" aria-selected="false">Chart in the sidebar</button><button role="tab" data-t="ipl" aria-selected="false">iPad landscape</button><button role="tab" data-t="ipp" aria-selected="false">iPad portrait (music stand)</button><button role="tab" data-t="add" aria-selected="false">Add a chart</button></nav></header>
+<main><section id="stage" class="on"><div class="scale"><div class="frame " style="width:1280px;height:800px"><div class="top"><span class="logo">⛪</span><div class="seg2"><button class="on">Perform</button><button>Edit</button></div>
+  <button class="tb">⚙</button><div class="status"><i class="ok"></i>MIDI ok<i class="ok"></i>Sound ok<span>42 ms</span></div>
+  <button class="tb rec">● REC</button><div class="mvol"><span>Master</span><div class="hfader"><i style="width:68%"></i><em style="left:68%"></em></div></div></div><div class="songbar"><b class="song">Piano + Warm Pad</b><span class="keylab">KEY</span><button class="keybtn">C ▾</button>
+  <div class="trn"><span class="keylab">TRANSPOSE</span><button class="sq">−</button><b>0</b><button class="sq">+</button></div>
+  <button class="spc"><span class="keylab">SPACE</span>Hall ▾</button>
+  <span class="chord">CHORD <b>D</b></span><button class="btn">Notes</button>
+  <button class="setbtn">Setlist<small>My Set · not in use</small></button></div><div class="board"><aside class="wheel"><button class="qk" aria-label="Quick settings"><span>⚡</span>Quick</button>
+    <div class="wh-h"><span class="lab">Wheel</span></div>
+    <div class="wbar"><i style="height:62%"></i></div><b class="wv">62%</b><small class="wt">→ Warm Pad level</small>
+    <button class="qb swell"><b>◢ Swell</b></button><div class="ped"><span class="dot"></span>Pedal</div>
+    </aside><div class="minis"><div class="mini" style="--c:#f78955"><button class="mon"><span class="dot"></span></button>
+      <div class="fwrap"><div class="ftrack"><i style="height:62%"></i><em style="bottom:62%"></em></div></div>
+      <small class="mdb">−1.9</small><span class="mnm">Grand Piano</span></div><div class="mini" style="--c:#4ec491"><button class="mon"><span class="dot"></span></button>
+      <div class="fwrap"><div class="ftrack"><i style="height:50%"></i><em style="bottom:50%"></em></div></div>
+      <small class="mdb">−5.2</small><span class="mnm">Warm Pad</span></div><div class="mini" style="--c:#7ad1f7"><button class="mon"><span class="dot"></span></button>
+      <div class="fwrap"><div class="ftrack"><i style="height:40%"></i><em style="bottom:40%"></em></div></div>
+      <small class="mdb">−8.0</small><span class="mnm">Sub Bass</span></div></div><div class="chart sz-l"><div class="chh">
+    <div class="cht"><b>Morning Light</b><small><em>Key C</em> · written in G · 72 bpm · 4/4</small></div>
+    <div class="chgrp"><div class="seg2 sm"><button class="on">Heard</button><button class="">Hands</button></div>
+      <button class="sq sm">A−</button><button class="sq sm">A+</button><button class="ghost">Edit chart…</button></div>
+    <div class="chs"><button class="play">▶ Scroll</button><button class="sq sm">−</button><b>1.0×</b><button class="sq sm">+</button></div>
+    <div class="jumps"><button class="jp">Intro</button><button class="jp">V1</button><button class="jp on">C</button><button class="jp">V2</button><button class="jp">C</button><button class="jp">B</button><button class="jp">C</button></div></div><div class="sheet"><section class="csec"><h5>Intro</h5><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">    </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">    </span></span><span class="cs"><span class="ch">Am</span><span class="ly">    </span></span><span class="cs"><span class="ch">F</span><span class="ly">    </span></span></div></section><section class="csec"><h5>Verse 1</h5><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">Morning light breaks </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">over the hill</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">You were here be</span></span><span class="cs"><span class="ch">F</span><span class="ly">fore I woke</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">Every breath I </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">take is still</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">held in the </span></span><span class="cs"><span class="ch">F</span><span class="ly">words you spoke</span></span></div></section><section class="csec cur"><h5>Chorus</h5><div class="cl"><span class="cs"><span class="ch">F</span><span class="ly">Hallelujah, </span></span><span class="cs"><span class="ch">C</span><span class="ly">You are near</span></span></div><div class="cl now"><span class="cs"><span class="ch">G</span><span class="ly">Steady my heart, </span></span><span class="cs"><span class="ch">Am</span><span class="ly">quiet my fear</span></span></div><div class="cl"><span class="cs"><span class="ch">F</span><span class="ly">Hallelujah, </span></span><span class="cs"><span class="ch">C</span><span class="ly">You remain</span></span></div><div class="cl"><span class="cs"><span class="ch">G</span><span class="ly">Over the </span></span><span class="cs"><span class="ch">F</span><span class="ly">storm and the </span></span><span class="cs"><span class="ch">C</span><span class="ly">rain</span></span></div></section><section class="csec"><h5>Verse 2</h5><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">When the evening </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">settles in</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">and the road is </span></span><span class="cs"><span class="ch">F</span><span class="ly">long and grey</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">You are where the </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">light begins</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">You are </span></span><span class="cs"><span class="ch">F</span><span class="ly">with me all the way</span></span></div></section><section class="csec"><h5>Bridge</h5><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">Nothing can </span></span><span class="cs"><span class="ch">F</span><span class="ly">move me</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">nothing can </span></span><span class="cs"><span class="ch">G</span><span class="ly">shake</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">what you have </span></span><span class="cs"><span class="ch">F</span><span class="ly">spoken</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">You will not </span></span><span class="cs"><span class="ch">G</span><span class="ly">break</span></span></div></section><div class="readline" title="auto-scroll reading line"></div></div></div><aside class="side rail "><button class="sb-x" aria-label="Open sidebar">⟨</button><button class="rb live" aria-label="Open Drone"><span>◉</span>Drone<em>C</em></button><button class="rb" aria-label="Open Setlist"><span>☰</span>Setlist</button><button class="rb act" aria-label="Open Chart"><span>♫</span>Chart</button><button class="rb" aria-label="Open Notes"><span>✎</span>Notes</button></aside></div><div class="bottom"><div class="keys2"><div class="rbars" style="--n:3"><i style="--c:#f78955;top:calc(0 * (100% + 2px) / 3);left:0.000%;width:100.000%"></i><i style="--c:#4ec491;top:calc(1 * (100% + 2px) / 3);left:0.000%;width:100.000%"></i><i style="--c:#7ad1f7;top:calc(2 * (100% + 2px) / 3);left:0.000%;width:38.889%"></i></div><div class="kb"><span class="wk"><i>C2</i></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"><i>C3</i></span><span class="wk held"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk held"></span><span class="wk"></span><span class="wk"><em>A</em></span><span class="wk held"><em>S</em></span><span class="wk"><em>D</em></span><span class="wk"><em>F</em></span><span class="wk"><em>G</em></span><span class="wk held"><em>H</em></span><span class="wk"><em>J</em></span><span class="wk"><em>K</em></span><span class="wk"><em>L</em></span><span class="wk"><em>;</em></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"><i>C6</i></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"><i>C7</i></span><span class="bk" style="left:1.944%;width:1.667%"></span><span class="bk" style="left:4.722%;width:1.667%"></span><span class="bk" style="left:10.278%;width:1.667%"></span><span class="bk" style="left:13.056%;width:1.667%"></span><span class="bk" style="left:15.833%;width:1.667%"></span><span class="bk" style="left:21.389%;width:1.667%"></span><span class="bk" style="left:24.167%;width:1.667%"></span><span class="bk" style="left:29.722%;width:1.667%"></span><span class="bk" style="left:32.500%;width:1.667%"></span><span class="bk" style="left:35.278%;width:1.667%"></span><span class="bk" style="left:40.833%;width:1.667%"><em>W</em></span><span class="bk" style="left:43.611%;width:1.667%"><em>E</em></span><span class="bk held" style="left:49.167%;width:1.667%"><em>T</em></span><span class="bk" style="left:51.944%;width:1.667%"><em>Y</em></span><span class="bk" style="left:54.722%;width:1.667%"><em>U</em></span><span class="bk" style="left:60.278%;width:1.667%"><em>O</em></span><span class="bk" style="left:63.056%;width:1.667%"><em>P</em></span><span class="bk" style="left:68.611%;width:1.667%"></span><span class="bk" style="left:71.389%;width:1.667%"></span><span class="bk" style="left:74.167%;width:1.667%"></span><span class="bk" style="left:79.722%;width:1.667%"></span><span class="bk" style="left:82.500%;width:1.667%"></span><span class="bk" style="left:88.056%;width:1.667%"></span><span class="bk" style="left:90.833%;width:1.667%"></span><span class="bk" style="left:93.611%;width:1.667%"></span></div></div><button class="act">↺ Revert<small>nothing changed</small></button>
+  <button class="act">Fade out</button><button class="act panic">PANIC<small>hold · or Esc</small></button><button class="act">🔒 Lock<small>hold to lock</small></button></div></div></div></section><section id="beside" class=""><div class="scale"><div class="frame " style="width:1280px;height:800px"><div class="top"><span class="logo">⛪</span><div class="seg2"><button class="on">Perform</button><button>Edit</button></div>
+  <button class="tb">⚙</button><div class="status"><i class="ok"></i>MIDI ok<i class="ok"></i>Sound ok<span>42 ms</span></div>
+  <button class="tb rec">● REC</button><div class="mvol"><span>Master</span><div class="hfader"><i style="width:68%"></i><em style="left:68%"></em></div></div></div><div class="songbar"><b class="song">Piano + Warm Pad</b><span class="keylab">KEY</span><button class="keybtn">C ▾</button>
+  <div class="trn"><span class="keylab">TRANSPOSE</span><button class="sq">−</button><b>0</b><button class="sq">+</button></div>
+  <button class="spc"><span class="keylab">SPACE</span>Hall ▾</button>
+  <span class="chord">CHORD <b>D</b></span><button class="btn">Notes</button>
+  <button class="setbtn">Setlist<small>My Set · not in use</small></button></div><div class="snaps"><span class="keylab">SNAPSHOTS</span>
+  <button class="chip plate">Piano + Warm Pad<span class="chg" title="edited since saved"></span></button>
+  <button class="chip">Felt piano, dry</button><button class="chip">Upright + drone</button><button class="chip">Full band</button>
+  <button class="chip dash">+ Save</button>
+  <span class="dirty">edited · <button class="link">Update</button> · <button class="link">Save as new</button></span>
+  <button class="btn arr">Arrange</button></div><div class="board mid"><aside class="wheel"><button class="qk" aria-label="Quick settings"><span>⚡</span>Quick</button>
+    <div class="wh-h"><span class="lab">Wheel</span></div>
+    <div class="wbar"><i style="height:62%"></i></div><b class="wv">62%</b><small class="wt">→ Warm Pad level</small>
+    <button class="qb swell"><b>◢ Swell</b></button><div class="ped"><span class="dot"></span>Pedal</div>
+    </aside><div class="strips"><div class="strip" style="--c:#f78955">
+    <div class="s-name"><span class="ico"></span><span class="nm">Grand Piano</span></div>
+    <button class="tile on"><span class="dot"></span>ON</button>
+    <div class="fwrap"><div class="ftrack"><i style="height:62%"></i><em style="bottom:62%"></em></div>
+      <div class="meter"><i style="height:44%"></i></div></div>
+    <div class="db">−1.9 dB</div>
+    <div class="qgrid"><button class="qb send"><b>Space</b><small>45%</small><i style="width:45%"></i></button><button class="qb send"><b>Echo</b><small>10%</small><i style="width:10%"></i></button><button class="qb"><b>Octave</b><small>normal</small></button><button class="qb sus lit"><span class="dot"></span><b>Sustain</b></button></div>
+    <div class="s-btns"><button class="btn">Change</button><button class="btn more" aria-label="Grand Piano more">⋯</button></div>
+    </div><div class="strip" style="--c:#4ec491">
+    <div class="s-name"><span class="ico"></span><span class="nm">Warm Pad</span></div>
+    <button class="tile on"><span class="dot"></span>ON</button>
+    <div class="fwrap"><div class="ftrack"><i style="height:50%"></i><em style="bottom:50%"></em></div>
+      <div class="meter"><i style="height:32%"></i></div></div>
+    <div class="db">−5.2 dB</div>
+    <div class="qgrid"><button class="qb send"><b>Space</b><small>55%</small><i style="width:55%"></i></button><button class="qb send"><b>Echo</b><small>20%</small><i style="width:20%"></i></button><button class="qb"><b>Octave</b><small>normal</small></button><button class="qb sus lit"><span class="dot"></span><b>Sustain</b></button></div>
+    <div class="s-btns"><button class="btn">Change</button><button class="btn more" aria-label="Warm Pad more">⋯</button></div>
+    </div><div class="strip" style="--c:#7ad1f7">
+    <div class="s-name"><span class="ico"></span><span class="nm">Sub Bass</span></div>
+    <button class="tile on"><span class="dot"></span>ON</button>
+    <div class="fwrap"><div class="ftrack"><i style="height:40%"></i><em style="bottom:40%"></em></div>
+      <div class="meter"><i style="height:22%"></i></div></div>
+    <div class="db">−8.0 dB</div>
+    <div class="qgrid"><button class="qb send"><b>Space</b><small>0%</small><i style="width:0%"></i></button><button class="qb send"><b>Echo</b><small>0%</small><i style="width:0%"></i></button><button class="qb alt"><b>Octave</b><small>−1</small></button><button class="qb sus"><span class="dot"></span><b>Sustain</b></button></div>
+    <div class="s-btns"><button class="btn">Change</button><button class="btn more" aria-label="Sub Bass more">⋯</button></div>
+    </div><button class="strip add slim" aria-label="Add instrument"><span>+</span></button></div><aside class="side chartw"><div class="sb-h"><div class="sbtabs"><button class="">Drone<i class="live"></i></button><button class="">Setlist</button><button class="on">Chart</button><button class="">Notes</button></div>
+    <button class="sb-c" aria-label="Customize sidebar">⋯</button><button class="sb-x" aria-label="Collapse sidebar">⟩</button></div>
+    <div class="sb-body"><div class="chart sz-s"><div class="chh">
+    <div class="cht"><b>Morning Light</b><small><em>Key C</em> · written in G · 72 bpm · 4/4</small></div>
+    <div class="chgrp"><div class="seg2 sm"><button class="on">Heard</button><button class="">Hands</button></div>
+      <button class="sq sm">A−</button><button class="sq sm">A+</button></div>
+    <div class="chs"><button class="play">▶ Scroll</button><button class="sq sm">−</button><b>1.0×</b><button class="sq sm">+</button></div>
+    <div class="jumps"><button class="jp">Intro</button><button class="jp">V1</button><button class="jp on">C</button><button class="jp">V2</button><button class="jp">C</button><button class="jp">B</button><button class="jp">C</button></div></div><div class="sheet"><section class="csec"><h5>Intro</h5><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">    </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">    </span></span><span class="cs"><span class="ch">Am</span><span class="ly">    </span></span><span class="cs"><span class="ch">F</span><span class="ly">    </span></span></div></section><section class="csec"><h5>Verse 1</h5><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">Morning light breaks </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">over the hill</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">You were here be</span></span><span class="cs"><span class="ch">F</span><span class="ly">fore I woke</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">Every breath I </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">take is still</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">held in the </span></span><span class="cs"><span class="ch">F</span><span class="ly">words you spoke</span></span></div></section><section class="csec cur"><h5>Chorus</h5><div class="cl"><span class="cs"><span class="ch">F</span><span class="ly">Hallelujah, </span></span><span class="cs"><span class="ch">C</span><span class="ly">You are near</span></span></div><div class="cl now"><span class="cs"><span class="ch">G</span><span class="ly">Steady my heart, </span></span><span class="cs"><span class="ch">Am</span><span class="ly">quiet my fear</span></span></div><div class="cl"><span class="cs"><span class="ch">F</span><span class="ly">Hallelujah, </span></span><span class="cs"><span class="ch">C</span><span class="ly">You remain</span></span></div><div class="cl"><span class="cs"><span class="ch">G</span><span class="ly">Over the </span></span><span class="cs"><span class="ch">F</span><span class="ly">storm and the </span></span><span class="cs"><span class="ch">C</span><span class="ly">rain</span></span></div></section><section class="csec"><h5>Verse 2</h5><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">When the evening </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">settles in</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">and the road is </span></span><span class="cs"><span class="ch">F</span><span class="ly">long and grey</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">You are where the </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">light begins</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">You are </span></span><span class="cs"><span class="ch">F</span><span class="ly">with me all the way</span></span></div></section><section class="csec"><h5>Bridge</h5><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">Nothing can </span></span><span class="cs"><span class="ch">F</span><span class="ly">move me</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">nothing can </span></span><span class="cs"><span class="ch">G</span><span class="ly">shake</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">what you have </span></span><span class="cs"><span class="ch">F</span><span class="ly">spoken</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">You will not </span></span><span class="cs"><span class="ch">G</span><span class="ly">break</span></span></div></section><div class="readline" title="auto-scroll reading line"></div></div></div></div></aside></div><div class="bottom"><div class="keys2"><div class="rbars" style="--n:3"><i style="--c:#f78955;top:calc(0 * (100% + 2px) / 3);left:0.000%;width:100.000%"></i><i style="--c:#4ec491;top:calc(1 * (100% + 2px) / 3);left:0.000%;width:100.000%"></i><i style="--c:#7ad1f7;top:calc(2 * (100% + 2px) / 3);left:0.000%;width:38.889%"></i></div><div class="kb"><span class="wk"><i>C2</i></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"><i>C3</i></span><span class="wk held"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk held"></span><span class="wk"></span><span class="wk"><em>A</em></span><span class="wk held"><em>S</em></span><span class="wk"><em>D</em></span><span class="wk"><em>F</em></span><span class="wk"><em>G</em></span><span class="wk held"><em>H</em></span><span class="wk"><em>J</em></span><span class="wk"><em>K</em></span><span class="wk"><em>L</em></span><span class="wk"><em>;</em></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"><i>C6</i></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"><i>C7</i></span><span class="bk" style="left:1.944%;width:1.667%"></span><span class="bk" style="left:4.722%;width:1.667%"></span><span class="bk" style="left:10.278%;width:1.667%"></span><span class="bk" style="left:13.056%;width:1.667%"></span><span class="bk" style="left:15.833%;width:1.667%"></span><span class="bk" style="left:21.389%;width:1.667%"></span><span class="bk" style="left:24.167%;width:1.667%"></span><span class="bk" style="left:29.722%;width:1.667%"></span><span class="bk" style="left:32.500%;width:1.667%"></span><span class="bk" style="left:35.278%;width:1.667%"></span><span class="bk" style="left:40.833%;width:1.667%"><em>W</em></span><span class="bk" style="left:43.611%;width:1.667%"><em>E</em></span><span class="bk held" style="left:49.167%;width:1.667%"><em>T</em></span><span class="bk" style="left:51.944%;width:1.667%"><em>Y</em></span><span class="bk" style="left:54.722%;width:1.667%"><em>U</em></span><span class="bk" style="left:60.278%;width:1.667%"><em>O</em></span><span class="bk" style="left:63.056%;width:1.667%"><em>P</em></span><span class="bk" style="left:68.611%;width:1.667%"></span><span class="bk" style="left:71.389%;width:1.667%"></span><span class="bk" style="left:74.167%;width:1.667%"></span><span class="bk" style="left:79.722%;width:1.667%"></span><span class="bk" style="left:82.500%;width:1.667%"></span><span class="bk" style="left:88.056%;width:1.667%"></span><span class="bk" style="left:90.833%;width:1.667%"></span><span class="bk" style="left:93.611%;width:1.667%"></span></div></div><button class="act">↺ Revert<small>nothing changed</small></button>
+  <button class="act">Fade out</button><button class="act panic">PANIC<small>hold · or Esc</small></button><button class="act">🔒 Lock<small>hold to lock</small></button></div></div></div></section><section id="ipl" class=""><div class="scale"><div class="frame " style="width:1180px;height:820px"><div class="top"><span class="logo">⛪</span><div class="seg2"><button class="on">Perform</button><button>Edit</button></div>
+  <button class="tb">⚙</button><div class="status"><i class="ok"></i>MIDI ok<i class="ok"></i>Sound ok<span>42 ms</span></div>
+  <button class="tb rec">● REC</button></div><div class="songbar"><b class="song">Piano + Warm Pad</b><span class="keylab">KEY</span><button class="keybtn">C ▾</button>
+  <div class="trn"><span class="keylab">TRANSPOSE</span><button class="sq">−</button><b>0</b><button class="sq">+</button></div>
+  <button class="spc"><span class="keylab">SPACE</span>Hall ▾</button>
+  <button class="btn">Notes</button>
+  <button class="setbtn">Setlist<small>My Set · not in use</small></button></div><div class="board"><aside class="wheel"><button class="qk" aria-label="Quick settings"><span>⚡</span>Quick</button>
+    <div class="wh-h"><span class="lab">Wheel</span></div>
+    <div class="wbar"><i style="height:62%"></i></div><b class="wv">62%</b><small class="wt">→ Warm Pad level</small>
+    <button class="qb swell"><b>◢ Swell</b></button><div class="ped"><span class="dot"></span>Pedal</div>
+    </aside><div class="minis"><div class="mini" style="--c:#f78955"><button class="mon"><span class="dot"></span></button>
+      <div class="fwrap"><div class="ftrack"><i style="height:62%"></i><em style="bottom:62%"></em></div></div>
+      <small class="mdb">−1.9</small><span class="mnm">Grand Piano</span></div><div class="mini" style="--c:#4ec491"><button class="mon"><span class="dot"></span></button>
+      <div class="fwrap"><div class="ftrack"><i style="height:50%"></i><em style="bottom:50%"></em></div></div>
+      <small class="mdb">−5.2</small><span class="mnm">Warm Pad</span></div><div class="mini" style="--c:#7ad1f7"><button class="mon"><span class="dot"></span></button>
+      <div class="fwrap"><div class="ftrack"><i style="height:40%"></i><em style="bottom:40%"></em></div></div>
+      <small class="mdb">−8.0</small><span class="mnm">Sub Bass</span></div></div><div class="chart sz-l"><div class="chh">
+    <div class="cht"><b>Morning Light</b><small><em>Key C</em> · written in G · 72 bpm · 4/4</small></div>
+    <div class="chgrp"><div class="seg2 sm"><button class="on">Heard</button><button class="">Hands</button></div>
+      <button class="sq sm">A−</button><button class="sq sm">A+</button><button class="ghost">Edit chart…</button></div>
+    <div class="chs"><button class="play">▶ Scroll</button><button class="sq sm">−</button><b>1.0×</b><button class="sq sm">+</button></div>
+    <div class="jumps"><button class="jp">Intro</button><button class="jp">V1</button><button class="jp on">C</button><button class="jp">V2</button><button class="jp">C</button><button class="jp">B</button><button class="jp">C</button></div></div><div class="sheet"><section class="csec"><h5>Intro</h5><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">    </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">    </span></span><span class="cs"><span class="ch">Am</span><span class="ly">    </span></span><span class="cs"><span class="ch">F</span><span class="ly">    </span></span></div></section><section class="csec"><h5>Verse 1</h5><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">Morning light breaks </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">over the hill</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">You were here be</span></span><span class="cs"><span class="ch">F</span><span class="ly">fore I woke</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">Every breath I </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">take is still</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">held in the </span></span><span class="cs"><span class="ch">F</span><span class="ly">words you spoke</span></span></div></section><section class="csec cur"><h5>Chorus</h5><div class="cl"><span class="cs"><span class="ch">F</span><span class="ly">Hallelujah, </span></span><span class="cs"><span class="ch">C</span><span class="ly">You are near</span></span></div><div class="cl now"><span class="cs"><span class="ch">G</span><span class="ly">Steady my heart, </span></span><span class="cs"><span class="ch">Am</span><span class="ly">quiet my fear</span></span></div><div class="cl"><span class="cs"><span class="ch">F</span><span class="ly">Hallelujah, </span></span><span class="cs"><span class="ch">C</span><span class="ly">You remain</span></span></div><div class="cl"><span class="cs"><span class="ch">G</span><span class="ly">Over the </span></span><span class="cs"><span class="ch">F</span><span class="ly">storm and the </span></span><span class="cs"><span class="ch">C</span><span class="ly">rain</span></span></div></section><section class="csec"><h5>Verse 2</h5><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">When the evening </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">settles in</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">and the road is </span></span><span class="cs"><span class="ch">F</span><span class="ly">long and grey</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">You are where the </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">light begins</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">You are </span></span><span class="cs"><span class="ch">F</span><span class="ly">with me all the way</span></span></div></section><section class="csec"><h5>Bridge</h5><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">Nothing can </span></span><span class="cs"><span class="ch">F</span><span class="ly">move me</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">nothing can </span></span><span class="cs"><span class="ch">G</span><span class="ly">shake</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">what you have </span></span><span class="cs"><span class="ch">F</span><span class="ly">spoken</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">You will not </span></span><span class="cs"><span class="ch">G</span><span class="ly">break</span></span></div></section><div class="readline" title="auto-scroll reading line"></div></div></div><aside class="side rail "><button class="sb-x" aria-label="Open sidebar">⟨</button><button class="rb live" aria-label="Open Drone"><span>◉</span>Drone<em>C</em></button><button class="rb" aria-label="Open Setlist"><span>☰</span>Setlist</button><button class="rb act" aria-label="Open Chart"><span>♫</span>Chart</button><button class="rb" aria-label="Open Notes"><span>✎</span>Notes</button></aside></div><div class="bottom"><div class="keys2"><div class="rbars" style="--n:3"><i style="--c:#f78955;top:calc(0 * (100% + 2px) / 3);left:0.000%;width:100.000%"></i><i style="--c:#4ec491;top:calc(1 * (100% + 2px) / 3);left:0.000%;width:100.000%"></i><i style="--c:#7ad1f7;top:calc(2 * (100% + 2px) / 3);left:0.000%;width:38.889%"></i></div><div class="kb"><span class="wk"><i>C2</i></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"><i>C3</i></span><span class="wk held"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk held"></span><span class="wk"></span><span class="wk"><em>A</em></span><span class="wk held"><em>S</em></span><span class="wk"><em>D</em></span><span class="wk"><em>F</em></span><span class="wk"><em>G</em></span><span class="wk held"><em>H</em></span><span class="wk"><em>J</em></span><span class="wk"><em>K</em></span><span class="wk"><em>L</em></span><span class="wk"><em>;</em></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"><i>C6</i></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"><i>C7</i></span><span class="bk" style="left:1.944%;width:1.667%"></span><span class="bk" style="left:4.722%;width:1.667%"></span><span class="bk" style="left:10.278%;width:1.667%"></span><span class="bk" style="left:13.056%;width:1.667%"></span><span class="bk" style="left:15.833%;width:1.667%"></span><span class="bk" style="left:21.389%;width:1.667%"></span><span class="bk" style="left:24.167%;width:1.667%"></span><span class="bk" style="left:29.722%;width:1.667%"></span><span class="bk" style="left:32.500%;width:1.667%"></span><span class="bk" style="left:35.278%;width:1.667%"></span><span class="bk" style="left:40.833%;width:1.667%"><em>W</em></span><span class="bk" style="left:43.611%;width:1.667%"><em>E</em></span><span class="bk held" style="left:49.167%;width:1.667%"><em>T</em></span><span class="bk" style="left:51.944%;width:1.667%"><em>Y</em></span><span class="bk" style="left:54.722%;width:1.667%"><em>U</em></span><span class="bk" style="left:60.278%;width:1.667%"><em>O</em></span><span class="bk" style="left:63.056%;width:1.667%"><em>P</em></span><span class="bk" style="left:68.611%;width:1.667%"></span><span class="bk" style="left:71.389%;width:1.667%"></span><span class="bk" style="left:74.167%;width:1.667%"></span><span class="bk" style="left:79.722%;width:1.667%"></span><span class="bk" style="left:82.500%;width:1.667%"></span><span class="bk" style="left:88.056%;width:1.667%"></span><span class="bk" style="left:90.833%;width:1.667%"></span><span class="bk" style="left:93.611%;width:1.667%"></span></div></div><button class="act">↺ Revert<small>nothing changed</small></button>
+  <button class="act">Fade out</button><button class="act panic">PANIC<small>hold · or Esc</small></button><button class="act">🔒 Lock<small>hold to lock</small></button></div></div></div></section><section id="ipp" class=""><div class="scale"><div class="frame port" style="width:820px;height:1180px"><div class="top"><span class="logo">⛪</span><div class="seg2"><button class="on">Perform</button><button>Edit</button></div>
+  <button class="tb">⚙</button><div class="status"><i class="ok"></i>MIDI ok<i class="ok"></i>Sound ok<span>42 ms</span></div>
+  <button class="tb rec">● REC</button></div><div class="songbar"><b class="song">Piano + Warm Pad</b><span class="keylab">KEY</span><button class="keybtn">C ▾</button>
+  <div class="trn"><span class="keylab">TRANSPOSE</span><button class="sq">−</button><b>0</b><button class="sq">+</button></div>
+  <button class="spc"><span class="keylab">SPACE</span>Hall ▾</button>
+  <button class="btn">Notes</button>
+  <button class="setbtn">Setlist<small>My Set · not in use</small></button></div><div class="board port chartport"><div class="toprow"><div class="minis row"><div class="mini" style="--c:#f78955"><button class="mon"><span class="dot"></span></button>
+      <div class="fwrap"><div class="ftrack"><i style="height:62%"></i><em style="bottom:62%"></em></div></div>
+      <small class="mdb">−1.9</small><span class="mnm">Grand Piano</span></div><div class="mini" style="--c:#4ec491"><button class="mon"><span class="dot"></span></button>
+      <div class="fwrap"><div class="ftrack"><i style="height:50%"></i><em style="bottom:50%"></em></div></div>
+      <small class="mdb">−5.2</small><span class="mnm">Warm Pad</span></div><div class="mini" style="--c:#7ad1f7"><button class="mon"><span class="dot"></span></button>
+      <div class="fwrap"><div class="ftrack"><i style="height:40%"></i><em style="bottom:40%"></em></div></div>
+      <small class="mdb">−8.0</small><span class="mnm">Sub Bass</span></div></div><button class="backto">▤ Strips</button></div><div class="chart sz-l"><div class="chh">
+    <div class="cht"><b>Morning Light</b><small><em>Key C</em> · written in G · 72 bpm · 4/4</small></div>
+    <div class="chgrp"><div class="seg2 sm"><button class="on">Heard</button><button class="">Hands</button></div>
+      <button class="sq sm">A−</button><button class="sq sm">A+</button><button class="ghost">Edit chart…</button></div>
+    <div class="chs"><button class="play">▶ Scroll</button><button class="sq sm">−</button><b>1.0×</b><button class="sq sm">+</button></div>
+    <div class="jumps"><button class="jp">Intro</button><button class="jp">V1</button><button class="jp on">C</button><button class="jp">V2</button><button class="jp">C</button><button class="jp">B</button><button class="jp">C</button></div></div><div class="sheet"><section class="csec"><h5>Intro</h5><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">    </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">    </span></span><span class="cs"><span class="ch">Am</span><span class="ly">    </span></span><span class="cs"><span class="ch">F</span><span class="ly">    </span></span></div></section><section class="csec"><h5>Verse 1</h5><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">Morning light breaks </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">over the hill</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">You were here be</span></span><span class="cs"><span class="ch">F</span><span class="ly">fore I woke</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">Every breath I </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">take is still</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">held in the </span></span><span class="cs"><span class="ch">F</span><span class="ly">words you spoke</span></span></div></section><section class="csec cur"><h5>Chorus</h5><div class="cl"><span class="cs"><span class="ch">F</span><span class="ly">Hallelujah, </span></span><span class="cs"><span class="ch">C</span><span class="ly">You are near</span></span></div><div class="cl now"><span class="cs"><span class="ch">G</span><span class="ly">Steady my heart, </span></span><span class="cs"><span class="ch">Am</span><span class="ly">quiet my fear</span></span></div><div class="cl"><span class="cs"><span class="ch">F</span><span class="ly">Hallelujah, </span></span><span class="cs"><span class="ch">C</span><span class="ly">You remain</span></span></div><div class="cl"><span class="cs"><span class="ch">G</span><span class="ly">Over the </span></span><span class="cs"><span class="ch">F</span><span class="ly">storm and the </span></span><span class="cs"><span class="ch">C</span><span class="ly">rain</span></span></div></section><section class="csec"><h5>Verse 2</h5><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">When the evening </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">settles in</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">and the road is </span></span><span class="cs"><span class="ch">F</span><span class="ly">long and grey</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">You are where the </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">light begins</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">You are </span></span><span class="cs"><span class="ch">F</span><span class="ly">with me all the way</span></span></div></section><section class="csec"><h5>Bridge</h5><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">Nothing can </span></span><span class="cs"><span class="ch">F</span><span class="ly">move me</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">nothing can </span></span><span class="cs"><span class="ch">G</span><span class="ly">shake</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">what you have </span></span><span class="cs"><span class="ch">F</span><span class="ly">spoken</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">You will not </span></span><span class="cs"><span class="ch">G</span><span class="ly">break</span></span></div></section><div class="readline" title="auto-scroll reading line"></div></div></div></div><div class="bottom"><div class="keys2"><div class="rbars" style="--n:3"><i style="--c:#f78955;top:calc(0 * (100% + 2px) / 3);left:0.000%;width:100.000%"></i><i style="--c:#4ec491;top:calc(1 * (100% + 2px) / 3);left:0.000%;width:100.000%"></i><i style="--c:#7ad1f7;top:calc(2 * (100% + 2px) / 3);left:0.000%;width:38.889%"></i></div><div class="kb"><span class="wk"><i>C2</i></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"><i>C3</i></span><span class="wk held"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk held"></span><span class="wk"></span><span class="wk"><em>A</em></span><span class="wk held"><em>S</em></span><span class="wk"><em>D</em></span><span class="wk"><em>F</em></span><span class="wk"><em>G</em></span><span class="wk held"><em>H</em></span><span class="wk"><em>J</em></span><span class="wk"><em>K</em></span><span class="wk"><em>L</em></span><span class="wk"><em>;</em></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"><i>C6</i></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"><i>C7</i></span><span class="bk" style="left:1.944%;width:1.667%"></span><span class="bk" style="left:4.722%;width:1.667%"></span><span class="bk" style="left:10.278%;width:1.667%"></span><span class="bk" style="left:13.056%;width:1.667%"></span><span class="bk" style="left:15.833%;width:1.667%"></span><span class="bk" style="left:21.389%;width:1.667%"></span><span class="bk" style="left:24.167%;width:1.667%"></span><span class="bk" style="left:29.722%;width:1.667%"></span><span class="bk" style="left:32.500%;width:1.667%"></span><span class="bk" style="left:35.278%;width:1.667%"></span><span class="bk" style="left:40.833%;width:1.667%"><em>W</em></span><span class="bk" style="left:43.611%;width:1.667%"><em>E</em></span><span class="bk held" style="left:49.167%;width:1.667%"><em>T</em></span><span class="bk" style="left:51.944%;width:1.667%"><em>Y</em></span><span class="bk" style="left:54.722%;width:1.667%"><em>U</em></span><span class="bk" style="left:60.278%;width:1.667%"><em>O</em></span><span class="bk" style="left:63.056%;width:1.667%"><em>P</em></span><span class="bk" style="left:68.611%;width:1.667%"></span><span class="bk" style="left:71.389%;width:1.667%"></span><span class="bk" style="left:74.167%;width:1.667%"></span><span class="bk" style="left:79.722%;width:1.667%"></span><span class="bk" style="left:82.500%;width:1.667%"></span><span class="bk" style="left:88.056%;width:1.667%"></span><span class="bk" style="left:90.833%;width:1.667%"></span><span class="bk" style="left:93.611%;width:1.667%"></span></div></div><button class="act">↺ Revert<small>nothing changed</small></button>
+  <button class="act">Fade out</button><button class="act panic">PANIC<small>hold · or Esc</small></button><button class="act">🔒 Lock<small>hold to lock</small></button></div></div></div></section><section id="add" class=""><div class="scale"><div class="frame " style="width:1280px;height:800px"><div class="top"><span class="logo">⛪</span><div class="seg2"><button class="on">Perform</button><button>Edit</button></div>
+  <button class="tb">⚙</button><div class="status"><i class="ok"></i>MIDI ok<i class="ok"></i>Sound ok<span>42 ms</span></div>
+  <button class="tb rec">● REC</button><div class="mvol"><span>Master</span><div class="hfader"><i style="width:68%"></i><em style="left:68%"></em></div></div></div><div class="songbar"><b class="song">Piano + Warm Pad</b><span class="keylab">KEY</span><button class="keybtn">C ▾</button>
+  <div class="trn"><span class="keylab">TRANSPOSE</span><button class="sq">−</button><b>0</b><button class="sq">+</button></div>
+  <button class="spc"><span class="keylab">SPACE</span>Hall ▾</button>
+  <span class="chord">CHORD <b>D</b></span><button class="btn">Notes</button>
+  <button class="setbtn">Setlist<small>My Set · not in use</small></button></div><div class="board dim"><aside class="wheel"><button class="qk" aria-label="Quick settings"><span>⚡</span>Quick</button>
+    <div class="wh-h"><span class="lab">Wheel</span></div>
+    <div class="wbar"><i style="height:62%"></i></div><b class="wv">62%</b><small class="wt">→ Warm Pad level</small>
+    <button class="qb swell"><b>◢ Swell</b></button><div class="ped"><span class="dot"></span>Pedal</div>
+    </aside><div class="minis"><div class="mini" style="--c:#f78955"><button class="mon"><span class="dot"></span></button>
+      <div class="fwrap"><div class="ftrack"><i style="height:62%"></i><em style="bottom:62%"></em></div></div>
+      <small class="mdb">−1.9</small><span class="mnm">Grand Piano</span></div><div class="mini" style="--c:#4ec491"><button class="mon"><span class="dot"></span></button>
+      <div class="fwrap"><div class="ftrack"><i style="height:50%"></i><em style="bottom:50%"></em></div></div>
+      <small class="mdb">−5.2</small><span class="mnm">Warm Pad</span></div><div class="mini" style="--c:#7ad1f7"><button class="mon"><span class="dot"></span></button>
+      <div class="fwrap"><div class="ftrack"><i style="height:40%"></i><em style="bottom:40%"></em></div></div>
+      <small class="mdb">−8.0</small><span class="mnm">Sub Bass</span></div></div><div class="chart sz-l"><div class="chh">
+    <div class="cht"><b>Morning Light</b><small><em>Key C</em> · written in G · 72 bpm · 4/4</small></div>
+    <div class="chgrp"><div class="seg2 sm"><button class="on">Heard</button><button class="">Hands</button></div>
+      <button class="sq sm">A−</button><button class="sq sm">A+</button><button class="ghost">Edit chart…</button></div>
+    <div class="chs"><button class="play">▶ Scroll</button><button class="sq sm">−</button><b>1.0×</b><button class="sq sm">+</button></div>
+    <div class="jumps"><button class="jp">Intro</button><button class="jp">V1</button><button class="jp on">C</button><button class="jp">V2</button><button class="jp">C</button><button class="jp">B</button><button class="jp">C</button></div></div><div class="sheet"><section class="csec"><h5>Intro</h5><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">    </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">    </span></span><span class="cs"><span class="ch">Am</span><span class="ly">    </span></span><span class="cs"><span class="ch">F</span><span class="ly">    </span></span></div></section><section class="csec"><h5>Verse 1</h5><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">Morning light breaks </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">over the hill</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">You were here be</span></span><span class="cs"><span class="ch">F</span><span class="ly">fore I woke</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">Every breath I </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">take is still</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">held in the </span></span><span class="cs"><span class="ch">F</span><span class="ly">words you spoke</span></span></div></section><section class="csec cur"><h5>Chorus</h5><div class="cl"><span class="cs"><span class="ch">F</span><span class="ly">Hallelujah, </span></span><span class="cs"><span class="ch">C</span><span class="ly">You are near</span></span></div><div class="cl now"><span class="cs"><span class="ch">G</span><span class="ly">Steady my heart, </span></span><span class="cs"><span class="ch">Am</span><span class="ly">quiet my fear</span></span></div><div class="cl"><span class="cs"><span class="ch">F</span><span class="ly">Hallelujah, </span></span><span class="cs"><span class="ch">C</span><span class="ly">You remain</span></span></div><div class="cl"><span class="cs"><span class="ch">G</span><span class="ly">Over the </span></span><span class="cs"><span class="ch">F</span><span class="ly">storm and the </span></span><span class="cs"><span class="ch">C</span><span class="ly">rain</span></span></div></section><section class="csec"><h5>Verse 2</h5><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">When the evening </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">settles in</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">and the road is </span></span><span class="cs"><span class="ch">F</span><span class="ly">long and grey</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">You are where the </span></span><span class="cs"><span class="ch">G/B</span><span class="ly">light begins</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">You are </span></span><span class="cs"><span class="ch">F</span><span class="ly">with me all the way</span></span></div></section><section class="csec"><h5>Bridge</h5><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">Nothing can </span></span><span class="cs"><span class="ch">F</span><span class="ly">move me</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">nothing can </span></span><span class="cs"><span class="ch">G</span><span class="ly">shake</span></span></div><div class="cl"><span class="cs"><span class="ch">Am</span><span class="ly">what you have </span></span><span class="cs"><span class="ch">F</span><span class="ly">spoken</span></span></div><div class="cl"><span class="cs"><span class="ch">C</span><span class="ly">You will not </span></span><span class="cs"><span class="ch">G</span><span class="ly">break</span></span></div></section><div class="readline" title="auto-scroll reading line"></div></div></div><div class="dlg" role="dialog" aria-label="Add chart"><div class="pop-h">Add a chart <span>to “Piano + Warm Pad”</span></div>
+    <div class="srcrow"><button class="seg sel">Paste text</button><button class="seg">Choose file…</button><small>ChordPro, WorshipTools, OnSong or plain chords over words</small></div>
+    <div class="paste"><pre>{title: Morning Light}
+{key: G}
+{tempo: 72}
+[G]Morning light breaks [D/F#]over the hill
+[Em]You were here be[C]fore I woke …</pre></div>
+    <div class="found"><b>Found:</b> 5 sections · 21 lines · key G · 72 bpm · 4/4 <span class="warn1">1 line skipped: “x2” read as a note</span></div>
+    <div class="offers"><span class="lab">Also update the song?</span><label class="offer"><span class="cb"></span>Set the song’s key to G<small>the song is in C now</small></label><label class="offer"><span class="cb on"></span>Set tempo to 72 bpm<small>none set now</small></label><label class="offer"><span class="cb on"></span>Set time to 4/4<small>none set now</small></label></div>
+    <div class="dlgb"><button class="ghost">Cancel</button><button class="btn savebtn">Save chart</button></div></div></div><div class="bottom"><div class="keys2"><div class="rbars" style="--n:3"><i style="--c:#f78955;top:calc(0 * (100% + 2px) / 3);left:0.000%;width:100.000%"></i><i style="--c:#4ec491;top:calc(1 * (100% + 2px) / 3);left:0.000%;width:100.000%"></i><i style="--c:#7ad1f7;top:calc(2 * (100% + 2px) / 3);left:0.000%;width:38.889%"></i></div><div class="kb"><span class="wk"><i>C2</i></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"><i>C3</i></span><span class="wk held"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk held"></span><span class="wk"></span><span class="wk"><em>A</em></span><span class="wk held"><em>S</em></span><span class="wk"><em>D</em></span><span class="wk"><em>F</em></span><span class="wk"><em>G</em></span><span class="wk held"><em>H</em></span><span class="wk"><em>J</em></span><span class="wk"><em>K</em></span><span class="wk"><em>L</em></span><span class="wk"><em>;</em></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"><i>C6</i></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"><i>C7</i></span><span class="bk" style="left:1.944%;width:1.667%"></span><span class="bk" style="left:4.722%;width:1.667%"></span><span class="bk" style="left:10.278%;width:1.667%"></span><span class="bk" style="left:13.056%;width:1.667%"></span><span class="bk" style="left:15.833%;width:1.667%"></span><span class="bk" style="left:21.389%;width:1.667%"></span><span class="bk" style="left:24.167%;width:1.667%"></span><span class="bk" style="left:29.722%;width:1.667%"></span><span class="bk" style="left:32.500%;width:1.667%"></span><span class="bk" style="left:35.278%;width:1.667%"></span><span class="bk" style="left:40.833%;width:1.667%"><em>W</em></span><span class="bk" style="left:43.611%;width:1.667%"><em>E</em></span><span class="bk held" style="left:49.167%;width:1.667%"><em>T</em></span><span class="bk" style="left:51.944%;width:1.667%"><em>Y</em></span><span class="bk" style="left:54.722%;width:1.667%"><em>U</em></span><span class="bk" style="left:60.278%;width:1.667%"><em>O</em></span><span class="bk" style="left:63.056%;width:1.667%"><em>P</em></span><span class="bk" style="left:68.611%;width:1.667%"></span><span class="bk" style="left:71.389%;width:1.667%"></span><span class="bk" style="left:74.167%;width:1.667%"></span><span class="bk" style="left:79.722%;width:1.667%"></span><span class="bk" style="left:82.500%;width:1.667%"></span><span class="bk" style="left:88.056%;width:1.667%"></span><span class="bk" style="left:90.833%;width:1.667%"></span><span class="bk" style="left:93.611%;width:1.667%"></span></div></div><button class="act">↺ Revert<small>nothing changed</small></button>
+  <button class="act">Fade out</button><button class="act panic">PANIC<small>hold · or Esc</small></button><button class="act">🔒 Lock<small>hold to lock</small></button></div></div></div></section></main>
+<script>{const tabs=[...document.querySelectorAll('[role=tab]')];
+function show(id){tabs.forEach(b=>b.setAttribute('aria-selected',b.dataset.t===id));document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('on',s.id===id));fit();}
+tabs.forEach(b=>b.addEventListener('click',()=>show(b.dataset.t)));
+function fit(){document.querySelectorAll('section.on .scale').forEach(sc=>{const f=sc.firstElementChild;const k=Math.min(1,(sc.clientWidth)/f.offsetWidth);f.style.transform='scale('+k+')';sc.style.height=(f.offsetHeight*k)+'px';});}
+new ResizeObserver(fit).observe(document.body);fit();}</script></body></html>

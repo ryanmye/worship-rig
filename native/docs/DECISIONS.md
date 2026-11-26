@@ -295,3 +295,21 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
 - Each card is a self-contained component.
 - This supersedes the role-specific "Pad underneath" card in the first Perform design pass.
 - Details are in DESIGN_PHILOSOPHY.md, "Modularity".
+
+## D16: Perform v6 direction: the instrument strips are the main screen (Ryan, 2026-11-26)
+- Mockup: `native/docs/design/mockups/perform-v6.html` (artifact "Perform v5 mockups"). Ryan: "looks like something
+  i will use". It replaces the v3/v4 card layouts; the open v3/v4 questions lapse unless they come back.
+- **Strips fill the stage**, Sunday Keys-style. Each keeps today's channel strip: ON tile, vertical fader + meter,
+  dB, the 2×2 Space / Echo / Octave / Sustain buttons, Change and ⋯ (Earlier, Later, Duplicate, Open in Edit,
+  Remove). Colours go by position, never by kind of sound (D15).
+- **More than 5 instruments scroll sideways** at the 5-across width, with a row of name pills that shows which are on
+  screen and jumps on tap.
+- **Left sidebar:** a Quick button (today's Quick sheet: This song / This Mac / If something's wrong, opening over the
+  strips so nothing reflows) above today's wheel column (wheel, what it drives, Swell, pedal).
+- **Right sidebar:** one module at a time as tabs, collapsible to an icon rail; ⋯ chooses and orders the modules
+  (Drone, Setlist, Notes, Tone, Snapshots; Chart in 2.1). Drone keeps today's key grid, Synth / My Pads and Keep
+  across songs.
+- **Song bar** holds key, Transpose and the Space room; snapshots get their own row with Update / Save as new.
+- **Kept from today:** the bottom keyboard (range bar per instrument, key letters, held notes), Revert / Fade out /
+  PANIC / Lock, and the menu bar popover unchanged.
+- Still open: whether "you play C" moves into the new song bar (proposed, not yet drawn).
