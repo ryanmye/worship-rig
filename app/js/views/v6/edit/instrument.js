@@ -1226,6 +1226,14 @@ export function mountInstrument(host, ctx, opts, env) {
     })
     : () => {};
   ctx.onEscape(() => {
+    // skeptic UI6-U5a after the rebase F1 (as the v6 Perform's pick Esc, UI6-move F2): an Esc mid-drag drops the
+    // live-writing range drag (its start value back, keyboard.js 'cancel'). Before, the drag went on writing live and
+    // committed on release, and the Esc closed whatever else was open instead.
+    const kb = pane?.ctl.kb;
+    if (kb?.dragging) {
+      kb.cancelDrag();
+      return true;
+    }
     if (cancelConfirm(true)) return true;
     if (closeMenu(true)) return true;
     return disarm();

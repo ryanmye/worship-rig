@@ -760,6 +760,65 @@ try {
     await selectSlot(0);
   });
 
+  await T('skeptic after the rebase F1: Esc mid-drag puts the start value back (no commit); pointercancel; the '
+    + 'dragged instrument removed; a pointermove in the slot map’s own task writes no other instrument', async () => {
+    await setSlots(3);
+    await toEdit();
+    await selectSlot(0);
+    const hitEvent = (type, x, y) => ev(([t, xx, yy]) => document.querySelector('[data-testid="v6e-range-kbd-hit"]')
+      .dispatchEvent(new PointerEvent(t, { pointerId: 1, bubbles: true, pointerType: 'mouse', clientX: xx,
+        clientY: yy, buttons: 1 })), [type, x, y]);
+    // (a) Esc: the drag ends with its start value; the release writes nothing (failed before the fix: [48, 84])
+    await R1_SET();
+    await holdLowAt48(0);
+    await page.keyboard.press('Escape');
+    assert.equal(await ev(() => window.__rig.views.edit._debug.instance()._debug.kb().dragging), false);
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    assert.deepEqual((await ranges()).slice(0, 3), [[36, 84], [40, 90], [28, 60]], 'Esc');
+    // (b) pointercancel (a touch the OS takes over)
+    await holdLowAt48(0);
+    await hitEvent('pointercancel', 0, 0);
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    assert.deepEqual((await ranges()).slice(0, 3), [[36, 84], [40, 90], [28, 60]], 'pointercancel');
+    // (c) a pointermove in the same task as a move (before the microtask cancel) is refused, never written to the
+    // instrument now at the dragged index; the cancel then restores the moved instrument
+    const n0 = await names3();
+    await holdLowAt48(0);
+    const key = await rectOf('.v6-kbd-range .pkey[data-note="60"]');
+    const hd = await rectOf(tid('v6e-range-kbd-hlo-0'));
+    const w = await ev(({ x, y }) => {
+      const { store } = window.__rig;
+      const out = [];
+      const orig = store.set;
+      store.set = (p, v) => (out.push(p.replace(/^songs\.[^.]+\.patch\./, '')), orig.call(store, p, v));
+      store.moveSlot(store.currentSong().id, 0, 1);
+      document.querySelector('[data-testid="v6e-range-kbd-hit"]').dispatchEvent(new PointerEvent('pointermove',
+        { pointerId: 1, bubbles: true, pointerType: 'mouse', clientX: x, clientY: y, buttons: 1 }));
+      return new Promise((res) => setTimeout(() => {
+        store.set = orig;
+        res(out);
+      }, 200));
+    }, { x: key.l + 1, y: hd.cy });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    assert.deepEqual(w, ['slots.1.lowNote'], 'only the restore, on the moved instrument');
+    assert.deepEqual((await names3()).slice(0, 3), [n0[1], n0[0], n0[2]]);
+    assert.deepEqual((await ranges()).slice(0, 3), [[40, 90], [36, 84], [28, 60]], 'same-task move');
+    await ev(() => window.__rig.store.moveSlot(window.__rig.store.currentSong().id, 1, 0));
+    await until(() => window.__rig.views.edit.editState.selected === 'slot:0');
+    // (d) the dragged instrument removed mid-drag: nothing is restored onto the one that takes its place
+    await holdLowAt48(0);
+    await ev(() => window.__rig.store.removeSlot(window.__rig.store.currentSong().id, 0));
+    await page.waitForTimeout(100);
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    assert.deepEqual((await ranges()).slice(0, 2), [[40, 90], [28, 60]], 'removed');
+    await setSlots(3);
+    await selectSlot(0);
+  });
+
   await T('Tone EQ: today’s eqKeyboard mounts on open and is destroyed on leave; no leaked store listeners',
     async () => {
     await choose('sound');
