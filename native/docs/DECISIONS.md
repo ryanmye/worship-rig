@@ -438,3 +438,7 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
 4. **A new song from the setlist's "+ Add song" is not selected** (as U3 built).
 5. **Notes / Setlist in the song bar only open the sidebar**, never close it (as U3 built).
 6. **The drone's Bright / Move show a percentage** beside the word, as today's card.
+7. **Esc in range-pick mode** (UI6-U2 review O2; Ryan: "go with what you think", orchestrator tier 2): Esc finishes
+   the pick, like every other open overlay in today's app (Esc closes what is open first; the next Esc panics).
+   ⌘. / Ctrl+. always panic at once, and the on-screen PANIC is a tap (D23). Reason: one consistent Esc rule across
+   the app; a stuck note costs one extra key press, never a lost edit.
