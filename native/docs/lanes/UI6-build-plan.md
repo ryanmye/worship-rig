@@ -74,6 +74,12 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 
 ## Queued small tasks
 
+- **U5b (orchestrator tier 2 answers to the U5a builder's questions):** every Edit category dot means "changed
+  since the song began" (compare against the baseline for all of the category's paths, so Sound / Tone EQ / Touch /
+  Advanced dot too, as the mockup shows); v6 Edit uses the v6 Perform bottom row (range bars + Revert / Fade out /
+  PANIC / Lock), as the mockup; the Edit strip keeps its Change / ⋯ row hidden (mockup). Plus Drone / Effects /
+  Master category panels and the instrument chooser (D18, mockup edit.html).
+
 - **U-MOVE (D23):** store `insertSlot(after)` / `moveSlot(from, to)` (carry scenes, wheel targets, instrument
   fields; MIDI learn stays positional), v6 Duplicate next to the original, ⋯ Earlier / Later, drag-to-reorder strips
   (and in Edit's rig tabs later); PANIC and Lock back to a tap.
