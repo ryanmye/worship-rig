@@ -79,6 +79,7 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   (and in Edit's rig tabs later); PANIC and Lock back to a tap.
 - **U-TWEAKS (D24):** live throttled range writes during a drag; pick-first mode on all pointers; drone Bright /
   Move percentages.
+- **Esc setting (D24.7):** "Esc always panics" toggle, per device, read by the v6 Esc handling (and today's).
 - **U-METRO (D23):** Metronome sidebar module (today's click chip behaviour) + load state in the sidebar header.
 
 - **Preview switch for Ryan (U1 review O3):** `?ui6=1` only works in Chrome; the Mac app needs a visible way to turn

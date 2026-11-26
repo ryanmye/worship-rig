@@ -442,3 +442,5 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
    the pick, like every other open overlay in today's app (Esc closes what is open first; the next Esc panics).
    ⌘. / Ctrl+. always panic at once, and the on-screen PANIC is a tap (D23). Reason: one consistent Esc rule across
    the app; a stuck note costs one extra key press, never a lost edit.
+   Ryan: "or add to settings" → a setting **Settings › Keyboards & MIDI › "Esc always panics"** (off by default =
+   the rule above; on = Esc panics at once even with a pick, popover or sheet open). Per device, not in the library.
