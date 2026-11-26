@@ -54,6 +54,11 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 
 ## Queued small tasks
 
+- **U-MOVE (D23):** store `insertSlot(after)` / `moveSlot(from, to)` (carry scenes, wheel targets, instrument
+  fields; MIDI learn stays positional), v6 Duplicate next to the original, ⋯ Earlier / Later, drag-to-reorder strips
+  (and in Edit's rig tabs later); PANIC and Lock back to a tap.
+- **U-METRO (D23):** Metronome sidebar module (today's click chip behaviour) + load state in the sidebar header.
+
 - **Preview switch for Ryan (U1 review O3):** `?ui6=1` only works in Chrome; the Mac app needs a visible way to turn
   v6 on for the U9 review. Add "Try the new layout (preview)" in Settings (today's Settings, Look or Mac category),
   writing `settings.uiV6`. Before U8 ends.

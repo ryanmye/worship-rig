@@ -415,3 +415,16 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
   tier 1). Builder then skeptic per task; flag-off purity is a gate.
 - No 1.2 with the new UI (Ryan, same day): it depends on 2.0-only pieces (UIA slots, patch packs, Cue-then-Go,
   MIDI learn any param). The new UI ships in 2.0.
+
+## D23: v6 Perform answers: tap PANIC/Lock, move instruments, metronome in the sidebar (Ryan, 2026-11-26)
+Answers to the U1 builder's questions (UI6-U1 review O1/O2):
+1. **PANIC and Lock go back to a tap**, as today (the 600 ms hold from the mockup is dropped). Esc / ⌘. unchanged.
+2. **Duplicate puts the copy next to the original, and instruments can be dragged around** (also ⋯ Earlier / Later).
+   This is a real change of the song's slot order (v4 question 1, option a). Needs store API: insert a slot after i
+   and move a slot from → to, carrying everything slot-indexed with the instrument (scenes' slot levels, wheel
+   targets, the instrument's own fields). Tier 2 (orchestrator): MIDI-learn mappings stay **positional**
+   (`slots.<i>.*` = the i-th strip of whichever song plays, O-AW-ML rule 2), so a learned knob keeps moving "strip
+   1" after a reorder; colours also follow position (D15). To revisit if Ryan expects knobs to follow an instrument.
+3. **The metronome click and the "Loading…" state go in the right sidebar**: a Metronome module (click on/off,
+   tempo, Tap) and the song's load state shown in the sidebar (Setlist rows already mark loading songs; the current
+   song's "Loading n of m" goes in the sidebar header).
