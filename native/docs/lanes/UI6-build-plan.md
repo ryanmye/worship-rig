@@ -79,17 +79,17 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   (and in Edit's rig tabs later); PANIC and Lock back to a tap.
 - **U-TWEAKS (D24):** live throttled range writes during a drag; pick-first mode on all pointers; drone Bright /
   Move percentages.
-- ~~**Esc setting (D24.7):**~~ **Done (lane-small, builder; skeptic pending):** Settings › Keyboards & MIDI ›
+- ~~**Esc setting (D24.7):**~~ **Done (lane-small; skeptic VERIFIED after fixes, reviews/UI6-small.md):** Settings › Keyboards & MIDI ›
   "Esc always panics" (`settings.escPanics`, per device, absent = off). On: Esc on Perform (today's and v6) panics at
   once and the open overlay still closes. CONTRACT_CHANGES "## Esc always panics (D24.7)".
 - **Small-window fit (UI6-U3 O1, orchestrator tier 2):** at ≤ 1100 px wide the sidebar starts folded unless the
   player opened it there before; the Add tile goes slim from 4 instruments (not 5). Goal: 4 strips at 1024×700
   without sideways scroll.
-- ~~**U-METRO (D23):**~~ **Done (lane-small, builder; skeptic pending):** sidebar module "Click" (today's chip:
+- ~~**U-METRO (D23):**~~ **Done (lane-small; skeptic VERIFIED after fixes, reviews/UI6-small.md):** sidebar module "Click" (today's chip:
   on / off with the count-in, tempo − / + / Tap, setup read only, Count-in & level… → Edit › Song) + "Loading…" /
   "Preparing n of m" in the sidebar header and a spinner on the rail. CONTRACT_CHANGES "## UI v6 U-METRO".
 
-- ~~**Preview switch for Ryan (U1 review O3):**~~ **Done (lane-small, builder; skeptic pending):** Settings › Look ›
+- ~~**Preview switch for Ryan (U1 review O3):**~~ **Done (lane-small; skeptic VERIFIED after fixes, reviews/UI6-small.md):** Settings › Look ›
   Perform view › "Try the new layout (preview)", swaps Perform live (Chrome and the Mac app). CONTRACT_CHANGES
   "## UI v6 preview switch in Settings". Original note: `?ui6=1` only works in Chrome; the Mac app needs a visible way to turn
   v6 on for the U9 review. Add "Try the new layout (preview)" in Settings (today's Settings, Look or Mac category),

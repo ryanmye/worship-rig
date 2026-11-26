@@ -8384,6 +8384,10 @@ controller or engine change.
 - CSS: `styles-v6-sidebar.css` (`.v6-metro`, `.v6-mt-*`, `.v6-sb-load`, `.v6-rail-load`, `.v6-spin`; reduced motion
   stops the spinner and the count-in pulse). Tests: ui-v6 `sidebar.tests.mjs` + 3 checks (Click writes / Lock / Edit
   link, load state incl. "the module stays put", old layout appended); U3 checks updated for the fourth tab.
+- **Skeptic (native/docs/reviews/UI6-small.md):** F2: a held − / + also stops on window blur and on a song change; −
+  / + step on pointerdown, and a click steps only with `detail === 0` (keyboard / assistive tech), so a press slid off
+  the button no longer swallows the next Enter. F3: beside ⋯ ⟩ the load line is `flex: 1 1 0` and wraps onto two
+  lines inside the 44 px row; at 1024 × 700 (220 px) its text width wrapped ⟩ onto a third row (module −50 px).
 
 ## Esc always panics (D24.7)
 Native DECISIONS D24.7 ("or add to settings"); UI6-build-plan queued "Esc setting".
@@ -8406,6 +8410,10 @@ Native DECISIONS D24.7 ("or add to settings"); UI6-build-plan queued "Esc settin
 - Tests: `test/phase1/shell/esc-panics-store.test.mjs`; settings suite (app + fixture) "D24.7 …" (toggle, device-local,
   Settings' Esc over Edit and Perform, today's Perform with the Quick sheet: on → panic + close, off → close only);
   ui-v6 "D24.7 …" (v6 popover, Quick sheet, focused control, auto-repeat, Edit / Settings, off again).
+- **Skeptic F1 (native/docs/reviews/UI6-small.md):** `escPanicKey` stands down for typing (a text field / textarea /
+  contenteditable as the key's target, or `isComposing`) and for a visible modal dialog / alertdialog on Perform (the
+  chart view's Add chart); today's rule runs for those (the dialog cancels, the first Esc lets go of the field). Ranges
+  (faders, wheel) still panic. The hint now reads "… menu or sheet open (not while typing in a box)".
 
 ## UI v6 preview switch in Settings (UI6-U1 review O3)
 - **Settings › Look › Perform view › "Try the new layout (preview)"** (`setting-ui-v6`, row `setting-row-ui-v6`),
@@ -8418,3 +8426,7 @@ Native DECISIONS D24.7 ("or add to settings"); UI6-build-plan queued "Esc settin
   compared as before.
 - Tests: settings suite "UI6-U1 O3 …" (app: on → the v6 Perform mounts with its stylesheet, off → today's, no `.v6`
   left; fixture: the store write).
+- **Skeptic F4 (UI6-U1 O4):** a flip keeps the Revert snapshot: `main.js` `swapPerform` hands the old view's
+  `savedSnapshot` to the new mount as `ctx.carrySnapshot` (present only during the mount); `perform.js` and
+  `v6/perform.js` adopt it. Purity check: without the row exclusion the flag-off DOM differs from b163c20 by exactly
+  the two rows' 16 elements.
