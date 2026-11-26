@@ -275,3 +275,7 @@ Not in v1.1: EQ simple mode, shimmer/choir, chord charts, stage display, Plannin
 - Always-wired 8-band EQ per slot: 1.5× the CPU; engaged-only chain with crossfade instead.
 - Cutting held notes on song switch to free memory faster: violates the gapless rule; soft cap instead (L-10).
 - Bundling GarageBand/Logic conversions: Apple-licensed personal content; local-only forever.
+
+## 2.y: Record ideas (Ryan, 2026-11-26)
+- Capture something you played at the desk. This comes after the instrument controls are simplified (D14).
+  Keep this thread open.

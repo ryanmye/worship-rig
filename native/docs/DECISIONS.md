@@ -270,3 +270,19 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
 - Steps 1 and 5 need no engine change and are in progress now:
   - 1: patch packs, with the song settings bank folded in;
   - 5: MIDI learn for any parameter.
+
+## D14: Design philosophy: single sound at the desk comes first (Ryan, 2026-11-26)
+- See native/docs/DESIGN_PHILOSOPHY.md.
+- **Priorities:**
+  - daily desk practice and play-along with one sound;
+  - worship nights with one sound all night;
+  - song switching as secondary, kept in the background.
+- **Main screen:** one sound plus its quick tweaks:
+  - pad blend;
+  - reverb;
+  - tone;
+  - transpose and sustain/pad hold.
+- **Sound switching:** a full sound browser.
+- **Menu bar:** a mini Perform.
+- **iPad:** mirrors the Mac in landscape and portrait, as a standalone rig.
+- **Recording ideas:** moves to 2.y, after the instrument controls get simpler.
