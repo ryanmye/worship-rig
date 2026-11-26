@@ -581,6 +581,27 @@ export async function sidebarTests(x) {
     assert.ok(held >= tapped + 5, `held + repeats (${tapped + 2} → ${held})`);
     await page.waitForTimeout(300);
     assert.equal(await tempo(), held, 'the repeat stops on release');
+    // skeptic UI6-small F2: the window losing focus mid-hold (⌘-Tab: no pointerup) stops the repeat; a press slid
+    // off the button doesn't swallow the next keyboard step
+    await page.mouse.down();
+    await page.waitForTimeout(700);
+    await ev(() => window.dispatchEvent(new Event('blur')));
+    const blurred = await tempo();
+    assert.ok(blurred > held, `the hold repeats (${held} → ${blurred})`);
+    await page.waitForTimeout(600);
+    assert.equal(await tempo(), blurred, 'the repeat stops on window blur');
+    await page.mouse.move(5, 5, { steps: 3 });
+    await page.mouse.up();
+    const ub = await page.locator(tid('v6-click-up')).boundingBox();
+    await page.mouse.move(ub.x + ub.width / 2, ub.y + ub.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(ub.x + ub.width / 2, ub.y - 120, { steps: 4 });
+    await page.mouse.up();
+    const slid = await tempo();
+    assert.equal(slid, blurred + 1, 'a press steps once, slid off it stops');
+    await page.focus(tid('v6-click-up'));
+    await page.keyboard.press('Enter');
+    assert.equal(await tempo(), slid + 1, 'Enter after a slid-off press steps');
     await ev(({ sid }) => window.__rig.store.set(`songs.${sid}.tempo`, 300), { sid: id });
     await until(() => document.querySelector('[data-testid="v6-click-up"]').disabled);
     await ev(({ sid }) => window.__rig.store.set(`songs.${sid}.tempo`, 96), { sid: id });

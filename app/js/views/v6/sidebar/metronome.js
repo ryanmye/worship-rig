@@ -112,15 +112,22 @@ export default {
       tapBtn, hint, setup, edit);
     el.append(root);
 
-    // − / +: a press steps 1 BPM; held, it repeats. A pointer press steps on pointerdown, so its click is skipped;
-    // Enter / Space (a click with no press before it) step once.
+    // − / +: a press steps 1 BPM; held, it repeats. A pointer press steps on pointerdown, so its click (detail ≥ 1)
+    // is skipped; Enter / Space (a click with detail 0: keyboard, assistive tech) step once. skeptic UI6-small F2:
+    // the repeat also stops when the window loses focus (⌘-Tab mid-hold sends no pointerup) and when the song
+    // changes (a held + never runs on into the next song's tempo); a press slid off the button no longer swallows
+    // the next keyboard step.
+    const stops = new Set();
+    const stopAll = () => {
+      for (const s of stops) s();
+    };
     const stepper = (b, dir) => {
       let t = 0;
-      let pressed = false;
       const stop = () => {
         clearTimeout(t);
         t = 0;
       };
+      stops.add(stop);
       const bump = () => {
         const s = song();
         if (!s || !(Number(s.tempo) > 0)) return stop();
@@ -130,7 +137,6 @@ export default {
       };
       d.listen(b, 'pointerdown', (e) => {
         if (b.disabled || (e.pointerType === 'mouse' && e.button !== 0)) return;
-        pressed = true;
         bump();
         const rep = (ms) => {
           t = setTimeout(() => {
@@ -142,15 +148,12 @@ export default {
         rep(REPEAT_WAIT);
       });
       for (const type of ['pointerup', 'pointercancel', 'pointerleave', 'lostpointercapture']) d.listen(b, type, stop);
-      d.listen(b, 'click', () => {
-        if (pressed) {
-          pressed = false;
-          return;
-        }
-        bump();
+      d.listen(b, 'click', (e) => {
+        if (e.detail === 0) bump();
       });
-      d.add(stop);
     };
+    d.listen(window, 'blur', stopAll);
+    d.add(stopAll);
     stepper(dec, -1);
     stepper(inc, 1);
     const taps = tapper((bpm) => setTempo(bpm));
@@ -172,6 +175,7 @@ export default {
       if ((s ? s.id : null) !== shownId) {
         shownId = s ? s.id : null;
         taps.reset(); // a tap run never carries into the next song
+        stopAll(); // nor does a held − / + (F2)
       }
       const bpm = s && Number(s.tempo) > 0 ? Math.round(s.tempo) : null;
       const on = !!click.on;
