@@ -295,6 +295,18 @@
   background: color-mix(in srgb, var(--c) 24%, var(--panel-2)); }
 .v6.v6-edit .v6e-ch-use:disabled { opacity: .5; }
 .v6.v6-edit .v6e-ch-remove { color: var(--danger); }
+/* UI6-U5b O3: an instrument the engine's list doesn't have (manifest gone), as U5a's menu said it */
+.v6.v6-edit .v6e-ch-missing { margin: 0; padding: 6px 10px; border-radius: 9px; font-size: 13px;
+  border: 1px solid color-mix(in srgb, var(--warn, #d9a441) 60%, transparent);
+  background: color-mix(in srgb, var(--warn, #d9a441) 12%, transparent); }
+.v6.v6-edit .v6e-ch-missing[hidden] { display: none; }
+/* UI6-U5b O5: the kinds list (9 × 40 px rows) scrolled at 1024 × 700 (360 px for 384). A short window takes the room
+   from the backdrop's and the dialog's padding and gaps instead of the 40 px rows */
+@media (max-height: 760px) {
+  .v6.v6-edit .v6e-ch-back { padding-top: 8px; padding-bottom: 8px; }
+  .v6.v6-edit .v6e-chooser { padding-top: 10px; padding-bottom: 10px; gap: 8px; }
+  .v6.v6-edit .v6e-ch-cats { gap: 2px; }
+}
 
 /* ---- smaller windows */
 @media (max-width: 1250px) {

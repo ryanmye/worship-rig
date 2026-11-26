@@ -110,4 +110,116 @@ export async function polish1EditTests(x) {
       store.set(`songs.${store.currentSong().id}.patch.slots.0.lowNote`, 36);
     });
   });
+
+  await T('polish1 U5b O2: ← / → (Shift, Ctrl) never change the song under the open chooser, whatever has the '
+    + 'focus; after it closes they do', async () => {
+    await toEdit();
+    await ev(() => window.__rig.views.edit.editState.select('slot:0'));
+    await until(() => !!document.querySelector('[data-testid="v6e-change"]'));
+    await settled();
+    const id0 = await curId();
+    await openChooser();
+    // a pointer click on a kind: nothing focused (the app-wide convention)
+    await page.click('[data-testid="v6e-chooser"] .v6e-ch-cat:nth-child(2)');
+    assert.equal(await ev(() => document.activeElement === document.body), true, 'nothing focused');
+    for (const k of ['ArrowRight', 'ArrowLeft', 'Shift+ArrowRight', 'Control+ArrowRight']) {
+      await page.keyboard.press(k);
+      await page.waitForTimeout(120);
+      assert.equal(await curId(), id0, `${k} with nothing focused`);
+      assert.equal(await chooserOpen(), true, `${k}: the chooser stays`);
+    }
+    // a tile: the arrows move through the tiles (the dialog's own keys), never the song
+    await ev(() => document.querySelector('[data-testid="v6e-chooser"] .v6e-ch-tile').focus());
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(120);
+    assert.equal(await ev(() => [...document.querySelectorAll('[data-testid="v6e-chooser"] .v6e-ch-tile')]
+      .indexOf(document.activeElement)), 1, '→ moved to the next tile');
+    assert.equal(await curId(), id0);
+    // the search box keeps its caret keys
+    await page.click(tid('v6e-ch-search'));
+    await page.keyboard.type('pa');
+    await page.keyboard.press('ArrowLeft');
+    assert.equal(await ev(() => document.activeElement.selectionStart), 1, '← moved the caret');
+    assert.equal(await curId(), id0);
+    await page.click(tid('v6e-ch-cancel'));
+    await until(() => !document.querySelector('[data-testid="v6e-chooser"]'));
+    // closed: → is Next song again (with nothing focused), ← goes back
+    await ev(() => document.activeElement?.blur?.());
+    await page.keyboard.press('ArrowRight');
+    await until((a) => window.__rig.store.get().settings.currentSongId !== a, id0);
+    await settled();
+    await page.keyboard.press('ArrowLeft');
+    await until((a) => window.__rig.store.get().settings.currentSongId === a, id0);
+    await settled();
+  });
+
+  await T('polish1 U5b O3: an instrument missing from the engine list shows "<id> (not available)"; a pick '
+    + 'replaces it', async () => {
+    await toEdit();
+    await ev(() => window.__rig.views.edit.editState.select('slot:0'));
+    await until(() => !!document.querySelector('[data-testid="v6e-change"]'));
+    const before = await ev(() => JSON.stringify(window.__rig.store.currentSong().patch.slots[0].instrument));
+    await ev(() => {
+      const { store } = window.__rig;
+      store.set(`songs.${store.currentSong().id}.patch.slots.0.instrument`, { type: 'sampler', id: 'gone-grand' });
+    });
+    try {
+      await openChooser();
+      const r = await ev(() => {
+        const m = document.querySelector('[data-testid="v6e-ch-missing"]');
+        return { shown: !!m && !m.hidden && m.getClientRects().length > 0, text: m?.textContent || '',
+          use: document.querySelector('[data-testid="v6e-ch-use"]').disabled };
+      });
+      assert.equal(r.shown, true);
+      assert.match(r.text, /^gone-grand \(not available\) · This instrument is not available on this computer/);
+      assert.equal(r.use, true, 'Use waits for a pick');
+      await page.click('[data-testid="v6e-chooser"] .v6e-ch-tile');
+      assert.equal(await page.isDisabled(tid('v6e-ch-use')), false);
+      await page.click(tid('v6e-ch-cancel'));
+      await until(() => !document.querySelector('[data-testid="v6e-chooser"]'));
+      // an instrument the engine has: no line
+      await ev((b) => {
+        const { store } = window.__rig;
+        store.set(`songs.${store.currentSong().id}.patch.slots.0.instrument`, JSON.parse(b));
+      }, before);
+      await openChooser();
+      assert.equal(await ev(() => document.querySelector('[data-testid="v6e-ch-missing"]').hidden), true);
+      await page.click(tid('v6e-ch-cancel'));
+      await until(() => !document.querySelector('[data-testid="v6e-chooser"]'));
+    } finally {
+      await ev((b) => {
+        const { store } = window.__rig;
+        store.set(`songs.${store.currentSong().id}.patch.slots.0.instrument`, JSON.parse(b));
+      }, before);
+    }
+  });
+
+  await T('polish1 U5b O5: at 1024×700 the chooser’s kinds list fits without scrolling (40 px rows)', async () => {
+    await page.setViewportSize({ width: 1024, height: 700 });
+    try {
+      await toEdit();
+      await ev(() => window.__rig.views.edit.editState.select('slot:0'));
+      await until(() => !!document.querySelector('[data-testid="v6e-change"]'));
+      await page.waitForTimeout(250);
+      await openChooser();
+      await page.waitForTimeout(250);
+      const r = await ev(() => {
+        const cats = document.querySelector('[data-testid="v6e-ch-cats"]');
+        const box = cats.getBoundingClientRect();
+        const rows = [...cats.querySelectorAll('.v6e-ch-cat')];
+        return { n: rows.length, scrolls: cats.scrollHeight > cats.clientHeight + 0.5,
+          allIn: rows.every((b) => b.getBoundingClientRect().bottom <= box.bottom + 0.5),
+          h: Math.min(...rows.map((b) => Math.round(b.getBoundingClientRect().height))),
+          use: document.querySelector('[data-testid="v6e-ch-use"]').getBoundingClientRect().bottom
+            <= document.querySelector('[data-testid="v6e-chooser"]').getBoundingClientRect().bottom + 0.5 };
+      });
+      assert.ok(r.n >= 9, `kinds: ${r.n}`);
+      assert.deepEqual({ scrolls: r.scrolls, allIn: r.allIn, h: r.h, use: r.use },
+        { scrolls: false, allIn: true, h: 40, use: true });
+      await page.click(tid('v6e-ch-cancel'));
+      await until(() => !document.querySelector('[data-testid="v6e-chooser"]'));
+    } finally {
+      await page.setViewportSize({ width: 1280, height: 800 });
+    }
+  });
 }

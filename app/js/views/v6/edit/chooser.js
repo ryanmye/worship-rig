@@ -23,6 +23,11 @@ const refKey = (ref) => (ref ? `${ref.type}:${ref.id}` : '');
 const kindOf = (it) => KIND_LABELS[groupOf(it)] || groupOf(it);
 const ORD = ['1st', '2nd', '3rd'];
 const ordinal = (n) => ORD[n - 1] || `${n}th`;
+// the controller's text controls (controller.js isTextControl): their arrows move the caret / the value, never a song
+const TEXT_TYPES = new Set(['text', 'search', 'email', 'number', 'password', 'tel', 'url', 'range', 'date', 'time',
+  'color', 'month', 'week', 'datetime-local', '']);
+const typingIn = (el) => !!el && (el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || !!el.isContentEditable
+  || (el.tagName === 'INPUT' && TEXT_TYPES.has(String(el.type || '').toLowerCase())));
 let seq = 0;
 
 /**
@@ -87,10 +92,14 @@ export function openChooser(o) {
   const remove = o.current && o.onRemove ? h('button.btn.ghost.v6e-ch-remove', {
     type: 'button', text: 'Remove this sound…', 'data-testid': 'v6e-ch-remove',
   }) : null;
+  // UI6-U5b O3: the place's instrument is not in the engine's list (its manifest is gone): say so, as U5a's menu did
+  // (slot.js "<id> (not available)"), instead of opening on the first kind with nothing marked as playing
+  const missing = h('p.v6e-ch-missing', { role: 'note', 'data-testid': 'v6e-ch-missing', hidden: true });
   const dlg = h('div.v6e-chooser', {
     role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': title.id, 'data-testid': 'v6e-chooser', tabindex: '-1',
   },
   h('div.v6e-ch-h', {}, title, sub, h('span.v6e-sp'), search),
+  missing,
   h('div.v6e-ch-b', {}, cats, tiles),
   h('div.v6e-ch-f', {}, remove || h('span'), keep, cancel, use));
   const back = h('div.v6e-ch-back', { 'data-testid': 'v6e-chooser-back',
@@ -106,6 +115,12 @@ export function openChooser(o) {
 
   function render({ focusTile = false } = {}) {
     const all = list();
+    const gone = !!cur && all.length > 0 && !all.some((it) => refKey(it.ref) === cur);
+    missing.hidden = !gone;
+    if (gone) {
+      missing.replaceChildren(h('b', { text: `${o.current.instrument.id} (not available)` }),
+        ' · This instrument is not available on this computer. Pick a sound to replace it.');
+    }
     const kinds = chooserKinds(all);
     if (!kind || !kinds.some((k) => k.label === kind)) {
       kind = (cur && kinds.find((k) => k.items.some((it) => refKey(it.ref) === cur))?.label) || kinds[0]?.label || null;
@@ -171,6 +186,7 @@ export function openChooser(o) {
   function close(reason = 'api') {
     if (!open) return false;
     open = false;
+    document.removeEventListener('keydown', holdSong, true);
     back.remove();
     o.markDialog?.(false);
     o.onClose?.(reason);
@@ -247,6 +263,23 @@ export function openChooser(o) {
       cats.querySelector(`[data-kind="${CSS.escape(n?.dataset.kind || '')}"]`)?.focus();
     }
   });
+
+  // UI6-U5b O2: no song change under the open chooser, whatever has the focus. A pointer click on a kind leaves
+  // nothing focused (app-wide), and ← / → on <body> were Prev / Next song (Shift: the cue, ⌘ / Ctrl: the song too),
+  // which closed the chooser. The controller skips a defaultPrevented key; typing keeps its arrows (the search box),
+  // and the dialog's own arrow keys (tiles, kinds) still run. Enter with nothing focused is GO on Perform.
+  function holdSong(e) {
+    if (!back.isConnected) {
+      document.removeEventListener('keydown', holdSong, true);
+      return;
+    }
+    if (e.altKey || e.defaultPrevented || typingIn(e.target)) return;
+    const t = e.target;
+    const none = !(t instanceof Element) || t === document.body || t === document.documentElement;
+    const arrow = e.code === 'ArrowLeft' || e.code === 'ArrowRight';
+    if (arrow || (none && (e.key === 'Enter' || e.code === 'NumpadEnter'))) e.preventDefault();
+  }
+  document.addEventListener('keydown', holdSong, true);
 
   render({ focusTile: true });
 
