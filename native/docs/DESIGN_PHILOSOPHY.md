@@ -44,6 +44,8 @@ changes it.
   can be shown, hidden, reordered and resized on Perform. The layout is saved.
 - **The same modules everywhere.** Perform, the menu-bar mini Perform and the iPad render the same card set. They
   differ only in which cards are shown and how they are arranged.
+- **Vertical faders (Ryan, 2026-11-26):** he likes today's vertical-slider channel-strip format. Instrument cards keep
+  a vertical level fader with its meter, as on today's strips, rather than v4's horizontal level slider.
 - **Modular code.** Each card is a self-contained component with one interface: props from the store, actions through
   the controller. New cards plug in without touching the others: arpeggiator, chart, recorder, Song bank.
 
