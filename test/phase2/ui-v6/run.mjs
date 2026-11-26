@@ -1211,6 +1211,36 @@ try {
       await until(() => window.__panics === 4);
       await page.waitForTimeout(150);
       assert.equal(await ev(() => window.__panics), 4);
+      // skeptic UI6-small F1: typing keeps its Esc (a text field, an IME composition), and so does a modal dialog on
+      // Perform (the chart view's Add chart, typed into): it closes without a panic, today's rule
+      await ev(() => window.__rig.setChartView(true));
+      await until(() => !!window.__rig.views.chart);
+      await ev(() => window.__rig.views.chart.openImport());
+      await until(() => !!document.querySelector('[data-testid="chart-paste"]'));
+      await page.focus(tid('chart-paste'));
+      await page.keyboard.type('G C D');
+      await ev(() => window.__rig.controller.perform.noteOn(62, 100));
+      await page.keyboard.press('Escape');
+      await until(() => !document.querySelector('[data-testid="chart-paste"]'));
+      await page.waitForTimeout(100);
+      assert.equal(await ev(() => window.__panics), 4, 'Add chart (a modal, typed into): Esc cancels, no panic');
+      assert.equal(await held(), 1, 'the held note plays on');
+      await ev(() => window.__rig.setChartView(false));
+      const typing = await ev(() => {
+        const i = document.createElement('input');
+        document.querySelector('[data-testid="v6-perform"]').append(i);
+        i.focus();
+        i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true,
+          isComposing: true }));
+        const ime = window.__panics;
+        i.focus(); // today's rule let go of the field on that Esc (main.js), as it does for any focused control
+        i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        const text = window.__panics;
+        i.remove();
+        return { ime, text };
+      });
+      assert.deepEqual(typing, { ime: 4, text: 4 }, 'a text field / IME composition: no panic');
+      await ev(() => window.__rig.controller.perform.noteOff(62));
       // Edit and Settings keep their Esc
       await ev(() => window.__rig.ctx.setView('edit'));
       await until(() => document.body.dataset.view === 'edit');

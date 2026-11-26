@@ -723,11 +723,32 @@ let lastSongId;
 // before overlay.js's and is only there while the setting is on, so with it absent the app is today's (no listener).
 let escPanicsOn = false;
 let escClosedSettings = null; // the Esc that just closed Settings (its window listener can run before this one)
+// skeptic UI6-small F1: typing keeps its Esc, as with every hotkey today (controller.js isTextControl): a text field,
+// an IME composition. So does a modal dialog on Perform (the chart view's Add chart: role=dialog aria-modal), like
+// Edit's and Settings' dialogs: Esc cancels it and never panics. A range (fader, wheel) is a "focused control": it
+// panics. Then today's rule runs (the overlay closes, or the first Esc lets go of the field).
+const ESC_TEXT_TYPES = new Set(['text', 'search', 'email', 'number', 'password', 'tel', 'url', '']);
+function escTyping(e) {
+  if (e.isComposing) return true;
+  // the key's target first, as the controller's keyEl (a field that blurred itself on this key was still typed in)
+  const t = e.target;
+  const el = t instanceof Element && t !== document.body && t !== document.documentElement ? t : document.activeElement;
+  if (!el || el === document.body) return false;
+  if (el.isContentEditable || el.tagName === 'TEXTAREA') return true;
+  return el.tagName === 'INPUT' && ESC_TEXT_TYPES.has(String(el.type || '').toLowerCase());
+}
+function escModalOpen() {
+  for (const el of document.querySelectorAll('[role="dialog"][aria-modal="true"], [role="alertdialog"]')) {
+    if (!el.closest('[hidden]') && el.getClientRects().length > 0) return true;
+  }
+  return false;
+}
 function escPanicKey(e) {
   if (e.key !== 'Escape' || e.metaKey || e.ctrlKey || e.altKey) return;
   if (settingsOpen || e === escClosedSettings || store.get().settings.view !== 'perform') return;
   const html = document.documentElement;
   if (html.hasAttribute('data-hotkey-capture') || html.hasAttribute('data-gb-import')) return;
+  if (escTyping(e) || escModalOpen()) return;
   // the controller's Esc and the blur-first rule below stand down (one panic per press); overlay.js still closes
   e.preventDefault();
   if (!e.repeat) controller.panic();
