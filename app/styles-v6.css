@@ -8,6 +8,8 @@
 @import url('./styles-v6-left.css'); /* U4: the left panel (Quick + wheel) and the Quick panel (views/v6/left.js) */
 @import url('./styles-v6-bank.css'); /* U7a: the Song bank browser and the Trying banner (views/v6/bank/) */
 @import url('./styles-v6-dialogs.css'); /* U7c: MIDI Learn on Perform, Arrange, Save snapshot, the song menu */
+@import url('./styles-v6-ipad.css'); /* U8a: iPad landscape / portrait fixes and the stacked portrait rows */
+@import url('./styles-v6-states.css'); /* U8a: edge states on the v6 stage (the first-run Start here card) */
 
 .v6 {
   /* positions 4..6 of the mockup's POS_COL (the first four are the theme's --slot-0..3): views/v6/lib.js slotColor */

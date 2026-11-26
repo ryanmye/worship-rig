@@ -128,7 +128,12 @@ export function popover(o) {
   } else {
     el.style.top = `${Math.round(ar.bottom - hr.top + 8)}px`;
     if (o.align === 'end') el.style.right = `${Math.max(8, Math.round(hr.right - ar.right))}px`;
-    else el.style.left = `${Math.max(8, Math.round(ar.left - hr.left))}px`;
+    else {
+      // U8a: kept inside the host on the right too (the song bar's ⋯ sits at the right of its first row at iPad
+      // portrait; its 280 px menu ran 21 px off the screen)
+      const w = el.offsetWidth || 0;
+      el.style.left = `${Math.max(8, Math.min(Math.round(ar.left - hr.left), Math.round(hr.width - w - 8)))}px`;
+    }
   }
   o.anchor.setAttribute('aria-expanded', 'true');
   o.anchor.classList.add('open');

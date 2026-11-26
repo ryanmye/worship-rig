@@ -1,0 +1,130 @@
+/* UI v6 U8a: iPad layouts (native/docs/lanes/UI6-build-plan.md U8; DECISIONS D14 "iPad mirrors the Mac in landscape
+   and portrait"; mockups perform-v6.html "iPad portrait · 3", edit.html, settings.html, chart.html, song-bank.html).
+   Landscape (1180 × 820, 1366 × 1024, 1024 × 768) is the Mac layout; this file fixes what the narrow widths broke and
+   lays out portrait (820 × 1180, 1024 × 1366). Imported by styles-v6.css, so linked only while settings.uiV6 is on;
+   the flag-off app never sees a rule here.
+   Two queries, as the rest of v6: the width (≤ 900 px: the top bar and the song bar, which only a portrait iPad makes
+   that narrow; the Mac window's minimum is 1024) and PORTRAIT_MQ (sidebar.js; portrait ≤ 1024 px: the bottom row and
+   the panels stacked under the strips). The top bar is today's (index.html): its rules here need a mounted v6
+   Perform, which is there (shown or hidden behind Edit) the whole time the flag is on. styles-v6.css's own rules come
+   after its imports, so the rules here are one class more specific where they must win. */
+
+/* ---- top bar, every width (UI6-U5a O7, UI6-U4 O2, UI6-U7c O1): the MIDI lamp may give way (it is the only flexible
+   one, styles.css), but its words ran on over the Sound lamp ("Not allowed yet" under "Sound OK" at 820 and 1024 px;
+   under "Stopped" at 1280 px with a 42 ms delay showing). They ellipsize inside their own lamp now; the whole sentence
+   stays the lamp's title and the toast. */
+body:has(.v6-perform) #midi-status { min-width: 0; overflow: hidden; }
+/* Settings (⚙) shrank to 40 px below 1250 px (it is a flex item there): 44 px, as every v6 target */
+body:has(.v6-perform) #btn-settings { flex: none; min-width: 44px; }
+body:has(.v6-perform) #midi-status > .midi-name { flex-shrink: 1; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; }
+
+/* ---- top bar at iPad portrait widths: nothing collapses away that tells the player something is wrong. Quick → its
+   icon (the left panel's Quick, under it, carries the word), Settings keeps 44 px, the output meter goes (every strip
+   has its own), the recording clock only while it counts or saves, the "All 19 ready" words only when ready (while
+   loading, the sidebar header says "Loading…" / "Preparing n of m", and the lamp is still there); the master volume
+   keeps a usable slider. */
+@media (max-width: 900px) {
+  body:has(.v6-perform) .topbar { gap: 6px; padding: 0 8px; }
+  body:has(.v6-perform) .tb-views .seg { min-width: 0; padding: 0 10px; }
+  body:has(.v6-perform) #btn-quick { min-width: 44px; padding: 0; justify-content: center; flex: none; }
+  body:has(.v6-perform) #btn-quick > span { display: none; }
+  body:has(.v6-perform) .tb-status { gap: 10px; justify-content: flex-start; }
+  body:has(.v6-perform) #ready-status:not(.on) .ready-text { display: none; }
+  body:has(.v6-perform) .tb-meter { display: none; }
+  body:has(.v6-perform) .tb-rec .rec-time:not(.on):not(.saving) { display: none; }
+  body:has(.v6-perform) .tb-master { width: 140px; }
+}
+
+/* ---- song bar at iPad portrait widths (UI6-U7c O1): two rows instead of a name cut to "Sun…" and a Setlist button
+   cut at the edge. Row 1: the song (its full width) · ⋯ · Notes · Setlist; row 2: Key · Transpose · Space · the
+   folded snapshot chip · the chord. The ::before is the line break (a flex item 100 % wide, ordered between them). */
+@media (max-width: 900px) {
+  .v6.v6-perform .v6-songbar { flex-wrap: wrap; row-gap: 4px; column-gap: 8px; padding: 4px 10px; }
+  .v6.v6-perform .v6-songbar::before { content: ''; order: 3; flex: 1 0 100%; height: 0; }
+  .v6.v6-perform .v6-songbar > * { order: 4; }
+  .v6.v6-perform .v6-songbar > .v6-song { order: 0; flex: 1 1 0; max-width: none; font-size: 24px; }
+  .v6.v6-perform .v6-songbar > :is([data-testid="v6-songmenu-btn"], .v6-notes-btn, .v6-setbtn) { order: 1; }
+  .v6.v6-perform .v6-songbar > .v6-gap { order: 4; }
+  .v6.v6-perform .v6-songbar .v6-chord .chord-caption { display: none; }
+}
+
+/* ---- bottom row, iPad portrait (mockup "iPad portrait · 3": .port .bottom): the keyboard takes the whole width on
+   its own row (it was ~260 px wide beside the four buttons, UI6-U5b known), Revert · Fade out · PANIC · Lock share
+   the row under it. Perform's row and the v6 Edit's (the same bottom.js row, UI6-U5b) alike. */
+@media (orientation: portrait) and (max-width: 1024px) {
+  .v6 .v6-bottom.v6-bottom { height: auto; grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: 96px 56px; }
+  .v6 .v6-bottom.v6-bottom > .v6-keys { grid-column: 1 / -1; }
+  .v6.v6-edit .v6e-bottom .v6-bottom.v6-bottom { height: auto; }
+}
+
+/* ---- portrait height budget: the two-row song bar and the stacked bottom row take ~110 px from the board, and the
+   strips under a Learn / Arrange bar (+52 px, + the strips' 44 px ◀ ▶ ✕ row) left the fader no track at all (its
+   thumb sat over the dB and the Space / Echo row). The panel under the strips gives some back (U3 had 340 px), and
+   the faders keep a 96 px track (strip-fit check in test/phase2/ui-v6-ipad). */
+@media (orientation: portrait) and (max-width: 1024px) {
+  .v6.v6-perform .v6-side { max-height: 300px; }
+  .v6.v6-perform:is(.learning, .arranging) .v6-side { max-height: 240px; }
+}
+
+/* ---- Arrange in short landscape windows (1024 × 768 iPad, the Mac's 1024 × 700 minimum): the strips' ◀ ▶ ✕ row and
+   the Arrange bar left the fader a 51–58 px track, under its 80 px input, so the thumb sat over the dB and the Space /
+   Echo row. While arranging there, the Space / Echo / Octave / Sustain grid steps aside (arranging moves instruments;
+   it is back on Done). */
+@media (max-height: 790px) {
+  .v6.v6-perform.arranging .v6-strip .v6-mods { display: none; }
+}
+
+/* ---- touch targets on a touch screen (iPad; (pointer: coarse), as keyboard.js's coarse handles): every control the
+   v6 screens show is at least 44 × 44 px (DESIGN_PHILOSOPHY). The Mac (a fine pointer) keeps today's compact sizes.
+   The v6 Perform's own controls are 44 px already; these are the ones the v6 screens borrow from today's Edit,
+   Settings and Quick sheet, and two that a strip cannot widen. */
+@media (pointer: coarse) {
+  /* a strip's name picks its range (D24.3): 24 px tall in the row; the hit area reaches into the strip's padding
+     above and the gap below (never onto the ON tile), 44 px in all */
+  .v6 .v6-strip .v6-who { position: relative; }
+  .v6 .v6-strip .v6-who::after { content: ''; position: absolute; left: 0; right: 0; top: -12px; bottom: -8px; }
+  /* Arrange: ◀ ▶ ✕ share the strip's width (3 × 44 px fit a 150 px strip with 5 px padding); the strip's own ⠿ grip
+     (44 px with its hit area) drags instead of the row's wide "⠿ drag" well, which left the three buttons 40 px */
+  .v6.v6-perform.arranging .v6-strip { padding-left: 5px; padding-right: 5px; }
+  .v6.v6-perform.arranging .v6-arr-grip { display: none; }
+  .v6.v6-perform.arranging .v6-strip .v6-grip:not([hidden]) { display: flex; }
+  .v6.v6-perform.arranging .v6-arrbar-s { gap: 2px; }
+  .v6.v6-perform.arranging .v6-arrbar-s .v6-arr-b { flex: 1 1 0; min-width: 0; min-height: 44px; }
+  /* the sidebar's customize list ↑ ↓ (also in Settings › Perform layout and Arrange) and the bank's search box */
+  .v6 .v6-cz-mv, .v6-st .v6-cz-mv { min-width: 44px; }
+  .v6 .v6-bank-q { min-height: 44px; }
+  /* today's Quick sheet on v6: the theme link and Save as scene n */
+  .v6 .qs :is(.qs-theme, .qs-scene) { min-height: 44px; min-width: 44px; }
+  .v6 .qs .qs-st:has(.qs-theme, .qs-scenes:not([hidden])) { min-height: 44px; align-items: center; }
+  /* the Song bank's key and tempo filters */
+  .v6 :is(.v6-bank-k, .v6-bank-sp) { min-width: 44px; }
+  /* the v6 Edit's song header, library column and rig row (today's ev2 parts) and the v6 Settings (today's rows) */
+  .v6.v6-edit :is(button, select, input:not([type="range"]):not([type="checkbox"]):not([type="radio"])):not(.ev2-tok),
+  .v6-st :is(button, select, input:not([type="range"]):not([type="checkbox"]):not([type="radio"])) {
+    min-height: 44px; }
+  .v6.v6-edit button:not(.ev2-tok), .v6-st button { min-width: 44px; }
+  /* with 44 px rows the library column's foot (Library file › Export / Import) no longer fits under the song list at
+     1180 × 820: the column scrolls instead of cutting it off */
+  .v6.v6-edit .v6e-libmod { overflow: hidden auto; overscroll-behavior: contain; }
+}
+
+/* ---- the sidebar's tabs at its default 220 px (≤ 1240 px wide windows: iPad landscape, small Mac windows) with the
+   chart view on: five 44 px tabs need ~234 px, so Chart ran out of the sidebar, off the screen (U7b). They wrap onto
+   a second row there instead (every tab stays a 44 px target, none scrolls out of sight). */
+@container v6side (max-width: 259px) {
+  .v6 .v6-sb-h:is([data-tabs="5"], [data-tabs="6"], [data-tabs="7"]) .v6-sb-tabs { flex-wrap: wrap; }
+}
+
+/* ---- the chart on the stage at iPad portrait (music stand): the mini faders' row put the name beside a 60 px track
+   and broke it mid-word ("War / m"). There the name goes on a line of its own above ON · fader · dB. */
+@media (orientation: portrait) and (max-width: 1024px) {
+  .v6.v6-perform .v6-minis.row .v6-mini { display: grid; grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto 44px; align-items: center; column-gap: 8px; row-gap: 3px; padding: 5px 10px 7px;
+    flex-basis: 200px; }
+  .v6.v6-perform .v6-minis.row .v6-mini-nm { grid-column: 1 / -1; grid-row: 1; max-width: none; max-height: none;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; word-break: normal; }
+  .v6.v6-perform .v6-minis.row .v6-mini .ontile.v6-mini-on { grid-column: 1; grid-row: 2; }
+  .v6.v6-perform .v6-minis.row .v6-mini .fader { grid-column: 2; grid-row: 2; min-width: 0; }
+}
