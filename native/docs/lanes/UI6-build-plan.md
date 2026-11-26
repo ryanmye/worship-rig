@@ -88,7 +88,13 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 - Pre-existing red suites to fix separately: eq "L-21 note labels fit" (fails on base), engine suite's 404 on
   `/__tests/api/health` and the CPU-timing `offline.eqCpu` on the 2-CPU box.
 
-## U3 status (builder, 2026-11-26; lane-u3 from lane-u2 f4d70a7, awaiting the skeptic)
+## U3 status (builder, 2026-11-26; lane-u3 from lane-u2 f4d70a7, rebased onto 7f1b128; skeptic pass done)
+
+- **Skeptic (2026-11-26): VERIFIED after fixes** (two low defects, one test race). The review is
+  `native/docs/reviews/UI6-U3.md`. Fixed: keyboard focus lost when ⟩ / ⟨ / a rail icon hid themselves (F1), the drone
+  forgetting My Pads across a tab switch (F2), and a same-frame pills assertion in the U1 check that raced U3's
+  overflow pills (F3). ui-v6 is 40/40, ui-core 78/78, settings 90/90. Open for Ryan / U4 / U8: at 1024 px the open
+  sidebar (≥ 200 px, D16) makes a 4-instrument song scroll and the pills take ~40 px off the faders (O1).
 
 - Built: `app/js/views/v6/sidebar/` (`sidebar.js` container, `modules.js` registry, `drone.js`, `setlist.js`,
   `notes.js`) and `app/styles-v6-sidebar.css` (imported by styles-v6.css); suite part

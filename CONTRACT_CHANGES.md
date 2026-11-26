@@ -8222,3 +8222,12 @@ portrait"). Behind `settings.uiV6` like U1 / U2. No store, controller or engine 
 - Tests: `node test/phase2/ui-v6/run.mjs` now 35 checks (U1 + U2's 24 + 11 for U3 in `sidebar.tests.mjs`), ~2.2 min on
   the 2-CPU box. Screenshots: `u3-open-1280.png`, `u3-setlist-1280.png`, `u3-customize-1280.png`,
   `u3-collapsed-1280.png`, `u3-wide-1280.png`, `u3-ipad-portrait-820.png`.
+- **Skeptic (UI6-U3, `native/docs/reviews/UI6-U3.md`)** changed these behaviours:
+  - ⟩, ⟨ and the rail icons pressed from the keyboard (a click with `detail` 0) move the focus to ⟨ after folding and
+    to the open tab after opening (F1); they used to drop it to the page. A pointer click leaves the focus alone, so
+    Space stays the pedal.
+  - The drone module keeps the Synth / My Pads its ON tile turned off per song for the sidebar's life (a `WeakMap` by
+    module ctx), not per mount, so a tab switch or a fold no longer forgets it (F2; today's card keeps it until the
+    song changes).
+  - Tests: ui-v6 is 40 checks (U3 skeptic F1, F2; the U1 "> 5 instruments" check now waits a frame for the pills,
+    which follow the measured overflow since U3).
