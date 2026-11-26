@@ -293,3 +293,130 @@ test('controller: Keep = Add to library (same record) + select; tweaks kept; set
     assert.equal((await ctl.tryBankSong('Desk Bank:gone.json')).ok, false);
     ctl.dispose();
   });
+
+// ------------------------------------------------------------------------------------------ skeptic (UI6-U7a)
+// F1: list edits during a trial move the replaced selection (what is saved, what Back returns to) as they move the
+// selection itself (M4). Before: a removal before a reprise's second entry saved setlistIndex on another entry.
+test('skeptic F1: a setlist edited during a trial keeps the replaced entry (saved, Back), as without the trial', () => {
+  const mkPair = () => [memoryStorage(), memoryStorage()].map((storage) => {
+    const s = makeStore({ storage, debounceMs: 0, now: () => 1000 });
+    s.seedFactory();
+    const o = s.get().songOrder;
+    s.setCurrentSetlist(s.addSetlist('Reprise', [o[0], o[1], o[2], o[0], o[3]]));
+    s.selectSongId(o[0], 3); // the reprise: the second entry of o[0]
+    s.persistNow();
+    return { s, storage };
+  });
+  const [S, R] = mkPair(); // S tries a bank song; R (the reference) never does
+  const o = S.s.get().songOrder;
+  const t = S.s.startTrial(entry('Desk Bank:lantern.json', song('Lantern Hymn')));
+  S.s.selectSongId(t.id);
+  const sl = S.s.get().settings.currentSetlistId;
+  for (const X of [S.s, R.s]) X.removeFromSetlist(sl, 1);
+  S.s.persistNow();
+  R.s.persistNow();
+  assert.ok(raw(S.storage) === raw(R.storage), 'saved as if there had been no trial');
+  assert.deepEqual(S.s.trialReturn(), { id: o[0], index: 2 }, 'Back: the same (reprise) entry, now at 2');
+  // the song it replaced deleted during the trial: the song after it (M4), saved and Back's target
+  for (const X of [S.s, R.s]) X.deleteSong(o[0]);
+  S.s.persistNow();
+  R.s.persistNow();
+  assert.ok(raw(S.storage) === raw(R.storage), 'saved as if there had been no trial (song deleted)');
+  assert.equal(S.s.trialReturn().id, R.s.get().settings.currentSongId);
+  assert.equal(S.s.currentSong().id, t.id, 'the trial plays on');
+  assert.equal(raw(S.storage).includes('trial:'), false);
+});
+
+// F1, property style: random trial / back / edit / switch / list-edit / persist / reload sequences against a store
+// that never sees the trial. Storage and export must always equal the reference's: the library without the trial.
+test('skeptic F1: random sequences: storage and export always = the library without the trial', () => {
+  const counter = () => {
+    let n = 0;
+    return (p) => `${p}${++n}`;
+  };
+  const strip = (j) => {
+    const x = JSON.parse(j);
+    delete x.exportedAt;
+    return x;
+  };
+  let runs = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    let r = seed >>> 0;
+    const rnd = () => ((r = (r * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+    const pick = (a) => a[Math.floor(rnd() * a.length)];
+    const sS = memoryStorage();
+    const sR = memoryStorage();
+    const gS = counter();
+    const gR = counter();
+    const mk = (storage, idGen) => makeStore({ storage, idGen, debounceMs: 0, now: () => 1000 });
+    let S = mk(sS, gS);
+    const R = mk(sR, gR);
+    for (const X of [S, R]) {
+      X.seedFactory();
+      const o = X.get().songOrder;
+      X.setCurrentSetlist(X.addSetlist('Sun', [o[0], o[1], o[2], o[0], o[3]]));
+    }
+    for (let k = 0; k < 60; k++) {
+      const st = R.get();
+      const nav = R.navIds();
+      const sl = st.settings.currentSetlistId;
+      const n = sl ? st.setlists[sl].songIds.length : 0;
+      const trialSel = isTrialId(S.get().settings.currentSongId);
+      const op = pick(['try', 'try', 'back', 'trialEdit', 'realEdit', 'curEdit', 'select', 'slAdd', 'slRemove',
+        'slMove', 'theme', 'reload', 'delete', 'addSong']);
+      if (op === 'try') {
+        const t = S.startTrial(entry(`Desk Bank:s${k}.json`, song(`Bank ${k}`, { tempo: 70 + k })));
+        S.selectSongId(t.id);
+        for (const x of S.trialIds()) if (x !== t.id) S.endTrial(x);
+      } else if (op === 'back' && trialSel) {
+        const back = S.trialReturn();
+        for (const X of [S, R]) X.selectSongId(back.id, back.index);
+        for (const x of S.trialIds()) S.endTrial(x);
+      } else if (op === 'trialEdit' && trialSel) {
+        S.set('slots.0.gain', Math.round(rnd() * 100) / 100);
+      } else if (op === 'realEdit') {
+        const id = pick(st.songOrder);
+        for (const X of [S, R]) X.set(`songs.${id}.notes`, `n${k}`);
+      } else if (op === 'curEdit' && !trialSel) {
+        const v = Math.round(rnd() * 100) / 100;
+        for (const X of [S, R]) X.set('slots.0.gain', v);
+      } else if (op === 'select' && nav.length) {
+        const i = Math.floor(rnd() * nav.length);
+        for (const X of [S, R]) X.selectSongId(nav[i], i);
+        for (const x of S.trialIds()) S.endTrial(x);
+      } else if (op === 'slAdd' && sl) {
+        const id = pick(st.songOrder);
+        const at = Math.floor(rnd() * (n + 1));
+        for (const X of [S, R]) X.addToSetlist(sl, id, at);
+      } else if (op === 'slRemove' && n) {
+        const at = Math.floor(rnd() * n);
+        for (const X of [S, R]) X.removeFromSetlist(sl, at);
+      } else if (op === 'slMove' && n > 1) {
+        const a = Math.floor(rnd() * n);
+        const b = Math.floor(rnd() * n);
+        for (const X of [S, R]) X.moveSong(sl, a, b);
+      } else if (op === 'theme') {
+        const v = pick(['ember', 'sanctuary']);
+        for (const X of [S, R]) X.set('settings.theme', v);
+      } else if (op === 'reload') {
+        S.persistNow();
+        S = mk(sS, gS);
+      } else if (op === 'delete' && st.songOrder.length > 4) {
+        const id = pick(st.songOrder);
+        for (const X of [S, R]) X.deleteSong(id);
+      } else if (op === 'addSong') {
+        for (const X of [S, R]) X.addSong(null, { name: `A${k}` });
+      }
+      S.persistNow();
+      R.persistNow();
+      const a = raw(sS);
+      assert.equal(a.includes('trial:'), false, `seed ${seed} step ${k} ${op}: a trial song saved`);
+      // assert.ok, not equal: a diff of two whole libraries is unreadable
+      assert.ok(a === raw(sR), `seed ${seed} step ${k} ${op}: saved library ≠ the library without the trial`);
+      assert.ok(JSON.stringify(strip(S.exportJSON())) === JSON.stringify(strip(R.exportJSON())),
+        `seed ${seed} step ${k} ${op}: export ≠ the library without the trial`);
+      runs++;
+    }
+  }
+  assert.equal(runs, 3600);
+});

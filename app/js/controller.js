@@ -2681,10 +2681,22 @@ export function createController(o) {
    * The trial in progress, or null: {id, packId, title, artist?, pack, key, bpm|null, prev:{id, name}|null}.
    * @returns {object|null}
    */
+  /**
+   * UI6-U7a skeptic F1: where Back goes: the store's trialReturn() while the trial song is selected (the replaced
+   * selection as saved, kept on its setlist entry through list edits; the song after it when it was deleted), else
+   * the selection remembered at Try it.
+   * @param {object} t the trial
+   * @returns {{id:string|null, index:number|undefined}}
+   */
+  function trialBack(t) {
+    const r = typeof store.trialReturn === 'function' ? store.trialReturn() : null;
+    return r ? { id: r.id, index: r.index } : { id: t.prev.id, index: t.prev.index };
+  }
   function trialInfo() {
     if (!trial || !store.getSong(trial.id)) return null;
     const s = store.getSong(trial.id);
-    const prev = trial.prev.id ? store.getSong(trial.prev.id) : null;
+    const back = trialBack(trial).id;
+    const prev = back ? store.getSong(back) : null;
     return {
       id: trial.id, packId: trial.packId, title: trial.item ? trial.item.title : s.name,
       artist: trial.item && trial.item.artist, pack: trial.item ? trial.item.pack : null,
@@ -2741,17 +2753,19 @@ export function createController(o) {
   /**
    * Back from a trial (the banner's "Back to …"): the song it replaced, at the same setlist entry, with its own
    * Revert snapshot (so Revert after Back is Revert before Try it). Live state is a song switch's: the song's own levels,
-   * no scene. Allowed under Perform lock (a way out, like GO). The previous song gone: the first of the list.
+   * no scene. Allowed under Perform lock (a way out, like GO). Where it goes: trialBack (skeptic F1).
    * @returns {Promise<{ok:boolean, error?:string}>}
    */
   async function backFromTrial() {
     if (!trial) return { ok: false, error: 'no-trial' };
     const t = trial;
-    const prevSong = t.prev.id && store.getSong(t.prev.id);
-    const target = prevSong ? t.prev.id : store.navIds()[0] || store.get().songOrder[0] || null;
+    const back = trialBack(t);
+    const prevSong = back.id && store.getSong(back.id);
+    const target = prevSong ? back.id : store.navIds()[0] || store.get().songOrder[0] || null;
     if (!target) return { ok: false, error: 'There is no song to go back to.' };
+    // applySong takes the baseline only for its own song (a deleted previous song: the next one, its own snapshot)
     const ok = await selectSong(target, {
-      ...(prevSong && Number.isInteger(t.prev.index) && t.prev.index >= 0 ? { index: t.prev.index } : {}),
+      ...(prevSong && Number.isInteger(back.index) && back.index >= 0 ? { index: back.index } : {}),
       _baseline: prevSong ? t.prev.baseline : null,
     });
     return ok ? { ok: true } : { ok: false, error: 'The song could not be loaded.' };

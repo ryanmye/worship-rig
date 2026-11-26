@@ -2148,17 +2148,36 @@ export function createStore(opts = {}) {
     if (!!state.settings.setlistGap !== !!gap) out.push(put(['settings', 'setlistGap'], !!gap));
     return out;
   }
+  // UI6-U7a skeptic F1: while a trial song is selected, the selection it replaced (trialNav: what persisted() saves
+  // and Back returns to) is what a list edit repositions (M4), as it would the selection itself. Before this, an
+  // entry removed / moved / inserted before it during a trial left trialNav's setlistIndex on another entry (saved
+  // so; Back landed there, or on the first copy of a reprise). The trial song's own position stays -1 (in no list).
+  const trialSelected = () => trialNav !== null && isTrialId(state.settings.currentSongId);
+  /** The state with the replaced selection in place of a selected trial song's (nav bookkeeping only). */
+  function navBase() {
+    if (!trialSelected()) return state;
+    const t = trialNav;
+    return { ...state, settings: { ...state.settings, currentSongId: t.currentSongId, setlistIndex: t.setlistIndex,
+      setlistGap: t.setlistGap } };
+  }
+  /** putPos for the selection a list edit follows: trialNav's while a trial song is selected (no state path). */
+  function putNavPos(pos, gap = false) {
+    if (!trialSelected()) return putPos(pos, gap);
+    if (trialNav.setlistIndex !== pos) trialNav.setlistIndex = pos;
+    if (!!trialNav.setlistGap !== !!gap) trialNav.setlistGap = !!gap;
+    return [];
+  }
   /**
    * M4: keep settings.setlistIndex pointing at the same entry after an edit of `editedListId` (null = library order).
-   * `before` is navState() captured before the edit; fn(pos, gap) → {pos, gap}. Call after the list was put().
+   * `before` = navState(navBase()) before the edit; fn(pos, gap) → {pos, gap}. Call after the list was put().
    */
   function reposition(before, editedListId, fn) {
-    const after = navState();
-    if (after.listId !== before.listId) return putPos(-1, false); // nav switched library ↔ setlist: fall back to indexOf
+    const after = navState(navBase());
+    if (after.listId !== before.listId) return putNavPos(-1, false); // nav switched library ↔ setlist: indexOf
     if (editedListId !== before.listId) return [];
-    if (before.pos < 0) return before.gap ? [] : putPos(-1, false);
+    if (before.pos < 0) return before.gap ? [] : putNavPos(-1, false);
     const r = fn(before.pos, before.gap);
-    return putPos(r.pos, r.gap);
+    return putNavPos(r.pos, r.gap);
   }
   const insertAtPos = (at) => (pos, gap) => ({ pos: (gap ? at < pos : at <= pos) ? pos + 1 : pos, gap });
   const removeAtPos = (idx) => (pos, gap) => {
@@ -2501,7 +2520,7 @@ export function createStore(opts = {}) {
       const s = state.songs[id];
       if (!s || isTrialId(id)) return null; // U7a: a trial song becomes a library song only by keeping it
       const newId = idGen('song');
-      const before = navState();
+      const before = navState(navBase()); // U7a skeptic F1
       const copy = normalizeSong({ ...clone(s), name: `${s.name} (copy)` }, newId);
       const paths = [put(['songs', newId], copy)];
       const order = state.songOrder.slice();
@@ -2527,15 +2546,15 @@ export function createStore(opts = {}) {
     /** Remove a song from the library and every setlist. @returns {boolean} */
     deleteSong(id) {
       if (!state.songs[id] || isTrialId(id)) return false; // U7a: a trial ends with endTrial (Back)
-      const before = navState();
+      const before = navState(navBase()); // U7a skeptic F1
       const removedBefore = (p) => before.ids.slice(0, Math.max(0, p)).filter((s) => s === id).length;
-      const wasCurrent = state.settings.currentSongId === id;
+      const wasCurrent = navBase().settings.currentSongId === id; // F1: the song a trial replaced counts as current
       const paths = [put(['songs', id], undefined), put(['songOrder'], state.songOrder.filter((s) => s !== id))];
       for (const slId of state.setlistOrder) {
         const sl = state.setlists[slId];
         if (sl.songIds.includes(id)) paths.push(put(['setlists', slId, 'songIds'], sl.songIds.filter((s) => s !== id)));
       }
-      const after = navState();
+      const after = navState(navBase());
       if (wasCurrent) {
         // select the song that followed it (M4), at its exact position
         const remaining = after.ids;
@@ -2543,8 +2562,10 @@ export function createStore(opts = {}) {
         if (after.listId !== before.listId) p = 0;
         p = Math.min(Math.max(0, p), remaining.length - 1);
         const next = remaining[p] || state.songOrder[0] || null;
-        paths.push(put(['settings', 'currentSongId'], next));
-        paths.push(...putPos(next && remaining[p] === next ? p : -1, false));
+        // F1: during a trial the song that followed it is what Back returns to (and what is saved); the trial plays on
+        if (trialSelected()) trialNav.currentSongId = next;
+        else paths.push(put(['settings', 'currentSongId'], next));
+        paths.push(...putNavPos(next && remaining[p] === next ? p : -1, false));
       } else {
         paths.push(...reposition(before, before.listId, (pos, gap) => ({ pos: pos - removedBefore(pos), gap })));
       }
@@ -2693,7 +2714,7 @@ export function createStore(opts = {}) {
       const paths = [put(['setlists', id], undefined), put(['setlistOrder'], order)];
       if (state.settings.currentSetlistId === id) {
         paths.push(put(['settings', 'currentSetlistId'], order[0] || null));
-        paths.push(...putPos(-1, false));
+        paths.push(...putNavPos(-1, false)); // F1: a trial's replaced selection too
       }
       // menubar-A: the menu-bar set falls back to the current setlist's first songs
       if (state.settings.menuBarSetlistId === id) paths.push(put(['settings', 'menuBarSetlistId'], null));
@@ -2704,7 +2725,7 @@ export function createStore(opts = {}) {
     addToSetlist(setlistId, songId, index) {
       const sl = state.setlists[setlistId];
       if (!sl || !state.songs[songId] || isTrialId(songId)) return false; // U7a: never a trial song
-      const before = navState();
+      const before = navState(navBase()); // U7a skeptic F1
       const ids = sl.songIds.slice();
       const at = Number.isInteger(index) ? Math.max(0, Math.min(ids.length, index)) : ids.length;
       ids.splice(at, 0, songId);
@@ -2716,7 +2737,7 @@ export function createStore(opts = {}) {
     removeFromSetlist(setlistId, index) {
       const sl = state.setlists[setlistId];
       if (!sl || !Number.isInteger(index) || index < 0 || index >= sl.songIds.length) return false;
-      const before = navState();
+      const before = navState(navBase()); // U7a skeptic F1
       const ids = sl.songIds.slice();
       ids.splice(index, 1);
       const paths = [put(['setlists', setlistId, 'songIds'], ids)];
@@ -2733,7 +2754,7 @@ export function createStore(opts = {}) {
       const at = Math.max(0, Math.min(ids.length, to));
       ids.splice(at, 0, x);
       if (deepEqual(ids, list)) return false;
-      const before = navState();
+      const before = navState(navBase()); // U7a skeptic F1
       const paths = [put(setlistId ? ['setlists', setlistId, 'songIds'] : ['songOrder'], ids)];
       paths.push(...reposition(before, setlistId || null, moveAtPos(from, at)));
       changed(paths);
@@ -2750,7 +2771,7 @@ export function createStore(opts = {}) {
     /** Make a setlist current; if the current song isn't in it, select its first song. */
     setCurrentSetlist(id) {
       if (id !== null && !state.setlists[id]) return false;
-      const paths = [put(['settings', 'currentSetlistId'], id), ...putPos(-1, false)];
+      const paths = [put(['settings', 'currentSetlistId'], id), ...putNavPos(-1, false)]; // F1: a trial's too
       const sl = id && state.setlists[id];
       if (sl && sl.songIds.length && !sl.songIds.includes(state.settings.currentSongId)) {
         paths.push(put(['settings', 'currentSongId'], sl.songIds[0]));
@@ -3076,6 +3097,16 @@ export function createStore(opts = {}) {
       changed([put(['songs', id], undefined)]);
       if (!trialIdsOf().length) trialNav = null;
       return true;
+    },
+    /**
+     * UI6-U7a skeptic F1: while a trial song is selected, where Back returns to: the selection it replaced as it is
+     * saved (persisted()), kept on its entry through list edits and moved on as M4 when that song is deleted.
+     * @returns {{id:string|null, index:number}|null} null when no trial song is selected
+     */
+    trialReturn() {
+      if (!trialSelected()) return null;
+      const st = persisted().settings;
+      return { id: st.currentSongId ?? null, index: Number.isInteger(st.setlistIndex) ? st.setlistIndex : -1 };
     },
     /** U7a: ids of the trial songs in the state (normally none or one). @returns {string[]} */
     trialIds: () => trialIdsOf(),
