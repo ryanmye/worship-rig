@@ -222,6 +222,28 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 - Open for Ryan / U5b: category dots follow today's rule (V6_DIFF_WATCH), so Sound, Tone EQ, Touch and Advanced never
   dot (the mockup shows a dot on Tone EQ); the eqKeyboard's own header still says "Keys plays…" (a role word, D15).
 
+## U6 status (builder, 2026-11-26; lane-u6 from acfa900; awaiting the skeptic)
+
+- Built: `app/js/views/v6/settings.js` (`enhanceSettings`: the v6 Settings applied in place to today's
+  `views/settings.js` DOM and undone when the flag goes off, live too), `views/v6/settings-summary.js` (pure category
+  summaries), `app/styles-v6-settings.css` (scope `.v6-st`). Small hooks in `views/settings.js` (`syncV6`, `v6Api`,
+  `shown` / `opened`), one Esc line in main.js, `controller.lastBackupAt()`. `sidebar.js` exports `customizeList` /
+  `sidebarLayout` / `prefsWithShown` (the ⋯ popover uses them too); `snapshots.js` exports `snapsFolded` /
+  `setSnapsFolded`. Interface notes: CONTRACT_CHANGES "## UI v6 U6".
+- Wired: summaries under every category (live), search (word starts in labels, hints and control words; filters
+  categories and rows; Enter / Shift+Enter; Esc clears first), MIDI Learn category (learned list + Forget, D20 rule,
+  Learn…, today's table), Perform layout (sidebar modules show / hide / order + Starts on the live sidebar, snapshots
+  row fold), Song bank entry in Sounds & Samples (today's list), theme preview cards, iPad portrait drill-in.
+- Left out (no setting exists yet): Perform layout's left panel row and the chart placement / text size rows (U7).
+- Choices to confirm with Ryan: Look › Perform view (Chips per sound, the preview switch) stays in Look; the drill-in
+  (not a top row) on iPad portrait; search matches word starts; Day / Stage / Auto only for Daylight (today's rule;
+  the mockup shows it for every theme); the mockup's "Learn, then tap what it should change on screen" is U7's MIDI
+  Learn mode, so Learn… here goes to today's table.
+- Tests: settings suite mode `v6` (13 checks, incl. the control-count proof: 119 today, all kept, + 20 new) and
+  `test/phase1/shell/ui-v6-settings.test.mjs`. Settings 107/107, ui-v6 68/68, ui-core 78/78 (rerun after a TAP
+  timing flake), edit-v2 14/14, shell unit 363/363. Screenshots: `/home/claude/design-out/u6/` (`u6-<category>-1280.png`,
+  `u6-search-1280.png`, `u6-ipad-list-820.png`, `u6-ipad-look-820.png`, `u6-*-sanctuary-day.png`, `u6-mac-1280.png`).
+
 ## Open questions carried into the build (decide, log in DECISIONS, tell Ryan)
 
 - **Snapshots vs today's scenes.** Today: up to 3 scenes per song, levels / ON / drone level / wheel only. The v6

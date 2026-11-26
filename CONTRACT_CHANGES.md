@@ -8607,3 +8607,81 @@ folded"). Behind `settings.uiV6` like U1–U4. No store, controller, engine or `
   - Gates: ui-v6-edit 21/21, ui-v6 68/68, edit-v2 14/14 files (117/117), settings 94/94. Flag-off purity vs acfa900:
     identical (asserted by both suites; the counts are not printed). Zero console.error. engine / store / controller /
     shared unchanged; `slot.js` only gains two `export`s.
+
+## UI v6 U6
+
+The v6 Settings (native DECISIONS D21 "easy to navigate and use"; `native/docs/lanes/UI6-build-plan.md` U6; mockup
+`native/docs/design/mockups/settings.html`). Behind `settings.uiV6` like U1–U4. No store schema, engine or `shared/`
+change.
+
+- **Approach: one Settings, enhanced in place.** `views/settings.js` stays the only source of Settings behaviour.
+  While `settings.uiV6` is on it imports `views/v6/settings.js` and calls `enhanceSettings(v6Api)`, which restyles the
+  same dialog (`.v6-st` on `.st-dialog`, `app/styles-v6-settings.css`) and moves / adds nodes. Every change goes in an
+  undo journal (a `disposer`); `destroy()` (flag off, live too, or Settings destroyed) puts today's Settings back. A
+  half-applied enhancement is undone before the error is reported (`enhanceSettings` catches and disposes). The scope
+  is `.v6-st`, not `.v6`: `styles-v6.css`'s own `.v6` rule lays out the v6 Perform's root and would hit the dialog.
+- **`views/settings.js` (flag-agnostic hooks, nothing new runs while off):**
+  - `settingBinds` gains `uiV6 → syncV6` (no new listener). On: `import('./v6/settings.js')`, `loadSettingsCss()`
+    (`link[data-v6-settings-css]`, resolved from the module so the test fixture works too), then enhance. Off:
+    `v6.destroy()`. A flip while loading is honoured, and a failed import leaves today's Settings.
+  - `v6Api` = the internals the enhancer needs (dialog, nav, body, tabs / panels maps, `showCategory`,
+    `revealSection`, `resolveSection`, `syncOrientation`, `C`, the learn / perform / appearance / theme / bank /
+    output nodes, `learnName`, `mappingText`, label helpers, `about()` = the last `rig.getInfo()`,
+    `manualBackupAt()` = the last successful Back up now).
+  - Hooks: `showCategory` calls `v6?.shown(cat, {remember, focus})`; `open()` calls `v6?.opened(linked)` before
+    `syncOrientation()`. Settings' Esc listener stands down while `html[data-settings-search]` is set. Test hook:
+    `settingsView.v6` (the enhancer or null).
+- **main.js (one line):** the Settings Esc listener also stands down for `html[data-settings-search]`, so the first Esc
+  clears the search and the next closes Settings. Separate from lane-u5's `applyEditV6`.
+- **controller.js:** `lastBackupAt()` = when this page last wrote an automatic backup, or null (read only).
+- **Categories:** Sound · Keyboards & MIDI · **MIDI Learn** · Sounds & Samples · **Perform layout** · Look · Library &
+  Backup · Mac (Mac app) · About. New ids `midilearn` and `layout` (tabs `settings-tab-<id>`, panels
+  `settings-panel-<id>`). The tabs / panels Maps are reordered so ↑/↓ follow the list. If the flag goes off while a new
+  category is shown, Settings falls back to Keyboards & MIDI / Look.
+- **Summaries** (`views/v6/settings-summary.js`, pure, unit-tested): one line under each name (`settings-sum-<id>`),
+  e.g. "System default · 42 ms", "Keystation 49 · Normal touch", "3 controls learned", "2 packs · 7 bank songs" (else
+  sample instruments / My Pads), "sidebar open · snapshots shown", "Sanctuary · dark" (Daylight: Day / Stage / Auto),
+  "backed up 4 min ago" (Mac app, once known) / "n songs · automatic backups" / "n songs · Export to back up" (Chrome),
+  "menu bar off · updates on", "Version 2.0.0" / "Chrome". Live: store changes, `controller.onStatus`, MIDI devices,
+  `user-patches`, `rig-theme-light`, coalesced to one frame and only while open. Cost: < 0.1 ms per full set.
+- **Search** (header, `settings-search`, count `settings-search-count`): every word of the query must start a word of a
+  unit's text (label, hint and the control's own words, e.g. theme names or Day / Stage / Auto; plus its section
+  heading and category name; accents and case ignored; "ember" finds Ember, not "remember"). Units are `.st-row`,
+  learn table rows, sidebar module rows, learned controls, the pedal box, Your keyboards, About; a section without rows
+  is searched whole. Categories without a match hide (`.v6-st-nohit`) and the others show a count; inside a panel what
+  does not lead to a match is hidden (`.v6-st-miss`, headings kept); closed disclosures with a match open and close
+  again when the search clears. Typing jumps to the first match (in the shown category if it has one), Enter / Shift+Enter
+  go on / back across categories ("2 of 5"). Esc clears (Settings stays open); closing Settings clears it. No match: the
+  list stays whole and the count says "No match". 2–8 ms per keystroke.
+- **MIDI Learn:** "Learned controls" (`settings-learned`): one row per mapping (`mappingText` → `learnName`) with
+  Forget = a click on that row's own Clear / Remove in today's table (one code path), the D20 rule spelled out
+  (`settings-learn-rule`: a learned knob changes the song like moving it on screen, marked, Revert puts it back), a
+  "Learn a new control" box whose Learn… (`settings-learn-new`) goes to the first Learn button, then today's MIDI Learn
+  section (`data-section="learn"`, moved here). The "tap what it should change on screen" flow of the mockup is U7.
+- **Perform layout:** Right sidebar = `customizeList()` exported from `sidebar/sidebar.js` (the ⋯ popover now uses it
+  too; `prefsWithShown()` holds the "last shown module stays" rule) over `sidebarLayout()`: the mounted sidebar's prefs
+  (changes apply at once) or `localStorage['worship-rig.v6.sidebar']` when no v6 Perform is mounted. Built only while
+  Settings is open (the popover has the same rows and testids; Settings is modal). Snapshots row Shown / Folded
+  (`setting-snapshots-row`) = `snapshots.js` `snapsFolded()` / `setSnapsFolded()` (the mounted row, else
+  `worship-rig.v6.snapshots`). **Left panel and chart rows are left out:** no left-panel setting exists, chart
+  placement does not exist yet, and the chart's text size is a px index read once per chart mount (U7 moves it to %).
+  Look › Perform view (Chips per sound, the preview switch) stays in Look, where Ryan turned the preview on.
+- **Sounds & Samples:** a Song bank card first (`settings-open-bank` → `revealSection('bank')`, today's list; disabled
+  with a hint while there are no bank songs). **Look:** each theme card gets a preview (`span.v6-tprev`, swatches from
+  `shared/themes.js`); the strip is hidden; Day / Stage / Auto is today's row (Daylight only).
+- **iPad portrait (dialog ≤ 780 px, `DRILL_WIDTH`): drill-in.** `dialog[data-v6-drill=list|detail]`: the categories
+  as a full-width list with their summaries, a tap opens one with "‹ Settings" (`settings-back`) and its name
+  (`settings-crumb`) in the header; a deep link opens its category; ↑/↓ on the list move without drilling in. Chosen
+  over a top row because a row of nine two-line tabs at 760 px hides most of them and their state (D21).
+- **Flag off:** nothing of `views/v6/settings.js` / `styles-v6-settings.css` is fetched; the ui-v6 purity probe (DOM,
+  requests, listeners, intervals, store listeners, CSS vs acfa900) is unchanged; an on → off cycle leaves the
+  Settings DOM shape, controls, categories and hidden states as before and the store listener count at boot.
+- **Control-count proof** (settings suite, v6 mode): Chrome, today 119 controls; with the flag flipped on, 116 are the
+  same element and 3 are rebuilt by today's own code on open / close (Test my pedal, Choose pad folder…, Rescan) and
+  matched by signature; all in a category with a visible tab, hidden exactly when today hides them; 139 = 119 + 20 new
+  (2 tabs, Learn…, Open Song bank…, 12 sidebar row buttons, Starts ×2, Snapshots Shown / Folded). Flag on at boot: none
+  missing by signature.
+- Tests: `node test/phase2/settings/run.mjs` gains mode `v6` (`test/phase2/settings/v6.mjs`, 13 checks incl. a Mac-app
+  run on the fixture with a fake rig); `test/phase1/shell/ui-v6-settings.test.mjs` (summaries). Settings 107/107 (all
+  five modes), ui-v6 68/68, ui-core 78/78 (one TAP-timing flake on the first run under load 5–9, green on rerun),
+  edit-v2 14/14, shell unit 363/363. Engine untouched.
