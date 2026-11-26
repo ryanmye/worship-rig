@@ -268,24 +268,42 @@ export function chartPanel(c, where) {
       wheelAcc = 0;
     }
   }, { passive: false });
-  // two-finger pinch on a touch screen (iPad): one step per PINCH_STEP change in the fingers' distance
+  // two-finger pinch on a touch screen (iPad): one step per PINCH_STEP change in the fingers' distance. skeptic
+  // UI6-U7b F2: only fingers that came down on the chart count (e.touches is every finger on the screen: a hand on a
+  // mini fader plus a finger scrolling the chart was a "pinch", which resized the text and stopped the scroll)
   let pinch = 0;
+  const onChart = (e) => [...e.touches].filter((t) => t.target instanceof Node && wrap.contains(t.target));
   const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
   d.listen(wrap, 'touchstart', (e) => {
-    pinch = e.touches.length === 2 ? dist(e.touches) : 0;
+    const t = onChart(e);
+    pinch = t.length === 2 ? dist(t) : 0;
   }, { passive: true });
   d.listen(wrap, 'touchmove', (e) => {
-    if (e.touches.length !== 2 || !pinch) return;
+    const t = onChart(e);
+    if (t.length !== 2 || !pinch) return;
     e.preventDefault(); // no page zoom, no scroll while pinching
-    const r = dist(e.touches) / pinch;
+    const r = dist(t) / pinch;
     if (r >= PINCH_STEP || r <= 1 / PINCH_STEP) {
       step(r > 1 ? 1 : -1, 'pinch');
-      pinch = dist(e.touches);
+      pinch = dist(t);
     }
   }, { passive: false });
   d.listen(wrap, 'touchend', (e) => {
-    if (e.touches.length < 2) pinch = 0;
+    if (onChart(e).length < 2) pinch = 0;
   }, { passive: true });
+
+  // skeptic UI6-U7b F1: a tap or click on the chart must not leave it focused. A focused chart took Space (the
+  // sustain pedal: the browser scrolled the chart a page instead) and the first Esc only let go of it (no Panic).
+  // Today's chart body was never focusable. Tab still reaches it (:focus-visible), and then the keys below scroll it.
+  d.listen(body, 'focus', () => {
+    let keyboard = true;
+    try {
+      keyboard = body.matches(':focus-visible');
+    } catch {
+      keyboard = true; // an engine without :focus-visible keeps today's focus
+    }
+    if (!keyboard) queueMicrotask(() => document.activeElement === body && body.blur());
+  });
 
   // ---- keys on the focused chart: ↑/↓/PgUp/PgDn/Home/End scroll it (never the mod wheel), Space stays the pedal
   d.listen(body, 'keydown', (e) => {

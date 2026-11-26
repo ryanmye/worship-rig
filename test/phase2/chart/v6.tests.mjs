@@ -789,6 +789,79 @@ export async function v6Tests(x) {
         await until(() => !!document.querySelector('[data-testid="v6-chart-side"]'));
       });
 
+    // ------------------------------------------------------------------ skeptic UI6-U7b
+    await T('U7b skeptic F1: a tap on the chart leaves nothing focused (Space = pedal, Esc = Panic); Tab still scrolls',
+      async () => {
+        await ev(() => window.__rig.views.chart.setPlacement('stage'));
+        await until(() => !!document.querySelector('[data-testid="v6-chart-stage"]'));
+        await setSong();
+        const body = `${tid('v6-chart-stage')} ${tid('v6-chart-body')}`;
+        const b = await page.locator(body).boundingBox();
+        await page.mouse.click(b.x + 120, b.y + 80);
+        await page.waitForTimeout(50);
+        assert.equal(await ev(() => document.activeElement?.dataset?.testid ?? null), null, 'the chart let go');
+        const y0 = await ev((s) => document.querySelector(s).scrollTop, body);
+        await page.keyboard.down('Space');
+        await until(() => window.__rig.controller.status.pedal === true, null, 3000);
+        await page.keyboard.up('Space');
+        await until(() => window.__rig.controller.status.pedal === false, null, 3000);
+        assert.equal(await ev((s) => document.querySelector(s).scrollTop, body), y0, 'Space did not page the chart');
+        await ev(() => {
+          window.__u7bPanics = 0;
+          window.__rig.controller.on('action', (a) => {
+            if (a && (a.type === 'panic' || a.action === 'panic')) window.__u7bPanics++;
+          });
+        });
+        await page.mouse.click(b.x + 120, b.y + 80);
+        await page.keyboard.press('Escape');
+        await until(() => window.__u7bPanics === 1, null, 3000);
+        // the keyboard path is kept: focused from the keyboard, ↓ scrolls the chart (not the mod wheel)
+        await page.keyboard.press('Shift');
+        await ev((s) => document.querySelector(s).focus(), body);
+        assert.equal(await ev(() => document.activeElement?.dataset?.testid), 'v6-chart-body');
+        await page.keyboard.press('ArrowDown');
+        assert.ok((await ev((s) => document.querySelector(s).scrollTop, body)) > y0, '↓ scrolls the focused chart');
+        await ev(() => document.activeElement?.blur());
+      });
+
+    await T('U7b skeptic F2: a hand on a mini fader plus a finger scrolling the chart is not a pinch', async () => {
+      await page.setViewportSize({ width: 1180, height: 820 });
+      await until(() => !!document.querySelector('.v6-minis.cols [data-testid="v6-mini-fader-0"]'));
+      await page.waitForTimeout(200);
+      const pct0 = (await st()).pct;
+      const cdp = await context.newCDPSession(page);
+      await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+      try {
+        const f = await page.locator(tid('v6-mini-fader-0')).boundingBox();
+        const b = await page.locator(`${tid('v6-chart-stage')} ${tid('v6-chart-body')}`).boundingBox();
+        const fx = f.x + f.width / 2;
+        const fy = f.y + f.height / 2;
+        const T2 = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
+        await T2('touchStart', [{ x: fx, y: fy, id: 1 }]);
+        await T2('touchStart', [{ x: fx, y: fy, id: 1 }, { x: b.x + 40, y: fy, id: 2 }]);
+        for (let k = 1; k <= 8; k++) {
+          await T2('touchMove', [{ x: fx, y: fy - k, id: 1 }, { x: b.x + 40, y: fy + k * 40, id: 2 }]);
+        }
+        await T2('touchEnd', []);
+        await page.waitForTimeout(150);
+        assert.equal((await st()).pct, pct0, 'the text size stays');
+        // a real pinch on the chart still steps it
+        const cx = b.x + b.width / 2;
+        const cy = b.y + b.height / 2;
+        await T2('touchStart', [{ x: cx - 40, y: cy, id: 1 }, { x: cx + 40, y: cy, id: 2 }]);
+        for (const dd of [50, 60, 70, 80]) {
+          await T2('touchMove', [{ x: cx - dd, y: cy, id: 1 }, { x: cx + dd, y: cy, id: 2 }]);
+        }
+        await T2('touchEnd', []);
+        assert.ok((await st()).pct > pct0, 'pinch out on the chart');
+      } finally {
+        await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+        await cdp.detach();
+        await ev(() => window.__rig.views.chart.panel.reset());
+        await page.setViewportSize({ width: 1280, height: 800 });
+      }
+    });
+
     await T('U7b zero console.error, no HTTP ≥ 400', async () => {
       assert.deepEqual(errors, []);
     });
