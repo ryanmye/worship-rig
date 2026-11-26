@@ -66,6 +66,12 @@ export function stripsRow(v) {
       pills[i].setAttribute('aria-pressed', String(on));
     }
     el.classList.toggle('atend', b >= row.scrollWidth - 4);
+    // U3: a wide sidebar can leave less room than the strips' 150 px minimum with ≤ 5 instruments too; the row then
+    // scrolls, so it gets the same soft edge and name pills as the > 5 case
+    const over = n > 0 && row.scrollWidth > row.clientWidth + 4;
+    if (el.classList.contains('overflow') !== over) el.classList.toggle('overflow', over);
+    const hide = !(n > STRIPS_ACROSS || over);
+    if (pillsEl.hidden !== hide) pillsEl.hidden = hide;
   });
   d.add(() => visible.cancel());
   d.listen(row, 'scroll', () => visible.push(), { passive: true });
@@ -95,7 +101,7 @@ export function stripsRow(v) {
     el.classList.toggle('scroll', scroll);
     el.classList.toggle('few', n < 4);
     el.dataset.n = String(n);
-    pillsEl.hidden = !scroll;
+    pillsEl.hidden = !(scroll || el.classList.contains('overflow'));
     for (let i = 0; i < strips.length; i++) {
       const S = strips[i];
       const on = i < n;
@@ -118,7 +124,7 @@ export function stripsRow(v) {
       setText(pills[i].firstChild, nm);
       pills[i].title = `Scroll to ${nm}`;
     }
-    setText(pillsHint, scroll ? `${n} instruments · scroll ⟷` : '');
+    setText(pillsHint, n ? `${n} instruments · scroll ⟷` : '');
     addBtn.hidden = !song;
     addBtn.disabled = x.locked || n >= MAX_SLOTS;
     addBtn.title = x.locked ? 'Perform lock is on: unlock to add an instrument'

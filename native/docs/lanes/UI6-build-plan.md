@@ -88,6 +88,26 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 - Pre-existing red suites to fix separately: eq "L-21 note labels fit" (fails on base), engine suite's 404 on
   `/__tests/api/health` and the CPU-timing `offline.eqCpu` on the 2-CPU box.
 
+## U3 status (builder, 2026-11-26; lane-u3 from lane-u2 f4d70a7, awaiting the skeptic)
+
+- Built: `app/js/views/v6/sidebar/` (`sidebar.js` container, `modules.js` registry, `drone.js`, `setlist.js`,
+  `notes.js`) and `app/styles-v6-sidebar.css` (imported by styles-v6.css); suite part
+  `test/phase2/ui-v6/sidebar.tests.mjs` (run by run.mjs). Interface notes: CONTRACT_CHANGES "## UI v6 U3".
+- Wired: tabs, the icon rail (⟩ / ⟨, drone dot + key), resize by the left-edge grip (drag, ←/→, 200 px … 62 % of the
+  board, fold below 200), ⋯ customize (show / hide, ↑ ↓ + drag order, Starts Open / Collapsed), per-device layout in
+  `localStorage['worship-rig.v6.sidebar']`; Drone (today's writes and lock rules), Setlist (cue then Go, Prev, + Add
+  song: library, Song bank via Settings, New song), Notes (read only); the song bar's Notes / Setlist open their tab;
+  iPad portrait panel under the strips.
+- Placeholders: Drone "Sustain" (no drone pedal hold exists anywhere yet), Notes "Chart · coming in 2.1"; the Song bank
+  entry opens today's list in Settings (U7 builds the browser).
+- Choices to confirm with Ryan: New song is added at the end and not selected (Perform never switches the sound by
+  itself; the toast offers "Edit it"); the pad-folder line shows only while My Pads is chosen (the column is short);
+  Starts applies per page load; the song bar's Notes / Setlist un-hide a module the player had hidden.
+- For U4 / U6 / U7: the left panel is still the placeholder; Settings › Perform layout can read / write the same
+  localStorage key (`normalizePrefs`); Chart as a sidebar tab = one module in `modules.js`.
+- Known: below 1024 px wide the whole app still has `body { min-width: 1024px }` (today's), so 820 px portrait scrolls
+  sideways; U8 owns the iPad layouts.
+
 ## Open questions carried into the build (decide, log in DECISIONS, tell Ryan)
 
 - **Snapshots vs today's scenes.** Today: up to 3 scenes per song, levels / ON / drone level / wheel only. The v6

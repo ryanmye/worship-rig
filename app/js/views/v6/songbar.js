@@ -1,18 +1,16 @@
 // UI v6 song bar (D16; UI6-build-plan U1): song name, KEY button ("Sing it in…", as today's KEY ▾) with "you play C"
 // while transposed, Transpose − / +, the Space room picker, the folded snapshots chip, the chord readout, Notes and the
-// Setlist button. Under Perform lock the key and transpose need a hold, as today (perform.js LOCK).
+// Setlist button (U3: those two open the right sidebar on their module). Under Perform lock the key and transpose need
+// a hold, as today (perform.js LOCK).
 import { h, setText, disposer } from '../components/util.js';
 import { holdButton } from '../components/holdButton.js';
 import { keyGrid } from '../components/keys.js';
 import { chordReadout } from '../components/readouts.js';
-import { say } from '../components/voice.js';
 import { keyName } from '../../shared/music.js';
 import { transposeSemisOf } from '../../store.js';
 import { SPACE_PRESETS, matchPreset } from '../../shared/fx-presets.js';
 import { singItInShift, songFxValue } from '../perform.js';
 import { button, popover, icon, signed, HOLD_MS, MINUS } from './lib.js';
-
-const LOAD_TEXT = { ready: 'ready', loading: 'loading…', cold: 'not loaded', playing: 'playing' };
 
 /**
  * @param {object} v  the v6 shell's view context
@@ -55,11 +53,11 @@ export function songBar(v, host, snapChip) {
   const chord = use(chordReadout({ label: 'Chord' }));
   chord.el.classList.add('v6-chord');
   const notesBtn = button(d, '.v6-notes-btn', [icon('note', 16), 'Notes'], {
-    'aria-haspopup': 'true', 'aria-expanded': 'false', 'data-testid': 'v6-notes',
+    'aria-pressed': 'false', 'data-testid': 'v6-notes', title: 'Show the song’s notes in the sidebar',
   });
   const setCap = h('small.v6-set-cap', { text: '' });
   const setBtn = button(d, '.v6-setbtn', [h('b', { text: 'Setlist' }), setCap], {
-    'aria-haspopup': 'true', 'aria-expanded': 'false', 'data-testid': 'v6-setlist',
+    'aria-pressed': 'false', 'data-testid': 'v6-setlist', title: 'Show the setlist in the sidebar',
   });
   const el = h('section.v6-songbar', { 'data-testid': 'v6-songbar', 'aria-label': 'Current song' },
     songName,
@@ -151,95 +149,9 @@ export function songBar(v, host, snapChip) {
   });
   const currentRoom = (song) => (song ? matchPreset(SPACE_PRESETS, (p) => songFxValue(song, p)) : null);
 
-  // ---- Notes: the song's notes, read only (Edit writes them)
-  let notesPop = null;
-  d.listen(notesBtn, 'click', () => {
-    if (notesPop) return notesPop.close();
-    notesPop = popover({
-      host, anchor: notesBtn, label: 'Song notes', className: 'v6-notespop', testid: 'v6-notes-pop', align: 'end',
-      build: (body) => {
-        const t = h('div.v6-notes-t', { tabindex: '0' });
-        body.append(h('div.v6-pop-h', { text: 'Notes' }), t);
-        return () => {
-          const notes = store.currentSong()?.notes || '';
-          t.classList.toggle('empty', !notes);
-          setText(t, notes || say('notesEmpty'));
-        };
-      },
-      onClose: () => {
-        notesPop = null;
-      },
-    });
-    notesPop.render();
-  });
-
-  // ---- Setlist: today's cue-then-Go (D6) in a list: a tap cues (tap the cued one again to clear), GO plays it
-  let setPop = null;
-  const tapEntry = (id, index) => {
-    if (typeof controller.cueSong !== 'function') return controller.selectSong(id, { index });
-    if (controller.songState(id, index)?.cued) return controller.clearCue();
-    return controller.cueSong(id, { index });
-  };
-  d.listen(setBtn, 'click', () => {
-    if (setPop) return setPop.close();
-    setPop = popover({
-      host, anchor: setBtn, label: 'Setlist', className: 'v6-setpop', testid: 'v6-setlist-pop', align: 'end',
-      build: (body, pd) => {
-        const title = h('div.v6-pop-h', { text: 'Setlist' });
-        const list = h('div.v6-slist', { role: 'list' });
-        pd.listen(list, 'click', (e) => {
-          const b = e.target.closest('button[data-id]');
-          if (b) tapEntry(b.dataset.id, Number(b.dataset.index));
-        });
-        const prev = button(pd, '.v6-prev', '◀ Prev', { 'data-testid': 'v6-prev', 'data-overlay-pass': '' });
-        pd.listen(prev, 'click', () => controller.prevSong());
-        const goCap = h('small', { text: '' });
-        const goName = h('b', { text: '' });
-        const go = button(pd, '.v6-go', [goCap, goName], { 'data-testid': 'v6-go', 'data-overlay-pass': '' });
-        pd.listen(go, 'click', () => (controller.go ? controller.go() : controller.nextSong()));
-        body.append(title, list, h('div.v6-prow', {}, prev, go));
-        let sig = '';
-        return () => {
-          const st = store.get();
-          const ids = store.navIds();
-          const sl = store.currentSetlist();
-          setText(title, sl && sl.songIds.length ? sl.name : 'Library');
-          const cur = store.currentIndex();
-          const states = ids.map((id, i) => (typeof controller.songState === 'function'
-            ? controller.songState(id, i) : null));
-          // rebuilt only when something it shows changed: a status tick between a pointer-down and its click must
-          // not replace the row being tapped
-          const next = JSON.stringify([cur, ids, ids.map((id) => [st.songs[id]?.name, st.songs[id]?.hearIn,
-            st.songs[id]?.minor]), states]);
-          if (next !== sig) {
-            sig = next;
-            list.replaceChildren(...ids.map((id, i) => {
-              const s = st.songs[id];
-              const ss = states[i];
-              const now = i === cur;
-              return h('button.btn.v6-sl', {
-                type: 'button', role: 'listitem', 'data-id': id, 'data-index': String(i), 'data-testid': `v6-sl-${i}`,
-                class: now ? 'now' : ss?.cued ? 'cued' : '',
-              }, h('span.n', { text: String(i + 1) }), h('b', { text: s ? s.name : '?' }),
-              h('span.k', { text: s ? keyName(s.hearIn, s.minor) : '' }),
-              h('small', { text: now ? 'playing' : ss?.cued ? `cued · ${LOAD_TEXT[ss.load] || ''}` : '' }));
-            }));
-          }
-          prev.disabled = !store.neighbors().prev;
-          const t = typeof controller.goTarget === 'function' ? controller.goTarget() : null;
-          const ts = t ? st.songs[t.id] : null;
-          go.disabled = !ts;
-          go.classList.toggle('cued', !!t?.cued);
-          setText(goCap, t?.cued ? 'GO' : say('nextCap'));
-          setText(goName, ts ? `${ts.name} · ${keyName(ts.hearIn, ts.minor)}` : 'End of set');
-        };
-      },
-      onClose: () => {
-        setPop = null;
-      },
-    });
-    setPop.render();
-  });
+  // ---- Notes and Setlist live in the right sidebar (U3, views/v6/sidebar/): the buttons open it on that module
+  d.listen(notesBtn, 'click', () => v.openSidebar?.('notes'));
+  d.listen(setBtn, 'click', () => v.openSidebar?.('setlist'));
 
   function renderSetlist() {
     const ids = store.navIds();
@@ -247,7 +159,6 @@ export function songBar(v, host, snapChip) {
     const cur = store.currentIndex();
     const pos = cur >= 0 ? `${cur + 1} of ${ids.length}` : `${ids.length} songs`;
     setText(setCap, `${sl && sl.songIds.length ? sl.name : 'Library'} · ${pos}`);
-    setPop?.render();
   }
 
   function render(state) {
@@ -279,7 +190,6 @@ export function songBar(v, host, snapChip) {
     notesBtn.classList.toggle('has-notes', !!song?.notes);
     keyPop?.render();
     spacePop?.render();
-    notesPop?.render();
     renderSetlist();
   }
 
@@ -292,11 +202,19 @@ export function songBar(v, host, snapChip) {
       chord.set(c);
     },
     chordEl: chord.el,
+    /** U3: the sidebar's state → Notes / Setlist show whether it is open on their module. */
+    setSide(s) {
+      for (const [b, id] of [[notesBtn, 'notes'], [setBtn, 'setlist']]) {
+        const on = !!s && s.open && s.tab === id;
+        b.classList.toggle('open', on);
+        b.setAttribute('aria-pressed', String(on));
+      }
+    },
     closePops() {
-      for (const p of [keyPop, spacePop, notesPop, setPop]) p?.close();
+      for (const p of [keyPop, spacePop]) p?.close();
     },
     destroy() {
-      for (const p of [keyPop, spacePop, notesPop, setPop]) p?.close();
+      for (const p of [keyPop, spacePop]) p?.close();
       d.dispose();
       for (const c of comps.splice(0)) c.destroy();
       el.remove();

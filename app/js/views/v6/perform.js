@@ -18,6 +18,7 @@ import { songBar } from './songbar.js';
 import { snapshotsRow } from './snapshots.js';
 import { stripsRow } from './strips-row.js';
 import { bottomRow } from './bottom.js';
+import { rightSidebar } from './sidebar/sidebar.js';
 
 /** The v6 stylesheet; linked only while the v6 Perform is mounted (removed again by destroy()). */
 export const V6_CSS_HREF = './styles-v6.css';
@@ -84,6 +85,10 @@ export function mountPerformV6(root, ctx) {
   const v = {
     store, controller, engine, ctx, toast, isLocked,
     snap: () => snap,
+    sceneLevel,
+    liveOf,
+    /** U3: the song bar's Setlist / Notes buttons open the sidebar on that module. */
+    openSidebar: (id) => side?.open(id),
     setSlot,
     setSlotGain(i, x) {
       if (!sceneLevel(`slots.${i}.gain`, x)) setSlot(i, 'gain', x);
@@ -173,11 +178,12 @@ export function mountPerformV6(root, ctx) {
   const snaps = snapshotsRow(v, { onFold: (f) => el.classList.toggle('snaps-folded', f) });
   const bar = songBar(v, el, snaps.chip);
   const row = stripsRow(v);
-  // U4 (left panel: Quick + wheel column) and U3 (right sidebar modules) mount here; until then the columns are kept
+  // U4 (left panel: Quick + wheel column) mounts here; until then the column is kept
   const left = h('aside.v6-left.v6-slot-ph', { 'data-testid': 'v6-left', 'aria-label': 'Left panel (coming)' },
     h('span', { text: 'Wheel' }), h('small', { text: 'coming' }));
-  const right = h('aside.v6-right.v6-slot-ph', { 'data-testid': 'v6-right', 'aria-label': 'Sidebar (coming)' },
-    h('span', { text: 'Drone · Setlist · Notes' }), h('small', { text: 'sidebar coming' }));
+  // U3: the right sidebar (views/v6/sidebar/): Drone · Setlist · Notes as tabs, a rail when folded, resizable
+  const side = rightSidebar(v, { onChange: (s) => bar.setSide(s) });
+  const right = side.el;
   const board = h('div.v6-board', { 'data-testid': 'v6-board' }, left, row.el, right);
   const bottom = bottomRow(v);
   v.onCoarse(bottom.kb.coarse);
@@ -254,6 +260,7 @@ export function mountPerformV6(root, ctx) {
     const live = liveOf(song);
     const w = wheelNow();
     bar.render(state);
+    side.render(state);
     snaps.render(song);
     row.render({
       song: live, base, changed, locked, names,
@@ -473,8 +480,10 @@ export function mountPerformV6(root, ctx) {
       return row.strips;
     },
     snapshots: snaps,
+    sidebar: side,
     destroy() {
       d.dispose();
+      side.destroy();
       bar.destroy();
       snaps.destroy();
       row.destroy();

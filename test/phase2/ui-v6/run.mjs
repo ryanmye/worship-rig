@@ -12,8 +12,11 @@
 //   Revert, Lock; the 'range' size in keyboard-harness.html (served at /u2-keyboard-harness.html by a route); a coarse
 //   (hasTouch / isMobile) context for the iPad pick-then-drag mode with CDP touch drags.
 //   node test/phase2/ui-v6/run.mjs   (screenshots: 1280×800 Sanctuary, 2 / 5 / 7 instruments, U2 drag / iPad pick /
-//   Edit range → ./screenshots, or UI6_SHOTS=<dir>). The purity comparison needs git: base = UI6_PURITY_BASE or `git merge-base HEAD v2-native`; it is
-//   skipped (with a note) when app/ does not differ from the base.
+//   Edit range, U3 sidebar open / collapsed / wide / iPad portrait → ./screenshots, or UI6_SHOTS=<dir>).
+//   U3 (views/v6/sidebar/, sidebar.tests.mjs): tabs, rail, resize + fold, customize, per-device persistence, the Drone
+//   / Setlist / Notes modules (same writes as today's Perform), Lock, iPad portrait.
+//   The purity comparison needs git: base = UI6_PURITY_BASE or `git merge-base HEAD v2-native`; it is skipped
+//   (with a note) when app/ does not differ from the base.
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -23,6 +26,7 @@ import os from 'node:os';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.mjs';
+import { sidebarTests } from './sidebar.tests.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -518,15 +522,14 @@ try {
     await page.click(tid('v6-space'));
     await page.click(tid('v6-room-hall'));
     await until(() => document.querySelector('[data-testid="v6-space"] .v6-space-t').textContent === 'Hall');
-    // Notes
+    // Notes (U3: the button opens the sidebar on its Notes module)
     await page.click(tid('v6-notes'));
-    await until(() => !!document.querySelector('[data-testid="v6-notes-pop"]'));
-    await page.click(tid('v6-notes'));
-    await until(() => !document.querySelector('[data-testid="v6-notes-pop"]'));
-    // Setlist: tap the next entry = cue; GO plays it
+    await until(() => !!document.querySelector('[data-testid="v6-notes-mod"]'));
+    assert.equal(await page.getAttribute(tid('v6-notes'), 'aria-pressed'), 'true');
+    // Setlist (U3: in the sidebar): tap the next entry = cue; GO plays it
     const first = s0.id;
     await page.click(tid('v6-setlist'));
-    await until(() => !!document.querySelector('[data-testid="v6-setlist-pop"]'));
+    await until(() => !!document.querySelector('[data-testid="v6-setlist-mod"]'));
     const cur = await ev(() => window.__rig.store.currentIndex());
     await page.click(tid(`v6-sl-${cur + 1}`));
     await until(() => !!window.__rig.controller.status.cue);
@@ -1145,6 +1148,9 @@ try {
     await rangeIs(2, 36, 59);
     await page.mouse.move(5, 5);
   });
+
+  // ---------------------------------------------------------------- U3: the right sidebar (sidebar.tests.mjs)
+  await sidebarTests({ T, page, browser, origin, ev, until, tid, song, settled, hold, setSlots, SHOTS, assert });
 
   await T('on / off cycles: today’s Perform comes back whole; nothing of v6 is left behind', async () => {
     for (let k = 0; k < 3; k++) {

@@ -8156,3 +8156,69 @@ set its range" / "iPad · pick, then drag a range", `edit.html` "Instrument · R
     cancel the drag, end the pick and swallow the note).
   - Correction to "Snapping" above: the open end (0 / 127) wins once the end is nearer to "half a white key past the
     edge" than to the edge key, i.e. past a quarter of a white key (≈ 7 px at 1280 × 800, ≈ 3 px on the 88 keys).
+
+
+## UI v6 U3
+
+The right sidebar of the v6 Perform (native DECISIONS D15, D16 "Right sidebar" / "The right sidebar is resizable";
+`native/docs/lanes/UI6-build-plan.md` U3; mockup `perform-v6.html` tabs "Sidebar …", "Everything folded", "iPad
+portrait"). Behind `settings.uiV6` like U1 / U2. No store, controller or engine change.
+
+- **`views/v6/sidebar/sidebar.js` `rightSidebar(v, {modules?, onChange?})`** replaces U1's dashed `.v6-right`
+  placeholder (perform.js mounts it in the board and calls `render(state)`; test hook `__rig.views.v6.sidebar`:
+  `open(id?)`, `collapse()`, `prefs`, `mounted`, `portrait`). One module at a time as tabs (`role="tablist"`, ←/→);
+  only the shown module is mounted, and folding or switching destroys it with its listeners. ⟩ folds it to a 64 px
+  icon rail (one button per shown module; the Drone's shows a live border + its key while on, and its tab a dot);
+  ⟨ opens it on the last tab, an icon on that module.
+- **Module API (D15)**: `views/v6/sidebar/modules.js` `SIDEBAR_MODULES = [drone, setlist, notes]`, each
+  `{id, label, blurb, icon (static SVG markup), badge?(state) → {live, text, title}|null,
+  mount(el, ctx) → {destroy()}}`; `ctx` = the v6 view context (store, controller, engine, ctx, toast, isLocked, snap, `sceneLevel`, `liveOf`, host;
+  the last two are new on `v`) + `size` ('side' | 'wide'). Modules subscribe to what they need themselves. Chart (2.1)
+  or Tone = one more row; a device's saved order gets new modules appended, shown.
+- **Resize**: the grip (`role="separator"`, `aria-valuenow/min/max`) on the left edge; drag or ←/→ (16 px, Shift 64),
+  Home = 200 px, End = widest. Width = `clampWidth(w, board)` = 200 px … `floor(0.62 × board width)`, re-clamped on
+  window resize. A drag below 200 px dims the sidebar (`.will-fold`) and folds it on release, keeping the width it had
+  before (⟨ brings that back); → at 200 px folds too. Default width 280 px (220 px in windows ≤ 1240 px, U1's rule).
+  Strips keep `min-width: 150px`; `strips-row.js` now also shows the name pills and the soft edge (`.overflow`)
+  whenever the row overflows, not only with > 5 instruments.
+- **⋯ customize** (popover): per module a show / hide switch (`role="switch"`; the last shown module cannot be hidden;
+  hiding the shown tab moves to the first shown), ↑ / ↓ and a ⠿ drag to reorder (followed on the document, since moving
+  the row in the DOM releases a pointer capture), and **Starts: Open / Collapsed**.
+- **Per device, never in the library**: `localStorage['worship-rig.v6.sidebar']` =
+  `{open, starts, width (px | null = default), tab, order, hidden}`, normalised on read (`normalizePrefs`: unknown ids
+  dropped, never all hidden, width ≥ 200 or null). "Starts" applies once per page load; a remount in the same page
+  (the v6 switch off / on) keeps the open state the player left. Not in `store` state or `exportJSON()` (tested).
+- **Drone module** = today's Key & drone card (views/perform.js) with the same writes: ON tile → `drone.mode`
+  ('off' ↔ the last source, else the Revert snapshot's, else synth), Synth / My Pads → `drone.mode`, key grid →
+  `hearIn` + `playIn` (transpose kept), Major / Minor → `minor`, Level → `drone.gain` (through
+  `controller.scenes.adjust` while a scene plays), Bright → `drone.brightness`, Move → `drone.movement`, Keep across songs →
+  `drone.continueAcrossSongs`, Follow chords (synth only) → `drone.chordFollow`; the pad-folder line (Rescan / Choose
+  folder… as today) shows while My Pads is the sound and always in the wide panel. Lock = today's LOCK table: tile and
+  Level live, keys and Major / Minor need the 600 ms hold (`holdGate`, now exported from views/perform.js with
+  `brightnessWord` / `movementWord`; no behaviour change there), Synth / My Pads, Bright, Move and the toggles frozen.
+  **Sustain** (a drone pedal hold) does not exist in PARAMS / the store / the engine: shown disabled, "coming".
+  The pad count comes from controller's `pads` event, or `engine.drone.files.size` when the sidebar mounted after it.
+- **Setlist module** = U1's song-bar popover, moved (list with now / cued, a tap cues, a tap on the cued one clears,
+  Prev, GO with "GO · ready" / the cued name; `controller.cueSong` / `clearCue` / `go`, D6 unchanged) + **+ Add song**:
+  From my library → `store.addToSetlist(currentSetlist, id)` (Edit's Library… flow; disabled when the whole library
+  is playing), From the Song bank → `ctx.openSettings({section: 'bank'})` (today's list; disabled without bank songs;
+  U7 replaces it), New song → `store.addSong(null, {name: 'New Song'})` at the end of the library and current setlist,
+  **not selected** (the sound playing never changes from Perform; a toast offers "Edit it"). Under Lock, + Add song is
+  disabled; cueing stays live.
+- **Notes module**: today's notes, read only as on today's Perform, with its keyboard scrolling (round2-ui #12) and the
+  mockup's disabled "Chart · coming in 2.1".
+- **Song bar**: Notes and Setlist now open the sidebar on that module (`aria-pressed` = open on it; a hidden module is
+  shown again); their popovers are gone.
+- **iPad portrait** (`(orientation: portrait) and (max-width: 1024px)`, sidebar.js `PORTRAIT_MQ`): the board becomes a
+  grid, the sidebar a full-width panel under the wheel column and strips (max 340 px tall), no grip, no width; folded,
+  it is one row of icons. Wide containers (≥ 600 px: the portrait panel, or a sidebar dragged wide) lay the Drone out
+  in the mockup's three columns (container queries `v6side` / `v6sb`).
+- **Settings** (one line each): the Song bank `<details>` has `data-section="bank"`, and `open({section})` opens a
+  section that is a `<details>`. Flag-off DOM shape unchanged (attributes are not part of it).
+- **CSS**: `app/styles-v6-sidebar.css`, `@import`ed by styles-v6.css; every selector under `.v6`. U1's `.v6-right`
+  widths and the Notes / Setlist popover widths are gone from styles-v6.css.
+- **Flag off:** unchanged (purity probe against 966b0b4: 103 requests, 14 store listeners, 4 intervals, 2528 elements,
+  identical).
+- Tests: `node test/phase2/ui-v6/run.mjs` now 35 checks (U1 + U2's 24 + 11 for U3 in `sidebar.tests.mjs`), ~2.2 min on
+  the 2-CPU box. Screenshots: `u3-open-1280.png`, `u3-setlist-1280.png`, `u3-customize-1280.png`,
+  `u3-collapsed-1280.png`, `u3-wide-1280.png`, `u3-ipad-portrait-820.png`.

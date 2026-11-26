@@ -1416,7 +1416,8 @@ export function mountSettings(el, ctx) {
     type: 'search', placeholder: 'Search title or artist', 'aria-label': 'Search the Song bank',
   });
   const bankList = h('ul.st-bank-list');
-  const bankBox = h('details.st-bank', { hidden: true },
+  // UI v6 U3: open({section: 'bank'}) (the v6 sidebar's Setlist › + Add song › From the Song bank) lands here, open
+  const bankBox = h('details.st-bank', { hidden: true, 'data-section': 'bank' },
     h('summary', { text: 'Song bank' }),
     h('p.st-hint', { text: 'Songs from bank packs are not added on their own. Add the ones you need.' }),
     bankSearch,
@@ -1966,6 +1967,7 @@ export function mountSettings(el, ctx) {
     if (!sec) return true;
     const adv = sec.closest('details.st-adv');
     if (adv) adv.open = true;
+    if (sec.tagName === 'DETAILS') sec.open = true; // UI v6 U3: a section that is a disclosure (Song bank) opens
     setTimeout(() => {
       if (!isOpen) return;
       sec.scrollIntoView({ block: 'start' });

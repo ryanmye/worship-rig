@@ -163,8 +163,8 @@ export function singItInShift(playIn, pc) {
 }
 
 /** Words for the drone's two character sliders (display only; the value is the PARAMS number). */
-const brightnessWord = (v) => (v < 0.25 ? 'Dark' : v < 0.55 ? 'Soft' : v < 0.8 ? 'Clear' : 'Bright');
-const movementWord = (v) => (v < 0.1 ? 'Still' : v < 0.45 ? 'Gentle' : v < 0.75 ? 'Moving' : 'Restless');
+export const brightnessWord = (v) => (v < 0.25 ? 'Dark' : v < 0.55 ? 'Soft' : v < 0.8 ? 'Clear' : 'Bright');
+export const movementWord = (v) => (v < 0.1 ? 'Still' : v < 0.45 ? 'Gentle' : v < 0.75 ? 'Moving' : 'Restless');
 
 // ---------------------------------------------------------------------------------------------- icons (24×24 stroke)
 const ICONS = {
@@ -195,7 +195,7 @@ const GROUP_ICON = { Piano: 'piano', 'Electric Piano': 'piano', Organ: 'piano', 
  * and shows the hint; a 600 ms hold runs `run(button)`. Unlocked, the buttons work as usual (the gate is off).
  * The progress is the `--hold` custom property on the held button (0..1), like holdButton().
  */
-function holdGate(root, { selector, ms = HOLD_MS, enabled, run, onHint, d }) {
+export function holdGate(root, { selector, ms = HOLD_MS, enabled, run, onHint, d }) {
   let timer = null;
   let raf = 0;
   let btn = null;
