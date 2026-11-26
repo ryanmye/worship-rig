@@ -68,3 +68,6 @@
 .ts-fit{min-height:40px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:var(--muted);font-weight:700;font-size:13px}
 .ts-toast{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:3;background:#000c;color:var(--text);border:1px solid var(--line-2);
   border-radius:20px;padding:8px 16px;font:600 14px var(--sans);white-space:nowrap}
+.ts-n{min-width:52px;min-height:40px;border:0;background:none;color:var(--accent);font-weight:800;font-variant-numeric:tabular-nums}
+.side.chartw .cht{grid-column:1/-1}.side.chartw .chgrp{grid-column:1/-1;grid-row:2;justify-self:start}
+.side.chartw .chs{grid-row:3}.side.chartw .jumps{grid-row:4}
