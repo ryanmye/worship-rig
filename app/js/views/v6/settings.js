@@ -87,7 +87,8 @@ export function unloadSettingsCss() {
  *   current(), nodes {learnSection, perfSection, appearance, themeCards, themeGrid, lightRow, bankBox, outputSelect},
  *   renderPacks, learnName, mappingText, velLabel, latencyLabel, about(), manualBackupAt()
  * @returns {{destroy():void, shown(cat:string, o:object):void, opened(linked:boolean):void, refresh():void,
- *   search(q:string):number, readonly query:string, readonly hits:{cat:string, el:Element}[], readonly drill:string|null,
+ *   search(q:string):number, readonly query:string, readonly hits:{cat:string, el:Element}[],
+ *   readonly drill:string|null,
  *   back():void, summaries():Record<string,string>}}
  */
 export function enhanceSettings(api) {
@@ -238,7 +239,8 @@ function enhance(api, d) {
       const forget = clear ? button('Forget', () => clear.click(), { class: 'v6-st-forget',
         'aria-label': `Forget ${name}`, 'data-control': id }) : null;
       return h('div.v6-st-lrn', { role: 'listitem', 'data-control': id },
-        h('span.v6-st-ctl', { text: api.mappingText(ml[id]) }), h('span.v6-st-arr', { 'aria-hidden': 'true', text: '→' }),
+        h('span.v6-st-ctl', { text: api.mappingText(ml[id]) }),
+        h('span.v6-st-arr', { 'aria-hidden': 'true', text: '→' }),
         h('b', { text: name }), forget);
     });
     if (!rows.length) rows.push(h('p.st-hint.v6-st-none', { text: 'Nothing learned yet.' }));
@@ -346,7 +348,8 @@ function enhance(api, d) {
     const t = themeById(resolveThemeId(s.theme));
     const lastAt = Math.max(Number(controller.lastBackupAt?.()) || 0, Number(api.manualBackupAt()) || 0);
     return {
-      sound: soundSummary({ output: outputLabel(), latencyMs: st.latencyMs, latencyLabel: api.latencyLabel(s.latency) }),
+      sound: soundSummary({ output: outputLabel(), latencyMs: st.latencyMs,
+        latencyLabel: api.latencyLabel(s.latency) }),
       keyboards: keyboardsSummary({ midi: st.midi, touch: api.velLabel(s.velocitySens),
         computerKeys: s.computerKeyboard !== false }),
       midilearn: learnSummary(s.midiLearn),
@@ -370,7 +373,9 @@ function enhance(api, d) {
     renderBankEntry();
   }
   d.add(store.subscribe((state, paths) => {
-    if (paths.some((p) => p === 'settings' || p.startsWith('settings.midiLearn'))) renderLearned(state.settings.midiLearn);
+    if (paths.some((p) => p === 'settings' || p.startsWith('settings.midiLearn'))) {
+      renderLearned(state.settings.midiLearn);
+    }
     if (api.isOpen()) sumsLater.push();
   }));
   if (typeof controller.onStatus === 'function') d.add(controller.onStatus(() => api.isOpen() && sumsLater.push()));
@@ -462,7 +467,8 @@ function enhance(api, d) {
       setText(n, String(set.size));
       n.hidden = false;
       // reading order inside the panel
-      const inOrder = [...set].sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+      const inOrder = [...set].sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING
+        ? -1 : 1));
       for (const u of inOrder) {
         u.classList.add('v6-st-hit');
         for (let det = u.closest('details'); det; det = det.parentElement?.closest('details')) {

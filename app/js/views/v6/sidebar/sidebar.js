@@ -154,7 +154,9 @@ export function customizeList(pb, pd, api) {
   const startCol = button(pd, '.v6-cz-start', 'Collapsed', {
     'data-value': 'collapsed', 'data-testid': 'v6-sb-starts-collapsed',
   });
-  if (api.heading !== false) pb.append(h('div.v6-pop-h', {}, 'Sidebar ', h('span', { text: 'drag ⠿ or use ↑ ↓ to reorder' })));
+  if (api.heading !== false) {
+    pb.append(h('div.v6-pop-h', {}, 'Sidebar ', h('span', { text: 'drag ⠿ or use ↑ ↓ to reorder' })));
+  }
   pb.append(
     list,
     h('div.v6-cz-starts', { role: 'group', 'aria-label': 'When the app starts, the sidebar is' },

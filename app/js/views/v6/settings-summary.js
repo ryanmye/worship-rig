@@ -61,7 +61,9 @@ export function learnSummary(midiLearn) {
  */
 export function samplesSummary(o = {}) {
   const p = o.packs;
-  if (p && p.enabled && p.songs > 0) return `${plural(p.packs || 0, 'pack')} · ${plural(p.bankSongs || 0, 'bank song')}`;
+  if (p && p.enabled && p.songs > 0) {
+    return `${plural(p.packs || 0, 'pack')} · ${plural(p.bankSongs || 0, 'bank song')}`;
+  }
   const parts = [];
   if (o.samples > 0) parts.push(plural(o.samples, 'sample instrument'));
   parts.push(o.padFolder ? 'My Pads folder set' : 'built-in sounds');

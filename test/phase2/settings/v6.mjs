@@ -1,6 +1,7 @@
 // Settings suite, "v6" mode (UI v6 U6; native DECISIONS D21; mockup native/docs/design/mockups/settings.html): the v6
 // Settings (views/v6/settings.js) applied to today's Settings while settings.uiV6 is on, in the real app.
-//   - flag off: nothing of the v6 Settings is fetched or drawn; an on → off cycle leaves today's Settings DOM as it was;
+//   - flag off: nothing of the v6 Settings is fetched or drawn; an on → off cycle leaves today's Settings DOM as it
+//     was;
 //   - the control-count proof: every control today's Settings renders is the same element in the v6 Settings, in a
 //     category with a visible tab, hidden exactly when today's code hides it (and the same with the flag on at boot);
 //   - category summaries (live), search (filter, Enter, Esc), deep links, MIDI Learn and Perform layout categories,
@@ -26,7 +27,8 @@ function inventory(tag) {
     for (let x = e; x && x !== panel && x !== dlg; x = x.parentElement) if (x.hidden) hidden = true;
     const sig = e.dataset.testid || e.dataset.bind || e.getAttribute('aria-label') || e.dataset.cat
       || e.dataset.themeId || e.dataset.control || `${e.tagName}:${(e.textContent || '').trim().slice(0, 30)}`;
-    return { id: e.__u6 || 0, sig: `${e.tagName.toLowerCase()}|${sig}`, cat: panel ? panel.dataset.cat : '(nav)', hidden };
+    return { id: e.__u6 || 0, sig: `${e.tagName.toLowerCase()}|${sig}`, cat: panel ? panel.dataset.cat : '(nav)',
+      hidden };
   });
 }
 
@@ -103,6 +105,7 @@ export async function runV6({ browser, createServer, ROOT, SHOTS, results }) {
     await until(() => document.querySelectorAll('#view-settings .st-about dt').length > 0, null, 8000).catch(() => {});
     await page.waitForTimeout(300);
   };
+  const tabCats = () => ev(() => [...document.querySelectorAll('#view-settings [role=tab]')].map((t) => t.dataset.cat));
   const sum = (id) => page.textContent(`[data-testid="settings-sum-${id}"]`);
   const clean = () => ev(() => {
     for (const t of document.querySelectorAll('#toasts > *')) t.remove();
@@ -129,9 +132,10 @@ export async function runV6({ browser, createServer, ROOT, SHOTS, results }) {
       await page.waitForTimeout(800);
       await open();
       assert.equal(await ev(() => window.__rig.views.settings.v6), null);
-      assert.equal(await ev(() => document.querySelectorAll('.v6-st, link[data-v6-settings-css], .v6-st-sum').length), 0);
+      assert.equal(await ev(() => document.querySelectorAll('.v6-st, link[data-v6-settings-css], .v6-st-sum').length),
+        0);
       assert.ok(!reqs.some((u) => /views\/v6\/settings|styles-v6-settings/.test(u)), 'no v6 Settings request');
-      assert.deepEqual(await ev(() => [...document.querySelectorAll('#view-settings [role=tab]')].map((t) => t.dataset.cat)),
+      assert.deepEqual(await tabCats(),
         ['sound', 'keyboards', 'samples', 'look', 'library', 'about']);
       base = await ev(() => ({ store: window.__storeListeners.size }));
       await cat('sound');
@@ -181,7 +185,7 @@ export async function runV6({ browser, createServer, ROOT, SHOTS, results }) {
         + `${rebuilt.length} rebuilt by today's code: ${rebuilt.join(', ')}); v6 ${now.length} = ${today.length} `
         + `+ ${added.length} new (${added.map((x) => x.sig.split('|')[1]).join(', ')})`);
       assert.equal(now.length, today.length + added.length);
-      assert.deepEqual(await ev(() => [...document.querySelectorAll('#view-settings [role=tab]')].map((t) => t.dataset.cat)),
+      assert.deepEqual(await tabCats(),
         ['sound', 'keyboards', 'midilearn', 'samples', 'layout', 'look', 'library', 'about']);
       // learnSection moved into MIDI Learn; Perform view stays in Look (the preview switch where Ryan knows it)
       assert.equal(await ev(() => document.querySelector('[data-section="learn"]').closest('.st-panel').dataset.cat),
@@ -237,7 +241,8 @@ export async function runV6({ browser, createServer, ROOT, SHOTS, results }) {
       assert.match(await sum('sound'), /^System default · (\d+ ms|Lowest|Balanced|Safe)$/);
       assert.match(await sum('keyboards'), / · Normal touch$/);
       await ev(() => window.__rig.store.set('settings.velocitySens', 'hard'));
-      await until(() => /Heavy touch$/.test(document.querySelector('[data-testid="settings-sum-keyboards"]').textContent));
+      await until(() => /Heavy touch$/.test(document.querySelector('[data-testid="settings-sum-keyboards"]')
+        .textContent));
       await ev(() => window.__rig.store.set('settings.velocitySens', 'normal'));
       assert.equal(await sum('midilearn'), 'nothing learned yet');
       await ev(() => window.__rig.store.setMidiLearn('slots.0.gain', { cc: 20, channel: 0 }));
@@ -249,7 +254,8 @@ export async function runV6({ browser, createServer, ROOT, SHOTS, results }) {
       assert.equal(await sum('about'), 'Chrome');
       assert.equal(await sum('samples'), 'built-in sounds');
       await ev(() => window.__rig.store.set('settings.theme', 'daylight-day'));
-      await until(() => document.querySelector('[data-testid="settings-sum-look"]').textContent === 'Daylight Day · Day');
+      await until(() => document.querySelector('[data-testid="settings-sum-look"]').textContent
+        === 'Daylight Day · Day');
       await ev(() => window.__rig.store.set('settings.theme', 'sanctuary'));
       await until(() => document.querySelector('[data-testid="settings-sum-look"]').textContent === 'Sanctuary · dark');
       await close();
@@ -286,9 +292,9 @@ export async function runV6({ browser, createServer, ROOT, SHOTS, results }) {
       await page.click('[data-testid="settings-sidebar-modules"] [data-testid="v6-cz-show-notes"]');
       await until(() => !!document.querySelector('.v6-side [data-testid="v6-sb-tab-notes"]'));
       await page.click('[data-testid="settings-sidebar-modules"] [data-testid="v6-cz-up-setlist"]');
-      await until(() => [...document.querySelectorAll('.v6-side .v6-sb-tab')].map((t) => t.dataset.id)[0] === 'setlist');
+      await until(() => document.querySelector('.v6-side .v6-sb-tab')?.dataset.id === 'setlist');
       await page.click('[data-testid="settings-sidebar-modules"] [data-testid="v6-cz-up-drone"]');
-      await until(() => [...document.querySelectorAll('.v6-side .v6-sb-tab')].map((t) => t.dataset.id)[0] === 'drone');
+      await until(() => document.querySelector('.v6-side .v6-sb-tab')?.dataset.id === 'drone');
       await page.click('[data-testid="settings-sidebar-modules"] [data-testid="v6-sb-starts-collapsed"]');
       await until(() => JSON.parse(localStorage.getItem('worship-rig.v6.sidebar')).starts === 'collapsed');
       await page.click('[data-testid="settings-sidebar-modules"] [data-testid="v6-sb-starts-open"]');
@@ -308,7 +314,8 @@ export async function runV6({ browser, createServer, ROOT, SHOTS, results }) {
       async () => {
         await open('sound');
         await page.fill('[data-testid="settings-search"]', 'pedal');
-        await until(() => /of \d+|found/.test(document.querySelector('[data-testid="settings-search-count"]').textContent));
+        await until(() => /of \d+|found/.test(document.querySelector('[data-testid="settings-search-count"]')
+          .textContent));
         const r = await ev(() => ({
           hits: window.__rig.views.settings.v6.hits.map((x) => x.cat),
           nohit: [...document.querySelectorAll('#view-settings .st-tab.v6-st-nohit')].map((t) => t.dataset.cat),
@@ -384,7 +391,7 @@ export async function runV6({ browser, createServer, ROOT, SHOTS, results }) {
     await T('screenshots: every category at 1280×800 (Sanctuary), search, Sanctuary Day', async () => {
       await page.setViewportSize({ width: 1280, height: 800 });
       await open('sound');
-      const cats = await ev(() => [...document.querySelectorAll('#view-settings [role=tab]')].map((t) => t.dataset.cat));
+      const cats = await tabCats();
       for (const c of cats) {
         await cat(c);
         await clean();
