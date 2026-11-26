@@ -74,6 +74,11 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 
 ## Queued small tasks
 
+- **U-SNAP (D26.1):** snapshots remember Space / Echo (sends + the song's room / echo choice) and the drone (on,
+  key, sound). shared/scenes.js + controller apply path + Save snapshot dialog "It keeps". Core-data change:
+  builder + strong skeptic.
+- **U-EDITRANGE (D26.2):** Edit's bottom-row range bars draggable with Perform's guards.
+
 - **Core flake (not UI):** CI run on f46bac4 (2026-11-26 19:37 UTC, macos-15 build-test) failed
   `unit.core3` at test_core3.cpp:353 `CHECK(busy <= 1)` (switch back to B: more than one job in the prebuild lane's
   hands). The commit changed JS/docs only and later runs passed: likely a timing/lane-count assumption in the test

@@ -462,3 +462,16 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
   sustain", "Drone: on, C major", "Space & Echo: Hall, dotted 8th"). That is a separate decision: it changes what a
   scene change does to the sound (a reverb or drone change mid-song can restart or retune things), so it is not part of
   U7c. Easy to reverse: the name is one optional field.
+
+## D26: Answers to the 26 Nov summary's open questions (Ryan, 2026-11-27: "1-5 yes sure")
+1. **Snapshots also remember Space, Echo and the drone** (widens D25 / today's scenes). Scope for the build (to be
+   designed and reviewed): per instrument its Space and Echo sends, the song's Space room and Echo choice, and the
+   drone's on/off, key and sound, on top of today's levels / ON tiles / drone level / wheel. Optional fields in each
+   scene (no SCHEMA bump; an old scene without them keeps today's meaning: those settings stay as the song has them).
+   A snapshot change must not restart a voice or cut a sound (glide what can glide; a drone key change crossfades
+   as today's key change does). "It keeps" in the Save snapshot dialog lists the new items.
+2. **Range bars are draggable in Edit too** (D18 "every screen with the bottom keyboard"), with Perform's guards
+   ported (pick first, live throttled writes, restore on every cancel path).
+3. **Lock: a tap locks, unlocking needs a hold** (as built).
+4. **Song bank: tempo bands < 80 / 80–114 / ≥ 115 BPM, Feel matches any chosen tag** (as built).
+5. **Start here card under the song bar; the portrait top bar hides the meter and the idle clock** (as built).
