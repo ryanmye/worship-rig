@@ -7,7 +7,7 @@ import { h, setText } from '../components/util.js';
 import { openOverlay } from '../components/overlay.js';
 import { markDialog } from '../_fallback-components.js';
 import { keyName } from '../../shared/music.js';
-import { CHART_MAX_CHARS, chartError } from '../../store.js';
+import { CHART_MAX_CHARS, chartError, isTrialId } from '../../store.js';
 import {
   CHART_ACCEPT, readImport, importOffers, offerWrites, csvPlaceholders, songKeyName, songLineCount,
 } from './logic.js';
@@ -154,7 +154,9 @@ export function chartReview(ctx, songId) {
     const t = tempoIn && tempoIn.value.trim() ? Math.round(Number(tempoIn.value)) : null;
     if (Number.isFinite(t) && t !== null) writes.push(['tempo', Math.max(30, Math.min(300, t))]);
     for (const [p, v] of writes) store.set(`songs.${songId}.${p}`, v);
-    ctx.toast?.('Chart saved.', 'ok', { ms: 2500 });
+    // skeptic UI6-U7b F4: a trial song (Song bank Try it, D17) is never saved; Back drops the chart, Keep it keeps it
+    ctx.toast?.(isTrialId(songId) ? 'Chart set for this try. Keep it to save it with the song.' : 'Chart saved.', 'ok',
+      { ms: isTrialId(songId) ? 4000 : 2500 });
     return { done: true };
   }
   return {

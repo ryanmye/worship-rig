@@ -9,7 +9,7 @@
 import { h, setText } from '../../components/util.js';
 import { openOverlay } from '../../components/overlay.js';
 import { markDialog } from '../../_fallback-components.js';
-import { CHART_MAX_CHARS } from '../../../store.js';
+import { CHART_MAX_CHARS, isTrialId } from '../../../store.js';
 import { detectFormat } from '../../../shared/chart-parse.js';
 import { chartReview, IMPORT_FILE_MAX_BYTES } from '../../chart/import.js';
 import { CHART_ACCEPT, CHART_SIDE_PCT, chartView, pctPx } from '../../chart/logic.js';
@@ -89,7 +89,9 @@ export function openChartEditor(ctx, songId, o) {
     'data-testid': 'v6-ce-save' });
 
   const titleText = h('span', {});
-  setText(titleText, `${s0?.name ?? ''} · changes show on the right as you type`);
+  // skeptic UI6-U7b F4: on a trial song (Song bank Try it) nothing is saved until Keep it
+  setText(titleText, `${s0?.name ?? ''} · ${isTrialId(songId) ? 'trying this song: Keep it to save the chart'
+    : 'changes show on the right as you type'}`);
   const dlg = h('div.v6-ce', { role: 'dialog', 'aria-modal': 'true', 'aria-label': had ? 'Edit chart' : 'Add a chart',
     tabindex: -1, 'data-testid': 'v6-chart-editor' },
   h('div.v6-ce-h', {}, h('b', { text: had ? 'Edit chart' : 'Add a chart' }), titleText),
@@ -120,14 +122,21 @@ export function openChartEditor(ctx, songId, o) {
       b.setAttribute('aria-pressed', String(on));
     }
     const s = song();
-    if (!s || !r || r.kind !== 'chart') {
+    // skeptic UI6-U7b F3: a source over the cap can't be saved, so it is not drawn either (a 300 KB paste drew 5000
+    // lines: ~1 s of main thread per pause in typing, with the keys live behind the dialog)
+    const tooBig = value.length > CHART_MAX_CHARS;
+    if (!s || !r || r.kind !== 'chart' || tooBig) {
       pSheet.replaceChildren();
       pEmpty.hidden = false;
+      setText(pEmpty, tooBig ? 'Too large to show: a chart can be at most '
+        + `${CHART_MAX_CHARS / 1024} KB.` : 'The chart shows here as you type.');
       setText(pTitle, s?.name ?? '');
       setText(pKey, '');
-      setText(status, r && r.kind === 'csv' ? 'A song list, not a chart: Save adds the songs that are new.' : '');
+      setText(status, r && r.kind === 'csv' ? 'A song list, not a chart: Save adds the songs that are new.'
+        : tooBig ? 'Too large to save' : '');
       return;
     }
+    setText(pEmpty, 'The chart shows here as you type.');
     const draft = { text: value, format: r.format };
     const k = rv.writtenIn();
     if (k) draft.key = k;

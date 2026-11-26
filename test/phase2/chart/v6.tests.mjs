@@ -862,6 +862,59 @@ export async function v6Tests(x) {
       }
     });
 
+    await T('U7b skeptic F3: Edit chart over the size cap shows no preview (and can’t be saved)', async () => {
+      await ev(() => window.__rig.views.chart.openEdit());
+      await until(() => !!document.querySelector('[data-testid="v6-ce-text"]'));
+      const r = await ev(() => new Promise((res) => {
+        const ta = document.querySelector('[data-testid="v6-ce-text"]');
+        const line = '[G]Counting every tile along the [D/F#]corridor of the hall\n';
+        ta.value = line.repeat(Math.ceil(70000 / line.length));
+        ta.dispatchEvent(new Event('input'));
+        setTimeout(() => res({
+          lines: document.querySelectorAll('[data-testid="v6-ce-psheet"] .chv-line').length,
+          save: document.querySelector('[data-testid="v6-ce-save"]').disabled,
+          err: document.querySelector('[data-testid="v6-chart-editor"] [data-testid="chart-error"]').textContent,
+          empty: document.querySelector('.v6-ce-pempty').textContent,
+        }), 350);
+      }));
+      assert.equal(r.lines, 0, 'nothing drawn');
+      assert.equal(r.save, true, 'Save off');
+      assert.match(r.err, /too large/);
+      assert.match(r.empty, /Too large to show/);
+      await page.click(tid('v6-ce-cancel'));
+      await until(() => !document.querySelector('[data-testid="v6-chart-editor"]'));
+    });
+
+    await T('U7b skeptic F4: a chart set on a trial song (Try it) says it is not saved yet', async () => {
+      const id = await ev(() => {
+        const { store } = window.__rig;
+        const song = JSON.parse(JSON.stringify(store.currentSong()));
+        delete song.id;
+        song.name = 'Trial Tiles';
+        delete song.chart;
+        const r = store.startTrial({ packId: 'u7b-test:trial.json', hash: 'u7b1', mode: 'bank', song });
+        store.set('settings.currentSongId', r.id);
+        return r.id;
+      });
+      await until((i) => window.__rig.views.chart.state().songId === i, id);
+      await ev(() => window.__rig.views.chart.openEdit());
+      await until(() => !!document.querySelector('[data-testid="v6-ce-text"]'));
+      assert.match(await page.textContent('.v6-ce-h'), /trying this song: Keep it to save the chart/);
+      await page.fill(tid('v6-ce-text'), '{key: G}\n[G]Tried [C]words');
+      await page.waitForTimeout(350);
+      await page.click(tid('v6-ce-save'));
+      await until(() => !document.querySelector('[data-testid="v6-chart-editor"]'));
+      assert.match(await page.textContent('#toasts'), /Chart set for this try\. Keep it to save it/);
+      assert.ok(!/Tried \[C\]words/.test(await ev(() => window.__rig.store.exportJSON())), 'not in the library');
+      await ev(() => {
+        const { store } = window.__rig;
+        const back = store.songsInOrder()[0].id;
+        const trial = store.get().settings.currentSongId;
+        store.set('settings.currentSongId', back);
+        store.endTrial(trial);
+      });
+    });
+
     await T('U7b zero console.error, no HTTP ≥ 400', async () => {
       assert.deepEqual(errors, []);
     });
