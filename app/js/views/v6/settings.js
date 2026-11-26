@@ -21,7 +21,8 @@ import {
   aboutSummary,
 } from './settings-summary.js';
 
-export const V6_SETTINGS_CSS_HREF = './styles-v6-settings.css';
+/** The stylesheet, resolved from this module (the app's index and the settings test fixture sit in other folders). */
+export const V6_SETTINGS_CSS_HREF = new URL('../../../styles-v6-settings.css', import.meta.url).href;
 /** The v6 category order (mockup CATS). `added`: categories only the v6 Settings has. `mac`: the Mac app only. */
 export const V6_CATEGORIES = Object.freeze([
   { id: 'sound', label: 'Sound' },
@@ -45,15 +46,17 @@ export const LEARN_RULE = 'A learned knob or fader changes the song just as movi
 
 /** Search text: lower case, no accents. */
 export const fold = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const esc = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /**
- * Does every word of `query` occur in `text`?
+ * Does every word of `query` start a word of `text` ("ped" finds "Sustain pedal"; "ember" finds Ember, not
+ * "remember")?
  * @param {string} text  already folded
  * @param {string} query
  * @returns {boolean}
  */
 export function matches(text, query) {
   const words = fold(query).split(/\s+/).filter(Boolean);
-  return words.length > 0 && words.every((w) => text.includes(w));
+  return words.length > 0 && words.every((w) => new RegExp(`(^|[^a-z0-9])${esc(w)}`).test(text));
 }
 
 /**
@@ -393,12 +396,20 @@ function enhance(api, d) {
     }
     return list;
   };
+  /** Text of an element with its pieces apart ("Aa" "Ember" "dark", not "AaEmberdark"). */
+  const words = (e) => {
+    if (!e) return '';
+    const out = [];
+    const w = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) out.push(n.data);
+    return out.join(' ');
+  };
   const textOf = (u, panel, cat) => {
     // a row: its label and hint, and its control's own words (theme names, Day / Stage / Auto, Balanced …)
-    const lab = u.matches('.st-row') ? `${u.querySelector('.st-label')?.textContent || ''} `
-      + `${u.querySelector('.st-control')?.textContent || ''}` : u.textContent;
+    const lab = u.matches('.st-row') ? `${words(u.querySelector('.st-label'))} ${words(u.querySelector('.st-control'))}`
+      : words(u);
     const sec = u.closest('.st-section, details');
-    const secHead = sec && sec !== u ? sec.querySelector(HEAD)?.textContent || sec.getAttribute('aria-label') : '';
+    const secHead = sec && sec !== u ? words(sec.querySelector(HEAD)) || sec.getAttribute('aria-label') : '';
     return fold(`${lab || ''} ${secHead || ''} ${cat.label}`);
   };
   function clearMarks() {
@@ -516,6 +527,7 @@ function enhance(api, d) {
     else delete dialog.dataset.v6Drill;
     back.hidden = drill !== 'detail';
     crumb.hidden = back.hidden;
+    api.syncOrientation?.(); // the list is vertical again while it drills in
     if (!crumb.hidden) setText(crumb, v6cats.find((c) => c.id === api.current())?.label || '');
   }
   d.add(() => {

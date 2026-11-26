@@ -11,6 +11,8 @@
 //             only exist in the Mac app. Its own tests only.
 //   bridge  — the fixture on the 2.0 BridgeEngine over MockNative (sound2.mjs): Settings › Sound's voices, buffer
 //             size and voice limit reaching the engine as config / audio messages. Its own tests only.
+//   v6      — the app with settings.uiV6 (v6.mjs, UI v6 U6): the v6 Settings over today's (control-count proof,
+//             summaries, search, deep links, MIDI Learn / Perform layout, themes, iPad drill-in, a fake-rig Mac run).
 // Every mode: the 11 settings tests from ui-edit, zero console.error, screenshots at 1440×900 and 1024×700 →
 // test/phase2/settings/screenshots/<mode>-<size>-settings.png (+ settings.png for the app at 1440).
 import { createRequire } from 'node:module';
@@ -23,6 +25,7 @@ import { chromium } from 'playwright';
 import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.mjs';
 import { runMac } from './mac.mjs';
 import { runBridge } from './sound2.mjs';
+import { runV6 } from './v6.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -33,7 +36,7 @@ const { createServer } = require(path.join(ROOT, 'server.js'));
 
 const haveApp = fs.existsSync(path.join(APP, 'index.html')) && fs.existsSync(path.join(APP, 'js', 'main.js')) &&
   /mountSettings/.test(fs.readFileSync(path.join(APP, 'js', 'main.js'), 'utf8'));
-const ALL_MODES = haveApp ? 'app,fixture,mac,bridge' : 'fixture,mac,bridge';
+const ALL_MODES = haveApp ? 'app,fixture,mac,bridge,v6' : 'fixture,mac,bridge';
 const MODES = (process.env.SETTINGS_MODES || ALL_MODES).split(',').map((s) => s.trim()).filter(Boolean);
 const VERBOSE = !!process.env.VERBOSE;
 
@@ -1437,6 +1440,7 @@ try {
   for (const m of MODES) {
     if (m === 'mac') await runMac({ browser, createServer, ROOT, SHOTS, results });
     else if (m === 'bridge') await runBridge({ browser, createServer, ROOT, SHOTS, results });
+    else if (m === 'v6') await runV6({ browser, createServer, ROOT, SHOTS, results });
     else await runMode(m, browser);
   }
 } finally {

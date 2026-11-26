@@ -2070,8 +2070,8 @@ export function mountSettings(el, ctx) {
     renderSound2();
     const linked = revealSection(opts && opts.section);
     if (!linked) showCategory(readLastCat());
-    syncOrientation();
     v6?.opened?.(linked);
+    syncOrientation();
     markDialog('settings', true);
     statsTimer = setInterval(renderStats, 1000);
     queueMicrotask(() => closeBtn.focus());
@@ -2110,7 +2110,7 @@ export function mountSettings(el, ctx) {
   const v6Api = {
     el, dialog, nav, body, closeBtn, tabs, panels, advs, cats, C,
     store, controller, midi, engine, rig, isElectron, ctx, toast,
-    showCategory, revealSection, resolveSection, isOpen: () => isOpen, current: () => current,
+    showCategory, revealSection, resolveSection, syncOrientation, isOpen: () => isOpen, current: () => current,
     nodes: { learnSection, perfSection, appearance, themeCards, themeGrid, lightRow, bankBox, outputSelect },
     renderPacks, learnName, mappingText, velLabel: (v) => (VEL_OPTS.find((o) => o.value === v) || VEL_OPTS[1]).label,
     latencyLabel: (v) => (LATENCY_OPTS.find((o) => o.value === v) || {}).label || '',
