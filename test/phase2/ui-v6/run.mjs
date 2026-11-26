@@ -243,8 +243,12 @@ try {
           assert.fail(`DOM shape differs at element ${i} (${al.length} vs ${bl.length} elements): base ${near(al)} `
             + `branch ${near(bl)}`);
         }
-        // the only intended difference: __rig.setUiV6 (and the views.v6 getter)
-        assert.deepEqual(b.rig.filter((k) => !a.rig.includes(k)), ['setUiV6']);
+        // the only intended difference: __rig.setUiV6 (and the views.v6 getter) when the base predates U1; none
+        // against a base that already has U1 (skeptic UI6-U2 F1: after the rebase onto 2fff370 the merge-base holds
+        // setUiV6, and the old `['setUiV6']` check failed although the flag-off app was identical)
+        assert.deepEqual(a.rig.filter((k) => !b.rig.includes(k)), [], '__rig keys the branch lost');
+        const extra = b.rig.filter((k) => !a.rig.includes(k));
+        assert.ok(extra.every((k) => k === 'setUiV6'), `__rig keys only the branch has: ${extra}`);
         console.log(`      base ${base.slice(0, 8)}: ${a.reqs.length} requests, ${a.store} store listeners, `
           + `${a.intervals} intervals, ${a.dom.split('\n').length} elements — identical`);
       } finally {
