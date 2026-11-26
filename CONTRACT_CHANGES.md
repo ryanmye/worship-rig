@@ -8786,3 +8786,12 @@ The second half of the v6 Edit (native DECISIONS D15, D18; `native/docs/lanes/UI
 - Gates: ui-v6-edit 29/29, ui-v6 68/68, edit-v2 14/14 files (117/117), settings 94/94, shell unit 357/357. Flag-off
   purity vs 4c485f5: identical (105 requests, 15 store listeners, 4 intervals, 2529 elements, 1047 in Edit). Zero
   console.error.
+- Skeptic review (native/docs/reviews/UI6-U5b.md, F1–F6): the chooser opens over Edit's body (`.v6e-body`), not the
+  whole view, so the bottom row (keys, Revert, Fade out, PANIC, Lock) stays live under no backdrop (mockup
+  `.frame.dimmed .ebody`); it closes when its place's instrument changes under it (Revert), and a kind chosen by
+  keyboard keeps the focus. `views/v6/bottom.js` `bottomRow(v, {prefix, barsReadOnly})`: `barsReadOnly` renders the
+  range bars with the keyboard's locked look (no pick, no handles; keys play); the v6 Edit's row passes it, so its
+  bars are display only as described above (before, a tap picked a bar and its ends wrote live without the v6
+  Perform's song-switch / slot-map guards). Dots compare key by key with PARAMS defaults (`catpanel.js`
+  `sameWithDefaults`): an optional object set back to its defaults (`fx.eq`, `fx.comp`, a slot's `touch`) is no
+  change. The Drone module's root test id in Edit is `v6e-dmod-root`. Gates after the review: see the review.
