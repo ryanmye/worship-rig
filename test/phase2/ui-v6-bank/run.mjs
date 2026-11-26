@@ -9,7 +9,8 @@
 //   meta.packSongs record as today's add), Add to setlist; Try it (storage bytes, export, meta.edited, the library
 //   order unchanged, even after fader moves in the trial), Back (song, setlist entry, Revert snapshot), Keep (added +
 //   selected), the banner's Add to setlist, Perform lock, reload ends a trial; My library mode; iPad portrait layout;
-//   flag off: today's Settings list, nothing of v6 fetched; zero console.error and no HTTP ≥ 400.
+//   flag off: today's Settings list, nothing of v6 fetched; zero console.error and no HTTP ≥ 400. U7c: the song menu
+//   (⋯ by the song name) on a trial song.
 //   node test/phase2/ui-v6-bank/run.mjs   (screenshots → ./screenshots or UI7A_SHOTS=<dir>; UI7A_ONLY=<regex>)
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -555,6 +556,45 @@ try {
     await until(() => !window.__rig.controller.trial());
     assert.equal(await ev(() => window.__rig.store.currentSong().id), id0);
     await ev(() => window.__rig.store.set('settings.performLock', false));
+  });
+
+  // U7c (views/v6/song-menu.js; closes UI6-U7a review O3 for the song menu): a trial song is not in the library
+  await T('U7c song menu on a trial song: Rename / Duplicate / Export / Delete say Keep it first; Add to setlist keeps '
+    + 'it first; Reset stays', async () => {
+    const lib0 = await ev(() => window.__rig.store.get().songOrder.length);
+    await ev((pid) => window.__rig.controller.tryBankSong(pid), 'sunday-pack:anthem.json');
+    await until(() => window.__rig.controller.trial()?.playing === true);
+    await page.click(tid('v6-songmenu-btn'));
+    await until(() => !!document.querySelector('[data-testid="v6-songmenu"]'));
+    const m = await ev(() => Object.fromEntries(['rename', 'dup', 'set', 'export', 'delete', 'reset'].map((k) => {
+      const b = document.querySelector(`[data-testid="v6-sm-${k}"]`);
+      return [k, { off: b.disabled, small: b.querySelector('small')?.textContent || '' }];
+    })));
+    for (const k of ['rename', 'dup', 'export', 'delete']) {
+      assert.deepEqual([k, m[k].off, m[k].small], [k, true, 'Keep it first']);
+    }
+    assert.equal(m.set.off, false);
+    assert.match(m.set.small, /keeps it in your library first/);
+    assert.match(await page.textContent(`${tid('v6-songmenu')} .v6-pop-h`), /trying/);
+    // Add to setlist ▸ = the banner's: keep + add to that setlist
+    const sl = await ev(() => window.__rig.store.currentSetlist().id);
+    await page.click(tid('v6-sm-set'));
+    await until(() => !!document.querySelector('[data-testid="v6-bank-setpop"]'));
+    await page.click(tid(`v6-bank-setlist-${sl}`));
+    await until(() => !window.__rig.controller.trial());
+    await settled();
+    const k = await ev(({ pid, sl }) => {
+      const { store } = window.__rig;
+      const id = store.get().meta.packSongs[pid]?.id;
+      return { n: store.get().songOrder.length, cur: store.currentSong().id === id,
+        inSet: store.get().setlists[sl].songIds.includes(id), trialIds: store.trialIds() };
+    }, { pid: 'sunday-pack:anthem.json', sl });
+    assert.deepEqual(k, { n: lib0 + 1, cur: true, inSet: true, trialIds: [] });
+    // the kept song is a library song: the menu is whole again
+    await page.click(tid('v6-songmenu-btn'));
+    await until(() => !!document.querySelector('[data-testid="v6-songmenu"]'));
+    assert.equal(await page.isDisabled(tid('v6-sm-dup')), false);
+    await page.keyboard.press('Escape');
   });
 
   await T('reload while trying: the trial is gone, the song before it is back', async () => {

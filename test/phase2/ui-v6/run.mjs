@@ -21,6 +21,9 @@
 //   U-MOVE + D24 tweaks (move.tests.mjs): Duplicate next to the original, Earlier / Later, the strip drag (mouse, touch,
 //   auto-scroll), Lock and the other ways a drag ends, protections keyed on the order (incl. Edit's tab + Undo), PANIC
 //   / Lock taps, live range writes (timed) and their restores, pick-first on a mouse, drone %, the 1024×700 fit.
+//   U7c (dialogs.tests.mjs): MIDI Learn on Perform (knob first or tap first, outlines / badges, Esc, Lock, song
+//   switch, flag off), Arrange (strip handles + the sidebar's list), Save snapshot (names, Update / Save as new) and the
+//   song menu; screenshots u7c-*.png (U7C_SHOTS=<dir>).
 //   The purity comparison needs git: base = UI6_PURITY_BASE or `git merge-base HEAD v2-native`; it is skipped
 //   (with a note) when app/ does not differ from the base.
 import { createRequire } from 'node:module';
@@ -35,6 +38,7 @@ import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.
 import { sidebarTests } from './sidebar.tests.mjs';
 import { leftTests } from './left.tests.mjs';
 import { moveTests } from './move.tests.mjs';
+import { dialogTests } from './dialogs.tests.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -470,7 +474,11 @@ try {
     // a clean song state: no scenes yet
     await ev(() => window.__rig.store.set(`songs.${window.__rig.store.currentSong().id}.scenes`, []));
     await until(() => document.querySelectorAll('[data-testid^="v6-snap-"][data-n]').length === 0);
+    // U7c: + Save opens the Save snapshot dialog; an empty name = "Scene 1" (D25)
     await page.click(tid('v6-snap-save'));
+    await until(() => !!document.querySelector('[data-testid="v6-savesnap"]'));
+    await page.fill(tid('v6-savesnap-name'), '');
+    await page.click(tid('v6-savesnap-new'));
     await until(() => (window.__rig.store.currentSong().scenes || []).length === 1);
     await until(() => document.querySelector('[data-testid="v6-snap-1"]')?.classList.contains('plate'));
     assert.equal(await page.textContent(tid('v6-snap-1')), 'Scene 1');
@@ -492,6 +500,8 @@ try {
     await page.click(tid('v6-on-0'));
     await until(() => !document.querySelector('[data-testid="v6-snap-dirty"]').hidden);
     await page.click(tid('v6-snap-new'));
+    await until(() => !!document.querySelector('[data-testid="v6-savesnap"]'));
+    await page.click(tid('v6-savesnap-new'));
     await until(() => (window.__rig.store.currentSong().scenes || []).length === 2);
     await until(() => document.querySelector('[data-testid="v6-snap-2"]')?.classList.contains('plate'));
     // Own levels / Scene 1 by tap
@@ -1326,6 +1336,9 @@ try {
   // ---------------------------------------------------------------- U-MOVE + D24 tweaks (move.tests.mjs)
   await moveTests({ T, page, browser, origin, ev, until, tid, song, settled, hold, setSlots, SHOTS, assert, rectOf,
     keyRect, dragHandle, pickOn, setRange, armPanics, errors, KB });
+
+  // ---------------------------------------------------------------- U7c (dialogs.tests.mjs)
+  await dialogTests({ T, page, ev, until, tid, song, settled, hold, setSlots, SHOTS, assert, rectOf, armPanics });
 
   await T('on / off cycles: today’s Perform comes back whole; nothing of v6 is left behind', async () => {
     for (let k = 0; k < 3; k++) {
