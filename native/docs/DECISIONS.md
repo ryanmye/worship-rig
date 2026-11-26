@@ -475,3 +475,11 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
 3. **Lock: a tap locks, unlocking needs a hold** (as built).
 4. **Song bank: tempo bands < 80 / 80–114 / ≥ 115 BPM, Feel matches any chosen tag** (as built).
 5. **Start here card under the song bar; the portrait top bar hides the meter and the idle clock** (as built).
+
+## D27: After Mac/iPad 2.0: iPhone 2.0, then Windows 2.0 (Ryan, 2026-11-27)
+- **Order:** Mac/iPad 2.0 first; then iPhone; then Windows. No building before Mac/iPad 2.0 ships; plan now.
+- **iPhone = both:** a full instrument on the phone (own audio, USB-C / Bluetooth MIDI, phone-sized UI from the same
+  modules, D15) AND a remote for a Mac on the same network (song, drone, master, PANIC; extends the menu-bar
+  popover's bus).
+- **Windows = same sound as the Mac:** a native shell around the 2.0 core (not the 1.x Electron web engine).
+- Plan doc: `native/docs/lanes/NEXT-PLATFORMS.md` (iPhone layout mockups + Windows options comparison).
