@@ -1073,6 +1073,28 @@ try {
       assert.deepEqual(await tapNoClick(1), [false, true, false], 'pointerup alone picks');
       assert.deepEqual(await tapNoClick(2, { click: true }), [false, false, true], 'pointerup + click: one toggle');
       assert.deepEqual(await tapNoClick(1, { dx: 40 }), [false, false, true], 'a press that moved picks nothing');
+      // skeptic UI6-U2 F6: a second finger on the keys while one drags an end plays its note and keeps the drag
+      // (it used to cancel the drag, unpick and swallow the note)
+      {
+        const hd = await rectOf(tp, tid(`${KB}-hhi-2`));
+        const k69 = await keyRect(tp, 69);
+        const k40 = await keyRect(tp, 40);
+        const P = (x) => ({ x, y: hd.cy, id: 1 });
+        const at = (m) => hd.cx + (k69.r - hd.cx) * m / 8;
+        const td = (type, touchPoints) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints });
+        const n0 = await tev(() => window.__notes);
+        await td('touchStart', [P(at(0))]);
+        for (let m = 1; m <= 4; m++) await td('touchMove', [P(at(m))]);
+        await td('touchStart', [P(at(4)), { x: k40.cx, y: k40.b - 10, id: 2 }]);
+        await tuntil((n) => window.__notes > n, n0);
+        assert.equal(await tev(() => document.querySelector('.v6-kbd').classList.contains('dragging')), true,
+          'the drag goes on');
+        await td('touchEnd', [P(at(4))]); // finger 2 lifts
+        for (let m = 5; m <= 8; m++) await td('touchMove', [P(at(m))]);
+        await td('touchEnd', []);
+        await tuntil(() => window.__rig.store.currentSong().patch.slots[2].highNote === 69);
+        assert.equal(await tev(() => document.querySelector('.v6-kbd').classList.contains('picking')), true);
+      }
       // tap the keys: finishes, plays nothing
       const notes0 = await tev(() => window.__notes);
       const key = await keyRect(tp, 60);

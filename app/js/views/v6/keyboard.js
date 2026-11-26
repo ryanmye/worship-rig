@@ -321,8 +321,10 @@ export function rangeKeyboard(o = {}) {
     o.onPick?.(picked);
   }
   // "tap the keys to finish": the tap only finishes (no note), ahead of pianoKeyboard's own pointerdown
+  // (skeptic UI6-U2 F6: not while an end is being dragged: a second finger on the keys then plays, as it would on
+  // the Mac, instead of cancelling the drag and swallowing the note)
   d.listen(piano.el, 'pointerdown', (ev) => {
-    if (picked === null) return;
+    if (picked === null || drag) return;
     ev.preventDefault();
     ev.stopPropagation();
     pick(null);
