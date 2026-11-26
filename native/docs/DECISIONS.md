@@ -363,3 +363,9 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
 - Answer to lane-learn's open question ("live only vs song edit"): moving a learned knob or fader changes the live
   sound only; the saved song is unchanged. The Revert button undoes those moves; otherwise they stay as set.
   Reading (to confirm when lane-learn is reviewed): loading a song plays it as saved, like any other live change.
+
+## D21: Settings design approved (Ryan, 2026-11-26)
+- Mockup: `native/docs/design/mockups/settings.html` (artifact "Settings mockups"). Ryan: "something like that is
+  fine. just easy to navigate and use". Category list with each category's current state, a search box, MIDI Learn
+  and Perform layout as categories, the Song bank entry in Sounds & Samples, theme previews. Guiding rule for the
+  build: easy to navigate and use beats completeness on screen.
