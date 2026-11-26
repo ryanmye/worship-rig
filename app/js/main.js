@@ -1074,8 +1074,16 @@ function setUiV6(on) {
 function swapPerform(mount, isV6) {
   chartView?.destroy();
   chartView = null;
+  // skeptic UI6-small F4 (UI6-U1 O4): the new Perform takes over the Revert snapshot (Edit's changed dots too)
+  let carried = null;
+  try {
+    carried = performView?.savedSnapshot ?? null;
+  } catch {
+    carried = null;
+  }
   performView?.destroy();
   performView = null;
+  ctx.carrySnapshot = carried;
   try {
     performView = mount(els.perform, ctx);
     performIsV6 = isV6;
@@ -1085,6 +1093,8 @@ function swapPerform(mount, isV6) {
       performView = mountPerform(els.perform, ctx); // never leave the stage empty
       performIsV6 = false;
     }
+  } finally {
+    delete ctx.carrySnapshot;
   }
   if (store.get().settings.chartView === true) applyChartView();
 }

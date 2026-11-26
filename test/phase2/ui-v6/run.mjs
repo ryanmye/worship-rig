@@ -1270,6 +1270,28 @@ try {
   // ---------------------------------------------------------------- U4: the left panel (left.tests.mjs)
   await leftTests({ T, page, browser, origin, ev, until, tid, song, settled, setSlots, SHOTS, assert });
 
+  await T('skeptic UI6-small F4 (UI6-U1 O4): a flag flip keeps the Revert snapshot (unsaved changes stay changes)',
+    async () => {
+      await ev(() => window.__rig.ctx.setView('perform'));
+      await settled();
+      const sid = (await song()).id;
+      const was = await ev(() => window.__rig.ctx.getBaseline().patch.fx.reverb.returnGain);
+      const now = was > 0.5 ? 0.2 : 0.8;
+      await ev(({ sid, now }) => window.__rig.store.set(`songs.${sid}.patch.fx.reverb.returnGain`, now), { sid, now });
+      const probe = () => ev(() => ({ base: window.__rig.ctx.getBaseline().patch.fx.reverb.returnGain,
+        changed: window.__rig.views.perform.changedPaths.length > 0, v6: !!window.__rig.views.v6 }));
+      const start = await probe();
+      try {
+        for (const on of [!start.v6, start.v6]) {
+          await ev((o) => window.__rig.setUiV6(o), on);
+          assert.deepEqual(await probe(), { base: was, changed: true, v6: on },
+            `after the flip to ${on ? 'v6' : 'today'}`);
+        }
+      } finally {
+        await ev(({ sid, was }) => window.__rig.store.set(`songs.${sid}.patch.fx.reverb.returnGain`, was), { sid, was });
+      }
+    });
+
   await T('on / off cycles: today’s Perform comes back whole; nothing of v6 is left behind', async () => {
     for (let k = 0; k < 3; k++) {
       assert.equal(await ev(() => window.__rig.setUiV6(false)), false);

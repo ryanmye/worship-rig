@@ -73,6 +73,9 @@ export function mountPerformV6(root, ctx) {
   const takeSnapshot = (song) => {
     snap = song ? { id: song.id, song, json: savedJSON(song) } : null;
   };
+  // skeptic UI6-small F4 (UI6-U1 review O4): a Perform swapped in by the v6 switch (main.js swapPerform) keeps the
+  // one it replaces' Revert snapshot, so a flip from Settings never makes unsaved changes the new baseline
+  if (ctx.carrySnapshot) takeSnapshot(ctx.carrySnapshot);
   const liveOf = (song) => (song && controller.scenes ? controller.scenes.view(song) : song);
   /** While a scene plays, level moves are live moves on top of it (perform.js sceneLevel, v11-scenes). */
   const sceneLevel = (path, value) => !!(shownId && controller.scenes?.state().id === shownId

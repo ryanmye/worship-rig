@@ -1093,6 +1093,9 @@ export function mountPerform(root, ctx) {
   const takeSnapshot = (song) => {
     snap = song ? { id: song.id, song, json: savedJSON(song) } : null;
   };
+  // skeptic UI6-small F4 (UI6-U1 review O4): a Perform swapped in by the v6 switch (main.js swapPerform) keeps the
+  // one it replaces' Revert snapshot, so a flip from Settings never makes unsaved changes the new baseline
+  if (ctx.carrySnapshot) takeSnapshot(ctx.carrySnapshot);
   function revertSong() {
     if (!snap || !shownId || snap.id !== shownId) return;
     const s = snap.song;
