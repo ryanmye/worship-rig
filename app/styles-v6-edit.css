@@ -26,6 +26,8 @@
 .v6.v6-edit .v6e-fold, .v6.v6-edit .v6e-unfold { min-height: 36px; min-width: 36px; padding: 0 8px; }
 .v6.v6-edit .v6e-libmod { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .v6.v6-edit .v6e-libmod .ev2-list-add { grid-template-columns: 1fr 1fr; }
+/* UI6-U5a O6: no Song bank songs, no Song bank… button: + New song takes the row */
+.v6.v6-edit .v6e-libmod .ev2-list-add:has(> .v6e-bank[hidden]) { grid-template-columns: 1fr; }
 /* skeptic UI6-U5a F4: in the library column (200–244 px), today's setlist head ("Setlist" + Setlist · Rename ·
    Delete, ~250 px of nowrap text) squeezed its buttons below their text, which then overlapped ("+ SetliRenamDelete"
    at 1024 px): the caption takes its own line above the three buttons */
@@ -56,8 +58,22 @@
 .v6.v6-edit .v6e-rig-h { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .v6.v6-edit .v6e-rig-h small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; }
+.v6.v6-edit .v6e-rtwrap { position: relative; min-width: 0; }
 .v6.v6-edit .v6e-rtabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin;
   scrollbar-color: var(--line-2) transparent; padding-bottom: 2px; }
+/* UI6-U5a O3: the tablist holds only the tabs; it lays its tabs out in the row (display: contents) and `order` puts
+   + Add and the separator between the instruments and Drone / Effects / Master, where U5a had them */
+.v6.v6-edit .v6e-rtl { display: contents; }
+.v6.v6-edit .v6e-rt.add { order: 1; }
+.v6.v6-edit .v6e-rsep { order: 2; }
+.v6.v6-edit .v6e-rt.gl { order: 3; }
+/* UI6-U5a O5: a ‹ / › over each end while tabs are out of sight there */
+.v6.v6-edit .v6e-rmore { position: absolute; top: 0; bottom: 4px; z-index: 2; width: 34px; min-height: 0; padding: 0;
+  border: 0; border-radius: 10px; color: var(--text); font: 800 22px var(--v6-book); }
+.v6.v6-edit .v6e-rmore.l { left: 0; background: linear-gradient(90deg, var(--panel) 55%, transparent); text-align: left;
+  padding-left: 6px; }
+.v6.v6-edit .v6e-rmore.r { right: 0; background: linear-gradient(270deg, var(--panel) 55%, transparent);
+  text-align: right; padding-right: 6px; }
 .v6.v6-edit .v6e-rt { position: relative; flex: 1 1 0; min-width: 116px; min-height: 50px; border-radius: 10px;
   border: 1px solid var(--line); border-top: 4px solid var(--c, var(--line-2)); background: var(--panel-2);
   text-align: left; padding: 3px 10px; display: flex; flex-direction: column; justify-content: center; }
@@ -173,19 +189,118 @@
    not; Edit's rig tabs are not reordered yet (D23 leaves that for later) */
 .v6.v6-edit .v6e-stage .v6-grip { display: none; }
 
-/* the keyboard row (today's Edit one until the v6 keyboard row comes to Edit). Its legend names the roles
-   (Keys / Pad / Extra / Bass), which v6 never shows (D15): left out, as today's ≤ 1250 px layout does */
-.v6.v6-edit .v6e-bottom { flex: 0 0 108px; min-height: 0; border-radius: 12px; }
-.v6.v6-edit .v6e-bottom .ev2-kb { grid-template-columns: minmax(0, 1fr) 120px 104px 112px; }
-.v6.v6-edit .v6e-bottom .ev2-kb-leg { display: none; }
+/* U5b: the bottom row is the v6 Perform's (views/v6/bottom.js, styles-v6.css .v6-bottom: its own panels and gaps), so
+   the footer is only its place: no card of its own, and the hold buttons' captions may rise above it */
+.v6.v6-edit .v6e-bottom { flex: none; min-height: 0; background: none; border: 0; border-radius: 0; overflow: visible; }
+
+/* ---- U5b: Drone / Effects / Master in the category-list frame (catpanel.js; the instrument panel's classes) */
+.v6.v6-edit .v6e-ncols.noright { grid-template-columns: 200px minmax(0, 1fr); }
+.v6.v6-edit .v6e-navcol { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.v6.v6-edit .v6e-navcol > .v6e-cnav { flex: 1 1 auto; min-height: 0; }
+.v6.v6-edit .v6e-navlink { flex: none; display: flex; flex-direction: column; align-items: flex-start;
+  min-height: 44px; padding: 4px 10px; text-align: left; font-weight: 700; }
+.v6.v6-edit .v6e-navlink small { font-weight: 500; color: var(--muted); }
+.v6.v6-edit .v6e-h5 { color: var(--v6-cap); font: 650 13px var(--v6-book); font-variant-caps: all-small-caps;
+  letter-spacing: .05em; margin-top: 4px; }
+/* Drone › Key & sound: the sidebar's Drone module (styles-v6-sidebar.css) in its container, so its wide layout
+   (≥ 600 px: ON · keys · sound + sliders) applies by the room it gets here; Keep / Follow are Behaviour, the pad
+   line is My Pads */
+.v6.v6-edit .v6e-dmod { container: v6sb / inline-size; }
+.v6.v6-edit .v6e-dmod :is(.v6-d-tg, .v6-pads) { display: none !important; }
+/* the value ("Gentle · 30%") is wider than the sidebar's 5.6em box at some theme fonts: let it take its width */
+.v6.v6-edit .v6e-dmod .v6-d-sl .fader.compact .fader-value { width: auto; min-width: 5.6em; }
+/* the module's wide columns (180 + 280 + 220 px) are the sidebar's; the pane at 1280 × 800 is ~700 px */
+@container v6sb (min-width: 600px) {
+  .v6.v6-edit .v6e-dmod .v6-drone { grid-template-columns: minmax(150px, 1fr) minmax(240px, 1.7fr)
+    minmax(190px, 1.3fr); }
+}
+.v6.v6-edit .v6e-dwide > .ev2-ws { flex: 1 1 260px; max-width: 420px; }
+/* Effects: the room / echo choices (mockup .room) */
+.v6.v6-edit .v6e-rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
+.v6.v6-edit .v6e-room { min-height: 54px; display: flex; flex-direction: column; align-items: flex-start;
+  justify-content: center; gap: 1px; padding: 4px 12px; border-radius: 10px; border: 1px solid var(--line-2);
+  background: var(--panel-2); text-align: left; }
+.v6.v6-edit .v6e-room b { font-weight: 700; font-size: 15px; }
+.v6.v6-edit .v6e-room small { color: var(--muted); font-size: 12px; }
+.v6.v6-edit .v6e-room[aria-pressed="true"] { border-color: var(--c);
+  background: color-mix(in srgb, var(--c) 18%, var(--panel-2)); }
+/* the per-instrument tables (Sends: Space · Echo; Chorus: Chorus) */
+.v6.v6-edit .v6e-sends { display: flex; flex-direction: column; gap: 6px; }
+.v6.v6-edit :is(.v6e-sendhead, .v6e-sendrow) { display: grid; align-items: center; gap: 14px;
+  grid-template-columns: minmax(110px, 0.9fr) minmax(0, 1.5fr) minmax(0, 1.5fr); }
+.v6.v6-edit .v6e-sendhead.one, .v6.v6-edit .v6e-fxchorus .v6e-sendrow { grid-template-columns: minmax(110px, 0.9fr)
+  minmax(0, 3fr); }
+.v6.v6-edit .v6e-sendhead span { color: var(--v6-cap); font: 650 13px var(--v6-book); font-variant-caps: all-small-caps;
+  letter-spacing: .05em; }
+.v6.v6-edit .v6e-sendrow { padding: 4px 0; border-top: 1px solid var(--line); }
+.v6.v6-edit .v6e-sendrow.empty { opacity: .5; }
+.v6.v6-edit .v6e-sname { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 700; }
+.v6.v6-edit .v6e-sname span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v6.v6-edit .v6e-sname i { flex: none; width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+.v6.v6-edit .v6e-sendcell .ev2-ws-label { display: none; } /* the column says Space / Echo (aria-label names both) */
+.v6.v6-edit .v6e-sendcell .ev2-ws-head { justify-content: flex-end; min-height: 0; }
+.v6.v6-edit .v6e-vibe-menu { width: 320px; }
+.v6.v6-edit .v6e-vibe-item span { display: flex; flex-direction: column; align-items: flex-start; }
+.v6.v6-edit .v6e-vibe-item small { color: var(--muted); font-size: 12px; }
+.v6.v6-edit .v6e-vibe-item { min-height: 44px; }
+.v6.v6-edit .v6e-vibe-btn { white-space: nowrap; padding: 0 14px; }
+/* Master */
+.v6.v6-edit .v6e-mroute { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px;
+  align-items: end; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.v6.v6-edit .v6e-msel { min-width: 0; }
+.v6.v6-edit .v6e-ceiling { border-left: 3px solid var(--line-2); padding-left: 8px; }
+
+/* ---- U5b: the instrument chooser (chooser.js; mockup "Change instrument") over the whole Edit view */
+.v6.v6-edit .v6e-ch-back { position: absolute; inset: 0; z-index: 60; display: flex; align-items: center;
+  justify-content: center; padding: 24px; background: color-mix(in srgb, #000 55%, transparent);
+  border-radius: var(--radius, 10px); }
+.v6.v6-edit .v6e-chooser { width: min(900px, 100%); max-height: 100%; min-height: 0; display: flex;
+  flex-direction: column; gap: 12px; padding: 14px 16px; background: var(--v6-sheet); color: var(--text);
+  border: 1px solid var(--v6-sheet-line); border-radius: 14px; box-shadow: 0 24px 60px #000c; outline: none; }
+.v6.v6-edit .v6e-ch-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.v6.v6-edit .v6e-ch-title { margin: 0; font: 800 20px var(--v6-book); }
+.v6.v6-edit .v6e-ch-sub { color: var(--muted); font-size: 14px; }
+.v6.v6-edit .v6e-ch-search { width: 240px; max-width: 100%; min-height: 40px; padding: 0 12px; border-radius: 10px;
+  border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text); font: inherit; }
+.v6.v6-edit .v6e-ch-b { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 190px minmax(0, 1fr);
+  gap: 12px; }
+.v6.v6-edit .v6e-ch-cats { display: flex; flex-direction: column; gap: 3px; overflow-y: auto; min-height: 0;
+  padding-right: 8px; border-right: 1px solid var(--line); scrollbar-width: thin; }
+.v6.v6-edit .v6e-ch-cat { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 40px; padding: 0 10px; border-radius: 9px; border: 1px solid transparent; background: none;
+  text-align: left; font-weight: 650; }
+.v6.v6-edit .v6e-ch-cat small { color: var(--muted); font-weight: 500; }
+.v6.v6-edit .v6e-ch-cat.on { background: color-mix(in srgb, var(--c) 18%, var(--panel-2)); border-color: var(--c); }
+.v6.v6-edit .v6e-ch-cat:disabled { opacity: .4; }
+.v6.v6-edit .v6e-ch-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  align-content: start; gap: 8px; overflow-y: auto; min-height: 0; scrollbar-width: thin; padding: 2px; }
+.v6.v6-edit .v6e-ch-tile { position: relative; min-height: 72px; display: flex; flex-direction: column;
+  align-items: flex-start; justify-content: center; gap: 2px; padding: 8px 12px; border-radius: 11px;
+  border: 1px solid var(--line-2); background: var(--panel-2); text-align: left; }
+.v6.v6-edit .v6e-ch-tile b { font-weight: 700; font-size: 15px; }
+.v6.v6-edit .v6e-ch-tile small { color: var(--muted); font-size: 12px; }
+.v6.v6-edit .v6e-ch-tile.sel { border-color: var(--c); box-shadow: inset 0 0 0 1px var(--c);
+  background: color-mix(in srgb, var(--c) 16%, var(--panel-2)); }
+.v6.v6-edit .v6e-ch-now { position: absolute; top: 6px; right: 8px; font: 700 11px var(--font, inherit);
+  font-style: normal; color: var(--c); text-transform: uppercase; letter-spacing: .05em; }
+.v6.v6-edit .v6e-ch-f { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center;
+  gap: 10px; }
+.v6.v6-edit .v6e-ch-keep { color: var(--muted); font-size: 13px; }
+.v6.v6-edit .v6e-ch-f .btn { white-space: nowrap; }
+.v6.v6-edit .v6e-ch-use { min-width: 150px; font-weight: 700; border-color: var(--c);
+  background: color-mix(in srgb, var(--c) 24%, var(--panel-2)); }
+.v6.v6-edit .v6e-ch-use:disabled { opacity: .5; }
+.v6.v6-edit .v6e-ch-remove { color: var(--danger); }
 
 /* ---- smaller windows */
 @media (max-width: 1250px) {
   .v6.v6-edit .v6e-body { grid-template-columns: 200px minmax(0, 1fr); }
   .v6.v6-edit .v6e-ncols { grid-template-columns: 170px minmax(0, 1fr) 170px; }
+  .v6.v6-edit .v6e-ncols.noright { grid-template-columns: 170px minmax(0, 1fr); }
+  .v6.v6-edit .v6e-ch-b { grid-template-columns: 160px minmax(0, 1fr); }
+  .v6.v6-edit .v6e-ch-tiles { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
   .v6.v6-edit .v6e-rig-h small { display: none; }
   .v6.v6-edit .v6e-sent .ev2-sent { font-size: 16px; }
-  .v6.v6-edit .v6e-bottom { flex-basis: 72px; }
   /* skeptic UI6-U5a F3: Tone EQ in a ~400 px pane (1024 × 700). The eqKeyboard was laid out for today's full-width
      Advanced: its A / B toggle ran 86 px past the pane and the band table (500 px) 115 px, so the pane scrolled
      sideways and clipped them. The head wraps, the band list goes above its side panel, and only the table scrolls */
@@ -197,6 +312,8 @@
 @media (max-height: 820px) {
   .v6.v6-edit .v6e-rt { min-height: 44px; }
   .v6.v6-edit .v6e-cn { min-height: 42px; }
+  /* U5b: the v6 Perform's 96 px row, a little lower in Edit (the panel needs the height more than the keys) */
+  .v6.v6-edit .v6e-bottom .v6-bottom { height: 84px; }
 }
 /* skeptic UI6-U5a F2: at 1024 × 700 the seven rows (46 px each) needed 349 px of a 308 px list, so Advanced was
    below the fold; tighter rows fit them all (the list still scrolls, and keeps the chosen row in sight, below that) */
@@ -221,7 +338,13 @@
   .v6.v6-edit .v6e-head .ev2-song-head { flex-wrap: wrap; row-gap: 6px; }
   .v6.v6-edit .v6e-rt { flex: 0 0 150px; }
   .v6.v6-edit .v6e-ihead { flex-wrap: wrap; }
-  .v6.v6-edit .v6e-ncols { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .v6.v6-edit .v6e-ncols, .v6.v6-edit .v6e-ncols.noright { grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr); }
+  .v6.v6-edit .v6e-navcol { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .v6.v6-edit .v6e-navcol > .v6e-cnav { flex: 1 1 auto; }
+  .v6.v6-edit .v6e-ch-b { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .v6.v6-edit .v6e-ch-cats { flex-direction: row; flex-wrap: wrap; border-right: 0; padding: 0 0 8px;
+    border-bottom: 1px solid var(--line); overflow: visible; }
   .v6.v6-edit .v6e-cnav { flex-direction: row; flex-wrap: wrap; border-right: 0; padding: 0 0 8px;
     border-bottom: 1px solid var(--line); overflow: visible; }
   .v6.v6-edit .v6e-cn { min-height: 44px; justify-content: center; }

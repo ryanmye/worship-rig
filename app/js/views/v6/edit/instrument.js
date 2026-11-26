@@ -23,30 +23,34 @@ import {
 } from '../../../shared/smart-controls.js';
 import { readEq, shelfWrites, eqSummary as mathSummary } from '../../../shared/eq-math.js';
 import { PEDAL_HOLD_TRACK } from '../../../shared/learn.js';
-import { hasChange } from '../../../shared/song-diff.js';
-import { groupOf, groupOrder, parseKey, TOUCH_LABELS, followSlot, UNDO_MS } from '../../edit/panels/slot.js';
+import { hasChange, sameValue } from '../../../shared/song-diff.js';
+import { touchWord } from '../../../shared/touch-curve.js';
+import { parseKey, TOUCH_LABELS, followSlot, UNDO_MS } from '../../edit/panels/slot.js';
 import { rangeKeyboard, rangeText } from '../keyboard.js';
 import { createStrip } from '../strip.js';
 import { slotColor } from '../lib.js';
+import { openChooser } from './chooser.js';
 
 /**
- * The category list (D18). `dot` = the slot-relative fields whose change (against the Revert snapshot, the v6 watch
- * list V6_DIFF_WATCH = today's DIFF_WATCH + the range) puts a dot on the row: today's rule, so faders, levels, EQ
- * and sound sliders never dot (CONTRACT §3.6); Range adds lowNote / highNote like v6 Perform's bars.
+ * The category list (D18). `dot` = the slot-relative fields compared with the Revert snapshot for the row's dot (U5b,
+ * orchestrator: "changed since the song began" over all of the category's paths, so Sound, Tone EQ, Touch and
+ * Advanced dot too; UI6-U5a O1). Sound and Advanced split the instrument's own params (instCatChanged); the level
+ * and ON tile are the strip's live moves and belong to no category.
  */
 export const CATEGORIES = Object.freeze([
-  { id: 'sound', label: 'Sound', blurb: 'how this instrument itself sounds', dot: [] },
-  { id: 'eq', label: 'Tone EQ', blurb: 'drag a point, or double-tap the curve to add one', dot: [] },
+  { id: 'sound', label: 'Sound', blurb: 'how this instrument itself sounds', dot: ['instrument'] },
+  { id: 'eq', label: 'Tone EQ', blurb: 'drag a point, or double-tap the curve to add one', dot: ['eq'] },
   { id: 'range', label: 'Range', blurb: 'which keys play it · drag the ends of the colour, or set by playing',
     dot: ['lowNote', 'highNote', 'octave'] },
-  { id: 'touch', label: 'Touch', blurb: 'how it answers your playing', dot: [] },
-  { id: 'sustain', label: 'Sustain', blurb: 'what the sustain pedal does to it', dot: ['sustain'] },
+  { id: 'touch', label: 'Touch', blurb: 'how it answers your playing', dot: ['velocityCurve', 'touch'] },
+  { id: 'sustain', label: 'Sustain', blurb: 'what the sustain pedal does to it', dot: ['sustain', 'release',
+    'pedalHold'] },
   { id: 'sends', label: 'Space & Echo', blurb: 'how much of it goes into the shared effects', dot: ['sends'] },
-  { id: 'adv', label: 'Advanced', blurb: 'pan, width, transpose, voices and the instrument’s own settings', dot: [] },
+  { id: 'adv', label: 'Advanced', blurb: 'pan, width, transpose, voices and the instrument’s own settings',
+    dot: ['pan', 'width', 'transpose', 'mono', 'bendEnabled'] },
 ]);
 export const CATEGORY_IDS = Object.freeze(CATEGORIES.map((c) => c.id));
 
-const HIDDEN_IN_PICKER = new Set(['synth:drone-osc']);
 const TOUCH_HINTS = {
   soft: 'Light: soft playing still sounds full.',
   normal: 'Normal: volume follows how hard you play (and your keyboard’s own touch, if you gave it one in Settings).',
@@ -99,6 +103,60 @@ function specValue(spec, slot) {
   const rel = spec.path.replace('slots.<i>.', '');
   const v = getIn(slot, rel);
   return v === undefined ? spec.default : v;
+}
+
+/** A slot field with its PARAMS default when absent (an optional field set back to its default is no change). */
+function fieldValue(slot, i, f) {
+  const v = getIn(slot, f);
+  if (v !== undefined) return v;
+  const d = describe(`slots.${i}.${f}`);
+  return d && !d.dynamic ? d.default : undefined;
+}
+
+/**
+ * The categories whose dot is on: what differs between the slot and the same place in the Revert snapshot (U5b; the
+ * shell's ctx.getBaseline). Sound = the instrument and its smart sliders' values (shelves read through readEq);
+ * Tone EQ = the EQ (readEq, so an absent EQ and a flat one match); Advanced = pan … pitch bend and the instrument's
+ * own params the smart sliders do not show. Positional, like today's dots and V6_DIFF_WATCH. An empty place, then or
+ * now: only Sound (the instrument came or went).
+ * @param {object|null} slot
+ * @param {object|null} base  the same place in the baseline
+ * @param {object|null} meta  listInstruments() entry of the slot's instrument
+ * @param {number} i
+ * @returns {Set<string>} category ids
+ */
+export function instCatChanges(slot, base, meta, i) {
+  const out = new Set();
+  if (!slot && !base) return out;
+  if (!slot || !base) {
+    out.add('sound');
+    return out;
+  }
+  const differs = (f) => !sameValue(fieldValue(slot, i, f), fieldValue(base, i, f));
+  const sameInst = refKey(slot.instrument) === refKey(base.instrument);
+  const specs = smartSlidersFor(meta);
+  if (!sameInst || specs.some((sp) => !sameValue(specValue(sp, slot), specValue(sp, base)))) out.add('sound');
+  if (!sameValue(readEq(slot.eq), readEq(base.eq))) out.add('eq');
+  for (const c of CATEGORIES) {
+    if (c.id !== 'sound' && c.id !== 'eq' && c.dot.some(differs)) out.add(c.id);
+  }
+  if (!out.has('adv') && sameInst) {
+    // the instrument's own params outside Sound (a changed instrument resets them: that is Sound's dot)
+    const mapped = new Set(specs.filter((sp) => sp.key).map((sp) => sp.key));
+    const def = new Map((meta && Array.isArray(meta.params) ? meta.params : []).filter((p) => p && p.key)
+      .map((p) => [p.key, p.default]));
+    const keys = new Set([...Object.keys(slot.params || {}), ...Object.keys(base.params || {})]);
+    for (const k of keys) {
+      if (mapped.has(k)) continue;
+      const a = slot.params?.[k] ?? def.get(k);
+      const b = base.params?.[k] ?? def.get(k);
+      if (!sameValue(a, b)) {
+        out.add('adv');
+        break;
+      }
+    }
+  }
+  return out;
 }
 
 /**
@@ -184,8 +242,9 @@ export function v6SentenceParts(slot, meta, o) {
  * @param {object} ctx      the panel ctx (views/edit/CONTRACT.md §3, from shell.js createEditCore)
  * @param {{slot:number, focus?:string}} opts
  * @param {{prefs:{cat:string, setCat(id:string):void}, changes:() => Set<string>, stripV:object,
- *          popHost:HTMLElement}} env
- *   changes: the v6 changed set (song-relative paths, V6_DIFF_WATCH); stripV: the view context strip.js expects
+ *          live?:(song:object) => object, dialogHost?:HTMLElement}} env
+ *   changes: the v6 changed set (song-relative paths, V6_DIFF_WATCH); stripV: the view context strip.js expects;
+ *   dialogHost: where the instrument chooser opens (the Edit view's root, U5b)
  * @returns {{update(opts:object):void, destroy():void, _debug:object}}
  */
 export function mountInstrument(host, ctx, opts, env) {
@@ -208,11 +267,12 @@ export function mountInstrument(host, ctx, opts, env) {
   // ---------------------------------------------------------------- frame
   const bar = h('span.v6e-ibar', { 'aria-hidden': 'true' });
   const sentHost = h('div.v6e-sent', { 'data-testid': 'v6e-sentence' });
+  // U5b: Change instrument ▾ opens the chooser dialog (chooser.js; mockup "Change instrument"), which replaces
+  // U5a's grouped menu: the same write and 8 s Undo (pickInstrument), Remove this sound… in its footer
   const chgBtn = h('button.btn.v6e-chg', {
-    type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'data-testid': 'v6e-change',
+    type: 'button', 'aria-haspopup': 'dialog', 'aria-expanded': 'false', 'data-testid': 'v6e-change',
   }, h('span', { text: 'Change instrument' }), ' ▾');
-  const menuEl = h('div.v6e-imenu', { role: 'menu', hidden: true, tabindex: '-1', 'data-testid': 'v6e-imenu' });
-  const actions = h('div.v6e-iact', {}, chgBtn, menuEl);
+  const actions = h('div.v6e-iact', {}, chgBtn);
   const confirmEl = h('div.v6e-confirm', { role: 'alertdialog', hidden: true, 'aria-label': 'Remove this sound' });
   const head = h('div.v6e-ihead', {}, bar, sentHost, actions);
   // skeptic UI6-U5a F1: a real tablist / tabpanel pair. The list is vertical (↑ / ↓) except at iPad portrait, where
@@ -655,8 +715,9 @@ export function mountInstrument(host, ctx, opts, env) {
       }));
     };
     const own = [
+      // UI6-U5a O4: a word, as today's slot panel (touchWord), not "0.50"
       touchSl('shape', {
-        label: 'Feel', curve: 'log', ends: ['light', 'heavy'], format: (v) => Number(v).toFixed(2),
+        label: 'Feel', curve: 'log', ends: ['light', 'heavy'], word: (v) => touchWord({ shape: v }), format: () => '',
       }),
       touchSl('min', { label: 'Softest note', format: pct, ends: ['silent', 'loud'] }),
       touchSl('max', { label: 'Loudest note', format: pct, ends: ['quiet', 'full'] }),
@@ -839,107 +900,47 @@ export function mountInstrument(host, ctx, opts, env) {
       grid.childElementCount ? grid : null);
   }
 
-  // ---------------------------------------------------------------- "Change instrument ▾" (today's picker)
+  // ---------------------------------------------------------------- "Change instrument ▾" (the chooser, U5b)
+  // openMenu / closeMenu keep U5a's names (every caller: the button, the empty place, the sentence's instrument word,
+  // focus 'instrument' from Perform's Change, Esc, a song / instrument switch, leaving Edit)
+  let chooser = null;
   let menuOpen = false;
-  const menuItems = () => [...menuEl.querySelectorAll('[role^="menuitem"]:not([disabled])')];
-  function buildMenu() {
-    const slot = curSlot();
-    const cur = slot ? refKey(slot.instrument) : '';
-    const list = ctx.instruments().filter((it) => {
-      const v = refKey(it.ref);
-      return (!HIDDEN_IN_PICKER.has(v) && !it.hidden) || v === cur;
-    });
-    const nodes = [];
-    const item = (value, text, checked, title) => h('button.v6e-mi', {
-      type: 'button', role: 'menuitemradio', 'aria-checked': String(checked), tabindex: '-1', title,
-      dataset: { value },
-    }, h('i.v6e-mi-check', { 'aria-hidden': 'true' }), h('span', { text }));
-    if (cur && !list.some((it) => refKey(it.ref) === cur)) {
-      nodes.push(h('div.v6e-mg', { role: 'group', 'aria-label': 'This song' },
-        item(cur, `${slot.instrument.id} (not available)`, true, 'This instrument is not available on this computer')));
-    }
-    for (const g of groupOrder(list)) {
-      const items = list.filter((it) => groupOf(it) === g).map((it) => item(refKey(it.ref), it.name,
-        refKey(it.ref) === cur, it.license ? `${it.name} — ${it.license}` : it.name));
-      nodes.push(h('div.v6e-mg', { role: 'group', 'aria-label': g },
-        h('div.v6e-mg-head', { 'aria-hidden': 'true', text: g }), ...items));
-    }
-    if (!list.length) nodes.push(h('p.v6e-hint', { text: 'Instruments appear once sound has started.' }));
-    if (slot) {
-      nodes.push(h('div.v6e-msep', { role: 'separator' }), h('button.v6e-mi.v6e-mi-remove', {
-        type: 'button', role: 'menuitem', tabindex: '-1', dataset: { action: 'remove' },
-      }, h('i.v6e-mi-check', { 'aria-hidden': 'true' }), h('span', { text: 'Remove this sound…' })));
-    }
-    menuEl.setAttribute('aria-label', 'Instrument');
-    const a = document.activeElement;
-    const had = a && menuEl.contains(a) ? { value: a.dataset.value, action: a.dataset.action } : null;
-    menuEl.replaceChildren(...nodes);
-    if (had) {
-      const items = [...menuEl.querySelectorAll('.v6e-mi')];
-      const next = items.find((x) => (had.value !== undefined ? x.dataset.value === had.value
-        : x.dataset.action === had.action)) || items[0];
-      next?.focus();
-    }
-  }
-  function openMenu({ focus = true } = {}) {
+  function openMenu() {
     cancelConfirm();
     disarm();
-    if (!menuOpen) {
-      buildMenu();
-      menuEl.hidden = false;
-      menuOpen = true;
-      chgBtn.setAttribute('aria-expanded', 'true');
-      chgBtn.classList.add('open');
-      ctx.markDialog(true, 'v6-inst-menu');
-    }
-    if (focus) {
-      const items = menuItems();
-      const cur = items.find((b) => b.getAttribute('aria-checked') === 'true');
-      (cur || items[0])?.focus({ preventScroll: false });
-    }
+    if (menuOpen) return;
+    const slot = curSlot();
+    const host = env.dialogHost || root;
+    menuOpen = true;
+    chgBtn.setAttribute('aria-expanded', 'true');
+    chgBtn.classList.add('open');
+    chooser = openChooser({
+      host,
+      instruments: () => ctx.instruments(),
+      slot: i,
+      current: slot,
+      currentName: slot ? displayName(slot, metaOf(slot)) : '',
+      color: slotColor(i),
+      onUse: (value) => pickInstrument(value),
+      onRemove: slot ? () => askRemove() : null,
+      markDialog: (open) => ctx.markDialog(open, 'v6-chooser'),
+      onClose: () => {
+        chooser = null;
+        menuOpen = false;
+        chgBtn.setAttribute('aria-expanded', 'false');
+        chgBtn.classList.remove('open');
+      },
+    });
   }
+  /** @param {boolean} [refocus] put the focus back on the opener (Esc) @returns {boolean} it was open */
   function closeMenu(refocus = false) {
-    if (!menuOpen) return false;
-    menuOpen = false;
-    menuEl.hidden = true;
-    chgBtn.setAttribute('aria-expanded', 'false');
-    chgBtn.classList.remove('open');
-    ctx.markDialog(false, 'v6-inst-menu');
-    if (refocus) chgBtn.focus();
-    else if (menuEl.contains(document.activeElement)) document.activeElement.blur();
+    if (!chooser) return false;
+    chooser.close(refocus ? 'escape' : 'api');
     return true;
   }
-  chgBtn.addEventListener('click', (e) => {
-    if (menuOpen) closeMenu(e.detail === 0);
-    else openMenu({ focus: true });
-  });
-  menuEl.addEventListener('keydown', (e) => {
-    const items = menuItems();
-    const k = items.indexOf(document.activeElement);
-    let n = -1;
-    if (e.key === 'ArrowDown') n = (k + 1) % items.length;
-    else if (e.key === 'ArrowUp') n = (k - 1 + items.length) % items.length;
-    else if (e.key === 'Home') n = 0;
-    else if (e.key === 'End') n = items.length - 1;
-    else if (e.key === 'Tab') {
-      closeMenu(false);
-      return;
-    }
-    if (n < 0 || !items.length) return;
-    e.preventDefault();
-    e.stopPropagation();
-    items[n].focus();
-  });
-  menuEl.addEventListener('click', (e) => {
-    const b = e.target.closest && e.target.closest('.v6e-mi');
-    if (!b || !menuEl.contains(b)) return;
-    if (b.dataset.action === 'remove') {
-      closeMenu(false);
-      askRemove();
-      return;
-    }
-    closeMenu(e.detail === 0);
-    pickInstrument(b.dataset.value);
+  chgBtn.addEventListener('click', () => {
+    if (menuOpen) closeMenu(true);
+    else openMenu();
   });
 
   /** Fill an empty slot (defaultSlot) or swap the instrument, with today's 8 s Undo (slot.js pickInstrument). */
@@ -1112,9 +1113,16 @@ export function mountInstrument(host, ctx, opts, env) {
     sentHost.replaceChildren(sent);
     sentHost.title = silent() && slot ? 'Silent here: it plays on the 2.0 engine' : '';
   }
+  /** The rows' dots (instCatChanges against the Revert snapshot's same place; none without a snapshot). */
+  function catDots(slot, meta) {
+    const b = ctx.editState.baseline;
+    if (!b || !ctx.song()) return new Set();
+    return instCatChanges(slot, b.patch?.slots?.[i] || null, meta, i);
+  }
   function renderNav() {
     const slot = curSlot();
     const meta = metaOf(slot);
+    const dots = catDots(slot, meta);
     for (const c of CATEGORIES) {
       const r = navRecs.get(c.id);
       const sel = c.id === cat;
@@ -1123,7 +1131,7 @@ export function mountInstrument(host, ctx, opts, env) {
       r.el.tabIndex = sel ? 0 : -1;
       r.el.disabled = !slot;
       setText(r.sum, slot ? categorySummary(c.id, slot, meta, i) : '');
-      r.dot.hidden = !slot || !c.dot.some((f) => isChangedRel(f));
+      r.dot.hidden = !slot || !dots.has(c.id);
     }
     const orient = navIsRow() ? 'horizontal' : 'vertical';
     if (nav.getAttribute('aria-orientation') !== orient) nav.setAttribute('aria-orientation', orient);
@@ -1191,7 +1199,7 @@ export function mountInstrument(host, ctx, opts, env) {
     renderSentence(true);
     renderNav();
     renderStrip();
-    if (menuOpen) buildMenu();
+    chooser?.refresh();
   });
   ctx.listen(ctx.editState, 'notes', onNotes);
   ctx.onLeaveSong(() => {
@@ -1240,7 +1248,6 @@ export function mountInstrument(host, ctx, opts, env) {
   });
   ctx.listen(document, 'pointerdown', (e) => {
     const t = e.target;
-    if (menuOpen && !actions.contains(t)) closeMenu(false);
     if (armed && !(t.closest && (t.closest('.v6e-arm') || t.closest('.ev2-bottom') || t.closest('[data-note]')))) {
       disarm();
     }

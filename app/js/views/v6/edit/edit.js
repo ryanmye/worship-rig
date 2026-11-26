@@ -5,8 +5,9 @@
 // Layout: library column (today's setlist module + a Song bank… button; folds to a rail, per device) · song header
 // (today's song-header module + time signature + Chart while the chart view is on) · "Your rig" tabs (one per
 // instrument, named by the instrument, its position colour and dB, a changed dot; + Add; then Drone / Effects /
-// Master) · the panel (views/v6/edit/instrument.js for an instrument; today's drone / effects / master / song panels
-// inside the v6 frame until U5b) · today's Edit keyboard row.
+// Master) · the panel (views/v6/edit/instrument.js for an instrument; U5b: drone.js / effects.js / master.js in the
+// same category-list frame, catpanel.js; today's song panel inside the v6 frame) · U5b: the v6 Perform's bottom row
+// (views/v6/bottom.js through ./bottom.js: range-bar keyboard + Revert / Fade out / PANIC / Lock).
 //
 // It reuses today's Edit core (shell.js createEditCore: store fan-out, Revert baseline + changed set, Esc stack,
 // instruments, held notes, per-panel ctx) so every reused panel behaves exactly as in today's Edit; the external
@@ -21,11 +22,18 @@ import { TIME_SIGS, DEFAULT_TIME_SIG } from '../../../shared/click-math.js';
 import { slotMuteState } from '../../perform.js';
 import { V6_DIFF_WATCH, loadV6Css } from '../perform.js';
 import { slotColor, instrumentNames } from '../lib.js';
-import { mountInstrument, CATEGORY_IDS } from './instrument.js';
+import { mountInstrument, CATEGORY_IDS, instCatChanges } from './instrument.js';
+import { mountDrone, droneChanges, DRONE_CATS } from './drone.js';
+import { mountEffects, effectsChanges, EFFECTS_CATS } from './effects.js';
+import { mountMaster, masterChanges, masterCats } from './master.js';
+import { editBottom } from './bottom.js';
 
 /** The v6 Edit stylesheet; linked only while the v6 Edit is mounted (removed again by destroy()). */
 export const V6_EDIT_CSS_HREF = './styles-v6-edit.css';
-/** Per-device Edit layout: {cat: the chosen instrument category, lib: 'folded' | absent}. Never in the library. */
+/**
+ * Per-device Edit layout: {cat: the chosen instrument category, lib: 'folded' | absent, cats: {drone, effects,
+ * master}: each shared panel's chosen category (U5b)}. Never in the library.
+ */
 export const V6_EDIT_KEY = 'worship-rig.v6.edit';
 /** iPad portrait (the sidebar's query, views/v6/sidebar/sidebar.js PORTRAIT_MQ). */
 const PORTRAIT_MQ = '(orientation: portrait) and (max-width: 1024px)';
@@ -54,6 +62,12 @@ function readPrefs() {
     const out = {};
     if (raw && CATEGORY_IDS.includes(raw.cat)) out.cat = raw.cat;
     if (raw && raw.lib === 'folded') out.lib = 'folded';
+    const known = { drone: DRONE_CATS, effects: EFFECTS_CATS, master: masterCats() };
+    if (raw && raw.cats && typeof raw.cats === 'object') {
+      for (const [k, list] of Object.entries(known)) {
+        if (list.some((c) => c.id === raw.cats[k])) (out.cats ||= {})[k] = raw.cats[k];
+      }
+    }
     return out;
   } catch {
     return {};
@@ -97,6 +111,28 @@ export function mountEditV6(el, ctx) {
       memo = { song: s, base: b, set: s && b ? changedPaths(s, b, V6_DIFF_WATCH) : new Set() };
     }
     return memo.set;
+  };
+
+  // ---- U5b: the rig tabs' dots = "changed since the song began" over every category of that tab (memoised as above)
+  let tabMemo = { song: undefined, base: undefined, ids: new Set() };
+  const tabDots = () => {
+    const s = core.song;
+    const b = editState.baseline;
+    if (s === tabMemo.song && b === tabMemo.base) return tabMemo.ids;
+    const ids = new Set();
+    if (s && b) {
+      const n = Math.max(s.patch.slots.length, b.patch?.slots?.length || 0);
+      for (let i = 0; i < n; i++) {
+        const sl = s.patch.slots[i] || null;
+        const meta = sl ? core.findInstrument(sl.instrument) : null;
+        if (instCatChanges(sl, b.patch?.slots?.[i] || null, meta, i).size) ids.add(`slot:${i}`);
+      }
+      if (droneChanges(s, b).size) ids.add('drone');
+      if (effectsChanges(s, b).size) ids.add('effects');
+      if (masterChanges(s, b).size) ids.add('master');
+    }
+    tabMemo = { song: s, base: b, ids };
+    return ids;
   };
 
   // ---- the view context strip.js expects (v6 Perform's `v`): the same writes as the v6 Perform's strips
@@ -177,11 +213,27 @@ export function mountEditV6(el, ctx) {
   }, h('span', { 'aria-hidden': 'true', text: '⟩' }), h('span.v6e-rail-lab', { text: 'Library' }));
   const rail = h('div.v6e-librail', { 'data-testid': 'v6e-lib-rail' }, unfoldBtn);
   const headHost = h('header.ev2-head.v6e-head', { 'aria-label': 'Song', 'data-testid': 'v6e-head' });
-  const tabs = h('div.v6e-rtabs', { role: 'tablist', 'aria-label': 'Your rig', 'data-testid': 'v6e-rtabs' });
+  // UI6-U5a O3: the tablist holds only the tabs. "+ Add" and the separator sit beside it in the scrolling row; the
+  // tablist is display: contents there, so CSS `order` puts Add and the separator between the instruments and
+  // Drone / Effects / Master as before (styles-v6-edit.css)
+  const tablist = h('div.v6e-rtl', { role: 'tablist', 'aria-label': 'Your rig', 'data-testid': 'v6e-rtablist' });
+  const tabs = h('div.v6e-rtabs', { 'data-testid': 'v6e-rtabs' }, tablist);
+  // UI6-U5a O5: when the tabs scroll sideways, a ‹ / › at each hidden end says more tabs are there (and scrolls)
+  const moreBtn = (side) => {
+    const b = h(`button.v6e-rmore.${side}`, {
+      type: 'button', tabindex: '-1', 'aria-hidden': 'true', hidden: true, 'data-testid': `v6e-rmore-${side}`,
+      title: side === 'l' ? 'More tabs to the left' : 'More tabs to the right',
+    }, side === 'l' ? '‹' : '›');
+    b.addEventListener('click', () => tabs.scrollBy?.({ left: (side === 'l' ? -0.7 : 0.7) * tabs.clientWidth,
+      behavior: 'smooth' }));
+    return b;
+  };
+  const moreL = moreBtn('l');
+  const moreR = moreBtn('r');
   const rig = h('section.v6e-rig', { 'data-testid': 'v6e-rig' },
     h('div.v6e-rig-h', {}, h('span.v6e-cap', { text: 'Your rig' }),
       h('small', { text: 'Pick one to shape it. A dot means it changed since the song began.' })),
-    tabs);
+    h('div.v6e-rtwrap', {}, tabs, moreL, moreR));
   const panelHost = h('div.v6e-panel', { role: 'tabpanel', 'data-testid': 'v6e-panel' });
   const main = h('div.v6e-main', {}, headHost, rig, panelHost);
   const body = h('div.v6e-body', {}, lib, rail, main);
@@ -221,8 +273,13 @@ export function mountEditV6(el, ctx) {
   const regions = [
     core.mountModule('setlist', libMod, {}),
     core.mountModule('song-header', headHost, {}),
-    core.mountModule('bottom', bottomHost, {}),
   ];
+  // U5b: the v6 Perform's bottom row (views/v6/bottom.js), mounted only while Edit shows, with its own test ids
+  const bottom = editBottom(bottomHost, {
+    store, controller, engine, editState, names, liveOf, changes: v6Changes, held: () => core.held,
+    setView: (view) => ctx.setView?.(view), toast,
+  });
+  regions.push({ id: 'bottom', pctx: null, destroy: () => bottom.destroy() });
   const own = core.panelCtx({ host: root });
   const ownBinder = createBinder(own.pctx);
   const bankBtn = h('button.ev2-btn.sm.v6e-bank', {
@@ -231,6 +288,13 @@ export function mountEditV6(el, ctx) {
   });
   bankBtn.addEventListener('click', () => ctx.openSettings?.({ section: 'bank' }));
   (libMod.querySelector('.ev2-list-add') || libMod).append(bankBtn);
+  // UI6-U5a O6: only with Song bank songs in the patch packs (controller.patchPacks, as the sidebar's + Add song)
+  const renderBank = () => {
+    const p = typeof controller?.patchPacks === 'function' ? controller.patchPacks() : null;
+    bankBtn.hidden = !(p && p.enabled && Number(p.bankSongs) > 0);
+  };
+  renderBank();
+  core.listen(controller, 'user-patches', renderBank);
   const sigSel = h('select.v6e-sig', { 'aria-label': 'Time signature', 'data-testid': 'v6e-timesig' },
     ...TIME_SIGS.map((sg) => h('option', { value: sg, text: sg })));
   sigSel.addEventListener('change', () => own.pctx.set('song.timeSig',
@@ -305,7 +369,8 @@ export function mountEditV6(el, ctx) {
       const m = /^slot:(\d+)$/.exec(id);
       if (m && Number(m[1]) >= n) tabRecs.delete(id);
     }
-    tabs.replaceChildren(...els, addBtn, sep, ...shared.map((r) => r.el));
+    tablist.replaceChildren(...els, ...shared.map((r) => r.el));
+    if (addBtn.parentNode !== tabs) tabs.append(addBtn, sep);
     tabs.dataset.slots = String(n);
     const m = /^slot:(\d+)$/.exec(editState.selected);
     if (m && n && Number(m[1]) >= n) editState.select(`slot:${n - 1}`);
@@ -314,6 +379,7 @@ export function mountEditV6(el, ctx) {
     syncTabs();
     const song = core.song;
     const ch = v6Changes();
+    const dots = tabDots();
     const live = liveOf(song);
     for (const [id, r] of tabRecs) {
       let nm = '—';
@@ -335,14 +401,14 @@ export function mountEditV6(el, ctx) {
           off = muted;
           sub = muted ? 'off' : formatValue(`slots.${i}.gain`, level);
         }
-        changed = hasChange(ch, `patch.slots.${i}`);
+        changed = hasChange(ch, `patch.slots.${i}`) || dots.has(id);
       } else if (song) {
         const b = blockOf(id);
         const t = id === 'drone' ? dronePanel.tab(song) : editDefaultTab(b, song, core);
         nm = id === 'drone' ? 'Drone' : id === 'effects' ? 'Effects' : 'Master';
         sub = `${t.name}${t.sub ? ` ${t.sub}` : ''}`.replace(/\s·\s/, ' · ');
         off = !!t.off;
-        changed = editState.isChanged(b.prefixes);
+        changed = dots.has(id) || editState.isChanged(b.prefixes);
       }
       setText(r.name, nm);
       setText(r.sub, sub);
@@ -358,6 +424,28 @@ export function mountEditV6(el, ctx) {
     for (const r of tabRecs.values()) r.el.tabIndex = r === curTab ? 0 : -1;
     addBtn.disabled = !song || song.patch.slots.length >= MAX_SLOTS;
     renderChartBtn();
+    renderMore();
+  }
+  /**
+   * O5: ‹ / › while tabs are out of sight on that side. Read in the next frame, once per frame (a store event's
+   * redraw must not pay a forced layout: UI6-U5a P1), and never while Perform shows.
+   */
+  let moreRaf = 0;
+  function renderMore() {
+    if (moreRaf || store.get().settings.view !== 'edit') return;
+    moreRaf = requestAnimationFrame(() => {
+      moreRaf = 0;
+      const max = tabs.scrollWidth - tabs.clientWidth;
+      moreL.hidden = !(max > 2 && tabs.scrollLeft > 2);
+      moreR.hidden = !(max > 2 && tabs.scrollLeft < max - 2);
+    });
+  }
+  core.cleanups.push(() => cancelAnimationFrame(moreRaf));
+  core.listen(tabs, 'scroll', () => renderMore(), { passive: true });
+  if (typeof ResizeObserver === 'function') {
+    const ro = new ResizeObserver(() => renderMore());
+    ro.observe(tabs);
+    core.cleanups.push(() => ro.disconnect());
   }
   tabs.addEventListener('keydown', (e) => {
     const ids = [...tabs.querySelectorAll('.v6e-rt[data-block]')].map((x) => x.dataset.block);
@@ -392,7 +480,9 @@ export function mountEditV6(el, ctx) {
     const { pctx, dispose } = core.panelCtx({ host });
     let inst = null;
     try {
-      inst = mountInstrument(host, pctx, opts, { prefs: instPrefs, changes: v6Changes, stripV, live: liveOf });
+      inst = mountInstrument(host, pctx, opts, {
+        prefs: instPrefs, changes: v6Changes, stripV, live: liveOf, dialogHost: root,
+      });
     } catch (err) {
       console.warn('[v6 edit] instrument panel failed to mount', err);
       host.replaceChildren(h('p.v6e-hint', { text: 'The instrument panel failed to load.' }));
@@ -414,9 +504,55 @@ export function mountEditV6(el, ctx) {
       },
     };
   }
+  // U5b: Drone / Effects / Master in the category-list frame (D18). The sidebar Drone module's ctx is one per Edit
+  // mount (the ON tile remembers the source it turned off per song across tab switches, as on Perform's sidebar).
+  const droneModCtx = {
+    ...stripV,
+    snap: () => (editState.baseline && core.songId ? { id: core.songId, song: editState.baseline } : null),
+    size: 'wide',
+  };
+  const catPrefs = (kind) => ({
+    get: () => prefs.cats?.[kind],
+    set(id) {
+      prefs.cats = { ...(prefs.cats || {}), [kind]: id };
+      writePrefs(prefs);
+    },
+  });
+  const SHARED = {
+    drone: (host, pctx, opts) => mountDrone(host, pctx, opts, { prefs: catPrefs('drone'), moduleCtx: droneModCtx }),
+    effects: (host, pctx, opts) => mountEffects(host, pctx, opts, { prefs: catPrefs('effects'), names }),
+    master: (host, pctx, opts) => mountMaster(host, pctx, opts, { prefs: catPrefs('master'), names }),
+  };
+  function mountShared(id, opts) {
+    const host = h('div.v6e-host', { dataset: { panel: id } });
+    panelHost.replaceChildren(host);
+    const { pctx, dispose } = core.panelCtx({ host });
+    let inst = null;
+    try {
+      inst = SHARED[id](host, pctx, opts);
+    } catch (err) {
+      console.warn(`[v6 edit] ${id} panel failed to mount`, err);
+      host.replaceChildren(h('p.v6e-hint', { text: `The ${id} panel failed to load.` }));
+    }
+    return {
+      kind: 'shared', id, inst, pctx,
+      update(o) {
+        inst?.update(o);
+        return !!inst;
+      },
+      destroy() {
+        try {
+          inst?.destroy();
+        } catch (err) {
+          console.warn(`[v6 edit] ${id} panel destroy failed`, err);
+        }
+        dispose();
+        host.remove();
+      },
+    };
+  }
   function mountPanel(block, opts) {
-    // today's drone / effects / master / song panels in their own frame (sentence title + body), inside the v6
-    // panel card (U5b gives them the category list)
+    // today's song panel in its own frame (sentence title + body), inside the v6 panel card
     const frame = editPanelFrame(core);
     const wrap = h('section.ev2-rig.v6e-legacy', { dataset: { block: block.id } }, frame.panel);
     wrap.style.setProperty('--c', block.color);
@@ -448,7 +584,7 @@ export function mountEditV6(el, ctx) {
     const want = block.panel === 'slot' ? 'slot' : block.panel;
     if (cur && cur.id === want && cur.update(opts)) return;
     cur?.destroy();
-    cur = want === 'slot' ? mountInst(opts) : mountPanel(block, opts);
+    cur = want === 'slot' ? mountInst(opts) : SHARED[want] ? mountShared(want, opts) : mountPanel(block, opts);
   }
   core.listen(editState, 'select', () => {
     showSelected();
@@ -462,7 +598,10 @@ export function mountEditV6(el, ctx) {
   core.cleanups.push(editFollowSelectedSlot(core, store, editState));
   // instruments arrive once the engine starts (a My Samples rescan adds more): the names follow (the core then
   // runs the store hooks, so the tabs re-render)
-  core.listen(editState, 'instruments', () => names.refresh());
+  core.listen(editState, 'instruments', () => {
+    names.refresh();
+    tabMemo = { song: undefined, base: undefined, ids: new Set() }; // Sound's dot reads the instrument's sliders
+  });
   core.onStoreHooks.push(() => renderTabs());
   // the library as a drawer (iPad portrait; today's ☰ Songs): Esc and an outside tap close it, as in today's Edit
   core.listen(editState, 'drawer', (e) => root.classList.toggle('drawer-open', !!e.detail.open));
