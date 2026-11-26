@@ -166,7 +166,7 @@ own size. The gold line is where auto-scroll reads; the section buttons jump. Th
 function show(id){{tabs.forEach(b=>b.setAttribute('aria-selected',b.dataset.t===id));document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('on',s.id===id));fit();}}
 tabs.forEach(b=>b.addEventListener('click',()=>show(b.dataset.t)));
 function fit(){{document.querySelectorAll('section.on .scale').forEach(sc=>{{const f=sc.firstElementChild;const k=Math.min(1,(sc.clientWidth)/f.offsetWidth);f.style.transform='scale('+k+')';sc.style.height=(f.offsetHeight*k)+'px';}});}}
-{m.RESIZE_JS}new ResizeObserver(fit).observe(document.body);fit();}}</script></body></html>'''
+{m.RESIZE_JS}{m.RANGE_JS}new ResizeObserver(fit).observe(document.body);fit();}}</script></body></html>'''
   os.makedirs(os.path.dirname(OUT), exist_ok=True)
   open(OUT, 'w').write(html)
   print('ok', len(html))

@@ -341,4 +341,10 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
   Space & Echo, Advanced. Each row shows its current setting under the name and a dot when it changed since the song
   began; the chosen category fills the middle, the Perform strip stays on the right. On iPad portrait the list
   becomes a row of tabs. Purpose: always visible what is being edited.
+- **Range uses a real keyboard** (Ryan, same day): Edit › Range shows an 88-key keyboard (A0–C8) with the
+  instrument's range as one coloured bar with a handle at each end; keys outside it are dimmed. "Set lowest / highest
+  by playing" and the note boxes stay.
+- **The range colours on Perform's keyboard are draggable** (Ryan, same day): each instrument's bar above the bottom
+  keyboard has a handle at each end; dragging shows "Sub Bass · C2–C5" and sets that instrument's range. Same for
+  every screen with the bottom keyboard. Snaps to keys; touch targets are 34 px despite the thin bars.
 - (An earlier reading, a per-instrument edit sidebar on Perform, was reverted at Ryan's request.)

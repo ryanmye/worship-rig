@@ -179,3 +179,18 @@
 .snapchip{min-height:44px;padding:0 12px;border-radius:10px;border:1px solid var(--accent);background:#3a2a1c;color:var(--text);
   font-weight:700;display:flex;align-items:center;gap:8px;white-space:nowrap}
 .snapchip .edot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+/* draggable range bars */
+.rbars{height:calc(var(--n) * 7px + (var(--n) - 1) * 3px);max-height:40px}
+.rbars .rbar{position:absolute;height:calc((100% - (var(--n) - 1) * 3px) / var(--n));min-height:4px;background:var(--c);border-radius:3px}
+.rh{position:absolute;top:50%;width:14px;height:14px;margin-top:-7px;border-radius:50%;background:var(--c);border:2px solid #fff8;cursor:ew-resize;z-index:2;touch-action:none}
+.rh::before{content:'';position:absolute;inset:-10px}
+.rh.l{left:-7px}.rh.r{right:-7px}
+.rtip{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);white-space:nowrap;background:#000d;color:var(--text);
+  border:1px solid var(--c);border-radius:12px;padding:3px 10px;font:700 12px var(--sans);z-index:3}
+.rbar.drag .rtip,.rbar.showtip .rtip{display:block}
+.rbar.showtip{box-shadow:0 0 0 2px #fff6}
+.keys2{position:relative;overflow:visible}
+/* edit › range: 88 keys */
+.rangek{padding:28px 10px 8px;height:150px}.rangek .rbars{height:10px}.rangek .kb{min-height:90px}
+.kb .wk.out{background:linear-gradient(#6f6558,#5d5448)}
+.rangek .wk i{font-size:9px}

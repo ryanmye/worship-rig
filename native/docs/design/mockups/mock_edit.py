@@ -75,7 +75,7 @@ def instrument_panel():
 
 
 CATS = [('sound', 'Sound', 'Bright · Neutral · Natural', False), ('eq', 'Tone EQ', '2 bands', True),
-        ('range', 'Range', 'every key', False), ('touch', 'Touch', 'Normal', False),
+        ('range', 'Range', 'every key · A0–C8', False), ('touch', 'Touch', 'Normal', False),
         ('sustain', 'Sustain', 'pedal holds · 0.1 s', False), ('sends', 'Space & Echo', '45% · 10%', True),
         ('adv', 'Advanced', 'Width 100% · Transpose 0', False)]
 
@@ -89,8 +89,8 @@ def cat_content(sec):
   if sec == 'eq':
     return '<h4>Tone EQ <small>2 bands · drag a point, or double-tap to add one</small></h4><img class="eqimg" src="img/eq-today.png" alt="Tone EQ">'
   if sec == 'range':
-    return (f'<h4>Range <small>which keys play it</small></h4><div class="mkb big">{keys}</div>'
-            '<div class="hrow"><button class="sel-box">C-1</button><span>to</span><button class="sel-box">G9</button><button class="btn">Whole keyboard</button></div>'
+    return (f'<h4>Range <small>which keys play it · drag the ends of the colour, or set by playing</small></h4>{m.range_kbd("Grand Piano", m.POS_COL[0])}'
+            '<div class="hrow"><button class="sel-box">A0</button><span>to</span><button class="sel-box">C8</button><button class="btn">Whole keyboard</button></div>'
             '<div class="hrow"><button class="btn grow">Set lowest by playing</button><button class="btn grow">Set highest by playing</button></div>'
             '<div class="hrow"><span class="lab">Octave</span><button class="sq">−</button><b>0</b><button class="sq">+</button></div>')
   return '<h4>…</h4>'
@@ -198,7 +198,7 @@ the one place where kinds of sound appear. Nothing is wired up.</p>
 function show(id){{tabs.forEach(b=>b.setAttribute('aria-selected',b.dataset.t===id));document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('on',s.id===id));fit();}}
 tabs.forEach(b=>b.addEventListener('click',()=>show(b.dataset.t)));
 function fit(){{document.querySelectorAll('section.on .scale').forEach(sc=>{{const f=sc.firstElementChild;const k=Math.min(1,(sc.clientWidth)/(f.offsetWidth||1280));f.style.transform='scale('+k+')';sc.style.height=((f.offsetHeight||800)*k)+'px';}});}}
-new ResizeObserver(fit).observe(document.body);window.addEventListener('load',fit);fit();}}</script></body></html>'''
+{m.RANGE_JS}new ResizeObserver(fit).observe(document.body);window.addEventListener('load',fit);fit();}}</script></body></html>'''
   os.makedirs(os.path.dirname(OUT), exist_ok=True)
   open(OUT, 'w').write(html)
   print('ok', len(html))

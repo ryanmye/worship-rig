@@ -155,30 +155,75 @@ HELD = {'D3', 'A3', 'D4', 'F#4', 'A4'}   # a D chord, matching "CHORD D"
 RANGES = {'Sub Bass': ('C2', 'B3')}      # one split to show the range bars doing their job
 
 
-def kbd(n):
-  # Today's Perform keyboard (perform.js .rbars + keys): C2–C7, a range bar per instrument, octave labels on C,
-  # computer-key letters, held notes in gold.
-  whites = [f'{l}{o}' for o in range(2, 7) for l in WHITE] + ['C7']
+def white_names(lo_oct, hi_oct, first='C', last='C'):
+  ws = [f'{l}{o}' for o in range(lo_oct, hi_oct + 1) for l in WHITE]
+  ws = ws[ws.index(f'{first}{lo_oct}'):]
+  return ws[:ws.index(f'{last}{hi_oct}') + 1]
+
+
+def keys_html(whites, held=(), letters=True, labels=None, out=None):
   N = len(whites); w = 100 / N
-  idx = {k: i for i, k in enumerate(whites)}
-  wk = ''.join(f'<span class="wk{" held" if k in HELD else ""}">{"<em>" + LET_W[k] + "</em>" if k in LET_W else ""}'
-               f'{"<i>" + k + "</i>" if k[0] == "C" and k in ("C2", "C3", "C6", "C7") else ""}</span>' for k in whites)
+  labels = labels if labels is not None else ('C2', 'C3', 'C6', 'C7')
+  wk = ''.join(f'<span class="wk{" held" if k in held else ""}{" out" if out and not (out[0] <= i < out[1]) else ""}">'
+               f'{"<em>" + LET_W[k] + "</em>" if letters and k in LET_W else ""}'
+               f'{"<i>" + k + "</i>" if k[0] == "C" and k in labels else ""}</span>' for i, k in enumerate(whites))
   bk = ''
   for i, k in enumerate(whites[:-1]):
     if k[0] in HAS_BLACK:
       name = f'{k[0]}#{k[1:]}'
-      bk += (f'<span class="bk{" held" if name in HELD else ""}" style="left:{(i + 1) * w - w * 0.3:.3f}%;width:{w * 0.6:.3f}%">'
-             f'{"<em>" + LET_B[name] + "</em>" if name in LET_B else ""}</span>')
+      bk += (f'<span class="bk{" held" if name in held else ""}" style="left:{(i + 1) * w - w * 0.3:.3f}%;width:{w * 0.6:.3f}%">'
+             f'{"<em>" + LET_B[name] + "</em>" if letters and name in LET_B else ""}</span>')
+  return wk + bk
+
+
+def range_bar(name, c, a, b, N, whites, top='0', tip=False):
+  # A range bar with a grab handle at each end: drag the colour's ends to set which keys that instrument plays
+  # (Ryan, 2026-11-26). Snaps to white keys in the mockup.
+  w = 100 / N
+  return (f'<i class="rbar{" showtip" if tip else ""}" data-name="{name}" data-a="{a}" data-b="{b}" '
+          f'style="--c:{c};top:{top};left:{a * w:.3f}%;width:{(b - a) * w:.3f}%">'
+          f'<b class="rh l" aria-label="{name}: lowest key"></b><b class="rh r" aria-label="{name}: highest key"></b>'
+          f'<span class="rtip">{name} · {whites[a]}–{whites[b - 1]}</span></i>')
+
+
+def kbd(n, tip_on=None):
+  # Today's Perform keyboard (perform.js .rbars + keys): C2–C7, a range bar per instrument, octave labels on C,
+  # computer-key letters, held notes in gold. The bars can be dragged to set each instrument's range.
+  whites = white_names(2, 7)
+  N = len(whites)
+  idx = {k: i for i, k in enumerate(whites)}
   bars = ''
   for i, r in enumerate(ALL[:n]):
     lo, hi = RANGES.get(r[0], ('C2', 'C7'))
-    a, b = idx[lo], idx[hi] + 1
-    bars += f'<i style="--c:{POS_COL[i % len(POS_COL)]};top:calc({i} * (100% + 2px) / {n});left:{a * w:.3f}%;width:{(b - a) * w:.3f}%"></i>'
-  return f'<div class="keys2"><div class="rbars" style="--n:{n}">{bars}</div><div class="kb">{wk}{bk}</div></div>'
+    bars += range_bar(r[0], POS_COL[i % len(POS_COL)], idx[lo], idx[hi] + 1, N, whites,
+                      top=f'calc({i} * (100% + 2px) / {n})', tip=(r[0] == tip_on))
+  return (f'<div class="keys2"><div class="rbars" style="--n:{n}" data-n="{N}" data-names="{",".join(whites)}">{bars}</div>'
+          f'<div class="kb">{keys_html(whites, HELD)}</div></div>')
 
 
-def bottom(n=2):
-  return f'''<div class="bottom">{kbd(n)}<button class="act">↺ Revert<small>nothing changed</small></button>
+def range_kbd(name, c, lo='A0', hi='C8'):
+  # Edit › Range: a real 88-key keyboard; the instrument's range is one bar with handles, keys outside are dimmed.
+  whites = white_names(0, 8, first='A', last='C')
+  N = len(whites); idx = {k: i for i, k in enumerate(whites)}
+  a, b = idx[lo], idx[hi] + 1
+  return (f'<div class="keys2 rangek"><div class="rbars" style="--n:1" data-n="{N}" data-names="{",".join(whites)}">'
+          f'{range_bar(name, c, a, b, N, whites, tip=True)}</div>'
+          f'<div class="kb ranged">{keys_html(whites, (), letters=False, labels=("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"), out=(a, b))}</div></div>')
+
+
+RANGE_JS = """document.querySelectorAll('.rh').forEach(h=>{const bar=h.parentElement,box=bar.parentElement;const N=+box.dataset.n,names=box.dataset.names.split(',');
+h.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();h.setPointerCapture(e.pointerId);bar.classList.add('drag');
+const mv=ev=>{const r=box.getBoundingClientRect();const k=Math.round((ev.clientX-r.left)/r.width*N);let a=+bar.dataset.a,b=+bar.dataset.b;
+if(h.classList.contains('l'))a=Math.max(0,Math.min(k,b-1));else b=Math.min(N,Math.max(k,a+1));
+bar.dataset.a=a;bar.dataset.b=b;bar.style.left=(a*100/N)+'%';bar.style.width=((b-a)*100/N)+'%';
+bar.querySelector('.rtip').textContent=bar.dataset.name+' · '+names[a]+'–'+names[b-1];
+const kb=box.parentElement.querySelector('.kb.ranged');if(kb)[...kb.querySelectorAll('.wk')].forEach((w,i)=>w.classList.toggle('out',i<a||i>=b));};
+const up=()=>{bar.classList.remove('drag');h.removeEventListener('pointermove',mv);h.removeEventListener('pointerup',up);};
+h.addEventListener('pointermove',mv);h.addEventListener('pointerup',up);});});"""
+
+
+def bottom(n=2, tip_on=None):
+  return f'''<div class="bottom">{kbd(n, tip_on)}<button class="act">↺ Revert<small>nothing changed</small></button>
   <button class="act">Fade out</button><button class="act panic">PANIC<small>hold · or Esc</small></button><button class="act">🔒 Lock<small>hold to lock</small></button></div>'''
 
 
@@ -229,9 +274,9 @@ def stage(n, more=None, port=False, side=None, quick=False):
           f'{sidebar(wide=port, **(side or {}))}</div>')
 
 
-def mac(n, more=None, w=1280, h=800, narrow=False, side=None, quick=False, folded=False):
+def mac(n, more=None, w=1280, h=800, narrow=False, side=None, quick=False, folded=False, tip_on=None):
   return (f'<div class="frame" style="width:{w}px;height:{h}px">{topbar(narrow)}{songbar(snap_chip=folded)}{"" if folded else snaps()}'
-          f'{stage(n, more, side=side, quick=quick)}{bottom(n)}</div>')
+          f'{stage(n, more, side=side, quick=quick)}{bottom(n, tip_on)}</div>')
 
 
 def portrait(n):
@@ -270,6 +315,7 @@ def build():
     ('seven', 'Mac · 7 (scrolls)', mac(7)),
     ('tweak', 'Mac · ⋯ open', mac(5, more='Warm Pad')),
     ('quick', 'Left · Quick open', mac(5, quick=True)),
+    ('ranges', 'Drag a colour to set its range', mac(3, tip_on='Sub Bass')),
     ('folded', 'Snapshots folded', mac(5, folded=True)),
     ('allfold', 'Everything folded', mac(5, folded=True, side={'collapsed': True})),
     ('collapsed', 'Sidebar collapsed · 5', mac(5, side={'collapsed': True})),
@@ -293,7 +339,7 @@ def build():
   <style>{CSS}</style></head><body>
   <header class="pg"><h1>Perform v6: the strips are the main screen</h1>
   <p>Quick HTML mockups in the app's Sanctuary v2 colours and fonts; nothing is wired up. The instrument strips fill the
-  screen, as in Sunday Keys, with today's Wheel column and a Quick button in a left sidebar (Quick opens over the strips, like today's sheet, so nothing moves while you play), and a sidebar on the right. The sidebar collapses to a thin rail (⟩), shows one module at a time as tabs, drag its left edge to make it wider or narrower, and ⋯ picks and orders which modules it holds: Drone, Setlist, Notes, Tone or Snapshots. The bottom keyboard is today's, with a range bar per instrument. Transpose and Space moved into the song bar and snapshots
+  screen, as in Sunday Keys, with today's Wheel column and a Quick button in a left sidebar (Quick opens over the strips, like today's sheet, so nothing moves while you play), and a sidebar on the right. The sidebar collapses to a thin rail (⟩), shows one module at a time as tabs, drag its left edge to make it wider or narrower, and ⋯ picks and orders which modules it holds: Drone, Setlist, Notes, Tone or Snapshots. The bottom keyboard is today's, with a range bar per instrument; drag either end of a colour to set which keys that instrument plays (try it). Transpose and Space moved into the song bar and snapshots
   got their own row (⌃ folds it into a chip in the song bar, ▾ brings it back), so the strips get the room. Colours go by position, not by kind of sound. With 6 or more
   instruments the strips keep the 5-across width and the row scrolls sideways; the coloured pills above it show every instrument and which ones are on screen (tap one to jump to it). In this page you can scroll the 7-instrument views.</p>
   <nav class="tabs" role="tablist">{tabs}</nav></header>
@@ -305,7 +351,7 @@ def build():
   document.querySelectorAll('.scrollwrap').forEach(w=>{{const sc=w.querySelector('.strips');const ps=[...w.querySelectorAll('.mmp')];const st=[...sc.querySelectorAll('.strip:not(.add)')];
   function upd(){{const a=sc.scrollLeft,b=a+sc.clientWidth;st.forEach((s,i)=>ps[i]&&ps[i].classList.toggle('vis',s.offsetLeft-sc.offsetLeft>=a-4&&s.offsetLeft-sc.offsetLeft+s.offsetWidth<=b+4));w.classList.toggle('atend',b>=sc.scrollWidth-4);}}
   sc.addEventListener('scroll',upd);ps.forEach((p,i)=>p.addEventListener('click',()=>sc.scrollTo({{left:st[i].offsetLeft-sc.offsetLeft-10,behavior:'smooth'}})));upd();}});
-  {RESIZE_JS}new ResizeObserver(fit).observe(document.body);fit();}}</script></body></html>'''
+  {RESIZE_JS}{RANGE_JS}new ResizeObserver(fit).observe(document.body);fit();}}</script></body></html>'''
   open(OUT, 'w').write(html)
   print('ok', len(html))
 
