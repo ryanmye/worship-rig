@@ -1040,7 +1040,10 @@ try {
     // under Lock: frozen
     await p.evaluate(() => window.__rig.store.set('settings.performLock', true));
     await p.waitForFunction(() => document.querySelector('[data-testid="v6-empty-new"]').disabled);
+    // skeptic F2: Restore a backup… opens Settings, which Lock refuses: frozen like the top bar's ⚙, not live-looking
+    assert.equal(await p.evaluate(() => document.querySelector('[data-testid="v6-empty-restore"]').disabled), true);
     await p.evaluate(() => window.__rig.store.set('settings.performLock', false));
+    await p.waitForFunction(() => !document.querySelector('[data-testid="v6-empty-restore"]').disabled);
     await p.click(tid('v6-empty-new'));
     await p.waitForFunction(() => !!window.__rig.store.currentSong());
     await p.waitForSelector(tid('v6-empty'), { state: 'hidden' });

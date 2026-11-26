@@ -58,7 +58,8 @@ export function emptyLibrary(v) {
   const add = button(d, '.v6-empty-new', 'New song', { 'data-testid': 'v6-empty-new' });
   const bank = button(d, '.v6-empty-bank', 'Song bank…', { 'data-testid': 'v6-empty-bank' });
   const restore = button(d, '.v6-empty-restore', 'Restore a backup…', { 'data-testid': 'v6-empty-restore' });
-  const lockLine = h('p.v6-empty-lock', { text: 'Perform lock is on: unlock to add a song.', hidden: true });
+  const lockLine = h('p.v6-empty-lock', { text: 'Perform lock is on: unlock to add a song or restore a backup.',
+    hidden: true });
   const el = h('section.v6-empty', { 'data-testid': 'v6-empty', 'aria-label': 'No songs', hidden: true },
     h('b.v6-empty-t', { text: 'No songs in your library' }),
     h('p.v6-empty-p', { text: 'Make a new one, or bring your songs back from a backup or an exported file.' }),
@@ -82,6 +83,10 @@ export function emptyLibrary(v) {
       if (!shown) return;
       const locked = !!state.settings.performLock;
       add.disabled = locked;
+      // skeptic UI6-U8a F2: Restore opens Settings, which Lock refuses (main.js, with only a toast); it looked live
+      // while the top bar's ⚙ next to it was disabled. One look: frozen like ⚙. The Song bank stays (browse only).
+      restore.disabled = locked;
+      restore.title = locked ? 'Perform lock is on: unlock to open Settings' : '';
       lockLine.hidden = !locked;
       const p = typeof controller.patchPacks === 'function' ? controller.patchPacks() : null;
       bank.hidden = !(p && p.enabled && Number(p.bankSongs) > 0);
