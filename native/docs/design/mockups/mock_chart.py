@@ -46,19 +46,22 @@ def sheet(cur=('Chorus', 1)):
   return out
 
 
-def chart_head(compact=False, mode='hear', where='stage'):
+def chart_head(compact=False, mode='hear', where='stage', fs=28):
   jumps = ''.join(f'<button class="jp{" on" if i == 2 else ""}">{j}</button>' for i, j in enumerate(JUMPS))
   return f'''<div class="chh">
     <div class="cht"><b>Morning Light</b><small><em>Key C</em> · written in G · 72 bpm · 4/4</small></div>
     <div class="chgrp"><div class="seg2 sm"><button class="{"on" if mode == "hear" else ""}">Heard</button><button class="{"on" if mode == "play" else ""}">Hands</button></div>
-      <button class="sq sm">A−</button><button class="sq sm">A+</button>{'' if compact else '<button class="ghost">Edit chart…</button>'}
+      <div class="tsize" role="group" aria-label="Text size"><button class="ts-b sm-a" aria-label="Smaller text">A</button><b class="ts-n">{fs}</b>
+        <button class="ts-b big-a" aria-label="Bigger text">A</button><button class="ts-fit" title="Biggest size where the longest line still fits">Fit</button></div>{'' if compact else '<button class="ghost">Edit chart…</button>'}
       <button class="ghost place" title="Choose where the chart shows; it remembers per device">{'⇥ Sidebar' if where == 'stage' else '⤢ Stage'}</button></div>
     <div class="chs"><button class="play">▶ Scroll</button><button class="sq sm">−</button><b>1.0×</b><button class="sq sm">+</button></div>
     <div class="jumps">{jumps}</div></div>'''
 
 
-def chart_panel(size='m', compact=False, mode='hear', where='stage'):
-  return f'''<div class="chart sz-{size}">{chart_head(compact, mode, where)}<div class="sheet">{sheet()}<div class="readline" title="auto-scroll reading line"></div></div></div>'''
+def chart_panel(size='m', compact=False, mode='hear', where='stage', fs=None, toast=False):
+  fs = fs or {'s': 17, 'm': 24, 'l': 28}[size]
+  t = (f'<div class="ts-toast">Text {fs} · pinch, ⌘+ / ⌘−, or ⌘-scroll</div>' if toast else '')
+  return f'''<div class="chart sz-{size}">{chart_head(compact, mode, where, fs)}<div class="sheet" style="--fs:{fs}px">{t}{sheet()}<div class="readline" title="auto-scroll reading line"></div></div></div>'''
 
 
 def mini_strips(n):
@@ -89,16 +92,16 @@ def beside(width=None, size='s', n=3):
   return frame(m.snaps() + board)
 
 
-def stage_mode(w=1280, h=800, narrow=False):
+def stage_mode(w=1280, h=800, narrow=False, fs=None, toast=False):
   # B: the chart takes the stage; the strips shrink to mini faders (still live), the sidebar folds to its rail.
-  board = (f'<div class="board">{m.wheel()}{mini_strips(3)}{chart_panel("l")}'
+  board = (f'<div class="board">{m.wheel()}{mini_strips(3)}{chart_panel("l", fs=fs, toast=toast)}'
            f'{m.sidebar(collapsed=True, mods=MODS, active="chart")}</div>')
   return frame(board, w, h, narrow)
 
 
-def ipad_portrait():
+def ipad_portrait(fs=None, toast=False):
   board = (f'<div class="board port chartport"><div class="toprow">{mini_strips(3).replace("minis", "minis row")}'
-           f'<button class="backto">▤ Strips</button></div>{chart_panel("l")}</div>')
+           f'<button class="backto">▤ Strips</button></div>{chart_panel("l", fs=fs, toast=toast)}</div>')
   return frame(board, 820, 1180, True, 'port')
 
 
@@ -127,8 +130,10 @@ frames = [
   ('stage', 'Chart takes the stage', stage_mode()),
   ('beside', 'Chart in the sidebar', beside()),
   ('wide', 'Sidebar dragged wider', beside(width=780, size='m', n=2)),
+  ('big', 'Text made bigger', stage_mode(fs=40, toast=True)),
   ('ipl', 'iPad landscape', stage_mode(1180, 820, True)),
   ('ipp', 'iPad portrait (music stand)', ipad_portrait()),
+  ('ippbig', 'iPad portrait · pinched bigger', ipad_portrait(fs=40, toast=True)),
   ('add', 'Add a chart', add_dialog()),
 ]
 
@@ -146,8 +151,9 @@ def build():
 <p>The chord chart (D7, ships in 2.1) inside the Perform v6 layout. You choose where it goes, per device: on the stage, while the instruments shrink to live mini faders (⇥ Sidebar moves it),
 or as a tab in the right sidebar (⤢ Stage moves it back). The sidebar is resizable: drag its left edge (try it in the
 sidebar tabs); dragging it very narrow folds it to the icon rail. Chords follow the song's key: this chart was written in G and the song is in C, so it shows in C. <b>Heard</b> shows the key
-the band hears, <b>Hands</b> the key your hands play when Easy Transpose is on. The gold line is where
-auto-scroll reads; the section buttons jump. The song and words are made up for the mockup. Nothing is wired up.</p>
+the band hears, <b>Hands</b> the key your hands play when Easy Transpose is on. Text size is one tap away: the small and big <b>A</b> buttons step through 16–56, <b>Fit</b> picks the biggest size
+where the longest line still fits, and pinch, ⌘+ / ⌘− or ⌘-scroll work on the chart itself. Each device remembers its
+own size. The gold line is where auto-scroll reads; the section buttons jump. The song and words are made up for the mockup. Nothing is wired up.</p>
 <nav class="tabs" role="tablist">{tabs}</nav></header>
 <main>{secs}</main>
 <script>{{const tabs=[...document.querySelectorAll('[role=tab]')];

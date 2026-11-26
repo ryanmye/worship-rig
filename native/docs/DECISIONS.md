@@ -319,4 +319,7 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
 - **Chart placement is the player's choice** (Ryan, same day): on the stage (instruments become live mini faders) or
   as a sidebar tab; "⇥ Sidebar" / "⤢ Stage" in the chart header switches it, remembered per device.
   Mockup: `native/docs/design/mockups/chart.html`.
+- **Chart text size is one tap away** (Ryan, same day): an always-visible small A / size / big A group steps through
+  the existing CHART_FONT_STEPS (16–56); **Fit** picks the biggest step whose longest line fits the width; pinch,
+  ⌘+ / ⌘− and ⌘-scroll work on the chart with a brief "Text 40" readout. Remembered per device (as today).
 - Still open: whether "you play C" moves into the new song bar (proposed, not yet drawn).
