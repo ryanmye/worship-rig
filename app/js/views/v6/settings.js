@@ -590,10 +590,37 @@ function enhance(api, d) {
     setDrill('list');
     tabs.get(api.current())?.focus({ preventScroll: true });
   });
-  listen(window, 'resize', () => api.isOpen() && setDrill(drill));
+  // UI6-U6 O1 (U8a): a rotation keeps the place. Going wide shows the category the narrow dialog was in (as today's
+  // wide Settings); coming back narrow shows that category again, drilled in, unless the player was on the list and
+  // stayed on the same category while wide (then the list again).
+  let wideFrom = null; // {mode, cat}: the narrow state when the dialog went wide
+  listen(window, 'resize', () => {
+    if (!api.isOpen()) return;
+    const was = drill;
+    const cat = api.current();
+    setDrill(drill);
+    if (was && !drill) wideFrom = { mode: was, cat };
+    else if (!was && drill) {
+      const mode = wideFrom && wideFrom.mode === 'list' && wideFrom.cat === api.current() ? 'list' : 'detail';
+      wideFrom = null;
+      setDrill(mode);
+      // as F2: a focused list row that the detail hides hands the focus to "‹ Settings"
+      if (drill === 'detail' && nav.contains(document.activeElement)) back.focus({ preventScroll: true });
+    }
+  });
 
   // ---------------------------------------------------------------- open / close
+  // UI6-U6 O2 (U8a): the summaries go stale while Settings stays open ("backed up 4 min ago" never ticked, and the
+  // controller's automatic backup showed only after the next store write). Every 30 s while open they are read again.
+  const SUMS_TICK_MS = 30000;
+  let sumsTick = 0;
+  const stopTick = () => {
+    clearInterval(sumsTick);
+    sumsTick = 0;
+  };
+  d.add(stopTick);
   listen(api.el, 'settings-close', () => {
+    stopTick();
     unmountCz();
     if (query) {
       input.value = '';
@@ -622,6 +649,8 @@ function enhance(api, d) {
       refresh();
       // the About info and the output names arrive a moment after open
       setTimeout(() => api.isOpen() && sumsLater.push(), 300);
+      stopTick();
+      sumsTick = setInterval(() => (api.isOpen() ? sumsLater.push() : stopTick()), SUMS_TICK_MS);
     },
     refresh,
     summaries,

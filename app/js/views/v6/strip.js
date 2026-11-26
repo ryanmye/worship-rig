@@ -74,6 +74,7 @@ export function createStrip(v, i) {
     ev.preventDefault();
     ev.stopPropagation();
     pickMe();
+    v.focusPicked?.(i); // UI6-move O2 (U8a): on to the picked bar's lowest handle, not 2 Tabs per control away
   });
   // the tile's word is ON / OFF; its accessible name is the instrument (D15: no role labels)
   const tile = use(onTile({ label: 'Instrument', color, testid: `v6-on-${i}`, onToggle: (on) => v.setMuted(i, !on) }));
@@ -257,6 +258,13 @@ export function createStrip(v, i) {
     arrLater.disabled = x.locked || i >= x.n - 1;
     arrRemove.setDisabled(x.locked || x.n <= 1);
     changeBtn.title = x.locked ? 'Perform lock is on: unlock to change the instrument' : 'Choose another instrument';
+    // U8a (Lock's one look): the name picks the range bar, which Lock freezes (D18 / LOCK table); it said so nowhere
+    // and kept the pointer cursor. Its words stay at full strength (it is the instrument's name).
+    if (x.locked || empty) who.setAttribute('aria-disabled', 'true');
+    else who.removeAttribute('aria-disabled');
+    who.classList.toggle('frozen', !!x.locked && !empty);
+    who.title = x.locked ? 'Perform lock is on: unlock to change which keys play it'
+      : `${coarse ? 'Tap' : 'Click'} to change which keys play this instrument`;
     if (empty) {
       // skeptic UI6-U1 F1: an empty slot shows no level and no sends. The strip is reused by position, so without
       // this it kept the fader / chips of the instrument that sat here before a Remove shifted the slots down.
@@ -311,7 +319,7 @@ export function createStrip(v, i) {
     /** The pointer kind: only the name's wording changes (the name picks on every pointer since D24.3). */
     setCoarse(on) {
       coarse = !!on;
-      who.title = `${coarse ? 'Tap' : 'Click'} to change which keys play this instrument`;
+      if (!info?.locked) who.title = `${coarse ? 'Tap' : 'Click'} to change which keys play this instrument`;
     },
     /** U2: this instrument's range is being changed (pick mode). */
     setPicked(on) {

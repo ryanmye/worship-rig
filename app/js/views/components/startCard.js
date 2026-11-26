@@ -15,7 +15,8 @@ const readDone = () => {
 };
 
 /**
- * @param {{onDismiss?:(why:'close'|'next'|'api')=>void}} [o]
+ * @param {{onDismiss?:(why:'close'|'next'|'api')=>void, songBar?:boolean}} [o]  songBar (UI v6 U8a): the v6 Perform's
+ *   words for where song change and the room are (NEXT in the Setlist, Space in the song bar; no Space row)
  * @returns {{el:HTMLElement, readonly shown:boolean, setMidi(connected:boolean):void, dismiss(why?:string):void,
  *            reset():void, destroy():void}}
  */
@@ -32,7 +33,10 @@ export function startCard(o = {}) {
       'ul.sc-list',
       {},
       kbLine,
-      h('li', {}, b('→'), ' or ', b('NEXT'), ' = next song. The ', b('Space'), ' row changes the room.'),
+      o.songBar
+        ? h('li', {}, b('→'), ' or ', b('NEXT'), ' in the Setlist = next song. ', b('Space'),
+          ' in the song bar changes the room.')
+        : h('li', {}, b('→'), ' or ', b('NEXT'), ' = next song. The ', b('Space'), ' row changes the room.'),
       h('li', {}, 'Before the service tap ', b('Lock'), '. To unlock, hold it until it lets go.'),
     ),
   );

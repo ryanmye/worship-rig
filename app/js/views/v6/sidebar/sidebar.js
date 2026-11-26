@@ -334,8 +334,8 @@ let startedThisPage = false;
  * @param {object} v  the v6 shell's view context (store, controller, engine, ctx, toast, isLocked, snap, sceneLevel,
  *   liveOf, host)
  * @param {{modules?:object[], onChange?:(s:{open:boolean, tab:string, portrait:boolean}) => void}} [o]
- * @returns {{el:HTMLElement, render(state:object):void, open(id?:string):void, collapse(tab?:string):void,
- *            addModule(m:object):void, removeModule(id:string):void, refreshBadges():void,
+ * @returns {{el:HTMLElement, render(state:object):void, open(id?:string, deliberate?:boolean):void,
+ *            collapse(tab?:string):void, addModule(m:object):void, removeModule(id:string):void, refreshBadges():void,
  *            readonly prefs:object, readonly mounted:string|null, readonly portrait:boolean, destroy():void}}
  */
 export function rightSidebar(v, o = {}) {
@@ -346,11 +346,16 @@ export function rightSidebar(v, o = {}) {
   let prefs = loadPrefs(ids());
   const mq = typeof window.matchMedia === 'function' ? window.matchMedia(PORTRAIT_MQ) : null;
   let portrait = !!mq?.matches;
+  // UI6-move O3 (U8a): while the player has not opened or folded the sidebar in this page, the small-window rule is
+  // decided per orientation: a 1080 px iPad that starts in landscape (folded) shows the portrait panel open after a
+  // rotation, and folds again when it turns back; one that starts in portrait folds when it turns to landscape.
+  let autoSmall = false;
   if (!startedThisPage) {
     startedThisPage = true;
     // small-window fit: ≤ SMALL_WINDOW px wide starts folded (4 instruments then fit 1024 × 700 without the pills)
     // until the player opens it at that size once; iPad portrait puts the panel under the strips, so not there
     prefs.open = prefs.starts === 'open' && (portrait || !isSmallWindow() || !!prefs.smallOpen);
+    autoSmall = prefs.starts === 'open' && !prefs.smallOpen;
   }
   let lastState = v.store.get();
 
@@ -490,11 +495,11 @@ export function rightSidebar(v, o = {}) {
   d.listen(railList, 'click', (e) => {
     const b = e.target.closest('button[data-id]');
     if (!b) return;
-    open(b.dataset.id);
+    open(b.dataset.id, true);
     if (byKeys(e)) focusTab();
   });
   d.listen(railOpen, 'click', (e) => {
-    open();
+    open(undefined, true);
     if (byKeys(e)) focusTab();
   });
   d.listen(xBtn, 'click', (e) => {
@@ -583,8 +588,11 @@ export function rightSidebar(v, o = {}) {
     save();
     applyLayout();
   }
-  /** Open the sidebar (on module `id`, shown again if the player had hidden it). */
-  function open(id) {
+  /**
+   * Open the sidebar (on module `id`, shown again if the player had hidden it). `deliberate`: the sidebar's own ⟨ /
+   * rail (UI6-move O3: only that latches `smallOpen`; the song bar's Notes / Setlist chips open it for this time only).
+   */
+  function open(id, deliberate = false) {
     if (id && byId.has(id)) {
       if (taken(id)) return;
       if (prefs.hidden.includes(id)) {
@@ -595,7 +603,9 @@ export function rightSidebar(v, o = {}) {
       prefs.tab = id;
     }
     prefs.open = true;
-    if (!portrait && isSmallWindow()) prefs.smallOpen = true; // the player wants it open in a small window too
+    autoSmall = false;
+    // the player wants it open in a small window too
+    if (deliberate && !portrait && isSmallWindow()) prefs.smallOpen = true;
     save();
     applyLayout();
   }
@@ -604,6 +614,7 @@ export function rightSidebar(v, o = {}) {
     czPop?.close();
     if (tab && byId.has(tab)) prefs.tab = tab;
     prefs.open = false;
+    autoSmall = false;
     save();
     applyLayout();
   }
@@ -681,6 +692,11 @@ export function rightSidebar(v, o = {}) {
     const onMq = () => {
       portrait = mq.matches;
       endDrag(false);
+      if (autoSmall) {
+        const want = portrait || !isSmallWindow();
+        if (arranging) arranging.wasOpen = want;
+        else prefs.open = want;
+      }
       applyLayout();
     };
     if (typeof mq.addEventListener === 'function') {
@@ -791,7 +807,8 @@ export function rightSidebar(v, o = {}) {
     let text = '';
     let title = '';
     if (status.instance !== 'secondary') {
-      if (status.loading) {
+      // U8a: an empty library has no song to load (the controller's flag stays up with nothing selected)
+      if (status.loading && v.store.currentSong()) {
         text = 'Loading…';
         title = 'Loading this song’s sounds. It plays as soon as this goes.';
       } else if (!status.ready) {
@@ -864,7 +881,9 @@ export function rightSidebar(v, o = {}) {
   return {
     el,
     render(state) {
+      const hadSong = !!lastState.songs[lastState.settings.currentSongId];
       lastState = state;
+      if (hadSong !== !!state.songs[state.settings.currentSongId]) renderLoad(); // U8a: the library emptied / refilled
       renderBadges(state);
       el.classList.toggle('locked', !!state.settings.performLock);
     },

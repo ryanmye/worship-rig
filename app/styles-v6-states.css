@@ -1,0 +1,43 @@
+/* UI v6 U8a: edge states on the v6 stage (native/docs/lanes/UI6-build-plan.md U8). Most states are the shared chrome,
+   unchanged: the top bar's lamps (MIDI / Sound / Ready), the banner strip under it (Sound has stopped · Restart
+   sound, a second window, changes not saved), the start overlay, toasts. Here: the first-run Start here card
+   (views/v6/start.js) as a band under the song bar. Imported by styles-v6.css (flag on only); selectors under .v6. */
+
+.v6 .start-card.v6-start { flex: none; display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center; column-gap: 14px; padding: 4px 6px 4px 14px; }
+.v6 .start-card.v6-start[hidden] { display: none; }
+.v6 .v6-start .sc-head { display: contents; }
+.v6 .v6-start .sc-title { grid-column: 1; grid-row: 1; }
+.v6 .v6-start .sc-x { grid-column: 3; grid-row: 1; width: 44px; height: 44px; margin: 0; }
+.v6 .v6-start .sc-list { grid-column: 2; grid-row: 1; flex-direction: row; flex-wrap: wrap; gap: 2px 22px;
+  padding-left: 16px; }
+@media (max-width: 900px) {
+  .v6 .v6-start .sc-list { flex-direction: column; gap: 2px; font-size: 13px; }
+}
+
+/* an empty library (start.js emptyLibrary): the card takes the strips' place */
+.v6 .v6-board.no-song > .v6-stripsarea { display: none; }
+.v6 .v6-empty { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 10px; padding: 24px; text-align: center; border: 1.5px dashed var(--line-2);
+  border-radius: 12px; }
+.v6 .v6-empty[hidden] { display: none; }
+.v6 .v6-empty-t { font: 800 24px var(--v6-book); }
+.v6 .v6-empty-p { margin: 0; max-width: 420px; color: var(--muted); font-size: 14px; line-height: 1.4; }
+.v6 .v6-empty-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.v6 .v6-empty-row .btn { min-height: 44px; padding: 0 16px; font-weight: 700; }
+.v6 .v6-empty-new { background: linear-gradient(var(--plate-top, var(--accent)), var(--plate-bot, var(--accent)));
+  color: var(--accent-ink); border-color: transparent; }
+.v6 .v6-empty-row .btn[hidden] { display: none; }
+.v6 .v6-empty-lock { margin: 0; color: var(--warn); font-size: 13px; }
+.v6 .v6-empty-lock[hidden] { display: none; }
+@media (orientation: portrait) and (max-width: 1024px) {
+  .v6.v6-perform .v6-board > .v6-empty { grid-column: 2; grid-row: 1; }
+}
+
+/* ---- Perform lock: one look (UI6 U8a). A frozen control is today's disabled button (opacity .45, no pointer); the
+   v6 parts that said it three other ways (Arrange .5, the drone's Synth / My Pads .2 from a dimmed group around dimmed
+   buttons, the strip name's live pointer while its pick was refused) follow it. The frame (styles-v6.css .v6.locked)
+   and Lock's "Locked · hold to unlock" are the rest of the look. */
+.v6.v6-perform.locked .v6-arrange:disabled { opacity: .45; }
+.v6.v6-perform.locked .v6-drone.locked .v6-d-sound .segmented .seg:disabled { opacity: 1; }
+.v6 .v6-strip .v6-who[aria-disabled="true"] { cursor: default; }

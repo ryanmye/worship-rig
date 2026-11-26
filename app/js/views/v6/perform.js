@@ -25,6 +25,7 @@ import { trialBanner } from './bank/banner.js';
 import { PORTRAIT_MQ } from './sidebar/sidebar.js';
 import { learnMode } from './learn-mode.js';
 import { arrangeMode } from './arrange.js';
+import { startBand, emptyLibrary } from './start.js';
 
 /** The v6 stylesheet; linked only while the v6 Perform is mounted (removed again by destroy()). */
 export const V6_CSS_HREF = './styles-v6.css';
@@ -73,6 +74,8 @@ export function mountPerformV6(root, ctx) {
   const isLocked = () => !!store.get().settings.performLock;
   const names = instrumentNames(engine);
   let shownId = null;
+  let rangePicked = null; // the instrument whose range bar is picked (onRangePick)
+  let kbPicked = null; // …when that pick came from the keyboard (Enter / Space on its name: focusPicked)
   let rangeSig = ''; // song id + slot count: a change drops a range drag / pick (skeptic UI6-U2 F3)
   let snap = null; // {id, song, json}: the Revert snapshot, as perform.js
   const takeSnapshot = (song) => {
@@ -204,8 +207,37 @@ export function mountPerformV6(root, ctx) {
       if (isLocked()) return;
       kb.pick(kb.picked === i ? null : i);
     },
-    /** keyboard.js → the strips: outline + "changing range" on the picked one. */
-    onRangePick: (i) => row.setPicked(i),
+    /**
+     * UI6-move O2 (U8a): a keyboard pick (Enter / Space on a strip's name) moves the focus to the picked bar's lowest
+     * handle, so ←/→ work at once (with pick first, D24.3, the handles were up to 32 Tab presses away).
+     * @param {number} i
+     */
+    focusPicked(i) {
+      const kb = bottom.kb;
+      if (kb.picked !== i) return;
+      const hd = kb.el.querySelector(`.v6-rbar[data-slot="${i}"] [data-end="lo"]`);
+      if (!hd) return;
+      hd.focus({ preventScroll: true });
+      kbPicked = i;
+    },
+    /**
+     * keyboard.js → the strips: outline + "changing range" on the picked one. When the pick ends (Esc, the keys, a
+     * song switch) with the focus on one of its handles, the focus goes back to that instrument's name (U8a: a
+     * handle that is no longer live must not keep it).
+     */
+    onRangePick: (i) => {
+      const prev = rangePicked;
+      const byKeys = kbPicked !== null && kbPicked === prev;
+      rangePicked = i;
+      if (i !== kbPicked) kbPicked = null;
+      row.setPicked(i);
+      // the keyboard's own repaint has already dropped the focus from the handle (to <body>) when it says so
+      const a = document.activeElement;
+      const lost = !a || a === document.body || (!!a.dataset?.end && bottom.kb.el.contains(a));
+      if (i === null && byKeys && lost) {
+        row.el.querySelector(`[data-testid="v6-who-${prev}"]`)?.focus({ preventScroll: true });
+      }
+    },
     onCoarse: (c) => {
       el.classList.toggle('coarse', c);
       row.setCoarse(c);
@@ -234,7 +266,10 @@ export function mountPerformV6(root, ctx) {
   // U3: the right sidebar (views/v6/sidebar/): Drone · Setlist · Notes as tabs, a rail when folded, resizable
   const side = rightSidebar(v, { onChange: (s) => bar.setSide(s) });
   const right = side.el;
-  const board = h('div.v6-board', { 'data-testid': 'v6-board' }, left, row.el, right);
+  // U8a: an empty library says so where the strips go (start.js emptyLibrary)
+  const empty = emptyLibrary(v);
+  d.add(() => empty.destroy());
+  const board = h('div.v6-board', { 'data-testid': 'v6-board' }, left, row.el, empty.el, right);
   const bottom = bottomRow(v);
   v.onCoarse(bottom.kb.coarse);
   const quick = quickSheet({
@@ -275,6 +310,9 @@ export function mountPerformV6(root, ctx) {
   const arrange = arrangeMode(v, { sidebar: side });
   v.arrange = arrange;
   d.add(() => arrange.destroy());
+  // U8a (edge states): the first-run Start here card, as today's Perform shows it (top of its Notes panel there)
+  const start = startBand(v, { onChange: () => quickPlaced?.push() });
+  d.add(() => start.destroy());
   let bank = null;
   const placeBank = () => {
     if (!bank || !bank.isOpen) return;
@@ -299,7 +337,7 @@ export function mountPerformV6(root, ctx) {
     placeBank();
   }
   d.listen(window, 'resize', placeBank);
-  el.append(bar.el, snaps.el, banner.el, learn.el, arrange.el, board, bottom.el, quick.el);
+  el.append(bar.el, snaps.el, banner.el, learn.el, arrange.el, start.el, board, bottom.el, quick.el);
   root.classList.remove('locked');
   root.replaceChildren(el);
 
@@ -356,6 +394,9 @@ export function mountPerformV6(root, ctx) {
     const live = liveOf(song);
     const w = wheelNow();
     bar.render(state);
+    start.render(state);
+    empty.render(state);
+    board.classList.toggle('no-song', empty.shown);
     side.render(state);
     lp.render({ song: live, names });
     snaps.render(song);
@@ -539,6 +580,7 @@ export function mountPerformV6(root, ctx) {
   }));
   d.add(controller.onStatus((s) => {
     status = s;
+    start.setMidi(!!s.midi?.connected);
     renderLetters();
     bar.renderSetlist();
     if (quick.isOpen) renderQuick();
@@ -611,6 +653,7 @@ export function mountPerformV6(root, ctx) {
   });
 
   render(store.get());
+  start.setMidi(!!status.midi?.connected);
   renderLetters();
   readRuntime();
 
@@ -657,6 +700,8 @@ export function mountPerformV6(root, ctx) {
       return bank;
     },
     banner,
+    /** U8a: the first-run Start here card (components/startCard.js; `card.reset()` shows it again). */
+    start,
     /** U7c: MIDI Learn on Perform, Arrange, the song menu. */
     learn,
     arrange,
