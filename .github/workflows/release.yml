@@ -13,6 +13,10 @@ name: release
 on:
   push:
     tags: ['v*']
+  # A release published from the GitHub web UI (Releases > Draft a new release > new tag v* > Publish) creates the tag
+  # there, so no git push is needed: build and attach the files to that release.
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       dry_run:
@@ -104,7 +108,9 @@ jobs:
   release:
     needs: build
     # tag push, or a manual run on a tag with dry_run unticked; never from a branch
-    if: startsWith(github.ref, 'refs/tags/v') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false))
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') && (github.event_name == 'push' || github.event_name == 'release' ||
+      (github.event_name == 'workflow_dispatch' && inputs.dry_run == false))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -138,8 +144,16 @@ jobs:
           This build is **ad-hoc signed**, not notarized by Apple — see the README
           ("Running on your Mac → First open on another Mac") for the Gatekeeper steps.
           EOF
-          gh release create "$GITHUB_REF_NAME" assets/*.dmg assets/*.zip docs/starter/worship-rig-starter-library.json \
-            --repo "$GITHUB_REPOSITORY" \
-            --verify-tag \
-            --title "Worship Rig $GITHUB_REF_NAME" \
-            --notes-file notes.md
+          files=(assets/*.dmg assets/*.zip docs/starter/worship-rig-starter-library.json)
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # made in the web UI (release event), or a re-run: attach the files and set the standard title and notes
+            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --title "Worship Rig $GITHUB_REF_NAME" --notes-file notes.md --draft=false --prerelease=false
+          else
+            gh release create "$GITHUB_REF_NAME" "${files[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "Worship Rig $GITHUB_REF_NAME" \
+              --notes-file notes.md
+          fi
