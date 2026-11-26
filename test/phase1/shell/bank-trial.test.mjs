@@ -420,3 +420,51 @@ test('skeptic F1: random sequences: storage and export always = the library with
   }
   assert.equal(runs, 3600);
 });
+
+test('skeptic F1–F3: Back after list edits; a pack update during a trial; Keep drops a removed field', async () => {
+  // F2 setup: Lantern in the library (a bank add), playing, then its pack file gets a newer version
+  const { store, ctl } = await boot();
+  const add = ctl.addFromBank(LANTERN);
+  assert.ok(add.ok);
+  const o = store.get().songOrder;
+  const sl = store.addSetlist('Reprise', [add.id, o[0], o[1], add.id, o[2]]);
+  store.setCurrentSetlist(sl);
+  assert.ok(await ctl.selectSong(add.id, { index: 3 }));
+  const lanternFile = path.join(samples, 'Desk Bank', 'songs', 'lantern.json');
+  const before = fs.readFileSync(lanternFile, 'utf8');
+  try {
+    assert.ok((await ctl.tryBankSong(HARBOUR)).ok);
+    // F1: an entry before the reprise removed while trying: Back lands on the same (second) entry
+    store.removeFromSetlist(sl, 1);
+    assert.equal(ctl.trial().prev.id, add.id);
+    // F2: a rescan during the trial updates the (unedited) Lantern in place
+    write(lanternFile, exportOf(song('Lantern Hymn', { tempo: 74, hearIn: 3, playIn: 3 }), { title: 'Lantern Hymn' }));
+    const res = await ctl.rescanPatchPacks();
+    assert.deepEqual(res.updated, [add.id]);
+    assert.deepEqual(await ctl.backFromTrial(), { ok: true });
+    assert.equal(store.currentSong().id, add.id);
+    assert.equal(store.currentIndex(), 2, 'the reprise entry, moved up by the removal');
+    store.set(`songs.${add.id}.tempo`, 99);
+    assert.equal(ctl.revertSong(), true);
+    assert.equal(store.getSong(add.id).tempo, 74, 'Revert after Back = the updated pack version');
+    assert.equal(songFingerprint(store.getSong(add.id)), store.get().meta.packSongs[LANTERN].sig,
+      'still unedited: later pack versions keep updating it (PP-1)');
+    // F3: Keep after the player set the trial song back to 4/4 (timeSig removed)
+    write(path.join(samples, 'Desk Bank', 'songs', 'waltz.json'), exportOf(song('Waltz Test', { timeSig: '3/4' }),
+      { title: 'Waltz Test' }));
+    await ctl.rescanPatchPacks();
+    const WALTZ = 'Desk Bank:waltz.json';
+    const tr = await ctl.tryBankSong(WALTZ);
+    assert.ok(tr.ok);
+    assert.equal(store.getSong(tr.id).timeSig, '3/4');
+    assert.ok(store.set(`songs.${tr.id}.timeSig`, null));
+    assert.equal(store.getSong(tr.id).timeSig, undefined);
+    const k = await ctl.keepTrial();
+    assert.ok(k.ok);
+    assert.equal(store.getSong(k.id).timeSig, undefined, 'kept as it was played (4/4)');
+  } finally {
+    fs.writeFileSync(lanternFile, before);
+    fs.rmSync(path.join(samples, 'Desk Bank', 'songs', 'waltz.json'), { force: true });
+    ctl.dispose();
+  }
+});

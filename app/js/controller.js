@@ -2644,6 +2644,13 @@ export function createController(o) {
       const song = store.getSong(selected.id);
       if (song) selected = { id: selected.id, song };
     }
+    // UI6-U7a skeptic F2: so does the Revert snapshot Back brings back for the song a trial replaced (a rescan during
+    // a trial); otherwise Revert after Back wrote the old pack version back and froze the song against updates
+    const b = trial && trial.prev.baseline;
+    if (b && ids.includes(b.id)) {
+      const song = store.getSong(b.id);
+      if (song) trial.prev = { ...trial.prev, baseline: { id: b.id, song } };
+    }
     emit('action', { type: 'packSongsUpdated', ids: ids.slice() });
   }
   /**
@@ -2787,9 +2794,12 @@ export function createController(o) {
     if (!r.ok) return r;
     const cur = store.getSong(t.id);
     if (!r.existing && cur && t.start) {
-      for (const k of Object.keys(cur)) {
+      // UI6-U7a skeptic F3: a field the player removed while trying (4/4 again: timeSig, a chart) goes too (null
+      // removes an optional field); only the changed fields were copied, so the kept song still had it
+      for (const k of new Set([...Object.keys(cur), ...Object.keys(t.start)])) {
         if (k === 'id' || k === 'name') continue;
-        if (JSON.stringify(cur[k]) !== JSON.stringify(t.start[k])) store.set(`songs.${r.id}.${k}`, clone(cur[k]));
+        if (JSON.stringify(cur[k]) === JSON.stringify(t.start[k])) continue;
+        store.set(`songs.${r.id}.${k}`, k in cur ? clone(cur[k]) : null);
       }
     }
     let index;
