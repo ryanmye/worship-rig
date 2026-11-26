@@ -1,0 +1,202 @@
+/* UI v6 Edit (U5a; native DECISIONS D15, D18; mockup native/docs/design/mockups/edit.html, mock_edit.py /
+   mock_edit.css). Linked only while the v6 Edit is mounted (views/v6/edit/edit.js loadV6EditCss); every selector sits
+   under .v6. The root is also .ev2 so today's Edit widgets and the reused panels (setlist, song header, drone,
+   effects, master, song, keyboard row; lib.js wordSlider / sentence) keep their styles-edit-v2.css look; the rules
+   here lay them out in the v6 frame and undo the .ev2 grid on the root. Colours are the theme's tokens. */
+
+/* ---- root: v6 column instead of today's Edit grid */
+.v6.v6-edit.ev2 { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px 12px; height: 100%;
+  min-height: 0; grid-template-areas: none; grid-template-columns: none; grid-template-rows: none; }
+/* base.css places .ev2-left / -head / -rig / -bottom by grid-area on any descendant: not here */
+.v6.v6-edit :is(.ev2-left, .ev2-head, .ev2-rig, .ev2-bottom) { grid-area: auto; }
+.v6.v6-edit .v6e-body { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 244px minmax(0, 1fr);
+  gap: 10px; }
+.v6.v6-edit.lib-folded .v6e-body { grid-template-columns: 56px minmax(0, 1fr); }
+.v6.v6-edit [hidden] { display: none !important; } /* the fold, empty rows: [hidden] always wins over a layout */
+.v6.v6-edit .v6e-cap { color: var(--v6-cap); font: 650 13px var(--v6-book); font-variant-caps: all-small-caps;
+  letter-spacing: .05em; text-transform: lowercase; white-space: nowrap; }
+.v6.v6-edit .v6e-hint { color: var(--muted); font-size: 13px; margin: 0; }
+.v6.v6-edit .v6e-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.v6.v6-edit .v6e-sp { flex: 1 1 auto; }
+.v6.v6-edit .v6e-flash { outline: 2px solid var(--ev2-flash); outline-offset: 3px; border-radius: 8px; }
+
+/* ---- library column (today's setlist module) + fold */
+.v6.v6-edit .v6e-lib { display: flex; flex-direction: column; min-height: 0; padding: 8px 8px 0; border-radius: 12px; }
+.v6.v6-edit .v6e-lib-h { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 4px; }
+.v6.v6-edit .v6e-fold, .v6.v6-edit .v6e-unfold { min-height: 36px; min-width: 36px; padding: 0 8px; }
+.v6.v6-edit .v6e-libmod { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.v6.v6-edit .v6e-libmod .ev2-list-add { grid-template-columns: 1fr 1fr; }
+.v6.v6-edit .v6e-librail { display: flex; flex-direction: column; align-items: center; padding: 8px 0;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.v6.v6-edit .v6e-unfold { display: flex; flex-direction: column; align-items: center; gap: 10px; height: auto;
+  padding: 10px 6px; }
+.v6.v6-edit .v6e-rail-lab { writing-mode: vertical-rl; font-weight: 700; font-size: 13px; color: var(--muted); }
+
+/* ---- main column: song header · rig tabs · panel */
+.v6.v6-edit .v6e-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.v6.v6-edit .v6e-head { flex: none; min-height: 58px; border-radius: 12px; position: relative; z-index: 5;
+  overflow: visible; padding: 0 12px; }
+/* today's ☰ Songs drawer button has no job here (the library folds instead) */
+.v6.v6-edit .v6e-head .ev2-song-songsbtn, .v6.v6-edit .v6e-head .ev2-song-livehint { display: none; }
+.v6.v6-edit .v6e-head .ev2-song-head { width: 100%; }
+.v6.v6-edit .v6e-sigbox { display: inline-flex; align-items: center; gap: 6px; }
+.v6.v6-edit .v6e-sig { min-height: 40px; padding: 0 8px; border-radius: 10px; border: 1px solid var(--line-2);
+  background: var(--panel-2); color: var(--text); font: 700 15px var(--font-display, inherit); }
+.v6.v6-edit .v6e-chart[hidden] { display: none; }
+
+.v6.v6-edit .v6e-rig { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 6px 8px 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+.v6.v6-edit .v6e-rig-h { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.v6.v6-edit .v6e-rig-h small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+.v6.v6-edit .v6e-rtabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin;
+  scrollbar-color: var(--line-2) transparent; padding-bottom: 2px; }
+.v6.v6-edit .v6e-rt { position: relative; flex: 1 1 0; min-width: 116px; min-height: 50px; border-radius: 10px;
+  border: 1px solid var(--line); border-top: 4px solid var(--c, var(--line-2)); background: var(--panel-2);
+  text-align: left; padding: 3px 10px; display: flex; flex-direction: column; justify-content: center; }
+.v6.v6-edit .v6e-rt.gl { --c: var(--label, var(--muted)); flex: 1 1 0; }
+.v6.v6-edit .v6e-rt-name { font: 700 15px var(--v6-book); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+.v6.v6-edit .v6e-rt-sub { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+.v6.v6-edit .v6e-rt.on { background: color-mix(in srgb, var(--c, var(--accent)) 20%, var(--panel-2));
+  border-color: var(--c, var(--accent)); }
+.v6.v6-edit .v6e-rt.off .v6e-rt-name { text-decoration: line-through; color: var(--muted); }
+.v6.v6-edit .v6e-rt.empty .v6e-rt-name { color: var(--faint); font-style: italic; }
+.v6.v6-edit .v6e-rt-cd { position: absolute; top: 6px; right: 8px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--chg); }
+.v6.v6-edit .v6e-rt.add { flex: 0 0 76px; min-width: 76px; border-style: dashed; border-top: 1px dashed var(--line-2);
+  color: var(--muted); font-weight: 700; align-items: center; }
+.v6.v6-edit .v6e-rsep { flex: none; width: 1px; background: var(--line-2); margin: 4px 2px; }
+
+.v6.v6-edit .v6e-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.v6.v6-edit .v6e-host { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+/* today's drone / effects / master / song panels, framed as in today's Edit until U5b */
+.v6.v6-edit .v6e-legacy { flex: 1 1 auto; min-height: 0; border-radius: 12px; }
+
+/* ---- the instrument panel */
+.v6.v6-edit .v6e-inst { --c: var(--accent); flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+  gap: 8px; padding: 8px 12px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  overflow: hidden; }
+.v6.v6-edit .v6e-ihead { display: flex; align-items: center; gap: 10px; position: relative; z-index: 4; }
+.v6.v6-edit .v6e-ibar { flex: none; width: 8px; height: 30px; border-radius: 3px; background: var(--c); }
+.v6.v6-edit .v6e-sent { flex: 1 1 auto; min-width: 0; }
+.v6.v6-edit .v6e-sent .ev2-sent { font: 600 19px/1.3 var(--v6-book); }
+.v6.v6-edit .v6e-sent .ev2-tok.v6e-sn { color: var(--c); text-decoration: none; font-weight: 800; }
+.v6.v6-edit .v6e-iact { position: relative; flex: none; }
+.v6.v6-edit .v6e-chg { white-space: nowrap; padding: 0 14px; }
+.v6.v6-edit .v6e-chg.open { border-color: var(--accent); }
+.v6.v6-edit .v6e-imenu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; width: 300px;
+  max-height: min(60vh, 460px); overflow-y: auto; padding: 6px; background: var(--panel-2);
+  border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 18px 48px #000c; }
+.v6.v6-edit .v6e-mg-head { padding: 8px 10px 4px; color: var(--faint); font-size: 11px; text-transform: uppercase;
+  letter-spacing: .06em; }
+.v6.v6-edit .v6e-mi { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 0 10px;
+  border: 0; border-radius: 8px; background: none; text-align: left; }
+.v6.v6-edit .v6e-mi:hover, .v6.v6-edit .v6e-mi:focus-visible { background: var(--panel-3, var(--panel)); }
+.v6.v6-edit .v6e-mi-check { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.v6.v6-edit .v6e-mi[aria-checked="true"] .v6e-mi-check { background: var(--c); }
+.v6.v6-edit .v6e-mi-remove { color: var(--danger); }
+.v6.v6-edit .v6e-msep { height: 1px; background: var(--line-2); margin: 6px 4px; }
+.v6.v6-edit .v6e-confirm { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 10px;
+  border: 1px solid var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--panel-2)); }
+
+.v6.v6-edit .v6e-ncols { flex: 1 1 auto; min-height: 0; display: grid;
+  grid-template-columns: 200px minmax(0, 1fr) 190px; gap: 12px; }
+.v6.v6-edit .v6e-cnav { display: flex; flex-direction: column; gap: 4px; padding-right: 10px; overflow-y: auto;
+  border-right: 1px solid var(--line); scrollbar-width: thin; }
+.v6.v6-edit .v6e-cn { position: relative; flex: none; display: flex; flex-direction: column; align-items: flex-start;
+  min-height: 46px; border-radius: 10px; border: 1px solid transparent; background: transparent; padding: 4px 10px;
+  text-align: left; }
+.v6.v6-edit .v6e-cn b { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 15px; }
+.v6.v6-edit .v6e-cn small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 100%; }
+.v6.v6-edit .v6e-cn.on { background: color-mix(in srgb, var(--c) 18%, var(--panel-2)); border-color: var(--c); }
+.v6.v6-edit .v6e-cn.on::before { content: ''; position: absolute; left: -1px; top: 8px; bottom: 8px; width: 4px;
+  border-radius: 2px; background: var(--c); }
+.v6.v6-edit .v6e-cn:disabled { opacity: .45; }
+.v6.v6-edit .v6e-cd { width: 7px; height: 7px; border-radius: 50%; background: var(--chg); }
+
+.v6.v6-edit .v6e-ccont { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0;
+  overflow-y: auto; scrollbar-width: thin; padding-right: 2px; }
+.v6.v6-edit .v6e-h4 { margin: 0; font: 700 15px var(--v6-book); color: var(--v6-cap); font-variant-caps: all-small-caps;
+  letter-spacing: .03em; }
+.v6.v6-edit .v6e-h4 small { font: 400 12px var(--font, inherit); color: var(--muted); font-variant-caps: normal;
+  margin-left: 6px; letter-spacing: 0; }
+.v6.v6-edit .v6e-pane { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.v6.v6-edit .v6e-pane > div { display: flex; flex-direction: column; gap: 12px; }
+.v6.v6-edit .v6e-pane .ev2-ws-label { font-size: 15px; }
+.v6.v6-edit .v6e-pane > div > .ev2-ws, .v6.v6-edit .v6e-advrow > .ev2-ws, .v6.v6-edit .v6e-params > .ev2-ws,
+.v6.v6-edit .v6e-own > .ev2-ws { flex: none; }
+.v6.v6-edit .v6e-own { display: flex; flex-direction: column; gap: 12px; }
+.v6.v6-edit .v6e-link { align-self: flex-start; color: var(--accent-text, var(--accent)); }
+.v6.v6-edit .v6e-empty { align-items: flex-start; padding: 10px 0; }
+.v6.v6-edit .v6e-empty-q { margin: 0; font: 700 18px var(--v6-book); }
+
+/* Range: the 88 keys, the boxes, Set by playing, Octave */
+/* the handles' hit layer reaches 14 px past each end: 16 px of padding keeps it inside the pane */
+.v6.v6-edit .v6e-range .v6-kbd-range { padding-left: 16px; padding-right: 16px; border-radius: 10px;
+  background: var(--panel-2); border: 1px solid var(--line); }
+.v6.v6-edit .v6e-note { width: 110px; min-height: 44px; padding: 0 12px; border-radius: 10px;
+  border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text); font: 700 16px inherit; }
+.v6.v6-edit .v6e-to { color: var(--muted); }
+.v6.v6-edit .v6e-rsay { color: var(--muted); font-size: 13px; }
+.v6.v6-edit .v6e-arms .btn { flex: 1 1 0; }
+.v6.v6-edit .v6e-arm.armed { border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--panel-2)); }
+.v6.v6-edit .v6e-oct .stepper { min-height: 44px; }
+.v6.v6-edit .v6e-touch .segmented { align-self: flex-start; }
+.v6.v6-edit .v6e-advrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.v6.v6-edit .v6e-params { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.v6.v6-edit .v6e-tonehost { min-height: 0; }
+
+/* the strip: the very same component as Perform (D15), one column tall */
+.v6.v6-edit .v6e-stage { display: flex; flex-direction: column; gap: 8px; min-height: 0; padding-left: 12px;
+  border-left: 1px solid var(--line); }
+.v6.v6-edit .v6e-stage .v6-strip { flex: 1 1 auto; min-height: 0; max-width: none; min-width: 0; width: auto;
+  position: relative; }
+/* Change is the panel's own "Change instrument ▾", and the rig tabs pick the instrument: the strip's Change / ⋯ row
+   is left out here, as the mockup's (mock_edit.css .col1 .strip) */
+.v6.v6-edit .v6e-stage .v6-btns { display: none; }
+
+/* the keyboard row (today's Edit one until the v6 keyboard row comes to Edit). Its legend names the roles
+   (Keys / Pad / Extra / Bass), which v6 never shows (D15): left out, as today's ≤ 1250 px layout does */
+.v6.v6-edit .v6e-bottom { flex: 0 0 108px; min-height: 0; border-radius: 12px; }
+.v6.v6-edit .v6e-bottom .ev2-kb { grid-template-columns: minmax(0, 1fr) 120px 104px 112px; }
+.v6.v6-edit .v6e-bottom .ev2-kb-leg { display: none; }
+
+/* ---- smaller windows */
+@media (max-width: 1250px) {
+  .v6.v6-edit .v6e-body { grid-template-columns: 200px minmax(0, 1fr); }
+  .v6.v6-edit .v6e-ncols { grid-template-columns: 170px minmax(0, 1fr) 170px; }
+  .v6.v6-edit .v6e-rig-h small { display: none; }
+  .v6.v6-edit .v6e-sent .ev2-sent { font-size: 16px; }
+  .v6.v6-edit .v6e-bottom { flex-basis: 72px; }
+}
+@media (max-height: 820px) {
+  .v6.v6-edit .v6e-rt { min-height: 44px; }
+  .v6.v6-edit .v6e-cn { min-height: 42px; }
+}
+
+/* ---- iPad portrait (820 × 1180, mockup "Instrument · iPad portrait"): no library column (the fold rail stays),
+   the categories become a row of tabs, the strip is hidden; the page does not scroll sideways */
+@media (orientation: portrait) and (max-width: 1024px) {
+  body:has(> #views > #view-edit:not([hidden]) > .v6-edit) { min-width: 0; }
+  .v6.v6-edit .v6e-body, .v6.v6-edit.lib-folded .v6e-body { grid-template-columns: minmax(0, 1fr); }
+  .v6.v6-edit .v6e-librail { display: none !important; }
+  .v6.v6-edit .v6e-lib { display: none; }
+  .v6.v6-edit.drawer-open .v6e-lib { display: flex; position: absolute; z-index: 40; left: 10px; top: 10px;
+    bottom: 10px; width: 290px; box-shadow: 0 20px 56px #000d; background: var(--panel); }
+  .v6.v6-edit .v6e-head .ev2-song-songsbtn { display: inline-flex; }
+  .v6.v6-edit .v6e-head { height: auto; padding: 8px 12px; }
+  .v6.v6-edit .v6e-head .ev2-song-head { flex-wrap: wrap; row-gap: 6px; }
+  .v6.v6-edit .v6e-rt { flex: 0 0 150px; }
+  .v6.v6-edit .v6e-ihead { flex-wrap: wrap; }
+  .v6.v6-edit .v6e-ncols { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .v6.v6-edit .v6e-cnav { flex-direction: row; flex-wrap: wrap; border-right: 0; padding: 0 0 8px;
+    border-bottom: 1px solid var(--line); overflow: visible; }
+  .v6.v6-edit .v6e-cn { min-height: 44px; justify-content: center; }
+  .v6.v6-edit .v6e-cn small { display: none; }
+  .v6.v6-edit .v6e-cn.on::before { display: none; }
+  .v6.v6-edit .v6e-stage { display: none; }
+}

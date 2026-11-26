@@ -1244,3 +1244,9 @@ export function mountSinglePanel(el, ctx, id, opts = {}) {
   };
 }
 
+
+// ---------------------------------------------------------------------------------------------------------------
+// UI v6 U5a (views/v6/edit/): the v6 Edit reuses this shell's core (store fan-out, baseline / changes, Esc stack,
+// per-panel ctx, panel registry) and panel frame, so the panels it mounts (setlist, song-header, song, drone,
+// effects, master, bottom) behave exactly as here. Exports only; nothing in today's Edit changes.
+export { createCore as createEditCore, panelFrame as editPanelFrame, defaultTab as editDefaultTab };

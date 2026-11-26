@@ -1,0 +1,708 @@
+#!/usr/bin/env node
+// UI v6 Edit suite (U5a; native DECISIONS D15, D18; native/docs/lanes/UI6-build-plan.md U5; app/js/views/v6/edit/).
+// The real app (app/index.html) in Chromium:
+//   flag off → today's Edit (views/edit/shell.js), nothing of views/v6/edit fetched, drawn or linked; flag-off purity
+//   against the base build (the ui-v6 suite's probe: requests, listeners, intervals, store listeners, DOM, CSS);
+//   flag on → the v6 Edit: same external interface (setView('edit', {block, focus}) → editState.select), library /
+//   header / rig tabs by instrument name / Drone · Effects · Master in the v6 frame, the instrument panel's category
+//   list (switching, per-device persistence, summaries, changed dots incl. Range), every category writes today's
+//   slot-panel paths (data-bind union compared with today's slot panel + real writes), the Range keyboard drag,
+//   Set lowest by playing, the Change instrument menu, Tone EQ mount / destroy without leaks, library fold, iPad
+//   portrait (tabs row, no strip, drawer), flag flips both ways, screenshots, zero console.error / HTTP ≥ 400.
+//   node test/phase2/ui-v6-edit/run.mjs   (screenshots → /home/claude/design-out/u5 when it exists, else
+//   ./screenshots; UI6E_SHOTS=<dir> overrides; UI6E_ONLY=<regex> runs a subset)
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
+import assert from 'node:assert/strict';
+import { chromium } from 'playwright';
+import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.mjs';
+
+const require = createRequire(import.meta.url);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(HERE, '../../..');
+const APP = path.join(ROOT, 'app');
+const DESIGN_OUT = '/home/claude/design-out/u5';
+const SHOTS = process.env.UI6E_SHOTS ? path.resolve(process.env.UI6E_SHOTS)
+  : fs.existsSync(DESIGN_OUT) ? DESIGN_OUT : path.join(HERE, 'screenshots');
+const { createServer } = require(path.join(ROOT, 'server.js'));
+fs.mkdirSync(SHOTS, { recursive: true });
+
+const results = [];
+const ONLY = process.env.UI6E_ONLY ? new RegExp(process.env.UI6E_ONLY) : null;
+const T = async (name, fn) => {
+  if (ONLY && !ONLY.test(name) && !/^flag off: today|^\?ui6=1 mounts|^zero console/.test(name)) return;
+  const t0 = Date.now();
+  try {
+    await fn();
+    results.push({ name, ok: true });
+    console.log(`  ✓ ${name} (${Date.now() - t0} ms)`);
+  } catch (err) {
+    results.push({ name, ok: false, err });
+    const stack = String(err && err.stack ? err.stack : err).split('\n').slice(0, 8);
+    console.log(`  ✗ ${name}\n      ${stack.join('\n      ')}`);
+  }
+};
+
+// ---- the ui-v6 suite's purity probes (listener / interval counts, store listeners)
+const PROBE = () => {
+  const p = { ael: {}, intervals: 0 };
+  window.__probe = p;
+  const add = EventTarget.prototype.addEventListener;
+  EventTarget.prototype.addEventListener = function (type, ...a) {
+    const who = this === window ? 'w' : this === document ? 'd' : null;
+    if (who) p.ael[`${who}:${type}`] = (p.ael[`${who}:${type}`] || 0) + 1;
+    return add.call(this, type, ...a);
+  };
+  const si = window.setInterval;
+  window.setInterval = function (...a) {
+    p.intervals += 1;
+    return si.apply(this, a);
+  };
+};
+async function exposeStoreListeners(target) {
+  await target.route('**/js/store.js', async (route) => {
+    const res = await route.fetch();
+    const body = (await res.text()).replace('const listeners = new Set();',
+      'const listeners = new Set(); globalThis.__storeListeners = listeners;');
+    await route.fulfill({ response: res, body });
+  });
+}
+const isSample = (u) => /\/samples\/|\.(mp3|wav|ogg|m4a|flac)(\?|$)/i.test(u);
+
+const server = createServer({ appDir: APP, port: 0 });
+const info = await server.listen();
+const origin = `http://127.0.0.1:${info.port}`;
+const browser = await chromium.launch({ headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
+
+async function purityBoot(base) {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await pinTheme(context, 'sanctuary');
+  await context.grantPermissions([...MIDI_PERMISSIONS], { origin: base });
+  await context.addInitScript(PROBE);
+  await exposeStoreListeners(context);
+  const page = await context.newPage();
+  const reqs = new Set();
+  page.on('request', (r) => {
+    const u = new URL(r.url());
+    if (!isSample(u.pathname)) reqs.add(u.pathname);
+  });
+  try {
+    await page.goto(`${base}/`);
+    await waitRigReady(page, { timeout: 40000 });
+    await page.waitForFunction(() => !!window.__rig.views.settings && !!window.__rig.views.edit, null,
+      { timeout: 30000, polling: 100 });
+    await page.waitForTimeout(1500);
+    const r = await page.evaluate(() => {
+      const shape = (el) => {
+        const tid = el.getAttribute('data-testid');
+        const id = el.id.replace(/-[a-z0-9]{6}$/, '-*').replace(/\d+/g, '#');
+        return `${el.tagName.toLowerCase()}${id ? `#${id}` : ''}${tid ? `[${tid}]` : ''}`;
+      };
+      return {
+        ael: window.__probe.ael,
+        intervals: window.__probe.intervals,
+        store: window.__storeListeners ? window.__storeListeners.size : null,
+        dom: [...document.body.querySelectorAll('*')].filter((e) => !e.closest('#toasts > *')
+          && !e.closest('[data-testid="setting-row-esc-panics"], [data-testid="setting-row-ui-v6"]'))
+          .map(shape).join('\n'),
+        edit: [...document.querySelectorAll('#view-edit *')].map(shape).join('\n'),
+        css: [...document.querySelectorAll('link[rel=stylesheet]')].map((l) => l.getAttribute('href')),
+        rig: Object.keys(window.__rig).sort(),
+      };
+    });
+    return { ...r, reqs: [...reqs].sort() };
+  } finally {
+    await context.close();
+  }
+}
+
+const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+await pinTheme(context, 'sanctuary');
+await context.grantPermissions([...MIDI_PERMISSIONS], { origin });
+await exposeStoreListeners(context);
+const page = await context.newPage();
+const errors = [];
+const v6EditFetches = [];
+page.on('console', (m) => {
+  if (m.type() === 'error') errors.push(`${m.text()} @ ${m.location()?.url || '?'}`);
+});
+page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+page.on('request', (r) => {
+  if (/\/js\/views\/v6\/edit\/|styles-v6-edit\.css/.test(r.url())) v6EditFetches.push(r.url());
+});
+page.on('response', (r) => {
+  if (r.status() >= 400) errors.push(`HTTP ${r.status()} ${r.url()}`);
+});
+const ev = (fn, arg) => page.evaluate(fn, arg);
+const until = (fn, arg, timeout = 15000) => page.waitForFunction(fn, arg, { timeout, polling: 50 });
+const tid = (id) => `[data-testid="${id}"]`;
+const song = () => ev(() => JSON.parse(JSON.stringify(window.__rig.store.currentSong())));
+const settled = () => until(() => {
+  const { controller, store } = window.__rig;
+  return controller.status.songId === store.get().settings.currentSongId && !controller.status.loading;
+}, null, 30000);
+const INSTRUMENTS = [['sampler', 'salamander-piano'], ['synth', 'warm-pad'], ['synth', 'sub-bass']];
+const setSlots = (n) => ev(({ n, list }) => {
+  const { store } = window.__rig;
+  const id = store.currentSong().id;
+  while (store.currentSong().patch.slots.length < n) store.addSlot(id);
+  while (store.currentSong().patch.slots.length > n) store.removeSlot(id);
+  list.slice(0, n).forEach(([type, iid], i) => {
+    const ref = { type, id: iid };
+    if (store.currentSong().patch.slots[i]) store.set(`songs.${id}.patch.slots.${i}.instrument`, ref);
+    else store.set(`songs.${id}.patch.slots.${i}`, { instrument: ref });
+  });
+  return store.currentSong().patch.slots.length;
+}, { n, list: INSTRUMENTS });
+const inst = () => '__rig.views.edit._debug.instance()';
+const toEdit = async () => {
+  await ev(() => window.__rig.ctx.setView('edit'));
+  await until(() => document.body.dataset.view === 'edit');
+};
+const choose = async (cat) => {
+  await page.click(tid(`v6e-cat-${cat}`));
+  await until((c) => document.querySelector('[data-testid="v6e-ccont"]')?.dataset.cat === c, cat);
+};
+/** The store writes a function causes, as song-relative paths (store.set wrapped for the duration). */
+async function writesOf(fn) {
+  await ev(() => {
+    const { store } = window.__rig;
+    window.__writes = [];
+    if (!store.__wrapped) {
+      const orig = store.set.bind(store);
+      store.set = (p, v) => {
+        window.__writes?.push(p);
+        return orig(p, v);
+      };
+      store.__wrapped = true;
+    }
+  });
+  await fn();
+  await page.waitForTimeout(100);
+  return ev(() => window.__writes.map((p) => p.replace(/^songs\.[^.]+\.patch\./, '').replace(/^songs\.[^.]+\./, '')));
+}
+const rectOf = (sel) => ev((s) => {
+  const r = document.querySelector(s).getBoundingClientRect();
+  return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: r.width, h: r.height, cx: r.left + r.width / 2,
+    cy: r.top + r.height / 2 };
+}, sel);
+
+let todayBinds = [];
+let baseListeners = 0;
+try {
+  await T('flag off: today’s Edit; nothing of the v6 Edit fetched, drawn or linked', async () => {
+    await page.goto(`${origin}/`);
+    await waitRigReady(page, { timeout: 40000 });
+    const overlay = await page.$('#overlay-start:not([hidden])');
+    if (overlay) await overlay.click();
+    await settled();
+    await until(() => !!window.__rig.views.settings && !!window.__rig.views.edit, null, 20000);
+    const r = await ev(() => ({
+      flag: 'uiV6' in window.__rig.store.get().settings,
+      today: !!document.querySelector('#view-edit > .ev2:not(.v6-edit)'),
+      v6: document.querySelectorAll('.v6-edit, [data-testid^="v6e-"]').length,
+      css: !!document.querySelector('link[data-v6-edit-css], link[href*="styles-v6-edit"]'),
+      debugV6: !!window.__rig.views.edit._debug.v6,
+    }));
+    assert.deepEqual(r, { flag: false, today: true, v6: 0, css: false, debugV6: false });
+    assert.deepEqual(v6EditFetches, []);
+    // today's slot panel's bound controls for slot 0 (Advanced open), the reference for "same paths"
+    await setSlots(3);
+    await toEdit();
+    await ev(() => window.__rig.views.edit.editState.select('slot:0'));
+    await until(() => !!document.querySelector('#view-edit [data-sec="slot0-adv"]'));
+    await ev(() => {
+      document.querySelector('#view-edit [data-sec="slot0-adv"]').open = true;
+    });
+    await page.waitForTimeout(300);
+    todayBinds = await ev(() => [...new Set([...document.querySelectorAll('#ev2-panel [data-bind^="slots.0."]')]
+      .map((e) => e.dataset.bind))].sort());
+    await ev(() => {
+      document.querySelector('#view-edit [data-sec="slot0-adv"]').open = false;
+      window.__rig.ctx.setView('perform');
+    });
+    assert.ok(todayBinds.length >= 15, todayBinds.join());
+    baseListeners = await ev(() => window.__storeListeners.size);
+  });
+
+  await T('flag-off purity vs the base build: requests, listeners, intervals, store listeners, DOM (Edit too), CSS',
+    async () => {
+      let base = process.env.UI6_PURITY_BASE || '';
+      try {
+        if (!base) base = execFileSync('git', ['merge-base', 'HEAD', 'v2-native'], { cwd: ROOT }).toString().trim();
+        execFileSync('git', ['diff', '--quiet', base, '--', 'app'], { cwd: ROOT });
+        console.log(`      (skipped: app/ is the same as ${base.slice(0, 8)}; set UI6_PURITY_BASE to compare)`);
+        return;
+      } catch (err) {
+        if (!base) {
+          console.log(`      (skipped: no git base: ${String(err.message).split('\n')[0]})`);
+          return;
+        }
+      }
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ui6e-base-'));
+      try {
+        const tar = path.join(tmp, 'app.tar');
+        execFileSync('git', ['archive', '-o', tar, base, 'app', ':(exclude)app/samples'], { cwd: ROOT });
+        execFileSync('tar', ['-xf', tar, '-C', tmp]);
+        fs.symlinkSync(path.join(APP, 'samples'), path.join(tmp, 'app', 'samples'));
+        const baseServer = createServer({ appDir: path.join(tmp, 'app'), port: 0 });
+        const bi = await baseServer.listen();
+        try {
+          const a = await purityBoot(`http://127.0.0.1:${bi.port}`);
+          const b = await purityBoot(origin);
+          assert.deepEqual(b.reqs, a.reqs, 'non-sample requests');
+          assert.deepEqual(b.ael, a.ael, 'window / document addEventListener calls by type');
+          assert.equal(b.intervals, a.intervals, 'setInterval calls');
+          assert.equal(b.store, a.store, 'store listeners');
+          assert.deepEqual(b.css, a.css, 'stylesheets');
+          assert.equal(b.edit, a.edit, 'today’s Edit DOM shape');
+          assert.equal(b.dom, a.dom, 'DOM shape');
+          assert.deepEqual(b.rig, a.rig, '__rig keys');
+          console.log(`      base ${base.slice(0, 8)}: ${a.reqs.length} requests, ${a.store} store listeners, `
+            + `${a.intervals} intervals, ${a.dom.split('\n').length} elements (${a.edit.split('\n').length} in Edit)`
+            + ' — identical');
+        } finally {
+          await baseServer.close();
+        }
+      } finally {
+        fs.rmSync(tmp, { recursive: true, force: true });
+      }
+    });
+
+  await T('?ui6=1 mounts the v6 Edit (CSS linked once): library, header, rig tabs by instrument, panel, keys',
+    async () => {
+      await page.goto(`${origin}/?ui6=1`);
+      await waitRigReady(page, { timeout: 40000 });
+      await until(() => !!window.__rig.views.v6 && !!window.__rig.views.edit?._debug?.v6, null, 30000);
+      await settled();
+      await setSlots(3);
+      await toEdit();
+      await until(() => document.querySelectorAll('.v6e-rt[data-block^="slot:"]').length === 3);
+      const r = await ev(() => ({
+        root: !!document.querySelector('#view-edit > .v6.v6-edit[data-testid="v6-edit"]'),
+        css: document.querySelectorAll('link[data-v6-edit-css]').length,
+        v6css: document.querySelectorAll('link[data-v6-css]').length,
+        mounted: window.__rig.views.edit._debug.mounted(),
+        parts: ['v6e-lib', 'v6e-head', 'v6e-rig', 'v6e-panel', 'v6e-inst', 'v6e-cnav', 'v6e-stage', 'v6e-bank',
+          'v6e-timesig'].filter((t) => !document.querySelector(`[data-testid="${t}"]`)),
+        tabs: [...document.querySelectorAll('.v6e-rt[data-block]')].map((t) => t.dataset.block),
+        names: [...document.querySelectorAll('.v6e-rt[data-block^="slot:"] .v6e-rt-name')].map((x) => x.textContent),
+        colors: [...document.querySelectorAll('.v6e-rt[data-block^="slot:"]')]
+          .map((t) => t.style.getPropertyValue('--c')),
+        db: document.querySelector('.v6e-rt[data-block="slot:0"] .v6e-rt-sub').textContent,
+        sent: document.querySelector('[data-testid="v6e-sentence"] .ev2-tok')?.textContent,
+        strip: !!document.querySelector('[data-testid="v6e-stage"] .v6-strip[data-testid="v6-strip-0"]'),
+        // D15: no Keys / Pad / Extra / Bass label anywhere (instrument names such as "Warm Pad" are fine)
+        roles: document.querySelector('[data-testid="v6-edit"]').innerText.split(/\n|\t/)
+          .some((l) => /^(keys|pad|extra|bass)$/i.test(l.trim())),
+        selected: window.__rig.views.edit.editState.selected,
+      }));
+      const s = await song();
+      assert.deepEqual(r, {
+        root: true, css: 1, v6css: 1, mounted: ['setlist', 'song-header', 'bottom', 'slot'], parts: [],
+        tabs: ['slot:0', 'slot:1', 'slot:2', 'drone', 'effects', 'master'],
+        names: ['Grand Piano', 'Warm Pad', 'Sub Bass'].map((x, k) => r.names[k]), // checked below
+        colors: ['var(--slot-0)', 'var(--slot-1)', 'var(--slot-2)'], db: r.db, sent: r.names[0], strip: true,
+        roles: false, selected: 'slot:0',
+      });
+      assert.ok(r.names.every((n) => n && !/^(Keys|Pad|Extra|Bass)$/i.test(n)), r.names.join());
+      assert.match(r.db, /dB$/);
+      assert.equal(s.patch.slots.length, 3);
+      assert.ok(v6EditFetches.some((u) => u.endsWith('/styles-v6-edit.css')));
+    });
+
+  await T('external interface: setView(edit, {block, focus}) selects; Drone / Effects / Master / Song panels mount '
+    + 'in the v6 frame; Perform’s Change opens the picker', async () => {
+    await ev(() => window.__rig.ctx.setView('edit', { block: 'slot:1', focus: 'instrument' }));
+    await until(() => window.__rig.views.edit.editState.selected === 'slot:1'
+      && !document.querySelector('[data-testid="v6e-imenu"]').hidden);
+    assert.equal(await ev(() => document.activeElement?.closest('[data-testid="v6e-imenu"]') !== null), true);
+    await page.keyboard.press('Escape');
+    await until(() => document.querySelector('[data-testid="v6e-imenu"]').hidden);
+    for (const id of ['drone', 'effects', 'master', 'song']) {
+      await ev((b) => window.__rig.views.edit.editState.select(b), id);
+      const want = id;
+      await until((b) => document.querySelector(`.v6e-legacy [data-panel="${b}"]`), want);
+      const tabOn = await ev((b) => document.querySelector(`.v6e-rt[data-block="${b}"]`)?.classList.contains('on')
+        ?? null, id);
+      assert.equal(tabOn, id === 'song' ? null : true, id);
+    }
+    // the header's KEY chip opens today's song panel (focus key), Notes the notes
+    await page.click('.v6e-head .ev2-song-keychip');
+    await until(() => window.__rig.views.edit.editState.selected === 'song');
+    await page.click(tid('v6e-tab-slot-0'));
+    await until(() => !!document.querySelector('[data-testid="v6e-inst"][data-slot="0"]'));
+    // Perform's strip Change → Edit picker on that slot
+    await ev(() => window.__rig.ctx.setView('perform'));
+    await until(() => document.body.dataset.view === 'perform');
+    await page.click(tid('v6-change-2'));
+    await until(() => document.body.dataset.view === 'edit' && window.__rig.views.edit.editState.selected === 'slot:2'
+      && !document.querySelector('[data-testid="v6e-imenu"]').hidden);
+    await page.keyboard.press('Escape');
+    await ev(() => window.__rig.views.edit.editState.select('slot:0'));
+  });
+
+  await T('category list: switching, aria, summaries, per-device persistence (focus jumps are not remembered)',
+    async () => {
+      await ev(() => localStorage.removeItem('worship-rig.v6.edit'));
+      for (const c of ['sound', 'eq', 'range', 'touch', 'sustain', 'sends', 'adv']) {
+        await choose(c);
+        const r = await ev((x) => ({
+          sel: document.querySelector(`[data-testid="v6e-cat-${x}"]`).getAttribute('aria-selected'),
+          others: [...document.querySelectorAll('.v6e-cn[aria-selected="true"]')].length,
+          saved: JSON.parse(localStorage.getItem('worship-rig.v6.edit') || '{}').cat,
+          sum: document.querySelector(`[data-testid="v6e-cat-${x}"] small`).textContent,
+        }), c);
+        assert.deepEqual({ ...r, sum: !!r.sum }, { sel: 'true', others: 1, saved: c, sum: true }, c);
+      }
+      // summaries say the state
+      await ev(() => {
+        const { store } = window.__rig;
+        const id = store.currentSong().id;
+        store.set(`songs.${id}.patch.slots.0.velocityCurve`, 'hard');
+        store.set(`songs.${id}.patch.slots.0.lowNote`, 48);
+        store.set(`songs.${id}.patch.slots.0.highNote`, 72);
+      });
+      await until(() => document.querySelector('[data-testid="v6e-cat-touch"] small').textContent === 'Heavy'
+        && document.querySelector('[data-testid="v6e-cat-range"] small').textContent.startsWith('C3–C5'));
+      // ↓ moves through the list
+      await page.focus(tid('v6e-cat-adv'));
+      await page.keyboard.press('Home');
+      await until(() => document.querySelector('[data-testid="v6e-ccont"]').dataset.cat === 'sound');
+      // remembered after a reload
+      await choose('sustain');
+      await page.reload();
+      await waitRigReady(page, { timeout: 40000 });
+      await until(() => !!window.__rig.views.edit?._debug?.v6, null, 30000);
+      await toEdit();
+      await until(() => document.querySelector('[data-testid="v6e-ccont"]')?.dataset.cat === 'sustain');
+      // a sentence word jumps (range) without changing the remembered category
+      await page.click('[data-testid="v6e-sentence"] .ev2-tok >> nth=1');
+      await until(() => document.querySelector('[data-testid="v6e-ccont"]').dataset.cat === 'range');
+      assert.equal(await ev(() => JSON.parse(localStorage.getItem('worship-rig.v6.edit')).cat), 'sustain');
+    });
+
+  await T('every category writes today’s slot-panel paths (data-bind union ⊇ today’s; real writes)', async () => {
+    const v6Binds = new Set();
+    for (const c of ['sound', 'eq', 'range', 'touch', 'sustain', 'sends', 'adv']) {
+      await choose(c);
+      for (const b of await ev(() => [...document.querySelectorAll('[data-testid="v6e-inst"] [data-bind^="slots.0."]')]
+        .map((e) => e.dataset.bind))) v6Binds.add(b);
+    }
+    // the strip carries the level / ON (not data-bound), and the range is the 88-key bar instead of the mini keyboard
+    const expected = todayBinds.filter((b) => !['slots.0.muted', 'slots.0.gain', 'slots.0.split'].includes(b));
+    const missing = expected.filter((b) => !v6Binds.has(b));
+    assert.deepEqual(missing, [], `today binds ${todayBinds.join()} · v6 ${[...v6Binds].join()}`);
+    // real writes: one control per category
+    await choose('sound');
+    let w = await writesOf(() => ev(() => {
+      const inp = document.querySelector('[data-smart="warmth"] input');
+      inp.value = '800';
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+    }));
+    assert.ok(w.length && w.every((p) => /^slots\.0\.eq\./.test(p)), `warmth → ${w}`);
+    await choose('touch');
+    w = await writesOf(() => page.click('[data-testid="v6e-ccont"] .segmented button >> text=Fixed'));
+    assert.deepEqual(w, ['slots.0.velocityCurve']);
+    await choose('sustain');
+    w = await writesOf(() => page.click('[data-testid="v6e-ccont"] [data-bind="slots.0.sustain"]'));
+    assert.deepEqual(w, ['slots.0.sustain']);
+    w = await writesOf(() => ev(() => {
+      const inp = document.querySelector('[data-bind="slots.0.release"] input');
+      inp.value = '300';
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+    }));
+    assert.deepEqual(w, ['slots.0.release']);
+    await choose('sends');
+    w = await writesOf(() => ev(() => {
+      const inp = document.querySelector('[data-bind="slots.0.sends.reverb"] input');
+      inp.value = '700';
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+    }));
+    assert.deepEqual(w, ['slots.0.sends.reverb']);
+    await choose('range');
+    w = await writesOf(() => page.click(tid('v6e-whole')));
+    assert.deepEqual(w, ['slots.0.lowNote', 'slots.0.highNote']);
+    w = await writesOf(() => page.click('[data-bind="slots.0.octave"] .step-btn.inc'));
+    assert.deepEqual(w, ['slots.0.octave']);
+    w = await writesOf(async () => {
+      await page.fill(tid('v6e-lowNote'), 'C3');
+      await page.press(tid('v6e-lowNote'), 'Enter');
+    });
+    assert.deepEqual(w, ['patch.slots.0.lowNote'.replace('patch.', '')]);
+    await choose('adv');
+    w = await writesOf(() => page.click('[data-bind="slots.0.transpose"] .step-btn.inc'));
+    assert.deepEqual(w, ['slots.0.transpose']);
+    w = await writesOf(() => page.click('[data-bind="slots.0.bendEnabled"]'));
+    assert.deepEqual(w, ['slots.0.bendEnabled']);
+    const s = await song();
+    assert.deepEqual([s.patch.slots[0].velocityCurve, s.patch.slots[0].lowNote, s.patch.slots[0].octave,
+      s.patch.slots[0].transpose], ['fixed', 48, 1, 1]);
+  });
+
+  await T('changed dots: Range (lowNote / highNote / octave), Space & Echo, Sustain; tab dot; Revert clears',
+    async () => {
+    await ev(() => {
+      const { store } = window.__rig;
+      window.__rig.ctx.setView('perform');
+      store.resetToFactory(store.currentSong().id);
+    });
+    await setSlots(3);
+    // a fresh baseline: v6 Perform takes the Revert snapshot when the view comes back from Edit
+    await ev(() => window.__rig.ctx.setView('edit'));
+    await ev(() => window.__rig.ctx.setView('perform'));
+    await toEdit();
+    await ev(() => window.__rig.views.edit.editState.select('slot:0'));
+    const dots = () => ev(() => Object.fromEntries([...document.querySelectorAll('.v6e-cn')]
+      .map((b) => [b.dataset.cat, !b.querySelector('.v6e-cd').hidden])));
+    const tabDot = () => ev(() => !document.querySelector('.v6e-rt[data-block="slot:0"] .v6e-rt-cd').hidden);
+    await until(() => [...document.querySelectorAll('.v6e-cn .v6e-cd')].every((d) => d.hidden));
+    assert.equal(await tabDot(), false);
+    await ev(() => {
+      const { store } = window.__rig;
+      store.set(`songs.${store.currentSong().id}.patch.slots.0.lowNote`, 40);
+    });
+    await until(() => !document.querySelector('[data-testid="v6e-cat-range"] .v6e-cd').hidden);
+    assert.deepEqual(await dots(), { sound: false, eq: false, range: true, touch: false, sustain: false,
+      sends: false, adv: false });
+    assert.equal(await tabDot(), true);
+    await ev(() => {
+      const { store } = window.__rig;
+      const id = store.currentSong().id;
+      store.set(`songs.${id}.patch.slots.0.sends.delay`, 0.6);
+      store.set(`songs.${id}.patch.slots.0.sustain`, false);
+    });
+    await until(() => !document.querySelector('[data-testid="v6e-cat-sends"] .v6e-cd').hidden
+      && !document.querySelector('[data-testid="v6e-cat-sustain"] .v6e-cd').hidden);
+    // the Range bar carries the dot too (keyboard.js `changed`)
+    await choose('range');
+    assert.equal(await ev(() => document.querySelector('[data-testid="v6e-range-kbd-bar-0"]')
+      .classList.contains('changed')), true);
+    // Revert (v6 Perform's) restores the song: every dot goes
+    await ev(() => window.__rig.ctx.setView('perform'));
+    await until(() => document.body.dataset.view === 'perform');
+    // revert through the store as the v6 Revert does (SAVED_FIELDS), whatever its button gesture
+    await ev(() => {
+      const { store, ctx } = window.__rig;
+      const base = ctx.getBaseline();
+      store.set(`songs.${base.id}.patch`, base.patch);
+    });
+    await toEdit();
+    await until(() => [...document.querySelectorAll('.v6e-cn .v6e-cd')].every((d) => d.hidden)
+      && document.querySelector('.v6e-rt[data-block="slot:0"] .v6e-rt-cd').hidden);
+  });
+
+  await T('Range: the 88-key bar drag writes lowNote in Edit (one end, one write); Set highest by playing; Esc disarms', async () => {
+    await choose('range');
+    await ev(() => {
+      const { store } = window.__rig;
+      const id = store.currentSong().id;
+      store.set(`songs.${id}.patch.slots.0.lowNote`, 36);
+      store.set(`songs.${id}.patch.slots.0.highNote`, 84);
+    });
+    await until(() => document.querySelectorAll('.v6-kbd-range .pkey.out').length === 88 - 49);
+    const k = await rectOf('.v6-kbd-range .pkey[data-note="48"]');
+    const hd = await rectOf(tid('v6e-range-kbd-hlo-0'));
+    const w = await writesOf(async () => {
+      await page.mouse.move(hd.cx, hd.cy);
+      await page.mouse.down();
+      await page.mouse.move(k.l + 1, hd.cy, { steps: 10 });
+      await page.mouse.up();
+    });
+    assert.deepEqual(w, ['slots.0.lowNote']);
+    const s = await song();
+    assert.deepEqual([s.patch.slots[0].lowNote, s.patch.slots[0].highNote], [48, 84]);
+    // Set highest by playing: arm, then a key (the controller's held notes)
+    await page.click(tid('v6e-arm-high'));
+    assert.equal(await page.getAttribute(tid('v6e-arm-high'), 'aria-pressed'), 'true');
+    await ev(() => window.__rig.controller.perform.noteOn(79, 90));
+    await until(() => window.__rig.store.currentSong().patch.slots[0].highNote === 79);
+    await ev(() => window.__rig.controller.perform.noteOff(79));
+    assert.equal(await page.getAttribute(tid('v6e-arm-high'), 'aria-pressed'), 'false');
+    // Esc disarms without a panic
+    await page.click(tid('v6e-arm-low'));
+    await page.keyboard.press('Escape');
+    assert.equal(await page.getAttribute(tid('v6e-arm-low'), 'aria-pressed'), 'false');
+  });
+
+  await T('Change instrument ▾: grouped picker writes slots.<i>.instrument with Undo; Esc closes it', async () => {
+    await page.click(tid('v6e-change'));
+    await until(() => !document.querySelector('[data-testid="v6e-imenu"]').hidden);
+    const target = await ev(() => {
+      const items = [...document.querySelectorAll('[data-testid="v6e-imenu"] .v6e-mi[aria-checked="false"]')];
+      return items.find((b) => b.dataset.value === 'synth:warm-pad')?.dataset.value || items[0].dataset.value;
+    });
+    const w = await writesOf(() => page.click(`[data-testid="v6e-imenu"] .v6e-mi[data-value="${target}"]`));
+    assert.deepEqual(w, ['slots.0.instrument']);
+    const s = await song();
+    assert.equal(`${s.patch.slots[0].instrument.type}:${s.patch.slots[0].instrument.id}`, target);
+    await until((t) => document.querySelector('.v6e-rt[data-block="slot:0"] .v6e-rt-name').textContent
+      === document.querySelector('[data-testid="v6e-sentence"] .ev2-tok').textContent, target);
+    await page.click(tid('v6e-change'));
+    await page.keyboard.press('Escape');
+    await until(() => document.querySelector('[data-testid="v6e-imenu"]').hidden);
+    await ev(() => {
+      const { store } = window.__rig;
+      const ref = { type: 'sampler', id: 'salamander-piano' };
+      store.set(`songs.${store.currentSong().id}.patch.slots.0.instrument`, ref);
+    });
+  });
+
+  await T('Tone EQ: today’s eqKeyboard mounts on open and is destroyed on leave; no leaked store listeners',
+    async () => {
+    await choose('sound');
+    const l0 = await ev(() => window.__storeListeners.size);
+    const t0 = await ev(() => window.__rig.views.edit._debug.instance()._debug.tone());
+    for (let k = 0; k < 3; k++) {
+      await choose('eq');
+      await until(() => !!document.querySelector('[data-testid="v6e-ccont"] .v6e-tonehost > *'));
+      await choose('range');
+      await choose('sound');
+    }
+    const t = await ev(() => window.__rig.views.edit._debug.instance()._debug.tone());
+    assert.deepEqual(t, { mounted: false, created: t0.created + 3, destroyed: t0.destroyed + 3 });
+    assert.equal(t0.created, t0.destroyed);
+    assert.equal(await ev(() => window.__storeListeners.size), l0);
+    // switching instruments while the EQ is open rebuilds it on the other slot
+    await choose('eq');
+    await page.click(tid('v6e-tab-slot-1'));
+    await until(() => document.querySelector('[data-testid="v6e-inst"]').dataset.slot === '1');
+    const t2 = await ev(() => window.__rig.views.edit._debug.instance()._debug.tone());
+    assert.equal(t2.mounted, true);
+    assert.equal(t2.created - t2.destroyed, 1);
+    await page.click(tid('v6e-tab-slot-0'));
+    await choose('sound');
+  });
+
+  await T('+ Add: an empty instrument at the end, selected with its picker; the strip on the right is Perform’s',
+    async () => {
+      const n0 = (await song()).patch.slots.length;
+      await page.click(tid('v6e-add'));
+      await until((n) => window.__rig.store.currentSong().patch.slots.length === n + 1, n0);
+      await until((n) => window.__rig.views.edit.editState.selected === `slot:${n}`
+        && !document.querySelector('[data-testid="v6e-imenu"]').hidden, n0);
+      assert.equal(await ev((n) => document.querySelector(`.v6e-rt[data-block="slot:${n}"] .v6e-rt-name`).textContent,
+        n0), 'Empty');
+      await page.keyboard.press('Escape');
+      // the strip: ON tile = the mute (same write as Perform)
+      await ev(() => window.__rig.views.edit.editState.select('slot:1'));
+      const w = await writesOf(() => page.click('[data-testid="v6e-stage"] [data-testid="v6-on-1"]'));
+      assert.deepEqual(w, ['slots.1.muted']);
+      await until(() => window.__rig.store.currentSong().patch.slots[1].muted === true);
+      await page.click('[data-testid="v6e-stage"] [data-testid="v6-on-1"]');
+      await until(() => !window.__rig.store.currentSong().patch.slots[1].muted);
+      await setSlots(3);
+      await until(() => document.querySelectorAll('.v6e-rt[data-block^="slot:"]').length === 3);
+      await ev(() => window.__rig.views.edit.editState.select('slot:0'));
+    });
+
+  await T('library fold: ⟨ folds to a rail, remembered per device; ⟩ brings it back', async () => {
+    await page.click(tid('v6e-lib-fold'));
+    await until(() => document.querySelector('[data-testid="v6e-lib"]').hidden
+      && !document.querySelector('[data-testid="v6e-lib-rail"]').hidden);
+    assert.equal(await ev(() => JSON.parse(localStorage.getItem('worship-rig.v6.edit')).lib), 'folded');
+    await page.reload();
+    await waitRigReady(page, { timeout: 40000 });
+    await until(() => !!window.__rig.views.edit?._debug?.v6, null, 30000);
+    await toEdit();
+    assert.equal(await ev(() => document.querySelector('[data-testid="v6e-lib"]').hidden), true);
+    await ev(() => document.getElementById('toasts')?.replaceChildren());
+    await ev(() => document.activeElement?.blur?.());
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(SHOTS, 'u5-edit-library-folded-1280.png') });
+    await page.click(tid('v6e-lib-unfold'));
+    await until(() => !document.querySelector('[data-testid="v6e-lib"]').hidden);
+    assert.equal(await ev(() => JSON.parse(localStorage.getItem('worship-rig.v6.edit')).lib), undefined);
+  });
+
+  await T('flag flips: v6 Edit ⇄ today’s Edit, stylesheet linked / removed, no store listeners left behind',
+    async () => {
+      for (let k = 0; k < 2; k++) {
+        assert.equal(await ev(() => window.__rig.setUiV6(false)), false);
+        await until(() => !!document.querySelector('#view-edit > .ev2:not(.v6-edit)')
+          && !window.__rig.views.edit._debug.v6);
+        assert.equal(await ev(() => !!document.querySelector('link[data-v6-edit-css]')), false);
+        assert.equal(await ev(() => window.__rig.setUiV6(true)), true);
+        await until(() => !!document.querySelector('#view-edit > .v6-edit') && window.__rig.views.edit._debug.v6);
+        assert.equal(await ev(() => document.querySelectorAll('link[data-v6-edit-css]').length), 1);
+      }
+      await ev(() => window.__rig.setUiV6(false));
+      await until(() => !window.__rig.views.edit._debug.v6 && !window.__rig.views.v6);
+      await page.waitForTimeout(300);
+      assert.equal(await ev(() => window.__storeListeners.size), baseListeners);
+      await ev(() => window.__rig.setUiV6(true));
+      await until(() => !!window.__rig.views.edit?._debug?.v6 && !!window.__rig.views.v6);
+    });
+
+  await T('screenshots 1280×800 Sanctuary: Sound, Tone EQ, Range', async () => {
+    await ev(() => {
+      const { store, controller } = window.__rig;
+      controller.scenes?.go(null);
+      store.resetToFactory(store.currentSong().id);
+    });
+    await setSlots(3);
+    await ev(() => window.__rig.ctx.setView('perform'));
+    await toEdit();
+    await ev(() => window.__rig.views.edit.editState.select('slot:0'));
+    for (const c of ['sound', 'eq', 'range']) {
+      await choose(c);
+      await ev(() => document.getElementById('toasts')?.replaceChildren());
+      await ev(() => document.activeElement?.blur?.());
+      await page.mouse.move(5, 790);
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: path.join(SHOTS, `u5-edit-${c}-1280.png`) });
+    }
+    // nothing scrolls sideways at 1280 or 1024
+    for (const [w, hgt] of [[1280, 800], [1024, 700]]) {
+      await page.setViewportSize({ width: w, height: hgt });
+      await page.waitForTimeout(300);
+      const over = await ev(() => [document.scrollingElement, ...document.querySelectorAll('.v6-edit, .v6e-main, '
+        + '.v6e-inst, .v6e-ccont')].filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.className || 'page'));
+      assert.deepEqual(over, [], `${w}×${hgt}`);
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+  });
+
+  await T('iPad portrait 820×1180: categories as a row of tabs, no strip, no sideways scroll; ☰ Songs drawer',
+    async () => {
+      await page.setViewportSize({ width: 820, height: 1180 });
+      try {
+        await choose('sound');
+        await page.waitForTimeout(300);
+        const r = await ev(() => ({
+          dir: getComputedStyle(document.querySelector('[data-testid="v6e-cnav"]')).flexDirection,
+          stage: getComputedStyle(document.querySelector('[data-testid="v6e-stage"]')).display,
+          lib: getComputedStyle(document.querySelector('[data-testid="v6e-lib"]')).display,
+          side: document.scrollingElement.scrollWidth > document.scrollingElement.clientWidth + 1,
+          rows: new Set([...document.querySelectorAll('.v6e-cn')].map((b) => Math.round(b.getBoundingClientRect().top)))
+            .size,
+        }));
+        assert.deepEqual(r, { dir: 'row', stage: 'none', lib: 'none', side: false, rows: r.rows });
+        assert.ok(r.rows <= 2, `${r.rows} rows of category tabs`);
+        await ev(() => document.getElementById('toasts')?.replaceChildren());
+        await page.screenshot({ path: path.join(SHOTS, 'u5-edit-ipad-portrait-820.png') });
+        await page.click('.v6e-head .ev2-song-songsbtn');
+        await until(() => getComputedStyle(document.querySelector('[data-testid="v6e-lib"]')).display === 'flex');
+        await page.keyboard.press('Escape');
+        await until(() => getComputedStyle(document.querySelector('[data-testid="v6e-lib"]')).display === 'none');
+      } finally {
+        await page.setViewportSize({ width: 1280, height: 800 });
+      }
+    });
+
+  await T('zero console.error, no HTTP ≥ 400', async () => {
+    assert.deepEqual(errors, []);
+  });
+} finally {
+  await context.close();
+  await browser.close();
+  await server.close();
+}
+
+const failed = results.filter((r) => !r.ok);
+console.log(`\nui-v6-edit: ${results.length - failed.length}/${results.length} passed`);
+process.exit(failed.length ? 1 : 0);

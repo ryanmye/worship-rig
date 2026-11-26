@@ -1098,7 +1098,48 @@ function swapPerform(mount, isV6) {
   }
   if (store.get().settings.chartView === true) applyChartView();
 }
+// UI v6 U5a: Edit follows the switch too (views/v6/edit/edit.js mountEditV6 ⇄ views/edit/shell.js mountEdit). The
+// boot mount below reads the flag itself; later flips swap the mounted Edit here.
+let editIsV6 = false;
+let editBooted = false;
+let editSwap = null;
+function loadEditV6() {
+  return import('./views/v6/edit/edit.js').then(async (mod) => {
+    await mod.loadV6EditCss();
+    return mod.mountEditV6;
+  }).catch((err) => {
+    console.warn(`[ui] ./views/v6/edit/edit.js not available: ${err && err.message}`);
+    return loadModule('./views/edit/shell.js', 'mountEdit'); // never leave Edit empty
+  });
+}
+function applyEditV6() {
+  if (!editBooted) return Promise.resolve(editIsV6);
+  const on = store.get().settings.uiV6 === true;
+  if (on === editIsV6 && editView) return Promise.resolve(editIsV6);
+  editSwap ||= (on ? loadEditV6() : loadModule('./views/edit/shell.js', 'mountEdit')).then((mount) => {
+    editSwap = null;
+    if ((store.get().settings.uiV6 === true) !== on) return applyEditV6(); // flipped again meanwhile
+    if (!mount) return editIsV6;
+    try {
+      editView?.destroy();
+    } catch (err) {
+      console.warn('[ui] Edit destroy failed', err);
+    }
+    editView = null;
+    try {
+      editView = mount(els.edit, ctx) || null;
+      editIsV6 = mount.name === 'mountEditV6';
+    } catch (err) {
+      console.warn('[ui] Edit mount failed', err);
+      placeholder(els.edit, 'Edit view failed to load.');
+      editIsV6 = false;
+    }
+    return editIsV6;
+  });
+  return editSwap;
+}
 function applyUiV6() {
+  applyEditV6();
   const on = store.get().settings.uiV6 === true;
   if (!on) {
     if (performIsV6 || !performView) swapPerform(mountPerform, false);
@@ -1152,15 +1193,21 @@ els.settings.setAttribute('aria-modal', 'true');
 els.settings.setAttribute('aria-label', 'Settings');
 const viewsReady = Promise.all([
   // H-v2 Edit (views/edit/shell.js; hv2-edit-integrate). The old views/edit.js is retired.
-  loadModule('./views/edit/shell.js', 'mountEdit').then((mountEdit) => {
-    if (!mountEdit) return;
-    try {
-      editView = mountEdit(els.edit, ctx) || null;
-    } catch (err) {
-      console.warn('[ui] mountEdit failed', err);
-      placeholder(els.edit, 'Edit view failed to load.');
-    }
-  }),
+  // UI v6 U5a: with settings.uiV6 on, views/v6/edit/edit.js (mountEditV6, the same interface) mounts instead.
+  (store.get().settings.uiV6 === true ? loadEditV6() : loadModule('./views/edit/shell.js', 'mountEdit'))
+    .then((mountEdit) => {
+      if (!mountEdit) return;
+      try {
+        editView = mountEdit(els.edit, ctx) || null;
+        editIsV6 = mountEdit.name === 'mountEditV6';
+      } catch (err) {
+        console.warn('[ui] mountEdit failed', err);
+        placeholder(els.edit, 'Edit view failed to load.');
+      }
+    }).finally(() => {
+      editBooted = true;
+      if ((store.get().settings.uiV6 === true) !== editIsV6) applyEditV6(); // flipped while it loaded
+    }),
   loadModule('./views/settings.js', 'mountSettings').then((mountSettings) => {
     if (!mountSettings) return;
     try {

@@ -56,6 +56,7 @@ const SUITES = [
   // UI v6 (D22, UI6-build-plan U1; hidden): flag-off purity vs the base build, the v6 Perform's strips / snapshots /
   // song bar / holds, on-off cycles
   { name: 'ui-v6', groups: ['phase2'], cmd: [node, 'test/phase2/ui-v6/run.mjs'], timeout: 8 * MIN },
+  { name: 'ui-v6-edit', groups: ['phase2'], cmd: [node, 'test/phase2/ui-v6-edit/run.mjs'], timeout: 8 * MIN },
   // Lane E5: real 1.x libraries (test/fixtures/library-1x) → 2.0 on every import path, the 1.1 downgrade, the 2.0 app
   { name: 'migration-1x', groups: ['phase2'], cmd: [node, 'test/phase2/migration-1x/run.mjs'], timeout: 8 * MIN },
   // themes-setup: every registered theme boots flash-free, switches at runtime, picker/Quick, selector coverage
