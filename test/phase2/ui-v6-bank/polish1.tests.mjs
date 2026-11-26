@@ -50,6 +50,40 @@ export async function polish1BankTests(x) {
       await until(() => window.__rig.views.v6.bank.isOpen === false);
     });
 
+  // skeptic UI6-polish1 F1: Settings opened over the browser (search typed, focused). The Esc that closes Settings
+  // gives the focus back to the search box; it must not also clear the search (nor close the browser, as on
+  // 38c664b) nor panic, with "Esc always panics" off or on. The next Esc is the browser's again.
+  await T('polish1 F1: the Esc that closes Settings over the browser keeps the search and the browser (D24.7 both)',
+    async () => {
+      await closeBank();
+      await armPanics();
+      const st = () => ev(() => ({
+        open: window.__rig.views.v6.bank.isOpen, settings: document.body.classList.contains('settings-open'),
+        q: document.querySelector('[data-testid="v6-bank-search"]').value, panics: window.__p1panics,
+      }));
+      try {
+        for (const on of [null, true]) {
+          await ev((v) => window.__rig.store.set('settings.escPanics', v), on);
+          await ev(() => window.__rig.ctx.openBank({ mode: 'bank', focus: true }));
+          await until(() => document.activeElement?.dataset?.testid === 'v6-bank-search');
+          await page.fill(tid('v6-bank-search'), 'river');
+          await ev(() => window.__rig.ctx.openSettings());
+          await until(() => document.body.classList.contains('settings-open'));
+          await page.waitForTimeout(100);
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(150);
+          assert.deepEqual(await st(), { open: true, settings: false, q: 'river', panics: 0 }, `escPanics ${on}`);
+          await page.keyboard.press('Escape'); // the browser's own Esc: the search clears first (O1)
+          await page.waitForTimeout(150);
+          assert.deepEqual(await st(), { open: true, settings: false, q: '', panics: 0 }, `escPanics ${on}: then O1`);
+          await closeBank();
+        }
+      } finally {
+        await ev(() => window.__rig.store.set('settings.escPanics', null));
+        await ev(() => window.__rig.ctx.closeSettings());
+      }
+    });
+
   await T('polish1 U7a O2: Back after the replaced entry was removed: that song, in the gap (not another copy)',
     async () => {
       await closeBank();

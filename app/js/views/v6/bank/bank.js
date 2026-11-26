@@ -448,8 +448,11 @@ export function songBank(v, o = {}) {
     if (!isOpen) {
       isOpen = true;
       el.hidden = false;
+      // skeptic UI6-polish1 F1: underModal (U7c F3) as learn mode / Arrange: Settings can open over the browser
+      // (⌘, / the gear), and the Esc that closes it then gave the focus back to the search box, where onEscape
+      // cleared the player's search (before polish 1 it closed the browser). That Esc is Settings' alone.
       closeOverlay = openOverlay({
-        el, closeOnOutside: false, group: 'v6-bank', onEscape: escInSearch,
+        el, closeOnOutside: false, group: 'v6-bank', underModal: true, onEscape: escInSearch,
         onClose: (reason) => {
           closeOverlay = null;
           if (isOpen) close(reason);
