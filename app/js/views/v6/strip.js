@@ -42,7 +42,30 @@ export function createStrip(v, i) {
   const pickMe = () => {
     if (coarse && info?.slot && !info.locked) v.pickRange?.(i);
   };
-  d.listen(who, 'click', pickMe);
+  // skeptic UI6-U2 F2: a touch / pen tap picks on pointerup, not on click. Chromium drops the click of a tap that
+  // lands within ~0.4 s of a quick touch drag (tap suppression after the drag's fling), which is exactly D18's
+  // "drag the ends, then tap another instrument to switch": the tap did nothing (13 of 16 taps in a probe; the ui-v6
+  // iPad test's flake). pointerdown / pointerup still arrive, so they decide; the click such a tap may still produce
+  // is ignored. Mouse and keyboard / AT clicks keep the click path.
+  let tap = null; // {id, x, y} of a touch / pen press on the name
+  let tapDoneAt = -Infinity;
+  d.listen(who, 'pointerdown', (ev) => {
+    tap = ev.pointerType === 'mouse' ? null : { id: ev.pointerId, x: ev.clientX, y: ev.clientY };
+  });
+  d.listen(who, 'pointercancel', () => {
+    tap = null; // the row started scrolling under the finger
+  });
+  d.listen(who, 'pointerup', (ev) => {
+    const t = tap;
+    tap = null;
+    if (!t || t.id !== ev.pointerId || Math.hypot(ev.clientX - t.x, ev.clientY - t.y) > 10) return;
+    tapDoneAt = performance.now();
+    pickMe();
+  });
+  d.listen(who, 'click', () => {
+    if (performance.now() - tapDoneAt < 1000) return; // that tap was handled on pointerup
+    pickMe();
+  });
   d.listen(who, 'keydown', (ev) => {
     if (!coarse || (ev.key !== 'Enter' && ev.key !== ' ')) return;
     ev.preventDefault();

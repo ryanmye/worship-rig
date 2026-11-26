@@ -969,6 +969,38 @@ try {
       await touchDrag(hi2.cx, hi2.cy, k.r);
       await tuntil(() => window.__rig.store.currentSong().patch.slots[2].highNote === 72);
       assert.notEqual(sl2, 72);
+      // skeptic UI6-U2 F2: drag an end, then at once tap another instrument's name: it switches. Chromium drops the
+      // click of a tap that soon after a quick touch drag (this test's former flake: 2 of 5 runs under load)
+      const hi2b = await rectOf(tp, tid(`${KB}-hhi-2`));
+      const k71 = await keyRect(tp, 71);
+      const who1a = await rectOf(tp, tid('v6-who-1'));
+      await touchDrag(hi2b.cx, hi2b.cy, k71.r);
+      await tp.touchscreen.tap(who1a.cx, who1a.cy);
+      await tuntil(() => document.querySelector('[data-testid="v6-strip-1"]').classList.contains('range-picked'));
+      await tuntil(() => window.__rig.store.currentSong().patch.slots[2].highNote === 71);
+      // and back to the first one, again straight after a drag (on bar 1 this time)
+      const hi1 = await rectOf(tp, tid(`${KB}-hhi-1`));
+      const k83 = await keyRect(tp, 83);
+      await touchDrag(hi1.cx, hi1.cy, k83.r);
+      await tp.touchscreen.tap(who2.cx, who2.cy);
+      await tuntil(() => document.querySelector('[data-testid="v6-strip-2"]').classList.contains('range-picked'));
+      await tuntil(() => window.__rig.store.currentSong().patch.slots[1].highNote === 83);
+      // the same, deterministically: a touch press + release with no click picks; a click that follows is not a
+      // second toggle; a press that moves (the row scrolling) picks nothing
+      const tapNoClick = (i, { click = false, dx = 0 } = {}) => tev(({ i, click, dx }) => {
+        const w = document.querySelector(`[data-testid="v6-who-${i}"]`);
+        const r = w.getBoundingClientRect();
+        const o = { pointerType: 'touch', pointerId: 77, isPrimary: true, bubbles: true, cancelable: true,
+          clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+        w.dispatchEvent(new PointerEvent('pointerdown', o));
+        w.dispatchEvent(new PointerEvent('pointerup', { ...o, clientX: o.clientX + dx }));
+        if (click) w.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        return [0, 1, 2].map((k) => document.querySelector(`[data-testid="v6-strip-${k}"]`).classList
+          .contains('range-picked'));
+      }, { i, click, dx });
+      assert.deepEqual(await tapNoClick(1), [false, true, false], 'pointerup alone picks');
+      assert.deepEqual(await tapNoClick(2, { click: true }), [false, false, true], 'pointerup + click: one toggle');
+      assert.deepEqual(await tapNoClick(1, { dx: 40 }), [false, false, true], 'a press that moved picks nothing');
       // tap the keys: finishes, plays nothing
       const notes0 = await tev(() => window.__notes);
       const key = await keyRect(tp, 60);
