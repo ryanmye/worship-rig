@@ -1,24 +1,23 @@
-// UI v6 bottom row (D16 "Kept from today"; UI6-build-plan U1): today's on-screen keyboard (C2–C7, components/keys.js)
-// with one range bar per instrument (display only, from lowNote / highNote; U2 makes them draggable), computer-key
-// letters while no MIDI keyboard is connected, held notes lit; then Revert (hold), Fade out, PANIC (hold, or Esc) and
-// Lock (hold), wired to the same controller / store calls as views/perform.js.
+// UI v6 bottom row (D16 "Kept from today"; UI6-build-plan U1, U2): the keyboard with range bars (keyboard.js, 'perform'
+// size: today's keys C2–C7, one draggable range bar per instrument, computer-key letters while no MIDI keyboard is
+// connected, held notes lit); then Revert (hold), Fade out, PANIC (hold, or Esc) and Lock (hold), wired to the same
+// controller / store calls as views/perform.js.
 import { h, setText, disposer } from '../components/util.js';
-import { pianoKeyboard, keyLayout } from '../components/keys.js';
 import { holdButton } from '../components/holdButton.js';
 import { say } from '../components/voice.js';
 import { KEY_MAP } from '../../controller.js';
 import { MAX_SLOTS } from '../../shared/params.js';
 import { slotMuteState } from '../perform.js';
 import { slotColor, button, icon, HOLD_MS } from './lib.js';
+import { rangeKeyboard } from './keyboard.js';
 
-const PIANO_FROM = 36;
-const PIANO_TO = 96;
 const KEY_LABELS = Object.entries(KEY_MAP).map(([code, off]) => [off, code === 'Semicolon' ? ';' : code.slice(3)]);
 
 /**
- * @param {object} v  the v6 shell's view context
+ * @param {object} v  the v6 shell's view context (uses setRange, onRangePick, onCoarse for the range bars)
  * @returns {{el:HTMLElement, keysEl:HTMLElement, render(x:object):void, setHeld(held:any):void,
- *            setLetters(on:boolean, oct:number):void, setFaded(b:boolean):void, releaseAll():void, destroy():void}}
+ *            setLetters(on:boolean, oct:number):void, setFaded(b:boolean):void, releaseAll():void, kb:object,
+ *            destroy():void}}
  */
 export function bottomRow(v) {
   const { store, controller } = v;
@@ -26,16 +25,16 @@ export function bottomRow(v) {
   const comps = [];
   const use = (c) => (comps.push(c), c);
 
-  const piano = use(pianoKeyboard({
-    from: PIANO_FROM, to: PIANO_TO, label: 'On-screen keyboard (C2–C7)',
+  const kb = use(rangeKeyboard({
+    size: 'perform',
     onNoteOn: (n, vel) => controller.perform.noteOn(n, vel),
     onNoteOff: (n) => controller.perform.noteOff(n),
+    onRange: (i, field, note) => v.setRange(i, field, note),
+    onPick: (i) => v.onRangePick?.(i),
+    onCoarse: (c) => v.onCoarse?.(c),
   }));
-  piano.el.dataset.testid = 'v6-piano';
-  const layout = new Map(keyLayout(PIANO_FROM, PIANO_TO).map((k) => [k.note, k]));
-  const bars = [];
-  const rbars = h('div.rbars.v6-rbars', { 'aria-hidden': 'true', 'data-testid': 'v6-range-bars' });
-  const keysEl = h('section.panel.v6-keys', { 'data-testid': 'v6-keys' }, rbars, piano.el);
+  kb.keysEl.dataset.testid = 'v6-piano';
+  const keysEl = h('section.panel.v6-keys', { 'data-testid': 'v6-keys' }, kb.el);
 
   const revertCount = h('span.rv-cnt-t', { text: '' });
   const revertBtn = use(holdButton({
@@ -79,43 +78,25 @@ export function bottomRow(v) {
     el,
     keysEl,
     /**
-     * @param {{song:object|null, same:boolean, count:number, locked:boolean}} x
-     *   same: nothing differs from the Revert snapshot; count: changes with a dot (perform.js changeCount)
+     * @param {{song:object|null, same:boolean, count:number, locked:boolean, names?:object, changed?:Set<string>}} x
+     *   same: nothing differs from the Revert snapshot; count: changes with a dot (perform.js changeCount);
+     *   names: lib.js instrumentNames (the bars' labels); changed: the shell's changed paths (a bar's dot)
      */
     render(x) {
       const song = x.song;
       const n = song ? Math.min(MAX_SLOTS, song.patch.slots.length) : 0;
-      while (bars.length < n) {
-        const k = bars.length;
-        const b = h('i.rbar', { hidden: true, style: { '--c': slotColor(k) }, dataset: { slot: String(k) } });
-        bars.push(b);
-        rbars.append(b);
+      const bars = [];
+      for (let i = 0; i < n; i++) {
+        const slot = song.patch.slots[i];
+        if (!slot) continue; // an empty slot plays nothing: no bar
+        bars.push({
+          i, name: x.names ? x.names.name(slot.instrument) : `Instrument ${i + 1}`, color: slotColor(i),
+          lo: slot.lowNote, hi: slot.highNote, off: slotMuteState(slot).muted,
+          changed: !!x.changed && (x.changed.has(`patch.slots.${i}.lowNote`)
+            || x.changed.has(`patch.slots.${i}.highNote`)),
+        });
       }
-      let row = 0;
-      for (let i = 0; i < bars.length; i++) {
-        const rb = bars[i];
-        const slot = i < n ? song.patch.slots[i] : null;
-        if (!slot) {
-          rb.hidden = true;
-          continue;
-        }
-        const lo = Math.max(PIANO_FROM, Number.isFinite(slot.lowNote) ? slot.lowNote : 0);
-        const hi = Math.min(PIANO_TO, Number.isFinite(slot.highNote) ? slot.highNote : 127);
-        const a = layout.get(lo);
-        const b = layout.get(hi);
-        rb.hidden = !(a && b && hi >= lo);
-        if (rb.hidden) continue;
-        rb.style.left = `${a.left.toFixed(2)}%`;
-        rb.style.width = `${(b.left + b.width - a.left).toFixed(2)}%`;
-        rb.style.setProperty('--row', String(row));
-        rb.classList.toggle('off', slotMuteState(slot).muted);
-        rb.classList.toggle('open-l', (slot.lowNote ?? 0) < PIANO_FROM);
-        rb.classList.toggle('open-r', (slot.highNote ?? 127) > PIANO_TO);
-        row += 1;
-      }
-      rbars.classList.toggle('dense', row > 4);
-      if (row > 4) rbars.style.setProperty('--rstep', `${(23 / row).toFixed(2)}px`);
-      else rbars.style.removeProperty('--rstep');
+      kb.render({ bars, locked: x.locked });
       revertBtn.setDisabled(x.same);
       revertBtn.el.classList.toggle('none', x.count === 0);
       setText(revertCount, x.same ? say('revertNone') : x.count ? `${x.count} changed` : 'levels only');
@@ -129,21 +110,23 @@ export function bottomRow(v) {
       for (const b of [revertBtn, panicBtn, lockBtn]) b.refresh();
     },
     setHeld(held, partOf) {
-      piano.set(held, partOf);
+      kb.setHeld(held, partOf);
     },
     setLetters(on, oct) {
       const key = on ? `on:${oct}` : 'off';
       if (key === lettersKey) return;
       lettersKey = key;
-      piano.setKeyLetters(on ? new Map(KEY_LABELS.map(([off, l]) => [60 + 12 * oct + off, l])) : null);
+      kb.setKeyLetters(on ? new Map(KEY_LABELS.map(([off, l]) => [60 + 12 * oct + off, l])) : null);
     },
     setFaded(faded, text) {
       fadeBtn.classList.toggle('faded', faded);
       setText(fadeLabel, faded ? text : 'Fade out');
     },
     releaseAll() {
-      piano.releaseAll();
+      kb.releaseAll();
     },
+    /** The keyboard with range bars (keyboard.js): pick(i) for the coarse-pointer pick mode, test hooks. */
+    kb,
     destroy() {
       d.dispose();
       for (const c of comps.splice(0)) c.destroy();

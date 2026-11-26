@@ -3,6 +3,7 @@
    every selector sits under .v6. Colours are the theme's tokens (Sanctuary v2 is the reference; the fallbacks are
    Classic's), so the view follows every theme. The shared components (ON tile, fader, chips, hold buttons, keys) keep
    their own styles.css / theme rules; this file lays them out. */
+@import url('./styles-v6-keyboard.css'); /* U2: the keyboard with range bars (views/v6/keyboard.js) */
 
 .v6 {
   /* positions 4..6 of the mockup's POS_COL (the first four are the theme's --slot-0..3): views/v6/lib.js slotColor */

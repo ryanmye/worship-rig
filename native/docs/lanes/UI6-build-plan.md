@@ -52,6 +52,20 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 - For U2: `bottom.js` holds the keyboard; replace its display-only range bars. For U3 / U4: mount into
   `.v6-right` / `.v6-left` (perform.js `right` / `left`).
 
+## U2 status (builder, 2026-11-26; lane-u2 from lane-u1 6623b04, awaiting the skeptic)
+
+- Built: `app/js/views/v6/keyboard.js` (`rangeKeyboard`, sizes 'perform' and 'range'), `app/styles-v6-keyboard.css`
+  (imported by styles-v6.css); bottom.js now mounts it; strips get the iPad pick outline ("changing range"); harness
+  `test/phase2/ui-v6/keyboard-harness.html`. Interface notes: CONTRACT_CHANGES "## UI v6 U2".
+- Wired: drag either end (fine pointers: always; coarse: pick an instrument first), snaps to every key, label while
+  dragging, writes `slots.<i>.lowNote` / `highNote` once on release; ←/→ / Shift on a focused handle; clipped ends
+  kept; past the edge = 0 / 127; Lock freezes it; a range edit counts in Revert and dots its bar (v6 only).
+- Choices to confirm with Ryan: write on release (not live while dragging); strict lowest < highest; the finishing
+  tap on the keys plays no note; past the keyboard edge = "every key that way".
+- For U5: mount `` rangeKeyboard({size: 'range', onRange: (i, f, n) => ctx.set(`slots.${i}.${f}`, n)}) `` and render
+  one bar `{i, name, color: slotColor(i), lo, hi, changed}`; the Range category's dot needs the same range paths as
+  `V6_DIFF_WATCH`.
+
 ## Queued small tasks
 
 - **U-MOVE (D23):** store `insertSlot(after)` / `moveSlot(from, to)` (carry scenes, wheel targets, instrument

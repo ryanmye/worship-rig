@@ -9,7 +9,7 @@
 import { h, disposer, rafCoalesce } from '../components/util.js';
 import { quickSheet } from '../components/quickSheet.js';
 import { say, onVoiceChange } from '../components/voice.js';
-import { changedPaths } from '../../shared/song-diff.js';
+import { changedPaths, DIFF_WATCH } from '../../shared/song-diff.js';
 import { SPACE_PRESETS } from '../../shared/fx-presets.js';
 import { isValidPath, SLOT_COUNT } from '../../shared/params.js';
 import { slotMuteState, slotWheelFactor, changeCount } from '../perform.js';
@@ -38,6 +38,13 @@ export function loadV6Css() {
     link.addEventListener('error', () => res(false), { once: true });
   });
 }
+
+/**
+ * What carries a "changed" mark on the v6 Perform: today's watch list (shared/song-diff.js DIFF_WATCH) plus each
+ * instrument's range (U2: the range bars are a tap-and-drag control on the stage now, so a range edit counts in
+ * Revert's "n changed" and marks its bar). Today's Perform / Edit keep DIFF_WATCH unchanged (flag-off purity).
+ */
+export const V6_DIFF_WATCH = Object.freeze([...DIFF_WATCH, 'patch.slots.<i>.lowNote', 'patch.slots.<i>.highNote']);
 
 /** Song fields Revert restores (perform.js SAVED_FIELDS, controller.revertSong()). */
 const SAVED_FIELDS = ['patch', 'drone', 'tempo', 'hearIn', 'playIn', 'transposeOctave', 'minor'];
@@ -134,6 +141,29 @@ export function mountPerformV6(root, ctx) {
       toast(`“${s.name}” is back to how it was when you selected it.`, 'ok', { ms: 3000 });
     },
     setFaded: (on) => setFaded(on),
+    /**
+     * A range bar's end moved (keyboard.js, on release or an arrow key): the same slot fields today's Edit writes for
+     * the lowest / highest note (slot.js miniKeyboard → slots.<i>.lowNote / highNote), so the changed dots, Revert
+     * and the store → engine diff treat it like any edit. Frozen under Perform lock (D18; LOCK table).
+     */
+    setRange(i, field, note) {
+      if (isLocked() || (field !== 'lowNote' && field !== 'highNote')) return false;
+      const slot = shownId && store.getSong(shownId)?.patch.slots[i];
+      if (!slot || !Number.isInteger(note)) return false;
+      return store.set(`songs.${shownId}.patch.slots.${i}.${field}`, note);
+    },
+    /** A strip's name was tapped: on a coarse pointer, change that instrument's range (tap it again to finish). */
+    pickRange(i) {
+      const kb = bottom.kb;
+      if (!kb.coarse || isLocked()) return;
+      kb.pick(kb.picked === i ? null : i);
+    },
+    /** keyboard.js → the strips: outline + "changing range" on the picked one. */
+    onRangePick: (i) => row.setPicked(i),
+    onCoarse: (c) => {
+      el.classList.toggle('coarse', c);
+      row.setCoarse(c);
+    },
   };
 
   // ---------------------------------------------------------------- layout
@@ -149,6 +179,7 @@ export function mountPerformV6(root, ctx) {
     h('span', { text: 'Drone · Setlist · Notes' }), h('small', { text: 'sidebar coming' }));
   const board = h('div.v6-board', { 'data-testid': 'v6-board' }, left, row.el, right);
   const bottom = bottomRow(v);
+  v.onCoarse(bottom.kb.coarse);
   const quick = quickSheet({
     anchor: ctx.quickButton || null,
     onTempo: (bpm) => shownId && store.set(`songs.${shownId}.tempo`, bpm),
@@ -191,6 +222,8 @@ export function mountPerformV6(root, ctx) {
       row.cancelDrags();
       row.closePanels();
       bar.closePops();
+      bottom.kb.cancelDrag();
+      bottom.kb.pick(null);
     }
     shownId = newId;
     const locked = !!st.performLock;
@@ -199,7 +232,7 @@ export function mountPerformV6(root, ctx) {
     lastView = st.view;
     if (st.view !== 'perform') quick.close();
     const base = song && snap && snap.id === song.id ? snap.song : null;
-    const changed = base ? changedPaths(song, base) : new Set();
+    const changed = base ? changedPaths(song, base, V6_DIFF_WATCH) : new Set();
     const live = liveOf(song);
     const w = wheelNow();
     bar.render(state);
@@ -210,7 +243,7 @@ export function mountPerformV6(root, ctx) {
       wheel: (i) => slotWheelFactor(live.patch, i, w),
     });
     const same = !song || !snap || snap.id !== song.id || savedJSON(song) === snap.json;
-    bottom.render({ song: live, same, count: changeCount(changed), locked });
+    bottom.render({ song: live, same, count: changeCount(changed), locked, names, changed });
     el.classList.toggle('locked', locked);
     if (quick.isOpen) renderQuick();
   }
@@ -404,7 +437,7 @@ export function mountPerformV6(root, ctx) {
     },
     get changedPaths() {
       const song = store.currentSong();
-      return song && snap && snap.id === song.id ? [...changedPaths(song, snap.song)] : [];
+      return song && snap && snap.id === song.id ? [...changedPaths(song, snap.song, V6_DIFF_WATCH)] : [];
     },
     toggleQuick() {
       if (quick.isOpen) quick.close();

@@ -7,8 +7,12 @@
 //   the right store paths, ⋯ menu, Add instrument, > 5 instruments scroll with name pills, snapshots (save, edited,
 //   Update, fold remembered), song bar (transpose, Sing it in, Space, Setlist cue + GO), Lock / PANIC / Revert holds,
 //   on / off cycles leave nothing behind; zero console.error and no HTTP ≥ 400.
-//   node test/phase2/ui-v6/run.mjs   (screenshots: 1280×800 Sanctuary, 2 / 5 / 7 instruments → ./screenshots, or
-//   UI6_SHOTS=<dir>). The purity comparison needs git: base = UI6_PURITY_BASE or `git merge-base HEAD v2-native`; it is
+//   U2 (views/v6/keyboard.js): range bars at the keys' real positions, drag snaps (black keys too) and writes one end
+//   on release, clamp, open ends past the edge, clipped ranges kept, ←/→ / Shift on a focused handle, changed dot +
+//   Revert, Lock; the 'range' size in keyboard-harness.html (served at /u2-keyboard-harness.html by a route); a coarse
+//   (hasTouch / isMobile) context for the iPad pick-then-drag mode with CDP touch drags.
+//   node test/phase2/ui-v6/run.mjs   (screenshots: 1280×800 Sanctuary, 2 / 5 / 7 instruments, U2 drag / iPad pick /
+//   Edit range → ./screenshots, or UI6_SHOTS=<dir>). The purity comparison needs git: base = UI6_PURITY_BASE or `git merge-base HEAD v2-native`; it is
 //   skipped (with a note) when app/ does not differ from the base.
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -581,6 +585,435 @@ try {
     await hold(tid('v6-transpose-down'));
     await hold(tid('v6-lock'));
     await until(() => !window.__rig.store.get().settings.performLock);
+  });
+
+  // ---------------------------------------------------------------- U2: the keyboard with range bars
+  const KB = 'v6-kbd';
+  /** Set a slot's range in an order the store never swaps (normalizeSlot swaps a crossed pair). */
+  const setRange = (i, lo, hi) => ev(({ i, lo, hi }) => {
+    const { store } = window.__rig;
+    const p = `songs.${store.currentSong().id}.patch.slots.${i}`;
+    store.set(`${p}.lowNote`, 0);
+    store.set(`${p}.highNote`, 127);
+    store.set(`${p}.lowNote`, lo);
+    store.set(`${p}.highNote`, hi);
+  }, { i, lo, hi });
+  const rangeOf = async (i) => {
+    const s = (await song()).patch.slots[i];
+    return [s.lowNote, s.highNote];
+  };
+  const rangeIs = (i, lo, hi) => until(({ i, lo, hi }) => {
+    const s = window.__rig.store.currentSong().patch.slots[i];
+    return s.lowNote === lo && s.highNote === hi;
+  }, { i, lo, hi });
+  /** Rect of a key / bar / handle on a page. */
+  const rectOf = (pg, sel) => pg.evaluate((s) => {
+    const r = document.querySelector(s).getBoundingClientRect();
+    return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: r.width, h: r.height, cx: r.left + r.width / 2,
+      cy: r.top + r.height / 2 };
+  }, sel);
+  const keyRect = (pg, note, scope = '.v6-kbd') => rectOf(pg, `${scope} .pkey[data-note="${note}"]`);
+  /** Press a handle's centre, move to x in steps (mid() runs while still held), release. */
+  async function dragHandle(pg, sel, x, mid) {
+    const b = await rectOf(pg, sel);
+    await pg.mouse.move(b.cx, b.cy);
+    await pg.mouse.down();
+    await pg.mouse.move(x, b.cy, { steps: 10 });
+    if (mid) await mid();
+    await pg.mouse.up();
+  }
+  const near = (a, b, tol = 1.01) => Math.abs(a - b) <= tol;
+
+  await T('U2 range bars: one per instrument, position colours, black keys at their real positions', async () => {
+    await ev(() => window.__rig.ctx.setView('perform'));
+    await setSlots(3);
+    await setRange(0, 40, 61); // E2 – Db4 (a black key)
+    await setRange(1, 36, 96);
+    await setRange(2, 30, 59); // F#1 is below C2: clipped on the left
+    await until(() => document.querySelectorAll('.v6-kbd .v6-rbar').length === 3);
+    const b0 = await rectOf(page, tid(`${KB}-bar-0`));
+    const k40 = await keyRect(page, 40);
+    const k61 = await keyRect(page, 61);
+    assert.ok(near(b0.l, k40.l) && near(b0.r, k61.r), `bar 0 ${b0.l}–${b0.r} vs keys ${k40.l}–${k61.r}`);
+    const r = await ev(() => [...document.querySelectorAll('.v6-kbd .v6-rbar')].map((b) => ({
+      c: b.style.getPropertyValue('--c'), clipL: b.classList.contains('clip-l'), clipR: b.classList.contains('clip-r'),
+      lo: b.querySelector('.v6-rh.l').getAttribute('aria-valuetext'),
+      hi: b.querySelector('.v6-rh.r').getAttribute('aria-valuetext'),
+    })));
+    assert.deepEqual(r.map((x) => x.c), ['var(--slot-0)', 'var(--slot-1)', 'var(--slot-2)']);
+    assert.deepEqual(r.map((x) => [x.clipL, x.clipR]), [[false, false], [false, false], [true, false]]);
+    assert.equal(r[0].hi, 'Db4');
+    assert.match(r[2].lo, /^Gb1, outside the keys shown/);
+    // 34 px tall hit layer over the thin bars
+    const hit = await rectOf(page, tid(`${KB}-hit`));
+    assert.ok(hit.h >= 34, `hit layer ${hit.h} px`);
+    assert.ok((await rectOf(page, tid(`${KB}-bar-0`))).h < 10, 'the bars stay thin');
+  });
+
+  await T('U2 drag: snaps to keys (black too), label while dragging, one write on release, only that end', async () => {
+    const before = (await song()).patch.slots[2];
+    const name = await page.textContent(tid('v6-name-2'));
+    const k54 = await keyRect(page, 54); // Gb3, a black key
+    let mid = null;
+    await dragHandle(page, tid(`${KB}-hhi-2`), k54.r + 2, async () => {
+      mid = await ev(() => ({
+        tip: document.querySelector('[data-testid="v6-kbd-tip"]').textContent,
+        shown: !document.querySelector('[data-testid="v6-kbd-tip"]').hidden,
+        hi: window.__rig.store.currentSong().patch.slots[2].highNote,
+        barR: document.querySelector('[data-testid="v6-kbd-bar-2"]').getBoundingClientRect().right,
+      }));
+    });
+    assert.equal(mid.shown, true);
+    assert.equal(mid.tip, `${name} · Gb1–Gb3`);
+    assert.equal(mid.hi, 59, 'nothing written while dragging');
+    assert.ok(near(mid.barR, k54.r), `bar end ${mid.barR} on the key's edge ${k54.r}`);
+    await rangeIs(2, 30, 54);
+    const after = (await song()).patch.slots[2];
+    assert.deepEqual({ ...after, highNote: 59 }, before, 'only highNote changed');
+    assert.equal(await ev(() => document.querySelector('[data-testid="v6-kbd-tip"]').hidden), true);
+    // a white key: the lowest end of bar 1 onto A2 (45)
+    const k45 = await keyRect(page, 45);
+    await dragHandle(page, tid(`${KB}-hlo-1`), k45.l - 1);
+    await rangeIs(1, 45, 96);
+  });
+
+  await T('U2 clamp: lowest stays below highest; past the edge = every key that way (0 / 127)', async () => {
+    await setRange(0, 40, 61);
+    const k61 = await keyRect(page, 61);
+    await dragHandle(page, tid(`${KB}-hlo-0`), k61.r + 200);
+    await rangeIs(0, 60, 61);
+    // the highest end onto the right edge and past it → 127 ("and up")
+    const kbr = await rectOf(page, tid('v6-piano'));
+    let tip = '';
+    await dragHandle(page, tid(`${KB}-hhi-0`), kbr.r + 30, async () => {
+      tip = await page.textContent(tid(`${KB}-tip`));
+    });
+    assert.match(tip, / · C4 and up$/);
+    await rangeIs(0, 60, 127);
+    // the lowest end past the left edge → 0; the bar now runs off both ends (edge markers)
+    await dragHandle(page, tid(`${KB}-hlo-0`), kbr.l - 40);
+    await rangeIs(0, 0, 127);
+    assert.deepEqual(await ev(() => {
+      const b = document.querySelector('[data-testid="v6-kbd-bar-0"]');
+      return [b.classList.contains('clip-l'), b.classList.contains('clip-r'),
+        b.querySelector('.v6-rh.l').classList.contains('beyond')];
+    }), [true, true, true]);
+  });
+
+  await T('U2 ranges outside C2–C7: drawn clipped with a marker, kept unless that end is dragged', async () => {
+    await setRange(0, 21, 108); // A0–C8
+    await setRange(1, 100, 120); // wholly above C7: a stub at the right edge
+    await page.waitForTimeout(100);
+    const kbr = await rectOf(page, tid('v6-piano'));
+    const stub = await rectOf(page, tid(`${KB}-bar-1`));
+    assert.ok(stub.w > 2 && near(stub.r, kbr.r, 1.5), `stub ${stub.l}–${stub.r}, keys end ${kbr.r}`);
+    assert.equal(await ev(() => document.querySelector('[data-testid="v6-kbd-bar-1"]').classList.contains('clip-r')),
+      true);
+    // a press without a move on the clipped end writes nothing
+    const h0 = await rectOf(page, tid(`${KB}-hlo-0`));
+    await page.mouse.move(h0.cx, h0.cy);
+    await page.mouse.down();
+    await page.mouse.move(h0.cx + 2, h0.cy);
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+    assert.deepEqual(await rangeOf(0), [21, 108]);
+    // dragging the other end keeps the clipped one
+    const k72 = await keyRect(page, 72);
+    await dragHandle(page, tid(`${KB}-hhi-0`), k72.r);
+    await rangeIs(0, 21, 72);
+    assert.deepEqual(await rangeOf(1), [100, 120], 'an untouched bar keeps its range');
+  });
+
+  await T('U2 keys: handles focusable, ←/→ a semitone, Shift an octave, aria-valuetext; no song change', async () => {
+    await setRange(2, 48, 72);
+    const id = (await song()).id;
+    await page.focus(tid(`${KB}-hlo-2`));
+    assert.equal(await ev(() => document.activeElement.getAttribute('role')), 'slider');
+    await page.keyboard.press('ArrowRight');
+    await rangeIs(2, 49, 72);
+    await page.keyboard.press('Shift+ArrowRight');
+    await rangeIs(2, 61, 72);
+    await page.keyboard.press('ArrowLeft');
+    await rangeIs(2, 60, 72);
+    assert.equal(await page.getAttribute(tid(`${KB}-hlo-2`), 'aria-valuetext'), 'C4');
+    assert.equal(await page.getAttribute(tid(`${KB}-hlo-2`), 'aria-valuemax'), '71');
+    // the tip shows for the focused handle
+    assert.match(await page.textContent(tid(`${KB}-tip`)), / · C4–C5$/);
+    await page.focus(tid(`${KB}-hhi-2`));
+    await page.keyboard.press('Shift+ArrowLeft');
+    await page.keyboard.press('Shift+ArrowLeft'); // clamps at lowest + 1
+    await rangeIs(2, 60, 61);
+    assert.equal((await song()).id, id, 'arrows on a handle never change the song');
+    await ev(() => document.activeElement.blur());
+  });
+
+  await T('U2 range edits count like any edit: changed count, Revert restores', async () => {
+    await setRange(2, 48, 84);
+    // a fresh Revert snapshot: Edit and back takes it (perform.js)
+    await ev(() => window.__rig.ctx.setView('edit'));
+    await until(() => document.body.dataset.view === 'edit');
+    await ev(() => window.__rig.ctx.setView('perform'));
+    await until(() => document.body.dataset.view === 'perform');
+    await until(() => document.querySelector('[data-testid="v6-revert"]').disabled);
+    const [lo] = await rangeOf(2);
+    const k = await keyRect(page, lo + 12);
+    await dragHandle(page, tid(`${KB}-hlo-2`), k.l);
+    await until((x) => window.__rig.store.currentSong().patch.slots[2].lowNote === x, lo + 12);
+    await until(() => !document.querySelector('[data-testid="v6-revert"]').disabled);
+    assert.ok((await ev(() => window.__rig.views.perform.changedPaths)).some((p) => /slots\.2\.lowNote$/.test(p)));
+    assert.equal(await page.getAttribute(tid('v6-revert'), 'data-count'), '1');
+    assert.equal(await ev(() => document.querySelector('[data-testid="v6-kbd-bar-2"]').classList.contains('changed')),
+      true, 'the bar carries the changed dot');
+    await hold(tid('v6-revert'));
+    await until((x) => window.__rig.store.currentSong().patch.slots[2].lowNote === x, lo);
+    await until(() => !document.querySelector('[data-testid="v6-kbd-bar-2"]').classList.contains('changed'));
+  });
+
+  await T('U2 Lock: no range edits (drag, arrows); handles hidden and out of the tab order', async () => {
+    await setRange(0, 48, 72);
+    await hold(tid('v6-lock'));
+    await until(() => window.__rig.store.get().settings.performLock === true);
+    const r = await ev(() => ({
+      handles: [...document.querySelectorAll('.v6-kbd .v6-rh')].map((x) => [x.tabIndex,
+        x.getAttribute('aria-disabled'), getComputedStyle(x).display]),
+      hit: getComputedStyle(document.querySelector('[data-testid="v6-kbd-hit"]')).pointerEvents,
+    }));
+    assert.ok(r.handles.every(([t, a, dsp]) => t === -1 && a === 'true' && dsp === 'none'), JSON.stringify(r));
+    assert.equal(r.hit, 'none');
+    const b = await rectOf(page, tid(`${KB}-bar-0`));
+    await page.mouse.move(b.r, b.cy);
+    await page.mouse.down();
+    await page.mouse.move(b.r + 120, b.cy, { steps: 6 });
+    await page.mouse.up();
+    await ev(() => {
+      const hd = document.querySelector('[data-testid="v6-kbd-hhi-0"]');
+      hd.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+    });
+    await page.waitForTimeout(150);
+    assert.deepEqual(await rangeOf(0), [48, 72]);
+    await hold(tid('v6-lock'));
+    await until(() => !window.__rig.store.get().settings.performLock);
+    assert.equal(await page.getAttribute(tid(`${KB}-hhi-0`), 'tabindex'), '0');
+  });
+
+  await T('U2 Edit › Range size (harness): 88 keys A0–C8, one bar, outside dimmed, shorter, drag, arrows', async () => {
+    const hp = await context.newPage();
+    hp.on('console', (m) => {
+      if (m.type() === 'error') errors.push(`[harness] ${m.text()}`);
+    });
+    hp.on('pageerror', (e) => errors.push(`[harness] pageerror: ${e.message}`));
+    hp.on('response', (res) => {
+      if (res.status() >= 400) errors.push(`[harness] HTTP ${res.status()} ${res.url()}`);
+    });
+    const body = fs.readFileSync(path.join(HERE, 'keyboard-harness.html'), 'utf8');
+    await hp.route('**/u2-keyboard-harness.html*', (r) => r.fulfill({ body, contentType: 'text/html' }));
+    try {
+      await hp.setViewportSize({ width: 700, height: 300 });
+      await hp.goto(`${origin}/u2-keyboard-harness.html?size=range`);
+      await hp.waitForFunction(() => window.__ready === true, null, { timeout: 15000 });
+      const R = 'v6-range-kbd';
+      const r = await hp.evaluate(() => {
+        const keys = [...document.querySelectorAll('.v6-kbd-range .pkey')].map((k) => Number(k.dataset.note));
+        const el = document.querySelector('.v6-kbd-range');
+        return {
+          n: keys.length, first: keys[0], last: keys[keys.length - 1],
+          bars: document.querySelectorAll('.v6-kbd-range .v6-rbar').length,
+          h: el.getBoundingClientRect().height,
+          out: document.querySelectorAll('.v6-kbd-range .pkey.out').length,
+          tip: document.querySelector('[data-testid="v6-range-kbd-tip"]').textContent,
+          tipShown: !document.querySelector('[data-testid="v6-range-kbd-tip"]').hidden,
+        };
+      });
+      assert.deepEqual(r, { n: 88, first: 21, last: 108, bars: 1, h: r.h, out: 0, tip: 'Grand Piano · every key',
+        tipShown: true });
+      assert.ok(r.h <= 100, `height ${r.h}`);
+      await hp.evaluate(() => window.__h.set(0, 48, 72));
+      await hp.waitForFunction(() => document.querySelectorAll('.v6-kbd-range .pkey.out').length === 88 - 25);
+      assert.equal(await hp.textContent(tid(`${R}-tip`)), 'Grand Piano · C3–C5');
+      const k60 = await keyRect(hp, 60, '.v6-kbd-range');
+      await dragHandle(hp, tid(`${R}-hlo-0`), k60.l);
+      await hp.waitForFunction(() => window.__h.state.slots[0].lo === 60);
+      assert.deepEqual(await hp.evaluate(() => window.__h.writes), [[0, 'lowNote', 60]]);
+      await hp.waitForFunction(() => document.querySelectorAll('.v6-kbd-range .pkey.out').length === 88 - 13);
+      await hp.focus(tid(`${R}-hhi-0`));
+      await hp.keyboard.press('Shift+ArrowRight');
+      await hp.waitForFunction(() => window.__h.state.slots[0].hi === 84);
+      await hp.evaluate(() => document.activeElement.blur());
+      await hp.waitForTimeout(150);
+      await hp.screenshot({ path: path.join(SHOTS, 'u2-edit-range-harness.png') });
+      // locked: no writes
+      await hp.evaluate(() => window.__h.lock(true));
+      const n0 = await hp.evaluate(() => window.__h.writes.length);
+      const hr = await rectOf(hp, tid(`${R}-bar-0`));
+      await hp.mouse.move(hr.l, hr.cy);
+      await hp.mouse.down();
+      await hp.mouse.move(hr.l - 80, hr.cy, { steps: 5 });
+      await hp.mouse.up();
+      assert.equal(await hp.evaluate(() => window.__h.writes.length), n0);
+      // coarse: the one bar is live straight away, with 26 px handles (no pick step in Edit)
+      await hp.goto(`${origin}/u2-keyboard-harness.html?size=range&coarse=1`);
+      await hp.waitForFunction(() => window.__ready === true);
+      const hd = await rectOf(hp, tid(`${R}-hlo-0`));
+      assert.ok(near(hd.w, 26), `coarse handle ${hd.w} px`);
+      await hp.evaluate(() => window.__h.set(0, 48, 72));
+      const k50 = await keyRect(hp, 50, '.v6-kbd-range');
+      await dragHandle(hp, tid(`${R}-hlo-0`), k50.l);
+      await hp.waitForFunction(() => window.__h.state.slots[0].lo === 50);
+    } finally {
+      await hp.close();
+    }
+  });
+
+  await T('U2 iPad (coarse): tap a strip, outline + "changing range", only its bar, 26 px handles', async () => {
+    const tc = await browser.newContext({ viewport: { width: 1180, height: 820 }, hasTouch: true, isMobile: true });
+    await pinTheme(tc, 'sanctuary');
+    await tc.grantPermissions([...MIDI_PERMISSIONS], { origin });
+    const tp = await tc.newPage();
+    tp.on('console', (m) => {
+      if (m.type() === 'error') errors.push(`[touch] ${m.text()}`);
+    });
+    tp.on('pageerror', (e) => errors.push(`[touch] pageerror: ${e.message}`));
+    tp.on('response', (res) => {
+      if (res.status() >= 400) errors.push(`[touch] HTTP ${res.status()} ${res.url()}`);
+    });
+    const tev = (fn, arg) => tp.evaluate(fn, arg);
+    const tuntil = (fn, arg) => tp.waitForFunction(fn, arg, { timeout: 15000, polling: 50 });
+    const cdp = await tc.newCDPSession(tp);
+    const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent',
+      { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+    async function touchDrag(x0, y, x1) {
+      await touch('touchStart', x0, y);
+      for (let k = 1; k <= 8; k++) await touch('touchMove', x0 + (x1 - x0) * k / 8, y);
+      await touch('touchEnd');
+    }
+    try {
+      await tp.goto(`${origin}/?ui6=1`);
+      await waitRigReady(tp, { timeout: 40000 });
+      await tuntil(() => !!window.__rig.views.v6);
+      await tuntil(() => {
+        const { controller, store } = window.__rig;
+        return controller.status.songId === store.get().settings.currentSongId && !controller.status.loading;
+      });
+      assert.equal(await tev(() => matchMedia('(pointer: coarse)').matches), true, 'the context is coarse');
+      await tev(({ list }) => {
+        const { store } = window.__rig;
+        const id = store.currentSong().id;
+        while (store.currentSong().patch.slots.length < 3) store.addSlot(id);
+        list.slice(0, 3).forEach(([type, iid], i) => {
+          const ref = { type, id: iid };
+          if (store.currentSong().patch.slots[i]) store.set(`songs.${id}.patch.slots.${i}.instrument`, ref);
+          else store.set(`songs.${id}.patch.slots.${i}`, { instrument: ref });
+        });
+        const p = (i) => `songs.${id}.patch.slots.${i}`;
+        store.set(`${p(1)}.lowNote`, 0);
+        store.set(`${p(1)}.highNote`, 127);
+        store.set(`${p(1)}.lowNote`, 48);
+        store.set(`${p(1)}.highNote`, 84);
+        window.__notes = 0;
+        window.__rig.controller.addEventListener('notes', () => { window.__notes += 1; });
+        window.__panics = 0;
+        window.__rig.controller.addEventListener('action', (e) => {
+          if (e.detail?.type === 'panic') window.__panics += 1;
+        });
+      }, { list: INSTRUMENTS });
+      await tuntil(() => document.querySelectorAll('.v6-kbd .v6-rbar').length === 3);
+      await tev(() => document.getElementById('toasts')?.replaceChildren());
+      const r0 = await tev(() => ({
+        coarse: document.querySelector('.v6').classList.contains('coarse'),
+        role: document.querySelector('[data-testid="v6-who-1"]').getAttribute('role'),
+        handles: [...document.querySelectorAll('.v6-kbd .v6-rh')].filter((x) => getComputedStyle(x).display !== 'none')
+          .length,
+      }));
+      assert.deepEqual(r0, { coarse: true, role: 'button', handles: 0 });
+      // not picked: a touch drag on Warm Pad's end does not move it
+      // (its handles are not drawn: press where the end is)
+      const bar1 = await rectOf(tp, tid(`${KB}-bar-1`));
+      await touchDrag(bar1.r - 2, bar1.cy, bar1.r - 120);
+      await tp.waitForTimeout(150);
+      assert.deepEqual(await tev(() => {
+        const s = window.__rig.store.currentSong().patch.slots[1];
+        return [s.lowNote, s.highNote];
+      }), [48, 84]);
+      // that touch landed on the bar, which picks it (D18: "tap the instrument first" — its bar counts)
+      await tuntil(() => window.__rig.views.v6 && document.querySelector('[data-testid="v6-strip-1"]')
+        .classList.contains('range-picked'));
+      // tap another strip's name to switch
+      const who2 = await rectOf(tp, tid('v6-who-2'));
+      await tp.touchscreen.tap(who2.cx, who2.cy);
+      await tuntil(() => document.querySelector('[data-testid="v6-strip-2"]').classList.contains('range-picked'));
+      const r1 = await tev(() => ({
+        one: document.querySelector('[data-testid="v6-strip-1"]').classList.contains('range-picked'),
+        flag: !document.querySelector('[data-testid="v6-pickflag-2"]').hidden,
+        flagText: document.querySelector('[data-testid="v6-pickflag-2"]').textContent,
+        outline: getComputedStyle(document.querySelector('[data-testid="v6-strip-2"]')).outlineStyle,
+        picking: document.querySelector('.v6-kbd').classList.contains('picking'),
+        hint: document.querySelector('[data-testid="v6-kbd-pickhint"]').textContent,
+        dim: [0, 1, 2].map((i) => Number(getComputedStyle(document.querySelector(`[data-testid="v6-kbd-bar-${i}"]`))
+          .opacity)),
+        handles: [...document.querySelectorAll('.v6-kbd .v6-rh')].filter((x) => getComputedStyle(x).display !== 'none')
+          .map((x) => [x.dataset.testid, Math.round(x.getBoundingClientRect().width)]),
+      }));
+      assert.deepEqual(r1, {
+        one: false, flag: true, flagText: 'changing range', outline: 'solid', picking: true, hint: r1.hint,
+        dim: [0.3, 0.3, 1], handles: [['v6-kbd-hlo-2', 26], ['v6-kbd-hhi-2', 26]],
+      });
+      assert.match(r1.hint, /^Drag the ends of .+ · tap another instrument to switch · tap the keys to finish$/);
+      // a touch drag on the picked bar's highest end → written on release
+      const sl2 = await tev(() => window.__rig.store.currentSong().patch.slots[2].highNote);
+      const hi2 = await rectOf(tp, tid(`${KB}-hhi-2`));
+      const k = await keyRect(tp, 72);
+      await touchDrag(hi2.cx, hi2.cy, k.r);
+      await tuntil(() => window.__rig.store.currentSong().patch.slots[2].highNote === 72);
+      assert.notEqual(sl2, 72);
+      // tap the keys: finishes, plays nothing
+      const notes0 = await tev(() => window.__notes);
+      const key = await keyRect(tp, 60);
+      await tp.touchscreen.tap(key.cx, key.b - 10);
+      await tuntil(() => !document.querySelector('.v6-kbd').classList.contains('picking'));
+      await tp.waitForTimeout(150);
+      assert.equal(await tev(() => window.__notes), notes0, 'the finishing tap plays no note');
+      assert.equal(await tev(() => document.querySelector('[data-testid="v6-strip-2"]').classList
+        .contains('range-picked')), false);
+      // Esc finishes too, without a panic
+      await tp.touchscreen.tap(who2.cx, who2.cy);
+      await tuntil(() => document.querySelector('.v6-kbd').classList.contains('picking'));
+      await tp.keyboard.press('Escape');
+      await tuntil(() => !document.querySelector('.v6-kbd').classList.contains('picking'));
+      assert.equal(await tev(() => window.__panics), 0);
+      // locked: tapping a name picks nothing
+      await tev(() => window.__rig.store.set('settings.performLock', true));
+      await tp.touchscreen.tap(who2.cx, who2.cy);
+      await tp.waitForTimeout(200);
+      assert.equal(await tev(() => document.querySelector('.v6-kbd').classList.contains('picking')), false);
+      await tev(() => window.__rig.store.set('settings.performLock', false));
+      // the screenshot: Warm Pad picked, as the mockup's "iPad · pick, then drag a range"
+      const who1 = await rectOf(tp, tid('v6-who-1'));
+      await tp.touchscreen.tap(who1.cx, who1.cy);
+      await tuntil(() => document.querySelector('.v6-kbd').classList.contains('picking'));
+      await tev(() => document.getElementById('toasts')?.replaceChildren());
+      await tp.waitForTimeout(300);
+      await tp.screenshot({ path: path.join(SHOTS, 'u2-ipad-pick-1180.png') });
+      await tp.keyboard.press('Escape');
+    } finally {
+      await tc.close();
+    }
+  });
+
+  await T('U2 screenshot: 1280×800 Sanctuary, Sub Bass range being dragged', async () => {
+    await ev(() => window.__rig.ctx.setView('perform'));
+    await setSlots(3);
+    await setRange(0, 0, 127);
+    await setRange(1, 0, 127);
+    await setRange(2, 36, 71);
+    await ev(() => document.getElementById('toasts')?.replaceChildren());
+    await page.waitForTimeout(200);
+    const k = await keyRect(page, 59);
+    await dragHandle(page, tid(`${KB}-hhi-2`), k.r, async () => {
+      await page.waitForTimeout(150);
+      await page.screenshot({ path: path.join(SHOTS, 'u2-drag-1280.png') });
+    });
+    await rangeIs(2, 36, 59);
+    await page.mouse.move(5, 5);
   });
 
   await T('on / off cycles: today’s Perform comes back whole; nothing of v6 is left behind', async () => {

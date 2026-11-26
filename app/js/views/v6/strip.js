@@ -34,7 +34,21 @@ export function createStrip(v, i) {
   let info = null;
 
   const nm = h('span.v6-nm', { 'data-testid': `v6-name-${i}`, text: '—' });
-  const who = h('div.v6-who', {}, h('span.v6-ico', { 'aria-hidden': 'true' }), nm);
+  const who = h('div.v6-who', { 'data-testid': `v6-who-${i}` }, h('span.v6-ico', { 'aria-hidden': 'true' }), nm);
+  // U2 (D18 "On iPad, tap the instrument first"): on a coarse pointer the name picks this instrument's range bar on
+  // the keyboard; its strip shows an outline and "changing range" while it is picked
+  const pickFlag = h('div.v6-pickflag', { text: 'changing range', hidden: true, 'data-testid': `v6-pickflag-${i}` });
+  let coarse = false;
+  const pickMe = () => {
+    if (coarse && info?.slot && !info.locked) v.pickRange?.(i);
+  };
+  d.listen(who, 'click', pickMe);
+  d.listen(who, 'keydown', (ev) => {
+    if (!coarse || (ev.key !== 'Enter' && ev.key !== ' ')) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    pickMe();
+  });
   // the tile's word is ON / OFF; its accessible name is the instrument (D15: no role labels)
   const tile = use(onTile({ label: 'Instrument', color, testid: `v6-on-${i}`, onToggle: (on) => v.setMuted(i, !on) }));
   const f = use(fader({
@@ -81,6 +95,7 @@ export function createStrip(v, i) {
     'div.panel.slot.strip.v6-strip',
     { dataset: { slot: String(i) }, 'data-testid': `v6-strip-${i}`, style: { '--c': color } },
     who,
+    pickFlag,
     tile.el,
     h('div.slot-body.v6-body', {}, f.el),
     h('div.slot-mods.v6-mods', {}, ...chips.map((c) => c.el)),
@@ -212,6 +227,26 @@ export function createStrip(v, i) {
     },
     cancelDrag() {
       f.cancelDrag?.();
+    },
+    /** U2: a coarse pointer makes the name a button that picks this instrument's range bar. */
+    setCoarse(on) {
+      coarse = !!on;
+      if (coarse) {
+        who.setAttribute('role', 'button');
+        who.tabIndex = 0;
+        who.title = 'Tap to change which keys play this instrument';
+      } else {
+        who.removeAttribute('role');
+        who.removeAttribute('tabindex');
+        who.removeAttribute('title');
+        who.removeAttribute('aria-pressed');
+      }
+    },
+    /** U2: this instrument's range is being changed (coarse pick mode). */
+    setPicked(on) {
+      el.classList.toggle('range-picked', !!on);
+      pickFlag.hidden = !on;
+      if (coarse) who.setAttribute('aria-pressed', String(!!on));
     },
     closePanels() {
       for (const c of chips) c.close();

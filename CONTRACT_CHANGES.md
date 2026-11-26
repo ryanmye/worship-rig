@@ -8088,3 +8088,59 @@ are today's.
     with 7 instruments, up from 58, and 156 px with 4, up from 102. Today's Perform has 141 px there.
   - The snapshot row's Update / Save as new are 44 px (F4).
   - No interface change.
+
+## UI v6 U2
+
+The keyboard with draggable range bars (native DECISIONS D18 "The range colours on Perform's keyboard are draggable",
+"Range uses a real keyboard"; `native/docs/lanes/UI6-build-plan.md` U2; mockups `perform-v6.html` "Drag a colour to
+set its range" / "iPad · pick, then drag a range", `edit.html` "Instrument · Range"). Behind `settings.uiV6` like U1.
+
+- **`views/v6/keyboard.js` `rangeKeyboard(o)`**: one component, two sizes (`KEYBOARD_SIZES`): `'perform'` = today's
+  keys C2–C7 (components/keys.js `pianoKeyboard`: key letters, held notes, glissando) with one bar per instrument;
+  `'range'` = Edit › Range, 88 keys A0–C8, one bar (extra bars are ignored), keys outside the range get `.out`
+  (dimmed), 96 px tall. Options: `onRange(i, 'lowNote'|'highNote', note)` (the write; the component never touches the
+  store), `onNoteOn` / `onNoteOff`, `onPick(i|null)`, `onCoarse(bool)`, `coarse` (forced, harness), `testid`.
+  API: `render({bars:[{i, name, color, lo, hi, off, changed}], locked})`, `setHeld`, `setKeyLetters`, `releaseAll`,
+  `pick(i|null)`, `picked`, `coarse`, `dragging`, `cancelDrag()`, `destroy()`. `rangeText(lo, hi)` gives "C2–C5",
+  "every key", "up to B3", "C4 and up". Not mounted in Edit yet (U5); covered by `test/phase2/ui-v6/keyboard-harness.html`.
+- **Writes** (Perform): `v.setRange(i, field, note)` → `store.set('songs.<id>.patch.slots.<i>.lowNote|highNote', n)`,
+  the fields today's Edit writes for the lowest / highest note (slot.js miniKeyboard / note fields; PARAMS
+  `slots.<i>.lowNote` / `highNote`, 0..127). Only the end that moved is written, so a clipped other end is never
+  rewritten. Refused under Perform lock. No new store / controller API; engine untouched.
+- **When it writes: on release**, one `store.set` per drag (a drag that ends where it began, a press without 4 px of
+  travel, or a `pointercancel` writes nothing). Why not throttled during the drag: every write re-renders the whole
+  v6 Perform (strips, changed set, Revert count) and runs the store → engine diff, on a 2-CPU class machine, while the
+  pointer moves; one write per gesture also makes one clean "changed" step. The label ("Sub Bass · C2–C5") shows the
+  range live meanwhile, so the player sees it; what they cannot do is hear the new split before letting go (today's
+  Edit miniKeyboard writes on every move). ←/→ on a focused handle write once per key press.
+- **Snapping:** an end goes to the nearest key edge of all 12 semitones (a black key's real edge from `keyLayout`),
+  with the pointer's grab offset kept, so a press never jumps. Past the keyboard's outer edge by half a white key the
+  end snaps to 0 / 127 ("every key that way", today's miniKeyboard rule), which is how a range goes back to the whole
+  keyboard from Perform. Clamp: `lowNote ≤ highNote − 1` (strictly lowest < highest, as the task asked; today's Edit
+  allows a one-key range, and a stored one-key range still draws and drags).
+- **Clipped ranges:** an end outside the keys shown draws at the edge, squared, with a dashed handle and an outward
+  arrow (`.clip-l` / `.clip-r`, also today's `.open-l` / `.open-r`); a range wholly outside shows as a stub at that
+  edge. `aria-valuetext` says "…, outside the keys shown".
+- **Pointers:** handles are focusable `role="slider"` spans with `pointer-events: none`; one hit layer (`.v6-rhit`,
+  34 px tall, 14 px past each side) picks the nearest live end by |dx| + |dy| (reach 17 px outward, ≤ 14 px or half
+  the bar inward), so stacked handles at the same key stay reachable. Fine pointers: always live; hover shows the
+  label and an ew-resize cursor. Coarse (`matchMedia('(pointer: coarse)')`, live): Perform size = pick mode (below);
+  Range size = the one bar is live with 26 px handles.
+- **Pick mode (coarse Perform):** tap a strip's name (`.v6-who` becomes `role="button"`, ≥ 44 px target) or a bar →
+  that strip gets `.range-picked` (3 px accent outline) and "changing range"; only its bar shows 26 px handles; the
+  others dim to .3; a hint "Drag the ends of <name> · tap another instrument to switch · tap the keys to finish".
+  Tap the same name again, the keys (that tap plays no note) or Esc to finish; Esc is an overlay (overlay.js, group
+  `v6-range-pick`, outside taps keep it) so it never panics. Song change, lock, a removed slot, hiding the view and a
+  switch to a fine pointer end it.
+- **Changed dots / Revert:** `views/v6/perform.js` `V6_DIFF_WATCH` = `DIFF_WATCH` + `patch.slots.<i>.lowNote` /
+  `highNote`: a range edit counts in Revert's "n changed" and puts a white dot on its bar; Revert restores it (it
+  restores the whole patch, as before). `shared/song-diff.js` is unchanged, so today's Perform and Edit still do not
+  dot a range change (they did not before either: their Revert enables with "levels only"). There is no undo beyond
+  Revert in today's Edit, so none here.
+- **CSS:** `app/styles-v6-keyboard.css`, `@import`ed first by `styles-v6.css` (only linked while v6 is on); every
+  selector under `.v6`. Bar rows: up to 10 px apart, 7 px thick, thinner past 2 instruments, stacked on the keys in a
+  26 px band (U1's was 23 px; the keys lose 3 px).
+- **Flag off:** unchanged (the ui-v6 purity probe against 966b0b4: 103 requests, 14 store listeners, 4 intervals,
+  2528 elements, identical).
+- Tests: `node test/phase2/ui-v6/run.mjs` now 26 checks (U1's 16 after its skeptic pass + 10 for U2). Screenshots: `u2-drag-1280.png`,
+  `u2-ipad-pick-1180.png`, `u2-edit-range-harness.png`.

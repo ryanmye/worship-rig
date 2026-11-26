@@ -29,12 +29,16 @@ export function stripsRow(v) {
   let n = 0;
   let shownFor = null;
   let slotsSig = '';
+  let picked = null; // U2: the strip whose range is being changed (coarse pointers)
+  let coarse = false;
 
   function ensure(k) {
     while (strips.length < Math.min(MAX_SLOTS, k)) {
       const i = strips.length;
       const s = createStrip(v, i);
       strips.push(s);
+      s.setCoarse(coarse);
+      s.setPicked(picked === i);
       row.insertBefore(s.el, addBtn);
       // a 44 px button around the 28 px pill (DESIGN_PHILOSOPHY: targets ≥ 44 px)
       const p = h('button.v6-pill', { type: 'button', 'data-testid': `v6-pill-${i}`, style: { '--c': slotColor(i) } },
@@ -139,6 +143,21 @@ export function stripsRow(v) {
     },
     cancelDrags() {
       for (const s of strips) s.cancelDrag();
+    },
+    /** U2: the strip whose range the coarse pointer is changing (null: none). */
+    setPicked(i) {
+      picked = i;
+      strips.forEach((s, k) => s.setPicked(k === i));
+      // a bar tapped on the keyboard can pick a strip scrolled out of view
+      if (i !== null && i < n) {
+        const x = strips[i].el.offsetLeft - row.offsetLeft;
+        if (x < row.scrollLeft || x + strips[i].el.offsetWidth > row.scrollLeft + row.clientWidth) scrollTo(i);
+      }
+    },
+    /** U2: names become pick buttons on a coarse pointer. */
+    setCoarse(c) {
+      coarse = !!c;
+      for (const s of strips) s.setCoarse(coarse);
     },
     closePanels() {
       for (const s of strips) s.closePanels();
