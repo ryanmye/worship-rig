@@ -9272,3 +9272,69 @@ requests, 15 store listeners, 4 intervals, 2529 elements).
     PORTRAIT_MQ, as under Learn / Arrange. At 820 × 1180 the fader track goes from 66 to 126 px on a first run, and
     from 59 to 119 px while trying.
   - F2: the empty card's Restore a backup… is disabled under Lock (Settings refuses there), like ⚙.
+
+## UI v6 U8b (themes)
+
+All 8 themes on every v6 screen (native/docs/lanes/UI6-build-plan.md U8, the themes half; U8a does the iPad layouts
+and edge states). Colour only: theme tokens and v6 colour declarations, no layout, view, store or engine change.
+Flag off: today's screens differ only by the three theme-file fixes below (each a contrast fix there too).
+
+- **The audit (`tools/themes/audit-lib.mjs`).** shoot.mjs's measuring code, moved so today's shoot and the v6 shoot
+  judge colour with one copy. Text: every visible run's computed colour vs the median background behind it, 4.5 : 1
+  (3 : 1 large), disabled exempt (as before). New in the lib (all of them also apply to today's shoot):
+  - runs cut to their clipping / scrolling ancestors (a strip scrolled out of view was measured on the page);
+  - the voice bridge's `::after` words hit-tested like the text runs (under Settings' scrim they counted);
+  - closed `<details>` skipped (`checkVisibility`: today's Settings › Sound › Advanced "Auto" was 1.0 : 1);
+  - text under an overlay's drop shadow measured on the rendered pixels (ink and background are both darkened);
+  - `fades` (exempt under an edge fade that means "scroll for more": the v6 strips' 48 px right fade);
+  - `ui: true` (WCAG 1.4.11): every visible focusable control (one per look) focused in keyboard modality, its focus
+    indicator (outline, ring shadow, a focus-within wrapper's border, a `::before` / `::after`, its own border or
+    fill; a decoration already there unfocused does not count) vs what is behind it, 3 : 1, and "nothing changes" =
+    fail; text fields' and selects' edge (border or fill vs outside, 3 : 1; a bare input is measured on its wrapper);
+    v6 switches' thumb vs track (3 : 1). Buttons with words need no edge (1.4.11 Understanding). `boundaryExempt`
+    lists fields found otherwise: Edit's song name (a title with a ✎).
+  - shoot.mjs: `--only settings` shoots today's Settings, every category.
+- **The v6 tour (`tools/themes/v6-tour.mjs`, CLI `shoot-v6.mjs`, suite `ui-v6-themes`).** 1280 × 800, a fresh context
+  per theme, the theme pinned before boot, `?ui6=1`, a temp My Samples bank pack (two invented songs). 38 states:
+  Perform 2 instruments (held notes) with the sidebar on Drone / Setlist / Notes / Click, 7 instruments, scrolled to
+  the end with one muted, the rail folded; Quick, range pick, ⋯, Space, + Add song, Arrange, MIDI Learn (one learned
+  badge), Save snapshot, song menu, Lock; Song bank browse and trying; Edit Sound / Range / Tone EQ / chooser / Drone /
+  Effects › Sends / Master; Settings, each category + search; chart (settings.chartView) on the stage, in the
+  sidebar, Edit chart. Contact sheets (Perform, Edit, Settings, Song bank) with `--sheets` / `UI6T_SHEETS`.
+- **Tokens (styles-v6.css, on `.v6` and `.v6-st`; light values under `html[data-mode="light"]`).**
+  `--v6-sh` (a theme's `--sh`, else `#000c` dark / `#3b2a1a2e` paper), `--v6-scrim` (black 45 % / brown 30 %),
+  `--v6-danger` (`--danger` 70 % + `--text`: no theme has `--danger-text`; its `#ffb3ad` fallback was 1.4 : 1 on
+  paper and `--danger` 3.8 : 1 on Studio's sheet), `--v6-ok`, `--v6-cmix` (share of a position colour in text drawn
+  in it: 70 % dark / 40 % paper; plain `--c` was 1.8–2.4 : 1 on paper), `--v6-tint-text` (`--accent-text` 78 % +
+  `--text`, for the accent on its own tint: 4.0–4.3 : 1 on Sanctuary Day), `--v6-field-line` (`--muted` 58 % +
+  `--line-2`, ≥ 3 : 1 on every theme's panel; `--line-2` was 1.5–2.0 : 1).
+- **Positions (D15 kept).** `--v6-pos-4` `#e46aa0` → `#ee84b2` (the ON label in dark ink was 4.4 : 1 on Studio).
+  Sanctuary Day gets deep glass for 4..6 (`#a8336a #5f6b00 #3a57b0`, cream ink 7.6–8.4 : 1, like its own slots),
+  Daylight Day pastels (`#f08fb8 #c9d867 #86b0f4`, dark ink ≥ 5.9 : 1). Theme tokens: `--slot-3` Studio `#b37fd2` →
+  `#bd90d9`, Nave `#b073da` → `#bc8ae0`, Daylight Day `#a883d4` → `#b495db` (ON in the ink window 4.3–4.4 → 5.0–5.3).
+- **Rules.** Fields / selects / textareas under `.v6` / `.v6-st` take `--v6-field-line` while not focused (the bank
+  and Settings search wrappers too); focus rings in `--focus` where they were `--accent` (strip names, range handles,
+  chart body, sidebar grip, Quick's theme / scene buttons, Settings' theme cards, bank search); Settings' tab ring
+  2 px outside (inside, it lay on the chosen tab's accent edge: 2.0–2.8 : 1); Learn's dashed outline and Arrange's
+  tab outline go solid `--focus` when focused (focus showed nothing); Save snapshot's name ring solid `--focus` (was a
+  35 % accent ring, 1.2–2.5 : 1) and its border `--accent-text`; v6 switches: ON thumb `--accent-ink` (a light thumb
+  on amber was 1.2–1.8 : 1), OFF track `--text` 52 % on paper (was 1.3 : 1); silent / muted strips dim the colour bar
+  and fader track and put the name and dB in `--muted` (opacity took them to 3.2–3.7 : 1 on paper; `.v6-body` resets
+  styles.css's `.slot.silent .slot-body` opacity); name pills: "on screen" = fill + border, no opacity .7; drone key
+  on the rail, Edit's instrument name and the chooser's "playing now" in `--v6-cmix`; Edit's chosen category summary
+  mixed toward `--text`; the picked range bar's ring in `--text` (`#fff8` vanished on paper); every overlay shadow /
+  scrim from the tokens; v6 popovers' shadow `0 8px 20px` at 55 % and the Quick sheet's `0 2px 8px` at 50 % (at
+  1280 × 800 the sheet's foot reaches the keys; the old shadows took the keys' labels to 2.1 : 1 and the strips' ON
+  labels beside a popover to 3.5 : 1).
+- **Daylight theme file.** `.st-engine-note` takes `--dl-warn-text` (UI6-U6 O3: 1.88 : 1 on Day, today's Settings
+  too); the EQ band / cut fields keep their `--focus` border when focused (the theme's border rule hid it: no focus
+  shown, today's Edit too); the EQ display's focus ring `#7cc4ff` (Day's ink-blue was 2.5 : 1 on the walnut bezel).
+- **Numbers (the final tool on dcb2f06 → this lane; text · rings · edges, 38 states each):** Classic 13 · 16 · 45 →
+  0, Sanctuary 11 · 7 · 44 → 0, Sanctuary Day 94 · 16 · 42 → 0, Daylight Stage 6 · 19 · 44 → 0, Daylight Day 101 · 50 ·
+  46 → 0, Studio 18 · 16 · 44 → 0, Ember 14 · 7 · 44 → 0, Nave 17 · 7 · 45 → 0; totals 274 · 138 · 354 → 0 · 0 · 0,
+  0 console errors / HTTP ≥ 400, all 38 states reached in every theme (~4 290 text runs, ~1 163 rings, ~47 edges
+  per theme). Today's screens (shoot.mjs perform, quick, edit, eq, settings, mini at 1440 × 900): 1 real fail before
+  (Daylight Day's engine note) → 0 in all 8 themes.
+- Gates: ui-v6-themes 8/8 themes clean (557 s on the shared 2-CPU box), themes 58/58 (coverage JSON: only Daylight's
+  file changed, 2 new selectors, both matched), ui-v6 76/76 (flag-off purity vs dcb2f06), settings 111/111 (app,
+  fixture, mac, bridge, v6). No engine file touched.

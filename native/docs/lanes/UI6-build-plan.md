@@ -91,7 +91,7 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   2026-11-27): v6 Edit's song title is cut mid-word at 1280×800 ("Sunday Pad + Pia" with no ellipsis) — ellipsize or
   let the KEY / BPM / Notes chips give way; check at 1180 and 820 too.
 
-- **U8 themes (UI6-U6 O3, pre-existing):** Daylight Day's Sound note `.st-engine-note` is 1.88:1 even with the
+- ~~**U8 themes (UI6-U6 O3, pre-existing):**~~ **Done (U8b, lane-u8b):** Daylight Day's Sound note `.st-engine-note` is 1.88:1 even with the
   flag off; fix in the themes pass. Also UI6-U6 O1/O2 (rotation keeps the open category; live "n min ago").
   (Polish batch 1 skipped O1/O2: both live in `views/v6/settings.js`, lane-u7c's file at the time.)
 
@@ -490,3 +490,22 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   logged decision. **U7c → D25:** snapshots stay today's scenes; an optional name per scene (no SCHEMA bump); widening
   stays open for Ryan.
 - Chart and song bank pieces already exist hidden (chart view D7, bank O-AW-PP); U7 reuses their logic.
+
+## U8b status (builder, 2026-11-26; lane-u8b from v2-native dcb2f06; awaiting the skeptic)
+
+- Built: the shared audit `tools/themes/audit-lib.mjs` (shoot.mjs now imports it; + clipping, scrim hit-test for
+  `::after`, closed `<details>`, drop-shadow pixels, edge fades, and a WCAG 1.4.11 half: focus rings, field edges,
+  switch thumbs), the v6 tour `tools/themes/v6-tour.mjs` / `shoot-v6.mjs` (38 states × 8 themes, 1280 × 800, contact
+  sheets) and the suite `test/phase2/ui-v6-themes/run.mjs` (in run-all). Fixes are colour only: v6 tokens
+  (`--v6-sh`, `--v6-scrim`, `--v6-danger`, `--v6-ok`, `--v6-cmix`, `--v6-tint-text`, `--v6-field-line`), day-theme
+  position sets for 4..6, `--slot-3` a step lighter in Studio / Nave / Daylight Day, focus rings in `--focus`, Daylight's
+  engine note (O3) and EQ focus. Details and numbers: CONTRACT_CHANGES "## UI v6 U8b (themes)".
+- Before → after (the final tool on dcb2f06 vs this lane): text 274 → 0, focus rings 138 → 0, field / switch edges
+  354 → 0 over 8 themes × 38 states; today's screens 1 → 0 (O3). Gates: ui-v6-themes 8/8 (0 errors), themes 58/58,
+  ui-v6 76/76 (flag-off purity vs dcb2f06 passes), settings 111/111 (5 modes incl. v6); engine untouched.
+- For Ryan / design calls: the day themes' positions 4..6 are new colours (Sanctuary Day deep glass, Daylight Day
+  pastels); v6 switches now have a dark thumb when on; field borders are visibly stronger (3 : 1) in every theme;
+  popover and Quick sheet shadows are lighter. Edit's song name has no field edge (a title with ✎): exempted, not
+  changed. At 1280 × 800 the v6 Quick sheet's foot reaches the keyboard (layout: U8a).
+- Not covered: iPad sizes (U8a's layouts; the tour is 1280 × 800 only), hover / pressed / dragging states, the
+  learn-picked green outline on paper (no state for it in the tour), focus rings of controls hidden behind others.
