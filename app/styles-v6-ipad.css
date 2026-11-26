@@ -18,6 +18,15 @@ body:has(.v6-perform) #midi-status { min-width: 0; overflow: hidden; }
 body:has(.v6-perform) #btn-settings { flex: none; min-width: 44px; }
 body:has(.v6-perform) #midi-status > .midi-name { flex-shrink: 1; min-width: 0; overflow: hidden;
   text-overflow: ellipsis; }
+/* skeptic UI6-U8a F1: a MIDI problem ("Not allowed yet", "No device", "Starting…") is a state, not a name (today's
+   styles.css never shrinks it). With the rule above alone it gave way to "All 19 ready" and showed 0 px of its words at
+   820 px once the sounds were ready. The ready words yield first now (they ellipsize, down to the lamp), and the MIDI
+   state keeps its room (today's max-width, 104 px at ≤ 1250 px, still ellipsizes a longer one). */
+body:has(.v6-perform) #midi-status:has(> .midi-name.off) { flex-shrink: 0; }
+body:has(.v6-perform) #midi-status > .midi-name.off { flex-shrink: 0; }
+body:has(.v6-perform) #ready-status { flex-shrink: 1; min-width: 0; overflow: hidden; }
+body:has(.v6-perform) #ready-status > .ready-text { flex-shrink: 1; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; }
 
 /* ---- top bar at iPad portrait widths: nothing collapses away that tells the player something is wrong. Quick → its
    icon (the left panel's Quick, under it, carries the word), Settings keeps 44 px, the output meter goes (every strip
@@ -31,6 +40,8 @@ body:has(.v6-perform) #midi-status > .midi-name { flex-shrink: 1; min-width: 0; 
   body:has(.v6-perform) #btn-quick > span { display: none; }
   body:has(.v6-perform) .tb-status { gap: 10px; justify-content: flex-start; }
   body:has(.v6-perform) #ready-status:not(.on) .ready-text { display: none; }
+  /* skeptic F1: with a MIDI problem showing, the ready words go entirely here (an "A…" stub said nothing) */
+  body:has(.v6-perform) .tb-status:has(.midi-name.off) .ready-text { display: none; }
   body:has(.v6-perform) .tb-meter { display: none; }
   body:has(.v6-perform) .tb-rec .rec-time:not(.on):not(.saving) { display: none; }
   body:has(.v6-perform) .tb-master { width: 140px; }

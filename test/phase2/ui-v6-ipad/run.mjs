@@ -809,6 +809,39 @@ try {
     }
   });
 
+  // skeptic UI6-U8a F1: once every sound was ready, "All 19 ready" took the MIDI state's room at 820 px and its words
+  // showed 0 px ("MIDI ●" only). The state words must show whole at every size (they are short), ready or not.
+  await T('skeptic F1: a MIDI problem\'s words show whole once the sounds are ready (820 … 1280)', async () => {
+    for (const [name, init] of [
+      ['blocked', () => {
+        navigator.requestMIDIAccess = async () => {
+          throw new DOMException('no', 'NotAllowedError');
+        };
+      }],
+      ['nodevice', () => {
+        const fake = { inputs: new Map(), outputs: new Map(), onstatechange: null, sysexEnabled: false,
+          addEventListener() {}, removeEventListener() {} };
+        navigator.requestMIDIAccess = async () => fake;
+      }]]) {
+      const { context, page: p } = await open({ viewport: MAC, ipad: false, init });
+      await boot(p);
+      await p.waitForFunction(() => /off/.test(document.getElementById('midi-name').className));
+      await p.waitForFunction(() => document.getElementById('ready-status').classList.contains('on'), null,
+        { timeout: 90000, polling: 200 });
+      for (const vp of [PORTRAIT, { width: 1024, height: 1366 }, LANDSCAPE, { width: 1024, height: 700 }, MAC]) {
+        await rotate(p, vp);
+        const r = await p.evaluate(() => {
+          const n = document.getElementById('midi-name');
+          return { text: n.textContent, w: n.clientWidth, sw: n.scrollWidth };
+        });
+        assert.ok(r.w > 0 && r.w >= r.sw, `${name} ${vp.width}×${vp.height}: "${r.text}" shows ${r.w} of ${r.sw} px`);
+        const rr = await p.evaluate(layoutReport, EXEMPT);
+        assert.deepEqual(rr.overlap, [], `${name} ${vp.width}`);
+      }
+      await close(context);
+    }
+  });
+
   await T('sound stopped: the banner over the v6 stage (Restart sound), "Stopped"; restarting says so', async () => {
     const { context, page: p } = await open({ viewport: MAC, ipad: false });
     await boot(p);
