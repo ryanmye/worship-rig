@@ -358,6 +358,9 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
 - Ryan chose to build the redesigned UI (D16–D18, charts and song bank designs) in 2.0, not 2.x: 2.0 waits until
   it is built and tested. Design continues in this order: finish Edit (Drone, Master, Effects), Settings, MIDI
   Learn + Arrange + dialogs, edge states + a themes check. A build plan follows the designs.
+- **Final UI changes wait for Ryan's Mac** (back in about a week from 2026-11-26): the mockups are proposals until he
+  has seen the real thing on his machine. Work in the meantime can prepare (plan, components behind a flag), but
+  nothing replaces today's UI before then.
 
 ## D20: MIDI Learn changes the live sound; Revert undoes it (Ryan, 2026-11-26)
 - Answer to lane-learn's open question ("live only vs song edit"): moving a learned knob or fader changes the live
