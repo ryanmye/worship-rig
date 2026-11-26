@@ -642,6 +642,30 @@ try {
       `empty strip fader at ${r.fader}`);
   });
 
+  // skeptic UI6-U1 F3: the Mac app's minimum window (main.js minWidth / minHeight 1024 × 700)
+  await T('1024×700 with 4 and 7 instruments: the fader keeps a ≥ 100 px track clear of its dB readout', async () => {
+    await page.setViewportSize({ width: 1024, height: 700 });
+    try {
+      for (const n of [4, 7]) {
+        assert.equal(await setSlots(n), n);
+        await until((k) => document.querySelectorAll('.v6-strip:not([hidden])').length === k, n);
+        await page.waitForTimeout(300);
+        const r = await ev(() => {
+          const s = document.querySelector('[data-testid="v6-strip-0"]');
+          const box = (sel) => s.querySelector(sel).getBoundingClientRect();
+          const tr = box('.fader-track');
+          const inp = box('.fader-track input');
+          const val = box('.fader-value');
+          const btn = box('.v6-btns').bottom <= s.getBoundingClientRect().bottom + 0.5;
+          return { track: Math.round(tr.height), clear: inp.bottom <= val.top + 0.5, buttonsInside: btn };
+        });
+        assert.ok(r.track >= 100 && r.clear && r.buttonsInside, `${n} instruments: ${JSON.stringify(r)}`);
+      }
+    } finally {
+      await page.setViewportSize({ width: 1280, height: 800 });
+    }
+  });
+
   await T('screenshots: 1280×800 Sanctuary, 2 / 5 / 7 instruments', async () => {
     await ev(() => window.__rig.ctx.setView('perform'));
     // the factory song as shipped (the tests above changed its levels, chips, room and scenes)

@@ -250,6 +250,19 @@
   .v6 .v6-song { max-width: 220px; font-size: 22px; }
   .v6 .v6-chord .chord-caption { display: none; }
 }
+/* ---- short windows (skeptic UI6-U1 F3): at the Mac app's minimum window (1024 × 700, a ~672 px page) with > 5
+   instruments the name pills took the fader down to a 58 px track, under its 80 px input, so the thumb covered the dB
+   readout (today's Perform keeps 141 px there). Tighter gaps and padding give the fader the room back; every target
+   stays 44 px. */
+@media (max-height: 760px) {
+  .v6 { --v6-gap: 6px; padding: 6px 12px 8px; }
+  .v6 .v6-songbar { min-height: 52px; padding: 3px 10px; }
+  .v6 .v6-snaps { min-height: 44px; }
+  .v6 .v6-stripsarea { gap: 4px; }
+  .v6 .v6-strip { gap: 5px; padding: 7px 8px; }
+  .v6 .v6-who { min-height: 20px; }
+  .v6 .v6-nm { font-size: 15px; }
+}
 @media (max-width: 1100px) {
   .v6 .v6-left { width: 64px; }
   .v6 .v6-right { width: 160px; }
