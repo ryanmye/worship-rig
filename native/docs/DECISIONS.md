@@ -362,13 +362,20 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
   has seen the real thing on his machine. Work in the meantime can prepare (plan, components behind a flag), but
   nothing replaces today's UI before then.
 
-## D20: MIDI Learn changes the live sound; Revert undoes it (Ryan, 2026-11-26)
-- Answer to lane-learn's open question ("live only vs song edit"): moving a learned knob or fader changes the live
-  sound only; the saved song is unchanged. The Revert button undoes those moves; otherwise they stay as set.
-  Reading (to confirm when lane-learn is reviewed): loading a song plays it as saved, like any other live change.
+## D20: MIDI Learn moves stick; the Revert button undoes them (Ryan, 2026-11-26)
+- Answer to lane-learn's open question: "revert with revert button, keep unchanged otherwise". Read as: a learned
+  knob's move stays (like any on-screen change) and Revert undoes it. That is lane-learn's O-AW-ML rule 5 as built
+  (a knob edits the song through store.set: changed dot, Revert undoes, wheels stay live-only), so lane-learn needs
+  no change for this. (An earlier wording of D20 said "live only, song unchanged"; corrected here. Ryan to confirm.)
 
 ## D21: Settings design approved (Ryan, 2026-11-26)
 - Mockup: `native/docs/design/mockups/settings.html` (artifact "Settings mockups"). Ryan: "something like that is
   fine. just easy to navigate and use". Category list with each category's current state, a search box, MIDI Learn
   and Perform layout as categories, the Song bank entry in Sounds & Samples, theme previews. Guiding rule for the
   build: easy to navigate and use beats completeness on screen.
+
+## D22: Build the v6 UI now; finishing touches before Ryan is back; then 2.0 (Ryan, 2026-11-26)
+- "you can build the ui first, and we can work on finishing touches before i get back before releasing 2.0".
+- Plan: `native/docs/lanes/UI6-build-plan.md` (U1–U9). Built behind `settings.uiV6` (true or absent, like
+  chartView) so today's UI keeps working and stays the default until Ryan flips it after seeing it on his Mac (U9,
+  tier 1). Builder then skeptic per task; flag-off purity is a gate.
