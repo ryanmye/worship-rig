@@ -23,7 +23,7 @@ def library(compact=False):
 
 
 def song_header():
-  return '''<div class="eh"><span class="livebadge"><i></i>LIVE</span><b class="song">Piano + Warm Pad</b><button class="ghost pen" aria-label="Rename">✎</button>
+  return '''<div class="eh"><span class="live"><i></i>LIVE</span><b class="song">Piano + Warm Pad</b><button class="ghost pen" aria-label="Rename">✎</button>
     <button class="keybtn">C ▾</button><small class="youplay">you play C</small>
     <div class="trn"><span class="keylab">BPM</span><b>72</b><button class="tap sm2">Tap</button></div>
     <span class="keylab">TIME</span><button class="spc">4/4 ▾</button>
@@ -124,48 +124,9 @@ def frame(main, w=1280, h=800, narrow=False, lib=True, n=3, cls=''):
           f'{m.bottom(n)}</div>')
 
 
-def inst_side_body(eq_wide=False):
-  # Per-instrument edit, as a sidebar module (Ryan, 2026-11-26): tap a strip's name (or ⋯ › Edit sound).
-  c = m.POS_COL[0]
-  keys = ''.join(f'<i class="{"in" if 8 <= k <= 44 else ""}"></i>' for k in range(52))
-  sound = (wslider('Brightness', 'Bright · 100%', 92, 'darker', 'brighter') + wslider('Warmth', 'Neutral · 0 dB', 50, 'thinner', 'fuller')
-           + wslider('Ring-out', 'Natural · 0.12 s', 38, 'short', 'long'))
-  eq = ('<img class="eqimg side" src="img/eq-today.png" alt="Tone EQ">' if eq_wide else
-        '''<button class="eqcard"><svg viewBox="0 0 120 34" aria-hidden="true"><path d="M0 22 C20 22 30 10 50 14 S80 24 120 18" fill="none" stroke="var(--c)" stroke-width="2"/></svg>
-          <span><b>Tone EQ</b><small>2 bands</small></span><em>Widen ▸</em></button>''')
-  return f'''<div class="isb" style="--c:{c}"><div class="isb-h"><span class="ico" style="background:{c}"></span><b>Grand Piano</b>
-      <button class="btn chgi">Change ▾</button></div>
-    <p class="sent sm">Plays on <u>every key</u>, <u>a little</u> into the <u>Hall</u>, sustain <u>on</u>.</p>
-    <details class="sec" open><summary>The sound</summary>{sound}</details>
-    <details class="sec"{" open" if eq_wide else ""}><summary>Tone EQ <small>2 bands</small></summary>{eq}</details>
-    <details class="sec"{"" if eq_wide else " open"}><summary>Where it plays <small>every key · Normal touch</small></summary>
-      <div class="mkb">{keys}</div><div class="hrow"><button class="btn grow">Set lowest</button><button class="btn grow">Set highest</button></div>
-      <div class="touch"><button class="seg">Light</button><button class="seg sel">Normal</button><button class="seg">Heavy</button><button class="seg">Fixed</button></div></details>
-    <details class="sec"><summary>Advanced <small>Width · Transpose · Voices · Pitch bend</small></summary></details></div>'''
-
-
-def perform_with_inst_side(n=5, width=None, eq_wide=False, w=1280, h=800, narrow=False, port=False):
-  m.BODIES['inst'] = lambda wide: inst_side_body(eq_wide)
-  mods = [('inst', 'Grand Piano ✕'), ('drone', 'Drone'), ('setlist', 'Setlist'), ('notes', 'Notes')]
-  rows = m.ALL[:n]
-  strips = ''.join(m.strip(i, r).replace('class="strip"', 'class="strip editing"', 1) if i == 0 else m.strip(i, r)
-                   for i, r in enumerate(rows))
-  side = m.sidebar(tab='inst', mods=mods, cls='instside', width=width, wide=port)
-  if port:
-    board = f'<div class="board port mid"><div class="toprow">{m.wheel()}<div class="strips">{strips}{m.addstrip(slim=True)}</div></div>{side}</div>'
-    return f'<div class="frame port" style="width:820px;height:1180px">{m.topbar(True)}{m.songbar(True, snap_chip=True)}{board}{m.bottom(n)}</div>'
-  dense = ' mid' if n >= 4 else ' few'
-  board = f'<div class="board{dense}">{m.wheel()}<div class="strips">{strips}{m.addstrip(slim=n >= 5)}</div>{side}</div>'
-  return (f'<div class="frame" style="width:{w}px;height:{h}px">{m.topbar(narrow)}{m.songbar(snap_chip=True)}'
-          f'{board}{m.bottom(n)}</div>')
-
-
 CSS = ''.join(open(f'/home/claude/scratch/{f}').read() for f in
               ('mock_v5.css', 'mock_v6.css', 'mock_chart.css', 'mock_bank.css', 'mock_edit.css'))
 frames = [
-  ('side', 'Sidebar edit · Perform', perform_with_inst_side()),
-  ('sidewide', 'Sidebar edit · EQ, widened', perform_with_inst_side(n=3, width=700, eq_wide=True)),
-  ('sideipp', 'Sidebar edit · iPad portrait', perform_with_inst_side(n=3, port=True)),
   ('inst', 'Edit · an instrument', frame(rig_tabs() + instrument_panel())),
   ('fx', 'Edit · Effects', frame(rig_tabs('fx') + fx_panel())),
   ('eq', 'Edit · Tone EQ', frame(rig_tabs() + eq_panel())),
@@ -186,7 +147,7 @@ def build():
 <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@700;800&family=Figtree:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>{CSS}</style></head><body>
 <header class="pg"><h1>Edit: quick mockups</h1>
-<p><b>New first three tabs: editing an instrument in the right sidebar, right on Perform.</b> Tap a strip's name (or ⋯ › Edit sound): it gets a gold outline and the sidebar opens a tab for it with the same sections as Edit (the sound, Tone EQ, where it plays, Advanced). Drag the sidebar wider for the EQ; ✕ closes the tab. Below that, the full Edit screen: Today's Edit, carried into the Perform v6 language. Kept: the library on the left (now foldable), the song header,
+<p>Today's Edit, carried into the Perform v6 language. Kept: the library on the left (now foldable), the song header,
 the plain-English sentence with tappable words, the three columns (on stage · the sound · where it plays), Advanced and
 the Tone EQ. Changed: tabs are named by instrument with their position colour, never Keys / Pad / Extra / Bass (D15);
 the "On stage" column is the very same strip as Perform; the keyboard row is Perform's. The instrument chooser is
