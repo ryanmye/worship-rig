@@ -8142,5 +8142,17 @@ set its range" / "iPad · pick, then drag a range", `edit.html` "Instrument · R
   26 px band (U1's was 23 px; the keys lose 3 px).
 - **Flag off:** unchanged (the ui-v6 purity probe against 966b0b4: 103 requests, 14 store listeners, 4 intervals,
   2528 elements, identical).
-- Tests: `node test/phase2/ui-v6/run.mjs` now 26 checks (U1's 16 after its skeptic pass + 10 for U2). Screenshots: `u2-drag-1280.png`,
+- Tests: `node test/phase2/ui-v6/run.mjs` now 27 checks (U1's 16 after its skeptic pass + 10 for U2 + 1 from the U2 skeptic). Screenshots: `u2-drag-1280.png`,
   `u2-ipad-pick-1180.png`, `u2-edit-range-harness.png`.
+- **Skeptic (UI6-U2, `native/docs/reviews/UI6-U2.md`)** changed these behaviours:
+  - a touch / pen tap on a strip name picks on `pointerup` (no move > 10 px), and the click it may produce is
+    ignored. Chromium drops the click of a tap within ~0.4 s of a quick touch drag (tap suppression after the
+    drag's fling), so "drag, then tap another instrument to switch" did nothing (F2; it was also the ui-v6 iPad flake);
+  - `perform.js` drops a range drag and the pick when the song's slot count changes (F3) and whenever the view is not
+    Perform (F4), and `keyboard.js` ignores pointer moves on a 0 px wide (hidden) keyboard;
+  - the end clamp keeps the end's start value as a bound, so a stored one-key range (lo === hi) is never moved the
+    wrong way by an arrow or a short inward drag, and `aria-valuemax` of a lowest handle is `max(hi − 1, lo)` (F5);
+  - while an end is being dragged on a coarse pointer, a second finger on the keys plays the note (F6; it used to
+    cancel the drag, end the pick and swallow the note).
+  - Correction to "Snapping" above: the open end (0 / 127) wins once the end is nearer to "half a white key past the
+    edge" than to the edge key, i.e. past a quarter of a white key (≈ 7 px at 1280 × 800, ≈ 3 px on the 88 keys).

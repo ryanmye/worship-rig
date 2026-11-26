@@ -52,7 +52,13 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 - For U2: `bottom.js` holds the keyboard; replace its display-only range bars. For U3 / U4: mount into
   `.v6-right` / `.v6-left` (perform.js `right` / `left`).
 
-## U2 status (builder, 2026-11-26; lane-u2 from lane-u1 6623b04, awaiting the skeptic)
+## U2 status (builder, 2026-11-26; lane-u2 from lane-u1 6623b04, rebased onto 2fff370; skeptic pass done)
+
+- **Skeptic (2026-11-26): PARTIAL as delivered, VERIFIED after fixes.** The review is
+  `native/docs/reviews/UI6-U2.md`. Fixed: the purity check failing after the rebase (25/26), the iPad test's flake
+  (a real Chromium tap-suppression miss on the strip names), a drag writing the wrong slot after a Remove, a drag
+  writing "every key" when the view hid, one-key ranges moving the wrong way, and a second finger on the keys
+  cancelling a drag. ui-v6 is 27/27. Open for Ryan: the four builder choices below, Esc in pick mode (O-items).
 
 - Built: `app/js/views/v6/keyboard.js` (`rangeKeyboard`, sizes 'perform' and 'range'), `app/styles-v6-keyboard.css`
   (imported by styles-v6.css); bottom.js now mounts it; strips get the iPad pick outline ("changing range"); harness
