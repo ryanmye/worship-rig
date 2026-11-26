@@ -597,7 +597,8 @@ async function runMacPart({ browser, createServer, ROOT, OUT, results }) {
   await pinTheme(context, 'sanctuary');
   await context.grantPermissions([...MIDI_PERMISSIONS], { origin });
   await context.addInitScript(() => {
-    window.rig = { isElectron: true, getInfo: async () => ({ version: '2.0.0', electron: '44', port: 8438 }) };
+    window.rig = { isElectron: true, getInfo: async () => ({ version: '2.0.0', electron: '44', port: 8438 }),
+      backupNow: async () => (window.__backupFails ? { error: 'disk full' } : { path: '/tmp/rig.json' }) };
     const raw = localStorage.getItem('rig.v1');
     const lib = raw ? JSON.parse(raw) : { schema: 1, songs: {}, setlists: {}, meta: {}, settings: {} };
     lib.settings = { ...(lib.settings || {}), uiV6: true };
@@ -625,6 +626,22 @@ async function runMacPart({ browser, createServer, ROOT, OUT, results }) {
       === 'Version 2.0.0', null, { timeout: 5000 });
     assert.equal(await page.textContent('[data-testid="settings-sum-mac"]'), 'menu bar off · updates on');
     assert.match(await page.textContent('[data-testid="settings-sum-library"]'), /songs · automatic backups$/);
+    // UI6-U6 skeptic F6: Back up now updates the summary at once (no store write needed); a failed one does not
+    await page.evaluate(() => window.__rig.views.settings._debug.showCategory('about'));
+    await page.evaluate(() => {
+      window.__backupFails = true;
+      [...document.querySelectorAll('#view-settings button')].find((b) => b.textContent.trim() === 'Back up now').click();
+    });
+    await page.waitForTimeout(300);
+    assert.match(await page.textContent('[data-testid="settings-sum-library"]'), /songs · automatic backups$/,
+      'F6: a failed backup is not "backed up"');
+    await page.evaluate(() => {
+      window.__backupFails = false;
+      [...document.querySelectorAll('#view-settings button')].find((b) => b.textContent.trim() === 'Back up now').click();
+    });
+    await page.waitForTimeout(150); // a frame or two; no store write or status event is waited for
+    assert.equal(await page.textContent('[data-testid="settings-sum-library"]'), 'backed up just now');
+    await page.evaluate(() => window.__rig.views.settings._debug.showCategory('mac'));
     await page.screenshot({ path: path.join(OUT, 'u6-mac-1280.png') });
     assert.deepEqual(errors, []);
     results.push({ mode, name, ok: true });

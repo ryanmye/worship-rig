@@ -1527,7 +1527,10 @@ export function mountSettings(el, ctx) {
         btn('Back up now', async () => {
           const r = await rig.backupNow(store.exportJSON({ pretty: false }));
           if (r && r.error) console.warn('[settings] backupNow', r.error);
-          else manualBackupAt = Date.now(); // UI v6 U6: the Library & Backup summary
+          else if (r) {
+            manualBackupAt = Date.now(); // UI v6 U6: the Library & Backup summary
+            v6?.refresh?.(); // UI6-U6 skeptic F6: at once, not at the next store write
+          }
           toast(r && !r.error ? 'Backup saved' : 'The backup could not be saved.', r && !r.error ? 'info' : 'error');
         }),
         typeof rig.openFolder === 'function' ? btn('Open backups folder', () => rig.openFolder('backups')) : null,
