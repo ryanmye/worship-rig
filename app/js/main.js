@@ -295,6 +295,11 @@ function applyView(name) {
 }
 
 function openSettings(opts = {}) {
+  // UI v6 U7a (D17): with the v6 Perform the Song bank is the browser over the stage, not today's list in Settings
+  // (Edit v6's Song bank…, the 'rig-open-settings' event); flag off this is today's path
+  if (opts && opts.section === 'bank' && performIsV6 && typeof performView?.openBank === 'function') {
+    return openBank(opts);
+  }
   // round4-perform P4: an unfolded banner strip ("Open Settings" is one of its actions) must not stay over the modal
   setBstripOpen(false);
   if (locked()) {
@@ -329,6 +334,20 @@ function openSettings(opts = {}) {
   return true;
 }
 
+/**
+ * UI v6 U7a (D17): open the Song bank browser over the v6 stage, closing Settings and leaving Edit first. Without the
+ * v6 Perform: today's Song bank list in Settings.
+ * @param {{mode?:'bank'|'library', focus?:boolean}} [opts]
+ * @returns {boolean}
+ */
+function openBank(opts = {}) {
+  if (!(performIsV6 && typeof performView?.openBank === 'function')) return openSettings({ section: 'bank' });
+  closeSettings();
+  if (store.get().settings.view !== 'perform' && !setView('perform')) return false;
+  performView.openBank({ mode: opts.mode, focus: !!opts.focus });
+  return true;
+}
+
 function closeSettings() {
   if (!settingsOpen) return;
   settingsOpen = false;
@@ -353,7 +372,7 @@ function closeSettings() {
 // getBaseline: Perform's Revert snapshot (perform.js savedSnapshot), so Edit's changed dots count against the same
 // song state as Perform's Revert (views/edit/CONTRACT.md §3.6). performView is assigned below; Edit mounts later.
 const ctx = {
-  store, controller, engine, midi, recorder, rig, isElectron, toast, openSettings, closeSettings, setView,
+  store, controller, engine, midi, recorder, rig, isElectron, toast, openSettings, closeSettings, setView, openBank,
   quickButton: $('btn-quick'),
   getBaseline: () => {
     try {

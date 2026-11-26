@@ -20,6 +20,9 @@ import { stripsRow } from './strips-row.js';
 import { bottomRow } from './bottom.js';
 import { rightSidebar } from './sidebar/sidebar.js';
 import { leftPanel } from './left.js';
+import { songBank } from './bank/bank.js';
+import { trialBanner } from './bank/banner.js';
+import { PORTRAIT_MQ } from './sidebar/sidebar.js';
 
 /** The v6 stylesheet; linked only while the v6 Perform is mounted (removed again by destroy()). */
 export const V6_CSS_HREF = './styles-v6.css';
@@ -94,6 +97,8 @@ export function mountPerformV6(root, ctx) {
     liveOf,
     /** U3: the song bar's Setlist / Notes buttons open the sidebar on that module. */
     openSidebar: (id) => side?.open(id),
+    /** U7a: the Song bank browser over the stage (the Setlist module's + Add song › From the Song bank). */
+    openBank: (o) => openBank(o),
     setSlot,
     setSlotGain(i, x) {
       if (!sceneLevel(`slots.${i}.gain`, x)) setSlot(i, 'gain', x);
@@ -249,7 +254,35 @@ export function mountPerformV6(root, ctx) {
   });
   let quickFrom = null; // the button that opened the sheet (U4)
   d.add(() => quick.destroy());
-  el.append(bar.el, snaps.el, board, bottom.el, quick.el);
+  // U7a (D17): the "Trying …" banner under the song bar, and the Song bank browser over the strips + sidebar (made on
+  // first use; the left panel, the keyboard row and PANIC stay live beside / under it)
+  const banner = trialBanner(v);
+  d.add(() => banner.destroy());
+  let bank = null;
+  const placeBank = () => {
+    if (!bank || !bank.isOpen) return;
+    const portrait = typeof window.matchMedia === 'function' && window.matchMedia(PORTRAIT_MQ).matches;
+    const b = board.getBoundingClientRect();
+    const gap = parseFloat(getComputedStyle(board).columnGap) || 10;
+    const l = portrait ? 0 : Math.max(0, Math.round(left.getBoundingClientRect().right - b.left + gap));
+    bank.el.style.setProperty('--bank-left', `${l}px`);
+  };
+  const setBankOpen = (on) => {
+    board.classList.toggle('bank-open', on);
+    for (const x of [row.el, right]) x.inert = on; // under the browser: not reachable by Tab / screen readers
+  };
+  function openBank(o = {}) {
+    if (!bank) {
+      bank = songBank(v, { onClose: () => setBankOpen(false) });
+      board.append(bank.el);
+    }
+    quick.close();
+    bank.open(o);
+    setBankOpen(true);
+    placeBank();
+  }
+  d.listen(window, 'resize', placeBank);
+  el.append(bar.el, snaps.el, banner.el, board, bottom.el, quick.el);
   root.classList.remove('locked');
   root.replaceChildren(el);
 
@@ -597,7 +630,17 @@ export function mountPerformV6(root, ctx) {
     snapshots: snaps,
     sidebar: side,
     left: lp,
+    /** U7a (D17): open the Song bank browser ({mode: 'bank'|'library', focus}); the browser and banner (tests). */
+    openBank: (o) => openBank(o),
+    get bank() {
+      return bank;
+    },
+    banner,
     destroy() {
+      // U7a: a trial is a v6 Perform thing; leaving the v6 Perform (the flag going off) goes back from it
+      if (typeof controller.trial === 'function' && controller.trial()) controller.backFromTrial();
+      bank?.destroy();
+      bank = null;
       d.dispose();
       side.destroy();
       bar.destroy();

@@ -174,7 +174,7 @@ async function boot(storage = memoryStorage()) {
 const LANTERN = 'Desk Bank:lantern.json';
 const HARBOUR = 'Desk Bank:harbour.json';
 
-test('controller: Try it plays the bank song, nothing persisted; Back restores the song, entry and Revert', async () => {
+test('controller: Try it plays the bank song, nothing persisted; Back restores song, entry, Revert', async () => {
   const { store, ctl, storage, events } = await boot();
   const lib = store.get().songOrder;
   const idx = 2;

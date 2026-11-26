@@ -435,10 +435,12 @@ export async function sidebarTests(x) {
     assert.equal((await song()).id, sid0);
     assert.equal(await ev(() => !!document.querySelector('[data-testid="v6-addsong"]')), false);
     await until((n) => !!document.querySelector(`[data-testid="v6-sl-${n + 1}"]`), n0);
-    // From the Song bank: Settings opens on the bank's section (today's list until U7)
+    // From the Song bank (U7a, D17): the browser over the stage, also for openSettings({section: 'bank'}); Settings
+    // stays closed (the browser itself is test/phase2/ui-v6-bank)
     await ev(() => window.__rig.ctx.openSettings({ section: 'bank' }));
-    await until(() => document.querySelector('details.st-bank')?.open === true);
-    await ev(() => window.__rig.ctx.closeSettings());
+    await until(() => window.__rig.views.v6.bank?.isOpen === true);
+    assert.equal(await ev(() => document.getElementById('view-settings').hidden), true);
+    await ev(() => window.__rig.views.v6.bank.close());
     await clearToasts();
     // tidy: the two songs go again
     await ev(({ a }) => {

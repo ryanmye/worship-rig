@@ -2,7 +2,7 @@
 // "Sidebar · Setlist"). U1's song-bar setlist popover, moved here: the list with now / cued markers (a tap cues, a tap
 // on the cued one clears it, GO plays it; controller.cueSong / clearCue / go, unchanged), Prev, GO with the cued (or
 // next) song's name, plus "+ Add song": From my library (Edit's Library… flow: store.addToSetlist), From the Song bank
-// (today's bank list in Settings › Sounds & Samples until U7's browser), New song (store.addSong at the end; it is
+// (U7a: the Song bank browser over the stage, views/v6/bank/), New song (store.addSong at the end; it is
 // not selected, so the sound playing never changes from here). Perform lock (perform.js LOCK): the list, Prev and GO
 // stay live (they cue); adding songs is frozen, as Edit is.
 import { h, setText, disposer } from '../../components/util.js';
@@ -130,9 +130,11 @@ export default {
         libOpen = true;
         renderAdd();
       });
-      pd.listen(fromBank, 'click', () => {
+      pd.listen(fromBank, 'click', (e) => {
         close();
-        m.ctx.openSettings?.({ section: 'bank' });
+        // U7a (D17): the browser over the stage (today's list in Settings when there is none)
+        if (typeof m.openBank === 'function') m.openBank({ mode: 'bank', focus: e.detail === 0 });
+        else m.ctx.openSettings?.({ section: 'bank' });
       });
       pd.listen(blank, 'click', () => {
         if (m.isLocked()) return;
@@ -160,7 +162,7 @@ export default {
         fromLib.disabled = !sl;
         setText(fromLib.lastChild, sl ? `add one to “${sl.name}”` : 'you are playing the whole library');
         fromBank.disabled = !bankN;
-        setText(fromBank.lastChild, bankN ? `${bankN} song${bankN === 1 ? '' : 's'}, in Settings for now`
+        setText(fromBank.lastChild, bankN ? `${bankN} ready-made song${bankN === 1 ? '' : 's'} from your packs`
           : 'no Song bank packs');
         menu.hidden = libOpen;
         libBox.hidden = !libOpen;

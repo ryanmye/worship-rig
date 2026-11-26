@@ -301,8 +301,16 @@ function enhance(api, d) {
   renderLayout();
 
   // ---------------------------------------------------------------- Sounds & Samples: the Song bank entry
-  const bankBtn = button('Open Song bank…', () => api.revealSection('bank'), { class: 'v6-st-bankbtn',
-    'data-testid': 'settings-open-bank' });
+  // U7a (D17): the browser over the stage (main.js ctx.openBank closes Settings first); today's list in Settings
+  // (revealSection) only where there is no browser (the Settings fixture). With the browser, today's list is hidden
+  // here (D17 "replacing today's plain list"), journalled, and left out of the search.
+  const browser = typeof api.ctx?.openBank === 'function';
+  const openBank = (e) => (browser ? api.ctx.openBank({ mode: 'bank', focus: !!e && e.detail === 0 })
+    : api.revealSection('bank'));
+  const bankBtn = button('Open Song bank…', openBank, {
+    class: 'v6-st-bankbtn', 'data-testid': 'settings-open-bank',
+  });
+  if (browser) addClass(nodes.bankBox, 'v6-st-bankgone');
   const bankLine = h('span.st-hint.v6-st-banknote', { 'data-testid': 'settings-bank-note' });
   insert(h('section.st-section.v6-st-bank', { 'aria-label': 'Song bank', 'data-section': 'songbank' },
     h('h2.st-h2', { text: 'Song bank' }),
@@ -414,7 +422,9 @@ function enhance(api, d) {
   const HEAD = 'h2, summary, thead, .st-learn-group';
   /** Not hidden by today's code (UI6-U6 skeptic F1: Daylight's Light row under another theme was a "1 of 1" hit). */
   const shownByToday = (u, panel) => {
-    for (let e = u; e && e !== panel; e = e.parentElement) if (e.hidden) return false;
+    for (let e = u; e && e !== panel; e = e.parentElement) {
+      if (e.hidden || e.classList.contains('v6-st-bankgone')) return false; // U7a: today's list, replaced here
+    }
     return true;
   };
   const unitsOf = (panel) => {
