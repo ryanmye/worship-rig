@@ -197,3 +197,11 @@
 /* Edit › Range keyboard: shorter (Ryan) */
 .rangek{height:96px;padding:24px 10px 6px}.rangek .rbars{height:8px}.rangek .kb{min-height:52px}
 .rangek .bk{height:60%}
+/* iPad: tap an instrument first, then only its range bar is grabbable (big handles); others dim */
+.keys2.picking .rbar:not(.picked){opacity:.3}.keys2.picking .rbar:not(.picked) .rh{display:none}
+.keys2.picking .rbar.picked{z-index:2;box-shadow:0 0 0 2px #fff8}
+.keys2.picking .rbar.picked .rh{width:26px;height:26px;margin-top:-13px}.keys2.picking .rbar.picked .rh.l{left:-13px}.keys2.picking .rbar.picked .rh.r{right:-13px}
+.pickhint{position:absolute;right:10px;top:-30px;background:#000d;border:1px solid var(--line-2);border-radius:12px;padding:4px 12px;font-size:12px;color:var(--muted);white-space:nowrap}
+.pickhint b{color:var(--text)}
+.pickflag{font-size:11px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin-top:-6px}
+.strip:has(.pickflag){outline:3px solid var(--accent);outline-offset:2px}

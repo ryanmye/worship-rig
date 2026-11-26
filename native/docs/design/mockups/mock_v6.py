@@ -176,17 +176,17 @@ def keys_html(whites, held=(), letters=True, labels=None, out=None):
   return wk + bk
 
 
-def range_bar(name, c, a, b, N, whites, top='0', tip=False):
+def range_bar(name, c, a, b, N, whites, top='0', tip=False, picked=False):
   # A range bar with a grab handle at each end: drag the colour's ends to set which keys that instrument plays
   # (Ryan, 2026-11-26). Snaps to white keys in the mockup.
   w = 100 / N
-  return (f'<i class="rbar{" showtip" if tip else ""}" data-name="{name}" data-a="{a}" data-b="{b}" '
+  return (f'<i class="rbar{" showtip" if tip else ""}{" picked" if picked else ""}" data-name="{name}" data-a="{a}" data-b="{b}" '
           f'style="--c:{c};top:{top};left:{a * w:.3f}%;width:{(b - a) * w:.3f}%">'
           f'<b class="rh l" aria-label="{name}: lowest key"></b><b class="rh r" aria-label="{name}: highest key"></b>'
           f'<span class="rtip">{name} · {whites[a]}–{whites[b - 1]}</span></i>')
 
 
-def kbd(n, tip_on=None):
+def kbd(n, tip_on=None, pick=None):
   # Today's Perform keyboard (perform.js .rbars + keys): C2–C7, a range bar per instrument, octave labels on C,
   # computer-key letters, held notes in gold. The bars can be dragged to set each instrument's range.
   whites = white_names(2, 7)
@@ -196,8 +196,10 @@ def kbd(n, tip_on=None):
   for i, r in enumerate(ALL[:n]):
     lo, hi = RANGES.get(r[0], ('C2', 'C7'))
     bars += range_bar(r[0], POS_COL[i % len(POS_COL)], idx[lo], idx[hi] + 1, N, whites,
-                      top=f'calc({i} * (100% + 2px) / {n})', tip=(r[0] == tip_on))
-  return (f'<div class="keys2"><div class="rbars" style="--n:{n}" data-n="{N}" data-names="{",".join(whites)}">{bars}</div>'
+                      top=f'calc({i} * (100% + 2px) / {n})', tip=(r[0] == tip_on or r[0] == pick), picked=(r[0] == pick))
+  hint = (f'<div class="pickhint">Drag the ends of <b>{pick}</b> · tap another instrument to switch · tap the keys to finish</div>'
+          if pick else '')
+  return (f'<div class="keys2{" picking" if pick else ""}">{hint}<div class="rbars" style="--n:{n}" data-n="{N}" data-names="{",".join(whites)}">{bars}</div>'
           f'<div class="kb">{keys_html(whites, HELD)}</div></div>')
 
 
@@ -222,8 +224,8 @@ const up=()=>{bar.classList.remove('drag');h.removeEventListener('pointermove',m
 h.addEventListener('pointermove',mv);h.addEventListener('pointerup',up);});});"""
 
 
-def bottom(n=2, tip_on=None):
-  return f'''<div class="bottom">{kbd(n, tip_on)}<button class="act">↺ Revert<small>nothing changed</small></button>
+def bottom(n=2, tip_on=None, pick=None):
+  return f'''<div class="bottom">{kbd(n, tip_on, pick)}<button class="act">↺ Revert<small>nothing changed</small></button>
   <button class="act">Fade out</button><button class="act panic">PANIC<small>hold · or Esc</small></button><button class="act">🔒 Lock<small>hold to lock</small></button></div>'''
 
 
@@ -274,9 +276,9 @@ def stage(n, more=None, port=False, side=None, quick=False):
           f'{sidebar(wide=port, **(side or {}))}</div>')
 
 
-def mac(n, more=None, w=1280, h=800, narrow=False, side=None, quick=False, folded=False, tip_on=None):
+def mac(n, more=None, w=1280, h=800, narrow=False, side=None, quick=False, folded=False, tip_on=None, pick=None):
   return (f'<div class="frame" style="width:{w}px;height:{h}px">{topbar(narrow)}{songbar(snap_chip=folded)}{"" if folded else snaps()}'
-          f'{stage(n, more, side=side, quick=quick)}{bottom(n, tip_on)}</div>')
+          f'{stage(n, more, side=side, quick=quick).replace(f'<span class="nm">{pick}</span>', f'<span class="nm">{pick}</span></div><div class="pickflag">changing range', 1) if pick else stage(n, more, side=side, quick=quick)}{bottom(n, tip_on, pick)}</div>')
 
 
 def portrait(n):
@@ -316,6 +318,7 @@ def build():
     ('tweak', 'Mac · ⋯ open', mac(5, more='Warm Pad')),
     ('quick', 'Left · Quick open', mac(5, quick=True)),
     ('ranges', 'Drag a colour to set its range', mac(3, tip_on='Sub Bass')),
+    ('iprange', 'iPad · pick, then drag a range', mac(3, w=1180, h=820, narrow=True, pick='Warm Pad')),
     ('folded', 'Snapshots folded', mac(5, folded=True)),
     ('allfold', 'Everything folded', mac(5, folded=True, side={'collapsed': True})),
     ('collapsed', 'Sidebar collapsed · 5', mac(5, side={'collapsed': True})),

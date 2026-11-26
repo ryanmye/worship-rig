@@ -2,7 +2,7 @@
    COLOUR/TYPE: Sanctuary v2 night tokens; Alegreya (book) + Figtree (sans)  LAYOUT: tabs, one frame scaled to fit */
 :root{color-scheme:dark;--bg:#160913;--panel:#21111c;--panel-2:#2a1a25;--panel-3:#352530;--line:#33232e;--line-2:#4a3a45;
 --well:#1b0c17;--text:#f5ecd8;--muted:#cec1aa;--faint:#ab9d87;--label:#d3bf94;--accent:#e6ba65;--pt:#efc878;--pb:#dfb05a;
---ink:#1c1406;--track:#3a2935;--thumb:#f4ecdc;--drone:#edd9a6;--danger:#ef5b4f;--panic-bg:#54121a;--panic-text:#ffd0cc;--chg:#fff4dc;
+--ink:#1c1406;--track:#3a2935;--thumb:#f4ecdc;--drone:#edd9a6;--danger:#ef5b4f;--panic-bg:#54121a;--panic-text:#ffd0cc;--chg:#fff4dc;--fx:#cdbf9f;
 --book:'Alegreya',Georgia,serif;--sans:'Figtree',system-ui,sans-serif}
 *{box-sizing:border-box;min-width:0}
 body{margin:0;background:#0f060d;color:var(--text);font:15px/1.4 var(--sans)}

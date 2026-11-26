@@ -110,6 +110,85 @@ def instrument_panel_nav(sec='sound'):
       <section class="col1"><h4>On stage</h4>{m.strip(0, m.ALL[0])}</section></div></div>'''
 
 
+def nav_panel(color, sentence, cats, sel, content, right=''):
+  # The same category-list pattern as an instrument (D18), for Drone, Effects and Master.
+  nav = ''.join(f'''<button class="cn{" on" if k == sel else ""}"><b>{lab}{"<span class=cd2></span>" if chg else ""}</b><small>{sub}</small></button>'''
+                for k, lab, sub, chg in cats)
+  cols = 'ncols' + ('' if right else ' noright')
+  return f'''<div class="ipanel" style="--c:{color}"><div class="ip-h"><span class="ico" style="background:{color}"></span>{sentence}</div>
+    <div class="{cols}"><nav class="cnav" aria-label="What to edit">{nav}</nav><section class="ccont">{content}</section>{right}</div></div>'''
+
+
+FX_CATS = [('space', 'Space', 'Hall · big, warm', False), ('echo', 'Echo', 'Dotted 8th · 72 bpm', True),
+           ('sends', 'Sends', 'how much of each goes in', False)]
+
+
+def fx_nav(sec):
+  sent = '<p class="sent">Everything plays into a <u>Hall</u> with a <u>dotted-8th echo</u> synced to <u>72 bpm</u>.</p>'
+  rooms = lambda items, cur: ''.join(f'<button class="room{" sel" if t == cur else ""}"><b>{t}</b><small>{d}</small></button>' for t, d in items)
+  if sec == 'space':
+    c = ('<h4>Space <small>the room everything plays in</small></h4><div class="rooms">' + rooms([
+      ('Dry', 'no room'), ('Room', 'small, close'), ('Stage', 'medium'), ('Hall', 'big, warm'), ('Cathedral', 'huge, long'),
+      ("Song's own", 'as saved')], 'Hall') + '</div>' + wslider('Size', 'Big', 70, 'small', 'huge')
+      + wslider('Length', '2.8 s', 55, 'short', 'long') + wslider('Brightness', 'Warm', 35, 'dark', 'bright'))
+  elif sec == 'echo':
+    c = ('<h4>Echo</h4><div class="rooms">' + rooms([('Off', 'no echo'), ('Slapback', '1 repeat'), ('Quarter', 'on the beat'),
+      ('Dotted 8th', 'worship echo'), ('Trails', 'long, dark')], 'Dotted 8th') + '</div>'
+      + wslider('Repeats', '3', 40, 'one', 'many') + wslider('Tone', 'Dark', 30, 'dark', 'bright')
+      + '<div class="hrow"><span class="qb sus lit" style="--c:var(--accent)"><span class="dot"></span><b>Follow tempo</b></span><small style="color:var(--muted)">72 bpm · 312 ms</small></div>')
+  else:
+    sends = ''
+    for i, r in enumerate(m.ALL[:3]):
+      col = m.POS_COL[i]
+      sends += f'''<div class="sendrow" style="--c:{col}"><span class="sname"><i></i>{r[0]}</span>
+        <div class="hfader"><i style="width:{r[3]}%;background:var(--c)"></i><em style="left:{r[3]}%"></em></div><small>{r[3]}%</small>
+        <div class="hfader"><i style="width:{r[4]}%;background:var(--c)"></i><em style="left:{r[4]}%"></em></div><small>{r[4]}%</small></div>'''
+    c = ('<h4>Sends <small>how much of each instrument goes into Space and Echo</small></h4>'
+         '<div class="sendhead"><span></span><span>Space</span><span></span><span>Echo</span><span></span></div>' + sends
+         + '<p class="hint">The same Space and Echo buttons as each strip on Perform.</p>')
+  return nav_panel('var(--fx)', sent, FX_CATS, sec, c)
+
+
+DRONE_CATS = [('drone', 'Key & sound', 'C major · Synth', False), ('pads', 'My Pads', 'no folder yet', False),
+              ('behave', 'Behaviour', 'keeps across songs · 4 s fade', True)]
+
+
+def drone_nav(sec):
+  sent = '<p class="sent">A <u>C major</u> drone from the <u>synth</u> at <u>−6 dB</u>, kept across songs.</p>'
+  if sec == 'drone':
+    c = '<h4>Key &amp; sound <small>the same Drone module as Perform’s sidebar</small></h4>' + m.drone(wide=True)
+  elif sec == 'pads':
+    c = ('<h4>My Pads <small>your own pad recordings, one per key</small></h4><p class="hint">No pad folder yet; the built-in synth drone plays.</p>'
+         '<div class="hrow"><button class="btn">Choose folder…</button><button class="ghost">How to name the files</button></div>')
+  else:
+    c = ('<h4>Behaviour</h4>' + wslider('Fade in / out', '4 s', 40, 'quick', 'slow')
+         + '<div class="hrow"><span class="qb sus lit" style="--c:var(--drone)"><span class="dot"></span><b>Keep across songs</b></span>'
+           '<span class="qb sus lit" style="--c:var(--drone)"><span class="dot"></span><b>Follow the song key</b></span></div>')
+  return nav_panel('var(--drone)', sent, DRONE_CATS, sec, c)
+
+
+MASTER_CATS = [('vol', 'Volume & output', '−6.0 dB · Built-in output', False), ('meq', 'Master EQ', 'flat', False),
+               ('comp', 'Glue', 'gentle', False), ('wheels', 'Wheels & pedal', 'wheel → Warm Pad level', True)]
+
+
+def master_nav(sec):
+  sent = '<p class="sent">Everything comes out at <u>−6 dB</u> through the <u>built-in output</u>, with <u>gentle</u> glue.</p>'
+  if sec == 'vol':
+    c = ('<h4>Volume &amp; output</h4>' + wslider('Master volume', '−6.0 dB', 68, 'quiet', 'loud')
+         + '<div class="hrow"><span class="lab">Output</span><button class="sel-box">Built-in output ▾</button><small style="color:var(--muted)">42 ms</small></div>'
+         + '<div class="hrow"><span class="qb sus lit" style="--c:var(--accent)"><span class="dot"></span><b>Safety limiter</b></span><small style="color:var(--muted)">stops sudden loud peaks</small></div>')
+  elif sec == 'wheels':
+    c = ('<h4>Wheels &amp; pedal <small>what your keyboard’s wheel and pedal do in this song</small></h4>'
+         '<div class="hrow"><span class="lab">Mod wheel</span><button class="sel-box">→ Warm Pad level ▾</button></div>'
+         + wslider('Swell time', '8 s', 45, 'quick', 'slow')
+         + '<div class="hrow"><span class="lab">Pitch wheel</span><button class="sel-box">Off ▾</button></div>'
+         '<div class="hrow"><span class="lab">Sustain pedal</span><span class="lamp"></span><small style="color:var(--muted)">up</small><button class="ghost">Reversed: off</button></div>'
+         '<p class="hint">Which instruments the pedal holds is each strip’s Sustain button.</p>')
+  else:
+    c = '<h4>…</h4>'
+  return nav_panel('var(--label)', sent, MASTER_CATS, sec, c)
+
+
 def fx_panel():
   rooms = ''.join(f'<button class="room{" sel" if t == "Hall" else ""}"><b>{t}</b><small>{d}</small></button>' for t, d in [
     ('Dry', 'no room'), ('Room', 'small, close'), ('Stage', 'medium'), ('Hall', 'big, warm'), ('Cathedral', 'huge, long'),
@@ -167,8 +246,12 @@ frames = [
   ('naveq', 'Instrument · Tone EQ', frame(rig_tabs() + instrument_panel_nav('eq'))),
   ('navrange', 'Instrument · Range', frame(rig_tabs() + instrument_panel_nav('range'))),
   ('navipp', 'Instrument · iPad portrait', frame(rig_tabs() + instrument_panel_nav('sound'), 820, 1180, True, lib=False, cls='port')),
+  ('fxspace', 'Effects · Space', frame(rig_tabs('fx') + fx_nav('space'))),
+  ('fxsends', 'Effects · Sends', frame(rig_tabs('fx') + fx_nav('sends'))),
+  ('drone', 'Drone', frame(rig_tabs('drone') + drone_nav('drone'))),
+  ('master', 'Master · Wheels & pedal', frame(rig_tabs('master') + master_nav('wheels'))),
+  ('mastervol', 'Master · Volume & output', frame(rig_tabs('master') + master_nav('vol'))),
   ('inst', 'Earlier: three columns', frame(rig_tabs() + instrument_panel())),
-  ('fx', 'Edit · Effects', frame(rig_tabs('fx') + fx_panel())),
   ('eq', 'Edit · Tone EQ', frame(rig_tabs() + eq_panel())),
   ('choose', 'Change instrument', frame(rig_tabs() + instrument_panel() + chooser(), cls='dimmed')),
   ('nolib', 'Library folded', frame(rig_tabs(n=5).replace('rtabs', 'rtabs', 1) + instrument_panel(), lib=False, n=5)),
@@ -187,7 +270,7 @@ def build():
 <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@700;800&family=Figtree:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>{CSS}</style></head><body>
 <header class="pg"><h1>Edit: quick mockups</h1>
-<p><b>New:</b> each instrument's edit has a short list of categories on its left (Sound, Tone EQ, Range, Touch, Sustain, Space &amp; Echo, Advanced), each with its current setting under the name and a dot when it changed; the chosen one fills the middle, the strip stays on the right. The earlier three-column version is kept as a tab. Today's Edit, carried into the Perform v6 language. Kept: the library on the left (now foldable), the song header,
+<p><b>New:</b> each instrument's edit has a short list of categories on its left (Sound, Tone EQ, Range, Touch, Sustain, Space &amp; Echo, Advanced), each with its current setting; Drone, Effects and Master use the same pattern, under the name and a dot when it changed; the chosen one fills the middle, the strip stays on the right. The earlier three-column version is kept as a tab. Today's Edit, carried into the Perform v6 language. Kept: the library on the left (now foldable), the song header,
 the plain-English sentence with tappable words, the three columns (on stage · the sound · where it plays), Advanced and
 the Tone EQ. Changed: tabs are named by instrument with their position colour, never Keys / Pad / Extra / Bass (D15);
 the "On stage" column is the very same strip as Perform; the keyboard row is Perform's. The instrument chooser is

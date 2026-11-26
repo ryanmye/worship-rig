@@ -107,3 +107,7 @@
 .frame.edit.port .cn{flex:0 0 auto;min-height:44px}.frame.edit.port .cn small{display:none}
 .frame.edit.port .cn.on::before{display:none}
 .frame.edit.port .ncols .col1{display:none}
+.ncols.noright{grid-template-columns:200px 1fr}
+.ccont .drone.wide{display:grid}
+.ccont .rooms{grid-template-columns:repeat(3,1fr)}
+.ccont .sendrow,.ccont .sendhead{grid-template-columns:140px 1fr 44px 1fr 44px}

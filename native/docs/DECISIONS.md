@@ -347,6 +347,11 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
 - **The range colours on Perform's keyboard are draggable** (Ryan, same day): each instrument's bar above the bottom
   keyboard has a handle at each end; dragging shows "Sub Bass · C2–C5" and sets that instrument's range. Same for
   every screen with the bottom keyboard. Snaps to keys; touch targets are 34 px despite the thin bars.
+  **On iPad, tap the instrument first** (Ryan, same day): its strip gets an outline and "changing range", only its
+  bar is grabbable (26 px handles), the others dim; tap another instrument to switch, tap the keys to finish.
+- **Drone, Effects and Master use the same category list** in Edit: Drone (Key & sound = the sidebar's Drone
+  module, My Pads, Behaviour), Effects (Space, Echo, Sends table), Master (Volume & output, Master EQ, Glue, Wheels &
+  pedal). The safety limiter and pitch-wheel target in the mockup are proposals to check against the engine.
 - (An earlier reading, a per-instrument edit sidebar on Perform, was reverted at Ryan's request.)
 
 ## D19: The v6 UI is built in 2.0 (Ryan, 2026-11-26)

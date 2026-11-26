@@ -5,7 +5,7 @@
    COLOUR/TYPE: Sanctuary v2 night tokens; Alegreya (book) + Figtree (sans)  LAYOUT: tabs, one frame scaled to fit */
 :root{color-scheme:dark;--bg:#160913;--panel:#21111c;--panel-2:#2a1a25;--panel-3:#352530;--line:#33232e;--line-2:#4a3a45;
 --well:#1b0c17;--text:#f5ecd8;--muted:#cec1aa;--faint:#ab9d87;--label:#d3bf94;--accent:#e6ba65;--pt:#efc878;--pb:#dfb05a;
---ink:#1c1406;--track:#3a2935;--thumb:#f4ecdc;--drone:#edd9a6;--danger:#ef5b4f;--panic-bg:#54121a;--panic-text:#ffd0cc;--chg:#fff4dc;
+--ink:#1c1406;--track:#3a2935;--thumb:#f4ecdc;--drone:#edd9a6;--danger:#ef5b4f;--panic-bg:#54121a;--panic-text:#ffd0cc;--chg:#fff4dc;--fx:#cdbf9f;
 --book:'Alegreya',Georgia,serif;--sans:'Figtree',system-ui,sans-serif}
 *{box-sizing:border-box;min-width:0}
 body{margin:0;background:#0f060d;color:var(--text);font:15px/1.4 var(--sans)}
@@ -319,6 +319,17 @@ button{font:inherit;color:inherit;cursor:pointer}
 .rangek{padding:28px 10px 8px;height:150px}.rangek .rbars{height:10px}.rangek .kb{min-height:90px}
 .kb .wk.out{background:linear-gradient(#6f6558,#5d5448)}
 .rangek .wk i{font-size:9px}
+/* Edit › Range keyboard: shorter (Ryan) */
+.rangek{height:96px;padding:24px 10px 6px}.rangek .rbars{height:8px}.rangek .kb{min-height:52px}
+.rangek .bk{height:60%}
+/* iPad: tap an instrument first, then only its range bar is grabbable (big handles); others dim */
+.keys2.picking .rbar:not(.picked){opacity:.3}.keys2.picking .rbar:not(.picked) .rh{display:none}
+.keys2.picking .rbar.picked{z-index:2;box-shadow:0 0 0 2px #fff8}
+.keys2.picking .rbar.picked .rh{width:26px;height:26px;margin-top:-13px}.keys2.picking .rbar.picked .rh.l{left:-13px}.keys2.picking .rbar.picked .rh.r{right:-13px}
+.pickhint{position:absolute;right:10px;top:-30px;background:#000d;border:1px solid var(--line-2);border-radius:12px;padding:4px 12px;font-size:12px;color:var(--muted);white-space:nowrap}
+.pickhint b{color:var(--text)}
+.pickflag{font-size:11px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin-top:-6px}
+.strip:has(.pickflag){outline:3px solid var(--accent);outline-offset:2px}
 /* chart view mockups */
 .chart{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;overflow:hidden}
 .side .chart{border:0;background:none;border-radius:0}
