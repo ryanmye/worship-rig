@@ -348,3 +348,13 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
   keyboard has a handle at each end; dragging shows "Sub Bass · C2–C5" and sets that instrument's range. Same for
   every screen with the bottom keyboard. Snaps to keys; touch targets are 34 px despite the thin bars.
 - (An earlier reading, a per-instrument edit sidebar on Perform, was reverted at Ryan's request.)
+
+## D19: The v6 UI is built in 2.0 (Ryan, 2026-11-26)
+- Ryan chose to build the redesigned UI (D16–D18, charts and song bank designs) in 2.0, not 2.x: 2.0 waits until
+  it is built and tested. Design continues in this order: finish Edit (Drone, Master, Effects), Settings, MIDI
+  Learn + Arrange + dialogs, edge states + a themes check. A build plan follows the designs.
+
+## D20: MIDI Learn changes the live sound; Revert undoes it (Ryan, 2026-11-26)
+- Answer to lane-learn's open question ("live only vs song edit"): moving a learned knob or fader changes the live
+  sound only; the saved song is unchanged. The Revert button undoes those moves; otherwise they stay as set.
+  Reading (to confirm when lane-learn is reviewed): loading a song plays it as saved, like any other live change.
