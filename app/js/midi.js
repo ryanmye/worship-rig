@@ -510,6 +510,17 @@ export class MidiInput extends EventTarget {
   /** @returns {boolean} true = message consumed by learn (swallowed) */
   _learnCheck(type, channel, d1, d2, inputId) {
     const l = this._learn;
+    // skeptic UI6-U7c F1: a control the caller wants left alone (the learned PANIC footswitch during a Learn on
+    // Perform capture) is never taken: it is delivered normally, so it still does what it does
+    if (l.pass && (type === 0x90 || type === 0xb0)) {
+      let keep = false;
+      try {
+        keep = !!l.pass(type === 0x90 ? { note: d1, channel } : { cc: d1, channel });
+      } catch {
+        keep = false;
+      }
+      if (keep) return false;
+    }
     if (type === 0x90 && d2 > 0) {
       if (l.accept === 'fader') return false; // a fader can't be a key: play it normally
       this._finishLearn({ note: d1, channel, inputId });
@@ -550,13 +561,14 @@ export class MidiInput extends EventTarget {
    * {error:'sustain-pedal-reserved', …} when CC64 arrives, or null after the timeout / cancelLearn().
    * The gesture that completes learning is not forwarded as a normal event.
    * @param {string} controlId
-   * @param {{timeoutMs?:number, accept?:'fader'|'button'|'any'|'control', motion?:number}} [o]  fader: continuous CC
-   *        only (motion > 0: it must travel that far within the learn first);
+   * @param {{timeoutMs?:number, accept?:'fader'|'button'|'any'|'control', motion?:number, pass?:Function}} [o]
+   *        fader: continuous CC only (motion > 0: it must travel that far within the learn first);
    *        button: note-on or CC press ≥ 64; any: first note-on or CC (CC64/120–127 still excluded); control: as any,
-   *        without the structural CCs (U7c)
+   *        without the structural CCs (U7c). pass({cc|note, channel}) → true: that message is never taken (it is
+   *        delivered normally; skeptic UI6-U7c F1, the learned PANIC control)
    * @returns {Promise<{cc?:number, note?:number, channel:number, inputId:string, controlId:string, error?:string}|null>}
    */
-  learn(controlId, { timeoutMs = 10000, accept = 'any', motion = 0 } = {}) {
+  learn(controlId, { timeoutMs = 10000, accept = 'any', motion = 0, pass = null } = {}) {
     this.cancelLearn();
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
@@ -565,7 +577,8 @@ export class MidiInput extends EventTarget {
           resolve(null);
         }
       }, timeoutMs);
-      this._learn = { controlId, resolve, timer, accept: LEARN_ACCEPTS.includes(accept) ? accept : 'any', motion: Number(motion) > 0 ? Number(motion) : 0, seen: new Map() };
+      this._learn = { controlId, resolve, timer, accept: LEARN_ACCEPTS.includes(accept) ? accept : 'any', motion: Number(motion) > 0 ? Number(motion) : 0, seen: new Map(),
+        pass: typeof pass === 'function' ? pass : null };
     });
   }
 

@@ -3803,19 +3803,29 @@ export function createController(o) {
     }
     return null;
   }
+  /** skeptic UI6-U7c F1: true for the note / CC (on an overlapping channel) learned to PANIC now. */
+  function isPanicControl(m) {
+    const p = (settings().midiLearn || {}).panic;
+    if (!p || !m) return false;
+    const same = m.cc !== undefined ? p.cc === m.cc : p.note === m.note;
+    return same && (p.channel === null || p.channel === undefined || p.channel === m.channel);
+  }
   /**
    * UI v6 U7c (MIDI Learn on Perform, "1 · Move a knob, fader or pad"): take the next knob, fader, pedal, key or pad
    * without a target yet (midi.js learn accept 'control': like 'any', but bank select / data entry / NRPN numbers are
    * skipped and delivered normally, as for a fader or button learn). The gesture is swallowed like any learning
    * gesture; nothing is stored. Pass the result to learn(id, {heard}) once the player has tapped the target.
    * Refused under Perform Lock (turning the lock on cancels it, as for learn()); cancelLearn() ends it with null.
+   * The control learned to PANIC is never taken (skeptic UI6-U7c F1): it plays on and panics.
    * @param {{timeoutMs?:number}} [o]
    * @returns {Promise<{cc?:number, note?:number, channel:number}|{error:string}|null>}
    */
   async function learnCapture(o = {}) {
     if (!midi || typeof midi.learn !== 'function') return null;
     if (settings().performLock) return { error: 'perform-locked' };
-    const res = await midi.learn(LEARN_CAPTURE_ID, { timeoutMs: o.timeoutMs, accept: 'control' });
+    // skeptic UI6-U7c F1: the learned PANIC control is never captured: a PANIC footswitch pressed during a capture
+    // (a stuck note while learning) still panics. Re-learning that control goes through Settings › MIDI Learn's table.
+    const res = await midi.learn(LEARN_CAPTURE_ID, { timeoutMs: o.timeoutMs, accept: 'control', pass: isPanicControl });
     if (!res) return null;
     if (settings().performLock) return { error: 'perform-locked' };
     if (res.error) return { error: res.error, cc: res.cc, channel: res.channel };

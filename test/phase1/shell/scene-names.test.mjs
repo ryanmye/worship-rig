@@ -160,3 +160,36 @@ test('U7c knob first: learnCapture takes the next control (structural CCs skippe
   store.set('settings.performLock', false);
   ctl.dispose?.();
 });
+
+test('skeptic UI6-U7c F1: a capture never takes the control learned to PANIC (it panics); other learns still can',
+  async () => {
+    const { store, midi, ctl } = await setup();
+    let panics = 0;
+    ctl.addEventListener('action', (e) => {
+      if (e.detail?.type === 'panic') panics += 1;
+    });
+    store.set('settings.midiLearn', { panic: { cc: 80, channel: null } });
+    let p = ctl.learnCapture({ timeoutMs: 1000 });
+    midi._inject([0xb3, 80, 127]); // the PANIC footswitch on any channel: delivered, it panics
+    midi._inject([0xb3, 80, 0]);
+    await tick();
+    assert.equal(panics, 1, 'the PANIC footswitch panicked while a capture waited');
+    assert.equal(midi.learning, '(capture)', 'the capture still waits');
+    midi._inject([0xb0, 21, 40]);
+    assert.deepEqual(await p, { cc: 21, channel: 0 });
+    // a note learned to PANIC on channel 10: that pad passes, the same note on another channel is captured
+    store.set('settings.midiLearn', { panic: { note: 36, channel: 9 } });
+    p = ctl.learnCapture({ timeoutMs: 1000 });
+    midi._inject([0x99, 36, 100]);
+    midi._inject([0x89, 36, 0]);
+    await tick();
+    assert.equal(panics, 2);
+    midi._inject([0x90, 36, 100]);
+    assert.deepEqual(await p, { note: 36, channel: 0 });
+    // Settings' table learn (midi.learn without `pass`) still takes it: re-learning the PANIC control goes there
+    p = midi.learn('panic', { timeoutMs: 1000, accept: 'button' });
+    midi._inject([0x99, 36, 100]);
+    assert.equal((await p).note, 36);
+    assert.equal(panics, 2, 'that learn swallowed it, as today');
+    ctl.dispose?.();
+  });
