@@ -407,7 +407,12 @@ export async function u5bTests(x) {
     // a tap on the dim backdrop is Cancel too
     await page.click(tid('v6e-change'));
     await until(() => !!document.querySelector('[data-testid="v6e-chooser"]'));
-    await page.mouse.click(4, 400);
+    // (skeptic UI6-U5b F1: the backdrop covers Edit's body, not the whole view: tap its own left edge)
+    const bk = await ev(() => {
+      const r = document.querySelector('[data-testid="v6e-chooser-back"]').getBoundingClientRect();
+      return { x: r.left + 4, y: r.top + r.height / 2 };
+    });
+    await page.mouse.click(bk.x, bk.y);
     await until(() => !document.querySelector('[data-testid="v6e-chooser"]'));
     // Use: only slots.0.instrument; what the note says is kept is kept; the instrument's own params start fresh
     await clearToasts();
