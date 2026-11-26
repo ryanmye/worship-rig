@@ -60,6 +60,8 @@ const SUITES = [
   { name: 'ui-v6-edit', groups: ['phase2'], cmd: [node, 'test/phase2/ui-v6-edit/run.mjs'], timeout: 8 * MIN },
   // U7a (D17): the Song bank browser + Try it, with two bank packs in a temp My Samples folder
   { name: 'ui-v6-bank', groups: ['phase2'], cmd: [node, 'test/phase2/ui-v6-bank/run.mjs'], timeout: 6 * MIN },
+  // U8a: iPad layouts (820 × 1180 / 1180 × 820 and three more sizes, every v6 screen) and the edge states
+  { name: 'ui-v6-ipad', groups: ['phase2'], cmd: [node, 'test/phase2/ui-v6-ipad/run.mjs'], timeout: 12 * MIN },
   // Lane E5: real 1.x libraries (test/fixtures/library-1x) → 2.0 on every import path, the 1.1 downgrade, the 2.0 app
   { name: 'migration-1x', groups: ['phase2'], cmd: [node, 'test/phase2/migration-1x/run.mjs'], timeout: 8 * MIN },
   // themes-setup: every registered theme boots flash-free, switches at runtime, picker/Quick, selector coverage
