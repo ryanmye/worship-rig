@@ -76,6 +76,9 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 
 - **U8 themes (UI6-U6 O3, pre-existing):** Daylight Day's Sound note `.st-engine-note` is 1.88:1 even with the
   flag off; fix in the themes pass. Also UI6-U6 O1/O2 (rotation keeps the open category; live "n min ago").
+- **Polish (U5b open Q4, orchestrator):** Perform's Change opens the instrument chooser over Perform (no switch to
+  Edit), so the sound changes where you play (D14 single sound at the desk). U5b Q1–Q3 kept as built: live moves
+  don't dot (today's rule), Edit's range bars display only, Lock from Edit goes to Perform and locks.
 - **Polish (UI6-U5a P1):** the range keyboard's always-visible label (`showTip`) forces a reflow on every live
   write (~10 ms at 6× CPU); measure it in a requestAnimationFrame (shared with Perform).
 - **Polish (UI6-move O2/O3, orchestrator):** Enter on a strip name (pick) moves focus to the picked bar's low
