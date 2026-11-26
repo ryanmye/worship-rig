@@ -76,19 +76,20 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 
 - **U8 themes (UI6-U6 O3, pre-existing):** Daylight Day's Sound note `.st-engine-note` is 1.88:1 even with the
   flag off; fix in the themes pass. Also UI6-U6 O1/O2 (rotation keeps the open category; live "n min ago").
+  (Polish batch 1 skipped O1/O2: both live in `views/v6/settings.js`, lane-u7c's file at the time.)
 - **Polish (U5b open Q4, orchestrator):** Perform's Change opens the instrument chooser over Perform (no switch to
   Edit), so the sound changes where you play (D14 single sound at the desk). U5b Q1–Q3 kept as built: live moves
   don't dot (today's rule), Edit's range bars display only, Lock from Edit goes to Perform and locks.
-- **Polish (UI6-U5b O2/O3/O5):** chooser: ←/→ must not change the song while it is open; "not available" line for
+- ~~**Polish (UI6-U5b O2/O3/O5):**~~ **Done (polish batch 1, lane-pol1):** chooser: ←/→ must not change the song while it is open; "not available" line for
   an instrument missing from the engine list; kinds list fit at 1024×700. O1 (Edit range bars draggable) waits for
   Ryan; O4/O6 noted.
-- **Polish (UI6-U7a O1–O4):** Edit's single-song Export refuses a trial song (or tells the player to Keep it
+- ~~**Polish (UI6-U7a O1–O4):**~~ **Done (polish batch 1, lane-pol1; O2 rule in CONTRACT_CHANGES):** Edit's single-song Export refuses a trial song (or tells the player to Keep it
   first) — no `trial:` id in any file; Esc in the bank's search box clears first; Back when the replaced entry was
   removed; Edit v6's "Song bank…" title text.
-- **Polish (UI6-U7b O1–O3):** the Notes module's body keeps pointer focus (Space scrolls instead of sustain, like
+- ~~**Polish (UI6-U7b O1–O3):**~~ **Done (polish batch 1, lane-pol1; O3 by the wording):** the Notes module's body keeps pointer focus (Space scrolls instead of sustain, like
   U7b F1) — release pointer focus; auto-scroll resumes after a placement change; Keep on an already-in-library trial
   song keeps the chart set while trying (or the wording says otherwise).
-- **Polish (UI6-U5a P1):** the range keyboard's always-visible label (`showTip`) forces a reflow on every live
+- ~~**Polish (UI6-U5a P1):**~~ **Done (polish batch 1, lane-pol1; numbers in CONTRACT_CHANGES):** the range keyboard's always-visible label (`showTip`) forces a reflow on every live
   write (~10 ms at 6× CPU); measure it in a requestAnimationFrame (shared with Perform).
 - **Polish (UI6-move O2/O3, orchestrator):** Enter on a strip name (pick) moves focus to the picked bar's low
   handle; the small-window "opened here" memory counts only a deliberate open of the sidebar (⟨ / rail), not the

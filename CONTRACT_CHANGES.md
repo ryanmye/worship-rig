@@ -9100,3 +9100,65 @@ SCHEMA change, no engine change. Flag off: the ui-v6 purity probe against f46bac
   - **F3.** `openOverlay({underModal: true})`: the Esc that closes Settings or clears its search (main.js marks it
     `e.rigSettingsEsc`) leaves such an entry open. Only learn mode and Arrange use it, so flag off is unchanged.
   - Tests: scene-names.test.mjs +1; ui-v6 76 (+2).
+
+## UI v6 polish batch 1
+
+The queued polish items of `native/docs/lanes/UI6-build-plan.md` ("Queued small tasks"; reviews UI6-U5a P1,
+UI6-U5b O2/O3/O5, UI6-U7a O1–O4, UI6-U7b O1–O3). Views and CSS only: no store, controller, engine, `shared/` or MIDI
+change, no new setting. Flag off is unchanged (ui-v6 and ui-v6-edit purity vs ba64c0a identical).
+
+- **Range label in a frame (U5a P1, `views/v6/keyboard.js`).** `showTip` sets the label's text, colour and top at once
+  and places it (reads `offsetWidth` / `clientWidth`, writes `left`) in one coalesced `requestAnimationFrame`
+  (`rafCoalesce`, the latest bar centre wins), before that frame paints. Before, the read came right after a render's
+  DOM writes and forced a layout on every live range write. Measured (`store.set` of `slots.0.lowNote`, 4
+  instruments, 40 writes each followed by its frame; Perform with bar 0 picked, Edit › Range):
+  - layouts per write (CDP `LayoutCount`): Edit 3 → 2, Perform 2 → 2 (the remaining read now is the frame's own
+    layout, pulled forward inside the rAF);
+  - write task (sync) median at 1×: Edit 5.3–8.0 → 2.6–2.9 ms, Perform 2.8 → 2.1–2.2 ms;
+  - at 6× CPU the box was shared (load 3–9 on 2 CPUs) and the medians swung 10–45 ms run to run for both builds
+    (Edit 17.5 / 41.1 / 42.3 / 45.0 → 15.8 / 23.5 / 26.3 / 40.1 ms): no reliable 6× number here.
+- **Instrument chooser (U5b, `views/v6/edit/chooser.js`, `styles-v6-edit.css`).**
+  - O2: while it is open, a document capture `keydown` listener `preventDefault`s ← / → (plain, Shift, ⌘ / Ctrl)
+    unless the key is typed in a text control (the controller's list), and Enter with nothing focused (GO). The
+    controller skips defaultPrevented keys, so no song change or cue step happens under it, whatever has the focus;
+    the dialog's own tile / kind arrows and the search caret still work. Removed on close. Not covered: global
+    hotkeys (Electron globalShortcut) and MIDI Program Change / learned Next.
+  - O3: a place whose instrument is not in the engine's list shows `v6e-ch-missing`: "<id> (not available) · This
+    instrument is not available on this computer. Pick a sound to replace it." (U5a's menu wording), refreshed with
+    the list.
+  - O5: at window heights ≤ 760 px the backdrop's and dialog's vertical padding and gaps shrink (16 → 8, 14 → 10,
+    12 → 8, kinds 3 → 2 px); the 9 kinds keep their 40 px rows and fit at 1024 × 700 (376 px of 376; was 384 in 360).
+    A missing-instrument line or a tenth kind (My Samples) makes it scroll again.
+- **Song bank (U7a).**
+  - O1: `components/overlay.js` `openOverlay({onEscape})`: an entry may use an Esc itself (true: it stays open; the
+    Esc is still `preventDefault`ed, so it never panics). The bank (`bank.js`) clears its search on an Esc typed in
+    the search box with text; the next Esc closes the browser.
+  - O2 (`bank/banner.js`) **rule: Back after the replaced setlist entry was removed during the trial plays the song it
+    replaced in the gap** (no row lit, Next = the entry that followed the removed one, Prev = the one before), as if
+    the entry had been removed while that song played. The banner reads the saved gap (`store.persisted()`, while
+    `store.trialReturn()` is set) before `controller.backFromTrial()` and writes it back after (`store.set`
+    `settings.setlistIndex` / `settings.setlistGap`), only when Back went to that song in the same list. Before, Back
+    landed on another copy of the song (a reprise) or on the song outside the list (Next = the top). A deleted
+    replaced song is unchanged (Back goes to the song after it, F1).
+  - O3: Export song refuses a `trial:` song (`edit/panels/song-header.js` ⋯ menu and `edit/panels/setlist.js`
+    Library file section, `edit/lib.js` `TRIAL_EXPORT_MESSAGE`: "You are trying this song from the Song bank. Keep it
+    first, then export it."). No file carries a `trial:` id.
+  - O4: Edit v6's Song bank… title: "Opens the Song bank browser over Perform: songs from your patch packs to try or
+    keep".
+- **Chart and Notes (U7b).**
+  - O1 (`v6/sidebar/notes.js`): the Notes body lets go of a focus that is not `:focus-visible` (U7b F1's pattern):
+    a tap keeps Space = sustain and Esc = Panic; Tab and ↑ ↓ PgUp PgDn Home End are unchanged.
+  - O2 (`v6/chart/panel.js` `place()` / `resume(p)`, `v6/chart/chart.js`): ⇥ Sidebar / ⤢ Stage and the iPad rotation
+    rebuild hand the line on the reading line and a running auto-scroll to the panel that takes over (was: top of
+    the chart, scroll stopped).
+  - O3 (`chart/import.js` `trialKeepsLibraryCopy(ctx, songId)`, `v6/chart/edit.js`): kept as built (Keep on a bank
+    song already in the library selects that copy as it is, U7a's rule); the wording says so: title "trying this
+    song: already in your library, so this chart is for this try only", toast "Chart set for this try only: this
+    song is already in your library, and Keep it plays your copy as it is."
+- **Not done:** UI6-U6 O1 / O2 (rotation keeps the open Settings category; a live "n min ago") need
+  `views/v6/settings.js` (lane-u7c's file): left in the plan.
+- Tests (each fails on ba64c0a): ui-v6-edit `polish1.tests.mjs` (P1 counts label layout reads outside a frame
+  around a live write, Edit and Perform: 0; O2 / O3 / O5; U7a O4), ui-v6-bank `polish1.tests.mjs` (U7a O1 / O2 / O3;
+  the D24.7 Esc check's search part now clears, then closes), chart `polish1.tests.mjs` (U7b O1 / O2 / O3).
+- Gates: ui-v6 68/68 (purity identical), ui-v6-edit 37/37 (purity identical), ui-v6-bank 19/19, chart 41/41,
+  settings 111/111 (5 modes), edit-v2 14/14 files, shell unit 377/377; zero console.error / HTTP ≥ 400.
