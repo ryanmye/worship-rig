@@ -134,4 +134,59 @@ export async function skepticU5bTests(x) {
       assert.equal(await inst(), false);
       assert.equal(await tabDot('slot:0'), false);
     });
+
+  await T('skeptic U5b F4/F5: the bottom row’s range bars are display only; no test id twice with Drone › Key & '
+    + 'sound', async () => {
+    await setStore([['patch.slots.0.lowNote', 48], ['patch.slots.0.highNote', 72]]);
+    await select('effects');
+    await page.waitForTimeout(200);
+    await ev(() => {
+      const { store } = window.__rig;
+      window.__w5 = [];
+      const orig = store.set;
+      window.__w5restore = () => {
+        store.set = orig;
+      };
+      store.set = (p, v) => {
+        if (/\.(lowNote|highNote)$/.test(p)) window.__w5.push(p);
+        return orig.call(store, p, v);
+      };
+    });
+    try {
+      const bar = await ev(() => {
+        const b = document.querySelector('[data-testid="v6e-kbd-bar-0"]').getBoundingClientRect();
+        return { x: (b.left + b.right) / 2, y: b.top + b.height / 2, l: b.left };
+      });
+      await page.mouse.click(bar.x, bar.y);
+      await page.waitForTimeout(150);
+      const st = await ev(() => ({
+        hint: !document.querySelector('[data-testid="v6e-kbd-pickhint"]').hidden,
+        tab: document.querySelector('[data-testid="v6e-kbd-hlo-0"]').tabIndex,
+      }));
+      assert.deepEqual(st, { hint: false, tab: -1 });
+      await page.mouse.move(bar.l + 1, bar.y);
+      await page.mouse.down();
+      for (let k = 1; k <= 5; k++) {
+        await page.mouse.move(bar.l + 1 + k * 10, bar.y);
+        await page.waitForTimeout(60);
+      }
+      await page.mouse.up();
+      await page.waitForTimeout(150);
+      assert.deepEqual(await ev(() => window.__w5), []);
+    } finally {
+      await ev(() => window.__w5restore());
+    }
+    await select('drone');
+    await page.click(tid('v6e-drone-cat-sound'));
+    await until(() => !!document.querySelector('[data-testid="v6e-drone-module"] [data-testid="v6e-drone-keys"]'));
+    const dup = await ev(() => {
+      const m = new Map();
+      for (const e of document.querySelectorAll('#view-edit [data-testid]')) {
+        if (e.closest('[data-testid="v6e-stage"]')) continue; // U5a's stage strip keeps Perform's ids (scoped)
+        m.set(e.dataset.testid, (m.get(e.dataset.testid) || 0) + 1);
+      }
+      return [...m].filter(([, n]) => n > 1).map(([t]) => t);
+    });
+    assert.deepEqual(dup, []);
+  });
 }

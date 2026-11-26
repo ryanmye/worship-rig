@@ -50,7 +50,7 @@ export function editBottom(host, env) {
 
   const v = {
     store, controller, isLocked,
-    /** As the v6 Perform's setRange (keyboard.js onRange); the bars here are display only, so only a cancel comes. */
+    /** As the v6 Perform's setRange (keyboard.js onRange); unused while the bars are read only (barsReadOnly). */
     setRange(i, field, note, phase, expect) {
       if (field !== 'lowNote' && field !== 'highNote') return false;
       if (phase !== 'cancel' && isLocked()) return false;
@@ -126,7 +126,10 @@ export function editBottom(host, env) {
     });
   }
   function mount() {
-    row = bottomRow(v, { prefix: 'v6e' });
+    // skeptic UI6-U5b F4: display only for real. Before, a tap on a bar picked it (keyboard.js does that itself) and
+    // its ends dragged with live writes, without the v6 Perform's guards: a song switch mid-drag left the partial
+    // range on the first song and wrote the rest onto the next one
+    row = bottomRow(v, { prefix: 'v6e', barsReadOnly: true });
     host.replaceChildren(row.el);
     render();
     renderLetters();

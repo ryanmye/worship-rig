@@ -88,8 +88,9 @@ export function mountDrone(host, ctx, opts, env) {
       const modHost = h('div.v6e-dmod', { 'data-testid': 'v6e-drone-module' });
       const inst = droneModule.mount(modHost, env.moduleCtx);
       // Perform's sidebar may have its own Drone module mounted (hidden): the same test ids twice in the document
+      // (skeptic UI6-U5b F5: the module's root 'v6-drone' would become 'v6e-drone', the panel's own id: 'v6e-dmod-root')
       for (const n of modHost.querySelectorAll('[data-testid^="v6-"]')) {
-        n.dataset.testid = `v6e-${n.dataset.testid.slice(3)}`;
+        n.dataset.testid = n.dataset.testid === 'v6-drone' ? 'v6e-dmod-root' : `v6e-${n.dataset.testid.slice(3)}`;
       }
       pane.offs.push(() => inst?.destroy?.());
       const width = binder.ctl('drone.width', (onChange) => wordSlider({
