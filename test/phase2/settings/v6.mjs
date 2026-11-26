@@ -630,14 +630,16 @@ async function runMacPart({ browser, createServer, ROOT, OUT, results }) {
     await page.evaluate(() => window.__rig.views.settings._debug.showCategory('about'));
     await page.evaluate(() => {
       window.__backupFails = true;
-      [...document.querySelectorAll('#view-settings button')].find((b) => b.textContent.trim() === 'Back up now').click();
+      [...document.querySelectorAll('#view-settings button')].find((b) => b.textContent.trim() === 'Back up now')
+        .click();
     });
     await page.waitForTimeout(300);
     assert.match(await page.textContent('[data-testid="settings-sum-library"]'), /songs · automatic backups$/,
       'F6: a failed backup is not "backed up"');
     await page.evaluate(() => {
       window.__backupFails = false;
-      [...document.querySelectorAll('#view-settings button')].find((b) => b.textContent.trim() === 'Back up now').click();
+      [...document.querySelectorAll('#view-settings button')].find((b) => b.textContent.trim() === 'Back up now')
+        .click();
     });
     await page.waitForTimeout(150); // a frame or two; no store write or status event is waited for
     assert.equal(await page.textContent('[data-testid="settings-sum-library"]'), 'backed up just now');

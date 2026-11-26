@@ -7,8 +7,9 @@
 .v6-st {
   --v6s-book: var(--font-book, var(--font-display, inherit));
   --v6s-cap: var(--label, var(--muted, #a3acb8));
-  /* the accent FILL, read here on the dialog: a theme may turn --accent into its text colour inside .ed-btn (Daylight:
-     amber as text, #8a5300), and an accent-filled .ed-btn then printed --accent-ink on it at 2.6:1 (UI6-U6 skeptic F5) */
+  /* the accent FILL, read here on the dialog: a theme may turn --accent into its text colour inside .ed-btn
+     (Daylight: amber as text, #8a5300), and an accent-filled .ed-btn then printed --accent-ink on it at 2.6:1
+     (UI6-U6 skeptic F5) */
   --v6s-fill: var(--accent, #ffc94d);
   --v6s-fill-top: var(--plate-top, var(--accent, #ffc94d));
   border-radius: 16px; border-color: var(--line-2, #3a414d);
