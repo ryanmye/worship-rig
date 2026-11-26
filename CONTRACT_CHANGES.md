@@ -9162,3 +9162,9 @@ change, no new setting. Flag off is unchanged (ui-v6 and ui-v6-edit purity vs ba
   the D24.7 Esc check's search part now clears, then closes), chart `polish1.tests.mjs` (U7b O1 / O2 / O3).
 - Gates: ui-v6 68/68 (purity identical), ui-v6-edit 37/37 (purity identical), ui-v6-bank 19/19, chart 41/41,
   settings 111/111 (5 modes), edit-v2 14/14 files, shell unit 377/377; zero console.error / HTTP ≥ 400.
+- **Skeptic (native/docs/reviews/UI6-polish1.md): VERIFIED after one fix.** F1: with Settings opened over the Song
+  bank, the Esc that closed Settings gave the focus back to the bank's search box, where `onEscape` cleared it (on
+  38c664b it closed the browser). The bank's overlay entry is now `underModal: true` (U7c F3), like learn mode and
+  Arrange. Test: ui-v6-bank "polish1 F1" (D24.7 off and on). Gates after the rebase onto 38c664b: ui-v6 76/76 and
+  ui-v6-edit 37/37 (purity vs 38c664b identical), ui-v6-bank 21/21, chart 41/41, settings 111/111, edit-v2 14/14
+  files, shell unit 384/384.
