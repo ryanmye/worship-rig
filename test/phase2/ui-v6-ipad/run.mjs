@@ -736,6 +736,16 @@ try {
       await shot(p, 'u8a-state-first-run-1280.png');
       await rotate(p, PORTRAIT);
       await checkLayout(p, 'first run 820', { allowScrollY: false });
+      // skeptic F3: the card took the faders' track down to 66 px at 820 × 1180 (the panel under the strips now gives
+      // back as much as under the Learn / Arrange bars); the short landscape windows keep the 80 px fader input
+      const f3 = await fit(p);
+      assert.ok(f3.track >= 96, `first run 820: fader track ${f3.track} px`);
+      for (const vp of [{ width: 1024, height: 768 }, { width: 1024, height: 700 }]) {
+        await rotate(p, vp);
+        const f = await fit(p);
+        assert.ok(f.track >= 80, `first run ${vp.width}×${vp.height}: fader track ${f.track} px`);
+      }
+      await rotate(p, PORTRAIT);
       await shot(p, 'u8a-state-first-run-820.png');
       await rotate(p, MAC);
       // the MIDI line follows a connected keyboard

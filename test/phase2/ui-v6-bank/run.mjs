@@ -455,6 +455,15 @@ try {
         'from the Song bank · Eb · 68 bpm · nothing saved yet');
       assert.equal(await page.textContent(tid('v6-try-back')), `Back to ${prev.name}`);
       await shot('u7a-trying-1280.png');
+      // skeptic UI6-U8a F3: at iPad portrait the banner's two rows (over U8a's two-row song bar and stacked bottom
+      // row) left the faders a ~60-77 px track; the panel under the strips gives room back, as under Learn / Arrange
+      await page.setViewportSize({ width: 820, height: 1180 });
+      await page.waitForTimeout(350);
+      const track = await ev(() => Math.min(...[...document.querySelectorAll('.v6-strip:not([hidden]) .fader-track')]
+        .map((x) => x.getBoundingClientRect().height)));
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.waitForTimeout(350);
+      assert.ok(track >= 96, `trying at 820 × 1180: fader track ${Math.round(track)} px`);
       // play with it: a fader and the ON tile, then wait past the save debounce
       await ev(() => {
         const inp = document.querySelector('[data-testid="v6-fader-0"] input');

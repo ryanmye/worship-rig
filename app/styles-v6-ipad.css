@@ -77,6 +77,10 @@ body:has(.v6-perform) #ready-status > .ready-text { flex-shrink: 1; min-width: 0
 @media (orientation: portrait) and (max-width: 1024px) {
   .v6.v6-perform .v6-side { max-height: 300px; }
   .v6.v6-perform:is(.learning, .arranging) .v6-side { max-height: 240px; }
+  /* skeptic UI6-U8a F3: the first-run Start here card (~90 px, three lines) and the Trying banner (two rows) sit in
+     the same slot as the Learn / Arrange bars, and left the faders a 66 / 77 px track (under their 80 px input) at
+     820 × 1180 */
+  .v6.v6-perform:has(> :is(.v6-start, .v6-trybar):not([hidden])) .v6-side { max-height: 240px; }
 }
 
 /* ---- Arrange in short landscape windows (1024 × 768 iPad, the Mac's 1024 × 700 minimum): the strips' ◀ ▶ ✕ row and
