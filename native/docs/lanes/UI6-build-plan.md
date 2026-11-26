@@ -74,6 +74,11 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 
 ## Queued small tasks
 
+- **Core flake (not UI):** CI run on f46bac4 (2026-11-26 19:37 UTC, macos-15 build-test) failed
+  `unit.core3` at test_core3.cpp:353 `CHECK(busy <= 1)` (switch back to B: more than one job in the prebuild lane's
+  hands). The commit changed JS/docs only and later runs passed: likely a timing/lane-count assumption in the test
+  (or a real race). Needs a core builder + skeptic; check how many prebuild workers run on the macOS runner.
+
 - **Polish batch 2 (UI6-polish1 O1/O2, orchestrator):** v6 Perform overlays (Quick sheet, step panels, popovers)
   opt in to `underModal` so the Esc that closes Settings never closes them (today's Perform unchanged); move the
   Back-into-the-gap rule from bank/banner.js into `controller.backFromTrial` so every Back (incl. perform.js destroy
