@@ -334,11 +334,3 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
 - **Try it replaces** what is playing, as a trial: nothing is saved, and a banner offers Keep it (add to library),
   Add to setlist, or Back to the previous song (restored exactly, like Revert).
 - Data is the existing O-AW-PP bank metadata; no schema change is implied by the design.
-
-## D18: Edit keeps its full screen; Perform also gets a per-instrument edit sidebar (Ryan, 2026-11-26)
-- Mockup: `native/docs/design/mockups/edit.html` (artifact "Edit mockups").
-- Ryan asked for a per-instrument edit sidebar on Perform, then answered "no" to shrinking the Edit screen to library
-  and song management. Read as: **both stay**. Edit keeps the full per-instrument panel (sentence, on stage / the
-  sound / where it plays, Advanced, Tone EQ, Effects with sends, Change instrument chooser); Perform's right sidebar
-  can open a "<instrument> ✕" tab with the same sections. To be confirmed if that reading is wrong.
-- Both are one module (D15): the sidebar tab and Edit's panel render the same component in two sizes.
