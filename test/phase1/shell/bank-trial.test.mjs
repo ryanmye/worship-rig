@@ -1,0 +1,295 @@
+// Song bank Try it (UI v6 U7a, native DECISIONS D17): store trial songs (store.startTrial / endTrial / persisted) and
+// the controller's tryBankSong / backFromTrial / keepTrial, end to end against a real server with a bank pack.
+// What is proven: a trial song is never saved (storage bytes), exported, backed up (exportJSON is the backup's
+// source), put in the library order or a setlist, never marks the library edited, and goes on reload; Back restores
+// the song, its setlist entry and its Revert snapshot; Keep is today's Add to library (same record) plus select.
+// Every pack and song name here is invented.
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { memoryStorage, migrate, isTrialId } from '../../../app/js/store.js';
+import { blankSong } from '../../../app/js/presets.js';
+import { createController } from '../../../app/js/controller.js';
+import { MidiInput } from '../../../app/js/midi.js';
+import { songFingerprint } from '../../../app/js/shared/patch-packs.js';
+import { makeStore, fakeEngine, fakeTimers, fakeDoc } from './helpers.mjs';
+
+const require = createRequire(import.meta.url);
+const { createServer } = require('../../../server.js');
+
+const song = (name, over = {}) => ({ ...blankSong({ name }), ...over });
+const entry = (packId, s, over = {}) => {
+  const [pack, rest] = packId.split(':');
+  return { packId, pack, file: rest.replace(/#.*/, ''), n: null, mtime: 1, hash: 'h1', mode: 'bank', schema: 2,
+    song: s, ...over };
+};
+const raw = (storage) => storage.getItem('rig.v1');
+
+// ------------------------------------------------------------------------------------------ store
+test('store: a trial song plays like a song but is never library state, saved, exported or an edit', () => {
+  const storage = memoryStorage();
+  const s = makeStore({ storage, debounceMs: 0 });
+  s.seedFactory();
+  s.persistNow();
+  assert.equal(s.pristine, true);
+  const before = raw(storage);
+  const st0 = s.get();
+  const prevId = st0.settings.currentSongId;
+  const r = s.startTrial(entry('Desk Bank:lantern.json', song('Lantern Hymn', { tempo: 68, hearIn: 3 })));
+  assert.equal(r.ok, true);
+  assert.ok(isTrialId(r.id));
+  assert.equal(s.getSong(r.id).name, 'Lantern Hymn');
+  assert.equal(s.get().songOrder.includes(r.id), false);
+  assert.ok(s.selectSongId(r.id));
+  assert.equal(s.currentSong().id, r.id);
+  assert.equal(s.currentIndex(), -1);
+  // writes inside it, as the strips make them
+  assert.ok(s.set('slots.0.gain', 0.3));
+  assert.ok(s.set(`songs.${r.id}.tempo`, 90));
+  assert.equal(s.pristine, true, 'never an edit');
+  s.persistNow();
+  assert.equal(raw(storage), before, 'nothing written: the trial changes nothing persisted');
+  // export / backup source / kept copy: no trial song, the selection it replaced
+  const exp = JSON.parse(s.exportJSON());
+  assert.equal(Object.keys(exp.songs).some(isTrialId), false);
+  assert.equal(exp.settings.currentSongId, prevId);
+  assert.deepEqual(exp.songOrder, st0.songOrder);
+  // another change is saved, without the trial song
+  assert.ok(s.set('settings.theme', 'ember'));
+  s.persistNow();
+  const saved = JSON.parse(raw(storage));
+  assert.equal(Object.keys(saved.songs).some(isTrialId), false);
+  assert.equal(saved.settings.currentSongId, prevId);
+  assert.equal(JSON.stringify({ ...saved, settings: { ...saved.settings, theme: st0.settings.theme } }), before);
+  // it never joins the library order or a setlist
+  const sl = s.currentSetlist();
+  assert.equal(s.addToSetlist(sl.id, r.id), false);
+  assert.ok(s.set('songOrder', st0.songOrder.slice().reverse()));
+  assert.equal(s.get().songOrder.includes(r.id), false);
+  assert.ok(s.set(`setlists.${sl.id}.songIds`, [...sl.songIds, r.id]) === false
+    || !s.currentSetlist().songIds.includes(r.id));
+  assert.equal(s.duplicateSong(r.id), null);
+  assert.equal(s.deleteSong(r.id), false);
+  // update() keeps it (migrate drops trial songs: never library state)
+  assert.ok(s.update((d) => {
+    d.songs[prevId].notes = 'n';
+  }));
+  assert.ok(s.getSong(r.id));
+  assert.equal(s.currentSong().id, r.id);
+  assert.equal(Object.keys(migrate({ ...s.get() }).songs).some(isTrialId), false);
+  // endTrial: not while it is selected
+  assert.equal(s.endTrial(r.id), false);
+  assert.ok(s.selectSongId(prevId, 0));
+  assert.ok(s.endTrial(r.id));
+  assert.equal(s.getSong(r.id), null);
+  assert.deepEqual(s.trialIds(), []);
+});
+
+test('store: a reload (storage) and a library replace end a trial; a fresh store never sees one', () => {
+  const storage = memoryStorage();
+  const s = makeStore({ storage, debounceMs: 0 });
+  s.seedFactory();
+  s.persistNow();
+  const r = s.startTrial(entry('Desk Bank:quiet.json', song('Quiet Room')));
+  s.selectSongId(r.id);
+  s.set('slots.0.gain', 0.2);
+  s.persistNow();
+  const again = makeStore({ storage });
+  assert.deepEqual(again.trialIds(), []);
+  assert.notEqual(again.currentSong().id, r.id);
+  s.set('settings.theme', 'ember'); // dirty, so a reload sees a difference
+  s.persistNow();
+  storage.setItem('rig.v1', JSON.stringify({ ...JSON.parse(raw(storage)), settings: {
+    ...JSON.parse(raw(storage)).settings, theme: 'sanctuary' } }));
+  assert.ok(s.reload());
+  assert.deepEqual(s.trialIds(), []);
+  assert.equal(isTrialId(s.get().settings.currentSongId), false);
+  const r2 = s.startTrial(entry('Desk Bank:quiet.json', song('Quiet Room')));
+  s.selectSongId(r2.id);
+  const lib = s.exportJSON();
+  assert.ok(s.importJSON(lib, { replace: true }).ok);
+  assert.deepEqual(s.trialIds(), []);
+  // packSongPreview: the song as the library would take it, nothing changed
+  const g = s.get();
+  const p = s.packSongPreview(entry('Desk Bank:quiet.json', song('Quiet Room', { tempo: 61 })));
+  assert.equal(p.tempo, 61);
+  assert.equal(s.get(), g);
+  assert.equal(s.packSongPreview({ packId: 'x' }), null);
+});
+
+// ------------------------------------------------------------------------------------------ controller
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'rig-bank-trial-'));
+const samples = path.join(tmp, 'Samples');
+const write = (f, data) => {
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f, JSON.stringify(data, null, 2));
+};
+const exportOf = (s, bank) => ({ app: 'worship-rig', kind: 'song', schema: 2, song: s, ...(bank ? { bank } : {}) });
+let server;
+let port;
+before(async () => {
+  fs.mkdirSync(path.join(tmp, 'app'), { recursive: true });
+  write(path.join(samples, 'Desk Bank', 'pack.json'), { mode: 'bank', name: 'Desk sounds' });
+  write(path.join(samples, 'Desk Bank', 'songs', 'lantern.json'), exportOf(song('Lantern Hymn', { tempo: 68, hearIn: 3,
+    playIn: 3 }), { title: 'Lantern Hymn', artist: 'Northgate Testers', originalKey: 'Eb', bpm: 68, tags: ['hymn'] }));
+  write(path.join(samples, 'Desk Bank', 'songs', 'harbour.json'), exportOf(song('Harbour Light', { tempo: 128 }),
+    { title: 'Harbour Light', artist: 'River Testhall', bpm: 128, tags: ['upbeat'] }));
+  port = 20437 + Math.floor(Math.random() * 2000);
+  server = createServer({ appDir: path.join(tmp, 'app'), port, userSamples: [samples], docsDir: null });
+  await server.listen();
+});
+after(async () => {
+  await server?.close();
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+async function withLocation(href, fn) {
+  const had = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  Object.defineProperty(globalThis, 'location', { value: new URL(href), configurable: true, writable: true });
+  try {
+    return await fn();
+  } finally {
+    if (had) Object.defineProperty(globalThis, 'location', had);
+    else delete globalThis.location;
+  }
+}
+async function boot(storage = memoryStorage()) {
+  const store = makeStore({ storage, debounceMs: 0 });
+  return withLocation(`http://127.0.0.1:${port}/`, async () => {
+    const midi = new MidiInput({ nav: null, warn: () => {} });
+    midi.access = {};
+    const ctl = createController({
+      store, engine: fakeEngine(), midi, recorder: null, doc: fakeDoc(), nav: null, win: new EventTarget(), rig: null,
+      timers: fakeTimers(), now: () => 0, locks: null, heartbeat: false, indexedDB: null,
+    });
+    await ctl.start();
+    await ctl.packsReady;
+    const events = [];
+    for (const t of ['trial', 'songSelected']) ctl.addEventListener(t, (e) => events.push([t, e.detail]));
+    return { store, ctl, storage, events };
+  });
+}
+const LANTERN = 'Desk Bank:lantern.json';
+const HARBOUR = 'Desk Bank:harbour.json';
+
+test('controller: Try it plays the bank song, nothing persisted; Back restores the song, entry and Revert', async () => {
+  const { store, ctl, storage, events } = await boot();
+  const lib = store.get().songOrder;
+  const idx = 2;
+  const prevId = store.navIds()[idx];
+  assert.ok(await ctl.selectSong(prevId, { index: idx }));
+  // an edit before trying: Revert after Back must still undo it
+  const si = store.getSong(prevId).patch.slots.findIndex(Boolean);
+  const g0 = store.getSong(prevId).patch.slots[si].gain;
+  store.set(`songs.${prevId}.patch.slots.${si}.gain`, 0.11);
+  await new Promise((r) => setTimeout(r, 5));
+  store.persistNow();
+  const bytes = raw(storage);
+  const edited = store.get().meta.edited;
+  const r = await ctl.tryBankSong(LANTERN);
+  assert.equal(r.ok, true);
+  assert.equal(store.currentSong().id, r.id);
+  assert.equal(ctl.status.songId, r.id);
+  const t = ctl.trial();
+  assert.deepEqual([t.title, t.artist, t.key, t.bpm, t.prev.id, t.playing], ['Lantern Hymn', 'Northgate Testers',
+    'Eb', 68, prevId, true]);
+  assert.ok(events.some(([k, d]) => k === 'songSelected' && d.id === r.id));
+  // moving a fader in the trial, then a second Try it (keeps the first one's way back)
+  store.set('slots.0.gain', 0.4);
+  const r2 = await ctl.tryBankSong(HARBOUR);
+  assert.equal(r2.ok, true);
+  assert.deepEqual(store.trialIds(), [r2.id], 'the first trial song is gone');
+  assert.equal(ctl.trial().prev.id, prevId);
+  await new Promise((res) => setTimeout(res, 5));
+  store.persistNow();
+  assert.equal(raw(storage), bytes, 'storage unchanged while trying');
+  assert.equal(store.get().meta.edited, edited);
+  assert.deepEqual(store.get().songOrder, lib);
+  assert.equal(JSON.parse(store.exportJSON()).settings.currentSongId, prevId);
+  // Back
+  assert.deepEqual(await ctl.backFromTrial(), { ok: true });
+  assert.equal(store.currentSong().id, prevId);
+  assert.equal(store.currentIndex(), idx);
+  assert.equal(ctl.trial(), null);
+  assert.deepEqual(store.trialIds(), []);
+  assert.equal(events.at(-1)[0], 'songSelected');
+  assert.equal(events.at(-1)[1].songSnapshot.patch.slots[si].gain, g0, 'the Revert snapshot from before Try it');
+  assert.ok(events.some(([k, d]) => k === 'trial' && d === null));
+  assert.equal(ctl.revertSong(), true);
+  assert.equal(store.getSong(prevId).patch.slots[si].gain, g0, 'Revert after Back = Revert before Try it');
+  await new Promise((res) => setTimeout(res, 5));
+  store.persistNow();
+  const after = JSON.parse(raw(storage));
+  assert.equal(Object.keys(after.songs).some(isTrialId), false);
+  assert.deepEqual(after.songOrder, lib);
+  assert.equal(after.meta.packSongs, undefined, 'no pack record: nothing was added');
+  ctl.dispose();
+});
+
+test('controller: Keep = Add to library (same record) + select; tweaks kept; setlist; Lock; GO ends a trial',
+  async () => {
+    // a plain Add to library, for the record to compare with
+    const ref = await boot();
+    const plain = ref.ctl.addFromBank(LANTERN);
+    const plainSong = ref.store.getSong(plain.id);
+    const plainRec = ref.store.get().meta.packSongs[LANTERN];
+    ref.ctl.dispose();
+
+    const { store, ctl } = await boot();
+    const n0 = store.get().songOrder.length;
+    const sl = store.currentSetlist();
+    // Lock: Try it refused; Back allowed
+    store.set('settings.performLock', true);
+    assert.deepEqual(await ctl.tryBankSong(LANTERN), { ok: false, error: 'perform-locked' });
+    store.set('settings.performLock', false);
+    const r = await ctl.tryBankSong(LANTERN);
+    assert.ok(r.ok);
+    store.set('settings.performLock', true);
+    assert.deepEqual(await ctl.keepTrial(), { ok: false, error: 'perform-locked' });
+    store.set('settings.performLock', false);
+    // Keep, untouched: exactly today's add
+    const k = await ctl.keepTrial();
+    assert.equal(k.ok, true);
+    assert.equal(k.selected, true);
+    assert.equal(store.currentSong().id, k.id);
+    assert.equal(store.get().songOrder.length, n0 + 1);
+    assert.equal(store.get().songOrder.at(-1), k.id);
+    const rec = store.get().meta.packSongs[LANTERN];
+    assert.deepEqual({ hash: rec.hash, sig: rec.sig }, { hash: plainRec.hash, sig: plainRec.sig });
+    assert.equal(rec.id, k.id);
+    assert.equal(songFingerprint(store.getSong(k.id)), songFingerprint(plainSong));
+    assert.equal(store.pristine, false, 'a Song bank add is an edit (O-AW-PP rule 6)');
+    assert.equal(ctl.trial(), null);
+    assert.deepEqual(store.trialIds(), []);
+    // Keep with a tweak and a setlist: the tweak is kept (an edit of the added song), the setlist entry selected
+    const r2 = await ctl.tryBankSong(HARBOUR);
+    store.set('slots.0.gain', 0.37);
+    const k2 = await ctl.keepTrial({ setlistId: sl.id });
+    assert.ok(k2.ok);
+    assert.equal(store.getSong(k2.id).patch.slots[0].gain, 0.37);
+    assert.notEqual(store.get().meta.packSongs[HARBOUR].sig, songFingerprint(store.getSong(k2.id)),
+      'edited relative to the pack version: never overwritten by a newer one');
+    assert.equal(store.currentSetlist().songIds.at(-1), k2.id);
+    assert.equal(store.currentIndex(), store.currentSetlist().songIds.length - 1);
+    assert.equal(store.getSong(r2.id), null);
+    // a song switch from elsewhere (GO / a library row) ends a trial
+    const r3 = await ctl.tryBankSong(HARBOUR);
+    assert.ok(r3.ok);
+    assert.equal(ctl.trial().id, r3.id);
+    assert.ok(await ctl.selectSong(store.navIds()[0], { index: 0 }));
+    assert.equal(ctl.trial(), null);
+    assert.deepEqual(store.trialIds(), []);
+    // already in the library: Keep selects it and leaves it as it is
+    const r4 = await ctl.tryBankSong(LANTERN);
+    store.set('slots.0.gain', 0.05);
+    const before = store.getSong(k.id);
+    const k4 = await ctl.keepTrial();
+    assert.deepEqual([k4.ok, k4.id, k4.existing], [true, k.id, true]);
+    assert.equal(store.getSong(k.id), before);
+    assert.equal(store.getSong(r4.id), null);
+    assert.deepEqual(await ctl.backFromTrial(), { ok: false, error: 'no-trial' });
+    assert.equal((await ctl.tryBankSong('Desk Bank:gone.json')).ok, false);
+    ctl.dispose();
+  });

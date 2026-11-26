@@ -45,6 +45,12 @@
 //   its songs and setlists are in a newer copy of its version; D8 skeptic K2), with a notice. keptLibraries() lists
 //   them (plus 1.1.1's separate `<key>.1x` library) for "Restore previous library…". onNotice(fn) reports what the
 //   UI should say (that, and D9's size warning).
+// Trial songs (UI v6 U7a, native DECISIONS D17 "Try it"): startTrial(entry) puts a Song bank song in `songs` under
+//   an id `trial:<n>` (isTrialId) so every view and the controller play it like any song, but it is never library
+//   state: not in songOrder or any setlist, never persisted (persistNow / exportJSON / keepCurrent write
+//   persisted(): no trial song, and the navigation it replaced), never marks the library edited, and a write that
+//   only touches a trial song (or selects one) schedules no save. migrate() drops any `trial:` song, so a reload or
+//   a library replace ends a trial. endTrial(id) removes it.
 import { mod12, transposeSemis } from './shared/music.js';
 import { isValidId as isThemeId, DEFAULT_THEME_ID } from './shared/themes.js';
 import { normalizeHotkeys } from './shared/hotkeys.js';
@@ -247,9 +253,19 @@ export function audioSleepSecOf(settings) {
 const NAV_SETTINGS = new Set(['currentSongId', 'setlistIndex', 'currentSetlistId']);
 /** Settings that change how the app looks, not the library (themes-setup): they don't mark it edited. */
 const LOOK_SETTINGS = new Set(['theme']);
+/** Prefix of a trial song's id (U7a, D17 Try it): never library state (see the header). */
+export const TRIAL_PREFIX = 'trial:';
+/** @param {*} id @returns {boolean} the id of a trial song (Song bank Try it), never a library song */
+export const isTrialId = (id) => typeof id === 'string' && id.startsWith(TRIAL_PREFIX);
+/** @param {string} p changed path @returns {boolean} the path is inside a trial song ('songs.trial:1…') */
+const isTrialPath = (p) => p.startsWith(`songs.${TRIAL_PREFIX}`);
+/** Settings that say which song plays (a trial song's selection is not saved: persisted() puts the old one back). */
+const TRIAL_NAV_KEYS = Object.freeze(['currentSongId', 'setlistIndex', 'setlistGap']);
+const SELECT_SETTINGS = new Set(TRIAL_NAV_KEYS.map((k) => `settings.${k}`));
 /** @param {string} p changed path @returns {boolean} the change edits library content (songs, setlists, settings) */
 function isEditPath(p) {
   if (p.startsWith('meta.') || p === 'meta' || p === 'schema') return false;
+  if (isTrialPath(p)) return false; // U7a: a trial song is not library content
   if (p.startsWith('settings.')) {
     const k = p.split('.')[1];
     return !NAV_SETTINGS.has(k) && !DEVICE_LOCAL_SETTINGS.includes(k) && !LOOK_SETTINGS.has(k);
@@ -742,7 +758,9 @@ export function normalizeSong(raw, id, { legacy = false } = {}) {
 
 function normalizeSetlist(raw, id, songs) {
   if (!isObj(raw)) return null;
-  const ids = Array.isArray(raw.songIds) ? raw.songIds.filter((s) => typeof s === 'string' && songs[s]) : [];
+  // U7a: never a trial song (Song bank Try it) in a setlist
+  const ids = Array.isArray(raw.songIds) ? raw.songIds.filter((s) => typeof s === 'string' && songs[s] && !isTrialId(s))
+    : [];
   return { ...raw, id, name: str(raw.name, 'Setlist', 120), songIds: ids };
 }
 
@@ -931,7 +949,8 @@ export function migrate(raw) {
   const songs = {};
   const srcSongs = Array.isArray(raw.songs) ? entriesFromArray(raw.songs, 'song') : isObj(raw.songs) ? raw.songs : {};
   for (const [id, s] of Object.entries(srcSongs)) {
-    if (!id || id === 'undefined' || isReservedKey(id)) continue;
+    // U7a: a trial song (Song bank Try it) is never library state; the store's update() puts its own back
+    if (!id || id === 'undefined' || isReservedKey(id) || isTrialId(id)) continue;
     const n = normalizeSong(s, id, { legacy });
     if (n) songs[id] = n;
   }
@@ -1074,6 +1093,10 @@ export function createStore(opts = {}) {
   let retryTimer = null;
   let retryIdx = 0;
   let readOnlyReason = null; // null | 'backup-failed' | 'second-window' | string
+  // U7a (D17 Try it): what the trial's selection replaced ({currentSongId, setlistIndex, setlistGap}), saved in its
+  // place by persisted() while a trial song is selected; null when no trial song is in the state
+  let trialNav = null;
+  let trialSeq = 0;
   let deviceTouched = null; // D11 skeptic DS1: Set of DEVICE_TOUCHED_KEY entries, read on first use
   const info = { status: 'ok', backupKey: null, backupError: null, lastSavedAt: null, persistError: null, persistFailures: 0, readOnly: false, readOnlyReason: null };
   const infoListeners = new Set();
@@ -1448,7 +1471,35 @@ export function createStore(opts = {}) {
       flushQueued = true;
       queueMicrotask(flushNotify);
     }
-    schedulePersist();
+    // U7a: a write inside a trial song, or the selection of one, changes nothing persisted(): no save is scheduled
+    const trialSel = isTrialId(state.settings.currentSongId);
+    if (!paths.every((p) => isTrialPath(p) || (trialSel && SELECT_SETTINGS.has(p)))) schedulePersist();
+  }
+  /** Ids of the trial songs in the state (U7a). */
+  const trialIdsOf = (s = state) => Object.keys(s.songs).filter(isTrialId);
+  /**
+   * U7a: the library as it is saved and exported: no trial song, and while one is selected, the selection it
+   * replaced. The same object when there is no trial song.
+   * @param {object} [s]
+   * @returns {object}
+   */
+  function persisted(s = state) {
+    const ids = trialIdsOf(s);
+    if (!ids.length) return s;
+    const songs = { ...s.songs };
+    for (const id of ids) delete songs[id];
+    let { settings } = s;
+    if (isTrialId(settings.currentSongId)) {
+      const nav = trialNav || { currentSongId: s.songOrder[0] || null };
+      settings = { ...settings };
+      // the keys the selection had (absent stays absent), so an untouched library saves byte for byte as before
+      for (const k of TRIAL_NAV_KEYS) {
+        if (hasOwn(nav, k)) settings[k] = nav[k];
+        else delete settings[k];
+      }
+      if (!songs[settings.currentSongId]) settings.currentSongId = s.songOrder[0] || null; // gone meanwhile
+    }
+    return { ...s, songs, settings };
   }
   function clearRetry() {
     if (retryTimer !== null) timers.clearTimeout(retryTimer);
@@ -1460,7 +1511,7 @@ export function createStore(opts = {}) {
     if (!dirty) return true;
     if (readOnlyReason !== null) return false; // dirty stays; written after allowOverwrite()/setReadOnly(false)
     clearRetry();
-    const json = JSON.stringify(state);
+    const json = JSON.stringify(persisted()); // U7a: never a trial song
     try {
       try {
         storage.setItem(key, json);
@@ -1532,6 +1583,7 @@ export function createStore(opts = {}) {
   function commit(next, paths) {
     if (next === state || !paths.length) return false;
     state = next;
+    if (trialNav && !trialIdsOf().length) trialNav = null; // U7a: a library replace ended the trial
     changed(paths);
     return true;
   }
@@ -1776,7 +1828,7 @@ export function createStore(opts = {}) {
       if (field === 'name') return typeof value === 'string' && rest.length === 0 ? { segs, value: value.slice(0, 120) } : null;
       if (field === 'songIds') {
         if (rest.length || !Array.isArray(value)) return null;
-        return { segs, value: value.filter((s) => typeof s === 'string' && state.songs[s]) };
+        return { segs, value: value.filter((s) => typeof s === 'string' && state.songs[s] && !isTrialId(s)) };
       }
       return { segs, value: clone(value) };
     }
@@ -1874,8 +1926,9 @@ export function createStore(opts = {}) {
     if ((root === 'songOrder' || root === 'setlistOrder') && segs.length === 1) {
       if (!Array.isArray(value)) return null;
       const map = root === 'songOrder' ? state.songs : state.setlists;
-      const seen = new Set(value.filter((s) => typeof s === 'string' && map[s]));
-      return { segs, value: [...seen, ...Object.keys(map).filter((s) => !seen.has(s))] };
+      const ok = (s) => typeof s === 'string' && map[s] && !isTrialId(s); // U7a: a trial song is not in the library
+      const seen = new Set(value.filter(ok));
+      return { segs, value: [...seen, ...Object.keys(map).filter((s) => ok(s) && !seen.has(s))] };
     }
     if (root === 'meta') return { segs, value: clone(value) };
     return null;
@@ -2222,7 +2275,7 @@ export function createStore(opts = {}) {
      */
     keepCurrent(kind = 'restore', { protect = null } = {}) {
       if (!KEPT_KINDS.includes(kind)) return { ok: false, error: 'unknown kind' };
-      const k = keepRaw(JSON.stringify(state), kind, SCHEMA, now(), { protect });
+      const k = keepRaw(JSON.stringify(persisted()), kind, SCHEMA, now(), { protect }); // U7a: no trial song
       if (!k) return { ok: false, error: 'Browser storage is full, so the library could not be kept.' };
       return { ok: true, key: k };
     },
@@ -2302,6 +2355,7 @@ export function createStore(opts = {}) {
       generation += 1;
       slotLines.clear(); // D23: the slot lineage is per library
       state = deepFreeze(next);
+      trialNav = null; // U7a: storage never holds a trial song, so a reload ends one
       for (const p of paths) pending.add(p);
       if (!flushQueued) {
         flushQueued = true;
@@ -2367,12 +2421,20 @@ export function createStore(opts = {}) {
     update(fn) {
       const draft = clone(state);
       const r = fn(draft);
+      const src = r && typeof r === 'object' ? r : draft;
       let next;
       try {
-        next = migrate(r && typeof r === 'object' ? r : draft);
+        next = migrate(src);
       } catch (err) {
         warn(`update rejected: ${err.message}`);
         return false;
+      }
+      // U7a: migrate() drops trial songs (never library state); an update keeps the ones it left in place, and the
+      // selection of one
+      for (const id of trialIdsOf()) {
+        if (!isObj(src.songs) || !src.songs[id]) continue;
+        next.songs[id] = clone(state.songs[id]);
+        if (isObj(src.settings) && src.settings.currentSongId === id) next.settings.currentSongId = id;
       }
       const paths = diffPaths(state, next);
       if (paths.some((p) => p === 'settings' || p.startsWith('settings.'))) noteDeviceWrites(state, next); // DS1
@@ -2437,7 +2499,7 @@ export function createStore(opts = {}) {
     /** @returns {string|null} id of the copy (inserted after the original in library + current setlist) */
     duplicateSong(id) {
       const s = state.songs[id];
-      if (!s) return null;
+      if (!s || isTrialId(id)) return null; // U7a: a trial song becomes a library song only by keeping it
       const newId = idGen('song');
       const before = navState();
       const copy = normalizeSong({ ...clone(s), name: `${s.name} (copy)` }, newId);
@@ -2464,7 +2526,7 @@ export function createStore(opts = {}) {
 
     /** Remove a song from the library and every setlist. @returns {boolean} */
     deleteSong(id) {
-      if (!state.songs[id]) return false;
+      if (!state.songs[id] || isTrialId(id)) return false; // U7a: a trial ends with endTrial (Back)
       const before = navState();
       const removedBefore = (p) => before.ids.slice(0, Math.max(0, p)).filter((s) => s === id).length;
       const wasCurrent = state.settings.currentSongId === id;
@@ -2641,7 +2703,7 @@ export function createStore(opts = {}) {
     /** Insert a song into a setlist (duplicates allowed, e.g. a reprise). */
     addToSetlist(setlistId, songId, index) {
       const sl = state.setlists[setlistId];
-      if (!sl || !state.songs[songId]) return false;
+      if (!sl || !state.songs[songId] || isTrialId(songId)) return false; // U7a: never a trial song
       const before = navState();
       const ids = sl.songIds.slice();
       const at = Number.isInteger(index) ? Math.max(0, Math.min(ids.length, index)) : ids.length;
@@ -2967,6 +3029,58 @@ export function createStore(opts = {}) {
      * Pack songs in the library now. @returns {Object<string,string>} pack id → library song id (deleted ones are
      * left out)
      */
+    /**
+     * U7a (D17): a pack entry's song as the library would take it (the same normalisation as addPackSong), without
+     * changing anything. For the Song bank browser's details (instruments, drone, space, echo, chart, snapshots).
+     * @param {object} e a pack entry
+     * @returns {object|null} a frozen song (id 'preview'), or null when the entry is not usable
+     */
+    packSongPreview(e) {
+      if (!validPackEntry(e)) return null;
+      try {
+        const s = packSongOf(e, 'preview');
+        return s ? deepFreeze(s) : null;
+      } catch {
+        return null;
+      }
+    },
+    /**
+     * U7a (D17 Try it): put a pack entry's song in the state as a trial song (`trial:<n>`, see the header), so it can
+     * be selected and played without being added: never in songOrder or a setlist, never saved, exported or backed
+     * up, never an edit. The selection it will replace is remembered (only for the first of overlapping trials) and
+     * saved in its place while the trial song is selected. Not selected here (the controller selects it).
+     * @param {object} e a pack entry
+     * @returns {{ok:true, id:string} | {ok:false, error:string}}
+     */
+    startTrial(e) {
+      if (!validPackEntry(e) || isReservedKey(e.packId)) return { ok: false, error: 'That is not a pack song.' };
+      const id = `${TRIAL_PREFIX}${++trialSeq}`;
+      const res = { skipped: [] };
+      const song = tryPackSong(e, id, res);
+      if (!song) return { ok: false, error: res.skipped[0] || 'That song could not be read.' };
+      if (!trialNav || !isTrialId(state.settings.currentSongId)) {
+        const st = state.settings;
+        trialNav = {};
+        for (const k of TRIAL_NAV_KEYS) if (hasOwn(st, k)) trialNav[k] = st[k];
+      }
+      changed([put(['songs', id], song)]);
+      return { ok: true, id };
+    },
+    /**
+     * U7a: remove a trial song (Back, Keep, or another song took over). The selection must have moved off it first.
+     * @param {string} id
+     * @returns {boolean} removed
+     */
+    endTrial(id) {
+      if (!isTrialId(id) || !state.songs[id] || state.settings.currentSongId === id) return false;
+      changed([put(['songs', id], undefined)]);
+      if (!trialIdsOf().length) trialNav = null;
+      return true;
+    },
+    /** U7a: ids of the trial songs in the state (normally none or one). @returns {string[]} */
+    trialIds: () => trialIdsOf(),
+    /** U7a: the library as it is saved (no trial song); the state itself when there is none. Read only. */
+    persisted: () => persisted(),
     packSongs() {
       const out = {};
       for (const [k, r] of Object.entries(packRecords())) if (r && state.songs[r.id]) out[k] = r.id;
@@ -2980,12 +3094,13 @@ export function createStore(opts = {}) {
 
     /** Whole library as JSON (for export files and Electron auto-backups). */
     exportJSON({ pretty = true } = {}) {
-      const { songs, songOrder, setlists, setlistOrder, meta } = state;
+      const lib = persisted(); // U7a: a trial song is never exported or backed up
+      const { songs, songOrder, setlists, setlistOrder, meta } = lib;
       // security S3: device-local settings stay on this machine. The pad folder's absolute path carries the account
       // name (/Users/<name>/…), and the MIDI/audio device names/ids identify the hardware. Nothing reads them back:
       // a replace-import keeps this machine's values, a merge ignores settings.
       const settings = Object.fromEntries(
-        Object.entries(state.settings).filter(([k]) => !DEVICE_LOCAL_SETTINGS.includes(k)),
+        Object.entries(lib.settings).filter(([k]) => !DEVICE_LOCAL_SETTINGS.includes(k)),
       );
       const doc = { app: 'worship-rig', kind: 'library', schema: SCHEMA, exportedAt: new Date(now()).toISOString(), songs, songOrder, setlists, setlistOrder, settings, meta };
       return JSON.stringify(doc, null, pretty ? 2 : 0);

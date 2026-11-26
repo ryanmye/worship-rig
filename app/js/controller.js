@@ -34,7 +34,7 @@
 // the pinned total stays ≤ PIN_BUDGET_MB; one {pin:'replace'} per switch; a warn if pinnedMB ever passes capMB.
 import {
   transposeSemisOf, audioSleepSecOf, COMPUTER_KEYBOARD, sound2Of, programChangeOf, DEVICE_LOCAL_SETTINGS, SCHEMA,
-  readDeviceSettings, deviceSettingUnset, DEVICE_SELECTIONS,
+  readDeviceSettings, deviceSettingUnset, DEVICE_SELECTIONS, isTrialId,
 } from './store.js';
 import { compileTouch } from './shared/touch-curve.js';
 import { transposeSemis, mod12, keyName } from './shared/music.js';
@@ -617,13 +617,16 @@ export function createController(o) {
     setStatus({ loading: false, songId: id });
     // round2-shell #4: snapshot the song as committed (catchUp just sent edits made while it loaded), not as requested
     const committed = store.getSong(id) || song;
-    selected = { id, song: committed };
+    // U7a: Back from a Song bank trial brings the song's own Revert snapshot back (taken when it was first selected)
+    const base = opts._baseline && opts._baseline.id === id ? opts._baseline.song : committed;
+    selected = { id, song: base };
+    trialCommitted(id);
     // Lane S: the cue is spent once its entry plays (a cue on another song stays: GO is still to come)
     if (cue && sameEntry(cue, id, appliedIndex)) cue = null;
     publishCue();
     emit('song', { id });
     emitActivity('song'); // idle-cpu-ui: the new song's drone may start sounding now
-    emit('songSelected', { id, patchSnapshot: clone(committed.patch), songSnapshot: clone(committed) });
+    emit('songSelected', { id, patchSnapshot: clone(base.patch), songSnapshot: clone(base) });
     preloadNeighbors();
     return true;
   }
@@ -2667,6 +2670,122 @@ export function createController(o) {
     return r;
   }
 
+  // ---- Song bank Try it (UI v6 U7a, native DECISIONS D17): a bank song plays as a trial song (store.startTrial),
+  // nothing saved; Back selects the song it replaced with that song's own Revert snapshot, Keep adds it (addFromBank)
+  // and selects it. Any other song committed (GO, a library row, Program Change) also ends the trial.
+  let trial = null; // {id, packId, item, prev:{id, index, baseline:{id, song}|null}, start:object}
+  const locked = () => !!settings().performLock;
+  /** A bank entry's browsing item (patchPacks().bank's shape) by pack id, or null. */
+  const bankItemOf = (packId) => bankItems(packsInfo.entries).find((x) => x.packId === packId) || null;
+  /**
+   * The trial in progress, or null: {id, packId, title, artist?, pack, key, bpm|null, prev:{id, name}|null}.
+   * @returns {object|null}
+   */
+  function trialInfo() {
+    if (!trial || !store.getSong(trial.id)) return null;
+    const s = store.getSong(trial.id);
+    const prev = trial.prev.id ? store.getSong(trial.prev.id) : null;
+    return {
+      id: trial.id, packId: trial.packId, title: trial.item ? trial.item.title : s.name,
+      artist: trial.item && trial.item.artist, pack: trial.item ? trial.item.pack : null,
+      key: keyName(s.hearIn, s.minor), bpm: Number.isFinite(s.tempo) ? s.tempo : null,
+      playing: appliedId === trial.id,
+      prev: prev ? { id: prev.id, name: prev.name } : null,
+    };
+  }
+  /** applySong committed `id`: trial songs other than it go; the trial ends unless `id` is its song. */
+  function trialCommitted(id) {
+    if (typeof store.trialIds !== 'function') return;
+    for (const t of store.trialIds()) if (t !== id) store.endTrial(t);
+    if (trial && trial.id !== id) {
+      trial = null;
+      emit('trial', null);
+    } else if (trial) emit('trial', trialInfo());
+  }
+  /**
+   * Song bank › Try it (D17): play a bank song in place of the current one, as a trial: not added to the library,
+   * nothing saved, the library not marked edited (store.startTrial). A second Try it replaces the trial and keeps
+   * the first one's way Back. Refused under Perform lock (as Edit and + Add song are) and in a muted second window.
+   * @param {string} packId
+   * @returns {Promise<{ok:true, id:string} | {ok:false, error:string}>}
+   */
+  async function tryBankSong(packId) {
+    if (locked()) return { ok: false, error: 'perform-locked' };
+    if (secondary) return { ok: false, error: SECONDARY_MESSAGE };
+    if (typeof store.startTrial !== 'function') return { ok: false, error: 'Try it is not available here.' };
+    const e = packsInfo.entries.find((x) => x.packId === packId);
+    if (!e || packModeOf(e) !== 'bank') {
+      return { ok: false, error: 'That song is no longer in the Song bank. Press Rescan.' };
+    }
+    const r = store.startTrial(e);
+    if (!r.ok) return r;
+    const curId = settings().currentSongId;
+    const prev = trial ? trial.prev : {
+      id: appliedId && !isTrialId(appliedId) ? appliedId : curId,
+      index: appliedId && !isTrialId(appliedId) ? appliedIndex : store.currentIndex(),
+      baseline: selected && !isTrialId(selected.id) ? { id: selected.id, song: selected.song } : null,
+    };
+    const before = trial;
+    trial = { id: r.id, packId, item: bankItemOf(packId), prev, start: store.getSong(r.id) };
+    emit('trial', trialInfo());
+    const ok = await selectSong(r.id);
+    if (!ok) {
+      // superseded (another Try it, a GO) or the load failed: this trial song goes; an earlier trial stays
+      if (trial && trial.id === r.id) trial = before && store.getSong(before.id) ? before : null;
+      store.endTrial(r.id);
+      emit('trial', trialInfo());
+      return { ok: false, error: 'The song could not be loaded.' };
+    }
+    return { ok: true, id: r.id };
+  }
+  /**
+   * Back from a trial (the banner's "Back to …"): the song it replaced, at the same setlist entry, with its own
+   * Revert snapshot (so Revert after Back is Revert before Try it). Live state is a song switch's: the song's own levels,
+   * no scene. Allowed under Perform lock (a way out, like GO). The previous song gone: the first of the list.
+   * @returns {Promise<{ok:boolean, error?:string}>}
+   */
+  async function backFromTrial() {
+    if (!trial) return { ok: false, error: 'no-trial' };
+    const t = trial;
+    const prevSong = t.prev.id && store.getSong(t.prev.id);
+    const target = prevSong ? t.prev.id : store.navIds()[0] || store.get().songOrder[0] || null;
+    if (!target) return { ok: false, error: 'There is no song to go back to.' };
+    const ok = await selectSong(target, {
+      ...(prevSong && Number.isInteger(t.prev.index) && t.prev.index >= 0 ? { index: t.prev.index } : {}),
+      _baseline: prevSong ? t.prev.baseline : null,
+    });
+    return ok ? { ok: true } : { ok: false, error: 'The song could not be loaded.' };
+  }
+  /**
+   * Keep the trial (the banner's "Keep it · add to library"): today's Add to library (addFromBank: the same
+   * meta.packSongs record, O-AW-PP rules 3–7), then select it; with `setlistId`, also add it to that setlist
+   * (store.addToSetlist) and select that entry when it is the current setlist. What the player changed while trying
+   * (levels, sounds, key…) is kept too: it is written over the added song, which is then an edit of it (rule 3).
+   * Already in the library: that song is selected and left as it is. Refused under Perform lock.
+   * @param {{setlistId?:string}} [o]
+   * @returns {Promise<{ok:true, id:string, existing?:true, selected:boolean} | {ok:false, error:string}>}
+   */
+  async function keepTrial(o = {}) {
+    if (!trial) return { ok: false, error: 'no-trial' };
+    if (locked()) return { ok: false, error: 'perform-locked' };
+    const t = trial;
+    const r = addFromBank(t.packId);
+    if (!r.ok) return r;
+    const cur = store.getSong(t.id);
+    if (!r.existing && cur && t.start) {
+      for (const k of Object.keys(cur)) {
+        if (k === 'id' || k === 'name') continue;
+        if (JSON.stringify(cur[k]) !== JSON.stringify(t.start[k])) store.set(`songs.${r.id}.${k}`, clone(cur[k]));
+      }
+    }
+    let index;
+    if (o.setlistId && store.addToSetlist(o.setlistId, r.id) && settings().currentSetlistId === o.setlistId) {
+      index = store.navIds().lastIndexOf(r.id);
+    }
+    const ok = await selectSong(r.id, Number.isInteger(index) && index >= 0 ? { index } : {});
+    return { ok: true, id: r.id, ...(r.existing ? { existing: true } : {}), selected: ok };
+  }
+
   // ---- wake lock (Chrome) — Electron uses powerSaveBlocker in main
   let wakeLock = null;
   async function acquireWakeLock() {
@@ -3241,6 +3360,7 @@ export function createController(o) {
     }
     let navChanged = false;
     let entityChanged = false;
+    let libraryChanged = false;
     for (const p of paths) {
       if (p.startsWith('settings.')) {
         const k = p.split('.')[1];
@@ -3249,9 +3369,13 @@ export function createController(o) {
       } else if (p.startsWith('setlists.') || p === 'songOrder') {
         navChanged = true;
         entityChanged = true;
-      } else if (p.startsWith('songs.')) entityChanged = true;
+      } else if (p.startsWith('songs.')) {
+        entityChanged = true;
+        if (!isTrialId(p.split('.')[1])) libraryChanged = true;
+      }
     }
-    if (entityChanged) scheduleBackup();
+    // U7a: a trial song is never backed up, so a write to it alone does not schedule one
+    if (entityChanged && (libraryChanged || paths.some((p) => !p.startsWith('songs.')))) scheduleBackup();
     const cur = state.settings.currentSongId;
     // idle-cpu-ui: an edit of the current song (drone, master, levels, key) may make sound; background writes to other
     // songs (preload bookkeeping, imports) must not wake the meters
@@ -4009,6 +4133,16 @@ export function createController(o) {
     rescanPatchPacks,
     patchPacks,
     addFromBank,
+    // UI v6 U7a (D17): Song bank Try it
+    tryBankSong,
+    backFromTrial,
+    keepTrial,
+    trial: trialInfo,
+    /** U7a: a bank song as the library would take it (store.packSongPreview), for the browser's details. */
+    bankSong: (packId) => {
+      const e = packsInfo.entries.find((x) => x.packId === packId);
+      return e && typeof store.packSongPreview === 'function' ? store.packSongPreview(e) : null;
+    },
     revertSong,
     scenes,
     learn,
