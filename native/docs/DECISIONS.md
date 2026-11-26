@@ -325,3 +325,12 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
   ⌘+ / ⌘− and ⌘-scroll work on the chart with a brief "Text 150 %" readout. Remembered per device (as today).
   Implementation note: the hidden chart code stores a px index (CHART_FONT_STEPS); it moves to a percent of a base.
 - Still open: whether "you play C" moves into the new song bar (proposed, not yet drawn).
+
+## D17: Song bank: a browser over the stage; Try it replaces the sound (Ryan, 2026-11-26)
+- Mockup: `native/docs/design/mockups/song-bank.html` (artifact "Song bank mockups"). Ryan: "looks good".
+- Opens over the stage (keyboard row and PANIC stay live) from **Setlist › + Add song › From the Song bank** and
+  from **Settings › My Samples** (replacing today's plain list there). Filters: search, key, tempo, feel tags, packs;
+  a "Song bank | My library" toggle reuses the browser for the player's own songs.
+- **Try it replaces** what is playing, as a trial: nothing is saved, and a banner offers Keep it (add to library),
+  Add to setlist, or Back to the previous song (restored exactly, like Revert).
+- Data is the existing O-AW-PP bank metadata; no schema change is implied by the design.
