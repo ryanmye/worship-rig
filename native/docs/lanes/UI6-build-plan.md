@@ -95,6 +95,15 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   on / off with the count-in, tempo − / + / Tap, setup read only, Count-in & level… → Edit › Song) + "Loading…" /
   "Preparing n of m" in the sidebar header and a spinner on the rail. CONTRACT_CHANGES "## UI v6 U-METRO".
 
+- **U-MOVE (D23):** store half done (skeptic VERIFIED, `reviews/U-MOVE-store.md`); UI half built on lane-moveui
+  (see "U-MOVE UI + D24 tweaks status" below; skeptic pending). Left for later: drag-to-reorder in Edit's rig tabs.
+- **U-TWEAKS (D24):** built on lane-moveui (live throttled range writes, pick-first on all pointers, drone %); skeptic
+  pending.
+- **Esc setting (D24.7):** "Esc always panics" toggle, per device, read by the v6 Esc handling (and today's).
+- **Small-window fit (UI6-U3 O1, orchestrator tier 2):** built on lane-moveui (sidebar folded at ≤ 1100 px until
+  opened there once; slim Add from 4); 4 strips at 1024×700 fit with no scroll, folded or open. Skeptic pending.
+- **U-METRO (D23):** Metronome sidebar module (today's click chip behaviour) + load state in the sidebar header.
+
 - ~~**Preview switch for Ryan (U1 review O3):**~~ **Done (lane-small; skeptic VERIFIED after fixes, reviews/UI6-small.md):** Settings › Look ›
   Perform view › "Try the new layout (preview)", swaps Perform live (Chrome and the Mac app). CONTRACT_CHANGES
   "## UI v6 preview switch in Settings". Original note: `?ui6=1` only works in Chrome; the Mac app needs a visible way to turn
@@ -102,6 +111,22 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   writing `settings.uiV6`. Before U8 ends.
 - Pre-existing red suites to fix separately: eq "L-21 note labels fit" (fails on base), engine suite's 404 on
   `/__tests/api/health` and the CPU-timing `offline.eqCpu` on the 2-CPU box.
+
+## U-MOVE UI + D24 tweaks status (builder, 2026-11-26; lane-moveui from b163c20; skeptic pending)
+
+- Built: ⋯ Duplicate next to the original (`store.insertSlot`, scenes copied), ⋯ Earlier / Later, a ⠿ grip to drag a
+  strip (mouse / pen / touch, drop line, auto-scroll, Esc), all refused under Lock and ended by a song switch, the
+  view hiding, Lock or any slot change; protections keyed on the order through `store.onSlotMap` (⋯ menus, step
+  panels, fader / reorder / range drags, the pick; Edit's selected tab and 8 s Undo); PANIC a tap, Lock as today
+  (tap locks, hold unlocks); live range writes (≤ 1 / 50 ms + final) with every cancel restoring the start value on
+  the right instrument; pick first on every pointer on Perform; drone Bright / Move %; small-window fit. Interface
+  notes: CONTRACT_CHANGES "## UI v6 move + D24 tweaks". Suite: `test/phase2/ui-v6/move.tests.mjs`; ui-v6 63/63.
+- Choices to confirm with Ryan: Lock unlocks with a hold (D23.1 "as today"; a single tap both ways was the other
+  reading); the grip drags at once on touch (no long-press: it is a dedicated handle with `touch-action: none`, the
+  rest of the row still scrolls); a cancelled live range drag writes the old value back even under Lock; the finishing
+  click on the keys plays no note on the Mac too (U2's iPad rule, now every pointer); a move drops a range pick rather
+  than following the instrument.
+- Not done: drag-to-reorder in Edit's rig tabs (later, per D23); MIDI learn stays positional (D23 tier 2).
 
 ## U3 status (builder, 2026-11-26; lane-u3 from lane-u2 f4d70a7, rebased onto 7f1b128; skeptic pass done)
 

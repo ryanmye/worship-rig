@@ -8430,3 +8430,78 @@ Native DECISIONS D24.7 ("or add to settings"); UI6-build-plan queued "Esc settin
   `savedSnapshot` to the new mount as `ctx.carrySnapshot` (present only during the mount); `perform.js` and
   `v6/perform.js` adopt it. Purity check: without the row exclusion the flag-off DOM differs from b163c20 by exactly
   the two rows' 16 elements.
+
+## UI v6 move + D24 tweaks
+
+The UI half of U-MOVE (native DECISIONS D23.1, D23.2) and the D24 tweaks (D24.2, D24.3, D24.6), plus the small-window
+fit (UI6-U3 review O1, orchestrator tier 2) and the position-keyed protections the store review left open
+(`native/docs/reviews/U-MOVE-store.md` O1, `UI6-U2.md` O3). Behind `settings.uiV6` like U1–U4, except the Edit fixes
+(they hold for any `store.moveSlot` / `insertSlot` / `removeSlot`). No store, controller, engine or `shared/` change;
+no SCHEMA change.
+
+- **⋯ Duplicate** (`views/v6/perform.js` `duplicateSlot`): `store.insertSlot(id, i, deepCopy(slot), {scenesFrom: i})`,
+  so the copy sits right after the original and has the original's scene entries (it follows the snapshots like the
+  original); later instruments move one place right, their wheel targets and scene entries with them. Toast "Added a
+  copy of X next to it." Disabled under Lock, on an empty slot and at 16.
+- **⋯ Earlier / Later** (`strip.js`): `v.moveSlot(i, i ∓ 1)` → `store.moveSlot`; disabled at the ends and under Lock.
+  From the keyboard (a click with `detail` 0) the focus moves to the instrument's ⋯ at its new place
+  (`stripsRow.focusMore`).
+- **Drag to reorder** (`strips-row.js`): each strip has a ⠿ grip (`.v6-grip`, `data-testid="v6-grip-<i>"`, top-right,
+  28 px with a 44 px hit area, `touch-action: none`, `aria-hidden`: the keyboard way is Earlier / Later). A press on it
+  (mouse, pen or touch, no long-press) becomes a drag after 6 px: the strip follows the pointer (`.reorder-src`,
+  dashed outline, shadow), a 4 px accent line (`.v6-dropline`, `data-to`) marks where it lands (past the middle of
+  each other strip), and within 48 px of the row's edge the row scrolls (≤ 18 px a frame; scroll-snap off while
+  dragging). Release = one `store.moveSlot(from, to)` (nothing when `to === from` or the press never moved).
+  Ends unwritten on: Esc (an overlay, group `v6-reorder`: no panic), `pointercancel`, a lost capture, Lock, a song
+  switch, the view leaving Perform, any count change and any `store.onSlotMap` re-order. Hidden under Lock and with one
+  instrument. Test hook `__rig.views.v6.reorder` = `{from, to}` | null.
+- **Colours follow position** (D15): strips are reused by position, so a moved instrument takes its new place's
+  colour (and its range bar's). MIDI-learn mappings stay positional (D23 tier 2), unchanged.
+- **Protections keyed on the order** (`perform.js` + `store.onSlotMap`): a re-order of the shown song (insert, move,
+  remove, a realigning Revert; from v6, Edit or anywhere) synchronously closes every ⋯ menu and step panel and ends
+  fader and reorder drags (`stripsRow.slotMap()`), moves a range drag to its instrument's new index
+  (`rangeKeyboard.remapDrag(order)`; -1 = removed → it writes nothing), and drops that drag and the range pick in a
+  microtask after the store's notification (no store write from inside the store's call). The count-keyed checks (U1
+  F2, U2 F3) stay for positional writes that emit no slot map.
+- **Edit** (today's H-v2, mounted beside v6): `edit/shell.js` remaps `editState.selected` `slot:<i>` → the new index
+  on a slot map of the shown song (a microtask later, so the tabs exist; no `focus`, so nothing opens by itself); a
+  removed selected slot falls back to the count clamp, as before. `edit/panels/slot.js` `followSlot`: the 8 s Undo
+  records of "Remove this sound…" and of an instrument change follow their slot through `store.onSlotMap` for 9 s;
+  removed meanwhile = "nothing to undo". Before, a move inside the 8 s wrote the Undo into the instrument now at that
+  index (Remove: refused as "has a sound again"; instrument change: refused, or wrong slot).
+- **PANIC / Lock** (`bottom.js`, D23.1 "as today"): PANIC is a plain button again (one tap; caption "or Esc"); Lock is
+  today's Perform's: one tap locks, unlocking needs the 600 ms hold (`requireHold: isLocked`, caption "hold to
+  unlock"). Esc / ⌘. unchanged.
+- **Range drags are heard live** (D24.2; `keyboard.js`, supersedes U2's write-on-release). `onRange(i, field, note,
+  phase, expect)`: `'live'` while dragging, at most one per `LIVE_MS` = 50 ms (a trailing timer writes the last
+  position after a pause), `'end'` on release only when it differs from the last live value, `'key'` for ←/→,
+  `'cancel'` when a drag that wrote live is dropped: `note` = the start value, `expect` = the value last written. The
+  shell (`v.setRange`) writes a cancel even under Lock (Lock is one of the cancels) but only while the slot still holds
+  `expect`, so a restore never lands on another instrument after a positional write. Every cancel path restores:
+  `pointercancel`, a slot shift / reorder (on the moved instrument), the view hidden, Lock, a song switch (into the old
+  song), a pick switch. A removed instrument: nothing. `bottom.js` passes the extra arguments through.
+- **Timing (2-CPU box, another agent's suites running, load 2.5–8):** one live write = `store.set` + its notification
+  (the whole v6 render + the store → engine diff) took median 1.7–2.1 ms, p95 2.8–4.7 ms, max 3.2–7.4 ms over 40 writes
+  (3 runs). A 2.0–2.2 s hand-like sweep of two octaves gave 24 writes, gaps ≥ 52 ms (median 71–88 ms, the move rate
+  under load), 0 long tasks (> 50 ms). So the throttle keeps writes to ≤ 20/s at ≤ ~10 % of one CPU.
+- **Pick first on every pointer** (D24.3): `rangeKeyboard` pick mode is `size === 'perform'` (it was coarse pointers
+  only); the strip name is always `role="button"` (`aria-pressed`, Enter / Space pick); a click on a bar picks it; hover
+  handles (`.hot`) only on the picked bar; a pointer cursor (`.v6-rhit.pickable`) over a bar a click would pick; the hint
+  says "click" on a fine pointer, "tap" on a coarse one; handles of unpicked bars are hidden and out of the tab order
+  (U2 O4: 2 tab stops instead of 2 per bar). The keys' finishing tap and Esc work as on the iPad. `pick` no longer ends
+  on a switch to a fine pointer. Edit › Range's 'range' size keeps its single live bar.
+- **Drone** (`sidebar/drone.js`, D24.6): Bright / Move read "Soft · 48%", "Restless · 90%" (today's card's format).
+- **Small-window fit** (`sidebar/sidebar.js`, `strips-row.js`): `SMALL_WINDOW = 1100`: at page start in a window
+  ≤ 1100 px wide (not iPad portrait) the sidebar starts folded unless `prefs.smallOpen` (set by `open()` in such a
+  window; per device in `localStorage['worship-rig.v6.sidebar']`, kept by `normalizePrefs`, absent otherwise); then the
+  usual Starts: Open / Collapsed rule. The Add tile is slim from `ADD_SLIM_FROM = 4` instruments (was 5). Measured at
+  1024 × 700 with 4 instruments: folded → strips 195 px, fader track 156 px, no row or page scroll, no pills; opened →
+  sidebar 220 px, strips 156 px, still no scroll.
+- **CSS**: `styles-v6.css` (grip, drop line, `.reorder-src`, `.reordering`, `.v6-who` right padding),
+  `styles-v6-keyboard.css` (pick-mode rules no longer need `.coarse`; `.v6-who[role=button]` focus ring and hit area on
+  every pointer).
+- **Flag off:** unchanged (ui-v6 purity probe against b163c20: 105 requests, 15 store listeners, 4 intervals,
+  2529 elements, identical).
+- Tests: `test/phase2/ui-v6/move.tests.mjs` (14 checks, run by run.mjs); U1 / U2 checks updated (Duplicate position,
+  Earlier / Later enabled, PANIC / Lock taps, pick before a drag, live values mid-drag, harness writes carry the phase).
+  ui-v6 63/63. Screenshots `move-drag-1280.png`, `move-fit-1024x700.png`, `move-fit-1024x700-open.png`.
