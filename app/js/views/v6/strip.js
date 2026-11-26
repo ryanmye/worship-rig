@@ -42,6 +42,8 @@ export function createStrip(v, i) {
   who.tabIndex = 0;
   who.setAttribute('aria-pressed', 'false');
   let coarse = false;
+  let whoLocked = false; // U8a: the name's title says Lock froze it
+  let whoTitle = '';
   const pickMe = () => {
     if (info?.slot && !info.locked) v.pickRange?.(i);
   };
@@ -263,8 +265,14 @@ export function createStrip(v, i) {
     if (x.locked || empty) who.setAttribute('aria-disabled', 'true');
     else who.removeAttribute('aria-disabled');
     who.classList.toggle('frozen', !!x.locked && !empty);
-    who.title = x.locked ? 'Perform lock is on: unlock to change which keys play it'
-      : `${coarse ? 'Tap' : 'Click'} to change which keys play this instrument`;
+    if (!!x.locked !== whoLocked) {
+      // the title the name had before Lock comes back after it (the v6 Edit gives its strip's name its own)
+      whoLocked = !!x.locked;
+      if (whoLocked) {
+        whoTitle = who.title;
+        who.title = 'Perform lock is on: unlock to change which keys play it';
+      } else who.title = whoTitle;
+    }
     if (empty) {
       // skeptic UI6-U1 F1: an empty slot shows no level and no sends. The strip is reused by position, so without
       // this it kept the fader / chips of the instrument that sat here before a Remove shifted the slots down.
@@ -319,7 +327,8 @@ export function createStrip(v, i) {
     /** The pointer kind: only the name's wording changes (the name picks on every pointer since D24.3). */
     setCoarse(on) {
       coarse = !!on;
-      if (!info?.locked) who.title = `${coarse ? 'Tap' : 'Click'} to change which keys play this instrument`;
+      whoTitle = `${coarse ? 'Tap' : 'Click'} to change which keys play this instrument`;
+      if (!whoLocked) who.title = whoTitle;
     },
     /** U2: this instrument's range is being changed (pick mode). */
     setPicked(on) {
