@@ -576,8 +576,12 @@ function enhance(api, d) {
   const inst = {
     /** views/settings.js showCategory → here: a click (remember, no focus) on the narrow list drills in. */
     shown(cat, o = {}) {
-      if (o.remember && !o.focus) setDrill('detail');
-      else if (drill === 'detail') setDrill('detail'); // the crumb follows a deep link or a search jump
+      if (o.remember && !o.focus) {
+        setDrill('detail');
+        // UI6-U6 skeptic F2: Enter / Space on a list row drilled in with the focus on that row, which the detail view
+        // hides: the focus fell out of the dialog to <body>. It goes to "‹ Settings", as after a deep link.
+        if (drill === 'detail' && nav.contains(document.activeElement)) back.focus({ preventScroll: true });
+      } else if (drill === 'detail') setDrill('detail'); // the crumb follows a deep link or a search jump
     },
     /** views/settings.js open() → here: a deep link opens its category; otherwise the narrow list shows first. */
     opened(linked) {

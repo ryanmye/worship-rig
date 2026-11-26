@@ -472,6 +472,28 @@ export async function runV6({ browser, createServer, ROOT, SHOTS, results }) {
       await close();
     });
 
+    await T('UI6-U6 skeptic F2: at 820×1180, Enter / Space on a category drills in with the focus on “‹ Settings”',
+      async () => {
+        await page.setViewportSize({ width: 820, height: 1180 });
+        try {
+          await open();
+          await until(() => window.__rig.views.settings.v6.drill === 'list');
+          for (const k of ['Enter', 'Space']) {
+            await page.focus('#view-settings [role=tab][data-cat="look"]');
+            await page.keyboard.press(k);
+            await until(() => window.__rig.views.settings.v6.drill === 'detail');
+            assert.equal(await ev(() => document.activeElement?.dataset.testid), 'settings-back',
+              `${k}: the focus stays in the dialog, on the back button`);
+            await page.keyboard.press('Enter'); // back to the list, focus on the row it came from
+            await until(() => window.__rig.views.settings.v6.drill === 'list');
+            assert.equal(await ev(() => document.activeElement?.dataset.cat), 'look');
+          }
+          await close();
+        } finally {
+          await page.setViewportSize({ width: 1280, height: 800 });
+        }
+      });
+
   } finally {
     await T('zero console.error', async () => {
       assert.deepEqual(errors, []);
