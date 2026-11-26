@@ -295,6 +295,35 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 - Known: at iPad portrait the bottom row's keyboard is ~260 px wide (the v6 Perform's row as it is; U8 does the iPad
   layouts); U5a's stage strip still carries Perform's strip test ids (scoped by `v6e-stage`).
 
+## U7a status (builder, 2026-11-26; lane-u7a from v2-native 025d90e; awaiting the skeptic)
+
+- Built: the Song bank browser over the v6 stage and Try it (D17). `app/js/views/v6/bank/` (`bank.js` browser,
+  `banner.js` the Trying banner, `model.js` pure filters), `app/styles-v6-bank.css`; store trial songs
+  (`startTrial` / `endTrial` / `persisted` / `packSongPreview`), controller `tryBankSong` / `backFromTrial` /
+  `keepTrial` / `trial` / `bankSong` + the `'trial'` event; `main.js` `ctx.openBank`. Interface notes:
+  CONTRACT_CHANGES "## UI v6 U7a (Song bank)".
+- Wired: entry from Setlist › + Add song › From the Song bank, v6 Settings › Open Song bank… (today's list hidden
+  there) and `openSettings({section:'bank'})` (Edit v6's Song bank… too); filters (search, key, tempo, feel, packs),
+  detail, Add to library (today's record), Add to setlist ▾, Try it (nothing saved; banner: Keep it, Add to setlist,
+  Back), My library mode (Try it = switch), Lock, iPad portrait (filters on top, list, detail under).
+- Try it guarantees, tested: localStorage byte for byte, Export / backup source, `meta.edited`, library order and
+  setlists unchanged while trying, after fader moves too; reload = gone; Back = same song, setlist entry and Revert
+  snapshot; Keep = today's add (same record) + select.
+- Choices to confirm with Ryan: tempo bands Slow < 80 ≤ Mid < 115 ≤ Fast; Feel is "any chosen tag"; Keep keeps what
+  the player changed while trying (so the kept song reads as edited and a newer pack version will not overwrite it;
+  untouched it is exactly today's add); Back is allowed under Lock (a way out, like GO) and lands on the song's own
+  levels (no scene); a second Try it keeps the first one's Back; My library's Try it is a plain switch (no banner);
+  leaving v6 (flag off) goes Back from a trial; the browser does not focus the search on a pointer open (Space stays
+  the pedal, no iPad keyboard pop-up).
+- Not done: Edit v6's own "Song bank…" button title still says "today's list in Settings" (lane-u5b's file; the
+  route already opens the browser); a trial song can be edited in Edit (transient) and exported alone with Edit's
+  Export song (explicit, one song; not a library export or backup).
+- Tests: `test/phase2/ui-v6-bank/run.mjs` 15/15 (in run-all), `bank-trial.test.mjs` 4/4, `ui-v6-bank.test.mjs` 5/5;
+  ui-v6 68/68 (purity vs 025d90e identical), settings 111/111, ui-core 78/78, ui-v6-edit 22/22, shell unit 373/373.
+  Screenshots: `/home/claude/design-out/u7a/` (`u7a-browse-1280.png`, `u7a-trying-1280.png`,
+  `u7a-setlist-entry-1280.png`, `u7a-library-1280.png`, `u7a-browse-1180.png`, `u7a-trying-1180.png`,
+  `u7a-browse-ipad-820.png`, `u7a-trying-ipad-820.png`).
+
 ## Open questions carried into the build (decide, log in DECISIONS, tell Ryan)
 
 - **Snapshots vs today's scenes.** Today: up to 3 scenes per song, levels / ON / drone level / wheel only. The v6

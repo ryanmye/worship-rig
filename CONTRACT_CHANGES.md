@@ -8795,3 +8795,78 @@ The second half of the v6 Edit (native DECISIONS D15, D18; `native/docs/lanes/UI
   Perform's song-switch / slot-map guards). Dots compare key by key with PARAMS defaults (`catpanel.js`
   `sameWithDefaults`): an optional object set back to its defaults (`fx.eq`, `fx.comp`, a slot's `touch`) is no
   change. The Drone module's root test id in Edit is `v6e-dmod-root`. Gates after the review: see the review.
+
+## UI v6 U7a (Song bank)
+
+The Song bank browser over the v6 stage and Try it (native DECISIONS D17; `native/docs/lanes/UI6-build-plan.md` U7;
+mockup `native/docs/design/mockups/song-bank.html`). Behind `settings.uiV6` like U1–U6; with the flag off the app is
+today's (Settings' Song bank list, no browser). No SCHEMA change, no engine change, no `shared/` change.
+
+- **Store: trial songs (`store.js`).** A Song bank song can play without being added:
+  - `startTrial(entry)` → `{ok, id}` puts the entry's song (normalised as `addPackSong` does) in `songs` under
+    `trial:<n>` (`TRIAL_PREFIX`, `isTrialId`, both exported). It does not select it. It records the selection it will
+    replace (`currentSongId`, `setlistIndex`, `setlistGap`, only the keys that exist) for the first of overlapping
+    trials.
+  - **Never library state.** A trial song is not in `songOrder` or any setlist: `addToSetlist`, `set('songOrder')`,
+    `set('setlists.<id>.songIds')` and `normalizeSetlist` leave it out, and `deleteSong` / `duplicateSong` refuse it.
+    `migrate()` drops any `trial:` song, so a reload, a restore or an import never carries one; `update()` keeps the
+    trial songs it was given, and their selection.
+  - **Never saved.** `persisted()` (also `store.persisted()`) = the state without trial songs and, while one is
+    selected, with the selection it replaced. `persistNow`, `exportJSON` (so the Electron backups and Export library,
+    which read it) and `keepCurrent` write `persisted()`. A write that only touches a trial song, or only selects one,
+    schedules no save, and `isEditPath` is false for it, so `meta.edited` / `pristine` never change.
+  - `endTrial(id)` removes a trial song that is no longer selected; `trialIds()`; `packSongPreview(entry)` = the
+    song as the library would take it, frozen, nothing changed (the browser's details).
+- **Controller (`controller.js`).**
+  - `tryBankSong(packId)` → `Promise<{ok, id} | {ok:false, error}>`: `store.startTrial`, then `selectSong(trialId)`.
+    Refused under Perform lock (`'perform-locked'`, like Edit / + Add song) and in a muted second window. A second Try
+    it replaces the trial and keeps the first one's way back. A failed or superseded load drops its trial song.
+  - `backFromTrial()`: selects the song the trial replaced at its setlist entry, with **its own Revert snapshot**
+    (`applySong`'s internal `_baseline`: `selected` and the `songSelected` event's `songSnapshot` are the snapshot
+    taken when that song was first selected), so Revert after Back = Revert before Try it. Allowed under Lock. Live
+    state is a song switch's (own levels, no scene). The previous song gone: the first of the list.
+  - `keepTrial({setlistId?})`: `addFromBank(packId)` (today's add: the same `meta.packSongs` record, O-AW-PP rules
+    3–7), then what the player changed while trying is written over the added song (an edit of it, rule 3: a newer
+    pack version never overwrites it), then `store.addToSetlist` when asked, then `selectSong` (that setlist entry when
+    it is the current setlist). Already in the library: that song is selected, unchanged. Refused under Lock.
+  - Any other song committed (GO, a library row, Program Change, Keep) ends the trial: `applySong` drops every trial
+    song but the committed one and emits **`'trial'`** (`trial()` or null). `trial()` →
+    `{id, packId, title, artist, pack, key, bpm, playing, prev:{id, name}|null}` or null. `bankSong(packId)` =
+    `store.packSongPreview`. `onStore` schedules no backup for a write that only touched a trial song.
+- **Views (`views/v6/bank/`, `styles-v6-bank.css` imported by `styles-v6.css`).**
+  - `bank.js` `songBank(v)`: the browser, absolutely placed over the strips and the sidebar (`--bank-left` = the left
+    panel's edge; iPad portrait: the whole board), which are `inert` and hidden under it; the left panel, keyboard
+    row, Revert / Fade out / PANIC / Lock stay live. An overlay (`openOverlay`, `closeOnOutside: false`): Esc and ×
+    close it, taps outside do not. Header (title, "n songs from n packs in My Samples", Song bank | My library, ×),
+    filters, list (title + In library / Playing badge, artist, a dot per instrument coloured by position (D15), key,
+    BPM), detail (facts Key / Tempo / Time / Snapshots, "original <key>" when the bank's differs, instruments, "Also in
+    this song": only what the body has, tags), actions. Lock: browsing stays, Try it / Add / Add to setlist are
+    disabled. Live while open, rebuilt only when what it shows changed (a signature), and on `'user-patches'`.
+  - `model.js` (pure, unit-tested): rows (key / tempo / time from the song body, the bank metadata as the fallback;
+    O-AW-PP rule 8), filters, options, `alsoIn`. **Tempo bands (U7a's choice): Slow < 80 BPM, Mid 80–114, Fast ≥ 115**;
+    a song without a tempo matches only Any. Search = `searchBank`. Feel: any chosen tag matches (OR); across groups
+    every filter applies (AND). Packs: checkboxes (pack.json `name`, else the folder).
+  - `banner.js` `trialBanner(v)`: "Trying “<title>” · from the Song bank · key · bpm · nothing saved yet" with Keep it
+    · add to library, Add to setlist ▾ (`setlistMenu`, shared with the browser), Back to <previous>; between the
+    snapshots row and the board, hidden without a trial.
+  - My library mode: the library's songs with the same UI; Try it = `controller.selectSong` (a plain switch, not a
+    trial), Add to setlist ▾ (duplicates allowed, as Edit).
+  - `perform.js`: `openBank({mode, focus})` (also on `v`, so the sidebar modules have it), getters `bank`, `banner`;
+    destroying the v6 Perform (the flag going off) goes Back from a trial first.
+- **Entry points.** Setlist › + Add song › From the Song bank (`m.openBank`); v6 Settings › Sounds & Samples › Open
+  Song bank… (`ctx.openBank`; today's list there gets `.v6-st-bankgone`, journalled, hidden and left out of the
+  search); `main.js` `ctx.openBank(opts)` closes Settings and leaves Edit first, and `openSettings({section:'bank'})`
+  routes to it while the v6 Perform is mounted (so Edit v6's Song bank… opens the browser without touching its
+  files). Without the v6 Perform both are today's Settings list.
+- **Flag off:** unchanged. ui-v6's purity probe vs 025d90e: 105 requests, 15 store listeners, 4 intervals, 2529
+  elements, identical; no `__rig` key added. The controller / store additions add no listener, timer or request.
+- **Tests.** `test/phase1/shell/bank-trial.test.mjs` (4: store trial rules incl. storage bytes, export, reload,
+  replace, update, setlists; controller Try / Back / Keep / Lock / GO end to end on a real server),
+  `test/phase1/shell/ui-v6-bank.test.mjs` (5, the model). New suite `test/phase2/ui-v6-bank/run.mjs` (in run-all,
+  15 checks, ~1 min): two bank packs in a temp My Samples; no pack → entries disabled; filters; detail; Add to library
+  = today's record; Add to setlist; Try it with fader / ON moves → localStorage byte for byte, export, `meta.edited`,
+  order and setlists unchanged; Back (song, entry, Revert snapshot), Keep, banner Add to setlist, Lock, reload; v6
+  Settings and Edit's route; My library; 1280 / 1180 / 820 portrait layout; flag off; zero console.error / HTTP ≥ 400.
+  Changed: ui-v6 `sidebar.tests.mjs` (From the Song bank now opens the browser), settings `v6.mjs` (deep link 'bank'
+  opens the browser). Gates: ui-v6-bank 15/15, ui-v6 68/68, settings 111/111, ui-core 78/78, ui-v6-edit 22/22, shell
+  unit 373/373, patch-packs.pw 5/5. Engine untouched. Screenshots: `/home/claude/design-out/u7a/`.

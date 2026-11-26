@@ -58,6 +58,9 @@ out. The song itself still holds the sound, the key and the tempo. The bank fiel
   not added to any setlist.
 - **Bank** (`pack.json` has `"mode": "bank"`). Nothing is added by itself. The songs are listed in
   **Settings › My Samples › Song bank**, where you can search by title or artist. **Add to library** copies one song.
+  With the new layout (UI v6), the Song bank opens over the stage instead, from the Setlist's **+ Add song › From
+  the Song bank** or **Settings › Sounds & Samples › Open Song bank…**: filter by key, tempo, feel and pack, and
+  **Try it** plays a song without adding it (nothing is saved until you keep it).
 
 After you add a pack, or change one, press **Rescan** in Settings › My Samples, or restart.
 
