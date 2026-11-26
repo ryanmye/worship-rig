@@ -601,6 +601,47 @@ try {
     await until(() => window.__rig.views.perform.quickOpen === false);
   });
 
+  // skeptic UI6-U1 F1 / F2 (native/docs/reviews/UI6-U1.md)
+  await T('a Remove that shifts the slots: empty strips show no stale level / sends; open ⋯ menus close', async () => {
+    await ev(() => window.__rig.ctx.setView('perform'));
+    await ev(() => window.__rig.controller.scenes.go(null));
+    assert.equal(await setSlots(4), 4);
+    // slot 1 gets a loud, wet, octave-up sound; slot 2 is empty
+    await ev(() => {
+      const { store } = window.__rig;
+      const id = store.currentSong().id;
+      store.set(`songs.${id}.patch.slots.1.gain`, 0.9);
+      store.set(`songs.${id}.patch.slots.1.sends.reverb`, 0.8);
+      store.set(`songs.${id}.patch.slots.1.octave`, 1);
+      store.set(`songs.${id}.patch.slots.2`, null);
+    });
+    await until(() => document.querySelector('[data-testid="v6-name-2"]')?.textContent === 'Empty');
+    // F2: slot 3's ⋯ menu is open when slot 0 goes (Edit, a learned control, another window…)
+    await page.click(tid('v6-more-3'));
+    await until(() => !!document.querySelector('[data-testid="v6-menu-3"]'));
+    await ev(() => {
+      const { store } = window.__rig;
+      store.removeSlot(store.currentSong().id, 0);
+    });
+    // F1: the old slot 1 is now 0 and the empty slot is now 1; strip 1 must not keep 0.9 / 80 % / +1
+    await until(() => document.querySelector('[data-testid="v6-name-1"]')?.textContent === 'Empty');
+    const r = await ev(() => {
+      const s1 = document.querySelector('[data-testid="v6-strip-1"]');
+      const val = s1.querySelector('.fader-value');
+      return {
+        menus: document.querySelectorAll('.v6-pop').length,
+        fader: Number(s1.querySelector('input').value),
+        valueShown: !!val && getComputedStyle(val).visibility !== 'hidden',
+        chips: ['space', 'echo', 'octave'].map((c) => document.querySelector(`[data-testid="v6-${c}-1"]`)
+          .classList.contains('on')),
+        dots: s1.querySelectorAll('.cdi:not([hidden])').length,
+      };
+    });
+    assert.deepEqual(r, { menus: 0, fader: r.fader, valueShown: false, chips: [false, false, false], dots: 0 });
+    assert.ok(r.fader <= Number(await page.getAttribute('[data-testid="v6-fader-1"] input', 'min')) + 1e-9,
+      `empty strip fader at ${r.fader}`);
+  });
+
   await T('screenshots: 1280×800 Sanctuary, 2 / 5 / 7 instruments', async () => {
     await ev(() => window.__rig.ctx.setView('perform'));
     // the factory song as shipped (the tests above changed its levels, chips, room and scenes)

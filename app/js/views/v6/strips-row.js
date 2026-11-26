@@ -28,6 +28,7 @@ export function stripsRow(v) {
   const el = h('div.v6-stripsarea', {}, pillsEl, h('div.v6-sfade', {}, row));
   let n = 0;
   let shownFor = null;
+  let slotsSig = '';
 
   function ensure(k) {
     while (strips.length < Math.min(MAX_SLOTS, k)) {
@@ -77,6 +78,14 @@ export function stripsRow(v) {
   function render(x) {
     const song = x.song;
     n = song ? Math.min(MAX_SLOTS, song.patch.slots.length) : 0;
+    // skeptic UI6-U1 F2: an Add / Remove / Duplicate (here, in Edit, or by any store write) moves which instrument
+    // sits at each position. A ⋯ menu or step panel opened on the old one would act on its neighbour (or on a hidden
+    // strip), so they close whenever the song's slot count changes.
+    const sig = song ? `${song.id}:${n}` : '';
+    if (sig !== slotsSig) {
+      if (slotsSig) for (const S of strips) S.closePanels();
+      slotsSig = sig;
+    }
     ensure(n);
     const scroll = n > STRIPS_ACROSS;
     el.classList.toggle('scroll', scroll);

@@ -131,6 +131,8 @@
 .v6 .v6-strip > .step-panel, .v6 .v6-strip > .step-panel[data-dir="cover"] { top: 90px; }
 .v6 .v6-strip.empty-v6 .v6-nm { color: var(--faint); font-style: italic; }
 .v6 .v6-strip.empty-v6 :is(.ontile, .v6-body, .v6-mods) { opacity: .35; }
+/* skeptic UI6-U1 F1: no level to read on an empty slot */
+.v6 .v6-strip.empty-v6 .fader-value { visibility: hidden; }
 .v6 .v6-strip.muted .v6-who { opacity: .7; }
 .v6 .v6-strip.silent .v6-who, .v6 .v6-strip.silent .v6-body { opacity: .55; }
 /* the sustain pedal shows on every strip it holds (perform.js v11-polish L4) */

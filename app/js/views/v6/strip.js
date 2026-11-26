@@ -163,9 +163,18 @@ export function createStrip(v, i) {
     changeBtn.disabled = x.locked; // Edit is frozen under Perform lock (LOCK table)
     changeBtn.title = x.locked ? 'Perform lock is on: unlock to change the instrument' : 'Choose another instrument';
     if (empty) {
+      // skeptic UI6-U1 F1: an empty slot shows no level and no sends. The strip is reused by position, so without
+      // this it kept the fader / chips of the instrument that sat here before a Remove shifted the slots down.
       el.classList.remove('muted');
       tile.set(true);
+      f.set(0);
+      f.setMuted(false);
       f.setIndicator(null);
+      for (const [c, x] of [[space, 0], [echo, 0], [octave, 0], [sustain, false]]) {
+        c.set(x);
+        c.setLoaded(undefined);
+        c.setChanged(false);
+      }
       return;
     }
     const { muted, level } = slotMuteState(slot);
