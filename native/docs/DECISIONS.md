@@ -206,3 +206,12 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
 
 ## D12: The chart view matches through the relative key (Ryan, 2026-11-26; chart-view review V1/O2)
 - An Em chart on a song set to G lines up with the G drone. The chart header may show "Key Em".
+
+## D13: 2.x effects work waits for any engine change until 2.0 ships (Ryan, 2026-11-26)
+- FX-gap steps 2–4 change the web engine, which is the golden oracle. They start after the 2.0 release:
+  - 2: delay sync values and a feedback high-pass;
+  - 3: per-slot velocity ranges;
+  - 4: one wheel driving several targets.
+- Steps 1 and 5 need no engine change and are in progress now:
+  - 1: patch packs, with the song settings bank folded in;
+  - 5: MIDI learn for any parameter.
