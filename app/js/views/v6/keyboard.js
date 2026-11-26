@@ -7,14 +7,16 @@
 //   'range'    Edit › Range: 88 keys A0–C8, one instrument's bar, keys outside its range dimmed, shorter.
 // Each bar has a handle at each end. A drag snaps to keys (all 12 semitones: a handle's edge goes to the nearest key
 // edge, black keys included, at their real positions), keeps lowest < highest, shows "Sub Bass · C2–C5" while it moves
-// and writes once, on release (see `finishDrag`). Past the keyboard's outer edge it snaps to "every key that way"
-// (0 / 127, today's Edit miniKeyboard rule), so a range can go back to the whole keyboard from here. A range that
+// and is heard while it moves (D24.2: throttled live writes, ≤ 1 per LIVE_MS, plus the final value on release; a
+// cancelled drag writes the start value back, see `finishDrag`). Past the keyboard's outer edge it snaps to "every key
+// that way" (0 / 127, today's Edit miniKeyboard rule), so a range can go back to the whole keyboard from here. A range that
 // reaches outside the keys shown is drawn clipped with an edge marker and never rewritten unless that end is dragged.
-// Pointers: fine → handles always live, with a 34 px tall hit area around the thin bars (one hit layer picks the
-// nearest handle, so stacked handles at the same key stay reachable); coarse (iPad, '(pointer: coarse)') on the
-// 'perform' size → tap an instrument first (its strip name, through the shell, or its bar): only that bar is grabbable
-// with 26 px handles, the others dim; tap another to switch, the keys or Esc to finish. Keyboard: handles are sliders,
-// ←/→ a semitone, Shift+←/→ an octave, aria-valuetext with the note name.
+// Pointers: a 34 px tall hit area around the thin bars (one hit layer picks the nearest handle, so stacked handles at
+// the same key stay reachable). The 'perform' size is always in pick mode (D24.3, every pointer, Mac mouse included):
+// tap / click an instrument first (its strip name, through the shell, or its bar): only that bar is grabbable (26 px
+// handles on coarse pointers), the others dim; another one switches, the keys or Esc finish. The 'range' size (Edit ›
+// Range) keeps its one bar always live. Keyboard: handles are sliders, ←/→ a semitone, Shift+←/→ an octave,
+// aria-valuetext with the note name.
 // Pure view code: reads come in through render(), writes go out through o.onRange (the shell does store.set).
 import { h, setText, disposer, clamp } from '../components/util.js';
 import { pianoKeyboard, keyLayout } from '../components/keys.js';
@@ -34,6 +36,8 @@ const DRAG_SLOP = 4;
 /** Height of the bar area per size (px; CSS --rb-h mirrors it). */
 const BARS_H = { perform: 26, range: 10 };
 const MEDIA_COARSE = '(pointer: coarse)';
+/** D24.2: at most one live range write per this many ms while an end is dragged (plus the final one on release). */
+export const LIVE_MS = 50;
 
 /**
  * "C2–C5", "every key", "up to B3", "C4 and up" (the open ends are today's Edit "Whole keyboard" values 0 / 127).
@@ -57,9 +61,14 @@ export function rangeText(lo, hi) {
  * @param {string} [o.label]            the keys' accessible name
  * @param {(note:number, vel:number) => void} [o.onNoteOn]  keys play while set (pianoKeyboard)
  * @param {(note:number) => void} [o.onNoteOff]
- * @param {(i:number, field:'lowNote'|'highNote', note:number) => boolean|void} o.onRange
- *   one end changed (one call per release / key press; only the end that moved)
- * @param {(i:number|null) => void} [o.onPick]  coarse 'perform' size: the instrument being changed (null: done)
+ * @param {(i:number, field:'lowNote'|'highNote', note:number, phase:'live'|'end'|'key'|'cancel',
+ *   expect?:number) => boolean|void} o.onRange
+ *   one end changed (only the end that moved). phase 'live': during a drag (≤ 1 per LIVE_MS); 'end': the final value
+ *   on release (only when it differs from the last live one); 'key': ←/→ on a focused handle; 'cancel': a drag that
+ *   wrote live was dropped, `note` is its start value and `expect` the value last written (the caller writes back
+ *   only when the slot still holds `expect`, so a restore never lands on another instrument). A false return from a
+ *   live write means it was refused (nothing to restore for it).
+ * @param {(i:number|null) => void} [o.onPick]  'perform' size: the instrument being changed (null: done)
  * @param {(coarse:boolean) => void} [o.onCoarse]  the pointer kind changed (and once at mount)
  * @param {boolean} [o.coarse]          force the pointer kind (harness); default matchMedia('(pointer: coarse)')
  * @param {string} [o.testid]
@@ -68,7 +77,7 @@ export function rangeText(lo, hi) {
  *   setHeld(held:any, partOf?:Function):void,
  *   setKeyLetters(map:Map<number,string>|null):void, releaseAll():void, pick(i:number|null):void,
  *   readonly picked:number|null, readonly coarse:boolean, readonly dragging:boolean, cancelDrag():void,
- *   destroy():void}}
+ *   remapDrag(order:number[]):void, destroy():void}}
  */
 export function rangeKeyboard(o = {}) {
   const size = o.size === 'range' ? 'range' : 'perform';
@@ -107,7 +116,7 @@ export function rangeKeyboard(o = {}) {
   let locked = false;
   let picked = null;
   let pickClose = null;
-  let drag = null; // {v, end, pid, x0, off, lo, hi, moved}
+  let drag = null; // {i, end, pid, x0, off, lo, hi, lo0, hi0, moved, sent, sentAt, timer, gone}
   let hot = null; // {v, end} under a fine pointer
   let focused = null; // {v, end} with keyboard focus
   let coarse = typeof o.coarse === 'boolean' ? o.coarse : false;
@@ -116,14 +125,13 @@ export function rangeKeyboard(o = {}) {
     mq = matchMedia(MEDIA_COARSE);
     coarse = mq.matches;
     d.listen(mq, 'change', () => {
-      coarse = mq.matches;
-      if (!coarse) pick(null);
+      coarse = mq.matches; // only the handle sizes change: pick mode is every pointer's now (D24.3)
       layoutBars();
       o.onCoarse?.(coarse);
     });
   }
-  /** Pick mode: coarse pointers on the Perform size (Edit's single bar is always live). */
-  const pickMode = () => coarse && size === 'perform';
+  /** Pick mode: the Perform size, on every pointer (D24.3; U2 had it on coarse ones only). Edit's one bar is live. */
+  const pickMode = () => size === 'perform';
 
   // ------------------------------------------------------------------ geometry
   const leftOf = (n) => geo.get(n).left;
@@ -291,12 +299,12 @@ export function rangeKeyboard(o = {}) {
     hint.hidden = !on;
     if (!on) return;
     const v = views.find((x) => x.i === picked);
+    const tap = coarse ? 'tap' : 'click';
     hint.replaceChildren('Drag the ends of ', h('b', { text: v ? v.b.name : 'this instrument' }),
-      ' · tap another instrument to switch · tap the keys to finish');
+      ` · ${tap} another instrument to switch · ${tap} the keys to finish`);
   }
   /**
-   * Choose the instrument whose range the coarse pointer changes (null: finish). No-op on fine pointers, on the
-   * 'range' size and while locked.
+   * Choose the instrument whose range is being changed (null: finish). No-op on the 'range' size and while locked.
    */
   function pick(i) {
     const next = i === null || i === undefined || !pickMode() || locked || !bars.some((b) => b.i === i) ? null : i;
@@ -406,8 +414,9 @@ export function rangeKeyboard(o = {}) {
       /* synthetic pointers */
     }
     const { lo, hi } = valuesOf(hd.v);
+    const was = hd.end === 'lo' ? lo : hi;
     drag = { i: hd.v.i, end: hd.end, pid: ev.pointerId, x0: ev.clientX, off: x - hd.ex, lo, hi, lo0: lo, hi0: hi,
-      moved: false };
+      moved: false, sent: was, sentAt: -Infinity, timer: 0, gone: false };
     setHot(null);
     pool.get(drag.i)?.el.classList.add('drag');
     pool.get(drag.i)?.[drag.end]?.classList.add('drag');
@@ -418,7 +427,12 @@ export function rangeKeyboard(o = {}) {
     if (!drag) {
       if (ev.pointerType === 'mouse' || ev.pointerType === 'pen') {
         const { x, y, W } = local(ev);
-        setHot(locked ? null : handleAt(x, y, W));
+        // hover handles only on the picked bar (handleAt skips the others, D24.3); over another bar a pointer
+        // cursor says a click picks it
+        const hd = locked ? null : handleAt(x, y, W);
+        setHot(hd);
+        const b = !hd && !locked && pickMode() ? barAt(x, y, W) : null;
+        hit.classList.toggle('pickable', !!b && b.i !== picked);
       }
       return;
     }
@@ -435,10 +449,36 @@ export function rangeKeyboard(o = {}) {
     const v = views.find((x2) => x2.i === drag.i);
     if (v) paintBar(v);
     showTip();
+    liveWrite();
   });
   d.listen(hit, 'pointerleave', () => {
     if (!drag) setHot(null);
+    hit.classList.remove('pickable');
   });
+
+  /**
+   * D24.2: the range is heard while dragging. Writes the dragged end now if the last live write is ≥ LIVE_MS old,
+   * else once LIVE_MS after it (a trailing write, so the last position before a pause is always heard). Each write
+   * re-renders the v6 Perform and runs the store → engine diff, hence the throttle (timed in CONTRACT_CHANGES
+   * "UI v6 move + D24 tweaks").
+   */
+  function liveWrite() {
+    const g = drag;
+    if (!g || g.gone || locked) return;
+    const now = performance.now();
+    const wait = LIVE_MS - (now - g.sentAt);
+    if (wait > 0) {
+      if (!g.timer) g.timer = setTimeout(() => {
+        g.timer = 0;
+        if (drag === g) liveWrite();
+      }, Math.ceil(wait));
+      return;
+    }
+    const val = g.end === 'lo' ? g.lo : g.hi;
+    if (val === g.sent) return;
+    g.sentAt = now;
+    if (o.onRange?.(g.i, g.end === 'lo' ? 'lowNote' : 'highNote', val, 'live') !== false) g.sent = val;
+  }
   d.listen(hit, 'pointerup', (ev) => {
     if (drag && ev.pointerId === drag.pid) finishDrag(true);
   });
@@ -450,18 +490,22 @@ export function rangeKeyboard(o = {}) {
   });
 
   /**
-   * End a drag. The store is written once, here, on release (not during the drag): one change per gesture keeps the
-   * shell's render (strips, changed dots, Revert count, store → engine diff) out of the pointer's path and gives the
-   * player one clean "changed" step; the label shows the range live meanwhile. A cancelled drag writes nothing.
+   * End a drag. commit: the final value is written on release, unless the last live write already said it. Not
+   * commit (pointercancel, a slot shift / reorder, the view hidden, Lock, a song or pick switch): when live writes
+   * changed the store, the start value is written back (phase 'cancel', with the value last written as `expect`), so
+   * a cancelled drag leaves the range as it was (UI6-U2 review O3). A drag whose instrument was removed
+   * (remapDrag) writes nothing.
    */
   function finishDrag(commit) {
     const g = drag;
     if (!g) return;
     drag = null;
-    const p = pool.get(g.i);
-    p?.el.classList.remove('drag');
-    p?.lo.classList.remove('drag');
-    p?.hi.classList.remove('drag');
+    if (g.timer) clearTimeout(g.timer);
+    for (const p of pool.values()) {
+      p.el.classList.remove('drag');
+      p.lo.classList.remove('drag');
+      p.hi.classList.remove('drag');
+    }
     el.classList.remove('dragging');
     try {
       if (hit.hasPointerCapture?.(g.pid)) hit.releasePointerCapture(g.pid);
@@ -471,14 +515,30 @@ export function rangeKeyboard(o = {}) {
     const field = g.end === 'lo' ? 'lowNote' : 'highNote';
     const val = g.end === 'lo' ? g.lo : g.hi;
     const was = g.end === 'lo' ? g.lo0 : g.hi0;
-    if (commit && !locked && g.moved && val !== was) o.onRange?.(g.i, field, val);
+    if (g.gone) {
+      /* the instrument is no longer in the song: nothing to write or restore */
+    } else if (commit && !locked && g.moved) {
+      if (val !== g.sent) o.onRange?.(g.i, field, val, 'end');
+    } else if (g.sent !== was) o.onRange?.(g.i, field, was, 'cancel', g.sent);
     // back to the values render() last gave (a write re-renders on the store's change, a microtask later)
     for (const v of views) if (v.i === g.i) paintBar(v);
     showTip();
   }
-  /** Drop a drag in progress without writing (song change, lock, pick switch). */
+  /** Drop a drag in progress and put its start value back (song change, lock, pick switch, slot shift). */
   function cancelDrag() {
     finishDrag(false);
+  }
+  /**
+   * The song's slots were re-ordered (store.onSlotMap; `order[j]` = old index of new slot j): the drag in progress
+   * follows its instrument to its new index, so the cancel that follows restores that instrument's range and never
+   * the one now at the old index (UI6-U2 review O3; U-MOVE-store O1). A removed instrument: the drag writes nothing.
+   * @param {number[]} order
+   */
+  function remapDrag(order) {
+    if (!drag || !Array.isArray(order)) return;
+    const j = order.indexOf(drag.i);
+    if (j < 0) drag.gone = true;
+    else drag.i = j;
   }
 
   // ------------------------------------------------------------------ keys on a focused handle
@@ -494,7 +554,7 @@ export function rangeKeyboard(o = {}) {
     const { lo, hi } = v.b;
     const cur = end === 'lo' ? lo : hi;
     const n = clampEnd(end, cur + dir * (ev.shiftKey ? 12 : 1), lo, hi, cur);
-    if (n !== cur) o.onRange?.(i, end === 'lo' ? 'lowNote' : 'highNote', n);
+    if (n !== cur) o.onRange?.(i, end === 'lo' ? 'lowNote' : 'highNote', n, 'key');
   }
 
   return {
@@ -512,7 +572,7 @@ export function rangeKeyboard(o = {}) {
       })).slice(0, size === 'range' ? 1 : undefined);
       locked = !!x.locked;
       bars = next;
-      if (drag && (locked || !bars.some((b) => b.i === drag.i))) cancelDrag();
+      if (drag && (locked || drag.gone || !bars.some((b) => b.i === drag.i))) cancelDrag();
       if (picked !== null && (locked || !bars.some((b) => b.i === picked))) pick(null);
       layoutBars();
     },
@@ -536,6 +596,7 @@ export function rangeKeyboard(o = {}) {
       return !!drag;
     },
     cancelDrag,
+    remapDrag,
     destroy() {
       cancelDrag();
       if (pickClose) pickClose('api');

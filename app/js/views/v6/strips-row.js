@@ -1,10 +1,20 @@
 // UI v6 strips row (D16; UI6-build-plan U1): one strip per instrument plus "+ Add instrument". Up to five share the
 // row; with more, the strips keep the five-across width and the row scrolls sideways, and a row of name pills above it
-// shows every instrument (lit = fully on screen) and scrolls to one on a tap.
+// shows every instrument (lit = fully on screen) and scrolls to one on a tap. D23.2: a strip's ⠿ grip drags it to
+// another place (a drop line shows where; the row scrolls at its edges); the drop is one store.moveSlot.
 import { h, setText, disposer, rafCoalesce } from '../components/util.js';
+import { openOverlay } from '../components/overlay.js';
 import { MAX_SLOTS } from '../../shared/params.js';
 import { createStrip } from './strip.js';
 import { slotColor, button, icon, STRIPS_ACROSS } from './lib.js';
+
+/** From this many instruments the Add tile is the slim one (UI6-U3 review O1: 4 strips fit 1024 × 700; U1 had 5). */
+export const ADD_SLIM_FROM = 4;
+/** Pointer travel (px) before a press on a grip becomes a reorder drag. */
+const REORDER_SLOP = 6;
+/** Auto-scroll: within this many px of the row's edge the row scrolls, up to REORDER_SPEED px a frame. */
+const REORDER_EDGE = 48;
+const REORDER_SPEED = 18;
 
 /**
  * @param {object} v  the v6 shell's view context
@@ -20,17 +30,138 @@ export function stripsRow(v) {
     'data-testid': 'v6-add', 'aria-label': 'Add instrument',
   });
   d.listen(addBtn, 'click', () => v.addSlot());
+  const dropLine = h('div.v6-dropline', { hidden: true, 'aria-hidden': 'true', 'data-testid': 'v6-dropline' });
   const row = h('div.v6-strips', { 'data-testid': 'v6-strips', role: 'group', 'aria-label': 'Instruments' }, addBtn);
   const pillsEl = h('div.v6-pills', { hidden: true, 'data-testid': 'v6-pills', role: 'group',
     'aria-label': 'All instruments; tap one to scroll to it' });
   const pillsHint = h('span.v6-pills-h', { text: '' });
   pillsEl.append(pillsHint);
-  const el = h('div.v6-stripsarea', {}, pillsEl, h('div.v6-sfade', {}, row));
+  const sfade = h('div.v6-sfade', {}, row, dropLine);
+  const el = h('div.v6-stripsarea', {}, pillsEl, sfade);
   let n = 0;
   let shownFor = null;
   let slotsSig = '';
-  let picked = null; // U2: the strip whose range is being changed (coarse pointers)
+  let picked = null; // U2: the strip whose range is being changed (pick mode)
   let coarse = false;
+  let locked = false;
+
+  // ------------------------------------------------------------------ D23.2: drag a strip to another place
+  /** {from, pid, x0, x, scroll0, started, to, grip, closeEsc, raf} while a grip is pressed. */
+  let re = null;
+  /** Where strip `from` lands (index 0..n-1) for a pointer at clientX `x`: past the middle of each other strip. */
+  function targetAt(from, x) {
+    let to = 0;
+    for (let j = 0; j < n; j++) {
+      if (j === from) continue;
+      const r = strips[j].el.getBoundingClientRect();
+      if (x > r.left + r.width / 2) to += 1;
+    }
+    return to;
+  }
+  /** The drop line in the gap where the strip would land (placed from the strips' rects on every move / scroll). */
+  function placeLine(from, to) {
+    const others = [];
+    for (let j = 0; j < n; j++) if (j !== from) others.push(strips[j].el.getBoundingClientRect());
+    const gap = parseFloat(getComputedStyle(row).columnGap) || 10;
+    const last = others[others.length - 1];
+    const x = to < others.length ? others[to].left - gap / 2 : last.right + gap / 2;
+    const box = sfade.getBoundingClientRect();
+    dropLine.style.left = `${Math.round(Math.max(0, Math.min(box.width - 4, x - box.left - 2)))}px`;
+    dropLine.hidden = false;
+    dropLine.classList.toggle('same', to === from);
+    dropLine.dataset.to = String(to);
+  }
+  function reorderFrame() {
+    if (!re || !re.started) return;
+    re.raf = 0;
+    const r = row.getBoundingClientRect();
+    const into = (k) => REORDER_SPEED * Math.min(1, k / REORDER_EDGE); // faster nearer the edge
+    let dx = 0;
+    if (re.x < r.left + REORDER_EDGE) dx = -into(r.left + REORDER_EDGE - re.x);
+    else if (re.x > r.right - REORDER_EDGE) dx = into(re.x - r.right + REORDER_EDGE);
+    if (dx) row.scrollLeft += dx;
+    paintReorder();
+    if (dx) re.raf = requestAnimationFrame(reorderFrame);
+  }
+  function paintReorder() {
+    const S = strips[re.from];
+    // the strip follows the pointer, also while the row scrolls under it
+    S.el.style.transform = `translateX(${Math.round(re.x - re.x0 + row.scrollLeft - re.scroll0)}px)`;
+    re.to = targetAt(re.from, re.x);
+    placeLine(re.from, re.to);
+  }
+  function startReorder() {
+    re.started = true;
+    strips[re.from].el.classList.add('reorder-src');
+    el.classList.add('reordering');
+    // Esc drops the drag (an overlay, like the range pick: the Esc does not panic); outside presses don't
+    re.closeEsc = openOverlay({
+      el: strips[re.from].el, anchors: [], closeOnOutside: false, group: 'v6-reorder',
+      onClose: (reason) => {
+        if (re) re.closeEsc = null;
+        if (reason !== 'api') endReorder(false);
+      },
+    });
+    paintReorder();
+  }
+  /**
+   * End a reorder drag: commit → one store.moveSlot through the shell (v.moveSlot, refused under Lock); else nothing
+   * is written. Every other way out (pointercancel, a lost capture, Esc, a song switch, the view hidden, Lock, any
+   * slot change) lands here with commit false.
+   */
+  function endReorder(commit) {
+    const g = re;
+    if (!g) return;
+    re = null;
+    if (g.raf) cancelAnimationFrame(g.raf);
+    if (g.closeEsc) g.closeEsc('api');
+    const S = strips[g.from];
+    if (S) {
+      S.el.classList.remove('reorder-src');
+      S.el.style.transform = '';
+    }
+    el.classList.remove('reordering');
+    dropLine.hidden = true;
+    try {
+      if (g.grip.hasPointerCapture?.(g.pid)) g.grip.releasePointerCapture(g.pid);
+    } catch {
+      /* already released */
+    }
+    if (commit && g.started && g.to !== g.from && !locked) v.moveSlot?.(g.from, g.to);
+  }
+  d.listen(row, 'pointerdown', (ev) => {
+    const grip = ev.target?.closest?.('.v6-grip');
+    if (!grip || re || locked || n < 2 || (ev.pointerType === 'mouse' && ev.button !== 0)) return;
+    const from = Number(grip.dataset.slot);
+    if (!Number.isInteger(from) || from >= n) return;
+    ev.preventDefault(); // no text selection, no row scroll (the grip is touch-action: none)
+    ev.stopPropagation();
+    try {
+      grip.setPointerCapture(ev.pointerId);
+    } catch {
+      /* synthetic pointers */
+    }
+    re = { from, pid: ev.pointerId, x0: ev.clientX, x: ev.clientX, started: false, to: from, grip, closeEsc: null,
+      raf: 0, scroll0: row.scrollLeft };
+  });
+  d.listen(row, 'pointermove', (ev) => {
+    if (!re || ev.pointerId !== re.pid) return;
+    re.x = ev.clientX;
+    if (!re.started) {
+      if (Math.abs(ev.clientX - re.x0) < REORDER_SLOP) return;
+      startReorder();
+    } else paintReorder();
+    if (!re.raf) re.raf = requestAnimationFrame(reorderFrame);
+  });
+  d.listen(row, 'pointerup', (ev) => {
+    if (re && ev.pointerId === re.pid) endReorder(true);
+  });
+  d.listen(row, 'pointercancel', (ev) => {
+    if (re && ev.pointerId === re.pid) endReorder(false);
+  });
+  d.listen(row, 'lostpointercapture', (ev) => {
+    if (re && ev.pointerId === re.pid) endReorder(false);
+  });
 
   function ensure(k) {
     while (strips.length < Math.min(MAX_SLOTS, k)) {
@@ -74,7 +205,10 @@ export function stripsRow(v) {
     if (pillsEl.hidden !== hide) pillsEl.hidden = hide;
   });
   d.add(() => visible.cancel());
-  d.listen(row, 'scroll', () => visible.push(), { passive: true });
+  d.listen(row, 'scroll', () => {
+    visible.push();
+    if (re && re.started) paintReorder(); // a wheel / trackpad scroll mid-drag moves the strips under the pointer
+  }, { passive: true });
   if (typeof ResizeObserver === 'function') {
     const ro = new ResizeObserver(() => visible.push());
     ro.observe(row);
@@ -95,7 +229,10 @@ export function stripsRow(v) {
     if (sig !== slotsSig) {
       if (slotsSig) for (const S of strips) S.closePanels();
       slotsSig = sig;
+      endReorder(false); // a song switch or a count change mid-drag: the indices it holds mean other instruments now
     }
+    locked = !!x.locked;
+    if (locked) endReorder(false);
     ensure(n);
     const scroll = n > STRIPS_ACROSS;
     el.classList.toggle('scroll', scroll);
@@ -129,7 +266,7 @@ export function stripsRow(v) {
     addBtn.disabled = x.locked || n >= MAX_SLOTS;
     addBtn.title = x.locked ? 'Perform lock is on: unlock to add an instrument'
       : n >= MAX_SLOTS ? `${MAX_SLOTS} is the most a song can have` : 'Add an instrument, then pick its sound';
-    addBtn.classList.toggle('slim', n >= STRIPS_ACROSS);
+    addBtn.classList.toggle('slim', n >= ADD_SLIM_FROM);
     const key = song ? song.id : null;
     if (key !== shownFor) {
       shownFor = key;
@@ -149,6 +286,27 @@ export function stripsRow(v) {
     },
     cancelDrags() {
       for (const s of strips) s.cancelDrag();
+      endReorder(false);
+    },
+    /**
+     * The song's slots were re-ordered (store.onSlotMap: a move, insert or remove, here or anywhere): a ⋯ menu, a step
+     * panel, a fader drag or a reorder drag held by position would now act on another instrument, so they all end
+     * (U-MOVE-store O1; U1 F2 did this for count changes only).
+     */
+    slotMap() {
+      for (const s of strips) {
+        s.closePanels();
+        s.cancelDrag();
+      }
+      endReorder(false);
+    },
+    /** Test hook: a reorder drag is in progress (from, to). */
+    get reorder() {
+      return re && re.started ? { from: re.from, to: re.to } : null;
+    },
+    /** Focus strip i's ⋯ (after a keyboard Earlier / Later, the focus follows the instrument). */
+    focusMore(i) {
+      strips[i]?.moreBtn?.focus();
     },
     /** U2: the strip whose range the coarse pointer is changing (null: none). */
     setPicked(i) {
@@ -169,6 +327,7 @@ export function stripsRow(v) {
       for (const s of strips) s.closePanels();
     },
     destroy() {
+      endReorder(false);
       d.dispose();
       for (const s of strips.splice(0)) s.destroy();
       el.remove();

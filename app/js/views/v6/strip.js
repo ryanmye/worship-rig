@@ -1,8 +1,10 @@
 // UI v6 instrument strip (D15, D16; UI6-build-plan U1): one component per instrument slot, the same for every kind of
 // sound. Name (the instrument's, never a role), ON tile (= the mute), vertical level fader with its meter and dB, the
 // 2×2 Space / Echo / Octave / Sustain chips, Change (today's instrument picker, in Edit) and ⋯ (Earlier, Later,
-// Duplicate, Open in Edit, Remove with a hold). Reads come from the shell's render(); writes go through the shell's
-// helpers (store.set / controller.scenes.adjust) exactly as views/perform.js's strips do.
+// Duplicate, Open in Edit, Remove with a hold), plus a ⠿ grip to drag it to another place (strips-row.js runs the
+// drag). Reads come from the shell's render(); writes go through the shell's helpers (store.set / store.moveSlot /
+// controller.scenes.adjust) exactly as views/perform.js's strips do. The strip is reused by position: its colour is the
+// position's (D15), so an instrument that moves takes the colour of its new place.
 import { h, setText, disposer } from '../components/util.js';
 import { fader } from '../components/fader.js';
 import { levelMeter } from '../components/levelMeter.js';
@@ -16,8 +18,6 @@ import { MAX_SLOTS } from '../../shared/params.js';
 import { slotMuteState, stepPanelNeed, SILENT_NOTE } from '../perform.js';
 import { slotColor, button, popover, HOLD_MS } from './lib.js';
 
-/** ⋯ entries the store cannot do yet (no slot move that carries wheel targets and scenes with it): shown, disabled. */
-export const COMING_TITLE = 'Coming: needs a store move that keeps the wheel targets and snapshots with the instrument';
 
 /**
  * @param {object} v   the v6 shell's view context (perform.js `v`)
@@ -35,12 +35,15 @@ export function createStrip(v, i) {
 
   const nm = h('span.v6-nm', { 'data-testid': `v6-name-${i}`, text: '—' });
   const who = h('div.v6-who', { 'data-testid': `v6-who-${i}` }, h('span.v6-ico', { 'aria-hidden': 'true' }), nm);
-  // U2 (D18 "On iPad, tap the instrument first"): on a coarse pointer the name picks this instrument's range bar on
-  // the keyboard; its strip shows an outline and "changing range" while it is picked
+  // U2 (D18 "On iPad, tap the instrument first"; D24.3: on every pointer): the name picks this instrument's range bar
+  // on the keyboard; its strip shows an outline and "changing range" while it is picked
   const pickFlag = h('div.v6-pickflag', { text: 'changing range', hidden: true, 'data-testid': `v6-pickflag-${i}` });
+  who.setAttribute('role', 'button');
+  who.tabIndex = 0;
+  who.setAttribute('aria-pressed', 'false');
   let coarse = false;
   const pickMe = () => {
-    if (coarse && info?.slot && !info.locked) v.pickRange?.(i);
+    if (info?.slot && !info.locked) v.pickRange?.(i);
   };
   // skeptic UI6-U2 F2: a touch / pen tap picks on pointerup, not on click. Chromium drops the click of a tap that
   // lands within ~0.4 s of a quick touch drag (tap suppression after the drag's fling), which is exactly D18's
@@ -67,7 +70,7 @@ export function createStrip(v, i) {
     pickMe();
   });
   d.listen(who, 'keydown', (ev) => {
-    if (!coarse || (ev.key !== 'Enter' && ev.key !== ' ')) return;
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
     ev.preventDefault();
     ev.stopPropagation();
     pickMe();
@@ -113,11 +116,18 @@ export function createStrip(v, i) {
   });
   let menu = null;
   d.listen(moreBtn, 'click', () => (menu ? menu.close() : openMenu()));
+  // D23.2: drag the strip by this grip to put the instrument somewhere else (strips-row.js listens on the row and
+  // runs the drag); ⋯ Earlier / Later are the keyboard way. Hidden under Lock and with one instrument.
+  const grip = h('span.v6-grip', {
+    'aria-hidden': 'true', 'data-testid': `v6-grip-${i}`, dataset: { slot: String(i) },
+    title: 'Drag to move this instrument (or ⋯ › Earlier / Later)', text: '⠿',
+  });
 
   const el = h(
     'div.panel.slot.strip.v6-strip',
     { dataset: { slot: String(i) }, 'data-testid': `v6-strip-${i}`, style: { '--c': color } },
     who,
+    grip,
     pickFlag,
     tile.el,
     h('div.slot-body.v6-body', {}, f.el),
@@ -144,12 +154,29 @@ export function createStrip(v, i) {
           return b;
         };
         const locked = v.isLocked();
-        const coming = (cls, text, id) => item(cls, text, { disabled: true, title: COMING_TITLE, 'data-testid': id });
-        const earlier = coming('.v6-earlier', '◀ Earlier', `v6-earlier-${i}`);
-        const later = coming('.v6-later', 'Later ▶', `v6-later-${i}`);
-        // Duplicate = store.addSlot with a copy: the store appends, so the copy goes last (there is no insert yet)
+        // D23.2: one place earlier / later (store.moveSlot: everything of the instrument goes with it). From the
+        // keyboard (a click with detail 0) the focus follows the instrument to its new ⋯ button.
+        const move = (to) => (ev) => {
+          if (v.moveSlot(i, to) && ev && ev.detail === 0) queueMicrotask(() => v.focusMore?.(to));
+        };
+        const earlier = item('.v6-earlier', '◀ Earlier', {
+          'data-testid': `v6-earlier-${i}`, title: 'Move this instrument one place to the left',
+          disabled: locked || i <= 0,
+        });
+        const later = item('.v6-later', 'Later ▶', {
+          'data-testid': `v6-later-${i}`, title: 'Move this instrument one place to the right',
+          disabled: locked || i >= info.n - 1,
+        });
+        for (const [b, to] of [[earlier, i - 1], [later, i + 1]]) {
+          pd.listen(b, 'click', (ev) => {
+            close();
+            move(to)(ev);
+          });
+        }
+        // Duplicate = store.insertSlot after this one with a deep copy, scenes copied from it (D23.2): the copy sits
+        // next to the original and follows the snapshots like it
         const dup = item('.v6-dup', 'Duplicate', {
-          'data-testid': `v6-dup-${i}`, title: 'Add a copy of this instrument at the end',
+          'data-testid': `v6-dup-${i}`, title: 'Add a copy of this instrument next to it',
           disabled: locked || !info.slot || info.n >= MAX_SLOTS,
         }, () => v.duplicateSlot(i));
         const edit = item('.v6-edit', 'Open in Edit', { 'data-testid': `v6-open-edit-${i}`, disabled: locked },
@@ -199,6 +226,7 @@ export function createStrip(v, i) {
     tile.setDisabled(empty);
     setText(changeBtn, empty ? 'Choose' : 'Change');
     changeBtn.disabled = x.locked; // Edit is frozen under Perform lock (LOCK table)
+    grip.hidden = x.locked || x.n < 2; // no reorder under Lock (D23.2 task) or with nothing to swap with
     changeBtn.title = x.locked ? 'Perform lock is on: unlock to change the instrument' : 'Choose another instrument';
     if (empty) {
       // skeptic UI6-U1 F1: an empty slot shows no level and no sends. The strip is reused by position, so without
@@ -251,26 +279,19 @@ export function createStrip(v, i) {
     cancelDrag() {
       f.cancelDrag?.();
     },
-    /** U2: a coarse pointer makes the name a button that picks this instrument's range bar. */
+    /** The pointer kind: only the name's wording changes (the name picks on every pointer since D24.3). */
     setCoarse(on) {
       coarse = !!on;
-      if (coarse) {
-        who.setAttribute('role', 'button');
-        who.tabIndex = 0;
-        who.title = 'Tap to change which keys play this instrument';
-      } else {
-        who.removeAttribute('role');
-        who.removeAttribute('tabindex');
-        who.removeAttribute('title');
-        who.removeAttribute('aria-pressed');
-      }
+      who.title = `${coarse ? 'Tap' : 'Click'} to change which keys play this instrument`;
     },
-    /** U2: this instrument's range is being changed (coarse pick mode). */
+    /** U2: this instrument's range is being changed (pick mode). */
     setPicked(on) {
       el.classList.toggle('range-picked', !!on);
       pickFlag.hidden = !on;
-      if (coarse) who.setAttribute('aria-pressed', String(!!on));
+      who.setAttribute('aria-pressed', String(!!on));
     },
+    /** The ⋯ button (focus after a keyboard Earlier / Later). */
+    moreBtn,
     closePanels() {
       for (const c of chips) c.close();
       menu?.close();

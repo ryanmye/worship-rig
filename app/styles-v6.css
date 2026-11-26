@@ -144,6 +144,24 @@
   box-shadow: 0 0 8px var(--text); }
 .v6.pedal-down .v6-strip.muted .sus-chip.on { border-color: var(--muted); }
 
+/* D23.2: move an instrument by its ⠿ grip (strips-row.js); the line shows where it lands; colours follow position */
+.v6 .v6-strip .v6-who { padding-right: 26px; }
+.v6 .v6-grip { position: absolute; top: 6px; right: 5px; width: 28px; height: 28px; display: flex; align-items: center;
+  justify-content: center; border-radius: 7px; color: var(--faint); font-size: 17px; line-height: 1; cursor: grab;
+  touch-action: none; user-select: none; -webkit-user-select: none; z-index: 2; }
+.v6 .v6-grip::after { content: ''; position: absolute; inset: -8px; } /* a 44 px target */
+.v6 .v6-grip:hover { color: var(--text); background: color-mix(in srgb, var(--text) 9%, transparent); }
+.v6 .v6-grip[hidden] { display: none; }
+.v6 .v6-stripsarea.reordering .v6-strips { scroll-snap-type: none; }
+.v6 .v6-stripsarea.reordering, .v6 .v6-stripsarea.reordering * { cursor: grabbing; }
+.v6 .v6-strip.reorder-src { z-index: 5; box-shadow: 0 12px 30px #000b; outline: 2px dashed var(--accent);
+  outline-offset: 2px; }
+.v6 .v6-strip.reorder-src .v6-grip { color: var(--text); }
+.v6 .v6-dropline { position: absolute; top: 0; bottom: 8px; width: 4px; border-radius: 2px; background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); z-index: 6; pointer-events: none; }
+.v6 .v6-dropline.same { opacity: .35; }
+.v6 .v6-dropline[hidden] { display: none; }
+
 .v6 .v6-add { flex: 0 0 120px; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 6px;
   border: 1.5px dashed var(--line-2); border-radius: 12px; background: transparent; color: var(--muted);

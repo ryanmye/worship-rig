@@ -29,7 +29,7 @@ export function bottomRow(v) {
     size: 'perform',
     onNoteOn: (n, vel) => controller.perform.noteOn(n, vel),
     onNoteOff: (n) => controller.perform.noteOff(n),
-    onRange: (i, field, note) => v.setRange(i, field, note),
+    onRange: (i, field, note, phase, expect) => v.setRange(i, field, note, phase, expect),
     onPick: (i) => v.onRangePick?.(i),
     onCoarse: (c) => v.onCoarse?.(c),
   }));

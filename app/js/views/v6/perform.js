@@ -126,13 +126,28 @@ export function mountPerformV6(root, ctx) {
       // after the store's change event (a microtask), so Edit's tab for the new slot exists when it is selected
       queueMicrotask(() => ctx.setView?.('edit', { block: `slot:${i}`, focus: 'instrument' }));
     },
+    /**
+     * ⋯ Duplicate (D23.2): a deep copy right after the original (store.insertSlot), with the original's scene entries
+     * (scenesFrom), so the copy follows the snapshots as the original does. Later instruments move one place right.
+     */
     duplicateSlot(i) {
       const s = shownId && store.getSong(shownId);
       const slot = s?.patch.slots[i];
       if (!slot || isLocked()) return;
-      const k = store.addSlot(shownId, clone(slot));
-      if (k >= 0) toast(`Added a copy of ${names.name(slot.instrument)} at the end.`, 'ok', { ms: 2500 });
+      const k = store.insertSlot(shownId, i, clone(slot), { scenesFrom: i });
+      if (k >= 0) toast(`Added a copy of ${names.name(slot.instrument)} next to it.`, 'ok', { ms: 2500 });
     },
+    /**
+     * ⋯ Earlier / Later and the strip drag (D23.2): the instrument at `from` goes to `to` with everything it has
+     * (store.moveSlot: the slot, its scene entries, wheel targets). Frozen under Perform lock, like Add / Remove.
+     * @returns {boolean} moved
+     */
+    moveSlot(from, to) {
+      if (!shownId || isLocked()) return false;
+      return store.moveSlot(shownId, from, to);
+    },
+    /** After a keyboard Earlier / Later: the focus follows the instrument (its ⋯ at the new place). */
+    focusMore: (i) => row.focusMore(i),
     removeSlot(i) {
       const s = shownId && store.getSong(shownId);
       if (!s || isLocked()) return;
@@ -153,20 +168,26 @@ export function mountPerformV6(root, ctx) {
     },
     setFaded: (on) => setFaded(on),
     /**
-     * A range bar's end moved (keyboard.js, on release or an arrow key): the same slot fields today's Edit writes for
-     * the lowest / highest note (slot.js miniKeyboard → slots.<i>.lowNote / highNote), so the changed dots, Revert
-     * and the store → engine diff treat it like any edit. Frozen under Perform lock (D18; LOCK table).
+     * A range bar's end moved (keyboard.js): the same slot fields today's Edit writes for the lowest / highest note
+     * (slot.js miniKeyboard → slots.<i>.lowNote / highNote), so the changed dots, Revert and the store → engine diff
+     * treat it like any edit. D24.2: written live while dragging ('live', ≤ 1 per 50 ms), then 'end' on release;
+     * ←/→ are 'key'. Frozen under Perform lock (D18; LOCK table), except 'cancel': a dropped drag putting back its
+     * start value, which is allowed under Lock (Lock is one of the things that drops it) but only while the slot still
+     * holds `expect`, the value the drag last wrote: a write that moved instruments without a slot map (a positional
+     * whole-array write) must not restore into the instrument that now sits there (UI6-U2 review O3).
      */
-    setRange(i, field, note) {
-      if (isLocked() || (field !== 'lowNote' && field !== 'highNote')) return false;
+    setRange(i, field, note, phase, expect) {
+      if (field !== 'lowNote' && field !== 'highNote') return false;
+      if (phase !== 'cancel' && isLocked()) return false;
       const slot = shownId && store.getSong(shownId)?.patch.slots[i];
       if (!slot || !Number.isInteger(note)) return false;
+      if (phase === 'cancel' && slot[field] !== expect) return false;
       return store.set(`songs.${shownId}.patch.slots.${i}.${field}`, note);
     },
-    /** A strip's name was tapped: on a coarse pointer, change that instrument's range (tap it again to finish). */
+    /** A strip's name was tapped / clicked (every pointer, D24.3): change that instrument's range (again: finish). */
     pickRange(i) {
       const kb = bottom.kb;
-      if (!kb.coarse || isLocked()) return;
+      if (isLocked()) return;
       kb.pick(kb.picked === i ? null : i);
     },
     /** keyboard.js → the strips: outline + "changing range" on the picked one. */
@@ -267,10 +288,12 @@ export function mountPerformV6(root, ctx) {
       rangeSig = sig;
     }
     // skeptic UI6-U2 F4: a drag that the view hides (⌘E, a MIDI view switch) must not write on its release: the
-    // hidden keyboard measures 0 px wide, so the end snapped to 0 / 127 ("every key") and that was written
+    // hidden keyboard measures 0 px wide, so the end snapped to 0 / 127 ("every key") and that was written. D24.2:
+    // with live writes, the cancel puts the start value back. A strip reorder drag ends too (D23.2).
     if (st.view !== 'perform') {
       bottom.kb.cancelDrag();
       bottom.kb.pick(null);
+      row.cancelDrags();
     }
     shownId = newId;
     const locked = !!st.performLock;
@@ -440,6 +463,23 @@ export function mountPerformV6(root, ctx) {
 
   // ---------------------------------------------------------------- subscriptions
   d.add(store.subscribe((state) => render(state)));
+  // D23 (U-MOVE-store review O1): a move keeps the slot count, so the count-keyed protections above never see it.
+  // store.onSlotMap runs synchronously in the write that re-orders the shown song (insert, move, remove, a realigning
+  // Revert; here, in Edit or anywhere): ⋯ menus, step panels, fader and reorder drags end at once; a range drag first
+  // follows its instrument to its new index (so its restore lands there, or nowhere when it was removed), then is
+  // dropped, with the pick, after the store's change notification (a microtask; no store write from inside the
+  // store's own call).
+  if (typeof store.onSlotMap === 'function') {
+    d.add(store.onSlotMap(({ id, order }) => {
+      if (id !== shownId) return;
+      row.slotMap();
+      bottom.kb.remapDrag(order);
+      queueMicrotask(() => {
+        bottom.kb.cancelDrag();
+        bottom.kb.pick(null);
+      });
+    }));
+  }
   d.add(store.subscribe((state, paths) => {
     if (!paths || paths.some((p) => p === 'settings' || p === 'settings.computerKeyboard')) renderLetters();
   }));
@@ -545,6 +585,14 @@ export function mountPerformV6(root, ctx) {
     /** Test hooks. */
     get strips() {
       return row.strips;
+    },
+    /** D23.2: the strip reorder drag in progress ({from, to}) or null. */
+    get reorder() {
+      return row.reorder;
+    },
+    /** The keyboard with range bars (picked, dragging, …). */
+    get kb() {
+      return bottom.kb;
     },
     snapshots: snaps,
     sidebar: side,
