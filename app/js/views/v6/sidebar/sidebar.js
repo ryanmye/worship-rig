@@ -21,6 +21,12 @@ export const SIDEBAR_MIN = 200;
 export const SIDEBAR_MAX_FRAC = 0.62;
 /** Width before the player has dragged it: the mockup's 280 px; 220 px up to 1240 px wide windows (U1's column). */
 export const sidebarDefaultWidth = () => (typeof window !== 'undefined' && window.innerWidth <= 1240 ? 220 : 280);
+/**
+ * Small-window fit (UI6-U3 review O1, orchestrator tier 2): in a window this wide or narrower the sidebar starts
+ * folded, unless the player has opened it in a window this small before (per device: `smallOpen` in the prefs).
+ */
+export const SMALL_WINDOW = 1100;
+const isSmallWindow = () => typeof window !== 'undefined' && window.innerWidth <= SMALL_WINDOW;
 /** iPad portrait: the sidebar becomes a wide panel under the strips. styles-v6-sidebar.css uses the same query. */
 export const PORTRAIT_MQ = '(orientation: portrait) and (max-width: 1024px)';
 /** ←/→ on the grip: px per press (Shift: BIG_STEP). */
@@ -38,7 +44,8 @@ export function defaultPrefs(ids) {
 
 /**
  * Stored prefs → valid prefs for these modules: unknown ids dropped, new modules appended (shown), at least one module
- * shown, the tab a shown module, a width ≥ SIDEBAR_MIN or null (default).
+ * shown, the tab a shown module, a width ≥ SIDEBAR_MIN or null (default); `smallOpen: true` (opened in a small
+ * window before) kept, absent otherwise.
  * @param {unknown} raw  parsed localStorage value (anything)
  * @param {string[]} ids
  * @returns {ReturnType<typeof defaultPrefs>}
@@ -52,7 +59,7 @@ export function normalizePrefs(raw, ids) {
   let hidden = uniq(o.hidden);
   if (hidden.length >= order.length) hidden = []; // never an empty sidebar
   const shown = order.filter((x) => !hidden.includes(x));
-  return {
+  const out = {
     open: typeof o.open === 'boolean' ? o.open : true,
     starts: o.starts === 'collapsed' ? 'collapsed' : 'open',
     width: Number.isFinite(o.width) && o.width >= SIDEBAR_MIN ? Math.round(o.width) : null,
@@ -60,6 +67,8 @@ export function normalizePrefs(raw, ids) {
     order,
     hidden,
   };
+  if (o.smallOpen === true) out.smallOpen = true;
+  return out;
 }
 
 /**
@@ -116,12 +125,14 @@ export function rightSidebar(v, o = {}) {
   const ids = mods.map((m) => m.id);
   const d = disposer();
   let prefs = loadPrefs(ids);
-  if (!startedThisPage) {
-    startedThisPage = true;
-    prefs.open = prefs.starts === 'open';
-  }
   const mq = typeof window.matchMedia === 'function' ? window.matchMedia(PORTRAIT_MQ) : null;
   let portrait = !!mq?.matches;
+  if (!startedThisPage) {
+    startedThisPage = true;
+    // small-window fit: ≤ SMALL_WINDOW px wide starts folded (4 instruments then fit 1024 × 700 without the pills)
+    // until the player opens it at that size once; iPad portrait puts the panel under the strips, so not there
+    prefs.open = prefs.starts === 'open' && (portrait || !isSmallWindow() || !!prefs.smallOpen);
+  }
   let lastState = v.store.get();
 
   const save = () => {
@@ -306,6 +317,7 @@ export function rightSidebar(v, o = {}) {
       prefs.tab = id;
     }
     prefs.open = true;
+    if (!portrait && isSmallWindow()) prefs.smallOpen = true; // the player wants it open in a small window too
     save();
     applyLayout();
   }
