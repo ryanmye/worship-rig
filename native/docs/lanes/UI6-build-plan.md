@@ -74,6 +74,8 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 
 ## Queued small tasks
 
+- **Polish (UI6-U5a P1):** the range keyboard's always-visible label (`showTip`) forces a reflow on every live
+  write (~10 ms at 6× CPU); measure it in a requestAnimationFrame (shared with Perform).
 - **Polish (UI6-move O2/O3, orchestrator):** Enter on a strip name (pick) moves focus to the picked bar's low
   handle; the small-window "opened here" memory counts only a deliberate open of the sidebar (⟨ / rail), not the
   Notes / Setlist chips, and is keyed by orientation so an iPad rotated to portrait is not held folded.
