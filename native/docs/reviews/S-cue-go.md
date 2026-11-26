@@ -375,4 +375,14 @@ not a defect, because the suite passes on either content. Commit whatever the la
   `samples` event, so the chip turns "ready" without another preload. Why the decode was deferred (pins not
   evicting unpinned buffers at the cap) is not changed and still wants a look in the cache lane.
 - R5: Enter auto-repeat on a chip (unverified).
+- **Fix (fixenter, 2026-11-25): S7's Enter = GO fired from fields that commit by blurring themselves.** The
+  regression came in with 10c3ec7 (bisected: db15e0e is green). `edit-v2 --only slot,song` failed there, and on
+  1959e0f and 6a911cf ("Lowest note", tempo). The S7 gates only ran `edit-v2 --only integration`. The controller
+  read `document.activeElement` when the Enter reached the document. Those fields blur themselves in their own
+  keydown, so it saw body, took the Enter as "nothing focused" and GOed. The value went to the old song, and the
+  next song came up. Edit in the real app was spared only by `settings.view === 'edit'`; the panel harness and any
+  Perform field of that kind were not. Fix: `controller.js` `keyEl(e)` (the event target wins over `activeElement`),
+  plus the same rule in main.js's dialog Enter guard. Tests: `test/phase2/edit-v2/integration-enter.test.mjs` (5;
+  Edit, Settings and Perform fields commit and never GO, and a bare Enter on Perform does GO) and
+  `cue-go.test.mjs` +1. Both fail without the fix. Gate and numbers: CONTRACT_CHANGES "## Lane S", "Fix" bullet.
 - From the first review: S9, and the D6 visual pass (GO name truncation, a dot legend).

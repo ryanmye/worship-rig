@@ -1420,6 +1420,19 @@ export function createController(o) {
   function activeEl(e) {
     return (doc && doc.activeElement) || (e && e.target) || null;
   }
+  /**
+   * fixenter (S-cue-go S7 follow-up): the element the key went to. e.target is fixed when the event is dispatched;
+   * activeElement is not. Edit's note / tempo fields (and eq-keyboard's) blur themselves on Enter in their own
+   * keydown, so they commit through 'change'. By the time the event bubbles to the document, body has focus, and
+   * reading activeElement alone took that Enter for "nothing focused" and fired GO (the song switched under the edit).
+   * A real element target wins; a target of body / the document (or a fake doc in the node tests) falls back to
+   * activeElement.
+   */
+  function keyEl(e) {
+    const t = e && e.target;
+    if (t && t.tagName && !(doc && (t === doc.body || t === doc.documentElement))) return t;
+    return activeEl(e);
+  }
   function nothingFocused(el) {
     return !el || (doc && (el === doc.body || el === doc.documentElement)) || !el.tagName;
   }
@@ -1435,7 +1448,7 @@ export function createController(o) {
 
   function onKeyDown(e) {
     if (e.defaultPrevented) return;
-    const el = activeEl(e);
+    const el = keyEl(e); // fixenter: not activeElement alone (a field may have blurred itself on this key)
     const inText = isTextControl(el);
     const onButton = isButtonish(el);
     const mod = e.metaKey || e.ctrlKey;

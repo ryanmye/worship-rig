@@ -896,9 +896,13 @@ function focusedControl() {
 }
 // S-review S7: Enter = GO (controller) only on Perform with no dialog open; the controller checks the view and
 // body.settings-open itself, this covers the other dialogs (a stray Enter with nothing focused in one never GOes)
+// fixenter: e.target too, as the controller reads it: a field that blurred itself on this Enter (its commit) was the
+// focused control, so its Enter is not "stray" and keeps its default action (a dialog form's submit).
 document.addEventListener('keydown', (e) => {
   if ((e.key !== 'Enter' && e.code !== 'NumpadEnter') || e.defaultPrevented) return;
-  if (popupOpen() && !focusedControl()) e.preventDefault();
+  const t = e.target;
+  const fromControl = t instanceof Element && t !== document.body && t !== document.documentElement;
+  if (popupOpen() && !focusedControl() && !fromControl) e.preventDefault();
 });
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;

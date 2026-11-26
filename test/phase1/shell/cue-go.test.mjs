@@ -368,3 +368,35 @@ test('songReady: null without a cache (fakes / secondary); a song with no sample
   assert.equal(ctl.songState(ids[4], 4).load, 'ready', 'unknown reads as ready (nothing to wait for)');
   ctl.dispose();
 });
+
+test('fixenter: Enter from a field that blurred itself on that key commits the field, never GOes', async () => {
+  const { ctl, store, doc, ids } = await setup();
+  assert.equal(store.get().settings.currentSongId, ids[0]);
+  // Edit's note / tempo fields blur themselves in their own keydown (blur commits), so when the Enter reaches the
+  // document, activeElement is body again; e.target still names the field the key went to
+  const fromField = (target) => {
+    const ev = new Event('keydown', { cancelable: true });
+    Object.assign(ev, { code: 'Enter', key: 'Enter', repeat: false, shiftKey: false, metaKey: false, ctrlKey: false,
+      altKey: false });
+    Object.defineProperty(ev, 'target', { value: target });
+    doc.activeElement = doc.body;
+    doc.dispatchEvent(ev);
+    return ev;
+  };
+  for (const target of [{ tagName: 'INPUT', type: 'text' }, { tagName: 'INPUT', type: 'number' },
+    { tagName: 'TEXTAREA' }, { tagName: 'DIV', isContentEditable: true }]) {
+    const ev = fromField(target);
+    await tick();
+    await tick();
+    assert.equal(ev.defaultPrevented, false, `${target.tagName}.${target.type || ''}: the field keeps its Enter`);
+    assert.equal(store.get().settings.currentSongId, ids[0], `${target.tagName}: no GO`);
+    assert.equal(ctl.status.go, null);
+  }
+  // a target of body (nothing was focused) is still GO
+  const ev = fromField(doc.body);
+  assert.equal(ev.defaultPrevented, true);
+  await tick();
+  await tick();
+  assert.equal(store.get().settings.currentSongId, ids[1], 'Enter with nothing focused GOes to the next song');
+  ctl.dispose();
+});

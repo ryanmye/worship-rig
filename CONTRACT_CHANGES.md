@@ -7372,6 +7372,29 @@ comes later. No engine change (`app/js/engine` untouched); no store SCHEMA bump.
     fails without the fix).
   - `native/docs/SHELL.md` G5 now records the `sampleStatus` shape and how the shim polls it; G8 counts the extra
     `get` traffic.
+- **Fix: Enter in a field that commits by blurring itself GOed** (fixenter, 2026-11-25; regression from 10c3ec7,
+  `reviews/S-cue-go.md` "Still open").
+  - **Symptom.** `edit-v2 --only slot,song` failed on 1959e0f and 6a911cf (2 slot tests, 4 song tests: "Lowest
+    note", tempo). Bisected over `b9a0c27..6a911cf -- app test/phase2/edit-v2`: db15e0e passes song 12/12, 10c3ec7
+    fails 4/12. Earlier gates ran `edit-v2 --only integration`, which never showed it.
+  - **Cause.** The controller's Enter = GO read "nothing focused" from `document.activeElement` when the event
+    reached its document listener. The slot note fields and the song tempo field blur themselves in their own
+    keydown (blur commits, via `change`), so by then body had focus. The Enter committed the value to the playing
+    song and then GOed to the next one, so the test read the next song's value. The real app's Edit hid it
+    (`settings.view` is `'edit'`, so `enterGoes()` is false). The panel harness keeps the store default `'perform'`,
+    and so does any Perform field that commits the same way. main.js's dialog guard had the same blind spot.
+  - **Fix.** `controller.js` `keyEl(e)`: the key's own target (fixed at dispatch) wins over `activeElement`; body,
+    the document, or a fake doc falls back to `activeElement` as before. `onKeyDown` uses it for every branch
+    (`inText`, `onButton`, Enter, Space). main.js's Enter guard leaves an Enter alone when `e.target` was a control.
+    Enter with nothing focused on Perform still GOes. The harness is unchanged on purpose: it is the stricter state.
+  - **Tests.** `test/phase2/edit-v2/integration-enter.test.mjs` (new, 5). Real app: Perform with nothing focused →
+    GO (the control); a number field and a blur-on-Enter text field in Perform and in Settings; Edit's Lowest note
+    and tempo. Harness, with view `'perform'`: Lowest note and tempo. Without the fix, 2 fail (Perform blur field;
+    harness Lowest note). `test/phase1/shell/cue-go.test.mjs` +1 (target = input / number / textarea /
+    contenteditable with body focused → no GO, not consumed; target body → GO); fails without the fix.
+  - **Gate** (one at a time, this box): edit-v2 13/13 files; shell unit, browser and electron (xvfb-run) PASS
+    (1 macOS-only skip); `run-all --only unit` 670 pass, 0 fail, 11 skip; settings 88/88; ui-core 78/78; themes
+    58/58; migration-1x PASS.
 
 ## E4: Mac self-test (2.0 Apple shell: `Worship Rig --self-test`; native/apple/Sources/**, tools/mac/check.sh, .github/workflows/native-core.yml; no bridge op, reply or app/js change)
 
