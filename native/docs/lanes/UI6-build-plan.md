@@ -52,6 +52,14 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 - For U2: `bottom.js` holds the keyboard; replace its display-only range bars. For U3 / U4: mount into
   `.v6-right` / `.v6-left` (perform.js `right` / `left`).
 
+## Queued small tasks
+
+- **Preview switch for Ryan (U1 review O3):** `?ui6=1` only works in Chrome; the Mac app needs a visible way to turn
+  v6 on for the U9 review. Add "Try the new layout (preview)" in Settings (today's Settings, Look or Mac category),
+  writing `settings.uiV6`. Before U8 ends.
+- Pre-existing red suites to fix separately: eq "L-21 note labels fit" (fails on base), engine suite's 404 on
+  `/__tests/api/health` and the CPU-timing `offline.eqCpu` on the 2-CPU box.
+
 ## Open questions carried into the build (decide, log in DECISIONS, tell Ryan)
 
 - **Snapshots vs today's scenes.** Today: up to 3 scenes per song, levels / ON / drone level / wheel only. The v6
