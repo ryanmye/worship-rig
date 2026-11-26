@@ -22,6 +22,7 @@ import { chromium } from 'playwright';
 import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.mjs';
 import { u5bTests } from './u5b.tests.mjs';
 import { skepticU5bTests } from './skeptic-u5b.tests.mjs';
+import { polish1EditTests } from './polish1.tests.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -1097,6 +1098,8 @@ try {
     todayShared: () => todayShared,
   });
   await skepticU5bTests({ T, page, ev, until, tid, toEdit, assert, settled });
+  // ---------------------------------------------------------------- UI v6 polish batch 1 (polish1.tests.mjs)
+  await polish1EditTests({ T, page, ev, until, tid, toEdit, assert, settled });
 
   await T('zero console.error, no HTTP ≥ 400', async () => {
     assert.deepEqual(errors, []);

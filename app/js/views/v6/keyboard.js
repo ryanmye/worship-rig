@@ -18,7 +18,7 @@
 // Range) keeps its one bar always live. Keyboard: handles are sliders, ←/→ a semitone, Shift+←/→ an octave,
 // aria-valuetext with the note name.
 // Pure view code: reads come in through render(), writes go out through o.onRange (the shell does store.set).
-import { h, setText, disposer, clamp } from '../components/util.js';
+import { h, setText, disposer, clamp, rafCoalesce } from '../components/util.js';
 import { pianoKeyboard, keyLayout } from '../components/keys.js';
 import { openOverlay } from '../components/overlay.js';
 import { noteName, mod12 } from '../../shared/music.js';
@@ -286,12 +286,20 @@ export function rangeKeyboard(o = {}) {
     tip.style.top = `${(v.y - 4).toFixed(2)}px`;
     tip.hidden = false;
     tip.classList.toggle('live', !!drag);
-    // centred over the bar, kept inside the keyboard
+    placeTip.push((v.L + v.R) / 2);
+  }
+  // Centred over the bar, kept inside the keyboard. UI6-U5a P1: the widths are read in the next animation frame
+  // (one per frame, the latest bar centre wins), not here: showTip runs after a render's DOM writes, so reading
+  // offsetWidth / clientWidth here forced a layout on every live range write (~10 ms at 6× CPU). The frame lays out
+  // before its paint anyway, so the label is never painted at its old place.
+  const placeTip = rafCoalesce((mid) => {
+    if (tip.hidden || !tip.isConnected) return;
     const W = rbars.clientWidth || 1;
     const tw = tip.offsetWidth || 0;
-    const c = ((v.L + v.R) / 2) * W / 100;
+    const c = mid * W / 100;
     tip.style.left = `${clamp(c - tw / 2, -4, Math.max(-4, W - tw + 4)).toFixed(1)}px`;
-  }
+  });
+  d.add(() => placeTip.cancel());
 
   // ------------------------------------------------------------------ pick mode (coarse 'perform')
   function renderHint() {
