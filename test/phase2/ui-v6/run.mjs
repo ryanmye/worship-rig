@@ -18,6 +18,9 @@
 //   U4 (views/v6/left.js, left.tests.mjs): the left panel's Quick (one sheet, two openers, Esc, TAP and the rest) and
 //   wheel column (simulated CC1 / CC11 / CC64 / bend, Swell, relative drag, Lock), 1024×700 fit, iPad portrait with no
 //   sideways page scroll; screenshots u4-*.png.
+//   U-MOVE + D24 tweaks (move.tests.mjs): Duplicate next to the original, Earlier / Later, the strip drag (mouse, touch,
+//   auto-scroll), Lock and the other ways a drag ends, protections keyed on the order (incl. Edit's tab + Undo), PANIC
+//   / Lock taps, live range writes (timed) and their restores, pick-first on a mouse, drone %, the 1024×700 fit.
 //   The purity comparison needs git: base = UI6_PURITY_BASE or `git merge-base HEAD v2-native`; it is skipped
 //   (with a note) when app/ does not differ from the base.
 import { createRequire } from 'node:module';
@@ -31,6 +34,7 @@ import { chromium } from 'playwright';
 import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.mjs';
 import { sidebarTests } from './sidebar.tests.mjs';
 import { leftTests } from './left.tests.mjs';
+import { moveTests } from './move.tests.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -356,7 +360,7 @@ try {
     assert.equal(await ev(() => !document.querySelector('[data-testid="v6-octave-0"] .cdi').hidden), true);
   });
 
-  await T('Change opens Edit’s instrument picker on that slot; ⋯ Earlier / Later are disabled (coming)', async () => {
+  await T('Change opens Edit’s instrument picker on that slot; ⋯ Earlier off on the first, Later on', async () => {
     await page.click(tid('v6-change-1'));
     await until(() => document.body.dataset.view === 'edit');
     assert.equal(await ev(() => window.__rig.views.edit.editState.selected), 'slot:1');
@@ -370,8 +374,8 @@ try {
       title: document.querySelector('[data-testid="v6-later-0"]').title,
       role: document.querySelector('[data-testid="v6-menu-0"]').getAttribute('role'),
     }));
-    assert.deepEqual({ ...r, title: /^Coming/.test(r.title) },
-      { earlier: true, later: true, title: true, role: 'dialog' });
+    assert.deepEqual({ ...r, title: /right/.test(r.title) },
+      { earlier: true, later: false, title: true, role: 'dialog' });
     // Esc closes the menu without a panic
     await armPanics();
     await page.keyboard.press('Escape');
@@ -379,21 +383,22 @@ try {
     assert.equal(await ev(() => window.__panics), 0);
   });
 
-  await T('⋯ Duplicate appends a copy; Remove needs a hold; Open in Edit; + Add instrument → Edit picker', async () => {
+  await T('⋯ Duplicate puts a copy next to it; Remove needs a hold; Open in Edit; + Add instrument → Edit picker',
+    async () => {
     const n0 = (await song()).patch.slots.length;
     await page.click(tid('v6-more-0'));
     await page.click(tid('v6-dup-0'));
     await until((n) => window.__rig.store.currentSong().patch.slots.length === n + 1, n0);
     const s = await song();
-    assert.deepEqual(s.patch.slots[n0].instrument, s.patch.slots[0].instrument);
+    assert.deepEqual(s.patch.slots[1].instrument, s.patch.slots[0].instrument, 'the copy sits next to it (D23.2)');
     await until((n) => document.querySelectorAll('.v6-strip:not([hidden])').length === n + 1, n0);
-    // Remove: a short press does nothing, a hold removes
-    await page.click(tid(`v6-more-${n0}`));
-    await page.click(tid(`v6-remove-${n0}`));
+    // Remove (the copy): a short press does nothing, a hold removes
+    await page.click(tid('v6-more-1'));
+    await page.click(tid('v6-remove-1'));
     await page.waitForTimeout(200);
     assert.equal((await song()).patch.slots.length, n0 + 1, 'a tap does not remove');
-    if (!(await page.$(tid(`v6-menu-${n0}`)))) await page.click(tid(`v6-more-${n0}`));
-    await hold(tid(`v6-remove-${n0}`));
+    if (!(await page.$(tid('v6-menu-1')))) await page.click(tid('v6-more-1'));
+    await hold(tid('v6-remove-1'));
     await until((n) => window.__rig.store.currentSong().patch.slots.length === n, n0);
     // Open in Edit
     await page.click(tid('v6-more-1'));
@@ -561,7 +566,8 @@ try {
     await settled();
   });
 
-  await T('Revert, PANIC and Lock need a hold; Lock freezes Change / Add / Remove', async () => {
+  await T('Revert needs a hold; PANIC a tap; Lock a tap, unlock a hold; Lock freezes Change / Add / Remove',
+    async () => {
     // Revert: transpose, then hold
     const h0 = (await song()).hearIn;
     await page.click(tid('v6-transpose-up'));
@@ -572,18 +578,12 @@ try {
     assert.notEqual((await song()).hearIn, h0, 'a tap does not revert');
     await hold(tid('v6-revert'));
     await until((x) => window.__rig.store.currentSong().hearIn === x, h0);
-    // PANIC: a tap does nothing, a hold panics
+    // PANIC: a tap panics (D23.1, as today's Perform)
     await armPanics();
     await page.click(tid('v6-panic'));
-    await page.waitForTimeout(150);
-    assert.equal(await ev(() => window.__panics), 0);
-    await hold(tid('v6-panic'));
     await until(() => window.__panics === 1);
-    // Lock: hold to lock
+    // Lock: a tap locks (D23.1, as today's Perform: unlocking needs the hold)
     await page.click(tid('v6-lock'));
-    await page.waitForTimeout(150);
-    assert.equal(await ev(() => !!window.__rig.store.get().settings.performLock), false, 'a tap does not lock');
-    await hold(tid('v6-lock'));
     await until(() => window.__rig.store.get().settings.performLock === true);
     const r = await ev(() => ({
       change: document.querySelector('[data-testid="v6-change-0"]').disabled,
@@ -634,8 +634,22 @@ try {
       cy: r.top + r.height / 2 };
   }, sel);
   const keyRect = (pg, note, scope = '.v6-kbd') => rectOf(pg, `${scope} .pkey[data-note="${note}"]`);
-  /** Press a handle's centre, move to x in steps (mid() runs while still held), release. */
+  /**
+   * D24.3: on Perform an instrument's range is picked first on every pointer: click its strip name unless it is
+   * already the picked one (a second click would finish the pick).
+   */
+  async function pickOn(pg, i) {
+    const on = await pg.evaluate((k) => document.querySelector(`[data-testid="v6-strip-${k}"]`)
+      ?.classList.contains('range-picked'), i);
+    if (on) return;
+    await pg.click(`[data-testid="v6-who-${i}"]`);
+    await pg.waitForFunction((k) => document.querySelector(`[data-testid="v6-strip-${k}"]`)
+      .classList.contains('range-picked'), i, { timeout: 15000, polling: 50 });
+  }
+  /** Press a handle's centre, move to x in steps (mid() runs while still held), release. Picks a Perform bar first. */
   async function dragHandle(pg, sel, x, mid) {
+    const m = /"v6-kbd-h(?:lo|hi)-(\d+)"/.exec(sel);
+    if (m) await pickOn(pg, Number(m[1]));
     const b = await rectOf(pg, sel);
     await pg.mouse.move(b.cx, b.cy);
     await pg.mouse.down();
@@ -677,6 +691,7 @@ try {
     const k54 = await keyRect(page, 54); // Gb3, a black key
     let mid = null;
     await dragHandle(page, tid(`${KB}-hhi-2`), k54.r + 2, async () => {
+      await page.waitForTimeout(120); // past the 50 ms throttle (D24.2)
       mid = await ev(() => ({
         tip: document.querySelector('[data-testid="v6-kbd-tip"]').textContent,
         shown: !document.querySelector('[data-testid="v6-kbd-tip"]').hidden,
@@ -686,12 +701,14 @@ try {
     });
     assert.equal(mid.shown, true);
     assert.equal(mid.tip, `${name} · Gb1–Gb3`);
-    assert.equal(mid.hi, 59, 'nothing written while dragging');
+    assert.equal(mid.hi, 54, 'written live while dragging (D24.2)');
     assert.ok(near(mid.barR, k54.r), `bar end ${mid.barR} on the key's edge ${k54.r}`);
     await rangeIs(2, 30, 54);
     const after = (await song()).patch.slots[2];
     assert.deepEqual({ ...after, highNote: 59 }, before, 'only highNote changed');
-    assert.equal(await ev(() => document.querySelector('[data-testid="v6-kbd-tip"]').hidden), true);
+    // the drag's label goes; the picked bar keeps its plain label (D24.3)
+    assert.equal(await ev(() => document.querySelector('[data-testid="v6-kbd-tip"]').classList.contains('live')),
+      false);
     // a white key: the lowest end of bar 1 onto A2 (45)
     const k45 = await keyRect(page, 45);
     await dragHandle(page, tid(`${KB}-hlo-1`), k45.l - 1);
@@ -731,6 +748,7 @@ try {
     assert.equal(await ev(() => document.querySelector('[data-testid="v6-kbd-bar-1"]').classList.contains('clip-r')),
       true);
     // a press without a move on the clipped end writes nothing
+    await pickOn(page, 0);
     const h0 = await rectOf(page, tid(`${KB}-hlo-0`));
     await page.mouse.move(h0.cx, h0.cy);
     await page.mouse.down();
@@ -748,6 +766,7 @@ try {
   await T('U2 keys: handles focusable, ←/→ a semitone, Shift an octave, aria-valuetext; no song change', async () => {
     await setRange(2, 48, 72);
     const id = (await song()).id;
+    await pickOn(page, 2); // D24.3: only the picked bar's handles are in the tab order
     await page.focus(tid(`${KB}-hlo-2`));
     assert.equal(await ev(() => document.activeElement.getAttribute('role')), 'slider');
     await page.keyboard.press('ArrowRight');
@@ -814,6 +833,8 @@ try {
     assert.deepEqual(await rangeOf(0), [48, 72]);
     await hold(tid('v6-lock'));
     await until(() => !window.__rig.store.get().settings.performLock);
+    assert.equal(await page.getAttribute(tid(`${KB}-hhi-0`), 'tabindex'), '-1', 'not picked: out of the tab order');
+    await pickOn(page, 0);
     assert.equal(await page.getAttribute(tid(`${KB}-hhi-0`), 'tabindex'), '0');
   });
 
@@ -827,6 +848,7 @@ try {
       await setRange(3, 60, 84);
       await until(() => document.querySelectorAll('.v6-kbd .v6-rbar').length === 4);
       const before = (await song()).patch.slots.map((s) => [s.lowNote, s.highNote]);
+      await pickOn(page, 2);
       const h2 = await rectOf(page, tid(`${KB}-hhi-2`));
       const k65 = await keyRect(page, 65);
       await page.mouse.move(h2.cx, h2.cy);
@@ -843,10 +865,11 @@ try {
       await page.mouse.up();
       await page.waitForTimeout(150);
       assert.deepEqual((await song()).patch.slots.map((s) => [s.lowNote, s.highNote]), before.slice(1),
-        'no range written');
+        'the live writes were put back (D24.2), on the instrument, not the shifted neighbour');
       // F4: a view switch mid-drag; the release used to write 0 / 127 (the hidden keys measure 0 px)
       await setSlots(3);
       await setRange(1, 40, 80);
+      await pickOn(page, 1);
       const h1 = await rectOf(page, tid(`${KB}-hhi-1`));
       const k70 = await keyRect(page, 70);
       await page.mouse.move(h1.cx, h1.cy);
@@ -864,6 +887,7 @@ try {
       // F5: a stored one-key range (today's Edit allows it): → on its lowest end, ← on its highest and a short
       // inward drag change nothing (they used to move the end a key the other way); valuenow stays within min..max
       await setRange(2, 60, 60);
+      await pickOn(page, 2);
       await page.focus(tid(`${KB}-hlo-2`));
       await page.keyboard.press('ArrowRight');
       await page.focus(tid(`${KB}-hhi-2`));
@@ -926,7 +950,10 @@ try {
       const k60 = await keyRect(hp, 60, '.v6-kbd-range');
       await dragHandle(hp, tid(`${R}-hlo-0`), k60.l);
       await hp.waitForFunction(() => window.__h.state.slots[0].lo === 60);
-      assert.deepEqual(await hp.evaluate(() => window.__h.writes), [[0, 'lowNote', 60]]);
+      // D24.2: live writes while dragging (one end only), the last one is the release value
+      const ws = await hp.evaluate(() => window.__h.writes);
+      assert.ok(ws.every(([i, f]) => i === 0 && f === 'lowNote'), JSON.stringify(ws));
+      assert.deepEqual(ws[ws.length - 1].slice(0, 3), [0, 'lowNote', 60]);
       await hp.waitForFunction(() => document.querySelectorAll('.v6-kbd-range .pkey.out').length === 88 - 13);
       await hp.focus(tid(`${R}-hhi-0`));
       await hp.keyboard.press('Shift+ArrowRight');
@@ -1291,6 +1318,10 @@ try {
         await ev(({ sid, was }) => window.__rig.store.set(`songs.${sid}.patch.fx.reverb.returnGain`, was), { sid, was });
       }
     });
+
+  // ---------------------------------------------------------------- U-MOVE + D24 tweaks (move.tests.mjs)
+  await moveTests({ T, page, browser, origin, ev, until, tid, song, settled, hold, setSlots, SHOTS, assert, rectOf,
+    keyRect, dragHandle, pickOn, setRange, armPanics, errors, KB });
 
   await T('on / off cycles: today’s Perform comes back whole; nothing of v6 is left behind', async () => {
     for (let k = 0; k < 3; k++) {

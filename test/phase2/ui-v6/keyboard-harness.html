@@ -38,9 +38,9 @@
     const coarse = q.get('coarse') === '1' ? true : q.get('coarse') === '0' ? false : undefined;
     const kb = rangeKeyboard({
       size, coarse,
-      onRange: (i, field, note) => {
-        if (state.locked) return false;
-        writes.push([i, field, note]);
+      onRange: (i, field, note, phase) => {
+        if (state.locked && phase !== 'cancel') return false;
+        writes.push([i, field, note, phase]);
         state.slots[i][field === 'lowNote' ? 'lo' : 'hi'] = note;
         queueMicrotask(render); // like the store's batched notify
         return true;
