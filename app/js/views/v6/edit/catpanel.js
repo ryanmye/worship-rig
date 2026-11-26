@@ -53,7 +53,35 @@ export function relValue(song, rel) {
  */
 export function relsDiffer(song, base, rels) {
   if (!song || !base) return false;
-  return rels.some((r) => !sameValue(relValue(song, r), relValue(base, r)));
+  return rels.some((r) => !sameWithDefaults(getIn(song, r), getIn(base, r), addrOfRel(r)));
+}
+
+const plainObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+/** A leaf's PARAMS default when it is absent (a container, a dynamic or an unknown address: as it is). */
+function orDefault(v, addr) {
+  if (v !== undefined) return v;
+  const d = describe(addr);
+  return d && !d.dynamic ? d.default : undefined;
+}
+/**
+ * song-diff sameValue, key by key with each absent leaf at its PARAMS default (skeptic UI6-U5b F3): an optional
+ * object the song began without (fx.eq, fx.comp, a slot's touch) and the same object set back to its defaults
+ * ({low: 0}) are the same sound, so neither dots. Before, the whole object was compared with `undefined` and the dot
+ * stayed after a double-click reset.
+ * @param {*} a
+ * @param {*} b
+ * @param {string} addr  the §4 address of a / b ('fx.eq', 'slots.0.touch', 'fx.reverb.size')
+ * @returns {boolean}
+ */
+export function sameWithDefaults(a, b, addr) {
+  const x = orDefault(a, addr);
+  const y = orDefault(b, addr);
+  if ((plainObj(x) || x === undefined) && (plainObj(y) || y === undefined) && (plainObj(x) || plainObj(y))) {
+    const keys = new Set([...Object.keys(x || {}), ...Object.keys(y || {})]);
+    for (const k of keys) if (!sameWithDefaults(x?.[k], y?.[k], `${addr}.${k}`)) return false;
+    return true;
+  }
+  return sameValue(x, y);
 }
 
 /**

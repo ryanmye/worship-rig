@@ -30,6 +30,7 @@ import { rangeKeyboard, rangeText } from '../keyboard.js';
 import { createStrip } from '../strip.js';
 import { slotColor } from '../lib.js';
 import { openChooser } from './chooser.js';
+import { sameWithDefaults } from './catpanel.js';
 
 /**
  * The category list (D18). `dot` = the slot-relative fields compared with the Revert snapshot for the row's dot (U5b,
@@ -105,14 +106,6 @@ function specValue(spec, slot) {
   return v === undefined ? spec.default : v;
 }
 
-/** A slot field with its PARAMS default when absent (an optional field set back to its default is no change). */
-function fieldValue(slot, i, f) {
-  const v = getIn(slot, f);
-  if (v !== undefined) return v;
-  const d = describe(`slots.${i}.${f}`);
-  return d && !d.dynamic ? d.default : undefined;
-}
-
 /**
  * The categories whose dot is on: what differs between the slot and the same place in the Revert snapshot (U5b; the
  * shell's ctx.getBaseline). Sound = the instrument and its smart sliders' values (shelves read through readEq);
@@ -132,7 +125,8 @@ export function instCatChanges(slot, base, meta, i) {
     out.add('sound');
     return out;
   }
-  const differs = (f) => !sameValue(fieldValue(slot, i, f), fieldValue(base, i, f));
+  // skeptic UI6-U5b F3: key by key with PARAMS defaults (an optional touch object reset to {shape: 1} is no change)
+  const differs = (f) => !sameWithDefaults(getIn(slot, f), getIn(base, f), `slots.${i}.${f}`);
   const sameInst = refKey(slot.instrument) === refKey(base.instrument);
   const specs = smartSlidersFor(meta);
   if (!sameInst || specs.some((sp) => !sameValue(specValue(sp, slot), specValue(sp, base)))) out.add('sound');

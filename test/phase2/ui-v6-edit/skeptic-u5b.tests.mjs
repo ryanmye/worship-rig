@@ -94,4 +94,44 @@ export async function skepticU5bTests(x) {
     assert.equal(await ev(() => document.querySelector('[data-testid="v6e-change"]').getAttribute('aria-expanded')),
       'false');
   });
+
+  await T('skeptic U5b F3: an optional object set back to its defaults does not dot (Master EQ, Glue, Touch)',
+    async () => {
+      // a song that begins without fx.eq / fx.comp / slot 0 touch
+      const id = await ev(() => {
+        const { store } = window.__rig;
+        const st = store.get();
+        const ok = (s) => s && !s.patch.fx.eq && !s.patch.fx.comp && s.patch.slots[0] && !s.patch.slots[0].touch;
+        if (ok(st.songs[st.settings.currentSongId])) return st.settings.currentSongId;
+        const s = Object.values(st.songs).find(ok);
+        if (s) store.set('settings.currentSongId', s.id);
+        return s ? s.id : null;
+      });
+      assert.ok(id, 'a song without fx.eq / fx.comp / touch');
+      await x.settled();
+      await freshBaseline();
+      const dots = (k) => ev((kk) => Object.fromEntries([...document.querySelectorAll(
+        `[data-testid="v6e-${kk}-cnav"] .v6e-cn`)].map((b) => [b.dataset.cat, !b.querySelector('.v6e-cd').hidden])), k);
+      const tabDot = (b) => ev((bid) => !document.querySelector(`.v6e-rt[data-block="${bid}"] .v6e-rt-cd`).hidden, b);
+      await select('master');
+      await setStore([['patch.fx.eq.low', 3], ['patch.fx.comp.amount', 0.4]]);
+      await page.waitForTimeout(150);
+      let d = await dots('master');
+      assert.deepEqual([d.meq, d.glue, await tabDot('master')], [true, true, true]);
+      await setStore([['patch.fx.eq.low', 0], ['patch.fx.comp.amount', 0]]);
+      await page.waitForTimeout(150);
+      d = await dots('master');
+      assert.deepEqual([d.meq, d.glue, await tabDot('master')], [false, false, false],
+        JSON.stringify(await ev(() => window.__rig.store.currentSong().patch.fx)));
+      await select('slot:0');
+      const inst = () => ev(() => !document.querySelector('[data-testid="v6e-cnav"] .v6e-cn[data-cat="touch"] .v6e-cd')
+        .hidden);
+      await setStore([['patch.slots.0.touch.shape', 2]]);
+      await page.waitForTimeout(150);
+      assert.equal(await inst(), true);
+      await setStore([['patch.slots.0.touch.shape', 1]]);
+      await page.waitForTimeout(150);
+      assert.equal(await inst(), false);
+      assert.equal(await tabDot('slot:0'), false);
+    });
 }
