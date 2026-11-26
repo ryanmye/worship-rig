@@ -185,6 +185,19 @@ export async function v6Tests(x) {
         assert.equal(await page.isVisible(tid('chart-toggle')), false, 'no Chart toggle in the song bar');
         await setSong();
         const w0 = await ev(() => document.querySelector('.v6-side').getBoundingClientRect().width);
+        // orchestrator decision a (UI6-U7b review): a device that never chose shows the chart on the stage; nothing
+        // is stored for the placement until the player picks one (then it is remembered)
+        assert.equal((await st()).placement, 'stage');
+        assert.equal((await st()).onStage, false, 'not up until asked for');
+        assert.equal(await ev((k) => 'placement' in JSON.parse(localStorage.getItem(k) || '{}'), PREFS), false);
+        await page.click(tid('v6-sb-tab-chart'));
+        await until(() => !!document.querySelector('[data-testid="v6-chart-stage"]'));
+        assert.equal(await ev((k) => 'placement' in JSON.parse(localStorage.getItem(k) || '{}'), PREFS), false);
+        await page.click(`${tid('v6-chart-stage')} ${tid('v6-chart-place')}`);
+        await until(() => !!document.querySelector('[data-testid="v6-chart-side"]'));
+        assert.equal(await ev((k) => JSON.parse(localStorage.getItem(k)).placement, PREFS), 'side');
+        await page.click(tid('v6-sb-tab-drone'));
+        await until((w) => Math.abs(document.querySelector('.v6-side').getBoundingClientRect().width - w) < 2, w0);
         await page.click(tid('v6-sb-tab-chart'));
         await until(() => !!document.querySelector('[data-testid="v6-chart-side"]'));
         const s = await st();
@@ -681,7 +694,8 @@ export async function v6Tests(x) {
       });
 
     // ------------------------------------------------------------------ iPad
-    await T('U7b iPad landscape (1180 × 820) = the Mac layout; portrait (820 × 1180) = music stand; 1024 × 700', async () => {
+    await T('U7b iPad landscape (1180 × 820) = the Mac layout; portrait (820 × 1180) = music stand; 1024 × 700',
+      async () => {
       await ev(() => window.__rig.views.chart.setPlacement('stage'));
       await page.setViewportSize({ width: 1180, height: 820 });
       await until(() => !!document.querySelector('.v6-minis.cols'));

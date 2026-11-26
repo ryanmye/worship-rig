@@ -10,6 +10,8 @@
 // Per-device preferences live in today's key (localStorage 'worship-rig.chart', views/chart/core.js), shared with
 // today's view (mode, speed) and kept beside its fields: `placement` ('side' | 'stage'), `stage` (up on the stage),
 // `pct` (stage text size, %), `sidePct` (sidebar, %). Today's px index (`font`) becomes `pct` once (logic pctFromPx).
+// Orchestrator decision (UI6-U7b review, tier 2): a device that never chose shows the chart on the STAGE (D16 "give
+// the user the choice"; `placement` is stored only when the player picks ⇥ Sidebar / ⤢ Stage).
 import { h, disposer } from '../../components/util.js';
 import { readStoredPrefs, writeStoredPrefs } from '../../chart/core.js';
 import {
@@ -23,6 +25,8 @@ import { miniFaders } from './minis.js';
 export const V6_CHART_CSS_HREF = './styles-v6-chart.css';
 /** The sheet's look (chord / lyric / heading classes) is today's chart stylesheet. */
 const CHART_CSS_HREF = './styles-chart.css';
+/** Where the chart shows on a device that never chose (UI6-U7b review, orchestrator decision a). */
+export const CHART_PLACEMENT_DEFAULT = 'stage';
 /** The sidebar's width while the Chart tab shows, until the player drags it (mockup .side.chartw: 540 px). */
 export const CHART_SIDE_WIDTH = 540;
 const PLACEMENTS = ['side', 'stage'];
@@ -30,11 +34,12 @@ const PLACEMENTS = ['side', 'stage'];
 /**
  * This device's chart preferences for the v6 chart, migrating today's px index to a percent the first time.
  * @returns {{placement:'side'|'stage', stage:boolean, pct:number, sidePct:number, mode:string, speed:number}}
+ *   (placement: CHART_PLACEMENT_DEFAULT when this device never chose)
  */
 export function readV6Prefs() {
   const p = readStoredPrefs();
   const out = {
-    placement: PLACEMENTS.includes(p.placement) ? p.placement : 'side',
+    placement: PLACEMENTS.includes(p.placement) ? p.placement : CHART_PLACEMENT_DEFAULT,
     stage: p.stage === true,
     pct: validPct(p.pct, NaN),
     sidePct: validPct(p.sidePct, CHART_SIDE_PCT),
@@ -92,8 +97,9 @@ export function mountChartV6(ctx, mounts) {
   const c = {
     store,
     prefs,
-    save: () => writeStoredPrefs({ placement: prefs.placement, stage: prefs.stage, pct: prefs.pct,
-      sidePct: prefs.sidePct, mode: prefs.mode, speed: prefs.speed }),
+    // `placement` is not here: it is the player's choice, written by setPlacement only (decision a: absent = stage)
+    save: () => writeStoredPrefs({ stage: prefs.stage, pct: prefs.pct, sidePct: prefs.sidePct, mode: prefs.mode,
+      speed: prefs.speed }),
     locked,
     pct: (where) => (where === 'side' ? prefs.sidePct : prefs.pct),
     setPct(where, p) {
@@ -144,6 +150,7 @@ export function mountChartV6(ctx, mounts) {
   function setPlacement(p) {
     if (!PLACEMENTS.includes(p)) return;
     prefs.placement = p;
+    writeStoredPrefs({ placement: p });
     if (p === 'side') {
       prefs.stage = false;
       c.save();
