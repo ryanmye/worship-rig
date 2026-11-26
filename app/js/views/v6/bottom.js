@@ -1,7 +1,7 @@
 // UI v6 bottom row (D16 "Kept from today"; UI6-build-plan U1, U2): the keyboard with range bars (keyboard.js, 'perform'
 // size: today's keys C2–C7, one draggable range bar per instrument, computer-key letters while no MIDI keyboard is
-// connected, held notes lit); then Revert (hold), Fade out, PANIC (hold, or Esc) and Lock (hold), wired to the same
-// controller / store calls as views/perform.js.
+// connected, held notes lit); then Revert (hold), Fade out, PANIC (a tap, or Esc) and Lock (a tap locks, a hold
+// unlocks), wired to the same controller / store calls as views/perform.js (D23.1: as today's Perform).
 import { h, setText, disposer } from '../components/util.js';
 import { holdButton } from '../components/holdButton.js';
 import { say } from '../components/voice.js';
@@ -53,25 +53,27 @@ export function bottomRow(v) {
     controller.fadeOutAll();
     v.setFaded(true);
   });
-  // PANIC needs a hold here (D16 mockup "hold · or Esc"; DESIGN_PHILOSOPHY: dangerous controls hard to hit by
-  // accident). Esc and ⌘. still panic at once (main.js / controller).
-  const panicBtn = use(holdButton({
-    content: [h('span.panic-l', { text: 'PANIC' }), h('small.panic-k', { text: 'hold · or Esc' })],
-    ms: HOLD_MS, requireHold: true, className: 'btn-panic v6-act', testid: 'v6-panic',
-    ariaLabel: 'Panic: all notes off (press and hold, or Esc)',
-    title: 'All notes off and the click stops (hold; Esc, ⌘.)',
-    onActivate: () => controller.panic(),
-  }));
+  // D23.1: PANIC is a tap again, as on today's Perform (the mockup's 600 ms hold is dropped: a stuck note must stop at
+  // once). Esc and ⌘. are unchanged (main.js / controller).
+  const panicBtn = button(d, '.btn-panic.v6-act', [h('span.panic-l', { text: 'PANIC' }),
+    h('small.panic-k', { text: 'or Esc' })], {
+    'data-testid': 'v6-panic', 'aria-label': 'Panic: all notes off (or Esc)',
+    title: 'All notes off and the click stops (Esc, ⌘.)',
+  });
+  d.listen(panicBtn, 'click', () => controller.panic());
+  // D23.1: Lock as today's Perform (views/perform.js, UX S1): one tap locks; unlocking needs the 600 ms hold, so a
+  // stray tap mid-song never unlocks
   const lockText = h('span.lock-text', { text: 'Lock' });
   const lockSub = h('span.lock-sub', { text: '' });
   const lockBtn = use(holdButton({
     content: [h('span.lock-l', {}, icon('lock', 18), lockText), lockSub],
-    ms: HOLD_MS, requireHold: true, className: 'lock-toggle v6-act', testid: 'v6-lock',
+    ms: HOLD_MS, requireHold: () => v.isLocked(), className: 'lock-toggle v6-act', testid: 'v6-lock',
+    holdText: 'keep holding… (0.6 s)',
     title: 'Perform lock: playing stays live; the key, transpose and Revert need a hold; Edit, Settings and library '
-      + 'changes are frozen. Hold to lock, hold to unlock.',
+      + 'changes are frozen. Tap to lock, hold to unlock.',
     onActivate: () => store.set('settings.performLock', !v.isLocked()),
   }));
-  const el = h('div.v6-bottom', { 'data-testid': 'v6-bottom' }, keysEl, revertBtn.el, fadeBtn, panicBtn.el, lockBtn.el);
+  const el = h('div.v6-bottom', { 'data-testid': 'v6-bottom' }, keysEl, revertBtn.el, fadeBtn, panicBtn, lockBtn.el);
 
   let lettersKey = '';
   return {
@@ -104,10 +106,10 @@ export function bottomRow(v) {
       lockBtn.el.classList.toggle('on', x.locked);
       lockBtn.el.setAttribute('aria-pressed', String(x.locked));
       lockBtn.el.setAttribute('aria-label', x.locked ? 'Perform lock is on. Press and hold to unlock.'
-        : 'Lock Perform view (press and hold)');
+        : 'Lock Perform view');
       setText(lockText, x.locked ? 'Locked' : 'Lock');
-      setText(lockSub, x.locked ? 'hold to unlock' : 'hold to lock');
-      for (const b of [revertBtn, panicBtn, lockBtn]) b.refresh();
+      setText(lockSub, x.locked ? 'hold to unlock' : '');
+      for (const b of [revertBtn, lockBtn]) b.refresh();
     },
     setHeld(held, partOf) {
       kb.setHeld(held, partOf);
