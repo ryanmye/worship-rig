@@ -67,24 +67,25 @@
   scrollbar-width: thin; overscroll-behavior-x: contain; }
 .v6 .v6-ch-jumps[hidden] { display: none; }
 .v6 .v6-ch-jp { flex: none; }
-.v6 .v6-ch-mode { display: flex; padding: 2px; border-radius: 10px; background: var(--well, var(--bg));
+.v6 .v6-ch-mode { display: flex; padding: 0; border-radius: 10px; background: var(--well, var(--bg));
   border: 1px solid var(--line-2); }
-.v6 .v6-ch-seg { min-height: 40px; min-width: 44px; padding: 0 12px; border: 0; border-radius: 8px;
+.v6 .v6-ch-seg { min-height: 44px; min-width: 44px; padding: 0 12px; border: 0; border-radius: 8px;
   background: transparent; font-weight: 700; font-size: 13.5px; }
 .v6 .v6-ch-seg.on { background: linear-gradient(var(--plate-top, var(--accent)), var(--plate-bot, var(--accent)));
   color: var(--accent-ink); }
-.v6 .v6-tsize { display: flex; align-items: center; gap: 2px; padding: 2px; border-radius: 10px;
+.v6 .v6-tsize { display: flex; align-items: center; gap: 2px; padding: 0; border-radius: 10px;
   background: var(--well, var(--bg)); border: 1px solid var(--line-2); }
-.v6 .v6-ts-b { min-width: 44px; min-height: 40px; padding: 0; border: 0; border-radius: 8px; background: var(--panel-2);
+.v6 .v6-ts-b { min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 8px; background: var(--panel-2);
   font-family: var(--v6-book); font-weight: 800; line-height: 1; }
 .v6 .v6-ts-b.sm-a { font-size: 14px; }
 .v6 .v6-ts-b.big-a { font-size: 24px; }
-.v6 .v6-ts-n { min-width: 56px; min-height: 40px; padding: 0 4px; border: 0; background: none;
+.v6 .v6-ts-n { min-width: 56px; min-height: 44px; padding: 0 4px; border: 0; background: none;
   color: var(--accent-text, var(--accent)); font-weight: 800; font-variant-numeric: tabular-nums; }
-.v6 .v6-ts-fit { min-width: 44px; min-height: 40px; padding: 0 10px; border: 0; border-radius: 8px;
+.v6 .v6-ts-fit { min-width: 44px; min-height: 44px; padding: 0 10px; border: 0; border-radius: 8px;
   background: transparent; color: var(--muted); font-weight: 700; font-size: 13px; }
 .v6 .v6-tsize button:disabled { opacity: .4; }
-.v6 .v6-ch-place, .v6 .v6-ch-edit { white-space: nowrap; }
+/* skeptic UI6-U7b F5: every Perform button is ≥ 44 × 44 (UI6-U1; chart-view review), the wells hold them flush */
+.v6 .v6-ch-place, .v6 .v6-ch-edit { white-space: nowrap; min-width: 44px; min-height: 44px; }
 .v6 .v6-ch-play { min-height: 44px; padding: 0 14px; border-radius: 10px; font-weight: 800;
   border: 1px solid var(--accent); color: var(--accent-text, var(--accent));
   background: color-mix(in srgb, var(--accent) 12%, var(--panel-2)); white-space: nowrap; }
@@ -175,7 +176,7 @@
 .v6 .v6-ce-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .v6 .v6-ce-fmt { display: flex; gap: 2px; padding: 2px; border-radius: 10px; background: var(--well, var(--bg));
   border: 1px solid var(--line-2); }
-.v6 .v6-ce-seg { min-height: 40px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent;
+.v6 .v6-ce-seg { min-height: 44px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent;
   font-size: 13px; font-weight: 700; }
 .v6 .v6-ce-seg.on { box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--accent-text, var(--accent)); }
 .v6 .v6-ce-insert { min-height: 44px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--panel-2);

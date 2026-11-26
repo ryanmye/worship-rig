@@ -915,6 +915,34 @@ export async function v6Tests(x) {
       });
     });
 
+    await T('U7b skeptic F5: every chart button is ≥ 44 × 44 (stage and sidebar headers, Edit chart; 1024 × 700)',
+      async () => {
+        const small = (sel) => ev((s) => [...document.querySelectorAll(`${s} button, ${s} select`)]
+          .filter((x) => x.getClientRects().length && getComputedStyle(x).visibility !== 'hidden')
+          .map((x) => [x.textContent.trim().slice(0, 12), x.getBoundingClientRect()])
+          .filter(([, r]) => r.width < 43.5 || r.height < 43.5)
+          .map(([t, r]) => `${t} ${Math.round(r.width)}×${Math.round(r.height)}`), sel);
+        await setSong();
+        for (const vp of [[1280, 800], [1024, 700]]) {
+          await page.setViewportSize({ width: vp[0], height: vp[1] });
+          await ev(() => window.__rig.views.chart.setPlacement('stage'));
+          await until(() => !!document.querySelector('[data-testid="v6-chart-stage"]'));
+          await page.waitForTimeout(150);
+          assert.deepEqual(await small('[data-testid="v6-chart-stage"]'), [], `stage ${vp}`);
+          assert.deepEqual(await small('[data-testid="v6-minis"]'), [], `minis ${vp}`);
+          await ev(() => window.__rig.views.chart.setPlacement('side'));
+          await until(() => !!document.querySelector('[data-testid="v6-chart-side"]'));
+          await page.waitForTimeout(150);
+          assert.deepEqual(await small('[data-testid="v6-chart-side"]'), [], `sidebar ${vp}`);
+          await ev(() => window.__rig.views.chart.openEdit());
+          await until(() => !!document.querySelector('[data-testid="v6-chart-editor"]'));
+          assert.deepEqual(await small('[data-testid="v6-chart-editor"]'), [], `Edit chart ${vp}`);
+          await page.click(tid('v6-ce-cancel'));
+          await until(() => !document.querySelector('[data-testid="v6-chart-editor"]'));
+        }
+        await page.setViewportSize({ width: 1280, height: 800 });
+      });
+
     await T('U7b zero console.error, no HTTP ≥ 400', async () => {
       assert.deepEqual(errors, []);
     });
