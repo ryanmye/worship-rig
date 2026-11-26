@@ -1088,6 +1088,22 @@ export function mountEdit(el, ctx) {
     renderTabs();
     revealTab();
   });
+  // D23 (U-MOVE-store review O1): the selected instrument tab is positional ('slot:<i>'). A move, insert or remove
+  // of the shown song's slots (the v6 Perform's ⋯ / drag while Edit stays mounted) keeps it on the same instrument:
+  // after the store's change notification (a microtask, so the tabs exist for the new count), slot:<i> → its new
+  // index. The selected slot itself removed: the count clamp in the tabs' rebuild applies, as before.
+  if (typeof ctx.store?.onSlotMap === 'function') {
+    core.cleanups.push(ctx.store.onSlotMap(({ id, order }) => {
+      const m = /^slot:(\d+)$/.exec(editState.selected);
+      if (id !== core.songId || !m) return;
+      const was = editState.selected;
+      const j = order.indexOf(Number(m[1]));
+      if (j < 0 || j === Number(m[1])) return;
+      queueMicrotask(() => {
+        if (editState.selected === was) editState.select(`slot:${j}`); // no focus: nothing opens by itself
+      });
+    }));
+  }
   core.listen(editState, 'wiring', renderWire);
   core.listen(editState, 'changes', renderTabs);
   core.listen(editState, 'notes', renderLeds);

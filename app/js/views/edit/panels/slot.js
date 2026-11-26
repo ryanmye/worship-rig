@@ -141,6 +141,24 @@ export default {
   },
 };
 
+/** How long the Undo toasts of Remove and of an instrument change stay (round3-edit m3). */
+const UNDO_MS = 8000;
+/**
+ * D23 (U-MOVE-store review O1): an Undo record holds the index of the slot it was made for, and an instrument move,
+ * insert or remove (the v6 Perform's ⋯ / drag, while this Edit stays mounted) inside the Undo's 8 s would put it back
+ * into another instrument. The record follows its slot through store.onSlotMap (`u.i` → the new index, -1 when that
+ * slot itself was removed) until its toast is gone.
+ * @param {object} store
+ * @param {{songId:string, i:number}} u
+ */
+function followSlot(store, u) {
+  if (typeof store?.onSlotMap !== 'function') return;
+  const off = store.onSlotMap(({ id, order }) => {
+    if (id === u.songId && u.i >= 0) u.i = order.indexOf(u.i);
+  });
+  setTimeout(off, UNDO_MS + 1000);
+}
+
 /** @returns {{destroy():void, update(opts:object):void}} */
 function mountSlot(el, ctx, opts) {
   const C = ctx.C || {};
@@ -311,16 +329,21 @@ function mountSlot(el, ctx, opts) {
         instrument: JSON.parse(JSON.stringify(slot.instrument)), params: JSON.parse(JSON.stringify(slot.params || {})),
       };
       if (!ctx.set(P('instrument'), ref)) return;
+      followSlot(ctx.store, captured);
       const next = slotOf(ctx.store.getSong?.(s.id) || ctx.song());
       const toName = next ? displayName(next, metaOf(next)) : ref.id;
       ctx.toast(`${role()} is now ${toName}.`, 'info', {
-        ms: 8000, action: { label: 'Undo', run: () => undoInstrument(captured) },
+        ms: UNDO_MS, action: { label: 'Undo', run: () => undoInstrument(captured) },
       });
     }
   }
   /** Put the captured instrument and its params back (songs.<id>.patch.slots.<i>), unless the slot moved on. */
   function undoInstrument(u) {
     const song = u && ctx.store.get().songs[u.songId];
+    if (u && u.i < 0) {
+      ctx.toast('That sound is no longer in this song, so there is nothing to undo.', 'info');
+      return false;
+    }
     const cur = song && song.patch.slots[u.i];
     if (!cur || refKey(cur.instrument) !== u.to) {
       ctx.toast(`${slotName(u.i)} has changed since, so there is nothing to undo.`, 'info');
@@ -370,9 +393,10 @@ function mountSlot(el, ctx, opts) {
     const captured = { songId: s.id, i, slot: JSON.parse(JSON.stringify(slot)), name };
     if (!ctx.set(`slots.${i}`, null)) return;
     undo = captured;
+    followSlot(ctx.store, captured);
     renderEmptyUndo();
     const msg = `${name} removed from ${slotName(captured.i)}.`;
-    ctx.toast(msg, 'info', { ms: 8000, action: { label: 'Undo', run: () => doUndo(captured) } });
+    ctx.toast(msg, 'info', { ms: UNDO_MS, action: { label: 'Undo', run: () => doUndo(captured) } });
   }
   /** Write the captured slot back to the song it was removed from (songs.<id>.patch.slots.<i>). */
   function doUndo(u = undo) {
@@ -380,6 +404,11 @@ function mountSlot(el, ctx, opts) {
     const st = ctx.store.get();
     const song = st.songs[u.songId];
     if (!song) return false;
+    if (u.i < 0) { // D23: that (empty) slot was removed since (followSlot)
+      if (undo === u) undo = null;
+      renderEmptyUndo();
+      return false;
+    }
     if (song.patch.slots[u.i]) {
       ctx.toast(`${slotName(u.i)} has a sound again, so there is nothing to undo.`, 'info');
       if (undo === u) undo = null;
