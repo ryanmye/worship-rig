@@ -89,6 +89,188 @@ function loadPrefs(ids) {
     return defaultPrefs(ids);
   }
 }
+function savePrefs(prefs) {
+  try {
+    localStorage.setItem(SIDEBAR_KEY, JSON.stringify(prefs));
+  } catch {
+    /* private mode / quota: the layout still works for this session */
+  }
+}
+
+/**
+ * `prefs` with module `id` shown or hidden; null when refused (the last shown module stays). Hiding the open tab moves
+ * it to the first shown module.
+ * @param {ReturnType<typeof defaultPrefs>} prefs
+ * @param {string} id
+ * @param {boolean} on
+ * @returns {ReturnType<typeof defaultPrefs>|null}
+ */
+export function prefsWithShown(prefs, id, on) {
+  const hidden = prefs.hidden.filter((x) => x !== id);
+  if (!on) hidden.push(id);
+  if (hidden.length >= prefs.order.length) return null;
+  const next = { ...prefs, hidden };
+  if (!on && next.tab === id) next.tab = next.order.filter((x) => !hidden.includes(x))[0];
+  return next;
+}
+
+// U6 (Settings › Perform layout): the mounted sidebar, so a change made in Settings reaches it at once (it keeps its
+// prefs in memory); with no v6 Perform mounted, Settings reads and writes SIDEBAR_KEY directly
+let live = null;
+
+/**
+ * The sidebar's layout for Settings › Perform layout (U6): the same prefs and rules the ⋯ popover uses.
+ * @param {object[]} [mods]  the module registry (default SIDEBAR_MODULES)
+ * @returns {{mods:object[], prefs():object, commit(next:object):void, readonly live:boolean}}
+ */
+export function sidebarLayout(mods = SIDEBAR_MODULES) {
+  const ids = mods.map((m) => m.id);
+  return {
+    mods,
+    prefs: () => (live ? live.prefs() : loadPrefs(ids)),
+    commit: (next) => (live ? live.commit(next) : savePrefs(normalizePrefs(next, ids))),
+    get live() {
+      return !!live;
+    },
+  };
+}
+
+/**
+ * The customize list: per module a show / hide switch, ↑ ↓ and a ⠿ drag to reorder, then Starts: Open / Collapsed.
+ * One builder for the sidebar's ⋯ popover and Settings › Perform layout (U6), so both follow the same rules.
+ * @param {HTMLElement} pb  container (filled here)
+ * @param {ReturnType<import('../../components/util.js').disposer>} pd  owns the listeners
+ * @param {{mods:object[], prefs:() => object, commit:(next:object) => void, heading?:boolean}} api
+ *   `prefs()` the current prefs, `commit(next)` stores and applies new ones; `heading: false` leaves out the popover's
+ *   title line
+ * @returns {() => void} render: re-reads api.prefs()
+ */
+export function customizeList(pb, pd, api) {
+  const byId = new Map(api.mods.map((m) => [m.id, m]));
+  const ids = api.mods.map((m) => m.id);
+  const P = () => api.prefs();
+  const list = h('div.v6-cz-list', { role: 'list', 'aria-label': 'Modules, in order' });
+  const startOpen = button(pd, '.v6-cz-start', 'Open', { 'data-value': 'open', 'data-testid': 'v6-sb-starts-open' });
+  const startCol = button(pd, '.v6-cz-start', 'Collapsed', {
+    'data-value': 'collapsed', 'data-testid': 'v6-sb-starts-collapsed',
+  });
+  if (api.heading !== false) pb.append(h('div.v6-pop-h', {}, 'Sidebar ', h('span', { text: 'drag ⠿ or use ↑ ↓ to reorder' })));
+  pb.append(
+    list,
+    h('div.v6-cz-starts', { role: 'group', 'aria-label': 'When the app starts, the sidebar is' },
+      h('span.v6-cap', { text: 'Starts' }), startOpen, startCol),
+  );
+  for (const b of [startOpen, startCol]) {
+    pd.listen(b, 'click', () => {
+      api.commit({ ...P(), starts: b.dataset.value });
+      renderCz();
+    });
+  }
+  const commit = (order) => {
+    api.commit({ ...P(), order });
+    renderCz();
+  };
+  const move = (id, by) => {
+    const order = P().order.slice();
+    const i = order.indexOf(id);
+    const j = i + by;
+    if (i < 0 || j < 0 || j >= order.length) return;
+    order.splice(i, 1);
+    order.splice(j, 0, id);
+    commit(order);
+    list.querySelector(`[data-id="${id}"] .v6-cz-${by < 0 ? 'up' : 'dn'}:not(:disabled)`)?.focus();
+  };
+  const setShown = (id, on) => {
+    const next = prefsWithShown(P(), id, on);
+    if (!next) return; // the last shown module stays
+    api.commit(next);
+    renderCz();
+  };
+  const rows = new Map();
+  let dragStop = null;
+  pd.add(() => dragStop?.()); // closing the popover mid-drag drops the drag
+  for (const id of ids) {
+    const m = byId.get(id);
+    const gripEl = h('span.v6-cz-grip', { text: '⠿', 'aria-hidden': 'true', title: 'Drag to reorder' });
+    const up = button(pd, '.v6-cz-mv.v6-cz-up', '↑', {
+      'aria-label': `Move ${m.label} up`, 'data-testid': `v6-cz-up-${id}`,
+    });
+    const dn = button(pd, '.v6-cz-mv.v6-cz-dn', '↓', {
+      'aria-label': `Move ${m.label} down`, 'data-testid': `v6-cz-dn-${id}`,
+    });
+    const sw = button(pd, '.v6-sw', h('span.v6-sw-k'), {
+      role: 'switch', 'aria-checked': 'true', 'aria-label': `Show ${m.label}`, 'data-testid': `v6-cz-show-${id}`,
+    });
+    const row = h('div.v6-cz', { role: 'listitem', 'data-id': id, 'data-testid': `v6-cz-${id}` },
+      gripEl, h('span.v6-cz-t', {}, h('b', { text: m.label }), h('small', { text: m.blurb || '' })), up, dn, sw);
+    pd.listen(up, 'click', () => move(id, -1));
+    pd.listen(dn, 'click', () => move(id, 1));
+    pd.listen(sw, 'click', () => setShown(id, sw.getAttribute('aria-checked') !== 'true'));
+    // drag the ⠿ to reorder: the row follows the pointer between its neighbours, the order is saved on release.
+    // The moves are followed on the document, not by pointer capture: moving the row in the DOM releases a capture.
+    pd.listen(gripEl, 'pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      e.preventDefault();
+      const pid = e.pointerId;
+      row.classList.add('dragging');
+      const onMove = (ev) => {
+        if (ev.pointerId !== pid) return;
+        const others = [...list.children].filter((r) => r !== row);
+        const after = others.find((r) => {
+          const b = r.getBoundingClientRect();
+          return ev.clientY < b.top + b.height / 2;
+        });
+        if (after) {
+          if (row.nextElementSibling !== after) list.insertBefore(row, after);
+        } else if (list.lastElementChild !== row) list.append(row);
+      };
+      const stop = () => {
+        document.removeEventListener('pointermove', onMove, true);
+        document.removeEventListener('pointerup', onUp, true);
+        document.removeEventListener('pointercancel', onUp, true);
+        dragStop = null;
+      };
+      const onUp = (ev) => {
+        if (ev.pointerId !== pid) return;
+        stop();
+        row.classList.remove('dragging');
+        const order = [...list.children].map((r) => r.dataset.id);
+        if (order.join() !== P().order.join()) commit(order);
+      };
+      dragStop?.();
+      dragStop = stop;
+      document.addEventListener('pointermove', onMove, true);
+      document.addEventListener('pointerup', onUp, true);
+      document.addEventListener('pointercancel', onUp, true);
+    });
+    rows.set(id, { row, up, dn, sw });
+  }
+  function renderCz() {
+    const prefs = P();
+    const n = prefs.order.length;
+    const vis = prefs.order.filter((x) => !prefs.hidden.includes(x));
+    list.replaceChildren(...prefs.order.map((id) => rows.get(id).row));
+    prefs.order.forEach((id, i) => {
+      const r = rows.get(id);
+      r.up.disabled = i === 0;
+      r.dn.disabled = i === n - 1;
+      const on = vis.includes(id);
+      r.sw.setAttribute('aria-checked', String(on));
+      r.sw.classList.toggle('on', on);
+      r.sw.disabled = on && vis.length === 1; // the last shown module stays
+      r.sw.title = r.sw.disabled ? 'The sidebar keeps at least one module'
+        : on ? 'Shown: tap to hide' : 'Hidden: tap to show';
+      r.row.classList.toggle('off', !on);
+    });
+    for (const b of [startOpen, startCol]) {
+      const on = b.dataset.value === prefs.starts;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', String(on));
+    }
+  }
+  renderCz();
+  return renderCz;
+}
 
 /**
  * Inline stroke icon from a module's own markup (static strings in the module files, never user data).
@@ -135,14 +317,24 @@ export function rightSidebar(v, o = {}) {
   }
   let lastState = v.store.get();
 
-  const save = () => {
-    try {
-      localStorage.setItem(SIDEBAR_KEY, JSON.stringify(prefs));
-    } catch {
-      /* private mode / quota: the layout still works for this session */
-    }
-  };
+  const save = () => savePrefs(prefs);
   const shown = () => prefs.order.filter((id) => !prefs.hidden.includes(id));
+  /**
+   * New prefs from the customize list (the ⋯ popover or Settings › Perform layout, U6): stored, then the tabs / rail
+   * rebuilt and the layout applied when the order or the shown modules changed (Starts only applies at the next start).
+   */
+  function commitPrefs(next) {
+    const heads = next.order.join() !== prefs.order.join() || next.hidden.join() !== prefs.hidden.join()
+      || next.tab !== prefs.tab;
+    prefs = { ...next };
+    save();
+    if (!heads) return;
+    buildHeads();
+    renderBadges(lastState);
+    applyLayout();
+  }
+  const me = { prefs: () => prefs, commit: commitPrefs };
+  live = me;
 
   // ---------------------------------------------------------------- DOM
   const el = h('aside.v6-right.v6-side', { 'data-testid': 'v6-right', 'aria-label': 'Sidebar' });
@@ -424,138 +616,9 @@ export function rightSidebar(v, o = {}) {
     czPop.render();
   });
 
+  // U6: one builder for this popover and Settings › Perform layout (customizeList below)
   function buildCustomize(pb, pd) {
-    const list = h('div.v6-cz-list', { role: 'list', 'aria-label': 'Modules, in order' });
-    const startOpen = button(pd, '.v6-cz-start', 'Open', { 'data-value': 'open', 'data-testid': 'v6-sb-starts-open' });
-    const startCol = button(pd, '.v6-cz-start', 'Collapsed', {
-      'data-value': 'collapsed', 'data-testid': 'v6-sb-starts-collapsed',
-    });
-    pb.append(
-      h('div.v6-pop-h', {}, 'Sidebar ', h('span', { text: 'drag ⠿ or use ↑ ↓ to reorder' })),
-      list,
-      h('div.v6-cz-starts', { role: 'group', 'aria-label': 'When the app starts, the sidebar is' },
-        h('span.v6-cap', { text: 'Starts' }), startOpen, startCol),
-    );
-    for (const b of [startOpen, startCol]) {
-      pd.listen(b, 'click', () => {
-        prefs.starts = b.dataset.value;
-        save();
-        renderCz();
-      });
-    }
-    const commit = (order) => {
-      prefs.order = order;
-      save();
-      buildHeads();
-      renderBadges(lastState);
-      applyLayout();
-      renderCz();
-    };
-    const move = (id, by) => {
-      const order = prefs.order.slice();
-      const i = order.indexOf(id);
-      const j = i + by;
-      if (i < 0 || j < 0 || j >= order.length) return;
-      order.splice(i, 1);
-      order.splice(j, 0, id);
-      commit(order);
-      list.querySelector(`[data-id="${id}"] .v6-cz-${by < 0 ? 'up' : 'dn'}:not(:disabled)`)?.focus();
-    };
-    const setShown = (id, on) => {
-      const hidden = prefs.hidden.filter((x) => x !== id);
-      if (!on) hidden.push(id);
-      if (hidden.length >= prefs.order.length) return; // the last shown module stays
-      prefs.hidden = hidden;
-      if (!on && prefs.tab === id) prefs.tab = shown()[0];
-      save();
-      buildHeads();
-      renderBadges(lastState);
-      applyLayout();
-      renderCz();
-    };
-    const rows = new Map();
-    let dragStop = null;
-    pd.add(() => dragStop?.()); // closing the popover mid-drag drops the drag
-    for (const id of ids) {
-      const m = byId.get(id);
-      const gripEl = h('span.v6-cz-grip', { text: '⠿', 'aria-hidden': 'true', title: 'Drag to reorder' });
-      const up = button(pd, '.v6-cz-mv.v6-cz-up', '↑', {
-        'aria-label': `Move ${m.label} up`, 'data-testid': `v6-cz-up-${id}`,
-      });
-      const dn = button(pd, '.v6-cz-mv.v6-cz-dn', '↓', {
-        'aria-label': `Move ${m.label} down`, 'data-testid': `v6-cz-dn-${id}`,
-      });
-      const sw = button(pd, '.v6-sw', h('span.v6-sw-k'), {
-        role: 'switch', 'aria-checked': 'true', 'aria-label': `Show ${m.label}`, 'data-testid': `v6-cz-show-${id}`,
-      });
-      const row = h('div.v6-cz', { role: 'listitem', 'data-id': id, 'data-testid': `v6-cz-${id}` },
-        gripEl, h('span.v6-cz-t', {}, h('b', { text: m.label }), h('small', { text: m.blurb || '' })), up, dn, sw);
-      pd.listen(up, 'click', () => move(id, -1));
-      pd.listen(dn, 'click', () => move(id, 1));
-      pd.listen(sw, 'click', () => setShown(id, sw.getAttribute('aria-checked') !== 'true'));
-      // drag the ⠿ to reorder: the row follows the pointer between its neighbours, the order is saved on release.
-      // The moves are followed on the document, not by pointer capture: moving the row in the DOM releases a capture.
-      pd.listen(gripEl, 'pointerdown', (e) => {
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
-        e.preventDefault();
-        const pid = e.pointerId;
-        row.classList.add('dragging');
-        const onMove = (ev) => {
-          if (ev.pointerId !== pid) return;
-          const others = [...list.children].filter((r) => r !== row);
-          const after = others.find((r) => {
-            const b = r.getBoundingClientRect();
-            return ev.clientY < b.top + b.height / 2;
-          });
-          if (after) {
-            if (row.nextElementSibling !== after) list.insertBefore(row, after);
-          } else if (list.lastElementChild !== row) list.append(row);
-        };
-        const stop = () => {
-          document.removeEventListener('pointermove', onMove, true);
-          document.removeEventListener('pointerup', onUp, true);
-          document.removeEventListener('pointercancel', onUp, true);
-          dragStop = null;
-        };
-        const onUp = (ev) => {
-          if (ev.pointerId !== pid) return;
-          stop();
-          row.classList.remove('dragging');
-          const order = [...list.children].map((r) => r.dataset.id);
-          if (order.join() !== prefs.order.join()) commit(order);
-        };
-        dragStop?.();
-        dragStop = stop;
-        document.addEventListener('pointermove', onMove, true);
-        document.addEventListener('pointerup', onUp, true);
-        document.addEventListener('pointercancel', onUp, true);
-      });
-      rows.set(id, { row, up, dn, sw });
-    }
-    function renderCz() {
-      const n = prefs.order.length;
-      const vis = shown();
-      list.replaceChildren(...prefs.order.map((id) => rows.get(id).row));
-      prefs.order.forEach((id, i) => {
-        const r = rows.get(id);
-        r.up.disabled = i === 0;
-        r.dn.disabled = i === n - 1;
-        const on = vis.includes(id);
-        r.sw.setAttribute('aria-checked', String(on));
-        r.sw.classList.toggle('on', on);
-        r.sw.disabled = on && vis.length === 1; // the last shown module stays
-        r.sw.title = r.sw.disabled ? 'The sidebar keeps at least one module'
-          : on ? 'Shown: tap to hide' : 'Hidden: tap to show';
-        r.row.classList.toggle('off', !on);
-      });
-      for (const b of [startOpen, startCol]) {
-        const on = b.dataset.value === prefs.starts;
-        b.classList.toggle('on', on);
-        b.setAttribute('aria-pressed', String(on));
-      }
-    }
-    renderCz();
-    return renderCz;
+    return customizeList(pb, pd, { mods, prefs: () => prefs, commit: commitPrefs });
   }
 
   // ---------------------------------------------------------------- badges (the drone's live dot + key)
@@ -668,6 +731,7 @@ export function rightSidebar(v, o = {}) {
     },
     destroy() {
       destroyed = true;
+      if (live === me) live = null;
       czPop?.close();
       endDrag(false);
       unmount();

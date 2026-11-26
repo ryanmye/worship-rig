@@ -306,6 +306,11 @@ export function mountSettings(el, ctx) {
   const settingBinds = []; // {key, apply(settings)}
   const S = () => store.get().settings;
   let isOpen = false;
+  // UI v6 U6: the v6 Settings (views/v6/settings.js) while settings.uiV6 is on: it restyles this DOM and adds the
+  // category summaries, search and the MIDI Learn / Perform layout categories; null while off (nothing loaded)
+  let v6 = null;
+  let v6Loading = null;
+  let destroyed = false;
   let statsTimer = null;
   let prevFocus = null;
 
@@ -413,6 +418,7 @@ export function mountSettings(el, ctx) {
     const html = document.documentElement;
     if (!isOpen || e.key !== 'Escape' || html.hasAttribute('data-hotkey-capture')) return;
     if (html.hasAttribute('data-gb-import')) return;
+    if (html.hasAttribute('data-settings-search')) return; // UI v6 U6: Esc clears the search box first
     e.preventDefault();
     requestClose();
   }, true);
@@ -1179,6 +1185,8 @@ export function mountSettings(el, ctx) {
   const backupBox = h('div.st-inline');
   const restoreBox = h('div.st-restore');
   const aboutBox = h('dl.st-about');
+  let aboutInfo = null; // rig.getInfo() of the last renderAbout (Mac app)
+  let manualBackupAt = null; // Back up now's last success (Mac app)
 
   // ---- import latest backup (controller.importLatestBackup; replaces the library after backing it up)
   function restoreIdle() {
@@ -1504,6 +1512,7 @@ export function mountSettings(el, ctx) {
         info = null;
       }
     }
+    aboutInfo = info && !info.error ? info : null; // UI v6 U6: the About summary
     if (info && !info.error) {
       rows.push(['Version', `${info.version || '?'} (Mac app)`], ['Electron', info.electron || '?'], ['Local server port', String(info.port ?? location.port)]);
       if (info.backupsDir) rows.push(['Backups', info.backupsDir]);
@@ -1518,6 +1527,7 @@ export function mountSettings(el, ctx) {
         btn('Back up now', async () => {
           const r = await rig.backupNow(store.exportJSON({ pretty: false }));
           if (r && r.error) console.warn('[settings] backupNow', r.error);
+          else manualBackupAt = Date.now(); // UI v6 U6: the Library & Backup summary
           toast(r && !r.error ? 'Backup saved' : 'The backup could not be saved.', r && !r.error ? 'info' : 'error');
         }),
         typeof rig.openFolder === 'function' ? btn('Open backups folder', () => rig.openFolder('backups')) : null,
@@ -1939,6 +1949,7 @@ export function mountSettings(el, ctx) {
     }
     if (remember) writeLastCat(cat);
     if (focus) tabs.get(cat).focus();
+    v6?.shown?.(cat, { remember, focus });
     return cat;
   }
   listen(nav, 'keydown', (e) => {
@@ -2057,8 +2068,10 @@ export function mountSettings(el, ctx) {
     if (updates) updates.refresh();
     if (hotkeys) hotkeys.refresh();
     renderSound2();
-    if (!revealSection(opts && opts.section)) showCategory(readLastCat());
+    const linked = revealSection(opts && opts.section);
+    if (!linked) showCategory(readLastCat());
     syncOrientation();
+    v6?.opened?.(linked);
     markDialog('settings', true);
     statsTimer = setInterval(renderStats, 1000);
     queueMicrotask(() => closeBtn.focus());
@@ -2092,11 +2105,47 @@ export function mountSettings(el, ctx) {
     el.dispatchEvent(new CustomEvent('settings-close'));
   }
 
+  // ---- UI v6 U6: settings.uiV6 on → views/v6/settings.js enhances this dialog (live, also while open); off → it puts
+  // everything back. One source of behaviour: the v6 module moves and restyles these nodes, it never copies them.
+  const v6Api = {
+    el, dialog, nav, body, closeBtn, tabs, panels, advs, cats, C,
+    store, controller, midi, engine, rig, isElectron, ctx, toast,
+    showCategory, revealSection, resolveSection, isOpen: () => isOpen, current: () => current,
+    nodes: { learnSection, perfSection, appearance, themeCards, themeGrid, lightRow, bankBox, outputSelect },
+    renderPacks, learnName, mappingText, velLabel: (v) => (VEL_OPTS.find((o) => o.value === v) || VEL_OPTS[1]).label,
+    latencyLabel: (v) => (LATENCY_OPTS.find((o) => o.value === v) || {}).label || '',
+    about: () => aboutInfo, manualBackupAt: () => manualBackupAt,
+  };
+  function syncV6(s = S()) {
+    const on = s.uiV6 === true;
+    if (on && !v6 && !v6Loading) {
+      v6Loading = import('./v6/settings.js').then(async (mod) => {
+        await mod.loadSettingsCss(); // never paint the v6 Settings unstyled
+        v6Loading = null;
+        if (destroyed || S().uiV6 !== true || v6) {
+          if (!v6) mod.unloadSettingsCss();
+          return;
+        }
+        v6 = mod.enhanceSettings(v6Api);
+      }).catch((err) => {
+        v6Loading = null;
+        document.querySelector('link[data-v6-settings-css]')?.remove();
+        console.warn(`[settings] v6 Settings not available: ${err && err.message}`); // today's Settings stays
+      });
+    } else if (!on && v6) {
+      const x = v6;
+      v6 = null;
+      x.destroy();
+    }
+  }
+  settingBinds.push({ key: 'uiV6', apply: syncV6 });
+
   renderLearn();
   renderPadInfo();
   populateOutputs(S().outputDeviceId, false);
   populateMidi();
   showCategory(readLastCat());
+  syncV6();
 
   return {
     open,
@@ -2106,6 +2155,11 @@ export function mountSettings(el, ctx) {
     },
     destroy() {
       close();
+      destroyed = true;
+      if (v6) {
+        v6.destroy();
+        v6 = null;
+      }
       for (const c of cleanups.splice(0)) {
         try {
           c();
@@ -2128,6 +2182,10 @@ export function mountSettings(el, ctx) {
     /** The category on show ('sound', 'keyboards', …). */
     get category() {
       return current;
+    },
+    /** UI v6 U6: the v6 Settings while settings.uiV6 is on (test hook), else null. */
+    get v6() {
+      return v6;
     },
     _debug: { startPedalTest, toggleLearn, renderSamples, showCategory, resolveSection, components: C.__source },
   };

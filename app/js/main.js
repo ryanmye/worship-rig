@@ -981,7 +981,9 @@ window.addEventListener(
     // v11-electron: Esc while recording a global shortcut cancels the recording only (views/settings-mac.js);
     // v11-importer: Esc in the GarageBand import dialog closes that dialog only (views/settings-import.js)
     const html = document.documentElement;
-    const owned = html.hasAttribute('data-hotkey-capture') || html.hasAttribute('data-gb-import');
+    // UI v6 U6: while the v6 Settings search box holds text, Esc clears it first (views/v6/settings.js)
+    const owned = html.hasAttribute('data-hotkey-capture') || html.hasAttribute('data-gb-import')
+      || html.hasAttribute('data-settings-search');
     if (settingsOpen && e.key === 'Escape' && !owned) {
       e.preventDefault();
       escClosedSettings = e; // D24.7: this Esc was Settings' (escPanicKey may run after this listener)

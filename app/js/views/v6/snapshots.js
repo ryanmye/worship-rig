@@ -24,6 +24,22 @@ const writeFold = (on) => {
   }
 };
 
+// U6 (Settings › Perform layout › Snapshots row): the mounted row, so Settings folds it at once; with no v6 Perform
+// mounted, Settings reads and writes SNAPS_FOLD_KEY directly
+let liveRow = null;
+/** @returns {boolean} whether the snapshots row is folded on this device (the mounted row's state, else stored) */
+export function snapsFolded() {
+  return liveRow ? liveRow.folded : readFold();
+}
+/**
+ * Fold or show the snapshots row (Settings › Perform layout, U6): the mounted row's setFolded, else the stored fold.
+ * @param {boolean} on
+ */
+export function setSnapsFolded(on) {
+  if (liveRow) liveRow.setFolded(!!on);
+  else writeFold(!!on);
+}
+
 /**
  * @param {object} v  the v6 shell's view context
  * @param {{onFold?:(folded:boolean) => void}} [o]
@@ -125,7 +141,7 @@ export function snapshotsRow(v, o = {}) {
   }
   applyFold();
 
-  return {
+  const api = {
     el,
     chip,
     render,
@@ -138,9 +154,12 @@ export function snapshotsRow(v, o = {}) {
       applyFold();
     },
     destroy() {
+      if (liveRow === api) liveRow = null;
       d.dispose();
       el.remove();
       chip.remove();
     },
   };
+  liveRow = api;
+  return api;
 }

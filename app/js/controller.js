@@ -3993,6 +3993,8 @@ export function createController(o) {
     reloadPads,
     restoreChromePads,
     backupNow,
+    /** UI v6 U6 (Settings › Library & Backup summary): when this page last wrote an automatic backup, or null. */
+    lastBackupAt: () => (Number.isFinite(lastBackup) ? lastBackup : null),
     importLatestBackup,
     applyDeviceSettings,
     inspectDeviceSettings,
