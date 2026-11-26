@@ -114,6 +114,55 @@ export async function leftTests(x) {
     assert.equal(await page.getAttribute(tid('v6-quick'), 'aria-expanded'), 'false');
   });
 
+  await T('U4 skeptic F1: an open sheet follows its opener on a window resize / rotation and a snapshots fold',
+    async () => {
+      // the sheet used to be placed once, on open: 1280 → 1024 left it 34 px off the left Quick (the column narrows to
+      // 64 px), 24 px below it, its arrow pointing at nothing and over Revert
+      const near = (a, b, tol = 1) => Math.abs(a - b) <= tol;
+      const fit = async (from) => {
+        const q = await rect('.qs');
+        const b = await rect(from === 'left' ? tid('v6-quick') : '#btn-quick');
+        return from === 'left' ? { beside: near(q.l - b.r, 12), top: near(q.t, b.t) }
+          : { beside: q.t > b.b && q.l <= b.l + b.w / 2 && q.r >= b.l + b.w / 2, top: true };
+      };
+      try {
+        for (const from of ['left', 'top']) {
+          const sel = from === 'left' ? tid('v6-quick') : '#btn-quick';
+          await page.setViewportSize({ width: 1280, height: 800 });
+          await page.click(sel);
+          await until(() => window.__rig.views.v6.quickOpen === true);
+          assert.deepEqual(await fit(from), { beside: true, top: true }, `${from}: 1280×800`);
+          for (const [w, h] of [[1024, 700], [820, 1180], [1180, 820]]) {
+            await page.setViewportSize({ width: w, height: h });
+            await page.waitForTimeout(150);
+            assert.deepEqual(await fit(from), { beside: true, top: true }, `${from}: resized to ${w}×${h}`);
+            const qs = await rect('.qs');
+            assert.ok(qs.r <= w && qs.b <= h, `${from} ${w}×${h}: inside the window (${qs.r}, ${qs.b})`);
+          }
+          await page.click(sel);
+          await until(() => window.__rig.views.v6.quickOpen === false);
+        }
+        // the snapshots row folds (⌃) and unfolds (the song bar's chip) under an open sheet: the board moves
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await page.click(tid('v6-quick'));
+        await until(() => window.__rig.views.v6.quickOpen === true);
+        const t0 = (await rect(tid('v6-quick'))).t;
+        await page.click(tid('v6-snap-fold'));
+        await page.waitForTimeout(150);
+        assert.ok((await rect(tid('v6-quick'))).t < t0 - 20, 'the fold moved the board up');
+        assert.deepEqual(await fit('left'), { beside: true, top: true }, 'after the fold');
+        await page.click(tid('v6-snap-chip'));
+        await page.waitForTimeout(150);
+        assert.deepEqual(await fit('left'), { beside: true, top: true }, 'after the unfold');
+        assert.equal(await quickOpen(), true, 'the sheet stays open');
+        await page.click(tid('v6-quick'));
+        await until(() => window.__rig.views.v6.quickOpen === false);
+      } finally {
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await ev(() => window.__rig.views.v6.closeQuick());
+      }
+    });
+
   await T('U4 Quick: TAP sets the tempo; Swell time, Touch, Reversed write today’s paths', async () => {
     const before = await song();
     const st0 = await ev(() => {

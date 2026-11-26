@@ -177,7 +177,15 @@ export function mountPerformV6(root, ctx) {
   // ---------------------------------------------------------------- layout
   const el = h('div.v6.v6-perform', { 'data-testid': 'v6-perform' });
   v.host = el; // popovers go here, outside the strips' scroller
-  const snaps = snapshotsRow(v, { onFold: (f) => el.classList.toggle('snaps-folded', f) });
+  let quickPlaced = null; // the sheet's re-anchoring (placeQuick below), once the sheet exists
+  const snaps = snapshotsRow(v, {
+    onFold: (f) => {
+      el.classList.toggle('snaps-folded', f);
+      // skeptic UI6-U4 F1: the board (and the left Quick) moved up or down under an open sheet (not while mounting:
+      // snapshotsRow applies the saved fold before the sheet exists)
+      if (quickPlaced) quickPlaced.push();
+    },
+  });
   const bar = songBar(v, el, snaps.chip);
   const row = stripsRow(v);
   // U4: the left panel (views/v6/left.js): a Quick button (the same sheet as the top bar's) + today's wheel column
@@ -321,6 +329,17 @@ export function mountPerformV6(root, ctx) {
     if (quick.isOpen) return;
     renderQuick();
     quickFrom = from;
+    placeQuick(from);
+    lp.setQuickOpen(true); // both buttons say the one sheet is open (quickSheet marks the top bar's)
+    quick.open(opts);
+  };
+  /**
+   * Anchor the sheet to its opener. Also run on a window resize while it is open (skeptic UI6-U4 F1: an iPad
+   * rotation or a Mac window resize moved the button, e.g. the column narrows to 64 px below 1100 px, and the sheet
+   * stayed where it was: 32 px off the button, its arrow pointing at nothing, over Revert).
+   * @param {HTMLElement|null} from
+   */
+  function placeQuick(from) {
     const p = el.getBoundingClientRect();
     const a = from?.getBoundingClientRect();
     const side = from === lp.quickBtn;
@@ -339,9 +358,15 @@ export function mountPerformV6(root, ctx) {
         quick.el.style.setProperty('--qx', `${Math.max(12, Math.round(a.left + a.width / 2 - p.left - left - 7))}px`);
       }
     }
-    lp.setQuickOpen(true); // both buttons say the one sheet is open (quickSheet marks the top bar's)
-    quick.open(opts);
-  };
+  }
+  const replaceQuick = rafCoalesce(() => {
+    if (quick.isOpen && !root.hidden) placeQuick(quickFrom);
+  });
+  d.add(() => replaceQuick.cancel());
+  d.listen(window, 'resize', () => {
+    if (quick.isOpen) replaceQuick.push();
+  });
+  quickPlaced = replaceQuick;
   /** Either Quick button: close the sheet if it is open (whichever opened it), else open it by that button. */
   const toggleQuick = (from) => {
     if (quick.isOpen) quick.close();
