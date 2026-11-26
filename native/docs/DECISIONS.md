@@ -444,3 +444,21 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
    the app; a stuck note costs one extra key press, never a lost edit.
    Ryan: "or add to settings" → a setting **Settings › Keyboards & MIDI › "Esc always panics"** (off by default =
    the rule above; on = Esc panics at once even with a pick, popover or sheet open). Per device, not in the library.
+
+## D25: Snapshots stay today's scenes; a snapshot can have a name (orchestrator, tier 2, 2026-11-26; UI v6 U7c)
+- Answer to UI6-build-plan "Open questions carried into the build: Snapshots vs today's scenes", for the Save snapshot
+  dialog (mockup `native/docs/design/mockups/dialogs.html` "Save snapshot").
+- **What a snapshot holds is unchanged:** today's scene (`shared/scenes.js`): each instrument's level and ON / OFF, the
+  drone's level, and the wheel's position when the song routes the wheel. Not Space / Echo, octave, sustain, range, or
+  the drone's ON / key / sound. The dialog's "It keeps" list says exactly that, and what is not kept.
+- **New: an optional `name` per scene.** A string, whitespace folded and trimmed, at most 40 characters
+  (`SCENE_NAME_MAX`; longer is cut there, by code point); absent = "Scene n", as today. The normalizer drops anything
+  else (not a string, empty). A scene with only a name is still unusable (dropped). No SCHEMA bump; `migrate()` keeps
+  it and stays idempotent; export / import and slot moves keep it. `controller.scenes.save(n, {name})` sets it;
+  without `name` an existing scene keeps its own (Quick's Save scene n and the row's Update never drop it).
+- Shown in the v6 snapshots row's chips and the folded "Snapshot: <name>" chip. Today's UI (flag off) still says
+  "Scene n".
+- **Still open for Ryan:** widening what a snapshot holds (the mockup's "Instruments: … Space / Echo, octave,
+  sustain", "Drone: on, C major", "Space & Echo: Hall, dotted 8th"). That is a separate decision: it changes what a
+  scene change does to the sound (a reverb or drone change mid-song can restart or retune things), so it is not part of
+  U7c. Easy to reverse: the name is one optional field.

@@ -8989,3 +8989,102 @@ The chord chart (D7, still the hidden 2.1 feature) in the v6 layout: a right-sid
   "U7b skeptic F1…F5" (each fails on e414a0b) and the default-placement checks in "U7b both on".
 - Gates after the skeptic: chart 38/38, ui-v6 68/68, ui-v6-edit 32/32, ui-v6-bank 16/16, settings 111/111, shell unit
   377/377, chart unit 123/123.
+
+## UI v6 U7c
+
+MIDI Learn mode on Perform, Arrange, the Save snapshot dialog and the song menu (native DECISIONS D14, D15, D20, D23,
+D24, O-AW-ML; new D25; `native/docs/lanes/UI6-build-plan.md` U7; mockup `native/docs/design/mockups/dialogs.html` tabs
+"MIDI Learn on Perform", "Arrange", "Save snapshot", "Song menu (⋯)"). Views behind `settings.uiV6` like U1–U7a. No
+SCHEMA change, no engine change. Flag off: the ui-v6 purity probe against f46bac4 is identical.
+
+- **`shared/scenes.js` (D25).** `SCENE_NAME_MAX = 40`, `sceneNameOf(v)` (a string, control characters and whitespace
+  runs folded to one space, trimmed, cut to 40 code points; null otherwise). `normalizeScene` keeps `name` when
+  `sceneNameOf` gives one and drops it otherwise; a scene with only a name is still null. So the store (whole
+  `songs.<id>.scenes` writes), `migrate()` (idempotent), export / import and `insertSlot` / `moveSlot` (they spread the
+  scene) keep it with no store change.
+- **`controller.js`.**
+  - `scenes.save(n, o?)`: `o.name` names the scene (`sceneNameOf`; '' / null = no name). Without `o.name` an existing
+    scene keeps its name, so Quick's "Save scene n", the row's Update and the bus never drop it.
+  - `learnCapture({timeoutMs}?)` → `Promise<{cc, channel} | {note, channel} | {error} | null>`: the next knob, fader,
+    pedal, key or pad with no target yet (`midi.learn(LEARN_CAPTURE_ID = '(capture)', {accept: 'control'})`). Nothing
+    is stored. Refused under Perform Lock (`perform-locked`; the lock coming on cancels it, as for `learn`);
+    `cancelLearn()` resolves it with null; CC64 resolves `{error: 'sustain-pedal-reserved'}`.
+  - `learn(id, {heard})`: with `heard` (a capture's result) it skips `midi.learn` and checks `heard` as midi.js would
+    for the target's kind (`heardFor`): a fader takes a CC that is not a pedal switch (64 / 66 / 67 → `needs-knob`,
+    64 → `sustain-pedal-reserved`), a button takes a note or a CC. Then the same code as every learn: Lock, the
+    learnable check, min / max / invert kept on a re-learn, C1 conflicts cleared and reported in `replaced`, pickups
+    reset. No new mapping format or rule (O-AW-ML unchanged).
+- **`midi.js`.** `LEARN_ACCEPTS` (exported) adds `'control'`: like `'any'` (a note-on or any CC value), except that
+  the structural CCs (bank select, data entry, NRPN / RPN numbers) are skipped and delivered normally, as for
+  `'fader'` / `'button'` (skeptic midi-learn-any M1).
+- **MIDI Learn on Perform (`views/v6/learn-mode.js`, `learnMode(v)`, `learnOnPerform()`).**
+  - A gold bar under the song bar (`v6-learnbar`): "1 · Move a knob, fader or pad" → "CC 21 moved ✓", "2 · Tap what it
+    should change" → "<target> ✓", Done. Either order works: the second step completes the learn through
+    `controller.learn(id, {heard})`, then the bar starts again for the next control.
+  - Targets (found by the v6 controls' test ids, so no module changed for them): each strip's level fader
+    (`slots.<i>.gain`), Space and Echo chips (`slots.<i>.sends.reverb` / `.delay`), the drone module's Level
+    (`drone.gain`, while that tab shows), the top bar's master fader (`master.volume`), Swell (`swell`), Fade out
+    (`fadeOutAll`), PANIC (`panic`); each kept only if `isLearnable` / `isLearnablePath` says so (octave, sustain, ON
+    tiles and the wheel are not). Outlines: `.v6-learnable` (dashed), `.v6-lpicked` (solid), `.v6-lmiss` (a key / pad
+    or a pedal switch was heard: only actions fit); badge `data-v6-badge` ("CC21", "N36") on learned ones. Body class
+    `v6-learning` (the master fader is outside `.v6`).
+  - While learning, a press / click / Enter on a target only picks it (document capture listeners; PANIC does not
+    panic, a fader does not move, no step panel opens); everything else plays.
+  - Entry: v6 Settings › MIDI Learn › **Learn on Perform** (closes Settings, shows Perform; Learn… still goes to
+    today's table) and a right-click / Ctrl-click (a Chromium long-press) on a target, which picks it. Toast: "CC 21 →
+    Warm Pad level ✓ · moves stick; Revert undoes them" (D20) for a fader, "… → PANIC ✓" for an action, "(it was …)"
+    when C1 cleared other mappings.
+  - Ends: Done; Esc (an overlay, group `v6-learn`: no panic); Perform lock on (refused under Lock too); leaving
+    Perform (Edit) or the v6 Perform (flag off): the capture is cancelled (only our own: another view's learn is never
+    cancelled). A song switch or a re-order of the song's instruments drops the half-made learn (back to step 1).
+    Nothing moved for `LEARN_IDLE_MS` (5 min): it ends with a toast. Arrange and learn mode never show together.
+  - **D24.7 "Esc always panics" on (builder's choice):** one Esc panics *and* leaves learn mode, as with every other
+    open overlay on Perform; nothing special-cased (a panic loses nothing, and the setting means "Esc always panics").
+- **Arrange (`views/v6/arrange.js`, `arrangeMode(v, {sidebar})`).** The snapshots row's **Arrange** button (U1 left it
+  out; disabled under Lock) shows a bar ("Drag a strip by ⠿ or use ◀ ▶ · drag the sidebar's modules, or ↑ ↓ · colours
+  follow the position · ✕ removes (hold)", Done) and `.arranging` on the v6 root:
+  - strips (`strip.js`): a handle row `v6-arr-<i>`: "⠿ drag" (`.v6-arr-grip`, a grip for strips-row.js's existing
+    drag, which now also takes `.v6-arr-grip`), ◀ / ▶ (`v.moveSlot`, keyboard focus follows via `v.focusArr`), ✕ (hold:
+    `v.removeSlot`); the small ⠿ grip hides;
+  - sidebar (`sidebar.js` `arrange(on)`, getter `arranging`): the body shows `customizeList` (the ⋯ popover's rows:
+    drag ⠿ or ↑ ↓, show / hide) in place of the module, tabs outlined, ⟩ and the resize grip hidden; a folded sidebar
+    opens for it and folds back after (that open is never saved: `save()` writes the open state from before).
+  - Done, Esc (no panic), Lock on, leaving Perform and learn mode end it. No new reorder logic.
+- **Save snapshot (`views/v6/dialogs.js`).** `modalDialog(v, o)`: role=dialog `aria-modal` over a dimmed backdrop
+  (so Esc cancels and never panics, also with D24.7 on: main.js `escModalOpen`), backdrop tap cancels, arrows stay in
+  it, closes on a song switch or a view change. `saveSnapshotDialog(v, {from})` from "+ Save" and the edited line's
+  "Save as new": the name (suggested; maxlength 40), "It keeps" (levels and ON / OFF with the instruments' names, the
+  drone's level, where the wheel is, or "not kept: the wheel drives nothing in this song"), "Not kept: …", then
+  Cancel / Update "<playing>" (only while a snapshot plays) / Save as new (disabled at 3). Update keeps the name unless
+  the field was edited; Save as new takes the field ('' = "Scene n"). Enter = Save as new (at 3: Update). A step to
+  another snapshot closes it. The edited line's Update still saves at once (keeps the name).
+  - `suggestSnapshotName(live, own, names, taken)` (D25 heuristic, exported): the instruments that are on, by position
+    ("A", "A + B", "A + B + n more"; none = "Drone only" / "All off"), then ", louder" / ", softer" when they average
+    more than 1.5 dB (`SUGGEST_DB`) from the song's own levels, else ", drone up" / ", drone down"; cut to 40; " 2",
+    " 3"… when taken. Never a tone word (a snapshot holds no tone).
+  - Row (`snapshots.js`): chips and the fold chip show the name; "+ Save" stays enabled at 3 while a snapshot plays
+    (the dialog then offers Update only); toasts name the snapshot. Lock does not block it (D24.1).
+- **Song menu (`views/v6/song-menu.js`; ⋯ `v6-songmenu-btn` after the song name in `songbar.js`).** A v6 popover:
+  Rename… (`nameDialog`, `store.set('songs.<id>.name')`, maxlength 120, empty refused), Duplicate
+  (`store.duplicateSong`: next to it, not selected, as Edit), Add to setlist ▸ (bank.js `setlistMenu` →
+  `store.addToSetlist`), Export this song… (`store.exportSong` + Edit's `download`, `<name>.rig-song.json`), Reset to
+  as saved (hold) (`v.revertSong`; disabled while `v.isSaved()`), Delete (hold).
+  - **Delete, worded truthfully:** `store.deleteSong` keeps no copy. In the Mac app (`ctx.rig.backupNow`) the menu says
+    "a backup of the library is made first" and runs `controller.backupNow()` first; if it fails nothing is deleted;
+    the toast points to Settings › Library › Import latest backup…. A pristine library (factory songs only) writes no
+    backup (as today). In Chrome it says "no automatic backup in Chrome: Export it first to keep a copy".
+  - Lock: Rename / Duplicate / Add to setlist / Export / Delete disabled ("Perform lock is on: unlock to change the
+    library", as Edit is frozen); Reset stays a hold. A trial song (U7a): Rename / Duplicate / Export / Delete disabled
+    with "Keep it first"; Add to setlist = `controller.keepTrial({setlistId})` (the banner's); closes UI6-U7a review O3
+    for this menu (Edit's own Export is unchanged).
+- **`perform.js`:** `v.names`, `v.isSaved()`, `v.focusArr`, `v.learn`, `v.arrange`; bars mounted after the Trying
+  banner; getters `learn`, `arrange`, `songMenu`. **`settings.js`:** "Learn on Perform" (`settings-learn-perform`)
+  beside Learn… (the control-count proof lists it). CSS: `styles-v6-dialogs.css` (imported by `styles-v6.css`).
+- **Tests.** `test/phase1/shell/scene-names.test.mjs` (6: sceneNameOf, normalizer, store + migrate + export / import
+  + slot moves, save(n, {name}), learnCapture / learn(id, {heard}) incl. structural CCs, kinds, C1, Lock);
+  `test/phase2/ui-v6/dialogs.tests.mjs` (6 checks run by run.mjs) and the U1 snapshot check now going through the
+  dialog; ui-v6-bank +1 (the song menu on a trial song). Screenshots `/home/claude/design-out/u7c/u7c-*.png`.
+- **Not done:** keyboard-only learn targets need focus first (Enter on a focused target picks it, but faders' inputs
+  are not in a learn order); no long-press of our own on iPad (Safari sends no contextmenu: Settings › Learn on
+  Perform is the way there, skeptic O-AW-ML O1 stays open); tabs are not dragged themselves in Arrange (the list in the
+  sidebar body orders them); "Knob 3" / "K1" in the mockup are CC numbers here ("CC 21", "CC21").

@@ -370,10 +370,39 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   placement = the stage (stored only when the player picks); (b) snapshots row on the stage, separate stage / sidebar
   sizes, Chart tab / rail as built. Open: O1 Notes module focus (same as F1), O2–O7 in the review.
 
+## U7c status (builder, 2026-11-26; lane-u7c from v2-native f46bac4; awaiting the skeptic)
+
+- Built: MIDI Learn mode on Perform (`views/v6/learn-mode.js`), Arrange (`arrange.js` + strip handles + the sidebar's
+  `arrange(on)`), the Save snapshot dialog and a name dialog (`dialogs.js`), the song menu (`song-menu.js`, ⋯ in the
+  song bar), `styles-v6-dialogs.css`; controller `learnCapture()` / `learn(id, {heard})` / `scenes.save(n, {name})`,
+  midi.js `accept: 'control'`, shared/scenes.js scene names (D25). Interface notes: CONTRACT_CHANGES "## UI v6 U7c".
+- Wired: learn knob-first or tap-first on every learnable v6 control (strip level / Space / Echo, drone level, master,
+  Swell, Fade out, PANIC) with outlines, badges, the D20 toast, from Settings › MIDI Learn › Learn on Perform and a
+  right-click; Esc / Done / Lock / song switch / Edit / flag off; Arrange from the snapshots row (◀ ▶ ✕ hold, the strip
+  drag, the sidebar's customize list); Save snapshot from + Save / Save as new (suggested name, It keeps, Update /
+  Save as new / Cancel, names in the row and fold chip); song menu (Rename…, Duplicate, Add to setlist ▸, Export,
+  Reset to as saved, Delete) with Lock and trial-song rules.
+- Decided here (tier 2/3, logged): **D25** snapshots stay today's scenes + an optional name; **Esc with "Esc always
+  panics" on** panics and leaves learn mode / Arrange (like every other Perform overlay); the Save snapshot dialog is
+  modal (Esc never panics there); **Delete** backs up the library first in the Mac app (refuses if it can't) and says
+  "no automatic backup in Chrome" there; "+ Save" stays enabled at 3 snapshots while one plays (Update / rename).
+- Choices to confirm with Ryan: the name heuristic (instruments on + louder / softer / drone up / down); badges show
+  the CC ("CC21") instead of the mockup's "K1"; Update keeps the old name unless the field was edited; the trial song's
+  Rename is refused too ("Keep it first"); Arrange orders the sidebar with the list in the sidebar body (tabs are
+  outlined, not dragged themselves).
+- Open for Ryan: widening what a snapshot holds (Space / Echo, drone key / sound) — D25 keeps it as today.
+- Not done: an iPad long-press entry (Safari has no contextmenu; Settings › Learn on Perform works there); at 820 px
+  the song bar's ⋯ makes the existing tight bar tighter (U8's iPad pass).
+- Gates: ui-v6 74/74 (purity vs f46bac4 identical), ui-v6-bank 17/17, ui-v6-edit 32/32, settings 111/111, ui-core
+  78/78, shell unit 383/383 (+6 in `scene-names.test.mjs`), edit-v2 learn 1/1; engine untouched. Screenshots:
+  `/home/claude/design-out/u7c/` (`u7c-learn-1280.png`, `u7c-learn-done-1280.png`, `u7c-arrange-1280.png`,
+  `u7c-savesnap-1280.png`, `u7c-songmenu-1280.png`, `u7c-*-820.png`).
+
 ## Open questions carried into the build (decide, log in DECISIONS, tell Ryan)
 
 - **Snapshots vs today's scenes.** Today: up to 3 scenes per song, levels / ON / drone level / wheel only. The v6
   mockups show named snapshots that may also hold Space / Echo and the drone. U1 shows the existing scenes in the
   snapshots row (names "Scene 1…" until named; no schema change). Widening what a snapshot holds is a separate,
-  logged decision.
+  logged decision. **U7c → D25:** snapshots stay today's scenes; an optional name per scene (no SCHEMA bump); widening
+  stays open for Ryan.
 - Chart and song bank pieces already exist hidden (chart view D7, bank O-AW-PP); U7 reuses their logic.
