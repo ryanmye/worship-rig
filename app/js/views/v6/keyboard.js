@@ -318,6 +318,9 @@ export function rangeKeyboard(o = {}) {
         onClose: (reason) => {
           pickClose = null;
           if (reason !== 'api' && picked !== null) {
+            // skeptic UI6-move F2: an Esc mid-drag drops the drag too (its start value back, as the strip grip's Esc
+            // and every other cancel); before, the pick ended but the drag kept writing live and committed on release
+            if (drag) cancelDrag();
             picked = null;
             layoutBars();
             o.onPick?.(null);

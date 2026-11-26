@@ -468,7 +468,7 @@ export async function moveTests(x) {
     assert.ok(cost.p95 < 50, `one write costs ${cost.p95} ms at p95 (the throttle interval is 50)`);
   });
 
-  await T('D24.2 every cancel path puts the pre-drag value back: Lock, Edit, a song switch, a pick switch, '
+  await T('D24.2 every cancel path puts the pre-drag value back: Lock, Edit, a song switch, a pick switch, Esc, '
     + 'a touch cancel', async () => {
     await setSlots(4);
     const id = (await song()).id;
@@ -488,6 +488,18 @@ export async function moveTests(x) {
         },
       },
       pick: { run: () => ev(() => document.querySelector('[data-testid="v6-who-0"]').click()), after: async () => {} },
+      // skeptic UI6-move F2: Esc finishes the pick (D24.7) and drops the drag with it; before, the drag kept writing
+      // and committed on release. Also with "Esc always panics" on (that press panics as well)
+      esc: { run: () => page.keyboard.press('Escape'), after: async () => {} },
+      escPanics: {
+        run: async () => {
+          await ev(() => window.__rig.store.set('settings.escPanics', true));
+          await armPanics();
+          await page.keyboard.press('Escape');
+          await until(() => window.__panics === 1);
+        },
+        after: () => ev(() => window.__rig.store.set('settings.escPanics', null)),
+      },
     };
     for (const [k, p] of Object.entries(paths)) {
       await setRange(1, 40, 64);
