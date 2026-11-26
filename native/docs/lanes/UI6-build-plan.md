@@ -89,7 +89,9 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   on / off with the count-in, tempo − / + / Tap, setup read only, Count-in & level… → Edit › Song) + "Loading…" /
   "Preparing n of m" in the sidebar header and a spinner on the rail. CONTRACT_CHANGES "## UI v6 U-METRO".
 
-- **Preview switch for Ryan (U1 review O3):** `?ui6=1` only works in Chrome; the Mac app needs a visible way to turn
+- ~~**Preview switch for Ryan (U1 review O3):**~~ **Done (lane-small, builder; skeptic pending):** Settings › Look ›
+  Perform view › "Try the new layout (preview)", swaps Perform live (Chrome and the Mac app). CONTRACT_CHANGES
+  "## UI v6 preview switch in Settings". Original note: `?ui6=1` only works in Chrome; the Mac app needs a visible way to turn
   v6 on for the U9 review. Add "Try the new layout (preview)" in Settings (today's Settings, Look or Mac category),
   writing `settings.uiV6`. Before U8 ends.
 - Pre-existing red suites to fix separately: eq "L-21 note labels fit" (fails on base), engine suite's 404 on

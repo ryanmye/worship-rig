@@ -1296,7 +1296,7 @@ async function runMode(mode, browser) {
       await closeSettings();
     });
 
-    // lane-small: D24.7 "Esc always panics"
+    // lane-small: D24.7 "Esc always panics" and the UI v6 preview switch (UI6-U1 review O3)
     const pressed = (t) => ev((sel) => {
       const b = document.querySelector(sel);
       return b.getAttribute('aria-pressed') ?? b.getAttribute('aria-checked');
@@ -1361,6 +1361,39 @@ async function runMode(mode, browser) {
         await until(() => !('escPanics' in window.__rig.store.get().settings));
         await closeSettings();
       }
+    });
+
+    await T('UI6-U1 O3 Look › Try the new layout (preview): writes settings.uiV6 (absent when off) and swaps Perform '
+      + 'live (on → the v6 Perform, off → today’s)', async () => {
+      await openSettings();
+      await cat('look');
+      const tog = '[data-testid="setting-ui-v6"]';
+      assert.match(await page.textContent('[data-testid="setting-row-ui-v6"]'),
+        /Try the new layout \(preview\)[\s\S]*Preview of 2\.0’s new screens; turn off any time\./);
+      assert.equal(await pressed(tog), 'false');
+      assert.equal(await ev(() => 'uiV6' in window.__rig.store.get().settings), false);
+      await page.click(tog);
+      await until(() => window.__rig.store.get().settings.uiV6 === true);
+      if (mode === 'app') {
+        await until(() => !!window.__rig.views.v6
+          && !!document.querySelector('#view-perform > .v6[data-testid="v6-perform"]'), null, 20000);
+        assert.equal(await ev(() => document.querySelectorAll('link[data-v6-css]').length), 1);
+        await closeSettings();
+        await page.click('#view-switch button[data-value="perform"]');
+        await until(() => document.body.dataset.view === 'perform' && !!document.querySelector('.v6-side'));
+        await openSettings();
+        await cat('look');
+      }
+      assert.equal(await pressed(tog), 'true');
+      await page.click(tog);
+      await until(() => !('uiV6' in window.__rig.store.get().settings));
+      if (mode === 'app') {
+        await until(() => !window.__rig.views.v6 && !!document.querySelector('#view-perform > .perform'), null, 20000);
+        assert.equal(await ev(() => document.querySelectorAll('link[data-v6-css], .v6').length), 0);
+        await closeSettings();
+        await page.click('#view-switch button[data-value="edit"]');
+        await until(() => document.body.dataset.view === 'edit');
+      } else await closeSettings();
     });
 
     // polish-1: the retired Edit's .ed-* rules are pruned; what remains is exactly what settings.js renders

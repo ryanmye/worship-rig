@@ -1562,9 +1562,16 @@ export function mountSettings(el, ctx) {
       ),
     ),
   );
+  // UI6-U1 review O3: the v6 preview switch, visible (the Mac app has no ?ui6=1). settings.uiV6 is true or absent
+  // (store.js); main.js swaps Perform when it changes, as __rig.setUiV6 does
+  const uiV6Tog = tog('uiV6', 'On');
+  uiV6Tog.el.dataset.testid = 'setting-ui-v6';
+  const uiV6Row = row('Try the new layout (preview)', uiV6Tog.el, 'Preview of 2.0’s new screens; turn off any time.');
+  uiV6Row.dataset.testid = 'setting-row-ui-v6';
   const perfSection = h('section.st-section', { 'aria-label': 'Perform view', 'data-section': 'perform' },
     h('h2.st-h2', { text: 'Perform view' }),
     row('Chips per sound', performChips.el, 'Under each fader. 2 = Space and Echo only, for a longer fader.'),
+    uiV6Row,
   );
   // D24.7: settings.escPanics, per device, absent = off (today's rule: Esc closes what is open first). main.js
   // listens for it only while it is on

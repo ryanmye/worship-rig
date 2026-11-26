@@ -8406,3 +8406,15 @@ Native DECISIONS D24.7 ("or add to settings"); UI6-build-plan queued "Esc settin
 - Tests: `test/phase1/shell/esc-panics-store.test.mjs`; settings suite (app + fixture) "D24.7 …" (toggle, device-local,
   Settings' Esc over Edit and Perform, today's Perform with the Quick sheet: on → panic + close, off → close only);
   ui-v6 "D24.7 …" (v6 popover, Quick sheet, focused control, auto-repeat, Edit / Settings, off again).
+
+## UI v6 preview switch in Settings (UI6-U1 review O3)
+- **Settings › Look › Perform view › "Try the new layout (preview)"** (`setting-ui-v6`, row `setting-row-ui-v6`),
+  hint "Preview of 2.0's new screens; turn off any time." Writes `settings.uiV6` through `store.set` (false → absent).
+- **main.js**: `onSettings` (the existing settings subscription) calls `applyUiV6()` when `settings.uiV6` changes after
+  boot (armed right after the boot mount), so any write swaps Perform live, as `__rig.setUiV6` does (it still does
+  `store.set` + `applyUiV6`; the second call is a no-op). Same in the Mac app (no query string needed).
+- **Flag-off purity**: the ui-v6 purity probe leaves out the two new Settings rows (by their row testids); everything
+  else (requests, window / document listeners, intervals, store listeners, the rest of the DOM, stylesheets) is
+  compared as before.
+- Tests: settings suite "UI6-U1 O3 …" (app: on → the v6 Perform mounts with its stylesheet, off → today's, no `.v6`
+  left; fixture: the store write).

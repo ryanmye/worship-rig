@@ -737,9 +737,18 @@ function applyEscPanics(on) {
   escPanicsOn = on;
   window[on ? 'addEventListener' : 'removeEventListener']('keydown', escPanicKey, true);
 }
+// UI v6 preview switch (UI6-U1 review O3): Settings › Look writes settings.uiV6 with store.set like any setting;
+// a change after boot swaps Perform here, as __rig.setUiV6 does (applyUiV6 is idempotent). Armed once Perform is
+// mounted below (the boot mount reads the flag itself).
+let uiV6Armed = false;
+let lastUiV6 = false;
 function onSettings(state) {
   const st = state.settings;
   applyEscPanics(st.escPanics === true);
+  if (uiV6Armed && (st.uiV6 === true) !== lastUiV6) {
+    lastUiV6 = st.uiV6 === true;
+    applyUiV6();
+  }
   if (st.performLock !== lastLock) {
     lastLock = st.performLock;
     document.body.classList.toggle('perform-locked', !!st.performLock);
@@ -1084,6 +1093,8 @@ function applyUiV6() {
   return v6Pending;
 }
 if (!performView) applyUiV6();
+lastUiV6 = store.get().settings.uiV6 === true;
+uiV6Armed = true;
 
 function placeholder(el, text) {
   el.replaceChildren(h('div.view-placeholder', { text }));
