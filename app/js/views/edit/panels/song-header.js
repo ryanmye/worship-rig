@@ -7,7 +7,8 @@
 // CSS), and a fixed box escapes that without touching the shell. They follow CONTRACT §5 (role=menu / alertdialog,
 // ctx.onEscape, ctx.markDialog, outside click, focus return).
 import { keyName } from '../../../shared/music.js';
-import { h, setText, icon, createBinder, changedDot, download, safeName } from '../lib.js';
+import { h, setText, icon, createBinder, changedDot, download, safeName, TRIAL_EXPORT_MESSAGE } from '../lib.js';
+import { isTrialId } from '../../../store.js';
 import { KEY_RELS, octaveWord, createTapper, flashTap } from './song.js';
 
 const LIVE_HINT = 'The song that’s playing. Changes are heard now and saved with it.';
@@ -224,6 +225,11 @@ export default {
         }),
         menuItem('export', 'Export song', () => {
           close(viaKeys);
+          // UI6-U7a O3: a Song bank trial song is not in the library (nothing saved): no file with its `trial:` id
+          if (isTrialId(s.id)) {
+            ctx.toast(TRIAL_EXPORT_MESSAGE, 'warn');
+            return;
+          }
           const text = store.exportSong(s.id);
           if (text) download(`${safeName(s.name)}.rig-song.json`, text);
         }),

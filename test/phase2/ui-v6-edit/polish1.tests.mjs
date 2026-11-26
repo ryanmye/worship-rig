@@ -222,4 +222,11 @@ export async function polish1EditTests(x) {
       await page.setViewportSize({ width: 1280, height: 800 });
     }
   });
+
+  await T('polish1 U7a O4: Edit’s Song bank… title says it opens the Song bank browser', async () => {
+    await toEdit();
+    const t = await page.getAttribute(tid('v6e-bank'), 'title');
+    assert.match(t, /Opens the Song bank browser/);
+    assert.doesNotMatch(t, /Settings/);
+  });
 }

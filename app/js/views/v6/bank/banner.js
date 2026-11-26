@@ -63,9 +63,36 @@ export function trialBanner(v) {
     });
   });
   d.listen(back, 'click', () => run(async () => {
+    const gap = removedEntry();
     const r = await controller.backFromTrial();
     if (r && !r.ok && r.error !== 'no-trial') toast(r.error, 'error');
+    else if (r && r.ok && gap) keepGap(gap);
   }));
+  /**
+   * UI6-U7a O2: where Back lands when the replaced song's setlist entry was removed during the trial. The rule: the
+   * song it replaced plays again, between the entries around the removed one (the store's "gap": no row lit, Next =
+   * the entry that followed it, Prev = the one before), exactly as if the entry had been removed while that song
+   * played. Before, Back selected the song through selectSongId, which drops the gap: it landed on another copy of
+   * the song in the list (a reprise, so Next went on from there), or on the song outside the list (Next = the top).
+   * The saved selection already kept the gap (UI6-U7a F1); this reads it before Back and puts it back after.
+   * @returns {{id:string, index:number, list:string|null}|null}
+   */
+  function removedEntry() {
+    if (typeof store.trialReturn !== 'function' || typeof store.persisted !== 'function') return null;
+    if (!store.trialReturn()) return null; // the trial song is not selected: Back goes to the remembered selection
+    const st = store.persisted().settings;
+    if (st.setlistGap !== true || !Number.isInteger(st.setlistIndex) || st.setlistIndex < 0) return null;
+    return { id: st.currentSongId, index: st.setlistIndex, list: store.get().settings.currentSetlistId ?? null };
+  }
+  /** @param {{id:string, index:number, list:string|null}} g */
+  function keepGap(g) {
+    const st = store.get().settings;
+    // only when Back went to that song in the same list (a deleted song: Back went on to the next one, no gap)
+    if (st.currentSongId !== g.id || (st.currentSetlistId ?? null) !== g.list) return;
+    if (g.index > store.navIds().length) return;
+    store.set('settings.setlistIndex', g.index);
+    store.set('settings.setlistGap', true);
+  }
 
   function render() {
     const t = typeof controller.trial === 'function' ? controller.trial() : null;

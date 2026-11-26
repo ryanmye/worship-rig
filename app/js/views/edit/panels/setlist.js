@@ -4,9 +4,12 @@
 // "+ New" / Factory… / Library… browsers and the Library file section (export / import).
 // Ported from views/edit.js "LEFT: setlists + songs" (lines 457–949); mockup design/H-v2/edit.png `.lib`/`.song-row`.
 // Every write goes through the store helpers; song switches through controller.selectSong (CONTRACT.md §3.3).
-import { h, setText, icon, iconButton, button, section, firstSentence, download, today, safeName } from '../lib.js';
+import {
+  h, setText, icon, iconButton, button, section, firstSentence, download, today, safeName, TRIAL_EXPORT_MESSAGE,
+} from '../lib.js';
 import { CATEGORIES, CATEGORY_LABELS, factoryByCategory } from '../../../presets.js';
 import { keyName } from '../../../shared/music.js';
+import { isTrialId } from '../../../store.js';
 
 /** The search box appears when a list has more than 8 songs (ui-edit "song search appears for > 8 songs"). */
 export const SEARCH_MIN = 9;
@@ -647,6 +650,11 @@ export default {
     function exportSong() {
       const s = store.currentSong();
       if (!s) return;
+      // UI6-U7a O3: a Song bank trial song is not in the library (nothing saved): no file with its `trial:` id
+      if (isTrialId(s.id)) {
+        toast(TRIAL_EXPORT_MESSAGE, 'warn');
+        return;
+      }
       download(`${safeName(s.name)}.rig-song.json`, store.exportSong(s.id));
     }
     function importText(text) {

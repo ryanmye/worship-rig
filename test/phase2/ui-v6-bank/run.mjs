@@ -23,6 +23,7 @@ import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.
 import { blankSong, defaultFx } from '../../../app/js/presets.js';
 import { defaultSlot } from '../../../app/js/shared/params.js';
 import { SPACE_PRESETS, ECHO_PRESETS } from '../../../app/js/shared/fx-presets.js';
+import { polish1BankTests } from './polish1.tests.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -285,6 +286,10 @@ try {
       await ev(() => window.__rig.ctx.openBank({}));
       await page.fill(tid('v6-bank-search'), 'river');
       const p2 = await panics();
+      // polish batch 1 (UI6-U7a O1): the first Esc in a search box with text clears it, the next one closes
+      await page.keyboard.press('Escape');
+      assert.equal(await bankOpen(), true);
+      assert.equal(await page.inputValue(tid('v6-bank-search')), '');
       await page.keyboard.press('Escape');
       assert.equal(await bankOpen(), false);
       assert.equal(await panics(), p2, 'typing in the search: Esc never panics');
@@ -704,6 +709,9 @@ try {
       await until(() => !window.__rig.controller.trial());
       await page.setViewportSize({ width: 1280, height: 800 });
     });
+
+  // ---- UI v6 polish batch 1 (polish1.tests.mjs: UI6-U7a O1–O3)
+  await polish1BankTests({ T, page, ev, until, tid, settled, assert, closeBank, QUIET });
 
   await T('flag off (a fresh profile, packs present): today’s Settings Song bank list; nothing of v6 fetched',
     async () => {

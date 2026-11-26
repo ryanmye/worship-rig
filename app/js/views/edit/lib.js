@@ -208,6 +208,11 @@ export function download(filename, text) {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 export const today = () => new Date().toISOString().slice(0, 10);
+/**
+ * UI6-U7a O3: Export song on a Song bank trial song (D17 Try it: not in the library, nothing saved) is refused with
+ * this, so no file ever carries a `trial:` id (the setlist's Library file section and the song header's ⋯ menu).
+ */
+export const TRIAL_EXPORT_MESSAGE = 'You are trying this song from the Song bank. Keep it first, then export it.';
 
 /**
  * "D major" / "C# minor": the drone's key in the KEY chip's spelling (C#m, not Dbm). Lifted from panels/drone.js

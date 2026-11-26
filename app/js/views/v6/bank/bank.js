@@ -426,6 +426,18 @@ export function songBank(v, o = {}) {
   });
 
   // ---------------------------------------------------------------- open / close
+  /**
+   * UI6-U7a O1: Esc typed in the search box with text in it clears the search (as Settings' search), and the browser
+   * stays open; the next Esc closes it. Before, one Esc closed the browser and the filter text stayed for next time.
+   * @returns {boolean} the Esc was used here
+   */
+  function escInSearch() {
+    if (document.activeElement !== search || !search.value) return false;
+    search.value = '';
+    f.q = '';
+    renderList();
+    return true;
+  }
   function open(opt = {}) {
     if (opt.mode === 'library' || opt.mode === 'bank') mode = opt.mode;
     else if (!isOpen) {
@@ -437,7 +449,7 @@ export function songBank(v, o = {}) {
       isOpen = true;
       el.hidden = false;
       closeOverlay = openOverlay({
-        el, closeOnOutside: false, group: 'v6-bank',
+        el, closeOnOutside: false, group: 'v6-bank', onEscape: escInSearch,
         onClose: (reason) => {
           closeOverlay = null;
           if (isOpen) close(reason);

@@ -284,7 +284,8 @@ export function mountEditV6(el, ctx) {
   const ownBinder = createBinder(own.pctx);
   const bankBtn = h('button.ev2-btn.sm.v6e-bank', {
     type: 'button', text: 'Song bank…', 'data-testid': 'v6e-bank',
-    title: 'Songs from your patch packs (today’s list in Settings until the Song bank browser comes)',
+    // UI6-U7a O4: Song bank… opens the browser over the Perform stage (main.js openBank), not Settings' list
+    title: 'Opens the Song bank browser over Perform: songs from your patch packs to try or keep',
   });
   bankBtn.addEventListener('click', () => ctx.openSettings?.({ section: 'bank' }));
   (libMod.querySelector('.ev2-list-add') || libMod).append(bankBtn);

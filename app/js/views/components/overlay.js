@@ -35,6 +35,8 @@ function onKey(e) {
   if (top.underModal && (e.rigSettingsEsc || document.body.classList.contains('settings-open'))) return;
   e.preventDefault();
   e.stopPropagation();
+  // UI6-U7a O1: an overlay can take an Esc for itself first (the Song bank's search box clears before it closes)
+  if (typeof top.onEscape === 'function' && top.onEscape(e) === true) return;
   top.close('escape');
 }
 function onPointerDown(e) {
@@ -81,6 +83,8 @@ function listen(on) {
  * @param {string} [o.passThrough=PASS_THROUGH]
  * @param {string} [o.group]            opening an overlay closes the open ones of the same group
  * @param {boolean} [o.underModal=false] stays open under Settings: an Esc for Settings never closes it (U7c F3)
+ * @param {(e:KeyboardEvent) => boolean} [o.onEscape]  true: this Esc was used inside (the overlay stays open; it is
+ *   still preventDefault()ed, so it never panics)
  * @returns {(reason?:string) => void}
  */
 export function openOverlay(o) {
@@ -93,6 +97,7 @@ export function openOverlay(o) {
     passThrough: o.passThrough || PASS_THROUGH,
     group: o.group || null,
     underModal: !!o.underModal,
+    onEscape: typeof o.onEscape === 'function' ? o.onEscape : null,
     closed: false,
     close(reason = 'api') {
       if (entry.closed) return;
