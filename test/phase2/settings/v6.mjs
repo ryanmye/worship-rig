@@ -442,6 +442,36 @@ export async function runV6({ browser, createServer, ROOT, SHOTS, results }) {
       await close();
     });
 
+    await T('UI6-U6 skeptic F1: search never lands on a row today’s code hides (Daylight’s Light row, the empty Song '
+      + 'bank)', async () => {
+      await open('sound');
+      assert.equal(await ev(() => window.__rig.store.get().settings.theme), 'sanctuary');
+      // Sanctuary has no Day / Stage / Auto: today hides the Light row, so its words are no match
+      assert.equal(await ev(() => window.__rig.views.settings.v6.search('auto follows')), 0);
+      assert.equal(await page.textContent('[data-testid="settings-search-count"]'), 'No match');
+      const hidden = await ev(() => {
+        const out = [];
+        for (const q of ['auto', 'stage', 'light', 'bank', 'mac']) {
+          for (const x of window.__rig.views.settings.v6.search(q) ? window.__rig.views.settings.v6.hits : []) {
+            const panel = x.el.closest('.st-panel');
+            for (let e = x.el; e && e !== panel; e = e.parentElement) if (e.hidden) out.push(`${q}: ${e.className}`);
+          }
+        }
+        window.__rig.views.settings.v6.search('');
+        return out;
+      });
+      assert.deepEqual(hidden, [], 'no hit inside an element today’s code hides');
+      // Daylight shows the row: then it is found, and on screen
+      await ev(() => window.__rig.store.set('settings.theme', 'daylight-day'));
+      await until(() => document.documentElement.dataset.theme === 'daylight-day');
+      assert.equal(await ev(() => window.__rig.views.settings.v6.search('auto follows')), 1);
+      assert.equal(await ev(() => document.querySelector('.v6-st-cur').getClientRects().length > 0), true);
+      await ev(() => window.__rig.views.settings.v6.search(''));
+      await ev(() => window.__rig.store.set('settings.theme', 'sanctuary'));
+      await until(() => document.documentElement.dataset.theme === 'sanctuary');
+      await close();
+    });
+
   } finally {
     await T('zero console.error', async () => {
       assert.deepEqual(errors, []);

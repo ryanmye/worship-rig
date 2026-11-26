@@ -406,11 +406,18 @@ function enhance(api, d) {
   const opened = new Set(); // <details> the search opened (closed again when it clears)
   const UNIT = '.st-row, tr[data-control], .v6-cz, .v6-st-lrn, .st-pedal, .st-kbs, .st-about';
   const HEAD = 'h2, summary, thead, .st-learn-group';
+  /** Not hidden by today's code (UI6-U6 skeptic F1: Daylight's Light row under another theme was a "1 of 1" hit). */
+  const shownByToday = (u, panel) => {
+    for (let e = u; e && e !== panel; e = e.parentElement) if (e.hidden) return false;
+    return true;
+  };
   const unitsOf = (panel) => {
-    const list = [...panel.querySelectorAll(UNIT)].filter((u) => !u.parentElement.closest(UNIT));
+    const list = [...panel.querySelectorAll(UNIT)].filter((u) => !u.parentElement.closest(UNIT)
+      && shownByToday(u, panel));
     // a section without rows (About, Diagnostics, the GarageBand how-to) is searched as a whole
     for (const sec of panel.querySelectorAll('.st-section, details')) {
-      if (!list.some((u) => sec.contains(u)) && !sec.parentElement.closest('.st-section, details')) list.push(sec);
+      if (sec.querySelector(UNIT) || sec.parentElement.closest('.st-section, details')) continue;
+      if (shownByToday(sec, panel)) list.push(sec); // F1: nor a section today's code hides (the Song bank, no songs)
     }
     return list;
   };
