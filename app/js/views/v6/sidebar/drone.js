@@ -19,6 +19,12 @@ import { button } from '../lib.js';
 /** "C major", "F# minor" (perform.js renderDroneReadout's wording). */
 export const droneKeyLabel = (pc, minor) => `${keyName(pc, minor).replace(/m$/, '')} ${minor ? 'minor' : 'major'}`;
 
+// skeptic UI6-U3 F2: the Synth / My Pads the ON tile turned off is remembered per song for as long as the sidebar
+// lives (keyed by its module ctx), not per mount: today's card is always mounted and keeps it until the song changes,
+// while this module is unmounted by every tab switch or fold, which made "off, look at the setlist, on" come back as
+// Synth instead of My Pads.
+const lastSources = new WeakMap(); // module ctx → {id, source}
+
 export default {
   id: 'drone',
   label: 'Drone',
@@ -49,7 +55,10 @@ export default {
     const comps = [];
     const use = (c) => (comps.push(c), c);
     let shownId = null;
-    let lastSource = null; // Synth / My Pads before the tile turned the drone off (perform.js round-3 fix 5)
+    // Synth / My Pads before the tile turned the drone off (perform.js round-3 fix 5), per song (F2 above)
+    if (!lastSources.has(m)) lastSources.set(m, { id: null, source: null });
+    const last = lastSources.get(m);
+    const lastSourceOf = (s) => (s && last.id === s.id ? last.source : null);
     let padsInfo = null;
     const song = () => store.currentSong();
     const setSong = (field, value) => {
@@ -173,11 +182,11 @@ export default {
       const s = song();
       if (!s) return;
       if (!on) {
-        if (s.drone.mode !== 'off') lastSource = s.drone.mode;
+        if (s.drone.mode !== 'off') Object.assign(last, { id: s.id, source: s.drone.mode });
         setSong('drone.mode', 'off');
       } else if (s.drone.mode === 'off') {
         const snap = m.snap();
-        setSong('drone.mode', lastSource || droneOnMode(snap && snap.id === s.id ? snap.song : s));
+        setSong('drone.mode', lastSourceOf(s) || droneOnMode(snap && snap.id === s.id ? snap.song : s));
       }
       render();
     }
@@ -227,7 +236,7 @@ export default {
       if ((s ? s.id : null) !== shownId) {
         // round2-ui #2: a drag must not carry into the next song
         for (const f of [level, bright, move]) f.cancelDrag?.();
-        lastSource = null;
+        if (s && last.id !== s.id) Object.assign(last, { id: null, source: null }); // another song: forget it
         shownId = s ? s.id : null;
       }
       if (s) {
@@ -236,7 +245,7 @@ export default {
         const snap = m.snap();
         tile.set(on);
         tile.setSub(droneKeyLabel(s.hearIn, s.minor));
-        mode.set(on ? dr.mode : lastSource || droneOnMode(snap && snap.id === s.id ? snap.song : s));
+        mode.set(on ? dr.mode : lastSourceOf(s) || droneOnMode(snap && snap.id === s.id ? snap.song : s));
         grid.set({ pc: s.hearIn, minor: s.minor });
         quality.set(!!s.minor);
         level.set(m.liveOf(s).drone.gain);

@@ -493,6 +493,45 @@ export async function sidebarTests(x) {
     await page.click(tid('v6-sb-open'));
   });
 
+  await T('U3 skeptic F2: the drone remembers My Pads across a tab switch (per song, as today’s card)', async () => {
+    // My Pads → tile off → another tab and back → tile on: My Pads again (as today's card), shown while off too
+    await page.click(tid('v6-sb-tab-drone'));
+    const id = (await song()).id;
+    const mode0 = (await song()).drone.mode;
+    await ev((sid) => window.__rig.store.set(`songs.${sid}.drone.mode`, 'files'), id);
+    await page.click(tid('v6-drone-on'));
+    await until(() => window.__rig.store.currentSong().drone.mode === 'off');
+    await page.click(tid('v6-sb-tab-setlist'));
+    await page.click(tid('v6-sb-tab-drone'));
+    assert.equal(await ev(() => document.querySelector('[data-testid="v6-drone-mode"] [aria-checked="true"]')
+      ?.dataset.value), 'files', 'the off drone shows the sound it will come back with');
+    await page.click(tid('v6-drone-on'));
+    await until(() => window.__rig.store.currentSong().drone.mode !== 'off');
+    assert.equal((await song()).drone.mode, 'files');
+    // it is this song's: another song's tile does not bring back My Pads (per song, as today)
+    await page.click(tid('v6-drone-on'));
+    await until(() => window.__rig.store.currentSong().drone.mode === 'off');
+    await page.click(tid('v6-sb-tab-notes'));
+    const other = await ev(() => {
+      const { store } = window.__rig;
+      const o = store.navIds().find((x) => x !== store.currentSong().id);
+      const was = store.getSong(o).drone.mode;
+      store.set(`songs.${o}.drone.mode`, 'synth'); // its Revert snapshot (taken when selected) says Synth
+      return { o, was };
+    });
+    await ev((o) => window.__rig.controller.selectSong(o), other.o);
+    await settled();
+    await page.click(tid('v6-sb-tab-drone'));
+    await ev((o) => window.__rig.store.set(`songs.${o}.drone.mode`, 'off'), other.o);
+    await page.click(tid('v6-drone-on'));
+    await until(() => window.__rig.store.currentSong().drone.mode !== 'off');
+    assert.equal((await song()).drone.mode, 'synth', 'another song: its own Revert snapshot’s source');
+    await ev(({ o, was }) => window.__rig.store.set(`songs.${o}.drone.mode`, was), other);
+    await ev((sid) => window.__rig.controller.selectSong(sid), id);
+    await settled();
+    await ev(({ sid, m }) => window.__rig.store.set(`songs.${sid}.drone.mode`, m), { sid: id, m: mode0 });
+  });
+
   await T('U3 screenshots: 1280×800 Sanctuary, sidebar open / collapsed / wide', async () => {
     await resetSidebar();
     await ev(() => {
