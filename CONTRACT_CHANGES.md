@@ -8685,3 +8685,13 @@ change.
   run on the fixture with a fake rig); `test/phase1/shell/ui-v6-settings.test.mjs` (summaries). Settings 107/107 (all
   five modes), ui-v6 68/68, ui-core 78/78 (one TAP-timing flake on the first run under load 5–9, green on rerun),
   edit-v2 14/14, shell unit 363/363. Engine untouched.
+- **Skeptic (2026-11-26, `native/docs/reviews/UI6-U6.md`): VERIFIED after fixes F1–F6.** Interface changes:
+  - `controller.lastBackupAt()` now returns the last automatic backup that was **written**. Before, it returned the
+    last attempt, so a failed backup read "backed up just now" (F4). It is still a read.
+  - views/settings.js: Back up now calls `v6?.refresh()` after a success, and a `null` reply no longer counts (F6).
+  - Search leaves out rows and sections that today's code hides (F1: Daylight's Light row under other themes).
+  - At ≤ 780 px, a keyboard drill-in puts the focus on "‹ Settings" (F2).
+  - Forget is one delegated listener on the learned list, so the journal no longer grows per render (F3).
+  - `.v6-st` reads the accent fill on the dialog (`--v6s-fill`, `--v6s-fill-top`), because Daylight re-points
+    `--accent` to its text amber inside `.ed-btn` (F5: Learn… was 2.6:1).
+  - Settings suite v6 mode: 17 checks. Flag-off purity and the 119 / 139 control-count proof are unchanged.

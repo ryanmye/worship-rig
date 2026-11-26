@@ -224,6 +224,23 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 
 ## U6 status (builder, 2026-11-26; lane-u6 from acfa900; awaiting the skeptic)
 
+## U6 status (builder, 2026-11-26; lane-u6 from acfa900; skeptic pass done)
+
+- **Skeptic (2026-11-26): VERIFIED after fixes.** The review is `native/docs/reviews/UI6-U6.md`.
+  - F1: search found rows today's code hides.
+  - F2: a keyboard drill-in at 820 px dropped the focus to `<body>`.
+  - F3: the undo journal grew by one listener per Forget per render.
+  - F4: `lastBackupAt()` reported failed attempts.
+  - F5: Learn… was 2.6:1 under Daylight Day.
+  - F6: Back up now left the summary stale.
+  - The undo journal held through flag-offs on every category, mid-search, mid-learn, at 820 px, with the
+    GarageBand dialog open, over 10× flips and with injected throws.
+  - Esc never panics with Settings open (Perform v6, today's Edit, Edit v6 via a scratch merge of lane-u5).
+  - Settings 111/111, ui-v6 68/68 (purity identical), ui-core 78/78, shell unit 364/364.
+  - Open: drill-in loses its place on a rotation (O1); stale-while-open details (O2); a pre-existing Daylight Day
+    contrast fail in today's Sound note (O3).
+
+
 - Built: `app/js/views/v6/settings.js` (`enhanceSettings`: the v6 Settings applied in place to today's
   `views/settings.js` DOM and undone when the flag goes off, live too), `views/v6/settings-summary.js` (pure category
   summaries), `app/styles-v6-settings.css` (scope `.v6-st`). Small hooks in `views/settings.js` (`syncV6`, `v6Api`,
