@@ -281,8 +281,9 @@
 .v6.v6-edit .v6e-ch-tile small { color: var(--muted); font-size: 12px; }
 .v6.v6-edit .v6e-ch-tile.sel { border-color: var(--c); box-shadow: inset 0 0 0 1px var(--c);
   background: color-mix(in srgb, var(--c) 16%, var(--panel-2)); }
-.v6.v6-edit .v6e-ch-now { position: absolute; top: 6px; right: 8px; font: 700 11px var(--font, inherit);
-  font-style: normal; color: var(--c); text-transform: uppercase; letter-spacing: .05em; }
+/* in the tile's flow (a long name wraps to two lines at 1024 px; a corner label covered it) */
+.v6.v6-edit .v6e-ch-now { font: 700 11px var(--font, inherit); font-style: normal; color: var(--c);
+  text-transform: uppercase; letter-spacing: .05em; }
 .v6.v6-edit .v6e-ch-f { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center;
   gap: 10px; }
 .v6.v6-edit .v6e-ch-keep { color: var(--muted); font-size: 13px; }
