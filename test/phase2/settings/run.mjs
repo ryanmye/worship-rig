@@ -323,6 +323,56 @@ async function runMode(mode, browser) {
       }
     });
 
+    // 2.x step 5 (O-AW-ML): custom mappings (any continuous param) are listed under the fixed rows, with Remove
+    await T('settings: MIDI Learn lists custom param knobs with Remove; re-learn keeps invert (O-AW-ML)', async () => {
+      await cat('keyboards');
+      const SEL = '.st-learn-custom tr[data-control="slots.1.sends.reverb"]';
+      try {
+        assert.equal(await ev(() => document.querySelectorAll('.st-learn-custom tr').length), 0, 'none: no group');
+        await ev(() => window.__rig.store.setMidiLearn('slots.1.sends.reverb', { cc: 74, channel: 0, invert: true }));
+        await until((s) => !!document.querySelector(s), SEL);
+        assert.equal(await page.textContent(`${SEL} th`), 'Pad reverb send');
+        assert.equal(await page.textContent(`${SEL} .st-map`), 'CC 74 · ch 1 · inverted');
+        assert.equal(await page.textContent(`${SEL} .st-remove`), 'Remove');
+        assert.match(await page.textContent('.st-learn-custom tr.st-learn-group'), /Parameter knobs/);
+        // skeptic midi-learn-any: a picture of the custom row under the fixed ones
+        await page.locator(SEL).scrollIntoViewIfNeeded();
+        fs.mkdirSync(SHOTS, { recursive: true });
+        await page.screenshot({ path: path.join(SHOTS, `${mode}-learn-custom.png`) });
+        // the fixed table is unchanged (17 rows for a 4-slot song) and the custom row is not one of them
+        assert.equal(await ev(() => document.querySelectorAll('.st-learn-table tbody:not(.st-learn-custom) tr')
+          .length), 17);
+        // re-learn from the row: the new CC keeps `invert`
+        await page.click(`${SEL} .st-learn`);
+        await until(() => window.__rig.midi.learning === 'slots.1.sends.reverb');
+        await ev(() => window.__rig.midi._inject([0xb2, 75, 30]));
+        await until(() => window.__rig.store.get().settings.midiLearn['slots.1.sends.reverb']?.cc === 75);
+        assert.deepEqual(await ev(() => window.__rig.store.get().settings.midiLearn['slots.1.sends.reverb']),
+          { cc: 75, channel: 2, invert: true });
+        await until((s) => document.querySelector(`${s} .st-map`).textContent === 'CC 75 · ch 3 · inverted', SEL);
+        // the knob moves the send (inverted: knob down = full send); pickup from the stored value
+        await ev(() => window.__rig.store.set('slots.1.sends.reverb', 0.5));
+        await ev(async () => {
+          for (let v = 127; v >= 0; v -= 8) {
+            window.__rig.midi._inject([0xb2, 75, v]);
+            await new Promise((r) => setTimeout(r, 25));
+          }
+          window.__rig.midi._inject([0xb2, 75, 0]);
+        });
+        await until(() => Math.abs(window.__rig.store.currentSong().patch.slots[1].sends.reverb - 1) < 1e-9);
+        await until(() => Math.abs(window.__rig.engine.getParam('slots.1.sends.reverb') - 1) < 1e-6);
+        // Remove: the mapping and its row go, the group header too
+        await page.click(`${SEL} .st-remove`);
+        await until(() => !window.__rig.store.get().settings.midiLearn['slots.1.sends.reverb']);
+        await until(() => !document.querySelector('.st-learn-custom tr'));
+      } finally {
+        await ev(() => {
+          window.__rig.controller.cancelLearn?.();
+          window.__rig.store.setMidiLearn('slots.1.sends.reverb', null);
+        });
+      }
+    });
+
     // hardware-fixes: the test samples BOTH states (press → settle → release → settle) and decides from the pair
     const pedalStep = (step) => until((st) => !!document.querySelector(`.st-pedal-prompt[data-step="${st}"]`), step);
     const cc64 = (v) => ev((x) => window.__rig.midi._inject([0xb0, 64, x]), v);

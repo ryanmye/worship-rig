@@ -47,12 +47,13 @@ import { mod12, transposeSemis } from './shared/music.js';
 import { isValidId as isThemeId, DEFAULT_THEME_ID } from './shared/themes.js';
 import { normalizeHotkeys } from './shared/hotkeys.js';
 import {
-  PARAMS, clamp, describe, isValidPath as isValidPath4, defaultSlot, SLOT_COUNT, MAX_SLOTS, slotGainIndex,
+  PARAMS, clamp, describe, isValidPath as isValidPath4, defaultSlot, SLOT_COUNT, MAX_SLOTS, slotGainIndex, isLearnable,
 } from './shared/params.js';
 import { normalizeTouch, PEDAL_CURVES, COMPUTER_KEYBOARD, validDynRange } from './shared/touch-curve.js';
 import { normalizeClick, validTimeSig } from './shared/click-math.js';
 import { normalizeScenes } from './shared/scenes.js';
 import { validPackEntry, packModeOf, songFingerprint, PACK_ID_RE, PACK_ID_MAX } from './shared/patch-packs.js';
+import { learnFields, isLearnablePath } from './shared/learn.js';
 import {
   FACTORY_SONGS, FACTORY_VERSION, FACTORY_SINCE, CATEGORIES, WHEEL_TARGETS, BEND_MODES, DRONE_MODES, defaultFx, defaultDrone, defaultRouting,
   blankSong, factoryById,
@@ -745,8 +746,10 @@ function normalizeMidiLearn(raw) {
   for (const [k, v] of Object.entries(raw)) {
     if (!isObj(v) || isReservedKey(k)) continue;
     const ch = v.channel === null || v.channel === undefined ? null : int(v.channel, 0, 15, null);
-    if (Number.isInteger(v.cc) && v.cc >= 0 && v.cc <= 127) out[k] = { ...v, channel: ch };
-    else if (Number.isInteger(v.note) && v.note >= 0 && v.note <= 127) out[k] = { ...v, channel: ch };
+    // 2.x step 5 (O-AW-ML): a learnable path's optional min / max / invert are validated (learnFields); other keys,
+    // including unknown ids from a newer version, keep every field as before
+    if (Number.isInteger(v.cc) && v.cc >= 0 && v.cc <= 127) out[k] = learnFields(k, { ...v, channel: ch });
+    else if (Number.isInteger(v.note) && v.note >= 0 && v.note <= 127) out[k] = learnFields(k, { ...v, channel: ch });
   }
   return out;
 }
@@ -2480,11 +2483,24 @@ export function createStore(opts = {}) {
       return true;
     },
 
-    /** MIDI Learn mapping for a controlId (ids contain dots, so this is not a set() path). null clears. */
+    /**
+     * MIDI Learn mapping for a controlId (ids contain dots, so this is not a set() path). null clears. 2.x step 5
+     * (O-AW-ML): a new mapping's id must be a fixed Learn row (params.isLearnable) or a continuous PARAMS path
+     * (shared/learn.js isLearnablePath; then `{cc, channel, min?, max?, invert?}`); anything else is refused, so a
+     * mapping on 'slots.0.mono' or a mistyped path is never stored. Clearing (null) takes any id.
+     */
     setMidiLearn(controlId, mapping) {
       if (typeof controlId !== 'string' || isReservedKey(controlId)) return false;
       if (mapping && mapping.cc === 64) {
         warn('setMidiLearn: CC64 is the sustain pedal and cannot be mapped');
+        return false;
+      }
+      if (mapping && !isLearnable(controlId) && !isLearnablePath(controlId)) {
+        warn(`setMidiLearn: "${controlId}" is not a learnable control or a continuous parameter`);
+        return false;
+      }
+      if (mapping && isLearnablePath(controlId) && !isLearnable(controlId) && !Number.isInteger(mapping.cc)) {
+        warn(`setMidiLearn: "${controlId}" takes a CC (a knob, fader or pedal), not a note`);
         return false;
       }
       const next = { ...state.settings.midiLearn };

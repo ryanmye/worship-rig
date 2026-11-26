@@ -20,6 +20,7 @@ import {
   h, setText, icon, getIn, relOf, pct, blocksFor, blockOf, sentence, droneKeyText, chorusWord,
 } from './lib.js';
 import { say, onVoiceChange } from '../components/voice.js';
+import { attachLearnMenu } from './learn-menu.js';
 
 const C = await loadComponents();
 // overlay.js's stack is shared with Perform; the shell closes Edit's overlays when the view is hidden (round3-edit M1)
@@ -378,6 +379,9 @@ function createCore(root, appCtx) {
       setTimeout(() => markDialog('edit-esc', false), 0); // …then drop it
     }
   }, true);
+
+  // ---- 2.x step 5 (O-AW-ML): right-click / long-press a slider bound to a continuous param → Learn MIDI knob
+  core.learnMenu = attachLearnMenu(core, root, appCtx);
 
   /**
    * The ctx a panel module's mount() receives (CONTRACT.md §3). Everything it registers is released by dispose().

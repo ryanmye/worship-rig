@@ -100,6 +100,13 @@
 .ev2 .ev2-slots-pop[role="alertdialog"] { padding: 12px 14px; gap: 10px; width: 340px; }
 .ev2 .ev2-slots-q { margin: 0; font-size: 14px; line-height: 1.4; }
 .ev2 .ev2-slots-qbtns { display: flex; gap: 8px; justify-content: flex-end; }
+/* 2.x step 5 (O-AW-ML): the slider "Learn MIDI knob" menu (learn-menu.js), the Slots popover's look */
+.ev2 .ev2-learn-pop { width: 260px; z-index: 70; }
+.ev2 .ev2-learn-head { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px 8px; }
+.ev2 .ev2-learn-head b { font-size: 13px; color: var(--text, #f1f4f8); }
+.ev2 .ev2-learn-status { font-size: 12px; color: var(--muted, #a3acb8); }
+.ev2 .ev2-learn-pop .ev2-slots-mi.on { background: var(--panel-3, #252a33);
+  box-shadow: inset 0 0 0 2px var(--focus, #7cc4ff); }
 .ev2 .ev2-rig-top { display: flex; align-items: center; gap: 12px; height: 34px; padding: 0 14px; flex: none; }
 .ev2 .ev2-rig-hint { font-size: 12.5px; color: var(--ev2-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* the rig hint keeps its one line from 1280 up: under 1441 px the Slots pill drops its icon and the bar its gaps narrow */

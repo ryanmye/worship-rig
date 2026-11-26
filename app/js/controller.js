@@ -39,8 +39,9 @@ import {
 import { compileTouch } from './shared/touch-curve.js';
 import { transposeSemis, mod12, keyName } from './shared/music.js';
 import {
-  PARAMS, isValidPath, isLearnButton, faderTaper, inverseTaper, SLOT_COUNT, MAX_SLOTS, slotGainIndex,
+  PARAMS, isValidPath, isLearnButton, isLearnable, parsePath, describe, SLOT_COUNT, MAX_SLOTS, slotGainIndex,
 } from './shared/params.js';
+import { isLearnablePath, ccToValue, valueToCc } from './shared/learn.js';
 import { detectKeyFromName } from './shared/keydetect.js';
 import { createBus, commandError } from './shared/bus.js';
 import { clickSettingsOf } from './shared/click-math.js';
@@ -125,6 +126,11 @@ export const LARGE_SET_NOTE = 'Large set: loading songs as you go';
 export const songAloneNote = (mb) => `This song alone is ${Math.round(mb)} MB`;
 /** A learned CC button held at ≥ 64 fires again after this long (press-only footswitches; round4-controller C9). */
 const CC_RETRIGGER_MS = 150;
+/**
+ * 2.x step 5 (O-AW-ML rule 5): a CC learned to a custom path writes the store at most once per this long (≈ a slider
+ * drag's input rate); the last value of a burst is written when the window ends. The fixed 1.x rows are not throttled.
+ */
+export const LEARN_WRITE_MS = 20;
 /** L11-8: wait this long after low-resource turns on (release tails end) before the one GC. */
 const LOWRES_GC_MS = 3000;
 /** 'memory' event note when pinned samples pass the cache cap (round4-controller C5: plain copy, never toasted). */
@@ -601,6 +607,7 @@ export function createController(o) {
     appliedId = id;
     appliedIndex = store.currentIndex();
     pickups.clear();
+    dropLearnWrites();
     sceneState = { id, n: null, baseWheel: null, tweak: null }; // v11-scenes: every song starts on its own levels
     applySongLevel(song, prev, true);
     catchUp(song);
@@ -1234,12 +1241,21 @@ export function createController(o) {
   }
 
   function learnedFor(kind, num, channel) {
-    if (kind === 'cc' && num === 64) return null; // the sustain pedal is never remapped (M2; old mappings ignored)
+    return learnedAll(kind, num, channel)[0] ?? null;
+  }
+  /**
+   * Every controlId learned to this note / CC on this channel, in settings.midiLearn order. 2.x step 5 (O-AW-ML
+   * rule 4): the first decides what the message is; when it is a fader, every fader mapping on the CC moves (one
+   * knob, several params), while a button mapping keeps the 1.x first-match rule.
+   */
+  function learnedAll(kind, num, channel) {
+    if (kind === 'cc' && num === 64) return []; // the sustain pedal is never remapped (M2; old mappings ignored)
     const ml = settings().midiLearn || {};
+    const out = [];
     for (const [id, m] of Object.entries(ml)) {
-      if (m[kind] === num && (m.channel === null || m.channel === undefined || m.channel === channel)) return id;
+      if (m[kind] === num && (m.channel === null || m.channel === undefined || m.channel === channel)) out.push(id);
     }
-    return null;
+    return out;
   }
 
   const isButtonControl = (id) => BUTTON_CONTROLS.includes(id) || isLearnButton(id);
@@ -1278,21 +1294,91 @@ export function createController(o) {
     triggerButton(id, pressed);
   }
 
-  /** Hardware fader with pickup: ignored until it crosses the stored value (REVIEW 2.1). */
-  function learnedFader(id, value01) {
-    if (!isValidPath(id, MAX_SLOTS)) return; // UIA: a learned level of slot 5..16 (a song without it: no-op below)
-    const cur = songParam(live(store.currentSong()), id); // v11-scenes: pick up the level as it sounds
-    if (cur === undefined || cur === null) return;
-    const pos = inverseTaper(cur);
+  /**
+   * Hardware fader / knob with pickup: ignored until it crosses the stored value (REVIEW 2.1). 2.x step 5 (O-AW-ML):
+   * any continuous PARAMS path (shared/learn.js isLearnablePath), mapped along the row's curve between the mapping's
+   * min / max (invert runs it backwards); with none of those a level is faderTaper(cc), as in 1.x. The path is in the
+   * current-song grammar, so it acts on whichever song plays; a slot the song lacks (or an empty one) is a no-op. A
+   * value no CC position stands for (an optional row's null / 'natural') is taken over at once.
+   * @param {string} id
+   * @param {number} value01
+   * @param {{min?:number, max?:number, invert?:boolean}} [m] the mapping
+   */
+  function learnedFader(id, value01, m) {
+    if (!isLearnablePath(id)) return; // UIA: a learned level of slot 5..16 (a song without it: no-op below)
+    const song = live(store.currentSong()); // v11-scenes: pick up the level as it sounds
+    if (!song) return;
+    const p = parsePath(id, MAX_SLOTS);
+    if (p.slot !== null && !song.patch.slots[p.slot]) return;
+    // skeptic midi-learn-any S1: the store moves to the next song at once, the commit (pickups.clear,
+    // dropLearnWrites) only after it loads. In between, a knob picked up on the old song must pick up again, and an
+    // old song's pending write must not land, so both are keyed by the song they were made on.
+    const sid = song.id;
+    const w0 = learnWrites.get(id);
+    if (w0 && w0.sid !== sid) dropLearnWrite(id);
+    const pend = learnWrites.get(id)?.pending; // a throttled write not stored yet is where the knob already is
+    const stored = songParam(song, id);
+    const cur = pend !== undefined ? pend : stored === undefined ? describe(id).default : stored;
+    const pos = valueToCc(id, cur, m);
     let pu = pickups.get(id);
-    if (!pu) pickups.set(id, (pu = { picked: false, last: null }));
-    if (pu.picked && pu.last !== null && Math.abs(pos - pu.last) > 0.02) pu.picked = false; // moved elsewhere (UI/song)
-    if (!pu.picked) {
-      if (Math.abs(value01 - pos) < 0.02) pu.picked = true;
-      else if (pu.last !== null && (pu.last - pos) * (value01 - pos) <= 0) pu.picked = true;
+    if (!pu || pu.sid !== sid) pickups.set(id, (pu = { picked: false, last: null, sid }));
+    if (pos === null) pu.picked = true;
+    else {
+      if (pu.picked && pu.last !== null && Math.abs(pos - pu.last) > 0.02) pu.picked = false; // moved elsewhere
+      if (!pu.picked) {
+        if (Math.abs(value01 - pos) < 0.02) pu.picked = true;
+        else if (pu.last !== null && (pu.last - pos) * (value01 - pos) <= 0) pu.picked = true;
+      }
     }
     pu.last = value01;
-    if (pu.picked && !adjustScene(id, faderTaper(value01))) store.set(id, faderTaper(value01));
+    if (!pu.picked) return;
+    const v = ccToValue(id, value01, m);
+    if (SCENE_LEVEL_RE.test(id) && adjustScene(id, v)) return;
+    writeLearned(id, v, sid);
+  }
+  const SCENE_LEVEL_RE = /^(slots\.\d+\.gain|drone\.gain)$/; // the levels a scene holds (shared/scenes.js)
+
+  /**
+   * 2.x step 5 (O-AW-ML rule 5): the store write of a learned knob. A fixed 1.x row (params.isLearnable) writes every
+   * message, as before. A custom path writes at once when LEARN_WRITE_MS has passed since its last write, else keeps
+   * the value and writes the latest one when the window ends (a knob sends up to ~1000 messages/s; every write runs
+   * the store notify, the controller diff and the views). Like a slider drag it edits the song (Revert undoes it).
+   */
+  const learnWrites = new Map(); // path → {at, pending, timer, sid}
+  function writeLearned(id, v, sid) {
+    if (isLearnable(id)) {
+      store.set(id, v);
+      return;
+    }
+    let w = learnWrites.get(id);
+    if (!w) learnWrites.set(id, (w = { at: -Infinity, pending: undefined, timer: null, sid }));
+    const t = now();
+    if (w.timer === null && t - w.at >= LEARN_WRITE_MS) {
+      w.at = t;
+      store.set(id, v);
+      return;
+    }
+    w.pending = v;
+    if (w.timer !== null) return;
+    w.timer = timers.setTimeout(() => {
+      w.timer = null;
+      w.at = now();
+      const val = w.pending;
+      w.pending = undefined;
+      // S1: the store already selected another song (still loading): this value belongs to the one it was played on
+      if (val !== undefined && store.get().settings.currentSongId === w.sid) store.set(id, val);
+    }, Math.max(0, LEARN_WRITE_MS - (t - w.at)));
+  }
+  /** One path's pending burst is dropped (S1: it was played on another song). */
+  function dropLearnWrite(id) {
+    const w = learnWrites.get(id);
+    if (w && w.timer !== null) timers.clearTimeout(w.timer);
+    learnWrites.delete(id);
+  }
+  /** A song switch / dispose: a burst still waiting belongs to the song it was played on, so it is dropped. */
+  function dropLearnWrites() {
+    for (const w of learnWrites.values()) if (w.timer !== null) timers.clearTimeout(w.timer);
+    learnWrites.clear();
   }
 
   const midiHandlers = {
@@ -1315,10 +1401,13 @@ export function createController(o) {
     },
     cc: (e) => {
       const d = e.detail;
-      const learned = learnedFor('cc', d.cc, d.channel);
-      if (learned) {
-        if (isButtonControl(learned)) ccButton(learned, d.value >= 64);
-        else learnedFader(learned, d.value01);
+      const learned = learnedAll('cc', d.cc, d.channel);
+      if (learned.length) {
+        if (isButtonControl(learned[0])) ccButton(learned[0], d.value >= 64);
+        else {
+          const ml = settings().midiLearn || {};
+          for (const id of learned) if (!isButtonControl(id)) learnedFader(id, d.value01, ml[id]);
+        }
         return;
       }
       switch (d.cc) {
@@ -2668,6 +2757,9 @@ export function createController(o) {
       case 'pedalInvert':
         reapplyPedalInvert();
         break;
+      case 'performLock': // 2.x step 5 (O-AW-ML rule 6): no learning under the lock
+        if (s.performLock && midi && midi.learning && typeof midi.cancelLearn === 'function') midi.cancelLearn();
+        break;
       case 'keyboards':
         rebuildTouch();
         applyRemembered();
@@ -3445,6 +3537,7 @@ export function createController(o) {
     going = null;
     for (const w of warmTimers) if (w.timer !== null) timers.clearTimeout(w.timer); // S-review S8
     warmTimers.clear();
+    dropLearnWrites(); // 2.x step 5: a throttled knob write never lands after dispose
     cueDisposed = true;
     for (const c of cleanups.splice(0)) {
       try {
@@ -3475,18 +3568,56 @@ export function createController(o) {
   /**
    * MIDI Learn (M2): faders take only a moving continuous CC; buttons take a note-on or a switch-CC press.
    * The sustain pedal (CC64) is reserved: resolves {error:'sustain-pedal-reserved'} and nothing is saved.
-   * @returns {Promise<{cc?:number, note?:number, channel:number}|{error:string}|null>} null = timeout / cancelled
+   * 2.x step 5 (O-AW-ML): `controlId` is a fixed Learn row or any continuous PARAMS path (else
+   * {error:'not-learnable'}); re-learning a path keeps its min / max / invert. Under Perform Lock nothing is learned
+   * ({error:'perform-locked'}; turning the lock on cancels a pending learn): the lock keeps the rig as it is, while
+   * learned controls still play.
+   * C1: mappings the new one would sit behind or in front of (a button sharing the control) are cleared and listed in
+   * `replaced` (absent when none).
+   * @returns {Promise<{cc?:number, note?:number, channel:number, replaced?:string[]}|{error:string}|null>} null =
+   *   timeout / cancelled
    */
   async function learn(controlId, o = {}) {
     if (!midi || typeof midi.learn !== 'function') return null;
+    if (settings().performLock) return { error: 'perform-locked' };
+    if (!isLearnable(controlId) && !isLearnablePath(controlId)) return { error: 'not-learnable' };
     const accept = isButtonControl(controlId) ? 'button' : 'fader';
     const res = await midi.learn(controlId, { ...o, accept });
     if (!res) return null;
+    if (settings().performLock) return { error: 'perform-locked' };
     if (res.error) return { error: res.error, cc: res.cc, channel: res.channel };
-    const mapping = res.cc !== undefined ? { cc: res.cc, channel: res.channel } : { note: res.note, channel: res.channel };
-    store.setMidiLearn(controlId, mapping);
+    const prev = (settings().midiLearn || {})[controlId] || {};
+    const range = {};
+    for (const k of ['min', 'max', 'invert']) if (prev[k] !== undefined) range[k] = prev[k];
+    const mapping = res.cc !== undefined ? { cc: res.cc, channel: res.channel, ...range }
+      : { note: res.note, channel: res.channel };
+    // skeptic midi-learn-any C1: a CC / note is either one button or any number of faders (O-AW-ML rule 4 reads the
+    // first mapping). A learn that would share it across kinds, or with another button, would sit dead behind the
+    // first one while the UI said it was learned, so the learn takes the control: those mappings are cleared.
+    const replaced = conflictsOf(controlId, mapping);
+    for (const id of replaced) store.setMidiLearn(id, null);
+    store.setMidiLearn(controlId, mapping); // (false when the same mapping is learned again: nothing changed)
     pickups.delete(controlId);
-    return mapping;
+    return replaced.length ? { ...mapping, replaced } : mapping;
+  }
+  /**
+   * C1: the mappings a new `mapping` for `controlId` would contend with: same CC (or note) on an overlapping channel
+   * (null = any), when either side is a button. Faders share a CC with faders (one knob, several params).
+   * @returns {string[]}
+   */
+  function conflictsOf(controlId, mapping) {
+    const kind = Number.isInteger(mapping.cc) ? 'cc' : 'note';
+    const num = mapping[kind];
+    const mine = isButtonControl(controlId);
+    const ch = mapping.channel;
+    const out = [];
+    for (const [id, m] of Object.entries(settings().midiLearn || {})) {
+      if (id === controlId || !m || m[kind] !== num) continue;
+      const overlap = ch === null || ch === undefined || m.channel === null || m.channel === undefined
+        || m.channel === ch;
+      if (overlap && (mine || isButtonControl(id))) out.push(id);
+    }
+    return out;
   }
 
   // ---- menu-bar mode (docs/menubar-mode.md, contract v1; C7 menubar-A)

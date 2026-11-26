@@ -31,6 +31,8 @@ app/js/views/edit/
   shell.js              mountEdit(el, ctx), mountSinglePanel(el, ctx, id, opts), registerPanel(id, def), EditState
   lib.js                shared helpers: h, icon, iconButton, sentence, createBinder, section, wordSlider, BLOCKS,
                         relOf, droneKeyText, chorusWord, TARGET_LABELS, BEND_LABELS, …
+  learn-menu.js         2.x step 5 (O-AW-ML): right-click / long-press a [data-bind] slider bound to a continuous
+                        param → Learn MIDI knob / Forget (shell core; opt out with data-no-learn)
   styles-edit-v2.css    linked from index.html; only @imports: base.css first, then panels/*.css (§4)
   base.css              tokens, layout, tabs, wiring, panel frame, shared widgets
   CONTRACT.md           this file

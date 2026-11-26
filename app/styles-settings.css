@@ -97,6 +97,9 @@
 .st-learn-table th, .st-learn-table td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line, #2d333d); }
 .st-learn-table thead th { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint, #8a93a0); }
 .st-learn-table tbody th { font-weight: 600; }
+/* 2.x step 5 (O-AW-ML): the custom parameter-knob rows under the fixed ones */
+.st-learn-table tbody.st-learn-custom tr.st-learn-group th { padding-top: 12px; font-size: 11px; font-weight: 600;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--faint, #8a93a0); }
 .st-map { font-variant-numeric: tabular-nums; color: var(--muted, #a3acb8); }
 .st-learn-btns { white-space: nowrap; text-align: right; }
 .st-learn-btns .ed-btn { min-height: 30px; padding: 0 10px; font-size: 13px; }

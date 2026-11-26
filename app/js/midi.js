@@ -18,7 +18,8 @@
 // Channel pressure / poly aftertouch / clock / active sensing are ignored.
 // MIDI Learn (M2): learn(id, {accept, motion}) — 'fader' takes only a continuous CC, never CC64/66/67 or notes
 // (with motion > 0 the CC must also travel that far first — off by default: one message learns, as the UI expects); 'button' takes a note-on or a switch CC press (value ≥ 64); CC64 (sustain) is never learnable
-// and resolves {error:'sustain-pedal-reserved'} (the pedal message still sustains). Channel-mode CCs 120–127 are
+// and resolves {error:'sustain-pedal-reserved'} (the pedal message still sustains). Fader / button learns skip bank
+// select, data entry and NRPN / RPN CCs (LEARN_STRUCTURAL_CCS). Channel-mode CCs 120–127 are
 // ignored. Messages that don't complete a learn are delivered normally.
 // 'first' input selection is sticky (L8): once resolved it stays on that port while it is connected.
 // midi-default: 'first' = best-ranked HARDWARE port (classifyInput); with none connected it listens to all ports and
@@ -32,6 +33,12 @@
 
 /** CCs never accepted by learn(). */
 export const LEARN_IGNORED_CCS = Object.freeze([120, 121, 122, 123, 124, 125, 126, 127]);
+/**
+ * CCs that are never a knob or a switch: bank select MSB / LSB (0, 32; a program-change pedal sends them first), data
+ * entry MSB / LSB, increment / decrement (6, 38, 96, 97) and the NRPN / RPN numbers (98–101; an NRPN knob sends 99
+ * first, a constant). A fader or button learn skips them and waits for the next CC (skeptic midi-learn-any M1).
+ */
+export const LEARN_STRUCTURAL_CCS = Object.freeze([0, 32, 6, 38, 96, 97, 98, 99, 100, 101]);
 /** Switch-type pedal CCs (sustain, sostenuto, soft): never a fader. */
 export const PEDAL_CCS = Object.freeze([64, 66, 67]);
 /** Suggested CC travel for learn(…, {motion}) to filter pot jitter (default motion is 0). */
@@ -508,6 +515,7 @@ export class MidiInput extends EventTarget {
       return false; // the pedal keeps sustaining
     }
     if (LEARN_IGNORED_CCS.includes(d1)) return false;
+    if (l.accept !== 'any' && LEARN_STRUCTURAL_CCS.includes(d1)) return false; // M1: delivered normally
     if (l.accept === 'button') {
       if (d2 < 64) return false; // switch release / low knob value: wait for a press
       this._finishLearn({ cc: d1, channel, inputId });

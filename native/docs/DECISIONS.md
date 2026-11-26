@@ -189,6 +189,40 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
     `pristine`, and that is persisted. What a pristine library can hold is factory songs (re-addable from Edit ›
     Factory…), navigation, device-local settings (kept) and the theme. The theme is the one 2.0 choice the replace
     overwrites; the release notes say so.
+- **O-AW-ML (2.x step 5, 2026-11-25): MIDI learn for any continuous PARAMS path.** FX-gap-analysis "MIDI learn",
+  CONTRACT_CHANGES "MIDI learn any param (2.x step 5)". The rules:
+  1. **Model.** A mapping is `settings.midiLearn[<path>] = {cc, channel, min?, max?, invert?}`. The key is a §4 path in
+     the current-song grammar (`slots.1.sends.reverb`, `fx.delay.feedback`). A path is learnable when its PARAMS row
+     is numeric with a finite min < max and is not a switch, a choice, a whole-number step (octave, transpose, note
+     range, touch.top) or the dynamic `slots.<i>.params.<key>` row (`shared/learn.js isLearnablePath`). The fixed
+     LEARNABLE rows, their stored `{cc|note, channel}` and their behaviour are unchanged. New fields are optional; no
+     SCHEMA bump; `migrate()` stays idempotent and keeps unknown ids and fields.
+  2. **Scope: the mapping follows the current song.** `slots.<i>.*` acts on slot i of whichever song plays, `fx.*`,
+     `drone.*` and `master.volume` on that song's own values. A song without slot i (or with it empty) is a no-op.
+     This is the rule the UIA slot levels already use. Not chosen: binding a mapping to one song. That would need
+     song-keyed ids and a second lookup, and per-song changes are what scenes are for. Easy to reverse: an optional
+     `songId` field can be added later (migrate keeps unknown fields).
+  3. **Value.** CC 0..127 runs from the mapping's min to its max (the row's when absent) along Edit's slider curve:
+     2·pos³ for gains shown in dB, log for log rows (Hz, Q, times), else linear. `invert` runs it backwards. min > max
+     is allowed. The result is clamped to the row. With no min/max/invert, a level is exactly the 1.x learned fader.
+  4. **One CC, several params.** When the first mapping on a CC is a fader, every fader mapping on that CC moves (one
+     knob opens the reverb send and the delay feedback together). A button mapping keeps the 1.x first-match rule.
+     Skeptic C1: a CC or note holds either one button or any number of faders. A learn clears the mappings of the
+     other kind (or another button) on that control and its overlapping channels, and it reports them.
+  5. **Writes.** Through `store.set` (clamped), then the controller's store→engine diff, like a slider drag. So a knob
+     edits the song (changed dot, Revert undoes it), as a learned level fader always has. Wheels stay live-only. A
+     custom path writes at most once per 20 ms (`LEARN_WRITE_MS`) with a trailing write of the last value. The fixed
+     rows are not throttled. A song switch drops a pending write, from the moment the store selects the next song
+     (skeptic S1), and the knob picks up again there. Pickup (soft takeover) applies to every learned
+     fader. A current value no CC stands for (release's null = the instrument's own) is taken over at once. Pedal
+     hold runs on its slider's track, with 'natural' at the top (skeptic L1). A value outside the mapping's range
+     picks up at the nearer end.
+  6. **Perform Lock.** No learning under the lock: `controller.learn` refuses (`{error:'perform-locked'}`), turning
+     the lock on cancels a pending learn, and Edit's menu does not open. Learned controls keep playing.
+  7. **UI (provisional).** Edit: right-click, Ctrl-click or long-press a slider, fader or chip whose `data-bind` is
+     learnable → Learn MIDI knob / Forget. Long-press is Chromium only: WebKit on iPad touch fires no `contextmenu`,
+     so the iPad needs its own gesture before it ships (skeptic open item O1). Settings › Keyboards & MIDI › MIDI Learn lists the custom mappings under
+     the fixed rows, with Learn and Remove. min / max / invert have no UI yet (store and controller only).
 
 - **O-AW-PP (patch packs, 2026-11-25): auto-loading personal patch packs and a Song bank (FX-gap-analysis step 1,
   plus Ryan's "song settings bank" scope).** Layout and user-facing rules: `docs/patch-packs.md`. Interfaces:

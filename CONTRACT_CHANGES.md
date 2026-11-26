@@ -7957,3 +7957,82 @@ Review `native/docs/reviews/patch-packs.md` (PP-1 to PP-6). No SCHEMA change; no
   name over 200 characters or a song file name over 245 is skipped with its own message (the client's `PACK_ID_RE`).
 - Tests: `patch-packs.test.mjs` +4 (PP-1 end to end, PP-2, PP-4, PP-6), `patch-packs.pw.mjs` +1 (PP-1 in Perform,
   PP-3 sizes and labels).
+
+## MIDI learn any param (2.x step 5)
+
+FX-gap-analysis "MIDI learn" (step 5); the rules are DECISIONS O-AW-ML. Any continuous PARAMS path (reverb send,
+cutoff, delay feedback, an EQ band's Hz…) can be mapped to a MIDI CC. Additions only: the fixed LEARNABLE rows, their
+stored format and their behaviour are unchanged, `SCHEMA` stays 2, and `migrate()` stays idempotent.
+- **`app/js/shared/learn.js` (new, pure).** `isLearnablePath(path)` (a numeric row with a finite min < max, not
+  bool / enum / step 1 / dynamic; slots 0..15), `isCustomLearn(id)` (learnable and not a fixed row),
+  `learnCurve(path)` ('taper' | 'log' | 'lin', the same curve as Edit's sliders), `ccToValue(path, cc01, m)`,
+  `valueToCc(path, value, m)` (the pickup target; null for a non-number or min = max), `learnFields(key, v)` (min /
+  max finite and clamped to the row, `invert` only `true`; other keys pass unchanged) and `learnLabel(path)`
+  ('Pad reverb send', 'Delay feedback').
+- **store.js.** `normalizeMidiLearn` runs `learnFields` on every entry (load, migrate, import, `settings.midiLearn`
+  writes). `setMidiLearn(id, mapping)` now refuses a new mapping whose id is neither a fixed row nor a learnable path
+  (`slots.0.mono`, `slots.0.octave`, `slots.0.params.x`, `slots.16.*`, a typo), and a note on a custom path (a param
+  takes a CC). Clearing (`null`) still takes any id. Imported odd keys are still kept (skeptic "midiLearn with odd
+  keys").
+- **controller.js.**
+  - `learnedFader(id, value01, m)` handles every learnable path: the current-song value as it sounds (scene on top),
+    the row's default when absent, `ccToValue` / `valueToCc` for the value and the pickup. A slot the song lacks is a
+    no-op, and null / 'natural' is taken over at once. Only `slots.<i>.gain` and `drone.gain` go through
+    `adjustScene`.
+  - A CC now drives every fader mapping on it (`learnedAll`). A button keeps first-match.
+  - `LEARN_WRITE_MS = 20` (exported): a custom path writes at once when 20 ms have passed since its last write, else
+    the latest value is written when the window ends. Fixed rows write every message, as before. `applySong` and
+    `dispose` drop pending writes. Measured (learn-any.test): 61 messages at one instant gave ≤ 2 store notifies.
+  - `learn(id)` returns `{error:'not-learnable'}` for other ids and `{error:'perform-locked'}` under the lock (also
+    when the lock came on during the learn). Re-learning a path keeps its `min` / `max` / `invert`.
+    `onSetting('performLock')` cancels a pending `midi.learn`.
+- **views/settings.js.** Exports `customLearnIds(midiLearn)`. `mappingText(m, id?)` adds the range and
+  " · inverted". `learnName` falls back to `learnLabel`. `LEARN_MESSAGES` has 'perform-locked' and 'not-learnable'.
+  The Learn table gets a second tbody, `.st-learn-custom`, with a group row and one row per custom mapping (Learn,
+  Remove). It is empty when there are none, so the 1.x table is unchanged (17 rows for a 4-slot song).
+- **Edit (`views/edit/learn-menu.js`, new).** `createCore` calls `attachLearnMenu(core, root, appCtx)` and keeps
+  `core.learnMenu`, so both `mountEdit` and `mountSinglePanel` get it. A `contextmenu` on a `[data-bind]` whose
+  address is learnable opens `[data-testid="ev2-learn-menu"]` with Learn (`[data-act="learn"]`, then Cancel) and
+  Forget (`[data-act="forget"]`). The menu closes on Esc (and cancels the learn), on an outside pointerdown, when
+  leaving the view, when the lock comes on, and on unmount. Anything else gets the browser's own menu, as do
+  `[data-no-learn]` controls: the slot's shelf smart sliders, because the legacy `eq.low` / `eq.high` row stops
+  acting once the EQ has bands. CSS is in `base.css` (`.ev2-learn-*`, on the Slots popover's look and theme
+  tokens).
+- **Native.** No change. `BridgeEngine.setParam` takes any PARAMS path (`_validPath`, coalesced per microtask) and
+  the core takes it through `set`. `params.js` is unchanged, so `engine-api.json` is unchanged and
+  `build-engine-api.mjs --check` passes.
+- **Not done:**
+  - No UI for min / max / invert.
+  - Instrument params (`slots.<i>.params.<key>`) are not learnable: their range lives in the instrument list.
+  - The web oracle plays 4 slots, so a knob on slots 5–16 edits the song but is only heard on the native engine.
+- **Tests:**
+  - `test/unit/shared/learn.test.mjs`: 8.
+  - `test/phase1/shell/learn-any.test.mjs`: 11. Store validation; fields on every write path; migrate idempotence
+    and the 1.x format; export / import; linear, log and taper; invert and range; the scope rule; the throttle; one CC
+    on several params; an optional row; learn() and the lock.
+  - `test/phase2/edit-v2/panels/learn.test.mjs`: 3. Right-click the Pad's reverb send → Learn → `_inject` CCs move it
+    in the store and the engine; Forget; switches and shelves are left alone; Esc cancels; the lock; zero
+    console.error.
+  - `test/phase2/settings/run.mjs`: +1 per app / fixture mode. Custom row, re-learn keeps invert, the knob moves the
+    send, Remove.
+
+### Skeptic fixes (review `native/docs/reviews/midi-learn-any.md`)
+- **L1 Pedal hold.** The slider runs log 2..40 s and reads 'natural' from 31 s up. The knob ran on the row's 2..30 s,
+  so it sat up to 0.096 off the thumb and could never get back to 'natural'. `shared/learn.js` exports
+  `PEDAL_HOLD_TRACK = {min: 2, top: 40, natural: 31}`, and the slot panel's slider reads it. `ccToValue` returns
+  `null` (natural: the store removes the field) from 31 s up, and `valueToCc` puts absent / null / 'natural' at the
+  top (pickup there). This is the one row where `ccToValue` can return null. Every other learnable slider agrees
+  with `valueToCc` within 0.0005 (the slider's 1/1000 rounding), measured over every bound slider in Edit.
+- **C1 one control, one kind.** `controller.learn` clears the mappings a new one would contend with: same CC or note,
+  overlapping channel (null = any), and either side a button. Faders still share a CC (rule 4). The result lists them
+  in `replaced` (absent when none). Settings' and Edit's toasts name them. Before, a knob learned on a footswitch's CC
+  sat dead behind the button (first match), while the UI said it was learned.
+- **S1 song switch.** The store selects the next song at once, and the commit (`pickups.clear`, `dropLearnWrites`)
+  waits for the load. Pickups and pending writes now carry the song id. A trailing write made on the old song is
+  dropped if the store has moved on, and a knob picks up again on the new song. Before, the old song's last value
+  landed on the loading song.
+- **M1 midi.js.** `LEARN_STRUCTURAL_CCS = [0, 32, 6, 38, 96, 97, 98, 99, 100, 101]` (bank select, data entry,
+  increment / decrement, NRPN / RPN numbers). A 'fader' or 'button' learn skips them ('any' is unchanged). Before,
+  an NRPN knob learned CC 99, a constant, and a program-change pedal's bank select could be learned as a fader.
+- Tests: `learn.test.mjs` +1 (one assertion changed: `valueToCc(pedalHold, 'natural')` is now 1), and
+  `learn-any.test.mjs` +4 (C1, S1, M1, L1). `settings/run.mjs` saves `<mode>-learn-custom.png`.

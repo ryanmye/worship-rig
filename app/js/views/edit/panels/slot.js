@@ -34,6 +34,7 @@ import { noteName, parseNoteName } from '../../../shared/music.js';
 import { SPACE_PRESETS, matchPreset } from '../../../shared/fx-presets.js';
 import { smartSlidersFor, slotPath, wordFor, formatSmart, describeSlot } from '../../../shared/smart-controls.js';
 import { readEq, shelfWrites, eqSummary as mathSummary } from '../../../shared/eq-math.js';
+import { PEDAL_HOLD_TRACK } from '../../../shared/learn.js';
 import {
   COMPILED_PRESETS, LINEAR_TOUCH, COMPUTER_KEYBOARD, compileTouch, touchAt, touchWord,
 } from '../../../shared/touch-curve.js';
@@ -537,6 +538,7 @@ function mountSlot(el, ctx, opts) {
         format: (v) => formatSmart(spec, v), onChange,
       }), how);
       c.el.dataset.smart = spec.role;
+      if (spec.shelf) c.el.dataset.noLearn = '1'; // O-AW-ML: the legacy shelf row stops acting once the EQ has bands
       wsl.append(c.el);
       return c;
     });
@@ -795,9 +797,12 @@ function mountSlot(el, ctx, opts) {
     if (v < 0.1) return `${Math.round(v * 1000)} ms`;
     return v < 10 ? `${(Math.round(v * 10) / 10).toFixed(1)} s` : `${Math.round(v)} s`;
   };
-  /** Pedal hold slider: 2–30 s on a log track, the top end (≥ HOLD_NATURAL) = 'natural'. */
-  const HOLD_TOP = 40;
-  const HOLD_NATURAL = 31;
+  /**
+   * Pedal hold slider: 2–30 s on a log track, the top end (≥ HOLD_NATURAL) = 'natural'. The track is
+   * shared/learn.js PEDAL_HOLD_TRACK, so a learned knob sits where the thumb does (skeptic midi-learn-any L1).
+   */
+  const HOLD_TOP = PEDAL_HOLD_TRACK.top;
+  const HOLD_NATURAL = PEDAL_HOLD_TRACK.natural;
   /**
    * "Sustain" row: two word sliders and one sentence ("Rings 0.8 s after you lift the pedal. With the pedal down it
    * rings to its natural end."). Absent fields mean today's sound: the instrument's release and 'natural'; a
@@ -822,7 +827,8 @@ function mountSlot(el, ctx, opts) {
       write: (v) => ctx.set(P('release'), v === own0 ? null : Math.round(v * 100) / 100),
     });
     ctl.pedalHold = binder.ctl(P('pedalHold'), (onChange) => slider({
-      label: 'Pedal hold', min: 2, max: HOLD_TOP, curve: 'log', default: HOLD_TOP, ends: ['fades soon', 'natural'],
+      label: 'Pedal hold', min: PEDAL_HOLD_TRACK.min, max: HOLD_TOP, curve: 'log', default: HOLD_TOP,
+      ends: ['fades soon', 'natural'],
       word: (v) => (v >= HOLD_NATURAL ? 'Natural' : 'Fades'), format: (v) => (v >= HOLD_NATURAL ? '' : secs(v)),
       onChange,
     }), {

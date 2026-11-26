@@ -6,7 +6,9 @@
 // mono → setMono, MIDI input → midi.select, 2.0 voices / buffer / voice limit → the bridge engine); transient
 // actions (restart audio, MIDI learn, pads) go through ctx.controller.
 import { loadComponents, markDialog } from './_fallback-components.js';
-import { LEARNABLE, ROLE_DEFAULTS, SLOT_COUNT, MAX_SLOTS, slotGainIndex, slotName } from '../shared/params.js';
+import { LEARNABLE, ROLE_DEFAULTS, SLOT_COUNT, MAX_SLOTS, slotGainIndex, slotName, formatValue, describe }
+  from '../shared/params.js';
+import { isCustomLearn, isLearnablePath, learnLabel } from '../shared/learn.js';
 import { noteName } from '../shared/music.js';
 import { pickableThemes, resolveThemeId, lightSiblings, byId as themeById, LIGHT_AUTO_KEY } from '../shared/themes.js';
 import { latencyHint } from './components/latencyHint.js';
@@ -70,7 +72,18 @@ export function learnRowsFor(slotCount = SLOT_COUNT, mapped = {}) {
 export function learnName(id) {
   if (LEARN_NAMES[id]) return LEARN_NAMES[id];
   const i = slotGainIndex(id);
-  return i !== null ? `${slotName(i)} level` : id;
+  if (i !== null) return `${slotName(i)} level`;
+  return isLearnablePath(id) ? learnLabel(id) : id; // 2.x step 5: a custom mapping ('Pad reverb send')
+}
+
+/**
+ * 2.x step 5 (O-AW-ML): the custom mappings of settings.midiLearn (any continuous PARAMS path that is not a fixed
+ * row), in mapping order. Settings lists them under the fixed rows, each with Remove.
+ * @param {object} [mapped] settings.midiLearn
+ * @returns {string[]}
+ */
+export function customLearnIds(mapped = {}) {
+  return Object.keys(mapped || {}).filter(isCustomLearn);
 }
 const LATENCY_OPTS = [
   { value: 'lowest', label: 'Lowest' },
@@ -92,6 +105,8 @@ export const VEL_HINTS = Object.freeze({
 });
 export const LEARN_MESSAGES = Object.freeze({
   'sustain-pedal-reserved': 'That’s the sustain pedal — it always sustains and can’t be mapped. Use another knob, fader, pedal or pad.',
+  'perform-locked': 'Perform Lock is on. Unlock to learn MIDI.', // 2.x step 5 (O-AW-ML rule 6)
+  'not-learnable': 'That can’t be moved by a knob. Pick a slider.',
 });
 export const GARAGEBAND_DOC = 'docs/garageband-import.md';
 
@@ -149,11 +164,18 @@ export function midiStatusText(m, electron = false) {
 const AUDIO_EXT = /\.(mp3|wav|ogg|oga|m4a|aac|aif|aiff|flac|webm)$/i;
 
 /** "CC 20 · ch 1" / "Note C4 · any ch" / "—" */
-export function mappingText(m) {
+export function mappingText(m, id) {
   if (!m) return '—';
   const what = Number.isInteger(m.cc) ? `CC ${m.cc}` : Number.isInteger(m.note) ? `Note ${noteName(m.note)}` : '?';
   const ch = m.channel === null || m.channel === undefined ? 'any ch' : `ch ${m.channel + 1}`;
-  return `${what} · ${ch}`;
+  let extra = '';
+  // 2.x step 5: a mapping's own range / direction (`id` given and a learnable path)
+  if (id && isLearnablePath(id) && (Number.isFinite(m.min) || Number.isFinite(m.max))) {
+    const e = describe(id);
+    extra += ` · ${formatValue(id, m.min ?? e.min)}–${formatValue(id, m.max ?? e.max)}`;
+  }
+  if (id && m.invert === true) extra += ' · inverted';
+  return `${what} · ${ch}${extra}`;
 }
 
 /** Pedal polarity from the first CC64 value after "press your pedal": < 64 on press → reversed. */
@@ -784,32 +806,42 @@ export function mountSettings(el, ctx) {
   const learnNotes = new Map(); // id → message shown in the row for a few seconds (e.g. sustain pedal refused)
   let learningId = null;
   let learnKey = '';
+  // 2.x step 5 (O-AW-ML): custom mappings (any continuous param, learned from Edit's slider menu) sit in their own
+  // tbody under the fixed rows, each with Remove (the row goes with its mapping)
+  const learnCustomBody = h('tbody.st-learn-custom', { 'aria-label': 'Your parameter knobs' });
+  const learnCustomHead = h('tr.st-learn-group', {}, h('th', { colspan: 3, scope: 'colgroup',
+    text: 'Parameter knobs (right-click a slider in Edit to add one)' }));
   function syncLearnRows(state = store.get()) {
     const song = state.songs && state.songs[state.settings.currentSongId];
     const n = song && song.patch && Array.isArray(song.patch.slots) ? song.patch.slots.length : SLOT_COUNT;
     const ids = learnRowsFor(n, state.settings.midiLearn);
-    const key = ids.join('|');
+    const custom = customLearnIds(state.settings.midiLearn);
+    const key = `${ids.join('|')}#${custom.join('|')}`;
     if (key === learnKey) return false;
     learnKey = key;
-    const rows = [];
-    for (const id of ids) {
+    const rowsOf = (list, isCustom) => list.map((id) => {
       let c = learnCells.get(id);
       if (!c) {
         const name = learnName(id);
         const map = h('td.st-map', { text: '—' });
         const learnBtn = btn('Learn', () => toggleLearn(id), { class: 'st-learn', 'aria-label': `Learn ${name}`, disabled: !midi });
-        const clearBtn = btn('Clear', () => {
+        const clearBtn = btn(isCustom ? 'Remove' : 'Clear', () => {
           if (typeof controller.clearLearn === 'function') controller.clearLearn(id);
           else store.setMidiLearn(id, null);
-        }, { class: 'st-clear', 'aria-label': `Clear ${name}` });
+        }, { class: isCustom ? 'st-clear st-remove' : 'st-clear',
+          'aria-label': `${isCustom ? 'Remove' : 'Clear'} ${name}` });
         const tr = h('tr', { dataset: { control: id } }, h('th', { scope: 'row', text: name }), map, h('td.st-learn-btns', {}, learnBtn, clearBtn));
-        c = { tr, map, learnBtn, clearBtn };
+        c = { tr, map, learnBtn, clearBtn, custom: isCustom };
         learnCells.set(id, c);
       }
-      rows.push(c.tr);
-    }
+      return c.tr;
+    });
     // cells of rows that left the table are kept (cheap, at most 12) so a pending learn keeps its button
-    learnBody.replaceChildren(...rows);
+    learnBody.replaceChildren(...rowsOf(ids, false));
+    for (const id of [...learnCells.keys()]) {
+      if (learnCells.get(id).custom && !custom.includes(id) && id !== learningId) learnCells.delete(id);
+    }
+    learnCustomBody.replaceChildren(...(custom.length ? [learnCustomHead] : []), ...rowsOf(custom, true));
     return true;
   }
   syncLearnRows();
@@ -825,7 +857,7 @@ export function mountSettings(el, ctx) {
         c.learnBtn.classList.add('on');
       } else {
         const note = learnNotes.get(id);
-        setText(c.map, note || mappingText(ml[id]));
+        setText(c.map, note || mappingText(ml[id], id));
         c.map.classList.toggle('st-map-note', !!note);
         setText(c.learnBtn, 'Learn');
         c.learnBtn.classList.remove('on');
@@ -870,7 +902,12 @@ export function mountSettings(el, ctx) {
           }
         }, 6000);
         toast(msg, 'warn');
-      } else if (r) toast(`${learnName(id)} → ${mappingText(r)}`);
+      } else if (r) {
+        // skeptic midi-learn-any C1: the learn took the control from a mapping that would have sat dead beside it
+        const took = Array.isArray(r.replaced) && r.replaced.length
+          ? ` (it was ${r.replaced.map(learnName).join(', ')})` : '';
+        toast(`${learnName(id)} → ${mappingText(r)}${took}`);
+      }
       else toast('Nothing was received — press Learn and try again', 'warn');
     }
     renderLearn();
@@ -932,7 +969,7 @@ export function mountSettings(el, ctx) {
     h('p.st-hint', { text: 'Press Learn, then move a knob, fader or pedal, or press a key or pad. A fader takes over '
       + 'once it passes the current level. The sustain pedal always sustains and can’t be mapped.' }),
     h('table.st-learn-table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Control' }),
-      h('th', { text: 'Mapped to' }), h('th', { text: '' }))), learnBody),
+      h('th', { text: 'Mapped to' }), h('th', { text: '' }))), learnBody, learnCustomBody),
   );
 
   // =============================================================================================================
