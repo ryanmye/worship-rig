@@ -59,3 +59,4 @@
 .cht{grid-column:1;grid-row:1}.chgrp{grid-column:2;grid-row:1;justify-self:end}
 .jumps{grid-column:1;grid-row:2}.chs{grid-column:2;grid-row:2;justify-self:end}
 .side.chartw .jumps{grid-column:1/-1;grid-row:3}.side.chartw .chs{grid-column:1/-1;grid-row:2;justify-self:start}
+.place{white-space:nowrap}

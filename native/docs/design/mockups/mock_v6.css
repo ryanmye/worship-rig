@@ -165,3 +165,12 @@
 .lamp{width:14px;height:14px;border-radius:50%;background:var(--track);border:2px solid var(--line-2)}
 .okd{width:10px;height:10px;border-radius:50%;background:#9ccf66}
 .qpanel .link{align-self:flex-start}
+/* resizable sidebar: drag handle on its left edge */
+.sb-grip{position:absolute;left:-9px;top:50%;width:10px;height:72px;margin-top:-36px;border-radius:5px;z-index:4;cursor:col-resize;
+  background:var(--panel-3);border:1px solid var(--line-2);touch-action:none}
+.sb-grip::after{content:'';position:absolute;left:3px;top:22px;width:2px;height:26px;border-left:2px dotted var(--muted)}
+.sb-grip:hover,.sb-grip:focus-visible{background:var(--accent);outline:none}
+.side.will-fold{opacity:.55}
+/* a wide sidebar never squeezes a strip below its minimum: the strips scroll instead */
+.board .strips{overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+.board .strip:not(.add){min-width:150px}.board .strip.add.slim{min-width:52px}

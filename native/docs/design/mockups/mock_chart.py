@@ -46,18 +46,19 @@ def sheet(cur=('Chorus', 1)):
   return out
 
 
-def chart_head(compact=False, mode='hear'):
+def chart_head(compact=False, mode='hear', where='stage'):
   jumps = ''.join(f'<button class="jp{" on" if i == 2 else ""}">{j}</button>' for i, j in enumerate(JUMPS))
   return f'''<div class="chh">
     <div class="cht"><b>Morning Light</b><small><em>Key C</em> · written in G · 72 bpm · 4/4</small></div>
     <div class="chgrp"><div class="seg2 sm"><button class="{"on" if mode == "hear" else ""}">Heard</button><button class="{"on" if mode == "play" else ""}">Hands</button></div>
-      <button class="sq sm">A−</button><button class="sq sm">A+</button>{'' if compact else '<button class="ghost">Edit chart…</button>'}</div>
+      <button class="sq sm">A−</button><button class="sq sm">A+</button>{'' if compact else '<button class="ghost">Edit chart…</button>'}
+      <button class="ghost place" title="Choose where the chart shows; it remembers per device">{'⇥ Sidebar' if where == 'stage' else '⤢ Stage'}</button></div>
     <div class="chs"><button class="play">▶ Scroll</button><button class="sq sm">−</button><b>1.0×</b><button class="sq sm">+</button></div>
     <div class="jumps">{jumps}</div></div>'''
 
 
-def chart_panel(size='m', compact=False, mode='hear'):
-  return f'''<div class="chart sz-{size}">{chart_head(compact, mode)}<div class="sheet">{sheet()}<div class="readline" title="auto-scroll reading line"></div></div></div>'''
+def chart_panel(size='m', compact=False, mode='hear', where='stage'):
+  return f'''<div class="chart sz-{size}">{chart_head(compact, mode, where)}<div class="sheet">{sheet()}<div class="readline" title="auto-scroll reading line"></div></div></div>'''
 
 
 def mini_strips(n):
@@ -78,13 +79,13 @@ def frame(inner, w=1280, h=800, narrow=False, cls=''):
 MODS = [('drone', 'Drone'), ('setlist', 'Setlist'), ('chart', 'Chart'), ('notes', 'Notes')]
 
 
-def beside():
+def beside(width=None, size='s', n=3):
   # A: the chart is a sidebar module; the sidebar widens while Chart is the open tab.
-  m.BODIES['chart'] = lambda wide: chart_panel('s', compact=True)
-  rows = m.ALL[:3]
+  m.BODIES['chart'] = lambda wide: chart_panel(size, compact=True, where='side')
+  rows = m.ALL[:n]
   strips = ''.join(m.strip(i, r) for i, r in enumerate(rows))
   board = (f'<div class="board mid">{m.wheel()}<div class="strips">{strips}{m.addstrip(slim=True)}</div>'
-           f'{m.sidebar(tab="chart", mods=MODS, cls="chartw")}</div>')
+           f'{m.sidebar(tab="chart", mods=MODS, cls="chartw", width=width)}</div>')
   return frame(m.snaps() + board)
 
 
@@ -125,6 +126,7 @@ CSS = open('/home/claude/scratch/mock_v5.css').read() + open('/home/claude/scrat
 frames = [
   ('stage', 'Chart takes the stage', stage_mode()),
   ('beside', 'Chart in the sidebar', beside()),
+  ('wide', 'Sidebar dragged wider', beside(width=780, size='m', n=2)),
   ('ipl', 'iPad landscape', stage_mode(1180, 820, True)),
   ('ipp', 'iPad portrait (music stand)', ipad_portrait()),
   ('add', 'Add a chart', add_dialog()),
@@ -141,8 +143,9 @@ def build():
 <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@700;800&family=Figtree:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>{CSS}</style></head><body>
 <header class="pg"><h1>Chart view: quick mockups</h1>
-<p>The chord chart (D7, ships in 2.1) inside the Perform v6 layout. Two ways to place it: the chart takes the stage
-while the instruments shrink to live mini faders, or the chart is a wider tab in the right sidebar. Chords follow the song's key: this chart was written in G and the song is in C, so it shows in C. <b>Heard</b> shows the key
+<p>The chord chart (D7, ships in 2.1) inside the Perform v6 layout. You choose where it goes, per device: on the stage, while the instruments shrink to live mini faders (⇥ Sidebar moves it),
+or as a tab in the right sidebar (⤢ Stage moves it back). The sidebar is resizable: drag its left edge (try it in the
+sidebar tabs); dragging it very narrow folds it to the icon rail. Chords follow the song's key: this chart was written in G and the song is in C, so it shows in C. <b>Heard</b> shows the key
 the band hears, <b>Hands</b> the key your hands play when Easy Transpose is on. The gold line is where
 auto-scroll reads; the section buttons jump. The song and words are made up for the mockup. Nothing is wired up.</p>
 <nav class="tabs" role="tablist">{tabs}</nav></header>
@@ -151,7 +154,7 @@ auto-scroll reads; the section buttons jump. The song and words are made up for 
 function show(id){{tabs.forEach(b=>b.setAttribute('aria-selected',b.dataset.t===id));document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('on',s.id===id));fit();}}
 tabs.forEach(b=>b.addEventListener('click',()=>show(b.dataset.t)));
 function fit(){{document.querySelectorAll('section.on .scale').forEach(sc=>{{const f=sc.firstElementChild;const k=Math.min(1,(sc.clientWidth)/f.offsetWidth);f.style.transform='scale('+k+')';sc.style.height=(f.offsetHeight*k)+'px';}});}}
-new ResizeObserver(fit).observe(document.body);fit();}}</script></body></html>'''
+{m.RESIZE_JS}new ResizeObserver(fit).observe(document.body);fit();}}</script></body></html>'''
   os.makedirs(os.path.dirname(OUT), exist_ok=True)
   open(OUT, 'w').write(html)
   print('ok', len(html))

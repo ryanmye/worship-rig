@@ -312,4 +312,9 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
 - **Song bar** holds key, Transpose and the Space room; snapshots get their own row with Update / Save as new.
 - **Kept from today:** the bottom keyboard (range bar per instrument, key letters, held notes), Revert / Fade out /
   PANIC / Lock, and the menu bar popover unchanged.
+- **The right sidebar is resizable** (Ryan, same day): drag its left edge, between 200 px and 62 % of the stage;
+  dragging below 200 px folds it to the rail. Strips never shrink below 150 px; past that they scroll.
+- **Chart placement is the player's choice** (Ryan, same day): on the stage (instruments become live mini faders) or
+  as a sidebar tab; "⇥ Sidebar" / "⤢ Stage" in the chart header switches it, remembered per device.
+  Mockup: `native/docs/design/mockups/chart.html`.
 - Still open: whether "you play C" moves into the new song bar (proposed, not yet drawn).

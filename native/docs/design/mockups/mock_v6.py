@@ -95,7 +95,7 @@ BODIES = {'drone': lambda wide: drone(wide), 'setlist': lambda wide: setlist_bod
           'tone': lambda wide: tone_body()}
 
 
-def sidebar(tab='drone', collapsed=False, customize=False, wide=False, mods=SIDE_MODS, cls='', active=None):
+def sidebar(tab='drone', collapsed=False, customize=False, wide=False, mods=SIDE_MODS, cls='', active=None, width=None):
   # Right sidebar (Ryan, 2026-11-26): collapsible to a rail, and it holds whichever modules the player picks.
   if collapsed:
     icons = {'drone': '◉', 'setlist': '☰', 'notes': '✎', 'tone': '◐', 'chart': '♫'}
@@ -115,7 +115,10 @@ def sidebar(tab='drone', collapsed=False, customize=False, wide=False, mods=SIDE
   body = BODIES[tab](wide)
   if tab != 'drone':
     body = f'<div class="sb-body">{body}</div>'
-  return f'''<aside class="side{" wide" if wide else ""} {cls}"><div class="sb-h"><div class="sbtabs">{tabs}</div>
+  grip = ('' if wide else '<div class="sb-grip" role="separator" aria-orientation="vertical" tabindex="0" '
+          'aria-label="Drag to resize the sidebar" title="Drag to resize; drag narrow to fold it"></div>')
+  st = f' style="flex-basis:{width}px"' if width else ''
+  return f'''<aside class="side{" wide" if wide else ""} {cls}"{st}>{grip}<div class="sb-h"><div class="sbtabs">{tabs}</div>
     <button class="sb-c{" act" if customize else ""}" aria-label="Customize sidebar">⋯</button><button class="sb-x" aria-label="Collapse sidebar">⟩</button></div>
     {body}{pop}</aside>'''
 
@@ -250,6 +253,14 @@ def menubar():
   <div class="mstat"><span class="dot"></span>Sound OK · 176 ms · Keystation 49es Port 1</div></div>'''
 
 
+RESIZE_JS = """document.querySelectorAll('.sb-grip').forEach(g=>{const side=g.parentElement;const fr=side.closest('.frame');
+g.addEventListener('pointerdown',e=>{e.preventDefault();g.setPointerCapture(e.pointerId);const k=fr.getBoundingClientRect().width/fr.offsetWidth;
+const x0=e.clientX,w0=side.offsetWidth;const board=side.parentElement;const max=board.offsetWidth*0.62;
+const mv=ev=>{let w=w0-(ev.clientX-x0)/k;side.classList.toggle('will-fold',w<200);w=Math.max(200,Math.min(max,w));side.style.flexBasis=w+'px';};
+const up=()=>{g.removeEventListener('pointermove',mv);g.removeEventListener('pointerup',up);side.classList.remove('will-fold');};
+g.addEventListener('pointermove',mv);g.addEventListener('pointerup',up);});});"""
+
+
 def build():
   CSS = open('/home/claude/scratch/mock_v5.css').read() + open('/home/claude/scratch/mock_v6.css').read()
   frames = [
@@ -279,7 +290,7 @@ def build():
   <style>{CSS}</style></head><body>
   <header class="pg"><h1>Perform v6: the strips are the main screen</h1>
   <p>Quick HTML mockups in the app's Sanctuary v2 colours and fonts; nothing is wired up. The instrument strips fill the
-  screen, as in Sunday Keys, with today's Wheel column and a Quick button in a left sidebar (Quick opens over the strips, like today's sheet, so nothing moves while you play), and a sidebar on the right. The sidebar collapses to a thin rail (⟩), shows one module at a time as tabs, and ⋯ picks and orders which modules it holds: Drone, Setlist, Notes, Tone or Snapshots. The bottom keyboard is today's, with a range bar per instrument. Transpose and Space moved into the song bar and snapshots
+  screen, as in Sunday Keys, with today's Wheel column and a Quick button in a left sidebar (Quick opens over the strips, like today's sheet, so nothing moves while you play), and a sidebar on the right. The sidebar collapses to a thin rail (⟩), shows one module at a time as tabs, drag its left edge to make it wider or narrower, and ⋯ picks and orders which modules it holds: Drone, Setlist, Notes, Tone or Snapshots. The bottom keyboard is today's, with a range bar per instrument. Transpose and Space moved into the song bar and snapshots
   got their own row, so the strips get the room. Colours go by position, not by kind of sound. With 6 or more
   instruments the strips keep the 5-across width and the row scrolls sideways; the coloured pills above it show every instrument and which ones are on screen (tap one to jump to it). In this page you can scroll the 7-instrument views.</p>
   <nav class="tabs" role="tablist">{tabs}</nav></header>
@@ -291,7 +302,7 @@ def build():
   document.querySelectorAll('.scrollwrap').forEach(w=>{{const sc=w.querySelector('.strips');const ps=[...w.querySelectorAll('.mmp')];const st=[...sc.querySelectorAll('.strip:not(.add)')];
   function upd(){{const a=sc.scrollLeft,b=a+sc.clientWidth;st.forEach((s,i)=>ps[i]&&ps[i].classList.toggle('vis',s.offsetLeft-sc.offsetLeft>=a-4&&s.offsetLeft-sc.offsetLeft+s.offsetWidth<=b+4));w.classList.toggle('atend',b>=sc.scrollWidth-4);}}
   sc.addEventListener('scroll',upd);ps.forEach((p,i)=>p.addEventListener('click',()=>sc.scrollTo({{left:st[i].offsetLeft-sc.offsetLeft-10,behavior:'smooth'}})));upd();}});
-  new ResizeObserver(fit).observe(document.body);fit();}}</script></body></html>'''
+  {RESIZE_JS}new ResizeObserver(fit).observe(document.body);fit();}}</script></body></html>'''
   open(OUT, 'w').write(html)
   print('ok', len(html))
 
