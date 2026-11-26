@@ -8870,3 +8870,12 @@ today's (Settings' Song bank list, no browser). No SCHEMA change, no engine chan
   Changed: ui-v6 `sidebar.tests.mjs` (From the Song bank now opens the browser), settings `v6.mjs` (deep link 'bank'
   opens the browser). Gates: ui-v6-bank 15/15, ui-v6 68/68, settings 111/111, ui-core 78/78, ui-v6-edit 22/22, shell
   unit 373/373, patch-packs.pw 5/5. Engine untouched. Screenshots: `/home/claude/design-out/u7a/`.
+- **Skeptic (native/docs/reviews/UI6-U7a.md).** Fixed:
+  - F1: while a trial song is selected, list edits reposition the replaced selection (`trialNav`) as M4 does, and
+    deleting that song moves it on to the next one. New `store.trialReturn()` → `{id, index}|null` is Back's target;
+    `trial().prev` follows it.
+  - F2: a pack update during a trial refreshes Back's Revert snapshot (PP-1).
+  - F3: Keep also removes the fields the player removed while trying.
+  - F4: `store.neighbors()` from a trial song steps from the replaced entry (Next no longer goes to the first song).
+  - Gates: bank-trial 8/8 (incl. a 3600-step property against a reference library), shell unit 377/377,
+    ui-v6-bank 16/16, ui-v6 68/68, settings 111/111, ui-core 78/78, migration-1x 107 + 8, patch-packs.pw 5/5.

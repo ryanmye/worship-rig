@@ -297,6 +297,8 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 
 ## U7a status (builder, 2026-11-26; lane-u7a from v2-native 025d90e; awaiting the skeptic)
 
+## U7a status (builder, 2026-11-26; lane-u7a from v2-native 025d90e; skeptic: verified after fixes)
+
 - Built: the Song bank browser over the v6 stage and Try it (D17). `app/js/views/v6/bank/` (`bank.js` browser,
   `banner.js` the Trying banner, `model.js` pure filters), `app/styles-v6-bank.css`; store trial songs
   (`startTrial` / `endTrial` / `persisted` / `packSongPreview`), controller `tryBankSong` / `backFromTrial` /
@@ -323,6 +325,9 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   Screenshots: `/home/claude/design-out/u7a/` (`u7a-browse-1280.png`, `u7a-trying-1280.png`,
   `u7a-setlist-entry-1280.png`, `u7a-library-1280.png`, `u7a-browse-1180.png`, `u7a-trying-1180.png`,
   `u7a-browse-ipad-820.png`, `u7a-trying-ipad-820.png`).
+- Skeptic (2026-11-26, `native/docs/reviews/UI6-U7a.md`): **VERIFIED after fixes F1–F4** (trial nav follows setlist
+  edits, Back / saved position; pack update during a trial; Keep removes fields; Next from a trial steps from the
+  replaced entry). Open: O1 Esc in the search closes the browser, O2 Back can't restore a gap, O5 choices to confirm.
 
 ## Open questions carried into the build (decide, log in DECISIONS, tell Ryan)
 
