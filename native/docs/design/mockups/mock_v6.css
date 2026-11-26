@@ -194,3 +194,6 @@
 .rangek{padding:28px 10px 8px;height:150px}.rangek .rbars{height:10px}.rangek .kb{min-height:90px}
 .kb .wk.out{background:linear-gradient(#6f6558,#5d5448)}
 .rangek .wk i{font-size:9px}
+/* Edit › Range keyboard: shorter (Ryan) */
+.rangek{height:96px;padding:24px 10px 6px}.rangek .rbars{height:8px}.rangek .kb{min-height:52px}
+.rangek .bk{height:60%}
