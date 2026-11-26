@@ -1627,7 +1627,10 @@ export function createStore(opts = {}) {
     for (let k = line.seen.length - 1; k >= 0; k--) {
       const e = line.seen[k];
       if (e.slots.length !== slots.length || !deepEqual(e.slots, slots)) continue;
-      if (e.tokens === line.tokens || e.tokens.every((t, j) => t === line.tokens[j])) return null;
+      // skeptic F2: an earlier layout that is a prefix of this one (a Revert after an insert / Duplicate / add at the
+      // end) is a re-order too: its scenes are cut to the restored slots, so a later add can't inherit a stale level
+      const same = e.tokens.length === line.tokens.length && e.tokens.every((t, j) => t === line.tokens[j]);
+      if (e.tokens === line.tokens || same) return null;
       return { tokens: e.tokens, order: e.tokens.map((t) => line.tokens.indexOf(t)) };
     }
     return null;

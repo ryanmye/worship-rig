@@ -343,3 +343,30 @@ test('skeptic F1: a long fader drag after a move does not push the Revert layout
   u.set(`songs.${uid}.patch`, usnap.patch);
   assert.deepEqual(u.getSong(uid), usnap);
 });
+
+test('skeptic F2: Revert after a Duplicate at the end cuts the copy’s scene entries (a later add starts empty)', () => {
+  const s = makeStore();
+  const id = s.get().settings.currentSongId;
+  ['soft-keys', 'warm-pad', 'soft-keys', 'warm-pad'].forEach((x, i) => s.set(`slots.${i}`, slot(x)));
+  s.set(`songs.${id}.scenes`, [{ slots: [{ gain: 0.11 }, { gain: 0.22 }, { gain: 0.33 }, { gain: 0.44 }] }]);
+  const snap = structuredClone(s.getSong(id));
+  const maps = [];
+  s.onSlotMap((e) => maps.push(e.order));
+  assert.equal(s.insertSlot(id, 3, structuredClone(snap.patch.slots[3]), { scenesFrom: 3 }), 4);
+  assert.deepEqual(s.getSong(id).scenes[0].slots[4], { gain: 0.44 });
+  s.set(`songs.${id}.patch`, snap.patch);
+  assert.deepEqual(s.getSong(id), snap, 'the song as it was, scenes included (4 entries)');
+  assert.deepEqual(maps.at(-1), [0, 1, 2, 3]);
+  assert.equal(s.addSlot(id, slot('warm-pad')), 4);
+  assert.equal(s.getSong(id).scenes[0].slots[4] ?? null, null, 'the new slot is not covered by the scene');
+  // the 1.x-era path: add, save a scene that covers it, Revert
+  const t = makeStore();
+  const tid = t.get().settings.currentSongId;
+  const tsnap = structuredClone(t.getSong(tid));
+  t.addSlot(tid, slot('warm-pad'));
+  t.set(`songs.${tid}.scenes`, [captureScene(t.getSong(tid))]);
+  t.set(`songs.${tid}.patch`, tsnap.patch);
+  assert.equal(t.getSong(tid).scenes[0].slots.length, 4, 'cut to the restored slots, as a reload would');
+  t.addSlot(tid, slot('soft-keys'));
+  assert.equal(t.getSong(tid).scenes[0].slots[4] ?? null, null);
+});
