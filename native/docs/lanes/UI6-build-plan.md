@@ -187,7 +187,13 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 - Known: at 820 px the top bar (today's) still overlaps itself (U8); the sheet can reach over the keyboard's left part
   at 1280×800 (it is ~555 px tall, the board 488 px), as the mockup's does.
 
-## U5a status (builder, 2026-11-26; lane-u5 from v2-native 715b936; skeptic pass pending)
+## U5a status (builder, 2026-11-26; lane-u5 from v2-native 715b936; skeptic pass done)
+
+- **Skeptic (2026-11-26): VERIFIED after fixes** (`native/docs/reviews/UI6-U5a.md`). Fixed: category tablist
+  semantics (F1), Advanced below the list's fold at 1024 × 700 (F2), Tone EQ scrolling sideways at 1024 × 700 and
+  its "Keys plays…" summary (F3, D15), the library's setlist head overlapping (F4). ui-v6-edit 18/18, edit-v2 14/14
+  (117), ui-v6 54/54, settings 94/94. **Rebase onto lane-moveui needs R1–R3** (live range writes vs `update()`'s
+  cancel; the strip's name button and grip in Edit; slot-move following + Undo `followSlot` in the v6 Edit).
 
 - Built: `app/js/views/v6/edit/edit.js` (`mountEditV6`, mountEdit's interface), `views/v6/edit/instrument.js` (the
   instrument panel), `app/styles-v6-edit.css`; main.js mounts / swaps it with `settings.uiV6`; `views/edit/shell.js`
