@@ -9261,3 +9261,14 @@ requests, 15 store listeners, 4 intervals, 2529 elements).
   - flag-off wording; zero console.error / HTTP ≥ 400.
 - **Screenshots:** `/home/claude/design-out/u8a/`: `u8a-<screen>-820.png` / `-1180.png`, `u8a-perform-<w>x<h>.png`,
   `u8a-state-*-1280.png` (and `-820` for several states), before-shots in `pre/`.
+- **Skeptic (2026-11-26, `native/docs/reviews/UI6-U8a.md`): VERIFIED after three fixes.**
+  - F1: the top-bar rule above made a MIDI problem's words shrinkable. At 820 px, once the sounds were ready, "All 19
+    ready" took their room: "Not allowed yet" showed 0/101 px.
+    - Now `#midi-status` and `.midi-name.off` don't shrink. `#ready-status` / `.ready-text` shrink and ellipsize
+      instead.
+    - At ≤ 900 px `.tb-status:has(.midi-name.off) .ready-text` is hidden.
+    - The MIDI words show whole at 820 … 1280. At 1280 the ready words lose ~9 px only while MIDI has a problem.
+  - F3: `.v6.v6-perform:has(> :is(.v6-start, .v6-trybar):not([hidden])) .v6-side { max-height: 240px }` at
+    PORTRAIT_MQ, as under Learn / Arrange. At 820 × 1180 the fader track goes from 66 to 126 px on a first run, and
+    from 59 to 119 px while trying.
+  - F2: the empty card's Restore a backup… is disabled under Lock (Settings refuses there), like ⚙.

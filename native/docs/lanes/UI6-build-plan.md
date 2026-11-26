@@ -430,8 +430,16 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   - Gates: ui-v6 76/76 (purity identical), ui-v6-bank 17/17, ui-v6-edit 32/32, shell unit 384/384, migration-1x unit
     107/107, settings 111/111, ui-core 78/78, edit-v2 117/117 (14 files).
 
-## U8a status (builder, 2026-11-26; lane-u8 from v2-native 38c664b; awaiting the skeptic)
+## U8a status (builder, 2026-11-26; lane-u8 from v2-native 38c664b, rebased onto dcb2f06; skeptic pass done)
 
+- **Skeptic (2026-11-26): PARTIAL as delivered, VERIFIED after fixes.** The review is
+  `native/docs/reviews/UI6-U8a.md`. Fixed:
+  - a MIDI problem's words showing 0 px at 820 once the sounds were ready (F1);
+  - the Start here card and the Trying banner leaving the portrait faders a 66 / 59 px track (F3);
+  - the empty library's Restore a backup… looking live under Lock (F2).
+
+  Open: Back from a trial that began in an empty library does nothing (O1); 16 pills cut (O2, pre-existing);
+  orientation flips under a height-shrinking keyboard (O3); today's "click" / computer-keys wording on an iPad (O4).
 - Built: iPad layouts and edge states. `app/styles-v6-ipad.css`, `app/styles-v6-states.css` (both imported by
   styles-v6.css), `views/v6/start.js` (first-run Start here band, empty-library card); small changes in `perform.js`,
   `strip.js`, `lib.js` (popover clamp), `sidebar/sidebar.js`, `settings.js`, `components/startCard.js` (`songBar`
