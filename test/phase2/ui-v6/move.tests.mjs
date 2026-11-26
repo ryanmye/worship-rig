@@ -344,8 +344,8 @@ export async function moveTests(x) {
   // follows a move through its own ports of mountEdit's onSlotMap handler and slot.js followSlot; today's Edit is the
   // flag-off one. Both run the same steps (store.moveSlot stands in for the v6 Perform's ⋯ / drag).
   const EDITS = {
-    v6: { chg: tid('v6e-change'), remove: '[data-testid="v6e-imenu"] .v6e-mi-remove', go: '.v6e-confirm .v6e-remove',
-      menu: '[data-testid="v6e-imenu"] [role="menuitemradio"]' },
+    // U5b: the v6 Edit's Change instrument ▾ opens the chooser (a tile, then Use; Remove in its footer)
+    v6: { chg: tid('v6e-change'), remove: tid('v6e-ch-remove'), go: '.v6e-confirm .v6e-remove', chooser: true },
     today: { chg: '.ev2-slot-chg', remove: '.ev2-slot-mi-remove', go: '.ev2-slot-remove',
       menu: '.ev2-slot-menu [role="menuitemradio"]' },
   };
@@ -375,7 +375,19 @@ export async function moveTests(x) {
     await clearToasts();
     await ev(() => window.__rig.views.edit.editState.select('slot:1'));
     await page.click(S.chg);
-    const pickOther = await ev((sel) => {
+    const pickOther = S.chooser ? await ev(() => {
+      const cur = window.__rig.store.currentSong().patch.slots[1].instrument;
+      const dlg = document.querySelector('[data-testid="v6e-chooser"]');
+      for (const c of dlg.querySelectorAll('.v6e-ch-cat')) {
+        c.click();
+        const t = [...dlg.querySelectorAll('.v6e-ch-tile')].find((x2) => x2.dataset.value !== `${cur.type}:${cur.id}`);
+        if (!t) continue;
+        t.click();
+        dlg.querySelector('[data-testid="v6e-ch-use"]').click();
+        return t.dataset.value;
+      }
+      return null;
+    }) : await ev((sel) => {
       const cur = window.__rig.store.currentSong().patch.slots[1].instrument;
       const b = [...document.querySelectorAll(sel)]
         .find((x2) => x2.getAttribute('aria-checked') !== 'true' && x2.dataset.value
