@@ -540,6 +540,43 @@ export async function runV6({ browser, createServer, ROOT, SHOTS, results }) {
       }
     });
 
+    await T('UI6-U6 skeptic F5: Daylight Day: the accent-filled Learn… keeps its ink readable (≥ 4.5:1)', async () => {
+      await ev(() => window.__rig.store.set('settings.theme', 'daylight-day'));
+      await until(() => document.documentElement.dataset.theme === 'daylight-day');
+      try {
+        await open('midilearn');
+        const r = await ev(() => {
+          const b = document.querySelector('[data-testid="settings-learn-new"]');
+          const cs = getComputedStyle(b);
+          const cv = document.createElement('canvas');
+          cv.width = cv.height = 1;
+          const g = cv.getContext('2d', { willReadFrequently: true });
+          const rgb = (c) => {
+            g.clearRect(0, 0, 1, 1);
+            g.fillStyle = '#000';
+            g.fillStyle = c;
+            g.fillRect(0, 0, 1, 1);
+            return [...g.getImageData(0, 0, 1, 1).data].slice(0, 3);
+          };
+          const lin = (c) => ((c /= 255) <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+          const L = ([x, y, z]) => 0.2126 * lin(x) + 0.7152 * lin(y) + 0.0722 * lin(z);
+          const ratio = (a, c) => {
+            const [hi, lo] = [L(a), L(c)].sort((p, q) => q - p);
+            return (hi + 0.05) / (lo + 0.05);
+          };
+          const stops = cs.backgroundImage.match(/(rgba?|oklab|oklch|color|lab|lch)\([^()]*\)|#[0-9a-f]{3,8}/gi) || [];
+          const fg = rgb(cs.color);
+          return stops.map((s) => Math.round(ratio(fg, rgb(s)) * 100) / 100);
+        });
+        assert.ok(r.length >= 1, 'a filled button');
+        assert.ok(r.every((x) => x >= 4.5), `Learn… ink vs its fill: ${r.join(' / ')} (≥ 4.5)`);
+        await close();
+      } finally {
+        await ev(() => window.__rig.store.set('settings.theme', 'sanctuary'));
+        await until(() => document.documentElement.dataset.theme === 'sanctuary');
+      }
+    });
+
   } finally {
     await T('zero console.error', async () => {
       assert.deepEqual(errors, []);
