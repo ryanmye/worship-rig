@@ -1,0 +1,76 @@
+/* UI v6 U4: the left panel (views/v6/left.js; mockup perform-v6.html "Left · Quick open", mock_v6.css .wheel / .qk /
+   .qpanel) and the Quick sheet as a floating panel (components/quickSheet.js, positioned by perform.js openQuick).
+   Imported by styles-v6.css, so linked only while settings.uiV6 is on; every selector is under .v6 (or, for the page
+   width below, needs a mounted, visible .v6-perform). The column's width is styles-v6.css's .v6-left (84 / 64 px). */
+
+/* U1 review / U3 known: today's body { min-width: 1024px } made the v6 Perform scroll sideways at 820 px (iPad
+   portrait). Only while the v6 Perform is the visible view; Edit and the flag-off app keep today's minimum. */
+body:has(> #views > #view-perform:not([hidden]) > .v6-perform) { min-width: 0; }
+
+/* ---- the column: Quick on top, then today's wheel strip filling the rest */
+.v6 .v6-left { flex: none; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.v6 .v6-quick { flex: none; min-height: 52px; padding: 4px 2px; border-radius: 10px; display: flex;
+  flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 12.5px; font-weight: 800;
+  border: 1px solid var(--line-2); background: var(--panel-2); }
+.v6 .v6-quick .ic { color: var(--accent-text, var(--accent)); }
+.v6 .v6-quick.on { background: linear-gradient(var(--plate-top, var(--accent)), var(--plate-bot, var(--accent)));
+  color: var(--accent-ink); border-color: transparent; }
+.v6 .v6-quick.on .ic { color: var(--accent-ink); }
+.v6 .v6-wheel { flex: 1 1 auto; min-height: 0; display: flex; padding: 0; border-radius: 12px; }
+.v6 .v6-wheel .wheel-strip { flex: 1 1 auto; height: auto; min-height: 0; width: 100%; padding: 10px 6px; gap: 7px; }
+.v6 .v6-wheel .wheel-track { min-height: 48px; }
+.v6 .v6-wheel .wheel-input { width: 52px; }
+/* what it drives ("→ Warm Pad level"): two short lines rather than one cut to "→ Warm…" in the narrow column */
+.v6 .v6-wheel .wheel-target { white-space: normal; line-height: 1.2; display: -webkit-box; -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2; overflow-wrap: anywhere; min-height: 0; flex: none; font-size: 11px; }
+.v6 .v6-wheel .wheel-value { font-size: 19px; }
+.v6 .v6-wheel .swell-btn { flex: none; min-height: 44px; font-size: 12.5px; padding: 0 2px; }
+
+/* below 1100 px the column is 64 px (styles-v6.css) */
+@media (max-width: 1100px) {
+  .v6 .v6-wheel .wheel-strip { padding: 8px 3px; gap: 5px; }
+  .v6 .v6-wheel .wheel-input { width: 44px; }
+  .v6 .v6-wheel .wheel-value { font-size: 16px; }
+  .v6 .v6-wheel .swell-btn .swell-icon { display: none; }
+  .v6 .v6-quick { font-size: 12px; }
+}
+/* short windows (the Mac minimum 1024 × 700; U1 review F3): the column gives its height to the wheel's track */
+@media (max-height: 760px) {
+  .v6 .v6-left { gap: 6px; }
+  .v6 .v6-quick { min-height: 44px; flex-direction: row; gap: 4px; }
+  .v6 .v6-quick .ic { width: 16px; height: 16px; }
+  .v6 .v6-wheel .wheel-strip { padding-top: 6px; padding-bottom: 6px; gap: 4px; }
+  .v6 .v6-wheel .wheel-caption { display: none; } /* the column's only control: the % and the target say what it is */
+  .v6 .v6-wheel .wheel-value { font-size: 16px; }
+}
+@media (max-height: 760px) and (max-width: 1100px) {
+  .v6 .v6-quick .ic { display: none; }
+}
+
+/* ---- the Quick sheet on v6: one column (mockup .qpanel), floating over the board, never moving anything */
+.v6 .qs { left: var(--qleft, 14px); right: auto; top: var(--qtop, 12px); width: 400px; min-height: 0;
+  max-height: calc(100% - var(--qtop, 12px) - 12px); }
+.v6 .qs .qs-h { flex-wrap: wrap; gap: 4px 8px; padding: 6px 6px 6px 14px; }
+.v6 .qs .qs-h h2 { flex: 1 1 auto; }
+.v6 .qs .qs-h .qs-sub { order: 5; flex: 1 1 100%; font-size: 12.5px; }
+.v6 .qs .qs-h .qs-latency { order: 5; flex: 1 1 100%; }
+.v6 .qs .qs-h .qs-lock { order: 6; flex: 1 1 100%; margin-left: 0; }
+/* one line under the title: what Lock does only while locked (the column is narrow), the subtitle otherwise */
+.v6 .qs:not(.locked) .qs-h .qs-lock, .v6 .qs.locked .qs-h .qs-sub { display: none; }
+.v6 .qs .qs-b { display: flex; flex-direction: column; overflow: hidden auto; container: none; }
+.v6 .qs .qs-sec { border-left: 0; border-top: 1px solid var(--line); padding: 8px 14px 10px; gap: 6px; }
+.v6 .qs .qs-sec:first-child { border-top: 0; }
+.v6 .qs .qs-row { grid-template-columns: 88px minmax(0, 1fr); gap: 8px; }
+.v6 .qs .qs-tempo { gap: 8px; }
+.v6 .qs .qs-tap { min-width: 84px; }
+.v6 .qs .qs-tempo-hint { font-size: 11.5px; }
+.v6 .qs .segmented .seg { padding: 0 2px; font-size: 13px; }
+.v6 .qs .qs-st { flex-wrap: wrap; row-gap: 2px; }
+/* from the left panel: beside its Quick button, the arrow on the left edge pointing at it */
+.v6 .qs.from-left::before { top: var(--qy, 18px); left: -8px; transform: rotate(-45deg); }
+/* from the top bar: under that button, the arrow on top (today's), max-height leaves the bottom row's PANIC clear */
+.v6 .qs.from-top::before { left: var(--qx, 24px); }
+@media (max-height: 760px) {
+  .v6 .qs .qs-sec { padding-top: 6px; padding-bottom: 8px; gap: 4px; }
+  .v6 .qs .qs-h { min-height: 44px; }
+}

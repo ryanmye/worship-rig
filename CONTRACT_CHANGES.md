@@ -8291,3 +8291,55 @@ change (app/js/engine untouched), no UI wiring yet (v6 Duplicate / ⋯ Earlier /
     copy's scene level.
   - F3: a removed slot's kept scene entries (by scene index) come back only while the song has as many scenes as at
     the removal; after a scene was deleted the slot comes back uncovered instead of with another scene's level.
+
+
+## UI v6 U4
+
+The left panel of the v6 Perform (native DECISIONS D16 "left sidebar": Quick + today's wheel column;
+`native/docs/lanes/UI6-build-plan.md` U4; mockup `perform-v6.html` "Mac · 5 instruments", "Left · Quick open",
+`mock_v6.py` `wheel()` / `quick_panel()`). Behind `settings.uiV6` like U1–U3. No store, controller, engine or `shared/`
+change; `views/perform.js` and `components/quickSheet.js` are untouched.
+
+- **`views/v6/left.js` `leftPanel(v, {onQuick})`** replaces U1's dashed `.v6-left` placeholder (same element id /
+  `data-testid="v6-left"`, same 84 px / 64 px-below-1100 width). Returns `{el, quickBtn, wheel, render({song, names}),
+  renderWheel(w?), setPedal(down), setQuickOpen(open), destroy()}`; test hook `__rig.views.v6.left`.
+  - **Quick** (`data-testid="v6-quick"`, the top bar's sliders icon): toggles the Quick sheet.
+  - **Wheel column** = today's `components/readouts.js` `wheelStrip` (relative drag, pickup ghost, Expr / Vol rows once
+    seen, ◢ Swell, pedal lamp with "Pedal held" after 20 s, Bend → drone lamp), wired as `views/perform.js` wires it:
+    wheel → `controller.perform.wheel(v)`, Swell → `controller.swell()`; values from `engine.wheelValues()` on the
+    controller's `wheel` / `action` (swell, panic) / `song` events (its own rAF), the bend from MIDI `bend`, the pedal
+    from the shell's existing 150 ms runtime tick + the CC64 listener (`readRuntime` → `left.setPedal`; no new timer).
+  - **What it drives** names the instrument (D15): `v6WheelTarget(song, names)` → "Warm Pad level" for
+    `slots.<i>.gain` (an empty slot: "Instrument n level"); every other target keeps `wheelTargetLabel`'s words.
+    Wraps to two lines in the narrow column instead of "→ Warm…".
+  - **Lock**: nothing in the column is frozen (today's LOCK table: 'wheel', 'Swell', 'top bar: … Quick' are live);
+    inside the sheet, This Mac / All settings / Theme stay frozen as today.
+- **One Quick sheet, two openers** (perform.js): `openQuick(opts?, from?)` / `toggleQuick` take the opener. From the
+  left button the sheet is a 400 px one-column panel beside it, top-aligned, arrow pointing left (`.qs.from-left`,
+  `--qleft` / `--qtop` / `--qy`); from the top bar it drops under that button (`.qs.from-top`, arrow up, clamped inside
+  the view). It floats (absolute in `.v6`, `max-height` to the view's bottom, its body scrolls): the strips never move
+  (tested: `.v6-stripsarea` rect identical). Either button closes it whichever opened it. Both buttons read
+  `aria-expanded="true"` while it is open (quickSheet still owns the top bar's); Esc closes it with no panic and hands
+  focus back to the opener (quickSheet focuses the top bar's, the shell's `onClose` moves it to the left one). Leaving
+  Perform closes it (as today). Same callbacks / `renderQuick` as U1, so TAP, Swell time, Touch, Reversed, the pedal
+  light, Sound OK / restart (hold, or one click when stalled / paused), latency hint, Theme, All settings and **Save as
+  scene 1 · 2 · 3** all stay (the mockup's panel leaves scenes out; kept, not removed).
+- **The sheet's v6 look** (`styles-v6-left.css`, under `.v6 .qs`): one column (This song / This Mac / If something's
+  wrong stacked), 88 px labels, header wraps (title · All settings · ×, then one line). One deviation in wording only:
+  the header's second line is the subtitle while unlocked and "Under Lock: This song still works, This Mac can't be
+  changed" while locked (today shows both side by side; the column has room for one). Today's `max-height` rules still
+  drop the captions in short windows.
+- **Page width** (U1 review, U3 "Known"): `body:has(> #views > #view-perform:not([hidden]) > .v6-perform)
+  { min-width: 0 }` in the v6 sheet, so the v6 Perform no longer scrolls sideways at 820 px; today's
+  `body { min-width: 1024px }` still holds for Edit / Settings and with the flag off (tested: Edit at 820 px computes
+  1024 px). The top bar itself still overflows at 820 px (U8).
+- **Fit**: 1280×800: column 84 × 488, wheel track 220 px. 1024×700: 64 px column, a 44 px one-row Quick, caption
+  hidden (`max-height: 760px`), track ≥ 170 px with 4 or 7 instruments; Swell (44 px), pedal and bend lamps inside.
+  iPad portrait 820×1180: the column at the left of the strips (U3's grid), 64 px, above the sidebar panel.
+- **CSS**: `app/styles-v6-left.css`, `@import`ed by styles-v6.css (after the sidebar's); every selector under `.v6`
+  except the `body:has(… .v6-perform)` page-width rule.
+- **Flag off:** unchanged (purity probe against 966b0b4: 103 requests, 14 store listeners, 4 intervals, 2528 elements,
+  identical).
+- Tests: `test/phase2/ui-v6/left.tests.mjs` (run by run.mjs): 8 checks. `run.mjs` also takes `UI6_ONLY=<regex>` to run
+  a subset (the boot tests and the console check always run). Screenshots `u4-{1280x800,1024x700,820x1180}.png` and
+  `u4-quick-*.png`.

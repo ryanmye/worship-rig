@@ -117,6 +117,23 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 - Known: below 1024 px wide the whole app still has `body { min-width: 1024px }` (today's), so 820 px portrait scrolls
   sideways; U8 owns the iPad layouts.
 
+## U4 status (builder, 2026-11-26; lane-u4 from lane-u3 28544f2, awaiting the skeptic)
+
+- Built: `app/js/views/v6/left.js` (`leftPanel`), `app/styles-v6-left.css` (imported by styles-v6.css); perform.js
+  mounts it in `.v6-left` and opens the one Quick sheet from either button; suite part
+  `test/phase2/ui-v6/left.tests.mjs` (run by run.mjs). Interface notes: CONTRACT_CHANGES "## UI v6 U4".
+- Wired: Quick (today's sheet, all of it incl. Save as scene; a one-column panel beside the button, or under the top
+  bar's Quick; floats, Esc / either button closes, focus back to the opener); today's wheel column (wheelStrip: wheel
+  with pickup, target by instrument name, Expr / Vol, Swell, pedal lamp + "Pedal held", Bend → drone lamp), same calls
+  and live updates as today; Lock leaves it live. The v6 Perform drops `body { min-width: 1024px }` (820 px portrait
+  no longer scrolls sideways; Edit keeps it).
+- Placeholders: none in the left panel.
+- Choices to confirm with Ryan: the sheet opens beside the left button but under the top bar's button (anchored to the
+  opener); its header shows the subtitle, or the "Under Lock: …" line while locked (not both); the target says
+  "Warm Pad level", an empty slot "Instrument n level"; the wheel caption hides below 760 px tall windows.
+- Known: at 820 px the top bar (today's) still overlaps itself (U8); the sheet can reach over the keyboard's left part
+  at 1280×800 (it is ~555 px tall, the board 488 px), as the mockup's does.
+
 ## Open questions carried into the build (decide, log in DECISIONS, tell Ryan)
 
 - **Snapshots vs today's scenes.** Today: up to 3 scenes per song, levels / ON / drone level / wheel only. The v6

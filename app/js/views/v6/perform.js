@@ -1,6 +1,6 @@
 // UI v6 Perform shell (D16–D22; native/docs/lanes/UI6-build-plan.md U1; mockup native/docs/design/mockups/
 // perform-v6.html). Mounted by main.js instead of views/perform.js while settings.uiV6 is true; flag off, nothing here
-// is loaded. Rows: song bar · snapshots (foldable) · board (left panel slot for U4, the strips, right sidebar slot for
+// is loaded. Rows: song bar · snapshots (foldable) · board (left panel: Quick + wheel, U4; the strips; right sidebar,
 // U3) · keyboard with range bars + Revert / Fade out / PANIC / Lock. The top bar (index.html) is today's.
 // Module boundaries (CLAUDE.md): writes go through store.set / store helpers and controller.*, never the engine; the
 // engine is only read (instrument names, wheel values, pedal / fade state), as perform.js reads it.
@@ -19,6 +19,7 @@ import { snapshotsRow } from './snapshots.js';
 import { stripsRow } from './strips-row.js';
 import { bottomRow } from './bottom.js';
 import { rightSidebar } from './sidebar/sidebar.js';
+import { leftPanel } from './left.js';
 
 /** The v6 stylesheet; linked only while the v6 Perform is mounted (removed again by destroy()). */
 export const V6_CSS_HREF = './styles-v6.css';
@@ -57,7 +58,8 @@ const clone = (x) => JSON.parse(JSON.stringify(x));
  * @param {HTMLElement} root
  * @param {{store, controller, engine, midi, toast, openSettings, setView, quickButton?}} ctx
  * @returns {{el:HTMLElement, readonly savedSnapshot:object|null, readonly changedPaths:string[], toggleQuick():void,
- *            openQuick():void, closeQuick():void, readonly quickOpen:boolean, chartMounts:object,
+ *            openQuick(opts?:object, from?:HTMLElement):void, closeQuick():void, readonly quickOpen:boolean,
+ *            chartMounts:object, left:object,
  *            readonly strips:object[], readonly snapshots:object, destroy():void}}
  */
 export function mountPerformV6(root, ctx) {
@@ -178,9 +180,10 @@ export function mountPerformV6(root, ctx) {
   const snaps = snapshotsRow(v, { onFold: (f) => el.classList.toggle('snaps-folded', f) });
   const bar = songBar(v, el, snaps.chip);
   const row = stripsRow(v);
-  // U4 (left panel: Quick + wheel column) mounts here; until then the column is kept
-  const left = h('aside.v6-left.v6-slot-ph', { 'data-testid': 'v6-left', 'aria-label': 'Left panel (coming)' },
-    h('span', { text: 'Wheel' }), h('small', { text: 'coming' }));
+  // U4: the left panel (views/v6/left.js): a Quick button (the same sheet as the top bar's) + today's wheel column
+  const lp = leftPanel(v, { onQuick: (btn) => toggleQuick(btn) });
+  d.add(() => lp.destroy());
+  const left = lp.el;
   // U3: the right sidebar (views/v6/sidebar/): Drone · Setlist · Notes as tabs, a rail when folded, resizable
   const side = rightSidebar(v, { onChange: (s) => bar.setSide(s) });
   const right = side.el;
@@ -203,7 +206,16 @@ export function mountPerformV6(root, ctx) {
       quick.close();
       ctx.openSettings?.();
     },
+    // U4: the sheet has two openers (the top bar's Quick and the left panel's); quickSheet keeps the top bar's
+    // aria-expanded and Esc focus, this keeps the left one's and hands Esc's focus back to whichever opened it
+    onClose: (reason) => {
+      const from = quickFrom;
+      quickFrom = null;
+      lp.setQuickOpen(false);
+      if (reason === 'escape' && from === lp.quickBtn && document.activeElement === ctx.quickButton) from.focus();
+    },
   });
+  let quickFrom = null; // the button that opened the sheet (U4)
   d.add(() => quick.destroy());
   el.append(bar.el, snaps.el, board, bottom.el, quick.el);
   root.classList.remove('locked');
@@ -261,6 +273,7 @@ export function mountPerformV6(root, ctx) {
     const w = wheelNow();
     bar.render(state);
     side.render(state);
+    lp.render({ song: live, names });
     snaps.render(song);
     row.render({
       song: live, base, changed, locked, names,
@@ -297,15 +310,42 @@ export function mountPerformV6(root, ctx) {
       echoSynced: !dl || !(Number(dl.returnGain) > 0) ? null : dl.sync && dl.sync !== 'off',
     });
   }
-  const openQuick = (opts) => {
+  /**
+   * Open the sheet by the button that asked (U4, mockup "Left · Quick open"): from the left panel's Quick it is a
+   * panel beside that button, over the strips (.from-left; its arrow points left at the button); from the top bar's
+   * it drops under that button (its arrow points up, as today). Either way it floats: nothing reflows while playing.
+   * @param {object} [opts]  quickSheet open() options ({focus})
+   * @param {HTMLElement} [from]  the opener (default: the top bar's Quick)
+   */
+  const openQuick = (opts, from = ctx.quickButton || null) => {
     if (quick.isOpen) return;
     renderQuick();
-    const a = ctx.quickButton?.getBoundingClientRect();
+    quickFrom = from;
     const p = el.getBoundingClientRect();
+    const a = from?.getBoundingClientRect();
+    const side = from === lp.quickBtn;
+    quick.el.classList.toggle('from-left', side);
+    quick.el.classList.toggle('from-top', !side);
     if (a && a.width) {
-      quick.el.style.setProperty('--qx', `${Math.max(12, Math.round(a.left + a.width / 2 - p.left - 21))}px`);
+      if (side) {
+        quick.el.style.setProperty('--qleft', `${Math.round(a.right - p.left + 12)}px`);
+        quick.el.style.setProperty('--qtop', `${Math.round(a.top - p.top)}px`);
+        quick.el.style.setProperty('--qy', `${Math.round(a.height / 2 - 7)}px`);
+      } else {
+        // 400 px: styles-v6-left.css .v6 .qs width; kept inside the v6 view on the right
+        const left = Math.max(14, Math.min(Math.round(a.left - p.left - 14), Math.round(p.width - 414)));
+        quick.el.style.setProperty('--qleft', `${left}px`);
+        quick.el.style.setProperty('--qtop', '12px');
+        quick.el.style.setProperty('--qx', `${Math.max(12, Math.round(a.left + a.width / 2 - p.left - left - 7))}px`);
+      }
     }
+    lp.setQuickOpen(true); // both buttons say the one sheet is open (quickSheet marks the top bar's)
     quick.open(opts);
+  };
+  /** Either Quick button: close the sheet if it is open (whichever opened it), else open it by that button. */
+  const toggleQuick = (from) => {
+    if (quick.isOpen) quick.close();
+    else openQuick(undefined, from);
   };
 
   // ---------------------------------------------------------------- runtime: pedal, faded (as perform.js readRuntime)
@@ -330,6 +370,7 @@ export function mountPerformV6(root, ctx) {
       el.classList.toggle('pedal-down', p);
       if (quick.isOpen) quick.set({ pedal: p });
     }
+    lp.setPedal(p); // U4: the wheel column's lamp (it times "Pedal held" itself)
     if (f !== faded) setFaded(f);
   }
   // no polling while Perform is hidden (Edit); 1 Hz under low-resource / a hidden window (perform.js idle-cpu-ui)
@@ -464,11 +505,9 @@ export function mountPerformV6(root, ctx) {
       const song = store.currentSong();
       return song && snap && snap.id === song.id ? [...changedPaths(song, snap.song, V6_DIFF_WATCH)] : [];
     },
-    toggleQuick() {
-      if (quick.isOpen) quick.close();
-      else openQuick();
-    },
-    openQuick,
+    toggleQuick: () => toggleQuick(ctx.quickButton || null),
+    /** main.js / tests: open the sheet (by the top bar's Quick unless `from` says otherwise). */
+    openQuick: (opts, from) => openQuick(opts, from),
     closeQuick: () => quick.close(),
     get quickOpen() {
       return quick.isOpen;
@@ -481,6 +520,7 @@ export function mountPerformV6(root, ctx) {
     },
     snapshots: snaps,
     sidebar: side,
+    left: lp,
     destroy() {
       d.dispose();
       side.destroy();

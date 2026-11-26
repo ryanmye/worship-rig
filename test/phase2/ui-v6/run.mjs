@@ -15,6 +15,9 @@
 //   Edit range, U3 sidebar open / collapsed / wide / iPad portrait → ./screenshots, or UI6_SHOTS=<dir>).
 //   U3 (views/v6/sidebar/, sidebar.tests.mjs): tabs, rail, resize + fold, customize, per-device persistence, the Drone
 //   / Setlist / Notes modules (same writes as today's Perform), Lock, iPad portrait.
+//   U4 (views/v6/left.js, left.tests.mjs): the left panel's Quick (one sheet, two openers, Esc, TAP and the rest) and
+//   wheel column (simulated CC1 / CC11 / CC64 / bend, Swell, relative drag, Lock), 1024×700 fit, iPad portrait with no
+//   sideways page scroll; screenshots u4-*.png.
 //   The purity comparison needs git: base = UI6_PURITY_BASE or `git merge-base HEAD v2-native`; it is skipped
 //   (with a note) when app/ does not differ from the base.
 import { createRequire } from 'node:module';
@@ -27,6 +30,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.mjs';
 import { sidebarTests } from './sidebar.tests.mjs';
+import { leftTests } from './left.tests.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -38,7 +42,10 @@ const VERBOSE = !!process.env.VERBOSE;
 fs.mkdirSync(SHOTS, { recursive: true });
 
 const results = [];
+// UI6_ONLY=<regex>: run only the matching tests (plus the boot and the console check), for iterating on one part
+const ONLY = process.env.UI6_ONLY ? new RegExp(process.env.UI6_ONLY) : null;
 const T = async (name, fn) => {
+  if (ONLY && !ONLY.test(name) && !/^flag off: today|^\?ui6=1 mounts|^zero console/.test(name)) return;
   const t0 = Date.now();
   try {
     await fn();
@@ -1154,6 +1161,9 @@ try {
 
   // ---------------------------------------------------------------- U3: the right sidebar (sidebar.tests.mjs)
   await sidebarTests({ T, page, browser, origin, ev, until, tid, song, settled, hold, setSlots, SHOTS, assert });
+
+  // ---------------------------------------------------------------- U4: the left panel (left.tests.mjs)
+  await leftTests({ T, page, browser, origin, ev, until, tid, song, settled, setSlots, SHOTS, assert });
 
   await T('on / off cycles: today’s Perform comes back whole; nothing of v6 is left behind', async () => {
     for (let k = 0; k < 3; k++) {
