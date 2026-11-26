@@ -18,6 +18,20 @@ const WARN_SHOWN = 12;
 const REVIEW_DEBOUNCE_MS = 250;
 
 /**
+ * UI6-U7b O3: the song is a Song bank trial whose bank song is already in the library. Keep it then selects that
+ * library song as it is (controller.keepTrial, U7a's rule), so a chart set while trying is not kept with it.
+ * @param {{store:object, controller?:object}} ctx
+ * @param {string} songId
+ * @returns {boolean}
+ */
+export function trialKeepsLibraryCopy(ctx, songId) {
+  if (!isTrialId(songId)) return false;
+  const t = typeof ctx.controller?.trial === 'function' ? ctx.controller.trial() : null;
+  if (!t || t.id !== songId || !t.packId || typeof ctx.store.packSongs !== 'function') return false;
+  return !!ctx.store.packSongs()[t.packId];
+}
+
+/**
  * The review under the chart text, shared by today's "Add chart…" dialog and the v6 Edit chart dialog (U7b): the
  * parser's summary and warnings, the title / key / tempo / time signature OFFERED as unticked updates to the song
  * (never applied silently), "written in" when the chart names no key, the tempo when neither has one, and a
@@ -154,9 +168,11 @@ export function chartReview(ctx, songId) {
     const t = tempoIn && tempoIn.value.trim() ? Math.round(Number(tempoIn.value)) : null;
     if (Number.isFinite(t) && t !== null) writes.push(['tempo', Math.max(30, Math.min(300, t))]);
     for (const [p, v] of writes) store.set(`songs.${songId}.${p}`, v);
-    // skeptic UI6-U7b F4: a trial song (Song bank Try it, D17) is never saved; Back drops the chart, Keep it keeps it
-    ctx.toast?.(isTrialId(songId) ? 'Chart set for this try. Keep it to save it with the song.' : 'Chart saved.', 'ok',
-      { ms: isTrialId(songId) ? 4000 : 2500 });
+    // skeptic UI6-U7b F4: a trial song (Song bank Try it, D17) is never saved; Back drops the chart, Keep it keeps it.
+    // UI6-U7b O3: unless that bank song is already in the library: Keep it then plays the library copy as it is
+    ctx.toast?.(!isTrialId(songId) ? 'Chart saved.' : trialKeepsLibraryCopy(ctx, songId)
+      ? 'Chart set for this try only: this song is already in your library, and Keep it plays your copy as it is.'
+      : 'Chart set for this try. Keep it to save it with the song.', 'ok', { ms: isTrialId(songId) ? 5000 : 2500 });
     return { done: true };
   }
   return {

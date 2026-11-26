@@ -32,7 +32,8 @@ const speedText = (x) => `${Number.isInteger(x) ? x.toFixed(1) : String(x)}×`;
  *   setPct(where, pct, why), setPlacement(where), closeStage(), openEdit(opener)
  * @param {'stage'|'side'} where
  * @returns {{el:HTMLElement, render(force?:boolean):void, step(dir:number, why?:string):void, reset():void, fit():void,
- *   state():object, destroy():void}}
+ *   place():{auto:boolean, line:number}, resume(p:{auto:boolean, line:number}|null):void, state():object,
+ *   destroy():void}}
  */
 export function chartPanel(c, where) {
   const { store } = c;
@@ -353,6 +354,24 @@ export function chartPanel(c, where) {
     step,
     reset,
     fit,
+    /**
+     * UI6-U7b O2: where the reader is (the line at the reading line) and whether auto-scroll runs, for the panel that
+     * takes over when the chart changes place (⇥ Sidebar / ⤢ Stage, an iPad rotation).
+     * @returns {{auto:boolean, line:number}}
+     */
+    place: () => ({ auto: core.auto, line: curLine ? lines.indexOf(curLine) : -1 }),
+    /**
+     * Take over from the other place: the same line on the reading line, and auto-scroll running again if it was
+     * (each place has its own panel; before, the new one started at the top with the scroll stopped).
+     * @param {{auto:boolean, line:number}|null} p
+     */
+    resume(p) {
+      if (!p || !el.isConnected) return;
+      const l = p.line >= 0 ? lines[p.line] : null;
+      if (l) core.scrollTo(l.offsetTop - body.clientHeight * READ_AT + 2);
+      mark.push();
+      if (p.auto) core.startAuto();
+    },
     /** Test / debug: what the panel shows. */
     state() {
       const v = core.view;

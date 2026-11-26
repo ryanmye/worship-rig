@@ -149,6 +149,9 @@ export function mountChartV6(ctx, mounts) {
   }
   function setPlacement(p) {
     if (!PLACEMENTS.includes(p)) return;
+    // UI6-U7b O2: the panel that takes over keeps the line being read and a running auto-scroll (each place has its
+    // own panel; the player had to press ▶ again)
+    const was = (stage?.panel || sidePanel)?.place() ?? null;
     prefs.placement = p;
     writeStoredPrefs({ placement: p });
     if (p === 'side') {
@@ -157,8 +160,10 @@ export function mountChartV6(ctx, mounts) {
       dropStage();
       side.refreshBadges();
       side.open('chart');
+      sidePanel?.resume(was);
     } else {
       showStage(true);
+      stage?.panel.resume(was);
     }
   }
   /** Show the chart where it lives: up on the stage, or the sidebar open on Chart. */
@@ -260,8 +265,10 @@ export function mountChartV6(ctx, mounts) {
   if (mq && typeof mq.addEventListener === 'function') {
     const onMq = () => {
       if (!stage || stage.vertical === !mq.matches) return;
+      const was = stage.panel.place(); // UI6-U7b O2: the rebuilt panel goes on where this one was
       dropStage();
       buildStage();
+      stage?.panel.resume(was);
     };
     mq.addEventListener('change', onMq);
     d.add(() => mq.removeEventListener('change', onMq));

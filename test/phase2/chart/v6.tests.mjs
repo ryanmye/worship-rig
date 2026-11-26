@@ -17,6 +17,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.mjs';
+import { polish1ChartTests } from './polish1.tests.mjs';
 
 const PREFS = 'worship-rig.chart';
 const SIDE = 'worship-rig.v6.sidebar';
@@ -943,6 +944,9 @@ export async function v6Tests(x) {
         }
         await page.setViewportSize({ width: 1280, height: 800 });
       });
+
+    // ---- UI v6 polish batch 1 (polish1.tests.mjs: UI6-U7b O1–O3)
+    await polish1ChartTests({ T, page, ev, until, tid, st, setSong, assert });
 
     await T('U7b zero console.error, no HTTP ≥ 400', async () => {
       assert.deepEqual(errors, []);

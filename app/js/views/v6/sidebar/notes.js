@@ -21,6 +21,18 @@ export default {
     const d = disposer();
     const text = h('div.v6-notes-t.v6-notes-side', { tabindex: '0', 'data-testid': 'v6-notes-text',
       'aria-label': 'Song notes' });
+    // UI6-U7b O1 (as U7b F1 for the chart body, views/v6/chart/panel.js): a tap or click on the notes must not leave
+    // them focused. Focused notes took Space (the browser scrolled them a page instead of the sustain pedal) and the
+    // first Esc only let go of them (no Panic). Tab still reaches them (:focus-visible), and the keys below scroll.
+    d.listen(text, 'focus', () => {
+      let keyboard = true;
+      try {
+        keyboard = text.matches(':focus-visible');
+      } catch {
+        keyboard = true; // an engine without :focus-visible keeps today's focus
+      }
+      if (!keyboard) queueMicrotask(() => document.activeElement === text && text.blur());
+    });
     d.listen(text, 'keydown', (e) => {
       if (e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return;
       const line = 40;

@@ -11,7 +11,7 @@ import { openOverlay } from '../../components/overlay.js';
 import { markDialog } from '../../_fallback-components.js';
 import { CHART_MAX_CHARS, isTrialId } from '../../../store.js';
 import { detectFormat } from '../../../shared/chart-parse.js';
-import { chartReview, IMPORT_FILE_MAX_BYTES } from '../../chart/import.js';
+import { chartReview, IMPORT_FILE_MAX_BYTES, trialKeepsLibraryCopy } from '../../chart/import.js';
 import { CHART_ACCEPT, CHART_SIDE_PCT, chartView, pctPx } from '../../chart/logic.js';
 import { renderChart } from '../../chart/render.js';
 
@@ -89,9 +89,12 @@ export function openChartEditor(ctx, songId, o) {
     'data-testid': 'v6-ce-save' });
 
   const titleText = h('span', {});
-  // skeptic UI6-U7b F4: on a trial song (Song bank Try it) nothing is saved until Keep it
-  setText(titleText, `${s0?.name ?? ''} · ${isTrialId(songId) ? 'trying this song: Keep it to save the chart'
-    : 'changes show on the right as you type'}`);
+  // skeptic UI6-U7b F4: on a trial song (Song bank Try it) nothing is saved until Keep it. UI6-U7b O3: a bank song
+  // already in the library is kept as the library copy (U7a's Keep rule), so the chart is for this try only there
+  setText(titleText, `${s0?.name ?? ''} · ${!isTrialId(songId) ? 'changes show on the right as you type'
+    : trialKeepsLibraryCopy(ctx, songId)
+      ? 'trying this song: already in your library, so this chart is for this try only'
+      : 'trying this song: Keep it to save the chart'}`);
   const dlg = h('div.v6-ce', { role: 'dialog', 'aria-modal': 'true', 'aria-label': had ? 'Edit chart' : 'Add a chart',
     tabindex: -1, 'data-testid': 'v6-chart-editor' },
   h('div.v6-ce-h', {}, h('b', { text: had ? 'Edit chart' : 'Add a chart' }), titleText),
