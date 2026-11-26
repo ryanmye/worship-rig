@@ -1578,7 +1578,8 @@ export function mountSettings(el, ctx) {
   const escTog = tog('escPanics', 'On');
   escTog.el.dataset.testid = 'setting-esc-panics';
   const escRow = row('Esc always panics', escTog.el, 'Off: on Perform, Esc first closes what is open (a menu, the '
-    + 'Quick sheet), the next Esc panics. On: every Esc on Perform panics at once. ⌘. (Ctrl+.) always panics.');
+    + 'Quick sheet), the next Esc panics. On: Esc on Perform panics at once, menu or sheet open (not while typing '
+    + 'in a box). ⌘. (Ctrl+.) always panics.');
   escRow.dataset.testid = 'setting-row-esc-panics';
   place('look', perfSection);
   place('keyboards',
