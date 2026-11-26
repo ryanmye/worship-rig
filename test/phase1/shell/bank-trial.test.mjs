@@ -468,3 +468,25 @@ test('skeptic F1–F3: Back after list edits; a pack update during a trial; Keep
     ctl.dispose();
   }
 });
+
+// F4: Next / Prev / GO from a trial song step from the entry it replaced. Before: a trial song is in no list, so
+// neighbors() gave next = the first song (a Next during a trial mid-set went back to the top of the set).
+test('skeptic F4: Next during a trial plays the entry after the replaced one; Prev the one before', async () => {
+  const { store, ctl } = await boot();
+  const ids = store.navIds();
+  assert.ok(ids.length >= 5);
+  assert.ok(await ctl.selectSong(ids[2], { index: 2 }));
+  const t = await ctl.tryBankSong(LANTERN);
+  assert.ok(t.ok);
+  assert.equal(store.currentIndex(), -1, 'the trial song itself is in no list');
+  const nb = store.neighbors();
+  assert.deepEqual([nb.prev, nb.next], [{ id: ids[1], index: 1 }, { id: ids[3], index: 3 }]);
+  assert.ok(await ctl.nextSong());
+  assert.deepEqual([store.get().settings.currentSongId, store.currentIndex()], [ids[3], 3]);
+  assert.equal(ctl.trial(), null, 'Next ended the trial');
+  assert.ok((await ctl.tryBankSong(HARBOUR)).ok);
+  assert.ok(await ctl.prevSong());
+  assert.deepEqual([store.get().settings.currentSongId, store.currentIndex()], [ids[2], 2]);
+  assert.deepEqual(store.trialIds(), []);
+  ctl.dispose();
+});

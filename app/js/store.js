@@ -2787,7 +2787,9 @@ export function createStore(opts = {}) {
     currentIndex: () => currentIndex(),
     /** @returns {{index:number, prev:{id,index}|null, next:{id,index}|null}} */
     neighbors() {
-      const nav = navState();
+      // UI6-U7a skeptic F4: from a trial song, Next / Prev / GO step from the entry it replaced (navBase), not from
+      // the top of the list: a trial song is in no list, so Next during a trial went back to the first song
+      const nav = navState(navBase());
       const { ids } = nav;
       const at = (j) => (j >= 0 && j < ids.length ? { id: ids[j], index: j } : null);
       if (nav.gap) return { index: -1, gap: nav.pos, prev: at(nav.pos - 1), next: at(nav.pos) };
