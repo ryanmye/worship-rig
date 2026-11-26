@@ -116,13 +116,15 @@ export default {
       onChange: (x) => m.sceneLevel('drone.gain', x) || setSong('drone.gain', x),
     }));
     level.el.dataset.testid = 'v6-drone-level';
+    // D24.6: the word and a percentage, as today's Key & drone card (views/perform.js "Soft · 48%")
+    const pct = (word) => (x) => `${word(x)} · ${Math.round(x * 100)}%`;
     const bright = use(fader({
-      ...common, path: 'drone.brightness', label: 'Bright', format: (x) => brightnessWord(x),
+      ...common, path: 'drone.brightness', label: 'Bright', format: pct(brightnessWord),
       onChange: (x) => setSong('drone.brightness', x),
     }));
     bright.el.dataset.testid = 'v6-drone-bright';
     const move = use(fader({
-      ...common, path: 'drone.movement', label: 'Move', format: (x) => movementWord(x),
+      ...common, path: 'drone.movement', label: 'Move', format: pct(movementWord),
       onChange: (x) => setSong('drone.movement', x),
     }));
     move.el.dataset.testid = 'v6-drone-move';
