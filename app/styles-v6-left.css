@@ -48,6 +48,11 @@ body:has(> #views > #view-perform:not([hidden]) > .v6-perform) { min-width: 0; }
 }
 
 /* ---- the Quick sheet on v6: one column (mockup .qpanel), floating over the board, never moving anything */
+/* U8b: a short, light shadow: at 1280 × 800 the sheet's foot reaches the keyboard, and its 22 + 60 px shadow darkened
+   the keys' letter labels to 2.1:1 (Sanctuary) */
+.v6 .qs { box-shadow: 0 2px 8px color-mix(in srgb, var(--v6-sh) 50%, transparent); }
+/* U8b: its rings in --focus (the --accent ring was 1.8:1 on Daylight Day's sheet) */
+.v6 .qs :is(.qs-theme, .qs-scene):focus-visible { outline-color: var(--focus); }
 .v6 .qs { left: var(--qleft, 14px); right: auto; top: var(--qtop, 12px); width: 400px; min-height: 0;
   max-height: calc(100% - var(--qtop, 12px) - 12px); }
 .v6 .qs .qs-h { flex-wrap: wrap; gap: 4px 8px; padding: 6px 6px 6px 14px; }

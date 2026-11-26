@@ -77,6 +77,8 @@
   border-left: 2px dotted var(--muted); }
 .v6 .v6-sb-grip:hover::before, .v6 .v6-sb-grip:focus-visible::before, .v6 .v6-side.resizing .v6-sb-grip::before {
   background: var(--accent); border-color: var(--accent); }
+/* U8b: the keyboard focus in the focus colour (Daylight Day's amber bar was 1.5:1 on its paper) */
+.v6 .v6-sb-grip:focus-visible::before { background: var(--focus); border-color: var(--focus); }
 .v6 .v6-sb-grip[hidden] { display: none; }
 
 /* ---- folded: the icon rail (mock_v6.css .side.rail / .rb) */
@@ -94,7 +96,7 @@
 .v6 .v6-rb.live { border-color: var(--drone); }
 .v6 .v6-rb.live .ic { color: var(--drone); }
 .v6 .v6-rb-k { position: absolute; top: 3px; right: 5px; font-style: normal; font-size: 11px; font-weight: 800;
-  color: var(--drone); }
+  color: color-mix(in oklab, var(--drone) var(--v6-cmix), var(--text)); } /* U8b: 1.2:1 on Daylight Day as --drone */
 .v6 .v6-rb-k[hidden] { display: none; }
 .v6 .v6-rb[data-id="metronome"].live { border-color: var(--accent); }
 .v6 .v6-rb[data-id="metronome"].live .ic { color: var(--accent); }
@@ -241,7 +243,7 @@
 .v6 .v6-cz small { color: var(--muted); font-weight: 400; font-size: 12px; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; }
 .v6 .v6-cz.off b { color: var(--muted); }
-.v6 .v6-cz.dragging { background: var(--panel-2); border-radius: 8px; box-shadow: 0 6px 18px #0008; }
+.v6 .v6-cz.dragging { background: var(--panel-2); border-radius: 8px; box-shadow: 0 6px 18px var(--v6-sh); }
 .v6 .v6-cz-grip { color: var(--faint); cursor: grab; touch-action: none; user-select: none; text-align: center;
   font-size: 16px; line-height: 44px; }
 .v6 .v6-cz-mv { min-height: 40px; min-width: 36px; padding: 0; font-size: 15px; }
@@ -252,6 +254,9 @@
   border-radius: 50%; background: var(--thumb, #ddd); transition: left .12s; }
 .v6 .v6-sw.on::before { background: var(--accent); }
 .v6 .v6-sw.on .v6-sw-k { left: 24px; }
+/* U8b: as v6 Settings' switches (styles-v6-settings.css): the ON thumb in the accent's ink, a darker OFF track on paper */
+.v6 .v6-sw.on .v6-sw-k { background: var(--accent-ink); }
+html[data-mode="light"] .v6 .v6-sw:not(.on)::before { background: color-mix(in srgb, var(--text) 52%, transparent); }
 .v6 .v6-cz-starts { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
 .v6 .v6-cz-starts .v6-cap { margin-right: auto; }
 .v6 .v6-cz-start { padding: 0 14px; }

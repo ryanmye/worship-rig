@@ -25,6 +25,7 @@
   margin-left: auto; width: 280px; min-width: 0; min-height: 44px; display: flex; align-items: center; gap: 8px;
   padding: 0 12px; border: 1px solid var(--line-2, #3a414d); border-radius: 12px; background: var(--panel-2, #1c2027);
 }
+.v6-st .v6-st-search:not(:focus-within) { border-color: var(--v6-field-line, var(--line-2, #3a414d)); } /* U8b */
 .v6-st .v6-st-search:focus-within { border-color: var(--focus, #7cc4ff); }
 .v6-st .v6-st-mag { color: var(--muted, #a3acb8); font-size: 15px; }
 .v6-st .v6-st-q {
@@ -58,6 +59,10 @@
   font-size: 12px; font-weight: 800; text-align: center;
 }
 .v6-st .st-tab .v6-st-n[hidden] { display: none; }
+/* U8b: the ring outside the tab (inside, it lay on the chosen tab's accent edge: 2.0–2.8:1) */
+.v6-st .st-tab:focus-visible { outline-offset: 2px; }
+/* U8b: the theme cards' ring in --focus (the --accent ring was 1.6:1 on Daylight Day's paper) */
+.v6-st .st-theme:focus-visible { outline-color: var(--focus, #7cc4ff); }
 .v6-st .st-tab.v6-st-nohit { display: none; }
 .v6-st.v6-st-searching .st-tab { padding-right: 38px; }
 
@@ -150,6 +155,12 @@
 .v6-st .v6-sw.on::before { background: var(--accent, #ffc94d); }
 .v6-st .v6-sw.on .v6-sw-k { left: 27px; }
 .v6-st .v6-sw:disabled { opacity: .5; }
+/* U8b: the thumb reads against its track (WCAG 1.4.11, the state is the thumb's place): ON, the accent's own ink (a
+   light thumb on the amber track was 1.2–1.8:1); OFF on paper, a darker track (the 18 % one was 1.3:1) */
+.v6-st .toggle.on .toggle-led::after, .v6-st .v6-sw.on .v6-sw-k { background: var(--accent-ink, #1a1400); }
+html[data-mode="light"] .v6-st .toggle:not(.on) .toggle-led,
+html[data-mode="light"] .v6-st .v6-sw:not(.on)::before {
+  background: color-mix(in srgb, var(--text, #27211b) 52%, transparent); }
 .v6-st .v6-cz-starts { display: flex; align-items: center; gap: 0; min-height: 52px; }
 .v6-st .v6-cz-starts .v6-cap { width: 254px; flex: none; font-weight: 700; font-size: 15px; }
 .v6-st .v6-cz-start {

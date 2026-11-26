@@ -6,7 +6,7 @@
 .v6 .v6-board.bank-open > .v6-stripsarea, .v6 .v6-board.bank-open > .v6-side { visibility: hidden; }
 .v6 .v6-bank { position: absolute; z-index: 20; top: 0; bottom: 0; right: 0; left: var(--bank-left, 0px);
   display: flex; flex-direction: column; min-width: 0; overflow: hidden; border-radius: 12px;
-  background: var(--v6-sheet); border: 1px solid var(--v6-sheet-line); box-shadow: 0 18px 40px var(--sh, #0009); }
+  background: var(--v6-sheet); border: 1px solid var(--v6-sheet-line); box-shadow: 0 18px 40px var(--v6-sh); }
 .v6 .v6-bank[hidden] { display: none; }
 .v6 .v6-bank-h { flex: none; display: flex; align-items: center; gap: 12px; padding: 8px 12px;
   border-bottom: 1px solid var(--line); min-width: 0; }
@@ -30,13 +30,16 @@
 .v6 .v6-bank-search span { color: var(--muted); font-size: 18px; }
 .v6 .v6-bank-q { flex: 1 1 auto; min-width: 0; background: none; border: 0; color: var(--text); font: 15px var(--font);
   outline: none; min-height: 40px; }
-.v6 .v6-bank-search:focus-within { border-color: var(--accent); }
+/* U8b: the box's edge ≥ 3:1 (--line-2 was 1.6:1); focused, --focus (Daylight Day's amber --accent was 1.1:1) */
+.v6 .v6-bank-search { border-color: var(--v6-field-line); }
+.v6 .v6-bank-search:focus-within { border-color: var(--focus); }
 .v6 .v6-bank-grp { display: flex; flex-direction: column; gap: 6px; }
 .v6 .v6-bank-grp[hidden] { display: none; }
 .v6 .v6-bank-keys, .v6 .v6-bank-tempo { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
 .v6 .v6-bank-k, .v6 .v6-bank-sp { padding: 0; font-size: 13px; font-weight: 700; min-width: 0; }
+/* U8b: the accent as text on its own tint: --v6-tint-text (4.3:1 on Sanctuary Day as --accent-text) */
 .v6 .v6-bank-k[aria-pressed="true"], .v6 .v6-bank-sp[aria-pressed="true"], .v6 .v6-bank-tag[aria-pressed="true"] {
-  border-color: var(--accent); color: var(--accent-text, var(--accent));
+  border-color: var(--accent); color: var(--v6-tint-text);
   background: color-mix(in srgb, var(--accent) 14%, var(--panel-2)); }
 .v6 .v6-bank-feel { display: flex; flex-wrap: wrap; gap: 6px; }
 .v6 .v6-bank-tag { min-height: 44px; padding: 2px 12px; font-size: 13px; }

@@ -11,9 +11,38 @@
 @import url('./styles-v6-ipad.css'); /* U8a: iPad landscape / portrait fixes and the stacked portrait rows */
 @import url('./styles-v6-states.css'); /* U8a: edge states on the v6 stage (the first-run Start here card) */
 
+/* ---- U8b (all 8 themes): colour tokens every v6 surface reads, so no rule carries a dark-only literal. On .v6 and on
+   v6 Settings (.v6-st, its own view). The light themes get their own values below (html[data-mode="light"]).
+   --v6-sh / --v6-scrim  overlay shadows and dialog scrims (a theme's --sh first; #000c was black on paper)
+   --v6-danger          danger AS TEXT: no theme has --danger-text, and the #ffb3ad fallback was 1.4:1 on paper;
+                        --danger itself is 3.8:1 on Studio's sheet. Mixed toward the text colour it reads ≥ 4.5:1 in
+                        both modes (U8b audit)
+   --v6-cmix            how much of a position colour (--c) goes into text drawn in it, the rest is --text: 70 % on
+                        dark, 40 % on paper (the mockup's lime and pink were 1.8:1 as text on Daylight Day)
+   --v6-tint-text       the accent as text on an accent-tinted fill (4.3:1 on Sanctuary Day as plain --accent-text)
+   --v6-field-line      text fields' and selects' border: ≥ 3:1 on the panel they sit on (WCAG 1.4.11; --line-2 is
+                        1.5–2:1 in every theme) */
+:is(.v6, .v6-st) {
+  --v6-sh: var(--sh, #000c);
+  --v6-scrim: color-mix(in srgb, #000 45%, transparent);
+  --v6-danger: color-mix(in oklab, var(--danger) 70%, var(--text));
+  --v6-ok: var(--ok, #9ccf66);
+  --v6-cmix: 70%;
+  --v6-tint-text: color-mix(in oklab, var(--accent-text, var(--accent)) 78%, var(--text));
+  --v6-field-line: color-mix(in oklab, var(--muted) 58%, var(--line-2));
+}
+html[data-mode="light"] :is(.v6, .v6-st) {
+  --v6-sh: var(--sh, #3b2a1a2e);
+  --v6-scrim: color-mix(in srgb, #2a1d12 30%, transparent);
+  --v6-ok: var(--ok, #3a732c);
+  --v6-cmix: 40%;
+}
+
 .v6 {
-  /* positions 4..6 of the mockup's POS_COL (the first four are the theme's --slot-0..3): views/v6/lib.js slotColor */
-  --v6-pos-4: #e46aa0; --v6-pos-5: #c9d867; --v6-pos-6: #6f9cf0;
+  /* positions 4..6 of the mockup's POS_COL (the first four are the theme's --slot-0..3): views/v6/lib.js slotColor.
+     U8b: the pink a step lighter (the strip's ON label in dark ink was 4.4:1 on Studio's pink); the light themes get
+     their own sets below (D15: colour by position stays, per theme) */
+  --v6-pos-4: #ee84b2; --v6-pos-5: #c9d867; --v6-pos-6: #6f9cf0;
   --v6-gap: 10px;
   --v6-cap: var(--label, var(--muted));
   --v6-book: var(--font-book, var(--font-display));
@@ -22,6 +51,11 @@
   height: 100%; display: flex; flex-direction: column; gap: var(--v6-gap); padding: var(--v6-gap) 14px 12px;
   position: relative; min-height: 0;
 }
+/* U8b: the day themes' positions 4..6 in their own families. Sanctuary Day's tiles are deep glass under cream ink
+   (its --slot-0..3 are #a63d02 #006e46 #02648c #7847a6): the same depth, ON 7.6–8.4:1. Daylight Day's are pastels
+   under dark ink: ON ≥ 5.9:1 */
+html[data-theme="sanctuary-day"] .v6 { --v6-pos-4: #a8336a; --v6-pos-5: #5f6b00; --v6-pos-6: #3a57b0; }
+html[data-theme="daylight-day"] .v6 { --v6-pos-4: #f08fb8; --v6-pos-5: #c9d867; --v6-pos-6: #86b0f4; }
 .v6.locked { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--warn) 70%, transparent);
   border-radius: var(--radius); }
 .v6 .ic { display: block; flex: none; }
@@ -43,8 +77,13 @@
 .v6 .ghost { min-height: 44px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line-2);
   background: transparent;
   font-size: 13.5px; font-weight: 600; }
-.v6 .ghost.warn { color: var(--danger); }
+.v6 .ghost.warn { color: var(--v6-danger); }
 .v6 .ghost:disabled { opacity: .45; }
+
+/* ---- U8b: text fields and selects show their edge (WCAG 1.4.11: ≥ 3:1; --line-2 was 1.5–2:1 in every theme). Not
+   while focused: each field's own focus rule (border → --focus / --accent) still shows */
+:is(.v6, .v6-st) :is(input:is([type="text"], [type="search"], [type="number"], :not([type])), select,
+  textarea):not(:focus) { border-color: var(--v6-field-line); }
 
 /* ---- song bar */
 .v6 .v6-songbar { flex: none; display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 6px 12px;
@@ -140,8 +179,13 @@
 .v6 .v6-strip.empty-v6 :is(.ontile, .v6-body, .v6-mods) { opacity: .35; }
 /* skeptic UI6-U1 F1: no level to read on an empty slot */
 .v6 .v6-strip.empty-v6 .fader-value { visibility: hidden; }
-.v6 .v6-strip.muted .v6-who { opacity: .7; }
-.v6 .v6-strip.silent .v6-who, .v6 .v6-strip.silent .v6-body { opacity: .55; }
+/* U8b: the dimmed strips dim their graphics; their words go to --muted (opacity took the name and the dB under
+   4.5:1 on paper: 3.6:1 on both day themes) */
+.v6 .v6-strip.muted .v6-ico { opacity: .7; }
+.v6 .v6-strip.muted .v6-nm { color: var(--muted); }
+.v6 .v6-strip.silent .v6-body { opacity: 1; } /* styles.css .slot.silent .slot-body dims it all */
+.v6 .v6-strip.silent :is(.v6-ico, .v6-body .fader-track) { opacity: .55; }
+.v6 .v6-strip.silent :is(.v6-nm, .fader-value) { color: var(--muted); }
 /* the sustain pedal shows on every strip it holds (perform.js v11-polish L4) */
 .v6.pedal-down .v6-strip:not(.empty-v6) .sus-chip.on { border-color: var(--text); color: var(--text); }
 .v6.pedal-down .v6-strip:not(.empty-v6) .sus-chip.on .mc-led { background: var(--text);
@@ -158,7 +202,7 @@
 .v6 .v6-grip[hidden] { display: none; }
 .v6 .v6-stripsarea.reordering .v6-strips { scroll-snap-type: none; }
 .v6 .v6-stripsarea.reordering, .v6 .v6-stripsarea.reordering * { cursor: grabbing; }
-.v6 .v6-strip.reorder-src { z-index: 5; box-shadow: 0 12px 30px #000b; outline: 2px dashed var(--accent);
+.v6 .v6-strip.reorder-src { z-index: 5; box-shadow: 0 12px 30px var(--v6-sh); outline: 2px dashed var(--accent);
   outline-offset: 2px; }
 .v6 .v6-strip.reorder-src .v6-grip { color: var(--text); }
 .v6 .v6-dropline { position: absolute; top: 0; bottom: 8px; width: 4px; border-radius: 2px; background: var(--accent);
@@ -189,9 +233,9 @@
   white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; max-width: 100%;
   border: 1px solid color-mix(in srgb, var(--c) 40%, var(--line));
-  color: color-mix(in srgb, var(--c) 70%, var(--text)); font-size: 12px; font-weight: 700; opacity: .7; }
-.v6 .v6-pill.vis .v6-pill-t { background: color-mix(in srgb, var(--c) 22%, var(--panel-2)); border-color: var(--c);
-  opacity: 1; }
+  color: color-mix(in oklab, var(--c) var(--v6-cmix), var(--text)); font-size: 12px; font-weight: 700; }
+/* U8b: "on screen" is the fill and the border (an opacity of .7 on the others took their words under 4.5:1) */
+.v6 .v6-pill.vis .v6-pill-t { background: color-mix(in srgb, var(--c) 22%, var(--panel-2)); border-color: var(--c); }
 .v6 .v6-pill[hidden] { display: none; }
 .v6 .v6-pills-h { margin-left: auto; flex: none; color: var(--muted); font-size: 12px; white-space: nowrap; }
 
@@ -211,7 +255,9 @@
 /* ---- popovers (⋯, Sing it in, Space); the setlist / notes rules below are the sidebar modules' (U3) */
 .v6 .v6-pop { position: absolute; z-index: 25; width: 300px; padding: 12px; border-radius: 12px;
   background: var(--v6-sheet);
-  border: 1px solid var(--v6-sheet-line); box-shadow: 0 18px 40px var(--sh, #000c); display: flex;
+  border: 1px solid var(--v6-sheet-line); display: flex;
+  /* U8b: shorter and lighter: under the 18 + 40 px black one the strips' ON labels beside a popover fell to 3.5:1 */
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--v6-sh) 55%, transparent);
   flex-direction: column;
   gap: 10px; text-align: left; }
 .v6 .v6-pop-h { font: 800 18px var(--v6-book); }

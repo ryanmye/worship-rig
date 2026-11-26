@@ -17,7 +17,7 @@
 .v6 .v6-lstep { flex: none; font-size: 13px; font-weight: 700; border-radius: 14px; padding: 4px 10px;
   border: 1px solid var(--line-2); color: var(--muted); white-space: nowrap; }
 .v6 .v6-lstep.on { border-color: var(--accent); color: var(--accent-text, var(--accent)); }
-.v6 .v6-lstep.done { color: var(--ok, #9ccf66); border-color: color-mix(in srgb, var(--ok, #9ccf66) 45%, transparent); }
+.v6 .v6-lstep.done { color: var(--v6-ok); border-color: color-mix(in srgb, var(--v6-ok) 45%, transparent); }
 .v6 .v6-lhint { flex: 1 1 auto; min-width: 0; color: var(--muted); font-size: 13px; white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis; }
@@ -33,6 +33,9 @@ body.v6-learning .v6-learnable { outline: 2px dashed var(--accent); outline-offs
 body.v6-learning .v6-learnable.v6-lmiss { outline-color: color-mix(in srgb, var(--muted) 45%, transparent);
   cursor: not-allowed; }
 body.v6-learning .v6-learnable.v6-lpicked { outline-style: solid; outline-color: var(--ok, #9ccf66); }
+html[data-mode="light"] body.v6-learning .v6-learnable.v6-lpicked { outline-color: var(--ok, #3a732c); } /* U8b */
+/* U8b: the dashed learn outline hid the keyboard focus (no change on focus): focused, it goes solid in --focus */
+body.v6-learning .v6-learnable:focus-visible { outline-style: solid; outline-color: var(--focus); outline-width: 3px; }
 body.v6-learning .v6-learnable[data-v6-badge]::after { content: attr(data-v6-badge); position: absolute; top: -10px;
   right: -6px; z-index: 3; padding: 1px 6px; border-radius: 9px; background: var(--accent); color: var(--accent-ink);
   font: 800 11px/1.4 var(--font); letter-spacing: 0; pointer-events: none; white-space: nowrap; }
@@ -50,9 +53,11 @@ body.v6-learning .v6-learnable input[type="range"] { pointer-events: none; }
   white-space: nowrap; }
 .v6 .v6-arr-grip:hover { color: var(--text); border-color: var(--accent); }
 .v6 .v6-arrbar-s .v6-arr-b { flex: none; min-width: 40px; min-height: 40px; padding: 0; border-radius: 8px; }
-.v6 .v6-arrbar-s .v6-arr-x { color: var(--danger-text, #ffb3ad); }
+.v6 .v6-arrbar-s .v6-arr-x { color: var(--v6-danger); }
 .v6 .v6-arrbar-s .v6-arr-b:disabled { opacity: .35; }
 .v6 .v6-right.arranging .v6-sb-tab { outline: 1px dashed var(--line-2); outline-offset: -3px; }
+/* U8b: as on the learnable controls, the arrange outline must not hide the keyboard focus */
+.v6 .v6-right.arranging .v6-sb-tab:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .v6 .v6-right.arranging :is(.v6-sb-x, .v6-sb-grip) { visibility: hidden; }
 .v6 .v6-sb-arr { display: flex; flex-direction: column; gap: 10px; padding: 12px; overflow: auto; min-height: 0; }
 .v6 .v6-arrange:disabled { opacity: .5; }
@@ -63,14 +68,16 @@ body.v6-learning .v6-learnable input[type="range"] { pointer-events: none; }
 
 /* ---- modal dialogs (dialogs.js; mock_dialogs.css .dlg / .namebox) */
 .v6 .v6-dlg-back { position: absolute; inset: 0; z-index: 40; display: flex; align-items: center;
-  justify-content: center; background: color-mix(in srgb, #000 45%, transparent); border-radius: var(--radius); }
+  justify-content: center; background: var(--v6-scrim); border-radius: var(--radius); }
 .v6 .v6-dlg { width: min(520px, calc(100% - 32px)); max-height: calc(100% - 32px); overflow: auto; padding: 18px;
   border-radius: 14px; background: var(--v6-sheet); border: 1px solid var(--v6-sheet-line);
-  box-shadow: 0 24px 60px var(--sh, #000c); display: flex; flex-direction: column; gap: 14px; }
+  box-shadow: 0 24px 60px var(--v6-sh); display: flex; flex-direction: column; gap: 14px; }
 .v6 .v6-dlg-namebox { display: flex; flex-direction: column; gap: 4px; }
-.v6 .v6-dlg-name { min-height: 48px; border-radius: 10px; border: 1px solid var(--accent); background: var(--well,
+.v6 .v6-dlg .v6-dlg-name { min-height: 48px; border-radius: 10px; border: 1px solid var(--accent-text, var(--accent));
+  background: var(--well,
   var(--panel)); color: var(--text); font: 700 18px var(--v6-book); padding: 0 12px; outline: none; }
-.v6 .v6-dlg-name:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+/* U8b: a 35 % accent ring was 1.2–2.5:1; the focus colour, solid */
+.v6 .v6-dlg-name:focus-visible { box-shadow: 0 0 0 3px var(--focus); }
 .v6 .v6-dlg-namebox small { color: var(--muted); font-size: 13px; min-height: 1em; }
 .v6 .v6-keeps { display: flex; flex-direction: column; gap: 6px; }
 .v6 .v6-keeps-r { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 10px;
@@ -80,7 +87,7 @@ body.v6-learning .v6-learnable input[type="range"] { pointer-events: none; }
 .v6 .v6-keeps-r.off { opacity: .6; }
 .v6 .v6-keeps-ck { flex: none; width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center;
   justify-content: center; font-weight: 800; background: color-mix(in srgb, var(--accent) 22%, transparent);
-  color: var(--accent-text, var(--accent)); }
+  color: var(--v6-tint-text); }
 .v6 .v6-keeps-r.off .v6-keeps-ck { background: var(--panel-3, var(--panel)); color: var(--muted); }
 .v6 .v6-keeps-not { margin: 2px 0 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
 .v6 .v6-dlg-btns { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
@@ -101,7 +108,7 @@ body.v6-learning .v6-learnable input[type="range"] { pointer-events: none; }
 .v6 .v6-mi b { font-weight: 700; }
 .v6 .v6-mi small { color: var(--muted); font-size: 12.5px; font-weight: 400; }
 .v6 .v6-mi:disabled { opacity: .5; }
-.v6 .v6-mi.warn2 b { color: var(--danger-text, #ffb3ad); }
+.v6 .v6-mi.warn2 b { color: var(--v6-danger); }
 /* narrow strips (iPad portrait, 1024 with a sidebar): the handle is ⠿ alone */
 @media (max-width: 1100px) { .v6 .v6-arr-w { display: none; } }
 /* the two hold items read like the others: ring on the left, words left-aligned */
