@@ -66,6 +66,14 @@ async function phase1(rig) {
     const r = await fetch(url, { headers: { Range: 'bytes=0-99' } });
     return { health, ids: m.instruments.map((i) => i.id), url, status: r.status, type: r.headers.get('content-type') };
   });
+  // O-AW-PP: patch packs over HTTP in Electron (the S4 key header must reach /api/user-patches)
+  await step('userPatchesHttp', async () => {
+    const h = await (await fetch('/api/health', { cache: 'no-store' })).json();
+    const r = await fetch('/api/user-patches', { cache: 'no-store' });
+    const j = r.ok ? await r.json() : null;
+    const ids = j ? j.patches.map((p) => p.packId) : null;
+    return { health: h.userPatches, features: h.features, status: r.status, ids };
+  });
   // integration #2: main must count HTTP errors (Electron's console-message never shows "Failed to load resource")
   await step('probe404', async () => (await fetch('/__selftest-404.json', { cache: 'no-store' })).status);
   await step('streamOpenDenied', () => rig.streamOpen('/etc/passwd-not-allowed.wav'));

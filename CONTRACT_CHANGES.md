@@ -7876,3 +7876,84 @@ Review `native/docs/reviews/D8-D9.md` (K1–K3). store.js and controller.js; SCH
     costs 0.78 ms.
   - **Gate.** Fixtures 112/112 byte-identical to `e3af65b`. g++ 77/77, clang-20 `-Werror` 72/72, ASan 11/11. TSan
     gave no report, and core3's gap bound flakes under external load with or without F2 (A/B).
+
+## Patch packs (2.x step 1)
+
+FX-gap-analysis step 1 plus the "song settings bank" scope. Rules: DECISIONS O-AW-PP. Layout: `docs/patch-packs.md`.
+
+- **Server (`server.js`).**
+  - New `GET /api/user-patches` → `{app, kind:'user-patches', enabled, patches, packs, errors}`, always 200. Each
+    entry in `patches` is `{packId, pack, file, n, mtime, hash, mode, schema?, song, bank?}`. This is an object, not
+    the bare `[{pack, file, mtime, song}]` array of the brief, so `packs` and `errors` fit beside the list, as in
+    `/api/user-samples/manifest.json`.
+  - `scanUserPatches(roots, {userIds})` reads `<root>/<slug>/songs/*.json` with the My Samples rules: the same
+    roots, sorted, dot-entries skipped, links that leave the root or the pack skipped with an error, and the first
+    root winning a duplicate slug. It also reads an optional `pack.json` `{mode, name}`.
+  - Caps: 1 MB per file, 200 files per pack, 100 songs per file, 2000 songs and 8 MB in all, nesting ≤ 64, and
+    1..16 slots. Malformed or over-cap entries are skipped with a line in `errors`.
+  - The library `id` is dropped. A bare song's `bank` field is lifted next to it. A `user:` id that no My Samples
+    pack has gives a warning, and the song is kept.
+  - `hash` = sha1(schema, song, bank), the first 16 hex digits.
+  - `/api/health` gains `userPatches` (a boolean), and its `features` gain `'user-patches'`, only when some pack has
+    a `songs/*.json`. The check only lists folders. Without packs the response keeps the old `features`
+    (`['user-samples']` or `[]`), plus `userPatches: false`.
+  - The route joins `API_ROUTE_RE`, so it is also answered under a page prefix, and `PRIVATE_ROUTE_RE`, so it needs
+    the S4 key in Electron.
+- **Store (`store.js`).**
+  - `topUpPacks(list)`, `addPackSong(entry, {select})`, `packSongs()` and `packIdOf(songId)`.
+  - New optional `meta.packSongs = {packId: {id, hash, sig}}`, absent until a pack song is added. `migrate` drops
+    bad records and an empty map, so it stays idempotent. There is no SCHEMA bump. A library without packs is
+    byte-for-byte unchanged (this is tested).
+  - A pack entry is normalised exactly like a song file in `importJSON`: its `schema` sets the slot count, and a
+    newer schema is skipped.
+- **Shared (`shared/patch-packs.js`, pure).** `stableStringify`, `hash53`, `songFingerprint`, `normalizeBank`,
+  `validPackEntry`, `searchBank` and `bankMatches`.
+- **Controller.**
+  - `rescanPatchPacks()` asks `./api/health` and asks `./api/user-patches` only when the feature is advertised. It
+    runs only on http(s) and rig://, and a muted second window only reads. It then calls `store.topUpPacks` and
+    emits `'user-patches'`.
+  - `patchPacks()` → `{enabled, songs, packs, bankSongs, bank:[{packId, pack, title, artist?, …, inLibrary}],
+    errors}`. `addFromBank(packId, {select})`.
+  - `packsReady` (a getter): `startPrimary` starts the read without waiting for it, so the first song never waits.
+- **Views.** main.js toasts "Patch packs: N songs added" after boot. Settings › My Samples gets the "Patch packs:
+  N songs from M packs" line with a Rescan button, and a provisional **Song bank** disclosure with a title/artist
+  search and Add to library. All of these are hidden unless the server lists pack songs. My Samples' own Rescan also
+  rescans the packs.
+- **Native (`RigSchemeHandler.swift`).** Health adds `userPatches: false`, and a `/api/user-patches` stub answers
+  an empty list. My Samples isn't served natively yet, so the feature is off there. This is unbuilt on Linux; it
+  compiles only on CI (`mac-check`).
+- **Measured (2-CPU container).**
+  - Without packs: one `/api/health` request at boot (the engine makes its own as well) and zero requests to
+    `/api/user-patches`.
+  - The health check costs a few readdirs, at most 1 + number of packs.
+- **Tests.**
+  - `test/phase1/shell/patch-packs.test.mjs` (25): shared ×4, store ×14 (no-pack no-op, once and idempotent, two
+    boots, schema, update in place, edit protection and undo, mute counts as an edit, delete memory and a gone
+    folder, migrate, export is plain, bad entries, size cap, read-only, bank mode), server ×5 (scan, hash vs mtime,
+    caps, health gating, S4 key), controller ×2 (end to end against a real server, and no feature means no
+    request).
+  - `patch-packs.pw.mjs` (4, real app in Chromium with `RIG_USER_SAMPLES`): no packs means no change; songs are
+    added once across two boots; an edit survives a file change; the Settings line, Rescan and Song bank. Every
+    boot has 0 console errors and 0 responses ≥ 400.
+  - `electron.boot.mjs` +1: in Electron, health advertises the feature and `/api/user-patches` answers 200 behind
+    the key.
+
+## Patch packs: skeptic fixes (O-AW-PP review)
+
+Review `native/docs/reviews/patch-packs.md` (PP-1 to PP-6). No SCHEMA change; no change for a library without packs.
+
+- **PP-1 (controller, Perform).** A pack update in place of the selected song moves the Revert snapshot along:
+  `controller.selected` is re-read and the controller emits `'action'` `{type: 'packSongsUpdated', ids}`, on which
+  Perform re-takes its snapshot. Before, Revert wrote the old pack version back, which then read as an edit and froze
+  the song against every later pack version (at boot too: the pack read lands after the first song is selected).
+- **PP-2 (store.topUpPacks).** An edited song whose content already equals the new pack version (the player exported
+  it back into the pack file) is re-recorded (`hash`, `sig`) without writing the song, so later versions apply again.
+- **PP-3 (Settings).** Rescan, the Song bank summary, search and Add buttons are ≥ 44 px; each Add button's
+  `aria-label` names its song.
+- **PP-4 (shared bankMatches).** Search also folds ø, æ, œ, ß, ł, đ, ð, þ, ı (NFD does not split them).
+- **PP-5 (store).** A new `meta.packSongs` record counts against `LIBRARY_MAX_CHARS` in `topUpPacks` / `addPackSong`.
+- **PP-6 (server).** A duplicate slug in a later root is reported only when that pack has `songs/*.json` (an
+  instrument-only duplicate is My Samples' own log line, not a patch-pack problem toast at every boot). A pack folder
+  name over 200 characters or a song file name over 245 is skipped with its own message (the client's `PACK_ID_RE`).
+- Tests: `patch-packs.test.mjs` +4 (PP-1 end to end, PP-2, PP-4, PP-6), `patch-packs.pw.mjs` +1 (PP-1 in Perform,
+  PP-3 sizes and labels).

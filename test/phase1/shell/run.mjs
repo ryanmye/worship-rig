@@ -16,7 +16,8 @@ const skip = new Set((argv.includes('--skip') ? argv[argv.indexOf('--skip') + 1]
 const units = fs.readdirSync(here).filter((f) => f.endsWith('.test.mjs')).sort().map((f) => path.join(here, f));
 const suites = [
   { name: 'unit', files: units, timeout: 120000 },
-  { name: 'browser', files: [path.join(here, 'browser.pw.mjs')], timeout: 300000 },
+  // O-AW-PP: patch-packs.pw.mjs boots the real app 9 times (~100 s on the 2-CPU container)
+  { name: 'browser', files: ['browser.pw.mjs', 'patch-packs.pw.mjs'].map((f) => path.join(here, f)), timeout: 600000 },
   // v11-importer: electron.importer.mjs picks a free port (RIG_PORT), so it runs next to the 8438 boot test
   { name: 'electron', files: [path.join(here, 'electron.boot.mjs'), path.join(here, 'electron.importer.mjs')], timeout: 420000 },
 ];

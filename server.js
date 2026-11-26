@@ -12,6 +12,10 @@
 // <root>/<slug>/manifest.json (roots: <repo>/user-samples, then ~/Music/Worship Rig/Samples; RIG_USER_SAMPLES
 // overrides) with layer dirs rewritten to /user-samples/<token>/<slug>/<dir>; always 200 (an empty list when nothing is
 // there). /user-samples/<token>/<slug>/<file> serves audio only, realpath-checked inside the pack folder.
+// Patch packs (2.x step 1, DECISIONS O-AW-PP): GET /api/user-patches lists the songs of every
+// <root>/<slug>/songs/*.json (same roots, same slug rules), checked and size-capped (scanUserPatches); always 200.
+// /api/health says `userPatches: true` (and 'user-patches' in features) only when some pack has a songs/*.json, so a
+// library without packs never makes the request.
 
 const http = require('node:http');
 const fs = require('node:fs');
@@ -70,10 +74,23 @@ const AUDIO_EXTS = new Set(['.mp3', '.wav', '.flac', '.ogg', '.oga', '.opus', '.
 const USER_SAMPLE_EXTS = Object.freeze(['.mp3', '.wav', '.m4a', '.aac', '.caf', '.aif', '.aiff', '.flac', '.ogg', '.oga', '.opus', '.webm']);
 const USER_MANIFEST_MAX_BYTES = 4 * 1024 * 1024;
 const USER_PACKS_MAX = 500;
+/** Patch packs (O-AW-PP): caps per file, per pack and per scan. A song export is ~5-20 KB. */
+const USER_PATCH_FILE_MAX_BYTES = 1024 * 1024;
+const USER_PATCH_FILES_MAX = 200;
+const USER_PATCH_SONGS_PER_FILE_MAX = 100;
+const USER_PATCH_SONGS_MAX = 2000;
+const USER_PATCH_TOTAL_MAX_BYTES = 8 * 1024 * 1024;
+const USER_PATCH_MAX_DEPTH = 64; // store.js IMPORT_MAX_DEPTH
+const USER_PATCH_MAX_SLOTS = 16; // params.js MAX_SLOTS
+const PACK_JSON_MAX_BYTES = 64 * 1024;
+/** shared/patch-packs.js PACK_ID_RE: `<slug ≤ 200>:<name ≤ 240>.json` (skeptic PP-6). */
+const USER_PATCH_SLUG_MAX = 200;
+const USER_PATCH_FILE_NAME_MAX = 245;
 /** API routes that are also answered under a path prefix (see handle()). */
-const API_ROUTE_RE = /^\/api\/(health|heartbeat|pads|user-samples|user-samples\/manifest\.json)$/;
+const API_ROUTE_RE = /^\/api\/(health|heartbeat|pads|user-samples|user-samples\/manifest\.json|user-patches)$/;
 /** S4: routes that expose personal audio or its paths; they need the X-Rig-Key header when the server has a secret. */
-const PRIVATE_ROUTE_RE = /^\/(api\/(pads|user-samples|user-samples\/manifest\.json)$|user-samples\/|pads\/)/;
+const PRIVATE_ROUTE_RE =
+  /^\/(api\/(pads|user-samples|user-samples\/manifest\.json|user-patches)$|user-samples\/|pads\/)/;
 const KEY_HEADER = 'x-rig-key';
 const NO_CACHE_EXTS = new Set(['.html', '.htm', '.js', '.mjs', '.css', '.json', '.webmanifest', '.map', '.md', '.txt']);
 const PADS_MAX_DEPTH = 4;
@@ -411,6 +428,269 @@ async function scanUserSamples(roots, token) {
   return { instruments, packs, errors };
 }
 
+// ---- patch packs (O-AW-PP)
+const isPlainObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+function deeperThan(v, max, d = 0) {
+  if (v === null || typeof v !== 'object') return false;
+  if (d >= max) return true;
+  for (const x of Array.isArray(v) ? v : Object.values(v)) if (deeperThan(x, max, d + 1)) return true;
+  return false;
+}
+
+/**
+ * Every pack folder under the roots, with the My Samples rules (scanUserSamples): sorted, dot-folders skipped, a link
+ * that leaves its root skipped with an error. A slug already found in an earlier root is listed with `skip` (the
+ * reason), and callers skip it.
+ * @returns {Promise<{slug:string, dir:string, root:string, skip?:string}[]>}
+ */
+async function listPackDirs(roots, errors) {
+  const out = [];
+  const slugs = new Set();
+  for (const root of roots || []) {
+    let rootReal;
+    let entries;
+    try {
+      rootReal = await fsp.realpath(root);
+      if (!(await fsp.stat(rootReal)).isDirectory()) continue;
+      entries = await fsp.readdir(rootReal, { withFileTypes: true });
+    } catch {
+      continue; // missing root
+    }
+    entries.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    for (const e of entries) {
+      if (slugs.size >= USER_PACKS_MAX) break;
+      if (e.name.startsWith('.') || !(e.isDirectory() || e.isSymbolicLink())) continue;
+      let dir;
+      try {
+        dir = await fsp.realpath(path.join(rootReal, e.name));
+        if (!(await fsp.stat(dir)).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+      if (!within(rootReal, dir)) {
+        errors.push(`${path.join(root, e.name)}: is a link to a folder outside My Samples (${dir}); skipped`);
+        continue;
+      }
+      if (slugs.has(e.name)) {
+        // skeptic PP-6: reported by the caller only for a pack that has songs (an instrument-only duplicate is My
+        // Samples' own warning; repeating it in the patch-pack problems toast at every boot was noise)
+        const where = path.join(root, e.name);
+        const skip = `${where}: a pack named "${e.name}" was already found in an earlier folder; skipped`;
+        out.push({ slug: e.name, dir, root: rootReal, skip });
+        continue;
+      }
+      slugs.add(e.name);
+      out.push({ slug: e.name, dir, root: rootReal });
+    }
+  }
+  return out;
+}
+
+/** The *.json files of <pack>/songs (regular files inside the pack; dot-files skipped), sorted. */
+async function packSongFiles(dir) {
+  const songsDir = path.join(dir, 'songs');
+  let entries;
+  try {
+    entries = await fsp.readdir(songsDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((e) => !e.name.startsWith('.') && /\.json$/i.test(e.name) && (e.isFile() || e.isSymbolicLink()))
+    .map((e) => e.name)
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+}
+
+/**
+ * True when some pack under the roots has a songs/*.json (the /api/health `userPatches` flag; cheap: readdirs only).
+ * @param {string[]} roots
+ * @returns {Promise<boolean>}
+ */
+async function hasUserPatches(roots) {
+  for (const p of await listPackDirs(roots, [])) if (!p.skip && (await packSongFiles(p.dir)).length) return true;
+  return false;
+}
+
+/** `<slug>/pack.json`: {mode?:'auto'|'bank', name?:string}. Missing = auto; unreadable = auto with an error. */
+async function readPackJson(dir, label, errors) {
+  const f = path.join(dir, 'pack.json');
+  try {
+    const st = await fsp.stat(f);
+    if (st.size > PACK_JSON_MAX_BYTES) throw new Error('pack.json is too large');
+    const j = JSON.parse(await fsp.readFile(f, 'utf8'));
+    if (!isPlainObj(j)) throw new Error('pack.json must be an object such as {"mode": "bank"}');
+    const out = { mode: 'auto' };
+    if (j.mode !== undefined) {
+      if (j.mode === 'auto' || j.mode === 'bank') out.mode = j.mode;
+      else errors.push(`${label}/pack.json: "mode" must be "auto" or "bank"; read as "auto"`);
+    }
+    if (typeof j.name === 'string' && j.name.trim()) out.name = j.name.trim().slice(0, 120);
+    return out;
+  } catch (err) {
+    if (err.code !== 'ENOENT') errors.push(`${label}/pack.json: ${err.message}; read as "auto"`);
+    return { mode: 'auto' };
+  }
+}
+
+/**
+ * One song entry of a pack file, checked: an export envelope {kind:'song', schema?, song, bank?} or a bare song (an
+ * object with a `patch`). The bank block sits next to `song` (a plain exported song file has none and loads as
+ * before); a bare song's own `bank` field is lifted out. Library ids (`id`) are dropped: the store gives new ones.
+ * @returns {{song:object, schema?:number, bank?:object}|string} the entry, or why it was skipped
+ */
+function checkPatchEntry(raw) {
+  if (!isPlainObj(raw)) return 'not a song object';
+  let song;
+  let schema;
+  let bank;
+  if (raw.kind === 'song') {
+    song = raw.song;
+    if (typeof raw.schema === 'number' && Number.isFinite(raw.schema)) schema = raw.schema;
+    bank = raw.bank;
+  } else if (raw.kind === 'library' || raw.songs !== undefined) {
+    return 'a whole library, not a song (export single songs, or put songs in an array)';
+  } else {
+    song = raw;
+  }
+  if (!isPlainObj(song) || !isPlainObj(song.patch)) {
+    return 'no song in it (expected "kind": "song" and a "song" with a "patch")';
+  }
+  if (song.patch.slots !== undefined) {
+    const n = Array.isArray(song.patch.slots) ? song.patch.slots.length : -1;
+    if (n < 1 || n > USER_PATCH_MAX_SLOTS) return `"patch.slots" must be a list of 1 to ${USER_PATCH_MAX_SLOTS} slots`;
+  }
+  if (song.name !== undefined && typeof song.name !== 'string') return '"name" must be text';
+  const { id, bank: ownBank, ...rest } = song;
+  if (bank === undefined) bank = ownBank;
+  const out = { song: rest };
+  if (schema !== undefined) out.schema = schema;
+  if (isPlainObj(bank)) out.bank = bank;
+  return out;
+}
+
+/** The `user:` sampler ids a song's slots use. */
+function userRefsOf(song) {
+  const slots = song && song.patch && Array.isArray(song.patch.slots) ? song.patch.slots : [];
+  const out = [];
+  for (const s of slots) {
+    const ref = s && s.instrument && s.instrument.id;
+    if (typeof ref === 'string' && ref.startsWith('user:')) out.push(ref);
+  }
+  return out;
+}
+
+/**
+ * Scan the patch packs: every <root>/<slug>/songs/*.json (slug rules as My Samples). Each file is one song (export
+ * format, `kind:'song'`) or an array of songs. Caps: USER_PATCH_FILE_MAX_BYTES per file, USER_PATCH_FILES_MAX files
+ * per pack, USER_PATCH_SONGS_PER_FILE_MAX songs per file, USER_PATCH_SONGS_MAX songs and USER_PATCH_TOTAL_MAX_BYTES
+ * in all, nesting ≤ USER_PATCH_MAX_DEPTH. Anything over a cap or malformed is skipped with a line in `errors`.
+ * A `user:<id>` instrument that no My Samples pack has is kept with a warning (the engine falls back).
+ * packId = `<slug>:<file>` for a one-song file, `<slug>:<file>#<n>` (n from 0) for an entry of an array file.
+ * hash = sha1 of the entry (song + schema + bank), so a file touched without changes, or one array entry changed,
+ * updates only what changed.
+ * @param {string[]} roots
+ * @param {{userIds?:Set<string>|null}} [o] the `user:` ids My Samples has (null = don't check)
+ * @returns {Promise<{patches:object[], packs:object[], errors:string[]}>}
+ */
+async function scanUserPatches(roots, { userIds = null } = {}) {
+  const errors = [];
+  const patches = [];
+  const packs = [];
+  let total = 0;
+  for (const p of await listPackDirs(roots, errors)) {
+    const files = await packSongFiles(p.dir);
+    if (!files.length) continue;
+    if (p.skip) {
+      errors.push(p.skip);
+      continue;
+    }
+    if (p.slug.includes(':')) {
+      errors.push(`${p.slug}: a pack folder name must not contain ":"; skipped`);
+      continue;
+    }
+    // skeptic PP-6: the client's pack id rule (shared/patch-packs.js PACK_ID_RE) caps the folder at 200 characters and
+    // a file at 240 + ".json"; say so here instead of a bare "not a pack song" in the app at every boot
+    if (p.slug.length > USER_PATCH_SLUG_MAX) {
+      const n = USER_PATCH_SLUG_MAX;
+      errors.push(`${p.slug.slice(0, 40)}…: a pack folder name must be at most ${n} characters; skipped`);
+      continue;
+    }
+    const meta = await readPackJson(p.dir, p.slug, errors);
+    const pack = { slug: p.slug, mode: meta.mode, songs: 0, files: 0 };
+    if (meta.name) pack.name = meta.name;
+    if (files.length > USER_PATCH_FILES_MAX) {
+      const n = USER_PATCH_FILES_MAX;
+      errors.push(`${p.slug}/songs: more than ${n} files; only the first ${n} are read`);
+    }
+    for (const file of files.slice(0, USER_PATCH_FILES_MAX)) {
+      const label = `${p.slug}/songs/${file}`;
+      if (file.length > USER_PATCH_FILE_NAME_MAX) {
+        errors.push(`${label}: the file name must be at most ${USER_PATCH_FILE_NAME_MAX} characters; skipped`);
+        continue;
+      }
+      if (patches.length >= USER_PATCH_SONGS_MAX) {
+        errors.push(`${label}: more than ${USER_PATCH_SONGS_MAX} pack songs in all; skipped`);
+        break;
+      }
+      let json;
+      let st;
+      try {
+        const abs = path.join(p.dir, 'songs', file);
+        const real = await fsp.realpath(abs);
+        if (!within(p.dir, real)) throw new Error('is a link to a file outside the pack');
+        st = await fsp.stat(real);
+        if (!st.isFile()) continue;
+        const mb = USER_PATCH_FILE_MAX_BYTES / 1048576;
+        if (st.size > USER_PATCH_FILE_MAX_BYTES) throw new Error(`is larger than ${mb} MB`);
+        if (total + st.size > USER_PATCH_TOTAL_MAX_BYTES) throw new Error('the pack songs are too large in all');
+        total += st.size;
+        json = JSON.parse(await fsp.readFile(real, 'utf8'));
+      } catch (err) {
+        const why = err instanceof SyntaxError ? `not valid JSON (${err.message})` : err.message;
+        errors.push(`${label}: ${why}; skipped`);
+        continue;
+      }
+      if (deeperThan(json, USER_PATCH_MAX_DEPTH)) {
+        errors.push(`${label}: nested too deeply; skipped`);
+        continue;
+      }
+      const isArr = Array.isArray(json);
+      const list = isArr ? json : [json];
+      if (isArr && !list.length) errors.push(`${label}: the song list is empty`);
+      if (list.length > USER_PATCH_SONGS_PER_FILE_MAX) {
+        const n = USER_PATCH_SONGS_PER_FILE_MAX;
+        errors.push(`${label}: more than ${n} songs; only the first ${n} are read`);
+      }
+      let used = 0;
+      for (const [i, raw] of list.slice(0, USER_PATCH_SONGS_PER_FILE_MAX).entries()) {
+        const where = isArr ? `${label} #${i}` : label;
+        if (patches.length >= USER_PATCH_SONGS_MAX) break;
+        const e = checkPatchEntry(raw);
+        if (typeof e === 'string') {
+          errors.push(`${where}: ${e}; skipped`);
+          continue;
+        }
+        if (userIds) {
+          for (const ref of userRefsOf(e.song)) {
+            if (userIds.has(ref)) continue;
+            errors.push(`${where}: uses "${ref}", which no My Samples pack has; it will not sound`);
+          }
+        }
+        const body = JSON.stringify([e.schema ?? null, e.song, e.bank ?? null]);
+        const hash = crypto.createHash('sha1').update(body).digest('hex').slice(0, 16);
+        const packId = `${p.slug}:${file}${isArr ? `#${i}` : ''}`;
+        const mtime = Math.round(st.mtimeMs);
+        patches.push({ packId, pack: p.slug, file, n: isArr ? i : null, mtime, hash, mode: meta.mode, ...e });
+        used += 1;
+      }
+      pack.files += 1;
+      pack.songs += used;
+    }
+    packs.push(pack);
+  }
+  return { patches, packs, errors };
+}
+
 /**
  * @param {object} opts
  * @param {string} opts.appDir     directory served at /
@@ -631,6 +911,16 @@ function createServer(opts = {}) {
     };
   }
 
+  /** Re-scan the patch packs (O-AW-PP); `user:` refs are checked against the My Samples scan. */
+  async function rescanUserPatches() {
+    if (!userSamplesOn) return { patches: [], packs: [], errors: [] };
+    const samples = await rescanUserSamples();
+    const userIds = new Set(samples.instruments.map((i) => `user:${i.id}`));
+    const r = await scanUserPatches(userRoots, { userIds });
+    for (const e of r.errors) log(`Patch packs: ${e}`);
+    return r;
+  }
+
   /**
    * @returns {Promise<{abs:string, real:string}|null>} the audio file of a /user-samples/<token>/<slug>/<rel> URL:
    *   `real` is its realpath, inside the pack and a regular file (round2-shell #1), `abs` the requested path
@@ -674,6 +964,10 @@ function createServer(opts = {}) {
     const apiAt = pathname.indexOf('/api/');
     if (apiAt > 0 && API_ROUTE_RE.test(pathname.slice(apiAt))) pathname = pathname.slice(apiAt);
     if (pathname === '/api/health') {
+      // O-AW-PP: advertised only when a pack has a songs/*.json, so a library without packs never requests the list
+      const patchesOn = userSamplesOn && (await hasUserPatches(userRoots).catch(() => false));
+      const features = userSamplesOn ? ['user-samples'] : [];
+      if (patchesOn) features.push('user-patches');
       return sendJSON(req, res, 200, {
         ok: true,
         app: APP_ID,
@@ -681,7 +975,8 @@ function createServer(opts = {}) {
         pid: process.pid,
         clientSeenMsAgo: lastClientSeen ? Date.now() - lastClientSeen : null,
         userSamples: userSamplesOn, // the engine requests /api/user-samples/manifest.json only when this is true
-        features: userSamplesOn ? ['user-samples'] : [],
+        userPatches: patchesOn,
+        features,
       });
     }
     if (secret && PRIVATE_ROUTE_RE.test(pathname) && !keyOk(req)) return sendText(req, res, 403, 'Forbidden');
@@ -689,6 +984,11 @@ function createServer(opts = {}) {
       // always 200: a missing/empty folder is an empty list (a 404 would log a console error in Chromium)
       const r = await rescanUserSamples();
       return sendJSON(req, res, 200, { app: APP_ID, kind: 'user-samples', instruments: r.instruments, roots: r.roots, packs: r.packs.map(({ slug, count }) => ({ slug, count })), errors: r.errors });
+    }
+    if (pathname === '/api/user-patches') {
+      // O-AW-PP: always 200 (an empty list when nothing is there or My Samples is off: never a console 404)
+      const r = await rescanUserPatches();
+      return sendJSON(req, res, 200, { app: APP_ID, kind: 'user-patches', enabled: userSamplesOn, ...r });
     }
     if (pathname === '/api/user-samples') {
       // summary for the Settings panel (Chrome has no window.rig): folder, roots, instrument count
@@ -862,6 +1162,7 @@ function createServer(opts = {}) {
     },
     /** @returns {Promise<{count, instruments, roots, packs:{slug,dir,count}[], errors}>} */
     rescanUserSamples,
+    rescanUserPatches,
     /** @returns {Promise<Array<{name,path,url}>|{error:'missing'}>} */
     listPads,
     /** GET /api/health on another port. @returns {Promise<object|false>} */
@@ -886,5 +1187,6 @@ function probeHealth(port, host = '127.0.0.1') {
 
 module.exports = {
   createServer, parseRange, mimeFor, safeJoin, walkPads, probeHealth, scanUserSamples, defaultUserSampleRoots, userSamplesHome,
+  scanUserPatches, hasUserPatches,
   PAD_EXTS, USER_SAMPLE_EXTS, APP_ID, CSP, KEY_HEADER,
 };

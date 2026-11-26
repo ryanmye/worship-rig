@@ -41,7 +41,8 @@ const SUITES = [
   { name: 'engine', groups: ['phase1'], cmd: [node, 'test/phase1/engine/run.mjs'], timeout: 20 * MIN },
   { name: 'instruments', groups: ['phase1'], cmd: [node, 'test/phase1/instruments/run.mjs'], timeout: 15 * MIN },
   { name: 'synth-extra', groups: ['phase1'], cmd: synthExtra ? [node, synthExtra] : null, timeout: 15 * MIN, absent: 'no synth-extra runner yet' },
-  { name: 'shell', groups: ['phase1'], cmd: [node, 'test/phase1/shell/run.mjs', ...(FAST ? ['--skip', 'electron'] : [])], timeout: 12 * MIN },
+  // O-AW-PP: + patch-packs.pw.mjs (~2 min) in the browser step
+  { name: 'shell', groups: ['phase1'], cmd: [node, 'test/phase1/shell/run.mjs', ...(FAST ? ['--skip', 'electron'] : [])], timeout: 15 * MIN },
   { name: 'ui-core', groups: ['phase2'], cmd: [node, 'test/phase2/ui-core/run.mjs'], timeout: 12 * MIN },
   // H-v2 Edit (views/edit/**): shell + one file per panel + integration, one process per file (each file has a
   // 900 s budget, CONTRACT §7), so the suite's own limit is well above the sum of typical files (~4–6 min idle).

@@ -45,6 +45,7 @@ import { detectKeyFromName } from './shared/keydetect.js';
 import { createBus, commandError } from './shared/bus.js';
 import { clickSettingsOf } from './shared/click-math.js';
 import { createMidiClock } from './midi-clock.js';
+import { normalizeBank, packModeOf, validPackEntry } from './shared/patch-packs.js';
 import {
   SCENE_MAX, SCENE_GLIDE_SEC, scenesOf, applyScene, captureScene, levelsOf, levelDiff, stepScene, withScene,
   withoutScene, tweakScene,
@@ -2438,6 +2439,126 @@ export function createController(o) {
     return info;
   }
 
+  // ---- patch packs (2.x step 1, DECISIONS O-AW-PP): <My Samples>/<slug>/songs/*.json, served by the local server
+  const PACKS_EMPTY = Object.freeze({
+    enabled: false, songs: 0, packs: 0, bankSongs: 0, entries: [], packList: [], errors: [],
+  });
+  let packsInfo = PACKS_EMPTY;
+  let packsReady = Promise.resolve(null);
+  let packsBusy = null;
+  /** The server's /api/* answer for `rel` (relative to the page, like the engine's manifest URLs), or null. */
+  async function localJSON(rel) {
+    const res = await globalThis.fetch(new URL(rel, loc.href).href, { cache: 'no-store' });
+    return res.ok ? res.json().catch(() => null) : null;
+  }
+  /**
+   * Bank items for the Song bank picker: one per bank-mode entry, with `inLibrary` = the library song id when it is
+   * there.
+   */
+  function bankItems(entries) {
+    const inLib = typeof store.packSongs === 'function' ? store.packSongs() : {};
+    const out = [];
+    for (const e of entries) {
+      if (packModeOf(e) !== 'bank') continue;
+      const name = e.song && typeof e.song.name === 'string' ? e.song.name : e.file.replace(/\.json$/i, '');
+      const bank = normalizeBank(e.bank || {}, name) || { title: name };
+      out.push({ packId: e.packId, pack: e.pack, ...bank, inLibrary: inLib[e.packId] || null });
+    }
+    return out;
+  }
+  function packsSummary(j) {
+    const entries = (j && Array.isArray(j.patches) ? j.patches : []).filter(validPackEntry);
+    const packList = j && Array.isArray(j.packs) ? j.packs.filter((p) => p && p.songs > 0) : [];
+    return {
+      enabled: true,
+      songs: entries.length,
+      packs: packList.length,
+      bankSongs: entries.filter((e) => packModeOf(e) === 'bank').length,
+      entries,
+      packList,
+      errors: (j && Array.isArray(j.errors) ? j.errors : []).filter((x) => typeof x === 'string'),
+    };
+  }
+  /**
+   * Read the patch packs and take their auto-mode songs into the library (store.topUpPacks: once each, never over an
+   * edit, never after a delete). Asks /api/user-patches only when /api/health advertises it ('user-patches'), so a
+   * setup without packs, the native shell (rig://, no such feature yet) and node tests make no request that could
+   * fail. A muted second window only reads (its store is read-only).
+   * @returns {Promise<{enabled:boolean, songs:number, packs:number, bankSongs:number, added:string[],
+   *   updated:string[], kept:string[], skipped:string[], errors:string[], error?:string}>}
+   */
+  async function rescanPatchPacks() {
+    if (packsBusy) return packsBusy;
+    packsBusy = (async () => {
+      const out = { ...PACKS_EMPTY, added: [], updated: [], kept: [], skipped: [] };
+      const web = loc && /^(https?|rig):$/.test(loc.protocol) && typeof globalThis.fetch === 'function';
+      if (!web) return out;
+      try {
+        const h = await localJSON('./api/health');
+        const feat = h && Array.isArray(h.features) ? h.features : [];
+        const on = !!(h && (h.userPatches === true || feat.includes('user-patches')));
+        if (!on) {
+          packsInfo = PACKS_EMPTY;
+          return out;
+        }
+        packsInfo = packsSummary(await localJSON('./api/user-patches'));
+      } catch (err) {
+        warn(`Could not read the patch packs: ${err && err.message}`);
+        return { ...out, error: (err && err.message) || String(err) };
+      }
+      const r = !secondary && typeof store.topUpPacks === 'function' ? store.topUpPacks(packsInfo.entries) : null;
+      const res = { ...out, ...packsInfo };
+      if (r) Object.assign(res, { added: r.added, updated: r.updated, kept: r.kept, skipped: r.skipped });
+      if (r && r.updated.length) packSongsUpdated(r.updated);
+      const problems = [...res.errors, ...res.skipped];
+      if (problems.length) {
+        const n = problems.length;
+        warn(`Patch packs: ${n} problem${n === 1 ? '' : 's'} (${problems[0]}${n > 1 ? ', …' : ''})`, true);
+      }
+      emit('user-patches', res);
+      return res;
+    })().finally(() => {
+      packsBusy = null;
+    });
+    return packsBusy;
+  }
+  /**
+   * Skeptic PP-1: a pack update in place is not an edit. The selected song's Revert snapshot (`selected`, and
+   * Perform's own via the 'packSongsUpdated' action) follows the new version; otherwise Revert wrote the old pack
+   * version back, which then read as an edit and froze the song against every later pack update.
+   * @param {string[]} ids library song ids topUpPacks updated
+   */
+  function packSongsUpdated(ids) {
+    if (selected && ids.includes(selected.id)) {
+      const song = store.getSong(selected.id);
+      if (song) selected = { id: selected.id, song };
+    }
+    emit('action', { type: 'packSongsUpdated', ids: ids.slice() });
+  }
+  /**
+   * The last patch-pack read: counts for Settings' "Patch packs" line and the Song bank items (searchBank them).
+   * @returns {{enabled:boolean, songs:number, packs:number, bankSongs:number, bank:object[], errors:string[]}}
+   */
+  function patchPacks() {
+    const { entries, ...rest } = packsInfo;
+    return { ...rest, bank: bankItems(entries) };
+  }
+  /**
+   * Song bank: add one bank song to the library (store.addPackSong; already there → that song). Views call this.
+   * @param {string} packId
+   * @param {{select?:boolean}} [o]
+   * @returns {{ok:true, id:string, existing?:true}|{ok:false, error:string}}
+   */
+  function addFromBank(packId, o = {}) {
+    const e = packsInfo.entries.find((x) => x.packId === packId);
+    if (!e) return { ok: false, error: 'That song is no longer in the Song bank. Press Rescan.' };
+    if (secondary) return { ok: false, error: SECONDARY_MESSAGE };
+    const r = store.addPackSong(e, o);
+    const added = r.ok && !r.existing ? [r.id] : [];
+    if (r.ok) emit('user-patches', { ...packsInfo, added, updated: [], kept: [], skipped: [], source: 'bank' });
+    return r;
+  }
+
   // ---- wake lock (Chrome) — Electron uses powerSaveBlocker in main
   let wakeLock = null;
   async function acquireWakeLock() {
@@ -3251,6 +3372,9 @@ export function createController(o) {
     startMidi();
     if (rig && typeof rig.listPads === 'function') await reloadPads().catch((err) => warn(`pad folder: ${err && err.message}`));
     else await restoreChromePads().catch(() => null);
+    // O-AW-PP: patch packs are read in the background (pack songs go to the end of the library, so the first song
+    // never waits for them); packsReady settles when they are in
+    packsReady = rescanPatchPacks().catch(() => null);
     startMenubar(); // menubar-A: bus + low-resource state before the first song and preload
     const cur = store.currentSong();
     if (cur) await selectSong(cur.id, { index: s.setlistIndex });
@@ -3724,6 +3848,9 @@ export function createController(o) {
     listPreviousLibraries,
     restorePreviousLibrary,
     rescanUserSamples,
+    rescanPatchPacks,
+    patchPacks,
+    addFromBank,
     revertSong,
     scenes,
     learn,
@@ -3828,6 +3955,9 @@ export function createController(o) {
   });
   // menubar-A (C7): menu-bar mode API (docs/menubar-mode.md)
   Object.assign(api, { modes, setLowResource, setWindowVisible, publishState, menuBarState, handleCommand });
+  // O-AW-PP: settles once the boot-time patch-pack read is done (tests; nothing waits on it). A getter, which
+  // Object.assign would have read once.
+  Object.defineProperty(api, 'packsReady', { get: () => packsReady, enumerable: true });
   // lowres2: input-activity clock + audio sleep
   Object.assign(api, {
     noteActivity,

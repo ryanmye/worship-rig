@@ -1116,6 +1116,11 @@ async function firstRunHints() {
 }
 
 const started = controller.start(); // creates the AudioContext synchronously, then loads the current song
+// O-AW-PP: the boot-time patch-pack read says what it added (Settings' Rescan toasts its own result)
+started.then(() => controller.packsReady).then((r) => {
+  const n = r && Array.isArray(r.added) ? r.added.length : 0;
+  if (n) toast(`Patch packs: ${n} song${n === 1 ? '' : 's'} added to your library.`, 'ok');
+}).catch(() => {});
 firstRunHints();
 // Only show the overlay if the context didn't start on its own (autoplay-allowed launchers and Electron start at once).
 setTimeout(() => {

@@ -1871,6 +1871,11 @@ export function mountPerform(root, ctx) {
       takeSnapshot(store.currentSong());
       renderSong(store.get());
     }
+    // skeptic PP-1: a patch-pack update replaced the shown song in place (it was unedited); Revert follows it
+    if (det.type === 'packSongsUpdated' && snap && Array.isArray(det.ids) && det.ids.includes(snap.id)) {
+      takeSnapshot(store.getSong(snap.id));
+      renderSong(store.get());
+    }
   });
   // round2-ui #8: snapshot = the song as the controller committed it (a plain deep copy from the controller)
   d.listen(controller, 'songSelected', (e) => {

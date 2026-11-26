@@ -190,6 +190,47 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
     Factory…), navigation, device-local settings (kept) and the theme. The theme is the one 2.0 choice the replace
     overwrites; the release notes say so.
 
+- **O-AW-PP (patch packs, 2026-11-25): auto-loading personal patch packs and a Song bank (FX-gap-analysis step 1,
+  plus Ryan's "song settings bank" scope).** Layout and user-facing rules: `docs/patch-packs.md`. Interfaces:
+  CONTRACT_CHANGES "Patch packs (2.x step 1)". Tier 2, and easy to reverse: everything sits behind the
+  `'user-patches'` health feature and one optional `meta.packSongs` map, with no SCHEMA bump.
+  1. **Identity.** `packId = <pack folder>:<file>`, plus `#<n>` (counting from 0) for an entry of an array file.
+     Renaming the folder or the file makes a new song. Reordering an array re-keys its entries, so authors should
+     append.
+  2. **Once.** Every pack song the library takes in is recorded in `meta.packSongs` and never pruned. An auto song
+     is added once, at the end of the library order, in no setlist. This mirrors `topUpFactory`'s version-gated
+     "once".
+  3. **Edit protection.** At write time the store records `sig = songFingerprint(song)`: a hash of every stored
+     field except `id`, over key-sorted JSON. If the current fingerprint differs, the song was edited, and a newer
+     pack version never overwrites it. Any persisted change counts, including mutes, levels and key. Undoing an
+     edit by hand makes the song updatable again. If a future normaliser changes stored songs, they read as edited:
+     the safe direction.
+  4. **Update in place.** The rule is "content changed", not "mtime changed": the server's `hash` is over (schema,
+     song, bank). An unedited song with a new hash is replaced under the same id, keeping its library position and
+     setlists. This also happens on a Rescan while the song is current: Rescan is the player's own action. A
+     touched file with no changes does nothing.
+  5. **Delete memory.** A deleted pack song keeps its record, so it is never added or updated again. A pack folder
+     that is gone changes nothing. A whole-library replace (restore, or O-AW-E5's pristine import) replaces `meta`
+     too, so the packs are taken in afresh afterwards.
+  6. **Pack writes are not edits.** Top-ups use the seed path, so an untouched factory library stays `pristine`.
+     Its pack songs can be rebuilt from the files, so the pristine rules for backups and O-AW-E5 still hold. A
+     Song bank add is the player's choice and does count as an edit.
+  7. **Bank mode** (`pack.json` `"mode": "bank"`). These songs are never auto-added. **Add to library** copies one
+     song with the same record, so rules 3 to 5 apply to it from then on. If the song is already in the library,
+     Add returns it. Adding again after a delete is allowed, because it is an explicit request; top-ups still never
+     bring it back. Switching a pack from bank to auto adds its unrecorded songs, and never ones that were deleted.
+  8. **Bank metadata** `{title, artist, ccli?, originalKey, bpm, timeSig, tags[]}` sits beside `song` in the export
+     envelope, so a plain song file imports as before. It is for browsing only and is never written into the song;
+     the song body holds the key, tempo and time signature. Bad fields are dropped, and `title` falls back to the
+     song name. Search matches every word in the title or artist, ignoring case and accents. The picker UI is
+     provisional.
+  9. **Gating.** `/api/health` advertises the feature only when a pack has `songs/*.json`. Without packs nothing is
+     requested and the library is unchanged. The native shell (rig://) says `userPatches: false` until it serves My
+     Samples. A muted second window reads but never writes.
+  10. **Bad input.** Malformed, over-cap or future-schema entries are skipped with a warning. Other entries in the
+     same file still load. A song that would overflow the 2 MB library cap is skipped without a record, so it is
+     tried again later.
+
 ## D8: 1.1 ↔ 2.0 in one Chrome profile: fix in 2.0, plus a 1.1.1 patch (Ryan, 2026-11-25; review E5 M4)
 - **The problem.** Switching back and forth between 1.1 and 2.0 in one browser profile hides each version's library
   in a backup key. After two round trips, both copies are pruned.

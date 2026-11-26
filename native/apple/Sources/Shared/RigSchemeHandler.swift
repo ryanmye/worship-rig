@@ -2,9 +2,12 @@
 // UNBUILT on Linux.
 //
 // Routes: the static tree under app/ (no samples: the native engine reads them straight from the bundle),
-// /docs/<name>.md as text/plain, and three JSON stubs (/api/health, /api/user-samples,
-// /api/user-samples/manifest.json). /api/heartbeat answers 204 (inert on a non-http scheme anyway). Anything outside
-// app/ or containing ".." is a 404 (safeJoin semantics of server.js).
+// /docs/<name>.md as text/plain, and four JSON stubs (/api/health, /api/user-samples,
+// /api/user-samples/manifest.json, /api/user-patches). /api/heartbeat answers 204 (inert on a non-http scheme anyway).
+// Anything outside app/ or containing ".." is a 404 (safeJoin semantics of server.js).
+// Patch packs (DECISIONS O-AW-PP): My Samples is not served here yet, so health says userPatches: false and lists no
+// 'user-patches' feature; the web client then never asks. The /api/user-patches stub only keeps a stray request off
+// the 404 count (E4 self-test). Serving real packs needs the My Samples roots first.
 //
 // While the app edit of native/docs/SHELL.md section 2 is not applied, `patchMain` serves js/main.js with its engine
 // import swapped for ./engine-bridge/select.js (the same one-line change the Playwright smoke applies). The needle is
@@ -52,7 +55,7 @@ final class RigSchemeHandler: NSObject, WKURLSchemeHandler {
         switch path {
         case "/api/health":
             return json(task, ["ok": true, "app": "worship-rig", "version": "native", "userSamples": false,
-                               "features": ["native"]])
+                               "userPatches": false, "features": ["native"]])
         case "/api/user-samples":
             return json(task, ["enabled": false, "dir": NSNull(), "path": NSNull(), "roots": [String](), "count": 0,
                                "packs": [String](), "errors": [String]()])
@@ -60,6 +63,9 @@ final class RigSchemeHandler: NSObject, WKURLSchemeHandler {
             return json(task, ["app": "worship-rig", "kind": "user-samples", "instruments": [String](),
                                "roots": [String](),
                                "packs": [String](), "errors": [String]()])
+        case "/api/user-patches":
+            return json(task, ["app": "worship-rig", "kind": "user-patches", "enabled": false,
+                               "patches": [String](), "packs": [String](), "errors": [String]()])
         case "/api/heartbeat", "/favicon.ico":
             return respond(task, status: 204, type: "text/plain", body: Data())
         default:

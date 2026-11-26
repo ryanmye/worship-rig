@@ -5,7 +5,11 @@
 //     songs: { [id]: Song }, songOrder: [id],            // library (map + display order)
 //     setlists: { [id]: Setlist }, setlistOrder: [id],
 //     settings: Settings,                                 // SPEC §2 + setlistIndex (position in current setlist)
-//     meta: { factorySeeded, factoryVersion, createdAt } }
+//     meta: { factorySeeded, factoryVersion, createdAt, packSongs? } }
+// Patch packs (2.x step 1, DECISIONS O-AW-PP): meta.packSongs = { '<slug>:<file>[#n]': {id, hash, sig} } remembers
+//   every pack song this library ever took (id = its library song, hash = the pack version it was written from,
+//   sig = songFingerprint of what was written). Never pruned: a deleted pack song keeps its entry, so it is never
+//   added again (topUpFactory's "once" rule). Absent until a pack song is added.
 // Everything returned by get() is deep-frozen; change it only through set()/update()/helpers.
 //
 // Paths for set(path, value):
@@ -48,6 +52,7 @@ import {
 import { normalizeTouch, PEDAL_CURVES, COMPUTER_KEYBOARD, validDynRange } from './shared/touch-curve.js';
 import { normalizeClick, validTimeSig } from './shared/click-math.js';
 import { normalizeScenes } from './shared/scenes.js';
+import { validPackEntry, packModeOf, songFingerprint, PACK_ID_RE, PACK_ID_MAX } from './shared/patch-packs.js';
 import {
   FACTORY_SONGS, FACTORY_VERSION, FACTORY_SINCE, CATEGORIES, WHEEL_TARGETS, BEND_MODES, DRONE_MODES, defaultFx, defaultDrone, defaultRouting,
   blankSong, factoryById,
@@ -936,7 +941,29 @@ export function migrate(raw) {
   }
   const meta = isObj(raw.meta) ? raw.meta : {};
   out.meta = { ...meta, factorySeeded: bool(meta.factorySeeded, out.songOrder.length > 0) };
+  // O-AW-PP: optional; unusable entries are dropped, an empty map is dropped (idempotent)
+  if (hasOwn(out.meta, 'packSongs')) {
+    const recs = normalizePackRecords(out.meta.packSongs);
+    if (recs) out.meta.packSongs = recs;
+    else delete out.meta.packSongs;
+  }
   return out;
+}
+
+/**
+ * meta.packSongs (O-AW-PP), cleaned: entries keyed by a valid pack id with {id:string, hash:string, sig:string}.
+ * @param {*} raw
+ * @returns {object|null} null when nothing usable is left
+ */
+function normalizePackRecords(raw) {
+  if (!isObj(raw)) return null;
+  const out = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (isReservedKey(k) || k.length > PACK_ID_MAX || !PACK_ID_RE.test(k) || !isObj(v)) continue;
+    if (typeof v.id !== 'string' || !v.id || typeof v.hash !== 'string' || typeof v.sig !== 'string') continue;
+    out[k] = { id: v.id, hash: v.hash, sig: v.sig };
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 /** Empty (unseeded) state at the current SCHEMA. */
@@ -1862,6 +1889,35 @@ export function createStore(opts = {}) {
     return ids;
   }
 
+  // ---- patch packs (O-AW-PP)
+  const packRecords = () => (isObj(state.meta.packSongs) ? state.meta.packSongs : {});
+  /**
+   * A pack entry's song, normalised exactly as importJSON reads a song file: the entry's `schema` decides the slot
+   * count (none = a 1.x song, 4 slots). @throws {FutureSchemaError} @returns {object|null}
+   */
+  function packSongOf(e, id) {
+    const sch = typeof e.schema === 'number' ? { schema: e.schema } : {};
+    const src = clone(e.song);
+    if (typeof src.name !== 'string' && e.bank && typeof e.bank.title === 'string') src.name = e.bank.title;
+    const lib = migrate({ ...sch, songs: [{ ...src, id: 'pack0' }] });
+    const s = lib.songs[lib.songOrder[0]];
+    return s ? normalizeSong({ ...s }, id) : null;
+  }
+  const skipLine = (e, why) => `${(e && typeof e.packId === 'string' && e.packId) || '(unknown pack song)'}: ${why}`;
+  function tryPackSong(e, id, res) {
+    try {
+      const s = packSongOf(e, id);
+      if (!s) res.skipped.push(skipLine(e, 'no song in it; skipped'));
+      return s;
+    } catch (err) {
+      const why = err instanceof FutureSchemaError
+        ? 'made by a newer version of Worship Rig; skipped'
+        : 'not a Worship Rig song; skipped';
+      res.skipped.push(skipLine(e, why));
+      return null;
+    }
+  }
+
   // ---- navigation helpers
   function navList(s = state) {
     const sl = s.settings.currentSetlistId ? s.setlists[s.settings.currentSetlistId] : null;
@@ -2522,6 +2578,144 @@ export function createStore(opts = {}) {
       if (pristine) paths.push(put(['meta', 'edited'], false)); // round2-shell #2: an untouched factory library
       changed(paths, { seed: true });
       return ids;
+    },
+
+    /**
+     * Patch packs, auto mode (O-AW-PP): take the songs of GET /api/user-patches into the library. Idempotent.
+     *  - A pack song is added once, at the end of the library order (no setlist), and remembered in meta.packSongs.
+     *  - Deleted from the library → remembered, never added again. A pack folder that is gone changes nothing.
+     *  - A newer version (entry hash ≠ the one written) replaces the song in place (same id, position, setlists)
+     *    only while the song is unedited (its fingerprint still matches); an edited song is never overwritten. An
+     *    edited song that already equals the new version (exported back into its pack) is re-recorded, not written
+     *    (skeptic PP-2).
+     *  - Bank-mode entries are never added here (addPackSong adds one on request); a bank song already in the
+     *    library follows the same update / edit / delete rules.
+     *  - A bad entry is skipped with a line in `skipped` (and a warning); a song that would push the library past
+     *    LIBRARY_MAX_CHARS is skipped and tried again next time.
+     * Pack writes are not edits: an untouched factory library stays pristine.
+     * @param {object[]} list entries {packId, hash, mode, schema?, song, bank?}
+     * @returns {{added:string[], updated:string[], kept:string[], skipped:string[], bank:number}} kept = pack ids
+     *   whose newer version was not applied because the song was edited
+     */
+    topUpPacks(list) {
+      const res = { added: [], updated: [], kept: [], skipped: [], bank: 0 };
+      if (!Array.isArray(list) || !list.length || readOnlyReason !== null) return res;
+      const recs = { ...packRecords() };
+      const seen = new Set();
+      const paths = [];
+      const added = [];
+      let relinked = false;
+      let size = null;
+      // skeptic PP-5: a new record (~packId + 70 chars) is library state too, so it counts against the cap
+      const recLen = (packId, id) => packId.length + id.length + 64;
+      const fits = (delta) => {
+        if (size === null) size = JSON.stringify(state).length;
+        if (size + delta > LIBRARY_MAX_CHARS) return false;
+        size += delta;
+        return true;
+      };
+      for (const e of list) {
+        if (!validPackEntry(e)) {
+          res.skipped.push(skipLine(e, 'not a pack song; skipped'));
+          continue;
+        }
+        if (seen.has(e.packId) || isReservedKey(e.packId)) continue;
+        seen.add(e.packId);
+        const rec = hasOwn(recs, e.packId) && isObj(recs[e.packId]) ? recs[e.packId] : null;
+        if (rec) {
+          const cur = state.songs[rec.id];
+          if (!cur || rec.hash === e.hash) continue; // deleted (remembered) or unchanged
+          if (songFingerprint(cur) !== rec.sig) {
+            // skeptic PP-2: edited here, but already equal to this pack version (the player exported the edited song
+            // back into its pack file): adopt the version without writing the song, so later versions update again
+            const next = tryPackSong(e, rec.id, { skipped: [] });
+            if (next && songFingerprint(next) === songFingerprint(cur)) {
+              recs[e.packId] = { id: rec.id, hash: e.hash, sig: songFingerprint(cur) };
+              relinked = true;
+              continue;
+            }
+            res.kept.push(e.packId); // edited here: never overwritten
+            continue;
+          }
+          const song = tryPackSong(e, rec.id, res);
+          if (!song) continue;
+          if (!fits(JSON.stringify(song).length - JSON.stringify(cur).length)) {
+            res.skipped.push(skipLine(e, 'the library is full; not updated'));
+            continue;
+          }
+          paths.push(put(['songs', rec.id], song));
+          recs[e.packId] = { id: rec.id, hash: e.hash, sig: songFingerprint(state.songs[rec.id]) };
+          res.updated.push(rec.id);
+          continue;
+        }
+        if (packModeOf(e) === 'bank') {
+          res.bank += 1;
+          continue;
+        }
+        const id = idGen('song');
+        const song = tryPackSong(e, id, res);
+        if (!song) continue;
+        if (!fits(JSON.stringify(song).length + id.length + 8 + recLen(e.packId, id))) {
+          res.skipped.push(skipLine(e, 'the library is full; not added'));
+          continue;
+        }
+        paths.push(put(['songs', id], song));
+        recs[e.packId] = { id, hash: e.hash, sig: songFingerprint(state.songs[id]) };
+        added.push(id);
+      }
+      for (const line of res.skipped) warn(`patch pack: ${line}`);
+      if (!paths.length && !relinked) return res;
+      if (added.length) {
+        paths.push(put(['songOrder'], [...state.songOrder, ...added]));
+        if (!state.settings.currentSongId) paths.push(put(['settings', 'currentSongId'], added[0]));
+      }
+      paths.push(put(['meta', 'packSongs'], recs));
+      changed(paths, { seed: true });
+      res.added = added;
+      return res;
+    },
+    /**
+     * Song bank (O-AW-PP): add one pack song on request, at the end of the library order, with the same pack id
+     * record as topUpPacks (so later versions update it in place while unedited). Already in the library → that
+     * song, nothing added. A bank song deleted earlier may be added again: this is an explicit request.
+     * @param {object} e a pack entry
+     * @param {{select?:boolean}} [o] select: make it the current song
+     * @returns {{ok:true, id:string, existing?:true} | {ok:false, error:string}}
+     */
+    addPackSong(e, { select = false } = {}) {
+      if (!validPackEntry(e) || isReservedKey(e.packId)) return { ok: false, error: 'That is not a pack song.' };
+      if (readOnlyReason !== null) return { ok: false, error: 'The library is read-only right now.' };
+      const recs = { ...packRecords() };
+      const rec = hasOwn(recs, e.packId) && isObj(recs[e.packId]) ? recs[e.packId] : null;
+      if (rec && state.songs[rec.id]) return { ok: true, id: rec.id, existing: true };
+      const res = { skipped: [] };
+      const id = idGen('song');
+      const song = tryPackSong(e, id, res);
+      if (!song) return { ok: false, error: res.skipped[0] || 'That song could not be read.' };
+      const grow = JSON.stringify(song).length + (rec ? 0 : e.packId.length + id.length + 64); // PP-5: the record
+      if (JSON.stringify(state).length + grow > LIBRARY_MAX_CHARS) {
+        return { ok: false, error: 'The library is full: delete some songs first.' };
+      }
+      const paths = [put(['songs', id], song), put(['songOrder'], [...state.songOrder, id])];
+      recs[e.packId] = { id, hash: e.hash, sig: songFingerprint(state.songs[id]) };
+      paths.push(put(['meta', 'packSongs'], recs));
+      if (select || !state.settings.currentSongId) paths.push(put(['settings', 'currentSongId'], id));
+      changed(paths);
+      return { ok: true, id };
+    },
+    /**
+     * Pack songs in the library now. @returns {Object<string,string>} pack id → library song id (deleted ones are
+     * left out)
+     */
+    packSongs() {
+      const out = {};
+      for (const [k, r] of Object.entries(packRecords())) if (r && state.songs[r.id]) out[k] = r.id;
+      return out;
+    },
+    /** @param {string} songId @returns {string|null} the pack id a library song came from */
+    packIdOf(songId) {
+      for (const [k, r] of Object.entries(packRecords())) if (r && r.id === songId && state.songs[songId]) return k;
+      return null;
     },
 
     /** Whole library as JSON (for export files and Electron auto-backups). */

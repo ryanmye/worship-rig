@@ -105,6 +105,11 @@ run them one at a time; `run-all` does that for you.
     modules are packaged, the rest of `tools/` is not).
   - **GarageBand/Logic conversions are Apple-licensed personal content. Never commit them, package them or copy them
     into `app/`.** `.gitignore` and electron-builder `files` both exclude `user-samples/`.
+- Patch packs (2.x step 1, DECISIONS O-AW-PP): `<My Samples root>/<slug>/songs/*.json` (song export files or arrays),
+  optional `pack.json` `{mode:'auto'|'bank'}`. They go through `server.js` `scanUserPatches` → `GET /api/user-patches`
+  (advertised in `/api/health` only when a pack has songs), then `controller.rescanPatchPacks` → `store.topUpPacks`
+  (stable `packId`, records in `meta.packSongs`). Bank songs are added from Settings › My Samples › Song bank. The
+  layout is in `docs/patch-packs.md`. Pack songs are personal content, like My Samples: never commit them.
 - Optional sound packs (2.0.x, BACKLOG "2.0.x"):
   - These are the CC0 libraries VSCO 2 CE, Karoryfer and VCSL. Download and build them under `sound-packs/`
     (git-ignored), or onto Ryan's Mac under `~/Music/Worship Rig/Samples/`.

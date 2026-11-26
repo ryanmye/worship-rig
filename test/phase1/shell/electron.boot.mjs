@@ -16,6 +16,13 @@ const require = createRequire(import.meta.url);
 const { createServer } = require('../../../server.js');
 
 const fx = buildFixture();
+// O-AW-PP: one patch-pack song next to the fixture's instrument (an invented name)
+const fixtureSongs = path.join(fx.userSamples, 'Test Keys', 'songs');
+fs.mkdirSync(fixtureSongs, { recursive: true });
+const fixtureSlot = { instrument: { type: 'sampler', id: 'user:test-keys' } };
+fs.writeFileSync(path.join(fixtureSongs, 'fixture-song.json'), JSON.stringify({
+  app: 'worship-rig', kind: 'song', schema: 2, song: { name: 'Fixture Song', patch: { slots: [fixtureSlot] } },
+}));
 let run;
 // L-30: a status item macOS parked (full menu bar); main.js reads it instead of tray.getBounds() under RIG_SELFTEST
 const FAKE_TRAY_BOUNDS = '{"x":0,"y":982,"width":0,"height":0}';
@@ -180,6 +187,14 @@ test('My Samples in Electron: userSamplesDir/getInfo roots, rescan count, manife
   assert.match(u.url, /\/user-samples\/[A-Za-z0-9_-]+\/Test%20Keys\/v%201\/A3\.wav$/);
   assert.equal(u.status, 206);
   assert.equal(u.type, 'audio/wav');
+});
+
+test('patch packs in Electron: advertised in /api/health, /api/user-patches answers 200 behind the S4 key', () => {
+  const p = run.report.result.steps.userPatchesHttp;
+  assert.equal(p.health, true);
+  assert.deepEqual(p.features, ['user-samples', 'user-patches']);
+  assert.equal(p.status, 200);
+  assert.deepEqual(p.ids, ['Test Keys:fixture-song.json']);
 });
 
 test('auto-backups land in userData/backups and only the newest 10 are kept', () => {

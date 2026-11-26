@@ -15,6 +15,7 @@ import { mountKeyboards } from './settings-keyboards.js';
 import { clickSettingsOf } from '../shared/click-math.js';
 import { mountGarageBandImport } from './settings-import.js';
 import { POLYPHONY_CHOICES, BUFFER_FRAMES_CHOICES, VOICE_LIMIT_CHOICES, sound2Of, programChangeOf } from '../store.js';
+import { searchBank } from '../shared/patch-packs.js';
 
 const C = await loadComponents();
 
@@ -1363,8 +1364,93 @@ export function mountSettings(el, ctx) {
       console.warn('[settings] rescan user samples', err);
       toast('The My Samples folder could not be scanned.', 'error');
     }
+    // O-AW-PP: a pack's songs/ sit in the same folders; reading them here finds a first pack without a restart
+    if (canPacks() && typeof controller.rescanPatchPacks === 'function') {
+      await controller.rescanPatchPacks().catch((err) => console.warn('[settings] rescan patch packs', err));
+      renderPacks();
+    }
     await renderSamples();
   }
+  // ---- Patch packs + Song bank (2.x step 1, DECISIONS O-AW-PP; the bank picker is provisional). Shown only when
+  // the server lists pack songs (controller.patchPacks().enabled), so a setup without packs looks as before.
+  const packsLine = h('p.st-packs-status', { 'aria-live': 'polite', hidden: true });
+  const packsBtns = h('div.st-inline.st-packs', { hidden: true });
+  const bankSearch = h('input.st-bank-search', {
+    type: 'search', placeholder: 'Search title or artist', 'aria-label': 'Search the Song bank',
+  });
+  const bankList = h('ul.st-bank-list');
+  const bankBox = h('details.st-bank', { hidden: true },
+    h('summary', { text: 'Song bank' }),
+    h('p.st-hint', { text: 'Songs from bank packs are not added on their own. Add the ones you need.' }),
+    bankSearch,
+    bankList,
+  );
+  const canPacks = () => !!(controller && typeof controller.patchPacks === 'function');
+  const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+  function renderBank(p) {
+    const items = searchBank(p.bank, bankSearch.value);
+    const rows = items.map((it) => {
+      const bits = [it.artist, it.originalKey && `Key ${it.originalKey}`, it.bpm && `${it.bpm} BPM`, it.timeSig]
+        .filter(Boolean);
+      // skeptic PP-3: every row's button names its song for screen readers (not ten "Add to library"s)
+      const add = it.inLibrary
+        ? btn('In library', () => {}, { class: 'st-bank-add', disabled: true, 'aria-label': `${it.title}: in library` })
+        : btn('Add to library', () => addBankSong(it.packId),
+          { class: 'st-bank-add', 'aria-label': `Add ${it.title} to library` });
+      return h('li.st-bank-item', { 'data-pack-id': it.packId },
+        h('span.st-bank-title', { text: it.title }),
+        h('span.st-bank-meta', { text: bits.join(' · ') }),
+        add,
+      );
+    });
+    const none = p.bank.length ? 'No song matches.' : 'The Song bank is empty.';
+    if (!rows.length) rows.push(h('li.st-bank-none', { text: none }));
+    bankList.replaceChildren(...rows);
+  }
+  function renderPacks() {
+    const p = canPacks() ? controller.patchPacks() : null;
+    const on = !!(p && p.enabled && p.songs > 0);
+    packsLine.hidden = !on;
+    packsBtns.hidden = !on;
+    bankBox.hidden = !(on && p.bankSongs > 0);
+    if (!on) return;
+    const bank = p.bankSongs ? `, ${p.bankSongs} of them in the Song bank` : '';
+    setText(packsLine, `Patch packs: ${plural(p.songs, 'song')} from ${plural(p.packs, 'pack')}${bank}.`);
+    const title = 'Look for new or changed patch pack songs';
+    packsBtns.replaceChildren(btn('Rescan', rescanPacks, { class: 'st-packs-rescan', title }));
+    if (!bankBox.hidden) renderBank(p);
+  }
+  async function rescanPacks() {
+    if (!canPacks() || typeof controller.rescanPatchPacks !== 'function') return null;
+    const b = packsBtns.querySelector('.st-packs-rescan');
+    if (b) b.disabled = true;
+    let r = null;
+    try {
+      r = await controller.rescanPatchPacks();
+    } catch (err) {
+      console.warn('[settings] rescan patch packs', err);
+    }
+    if (r && r.enabled) {
+      const n = r.added.length;
+      const u = r.updated.length;
+      toast(n || u ? `Patch packs: ${plural(n, 'song')} added, ${plural(u, 'song')} updated.`
+        : 'Patch packs: nothing new.');
+    }
+    renderPacks();
+    return r;
+  }
+  function addBankSong(packId) {
+    const r = controller.addFromBank(packId);
+    if (r && r.ok) {
+      const song = store.getSong(r.id);
+      const name = song ? song.name : 'the song';
+      toast(r.existing ? 'That song is already in your library.' : `Added “${name}” to your library.`);
+    } else toast((r && r.error) || 'The song could not be added.', 'error');
+    renderPacks();
+  }
+  listen(bankSearch, 'input', () => canPacks() && renderBank(controller.patchPacks()));
+  listen(controller, 'user-patches', () => isOpen && renderPacks());
+
   // v11-importer (Mac app only): "Import from GarageBand / Logic…" converts instruments in a worker, then Rescans
   const gbImport = rig && typeof rig.garageBandScan === 'function' && typeof rig.garageBandImport === 'function'
     ? mountGarageBandImport({ rig, h, btn, rescan: () => rescanSamples(), host: dialog })
@@ -1416,6 +1502,9 @@ export function mountSettings(el, ctx) {
       samplesNote,
       samplesBtns,
       samplesStatus,
+      packsLine,
+      packsBtns,
+      bankBox,
       gbImport ? h('div.st-inline.st-gb-entry', {}, gbImport.button) : null,
       gbImport ? gbImport.line : null,
       h('details.st-howto', {},
@@ -1907,6 +1996,7 @@ export function mountSettings(el, ctx) {
     renderStats();
     renderAbout();
     renderSamples();
+    renderPacks();
     restoreIdle();
     previousIdle();
     if (updates) updates.refresh();
