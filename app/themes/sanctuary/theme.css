@@ -72,7 +72,7 @@
     --slot-0: #f7775f;         /* Keys: coral-ember glass, pulled off the lock amber (stage critic: ΔE 6.9 → 11.4) */
     --slot-1: #5fc98a;         /* Pad: emerald glass, off v1's mint (warmth critic); ink 9.3:1, vs OFF pane 8.4:1 */
     --slot-2: #7ad1f7;         /* Extra: sky glass, lighter than Bass (deutan separation, research §5.3) */
-    --slot-3: #b073da;         /* Bass: amethyst glass */
+    --slot-3: #bc8ae0;         /* Bass: amethyst glass (U8b: #b073da, ON label 4.3:1 in its ink window; now 5.0:1) */
     --danger: #ef5b4f;
     --warn: #f7a23d;
     --ok: #6ed889;

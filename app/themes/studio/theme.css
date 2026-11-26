@@ -53,7 +53,7 @@
     --slot-0: #f47e4f;      /* Keys   ink on it 6.6:1 */
     --slot-1: #6fd183;      /* Pad    9.2:1 */
     --slot-2: #9edaff;      /* Extra  11.5:1 */
-    --slot-3: #b37fd2;      /* Bass   5.7:1 */
+    --slot-3: #bd90d9;      /* Bass   6.4:1 (U8b: #b37fd2 was 4.4:1 under the ON label's 14 % ink window) */
     --ink-on-lamp: #1f1915;
     --drone: #ebd9ae;
     --fx: #c9bba9;

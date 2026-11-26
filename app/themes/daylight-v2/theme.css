@@ -45,7 +45,8 @@
   &:root { color-scheme: dark; }
   &:root[data-mode="light"] { color-scheme: light; }
   /* Day's slot pastels as plain values (0,2,0 beats the Stage values on &:root; see the note at --slot-0) */
-  &:root[data-mode="light"] { --slot-0: #f28a4c; --slot-1: #79c68f; --slot-2: #7cc4ee; --slot-3: #a883d4; }
+  /* U8b: Bass #a883d4 → #b495db: its ON label (dark ink in a 14 % ink window) was 4.4:1, now 5.3:1 */
+  &:root[data-mode="light"] { --slot-0: #f28a4c; --slot-1: #79c68f; --slot-2: #7cc4ee; --slot-3: #b495db; }
 
   /* ================================================================ tokens: light-dark(day, stage)
      Day neutrals: OKLCH hue 70–85 (oat paper), chroma ≤ 0.02. Stage: walnut, hue 57–67, chroma 0.013–0.019.
@@ -225,7 +226,8 @@
   & .st-dialog { background: var(--panel); box-shadow: var(--dl-pop-shadow); border-radius: 18px; }
   & .st-title { font: 650 24px/1.1 var(--dl-title); }
   & .st-section { background: var(--panel-2); }
-  & :is(.st-status.warn, .st-map-note) { color: var(--dl-warn-text) !important; }
+  /* U8b (UI6-U6 O3): the engine note is a warning too: --warn as text was 1.88:1 on Day's paper */
+  & :is(.st-status.warn, .st-map-note, .st-engine-note) { color: var(--dl-warn-text) !important; }
   & .st-doc-link { color: var(--focus); }
 
   /* ================================================================ cards */
@@ -606,6 +608,11 @@
   & :is(.eqk-bands select, .eqk-bands input[type=text], .eqk-cut input, .eqk-paste textarea) {
     background: var(--panel-2); border-color: var(--line-2); color: var(--text);
   }
+  /* U8b: the rule above also took the focus border (eq-keyboard.css draws focus as the border, outline none), so a
+     focused field showed nothing; and the plot's focus ring sits on the walnut bezel, where Day's ink-blue --focus
+     was 2.5:1: the display's own light blue (7:1 on the bezel) */
+  & :is(.eqk-bands, .eqk-cut) input:focus { border-color: var(--focus); }
+  & .eqk-graph :focus-visible { outline-color: #7cc4ff; }
   /* the OFF switch was a slate pill (#2a2f37), darker than the ON one on paper: OFF is a hollow track, ON is filled */
   & .eqk-onoff { background: var(--panel-2); border-color: var(--track-edge); }
   & .eqk-onoff::after { background: var(--track-edge); }
