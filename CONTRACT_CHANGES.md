@@ -8078,4 +8078,13 @@ are today's.
   new = `scenes.save(count)`. The fold is per device: `localStorage['worship-rig.v6.snapshots'] = 'folded'`.
 - **Colours by position:** `--slot-0..3`, then `--v6-pos-4..6` (#e46aa0, #c9d867, #6f9cf0, the mockup's POS_COL),
   repeating every 7 (`views/v6/lib.js slotColor`).
-- Tests: `node test/phase2/ui-v6/run.mjs` (14 checks, ~75 s idle; in run-all as `ui-v6`, phase2). Engine untouched.
+- Tests: `node test/phase2/ui-v6/run.mjs` (16 checks, ~80 s idle; in run-all as `ui-v6`, phase2) and
+  `test/phase1/shell/ui-v6-store.test.mjs` (the uiV6 store rules). Engine untouched.
+- **Skeptic pass** (`native/docs/reviews/UI6-U1.md`):
+  - An empty strip now shows a zero fader with no dB and every chip off. Before, it kept the values of the instrument
+    that sat there before a Remove (F1).
+  - A ⋯ menu or step panel closes when the song's slot count changes (F2).
+  - Below 760 px of height the stage uses tighter gaps and padding (F3). At 1024 × 700 the fader track is 114 px
+    with 7 instruments, up from 58, and 156 px with 4, up from 102. Today's Perform has 141 px there.
+  - The snapshot row's Update / Save as new are 44 px (F4).
+  - No interface change.

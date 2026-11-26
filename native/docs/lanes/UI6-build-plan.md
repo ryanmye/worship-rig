@@ -34,8 +34,12 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 | U8 | iPad layouts (landscape = Mac; portrait stacks), edge states (loading, MIDI off, audio stalled, first run, Lock), all 8 themes incl. the two day themes (contrast audit via tools/themes/shoot.mjs). Menu bar popover unchanged. | all | U1–U7 |
 | U9 | Ryan's review on his Mac, finishing touches, then flip the default and retire the old views (tier 1: Ryan says when). | — | U8 |
 
-## U1 status (builder, 2026-11-26; lane-u1, awaiting the skeptic)
+## U1 status (builder, 2026-11-26; lane-u1; skeptic pass done, see below)
 
+- **Skeptic (2026-11-26): PARTIAL as delivered, VERIFIED after fixes.** The review is
+  `native/docs/reviews/UI6-U1.md`. It fixed four defects: stale values on empty strips, menus outliving a slot
+  shift, a 58 px fader at 1024 × 700 and 36 px snapshot links. It added a uiV6 store unit test, and the ui-v6 suite
+  is now 16/16. Open for Ryan: PANIC and Lock now need a hold, and there is no Mac-app switch yet (O1–O3).
 - Built: `settings.uiV6` + `?ui6=1` / `__rig.setUiV6`; `app/js/views/v6/` (`perform.js` shell, `songbar.js`,
   `snapshots.js`, `strips-row.js`, `strip.js`, `bottom.js`, `lib.js`) and `app/styles-v6.css`; suite
   `test/phase2/ui-v6/run.mjs` (in run-all). Interface notes: CONTRACT_CHANGES "## UI v6 U1".
