@@ -233,11 +233,10 @@ function enhance(api, d) {
   function renderLearned(ml = S().midiLearn || {}) {
     const ids2 = Object.keys(ml).filter((k) => ml[k]);
     const rows = ids2.map((id) => {
-      const clear = learnRowOf(id)?.querySelector('.st-clear');
       const name = api.learnName(id);
-      // Forget = that row's own Clear / Remove (one code path)
-      const forget = clear ? button('Forget', () => clear.click(), { class: 'v6-st-forget',
-        'aria-label': `Forget ${name}`, 'data-control': id }) : null;
+      // Forget = that row's own Clear / Remove (one code path); its click is the list's one listener below
+      const forget = learnRowOf(id)?.querySelector('.st-clear') ? h('button.ed-btn.v6-st-forget', { type: 'button',
+        'aria-label': `Forget ${name}`, 'data-control': id }, 'Forget') : null;
       return h('div.v6-st-lrn', { role: 'listitem', 'data-control': id },
         h('span.v6-st-ctl', { text: api.mappingText(ml[id]) }),
         h('span.v6-st-arr', { 'aria-hidden': 'true', text: '→' }),
@@ -246,6 +245,13 @@ function enhance(api, d) {
     if (!rows.length) rows.push(h('p.st-hint.v6-st-none', { text: 'Nothing learned yet.' }));
     lrnList.replaceChildren(...rows);
   }
+  // UI6-U6 skeptic F3: one listener for every Forget. A listener per button went into the undo journal on each render
+  // (every open, every settings write), so the journal and the detached buttons it held grew for as long as the flag
+  // stayed on. Looked up at click time, so a table today's renderLearn rebuilt is followed too.
+  listen(lrnList, 'click', (e) => {
+    const b = e.target instanceof Element ? e.target.closest('.v6-st-forget') : null;
+    if (b) learnRowOf(b.dataset.control)?.querySelector('.st-clear')?.click();
+  });
   renderLearned();
 
   // ---------------------------------------------------------------- Perform layout

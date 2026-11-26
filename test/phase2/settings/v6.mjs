@@ -494,6 +494,52 @@ export async function runV6({ browser, createServer, ROOT, SHOTS, results }) {
         }
       });
 
+    await T('UI6-U6 skeptic F3: the learned list’s Forget buttons hold no listeners once re-rendered (no journal '
+      + 'growth while the flag stays on)', async () => {
+      // count click listeners added to / removed from Forget buttons from here on
+      await ev(() => {
+        const P = EventTarget.prototype;
+        const add = P.addEventListener;
+        const rem = P.removeEventListener;
+        const live = new Map();
+        window.__forget = { live, add, rem };
+        P.addEventListener = function (type, fn, o) {
+          if (this instanceof Element && this.classList.contains('v6-st-forget')) {
+            live.set(this, (live.get(this) || 0) + 1);
+          }
+          return add.call(this, type, fn, o);
+        };
+        P.removeEventListener = function (type, fn, o) {
+          if (this instanceof Element && live.has(this)) live.set(this, live.get(this) - 1);
+          return rem.call(this, type, fn, o);
+        };
+      });
+      try {
+        await ev(() => {
+          window.__rig.store.setMidiLearn('slots.0.gain', { cc: 20, channel: 0 });
+          window.__rig.store.setMidiLearn('swell', { cc: 21, channel: 0 });
+        });
+        for (let i = 0; i < 4; i++) {
+          await open('midilearn');
+          await close();
+        }
+        const held = await ev(() => [...window.__forget.live].filter(([b, n]) => n > 0 && !b.isConnected).length);
+        assert.equal(held, 0, 'detached Forget buttons still listened to (held by the undo journal)');
+        // Forget still works (one delegated listener)
+        await open('midilearn');
+        await page.click('[data-testid="settings-learned"] .v6-st-forget[data-control="swell"]');
+        await until(() => !window.__rig.store.get().settings.midiLearn.swell);
+        await page.click('[data-testid="settings-learned"] .v6-st-forget[data-control="slots.0.gain"]');
+        await until(() => !window.__rig.store.get().settings.midiLearn['slots.0.gain']);
+        await close();
+      } finally {
+        await ev(() => {
+          EventTarget.prototype.addEventListener = window.__forget.add;
+          EventTarget.prototype.removeEventListener = window.__forget.rem;
+        });
+      }
+    });
+
   } finally {
     await T('zero console.error', async () => {
       assert.deepEqual(errors, []);
