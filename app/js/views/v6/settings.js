@@ -252,13 +252,26 @@ function enhance(api, d) {
   const layoutPanel = panels.get('layout');
   const sb = sidebarLayout();
   const czBox = h('div.v6-st-cz', { 'data-testid': 'settings-sidebar-modules' });
-  const czD = disposer();
-  d.add(() => czD.dispose());
-  const renderCz = customizeList(czBox, czD, { mods: sb.mods, prefs: sb.prefs, heading: false,
-    commit: (next) => {
-      sb.commit(next);
-      refresh();
-    } });
+  // the list exists only while Settings is open: the sidebar's own ⋯ popover builds the same rows (same testids and
+  // classes), and Settings is modal, so the two are never on screen together
+  let cz = null;
+  function mountCz() {
+    if (cz) return cz.render();
+    const pd = disposer();
+    const render = customizeList(czBox, pd, { mods: sb.mods, prefs: sb.prefs, heading: false,
+      commit: (next) => {
+        sb.commit(next);
+        refresh();
+      } });
+    cz = { pd, render };
+  }
+  function unmountCz() {
+    if (!cz) return;
+    cz.pd.dispose();
+    cz = null;
+    czBox.replaceChildren();
+  }
+  d.add(unmountCz);
   const snapSeg = api.C.segmented({
     label: 'Snapshots row',
     options: [{ value: 'shown', label: 'Shown' }, { value: 'folded', label: 'Folded' }],
@@ -276,7 +289,7 @@ function enhance(api, d) {
     h('h2.st-h2', { text: 'Perform' }),
     row('Snapshots row', snapSeg.el, 'Folded: one Snapshot chip in the song bar instead.')), layoutPanel);
   const renderLayout = () => {
-    renderCz();
+    if (api.isOpen()) mountCz();
     snapSeg.set(snapsFolded() ? 'folded' : 'shown');
   };
   renderLayout();
@@ -547,6 +560,7 @@ function enhance(api, d) {
 
   // ---------------------------------------------------------------- open / close
   listen(api.el, 'settings-close', () => {
+    unmountCz();
     if (query) {
       input.value = '';
       runSearch('');
