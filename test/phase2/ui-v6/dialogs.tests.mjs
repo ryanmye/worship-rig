@@ -282,6 +282,27 @@ export async function dialogTests(x) {
       store.set(`songs.${id}.patch.slots.2.muted`, true);
     });
     await until(() => document.querySelectorAll('[data-testid^="v6-snap-"][data-n]').length === 0);
+    // the name heuristic (dialogs.js suggestSnapshotName, D25), on made-up songs
+    const sg = await ev(async () => {
+      const { suggestSnapshotName: f } = await import('./js/views/v6/dialogs.js');
+      const names = { name: (r) => r.id };
+      const sl = (id, gain, muted) => ({ instrument: { type: 'synth', id }, gain: muted ? 0 : gain,
+        ...(muted ? { muted: true, gainBeforeMute: gain } : {}) });
+      const songOf = (slots, dg = 1) => ({ patch: { slots }, drone: { mode: 'synth', gain: dg } });
+      const own = songOf([sl('A', 0.5), sl('B', 0.5), sl('C', 0.5), sl('D', 0.5)]);
+      return [
+        f(songOf([sl('A', 0.5), sl('B', 0.5), sl('C', 0.5, true), sl('D', 0, false)]), own, names),
+        f(songOf([sl('A', 0.9), sl('B', 0.9), sl('C', 0.9), sl('D', 0.9)]), own, names),
+        f(songOf([sl('A', 0.2), null, sl('C', 0.5, true), sl('D', 0.5, true)]), own, names),
+        f(songOf([sl('A', 0.5), sl('B', 0.5, true), sl('C', 0.5, true), sl('D', 0.5, true)], 2), own, names),
+        f(songOf([sl('A', 0, true)], 0.5), songOf([sl('A', 0.5)]), names),
+        f(songOf([sl('A', 0, true)], 0), songOf([sl('A', 0.5)]), names),
+        f(songOf([sl('A', 0.5), sl('B', 0.5)]), own, names, ['a + b', 'A + B 2']),
+        f(songOf([sl('x'.repeat(30), 0.5), sl('y'.repeat(30), 0.5)]), own, names).length,
+      ];
+    });
+    assert.deepEqual(sg, ['A + B', 'A + B + 2 more, louder', 'A, softer', 'A, drone up', 'Drone only', 'All off',
+      'A + B 3', 40]);
     await page.click(tid('v6-snap-save'));
     await until(() => !!document.querySelector('[data-testid="v6-savesnap"]'));
     const d0 = await ev(() => ({
@@ -387,6 +408,19 @@ export async function dialogTests(x) {
     } finally {
       await ev(() => window.__rig.store.set('settings.performLock', false));
     }
+    // a footswitch step to another snapshot, or a song switch, closes it (Update would name the wrong one)
+    await page.click(tid('v6-snap-save'));
+    await until(() => !!document.querySelector('[data-testid="v6-savesnap-update"]'));
+    await ev(() => window.__rig.controller.scenes.next());
+    await until(() => !document.querySelector('[data-testid="v6-savesnap"]'));
+    await page.click(tid('v6-snap-save'));
+    await until(() => !!document.querySelector('[data-testid="v6-savesnap"]'));
+    const sid0 = (await song()).id;
+    await ev(() => window.__rig.controller.nextSong());
+    await until(() => !document.querySelector('[data-testid="v6-savesnap"]'));
+    await ev((id) => window.__rig.controller.selectSong(id), sid0);
+    await until((id) => window.__rig.store.currentSong().id === id, sid0);
+    await settled();
     await ev(() => {
       const { store, controller } = window.__rig;
       controller.scenes.go(null);

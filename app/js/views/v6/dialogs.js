@@ -22,7 +22,8 @@ const levelDb = (slot) => db(slotMuteState(slot).level);
  *   1. the instruments that are on (ON and above silence), by position: "Piano", "Piano + Warm Pad", or
  *      "Piano + Warm Pad + 2 more"; none on = "Drone only" when the drone plays, else "All off";
  *   2. then ", louder" / ", softer" when those instruments are on average more than SUGGEST_DB louder / softer than the
- *      song's own levels, else ", drone up" / ", drone down" when the drone level moved that much;
+ *      song's own levels, else ", drone up" / ", drone down" when the drone level moved that much (neither word when
+ *      no instrument is on);
  *   3. cut to SCENE_NAME_MAX; " 2", " 3" … added when another snapshot of the song has that name.
  * A snapshot holds levels, ON switches, the drone level and the wheel (shared/scenes.js), so the words only ever name
  * those (never "warmer": tone is not in a snapshot).
@@ -50,7 +51,7 @@ export function suggestSnapshotName(live, own, names, taken = []) {
     if (dd > SUGGEST_DB) word = 'louder';
     else if (dd < -SUGGEST_DB) word = 'softer';
   }
-  if (!word && live.drone && own?.drone) {
+  if (!word && on.length && live.drone && own?.drone) {
     const dd = db(live.drone.gain) - db(own.drone.gain);
     if (dd > SUGGEST_DB) word = 'drone up';
     else if (dd < -SUGGEST_DB) word = 'drone down';
@@ -74,12 +75,17 @@ export function suggestSnapshotName(live, own, names, taken = []) {
  * A modal dialog over the v6 stage: a dimmed backdrop (a tap on it cancels), Esc cancels (an overlay; never a panic),
  * focus goes to `o.focus` (else the first field) and back to nothing on close (Space stays the sustain pedal).
  * @param {object} v  the v6 view context (host)
+ * A song switch (a footswitch, the setlist) closes it: what it would write belongs to the song it was opened on.
  * @param {{label:string, testid:string, className?:string, build:(body:HTMLElement, pd:object, close:() => void) =>
  *   (HTMLElement|void), onClose?:(reason:string) => void}} o  build returns the element to focus
  * @returns {{el:HTMLElement, close():void}}
  */
 export function modalDialog(v, o) {
   const pd = disposer();
+  const songId = v.store.get().settings.currentSongId;
+  pd.add(v.store.subscribe((state) => {
+    if (state.settings.currentSongId !== songId || state.settings.view !== 'perform') queueMicrotask(close);
+  }));
   const dlg = h(`div.v6-dlg${o.className ? `.${o.className}` : ''}`, {
     role: 'dialog', 'aria-modal': 'true', 'aria-label': o.label, 'data-testid': o.testid,
   });
@@ -190,6 +196,11 @@ export function saveSnapshotDialog(v, o = {}) {
         title: list.length >= max ? `${max} snapshots is the most a song keeps for now` : say('sceneSaveTitle',
           { n: list.length + 1 }) });
       const nameNow = () => field.input.value;
+      // the playing snapshot changed under the dialog (a footswitch, the bus): Update would name the wrong one
+      pd.listen(controller, 'scene', () => {
+        const now = controller.scenes.state();
+        if (now.id !== sc.id || now.n !== sc.n || now.count !== list.length) close();
+      });
       function doUpdate() {
         if (!playing) return;
         const nm = touched ? sceneNameOf(nameNow()) : playing.name || null;
