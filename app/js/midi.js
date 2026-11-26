@@ -41,6 +41,12 @@ export const LEARN_IGNORED_CCS = Object.freeze([120, 121, 122, 123, 124, 125, 12
 export const LEARN_STRUCTURAL_CCS = Object.freeze([0, 32, 6, 38, 96, 97, 98, 99, 100, 101]);
 /** Switch-type pedal CCs (sustain, sostenuto, soft): never a fader. */
 export const PEDAL_CCS = Object.freeze([64, 66, 67]);
+/**
+ * learn() kinds. UI v6 U7c: 'control' = the next knob, fader, pedal, key or pad (controller.learnCapture, MIDI Learn on
+ * Perform: the knob first, the target after): like 'any', except that the structural CCs are skipped as for 'fader' /
+ * 'button' (delivered normally), so an NRPN knob is never taken as its CC 99.
+ */
+export const LEARN_ACCEPTS = Object.freeze(['fader', 'button', 'any', 'control']);
 /** Suggested CC travel for learn(…, {motion}) to filter pot jitter (default motion is 0). */
 export const LEARN_MOTION = 8;
 
@@ -522,7 +528,7 @@ export class MidiInput extends EventTarget {
       return true;
     }
     if (l.accept === 'fader' && PEDAL_CCS.includes(d1)) return false;
-    if (l.accept === 'any') {
+    if (l.accept === 'any' || l.accept === 'control') {
       this._finishLearn({ cc: d1, channel, inputId });
       return true;
     }
@@ -544,9 +550,10 @@ export class MidiInput extends EventTarget {
    * {error:'sustain-pedal-reserved', …} when CC64 arrives, or null after the timeout / cancelLearn().
    * The gesture that completes learning is not forwarded as a normal event.
    * @param {string} controlId
-   * @param {{timeoutMs?:number, accept?:'fader'|'button'|'any', motion?:number}} [o]  fader: continuous CC only
-   *        (motion > 0: it must travel that far within the learn first);
-   *        button: note-on or CC press ≥ 64; any: first note-on or CC (CC64/120–127 still excluded)
+   * @param {{timeoutMs?:number, accept?:'fader'|'button'|'any'|'control', motion?:number}} [o]  fader: continuous CC
+   *        only (motion > 0: it must travel that far within the learn first);
+   *        button: note-on or CC press ≥ 64; any: first note-on or CC (CC64/120–127 still excluded); control: as any,
+   *        without the structural CCs (U7c)
    * @returns {Promise<{cc?:number, note?:number, channel:number, inputId:string, controlId:string, error?:string}|null>}
    */
   learn(controlId, { timeoutMs = 10000, accept = 'any', motion = 0 } = {}) {
@@ -558,7 +565,7 @@ export class MidiInput extends EventTarget {
           resolve(null);
         }
       }, timeoutMs);
-      this._learn = { controlId, resolve, timer, accept: ['fader', 'button', 'any'].includes(accept) ? accept : 'any', motion: Number(motion) > 0 ? Number(motion) : 0, seen: new Map() };
+      this._learn = { controlId, resolve, timer, accept: LEARN_ACCEPTS.includes(accept) ? accept : 'any', motion: Number(motion) > 0 ? Number(motion) : 0, seen: new Map() };
     });
   }
 

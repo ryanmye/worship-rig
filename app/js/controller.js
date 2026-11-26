@@ -49,7 +49,7 @@ import { createMidiClock } from './midi-clock.js';
 import { normalizeBank, packModeOf, validPackEntry } from './shared/patch-packs.js';
 import {
   SCENE_MAX, SCENE_GLIDE_SEC, scenesOf, applyScene, captureScene, levelsOf, levelDiff, stepScene, withScene,
-  withoutScene, tweakScene,
+  withoutScene, tweakScene, sceneNameOf,
 } from './shared/scenes.js';
 
 /** Menu-bar modes (docs/menubar-mode.md): the popover shows at most this many. */
@@ -131,6 +131,10 @@ const CC_RETRIGGER_MS = 150;
  * drag's input rate); the last value of a burst is written when the window ends. The fixed 1.x rows are not throttled.
  */
 export const LEARN_WRITE_MS = 20;
+/** UI v6 U7c: the controlId midi.learn carries while learnCapture() waits (never stored: learn(id, {heard}) stores). */
+export const LEARN_CAPTURE_ID = '(capture)';
+/** Switch-type pedal CCs (sustain, sostenuto, soft): never a fader (= midi.js PEDAL_CCS, kept here for heardFor). */
+const PEDAL_SWITCH_CCS = Object.freeze([64, 66, 67]);
 /** L11-8: wait this long after low-resource turns on (release tails end) before the one GC. */
 const LOWRES_GC_MS = 3000;
 /** 'memory' event note when pinned samples pass the cache cap (round4-controller C5: plain copy, never toasted). */
@@ -736,14 +740,20 @@ export function createController(o) {
   /**
    * Save what plays now (levels, mutes, drone level, the wheel when routed) as scene `n` of the current song: a new
    * scene (n = the count) or over an existing one. That scene then plays.
+   * D25 (UI v6 U7c): `o.name` names it (shared/scenes.js sceneNameOf; '' or null = no name, "Scene n"); without
+   * `o.name` an existing scene keeps its name, so a re-save from Quick / Update never drops it.
    * @param {number} n 0-based, ≤ the count, < SCENE_MAX
+   * @param {{name?:string|null}} [o]
    * @returns {boolean}
    */
-  function saveScene(n) {
+  function saveScene(n, o = {}) {
     if (!applied || targetId !== appliedId) return false;
     const cur = store.getSong(appliedId);
     if (cur !== applied) applyDiff(applied, cur); // pending edits first, under the scene that played them
-    const next = withScene(scenesOf(cur), n, captureScene(live(cur), { wheel: wheelNow() }));
+    const scene = captureScene(live(cur), { wheel: wheelNow() });
+    const name = o && 'name' in o ? sceneNameOf(o.name) : sceneNameOf(scenesOf(cur)[n]?.name);
+    if (scene && name) scene.name = name;
+    const next = withScene(scenesOf(cur), n, scene);
     if (!next) return false;
     store.set(`songs.${appliedId}.scenes`, next); // false when unchanged (the same scene saved again)
     const saved = store.getSong(appliedId);
@@ -3748,11 +3758,14 @@ export function createController(o) {
    *   timeout / cancelled
    */
   async function learn(controlId, o = {}) {
-    if (!midi || typeof midi.learn !== 'function') return null;
+    const { heard, ...lo } = o || {};
+    if (!heard && (!midi || typeof midi.learn !== 'function')) return null;
     if (settings().performLock) return { error: 'perform-locked' };
     if (!isLearnable(controlId) && !isLearnablePath(controlId)) return { error: 'not-learnable' };
     const accept = isButtonControl(controlId) ? 'button' : 'fader';
-    const res = await midi.learn(controlId, { ...o, accept });
+    // UI v6 U7c (MIDI Learn on Perform): the knob can come first. `heard` = a control learnCapture() already took;
+    // it is checked as midi.learn would have checked it for this kind of target, then stored the same way
+    const res = heard ? heardFor(heard, accept) : await midi.learn(controlId, { ...lo, accept });
     if (!res) return null;
     if (settings().performLock) return { error: 'perform-locked' };
     if (res.error) return { error: res.error, cc: res.cc, channel: res.channel };
@@ -3769,6 +3782,44 @@ export function createController(o) {
     store.setMidiLearn(controlId, mapping); // (false when the same mapping is learned again: nothing changed)
     pickups.delete(controlId);
     return replaced.length ? { ...mapping, replaced } : mapping;
+  }
+  /**
+   * UI v6 U7c: a control learnCapture() took, checked for a target of kind `accept` with midi.js's own rules: a fader
+   * takes a CC that is not a pedal switch (CC64 is never learnable); a button takes a note or a CC.
+   * @param {{cc?:number, note?:number, channel?:number|null}} h
+   * @param {'fader'|'button'} accept
+   * @returns {{cc?:number, note?:number, channel:number|null}|{error:string, cc?:number, channel?:number|null}|null}
+   */
+  function heardFor(h, accept) {
+    const ch = Number.isInteger(h && h.channel) && h.channel >= 0 && h.channel < 16 ? h.channel : null;
+    const int7 = (x) => Number.isInteger(x) && x >= 0 && x <= 127;
+    if (h && int7(h.cc)) {
+      if (h.cc === 64) return { error: 'sustain-pedal-reserved', cc: 64, channel: ch };
+      if (accept === 'fader' && PEDAL_SWITCH_CCS.includes(h.cc)) return { error: 'needs-knob', cc: h.cc, channel: ch };
+      return { cc: h.cc, channel: ch };
+    }
+    if (h && int7(h.note)) {
+      return accept === 'button' ? { note: h.note, channel: ch } : { error: 'needs-knob', channel: ch };
+    }
+    return null;
+  }
+  /**
+   * UI v6 U7c (MIDI Learn on Perform, "1 · Move a knob, fader or pad"): take the next knob, fader, pedal, key or pad
+   * without a target yet (midi.js learn accept 'control': like 'any', but bank select / data entry / NRPN numbers are
+   * skipped and delivered normally, as for a fader or button learn). The gesture is swallowed like any learning
+   * gesture; nothing is stored. Pass the result to learn(id, {heard}) once the player has tapped the target.
+   * Refused under Perform Lock (turning the lock on cancels it, as for learn()); cancelLearn() ends it with null.
+   * @param {{timeoutMs?:number}} [o]
+   * @returns {Promise<{cc?:number, note?:number, channel:number}|{error:string}|null>}
+   */
+  async function learnCapture(o = {}) {
+    if (!midi || typeof midi.learn !== 'function') return null;
+    if (settings().performLock) return { error: 'perform-locked' };
+    const res = await midi.learn(LEARN_CAPTURE_ID, { timeoutMs: o.timeoutMs, accept: 'control' });
+    if (!res) return null;
+    if (settings().performLock) return { error: 'perform-locked' };
+    if (res.error) return { error: res.error, cc: res.cc, channel: res.channel };
+    return res.cc !== undefined ? { cc: res.cc, channel: res.channel } : { note: res.note, channel: res.channel };
   }
   /**
    * C1: the mappings a new `mapping` for `controlId` would contend with: same CC (or note) on an overlapping channel
@@ -4170,6 +4221,7 @@ export function createController(o) {
     revertSong,
     scenes,
     learn,
+    learnCapture,
     startClick,
     stopClick,
     toggleClick,

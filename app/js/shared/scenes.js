@@ -15,10 +15,15 @@
 // UIA (native DECISIONS D3): `slots` has one entry per slot of the song, at least SLOT_COUNT (so a 1.x scene keeps
 // its 4) and at most MAX_SLOTS; store.removeSlot drops a removed slot's entry from every scene, and (D23)
 // store.insertSlot / moveSlot move each entry with its slot.
+// D25 (UI v6 U7c, the Save snapshot dialog): an optional `name` (a string, trimmed, at most SCENE_NAME_MAX characters;
+// absent = "Scene n"). It names the scene and holds nothing else; no SCHEMA change, and a scene with only a name is
+// still unusable (dropped).
 import { SLOT_COUNT, MAX_SLOTS, clamp } from './params.js';
 
 /** Scenes per song. */
 export const SCENE_MAX = 3;
+/** D25: the longest scene name kept (longer ones are cut there; the v6 dialog's field has the same maxlength). */
+export const SCENE_NAME_MAX = 40;
 /** A scene change glides every level this long (v11-scenes: agreed 300–800 ms, no setting). */
 export const SCENE_GLIDE_SEC = 0.5;
 
@@ -32,6 +37,21 @@ function slotLevel(slot) {
   const before = fin(slot.gainBeforeMute) ? slot.gainBeforeMute : fin(slot.mutedGain) ? slot.mutedGain : null;
   const muted = slot.muted === true || (slot.muted === undefined && slot.gain === 0 && before !== null);
   return { gain: muted ? (before ?? 0) : slot.gain, muted };
+}
+
+/**
+ * D25: a scene name as stored: a string with its whitespace runs folded to one space and trimmed, cut to
+ * SCENE_NAME_MAX characters (by code point, so an emoji is never split); null for anything else or an empty name.
+ * @param {*} v
+ * @returns {string|null}
+ */
+export function sceneNameOf(v) {
+  if (typeof v !== 'string') return null;
+  // control characters out (a pasted tab / newline is whitespace and folds to one space)
+  const t = v.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!t) return null;
+  const cps = [...t];
+  return cps.length > SCENE_NAME_MAX ? cps.slice(0, SCENE_NAME_MAX).join('').trimEnd() : t;
 }
 
 /** UIA: entries a scene's `slots` gets: the song's slot count (default SLOT_COUNT), never under SLOT_COUNT. */
@@ -68,6 +88,8 @@ export function normalizeScene(raw, slotCount) {
     out.wheel = Math.min(1, Math.max(0, raw.wheel));
     any = true;
   }
+  const name = sceneNameOf(raw.name); // D25: optional; a bad value is dropped, it never makes a scene usable
+  if (name) out.name = name;
   return any ? out : null;
 }
 
