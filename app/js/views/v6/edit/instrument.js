@@ -74,6 +74,10 @@ const secs = (v) => {
 };
 const HOLD_TOP = PEDAL_HOLD_TRACK.top;
 const HOLD_NATURAL = PEDAL_HOLD_TRACK.natural;
+/** Per-mount id prefix for the category tabs / pane (aria-controls / aria-labelledby). */
+let mountSeq = 0;
+/** iPad portrait, where the category list is a row of tabs (styles-v6-edit.css; edit.js PORTRAIT_MQ). */
+const PORTRAIT_MQ = '(orientation: portrait) and (max-width: 1024px)';
 
 /**
  * dB of the EQ's highest high shelf / lowest low shelf (slot.js shelfDb; 0 when off or absent, round3-edit m1).
@@ -211,14 +215,22 @@ export function mountInstrument(host, ctx, opts, env) {
   const actions = h('div.v6e-iact', {}, chgBtn, menuEl);
   const confirmEl = h('div.v6e-confirm', { role: 'alertdialog', hidden: true, 'aria-label': 'Remove this sound' });
   const head = h('div.v6e-ihead', {}, bar, sentHost, actions);
-  const nav = h('nav.v6e-cnav', { role: 'tablist', 'aria-label': 'What to edit', 'data-testid': 'v6e-cnav' });
+  // skeptic UI6-U5a F1: a real tablist / tabpanel pair. The list is vertical (↑ / ↓) except at iPad portrait, where
+  // it is a row of tabs (← / →): aria-orientation says which (renderNav); each tab controls the pane, and the pane is
+  // labelled by the chosen tab (the ids are per mount: two panels never share them)
+  const uid = `v6e-${(mountSeq += 1)}`;
+  const portraitMq = typeof matchMedia === 'function' ? matchMedia(PORTRAIT_MQ) : null;
+  const contId = `${uid}-pane`;
+  const nav = h('nav.v6e-cnav', {
+    role: 'tablist', 'aria-label': 'What to edit', 'aria-orientation': 'vertical', 'data-testid': 'v6e-cnav',
+  });
   const navRecs = new Map();
   for (const c of CATEGORIES) {
     const dot = h('span.v6e-cd', { title: 'Changed since the song began', hidden: true });
     const sum = h('small.v6e-cn-sum');
     const b = h('button.v6e-cn', {
-      type: 'button', role: 'tab', 'aria-selected': 'false', tabindex: '-1', dataset: { cat: c.id },
-      'data-testid': `v6e-cat-${c.id}`,
+      type: 'button', role: 'tab', id: `${uid}-cat-${c.id}`, 'aria-controls': contId, 'aria-selected': 'false',
+      tabindex: '-1', dataset: { cat: c.id }, 'data-testid': `v6e-cat-${c.id}`,
     }, h('b', {}, h('span', { text: c.label }), dot), sum);
     b.addEventListener('click', () => choose(c.id, { persist: true }));
     nav.append(b);
@@ -228,7 +240,7 @@ export function mountInstrument(host, ctx, opts, env) {
     const ids = CATEGORY_IDS;
     const k = ids.indexOf(e.target?.dataset?.cat);
     if (k < 0) return;
-    const portrait = getComputedStyle(nav).flexDirection === 'row';
+    const portrait = navIsRow();
     const next = portrait ? 'ArrowRight' : 'ArrowDown';
     const prev = portrait ? 'ArrowLeft' : 'ArrowUp';
     let n = -1;
@@ -244,7 +256,8 @@ export function mountInstrument(host, ctx, opts, env) {
   });
   const paneTitle = h('h4.v6e-h4');
   const paneHost = h('div.v6e-pane');
-  const cont = h('section.v6e-ccont', { role: 'tabpanel', 'data-testid': 'v6e-ccont' }, paneTitle, paneHost);
+  const cont = h('section.v6e-ccont', { role: 'tabpanel', id: contId, 'data-testid': 'v6e-ccont' }, paneTitle,
+    paneHost);
   const stageCol = h('section.v6e-stage', { 'data-testid': 'v6e-stage' }, h('h4.v6e-h4', { text: 'On stage' }));
   const cols = h('div.v6e-ncols', {}, nav, cont, stageCol);
   const root = h('div.v6e-inst', { 'data-testid': 'v6e-inst' }, head, confirmEl, cols);
@@ -295,6 +308,7 @@ export function mountInstrument(host, ctx, opts, env) {
     cat = id;
     buildPane();
     renderNav();
+    revealCat();
   }
 
   function destroyPane() {
@@ -325,7 +339,7 @@ export function mountInstrument(host, ctx, opts, env) {
     const c = CATEGORIES.find((x) => x.id === cat);
     paneTitle.replaceChildren(c.label, h('small', { text: c.blurb }));
     cont.dataset.cat = cat;
-    cont.setAttribute('aria-label', c.label);
+    cont.setAttribute('aria-labelledby', navRecs.get(cat).el.id);
     if (!slot) {
       paneTitle.replaceChildren('Empty');
       paneHost.replaceChildren(buildEmpty());
@@ -1076,6 +1090,26 @@ export function mountInstrument(host, ctx, opts, env) {
       setText(r.sum, slot ? categorySummary(c.id, slot, meta, i) : '');
       r.dot.hidden = !slot || !c.dot.some((f) => isChangedRel(f));
     }
+    const orient = navIsRow() ? 'horizontal' : 'vertical';
+    if (nav.getAttribute('aria-orientation') !== orient) nav.setAttribute('aria-orientation', orient);
+  }
+  /** iPad portrait: the list is a row of tabs (styles-v6-edit.css, the same query; no layout read). */
+  function navIsRow() {
+    return !!portraitMq?.matches;
+  }
+  /**
+   * skeptic UI6-U5a F2: the chosen category stays in sight (D18 "always visible what is being edited"). At 1024 × 700
+   * the list had 308 px for 349 px of rows, so a remembered Advanced sat below its fold. Scrolls the list only (never
+   * the page); run when the category changes and when Edit shows again, not on every store event (a layout read).
+   */
+  function revealCat() {
+    const el = navRecs.get(cat)?.el;
+    if (!el || !nav.clientHeight || navIsRow()) return;
+    const top = el.getBoundingClientRect().top - nav.getBoundingClientRect().top + nav.scrollTop;
+    if (top < nav.scrollTop) nav.scrollTop = top;
+    else if (top + el.offsetHeight > nav.scrollTop + nav.clientHeight) {
+      nav.scrollTop = top + el.offsetHeight - nav.clientHeight;
+    }
   }
   function paint() {
     root.dataset.slot = String(i);
@@ -1096,6 +1130,7 @@ export function mountInstrument(host, ctx, opts, env) {
     if (stale) {
       stale = false;
       renderSentence(true);
+      queueMicrotask(revealCat); // after this event's redraw, with the view laid out again
     }
     const slot = slotOf(e.song);
     const key = `${cat}|${slotKey(slot)}|${i}`;
@@ -1172,6 +1207,7 @@ export function mountInstrument(host, ctx, opts, env) {
   renderNav();
   renderStrip();
   applyFocus(opts.focus);
+  queueMicrotask(revealCat); // the panel is in the document (and laid out) once the shell has placed it
 
   return {
     /** Re-render the strip (a refused mute write puts its tile back). */

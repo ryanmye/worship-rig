@@ -700,6 +700,64 @@ try {
       }
     });
 
+  // skeptic UI6-U5a F1: the category list is a tablist with its orientation, each tab controls the pane and the pane
+  // is labelled by the chosen tab (before: no orientation, no ids / aria-controls, the pane only aria-label'd)
+  // skeptic UI6-U5a F2: at 1024 × 700 all seven rows fit, and a remembered Advanced is in sight (before: 349 px of rows
+  // in a 308 px list, Advanced below the fold with the list at scrollTop 0)
+  await T('skeptic U5a F1/F2: category tablist semantics; the chosen row in sight at 1024×700', async () => {
+    await toEdit();
+    await ev(() => window.__rig.views.edit.editState.select('slot:0'));
+    await choose('touch');
+    const aria = await ev(() => {
+      const nav = document.querySelector('[data-testid="v6e-cnav"]');
+      const cont = document.querySelector('[data-testid="v6e-ccont"]');
+      const tabs = [...nav.querySelectorAll('[role="tab"]')];
+      const on = nav.querySelector('[aria-selected="true"]');
+      return {
+        orient: nav.getAttribute('aria-orientation'),
+        ids: tabs.every((t) => t.id && document.getElementById(t.id) === t),
+        controls: tabs.every((t) => t.getAttribute('aria-controls') === cont.id && !!cont.id),
+        labelledby: cont.getAttribute('aria-labelledby') === on.id,
+        label: cont.hasAttribute('aria-label'),
+      };
+    });
+    assert.deepEqual(aria, { orient: 'vertical', ids: true, controls: true, labelledby: true, label: false });
+    await page.setViewportSize({ width: 820, height: 1180 });
+    try {
+      await choose('sound');
+      assert.equal(await page.getAttribute(tid('v6e-cnav'), 'aria-orientation'), 'horizontal');
+    } finally {
+      await page.setViewportSize({ width: 1280, height: 800 });
+    }
+    await page.setViewportSize({ width: 1024, height: 700 });
+    try {
+      await choose('adv');
+      // a fresh mount (flag flip) with Advanced remembered, the list scrolled to the top
+      await ev(() => window.__rig.setUiV6(false));
+      await ev(() => window.__rig.setUiV6(true));
+      await until(() => !!window.__rig.views.edit?._debug?.v6 && !!document.querySelector('[data-testid="v6e-cnav"]'));
+      await ev(() => window.__rig.views.edit.editState.select('slot:0'));
+      await page.waitForTimeout(300);
+      const r = await ev(() => {
+        const nav = document.querySelector('[data-testid="v6e-cnav"]');
+        const n = nav.getBoundingClientRect();
+        const inSight = (el) => {
+          const b = el.getBoundingClientRect();
+          return b.top >= n.top - 1 && b.bottom <= n.bottom + 1;
+        };
+        return {
+          cat: window.__rig.views.edit._debug.instance()._debug.cat(),
+          all: [...nav.querySelectorAll('.v6e-cn')].every(inSight),
+          over: nav.scrollHeight - nav.clientHeight,
+        };
+      });
+      assert.deepEqual(r, { cat: 'adv', all: true, over: 0 }, JSON.stringify(r));
+      await choose('sound');
+    } finally {
+      await page.setViewportSize({ width: 1280, height: 800 });
+    }
+  });
+
   await T('zero console.error, no HTTP ≥ 400', async () => {
     assert.deepEqual(errors, []);
   });

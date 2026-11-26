@@ -177,6 +177,14 @@
   .v6.v6-edit .v6e-rt { min-height: 44px; }
   .v6.v6-edit .v6e-cn { min-height: 42px; }
 }
+/* skeptic UI6-U5a F2: at 1024 × 700 the seven rows (46 px each) needed 349 px of a 308 px list, so Advanced was
+   below the fold; tighter rows fit them all (the list still scrolls, and keeps the chosen row in sight, below that) */
+@media (max-height: 760px) {
+  .v6.v6-edit .v6e-cnav { gap: 2px; }
+  .v6.v6-edit .v6e-cn { min-height: 40px; padding: 2px 10px; }
+  .v6.v6-edit .v6e-cn b { font-size: 14px; line-height: 1.25; }
+  .v6.v6-edit .v6e-cn small { font-size: 11.5px; line-height: 1.25; }
+}
 
 /* ---- iPad portrait (820 × 1180, mockup "Instrument · iPad portrait"): no library column (the fold rail stays),
    the categories become a row of tabs, the strip is hidden; the page does not scroll sideways */
