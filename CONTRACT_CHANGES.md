@@ -8281,3 +8281,13 @@ change (app/js/engine untouched), no UI wiring yet (v6 Duplicate / ⋯ Earlier /
   Revert after edits + move + insert gives the snapshot song deep-equal, removeSlot + Revert, positional writes stay
   positional, controller re-prepare on both engines with routing, same-instrument swap as a param diff, scene live
   move travelling + controller Revert).
+- **Skeptic (reviews/U-MOVE-store.md), no interface change:**
+  - F1: the layout history no longer drops the oldest entry. `evictLayout` keeps each token run's first and last
+    layout (right after / before a re-order) and the newest, and drops the shortest-lived one in between (a drag's
+    in-between values; each entry records `at` = the store's `now()`). Before, ~4 s of fader drag (256 slot writes)
+    after a move made Revert positional again. Test: move + 600 drag writes + Revert, and a mid-run snapshot.
+  - F2: a recorded layout that is a prefix of the current one (Revert after an insert / Duplicate / add at the end)
+    realigns too, so the scenes are cut to the restored slots in the same write; before, the next add inherited the
+    copy's scene level.
+  - F3: a removed slot's kept scene entries (by scene index) come back only while the song has as many scenes as at
+    the removal; after a scene was deleted the slot comes back uncovered instead of with another scene's level.
