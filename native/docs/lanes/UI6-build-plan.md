@@ -96,12 +96,13 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   "Preparing n of m" in the sidebar header and a spinner on the rail. CONTRACT_CHANGES "## UI v6 U-METRO".
 
 - **U-MOVE (D23):** store half done (skeptic VERIFIED, `reviews/U-MOVE-store.md`); UI half built on lane-moveui
-  (see "U-MOVE UI + D24 tweaks status" below; skeptic pending). Left for later: drag-to-reorder in Edit's rig tabs.
+  (see "U-MOVE UI + D24 tweaks status" below; skeptic VERIFIED after fixes, `reviews/UI6-move.md`). Left for later: drag-to-reorder in Edit's rig tabs.
 - **U-TWEAKS (D24):** built on lane-moveui (live throttled range writes, pick-first on all pointers, drone %); skeptic
-  pending.
+  VERIFIED after fixes (`reviews/UI6-move.md`).
 - **Esc setting (D24.7):** "Esc always panics" toggle, per device, read by the v6 Esc handling (and today's).
 - **Small-window fit (UI6-U3 O1, orchestrator tier 2):** built on lane-moveui (sidebar folded at ≤ 1100 px until
-  opened there once; slim Add from 4); 4 strips at 1024×700 fit with no scroll, folded or open. Skeptic pending.
+  opened there once; slim Add from 4); 4 strips at 1024×700 fit with no scroll, folded or open. Skeptic VERIFIED
+  (`reviews/UI6-move.md`).
 - **U-METRO (D23):** Metronome sidebar module (today's click chip behaviour) + load state in the sidebar header.
 
 - ~~**Preview switch for Ryan (U1 review O3):**~~ **Done (lane-small; skeptic VERIFIED after fixes, reviews/UI6-small.md):** Settings › Look ›
@@ -112,7 +113,12 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 - Pre-existing red suites to fix separately: eq "L-21 note labels fit" (fails on base), engine suite's 404 on
   `/__tests/api/health` and the CPU-timing `offline.eqCpu` on the 2-CPU box.
 
-## U-MOVE UI + D24 tweaks status (builder, 2026-11-26; lane-moveui from b163c20; skeptic pending)
+## U-MOVE UI + D24 tweaks status (builder, 2026-11-26; lane-moveui from b163c20, rebased onto 715b936; skeptic done)
+
+- **Skeptic (2026-11-26): VERIFIED after fixes** (one low defect, one test-order failure from the rebase). The review
+  is `native/docs/reviews/UI6-move.md`. Fixed: an Esc mid range drag ended the pick but the drag kept writing and
+  committed on release (F2); the lane-small D24.7 check met a range pick left open by the U2 checks (F1). ui-v6 68/68,
+  ui-core 78/78 (one TAP-timing flake on the first run), edit-v2 14/14, settings 94/94, shell unit 357/357.
 
 - Built: ⋯ Duplicate next to the original (`store.insertSlot`, scenes copied), ⋯ Earlier / Later, a ⠿ grip to drag a
   strip (mouse / pen / touch, drop line, auto-scroll, Esc), all refused under Lock and ended by a song switch, the

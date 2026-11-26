@@ -8505,3 +8505,11 @@ no SCHEMA change.
 - Tests: `test/phase2/ui-v6/move.tests.mjs` (14 checks, run by run.mjs); U1 / U2 checks updated (Duplicate position,
   Earlier / Later enabled, PANIC / Lock taps, pick before a drag, live values mid-drag, harness writes carry the phase).
   ui-v6 63/63. Screenshots `move-drag-1280.png`, `move-fit-1024x700.png`, `move-fit-1024x700-open.png`.
+- **Skeptic (reviews/UI6-move.md), no interface change:**
+  - F1 (test): after the rebase onto 715b936 the D24.7 Esc check (lane-small) ran after U2 checks that, with pick first
+    on every pointer, leave a range pick open; the pick takes its own Esc, so the check failed in the full suite
+    (67/68) and passed alone. It now starts with no pick.
+  - F2: an Esc during a range drag ended the pick but not the drag, which kept writing live and committed on release
+    (also with "Esc always panics" on). The pick overlay's Esc now cancels the drag (start value back), as the grip's
+    Esc and every other cancel do. Test: the D24.2 cancel-path check gains Esc and Esc + escPanics.
+  - Timing at 6× CPU throttle: one live write + render median 7.5 ms, p95 18 ms (4 instruments); 9.3 / 25 ms with 16.
