@@ -1088,22 +1088,7 @@ export function mountEdit(el, ctx) {
     renderTabs();
     revealTab();
   });
-  // D23 (U-MOVE-store review O1): the selected instrument tab is positional ('slot:<i>'). A move, insert or remove
-  // of the shown song's slots (the v6 Perform's ⋯ / drag while Edit stays mounted) keeps it on the same instrument:
-  // after the store's change notification (a microtask, so the tabs exist for the new count), slot:<i> → its new
-  // index. The selected slot itself removed: the count clamp in the tabs' rebuild applies, as before.
-  if (typeof ctx.store?.onSlotMap === 'function') {
-    core.cleanups.push(ctx.store.onSlotMap(({ id, order }) => {
-      const m = /^slot:(\d+)$/.exec(editState.selected);
-      if (id !== core.songId || !m) return;
-      const was = editState.selected;
-      const j = order.indexOf(Number(m[1]));
-      if (j < 0 || j === Number(m[1])) return;
-      queueMicrotask(() => {
-        if (editState.selected === was) editState.select(`slot:${j}`); // no focus: nothing opens by itself
-      });
-    }));
-  }
+  core.cleanups.push(followSelectedSlot(core, ctx.store, editState));
   core.listen(editState, 'wiring', renderWire);
   core.listen(editState, 'changes', renderTabs);
   core.listen(editState, 'notes', renderLeds);
@@ -1245,8 +1230,37 @@ export function mountSinglePanel(el, ctx, id, opts = {}) {
 }
 
 
+
+/**
+ * D23 (U-MOVE-store review O1): the selected instrument tab is positional ('slot:<i>'). A move, insert or remove
+ * of the shown song's slots (the v6 Perform's ⋯ / drag while Edit stays mounted) keeps it on the same instrument:
+ * after the store's change notification (a microtask, so the tabs exist for the new count), slot:<i> → its new
+ * index. The selected slot itself removed: the count clamp in the tabs' rebuild applies, as before.
+ * One function for today's Edit and the v6 Edit (skeptic UI6-U5a after the rebase: the v6 Edit had a copy).
+ * @param {{songId:string|null}} core the Edit core (createCore), for the shown song's id
+ * @param {object} store
+ * @param {EditState} editState
+ * @returns {() => void} unsubscribe (a no-op without store.onSlotMap)
+ */
+function followSelectedSlot(core, store, editState) {
+  if (typeof store?.onSlotMap !== 'function') return () => {};
+  return store.onSlotMap(({ id, order }) => {
+    const m = /^slot:(\d+)$/.exec(editState.selected);
+    if (id !== core.songId || !m) return;
+    const was = editState.selected;
+    const j = order.indexOf(Number(m[1]));
+    if (j < 0 || j === Number(m[1])) return;
+    queueMicrotask(() => {
+      if (editState.selected === was) editState.select(`slot:${j}`); // no focus: nothing opens by itself
+    });
+  });
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // UI v6 U5a (views/v6/edit/): the v6 Edit reuses this shell's core (store fan-out, baseline / changes, Esc stack,
 // per-panel ctx, panel registry) and panel frame, so the panels it mounts (setlist, song-header, song, drone,
 // effects, master, bottom) behave exactly as here. Exports only; nothing in today's Edit changes.
-export { createCore as createEditCore, panelFrame as editPanelFrame, defaultTab as editDefaultTab };
+export {
+  createCore as createEditCore, panelFrame as editPanelFrame, defaultTab as editDefaultTab,
+  followSelectedSlot as editFollowSelectedSlot,
+};

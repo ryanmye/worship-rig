@@ -13,7 +13,7 @@
 // interface is mountEdit's ({el, editState, destroy, _debug}; main.js setView → editState.select(block, {focus})).
 // Module boundaries (CLAUDE.md): writes go through store.set / store helpers / controller.*; the engine is only read.
 import { h, setText, createBinder, blockOf } from '../../edit/lib.js';
-import { createEditCore, editPanelFrame, editDefaultTab } from '../../edit/shell.js';
+import { createEditCore, editPanelFrame, editDefaultTab, editFollowSelectedSlot } from '../../edit/shell.js';
 import dronePanel from '../../edit/panels/drone.js';
 import { formatValue, MAX_SLOTS } from '../../../shared/params.js';
 import { changedPaths, hasChange } from '../../../shared/song-diff.js';
@@ -456,23 +456,10 @@ export function mountEditV6(el, ctx) {
     tabRecs.get(editState.selected)?.el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   });
   core.listen(editState, 'changes', renderTabs);
-  // UI6-U5a review R3 (ported from today's mountEdit, D23 / U-MOVE-store O1): the selected tab is positional
-  // ('slot:<i>'). A move, insert or remove of the shown song's slots (the v6 Perform's ⋯ / drag while Edit stays
-  // mounted, or Edit's own strip) keeps it on the same instrument: after the store's change notification (a
-  // microtask, so the tabs exist for the new count), slot:<i> → its new index. The selected slot itself removed: the
-  // count clamp in syncTabs applies, as before.
-  if (typeof store.onSlotMap === 'function') {
-    core.cleanups.push(store.onSlotMap(({ id, order }) => {
-      const m = /^slot:(\d+)$/.exec(editState.selected);
-      if (id !== core.songId || !m) return;
-      const was = editState.selected;
-      const j = order.indexOf(Number(m[1]));
-      if (j < 0 || j === Number(m[1])) return;
-      queueMicrotask(() => {
-        if (editState.selected === was) editState.select(`slot:${j}`); // no focus: nothing opens by itself
-      });
-    }));
-  }
+  // UI6-U5a review R3 (D23 / U-MOVE-store O1): the selected 'slot:<i>' tab follows its instrument through a move,
+  // insert or remove of the shown song's slots (the v6 Perform's ⋯ / drag while Edit stays mounted), with today's
+  // mountEdit's own function (shell.js), so the two cannot drift. The selected slot itself removed: syncTabs clamps.
+  core.cleanups.push(editFollowSelectedSlot(core, store, editState));
   // instruments arrive once the engine starts (a My Samples rescan adds more): the names follow (the core then
   // runs the store hooks, so the tabs re-render)
   core.listen(editState, 'instruments', () => names.refresh());
