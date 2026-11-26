@@ -9168,3 +9168,96 @@ change, no new setting. Flag off is unchanged (ui-v6 and ui-v6-edit purity vs ba
   Arrange. Test: ui-v6-bank "polish1 F1" (D24.7 off and on). Gates after the rebase onto 38c664b: ui-v6 76/76 and
   ui-v6-edit 37/37 (purity vs 38c664b identical), ui-v6-bank 21/21, chart 41/41, settings 111/111, edit-v2 14/14
   files, shell unit 384/384.
+
+## UI v6 U8a (iPad + edge states)
+
+The v6 screens at iPad sizes (landscape = the Mac layout, portrait stacked; DECISIONS D14) and the edge states on the
+v6 stage (`native/docs/lanes/UI6-build-plan.md` U8; mockups perform-v6.html "iPad portrait · 3", edit.html,
+settings.html, chart.html, song-bank.html). Views behind `settings.uiV6` like U1–U7c. No SCHEMA change, no engine /
+store / controller / shared / main.js change. Flag off: the ui-v6 purity probe against 38c664b is identical (105
+requests, 15 store listeners, 4 intervals, 2529 elements).
+
+- **`app/styles-v6-ipad.css`** (new, imported by `styles-v6.css`):
+  - top bar (today's, so its rules need a mounted v6 Perform: `body:has(.v6-perform)`), every width: the MIDI lamp's
+    words ellipsize inside the lamp (`#midi-status` overflow hidden). They ran on under "Sound OK" at 820 / 1024 px
+    and under "Stopped" at 1280 px with a 42 ms delay (UI6-U5a O7, UI6-U4 O2, UI6-U7c O1). ⚙ keeps 44 px.
+  - ≤ 900 px wide (an iPad in portrait): Quick shows its icon only, the output meter hides, the recording clock shows
+    only while it counts or saves, the ready words only when ready (while loading the sidebar header says
+    "Loading…" / "Preparing n of m"; the lamp stays), the master slider gets 140 px. Measured at 820: brand 28 ·
+    views 127 · Quick 44 · ⚙ 44 · lamps 303 · REC 82 · master 140, page width 820 (was 829, with the lamps on top of
+    each other).
+  - ≤ 900 px: the song bar wraps into two rows (song name full width · ⋯ · Notes · Setlist / Key · Transpose ·
+    Space · snapshot chip · chord). The name had 60 px ("Sun…") and Setlist was cut at 858 px (UI6-U7c O1).
+  - PORTRAIT_MQ: the bottom row is `repeat(4, 1fr)` over two rows (96 / 56 px). The keyboard spans the row (792 px;
+    was ~265 px, UI6-U5b known). The same applies to the v6 Edit's row. The sidebar panel's max-height goes
+    340 → 300 px (240 px under the Learn / Arrange bars), so the faders keep ≥ 96 px of track in Perform, Learn and
+    Arrange. Measured at 820 × 1180 with 4 instruments: 160 / 156 / 108 px.
+  - ≤ 790 px tall (1024 × 768, the Mac's 1024 × 700) while arranging: the strips' 2 × 2 grid hides. The ◀ ▶ ✕ row and
+    the bar had left the fader a 51–58 px track under its 80 px input; it now has 150 / 160 px.
+  - `(pointer: coarse)` (iPad): every control the v6 screens show is ≥ 44 × 44 px (DESIGN_PHILOSOPHY; the Mac's fine
+    pointer keeps today's sizes):
+    - the strip name gets a 44 px `::after` hit area (24 px row; −12 / −8 px, never onto the ON tile);
+    - while arranging, ◀ ▶ ✕ share the strip (5 px padding, 2 px gaps), and the strip's own ⠿ grip drags instead of
+      the "⠿ drag" well;
+    - Quick's theme link and scene buttons (their title row grows to 44 px);
+    - the bank's key / tempo filters, the customize ↑ ↓;
+    - every button / select / text input in the v6 Edit (today's ev2 song header, library column, rig row) and the v6
+      Settings (today's rows; 42 → 44 px). The Edit library column scrolls (`.v6e-libmod` overflow-y auto) now that
+      its foot no longer fits at 1180 × 820.
+    - Exempt, by design: the instrument sentence's words (`.ev2-tok`, inline text that jumps to a category that has
+      its own 44 px tab), range inputs (judged by their tracks), the range handles (the keyboard's hit layer).
+  - `@container v6side (max-width: 259px)`: five or more sidebar tabs wrap onto a second row. With the chart view on,
+    the fifth tab (Chart) ran out of the default 220 px sidebar and off the screen at 1180 × 820 (5 × 44 px tabs need
+    ~234 px). This dates from U7b.
+  - Chart on the stage at portrait: each mini fader puts the name on a line of its own above ON · fader · dB (it was
+    beside a 60 px track and broke mid-word: "War / m").
+- **`views/v6/lib.js` `popover`:** a popover is kept inside its host on the right too. The song bar's ⋯ sits at the
+  right of row 1 in portrait, and its 280 px menu ran 21 px off the screen.
+- **Edge states.** Today's shared chrome is unchanged and shows over the v6 stage: the top bar's lamps, the banner
+  strip, the start overlay and toasts. That covers MIDI not allowed / no device, sound stopped / restarting / asleep /
+  paused, the muted second window and a full storage refusing a save (D10). The v6 parts:
+  - **first run:** `views/v6/start.js` `startBand(v)`. Today's `components/startCard.js` card goes under the song bar,
+    in the slot of the trial / learn / arrange bars, with the same key (`worship-rig.start-card`), the same × and the
+    same "first song change after it was on screen" rule. The keyboard line follows MIDI.
+    `startCard({songBar: true})` words the second line for v6: "→ or NEXT in the Setlist = next song. Space in the
+    song bar changes the room." Without `songBar` the card is today's, word for word. CSS in the new
+    `app/styles-v6-states.css`.
+  - **empty library:** `start.js` `emptyLibrary(v)`. The strips area says "No songs in your library", with New song
+    (`store.addSong`, then `controller.selectSong`), Song bank… (only when packs have bank songs) and Restore a
+    backup… (Settings › Library & Backup). New song is frozen under Lock. Today's Perform shows "No song" and four
+    empty slots there. The sidebar no longer says "Loading…" with no song (the controller's `loading` stays up with
+    nothing selected; today's song block shows that "Loading…" too).
+  - **Perform lock, one look:** a frozen control looks like today's disabled button (opacity .45 all told, no
+    pointer). Arrange (.5) and the drone's Synth / My Pads (.2, a dimmed group around dimmed buttons) now match. The
+    strip name, which picks the range Lock freezes, gets `aria-disabled`, no pointer cursor and the title "Perform
+    lock is on: unlock to change which keys play it". It keeps full strength (it is the instrument's name), and its
+    own title (the v6 Edit's "(Range)") comes back on unlock.
+  - `perform.js`: getter `start` (the band; `start.card.reset()` shows it again), `.no-song` on the board.
+- **Queued polish.**
+  - UI6-move O3 (`sidebar.js`):
+    - Until the player opens or folds the sidebar in this page, the small-window rule is decided per orientation.
+      Portrait shows the panel, landscape ≤ 1100 px folds, and both are re-decided on every rotation.
+    - Only the rail's ⟨ and its module icons latch `smallOpen`: `open(id, deliberate)`, where `deliberate` is true
+      for those. The song bar's Notes / Setlist and the chart's placement open the sidebar for now only.
+  - UI6-move O2 (`strip.js`, `perform.js` `v.focusPicked`): Enter / Space on a strip name focuses the picked bar's
+    low handle. When that keyboard pick ends (Esc, the keys, a song switch), the focus goes back to the name: the
+    keyboard's repaint had dropped it to `<body>`. A pointer pick leaves the focus alone (Space stays the pedal).
+  - UI6-U6 O1 (`views/v6/settings.js`): a rotation keeps the place. Going wide shows the narrow dialog's category;
+    coming back narrow shows it drilled in, or the list when the player was on the list and picked nothing while
+    wide. A focused list row hands the focus to "‹ Settings", as F2.
+  - UI6-U6 O2: while the v6 Settings is open its summaries are read again every 30 s (`setInterval`, cleared on
+    close). That covers "backed up n min ago" and an automatic backup.
+- **Tests.** `test/phase2/ui-v6-ipad/run.mjs` (new, in run-all as `ui-v6-ipad`), 27 checks:
+  - every v6 screen at 820 × 1180 and 1180 × 820 in an iPad context (hasTouch, isMobile, DSF 2): no sideways page
+    scroll, no control cut by a box that does not scroll, no overlapping top-bar items / lamps / song-bar items,
+    every control ≥ 44 px (an `::after` hit area counts);
+  - Perform also at 1024 × 1366, 1366 × 1024 and 1024 × 768; portrait 4-across with the panel open or folded, 7
+    scrolling in their row only;
+  - rotation keeping Quick (on its button), the sidebar tab, a range pick, the bank's song, Edit's category, the
+    chart's placement and size;
+  - Settings O1 / O2, move O2 / O3;
+  - the edge states (first run, loading, MIDI denied / no device, stalled + Restart, asleep, paused overlay in a
+    browser without the autoplay flag, Lock's one look, a second window, storage full, empty library);
+  - flag-off wording; zero console.error / HTTP ≥ 400.
+- **Screenshots:** `/home/claude/design-out/u8a/`: `u8a-<screen>-820.png` / `-1180.png`, `u8a-perform-<w>x<h>.png`,
+  `u8a-state-*-1280.png` (and `-820` for several states), before-shots in `pre/`.

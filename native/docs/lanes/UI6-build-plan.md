@@ -92,6 +92,9 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 - **U8 themes (UI6-U6 O3, pre-existing):** Daylight Day's Sound note `.st-engine-note` is 1.88:1 even with the
   flag off; fix in the themes pass. Also UI6-U6 O1/O2 (rotation keeps the open category; live "n min ago").
   (Polish batch 1 skipped O1/O2: both live in `views/v6/settings.js`, lane-u7c's file at the time.)
+
+  flag off; fix in the themes pass. ~~Also UI6-U6 O1/O2 (rotation keeps the open category; live "n min ago").~~
+  **O1 / O2 done in U8a** (see "U8a status"); the themes pass is not (U8b).
 - **Polish (U5b open Q4, orchestrator):** Perform's Change opens the instrument chooser over Perform (no switch to
   Edit), so the sound changes where you play (D14 single sound at the desk). U5b Q1–Q3 kept as built: live moves
   don't dot (today's rule), Edit's range bars display only, Lock from Edit goes to Perform and locks.
@@ -106,9 +109,10 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   song keeps the chart set while trying (or the wording says otherwise).
 - ~~**Polish (UI6-U5a P1):**~~ **Done (polish batch 1, lane-pol1; numbers in CONTRACT_CHANGES):** the range keyboard's always-visible label (`showTip`) forces a reflow on every live
   write (~10 ms at 6× CPU); measure it in a requestAnimationFrame (shared with Perform).
-- **Polish (UI6-move O2/O3, orchestrator):** Enter on a strip name (pick) moves focus to the picked bar's low
+- ~~**Polish (UI6-move O2/O3, orchestrator):** Enter on a strip name (pick) moves focus to the picked bar's low
   handle; the small-window "opened here" memory counts only a deliberate open of the sidebar (⟨ / rail), not the
-  Notes / Setlist chips, and is keyed by orientation so an iPad rotated to portrait is not held folded.
+  Notes / Setlist chips, and is keyed by orientation so an iPad rotated to portrait is not held folded.~~ **Done in
+  U8a** (see "U8a status").
 
 - **U5b (orchestrator tier 2 answers to the U5a builder's questions):** every Edit category dot means "changed
   since the song began" (compare against the baseline for all of the category's paths, so Sound / Tone EQ / Touch /
@@ -425,6 +429,48 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
       choice.
   - Gates: ui-v6 76/76 (purity identical), ui-v6-bank 17/17, ui-v6-edit 32/32, shell unit 384/384, migration-1x unit
     107/107, settings 111/111, ui-core 78/78, edit-v2 117/117 (14 files).
+
+## U8a status (builder, 2026-11-26; lane-u8 from v2-native 38c664b; awaiting the skeptic)
+
+- Built: iPad layouts and edge states. `app/styles-v6-ipad.css`, `app/styles-v6-states.css` (both imported by
+  styles-v6.css), `views/v6/start.js` (first-run Start here band, empty-library card); small changes in `perform.js`,
+  `strip.js`, `lib.js` (popover clamp), `sidebar/sidebar.js`, `settings.js`, `components/startCard.js` (`songBar`
+  wording, default unchanged). Interface notes: CONTRACT_CHANGES "## UI v6 U8a (iPad + edge states)".
+- Layouts: landscape 1180 × 820 / 1366 × 1024 / 1024 × 768 is the Mac layout. The top bar never overlaps itself;
+  at ≤ 900 px Quick is an icon, there is no meter, the clock shows only while recording and the ready words only
+  when ready. At portrait (820 × 1180, 1024 × 1366):
+  - the song bar has two rows;
+  - 4 strips fit with no scroll, with the panel under them open or folded (7 scroll in their row);
+  - the keyboard is full width over Revert / Fade out / PANIC / Lock (Perform and Edit);
+  - faders keep ≥ 96 px in Learn / Arrange;
+  - the chart's mini faders have their names above.
+
+  On a touch screen every control is ≥ 44 px, except the Edit sentence's words (by design). Arrange at ≤ 790 px tall
+  hides the 2 × 2 grid. Five or more sidebar tabs wrap at 220 px (a U7b overflow).
+- Absorbed polish: **UI6-U4 O2** (strips at 150 px in portrait), **UI6-U4 / U5a O7 / U7c O1** (the top bar
+  overlapping, the 820 px song bar), **UI6-U5b known** (keyboard ~260 px), **UI6-U6 O1** (rotation keeps the
+  Settings category), **UI6-U6 O2** (summaries tick every 30 s while open), **UI6-move O2** (Enter on a name →
+  the low handle; the focus comes back on Esc), **UI6-move O3** (small-window fold per orientation; only ⟨ / rail
+  latch it).
+- Edge states, each with its words on screen (tested):
+  - first run: today's Start here card under the song bar (v6 wording);
+  - loading: "Loading…" / "Preparing n of m" in the sidebar header and the lamp;
+  - MIDI not allowed / no device: the lamp;
+  - sound stopped (banner + Restart sound), restarting, asleep, paused (the start overlay);
+  - Perform lock: one look; the strip name says it is frozen;
+  - a muted second window: banner + "Muted";
+  - storage full (D10): "Latest changes not saved yet — retrying";
+  - empty library: a v6 card with New song / Song bank / Restore a backup, where today shows "No song" + "Loading…".
+- Choices to confirm with Ryan:
+  - Start here sits under the song bar (today: in Notes);
+  - the empty-library card offers New song, which plays it;
+  - the iPad portrait top bar hides the meter and the idle clock;
+  - Arrange on short windows hides the Space / Echo / Octave / Sustain grid;
+  - touch-only 44 px sizing (the Mac keeps today's sizes).
+- Gates: ui-v6-ipad 27/27 (new), ui-v6 76/76 (purity vs 38c664b identical), ui-v6-edit 32/32, ui-v6-bank 17/17,
+  chart 38/38, settings 111/111, ui-core 78/78, shell unit 384/384; engine / store / controller / shared / main.js
+  unchanged. Screenshots: `/home/claude/design-out/u8a/`.
+- Not done (U8b): the 8-theme contrast audit (tools/themes/shoot.mjs), incl. UI6-U6 O3.
 
 ## Open questions carried into the build (decide, log in DECISIONS, tell Ryan)
 
