@@ -171,3 +171,19 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
 ## D9: The library size cap warns and still allows restores (Ryan, 2026-11-25; review E5 M3)
 - **Saves.** A save that pushes the library past 2,000,000 characters warns but is not refused.
 - **Imports.** An import or restore of the library's own backup is allowed up to 1.25× the cap.
+
+## D10: A full browser storage refuses the save (Ryan, 2026-11-26; review D8-D9 K2)
+- When storage is completely full, 2.0 refuses the save. It warns and keeps the last good save. It never deletes a
+  distinct kept library to make room.
+
+## D11: 1.1.1 is approved to publish, and it also exports 1.x's per-machine settings (Ryan, 2026-11-26)
+- **Approved.** Ryan approved pushing `main`, tagging `v1.1.1` and the GitHub release that release.yml makes.
+  This is a one-time override of the pre-push guard, for `main` and that tag only.
+- **Order.** The release waits until the settings export below is built, reviewed and green on main's `test.yml`.
+- **Settings export.** 1.1.1 also writes the device-local settings into its backups and exports, and 2.0 imports them.
+  - Covered: touch curves, click, MIDI clock, hotkeys, MIDI and audio devices, the pad folder, menu-bar mode and the
+    rest.
+  - Not covered: settings that only make sense on the same machine, which is the reason they were device-local.
+
+## D12: The chart view matches through the relative key (Ryan, 2026-11-26; chart-view review V1/O2)
+- An Em chart on a song set to G lines up with the G drone. The chart header may show "Key Em".
