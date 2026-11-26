@@ -467,11 +467,14 @@ export function createController(o) {
 
   function applyDiff(prev, next) {
     if (!prev || !next || prev === next) return;
+    // D23: a slot re-order moved the scene's live moves to the new layout; `prev` still plays them where they were
+    const before = liveBefore && liveBefore.song === prev ? liveBefore.live : null;
+    liveBefore = null;
     if (structuralChange(prev.patch, next.patch, engineSlots())) {
       reprepare(next.id);
       return;
     }
-    const a = live(prev); // v11-scenes: diff what the engine plays (the playing scene on top of the song)
+    const a = before || live(prev); // v11-scenes: diff what the engine plays (the playing scene on top of the song)
     const b = live(next);
     if (applyParamDiff(a, b) === false) {
       reprepare(next.id, true);
@@ -672,6 +675,22 @@ export function createController(o) {
     const n = song && sceneState.id === song.id && sceneState.n !== null && sceneState.n < count ? sceneState.n : null;
     return { id: song ? song.id : null, n, count };
   };
+  /**
+   * D23: the store re-ordered song `id`'s slots (insertSlot / moveSlot / removeSlot, or a Revert bringing an earlier
+   * order back). The song's scenes moved with the instruments in the same write; the transient live moves on top of
+   * the playing scene (sceneState.tweak) are controller state, so they move here, with each instrument. `applied`
+   * still plays the old layout until the store notification's applyDiff: what it plays is kept in `liveBefore`.
+   * MIDI pickups and pending learned writes are positional (D23 / O-AW-ML rule 2) and stay.
+   * @param {{id:string, order:number[]}} e  order[j] = old index of new slot j (-1 = new)
+   */
+  function onSlotMap({ id, order }) {
+    if (!applied || appliedId !== id || sceneState.id !== id || !sceneState.tweak) return;
+    if (!liveBefore || liveBefore.song !== applied) liveBefore = { song: applied, live: live(applied) };
+    const t = sceneState.tweak;
+    const slots = order.map((k) => (k >= 0 && Array.isArray(t.slots) ? t.slots[k] ?? null : null));
+    sceneState = { ...sceneState, tweak: { ...t, slots } };
+  }
+  let liveBefore = null; // {song: applied, live: what it played before a slot re-order} (onSlotMap → applyDiff)
   /** Leaving the song's own levels: remember its wheel, so stepping back puts the wheel where it was. */
   const leaveBase = () => {
     if (sceneState.id === appliedId && sceneState.n !== null) return;
@@ -3401,6 +3420,7 @@ export function createController(o) {
 
   async function startPrimary() {
     cleanups.push(store.subscribe(onStore));
+    if (typeof store.onSlotMap === 'function') cleanups.push(store.onSlotMap(onSlotMap)); // D23
     if (midi) for (const [type, fn] of Object.entries(midiHandlers)) listen(midi, type, fn);
     // v11-metronome: a re-plugged clock output is found again by name
     if (midi) {

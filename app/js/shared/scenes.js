@@ -13,7 +13,8 @@
 // while a scene plays (Perform's faders, ON tiles, a learned MIDI fader) are a transient tweak on top of it
 // (tweakScene): heard at once, kept by "Save as scene", dropped at the next scene change.
 // UIA (native DECISIONS D3): `slots` has one entry per slot of the song, at least SLOT_COUNT (so a 1.x scene keeps
-// its 4) and at most MAX_SLOTS; store.removeSlot drops a removed slot's entry from every scene.
+// its 4) and at most MAX_SLOTS; store.removeSlot drops a removed slot's entry from every scene, and (D23)
+// store.insertSlot / moveSlot move each entry with its slot.
 import { SLOT_COUNT, MAX_SLOTS, clamp } from './params.js';
 
 /** Scenes per song. */

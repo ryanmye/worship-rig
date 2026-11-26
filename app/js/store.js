@@ -34,8 +34,10 @@
 //   slot); its length is the song's slot count. Schema 1 had exactly 4, so migrate() keeps a 1.x song's 4 entries
 //   byte for byte (a schema-1 array of another length is padded / cut to 4, as 1.x did); new songs start with 4.
 //   Slot paths ('slots.<i>…') address i < that song's slot count; addSlot / removeSlot change the count (removeSlot
-//   moves later slots down and re-points wheel targets and scenes). Loading a schema-1 library that has songs first
-//   keeps a copy of it (1.1 cannot read schema 2).
+//   moves later slots down and re-points wheel targets and scenes). D23: insertSlot / moveSlot re-order the slots and
+//   carry each slot's wheel targets and scene entries with it (MIDI learn stays positional); an in-memory slot
+//   lineage lets a Revert of the patch take the scenes back to the earlier order (noteLayout). Loading a schema-1
+//   library that has songs first keeps a copy of it (1.1 cannot read schema 2).
 // Kept copies (D8, review E5 M4): `<key>.kept-<ts>.<kind>.s<schema>` hold whole libraries that must never be rotated
 //   away: the 1.x text kept at an upgrade ('migration'), a newer library set aside here or by 1.x ('downgrade'; 1.x
 //   puts it in the `.backup-` rotation, and the next load moves it here) and the library a restore replaced
@@ -1054,6 +1056,12 @@ export function createStore(opts = {}) {
 
   let state;
   const listeners = new Set();
+  // D23 slot lineage (see noteLayout)
+  const SLOT_HISTORY = 256; // layouts kept per song (a drag writes ~60/s; a Revert older than this is positional)
+  const SLOT_DROPPED = 64; // removed slots whose scene entries are kept for a Revert
+  const slotLines = new Map(); // songId → {tokens:number[], seen:Array<{slots, tokens}>, dropped:Map<token, entries>}
+  let slotToken = 0;
+  const slotMapListeners = new Set();
   const pending = new Set();
   let flushQueued = false;
   let persistTimer = null;
@@ -1524,9 +1532,114 @@ export function createStore(opts = {}) {
     return true;
   }
   const put = (segs, value) => {
+    const sid = segs[0] === 'songs' && typeof segs[1] === 'string' ? segs[1] : null;
+    if (sid) noteLayout(sid); // D23: the layout before the write (a Revert snapshot may be this one)
     state = setIn(state, segs, value === undefined ? undefined : deepFreeze(clone(value)));
+    if (sid) noteLayout(sid);
     return segs.join('.');
   };
+
+  // ---- D23 slot lineage (in memory, never persisted): which instrument sits where, so a Revert that writes an
+  // earlier patch back takes the scenes' slot entries back with it. moveSlot / insertSlot / removeSlot re-point the
+  // song's scene entries; Revert (perform.js / v6 / controller.revertSong) only writes `patch`, so without this a
+  // reorder + Revert left every scene entry on the wrong instrument (removeSlot + Revert did the same before D23).
+  // Each song gets one token per slot (positional writes keep the tokens; the slot ops permute them) and a short
+  // history of the slots arrays it had, each with its tokens. A whole patch / slots write equal to a recorded layout
+  // with other tokens is that layout coming back: its scenes are re-ordered by token in the same write.
+  // (SLOT_HISTORY, slotLines… are declared with the store's state: put() runs during load)
+  const freshTokens = (n) => Array.from({ length: n }, () => ++slotToken);
+  /** Record the song's current slots array (once per array) with the tokens it has. */
+  function noteLayout(id) {
+    const s = state.songs && state.songs[id];
+    if (!s) {
+      slotLines.delete(id);
+      return;
+    }
+    const slots = s.patch.slots;
+    let line = slotLines.get(id);
+    if (!line) slotLines.set(id, (line = { tokens: freshTokens(slots.length), seen: [], dropped: new Map() }));
+    if (line.tokens.length !== slots.length) {
+      // a positional count change (a whole slots / patch write, an import): keep the tokens by index
+      line.tokens = line.tokens.length > slots.length ? line.tokens.slice(0, slots.length)
+        : [...line.tokens, ...freshTokens(slots.length - line.tokens.length)];
+    }
+    const last = line.seen[line.seen.length - 1];
+    if (last && last.slots === slots && last.tokens === line.tokens) return;
+    line.seen.push({ slots, tokens: line.tokens });
+    if (line.seen.length > SLOT_HISTORY) line.seen.shift();
+  }
+  /** The song's slot tokens now (recording its layout first). */
+  function tokensOf(id) {
+    noteLayout(id);
+    const line = slotLines.get(id);
+    return line ? line.tokens : [];
+  }
+  /**
+   * The slot ops: song `id`'s slots were rearranged, `order[j]` = the old index of new slot j (-1 = a new slot);
+   * `before` = tokensOf(id) taken before the put. Call after the put and before changed().
+   */
+  function retoken(id, before, order, droppedEntries = null) {
+    const line = slotLines.get(id);
+    if (!line) return;
+    line.tokens = order.map((k) => (k >= 0 ? before[k] : ++slotToken));
+    if (droppedEntries) {
+      line.dropped.set(droppedEntries.token, droppedEntries.entries);
+      if (line.dropped.size > SLOT_DROPPED) line.dropped.delete(line.dropped.keys().next().value);
+    }
+    line.seen[line.seen.length - 1] = { slots: state.songs[id].patch.slots, tokens: line.tokens };
+  }
+  function emitSlotMap(id, order) {
+    for (const fn of [...slotMapListeners]) {
+      try {
+        fn({ id, order: order.slice() });
+      } catch (err) {
+        warn(`slot-map listener failed: ${err && err.message}`);
+      }
+    }
+  }
+  /**
+   * A whole slots array about to be written to song `id`: when it equals a layout the song had with other tokens,
+   * the new order by token ({order: new index → current index or -1, tokens}); else null (a positional write).
+   */
+  function realignFor(id, slots) {
+    const line = slotLines.get(id);
+    if (!line || !Array.isArray(slots)) return null;
+    for (let k = line.seen.length - 1; k >= 0; k--) {
+      const e = line.seen[k];
+      if (e.slots.length !== slots.length || !deepEqual(e.slots, slots)) continue;
+      if (e.tokens === line.tokens || e.tokens.every((t, j) => t === line.tokens[j])) return null;
+      return { tokens: e.tokens, order: e.tokens.map((t) => line.tokens.indexOf(t)) };
+    }
+    return null;
+  }
+  /**
+   * D23: write song `id` with its slots in `order` (new index → old index; -1 = `fill`, a normalised Slot or null):
+   * wheel / pedal / knob slot targets follow their slot, each scene's entries are re-ordered (`sceneFill(j, scene)`
+   * for a new slot). One put, one changed(), then the slot-map listeners.
+   */
+  function rearrange(id, order, fill, sceneFill) {
+    const s = state.songs[id];
+    const next = clone(s);
+    const slots = next.patch.slots;
+    next.patch.slots = order.map((k) => (k >= 0 ? slots[k] : clone(fill)));
+    const where = (t) => {
+      const k = slotGainIndex(t);
+      return k === null ? t : `slots.${order.indexOf(k)}.gain`; // every old slot is still there
+    };
+    for (const key of ['modWheel', 'expression', 'volume']) {
+      if (isObj(next.patch[key])) next.patch[key].target = where(next.patch[key].target);
+    }
+    if (Array.isArray(next.scenes)) next.scenes = scenesBy(next.scenes, order, sceneFill);
+    const before = tokensOf(id);
+    const p = put(['songs', id], normalizeSong(next, id));
+    retoken(id, before, order);
+    changed([p]);
+    emitSlotMap(id, order);
+  }
+  /** The song's scenes re-ordered by `order` (new index → old index, -1 = none), `fill(j)` for the -1 entries. */
+  const scenesBy = (scenes, order, fill = () => null) => scenes.map((sc) => (isObj(sc) ? {
+    ...sc, slots: order.map((k, j) => (k >= 0 ? (Array.isArray(sc.slots) ? sc.slots[k] ?? null : null) : fill(j, sc))),
+  } : sc));
 
   // ---- validation of a single write
   function resolvePath(path) {
@@ -2158,6 +2271,7 @@ export function createStore(opts = {}) {
       const paths = diffPaths(state, next);
       if (!paths.length) return false;
       generation += 1;
+      slotLines.clear(); // D23: the slot lineage is per library
       state = deepFreeze(next);
       for (const p of paths) pending.add(p);
       if (!flushQueued) {
@@ -2188,10 +2302,30 @@ export function createStore(opts = {}) {
       const pcOn = v.segs.length === 2 && v.segs[0] === 'settings' && v.segs[1] === 'programChange'
         && v.value === true && !state.settings.programChange && !hasOwn(state.settings, 'programChangeAction');
       const prev = state;
+      // D23: a whole patch / slots array that brings back an earlier slot order (Revert) takes the scenes back too
+      const sid = v.segs[0] === 'songs' && v.segs[2] === 'patch' && (v.segs.length === 3 || (v.segs.length === 4
+        && v.segs[3] === 'slots')) ? v.segs[1] : null;
+      if (sid) noteLayout(sid);
+      const re = sid ? realignFor(sid, v.segs.length === 3 ? v.value && v.value.slots : v.value) : null;
       const paths = [put(v.segs, v.value)];
+      if (re) {
+        const line = slotLines.get(sid);
+        const song = state.songs[sid];
+        if (Array.isArray(song.scenes)) {
+          const fill = (j, _sc) => {
+            const kept = line.dropped.get(re.tokens[j]);
+            return kept ? kept[song.scenes.indexOf(_sc)] ?? null : null;
+          };
+          paths.push(put(['songs', sid, 'scenes'], normalizeScenes(scenesBy(song.scenes, re.order, fill),
+            song.patch.slots.length)));
+        }
+        line.tokens = re.tokens; // exactly the earlier layout's tokens (a removed slot's comes back as itself)
+        line.seen[line.seen.length - 1] = { slots: state.songs[sid].patch.slots, tokens: line.tokens };
+      }
       if (pcOn) paths.push(put(['settings', 'programChangeAction'], PC_ACTION_DEFAULT));
       if (v.segs[0] === 'settings' && DEVICE_BLOCK_SETTINGS.includes(v.segs[1])) noteDeviceWrites(prev, state); // DS1
       changed(paths);
+      if (re) emitSlotMap(sid, re.order);
       return true;
     },
 
@@ -2218,6 +2352,18 @@ export function createStore(opts = {}) {
     subscribe(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);
+    },
+    /**
+     * D23: `fn({id, order})` runs synchronously after a write that re-orders song `id`'s slots (insertSlot, moveSlot,
+     * removeSlot, and a whole patch / slots write that brings an earlier order back, e.g. Revert). `order[j]` is the
+     * old index of new slot j (-1 = a new slot). The controller uses it to move transient per-slot state (a scene's
+     * live level moves) with the instruments; the normal subscribe() notification still follows.
+     * @param {(e:{id:string, order:number[]}) => void} fn
+     * @returns {() => void} unsubscribe
+     */
+    onSlotMap(fn) {
+      slotMapListeners.add(fn);
+      return () => slotMapListeners.delete(fn);
     },
     /** Deliver pending notifications synchronously (tests). */
     flush: flushNotify,
@@ -2368,10 +2514,72 @@ export function createStore(opts = {}) {
       for (const k of ['modWheel', 'expression', 'volume']) {
         if (isObj(next.patch[k])) next.patch[k].target = shift(next.patch[k].target);
       }
+      // D23: the removed slot's scene entries are kept (in memory) so a Revert that brings the slot back gets them
+      const entryAt = (sc) => (isObj(sc) && Array.isArray(sc.slots) ? sc.slots[at] ?? null : null);
+      const dropped = Array.isArray(s.scenes) ? s.scenes.map(entryAt) : null;
       if (Array.isArray(next.scenes)) {
         for (const sc of next.scenes) if (isObj(sc) && Array.isArray(sc.slots)) sc.slots.splice(at, 1);
       }
-      changed([put(['songs', id], normalizeSong(next, id))]);
+      const before = tokensOf(id);
+      const order = Array.from({ length: n }, (_, k) => k).filter((k) => k !== at);
+      const p = put(['songs', id], normalizeSong(next, id));
+      retoken(id, before, order, dropped ? { token: before[at], entries: dropped } : null);
+      changed([p]);
+      emitSlotMap(id, order);
+      return true;
+    },
+
+    /**
+     * D23: insert a slot right after slot `after` (-1 = first); later slots move up one place and everything
+     * slot-indexed in the song follows its instrument (wheel / pedal / knob targets, each scene's entry). The new
+     * slot's scene entries are empty (scenes don't cover it) unless `o.scenesFrom` names a slot whose entries it
+     * copies (Duplicate: the copy then follows the scenes like the original). MIDI-learn mappings are positional
+     * (settings, D23 / O-AW-ML rule 2) and stay. One write, one notification.
+     * @param {string} [id] song id (default: the current song)
+     * @param {number} [after] slot index, -1..count-1 (default: the last slot, = addSlot)
+     * @param {object|null} [slot] a Slot (Duplicate: a deep copy of slot `after`), or null for an empty slot
+     * @param {{scenesFrom?:number}} [o]
+     * @returns {number} the new slot's index (after + 1), or -1 (no such song, MAX_SLOTS already, bad args or slot)
+     */
+    insertSlot(id = state.settings.currentSongId, after, slot = null, o = {}) {
+      const s = state.songs[id];
+      if (!s) return -1;
+      const n = s.patch.slots.length;
+      const a = after === undefined ? n - 1 : after;
+      if (n >= MAX_SLOTS || !Number.isInteger(a) || a < -1 || a >= n) return -1;
+      const at = a + 1;
+      const v = slot === null || slot === undefined ? null : normalizeSlot(slot, at);
+      if (slot && !v) return -1;
+      const from = o && o.scenesFrom;
+      if (from !== undefined && from !== null && !(Number.isInteger(from) && from >= 0 && from < n)) return -1;
+      const order = Array.from({ length: n + 1 }, (_, j) => (j < at ? j : j === at ? -1 : j - 1));
+      const fill = (_, sc) => (Number.isInteger(from) && Array.isArray(sc.slots)
+        ? clone(sc.slots[from] ?? null) : null);
+      rearrange(id, order, v, fill);
+      return at;
+    },
+
+    /**
+     * D23: move slot `from` to index `to` (the slots between shift by one). Everything slot-indexed in the song
+     * travels with the instrument: the slot itself (sound, level, mute, sends, range, EQ, sustain…), each scene's
+     * entry and every wheel / pedal / knob target on a slot ('slots.<i>.gain'). Not moved: MIDI-learn mappings
+     * (settings.midiLearn, positional by D23 / O-AW-ML rule 2: a learned knob keeps moving "strip i") and colours /
+     * role names, which go by position (D15). One write, one notification.
+     * @param {string} [id] song id (default: the current song)
+     * @param {number} from
+     * @param {number} to
+     * @returns {boolean} false for bad args, from === to or no such song
+     */
+    moveSlot(id = state.settings.currentSongId, from, to) {
+      const s = state.songs[id];
+      if (!s) return false;
+      const n = s.patch.slots.length;
+      const ok = (i) => Number.isInteger(i) && i >= 0 && i < n;
+      if (!ok(from) || !ok(to) || from === to) return false;
+      const order = Array.from({ length: n }, (_, k) => k);
+      order.splice(from, 1);
+      order.splice(to, 0, from);
+      rearrange(id, order, null);
       return true;
     },
 
@@ -2834,6 +3042,7 @@ export function createStore(opts = {}) {
         if (deviceBlock !== undefined) res.deviceSettings = deviceBlock;
         if (dryRun) return res;
         generation += 1; // round2-shell #3: read by the controller's onStore (revert snapshot)
+        slotLines.clear(); // D23: the slot lineage is per library
         commit(deepFreeze(next), diffPaths(state, next));
         return res;
       }

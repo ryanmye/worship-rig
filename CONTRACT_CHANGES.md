@@ -8231,3 +8231,53 @@ portrait"). Behind `settings.uiV6` like U1 / U2. No store, controller or engine 
     song changes).
   - Tests: ui-v6 is 40 checks (U3 skeptic F1, F2; the U1 "> 5 instruments" check now waits a frame for the pills,
     which follow the measured overflow since U3).
+
+## Slot insert / move (D23)
+Store + controller half of U-MOVE (native DECISIONS D23 item 2, UI6-build-plan "U-MOVE"). No SCHEMA change, no engine
+change (app/js/engine untouched), no UI wiring yet (v6 Duplicate / ⋯ Earlier / Later / drag come in the UI task).
+- **`store.insertSlot(id = current, after = last, slot = null, {scenesFrom}?) → index | -1`**: a new slot at
+  `after + 1` (`after` -1..count-1; -1 = first). Later slots move up one place. `slot` is normalised like addSlot
+  (Duplicate passes a deep copy of slot `after`); null = an empty slot. Its scene entries are empty (scenes don't cover
+  it, as with addSlot) unless `scenesFrom` names a slot whose entries it copies (Duplicate can then follow the scenes
+  like the original; the UI task decides). -1 when the song is missing, already MAX_SLOTS (16), `after` is not an
+  integer in range, the slot is invalid or `scenesFrom` is not a slot. Nothing is written then.
+- **`store.moveSlot(id = current, from, to) → boolean`**: the slot at `from` ends at `to`, the ones between shift by
+  one. false (nothing written) for bad indices, from === to, or no such song.
+- **What travels with the instrument** (insert: every later slot; move: the moved one and the shifted ones): the Slot
+  object itself (instrument, level / mute, pan, octave, transpose, range, sends, EQ, sustain / pedal hold, params:
+  byte for byte, `normalizeSlot` at the new index changes nothing because a stored slot is complete), each scene's
+  `slots[i]` entry, and every stored slot target `slots.<i>.gain` of `patch.modWheel / expression / volume`. Those are
+  the only slot indices a song stores (chart, drone, fx, swell, bend hold none).
+- **What deliberately does not travel:** `settings.midiLearn` (positional by D23 tier 2 / O-AW-ML rule 2: a learned
+  knob keeps moving "strip i" of whichever song plays), slot colours and role names (by position, D15), and the
+  controller's MIDI pickups / pending learned writes (keyed by the positional path, like the mappings).
+- **One write:** each op is one `put(['songs', id])` + one `changed()`: one notification with the path
+  `songs.<id>`, persisted by the usual debounce, `meta.edited` set as for any song edit. `migrate()` stays idempotent
+  (tested on a moved / inserted library).
+- **Revert / changed dots:** a reorder changes `patch`, so Perform's change count (`savedJSON`) and Edit's changed
+  dots (against `ctx.getBaseline()`) count it. Revert writes `patch` back, which restores the slot order and the wheel
+  targets exactly. Scenes are not a Revert field (v11-scenes), so before D23 a removeSlot + Revert left every scene
+  entry after the removed slot one place off; a move + Revert would do the same. **New: an in-memory slot lineage in
+  the store** (`noteLayout` / `realignFor`): one token per slot, permuted by insert / move / remove and kept by index
+  by every positional write, plus the last 256 slots arrays per song with their tokens. A whole `patch` or
+  `patch.slots` write that equals a recorded layout with other tokens re-orders the song's scene entries by token in
+  the same write (a removed slot's scene entries come back from the last 64 removals). Positional writes (Edit's
+  whole-array write, imports, a Revert older than 256 layout writes) behave exactly as before. A library replace
+  clears the lineage. Nothing new is persisted.
+- **`store.onSlotMap(fn) → unsubscribe`**: `fn({id, order})` runs synchronously after a re-ordering write
+  (insertSlot, moveSlot, removeSlot, a realigning Revert); `order[j]` = old index of new slot j, -1 = new. The normal
+  subscribe() notification still follows in the microtask.
+- **Controller:** no new path for the engine. The store notification goes through `applyDiff` exactly as removeSlot's
+  does: when any slot the engine plays changes instrument it re-prepares the whole patch and commits gaplessly (held /
+  pedalled notes ring out on the retired instruments, new notes play the new layout: the removeSlot precedent);
+  when only same-instrument slots swap places it is a per-index setParam diff (a held note keeps sounding on its
+  channel with that index's new params). `setRouting` follows the moved wheel targets. The web engine still only gets
+  slots 0..3 (enginePatch). New: `onSlotMap` moves the playing scene's transient live moves (`sceneState.tweak`)
+  with their instruments and keeps what `applied` played (`liveBefore`) so the following diff starts from the real
+  engine state. removeSlot gets the same fix.
+- Tests: `test/phase1/shell/slot-move.test.mjs` (10 tests: move shifting both ways, slot / range / sends / EQ /
+  targets / both scenes travel, MIDI learn untouched, bad args and no-ops write nothing, one notification + slot map,
+  persisted + normalise / migrate idempotent, insert + Duplicate + scenesFrom + -1 + default, MAX_SLOTS and bad args,
+  Revert after edits + move + insert gives the snapshot song deep-equal, removeSlot + Revert, positional writes stay
+  positional, controller re-prepare on both engines with routing, same-instrument swap as a param diff, scene live
+  move travelling + controller Revert).
