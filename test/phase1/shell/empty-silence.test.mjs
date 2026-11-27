@@ -1,6 +1,7 @@
 // UI6-er O1: an empty library is silent, and PANIC stops a drone left on with no song behind it.
 // - The last song deleted (or an empty library imported): the controller turns the drone off (drone.configure
-//   {mode:'off'}, the ON tile's path) and fades the voices (fadeOutAll, Fade out's path), once per empty spell.
+//   {mode:'off'}, the ON tile's path) and, only while a key or the sustain pedal is held (UI6-fu O1 option (b)),
+//   fades the voices (fadeOutAll, Fade out's path), once per empty spell.
 // - PANIC: as before for every drone a song (or its snapshot) has on or off (engine allNotesOff only); a drone the
 //   engine was left playing with no selected song is turned off after allNotesOff.
 // - Over the native bridge (BridgeEngine + MockNative, the contract validator): no finding, no warning.
@@ -26,7 +27,7 @@ async function setup(opts = {}) {
   ctl.addEventListener('action', (e) => actions.push(e.detail.type));
   await ctl.start();
   await tick();
-  return { store, engine, ctl, warns, actions };
+  return { store, engine, ctl, warns, actions, midi };
 }
 const deleteAll = (store) => {
   for (const id of store.get().songOrder.slice()) assert.ok(store.deleteSong(id));
@@ -35,10 +36,11 @@ const deleteAll = (store) => {
 const SOUND = new Set(['allNotesOff', 'fadeOutAll', 'drone.configure', 'drone.setKey', 'prepare', 'commit']);
 const soundCalls = (engine) => engine.calls.filter((c) => SOUND.has(c[0]));
 
-test('UI6-er O1: deleting the last song turns the drone off, then fades the voices, once', async () => {
+test('UI6-er O1: deleting the last song with a key held turns the drone off, then fades the voices, once', async () => {
   const { store, engine, ctl, warns, actions } = await setup();
   try {
     assert.equal(store.currentSong().drone.mode, 'synth', 'the factory song plays a drone');
+    ctl.perform.noteOn(60, 100); // UI6-fu O1 (b): a key held at that moment
     engine.clear();
     deleteAll(store);
     await tick();
@@ -68,7 +70,8 @@ test('UI6-er O1: deleting the last song turns the drone off, then fades the voic
     assert.equal(conf.length, 1);
     assert.equal(conf[0][1].mode, 'synth', 'its drone sounds again');
     assert.equal(engine.of('fadeOutAll').length, 0);
-    // a second empty spell: silent again, once
+    // a second empty spell: silent again, once (PANIC above dropped the held key: hold one again)
+    ctl.perform.noteOn(60, 100);
     engine.clear();
     actions.length = 0;
     deleteAll(store);
@@ -89,6 +92,7 @@ test('UI6-er O1: emptied with the drone off: only a fade; an empty library at st
       store.set(`songs.${cur.id}.drone.mode`, 'off');
       await tick();
       assert.equal(engine.of('drone.configure').at(-1)[1].mode, 'off');
+      ctl.perform.noteOn(64, 90); // UI6-fu O1 (b): a key held
       engine.clear();
       deleteAll(store);
       await tick();
@@ -155,7 +159,7 @@ test('UI6-er O1: PANIC leaves a drone a song or snapshot has on; it stops one le
     deleteAll(store);
     await tick();
     assert.ok(warns.some((w) => /drone\.configure failed: bridge down/.test(w)), warns.join(' | '));
-    assert.deepEqual(engine.calls.filter((c) => c[0] === 'fadeOutAll'), [['fadeOutAll', 6]]);
+    assert.deepEqual(engine.calls.filter((c) => c[0] === 'fadeOutAll'), [], 'nothing held: no fade (UI6-fu O1)');
     assert.equal(ctl.menuBarState().droneOn, false, 'no song: the state says no drone, yet the engine plays one');
     engine.clear();
     ctl.panic();
@@ -198,6 +202,8 @@ test('UI6-er O1 over the native bridge: empty library and PANIC send only contra
   const r = bridgeRig();
   const { store, ctl, warns } = await setup({ engine: r.engine });
   try {
+    await flush();
+    ctl.perform.noteOn(60, 100); // UI6-fu O1 (b): held, so the fade is sent too
     await flush();
     const from = r.log.toNative.length;
     deleteAll(store);
@@ -282,5 +288,76 @@ test('UI6-fu F1: the same library brought back after the empty spell plays its s
     assert.deepEqual(warns, []);
   } finally {
     ctl.dispose();
+  }
+});
+
+/** A fake engine that models the master fade as the web engine does: fadeOutAll fades, the next noteOn un-fades. */
+function fadingEngine() {
+  const engine = fakeEngine();
+  engine.faded = false;
+  const fade = engine.fadeOutAll;
+  const on = engine.noteOn;
+  engine.fadeOutAll = (...a) => { engine.faded = true; return fade(...a); };
+  engine.noteOn = (...a) => { engine.faded = false; return on(...a); };
+  return engine;
+}
+
+test('UI6-fu O1 (b): with nothing held the empty step only turns the drone off; the next song is not faded',
+  async () => {
+    const { store, engine, ctl, warns, actions } = await setup({ engine: fadingEngine() });
+    try {
+      // a chord played and released, the pedal pressed and lifted: nothing held when the last song goes
+      ctl.perform.noteOn(60, 100);
+      ctl.perform.sustain(true);
+      ctl.perform.noteOff(60);
+      ctl.perform.sustain(false);
+      assert.equal(ctl.status.pedal, false);
+      engine.clear();
+      deleteAll(store);
+      await tick();
+      assert.deepEqual(soundCalls(engine), [['drone.configure', { mode: 'off' }]], 'the drone off, no fade');
+      assert.deepEqual(actions, [], 'the views are not told "Faded"');
+      assert.equal(engine.faded, false);
+      // the next song (added, then a footswitch / Next) starts at full level with its drone on
+      const b = blankSong({ name: 'Next one' });
+      const id = store.addSong({ ...b, drone: { ...b.drone, mode: 'synth' } });
+      await tick();
+      await tick();
+      assert.equal(store.get().settings.currentSongId, id);
+      assert.equal(engine.of('drone.configure').at(-1)[1].mode, 'synth');
+      assert.equal(engine.of('fadeOutAll').length, 0);
+      assert.equal(engine.faded, false, 'the next song never starts faded');
+      assert.deepEqual(actions, []);
+      assert.deepEqual(warns, []);
+    } finally {
+      ctl.dispose();
+    }
+  });
+
+test('UI6-fu O1 (b): a key or the sustain pedal held at that moment: the drone off, then Fade out', async () => {
+  for (const hold of ['key', 'pedal', 'midi key']) {
+    const { store, engine, ctl, warns, actions, midi } = await setup({ engine: fadingEngine() });
+    try {
+      if (hold === 'key') ctl.perform.noteOn(62, 100);
+      else if (hold === 'pedal') {
+        ctl.perform.noteOn(62, 100);
+        ctl.perform.sustain(true);
+        ctl.perform.noteOff(62); // released under the pedal: still sounding
+        assert.equal(ctl.status.pedal, true);
+      } else {
+        midi.dispatchEvent(new CustomEvent('noteon', { detail: { note: 67, velocity: 90, channel: 0, inputId: 'in1',
+          timestamp: 1 } }));
+        assert.equal(engine.of('noteOn').length, 1, 'the MIDI note reached the engine');
+      }
+      engine.clear();
+      deleteAll(store);
+      await tick();
+      assert.deepEqual(soundCalls(engine), [['drone.configure', { mode: 'off' }], ['fadeOutAll', 6]], hold);
+      assert.deepEqual(actions, ['fadeOutAll'], hold);
+      assert.equal(engine.faded, true, hold);
+      assert.deepEqual(warns, [], hold);
+    } finally {
+      ctl.dispose();
+    }
   }
 });

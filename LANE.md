@@ -11,7 +11,7 @@ pixel-identical, 0 console.error / HTTP ≥ 400. Gates via tools/cloud/gates.mjs
 Worktree /home/claude/wt-fu2, branch lane-fu2 from origin/v2-native ee5bcb9. Scratch: /home/claude/scratch/fu2.
 
 ## Checklist
-- [ ] 1 FU2 O1 empty-library fade only when held (+ shell tests)
+- [x] 1 FU2 O1 empty-library fade only when held (+ shell tests)
 - [ ] 2 FU2 O2 snapshot line height reserved (both Edits) + rect tests
 - [ ] 3 FU2 O3 bank-trial skeptic F1–F3 deterministic (5 full-file runs)
 - [ ] 4 FU2 ⋯ Song overflow 1024×700 coarse (v6) + today's Edit 1004 px at 820
@@ -23,7 +23,7 @@ Worktree /home/claude/wt-fu2, branch lane-fu2 from origin/v2-native ee5bcb9. Scr
 - [ ] final report in this file
 
 ## Next step
-1 (read controller silenceEmptyLibrary).
+2 (snapshot line height: find the snapline in v6 Edit + today's Edit). Browser tests for 1 (ui-core scenes, ui-v6-bank polish2) updated, not yet run.
 
 ## Findings
 

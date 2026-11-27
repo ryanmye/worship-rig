@@ -560,8 +560,9 @@ test('U8a O1: Back from a trial begun in an empty library ends it; the library i
 });
 
 // UI6-er O1: Back from a trial begun in an empty library left the trial's sound loaded, drone included, with nothing on
-// screen to stop that drone. Now the controller turns the drone off and fades the voices, once.
-test('UI6-er O1: Back from a trial begun in an empty library silences it (drone off, Fade out), once', async () => {
+// screen to stop that drone. Now the controller turns the drone off, once, and fades the voices only while a key or
+// the pedal is held (UI6-fu O1 (b); here nothing is held, so no fade: the next song never starts faded).
+test('UI6-er O1: Back from a trial begun in an empty library silences it (drone off), once', async () => {
   const { store, ctl, engine } = await boot();
   try {
     for (const id of store.get().songOrder.slice()) assert.ok(store.deleteSong(id));
@@ -577,8 +578,8 @@ test('UI6-er O1: Back from a trial begun in an empty library silences it (drone 
     assert.deepEqual(await ctl.backFromTrial(), { ok: true, empty: true });
     await new Promise((res) => setTimeout(res, 5));
     const sound = engine.calls.filter((c) => ['drone.configure', 'fadeOutAll', 'allNotesOff'].includes(c[0]));
-    assert.deepEqual(sound, [['drone.configure', { mode: 'off' }], ['fadeOutAll', 6]]);
-    assert.deepEqual(actions, ['fadeOutAll']);
+    assert.deepEqual(sound, [['drone.configure', { mode: 'off' }]], 'nothing held: the drone off alone');
+    assert.deepEqual(actions, []);
     // PANIC now: today's (the drone is already off)
     engine.clear();
     ctl.panic();

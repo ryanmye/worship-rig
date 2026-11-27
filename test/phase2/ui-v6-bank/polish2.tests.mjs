@@ -4,8 +4,9 @@
 //   O2 the Back-into-the-gap rule is controller.backFromTrial's: a flag flip mid-trial (the v6 Perform's destroy goes
 //      Back) lands in the gap too, as the banner's Back does;
 //   U8a O1 Back from a trial begun in an empty library ends it: the banner goes, the empty library card is back.
-//   UI6-er O1 the empty library is silent: deleting the last song, and Back from a trial there, turn the drone off and
-//      fade the voices (the web engine's drone and fade, not just the controller's calls); PANIC stays quiet.
+//   UI6-er O1 the empty library is silent: deleting the last song, and Back from a trial there, turn the drone off
+//      (the web engine's drone, not just the controller's calls); with nothing held the master is not faded (UI6-fu O1
+//      (b)), so the next song starts at full level; PANIC stays quiet.
 
 /**
  * @param {object} x  run.mjs's helpers: {T, page, ev, until, tid, settled, assert, closeBank, QUIET}
@@ -73,7 +74,8 @@ export async function polish2BankTests(x) {
         for (const id of [...store.get().songOrder]) store.deleteSong(id);
       });
       await until(() => !!document.querySelector('[data-testid="v6-empty"]:not([hidden])'));
-      assert.deepEqual(await heard(), { drone: 'off', sounding: false, faded: true }, 'the last song deleted');
+      // UI6-fu O1 (b): nothing held, so the drone off alone: the master is not left faded for the next song
+      assert.deepEqual(await heard(), { drone: 'off', sounding: false, faded: false }, 'the last song deleted');
       await ev(() => document.getElementById('toasts')?.replaceChildren());
       await ev((pid) => window.__rig.controller.tryBankSong(pid), QUIET);
       await until(() => window.__rig.controller.trial()?.playing === true);
@@ -94,9 +96,9 @@ export async function polish2BankTests(x) {
         toasts: [...document.querySelectorAll('#toasts > *')].map((t) => t.textContent),
       }));
       assert.deepEqual(r, { banner: true, cur: null, songs: 0, toasts: [] });
-      assert.deepEqual(await heard(), { drone: 'off', sounding: false, faded: true }, 'Back from the trial');
+      assert.deepEqual(await heard(), { drone: 'off', sounding: false, faded: false }, 'Back from the trial');
       // PANIC (the on-screen tap) in the empty library: nothing to stop, no error
       await page.click(tid('v6-panic'));
-      assert.deepEqual(await heard(), { drone: 'off', sounding: false, faded: true });
+      assert.deepEqual(await heard(), { drone: 'off', sounding: false, faded: false });
     });
 }

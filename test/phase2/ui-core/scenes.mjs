@@ -307,9 +307,10 @@ test('UI6-snap O1: today’s Edit header line while a scene plays; Update / Own 
   });
 });
 
-// UI6-er O1 (flag off): delete the last song from Edit's ⋯ Song menu → the drone goes off and the voices fade (the web
-// engine's drone and fade), Perform shows today's faded chip; PANIC (Esc) then has nothing left to stop. Empties this
-// page's library: the last test before the console check.
+// UI6-er O1 (flag off): delete the last song from Edit's ⋯ Song menu with a key held → the drone goes off and the
+// voices fade (the web engine's drone and fade; UI6-fu O1 (b): the fade only while a key or the pedal is held),
+// Perform shows today's faded chip; PANIC (Esc) then has nothing left to stop. Empties this page's library: the last
+// test before the console check.
 test('UI6-er O1: deleting the last song from Edit’s song menu silences the drone and the voices', async () => {
   await ev(() => {
     const { store } = window.__rig;
@@ -317,6 +318,7 @@ test('UI6-er O1: deleting the last song from Edit’s song menu silences the dro
     for (const id of [...store.get().songOrder]) if (id !== keep) store.deleteSong(id);
     store.set(`songs.${keep}.drone.mode`, 'synth');
     store.set('settings.view', 'edit');
+    window.__rig.controller.perform.noteOn(60, 90); // held through the delete
   });
   await until(() => window.__rig.engine.drone.sounding === true && document.body.dataset.view === 'edit');
   await page.click('.ev2-song-menubtn');

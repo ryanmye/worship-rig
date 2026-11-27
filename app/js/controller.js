@@ -3638,9 +3638,11 @@ export function createController(o) {
   /**
    * UI6-er O1: no song selected and none in the library (the last song deleted, Back from a trial begun in an empty
    * library, an empty library imported): the engine still had the last song loaded, drone included, and nothing on
-   * screen could stop that drone. Once per empty spell: the drone off (droneOffIfOrphaned) and the voices faded (Fade
-   * out's path: fadeOutAll, its 'action' tells the views). Nothing when no song has played in this engine (a fresh
-   * engine is silent).
+   * screen could stop that drone. Once per empty spell: the drone off (droneOffIfOrphaned), and the voices faded (Fade
+   * out's path: fadeOutAll, its 'action' tells the views) only while a key or the sustain pedal is held (UI6-fu O1
+   * option (b)): with nothing held the deleted song's voices are release tails that end by themselves, and a fade
+   * would leave the master faded under the next song until its first note. Nothing when no song has played in this
+   * engine (a fresh engine is silent).
    * @param {object} state the store state
    */
   let emptySilenced = false;
@@ -3654,7 +3656,8 @@ export function createController(o) {
     // turned off just below, stayed off under a song that has it on.
     targetId = null;
     droneOffIfOrphaned();
-    fadeOutAll();
+    // UI6-fu O1 (b): heldCount = notes held by any source; pedalDown = the effective sustain (status.pedal)
+    if (heldCount.size > 0 || pedalDown) fadeOutAll();
   }
 
   // ---- menu (Electron)
