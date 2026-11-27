@@ -9502,3 +9502,16 @@ no SCHEMA change, every new field optional, engine untouched (app/js/engine and 
   ui-v6-edit 37/37 (flag-off purity identical in both: requests, listeners, intervals, store listeners, DOM, CSS),
   edit-v2 14/14 files, settings 111/111 (5 modes), migration-1x 107/107 + 8/8. ui-v6-ipad: no such suite on this
   branch (it is lane U8a's). Engine, bridge, native core, golden fixtures and CSS untouched.
+- **Review fixes (UI6-snap, native/docs/reviews/UI6-snap.md).**
+  - F1 `controller.js` saveScene: the move after a save goes from what was heard to `live(saved)`, not
+    `live(applied)` (during an instrument re-prepare `applied` lacks the new scene; the save glided the whole mix to
+    that song's own levels / Space / Echo). Test `test/phase1/shell/scene-snap-review.test.mjs` (7).
+  - F2 `views/v6/edit/edit.js` stripV.setSlot: `controller.scenes.take` first, as v6 Perform's (v6 Edit's
+    instrument strip wrote the song; a step equal to the song's own value was silent).
+  - F3 Edit v2 › Effects send chips and v6 Edit › Effects › Sends read `ctx.view()` (they read the song's own).
+  - F4 `styles-v6-dialogs.css`: the Save snapshot key choice (`.v6-keeps-key`, `.v6-savesnap-key`) gets a 44 px
+    control (it was 22 px tall: ui-v6-ipad's touch rule failed 4 of 28, the open dialog cascading). So the lane's
+    "no CSS change" no longer holds: this one rule block in the v6 dialogs file (linked only with the flag on).
+  - Gates after: shell unit 404/404, unit 685/685 (12 skipped), ui-core 78/78, ui-v6 82/82 and ui-v6-edit 37/37
+    (flag-off purity identical), ui-v6-ipad 28/28, ui-v6-bank 21/21, edit-v2 14/14 files, settings 111/111,
+    migration-1x 107/107 + 8/8.
