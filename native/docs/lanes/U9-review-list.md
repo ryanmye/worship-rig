@@ -5,6 +5,9 @@ addressed to Ryan, at `v2-native` d35b788. Deduplicated: an item a later decisio
 listed as open; those are in "Already answered" at the end, so nothing is asked twice. Each item says what is built
 now (the default if Ryan says nothing) and where it comes from (`file` › section / item).
 
+Skeptic pass (2026-11-27, `native/docs/reviews/LaneR.md`): items 6, 8, 25 and 27 turned out settled and point to
+"Already answered" (their numbers stay, so references hold); items 51–54 were added in their sections.
+
 How to use it: turn on **Settings › Look › Perform view › Try the new layout (preview)** on the Mac, go screen by
 screen, and answer each item with **keep**, **change to …** or **later**. The release checklist
 (`native/docs/MAC_CHECK.md` "2.0 release checklist") has the hardware checks; this list is the design calls only,
@@ -14,12 +17,16 @@ plus the release-scope questions in section 1.
 
 1. **MIDI keyboard input in the Mac / iPad app** looks unwired (Lane R code read, not run): WKWebView has no Web MIDI,
    the JS polyfill over the native `midi` op is not built (ENGINE_CONTRACT §5, WEBKIT_AUDIT item 5), and `RigMIDI`
-   connects only the sources a `midi listen` op names, which nothing sends. Not a design call: it has to be built,
-   or shown wrong on the Mac, before release. Asking only for priority. (MAC_CHECK "2.0 release checklist" B1)
+   connects only the sources a `midi listen` op names, which nothing sends. Not a design call: it has to work before
+   release. Being built on lane-nma; nothing to answer unless that lane stalls. (MAC_CHECK "2.0 release checklist"
+   B1)
 2. **Ship 2.0 without these in the Mac / iPad app?** My Samples, patch packs and the Song bank's content, the
-   GarageBand importer, My Pads (pad folder), menu-bar mode, global shortcuts, the update check, MIDI clock out. They
-   work in Chrome and in the 1.x app. Options: (a) ship and list them as known gaps (the release notes draft does);
-   (b) build some first (which?). (`RigSchemeHandler.swift`, `RigLibrary.swift` polyfill, SHELL.md "Later tasks")
+   GarageBand importer, My Pads (pad folder), menu-bar mode, Open at login, global shortcuts, the update check, MIDI
+   clock out (rides on B1), keeping the screen awake (1.x holds `powerSaveBlocker`), and most of the 1.x Rig / Help
+   menus (the app has File › Import Library Backup… only). They work in Chrome and / or the 1.x app. Options: (a) ship
+   and list them as known gaps (the release notes draft does); (b) build some first (which?). Asked by the
+   orchestrator on 27 Nov. (`RigSchemeHandler.swift`, `RigLibrary.swift` polyfill, `WorshipRigApp.swift`, SHELL.md
+   "Later tasks")
 3. **Intel Macs and macOS 12–14.4.** The 2.0 app is arm64-only and needs macOS 14.5 (`project.yml`,
    `build-core.sh`). 1.1.x's update check reads GitHub's latest release, so once 2.0 is "latest" every 1.1 user is
    told about it, including the ones it can't run for (on Intel it finds no `x64` file and opens the release page).
@@ -33,12 +40,11 @@ plus the release-scope questions in section 1.
    `native/apple` and packs a `.dmg` / `.zip`; `release.yml` builds Electron. The checklist drafts the steps (asset
    names kept as `Worship-Rig-arm64.dmg` / `.zip` so 1.1's update check finds them). Who builds it: Ryan's Mac by hand,
    or a new CI job? (MAC_CHECK "2.0 release checklist" steps 2–3)
-6. **Desktop Auto voice limit: stay 128 or raise to 256?** The M2 Pro probe suggests 256 (raw 271); it stays 128 until a
-   large layered chord is timed on the Mac (the steal burst is not measured). (DECISIONS D4 "Measured", D5 follow-up)
+6. *(Settled: desktop Auto stays 128, D5 follow-up. See "Already answered".)*
 7. **Should PANIC also stop the song's drone?** Since 1.x it deliberately leaves a drone the song has on; since UI6-er
-   it stops a drone no song wants. (ORCH "Waiting on Ryan"; DECISIONS dashboard question 7; UI6-er O1)
-8. **PDF charts in 2.0?** D33 moved the chord chart to 2.0; PDF attachments and notation stay after 2.0 unless Ryan
-   moves them too. (DECISIONS D33)
+   it stops a drone no song wants. Asked by the orchestrator on 27 Nov. (UI6-er O1; UI6-build-plan "Empty-library
+   silence")
+8. *(Settled: PDF charts and notation come after 2.0, D33. See "Already answered".)*
 
 ## 2. Perform (new layout)
 
@@ -52,12 +58,16 @@ plus the release-scope questions in section 1.
     instead of following the instrument. (UI6-move O1)
 11. **MIDI Learn mappings stay with the position**, so a learned knob keeps moving "strip 1" after a reorder. Revisit
     if knobs should follow an instrument. (DECISIONS D23.2; UI6-U7c, the note on O-AW-ML rule 2)
+52. **The Start here band hides while Learn or Arrange is on** (their own bar is the instruction then; it comes back
+    on Done). The other option was a smaller panel under the strips (about 140 px). (UI6-U8b, "For Ryan" under F3)
 12. **Perform's Change** still switches to Edit to open the chooser. The orchestrator's answer (open the chooser
     over Perform, D14 "single sound at the desk") is queued, not built. Confirm. (UI6-build-plan "Polish (U5b open
     Q4)"; UI6-U5b builder choices)
 
 ### Song bar and snapshots
 
+54. **"you play C" sits in the song bar** beside the key (built). D16 left it open ("proposed, not yet drawn").
+    Keep? (DECISIONS D16 "Still open")
 13. **Empty current setlist wording.** With an empty setlist the sidebar title says "Library" and lists every song,
     while + Add song says "add one to ‘Empty set’"; a New song then makes it a one-song setlist without the playing
     song ("Empty set · 1 songs"). (UI6-U3 O2)
@@ -81,6 +91,9 @@ plus the release-scope questions in section 1.
 19. **Sidebar builder choices** (built): New song from the setlist is added at the end and not selected (D24.4
     confirmed that part); the pad-folder line shows only for My Pads; "Starts open / collapsed" applies per page load;
     the song bar's Notes / Setlist un-hide a module the player had hidden. (UI6-U3 O7)
+53. **D16's Tone and Snapshots sidebar modules aren't built.** The sidebar has Drone, Setlist, Notes, Click and Chart;
+    snapshots have their own row under the song bar and tone is in Edit › Tone EQ. Want either as a module, and
+    "Snapshots also in the top row" from the mockup's customize? (DECISIONS D16; UI6-U3 O5)
 20. **Width memory:** ← / End at the widest point of a small window saves the clamped width over a wider one saved on
     a big screen; a drag-fold makes the default width explicit. Both follow "the player moved it". (UI6-U3 O3)
 
@@ -100,7 +113,7 @@ plus the release-scope questions in section 1.
     placement is the stage (orchestrator). (UI6-U7b O6, decision (a))
 24. **Turning Chord charts off while the chart is on the stage** leaves the sidebar folded to its rail; turning them on
     again brings the chart back on the stage. Expect the sidebar back instead? (UI6-cship O4)
-25. **Auto-scroll stops when the chart changes place** (⇥ / ⤢ / ▤ Strips); press ▶ again. Accept? (UI6-U7b O2)
+25. *(Fixed: auto-scroll carries on when the chart changes place, polish batch 1. See "Already answered".)*
 
 ## 3. Song bank and Try it (new layout)
 
@@ -109,8 +122,7 @@ plus the release-scope questions in section 1.
     Lock; a second Try it keeps the first one's Back; My library's Try it is a plain switch (no banner); Next / Prev
     from a trial step from the replaced entry; if the replaced song is deleted during a trial, Back goes to the song
     after it; a setlist switch during a trial ends it. (UI6-U7a O5)
-27. **Keep on a trial song already in the library** selects it as it is and drops a chart set while trying, so
-    "Keep it to save it" isn't quite true there. (UI6-U7b O3)
+27. *(Fixed: the banner's words match what Keep does there, polish batch 1. See "Already answered".)*
 28. **The Song bank browser's look** is provisional (O-AW-PP rule 8 "The picker UI is provisional"; D17 mockup).
 
 ## 4. MIDI Learn
@@ -131,8 +143,8 @@ plus the release-scope questions in section 1.
 
 34. **Edit builder choices** (built): live moves (level, ON, drone level, master) never dot; a key change dots Drone ›
     Key & sound; Lock in Edit returns to Perform locked. (UI6-U5b builder choices; build plan "U5b status")
-35. **The strip is hidden in Edit at iPad portrait** (as in the mockup), so nothing in Edit can mute or set a level
-    there, and the sentence's "off" word does nothing. (UI6-U5a O2)
+35. **(Only if item 51 allows portrait.) The strip is hidden in Edit at iPad portrait** (as in the mockup), so
+    nothing in Edit can mute or set a level there, and the sentence's "off" word does nothing. (UI6-U5a O2)
 36. **The Edit header at ≤ 1100 px is tight:** with Chart, Easy Transpose and an octave word at 1024 px the name shows
     "Sun…" and the key chip is cut (on touch the words go). Next step would be a two-row header or Chart in the ⋯
     menu there. (UI6-fu2 O2)
@@ -147,14 +159,19 @@ plus the release-scope questions in section 1.
 
 ## 7. iPad and small windows
 
+51. **Portrait in the iPad app?** The app is landscape-only: Info-iPad allows landscape left / right and sets
+    `UIRequiresFullScreen` (`native/apple/project.yml`), so the portrait layout U8a built shows only in emulation, and
+    Split View / Stage Manager don't apply. Options: (a) landscape-only for 2.0 (as built); (b) add the portrait
+    orientations (and drop `UIRequiresFullScreen` for Split View, which brings item 41 in). (project.yml; WEBKIT_AUDIT
+    §7 B item 1 "Orientation decision"; D14 "iPad mirrors the Mac in landscape and portrait")
 39. **iPad layout choices** (built; Start here under the song bar and the portrait top bar already answered by D26.5):
     Quick becomes an icon at ≤ 900 px; New song from the empty-library card plays it; Arrange on windows ≤ 790 px tall
     hides the Space / Echo / Octave / Sustain grid; 44 px sizing on touch only (the Mac keeps today's sizes); the
     Edit sentence's words are exempt from 44 px; with a MIDI problem at ≤ 900 px the ready words go. (UI6-U8a O5)
 40. **iPad wording** still comes from today's screens: "No keyboard yet? Play A S D F G H J K on your computer (Space =
     sustain)" and "click "Restart sound"". Want iPad-specific words? (UI6-U8a O4)
-41. **Split View / Stage Manager windows narrower than tall** turn on the portrait layout (orientation queries).
-    Seen only in emulation. (UI6-U8a O3)
+41. **(Only if item 51 drops full screen.) Split View / Stage Manager windows narrower than tall** turn on the
+    portrait layout (orientation queries). Seen only in emulation. (UI6-U8a O3)
 
 ## 8. Themes and colour
 
@@ -216,4 +233,8 @@ plus the release-scope questions in section 1.
 | Range-bar numbers stacking, dot over the number, muted number (UI6-cvd O1, O5, O6) | fixed | CVD2 |
 | Size rules for add / duplicate (D33 O4) | warn past 2 MB, refuse past 2.5 MB; chart / bank / pack top-up to follow (CAP, in flight) | D9, D33 note |
 | Chart in 2.0 | yes, on by default | D33 |
+| Desktop Auto voice limit (item 6) | stays 128; 256 / 512 stay manual choices | D5 follow-up (Ryan, 2026-11-21) |
+| PDF charts / notation in 2.0 (item 8) | after 2.0 | D33 |
+| Chart auto-scroll stops on a place change (item 25, UI6-U7b O2) | it carries on | polish batch 1 (UI6-polish1) |
+| Keep on an in-library trial song (item 27, UI6-U7b O3) | the words match what Keep does | polish batch 1 (UI6-polish1) |
 | Colour-blind setting | Settings › Look › Colour-blind colours | D32 |
