@@ -1,5 +1,8 @@
 # Worship Rig 2.0: bringing your 1.x library over (DRAFT, Lane E5, 2026-11-25)
 
+The player-facing version of this is merged into `docs/release-notes-2.0.md` ("Bringing your 1.x library over",
+Lane R, 2026-11-27). This file keeps the detail: what was verified how, and what still needs the Mac or the iPad.
+
 This is a draft for the Lane R release notes. Everything marked *verified* was run in JS against libraries made by
 the real 1.1.0 and 1.0.0 apps (`test/phase2/migration-1x`). Everything marked *not yet run* still needs the Mac or the
 iPad.
@@ -112,7 +115,7 @@ Chrome profile is safe in 2.0 (D8, *verified* with the real 1.1.0 store, 2.0 →
   in your current library. A different library is never removed to make room, and the newest 1.x copy and the
   newest 2.0 copy always stay. 2.0 says when it has removed one. If nothing can be removed, 2.0 says it could not
   save, and nothing is replaced. Export your library from Settings and remove songs you do not need.
-- **Worship Rig 1.1.1** (a small 1.x update, *to be published*) never sets a 2.0 library aside. It says "This library
+- **Worship Rig 1.1.1** (a small 1.x update, released 2026-11-26) never sets a 2.0 library aside. It says "This library
   was saved by Worship Rig 2.0 …" and offers a separate 1.x library, or to quit. 2.0's Restore previous library…
   lists that separate 1.x library too.
 
