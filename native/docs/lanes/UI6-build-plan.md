@@ -74,6 +74,11 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 
 ## Queued small tasks
 
+- **Empty-library silence (UI6-er O1, tier 2: mine):** when no song is selected and no songs are left (delete the last
+  song, or Back from an empty-library trial) the controller turns the drone off and fades the voices; PANIC must stop a
+  sounding drone whatever `menuBarState` says. Today PANIC leaves such a drone sounding (pre-existing). Builder +
+  skeptic, with the U-SNAP follow-up.
+
 - **U-SNAP follow-up (UI6-snap O1/O2/O5, tier 2: mine):** while a snapshot plays, both Edit views show a line in the
   header: "Changing snapshot “Hall” for now: Update keeps it, Own levels edits the song" (O1); v6 Edit's Effects
   "Sends" and the instrument's "Space & Echo" summaries read the song as it plays (O2); the dialog's drone row copy
