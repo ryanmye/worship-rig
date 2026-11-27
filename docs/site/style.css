@@ -372,3 +372,14 @@ details.credits p { margin-top: 0.8rem; }
 @media (prefers-reduced-motion: no-preference) {
   a, .btn { transition: text-decoration-thickness 0.15s, opacity 0.15s; }
 }
+
+/* download: optional sound packs (2.0.x; listed without links until they are hosted) */
+.packs { margin: 2.5rem auto 0; max-width: 40rem; text-align: left; }
+.packs h3 { font-size: 1.25rem; margin-bottom: 0.35em; text-align: center; }
+.packs > p { font-size: 0.9375rem; text-align: center; }
+.pack-list { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: 0.6rem; }
+.pack-list li {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.7rem 1rem;
+  display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: baseline;
+}
+.pack-list span { font-size: 0.875rem; color: var(--muted); }

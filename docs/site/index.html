@@ -5,26 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Worship Rig</title>
-<meta name="description" content="A live keys rig for worship teams: pads, piano and a key drone, on one Mac. Free and open source.">
+<meta name="description" content="A live keys rig for worship teams: pads, piano and a key drone, on a Mac or an iPad. Free and open source.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f1f7f5">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0d1513">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://ryanmye.github.io/worship-rig/">
 <meta property="og:title" content="Worship Rig">
-<meta property="og:description" content="A live keys rig for worship teams: pads, piano and a key drone, on one Mac. Free and open source.">
+<meta property="og:description" content="A live keys rig for worship teams: pads, piano and a key drone, on a Mac or an iPad. Free and open source.">
 <meta property="og:image" content="https://ryanmye.github.io/worship-rig/img/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Worship Rig: the Perform screen in the Sanctuary theme.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Worship Rig">
-<meta name="twitter:description" content="A live keys rig for worship teams: pads, piano and a key drone, on one Mac.">
+<meta name="twitter:description" content="A live keys rig for worship teams: pads, piano and a key drone, on a Mac or an iPad.">
 <meta name="twitter:image" content="https://ryanmye.github.io/worship-rig/img/og.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="preload" href="fonts/Alegreya-wght.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=v110-sage1">
+<link rel="stylesheet" href="style.css?v=v200-r1">
 </head>
 <body>
 
@@ -34,15 +34,15 @@
       <img src="img/mark.svg" alt="" width="56" height="56">
       <h1>Worship Rig</h1>
     </div>
-    <p class="lede">A live keys rig for worship teams: pads, piano and a key drone, on one Mac.</p>
-    <p class="new-pill"><a href="#new"><b>New in 1.1</b> A click with a count-in, scenes and your own touch</a></p>
+    <p class="lede">A live keys rig for worship teams: pads, piano and a key drone, on a Mac or an iPad.</p>
+    <p class="new-pill"><a href="#new"><b>New in 2.0</b> Its own sound engine, the iPad, up to 16 sounds a song and chord charts</a></p>
 
     <div class="cta">
       <a class="btn" href="https://github.com/ryanmye/worship-rig/releases/latest/download/Worship-Rig-arm64.dmg" title="Worship-Rig-arm64.dmg, Apple Silicon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m0 0-4-4m4 4 4-4M4 16h12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Download for Mac</a>
       <a class="alt" href="https://github.com/ryanmye/worship-rig">Source on GitHub</a>
       <a class="alt" href="https://ryanmye.github.io/">More from Ryan Ye</a>
     </div>
-    <p class="cta-note">Apple Silicon · <a href="https://github.com/ryanmye/worship-rig/releases/latest/download/Worship-Rig-x64.dmg">Intel</a> · <a href="https://github.com/ryanmye/worship-rig/releases/latest">all downloads</a>.
+    <p class="cta-note">Apple Silicon, macOS 14.5 or later · Intel or older macOS: <a href="https://github.com/ryanmye/worship-rig/releases/tag/v1.1.1">1.1.1</a> · <a href="https://github.com/ryanmye/worship-rig/releases/latest">all downloads</a>.
       Ad-hoc signed: see the first-launch steps below.</p>
   </div>
 
@@ -55,8 +55,8 @@
 <div class="facts">
   <ul>
     <li><a href="https://github.com/ryanmye/worship-rig/blob/main/reviews/hardware-checklist.md#3-latency-settings--audio-lowest">20 ms latency</a> on a USB-C dock</li>
-    <li>about <a href="https://github.com/ryanmye/worship-rig/releases/tag/v1.1.0">192 MB download</a></li>
-    <li><a href="https://github.com/ryanmye/worship-rig/blob/main/package.json">macOS 12+</a></li>
+    <li><a href="https://github.com/ryanmye/worship-rig/blob/main/native/docs/PARITY.md">112 of 112 test renders</a> match the 1.x engine</li>
+    <li><a href="https://github.com/ryanmye/worship-rig/blob/main/native/apple/project.yml">macOS 14.5+ and iPadOS 17.5+</a></li>
   </ul>
 </div>
 
@@ -86,9 +86,10 @@
           alt="Edit screen: the rig row with Keys (Grand Piano), Pad (Warm Pad), Extra and Bass, Drone, Effects and Master, and below it the Keys EQ curve drawn over a piano keyboard from A0 to C8.">
       </figure>
       <div>
-        <p class="kicker">Keys · Pad · Extra · Bass</p>
-        <h2>Four sounds per song, shaped to the room</h2>
-        <p>Each part gets its own level, space, echo and an
+        <p class="kicker">Up to 16 sounds · new in 2.0</p>
+        <h2>Layer up to 16 sounds, shaped to the room</h2>
+        <p>A song starts with four (keys, pad, extra and bass) and takes up to 16. Each gets its own level, space, echo
+          and an
           <a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/shared/eq-math.js">8-band EQ</a>
           drawn over a piano keyboard, so you can see which notes a cut will touch.</p>
       </div>
@@ -100,9 +101,10 @@
           alt="Menu-bar popover: three songs to switch between, master level, drone, fade, panic, open, record and a low-resource switch.">
       </figure>
       <div>
-        <p class="kicker">Menu bar mode</p>
+        <p class="kicker">Menu bar mode · 1.x Mac app</p>
         <h2>Keep it running in the menu bar</h2>
-        <p>Close the window and keep playing: switch songs, the drone and the master level from the menu bar.</p>
+        <p>Close the window and keep playing: switch songs, the drone and the master level from the menu bar. In the
+          1.x Mac app; the 2.0 app doesn't have it yet.</p>
         <p class="measure"><a href="https://github.com/ryanmye/worship-rig/blob/main/reviews/idle-cpu-mac.md#build-1ce40b4-lowres2--idle-cpu-ui--themes-2026-09-30-05200530-utc">10 on Activity Monitor's energy scale while hidden, 55 in front</a>,
           measured with the drone playing.</p>
       </div>
@@ -114,10 +116,11 @@
           alt="The Perform screen: the song row shows SCENE 1 2 3 with scene 2 lit, above the Keys and Pad strips.">
       </figure>
       <div>
-        <p class="kicker">Scenes · new in 1.1</p>
+        <p class="kicker">Scenes · more in 2.0</p>
         <h2>Verse, chorus, bridge on one footswitch</h2>
-        <p>Save up to three sets of levels per song and step through them with a footswitch or the numbers on Perform.
-          Each change glides over half a second, and the notes you're holding keep ringing.</p>
+        <p>Save up to three scenes per song and step through them with a footswitch or the numbers on Perform. From 2.0
+          a scene also brings its own Space, Echo and drone. Each change glides over half a second, and the notes you're
+          holding keep ringing.</p>
         <p class="measure"><a href="https://github.com/ryanmye/worship-rig/blob/main/CONTRACT_CHANGES.md#v11-scenes">No click
           when a scene changes</a>: the biggest sample-to-sample step is the same as on a steady note (a hard switch
           measured 22.9 times that).</p>
@@ -134,7 +137,7 @@
         <h2>A count-in that never holds up the song</h2>
         <p>Tap Click and the band hears one or two bars, then the click or quiet. Change songs whenever you like: a
           running click picks up the new tempo on the next beat. With a 4-output interface it plays in your in-ears
-          only, and MIDI clock can drive a delay pedal.</p>
+          only, and in Chrome and the 1.x app MIDI clock can drive a delay pedal.</p>
         <p class="measure"><a href="https://github.com/ryanmye/worship-rig/blob/main/test/phase1/engine/click-suites.mjs">Every
           click lands within 0.3 samples of the beat</a>, and the click uses 0.14 % of one CPU core.</p>
       </div>
@@ -217,65 +220,75 @@
   <div class="wrap">
     <div class="new-head">
       <div>
-        <p class="kicker">Version 1.1</p>
-        <h2>What's new in 1.1</h2>
+        <p class="kicker">Version 2.0</p>
+        <h2>What's new in 2.0</h2>
       </div>
-      <p class="muted">Everything new stays out of the way until you want it. A 1.0 library plays exactly as before.
-        <a href="https://github.com/ryanmye/worship-rig/blob/main/docs/release-notes-1.1.0.md">Full release notes</a>.</p>
+      <p class="muted">A new Mac app with its own sound engine, and the first iPad version. Your 1.x songs, setlists and
+        settings come over.
+        <a href="https://github.com/ryanmye/worship-rig/blob/main/docs/release-notes-2.0.md">Full release notes</a>.
+        Before: <a href="https://github.com/ryanmye/worship-rig/blob/main/docs/release-notes-1.1.0.md">1.1</a>,
+        <a href="https://github.com/ryanmye/worship-rig/blob/main/docs/release-notes-1.1.1.md">1.1.1</a>.</p>
     </div>
     <ul class="new-grid">
       <li class="new-card">
-        <h3>Click and count-in</h3>
-        <p>Tap Click by the tempo for one or two bars of count-in, then the click or quiet. Outputs 3–4 can send it to
-          the in-ears only.</p>
-        <p class="where">Perform › Click · Edit › Song › Click</p>
+        <h3>Its own sound engine</h3>
+        <p>The Mac and iPad app play through a C++ engine instead of the browser's audio. It matches the 1.x sound on
+          all 112 test renders, and prepares the next and previous songs ahead of time.</p>
+        <p class="where">Settings › Sound · voices, buffer size, voice limit</p>
       </li>
       <li class="new-card">
-        <h3>Scenes</h3>
-        <p>Up to three saved sets of levels per song, stepped by a footswitch. Changes glide, and held notes ring
-          on.</p>
+        <h3>Up to 16 sounds a song</h3>
+        <p>Add or remove sounds from 1 to 16. A 1.x song keeps its four exactly, and Perform scrolls when they don't
+          all fit.</p>
+        <p class="where">Edit › Slots</p>
+      </li>
+      <li class="new-card">
+        <h3>Cue, then Go</h3>
+        <p>Tap a song in the setlist to cue it; nothing changes until Go. Each song shows whether it is ready, and a
+          footswitch on Next plays the cue.</p>
+        <p class="where">Perform › setlist · Next is Go</p>
+      </li>
+      <li class="new-card">
+        <h3>Scenes that bring more</h3>
+        <p>A scene now also keeps each sound's Space and Echo, the room, and the drone on or off, gliding without
+          restarting a note. Its drone follows the key you play in.</p>
         <p class="where">Quick › This song › Save as scene</p>
       </li>
       <li class="new-card">
-        <h3>Your keyboards</h3>
-        <p>Play six soft notes and six hard ones, and the app fits its touch to that keyboard, with a Range slider
-          for how far soft is from loud. Saved on this Mac.</p>
-        <p class="where">Settings › MIDI keyboard › Your keyboards</p>
+        <h3>MIDI Learn on any setting</h3>
+        <p>Right-click any slider or fader in Edit and move a knob. One knob can drive several faders, and Revert undoes
+          what it moved.</p>
+        <p class="where">Edit › right-click › Learn MIDI knob</p>
       </li>
       <li class="new-card">
-        <h3>Pedal</h3>
-        <p>A Log curve gives an expression pedal finer control when it's quiet, and a switch lets the sustain pedal
-          swell the drone.</p>
-        <p class="where">Edit › Master › Wheels &amp; pedal</p>
+        <h3>Chord charts</h3>
+        <p>Paste or import ChordPro or chords over lyrics. The chords follow Easy Transpose, and the chart scrolls by
+          itself in big type.</p>
+        <p class="where">Perform › Chart · on by default</p>
       </li>
       <li class="new-card">
-        <h3>Global shortcuts</h3>
-        <p>Next or previous song, Panic, master louder or softer and scenes from any app, even with the window hidden:
-          <kbd>⌃⌥⌘]</kbd> <kbd>⌃⌥⌘[</kbd> for songs.</p>
-        <p class="where">Settings › Menu bar · Mac app · off until you turn it on</p>
+        <h3>Patch packs and the Song bank</h3>
+        <p>Put song files in a pack folder and they join your library, or keep a bank of songs to add when you want
+          them. Your files stay on your Mac.</p>
+        <p class="where">Settings › Sounds &amp; Samples › My Samples · Chrome for now</p>
       </li>
       <li class="new-card">
-        <h3>Update check</h3>
-        <p>Once a day the app asks GitHub whether there's a newer version and tells you in Settings › About. It never
-          installs anything by itself.</p>
-        <p class="where">Settings › About · Mac app · can be switched off</p>
+        <h3>Colour-blind colours</h3>
+        <p>Instrument colours chosen to stay apart for red–green or blue–yellow colour blindness, with each
+          instrument's number on its bar.</p>
+        <p class="where">Settings › Look › Appearance</p>
       </li>
       <li class="new-card">
-        <h3>GarageBand importer</h3>
-        <p>Tick GarageBand or Logic instruments and import them into My Samples while you play. Apple's sounds stay on
-          your Mac.</p>
-        <p class="where">Settings › My Samples · Mac app</p>
+        <h3>The iPad</h3>
+        <p>The same app and the same library on an iPad, installed from Xcode with a free Apple ID. Bring your songs
+          over by AirDrop.</p>
+        <p class="where">iPadOS 17.5 or later · no App Store version</p>
       </li>
       <li class="new-card">
-        <h3>Themes and polish</h3>
-        <p>Each theme uses its own wording, Daylight can follow your Mac's light or dark mode, and the EQ graph matches
-          the theme.</p>
-        <p class="where">Settings › Appearance</p>
-      </li>
-      <li class="new-card">
-        <h3>Fixes</h3>
-        <p>The frozen drone no longer dips once each time its loop goes around, Panic also stops the click, piano
-          songs use less memory, and hidden in the menu bar the app gives about 800 MB back to the Mac.</p>
+        <h3>A new layout to try</h3>
+        <p>Instrument strips across the stage, a sidebar for the drone, setlist, notes, click and chart, and a Song bank
+          with Try it. A preview until it becomes the default.</p>
+        <p class="where">Settings › Look › Perform view › Try the new layout</p>
       </li>
     </ul>
   </div>
@@ -284,17 +297,31 @@
 <section class="download" id="download">
   <div class="wrap">
     <h2>Get Worship Rig</h2>
-    <p class="lede">Free and open source. Plug in a MIDI keyboard, pick a song, play. Everything runs on your Mac.</p>
+    <p class="lede">Free and open source. Plug in a MIDI keyboard, pick a song, play. Everything runs on your Mac or iPad.</p>
     <div class="cta">
       <a class="btn" href="https://github.com/ryanmye/worship-rig/releases/latest/download/Worship-Rig-arm64.dmg" title="Worship-Rig-arm64.dmg, Apple Silicon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m0 0-4-4m4 4 4-4M4 16h12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Download for Mac</a>
       <a class="alt" href="https://github.com/ryanmye/worship-rig">Source on GitHub</a>
       <a class="alt" href="https://ryanmye.github.io/">More from Ryan Ye</a>
     </div>
-    <p class="cta-note">Apple Silicon · <a href="https://github.com/ryanmye/worship-rig/releases/latest/download/Worship-Rig-x64.dmg">Intel</a> · <a href="https://github.com/ryanmye/worship-rig/releases/latest">all downloads</a>.
+    <p class="cta-note">Apple Silicon, macOS 14.5 or later · Intel or older macOS: <a href="https://github.com/ryanmye/worship-rig/releases/tag/v1.1.1">1.1.1</a> · <a href="https://github.com/ryanmye/worship-rig/releases/latest">all downloads</a>.
       Ad-hoc signed: see the first-launch steps below.</p>
 
-    <p class="sizes">About 192 MB download (arm64) / 197 MB (x64), about 368 MB installed,
-      <a href="https://github.com/ryanmye/worship-rig/releases/tag/v1.1.0">measured on the v1.1.0 release builds</a>.</p>
+    <!-- Release (MAC_CHECK "2.0 release checklist"): put the measured sizes here, e.g. "About N MB download, about N MB
+         installed, measured on the v2.0.0 release build". The 1.1.0 line said 192 MB / 197 MB / 368 MB. -->
+    <p class="sizes">The iPad app is installed from Xcode: <a href="https://github.com/ryanmye/worship-rig/blob/main/native/apple/README.md">native/apple/README.md</a>, steps 7–10.</p>
+
+    <div class="packs" id="sound-packs">
+      <h3>Optional sound packs</h3>
+      <p class="muted">Extra free instruments you can pick and download on their own, so the app stays small. They are
+        not ready yet: this list gets a download link for each pack when it is.</p>
+      <!-- Lane P / 2.0.x: one <li> per pack: name, what it adds, size, licence, and a link once Ryan says where packs
+           are hosted (AWAY_WEEK_PLAN Lane P: hosting and each pack's OK are tier 1). No links until then. -->
+      <ul class="pack-list">
+        <li><b>VSCO 2 Community Edition</b> <span>orchestral strings, winds and more · CC0 · not available yet</span></li>
+        <li><b>Karoryfer</b> <span>String Cyborgs, Bigcat Cello, Meatbass and more · CC0 · not available yet</span></li>
+        <li><b>VCSL</b> <span>the Versilian Community Sample Library · CC0 · not available yet</span></li>
+      </ul>
+    </div>
   </div>
 </section>
 
@@ -306,20 +333,29 @@
       <div id="install">
         <h3>Install</h3>
         <ol>
+          <li><strong>Coming from 1.x?</strong> Open the old Worship Rig once and quit it, so its latest backup is on
+            disk. 2.0 offers to import it on its first launch
+            (<a href="https://github.com/ryanmye/worship-rig/blob/main/docs/release-notes-2.0.md#bringing-your-1x-library-over">steps</a>).</li>
           <li>Open the <code>.dmg</code> and drag <strong>Worship Rig</strong> to <strong>Applications</strong>.
-            macOS 12 or later; Apple Silicon (<code>arm64</code>) or Intel (<code>x64</code>).</li>
+            Apple Silicon (<code>arm64</code>) with macOS 14.5 or later. For an Intel Mac or an older macOS, use
+            <a href="https://github.com/ryanmye/worship-rig/releases/tag/v1.1.1">1.1.1</a>.</li>
           <li><strong>First launch.</strong> The app isn't notarized, so macOS says it "could not verify" it (on
             macOS 15 and later right-click › Open no longer gets past this). Click <strong>Done</strong>, then
             <strong>System Settings › Privacy &amp; Security</strong> › <strong>Open Anyway</strong>. Or once in Terminal:
             <code>xattr -dr com.apple.quarantine "/Applications/Worship Rig.app"</code></li>
           <li><strong>MIDI.</strong> macOS usually doesn't ask about a USB keyboard; if it does, allow it. If the MIDI
-            light stays off, pick the keyboard in <strong>Settings › MIDI keyboard › Input</strong>. No keyboard? The
+            light stays off, pick the keyboard in <strong>Settings › Keyboards &amp; MIDI</strong>. No keyboard? The
             computer keys play notes too.</li>
           <li><strong>Output.</strong> Use the headphone jack or a wired interface, not Bluetooth: Bluetooth measured
             176 ms against 20 ms on a USB-C dock
             (<a href="https://github.com/ryanmye/worship-rig/blob/main/reviews/hardware-checklist.md">hardware check</a>).</li>
-          <li><strong>Updating.</strong> From 1.1 on, <strong>Settings › About</strong> tells you when a new version is
-            out. Quit Worship Rig, open the new <code>.dmg</code> and drag it over the old app. Your songs stay.</li>
+          <li><strong>Updating.</strong> Quit Worship Rig, open the new <code>.dmg</code> and drag it over the old app.
+            Your songs stay. The 1.x app's <strong>Settings › About</strong> tells you when a new version is out; the
+            2.0 app doesn't check yet, so look at the
+            <a href="https://github.com/ryanmye/worship-rig/releases">releases</a>.</li>
+          <li><strong>iPad.</strong> Installed from Xcode on a Mac with a free Apple ID, re-installed every 7 days
+            (<a href="https://github.com/ryanmye/worship-rig/blob/main/native/apple/README.md">steps 7–10</a>).
+            iPadOS 17.5 or later.</li>
         </ol>
         <p class="small muted">Full steps: <a href="https://github.com/ryanmye/worship-rig#running-on-your-mac">README › Running on your Mac</a>.</p>
       </div>
@@ -334,7 +370,7 @@
             <a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/engine/synth-extra.js">synth-extra.js</a>)
             plus a drawbar <strong>organ</strong> with a rotary speaker
             (<a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/engine/organ.js">organ.js</a>).</li>
-          <li><strong>19 songs</strong> in five groups, each with a note on what it's for
+          <li><strong>19 factory songs</strong> in five groups, each with a note on what it's for
             (<a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/presets.js">presets.js</a>,
             <a href="https://github.com/ryanmye/worship-rig#songs-and-setlists">README</a>), and 6 Spaces, 5 Echoes
             and 6 Vibes (<a href="https://github.com/ryanmye/worship-rig/blob/main/app/js/shared/fx-presets.js">fx-presets.js</a>).</li>
@@ -350,6 +386,7 @@
             alt="The Import from GarageBand / Logic panel: a list of instruments with their sizes, two of them ticked.">
         </figure>
         <h3>Sounds from GarageBand or Logic</h3>
+        <p class="small muted">In Chrome and the 1.x Mac app; not in the 2.0 Mac app yet.</p>
         <p>If GarageBand or Logic is installed, <strong>Settings › My Samples › Import from GarageBand / Logic…</strong>
           converts their sampled instruments into your <strong>My Samples</strong> folder, and they show up in the
           instrument picker without a restart (a command-line tool does the same). Those sounds are Apple's and
@@ -359,7 +396,8 @@
       </div>
 
     </div>
-    <p class="shots-line">Full-size screenshots (1440×900, Sanctuary):
+    <p class="shots-line">Full-size screenshots (1440×900, Sanctuary; today's screens, which stay the 2.0 default until
+      the new layout replaces them):
       <a href="img/perform.webp">Perform</a> · <a href="img/edit.webp">Edit</a> ·
       <a href="img/edit-eq.webp">EQ</a> · <a href="img/settings.webp">Settings</a> ·
       <a href="img/settings-appearance.webp">Appearance and menu bar</a>.</p>
@@ -386,10 +424,12 @@
         <a href="fonts/OFL-Alegreya.txt">OFL-Alegreya.txt</a>, <a href="fonts/OFL-Figtree.txt">OFL-Figtree.txt</a>).</p>
     </details>
 
-    <p class="privacy">Privacy: no telemetry. The only network call is a once-a-day check of GitHub's latest release
+    <p class="privacy">Privacy: no telemetry. Songs, recordings and sounds stay on your Mac or iPad. The 2.0 app has
+      no update check and no web server: it loads its own pages from inside the app
+      (<a href="https://github.com/ryanmye/worship-rig/blob/main/native/apple/Sources/Shared/RigSchemeHandler.swift">RigSchemeHandler.swift</a>).
+      The 1.x app's only network call is a once-a-day check of GitHub's latest release
       (<a href="https://github.com/ryanmye/worship-rig/blob/main/update-check.js">update-check.js</a>, switch it off in
-      Settings › About). Songs, recordings and sounds stay on your Mac, and its small web server listens only on
-      <code>127.0.0.1</code>
+      Settings › About), and its small web server listens only on <code>127.0.0.1</code>
       (<a href="https://github.com/ryanmye/worship-rig/blob/main/server.js">server.js</a>).</p>
 
     <ul class="footer-links">
@@ -399,7 +439,7 @@
         <a href="https://github.com/ryanmye/worship-rig/blob/main/LICENSES.md">LICENSES.md</a></li>
       <li><a href="https://github.com/ryanmye/worship-rig">Source</a></li>
     </ul>
-    <p class="foot-brand"><img src="img/mark.svg" alt="" width="22" height="22"><span>Made by <a href="https://ryanmye.github.io/">Ryan Ye</a>. Built on a Mac; verified with a Keystation 49es.</span></p>
+    <p class="foot-brand"><img src="img/mark.svg" alt="" width="22" height="22"><span>Made by <a href="https://ryanmye.github.io/">Ryan Ye</a>. Built on a Mac; 1.x verified with a Keystation 49es.</span></p>
   </div>
 </footer>
 
