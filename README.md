@@ -8,21 +8,61 @@ strings, synths, mallets and guitars (see [Sounds](#sounds)), a key "drone" pad 
 you, and one-button song changes that never cut off a note you're holding. It can also record your playing to a WAV
 file, and play sampled instruments you convert from GarageBand ([My Samples](#my-samples-garageband-and-your-own-sounds)).
 
-New in 1.1: a [click with a count-in](#click-and-count-in), [scenes](#scenes-verse-chorus-bridge) (saved levels per
-song that a footswitch steps through), a [touch that fits your keyboard](#your-keyboards-touch), and, in the Mac app,
-global shortcuts, an update check and a GarageBand importer. Each one stays out of the way until you turn it on.
+New in 2.0 ([release notes](docs/release-notes-2.0.md)): a new Mac app with its own sound engine, and an iPad app;
+up to [16 sounds per song](#songs-and-setlists); song changes that you [cue, then Go](#songs-and-setlists);
+[scenes](#scenes-verse-chorus-bridge) that also bring their own Space, Echo and drone;
+[MIDI Learn on any setting](#midi-learn-map-a-footswitch-to-next-song); [chord charts](#chord-charts);
+[colour-blind colours](#settings); and a redesigned layout you can [try as a preview](#the-new-layout-preview).
+New in 1.1: a [click with a count-in](#click-and-count-in), [scenes](#scenes-verse-chorus-bridge), a
+[touch that fits your keyboard](#your-keyboards-touch), and, in the 1.x Mac app, global shortcuts, an update check and
+a GarageBand importer.
 
-It runs two ways, with exactly the same sound and screens:
+It runs three ways, with the same screens:
 
-- **As a Mac app** ("Worship Rig.app"), which you build once on your own Mac. This is the recommended way.
-- **In Google Chrome**: double-click `Start Worship Rig.command`. Use this if you can't build the app.
+- **As a Mac app** ("Worship Rig.app", 2.0): Apple Silicon (M1 or later), macOS 14.5 or later. It plays through
+  Worship Rig's own engine. This is the recommended way. On an Intel Mac or an older macOS, use
+  [Worship Rig 1.1.1](https://github.com/ryanmye/worship-rig/releases/tag/v1.1.1).
+- **On an iPad** (2.0, iPadOS 17.5 or later), installed from Xcode: see [The iPad app](#the-ipad-app).
+- **In Google Chrome**: double-click `Start Worship Rig.command`. Chrome plays through the browser's own audio
+  engine, which plays the first four sounds of a song.
 
-Nothing is downloaded while you play. Everything, the sounds included, lives on your Mac. The Mac app's only trip
-online is a once-a-day check for a newer version, which you can switch off in Settings › About.
+Nothing is downloaded while you play. Everything, the sounds included, lives on your Mac (or iPad). The 1.x Mac app's
+only trip online is a once-a-day check for a newer version, which you can switch off in Settings › About; the 2.0 app
+doesn't check yet.
+
+**Not in the 2.0 Mac and iPad app yet** (they work in Chrome and in the 1.x Mac app): My Samples, patch packs and the
+Song bank, the GarageBand importer, My Pads (pad files for the drone), menu-bar mode, global shortcuts, the update
+check and MIDI clock out. The sections below say where a feature needs Chrome or the 1.x app.
 
 ---
 
-## Build the Mac app (once)
+## Get the Mac app
+
+**Download** `Worship-Rig-arm64.dmg` from the [latest release](https://github.com/ryanmye/worship-rig/releases/latest),
+open it and drag Worship Rig to Applications. The first open needs the steps in
+[Running on your Mac](#running-on-your-mac) (the app is ad-hoc signed, not notarized). Coming from 1.x? Open the old app
+once and quit it first, so 2.0 can bring your library over: see
+[Bringing your 1.x library over](docs/release-notes-2.0.md#bringing-your-1x-library-over).
+
+**Build the 2.0 app yourself.** You need an Apple Silicon Mac with macOS 14.5+, Xcode 15.4 or later (opened once), and
+`brew install cmake ninja xcodegen`. Then, from the `worship-rig` folder:
+
+```
+cd native/apple
+./scripts/build-core.sh --mac-only
+xcodegen
+xcodebuild -project WorshipRig.xcodeproj -scheme WorshipRig-macOS -configuration Release \
+  -destination 'platform=macOS' CODE_SIGN_IDENTITY=- ARCHS=arm64 -derivedDataPath build/dd build
+```
+
+The app is `native/apple/build/dd/Build/Products/Release/Worship Rig.app`. The full steps, with the errors to expect,
+are in [native/apple/README.md](native/apple/README.md). (`tools/mac/check.sh` runs the same build as a check, in the
+Debug configuration; the Release line above has not been run yet.)
+
+### The 1.x app (Electron), from this folder
+
+`npm start` and `npm run build:mac` still run and build the Electron app from this folder: the 1.x shell with the
+browser's engine (it plays the first four sounds of a song). The steps below are for it.
 
 You need an Apple Silicon Mac (M1 or newer) and **Node.js** from <https://nodejs.org> (the "LTS" installer).
 
@@ -60,6 +100,8 @@ while you play; closing it stops Worship Rig), and Chrome opens Worship Rig in i
   every note twice or undo each other's edits. Close the other window and this one takes over by itself.
 - If Chrome's pad folder is still allowed, it reconnects by itself when Worship Rig starts; otherwise Settings shows
   **Reconnect** (Chrome asks once).
+- Chrome plays the first four sounds of a song; sounds 5 to 16 play in the 2.0 Mac and iPad app (Edit and Perform
+  say so). The 2.0 Sound choices (voices per sound, buffer size, total voice limit) apply only there too.
 
 ## Connect your keyboard
 
@@ -97,7 +139,9 @@ when you press down, your pedal is "the other polarity" (common with cheap squar
 ## Songs and setlists
 
 A **Song** is a complete sound. It sets which instruments are playing, how loud each one is, the effects, which
-key you play in and which key the band hears, the drone, and what the wheels do. There are four **slots** per song:
+key you play in and which key the band hears, the drone, and what the wheels do. A song has 1 to 16 **sounds**
+(slots): **Edit › Slots** adds or removes one, and Perform scrolls sideways when they don't all fit. A new song starts
+with four, which today's screens call:
 
 | Slot | Colour | Usually |
 |---|---|---|
@@ -106,10 +150,18 @@ key you play in and which key the band hears, the drone, and what the wheels do.
 | Extra | blue | bells, strings, a second texture |
 | Bass | purple | left-hand bass (low notes only) |
 
+The [new layout](#the-new-layout-preview) drops these role names: every sound is an instrument like the others, named
+by what it plays, and coloured by its position.
+
 A **Setlist** is the order of songs for a service. Step through it with the **◀ ▶** buttons, the **← →** arrow keys,
 **⌘← / ⌘→**, or a footswitch (see MIDI Learn). When you switch songs, notes you're already holding (or holding with
 the pedal) keep ringing on the old sound until you let go. Only new notes use the new song, so switches are
 seamless. The **Ready** light means every song in the setlist is loaded and switching will be instant.
+
+**Cue, then Go (2.0).** Tapping a song in the setlist *cues* it: nothing changes until you press **Go** (the Next
+button), and Go waits until the cued song has loaded. Each song shows whether it is playing, cued, ready, loading or
+not loaded. Tap the cued song again (or ✕) to clear the cue. With nothing cued, Next plays the next song as before. A
+footswitch learned to Next Song, the → key and the menu's Next also play the cued song; Previous Song clears the cue.
 
 A **Scene** is a saved set of levels inside one song (for example verse, chorus and bridge): see
 [Scenes](#scenes-verse-chorus-bridge).
@@ -148,8 +200,10 @@ The button is hidden for a song with no tempo, and Worship Rig always starts wit
 ## Scenes: verse, chorus, bridge
 
 A song can keep up to three **scenes**: saved sets of levels that you step through while you play. A scene holds the
-faders, the ON switches, the drone level and the mod wheel. It doesn't change the instruments, the effects or the
-key.
+faders, the ON switches, the drone level and the mod wheel, and in 2.0 also each sound's Space and Echo amounts, the
+song's Space room and Echo choice, and whether the drone is on and its sound. It doesn't change the instruments or the
+key: a scene's drone plays in the key the song is played in. (The new layout calls scenes *snapshots*, lets you name
+them, and can give one a drone key of its own, counted from the song's key.)
 
 1. Set the levels the way you want them for the verse.
 2. Open **Quick** (top bar) → **This song** and tap **Save as scene** 1, or use **Edit → Song → Scenes**.
@@ -203,6 +257,8 @@ glance which space each one is in.
 
 ## My Samples: GarageBand and your own sounds
 
+*In Chrome and the 1.x Mac app; the 2.0 Mac and iPad app don't read My Samples yet.*
+
 Worship Rig can also play sampled instruments that live outside the app, in a **My Samples** folder:
 
 - `Music/Worship Rig/Samples` in your home folder (the Mac app's **Rig → Open My Samples Folder** opens it, creating
@@ -230,11 +286,29 @@ copies them into the app, the build or git.
 After adding or removing packs, choose **Rig → Rescan My Samples** (or **Settings → My Samples → Rescan**). If a
 message says to restart, quit and reopen Worship Rig.
 
+### Patch packs and the Song bank (2.0)
+
+A pack folder in My Samples can also hold whole songs, as song export files in `<pack>/songs/*.json`. They come into
+your library by themselves, once each, at the end of the library. A newer version replaces a pack song only if you
+haven't changed it, and a pack song you delete stays deleted. A pack whose `pack.json` says `"mode": "bank"` is a
+**Song bank** instead: browse it in **Settings › Sounds & Samples › My Samples › Song bank** and press **Add to
+library** for the songs you want. The folder layout is in [docs/patch-packs.md](docs/patch-packs.md). Pack songs are
+your own files, like My Samples: Worship Rig never uploads or shares them.
+
 ## Easy Transpose
 
 Say the band plays in **B** but you'd rather play in **G** shapes. Set **Play In: G** and **Hear In: B** on the song.
 You play G shapes and everyone hears B. The **− / +** buttons on the Perform screen move the key a half-step
 ("take it up one") without touching the song's settings. The drone always follows the **Hear In** key.
+
+## Chord charts
+
+Perform has a **Chart** button. Paste a chart, or import a ChordPro file (`.cho`, `.chordpro`, `.pro`) or plain chords
+over lyrics (`.txt`), and the chords follow Easy Transpose and the song's key. A chart written in the relative minor
+lines up too (an Em chart on a song in G). The chart scrolls by itself at the speed you set, and **A− / A+** change the
+text size. A song's chart travels with it in exports and backups. **Settings › Look › Perform view › Chord charts**
+turns the button off on this computer. In the [new layout](#the-new-layout-preview) the chart is a sidebar tab or fills
+the stage (with small faders for each sound), and its text size goes in percent steps.
 
 ## Wheels and Swell
 
@@ -262,7 +336,8 @@ and can keep going across song changes.
 - **Spread Worship** pads in all 12 keys (12 MP3s, about 19 minutes each): the free download link is in
   <https://spreadworship.com/blog/how-to-use-pads-in-worship/> (their "Simple Pads" pack on Gumroad is a paid,
   larger set).
-Download one, unzip it anywhere (e.g. `Music/Pads`), then choose **Settings → Pad folder**. Worship Rig works out
+Download one, unzip it anywhere (e.g. `Music/Pads`), then choose **Settings → Pad folder** (Chrome and the 1.x Mac
+app; the 2.0 Mac and iPad app can't pick a pad folder yet). Worship Rig works out
 each file's key from its name ("Pad - C#.mp3", "Warm Pad in Eb", "Ambient_Pad_-_F#m.mp3" …). Files it can't read
 are listed so you can set their key by hand. Then set a song's drone to **Files**. For a minor song it plays the
 relative major's file (A minor → C) unless you turn that off. Your pad files are never copied into the app.
@@ -271,7 +346,8 @@ relative major's file (A minor → C) unless you turn that off. Your pad files a
 
 Press **REC** (or **⌘R**) to record exactly what comes out of Worship Rig. Press it again to stop.
 
-- **Mac app:** recordings go straight to **Music → Worship Rig** as `Rig 2026-10-04 1030.wav`. No dialog.
+- **Mac app:** recordings go straight to **Music → Worship Rig** as `Rig 2026-10-04 1030.wav`. No dialog. (In 2.0
+  the engine writes the file itself; on the iPad it goes to **Files › On My iPad › Worship Rig › Recordings**.)
   The file is written as you play, so even if something crashes, everything up to the last few seconds is saved.
   **Help → Open Recordings Folder** takes you there.
 - **Chrome:** Chrome asks where to save each recording. Be aware that Chrome only creates the real file when you
@@ -292,13 +368,24 @@ You can also learn **Panic**, **Fade Out All**, **Swell**, and faders/knobs for 
 the reverb level and the master volume. Learned faders use "pickup": a hardware knob does nothing until you move it
 past the value on screen, so the sound never jumps.
 
+**Any setting (2.0).** In Edit, right-click (Ctrl-click, or long-press) any slider, fader or level chip and choose
+**Learn MIDI knob**, then move the knob; **Forget** removes it. Settings › MIDI Learn lists these under the fixed rows.
+A mapping belongs to a place ("sound 2's Space"), so it moves that place in whichever song is playing. One knob can
+drive several faders. A knob move is an edit like a slider drag: the song shows its changed dot and Revert undoes it.
+You can't learn under Perform lock, but learned knobs keep working there. On the iPad, Safari has no right-click
+menu: use the new layout's **Settings › MIDI Learn › Learn on Perform**.
+
 ## Other handy controls
 
-- **Panic** (**⌘.** or **Esc**): silences stuck notes instantly and stops the click (the drone keeps going).
+- **Panic** (**⌘.** or **Esc**): silences stuck notes instantly and stops the click. A drone the song has on keeps
+  going; a drone left on with no song behind it stops. Esc first closes whatever is open (a menu, the Quick sheet),
+  and the next Esc panics; **⌘.** always panics at once. To make every Esc on Perform panic at once, turn on
+  **Settings › Keyboards & MIDI › Esc always panics**.
 - **Fade Out All** (**⌘⇧F**): everything, drone included, fades out over about 6 seconds. Good for the end of a
   prayer time. The next note you play brings the volume back.
 - **Perform / Edit** (**⌘E**): the Perform screen is big and simple for the service. Edit is where you build songs.
-- **Perform lock** stops accidental edits during the service.
+- **Perform lock** stops accidental edits during the service. One press locks; unlocking needs a press-and-hold.
+  Playing, the faders, PANIC, Go and the scene numbers stay live.
 - The Mac app keeps your Mac from going to sleep while it's open, and saves a backup of all your songs now and then
   and every time you close it (**Help → Open Backups Folder**; the last 10 are kept). **Rig → Import Latest
   Backup…** puts the newest one back (your current songs are backed up first).
@@ -317,6 +404,44 @@ past the value on screen, so the sound never jumps.
   hard you play. To give one keyboard its own touch, see [Your keyboards](#your-keyboards-touch).
 - **Click output**, **Record the click** (Audio) and **Clock out** (MIDI keyboard): see
   [Click and count-in](#click-and-count-in).
+- **Sound (2.0 Mac and iPad app):** **Voices per sound** (32 / 64 / 128, default 64), **Buffer size** (64 / 128 /
+  256 / 512 frames, default 128; the line beside it shows what the Mac gave), **Total voice limit** (Auto / 128 / 256 /
+  512 / Off) and, under Advanced, **Freeze drone to save CPU**.
+- **Look › Appearance › Colour-blind colours** (Off / Red–green / Blue–yellow): instrument colours that stay apart
+  for that kind of colour blindness, plus each instrument's number on its range bar and tab. Per computer.
+- **Look › Perform view › Chord charts** turns the Chart button off on this computer; **Try the new layout
+  (preview)** switches to the redesigned screens.
+- **Keyboards & MIDI › Program buttons**: *Cue (Go plays it)* or *Switch now*. A 1.x library that had Program Change
+  on keeps *Switch now*.
+
+## The new layout (preview)
+
+**Settings › Look › Perform view › Try the new layout (preview)** switches to the redesigned screens; turning it off
+brings today's screens back at once. They are a preview until Ryan's own review on his Mac makes them the default.
+
+- **Perform:** the instrument strips fill the stage (ON tile, fader and meter, Space / Echo / Octave / Sustain,
+  Change and a ⋯ menu). Drag a strip by its ⠿ grip to reorder it. More than five scroll sideways, with name pills to
+  jump. On the left, **Quick** and the wheel column; on the right, a sidebar with one module at a time (Drone, Setlist,
+  Notes, Click, Chart) that you can resize, fold to an icon rail and reorder.
+- **Snapshots:** a row under the song bar shows the song's scenes by name, with Update and Save as new.
+- **Range bars:** above the bottom keyboard, each sound's coloured bar has a handle at each end. Tap the sound, then
+  drag a handle, and you hear the split as you drag.
+- **Song bank:** **Setlist › + Add song › From the Song bank** opens a browser over the stage with filters. **Try it**
+  plays a song in place of the current one without saving anything; then **Keep it**, **Add to setlist** or **Back**.
+- **Edit:** tabs by instrument name, and for each instrument a short list of categories (Sound, Tone EQ, Range,
+  Touch, Sustain, Space & Echo, Advanced) showing its setting and a dot when it changed.
+- **Settings:** each category shows its state, and a search box finds any setting. **MIDI Learn › Learn on Perform**
+  lets you move a knob and tap what it should change.
+
+Screens to compare are listed in [native/docs/MAC_CHECK.md](native/docs/MAC_CHECK.md) ("Screenshots for the 2.0 site").
+
+## The iPad app
+
+The 2.0 iPad app is the same app as on the Mac (iPadOS 17.5 or later). There is no App Store version: it is installed
+from Xcode on a Mac with a free Apple ID, and then has to be re-installed every 7 days (your songs stay). The steps
+are in [native/apple/README.md](native/apple/README.md), steps 7 to 10. To bring a library over, AirDrop a backup or an
+export to the iPad and open it with Worship Rig, or use **Import Library Backup…**. Recordings and backups show up in
+**Files › On My iPad › Worship Rig**.
 
 ## Troubleshooting
 
@@ -343,19 +468,23 @@ past the value on screen, so the sound never jumps.
 
 ## Running on your Mac
 
-**Downloads.** Each release on GitHub has four files. Pick **arm64** for an Apple Silicon Mac (M1 or later) and
-**x64** for an Intel Mac; `Worship-Rig-<arch>.dmg` opens a window where you drag the app to Applications,
-and the `.zip` holds the same app if you'd rather unzip it. Each is about 200 MB, and the app is about 370 MB
-installed. They aren't notarized, so the first open needs the Gatekeeper steps below.
+**Downloads.** From 2.0, the Mac app is for Apple Silicon (M1 or later) with macOS 14.5 or later:
+`Worship-Rig-arm64.dmg` opens a window where you drag the app to Applications, and the `.zip` holds the same app if
+you'd rather unzip it. It isn't notarized, so the first open needs the Gatekeeper steps below. For an Intel Mac or
+macOS 12 to 14.4, the [1.1.1 release](https://github.com/ryanmye/worship-rig/releases/tag/v1.1.1) has four files
+(**arm64** and **x64**, each as .dmg and .zip, about 200 MB each, about 370 MB installed).
 
-**Building.** After `npm install`, `npm run build:mac` takes about half a minute on an M-series Mac. It makes
+**Building the 1.x (Electron) app.** After `npm install`, `npm run build:mac` takes about half a minute on an M-series
+Mac. It makes
 `dist/mac-arm64/Worship Rig.app` (about 365 MB) plus `dist/Worship-Rig-arm64.zip` and `.dmg` (about
 190 MB each). For Intel: `npx electron-builder --mac dir zip dmg --x64 --publish never` (app in `dist/mac/`).
 The app has to stay under 500 MB on disk (around 400 MB is fine). The build check (`build-lint`) fails above
 480 MB and prints what takes the space.
 
-**Releases** (maintainer): push a `v*` tag matching `package.json`'s version; the release workflow builds and
-attaches dmg+zip for arm64 and x64 to a prerelease. Run it by hand from Actions with *dry_run* ticked to only build.
+**Releases** (maintainer): for 1.x, push a `v*` tag matching `package.json`'s version; the release workflow builds
+and attaches dmg+zip for arm64 and x64. Run it by hand from Actions with *dry_run* ticked to only build. That workflow
+builds the Electron app, not the 2.0 app: the 2.0 release steps are in
+[native/docs/MAC_CHECK.md](native/docs/MAC_CHECK.md) ("2.0 release checklist").
 
 **First open on another Mac.** The app isn't notarized by Apple. A copy that came through a browser, AirDrop or
 Messages makes macOS say *"Apple could not verify 'Worship Rig' is free of malware"*. On macOS 15 and later,
@@ -367,7 +496,13 @@ right-click → Open no longer gets past this. Instead:
 Or run this once in Terminal: `xattr -dr com.apple.quarantine "/Applications/Worship Rig.app"`. If macOS says
 *"damaged"*, the copy itself is broken. Copy the zip again and double-click it to unpack.
 
-**Where things are kept.**
+**Where things are kept (2.0 Mac app).**
+- **Songs and setlists** live in the app's own web storage (`rig://app`), apart from Chrome's and the 1.x app's.
+- **Backups**: `~/Library/Application Support/Worship Rig Native/backups/` (the newest 10 are kept). On the iPad:
+  Files › On My iPad › Worship Rig › Backups.
+- **Recordings**: `~/Music/Worship Rig/`, the same folder as 1.x.
+
+**Where things are kept (1.x Mac app and Chrome).**
 - **Songs and setlists** live in the app's own browser storage, which is kept separately for each address. The
   Mac app (`127.0.0.1:8438`) and Chrome (`127.0.0.1:8437`) therefore have separate libraries. `npm start` and the
   built app share one.
@@ -427,6 +562,9 @@ so testing Next song doesn't change the song. If nothing comes through within 5 
 combination: pick another. Esc stops a test.
 
 ## Manual check on your Mac (5 minutes, after each build)
+
+For the 2.0 app, the hands-on list is in [native/docs/MAC_CHECK.md](native/docs/MAC_CHECK.md) ("Tier 2" and the
+"2.0 release checklist"). The list below is for the 1.x (Electron) app.
 
 1. `npm run build:mac` finishes; the app opens from Applications.
 2. The MIDI light and your keyboard's name appear when you play.
@@ -497,6 +635,10 @@ docs/                            developer and user docs (below)
   second Chrome window when the page pinged `/api/heartbeat` within 45 s.
 - The renderer is plain ES modules under `app/js/` (no build step). `server.js`, `main.js` and `preload.js` are the
   shell. `SPEC.md` is the original design contract; `CONTRACT_CHANGES.md` records every change to it.
+- 2.0: `native/` holds the C++ engine (`native/core`, CMake), the Swift shell for macOS and iPad (`native/apple`,
+  XcodeGen), the dev host that runs the real engine under Chrome (`native/devhost`) and the golden renders that check
+  it against the browser engine (`native/golden`, `tools/golden`). Start with `native/docs/REPICKUP.md`; the engine
+  contract is `native/docs/ENGINE_CONTRACT.md` and the product decisions are `native/docs/DECISIONS.md`.
 - Docs: [docs/architecture.md](docs/architecture.md) (how the pieces fit, as built),
   [docs/garageband-import.md](docs/garageband-import.md) (My Samples importer), `test/README.md` (test suites),
   `LICENSES.md`, and `CLAUDE.md` (conventions for coding sessions).
