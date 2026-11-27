@@ -1,6 +1,6 @@
 # U-CVD (D32, Colour-blind colours): skeptic review (2026-11-27)
 
-Verdict: **PARTIAL** (shippable as a setting; design calls open). Off is today's app: across 8 themes × today's
+Verdict: **PARTIAL**. It is shippable as a setting, but design calls are open. Off is today's app: across 8 themes × today's
 and v6 Perform / Edit / Settings, every computed style and every canvas is identical to the base, except for the new
 row and the height it adds. Both purity probes are identical too. The palette numbers hold up. I re-implemented
 Machado 2009 and OKLab separately and got the builder's table to two decimals. The ON-window inks match what Chromium
@@ -180,6 +180,31 @@ has all three rows. There are no conflict markers. With the rebase, the badges a
 - Contrast of text on the ON tile outside the label window. That is the themes' existing design, covered by the
   ui-v6-themes audit only where it runs.
 
-## Gates (lane-cvd at the fix commit, 2-CPU box, one suite at a time)
+## Gates (2-CPU box shared with other agents, one suite at a time)
 
-GATES_TABLE
+Rows marked (A) ran on lane-cvd rebased onto c10ad59 with the F1–F3 fix (31b0f09 + the review draft). Rows marked
+(B) ran through `tools/cloud/gates.mjs` on the final rebase onto 937a04a (tree 675088eace0b). The two trees differ
+only in `tools/cloud/` (`git diff --stat 3e9c9cf b62cbcb`), and app/ and test/ are byte-identical.
+
+| suite | result | notes |
+|---|---|---|
+| shell unit | 415 / 416 (A and B) | One failure outside the lane, see below |
+| unit | 689 pass / 0 fail / 12 skipped of 701 (B) | (A) had one importer-host flake: "progress snapshots", load avg 13. It also flaked on the old base tree and passed on rerun |
+| ui-v6 | 90 / 90 (A, B) | Flag-off purity vs origin/v2-native (`UI6_PURITY_BASE`) identical: 105 requests, 15 store listeners, 4 intervals, 2529 elements. U-CVD + skeptic F1–F3 pass |
+| ui-v6-edit | 43 / 43 (A, B) | Purity vs origin/v2-native identical (1047 in Edit) |
+| ui-v6-ipad | 29 / 29 (A) | |
+| ui-v6-bank | 23 / 23 (A) | |
+| settings | 115 / 115 (A) | app, fixture, mac, bridge, v6. Includes [app] "U-CVD skeptic F3" |
+| ui-core | 78 / 78 (A) | |
+| themes | 58 / 58 (A) | |
+| edit-v2 | 14 / 14 files (A) | |
+| ui-v6-themes | 30 / 30 clean in 2253 s (A) | 8 themes × 3 sizes + Sanctuary, Daylight Day, Studio × rg, by: 0 text / ring / edge fails |
+
+0 console.error and 0 HTTP ≥ 400 in every browser suite. `app/js/engine/` is untouched.
+
+**The shell unit failure is not this lane's.** `bank-trial.test.mjs` "skeptic F1–F3: Back after list edits…":
+`ctl.addFromBank(LANTERN)` answers "That song is no longer in the Song bank. Press Rescan." Run alone
+(`--test-name-pattern`) it passes on lane-cvd. Run with the full file it fails on lane-cvd, on a plain
+origin/v2-native c10ad59 tree, and on the old 36ef998 tree. It had passed on 36ef998 in my first gate run 7 hours
+earlier. So it depends on the order of the tests in that file and on something in the environment or the clock. The
+lane touches neither the controller, the server nor the bank. I did not chase it further; it is for the orchestrator.

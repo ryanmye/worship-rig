@@ -30,9 +30,9 @@ verified, lane tip.
   ui-v6-edit 43/43, ui-v6-ipad 29/29, ui-v6-bank 23/23, settings 115/115, ui-core 78/78, themes rc 0
 - [x] edit-v2 14/14 files, ui-v6-themes 30/30 clean in 2253 s (c10ad59 tree; logs /tmp/cvdsk/gates2/)
 - [x] Rebased onto origin/v2-native 937a04a (tools/cloud only; app/ and test/ are byte-identical to the gated tree)
-- [ ] gates.mjs shell-unit,unit,ui-v6,ui-v6-edit with UI6_PURITY_BASE=origin/v2-native (the default merge-base is
+- [x] gates.mjs shell-unit,unit,ui-v6,ui-v6-edit with UI6_PURITY_BASE=origin/v2-native (the default merge-base is
   the stale local v2-native 36ef998)
-- [ ] Fill the gates table in the review, set the verdict, commit, hand back
+- [x] Gates table and verdict (PARTIAL) in the review; committed; hand back
 
 ## Findings
 - F1 (fixed): a range-bar number floated past the end of a short bar (stagger i × 16 px) → clamped to the bar.
@@ -51,4 +51,4 @@ verified, lane tip.
   unit importer-host "progress snapshots" flakes under load (load avg 13).
 
 ## Next step
-Run the gates.mjs list above, fill the gates table in the review, then hand back.
+Done: hand back to the orchestrator.
