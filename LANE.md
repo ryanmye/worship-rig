@@ -15,7 +15,9 @@ ui-v6-bank,settings. Don't push.
 - [x] T1: fix (BuildWorker::PrebuildHold in SongGraph::prepare + onRateChanged) 34c9bec
 - [ ] T1: loops: g++ 1000x running (.probe/loop-gcc1000/summary.txt); clang-20 1000x; ASan; taskset 1/2 CPUs;
       RIG_TEST_DECODE_THREADS 1..4
-- [ ] T1: native gates (ctest g++, clang-20 -Werror, ASan; fixtures byte-identical vs .probe/fx-base)
+- [x] T1: native gates: fixtures 112/112 byte-identical to base (g++ and clang-20); ctest clang-20 -Werror 84/84;
+      g++ 83/84 and ASan 83/84 (unit.core3 tick-gap bounds only, load avg 4-6 from another agent; 0 sanitizer
+      reports); A/B with a temp no-hold toggle under the same load: hold 3/8 clean, no-hold 1/8 (same gap lines)
 - [x] docs: CONTRACT_CHANGES "## core3f" + "## CAP", INTERFACE_LOG, docs/patch-packs.md
 - [x] T2: refusal sites: store.js chartOverflows (setChart + validate), addPackSong, topUpPacks fits()
 - [x] T2: fix + shell unit tests (be247be)
@@ -26,7 +28,8 @@ ui-v6-bank,settings. Don't push.
 - [ ] final report here
 
 ## Next step
-Loops are SIGSTOPped (pkill -CONT to resume) while native gates run: fixtures, ctest g++ / clang20 / asan. Then resume
+Loops resumed 10:25Z + sweeps.sh (dec1..4, cpu1, asan) + TSan build (nice 19). Wait, tally, report.
+(old) Loops are SIGSTOPped (pkill -CONT to resume) while native gates run: fixtures, ctest g++ / clang20 / asan. Then resume
 loops (gcc1000 at ~240, clang1000 just started), then taskset 1-CPU + RIG_TEST_DECODE_THREADS 1..4 sweeps, ASan loop.
 
 ## Findings
