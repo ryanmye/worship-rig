@@ -975,10 +975,12 @@ try {
       await until(() => !window.__rig.views.edit._debug.v6 && !window.__rig.views.v6);
       await page.waitForTimeout(300);
       assert.equal(await ev(() => window.__storeListeners.size), baseListeners);
-      // today's Edit keeps today's 1024 px page minimum at iPad portrait (the v6 Edit's portrait rule is its own)
+      // FU2 (UI6-fu layout quirk): today's Edit no longer keeps the 1024 px page minimum below 1024 px (it was 1004 px
+      // wide in an 820 px window, its right side cut off); it fits the window (layout-fu2.tests.mjs has the rest)
       await page.setViewportSize({ width: 820, height: 1180 });
       await toEdit();
-      assert.equal(await ev(() => getComputedStyle(document.body).minWidth), '1024px');
+      assert.equal(await ev(() => getComputedStyle(document.body).minWidth), '0px');
+      assert.equal(await ev(() => Math.round(document.querySelector('#view-edit').getBoundingClientRect().width)), 820);
       await page.setViewportSize({ width: 1280, height: 800 });
       await ev(() => window.__rig.setUiV6(true));
       await until(() => !!window.__rig.views.edit?._debug?.v6 && !!window.__rig.views.v6);

@@ -56,4 +56,8 @@ gates (in order; rerun the same command after a restart: gates.mjs skips what pa
   out-ranks every `.rbar.off`; styles-v6-keyboard.css's comment says otherwise). Not fixed (it would change cvd-Off
   pixels). Badge: today's = the bar's grey (inherit) + --text; v6 = --muted + --bg (grey, ≥ 4.5:1 in all 8 themes).
 
+- gates run 1 (tree f772e05): shell-unit, unit, ui-v6 PASS; ui-v6-edit TIMEOUT at 480 s: the old "flag flips" test
+  asserted today's Edit keeps the 1024 px minimum at 820 (the quirk this lane fixes) → updated to 0px + Edit 820 wide;
+  its failure cascaded (30 s timeouts). Budget 8 → 12 min in run-all (the two new files add ≈ 2.5 min).
+
 ## Open questions
