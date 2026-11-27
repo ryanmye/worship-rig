@@ -164,9 +164,11 @@
 }
 
 /* ---- Edit chart (mock_dialogs.css .dlg.cedit): source left, the chart live right */
+/* C-SHIP skeptic F2: --chart-dlg-clear (chart/import.js keepClearOfPanic) keeps the dialog off PANIC's row, which
+   chart-view O1 lifts above this backdrop */
 .v6 .v6-ce-host { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
-  background: color-mix(in srgb, var(--bg) 62%, transparent); }
-.v6 .v6-ce { width: min(1040px, 96vw); max-height: 92vh; display: flex; flex-direction: column; gap: 12px;
+  padding-bottom: var(--chart-dlg-clear, 0px); background: color-mix(in srgb, var(--bg) 62%, transparent); }
+.v6 .v6-ce { width: min(1040px, 96vw); max-height: min(92vh, calc(100vh - var(--chart-dlg-clear, 0px) - 16px)); display: flex; flex-direction: column; gap: 12px;
   padding: 16px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 14px; color: var(--text);
   box-shadow: 0 24px 60px var(--v6-sh); }
 .v6 .v6-ce-h { display: flex; align-items: baseline; gap: 8px; min-width: 0; }

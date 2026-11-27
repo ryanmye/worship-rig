@@ -25,6 +25,26 @@ export function fileTooLargeMessage(bytes) {
   return `That file is too large (${mb(bytes)} MB). A file can be at most ${mb(IMPORT_FILE_MAX_BYTES)} MB `
     + `(a song list), and a chart at most ${CHART_MAX_CHARS / 1024} KB.`;
 }
+/**
+ * C-SHIP skeptic F2: PANIC sits above the chart dialogs' backdrop (chart-view O1, styles.css .chart-dlg-open), so a
+ * dialog must not reach under it: at 1024 × 700 the Edit chart dialog (92vh) put PANIC over its Cancel, and a tap
+ * there panicked. While a dialog is open its host gets `--chart-dlg-clear`, the room PANIC's row takes at the
+ * bottom of the window (0 when PANIC is not shown there); the host pads by it and the dialog's max-height leaves it
+ * free (styles-chart.css, styles-v6-chart.css). Kept up to date on resize.
+ * @param {HTMLElement} host  the dialog's full-window host
+ * @returns {() => void} stop following resizes
+ */
+export function keepClearOfPanic(host) {
+  const fit = () => {
+    const p = [...document.querySelectorAll('.btn-panic')].find((x) => x.offsetParent);
+    const r = p ? p.getBoundingClientRect() : null;
+    const clear = r && r.height && r.top > innerHeight / 2 ? Math.ceil(innerHeight - r.top) + 8 : 0;
+    host.style.setProperty('--chart-dlg-clear', `${clear}px`);
+  };
+  fit();
+  window.addEventListener('resize', fit);
+  return () => window.removeEventListener('resize', fit);
+}
 const WARN_SHOWN = 12;
 const REVIEW_DEBOUNCE_MS = 250;
 
@@ -240,6 +260,7 @@ export function openChartImport(ctx, songId, o = {}) {
   // C-SHIP (chart-view review O1): the on-screen PANIC sits above this backdrop (styles.css .chart-dlg-open), so it
   // stays reachable and working while the dialog is open, as ⌘. already did
   document.body.classList.add('chart-dlg-open');
+  const unclear = keepClearOfPanic(host); // C-SHIP skeptic F2
 
   // ---- review
   function renderReview() {
@@ -323,6 +344,7 @@ export function openChartImport(ctx, songId, o = {}) {
     closeOverlay();
     markDialog(token, false);
     document.body.classList.remove('chart-dlg-open');
+    unclear();
     host.remove();
     o.onClose?.();
     // back to the button that opened it, if it is still there; otherwise nothing stays focused (Esc = Panic again)

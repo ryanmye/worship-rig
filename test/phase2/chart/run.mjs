@@ -288,6 +288,41 @@ try {
     await ev(() => document.activeElement?.blur?.());
   });
 
+  // C-SHIP skeptic F2: PANIC is lifted over the dialog (O1), so the dialog keeps clear of it; at 1024 × 700 a long
+  // paste (the review, 90vh) reached under PANIC
+  await T('C-SHIP skeptic F2: the import dialog stays clear of PANIC with a long paste (1024 × 700, 1280 × 800)',
+    async () => {
+      const long = Array.from({ length: 60 }, (_, i) => `[G]Line ${i} of the [C]test [D]chart`).join('\n');
+      const meet = () => ev(() => {
+        const p = [...document.querySelectorAll('.btn-panic')].find((x) => x.offsetParent);
+        const a = p.getBoundingClientRect();
+        const b = document.querySelector('[data-testid="chart-import"]').getBoundingClientRect();
+        const w = Math.min(a.right, b.right) - Math.max(a.x, b.x);
+        const hh = Math.min(a.bottom, b.bottom) - Math.max(a.y, b.y);
+        return w > 0 && hh > 0 ? `${Math.round(w)}×${Math.round(hh)}` : null;
+      });
+      try {
+        for (const vp of [[1024, 700], [1280, 800]]) {
+          await page.setViewportSize({ width: vp[0], height: vp[1] });
+          await page.click('[data-testid="chart-add-empty"], [data-testid="chart-add"]');
+          await until(() => !!document.querySelector('[data-testid="chart-import"]'));
+          await page.fill('[data-testid="chart-import"] textarea', `{title: Long}\n{key: D}\n{tempo: 90}\n${long}`);
+          await page.waitForTimeout(700);
+          assert.equal(await meet(), null, `import dialog and PANIC overlap at ${vp}`);
+          await page.keyboard.press('Escape');
+          await until(() => !document.querySelector('[data-testid="chart-import"]'));
+          await ev(() => document.activeElement?.blur?.());
+        }
+      } finally {
+        if (await ev(() => !!document.querySelector('[data-testid="chart-import"]'))) {
+          await page.keyboard.press('Escape');
+          await until(() => !document.querySelector('[data-testid="chart-import"]'));
+          await ev(() => document.activeElement?.blur?.());
+        }
+        await page.setViewportSize({ width: 1440, height: 900 });
+      }
+    });
+
   await T('C-SHIP O7: a file over 1 MB is refused with the file limit (not the 64 KB chart cap)', async () => {
     await page.click('[data-testid="chart-add-empty"]');
     await until(() => !!document.querySelector('[data-testid="chart-import"]'));

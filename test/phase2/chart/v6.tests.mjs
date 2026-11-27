@@ -964,6 +964,43 @@ export async function v6Tests(x) {
         await page.setViewportSize({ width: 1280, height: 800 });
       });
 
+    // C-SHIP skeptic F2 (native/docs/reviews/UI6-cship.md): PANIC is lifted over the chart dialogs (chart-view O1), so
+    // a dialog must stay clear of it. At 1024 × 700 the Edit chart dialog (92vh) ran under PANIC, which covered its
+    // Cancel and Remove chart: a tap on Cancel panicked. Every size: the dialog's box and PANIC's never meet.
+    await T('U7b (C-SHIP skeptic F2): the Edit chart dialog stays clear of PANIC (1024 × 700, 1280 × 800, 1440 × 900)',
+      async () => {
+        await setSong(Array.from({ length: 60 }, (_, i) => `[G]Line ${i} of the [C]test [D]chart`).join('\n'));
+        const meet = () => ev(() => {
+          const p = [...document.querySelectorAll('.btn-panic')].find((x) => x.offsetParent);
+          const a = p.getBoundingClientRect();
+          const b = document.querySelector('[data-testid="v6-chart-editor"]').getBoundingClientRect();
+          const w = Math.min(a.right, b.right) - Math.max(a.x, b.x);
+          const hh = Math.min(a.bottom, b.bottom) - Math.max(a.y, b.y);
+          return w > 0 && hh > 0 ? `${Math.round(w)}×${Math.round(hh)}` : null;
+        });
+        try {
+          for (const vp of [[1024, 700], [1280, 800], [1440, 900]]) {
+            await page.setViewportSize({ width: vp[0], height: vp[1] });
+            await ev(() => window.__rig.views.chart.openEdit());
+            await until(() => !!document.querySelector('[data-testid="v6-chart-editor"]'));
+            await page.waitForTimeout(200);
+            assert.equal(await meet(), null, `Edit chart and PANIC overlap at ${vp}`);
+            // the dialog still fits: its foot is on screen and nothing scrolls the page
+            assert.equal(await ev(() => document.querySelector('[data-testid="v6-ce-save"]').getBoundingClientRect()
+              .bottom <= innerHeight), true, `Save on screen at ${vp}`);
+            // a resize while it is open keeps it clear
+            await page.setViewportSize({ width: vp[0], height: vp[1] - 40 });
+            await page.waitForTimeout(250);
+            assert.equal(await meet(), null, `after a resize at ${vp}`);
+            await page.click(tid('v6-ce-cancel'));
+            await until(() => !document.querySelector('[data-testid="v6-chart-editor"]'));
+          }
+        } finally {
+          await ev(() => window.__rig.views.chart?.editor?.close());
+          await page.setViewportSize({ width: 1280, height: 800 });
+        }
+      });
+
     // ---- UI v6 polish batch 1 (polish1.tests.mjs: UI6-U7b O1–O3)
     await polish1ChartTests({ T, page, ev, until, tid, st, setSong, assert });
 

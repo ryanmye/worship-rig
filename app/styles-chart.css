@@ -45,9 +45,12 @@
   align-items: flex-start; }
 
 /* the Add chart dialog */
+/* C-SHIP skeptic F2: --chart-dlg-clear (import.js keepClearOfPanic) keeps the dialog off PANIC's row, which O1 lifts
+   above this backdrop */
 .chv-dlg-host { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
-  background: color-mix(in srgb, var(--bg) 70%, transparent); }
-.chv-dlg { width: min(720px, 94vw); max-height: 90vh; overflow: auto; display: flex; flex-direction: column; gap: 10px;
+  padding-bottom: var(--chart-dlg-clear, 0px); background: color-mix(in srgb, var(--bg) 70%, transparent); }
+.chv-dlg { width: min(720px, 94vw); max-height: min(90vh, calc(100vh - var(--chart-dlg-clear, 0px) - 16px));
+  overflow: auto; display: flex; flex-direction: column; gap: 10px;
   padding: 16px 18px; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--radius);
   color: var(--text); box-shadow: 0 10px 40px #000c; }
 .chv-dlg-h { margin: 0; font-size: 18px; }

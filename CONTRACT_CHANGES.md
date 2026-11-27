@@ -9807,8 +9807,21 @@ review O1, O3, O4 and O7 fixed. No engine change (`app/js/engine` untouched), no
   z-index: 61`, over the z 60 backdrop (no ancestor of PANIC makes a stacking context; checked with
   `elementFromPoint`). A tap panics and the dialog stays open. ⌘. / Esc unchanged. (The U5b F1 idea: PANIC is never
   under a dialog's backdrop. Settings, z 50, still covers it, as before.)
+  - C-SHIP skeptic F2: with PANIC above the backdrop, a dialog that reached PANIC's row put PANIC over its own
+    controls (v6 Edit chart at 1024 × 700, 92vh: PANIC covered Cancel and part of Remove chart; today's import
+    review at 1024 × 700 reached 21 px under it). `views/chart/import.js` `keepClearOfPanic(host)` (both dialogs):
+    while one is open its host gets `--chart-dlg-clear` = the window height below PANIC's top + 8 px (0 when no
+    PANIC shows in the lower half; follows resizes, one window `resize` listener while open); the host pads its
+    bottom by it and the dialog's max-height is `min(90vh | 92vh, 100vh − clear − 16px)`, so it centres above
+    PANIC's row. Tests: chart suite "C-SHIP skeptic F2" (today's import with a long paste, 1024 × 700 and 1280 × 800)
+    and "U7b (C-SHIP skeptic F2)" (v6 Edit chart at 1024 × 700, 1280 × 800, 1440 × 900, and after a resize); both
+    fail before.
 - **O3** The toggle's look moved from styles-chart.css to styles.css (`.song-sub .chv-toggle`, so the placeholder and
   the view's button look the same): 36 px on a mouse like Notes and Click, `@media (pointer: coarse)` 44 px.
+  - C-SHIP skeptic F1: pressed and under the mouse (right after the click that opened the chart) Studio's cap hover
+    (`.btn:hover`, a dark gradient) replaced the accent under the accent ink: 1.33 : 1 at the gradient's worst stop.
+    styles.css keeps the accent on `:is(:hover, :active)` of the pressed toggle. Test: chart suite "C-SHIP skeptic
+    F1" (every theme: idle, pressed, pressed + hover ≥ 4.5 : 1; fails before).
 - **O4** `store.addSong` / `store.duplicateSong` check the library size before writing (`songOverflows`: the library
   JSON + the new song's + 64 for the id in the order / setlist). Orchestrator call (tier 2, a note under DECISIONS
   D33; the builder's first cut refused past 2 MB, which contradicted D9's "a save past 2,000,000 characters warns but

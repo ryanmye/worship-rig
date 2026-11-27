@@ -12,7 +12,7 @@ import { markDialog } from '../../_fallback-components.js';
 import { CHART_MAX_CHARS, isTrialId } from '../../../store.js';
 import { detectFormat } from '../../../shared/chart-parse.js';
 import {
-  chartReview, IMPORT_FILE_MAX_BYTES, fileTooLargeMessage, trialKeepsLibraryCopy,
+  chartReview, IMPORT_FILE_MAX_BYTES, fileTooLargeMessage, keepClearOfPanic, trialKeepsLibraryCopy,
 } from '../../chart/import.js';
 import { CHART_ACCEPT, CHART_SIDE_PCT, chartView, pctPx } from '../../chart/logic.js';
 import { renderChart } from '../../chart/render.js';
@@ -108,6 +108,7 @@ export function openChartEditor(ctx, songId, o) {
   // C-SHIP (chart-view review O1): the on-screen PANIC sits above this backdrop (styles.css .chart-dlg-open), so it
   // stays reachable and working while the dialog is open, as ⌘. already did
   document.body.classList.add('chart-dlg-open');
+  const unclear = keepClearOfPanic(host); // C-SHIP skeptic F2: never under PANIC
 
   // ---- live review + preview
   function refresh() {
@@ -266,6 +267,7 @@ export function openChartEditor(ctx, songId, o) {
     closeOverlay();
     markDialog(token, false);
     document.body.classList.remove('chart-dlg-open');
+    unclear();
     host.remove();
     o.onClose?.();
     if (o.opener && o.opener.isConnected && typeof o.opener.focus === 'function' && !o.opener.disabled) {
