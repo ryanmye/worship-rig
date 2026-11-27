@@ -580,3 +580,12 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
     Android Chrome 50+. Falls back to polling if WebSocket fails.
   - **Same command bus** as the iPhone app and the menu-bar popover; pairing with a short code; local network only.
   - **Order:** after 2.0, with the Mac command bus (D31 item 2), before the iPhone app. Effort ≈ 3–5 agent-days [E].
+
+## D35: Every 1.x Mac feature is in the native 2.0 app before 2.0 ships (Ryan, 2026-11-27: "Build all before 2.0")
+- Found by Lane R (code reading): the native Mac / iPad app lacks My Samples, patch packs and Song bank content, the
+  GarageBand / Logic importer, My Pads, menu-bar mode (mini panel), global shortcuts, the update check, Open at login,
+  keeping the screen awake and most of the Rig / Help menus; MIDI input (B1, lane NMA), export / import of files
+  (B2) and a native release build (B3) are blockers handled separately.
+- All of these are built before the 2.0 tag (tier 1 answered). Estimate 12–20 agent-days [E]. Each is a lane with a
+  builder and a skeptic; iPad equivalents where they make sense (Files picker / security-scoped bookmarks for folders;
+  no menu bar or global shortcuts on iPad).
