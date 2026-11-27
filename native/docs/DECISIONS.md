@@ -476,6 +476,17 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
 4. **Song bank: tempo bands < 80 / 80–114 / ≥ 115 BPM, Feel matches any chosen tag** (as built).
 5. **Start here card under the song bar; the portrait top bar hides the meter and the idle clock** (as built).
 
+### D26.1a: a snapshot's drone follows the key played; a chosen key is optional, relative (2026-11-27; U-SNAP)
+- **Default:** a snapshot keeps no drone key. Its drone plays the key the song is played in (`song.hearIn` / `minor`),
+  so an Easy Transpose or a key-grid change of the song moves every snapshot's drone with it.
+- **Optional:** a key chosen for the snapshot in the Save snapshot dialog (Save as new / Update), stored as
+  `drone.keyShift = {semis 0..11, minor?}` above the song's key (`minor` absent = the song's own major / minor).
+  While such a snapshot plays, the key grids (sidebar Drone module, today's Perform card, the bus' droneKey) move
+  that key on top of it (transient, kept by Update); without one they change the song's key as before.
+- **Why not absolute** (the builder's first cut): an absolute key would not follow an Easy Transpose (a different
+  singer), and a relative key captured on every save would turn "tap D, Save, tap back to C" into "the song's key".
+  Choosing the key explicitly avoids both.
+
 ## D27: After Mac/iPad 2.0: iPhone 2.0, then Windows 2.0 (Ryan, 2026-11-27)
 - **Order:** Mac/iPad 2.0 first; then iPhone; then Windows. No building before Mac/iPad 2.0 ships; plan now.
 - **iPhone = both:** a full instrument on the phone (own audio, USB-C / Bluetooth MIDI, phone-sized UI from the same

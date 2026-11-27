@@ -9364,9 +9364,10 @@ no SCHEMA change, every new field optional, engine untouched (app/js/engine and 
 - **What a scene holds (`shared/scenes.js`; header comment rewritten).** All optional, each checked on its own:
   - `slots[i] = {gain, muted?, sends?}`; `sends = {reverb?, delay?}` = `slots.<i>.sends.reverb / .delay` (`SCENE_SENDS`;
     not the chorus). An entry is still the slot's level first: sends without a gain make no entry.
-  - `drone = {gain?, mode?, key?}`; `mode` ∈ 'off' | 'synth' | 'files' (`SCENE_DRONE_MODES` = presets.js DRONE_MODES:
-    ON / OFF and Synth / My Pads are one field in the song, so in the scene too); `key = {pc 0..11, minor}` = the key
-    grid's `song.hearIn` / `song.minor`. Before D26.1 the drone entry needed a gain; now any valid field makes it.
+  - `drone = {gain?, mode?, keyShift?}`; `mode` ∈ 'off' | 'synth' | 'files' (`SCENE_DRONE_MODES` = presets.js
+    DRONE_MODES: ON / OFF and Synth / My Pads are one field in the song, so in the scene too); `keyShift =
+    {semis 0..11, minor?}` (D26.1a): a key chosen in the Save snapshot dialog, above the song's key (`minor` absent
+    = the song's own). Before D26.1 the drone entry needed a gain; now any valid field makes it.
   - `fx = {reverb?: {size, damp, predelay, returnGain}, delay?: {time, feedback, pingpong, tone, sync, returnGain}}`
     (`SCENE_FX`): exactly the rows SPACE_PRESETS / ECHO_PRESETS write, so a scene holds the preset (or a "Custom"
     setting) and its level. The app stores no preset id (the pickers match values, `matchPreset`), so neither does a
@@ -9375,16 +9376,18 @@ no SCHEMA change, every new field optional, engine untouched (app/js/engine and 
     a non-boolean `pingpong`, a `sync` / `mode` outside its enum, a key without an integer `pc` and a boolean `minor`
     are dropped (never coerced); unknown fields are dropped. An fx row or a drone field alone is a usable scene; a
     name alone still is not (D25). Idempotent; a pre-D26.1 scene normalises to itself.
-- **Absolute drone key (builder's choice; Ryan can flip it).** A relative key (semitones above the song's key) would
-  follow an Easy Transpose of the song, but today's key grid (sidebar drone, today's Perform card, the bus' droneKey)
-  writes the song's own key: "tap D, Save, tap back to C" would save "the song's key" and lose D. So the key is
-  absolute and a later transpose of the song does not move a scene's drone key (Update the snapshot; the dialog
-  shows the key). Applying it sets `hearIn = key.pc`, `minor`, and moves `playIn` with it, so the transpose
-  (`transposeSemis`) and the instruments' pitch never change: exactly the key grid's write.
-- **Capture** (`captureScene(live, {wheel})`, from `controller.scenes.save`): every filled slot's sends, the drone's
-  gain / mode / key and the song's SCENE_FX rows, always. So Save / Update now pins those fields (a song edit of the
-  song's own Space afterwards no longer reaches that scene, as with levels). An old scene keeps meaning "as the song
-  has it" for every field it lacks until it is updated.
+- **Drone key (DECISIONS D26.1a).** By default a snapshot holds no key: its drone follows the key the song is played
+  in. A key chosen in the Save snapshot dialog is stored as `keyShift` relative to the song's key, so an Easy
+  Transpose moves it too. Applying it sets `hearIn = own + semis` (and `minor` when given) and moves `playIn` with
+  it, so the transpose (`transposeSemis`) and the instruments' pitch never change: exactly the key grid's write.
+  (A first cut stored an absolute key on every save; replaced.)
+- **Capture** (`captureScene(live, {wheel, keyShift})`, from `controller.scenes.save(n, {name?, keyShift?})`): every
+  filled slot's sends, the drone's gain / mode and the song's SCENE_FX rows, always; `keyShift` only when the dialog
+  gives one (`null` = follows the song's key), or, without one, when the playing snapshot has a chosen key (its key
+  as heard is kept: Quick's Save scene n, the row's Update). A save whose chosen key differs from what plays moves
+  the drone there at once (`sceneMove`). So Save / Update pins the sends, Space / Echo and drone ON / sound (a later
+  edit of the song's own Space no longer reaches that scene, as with levels); an old scene keeps meaning "as the
+  song has it" for every field it lacks.
 - **Apply** (`applyScene(song, mergeScene(scene, tweak))`; `controller.live`). The controller's scene change is now
   `sceneMove(from, to)`:
   - slot and drone levels: `setParam(path, v, {glide: SCENE_GLIDE_SEC})`, as before;
@@ -9408,19 +9411,19 @@ no SCHEMA change, every new field optional, engine untouched (app/js/engine and 
     during the load.
 - **Live moves stay transient.** `controller.scenes.adjust(path, v)` takes (when the playing scene holds the field,
   `sceneHolds`) `slots.<i>.sends.reverb/.delay`, `fx.reverb.<row>` / `fx.delay.<row>`, `drone.mode`, `drone.key`
-  (`{pc, minor?}`) besides the levels; the engine gets what a manual change of that field sends (`applyParamDiff` +
+  (`{pc, minor?}`, only while the snapshot has a chosen key; kept as its keyShift) besides the levels; the engine gets what a manual change of that field sends (`applyParamDiff` +
   `applySongLevel`). Learned MIDI knobs on those rows go there first (`SCENE_LEVEL_RE`), and the bus' `droneToggle` /
   `droneKey` too (they read the drone as it plays). `mergeScene(scene, tweak)`: the tweak wins field by field.
 - **A view's store write under a scene (`absorbEdits`, in `applyDiff`).** Today's views write sends, the Space / Echo
-  pickers, the drone ON tile / Synth-My Pads / key grid straight to the store (only levels go through
+  pickers, the drone ON tile / Synth-My Pads straight to the store (only levels go through
   `scenes.adjust`). Without help a scene holding that field would keep playing its value and the tap would be silent.
   So when the song's own value of a field the playing scene holds changes, the new value goes on top of the scene
   (the tweak): heard at once, dropped at the next scene change; the store write itself stays a song edit (changed
   dot, Revert undoes it), as it is today. Slots are paired through the slot map (a re-order is not an edit). Levels
-  are not absorbed (unchanged: a level write under a scene that holds it is not heard).
-  **Known gap:** a write equal to the song's own value changes nothing in the store, so the controller never sees it
-  (e.g. the song bar's Space shows the song's own room "Stage" while scene "Hall" plays; tapping Stage is silent).
-  Fix in the views (lane follow-up): call `controller.scenes.adjust` first and show `controller.scenes.view(song)`.
+  are not absorbed (unchanged: a level write under a scene that holds it is not heard). Since the views below go
+  through `scenes.take` first, this is only the fallback for paths that still write the store (other views, imports,
+  a learned knob on a row outside SCENE_LEVEL_RE). Its limit: a write equal to the song's own value changes nothing
+  in the store, so the controller never sees it.
 - **Other controller reads of "the drone as it plays":** `menuBarState().droneOn / droneKey` (the popover), the
   pad-folder restore after an audio restart (`restorePads`).
 - **Slot moves (D23).** Per-instrument entries carry their sends inside the slot entry, so insertSlot (`scenesFrom`
@@ -9428,8 +9431,9 @@ no SCHEMA change, every new field optional, engine untouched (app/js/engine and 
   records the order (composed over several re-orders before one notification) for `absorbEdits`.
 - **Save snapshot dialog (`views/v6/dialogs.js`).** "It keeps": each instrument's level and ON / OFF; each
   instrument's Space and Echo; "Space and Echo: Space: Hall · Echo: Dotted Eighth, with their levels" (preset names as
-  the song bar matches them, else Custom); "The drone: ON / OFF, key, sound and level" with "on · D major · My Pads" /
-  "off · C major when on"; the wheel row as before. "Not kept: the sounds themselves, octave, sustain, range, tone
+  the song bar matches them, else Custom); "The drone: ON / OFF, sound and level, and its key" with "on · My Pads" /
+  "off" and a key choice (D26.1a: "Follows the song’s key (C major)", the default, or one of 24 keys; preselected =
+  the key that plays when a snapshot with a chosen key plays); the wheel row as before. "Not kept: the sounds themselves, octave, sustain, range, tone
   (EQ), the chorus, lofi and master, and the drone's brightness and movement." No CSS change; the name suggestion is
   unchanged (still levels only).
 - **Export / import / migrate / 1.x / patch packs.** Nothing new in the store: whole `scenes` writes, `migrate()`,
@@ -9440,7 +9444,7 @@ no SCHEMA change, every new field optional, engine untouched (app/js/engine and 
   `sceneHolds`, `absorbEdits`, `mixOf`, `fxSettingsOf`, `paramDiff`. Changed: `tweakScene` (new paths),
   `sceneMatches` (also compares the sends / fx / drone fields the scene has; snapshots.js' "edited" dot follows).
 - **Tests.** `test/phase1/shell/scene-snap.test.mjs` (12): normaliser (bad values, idempotent, old scenes unchanged);
-  capture / apply / absolute key / sceneMatches; merge / tweak / sceneHolds / absorbEdits (incl. slot pairing);
+  capture / apply / chosen relative key / sceneMatches; merge / tweak / sceneHolds / absorbEdits (incl. slot pairing);
   Save captures; a scene change = the manual change for the room / echo rows and the drone key / mode (same engine
   calls), levels glide, sends / returns in 10 even steps ending on the value, no prepare / commit / note off / fade,
   a held note survives, the song never written; drone key = the key grid's calls, OFF = the ON tile's; an old scene
@@ -9456,8 +9460,34 @@ no SCHEMA change, every new field optional, engine untouched (app/js/engine and 
   shape fix, ui-v6 76/76 (flag-off purity identical), edit-v2 14/14 files, settings 111/111 (5 modes),
   migration-1x unit 107/107 and browser 8/8 (one Settings-import toast timeout on the first run, passed on rerun,
   unrelated). Engine, bridge, native core, golden fixtures and CSS untouched.
-- **Not done / for the skeptic:** the view follow-up above (adjust first, show the live song: song bar Space chip and
-  picker, sidebar drone module key / ON / sound, v6 strip chips already show the live sends); `shared/voice.js`
-  `sceneSaveTitle` / `sceneEditHint` (today's UI, flag off) still list only "levels, ON switches, drone level,
-  wheel" (incomplete, not changed to keep flag-off purity and this lane's UI scope); suggestSnapshotName never names
-  a Space / Echo / drone change.
+- **Views (closes the gap above; coordinator follow-up on lane-snap).** Every view that writes a field a snapshot can
+  hold now offers the write to the playing snapshot first and shows the song as it plays for those fields:
+  - `controller.scenes.take(addr, v) → boolean` (new): `shared/scenes.js sceneFieldOf(addr)` maps a store address
+    (current-song grammar, `song.<rel>`, `songs.<id>.<rel>`) to a scene field: `slots.<i>.sends.reverb/.delay`,
+    `fx.reverb/delay.<row>` (SCENE_FX), a whole `patch.fx.reverb/delay` object ("Song's own": taken only when the
+    snapshot holds every row it writes), `drone.mode`. Taken = `adjustScene` (heard, transient, kept by Save /
+    Update, dropped at the next change; nothing written); else the view writes the store as before. The key is not
+    an address (hearIn / playIn are also Easy Transpose's): key grids and Major / Minor call
+    `scenes.adjust('drone.key', {pc, minor?})` first.
+  - v6: song bar Space chip + picker (`songbar.js` currentRoom reads `v.liveOf`; `perform.js` `applySpace` /
+    `setSlot` take first, so the strips' Space / Echo steps too), sidebar Drone module (ON tile, Synth / My Pads, key
+    grid, Major / Minor, its pad line; also inside v6 Edit › Drone), v6 Edit › Effects and the instrument's Space /
+    Echo (both through the Edit shell's panel ctx, below), v6 Edit › Drone › My Pads source. The v6 Quick sheet holds
+    none of these fields. The sidebar rail's Drone badge still shows the song's own ON / key (`badge(state)` has no
+    controller).
+  - Flag off: today's Perform (`setSong` / `setSlot` / the Space and Echo rows' `applyPreset` and "Song's own" /
+    `setDroneOn` / `setSongKey` / Major / Minor take or adjust first; the drone card, the Space / Echo rows show the
+    live song), Edit v2 (all panels through the shell's ctx: `ctx.set` = take first, `ctx.valueOf` and the binder's
+    default read show `ctx.view()` for scene fields; the Effects panel, the slot panel's Space / Echo chips, the
+    Drone panel's ON tile / source / its `.off` look).
+  - Edit shell (`views/edit/shell.js`, both Edit views): `pctx.view()`, `pctx.sceneField(addr)`, and a refresh of the
+    scene fields' bindings on the controller's `scene` event (a snapshot change or a move on top changes what they
+    show without a store write). Purity: no window / document listener, interval or store listener added (the
+    controller listener is an EventTarget's), no new request (shared/scenes.js was loaded already).
+  - So under a snapshot Edit's Space / Echo / drone controls edit the snapshot (transiently, as Perform), not the
+    song; on the song's own levels (no snapshot) Edit edits the song as before.
+- **Copy.** `shared/voice.js` sceneSaveTitle ("Save what you hear now as scene n: levels, ON switches, Space and
+  Echo, the drone and the wheel"), sceneEditHint, sceneEditSub ("Saved sounds to step through …"). Save snapshot's
+  name suggestion (`suggestSnapshotName(live, own, names, taken, prev)`): when the levels and ON switches are those of
+  `prev` (the playing snapshot, else the song) and only the Space / Echo / drone differ, the name says that: "Hall",
+  "Hall + Dotted Eighth", "Drone D", "Drone off", "Drone Dm pads" ("Own Space" / "Own Echo" for no preset).

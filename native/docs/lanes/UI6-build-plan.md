@@ -82,11 +82,10 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   builder + strong skeptic.
 
 - ~~**U-SNAP (D26.1):**~~ **Built (lane-snap; awaiting the skeptic):** snapshots remember Space / Echo (sends + the
-  song's room / echo rows) and the drone (on, key, sound). shared/scenes.js + controller apply path + Save snapshot
-  dialog "It keeps". CONTRACT_CHANGES "## Snapshots remember Space / Echo / drone (D26.1)". **Follow-up for the view
-  lanes:** the views that write these fields (v6 strip Space / Echo chips, song bar Space picker, sidebar drone,
-  Edit › Effects, today's Perform card) should call `controller.scenes.adjust(path, v)` first, as levels do
-  (`sceneLevel`), and show `scenes.view(song)` (the song bar Space chip and the drone module show the song's own).
+  song's room / echo rows) and the drone (on, key, sound; key absolute, DECISIONS D26.1a). shared/scenes.js +
+  controller apply path + every view that writes those fields goes through `controller.scenes.take` / `adjust` first
+  and shows `scenes.view(song)` (v6 and flag off) + Save snapshot "It keeps" / names / voice.js copy.
+  CONTRACT_CHANGES "## Snapshots remember Space / Echo / drone (D26.1)".
 - **U-EDITRANGE (D26.2):** Edit's bottom-row range bars draggable with Perform's guards.
 
 - **Core flake (not UI):** CI run on f46bac4 (2026-11-26 19:37 UTC, macos-15 build-test) failed
