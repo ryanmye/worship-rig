@@ -162,15 +162,15 @@ Scratch / probes: /home/claude/scratch/fu2-sk, .probe/.
 - [x] 1 empty-library: fade only when held (key / pedal / MIDI), drone off once, next song not faded, F1 holds
 - [x] 2 snapshot line reserved height: 0 px shift (3 sizes, both Edits), no-snapshot unchanged, ellipsis, role=status
 - [x] 3 bank-trial root cause; app boot path on one transient fetch failure
-- [ ] 4 layout: v6 Edit ≤1100 with chart + FU2; today's Edit ≤1024 only while visible; purity
-- [ ] 5 CVD2: placeBadges overlap (16 instruments, identical / one octave / clipped), Off writes nothing, observer
+- [x] 4 layout: v6 Edit ≤1100 with chart + FU2; today's Edit ≤1024 only while visible; purity (F1)
+- [x] 5 CVD2 (F2): placeBadges overlap (16 instruments, identical / one octave / clipped), Off writes nothing, observer
       leaks, tab dot vs 2-digit number, muted grey ≥ 4.5:1 in 8 themes, v6 muted bar colour (O-item + screenshot)
 - [ ] gates (gates.mjs): shell-unit,unit,chart,ui-v6,ui-v6-edit,ui-v6-ipad,ui-v6-bank,settings,ui-core,edit-v2,
       ui-v6-themes
 - [ ] review doc native/docs/reviews/UI6-fu2.md
 
 ### Next step
-4 done with F1 (commit), then 5 (CVD2).
+Gates on the code-final tree (gates.mjs, full list, themes last), then the review doc UI6-fu2.md.
 
 ### Findings (as found)
 - 1 OK (.probe/probe-a.json, real web engine, flag off + v6): nothing held / a key played and released → empty:
@@ -196,3 +196,8 @@ Scratch / probes: /home/claude/scratch/fu2-sk, .probe/.
   is short, by design). Pure fuzz 15 048 cases, 0 overlaps (.probe/place-fuzz.txt). keys.js rAFs per cvd flip
   constant (2 on / 1 off) after 6 view flips, 4 flag flips, 4 song changes: no live watcher leak. 820 v6 Edit 16
   tabs: no dot over a number. v6 muted bar keeps lamp colour (confirmed, .probe/cvd/v6-muted-off-sanctuary.png).
+- 5 observers: keys.js MutationObservers live = 1 and ResizeObservers live ≤ 1 after view / flag flips with cvd Off and
+  On; 0 ResizeObservers live after Off (.probe/probe-mo.json). Flag-off with cvd Off keeps one html-class observer
+  (builder's note; not counted by purity).
+- F1 side effect: v6 header at 1280 differs from base by sub-pixel text antialiasing right of the key chip (two spans
+  instead of one text node; max diff 60/255 on 52 px, no visible change); 1180 identical.
