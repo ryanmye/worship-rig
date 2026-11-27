@@ -61,9 +61,18 @@ export default {
     const lastSourceOf = (s) => (s && last.id === s.id ? last.source : null);
     let padsInfo = null;
     const song = () => store.currentSong();
+    // D26.1: the drone as it plays (a snapshot may hold its ON / sound / key); a field the playing snapshot holds goes
+    // on top of it (controller.scenes.take / adjust: heard, transient, kept by Save), never into the song
+    const heard = (s = song()) => (s ? m.liveOf(s) : s);
     const setSong = (field, value) => {
       const s = song();
-      return s ? store.set(`songs.${s.id}.${field}`, value) : false;
+      if (!s) return false;
+      return !!controller.scenes?.take?.(`songs.${s.id}.${field}`, value) || store.set(`songs.${s.id}.${field}`, value);
+    };
+    const setMinor = (minor) => {
+      const h0 = heard();
+      if (h0 && controller.scenes?.adjust?.('drone.key', { pc: h0.hearIn, minor: !!minor })) return true;
+      return setSong('minor', !!minor);
     };
 
     const tile = use(onTile({
@@ -98,7 +107,7 @@ export default {
           if (!qualityGate.justHeld()) hint();
           return render();
         }
-        setSong('minor', !!val);
+        setMinor(!!val);
       },
     }));
     quality.el.dataset.testid = 'v6-drone-quality';
@@ -106,7 +115,7 @@ export default {
       selector: '.key-btn', enabled: m.isLocked, run: (b) => setKey(Number(b.dataset.pc)), onHint: () => hint(), d,
     });
     const qualityGate = holdGate(quality.el, {
-      selector: '.seg', enabled: m.isLocked, run: (b) => setSong('minor', b.dataset.value === 'true'),
+      selector: '.seg', enabled: m.isLocked, run: (b) => setMinor(b.dataset.value === 'true'),
       onHint: () => hint(), d,
     });
     const common = { compact: true, color: 'var(--drone)', relative: true, resetOnDoubleClick: false };
@@ -181,7 +190,7 @@ export default {
 
     /** ON tile: off ↔ the last source (this song), else the Revert snapshot's source, else Synth (perform.js). */
     function setOn(on) {
-      const s = song();
+      const s = heard();
       if (!s) return;
       if (!on) {
         if (s.drone.mode !== 'off') Object.assign(last, { id: s.id, source: s.drone.mode });
@@ -195,7 +204,8 @@ export default {
     /** Key grid: the key the band hears; the transpose amount stays (Play-In moves with it), as perform.js. */
     function setKey(pc) {
       const s = song();
-      if (!s || s.hearIn === mod12(pc)) return;
+      if (!s || heard(s).hearIn === mod12(pc)) return;
+      if (controller.scenes?.adjust?.('drone.key', { pc: mod12(pc) })) return; // D26.1: the playing snapshot's key
       const semis = transposeSemis(s.playIn, s.hearIn);
       store.set(`songs.${s.id}.hearIn`, mod12(pc));
       store.set(`songs.${s.id}.playIn`, mod12(pc - semis));
@@ -242,15 +252,16 @@ export default {
         shownId = s ? s.id : null;
       }
       if (s) {
-        const dr = s.drone;
+        const hs = heard(s); // D26.1: the ON tile, sound and key as they play
+        const dr = hs.drone;
         const on = dr.mode !== 'off';
         const snap = m.snap();
         tile.set(on);
-        tile.setSub(droneKeyLabel(s.hearIn, s.minor));
+        tile.setSub(droneKeyLabel(hs.hearIn, hs.minor));
         mode.set(on ? dr.mode : lastSourceOf(s) || droneOnMode(snap && snap.id === s.id ? snap.song : s));
-        grid.set({ pc: s.hearIn, minor: s.minor });
-        quality.set(!!s.minor);
-        level.set(m.liveOf(s).drone.gain);
+        grid.set({ pc: hs.hearIn, minor: hs.minor });
+        quality.set(!!hs.minor);
+        level.set(dr.gain);
         bright.set(Number.isFinite(dr.brightness) ? dr.brightness : 0.5);
         move.set(Number.isFinite(dr.movement) ? dr.movement : 0.3);
         follow.set(dr.chordFollow);
@@ -268,7 +279,7 @@ export default {
       follow.setDisabled(locked || !s);
       keep.setDisabled(locked || !s);
       root.classList.toggle('locked', locked);
-      renderPads(st, s);
+      renderPads(st, s && heard(s));
     }
 
     d.add(store.subscribe(() => render()));

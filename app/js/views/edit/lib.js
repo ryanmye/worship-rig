@@ -461,7 +461,11 @@ export function createBinder(ctx) {
       if (comp.el) comp.el.dataset.bind = addr;
       const def = hasParam(addr) ? describe(addr).default : undefined;
       const b = {
-        rels: rels && rels.length ? rels : [rel], comp, read: read || ((s) => getIn(s, rel) ?? def), last: undefined,
+        // D26.1: a field a snapshot can hold shows the song as it plays (ctx.view), as its write goes on top of the
+        // snapshot (ctx.set → controller.scenes.take)
+        rels: rels && rels.length ? rels : [rel], comp, last: undefined,
+        read: read || (ctx.sceneField?.(addr) && ctx.view ? (s) => getIn(ctx.view() || s, rel) ?? def
+          : (s) => getIn(s, rel) ?? def),
         text, dirty: false,
       };
       if (text === 'dirty' && comp.el) {

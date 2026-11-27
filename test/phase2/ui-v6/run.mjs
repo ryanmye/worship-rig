@@ -39,6 +39,7 @@ import { sidebarTests } from './sidebar.tests.mjs';
 import { leftTests } from './left.tests.mjs';
 import { moveTests } from './move.tests.mjs';
 import { dialogTests } from './dialogs.tests.mjs';
+import { snapTests } from './snap.tests.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -1339,6 +1340,9 @@ try {
 
   // ---------------------------------------------------------------- U7c (dialogs.tests.mjs)
   await dialogTests({ T, page, ev, until, tid, song, settled, hold, setSlots, SHOTS, assert, rectOf, armPanics });
+
+  // ---------------------------------------------------------------- D26.1 U-SNAP views (snap.tests.mjs)
+  await snapTests({ T, page, ev, until, tid, song, settled, assert });
 
   await T('on / off cycles: today’s Perform comes back whole; nothing of v6 is left behind', async () => {
     for (let k = 0; k < 3; k++) {

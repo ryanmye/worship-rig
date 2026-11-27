@@ -691,13 +691,13 @@ export function mountPerform(root, ctx) {
           if (!qualityGate.justHeld()) lockHint();
           return renderSong(store.get());
         }
-        setSong('minor', !!v);
+        setSongMinor(!!v);
       },
     }),
   );
   quality.el.dataset.testid = 'key-quality';
   const gridGate = holdGate(grid.el, { selector: '.key-btn', enabled: isLocked, run: (b) => setSongKey(Number(b.dataset.pc)), onHint: () => lockHint(), d });
-  const qualityGate = holdGate(quality.el, { selector: '.seg', enabled: isLocked, run: (b) => setSong('minor', b.dataset.value === 'true'), onHint: () => lockHint(), d });
+  const qualityGate = holdGate(quality.el, { selector: '.seg', enabled: isLocked, run: (b) => setSongMinor(b.dataset.value === 'true'), onHint: () => lockHint(), d });
   const droneGain = use(fader({ path: 'drone.gain', label: 'Drone level', compact: true, color: 'var(--drone)', relative: true, resetOnDoubleClick: false, onChange: (v) => sceneLevel('drone.gain', v) || setSong('drone.gain', v) }));
   droneGain.el.dataset.testid = 'drone-gain';
   const brightness = use(fader({ path: 'drone.brightness', label: 'Brightness', compact: true, color: 'var(--drone)', relative: true, resetOnDoubleClick: false, format: (v) => `${brightnessWord(v)} · ${Math.round(v * 100)}%`, onChange: (v) => setSong('drone.brightness', v) }));
@@ -1014,13 +1014,24 @@ export function mountPerform(root, ctx) {
   // ---------------------------------------------------------------- writes
   let shownId = null; // id of the song the view shows
   /** A song field. The frozen / hold rules are enforced by the controls (LOCK); this only needs a song. */
+  // D26.1: a field the playing snapshot holds (a send, the Space / Echo, the drone's ON / sound / key) goes on top of
+  // it (controller.scenes.take / adjust: heard, transient, kept by Save as scene), never into the song
+  const sceneTake = (addr, value) => !!(controller.scenes?.take && controller.scenes.take(addr, value));
   function setSong(field, value) {
     if (!shownId) return false;
-    return store.set(`songs.${shownId}.${field}`, value);
+    const addr = `songs.${shownId}.${field}`;
+    return sceneTake(addr, value) || store.set(addr, value);
   }
   function setSlot(i, field, value) {
     if (!shownId || !store.getSong(shownId)?.patch.slots[i]) return;
-    store.set(`songs.${shownId}.patch.slots.${i}.${field}`, value);
+    const addr = `songs.${shownId}.patch.slots.${i}.${field}`;
+    if (!sceneTake(addr, value)) store.set(addr, value);
+  }
+  /** Major / Minor: the playing snapshot's drone key first (D26.1). */
+  function setSongMinor(minor) {
+    const h0 = shownId ? liveOf(store.getSong(shownId)) : null;
+    if (h0 && controller.scenes?.adjust?.('drone.key', { pc: h0.hearIn, minor: !!minor })) return true;
+    return setSong('minor', !!minor);
   }
   function setSlotGain(i, v) {
     if (!sceneLevel(`slots.${i}.gain`, v)) setSlot(i, 'gain', v);
@@ -1048,7 +1059,7 @@ export function mountPerform(root, ctx) {
   }
   /** Drone ON tile: off ↔ the last source (this session), else the snapshot's source, else Synth (round-3 fix 5). */
   function setDroneOn(on) {
-    const s = shownId && store.getSong(shownId);
+    const s = shownId && liveOf(store.getSong(shownId)); // D26.1: the drone as it plays
     if (!s) return;
     if (!on) {
       if (s.drone.mode !== 'off') lastDroneSource = s.drone.mode;
@@ -1064,7 +1075,8 @@ export function mountPerform(root, ctx) {
     const s = store.getSong(shownId);
     if (!s) return;
     const semis = transposeSemis(s.playIn, s.hearIn);
-    if (s.hearIn === mod12(pc)) return;
+    if (liveOf(s).hearIn === mod12(pc)) return;
+    if (controller.scenes?.adjust?.('drone.key', { pc: mod12(pc) })) return; // D26.1: the playing snapshot's key
     store.set(`songs.${shownId}.hearIn`, mod12(pc));
     store.set(`songs.${shownId}.playIn`, mod12(pc - semis));
   }
@@ -1074,7 +1086,7 @@ export function mountPerform(root, ctx) {
     for (const [path, v] of Object.entries(p.params)) {
       if (!isValidPath(path)) continue; // e.g. an EQ/comp param this build doesn't have
       const target = path.startsWith('master.') ? `songs.${shownId}.patch.fx.master.${path.slice(7)}` : `songs.${shownId}.patch.${path}`;
-      store.set(target, v);
+      if (!sceneTake(target, v)) store.set(target, v); // D26.1: a snapshot's Space / Echo first
     }
   }
   /** Header chip → preset; "Song's own" writes back only that effect from the Revert snapshot (H implementation §2). */
@@ -1082,7 +1094,8 @@ export function mountPerform(root, ctx) {
     if (!shownId) return;
     if (id === SONG_OWN) {
       const own = snap && snap.id === shownId ? snap.song.patch?.fx?.[unit] : null;
-      if (own) store.set(`songs.${shownId}.patch.fx.${unit}`, JSON.parse(JSON.stringify(own)));
+      const addr = `songs.${shownId}.patch.fx.${unit}`;
+      if (own && !sceneTake(addr, JSON.parse(JSON.stringify(own)))) store.set(addr, JSON.parse(JSON.stringify(own)));
     } else if (id.startsWith('vibe:')) applyPreset(VIBE_PRESETS, id.slice(5));
     else applyPreset(unit === 'reverb' ? SPACE_PRESETS : ECHO_PRESETS, id);
     renderPresets(store.getSong(shownId)); // a no-op write (same values) still re-syncs the row
@@ -1225,12 +1238,12 @@ export function mountPerform(root, ctx) {
     renderScenes();
     // drone
     if (song) {
-      const dr = song.drone;
+      const dr = live.drone; // D26.1: the drone's ON / sound / key as they play (a snapshot may hold them)
       const on = dr.mode !== 'off';
       droneTile.set(on);
       droneMode.set(on ? dr.mode : lastDroneSource || droneOnMode(snap && snap.id === song.id ? snap.song : song));
-      grid.set({ pc: song.hearIn, minor: song.minor });
-      quality.set(!!song.minor);
+      grid.set({ pc: live.hearIn, minor: live.minor });
+      quality.set(!!live.minor);
       droneGain.set(live.drone.gain);
       brightness.set(Number.isFinite(dr.brightness) ? dr.brightness : 0.5);
       movement.set(Number.isFinite(dr.movement) ? dr.movement : 0.3);
@@ -1374,9 +1387,10 @@ export function mountPerform(root, ctx) {
         row.setChanged(false);
         continue;
       }
-      const m = matchPreset(list, (p) => songFxValue(song, p));
+      const heard = liveOf(song); // D26.1: the Space / Echo as they play (a snapshot may hold them)
+      const m = matchPreset(list, (p) => songFxValue(heard, p));
       const baseM = base ? matchPreset(list, (p) => songFxValue(base, p)) : null;
-      const asSaved = !!base && sameValue(song.patch.fx?.[unit], base.patch.fx?.[unit]);
+      const asSaved = !!base && sameValue(heard.patch.fx?.[unit], base.patch.fx?.[unit]);
       const hasOwn = unit === 'delay' || spaceHasOwn;
       row.set(hasOwn && asSaved && !baseM ? SONG_OWN : m ? m.id : null);
       row.setChanged(hasChange(changed, `patch.fx.${unit}`));

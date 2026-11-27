@@ -15,6 +15,7 @@ import { loadComponents, markDialog } from '../_fallback-components.js';
 import { describe, formatValue, SLOT_COUNT, MAX_SLOTS, slotName } from '../../shared/params.js';
 import { SPACE_PRESETS, ECHO_PRESETS, matchPreset } from '../../shared/fx-presets.js';
 import { changedPaths, hasChange } from '../../shared/song-diff.js';
+import { sceneFieldOf } from '../../shared/scenes.js';
 import PANELS from './panels/index.js';
 import {
   h, setText, icon, getIn, relOf, pct, blocksFor, blockOf, sentence, droneKeyText, chorusWord,
@@ -131,6 +132,8 @@ const clone = (o) => (o ? JSON.parse(JSON.stringify(o)) : null);
  */
 function createCore(root, appCtx) {
   const { store, controller, engine } = appCtx;
+  /** D26.1: the song as it plays (the playing snapshot and its live moves on top). */
+  const liveSong = (song) => (song && controller?.scenes?.view ? controller.scenes.view(song) : song);
   const editState = new EditState();
   const cleanups = [];
   const listen = (target, type, fn, opts) => {
@@ -289,6 +292,28 @@ function createCore(root, appCtx) {
     }
   };
   cleanups.push(store.subscribe(core.onStore));
+  // D26.1: a snapshot change or a move on top of one changes what the scene fields show without a store write: the
+  // panels refresh those fields as if they had changed
+  const onScene = () => {
+    const s = core.song;
+    if (!s) return;
+    const rels = ['patch.fx.reverb', 'patch.fx.delay', 'drone.mode', 'hearIn', 'minor',
+      ...s.patch.slots.map((_, i) => `patch.slots.${i}.sends`)];
+    const ev = { state: store.get(), song: s, songId: core.songId, paths: [], rels, songChanged: false, full: false };
+    for (const set of [...core.subSets]) {
+      for (const fn of [...set]) {
+        try {
+          fn(ev);
+        } catch (err) {
+          console.warn('[edit] panel scene handler failed', err);
+        }
+      }
+    }
+  };
+  if (controller && typeof controller.addEventListener === 'function') {
+    controller.addEventListener('scene', onScene);
+    cleanups.push(() => controller.removeEventListener('scene', onScene));
+  }
 
   // ---- instruments (arrive when the engine starts; change on a My Samples rescan)
   const readInstruments = () => {
@@ -413,13 +438,25 @@ function createCore(root, appCtx) {
       // song access
       song: () => core.song,
       songId: () => core.songId,
-      /** store.set passthrough (§4 grammar, 'song.<field>', entity paths). @returns {boolean} */
-      set: (addr, v) => store.set(addr, v),
-      /** Current song value for a §4 address / 'song.<field>' (PARAMS default when the song lacks it). */
+      /**
+       * store.set passthrough (§4 grammar, 'song.<field>', entity paths). @returns {boolean}
+       * D26.1: a field the playing snapshot holds (a send, a Space / Echo row, the drone's sound) goes on top of it
+       * first (controller.scenes.take: heard, transient, kept by Save), so nothing is written then.
+       */
+      set: (addr, v) => !!controller?.scenes?.take?.(addr, v) || store.set(addr, v),
+      /**
+       * Current song value for a §4 address / 'song.<field>' (PARAMS default when the song lacks it). D26.1: a field
+       * a snapshot can hold reads the song as it plays (controller.scenes.view), so Edit shows what is heard.
+       */
       valueOf(addr) {
-        const v = core.song ? getIn(core.song, relOf(addr)) : undefined;
+        const s = core.song && sceneFieldOf(addr) ? liveSong(core.song) : core.song;
+        const v = s ? getIn(s, relOf(addr)) : undefined;
         return v === undefined ? describe(addr)?.default : v;
       },
+      /** D26.1: the song as it plays (its snapshot on top; = song() when none plays). */
+      view: () => liveSong(core.song),
+      /** D26.1: true for an address a snapshot can hold (the binder reads those from view()). */
+      sceneField: (addr) => !!sceneFieldOf(addr),
       /** Store changes, pre-digested; fn({state, song, songId, paths, rels, songChanged, full}). @returns unsub */
       subscribe(fn) {
         subs.add(fn);

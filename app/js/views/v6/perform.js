@@ -90,7 +90,10 @@ export function mountPerformV6(root, ctx) {
     && controller.scenes.adjust(path, value));
   const setSlot = (i, field, value) => {
     if (!shownId || !store.getSong(shownId)?.patch.slots[i]) return;
-    store.set(`songs.${shownId}.patch.slots.${i}.${field}`, value);
+    const addr = `songs.${shownId}.patch.slots.${i}.${field}`;
+    // D26.1: a send the playing snapshot holds goes on top of it (heard, transient, kept by Save), not into the song
+    if (controller.scenes?.take?.(addr, value)) return;
+    store.set(addr, value);
   };
   const toast = (msg, kind, o) => ctx.toast?.(msg, kind, o);
 
@@ -130,7 +133,7 @@ export function mountPerformV6(root, ctx) {
         if (!isValidPath(path)) continue;
         const target = path.startsWith('master.') ? `songs.${shownId}.patch.fx.master.${path.slice(7)}`
           : `songs.${shownId}.patch.${path}`;
-        store.set(target, val);
+        if (!controller.scenes?.take?.(target, val)) store.set(target, val); // D26.1: a snapshot's room first
       }
     },
     /** "+ Add instrument": an empty slot at the end, then Edit's instrument picker on it (as Edit's "Slots" menu). */

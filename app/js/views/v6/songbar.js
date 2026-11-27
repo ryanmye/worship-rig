@@ -154,7 +154,11 @@ export function songBar(v, host, snapChip) {
     });
     spacePop.render();
   });
-  const currentRoom = (song) => (song ? matchPreset(SPACE_PRESETS, (p) => songFxValue(song, p)) : null);
+  // D26.1: the room as it plays (a snapshot may hold it; v.liveOf = controller.scenes.view)
+  const currentRoom = (song) => {
+    const heard = song && v.liveOf ? v.liveOf(song) : song;
+    return heard ? matchPreset(SPACE_PRESETS, (p) => songFxValue(heard, p)) : null;
+  };
 
   // ---- Notes and Setlist live in the right sidebar (U3, views/v6/sidebar/): the buttons open it on that module
   d.listen(notesBtn, 'click', () => v.openSidebar?.('notes'));

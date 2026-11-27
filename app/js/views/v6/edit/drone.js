@@ -108,7 +108,10 @@ export function mountDrone(host, ctx, opts, env) {
           { value: 'files', label: 'My Pads', title: 'Pad files from your My Pads folder (Settings)' },
         ],
         onChange,
-      }), { read: (s) => (s.drone.mode === 'off' ? null : s.drone.mode) });
+      }), { read: (own) => { // D26.1: the drone as it plays (a snapshot may hold its sound)
+        const s = (ctx.view && ctx.view()) || own;
+        return s.drone.mode === 'off' ? null : s.drone.mode;
+      } });
       source.el.dataset.testid = 'v6e-drone-source';
       const minorPad = binder.ctl('song.drone.minorUsesRelativeMajorFile', (onChange) => C.toggle({
         label: 'Minor keys use the major pad', title: 'For a minor key with no pad file, use the relative-major pad',

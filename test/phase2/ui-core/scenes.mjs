@@ -166,6 +166,61 @@ test('a song switch starts on the song’s own levels; Edit › Song lists the s
   assert.deepEqual(await ev(() => [...document.querySelectorAll('[data-testid=scene-dots] button')].map((b) => b.textContent)), ['1']);
 });
 
+// D26.1 (U-SNAP) views, flag off: today's Perform card and Edit v2 under a snapshot that holds the room / drone
+test('D26.1: under snapshot "Hall" (own room Stage) today’s Perform shows Hall; tapping Stage, a key, the drone ON '
+  + 'tile and Edit › Effects › Stage are heard and the song is NOT written; the next change drops them', async () => {
+  const { HALL_SCENE, HEARD } = await import('../ui-v6/snap.tests.mjs');
+  await ev(() => window.__rig.store.set('settings.view', 'perform'));
+  const { up2, own } = await ev(HALL_SCENE);
+  await until(() => !window.__rig.controller.status.loading);
+  await ev(() => window.__rig.controller.scenes.go(0));
+  await until(() => window.__rig.engine.getParam('fx.reverb.size') === 0.65);
+  let h = await ev(HEARD);
+  const before = h.json;
+  const checked = (sel) => ev((x) => document.querySelector(x)?.getAttribute('aria-checked'), sel);
+  await until(() => document.querySelector('[data-testid=space-row] .fxc[data-id="stage"]')?.getAttribute(
+    'aria-checked') === 'false');
+  // Space row → Stage
+  await ev(() => document.querySelector('[data-testid=space-row] .fxc[data-id="stage"]').click());
+  await until(() => window.__rig.engine.getParam('fx.reverb.size') === 0.42);
+  assert.equal((await ev(HEARD)).json, before, 'Space: not written');
+  await until(() => document.querySelector('[data-testid=space-row] .fxc[data-id="stage"]')?.getAttribute(
+    'aria-checked') === 'true');
+  assert.equal(await checked('[data-testid=space-row] .fxc[data-id="stage"]'), 'true');
+  // key grid: the snapshot's key shows; another key is heard, not written
+  assert.equal(await ev((pc) => document.querySelector(`[data-testid=key-grid] .key-btn[data-pc="${pc}"]`)
+    ?.getAttribute('aria-checked'), up2), 'true');
+  const up4 = (own + 4) % 12;
+  await ev((pc) => document.querySelector(`[data-testid=key-grid] .key-btn[data-pc="${pc}"]`).click(), up4);
+  await until((pc) => window.__rig.engine.drone?.key?.pc === pc, up4);
+  assert.equal((await ev(HEARD)).json, before, 'key: not written');
+  // ON tile
+  await page.click('[data-testid=drone-on]');
+  await until(() => window.__rig.engine.drone?.cfg?.mode === 'off');
+  h = await ev(HEARD);
+  assert.deepEqual([h.viewMode, h.ownMode], ['off', 'synth']);
+  assert.equal(h.json, before, 'ON tile: not written');
+  // the next change: the snapshot again
+  await ev(() => {
+    window.__rig.controller.scenes.go(null);
+    window.__rig.controller.scenes.go(0);
+  });
+  await until((pc) => window.__rig.engine.drone?.key?.pc === pc && window.__rig.engine.drone.cfg.mode === 'synth'
+    && window.__rig.engine.getParam('fx.reverb.size') === 0.65, up2);
+  // Edit v2 › Effects › Space › Stage
+  await ev(() => window.__rig.store.set('settings.view', 'edit'));
+  await ev(() => window.__rig.views.edit.editState.select('effects'));
+  const stage = '.ev2-fx-pchips[data-preset="space"] .ev2-fx-pc[data-id="stage"]';
+  await page.waitForSelector(stage, { timeout: 10000 });
+  assert.equal(await ev(() => document.querySelector('.ev2-fx-pchips[data-preset="space"] .ev2-fx-pc[data-id="hall"]')
+    ?.getAttribute('aria-pressed')), 'true', 'Edit shows the snapshot’s Hall');
+  await ev((x) => document.querySelector(x).click(), stage);
+  await until(() => window.__rig.engine.getParam('fx.reverb.size') === 0.42);
+  assert.equal((await ev(HEARD)).json, before, 'Edit › Effects: not written');
+  await ev(() => window.__rig.store.set('settings.view', 'perform'));
+  await ev(() => window.__rig.controller.scenes.go(null));
+});
+
 test('no console errors', () => {
   assert.deepEqual(errors, [], errors.join('\n'));
 });

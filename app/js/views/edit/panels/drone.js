@@ -54,8 +54,10 @@ export default {
     };
 
     // ---- ON STAGE: ON tile, source, level
+    // D26.1: the drone as it plays (a snapshot may hold its ON / sound); ctx.set puts the tap on top of it
+    const heard = () => (ctx.view ? ctx.view() : ctx.song());
     const setOn = (on) => {
-      const s = ctx.song();
+      const s = heard();
       if (!s) return;
       if (!on) {
         if (s.drone.mode !== 'off') lastSource.set(s.drone.mode);
@@ -76,7 +78,8 @@ export default {
     }
     tile.el.classList.add('ev2-drone-tile');
     tile.el.dataset.droneOn = '';
-    binder.fn(['drone.mode', 'hearIn', 'minor'], (s) => {
+    binder.fn(['drone.mode', 'hearIn', 'minor'], (own) => {
+      const s = heard() || own;
       tile.set(s.drone.mode !== 'off');
       tile.setSub?.(droneKeyText(s));
     });
@@ -90,7 +93,10 @@ export default {
         { value: 'files', label: 'My Pads', title: 'Pad files from your My Pads folder (Settings)' },
       ],
       onChange,
-    }), { read: (s) => (s.drone.mode === 'off' ? null : s.drone.mode) });
+    }), { read: (own) => {
+      const s = heard() || own;
+      return s.drone.mode === 'off' ? null : s.drone.mode;
+    } });
     source.el.classList.add('ev2-drone-src');
     const srcDot = changedDot('Source changed since the song was loaded');
 
@@ -160,7 +166,8 @@ export default {
       foot);
     el.replaceChildren(root);
     // OFF: the sound controls stay editable (you can shape it before turning it on) but read as resting
-    binder.fn(['drone.mode', 'drone.gain'], (s) => {
+    binder.fn(['drone.mode', 'drone.gain'], (own) => {
+      const s = heard() || own;
       root.classList.toggle('off', s.drone.mode === 'off');
       // v11-polish: `.audible` = on and above −∞ (Sanctuary's / Nave's window lights on it, not on the mode)
       root.classList.toggle('audible', s.drone.mode !== 'off' && Number(s.drone.gain) > 0.0005);
