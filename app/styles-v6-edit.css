@@ -52,6 +52,13 @@
 .v6.v6-edit .v6e-sig { min-height: 40px; padding: 0 8px; border-radius: 10px; border: 1px solid var(--line-2);
   background: var(--panel-2); color: var(--text); font: 700 15px var(--font-display, inherit); }
 .v6.v6-edit .v6e-chart[hidden] { display: none; }
+/* C-SHIP (D33): the Chart button shows by default now; at the Mac's narrow widths (1024 × 700) the header keeps
+   to one row without a sideways scroll: no "Time" caption (the select keeps its aria-label), tighter gaps */
+@media (max-width: 1100px) {
+  .v6.v6-edit .v6e-sigbox .v6e-cap { display: none; }
+  .v6.v6-edit .v6e-head .ev2-song-head { gap: 6px; }
+  .v6.v6-edit .v6e-chart { padding-left: 10px; padding-right: 10px; }
+}
 
 .v6.v6-edit .v6e-rig { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 6px 8px 8px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
