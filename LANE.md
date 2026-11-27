@@ -20,7 +20,7 @@ LIBRARY_MAX_CHARS), O7 (over-1 MB message); docs (CONTRACT_CHANGES "C-SHIP (D33)
 - [x] gates on ba4dfbc (gates.mjs): all PASS except migration-1x (O4 broke fixtures that grew past 2 MB by addSong;
       bigLib looped forever → 180 s / 480 s timeouts)
 - [x] migration-1x fixtures fixed (d8-skeptic bigLib + D9 test, quota.pw.mjs); d8 12/12 and quota.pw 2/2 alone
-- [ ] gates.mjs migration-1x on the new tip
+- [x] gates.mjs migration-1x on ca7fe5e: PASS (117 s)
 - [x] UI6-build-plan "C-SHIP status"; CONTRACT_CHANGES gates
 
 ## Gates so far (old runner, before the v6 Edit header CSS fix and the sidebar-test fix)
@@ -40,8 +40,7 @@ shell-unit, unit, chart 44/44, ui-v6 85/85, ui-v6-edit 44/44, ui-v6-ipad 29/29, 
 ui-core 79/79, edit-v2 14/14 files, ui-v6-themes 24/24 clean: PASS. migration-1x FAIL (fixtures, fixed next commit).
 
 ## Next step
-`node tools/cloud/gates.mjs migration-1x` on the new tip (the only change after ba4dfbc: migration-1x test files and
-docs), then hand back.
+Hand back (report below in the hand-off). Nothing open in the lane.
 
 ## Findings / risks
 - Lazy rule has no store listener of its own: a chart arriving on a non-current song loads nothing until used.

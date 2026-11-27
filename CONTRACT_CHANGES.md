@@ -9838,4 +9838,4 @@ review O1, O3, O4 and O7 fixed. No engine change (`app/js/engine` untouched), no
   header's gaps go 10 → 6 px (styles-v6-edit.css).
 - Gates (ba4dfbc, one at a time, `tools/cloud/gates.mjs`): shell unit 415/415, unit 685 pass / 0 fail / 12 skip,
   chart 44/44, ui-v6 85/85, ui-v6-edit 44/44, ui-v6-ipad 29/29, ui-v6-bank 23/23, settings 114/114, ui-core 79/79,
-  edit-v2 14/14 files, ui-v6-themes 24/24 themes clean; migration-1x after the fixture fix (see the lane report).
+  edit-v2 14/14 files, ui-v6-themes 24/24 themes clean; migration-1x PASS after the fixture fix (ca7fe5e).
