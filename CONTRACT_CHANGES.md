@@ -9561,3 +9561,10 @@ orchestrator's 1280 × 800 title screenshot). No engine change. Flag off is unch
   has the focus, as before). `components/quickSheet.js` and `components/stepChip.js` take a new
   `underModal` option (default false), so today's Perform is unchanged: its Esc still closes Settings and the Quick
   sheet at once (test). Not opted in: the strip reorder drag (an Esc during a drag under Settings is not a path).
+- **Back into the gap is the controller's (UI6-polish1 O2).** The UI6-U7a O2 rule (Back lands the replaced song in
+  the gap of its setlist entry when that entry was removed during the trial) moved from `views/v6/bank/banner.js`
+  (`removedEntry` / `keepGap`) into `controller.backFromTrial` (`trialGap` read before the switch, `keepTrialGap`
+  after it resolves true: the same two `NAV_SETTINGS` writes, at the same moment). So every Back follows it, the
+  v6 Perform's `destroy()` on a flag flip mid-trial included (before, that one landed on the reprise). The banner's
+  Back is now just `controller.backFromTrial()` and its error toast. Tests: shell `bank-trial` "polish batch 2 O2";
+  ui-v6-bank "polish2 O2" (flag flip). The existing ui-v6-bank "polish1 U7a O2" passes unchanged.

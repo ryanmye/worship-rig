@@ -24,6 +24,7 @@ import { blankSong, defaultFx } from '../../../app/js/presets.js';
 import { defaultSlot } from '../../../app/js/shared/params.js';
 import { SPACE_PRESETS, ECHO_PRESETS } from '../../../app/js/shared/fx-presets.js';
 import { polish1BankTests } from './polish1.tests.mjs';
+import { polish2BankTests } from './polish2.tests.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -721,6 +722,8 @@ try {
 
   // ---- UI v6 polish batch 1 (polish1.tests.mjs: UI6-U7a O1–O3)
   await polish1BankTests({ T, page, ev, until, tid, settled, assert, closeBank, QUIET });
+  // ---- UI v6 polish batch 2 (polish2.tests.mjs: UI6-polish1 O2, UI6-U8a O1; the last one empties the library)
+  await polish2BankTests({ T, page, ev, until, tid, settled, assert, closeBank, QUIET });
 
   await T('flag off (a fresh profile, packs present): today’s Settings Song bank list; nothing of v6 fetched',
     async () => {

@@ -2890,14 +2890,41 @@ export function createController(o) {
     return { ok: true, id: r.id };
   }
   /**
+   * UI6-U7a O2 (moved here from views/v6/bank/banner.js, polish batch 2 / UI6-polish1 O2, so every Back follows it,
+   * the v6 Perform's destroy on a flag flip included): where Back lands when the replaced song's setlist entry was
+   * removed during the trial. The rule: the song it replaced plays again, between the entries around the removed one
+   * (the store's "gap": no row lit, Next = the entry that followed it, Prev = the one before), exactly as if the entry
+   * had been removed while that song played. selectSong drops a gap (selectSongId), so it is read before Back and put
+   * back after it.
+   * @returns {{id:string, index:number, list:string|null}|null}
+   */
+  function trialGap() {
+    if (typeof store.trialReturn !== 'function' || typeof store.persisted !== 'function') return null;
+    if (!store.trialReturn()) return null; // the trial song is not selected: Back goes to the remembered selection
+    const st = store.persisted().settings;
+    if (st.setlistGap !== true || !Number.isInteger(st.setlistIndex) || st.setlistIndex < 0) return null;
+    return { id: st.currentSongId, index: st.setlistIndex, list: settings().currentSetlistId ?? null };
+  }
+  /** @param {{id:string, index:number, list:string|null}} g */
+  function keepTrialGap(g) {
+    const st = settings();
+    // only when Back went to that song in the same list (a deleted song: Back went on to the next one, no gap)
+    if (st.currentSongId !== g.id || (st.currentSetlistId ?? null) !== g.list) return;
+    if (g.index > store.navIds().length) return;
+    store.set('settings.setlistIndex', g.index);
+    store.set('settings.setlistGap', true);
+  }
+  /**
    * Back from a trial (the banner's "Back to …"): the song it replaced, at the same setlist entry, with its own
    * Revert snapshot (so Revert after Back is Revert before Try it). Live state is a song switch's: the song's own levels,
-   * no scene. Allowed under Perform lock (a way out, like GO). Where it goes: trialBack (skeptic F1).
+   * no scene. Allowed under Perform lock (a way out, like GO). Where it goes: trialBack (skeptic F1); into the gap of a
+   * removed entry (trialGap).
    * @returns {Promise<{ok:boolean, error?:string}>}
    */
   async function backFromTrial() {
     if (!trial) return { ok: false, error: 'no-trial' };
     const t = trial;
+    const gap = trialGap();
     const back = trialBack(t);
     const prevSong = back.id && store.getSong(back.id);
     const target = prevSong ? back.id : store.navIds()[0] || store.get().songOrder[0] || null;
@@ -2907,6 +2934,7 @@ export function createController(o) {
       ...(prevSong && Number.isInteger(back.index) && back.index >= 0 ? { index: back.index } : {}),
       _baseline: prevSong ? t.prev.baseline : null,
     });
+    if (ok && gap) keepTrialGap(gap);
     return ok ? { ok: true } : { ok: false, error: 'The song could not be loaded.' };
   }
   /**

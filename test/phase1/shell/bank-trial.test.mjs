@@ -490,3 +490,32 @@ test('skeptic F4: Next during a trial plays the entry after the replaced one; Pr
   assert.deepEqual(store.trialIds(), []);
   ctl.dispose();
 });
+
+// UI v6 polish batch 2 (UI6-polish1 O2): the Back-into-the-gap rule (UI6-U7a O2) lives in controller.backFromTrial,
+// so every Back follows it (the banner's, and the v6 Perform's destroy on a flag flip, which calls the controller
+// directly). Before, it was in views/v6/bank/banner.js and a direct backFromTrial landed on the reprise.
+test('polish batch 2 O2: backFromTrial itself puts the song back into the gap of its removed entry', async () => {
+  const { store, ctl } = await boot();
+  const [a, b, c] = store.get().songOrder;
+  const sl = store.addSetlist('Gap test', [a, b, c, b]);
+  store.setCurrentSetlist(sl);
+  try {
+    assert.ok(await ctl.selectSong(b, { index: 1 }));
+    assert.ok((await ctl.tryBankSong(LANTERN)).ok);
+    assert.ok(store.removeFromSetlist(sl, 1) !== false);
+    assert.deepEqual(await ctl.backFromTrial(), { ok: true });
+    const st = store.get().settings;
+    assert.deepEqual([st.currentSongId, st.setlistIndex, st.setlistGap], [b, 1, true], 'b, in the gap at 1');
+    const nb = store.neighbors();
+    assert.deepEqual([nb.prev?.id, nb.next?.id], [a, c], 'Prev = a, Next = c (not the reprise\'s neighbours)');
+    // no gap to keep: an entry that is still there is selected as before (no gap)
+    assert.ok(await ctl.selectSong(c, { index: 1 }));
+    assert.ok((await ctl.tryBankSong(LANTERN)).ok);
+    assert.deepEqual(await ctl.backFromTrial(), { ok: true });
+    assert.deepEqual([store.get().settings.currentSongId, store.currentIndex(), !!store.get().settings.setlistGap],
+      [c, 1, false]);
+  } finally {
+    ctl.dispose();
+  }
+});
+
