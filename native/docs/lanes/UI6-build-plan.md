@@ -74,6 +74,9 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 
 ## Queued small tasks
 
+- **CAP (UI6-cship O1, tier 2: mine):** one size rule for every add: saving a chart, adding a Song bank song and pack
+  top-up follow D9 + D33's O4 note too (past 2 MB warn and go through; refuse only past the 2.5 MB restore cap).
+
 - **CVD2 (UI6-cvd O1/O5/O6, tier 2: mine):** place each range-bar number in JS so two short bars with the same range
   (positions 9+) or bars clipped at the keyboard edge never stack numbers (keyboard.js + today's perform.js); the
   changed dot never covers a two-digit Edit tab number; a muted instrument's number goes grey with its bar. With FU2.
