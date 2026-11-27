@@ -79,9 +79,11 @@ release-notes --require-final + link rewriting). Fix real problems; review in na
 - [x] S0. rebase: origin/v2-native is still 7e92df4 (lane is on it; nothing to rebase)
 - [x] S1. read LANE.md, workflows (vs origin/main 261ea8d), package-release.sh, check.sh, project.yml, notes, test
 - [x] S2. actionlint + shellcheck: clean as delivered
-- [ ] S3. fix F1-F5 (commit each), extend the unit test
-- [ ] S4. gates.mjs unit; actionlint/shellcheck again
-- [ ] S5. native/docs/reviews/N10.md (verdict, F/O, CI/macOS-only items), committed
+- [x] S3. fix F1-F5 (762539b, 35dbf6e, f69d9cd), extend the unit test (13 tests; 4dfa065)
+- [x] S4. gates.mjs unit PASS at 4dfa065 (707 pass); actionlint + shellcheck clean
+- [x] S5. native/docs/reviews/N10.md (verdict, F/O, CI/macOS-only items), committed
+
+Skeptic verdict: pass after fixes (F1-F5 fixed; O1-O7 open, see the review). Next step: none, hand back.
 
 Findings (before fixes):
 - F1 release-notes.mjs is fail-open: its main guard compares import.meta.url (realpath) with argv[1] (not realpath),
