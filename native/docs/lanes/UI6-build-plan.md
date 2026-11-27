@@ -74,6 +74,12 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 
 ## Queued small tasks
 
+- **FU2 (UI6-fu O1/O2/O3 + quirks; tier 2: mine):** O1 option (b): the empty-library step fades only if a key or the
+  pedal is held at that moment (with nothing held, the drone-off alone), so the next song never starts faded;
+  O2: while the song has snapshots, Edit reserves the snapshot line's height (no layout shift when a footswitch
+  changes snapshot); O3: make shell bank-trial "skeptic F1–F3" deterministic; v6 Edit's ⋯ Song button overflowing
+  at 1024×700 on touch; today's Edit 1004 px wide in an 820 px window.
+
 - **C-SHIP (D33):** the chord chart ships in 2.0: default on with a Settings › Perform switch, placeholders gone,
   chart-view review O1 (PANIC reachable over the chart dialogs), O3, O4, O7 fixed; purity probes re-based; iPad sizes
   and all 8 themes with charts on. Builder + skeptic.
