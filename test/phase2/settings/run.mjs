@@ -1366,6 +1366,39 @@ async function runMode(mode, browser) {
       }
     });
 
+    await T('C-SHIP (D33) Look › Perform view › Chord charts: on by default (absent), off writes false (device-local); '
+      + 'the Chart toggle on Perform follows live', async () => {
+      await openSettings();
+      await cat('look');
+      const tog = '[data-testid="setting-chart-view"]';
+      assert.equal(await ev(() => document.querySelector('[data-testid="setting-row-chart-view"]')
+        .closest('.st-section').dataset.section), 'perform', 'in the Perform view section');
+      assert.match(await page.textContent('[data-testid="setting-row-chart-view"]'),
+        /Chord charts[\s\S]*ChordPro[\s\S]*chords over lyrics[\s\S]*Easy Transpose/);
+      assert.equal(await pressed(tog), 'true', 'on by default');
+      assert.equal(await ev(() => 'chartView' in window.__rig.store.get().settings), false, 'absent = on');
+      if (mode === 'app') {
+        assert.equal(await ev(() => !!document.querySelector('[data-testid="chart-toggle"]')), true);
+      }
+      await page.click(tog);
+      await until(() => window.__rig.store.get().settings.chartView === false);
+      assert.equal(await pressed(tog), 'false');
+      assert.equal(await ev(() => 'chartView' in JSON.parse(window.__rig.store.exportJSON()).settings), false,
+        'device-local: not exported');
+      if (mode === 'app') {
+        await until(() => !document.querySelector('[data-testid="chart-toggle"]'));
+        assert.equal(await ev(() => window.__rig.views.chart), null);
+      }
+      await page.click(tog);
+      await until(() => !('chartView' in window.__rig.store.get().settings));
+      assert.equal(await pressed(tog), 'true');
+      if (mode === 'app') {
+        await until(() => !!document.querySelector('[data-testid="chart-toggle"]'));
+        assert.equal(await ev(() => window.__rig.views.chart), null, 'on again: the toggle only, not loaded');
+      }
+      await closeSettings();
+    });
+
     await T('UI6-U1 O3 Look › Try the new layout (preview): writes settings.uiV6 (absent when off) and swaps Perform '
       + 'live (on → the v6 Perform, off → today’s)', async () => {
       await openSettings();

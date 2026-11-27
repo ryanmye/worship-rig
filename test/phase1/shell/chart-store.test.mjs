@@ -1,6 +1,7 @@
-// Chart view (D7, hidden): song.chart storage. Optional (absent until set), written whole, normalised, size-capped,
-// migrate stays idempotent, it travels with library / song export and import, and settings.chartView is a device-local
-// boolean that is absent when off. CONTRACT_CHANGES "Chart view (D7, hidden)".
+// Chart view (D7; D33 ships it in 2.0): song.chart storage. Optional (absent until set), written whole, normalised,
+// size-capped, migrate stays idempotent, it travels with library / song export and import, and settings.chartView is
+// a device-local switch, absent = on, false = off (C-SHIP). addSong / duplicateSong check LIBRARY_MAX_CHARS (C-SHIP
+// O4). CONTRACT_CHANGES "Chart view (D7, hidden)", "C-SHIP (D33)".
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -129,28 +130,72 @@ test('chart: persisted and read back', () => {
   assert.equal(b.currentSong().chart.text, CHART);
 });
 
-test('settings.chartView: true or absent, device-local, not an edit', () => {
+test('C-SHIP (D33) settings.chartView: absent = on, false = off, device-local, not an edit', () => {
   const store = makeStore();
-  assert.equal('chartView' in store.get().settings, false, 'absent = off');
+  assert.equal('chartView' in store.get().settings, false, 'absent = on (the chart ships in 2.0)');
   assert.ok(DEVICE_LOCAL_SETTINGS.includes('chartView'));
   const edited = store.get().meta.edited;
-  assert.equal(store.set('settings.chartView', true), true);
-  assert.equal(store.get().settings.chartView, true);
+  assert.equal(store.set('settings.chartView', false), true);
+  assert.equal(store.get().settings.chartView, false, 'off is stored as false');
   assert.equal(store.get().meta.edited, edited, 'a machine switch does not mark the library edited');
   assert.equal(store.set('settings.chartView', 'yes'), false);
+  assert.equal(store.set('settings.chartView', 0), false);
   assert.equal(store.set('settings.chartView.x', true), false);
   const lib = JSON.parse(store.exportJSON());
   assert.equal('chartView' in lib.settings, false, 'not exported');
-  assert.equal(store.set('settings.chartView', false), true);
-  assert.equal('chartView' in store.get().settings, false, 'false is stored as absent');
-  store.set('settings.chartView', true);
+  assert.equal(store.set('settings.chartView', true), true);
+  assert.equal('chartView' in store.get().settings, false, 'true (on) is stored as absent');
+  store.set('settings.chartView', false);
   assert.equal(store.set('settings.chartView', null), true);
-  assert.equal('chartView' in store.get().settings, false);
-  for (const v of [false, 1, 'true', {}]) {
+  assert.equal('chartView' in store.get().settings, false, 'null = back to the default (on)');
+  assert.equal(store.set('settings.chartView', null), false, 'no change');
+  // migration: the hidden 2.0 builds stored true for on; it stays on (absent). false stays off; junk = on
+  for (const v of [true, 1, 'true', {}, null]) {
     assert.equal('chartView' in migrate({ schema: 2, settings: { chartView: v } }).settings, false, String(v));
   }
-  assert.equal(migrate({ schema: 2, settings: { chartView: true } }).settings.chartView, true);
+  const off = migrate({ schema: 2, settings: { chartView: false } });
+  assert.equal(off.settings.chartView, false);
+  assert.deepEqual(migrate(off).settings, off.settings, 'idempotent');
+  // a replace-import keeps this machine's switch (device-local)
+  const other = makeStore();
+  other.set('settings.chartView', false);
+  const text = JSON.stringify({ ...JSON.parse(store.exportJSON()) });
+  assert.ok(other.importJSON(text, { replace: true }).ok !== false);
+  assert.equal(other.get().settings.chartView, false, 'kept across a replace-import');
 });
+
+test('C-SHIP (chart-view O4) addSong / duplicateSong refuse past LIBRARY_MAX_CHARS, with a notice, writing nothing',
+  () => {
+    const store = makeStore();
+    const notices = [];
+    store.onNotice((n) => notices.push(n));
+    const id = sid(store);
+    const big = { text: `[G]${'x'.repeat(CHART_MAX_CHARS - 10)}` };
+    assert.equal(store.setChart(id, big).ok, true);
+    // duplicate a 64 KB chart until the library is near the cap: each copy is checked first
+    let copies = 0;
+    for (let i = 0; i < 40; i++) {
+      const before = JSON.stringify(store.get());
+      const n = store.duplicateSong(id);
+      if (!n) {
+        assert.equal(JSON.stringify(store.get()), before, 'a refused duplicate writes nothing');
+        break;
+      }
+      copies += 1;
+    }
+    assert.ok(copies > 5 && copies < 40, `copies before the cap: ${copies}`);
+    assert.ok(JSON.stringify(store.get()).length <= LIBRARY_MAX_CHARS, 'the library stays inside the cap');
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0].type, 'library-full');
+    assert.match(notices[0].message, /library is full/);
+    // addSong of a song with the big chart is refused the same way; a small blank song may still fit
+    const before = JSON.stringify(store.get());
+    assert.equal(store.addSong(store.getSong(id)), null);
+    assert.equal(JSON.stringify(store.get()), before, 'a refused add writes nothing (songs, order, setlist)');
+    assert.equal(notices.length, 2);
+    const small = store.addSong(null, { name: 'Small' });
+    assert.equal(typeof small, 'string', 'a blank song still fits');
+  });
 
 // skeptic (native/docs/reviews/chart-view.md): the cap counts UTF-16 units, as localStorage does
 test('chart: multi-byte text at the cap; the library check counts the stored JSON', () => {

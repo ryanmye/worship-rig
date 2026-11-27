@@ -207,6 +207,7 @@
 .v6 .v6-notes { display: flex; flex-direction: column; gap: 8px; }
 .v6 .v6-side .v6-notes-t { flex: 1 1 auto; min-height: 60px; max-height: none; }
 .v6 .v6-notes-chart { flex: none; }
+.v6 .v6-side .v6-notes-chart[hidden] { display: none; } /* C-SHIP: chord charts off */
 
 /* ---- Click (the metronome, U-METRO): ON tile · − BPM + · Tap · hint · setup line · Count-in & level… */
 .v6 .v6-metro { display: flex; flex-direction: column; gap: 8px; }
@@ -282,3 +283,4 @@ html[data-mode="light"] .v6 .v6-sw:not(.on)::before { background: color-mix(in s
   .v6 .v6-side.rail .v6-rb.v6-rb-open { flex: 0 0 56px; }
   .v6 .v6-side .v6-slist { max-height: 200px; }
 }
+.v6 .v6-ch-wait { margin: 0; font-size: 13px; color: var(--muted); } /* C-SHIP: the Chart module while it loads */

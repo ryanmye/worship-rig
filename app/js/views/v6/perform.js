@@ -20,6 +20,7 @@ import { stripsRow } from './strips-row.js';
 import { bottomRow } from './bottom.js';
 import { rangeGuard } from './range-guard.js';
 import { rightSidebar } from './sidebar/sidebar.js';
+import { chartPlaceholder } from './sidebar/modules.js';
 import { leftPanel } from './left.js';
 import { songBank } from './bank/bank.js';
 import { trialBanner } from './bank/banner.js';
@@ -648,11 +649,13 @@ export function mountPerformV6(root, ctx) {
       return quick.isOpen;
     },
     /**
-     * The hidden chart view (D7): today's toggle goes after Notes and its panel over the board; U7b's v6 chart
-     * (views/v6/chart/, main.js mounts it instead while this Perform is on) uses `v6`: the view context, the sidebar
-     * (a Chart module), the board and the strips area (the chart on the stage), the instrument names.
+     * The chord chart (D7, D33): U7b's v6 chart (views/v6/chart/, main.js mounts it while this Perform is on) uses
+     * `v6`: the view context, the sidebar (a Chart module), the board and the strips area (the chart on the stage),
+     * the instrument names; C-SHIP: `placeholder`, the Chart module main.js registers until the chart is used.
      */
-    chartMounts: { after: bar.notesBtn, stage: board, v6: { v, side, board, strips: row.el, names } },
+    chartMounts: {
+      after: bar.notesBtn, stage: board, v6: { v, side, board, strips: row.el, names, placeholder: chartPlaceholder },
+    },
     /** Test hooks. */
     get strips() {
       return row.strips;

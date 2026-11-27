@@ -84,9 +84,9 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   changes snapshot); O3: make shell bank-trial "skeptic F1–F3" deterministic; v6 Edit's ⋯ Song button overflowing
   at 1024×700 on touch; today's Edit 1004 px wide in an 820 px window.
 
-- **C-SHIP (D33):** the chord chart ships in 2.0: default on with a Settings › Perform switch, placeholders gone,
-  chart-view review O1 (PANIC reachable over the chart dialogs), O3, O4, O7 fixed; purity probes re-based; iPad sizes
-  and all 8 themes with charts on. Builder + skeptic.
+- ~~**C-SHIP (D33):**~~ **Built (lane-cship; skeptic pending; "C-SHIP status" below):** the chord chart ships in
+  2.0: default on with a Settings › Perform switch, placeholders gone, chart-view review O1 (PANIC reachable over the
+  chart dialogs), O3, O4, O7 fixed; purity probes re-based; iPad sizes and all 8 themes with charts on.
 
 - ~~**Empty-library silence (UI6-er O1, tier 2: mine):**~~ **Built (lane-fu; skeptic pending):** when no song is
   selected and no songs are left (delete the last song, Back from an empty-library trial, an empty import) the
@@ -238,8 +238,8 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   `localStorage['worship-rig.v6.sidebar']`; Drone (today's writes and lock rules), Setlist (cue then Go, Prev, + Add
   song: library, Song bank via Settings, New song), Notes (read only); the song bar's Notes / Setlist open their tab;
   iPad portrait panel under the strips.
-- Placeholders: Drone "Sustain" (no drone pedal hold exists anywhere yet), Notes "Chart · coming in 2.1"; the Song bank
-  entry opens today's list in Settings (U7 builds the browser).
+- Placeholders: Drone "Sustain" (no drone pedal hold exists anywhere yet), Notes "Chart · coming in 2.1" (gone with
+  C-SHIP, D33); the Song bank entry opens today's list in Settings (U7 builds the browser).
 - Choices to confirm with Ryan: New song is added at the end and not selected (Perform never switches the sound by
   itself; the toast offers "Edit it"); the pad-folder line shows only while My Pads is chosen (the column is short);
   Starts applies per page load; the song bar's Notes / Setlist un-hide a module the player had hidden.

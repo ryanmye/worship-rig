@@ -14,6 +14,17 @@ import {
 
 /** Files larger than this are refused before they are read (a song list may be larger than one chart). */
 export const IMPORT_FILE_MAX_BYTES = 1024 * 1024;
+/**
+ * C-SHIP (chart-view review O7): the words for a file over IMPORT_FILE_MAX_BYTES. It used to say "A chart can be at
+ * most 64 KB", which is the chart's own cap (chartError), not the file limit, so a 900 KB song list read as too big.
+ * @param {number} bytes  the file's size
+ * @returns {string}
+ */
+export function fileTooLargeMessage(bytes) {
+  const mb = (n) => (n / (1024 * 1024)).toFixed(1).replace(/\.0$/, '');
+  return `That file is too large (${mb(bytes)} MB). A file can be at most ${mb(IMPORT_FILE_MAX_BYTES)} MB `
+    + `(a song list), and a chart at most ${CHART_MAX_CHARS / 1024} KB.`;
+}
 const WARN_SHOWN = 12;
 const REVIEW_DEBOUNCE_MS = 250;
 
@@ -147,11 +158,14 @@ export function chartReview(ctx, songId) {
     }
     if (result.kind === 'csv') {
       const p = csvPlaceholders(result.songs, store.songsInOrder().map((x) => x.name));
+      let added = 0;
       for (const x of p.add) {
         const id = store.addSong(null, { name: x.name, setlistId: null });
+        if (!id) break; // C-SHIP (chart-view O4): the library is full (the store's notice says so); stop here
+        added += 1;
         if (x.notes) store.set(`songs.${id}.notes`, x.notes);
       }
-      ctx.toast?.(`Added ${p.add.length} placeholder song${p.add.length === 1 ? '' : 's'} to the library.`, 'ok',
+      ctx.toast?.(`Added ${added} placeholder song${added === 1 ? '' : 's'} to the library.`, 'ok',
         { ms: 4000 });
       return { done: true };
     }
@@ -223,6 +237,9 @@ export function openChartImport(ctx, songId, o = {}) {
   const host = h('div.chv-dlg-host', {}, dlg);
   document.body.append(host);
   markDialog(token, true);
+  // C-SHIP (chart-view review O1): the on-screen PANIC sits above this backdrop (styles.css .chart-dlg-open), so it
+  // stays reachable and working while the dialog is open, as ⌘. already did
+  document.body.classList.add('chart-dlg-open');
 
   // ---- review
   function renderReview() {
@@ -258,8 +275,7 @@ export function openChartImport(ctx, songId, o = {}) {
     fileInput.value = '';
     if (!f) return;
     if (f.size > IMPORT_FILE_MAX_BYTES) {
-      showError(`That file is too large (${Math.ceil(f.size / 1024)} KB). A chart can be at most `
-        + `${CHART_MAX_CHARS / 1024} KB.`);
+      showError(fileTooLargeMessage(f.size));
       return;
     }
     try {
@@ -306,6 +322,7 @@ export function openChartImport(ctx, songId, o = {}) {
     clearTimeout(reviewTimer);
     closeOverlay();
     markDialog(token, false);
+    document.body.classList.remove('chart-dlg-open');
     host.remove();
     o.onClose?.();
     // back to the button that opened it, if it is still there; otherwise nothing stays focused (Esc = Panic again)

@@ -666,7 +666,8 @@ unchanged); the mutation runs (CORE3 M1-M3 and MACFIX M1-M3 were run in their re
   (`native/core/build-int{,-clang20,-asan,-tsan}`, `native/devhost/build-int`).
 - **Chart lanes (Ryan / D7 design pass)**: C2 parser O1-O9 (PARTIAL: O7 needs a real WorshipTools / SongSelect
   export from Ryan's account); chart view O1-O9 (O1 PANIC covered by the import dialog: Ryan's call). Hidden behind
-  `settings.chartView`, so none of it is in Ryan's hands-on.
+  `settings.chartView`, so none of it is in Ryan's hands-on. **C-SHIP (D33, 2026-11-27): the chart ships in 2.0, on by
+  default; O1, O3, O4 and O7 are fixed (CONTRACT_CHANGES "C-SHIP (D33)").**
 - **T10 Apple shell, contract, shim / UI nits, core follow-ups**: unchanged from the UI-wave list above.
 
 ## Orchestrator-only items (not a task)

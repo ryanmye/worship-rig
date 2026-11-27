@@ -105,9 +105,10 @@ export const DEVICE_LOCAL_SETTINGS = Object.freeze([
   'polyphony', 'bufferFrames', 'voiceLimit',
   // UIB (DECISIONS D5): "Freeze drone to save CPU" is about this machine's CPU, like the voices above
   'droneFreeze',
-  // Chart view (D7, hidden): a preview switch for this machine; a replace-import never turns it on or off
+  // Chord charts (D7; C-SHIP / D33: on by default in 2.0, false = off): this machine's choice; a replace-import never
+  // turns it on or off
   'chartView',
-  // UI v6 (D22, hidden until Ryan flips it): the same kind of preview switch as chartView
+  // UI v6 (D22, hidden until Ryan flips it): a preview switch for this machine
   'uiV6',
   // D24.7: "Esc always panics" is how this player's hands work this machine's keyboard; true or absent (off)
   'escPanics',
@@ -873,9 +874,10 @@ function normalizeSettings(raw, songs, setlists) {
     else delete out.click;
   }
   if (hasOwn(out, 'midiClockOut') && validMidiClockOut(out.midiClockOut) === undefined) delete out.midiClockOut;
-  // Chart view (D7, hidden): settings.chartView is true or absent (off); anything else is dropped
-  if (hasOwn(out, 'chartView') && out.chartView !== true) delete out.chartView;
-  // UI v6 (D22, UI6-build-plan U1): settings.uiV6 is true or absent (off), exactly like chartView
+  // C-SHIP (D33): settings.chartView is false (off) or absent (on). The hidden 2.0 builds stored `true` for on: it
+  // folds to absent (still on), and anything else is dropped (on)
+  if (hasOwn(out, 'chartView') && out.chartView !== false) delete out.chartView;
+  // UI v6 (D22, UI6-build-plan U1): settings.uiV6 is true or absent (off)
   if (hasOwn(out, 'uiV6') && out.uiV6 !== true) delete out.uiV6;
   // D24.7 "Esc always panics": true or absent (off = today's Esc rule), like uiV6
   if (hasOwn(out, 'escPanics') && out.escPanics !== true) delete out.escPanics;
@@ -1759,6 +1761,24 @@ export function createStore(opts = {}) {
     return size > LIBRARY_MAX_CHARS;
   }
 
+  /**
+   * C-SHIP (chart-view review O4): would adding `song` (a new id) push the library past LIBRARY_MAX_CHARS? A 64 KB
+   * chart duplicated 29 times passed the cap, since only chart writes paid for the JSON size. addSong / duplicateSong
+   * refuse such a song before writing anything and say why in a notice (the controller toasts it). The 64 characters
+   * stand for the id in songOrder and a setlist.
+   * @param {object} song
+   * @returns {boolean}
+   */
+  function songOverflows(song) {
+    if (JSON.stringify(state).length + JSON.stringify(song).length + 64 <= LIBRARY_MAX_CHARS) return false;
+    notice({
+      type: 'library-full', cap: LIBRARY_MAX_CHARS,
+      message: `The library is full (about ${(LIBRARY_MAX_CHARS / 1e6).toFixed(0)} MB), so “${song.name}” was not `
+        + 'added. Delete songs, charts or long notes you no longer need first.',
+    });
+    return true;
+  }
+
   /** @returns {{segs:string[], value:*}|null} */
   function validate(segs, value) {
     const [root, id, field, ...rest] = segs;
@@ -1877,9 +1897,13 @@ export function createStore(opts = {}) {
         return v === null ? null : { segs, value: v };
       }
       if (k === 'updateCheck') return typeof value === 'boolean' ? { segs, value } : null;
-      // Chart view (D7) / UI v6 (D22), both hidden, and "Esc always panics" (D24.7): true = on; false / null =
-      // absent (off)
-      if (k === 'chartView' || k === 'uiV6' || k === 'escPanics') {
+      // C-SHIP (D33): chord charts are on unless switched off: false = off; true / null = absent (on)
+      if (k === 'chartView') {
+        if (value === null || value === undefined || value === true) return { segs, value: undefined };
+        return value === false ? { segs, value } : null;
+      }
+      // UI v6 (D22, hidden) and "Esc always panics" (D24.7): true = on; false / null = absent (off)
+      if (k === 'uiV6' || k === 'escPanics') {
         if (value === null || value === undefined || value === false) return { segs, value: undefined };
         return value === true ? { segs, value } : null;
       }
@@ -2506,13 +2530,14 @@ export function createStore(opts = {}) {
      * @param {object} [from]  Song or factory preset (factory ids are kept as `factoryId`)
      * @param {{setlistId?:string|null, index?:number, name?:string, select?:boolean}} [o]
      *        setlistId default = current setlist (null = library only)
-     * @returns {string} new id
+     * @returns {string|null} new id; null when the song would not fit LIBRARY_MAX_CHARS (C-SHIP, chart-view O4)
      */
     addSong(from, o = {}) {
       const id = idGen('song');
       const src = from ? clone(from) : blankSong();
       if (typeof src.id === 'string' && src.id.startsWith('factory:') && !src.factoryId) src.factoryId = src.id;
       const song = normalizeSong({ ...src, name: o.name ?? src.name }, id);
+      if (songOverflows(song)) return null; // C-SHIP (chart-view O4): nothing written
       const paths = [];
       paths.push(put(['songs', id], song));
       paths.push(put(['songOrder'], [...state.songOrder, id]));
@@ -2535,6 +2560,7 @@ export function createStore(opts = {}) {
       const newId = idGen('song');
       const before = navState(navBase()); // U7a skeptic F1
       const copy = normalizeSong({ ...clone(s), name: `${s.name} (copy)` }, newId);
+      if (songOverflows(copy)) return null; // C-SHIP (chart-view O4): nothing written
       const paths = [put(['songs', newId], copy)];
       const order = state.songOrder.slice();
       const libAt = order.indexOf(id) + 1;

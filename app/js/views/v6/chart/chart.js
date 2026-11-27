@@ -1,8 +1,10 @@
-// UI v6 chart (D7 hidden 2.1 feature, D12, D16 "Chart placement is the player's choice" + "Chart text size is one tap
+// UI v6 chart (D7, D33: ships in 2.0; D12, D16 "Chart placement is the player's choice" + "Chart text size is one tap
 // away, in percent"; native/docs/lanes/UI6-build-plan.md U7b; mockup native/docs/design/mockups/chart.html).
-// main.js imports this instead of views/chart/index.js while BOTH settings.chartView and settings.uiV6 are on (on the
-// v6 Perform); with either off nothing here is loaded. It mounts:
-//   - a Chart module in the right sidebar (sidebar.js addModule; a tab, the sidebar wider while it shows), and
+// main.js imports this instead of views/chart/index.js on the v6 Perform while chord charts are on (settings.chartView
+// not false), and only once the chart is used (C-SHIP: until then the sidebar has modules.js chartPlaceholder). It
+// mounts:
+//   - the Chart module in the right sidebar, in the placeholder's place (sidebar.js addModule; a tab, the sidebar
+//     wider while it shows), and
 //   - the chart on the stage: the strips give way to live mini faders (minis.js) beside the chart, the sidebar folds
 //     to its rail with Chart lit; iPad portrait = "music stand" (mini faders in a row above the chart).
 // The player chooses per device (⇥ Sidebar / ⤢ Stage in the chart's header). One chart shows at a time: on the stage
@@ -19,6 +21,7 @@ import {
   pctFromPx, validPct,
 } from '../../chart/logic.js';
 import { PORTRAIT_MQ } from '../sidebar/sidebar.js';
+import { CHART_MODULE } from '../sidebar/modules.js';
 import { chartPanel } from './panel.js';
 import { miniFaders } from './minis.js';
 
@@ -28,7 +31,7 @@ const CHART_CSS_HREF = './styles-chart.css';
 /** Where the chart shows on a device that never chose (UI6-U7b review, orchestrator decision a). */
 export const CHART_PLACEMENT_DEFAULT = 'stage';
 /** The sidebar's width while the Chart tab shows, until the player drags it (mockup .side.chartw: 540 px). */
-export const CHART_SIDE_WIDTH = 540;
+export const CHART_SIDE_WIDTH = CHART_MODULE.width;
 const PLACEMENTS = ['side', 'stage'];
 
 /**
@@ -174,11 +177,7 @@ export function mountChartV6(ctx, mounts) {
 
   // ---------------------------------------------------------------- the sidebar module (D15 module API, U3)
   const module = {
-    id: 'chart',
-    label: 'Chart',
-    blurb: 'chord chart, follows the key',
-    icon: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
-    width: CHART_SIDE_WIDTH,
+    ...CHART_MODULE, // C-SHIP: the placeholder's face (modules.js)
     badge: () => (prefs.placement === 'stage' && stage ? { live: true, text: '', title: 'on the stage' } : null),
     /** The player asked for Chart (tab, rail icon): with the stage placement it goes up there instead. */
     take() {

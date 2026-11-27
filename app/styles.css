@@ -779,6 +779,17 @@ body[data-view="edit"] .quick-btn { display: none; }
   .song-sub:has(> .scene-dots:not([hidden])):has(> .click-btn:not([hidden])) .notes-btn { font-size: 0; gap: 0; }
 }
 .notes-btn.has-notes::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-left: 4px; }
+/* C-SHIP (D33): the Chart toggle shows before the chart loads (main.js placeholder, then views/chart/index.js takes
+   it over), so its look lives here and not in styles-chart.css. 36 px like Notes and Click on a mouse; chart-view O3:
+   44 px on a touch screen */
+.song-sub .chv-toggle { margin-left: auto; min-height: 36px; min-width: 44px; padding: 0 10px; font-size: 13px; }
+.song-sub .chv-toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink);
+  border-color: var(--accent); }
+@media (max-width: 1340px) { .song-sub .notes-btn ~ .chv-toggle { margin-left: 0; } }
+@media (pointer: coarse) { .song-sub .chv-toggle { min-height: 44px; } }
+/* C-SHIP (chart-view review O1): the chart import / Edit chart dialogs cover the screen at z 60; PANIC (today's Perform
+   and the v6 bottom row) is lifted above their backdrop while one is open (no ancestor makes a stacking context) */
+body.chart-dlg-open .btn-panic { position: relative; z-index: 61; }
 
 /* −  0  + stay whole down to the 156 px column at 1280 (44 px buttons, the side padding gives way) */
 .transpose { padding: 10px clamp(6px, calc((100vw - 1280px) * .05 + 6px), 14px); display: flex; flex-direction: column; justify-content: center; gap: 6px; position: relative; min-width: 0; }

@@ -84,7 +84,7 @@ const info = await server.listen();
 const origin = `http://127.0.0.1:${info.port}`;
 const browser = await chromium.launch({ headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
 
-async function purityBoot(base) {
+async function purityBoot(base, q = '') {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   await pinTheme(context, 'sanctuary');
   await context.grantPermissions([...MIDI_PERMISSIONS], { origin: base });
@@ -97,7 +97,7 @@ async function purityBoot(base) {
     if (!isSample(u.pathname)) reqs.add(u.pathname);
   });
   try {
-    await page.goto(`${base}/`);
+    await page.goto(`${base}/${q}`);
     await waitRigReady(page, { timeout: 40000 });
     await page.waitForFunction(() => !!window.__rig.views.settings && !!window.__rig.views.edit, null,
       { timeout: 30000, polling: 100 });
@@ -112,10 +112,15 @@ async function purityBoot(base) {
         ael: window.__probe.ael,
         intervals: window.__probe.intervals,
         store: window.__storeListeners ? window.__storeListeners.size : null,
+        // C-SHIP: the "Chord charts" row (a Settings row added on purpose, like the two before it) is left out, and
+        // the Chart toggle is counted apart (`chart`)
         dom: [...document.body.querySelectorAll('*')].filter((e) => !e.closest('#toasts > *')
           && !e.closest('[data-testid="setting-row-esc-panics"], [data-testid="setting-row-ui-v6"], '
-            + '[data-testid="setting-row-cvd"]')) // U-CVD (D32): the third intended Settings row
+            + '[data-testid="setting-row-cvd"], ' // U-CVD (D32): the third intended Settings row
+            + '[data-testid="setting-row-chart-view"], [data-testid="chart-toggle"]'))
           .map(shape).join('\n'),
+        chart: [...document.querySelectorAll('[data-testid="chart-toggle"], [class*="chv-"], #perform-chart')]
+          .map((e) => e.dataset.testid || e.id || e.className),
         edit: [...document.querySelectorAll('#view-edit *')].map(shape).join('\n'),
         css: [...document.querySelectorAll('link[rel=stylesheet]')].map((l) => l.getAttribute('href')),
         rig: Object.keys(window.__rig).sort(),
@@ -294,19 +299,26 @@ try {
         const baseServer = createServer({ appDir: path.join(tmp, 'app'), port: 0 });
         const bi = await baseServer.listen();
         try {
-          const a = await purityBoot(`http://127.0.0.1:${bi.port}`);
-          const b = await purityBoot(origin);
-          assert.deepEqual(b.reqs, a.reqs, 'non-sample requests');
-          assert.deepEqual(b.ael, a.ael, 'window / document addEventListener calls by type');
-          assert.equal(b.intervals, a.intervals, 'setInterval calls');
-          assert.equal(b.store, a.store, 'store listeners');
-          assert.deepEqual(b.css, a.css, 'stylesheets');
-          assert.equal(b.edit, a.edit, 'today’s Edit DOM shape');
-          assert.equal(b.dom, a.dom, 'DOM shape');
-          assert.deepEqual(b.rig, a.rig, '__rig keys');
-          console.log(`      base ${base.slice(0, 8)}: ${a.reqs.length} requests, ${a.store} store listeners, `
+          // C-SHIP (D33): charts off is an explicit false (?chart=0, a no-op on a base that predates C-SHIP);
+          // charts on (nothing stored, no charts) differs only by the Chart toggle on Perform
+          const a = await purityBoot(`http://127.0.0.1:${bi.port}`, '?chart=0');
+          for (const [b, what] of [[await purityBoot(origin, '?chart=0'), 'charts off'],
+            [await purityBoot(origin), 'charts on, no charts']]) {
+            assert.deepEqual(b.reqs, a.reqs, `${what}: non-sample requests`);
+            assert.deepEqual(b.ael, a.ael, `${what}: window / document addEventListener calls by type`);
+            assert.equal(b.intervals, a.intervals, `${what}: setInterval calls`);
+            assert.equal(b.store, a.store, `${what}: store listeners`);
+            assert.deepEqual(b.css, a.css, `${what}: stylesheets`);
+            assert.equal(b.edit, a.edit, `${what}: today’s Edit DOM shape`);
+            assert.equal(b.dom, a.dom, `${what}: DOM shape`);
+            assert.deepEqual(b.rig, a.rig, `${what}: __rig keys`);
+            assert.deepEqual(b.chart, what === 'charts off' ? [] : ['chart-toggle'], `${what}: chart DOM`);
+          }
+          assert.deepEqual(a.chart, [], 'the base, charts off');
+          console.log(`      base ${base.slice(0, 8)} (?chart=0): ${a.reqs.length} requests, ${a.store} store `
+            + 'listeners, '
             + `${a.intervals} intervals, ${a.dom.split('\n').length} elements (${a.edit.split('\n').length} in Edit)`
-            + ' — identical');
+            + ' — identical with charts off; charts on, no charts: identical + the Chart toggle');
         } finally {
           await baseServer.close();
         }
@@ -355,6 +367,27 @@ try {
       assert.match(r.db, /dB$/);
       assert.equal(s.patch.slots.length, 3);
       assert.ok(v6EditFetches.some((u) => u.endsWith('/styles-v6-edit.css')));
+    });
+
+  await T('C-SHIP (D33): the header’s Chart button shows by default and opens the chart on Perform; hidden when off',
+    async () => {
+      await toEdit();
+      assert.equal(await ev(() => window.__rig.views.chart), null, 'not loaded before it is used');
+      assert.equal(await page.isVisible(tid('v6e-chart')), true);
+      await page.click(tid('v6e-chart'));
+      await until(() => document.body.dataset.view === 'perform' && !!window.__rig.views.chart?.state()?.onStage,
+        null, 20000);
+      await ev(() => window.__rig.views.chart.closeStage());
+      await until(() => !document.querySelector('.v6-chstage'));
+      await toEdit();
+      await ev(() => window.__rig.store.set('settings.chartView', false));
+      await until(() => !document.querySelector('[data-testid="v6e-chart"]')?.checkVisibility?.());
+      assert.equal(await page.isVisible(tid('v6e-chart')), false);
+      assert.equal(await ev(() => window.__rig.views.chart), null, 'off: the chart goes');
+      await ev(() => window.__rig.store.set('settings.chartView', null));
+      await until(() => !!document.querySelector('[data-testid="v6e-chart"]')?.checkVisibility?.());
+      await ev(() => window.__rig.ctx.setView('perform'));
+      await until(() => document.body.dataset.view === 'perform');
     });
 
   await T('external interface: setView(edit, {block, focus}) selects; Drone / Effects / Master (U5b: category '

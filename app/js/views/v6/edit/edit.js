@@ -329,7 +329,7 @@ export function mountEditV6(el, ctx) {
     else headRow.append(n);
   }
   const renderChartBtn = () => {
-    chartBtn.hidden = store.get().settings.chartView !== true;
+    chartBtn.hidden = store.get().settings.chartView === false; // C-SHIP (D33): on unless switched off
   };
   // polish batch 2 (orchestrator screenshot, 1280 × 800: "Sunday Pad + Pia" with no ellipsis): the song name field
   // shrinks with the header (flex), but today's header module re-checks its ellipsis (`long`, song-header.js fitName)

@@ -122,6 +122,8 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
   Lane S builds the cue/go behaviour and its state first, and keeps the look provisional.
 
 ## D7: Chart view ships in 2.1, built ahead of time behind a hidden setting (Ryan, 2026-11-25)
+- **Superseded on when it ships: D33 (2026-11-27) moves step 1 to 2.0** (task C-SHIP: on by default, Settings ›
+  Perform › Chord charts; CONTRACT_CHANGES "C-SHIP (D33)"). The rest of D7 stands.
 - **2.0 scope is unchanged.** The chart view is the first 2.x feature.
 - **Two steps:**
   1. A chord-chart view with transpose that follows Easy Transpose, auto-scroll and big type.
@@ -341,8 +343,8 @@ Decided 2026-11-20: a Setting, Auto + manual (D4 above).
 - **Left sidebar:** a Quick button (today's Quick sheet: This song / This Mac / If something's wrong, opening over the
   strips so nothing reflows) above today's wheel column (wheel, what it drives, Swell, pedal).
 - **Right sidebar:** one module at a time as tabs, collapsible to an icon rail; ⋯ chooses and orders the modules
-  (Drone, Setlist, Notes, Tone, Snapshots; Chart in 2.1). Drone keeps today's key grid, Synth / My Pads and Keep
-  across songs.
+  (Drone, Setlist, Notes, Tone, Snapshots; Chart in 2.1, now 2.0: D33). Drone keeps today's key grid, Synth /
+  My Pads and Keep across songs.
 - **Song bar** holds key, Transpose and the Space room; snapshots get their own row with Update / Save as new.
 - **Kept from today:** the bottom keyboard (range bar per instrument, key letters, held notes), Revert / Fade out /
   PANIC / Lock, and the menu bar popover unchanged.

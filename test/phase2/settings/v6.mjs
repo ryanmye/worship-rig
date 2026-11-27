@@ -310,6 +310,41 @@ export async function runV6({ browser, createServer, ROOT, SHOTS, results }) {
       await close();
     });
 
+    await T('C-SHIP (D33) Perform layout › Perform › Chord charts: today’s row, moved here; the search finds it by '
+      + 'chart / chords / chordpro / lyrics; off → the Chart module leaves the sidebar, on → it comes back',
+      async () => {
+        await page.click('#view-switch button[data-value="perform"]').catch(() => {});
+        await until(() => !!document.querySelector('.v6-side [data-testid="v6-sb-tab-chart"]'), null, 20000);
+        await open('layout');
+        const row = '[data-testid="setting-row-chart-view"]';
+        assert.deepEqual(await ev((r) => {
+          const e = document.querySelector(r);
+          return { cat: e.closest('.st-panel').dataset.cat, sec: e.closest('.st-section').dataset.section };
+        }, row), { cat: 'layout', sec: 'perform-layout' });
+        for (const q of ['chart', 'chords', 'chordpro', 'lyrics', 'chord charts']) {
+          await page.fill('[data-testid="settings-search"]', q);
+          await until(() => window.__rig.views.settings.v6.query !== '');
+          assert.ok(await ev((r) => window.__rig.views.settings.v6.hits.some((x) => x.el.matches(r)), row),
+            `“${q}” finds Chord charts`);
+        }
+        await page.fill('[data-testid="settings-search"]', '');
+        await until(() => window.__rig.views.settings.v6.query === '');
+        await page.click('[data-testid="setting-chart-view"]');
+        await until(() => window.__rig.store.get().settings.chartView === false
+          && !document.querySelector('.v6-side [data-testid="v6-sb-tab-chart"]'));
+        assert.equal(await ev(() => window.__rig.views.v6.sidebar.modules.includes('chart')), false);
+        await page.click('[data-testid="setting-chart-view"]');
+        await until(() => !('chartView' in window.__rig.store.get().settings)
+          && !!document.querySelector('.v6-side [data-testid="v6-sb-tab-chart"]'));
+        await close();
+        // the flag off: the row goes back to today’s Look › Perform view (journalled move)
+        await ev(() => window.__rig.setUiV6(false));
+        await until(() => !window.__rig.views.settings.v6);
+        assert.equal(await ev((r) => document.querySelector(r).closest('.st-section').dataset.section, row), 'perform');
+        await ev(() => window.__rig.setUiV6(true));
+        await until(() => !!window.__rig.views.settings.v6 && !!window.__rig.views.v6, null, 20000);
+      });
+
     await T('search: filters categories and rows by label / hint, Enter jumps on, Esc clears (and only then closes)',
       async () => {
         await open('sound');

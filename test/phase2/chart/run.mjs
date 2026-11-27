@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Chart view suite (D7, hidden; app/js/views/chart/). The real app (app/index.html) in Chromium:
-//   flag off → no chart DOM, no chart module or stylesheet fetched; flag on → import a chart through the "Add chart…"
+// Chart view suite (D7; C-SHIP / D33: ships in 2.0; app/js/views/chart/). The real app (app/index.html) in Chromium:
+//   charts on by default with no charts → only the Chart toggle, no chart module or stylesheet fetched until it is
+//   used; explicit off (?chart=0) → no chart DOM at all; a tap → import a chart through the "Add chart…"
 //   dialog (a file written for this test, never real lyrics), offers unticked except what we tick, the chart renders,
 //   Perform's Transpose re-keys the chords, big type, auto-scroll, a committed song switch swaps the chart, the flag
 //   off again removes everything; zero console.error and no HTTP ≥ 400.
@@ -77,30 +78,32 @@ const chords = () => ev(() => [...document.querySelectorAll('#perform-chart .chv
   .flatMap((l) => [...l.querySelectorAll('.chv-ch')].map((c) => c.textContent)));
 
 try {
-  await T('boot with the flag off: no chart DOM, nothing of the chart fetched', async () => {
-    await page.goto(`${origin}/`);
-    await waitRigReady(page, { timeout: 30000 });
-    const overlay = await page.$('#overlay-start:not([hidden])');
-    if (overlay) await overlay.click();
-    await until(() => window.__rig.controller.status.songId === window.__rig.store.get().settings.currentSongId
-      && !window.__rig.controller.status.loading, null, 30000);
-    await until(() => !!window.__rig.views.settings && !!window.__rig.views.edit, null, 20000);
-    const r = await ev(() => ({
-      flag: 'chartView' in window.__rig.store.get().settings,
-      view: window.__rig.views.chart,
-      dom: document.querySelectorAll('[class*="chv-"], #perform-chart, [data-testid^="chart-"]').length,
-      css: !!document.querySelector('link[data-chart-css]'),
-    }));
-    assert.deepEqual(r, { flag: false, view: null, dom: 0, css: false });
-    assert.deepEqual(chartFetches, []);
-  });
+  await T('C-SHIP boot, charts on (absent) and no charts: the Chart toggle only; nothing of the chart fetched',
+    async () => {
+      await page.goto(`${origin}/`);
+      await waitRigReady(page, { timeout: 30000 });
+      const overlay = await page.$('#overlay-start:not([hidden])');
+      if (overlay) await overlay.click();
+      await until(() => window.__rig.controller.status.songId === window.__rig.store.get().settings.currentSongId
+        && !window.__rig.controller.status.loading, null, 30000);
+      await until(() => !!window.__rig.views.settings && !!window.__rig.views.edit, null, 20000);
+      await page.waitForTimeout(800);
+      const r = await ev(() => ({
+        flag: 'chartView' in window.__rig.store.get().settings,
+        charts: window.__rig.store.songsInOrder().filter((s) => s.chart).length,
+        view: window.__rig.views.chart,
+        // D33: the Chart toggle shows by default; nothing else of the chart (panel, stylesheet) exists until it is used
+        dom: [...document.querySelectorAll('[class*="chv-"], #perform-chart, [data-testid^="chart-"]')]
+          .map((e) => e.dataset.testid || e.className),
+        after: document.querySelector('[data-testid="chart-toggle"]')?.previousElementSibling?.dataset.testid,
+        css: !!document.querySelector('link[data-chart-css]'),
+      }));
+      assert.deepEqual(r, { flag: false, charts: 0, view: null, dom: ['chart-toggle'], after: 'notes-toggle',
+        css: false });
+      assert.deepEqual(chartFetches, [], 'no chart module or stylesheet before the chart is used');
+    });
 
-  await T('flag on: a Chart toggle after Notes; the panel opens on the empty state', async () => {
-    assert.equal(await ev(() => window.__rig.setChartView(true)), true);
-    await until(() => !!document.querySelector('[data-testid="chart-toggle"]'));
-    assert.equal(await ev(() => document.querySelector('[data-testid="chart-toggle"]').previousElementSibling
-      ?.dataset.testid), 'notes-toggle');
-    assert.ok(chartFetches.some((u) => u.endsWith('/styles-chart.css')));
+  await T('C-SHIP a tap on the Chart toggle loads the chart (the same button) and opens the empty state', async () => {
     // the song in G, no transpose, so the chart's key is the song's (no key offer)
     await ev(() => {
       const { store } = window.__rig;
@@ -108,11 +111,22 @@ try {
       store.set(`songs.${id}.playIn`, 7);
       store.set(`songs.${id}.hearIn`, 7);
       store.set(`songs.${id}.minor`, false);
+      window.__chartStub = document.querySelector('[data-testid="chart-toggle"]');
     });
     await page.click('[data-testid="chart-toggle"]');
-    await until(() => !document.getElementById('perform-chart').hidden);
+    await until(() => !!document.getElementById('perform-chart') && !document.getElementById('perform-chart').hidden);
+    assert.ok(chartFetches.some((u) => u.endsWith('/styles-chart.css')));
     assert.equal(await page.isVisible('[data-testid="chart-empty"]'), true);
-    assert.equal(await page.getAttribute('[data-testid="chart-toggle"]', 'aria-pressed'), 'true');
+    assert.deepEqual(await ev(() => {
+      const t = document.querySelectorAll('[data-testid="chart-toggle"]');
+      return { n: t.length, same: t[0] === window.__chartStub, pressed: t[0].getAttribute('aria-pressed'),
+        controls: t[0].getAttribute('aria-controls'), focused: document.activeElement === t[0] };
+    }), { n: 1, same: true, pressed: 'true', controls: 'perform-chart', focused: false });
+    // the toggle is the view's now: a second tap closes the panel
+    await page.click('[data-testid="chart-toggle"]');
+    await until(() => document.getElementById('perform-chart').hidden);
+    await page.click('[data-testid="chart-toggle"]');
+    await until(() => !document.getElementById('perform-chart').hidden);
   });
 
   await T('import: file → review with offers (unticked); tick Title only; Save stores the source text', async () => {
@@ -255,6 +269,38 @@ try {
     await until(() => window.__panics === 1, null, 5000);
   });
 
+  await T('C-SHIP O1: PANIC is on top of the import dialog, and a click on it panics (the dialog stays)', async () => {
+    await page.click('[data-testid="chart-add-empty"]');
+    await until(() => !!document.querySelector('[data-testid="chart-import"]'));
+    const top = await ev(() => {
+      const p = document.querySelector('[data-testid="panic"]');
+      const b = p.getBoundingClientRect();
+      return p.contains(document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2));
+    });
+    assert.equal(top, true, 'elementFromPoint at PANIC is PANIC, not the backdrop');
+    const n0 = await ev(() => window.__panics);
+    await page.click('[data-testid="panic"]');
+    await until((n) => window.__panics === n + 1, n0, 5000);
+    assert.equal(await page.isVisible('[data-testid="chart-import"]'), true, 'the dialog stays open');
+    await page.click('[data-testid="chart-import"] .chv-dlg-foot button:not(.primary)'); // Cancel
+    await until(() => !document.querySelector('[data-testid="chart-import"]'));
+    assert.equal(await ev(() => document.body.classList.contains('chart-dlg-open')), false);
+    await ev(() => document.activeElement?.blur?.());
+  });
+
+  await T('C-SHIP O7: a file over 1 MB is refused with the file limit (not the 64 KB chart cap)', async () => {
+    await page.click('[data-testid="chart-add-empty"]');
+    await until(() => !!document.querySelector('[data-testid="chart-import"]'));
+    await page.setInputFiles('[data-testid="chart-file"]', { name: 'big.txt', mimeType: 'text/plain',
+      buffer: Buffer.alloc(1536 * 1024, 'a') });
+    await until(() => !document.querySelector('[data-testid="chart-error"]').hidden);
+    assert.equal(await ev(() => document.querySelector('[data-testid="chart-error"]').textContent),
+      'That file is too large (1.5 MB). A file can be at most 1 MB (a song list), and a chart at most 64 KB.');
+    await page.keyboard.press('Escape');
+    await until(() => !document.querySelector('[data-testid="chart-import"]'));
+    await ev(() => document.activeElement?.blur?.());
+  });
+
   await T('the dialog keeps Tab inside it; a keyboard-opened one gives focus back', async () => {
     await page.focus('[data-testid="chart-add-empty"]');
     await page.keyboard.press('Enter');
@@ -353,7 +399,7 @@ try {
   await T('flag off: the toggle, panel and stylesheet go away', async () => {
     assert.equal(await ev(() => window.__rig.setChartView(false)), false);
     const r = await ev(() => ({
-      flag: 'chartView' in window.__rig.store.get().settings,
+      flag: 'chartView' in window.__rig.store.get().settings && window.__rig.store.get().settings.chartView !== false,
       view: window.__rig.views.chart,
       dom: document.querySelectorAll('[class*="chv-"], #perform-chart, [data-testid^="chart-"]').length,
       css: !!document.querySelector('link[data-chart-css]'),
@@ -361,17 +407,60 @@ try {
     assert.deepEqual(r, { flag: false, view: null, dom: 0, css: false });
   });
 
-  await T('?chart=1 turns it on at boot (and the chart open state is remembered)', async () => {
+  await T('?chart=1 turns it on at boot (the chart open state is remembered); ?chart=0 = explicit off', async () => {
     await page.goto(`${origin}/?chart=1`);
     await waitRigReady(page, { timeout: 30000 });
-    await until(() => !!document.querySelector('[data-testid="chart-toggle"]'), null, 20000);
-    assert.equal(await ev(() => window.__rig.store.get().settings.chartView), true);
+    await until(() => !!document.querySelector('#perform-chart'), null, 20000);
+    assert.equal(await ev(() => 'chartView' in window.__rig.store.get().settings), false, 'on = absent (D33)');
     assert.equal(await ev(() => !document.getElementById('perform-chart').hidden), true);
+    chartFetches.length = 0;
     await page.goto(`${origin}/?chart=0`);
     await waitRigReady(page, { timeout: 30000 });
-    assert.equal(await ev(() => 'chartView' in window.__rig.store.get().settings), false);
-    assert.equal(await ev(() => !!document.querySelector('[data-testid="chart-toggle"]')), false);
+    await page.waitForTimeout(500);
+    assert.equal(await ev(() => window.__rig.store.get().settings.chartView), false, 'off = false (D33)');
+    assert.equal(await ev(() => document.querySelectorAll('[class*="chv-"], #perform-chart, [data-testid^="chart-"]')
+      .length), 0);
+    assert.deepEqual(chartFetches, [], 'explicit off: nothing of the chart, not even its toggle');
   });
+
+  await T('C-SHIP lazy: a remembered open panel or a current song with a chart loads it; otherwise only the toggle',
+    async () => {
+      // back on, the panel closed, the current song without a chart: a reload loads nothing
+      await ev(() => {
+        const { store } = window.__rig;
+        localStorage.setItem('worship-rig.chart', JSON.stringify({ open: false }));
+        for (const s of store.songsInOrder()) if (s.chart) store.setChart(s.id, null);
+        store.set('settings.chartView', null);
+      });
+      await page.waitForTimeout(600); // the store's debounced save
+      chartFetches.length = 0;
+      await page.goto(`${origin}/`);
+      await waitRigReady(page, { timeout: 30000 });
+      await until(() => !!document.querySelector('[data-testid="chart-toggle"]'), null, 20000);
+      await page.waitForTimeout(800);
+      assert.equal(await ev(() => window.__rig.views.chart), null);
+      assert.deepEqual(chartFetches, []);
+      // a chart arrives on the current song (an import, a pack): the chart loads, the panel stays closed
+      await ev(() => {
+        const { store } = window.__rig;
+        store.setChart(store.currentSong().id, { text: '[G]Lazy [C]line', format: 'chordpro' });
+      });
+      await until(() => !!window.__rig.views.chart, null, 10000);
+      assert.equal(await ev(() => window.__rig.views.chart.isOpen), false);
+      assert.ok(chartFetches.some((u) => u.includes('/views/chart/index.js')));
+      assert.equal(await ev(() => document.querySelectorAll('[data-testid="chart-toggle"]').length), 1);
+      // and a reload with that chart on the current song loads it at boot
+      await page.waitForTimeout(600);
+      chartFetches.length = 0;
+      await page.goto(`${origin}/`);
+      await waitRigReady(page, { timeout: 30000 });
+      await until(() => !!window.__rig.views.chart, null, 20000);
+      assert.ok(chartFetches.some((u) => u.includes('/views/chart/index.js')));
+      await ev(() => {
+        const { store } = window.__rig;
+        store.setChart(store.currentSong().id, null);
+      });
+    });
 
   await T('zero console.error, no HTTP ≥ 400', async () => {
     assert.deepEqual(errors, []);

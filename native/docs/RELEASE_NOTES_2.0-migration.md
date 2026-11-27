@@ -49,7 +49,12 @@ With a backup or export from 1.1.0 or older, set these once again in 2.0.
 
 Also not moved, from any version: the My Samples packs themselves. Songs keep pointing at them: put the packs back
 in `~/Music/Worship Rig/Samples/` (Mac). And 2.0's own per-computer settings (voices, buffer size, voice limit,
-drone freeze) are never taken from a file.
+drone freeze, chord charts on / off) are never taken from a file.
+
+New in 2.0 (C-SHIP, DECISIONS D33): **chord charts.** Perform has a Chart button (on the v6 screens, a Chart tab in
+the sidebar): paste or import a ChordPro file or chords over lyrics, and the chords follow Easy Transpose, with
+auto-scroll and a text size in percent. A song's chart travels with it in exports and backups. Settings › Perform ›
+Chord charts turns the button off on this computer.
 
 ## Steps: Mac
 
@@ -123,7 +128,8 @@ A library is meant to stay under about 2 MB (a song is usually about 2 KB, so th
 and charts take the most room). 2.0 no longer refuses a save past that: it saves and warns you, once per session and
 again at each further 10 % of growth. Restoring a library from a backup, an export or Restore previous library… works
 up to 2.5 MB, so a library that grew a little past 2 MB can still be brought back. Adding songs from a file (a merge)
-still has to fit the 2 MB.
+still has to fit the 2 MB. So do a new or duplicated song: past the cap, Worship Rig says the library is full and
+adds nothing.
 
 ## Not yet verified (needs the Mac or the iPad)
 

@@ -101,8 +101,8 @@ const info = await server.listen();
 const origin = `http://127.0.0.1:${info.port}`;
 const browser = await chromium.launch({ headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
 
-/** Boot a page on `base` (an origin) with the probes; returns what the purity check compares. */
-async function purityBoot(base) {
+/** Boot a page on `base` (an origin, + `q`) with the probes; returns what the purity check compares. */
+async function purityBoot(base, q = '') {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   await pinTheme(context, 'sanctuary');
   await context.grantPermissions([...MIDI_PERMISSIONS], { origin: base });
@@ -115,7 +115,7 @@ async function purityBoot(base) {
     if (!isSample(u.pathname)) reqs.add(u.pathname);
   });
   try {
-    await page.goto(`${base}/`);
+    await page.goto(`${base}/${q}`);
     await waitRigReady(page, { timeout: 40000 });
     await page.waitForFunction(() => !!window.__rig.views.settings && !!window.__rig.views.edit, null,
       { timeout: 30000, polling: 100 });
@@ -133,12 +133,15 @@ async function purityBoot(base) {
         store: window.__storeListeners ? window.__storeListeners.size : null,
         // toasts come and go on their own clock (MIDI / wake-lock notes), so they are left out. The Settings rows
         // added on purpose after U3 (lane-small: "Esc always panics" D24.7, the v6 preview switch U1 O3; U-CVD:
-        // Colour-blind colours D32) are left out too: they are the only intended flag-off DOM change (a base that has
-        // them has them on both sides).
+        // Colour-blind colours D32; C-SHIP's "Chord charts") are left out too: they are the only intended flag-off DOM
+        // change (a base that has them has them on both sides). C-SHIP: the Chart toggle is counted apart (`chart`),
+        // so charts on can be compared.
         dom: [...document.body.querySelectorAll('*')].filter((e) => !e.closest('#toasts > *')
           && !e.closest('[data-testid="setting-row-esc-panics"], [data-testid="setting-row-ui-v6"], '
-            + '[data-testid="setting-row-cvd"]'))
+            + '[data-testid="setting-row-cvd"], [data-testid="setting-row-chart-view"], [data-testid="chart-toggle"]'))
           .map(shape).join('\n'),
+        chart: [...document.querySelectorAll('[data-testid="chart-toggle"], [class*="chv-"], #perform-chart')]
+          .map((e) => e.dataset.testid || e.id || e.className),
         css: [...document.querySelectorAll('link[rel=stylesheet]')].map((l) => l.getAttribute('href')),
         rig: Object.keys(window.__rig).sort(),
       };
@@ -255,30 +258,48 @@ try {
       const baseServer = createServer({ appDir: path.join(tmp, 'app'), port: 0 });
       const bi = await baseServer.listen();
       try {
-        const a = await purityBoot(`http://127.0.0.1:${bi.port}`);
-        const b = await purityBoot(origin);
-        assert.deepEqual(b.reqs, a.reqs, 'non-sample requests');
-        assert.deepEqual(b.ael, a.ael, 'window / document addEventListener calls by type');
-        assert.equal(b.intervals, a.intervals, 'setInterval calls');
-        assert.equal(b.store, a.store, 'store listeners');
+        // C-SHIP (D33): the base may predate it (charts hidden, absent = off) or have it (absent = on). Its boot with
+        // ?chart=0 is charts off either way. The branch is compared twice: ?chart=0 (explicit off: identical, no
+        // Chart toggle) and with nothing stored (charts on, a library with no charts: identical but for the Chart
+        // toggle; no chart module, stylesheet, listener or interval until the chart is used)
+        const a = await purityBoot(`http://127.0.0.1:${bi.port}`, '?chart=0');
+        const b = await purityBoot(origin, '?chart=0');
+        const c = await purityBoot(origin);
+        const same = (x, what) => {
+          assert.deepEqual(x.reqs, a.reqs, `${what}: non-sample requests`);
+          assert.deepEqual(x.ael, a.ael, `${what}: window / document addEventListener calls by type`);
+          assert.equal(x.intervals, a.intervals, `${what}: setInterval calls`);
+          assert.equal(x.store, a.store, `${what}: store listeners`);
+          assert.deepEqual(x.css, a.css, `${what}: stylesheets`);
+          if (x.dom !== a.dom) {
+            const al = a.dom.split('\n');
+            const bl = x.dom.split('\n');
+            const i = al.findIndex((l, k) => l !== bl[k]);
+            const near = (l) => JSON.stringify(l.slice(Math.max(0, i - 3), i + 4));
+            assert.fail(`${what}: DOM shape differs at element ${i} (${al.length} vs ${bl.length} elements): base `
+              + `${near(al)} branch ${near(bl)}`);
+          }
+        };
         assert.ok(a.store > 0, 'the store probe works');
-        assert.deepEqual(b.css, a.css, 'stylesheets');
-        if (b.dom !== a.dom) {
-          const al = a.dom.split('\n');
-          const bl = b.dom.split('\n');
-          const i = al.findIndex((l, k) => l !== bl[k]);
-          const near = (l) => JSON.stringify(l.slice(Math.max(0, i - 3), i + 4));
-          assert.fail(`DOM shape differs at element ${i} (${al.length} vs ${bl.length} elements): base ${near(al)} `
-            + `branch ${near(bl)}`);
-        }
+        assert.deepEqual(a.chart, [], 'the base with charts off has no chart DOM');
+        same(b, 'charts off (false)');
+        assert.deepEqual(b.chart, [], 'charts off: no Chart toggle');
+        same(c, 'charts on, no charts');
+        assert.deepEqual(c.chart, ['chart-toggle'], 'charts on: the Chart toggle and nothing else of the chart');
+        assert.ok(!c.reqs.some((r) => /chart/i.test(r)), `no chart request until used: ${c.reqs.filter((r) => /chart/i
+          .test(r))}`);
         // the only intended difference: __rig.setUiV6 (and the views.v6 getter) when the base predates U1; none
         // against a base that already has U1 (skeptic UI6-U2 F1: after the rebase onto 2fff370 the merge-base holds
         // setUiV6, and the old `['setUiV6']` check failed although the flag-off app was identical)
-        assert.deepEqual(a.rig.filter((k) => !b.rig.includes(k)), [], '__rig keys the branch lost');
-        const extra = b.rig.filter((k) => !a.rig.includes(k));
-        assert.ok(extra.every((k) => k === 'setUiV6'), `__rig keys only the branch has: ${extra}`);
-        console.log(`      base ${base.slice(0, 8)}: ${a.reqs.length} requests, ${a.store} store listeners, `
-          + `${a.intervals} intervals, ${a.dom.split('\n').length} elements — identical`);
+        for (const x of [b, c]) {
+          assert.deepEqual(a.rig.filter((k) => !x.rig.includes(k)), [], '__rig keys the branch lost');
+          const extra = x.rig.filter((k) => !a.rig.includes(k));
+          assert.ok(extra.every((k) => k === 'setUiV6'), `__rig keys only the branch has: ${extra}`);
+        }
+        console.log(`      base ${base.slice(0, 8)} (?chart=0): ${a.reqs.length} requests, ${a.store} store listeners, `
+          + `${a.intervals} intervals, ${a.dom.split('\n').length} elements; branch charts off (false): identical; `
+          + `charts on, no charts: identical + the Chart toggle (${c.reqs.length} requests, ${c.store} store `
+          + `listeners, ${c.intervals} intervals)`);
       } finally {
         await baseServer.close();
       }
@@ -318,6 +339,65 @@ try {
     const names = await ev(() => [...document.querySelectorAll('.v6-strip:not([hidden]) .v6-nm')]
       .map((x) => x.textContent));
     assert.ok(names.every((n) => !/^(Keys|Pad|Extra|Bass)$/i.test(n)), names.join());
+  });
+
+  await T('C-SHIP (D33): the Chart module shows by default, unloaded; Notes’ Chart opens it (no “coming in 2.1”); '
+    + 'PANIC on top of the Edit chart dialog panics', async () => {
+    // (the resource-timing buffer is full of samples by now, so requests are counted from here on)
+    const chartReqs = [];
+    const onReq = (q) => {
+      if (/\/views\/(v6\/)?chart\/|styles-(v6-)?chart\.css/.test(q.url())) chartReqs.push(q.url());
+    };
+    page.on('request', onReq);
+    try {
+      const r = await ev(() => ({
+        flag: 'chartView' in window.__rig.store.get().settings,
+        mods: window.__rig.views.v6.sidebar.modules,
+        tab: !!document.querySelector('[data-testid="v6-sb-tab-chart"]'),
+        rail: !!document.querySelector('[data-testid="v6-rb-chart"]'),
+        chart: window.__rig.views.chart,
+        css: !!document.querySelector('link[data-chart-css], link[data-v6-chart-css]'),
+      }));
+      assert.deepEqual(r, { flag: false, mods: ['drone', 'setlist', 'notes', 'metronome', 'chart'], tab: true,
+        rail: true, chart: null, css: false });
+      // the Notes module: "Chart · open the chord chart", live; the 2.1 placeholder is gone
+      await page.click(tid('v6-sb-tab-notes'));
+      await until(() => !!document.querySelector('[data-testid="v6-notes-chart"]'));
+      assert.deepEqual(await ev(() => {
+        const b = document.querySelector('[data-testid="v6-notes-chart"]');
+        return { disabled: b.disabled, hidden: b.hidden, text: b.textContent,
+          any21: /2\.1/.test(document.body.innerText) };
+      }), { disabled: false, hidden: false, text: 'Chartopen the chord chart', any21: false });
+      assert.deepEqual(chartReqs, [], 'nothing of the chart fetched before it is used');
+      await page.click(tid('v6-notes-chart')); // a device that never chose: the chart goes up on the stage
+      await until(() => !!window.__rig.views.chart?.state()?.onStage, null, 20000);
+      assert.ok(chartReqs.some((u) => u.includes('/views/v6/chart/chart.js')), 'loaded on use');
+      // chart-view O1: PANIC stays reachable and working over the Edit chart dialog
+      await armPanics();
+      await ev(() => window.__rig.views.chart.openEdit());
+      await until(() => !!document.querySelector('[data-testid="v6-chart-editor"]'));
+      assert.equal(await ev(() => {
+        const p = document.querySelector('[data-testid="v6-panic"]');
+        const b = p.getBoundingClientRect();
+        return p.contains(document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2));
+      }), true, 'elementFromPoint at PANIC is PANIC, not the dialog backdrop');
+      await page.click(tid('v6-panic'));
+      await until(() => window.__panics === 1, null, 5000);
+      assert.equal(await page.isVisible(tid('v6-chart-editor')), true, 'the dialog stays open');
+      await page.click(tid('v6-ce-cancel'));
+      await until(() => !document.querySelector('[data-testid="v6-chart-editor"]'));
+      assert.equal(await ev(() => document.body.classList.contains('chart-dlg-open')), false);
+    } finally {
+      page.off('request', onReq);
+      // the strips back, the sidebar open on Drone, for the tests after this one
+      await ev(() => {
+        window.__rig.views.chart?.editor?.close();
+        window.__rig.views.chart?.closeStage?.();
+        window.__rig.views.v6.sidebar.open('drone');
+        document.activeElement?.blur?.();
+      });
+      await until(() => !document.querySelector('.v6-chstage'));
+    }
   });
 
   await T('strip controls write the right store paths (fader, ON, Space, Echo, Octave, Sustain)', async () => {

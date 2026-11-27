@@ -4742,6 +4742,38 @@ test('v11-decisions: PANIC stops the click (during the count-in and after); the 
     assert.equal(await ev(() => window.__t.clickRunning()), false, 'no MIDI clock transport left running');
   });
 
+test('C-SHIP (D33): the Chart toggle shows after Notes by default (36 px on a mouse), unloaded until tapped; '
+  + 'chart-view O3: 44 px on a touch screen', async () => {
+  const geo = (p) => p.evaluate(() => {
+    const t = document.querySelector('[data-testid="chart-toggle"]');
+    const r = t?.getBoundingClientRect();
+    return t ? { after: t.previousElementSibling?.dataset.testid, h: Math.round(r.height), w: r.width >= 44,
+      shown: t.offsetParent !== null, chart: !!window.__rig.views.chart } : null;
+  });
+  assert.deepEqual(await geo(page), { after: 'notes-toggle', h: 36, w: true, shown: true, chart: false });
+  const errs = [];
+  const ctx2 = await browser.newContext({ viewport: { width: 1180, height: 820 }, hasTouch: true });
+  try {
+    await pinTheme(ctx2, 'classic');
+    const p2 = await ctx2.newPage();
+    watchConsole(p2, errs);
+    await p2.goto(base);
+    await p2.waitForFunction(() => !!window.__rig?.views?.perform
+      && !!document.querySelector('[data-testid="chart-toggle"]'), null, { timeout: 30000 });
+    if (!(await p2.evaluate(() => matchMedia('(pointer: coarse)').matches))) {
+      console.log('# hasTouch gave no (pointer: coarse) here; the 44 px rule is not checked');
+    } else {
+      const g = await geo(p2);
+      assert.ok(g.h >= 44 && g.w && g.shown, `44 px on touch: ${JSON.stringify(g)}`);
+    }
+    await p2.tap('[data-testid="chart-toggle"]');
+    await p2.waitForFunction(() => !!window.__rig.views.chart?.isOpen, null, { timeout: 15000 });
+  } finally {
+    await ctx2.close();
+  }
+  assert.deepEqual(errs, [], errs.join('\n'));
+});
+
 test('no console errors on the main page', () => {
   assert.deepEqual(consoleErrors, [], consoleErrors.join('\n'));
 });

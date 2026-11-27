@@ -1,7 +1,8 @@
 // Sidebar module: Notes (D16; UI6-build-plan U3; mockup mock_v6.py notes_body(), tab "Sidebar · Notes"). The song's
 // notes, read only as on today's Perform (views/perform.js notes panel; Edit › Song writes them), with today's
 // keyboard scrolling (round2-ui #12: ↑/↓/PgUp/PgDn/Home/End scroll the focused notes and never reach the controller,
-// where ↑/↓ are the mod wheel). The mockup's "Chart · coming in 2.1" sits under them, disabled.
+// where ↑/↓ are the mod wheel). Under them "Chart · open the chord chart" opens the Chart module (or the chart on
+// the stage) while chord charts are on (C-SHIP / D33: the mockup's "coming in 2.1" is gone); off, it is not there.
 import { h, setText, disposer } from '../../components/util.js';
 import { say, onVoiceChange } from '../../components/voice.js';
 import { button } from '../lib.js';
@@ -45,22 +46,14 @@ export default {
       e.preventDefault(); // the controller ignores defaultPrevented keys
       e.stopPropagation();
     });
-    const chartSub = h('small', { text: 'coming in 2.1' });
-    const chart = button(d, '.v6-qb.v6-notes-chart', [h('b', { text: 'Chart' }), chartSub], {
-      disabled: true, title: 'Chord charts come in 2.1',
+    const chart = button(d, '.v6-qb.v6-notes-chart', [h('b', { text: 'Chart' }),
+      h('small', { text: 'open the chord chart' })], {
+      title: 'Open this song’s chord chart', 'data-testid': 'v6-notes-chart',
     });
-    // U7b: with the hidden chart view on (settings.chartView), this opens the Chart module (or the chart on the stage)
+    // U7b: this opens the Chart module (or the chart on the stage); C-SHIP: hidden while chord charts are off
     d.listen(chart, 'click', () => m.openSidebar?.('chart'));
-    let chartOn = false;
     const renderChart = () => {
-      const on = store.get().settings.chartView === true;
-      if (on === chartOn) return;
-      chartOn = on;
-      chart.disabled = !on;
-      setText(chartSub, on ? 'open the chord chart' : 'coming in 2.1');
-      chart.title = on ? 'Open this song’s chord chart' : 'Chord charts come in 2.1';
-      if (on) chart.dataset.testid = 'v6-notes-chart';
-      else delete chart.dataset.testid;
+      chart.hidden = store.get().settings.chartView === false;
     };
     const root = h('div.v6-notes', { 'data-testid': 'v6-notes-mod' }, text, chart);
     el.append(root);

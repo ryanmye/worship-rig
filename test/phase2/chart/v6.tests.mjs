@@ -111,11 +111,11 @@ export async function v6Tests(x) {
     // ------------------------------------------------------------------ v6 on, chart off
     await T('U7b v6 on, chart off: nothing chart-related fetched, drawn or in the sidebar', async () => {
       fetches = [];
-      await boot('?ui6=1&chart=0'); // a fresh context: nothing stored
+      await boot('?ui6=1&chart=0'); // a fresh context: nothing stored; C-SHIP: ?chart=0 = an explicit false
       await page.waitForTimeout(800);
       const r = await ev(() => ({
         chart: window.__rig.views.chart,
-        flag: 'chartView' in window.__rig.store.get().settings,
+        flag: window.__rig.store.get().settings.chartView,
         mods: window.__rig.views.v6.sidebar.modules,
         dom: document.querySelectorAll('[data-testid^="v6-chart"], [data-testid="v6-rb-chart"], .v6-chstage, '
           + '[data-testid^="chart-"], link[data-chart-css], link[data-v6-chart-css]').length,
@@ -124,10 +124,11 @@ export async function v6Tests(x) {
       assert.deepEqual(r, { chart: null, flag: false, mods: ['drone', 'setlist', 'notes', 'metronome'], dom: 0,
         notesChart: null });
       assert.deepEqual(fetches, []);
-      // the Notes module's "Chart · coming in 2.1" is as before
+      // C-SHIP: the Notes module's "Chart · coming in 2.1" is gone; with charts off its Chart button is not there
       await page.click(tid('v6-sb-tab-notes'));
-      assert.equal(await ev(() => document.querySelector('.v6-notes-chart').disabled), true);
-      assert.match(await ev(() => document.querySelector('.v6-notes-chart').textContent), /coming in 2\.1/);
+      assert.equal(await ev(() => document.querySelector('.v6-notes-chart').hidden), true);
+      assert.equal(await page.isVisible('.v6-notes-chart'), false);
+      assert.doesNotMatch(await ev(() => document.querySelector('.v6-notes').textContent), /2\.1/);
     });
 
     await T('U7b v6 on, chart off: the same as the base build’s v6 (requests, listeners, store listeners, DOM)',
@@ -148,8 +149,10 @@ export async function v6Tests(x) {
           const baseServer = createServer({ appDir: path.join(tmp, 'app'), port: 0 });
           const bi = await baseServer.listen();
           try {
-            const a = await v6PurityBoot(browser, `http://127.0.0.1:${bi.port}`);
-            const b = await v6PurityBoot(browser, origin);
+            // C-SHIP (D33): charts off is now an explicit false (?chart=0); the base predates or has C-SHIP, so its
+            // ?chart=0 boot is charts off either way
+            const a = await v6PurityBoot(browser, `http://127.0.0.1:${bi.port}`, '?ui6=1&chart=0');
+            const b = await v6PurityBoot(browser, origin, '?ui6=1&chart=0');
             // What this check guards: with the chart flag off, the v6 app loads and builds NOTHING chart-related.
             // A strict whole-app comparison against the merge-base only holds on the branch that added U7b; any
             // later v6 lane legitimately adds its own modules (UI6-U7c rebase), so the chart-related subset is
@@ -166,8 +169,24 @@ export async function v6Tests(x) {
               assert.equal(b.store, a.store, 'store listeners (strict)');
               assert.equal(b.dom, a.dom, 'DOM (strict)');
             }
-            console.log(`      base ${base.slice(0, 8)} (v6 on): ${a.reqs.length} requests; branch ${b.reqs.length}; `
-              + 'nothing chart-related with the chart flag off');
+            // C-SHIP: charts on (nothing stored) with no charts: the Chart module's tab and rail icon, and nothing else
+            // of the chart (no request, stylesheet, store / window listener or interval) until it is used
+            const c = await v6PurityBoot(browser, origin, '?ui6=1');
+            assert.deepEqual(c.reqs.filter(chartish), [], 'charts on, no charts: no chart-related request');
+            assert.deepEqual(c.css.filter(chartish), [], 'charts on, no charts: no chart stylesheet');
+            assert.deepEqual(c.reqs, b.reqs, 'charts on vs off: the same requests');
+            assert.deepEqual(c.ael, b.ael, 'charts on vs off: window / document listeners');
+            assert.equal(c.intervals, b.intervals, 'charts on vs off: intervals');
+            assert.equal(c.store, b.store, 'charts on vs off: store listeners');
+            assert.equal(c.domNoChart, b.dom, 'charts on vs off: the DOM but for the Chart tab and rail icon');
+            assert.deepEqual(c.chartEls, ['v6-sb-tab-chart', 'v6-rb-chart', 'v6e-chart'],
+              'charts on: only the Chart entry (sidebar tab, rail icon, v6 Edit’s Chart button)');
+            assert.deepEqual(b.chartEls, [], 'charts off: nothing of the chart');
+            assert.ok(c.side.includes('chart') && !b.side.includes('chart'), `sidebar modules ${c.side} / ${b.side}`);
+            console.log(`      base ${base.slice(0, 8)} (v6 on, ?chart=0): ${a.reqs.length} requests; `
+              + `branch charts off ${b.reqs.length}, nothing chart-related; charts on, no charts: ${c.reqs.length} requests, ${c.store} `
+              + `store listeners (off ${b.store}), ${c.intervals} intervals (off ${b.intervals}), `
+              + `+${c.dom.split('\n').length - b.dom.split('\n').length} elements (the Chart tab + rail icon)`);
           } finally {
             await baseServer.close();
           }
@@ -957,7 +976,7 @@ export async function v6Tests(x) {
 }
 
 /** Boot `base` with the v6 Perform on and the chart off; what the purity check compares (as ui-v6's purityBoot). */
-async function v6PurityBoot(browser, base) {
+async function v6PurityBoot(browser, base, q = '?ui6=1') {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   await pinTheme(context, 'sanctuary');
   await context.grantPermissions([...MIDI_PERMISSIONS], { origin: base });
@@ -989,7 +1008,7 @@ async function v6PurityBoot(browser, base) {
     if (!/\/samples\/|\.(mp3|wav|ogg|m4a|flac)(\?|$)/i.test(u.pathname)) reqs.add(u.pathname);
   });
   try {
-    await page.goto(`${base}/?ui6=1`);
+    await page.goto(`${base}/${q}`);
     await waitRigReady(page, { timeout: 40000 });
     await page.waitForFunction(() => !!window.__rig.views.v6 && !!window.__rig.views.settings, null,
       { timeout: 30000, polling: 100 });
@@ -1005,6 +1024,14 @@ async function v6PurityBoot(browser, base) {
         intervals: window.__probe.intervals,
         store: window.__storeListeners ? window.__storeListeners.size : null,
         dom: [...document.body.querySelectorAll('*')].filter((e) => !e.closest('#toasts > *')).map(shape).join('\n'),
+        // C-SHIP: the same without the Chart module's tab and rail icon (charts on, before the chart is used)
+        domNoChart: [...document.body.querySelectorAll('*')].filter((e) => !e.closest('#toasts > *')
+          && !e.closest('[data-testid="v6-sb-tab-chart"], [data-testid="v6-rb-chart"]')).map(shape).join('\n'),
+        // (the Settings row is there either way; a [hidden] one, the v6 Edit's Chart button while off, is left out)
+        chartEls: [...document.querySelectorAll('[data-testid*="chart"], [class*="v6-ch-"], .v6-chstage, '
+          + '[class*="chv-"]')].filter((e) => !e.closest('#view-settings') && !e.hidden)
+          .map((e) => e.dataset.testid || e.className),
+        side: window.__rig.views.v6?.sidebar?.modules ?? null,
         // (styles-v6-settings.css is linked by an absolute URL: its origin differs between the two servers)
         css: [...document.querySelectorAll('link[rel=stylesheet]')]
           .map((l) => new URL(l.getAttribute('href'), location.href).pathname),

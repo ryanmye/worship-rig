@@ -7203,7 +7203,8 @@ Planned for 2.1 (native DECISIONS D7). Built now behind a hidden switch that is 
 - **`store.setChart(id, chart|null)`** returns `{ok, changed}` or `{ok:false, error}` (the words for the user). New
   exports: `CHART_MAX_CHARS`, `CHART_FORMATS`, `normalizeChart`, `chartError`.
 - **`settings.chartView`**: `true` or absent (off). False and null are stored as absent; anything else is refused
-  or dropped. It is in `DEVICE_LOCAL_SETTINGS`: not exported, kept across a replace-import, and not an edit.
+  or dropped. (**Superseded by "C-SHIP (D33)"**: absent = on, `false` = off, and the chart loads only when
+  used.) It is in `DEVICE_LOCAL_SETTINGS`: not exported, kept across a replace-import, and not an edit.
   - Switch: `__rig.setChartView(true|false)` (DevTools; the Mac app's View › Toggle Developer Tools), or open
     the app with `?chart=1` / `?chart=0` (Chrome). It applies at once. There is no Settings row, so with the flag off
     Settings is unchanged too.
@@ -8882,10 +8883,11 @@ today's (Settings' Song bank list, no browser). No SCHEMA change, no engine chan
 
 ## UI v6 U7b (chart)
 
-The chord chart (D7, still the hidden 2.1 feature) in the v6 layout: a right-sidebar module and "on the stage"
-(native DECISIONS D12, D16 "Chart placement is the player's choice" + "Chart text size is one tap away, in percent";
-`native/docs/lanes/UI6-build-plan.md` U7; mockups `chart.html`, `dialogs.html` "Edit chart"). Only while
-`settings.uiV6` **and** `settings.chartView` are on. No store, controller, engine or `shared/` change; no new setting.
+The chord chart (D7, still the hidden 2.1 feature here; D33 / "C-SHIP (D33)" ships it in 2.0) in the v6 layout: a
+right-sidebar module and "on the stage" (native DECISIONS D12, D16 "Chart placement is the player's choice" + "Chart
+text size is one tap away, in percent"; `native/docs/lanes/UI6-build-plan.md` U7; mockups `chart.html`, `dialogs.html`
+"Edit chart"). Only while `settings.uiV6` **and** `settings.chartView` are on. No store, controller, engine or `shared/`
+change; no new setting.
 
 - **Flag combinations.** v6 off + chart on = today's hidden chart view, unchanged (`views/chart/index.js`; its
   15 checks pass as before). v6 on + chart off = nothing chart-related is fetched, drawn or listened to (tested
@@ -9762,3 +9764,68 @@ edit-v2 14/14 files. 0 console.error / HTTP ≥ 400.
   (`panels/slot.js` curveSpark) subscribes to it too (also on a theme switch, which it missed before). Before, a live
   toggle left them in the old colour until the next rebuild. Tests: ui-v6 "U-CVD skeptic F3" (v6 Tone EQ), settings
   [app] "U-CVD skeptic F3" (today's response curve).
+
+## C-SHIP (D33)
+
+The chord chart ships in 2.0 (native DECISIONS D33, replacing D7's "2.1"; D7 step 1 only: PDF attachments and real
+notation stay after 2.0). On by default, with a switch per device; nothing of it loads before it is used; chart-view
+review O1, O3, O4 and O7 fixed. No engine change (`app/js/engine` untouched), no SCHEMA bump, no controller change.
+
+- **`settings.chartView`** (store.js): absent = **on**, `false` = off. Still in `DEVICE_LOCAL_SETTINGS` (not
+  exported, kept across a replace-import, not an edit). `store.set('settings.chartView', true | null)` stores absent,
+  `false` stores false, anything else is refused. Migration: `normalizeSettings` keeps `false` and drops anything
+  else, so the hidden 2.0 builds' `true` (on) becomes absent (still on); idempotent.
+  - `?chart=1` / `__rig.setChartView(true)` = on (absent) **and load now** (the dev switch, as before);
+    `?chart=0` / `__rig.setChartView(false)` = `false`. Both apply at once.
+- **Settings › Perform › "Chord charts"** On / Off (`setting-row-chart-view`, toggle `setting-chart-view`, writes
+  `v ? null : false`). Today's Settings: Look › Perform view, after Chips per sound. The v6 Settings moves the same
+  node into Perform layout › Perform (journalled, back on destroy). The hint carries the search words: chart, chords,
+  ChordPro, lyrics. main.js follows the switch live from its existing settings listener (`onSettings` →
+  `onChartSettings`; no new store listener).
+- **Shown by default; loaded when used** (main.js "Chord charts"). With charts on, Perform gets the chart's entry at
+  once and nothing else:
+  - today's Perform: a "Chart" toggle after Notes (`chart-toggle`, the same classes as the view's), made by main.js;
+    `views/chart/index.js` takes that button over when it mounts (`mounts.toggle`), so place and focus stay;
+  - the v6 Perform: a Chart sidebar module placeholder (`views/v6/sidebar/modules.js` `chartPlaceholder(use)`, the
+    shared face `CHART_MODULE` {id, label, blurb, icon, width 540}, `storedChartPlacement()`), registered with
+    `side.addModule`; `views/v6/chart/chart.js` registers the real module, which **replaces a `placeholder` in place**
+    (sidebar.js `addModule`: same tab and rail buttons, remounted where the placeholder showed). The placeholder's
+    `take()` / `away()` follow the stored placement (absent = stage), so the first tap goes where the chart would.
+    `views/v6/perform.js` `chartMounts.v6.placeholder` hands main.js the factory (no new module request).
+  - The chart (views/chart/* or views/v6/chart/*, styles-chart.css, styles-v6-chart.css, its DOM, store listeners,
+    window listeners) loads on: a tap on the toggle / the Chart tab / rail icon (v6 Edit's Chart button and the Notes
+    module's Chart go through those), the sidebar opening on Chart, a current song with a chart (at boot, or when one
+    arrives: checked in `onSettings`, O(1)), or a chart this device left up (today's `open`, the v6 `stage` with the
+    stage placement, read from `localStorage['worship-rig.chart']`).
+  - Off: no entry, no chart (as the flag-off build was).
+  - The v6 Edit's Chart button and the Notes module's "Chart · open the chord chart" show unless charts are off; the
+    "Chart · coming in 2.1" text is gone everywhere.
+- **O1 PANIC over the chart dialogs.** While today's import dialog or the v6 Edit chart dialog is open, `body` has
+  `chart-dlg-open` and styles.css lifts `.btn-panic` (today's Perform and the v6 bottom row) to `position: relative;
+  z-index: 61`, over the z 60 backdrop (no ancestor of PANIC makes a stacking context; checked with
+  `elementFromPoint`). A tap panics and the dialog stays open. ⌘. / Esc unchanged. (The U5b F1 idea: PANIC is never
+  under a dialog's backdrop. Settings, z 50, still covers it, as before.)
+- **O3** The toggle's look moved from styles-chart.css to styles.css (`.song-sub .chv-toggle`, so the placeholder and
+  the view's button look the same): 36 px on a mouse like Notes and Click, `@media (pointer: coarse)` 44 px.
+- **O4** `store.addSong` / `store.duplicateSong` check `LIBRARY_MAX_CHARS` before writing (`songOverflows`: the
+  library JSON + the new song's + 64 for the id in the order / setlist). Past it they return `null`, write nothing,
+  and send a `library-full` notice ("The library is full (about 2 MB), so “<name>” was not added. …") that the
+  controller toasts like D8/D9's. Callers: the WorshipTools CSV placeholders stop at the first refusal and count what
+  was added; the v6 song menu no longer adds its own "Could not duplicate" for a full library. The other callers
+  already handled a null id.
+- **O7** `views/chart/import.js` `fileTooLargeMessage(bytes)`: "That file is too large (1.5 MB). A file can be at
+  most 1 MB (a song list), and a chart at most 64 KB." (was "A chart can be at most 64 KB"), in both dialogs.
+- **Purity** (measured on the factory library, which has no charts; 1280 × 800):
+  - today's UI vs the base build (36ef998, `?chart=0`: 105 requests, 15 store listeners, 4 intervals, 2529
+    elements): charts off identical; charts on identical requests, window / document listeners, intervals, store
+    listeners and stylesheets, the DOM + the Chart toggle only (ui-v6 "flag-off purity"; ui-v6-edit the same with
+    today's Edit);
+  - v6 vs the base build: charts off identical in everything chart-related; charts on vs off on the branch: the same
+    148 requests, 19 store listeners, 3 intervals and window / document listeners; +10 elements = the Chart tab and
+    rail icon (chart suite "U7b v6 on, chart off …").
+- Tests: shell unit `chart-store.test.mjs` (the switch's values / migration / replace-import, the O4 refusals);
+  chart suite (boot with charts on and no charts, a tap loads it on the same button, O1 PANIC over the import
+  dialog, O7 message, `?chart=` both ways, the lazy rules, v6 purity re-based); ui-v6 (the Chart module by default,
+  unloaded; Notes' Chart; PANIC over the Edit chart dialog; purity both ways); ui-v6-edit (the Chart button; purity
+  both ways); settings (the row in both UIs, the search words, live on / off); ui-core (the toggle by default, 36 px,
+  44 px on touch, a tap loads it).

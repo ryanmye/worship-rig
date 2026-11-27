@@ -11,7 +11,9 @@ import { openOverlay } from '../../components/overlay.js';
 import { markDialog } from '../../_fallback-components.js';
 import { CHART_MAX_CHARS, isTrialId } from '../../../store.js';
 import { detectFormat } from '../../../shared/chart-parse.js';
-import { chartReview, IMPORT_FILE_MAX_BYTES, trialKeepsLibraryCopy } from '../../chart/import.js';
+import {
+  chartReview, IMPORT_FILE_MAX_BYTES, fileTooLargeMessage, trialKeepsLibraryCopy,
+} from '../../chart/import.js';
 import { CHART_ACCEPT, CHART_SIDE_PCT, chartView, pctPx } from '../../chart/logic.js';
 import { renderChart } from '../../chart/render.js';
 
@@ -103,6 +105,9 @@ export function openChartEditor(ctx, songId, o) {
   const host = h('div.v6-ce-host', { 'data-testid': 'v6-chart-editor-host' }, dlg);
   o.host.append(host);
   markDialog(token, true);
+  // C-SHIP (chart-view review O1): the on-screen PANIC sits above this backdrop (styles.css .chart-dlg-open), so it
+  // stays reachable and working while the dialog is open, as ⌘. already did
+  document.body.classList.add('chart-dlg-open');
 
   // ---- live review + preview
   function refresh() {
@@ -217,8 +222,7 @@ export function openChartEditor(ctx, songId, o) {
     fileInput.value = '';
     if (!f) return;
     if (f.size > IMPORT_FILE_MAX_BYTES) {
-      rv.showError(`That file is too large (${Math.ceil(f.size / 1024)} KB). A chart can be at most `
-        + `${CHART_MAX_CHARS / 1024} KB.`);
+      rv.showError(fileTooLargeMessage(f.size)); // C-SHIP (chart-view O7)
       return;
     }
     try {
@@ -261,6 +265,7 @@ export function openChartEditor(ctx, songId, o) {
     clearTimeout(removeTimer);
     closeOverlay();
     markDialog(token, false);
+    document.body.classList.remove('chart-dlg-open');
     host.remove();
     o.onClose?.();
     if (o.opener && o.opener.isConnected && typeof o.opener.focus === 'function' && !o.opener.disabled) {

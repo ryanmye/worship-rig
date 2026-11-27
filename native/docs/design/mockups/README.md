@@ -6,7 +6,7 @@ loaded by the app.
 | File | What |
 |---|---|
 | `perform-v6.html` | Perform v6 (D16): strips as the main screen, left sidebar (Quick, wheel), right sidebar (Drone, Setlist, Notes…), scrolling after 5 instruments, today's keyboard and menu bar popover |
-| `chart.html` | Chart view (D7, 2.1) placed in the v6 layout: on the stage, or as a sidebar tab; iPad; Add a chart |
+| `chart.html` | Chart view (D7; ships in 2.0, D33) placed in the v6 layout: on the stage, or as a sidebar tab; iPad; Add a chart |
 | `song-bank.html` | Song bank (O-AW-PP bank packs) as a browser over the stage: filters, detail, Try it, Add to library / setlist; opened from Setlist › + Add song. Proposal, not yet approved |
 | `edit.html` (+ `img/`) | Edit in the v6 language: instrument tabs by name, the same strip as Perform, Effects with a sends table, the instrument chooser, library folding. Proposal, not yet approved |
 | `settings.html` | Settings: category list with current state, search, MIDI Learn, Perform layout, Song bank entry, theme previews. Proposal |

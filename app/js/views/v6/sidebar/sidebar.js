@@ -10,7 +10,8 @@
 // folding the sidebar or switching tabs destroys it (its listeners go with it).
 // U7b: a module that is loaded with its own flag (Chart, settings.chartView) is added after the sidebar mounts
 // (addModule) and taken away with the flag (removeModule); its place in a saved layout is kept meanwhile
-// (LATE_MODULE_IDS). Such a module may also show itself elsewhere (the chart on the stage): take() / away().
+// (LATE_MODULE_IDS). C-SHIP (D33): Chart is first a placeholder (modules.js), replaced in place when it loads.
+// Such a module may also show itself elsewhere (the chart on the stage): take() / away().
 import { h, setText, disposer, nextId } from '../../components/util.js';
 import { say, onVoiceChange } from '../../components/voice.js';
 import { button, popover } from '../lib.js';
@@ -19,7 +20,7 @@ import { SIDEBAR_MODULES } from './modules.js';
 /** localStorage key of the per-device sidebar layout (never exported with the library). */
 export const SIDEBAR_KEY = 'worship-rig.v6.sidebar';
 /**
- * Modules added after the sidebar mounts (U7b: 'chart', loaded only while settings.chartView is on). A saved layout
+ * Modules added after the sidebar mounts (U7b: 'chart', there while chord charts are on, D33). A saved layout
  * keeps their place, hidden state and tab while they are absent; they are never added to a layout that never had them
  * until they are registered.
  */
@@ -853,11 +854,23 @@ export function rightSidebar(v, o = {}) {
 
   /**
    * U7b: register a module after mounting (one loaded with its own flag). A layout that had it gets it back in its
-   * place; one that never had it gets it at the end, shown.
-   * @param {object} m  a module ({id, label, …, mount}); ignored when one with that id is there
+   * place; one that never had it gets it at the end, shown. C-SHIP (D33): a module with that id that is a
+   * `placeholder` (modules.js chartPlaceholder) is replaced in place: same tab and rail buttons (focus stays), and the
+   * new module is mounted where the placeholder was showing.
+   * @param {object} m  a module ({id, label, …, mount}); ignored when a non-placeholder with that id is there
    */
   function addModule(m) {
-    if (!m || !m.id || byId.has(m.id) || destroyed) return;
+    if (!m || !m.id || destroyed) return;
+    const old = byId.get(m.id);
+    if (old && !old.placeholder) return;
+    if (old) {
+      if (cur?.id === m.id) unmount();
+      mods[mods.indexOf(old)] = m;
+      byId.set(m.id, m);
+      renderBadges(lastState);
+      applyLayout();
+      return;
+    }
     mods.push(m);
     byId.set(m.id, m);
     prefs = normalizePrefs(prefs, ids(), LATE_MODULE_IDS);

@@ -85,7 +85,8 @@ export function unloadSettingsCss() {
  * Apply the v6 Settings to today's mounted Settings (views/settings.js passes its internals).
  * @param {object} api  views/settings.js `v6Api`: el, dialog, nav, body, closeBtn, tabs, panels, advs, cats, C, store,
  *   controller, midi, engine, rig, isElectron, ctx, toast, showCategory, revealSection, resolveSection, isOpen(),
- *   current(), nodes {learnSection, perfSection, appearance, themeCards, themeGrid, lightRow, bankBox, outputSelect},
+ *   current(), nodes {learnSection, perfSection, chartRow, appearance, themeCards, themeGrid, lightRow, bankBox,
+ *   outputSelect},
  *   renderPacks, learnName, mappingText, velLabel, latencyLabel, about(), manualBackupAt()
  * @returns {{destroy():void, shown(cat:string, o:object):void, opened(linked:boolean):void, refresh():void,
  *   search(q:string):number, readonly query:string, readonly hits:{cat:string, el:Element}[],
@@ -302,9 +303,12 @@ function enhance(api, d) {
   insert(h('section.st-section', { 'aria-label': 'Right sidebar', 'data-section': 'sidebar' },
     h('h2.st-h2', {}, 'Right sidebar', h('small.v6-st-h2note', { text: 'the same as ⋯ on the sidebar' })),
     czBox), layoutPanel);
-  insert(h('section.st-section', { 'aria-label': 'Perform', 'data-section': 'perform-layout' },
+  const perfLayout = insert(h('section.st-section', { 'aria-label': 'Perform', 'data-section': 'perform-layout' },
     h('h2.st-h2', { text: 'Perform' }),
     row('Snapshots row', snapSeg.el, 'Folded: one Snapshot chip in the song bar instead.')), layoutPanel);
+  // C-SHIP (D33): today's "Chord charts" row (views/settings.js, Look › Perform view) moves here, beside the other
+  // Perform choices: the same node and write, put back on destroy
+  if (nodes.chartRow) move(nodes.chartRow, perfLayout, null);
   const renderLayout = () => {
     if (api.isOpen()) mountCz();
     snapSeg.set(snapsFolded() ? 'folded' : 'shown');

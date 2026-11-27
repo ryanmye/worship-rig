@@ -802,10 +802,14 @@ function applyCvd(v) {
 // mounted below (the boot mount reads the flag itself).
 let uiV6Armed = false;
 let lastUiV6 = false;
+// C-SHIP (D33): chord charts follow their switch here too (Settings › Perform), armed with the chart section below
+let chartArmed = false;
+let lastChartOn = store.get().settings.chartView !== false;
 function onSettings(state) {
   const st = state.settings;
   applyEscPanics(st.escPanics === true);
   applyCvd(st.cvd);
+  if (chartArmed) onChartSettings(state);
   if (uiV6Armed && (st.uiV6 === true) !== lastUiV6) {
     lastUiV6 = st.uiV6 === true;
     applyUiV6();
@@ -1073,22 +1077,82 @@ $('btn-quick').addEventListener('click', () => {
   performView?.toggleQuick();
 });
 
-// Chart view (D7, hidden; views/chart/, CONTRACT_CHANGES "Chart view (D7, hidden)"). While settings.chartView is absent
-// nothing of it is loaded, drawn or listened to. Turned on or off by __rig.setChartView(true|false) (DevTools) or by
-// opening the app with ?chart=1 / ?chart=0; it applies at once and is remembered on this machine.
-let chartView = null;
+// Chord charts (D7; C-SHIP / native DECISIONS D33: they ship in 2.0; views/chart/, views/v6/chart/; CONTRACT_CHANGES
+// "C-SHIP (D33)"). settings.chartView absent = on, false = off (Settings › Perform › Chord charts, ?chart=1 /
+// ?chart=0, __rig.setChartView(true|false)); it applies at once and is this machine's. On, Perform shows the chart's
+// entry at once: today's "Chart" toggle, or the v6 sidebar's Chart module (views/v6/sidebar/modules.js
+// chartPlaceholder). The chart itself (its modules, stylesheets, DOM, store listeners) loads only when it is used:
+// that entry tapped (v6 Edit's Chart and the Notes module's Chart go through it), a current song with a chart, or a
+// chart this device left up (today's `open`, the v6 stage). Off, nothing of it exists.
+let chartView = null; // the mounted chart (views/chart/index.js or views/v6/chart/chart.js)
 let chartPending = null;
+let chartStub = null; // {destroy()}: the entry while the chart is not loaded
+const chartOn = () => store.get().settings.chartView !== false;
+/** views/chart/core.js CHART_PREFS_KEY (not imported: that loads the chart). */
+const CHART_PREFS_KEY = 'worship-rig.chart';
 function setChartView(on) {
-  store.set('settings.chartView', on ? true : null);
-  return applyChartView();
+  store.set('settings.chartView', on ? null : false);
+  return on ? loadChart() : applyChartView(); // the DevTools / ?chart=1 switch loads it at once, as before
 }
+/** Has this device left the chart up (it comes back at boot as before), or does the current song have one? */
+function chartWanted(v6) {
+  if (store.currentSong()?.chart) return true;
+  try {
+    const p = JSON.parse(localStorage.getItem(CHART_PREFS_KEY) || 'null') || {};
+    return v6 ? p.stage === true && p.placement !== 'side' : p.open === true; // v6/chart/chart.js: absent = stage
+  } catch {
+    return false;
+  }
+}
+/** Charts on: the entry (and the chart when it is wanted); off: neither. */
 function applyChartView() {
-  const on = store.get().settings.chartView === true;
-  if (!on) {
+  if (!chartOn()) {
+    chartStub?.destroy();
+    chartStub = null;
     chartView?.destroy();
     chartView = null;
     return Promise.resolve(false);
   }
+  if (chartView) return Promise.resolve(true);
+  armChartStub();
+  return chartWanted(performIsV6) ? loadChart() : Promise.resolve(false);
+}
+/** The chart's entry on the mounted Perform, before the chart is loaded (C-SHIP: nothing else of it runs). */
+function armChartStub() {
+  const mounts = performView?.chartMounts;
+  if (chartStub || chartView || !mounts) return;
+  if (mounts.v6) {
+    const side = mounts.v6.side;
+    side.addModule(mounts.v6.placeholder((then) => useChart(then)));
+    chartStub = { destroy: () => side.removeModule('chart') };
+    return;
+  }
+  const toggle = h('button.btn.chv-btn.chv-toggle', { type: 'button', text: 'Chart', 'aria-pressed': 'false',
+    'data-testid': 'chart-toggle', title: 'Show this song’s chord chart' });
+  const onClick = (e) => {
+    if (e.detail > 0 || e.pointerType) queueMicrotask(() => toggle.blur()); // Space = sustain (blurAfterPointer)
+    useChart((view) => view.open());
+  };
+  toggle.addEventListener('click', onClick);
+  mounts.after.after(toggle);
+  chartStub = {
+    toggle,
+    release: () => toggle.removeEventListener('click', onClick), // index.js takes the button over
+    destroy() {
+      toggle.removeEventListener('click', onClick);
+      toggle.remove();
+    },
+  };
+}
+/** The entry was used: load and mount the chart, then `then(view)`. */
+function useChart(then) {
+  loadChart().then((ok) => {
+    if (ok && chartView && typeof then === 'function') then(chartView);
+  });
+}
+/** Load and mount the chart on the mounted Perform; resolves to whether it is mounted. */
+function loadChart() {
+  if (!chartOn()) return Promise.resolve(false);
   if (chartView) return Promise.resolve(true);
   // UI v6 U7b: on the v6 Perform the chart is views/v6/chart/ (a sidebar module or the stage); today's view otherwise
   const v6 = performIsV6;
@@ -1096,23 +1160,49 @@ function applyChartView() {
     : loadModule('./views/chart/index.js', 'mountChartView')).then((mount) => {
     chartPending = null;
     const mounts = performView?.chartMounts; // UI v6 (U1): none while Perform is being swapped
-    if (mount && mounts && !!mounts.v6 !== v6 && store.get().settings.chartView === true && !chartView) {
-      return applyChartView(); // Perform was swapped while the module loaded: the other one
+    if (mount && mounts && !!mounts.v6 !== v6 && chartOn() && !chartView) {
+      return loadChart(); // Perform was swapped while the module loaded: the other one
     }
-    if (!mount || chartView || store.get().settings.chartView !== true || !mounts) return !!chartView;
+    if (!mount || chartView || !chartOn() || !mounts) return !!chartView;
+    armChartStub(); // a Perform swapped meanwhile has no entry yet
+    const stub = chartStub;
+    chartStub = null;
+    stub?.release?.();
     try {
-      chartView = mount(ctx, mounts);
+      // the v6 chart takes the placeholder module's place (sidebar addModule); today's takes the toggle over
+      chartView = mount(ctx, stub?.toggle ? { ...mounts, toggle: stub.toggle } : mounts);
     } catch (err) {
       console.warn('[ui] mountChartView failed', err);
+    }
+    if (!chartView) {
+      stub?.destroy(); // never two entries: a fresh one
+      armChartStub();
     }
     return !!chartView;
   });
   return chartPending;
 }
+/** onSettings (main.js's one settings listener): the switch flipped, or a chart arrived on the current song. */
+function onChartSettings(state) {
+  const on = state.settings.chartView !== false;
+  if (on !== lastChartOn) {
+    lastChartOn = on;
+    applyChartView();
+  } else if (on && chartStub && !chartView && !chartPending && state.songs[state.settings.currentSongId]?.chart) {
+    loadChart();
+  }
+}
 {
   const q = new URLSearchParams(location.search).get('chart');
-  if (q === '1' || q === '0') store.set('settings.chartView', q === '1' ? true : null);
-  if (store.get().settings.chartView === true && performView) applyChartView();
+  if (q === '1' || q === '0') {
+    store.set('settings.chartView', q === '1' ? null : false);
+    lastChartOn = chartOn();
+  }
+  if (performView) {
+    if (q === '1') loadChart();
+    else applyChartView();
+  }
+  chartArmed = true;
 }
 
 // UI v6 (D22, U1): swap Perform for views/v6/perform.js and back. The chart view (mounted on Perform's mount points)
@@ -1125,6 +1215,8 @@ function setUiV6(on) {
 function swapPerform(mount, isV6) {
   chartView?.destroy();
   chartView = null;
+  chartStub?.destroy(); // C-SHIP: the entry belongs to that Perform
+  chartStub = null;
   // skeptic UI6-small F4 (UI6-U1 O4): the new Perform takes over the Revert snapshot (Edit's changed dots too)
   let carried = null;
   try {
@@ -1147,7 +1239,7 @@ function swapPerform(mount, isV6) {
   } finally {
     delete ctx.carrySnapshot;
   }
-  if (store.get().settings.chartView === true) applyChartView();
+  applyChartView();
 }
 // UI v6 U5a: Edit follows the switch too (views/v6/edit/edit.js mountEditV6 ⇄ views/edit/shell.js mountEdit). The
 // boot mount below reads the flag itself; later flips swap the mounted Edit here.

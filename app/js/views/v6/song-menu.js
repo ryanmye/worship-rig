@@ -80,7 +80,10 @@ export function songMenu(v) {
             closePop();
             const nid = !v.isLocked() && store.duplicateSong(id);
             if (nid) v.toast(`Duplicated “${s.name}”. The copy is next to it in the list.`);
-            else v.toast(`Could not duplicate “${s.name}”.`, 'error');
+            // C-SHIP (chart-view O4): a full library is refused by the store, whose notice is the toast
+            else if (v.isLocked() || trial || !store.getSong(id)) {
+              v.toast(`Could not duplicate “${s.name}”.`, 'error');
+            }
           });
         const st = store.get();
         const setNames = st.setlistOrder.map((k) => st.setlists[k]?.name).filter(Boolean);

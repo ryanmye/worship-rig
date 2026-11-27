@@ -1581,9 +1581,22 @@ export function mountSettings(el, ctx) {
   uiV6Tog.el.dataset.testid = 'setting-ui-v6';
   const uiV6Row = row('Try the new layout (preview)', uiV6Tog.el, 'Preview of 2.0’s new screens; turn off any time.');
   uiV6Row.dataset.testid = 'setting-row-ui-v6';
+  // C-SHIP (native DECISIONS D33): chord charts ship in 2.0. settings.chartView, per device, absent = on, false = off
+  // (store.js); main.js shows or takes away the chart's entry on Perform when it changes. The hint holds the words a
+  // search finds it by (v6 Settings: chart, chords, ChordPro, lyrics)
+  const chartTog = C.toggle({ label: 'On', onChange: (v) => store.set('settings.chartView', v ? null : false) });
+  chartTog.el.dataset.bind = 'settings.chartView';
+  chartTog.el.dataset.testid = 'setting-chart-view';
+  comps.push(chartTog);
+  settingBinds.push({ key: 'chartView', apply: (st) => chartTog.set(st.chartView !== false) });
+  chartTog.set(S().chartView !== false);
+  const chartRow = row('Chord charts', chartTog.el, 'The Chart button on Perform: paste or import ChordPro or chords '
+    + 'over lyrics; the chords follow Easy Transpose. Off: no Chart button.');
+  chartRow.dataset.testid = 'setting-row-chart-view';
   const perfSection = h('section.st-section', { 'aria-label': 'Perform view', 'data-section': 'perform' },
     h('h2.st-h2', { text: 'Perform view' }),
     row('Chips per sound', performChips.el, 'Under each fader. 2 = Space and Echo only, for a longer fader.'),
+    chartRow,
     uiV6Row,
   );
   // D24.7: settings.escPanics, per device, absent = off (today's rule: Esc closes what is open first). main.js
@@ -2134,7 +2147,7 @@ export function mountSettings(el, ctx) {
     el, dialog, nav, body, closeBtn, tabs, panels, advs, cats, C,
     store, controller, midi, engine, rig, isElectron, ctx, toast,
     showCategory, revealSection, resolveSection, syncOrientation, isOpen: () => isOpen, current: () => current,
-    nodes: { learnSection, perfSection, appearance, themeCards, themeGrid, lightRow, bankBox, outputSelect },
+    nodes: { learnSection, perfSection, chartRow, appearance, themeCards, themeGrid, lightRow, bankBox, outputSelect },
     renderPacks, learnName, mappingText, velLabel: (v) => (VEL_OPTS.find((o) => o.value === v) || VEL_OPTS[1]).label,
     latencyLabel: (v) => (LATENCY_OPTS.find((o) => o.value === v) || {}).label || '',
     about: () => aboutInfo, manualBackupAt: () => manualBackupAt,

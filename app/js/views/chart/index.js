@@ -1,6 +1,8 @@
-// Chart view (D7, hidden; CONTRACT_CHANGES "Chart view (D7, hidden)"). main.js imports this module only while
-// settings.chartView is true and mounts it on Perform's two mount points (perform.js `chartMounts`): a "Chart" toggle
-// after the Notes button and a panel over the stage row (.p-main). With the flag off none of this exists.
+// Chart view (D7; D33: ships in 2.0; CONTRACT_CHANGES "Chart view (D7, hidden)", "C-SHIP (D33)"). main.js imports
+// this module only while chord charts are on (settings.chartView not false) and the chart is used, and mounts it on
+// Perform's two mount points (perform.js `chartMounts`): the "Chart" toggle after the Notes button (main.js's
+// placeholder toggle, taken over: `mounts.toggle`) and a panel over the stage row (.p-main). Off, none of this
+// exists.
 //
 // The panel shows the committed song's chart (settings.currentSongId: a cued song in lane-s's Cue-then-Go is not
 // committed, so it never swaps the chart), transposed live to the key on show (logic.js chartView), with big-type
@@ -31,7 +33,8 @@ function readPrefs() {
 /**
  * Mount the chart toggle and panel on Perform.
  * @param {{store:object, toast?:Function}} ctx main.js ctx
- * @param {{after:HTMLElement, stage:HTMLElement}} mounts perform.js `chartMounts`
+ * @param {{after:HTMLElement, stage:HTMLElement, toggle?:HTMLButtonElement}} mounts perform.js `chartMounts`;
+ *   `toggle`: main.js's placeholder Chart toggle (C-SHIP), taken over
  * @returns {{destroy():void, open():void, close():void, readonly isOpen:boolean, state():object,
  *   openImport():object|null}}
  */
@@ -53,10 +56,13 @@ export function mountChartView(ctx, mounts) {
     blurAfterPointer(b, d);
     return b;
   };
-  // ---- toggle (Perform's song row)
-  const toggle = btn('.chv-toggle', 'Chart', { 'aria-pressed': 'false', 'aria-controls': 'perform-chart',
+  // ---- toggle (Perform's song row). C-SHIP: main.js shows the same button before this module loads (it is the
+  // tap that loads it); it is taken over here, so its place and focus stay (its own click listener is gone by now)
+  const toggle = mounts.toggle || btn('.chv-toggle', 'Chart', { 'aria-pressed': 'false',
     'data-testid': 'chart-toggle', title: 'Show this song’s chord chart' });
-  mounts.after.after(toggle);
+  if (mounts.toggle) blurAfterPointer(toggle, d);
+  toggle.setAttribute('aria-controls', 'perform-chart');
+  if (!toggle.isConnected) mounts.after.after(toggle);
 
   // ---- panel (over the stage row)
   const titleEl = h('span.chv-title', { 'data-testid': 'chart-title' });

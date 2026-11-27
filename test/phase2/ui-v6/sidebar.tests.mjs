@@ -471,7 +471,12 @@ export async function sidebarTests(x) {
       assert.deepEqual({ ...prevented, top: prevented.top > 0 }, { prevented: true, top: true });
       await ev(({ id }) => window.__rig.store.set(`songs.${id}.notes`, ''), { id });
       await until(() => document.querySelector('[data-testid="v6-notes-text"]').classList.contains('empty'));
-      assert.equal(await page.isDisabled('.v6-notes-chart'), true, 'Chart: coming in 2.1');
+      // C-SHIP (D33): no "Chart · coming in 2.1"; the Chart button shows while chord charts are on (the D24.7 Esc
+      // test before this one turned them off, so it is hidden here; run.mjs "C-SHIP (D33)" checks it on)
+      assert.equal(await ev(() => {
+        const b = document.querySelector('.v6-notes-chart');
+        return b.hidden === (window.__rig.store.get().settings.chartView === false) && !/2\.1/.test(b.textContent);
+      }), true, 'Chart: shown with charts on, hidden off; no 2.1');
       await ev(({ id, n0 }) => window.__rig.store.set(`songs.${id}.notes`, n0), { id, n0 });
     });
 
