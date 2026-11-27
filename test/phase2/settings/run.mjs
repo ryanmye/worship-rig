@@ -1430,7 +1430,7 @@ async function runMode(mode, browser) {
         const on = await look();
         assert.deepEqual(on.cls, ['cvd-rg']);
         assert.ok(on.strips.every((c, i) => c !== before.strips[i]), `every strip recoloured: ${on.strips}`);
-        assert.deepEqual(on.nums, on.nums.map((_, i) => `"${i + 1}"`), 'each range bar numbered');
+        assert.deepEqual(on.nums, on.nums.map((_, i) => `"${i + 1}" / ""`), 'each range bar numbered');
         await page.click(`${seg} [data-value="by"]`);
         await until(() => document.documentElement.classList.contains('cvd-by'));
         const by = await look();
@@ -1444,6 +1444,59 @@ async function runMode(mode, browser) {
       if (mode === 'app') assert.deepEqual(await look(), before, 'Off: exactly the colours from before');
       await closeSettings();
     });
+
+    // skeptic UI6-cvd F3: a live toggle redraws today's Edit canvases drawn in the slot colour (the response curve; the
+    // EQ curves follow the same html-class observer, ui-v6 "U-CVD skeptic F3")
+    if (mode === 'app') {
+      await T('U-CVD skeptic F3: a live Colour-blind colours toggle redraws today’s Edit response curve in the new '
+        + 'colour', async () => {
+        await ev(() => {
+          window.__rig.ctx.setView('edit');
+          window.__rig.views.edit.editState.select('slot:1');
+        });
+        await until(() => !!document.querySelector('#view-edit canvas.ev2-slot-spark')?.offsetParent);
+        await page.waitForTimeout(200);
+        // the curve's colour (its most common saturated pixel) and the panel's slot colour now, as 0..255 triples
+        const read = () => ev(() => {
+          const cv = document.querySelector('#view-edit canvas.ev2-slot-spark');
+          const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+          const m = new Map();
+          for (let k = 0; k < d.length; k += 4) {
+            const sat = Math.max(d[k], d[k + 1], d[k + 2]) - Math.min(d[k], d[k + 1], d[k + 2]);
+            if (d[k + 3] < 250 || sat < 40) continue;
+            const key = `${d[k]},${d[k + 1]},${d[k + 2]}`;
+            m.set(key, (m.get(key) || 0) + 1);
+          }
+          const top = [...m].sort((a, b) => b[1] - a[1])[0];
+          const probe = document.createElement('i');
+          probe.style.color = 'var(--c)';
+          cv.parentElement.append(probe);
+          const c = getComputedStyle(probe).color;
+          probe.remove();
+          const cnv = document.createElement('canvas').getContext('2d');
+          cnv.fillStyle = c;
+          cnv.fillRect(0, 0, 1, 1);
+          return { drawn: top ? top[0].split(',').map(Number) : null, want: [...cnv.getImageData(0, 0, 1, 1).data]
+            .slice(0, 3) };
+        });
+        const near = (r) => r.drawn && r.drawn.every((v, k) => Math.abs(v - r.want[k]) <= 10);
+        try {
+          const off = await read();
+          assert.ok(near(off), `Off: drawn ${off.drawn}, slot colour ${off.want}`);
+          await openSettings();
+          await cat('look');
+          await page.click('[data-testid="setting-cvd"] [data-value="rg"]');
+          await until(() => document.documentElement.classList.contains('cvd-rg'));
+          await closeSettings();
+          await page.waitForTimeout(300);
+          const on = await read();
+          assert.notDeepEqual(on.want, off.want, 'the slot colour changed');
+          assert.ok(near(on), `Red–green: drawn ${on.drawn}, slot colour ${on.want}`);
+        } finally {
+          await ev(() => window.__rig.store.set('settings.cvd', null));
+        }
+      });
+    }
 
     // polish-1: the retired Edit's .ed-* rules are pruned; what remains is exactly what settings.js renders
     if (mode === 'app') {

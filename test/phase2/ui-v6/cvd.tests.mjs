@@ -74,14 +74,14 @@ export async function cvdTests(x) {
       for (const s of on.strips) {
         const want = toRgb(PAL[type][s.i % 8]);
         assert.equal(s.ico, want, `${type} strip ${s.i}: the palette's colour`);
-        assert.equal(s.n, `"${s.i + 1}"`, `${type} strip ${s.i}: its number before the name`);
+        assert.equal(s.n, `"${s.i + 1}" / ""`, `${type} strip ${s.i}: its number before the name`);
         assert.equal(s.nBg, want);
         const cr = contrast(rgbOf(s.nInk), rgbOf(s.nBg));
         assert.ok(cr >= 4.5, `${type} strip ${s.i}: number ${cr.toFixed(2)} : 1`);
       }
       for (const b of on.bars) {
         assert.equal(b.bg, toRgb(PAL[type][b.i % 8]), `${type} bar ${b.i}`);
-        assert.equal(b.n, `"${b.i + 1}"`, `${type} bar ${b.i}: its number`);
+        assert.equal(b.n, `"${b.i + 1}" / ""`, `${type} bar ${b.i}: its number`);
         assert.ok(contrast(rgbOf(b.nInk), rgbOf(b.nBg)) >= 4.5, `${type} bar ${b.i}: number contrast`);
       }
       assert.notEqual(on.strips[7].ico, on.strips[0].ico, `${type}: position 7 has its own colour`);
@@ -123,14 +123,155 @@ export async function cvdTests(x) {
       const on = await read();
       on.tabs.forEach((t, k) => {
         assert.equal(t.top, toRgb(PAL.rg[k % 8]), `tab ${t.b}`);
-        assert.equal(t.n, `"${k + 1}"`, `tab ${t.b}: its number`);
+        assert.equal(t.n, `"${k + 1}" / ""`, `tab ${t.b}: its number`);
         assert.equal(t.h, off.tabs[k].h, `tab ${t.b}: same height`);
       });
-      assert.deepEqual(on.bar, { bg: toRgb(PAL.rg[2]), n: '"3"' }, 'Edit › Range: instrument 3');
+      assert.deepEqual(on.bar, { bg: toRgb(PAL.rg[2]), n: '"3" / ""' }, 'Edit › Range: instrument 3');
       await ev(() => window.__rig.store.set('settings.cvd', null));
       await until(() => !/cvd-/.test(document.documentElement.className));
       await page.waitForTimeout(150);
       assert.deepEqual(await read(), off);
+    } finally {
+      await ev(() => {
+        window.__rig.store.set('settings.cvd', null);
+        window.__rig.ctx.setView('perform');
+      });
+    }
+  });
+
+  await T('U-CVD skeptic F1: a range bar’s number stays on its own bar when the bar is short (split ranges, '
+    + 'later positions)', async () => {
+    await ev(() => window.__rig.store.set('settings.cvd', null));
+    assert.equal(await setSlots(8), 8);
+    // position 7 (staggered 2 + 7 × 16 = 114 px) on a fifth (C4–G4, ≈ 80 px at 1280 px); position 3 on one octave
+    await ev(() => {
+      const { store } = window.__rig;
+      const id = store.currentSong().id;
+      const ref = { type: 'synth', id: 'warm-pad' };
+      if (store.currentSong().patch.slots[7]) store.set(`songs.${id}.patch.slots.7.instrument`, ref);
+      else store.set(`songs.${id}.patch.slots.7`, { instrument: ref });
+      store.set(`songs.${id}.patch.slots.7.lowNote`, 60);
+      store.set(`songs.${id}.patch.slots.7.highNote`, 67);
+      store.set(`songs.${id}.patch.slots.3.lowNote`, 36);
+      store.set(`songs.${id}.patch.slots.3.highNote`, 47);
+    });
+    await settled();
+    await ev(() => window.__rig.store.set('settings.cvd', 'rg'));
+    await until(() => document.documentElement.classList.contains('cvd-rg')
+      && document.querySelectorAll('[data-testid="v6-kbd"] .v6-rbar').length === 8);
+    await page.waitForTimeout(200);
+    try {
+      const bars = await ev(() => [...document.querySelectorAll('[data-testid="v6-kbd"] .v6-rbar')].map((b) => {
+        const r = b.getBoundingClientRect();
+        const bs = getComputedStyle(b, '::before');
+        const left = r.left + parseFloat(bs.left);
+        return { i: Number(b.dataset.slot), L: r.left, R: r.right, bl: left, br: left + parseFloat(bs.width) };
+      }));
+      for (const b of bars) {
+        if (b.R - b.L < 24) continue; // a sliver at the keyboard's edge: the number may overhang it
+        assert.ok(b.bl >= b.L - 0.5 && b.br <= b.R + 0.5,
+          `bar ${b.i + 1} (${Math.round(b.L)}–${Math.round(b.R)}): its number at `
+          + `${Math.round(b.bl)}–${Math.round(b.br)}`);
+      }
+      assert.ok(bars.some((b) => b.i === 7 && b.R - b.L < 114),
+        'the case: position 7 on a bar shorter than its stagger');
+    } finally {
+      await ev(() => {
+        const { store } = window.__rig;
+        const id = store.currentSong().id;
+        store.set('settings.cvd', null);
+        for (const i of [3, 7]) {
+          store.set(`songs.${id}.patch.slots.${i}.lowNote`, 21);
+          store.set(`songs.${id}.patch.slots.${i}.highNote`, 108);
+        }
+      });
+    }
+  });
+
+  await T('U-CVD skeptic F2: the numbers are not read out (strip names, Edit tabs and the range bars say the same '
+    + 'as Off)', async () => {
+    const snap = async () => {
+      const out = {
+        strips: await page.locator('[data-testid="v6-strips"], .v6-strips').first().ariaSnapshot(),
+        bars: await page.locator('[data-testid="v6-kbd-bars"]').ariaSnapshot(),
+      };
+      return out;
+    };
+    await ev(() => {
+      window.__rig.store.set('settings.cvd', null);
+      window.__rig.ctx.setView('perform');
+    });
+    assert.equal(await setSlots(3), 3);
+    await settled();
+    await page.waitForTimeout(200);
+    const off = await snap();
+    await ev(() => window.__rig.store.set('settings.cvd', 'by'));
+    await until(() => document.documentElement.classList.contains('cvd-by'));
+    await page.waitForTimeout(200);
+    try {
+      assert.deepEqual(await snap(), off, 'Perform: the same accessible names / text with the numbers shown');
+      // the badges are still drawn (content "1"…), with empty alt text
+      assert.equal(await ev(() => getComputedStyle(document.querySelector('.v6-strip[data-slot="0"] .v6-nm'),
+        '::before').content), '"1" / ""');
+      await ev(() => window.__rig.ctx.setView('edit'));
+      await until(() => document.body.dataset.view === 'edit' && !!window.__rig.views.edit?._debug?.v6);
+      const tabs = () => page.locator('[role="tablist"]').filter({ has: page.locator('.v6e-rt') }).first()
+        .ariaSnapshot();
+      const on = await tabs();
+      await ev(() => window.__rig.store.set('settings.cvd', null));
+      await until(() => !/cvd-/.test(document.documentElement.className));
+      await page.waitForTimeout(150);
+      assert.equal(on, await tabs(), 'Edit tabs: the same accessible names');
+    } finally {
+      await ev(() => {
+        window.__rig.store.set('settings.cvd', null);
+        window.__rig.ctx.setView('perform');
+      });
+    }
+  });
+
+  await T('U-CVD skeptic F3: a live toggle redraws v6 Edit › Tone EQ’s canvases in the new colour', async () => {
+    assert.equal(await setSlots(3), 3);
+    await ev(() => {
+      window.__rig.store.set('settings.cvd', null);
+      window.__rig.ctx.setView('edit');
+    });
+    await until(() => document.body.dataset.view === 'edit' && !!window.__rig.views.edit?._debug?.v6);
+    await ev(() => window.__rig.views.edit.editState.select('slot:2'));
+    await page.click(tid('v6e-cat-eq'));
+    await until(() => !!document.querySelector('#view-edit canvas.eqk-kb')?.offsetParent);
+    await page.waitForTimeout(400);
+    // the EQ keyboard strip's most common saturated pixel vs the slot colour it should be drawn in
+    const read = () => ev(() => {
+      const cv = document.querySelector('#view-edit canvas.eqk-kb');
+      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+      const m = new Map();
+      for (let k = 0; k < d.length; k += 4) {
+        if (d[k + 3] < 250 || Math.max(d[k], d[k + 1], d[k + 2]) - Math.min(d[k], d[k + 1], d[k + 2]) < 40) continue;
+        const key = `${d[k]},${d[k + 1]},${d[k + 2]}`;
+        m.set(key, (m.get(key) || 0) + 1);
+      }
+      const top = [...m].sort((a, b) => b[1] - a[1])[0];
+      const probe = document.createElement('i');
+      probe.style.color = 'var(--slot-2)';
+      cv.parentElement.append(probe);
+      const g = document.createElement('canvas').getContext('2d');
+      g.fillStyle = getComputedStyle(probe).color;
+      probe.remove();
+      g.fillRect(0, 0, 1, 1);
+      return { drawn: top ? top[0].split(',').map(Number) : null,
+        want: [...g.getImageData(0, 0, 1, 1).data].slice(0, 3) };
+    });
+    const near = (r) => r.drawn && r.drawn.every((v, k) => Math.abs(v - r.want[k]) <= 10);
+    try {
+      const off = await read();
+      assert.ok(near(off), `Off: drawn ${off.drawn}, slot colour ${off.want}`);
+      await ev(() => window.__rig.store.set('settings.cvd', 'rg'));
+      await until(() => document.documentElement.classList.contains('cvd-rg'));
+      await page.waitForTimeout(400);
+      const on = await read();
+      assert.notDeepEqual(on.want, off.want, 'the slot colour changed');
+      assert.ok(near(on), `Red–green: drawn ${on.drawn}, slot colour ${on.want}`);
     } finally {
       await ev(() => {
         window.__rig.store.set('settings.cvd', null);

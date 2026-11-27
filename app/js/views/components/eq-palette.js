@@ -139,7 +139,9 @@ export function readEqPalette(host, slotIndex) {
 const themeListeners = new Set();
 let themeObserver = null;
 /**
- * Call `cb` when the page theme (html data-theme / data-mode) changes.
+ * Call `cb` when the page theme (html data-theme / data-mode) changes, or html's classes do: Colour-blind colours
+ * (U-CVD, D32) is html.cvd-rg / .cvd-by and recolours --slot-N (skeptic UI6-cvd F3: a live toggle left the EQ
+ * canvases in the old colour until the next rebuild). Nothing else toggles a class on html.
  * @param {() => void} cb
  * @returns {() => void} unsubscribe
  */
@@ -149,7 +151,9 @@ export function onThemeChange(cb) {
     themeObserver = new MutationObserver(() => {
       for (const fn of [...themeListeners]) fn();
     });
-    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-mode'] });
+    themeObserver.observe(document.documentElement, {
+      attributes: true, attributeFilter: ['data-theme', 'data-mode', 'class'],
+    });
   }
   return () => {
     themeListeners.delete(cb);

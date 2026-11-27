@@ -9749,3 +9749,16 @@ ui-v6 85/85 (flag-off purity identical: 105 requests, 15 store listeners, 4 inte
 78/78; themes 58/58; ui-v6-themes 30/30 clean in 2124 s (the 8 × 3 sizes plus Sanctuary / Daylight Day / Studio × rg,
 by: +459 s); the other five themes × rg, by with `--cvd only` 10/10 clean (738 s, not part of the default run);
 edit-v2 14/14 files. 0 console.error / HTTP ≥ 400.
+
+**Skeptic review (UI6-cvd, native/docs/reviews/UI6-cvd.md).**
+- F1: a range bar's number is clamped to its bar: `left: clamp(0px, 2px + i × 16px, 100% − 20px)` (was the bare
+  stagger, which put position 7+'s number past the end of a short bar, over the keyboard or another bar). Bars under
+  ≈ 20 px (a range clipped at the keyboard's edge) may still overhang. Test: ui-v6 "U-CVD skeptic F1".
+- F2: the numbers carry empty alt text (`content: var(--cvd-n) / ''`, inside `@supports (content: 'x' / '')`), so the
+  accessibility tree is the same as Off (it was: strip button "2 Warm Pad", Edit tab "1 Grand Piano −1.9 dB", the
+  "Instrument ranges" group "1 2 3…"). Test: ui-v6 "U-CVD skeptic F2" (aria snapshots Off = on).
+- F3: `eq-palette.js` `onThemeChange` also fires on a change of html's `class` (Colour-blind colours), so the EQ
+  canvases (Tone EQ plot / keyboard, the mini curve) re-read the slot colour; today's Edit response curve
+  (`panels/slot.js` curveSpark) subscribes to it too (also on a theme switch, which it missed before). Before, a live
+  toggle left them in the old colour until the next rebuild. Tests: ui-v6 "U-CVD skeptic F3" (v6 Tone EQ), settings
+  [app] "U-CVD skeptic F3" (today's response curve).

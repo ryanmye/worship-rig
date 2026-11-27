@@ -38,6 +38,7 @@ import { PEDAL_HOLD_TRACK } from '../../../shared/learn.js';
 import {
   COMPILED_PRESETS, LINEAR_TOUCH, COMPUTER_KEYBOARD, compileTouch, touchAt, touchWord,
 } from '../../../shared/touch-curve.js';
+import { onThemeChange } from '../../components/eq-palette.js';
 import { say } from '../../components/voice.js'; // v11-polish: the strip foot's words per theme
 
 /** "Flat" / "Shaped · 3 bands": eq-math says "Custom · …", a word Edit keeps off screen (polish-2B, ux-round2 #5). */
@@ -667,7 +668,12 @@ function mountSlot(el, ctx, opts) {
     binder.fn([`${rel}.velocityCurve`, `${rel}.touch`], drawSpark);
     // settings.keyboards (a keyboard's own curve) is outside the song, and the playing keyboard can change; both
     // listeners belong to this body (released with its binder on a rebuild)
-    const offs = [ctx.subscribe(drawSpark), ctx.listen(ctx.controller, 'status', drawSpark)];
+    // skeptic UI6-cvd F3: a theme / Colour-blind colours change recolours --c; redraw the curve in the new colour
+    const respark = () => {
+      sparkKey = '';
+      drawSpark();
+    };
+    const offs = [ctx.subscribe(drawSpark), ctx.listen(ctx.controller, 'status', drawSpark), onThemeChange(respark)];
     binder.track({ destroy: () => offs.forEach((off) => typeof off === 'function' && off()) });
     const play = h('div.ev2-col.ev2-slot-play', {},
       h('span.ev2-cap', { text: 'Where it plays' }),
