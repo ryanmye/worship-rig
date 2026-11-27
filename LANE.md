@@ -14,12 +14,12 @@ Never tag, release or push.
 - [x] 2. release.yml gated to v1.* (main's `release: published` + reuse-release folded in, gated)
 - [x] 3. package-release.sh (build Release + ad-hoc sign + gates + zip + dmg + sizes + sha256; shellcheck clean; stub-run on Linux)
 - [x] 4. release-native.yml (mac / ipad / release jobs; actionlint + shellcheck clean)
-- [ ] 5. MAC_CHECK steps 2/3/8 (+ README) docs
-- [ ] 6. local validation (actionlint + shellcheck clean: done; test/unit/release/release-workflows.test.mjs 9/9, mutation-checked: done; gates unit: pending)
-- [ ] 7. final report here
+- [x] 5. MAC_CHECK B3 + steps 2/3/7/8, the check.sh usage; README; CONTRACT_CHANGES ## N10
+- [x] 6. local validation: actionlint (with shellcheck) clean on all workflows; shellcheck clean on package-release.sh and check.sh; stub run of package-release.sh; test/unit/release/release-workflows.test.mjs 9/9, mutation-checked; `gates.mjs unit` PASS at 3f22e46
+- [x] 7. final report here
 
 ## Next step
-5. docs (MAC_CHECK steps 2/3/8, README, CONTRACT_CHANGES); then gates unit
+None: hand back. (A `node_modules` symlink to the main checkout is in the worktree, git-ignored, for the gates.)
 
 ## Findings
 - main's release.yml (261ea8d) has a `release: published` trigger that v2-native lacks; the merge of v2-native into
@@ -33,3 +33,38 @@ Never tag, release or push.
   run.
 
 ## Open questions
+
+None for this lane beyond the tier-1 items already in MAC_CHECK (pre-release vs latest: U9 item 3; who dispatches).
+
+## Final report
+
+Changes (lane-n10 on origin/v2-native 7e92df4):
+- `.github/workflows/release.yml`: Electron only for `v1.*` tags (`push: tags: ['v1.*']` + job-level `refs/tags/v1.`
+  guards on `build` and `release`); main's 261ea8d `release: published` + reuse-existing-release folded in under the
+  same gate, so the 2.0 merge can take this file. 1.x behaviour unchanged; branch dispatch is still a dry run.
+- `.github/workflows/release-native.yml` (new): triggers `v2.*` tag push, `v2-native` push touching the release files
+  (path filter), `workflow_dispatch` (`publish`, `latest`, default off). Jobs `mac` (macos-15: brew xcodegen ninja,
+  tag vs MARKETING_VERSION, package-release.sh --clean, check.sh selftest on the Release app (fails the job), notes
+  preview, summary; artifacts dmg / zip / meta / logs), `ipad` (unsigned Release `xcodebuild archive`,
+  `CODE_SIGNING_ALLOWED=NO`, continue-on-error, not needed by release), `release` (ubuntu, contents: write, only
+  dispatch + publish + `refs/tags/v2.` + green mac; sha256 re-check, notes with --require-final, pre-release unless
+  latest; dmg, zip, SHA256SUMS, starter library).
+- `native/apple/scripts/package-release.sh` (new): Release build + ad-hoc re-sign (as afterPack.js) + gates + zip /
+  dmg (`Worship-Rig-arm64.*`, the update-check.js pickAsset names) + SHA256SUMS / release.json / summary.
+- `tools/mac/check.sh --app <path>`: selftest stage on a given app.
+- `native/apple/project.yml`: explicit `CFBundleShortVersionString`/`CFBundleVersion` from the build settings.
+- `tools/release/release-notes.mjs` (new): release body from docs/release-notes-<v>.md; `--require-final`.
+- `test/unit/release/release-workflows.test.mjs` (new, unit suite).
+- Docs: MAC_CHECK B3 + steps 2, 3 (dry run + what to check), 7, 8; README build/release text; CONTRACT_CHANGES N10.
+
+Unverified until CI runs it (no macOS here):
+- The Release configuration has never been built (Debug only so far); Swift/C may warn or fail under -O / WMO.
+- package-release.sh against the real codesign / hdiutil / ditto / lipo / PlistBuddy (only a stubbed run here),
+  the hdiutil retry, the XcodeGen no-scheme fallback path for Release.
+- That XcodeGen expands `$(MARKETING_VERSION)` in the plist (standard Xcode build-setting expansion; expected fine).
+- The self-test passing on a Release build (same code; no `#if DEBUG` other than isInspectable).
+- The iPad unsigned archive (CODE_SIGNING_ALLOWED=NO archive; the iOS platform on the macos-15 image).
+- GitHub behaviour taken from docs, not tested: dispatch needs the workflow on the default branch (hence the
+  v2-native path trigger), path filters don't apply to tag pushes, download-artifact patterns, `gh release
+  create/edit --latest/--prerelease`.
+- The release job (never run; it needs a tag + publish, tier 1).
