@@ -9578,3 +9578,13 @@ orchestrator's 1280 × 800 title screenshot). No engine change. Flag off is unch
   still play the trial's instruments until a song is added); no engine call was added for this. Tests: shell
   `bank-trial` "U8a O1" (then Try it + Keep from there), ui-v6-bank "polish2 U8a O1" (banner Back, card back, no
   toast).
+- **v6 Edit's song name ellipsizes (orchestrator screenshot).** At 1280 × 800 the name field (today's song-header
+  module, `field-sizing: content`, `flex: 0 1 auto`) shrank to 189 px for a 220 px name, but its ellipsis class
+  (`long`, song-header.js `fitName`) is only re-checked on a rename or typing, so it stayed `text-overflow: clip`:
+  "Sunday Pad + Pia". `views/v6/edit/edit.js` re-runs the same check (wider than the field by > 2 px, the caret's
+  slack) in a frame whenever the field's size (ResizeObserver) or the name (binder `fn(['name'])`, input) changes,
+  and a cut name's title is "“<name>” · click to rename" (else today's "Song name: click to rename"). v6 only:
+  today's Edit and its header module are untouched. Measured with "Sunday Pad + Piano": 1280 × 800 ellipsis
+  (189 px field), 1180 × 820 and 820 × 1180 fit (179 px, the ≤ 1250 px 19 px font), 1024 × 700 ellipsis (68 px).
+  The chips keep their size (the name gives way). Test: ui-v6-edit "polish2" (three sizes, a resize back, a long
+  rename and back).

@@ -331,6 +331,34 @@ export function mountEditV6(el, ctx) {
   const renderChartBtn = () => {
     chartBtn.hidden = store.get().settings.chartView !== true;
   };
+  // polish batch 2 (orchestrator screenshot, 1280 × 800: "Sunday Pad + Pia" with no ellipsis): the song name field
+  // shrinks with the header (flex), but today's header module re-checks its ellipsis (`long`, song-header.js fitName)
+  // only on a rename or typing, so a name the layout cut stayed clipped mid-glyph. Here it is re-checked whenever the
+  // field's size or the name changes (same rule: wider than the field by more than the caret's 1–2 px), and a cut
+  // name's full text goes in its title.
+  const nameEl = headRow.querySelector('.ev2-song-name');
+  if (nameEl) {
+    const baseTitle = nameEl.title;
+    let nameRaf = 0;
+    const fitName = () => {
+      nameRaf = 0;
+      if (!nameEl.isConnected) return;
+      const long = nameEl.scrollWidth > nameEl.clientWidth + 2;
+      nameEl.classList.toggle('long', long);
+      nameEl.title = long ? `“${nameEl.value}” · click to rename` : baseTitle;
+    };
+    const fitSoon = () => {
+      if (!nameRaf) nameRaf = requestAnimationFrame(fitName);
+    };
+    ownBinder.fn(['name'], fitSoon);
+    core.listen(nameEl, 'input', fitSoon);
+    if (typeof ResizeObserver === 'function') {
+      const ro = new ResizeObserver(fitSoon);
+      ro.observe(nameEl);
+      core.cleanups.push(() => ro.disconnect());
+    }
+    core.cleanups.push(() => cancelAnimationFrame(nameRaf));
+  }
 
   // ---------------------------------------------------------------- rig tabs
   /** @type {Map<string, {el:HTMLElement, name:HTMLElement, sub:HTMLElement, cd:HTMLElement}>} */

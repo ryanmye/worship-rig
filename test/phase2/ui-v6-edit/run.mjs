@@ -24,6 +24,7 @@ import { u5bTests } from './u5b.tests.mjs';
 import { skepticU5bTests } from './skeptic-u5b.tests.mjs';
 import { polish1EditTests } from './polish1.tests.mjs';
 import { editRangeTests } from './editrange.tests.mjs';
+import { polish2EditTests } from './polish2.tests.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -1103,6 +1104,8 @@ try {
   await polish1EditTests({ T, page, ev, until, tid, toEdit, assert, settled });
   // ---------------------------------------------------------------- U-EDITRANGE (editrange.tests.mjs, D26.2)
   await editRangeTests({ T, page, ev, until, tid, toEdit, assert, settled, setSlots });
+  // ---------------------------------------------------------------- polish batch 2 (polish2.tests.mjs)
+  await polish2EditTests({ T, page, ev, until, tid, toEdit, assert, settled });
 
   await T('zero console.error, no HTTP ≥ 400', async () => {
     assert.deepEqual(errors, []);

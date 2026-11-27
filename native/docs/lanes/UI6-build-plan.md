@@ -103,8 +103,9 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   hands). The commit changed JS/docs only and later runs passed: likely a timing/lane-count assumption in the test
   (or a real race). Needs a core builder + skeptic; check how many prebuild workers run on the macOS runner.
 
-- **Polish batch 2 (UI6-polish1 O1/O2, orchestrator):** v6 Perform overlays (Quick sheet, step panels, popovers)
-  opt in to `underModal` so the Esc that closes Settings never closes them (today's Perform unchanged); move the
+- ~~**Polish batch 2 (UI6-polish1 O1/O2, orchestrator):**~~ **Built (lane-er; also UI6-U8a O1: Back from a
+  trial begun in an empty library ends it; CONTRACT_CHANGES "## UI v6 polish batch 2"; skeptic review pending):**
+  v6 Perform overlays (Quick sheet, step panels, popovers) opt in to `underModal` so the Esc that closes Settings never closes them (today's Perform unchanged); move the
   Back-into-the-gap rule from bank/banner.js into `controller.backFromTrial` so every Back (incl. perform.js destroy
   on a flag flip) uses it. O3 (reload drops a setlist gap) is pre-existing: note only. Also (orchestrator screenshot,
   2026-11-27): v6 Edit's song title is cut mid-word at 1280×800 ("Sunday Pad + Pia" with no ellipsis) — ellipsize or
