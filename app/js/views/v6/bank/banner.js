@@ -2,8 +2,8 @@
 // mock_bank.css .trybar). Shown while controller.trial() is set: a Song bank song plays as a trial and nothing is
 // saved. Keep it · add to library = controller.keepTrial() (today's Add to library, then select it), Add to
 // setlist ▾ = keepTrial({setlistId}), Back to <previous> = controller.backFromTrial() (the song, its setlist entry
-// or its gap, and its Revert snapshot). Perform lock: Keep and Add to setlist are frozen (adding songs is); Back
-// stays live (a song change back, like GO).
+// or its gap, and its Revert snapshot; from a trial begun in an empty library: the empty library again). Perform
+// lock: Keep and Add to setlist are frozen (adding songs is); Back stays live (a song change back, like GO).
 import { h, setText, disposer } from '../../components/util.js';
 import { button } from '../lib.js';
 import { setlistMenu } from './bank.js';
@@ -63,7 +63,7 @@ export function trialBanner(v) {
     });
   });
   // Back = controller.backFromTrial(), which also keeps a removed entry's gap (UI6-U7a O2; moved into the controller
-  // by polish batch 2 so every Back follows it)
+  // by polish batch 2 so every Back follows it) and ends a trial begun in an empty library (UI6-U8a O1)
   d.listen(back, 'click', () => run(async () => {
     const r = await controller.backFromTrial();
     if (r && !r.ok && r.error !== 'no-trial') toast(r.error, 'error');

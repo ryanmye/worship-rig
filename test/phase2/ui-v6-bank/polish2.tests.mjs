@@ -1,8 +1,9 @@
 // UI v6 polish batch 2 (native/docs/lanes/UI6-build-plan.md "Queued small tasks"; reviews UI6-polish1 O2, UI6-U8a
 // O1). Run from run.mjs on its page (the v6 Perform with the bank packs), after polish1.tests.mjs and before the
-// flag-off test.
+// flag-off test (the last check empties this page's library).
 //   O2 the Back-into-the-gap rule is controller.backFromTrial's: a flag flip mid-trial (the v6 Perform's destroy goes
 //      Back) lands in the gap too, as the banner's Back does;
+//   U8a O1 Back from a trial begun in an empty library ends it: the banner goes, the empty library card is back.
 
 /**
  * @param {object} x  run.mjs's helpers: {T, page, ev, until, tid, settled, assert, closeBank, QUIET}
@@ -51,4 +52,28 @@ export async function polish2BankTests(x) {
       }
     });
 
+  await T('polish2 U8a O1: Back from a trial begun in an empty library ends it; the empty library card is back',
+    async () => {
+      await closeBank();
+      await ev(() => {
+        const { store } = window.__rig;
+        for (const id of [...store.get().songOrder]) store.deleteSong(id);
+      });
+      await until(() => !!document.querySelector('[data-testid="v6-empty"]:not([hidden])'));
+      await ev(() => document.getElementById('toasts')?.replaceChildren());
+      await ev((pid) => window.__rig.controller.tryBankSong(pid), QUIET);
+      await until(() => window.__rig.controller.trial()?.playing === true);
+      await until(() => !document.querySelector('[data-testid="v6-trybar"]').hidden);
+      assert.equal(await page.textContent(tid('v6-try-back')), 'Back');
+      await page.click(tid('v6-try-back'));
+      await until(() => !window.__rig.controller.trial());
+      await until(() => !!document.querySelector('[data-testid="v6-empty"]:not([hidden])'));
+      const r = await ev(() => ({
+        banner: document.querySelector('[data-testid="v6-trybar"]').hidden,
+        cur: window.__rig.store.get().settings.currentSongId,
+        songs: Object.keys(window.__rig.store.get().songs).length,
+        toasts: [...document.querySelectorAll('#toasts > *')].map((t) => t.textContent),
+      }));
+      assert.deepEqual(r, { banner: true, cur: null, songs: 0, toasts: [] });
+    });
 }

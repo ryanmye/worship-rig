@@ -2918,8 +2918,10 @@ export function createController(o) {
    * Back from a trial (the banner's "Back to …"): the song it replaced, at the same setlist entry, with its own
    * Revert snapshot (so Revert after Back is Revert before Try it). Live state is a song switch's: the song's own levels,
    * no scene. Allowed under Perform lock (a way out, like GO). Where it goes: trialBack (skeptic F1); into the gap of a
-   * removed entry (trialGap).
-   * @returns {Promise<{ok:boolean, error?:string}>}
+   * removed entry (trialGap). A trial that began in an empty library (UI6-U8a O1): Back ends it and the library is
+   * empty again (nothing selected, as after deleting the last song); before, it said "There is no song to go back
+   * to." and the trial stayed.
+   * @returns {Promise<{ok:boolean, empty?:true, error?:string}>}
    */
   async function backFromTrial() {
     if (!trial) return { ok: false, error: 'no-trial' };
@@ -2928,7 +2930,7 @@ export function createController(o) {
     const back = trialBack(t);
     const prevSong = back.id && store.getSong(back.id);
     const target = prevSong ? back.id : store.navIds()[0] || store.get().songOrder[0] || null;
-    if (!target) return { ok: false, error: 'There is no song to go back to.' };
+    if (!target) return backToEmpty(t);
     // applySong takes the baseline only for its own song (a deleted previous song: the next one, its own snapshot)
     const ok = await selectSong(target, {
       ...(prevSong && Number.isInteger(back.index) && back.index >= 0 ? { index: back.index } : {}),
@@ -2936,6 +2938,24 @@ export function createController(o) {
     });
     if (ok && gap) keepTrialGap(gap);
     return ok ? { ok: true } : { ok: false, error: 'The song could not be loaded.' };
+  }
+  /**
+   * UI6-U8a O1: no library song to go back to. The trial song is deselected (currentSongId null: the empty library's
+   * selection, which the store accepts like any write of it) and removed, and the trial ends. The engine keeps the
+   * trial's sound loaded, as it keeps a deleted last song's: the keys still play it until a song is added.
+   * @param {object} t the trial
+   * @returns {{ok:true, empty:true} | {ok:false, error:string}}
+   */
+  function backToEmpty(t) {
+    if (store.get().songOrder.length) return { ok: false, error: 'There is no song to go back to.' };
+    dropPendingGo(); // a GO waiting for a song must not land after Back
+    if (store.get().settings.currentSongId === t.id) store.set('settings.currentSongId', null);
+    if (isTrialId(store.get().settings.currentSongId)) return { ok: false, error: 'The trial could not be ended.' };
+    for (const id of store.trialIds()) store.endTrial(id);
+    trial = null;
+    targetId = null;
+    emit('trial', null);
+    return { ok: true, empty: true };
   }
   /**
    * Keep the trial (the banner's "Keep it · add to library"): today's Add to library (addFromBank: the same

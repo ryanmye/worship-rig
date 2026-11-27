@@ -9568,3 +9568,13 @@ orchestrator's 1280 × 800 title screenshot). No engine change. Flag off is unch
   v6 Perform's `destroy()` on a flag flip mid-trial included (before, that one landed on the reprise). The banner's
   Back is now just `controller.backFromTrial()` and its error toast. Tests: shell `bank-trial` "polish batch 2 O2";
   ui-v6-bank "polish2 O2" (flag flip). The existing ui-v6-bank "polish1 U7a O2" passes unchanged.
+- **Back from a trial begun in an empty library (UI6-U8a O1).** `controller.backFromTrial()` with no library song
+  to go back to (`songOrder` empty) now ends the trial there: drops a waiting GO, writes `settings.currentSongId` =
+  null (the empty library's selection; the store accepts it as any write of it, no store change), `store.endTrial`s
+  the trial songs, clears the trial and emits `'trial'` null, and returns `{ok: true, empty: true}`. The v6 Perform
+  then shows the empty-library card again and the banner goes. Before, it returned "There is no song to go back to."
+  (toasted) and the trial stayed. Saved state: no song, `currentSongId` null (the trial selection's `setlistIndex`
+  −1 stays, i.e. no position). As after deleting the last song, the engine keeps the last sound loaded (the keys
+  still play the trial's instruments until a song is added); no engine call was added for this. Tests: shell
+  `bank-trial` "U8a O1" (then Try it + Keep from there), ui-v6-bank "polish2 U8a O1" (banner Back, card back, no
+  toast).

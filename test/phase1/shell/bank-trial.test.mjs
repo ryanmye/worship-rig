@@ -519,3 +519,41 @@ test('polish batch 2 O2: backFromTrial itself puts the song back into the gap of
   }
 });
 
+// UI6-U8a O1: Back from a trial that began in an empty library said "There is no song to go back to." and the trial
+// stayed. Now it ends the trial and the library is empty again (nothing selected, nothing saved).
+test('U8a O1: Back from a trial begun in an empty library ends it; the library is empty again', async () => {
+  const storage = memoryStorage();
+  const { store, ctl, events } = await boot(storage);
+  try {
+    for (const id of store.get().songOrder.slice()) assert.ok(store.deleteSong(id));
+    assert.equal(store.get().settings.currentSongId, null);
+    await new Promise((res) => setTimeout(res, 5));
+    store.persistNow();
+    const bytes = raw(storage);
+    const r = await ctl.tryBankSong(LANTERN);
+    assert.equal(r.ok, true);
+    assert.equal(store.currentSong().id, r.id);
+    assert.equal(ctl.trial().prev, null);
+    assert.deepEqual(await ctl.backFromTrial(), { ok: true, empty: true });
+    assert.equal(store.get().settings.currentSongId, null);
+    assert.equal(store.currentSong(), null);
+    assert.deepEqual(store.trialIds(), []);
+    assert.equal(ctl.trial(), null);
+    assert.ok(events.some(([k, d]) => k === 'trial' && d === null));
+    assert.deepEqual(store.get().songOrder, []);
+    await new Promise((res) => setTimeout(res, 5));
+    store.persistNow();
+    const saved = JSON.parse(raw(storage));
+    assert.deepEqual([Object.keys(saved.songs).length, saved.settings.currentSongId], [0, null]);
+    assert.equal(JSON.parse(bytes).settings.currentSongId, null);
+    // a second Back does nothing; another Try it and Keep still work from there
+    assert.deepEqual(await ctl.backFromTrial(), { ok: false, error: 'no-trial' });
+    assert.ok((await ctl.tryBankSong(HARBOUR)).ok);
+    const k = await ctl.keepTrial();
+    assert.ok(k.ok);
+    assert.equal(store.currentSong().id, k.id);
+    assert.deepEqual(store.get().songOrder, [k.id]);
+  } finally {
+    ctl.dispose();
+  }
+});
