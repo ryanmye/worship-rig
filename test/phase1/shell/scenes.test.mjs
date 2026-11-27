@@ -73,7 +73,9 @@ test('save → step: levels glide (SCENE_GLIDE_SEC), the wheel glides, nothing c
   assert.equal(ctl.scenes.view(store.currentSong()).patch.slots[1].muted, true, 'view = what is heard');
   ctl.perform.wheel(0.3);
   assert.equal(ctl.scenes.save(1), true, 'Save as scene 2 keeps the moves');
-  assert.deepEqual(store.currentSong().scenes[1].slots.slice(0, 2), [{ gain: 0.2 }, { gain: base.patch.slots[1].gain, muted: true }]);
+  // (D26.1: each entry also holds the instrument's sends, compared in scene-snap.test.mjs)
+  assert.deepEqual(store.currentSong().scenes[1].slots.slice(0, 2).map(({ sends: _s, ...lvl }) => lvl),
+    [{ gain: 0.2 }, { gain: base.patch.slots[1].gain, muted: true }]);
   assert.equal(store.currentSong().scenes[1].wheel, 0.3, 'the wheel (the song routes it)');
   await tick();
   // step back to scene 1: every changed level glides, the wheel glides back

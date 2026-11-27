@@ -48,8 +48,9 @@ import { clickSettingsOf } from './shared/click-math.js';
 import { createMidiClock } from './midi-clock.js';
 import { normalizeBank, packModeOf, validPackEntry } from './shared/patch-packs.js';
 import {
-  SCENE_MAX, SCENE_GLIDE_SEC, scenesOf, applyScene, captureScene, levelsOf, levelDiff, stepScene, withScene,
-  withoutScene, tweakScene, sceneNameOf,
+  SCENE_MAX, SCENE_GLIDE_SEC, SCENE_STEP_SEC, scenesOf, applyScene, captureScene, levelsOf, levelDiff, stepScene,
+  withScene, withoutScene, tweakScene, sceneNameOf, mergeScene, mixOf, fxSettingsOf, paramDiff, sceneHolds,
+  absorbEdits,
 } from './shared/scenes.js';
 
 /** Menu-bar modes (docs/menubar-mode.md): the popover shows at most this many. */
@@ -286,9 +287,14 @@ export function createController(o) {
     return out;
   }
 
+  // D26.1: the controller's glide of the sends / Space / Echo levels (glideMix, in the scenes section); here because
+  // call() reads it
+  const mixGlides = new Map(); // path → {from, to, v, k, t0}
+  let mixStepping = false;
   function call(name, ...args) {
     if (secondary) return undefined; // muted second window
     if (name === 'setParam' && pastEngine(args[0])) return false; // UIA: never route slots >= 4 to the web engine
+    if (name === 'setParam' && !mixStepping && mixGlides.size) mixGlides.delete(args[0]); // D26.1: a later write wins
     const fn = engine && engine[name];
     if (typeof fn !== 'function') {
       warn(`engine.${name}() not available`, true);
@@ -474,11 +480,20 @@ export function createController(o) {
     // D23: a slot re-order moved the scene's live moves to the new layout; `prev` still plays them where they were
     const before = liveBefore && liveBefore.song === prev ? liveBefore.live : null;
     liveBefore = null;
+    const order = slotOrder && slotOrder.song === prev ? slotOrder.order : null;
+    slotOrder = null;
+    const a = before || live(prev); // v11-scenes: diff what the engine plays (the playing scene on top of the song)
+    // D26.1: an edit of the song's own sends / Space / Echo / drone mode or key under a scene that holds that field
+    // (a view, the bus or an import wrote the store) goes on top of the scene like a live move, so it is heard
+    const sc = prev.id === next.id ? sceneFor(next) : null;
+    if (sc) {
+      const tweak = absorbEdits(sceneState.tweak, sc, prev, next, order);
+      if (tweak !== sceneState.tweak) sceneState = { ...sceneState, tweak };
+    }
     if (structuralChange(prev.patch, next.patch, engineSlots())) {
       reprepare(next.id);
       return;
     }
-    const a = before || live(prev); // v11-scenes: diff what the engine plays (the playing scene on top of the song)
     const b = live(next);
     if (applyParamDiff(a, b) === false) {
       reprepare(next.id, true);
@@ -529,10 +544,15 @@ export function createController(o) {
     // v11-review-fixes R-2: the commit set the slots to the levels captured before the load. A scene step or a live
     // move inside the scene made while it loaded went to the old channels (scenes stay allowed meanwhile), and the
     // playing scene is controller state that catchUp can't see: glide the slots to what that scene plays now.
-    for (const [path, v] of levelDiff(levelsOf(sent), levelsOf(live(song)))) {
+    const heard = live(song);
+    mixGlides.clear(); // D26.1: the new channels start at `sent`; a glide still on its way would step back from there
+    for (const [path, v] of levelDiff(levelsOf(sent), levelsOf(heard))) {
       if (path.startsWith('slots.')) call('setParam', path, v, { glide: SCENE_GLIDE_SEC }); // (the drone isn't reset)
     }
-    applySongLevel(live(song), live(prev), false);
+    // D26.1: the sends and the Space / Echo of a scene step made meanwhile, the same way
+    for (const [path, v] of paramDiff(fxSettingsOf(sent), fxSettingsOf(heard))) call('setParam', path, v);
+    glideMix(mixOf(sent), mixOf(heard));
+    applySongLevel(heard, live(prev), false);
     catchUp(song);
     setStatus({ loading: false });
     return true;
@@ -616,6 +636,8 @@ export function createController(o) {
     pickups.clear();
     dropLearnWrites();
     sceneState = { id, n: null, baseWheel: null, tweak: null }; // v11-scenes: every song starts on its own levels
+    mixGlides.clear(); // D26.1: the committed song set every send / return
+    slotOrder = null;
     applySongLevel(song, prev, true);
     catchUp(song);
     setStatus({ loading: false, songId: id });
@@ -667,10 +689,10 @@ export function createController(o) {
   /** The playing scene of this song (null = its own levels). */
   const sceneFor = (song) => (song && sceneState.n !== null && sceneState.id === song.id
     ? scenesOf(song)[sceneState.n] || null : null);
-  /** The song as the engine plays it: the playing scene and its live moves on top. */
+  /** The song as the engine plays it: the playing scene and its live moves on top (D26.1: merged, then applied). */
   const live = (song) => {
     const sc = sceneFor(song);
-    return sc ? applyScene(applyScene(song, sc), sceneState.tweak) : song;
+    return sc ? applyScene(song, mergeScene(sc, sceneState.tweak)) : song;
   };
   const wheelNow = () => {
     const w = optional('wheelValues');
@@ -691,13 +713,71 @@ export function createController(o) {
    * @param {{id:string, order:number[]}} e  order[j] = old index of new slot j (-1 = new)
    */
   function onSlotMap({ id, order }) {
-    if (!applied || appliedId !== id || sceneState.id !== id || !sceneState.tweak) return;
+    if (!applied || appliedId !== id) return;
+    // D26.1: applyDiff pairs each instrument's own sends before / after the re-order (absorbEdits); two re-orders
+    // before one store notification compose
+    const was = slotOrder && slotOrder.song === applied ? slotOrder.order : null;
+    slotOrder = { song: applied, order: was ? order.map((k) => (k >= 0 ? was[k] ?? -1 : -1)) : order.slice() };
+    if (sceneState.id !== id || !sceneState.tweak) return;
     if (!liveBefore || liveBefore.song !== applied) liveBefore = { song: applied, live: live(applied) };
     const t = sceneState.tweak;
     const slots = order.map((k) => (k >= 0 && Array.isArray(t.slots) ? t.slots[k] ?? null : null));
     sceneState = { ...sceneState, tweak: { ...t, slots } };
   }
   let liveBefore = null; // {song: applied, live: what it played before a slot re-order} (onSlotMap → applyDiff)
+  let slotOrder = null; // D26.1: {song: applied, order} of a slot re-order not diffed yet (onSlotMap → applyDiff)
+
+  // ---- D26.1: the sends and Space / Echo levels glide in SCENE_STEP_SEC steps. The engines glide only slot / drone
+  // levels (ENGINE_CONTRACT setParam `glide`); every other row has its τ 15 ms smoothing, so plain setParam writes at
+  // each step make the glide (as the web engine's virtual-wheel glide). A step's value follows the clock too
+  // (o.now), so a throttled timer only makes fewer, bigger steps and the glide still ends on time. Any other write of
+  // a path (a fader, a learned knob, the next diff) ends its glide (call()); a song switch ends them all.
+  const SCENE_STEPS = Math.max(1, Math.round(SCENE_GLIDE_SEC / SCENE_STEP_SEC));
+  let mixTimer = null;
+  /**
+   * Glide every mix level that differs between `from` and `to` (mixOf maps) over SCENE_GLIDE_SEC. A path already
+   * gliding starts from where its glide is.
+   */
+  function glideMix(from, to) {
+    for (const [path, v] of paramDiff(from, to)) {
+      const cur = mixGlides.get(path);
+      const start = cur ? cur.v : from[path];
+      if (!Number.isFinite(start)) continue;
+      mixGlides.set(path, { from: start, to: v, v: start, k: 0, t0: now() });
+    }
+    if (mixGlides.size && mixTimer === null) mixTimer = timers.setTimeout(mixStep, SCENE_STEP_SEC * 1000);
+  }
+  function mixStep() {
+    mixTimer = null;
+    const t = now();
+    mixStepping = true;
+    try {
+      for (const [path, g] of [...mixGlides]) {
+        g.k += 1;
+        const elapsed = Number.isFinite(t - g.t0) ? (t - g.t0) / (SCENE_GLIDE_SEC * 1000) : 0;
+        const f = Math.min(1, Math.max(g.k / SCENE_STEPS, elapsed));
+        g.v = f >= 1 ? g.to : g.from + (g.to - g.from) * f;
+        if (f >= 1) mixGlides.delete(path);
+        call('setParam', path, g.v);
+      }
+    } finally {
+      mixStepping = false;
+    }
+    if (mixGlides.size) mixTimer = timers.setTimeout(mixStep, SCENE_STEP_SEC * 1000);
+  }
+  /**
+   * D26.1: move the engine from what `a` plays to what `b` plays at a scene change: the drone's ON / sound / key and
+   * the Space room / Echo settings exactly as a manual change (applySongLevel → applyDrone; setParam), the slot and
+   * drone levels glide in the engine, the sends and Space / Echo levels in steps (glideMix). Never a prepare / commit.
+   */
+  function sceneMove(a, b) {
+    // the drone's level is the glide below, so the manual path sees it unchanged (configure would set it at once)
+    const bd = b.drone && a.drone ? { ...b, drone: { ...b.drone, gain: a.drone.gain } } : b;
+    applySongLevel(bd, a, false);
+    for (const [path, v] of paramDiff(fxSettingsOf(a), fxSettingsOf(b))) call('setParam', path, v);
+    for (const [path, v] of levelDiff(levelsOf(a), levelsOf(b))) call('setParam', path, v, { glide: SCENE_GLIDE_SEC });
+    glideMix(mixOf(a), mixOf(b));
+  }
   /** Leaving the song's own levels: remember its wheel, so stepping back puts the wheel where it was. */
   const leaveBase = () => {
     if (sceneState.id === appliedId && sceneState.n !== null) return;
@@ -705,7 +785,9 @@ export function createController(o) {
   };
   /**
    * Play scene `n` of the applied song (null = its own levels): every level that differs glides SCENE_GLIDE_SEC from
-   * where it is (engine setParam {glide}); held notes, the drone and the song switch path are untouched.
+   * where it is (engine setParam {glide}; D26.1: sends and Space / Echo levels in steps), the Space room / Echo and the
+   * drone's ON / sound / key change as a manual change does (sceneMove); held notes and the song switch path are
+   * untouched.
    * @param {number|null} n
    * @returns {boolean} false when there is no such scene (or no song is playing yet)
    */
@@ -716,11 +798,10 @@ export function createController(o) {
     const list = scenesOf(applied);
     if (n !== null && !(Number.isInteger(n) && n >= 0 && n < list.length)) return false;
     const was = sceneFor(applied);
-    const from = levelsOf(live(applied));
+    const from = live(applied);
     leaveBase();
     sceneState = { ...sceneState, n, tweak: null };
-    const to = levelsOf(live(applied));
-    for (const [path, v] of levelDiff(from, to)) call('setParam', path, v, { glide: SCENE_GLIDE_SEC });
+    sceneMove(from, live(applied)); // D26.1: levels, sends, Space / Echo and the drone
     const sc = n === null ? null : list[n];
     const wheel = sc ? sc.wheel : was && Number.isFinite(was.wheel) ? sceneState.baseWheel : undefined;
     if (Number.isFinite(wheel) && Math.abs(wheel - (wheelNow() ?? -1)) > 1e-4) {
@@ -738,8 +819,9 @@ export function createController(o) {
     return i.count ? goScene(stepScene(i.n, i.count, dir)) : false;
   };
   /**
-   * Save what plays now (levels, mutes, drone level, the wheel when routed) as scene `n` of the current song: a new
-   * scene (n = the count) or over an existing one. That scene then plays.
+   * Save what plays now (levels, mutes, drone level, the wheel when routed; D26.1: sends, Space / Echo, the drone's
+   * ON / sound / key) as scene `n` of the current song: a new scene (n = the count) or over an existing one. That
+   * scene then plays.
    * D25 (UI v6 U7c): `o.name` names it (shared/scenes.js sceneNameOf; '' or null = no name, "Scene n"); without
    * `o.name` an existing scene keeps its name, so a re-save from Quick / Update never drops it.
    * @param {number} n 0-based, ≤ the count, < SCENE_MAX
@@ -766,26 +848,31 @@ export function createController(o) {
     return true;
   }
   /**
-   * A level move while a scene plays (Perform's faders / ON tiles, a learned MIDI fader): it is heard at once and held
-   * on top of the scene (tweakScene); the song's own levels and the saved scene stay. Views call this first and write
-   * the store only when it returns false (no scene playing, or a level the scene doesn't hold).
-   * @param {string} path 'slots.<i>.gain' | 'slots.<i>.muted' | 'drone.gain'
-   * @param {number|boolean} value
+   * A move while a scene plays (Perform's faders / ON tiles, a learned MIDI fader, the bus' drone commands): it is
+   * heard at once and held on top of the scene (tweakScene); the song's own fields and the saved scene stay. Views call
+   * this first and write the store only when it returns false (no scene playing, or a field the scene doesn't hold).
+   * The engine gets what a manual change of the same field sends (applyParamDiff + applySongLevel: a level at once, a
+   * drone key change crossfades, a reverb room swaps crossfaded).
+   * @param {string} path 'slots.<i>.gain' | 'slots.<i>.muted' | 'drone.gain'; D26.1: 'slots.<i>.sends.reverb' |
+   *   '.delay', 'fx.reverb.<row>' | 'fx.delay.<row>' (shared/scenes.js SCENE_FX), 'drone.mode', 'drone.key'
+   *   ({pc, minor?})
+   * @param {number|boolean|string|object} value
    * @returns {boolean} true when the playing scene took it
    */
   function adjustScene(path, value) {
     const song = appliedId && targetId === appliedId ? store.getSong(appliedId) : null;
     const sc = sceneFor(song);
-    if (!sc) return false;
-    const m = /^slots\.(\d+)\./.exec(path); // UIA: slots.0..15
-    if (m ? !sc.slots[Number(m[1])] : path === 'drone.gain' ? !sc.drone : true) return false; // the song's own level
+    if (!sc || !sceneHolds(sc, path)) return false; // the song's own field
     if (song !== applied) applyDiff(applied, song);
-    const from = levelsOf(live(applied));
-    const tweak = tweakScene(sceneState.tweak, live(applied), path, value);
+    const from = live(applied);
+    const tweak = tweakScene(sceneState.tweak, from, path, value);
     if (!tweak) return false;
     sceneState = { ...sceneState, tweak };
-    for (const [p, v] of levelDiff(from, levelsOf(live(applied)))) call('setParam', p, v);
+    const to = live(applied);
+    applyParamDiff(from, to);
+    applySongLevel(to, from, false);
     emit('scene', sceneInfo());
+    if (bus) publishState();
     return true;
   }
   /** Delete scene `n` (the playing one glides back to the song's own levels first). @returns {boolean} */
@@ -1368,7 +1455,8 @@ export function createController(o) {
     if (SCENE_LEVEL_RE.test(id) && adjustScene(id, v)) return;
     writeLearned(id, v, sid);
   }
-  const SCENE_LEVEL_RE = /^(slots\.\d+\.gain|drone\.gain)$/; // the levels a scene holds (shared/scenes.js)
+  // the rows a scene holds (shared/scenes.js sceneHolds; D26.1: the Space / Echo sends and rows too)
+  const SCENE_LEVEL_RE = /^(slots\.\d+\.(gain|sends\.reverb|sends\.delay)|drone\.gain|fx\.(reverb|delay)\.[a-zA-Z]+)$/;
 
   /**
    * 2.x step 5 (O-AW-ML rule 5): the store write of a learned knob. A fixed 1.x row (params.isLearnable) writes every
@@ -2256,10 +2344,11 @@ export function createController(o) {
     const kept = d && d.files instanceof Map && d.files.size > 0;
     if (kept) return false;
     droneCall('attachFiles', padList);
-    if (applied && applied.drone && applied.drone.mode === 'files') {
+    const heard = applied ? live(applied) : null; // D26.1: a playing scene may hold the drone's sound
+    if (heard && heard.drone && heard.drone.mode === 'files') {
       lastDroneKey = null;
-      droneCall('configure', { ...applied.drone, mode: 'off' });
-      applyDrone(live(applied), null, true);
+      droneCall('configure', { ...heard.drone, mode: 'off' });
+      applyDrone(heard, null, true);
       return true;
     }
     return false;
@@ -3730,6 +3819,9 @@ export function createController(o) {
     watchdogTimer = null;
     if (backupTimer !== null) timers.clearTimeout(backupTimer);
     backupTimer = null;
+    if (mixTimer !== null) timers.clearTimeout(mixTimer); // D26.1
+    mixTimer = null;
+    mixGlides.clear();
     if (lowResGcTimer !== null) timers.clearTimeout(lowResGcTimer);
     lowResGcTimer = null;
     if (heartbeatTimer !== null) timers.clearInterval(heartbeatTimer);
@@ -4009,6 +4101,7 @@ export function createController(o) {
     const mv = song ? Number(songParam(song, 'master.volume')) : 0;
     const master = Number.isFinite(mv) ? Math.min(2, Math.max(0, mv)) : 0;
     const key = song ? keyName(song.hearIn, song.minor) : '';
+    const heard = song ? live(song) : null; // D26.1: the drone as it plays (a scene may hold its ON / key)
     const lat = Number(status.latencyMs);
     return {
       v: 1,
@@ -4016,8 +4109,8 @@ export function createController(o) {
       modes: listModes(),
       master,
       masterDb: master > 0 ? Math.round(20 * Math.log10(master) * 10) / 10 : null,
-      droneOn: !!(song && song.drone && song.drone.mode !== 'off'),
-      droneKey: key,
+      droneOn: !!(heard && heard.drone && heard.drone.mode !== 'off'),
+      droneKey: heard ? keyName(heard.hearIn, heard.minor) : '',
       // restarting → 'stalled'; 'asleep' (lowres2 audio sleep) is a contract v1 value too
       audio: ['running', 'stalled', 'suspended', 'asleep'].includes(status.audio) ? status.audio : 'stalled',
       latencyMs: Number.isFinite(lat) ? Math.round(lat * 10) / 10 : 0,
@@ -4086,19 +4179,26 @@ export function createController(o) {
       case 'master':
         if (song) store.set(`songs.${song.id}.patch.fx.master.volume`, Math.min(2, Math.max(0, cmd.value)));
         break;
-      case 'droneToggle':
+      case 'droneToggle': {
         if (!song) break;
-        if (song.drone.mode !== 'off') {
-          lastDroneOnMode = song.drone.mode;
-          store.set(`songs.${song.id}.drone.mode`, 'off');
+        // D26.1: the drone as it plays (a scene may hold its ON / sound); a scene that holds it takes the toggle
+        const heard = live(song);
+        let mode;
+        if (heard.drone.mode !== 'off') {
+          lastDroneOnMode = heard.drone.mode;
+          mode = 'off';
         } else {
           const snapMode = selected && selected.id === song.id ? selected.song.drone && selected.song.drone.mode : null;
-          store.set(`songs.${song.id}.drone.mode`, lastDroneOnMode || (snapMode === 'files' ? 'files' : 'synth'));
+          mode = lastDroneOnMode || (snapMode === 'files' ? 'files' : 'synth');
         }
+        if (!adjustScene('drone.mode', mode)) store.set(`songs.${song.id}.drone.mode`, mode);
         break;
+      }
       case 'droneKey': {
         // the key the band hears; the transpose amount is kept (Perform's key grid, setSongKey)
-        if (!song || song.hearIn === cmd.pc) break;
+        if (!song) break;
+        if (adjustScene('drone.key', { pc: mod12(cmd.pc) })) break; // D26.1: a scene holding the key takes it
+        if (song.hearIn === cmd.pc) break;
         const semis = transposeSemis(song.playIn, song.hearIn);
         store.set(`songs.${song.id}.hearIn`, mod12(cmd.pc));
         store.set(`songs.${song.id}.playIn`, mod12(cmd.pc - semis));

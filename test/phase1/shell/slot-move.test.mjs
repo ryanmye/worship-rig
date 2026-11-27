@@ -292,7 +292,8 @@ test('controller: a scene’s live level move travels with its instrument; Rever
   await settle();
   const back = store.getSong(id);
   assert.deepEqual(back.patch, selected.patch);
-  assert.deepEqual(back.scenes[0].slots.slice(1, 3), [{ gain: 0.2 }, { gain: 0.6 }], 'scene 1 is back on the old order');
+  assert.deepEqual(back.scenes[0].slots.slice(1, 3).map(({ sends: _s, ...lvl }) => lvl), [{ gain: 0.2 }, { gain: 0.6 }],
+    'scene 1 is back on the old order'); // (D26.1: the entries also hold the sends)
   assert.equal(c.scenes.state().n, null, 'Revert goes back to the song’s own levels (as before D23)');
   c.dispose?.();
 });
