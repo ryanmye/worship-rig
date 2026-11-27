@@ -46,3 +46,23 @@ Hand back (report below in the hand-off). Nothing open in the lane.
 - Lazy rule has no store listener of its own: a chart arriving on a non-current song loads nothing until used.
 - `__rig.setChartView(true)` / `?chart=1` still load at once (dev switch); on a v6 boot ?chart=1 only arms.
 - O1 relies on no PANIC ancestor making a stacking context (checked with elementFromPoint in both Performs).
+
+# Skeptic (C-SHIP)
+
+Brief: try to break C-SHIP; implement the orchestrator's O4 change (add/duplicate past 2 MB warns and goes through;
+refused only past the restore cap 2,500,000); review doc native/docs/reviews/UI6-cship.md. Commit on lane-cship only.
+
+## Checklist
+- [x] rebase onto origin/v2-native (ee5bcb9; conflicts CONTRACT_CHANGES, main.js applyCvd, ui-v6/ui-v6-edit purity
+      filters: both sides kept)
+- [ ] read DECISIONS D7/D9/D16/D33, CONTRACT_CHANGES C-SHIP, reviews chart-view.md, UI6-U7b.md, diff
+- [ ] O4 change (store, chart-store test, kept.test, migration-1x fixtures, CONTRACT_CHANGES, DECISIONS note)
+- [ ] lazy load probes (both UIs, entry points, chart arrival, Off unloads)
+- [ ] migration / device-local / export-import / ?chart
+- [ ] O1 PANIC, O3, O7, v6 Edit header ≤1100 px
+- [ ] iPad + themes placeholder
+- [ ] release notes line
+- [ ] gates
+- [ ] review doc
+
+## Findings (before fixing)
