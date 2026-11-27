@@ -122,7 +122,24 @@ Restore previous library, then Next:
 
 ## Gates
 
-See the table in the final report below (code-final tree 174e38a; this doc and the screenshots changed afterwards).
+`tools/cloud/gates.mjs`, tree 2dc3788 (every code change; only this doc's gates / items text and LANE.md changed
+after), PLAYWRIGHT_BROWSERS_PATH=/root/.cache/rig-pw, UI6_PURITY_BASE=origin/v2-native, one suite at a time.
+
+| suite | result |
+|---|---|
+| shell-unit | PASS 419/419 |
+| unit | PASS 694 pass, 0 fail, 12 skip |
+| chart | PASS 47/47 on rerun. First run (load avg ≈ 12, another agent's suites beside it): 45/47, a v6 purity boot's `__rig.ready` past 40 s and "U7b contrast" reading `.v6-ts-n` at 1.34 : 1 in Sanctuary Day (mid theme switch). Nothing of the chart changed; it passed on the rebased tree before my fixes too (169 s) |
+| ui-v6 | PASS 95/95 on rerun (423 s of its 480 s budget), flag-off purity vs origin/v2-native identical. First run: TIMEOUT at 480 s under load ≈ 12, with 94 passed when it was killed (in "screenshots"). See O3 |
+| ui-v6-edit | PASS 49/49, flag-off purity identical (Edit too) |
+| ui-v6-ipad | PASS 29/29 |
+| ui-v6-bank | PASS 23/23 |
+| settings | PASS 118/118 (app, fixture, mac, bridge, v6) |
+| ui-core | PASS 96/96 |
+| edit-v2 | PASS 117 pass, 0 fail |
+| ui-v6-themes | PASS 30/30 themes clean (text 0, rings 0, bounds 0, errors 0, missed 0), 2067 s |
+
+0 console.error and 0 HTTP ≥ 400: every browser suite's own check, plus my probes. `app/js/engine/` is untouched.
 
 ## Open items
 
@@ -141,6 +158,11 @@ See the table in the final report below (code-final tree 174e38a; this doc and t
   1024 the words are gone and the key is cut too. C-SHIP and FU2 together have used up the give-ways that cost
   nothing. A two-row header at ≤ 1100 px, or Chart in the ⋯ Song menu there, would be the next step.
 
+- **O3 (orchestrator): the ui-v6 suite runs close to its budget.** 423 s of 480 s on a quiet box (the builder's run:
+  333 s). It timed out at load average ≈ 12. CVD2's tests and F2's 8-theme loop add about 45 s. Raise the budget to
+  10 min in `test/run-all.mjs`, as FU2 did for ui-v6-edit. I did not change it, because that would have invalidated
+  the gate run above.
+
 ## Not verified
 
 - A real iPad, the Mac app (Electron/WebKit), real fingers and a MIDI footswitch. Snapshot steps used
@@ -150,3 +172,8 @@ See the table in the final report below (code-final tree 174e38a; this doc and t
 - The MIDI CC64 pedal path into the empty-library fade (read: it sets the same `pedalDown`).
 - The Electron / Mac suites, migration-1x and phase-2 themes.
 - How the fade or drone sounds: the state was read from the web engine (`fadeGain`, `drone.cfg`, `sounding`).
+
+## Lane tip
+
+lane-fu2 at the commit that adds this report (after 2dc3788, where every gate passed; this doc and LANE.md only).
+Not pushed, not merged.

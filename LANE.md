@@ -165,13 +165,12 @@ Scratch / probes: /home/claude/scratch/fu2-sk, .probe/.
 - [x] 4 layout: v6 Edit ≤1100 with chart + FU2; today's Edit ≤1024 only while visible; purity (F1)
 - [x] 5 CVD2 (F2): placeBadges overlap (16 instruments, identical / one octave / clipped), Off writes nothing, observer
       leaks, tab dot vs 2-digit number, muted grey ≥ 4.5:1 in 8 themes, v6 muted bar colour (O-item + screenshot)
-- [ ] gates (gates.mjs): shell-unit,unit,chart,ui-v6,ui-v6-edit,ui-v6-ipad,ui-v6-bank,settings,ui-core,edit-v2,
-      ui-v6-themes
-- [ ] review doc native/docs/reviews/UI6-fu2.md
+- [x] gates (gates.mjs): shell-unit,unit,chart,ui-v6,ui-v6-edit,ui-v6-ipad,ui-v6-bank,settings,ui-core,edit-v2,
+      ui-v6-themes (tree 2dc3788; chart + ui-v6 passed on a rerun at low load)
+- [x] review doc native/docs/reviews/UI6-fu2.md
 
 ### Next step
-Review doc drafted (gates table pending). Gates on this commit's tree (gates.mjs, full list, themes last); do
-not touch the worktree while they run (an untracked file stops gates.mjs).
+Done: report in native/docs/reviews/UI6-fu2.md; hand back.
 
 ### Findings (as found)
 - 1 OK (.probe/probe-a.json, real web engine, flag off + v6): nothing held / a key played and released → empty:
