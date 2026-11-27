@@ -18,12 +18,12 @@ Worktree /home/claude/wt-fu2, branch lane-fu2 from origin/v2-native ee5bcb9. Scr
 - [x] 5 CVD2 O1 range-bar number placement in JS (v6 keyboard.js + perform.js)
 - [x] 6 CVD2 O5 changed dot vs two-digit tab number
 - [x] 7 CVD2 O6 muted instrument's number grey
-- [ ] docs: CONTRACT_CHANGES sections, plan status
+- [x] docs: CONTRACT_CHANGES sections, plan status
 - [ ] gates: shell-unit,unit,ui-v6,ui-v6-edit,ui-v6-ipad,ui-v6-bank,settings,ui-core,edit-v2, then ui-v6-themes
 - [ ] final report in this file
 
 ## Next step
-docs (CONTRACT_CHANGES sections, plan status), then gates (commit first).
+gates (in order; rerun the same command after a restart: gates.mjs skips what passed).
 
 ## Findings
 - 2: base shift rest→snapshot: today's Edit 22 px mouse / 50 touch; v6 6 / 37 (1280, 1024), 22 / 49 (820). Lane: 0

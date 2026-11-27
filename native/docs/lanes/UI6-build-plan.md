@@ -77,15 +77,16 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 - **CAP (UI6-cship O1, tier 2: mine):** one size rule for every add: saving a chart, adding a Song bank song and pack
   top-up follow D9 + D33's O4 note too (past 2 MB warn and go through; refuse only past the 2.5 MB restore cap).
 
-- **CVD2 (UI6-cvd O1/O5/O6, tier 2: mine):** place each range-bar number in JS so two short bars with the same range
-  (positions 9+) or bars clipped at the keyboard edge never stack numbers (keyboard.js + today's perform.js); the
-  changed dot never covers a two-digit Edit tab number; a muted instrument's number goes grey with its bar. With FU2.
+- ~~**CVD2 (UI6-cvd O1/O5/O6, tier 2: mine):**~~ **Built (lane-fu2; skeptic pending):** range-bar numbers placed in
+  JS (components/keys.js placeBadges / cvdBadges → --cvd-x, only while the setting is on) so none stacks, in the v6
+  keyboard and today's; the v6 Edit tab name stops before the changed dot; a muted number goes grey (v6 muted bars
+  keep their lamp colour: pre-existing, left). CONTRACT_CHANGES "## CVD2".
 
-- **FU2 (UI6-fu O1/O2/O3 + quirks; tier 2: mine):** O1 option (b): the empty-library step fades only if a key or the
-  pedal is held at that moment (with nothing held, the drone-off alone), so the next song never starts faded;
-  O2: while the song has snapshots, Edit reserves the snapshot line's height (no layout shift when a footswitch
-  changes snapshot); O3: make shell bank-trial "skeptic F1–F3" deterministic; v6 Edit's ⋯ Song button overflowing
-  at 1024×700 on touch; today's Edit 1004 px wide in an 820 px window.
+- ~~**FU2 (UI6-fu O1/O2/O3 + quirks; tier 2: mine):**~~ **Built (lane-fu2; skeptic pending):** O1 (b): the
+  empty-library step fades only while a key or the pedal is held; O2: both Edits keep the snapshot line's room while
+  the song has snapshots (0 px shift measured); O3: bank-trial deterministic (root cause: a stale keep-alive socket
+  after the 5–17 s synchronous "random sequences" test); the v6 Edit header row fits below 1100 px (chart on too);
+  today's Edit fits an 820 px window. CONTRACT_CHANGES "## FU2".
 
 - ~~**C-SHIP (D33):**~~ **Built (lane-cship; skeptic pending; "C-SHIP status" below):** the chord chart ships in
   2.0: default on with a Settings › Perform switch, placeholders gone, chart-view review O1 (PANIC reachable over the
