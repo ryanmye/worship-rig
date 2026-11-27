@@ -113,7 +113,8 @@ async function purityBoot(base) {
         intervals: window.__probe.intervals,
         store: window.__storeListeners ? window.__storeListeners.size : null,
         dom: [...document.body.querySelectorAll('*')].filter((e) => !e.closest('#toasts > *')
-          && !e.closest('[data-testid="setting-row-esc-panics"], [data-testid="setting-row-ui-v6"]'))
+          && !e.closest('[data-testid="setting-row-esc-panics"], [data-testid="setting-row-ui-v6"], '
+            + '[data-testid="setting-row-cvd"]')) // U-CVD (D32): the third intended Settings row
           .map(shape).join('\n'),
         edit: [...document.querySelectorAll('#view-edit *')].map(shape).join('\n'),
         css: [...document.querySelectorAll('link[rel=stylesheet]')].map((l) => l.getAttribute('href')),

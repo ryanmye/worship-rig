@@ -97,8 +97,11 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   instrument's "Space & Echo" summaries read the song as it plays (O2); the dialog's drone row no longer says "and its
   key" (O5). CONTRACT_CHANGES "## U-SNAP follow-up (UI6-snap O1 / O2 / O5)".
 
-- **U-CVD (D32):** Settings › Look › Colour-blind colours (Off / Red–green / Blue–yellow), per device; slot palettes
-  per theme checked by CVD simulation + the contrast audit; instrument numbers on range bars and strip tabs when on.
+- ~~**U-CVD (D32):**~~ **Built (lane-cvd; awaiting the skeptic):** Settings › Look › Colour-blind colours (Off /
+  Red–green / Blue–yellow), `settings.cvd` per device; `html.cvd-rg` / `.cvd-by` (main.js + boot.js mirror); a
+  palette per theme × type in styles.css (8 colours, 8..15 repeat; Machado ΔE×100 ≥ 10.3, neighbour ΔL ≥ 0.09, lamp
+  ink ≥ 4.9 : 1 in the ON window: `tools/themes/cvd-check.mjs`); v6 position 7 gets its own colour; instrument
+  numbers on range bars and before the v6 strip / Edit tab names. CONTRACT_CHANGES "## U-CVD".
 
 - **U-SNAP (D26.1):** snapshots remember Space / Echo (sends + the song's room / echo choice) and the drone (on,
   key, sound). shared/scenes.js + controller apply path + Save snapshot dialog "It keeps". Core-data change:

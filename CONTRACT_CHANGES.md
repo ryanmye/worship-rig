@@ -9663,3 +9663,82 @@ or view change.
   said ON (web engine, measured: `drone.cfg.mode` 'off', `menuBarState().droneOn` true; a note brought the master
   back but not the drone). Now that song is selected like any other (prepare, commit, drone configured). Test: shell
   `empty-silence.test.mjs` "UI6-fu F1" (a replace import and `restorePreviousLibrary`; fails before).
+
+## U-CVD (colour-blind colours, DECISIONS D32)
+
+Settings › Look › Appearance › **Colour-blind colours: Off / Red–green / Blue–yellow**, in today's Settings and
+(the same row, restyled) the v6 Settings. Off is the default and is today's app exactly.
+
+**Store.** `settings.cvd`: `'rg'` (red–green: deutan / protan) | `'by'` (blue–yellow: tritan) | absent (Off). New
+export `CVD_TYPES`. Device-local exactly like `escPanics`: in `DEVICE_LOCAL_SETTINGS` (not exported, a replace-import
+keeps this machine's, an import never brings one), not a library edit. `store.set('settings.cvd', v)`: `'rg'` / `'by'`
+stored; `null` / `undefined` / `false` / `'off'` = absent; anything else refused (false). `migrate()` drops any other
+value and stays idempotent. No SCHEMA bump. Test: `test/phase1/shell/cvd-store.test.mjs`.
+
+**Applying it.** main.js `applyCvd` (in the existing `onSettings` subscription: no new store listener) puts
+`html.cvd-rg` / `html.cvd-by` and mirrors the value to `localStorage['worship-rig.cvd']`; `app/themes/boot.js` reads
+the mirror and sets the class before first paint (index.html and mini.html). With the setting absent and no mirror
+nothing is written or read beyond one `localStorage.getItem`. A stale mirror is cleared by the store's value.
+
+**CSS (all in `app/styles.css`, every selector under `html.cvd-rg` / `html.cvd-by`, so Off matches nothing).**
+- Per theme id × type, `--slot-0..7` (and `--cvd-ink`, the theme's lamp ink) on html and body (Ember and Nave set
+  their lamps on body). `--slot-8..15` repeat 0..7. The block between `cvd:palettes begin` / `end` is written by
+  `tools/themes/cvd-design.mjs` and checked by `tools/themes/cvd-check.mjs`.
+- v6: `--v6-pos-4..6` → `--slot-4..6` and `--v6-cvd-0..7` → `--slot-0..7` on `.v6` (0,3,1). `views/v6/lib.js`
+  `slotColor(i)`: positions 0..6 return the same strings as before; from 7 it returns
+  `var(--v6-cvd-<i mod 8>, <today's seven-cycle colour>)`, so with cvd on position 7 has its own colour (the seven
+  cycle made 7 = 0) and with it off the computed colour is unchanged.
+- The non-colour cue: `[data-slot="i"]` / `[data-block="slot:i"]` get `--cvd-n` (i + 1) and `--cvd-i`. Each range bar
+  (`.rbar[data-slot]::before`: v6 Perform, v6 Edit › Range, today's keyboard) shows a 13 px badge in the lamp colour
+  with the lamp ink, at its start, staggered 16 px per position so stacked bars' badges don't cover each other; the
+  v6 strip's name and the v6 Edit tab's name get the same badge before the text. Absolutely placed / inline in a
+  single-line ellipsised name: no box moves (ui-v6 asserts strips, name rows, bars and the keyboard keep their
+  rects). Today's strips and Edit tabs keep their words (KEYS, PAD…, SOUND 5) as the cue.
+
+**Palettes and numbers** (`node tools/themes/cvd-check.mjs`). Thresholds: under Machado 2009 (severity 1.0) every pair
+of slots 0..7 ≥ 10 OKLab ΔE×100 (`rg`: the worse of deutan and protan); neighbours (0–1 … 6–7 and 7–0, since 8
+repeats 0) ≥ 0.08 in OKLab L, normal and simulated; the theme's lamp ink ≥ 4.5 : 1 on each colour, flat and in the ON
+label's window (the theme's window colour composited over the lamp: Classic ink 18 %, Nave 19 %, Studio / Daylight
+14 %, Sanctuary cream 22 %, Ember cream 32 %, Sanctuary Day plum 22 %). The design search kept margins (ΔL ≥ 0.09,
+ink ≥ 5.2 flat / 4.9 in the window) and pulled slots 0..3 toward each theme's own hues (orange, green, blue, purple).
+
+| theme | type | slots 0..7 | min ΔE sim (pair, kind) | ΔE normal | min ΔL (pair) | ink flat / window |
+|---|---|---|---|---|---|---|
+| classic | rg | `#ffb73e` `#80a55a` `#81c0ff` `#908dff` `#fff37e` `#e4b1ac` `#fddbff` `#b98cb3` | 11.3 (1–7, deutan) | 12.7 | 0.093 (2–3) | 6.80 / 4.90 |
+| classic | by | `#ffb87f` `#00b363` `#7dc5ff` `#a586ff` `#d4ff94` `#bd9600` `#00fff8` `#ff707e` | 11.5 (1–2, tritan) | 16.3 | 0.097 (2–3) | 6.81 / 4.91 |
+| sanctuary | rg | `#ffa2a1` `#009878` `#00c2fc` `#9f74ce` `#fff26b` `#bdb500` `#b8f1ff` `#d76500` | 11.5 (1–7, protan) | 18.6 | 0.115 (0–1) | 5.21 / 6.85 |
+| sanctuary | by | `#ffa77f` `#009968` `#00b6ed` `#a16fd5` `#c4d5ff` `#aab800` `#00fdd1` `#c97000` | 12.1 (0–5, tritan) | 18.0 | 0.090 (2–3) | 5.21 / 6.84 |
+| sanctuary-day | rg | `#a95113` `#094500` `#1368cc` `#4800af` `#00776e` `#001864` `#513f61` `#420028` | 11.5 (4–6, deutan) | 16.7 | 0.100 (5–6) | 5.20 / 7.09 |
+| sanctuary-day | by | `#b84300` `#005c2a` `#00719e` `#5a008f` `#9b49a3` `#00175c` `#800036` `#381900` | 11.5 (0–4, tritan) | 18.0 | 0.102 (1–2) | 5.21 / 7.07 |
+| daylight-stage | rg | `#ffc26c` `#00af78` `#60c6ff` `#a385ff` `#edfd00` `#f07700` `#b3fffa` `#ff81b9` | 10.7 (2–7, deutan) | 17.3 | 0.090 (2–3) | 6.20 / 4.90 |
+| daylight-stage | by | `#ffbd7c` `#80a600` `#b1c9ff` `#c67be4` `#d2ff7c` `#00bfb8` `#00feef` `#ff7480` | 11.6 (1–3, tritan) | 17.2 | 0.118 (7–0) | 6.21 / 4.91 |
+| daylight-day | rg | `#ffaea6` `#7da936` `#72caff` `#a788ff` `#8ffffb` `#d5c700` `#fff19d` `#ed72af` | 11.5 (1–5, protan) | 15.2 | 0.090 (0–1) | 6.18 / 4.91 |
+| daylight-day | by | `#ffaf7d` `#00b36a` `#6dcaff` `#b983f7` `#8bffe0` `#afd244` `#ffdcff` `#f66e98` | 11.6 (2–4, tritan) | 16.8 | 0.092 (2–3) | 6.18 / 4.90 |
+| studio | rg | `#ffbb72` `#62ab73` `#68c8ff` `#a687ff` `#bafdff` `#ff89ba` `#f0fa63` `#ff6e19` | 10.6 (1–7, protan) | 16.5 | 0.092 (2–3) | 6.20 / 4.90 |
+| studio | by | `#ffb793` `#04b261` `#6ac9ff` `#a988ff` `#fff558` `#c19400` `#b6fff7` `#ff6781` | 11.8 (5–7, tritan) | 17.4 | 0.091 (2–3) | 6.21 / 4.91 |
+| ember | rg | `#ffaa68` `#009d69` `#91c4ff` `#d380b7` `#eafb76` `#7382ff` `#00ffe8` `#f25300` | 11.4 (2–3, deutan) | 18.0 | 0.091 (2–3) | 5.21 / 7.36 |
+| ember | by | `#ffa88b` `#2a9e3b` `#72cdff` `#e65ea4` `#afce3c` `#a088ff` `#c5ffd2` `#ae8157` | 11.6 (3–7, tritan) | 18.0 | 0.102 (4–5) | 5.24 / 7.75 |
+| nave | rg | `#ffbc9f` `#00b46a` `#4cceff` `#ab88ff` `#befcff` `#ff7217` `#ecfb6f` `#ff7ab8` | 10.3 (1–7, deutan) | 17.0 | 0.090 (2–3) | 6.95 / 4.90 |
+| nave | by | `#ffb482` `#00b76a` `#00e6fc` `#a58aff` `#c8ffd0` `#bd9800` `#cdc3ff` `#ff708c` | 11.5 (5–7, tritan) | 16.1 | 0.105 (7–0) | 6.94 / 4.91 |
+
+For comparison, today's Classic lamps (0..3 + the v6 positions, 7 = 0) under `rg`: ΔE 0 (7 vs 0) and 0.6 deutan
+(Extra vs Bass, Ember's note). The ink-in-window floor (≈ 4.9) sets the dark themes' lightness range at about
+L 0.67–0.95, which is why their palettes are light and fairly saturated; Sanctuary Day's cream ink caps its lamps at
+about L 0.5, so its palettes are deep.
+
+**Settings.** Today's Settings: a segmented control (`data-testid="setting-cvd"`, values `off` / `rg` / `by`) in the
+row `setting-row-cvd` under Theme / Light, hint "Instrument colours that stay apart for that kind of colour
+blindness, with each instrument’s number on its range bar and name." The row's `data-keywords` (color blind,
+colorblind, deuteranopia, protanopia, tritanopia …) feed the v6 Settings search (`views/v6/settings.js` reads a row's
+`dataset.keywords`). `lookSummary({…, cvd})` adds " · red–green colours" / " · blue–yellow colours".
+
+**Tests.** shell unit `cvd-store.test.mjs`; unit `test/unit/shared/cvd-palettes.test.mjs` (runs the check for 8 themes
+× 2 types, checks the inks / windows it judges by are still in the theme files, the maths, and that every cvd rule in
+styles.css is guarded by the class); ui-v6 `cvd.tests.mjs` (8 instruments: class, mirror, every strip / bar in the
+palette colour with position 7 its own, numbers ≥ 4.5 : 1, no layout shift, Off back to exactly the same computed
+values; v6 Edit tabs and Edit › Range; boot.js from the mirror on mini.html; a stale mirror cleared); settings
+(today's row in app + fixture modes: device-local, not an edit, today's strips recoloured and range bars numbered,
+Off restores; v6: found by "colour blind" / "color blind" / "tritanopia" / "blue yellow", Look summary);
+ui-v6-themes: after the 8 themes × 3 sizes, Colour-blind colours `rg` and `by` on Sanctuary, Daylight Day and Studio
+at 1280 × 800 over the states that draw instrument colours (`--cvd rg,by | only | none`, `--cvd-themes`). The
+ui-v6 purity probe leaves `setting-row-cvd` out of the DOM comparison, like the other two Settings rows.
