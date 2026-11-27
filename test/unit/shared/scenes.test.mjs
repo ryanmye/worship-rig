@@ -43,8 +43,11 @@ test('normalizeScene / normalizeScenes: clamps, drops junk, absent when empty, i
 
 test('captureScene: each filled slot’s level (pre-mute) and ON, the drone level, the wheel only when routed', () => {
   const sc = captureScene(song(), { wheel: 0.25 });
+  // D26.1: also the drone's mode and the Space / Echo rows the song has (this fixture: reverb size only; no sends);
+  // the drone key only with `own`
   assert.deepEqual(sc, {
-    slots: [{ gain: 0.8 }, { gain: 0.6, muted: true }, null, { gain: 0.5 }], drone: { gain: 0.5 }, wheel: 0.25,
+    slots: [{ gain: 0.8 }, { gain: 0.6, muted: true }, null, { gain: 0.5 }], drone: { gain: 0.5, mode: 'synth' },
+    fx: { reverb: { size: 0.5 } }, wheel: 0.25,
   });
   const unrouted = song();
   unrouted.patch.modWheel = { target: 'none' };
@@ -122,7 +125,9 @@ test('tweakScene: live moves on top of a scene (fader, ON tile, drone level); a 
   const zero = tweakScene(null, live, 'slots.1.gain', 0);
   assert.deepEqual(zero.slots[1], { gain: 0.6, muted: true }, 'fader to 0 on a muted slot: stays muted at its level');
   assert.equal(tweakScene(null, live, 'slots.2.gain', 0.5), null, 'an empty slot');
-  assert.equal(tweakScene(null, live, 'fx.reverb.size', 0.5), null, 'not a level');
+  // D26.1: the Space room is a scene field now (fx.reverb.size); a row outside SCENE_FX is still refused
+  assert.deepEqual(tweakScene(null, live, 'fx.reverb.size', 0.5).fx, { reverb: { size: 0.5 } });
+  assert.equal(tweakScene(null, live, 'fx.chorus.rate', 0.5), null, 'not a scene field');
   assert.equal(tweakScene(null, live, 'slots.0.gain', NaN), null);
   // what you hear after the moves = scene + tweak, and Save keeps exactly that
   const heard = applyScene(live, t);
