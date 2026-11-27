@@ -1,7 +1,8 @@
 # NEXT-PLATFORMS: iPhone 2.0, then Windows 2.0 (D27)
 
-Status: plan only, nothing built. Written 2026-11-26. Order (D27, Ryan): Mac/iPad 2.0 ships first, then iPhone, then
-Windows. No building on either before Mac/iPad 2.0 ships.
+Status: plan only, nothing built. Written 2026-11-26. Order (D27, Ryan): Mac/iPad 2.0 first, then iPhone, then
+Windows. D31 (Ryan, 2026-11-27): building starts as soon as the 2.0 work Claude can do is done; see D31 for what may
+land on v2-native before the 2.0 tag.
 
 Evidence tags as in the Windows doc: **[R]** checked in this repo, **[V]** checked against a source this session,
 **[E]** estimate, **[U]** from memory, verify before relying on it.

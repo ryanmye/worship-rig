@@ -507,3 +507,17 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
 - No instrument mode, no engine spike on the iPhone 14, no phone instrument layouts in 2.0. Instrument mode stays
   open for a later version when phone hardware improves (D27's "both" is deferred, not dropped).
 - Effort ≈ 11–17 agent-days [E]; still after Mac/iPad 2.0 ships (D27).
+
+## D31: Start the after-2.0 work as soon as the 2.0 work Claude can do is done (Ryan, 2026-11-27)
+- Replaces D27's "no building before Mac/iPad 2.0 ships". The trigger is: every 2.0 item that does not need Ryan
+  (his Mac review U9, the release itself, hardware checks) is merged and green.
+- 2.0 queue still first: U8b themes, U-SNAP, U-EDITRANGE, polish batch 2, the core3 CI flake, Lane E2 leftovers,
+  Lane R (release notes, README/site, release checklist; publishing stays tier 1).
+- Tier 2 (mine), how the after-2.0 work may land without risking 2.0 (it is cut from v2-native):
+  1. **Windows CI + tree fixes (W1–W11):** merged to v2-native only with fixtures byte-identical and ctest green on
+     g++/clang++-20/ASan; the new windows-2025 job may fail without blocking.
+  2. **Mac command bus, then the iPhone remote (D30):** additive, behind a hidden flag / a new target; flag-off
+     purity probes identical; nothing visible in 2.0.
+  3. **Lane P build scripts** (no audio in git, no uploads: uploading stays tier 1).
+  4. **Held until 2.0 is tagged:** anything that changes the sound engine or the golden oracle (FX steps 2–4, D13),
+     and work that needs hardware (E6 iPad memory, Windows audio/MIDI, iPhone on a device).
