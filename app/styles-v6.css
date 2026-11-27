@@ -30,8 +30,17 @@
   --v6-cmix: 70%;
   --v6-tint-text: color-mix(in oklab, var(--accent-text, var(--accent)) 78%, var(--text));
   --v6-field-line: color-mix(in oklab, var(--muted) 58%, var(--line-2));
+  /* skeptic UI6-U8b F2: a popover's / the Quick sheet's drop shadow darkens the words beside it, ink and background
+     alike. On the dark themes the builder's 0 8px 20px at 55 % of #000c took a strip's "Octave normal" beside Space /
+     ⋯ to 3.2–4.2:1 (Classic, Sanctuary, Ember, Nave; 1280 and 1180 × 820) and the keys' labels beside Quick to
+     4.4:1 (Ember, 1180 × 820). Dark: a tight 20 % shadow (the sheet colour and its line carry the edge there); paper
+     keeps the builder's (18 % brown: nothing under it fails) */
+  --v6-pop-sh: 0 2px 6px color-mix(in srgb, var(--v6-sh) 25%, transparent);
+  --v6-qs-sh: var(--v6-pop-sh);
 }
 html[data-mode="light"] :is(.v6, .v6-st) {
+  --v6-pop-sh: 0 8px 20px color-mix(in srgb, var(--v6-sh) 55%, transparent);
+  --v6-qs-sh: 0 2px 8px color-mix(in srgb, var(--v6-sh) 50%, transparent);
   --v6-sh: var(--sh, #3b2a1a2e);
   --v6-scrim: color-mix(in srgb, #2a1d12 30%, transparent);
   --v6-ok: var(--ok, #3a732c);
@@ -84,6 +93,9 @@ html[data-theme="daylight-day"] .v6 { --v6-pos-4: #f08fb8; --v6-pos-5: #c9d867; 
    while focused: each field's own focus rule (border → --focus / --accent) still shows */
 :is(.v6, .v6-st) :is(input:is([type="text"], [type="search"], [type="number"], :not([type])), select,
   textarea):not(:focus) { border-color: var(--v6-field-line); }
+/* skeptic UI6-U8b F1: a field's hint is text too (WCAG 1.4.3). Unstyled, Chromium draws it #757575: 2.7–3.1:1 on the
+   dark themes' fields, 3.7–4.5:1 on paper (the bank's and the chooser's search, Edit's "Find a song…") */
+:is(.v6, .v6-st) :is(input, textarea)::placeholder { color: var(--muted); opacity: 1; }
 
 /* ---- song bar */
 .v6 .v6-songbar { flex: none; display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 6px 12px;
@@ -257,7 +269,7 @@ html[data-theme="daylight-day"] .v6 { --v6-pos-4: #f08fb8; --v6-pos-5: #c9d867; 
   background: var(--v6-sheet);
   border: 1px solid var(--v6-sheet-line); display: flex;
   /* U8b: shorter and lighter: under the 18 + 40 px black one the strips' ON labels beside a popover fell to 3.5:1 */
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--v6-sh) 55%, transparent);
+  box-shadow: var(--v6-pop-sh); /* skeptic UI6-U8b F2: the token (dark: tighter, lighter) */
   flex-direction: column;
   gap: 10px; text-align: left; }
 .v6 .v6-pop-h { font: 800 18px var(--v6-book); }
