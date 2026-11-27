@@ -9775,7 +9775,9 @@ review O1, O3, O4 and O7 fixed. No engine change (`app/js/engine` untouched), no
   exported, kept across a replace-import, not an edit). `store.set('settings.chartView', true | null)` stores absent,
   `false` stores false, anything else is refused. Migration: `normalizeSettings` keeps `false` and drops anything
   else, so the hidden 2.0 builds' `true` (on) becomes absent (still on); idempotent.
-  - `?chart=1` / `__rig.setChartView(true)` = on (absent) **and load now** (the dev switch, as before);
+  - `?chart=1` / `__rig.setChartView(true)` = on (absent) **and load now** (the dev switch, as before; skeptic: on
+    a v6 boot `?chart=1` only turns charts on, since the v6 Perform mounts after this check; the chart then loads
+    by the usual rules);
     `?chart=0` / `__rig.setChartView(false)` = `false`. Both apply at once.
 - **Settings › Perform › "Chord charts"** On / Off (`setting-row-chart-view`, toggle `setting-chart-view`, writes
   `v ? null : false`). Today's Settings: Look › Perform view, after Chips per sound. The v6 Settings moves the same

@@ -52,9 +52,10 @@ in `~/Music/Worship Rig/Samples/` (Mac). And 2.0's own per-computer settings (vo
 drone freeze, chord charts on / off) are never taken from a file.
 
 New in 2.0 (C-SHIP, DECISIONS D33): **chord charts.** Perform has a Chart button (on the v6 screens, a Chart tab in
-the sidebar): paste or import a ChordPro file or chords over lyrics, and the chords follow Easy Transpose, with
-auto-scroll and a text size in percent. A song's chart travels with it in exports and backups. Settings › Perform ›
-Chord charts turns the button off on this computer.
+the sidebar, and Edit has a Chart button too): paste or import a ChordPro file or chords over lyrics, and the chords
+follow Easy Transpose, with auto-scroll and bigger or smaller text (in percent on the v6 screens). A song's chart
+travels with it in exports and backups. Chord charts in Settings (v6: Perform layout; the classic screens: Look ›
+Perform view) turns them off on this computer.
 
 ## Steps: Mac
 
