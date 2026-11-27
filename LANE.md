@@ -23,7 +23,7 @@ Worktree /home/claude/wt-fu2, branch lane-fu2 from origin/v2-native ee5bcb9. Scr
 - [ ] final report in this file
 
 ## Next step
-5 (CVD2 O1). Browser tests for 1 (ui-core scenes, ui-v6-bank polish2) and 2's ui-core edit updated, not yet
+5 (CVD2 O1): shared/cvd-badges.js placeBadges + unit test done; next the DOM helper (components/cvd-badges.js) wired into v6 keyboard.js and perform.js, CSS left: var(--cvd-x, clamp…). Browser tests for 1 (ui-core scenes, ui-v6-bank polish2) and 2's ui-core edit updated, not yet
 run (gates will). Probe for 2: /home/claude/scratch/fu2/snapshift.mjs (+ summ.py), results base-shift.json /
 lane-shift.json.
 
