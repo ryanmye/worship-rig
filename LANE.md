@@ -15,11 +15,11 @@ Never tag, release or push.
 - [x] 3. package-release.sh (build Release + ad-hoc sign + gates + zip + dmg + sizes + sha256; shellcheck clean; stub-run on Linux)
 - [x] 4. release-native.yml (mac / ipad / release jobs; actionlint + shellcheck clean)
 - [ ] 5. MAC_CHECK steps 2/3/8 (+ README) docs
-- [ ] 6. local validation (actionlint / yaml parse, shellcheck, gate test)
+- [ ] 6. local validation (actionlint + shellcheck clean: done; test/unit/release/release-workflows.test.mjs 9/9, mutation-checked: done; gates unit: pending)
 - [ ] 7. final report here
 
 ## Next step
-6a. test/unit/release/release-workflows.test.mjs, then 5. docs
+5. docs (MAC_CHECK steps 2/3/8, README, CONTRACT_CHANGES); then gates unit
 
 ## Findings
 - main's release.yml (261ea8d) has a `release: published` trigger that v2-native lacks; the merge of v2-native into
