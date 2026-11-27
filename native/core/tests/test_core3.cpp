@@ -86,6 +86,10 @@ struct Rt {
     cfg.profile = profile;
     cfg.sample_rate = 48000;
     cfg.app_dir = RIG_REPO_DIR "/app";
+    // core3f worker-count sweep: the sample decode pool's size (0 = by hardware_concurrency: 1 here, 2 on macos-15);
+    // the build worker always has one thread per lane
+    if (const char *d = std::getenv("RIG_TEST_DECODE_THREADS"))
+      cfg.decode_threads = static_cast<std::uint32_t>(std::atoi(d));
     cfg.on_event = [](void *u, const char *j, size_t n) {
       auto *r = static_cast<Rt *>(u);
       const auto now = Clock::now();
@@ -471,7 +475,7 @@ TEST_SUITE("core3") {
       hits = rt.stat("prebuildHits") - hits0;
       busy = rt.stat("prebuildBusy") - busy0;
       MESSAGE("slow switch to the neighbour being prebuilt (" << done0 << " done at the switch): " << hits
-                                                              << " adopted, " << busy << " in the prebuild lane's hands");
+              << " adopted, " << busy << " in the prebuild lane's hands");
       REQUIRE(contains(rt.call("\"op\":\"commit\",\"token\":" + std::to_string(Rt::tokenOf(r))),
                        "\"committed\":true"));
     }
