@@ -7,6 +7,8 @@ import { openOverlay } from '../components/overlay.js';
 import { say } from '../components/voice.js';
 import { scenesOf, sceneNameOf, SCENE_NAME_MAX } from '../../shared/scenes.js';
 import { gainToDb } from '../../shared/params.js';
+import { SPACE_PRESETS, ECHO_PRESETS, matchPreset } from '../../shared/fx-presets.js';
+import { keyName } from '../../shared/music.js';
 import { slotMuteState } from '../perform.js';
 import { button } from './lib.js';
 
@@ -25,8 +27,9 @@ const levelDb = (slot) => db(slotMuteState(slot).level);
  *      song's own levels, else ", drone up" / ", drone down" when the drone level moved that much (neither word when
  *      no instrument is on);
  *   3. cut to SCENE_NAME_MAX; " 2", " 3" … added when another snapshot of the song has that name.
- * A snapshot holds levels, ON switches, the drone level and the wheel (shared/scenes.js), so the words only ever name
- * those (never "warmer": tone is not in a snapshot).
+ * A snapshot holds levels, ON switches, the drone level and the wheel, and (D26.1) the sends, Space / Echo and the
+ * drone's ON / sound / key (shared/scenes.js). The words name only levels (never "warmer": tone is not in a
+ * snapshot).
  * @param {object} live  the song as it plays now (controller.scenes.view)
  * @param {object} own   the song's own levels (the store's song)
  * @param {{name(ref:object):string}} names  lib.js instrumentNames
@@ -134,8 +137,9 @@ function nameField(pd, { value, label, caption, maxlength, testid, onEnter }) {
 }
 
 /**
- * Save snapshot (mockup "Save snapshot"; D25): a name (suggested from what changed), what a snapshot keeps (exactly
- * what shared/scenes.js holds), then Update "<playing>" (when a snapshot plays) / Save as new / Cancel.
+ * Save snapshot (mockup "Save snapshot"; D25, D26.1): a name (suggested from what changed), what a snapshot keeps
+ * (exactly what shared/scenes.js captureScene holds, with what plays now), then Update "<playing>" (when a snapshot
+ * plays) / Save as new / Cancel.
  * Update keeps the snapshot's name unless the field was edited; Save as new takes the field (an empty field = no name,
  * "Scene n"). Live under Lock (D24.1).
  * @param {object} v  the v6 view context (store, controller, names, toast, host)
@@ -171,6 +175,15 @@ export function saveSnapshotDialog(v, o = {}) {
         setText(field.cap, field.input.value.trim() ? '' : 'No name: it shows as “Scene n”');
       });
       const n = live.patch.slots.filter(Boolean).length;
+      const fxv = (p) => p.split('.').slice(1).reduce((o, k) => o?.[k], live.patch.fx);
+      const space = matchPreset(SPACE_PRESETS, fxv);
+      const echo = matchPreset(ECHO_PRESETS, fxv);
+      const spaceEcho = `Space: ${space ? space.name : 'Custom'} · Echo: ${echo ? echo.name : 'Custom'}`;
+      const dr = live.drone || {};
+      const droneNow = dr.mode && dr.mode !== 'off'
+        ? `on · ${keyName(live.hearIn, live.minor).replace(/m$/, '')} ${live.minor ? 'minor' : 'major'} · `
+          + `${dr.mode === 'files' ? 'My Pads' : 'Synth'}`
+        : `off · ${keyName(live.hearIn, live.minor).replace(/m$/, '')} ${live.minor ? 'minor' : 'major'} when on`;
       const names = live.patch.slots.filter(Boolean).map((s) => v.names.name(s.instrument));
       const keepRow = (title, small, on = true, tid = '') => h(`div.v6-keeps-r${on ? '' : '.off'}`,
         tid ? { 'data-testid': tid } : {}, h('span.v6-keeps-ck', { 'aria-hidden': 'true', text: on ? '✓' : '–' }),
@@ -180,12 +193,17 @@ export function saveSnapshotDialog(v, o = {}) {
         keepRow(`Each instrument’s level and ON / OFF (${n})`,
           names.length > 4 ? `${names.slice(0, 4).join(', ')} + ${names.length - 4} more` : names.join(', ') || '—',
           true, 'v6-keeps-levels'),
-        keepRow('The drone’s level', 'not its ON / OFF, key or sound', true, 'v6-keeps-drone'),
+        // D26.1: the sends, the Space room / Echo with their levels, the drone's ON / sound / key (what plays now)
+        keepRow('Each instrument’s Space and Echo', 'how much of each goes to the Space and the Echo', true,
+          'v6-keeps-sends'),
+        keepRow('Space and Echo', `${spaceEcho}, with their levels`, true, 'v6-keeps-fx'),
+        keepRow('The drone: ON / OFF, key, sound and level', droneNow, true, 'v6-keeps-drone'),
         wheelRouted ? keepRow('Where the wheel is', 'it moves what the wheel drives in this song', true,
           'v6-keeps-wheel')
           : keepRow('The wheel', 'not kept: the wheel drives nothing in this song', false, 'v6-keeps-wheel'),
-        h('p.v6-keeps-not', { 'data-testid': 'v6-savesnap-not', text: 'Not kept: the sounds themselves, Space and '
-          + 'Echo, octave, sustain, range, and the drone’s key and sound. They stay as the song has them.' }));
+        h('p.v6-keeps-not', { 'data-testid': 'v6-savesnap-not', text: 'Not kept: the sounds themselves, octave, '
+          + 'sustain, range, tone (EQ), the chorus, lofi and master, and the drone’s brightness and movement. They '
+          + 'stay as the song has them.' }));
       const cancel = button(pd, '.ghost.v6-savesnap-cancel', 'Cancel', { 'data-testid': 'v6-savesnap-cancel' });
       pd.listen(cancel, 'click', () => close());
       const update = playing ? button(pd, '.v6-savesnap-update', `Update “${playingName}”`, {
