@@ -374,10 +374,21 @@ CoreMIDI timing (Chrome's Web MIDI adds a hop that the app will not have).
    e. Settings › Diagnostics or Safari's Web Inspector (Develop › <Mac> › Worship Rig) console:
       `navigator.requestMIDIAccess.nativeMidi.access.stats` shows `messages` counting up and `dropped` 0 while
       playing; `__rig.midi.inputs` lists the keyboard as `hardware`.
+   f. Reload with notes held (skeptic NMA F1): hold a chord with the sustain pedal down and reload the page (Web
+      Inspector console `location.reload()`, or Settings › My Samples › Reload when it shows). The chord stops when
+      the page comes back, and with the pedal still down a new note does not ring on after its key-up once the pedal
+      is lifted (the new page's boot sends one `play panic`). The drone keeps playing.
+   g. 1.x choices carry over by name (skeptic NMA O7, unverified): the keyboard chosen in 1.x Settings › MIDI and the
+      keyboards marked "remember" (with their own touch curve) show the same names here and are still chosen /
+      remembered. The app names a port by CoreMIDI's display name; if 1.x (Chrome) showed another name for the same
+      keyboard, say both names.
+   h. Listen set follows the choice (skeptic NMA): with two keyboards plugged in, Settings › MIDI › pick one: only it
+      plays; pick "All": both play; unplug the chosen one while 'first' is on: the other takes over within a second
+      (toast) and plays.
 3. Switch through the six themes: each renders.
 4. One real GarageBand / Logic instrument through Settings › My Samples imports and plays.
 
-The iPad install (`native/apple/README.md` steps 7-10) comes after part B. On the iPad, repeat B2 a-c with a USB
+The iPad install (`native/apple/README.md` steps 7-10) comes after part B. On the iPad, repeat B2 a-c and f with a USB
 keyboard (USB-C or the camera adapter). A Bluetooth MIDI keyboard shows up only once it is paired in an app that
 offers the Bluetooth MIDI pairing view (GarageBand, for example): Worship Rig has no pairing view yet (lane NMA).
 

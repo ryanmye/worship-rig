@@ -10042,3 +10042,12 @@ touch fitting, the MIDI lamp and the clock-out choice all hung on it).
   hot-unplug releases both held notes and falls back, re-plug plays, clock-out name in `config.midiClock`, zero
   console errors, contract-valid wire; and a page with Web MIDI does not get the adapter). Only a Mac / iPad can
   check CoreMIDI, latency and Bluetooth MIDI: MAC_CHECK.md part B2.
+- NMA skeptic (native/docs/reviews/NMA.md):
+  - F1: `installNativeMidi` now calls `engine.allNotesOff()` right after `hello` (one `play {e:'panic'}` per page
+    boot, only where the adapter installs: no Web MIDI). The core outlives the page: after a `location.reload()`
+    (Settings › My Samples "Reload"; only a web-content crash made the shell post a panic) it still sounded the old
+    page's notes and held its sustain, and the new controller (nothing held, pedal up) dropped their key-ups and the
+    pedal lift, so they stuck. On a first boot nothing sounds; the drone is untouched (allNotesOff's contract).
+  - Engine test server (`test/phase1/engine/server.mjs`) answers `/__tests/api/health` (no features): harness.html
+    loads the controller, whose relative `./api/health` 404'd: the `engine` suite's one console error, pre-existing
+    on origin/v2-native 7e92df4 (99/99 checks passed there).
