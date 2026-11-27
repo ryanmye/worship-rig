@@ -68,6 +68,10 @@ targets:
       path: Config/Info-macOS.plist
       properties:
         CFBundleDisplayName: Worship Rig
+        # explicit, so the bundle (and Settings › About, the self-test's "app" line, the release check in
+        # scripts/package-release.sh) carry settings.base's versions whatever XcodeGen's own default is (lane N10)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSMinimumSystemVersion: "14.5"
         LSApplicationCategoryType: public.app-category.music
         NSHighResolutionCapable: true
@@ -115,6 +119,8 @@ targets:
       path: Config/Info-iPad.plist
       properties:
         CFBundleDisplayName: Worship Rig
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UIRequiresFullScreen: true
         UISupportedInterfaceOrientations~ipad:
