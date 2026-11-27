@@ -17,7 +17,13 @@ ui-v6-bank,settings. Don't push.
       restart), clang-20 1000, RIG_TEST_DECODE_THREADS 1..4 x25, taskset 1 CPU x40 (g++, clang), ASan x20, TSan x2:
       0 prebuild-count failures (busy <= 1 and hits + busy == 10 in every run), 0 sanitizer reports. Timing-bound
       failures (tick gaps / reply latency, load avg 3-19 from another agent + my own jobs) in about half the runs
-- [ ] T3 (added by coordinator): runtime_preload :314 flake (CI 45940152991, `301.5 < 156.083`)
+- [x] T3 (added by coordinator): runtime_preload :314 flake (CI 45940152991, `301.5 < 156.083`): root cause = macOS
+      runner stalls, not the engine (same job: an idle loop, nothing loading, 242.8 ms gap; macOS idle samples are
+      40-60 ms otherwise; locally idle or under 3 busy loops the window never exceeds 60 ms and no iteration runs
+      >= 10 ms). Fix 1f14219: Engine records long control-loop iterations; checkLive fails on a held loop, reports a
+      gap with no long iteration as box, cap 1 s. SIGSTOP 350 ms repro: old 3/3 FAIL, new 3/3 pass; hold mutation
+      (300 ms in processMessage) new 2/2 FAIL
+- [ ] T3 loops: g++ case x300 + suite x30 (.probe/loop-t3-*), then clang / ASan / TSan; re-run native gates
 - [x] T1: native gates: fixtures 112/112 byte-identical to base (g++ and clang-20); ctest clang-20 -Werror 84/84;
       g++ 83/84 and ASan 83/84 (unit.core3 tick-gap bounds only, load avg 4-6 from another agent; 0 sanitizer
       reports); A/B with a temp no-hold toggle under the same load: hold 3/8 clean, no-hold 1/8 (same gap lines)
