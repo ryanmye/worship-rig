@@ -82,6 +82,11 @@ body:has(.v6-perform) #ready-status > .ready-text { flex-shrink: 1; min-width: 0
      820 × 1180 */
   .v6.v6-perform:has(> :is(.v6-start, .v6-trybar):not([hidden])) .v6-side { max-height: 240px; }
 }
+/* skeptic UI6-U8b F3: the Start here card and a Learn / Arrange bar together (a first run that opens Learn) left a
+   61 px fader track at 820 × 1180 with 4 instruments and none with 7 (the thumb over the dB: the contrast audit's
+   1.1–2.1:1), 94 px at 1180 × 820. The mode's bar is the instruction while it is on, at every size: the card steps
+   aside and comes back on Done (only × or a song change end it) */
+.v6.v6-perform:is(.learning, .arranging) > .v6-start { display: none; }
 
 /* ---- Arrange in short landscape windows (1024 × 768 iPad, the Mac's 1024 × 700 minimum): the strips' ◀ ▶ ✕ row and
    the Arrange bar left the fader a 51–58 px track, under its 80 px input, so the thumb sat over the dB and the Space /

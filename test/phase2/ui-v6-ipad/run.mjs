@@ -467,6 +467,36 @@ try {
       await rotate(page, PORTRAIT);
     });
 
+  // skeptic UI6-U8b: the contrast audit at 820 × 1180 found the strips' dB under the fader thumb in Learn on a first
+  // run: the Start here card and the Learn bar share the slot above the strips, and the two together left the faders
+  // no track (U8a F3 gave the room back for each alone)
+  await T('skeptic U8b: Learn / Arrange with the Start here card still up keep the faders ≥ 96 px', async () => {
+    await clean(page);
+    await rotate(page, PORTRAIT);
+    await ev(() => {
+      const st = window.__rig.views.v6.start;
+      if (!st.shown) st.card.reset();
+    });
+    await until(() => !!document.querySelector('[data-testid="start-card"]:not([hidden])'));
+    for (const [mode, enter, done] of [
+      ['learn', () => window.__rig.views.v6.learn.enter(), () => window.__rig.views.v6.learn.exit()],
+      ['arrange', () => window.__rig.views.v6.arrange.enter(), () => window.__rig.views.v6.arrange.exit()]]) {
+      await ev(enter);
+      await page.waitForTimeout(200);
+      for (const vp of [PORTRAIT, LANDSCAPE, { width: 1024, height: 768 }]) {
+        await rotate(page, vp);
+        const f = await fit(page);
+        assert.ok(f.track >= (vp.width === 1024 ? 80 : 96), `${mode} + Start here ${vp.width}×${vp.height}: track ${f.track}`);
+      }
+      await rotate(page, PORTRAIT);
+      await ev(done);
+      await page.waitForTimeout(200);
+      // the card is back as it was once the mode is done (still up: only × or a song change ends it)
+      assert.equal(await page.isVisible(tid('start-card')), true, `${mode}: Start here back after Done`);
+    }
+    await ev(() => window.__rig.views.v6.start.card.dismiss('x'));
+  });
+
   await T('the Song bank (My library) fits both ways and keeps its song across a rotation', async () => {
     await clean(page);
     await ev(() => window.__rig.ctx.openBank({ mode: 'library' }));
