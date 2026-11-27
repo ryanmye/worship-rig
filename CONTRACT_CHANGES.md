@@ -9742,3 +9742,10 @@ Off restores; v6: found by "colour blind" / "color blind" / "tritanopia" / "blue
 ui-v6-themes: after the 8 themes × 3 sizes, Colour-blind colours `rg` and `by` on Sanctuary, Daylight Day and Studio
 at 1280 × 800 over the states that draw instrument colours (`--cvd rg,by | only | none`, `--cvd-themes`). The
 ui-v6 purity probe leaves `setting-row-cvd` out of the DOM comparison, like the other two Settings rows.
+
+Gates (lane-cvd, 2-CPU box, one suite at a time): shell unit 406/406; unit 689 pass / 0 fail (701, 12 skipped);
+ui-v6 85/85 (flag-off purity identical: 105 requests, 15 store listeners, 4 intervals, 2529 elements); ui-v6-edit
+37/37 (purity identical, 1047 in Edit); ui-v6-ipad 29/29; settings 114/114 (app, fixture, mac, bridge, v6); ui-core
+78/78; themes 58/58; ui-v6-themes 30/30 clean in 2124 s (the 8 × 3 sizes plus Sanctuary / Daylight Day / Studio × rg,
+by: +459 s); the other five themes × rg, by with `--cvd only` 10/10 clean (738 s, not part of the default run);
+edit-v2 14/14 files. 0 console.error / HTTP ≥ 400.
