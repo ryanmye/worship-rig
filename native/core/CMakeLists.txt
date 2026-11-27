@@ -68,6 +68,7 @@ set(RIG_SOURCE_EXCLUDE "" CACHE STRING
     "regex of src/ paths left out of rig_core (orchestrator: isolate a task's unfinished files; empty in CI)")
 file(GLOB_RECURSE RIG_CORE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 list(FILTER RIG_CORE_SOURCES EXCLUDE REGEX "/third_party/")  # vendored code: added by its module's .cmake hook
+list(FILTER RIG_CORE_SOURCES EXCLUDE REGEX "/src/hostkit/")   # its own library (below): not part of the engine
 if(RIG_SOURCE_EXCLUDE)
   list(FILTER RIG_CORE_SOURCES EXCLUDE REGEX "${RIG_SOURCE_EXCLUDE}")
 endif()
@@ -94,6 +95,16 @@ foreach(hook ${RIG_MODULE_HOOKS})
   include(${hook})
 endforeach()
 
+# ---- rig_hostkit (lane N1): host-side helpers for the Apple shell and rig-devhost (include/rig/rig_hostkit.h): the
+# patch-pack scanner. Its own static library, independent of rig_core; yyjson from rig_third_party.
+file(GLOB RIG_HOSTKIT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/hostkit/*.cpp)
+list(SORT RIG_HOSTKIT_SOURCES)
+add_library(rig_hostkit STATIC ${RIG_HOSTKIT_SOURCES})
+target_include_directories(rig_hostkit PUBLIC include PRIVATE src/hostkit)
+target_link_libraries(rig_hostkit PRIVATE rig_third_party)
+rig_target_defaults(rig_hostkit)
+set_target_properties(rig_hostkit PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+
 if(RIG_BUILD_TESTS)
   enable_testing()
   find_program(NODE_EXECUTABLE node)
@@ -116,6 +127,7 @@ if(RIG_BUILD_TESTS)
   rig_target_defaults(rig_bench)
 
   file(GLOB_RECURSE RIG_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp)
+  list(FILTER RIG_TEST_SOURCES EXCLUDE REGEX "/tests/hostkit/")  # rig_hostkit_tests (below)
   list(SORT RIG_TEST_SOURCES)
   rig_module_list(${CMAKE_CURRENT_SOURCE_DIR}/tests "tests_" ${RIG_GEN_DIR}/rig_test_modules.inc)
   add_executable(rig_tests ${RIG_TEST_SOURCES})
@@ -162,5 +174,29 @@ if(RIG_BUILD_TESTS)
                        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_golden.cmake)
       set_tests_properties(golden.${_name} PROPERTIES LABELS golden SKIP_REGULAR_EXPRESSION "GOLDEN-MISSING")
     endforeach()
+  endif()
+
+  # ---- rig_hostkit: unit tests (unit.hostkit-*), the CLI the node parity test drives, and that test
+  file(GLOB RIG_HOSTKIT_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tests/hostkit/*.cpp)
+  list(SORT RIG_HOSTKIT_TEST_SOURCES)
+  add_executable(rig_hostkit_tests ${RIG_HOSTKIT_TEST_SOURCES})
+  target_include_directories(rig_hostkit_tests PRIVATE third_party/doctest src/hostkit)
+  target_link_libraries(rig_hostkit_tests PRIVATE rig_hostkit)
+  rig_test_defaults(rig_hostkit_tests)
+  rig_test_suites("${RIG_HOSTKIT_TEST_SOURCES}" _hk_suites)
+  foreach(suite ${_hk_suites})
+    add_test(NAME unit.${suite} COMMAND rig_hostkit_tests -ts=${suite})
+    set_tests_properties(unit.${suite} PROPERTIES LABELS unit)
+  endforeach()
+  add_executable(rig-hostkit tools/hostkit/main.cpp)
+  target_include_directories(rig-hostkit PRIVATE src/hostkit)
+  target_link_libraries(rig-hostkit PRIVATE rig_hostkit)
+  rig_target_defaults(rig-hostkit)
+  if(NODE_EXECUTABLE)
+    # server.js's scanner and this one on the same generated trees, byte for byte (test/unit/hostkit)
+    add_test(NAME unit.hostkit-parity
+             COMMAND ${NODE_EXECUTABLE} --test ${RIG_REPO_ROOT}/test/unit/hostkit/parity.test.mjs)
+    set_tests_properties(unit.hostkit-parity PROPERTIES LABELS unit TIMEOUT 300
+                         ENVIRONMENT "RIG_HOSTKIT_CLI=$<TARGET_FILE:rig-hostkit>")
   endif()
 endif()
