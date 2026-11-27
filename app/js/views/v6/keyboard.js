@@ -19,7 +19,7 @@
 // aria-valuetext with the note name.
 // Pure view code: reads come in through render(), writes go out through o.onRange (the shell does store.set).
 import { h, setText, disposer, clamp, rafCoalesce } from '../components/util.js';
-import { pianoKeyboard, keyLayout } from '../components/keys.js';
+import { pianoKeyboard, keyLayout, cvdBadges } from '../components/keys.js';
 import { openOverlay } from '../components/overlay.js';
 import { noteName, mod12 } from '../../shared/music.js';
 
@@ -108,6 +108,9 @@ export function rangeKeyboard(o = {}) {
   }, hit, tip);
   const hint = h('div.v6-pickhint', { 'aria-live': 'polite', 'data-testid': `${tid}-pickhint`, hidden: true });
   const el = h(`div.v6-kbd.v6-kbd-${size}`, { 'data-testid': tid, dataset: { size } }, hint, rbars, piano.el);
+  // UI6-cvd O1: the bars' numbers (colour-blind colours on) placed so none stacks; Edit › Range has one bar (CSS 4 px)
+  const badges = size === 'range' ? null : cvdBadges(rbars);
+  d.add(() => badges?.destroy());
 
   /** One per shown bar, in row order: {i, el, lo, hi (handles), b (its render input), row, L, R (%), y (px)}. */
   const views = [];
@@ -223,6 +226,7 @@ export function rangeKeyboard(o = {}) {
       else hd.setAttribute('aria-disabled', 'true');
     }
     if (size === 'range') dimKeys(lo, hi);
+    badges?.update(); // a drag moves the bar: its number (and its neighbours') follow, once per frame
   }
   const noteText = (n, out) => {
     if (n <= MIN_NOTE) return `${noteName(n)}, the lowest note (every key down)`;

@@ -19,7 +19,7 @@ import { h, setText, disposer, blurAfterPointer, rafCoalesce } from './component
 import { fader } from './components/fader.js';
 import { levelMeter } from './components/levelMeter.js';
 import { toggle, segmented } from './components/buttons.js';
-import { keyGrid, pianoKeyboard, keyLayout } from './components/keys.js';
+import { keyGrid, pianoKeyboard, keyLayout, cvdBadges } from './components/keys.js';
 import { chordReadout, wheelStrip } from './components/readouts.js';
 import { setlistStrip } from './components/setlist.js';
 import { stageName, groupOf } from './components/instrument-groups.js';
@@ -470,6 +470,7 @@ export function mountPerform(root, ctx) {
   // where the silent strips start: they are stored and shown, and play on the 2.0 engine.
   const slots = [];
   let rbars = null; // the keyboard's range bars (built below; makeStrip adds a bar for each later strip)
+  let rbBadges = null; // UI6-cvd O1: their numbers (colour-blind colours on) placed so none stacks
   const slotsEl = h('section.p-slots', { 'aria-label': 'Instrument slots' });
   const silentNote = h('div.p-silent-note', { hidden: true, role: 'note', 'data-testid': 'slots-silent-note' },
     h('span.slot-vt', { text: SILENT_NOTE }));
@@ -777,6 +778,8 @@ export function mountPerform(root, ctx) {
   // UIA: one bar per strip; strips built later (makeStrip) add theirs
   const rangeBars = Array.from({ length: slots.length }, (_, i) => h('i.rbar', { hidden: true, style: { '--c': `var(--slot-${i})` }, dataset: { slot: String(i) } }));
   rbars = h('div.rbars', { 'aria-hidden': 'true', 'data-testid': 'range-bars' }, ...rangeBars);
+  rbBadges = cvdBadges(rbars);
+  d.add(() => rbBadges.destroy());
 
   const revertCount = h('span.rv-cnt-t', { text: '' });
   const revertBtn = use(
@@ -1551,6 +1554,7 @@ export function mountPerform(root, ctx) {
     rbars.classList.toggle('dense', bar > SLOT_COUNT);
     if (bar > SLOT_COUNT) rbars.style.setProperty('--rstep', `${(23 / bar).toFixed(2)}px`);
     else rbars.style.removeProperty('--rstep');
+    rbBadges?.update();
   }
 
   /**

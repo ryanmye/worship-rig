@@ -70,9 +70,9 @@
    lines at 1280 px): the header region stacks the two; today's Edit gives that region the line's height meanwhile,
    the v6 Edit's header grows by itself.
    UI6-fu O2: the room is kept while the shown song has a snapshot (.ev2-snapres; .ev2-snapping = one plays), the
-   line laid out but invisible when none plays (.ev2-snapidle), so a snapshot change shifts nothing. One line at every width: the
-   words before Update give way (ellipsis, the whole line in the title), so the reserved height never depends on a
-   name. */
+   line laid out but invisible when none plays (.ev2-snapidle), so a snapshot change shifts nothing. One line at
+   every width: the words before Update give way (ellipsis, the whole line in the title), so the reserved height
+   never depends on a name. */
 .ev2 .ev2-head.ev2-snapres { flex-direction: column; align-items: stretch; justify-content: center; gap: 3px; }
 .ev2 .ev2-head.ev2-snapres > .ev2-song-head { flex: none; height: auto; }
 .ev2 .ev2-song-snap {

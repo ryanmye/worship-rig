@@ -42,6 +42,7 @@ import { dialogTests } from './dialogs.tests.mjs';
 import { snapTests } from './snap.tests.mjs';
 import { polish2Tests } from './polish2.tests.mjs';
 import { cvdTests } from './cvd.tests.mjs';
+import { cvd2Tests } from './cvd2.tests.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -1522,6 +1523,7 @@ try {
 
   // ---------------------------------------------------------------- U-CVD, D32 (cvd.tests.mjs; reloads the page last)
   await cvdTests({ T, page, browser, origin, ev, until, tid, settled, setSlots, assert });
+  await cvd2Tests({ T, page, browser, origin, ev, until, settled, setSlots, assert, errors });
 
   await T('screenshots: 1280×800 Sanctuary, 2 / 5 / 7 instruments', async () => {
     await ev(() => window.__rig.ctx.setView('perform'));

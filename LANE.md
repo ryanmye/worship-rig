@@ -15,17 +15,15 @@ Worktree /home/claude/wt-fu2, branch lane-fu2 from origin/v2-native ee5bcb9. Scr
 - [x] 2 FU2 O2 snapshot line height reserved (both Edits) + rect tests
 - [x] 3 FU2 O3 bank-trial skeptic F1–F3 deterministic (5 full-file runs)
 - [x] 4 FU2 ⋯ Song overflow 1024×700 coarse (v6) + today's Edit 1004 px at 820
-- [ ] 5 CVD2 O1 range-bar number placement in JS (v6 keyboard.js + perform.js)
-- [ ] 6 CVD2 O5 changed dot vs two-digit tab number
-- [ ] 7 CVD2 O6 muted instrument's number grey
+- [x] 5 CVD2 O1 range-bar number placement in JS (v6 keyboard.js + perform.js)
+- [x] 6 CVD2 O5 changed dot vs two-digit tab number
+- [x] 7 CVD2 O6 muted instrument's number grey
 - [ ] docs: CONTRACT_CHANGES sections, plan status
 - [ ] gates: shell-unit,unit,ui-v6,ui-v6-edit,ui-v6-ipad,ui-v6-bank,settings,ui-core,edit-v2, then ui-v6-themes
 - [ ] final report in this file
 
 ## Next step
-5 (CVD2 O1): shared/cvd-badges.js placeBadges + unit test done; next the DOM helper (components/cvd-badges.js) wired into v6 keyboard.js and perform.js, CSS left: var(--cvd-x, clamp…). Browser tests for 1 (ui-core scenes, ui-v6-bank polish2) and 2's ui-core edit updated, not yet
-run (gates will). Probe for 2: /home/claude/scratch/fu2/snapshift.mjs (+ summ.py), results base-shift.json /
-lane-shift.json.
+docs (CONTRACT_CHANGES sections, plan status), then gates (commit first).
 
 ## Findings
 - 2: base shift rest→snapshot: today's Edit 22 px mouse / 50 touch; v6 6 / 37 (1280, 1024), 22 / 49 (820). Lane: 0
@@ -46,5 +44,16 @@ lane-shift.json.
   may ellipsize (shrink .1, name gives way first). 1101 touch chart on: 1 px spare. Today's Edit at 820: body
   min-width 1024 cut the right 204 px (Range column, PANIC). Fix <1024 px, only while today's Edit is the visible
   view: body min-width 0 + top-bar rules (lamps no longer overlap). Flag-off Perform keeps 1024 (tested).
+
+- 5: placeBadges (pure) + cvdBadges (DOM, rAF, ResizeObserver only while on, html-class MutationObserver) live in
+  views/components/keys.js, not a new module: both keyboards already load keys.js, a new module would be a new
+  request with cvd Off (flag-off purity compares requests). Off: nothing measured/scheduled/written. Base: ui-v6
+  "CVD2 O1" fails (9 and 10 at the same x, v6 and today's); lane passes at 1280/1180/820 (v6), 1280/1024 (today).
+- 6: could not reproduce the skeptic's ~45 px tabs (current tree: tabs ≥ 116 px, dot at 99–107 px, number at
+  10–36). Seen instead: the dot sits over the end of the name. Fix (cvd on only): name padding-right 8 px, so the
+  name's text (number included) ends before the dot. Test asserts dot ∩ name content box = ∅ at 1280 / 1024.
+- 7: v6 muted bars are NOT grey in any theme (pre-existing: `.v6 .v6-kbd .v6-rbar { background: var(--c) }`
+  out-ranks every `.rbar.off`; styles-v6-keyboard.css's comment says otherwise). Not fixed (it would change cvd-Off
+  pixels). Badge: today's = the bar's grey (inherit) + --text; v6 = --muted + --bg (grey, ≥ 4.5:1 in all 8 themes).
 
 ## Open questions

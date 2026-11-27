@@ -17,7 +17,8 @@ export async function snaplineEditTests(x) {
     const b = el.getBoundingClientRect();
     const chips = el.parentElement.querySelector('.ev2-song-head').getBoundingClientRect();
     // UI6-fu O2: an idle line (.ev2-snapidle) keeps its room but is not shown
-    return { shown: !el.hidden && !el.classList.contains('ev2-snapidle') && b.height > 0, text: el.innerText.replace(/\s+/g, ' ').trim(),
+    return { shown: !el.hidden && !el.classList.contains('ev2-snapidle') && b.height > 0,
+      text: el.innerText.replace(/\s+/g, ' ').trim(),
       below: b.top >= chips.bottom - 1, oneLine: b.height < 26, w: Math.round(b.width) };
   });
   const sum = (sel) => ev((s) => document.querySelector(s)?.innerText.replace(/\s+/g, ' ').trim() ?? null, sel);

@@ -1465,21 +1465,35 @@ html:is(.cvd-rg, .cvd-by) :is([data-slot="14"], [data-block="slot:14"]) { --cvd-
 html:is(.cvd-rg, .cvd-by) :is([data-slot="15"], [data-block="slot:15"]) { --cvd-n: '16'; --cvd-i: 15; }
 /* the badge: absolutely placed, so nothing moves; under the v6 handles (z 2) and the hit layer. Skeptic UI6-cvd F1:
    the stagger is clamped to the bar (a two-digit badge is ≤ 20 px), so a short bar (a split, a bass) keeps its number
-   on itself instead of floating past its end over another bar */
+   on itself instead of floating past its end over another bar. UI6-cvd O1: the keyboards place each badge in JS
+   (components/keys.js placeBadges → --cvd-x), so two short bars with the same range or slivers at the keyboard's edge
+   never stack their numbers; the clamp is the place until that first measure */
 html:is(.cvd-rg, .cvd-by) .rbar[data-slot]::before {
   content: var(--cvd-n); position: absolute; top: 50%; z-index: 1;
-  left: clamp(0px, calc(2px + var(--cvd-i) * 16px), calc(100% - 20px));
+  left: var(--cvd-x, clamp(0px, calc(2px + var(--cvd-i) * 16px), calc(100% - 20px)));
   transform: translateY(-50%); min-width: 14px; height: 13px; padding: 0 3px; box-sizing: border-box;
   border-radius: 4px; background: var(--c); color: var(--cvd-ink, #0d0f12); box-shadow: 0 0 0 1px var(--bg);
   font: 800 10px/13px var(--font); text-align: center; font-variant-numeric: tabular-nums; pointer-events: none;
 }
 html:is(.cvd-rg, .cvd-by) .v6-kbd-range .rbar[data-slot]::before { left: 4px; } /* Edit › Range: one bar */
+/* UI6-cvd O6: a muted instrument's number goes grey, so a lamp-coloured number never reads as "on". Today's keyboard:
+   the bar's own grey (the themes' `.rbar.off`, inherited) in the theme's text colour. The v6 keyboard's muted bar
+   keeps its lamp colour (styles-v6-keyboard.css `.v6 .v6-kbd .v6-rbar` out-ranks every `.rbar.off`; only its handles
+   go grey), so there the number is the theme's muted grey with the page colour on it (≥ 4.5 : 1 in all 8 themes:
+   ui-v6 "CVD2 O6") */
+html:is(.cvd-rg, .cvd-by) .rbar.off[data-slot]::before { background: inherit; color: var(--text); }
+html:is(.cvd-rg, .cvd-by) .v6 .v6-kbd .v6-rbar.off[data-slot]::before { background: var(--muted); color: var(--bg); }
 html:is(.cvd-rg, .cvd-by) :is(.v6-strip .v6-nm, .v6e-rt[data-block^="slot:"] .v6e-rt-name)::before {
   content: var(--cvd-n); display: inline-block; min-width: 18px; margin-right: 6px; padding: 0 4px;
   box-sizing: border-box; border-radius: 5px; background: var(--c); color: var(--cvd-ink, #0d0f12);
   font: 800 12px/16px var(--font); text-align: center; vertical-align: 2px; font-variant-numeric: tabular-nums;
   font-style: normal; text-decoration: none;
 }
+/* UI6-cvd O5: the v6 Edit tab's changed dot (styles-v6-edit.css .v6e-rt-cd: 8 px at 8 px from the right) sat over
+   the end of the name, and on a narrow tab over a two-digit number's second digit. With the numbers on, the name
+   (number included) ends before the dot: its text stops 8 px short of the tab's padding (the dot's room), so the
+   ellipsis comes first. Off: today's tab */
+html:is(.cvd-rg, .cvd-by) .v6e-rt[data-block^="slot:"] .v6e-rt-name { padding-right: 8px; }
 /* Skeptic UI6-cvd F2: the numbers get empty alt text, so a screen reader hears the names it hears with Off (the strip
    button was "2 Warm Pad", the Edit tab "1 Grand Piano −1.9 dB", the range group "1 2 3…"); the number is a visual
    cue for the colours and the order is in the DOM. Behind @supports: an engine without the alt syntax (older WebKit)

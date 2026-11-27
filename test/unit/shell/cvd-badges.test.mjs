@@ -1,9 +1,9 @@
-// UI6-cvd O1 (CVD2): shared/cvd-badges.js placeBadges, the range-bar number placement. Geometry only: the badges of
+// UI6-cvd O1 (CVD2): views/components/keys.js placeBadges, the range-bar number placement. Geometry only: the badges of
 // rows that touch never overlap, each badge stays on (or, for a bar shorter than it, touches) its own bar, a long bar
 // keeps the old stagger (2 px + i × 16 px), slivers at the keyboard's edge don't stack.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { placeBadges, badgeWidth, BADGE_H, BADGE_GAP } from '../../../app/js/shared/cvd-badges.js';
+import { placeBadges, badgeWidth, BADGE_H, BADGE_GAP } from '../../../app/js/views/components/keys.js';
 
 /** Rows as keyboard.js lays them out: n bars in H px, pitch ≤ 10, the centre lines. */
 const rowsY = (n, H = 26) => {
