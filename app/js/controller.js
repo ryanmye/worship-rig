@@ -2836,7 +2836,7 @@ export function createController(o) {
    * Song bank: add one bank song to the library (store.addPackSong; already there → that song). Views call this.
    * @param {string} packId
    * @param {{select?:boolean}} [o]
-   * @returns {{ok:true, id:string, existing?:true}|{ok:false, error:string}}
+   * @returns {{ok:true, id:string, existing?:true}|{ok:false, error:string, notified?:true}} (store.addPackSong)
    */
   function addFromBank(packId, o = {}) {
     const e = packsInfo.entries.find((x) => x.packId === packId);
@@ -3003,7 +3003,8 @@ export function createController(o) {
    * (levels, sounds, key…) is kept too: it is written over the added song, which is then an edit of it (rule 3).
    * Already in the library: that song is selected and left as it is. Refused under Perform lock.
    * @param {{setlistId?:string}} [o]
-   * @returns {Promise<{ok:true, id:string, existing?:true, selected:boolean} | {ok:false, error:string}>}
+   * @returns {Promise<{ok:true, id:string, existing?:true, selected:boolean} | {ok:false, error:string,
+   *   notified?:true}>} notified: addFromBank's (CAP: the 'library-full' notice already said it)
    */
   async function keepTrial(o = {}) {
     if (!trial) return { ok: false, error: 'no-trial' };

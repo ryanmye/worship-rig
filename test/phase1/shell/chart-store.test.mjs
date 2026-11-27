@@ -1,7 +1,8 @@
 // Chart view (D7; D33 ships it in 2.0): song.chart storage. Optional (absent until set), written whole, normalised,
 // size-capped, migrate stays idempotent, it travels with library / song export and import, and settings.chartView is
-// a device-local switch, absent = on, false = off (C-SHIP). addSong / duplicateSong warn past LIBRARY_MAX_CHARS
-// and refuse past LIBRARY_RESTORE_MAX_CHARS (C-SHIP O4, per D9). CONTRACT_CHANGES "Chart view (D7, hidden)", "C-SHIP (D33)".
+// a device-local switch, absent = on, false = off (C-SHIP). addSong / duplicateSong and setChart warn past
+// LIBRARY_MAX_CHARS and refuse past LIBRARY_RESTORE_MAX_CHARS (C-SHIP O4, CAP, per D9). CONTRACT_CHANGES
+// "Chart view (D7, hidden)", "C-SHIP (D33)", "CAP".
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -57,22 +58,55 @@ test('chart: the size cap (CHART_MAX_CHARS) refuses with a message; exactly the 
   assert.equal(chartError({ text: 'x' }), null);
 });
 
-test('chart: a library that would pass LIBRARY_MAX_CHARS refuses the chart', () => {
-  const store = makeStore();
+// CAP (UI6-cship O1; D9 + the O4 note under D33): one size rule for every add. A chart that takes the library past
+// LIBRARY_MAX_CHARS is saved and the save warns ('library-size'); one that would take it past
+// LIBRARY_RESTORE_MAX_CHARS is refused, writes nothing, and says so ('library-full' notice = the error).
+test('CAP: a chart past 2 MB is saved with the D9 warning; past the restore cap refused, nothing written', () => {
+  const storage = memoryStorage();
+  const store = makeStore({ storage, debounceMs: 0 });
+  const notices = [];
+  store.onNotice((n) => notices.push(n));
   const ids = store.songsInOrder().map((s) => s.id);
-  const n = Math.ceil(LIBRARY_MAX_CHARS / CHART_MAX_CHARS) + 1;
+  const n = Math.ceil(LIBRARY_RESTORE_MAX_CHARS / CHART_MAX_CHARS) + 2;
   while (ids.length < n) ids.push(store.addSong(null, { name: `S${ids.length}` }));
   let refused = null;
+  let refusedId = null;
+  let pastCap = 0;
   for (const [i, id] of ids.entries()) {
+    const before = JSON.stringify(store.get());
     const r = store.setChart(id, { text: String(i % 10).repeat(CHART_MAX_CHARS - 10) });
     if (!r.ok) {
+      assert.equal(JSON.stringify(store.get()), before, 'a refused chart writes nothing');
       refused = r;
+      refusedId = id;
       break;
     }
+    if (JSON.stringify(store.get()).length > LIBRARY_MAX_CHARS) pastCap += 1;
+    assert.equal(store.persistNow(), true, `chart ${i} is saved`);
+    assert.equal(storage.getItem(STORAGE_KEY), JSON.stringify(store.get()));
   }
+  assert.ok(pastCap >= 3, `charts past 2 MB go through (${pastCap})`);
   assert.ok(refused, 'one of them is refused');
-  assert.match(refused.error, /library is full/);
-  assert.ok(JSON.stringify(store.get()).length <= LIBRARY_MAX_CHARS);
+  assert.match(refused.error, /^The chart for “S\d+” was not saved: the library would be 2\.[5-9] MB, /);
+  assert.match(refused.error, /and a backup over 2\.5 MB cannot be restored/);
+  assert.equal(store.getSong(refusedId).chart, undefined);
+  const size = JSON.stringify(store.get()).length;
+  assert.ok(size > LIBRARY_MAX_CHARS && size <= LIBRARY_RESTORE_MAX_CHARS, `${size}: past 2 MB, inside 2.5 MB`);
+  const sizeWarn = notices.filter((x) => x.type === 'library-size');
+  assert.ok(sizeWarn.length >= 1, 'the D9 save warning');
+  assert.match(sizeWarn[0].message, /more than the 2\.0 MB/);
+  const full = notices.filter((x) => x.type === 'library-full');
+  assert.equal(full.length, 1);
+  assert.equal(full[0].message, refused.error);
+  assert.equal(full[0].cap, LIBRARY_RESTORE_MAX_CHARS);
+  // a raw write (store.set) is held to the same cap, silently (setChart is the path that explains)
+  const before = JSON.stringify(store.get());
+  assert.equal(store.set(`songs.${refusedId}.chart`, { text: 'y'.repeat(CHART_MAX_CHARS - 10) }), false);
+  assert.equal(JSON.stringify(store.get()), before);
+  // replacing a chart with a smaller one, and removing one, still work; the library's own export restores (D9)
+  assert.equal(store.setChart(ids[0], { text: 'small' }).ok, true);
+  assert.equal(store.setChart(ids[1], null).ok, true);
+  assert.equal(makeStore().importJSON(store.exportJSON(), { replace: true }).ok, true);
 });
 
 test('chart: migrate keeps it, drops unusable ones, and is idempotent; no SCHEMA bump', () => {

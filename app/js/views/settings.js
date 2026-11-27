@@ -1491,7 +1491,7 @@ export function mountSettings(el, ctx) {
       const song = store.getSong(r.id);
       const name = song ? song.name : 'the song';
       toast(r.existing ? 'That song is already in your library.' : `Added “${name}” to your library.`);
-    } else toast((r && r.error) || 'The song could not be added.', 'error');
+    } else if (!(r && r.notified)) toast((r && r.error) || 'The song could not be added.', 'error'); // CAP: toasted
     renderPacks();
   }
   listen(bankSearch, 'input', () => canPacks() && renderBank(controller.patchPacks()));

@@ -289,7 +289,7 @@ export function songBank(v, o = {}) {
       const s = store.getSong(res.id);
       toast(res.existing ? 'That song is already in your library.'
         : `Added “${s ? s.name : r.title}” to your library.`);
-    } else toast((res && res.error) || 'The song could not be added.', 'error');
+    } else if (!(res && res.notified)) toast((res && res.error) || 'The song could not be added.', 'error'); // CAP
     return res && res.ok ? res.id : null;
   }
   let setPop = null;

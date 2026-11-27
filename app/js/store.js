@@ -1752,36 +1752,46 @@ export function createStore(opts = {}) {
   }
 
   /**
-   * Chart view (D7): would storing `chart` on song `id` push the library past LIBRARY_MAX_CHARS (security S2's cap,
-   * which keeps every later save inside localStorage)? Only chart writes pay for the JSON size.
+   * CAP (UI6-cship O1; DECISIONS D9 and the orchestrator's O4 note under D33): one size rule for every add, i.e.
+   * addSong, duplicateSong, setChart, addPackSong and topUpPacks. An add that leaves the library at `size` characters
+   * goes through up to LIBRARY_RESTORE_MAX_CHARS: past LIBRARY_MAX_CHARS it is an ordinary save under D9, so the save
+   * warns (checkSize's 'library-size'). Past the restore cap (1.25×) it is refused and writes nothing, and this
+   * 'library-full' notice says so (the controller toasts it), so the library's own backup always stays restorable.
+   * (The first cuts refused a chart, a Song bank add and a pack top-up past 2 MB, which contradicted D9.)
+   * @param {number} size the library's JSON length after the add
+   * @param {string} what the message's start: what was not written
+   * @returns {string|null} the notice's message when refused; null when the add fits
    */
-  function chartOverflows(id, chart) {
-    const old = state.songs[id] && state.songs[id].chart;
-    const size = JSON.stringify(state).length - (old ? JSON.stringify(old).length : 0) + JSON.stringify(chart).length;
-    return size > LIBRARY_MAX_CHARS;
+  function restoreCapRefusal(size, what) {
+    if (size <= LIBRARY_RESTORE_MAX_CHARS) return null;
+    const mb = (n) => (n / 1e6).toFixed(1);
+    const message = `${what}: the library would be ${mb(size)} MB, and a backup over `
+      + `${mb(LIBRARY_RESTORE_MAX_CHARS)} MB cannot be restored. Remove songs, charts or long notes you no longer `
+      + 'need first.';
+    notice({ type: 'library-full', chars: size, cap: LIBRARY_RESTORE_MAX_CHARS, message });
+    return message;
   }
 
   /**
-   * C-SHIP (chart-view review O4; orchestrator note under DECISIONS D33): would adding `song` (a new id) take the
-   * library past LIBRARY_RESTORE_MAX_CHARS? A 64 KB chart duplicated 29 times passed the 2 MB cap unchecked. Past
-   * LIBRARY_MAX_CHARS an add is an ordinary save under D9: it goes through and the save warns (checkSize's
-   * 'library-size'). Only past the restore cap (1.25×) does addSong / duplicateSong refuse, writing nothing, with a
-   * 'library-full' notice (the controller toasts it), so the library's own backup always stays restorable. The 64
+   * Chart view (D7): the library's JSON length once `chart` is stored on song `id` (it replaces the old one). Only
+   * chart writes pay for the JSON size. CAP: refused past LIBRARY_RESTORE_MAX_CHARS (restoreCapRefusal).
+   * @returns {number}
+   */
+  function chartLibrarySize(id, chart) {
+    const old = state.songs[id] && state.songs[id].chart;
+    return JSON.stringify(state).length - (old ? JSON.stringify(old).length : 0) + JSON.stringify(chart).length;
+  }
+
+  /**
+   * C-SHIP (chart-view review O4): would adding `song` (a new id) take the library past LIBRARY_RESTORE_MAX_CHARS?
+   * A 64 KB chart duplicated 29 times passed the 2 MB cap unchecked. The rule is restoreCapRefusal's (CAP). The 64
    * characters stand for the id in songOrder and a setlist.
    * @param {object} song
-   * @returns {boolean}
+   * @returns {boolean} true = refused (notice sent, nothing written)
    */
   function songOverflows(song) {
     const size = JSON.stringify(state).length + JSON.stringify(song).length + 64;
-    if (size <= LIBRARY_RESTORE_MAX_CHARS) return false;
-    const mb = (n) => (n / 1e6).toFixed(1);
-    notice({
-      type: 'library-full', chars: size, cap: LIBRARY_RESTORE_MAX_CHARS,
-      message: `“${song.name}” was not added: the library would be ${mb(size)} MB, and a backup over `
-        + `${mb(LIBRARY_RESTORE_MAX_CHARS)} MB cannot be restored. Remove songs, charts or long notes you no longer `
-        + 'need first.',
-    });
-    return true;
+    return restoreCapRefusal(size, `“${song.name}” was not added`) !== null;
   }
 
   /** @returns {{segs:string[], value:*}|null} */
@@ -1819,7 +1829,8 @@ export function createStore(opts = {}) {
         if (rest.length) return null;
         if (value === null || value === undefined) return { segs, value: undefined };
         const chart = normalizeChart(value);
-        if (!chart || chartOverflows(id, chart)) return null;
+        // CAP: past the restore cap a raw write is refused (setChart checks first and says so)
+        if (!chart || chartLibrarySize(id, chart) > LIBRARY_RESTORE_MAX_CHARS) return null;
         return { segs, value: chart };
       }
       if (rest.length) return { segs, value: clone(value) }; // unknown nested fields
@@ -2264,7 +2275,8 @@ export function createStore(opts = {}) {
     },
     /**
      * D8/D9: things the user should be told, `{type, message, …}`: 'library-size' (a save past LIBRARY_MAX_CHARS,
-     * D9), 'kept-removed' (storage was full and superseded kept copies were removed, D8). Notices from before the
+     * D9), 'library-full' (an add refused past LIBRARY_RESTORE_MAX_CHARS, CAP), 'kept-removed' (storage was full and
+     * superseded kept copies were removed, D8). Notices from before the
      * first subscriber (load time) are delivered to it. The controller toasts `message`.
      * @param {(n:{type:string, message:string}) => void} fn @returns {() => void} unsubscribe
      */
@@ -2919,7 +2931,8 @@ export function createStore(opts = {}) {
 
     /**
      * Chart view (D7): store, replace or remove (null) a song's chart, with the reason in words when it is refused
-     * (empty, over CHART_MAX_CHARS, or a library that would no longer fit LIBRARY_MAX_CHARS).
+     * (empty, over CHART_MAX_CHARS, or a library that would pass LIBRARY_RESTORE_MAX_CHARS: CAP, D9; past
+     * LIBRARY_MAX_CHARS it is saved and the save warns).
      * @param {string} id song id
      * @param {{text:string, format?:string, key?:string, name?:string}|null} chart
      * @returns {{ok:true, changed:boolean} | {ok:false, error:string}}
@@ -2930,10 +2943,10 @@ export function createStore(opts = {}) {
       const err = chartError(chart);
       if (err) return { ok: false, error: err };
       const n = normalizeChart(chart);
-      if (chartOverflows(id, n)) {
-        return { ok: false, error: 'The library is full (about 2 MB), so the chart was not saved. Remove a chart or a '
-          + 'song first.' };
-      }
+      // CAP: nothing written; the 'library-full' notice says the same
+      const what = `The chart for “${state.songs[id].name}” was not saved`;
+      const full = restoreCapRefusal(chartLibrarySize(id, n), what);
+      if (full) return { ok: false, error: full };
       return { ok: true, changed: api.set(`songs.${id}.chart`, n) };
     },
 
@@ -2980,8 +2993,9 @@ export function createStore(opts = {}) {
      *    (skeptic PP-2).
      *  - Bank-mode entries are never added here (addPackSong adds one on request); a bank song already in the
      *    library follows the same update / edit / delete rules.
-     *  - A bad entry is skipped with a line in `skipped` (and a warning); a song that would push the library past
-     *    LIBRARY_MAX_CHARS is skipped and tried again next time.
+     *  - A bad entry is skipped with a line in `skipped` (and a warning). CAP (D9): a song that takes the library
+     *    past LIBRARY_MAX_CHARS goes in and the save warns; one that would take it past LIBRARY_RESTORE_MAX_CHARS is
+     *    skipped (a line in `skipped`, one 'library-full' notice per call) and tried again next time.
      * Pack writes are not edits: an untouched factory library stays pristine.
      * @param {object[]} list entries {packId, hash, mode, schema?, song, bank?}
      * @returns {{added:string[], updated:string[], kept:string[], skipped:string[], bank:number}} kept = pack ids
@@ -2998,9 +3012,13 @@ export function createStore(opts = {}) {
       let size = null;
       // skeptic PP-5: a new record (~packId + 70 chars) is library state too, so it counts against the cap
       const recLen = (packId, id) => packId.length + id.length + 64;
-      const fits = (delta) => {
+      const full = []; // CAP: {name, size, verb} of each song refused at the restore cap
+      const fits = (delta, name, verb) => {
         if (size === null) size = JSON.stringify(state).length;
-        if (size + delta > LIBRARY_MAX_CHARS) return false;
+        if (size + delta > LIBRARY_RESTORE_MAX_CHARS) {
+          full.push({ name, size: size + delta, verb });
+          return false;
+        }
         size += delta;
         return true;
       };
@@ -3029,7 +3047,7 @@ export function createStore(opts = {}) {
           }
           const song = tryPackSong(e, rec.id, res);
           if (!song) continue;
-          if (!fits(JSON.stringify(song).length - JSON.stringify(cur).length)) {
+          if (!fits(JSON.stringify(song).length - JSON.stringify(cur).length, song.name, 'updated')) {
             res.skipped.push(skipLine(e, 'the library is full; not updated'));
             continue;
           }
@@ -3045,7 +3063,7 @@ export function createStore(opts = {}) {
         const id = idGen('song');
         const song = tryPackSong(e, id, res);
         if (!song) continue;
-        if (!fits(JSON.stringify(song).length + id.length + 8 + recLen(e.packId, id))) {
+        if (!fits(JSON.stringify(song).length + id.length + 8 + recLen(e.packId, id), song.name, 'added')) {
           res.skipped.push(skipLine(e, 'the library is full; not added'));
           continue;
         }
@@ -3054,6 +3072,12 @@ export function createStore(opts = {}) {
         added.push(id);
       }
       for (const line of res.skipped) warn(`patch pack: ${line}`);
+      if (full.length) {
+        const verbs = [...new Set(full.map((f) => f.verb))].join(' or ');
+        const what = full.length === 1 ? `The patch pack song “${full[0].name}” was not ${verbs}`
+          : `${full.length} patch pack songs were not ${verbs}`;
+        restoreCapRefusal(Math.max(...full.map((f) => f.size)), what);
+      }
       if (!paths.length && !relinked) return res;
       if (added.length) {
         paths.push(put(['songOrder'], [...state.songOrder, ...added]));
@@ -3070,7 +3094,8 @@ export function createStore(opts = {}) {
      * song, nothing added. A bank song deleted earlier may be added again: this is an explicit request.
      * @param {object} e a pack entry
      * @param {{select?:boolean}} [o] select: make it the current song
-     * @returns {{ok:true, id:string, existing?:true} | {ok:false, error:string}}
+     * @returns {{ok:true, id:string, existing?:true} | {ok:false, error:string, notified?:true}} notified: the error
+     *   went out as a 'library-full' notice too (CAP; the controller toasts it), so a view need not toast it again
      */
     addPackSong(e, { select = false } = {}) {
       if (!validPackEntry(e) || isReservedKey(e.packId)) return { ok: false, error: 'That is not a pack song.' };
@@ -3083,9 +3108,9 @@ export function createStore(opts = {}) {
       const song = tryPackSong(e, id, res);
       if (!song) return { ok: false, error: res.skipped[0] || 'That song could not be read.' };
       const grow = JSON.stringify(song).length + (rec ? 0 : e.packId.length + id.length + 64); // PP-5: the record
-      if (JSON.stringify(state).length + grow > LIBRARY_MAX_CHARS) {
-        return { ok: false, error: 'The library is full: delete some songs first.' };
-      }
+      // CAP (D9): past LIBRARY_MAX_CHARS it is added and the save warns; refused only past the restore cap
+      const full = restoreCapRefusal(JSON.stringify(state).length + grow, `“${song.name}” was not added`);
+      if (full) return { ok: false, error: full, notified: true }; // notified: the 'library-full' notice is toasted
       const paths = [put(['songs', id], song), put(['songOrder'], [...state.songOrder, id])];
       recs[e.packId] = { id, hash: e.hash, sig: songFingerprint(state.songs[id]) };
       paths.push(put(['meta', 'packSongs'], recs));

@@ -8,7 +8,9 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import { createRequire } from 'node:module';
-import { memoryStorage, migrate, LIBRARY_MAX_CHARS } from '../../../app/js/store.js';
+import {
+  memoryStorage, migrate, LIBRARY_MAX_CHARS, LIBRARY_RESTORE_MAX_CHARS, STORAGE_KEY,
+} from '../../../app/js/store.js';
 import { blankSong, FACTORY_SONGS } from '../../../app/js/presets.js';
 import { createController } from '../../../app/js/controller.js';
 import { MidiInput } from '../../../app/js/midi.js';
@@ -266,15 +268,98 @@ test('bad entries are skipped with a warning; good ones in the same list still g
   assert.equal(s.get().songs[r.added[0]].name, 'Arbor Song');
 });
 
-test('size cap: a song that would push the library past LIBRARY_MAX_CHARS is skipped (and tried again later)', () => {
-  const { s } = storeWithWarns();
-  const big = song('Heavy Anthem', { blob: 'x'.repeat(LIBRARY_MAX_CHARS) }); // unknown fields are kept, uncapped
-  const r = s.topUpPacks([entry('P:big.json', big), entry('P:small.json', song('Light Anthem'))]);
-  assert.equal(r.added.length, 1);
-  assert.match(r.skipped[0], /^P:big\.json: the library is full; not added/);
-  assert.equal('P:big.json' in s.get().meta.packSongs, false, 'not remembered: it can go in once there is room');
-  assert.equal(s.addPackSong({ ...entry('B:big.json', big), mode: 'bank' }).ok, false);
+// CAP (UI6-cship O1; D9 + the O4 note under D33): one size rule for every add. A pack song that takes the library
+// past LIBRARY_MAX_CHARS goes in and the save warns ('library-size'); one that would take it past
+// LIBRARY_RESTORE_MAX_CHARS is skipped / refused, writes nothing, with one 'library-full' notice, and is tried again.
+const PAST_2MB = 2100000; // a blob this long takes a fresh library past LIBRARY_MAX_CHARS, inside the restore cap
+function capStore() {
+  const storage = memoryStorage();
+  const { s, warns } = storeWithWarns({ storage, debounceMs: 0 });
+  const notices = [];
+  s.onNotice((n) => notices.push(n));
+  return { s, warns, notices, storage };
+}
+const ofType = (notices, t) => notices.filter((n) => n.type === t);
+
+test('CAP: pack top-up past 2 MB adds and warns at the save; past the restore cap skipped (and tried again later)',
+  () => {
+    const { s, notices, storage } = capStore();
+    assert.ok(PAST_2MB > LIBRARY_MAX_CHARS && PAST_2MB < LIBRARY_RESTORE_MAX_CHARS);
+    const big = song('Heavy Anthem', { blob: 'x'.repeat(PAST_2MB) }); // unknown fields are kept, uncapped
+    const r = s.topUpPacks([entry('P:big.json', big), entry('P:small.json', song('Light Anthem'))]);
+    assert.equal(r.added.length, 2, 'past 2 MB: added (D9)');
+    assert.deepEqual(r.skipped, []);
+    const size = JSON.stringify(s.get()).length;
+    assert.ok(size > LIBRARY_MAX_CHARS && size <= LIBRARY_RESTORE_MAX_CHARS, `${size}`);
+    assert.equal(s.persistNow(), true, 'saved');
+    assert.equal(storage.getItem(STORAGE_KEY), JSON.stringify(s.get()));
+    assert.equal(ofType(notices, 'library-size').length, 1, 'the D9 save warning');
+    assert.equal(ofType(notices, 'library-full').length, 0);
+    // the next one would pass 2.5 MB: skipped, nothing written, one notice, not remembered
+    const huge = song('Huge Anthem', { blob: 'y'.repeat(LIBRARY_RESTORE_MAX_CHARS - PAST_2MB) });
+    const before = JSON.stringify(s.get());
+    const r2 = s.topUpPacks([entry('P:huge.json', huge), entry('P:huge2.json', song('Huge Too', { blob: 'z' }))]);
+    assert.equal(r2.added.length, 1, 'a small one still fits');
+    assert.match(r2.skipped[0], /^P:huge\.json: the library is full; not added/);
+    const full = ofType(notices, 'library-full');
+    assert.equal(full.length, 1);
+    assert.match(full[0].message, /^The patch pack song “Huge Anthem” was not added: the library would be 2\.\d/);
+    assert.match(full[0].message, /a backup over 2\.5 MB cannot be restored/);
+    assert.equal('P:huge.json' in s.get().meta.packSongs, false, 'not remembered: it can go in once there is room');
+    assert.ok(JSON.stringify(s.get()).length <= LIBRARY_RESTORE_MAX_CHARS);
+    // all refused: nothing written at all
+    const before2 = JSON.stringify(s.get());
+    const r3 = s.topUpPacks([entry('P:huge.json', huge), entry('P:huge3.json', song('Huge Three', { blob: 'w'.repeat(
+      LIBRARY_RESTORE_MAX_CHARS) }))]);
+    assert.deepEqual(r3.added, []);
+    assert.equal(r3.skipped.length, 2);
+    assert.equal(JSON.stringify(s.get()), before2, 'a refused top-up writes nothing');
+    assert.equal(ofType(notices, 'library-full').length, 2, 'one notice per top-up');
+    assert.match(ofType(notices, 'library-full')[1].message, /^2 patch pack songs were not added: /);
+    assert.notEqual(before, before2);
+    // once there is room it goes in
+    s.deleteSong(r.added[0]);
+    assert.equal(s.topUpPacks([entry('P:huge.json', huge)]).added.length, 1);
+  });
+
+test('CAP: a pack update past the restore cap is not applied (the old version stays) and says so', () => {
+  const { s, notices } = capStore();
+  const v1 = entry('P:grow.json', song('Growing Hymn'));
+  const [id] = s.topUpPacks([v1]).added;
+  s.topUpPacks([entry('P:filler.json', song('Filler', { blob: 'f'.repeat(PAST_2MB) }))]);
+  const v2 = { ...v1, hash: 'h-grown', song: song('Growing Hymn', { blob: 'g'.repeat(LIBRARY_RESTORE_MAX_CHARS) }) };
+  const before = JSON.stringify(s.get());
+  const r = s.topUpPacks([v2]);
+  assert.deepEqual(r.updated, []);
+  assert.match(r.skipped[0], /^P:grow\.json: the library is full; not updated/);
+  assert.equal(JSON.stringify(s.get()), before);
+  assert.equal(s.get().songs[id].blob, undefined);
+  assert.match(ofType(notices, 'library-full')[0].message, /^The patch pack song “Growing Hymn” was not updated: /);
 });
+
+test('CAP: Song bank add past 2 MB goes through and warns at the save; past the restore cap refused, nothing written',
+  () => {
+    const { s, notices, storage } = capStore();
+    const big = { ...entry('B:big.json', song('Bank Anthem', { blob: 'x'.repeat(PAST_2MB) })), mode: 'bank' };
+    const a = s.addPackSong(big);
+    assert.equal(a.ok, true, 'past 2 MB: added (D9)');
+    assert.ok(JSON.stringify(s.get()).length > LIBRARY_MAX_CHARS);
+    assert.equal(s.persistNow(), true);
+    assert.equal(storage.getItem(STORAGE_KEY), JSON.stringify(s.get()));
+    assert.equal(ofType(notices, 'library-size').length, 1);
+    const huge = { ...entry('B:huge.json', song('Bank Colossus', { blob: 'y'.repeat(LIBRARY_RESTORE_MAX_CHARS -
+      PAST_2MB) })), mode: 'bank' };
+    const before = JSON.stringify(s.get());
+    const r = s.addPackSong(huge, { select: true });
+    assert.equal(r.ok, false);
+    assert.equal(r.notified, true, 'the views do not toast it a second time');
+    assert.match(r.error, /^“Bank Colossus” was not added: the library would be 2\.\d MB, /);
+    assert.equal(JSON.stringify(s.get()), before, 'nothing written (song, order, record, selection)');
+    const full = ofType(notices, 'library-full');
+    assert.equal(full.length, 1);
+    assert.equal(full[0].message, r.error);
+    assert.equal(full[0].cap, LIBRARY_RESTORE_MAX_CHARS);
+  });
 
 test('read-only library: topUpPacks / addPackSong write nothing', () => {
   const { s } = storeWithWarns();

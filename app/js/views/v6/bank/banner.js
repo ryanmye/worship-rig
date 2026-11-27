@@ -44,7 +44,9 @@ export function trialBanner(v) {
       const nm = s ? s.name : 'the song';
       toast(r.existing ? `“${nm}” is already in your library.` : `Added “${nm}” to your library${where}.`);
     } else if (r && r.error === 'perform-locked') toast('Perform lock is on: unlock to keep it.', 'warn');
-    else if (r && r.error !== 'no-trial') toast((r && r.error) || 'The song could not be added.', 'error');
+    else if (r && r.error !== 'no-trial' && !r.notified) { // CAP: a 'library-full' refusal is toasted already
+      toast((r && r.error) || 'The song could not be added.', 'error');
+    }
   };
   d.listen(keep, 'click', () => run(async () => kept(await controller.keepTrial(), '')));
   let pop = null;
