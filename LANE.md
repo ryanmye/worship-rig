@@ -188,3 +188,11 @@ Scratch / probes: /home/claude/scratch/fu2-sk, .probe/.
   1000 (gives way first, to 6ch), v6 chip text split into words + key, words go first. Test fails first
   (.probe/f1-before.log), passes after (.probe/f1-after.log). Today's Edit min-width: 0 only while Edit shows <1024
   (Perform 1024, Settings over Edit 0) — .probe/probe-layout.json.
+- 5 F2 (defect, fixed): today's keyboard muted number = bar grey + --text: 3.60 : 1 in Daylight Stage (builder
+  measured Sanctuary only). Fix: the v6 rule for both (--muted + --bg): ≥ 4.5 : 1 in all 8. Test (today's 8 themes)
+  fails first (.probe/f2-before.log), passes after (.probe/f2-after.log).
+- 5 OK: 36 real-DOM layouts (16 instruments: identical whole / identical short / one octave / clipped low / high /
+  both; v6 + today's; 1280 / 1024 / 820): no overlap, none outside the keyboard (badges off their bar where room
+  is short, by design). Pure fuzz 15 048 cases, 0 overlaps (.probe/place-fuzz.txt). keys.js rAFs per cvd flip
+  constant (2 on / 1 off) after 6 view flips, 4 flag flips, 4 song changes: no live watcher leak. 820 v6 Edit 16
+  tabs: no dot over a number. v6 muted bar keeps lamp colour (confirmed, .probe/cvd/v6-muted-off-sanctuary.png).

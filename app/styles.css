@@ -1476,13 +1476,12 @@ html:is(.cvd-rg, .cvd-by) .rbar[data-slot]::before {
   font: 800 10px/13px var(--font); text-align: center; font-variant-numeric: tabular-nums; pointer-events: none;
 }
 html:is(.cvd-rg, .cvd-by) .v6-kbd-range .rbar[data-slot]::before { left: 4px; } /* Edit › Range: one bar */
-/* UI6-cvd O6: a muted instrument's number goes grey, so a lamp-coloured number never reads as "on". Today's keyboard:
-   the bar's own grey (the themes' `.rbar.off`, inherited) in the theme's text colour. The v6 keyboard's muted bar
-   keeps its lamp colour (styles-v6-keyboard.css `.v6 .v6-kbd .v6-rbar` out-ranks every `.rbar.off`; only its handles
-   go grey), so there the number is the theme's muted grey with the page colour on it (≥ 4.5 : 1 in all 8 themes:
-   ui-v6 "CVD2 O6") */
-html:is(.cvd-rg, .cvd-by) .rbar.off[data-slot]::before { background: inherit; color: var(--text); }
-html:is(.cvd-rg, .cvd-by) .v6 .v6-kbd .v6-rbar.off[data-slot]::before { background: var(--muted); color: var(--bg); }
+/* UI6-cvd O6: a muted instrument's number goes grey, so a lamp-coloured number never reads as "on": the theme's muted
+   grey with the page colour on it (≥ 4.5 : 1 in all 8 themes: ui-v6 "CVD2 O6", "CVD2 O1: today's keyboard"). The v6
+   keyboard's muted bar keeps its lamp colour (styles-v6-keyboard.css `.v6 .v6-kbd .v6-rbar` out-ranks every
+   `.rbar.off`; only its handles go grey). Skeptic FU2 F2: today's keyboard used the bar's own grey under the theme's
+   text, 3.6 : 1 in Daylight Stage (its bar grey is mid-tone); now the same rule as the v6 one. */
+html:is(.cvd-rg, .cvd-by) .rbar.off[data-slot]::before { background: var(--muted); color: var(--bg); }
 html:is(.cvd-rg, .cvd-by) :is(.v6-strip .v6-nm, .v6e-rt[data-block^="slot:"] .v6e-rt-name)::before {
   content: var(--cvd-n); display: inline-block; min-width: 18px; margin-right: 6px; padding: 0 4px;
   box-sizing: border-box; border-radius: 5px; background: var(--c); color: var(--cvd-ink, #0d0f12);

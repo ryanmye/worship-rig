@@ -241,10 +241,24 @@ export async function cvd2Tests(x) {
           true));
         await p.waitForFunction(() => !!document.querySelector('[data-testid="range-bars"] .rbar.off'));
         await p.waitForTimeout(200);
-        const m = (await pev(BADGES, '[data-testid="range-bars"]')).find((b) => b.i === 2);
-        assert.ok(m.off);
-        assert.equal(m.bg, m.barBg, 'today: the muted number takes the bar\'s grey');
-        assert.ok(contrast(m.ink, m.bg) >= 4.5, `today: muted number ${contrast(m.ink, m.bg).toFixed(2)} : 1`);
+        // Skeptic FU2 F2: in every theme (Daylight Stage's bar grey under the theme's text was 3.6 : 1)
+        for (const t of ['classic', 'sanctuary', 'sanctuary-day', 'daylight-stage', 'daylight-day', 'studio', 'ember',
+          'nave']) {
+          await pev((v) => window.__rig.store.set('settings.theme', v), t);
+          await p.waitForFunction((v) => document.documentElement.dataset.theme === v || (v === 'classic'
+            && !document.documentElement.dataset.theme), t).catch(() => {});
+          await p.waitForTimeout(250);
+          const bars = await pev(BADGES, '[data-testid="range-bars"]');
+          const m = bars.find((b) => b.i === 2);
+          const on = bars.find((b) => b.i === 0);
+          assert.ok(m.off, t);
+          const c = rgbOf(m.bg).map((v) => v * 255);
+          assert.ok(Math.max(...c) - Math.min(...c) <= 40, `today ${t}: its number is grey (${m.bg})`);
+          assert.notEqual(m.bg, on.bg, `today ${t}: not the lamp colour`);
+          const cr = contrast(m.ink, m.bg);
+          assert.ok(cr >= 4.5, `today ${t}: muted number ${cr.toFixed(2)} : 1 (${m.ink} on ${m.bg})`);
+        }
+        await pev(() => window.__rig.store.set('settings.theme', 'sanctuary'));
         await pev(() => window.__rig.store.set('settings.cvd', null));
         await p.waitForFunction(() => !/cvd-/.test(document.documentElement.className));
         await p.waitForTimeout(200);
