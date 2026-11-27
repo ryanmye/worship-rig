@@ -75,3 +75,6 @@ refused only past the restore cap 2,500,000); review doc native/docs/reviews/UI6
 - F1 (fixed): today's pressed Chart toggle under the mouse in Studio: dark cap hover under accent ink, 1.04–1.33 : 1
   (pre-existing in the hidden build, now on by default). styles.css hover/active rule; chart suite test fails first.
 - O-a also: addPackSong (bank Add) refuses at 2 MB, while + New / Duplicate now go to 2.5 MB.
+- F2 (fixed, a723b11): O1 lifted PANIC over the backdrop, but the dialogs (90vh / 92vh) reached PANIC's row: v6 Edit
+  chart at 1024×700 had Cancel under PANIC (a tap panicked). keepClearOfPanic + CSS; tests fail first. (.probe/p6.mjs)
+- Gate run 1 was stopped at chart (to fix F2); rerun on the F2 tree.
