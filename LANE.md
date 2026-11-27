@@ -119,3 +119,27 @@ verification after merge: **UNVERIFIED until pushed.**
 - No Bluetooth pairing view.
 
 **Lane tip:** see `git log -1 lane-nma` (this commit). Not pushed.
+
+## Skeptic (lane NMA review, 2026-11-27)
+
+Brief: strong skeptic for NMA (2.0 blocker, live playing). Rebased onto origin/v2-native (7e92df4, clean). Try to
+break surface fidelity, listen policy, stuck notes, timing, clock-out routing, install guard, MockNative fidelity vs
+the core; settle the `engine` suite 404. Fix real defects with failing-first tests, one commit each; review doc
+native/docs/reviews/NMA.md; gates via tools/cloud/gates.mjs. Commit on lane-nma only.
+
+### Checklist
+- [x] S0. Rebase onto origin/v2-native (clean, 11 commits replayed)
+- [x] S1. Read adapter, midi.js, midi-clock.js, core midi_service / port_table / parser, bridge hello, RigMIDI.swift
+- [ ] S2. Probes: reload stuck-note path, surface edge cases, mock vs core
+- [ ] S3. Fixes (tests first), one commit each
+- [ ] S4. engine suite 404: base check, harness fix if one-line
+- [ ] S5. Gates
+- [ ] S6. native/docs/reviews/NMA.md + MAC_CHECK steps; final report
+
+### Findings so far (before fixing)
+- F1 (candidate): page reload with notes / pedal held: the core keeps the old page's voices and sustain (only the
+  crash path posts `play panic`; Settings › My Samples "Reload" is a plain location.reload()); the new controller
+  has empty heldBySrc / pedalDown=false, so key-ups are dropped and a pedal lift sends nothing → notes / sustain stuck.
+
+### Next step
+S2 probes.
