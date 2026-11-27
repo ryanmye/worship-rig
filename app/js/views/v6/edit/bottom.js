@@ -4,15 +4,19 @@
 // controller / store calls, mounted here instead of today's Edit keyboard row.
 //
 // Two rows, never in each other's way: this one exists only while Edit shows (as U5a's strip) and has its own test
-// ids ('v6e-…'), while the hidden v6 Perform keeps its own row mounted. Its range bars are display only: on the
-// Perform size a bar is changed after picking its instrument (D24.3), which is the strip's name on Perform; in Edit
-// the strip's name opens Range (UI6-U5a R2), where the instrument's range has its own 88-key editor.
+// ids ('v6e-…'), while the hidden v6 Perform keeps its own row mounted. U-EDITRANGE (D26.2, D18 "Same for every
+// screen with the bottom keyboard"): its range bars are draggable as on Perform, with Perform's guards
+// (range-guard.js, the same module): tap / click a bar first (D24.3; the strip's name opens Range here, UI6-U5a R2),
+// heard while dragging (D24.2), and every way out of a drag puts the start value back: Esc (the pick's overlay),
+// pointercancel (keyboard.js), a window blur, leaving Edit, a song switch, a slot count change or move, Lock, the
+// flag going off (unmount). Before, they were display only (skeptic UI6-U5b F4: unguarded writes).
 // Revert puts the song back to the Revert snapshot the dots count against (ctx.getBaseline), as Perform's Revert.
 // Lock goes back to Perform and locks it: Perform lock freezes Edit (main.js sends a locked Edit back to Perform).
 import { say } from '../../components/voice.js';
 import { slotMuteState, changeCount } from '../../perform.js';
 import { SLOT_COUNT } from '../../../shared/params.js';
 import { bottomRow } from '../bottom.js';
+import { rangeGuard } from '../range-guard.js';
 
 /** Song fields Revert restores (views/v6/perform.js SAVED_FIELDS, perform.js, controller.revertSong()). */
 const SAVED_FIELDS = ['patch', 'drone', 'tempo', 'hearIn', 'playIn', 'transposeOctave', 'minor'];
@@ -47,19 +51,15 @@ export function editBottom(host, env) {
   let row = null;
   let faded = false;
   let status = controller?.status || {};
+  // U-EDITRANGE: Perform's guards (song switch, slot count, view, slot map; plus a window blur, which only this row
+  // opts in to: a mouse held across ⌘Tab must not commit on a release the page may never see)
+  const guard = rangeGuard({ store, view: 'edit', kb: () => row?.kb || null, blur: true });
+  guard.sync(store.get());
 
   const v = {
     store, controller, isLocked,
-    /** As the v6 Perform's setRange (keyboard.js onRange); unused while the bars are read only (barsReadOnly). */
-    setRange(i, field, note, phase, expect) {
-      if (field !== 'lowNote' && field !== 'highNote') return false;
-      if (phase !== 'cancel' && isLocked()) return false;
-      const id = songId();
-      const slot = id && store.getSong(id)?.patch.slots[i];
-      if (!slot || !Number.isInteger(note)) return false;
-      if (phase === 'cancel' && slot[field] !== expect) return false;
-      return store.set(`songs.${id}.patch.slots.${i}.${field}`, note);
-    },
+    /** The v6 Perform's write rule (range-guard.js): to the song the bars show, frozen under Lock but a restore. */
+    setRange: (i, field, note, phase, expect) => guard.setRange(i, field, note, phase, expect),
     onRangePick: () => {},
     onCoarse: () => {},
     /** Perform's Revert (views/v6/perform.js revertSong) against Edit's baseline, which is Perform's snapshot. */
@@ -126,10 +126,9 @@ export function editBottom(host, env) {
     });
   }
   function mount() {
-    // skeptic UI6-U5b F4: display only for real. Before, a tap on a bar picked it (keyboard.js does that itself) and
-    // its ends dragged with live writes, without the v6 Perform's guards: a song switch mid-drag left the partial
-    // range on the first song and wrote the rest onto the next one
-    row = bottomRow(v, { prefix: 'v6e', barsReadOnly: true });
+    // U-EDITRANGE (D26.2): draggable, behind the same guards as Perform (skeptic UI6-U5b F4 had made them display
+    // only, because a song switch mid-drag left the partial range on the first song and wrote the rest onto the next)
+    row = bottomRow(v, { prefix: 'v6e' });
     host.replaceChildren(row.el);
     render();
     renderLetters();
@@ -151,7 +150,12 @@ export function editBottom(host, env) {
     else render();
   };
 
-  offs.push(store.subscribe(() => sync()));
+  offs.push(store.subscribe((state) => {
+    guard.sync(state); // before the row renders or unmounts: a drag it drops restores into the song it wrote
+    sync();
+  }));
+  if (typeof store.onSlotMap === 'function') offs.push(store.onSlotMap((e) => guard.slotMap(e)));
+  offs.push(() => guard.destroy());
   listen(env.editState, 'changes', () => render());
   if (typeof controller?.onStatus === 'function') {
     offs.push(controller.onStatus((s) => {

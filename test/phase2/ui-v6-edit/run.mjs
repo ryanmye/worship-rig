@@ -23,6 +23,7 @@ import { MIDI_PERMISSIONS, waitRigReady, pinTheme } from '../../integration/lib.
 import { u5bTests } from './u5b.tests.mjs';
 import { skepticU5bTests } from './skeptic-u5b.tests.mjs';
 import { polish1EditTests } from './polish1.tests.mjs';
+import { editRangeTests } from './editrange.tests.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -1100,6 +1101,8 @@ try {
   await skepticU5bTests({ T, page, ev, until, tid, toEdit, assert, settled });
   // ---------------------------------------------------------------- UI v6 polish batch 1 (polish1.tests.mjs)
   await polish1EditTests({ T, page, ev, until, tid, toEdit, assert, settled });
+  // ---------------------------------------------------------------- U-EDITRANGE (editrange.tests.mjs, D26.2)
+  await editRangeTests({ T, page, ev, until, tid, toEdit, assert, settled, setSlots });
 
   await T('zero console.error, no HTTP ≥ 400', async () => {
     assert.deepEqual(errors, []);

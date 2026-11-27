@@ -18,6 +18,7 @@ import { songBar } from './songbar.js';
 import { snapshotsRow } from './snapshots.js';
 import { stripsRow } from './strips-row.js';
 import { bottomRow } from './bottom.js';
+import { rangeGuard } from './range-guard.js';
 import { rightSidebar } from './sidebar/sidebar.js';
 import { leftPanel } from './left.js';
 import { songBank } from './bank/bank.js';
@@ -76,7 +77,10 @@ export function mountPerformV6(root, ctx) {
   let shownId = null;
   let rangePicked = null; // the instrument whose range bar is picked (onRangePick)
   let kbPicked = null; // …when that pick came from the keyboard (Enter / Space on its name: focusPicked)
-  let rangeSig = ''; // song id + slot count: a change drops a range drag / pick (skeptic UI6-U2 F3)
+  // the range bars' write rule and cancel guards (range-guard.js, shared with the v6 Edit's bottom row, D26.2); its
+  // song is shownId (both follow the same render)
+  const range = rangeGuard({ store, view: 'perform', kb: () => bottom.kb });
+  d.add(() => range.destroy());
   let snap = null; // {id, song, json}: the Revert snapshot, as perform.js
   const takeSnapshot = (song) => {
     snap = song ? { id: song.id, song, json: savedJSON(song) } : null;
@@ -187,23 +191,8 @@ export function mountPerformV6(root, ctx) {
       toast(`“${s.name}” is back to how it was when you selected it.`, 'ok', { ms: 3000 });
     },
     setFaded: (on) => setFaded(on),
-    /**
-     * A range bar's end moved (keyboard.js): the same slot fields today's Edit writes for the lowest / highest note
-     * (slot.js miniKeyboard → slots.<i>.lowNote / highNote), so the changed dots, Revert and the store → engine diff
-     * treat it like any edit. D24.2: written live while dragging ('live', ≤ 1 per 50 ms), then 'end' on release;
-     * ←/→ are 'key'. Frozen under Perform lock (D18; LOCK table), except 'cancel': a dropped drag putting back its
-     * start value, which is allowed under Lock (Lock is one of the things that drops it) but only while the slot still
-     * holds `expect`, the value the drag last wrote: a write that moved instruments without a slot map (a positional
-     * whole-array write) must not restore into the instrument that now sits there (UI6-U2 review O3).
-     */
-    setRange(i, field, note, phase, expect) {
-      if (field !== 'lowNote' && field !== 'highNote') return false;
-      if (phase !== 'cancel' && isLocked()) return false;
-      const slot = shownId && store.getSong(shownId)?.patch.slots[i];
-      if (!slot || !Number.isInteger(note)) return false;
-      if (phase === 'cancel' && slot[field] !== expect) return false;
-      return store.set(`songs.${shownId}.patch.slots.${i}.${field}`, note);
-    },
+    /** A range bar's end moved (keyboard.js): range-guard.js setRange (the write rule, D24.2, UI6-U2 review O3). */
+    setRange: (i, field, note, phase, expect) => range.setRange(i, field, note, phase, expect),
     /** A strip's name was tapped / clicked (every pointer, D24.3): change that instrument's range (again: finish). */
     pickRange(i) {
       const kb = bottom.kb;
@@ -364,28 +353,13 @@ export function mountPerformV6(root, ctx) {
       row.cancelDrags();
       row.closePanels();
       bar.closePops();
-      bottom.kb.cancelDrag();
-      bottom.kb.pick(null);
     }
-    // skeptic UI6-U2 F3: an Add / Remove (here, in Edit, by any store write) moves which instrument sits at each
-    // position; a range drag or the iPad pick held by index would then write / outline the neighbour (removing slot 0
-    // mid-drag of slot 2's end wrote the old slot 3's range). As U1 F2 does for menus: drop both when the count moves.
-    const sig = song ? `${song.id}:${song.patch.slots.length}` : '';
-    if (sig !== rangeSig) {
-      if (rangeSig && newId === shownId) {
-        bottom.kb.cancelDrag();
-        bottom.kb.pick(null);
-      }
-      rangeSig = sig;
-    }
-    // skeptic UI6-U2 F4: a drag that the view hides (⌘E, a MIDI view switch) must not write on its release: the
-    // hidden keyboard measures 0 px wide, so the end snapped to 0 / 127 ("every key") and that was written. D24.2:
-    // with live writes, the cancel puts the start value back. A strip reorder drag ends too (D23.2).
-    if (st.view !== 'perform') {
-      bottom.kb.cancelDrag();
-      bottom.kb.pick(null);
-      row.cancelDrags();
-    }
+    // a range drag / pick: dropped on a song switch, a slot count change (skeptic UI6-U2 F3: an Add / Remove by any
+    // store write moves which instrument sits at each position) and another view (UI6-U2 F4: the hidden keyboard
+    // measures 0 px wide); D24.2: the cancel puts the start value back. range-guard.js sync.
+    range.sync(state);
+    // a strip reorder drag ends too when the view hides it (D23.2)
+    if (st.view !== 'perform') row.cancelDrags();
     shownId = newId;
     const locked = !!st.performLock;
     if (!song) snap = null;
@@ -567,11 +541,7 @@ export function mountPerformV6(root, ctx) {
     d.add(store.onSlotMap(({ id, order }) => {
       if (id !== shownId) return;
       row.slotMap();
-      bottom.kb.remapDrag(order);
-      queueMicrotask(() => {
-        bottom.kb.cancelDrag();
-        bottom.kb.pick(null);
-      });
+      range.slotMap({ id, order });
     }));
   }
   d.add(store.subscribe((state, paths) => {

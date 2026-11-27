@@ -94,6 +94,10 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   CONTRACT_CHANGES "## Snapshots remember Space / Echo / drone (D26.1)".
 - **U-EDITRANGE (D26.2):** Edit's bottom-row range bars draggable with Perform's guards.
 
+- ~~**U-EDITRANGE (D26.2):** Edit's bottom-row range bars draggable with Perform's guards.~~ **Built (lane-er):**
+  Perform's write rule and guards moved to `views/v6/range-guard.js`, used by Perform (unchanged) and the v6 Edit's
+  row (plus a window-blur cancel there). CONTRACT_CHANGES "## UI v6 U-EDITRANGE". Skeptic review pending.
+
 - **Core flake (not UI):** CI run on f46bac4 (2026-11-26 19:37 UTC, macos-15 build-test) failed
   `unit.core3` at test_core3.cpp:353 `CHECK(busy <= 1)` (switch back to B: more than one job in the prebuild lane's
   hands). The commit changed JS/docs only and later runs passed: likely a timing/lane-count assumption in the test

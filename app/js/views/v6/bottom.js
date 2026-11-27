@@ -15,10 +15,9 @@ const KEY_LABELS = Object.entries(KEY_MAP).map(([code, off]) => [off, code === '
 
 /**
  * @param {object} v  the v6 shell's view context (uses setRange, onRangePick, onCoarse for the range bars)
- * @param {{prefix?:string, barsReadOnly?:boolean}} [o]  prefix: the test ids' prefix ('v6' on Perform; the v6 Edit
- *   mounts its own row with 'v6e', U5b, so the two rows never share a test id while the hidden Perform keeps its row
- *   mounted); barsReadOnly: the range bars only show (no pick, no handles: the keyboard's locked look for the bars
- *   alone; the keys still play). The v6 Edit's row (skeptic UI6-U5b F4)
+ * @param {{prefix?:string}} [o]  prefix: the test ids' prefix ('v6' on Perform; the v6 Edit mounts its own row with
+ *   'v6e', U5b, so the two rows never share a test id while the hidden Perform keeps its row mounted). U-EDITRANGE
+ *   dropped `barsReadOnly` (the v6 Edit's bars are draggable behind range-guard.js, D26.2)
  * @returns {{el:HTMLElement, keysEl:HTMLElement, render(x:object):void, setHeld(held:any):void,
  *            setLetters(on:boolean, oct:number):void, setFaded(b:boolean):void, releaseAll():void, kb:object,
  *            destroy():void}}
@@ -107,7 +106,7 @@ export function bottomRow(v, o = {}) {
             || x.changed.has(`patch.slots.${i}.highNote`)),
         });
       }
-      kb.render({ bars, locked: x.locked || !!o.barsReadOnly });
+      kb.render({ bars, locked: x.locked });
       revertBtn.setDisabled(x.same);
       revertBtn.el.classList.toggle('none', x.count === 0);
       setText(revertCount, x.same ? say('revertNone') : x.count ? `${x.count} changed` : 'levels only');

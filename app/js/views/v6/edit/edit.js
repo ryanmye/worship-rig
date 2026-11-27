@@ -652,6 +652,8 @@ export function mountEditV6(el, ctx) {
       v6: true,
       mounted: () => [...regions.map((r) => r.id), cur?.id].filter(Boolean),
       instance: () => cur?.inst || null,
+      /** U-EDITRANGE: the bottom row's range keyboard (keyboard.js; null while Edit is not shown). */
+      bottomKb: () => bottom.row?.kb || null,
       ctx: (id) => (regions.find((r) => r.id === id) || (cur && cur.id === id ? cur : null))?.pctx || null,
       baseline: () => editState.baseline,
       changes: () => [...v6Changes()],

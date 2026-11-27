@@ -9515,3 +9515,35 @@ no SCHEMA change, every new field optional, engine untouched (app/js/engine and 
   - Gates after: shell unit 404/404, unit 685/685 (12 skipped), ui-core 78/78, ui-v6 82/82 and ui-v6-edit 37/37
     (flag-off purity identical), ui-v6-ipad 28/28, ui-v6-bank 21/21, edit-v2 14/14 files, settings 111/111,
     migration-1x 107/107 + 8/8.
+
+## UI v6 U-EDITRANGE (Edit's range bars draggable)
+
+DECISIONS D26.2 (D18 "Same for every screen with the bottom keyboard"): the range bars above the v6 Edit's bottom-row
+keyboard are draggable exactly like Perform's. Views only: no store, controller, engine, `shared/` change. Flag off is
+unchanged (the v6 Edit and its bottom row only exist with the flag on).
+
+- **New `views/v6/range-guard.js` `rangeGuard({store, kb, view, blur?})`**, factored out of `views/v6/perform.js`
+  (the same code, moved): `setRange(i, field, note, phase, expect)` (keyboard.js `onRange`: lock refuses all but a
+  `'cancel'` restore, the restore only while the slot still holds `expect`, written to the song the bars show),
+  `sync(state)` (on every store change, before the bars render: a song switch, a slot count change or another view
+  drops a drag, start value back, and the pick), `slotMap({id, order})` (`store.onSlotMap`: the drag follows its
+  instrument, then drag and pick are dropped in a microtask) and `songId`. Perform calls them at the same points of
+  its render, in the same order (song-switch closes, then the range drop, then the reorder drag on a hidden view), so
+  its behaviour is unchanged: ui-v6 (incl. every D24.2 cancel path) green without a test change.
+- **`views/v6/edit/bottom.js`** uses the same guard (`view: 'edit'`) and mounts `bottomRow` without `barsReadOnly`
+  (dropped from `views/v6/bottom.js`: no caller left). Pick first on every pointer (D24.3: a press on an unpicked bar
+  only picks it; another bar switches; the keys or Esc finish), live throttled writes (D24.2, ≤ 1 per 50 ms + the
+  release value), one commit per drag (the release writes only when it differs from the last live write; Revert puts
+  the snapshot back). The strip's name in Edit still opens Range (UI6-U5a R2), so a bar is picked from the bar itself.
+- **Cancel paths in Edit**, each putting the start value back on the song and instrument it wrote: Esc (the pick's
+  overlay, UI6-move F2), pointercancel, a window `blur` (`rangeGuard({blur: true})`: only the Edit row opts in;
+  Perform has no blur cancel today and keeps none), leaving Edit, a song switch (the restore goes to the old song, not
+  the one selected meanwhile: the guard's own song id, as Perform's `shownId`; the old Edit `setRange` read the current
+  song), Lock (keyboard.js `render({locked})`; the Edit stays shown under a store-written Lock, its bars locked), an
+  Add / Remove, a move (follows the instrument), the flag going off (unmount).
+- `mountEdit()._debug.bottomKb()` (test hook): the row's range keyboard, null while Edit is hidden.
+- **Timing** (2-CPU box, another agent's suite running): a 1.2 s drag gave 20 live writes, gaps ≥ 40 ms; one write in
+  Edit (`store.set` + notification: the v6 Edit, the hidden v6 Perform, the store → engine diff) median 2.8 ms, p95
+  7.8 ms, max 8.4 ms over 40 writes.
+- Tests: ui-v6-edit `editrange.tests.mjs` (pick first, live + one commit + dot + Revert, nine cancel paths, Lock, 16
+  instruments); skeptic U5b F4 now asserts the press only picks (it asserted display only).

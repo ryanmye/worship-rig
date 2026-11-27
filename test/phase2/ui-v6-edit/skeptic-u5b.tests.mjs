@@ -3,7 +3,8 @@
 //   F1 the chooser dims Edit's body only: the bottom row (PANIC, Lock, keys) stays live under no backdrop (mockup);
 //   F2 a kind chosen by keyboard keeps the focus (it fell to <body>, where → is Next song under the dialog);
 //   F3 an optional object the song began without, set back to its defaults, does not dot (fx.eq, fx.comp, touch);
-//   F4 the bottom row's range bars are display only (a tap picked a bar and its ends wrote, unguarded);
+//   F4 the bottom row's range bars were made display only (a tap picked a bar and its ends wrote, unguarded); since
+//      U-EDITRANGE (D26.2) they are draggable behind Perform's guards: a press only picks, nothing is written;
 //   F5 no test id twice in Edit with Drone › Key & sound open (the module's root and the panel were both v6e-drone);
 //   F6 the chooser closes when its place's instrument changes under it (Revert).
 
@@ -135,8 +136,8 @@ export async function skepticU5bTests(x) {
       assert.equal(await tabDot('slot:0'), false);
     });
 
-  await T('skeptic U5b F4/F5: the bottom row’s range bars are display only; no test id twice with Drone › Key & '
-    + 'sound', async () => {
+  await T('skeptic U5b F4/F5: a press on the bottom row’s unpicked bar only picks it (U-EDITRANGE); no test id twice '
+    + 'with Drone › Key & sound', async () => {
     await setStore([['patch.slots.0.lowNote', 48], ['patch.slots.0.highNote', 72]]);
     await select('effects');
     await page.waitForTimeout(200);
@@ -157,13 +158,17 @@ export async function skepticU5bTests(x) {
         const b = document.querySelector('[data-testid="v6e-kbd-bar-0"]').getBoundingClientRect();
         return { x: (b.left + b.right) / 2, y: b.top + b.height / 2, l: b.left };
       });
+      await ev(() => window.__rig.views.edit._debug.bottomKb().pick(null));
+      assert.equal(await ev(() => document.querySelector('[data-testid="v6e-kbd-hlo-0"]').tabIndex), -1);
       await page.mouse.click(bar.x, bar.y);
       await page.waitForTimeout(150);
       const st = await ev(() => ({
         hint: !document.querySelector('[data-testid="v6e-kbd-pickhint"]').hidden,
         tab: document.querySelector('[data-testid="v6e-kbd-hlo-0"]').tabIndex,
       }));
-      assert.deepEqual(st, { hint: false, tab: -1 });
+      assert.deepEqual(st, { hint: true, tab: 0 }, 'U-EDITRANGE: the click picked bar 0');
+      await ev(() => window.__rig.views.edit._debug.bottomKb().pick(null));
+      // a press-drag inside an unpicked bar picks it and moves nothing
       await page.mouse.move(bar.l + 1, bar.y);
       await page.mouse.down();
       for (let k = 1; k <= 5; k++) {
@@ -173,7 +178,9 @@ export async function skepticU5bTests(x) {
       await page.mouse.up();
       await page.waitForTimeout(150);
       assert.deepEqual(await ev(() => window.__w5), []);
+      assert.equal(await ev(() => window.__rig.views.edit._debug.bottomKb().picked), 0);
     } finally {
+      await ev(() => window.__rig.views.edit._debug.bottomKb()?.pick(null));
       await ev(() => window.__w5restore());
     }
     await select('drone');
