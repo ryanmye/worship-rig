@@ -9491,3 +9491,14 @@ no SCHEMA change, every new field optional, engine untouched (app/js/engine and 
   name suggestion (`suggestSnapshotName(live, own, names, taken, prev)`): when the levels and ON switches are those of
   `prev` (the playing snapshot, else the song) and only the Space / Echo / drone differ, the name says that: "Hall",
   "Hall + Dotted Eighth", "Drone D", "Drone off", "Drone Dm pads" ("Own Space" / "Own Echo" for no preset).
+- **Tests (views + D26.1a).** `scene-snap.test.mjs` 13 (+1: `scenes.take` address forms, whole unit, not-held
+  fields, another song, "Stage under Hall" heard and not written; the model test now also saves with chosen keys /
+  "follows" and checks the engine's drone mode / key after every op). Mutation check: dropping the drone move after a
+  save with a chosen key fails the model test. ui-v6 `snap.tests.mjs` (4): song bar Space under Hall, the Drone
+  module's key / Major-Minor / ON tile, a strip's Space and v6 Edit › Effects (heard, song not written, next change
+  drops, Update keeps), the dialog's key choice (default follows; chosen 5 up minor kept relative and heard; Update
+  back to follows); ui-core `scenes.mjs` +1 (flag off: Space row, key grid, ON tile, Edit v2 › Effects).
+- Gates (lane tip, one at a time): shell unit 397/397, unit 685/685 (12 skipped), ui-core 78/78, ui-v6 81/81 and
+  ui-v6-edit 37/37 (flag-off purity identical in both: requests, listeners, intervals, store listeners, DOM, CSS),
+  edit-v2 14/14 files, settings 111/111 (5 modes), migration-1x 107/107 + 8/8. ui-v6-ipad: no such suite on this
+  branch (it is lane U8a's). Engine, bridge, native core, golden fixtures and CSS untouched.

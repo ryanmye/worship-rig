@@ -82,7 +82,8 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   builder + strong skeptic.
 
 - ~~**U-SNAP (D26.1):**~~ **Built (lane-snap; awaiting the skeptic):** snapshots remember Space / Echo (sends + the
-  song's room / echo rows) and the drone (on, key, sound; key absolute, DECISIONS D26.1a). shared/scenes.js +
+  song's room / echo rows) and the drone (on, sound; its key follows the song's, or a key chosen in Save snapshot,
+  relative: DECISIONS D26.1a). shared/scenes.js +
   controller apply path + every view that writes those fields goes through `controller.scenes.take` / `adjust` first
   and shows `scenes.view(song)` (v6 and flag off) + Save snapshot "It keeps" / names / voice.js copy.
   CONTRACT_CHANGES "## Snapshots remember Space / Echo / drone (D26.1)".
