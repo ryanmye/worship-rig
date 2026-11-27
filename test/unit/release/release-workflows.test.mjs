@@ -10,8 +10,11 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
+import { mkdtempSync, symlinkSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 import {
-  releaseBody, draftReason, notesCandidates, bundleVersionForTag, filesSection,
+  releaseBody, draftReason, notesCandidates, bundleVersionForTag, filesSection, absoluteLink,
 } from '../../../tools/release/release-notes.mjs';
 
 const require = createRequire(import.meta.url);
@@ -296,4 +299,43 @@ test('release-notes: the real 2.0 draft yields a clean body', () => {
   assert.ok(!/Draft, not released|Editor's notes|<!--/.test(body));
   assert.match(body, /Worship-Rig-arm64\.dmg/);
   for (const [, href] of body.matchAll(/\]\(([^)\s]+)\)/g)) assert.match(href, /^(https:\/\/|#|mailto:)/, href);
+});
+
+// N10 skeptic F2: link rewriting never yields a URL outside github.com/<repo>/(blob|tree)/<ref>/
+test('release-notes: links resolve inside the repository at the tag, or throw', () => {
+  const o = { repo: 'o/r', ref: 'v2.0.0', docPath: 'docs/release-notes-2.0.md' };
+  const B = 'https://github.com/o/r/blob/v2.0.0/';
+  assert.equal(absoluteLink('patch-packs.md', o), `${B}docs/patch-packs.md`);
+  assert.equal(absoluteLink('./patch-packs.md#a', o), `${B}docs/patch-packs.md#a`);
+  assert.equal(absoluteLink('../native/apple/README.md', o), `${B}native/apple/README.md`);
+  assert.equal(absoluteLink('/native/docs/X.md', o), `${B}native/docs/X.md`, 'root-relative = repo root');
+  assert.equal(absoluteLink('..', o), 'https://github.com/o/r/tree/v2.0.0');
+  assert.equal(absoluteLink('?x', o), `${B}docs/release-notes-2.0.md?x`);
+  for (const h of ['https://example.org/a', '#install', 'mailto:a@b.c', '//cdn.example/x']) {
+    assert.equal(absoluteLink(h, o), h);
+  }
+  assert.throws(() => absoluteLink('../../X.md', o), /outside the repository/);
+  assert.throws(() => absoluteLink('/../X.md', o), /outside the repository/);
+  assert.throws(() => releaseBody('[a](../../../a/b.md)\n', o), /outside the repository/);
+});
+
+// N10 skeptic F1: run through a symlinked path the CLI used to skip main() (empty stdout, exit 0), so --require-final
+// passed a draft. It must refuse the draft and print the body however it is reached.
+test('release-notes CLI: --require-final refuses the 2.0 draft, also through a symlink', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'n10-notes-'));
+  try {
+    symlinkSync(ROOT, join(dir, 'repo'));
+    const rel = 'tools/release/release-notes.mjs';
+    for (const script of [join(ROOT, rel), join(dir, 'repo', rel)]) {
+      const fin = spawnSync(process.execPath, [script, '--tag', 'v2.0.0', '--require-final'], { encoding: 'utf8' });
+      assert.equal(fin.status, 1, `${script}: ${fin.stderr}`);
+      assert.match(fin.stderr, /is not final/);
+      assert.equal(fin.stdout, '');
+      const pre = spawnSync(process.execPath, [script, '--tag', 'v2.0.0', '--repo', 'o/r'], { encoding: 'utf8' });
+      assert.equal(pre.status, 0, pre.stderr);
+      assert.ok(pre.stdout.length > 2000, `${script}: preview body printed`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

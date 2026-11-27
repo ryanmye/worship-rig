@@ -322,6 +322,8 @@ jobs:
         run: |
           node tools/release/release-notes.mjs --tag "$GITHUB_REF_NAME" --sums assets/SHA256SUMS --require-final \
             > notes.md
+          # never publish an empty body (N10 skeptic F1: the script once exited 0 with no output via a symlink)
+          grep -q '^### Files (sha256)' notes.md || { echo "::error title=release notes::notes.md has no body"; exit 1; }
           wc -l notes.md
 
       - name: Create the release

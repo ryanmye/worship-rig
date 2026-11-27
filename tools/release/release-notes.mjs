@@ -14,8 +14,8 @@
 // Notes file: docs/release-notes-<X.Y.Z[-pre]>.md, else -<X.Y.Z>.md, else (only for X.Y.0) -<X.Y>.md.
 // Pure functions are exported for test/unit/release/release-workflows.test.mjs.
 
-import { readFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { readFileSync, existsSync, realpathSync } from 'node:fs';
+import { join, dirname, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const TAG_RE = /^v(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
@@ -48,6 +48,28 @@ export function bundleVersionForTag(tag) {
 }
 
 /**
+ * A link of a repo markdown file as an absolute GitHub URL at `ref` (N10 skeptic F2). Absolute URLs (any scheme),
+ * protocol-relative ones and `#anchors` are kept. `/x` is repo-root-relative, as GitHub renders it in a repo file
+ * (WHATWG URL resolution made it https://github.com/x); a path that leaves the repository (`../` past the root, which
+ * URL resolution turned into github.com/<repo>/blob/<file>, dropping the ref) throws instead of guessing.
+ * @param {string} href
+ * @param {{repo: string, ref: string, docPath: string}} o
+ * @returns {string}
+ */
+export function absoluteLink(href, { repo, ref, docPath }) {
+  if (/^(?:[a-z][a-z0-9+.-]*:|#|\/\/)/i.test(href)) return href;
+  const [, path, rest] = /^([^?#]*)(.*)$/.exec(href);
+  let joined = posix.join(posix.dirname(docPath), path);
+  if (path === '') joined = docPath; // `?q` alone: the notes file itself
+  else if (path.startsWith('/')) joined = path.slice(1);
+  const norm = posix.normalize(joined || '.').replace(/^\.\/+/, '') || '.';
+  if (norm === '..' || norm.startsWith('../')) {
+    throw new Error(`link '${href}' in ${docPath} points outside the repository`);
+  }
+  return `https://github.com/${repo}/${norm === '.' ? 'tree' : 'blob'}/${ref}${norm === '.' ? '' : `/${norm}`}${rest}`;
+}
+
+/**
  * Strip the editorial parts of a notes draft and absolutise its links.
  * @param {string} md the notes file
  * @param {{repo: string, ref: string, docPath?: string}} o docPath: the file's repo path (for relative links)
@@ -77,11 +99,7 @@ export function releaseBody(md, { repo, ref, docPath = 'docs/release-notes.md' }
   }
   s = kept.join('\n');
   // relative links -> https://github.com/<repo>/blob/<ref>/<resolved path>
-  const base = new URL(`https://github.com/${repo}/blob/${ref}/${docPath}`);
-  s = s.replace(/(\]\()([^)\s]+)(\))/g, (all, a, href, b) => {
-    if (/^(?:[a-z][a-z0-9+.-]*:|#|\/\/)/i.test(href)) return all;
-    return a + new URL(href, base).href + b;
-  });
+  s = s.replace(/(\]\()([^)\s]+)(\))/g, (all, a, href, b) => a + absoluteLink(href, { repo, ref, docPath }) + b);
   s = s.replace(/\n{3,}/g, '\n\n').trim() + '\n';
   if (/Draft, not released/i.test(s) || /<!--|Editor:/.test(s)) {
     throw new Error('the notes still carry draft or editor text after stripping (MAC_CHECK step 7)');
@@ -144,7 +162,19 @@ function main(argv) {
   process.stdout.write(body);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+// Run as a script? Compare real paths: import.meta.url is the module's realpath but argv[1] is the path as typed, so a
+// plain string compare silently skipped main() (empty stdout, exit 0, --require-final bypassed) when the script was
+// reached through a symlink (N10 skeptic F1).
+function isMain() {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+}
+
+if (isMain()) {
   try {
     main(process.argv.slice(2));
   } catch (e) {
