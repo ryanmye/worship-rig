@@ -13,18 +13,18 @@ come over (see "Bringing your 1.x library over").
 
 The Mac app and the iPad app play through a new engine written in C++, instead of the browser's Web Audio. The
 screens are the same web pages as before. The new engine was checked against the old one with 112 recorded test
-renders: all 112 match within their tolerance, and 110 of them sample for sample. *(Nobody has compared the two by
-ear on a Mac yet.)*
+renders: all 112 match within their tolerance, and 110 of them also pass the strictest check. *(Nobody has compared
+the two by ear on a Mac yet.)*
 
 - **Song changes stay smooth.** Synth and organ sounds are built away from the engine's timing thread, and the songs
-  next to the current one in the setlist (Next, Prev and one more each way) are built ahead of time, so Next and Prev
-  are instant. A jump to a song further away can take a moment before its sound comes in, but the notes you are
-  playing stay on time. Notes you hold keep ringing on the old sound, as in 1.x.
+  around the current one in the setlist (Next and Prev at least, as many as fit a memory limit) are built ahead of
+  time, so Next and Prev come in at once. A jump to a song further away can take a moment before its sound comes in,
+  but the notes you are playing stay on time. Notes you hold keep ringing on the old sound, as in 1.x.
 - **Settings › Sound** has three new choices:
   - **Voices per sound: 32 · 64 · 128** (64 by default; 1.x had 16 for synths and 32 for sampled sounds). When a sound
     runs out, the oldest released note goes first, as before.
   - **Buffer size: 64 · 128 · 256 · 512 frames** (128 by default). The line next to it shows the size the Mac gave.
-    On an M2 Pro through a USB-C dock, 64 frames played with no dropouts (2.9 ms; 128 is 5.8 ms).
+    On an M2 Pro through a USB-C dock, 64 frames played with no dropouts (2.9 ms of latency; 128 gives 5.8 ms).
   - **Total voice limit: Auto · 128 · 256 · 512 · Off** (under **Advanced**), across all the sounds of a song.
     **Auto** is 128 on the Mac and 64 on the iPad for now *(the iPad number is not measured yet)*.
 - **Settings › Sound › Advanced › Freeze drone to save CPU** (on by default, which is 1.x's behaviour): in
@@ -67,7 +67,8 @@ call them Scene 1, 2 and 3.
 A scene change still glides over half a second and never restarts a note: Space and Echo glide, and a drone key change
 crossfades as it always has. A scene saved by 1.x keeps meaning what it did: what it didn't save stays as the song
 has it. While a scene plays, Edit says so in a line under its header ("Changing scene … for now: Update keeps it, Own
-levels edits the song"). **Perform lock** leaves Save and Update working, as Quick › Save as scene did in 1.x.
+levels edits the song"). **Perform lock** leaves saving and updating scenes working, as Quick › Save as scene did in
+1.x.
 
 ### MIDI Learn on any setting
 
@@ -94,7 +95,8 @@ chart on a song in G plays with the G drone, and its header can say "Key Em". Th
 you set, and the text size goes up and down.
 
 - A song's chart travels with it in exports and backups.
-- **Settings › Look › Perform view › Chord charts** turns the Chart button off on this computer.
+- **Settings › Look › Perform view › Chord charts** turns the Chart button off on this computer (in the new layout:
+  **Settings › Perform layout**).
 - **New layout:** the chart is a tab in the right sidebar, or fills the stage with small faders for each sound
   (**⇥ Sidebar** / **⤢ Stage**, remembered on this device). Text size goes in steps from 50 % to 200 %: tap the
   percentage or ⌘0 for 100 %, **Fit** picks the biggest size whose longest line fits, and pinch or ⌘+ / ⌘− work
@@ -120,13 +122,13 @@ Patch packs and the Song bank work in the Chrome version today; the Mac and iPad
 ### The new layout (preview)
 
 **Settings › Look › Perform view › Try the new layout (preview)** switches to the redesigned screens, and switching it
-off brings today's screens back at once. Until Ryan's review on his Mac (U9), today's screens are the default and
-everything in this section is a preview.
+off brings today's screens back at once. Until Ryan has gone through it on his Mac, today's screens are the default
+and everything in this section is a preview.
 
 - **Perform:** the instrument strips fill the stage, each with its ON tile, fader and meter, Space / Echo / Octave /
   Sustain, **Change** and a **⋯** menu (Earlier, Later, Duplicate, Open in Edit, Remove). Drag a strip by its **⠿**
   grip to reorder; a duplicate goes next to the original. More than five scroll sideways, with a row of name pills
-  to jump. Colours go by position, never by kind of sound, and no screen says Keys, Pad, Extra or Bass any more.
+  to jump. Colours go by position, never by kind of sound, and the new layout never says Keys, Pad, Extra or Bass.
 - **Left:** a **Quick** button (today's Quick sheet) above the wheel column (wheel, what it drives, Swell, pedal).
 - **Right sidebar:** one module at a time as tabs: Drone, Setlist, Notes, Click and Chart. Drag its edge to resize
   it, fold it to an icon rail, and choose and order the modules with **⋯**. The sidebar header shows "Loading…" or
@@ -143,7 +145,8 @@ everything in this section is a preview.
 - **Settings:** each category shows its current state, a search box finds any setting, and there are **MIDI Learn**
   and **Perform layout** categories and theme previews.
 - **Arrange** (from the snapshots row) moves strips and sidebar modules.
-- **iPad:** landscape looks like the Mac; portrait stacks the strips over a panel, with the keyboard full width.
+- **iPad:** landscape looks like the Mac. (A portrait layout is built too, but the iPad app stays in landscape for
+  now.)
 - **First run and empty states:** a "Start here" band under the song bar; with no songs, a card with New song, Song
   bank and Restore a backup.
 
@@ -174,12 +177,11 @@ A library is meant to stay under about 2 MB (2,000,000 characters; a song is abo
 songs, and long notes and charts take the most room).
 
 - A save past 2 MB goes through and warns you, once per session and again at each further 10 %.
-- Restoring a backup, an export or a kept library works up to 2.5 MB, so a library that grew a little past 2 MB can
-  always be brought back.
+- Restoring a backup or a kept library, or importing a whole library into an untouched one, works up to 2.5 MB, so a
+  library that grew a little past 2 MB can always be brought back.
 - Adding songs from a file (a merge) still has to fit in 2 MB.
 - A new or duplicated song past 2 MB is added with the warning; one that would take the library past 2.5 MB is not.
-- Saving a chart, adding a Song bank song and a pack top-up still stop at 2 MB in this draft (being made to follow the
-  same rule).
+- Saving a chart, adding a Song bank song and new pack songs still stop at 2 MB.
 - If the browser's storage itself is full, the save is refused, the last good save is kept, and you are told.
 
 ### The iPad app
@@ -216,8 +218,8 @@ app; your 1.x backups stay where they were, so the import still works. To keep 1
 **On the iPad**
 
 1. On the Mac, take the newest `rig-….json` from 1.x's backups folder, or a **Settings › Export library** file.
-2. AirDrop it to the iPad or put it in Files, then open it with Worship Rig ("Import this library?" › **Import**), or
-   use **Import Library Backup…** and pick it.
+2. AirDrop it to the iPad or put it in Files, then open it with Worship Rig ("Import this library?" › **Import**). With
+   a keyboard attached, **⇧⌘I** (Import Library Backup…) picks it from Files too.
 3. The current iPad library is saved as a backup first (Files › On My iPad › Worship Rig › Backups), and can be
    imported back the same way.
 
@@ -286,8 +288,13 @@ See the README ("Running on your Mac → First open on another Mac") for the ful
 - **My Samples**, **patch packs** and the **Song bank**: the app doesn't read the My Samples folder yet, so its Song
   bank is empty, and the **GarageBand / Logic importer** isn't there.
 - **My Pads**: a pad folder can't be chosen yet; the drone uses the synth drone.
-- **Menu-bar mode**, **global shortcuts** and the **update check**.
+- **Menu-bar mode**, **Open at login**, **global shortcuts** and the **update check**.
 - **MIDI clock out** for the click.
+- **Keeping the screen awake**: the 1.x app stopped the display from sleeping while it was open; the 2.0 app doesn't
+  yet, so set the Mac's display sleep to Never for a service.
+- Most of the 1.x **Rig** and **Help** menus: the 2.0 app's menu has **File › Import Library Backup…**, and **Settings
+  › Library & Backup › Import latest backup…** puts the newest backup back. Nothing opens the backups or recordings
+  folder yet: they are in `~/Library/Application Support/Worship Rig Native/backups` and **Music › Worship Rig**.
 
 **Not yet tried on a real Mac or iPad.** The engine was measured on Ryan's M2 Pro (buffer sizes, the cost per voice)
 and the app starts, loads and plays a note on GitHub's Mac test machines, but nobody has played it yet. Still to be
@@ -325,14 +332,27 @@ in the release checklist (`native/docs/MAC_CHECK.md` "2.0 release checklist", "B
    `requestMIDIAccess` polyfill over the native `midi` op (ENGINE_CONTRACT §5, WEBKIT_AUDIT item 5) is not in `app/js`.
    `RigMIDI.listen` connects only the sources a `midi listen` op names, and nothing in `app/js` sends one. If that
    holds on the Mac, a keyboard plays nothing in the app (and MIDI Learn, Program Change, touch fitting and the MIDI
-   lamp don't work). This has to work before 2.0 ships; it is not a "known gap".
-2. **Export from the Mac / iPad app** (Settings › Export library, Edit's Export song, the song menu's Export): the
-   page downloads a file, and `RigNavigation.swift` has no download handling (no `WKDownload` delegate). Check it on
-   the Mac.
+   lamp don't work). This has to work before 2.0 ships; it is not a "known gap". Being built on lane-nma (not merged
+   at d35b788): these notes may say MIDI works in the app only once that lane is merged, VERIFIED and played on the
+   Mac (checklist step 4 item 1). MIDI clock out rides on the same work (`setClockSink` sends `config midiClock`, but
+   the port is picked from Web MIDI's outputs), so its "Known gaps" line is re-checked then too.
+2. **Export and file import in the Mac / iPad app.** Export (Settings › Export library, Edit's Export song, the song
+   menu's Export) clicks an `<a download>` on a `blob:` URL; `RigNavigation.swift` answers `.allow` for `blob:` and
+   has no `WKDownload` handling, so nothing may be saved (or WebKit may show the file in the app's window instead:
+   check which). Import from the page (Settings › Import…, the chart's Import file, Choose pad files) uses
+   `<input type=file>`; on macOS WebKit shows no file panel unless the UI delegate implements
+   `runOpenPanelWith`, and `RigNavigationDelegate` doesn't. File › Import Library Backup… (NSOpenPanel) is not
+   affected. On the iPad the file input should work as in Safari. Check all of it on the Mac.
 3. The "Not in the Mac and iPad app yet" list comes from `RigSchemeHandler.swift` (`/api/health` says
    `userSamples: false, userPatches: false`), the `window.rig` polyfill in `RigLibrary.swift` (backupNow /
-   latestBackup / onMenu only) and SHELL.md "Later tasks". Ryan decides whether 2.0 ships with them missing.
+   latestBackup / onMenu only), SHELL.md "Later tasks" and `WorshipRigApp.swift` (one menu item). Screen awake: 1.x
+   `main.js` holds `powerSaveBlocker` 'prevent-display-sleep'; the Swift shell asks for nothing like it (only the
+   self-test calls `beginActivity`). Open at login lives in Settings › Mac, which the app doesn't show
+   (`isElectron` false). Ryan decides whether 2.0 ships with them missing.
 4. Intel Macs and macOS 12–14.4: the 1.1.x update check reads GitHub's latest release, so once 2.0 is "latest" every
    1.1 user is told about it, including the ones 2.0 can't run for. See the checklist's tier-1 questions.
-5. The 2 MB rule line for charts, the Song bank and packs changes when the CAP task lands (UI6-build-plan "Queued
-   small tasks"): re-read it then.
+5. The 2 MB rule line for charts, the Song bank and packs changes when the CAP task lands (lane-core3f, not merged
+   at d35b788; UI6-build-plan "Queued small tasks"): re-read it then.
+6. The iPad app is landscape-only (`project.yml` Info-iPad: `UISupportedInterfaceOrientations~ipad` landscape left /
+   right, `UIRequiresFullScreen`), so the built portrait layout can't show there. U9 list item 51 asks whether to
+   allow portrait; the "iPad" line in "The new layout" changes with the answer.
