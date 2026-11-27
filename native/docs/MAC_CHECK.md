@@ -379,25 +379,34 @@ numbers). The player-facing notes are `docs/release-notes-2.0.md` (a draft with 
 
 ### Blockers found while writing the notes (code read at d35b788, not run on a Mac)
 
-- [ ] **B1 MIDI keyboard input in the app.** WKWebView has no Web MIDI; the `requestMIDIAccess` polyfill over the
-  native `midi` op (ENGINE_CONTRACT §5 "v1 default", WEBKIT_AUDIT item 5) is not in `app/js`; `RigMIDI.listen`
-  connects only the source ids a `midi listen` op names, and nothing in `app/js` sends one. Expect: in the Mac and
-  iPad app a keyboard plays nothing, and the MIDI lamp, MIDI Learn, Program Change and touch fitting don't work. Build
-  the polyfill (builder + skeptic, with a mock-native test), or prove this wrong on the Mac in step 4 item 1. Part A
-  of Tier 2 (Chrome + `rig-devhost`) doesn't catch it: Chrome has Web MIDI.
-- [ ] **B2 Export from the app.** Settings › Export library, Edit's Export song and the v6 song menu's Export download
-  a file; `RigNavigation.swift` allows `blob:` / `data:` but has no `WKDownload` handling. Check on the Mac (step 4
-  item 5); if nothing is saved, add a download delegate (save panel on the Mac, the Files picker on the iPad).
+- [ ] **B1 MIDI keyboard input in the app.** At d35b788 (code read, not run): WKWebView has no Web MIDI; the
+  `requestMIDIAccess` polyfill over the native `midi` op (ENGINE_CONTRACT §5 "v1 default", WEBKIT_AUDIT §7 A item 5)
+  is not in `app/js`; `RigMIDI.listen` connects only the source ids a `midi listen` op names, and nothing in `app/js`
+  sends one. If that reading holds, a keyboard plays nothing in the Mac and iPad app, and the MIDI lamp, MIDI Learn,
+  Program Change, touch fitting and MIDI clock out don't work. **Being built on lane-nma** (builder + skeptic, with a
+  mock-native test). Tick this box only when that lane is merged and VERIFIED **and** step 4 item 1 passes on the Mac.
+  Part A of Tier 2 (Chrome + `rig-devhost`) doesn't catch it: Chrome has Web MIDI.
+- [ ] **B2 Export and file import from the page.** Settings › Export library, Edit's Export song and the v6 song menu's
+  Export click an `<a download>` on a `blob:` URL; `RigNavigation.swift` answers `.allow` for `blob:` (not
+  `.download`) and has no `WKDownload` handling, so expect nothing saved, or the file shown in the app's window in
+  place of the app. The page's file inputs (Settings › Import…, the chart's Import file, Choose pad files) need the
+  UI delegate's `runOpenPanelWith` on macOS, which `RigNavigationDelegate` doesn't implement, so expect no file panel
+  on the Mac (the iPad shows its own picker). File › Import Library Backup… (NSOpenPanel) is not affected. Check on
+  the Mac (step 4 item 5); fix with a download delegate (save panel on the Mac, the Files picker on the iPad) and an
+  open panel.
 - [ ] **B3 No native release build.** `.github/workflows/release.yml` builds the **Electron** app on any `v*` tag
-  (and, on `main`, on a release published from the web UI). Tagging `v2.0.0` as things stand publishes Electron
-  arm64 + x64 builds of the 1.x shell under the 2.0 name. Before any 2.0 tag: replace or gate that workflow (step 3).
+  (and, on `main`, on a release published from the web UI). Today a `v2.0.0` tag stops at its "Tag matches
+  package.json version" step (package.json says 1.1.0 here, 1.1.1 on main), so nothing is published; but once step 7
+  sets package.json to 2.0.0, the same tag publishes Electron arm64 + x64 builds of the 1.x shell under the 2.0 name.
+  Before step 7 and any 2.0 tag: replace or gate that workflow (step 3).
 
 ### Step 0: before starting
 
 - [ ] Every 2.0 lane is merged on `v2-native` and VERIFIED: the core3 CI flake + CAP size rule (lane-core3f), Lane E2
   leftovers, this lane (R) after its skeptic, and B1 / B2 above.
 - [ ] Ryan's answers to `U9-review-list.md` are applied (each answered item: built, reviewed, merged) or moved to 2.0.x.
-- [ ] Ryan's tier-1 answers: U9 list items 1–8 (release scope, Intel / old macOS, Electron's future, who builds).
+- [ ] Ryan's tier-1 answers: U9 list items 1–5 and 7 (release scope, Intel / old macOS, Electron's future, who
+  builds, PANIC and the drone).
 
 ### Step 1: gates on the release commit
 
@@ -459,10 +468,11 @@ Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to r
 - [ ] 3. **1.1.1 device settings** come over by themselves from this Mac's backups (touch curves, click, audio output).
 - [ ] 4. **Song changes while holding notes** (Tier 2 A5) in the app, with **cue, then Go**: tap a chip (cued), Go,
   a footswitch on Next Song plays the cue, Prev clears it; a cold song shows "loading" until ready.
-- [ ] 5. **Export** (B2): Settings › Export library writes a file you can import back.
+- [ ] 5. **Export and import** (B2): Settings › Export library writes a file; Settings › Import… opens a file panel
+  and imports it back; the chart's Import file opens one too.
 - [ ] 6. **Recording**: REC, 30 s, stop; the WAV is in Music › Worship Rig and plays.
-- [ ] 7. **Buffer size 64 / 128** and **Voices per sound 128** with a big pedalled chord: no clicks. Time a large
-  layered chord for the Auto 128 → 256 question (U9 item 6).
+- [ ] 7. **Buffer size 64 / 128** and **Voices per sound 128** with a big pedalled chord: no clicks. Optional: time a
+  large layered chord (data for raising desktop Auto later; Ryan kept it at 128, D5 follow-up).
 - [ ] 8. **8 sounds**: Edit › Slots to 8; all 8 play and meter; Chrome on the same library says 5–8 are silent there.
 - [ ] 9. **Scenes with Space / Echo / drone**: save two that differ in room and drone on / off; switch with a held
   chord: glides, no restart, no click. Easy Transpose moves the scenes' drone.
@@ -476,12 +486,12 @@ Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to r
 - [ ] 14. **Sleep / wake and an audio device change** (headphones ↔ interface) while the app plays.
 - [ ] 15. **The new layout** (Settings › Look › Perform view › Try the new layout): go through U9-review-list.md
   sections 2–9 and answer each numbered item:
-  - [ ] Perform: 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25
-  - [ ] Song bank and Try it: 26, 27, 28 (needs a pack: run Chrome for this until the app reads My Samples)
+  - [ ] Perform: 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 52, 53, 54
+  - [ ] Song bank and Try it: 26, 28 (needs a pack: run Chrome for this until the app reads My Samples)
   - [ ] MIDI Learn: 29, 30, 31, 32, 33
   - [ ] Edit: 34, 35, 36, 37
   - [ ] Settings: 38
-  - [ ] iPad and small windows: 39, 40, 41
+  - [ ] iPad and small windows: 51, 39, 40, 41
   - [ ] Themes and colour: 42, 43, 44, 45, 46, 47
   - [ ] Esc: 48; design passes: 49, 50
 
@@ -494,7 +504,8 @@ Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to r
   Recordings.
 - [ ] The README's verification list items 6–7 (memory warning, AVAudioSession: silent switch, screen lock, a call,
   headphones in and out).
-- [ ] Portrait and landscape in the new layout (U9 items 35, 39–41).
+- [ ] Landscape in the new layout (U9 items 39–40). The app doesn't turn to portrait: Info-iPad allows landscape
+  only, full screen (`project.yml`); U9 item 51 decides whether it should (then items 35, 41 apply).
 - [ ] Note the free-account limits for the release notes (7-day expiry, data kept on re-install).
 - [ ] The iPad memory budget and its Auto voice limit (Lane E6) stay for 2.0.x unless Ryan wants them first.
 
@@ -520,8 +531,6 @@ Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to r
   re-check "Known gaps" against what B1–B3 and U9 items 1–2 decided.
 - [ ] `docs/site/index.html`: put the measured download / installed sizes in the `download` section (the HTML comment
   there), check the What's new cards against the final scope, bump `style.css?v=`.
-- [ ] `native/docs/RELEASE_NOTES_2.0-migration.md`: "1.1.1 … *to be published*" is out of date (v1.1.1 was released
-  2026-11-26).
 
 ### Step 8: tag and release (instructions for Ryan; the cloud does none of this)
 
@@ -533,7 +542,8 @@ Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to r
      says 2.0. So either release first from a tag on the merge commit and push `main` right after, or merge without
      `docs/site/` and bring it in once the release is up.
 2. Tag: `git tag -a v2.0.0 -m "Worship Rig 2.0.0" <merge commit> && git push origin v2.0.0` (or GitHub › Releases ›
-   Draft a new release › new tag `v2.0.0` on `main` › Publish, which main's release.yml also handles).
+   Draft a new release › new tag `v2.0.0` on `main` › Publish). Either way runs main's release.yml, so only after
+   step 3 has replaced its Electron build for `v2*` tags.
 3. Check the release page: title "Worship Rig v2.0.0", the two files and the starter library, the notes, pre-release
    or latest as decided.
 4. Download `Worship-Rig-arm64.dmg` from the site's button on a clean account and do the first open.
@@ -547,7 +557,7 @@ shots, if wanted, from these (paths only; nothing over 1 MB goes into `docs/site
 existing ones):
 
 - 16 sounds, today's screens: `native/docs/reviews/UIA-shots/after-perform-16-1440x900.png`,
-  `after-edit-16-1440x900.png` (iPad portrait: `*-820x1180.png`).
+  `after-edit-16-1440x900.png` (`*-820x1180.png` are Chromium's iPad-portrait emulation; the app is landscape-only).
 - Settings › Sound with the 2.0 choices: `native/docs/reviews/UIB-shots/after-sound-1440x900.png`,
   `after-sound-advanced-1440x900.png`; the categories: `native/docs/reviews/settings-shots/after-*-1440x900.png`.
 - Chord chart: `native/docs/reviews/chart-view-shots/classic-1280.png`, `sanctuary-day-1280.png`, `import-1024.png`.
@@ -557,7 +567,7 @@ existing ones):
   `/home/claude/design-out/` `u1`…`u8b` (`u7a/u7a-browse-1280.png` Song bank, `u7a/u7a-trying-1280.png` Try it, `u7b/u7b-stage-1280.png`
   chart on the stage, `u7c/u7c-savesnap-1280.png` Save snapshot, `u8a/` iPad).
 - To retake for the release: Perform with a cued song in the setlist (cue, then Go) and the Chart button, in
-  Sanctuary at 1440×900; the iPad in portrait once installed (step 5).
+  Sanctuary at 1440×900; the iPad in landscape once installed (step 5).
 
 ## Self-test (`Worship Rig --self-test`, E4)
 
