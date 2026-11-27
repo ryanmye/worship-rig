@@ -12,10 +12,10 @@ Worktree /home/claude/wt-nma, branch lane-nma off origin/v2-native (d35b788). Do
 - [x] 1. `app/js/engine-bridge/native-midi.js` adapter + install from select.js / boot-mock.js / boot-devhost.js
 - [x] 2. MockNative midi emulation (ports appear / disappear, msgs with ts, listen filter, send log)
 - [x] 3. Unit tests `test/unit/engine-bridge/native-midi.test.mjs`
-- [ ] 4. Browser test (app on bridge-mock, Web MIDI removed): note, Learn, Program Change, lamp, hot-unplug
+- [x] 4. Browser test (app on bridge-mock, Web MIDI removed): note, Learn, Program Change, lamp, hot-unplug
 - [x] 5. MIDI clock out port (SHELL.md G4) through the bridge
-- [ ] 6. Native side: gaps? (core / RigMIDI.swift); ctest g++, clang++-20 -Werror, ASan if native changes
-- [ ] 7. Docs: CONTRACT_CHANGES, ENGINE_CONTRACT/SHELL/WEBKIT_AUDIT notes, MAC_CHECK steps
+- [x] 6. Native side: gaps? (core / RigMIDI.swift); ctest g++, clang++-20 -Werror, ASan if native changes
+- [x] 7. Docs: CONTRACT_CHANGES, ENGINE_CONTRACT/SHELL/WEBKIT_AUDIT notes, MAC_CHECK steps
 - [ ] 8. Gates via tools/cloud/gates.mjs
 - [ ] 9. Final report here
 
@@ -37,7 +37,8 @@ Worktree /home/claude/wt-nma, branch lane-nma off origin/v2-native (d35b788). Do
 - devhost: no MIDI ports (`midi_listen`/`midi_send` NULL); in Chrome it uses Chrome's Web MIDI (adapter not installed).
 
 ## Next step
-Step 4 (browser test), then 6.
+Step 8: gates (export PLAYWRIGHT_BROWSERS_PATH=$HOME/.cache/rig-pw UI6_PURITY_BASE=origin/v2-native):
+`node tools/cloud/gates.mjs shell-unit,unit,native-midi,settings,ui-core,ui-v6,migration-1x,engine`
 
 ## Findings / decisions
 - Listen policy: the adapter listens to exactly the inputs midi.js attached (onmidimessage set / midimessage
@@ -45,6 +46,11 @@ Step 4 (browser test), then 6.
   unselected source would cross the WebView bridge (one evaluateJavaScript per batch), CoreMIDI would connect
   virtual ports midi.js deliberately ignores, and the v1.1 direct path (`midi route`) plays every forwarded message,
   so the core's listen set must equal midi.js's selection or unselected ports would sound.
+
+- Step 6: native needs no change (midi_service.cpp listen/ports/msg/send complete; RigMIDI connects listened ids and
+  republishes on hot-plug). The adapter was run against the real core in rig-devhost (integration build-int binary,
+  2026-11-24): `native-midi-devhost.test.mjs` passes. native/ untouched → ctest / fixtures identical to base.
+- Browser suites need PLAYWRIGHT_BROWSERS_PATH=$HOME/.cache/rig-pw (tools/cloud/setup.sh mapping 1194→1243).
 
 ## Open questions
 (none yet)
