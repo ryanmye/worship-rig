@@ -68,3 +68,31 @@ Unverified until CI runs it (no macOS here):
   v2-native path trigger), path filters don't apply to tag pushes, download-artifact patterns, `gh release
   create/edit --latest/--prerelease`.
 - The release job (never run; it needs a tag + publish, tier 1).
+
+## Skeptic (N10 review, 2026-11-27)
+
+Brief: prove the six safety properties (Electron only for v1 refs; native publish only by dispatch + publish + v2 tag +
+green mac, `latest` only by input, GITHUB_TOKEN only, minimal permissions; path-filtered v2-native push builds only;
+package-release.sh safety + real leak check + 480 MB guard + ad-hoc signing; project.yml versions safe for Debug CI;
+release-notes --require-final + link rewriting). Fix real problems; review in native/docs/reviews/N10.md.
+
+- [x] S0. rebase: origin/v2-native is still 7e92df4 (lane is on it; nothing to rebase)
+- [x] S1. read LANE.md, workflows (vs origin/main 261ea8d), package-release.sh, check.sh, project.yml, notes, test
+- [x] S2. actionlint + shellcheck: clean as delivered
+- [ ] S3. fix F1-F5 (commit each), extend the unit test
+- [ ] S4. gates.mjs unit; actionlint/shellcheck again
+- [ ] S5. native/docs/reviews/N10.md (verdict, F/O, CI/macOS-only items), committed
+
+Findings (before fixes):
+- F1 release-notes.mjs is fail-open: its main guard compares import.meta.url (realpath) with argv[1] (not realpath),
+  so run through a symlinked path it prints nothing and exits 0: `--require-final` passes and the release job would
+  publish an empty body. Reproduced via /tmp/n10-sym/wt -> worktree.
+- F2 link rewriting: a root-relative `/x` link becomes https://github.com/x, and `../` past the repo root eats
+  `blob/<ref>` (`../../X.md` -> github.com/o/r/blob/X.md). Wrong URLs, silently.
+- F3 package-release.sh leak check is names only (user-samples, sound-packs, *.exs). The bundle copies app/ and docs/
+  verbatim (folder refs); GarageBand conversions are .m4a/.mp3 (importer), sound packs .wav/.flac/.sfz: none caught
+  if copied into app/. Real check: every file under Resources/app and Resources/docs is tracked in git at the build
+  commit, plus a media/personal extension ban over the whole bundle (.caf .aif .aiff .aifc .m4a .wav .flac .ogg .sfz
+  .exs .aupreset .cst .pst .patch .band .logicx, pack.json).
+- F4 480 MB guard floors to whole MB (kb/1024): 480.0-480.99 MB passes where build-lint (KB <= 480*1024) fails.
+- F5 `leak="$(find … 2>/dev/null | head)"` under set -e/pipefail: a find error exits the script silently.
