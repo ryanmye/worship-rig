@@ -3648,6 +3648,11 @@ export function createController(o) {
     if (emptySilenced || secondary || !started || appliedId === null) return;
     if (state.settings.currentSongId || (state.songOrder && state.songOrder.length)) return;
     emptySilenced = true;
+    // Skeptic UI6-fu F1: nothing is the requested song any more (as backToEmpty). A library brought back with the
+    // same ids (a replace import, a kept library) must then be selected as any song (onStore: cur !== targetId), not
+    // diffed against the deleted one still applied: their drones match, so applyDiff sent nothing and the drone,
+    // turned off just below, stayed off under a song that has it on.
+    targetId = null;
     droneOffIfOrphaned();
     fadeOutAll();
   }

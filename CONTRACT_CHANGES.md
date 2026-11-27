@@ -9655,3 +9655,11 @@ or view change.
   bridge; a restart in the empty library; 5 of 6 fail before), `bank-trial.test.mjs` "UI6-er O1" (Back); ui-v6-bank
   "polish2 U8a O1" (the web engine's drone and fade after delete and after Back, the on-screen PANIC); ui-core
   scenes.mjs "UI6-er O1" (today's Edit ⋯ Song › Delete on the last song, Perform's faded chip, Esc).
+- **Skeptic UI6-fu F1: the same library brought back played no drone.** The empty-library step now also clears
+  `targetId` (as `backToEmpty` already did). Before, the deleted song stayed the requested one, so a library restored
+  over the empty one with the same song ids (Settings › Restore previous library, an Import… that replaces, a backup)
+  went down onStore's "same song, edited" branch: `applyDiff` against the deleted song found the same drone mode and
+  sent nothing, and the drone the empty step had turned off stayed off under a song whose drone, menu bar and tiles
+  said ON (web engine, measured: `drone.cfg.mode` 'off', `menuBarState().droneOn` true; a note brought the master
+  back but not the drone). Now that song is selected like any other (prepare, commit, drone configured). Test: shell
+  `empty-silence.test.mjs` "UI6-fu F1" (a replace import and `restorePreviousLibrary`; fails before).

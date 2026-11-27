@@ -238,3 +238,49 @@ test('UI6-er O1: an audio restart in the empty library does not bring the last s
     ctl.dispose();
   }
 });
+
+test('UI6-fu F1: the same library brought back after the empty spell plays its song\'s drone again', async () => {
+  // Skeptic UI6-fu F1: a library restored over the empty one (Import… replace, a kept library, a backup) keeps its
+  // song ids. The deleted song was still `targetId` / `appliedId`, so onStore took the brought-back song for the
+  // one already playing (applyDiff: same drone mode, no configure) and the engine's drone stayed off under a song
+  // whose drone, menu bar and tiles all said ON.
+  const { store, engine, ctl, warns } = await setup();
+  try {
+    const cur = store.currentSong();
+    assert.equal(cur.drone.mode, 'synth');
+    for (const id of store.get().songOrder.slice()) if (id !== cur.id) assert.ok(store.deleteSong(id));
+    await tick();
+    const backup = JSON.stringify({ kind: 'library', schema: 2, songs: { [cur.id]: store.getSong(cur.id) },
+      songOrder: [cur.id], setlists: {}, setlistOrder: [] });
+    assert.ok(store.deleteSong(cur.id));
+    await tick();
+    assert.deepEqual(engine.of('drone.configure').at(-1)[1], { mode: 'off' }, 'the empty library silenced it');
+    engine.clear();
+    const r = store.importJSON(backup, { replace: true });
+    assert.equal(r.ok, true);
+    await tick();
+    await tick();
+    assert.equal(store.get().settings.currentSongId, cur.id, 'the same id is selected again');
+    assert.equal(ctl.menuBarState().droneOn, true);
+    const conf = engine.of('drone.configure');
+    assert.equal(conf.length, 1, 'its drone is configured again');
+    assert.equal(conf[0][1].mode, 'synth');
+    assert.equal(engine.of('commit').length, 1, 'selected as any song (prepare / commit)');
+    // the undo a player reaches for: every song deleted, then Settings › Restore previous library (a kept copy, D8)
+    const kept = store.keepCurrent('restore');
+    assert.equal(kept.ok, true);
+    deleteAll(store);
+    await tick();
+    assert.deepEqual(engine.of('drone.configure').at(-1)[1], { mode: 'off' });
+    engine.clear();
+    const back = await ctl.restorePreviousLibrary(kept.key);
+    assert.equal(back.ok, true, JSON.stringify(back));
+    await tick();
+    await tick();
+    assert.equal(store.get().settings.currentSongId, cur.id);
+    assert.deepEqual(engine.of('drone.configure').map((c) => c[1].mode), ['synth'], 'its drone on again');
+    assert.deepEqual(warns, []);
+  } finally {
+    ctl.dispose();
+  }
+});
