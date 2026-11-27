@@ -3,7 +3,7 @@
 #
 #   bash tools/mac/check.sh [--rev <ref>] [--stage tools,core,probe,apple-mac,selftest,apple-sim] [--out <dir>]
 #                           [--quick]
-#                           [--jobs N] [--cache <dir>] [--repo <dir>] [--src <tree>]
+#                           [--jobs N] [--cache <dir>] [--repo <dir>] [--src <tree>] [--app <Worship Rig.app>]
 #
 # Stages (in this order; a failed stage does not stop the ones that do not depend on it):
 #   tools      versions of macOS, CPU, Xcode, cmake, ninja, xcodegen, node; missing ones -> the exact brew line
@@ -14,7 +14,8 @@
 #              MAC_CHECK.md "Self-test"): load rig://app/, bridge hello, boot, audio frames, library, migration probe
 #   apple-sim  build-core.sh --sim --no-device, xcodebuild WorshipRig-iPad for 'generic/platform=iOS Simulator'
 # --quick = core + apple-mac (the compile-fix loop). --src <tree> copies an uncommitted tree instead of exporting a
-# revision (testing this script; the copy, not the tree, is built).
+# revision (testing this script; the copy, not the tree, is built). --app <path> makes `selftest` launch that app
+# instead of the Debug build apple-mac made (release-native.yml: the Release app package-release.sh built; lane N10).
 #
 # Rules it keeps: the user's working tree, index and branches are never touched (the revision is exported with
 # `git archive` into a cache dir and built there); nothing is installed; no admin rights; no UI (the app is launched
@@ -46,9 +47,10 @@ jobs=""
 cache_root="${RIG_CHECK_CACHE:-}"
 repo=""
 src_dir=""
+app_arg=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --rev|--stage|--out|--jobs|--cache|--repo|--src)
+    --rev|--stage|--out|--jobs|--cache|--repo|--src|--app)
       [ $# -ge 2 ] && [ -n "$2" ] || die_usage "$1 needs a value"
       case "$1" in
         --rev) rev="$2" ;;
@@ -58,6 +60,7 @@ while [ $# -gt 0 ]; do
         --cache) cache_root="$2" ;;
         --repo) repo="$2" ;;
         --src) src_dir="$2" ;;
+        --app) app_arg="$2" ;;
       esac
       shift 2 ;;
     --rev=*) rev="${1#*=}"; shift ;;
@@ -67,6 +70,7 @@ while [ $# -gt 0 ]; do
     --cache=*) cache_root="${1#*=}"; shift ;;
     --repo=*) repo="${1#*=}"; shift ;;
     --src=*) src_dir="${1#*=}"; shift ;;
+    --app=*) app_arg="${1#*=}"; shift ;;
     --quick) quick=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die_usage "unknown argument '$1'" ;;
@@ -79,6 +83,10 @@ case "$rev" in -*) die_usage "--rev '$rev' is not a revision" ;; esac
 if [ -n "$src_dir" ]; then
   [ -d "$src_dir/native/core" ] || die_usage "--src $src_dir has no native/core"
   src_dir="$(cd "$src_dir" && pwd -P)"
+fi
+if [ -n "$app_arg" ]; then
+  [ -x "$app_arg/Contents/MacOS/Worship Rig" ] || die_usage "--app $app_arg has no Contents/MacOS/Worship Rig"
+  app_arg="$(cd "$app_arg" && pwd -P)"
 fi
 if [ "$quick" -eq 1 ]; then stage_arg="core,apple-mac"; fi
 [ -n "$stage_arg" ] || stage_arg="${ALL_STAGES// /,}"
@@ -720,13 +728,16 @@ if want selftest; then
   cur_stage=selftest
   log="$out/selftest.log"; : > "$log"
   st_json="$out/selftest.json"; rm -f "$st_json"
-  app=""
-  for cand in "$work/dd-apple-mac/Build/Products/Debug/Worship Rig.app" "$work/sym-apple-mac/Debug/Worship Rig.app"; do
-    if [ -n "$work" ] && [ -x "$cand/Contents/MacOS/Worship Rig" ]; then app="$cand"; break; fi
-  done
+  app="$app_arg"
+  if [ -z "$app" ]; then
+    for cand in "$work/dd-apple-mac/Build/Products/Debug/Worship Rig.app" "$work/sym-apple-mac/Debug/Worship Rig.app"
+    do
+      if [ -n "$work" ] && [ -x "$cand/Contents/MacOS/Worship Rig" ]; then app="$cand"; break; fi
+    done
+  fi
   if [ "$IS_MAC" -eq 0 ]; then skip selftest "not macOS ($OS): the app runs on macOS only"
   elif [ "$exported" -eq 0 ]; then skip selftest "no exported tree ($export_details)"
-  elif want apple-mac && [ "$(cat "$state/apple-mac.status" 2>/dev/null || true)" != PASS ]; then
+  elif [ -z "$app_arg" ] && want apple-mac && [ "$(cat "$state/apple-mac.status" 2>/dev/null || true)" != PASS ]; then
     skip selftest "apple-mac did not pass, so there is no app to launch"
   elif [ -z "$app" ]; then skip selftest "no built app under $work (run --stage apple-mac on this revision first)"
   else

@@ -19,7 +19,7 @@ Never tag, release or push.
 - [ ] 7. final report here
 
 ## Next step
-4. check.sh --app (self-test a given app), then release-native.yml
+4. release-native.yml (check.sh --app done)
 
 ## Findings
 - main's release.yml (261ea8d) has a `release: published` trigger that v2-native lacks; the merge of v2-native into
