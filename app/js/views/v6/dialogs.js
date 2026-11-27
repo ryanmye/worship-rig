@@ -153,6 +153,7 @@ export function modalDialog(v, o) {
     // no swallow: the backdrop takes the tap that closes it (nothing under it got the press), and an armed swallow
     // would eat the next tap when that press makes no click (its target, the backdrop, is gone by pointerup)
     el: dlg, anchors: [], group: 'v6-dlg',
+    underModal: true, // polish batch 2: an Esc for Settings (⌘, over it) never closes it (U7c F3)
     onClose: (reason) => {
       closeFn = null;
       pd.dispose();

@@ -141,6 +141,9 @@ export function popover(o) {
     el,
     anchors: [o.anchor],
     group: 'v6-pop',
+    // polish batch 2 (UI6-polish1 O1, U7c F3): Settings can open over it (⌘,): the Esc that closes Settings is
+    // Settings' alone
+    underModal: true,
     onClose: () => {
       pd.dispose();
       el.remove();

@@ -32,6 +32,8 @@ import { openOverlay } from './overlay.js';
  * @param {number|(() => number)} [o.placementNeed]  panel height 'auto' needs (default 290; 220 at ≤ 1250 px)
  * @param {string} [o.title]
  * @param {string} [o.className]
+ * @param {boolean} [o.underModal]  the panel stays open under Settings (overlay.js `underModal`): the v6 Perform's
+ *   strips (polish batch 2, UI6-polish1 O1); today's Perform leaves it off
  * @returns {{el:HTMLButtonElement, set(v:any):void, get():any, setLoaded(v:any):void, setChanged(b:boolean|null):void,
  *            setHint(s:string):void, setDisabled(b:boolean):void, open(opts?:{focus?:boolean}):void, close():void,
  *            cancelDrag():void, readonly isOpen:boolean, destroy():void}}
@@ -166,6 +168,7 @@ export function stepChip(o = {}) {
       anchors: [el],
       swallow: true,
       group: 'step-panel',
+      underModal: !!o.underModal,
       onClose: (reason) => {
         // focus returns to the chip only after keyboard use; after a tap nothing stays focused (Space = sustain)
         const hadFocus = focusBack || (reason === 'escape' && panel && panel.el.contains(document.activeElement));

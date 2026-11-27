@@ -9547,3 +9547,17 @@ unchanged (the v6 Edit and its bottom row only exist with the flag on).
   7.8 ms, max 8.4 ms over 40 writes.
 - Tests: ui-v6-edit `editrange.tests.mjs` (pick first, live + one commit + dot + Revert, nine cancel paths, Lock, 16
   instruments); skeptic U5b F4 now asserts the press only picks (it asserted display only).
+
+## UI v6 polish batch 2
+
+The queued "Polish batch 2" of `native/docs/lanes/UI6-build-plan.md` (UI6-polish1 O1 / O2, UI6-U8a O1, the
+orchestrator's 1280 × 800 title screenshot). No engine change. Flag off is unchanged (ui-v6 and ui-v6-edit purity).
+
+- **v6 Perform overlays stay open under Settings (UI6-polish1 O1).** overlay.js `underModal` (U7c F3) is now set by
+  the v6 Quick sheet, the v6 strips' step panels, every `views/v6/lib.js` popover (song bar Key / Space, ⋯ menus, the
+  sidebar's and the bank's menus), `views/v6/dialogs.js` `modalDialog` (Save snapshot, Rename) and the range pick
+  (keyboard.js, Perform and the v6 Edit's row). The Esc that closes Settings over one of them is Settings' alone; the
+  next Esc is the overlay's (with "Esc always panics" on it also panics, D24.7, except in a dialog, whose name field
+  has the focus, as before). `components/quickSheet.js` and `components/stepChip.js` take a new
+  `underModal` option (default false), so today's Perform is unchanged: its Esc still closes Settings and the Quick
+  sheet at once (test). Not opted in: the strip reorder drag (an Esc during a drag under Settings is not a path).

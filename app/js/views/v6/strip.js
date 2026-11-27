@@ -89,7 +89,8 @@ export function createStrip(v, i) {
   lvl.el.dataset.testid = `v6-level-${i}`;
   f.el.querySelector('.fader-track')?.append(lvl.el);
   // the steps keep 44 px; a strip without room above the chip opens the panel over the strip below the tile
-  const chip = (o) => use(stepChip({ color, placement: 'auto', placementNeed: stepPanelNeed, ...o }));
+  // underModal (polish batch 2, UI6-polish1 O1): the Esc that closes Settings over an open step panel is Settings'
+  const chip = (o) => use(stepChip({ color, placement: 'auto', placementNeed: stepPanelNeed, underModal: true, ...o }));
   const amount = (label, send, hint) => chip({
     label, steps: AMOUNT_STEPS, format: formatAmount, lit: (x) => Number(x) > 0.0005, amount: (x) => Number(x) || 0,
     fine: { min: 0, max: 1, format: (x) => `${Math.round(x * 100)}%` }, hint,

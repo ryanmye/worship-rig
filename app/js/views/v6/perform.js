@@ -266,6 +266,7 @@ export function mountPerformV6(root, ctx) {
   v.onCoarse(bottom.kb.coarse);
   const quick = quickSheet({
     anchor: ctx.quickButton || null,
+    underModal: true, // polish batch 2 (UI6-polish1 O1): an Esc for Settings over it never closes it (U7c F3)
     onTempo: (bpm) => shownId && store.set(`songs.${shownId}.tempo`, bpm),
     onSwell: (s) => shownId && store.set(`songs.${shownId}.patch.swell.seconds`, s),
     onTouch: (x) => !isLocked() && store.set('settings.velocitySens', x),

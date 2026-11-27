@@ -322,7 +322,8 @@ export function rangeKeyboard(o = {}) {
     if (picked !== null && !pickClose) {
       // Esc finishes (an overlay: the Esc never reaches main.js's panic); outside taps keep it (only the keys finish)
       pickClose = openOverlay({
-        el, anchors: [], closeOnOutside: false, group: 'v6-range-pick',
+        // underModal (polish batch 2, U7c F3): the Esc that closes Settings over it is Settings' alone
+        el, anchors: [], closeOnOutside: false, group: 'v6-range-pick', underModal: true,
         onClose: (reason) => {
           pickClose = null;
           if (reason !== 'api' && picked !== null) {

@@ -61,6 +61,8 @@ const SOUND_TEXT = {
  * @param {() => void} [o.onAllSettings]
  * @param {() => void} [o.onTheme]           Theme row (default: event 'rig-open-settings' {section:'appearance'})
  * @param {(reason:string) => void} [o.onClose]
+ * @param {boolean} [o.underModal]  stays open under Settings (overlay.js `underModal`): the v6 Perform's sheet
+ *   (polish batch 2, UI6-polish1 O1); today's Perform leaves it off
  * @param {object} [o.state]                    initial state, see set() (latencyMs + outputDeviceId drive the
  *                                              latency hint)
  * @returns {{el:HTMLElement, set(state:object):void, open(opts?:{focus?:boolean}):void, close():void,
@@ -375,6 +377,7 @@ export function quickSheet(o = {}) {
       anchors: o.anchor ? [o.anchor] : [],
       closeOnOutside: false,
       group: 'quick',
+      underModal: !!o.underModal,
       onClose: (reason) => {
         closeOverlay = null;
         restartHold.cancel();

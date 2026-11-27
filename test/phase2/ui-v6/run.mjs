@@ -40,6 +40,7 @@ import { leftTests } from './left.tests.mjs';
 import { moveTests } from './move.tests.mjs';
 import { dialogTests } from './dialogs.tests.mjs';
 import { snapTests } from './snap.tests.mjs';
+import { polish2Tests } from './polish2.tests.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -1343,6 +1344,9 @@ try {
 
   // ---------------------------------------------------------------- D26.1 U-SNAP views (snap.tests.mjs)
   await snapTests({ T, page, ev, until, tid, song, settled, assert });
+
+  // ---------------------------------------------------------------- polish batch 2 (polish2.tests.mjs)
+  await polish2Tests({ T, page, ev, until, tid, settled, setSlots, assert, armPanics });
 
   await T('on / off cycles: today’s Perform comes back whole; nothing of v6 is left behind', async () => {
     for (let k = 0; k < 3; k++) {
