@@ -9995,3 +9995,50 @@ Prepare only: nothing was tagged, dispatched or published, and none of it has ru
     .aupreset .band .logicx` …, `pack.json`) anywhere in the bundle and requires every file of `Resources/app` and
     `Resources/docs` to be tracked in git (a GarageBand conversion is an `.m4a`/`.mp3`); the 480 MB gate compares KB
     like build-lint (whole MB let 480.0–480.99 MB through); find / git errors fail with a message. Tests: 12.
+
+## NMA: MIDI keyboards in the native Mac / iPad app (NativeMidiAccess over BRIDGE v1)
+
+WKWebView has no Web MIDI, so on the native app `midi.js` reported "unavailable" and no message reached the engine;
+nothing in app/js sent `midi listen`, so RigMIDI connected no CoreMIDI source either (MIDI Learn, Program Change,
+touch fitting, the MIDI lamp and the clock-out choice all hung on it).
+
+- **New `app/js/engine-bridge/native-midi.js`** (`NativeMidiAccess`, `installNativeMidi(engine, {nav})`): the Web
+  MIDI surface midi.js and midi-clock.js read (inputs / outputs Maps, `statechange` with `.port` on the access and
+  the port, `onmidimessage` / `midimessage` `{data: Uint8Array, timeStamp}`, `send(data, ts)`, `open` / `close`,
+  `sysexEnabled: false`). Installed by `engine-bridge/select.js` (shell), `boot-mock.js` and `boot-devhost.js` only
+  when `navigator.requestMIDIAccess` is absent: Chrome, Electron and the devhost in Chrome keep their own Web MIDI,
+  and the Web build never loads the file (main.js imports `engine/index.js`; flag-off purity unchanged). midi.js is
+  unchanged.
+- **Wire** (contract 5 / 6.4 / 6.5, no new op or field): the first `midi listen` (`ids: []`) is a request whose
+  reply `{ports}` is the port snapshot (the shell's first `ports` event goes out before the page exists). Then
+  `midi listen {ids}` = exactly the inputs midi.js attached (handler set / listener / `open()`), sent
+  fire-and-forget once per microtask and only when the set changed: 'first' → the chosen keyboard, 'all' → every
+  port, a device → that one, hot-plug re-attaches follow. Not "all + filter in JS": unselected sources would cross
+  the bridge, CoreMIDI would connect virtual ports midi.js ignores, and the v1.1 direct path plays what the core
+  forwards. A `ports` event is diffed: new ports appear, a known port missing from it goes 'disconnected' and stays
+  in the map (Chrome's behaviour); a reply snapshot never overwrites a `ports` event that arrived after the request.
+  `msg.ts` (engine s) → page ms through the last tick (`EngineClock` {t, perf}); no clock, a stale map (> 1 s old)
+  or a future time → now. `output.send(data, ts)` → `midi send {port, data, when?}` (`when` only for a time ahead
+  of now); TypeError / InvalidAccessError (SysEx) / InvalidStateError as Web MIDI. `requestMIDIAccess({sysex:true})`
+  rejects. A message for a port with no handler (in flight across a listen change) or malformed is dropped
+  (`access.stats.dropped`).
+- **midi-clock.js: `sink.portId`** = the chosen output name (null = off), set by `setOutput`. BridgeEngine's
+  `setClockSink` already sent `config {midiClock:{port: fn.portId ?? 'auto'}}`; without it the native clock went to
+  the first output instead of the chosen one (SHELL.md G4). The core resolves the port by id, then by name. The Web
+  Audio engine ignores the property.
+- **MockNative MIDI** (`mock-native.js`): stands in for core + shell: `midiPorts` option and
+  `globalThis.__bridgeMockMidiPorts` (boot-mock), `midiSetPorts` / `midiPlug` / `midiUnplug` (emit `ports`),
+  `midiIn(id, data, {ts})` (forwards only from a listened, present input, as RigMIDI connects only listened
+  sources), `listen` replies `{ports}` with no event (was: a hard-coded "Mock Keys" `ports` event and `ports: []`;
+  nothing sent `listen` before), `send` logs to `midi.sent` and replies `{sent}`, `route` replies `{on}`, an unknown
+  action is `bad-request`.
+- **Native: no change.** `midi_service.cpp` already had listen / ports / msg / send (ctest "service: …"), RigMIDI
+  already connects the listened ids and republishes on hot-plug.
+- Tests: unit `test/unit/engine-bridge/native-midi.test.mjs` (12: install rules, snapshot, real midi.js in every
+  selection mode, hot-plug both ways, timestamps, stale reply, failed listen and retry, drops, send and its errors,
+  midi-clock.js); opt-in `native-midi-devhost.test.mjs` (the adapter against the real core in rig-devhost:
+  RIG_DEVHOST=<binary>); new suite `native-midi` (`test/phase2/native-midi/run.mjs`, ~10 s: the real app on
+  bridge-mock with Web MIDI deleted: lamp, note → `play on/off`, pedal, MIDI Learn → next song, Program Change cue,
+  hot-unplug releases both held notes and falls back, re-plug plays, clock-out name in `config.midiClock`, zero
+  console errors, contract-valid wire; and a page with Web MIDI does not get the adapter). Only a Mac / iPad can
+  check CoreMIDI, latency and Bluetooth MIDI: MAC_CHECK.md part B2.

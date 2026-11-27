@@ -590,7 +590,14 @@ dotted beat) + Start (first downbeat) / Stop to the sink with engine times.
 
 v1 default: native forwards parsed messages to JS (`midi` event); a JS `NativeMidiAccess` adapter makes `midi.js`
 run unchanged; perform calls come back as `play` messages (one WebView round trip per note: measure on the Mac; open
-question 2). The direct path removes the round trip without moving policy: JS pushes the routing table, native plays,
+question 2). The adapter (lane NMA, `app/js/engine-bridge/native-midi.js`): installed only when the bridge engine
+runs on a page without `navigator.requestMIDIAccess`; its first `midi listen` is a request whose reply `{ports}` is
+the port snapshot (the shell publishes its ports before the page exists); after that it sends `midi listen` with
+exactly the inputs midi.js attached (fire-and-forget, one per microtask, only on change), so CoreMIDI connects only
+the selected sources and the v1.1 direct path never plays an unselected port; a port missing from a `ports` event
+goes 'disconnected' (kept in the map, as Chrome does); `msg.ts` (engine s) maps to page ms through the last tick;
+`output.send(data, ts)` → `midi send {port, data, when?}`. MIDI clock out stays native: `config.midiClock.port`
+carries the chosen output's name (midi-clock.js `sink.portId`). The direct path removes the round trip without moving policy: JS pushes the routing table, native plays,
 and still forwards each message flagged `handled` so the UI, learn and activity keep working.
 
 ---------------------------------------------------------------------------------------------------------------------

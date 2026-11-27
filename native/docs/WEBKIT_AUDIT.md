@@ -25,6 +25,10 @@ Sizes: S < 0.5 day, M 0.5-2 days, L > 2 days. "App edit" = a change to an app/ f
 - Fix: the shell injects a polyfill with the surface midi.js reads (inputs/outputs Maps, onstatechange,
   port.onmidimessage, port.send, port.state/name/id/manufacturer) fed by the contract ops `midi listen/route/send`.
   No app edit. Size M.
+- Done (lane NMA, 2026-11-27): `app/js/engine-bridge/native-midi.js` (NativeMidiAccess), installed by
+  engine-bridge/select.js (and boot-mock / boot-devhost) only when the bridge engine runs and the page has no
+  `navigator.requestMIDIAccess`; midi.js and midi-clock.js unchanged but for `sink.portId` (SHELL.md G4). Tests:
+  test/unit/engine-bridge/native-midi.test.mjs, suite `native-midi`. CoreMIDI itself: MAC_CHECK.md part B2.
 
 ### Web Audio objects read outside the engine folder [C]
 - No view constructs an AudioContext. Reads only: controller.js:1604,1705,1862,1919,1931,2070 (`engine.ctx.state`,
@@ -299,7 +303,7 @@ Anything not marked [C] above is unverified; no rendering was done.
 2. `window.rig` injected at document start, plus the `isElectron` decision (section 5). M
 3. OS floor 14.5 / 17.5 for `light-dark()` (nesting 17.2, color-mix 16.2 are covered by it) (section 3). S (policy)
 4. Engine-adjacent objects the UI reads: fake `ctx`, analysers, cached `listInstruments` (section 1). M
-5. Web MIDI polyfill from the native `midi` op (midi.js:138). M
+5. Web MIDI polyfill from the native `midi` op (midi.js:138). M (done, lane NMA: engine-bridge/native-midi.js)
 6. Library migration from Electron's localStorage origin via the backup file, and persistence via `backupNow`. M
 7. WKUIDelegate `runOpenPanel`, WKDownloadDelegate and `createWebView` for import, export, doc links. S-M
 8. Device check of CSP `'self'` on the scheme and the nesting cascade across all 6 themes [D]. S

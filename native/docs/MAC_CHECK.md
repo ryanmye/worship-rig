@@ -359,10 +359,27 @@ CoreMIDI timing (Chrome's Web MIDI adds a hop that the app will not have).
    and double-click the app there (or Product › Run in Xcode). The window opens and the page loads (`rig://app/`),
    not a blank window.
 2. Repeat part A steps 3-5 there (CoreMIDI is the app's own path).
+   **MIDI in the app (lane NMA; only the Mac can check this, the cloud has no CoreMIDI).** With the keyboard
+   plugged in before launch: the top bar's MIDI lamp names it within a second of the page loading (not "Not
+   supported" / "Off"); Settings › MIDI lists it (and, greyed or not chosen, the IAC / network ports). Then:
+   a. Play: notes and the sustain pedal sound; fast repeats on one key do not hang notes. Compare the feel with part A
+      (Chrome's Web MIDI): the app is one WebView round trip per note (contract 5 "v1 default", open question 2);
+      say if it feels later or less even than Chrome.
+   b. Hot-plug: unplug the USB cable while holding a chord with the pedal down: the chord stops at once (no stuck
+      notes) and a toast names the fallback; plug it back: the lamp names it again and it plays.
+   c. MIDI Learn on one control (Perform › Learn, or Settings › MIDI), and a Program Change from the keyboard with
+      Settings › Program change on: both act.
+   d. Settings › Metronome › MIDI clock out: pick an output (a DAW on the IAC bus, or a drum machine); start the click
+      on a song with a tempo: the receiver follows the tempo (the clock goes out natively to the chosen port by name).
+   e. Settings › Diagnostics or Safari's Web Inspector (Develop › <Mac> › Worship Rig) console:
+      `navigator.requestMIDIAccess.nativeMidi.access.stats` shows `messages` counting up and `dropped` 0 while
+      playing; `__rig.midi.inputs` lists the keyboard as `hardware`.
 3. Switch through the six themes: each renders.
 4. One real GarageBand / Logic instrument through Settings › My Samples imports and plays.
 
-The iPad install (`native/apple/README.md` steps 7-10) comes after part B.
+The iPad install (`native/apple/README.md` steps 7-10) comes after part B. On the iPad, repeat B2 a-c with a USB
+keyboard (USB-C or the camera adapter). A Bluetooth MIDI keyboard shows up only once it is paired in an app that
+offers the Bluetooth MIDI pairing view (GarageBand, for example): Worship Rig has no pairing view yet (lane NMA).
 
 **How to report.** For each step number: **OK**, or **not OK** + one line (what you heard or saw, which song, the
 clock time). Send that list in the chat with the cloud session, with `~/Desktop/rig-bridge.jsonl` and the last ~50
@@ -721,7 +738,8 @@ engine, the RigLibrary first-launch import end to end against a fixture, and a c
 What it cannot cover (stays on the Tier 2 list):
 - **Real audio**: AUHAL, the device rate, buffer sizes, xruns, latency (RigAudio.swift and rig_apple_audio.c never
   run; the probe stage covers them on Ryan's Mac).
-- **MIDI**: no device, so no CoreMIDI input, timestamps or hot-plug.
+- **MIDI**: no device, so no CoreMIDI input, timestamps or hot-plug. The page's MIDI comes up "available" with no
+  ports (lane NMA adapter: one `midi listen` request at boot, answered by the core).
 - **Ryan's ears**: whether anything sounds right; the `note` check only says "not silence".
 - **His real library**: the fixture is a synthetic 1.x-shaped backup (two factory songs), not a real export (Lane E 5);
   the real scan of `~/Library/Application Support/*/backups` and the native dialog are skipped.

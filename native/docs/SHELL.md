@@ -53,6 +53,8 @@ recordTap, reloadManifests, sleepBlockers, volumeCC (need MIDI, pads, recorder, 
 - G2 (closed in SETUP_REVIEW): `set` path/value are optional in the spec (required unless `batch` is given).
 - G3: clickStart is sync in the contract (`{t0, downbeat}`); native cannot answer sync. Shim returns an estimate.
 - G4: setClockSink(fn) has no port id but `config.midiClock.port` needs one. Shim sends `fn.portId ?? 'auto'`.
+  Done (lane NMA): midi-clock.js sets `sink.portId` to the chosen output NAME; the core resolves it by id, then by
+  name (click_service.cpp clockTarget), so a re-plugged device with a new id keeps its clock.
 - G5 (closed in the core by lanes F1 and F2; shim updated by Lane S, DECISIONS O-AW-4, O-AW-F2): `get sampleStatus {patches}` answers
   `{loaded: bool[], failed: bool[]}`, one entry per patch (ENGINE_CONTRACT §6.4 `get`). **Since lane F1 the core
   emits `load {phase:'samples', loaded:{<id>: bool}}`** (contract 6.5; `true` = every sample decoded or failed, the
@@ -108,7 +110,8 @@ recordTap, reloadManifests, sleepBlockers, volumeCC (need MIDI, pads, recorder, 
 - garageBandScan / garageBandImport (Mac only).
 - onMenu ids: panic, fadeOutAll, nextSong, prevSong, toggleView, record, restartAudio, openSettings.
 - bus: busPublish, onBusCommand, miniSubscribe, miniCommand; menu-bar mode; global hotkeys; update check.
-- Web MIDI polyfill over the `midi` op/event (UI currently warns "MIDI unavailable").
+- (done, lane NMA) Web MIDI polyfill over the `midi` op/event: `app/js/engine-bridge/native-midi.js`, installed by
+  select.js in the shell; no Swift change (the first `midi listen` reply carries the ports RigMIDI published).
 - (done, unbuilt) Library migration: see "Library migration" below.
 
 ## Shell follow-up (SETUP_REVIEW 27, G10, memory, audio session). Everything below is UNBUILT.
