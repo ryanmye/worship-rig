@@ -137,7 +137,7 @@ native/docs/reviews/NMA.md; gates via tools/cloud/gates.mjs. Commit on lane-nma 
 - [ ] S6. native/docs/reviews/NMA.md + MAC_CHECK steps; final report
 
 ### Findings so far (before fixing)
-- F1 (candidate): page reload with notes / pedal held: the core keeps the old page's voices and sustain (only the
+- F1 (FIXED): page reload with notes / pedal held: the core keeps the old page's voices and sustain (only the
   crash path posts `play panic`; Settings › My Samples "Reload" is a plain location.reload()); the new controller
   has empty heldBySrc / pedalDown=false, so key-ups are dropped and a pedal lift sends nothing → notes / sustain stuck.
 

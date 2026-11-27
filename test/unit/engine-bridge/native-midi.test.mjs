@@ -300,3 +300,40 @@ test('midi-clock.js over the adapter: outputs, setOutput by name, the sink is ta
   r.engine.setClockSink(null);
   assert.deepEqual(r.log.toNative.filter((m) => m.op === 'config' && m.midiClock).at(-1).midiClock, { port: null });
 });
+
+test('reload (skeptic NMA F1): a page that boots on a running core releases what the previous page held',
+  async () => {
+    // The core outlives the page: a location.reload() (Settings › My Samples "Reload") keeps its voices and sustain.
+    // The new controller starts with nothing held, so a key-up or a pedal lift on the new page sends nothing.
+    const env = fakeEnv();
+    const first = loopbackPair({ schedule: 'sync' });
+    const mock = new MockNative({ api, transport: first.native, now: env.now, timers: env.timers, midiPorts: [NORD] });
+    const old = new BridgeEngine({ transport: first.js, now: env.now, timers: env.timers });
+    installNativeMidi(old, { nav: {} });
+    await old.start();
+    old.noteOn(60, 100);
+    old.noteOn(64, 100);
+    old.sustain(true);
+    assert.equal(mock.held.size, 2);
+    assert.equal(mock.pedal, true);
+    // reload: the old page and its link are gone, the same core answers the new page
+    mock._offMsg();
+    const second = loopbackPair({ schedule: 'sync' });
+    mock.transport = second.native;
+    mock._offMsg = second.native.onMessage((m) => mock.receive(m));
+    const engine = new BridgeEngine({ transport: second.js, now: env.now, timers: env.timers });
+    const nav = {};
+    installNativeMidi(engine, { nav });
+    await flush();
+    assert.equal(mock.held.size, 0, 'the old page\'s notes are released');
+    assert.equal(mock.pedal, false, 'and its pedal');
+    const toNative = second.log.toNative.map((m) => m.op === 'play' ? `play ${m.e}` : m.op);
+    assert.deepEqual(toNative.slice(0, 2), ['hello', 'play panic'], 'right after hello, before anything is played');
+    // a Chromium page (Web MIDI of its own) is not touched: the adapter, and so this release, is not installed
+    const third = loopbackPair({ schedule: 'sync' });
+    third.native.onMessage(() => {});
+    const chrome = new BridgeEngine({ transport: third.js, now: env.now, timers: env.timers });
+    installNativeMidi(chrome, { nav: { requestMIDIAccess: () => Promise.resolve(null) } });
+    assert.deepEqual(third.log.toNative.map((m) => m.op), ['hello']);
+    assert.deepEqual(mock.findings, []);
+  });

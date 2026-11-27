@@ -369,5 +369,11 @@ export function installNativeMidi(engine, { nav = globalThis.navigator } = {}) {
   };
   requestMIDIAccess.nativeMidi = { access };
   Object.defineProperty(nav, 'requestMIDIAccess', { value: requestMIDIAccess, configurable: true, writable: true });
+  // skeptic NMA F1: the core outlives the page. After a reload (Settings › My Samples "Reload" is a plain
+  // location.reload(); only a web-content crash makes the shell post a panic) it still sounds the notes and holds
+  // the sustain of the previous page, whose key-ups and pedal lift now reach a controller that holds nothing, so
+  // they are dropped and the notes / pedal stick. Release them before this page plays anything (right after
+  // `hello`). On a first boot nothing sounds; the drone is left alone (allNotesOff's contract).
+  engine.allNotesOff();
   return access;
 }
