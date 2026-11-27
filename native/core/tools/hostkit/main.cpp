@@ -6,7 +6,7 @@
 //   rig-hostkit text < cases                               decode, length, slice(0, 40), trim of each line
 //   rig-hostkit collate < cases                            the lines sorted with localeCompare (numeric, base)
 // Case lines are hex-encoded bytes (any bytes: invalid UTF-8 too); answers are one line each:
-//   json:    `ok <deep 0|1> <hex of JSON.stringify(JSON.parse(text))>` or `err`
+//   json:    `ok <deep 0|1> <hex of JSON.stringify(JSON.parse(text))>` or `err <hex of the SyntaxError text>`
 //   text:    `<hex decoded> <length> <hex slice> <hex trim>`
 //   collate: the sorted input lines (hex), stable
 #include <algorithm>
@@ -73,7 +73,7 @@ int main(int argc, char **argv) {
       // the scanner's depth (64) is what the corpus checks; the CLI builds at most 64 levels too
       const ParseResult r = jsonParse(decodeUtf8(unhex(l)), 64);
       if (!r.ok) {
-        std::cout << "err\n";
+        std::cout << "err " << hex(r.error) << '\n';
         continue;
       }
       std::string out;

@@ -4,8 +4,8 @@
 //   1. JSON.parse + JSON.stringify on a generated corpus (the hash is sha1 of a stringify): byte for byte
 //   2. Node's UTF-8 decode, .length, .slice(0, 40), .trim(): byte for byte
 //   3. localeCompare(numeric, base) order: identical on realistic names, measured on exotic ones
-//   4. scanUserPatches / hasUserPatches / GET /api/user-patches and /api/health on generated pack trees: identical,
-//      except inside V8's JSON SyntaxError texts (hostkit words them its own way): those are compared up to the text
+//   4. scanUserPatches / hasUserPatches / GET /api/user-patches and /api/health on generated pack trees: byte for
+//      byte (error texts included: hostkit reproduces V8's SyntaxError messages)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -53,8 +53,8 @@ function cut(v, max, d = 0) {
   return o;
 }
 
-test('JSON.parse + JSON.stringify: byte for byte on the corpus', { skip }, () => {
-  const cases = jsonCases(6000);
+test('JSON.parse + JSON.stringify (and SyntaxError texts): byte for byte on the corpus', { skip }, () => {
+  const cases = jsonCases(20000);
   const got = run(['json'], hexLines(cases)).toString().replace(/\n$/, '').split('\n');
   assert.equal(got.length, cases.length);
   let ok = 0;
@@ -66,11 +66,18 @@ test('JSON.parse + JSON.stringify: byte for byte on the corpus', { skip }, () =>
       const v = JSON.parse(b.toString('utf8'));
       want = `ok ${deeperThan(v, 64) ? 1 : 0} ${wtf8(JSON.stringify(cut(v, 64))).toString('hex')}`;
       ok++;
-    } catch {
-      want = 'err';
+    } catch (e) {
+      want = `err ${wtf8(e.message).toString('hex')}`;
       bad++;
     }
-    if (got[i] !== want && fails.length < 10) fails.push(`${JSON.stringify(b.toString('latin1'))}: ${got[i].slice(0, 200)} vs ${want.slice(0, 200)}`);
+    if (got[i] !== want && fails.length < 10) {
+      const show = (x) => (x.startsWith('err ') ? `err ${Buffer.from(x.slice(4), 'hex').toString()}` : x);
+      const [g, w] = [show(got[i]), show(want)];
+      let k = 0;
+      while (k < g.length && g[k] === w[k]) k++;
+      const at = Math.max(0, k - 60);
+      fails.push(`${JSON.stringify(b.toString('latin1').slice(0, 80))}…: at ${k}: ${g.slice(at, k + 60)} vs ${w.slice(at, k + 60)}`);
+    }
   }
   console.log(`json corpus: ${cases.length} cases (${ok} valid, ${bad} invalid)`);
   assert.deepEqual(fails, []);
@@ -120,45 +127,12 @@ test('localeCompare order: measured on exotic names (all of the modelled blocks,
   assert.ok(inv / names.length < 0.02, `${inv} inversions in ${names.length}`);
 });
 
-/**
- * Error texts: identical, except V8's SyntaxError wording (`not valid JSON (<V8 text>)` and a bad pack.json's
- * `<label>/pack.json: <V8 text>; read as "auto"`), which is compared up to that text.
- * @returns {{a:string, b:string, normalised:number}}
- */
-function normalise(nodeJson, hostJson) {
-  const n = JSON.parse(nodeJson);
-  const h = JSON.parse(hostJson);
-  let normalised = 0;
-  const v8 = /^(.*: not valid JSON \().*(\); skipped)$/s;
-  const pj = /^(.*\/pack\.json: )(.*)(; read as "auto")$/s;
-  const syntax = /JSON|Unexpected|Expected|Bad |Unterminated|No number|Exponent/;
-  const errs = (n.errors || []).map((e, i) => {
-    const o = h.errors && h.errors[i];
-    if (typeof o !== 'string') return e;
-    const m1 = v8.exec(e);
-    const m2 = v8.exec(o);
-    if (m1 && m2 && m1[1] === m2[1]) {
-      normalised++;
-      h.errors[i] = `${m2[1]}…${m2[2]}`;
-      return `${m1[1]}…${m1[2]}`;
-    }
-    const p1 = pj.exec(e);
-    const p2 = pj.exec(o);
-    if (p1 && p2 && p1[1] === p2[1] && syntax.test(p1[2]) && p1[2] !== p2[2] && !/too large|must be|EISDIR|ENOENT/.test(p1[2])) {
-      normalised++;
-      h.errors[i] = `${p2[1]}…${p2[3]}`;
-      return `${p1[1]}…${p1[3]}`;
-    }
-    return e;
-  });
-  if (n.errors) n.errors = errs;
-  return { a: JSON.stringify(n), b: JSON.stringify(h), normalised };
-}
-
-function rawEqualExceptErrors(nodeJson, hostJson) {
-  // everything before "errors" is compared as bytes: the patches (songs, hashes, ids, mtimes) and the packs
-  const cutAt = (s) => s.slice(0, s.lastIndexOf(',"errors":['));
-  assert.equal(cutAt(hostJson), cutAt(nodeJson), 'patches and packs differ byte for byte');
+/** Byte for byte, with the first difference in the message. */
+function sameBytes(got, want, what) {
+  if (got === want) return;
+  let k = 0;
+  while (k < got.length && got[k] === want[k]) k++;
+  assert.fail(`${what}: differs at ${k}:\n  hostkit ${got.slice(Math.max(0, k - 80), k + 80)}\n  server  ${want.slice(Math.max(0, k - 80), k + 80)}`);
 }
 
 for (const variant of ['main', 'caps']) {
@@ -169,11 +143,10 @@ for (const variant of ['main', 'caps']) {
       for (const ids of [null, ['user:here']]) {
         const want = JSON.stringify(await server.scanUserPatches(roots, { userIds: ids ? new Set(ids) : null }));
         const got = run(['scan', JSON.stringify(roots), ...(ids ? [JSON.stringify(ids)] : [])]).toString('utf8');
-        rawEqualExceptErrors(want, got);
-        const { a, b, normalised } = normalise(want, got);
-        assert.equal(b, a);
+        sameBytes(got, want, `scan ${variant}`);
         const j = JSON.parse(want);
-        console.log(`${variant}${ids ? ' +userIds' : ''}: ${j.patches.length} patches, ${j.packs.length} packs, ${j.errors.length} errors (${normalised} SyntaxError texts compared up to the text), ${Buffer.byteLength(want)} bytes`);
+        console.log(`${variant}${ids ? ' +userIds' : ''}: ${j.patches.length} patches, ${j.packs.length} packs, `
+          + `${j.errors.length} errors, ${Buffer.byteLength(want)} bytes: identical`);
         if (variant === 'main') assert.ok(j.patches.length > 20 && j.errors.length > 30, 'the tree exercises the scanner');
       }
       const has = run(['has', JSON.stringify(roots)]).toString();
@@ -196,9 +169,7 @@ test('GET /api/user-patches and /api/health of server.js vs hostkit', { skip }, 
     const health = await (await fetch(`${base}/api/health`)).json();
     // the server checks `user:` refs against its My Samples scan (no instruments in this tree): an empty id list
     const got = run(['user-patches', JSON.stringify(roots), '[]']).toString('utf8');
-    rawEqualExceptErrors(body, got);
-    const { a, b } = normalise(body, got);
-    assert.equal(b, a);
+    sameBytes(got, body, 'GET /api/user-patches');
     assert.equal(health.userPatches, run(['has', JSON.stringify(roots)]).toString() === 'true');
   } finally {
     await srv.close();

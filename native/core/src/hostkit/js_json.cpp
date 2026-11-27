@@ -139,15 +139,66 @@ class Parser {
     err_ = what;
     return false;
   }
-  bool failAt(const char *what) {
-    return fail(std::string(what) + " in JSON at position " + std::to_string(i_));
+  bool failEnd() { return fail("Unexpected end of JSON input"); }
+  /** V8's positioned messages: "<what> in JSON at position <p> (line <l> column <c>)", in UTF-16 units. */
+  bool failAt(const char *what, const char *in = " in JSON") {
+    const std::u16string u = utf16(s_.substr(0, i_));
+    std::size_t line = 1, last = 0;  // V8 CalculateFileLocation: \r, \n and \r\n end a line
+    for (std::size_t k = 0; k < u.size(); ++k) {
+      if (u[k] == '\r' && k + 1 < u.size() && u[k + 1] == '\n') ++k;
+      if (u[k] == '\r' || u[k] == '\n') {
+        ++line;
+        last = k + 1;
+      }
+    }
+    return fail(std::string(what) + in + " at position " + std::to_string(u.size()) + " (line " +
+                std::to_string(line) + " column " + std::to_string(u.size() - last + 1) + ")");
   }
+  /** V8's unexpected-token message: the UTF-16 unit at the cursor and up to 10 units of context each side. */
   bool failToken() {
-    if (i_ >= s_.size()) return fail("Unexpected end of JSON input");
-    std::size_t j = i_;
-    std::string tok;
-    appendCodePoint(tok, nextCodePoint(s_, j));
-    return fail("Unexpected token '" + tok + "' in JSON at position " + std::to_string(i_));
+    if (i_ >= s_.size()) return failEnd();
+    const char c = s_[i_];  // V8 names the token the character starts (one_char_json_tokens)
+    if (c == '"') return failAt("Unexpected string");
+    if (c == '-' || (c >= '0' && c <= '9')) return failAt("Unexpected number");
+    if (s_ == "NaN" || s_ == "Infinity" || s_ == "undefined" || s_ == "[object Object]") {
+      return fail("\"" + std::string(s_) + "\" is not valid JSON");  // V8 IsSpecialString
+    }
+    const std::u16string u = utf16(s_);
+    const std::size_t pos = utf16(s_.substr(0, i_)).size();
+    const std::string tok = wtf8(u.substr(pos, 1));
+    constexpr std::size_t kCtx = 10;
+    std::string head = "Unexpected token '" + tok + "', ";
+    if (u.size() < 2 * kCtx + 1) return fail(head + "\"" + std::string(s_) + "\" is not valid JSON");
+    if (pos < kCtx) return fail(head + "\"" + wtf8(u.substr(0, pos + kCtx)) + "\"... is not valid JSON");
+    if (pos < u.size() - kCtx) {
+      return fail(head + "...\"" + wtf8(u.substr(pos - kCtx, 2 * kCtx)) + "\"... is not valid JSON");
+    }
+    return fail(head + "...\"" + wtf8(u.substr(pos - kCtx)) + "\" is not valid JSON");
+  }
+  static std::u16string utf16(std::string_view w) {
+    std::u16string u;
+    for (std::size_t k = 0; k < w.size();) {
+      const std::uint32_t cp = nextCodePoint(w, k);
+      if (cp >= 0x10000) {
+        u.push_back(static_cast<char16_t>(0xD800 + ((cp - 0x10000) >> 10)));
+        u.push_back(static_cast<char16_t>(0xDC00 + ((cp - 0x10000) & 0x3FF)));
+      } else {
+        u.push_back(static_cast<char16_t>(cp));
+      }
+    }
+    return u;
+  }
+  static std::string wtf8(const std::u16string &u) {
+    std::string out;
+    for (std::size_t k = 0; k < u.size(); ++k) {
+      std::uint32_t c = u[k];
+      if (c >= 0xD800 && c <= 0xDBFF && k + 1 < u.size() && u[k + 1] >= 0xDC00 && u[k + 1] <= 0xDFFF) {
+        c = 0x10000 + ((c - 0xD800) << 10) + (u[k + 1] - 0xDC00u);
+        ++k;
+      }
+      appendCodePoint(out, c);
+    }
+    return out;
   }
   void ws() {
     while (i_ < s_.size()) {
@@ -193,7 +244,7 @@ class Parser {
         if (out) out->append(s_.substr(b, i_ - b));
         continue;
       }
-      if (i_ + 1 >= s_.size()) return failAt("Unterminated string");
+      if (i_ + 1 >= s_.size()) return failEnd();
       const char e = s_[i_ + 1];
       char lit = 0;
       switch (e) {
@@ -206,9 +257,12 @@ class Parser {
         case 'r': lit = '\r'; break;
         case 't': lit = '\t'; break;
         case 'u': break;
-        default:
+        default: {
           ++i_;
+          std::size_t j = i_;  // V8: an escaped character past Latin-1 is an unexpected token, not a bad escape
+          if (nextCodePoint(s_, j) > 0xFF) return failToken();
           return failAt("Bad escaped character");
+        }
       }
       if (lit) {
         if (out) out->push_back(lit);
@@ -216,8 +270,9 @@ class Parser {
         continue;
       }
       std::uint32_t u;
-      if (!hex4(i_ + 2, &u)) {
+      if (!hex4(i_ + 2, &u)) {  // V8 points at the first character that is not a hex digit (or the end)
         i_ += 2;
+        while (i_ < s_.size() && hex(s_[i_]) >= 0) ++i_;
         return failAt("Bad Unicode escape");
       }
       i_ += 6;
@@ -237,13 +292,14 @@ class Parser {
     const std::size_t b = i_;
     bool simple = true;
     if (s_[i_] == '-') ++i_;
-    if (i_ >= s_.size()) return fail("No number after minus sign in JSON at position " + std::to_string(i_));
+    if (i_ >= s_.size()) return failAt("No number after minus sign");
     if (s_[i_] == '0') {
       ++i_;
+      if (i_ < s_.size() && s_[i_] >= '0' && s_[i_] <= '9') return failAt("Unexpected number");
     } else if (s_[i_] >= '1' && s_[i_] <= '9') {
       while (i_ < s_.size() && s_[i_] >= '0' && s_[i_] <= '9') ++i_;
     } else {
-      return fail("No number after minus sign in JSON at position " + std::to_string(i_));
+      return failAt("No number after minus sign");
     }
     if (i_ < s_.size() && s_[i_] == '.') {
       simple = false;
@@ -292,7 +348,7 @@ class Parser {
 
   bool literal(const char *word, std::size_t n) {
     for (std::size_t k = 0; k < n; ++k, ++i_) {
-      if (i_ >= s_.size() || s_[i_] != word[k]) return failToken();
+      if (i_ >= s_.size() || s_[i_] != word[k]) return failToken();  // the end of input: "Unexpected end" 
     }
     return true;
   }
@@ -319,7 +375,6 @@ class Parser {
     if (building()) frames_.back().key = std::move(k);
     ws();
     if (i_ >= s_.size() || s_[i_] != ':') {
-      if (i_ >= s_.size()) return fail("Unexpected end of JSON input");
       return failAt("Expected ':' after property name");
     }
     ++i_;
@@ -357,7 +412,7 @@ class Parser {
     for (;;) {
       // ---- a value
       ws();
-      if (i_ >= s_.size()) return fail("Unexpected end of JSON input");
+      if (i_ >= s_.size()) return failEnd();
       JVal v;
       const char c = s_[i_];
       if (c == '{' || c == '[') {
@@ -370,8 +425,7 @@ class Parser {
           v = close();
         } else {
           if (c == '{') {
-            if (i_ >= s_.size()) return fail("Unexpected end of JSON input");
-            if (s_[i_] != '"') return failAt("Expected property name or '}'");
+            if (i_ >= s_.size() || s_[i_] != '"') return failAt("Expected property name or '}'");
             if (!key()) return false;
           }
           continue;  // the first member's value
@@ -399,18 +453,16 @@ class Parser {
         attach(std::move(v), root);
         ws();
         if (kinds_.empty()) {
-          if (i_ < s_.size()) return failAt("Unexpected non-whitespace character after JSON");
+          if (i_ < s_.size()) return failAt("Unexpected non-whitespace character after JSON", "");
           return true;
         }
-        if (i_ >= s_.size()) return fail("Unexpected end of JSON input");
         const bool obj = kinds_.back() == '{';
-        const char d = s_[i_];
+        const char d = i_ < s_.size() ? s_[i_] : '\0';
         if (d == ',') {
           ++i_;
           if (obj) {
             ws();
-            if (i_ >= s_.size()) return fail("Unexpected end of JSON input");
-            if (s_[i_] != '"') return failAt("Expected double-quoted property name");
+            if (i_ >= s_.size() || s_[i_] != '"') return failAt("Expected double-quoted property name");
             if (!key()) return false;
           }
           break;  // the next value
