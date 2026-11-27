@@ -105,6 +105,9 @@ const mk = (page) => {
  * `leave` puts it back. `group` picks the contact sheet's tile.
  * @type {Array<{id:string, enter:(p:object, x:object)=>Promise<void>, leave?:(p:object, x:object)=>Promise<void>}>}
  */
+/** C-SHIP skeptic: the chart module request 'chart-loading' holds back, and how it lets it go. */
+const CHART_MODULE_URL = '**/js/views/v6/chart/chart.js';
+let chartGate = null;
 export const STATES = [
   // ---- Perform, 2 instruments, the sidebar on each module (held notes: lit keys, meters)
   { id: 'perform-2', enter: async (p, x) => {
@@ -246,6 +249,32 @@ export const STATES = [
     await x.until(() => document.getElementById('view-settings').hidden);
   } },
   // ---- the chart (settings.chartView on): on the stage, in the sidebar, the Edit chart dialog
+  // C-SHIP skeptic (D33: charts on by default, loaded when used): the sidebar's Chart module before the chart has
+  // loaded (modules.js chartPlaceholder, "Loading the chart…"), held there by holding views/v6/chart/chart.js back
+  { id: 'chart-loading', enter: async (p, x) => {
+    let open;
+    const gate = new Promise((r) => { open = r; });
+    chartGate = async () => {
+      open();
+      await p.waitForTimeout(50);
+      await p.unroute(CHART_MODULE_URL);
+    };
+    await p.route(CHART_MODULE_URL, async (route) => {
+      await gate;
+      await route.continue();
+    });
+    await x.ev(() => {
+      const k = 'worship-rig.chart';
+      localStorage.setItem(k, JSON.stringify({ ...JSON.parse(localStorage.getItem(k) || '{}'), placement: 'side' }));
+      window.__rig.views.v6.sidebar.open('chart');
+    });
+    await x.until(() => !!document.querySelector('[data-testid="v6-chart-loading"]'));
+  }, leave: async (p, x) => {
+    await chartGate?.();
+    chartGate = null;
+    await x.until(() => !!window.__rig.views.chart?.state()?.v6, null, 30000);
+    await x.ev(() => window.__rig.views.v6.sidebar.open('drone'));
+  } },
   { id: 'chart-stage', enter: async (p, x) => {
     await x.ev(() => {
       const { store } = window.__rig;
@@ -319,7 +348,8 @@ export const SIZES = {
  */
 export const IPAD_STATES = ['start-card', 'perform-2', 'perform-7', 'quick', 'range-pick', 'more-menu', 'space-pop',
   'add-song', 'learn', 'save-snapshot', 'song-menu', 'locked', 'bank', 'bank-trying', 'edit-sound', 'edit-chooser',
-  'edit-sends', 'edit-vibe', 'edit-master', 'edit-drawer', 'settings-search', 'empty-library', 'empty-library-locked'];
+  'edit-sends', 'edit-vibe', 'edit-master', 'edit-drawer', 'settings-search', 'chart-loading', 'empty-library',
+  'empty-library-locked'];
 /** The strips' "more this way" fade (styles-v6.css .v6-sfade::after, 48 px) over a strip scrolled half out. */
 const FADES = [{ sel: '.v6-stripsarea.scroll:not(.atend) .v6-sfade', side: 'right', px: 48 }];
 /** Fields found without a boundary: Edit's song name is a title with a ✎ beside it (views/v6/edit/edit.js). */
