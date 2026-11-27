@@ -405,8 +405,8 @@ menu: use the new layout's **Settings › MIDI Learn › Learn on Perform**.
 - **Click output**, **Record the click** (Audio) and **Clock out** (MIDI keyboard): see
   [Click and count-in](#click-and-count-in).
 - **Sound (2.0 Mac and iPad app):** **Voices per sound** (32 / 64 / 128, default 64), **Buffer size** (64 / 128 /
-  256 / 512 frames, default 128; the line beside it shows what the Mac gave), **Total voice limit** (Auto / 128 / 256 /
-  512 / Off) and, under Advanced, **Freeze drone to save CPU**.
+  256 / 512 frames, default 128; the line beside it shows what the Mac gave) and, under Advanced, **Total voice
+  limit** (Auto / 128 / 256 / 512 / Off) and **Freeze drone to save CPU**.
 - **Look › Appearance › Colour-blind colours** (Off / Red–green / Blue–yellow): instrument colours that stay apart
   for that kind of colour blindness, plus each instrument's number on its range bar and tab. Per computer.
 - **Look › Perform view › Chord charts** turns the Chart button off on this computer; **Try the new layout

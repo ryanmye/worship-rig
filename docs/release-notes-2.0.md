@@ -25,8 +25,8 @@ ear on a Mac yet.)*
     runs out, the oldest released note goes first, as before.
   - **Buffer size: 64 · 128 · 256 · 512 frames** (128 by default). The line next to it shows the size the Mac gave.
     On an M2 Pro through a USB-C dock, 64 frames played with no dropouts (2.9 ms; 128 is 5.8 ms).
-  - **Total voice limit: Auto · 128 · 256 · 512 · Off**, across all the sounds of a song. **Auto** is 128 on the Mac
-    and 64 on the iPad for now *(the iPad number is not measured yet)*.
+  - **Total voice limit: Auto · 128 · 256 · 512 · Off** (under **Advanced**), across all the sounds of a song.
+    **Auto** is 128 on the Mac and 64 on the iPad for now *(the iPad number is not measured yet)*.
 - **Settings › Sound › Advanced › Freeze drone to save CPU** (on by default, which is 1.x's behaviour): in
   low-resource mode the drone plays from a recorded loop. Off keeps the live drone.
 - **Recording** writes the WAV file from the engine itself, into **Music › Worship Rig** on the Mac and **Files › On
