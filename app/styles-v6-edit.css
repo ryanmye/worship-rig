@@ -53,11 +53,19 @@
   background: var(--panel-2); color: var(--text); font: 700 15px var(--font-display, inherit); }
 .v6.v6-edit .v6e-chart[hidden] { display: none; }
 /* C-SHIP (D33): the Chart button shows by default now; at the Mac's narrow widths (1024 × 700) the header keeps
-   to one row without a sideways scroll: no "Time" caption (the select keeps its aria-label), tighter gaps */
+   to one row without a sideways scroll: no "Time" caption (the select keeps its aria-label), tighter gaps.
+   UI6-fu layout quirk (FU2): on a coarse pointer (44 px pencil and chips) the row was still wider than the header and
+   ⋯ Song stuck out past its edge, so a second give-way: the key chip's "· you play …" may ellipsize (its title and
+   aria-label carry it whole), its share small (the song name gives way first, to its 6ch). Measured in ui-v6-edit
+   "UI6-fu ⋯ Song" (1024 / 1101 / 1180 / 1280, mouse and touch, chart on and off); wider windows are unchanged. */
 @media (max-width: 1100px) {
   .v6.v6-edit .v6e-sigbox .v6e-cap { display: none; }
   .v6.v6-edit .v6e-head .ev2-song-head { gap: 6px; }
   .v6.v6-edit .v6e-chart { padding-left: 10px; padding-right: 10px; }
+  .v6.v6-edit .v6e-head .ev2-song-keychip { flex-shrink: .1; min-width: 0; overflow: hidden; }
+  .v6.v6-edit .v6e-head .ev2-song-keychip > * { flex-shrink: 0; }
+  .v6.v6-edit .v6e-head .ev2-song-keychip > .ev2-song-muted { flex-shrink: 1; min-width: 0; overflow: hidden;
+    text-overflow: ellipsis; }
 }
 
 .v6.v6-edit .v6e-rig { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 6px 8px 8px;

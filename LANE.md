@@ -14,7 +14,7 @@ Worktree /home/claude/wt-fu2, branch lane-fu2 from origin/v2-native ee5bcb9. Scr
 - [x] 1 FU2 O1 empty-library fade only when held (+ shell tests)
 - [x] 2 FU2 O2 snapshot line height reserved (both Edits) + rect tests
 - [x] 3 FU2 O3 bank-trial skeptic F1–F3 deterministic (5 full-file runs)
-- [ ] 4 FU2 ⋯ Song overflow 1024×700 coarse (v6) + today's Edit 1004 px at 820
+- [x] 4 FU2 ⋯ Song overflow 1024×700 coarse (v6) + today's Edit 1004 px at 820
 - [ ] 5 CVD2 O1 range-bar number placement in JS (v6 keyboard.js + perform.js)
 - [ ] 6 CVD2 O5 changed dot vs two-digit tab number
 - [ ] 7 CVD2 O6 muted instrument's number grey
@@ -23,7 +23,7 @@ Worktree /home/claude/wt-fu2, branch lane-fu2 from origin/v2-native ee5bcb9. Scr
 - [ ] final report in this file
 
 ## Next step
-3 (bank-trial O3). Browser tests for 1 (ui-core scenes, ui-v6-bank polish2) and 2's ui-core edit updated, not yet
+5 (CVD2 O1). Browser tests for 1 (ui-core scenes, ui-v6-bank polish2) and 2's ui-core edit updated, not yet
 run (gates will). Probe for 2: /home/claude/scratch/fu2/snapshift.mjs (+ summ.py), results base-shift.json /
 lane-shift.json.
 
@@ -40,5 +40,11 @@ lane-shift.json.
   only): the random test yields per seed; the file's fetch retries once on a network TypeError (Chromium's behaviour
   on a reused keep-alive socket); boot() asserts the pack was read. Ablation under load: yield only 2/2 pass, retry
   only 2/2, neither 0/2. 5 full-file runs plain + 5 under load: 11/11 each (.probe/o3-*.txt).
+
+- 4: v6 ⋯ Song at 1024×700: 4 px past the header on touch; with the Chart button (D33 on by default) 47 px mouse /
+  74 touch. Fix ≤1100 px only: "Time" caption visually hidden (select keeps aria-label), key chip "· you play …"
+  may ellipsize (shrink .1, name gives way first). 1101 touch chart on: 1 px spare. Today's Edit at 820: body
+  min-width 1024 cut the right 204 px (Range column, PANIC). Fix <1024 px, only while today's Edit is the visible
+  view: body min-width 0 + top-bar rules (lamps no longer overlap). Flag-off Perform keeps 1024 (tested).
 
 ## Open questions

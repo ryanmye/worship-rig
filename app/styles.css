@@ -398,6 +398,29 @@ body.perform-locked .tb-views .seg[data-value="edit"] { opacity: .4; }
   .rec-time { min-width: 0; font-size: 14px; }
   .quick-btn { padding: 0 10px 0 8px; }
 }
+/* UI6-fu layout quirk (FU2): the body's 1024 px minimum made today's Edit 1004 px wide in an 820 px window (iPad
+   portrait, a narrow Chrome window), its right side (the Range column, Effects / Master tabs, PANIC) cut off past the
+   edge. Edit lays out at 820 by itself; only while it is the visible view (the flag-off Perform keeps its minimum),
+   and the top bar then gives the lamps room as the v6 one does at that width (styles-v6-ipad.css): a lamp whose
+   words don't fit is cut, never drawn over the next one. Below 1024 px only: wider windows are unchanged. */
+@media (max-width: 1023.98px) {
+  body:has(> #views > #view-edit:not([hidden]) > .ev2:not(.v6-edit)) { min-width: 0; }
+  body:has(> #views > #view-edit:not([hidden]) > .ev2:not(.v6-edit)) .tb-views .seg { min-width: 0; padding: 0 10px; }
+  body:has(> #views > #view-edit:not([hidden]) > .ev2:not(.v6-edit)) #midi-status:has(> .midi-name.off) {
+    flex-shrink: 0;
+  }
+  body:has(> #views > #view-edit:not([hidden]) > .ev2:not(.v6-edit)) .tb-status { justify-content: flex-start; }
+  body:has(> #views > #view-edit:not([hidden]) > .ev2:not(.v6-edit)) #ready-status {
+    flex-shrink: 1; min-width: 0; overflow: hidden;
+  }
+  body:has(> #views > #view-edit:not([hidden]) > .ev2:not(.v6-edit)) #ready-status > .ready-text {
+    flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  }
+  body:has(> #views > #view-edit:not([hidden]) > .ev2:not(.v6-edit)) .tb-meter { display: none; }
+  body:has(> #views > #view-edit:not([hidden]) > .ev2:not(.v6-edit)) .tb-rec .rec-time:not(.on):not(.saving) {
+    display: none;
+  }
+}
 @media (max-height: 820px) {
   .banner { min-height: 56px; padding: 4px 16px; }
 }
