@@ -32,7 +32,8 @@ doesn't check yet.
 
 **Not in the 2.0 Mac and iPad app yet** (they work in Chrome and in the 1.x Mac app): My Samples, patch packs and the
 Song bank, the GarageBand importer, My Pads (pad files for the drone), menu-bar mode, global shortcuts, the update
-check and MIDI clock out. The sections below say where a feature needs Chrome or the 1.x app.
+check, MIDI clock out, Open at login, keeping the screen awake, and most of the 1.x Rig and Help menus. The sections
+below say where a feature needs Chrome or the 1.x app.
 
 ---
 
@@ -349,7 +350,7 @@ Press **REC** (or **⌘R**) to record exactly what comes out of Worship Rig. Pre
 - **Mac app:** recordings go straight to **Music → Worship Rig** as `Rig 2026-10-04 1030.wav`. No dialog. (In 2.0
   the engine writes the file itself; on the iPad it goes to **Files › On My iPad › Worship Rig › Recordings**.)
   The file is written as you play, so even if something crashes, everything up to the last few seconds is saved.
-  **Help → Open Recordings Folder** takes you there.
+  In the 1.x app, **Help → Open Recordings Folder** takes you there (the 2.0 app has no such menu item yet).
 - **Chrome:** Chrome asks where to save each recording. Be aware that Chrome only creates the real file when you
   press stop: if the Chrome window crashes or is force-quit mid-recording, that take is lost. If Chrome can't show
   the save dialog, it records internally and downloads the file to your **Downloads** folder when you stop.
@@ -359,8 +360,8 @@ Press **REC** (or **⌘R**) to record exactly what comes out of Worship Rig. Pre
 ## MIDI Learn: map a footswitch to "Next Song"
 
 The most useful thing you can do with MIDI Learn: put a footswitch on your keyboard's second pedal jack (or use a
-button/pad on your controller), then go to **Settings → MIDI Learn**, click **Learn** next to **Next Song**, and
-press the footswitch. Now you can change songs without taking your hands off the keys. Do the same for
+button/pad on your controller), then go to **Settings → Keyboards & MIDI → MIDI Learn**, click **Learn** next to
+**Next Song**, and press the footswitch. Now you can change songs without taking your hands off the keys. Do the same for
 **Previous Song** if you have two. If a song has [scenes](#scenes-verse-chorus-bridge), learn **Next scene** (and
 **Previous scene**) the same way.
 
@@ -369,7 +370,8 @@ the reverb level and the master volume. Learned faders use "pickup": a hardware 
 past the value on screen, so the sound never jumps.
 
 **Any setting (2.0).** In Edit, right-click (Ctrl-click, or long-press) any slider, fader or level chip and choose
-**Learn MIDI knob**, then move the knob; **Forget** removes it. Settings › MIDI Learn lists these under the fixed rows.
+**Learn MIDI knob**, then move the knob; **Forget** removes it. Settings › Keyboards & MIDI › MIDI Learn lists these
+under the fixed rows.
 A mapping belongs to a place ("sound 2's Space"), so it moves that place in whichever song is playing. One knob can
 drive several faders. A knob move is an edit like a slider drag: the song shows its changed dot and Revert undoes it.
 You can't learn under Perform lock, but learned knobs keep working there. On the iPad, Safari has no right-click
@@ -386,12 +388,13 @@ menu: use the new layout's **Settings › MIDI Learn › Learn on Perform**.
 - **Perform / Edit** (**⌘E**): the Perform screen is big and simple for the service. Edit is where you build songs.
 - **Perform lock** stops accidental edits during the service. One press locks; unlocking needs a press-and-hold.
   Playing, the faders, PANIC, Go and the scene numbers stay live.
-- The Mac app keeps your Mac from going to sleep while it's open, and saves a backup of all your songs now and then
-  and every time you close it (**Help → Open Backups Folder**; the last 10 are kept). **Rig → Import Latest
-  Backup…** puts the newest one back (your current songs are backed up first).
-- Closing or quitting the Mac app while recording asks first. The part recorded so far is always kept.
-- If audio has to restart during a recording (Restart audio, or the output device disappears), the take is split:
-  the first part is saved and recording continues in a new file (a message says where).
+- The Mac app saves a backup of all your songs now and then and every time you close it (the last 10 are kept).
+  **Settings › Library & Backup › Import latest backup…** puts the newest one back (your current songs are backed up
+  first); in the 1.x app also **Rig → Import Latest Backup…** and **Help → Open Backups Folder**. The 1.x app also
+  keeps your Mac's screen from going to sleep while it's open; the 2.0 app doesn't yet.
+- Closing or quitting the 1.x Mac app while recording asks first. The part recorded so far is always kept.
+- In the 1.x app, if audio has to restart during a recording (Restart audio, or the output device disappears), the
+  take is split: the first part is saved and recording continues in a new file (a message says where).
 
 ## Settings
 
@@ -440,8 +443,9 @@ Screens to compare are listed in [native/docs/MAC_CHECK.md](native/docs/MAC_CHEC
 The 2.0 iPad app is the same app as on the Mac (iPadOS 17.5 or later). There is no App Store version: it is installed
 from Xcode on a Mac with a free Apple ID, and then has to be re-installed every 7 days (your songs stay). The steps
 are in [native/apple/README.md](native/apple/README.md), steps 7 to 10. To bring a library over, AirDrop a backup or an
-export to the iPad and open it with Worship Rig, or use **Import Library Backup…**. Recordings and backups show up in
-**Files › On My iPad › Worship Rig**.
+export to the iPad and open it with Worship Rig (with a keyboard attached, **⇧⌘I** Import Library Backup… also picks
+one from Files). Recordings and backups show up in **Files › On My iPad › Worship Rig**. The iPad app stays in
+landscape for now.
 
 ## Troubleshooting
 
