@@ -127,7 +127,8 @@ test('no hardware: listens to every port with the hint; a keyboard plugged in ta
   assert.equal(r.of('disconnected').at(-1).inputId, 'v1', 'the dropped fallback port releases its notes');
 });
 
-test('hot-unplug: the port goes disconnected, midi.js releases it, listen drops it; re-plug listens again', async () => {
+test('hot-unplug: the port goes disconnected, midi.js releases it, listen drops it; re-plug listens again',
+  async () => {
   const r = setup({ ports: [NORD, KEYSTATION] });
   await r.midi.init();
   await flush();
@@ -160,7 +161,8 @@ test('hot-unplug: the port goes disconnected, midi.js releases it, listen drops 
   assert.equal(r.of('noteon').at(-1).note, 62);
 });
 
-test('timestamps: engine seconds → performance.now() ms through the last tick; stale or no clock → now', async () => {
+test('timestamps: engine seconds → performance.now() ms through the last tick; stale or no clock → now',
+  async () => {
   const r = setup();
   await r.midi.init();
   await flush();
@@ -184,6 +186,17 @@ test('timestamps: engine seconds → performance.now() ms through the last tick;
   r.mock.midiIn('k1', [0x90, 60, 4], { ts: c.t - 30 }); // a stale map (asleep): now
   assert.equal(got.at(-1).timeStamp, r.env.now());
   assert.equal(r.of('noteon').at(-1).timestamp, r.env.now(), 'midi.js gets the mapped timestamp');
+  // addEventListener('midimessage') also opens a port; a duplicate add is a no-op (DOM rule)
+  const dup = (e) => got.push(e);
+  port.addEventListener('midimessage', dup);
+  port.addEventListener('midimessage', dup);
+  port.removeEventListener('midimessage', dup);
+  r.midi.select('v1'); // midi.js lets go of k1: the first listener keeps it open
+  await flush();
+  assert.deepEqual(r.listens().at(-1), ['k1', 'v1']);
+  const n = got.length;
+  r.mock.midiIn('k1', [0x90, 61, 5]);
+  assert.equal(got.length, n + 1, 'delivered once: the duplicate was not registered twice');
 });
 
 test('a reply snapshot older than a ports event does not undo it', async () => {
@@ -267,7 +280,8 @@ test('output.send → midi send {port, data, when?}; Web MIDI errors for bad byt
     assert.deepEqual(r.mock.findings, []);
   });
 
-test('midi-clock.js over the adapter: outputs, setOutput by name, the sink is tagged with the chosen name', async () => {
+test('midi-clock.js over the adapter: outputs, setOutput by name, the sink is tagged with the chosen name',
+  async () => {
   const r = setup();
   await r.midi.init();
   const ctx = r.engine.ctx;

@@ -107,7 +107,8 @@ test('no Web MIDI (WKWebView): midi.js runs on the bridge; keys play, Learn, Pro
         await a.until((k) => globalThis.__bridgeLog.toNative.slice(k).some((m) => m.op === 'play' && m.e === 'on'), m0);
         assert.equal(await a.midiIn('v1', [0x90, 72, 100]), false);
         await a.midiIn('k1', [0x80, 60, 0]);
-        await a.until((k) => globalThis.__bridgeLog.toNative.slice(k).some((m) => m.op === 'play' && m.e === 'off'), m0);
+        await a.until((k) => globalThis.__bridgeLog.toNative.slice(k).some((m) => m.op === 'play' && m.e === 'off'),
+          m0);
         const plays = (await a.sent(m0)).filter((m) => m.op === 'play' && (m.e === 'on' || m.e === 'off'));
         assert.equal(plays.length, 2, JSON.stringify(plays));
         assert.equal(plays[0].e, 'on');
@@ -127,7 +128,8 @@ test('no Web MIDI (WKWebView): midi.js runs on the bridge; keys play, Learn, Pro
         await a.midiIn('k1', [0xb0, 80, 127]);
         const res = await learning;
         assert.deepEqual(res, { cc: 80, channel: 0 });
-        assert.deepEqual(await a.ev(() => window.__rig.store.get().settings.midiLearn.nextSong), { cc: 80, channel: 0 });
+        const stored = await a.ev(() => window.__rig.store.get().settings.midiLearn.nextSong);
+        assert.deepEqual(stored, { cc: 80, channel: 0 });
         const ids = await a.ev(() => window.__rig.store.navIds());
         const cur = await a.ev(() => window.__rig.store.get().settings.currentSongId);
         const next = ids[ids.indexOf(cur) + 1];

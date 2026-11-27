@@ -113,11 +113,11 @@ class NativeMidiInput extends NativeMidiPort {
   constructor(access, p) {
     super(access, p);
     this._onmsg = null;
-    this._msgListeners = 0;
+    this._msgFns = new Set(); // 'midimessage' listeners (a second add of the same one is a no-op, as in the DOM)
   }
 
   _wanted() {
-    return this._open || !!this._onmsg || this._msgListeners > 0;
+    return this._open || !!this._onmsg || this._msgFns.size > 0;
   }
 
   get onmidimessage() {
@@ -134,23 +134,20 @@ class NativeMidiInput extends NativeMidiPort {
 
   addEventListener(type, fn, opts) {
     super.addEventListener(type, fn, opts);
-    if (type === 'midimessage' && fn) {
-      this._msgListeners += 1;
+    if (type === 'midimessage' && fn && !this._msgFns.has(fn)) {
+      this._msgFns.add(fn);
       this._access._listenChanged();
     }
   }
 
   removeEventListener(type, fn, opts) {
     super.removeEventListener(type, fn, opts);
-    if (type === 'midimessage' && fn && this._msgListeners > 0) {
-      this._msgListeners -= 1;
-      this._access._listenChanged();
-    }
+    if (type === 'midimessage' && this._msgFns.delete(fn)) this._access._listenChanged();
   }
 
   _deliver(data, timeStamp, handled) {
     const ev = makeEvent('midimessage', { data, timeStamp, handled: !!handled });
-    if (this._msgListeners > 0) this.dispatchEvent(ev);
+    if (this._msgFns.size > 0) this.dispatchEvent(ev);
     if (this._onmsg) this._onmsg.call(this, ev);
   }
 }
