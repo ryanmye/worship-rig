@@ -67,6 +67,8 @@ Evidence tags as in the Windows doc: **[R]** checked in this repo, **[V]** check
 ### 1.5a Ryan's call (D29, then D30)
 
 - **D30: ship remote-only.** No instrument mode on iPhone in 2.0; §1.2 is kept for a later version.
+- **D34: also a browser remote**, more stripped down (song + snapshot Prev/Next, PANIC, drone on/off) for old phones and
+  Android, served by the Mac; the native app's floor is iOS 15 (iPhone 6s and later), set by Xcode 26 / the App Store.
 
 - Remote from the XR up. Instrument mode only if Ryan's iPhone 14 runs it properly; otherwise remote-only until
   phones improve. Order: remote → engine spike on the 14 → phone layouts (if it passes) → RAM floor per phone.

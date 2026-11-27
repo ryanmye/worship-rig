@@ -560,3 +560,17 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
   - The flag-off purity probes change meaning: "chart off" is now an explicit `false`; with charts on, nothing
     loads until a song has a chart or the Chart module is opened (lazy module load as today).
   - The chart's look stays part of Ryan's Mac review (U9) with the rest of v6.
+
+## D34: A browser remote for old phones, more stripped down than the iPhone app (Ryan, 2026-11-27)
+- Ryan: "sure add browser remote. even more stripped down than the phone app". Also settles the native floor: the
+  App Store iPhone remote targets iOS 15 (iPhone 6s / SE 1st gen and later; Xcode 26 / App Store minimum), not the XR.
+- Tier 2 (mine), the shape:
+  - **What it is:** the Mac app serves one small page on the local network (off by default; Settings › Remote shows
+    the address and a QR code and a pairing code). Any phone's browser opens it: old iPhones, Android, a tablet.
+  - **What it does (only):** the song name and snapshot name; Previous / Next song; Previous / Next snapshot; PANIC;
+    drone on / off. No levels, no Edit, no setlist editing. The Mac stays in charge; Lock blocks everything but PANIC.
+  - **Built for old browsers:** one HTML file with ES5 script and plain CSS (no modules, no build step), plain
+    WebSocket, no web fonts; target Safari on iOS 12 (iPhone 5s / 6) reliably, iOS 7 (iPhone 4) best effort,
+    Android Chrome 50+. Falls back to polling if WebSocket fails.
+  - **Same command bus** as the iPhone app and the menu-bar popover; pairing with a short code; local network only.
+  - **Order:** after 2.0, with the Mac command bus (D31 item 2), before the iPhone app. Effort ≈ 3–5 agent-days [E].
