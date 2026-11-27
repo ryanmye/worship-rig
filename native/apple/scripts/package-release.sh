@@ -18,7 +18,8 @@
 # built app, for `tools/mac/check.sh --stage selftest --app`).
 # Signing is 1.x's: ad hoc (`codesign --force --deep --sign -`, build/afterPack.js), no hardened runtime, not
 # notarized. Gates: arm64 only, Signature=adhoc, identifier com.ryanmye.worshiprig.native, the web app is in the
-# bundle, nothing from My Samples / sound packs is, app size <= 480 MB (CLAUDE.md "Size budget": 500 MB rule, the
+# bundle, nothing from My Samples / sound packs is (no Apple/pack audio types; every file of Resources/app and
+# Resources/docs tracked in git), app size <= 480 MB (CLAUDE.md "Size budget": 500 MB rule, the
 # same 480 MB line build-lint uses; warns above 400 MB), the zip and the dmg each hold an app that verifies.
 # Exit 0 = packaged, 1 = a gate failed, 2 = usage. Written for /bin/bash 3.2 (macOS).
 set -euo pipefail
@@ -130,9 +131,33 @@ fi
 archs="$(lipo -archs "$exe")"
 [ "$archs" = arm64 ] || die "executable architectures are '$archs', expected arm64 only"
 [ -f "$app/Contents/Resources/app/index.html" ] || die "the web app is not in the bundle (Resources/app/index.html)"
-# CLAUDE.md: My Samples, GarageBand conversions, pack songs and sound-pack audio never ship in the app
-leak="$(find "$app" \( -name 'user-samples' -o -name 'sound-packs' -o -name '*.exs' \) -print 2>/dev/null | head -n 5)"
+# CLAUDE.md: My Samples, GarageBand/Logic conversions, pack songs and sound-pack audio never ship in the app.
+# (N10 skeptic F3: the check was names only, user-samples / sound-packs / *.exs.) Two checks:
+# 1. names and extensions nothing in the bundle uses (the bundled samples are app/samples/*.mp3): Apple and pack
+#    audio and instruments, GarageBand/Logic files, pack.json. find errors go into $leak too, so they fail (F5).
+leak="$(find "$app" \( -iname 'user-samples' -o -iname 'sound-packs' -o -iname '*.exs' -o -iname '*.caf' \
+  -o -iname '*.aif' -o -iname '*.aiff' -o -iname '*.aifc' -o -iname '*.m4a' -o -iname '*.wav' -o -iname '*.flac' \
+  -o -iname '*.ogg' -o -iname '*.sfz' -o -iname '*.aupreset' -o -iname '*.cst' -o -iname '*.pst' \
+  -o -iname '*.patch' -o -iname '*.band' -o -iname '*.logicx' -o -name 'pack.json' \) -print 2>&1 | head -n 5 || true)"
 [ -z "$leak" ] || die "personal or pack content in the bundle: $leak"
+# 2. Resources/app and Resources/docs are folder references, copied verbatim from the checkout (project.yml), so
+#    every file in them must be tracked in git: a converted GarageBand .m4a/.mp3 or a pack copied into app/ (never
+#    committed, often git-ignored) is caught even when its name looks like a bundled sample's.
+res="$app/Contents/Resources"
+[ -d "$res/docs" ] || die "no Resources/docs in the bundle (project.yml folder reference ../../docs)"
+repo_root="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || true)"
+[ -n "$repo_root" ] || die "$here is not in a git checkout: cannot check the bundle's web app against git"
+(cd "$repo_root" && git ls-files -z -- app docs) | tr '\0' '\n' | LC_ALL=C sort > "$work/tracked.txt" \
+  || die "git ls-files app docs failed in $repo_root"
+(cd "$res" && find app docs -type f ! -name .DS_Store) | LC_ALL=C sort > "$work/bundled.txt" \
+  || die "cannot list $res/app and $res/docs"
+[ -s "$work/tracked.txt" ] && [ -s "$work/bundled.txt" ] || die "empty file list (git ls-files or find failed)"
+untracked="$(LC_ALL=C comm -13 "$work/tracked.txt" "$work/bundled.txt")"
+if [ -n "$untracked" ]; then
+  printf '%s\n' "$untracked" | head -n 20 >&2
+  die "$(printf '%s\n' "$untracked" | wc -l | tr -d ' ') file(s) in the bundle's app/ or docs/ are not tracked in git" \
+    "(untracked or git-ignored in $repo_root: personal content? commit or remove them)"
+fi
 
 say "codesign --force --deep --sign - (ad hoc)"
 codesign --force --deep --sign - "$app"
@@ -146,9 +171,12 @@ sig_ident="$(printf '%s\n' "$sig" | sed -n 's/^Identifier=//p' | head -n 1)"
 app_kb="$(du -sk "$app" | cut -f1)"
 app_mb=$((app_kb / 1024))
 say "app size: $app_mb MB"
-if [ "$app_mb" -gt "$MAX_MB" ]; then die "Worship Rig.app is $app_mb MB (> $MAX_MB MB; CLAUDE.md size budget)"; fi
+# in KB, as build-lint (totalKB <= 480 * 1024): whole MB rounded down let 480.0-480.99 MB through (N10 skeptic F4)
+if [ "$app_kb" -gt $((MAX_MB * 1024)) ]; then
+  die "Worship Rig.app is $app_kb KB (> $MAX_MB MB; CLAUDE.md size budget)"
+fi
 size_note="under the $COMFORT_MB MB comfort zone"
-if [ "$app_mb" -gt "$COMFORT_MB" ]; then
+if [ "$app_kb" -gt $((COMFORT_MB * 1024)) ]; then
   size_note="above the $COMFORT_MB MB comfort zone (limit $MAX_MB)"
   echo "::warning title=App size::Worship Rig.app is $app_mb MB, $size_note"
 fi

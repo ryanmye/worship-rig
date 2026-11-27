@@ -339,3 +339,19 @@ test('release-notes CLI: --require-final refuses the 2.0 draft, also through a s
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// N10 skeptic F3/F4 (static: the script needs macOS; a stubbed run is in native/docs/reviews/N10.md)
+test('package-release.sh: personal-content gate and the 480 MB line as build-lint draws it', () => {
+  const sh = read('native/apple/scripts/package-release.sh');
+  assert.match(sh, /^set -euo pipefail$/m);
+  for (const ext of ['exs', 'caf', 'aif', 'aiff', 'm4a', 'wav', 'flac', 'sfz', 'aupreset', 'band', 'logicx']) {
+    assert.ok(sh.includes(`-iname '*.${ext}'`), `bans *.${ext}`);
+  }
+  assert.match(sh, /git ls-files -z -- app docs/, 'bundled app/ and docs/ checked against git');
+  assert.match(sh, /comm -13 "\$work\/tracked\.txt" "\$work\/bundled\.txt"/);
+  assert.match(sh, /^MAX_MB=480$/m);
+  assert.match(sh, /"\$app_kb" -gt \$\(\(MAX_MB \* 1024\)\)/, 'compares KB, as build-lint');
+  // the bundled samples stay mp3, so the extension ban can't trip on them
+  const exts = new Set(JSON.parse(read('app/samples/manifest.json')).instruments.map((i) => i.ext));
+  assert.deepEqual([...exts], ['mp3'], 'bundled samples are mp3 only');
+});
