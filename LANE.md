@@ -130,9 +130,9 @@ native/docs/reviews/NMA.md; gates via tools/cloud/gates.mjs. Commit on lane-nma 
 ### Checklist
 - [x] S0. Rebase onto origin/v2-native (clean, 11 commits replayed)
 - [x] S1. Read adapter, midi.js, midi-clock.js, core midi_service / port_table / parser, bridge hello, RigMIDI.swift
-- [ ] S2. Probes: reload stuck-note path, surface edge cases, mock vs core
-- [ ] S3. Fixes (tests first), one commit each
-- [ ] S4. engine suite 404: base check, harness fix if one-line
+- [x] S2. Probes: reload stuck-note path, surface edge cases, mock vs core (.probe/fuzz.mjs: 0 failures)
+- [x] S3. Fixes (tests first), one commit each (F1 01f5cea)
+- [x] S4. engine suite 404: pre-existing on 7e92df4; test server answers /__tests/api/health (67a3228)
 - [ ] S5. Gates
 - [ ] S6. native/docs/reviews/NMA.md + MAC_CHECK steps; final report
 
@@ -142,4 +142,6 @@ native/docs/reviews/NMA.md; gates via tools/cloud/gates.mjs. Commit on lane-nma 
   has empty heldBySrc / pedalDown=false, so key-ups are dropped and a pedal lift sends nothing → notes / sustain stuck.
 
 ### Next step
-S2 probes.
+S5 gates (node tools/cloud/gates.mjs shell-unit,unit,native-midi,engine,ui-core,ui-v6,settings,migration-1x),
+then the gates table into native/docs/reviews/NMA.md; optional fresh rig-devhost -j1 + opt-in devhost test.
+Rebased again onto origin/v2-native 030562e (N10 merge); O1-O8 in the review doc.
