@@ -370,6 +370,195 @@ Everything else on the README's "Mac / iPad verification list" (WebContent crash
 AVAudioSession interruptions) is optional for Ryan; it can be scripted into tier 1 later on top of the `--self-test` mode ("Self-test" below), which
 now covers launch, load, `hello`, boot and quit from `check.sh`.
 
+## 2.0 release checklist (Lane R, 2026-11-27; nothing here is done yet)
+
+Every step that publishes something (merging to `main`, a tag, a GitHub release, the site, uploading anything) is tier
+1: **Ryan does it, or says "go" for it**. The cloud prepares; it never tags, releases or pushes `main`. The design calls
+for the review are in `native/docs/lanes/U9-review-list.md` (numbered there; the checkboxes in step 5 use those
+numbers). The player-facing notes are `docs/release-notes-2.0.md` (a draft with a banner and "Editor's notes").
+
+### Blockers found while writing the notes (code read at d35b788, not run on a Mac)
+
+- [ ] **B1 MIDI keyboard input in the app.** WKWebView has no Web MIDI; the `requestMIDIAccess` polyfill over the
+  native `midi` op (ENGINE_CONTRACT §5 "v1 default", WEBKIT_AUDIT item 5) is not in `app/js`; `RigMIDI.listen`
+  connects only the source ids a `midi listen` op names, and nothing in `app/js` sends one. Expect: in the Mac and
+  iPad app a keyboard plays nothing, and the MIDI lamp, MIDI Learn, Program Change and touch fitting don't work. Build
+  the polyfill (builder + skeptic, with a mock-native test), or prove this wrong on the Mac in step 4 item 1. Part A
+  of Tier 2 (Chrome + `rig-devhost`) doesn't catch it: Chrome has Web MIDI.
+- [ ] **B2 Export from the app.** Settings › Export library, Edit's Export song and the v6 song menu's Export download
+  a file; `RigNavigation.swift` allows `blob:` / `data:` but has no `WKDownload` handling. Check on the Mac (step 4
+  item 5); if nothing is saved, add a download delegate (save panel on the Mac, the Files picker on the iPad).
+- [ ] **B3 No native release build.** `.github/workflows/release.yml` builds the **Electron** app on any `v*` tag
+  (and, on `main`, on a release published from the web UI). Tagging `v2.0.0` as things stand publishes Electron
+  arm64 + x64 builds of the 1.x shell under the 2.0 name. Before any 2.0 tag: replace or gate that workflow (step 3).
+
+### Step 0: before starting
+
+- [ ] Every 2.0 lane is merged on `v2-native` and VERIFIED: the core3 CI flake + CAP size rule (lane-core3f), Lane E2
+  leftovers, this lane (R) after its skeptic, and B1 / B2 above.
+- [ ] Ryan's answers to `U9-review-list.md` are applied (each answered item: built, reviewed, merged) or moved to 2.0.x.
+- [ ] Ryan's tier-1 answers: U9 list items 1–8 (release scope, Intel / old macOS, Electron's future, who builds).
+
+### Step 1: gates on the release commit
+
+- [ ] CI `native-core` green on the commit (`build-test` macos-15 + ubuntu, `goldens`, `mac-check` incl. `selftest`,
+  `sanitizers`): `env -u GH_TOKEN gh api repos/ryanmye/worship-rig/actions/runs?branch=v2-native`.
+- [ ] `node test/run-all.mjs` on the cloud box with `node tools/cloud/gates.mjs` (every suite, one at a time;
+  `PLAYWRIGHT_BROWSERS_PATH=/root/.cache/rig-pw`), incl. build-lint (Electron size, fails > 480 MB).
+- [ ] Tier 1 on Ryan's Mac, all stages on that commit: `bash tools/mac/check.sh --rev <sha> --stage
+  tools,core,probe,apple-mac,selftest,apple-sim` (install the iOS platform first so `apple-sim` runs). Record it under
+  "Results" as Mac check #5.
+
+### Step 2: build the Release app (Ryan's Mac; the same signing as 1.x)
+
+1.x is **ad-hoc signed and not notarized** (`build/afterPack.js` runs `codesign --sign -`; release.yml sets
+`CSC_IDENTITY_AUTO_DISCOVERY=false`). 2.0 keeps that: `project.yml` has `CODE_SIGN_IDENTITY: "-"` and the hardened
+runtime off. Notarizing needs a paid Apple Developer ID; that is a separate tier-1 decision, not part of 2.0.
+
+```sh
+cd native/apple
+rm -rf build && ./scripts/build-core.sh --mac-only
+xcodegen
+xcodebuild -project WorshipRig.xcodeproj -scheme WorshipRig-macOS -configuration Release \
+  -destination 'platform=macOS' CODE_SIGN_IDENTITY=- ARCHS=arm64 -derivedDataPath build/dd build
+APP="build/dd/Build/Products/Release/Worship Rig.app"
+codesign --verify --deep --strict "$APP" && codesign -dv "$APP" 2>&1 | grep -E 'Signature|Identifier'
+du -sh "$APP"                                   # size rule: < 500 MB (comfort ~400); expect ~100 MB (estimate)
+mkdir -p dist && ditto -c -k --keepParent "$APP" dist/Worship-Rig-arm64.zip
+mkdir -p /tmp/rig-dmg && cp -R "$APP" /tmp/rig-dmg/ && ln -sf /Applications /tmp/rig-dmg/Applications
+hdiutil create -volname "Worship Rig" -srcfolder /tmp/rig-dmg -ov -format UDZO dist/Worship-Rig-arm64.dmg
+```
+
+- [ ] The Release configuration has never been built: fix what it shows (the Debug build is what CI and `check.sh`
+  compile).
+- [ ] `codesign -dv` says `Signature=adhoc`, identifier `com.ryanmye.worshiprig.native`.
+- [ ] Asset names stay `Worship-Rig-arm64.dmg` / `.zip`: 1.1's update check (`update-check.js` `pickAsset`) looks for
+  exactly those. There is no `x64` file (the core is built arm64 only).
+- [ ] Copy the `.zip` to another account or Mac through AirDrop and do the first-open steps (macOS 15+: Done › System
+  Settings › Privacy & Security › Open Anyway). The README's wording must match what macOS 26 shows.
+
+### Step 3: the release workflow (cloud prepares, Ryan approves)
+
+- [ ] Replace release.yml's Electron build for `v2*` tags: either a macOS job that runs step 2's commands and uploads
+  the two files (`macos-15` has Xcode; `brew install xcodegen ninja`), or "upload the files Ryan built" by hand with
+  `gh release create … --prerelease` and no workflow build. Keep `v1*` tags building Electron if 1.x patch releases
+  stay possible. Dry-run it (`workflow_dispatch`, `dry_run: true`) before any tag.
+- [ ] Release body: `docs/release-notes-2.0.md` without its banner and "Editor's notes", plus the starter library
+  (`docs/starter/worship-rig-starter-library.json`), as 1.x attached it.
+- [ ] Decide pre-release or "latest" (U9 item 3): "latest" makes every 1.1 install announce 2.0, Intel ones included.
+
+### Step 4: Mac hands-on (Ryan, about 40 minutes; after step 2's app)
+
+Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to report").
+
+- [ ] 1. **MIDI keyboard in the app** (B1): the lamp lights, notes play, the pedal holds, Settings › Keyboards & MIDI
+  lists the keyboard, Learn takes a knob.
+- [ ] 2. **First launch with your real 1.x library**: quit 1.x, open 2.0, "Import your Worship Rig library?" ›
+  Import; songs, setlists, MIDI Learn and theme as in 1.x. Confirm the Electron backups folder name
+  (`ls ~/Library/Application Support`; `RigLibrary` scans `*/backups`).
+- [ ] 3. **1.1.1 device settings** come over by themselves from this Mac's backups (touch curves, click, audio output).
+- [ ] 4. **Song changes while holding notes** (Tier 2 A5) in the app, with **cue, then Go**: tap a chip (cued), Go,
+  a footswitch on Next Song plays the cue, Prev clears it; a cold song shows "loading" until ready.
+- [ ] 5. **Export** (B2): Settings › Export library writes a file you can import back.
+- [ ] 6. **Recording**: REC, 30 s, stop; the WAV is in Music › Worship Rig and plays.
+- [ ] 7. **Buffer size 64 / 128** and **Voices per sound 128** with a big pedalled chord: no clicks. Time a large
+  layered chord for the Auto 128 → 256 question (U9 item 6).
+- [ ] 8. **8 sounds**: Edit › Slots to 8; all 8 play and meter; Chrome on the same library says 5–8 are silent there.
+- [ ] 9. **Scenes with Space / Echo / drone**: save two that differ in room and drone on / off; switch with a held
+  chord: glides, no restart, no click. Easy Transpose moves the scenes' drone.
+- [ ] 10. **MIDI Learn any setting**: right-click a Space send in Edit › Learn MIDI knob; the knob moves it with
+  pickup; Revert undoes it.
+- [ ] 11. **Chord chart**: import a ChordPro file, transpose follows, auto-scroll, A− / A+; ⌘+ / ⌘− reach the page.
+- [ ] 12. **Themes**: all **eight** (not six) render in the app; colour-blind colours Red–green and Blue–yellow in a
+  dark theme and in Sanctuary Day.
+- [ ] 13. **PANIC / Esc / Lock**: Esc closes a menu then panics; ⌘. panics at once; Esc always panics on; Lock taps on,
+  holds off.
+- [ ] 14. **Sleep / wake and an audio device change** (headphones ↔ interface) while the app plays.
+- [ ] 15. **The new layout** (Settings › Look › Perform view › Try the new layout): go through U9-review-list.md
+  sections 2–9 and answer each numbered item:
+  - [ ] Perform: 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25
+  - [ ] Song bank and Try it: 26, 27, 28 (needs a pack: run Chrome for this until the app reads My Samples)
+  - [ ] MIDI Learn: 29, 30, 31, 32, 33
+  - [ ] Edit: 34, 35, 36, 37
+  - [ ] Settings: 38
+  - [ ] iPad and small windows: 39, 40, 41
+  - [ ] Themes and colour: 42, 43, 44, 45, 46, 47
+  - [ ] Esc: 48; design passes: 49, 50
+
+### Step 5: iPad install (Ryan; needs his Apple ID)
+
+- [ ] `native/apple/README.md` steps 7–10: `./scripts/build-core.sh` (with the iOS slice), `xcodegen`, team = his
+  Personal Team, Developer Mode on, Run to the iPad, trust the developer profile.
+- [ ] Launch, the page loads, a song plays (B1 decides MIDI over USB-C).
+- [ ] AirDrop a 1.x backup › "Import this library?" › Import; Files › On My iPad › Worship Rig shows Backups and
+  Recordings.
+- [ ] The README's verification list items 6–7 (memory warning, AVAudioSession: silent switch, screen lock, a call,
+  headphones in and out).
+- [ ] Portrait and landscape in the new layout (U9 items 35, 39–41).
+- [ ] Note the free-account limits for the release notes (7-day expiry, data kept on re-install).
+- [ ] The iPad memory budget and its Auto voice limit (Lane E6) stay for 2.0.x unless Ryan wants them first.
+
+### Step 6: switch the new layout on by default (U9, tier 1: Ryan says when)
+
+- [ ] After step 4 item 15's answers are built and reviewed.
+- [ ] `settings.uiV6`: absent = on, `false` = off (as `settings.chartView` did in C-SHIP, D33), so libraries that never
+  touched it get the new layout and anyone can still turn it off. Update `store.js` validation, `main.js`
+  (`?ui6=`, `__rig.setUiV6`, the Perform / Edit mounts), the Settings row's words ("Use the classic layout"?), the
+  purity probes (they then test "off" as an explicit `false`), and the release notes' "New layout" marks.
+- [ ] Decide when today's views are retired (2.0 or 2.0.x); retiring them is a separate lane.
+- [ ] Re-run ui-v6, ui-v6-edit, ui-v6-ipad, ui-v6-bank, ui-v6-themes, settings, ui-core, chart, edit-v2 with the
+  default flipped.
+
+### Step 7: version bumps (cloud prepares, on `v2-native`)
+
+- [ ] `native/apple/project.yml`: `MARKETING_VERSION` is already `2.0.0`; set `CURRENT_PROJECT_VERSION` to the build
+  number of the release build (1 for the first).
+- [ ] `package.json` `version` (1.1.0 on `v2-native`; main has 1.1.1): `2.0.0` if release.yml's tag check stays
+  (`tag == v<package.json version>`), and so the Electron shell, if kept, says 2.0.0.
+- [ ] Settings › About in the app: check what it shows as the version (the native `window.rig` has no `getInfo`).
+- [ ] `docs/release-notes-2.0.md`: remove the banner and "Editor's notes", fill in the file names and sizes, and
+  re-check "Known gaps" against what B1–B3 and U9 items 1–2 decided.
+- [ ] `docs/site/index.html`: put the measured download / installed sizes in the `download` section (the HTML comment
+  there), check the What's new cards against the final scope, bump `style.css?v=`.
+- [ ] `native/docs/RELEASE_NOTES_2.0-migration.md`: "1.1.1 … *to be published*" is out of date (v1.1.1 was released
+  2026-11-26).
+
+### Step 8: tag and release (instructions for Ryan; the cloud does none of this)
+
+1. Merge `v2-native` into `main` (main has 1.1.1-only commits: `release.yml`'s `release: published` trigger, the site's
+   1.1.1 line and `docs/release-notes-1.1.1.md`; the site part is already folded into `v2-native` by Lane R, the
+   workflow part needs step 3's version). Push `main`.
+   - `pages.yml` deploys `docs/site/` on that push. Until the 2.0 release exists, the site's "Download for Mac"
+     (`releases/latest/download/Worship-Rig-arm64.dmg`) still gives 1.1.1's Electron arm64 file under a page that
+     says 2.0. So either release first from a tag on the merge commit and push `main` right after, or merge without
+     `docs/site/` and bring it in once the release is up.
+2. Tag: `git tag -a v2.0.0 -m "Worship Rig 2.0.0" <merge commit> && git push origin v2.0.0` (or GitHub › Releases ›
+   Draft a new release › new tag `v2.0.0` on `main` › Publish, which main's release.yml also handles).
+3. Check the release page: title "Worship Rig v2.0.0", the two files and the starter library, the notes, pre-release
+   or latest as decided.
+4. Download `Worship-Rig-arm64.dmg` from the site's button on a clean account and do the first open.
+5. On a Mac with 1.1.1: Settings › About says 2.0.0 is available and Download opens the arm64 `.dmg`.
+6. Tell the dashboard; revoke the away-week token if it is still live (AWAY_WEEK_PLAN §0).
+
+### Screenshots for the 2.0 site
+
+The site keeps today's screenshots (`docs/site/img/*.webp`): today's screens stay the default until step 6. New
+shots, if wanted, from these (paths only; nothing over 1 MB goes into `docs/site/img`, and webp at 1440×900 like the
+existing ones):
+
+- 16 sounds, today's screens: `native/docs/reviews/UIA-shots/after-perform-16-1440x900.png`,
+  `after-edit-16-1440x900.png` (iPad portrait: `*-820x1180.png`).
+- Settings › Sound with the 2.0 choices: `native/docs/reviews/UIB-shots/after-sound-1440x900.png`,
+  `after-sound-advanced-1440x900.png`; the categories: `native/docs/reviews/settings-shots/after-*-1440x900.png`.
+- Chord chart: `native/docs/reviews/chart-view-shots/classic-1280.png`, `sanctuary-day-1280.png`, `import-1024.png`.
+- Colour-blind colours, new layout: `native/docs/reviews/UI6-cvd-shots/v6-perform-16-sanctuary-rg-1280.png`,
+  `v6-edit-16-split-sanctuary-rg-1280.png`; swatches `palettes.svg`.
+- New layout (not in git; on the cloud box, regenerate with `node tools/themes/shoot-v6.mjs`):
+  `/home/claude/design-out/` `u1`…`u8b` (`u7a/u7a-browse-1280.png` Song bank, `u7a/u7a-trying-1280.png` Try it, `u7b/u7b-stage-1280.png`
+  chart on the stage, `u7c/u7c-savesnap-1280.png` Save snapshot, `u8a/` iPad).
+- To retake for the release: Perform with a cued song in the setlist (cue, then Go) and the Chart button, in
+  Sanctuary at 1440×900; the iPad in portrait once installed (step 5).
+
 ## Self-test (`Worship Rig --self-test`, E4)
 
 A UI-less launch of the macOS app (`native/apple/Sources/Shared/RigSelfTest.swift`), so that the app's first launch
