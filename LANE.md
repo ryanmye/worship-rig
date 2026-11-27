@@ -28,9 +28,10 @@ verified, lane tip.
 - [x] Rebased onto c10ad59 (CONTRACT_CHANGES conflict: both sides kept)
 - [x] Gates on the c10ad59 tree (chain): shell-unit / unit fail only on non-lane flakes (see below); ui-v6 90/90,
   ui-v6-edit 43/43, ui-v6-ipad 29/29, ui-v6-bank 23/23, settings 115/115, ui-core 78/78, themes rc 0
-- [ ] edit-v2, ui-v6-themes (chain running on the c10ad59 tree; logs /tmp/cvdsk/gates2/)
-- [ ] Rebase onto origin/v2-native 937a04a (tools/cloud only), then rerun through tools/cloud/gates.mjs (purity with
-  UI6_PURITY_BASE=origin/v2-native: the default merge-base is the stale local v2-native)
+- [x] edit-v2 14/14 files, ui-v6-themes 30/30 clean in 2253 s (c10ad59 tree; logs /tmp/cvdsk/gates2/)
+- [x] Rebased onto origin/v2-native 937a04a (tools/cloud only; app/ and test/ are byte-identical to the gated tree)
+- [ ] gates.mjs shell-unit,unit,ui-v6,ui-v6-edit with UI6_PURITY_BASE=origin/v2-native (the default merge-base is
+  the stale local v2-native 36ef998)
 - [ ] Fill the gates table in the review, set the verdict, commit, hand back
 
 ## Findings
@@ -50,4 +51,4 @@ verified, lane tip.
   unit importer-host "progress snapshots" flakes under load (load avg 13).
 
 ## Next step
-Wait for the chain to finish (no rebase while it runs), then rebase onto 937a04a and run the gates with gates.mjs.
+Run the gates.mjs list above, fill the gates table in the review, then hand back.
