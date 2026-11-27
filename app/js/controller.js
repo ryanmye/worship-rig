@@ -850,7 +850,10 @@ export function createController(o) {
     leaveBase();
     sceneState = { ...sceneState, n, tweak: null };
     if (applied === cur) applied = saved; // only `scenes` changed, and it now plays what was heard …
-    sceneMove(heard, live(applied)); // … but for a key chosen in the dialog (D26.1a): the drone goes there
+    // … but for a key chosen in the dialog (D26.1a): the drone goes there. UI6-snap F1: from what was heard to the
+    // saved song as it plays now, not to live(applied): during an instrument re-prepare `applied` is still the song
+    // before the load, without this scene, and the move took the whole mix to that song's own levels / Space / Echo
+    sceneMove(heard, live(saved));
     emit('scene', sceneInfo());
     if (bus) publishState();
     return true;
