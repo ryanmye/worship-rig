@@ -590,6 +590,11 @@ Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to r
   if the Electron shell, if kept, should say 2.0.0. `release-native.yml` checks the tag against `project.yml`
   `MARKETING_VERSION` instead.
 - [ ] Settings › About in the app: check what it shows as the version (the native `window.rig` has no `getInfo`).
+- [ ] The engine's version string is still `worship-rig-core 0.1.0-skeleton` (native/core/src/api/rig_engine.cpp:51;
+  seen in the first release-native dry run, 030562e): set it to the release version (or derive it from
+  `MARKETING_VERSION`).
+- First release-native dry run (030562e, 2026-11-27, build only): macOS Release app **89 MB** installed, zip 77.2 MB,
+  dmg 86.1 MB; self-test ok (load, hello, boot, store); unsigned iPad archive 78.1 MB. Re-measure on the release commit.
 - [ ] `docs/release-notes-2.0.md`: remove the banner and "Editor's notes", fill in the file names and sizes, and
   re-check "Known gaps" against what B1–B3 and U9 items 1–2 decided. The publish job refuses the file until the
   banner and "Editor's notes" are gone (`release-notes.mjs --require-final`); the dry run's summary says whether it
