@@ -355,3 +355,23 @@ test('package-release.sh: personal-content gate and the 480 MB line as build-lin
   const exts = new Set(JSON.parse(read('app/samples/manifest.json')).instruments.map((i) => i.ext));
   assert.deepEqual([...exts], ['mp3'], 'bundled samples are mp3 only');
 });
+
+// N10 skeptic: no secret but GITHUB_TOKEN, and `latest` reaches gh only through the input
+test('release workflows: GITHUB_TOKEN only; --latest only when the latest input is ticked', { skip: noYaml }, () => {
+  for (const f of ['release.yml', 'release-native.yml']) {
+    const src = read(`.github/workflows/${f}`);
+    const used = [...src.matchAll(/secrets\.([A-Za-z_][\w]*)/g)].map((m) => m[1]);
+    assert.deepEqual([...new Set(used)], ['GITHUB_TOKEN'], f);
+    assert.ok(!/pull_request_target|workflow_run|repository_dispatch/.test(src), `${f}: no foreign triggers`);
+  }
+  const w = wf('release-native.yml');
+  const create = w.jobs.release.steps.find((s) => s.name === 'Create the release');
+  assert.equal(create.env.LATEST, '${{ inputs.latest }}');
+  assert.equal((create.run.match(/--latest/g) || []).length, 1);
+  const kind = /if \[ "\$LATEST" = true \]; then kind=\(--prerelease=false --latest\); else kind=\(--prerelease\); fi/;
+  assert.match(create.run, kind);
+  for (const [n, j] of Object.entries(w.jobs)) {
+    if (n === 'release') continue;
+    for (const s of j.steps) assert.ok(!/gh release|--latest/.test(s.run || ''), `${n}: ${s.name} touches no release`);
+  }
+});
