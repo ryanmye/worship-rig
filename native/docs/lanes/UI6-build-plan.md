@@ -87,7 +87,9 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 - **Polish batch 2 (UI6-polish1 O1/O2, orchestrator):** v6 Perform overlays (Quick sheet, step panels, popovers)
   opt in to `underModal` so the Esc that closes Settings never closes them (today's Perform unchanged); move the
   Back-into-the-gap rule from bank/banner.js into `controller.backFromTrial` so every Back (incl. perform.js destroy
-  on a flag flip) uses it. O3 (reload drops a setlist gap) is pre-existing: note only.
+  on a flag flip) uses it. O3 (reload drops a setlist gap) is pre-existing: note only. Also (orchestrator screenshot,
+  2026-11-27): v6 Edit's song title is cut mid-word at 1280×800 ("Sunday Pad + Pia" with no ellipsis) — ellipsize or
+  let the KEY / BPM / Notes chips give way; check at 1180 and 820 too.
 
 - **U8 themes (UI6-U6 O3, pre-existing):** Daylight Day's Sound note `.st-engine-note` is 1.88:1 even with the
   flag off; fix in the themes pass. Also UI6-U6 O1/O2 (rotation keeps the open category; live "n min ago").
