@@ -13,8 +13,11 @@ ui-v6-bank,settings. Don't push.
 - [x] T1: read CI log, read test + build_worker (.probe/ci/*.log)
 - [x] T1: root cause + deterministic repro (hook testSwitchSlotWaitMs; unfixed 0/10 adopted 5/5)
 - [x] T1: fix (BuildWorker::PrebuildHold in SongGraph::prepare + onRateChanged) 34c9bec
-- [ ] T1: loops: g++ 1000x running (.probe/loop-gcc1000/summary.txt); clang-20 1000x; ASan; taskset 1/2 CPUs;
-      RIG_TEST_DECODE_THREADS 1..4
+- [x] T1: loops (supersede + core3f cases per run; logs .probe/loop-*/summary.txt): g++ 1000 (839 + 161 after the
+      restart), clang-20 1000, RIG_TEST_DECODE_THREADS 1..4 x25, taskset 1 CPU x40 (g++, clang), ASan x20, TSan x2:
+      0 prebuild-count failures (busy <= 1 and hits + busy == 10 in every run), 0 sanitizer reports. Timing-bound
+      failures (tick gaps / reply latency, load avg 3-19 from another agent + my own jobs) in about half the runs
+- [ ] T3 (added by coordinator): runtime_preload :314 flake (CI 45940152991, `301.5 < 156.083`)
 - [x] T1: native gates: fixtures 112/112 byte-identical to base (g++ and clang-20); ctest clang-20 -Werror 84/84;
       g++ 83/84 and ASan 83/84 (unit.core3 tick-gap bounds only, load avg 4-6 from another agent; 0 sanitizer
       reports); A/B with a temp no-hold toggle under the same load: hold 3/8 clean, no-hold 1/8 (same gap lines)
