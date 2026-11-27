@@ -490,3 +490,14 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
 - **Signing:** not decided; the default is unsigned at first, which means Windows SmartScreen shows "Windows protected
   your PC → More info → Run anyway" on first launch until the file builds reputation. A paid signing route (Azure
   Artifact Signing ≈ $120/yr) can be added later without changing the channel. Uploading a release stays tier 1.
+
+## D29: iPhone: remote from the XR up; instrument mode only if Ryan's iPhone 14 runs it properly (Ryan, 2026-11-27)
+- **Remote mode** runs on every iPhone from the XR (iOS 17.5, the iPad's target). It has no audio engine, so 3 GB
+  phones are fine.
+- **Instrument mode** is gated on a test on Ryan's iPhone 14 (6 GB): full 2.0 engine, a heavy song, a 30-minute set
+  with no dropouts and no memory kill. If the 14 fails, the iPhone app ships remote-only and instrument mode stays
+  planned until phone hardware catches up.
+- Tier 2 (mine, from this): build order is remote first, then a 1–2 day engine spike on the 14 before any phone
+  layout work. If the 14 passes, instrument mode turns on per phone at runtime from a measured RAM floor
+  (`ProcessInfo.physicalMemory`, the floor set from the 14 and E6); phones below it see remote only. The 3 GB
+  instrument tier (≈ 3–5 agent-days) is dropped.

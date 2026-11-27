@@ -63,6 +63,11 @@ Evidence tags as in the Windows doc: **[R]** checked in this repo, **[V]** check
 3. Does remote mode need to work without Wi-Fi (Mac hotspot, USB)? Default: same Wi-Fi only.
 4. Price / App Store listing (shared with the iPad listing).
 
+### 1.5a Ryan's call (D29)
+
+- Remote from the XR up. Instrument mode only if Ryan's iPhone 14 runs it properly; otherwise remote-only until
+  phones improve. Order: remote → engine spike on the 14 → phone layouts (if it passes) → RAM floor per phone.
+
 ### 1.6 Earliest iPhone and work [V for iOS lists and RAM, E for effort]
 
 - iOS 26 and iOS 27 run on iPhone 11 and later plus SE (2nd/3rd gen); iOS 26 dropped XS / XS Max / XR. With the
