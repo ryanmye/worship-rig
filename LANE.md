@@ -149,3 +149,27 @@ UI6_PURITY_BASE=origin/v2-native)
 
 **Lane tip:** see `git log -1` on lane-fu2 (this report's commit, after 76850e7 where every gate passed; LANE.md only
 changed since). Not pushed.
+
+## Skeptic (lane-fu2)
+
+Rebased onto origin/v2-native cae9f84 (C-SHIP). Conflicts: styles-v6-edit.css (one ≤1100 px media query: C-SHIP's
+`display:none` Time caption + 6 px gaps + chart padding, and FU2's key-chip ellipsis; FU2's visually-hidden caption
+rule dropped as a duplicate), CONTRACT_CHANGES (both sections kept), UI6-build-plan (CAP + CVD2 kept).
+Scratch / probes: /home/claude/scratch/fu2-sk, .probe/.
+
+### Checklist
+- [x] 0 rebase onto origin/v2-native, conflicts resolved
+- [ ] 1 empty-library: fade only when held (key / pedal / MIDI), drone off once, next song not faded, F1 holds
+- [ ] 2 snapshot line reserved height: 0 px shift (3 sizes, both Edits), no-snapshot unchanged, ellipsis, role=status
+- [ ] 3 bank-trial root cause; app boot path on one transient fetch failure
+- [ ] 4 layout: v6 Edit ≤1100 with chart + FU2; today's Edit ≤1024 only while visible; purity
+- [ ] 5 CVD2: placeBadges overlap (16 instruments, identical / one octave / clipped), Off writes nothing, observer
+      leaks, tab dot vs 2-digit number, muted grey ≥ 4.5:1 in 8 themes, v6 muted bar colour (O-item + screenshot)
+- [ ] gates (gates.mjs): shell-unit,unit,chart,ui-v6,ui-v6-edit,ui-v6-ipad,ui-v6-bank,settings,ui-core,edit-v2,
+      ui-v6-themes
+- [ ] review doc native/docs/reviews/UI6-fu2.md
+
+### Next step
+1 (empty library).
+
+### Findings (as found)
