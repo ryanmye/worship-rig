@@ -576,3 +576,8 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
     Android Chrome 50+. Falls back to polling if WebSocket fails.
   - **Same command bus** as the iPhone app and the menu-bar popover; pairing with a short code; local network only.
   - **Order:** after 2.0, with the Mac command bus (D31 item 2), before the iPhone app. Effort ≈ 3–5 agent-days [E].
+
+  - **Note (orchestrator, tier 2, 2026-11-27; C-SHIP skeptic): O4 follows D9.** An add / duplicate past 2,000,000
+    characters warns (the same warning as any save past the cap) and goes through; it is refused only if it would
+    take the library past the restore cap (1.25× = 2,500,000), so the library's own backup always stays restorable.
+    The first cut refused it past 2 MB, which contradicted D9. CONTRACT_CHANGES "C-SHIP (D33)" O4.

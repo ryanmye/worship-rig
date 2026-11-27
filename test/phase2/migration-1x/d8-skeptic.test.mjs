@@ -212,22 +212,13 @@ const keptOf = (st) => st.keys().filter((k) => k.includes('.kept-'));
 /** A 2.0 library of about `chars` characters: user songs with long notes (ids `u<tag>-<i>`). */
 function bigLib(tag, chars, schema = 2) {
   const s = S2.createStore(opts(S2, { seed: false }));
-  // C-SHIP (chart-view O4): addSong refuses a song past LIBRARY_MAX_CHARS, so the store builds up to just under it
-  // and a bigger library (one grown past the cap by edits, D9) gets the rest as copies of its last song, in JSON
-  const room = Math.min(chars, S2.LIBRARY_MAX_CHARS - 20000);
-  for (let i = 0; s && JSON.stringify(s.get()).length < room; i++) {
+  for (let i = 0; s && JSON.stringify(s.get()).length < chars; i++) {
     const id = s.addSong(null, { name: `${tag} ${i}` });
-    s.set(`songs.${id}.notes`, 'n'.repeat(Math.max(0, Math.min(10000, room - JSON.stringify(s.get()).length))));
+    // C-SHIP skeptic (O4 per D9): an add is refused only past LIBRARY_RESTORE_MAX_CHARS; fail here, never loop
+    if (!id) throw new Error(`bigLib(${tag}): addSong refused at ${JSON.stringify(s.get()).length} characters`);
+    s.set(`songs.${id}.notes`, 'n'.repeat(Math.min(10000, chars - JSON.stringify(s.get()).length)));
   }
-  const lib = JSON.parse(JSON.stringify(s.get()));
-  const last = lib.songs[lib.songOrder[lib.songOrder.length - 1]];
-  for (let i = lib.songOrder.length; JSON.stringify(lib).length < chars; i++) {
-    const id = `song_${tag.replace(/\W/g, '')}x${i}`;
-    const notes = 'n'.repeat(Math.max(1, Math.min(10000, chars - JSON.stringify(lib).length - 2000)));
-    lib.songs[id] = { ...last, id, name: `${tag} ${i}`, notes };
-    lib.songOrder.push(id);
-  }
-  return JSON.stringify({ ...lib, schema });
+  return JSON.stringify({ ...JSON.parse(JSON.stringify(s.get())), schema });
 }
 
 test('K1: storage full while restoring an older copy must not delete the very copy being restored', { skip: false }, async () => {
@@ -473,31 +464,18 @@ test('restore near the 2.5 M limit: works with room, refuses cleanly without it 
 
 // ============================================================================================ D9
 test('D9: past the cap every edit is saved; the toast comes once, then at +10 %; merge and song files over 2 M refused', async () => {
-  // C-SHIP (chart-view O4): past the cap a new song is refused, so the library grows by edits: 40 of its songs
-  // start with short notes and get 10 000 characters each
-  const one = JSON.parse(bigLib('One', 3000));
-  const tpl = one.songs[one.songOrder[0]];
-  const blank = JSON.stringify({ ...tpl, id: 'song_grow00', name: 'grow 00', notes: '' }).length + 30;
-  // (the library starts where the old test's did, just under the cap, and ends ~400 000 characters past it)
-  const pre = JSON.parse(bigLib('Big', S2.LIBRARY_MAX_CHARS - 5000 - 40 * blank));
-  for (let i = 0; i < 40; i++) {
-    pre.songs[`song_grow${i}`] = { ...tpl, id: `song_grow${i}`, name: `grow ${i}`, notes: '' };
-    pre.songOrder.push(`song_grow${i}`);
-  }
-  const base = JSON.stringify(pre);
+  const base = bigLib('Big', S2.LIBRARY_MAX_CHARS - 5000);
   const storage = S2.memoryStorage({ [S2.STORAGE_KEY]: base });
   const store = S2.createStore(opts(S2, { storage, debounceMs: 0 }));
   const { warns } = await ctlFor(store);
   for (let i = 0; i < 40; i++) {
-    store.set(`songs.song_grow${i}.notes`, 'g'.repeat(10000));
+    // C-SHIP skeptic (O4 per D9): a new song past the cap is an ordinary save: it goes through and warns
+    const id = store.addSong(null, { name: `grow ${i}` });
+    assert.ok(id, `add ${i} at ${JSON.stringify(store.get()).length} characters goes through`);
+    store.set(`songs.${id}.notes`, 'g'.repeat(10000));
     assert.equal(store.persistNow(), true);
     assert.equal(storage.getItem(S2.STORAGE_KEY), JSON.stringify(store.get()), `edit ${i} saved`);
   }
-  // C-SHIP (O4): adding or duplicating a song past the cap writes nothing (the store's notice says why)
-  const before = JSON.stringify(store.get());
-  assert.equal(store.addSong(null, { name: 'one more' }), null);
-  assert.equal(store.duplicateSong('song_grow0'), null);
-  assert.equal(JSON.stringify(store.get()), before);
   await tick();
   const size = JSON.stringify(store.get()).length;
   const toasts = warns.filter((w) => /more than the 2\.0 MB/.test(w));

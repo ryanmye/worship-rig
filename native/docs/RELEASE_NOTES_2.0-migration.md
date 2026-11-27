@@ -128,8 +128,9 @@ A library is meant to stay under about 2 MB (a song is usually about 2 KB, so th
 and charts take the most room). 2.0 no longer refuses a save past that: it saves and warns you, once per session and
 again at each further 10 % of growth. Restoring a library from a backup, an export or Restore previous library… works
 up to 2.5 MB, so a library that grew a little past 2 MB can still be brought back. Adding songs from a file (a merge)
-still has to fit the 2 MB. So do a new or duplicated song: past the cap, Worship Rig says the library is full and
-adds nothing.
+still has to fit the 2 MB. A new or duplicated song is a save like any other: past 2 MB it is added and you are
+warned; only one that would take the library past 2.5 MB is not added (Worship Rig says why), so the library's own
+backup can always be restored.
 
 ## Not yet verified (needs the Mac or the iPad)
 

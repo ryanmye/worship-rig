@@ -41,23 +41,13 @@ test('real Chromium quota: room comes only from earlier states of a kept library
     let n = 0;
     const mem = () => S.createStore({ storage: S.memoryStorage(), seed: false, idGen: (p) => `${p}-${++n}`, requestIdle: null, warn: () => {}, autoFlush: false });
     const grow = (s, to, tag) => {
-      while (JSON.stringify(s.get()).length < to) s.set(`songs.${s.addSong(null, { name: tag })}.notes`, 'n'.repeat(10000));
-      return JSON.stringify(s.get());
-    };
-    // C-SHIP (chart-view O4): addSong refuses a song past LIBRARY_MAX_CHARS, so a library grows past the cap by edits
-    // (D9). `blanks` songs with no notes are added while it still fits; fill(s, k) then gives k of them 10 000
-    // characters each (an edit, saved past the cap)
-    const blanks = [];
-    const addBlanks = (s, k, tag) => {
-      for (let i = 0; i < k; i++) blanks.push(s.addSong(null, { name: `${tag} blank ${i}` }));
-    };
-    const fill = (s, k) => {
-      for (let i = 0; i < k; i++) {
-        const id = blanks.shift();
-        if (!id) return false;
-        s.set(`songs.${id}.notes`, 'f'.repeat(10000));
+      // C-SHIP skeptic (O4 per D9): an add is refused only past LIBRARY_RESTORE_MAX_CHARS; fail here, never loop
+      while (JSON.stringify(s.get()).length < to) {
+        const id = s.addSong(null, { name: tag });
+        if (!id) throw new Error(`grow(${tag}): addSong refused at ${JSON.stringify(s.get()).length} characters`);
+        s.set(`songs.${id}.notes`, 'n'.repeat(10000));
       }
-      return true;
+      return JSON.stringify(s.get());
     };
     // how much this origin holds (key + value characters)
     localStorage.clear();
@@ -72,17 +62,24 @@ test('real Chromium quota: room comes only from earlier states of a kept library
     }
     localStorage.clear();
     const real = mem();
-    const realOld = grow(real, 1600000, 'Real');
+    const realOld = grow(real, 1700000, 'Real');
     const trivial = grow(mem(), 20000, 'Trivial');
     localStorage.setItem(`${K}1000.downgrade.s2`, realOld);
     localStorage.setItem(`${K}2000.downgrade.s2`, trivial);
-    // the main library: the real one, grown on (a later state of realOld): 150 more songs, notes still to come
-    addBlanks(real, 150, 'Real');
-    localStorage.setItem(S.STORAGE_KEY, JSON.stringify(real.get()));
+    // the main library: the real one, grown on (a later state of realOld)
+    localStorage.setItem(S.STORAGE_KEY, grow(real, 1900000, 'Real'));
     const s = S.createStore({ storage: localStorage, idGen: (p) => `${p}-${++n}`, requestIdle: null, warn: () => {}, autoFlush: false, debounceMs: 0 });
     const notices = [];
     s.onNotice((x) => notices.push(x.type));
-    while (JSON.stringify(s.get()).length < 2300000 && fill(s, 1)) { /* D9: past the cap, still saved */ }
+    grow(s, 2300000, 'Real'); // D9: past the cap, still saved
+    // C-SHIP skeptic: 100 blank songs (still inside the 2.5 M restore cap, so the adds go through) whose notes the
+    // loop below fills in: a library grows past the restore cap only by edits
+    const blanks = [];
+    for (let i = 0; i < 100; i++) {
+      const id = s.addSong(null, { name: `blank ${i}` });
+      if (!id) return { addRefusedAt: JSON.stringify(s.get()).length };
+      blanks.push(id);
+    }
     const saved1 = s.persistNow();
     const keep1 = s.keepCurrent();
     const afterKeep1 = Object.keys(localStorage).filter((k) => k.startsWith(K)).sort();
@@ -93,7 +90,13 @@ test('real Chromium quota: room comes only from earlier states of a kept library
     let saved2 = true;
     for (let i = 0; i < 100 && saved2; i++) {
       mainBefore = localStorage.getItem(S.STORAGE_KEY);
-      if (!fill(s, 5)) return { outOfBlanks: true };
+      // C-SHIP skeptic: grown by edits (D9: saves past the cap), giving the blank songs their notes; new songs stop at
+      // the 2.5 M restore cap (O4 per D9), which comes before this origin's quota does
+      for (let j = 0; j < 5; j++) {
+        const id = blanks.shift();
+        if (!id) return { outOfBlanks: true };
+        s.set(`songs.${id}.notes`, 'm'.repeat(10000));
+      }
       saved2 = s.persistNow();
       if (saved2 && localStorage.getItem(S.STORAGE_KEY) !== JSON.stringify(s.get())) return { torn: true };
     }
@@ -133,18 +136,10 @@ test('real Chromium quota: restoring a 2.47 M copy over an edited library (kept 
     let n = 0;
     localStorage.clear();
     const big = S.createStore({ storage: S.memoryStorage(), seed: false, idGen: (p) => `${p}-${++n}`, requestIdle: null, warn: () => {}, autoFlush: false });
-    // C-SHIP (chart-view O4): addSong stops at LIBRARY_MAX_CHARS; the rest of the 2.47 M copy is copies of its last
-    // song, in JSON (a library grown past the cap by edits, D9)
-    while (JSON.stringify(big.get()).length < S.LIBRARY_MAX_CHARS - 20000) {
+    while (JSON.stringify(big.get()).length < S.LIBRARY_RESTORE_MAX_CHARS - 40000) {
       big.set(`songs.${big.addSong(null, { name: 'Near' })}.notes`, 'n'.repeat(10000));
     }
-    const lib = JSON.parse(JSON.stringify(big.get()));
-    const last = lib.songs[lib.songOrder[lib.songOrder.length - 1]];
-    for (let i = 0; JSON.stringify(lib).length < S.LIBRARY_RESTORE_MAX_CHARS - 40000; i++) {
-      lib.songs[`song-near${i}`] = { ...last, id: `song-near${i}`, name: `Near ${i}` };
-      lib.songOrder.push(`song-near${i}`);
-    }
-    const near = JSON.stringify(lib);
+    const near = JSON.stringify(big.get());
     localStorage.setItem(`${K}1.downgrade.s2`, near);
     const s = S.createStore({ storage: localStorage, idGen: (p) => `${p}-${++n}`, requestIdle: null, warn: () => {}, autoFlush: false, debounceMs: 0 });
     s.addSong(null, { name: 'Current work' });

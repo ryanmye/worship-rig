@@ -1,12 +1,12 @@
 // Chart view (D7; D33 ships it in 2.0): song.chart storage. Optional (absent until set), written whole, normalised,
 // size-capped, migrate stays idempotent, it travels with library / song export and import, and settings.chartView is
-// a device-local switch, absent = on, false = off (C-SHIP). addSong / duplicateSong check LIBRARY_MAX_CHARS (C-SHIP
-// O4). CONTRACT_CHANGES "Chart view (D7, hidden)", "C-SHIP (D33)".
+// a device-local switch, absent = on, false = off (C-SHIP). addSong / duplicateSong warn past LIBRARY_MAX_CHARS
+// and refuse past LIBRARY_RESTORE_MAX_CHARS (C-SHIP O4, per D9). CONTRACT_CHANGES "Chart view (D7, hidden)", "C-SHIP (D33)".
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  migrate, normalizeChart, chartError, CHART_MAX_CHARS, LIBRARY_MAX_CHARS, SCHEMA, DEVICE_LOCAL_SETTINGS,
-  memoryStorage, STORAGE_KEY,
+  migrate, normalizeChart, chartError, CHART_MAX_CHARS, LIBRARY_MAX_CHARS, LIBRARY_RESTORE_MAX_CHARS, SCHEMA,
+  DEVICE_LOCAL_SETTINGS, memoryStorage, STORAGE_KEY,
 } from '../../../app/js/store.js';
 import { makeStore } from './helpers.mjs';
 
@@ -164,17 +164,22 @@ test('C-SHIP (D33) settings.chartView: absent = on, false = off, device-local, n
   assert.equal(other.get().settings.chartView, false, 'kept across a replace-import');
 });
 
-test('C-SHIP (chart-view O4) addSong / duplicateSong refuse past LIBRARY_MAX_CHARS, with a notice, writing nothing',
+// C-SHIP skeptic (orchestrator note under DECISIONS D33): D9 says a save past LIBRARY_MAX_CHARS warns and is not
+// refused, so an add / duplicate past 2 MB goes through with the same 'library-size' warning; only one that would take
+// the library past LIBRARY_RESTORE_MAX_CHARS (1.25×) is refused, so the library's own backup always restores.
+test('C-SHIP (chart-view O4 per D9) add / duplicate past 2 MB warn and go through; past the restore cap refused',
   () => {
-    const store = makeStore();
+    const storage = memoryStorage();
+    const store = makeStore({ storage, debounceMs: 0 });
     const notices = [];
     store.onNotice((n) => notices.push(n));
     const id = sid(store);
     const big = { text: `[G]${'x'.repeat(CHART_MAX_CHARS - 10)}` };
     assert.equal(store.setChart(id, big).ok, true);
-    // duplicate a 64 KB chart until the library is near the cap: each copy is checked first
+    // duplicate a 64 KB chart until refused: each copy is checked first, every accepted one is saved
     let copies = 0;
-    for (let i = 0; i < 40; i++) {
+    let pastCap = 0;
+    for (let i = 0; i < 60; i++) {
       const before = JSON.stringify(store.get());
       const n = store.duplicateSong(id);
       if (!n) {
@@ -182,19 +187,29 @@ test('C-SHIP (chart-view O4) addSong / duplicateSong refuse past LIBRARY_MAX_CHA
         break;
       }
       copies += 1;
+      if (JSON.stringify(store.get()).length > LIBRARY_MAX_CHARS) pastCap += 1;
+      assert.equal(store.persistNow(), true, `copy ${copies} is saved`);
+      assert.equal(storage.getItem(STORAGE_KEY), JSON.stringify(store.get()));
     }
-    assert.ok(copies > 5 && copies < 40, `copies before the cap: ${copies}`);
-    assert.ok(JSON.stringify(store.get()).length <= LIBRARY_MAX_CHARS, 'the library stays inside the cap');
-    assert.equal(notices.length, 1);
-    assert.equal(notices[0].type, 'library-full');
-    assert.match(notices[0].message, /library is full/);
+    assert.ok(pastCap > 3, `duplicates past 2 MB go through (${pastCap} of ${copies})`);
+    assert.ok(copies < 60, `copies before the restore cap: ${copies}`);
+    const size = JSON.stringify(store.get()).length;
+    assert.ok(size > LIBRARY_MAX_CHARS && size <= LIBRARY_RESTORE_MAX_CHARS, `${size}: past 2 MB, inside 2.5 MB`);
+    const sizeWarn = notices.filter((n) => n.type === 'library-size');
+    assert.ok(sizeWarn.length >= 1, 'the D9 save warning');
+    assert.match(sizeWarn[0].message, /more than the 2\.0 MB/);
+    const full = notices.filter((n) => n.type === 'library-full');
+    assert.equal(full.length, 1);
+    assert.match(full[0].message, /was not added.*2\.5 MB cannot be restored/);
     // addSong of a song with the big chart is refused the same way; a small blank song may still fit
     const before = JSON.stringify(store.get());
     assert.equal(store.addSong(store.getSong(id)), null);
     assert.equal(JSON.stringify(store.get()), before, 'a refused add writes nothing (songs, order, setlist)');
-    assert.equal(notices.length, 2);
+    assert.equal(notices.filter((n) => n.type === 'library-full').length, 2);
     const small = store.addSong(null, { name: 'Small' });
     assert.equal(typeof small, 'string', 'a blank song still fits');
+    // and the library's own export restores (D9's 1.25×)
+    assert.equal(makeStore().importJSON(store.exportJSON(), { replace: true }).ok, true);
   });
 
 // skeptic (native/docs/reviews/chart-view.md): the cap counts UTF-16 units, as localStorage does

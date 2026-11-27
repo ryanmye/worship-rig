@@ -376,8 +376,13 @@ test('D9 / M3: a library grown past the cap by edits is saved (with a warning) a
   const { store, warns } = await setup({ store: makeStore({ storage: st, debounceMs: 0 }) });
   const order = store.get().songOrder;
   for (let i = 0; i < 6; i++) store.set(`songs.${order[i]}.notes`, `${'N'.repeat(9999)}${i}`);
-  store.addSong(null, { name: 'one more' });
-  for (let i = 0; i < 4; i++) store.set(`songs.${store.addSong(null, { name: `more ${i}` })}.notes`, 'n'.repeat(10000));
+  // C-SHIP skeptic (O4 per D9): a new song past the cap is an ordinary save: it is added, and the save warns
+  assert.ok(store.addSong(null, { name: 'one more' }), 'an add past the cap goes through');
+  for (let i = 0; i < 4; i++) {
+    const id = store.addSong(null, { name: `more ${i}` });
+    assert.ok(id, `add ${i} past the cap goes through`);
+    store.set(`songs.${id}.notes`, 'n'.repeat(10000));
+  }
   assert.equal(store.persistNow(), true, 'the save is not refused');
   const size = JSON.stringify(store.get()).length;
   assert.ok(size > LIBRARY_MAX_CHARS, `grown past the cap by ordinary writes (${size})`);

@@ -1762,19 +1762,24 @@ export function createStore(opts = {}) {
   }
 
   /**
-   * C-SHIP (chart-view review O4): would adding `song` (a new id) push the library past LIBRARY_MAX_CHARS? A 64 KB
-   * chart duplicated 29 times passed the cap, since only chart writes paid for the JSON size. addSong / duplicateSong
-   * refuse such a song before writing anything and say why in a notice (the controller toasts it). The 64 characters
-   * stand for the id in songOrder and a setlist.
+   * C-SHIP (chart-view review O4; orchestrator note under DECISIONS D33): would adding `song` (a new id) take the
+   * library past LIBRARY_RESTORE_MAX_CHARS? A 64 KB chart duplicated 29 times passed the 2 MB cap unchecked. Past
+   * LIBRARY_MAX_CHARS an add is an ordinary save under D9: it goes through and the save warns (checkSize's
+   * 'library-size'). Only past the restore cap (1.25×) does addSong / duplicateSong refuse, writing nothing, with a
+   * 'library-full' notice (the controller toasts it), so the library's own backup always stays restorable. The 64
+   * characters stand for the id in songOrder and a setlist.
    * @param {object} song
    * @returns {boolean}
    */
   function songOverflows(song) {
-    if (JSON.stringify(state).length + JSON.stringify(song).length + 64 <= LIBRARY_MAX_CHARS) return false;
+    const size = JSON.stringify(state).length + JSON.stringify(song).length + 64;
+    if (size <= LIBRARY_RESTORE_MAX_CHARS) return false;
+    const mb = (n) => (n / 1e6).toFixed(1);
     notice({
-      type: 'library-full', cap: LIBRARY_MAX_CHARS,
-      message: `The library is full (about ${(LIBRARY_MAX_CHARS / 1e6).toFixed(0)} MB), so “${song.name}” was not `
-        + 'added. Delete songs, charts or long notes you no longer need first.',
+      type: 'library-full', chars: size, cap: LIBRARY_RESTORE_MAX_CHARS,
+      message: `“${song.name}” was not added: the library would be ${mb(size)} MB, and a backup over `
+        + `${mb(LIBRARY_RESTORE_MAX_CHARS)} MB cannot be restored. Remove songs, charts or long notes you no longer `
+        + 'need first.',
     });
     return true;
   }
@@ -2530,7 +2535,8 @@ export function createStore(opts = {}) {
      * @param {object} [from]  Song or factory preset (factory ids are kept as `factoryId`)
      * @param {{setlistId?:string|null, index?:number, name?:string, select?:boolean}} [o]
      *        setlistId default = current setlist (null = library only)
-     * @returns {string|null} new id; null when the song would not fit LIBRARY_MAX_CHARS (C-SHIP, chart-view O4)
+     * @returns {string|null} new id; null when the song would take the library past LIBRARY_RESTORE_MAX_CHARS (C-SHIP,
+     *          chart-view O4 per D9: past LIBRARY_MAX_CHARS it goes through and the save warns)
      */
     addSong(from, o = {}) {
       const id = idGen('song');

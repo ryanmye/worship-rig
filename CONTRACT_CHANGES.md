@@ -9807,16 +9807,25 @@ review O1, O3, O4 and O7 fixed. No engine change (`app/js/engine` untouched), no
   under a dialog's backdrop. Settings, z 50, still covers it, as before.)
 - **O3** The toggle's look moved from styles-chart.css to styles.css (`.song-sub .chv-toggle`, so the placeholder and
   the view's button look the same): 36 px on a mouse like Notes and Click, `@media (pointer: coarse)` 44 px.
-- **O4** `store.addSong` / `store.duplicateSong` check `LIBRARY_MAX_CHARS` before writing (`songOverflows`: the
-  library JSON + the new song's + 64 for the id in the order / setlist). Past it they return `null`, write nothing,
-  and send a `library-full` notice ("The library is full (about 2 MB), so “<name>” was not added. …") that the
-  controller toasts like D8/D9's. Callers: the WorshipTools CSV placeholders stop at the first refusal and count what
-  was added; the v6 song menu no longer adds its own "Could not duplicate" for a full library. The other callers
-  already handled a null id.
-  - With D9 (saves past the cap warn and are kept): a library still grows past 2 MB by edits (notes, …), never by a
-    new song, as merges and pack songs already could not. The migration-1x fixtures that built over-cap libraries
-    with `addSong` (`d8-skeptic` `bigLib`, its D9 test, `quota.pw.mjs`) now build the part past the cap in JSON or
-    grow by notes edits, and D9's test also checks that an add / duplicate past the cap writes nothing.
+- **O4** `store.addSong` / `store.duplicateSong` check the library size before writing (`songOverflows`: the library
+  JSON + the new song's + 64 for the id in the order / setlist). Orchestrator call (tier 2, a note under DECISIONS
+  D33; the builder's first cut refused past 2 MB, which contradicted D9's "a save past 2,000,000 characters warns but
+  is not refused"):
+  - past `LIBRARY_MAX_CHARS` (2,000,000) an add / duplicate is an ordinary save: it goes through, and the save warns
+    with the same `library-size` notice as any save past the cap (once a session, then at +10 %);
+  - past `LIBRARY_RESTORE_MAX_CHARS` (1.25×, 2,500,000) it returns `null`, writes nothing, and sends a
+    `library-full` notice ("“<name>” was not added: the library would be 2.5 MB, and a backup over 2.5 MB cannot be
+    restored. …", `{chars, cap}`) that the controller toasts like D8/D9's. So the library's own backup always stays
+    restorable by adding songs; it can still pass 2.5 MB by edits (D9, warned).
+  - Callers: the WorshipTools CSV placeholders stop at the first refusal and count what was added; the v6 song menu
+    no longer adds its own "Could not duplicate" for a full library. The other callers already handled a null id.
+  - migration-1x fixtures: back to the base's `addSong` builders (`d8-skeptic` `bigLib`, the D9 test, `quota.pw.mjs`
+    `grow`, the 2.47 M copy), each now throws if an add is refused instead of looping (the builder's first cut made
+    `bigLib` loop forever). `quota.pw.mjs`'s grow-until-full loop fills 100 blank songs' notes (edits), since new
+    songs stop at 2.5 M before this origin's ~5.24 M quota does. D9 tests (`d8-skeptic`, `kept.test.mjs`) assert each
+    add past 2 MB goes through. Tests: shell unit `chart-store.test.mjs` "C-SHIP (chart-view O4 per D9)" (fails on
+    the first cut: duplicates past 2 MB go through and are saved with the `library-size` warning, the refusal comes
+    inside 2.5 MB, a refused add / duplicate writes nothing, the export restores).
 - **O7** `views/chart/import.js` `fileTooLargeMessage(bytes)`: "That file is too large (1.5 MB). A file can be at
   most 1 MB (a song list), and a chart at most 64 KB." (was "A chart can be at most 64 KB"), in both dialogs.
 - **Purity** (measured on the factory library, which has no charts; 1280 × 800):
