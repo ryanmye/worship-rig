@@ -5,7 +5,7 @@
 import { h, setText, disposer } from '../components/util.js';
 import { openOverlay } from '../components/overlay.js';
 import { say } from '../components/voice.js';
-import { scenesOf, sceneNameOf, SCENE_NAME_MAX } from '../../shared/scenes.js';
+import { scenesOf, sceneNameOf, applyScene, SCENE_NAME_MAX } from '../../shared/scenes.js';
 import { gainToDb } from '../../shared/params.js';
 import { SPACE_PRESETS, ECHO_PRESETS, matchPreset } from '../../shared/fx-presets.js';
 import { keyName } from '../../shared/music.js';
@@ -16,6 +16,48 @@ import { button } from './lib.js';
 export const SUGGEST_DB = 1.5;
 
 const isOn = (slot) => !!slot && !slotMuteState(slot).muted && slotMuteState(slot).level > 0.001;
+const fxReader = (song) => (p) => p.split('.').slice(1).reduce((o, k) => o?.[k], song?.patch?.fx);
+const keyWord = (song) => keyName(song.hearIn, song.minor);
+
+/**
+ * D26.1: the suggestion for a snapshot that changes only the Space, Echo or drone against `prev` (its levels and ON
+ * switches within 0.5 dB / the same), or null.
+ */
+function mixOnlyName(live, prev) {
+  if (!prev?.patch || !live.patch.fx || !prev.patch.fx) return null;
+  const a = live.patch.slots;
+  const b = prev.patch.slots;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if (!a[i] || !b[i]) {
+      if (!!a[i] !== !!b[i]) return null;
+      continue;
+    }
+    if (isOn(a[i]) !== isOn(b[i]) || (isOn(a[i]) && Math.abs(levelDb(a[i]) - levelDb(b[i])) > 0.5)) return null;
+  }
+  if (live.drone && prev.drone && Math.abs(db(live.drone.gain) - db(prev.drone.gain)) > 0.5) return null;
+  const words = [];
+  const preset = (list, own) => (song) => matchPreset(list, fxReader(song))?.name || own;
+  for (const [name, keys] of [[preset(SPACE_PRESETS, 'Own Space'), ['size', 'damp', 'predelay', 'returnGain']],
+    [preset(ECHO_PRESETS, 'Own Echo'), ['time', 'feedback', 'pingpong', 'tone', 'sync', 'returnGain']]]) {
+    const unit = keys.length === 4 ? 'reverb' : 'delay';
+    const differs = keys.some((k) => {
+      const x = live.patch.fx[unit]?.[k];
+      const y = prev.patch.fx[unit]?.[k];
+      return typeof x === 'number' && typeof y === 'number' ? Math.abs(x - y) > 1e-6 : x !== y;
+    });
+    if (differs) words.push(name(live));
+  }
+  const dl = live.drone;
+  const dp = prev.drone;
+  if (dl && dp) {
+    const onL = dl.mode !== 'off';
+    if (onL !== (dp.mode !== 'off')) words.push(onL ? `Drone ${keyWord(live)}` : 'Drone off');
+    else if (onL && (live.hearIn !== prev.hearIn || !!live.minor !== !!prev.minor || dl.mode !== dp.mode)) {
+      words.push(`Drone ${keyWord(live)}${dl.mode !== dp.mode ? (dl.mode === 'files' ? ' pads' : ' synth') : ''}`);
+    }
+  }
+  return words.length ? words.join(' + ') : null;
+}
 const db = (g) => gainToDb(Math.max(1e-4, Number(g) || 0));
 const levelDb = (slot) => db(slotMuteState(slot).level);
 
@@ -33,11 +75,17 @@ const levelDb = (slot) => db(slotMuteState(slot).level);
  * @param {object} live  the song as it plays now (controller.scenes.view)
  * @param {object} own   the song's own levels (the store's song)
  * @param {{name(ref:object):string}} names  lib.js instrumentNames
+ * D26.1: when the levels and ON switches are those of `prev` (the snapshot that plays, else the song's own) and only
+ * the Space, the Echo or the drone differ, the name says that instead: "Hall", "Hall + Dotted Eighth", "Drone D",
+ * "Drone off" (the room / echo preset names as the song bar shows them; "Own Space" / "Own Echo" for no preset).
  * @param {string[]} [taken]  names the song's snapshots already have
+ * @param {object} [prev]  what played before the moves (default `own`)
  * @returns {string}
  */
-export function suggestSnapshotName(live, own, names, taken = []) {
+export function suggestSnapshotName(live, own, names, taken = [], prev = own) {
   if (!live?.patch) return 'Snapshot';
+  const mix = mixOnlyName(live, prev);
+  if (mix) return uniqueName(sceneNameOf(mix) || 'Snapshot', taken);
   const slots = live.patch.slots;
   const on = slots.map((s, i) => (isOn(s) ? i : -1)).filter((i) => i >= 0);
   const droneOn = !!live.drone && live.drone.mode !== 'off' && Number(live.drone.gain) > 0.001;
@@ -59,7 +107,11 @@ export function suggestSnapshotName(live, own, names, taken = []) {
     if (dd > SUGGEST_DB) word = 'drone up';
     else if (dd < -SUGGEST_DB) word = 'drone down';
   }
-  let name = sceneNameOf(word ? `${base}, ${word}` : base) || 'Snapshot';
+  return uniqueName(sceneNameOf(word ? `${base}, ${word}` : base) || 'Snapshot', taken);
+}
+
+/** `name`, or "name 2", "name 3" … when another snapshot of the song has it (cut to SCENE_NAME_MAX). */
+function uniqueName(name, taken) {
   const used = new Set(taken.map((t) => String(t).toLowerCase()));
   if (used.has(name.toLowerCase())) {
     for (let k = 2; k < 100; k++) {
@@ -156,7 +208,8 @@ export function saveSnapshotDialog(v, o = {}) {
   const live = controller.scenes.view(song);
   const playing = sc.n !== null ? list[sc.n] : null;
   const playingName = playing ? playing.name || say('sceneLabel', { n: sc.n + 1 }) : null;
-  const suggested = suggestSnapshotName(live, song, v.names, list.map((x) => x.name).filter(Boolean));
+  const suggested = suggestSnapshotName(live, song, v.names, list.map((x) => x.name).filter(Boolean),
+    playing ? applyScene(song, playing) : song); // D26.1: against what played before the moves
   const wheelRouted = (() => {
     const t = song.patch.modWheel?.target;
     return typeof t === 'string' && t !== '' && t !== 'none';

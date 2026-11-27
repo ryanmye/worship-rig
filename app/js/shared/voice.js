@@ -51,12 +51,15 @@ const CLASSIC = Object.freeze({
   sceneLabel: ({ n }) => `Scene ${n}`,
   sceneBack: 'Playing. Tap to go back to the song’s own levels',
   sceneSaveCap: 'Save as scene',
-  sceneSaveTitle: ({ n }) => `Save what you hear now (levels, ON switches, drone level, wheel) as scene ${n}`,
+  // D26.1: a scene also keeps Space / Echo and the drone (shared/scenes.js)
+  sceneSaveTitle: ({ n }) => `Save what you hear now as scene ${n}: levels, ON switches, Space and Echo, the drone `
+    + 'and the wheel',
   sceneSaved: ({ n }) => `Saved as scene ${n}. A footswitch or the scene numbers step through them.`,
-  sceneEditHint: 'Up to 3 saved sets of levels for this song: faders, ON switches, the drone level and the wheel. '
-    + 'The song always starts on its own levels; step through the scenes with a footswitch (Settings › MIDI › '
-    + 'Next scene), the numbers in Perform, or a hotkey. A change glides, held notes keep sounding.',
-  sceneEditSub: 'Saved levels to step through while you play. The song always starts on its own levels.',
+  sceneEditHint: 'Up to 3 saved sounds for this song: each instrument’s level, ON switch and Space / Echo amount, '
+    + 'the song’s Space and Echo, the drone (on or off, key, sound and level) and the wheel. The song always starts '
+    + 'on its own settings; step through the scenes with a footswitch (Settings › MIDI › Next scene), the numbers '
+    + 'in Perform, or a hotkey. A change glides, held notes keep sounding.',
+  sceneEditSub: 'Saved sounds to step through while you play. The song always starts on its own settings.',
   scenePlaying: 'playing',
   sceneNone: 'No scenes yet.',
   // v11-decisions (Ryan, checklist Q3): Settings › Menu bar › Global shortcuts: next / previous step the setlist's
