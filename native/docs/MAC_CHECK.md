@@ -134,8 +134,11 @@ When tier 0 is green, tier 1 is mostly a confirmation on Ryan's machine plus the
 
 ```sh
 bash tools/mac/check.sh [--rev <ref>] [--stage tools,core,probe,apple-mac,selftest,apple-sim] [--out <dir>] [--quick]
-                        [--jobs N] [--cache <dir>] [--repo <dir>] [--src <tree>]
+                        [--jobs N] [--cache <dir>] [--repo <dir>] [--src <tree>] [--app <Worship Rig.app>]
 ```
+
+`--app` makes the `selftest` stage launch that app instead of the Debug build `apple-mac` made (the Release app of
+"2.0 release checklist" step 2; release-native.yml uses it).
 
 Run from `~/Projects/worship-rig`. Defaults: `--rev` = the local branch `v2-native` (the push agent fast-forwards it),
 else `origin/v2-native`; all six stages; `--out` = `~/Projects/worship-rig-v2/outbox/logs/<UTC>-check/` (when the
@@ -399,6 +402,9 @@ numbers). The player-facing notes are `docs/release-notes-2.0.md` (a draft with 
   package.json version" step (package.json says 1.1.0 here, 1.1.1 on main), so nothing is published; but once step 7
   sets package.json to 2.0.0, the same tag publishes Electron arm64 + x64 builds of the 1.x shell under the 2.0 name.
   Before step 7 and any 2.0 tag: replace or gate that workflow (step 3).
+  **Prepared on lane-n10 (not run on GitHub yet):** release.yml runs only for `v1.*` tags (push, a release published
+  from the web UI, or a dispatch), and the new `release-native.yml` builds the native app for `v2.*` tags (step 3).
+  Tick this box after step 3's dry run is green.
 
 ### Step 0: before starting
 
@@ -418,43 +424,95 @@ numbers). The player-facing notes are `docs/release-notes-2.0.md` (a draft with 
   tools,core,probe,apple-mac,selftest,apple-sim` (install the iOS platform first so `apple-sim` runs). Record it under
   "Results" as Mac check #5.
 
-### Step 2: build the Release app (Ryan's Mac; the same signing as 1.x)
+### Step 2: build the Release app (Ryan's Mac or CI; the same signing as 1.x)
 
 1.x is **ad-hoc signed and not notarized** (`build/afterPack.js` runs `codesign --sign -`; release.yml sets
 `CSC_IDENTITY_AUTO_DISCOVERY=false`). 2.0 keeps that: `project.yml` has `CODE_SIGN_IDENTITY: "-"` and the hardened
 runtime off. Notarizing needs a paid Apple Developer ID; that is a separate tier-1 decision, not part of 2.0.
 
+One script does the build and the packing, on the Mac and in `release-native.yml` alike (lane N10; UNRUN as written):
+
 ```sh
-cd native/apple
-rm -rf build && ./scripts/build-core.sh --mac-only
-xcodegen
-xcodebuild -project WorshipRig.xcodeproj -scheme WorshipRig-macOS -configuration Release \
-  -destination 'platform=macOS' CODE_SIGN_IDENTITY=- ARCHS=arm64 -derivedDataPath build/dd build
-APP="build/dd/Build/Products/Release/Worship Rig.app"
-codesign --verify --deep --strict "$APP" && codesign -dv "$APP" 2>&1 | grep -E 'Signature|Identifier'
-du -sh "$APP"                                   # size rule: < 500 MB (comfort ~400); expect ~100 MB (estimate)
-mkdir -p dist && ditto -c -k --keepParent "$APP" dist/Worship-Rig-arm64.zip
-mkdir -p /tmp/rig-dmg && cp -R "$APP" /tmp/rig-dmg/ && ln -sf /Applications /tmp/rig-dmg/Applications
-hdiutil create -volname "Worship Rig" -srcfolder /tmp/rig-dmg -ov -format UDZO dist/Worship-Rig-arm64.dmg
+bash native/apple/scripts/package-release.sh --clean [--expect-version 2.0.0]
+#   build-core.sh --mac-only, xcodegen, xcodebuild WorshipRig-macOS -configuration Release CODE_SIGN_IDENTITY=-
+#   ARCHS=arm64 into native/apple/build/dd-release; then codesign --force --deep --sign - (as afterPack.js) and the
+#   gates below; then native/apple/build/release-dist/: Worship-Rig-arm64.zip (ditto), Worship-Rig-arm64.dmg (hdiutil
+#   UDZO, with an Applications link), SHA256SUMS, release.json, release-summary.md, app-path.txt
+bash tools/mac/check.sh --rev HEAD --stage selftest --app "$(cat native/apple/build/release-dist/app-path.txt)"
+#   the self-test ("Self-test" above) on the Release app instead of the Debug one
 ```
+
+The script fails (exit 1) unless: the bundle id is `com.ryanmye.worshiprig.native` and the version is a number (and
+equals `--expect-version` when given; CI passes the tag's); the executable is arm64 only; `Resources/app/index.html`
+is in the bundle and no `user-samples` / `sound-packs` / `.exs` is; `codesign --verify --deep --strict` passes and
+`codesign -dv` says `Signature=adhoc` with that identifier; the app is at most 480 MB (the 500 MB rule's build-lint
+line; a warning above 400 MB); the app inside the zip and inside the mounted dmg verifies too.
 
 - [ ] The Release configuration has never been built: fix what it shows (the Debug build is what CI and `check.sh`
   compile).
-- [ ] `codesign -dv` says `Signature=adhoc`, identifier `com.ryanmye.worshiprig.native`.
+- [ ] `release-summary.md` says `Signature=adhoc`, identifier `com.ryanmye.worshiprig.native`, version 2.0.0, and an
+  app size under 500 MB (estimate ~100 MB, not measured).
 - [ ] Asset names stay `Worship-Rig-arm64.dmg` / `.zip`: 1.1's update check (`update-check.js` `pickAsset`) looks for
-  exactly those. There is no `x64` file (the core is built arm64 only).
+  exactly those (checked by `test/unit/release/release-workflows.test.mjs`). There is no `x64` file (the core is
+  built arm64 only), so an Intel 1.1 install is shown the release page, not a download.
 - [ ] Copy the `.zip` to another account or Mac through AirDrop and do the first-open steps (macOS 15+: Done › System
   Settings › Privacy & Security › Open Anyway). The README's wording must match what macOS 26 shows.
 
 ### Step 3: the release workflow (cloud prepares, Ryan approves)
 
-- [ ] Replace release.yml's Electron build for `v2*` tags: either a macOS job that runs step 2's commands and uploads
-  the two files (`macos-15` has Xcode; `brew install xcodegen ninja`), or "upload the files Ryan built" by hand with
-  `gh release create … --prerelease` and no workflow build. Keep `v1*` tags building Electron if 1.x patch releases
-  stay possible. Dry-run it (`workflow_dispatch`, `dry_run: true`) before any tag.
-- [ ] Release body: `docs/release-notes-2.0.md` without its banner and "Editor's notes", plus the starter library
-  (`docs/starter/worship-rig-starter-library.json`), as 1.x attached it.
-- [ ] Decide pre-release or "latest" (U9 item 3): "latest" makes every 1.1 install announce 2.0, Intel ones included.
+Prepared on lane-n10 (UNVERIFIED until it runs on GitHub; actionlint + shellcheck clean, and
+`test/unit/release/release-workflows.test.mjs` evaluates every trigger and job `if:` per event):
+
+- `release.yml` (Electron 1.x) runs only for `v1.*` tags: `push: tags: ['v1.*']`, and both jobs check
+  `refs/tags/v1.` themselves because the `release: published` event (main's 261ea8d, folded in) and
+  `workflow_dispatch` can't be filtered by tag. A branch dispatch is still a dry run. A 2.x tag, by any event, builds
+  and publishes no Electron app.
+- `release-native.yml` (the native app) runs on a `v2.*` tag push, on a `v2-native` push that changes the release
+  files (`release-native.yml`, `package-release.sh`, `tools/release/`), and on `workflow_dispatch` (inputs `publish`,
+  `latest`, both off by default). Jobs:
+  - `mac` (macos-15): `brew install xcodegen ninja`; on a tag, the tag (minus `v` and any `-pre`) must equal
+    `project.yml` `MARKETING_VERSION`; step 2's `package-release.sh --clean`; the self-test on the Release app
+    (`check.sh --stage selftest --app`, fails the job); the release-notes preview; the summary (sizes, sha256,
+    self-test JSON, whether the notes are final). Artifacts: `Worship-Rig-arm64.dmg`, `Worship-Rig-arm64.zip`,
+    `release-native-meta` (SHA256SUMS, release.json, release-summary.md, release-notes-preview.md),
+    `release-native-logs`.
+  - `ipad` (macos-15, `continue-on-error`, never needed by `release`): `build-core.sh` (macOS + iphoneos), xcodegen,
+    `xcodebuild archive` of `WorshipRig-iPad`, Release, `generic/platform=iOS`, `CODE_SIGNING_ALLOWED=NO`. An
+    unsigned archive (artifact `WorshipRig-iPad-unsigned.xcarchive.zip`, 7 days) proves the Release configuration
+    compiles and links for a device; it is not installable. There is no export or `.ipa`: that needs a team id, and
+    the iPad install stays Xcode with Ryan's Personal Team (step 5).
+  - `release` (ubuntu): only when the run is a `workflow_dispatch` **and** `publish` is ticked **and** the ref is a
+    `v2.*` tag **and** `mac` passed. It checks the files against the build's SHA256SUMS, makes the body with
+    `tools/release/release-notes.mjs --require-final` (docs/release-notes-<version>.md without the banner, "Editor's
+    notes" and editor comments, links made absolute, a sha256 list; it refuses a file that is still a draft), and
+    creates the release with the dmg, the zip, SHA256SUMS and the starter library (or attaches them to a release made
+    earlier). A **pre-release** unless `latest` is ticked (U9 item 3: "latest" makes every 1.1 install offer 2.0,
+    Intel ones included).
+
+**The dry run** (publishes nothing; the orchestrator may start it with Ryan's OK, Ryan otherwise):
+
+1. Until the 2.0 merge, `release-native.yml` is only on `v2-native`, and GitHub offers `workflow_dispatch` only for
+   workflow files on the default branch. So the first dry run is the push of lane-n10 to `v2-native` (its files
+   match the path filter). To run it again before the merge, push a change to one of those files, or (Ryan, tier 1)
+   put `release-native.yml` on `main` alone: it does nothing there but wait for a dispatch or a `v2.*` tag.
+2. Once the file is on `main`: GitHub › Actions › release-native › Run workflow › "Use workflow from" `v2-native`,
+   `publish` unticked › Run. Or `gh workflow run release-native.yml --ref v2-native` (both inputs default off).
+3. Find and fetch it: `env -u GH_TOKEN gh run list --workflow release-native.yml --limit 3`, then
+   `gh run view <id> --log-failed` if red, and `gh run download <id> -n release-native-meta -D /tmp/rn` (add
+   `-n Worship-Rig-arm64.zip` to fetch the app).
+
+What to check on the run (and write under "Results"):
+
+- [ ] `mac` green: package-release.sh passed every gate (version, arm64, adhoc, identifier, bundle contents, zip and
+  dmg verify) and the **self-test passed** on the Release app ("Self-test: success" and the JSON with `"pass":true` in
+  the summary; a failure is an `::error` "Release app self-test").
+- [ ] Sizes in the summary / `release.json`: the app under **500 MB** (the gate fails above 480; a warning above
+  400 MB), and the dmg and zip sizes for step 7's release notes and site.
+- [ ] `release` was **skipped** (a branch or a tag push never publishes).
+- [ ] `ipad`: green, or a warning with its reason (a red `ipad` doesn't block 2.0; note what it says).
+- [ ] `release-notes-preview.md` reads right (step 7 makes it final).
+
+**Publishing** is step 8 (tier 1, Ryan).
 
 ### Step 4: Mac hands-on (Ryan, about 40 minutes; after step 2's app)
 
@@ -524,31 +582,43 @@ Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to r
 
 - [ ] `native/apple/project.yml`: `MARKETING_VERSION` is already `2.0.0`; set `CURRENT_PROJECT_VERSION` to the build
   number of the release build (1 for the first).
-- [ ] `package.json` `version` (1.1.0 on `v2-native`; main has 1.1.1): `2.0.0` if release.yml's tag check stays
-  (`tag == v<package.json version>`), and so the Electron shell, if kept, says 2.0.0.
+- [ ] `package.json` `version` (1.1.0 on `v2-native`; main has 1.1.1): release.yml's tag check
+  (`tag == v<package.json version>`) now applies to `v1.*` tags only, so 2.0 doesn't need it; set it to 2.0.0 only
+  if the Electron shell, if kept, should say 2.0.0. `release-native.yml` checks the tag against `project.yml`
+  `MARKETING_VERSION` instead.
 - [ ] Settings › About in the app: check what it shows as the version (the native `window.rig` has no `getInfo`).
 - [ ] `docs/release-notes-2.0.md`: remove the banner and "Editor's notes", fill in the file names and sizes, and
-  re-check "Known gaps" against what B1–B3 and U9 items 1–2 decided.
+  re-check "Known gaps" against what B1–B3 and U9 items 1–2 decided. The publish job refuses the file until the
+  banner and "Editor's notes" are gone (`release-notes.mjs --require-final`); the dry run's summary says whether it
+  would accept it.
 - [ ] `docs/site/index.html`: put the measured download / installed sizes in the `download` section (the HTML comment
   there), check the What's new cards against the final scope, bump `style.css?v=`.
 
 ### Step 8: tag and release (instructions for Ryan; the cloud does none of this)
 
 1. Merge `v2-native` into `main` (main has 1.1.1-only commits: `release.yml`'s `release: published` trigger, the site's
-   1.1.1 line and `docs/release-notes-1.1.1.md`; the site part is already folded into `v2-native` by Lane R, the
-   workflow part needs step 3's version). Push `main`.
+   1.1.1 line and `docs/release-notes-1.1.1.md`; the site part is already folded into `v2-native` by Lane R, and the
+   workflow part by lane-n10: take v2-native's release.yml, which has main's `release: published` path gated to
+   `v1.*`). Push `main`.
    - `pages.yml` deploys `docs/site/` on that push. Until the 2.0 release exists, the site's "Download for Mac"
      (`releases/latest/download/Worship-Rig-arm64.dmg`) still gives 1.1.1's Electron arm64 file under a page that
      says 2.0. So either release first from a tag on the merge commit and push `main` right after, or merge without
      `docs/site/` and bring it in once the release is up.
-2. Tag: `git tag -a v2.0.0 -m "Worship Rig 2.0.0" <merge commit> && git push origin v2.0.0` (or GitHub › Releases ›
-   Draft a new release › new tag `v2.0.0` on `main` › Publish). Either way runs main's release.yml, so only after
-   step 3 has replaced its Electron build for `v2*` tags.
-3. Check the release page: title "Worship Rig v2.0.0", the two files and the starter library, the notes, pre-release
-   or latest as decided.
-4. Download `Worship-Rig-arm64.dmg` from the site's button on a clean account and do the first open.
-5. On a Mac with 1.1.1: Settings › About says 2.0.0 is available and Download opens the arm64 `.dmg`.
-6. Tell the dashboard; revoke the away-week token if it is still live (AWAY_WEEK_PLAN §0).
+2. Tag: `git tag -a v2.0.0 -m "Worship Rig 2.0.0" <merge commit> && git push origin v2.0.0`. GitHub reads the
+   workflows from the tagged commit, so tag a commit that has lane-n10's release.yml and release-native.yml (an older
+   commit's release.yml would build Electron for any `v*` tag). The push runs `release-native` (build, self-test,
+   files on the run; no release) and not `release`. Don't make the 2.0 release in the web UI (Releases › Draft a new
+   release): nothing would attach files to it.
+3. When that run is green: Actions › release-native › Run workflow › "Use workflow from" **tag `v2.0.0`**, tick
+   `publish` (and `latest` only if U9 item 3 says "latest"; otherwise it is a pre-release) › Run. Or
+   `gh workflow run release-native.yml --ref v2.0.0 -f publish=true [-f latest=true]`. It rebuilds, runs the
+   self-test again and then creates the release.
+4. Check the release page: title "Worship Rig v2.0.0", `Worship-Rig-arm64.dmg`, `Worship-Rig-arm64.zip`,
+   `SHA256SUMS` and the starter library, the notes, pre-release or latest as decided.
+5. Download `Worship-Rig-arm64.dmg` from the site's button on a clean account and do the first open.
+6. On a Mac with 1.1.1 (only once the release is "latest"): Settings › About says 2.0.0 is available and Download
+   opens the arm64 `.dmg`.
+7. Tell the dashboard; revoke the away-week token if it is still live (AWAY_WEEK_PLAN §0).
 
 ### Screenshots for the 2.0 site
 
