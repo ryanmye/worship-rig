@@ -9863,3 +9863,85 @@ review O1, O3, O4 and O7 fixed. No engine change (`app/js/engine` untouched), no
 - Gates (ba4dfbc, one at a time, `tools/cloud/gates.mjs`): shell unit 415/415, unit 685 pass / 0 fail / 12 skip,
   chart 44/44, ui-v6 85/85, ui-v6-edit 44/44, ui-v6-ipad 29/29, ui-v6-bank 23/23, settings 114/114, ui-core 79/79,
   edit-v2 14/14 files, ui-v6-themes 24/24 themes clean; migration-1x PASS after the fixture fix (ca7fe5e).
+
+## FU2: empty-library fade only when held; Edit keeps the snapshot line's room; layout quirks (UI6-fu O1–O3)
+
+Lane-fu2 (native/docs/lanes/UI6-build-plan.md "Queued small tasks", reviews UI6-fu.md O1–O3 and its two layout
+quirks). `app/js/engine/` is untouched.
+
+- **O1, option (b): the empty-library step fades only while something is held.** `controller.silenceEmptyLibrary`
+  still turns the drone off once per empty spell (droneOffIfOrphaned), and calls `fadeOutAll` (with its 'action')
+  only when a key is held by any source (`heldCount`) or the sustain pedal is down (`pedalDown`, status.pedal) at
+  that moment. With nothing held, the deleted song's voices are release tails that end by themselves, and the master
+  is no longer left faded under the next song until its first note (skeptic: `fadeGain` 0 after the empty step,
+  through an added or restored song and a footswitch Next). Tests: shell `empty-silence.test.mjs` "UI6-fu O1 (b)"
+  (nothing held: drone off only, no "Faded", the next song added not faded, in a fake engine that models the fade;
+  key / pedal / MIDI key held: drone off then Fade out; both fail before the change where they should); the older
+  tests hold a key where they meant the fade. Browser: ui-v6-bank polish2 (nothing held: `faded` false in the web
+  engine after the delete and after Back), ui-core scenes "UI6-er O1" (a key held: today's faded chip).
+- **O2: both Edit views keep the snapshot line's room while the shown song has a snapshot.** `song-header.js`: the
+  line (`edit-snapline`) is made once a song shown has a scene, and stays laid out: `.ev2-head.ev2-snapres` keeps its
+  room; with none playing it is `.ev2-snapidle` (visibility hidden, so neither focusable nor read; words of its first
+  snapshot as the stand-in); a snapshot starting writes it afresh (role=status speaks it). `.ev2-snapping` still
+  means "one plays". `hidden` now means "no snapshots": a song without them has today's header (no element until a
+  song has them, so flag-off purity is unchanged). The line is one line at every width (the words before Update
+  ellipsize, the whole line in its title), so the reserved height never depends on a name.
+  Measured (probe, every visible element of #view-edit outside the line, meters aside): a snapshot starting moved
+  the rig 22 px (today's Edit, mouse) / 50 (touch) and 6 / 37 px in the v6 Edit (22 / 49 at 820 × 1180); now 0 px,
+  also snapshot → a 40-character-named snapshot and Own levels. Header heights without snapshots as before (52 / 48 /
+  58 / 98 / 112 px). Tests: ui-v6-edit `snapres.tests.mjs` (both Edits; 1280 × 800, 1024 × 700 mouse, 820 × 1180
+  touch; fails before: no `.ev2-snapres`), `snapline.tests.mjs` and ui-core scenes (the idle line, the rig's top
+  unchanged).
+- **O3: shell `bank-trial.test.mjs` "skeptic F1–F3" is deterministic.** Root cause: Node's fetch (undici) keeps the
+  socket to the test server alive; server.js closes an idle one after 5 s (`keepAliveTimeout`). "random sequences"
+  is synchronous and held the event loop 5–17 s on the 2-CPU box, so the next boot's `/api/health` or
+  `/api/user-patches` went out on the half-closed socket and failed ("Could not read the patch packs: fetch failed",
+  a warning nobody saw); the bank list stayed empty and `addFromBank` said "no longer in the Song bank". Reproduced
+  2/2 with two busy loops beside it. Fix (test file only): "random sequences" yields once per seed; the file's fetch
+  sends a request that fails at the network level once more on a new connection, as Chromium does on a reused
+  keep-alive socket (the app runs there); `boot()` asserts the pack was read, with the warnings. Ablation under the
+  same load: yield only 2/2 pass, retry only 2/2, neither 0/2. 5 full-file runs plain and 5 under load: 11/11 each.
+- **Layout quirk: the v6 Edit's ⋯ Song past the header.** At 1024 × 700 on a coarse pointer the header row was 4 px
+  wider than the header; with the Chart button (D33: on by default) 47 px with a mouse, 74 on touch. Below 1100 px
+  (styles-v6-edit.css), beside C-SHIP's give-ways in the same media query (no "Time" caption, 6 px gaps; after the
+  rebase onto C-SHIP the lane's own caption rule was dropped as a duplicate), the key chip's "· you play …" may
+  ellipsize (flex-shrink .1: the name gives way first, to its 6ch; title and
+  aria-label carry it whole). Measured: fits at 1024 (mouse, touch, chart on / off); at 1101 touch with the chart,
+  1 px spare. Above 1100 px nothing changes. Test: ui-v6-edit `layout-fu2.tests.mjs` "UI6-fu ⋯ Song" (1024, 1101,
+  1180, 1280; mouse / touch; chart on / off; nothing gives way at 1280).
+- **Layout quirk: today's Edit in an 820 px window.** The body's 1024 px minimum made it 1004 px wide, its right side
+  (the Range column, Effects / Master tabs, PANIC) past the edge. Below 1024 px and only while today's Edit is the
+  visible view (styles.css, `body:has(> #views > #view-edit:not([hidden]) > .ev2:not(.v6-edit))`): no minimum, and
+  the top bar's lamps get the v6 rules for that width (a lamp whose words don't fit is cut, not drawn over the next;
+  the meter and an idle recording clock go). The flag-off Perform keeps its 1024 px minimum. Test: ui-v6-edit
+  `layout-fu2.tests.mjs` (820 × 1180 mouse / touch: Edit 820 wide, nothing past the edge, PANIC on screen, lamps
+  apart; Perform's minimum still 1024 px).
+
+## CVD2: range-bar numbers never stack; the changed dot clear of the tab number; a muted number grey (UI6-cvd O1, O5, O6)
+
+- **O1: each range bar's number is placed in JS.** `views/components/keys.js`: `placeBadges(bars, W)` (pure
+  geometry) places each badge in number order at the spot nearest the old stagger (2 px + i × 16 px from the bar's
+  start) that overlaps no badge already placed on a row it touches (badge 13 px + 1 px ring, 14 / 20 px wide):
+  first wholly on its bar's visible part; then still reaching ≥ 4 px onto it; then anywhere on the keyboard, nearest
+  its bar. `cvdBadges(box)` measures one keyboard's `.rbar[data-slot]` in the next animation frame and writes
+  `--cvd-x` (px from the bar's start); styles.css uses `left: var(--cvd-x, <F1's clamp>)`. Only while Colour-blind
+  colours are on: Off measures, schedules and writes nothing (a value left from On is removed), so Off is today's
+  page. It re-runs on a bar change (v6 `paintBar` / `layoutBars`, today's `renderSlots`), a resize (ResizeObserver,
+  only while on) and the setting (one MutationObserver on html's class). In keys.js because both keyboards already
+  load it: a new module would be a new request with the setting Off (flag-off purity compares requests). Edit ›
+  Range (one bar) keeps CSS's 4 px. Tests: unit `test/unit/shell/cvd-badges.test.mjs` (long bars keep the stagger;
+  16 instruments with pairs of identical octaves, fifths, three on one octave at 700 / 900 / 1180 px; edge slivers;
+  all 16 on one octave never overlap); ui-v6 `cvd2.tests.mjs` "CVD2 O1" (v6 keyboard at 1280 / 1180 / 820 and after
+  a range write; today's keyboard, flag off, at 1280 / 1024: 16 instruments, 9–14 in identical one-octave pairs, 15
+  / 16 mostly off the keys; every number inside the keyboard, touching its bar, none overlapping on touching rows;
+  Off writes nothing). Before: "9" and "10" at the same x in both keyboards.
+- **O5: the v6 Edit tab's changed dot never covers its number.** With the numbers on, `.v6e-rt-name` gets 8 px of
+  right padding (the dot's room), so the name's text, number included, ends before the dot. The ~45 px tabs of the
+  review's screenshot did not reproduce on this tree (tabs ≥ 116 px; the number at 10–36 px, the dot at 99–107 px);
+  what did is the dot over the end of the name. Test: ui-v6 "CVD2 O5" (16 tabs, every one changed, 1280 / 1024: the
+  dot and the name's content box never meet).
+- **O6: a muted instrument's number goes grey.** Today's keyboard: the bar's own grey (the themes' `.rbar.off`,
+  inherited) with the theme's text colour. The v6 keyboard's muted bar keeps its lamp colour (pre-existing:
+  `.v6 .v6-kbd .v6-rbar` out-ranks every `.rbar.off`; only its handles go grey), so there the number is `--muted`
+  with `--bg` on it. Measured ≥ 4.5 : 1 in all 8 themes (ui-v6 "CVD2 O6"); today's: the bar's grey, ≥ 4.5 : 1
+  (Sanctuary). The bar itself is unchanged (changing it would change cvd-Off pixels).
