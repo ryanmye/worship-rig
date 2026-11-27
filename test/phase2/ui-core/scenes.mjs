@@ -81,7 +81,9 @@ test('Save as scene 1 → the numbers appear with 1 lit; a live move in it leave
   await page.click('#btn-quick');
   await page.click('[data-testid=quick-scene-2]');
   await until(() => window.__rig.controller.scenes.state().n === 1);
-  assert.deepEqual(await ev(() => window.__rig.store.currentSong().scenes[1].slots[0]), { gain: base.gain, muted: true });
+  // (D26.1: the entry also holds the instrument's Space / Echo sends; test/phase1/shell/scene-snap.test.mjs)
+  assert.deepEqual(await ev(() => window.__rig.store.currentSong().scenes[1].slots[0]),
+    { gain: base.gain, muted: true, sends: { reverb: base.sends.reverb, delay: base.sends.delay } });
   assert.deepEqual(await ev(() => [...document.querySelectorAll('[data-testid=quick-scenes] button')].map((b) => b.textContent)), ['1', '2', '3']);
   await page.screenshot({ path: path.join(shots, 'scenes-quick.png') });
   await page.click('[data-testid=quick-sheet] .qs-x');
