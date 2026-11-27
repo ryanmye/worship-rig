@@ -38,7 +38,9 @@ function spy(target, prefix) {
 export class AudioEngine {
   constructor(opts = {}) {
     const { js, native, log } = loopbackPair({ schedule: 'microtask' });
-    const mock = new MockNative({ api, transport: native, autoTick: true });
+    // lane NMA: a test may give the mock MIDI ports before boot (globalThis.__bridgeMockMidiPorts, an init script)
+    const midiPorts = globalThis.__bridgeMockMidiPorts;
+    const mock = new MockNative({ api, transport: native, autoTick: true, midiPorts });
     const engine = new BridgeEngine({ transport: js, latency: opts.latency });
     globalThis.__bridgeMock = mock;
     globalThis.__bridgeLog = log;
