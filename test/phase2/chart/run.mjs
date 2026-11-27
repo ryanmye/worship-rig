@@ -396,6 +396,71 @@ try {
     assert.deepEqual(small, []);
   });
 
+  // C-SHIP skeptic F1 (native/docs/reviews/UI6-cship.md): the toggle ships on by default; pressed and under the mouse
+  // (right after the click that opened the chart) Studio's cap hover painted its dark gradient under the accent ink
+  // (1.04 : 1). Every theme: idle, pressed, pressed + hover ≥ 4.5 : 1 (a gradient counts by its stops).
+  await T('C-SHIP skeptic F1: the Chart toggle reads ≥ 4.5:1 in every theme (idle, pressed, pressed under the mouse)',
+    async () => {
+      const ratio = () => ev(() => {
+        const el = document.querySelector('[data-testid="chart-toggle"]');
+        const parse = (c) => {
+          const m = c.match(/rgba?\(([^)]+)\)/);
+          if (!m) return null;
+          const p = m[1].split(/[ ,/]+/).filter(Boolean).map(Number);
+          return [p[0], p[1], p[2], p[3] ?? 1];
+        };
+        const lum = (c) => {
+          const f = (v) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+          return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+        };
+        const comp = (layers) => layers.reverse().reduce((o, c) => o.map((v, i) => v * (1 - c[3]) + c[i] * c[3]),
+          [0, 0, 0]);
+        // the backgrounds under the text: each gradient stop on the element (worst case), else the colour stack
+        const stack = [];
+        for (let e = el; e; e = e.parentElement) {
+          const c = parse(getComputedStyle(e).backgroundColor);
+          if (c && c[3] > 0) {
+            stack.push(c);
+            if (c[3] >= 1) break;
+          }
+        }
+        const stops = (getComputedStyle(el).backgroundImage.match(/rgba?\([^)]+\)/g) || []).map(parse);
+        const bgs = stops.length ? stops.map((s) => comp([s, ...stack])) : [comp(stack.slice())];
+        const fg = parse(getComputedStyle(el).color);
+        return Math.min(...bgs.map((b) => {
+          const f = fg.slice(0, 3).map((v, i) => v * fg[3] + b[i] * (1 - fg[3]));
+          const [hi, lo] = [lum(f), lum(b)].sort((x, y) => y - x);
+          return +((hi + 0.05) / (lo + 0.05)).toFixed(2);
+        }));
+      });
+      const ids = await ev(() => import('/js/shared/themes.js').then((m) => m.pickableThemes().map((t) => t.id)));
+      assert.equal(await page.getAttribute('[data-testid="chart-toggle"]', 'aria-pressed'), 'true');
+      const low = [];
+      try {
+        for (const id of ids) {
+          await ev((t) => window.__rig.theme.apply(t), id);
+          await page.mouse.move(2, 2);
+          await page.waitForTimeout(250);
+          const pressed = await ratio();
+          await page.hover('[data-testid="chart-toggle"]');
+          await page.waitForTimeout(250);
+          const hover = await ratio();
+          await page.click('[data-testid="chart-toggle"]'); // closed: idle (and still under the mouse)
+          await until(() => document.getElementById('perform-chart').hidden);
+          await page.mouse.move(2, 2);
+          await page.waitForTimeout(250);
+          const idle = await ratio();
+          await page.click('[data-testid="chart-toggle"]');
+          await until(() => !document.getElementById('perform-chart').hidden);
+          for (const [k, v] of Object.entries({ idle, pressed, hover })) if (v < 4.5) low.push(`${id} ${k} ${v}`);
+        }
+      } finally {
+        await ev(() => window.__rig.theme.apply('classic'));
+        await ev(() => document.activeElement?.blur?.());
+      }
+      assert.deepEqual(low, []);
+    });
+
   await T('flag off: the toggle, panel and stylesheet go away', async () => {
     assert.equal(await ev(() => window.__rig.setChartView(false)), false);
     const r = await ev(() => ({

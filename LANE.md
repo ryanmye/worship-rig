@@ -58,9 +58,9 @@ refused only past the restore cap 2,500,000); review doc native/docs/reviews/UI6
 - [x] read DECISIONS D7/D9/D16/D33, CONTRACT_CHANGES C-SHIP, reviews chart-view.md, UI6-U7b.md, diff
 - [x] O4 change (store, chart-store test, kept.test, migration-1x fixtures, CONTRACT_CHANGES, DECISIONS note,
       release notes) 9606281; shell-unit, unit, migration-1x PASS on it
-- [ ] lazy load probes (both UIs, entry points, chart arrival, Off unloads)
+- [x] lazy load probes (both UIs, entry points, chart arrival, Off unloads): .probe/p1.mjs, p2.mjs — all held
 - [ ] migration / device-local / export-import / ?chart
-- [ ] O1 PANIC, O3, O7, v6 Edit header ≤1100 px
+- [x] O1 PANIC, O3, O7, v6 Edit header ≤1100 px: .probe/p3.mjs — all held (6 sizes, Esc off/on, Lock, off/swap)
 - [ ] iPad + themes placeholder
 - [ ] release notes line
 - [ ] gates
@@ -71,3 +71,5 @@ refused only past the restore cap 2,500,000); review doc native/docs/reviews/UI6
   PLAYWRIGHT_BROWSERS_PATH=/root/.cache/rig-pw (tools/cloud/setup.sh mapping) for every browser run / gates.mjs.
 - O-a: chart writes (setChart / chartOverflows) are still refused past 2 MB, while D9 lets every other save pass it
   (notes edits, now adds). Not changed (outside the O4 call); for the orchestrator.
+- F1 (fixed): today's pressed Chart toggle under the mouse in Studio: dark cap hover under accent ink, 1.04–1.33 : 1
+  (pre-existing in the hidden build, now on by default). styles.css hover/active rule; chart suite test fails first.

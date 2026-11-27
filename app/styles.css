@@ -785,6 +785,10 @@ body[data-view="edit"] .quick-btn { display: none; }
 .song-sub .chv-toggle { margin-left: auto; min-height: 36px; min-width: 44px; padding: 0 10px; font-size: 13px; }
 .song-sub .chv-toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink);
   border-color: var(--accent); }
+/* C-SHIP skeptic F1: pressed and under the mouse (right after the click that opened it) a theme's cap hover / press
+   (Studio: a dark gradient) must not replace the accent under the accent ink (1.04 : 1 before) */
+.song-sub .chv-toggle[aria-pressed="true"]:is(:hover, :active):not(:disabled) { background: var(--accent);
+  color: var(--accent-ink); border-color: var(--accent); }
 @media (max-width: 1340px) { .song-sub .notes-btn ~ .chv-toggle { margin-left: 0; } }
 @media (pointer: coarse) { .song-sub .chv-toggle { min-height: 44px; } }
 /* C-SHIP (chart-view review O1): the chart import / Edit chart dialogs cover the screen at z 60; PANIC (today's Perform
