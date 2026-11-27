@@ -13,7 +13,7 @@ Worktree /home/claude/wt-fu2, branch lane-fu2 from origin/v2-native ee5bcb9. Scr
 ## Checklist
 - [x] 1 FU2 O1 empty-library fade only when held (+ shell tests)
 - [x] 2 FU2 O2 snapshot line height reserved (both Edits) + rect tests
-- [ ] 3 FU2 O3 bank-trial skeptic F1–F3 deterministic (5 full-file runs)
+- [x] 3 FU2 O3 bank-trial skeptic F1–F3 deterministic (5 full-file runs)
 - [ ] 4 FU2 ⋯ Song overflow 1024×700 coarse (v6) + today's Edit 1004 px at 820
 - [ ] 5 CVD2 O1 range-bar number placement in JS (v6 keyboard.js + perform.js)
 - [ ] 6 CVD2 O5 changed dot vs two-digit tab number
@@ -32,5 +32,13 @@ lane-shift.json.
   everywhere (also snapshot→long-named snapshot and Own levels). Header without snapshots identical to base (52 / 48 /
   58 / 98 / 112 px). The line is one line (words before Update ellipsize), so its reserved height never depends on a
   name. Idle = `.ev2-snapidle` (visibility hidden), `hidden` = no snapshots.
+
+- 3: root cause of bank-trial "skeptic F1–F3": Node fetch (undici) keeps the socket to the test server alive; the
+  server closes idle sockets after 5 s (server.js keepAliveTimeout). "random sequences" is synchronous and held the
+  loop 5–17 s, so the next boot's /api/health or /api/user-patches went out on the half-closed socket: "Could not
+  read the patch packs: fetch failed" (warned, unseen), bank list empty. Reproduced 2/2 under 2 busy loops. Fix (test
+  only): the random test yields per seed; the file's fetch retries once on a network TypeError (Chromium's behaviour
+  on a reused keep-alive socket); boot() asserts the pack was read. Ablation under load: yield only 2/2 pass, retry
+  only 2/2, neither 0/2. 5 full-file runs plain + 5 under load: 11/11 each (.probe/o3-*.txt).
 
 ## Open questions

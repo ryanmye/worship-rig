@@ -130,6 +130,24 @@ const write = (f, data) => {
 const exportOf = (s, bank) => ({ app: 'worship-rig', kind: 'song', schema: 2, song: s, ...(bank ? { bank } : {}) });
 let server;
 let port;
+// UI6-fu O3: the file's controllers read the bank pack through Node's fetch (undici), which keeps the connection to
+// the test server alive between requests; the server closes an idle one after 5 s (keepAliveTimeout). A test that
+// held the event loop longer than that ("random sequences", 5–17 s on the 2-CPU box) left the pooled socket
+// half-closed: the next boot's /api/health or /api/user-patches went out on it and failed ("fetch failed"), the
+// controller warned, its bank list stayed empty, and "skeptic F1–F3" read "That song is no longer in the Song bank".
+// So: that test yields between seeds (no test holds the loop past the keep-alive), and a request that fails at the
+// network level is sent once more on a new connection, as Chromium does for a reused keep-alive socket (the app runs
+// there); boot() fails loudly when the pack was not read.
+const realFetch = globalThis.fetch;
+before(() => {
+  globalThis.fetch = (...a) => realFetch(...a).catch((err) => {
+    if (!(err instanceof TypeError)) throw err;
+    return realFetch(...a);
+  });
+});
+after(() => {
+  globalThis.fetch = realFetch;
+});
 before(async () => {
   fs.mkdirSync(path.join(tmp, 'app'), { recursive: true });
   write(path.join(samples, 'Desk Bank', 'pack.json'), { mode: 'bank', name: 'Desk sounds' });
@@ -165,8 +183,11 @@ async function boot(storage = memoryStorage()) {
       store, engine, midi, recorder: null, doc: fakeDoc(), nav: null, win: new EventTarget(), rig: null,
       timers: fakeTimers(), now: () => 0, locks: null, heartbeat: false, indexedDB: null,
     });
+    const warns = [];
+    ctl.addEventListener('warn', (e) => warns.push(e.detail.message));
     await ctl.start();
     await ctl.packsReady;
+    assert.ok(ctl.patchPacks().bankSongs >= 2, `the bank pack was read at boot (${warns.join(' | ')})`);
     const events = [];
     for (const t of ['trial', 'songSelected']) ctl.addEventListener(t, (e) => events.push([t, e.detail]));
     return { store, ctl, storage, events, engine };
@@ -330,7 +351,7 @@ test('skeptic F1: a setlist edited during a trial keeps the replaced entry (save
 
 // F1, property style: random trial / back / edit / switch / list-edit / persist / reload sequences against a store
 // that never sees the trial. Storage and export must always equal the reference's: the library without the trial.
-test('skeptic F1: random sequences: storage and export always = the library without the trial', () => {
+test('skeptic F1: random sequences: storage and export always = the library without the trial', async () => {
   const counter = () => {
     let n = 0;
     return (p) => `${p}${++n}`;
@@ -342,6 +363,7 @@ test('skeptic F1: random sequences: storage and export always = the library with
   };
   let runs = 0;
   for (let seed = 1; seed <= 60; seed++) {
+    await new Promise((res) => setImmediate(res)); // UI6-fu O3: never hold the loop past the server's keep-alive
     let r = seed >>> 0;
     const rnd = () => ((r = (r * 1664525 + 1013904223) >>> 0) / 2 ** 32);
     const pick = (a) => a[Math.floor(rnd() * a.length)];
