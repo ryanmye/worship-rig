@@ -415,7 +415,8 @@ export function mountEffects(host, ctx, opts, env) {
         return on ? `${cap(chorusWord(val('fx.chorus.depth')))} · level ${formatValue('fx.chorus.returnGain',
           val('fx.chorus.returnGain'))}` : 'off';
       }
-      const filled = slotsOf(s).filter(Boolean);
+      // UI6-snap O2: the sends as they play (a snapshot may hold them; ctx.view), as the cells under it show
+      const filled = slotsOf((ctx.view && ctx.view()) || s).filter(Boolean);
       const into = filled.filter((sl) => Number(sl.sends?.reverb) > 0.0005).length;
       return `${into} of ${filled.length} in the Space`;
     },

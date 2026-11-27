@@ -264,8 +264,10 @@ export function saveSnapshotDialog(v, o = {}) {
           'v6-keeps-sends'),
         keepRow('Space and Echo', `${spaceEcho}, with their levels`, true, 'v6-keeps-fx'),
         (() => {
-          const r = keepRow('The drone: ON / OFF, sound and level, and its key', droneNow, true, 'v6-keeps-drone');
-          r.lastChild.append(h('label.v6-keeps-key', {}, h('small', { text: 'Key ' }), keySel));
+          // UI6-snap O5: the title says what is always kept; the key is the choice below (it follows the song's key
+          // unless one is chosen), so the title no longer reads as if the key were pinned
+          const r = keepRow('The drone: ON / OFF, sound and level', droneNow, true, 'v6-keeps-drone');
+          r.lastChild.append(h('label.v6-keeps-key', {}, h('small', { text: 'Its key' }), keySel));
           return r;
         })(),
         wheelRouted ? keepRow('Where the wheel is', 'it moves what the wheel drives in this song', true,

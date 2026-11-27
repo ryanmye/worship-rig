@@ -9,6 +9,8 @@
 import { keyName } from '../../../shared/music.js';
 import { h, setText, icon, createBinder, changedDot, download, safeName, TRIAL_EXPORT_MESSAGE } from '../lib.js';
 import { isTrialId } from '../../../store.js';
+import { scenesOf } from '../../../shared/scenes.js';
+import { say } from '../../components/voice.js';
 import { KEY_RELS, octaveWord, createTapper, flashTap } from './song.js';
 
 const LIVE_HINT = 'The song that’s playing. Changes are heard now and saved with it.';
@@ -24,7 +26,12 @@ const firstLine = (t) => {
 export default {
   id: 'song-header',
   region: 'head',
-  mount(el, ctx) {
+  /**
+   * @param {HTMLElement} el
+   * @param {object} ctx  the panel ctx
+   * @param {{v6?:boolean}} [opts]  v6: mounted by the v6 Edit (views/v6/edit/edit.js): its words ("snapshot", names)
+   */
+  mount(el, ctx, opts = {}) {
     const { store, editState } = ctx;
     const binder = createBinder(ctx);
     const song = () => ctx.song();
@@ -319,18 +326,90 @@ export default {
     ctx.listen(window, 'resize', () => close(false));
     ctx.onLeaveSong(() => close(false)); // the menu and its question belong to the song they were opened on
 
+    const liveHint = h('span.ev2-song-livehint', { text: LIVE_HINT });
     const head = h('div.ev2-song-head', {},
       songsBtn, live, nameInput, pencil, keyChip, bpmChip, notesChip, loading,
       h('span.ev2-sp'),
-      h('span.ev2-song-livehint', { text: LIVE_HINT }),
+      liveHint,
       menuBtn, pop,
     );
     el.replaceChildren(head);
+
+    // ---- UI6-snap O1: while a snapshot plays, Edit's Space / Echo / sends / drone controls change it (heard, for now:
+    // the next snapshot change drops it), not the song. One line says so, with the snapshot row's Update (save over
+    // it, its name kept; Lock never blocks it, D24.1) and Own levels (back to the song's own: then Edit edits the
+    // song). Made the first time a snapshot plays, so the header at rest is unchanged (flag-off purity).
+    const scenes = ctx.controller?.scenes;
+    const v6 = !!opts.v6;
+    let snap = null; // {el, sig}
+    const playingScene = () => {
+      const s = song();
+      const st = scenes?.state?.();
+      if (!s || !st || st.id !== s.id || st.n === null) return null;
+      const sc = scenesOf(s)[st.n];
+      // D25: the v6 Edit names it; today's UI still says "Scene n"
+      return sc ? { n: st.n, name: (v6 && sc.name) || say('sceneLabel', { n: st.n + 1 }) } : null;
+    };
+    const noun = v6 ? 'snapshot' : 'scene';
+    const doUpdate = () => {
+      const st = scenes.state();
+      if (!st || st.n === null || !scenes.save(st.n)) return;
+      const sn = scenesOf(store.currentSong())[st.n];
+      ctx.toast(`“${(v6 && sn?.name) || say('sceneLabel', { n: st.n + 1 })}” updated.`, 'ok', { ms: 2500 });
+    };
+    const doOwn = () => scenes.go(null);
+    const buildSnap = (text) => {
+      // the words come from shared/voice.js: the two [..] are the buttons, Update first, then Own levels
+      const acts = [['update', doUpdate, say('sceneEditUpdateTitle', { noun })],
+        ['own', doOwn, say('sceneEditOwnTitle', { noun })]];
+      const parts = [];
+      let k = 0;
+      for (const [i, piece] of text.split(/\[([^\]]+)\]/).entries()) {
+        if (i % 2 === 0) {
+          if (piece) parts.push(piece);
+          continue;
+        }
+        const [act, fn, title] = acts[k++] || [];
+        if (!act) {
+          parts.push(piece);
+          continue;
+        }
+        const b = h('button.ev2-song-snapbtn', { type: 'button', title, dataset: { act: `snap-${act}` },
+          'data-testid': `edit-snap-${act}` }, piece);
+        b.addEventListener('click', fn);
+        parts.push(b);
+      }
+      return parts;
+    };
+    const renderSnap = () => {
+      const p = scenes ? playingScene() : null;
+      if (!p && !snap) return;
+      if (!snap) {
+        snap = { el: h('span.ev2-song-snap', { role: 'status', 'data-testid': 'edit-snapline' }), sig: '' };
+        el.append(snap.el); // a line of its own under the chips row (song-header.css .ev2-snapping)
+      }
+      snap.el.hidden = !p;
+      el.classList.toggle('ev2-snapping', !!p);
+      liveHint.hidden = !!p; // "Changes are … saved with it" is not true of these controls meanwhile
+      if (!p) return;
+      const text = say('sceneEditLine', { noun, name: p.name });
+      if (text !== snap.sig) {
+        snap.sig = text;
+        snap.el.replaceChildren(...buildSnap(text));
+      }
+    };
+    if (scenes) {
+      ctx.listen(ctx.controller, 'scene', renderSnap);
+      ctx.listen(ctx.controller, 'song', renderSnap);
+      binder.fn(['scenes'], renderSnap); // the song shown changed, or its scenes (renamed, removed)
+    }
 
     return {
       destroy() {
         close(false);
         binder.destroy();
+        snap?.el.remove(); // the region host outlives this panel
+        el.classList.remove('ev2-snapping');
       },
     };
   },

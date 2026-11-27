@@ -1119,6 +1119,8 @@ export function mountInstrument(host, ctx, opts, env) {
     const slot = curSlot();
     const meta = metaOf(slot);
     const dots = catDots(slot, meta);
+    // UI6-snap O2: Space & Echo reads the sends as they play (a snapshot may hold them), as its sliders do
+    const heard = slot ? ctx.view?.()?.patch?.slots?.[i] || slot : null;
     for (const c of CATEGORIES) {
       const r = navRecs.get(c.id);
       const sel = c.id === cat;
@@ -1126,7 +1128,7 @@ export function mountInstrument(host, ctx, opts, env) {
       r.el.classList.toggle('on', sel);
       r.el.tabIndex = sel ? 0 : -1;
       r.el.disabled = !slot;
-      setText(r.sum, slot ? categorySummary(c.id, slot, meta, i) : '');
+      setText(r.sum, slot ? categorySummary(c.id, c.id === 'sends' ? heard : slot, meta, i) : '');
       r.dot.hidden = !slot || !dots.has(c.id);
     }
     const orient = navIsRow() ? 'horizontal' : 'vertical';

@@ -276,7 +276,7 @@ export function mountEditV6(el, ctx) {
   // ---- regions: today's setlist (+ Song bank…), song header (+ time signature, Chart), keyboard row
   const regions = [
     core.mountModule('setlist', libMod, {}),
-    core.mountModule('song-header', headHost, {}),
+    core.mountModule('song-header', headHost, { v6: true }), // UI6-snap O1: its snapshot line says “snapshot”
   ];
   // U5b: the v6 Perform's bottom row (views/v6/bottom.js), mounted only while Edit shows, with its own test ids
   const bottom = editBottom(bottomHost, {

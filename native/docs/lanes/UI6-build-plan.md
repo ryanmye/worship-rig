@@ -78,15 +78,18 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   chart-view review O1 (PANIC reachable over the chart dialogs), O3, O4, O7 fixed; purity probes re-based; iPad sizes
   and all 8 themes with charts on. Builder + skeptic.
 
-- **Empty-library silence (UI6-er O1, tier 2: mine):** when no song is selected and no songs are left (delete the last
-  song, or Back from an empty-library trial) the controller turns the drone off and fades the voices; PANIC must stop a
-  sounding drone whatever `menuBarState` says. Today PANIC leaves such a drone sounding (pre-existing). Builder +
-  skeptic, with the U-SNAP follow-up.
+- ~~**Empty-library silence (UI6-er O1, tier 2: mine):**~~ **Built (lane-fu; skeptic pending):** when no song is
+  selected and no songs are left (delete the last song, Back from an empty-library trial, an empty import) the
+  controller turns the drone off and fades the voices (Fade out's path), once; PANIC turns off a drone left on with no
+  song behind it (the controller now records the drone mode it last sent the engine). A drone a song or snapshot has
+  on still keeps going under PANIC, as in 1.x; PANIC is otherwise unchanged. CONTRACT_CHANGES "## Empty-library
+  silence; PANIC stops an orphaned drone (UI6-er O1)".
 
-- **U-SNAP follow-up (UI6-snap O1/O2/O5, tier 2: mine):** while a snapshot plays, both Edit views show a line in the
-  header: "Changing snapshot “Hall” for now: Update keeps it, Own levels edits the song" (O1); v6 Edit's Effects
-  "Sends" and the instrument's "Space & Echo" summaries read the song as it plays (O2); the dialog's drone row copy
-  matches the key choice's default (O5).
+- ~~**U-SNAP follow-up (UI6-snap O1/O2/O5, tier 2: mine):**~~ **Built (lane-fu; skeptic pending):** while a snapshot
+  plays, both Edit views show a line under the header's chips: "Changing snapshot “Hall” for now: Update keeps it,
+  Own levels edits the song" (O1; today's Edit says "scene “Scene n”"); v6 Edit's Effects "Sends" and the
+  instrument's "Space & Echo" summaries read the song as it plays (O2); the dialog's drone row no longer says "and its
+  key" (O5). CONTRACT_CHANGES "## U-SNAP follow-up (UI6-snap O1 / O2 / O5)".
 
 - **U-CVD (D32):** Settings › Look › Colour-blind colours (Off / Red–green / Blue–yellow), per device; slot palettes
   per theme checked by CVD simulation + the contrast audit; instrument numbers on range bars and strip tabs when on.

@@ -160,15 +160,16 @@ async function boot(storage = memoryStorage()) {
   return withLocation(`http://127.0.0.1:${port}/`, async () => {
     const midi = new MidiInput({ nav: null, warn: () => {} });
     midi.access = {};
+    const engine = fakeEngine();
     const ctl = createController({
-      store, engine: fakeEngine(), midi, recorder: null, doc: fakeDoc(), nav: null, win: new EventTarget(), rig: null,
+      store, engine, midi, recorder: null, doc: fakeDoc(), nav: null, win: new EventTarget(), rig: null,
       timers: fakeTimers(), now: () => 0, locks: null, heartbeat: false, indexedDB: null,
     });
     await ctl.start();
     await ctl.packsReady;
     const events = [];
     for (const t of ['trial', 'songSelected']) ctl.addEventListener(t, (e) => events.push([t, e.detail]));
-    return { store, ctl, storage, events };
+    return { store, ctl, storage, events, engine };
   });
 }
 const LANTERN = 'Desk Bank:lantern.json';
@@ -553,6 +554,35 @@ test('U8a O1: Back from a trial begun in an empty library ends it; the library i
     assert.ok(k.ok);
     assert.equal(store.currentSong().id, k.id);
     assert.deepEqual(store.get().songOrder, [k.id]);
+  } finally {
+    ctl.dispose();
+  }
+});
+
+// UI6-er O1: Back from a trial begun in an empty library left the trial's sound loaded, drone included, with nothing on
+// screen to stop that drone. Now the controller turns the drone off and fades the voices, once.
+test('UI6-er O1: Back from a trial begun in an empty library silences it (drone off, Fade out), once', async () => {
+  const { store, ctl, engine } = await boot();
+  try {
+    for (const id of store.get().songOrder.slice()) assert.ok(store.deleteSong(id));
+    await new Promise((res) => setTimeout(res, 5));
+    const r = await ctl.tryBankSong(LANTERN);
+    assert.equal(r.ok, true);
+    store.set(`songs.${r.id}.drone.mode`, 'synth'); // the player turns the trial's drone on (a trial write)
+    await new Promise((res) => setTimeout(res, 5));
+    assert.equal(engine.of('drone.configure').at(-1)[1].mode, 'synth', 'the trial plays a drone');
+    const actions = [];
+    ctl.addEventListener('action', (e) => actions.push(e.detail.type));
+    engine.clear();
+    assert.deepEqual(await ctl.backFromTrial(), { ok: true, empty: true });
+    await new Promise((res) => setTimeout(res, 5));
+    const sound = engine.calls.filter((c) => ['drone.configure', 'fadeOutAll', 'allNotesOff'].includes(c[0]));
+    assert.deepEqual(sound, [['drone.configure', { mode: 'off' }], ['fadeOutAll', 6]]);
+    assert.deepEqual(actions, ['fadeOutAll']);
+    // PANIC now: today's (the drone is already off)
+    engine.clear();
+    ctl.panic();
+    assert.deepEqual(engine.calls, [['allNotesOff']]);
   } finally {
     ctl.dispose();
   }

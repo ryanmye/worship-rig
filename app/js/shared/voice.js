@@ -62,6 +62,13 @@ const CLASSIC = Object.freeze({
   sceneEditSub: 'Saved sounds to step through while you play. The song always starts on its own settings.',
   scenePlaying: 'playing',
   sceneNone: 'No scenes yet.',
+  // UI6-snap O1: Edit's header while a snapshot plays (Edit's Space / Echo / drone changes go to it, for now).
+  // `noun` = 'snapshot' (v6 Edit) | 'scene' (today's Edit); `name` = its name. The two [..] are the buttons, in this
+  // order: Update (saves over it), then Own levels (back to the song's own; Edit then changes the song).
+  sceneEditLine: ({ noun, name }) => `Changing ${noun} “${name}” for now: [Update] keeps it, [Own levels] edits the `
+    + 'song',
+  sceneEditUpdateTitle: ({ noun }) => `Save what you hear now over this ${noun}`,
+  sceneEditOwnTitle: 'Back to the song’s own levels: then Edit changes the song itself',
   // v11-decisions (Ryan, checklist Q3): Settings › Menu bar › Global shortcuts: next / previous step the setlist's
   // songs (they were "Next mode" / "Previous mode")
   hotkeyNextSong: 'Next song',

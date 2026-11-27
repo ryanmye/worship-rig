@@ -4,6 +4,8 @@
 //   O2 the Back-into-the-gap rule is controller.backFromTrial's: a flag flip mid-trial (the v6 Perform's destroy goes
 //      Back) lands in the gap too, as the banner's Back does;
 //   U8a O1 Back from a trial begun in an empty library ends it: the banner goes, the empty library card is back.
+//   UI6-er O1 the empty library is silent: deleting the last song, and Back from a trial there, turn the drone off and
+//      fade the voices (the web engine's drone and fade, not just the controller's calls); PANIC stays quiet.
 
 /**
  * @param {object} x  run.mjs's helpers: {T, page, ev, until, tid, settled, assert, closeBank, QUIET}
@@ -55,14 +57,31 @@ export async function polish2BankTests(x) {
   await T('polish2 U8a O1: Back from a trial begun in an empty library ends it; the empty library card is back',
     async () => {
       await closeBank();
+      // UI6-er O1: the song that plays has its drone on; deleting the last song silences the drone and the voices
+      await ev(() => {
+        const { store } = window.__rig;
+        store.set(`songs.${store.currentSong().id}.drone.mode`, 'synth');
+      });
+      await until(() => window.__rig.engine.drone.sounding === true);
+      const heard = () => ev(() => {
+        const { engine } = window.__rig;
+        return { drone: engine.drone.cfg.mode, sounding: engine.drone.sounding,
+          faded: engine.getRuntimeState().faded };
+      });
       await ev(() => {
         const { store } = window.__rig;
         for (const id of [...store.get().songOrder]) store.deleteSong(id);
       });
       await until(() => !!document.querySelector('[data-testid="v6-empty"]:not([hidden])'));
+      assert.deepEqual(await heard(), { drone: 'off', sounding: false, faded: true }, 'the last song deleted');
       await ev(() => document.getElementById('toasts')?.replaceChildren());
       await ev((pid) => window.__rig.controller.tryBankSong(pid), QUIET);
       await until(() => window.__rig.controller.trial()?.playing === true);
+      await ev(() => {
+        const { store } = window.__rig;
+        store.set(`songs.${store.currentSong().id}.drone.mode`, 'synth'); // the player turns the trial's drone on
+      });
+      await until(() => window.__rig.engine.drone.sounding === true);
       await until(() => !document.querySelector('[data-testid="v6-trybar"]').hidden);
       assert.equal(await page.textContent(tid('v6-try-back')), 'Back');
       await page.click(tid('v6-try-back'));
@@ -75,5 +94,9 @@ export async function polish2BankTests(x) {
         toasts: [...document.querySelectorAll('#toasts > *')].map((t) => t.textContent),
       }));
       assert.deepEqual(r, { banner: true, cur: null, songs: 0, toasts: [] });
+      assert.deepEqual(await heard(), { drone: 'off', sounding: false, faded: true }, 'Back from the trial');
+      // PANIC (the on-screen tap) in the empty library: nothing to stop, no error
+      await page.click(tid('v6-panic'));
+      assert.deepEqual(await heard(), { drone: 'off', sounding: false, faded: true });
     });
 }

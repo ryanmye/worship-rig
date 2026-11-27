@@ -88,6 +88,7 @@ const getIn = (o, segs) => segs.reduce((v, k) => (v === null || v === undefined 
 const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
 const DRONE_NUM = ['gain', 'brightness', 'movement', 'width', 'fade'];
 const DRONE_OPTS = ['chordFollow', 'continueAcrossSongs', 'minorUsesRelativeMajorFile'];
+const DRONE_MODES = ['off', 'synth', 'files']; // drone.js setMode: anything else is 'off'
 const ROUTING_KEYS = ['modWheel', 'expression', 'volume', 'bend', 'swell'];
 const KB_VELOCITY = 100;
 const WHEEL_NUDGE = 0.1;
@@ -307,6 +308,12 @@ export function createController(o) {
       return undefined;
     }
   }
+  /**
+   * UI6-er O1: the drone mode the engine was last configured with ('off' | 'synth' | 'files'; null = never, a fresh
+   * engine's silence). The controller's other drone state follows the song (`applied`, live()); this one follows the
+   * engine, so a drone left sounding with no song behind it can be told apart from one a song or snapshot has on.
+   */
+  let droneSent = null;
   function droneCall(name, ...args) {
     if (secondary) return undefined;
     const d = engine && engine.drone;
@@ -315,11 +322,31 @@ export function createController(o) {
       return undefined;
     }
     try {
-      return d[name](...args);
+      const r = d[name](...args);
+      // UI6-er O1: what the engine's drone was last told to play, whoever asked (applyDrone, restorePads, droneOff)
+      const m = name === 'configure' && args[0] ? args[0].mode : undefined;
+      if (m !== undefined) droneSent = DRONE_MODES.includes(m) ? m : 'off';
+      return r;
     } catch (err) {
       warn(`engine.drone.${name} failed: ${err && err.message}`);
       return undefined;
     }
+  }
+  /** UI6-er O1: the drone a selected song plays (its snapshot on top): the applied song's, while a song is selected. */
+  function droneWanted() {
+    if (!applied || !store.currentSong()) return false;
+    const d = live(applied).drone;
+    return !!(d && d.mode && d.mode !== 'off');
+  }
+  /**
+   * UI6-er O1: turn the engine's drone off when it was left on (configured on) and no selected song wants it, e.g. the
+   * last song deleted. The ON tile's path (drone.configure {mode:'off'}: the drone's own fade). A drone that is off or
+   * that a song has on is left alone. @returns {boolean} true when it was turned off
+   */
+  function droneOffIfOrphaned() {
+    if (secondary || droneSent === null || droneSent === 'off' || droneWanted()) return false;
+    droneCall('configure', { mode: 'off' });
+    return true;
   }
 
   // ---- status
@@ -2161,6 +2188,13 @@ export function createController(o) {
   function prevSong() {
     return stepSong(-1);
   }
+  /**
+   * PANIC: every voice off (engine allNotesOff: 30 ms, pedal up, swell and bend dropped), the controller's held / pedal
+   * state cleared, the click stopped. A drone the song (or its snapshot) has on keeps going, as in 1.x (release notes
+   * 1.1.0). UI6-er O1: a drone left on with no selected song behind it (droneOffIfOrphaned) is turned off. The
+   * engine's allNotesOff leaves every drone alone by contract (ENGINE_CONTRACT), and the views' drone state reads the
+   * song (menuBarState().droneOn is false with no song), so nothing else could reach that drone.
+   */
   function panic() {
     call('allNotesOff');
     heldBySrc.clear();
@@ -2173,6 +2207,7 @@ export function createController(o) {
     buttonState.clear();
     swellActive = false; // round4-controller C8: engine.allNotesOff() drops the swell, so the next toggle starts one
     stopClickForPanic();
+    droneOffIfOrphaned();
     emit('action', { type: 'panic' });
   }
   /**
@@ -3585,6 +3620,8 @@ export function createController(o) {
     // songs (preload bookkeeping, imports) must not wake the meters
     if (cur && entityChanged && paths.some((p) => p.startsWith(`songs.${cur}.`))) emitActivity('edit');
     if (navChanged) dropStaleCue(); // S-review S1: before a selectSong below, which would also drop a waiting GO
+    if (cur) emptySilenced = false;
+    else silenceEmptyLibrary(state);
     if (cur && cur !== targetId) {
       selectSong(cur, { index: state.settings.setlistIndex });
     } else if (cur && cur === appliedId && targetId === appliedId) {
@@ -3592,6 +3629,23 @@ export function createController(o) {
       if (song && song !== applied) applyDiff(applied, song);
     }
     if (navChanged && started) preloadSetlist();
+  }
+
+  /**
+   * UI6-er O1: no song selected and none in the library (the last song deleted, Back from a trial begun in an empty
+   * library, an empty library imported): the engine still had the last song loaded, drone included, and nothing on
+   * screen could stop that drone. Once per empty spell: the drone off (droneOffIfOrphaned) and the voices faded (Fade
+   * out's path: fadeOutAll, its 'action' tells the views). Nothing when no song has played in this engine (a fresh
+   * engine is silent).
+   * @param {object} state the store state
+   */
+  let emptySilenced = false;
+  function silenceEmptyLibrary(state) {
+    if (emptySilenced || secondary || !started || appliedId === null) return;
+    if (state.settings.currentSongId || (state.songOrder && state.songOrder.length)) return;
+    emptySilenced = true;
+    droneOffIfOrphaned();
+    fadeOutAll();
   }
 
   // ---- menu (Electron)
@@ -3693,6 +3747,8 @@ export function createController(o) {
       appliedId = null;
       targetId = null;
       lastDroneKey = null;
+      droneSent = null; // UI6-er O1: a fresh engine, nothing configured yet
+      emptySilenced = false;
       if (typeof store.reload === 'function') store.reload(); // pick up what the other window saved
       // round4-controller C6: deliver the reload diff now, before startPrimary() subscribes onStore. Otherwise it
       // arrives while engine.start() is pending ('latency' → engine.restart() on a context still initialising, and

@@ -9588,3 +9588,68 @@ orchestrator's 1280 × 800 title screenshot). No engine change. Flag off is unch
   (189 px field), 1180 × 820 and 820 × 1180 fit (179 px, the ≤ 1250 px 19 px font), 1024 × 700 ellipsis (68 px).
   The chips keep their size (the name gives way). Test: ui-v6-edit "polish2" (three sizes, a resize back, a long
   rename and back).
+
+## U-SNAP follow-up (UI6-snap O1 / O2 / O5)
+
+The queued "U-SNAP follow-up" of `native/docs/lanes/UI6-build-plan.md`. No engine, store or controller change. Flag
+off: today's Edit gets the line too (O1), made only the first time a scene plays in Edit, so the flag-off purity
+probes (ui-v6, ui-v6-edit: requests, listeners, store listeners, DOM shape at rest) are identical.
+
+- **Edit says it is changing the snapshot (O1).** While a snapshot plays on the song Edit shows, the song header
+  (`views/edit/panels/song-header.js`, used by today's Edit and, with `{v6: true}`, by the v6 Edit) shows one line
+  under its chips: "Changing snapshot “<name>” for now: Update keeps it, Own levels edits the song" (v6; today's
+  Edit: "Changing scene “Scene n” …", D25: names are v6 only). Words: `shared/voice.js` `sceneEditLine({noun, name})`
+  (the two `[..]` are the buttons, Update first), `sceneEditUpdateTitle`, `sceneEditOwnTitle`. **Update** =
+  `controller.scenes.save(n)` and the toast "“<name>” updated." (the snapshots row's Update; never blocked by Lock,
+  D24.1, as the row); **Own levels** = `controller.scenes.go(null)` (the row's Own levels). It follows the controller's
+  `'scene'` / `'song'` events and the song's `scenes`; hidden when none plays, and the LIVE hint ("… saved with it")
+  gives way meanwhile. Layout: the header region (`.ev2-head.ev2-snapping`) stacks the chips row and the line;
+  today's Edit grows its header grid row by 22 px meanwhile (`:has()`, 50 px on a coarse pointer), the v6 Edit's
+  header grows by itself. Squeezed in beside the chips (first cut) it took the song name's room and ran to 4–6 lines
+  at 1280 px. Measured, the line one 19 px row: v6 Edit header 58 → 64 px at 1280 × 800, 1180 × 820, 1024 × 700
+  (98 → 120 px at 820 × 1180, where it already wraps); today's Edit 52 → 74 px at 1280 × 800, 58 → 80 px at 1440 ×
+  900, 48 → 70 px at 1024 × 700. On a coarse pointer the words are 44 px targets (line 46 px). Tests: ui-v6-edit
+  "UI6-snap O1/O2" (text, under the chips, Update keeps a change and the name, Own levels, the row's path), "UI6-snap
+  O1: the line fits" (1180 × 820, 820 × 1180, a 40-character name); ui-core scenes.mjs "UI6-snap O1" (flag off).
+- **Summaries read the song as it plays (O2).** v6 Edit › Effects' Sends row ("n of m in the Space",
+  `views/v6/edit/effects.js`) and the instrument's Space & Echo row (`instrument.js` `renderNav`, `categorySummary` gets
+  the slot of `ctx.view()` for that row only) now read `ctx.view()`, as their controls do since UI6-snap F3. Test:
+  ui-v6-edit "UI6-snap O1/O2" (1 of 3 in the Space and 90 % under a snapshot holding Keys' Space 90 % over the song's
+  25 %; fails before for each summary).
+- **Save snapshot's drone row (O5).** The row's title is now "The drone: ON / OFF, sound and level" (it said "…, and
+  its key" while the key choice under it defaults to "Follows the song’s key (C major)"); the choice is labelled "Its
+  key". Test: ui-v6 dialogs "U7c Save snapshot".
+
+## Empty-library silence; PANIC stops an orphaned drone (UI6-er O1)
+
+The queued "Empty-library silence" of `native/docs/lanes/UI6-build-plan.md`. `controller.js` only; no engine, bridge
+or view change.
+
+- **An empty library is silent.** When `settings.currentSongId` becomes null and `songOrder` is empty (the last song
+  deleted, Back from a trial begun in an empty library, an empty library imported), `onStore` calls
+  `silenceEmptyLibrary`: the drone off (`drone.configure({mode: 'off'})`, the ON tile's path and the drone's own fade)
+  when the engine's drone was left on, then `fadeOutAll()` (Fade out's path: `engine.fadeOutAll(6)` and the
+  `'action'` `fadeOutAll` the views show as faded). Once per empty spell (reset when a song is selected again). Not
+  when no song has played in this engine yet (a fresh engine is silent; the views do not show "Faded"). A song added
+  afterwards is selected and its drone configured as any selection (`applySongLevel` force); as after Fade out, the
+  master comes back on the next note.
+- **PANIC and the drone: the root cause.** PANIC never touched the drone: `engine.allNotesOff` leaves it by contract
+  (SPEC, ENGINE_CONTRACT; 1.1.0 release notes "The drone keeps going, as before"), and the controller's drone state
+  was only the song's (`applied` / `live()`; `menuBarState().droneOn` reads the current song, so it is false with no
+  song). A drone left sounding with no song behind it had no control at all. Now the controller also keeps
+  `droneSent`, the mode the engine's drone was last configured with (recorded in `droneCall` for every `configure`,
+  whoever sends it; reset with a fresh engine), and `droneOffIfOrphaned()` turns the drone off when `droneSent` is on
+  and no selected song (with its snapshot) wants it. PANIC calls it after its existing steps. **Unchanged:** a drone
+  the song or its snapshot has on keeps going under PANIC (1.x behaviour), and PANIC's calls, order and timing are
+  as before whenever no drone is orphaned (`[allNotesOff]`, then the held / pedal / swell / click state; a probe
+  against v2-native ea7fb9c on three scenarios gave byte-identical calls and events). An orphaned drone costs one
+  `drone.configure({mode:'off'})` after `allNotesOff`.
+- **Native bridge.** Both paths send `drone {config: {mode: 'off'}}` (a partial SongDrone, as `restorePads` does; the
+  core's `DroneCore::configure` sets only the fields present) and `play {e: 'fade', seconds: 6}`. Against
+  `MockNative` (the contract validator): no finding, no warning.
+- Tests: shell `empty-silence.test.mjs` (delete: drone off then fade, once, and again after a new song; drone off: a
+  fade only; an empty library at start: nothing; PANIC under a song's drone and a snapshot's drone: `[allNotesOff]`;
+  PANIC with an orphaned drone (its off failed once): `[allNotesOff, drone.configure off]`, then today's again; the
+  bridge; 4 of 5 fail before), `bank-trial.test.mjs` "UI6-er O1" (Back); ui-v6-bank "polish2 U8a O1" (the web
+  engine's drone and fade after delete and after Back, the on-screen PANIC); ui-core scenes.mjs "UI6-er O1" (today's
+  Edit ⋯ Song › Delete on the last song, Perform's faded chip, Esc).

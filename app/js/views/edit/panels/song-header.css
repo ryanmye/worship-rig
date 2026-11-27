@@ -65,6 +65,38 @@
   flex: 0 100 auto; min-width: 0; max-height: 100%; overflow: hidden;
 }
 .ev2 .ev2-song-head .ev2-btn.ev2-song-menubtn { flex: none; }
+/* UI6-snap O1: "Changing snapshot “Hall” for now: Update keeps it, Own levels edits the song" while a snapshot plays.
+   A line of its own under the chips row (squeezed in beside the chips it took the song name's room and ran to 4–6
+   lines at 1280 px): the header region stacks the two; today's Edit gives that region the line's height meanwhile,
+   the v6 Edit's header grows by itself. */
+.ev2 .ev2-head.ev2-snapping { flex-direction: column; align-items: stretch; justify-content: center; gap: 3px; }
+.ev2 .ev2-head.ev2-snapping > .ev2-song-head { flex: none; height: auto; }
+.ev2 .ev2-song-snap {
+  flex: none; min-width: 0; padding: 1px 10px; border-left: 3px solid var(--accent, #ffc94d);
+  color: var(--text, #f1f4f8); font-size: 12.5px; line-height: 1.35;
+}
+.ev2 .ev2-song-snap[hidden] { display: none; }
+.ev2 .ev2-song-snapbtn {
+  display: inline; padding: 0 1px; border: 0; background: none; color: inherit; font: inherit;
+  font-weight: 800; text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
+.ev2 .ev2-song-snapbtn:focus-visible { outline: 2px solid var(--focus, #7cc4ff); outline-offset: 1px; }
+.ev2 .ev2-song-livehint[hidden] { display: none; }
+.ev2:has(> .ev2-head.ev2-snapping) {
+  grid-template-rows: calc(var(--ev2-head) + 22px) minmax(0, 1fr) var(--ev2-bottom);
+}
+.ev2.ev2-single > .ev2-head.ev2-snapping { flex-basis: calc(var(--ev2-head) + 22px); }
+/* a finger (the iPad's 44 px rule): the words become 44 px targets, the line grows with them (an invisible hit area
+   around the words would reach over the chips above and the rig below) */
+@media (pointer: coarse) {
+  .ev2 .ev2-song-snapbtn {
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; vertical-align: middle;
+  }
+  .ev2:has(> .ev2-head.ev2-snapping) {
+    grid-template-rows: calc(var(--ev2-head) + 50px) minmax(0, 1fr) var(--ev2-bottom);
+  }
+  .ev2.ev2-single > .ev2-head.ev2-snapping { flex-basis: calc(var(--ev2-head) + 50px); }
+}
 
 /* menu + confirm popovers: fixed, so the clipped header region doesn't cut them off */
 .ev2 .ev2-song-pop {

@@ -249,6 +249,92 @@ test('UI6-snap F3: Edit v2 › Effects under a snapshot holding Keys’ Space se
     });
   });
 
+// UI6-snap O1 (flag off): today's Edit says when its Space / Echo / drone controls change a playing scene (for now)
+// rather than the song: "Changing scene “Scene 1” for now: Update keeps it, Own levels edits the song" under the
+// header's chips; Update saves over the scene (Edit › Song's Save), Own levels goes back to the song's own levels.
+test('UI6-snap O1: today’s Edit header line while a scene plays; Update / Own levels; none without one', async () => {
+  await ev(() => window.__rig.store.set('settings.view', 'perform'));
+  await ev(() => {
+    const { store, controller } = window.__rig;
+    const s = store.currentSong();
+    controller.scenes.go(null);
+    store.set(`songs.${s.id}.patch.slots.0.sends.reverb`, 0.25);
+    store.set(`songs.${s.id}.scenes`, [{ name: 'Named in v6', slots: [{ gain: s.patch.slots[0].gain,
+      sends: { reverb: 0.9 } }] }]);
+  });
+  await until(() => !window.__rig.controller.status.loading);
+  await ev(() => window.__rig.store.set('settings.view', 'edit'));
+  await until(() => document.body.dataset.view === 'edit');
+  // (the element is made the first time a scene plays in Edit, the F3 test above; hidden since)
+  assert.equal(await ev(() => !!document.querySelector('[data-testid=edit-snapline]:not([hidden])')), false,
+    'no line while no scene plays');
+  await ev(() => window.__rig.controller.scenes.go(0));
+  await until(() => !!document.querySelector('[data-testid=edit-snapline]:not([hidden])'));
+  const l = await ev(() => {
+    const el = document.querySelector('[data-testid=edit-snapline]');
+    const head = el.closest('.ev2-head').getBoundingClientRect();
+    const chips = el.parentElement.querySelector('.ev2-song-head').getBoundingClientRect();
+    const b = el.getBoundingClientRect();
+    return { text: el.innerText.replace(/\s+/g, ' ').trim(), below: b.top >= chips.bottom - 1,
+      inside: b.bottom <= head.bottom + 1 && b.right <= head.right + 1, h: b.height,
+      hint: getComputedStyle(document.querySelector('.ev2-song-livehint')).display };
+  });
+  // D25: today's UI says "Scene n", not the v6 name
+  assert.equal(l.text, 'Changing scene “Scene 1” for now: Update keeps it, Own levels edits the song');
+  assert.ok(l.below && l.inside && l.h < 26, JSON.stringify(l));
+  assert.equal(l.hint, 'none', 'the LIVE hint ("saved with it") gives way meanwhile');
+  await page.screenshot({ path: path.join(shots, 'scenes-edit-snapline.png') });
+  // a change on top of the scene, then Update keeps it in the scene (the song's own stays 25 %)
+  await ev(() => window.__rig.controller.scenes.take('slots.0.sends.reverb', 0.5));
+  await clearToasts();
+  await page.click('[data-testid=edit-snap-update]');
+  await until(() => window.__rig.store.currentSong().scenes[0].slots[0].sends.reverb === 0.5);
+  const after1 = await ev(() => {
+    const s = window.__rig.store.currentSong();
+    return [s.scenes[0].name, s.patch.slots[0].sends.reverb, window.__rig.controller.scenes.state().n];
+  });
+  assert.deepEqual(after1, ['Named in v6', 0.25, 0]);
+  await until(() => [...document.querySelectorAll('#toasts .toast')].some((t) => /“Scene 1” updated\./
+    .test(t.textContent)));
+  await page.click('[data-testid=edit-snap-own]');
+  await until(() => window.__rig.controller.scenes.state().n === null);
+  await until(() => document.querySelector('[data-testid=edit-snapline]').hidden === true);
+  assert.equal(await ev(() => !!document.querySelector('.ev2-head.ev2-snapping')), false);
+  await ev(() => {
+    const { store } = window.__rig;
+    store.set(`songs.${store.currentSong().id}.scenes`, null);
+    store.set('settings.view', 'perform');
+  });
+});
+
+// UI6-er O1 (flag off): delete the last song from Edit's ⋯ Song menu → the drone goes off and the voices fade (the web
+// engine's drone and fade), Perform shows today's faded chip; PANIC (Esc) then has nothing left to stop. Empties this
+// page's library: the last test before the console check.
+test('UI6-er O1: deleting the last song from Edit’s song menu silences the drone and the voices', async () => {
+  await ev(() => {
+    const { store } = window.__rig;
+    const keep = store.currentSong().id;
+    for (const id of [...store.get().songOrder]) if (id !== keep) store.deleteSong(id);
+    store.set(`songs.${keep}.drone.mode`, 'synth');
+    store.set('settings.view', 'edit');
+  });
+  await until(() => window.__rig.engine.drone.sounding === true && document.body.dataset.view === 'edit');
+  await page.click('.ev2-song-menubtn');
+  await page.click('.ev2-song-mi[data-act=delete]');
+  await page.click('.ev2-song-go[data-act=delete-go]');
+  await until(() => window.__rig.store.get().songOrder.length === 0);
+  const heard = () => ev(() => {
+    const { engine } = window.__rig;
+    return { drone: engine.drone.cfg.mode, sounding: engine.drone.sounding, faded: engine.getRuntimeState().faded };
+  });
+  assert.deepEqual(await heard(), { drone: 'off', sounding: false, faded: true });
+  await ev(() => window.__rig.store.set('settings.view', 'perform'));
+  await until(() => document.body.dataset.view === 'perform');
+  await until(() => document.querySelector('[data-testid=faded-chip]')?.hidden === false);
+  await page.keyboard.press('Escape');
+  assert.deepEqual(await heard(), { drone: 'off', sounding: false, faded: true });
+});
+
 test('no console errors', () => {
   assert.deepEqual(errors, [], errors.join('\n'));
 });
