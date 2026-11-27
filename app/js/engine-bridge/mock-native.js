@@ -86,7 +86,8 @@ export function checkSpec(spec, value) {
 
 /** @param {{api:object, transport:{post:Function,onMessage:Function}, now?:()=>number, timers?:object,
  *   autoTick?:boolean, seed?:number, sampleRate?:number, channels?:number, devices?:object[],
- *   profile?:'desktop'|'ipad'}} o */
+ *   profile?:'desktop'|'ipad', midiPorts?:Array<{id:string, name?:string, manufacturer?:string,
+ *   kind?:'input'|'output'}>}} o */
 export class MockNative {
   constructor(o) {
     if (!o || !o.api || !o.transport) throw new TypeError('MockNative needs {api, transport}');
@@ -147,6 +148,14 @@ export class MockNative {
     this._out = [];
     this._unspec = new Set();
     this._timer = null;
+    /** Lane NMA: MIDI ports (key 'input:<id>' / 'output:<id>'), the listened source ids (null = no listen yet: no
+     *  source connected), and logs of listens and sends. o.midiPorts = the ports present at start. */
+    this.midi = { ports: new Map(), listening: null, listens: [], sent: [], route: false, forwarded: 0, filtered: 0 };
+    for (const p of o.midiPorts || []) {
+      const kind = p.kind === 'output' ? 'output' : 'input';
+      this.midi.ports.set(`${kind}:${p.id}`, { id: p.id, name: p.name || '', manufacturer: p.manufacturer || '',
+        state: 'connected', kind });
+    }
     this._offMsg = o.transport.onMessage((m) => this.receive(m));
     this.autoTick = !!o.autoTick;
     this._lastPerf = this.now();
@@ -598,15 +607,87 @@ export class MockNative {
     }
   }
 
+  // ------------------------------------------------------------------------------------------- MIDI (lane NMA)
+  // The mock stands in for the core (midi_service.cpp) AND the shell (RigMIDI.swift) together: `listen` sets which
+  // sources are connected (none before the first one, as RigMIDI connects none) and replies the present ports
+  // without an event; a port report (midiSetPorts / midiPlug / midiUnplug, the shell's hot-plug) emits
+  // `midi {type:'ports'}`; midiIn() forwards one message from a listened, connected input as `midi {type:'msg'}`
+  // with `ts` in engine seconds; `send` is logged in midiSent.
+
+  /** Present ports as the core lists them (PortTable::json). */
+  _midiPortList() {
+    return [...this.midi.ports.values()].map((p) => ({ ...p }));
+  }
+
+  /**
+   * Replace the port list (a CoreMIDI setup change) and emit the `ports` event.
+   * @param {Array<{id:string, name?:string, manufacturer?:string, state?:string, kind?:'input'|'output'}>} list
+   */
+  midiSetPorts(list) {
+    this.midi.ports = new Map();
+    for (const p of list || []) {
+      if (!p || typeof p.id !== 'string' || !p.id) continue;
+      this.midi.ports.set(`${p.kind === 'output' ? 'output' : 'input'}:${p.id}`, {
+        id: p.id, name: p.name || '', manufacturer: p.manufacturer || '',
+        state: p.state === 'disconnected' ? 'disconnected' : 'connected',
+        kind: p.kind === 'output' ? 'output' : 'input',
+      });
+    }
+    this._emit('midi', { type: 'ports', ports: this._midiPortList() });
+    this._flush();
+  }
+
+  /** Plug a port in (or update it). */
+  midiPlug(port) {
+    const key = `${port.kind === 'output' ? 'output' : 'input'}:${port.id}`;
+    const rest = [...this.midi.ports.entries()].filter(([k]) => k !== key).map(([, p]) => p);
+    this.midiSetPorts([...rest, port]);
+  }
+
+  /** Unplug a port: it leaves the list (CoreMIDI removes the endpoint). */
+  midiUnplug(id, kind = 'input') {
+    this.midiSetPorts([...this.midi.ports.entries()].filter(([k]) => k !== `${kind}:${id}`).map(([, p]) => p));
+  }
+
+  /**
+   * One complete message from input `id`, as CoreMIDI delivers it. Forwarded only from a listened, present input.
+   * @param {string} id
+   * @param {number[]} data
+   * @param {{ts?:number}} [o] engine seconds (default: now)
+   * @returns {boolean} forwarded
+   */
+  midiIn(id, data, o = {}) {
+    const p = this.midi.ports.get(`input:${id}`);
+    if (!p || p.state === 'disconnected' || !this.midi.listening || !this.midi.listening.has(id)) {
+      this.midi.filtered += 1;
+      return false;
+    }
+    this.midi.forwarded += 1;
+    this._emit('midi', { type: 'msg', port: id, data: [...data], ts: o.ts ?? this.t(), handled: false });
+    this._flush();
+    return true;
+  }
+
   op_midi(m) {
     if (m.action === 'listen') {
-      this._emit('midi', {
-        type: 'ports',
-        ports: [{ id: 'mock-in', name: 'Mock Keys', manufacturer: 'Mock', state: 'connected', kind: 'input' }],
-      });
-      return this._reply(m.id, true, { ports: [] });
+      this.midi.listening = new Set(Array.isArray(m.ids) ? m.ids.filter((x) => typeof x === 'string') : []);
+      this.midi.listens.push([...this.midi.listening]);
+      return this._reply(m.id, true, { ports: this._midiPortList() });
     }
-    return this._reply(m.id, true, {});
+    if (m.action === 'send') {
+      const isByte = (b) => Number.isInteger(b) && b >= 0 && b <= 255;
+      const ok = typeof m.port === 'string' && Array.isArray(m.data) && m.data.length > 0 && m.data.every(isByte);
+      if (ok) {
+        const when = m.when !== undefined ? { when: m.when } : {};
+        this.midi.sent.push({ port: m.port, data: [...m.data], ...when });
+      }
+      return this._reply(m.id, true, { sent: ok });
+    }
+    if (m.action === 'route') {
+      this.midi.route = !!m.on;
+      return this._reply(m.id, true, { on: this.midi.route });
+    }
+    return this._fail(m, 'bad-request', `midi: unknown action ${m.action}`);
   }
 
   op_rec(m) {
