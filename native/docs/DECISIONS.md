@@ -501,3 +501,9 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
   layout work. If the 14 passes, instrument mode turns on per phone at runtime from a measured RAM floor
   (`ProcessInfo.physicalMemory`, the floor set from the 14 and E6); phones below it see remote only. The 3 GB
   instrument tier (≈ 3–5 agent-days) is dropped.
+
+## D30: iPhone 2.0 ships remote-only (Ryan, 2026-11-27; supersedes D29's iPhone-14 gate)
+- The iPhone app is a remote for the Mac (song, drone, master, PANIC, snapshots), iPhone XR and later, iOS 17.5.
+- No instrument mode, no engine spike on the iPhone 14, no phone instrument layouts in 2.0. Instrument mode stays
+  open for a later version when phone hardware improves (D27's "both" is deferred, not dropped).
+- Effort ≈ 11–17 agent-days [E]; still after Mac/iPad 2.0 ships (D27).
