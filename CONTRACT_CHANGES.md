@@ -9952,3 +9952,36 @@ quirks). `app/js/engine/` is untouched.
   would change cvd-Off pixels). Skeptic FU2 F2: today's bar grey under `--text` was 3.60 : 1 in Daylight Stage (it
   had been measured in Sanctuary only), so today's keyboard now uses the same `--muted` + `--bg` rule (≥ 4.5 : 1 in
   all 8: ui-v6 "CVD2 O1: today's keyboard" loops the themes).
+
+## N10: the 2.x native release build; release.yml (Electron) only for v1.* (B3, NATIVE-GAPS row 1f)
+
+Prepare only: nothing was tagged, dispatched or published, and none of it has run on macOS (written on Linux).
+
+- **release.yml** runs for `v1.*` tags only: `push: tags: ['v1.*']` (was `v*`), plus a job-level guard on both jobs
+  (`build`: not a tag or a `refs/tags/v1.` tag; `release`: `refs/tags/v1.` and push / release / dispatch with
+  dry_run off). main's 261ea8d (`release: published` trigger, reuse an existing release) is folded in with the same
+  v1 gate, so the 2.0 merge into main can take this file as is. 1.x behaviour is unchanged.
+- **release-native.yml** (new): `v2.*` tag pushes, `v2-native` pushes that change the release files, and
+  `workflow_dispatch` (`publish`, `latest`, default off). `mac` builds, signs, packs and self-tests; `ipad` archives
+  the iPad app unsigned (continue-on-error); `release` runs only for dispatch + publish + a `v2.*` tag + green `mac`,
+  and makes a pre-release unless `latest`. Assets: `Worship-Rig-arm64.dmg`, `Worship-Rig-arm64.zip` (the names
+  update-check.js `pickAsset` offers; no x64), `SHA256SUMS`, the starter library.
+- **native/apple/scripts/package-release.sh** (new): the Release build + ad-hoc signing (as build/afterPack.js) +
+  gates (bundle id, numeric version / `--expect-version`, arm64 only, web app present, no My Samples / sound-pack
+  content, Signature=adhoc, app ≤ 480 MB with a warning above 400, zip and dmg each hold an app that verifies) +
+  zip / dmg / SHA256SUMS / release.json / release-summary.md / app-path.txt. Linux: shellcheck clean and a stub run
+  (fake codesign / hdiutil / ditto / lipo / PlistBuddy) of the `--app` path; `PLISTBUDDY` overrides the PlistBuddy
+  path for that.
+- **tools/mac/check.sh `--app <path>`**: the `selftest` stage launches the given app (the Release build) instead of
+  looking for apple-mac's Debug build, and doesn't require apple-mac to have passed in the same run.
+- **native/apple/project.yml**: both targets' Info.plist set `CFBundleShortVersionString: $(MARKETING_VERSION)` and
+  `CFBundleVersion: $(CURRENT_PROJECT_VERSION)` explicitly (XcodeGen's generated plist may otherwise carry its own
+  default; unverified which), so the bundle, About and the release check agree with project.yml.
+- **tools/release/release-notes.mjs** (new): the release body from `docs/release-notes-<version>.md` (banner, "Editor's
+  notes", `<!-- -->` comments stripped; relative links to `github.com/<repo>/blob/<tag>/…`; a sha256 list);
+  `--require-final` (the publish job) refuses a file still carrying the banner or "Editor's notes".
+- Tests: `test/unit/release/release-workflows.test.mjs` (in the `unit` suite, 9 tests): the workflows' tag filters
+  and job `if:`s evaluated per event (push / release / dispatch × v1 / v2 / v3 / v10 tags and branches; no v2 path
+  into release.yml, release-native publishes only on dispatch + publish + v2 tag), asset names vs `pickAsset`, the
+  project.yml version keys, the notes stripping. Mutation-checked: reverting release.yml to `v*` or dropping either
+  half of release-native's publish guard fails it.
