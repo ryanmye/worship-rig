@@ -89,10 +89,12 @@ body.v6-learning .v6-learnable input[type="range"] { pointer-events: none; }
   justify-content: center; font-weight: 800; background: color-mix(in srgb, var(--accent) 22%, transparent);
   color: var(--v6-tint-text); }
 .v6 .v6-keeps-r.off .v6-keeps-ck { background: var(--panel-3, var(--panel)); color: var(--muted); }
-/* D26.1a: the drone key choice in "It keeps" (UI6-snap F4: a bare select was 22 px tall, under the 44 px touch rule) */
+/* D26.1a: the drone key choice in "It keeps" (UI6-snap F4: a bare select was 22 px tall, under the 44 px touch rule;
+   border on U8b's --v6-field-line, so it meets the 3:1 field-edge rule) */
 .v6 .v6-keeps-key { display: flex; align-items: center; gap: 8px; margin-top: 6px; min-width: 0; }
 .v6 .v6-savesnap-key { min-height: 44px; min-width: 0; max-width: 100%; border-radius: 10px; border: 1px solid
-  var(--line); background: var(--well, var(--panel)); color: var(--text); font: inherit; padding: 0 10px; }
+  var(--v6-field-line, var(--line)); background: var(--well, var(--panel)); color: var(--text); font: inherit;
+  padding: 0 10px; }
 .v6 .v6-savesnap-key:focus-visible { outline: none; box-shadow: 0 0 0 3px
   color-mix(in srgb, var(--accent) 35%, transparent); }
 .v6 .v6-keeps-not { margin: 2px 0 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
