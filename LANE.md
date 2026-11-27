@@ -63,9 +63,8 @@ refused only past the restore cap 2,500,000); review doc native/docs/reviews/UI6
 - [x] O1 PANIC, O3, O7, v6 Edit header ≤1100 px: .probe/p3.mjs — all held (6 sizes, Esc off/on, Lock, off/swap)
 - [x] iPad + themes placeholder (tour state chart-loading, 24b817f; p4 contrast probe)
 - [x] release notes line (2877800)
-- [ ] gates (running: UI6_PURITY_BASE=origin/v2-native, PLAYWRIGHT_BROWSERS_PATH=/root/.cache/rig-pw;
-      log .probe/gates2.out)
-- [ ] review doc
+- [x] gates on bf76580: all 12 PASS (shell-unit on the 2nd run: bank-trial F1–F3 flake under load, also on base)
+- [x] review doc native/docs/reviews/UI6-cship.md (verdict VERIFIED after F1, F2, O4 call)
 
 ## Findings (before fixing)
 - Env: this box's Chromium is build 1243, Playwright 1.56 wants 1194: export
@@ -78,3 +77,6 @@ refused only past the restore cap 2,500,000); review doc native/docs/reviews/UI6
 - F2 (fixed, a723b11): O1 lifted PANIC over the backdrop, but the dialogs (90vh / 92vh) reached PANIC's row: v6 Edit
   chart at 1024×700 had Cancel under PANIC (a tap panicked). keepClearOfPanic + CSS; tests fail first. (.probe/p6.mjs)
 - Gate run 1 was stopped at chart (to fix F2); rerun on the F2 tree.
+
+## Next step
+Handed back. Nothing open in the lane.
