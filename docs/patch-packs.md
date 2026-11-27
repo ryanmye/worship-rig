@@ -97,8 +97,9 @@ A file is "changed" when its content changes. Saving it with no changes does not
 | Nesting depth | 64 |
 | Slots per song | 1 to 16 |
 
-Anything over a limit is skipped and listed in the log or warning. A song that doesn't fit the library's 2 MB cap is
-skipped and tried again at the next start.
+Anything over a limit is skipped and listed in the log or warning. A song that takes the library past its 2 MB size
+is still added (the save warns, as for any save past 2 MB); one that would take it past 2.5 MB, the most a backup
+can restore, is skipped with a message and tried again at the next start. The Song bank's Add follows the same rule.
 
 ## Where it works
 

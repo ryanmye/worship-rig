@@ -10051,3 +10051,49 @@ touch fitting, the MIDI lamp and the clock-out choice all hung on it).
   - Engine test server (`test/phase1/engine/server.mjs`) answers `/__tests/api/health` (no features): harness.html
     loads the controller, whose relative `./api/health` 404'd: the `engine` suite's one console error, pre-existing
     on origin/v2-native 7e92df4 (99/99 checks passed there).
+
+## core3f (CORE3 prebuild lane: a switch takes its prebuilt units in one step)
+
+- **Flake.** macos-15 `unit.core3` failed at test_core3.cpp:353 `CHECK(busy <= 1)` twice (run 45885049507 on
+  f46bac4, 2026-11-26 19:40Z; run 45963347960, 2026-11-27 08:10Z), both "switch back to B: 8 adopted, 2 in the
+  prebuild lane's hands".
+- **Root cause (core, a real race; not the test, not a worker count).** `SongGraph::startFresh` promoted a song's
+  prebuilt jobs one slot at a time. Lane 1 (one utility-priority thread, FIFO) could finish its job between two
+  slots and pop the song's next queued one, which the next slot then found "in the prebuild lane's hands" and built
+  a second time. Two on the 3-core runner; up to every unit of the song when the control thread is slow between
+  slots (preempted, or inline sampler builds in a mixed song). The build worker always has two threads (one per
+  lane), whatever `hardware_concurrency`; only the sample decode pool scales with it (1 here, 2 on macos-15), and
+  this case has no sampler.
+- **Fix.** `BuildWorker::holdPrebuilds` / `releasePrebuilds` (RAII `PrebuildHold`, nests): while held, lane 1
+  starts no new job; the one it is building runs on. `SongGraph::prepare` and the rate-change rebuild
+  (`onRateChanged`) hold it over their slot loop, so at most the one job lane 1 had when the switch began is
+  duplicated (the documented contract). The superseded plan's queued jobs (discard) cannot start under it either.
+  No change to offline renders (no worker offline); the web engine is untouched.
+- **Test hook.** `BuildWorker::testSwitchSlotWaitMs` (tests only, 0 = off): after each off-thread slot of a switch,
+  the control thread waits until lane 1 has started another job, for as long as it could (queued work, not held).
+  A fixed sleep was not deterministic here: lane 1 at nice 10 is starved on a loaded box. New case "core3f: a switch
+  takes its prebuilt units in one step": the unfixed core **0 adopted, 10 busy** (5/5 runs), fixed 9 / 1 (5/5). The
+  test `Rt` also takes `RIG_TEST_DECODE_THREADS` (decode pool size) for the worker-count sweep. INTERFACE_LOG
+  CORE3-16.
+
+## CAP (UI6-cship O1: one size rule for every add)
+
+- **What.** DECISIONS D9 + the orchestrator's O4 note under D33, now for every add: `addSong`, `duplicateSong`,
+  `setChart`, `addPackSong` (Song bank, also Keep it) and `topUpPacks` (pack top-up, adds and in-place updates).
+  An add that takes the library past `LIBRARY_MAX_CHARS` (2,000,000) goes through and its save warns
+  (`library-size`, D9); one that would take it past `LIBRARY_RESTORE_MAX_CHARS` (2,500,000) is refused, writes
+  nothing, and sends a `library-full` notice (the controller toasts it). Before: a chart, a Song bank add and a pack
+  top-up were refused past 2 MB.
+- **How.** store.js `restoreCapRefusal(size, what)` (the one rule; `songOverflows` uses it); `chartLibrarySize`
+  replaces `chartOverflows`. `setChart` returns the notice text as `error` ("The chart for “X” was not saved: the
+  library would be 2.6 MB, and a backup over 2.5 MB cannot be restored. …"), which the chart dialogs show inline;
+  a raw `set('songs.<id>.chart')` past the restore cap is refused silently (setChart is the path that explains).
+  `addPackSong` returns `{ok:false, error, notified:true}`: Settings › Song bank, the v6 bank sheet and the trial
+  banner skip their own error toast for a `notified` refusal (the notice is toasted already; the same text twice
+  would show as one toast "×2"). `topUpPacks` keeps its `skipped` lines ("the library is full; not added" /
+  "not updated", tried again next time) and sends one notice per call ("The patch pack song “X” was not added: …",
+  or "N patch pack songs were not added: …").
+- **Not changed.** A merge import (`importJSON` without replace) still refuses past 2 MB: D9 grants 1.25× to a
+  replace / restore only.
+- Tests: shell unit `chart-store.test.mjs` "CAP: a chart past 2 MB …", `patch-packs.test.mjs` "CAP: pack top-up …",
+  "CAP: a pack update …", "CAP: Song bank add …" (all four fail on the old store).
