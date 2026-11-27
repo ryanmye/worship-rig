@@ -47,6 +47,12 @@
     } catch (e) { /* storage blocked: the mirror's id */ }
   }
   var t = MAP[id];
+  // U-CVD (DECISIONS D32): "Colour-blind colours" before first paint, from main.js's mirror of settings.cvd
+  // ('rg' | 'by'; absent = Off: nothing is written). styles.css keys its palettes and numbers on these classes.
+  try {
+    var cvd = w.localStorage.getItem('worship-rig.cvd');
+    if (cvd === 'rg' || cvd === 'by') root.classList.add('cvd-' + cvd);
+  } catch (e) { /* storage blocked: Off until main.js applies the store's value */ }
   root.setAttribute('data-theme', id);
   root.setAttribute('data-mode', t.mode);
   root.style.colorScheme = t.mode;

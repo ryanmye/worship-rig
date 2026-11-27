@@ -393,7 +393,7 @@ function enhance(api, d) {
       midilearn: learnSummary(s.midiLearn),
       samples: samplesSummary({ packs: packsOf(), samples: sampleCount(), padFolder: !!s.padFolder }),
       layout: layoutSummary({ sidebarOpen: sb.prefs().open, snapsFolded: snapsFolded() }),
-      look: lookSummary({ name: t?.name, mode: t?.mode, light: lightOf(s) }),
+      look: lookSummary({ name: t?.name, mode: t?.mode, light: lightOf(s), cvd: s.cvd }),
       library: librarySummary({ electron: isElectron, lastBackupAt: lastAt || null,
         songs: (state.songOrder || []).length }),
       mac: macSummary({ menuBarMode: !!s.menuBarMode, updateCheck: s.updateCheck }),
@@ -459,7 +459,7 @@ function enhance(api, d) {
   const textOf = (u, panel, cat) => {
     // a row: its label and hint, and its control's own words (theme names, Day / Stage / Auto, Balanced …)
     const lab = u.matches('.st-row') ? `${words(u.querySelector('.st-label'))} ${words(u.querySelector('.st-control'))}`
-      : words(u);
+      + ` ${u.dataset.keywords || ''}` : words(u); // U-CVD: a row's other names ("color blind", "tritanopia")
     const sec = u.closest('.st-section, details');
     const secHead = sec && sec !== u ? words(sec.querySelector(HEAD)) || sec.getAttribute('aria-label') : '';
     return fold(`${lab || ''} ${secHead || ''} ${cat.label}`);

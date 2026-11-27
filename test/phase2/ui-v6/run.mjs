@@ -41,6 +41,7 @@ import { moveTests } from './move.tests.mjs';
 import { dialogTests } from './dialogs.tests.mjs';
 import { snapTests } from './snap.tests.mjs';
 import { polish2Tests } from './polish2.tests.mjs';
+import { cvdTests } from './cvd.tests.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -130,11 +131,13 @@ async function purityBoot(base) {
         ael: window.__probe.ael,
         intervals: window.__probe.intervals,
         store: window.__storeListeners ? window.__storeListeners.size : null,
-        // toasts come and go on their own clock (MIDI / wake-lock notes), so they are left out. The two Settings rows
-        // added on purpose after U3 (lane-small: "Esc always panics" D24.7, the v6 preview switch U1 O3) are left out
-        // too: they are the only intended flag-off DOM change (a base that has them has them on both sides).
+        // toasts come and go on their own clock (MIDI / wake-lock notes), so they are left out. The Settings rows
+        // added on purpose after U3 (lane-small: "Esc always panics" D24.7, the v6 preview switch U1 O3; U-CVD:
+        // Colour-blind colours D32) are left out too: they are the only intended flag-off DOM change (a base that has
+        // them has them on both sides).
         dom: [...document.body.querySelectorAll('*')].filter((e) => !e.closest('#toasts > *')
-          && !e.closest('[data-testid="setting-row-esc-panics"], [data-testid="setting-row-ui-v6"]'))
+          && !e.closest('[data-testid="setting-row-esc-panics"], [data-testid="setting-row-ui-v6"], '
+            + '[data-testid="setting-row-cvd"]'))
           .map(shape).join('\n'),
         css: [...document.querySelectorAll('link[rel=stylesheet]')].map((l) => l.getAttribute('href')),
         rig: Object.keys(window.__rig).sort(),
@@ -1436,6 +1439,9 @@ try {
       await page.setViewportSize({ width: 1280, height: 800 });
     }
   });
+
+  // ---------------------------------------------------------------- U-CVD, D32 (cvd.tests.mjs; reloads the page last)
+  await cvdTests({ T, page, browser, origin, ev, until, tid, settled, setSlots, assert });
 
   await T('screenshots: 1280×800 Sanctuary, 2 / 5 / 7 instruments', async () => {
     await ev(() => window.__rig.ctx.setView('perform'));

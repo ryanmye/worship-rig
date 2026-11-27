@@ -777,6 +777,26 @@ function applyEscPanics(on) {
   escPanicsOn = on;
   window[on ? 'addEventListener' : 'removeEventListener']('keydown', escPanicKey, true);
 }
+// U-CVD (DECISIONS D32): "Colour-blind colours" (settings.cvd 'rg' | 'by', per device; absent = Off) is a class on
+// <html>: styles.css swaps every theme's --slot-0..15 for a palette designed for that type and shows each
+// instrument's number. The localStorage mirror lets themes/boot.js set the class before first paint. Starts from what
+// boot.js did, so with the setting absent and no mirror nothing is touched (Off is today's app).
+const CVD_MIRROR = 'worship-rig.cvd';
+const htmlCls = document.documentElement.classList;
+let cvdShown = htmlCls.contains('cvd-rg') ? 'rg' : htmlCls.contains('cvd-by') ? 'by' : null;
+function applyCvd(v) {
+  const want = v === 'rg' || v === 'by' ? v : null;
+  if (want === cvdShown) return;
+  if (cvdShown) htmlCls.remove(`cvd-${cvdShown}`);
+  if (want) htmlCls.add(`cvd-${want}`);
+  cvdShown = want;
+  try {
+    if (want) localStorage.setItem(CVD_MIRROR, want);
+    else localStorage.removeItem(CVD_MIRROR);
+  } catch {
+    /* storage blocked: the class still follows the store; the next boot starts Off until the store applies */
+  }
+}
 // UI v6 preview switch (UI6-U1 review O3): Settings › Look writes settings.uiV6 with store.set like any setting;
 // a change after boot swaps Perform here, as __rig.setUiV6 does (applyUiV6 is idempotent). Armed once Perform is
 // mounted below (the boot mount reads the flag itself).
@@ -785,6 +805,7 @@ let lastUiV6 = false;
 function onSettings(state) {
   const st = state.settings;
   applyEscPanics(st.escPanics === true);
+  applyCvd(st.cvd);
   if (uiV6Armed && (st.uiV6 === true) !== lastUiV6) {
     lastUiV6 = st.uiV6 === true;
     applyUiV6();

@@ -20,12 +20,17 @@ const humanize = (id) => String(id || '').replace(/[-_]+/g, ' ').replace(/\b\w/g
  * Colour of the instrument at position `i` (D15: by position, never by kind of sound). The first four are the theme's
  * --slot-0..3; positions 4..6 are the mockup's POS_COL (mock_v6.py), as --v6-pos-4..6 in styles-v6.css so a theme
  * can override them; the seven then repeat.
+ * U-CVD (D32): with Colour-blind colours on, the positions cycle through 8 (the designed palette, --slot-0..7; see
+ * styles.css). Positions 0..6 are the same variables either way (the cvd rules repoint --v6-pos-4..6); from 7 on
+ * the colour is `--v6-cvd-<i mod 8>`, which only exists while cvd is on, falling back to today's cycle of seven.
  * @param {number} i
  * @returns {string} a CSS colour
  */
 export function slotColor(i) {
-  const k = ((Number(i) || 0) % 7 + 7) % 7;
-  return k < 4 ? `var(--slot-${k})` : `var(--v6-pos-${k})`;
+  const n = Number(i) || 0;
+  const k = (n % 7 + 7) % 7;
+  const seven = k < 4 ? `var(--slot-${k})` : `var(--v6-pos-${k})`;
+  return n < 7 ? seven : `var(--v6-cvd-${n % 8}, ${seven})`;
 }
 
 const ICONS = {

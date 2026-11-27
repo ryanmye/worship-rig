@@ -80,13 +80,15 @@ export function layoutSummary(o = {}) {
 }
 
 /**
- * Look: the theme's name, then Day / Stage / Auto for a theme with the light switch, else dark / light.
- * @param {{name?:string, mode?:'dark'|'light', light?:'day'|'stage'|'auto'|null}} o
+ * Look: the theme's name, then Day / Stage / Auto for a theme with the light switch, else dark / light; then the
+ * colour-blind colours when they are on (U-CVD, D32).
+ * @param {{name?:string, mode?:'dark'|'light', light?:'day'|'stage'|'auto'|null, cvd?:'rg'|'by'|null}} o
  * @returns {string}
  */
 export function lookSummary(o = {}) {
   const light = o.light ? { day: 'Day', stage: 'Stage', auto: 'Auto' }[o.light] : o.mode === 'light' ? 'light' : 'dark';
-  return `${o.name || 'Theme'} · ${light}`;
+  const cvd = { rg: ' · red–green colours', by: ' · blue–yellow colours' }[o.cvd] || '';
+  return `${o.name || 'Theme'} · ${light}${cvd}`;
 }
 
 /**

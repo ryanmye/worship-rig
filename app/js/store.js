@@ -111,7 +111,12 @@ export const DEVICE_LOCAL_SETTINGS = Object.freeze([
   'uiV6',
   // D24.7: "Esc always panics" is how this player's hands work this machine's keyboard; true or absent (off)
   'escPanics',
+  // D32 (U-CVD): "Colour-blind colours" is this player's eyes on this screen, like the theme's Auto light: 'rg' |
+  // 'by' or absent (Off); an imported library never brings another player's
+  'cvd',
 ]);
+/** D32 (U-CVD) settings.cvd: red–green (deutan / protan) or blue–yellow (tritan) instrument colours; absent = Off. */
+export const CVD_TYPES = Object.freeze(['rg', 'by']);
 /** 2.0 settings.polyphony (D1): voices per sound (slot). Optional; absent = POLYPHONY_DEFAULT. */
 export const POLYPHONY_CHOICES = Object.freeze([32, 64, 128]);
 export const POLYPHONY_DEFAULT = 64;
@@ -874,6 +879,8 @@ function normalizeSettings(raw, songs, setlists) {
   if (hasOwn(out, 'uiV6') && out.uiV6 !== true) delete out.uiV6;
   // D24.7 "Esc always panics": true or absent (off = today's Esc rule), like uiV6
   if (hasOwn(out, 'escPanics') && out.escPanics !== true) delete out.escPanics;
+  // D32 (U-CVD): 'rg' | 'by' or absent (Off); anything else is dropped
+  if (hasOwn(out, 'cvd') && !CVD_TYPES.includes(out.cvd)) delete out.cvd;
   // Lane S: optional Program Change channel / action; a bad value is dropped (absent = any channel; the action as
   // programChangeOf reads it, O-AW-3). Never filled in here: an imported 1.x library with PC on stays 'switch'.
   if (hasOwn(out, 'programChangeChannel') && validPcChannel(out.programChangeChannel) === undefined) {
@@ -1846,7 +1853,7 @@ export function createStore(opts = {}) {
         // keyboards: device names may contain dots, so only the whole map is a path (store.setKeyboard)
         const whole = k === 'theme' || k === 'audioSleepSec' || k === 'hotkeys' || k === 'updateCheck'
           || k === 'keyboards' || k === 'click' || k === 'midiClockOut' || k === 'dynamicRange'
-          || k === 'droneFreeze' || k === 'chartView' || k === 'uiV6' || k === 'escPanics'
+          || k === 'droneFreeze' || k === 'chartView' || k === 'uiV6' || k === 'escPanics' || k === 'cvd'
           || k === 'programChangeChannel'
           || k === 'programChangeAction' || hasOwn(SOUND_2_CHOICES, k);
         return hasOwn(SETTINGS_VALIDATORS, k) || whole ? null : { segs, value: clone(value) };
@@ -1875,6 +1882,12 @@ export function createStore(opts = {}) {
       if (k === 'chartView' || k === 'uiV6' || k === 'escPanics') {
         if (value === null || value === undefined || value === false) return { segs, value: undefined };
         return value === true ? { segs, value } : null;
+      }
+      // D32 (U-CVD): 'rg' | 'by'; null / false / 'off' = absent (Off); anything else is refused
+      if (k === 'cvd') {
+        const off = value === null || value === undefined || value === false || value === 'off';
+        if (off) return { segs, value: undefined };
+        return CVD_TYPES.includes(value) ? { segs, value } : null;
       }
       if (k === 'droneFreeze') { // UIB (D5): a boolean; null = back to the default (absent = on)
         if (value === null || value === undefined) return { segs, value: undefined };

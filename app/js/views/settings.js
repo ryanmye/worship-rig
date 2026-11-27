@@ -1895,6 +1895,25 @@ export function mountSettings(el, ctx) {
     themeCards[to].focus();
     themeCards[to].click();
   });
+  // U-CVD (DECISIONS D32): settings.cvd, per device, absent = Off. main.js puts html.cvd-rg / .cvd-by, and styles.css
+  // recolours every theme's instruments and numbers them. The row's data-keywords feed the v6 Settings search.
+  const cvdSeg = C.segmented({
+    label: 'Colour-blind colours',
+    options: [
+      { value: 'off', label: 'Off', title: 'The theme’s own instrument colours' },
+      { value: 'rg', label: 'Red–green', title: 'For red–green colour blindness (deuteranopia, protanopia)' },
+      { value: 'by', label: 'Blue–yellow', title: 'For blue–yellow colour blindness (tritanopia)' },
+    ],
+    onChange: (v) => store.set('settings.cvd', v === 'rg' || v === 'by' ? v : null),
+  });
+  cvdSeg.el.dataset.testid = 'setting-cvd';
+  comps.push(cvdSeg);
+  settingBinds.push({ key: 'cvd', apply: (s) => cvdSeg.set(s.cvd === 'rg' || s.cvd === 'by' ? s.cvd : 'off') });
+  const cvdRow = row('Colour-blind colours', cvdSeg.el, 'Instrument colours that stay apart for that kind of colour '
+    + 'blindness, with each instrument’s number on its range bar and name.');
+  cvdRow.dataset.testid = 'setting-row-cvd';
+  cvdRow.dataset.keywords = 'color blind colorblind colourblind daltonism deuteranopia protanopia tritanopia '
+    + 'accessibility';
   const appearance = h('section.st-section.st-appearance', { 'aria-label': 'Appearance', 'data-section': 'appearance',
     'data-testid': 'settings-appearance' },
   h('h2.st-h2', { text: 'Appearance' }),
@@ -1902,7 +1921,8 @@ export function mountSettings(el, ctx) {
     h('div.st-label', {}, h('span', { text: 'Theme' }),
       h('span.st-hint', { text: 'How the whole app looks. The sound doesn’t change.' })),
     h('div.st-control', {}, themeGrid)),
-  lightRow);
+  lightRow,
+  cvdRow);
   renderLight();
   panels.get('look').insertBefore(appearance, perfSection);
 

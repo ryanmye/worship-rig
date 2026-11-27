@@ -14,7 +14,9 @@
 // Vibe menu, field hints (placeholders), selects' and fields' own words, text drawn under an overlay's shadow on every
 // theme (not only where the computed colour already failed), and the iPad sizes: 820 × 1180 and 1180 × 820 in a touch
 // context ((pointer: coarse), MIDI refused), the states in v6-tour.mjs IPAD_STATES (portrait: + Edit's song drawer).
+// U-CVD (D32): then Colour-blind colours on (rg, by) for Sanctuary, Daylight Day and Studio at 1280 × 800.
 //   node test/phase2/ui-v6-themes/run.mjs [--theme id,id] [--only perform,edit,...] [--sizes mac,portrait,landscape]
+//     [--cvd rg,by | only | none] [--cvd-themes id,id]
 //   screenshots + audit JSON → ./screenshots/<theme>/ (git-ignored) or UI6T_SHOTS=<dir>; UI6T_SHEETS=<dir> also
 //   writes a contact sheet per theme (Perform, Edit, Settings, Song bank).
 import path from 'node:path';
@@ -31,22 +33,46 @@ fs.mkdirSync(OUT, { recursive: true });
 const t0 = Date.now();
 console.log('\n[ui-v6-themes] the v6 screens × the themes, contrast audit');
 const SIZES = list('--sizes').length ? list('--sizes') : ['mac', 'portrait', 'landscape'];
-const r = await shootV6({ themes: list('--theme'), only: list('--only'), out: OUT, sizes: SIZES,
-  sheets: process.env.UI6T_SHEETS ? path.resolve(process.env.UI6T_SHEETS) : null,
-  log: (s) => { if (/TEXT|RING|EDGE|not reached/.test(s) || process.env.VERBOSE) console.log(s); } });
+const log = (s) => { if (/TEXT|RING|EDGE|not reached/.test(s) || process.env.VERBOSE) console.log(s); };
+const sheets = process.env.UI6T_SHEETS ? path.resolve(process.env.UI6T_SHEETS) : null;
+const runs = [];
+if (!list('--cvd').includes('only')) {
+  runs.push(await shootV6({ themes: list('--theme'), only: list('--only'), out: OUT, sizes: SIZES, sheets, log }));
+}
+// U-CVD (D32): Colour-blind colours on, both types, on Sanctuary, Daylight Day and Studio (a dark theme with a light
+// ON window, the paper theme, a dark theme with an ink window), at 1280 × 800, over the states that draw instrument
+// colours (Perform, Quick, the range pick, ⋯, Arrange, Learn, Lock, the Song bank, Edit, the chart). Settings and
+// U8a's surfaces show no instrument colour and are covered by the runs above. --cvd rg,by | only | none,
+// --cvd-themes id,id
+const CVD = list('--cvd').filter((t) => t === 'rg' || t === 'by');
+const cvdTypes = list('--cvd').includes('none') ? [] : CVD.length ? CVD : ['rg', 'by'];
+const CVD_STATES = ['perform', 'quick', 'range-pick', 'more-menu', 'arrange', 'learn', 'locked', 'bank', 'edit',
+  'chart'];
+const cvdThemes = list('--cvd-themes').length ? list('--cvd-themes') : ['sanctuary', 'daylight-day', 'studio'];
+const tc = Date.now();
+for (const cvd of cvdTypes) {
+  runs.push(await shootV6({ themes: cvdThemes, only: list('--only').length ? list('--only') : CVD_STATES, out: OUT,
+    sizes: ['mac'], u8a: false, cvd, log }));
+}
+if (cvdTypes.length) console.log(`  (colour-blind runs: ${Math.round((Date.now() - tc) / 1000)} s)`);
+const r = { themes: Object.assign({}, ...runs.map((x) => x.themes)),
+  totals: runs.reduce((a, x) => Object.fromEntries(Object.entries(x.totals).map(([k, v]) => [k, (a[k] || 0) + v])),
+    {}) };
 
 const results = [];
 for (const [id, s] of Object.entries(r.themes)) {
   const shots = Object.entries(s.shots);
   const sum = (k) => shots.reduce((a, [, v]) => a + (v[k] || 0), 0);
-  const runs = sum('count');
+  const runsN = sum('count');
+  const want = /\+(cvd-(rg|by))$/.exec(id)?.[1] || null;
   const bad = { text: sum('fails'), rings: sum('ringFails'), edges: sum('boundFails'),
-    missed: Object.keys(s.missed).length, errors: s.errors.length };
+    missed: Object.keys(s.missed).length, errors: s.errors.length, cvd: (s.cvd || null) === want ? 0 : 1 };
   const ok = Object.values(bad).every((n) => n === 0) && shots.length > 0;
   results.push({ id, ok });
-  console.log(`  ${ok ? '✓' : '✗'} ${id}: ${shots.length} screens, ${runs} text runs, ${sum('rings')} focus rings, `
+  console.log(`  ${ok ? '✓' : '✗'} ${id}: ${shots.length} screens, ${runsN} text runs, ${sum('rings')} focus rings, `
     + `${sum('bounds')} boundaries · fails: text ${bad.text}, rings ${bad.rings}, edges ${bad.edges}; `
-    + `not reached ${bad.missed}; console errors / HTTP ≥ 400 ${bad.errors}`);
+    + `not reached ${bad.missed}; console errors / HTTP ≥ 400 ${bad.errors}`
+    + (bad.cvd ? `; colour-blind class ${s.cvd} (want ${want})` : ''));
   for (const [k, v] of Object.entries(s.missed)) console.log(`      not reached: ${k} (${v})`);
   for (const e of s.errors.slice(0, 10)) console.log(`      error: ${e}`);
 }

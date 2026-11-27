@@ -53,6 +53,10 @@ test('layout, look, library, mac, about', () => {
   assert.equal(lookSummary({ name: 'Sanctuary', mode: 'dark' }), 'Sanctuary · dark');
   assert.equal(lookSummary({ name: 'Sanctuary Day', mode: 'light' }), 'Sanctuary Day · light');
   assert.equal(lookSummary({ name: 'Daylight Day', mode: 'light', light: 'auto' }), 'Daylight Day · Auto');
+  // U-CVD (D32): the colour-blind colours, only when on
+  assert.equal(lookSummary({ name: 'Studio', mode: 'dark', cvd: 'rg' }), 'Studio · dark · red–green colours');
+  assert.equal(lookSummary({ name: 'Ember', mode: 'dark', cvd: 'by' }), 'Ember · dark · blue–yellow colours');
+  assert.equal(lookSummary({ name: 'Ember', mode: 'dark', cvd: 'nope' }), 'Ember · dark');
   const now = 5_000_000;
   assert.equal(librarySummary({ electron: true, lastBackupAt: now - 120e3, now }), 'backed up 2 min ago');
   assert.equal(librarySummary({ electron: true, lastBackupAt: null, songs: 42 }), '42 songs · automatic backups');

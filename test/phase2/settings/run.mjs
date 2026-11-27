@@ -1399,6 +1399,52 @@ async function runMode(mode, browser) {
       } else await closeSettings();
     });
 
+    // U-CVD (D32): Look › Appearance › Colour-blind colours, per device; in the app it recolours today's Perform too
+    await T('U-CVD Look › Colour-blind colours: Off (absent) / Red–green / Blue–yellow, device-local; the app '
+      + 'recolours today\'s strips and numbers its range bars, Off puts the colours back', async () => {
+      const seg = '[data-testid="setting-cvd"]';
+      const look = () => ev(() => {
+        const st = [...document.querySelectorAll('#view-perform .slot[data-slot]')];
+        const bars = [...document.querySelectorAll('#view-perform .rbars .rbar[data-slot]')];
+        return { cls: document.documentElement.className.split(/\s+/).filter((c) => c.startsWith('cvd-')),
+          strips: st.map((e) => getComputedStyle(e).getPropertyValue('--c').trim()),
+          nums: bars.map((b) => getComputedStyle(b, '::before').content) };
+      });
+      const before = mode === 'app' ? await look() : null;
+      await openSettings();
+      await cat('look');
+      assert.equal(await ev(() => document.querySelector('[data-testid="setting-row-cvd"]').closest('.st-section')
+        .dataset.section), 'appearance', 'in Appearance, under the theme');
+      assert.match(await page.textContent('[data-testid="setting-row-cvd"]'),
+        /Colour-blind colours[\s\S]*Instrument colours that stay apart[\s\S]*Off[\s\S]*Red–green[\s\S]*Blue–yellow/);
+      assert.equal(await page.getAttribute(`${seg} [data-value="off"]`, 'aria-checked'), 'true');
+      assert.equal(await ev(() => 'cvd' in window.__rig.store.get().settings), false, 'absent until chosen');
+      const edited = await ev(() => window.__rig.store.get().meta.edited);
+      await page.click(`${seg} [data-value="rg"]`);
+      await until(() => window.__rig.store.get().settings.cvd === 'rg');
+      assert.equal(await page.getAttribute(`${seg} [data-value="rg"]`, 'aria-checked'), 'true');
+      assert.equal(await ev(() => 'cvd' in JSON.parse(window.__rig.store.exportJSON()).settings), false,
+        'device-local: not exported');
+      assert.equal(await ev(() => window.__rig.store.get().meta.edited), edited, 'not a library edit');
+      if (mode === 'app') {
+        const on = await look();
+        assert.deepEqual(on.cls, ['cvd-rg']);
+        assert.ok(on.strips.every((c, i) => c !== before.strips[i]), `every strip recoloured: ${on.strips}`);
+        assert.deepEqual(on.nums, on.nums.map((_, i) => `"${i + 1}"`), 'each range bar numbered');
+        await page.click(`${seg} [data-value="by"]`);
+        await until(() => document.documentElement.classList.contains('cvd-by'));
+        const by = await look();
+        assert.ok(by.strips.some((c, i) => c !== on.strips[i]), 'Blue–yellow is its own palette');
+      } else {
+        await page.click(`${seg} [data-value="by"]`);
+        await until(() => window.__rig.store.get().settings.cvd === 'by');
+      }
+      await page.click(`${seg} [data-value="off"]`);
+      await until(() => !('cvd' in window.__rig.store.get().settings));
+      if (mode === 'app') assert.deepEqual(await look(), before, 'Off: exactly the colours from before');
+      await closeSettings();
+    });
+
     // polish-1: the retired Edit's .ed-* rules are pruned; what remains is exactly what settings.js renders
     if (mode === 'app') {
       await T('settings: styles-settings.css keeps only the .ed-* classes Settings renders (polish-1)', async () => {

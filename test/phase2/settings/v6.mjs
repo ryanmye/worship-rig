@@ -356,6 +356,39 @@ export async function runV6({ browser, createServer, ROOT, SHOTS, results }) {
         await until(() => !window.__rig.views.settings.isOpen);
       });
 
+    // U-CVD (D32): Look › Colour-blind colours, the same row as today's Settings, restyled; searchable by its label,
+    // its words and its other names (US spelling, the deficiencies); Look's summary says when it is on
+    await T('U-CVD Look › Colour-blind colours: found by search ("colour blind", "color blind", "tritanopia"), '
+      + 'writes settings.cvd, the class follows, the Look summary says it', async () => {
+      await open('sound');
+      for (const q of ['colour blind', 'color blind', 'tritanopia', 'blue yellow']) {
+        await page.fill('[data-testid="settings-search"]', q);
+        await until(() => window.__rig.views.settings.v6.hits.some((x) => x.el.matches('[data-testid="setting-row-cvd"]')),
+          null, 5000).catch(() => {});
+        const hits = await ev(() => window.__rig.views.settings.v6.hits
+          .map((x) => x.el.dataset.testid || '').filter((t) => t === 'setting-row-cvd'));
+        assert.deepEqual(hits, ['setting-row-cvd'], `"${q}" finds the row`);
+      }
+      for (let i = 0; i < 6 && (await ev(() => window.__rig.views.settings.category)) !== 'look'; i++) {
+        await page.press('[data-testid="settings-search"]', 'Enter');
+      }
+      assert.equal(await ev(() => window.__rig.views.settings.category), 'look');
+      await page.keyboard.press('Escape');
+      await until(() => window.__rig.views.settings.v6.query === '');
+      await cat('look');
+      const seg = '[data-testid="setting-cvd"]';
+      assert.equal(await page.getAttribute(`${seg} [data-value="off"]`, 'aria-checked'), 'true');
+      await page.click(`${seg} [data-value="by"]`);
+      await until(() => window.__rig.store.get().settings.cvd === 'by'
+        && document.documentElement.classList.contains('cvd-by'));
+      await until(() => document.querySelector('[data-testid="settings-sum-look"]').textContent
+        === 'Sanctuary · dark · blue–yellow colours');
+      await page.click(`${seg} [data-value="off"]`);
+      await until(() => !('cvd' in window.__rig.store.get().settings)
+        && !/cvd-/.test(document.documentElement.className));
+      await until(() => document.querySelector('[data-testid="settings-sum-look"]').textContent === 'Sanctuary · dark');
+      await close();
+    });
     await T('deep links land where they did (1.x names, aliases) and on the new categories', async () => {
       const want = {
         learn: 'midilearn', 'midi-learn': 'midilearn', midilearn: 'midilearn', layout: 'layout', appearance: 'look',

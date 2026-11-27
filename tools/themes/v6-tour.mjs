@@ -343,6 +343,8 @@ const SHEET = [['perform-2', 'Perform'], ['edit-sound', 'Edit · Sound'], ['sett
  * @param {object} [o.auditOpts] passed to audit() (skeptic probes)
  * @param {boolean} [o.ipadAll]  every state at the iPad sizes too (default: IPAD_STATES)
  * @param {string[]} [o.ipadStates]  the states entered at the iPad sizes (default IPAD_STATES)
+ * @param {'rg'|'by'} [o.cvd]   U-CVD (D32): Colour-blind colours on (settings.cvd + its mirror, before boot); keys
+ *                               the result '<id>+cvd-<type>' and writes to <out>/<id>-cvd-<type>/
  * @param {(s:string)=>void} [o.log]
  * @returns {Promise<{themes:object, totals:{text:number, rings:number, bounds:number, errors:number, missed:number}}>}
  */
@@ -368,14 +370,23 @@ export async function shootV6(o) {
       for (const sz of sizes) {
         const vp = SIZES[sz];
         if (!vp) throw new Error(`unknown size ${sz}`);
-        const key = sz === 'mac' ? id : `${id}@${sz}`;
-        const out = path.join(o.out, id);
+        const cv = o.cvd ? `+cvd-${o.cvd}` : '';
+        const key = `${sz === 'mac' ? id : `${id}@${sz}`}${cv}`;
+        const out = path.join(o.out, o.cvd ? `${id}-cvd-${o.cvd}` : id);
         fs.mkdirSync(out, { recursive: true });
         // the Mac run keeps the builder's file names (<state>.png, audit-<state>-1280.json)
         const tag = sz === 'mac' ? '' : `-${sz}`;
         const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1,
           colorScheme: t.mode, ...(vp.ipad ? { hasTouch: true, isMobile: true } : {}) });
         await pinTheme(ctx, id);
+        if (o.cvd) {
+          await ctx.addInitScript((type) => { // after pinTheme's script: the library it wrote, plus settings.cvd
+            localStorage.setItem('worship-rig.cvd', type);
+            const lib = JSON.parse(localStorage.getItem('rig.v1'));
+            lib.settings = { ...lib.settings, cvd: type };
+            localStorage.setItem('rig.v1', JSON.stringify(lib));
+          }, o.cvd);
+        }
         await ctx.grantPermissions([...MIDI_PERMISSIONS], { origin });
         await ctx.addInitScript(([chart]) => { window.__auditChart = chart; }, [CHART]);
         if (vp.midi === 'blocked') {
@@ -402,6 +413,7 @@ export async function shootV6(o) {
           // caught lit when the colours were read and unlit in the background shot (portrait perform-2: 1.4 : 1)
           await x.until(() => document.getElementById('ready-status')?.classList.contains('on'), null, 240000);
           sum.shown = await x.ev(() => document.documentElement.dataset.theme);
+          sum.cvd = await x.ev(() => [...document.documentElement.classList].find((c) => c.startsWith('cvd-')) || null);
           sum.coarse = await x.ev(() => matchMedia('(pointer: coarse)').matches);
           await x.ev((n) => {
             const { store } = window.__rig;

@@ -1384,3 +1384,140 @@ body[data-view="edit"] .quick-btn { display: none; }
 .qs-scene.on { border-color: var(--accent); color: var(--accent); }
 .qs-scene:hover { color: var(--text); border-color: var(--accent); }
 .qs-scene:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ================================================================== U-CVD: colour-blind colours (native DECISIONS D32)
+   Settings › Look › "Colour-blind colours" = settings.cvd 'rg' (red–green: deutan / protan) | 'by' (blue–yellow:
+   tritan), per device; absent = Off. main.js (and themes/boot.js before first paint) put html.cvd-rg / html.cvd-by;
+   with neither class nothing below matches, so Off is today's app exactly. On:
+   - every theme's --slot-0..7 become a palette designed for that type (the cvd:palettes block, written by
+     tools/themes/cvd-design.mjs and checked by tools/themes/cvd-check.mjs: under Machado 2009 simulation every pair
+     of the 8 differs by OKLab ΔE×100 ≥ 10, neighbours by L ≥ 0.08, and the theme's lamp ink keeps ≥ 4.5 : 1 on each,
+     in the ON label's window too). --slot-8..15 repeat them: the number tells those apart. Declared on html and body:
+     Ember and Nave set their lamps on body, and a custom property resolves where it is declared;
+   - the v6 positions follow the same 8 (views/v6/lib.js slotColor: --v6-pos-4..6 and, past 7, --v6-cvd-k);
+   - a non-colour cue: each instrument's number (1-based) on its range bar (a badge at the bar's start, staggered by
+     position so stacked bars don't cover each other's) and before its name on the v6 strip and Edit tab. A badge is
+     the lamp colour with the lamp ink (--cvd-ink, the theme's), so it reads as well as an ON tile. */
+html:is(.cvd-rg, .cvd-by), html:is(.cvd-rg, .cvd-by) > body {
+  --slot-8: var(--slot-0); --slot-9: var(--slot-1); --slot-10: var(--slot-2); --slot-11: var(--slot-3);
+  --slot-12: var(--slot-4); --slot-13: var(--slot-5); --slot-14: var(--slot-6); --slot-15: var(--slot-7);
+}
+/* (0,3,1): beats styles-v6.css .v6 and html[data-theme="sanctuary-day"] .v6 */
+html:is(.cvd-rg, .cvd-by)[data-theme] .v6 {
+  --v6-pos-4: var(--slot-4); --v6-pos-5: var(--slot-5); --v6-pos-6: var(--slot-6);
+  --v6-cvd-0: var(--slot-0); --v6-cvd-1: var(--slot-1); --v6-cvd-2: var(--slot-2); --v6-cvd-3: var(--slot-3);
+  --v6-cvd-4: var(--slot-4); --v6-cvd-5: var(--slot-5); --v6-cvd-6: var(--slot-6); --v6-cvd-7: var(--slot-7);
+}
+/* the number of the instrument at position i: range bars and strips carry data-slot, Edit's tabs data-block */
+html:is(.cvd-rg, .cvd-by) :is([data-slot="0"], [data-block="slot:0"]) { --cvd-n: '1'; --cvd-i: 0; }
+html:is(.cvd-rg, .cvd-by) :is([data-slot="1"], [data-block="slot:1"]) { --cvd-n: '2'; --cvd-i: 1; }
+html:is(.cvd-rg, .cvd-by) :is([data-slot="2"], [data-block="slot:2"]) { --cvd-n: '3'; --cvd-i: 2; }
+html:is(.cvd-rg, .cvd-by) :is([data-slot="3"], [data-block="slot:3"]) { --cvd-n: '4'; --cvd-i: 3; }
+html:is(.cvd-rg, .cvd-by) :is([data-slot="4"], [data-block="slot:4"]) { --cvd-n: '5'; --cvd-i: 4; }
+html:is(.cvd-rg, .cvd-by) :is([data-slot="5"], [data-block="slot:5"]) { --cvd-n: '6'; --cvd-i: 5; }
+html:is(.cvd-rg, .cvd-by) :is([data-slot="6"], [data-block="slot:6"]) { --cvd-n: '7'; --cvd-i: 6; }
+html:is(.cvd-rg, .cvd-by) :is([data-slot="7"], [data-block="slot:7"]) { --cvd-n: '8'; --cvd-i: 7; }
+html:is(.cvd-rg, .cvd-by) :is([data-slot="8"], [data-block="slot:8"]) { --cvd-n: '9'; --cvd-i: 8; }
+html:is(.cvd-rg, .cvd-by) :is([data-slot="9"], [data-block="slot:9"]) { --cvd-n: '10'; --cvd-i: 9; }
+html:is(.cvd-rg, .cvd-by) :is([data-slot="10"], [data-block="slot:10"]) { --cvd-n: '11'; --cvd-i: 10; }
+html:is(.cvd-rg, .cvd-by) :is([data-slot="11"], [data-block="slot:11"]) { --cvd-n: '12'; --cvd-i: 11; }
+html:is(.cvd-rg, .cvd-by) :is([data-slot="12"], [data-block="slot:12"]) { --cvd-n: '13'; --cvd-i: 12; }
+html:is(.cvd-rg, .cvd-by) :is([data-slot="13"], [data-block="slot:13"]) { --cvd-n: '14'; --cvd-i: 13; }
+html:is(.cvd-rg, .cvd-by) :is([data-slot="14"], [data-block="slot:14"]) { --cvd-n: '15'; --cvd-i: 14; }
+html:is(.cvd-rg, .cvd-by) :is([data-slot="15"], [data-block="slot:15"]) { --cvd-n: '16'; --cvd-i: 15; }
+/* the badge: absolutely placed, so nothing moves; under the v6 handles (z 2) and the hit layer */
+html:is(.cvd-rg, .cvd-by) .rbar[data-slot]::before {
+  content: var(--cvd-n); position: absolute; top: 50%; left: calc(2px + var(--cvd-i) * 16px); z-index: 1;
+  transform: translateY(-50%); min-width: 14px; height: 13px; padding: 0 3px; box-sizing: border-box;
+  border-radius: 4px; background: var(--c); color: var(--cvd-ink, #0d0f12); box-shadow: 0 0 0 1px var(--bg);
+  font: 800 10px/13px var(--font); text-align: center; font-variant-numeric: tabular-nums; pointer-events: none;
+}
+html:is(.cvd-rg, .cvd-by) .v6-kbd-range .rbar[data-slot]::before { left: 4px; } /* Edit › Range: one bar */
+html:is(.cvd-rg, .cvd-by) :is(.v6-strip .v6-nm, .v6e-rt[data-block^="slot:"] .v6e-rt-name)::before {
+  content: var(--cvd-n); display: inline-block; min-width: 18px; margin-right: 6px; padding: 0 4px;
+  box-sizing: border-box; border-radius: 5px; background: var(--c); color: var(--cvd-ink, #0d0f12);
+  font: 800 12px/16px var(--font); text-align: center; vertical-align: 2px; font-variant-numeric: tabular-nums;
+  font-style: normal; text-decoration: none;
+}
+/* cvd:palettes begin (generated by tools/themes/cvd-design.mjs; checked by tools/themes/cvd-check.mjs) */
+html.cvd-rg[data-theme="classic"], html.cvd-rg[data-theme="classic"] > body {
+  --slot-0: #ffbe7e; --slot-1: #52ac80; --slot-2: #7dc4ff; --slot-3: #ab85ff;
+  --slot-4: #e6fd70; --slot-5: #ff82bc; --slot-6: #b2fffe; --slot-7: #c99000;
+  --cvd-ink: #0d0f12;
+}
+html.cvd-by[data-theme="classic"], html.cvd-by[data-theme="classic"] > body {
+  --slot-0: #ffb87f; --slot-1: #00b363; --slot-2: #7dc5ff; --slot-3: #a586ff;
+  --slot-4: #d4ff94; --slot-5: #bd9600; --slot-6: #00fff8; --slot-7: #ff707e;
+  --cvd-ink: #0d0f12;
+}
+html.cvd-rg[data-theme="sanctuary"], html.cvd-rg[data-theme="sanctuary"] > body {
+  --slot-0: #ffa2a1; --slot-1: #009878; --slot-2: #00c2fc; --slot-3: #9f74ce;
+  --slot-4: #fff26b; --slot-5: #bdb500; --slot-6: #b8f1ff; --slot-7: #d76500;
+  --cvd-ink: #150f08;
+}
+html.cvd-by[data-theme="sanctuary"], html.cvd-by[data-theme="sanctuary"] > body {
+  --slot-0: #ffa77f; --slot-1: #009968; --slot-2: #00b6ed; --slot-3: #a16fd5;
+  --slot-4: #c4d5ff; --slot-5: #aab800; --slot-6: #00fdd1; --slot-7: #c97000;
+  --cvd-ink: #150f08;
+}
+html.cvd-rg[data-theme="sanctuary-day"], html.cvd-rg[data-theme="sanctuary-day"] > body {
+  --slot-0: #a95113; --slot-1: #094500; --slot-2: #1368cc; --slot-3: #4800af;
+  --slot-4: #00776e; --slot-5: #001864; --slot-6: #513f61; --slot-7: #420028;
+  --cvd-ink: #fffaf0;
+}
+html.cvd-by[data-theme="sanctuary-day"], html.cvd-by[data-theme="sanctuary-day"] > body {
+  --slot-0: #b84300; --slot-1: #005c2a; --slot-2: #00719e; --slot-3: #5a008f;
+  --slot-4: #9b49a3; --slot-5: #00175c; --slot-6: #800036; --slot-7: #381900;
+  --cvd-ink: #fffaf0;
+}
+html.cvd-rg[data-theme="daylight-stage"], html.cvd-rg[data-theme="daylight-stage"] > body {
+  --slot-0: #ffc26c; --slot-1: #00af78; --slot-2: #60c6ff; --slot-3: #a385ff;
+  --slot-4: #edfd00; --slot-5: #f07700; --slot-6: #b3fffa; --slot-7: #ff81b9;
+  --cvd-ink: #1d1712;
+}
+html.cvd-by[data-theme="daylight-stage"], html.cvd-by[data-theme="daylight-stage"] > body {
+  --slot-0: #ffbd7c; --slot-1: #80a600; --slot-2: #b1c9ff; --slot-3: #c67be4;
+  --slot-4: #d2ff7c; --slot-5: #00bfb8; --slot-6: #00feef; --slot-7: #ff7480;
+  --cvd-ink: #1d1712;
+}
+html.cvd-rg[data-theme="daylight-day"], html.cvd-rg[data-theme="daylight-day"] > body {
+  --slot-0: #ffaea6; --slot-1: #7da936; --slot-2: #72caff; --slot-3: #a788ff;
+  --slot-4: #8ffffb; --slot-5: #d5c700; --slot-6: #fff19d; --slot-7: #ed72af;
+  --cvd-ink: #241a10;
+}
+html.cvd-by[data-theme="daylight-day"], html.cvd-by[data-theme="daylight-day"] > body {
+  --slot-0: #ffaf7d; --slot-1: #00b36a; --slot-2: #6dcaff; --slot-3: #b983f7;
+  --slot-4: #8bffe0; --slot-5: #afd244; --slot-6: #ffdcff; --slot-7: #f66e98;
+  --cvd-ink: #241a10;
+}
+html.cvd-rg[data-theme="studio"], html.cvd-rg[data-theme="studio"] > body {
+  --slot-0: #ffbb72; --slot-1: #62ab73; --slot-2: #68c8ff; --slot-3: #a687ff;
+  --slot-4: #bafdff; --slot-5: #ff89ba; --slot-6: #f0fa63; --slot-7: #ff6e19;
+  --cvd-ink: #1f1915;
+}
+html.cvd-by[data-theme="studio"], html.cvd-by[data-theme="studio"] > body {
+  --slot-0: #ffb793; --slot-1: #04b261; --slot-2: #6ac9ff; --slot-3: #a988ff;
+  --slot-4: #fff558; --slot-5: #c19400; --slot-6: #b6fff7; --slot-7: #ff6781;
+  --cvd-ink: #1f1915;
+}
+html.cvd-rg[data-theme="ember"], html.cvd-rg[data-theme="ember"] > body {
+  --slot-0: #ffaa68; --slot-1: #009d69; --slot-2: #91c4ff; --slot-3: #d380b7;
+  --slot-4: #eafb76; --slot-5: #7382ff; --slot-6: #00ffe8; --slot-7: #f25300;
+  --cvd-ink: #1e130e;
+}
+html.cvd-by[data-theme="ember"], html.cvd-by[data-theme="ember"] > body {
+  --slot-0: #ffa88b; --slot-1: #2a9e3b; --slot-2: #72cdff; --slot-3: #e65ea4;
+  --slot-4: #afce3c; --slot-5: #a088ff; --slot-6: #c5ffd2; --slot-7: #ae8157;
+  --cvd-ink: #1e130e;
+}
+html.cvd-rg[data-theme="nave"], html.cvd-rg[data-theme="nave"] > body {
+  --slot-0: #ffbc9f; --slot-1: #00b46a; --slot-2: #4cceff; --slot-3: #ab88ff;
+  --slot-4: #befcff; --slot-5: #ff7217; --slot-6: #ecfb6f; --slot-7: #ff7ab8;
+  --cvd-ink: #150f08;
+}
+html.cvd-by[data-theme="nave"], html.cvd-by[data-theme="nave"] > body {
+  --slot-0: #ffb482; --slot-1: #00b76a; --slot-2: #00e6fc; --slot-3: #a58aff;
+  --slot-4: #c8ffd0; --slot-5: #bd9800; --slot-6: #cdc3ff; --slot-7: #ff708c;
+  --cvd-ink: #150f08;
+}
+/* cvd:palettes end */
