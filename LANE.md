@@ -79,7 +79,11 @@ merged UI6 reviews; fix on lane-r; write native/docs/reviews/LaneR.md. Docs only
 - [x] 4. README + site (HTML parse 0 errors, local links / anchors ok; credits / LICENSES.md unchanged vs main)
 - [x] 5. MAC_CHECK 2.0 checklist
 - [x] 6. U9 list vs reviews + D26–D34
-- [ ] 7. Fixes (one commit per finding group), then review doc LaneR.md, final report
+- [x] 7. Fixes (c119f0a notes, 983a5a9 README, 6c36bb6 MAC_CHECK, 4bd1bc0 U9), review doc native/docs/reviews/LaneR.md
+
+Skeptic verdict: VERIFIED after fixes F1–F13 (all fixed); open O1 (native Settings shows Chrome's Menu-bar rows),
+O2 (SHELL.md stale on recording), O3 (re-read notes when lane-nma / B2 / B3 / CAP merge), O4 (Release build never run).
+Details: native/docs/reviews/LaneR.md.
 
 Findings (before fixing):
 - F1 iPad app is landscape-only (project.yml Info-iPad UISupportedInterfaceOrientations~ipad L/R, UIRequiresFullScreen):
