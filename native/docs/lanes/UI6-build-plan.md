@@ -74,6 +74,10 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 
 ## Queued small tasks
 
+- **CVD2 (UI6-cvd O1/O5/O6, tier 2: mine):** place each range-bar number in JS so two short bars with the same range
+  (positions 9+) or bars clipped at the keyboard edge never stack numbers (keyboard.js + today's perform.js); the
+  changed dot never covers a two-digit Edit tab number; a muted instrument's number goes grey with its bar. With FU2.
+
 - **FU2 (UI6-fu O1/O2/O3 + quirks; tier 2: mine):** O1 option (b): the empty-library step fades only if a key or the
   pedal is held at that moment (with nothing held, the drone-off alone), so the next song never starts faded;
   O2: while the song has snapshots, Edit reserves the snapshot line's height (no layout shift when a footswitch
