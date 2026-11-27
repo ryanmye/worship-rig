@@ -74,6 +74,9 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 
 ## Queued small tasks
 
+- **U-CVD (D32):** Settings › Look › Colour-blind colours (Off / Red–green / Blue–yellow), per device; slot palettes
+  per theme checked by CVD simulation + the contrast audit; instrument numbers on range bars and strip tabs when on.
+
 - **U-SNAP (D26.1):** snapshots remember Space / Echo (sends + the song's room / echo choice) and the drone (on,
   key, sound). shared/scenes.js + controller apply path + Save snapshot dialog "It keeps". Core-data change:
   builder + strong skeptic.

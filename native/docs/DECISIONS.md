@@ -521,3 +521,16 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
   3. **Lane P build scripts** (no audio in git, no uploads: uploading stays tier 1).
   4. **Held until 2.0 is tagged:** anything that changes the sound engine or the golden oracle (FX steps 2–4, D13),
      and work that needs hardware (E6 iPad memory, Windows audio/MIDI, iPhone on a device).
+
+## D32: A colour-blind setting in Settings (Ryan, 2026-11-27)
+- Ryan: "make color blind settings toggleable in settings". Answers the U8b review's O3 (the lighter Bass narrowed
+  Extra/Bass lightness separation for deutan viewers).
+- Tier 2 (mine), the shape: Settings › Look › **Colour-blind colours: Off (default) / Red–green / Blue–yellow**.
+  Per device (like `escPanics`), not in the library or song exports.
+  - On, it recolours the 16 instrument colours (`--slot-0..15`: strips, ON tiles, range bars, Edit cards, chooser) in
+    every theme, day and night, with a palette chosen for that type: neighbours separated by lightness as well as
+    hue, each colour still ≥ the theme's contrast rules (ui-v6-themes audit), checked with a CVD simulation
+    (Machado 2009) for the chosen type.
+  - It also adds a non-colour cue: each instrument's number on its range bar and strip tab, so no colour is the
+    only way to tell two instruments apart.
+  - Applies to the new UI and today's UI (themes are shared). Off = exactly today's colours (purity: no change).
