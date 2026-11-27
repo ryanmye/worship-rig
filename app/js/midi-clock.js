@@ -120,6 +120,11 @@ export function createMidiClock({ getAccess, getCtx, perfNow, warn = () => {} })
     /** Choose the output by name; null = off. @returns {boolean} the port is there now */
     setOutput(n) {
       name = typeof n === 'string' && n ? n : null;
+      // lane NMA (SHELL.md G4): on the 2.0 engine the clock is sent natively and this sink is never called;
+      // BridgeEngine.setClockSink sends `config {midiClock: {port: sink.portId}}`, and the core finds the output by
+      // id, then by name (click_service.cpp clockTarget), so the chosen name goes along (else it was 'auto' = the
+      // first output). The Web Audio engine ignores the property.
+      sink.portId = name;
       return resolve();
     },
     get name() {
