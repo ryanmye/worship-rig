@@ -63,6 +63,16 @@ Evidence tags as in the Windows doc: **[R]** checked in this repo, **[V]** check
 3. Does remote mode need to work without Wi-Fi (Mac hotspot, USB)? Default: same Wi-Fi only.
 4. Price / App Store listing (shared with the iPad listing).
 
+### 1.6 Earliest iPhone and work [V for iOS lists and RAM, E for effort]
+
+- iOS 26 and iOS 27 run on iPhone 11 and later plus SE (2nd/3rd gen); iOS 26 dropped XS / XS Max / XR. With the
+  iPad's iOS 17.5 target, XS / XR are also in.
+- RAM: 3 GB = XR, SE 2nd gen; 4 GB = XS, 11, 12, 12 mini, 13, 13 mini, SE 3rd gen; 6 GB = 12/13 Pro, 14, 15;
+  8 GB = 15 Pro, 16, 16e, 17; 12 GB = Air, 17 Pro. USB-C from iPhone 15 [U].
+- The SE 2nd gen (3 GB, 4.7-inch) is on every current iOS, so any minimum iOS keeps a 3 GB small phone in; raising
+  the minimum iOS removes almost no work. App Store targeting cannot select by RAM [U].
+- Effort: instrument mode ≈ 12–19 agent-days, remote ≈ 11–17, the 3 GB / 4.7-inch tier ≈ 3–5; total ≈ 26–41.
+
 ---
 
 ## 2. Windows 2.0: summary of NEXT-PLATFORMS-windows.md
@@ -78,7 +88,9 @@ Evidence tags as in the Windows doc: **[R]** checked in this repo, **[V]** check
   16,380); `-isystem`, `__builtin_inf()`, `fopen` under `/WX`; narrow-string paths; no flush-to-zero on ARM64 `cl`;
   no Windows thread priority; the devhost server uses POSIX `poll`/`pipe`.
 - **Biggest blocker:** no Windows test PC; CI runners have no audio device.
-- **Tier-1 questions:** signing/channel (Store, Azure Artifact Signing ≈ $120/yr, OV cert, unsigned beta); ASIO under
+- **Channel (D28, Ryan):** a download from the website, not the Store; unsigned at first (SmartScreen warning on
+  first launch), paid signing optional later.
+- **Tier-1 questions still open:** ASIO under
   its GPLv3 option (licence text still to read); test hardware (x64 or ARM64); Windows 10 support; exclusive WASAPI
   default; size budget; updater style.
 

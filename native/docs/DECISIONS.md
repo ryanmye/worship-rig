@@ -483,3 +483,10 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
   popover's bus).
 - **Windows = same sound as the Mac:** a native shell around the 2.0 core (not the 1.x Electron web engine).
 - Plan doc: `native/docs/lanes/NEXT-PLATFORMS.md` (iPhone layout mockups + Windows options comparison).
+
+## D28: Windows 2.0 ships as a download from the website (Ryan, 2026-11-27)
+- **Channel:** a direct download (installer from the site / GitHub Releases), not the Microsoft Store. Answers
+  NEXT-PLATFORMS-windows §7 question 1.
+- **Signing:** not decided; the default is unsigned at first, which means Windows SmartScreen shows "Windows protected
+  your PC → More info → Run anyway" on first launch until the file builds reputation. A paid signing route (Azure
+  Artifact Signing ≈ $120/yr) can be added later without changing the channel. Uploading a release stays tier 1.
