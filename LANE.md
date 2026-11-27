@@ -170,7 +170,8 @@ Scratch / probes: /home/claude/scratch/fu2-sk, .probe/.
 - [ ] review doc native/docs/reviews/UI6-fu2.md
 
 ### Next step
-Gates on the code-final tree (gates.mjs, full list, themes last), then the review doc UI6-fu2.md.
+Review doc drafted (gates table pending). Gates on this commit's tree (gates.mjs, full list, themes last); do
+not touch the worktree while they run (an untracked file stops gates.mjs).
 
 ### Findings (as found)
 - 1 OK (.probe/probe-a.json, real web engine, flag off + v6): nothing held / a key played and released → empty:
