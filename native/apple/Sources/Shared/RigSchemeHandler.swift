@@ -2,12 +2,15 @@
 // UNBUILT on Linux.
 //
 // Routes: the static tree under app/ (no samples: the native engine reads them straight from the bundle),
-// /docs/<name>.md as text/plain, and four JSON stubs (/api/health, /api/user-samples,
-// /api/user-samples/manifest.json, /api/user-patches). /api/heartbeat answers 204 (inert on a non-http scheme anyway).
+// /docs/<name>.md as text/plain, and the JSON routes /api/health, /api/user-samples,
+// /api/user-samples/manifest.json, /api/user-patches. /api/heartbeat answers 204 (inert on a non-http scheme anyway).
 // Anything outside app/ or containing ".." is a 404 (safeJoin semantics of server.js).
-// Patch packs (DECISIONS O-AW-PP): My Samples is not served here yet, so health says userPatches: false and lists no
-// 'user-patches' feature; the web client then never asks. The /api/user-patches stub only keeps a stray request off
-// the 404 count (E4 self-test). Serving real packs needs the My Samples roots first.
+// Patch packs (DECISIONS O-AW-PP, lane N1): the My Samples roots are RigPaths.userSampleRoots. /api/health says
+// userPatches: true and lists 'user-patches' only when a pack there has a songs/*.json (rig_hostkit_has_patches,
+// server.js hasUserPatches), so a Mac without packs makes no request; /api/user-patches is rig_hostkit's port of
+// server.js scanUserPatches, byte for byte (test/unit/hostkit/parity.test.mjs). Both run on `queue` (file I/O), never
+// on the main thread. `user:` instruments are not checked (null ids) until My Samples sound exists (lane N2).
+// The manifest stays empty: no audio is served over rig:// (the core reads files itself, N2).
 //
 // While the app edit of native/docs/SHELL.md section 2 is not applied, `patchMain` serves js/main.js with its engine
 // import swapped for ./engine-bridge/select.js (the same one-line change the Playwright smoke applies). The needle is
@@ -54,18 +57,30 @@ final class RigSchemeHandler: NSObject, WKURLSchemeHandler {
 
         switch path {
         case "/api/health":
-            return json(task, ["ok": true, "app": "worship-rig", "version": "native", "userSamples": false,
-                               "userPatches": false, "features": ["native"]])
+            return queue.async { [weak self] in
+                let packs = rig_hostkit_has_patches(RigPaths.userSampleRootsJSON) == 1
+                self?.json(task, ["ok": true, "app": "worship-rig", "version": "native", "userSamples": true,
+                                  "userPatches": packs,
+                                  "features": ["native", "user-samples"] + (packs ? ["user-patches"] : [])])
+            }
         case "/api/user-samples":
-            return json(task, ["enabled": false, "dir": NSNull(), "path": NSNull(), "roots": [String](), "count": 0,
-                               "packs": [String](), "errors": [String]()])
+            let roots = RigPaths.userSampleRoots.map { $0.path }
+            return json(task, ["enabled": true, "dir": roots.first ?? "", "path": roots.first ?? "", "roots": roots,
+                               "count": 0, "packs": [String](), "errors": [String]()])
         case "/api/user-samples/manifest.json":
             return json(task, ["app": "worship-rig", "kind": "user-samples", "instruments": [String](),
-                               "roots": [String](),
+                               "roots": RigPaths.userSampleRoots.map { $0.path },
                                "packs": [String](), "errors": [String]()])
         case "/api/user-patches":
-            return json(task, ["app": "worship-rig", "kind": "user-patches", "enabled": false,
-                               "patches": [String](), "packs": [String](), "errors": [String]()])
+            return queue.async { [weak self] in
+                guard let body = rig_hostkit_user_patches_json(RigPaths.userSampleRootsJSON, nil) else {
+                    self?.fail(task, 500, "out of memory")
+                    return
+                }
+                defer { rig_hostkit_free(body) }
+                self?.respond(task, status: 200, type: "application/json; charset=utf-8",
+                              body: Data(bytes: body, count: strlen(body)))
+            }
         case "/api/heartbeat", "/favicon.ico":
             return respond(task, status: 204, type: "text/plain", body: Data())
         default:

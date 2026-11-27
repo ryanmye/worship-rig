@@ -33,6 +33,7 @@ void usage() {
       "  --log FILE          write every bridge message (both directions) as JSON lines\n"
       "  --no-serve          WebSocket only (serve the UI elsewhere; boot-devhost.js takes ?devhost=ws://...)\n"
       "  --no-patch-main     serve js/main.js unchanged\n"
+      "  --user-samples DIR  a My Samples folder: serves its patch packs (Song bank); repeat for more roots\n"
       "  --exit-after SEC    stop after SEC seconds (tests)\n"
       "Open http://127.0.0.1:<port>/ in Chromium: the real UI, engine = the native core.\n",
       stderr);
@@ -84,6 +85,8 @@ int main(int argc, char **argv) {
       o.serveApp = false;
     } else if (a == "--no-patch-main") {
       o.patchMain = false;
+    } else if (a == "--user-samples") {  // lane N1: patch packs (Song bank) from this My Samples folder; repeatable
+      o.userSamples.push_back(val());
     } else if (a == "--exit-after") {
       exitAfter = std::stod(val());
     } else if (a == "-h" || a == "--help") {

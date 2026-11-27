@@ -2,8 +2,10 @@
 //
 //   macOS  recordings  ~/Music/Worship Rig/                         (same folder the Electron app used)
 //          backups     ~/Library/Application Support/Worship Rig Native/backups/
+//          My Samples  ~/Music/Worship Rig/Samples/                 (the Electron app's folder; patch packs, lane N1)
 //   iPad   recordings  <container>/Documents/Recordings/            (Files > On My iPad > Worship Rig > Recordings)
 //          backups     <container>/Documents/Backups/               (visible in Files so they can be AirDropped out)
+//          My Samples  <container>/Documents/Samples/               (Files > On My iPad > Worship Rig > Samples)
 //
 // The iPad folders are visible in Files only because project.yml sets UIFileSharingEnabled and
 // LSSupportsOpeningDocumentsInPlace (see SHELL.md "Recording ownership").
@@ -56,8 +58,39 @@ enum RigPaths {
         #endif
     }
 
+    /// The My Samples roots, in priority order (server.js defaultUserSampleRoots; an earlier root wins a pack name).
+    /// The self-test's temporary root first (hermetic: it writes its own packs there), then RIG_USER_SAMPLES
+    /// (':'-separated, replaces the default, as in 1.x), then the platform folder. Only patch packs are read from
+    /// them so far (/api/user-patches, lane N1); My Samples sound is lane N2. The Mac app is not sandboxed
+    /// (project.yml), so plain paths work, spaces and non-ASCII included.
+    static var userSampleRoots: [URL] {
+        if let r = overrideRoot { return [r.appendingPathComponent("Samples", isDirectory: true)] }
+        let env = ProcessInfo.processInfo.environment["RIG_USER_SAMPLES"] ?? ""
+        let over = env.split(separator: ":").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        if !over.isEmpty { return over.map { URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL } }
+        #if os(macOS)
+        let music = FileManager.default.urls(for: .musicDirectory, in: .userDomainMask).first ?? documents
+        return [music.appendingPathComponent("Worship Rig", isDirectory: true)
+            .appendingPathComponent("Samples", isDirectory: true)]
+        #else
+        return [documents.appendingPathComponent("Samples", isDirectory: true)]
+        #endif
+    }
+
+    /// `userSampleRoots` as the JSON array of paths rig_hostkit takes.
+    static var userSampleRootsJSON: String {
+        let paths = userSampleRoots.map { $0.path }
+        guard let d = try? JSONSerialization.data(withJSONObject: paths), let s = String(data: d, encoding: .utf8)
+        else { return "[]" }
+        return s
+    }
+
     static func ensureDirectories() {
-        for dir in [recordingsDir, backupsDir] {
+        var dirs = [recordingsDir, backupsDir]
+        #if os(iOS)
+        dirs.append(contentsOf: userSampleRoots) // so Files shows On My iPad > Worship Rig > Samples to copy packs into
+        #endif
+        for dir in dirs {
             do { try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true) } catch {
                 NSLog("rig: cannot create %@: %@", dir.path, error.localizedDescription)
             }

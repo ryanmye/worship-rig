@@ -10,6 +10,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "audio_host.h"
 #include "rig/rig_engine.h"
@@ -26,6 +27,7 @@ struct DevhostOptions {
   bool patchMain = true;        // serve js/main.js with the engine import swapped to boot-devhost.js
   std::string logPath;          // JSON lines of every message in both directions ("" = off)
   std::uint32_t seed = 0;       // 0 = time-derived (realtime)
+  std::vector<std::string> userSamples;  // My Samples roots (--user-samples; lane N1): empty = My Samples off
   AudioOptions audio;
 };
 
@@ -75,6 +77,7 @@ class Devhost {
   std::FILE *log_ = nullptr;
   std::uint64_t t0_ = 0;
   std::string appDir_, contractPath_;
+  std::string rootsJson_;  // o_.userSamples as a JSON array of absolute paths (rig_hostkit)
 };
 
 }  // namespace devhost

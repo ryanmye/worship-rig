@@ -1,6 +1,8 @@
 // rig-devhost composition (see devhost.h).
 #include "devhost.h"
 
+#include "rig/rig_hostkit.h"
+
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -18,6 +20,23 @@ std::string readFile(const std::string &path, bool *ok) {
   return s.str();
 }
 
+std::string quote(const std::string &s) {
+  std::string o = "\"";
+  for (const char c : s) {
+    if (c == '"' || c == '\\') {
+      o.push_back('\\');
+      o.push_back(c);
+    } else if (static_cast<unsigned char>(c) < 0x20) {
+      char b[8];
+      std::snprintf(b, sizeof b, "\\u%04x", static_cast<unsigned>(static_cast<unsigned char>(c)));
+      o += b;
+    } else {
+      o.push_back(c);
+    }
+  }
+  return o + "\"";
+}
+
 HttpResponse json(int code, std::string body) {
   HttpResponse r;
   r.code = code;
@@ -32,6 +51,13 @@ Devhost::Devhost(DevhostOptions o) : o_(std::move(o)) {
   audio_ = std::make_unique<AudioHost>(o_.audio);
   appDir_ = o_.repoDir + "/app";
   contractPath_ = o_.repoDir + "/native/contract/engine-api.json";
+  rootsJson_ = "[";
+  for (const std::string &r : o_.userSamples) {
+    std::error_code ec;
+    const std::string abs = std::filesystem::absolute(r, ec).lexically_normal().string();
+    rootsJson_ += (rootsJson_.size() > 1 ? "," : "") + quote(ec ? r : abs);
+  }
+  rootsJson_ += "]";
   ServerHooks hooks;
   hooks.http = [this](const HttpRequest &r) { return route(r); };
   hooks.message = [this](std::string &&m) {
@@ -130,7 +156,36 @@ HttpResponse Devhost::route(const HttpRequest &r) const {
     return ok ? json(200, std::move(body)) : json(404, R"({"error":"engine-api.json not found"})");
   }
   if (p == "/api/health") {
-    return json(200, R"({"ok":true,"app":"worship-rig","version":"devhost","userSamples":false,"devhost":true})");
+    if (o_.userSamples.empty()) {
+      return json(200, R"({"ok":true,"app":"worship-rig","version":"devhost","userSamples":false,"devhost":true})");
+    }
+    // lane N1, as server.js: 'user-patches' only when a pack has a songs/*.json, so no pack = no request
+    const bool packs = rig_hostkit_has_patches(rootsJson_.c_str()) == 1;
+    return json(200, std::string(R"({"ok":true,"app":"worship-rig","version":"devhost","userSamples":true,)") +
+                         (packs ? R"("userPatches":true,"features":["user-samples","user-patches"],)"
+                                : R"("userPatches":false,"features":["user-samples"],)") +
+                         R"("devhost":true})");
+  }
+  if (p == "/api/user-patches") {
+    if (o_.userSamples.empty()) {
+      return json(200,
+                  R"({"app":"worship-rig","kind":"user-patches","enabled":false,"patches":[],"packs":[],"errors":[]})");
+    }
+    // the `user:` ids are not checked (null): the dev host has no My Samples scanner yet (lane N2)
+    char *body = rig_hostkit_user_patches_json(rootsJson_.c_str(), nullptr);
+    if (!body) return json(500, R"({"error":"out of memory"})");
+    HttpResponse res = json(200, body);
+    rig_hostkit_free(body);
+    return res;
+  }
+  if (p == "/api/user-samples" && !o_.userSamples.empty()) {  // the Settings summary (server.js shape, no scanner)
+    const std::string home = quote(std::filesystem::absolute(o_.userSamples.front()).lexically_normal().string());
+    return json(200, R"({"enabled":true,"dir":)" + home + R"(,"path":)" + home + R"(,"roots":)" + rootsJson_ +
+                         R"(,"count":0,"packs":[],"errors":[]})");
+  }
+  if (p == "/api/user-samples/manifest.json" && !o_.userSamples.empty()) {
+    return json(200, R"({"app":"worship-rig","kind":"user-samples","instruments":[],"roots":)" + rootsJson_ +
+                         R"(,"packs":[],"errors":[]})");
   }
   if (p.rfind("/api/user-samples", 0) == 0) return json(200, R"({"instruments":[]})");
   if (p == "/api/pads") return json(200, R"({"files":[]})");

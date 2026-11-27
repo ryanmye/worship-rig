@@ -43,7 +43,7 @@ endif()
 add_library(devhost_lib STATIC src/ws_codec.cpp src/http.cpp src/server.cpp src/audio_host.cpp src/devhost.cpp
                                src/probe.cpp src/probe_apple.cpp)
 target_include_directories(devhost_lib PUBLIC src)
-target_link_libraries(devhost_lib PUBLIC rig_core devhost_miniaudio)
+target_link_libraries(devhost_lib PUBLIC rig_core rig_hostkit devhost_miniaudio)
 target_compile_definitions(devhost_lib PUBLIC DEVHOST_REPO_DIR="${DEVHOST_REPO}")
 rig_target_defaults(devhost_lib)
 

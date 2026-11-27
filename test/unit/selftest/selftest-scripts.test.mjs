@@ -5,6 +5,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { createStore, memoryStorage, SCHEMA } from '../../../app/js/store.js';
 
@@ -77,11 +79,11 @@ function fakeWindow({ handler = true } = {}) {
 }
 
 test('the Swift file has no interpolation or escapes inside the JS (raw strings only)', () => {
-  for (const name of ['pageHook', 'bootProbe', 'importProbe']) {
+  for (const name of ['pageHook', 'bootProbe', 'importProbe', 'packsProbe']) {
     const body = rawString(name);
     assert.ok(!body.includes('"""'), name);
     const compile = () => (name === 'pageHook' ? new Function('window', body)
-      : new AsyncFunction('timeoutMs', 'marker', body));
+      : new AsyncFunction('timeoutMs', 'marker', ...(name === 'packsProbe' ? ['phase'] : []), body));
     assert.doesNotThrow(compile, name);
   }
 });
@@ -250,3 +252,46 @@ test('importProbe: waits for the import to land', async () => {
   const out = JSON.parse(await probe('importProbe', { marker, timeoutMs: 3000 })({ __rig: { store } }));
   assert.equal(out.hit, true);
 });
+
+test('packsProbe (lane N1): its pack files are valid songs; Rescan, Song bank and Add to library on the real store',
+  async () => {
+    const store = makeStore();
+    const out = JSON.parse(await probe('packsProbe', { phase: 'export', timeoutMs: 2000 })({
+      __rig: { store, controller: { rescanPatchPacks() {} } },
+    }));
+    assert.deepEqual(Object.keys(out.files).sort(), ['N1 Auto \u00c4/songs/auto song.json', 'N1 Bank/pack.json',
+      'N1 Bank/songs/bank 1.json', 'N1 Bank/songs/bank 2.json']);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rig-selftest-packs-'));
+    try {
+      for (const [rel, text] of Object.entries(out.files)) {
+        fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+        fs.writeFileSync(path.join(dir, rel), text);
+      }
+      // the reference scanner (rig_hostkit, which the Mac app runs, matches it byte for byte: test/unit/hostkit)
+      const { scanUserPatches } = createRequire(import.meta.url)(path.join(root, 'server.js'));
+      let entries = [];
+      let errors = [];
+      const bank = () => entries.filter((e) => e.mode === 'bank')
+        .map((e) => ({ packId: e.packId, title: (e.bank && e.bank.title) || e.song.name }));
+      const controller = {
+        async rescanPatchPacks() {
+          const j = JSON.parse(JSON.stringify(await scanUserPatches([dir])));
+          entries = j.patches;
+          errors = j.errors;
+          return { ...store.topUpPacks(entries), errors };
+        },
+        patchPacks: () => ({ songs: entries.length, packs: 2, bankSongs: bank().length, bank: bank(), errors }),
+        addFromBank: (id) => store.addPackSong(entries.find((e) => e.packId === id)),
+      };
+      const fetch = async () => ({ ok: true, json: async () => ({ userPatches: true, features: ['user-patches'] }) });
+      const r = JSON.parse(await probe('packsProbe', { phase: 'check', timeoutMs: 2000 })({
+        __rig: { store, controller }, fetch,
+      }));
+      assert.deepEqual([r.userPatches, r.songs, r.bankSongs, r.autoInLibrary, r.addOk, r.addedName, r.errors],
+        [true, 3, 2, true, true, 'N1 bank one', []]);
+      assert.deepEqual(r.bank.sort(), ['N1 bank one', 'N1 bank two']);
+      assert.equal(r.added, 1, 'the auto song, once');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });

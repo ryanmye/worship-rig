@@ -1,5 +1,7 @@
 // The whole dev host in-process (null audio backend, ephemeral port): HTTP routes, the WebSocket relay to the core,
 // recording through the relay, page replacement and the panic/rec-stop cleanup for a page that goes away.
+#include <unistd.h>
+
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
@@ -67,6 +69,52 @@ TEST_SUITE("devhost-relay") {
     CHECK(dht::httpGet(port, "/%2e%2e/package.json").rfind("HTTP/1.1 404", 0) == 0);
     CHECK(dht::httpGet(port, "/__rig/ws").rfind("HTTP/1.1 400", 0) == 0);  // not an upgrade
     CHECK(dht::httpGet(port, "/api/other").find("not served by rig-devhost") != std::string::npos);
+  }
+
+  TEST_CASE("HTTP: --user-samples serves the patch packs (lane N1): health flags, /api/user-patches, no pack = off") {
+    const fs::path dir = fs::temp_directory_path() / ("rig devhost packs \xC3\x84-" + std::to_string(::getpid()));
+    fs::remove_all(dir);
+    fs::create_directories(dir / "Bank Pack" / "songs");
+    std::ofstream(dir / "Bank Pack" / "pack.json") << R"({"mode":"bank"})";
+    std::ofstream(dir / "Bank Pack" / "songs" / "lantern.json")
+        << R"({"app":"worship-rig","kind":"song","schema":2,"song":{"name":"Lantern","patch":{}},"bank":{"title":"L"}})";
+    fs::create_directories(dir / "empty");
+    devhost::DevhostOptions o;
+    o.port = 0;
+    o.repoDir = DEVHOST_REPO_DIR;
+    o.recordingsDir.clear();
+    o.audio.backend = "null";
+    o.userSamples = {dir.string(), (dir / "missing").string()};
+    devhost::Devhost h(o);
+    std::string err;
+    REQUIRE_MESSAGE(h.open(&err), err);
+    {
+      Running run(h);
+      const auto port = h.port();
+      std::string r = dht::httpGet(port, "/api/health");
+      CHECK(r.find(R"("userSamples":true,"userPatches":true,"features":["user-samples","user-patches"])") !=
+            std::string::npos);
+      r = dht::httpGet(port, "/api/user-patches");
+      CHECK(r.rfind("HTTP/1.1 200", 0) == 0);
+      CHECK(r.find(R"({"app":"worship-rig","kind":"user-patches","enabled":true,"patches":[{"packId":"Bank Pack:lantern.json")") !=
+            std::string::npos);
+      CHECK(r.find(R"("mode":"bank")") != std::string::npos);
+      r = dht::httpGet(port, "/api/user-samples");
+      CHECK(r.find("\"dir\":\"" + dir.string() + "\"") != std::string::npos);
+      fs::remove_all(dir / "Bank Pack");  // the flag follows the folder (no cache)
+      CHECK(dht::httpGet(port, "/api/health").find(R"("userPatches":false,"features":["user-samples"])") !=
+            std::string::npos);
+    }
+    fs::remove_all(dir);
+    devhost::DevhostOptions off;
+    off.port = 0;
+    off.repoDir = DEVHOST_REPO_DIR;
+    off.recordingsDir.clear();
+    off.audio.backend = "null";
+    devhost::Devhost h2(off);
+    REQUIRE_MESSAGE(h2.open(&err), err);
+    Running run2(h2);
+    CHECK(dht::httpGet(h2.port(), "/api/user-patches").find(R"("enabled":false,"patches":[])") != std::string::npos);
   }
 
   TEST_CASE("WebSocket: hello, audio start, ticks, a take recorded, replaced page cleaned up") {

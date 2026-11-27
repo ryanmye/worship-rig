@@ -17,6 +17,10 @@
 //              without a dialog, replaced the library with the backup (marker song present, schema 2). The fixture
 //              folder also holds a newer, truncated rotation file: RigBackups.latestAnywhere must skip it and serve
 //              the older good one (review E5 open item 3); serving it would leave the marker out and fail this step
+//   packs      (lane N1) patch packs from My Samples: no /api/user-patches request while there is no pack; then two
+//              packs written under <temp>/Samples (built from the current song by `packsProbe`, names with spaces
+//              and non-ASCII): /api/health says userPatches, controller.rescanPatchPacks takes the auto song into the
+//              library, the Song bank lists the 2 bank songs, Add to library works, no pack errors
 //   midi       (not required) the CoreMIDI client was created
 //   webcontent the WebContent process did not terminate
 //   console    zero console.error / uncaught errors / unhandled rejections / resource or CSP errors on the page
@@ -24,7 +28,7 @@
 // Hard limit: RigSelfTest.budget seconds (60), then a `timedOut` result and exit 1.
 //
 // Isolation (it may also run on Ryan's Mac from check.sh): the web view uses a non-persistent data store (no
-// localStorage left behind), the shell's folders (backups, recordings) move to a temporary directory, the migration
+// localStorage left behind), the shell's folders (backups, recordings, My Samples) move to a temporary directory, the migration
 // answer is not written to UserDefaults, Application Support is never scanned (only RIG_ELECTRON_BACKUPS), and audio
 // goes to rig_apple_null_sink (no device is opened). CoreMIDI is created as in the real app (it opens no port).
 import Foundation
@@ -105,6 +109,46 @@ enum RigSelfTestScripts {
         report('csp', String(ev.violatedDirective) + ' ' + String(ev.blockedURI));
       });
     })();
+    """#
+
+    /// callAsyncJavaScript body, arguments `phase`, `timeoutMs` (lane N1). phase 'export': the pack files to write
+    /// (relative path -> text), built from the current song's export so they are valid songs by construction.
+    /// phase 'check': health's flags, a Rescan, the Song bank and one Add to library. Returns a JSON string.
+    static let packsProbe = #"""
+    const rig = window.__rig || {};
+    const { controller, store } = rig;
+    if (!controller || !store || typeof controller.rescanPatchPacks !== 'function') {
+      return JSON.stringify({ error: 'no __rig.controller / store' });
+    }
+    if (phase === 'export') {
+      const base = JSON.parse(store.exportSong(store.get().settings.currentSongId, { pretty: false }));
+      const one = (name, bank) => JSON.stringify({ app: 'worship-rig', kind: 'song', schema: base.schema,
+        song: { ...base.song, id: undefined, name }, ...(bank ? { bank } : {}) });
+      return JSON.stringify({ files: {
+        'N1 Auto \u00c4/songs/auto song.json': one('N1 self-test auto'),
+        'N1 Bank/pack.json': JSON.stringify({ mode: 'bank', name: 'N1 self-test bank' }),
+        'N1 Bank/songs/bank 1.json': one('N1 bank one', { title: 'N1 bank one', originalKey: 'G', bpm: 72 }),
+        'N1 Bank/songs/bank 2.json': one('N1 bank two', { title: 'N1 bank two', artist: 'Self-test' }),
+      } });
+    }
+    const t0 = Date.now();
+    const res = await window.fetch('./api/health', { cache: 'no-store' });
+    const h = res.ok ? await res.json() : {};
+    const r = await Promise.race([controller.rescanPatchPacks(),
+      new Promise((ok) => setTimeout(() => ok(null), timeoutMs))]);
+    const p = controller.patchPacks();
+    const st = store.get();
+    const names = st.songOrder.map((id) => st.songs[id] && st.songs[id].name);
+    const item = (p.bank || []).find((b) => b.title === 'N1 bank one');
+    const add = item ? controller.addFromBank(item.packId) : { ok: false, error: 'not in the bank' };
+    const after = store.get();
+    return JSON.stringify({
+      userPatches: h.userPatches === true, features: h.features || [], rescanned: !!r,
+      added: r ? r.added.length : null, songs: p.songs, packs: p.packs, bankSongs: p.bankSongs,
+      bank: (p.bank || []).map((b) => b.title), errors: p.errors || [], skipped: r ? r.skipped : null,
+      autoInLibrary: names.includes('N1 self-test auto'), addOk: !!add.ok, addError: add.error || null,
+      addedName: add.ok && after.songs[add.id] ? after.songs[add.id].name : null, ms: Date.now() - t0,
+    });
     """#
 
     /// callAsyncJavaScript body, argument `timeoutMs`: waits for main.js's `__rig.ready` (controller.start: audio
@@ -277,6 +321,7 @@ final class RigSelfTestRunner {
     private var pageErrorCount = 0
     private var httpErrors: [String] = []
     private var httpCount = 0
+    private var patchRequests = 0 // rig://app/api/user-patches responses (lane N1: none while there is no pack)
     private let env = ProcessInfo.processInfo.environment
 
     private func ms(since t: Date) -> Double { Date().timeIntervalSince(t) * 1000 }
@@ -307,6 +352,7 @@ final class RigSelfTestRunner {
         hooks.httpStatus = { [weak self] url, status in
             guard let self else { return }
             self.httpCount += 1
+            if url.contains("/api/user-patches") { self.patchRequests += 1 }
             if status >= 400, self.httpErrors.count < 50 { self.httpErrors.append("\(status) \(url)") }
         }
         hooks.pageMessage = { [weak self] body in
@@ -502,7 +548,7 @@ final class RigSelfTestRunner {
     private func stepMigration() {
         guard let dir = env["RIG_ELECTRON_BACKUPS"], !dir.isEmpty else {
             report.set("migration", NSNull())
-            return stepEnd()
+            return stepPacks()
         }
         let t = Date()
         let marker = env["RIG_SELFTEST_IMPORT_MARKER"].flatMap { $0.isEmpty ? nil : $0 } ?? RigSelfTest.defaultMarker
@@ -512,7 +558,7 @@ final class RigSelfTestRunner {
                 let m: [String: Any] = ["dir": dir, "outcome": outcome]
                 report.set("migration", m)
                 report.check("migration", false, ms: ms(since: t), "first-launch offer from \(dir): \(outcome)")
-                return stepEnd()
+                return stepPacks()
             }
             js(RigSelfTestScripts.importProbe, ["marker": marker, "timeoutMs": 10000]) { [self] d, err in
                 let hit = (d?["hit"] as? Bool) == true
@@ -525,6 +571,47 @@ final class RigSelfTestRunner {
                 report.check("migration", hit && schema == 2, ms: ms(since: t),
                              hit ? "imported '\(marker)' from \(dir): \(songs) songs, schema \(schema)"
                                  : "'\(marker)' not in the library after the import (\(why))")
+                stepPacks()
+            }
+        }
+    }
+
+    /// Lane N1: patch packs. RigPaths.userSampleRoots is <temp>/Samples here (missing until this step writes it).
+    private func stepPacks() {
+        let t = Date()
+        let before = patchRequests
+        guard let root = RigPaths.userSampleRoots.first else { return stepEnd() }
+        js(RigSelfTestScripts.packsProbe, ["phase": "export", "timeoutMs": 10000]) { [self] d, err in
+            guard let files = d?["files"] as? [String: String] else {
+                let why = err ?? String(describing: d ?? [:])
+                report.check("packs", false, ms: ms(since: t), "export probe failed: \(why)")
+                return stepEnd()
+            }
+            do {
+                for (rel, text) in files {
+                    let url = root.appendingPathComponent(rel)
+                    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                            withIntermediateDirectories: true)
+                    try Data(text.utf8).write(to: url)
+                }
+            } catch {
+                report.check("packs", false, ms: ms(since: t),
+                             "could not write the packs under \(root.path): \(error.localizedDescription)")
+                return stepEnd()
+            }
+            js(RigSelfTestScripts.packsProbe, ["phase": "check", "timeoutMs": 10000]) { [self] d, err in
+                let probe: [String: Any] = d ?? ["error": err ?? "?"]
+                report.set("packs", ["root": root.path, "requestsBeforePacks": before, "probe": probe] as [String: Any])
+                let bank = (d?["bankSongs"] as? NSNumber)?.intValue ?? -1
+                let errs = d?["errors"] as? [Any] ?? ["?"]
+                let first = errs.first.map { ": \($0)" } ?? ""
+                let ok = before == 0 && (d?["userPatches"] as? Bool) == true && bank == 2
+                    && (d?["autoInLibrary"] as? Bool) == true && (d?["addOk"] as? Bool) == true && errs.isEmpty
+                report.check("packs", ok, ms: ms(since: t),
+                             "\(before) pack request(s) before any pack; then userPatches \(d?["userPatches"] ?? "?"), "
+                             + "\(d?["songs"] ?? "?") pack songs, \(bank) in the Song bank, auto song in library "
+                             + "\(d?["autoInLibrary"] ?? "?"), Add to library \(d?["addOk"] ?? "?"), "
+                             + "\(errs.count) error(s)\(first)")
                 stepEnd()
             }
         }
