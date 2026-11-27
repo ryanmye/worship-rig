@@ -596,7 +596,9 @@ the port snapshot (the shell publishes its ports before the page exists); after 
 exactly the inputs midi.js attached (fire-and-forget, one per microtask, only on change), so CoreMIDI connects only
 the selected sources and the v1.1 direct path never plays an unselected port; a port missing from a `ports` event
 goes 'disconnected' (kept in the map, as Chrome does); `msg.ts` (engine s) maps to page ms through the last tick;
-`output.send(data, ts)` → `midi send {port, data, when?}`. MIDI clock out stays native: `config.midiClock.port`
+`output.send(data, ts)` → `midi send {port, data, when?}`; installing it also sends one `play {e:'panic'}` right
+after `hello` (skeptic NMA F1: the core outlives a page reload, whose new controller cannot release the old page's
+notes or pedal). MIDI clock out stays native: `config.midiClock.port`
 carries the chosen output's name (midi-clock.js `sink.portId`). The direct path removes the round trip without moving policy: JS pushes the routing table, native plays,
 and still forwards each message flagged `handled` so the UI, learn and activity keep working.
 
