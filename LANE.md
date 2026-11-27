@@ -9,11 +9,11 @@ Worktree /home/claude/wt-nma, branch lane-nma off origin/v2-native (d35b788). Do
 
 ## Checklist
 - [x] 0. Worktree, read docs/code, verify the facts (below)
-- [ ] 1. `app/js/engine-bridge/native-midi.js` adapter + install from select.js / boot-mock.js / boot-devhost.js
-- [ ] 2. MockNative midi emulation (ports appear / disappear, msgs with ts, listen filter, send log)
-- [ ] 3. Unit tests `test/unit/engine-bridge/native-midi.test.mjs`
+- [x] 1. `app/js/engine-bridge/native-midi.js` adapter + install from select.js / boot-mock.js / boot-devhost.js
+- [x] 2. MockNative midi emulation (ports appear / disappear, msgs with ts, listen filter, send log)
+- [x] 3. Unit tests `test/unit/engine-bridge/native-midi.test.mjs`
 - [ ] 4. Browser test (app on bridge-mock, Web MIDI removed): note, Learn, Program Change, lamp, hot-unplug
-- [ ] 5. MIDI clock out port (SHELL.md G4) through the bridge
+- [x] 5. MIDI clock out port (SHELL.md G4) through the bridge
 - [ ] 6. Native side: gaps? (core / RigMIDI.swift); ctest g++, clang++-20 -Werror, ASan if native changes
 - [ ] 7. Docs: CONTRACT_CHANGES, ENGINE_CONTRACT/SHELL/WEBKIT_AUDIT notes, MAC_CHECK steps
 - [ ] 8. Gates via tools/cloud/gates.mjs
@@ -37,7 +37,7 @@ Worktree /home/claude/wt-nma, branch lane-nma off origin/v2-native (d35b788). Do
 - devhost: no MIDI ports (`midi_listen`/`midi_send` NULL); in Chrome it uses Chrome's Web MIDI (adapter not installed).
 
 ## Next step
-Step 1.
+Step 4 (browser test), then 6.
 
 ## Findings / decisions
 - Listen policy: the adapter listens to exactly the inputs midi.js attached (onmidimessage set / midimessage
