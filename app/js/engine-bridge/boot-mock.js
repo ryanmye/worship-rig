@@ -7,6 +7,7 @@
 import { BridgeEngine } from './bridge-engine.js';
 import { MockNative } from './mock-native.js';
 import { loopbackPair } from './transports.js';
+import { installNativeMidi } from './native-midi.js';
 
 const api = await (await fetch('/__bridge/engine-api.json')).json();
 const seen = (globalThis.__bridgeSeen = globalThis.__bridgeSeen || {});
@@ -42,6 +43,9 @@ export class AudioEngine {
     globalThis.__bridgeMock = mock;
     globalThis.__bridgeLog = log;
     globalThis.__bridgeRaw = engine;
+    // lane NMA: a page without Web MIDI (a test that removes it, Safari) plays MockNative's MIDI ports through the
+    // bridge, as the native app does; Chromium keeps its own Web MIDI
+    globalThis.__nativeMidi = installNativeMidi(engine);
     return spy(engine, '');
   }
 }

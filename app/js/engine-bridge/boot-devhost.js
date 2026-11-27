@@ -5,6 +5,7 @@
 // test/unit/engine-bridge/boot-devhost.mjs.
 import { BridgeEngine } from './bridge-engine.js';
 import { websocketTransport, devhostUrl } from './ws-transport.js';
+import { installNativeMidi } from './native-midi.js';
 
 const params = (() => {
   try {
@@ -53,6 +54,7 @@ export class AudioEngine {
     engine = new BridgeEngine({ transport, latency: opts.latency, app: 'worship-rig-ui (devhost)' });
     globalThis.__bridgeRaw = engine;
     globalThis.__devhostTransport = transport;
+    installNativeMidi(engine); // lane NMA: only a browser without Web MIDI (Safari); the dev host has no MIDI ports
     if (params.get('spy') !== '1') return engine;
     const seen = (globalThis.__bridgeSeen = globalThis.__bridgeSeen || {});
     return spy(engine, '', seen);
