@@ -73,12 +73,34 @@ Brief: check every factual claim in the Lane R docs against the code on lane-r, 
 merged UI6 reviews; fix on lane-r; write native/docs/reviews/LaneR.md. Docs only: no browser suites.
 
 - [x] 0. Rebase: lane-r already sits on origin/v2-native tip d35b788 (nothing to rebase)
-- [ ] 1. release-notes-2.0.md: v6 flag marks vs main.js / views; default-on items
-- [ ] 2. Known gaps vs Swift shell (scheme handler, RigLibrary, menus); B1–B3 wording
-- [ ] 3. Size text vs D9 + D33 O4; hardware vs project.yml
-- [ ] 4. README + site (+ HTML parse / link check; credits / LICENSES unchanged)
-- [ ] 5. MAC_CHECK 2.0 checklist
-- [ ] 6. U9 list vs reviews + D26–D34
-- [ ] 7. Review doc LaneR.md, final report
+- [x] 1. release-notes-2.0.md: v6 flag marks vs main.js / views; default-on items (marks right)
+- [x] 2. Known gaps vs Swift shell (scheme handler, RigLibrary, menus); B1–B3 wording
+- [x] 3. Size text vs D9 + D33 O4 (right; CAP not merged); hardware vs project.yml (right)
+- [x] 4. README + site (HTML parse 0 errors, local links / anchors ok; credits / LICENSES.md unchanged vs main)
+- [x] 5. MAC_CHECK 2.0 checklist
+- [x] 6. U9 list vs reviews + D26–D34
+- [ ] 7. Fixes (one commit per finding group), then review doc LaneR.md, final report
 
-Findings so far: (none yet)
+Findings (before fixing):
+- F1 iPad app is landscape-only (project.yml Info-iPad UISupportedInterfaceOrientations~ipad L/R, UIRequiresFullScreen):
+  notes / MAC_CHECK step 5 / U9 promise portrait in the app.
+- F2 macOS file inputs: RigNavigationDelegate (the uiDelegate) has no runOpenPanelWith, so Settings › Import…, chart
+  import, Choose pad files likely do nothing on the Mac; B2 covers export only. Export: `.allow` for blob: (not
+  `.download`), outcome to check.
+- F3 B3 overclaims: a v2.0.0 tag now fails release.yml's "Tag matches package.json version" (1.1.0); the risk comes
+  with step 7's bump. Step 8's "Draft a new release … main's release.yml also handles" needs step 3 first.
+- F4 U9 re-asks settled items: 6 (Auto 128, D5 follow-up), 8 (PDF after 2.0, D33), 25 (chart resume, polish1),
+  27 (Keep wording, polish1).
+- F5 U9 misses: U8b Start-here card hidden in Learn / Arrange; U3 O5 / D16 Tone + Snapshots modules; D16 "you play"
+  in the song bar (built); iPad orientation (F1).
+- F6 U9 item 7 refs don't resolve ("ORCH", "DECISIONS dashboard question 7").
+- F7 "110 sample for sample": PARITY exact tier is max|diff| ≤ 2e-4, not identical samples.
+- F8 "Next, Prev and one more each way": pins are ±1 (library) / ±2 (large setlist) / whole setlist; prebuild capped.
+- F9 Known gaps miss: screen kept awake (1.x powerSaveBlocker), Open at login, 1.x Rig / Help menu items; README
+  "Other handy controls" / Recording give 1.x behaviour as "the Mac app"; MIDI clock out hangs on B1.
+- F10 README "Settings › MIDI Learn" (today: Keyboards & MIDI › MIDI Learn).
+- F11 MAC_CHECK step 7 last bullet already done (c7911dd).
+- F12 jargon in player text: "(U9)", "in this draft", "no screen says Keys…" (today's do).
+- F13 iPad "Import Library Backup…" needs a hardware keyboard (⇧⌘I): iPadOS 17 has no menu bar.
+- O1 native Settings shows Chrome's Menu-bar rows in Look ("Used by the Mac app…", a dead "Open mini panel").
+- O2 SHELL.md says recording is unavailable under the bridge (NativeRecorder exists): stale.
