@@ -159,11 +159,18 @@ test('no Web MIDI (WKWebView): midi.js runs on the bridge; keys play, Learn, Pro
           await a.until((k) => globalThis.__bridgeLog.toNative.slice(k).filter((m) => m.op === 'play'
             && m.e === 'on').length === 2, m0);
           const on = (await a.sent(m0)).filter((m) => m.op === 'play' && m.e === 'on').map((m) => m.n).sort();
+          // skeptic NMA: mid-chord with the sustain pedal down, the unplug also lifts the pedal
+          await a.midiIn('k1', [0xb0, 64, 127]);
+          await a.until((k) => globalThis.__bridgeLog.toNative.slice(k).some((m) => m.op === 'play' && m.e === 'pedal'
+            && m.down === true), m0);
           await a.ev(() => globalThis.__bridgeMock.midiUnplug('k1'));
           await a.until(([k, n]) => {
             const off = globalThis.__bridgeLog.toNative.slice(k).filter((m) => m.op === 'play' && m.e === 'off');
             return n.every((x) => off.some((m) => m.n === x));
           }, [m0, on]);
+          await a.until((k) => globalThis.__bridgeLog.toNative.slice(k).some((m) => m.op === 'play' && m.e === 'pedal'
+            && m.down === false), m0);
+          await a.until(() => globalThis.__bridgeMock.held.size === 0 && globalThis.__bridgeMock.pedal === false);
           await a.until(() => window.__rig.controller.status.midi.fallback === true);
           await a.until(() => globalThis.__bridgeMock.midi.listening?.has('v1')
             && !globalThis.__bridgeMock.midi.listening.has('k1'));

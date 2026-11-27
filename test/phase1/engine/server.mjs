@@ -37,6 +37,9 @@ function apiRoute(req, res) {
   };
   if (p === '/api/health') return json({ ok: true, app: 'engine-tests', userSamples: true });
   if (p === '/__nohealth/api/health') return json({ ok: true, app: 'engine-tests' });
+  // skeptic NMA: the controller's relative './api/health' (rescanPatchPacks) from /__tests/harness.html; no features,
+  // so it asks for nothing more (this 404 was the suite's one console error, already on origin/v2-native 7e92df4)
+  if (p === '/__tests/api/health') return json({ ok: true, app: 'engine-tests' });
   return false;
 }
 
