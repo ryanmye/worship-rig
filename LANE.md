@@ -66,3 +66,19 @@ Nothing published, no tags, no pushes.
 
 ## Open questions
 - All in native/docs/lanes/U9-review-list.md section 1 (tier 1) for Ryan.
+
+## Skeptic (Lane R review, 2026-11-27)
+
+Brief: check every factual claim in the Lane R docs against the code on lane-r, DECISIONS, CONTRACT_CHANGES and the
+merged UI6 reviews; fix on lane-r; write native/docs/reviews/LaneR.md. Docs only: no browser suites.
+
+- [x] 0. Rebase: lane-r already sits on origin/v2-native tip d35b788 (nothing to rebase)
+- [ ] 1. release-notes-2.0.md: v6 flag marks vs main.js / views; default-on items
+- [ ] 2. Known gaps vs Swift shell (scheme handler, RigLibrary, menus); B1–B3 wording
+- [ ] 3. Size text vs D9 + D33 O4; hardware vs project.yml
+- [ ] 4. README + site (+ HTML parse / link check; credits / LICENSES unchanged)
+- [ ] 5. MAC_CHECK 2.0 checklist
+- [ ] 6. U9 list vs reviews + D26–D34
+- [ ] 7. Review doc LaneR.md, final report
+
+Findings so far: (none yet)
