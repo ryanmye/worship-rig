@@ -27,4 +27,9 @@ Never tag, release or push.
 - XcodeGen's generated Info.plist may not carry MARKETING_VERSION (its default is a literal "1.0" in some versions,
   unverified): project.yml now sets CFBundleShortVersionString / CFBundleVersion from the build settings explicitly.
 
+- workflow_dispatch only works for workflow files on the default branch (GitHub rule, not tested here): until the
+  2.0 merge puts release-native.yml on main, "Run workflow" is not offered for it. So release-native.yml also runs (build
+  only) on a push to v2-native that changes the release files: the orchestrator's push of this lane is the first dry
+  run.
+
 ## Open questions

@@ -112,9 +112,13 @@ function triggers(w, event) {
   const on = w.on;
   if (!(event.name in on)) return false;
   if (event.name === 'push') {
-    const tags = on.push && on.push.tags;
-    if (!event.ref.startsWith('refs/tags/')) return !tags || Boolean(on.push.branches);
-    return Boolean(tags) && tags.some((p) => globMatch(p, event.ref.slice('refs/tags/'.length)));
+    // path filters are taken as matched (they apply to branch pushes only, never to tags)
+    const { tags, branches } = on.push || {};
+    if (event.ref.startsWith('refs/tags/')) {
+      return Boolean(tags) && tags.some((p) => globMatch(p, event.ref.slice('refs/tags/'.length)));
+    }
+    const b = event.ref.slice('refs/heads/'.length);
+    return branches ? branches.some((p) => globMatch(p, b)) : !tags;
   }
   if (event.name === 'release') return (on.release.types || ['published']).includes(event.action);
   return true;
@@ -184,7 +188,10 @@ test('release-native.yml: builds on v2.* tags and dispatch; publishes only on di
     assert.deepEqual(runningJobs(w, rel('v2.0.0')), [], 'no release trigger');
     assert.deepEqual(runningJobs(w, push(tag('v2.0.0'))), ['mac', 'ipad'], 'tag push: build only');
     assert.deepEqual(runningJobs(w, push(tag('v2.0.0-beta.1'))), ['mac', 'ipad']);
-    assert.deepEqual(runningJobs(w, push('refs/heads/v2-native')), []);
+    // the path-filtered dry run on v2-native (the release files changed): build only
+    assert.deepEqual(runningJobs(w, push('refs/heads/v2-native')), ['mac', 'ipad']);
+    assert.deepEqual(runningJobs(w, push('refs/heads/main')), []);
+    assert.ok(w.on.push.paths.includes('.github/workflows/release-native.yml'));
     const off = { publish: false, latest: false };
     const on = { publish: true, latest: false };
     assert.deepEqual(runningJobs(w, dispatch('refs/heads/v2-native', off)), ['mac', 'ipad'], 'the dry run');

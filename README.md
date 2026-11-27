@@ -49,16 +49,15 @@ once and quit it first, so 2.0 can bring your library over: see
 `brew install cmake ninja xcodegen`. Then, from the `worship-rig` folder:
 
 ```
-cd native/apple
-./scripts/build-core.sh --mac-only
-xcodegen
-xcodebuild -project WorshipRig.xcodeproj -scheme WorshipRig-macOS -configuration Release \
-  -destination 'platform=macOS' CODE_SIGN_IDENTITY=- ARCHS=arm64 -derivedDataPath build/dd build
+bash native/apple/scripts/package-release.sh --clean
 ```
 
-The app is `native/apple/build/dd/Build/Products/Release/Worship Rig.app`. The full steps, with the errors to expect,
-are in [native/apple/README.md](native/apple/README.md). (`tools/mac/check.sh` runs the same build as a check, in the
-Debug configuration; the Release line above has not been run yet.)
+It builds the core, generates the Xcode project, builds the Release app (arm64, ad-hoc signed like 1.x), checks it
+and packs it. The app is `native/apple/build/dd-release/Build/Products/Release/Worship Rig.app`, and
+`native/apple/build/release-dist/` holds `Worship-Rig-arm64.dmg` / `.zip`, their sha256 and the sizes. The release
+workflow runs the same script. The full steps, with the errors to expect, are in
+[native/apple/README.md](native/apple/README.md). (`tools/mac/check.sh` builds the Debug configuration as a check; the
+Release build has not been run yet.)
 
 ### The 1.x app (Electron), from this folder
 
@@ -485,10 +484,12 @@ Mac. It makes
 The app has to stay under 500 MB on disk (around 400 MB is fine). The build check (`build-lint`) fails above
 480 MB and prints what takes the space.
 
-**Releases** (maintainer): for 1.x, push a `v*` tag matching `package.json`'s version; the release workflow builds
-and attaches dmg+zip for arm64 and x64. Run it by hand from Actions with *dry_run* ticked to only build. That workflow
-builds the Electron app, not the 2.0 app: the 2.0 release steps are in
-[native/docs/MAC_CHECK.md](native/docs/MAC_CHECK.md) ("2.0 release checklist").
+**Releases** (maintainer): for 1.x, push a `v1.*` tag matching `package.json`'s version; the `release` workflow
+builds and attaches dmg+zip for arm64 and x64. Run it by hand from Actions with *dry_run* ticked to only build. It
+builds the Electron app and ignores `v2.*` and later tags. 2.x tags go to `release-native` (the native app, arm64): a
+tag push or a run from Actions only builds, checks and self-tests the app and uploads it to the run; the GitHub
+release is made only by a run on a `v2.*` tag with *publish* ticked. The 2.0 release steps are in
+[native/docs/MAC_CHECK.md](native/docs/MAC_CHECK.md) ("2.0 release checklist", steps 2, 3 and 8).
 
 **First open on another Mac.** The app isn't notarized by Apple. A copy that came through a browser, AirDrop or
 Messages makes macOS say *"Apple could not verify 'Worship Rig' is free of malware"*. On macOS 15 and later,

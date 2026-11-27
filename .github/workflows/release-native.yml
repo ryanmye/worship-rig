@@ -6,12 +6,16 @@ name: release-native
 # test/unit/release/ only).
 #
 # - push a tag v2.*                     → build + check + self-test, upload the files to the run. Never a release.
-# - Actions → release-native → Run      → the same, on the branch or tag picked in "Use workflow from" (the dry run).
+# - push to v2-native touching this file, package-release.sh or tools/release/ → the same (a dry run that needs no
+#   dispatch: GitHub offers workflow_dispatch only for workflow files on the default branch, main, and this file is on
+#   v2-native until the 2.0 merge)
+# - Actions → release-native → Run      → the same, on the branch or tag picked in "Use workflow from" (the dry run;
+#   once this file is on main).
 # - Run on a v2.* tag with publish ticked → also create the GitHub release (tier 1: Ryan only). It is a pre-release
 #   unless "latest" is ticked too: GitHub's /releases/latest skips pre-releases, so 1.1's update check (update-check.js)
 #   offers 2.0 to every 1.1 install, Intel ones included, only once a release is "latest" (U9 item 3).
 # A release can only come from workflow_dispatch AND publish == true AND a refs/tags/v2.* ref AND a green `mac` job.
-# A tag push or a branch run never publishes. Publishing a 2.x release from the web UI attaches nothing (this workflow
+# A push (tag or branch) or a branch run never publishes. Publishing a 2.x release from the web UI attaches nothing (this workflow
 # has no `release` trigger, and release.yml ignores non-v1 tags): tag, then dispatch with publish (MAC_CHECK step 8).
 #
 # Asset names: update-check.js pickAsset offers `Worship-Rig-<arch>.dmg`, else `.zip`. 2.0 has arm64 only, so an
@@ -20,6 +24,12 @@ name: release-native
 on:
   push:
     tags: ['v2.*']
+    # path filters don't apply to tag pushes (GitHub), so every v2.* tag still builds
+    branches: [v2-native]
+    paths:
+      - '.github/workflows/release-native.yml'
+      - 'native/apple/scripts/package-release.sh'
+      - 'tools/release/**'
   workflow_dispatch:
     inputs:
       publish:
