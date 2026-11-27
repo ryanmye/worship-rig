@@ -377,8 +377,9 @@ export async function dialogTests(x) {
     // D26.1: the sends, Space / Echo (named as the song bar names them) and the drone's ON / key / sound are kept now
     assert.match(d0.keeps, /Each instrument’s Space and Echo/);
     assert.match(d0.keeps, /Space: (\w[\w ]*|Custom) · Echo: (\w[\w ]*|Custom), with their levels/);
-    assert.match(d0.keeps, /The drone: ON \/ OFF, key, sound and level/);
-    assert.match(d0.keeps, /(on|off) · [A-G][#b]? (major|minor)/);
+    assert.match(d0.keeps, /The drone: ON \/ OFF, sound and level, and its key/);
+    assert.match(d0.keeps, /(on · (Synth|My Pads)|off)/);
+    assert.match(d0.keeps, /Follows the song’s key \([A-G][#b]? (major|minor)\)/);
     assert.match(d0.keeps, /Not kept: .*tone \(EQ\).*brightness and movement/);
     assert.doesNotMatch(d0.keeps.split('Not kept')[0], /warmer|brighter|octave|sustain/,
       'never claims tone / octave / sustain');

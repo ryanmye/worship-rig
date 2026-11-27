@@ -145,7 +145,7 @@ export function snapshotsRow(v, o = {}) {
     save.title = count >= max ? `${max} snapshots is the most a song keeps for now${n !== null
       ? ': update the one that plays' : ''}` : say('sceneSaveTitle', { n: count + 1 });
     const scene = n !== null ? scenes[n] : null;
-    const edited = !!scene && !sceneMatches(scene, controller.scenes.view(song));
+    const edited = !!scene && !sceneMatches(scene, controller.scenes.view(song), song); // D26.1a: its key too
     dirty.hidden = !edited;
     saveNew.title = count >= max ? `${max} snapshots is the most a song keeps for now: update this one` : '';
     own.disabled = !song;

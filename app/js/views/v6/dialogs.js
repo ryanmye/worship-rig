@@ -8,7 +8,7 @@ import { say } from '../components/voice.js';
 import { scenesOf, sceneNameOf, applyScene, SCENE_NAME_MAX } from '../../shared/scenes.js';
 import { gainToDb } from '../../shared/params.js';
 import { SPACE_PRESETS, ECHO_PRESETS, matchPreset } from '../../shared/fx-presets.js';
-import { keyName } from '../../shared/music.js';
+import { keyName, mod12 } from '../../shared/music.js';
 import { slotMuteState } from '../perform.js';
 import { button } from './lib.js';
 
@@ -233,10 +233,22 @@ export function saveSnapshotDialog(v, o = {}) {
       const echo = matchPreset(ECHO_PRESETS, fxv);
       const spaceEcho = `Space: ${space ? space.name : 'Custom'} · Echo: ${echo ? echo.name : 'Custom'}`;
       const dr = live.drone || {};
-      const droneNow = dr.mode && dr.mode !== 'off'
-        ? `on · ${keyName(live.hearIn, live.minor).replace(/m$/, '')} ${live.minor ? 'minor' : 'major'} · `
-          + `${dr.mode === 'files' ? 'My Pads' : 'Synth'}`
-        : `off · ${keyName(live.hearIn, live.minor).replace(/m$/, '')} ${live.minor ? 'minor' : 'major'} when on`;
+      const droneNow = dr.mode && dr.mode !== 'off' ? `on · ${dr.mode === 'files' ? 'My Pads' : 'Synth'}` : 'off';
+      // D26.1a: the drone's key follows the song's key unless one is chosen here (kept as semitones above the song's
+      // key, so an Easy Transpose moves it too); preselected = the key that plays now when it is not the song's
+      const keyLabel = (pc, minor) => `${keyName(pc, minor).replace(/m$/, '')} ${minor ? 'minor' : 'major'}`;
+      const keySel = h('select.v6-savesnap-key', { 'aria-label': 'The drone’s key in this snapshot',
+        'data-testid': 'v6-savesnap-key' },
+      h('option', { value: 'follow', text: `Follows the song’s key (${keyLabel(song.hearIn, song.minor)})` }),
+      ...[false, true].flatMap((mi) => Array.from({ length: 12 }, (_, pc) => h('option', {
+        value: `${pc}:${mi ? 1 : 0}`, text: keyLabel(pc, mi) }))));
+      const chosenNow = live.hearIn !== song.hearIn || !!live.minor !== !!song.minor;
+      keySel.value = chosenNow ? `${live.hearIn}:${live.minor ? 1 : 0}` : 'follow';
+      const keyShiftNow = () => {
+        if (keySel.value === 'follow') return null;
+        const [pc, mi] = keySel.value.split(':').map(Number);
+        return { semis: mod12(pc - song.hearIn), minor: mi === 1 };
+      };
       const names = live.patch.slots.filter(Boolean).map((s) => v.names.name(s.instrument));
       const keepRow = (title, small, on = true, tid = '') => h(`div.v6-keeps-r${on ? '' : '.off'}`,
         tid ? { 'data-testid': tid } : {}, h('span.v6-keeps-ck', { 'aria-hidden': 'true', text: on ? '✓' : '–' }),
@@ -250,7 +262,11 @@ export function saveSnapshotDialog(v, o = {}) {
         keepRow('Each instrument’s Space and Echo', 'how much of each goes to the Space and the Echo', true,
           'v6-keeps-sends'),
         keepRow('Space and Echo', `${spaceEcho}, with their levels`, true, 'v6-keeps-fx'),
-        keepRow('The drone: ON / OFF, key, sound and level', droneNow, true, 'v6-keeps-drone'),
+        (() => {
+          const r = keepRow('The drone: ON / OFF, sound and level, and its key', droneNow, true, 'v6-keeps-drone');
+          r.lastChild.append(h('label.v6-keeps-key', {}, h('small', { text: 'Key ' }), keySel));
+          return r;
+        })(),
         wheelRouted ? keepRow('Where the wheel is', 'it moves what the wheel drives in this song', true,
           'v6-keeps-wheel')
           : keepRow('The wheel', 'not kept: the wheel drives nothing in this song', false, 'v6-keeps-wheel'),
@@ -276,7 +292,7 @@ export function saveSnapshotDialog(v, o = {}) {
         if (!playing) return;
         const nm = touched ? sceneNameOf(nameNow()) : playing.name || null;
         close();
-        if (controller.scenes.save(sc.n, { name: nm })) {
+        if (controller.scenes.save(sc.n, { name: nm, keyShift: keyShiftNow() })) {
           v.toast(`“${nm || say('sceneLabel', { n: sc.n + 1 })}” updated.`, 'ok', { ms: 2500 });
         }
       }
@@ -284,7 +300,7 @@ export function saveSnapshotDialog(v, o = {}) {
         if (list.length >= max) return;
         const nm = sceneNameOf(nameNow());
         close();
-        if (controller.scenes.save(list.length, { name: nm })) {
+        if (controller.scenes.save(list.length, { name: nm, keyShift: keyShiftNow() })) {
           v.toast(`Saved “${nm || say('sceneLabel', { n: list.length + 1 })}”. A footswitch or a tap brings it back.`,
             'ok', { ms: 3000 });
         }

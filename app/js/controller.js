@@ -50,7 +50,7 @@ import { normalizeBank, packModeOf, validPackEntry } from './shared/patch-packs.
 import {
   SCENE_MAX, SCENE_GLIDE_SEC, SCENE_STEP_SEC, scenesOf, applyScene, captureScene, levelsOf, levelDiff, stepScene,
   withScene, withoutScene, tweakScene, sceneNameOf, mergeScene, mixOf, fxSettingsOf, paramDiff, sceneHolds,
-  absorbEdits, sceneFieldOf,
+  absorbEdits, sceneFieldOf, keyShiftOf, keyShiftBetween,
 } from './shared/scenes.js';
 
 /** Menu-bar modes (docs/menubar-mode.md): the popover shows at most this many. */
@@ -824,15 +824,22 @@ export function createController(o) {
    * scene then plays.
    * D25 (UI v6 U7c): `o.name` names it (shared/scenes.js sceneNameOf; '' or null = no name, "Scene n"); without
    * `o.name` an existing scene keeps its name, so a re-save from Quick / Update never drops it.
+   * D26.1a: `o.keyShift` ({semis, minor?} above the song's key, the Save / Update dialog's chosen key; null = the
+   * drone follows the song's key). Without it the scene keeps a chosen key only while the snapshot that plays has
+   * one (its key as heard, live moves included); else none.
    * @param {number} n 0-based, ≤ the count, < SCENE_MAX
-   * @param {{name?:string|null}} [o]
+   * @param {{name?:string|null, keyShift?:{semis:number, minor?:boolean}|null}} [o]
    * @returns {boolean}
    */
   function saveScene(n, o = {}) {
     if (!applied || targetId !== appliedId) return false;
     const cur = store.getSong(appliedId);
     if (cur !== applied) applyDiff(applied, cur); // pending edits first, under the scene that played them
-    const scene = captureScene(live(cur), { wheel: wheelNow() });
+    const heard = live(cur);
+    const playing = sceneFor(cur) ? mergeScene(sceneFor(cur), sceneState.tweak) : null;
+    const keyShift = o && 'keyShift' in o ? keyShiftOf(o.keyShift)
+      : playing?.drone?.keyShift ? keyShiftBetween(heard, cur) : null;
+    const scene = captureScene(heard, { wheel: wheelNow(), keyShift });
     const name = o && 'name' in o ? sceneNameOf(o.name) : sceneNameOf(scenesOf(cur)[n]?.name);
     if (scene && name) scene.name = name;
     const next = withScene(scenesOf(cur), n, scene);
@@ -842,7 +849,8 @@ export function createController(o) {
     if (!scenesOf(saved)[n]) return false; // a read-only store
     leaveBase();
     sceneState = { ...sceneState, n, tweak: null };
-    if (applied === cur) applied = saved; // only `scenes` changed, and it now plays exactly what was heard
+    if (applied === cur) applied = saved; // only `scenes` changed, and it now plays what was heard …
+    sceneMove(heard, live(applied)); // … but for a key chosen in the dialog (D26.1a): the drone goes there
     emit('scene', sceneInfo());
     if (bus) publishState();
     return true;
@@ -855,7 +863,7 @@ export function createController(o) {
    * drone key change crossfades, a reverb room swaps crossfaded).
    * @param {string} path 'slots.<i>.gain' | 'slots.<i>.muted' | 'drone.gain'; D26.1: 'slots.<i>.sends.reverb' |
    *   '.delay', 'fx.reverb.<row>' | 'fx.delay.<row>' (shared/scenes.js SCENE_FX), 'drone.mode', 'drone.key'
-   *   ({pc, minor?})
+   *   ({pc, minor?}; only while the snapshot has a chosen key, D26.1a)
    * @param {number|boolean|string|object} value
    * @returns {boolean} true when the playing scene took it
    */
@@ -865,7 +873,7 @@ export function createController(o) {
     if (!sc || !sceneHolds(sc, path)) return false; // the song's own field
     if (song !== applied) applyDiff(applied, song);
     const from = live(applied);
-    const tweak = tweakScene(sceneState.tweak, from, path, value);
+    const tweak = tweakScene(sceneState.tweak, from, path, value, applied);
     if (!tweak) return false;
     sceneState = { ...sceneState, tweak };
     const to = live(applied);

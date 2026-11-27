@@ -6,11 +6,12 @@
 // instruments themselves, octave, sustain, range, EQ / tone or the other effects, and nothing that restarts a voice:
 //   slots[i] = {gain, muted?, sends?}  each filled slot's level (the pre-mute level while muted), its ON tile, and
 //                                      (D26.1) sends {reverb?, delay?} = slots.<i>.sends.reverb / .delay
-//   drone    = {gain?, mode?, key?}    the drone level; (D26.1) mode 'off' | 'synth' | 'files' (ON + sound: Synth / My
-//                                      Pads) and key {pc 0..11, minor}: the key the drone plays (the key grid's
-//                                      song.hearIn / minor). Absolute, because today's key grid writes the song's own
-//                                      key: "tap D, Save, tap back to C" must give a snapshot in D. So a scene does
-//                                      not follow a later Easy Transpose of the song (Update it to move it).
+//   drone    = {gain?, mode?, keyShift?}  the drone level; (D26.1) mode 'off' | 'synth' | 'files' (ON + sound: Synth
+//                                      / My Pads); (D26.1a) keyShift {semis 0..11, minor?}: a key chosen for this
+//                                      snapshot in the Save / Update dialog, relative to the song's key (song.hearIn;
+//                                      minor absent = the song's own major / minor). Without it (the default) the
+//                                      drone follows the key the song is played in, so an Easy Transpose or a key
+//                                      grid tap moves every snapshot's drone with the song.
 //   fx       = {reverb?, delay?}       (D26.1) the Space room = fx.reverb.{size, damp, predelay, returnGain} and the
 //                                      Echo = fx.delay.{time, feedback, pingpong, tone, sync, returnGain}: what the
 //                                      song bar's Space / Echo pickers (shared/fx-presets.js) and Edit › Effects
@@ -133,21 +134,28 @@ function fxOf(raw) {
   return Object.keys(out).length ? out : null;
 }
 
-/** D26.1: a drone key as stored ({pc: 0..11, minor: boolean}), or null. */
-function keyOf(raw) {
-  if (!isObj(raw) || !Number.isInteger(raw.pc) || typeof raw.minor !== 'boolean') return null;
-  return { pc: mod12(raw.pc), minor: raw.minor };
+/**
+ * D26.1a: a chosen drone key as stored ({semis: 0..11, minor?: boolean}: above the song's key), or null. A
+ * non-integer `semis` drops it; a non-boolean `minor` is dropped alone (the song's own quality).
+ * @param {*} raw
+ * @returns {{semis:number, minor?:boolean}|null}
+ */
+export function keyShiftOf(raw) {
+  if (!isObj(raw) || !Number.isInteger(raw.semis)) return null;
+  const out = { semis: mod12(raw.semis) };
+  if (typeof raw.minor === 'boolean') out.minor = raw.minor;
+  return out;
 }
 
-/** D26.1: the drone entry ({gain?, mode?, key?}), or null when nothing in it is valid. */
+/** D26.1: the drone entry ({gain?, mode?, keyShift?}), or null when nothing in it is valid. */
 function droneOf(raw) {
   if (!isObj(raw)) return null;
   const out = {};
   const g = gainOf(raw.gain);
   if (g !== null) out.gain = clamp('drone.gain', g);
   if (SCENE_DRONE_MODES.includes(raw.mode)) out.mode = raw.mode;
-  const key = keyOf(raw.key);
-  if (key) out.key = key;
+  const key = keyShiftOf(raw.keyShift);
+  if (key) out.keyShift = key;
   return Object.keys(out).length ? out : null;
 }
 
@@ -220,12 +228,15 @@ const wheelRouted = (song) => {
 
 /**
  * Snapshot of what the song plays now (pass the live song: applyScene's result while a scene plays).
- * D26.1: also each filled slot's Space / Echo sends, the Space room and Echo (SCENE_FX) and the drone's mode and key.
+ * D26.1: also each filled slot's Space / Echo sends, the Space room and Echo (SCENE_FX) and the drone's mode. The
+ * drone's key only when `keyShift` is given (D26.1a: a key chosen in the Save / Update dialog, or the playing
+ * snapshot's own kept by the controller); else the snapshot follows the song's key.
  * @param {object} song
- * @param {{wheel?:number|null}} [o]  the mod wheel's position now (kept when the song routes the wheel)
+ * @param {{wheel?:number|null, keyShift?:{semis:number, minor?:boolean}|null}} [o]  wheel: the mod wheel's position
+ *   now (kept when the song routes the wheel)
  * @returns {object|null} a stored-form scene
  */
-export function captureScene(song, { wheel = null } = {}) {
+export function captureScene(song, { wheel = null, keyShift = null } = {}) {
   if (!song || !song.patch) return null;
   const slots = [];
   const n = entriesFor(song.patch.slots.length);
@@ -241,10 +252,21 @@ export function captureScene(song, { wheel = null } = {}) {
   }
   const d = song.drone || null;
   const drone = { gain: d ? d.gain : null, mode: d ? d.mode : null };
-  if (d && fin(song.hearIn)) drone.key = { pc: song.hearIn, minor: !!song.minor };
+  if (d && keyShift) drone.keyShift = keyShift;
   const raw = { slots, drone, fx: song.patch.fx };
   if (fin(wheel) && wheelRouted(song)) raw.wheel = wheel;
   return normalizeScene(raw, n);
+}
+
+/**
+ * D26.1a: the drone key a live song plays above its own song (`own`), as a keyShift (minor always given).
+ * @param {object} live
+ * @param {object} own
+ * @returns {{semis:number, minor:boolean}|null}
+ */
+export function keyShiftBetween(live, own) {
+  if (!live || !own || !fin(live.hearIn) || !fin(own.hearIn)) return null;
+  return { semis: mod12(live.hearIn - own.hearIn), minor: !!live.minor };
 }
 
 /** A slot entry with `b` (a tweak's) over `a` (the scene's): the level as a unit, the sends key by key. */
@@ -289,8 +311,9 @@ export function mergeScene(scene, tweak) {
  * The song as it plays with `scene` on top: each filled slot the scene covers gets the scene's level and mute (store
  * convention) and (D26.1) its sends; the drone its level, mode and key; the fx the scene's Space / Echo rows.
  * Everything else, and the song's identity, stays; patch.fx is the same object when the scene holds no fx.
- * The drone key: hearIn = key.pc and minor = key.minor; playIn moves with it, so the song's transpose
- * (transposeSemis) and the instruments' pitch never change (as the key grid's manual change).
+ * The drone key (D26.1a keyShift): hearIn = the song's own + semis and minor = keyShift.minor (absent: the song's);
+ * playIn moves with it, so the song's transpose (transposeSemis) and the instruments' pitch never change (as the
+ * key grid's manual change).
  * @param {object} song
  * @param {object|null} scene  a stored scene, or mergeScene(scene, tweak)
  * @returns {object} a new song object (not frozen), or `song` itself when there is no scene
@@ -320,11 +343,11 @@ export function applyScene(song, scene) {
     drone = { ...song.drone };
     if (fin(sd.gain)) drone.gain = sd.gain;
     if (SCENE_DRONE_MODES.includes(sd.mode)) drone.mode = sd.mode;
-    if (isObj(sd.key) && fin(sd.key.pc) && fin(song.hearIn)) {
+    if (isObj(sd.keyShift) && fin(sd.keyShift.semis) && fin(song.hearIn)) {
       const semis = transposeSemis(song.playIn, song.hearIn);
-      live.hearIn = mod12(sd.key.pc);
+      live.hearIn = mod12(song.hearIn + sd.keyShift.semis);
       live.playIn = mod12(live.hearIn - semis);
-      live.minor = !!sd.key.minor;
+      if (typeof sd.keyShift.minor === 'boolean') live.minor = sd.keyShift.minor;
     }
   }
   let fx = song.patch.fx;
@@ -464,7 +487,7 @@ export function sceneHolds(scene, path) {
   const d = scene.drone;
   if (p === 'drone.gain') return !!d && fin(d.gain);
   if (p === 'drone.mode') return !!d && d.mode !== undefined;
-  if (p === 'drone.key') return !!d && isObj(d.key);
+  if (p === 'drone.key') return !!d && isObj(d.keyShift);
   let m = SLOT_TWEAK_RE.exec(p);
   if (m) {
     const e = Array.isArray(scene.slots) ? scene.slots[Number(m[1])] : null;
@@ -519,11 +542,13 @@ export function sceneFieldOf(addr) {
  * @param {object} live  the song as it sounds now (applyScene of the scene and the tweak)
  * @param {string} path  'slots.<i>.gain' | 'slots.<i>.muted' | 'drone.gain', and (D26.1) 'slots.<i>.sends.reverb' |
  *   '.delay', 'fx.reverb.<row>' | 'fx.delay.<row>' (SCENE_FX), 'drone.mode' ('off' | 'synth' | 'files'),
- *   'drone.key' ({pc, minor?}: the key the drone plays; minor absent = as it plays now)
+ *   'drone.key' ({pc, minor?}: the key the drone plays; minor absent = as it plays now; kept as a keyShift above
+ *   the song's own key, so `own` is needed)
  * @param {number|boolean|string|object} value
+ * @param {object|null} [own]  the song's own fields (the store's song): for 'drone.key'
  * @returns {object|null} the new tweak; null for anything a scene doesn't hold, a bad value or an empty slot
  */
-export function tweakScene(tweak, live, path, value) {
+export function tweakScene(tweak, live, path, value, own = null) {
   if (!live || !live.patch) return null;
   const n = entriesFor(live.patch.slots.length);
   const out = { slots: tweak && Array.isArray(tweak.slots) ? tweak.slots.slice() : Array(n).fill(null) };
@@ -542,9 +567,9 @@ export function tweakScene(tweak, live, path, value) {
     return out;
   }
   if (p === 'drone.key') {
-    if (!isObj(value) || !fin(value.pc)) return null;
+    if (!isObj(value) || !fin(value.pc) || !own || !fin(own.hearIn)) return null;
     const minor = value.minor === undefined ? !!live.minor : value.minor === true;
-    out.drone = { ...out.drone, key: { pc: mod12(value.pc), minor } };
+    out.drone = { ...out.drone, keyShift: { semis: mod12(value.pc - own.hearIn), minor } };
     return out;
   }
   const f = FX_RE.exec(p);
@@ -585,7 +610,7 @@ export function tweakScene(tweak, live, path, value) {
  * controller.scenes.adjust as before). Without this the scene would keep playing its value and the change would not
  * be heard; with it the change goes on top of the scene like a live move (the tweak) until the next scene change.
  * `order` (a slot re-order between prev and next: order[j] = prev index of next slot j, -1 = new) pairs the slots.
- * The drone key: a change of the song's own key (the key grid) makes the drone play that key.
+ * The drone key is relative (D26.1a keyShift): a change of the song's own key moves it along, nothing to absorb.
  * @param {object|null} tweak
  * @param {object|null} scene  the playing scene (next's)
  * @param {object} prev  the song's own fields before
@@ -635,23 +660,21 @@ export function absorbEdits(tweak, scene, prev, next, order = null) {
       const o = t();
       o.drone = { ...o.drone, mode: next.drone.mode };
     }
-    if (d.key && (prev.hearIn !== next.hearIn || !!prev.minor !== !!next.minor)) {
-      const o = t();
-      o.drone = { ...o.drone, key: { pc: mod12(next.hearIn), minor: !!next.minor } };
-    }
   }
   return out || tweak;
 }
 
 /**
  * True when the song (live) plays exactly what the scene holds: levels and mutes, and (D26.1) the sends, Space / Echo
- * rows and drone fields the scene has (a field it lacks is the song's own, so it always matches). The wheel isn't
- * compared: it moves while playing. Used to tell whether "Save as scene n" would change anything.
+ * rows and drone fields the scene has (a field it lacks is the song's own, so it always matches); the chosen drone
+ * key (keyShift) only with `own` (it is relative to the song's key). The wheel isn't compared: it moves while
+ * playing. Used to tell whether "Save as scene n" would change anything.
  * @param {object|null} scene
  * @param {object} song  the live song
+ * @param {object|null} [own]  the song's own fields (for the keyShift)
  * @returns {boolean}
  */
-export function sceneMatches(scene, song) {
+export function sceneMatches(scene, song, own = null) {
   const cur = captureScene(song);
   if (!scene || !cur) return false;
   const near = (a, b) => (fin(a) && fin(b) ? Math.abs(a - b) <= EPS : a === b);
@@ -667,7 +690,9 @@ export function sceneMatches(scene, song) {
   if (sd && cd) {
     if (fin(sd.gain) && !near(sd.gain, cd.gain)) return false;
     if (sd.mode !== undefined && sd.mode !== cd.mode) return false;
-    if (sd.key && cd.key && (sd.key.pc !== cd.key.pc || sd.key.minor !== cd.key.minor)) return false;
+    const ks = sd.keyShift;
+    if (ks && own && fin(own.hearIn) && (mod12(song.hearIn - own.hearIn) !== ks.semis
+      || (typeof ks.minor === 'boolean' && ks.minor !== !!song.minor))) return false;
   }
   if (scene.fx) {
     for (const u of FX_UNITS) {

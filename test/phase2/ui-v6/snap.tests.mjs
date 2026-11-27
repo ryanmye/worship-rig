@@ -4,7 +4,7 @@
 // bar's Space picker, the sidebar Drone module (ON tile, key grid, Major / Minor), a strip's Space step and v6 Edit ›
 // Effects. Run from run.mjs on its page (the v6 Perform is on).
 
-/** The page-side setup: the song's own room Stage + Synth drone; snapshot 1 = Hall, the drone two keys up. */
+/** The page-side setup: the song's own room Stage + Synth drone; snapshot 1 = Hall, a chosen drone key 2 up. */
 export const HALL_SCENE = () => {
   const { store, controller } = window.__rig;
   const s = store.currentSong();
@@ -15,7 +15,7 @@ export const HALL_SCENE = () => {
   store.set(`songs.${id}.drone.mode`, 'synth');
   const up2 = (s.hearIn + 2) % 12;
   store.set(`songs.${id}.scenes`, [{
-    slots: [], drone: { mode: 'synth', key: { pc: up2, minor: false } },
+    slots: [], drone: { mode: 'synth', keyShift: { semis: 2, minor: false } }, // D26.1a: a chosen key
     fx: { reverb: { size: 0.65, damp: 0.45, predelay: 0.035, returnGain: 1.15 } },
   }]);
   return { id, up2, own: s.hearIn };
@@ -184,4 +184,45 @@ export async function snapTests(x) {
       });
       assert.deepEqual(got, ['Hall', 'Hall + Dotted Eighth', 'Drone D', 'Drone off', 'Hall 2', 'pad, softer']);
     });
+
+  await T('D26.1a Save snapshot: the drone key follows the song’s key by default; a key chosen in the dialog is kept '
+    + 'relative to the song and heard at once', async () => {
+    await ev(() => window.__rig.ctx.setView('perform'));
+    await until(() => document.body.dataset.view === 'perform');
+    const own = await ev(() => {
+      const { store, controller } = window.__rig;
+      controller.scenes.go(null);
+      store.set(`songs.${store.currentSong().id}.scenes`, null);
+      return { pc: store.currentSong().hearIn, minor: !!store.currentSong().minor };
+    });
+    await settled();
+    await page.click(tid('v6-snap-save'));
+    await page.waitForSelector(tid('v6-savesnap-key'));
+    assert.equal(await page.inputValue(tid('v6-savesnap-key')), 'follow', 'default: follows the song’s key');
+    await page.click(tid('v6-savesnap-new'));
+    await until(() => window.__rig.store.currentSong().scenes?.length === 1);
+    assert.equal(await ev(() => window.__rig.store.currentSong().scenes[0].drone.keyShift), undefined);
+    // a second one with a chosen key: 5 up, minor
+    const pc = (own.pc + 5) % 12;
+    await page.click(tid('v6-snap-save'));
+    await page.waitForSelector(tid('v6-savesnap-key'));
+    await page.selectOption(tid('v6-savesnap-key'), `${pc}:1`);
+    await page.click(tid('v6-savesnap-new'));
+    await until(() => window.__rig.store.currentSong().scenes?.length === 2);
+    assert.deepEqual(await ev(() => window.__rig.store.currentSong().scenes[1].drone.keyShift), { semis: 5, minor: true });
+    await until((p) => window.__rig.engine.drone?.key?.pc === p && window.__rig.engine.drone.key.minor === true, pc);
+    // Update offers the chosen key preselected; "follows" clears it
+    await page.click(tid('v6-snap-save'));
+    await page.waitForSelector(tid('v6-savesnap-key'));
+    assert.equal(await page.inputValue(tid('v6-savesnap-key')), `${pc}:1`);
+    await page.selectOption(tid('v6-savesnap-key'), 'follow');
+    await page.click(tid('v6-savesnap-update'));
+    await until(() => window.__rig.store.currentSong().scenes[1].drone.keyShift === undefined);
+    await until((p) => window.__rig.engine.drone?.key?.pc === p.pc, own);
+    await ev(() => {
+      const { store, controller } = window.__rig;
+      controller.scenes.go(null);
+      store.set(`songs.${store.currentSong().id}.scenes`, null);
+    });
+  });
 }

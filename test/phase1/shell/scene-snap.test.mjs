@@ -13,7 +13,7 @@ import { DRONE_MODES } from '../../../app/js/presets.js';
 import { SPACE_PRESETS, ECHO_PRESETS, applyPreset } from '../../../app/js/shared/fx-presets.js';
 import {
   SCENE_GLIDE_SEC, SCENE_STEP_SEC, SCENE_FX, SCENE_DRONE_MODES, normalizeScene, normalizeScenes, captureScene,
-  applyScene, mergeScene, sceneMatches, sceneHolds, tweakScene, absorbEdits, mixOf, fxSettingsOf,
+  applyScene, mergeScene, sceneMatches, sceneHolds, tweakScene, absorbEdits, mixOf, fxSettingsOf, keyShiftBetween,
 } from '../../../app/js/shared/scenes.js';
 import { createRng } from '../../../app/js/shared/prng.js';
 import { mod12 } from '../../../app/js/shared/music.js';
@@ -136,14 +136,14 @@ test('normalizeScene (D26.1): sends, Space / Echo rows and drone mode / key are 
   const raw = {
     slots: [{ gain: 0.5, sends: { reverb: 3, delay: 'x', chorus: 0.5, junk: 1 } }, { sends: { reverb: 0.4 } },
       { gain: 0.2, sends: 7 }, { gain: 0.1, sends: { delay: -1 } }],
-    drone: { gain: 0.4, mode: 'loud', key: { pc: 14, minor: true }, brightness: 1 },
+    drone: { gain: 0.4, mode: 'loud', keyShift: { semis: 14, minor: true }, brightness: 1 },
     fx: { reverb: { size: 0.65, damp: '0.4', predelay: 9, returnGain: NaN, extra: 1 },
       delay: { sync: '1/8d', pingpong: 1, tone: 0.45, time: 0.01 }, chorus: { rate: 1 }, lofi: { amount: 1 } },
   };
   const n = normalizeScene(raw);
   assert.deepEqual(n, {
     slots: [{ gain: 0.5, sends: { reverb: 1 } }, null, { gain: 0.2 }, { gain: 0.1, sends: { delay: 0 } }],
-    drone: { gain: 0.4, key: { pc: 2, minor: true } },
+    drone: { gain: 0.4, keyShift: { semis: 2, minor: true } },
     fx: { reverb: { size: 0.65, predelay: 0.2 }, delay: { sync: '1/8d', tone: 0.45, time: 0.05 } },
   }, 'clamped like the param rows; a send alone is no slot entry; chorus / lofi / brightness are not scene fields');
   assert.deepEqual(normalizeScene(n), n, 'idempotent');
@@ -151,8 +151,10 @@ test('normalizeScene (D26.1): sends, Space / Echo rows and drone mode / key are 
     { slots: [null, null, null, null], fx: { delay: { returnGain: 0.5 } } }, 'an fx row alone is a usable scene');
   assert.deepEqual(normalizeScene({ drone: { mode: 'off' } }),
     { slots: [null, null, null, null], drone: { mode: 'off' } });
-  assert.equal(normalizeScene({ drone: { key: { pc: 1.5, minor: false } }, name: 'n' }), null, 'bad key, a name only');
-  assert.equal(normalizeScene({ drone: { key: { pc: 1, minor: 'yes' } } }), null);
+  assert.equal(normalizeScene({ drone: { keyShift: { semis: 1.5, minor: false } }, name: 'n' }), null,
+    'bad key, a name only');
+  assert.deepEqual(normalizeScene({ drone: { keyShift: { semis: -1, minor: 'yes' } } }),
+    { slots: [null, null, null, null], drone: { keyShift: { semis: 11 } } }, 'a bad minor alone is dropped');
   assert.deepEqual([...SCENE_DRONE_MODES], [...DRONE_MODES], 'the drone modes are presets.js’s');
   assert.equal(normalizeScenes([{ fx: { reverb: { size: 'big' } } }]), undefined);
 });
@@ -165,12 +167,13 @@ test('captureScene / applyScene (D26.1): what a scene keeps, and the song as it 
     ...[0, 1].map((i) => ({ gain: own.patch.slots[i].gain,
       sends: { reverb: own.patch.slots[i].sends.reverb, delay: own.patch.slots[i].sends.delay } })),
   ], 'chorus send not kept');
-  assert.deepEqual(sc.drone, { gain: own.drone.gain, mode: own.drone.mode, key: { pc: own.hearIn, minor: own.minor } });
+  assert.deepEqual(sc.drone, { gain: own.drone.gain, mode: own.drone.mode }, 'D26.1a: no key unless one is chosen');
+  assert.deepEqual(captureScene(own, { keyShift: { semis: 3 } }).drone.keyShift, { semis: 3 });
   assert.deepEqual(Object.keys(sc.fx.reverb).sort(), [...SCENE_FX.reverb].sort());
   assert.deepEqual(Object.keys(sc.fx.delay).sort(), [...SCENE_FX.delay].sort());
   // apply: a scene two semitones up, minor, My Pads, Hall
   const up2 = mod12(own.hearIn + 2);
-  const scene = normalizeScene({ ...sc, drone: { ...sc.drone, mode: 'files', key: { pc: up2, minor: true } },
+  const scene = normalizeScene({ ...sc, drone: { ...sc.drone, mode: 'files', keyShift: { semis: 2, minor: true } },
     fx: { reverb: SPACE_PRESETS.find((p) => p.id === 'hall').params && { size: 0.65, returnGain: 1.15 } },
     slots: [{ gain: 0.3, sends: { reverb: 0.9 } }] });
   const live = applyScene(own, scene);
@@ -186,18 +189,22 @@ test('captureScene / applyScene (D26.1): what a scene keeps, and the song as it 
   assert.equal(live.patch.fx.delay, own.patch.fx.delay, 'a unit the scene lacks is the song’s object');
   assert.equal(live.patch.fx.chorus, own.patch.fx.chorus);
   assert.equal(own.patch.fx.reverb.size !== 0.65, true, 'the song itself is untouched');
-  // the key is absolute: the song's own key moved later (key grid / Hear In) leaves the scene's drone key, and the
-  // scene keeps the song's transpose
+  // D26.1a: the chosen key is relative: the song's own key moved later (Easy Transpose / key grid) moves it too,
+  // and the scene keeps the song's transpose
   const moved = { ...own, hearIn: mod12(own.hearIn + 5) };
   const lm = applyScene(moved, scene);
-  assert.equal(lm.hearIn, up2);
+  assert.equal(lm.hearIn, mod12(own.hearIn + 7));
   assert.equal(((lm.hearIn - lm.playIn + 18) % 12) - 6, ((moved.hearIn - moved.playIn + 18) % 12) - 6);
+  assert.equal(applyScene(own, { slots: [], drone: { keyShift: { semis: 0 } } }).minor, own.minor,
+    'minor absent: the song’s own');
   // capture(apply) gives the scene back
-  const back = captureScene(live);
-  assert.deepEqual(back.drone, { gain: own.drone.gain, mode: 'files', key: { pc: up2, minor: true } });
-  assert.equal(sceneMatches(scene, live), true);
-  assert.equal(sceneMatches(scene, own), false, 'the song’s own (C, synth, Stage) is not that scene');
-  assert.equal(sceneMatches({ slots: scene.slots, drone: { key: { pc: own.hearIn, minor: true } } }, live), false);
+  const back = captureScene(live, { keyShift: keyShiftBetween(live, own) });
+  assert.deepEqual(back.drone, { gain: own.drone.gain, mode: 'files', keyShift: { semis: 2, minor: true } });
+  assert.equal(sceneMatches(scene, live, own), true);
+  assert.equal(sceneMatches(scene, own, own), false, 'the song’s own (C, synth, Stage) is not that scene');
+  const at0 = { slots: scene.slots, drone: { keyShift: { semis: 0, minor: true } } };
+  assert.equal(sceneMatches(at0, live, own), false);
+  assert.equal(sceneMatches(at0, live), true, 'without own the key is not compared (it is relative)');
   // an old scene (levels only) matches whatever the song's own sends / fx / drone are
   const otherFx = applyScene(own, { slots: [], fx: { reverb: { size: 0.1 } } });
   assert.equal(sceneMatches({ slots: [{ gain: own.patch.slots[0].gain }] }, otherFx), true);
@@ -215,9 +222,10 @@ test('mergeScene / tweakScene / sceneHolds / absorbEdits (D26.1)', () => {
   assert.deepEqual(t.slots[0], { gain: 0.2, muted: true, sends: { reverb: 0.9 } });
   t = tweakScene(t, applyScene(own, mergeScene(sc, t)), 'fx.delay.sync', '1/4');
   t = tweakScene(t, applyScene(own, mergeScene(sc, t)), 'drone.mode', 'off');
-  t = tweakScene(t, applyScene(own, mergeScene(sc, t)), 'drone.key', { pc: own.hearIn + 15 });
-  assert.deepEqual(t.drone, { mode: 'off', key: { pc: mod12(own.hearIn + 3), minor: own.minor } });
-  assert.equal(tweakScene(t, own, 'drone.key', { pc: 'D' }), null);
+  t = tweakScene(t, applyScene(own, mergeScene(sc, t)), 'drone.key', { pc: own.hearIn + 15 }, own);
+  assert.deepEqual(t.drone, { mode: 'off', keyShift: { semis: 3, minor: own.minor } });
+  assert.equal(tweakScene(t, own, 'drone.key', { pc: 2 }), null, 'the key needs the own song (it is relative)');
+  assert.equal(tweakScene(t, own, 'drone.key', { pc: 'D' }, own), null);
   assert.equal(tweakScene(t, own, 'drone.mode', 'loud'), null);
   assert.equal(tweakScene(t, own, 'fx.delay.sync', '1/16'), null, 'a bad enum value');
   assert.equal(tweakScene(t, own, 'fx.delay.pingpong', 1), null, 'a boolean row takes booleans only');
@@ -241,7 +249,7 @@ test('mergeScene / tweakScene / sceneHolds / absorbEdits (D26.1)', () => {
   [true, true, false, false, true, false, false, false]);
   assert.deepEqual(['slots.0.sends.reverb', 'slots.0.sends.chorus', 'drone.mode', 'drone.key', 'fx.reverb.size',
     'fx.delay.sync', 'fx.chorus.rate', 'master.volume'].map((p) => sceneHolds(sc, p)),
-  [true, false, true, true, true, true, false, false]);
+  [true, false, true, false, true, true, false, false]); // (drone.key: only a chosen key, D26.1a)
   // absorbEdits: the song's own field changes under a scene holding it → on top (heard); not for old scenes / levels
   const next = structuredClone(own);
   next.patch.slots[1].sends.delay = 0.66;
@@ -254,7 +262,7 @@ test('mergeScene / tweakScene / sceneHolds / absorbEdits (D26.1)', () => {
   assert.deepEqual(a.slots[1], { sends: { delay: 0.66 } });
   assert.equal(a.slots[0], null, 'levels are not absorbed (views move them through scenes.adjust)');
   assert.deepEqual(a.fx, { reverb: { size: 0.11 } });
-  assert.deepEqual(a.drone, { mode: 'off', key: { pc: next.hearIn, minor: own.minor } }, 'a key change: that key');
+  assert.deepEqual(a.drone, { mode: 'off' }, 'a key change: nothing to absorb (the chosen key is relative)');
   assert.equal(absorbEdits(null, old, own, next), null, 'an old scene holds none of it: nothing');
   assert.equal(absorbEdits(t, sc, own, own), t);
   // a re-order: next slot 0 is prev slot 1 (its send did not change), next slot 1 is prev slot 0
@@ -268,7 +276,7 @@ test('mergeScene / tweakScene / sceneHolds / absorbEdits (D26.1)', () => {
 // ---------------------------------------------------------------------------------------------------- controller
 
 test('capture on Save: the scene holds the sends, Space / Echo and the drone as they play', async () => {
-  const { store, ctl } = await setup();
+  const { store, engine, ctl } = await setup();
   makeDifferent(store);
   await tick();
   assert.equal(ctl.scenes.save(0), true);
@@ -276,8 +284,17 @@ test('capture on Save: the scene holds the sends, Space / Echo and the drone as 
   const sc = own.scenes[0];
   assert.deepEqual(sc.slots[0].sends, { reverb: 0.7, delay: own.patch.slots[0].sends.delay });
   assert.equal(sc.slots[1].sends.delay, 0.45);
-  assert.deepEqual(sc.drone, { gain: own.drone.gain, mode: 'files', key: { pc: own.hearIn, minor: true } },
-    'the key as it plays');
+  assert.deepEqual(sc.drone, { gain: own.drone.gain, mode: 'files' }, 'no key: it follows the song’s key');
+  // a key chosen in the dialog: kept relative to the song, and the drone goes there at once
+  assert.equal(ctl.scenes.save(1, { keyShift: { semis: 5 } }), true);
+  assert.deepEqual(store.currentSong().scenes[1].drone.keyShift, { semis: 5 });
+  assert.equal(ctl.scenes.view(store.currentSong()).hearIn, mod12(own.hearIn + 5));
+  assert.equal(mirror(engine).drone.key.pc, mod12(own.hearIn + 5), 'the drone plays the chosen key at once');
+  // Update without a choice (Quick, the edited line) keeps the playing snapshot's key as heard
+  assert.equal(ctl.scenes.save(1), true);
+  assert.deepEqual(store.currentSong().scenes[1].drone.keyShift, { semis: 5, minor: true });
+  assert.equal(ctl.scenes.save(1, { keyShift: null }), true, 'the dialog’s "follows the song’s key"');
+  assert.equal(store.currentSong().scenes[1].drone.keyShift, undefined);
   assert.equal(sc.fx.reverb.size, SPACE_PRESETS.find((p) => p.id === 'hall').params['fx.reverb.size']);
   assert.equal(sc.fx.delay.sync, '1/8d');
   assert.equal(sceneMatches(sc, ctl.scenes.view(own)), true);
@@ -293,7 +310,7 @@ test('apply: levels glide in the engine, sends + Space / Echo levels glide in st
   await tick();
   runSteps(timers);
   const manual = engine.calls.filter((c) => c[0] !== 'setParam' || !/returnGain|sends|gain$/.test(c[1]));
-  assert.equal(ctl.scenes.save(0), true);
+  assert.equal(ctl.scenes.save(0, { keyShift: { semis: 2, minor: true } }), true); // the key chosen in the dialog
   ctl.revertSong(); // the song as selected again (Stage / no echo / synth / its key); scene 1 = the different one
   await tick();
   runSteps(timers);
@@ -359,7 +376,7 @@ test('a drone key change is the manual one (crossfade); a drone ON → OFF is th
   const own = store.currentSong();
   // key: scene = song key + 5, as the key grid would do it
   const sc = captureScene(own);
-  store.set(`songs.${id}.scenes`, [{ ...sc, drone: { ...sc.drone, key: { pc: mod12(own.hearIn + 5), minor: false } } },
+  store.set(`songs.${id}.scenes`, [{ ...sc, drone: { ...sc.drone, keyShift: { semis: 5, minor: false } } },
     { ...sc, drone: { ...sc.drone, mode: 'off' } },
     { slots: [{ gain: 0.3 }, { gain: 0.2 }], drone: { gain: 0.1 } }]); // scene 3: saved before D26.1
   await tick();
@@ -411,7 +428,7 @@ test('live moves on a scene that holds the field are transient (scenes.adjust): 
   + 'scene untouched, kept by Save, dropped at the next change; learned knobs and the bus too', async () => {
   const { store, engine, midi, ctl, timers } = await setup();
   const id = sid(store);
-  ctl.scenes.save(0);
+  ctl.scenes.save(0, { keyShift: { semis: 0 } }); // a key chosen in the dialog (the song's), so the key is held
   const own = store.currentSong();
   const saved = own.scenes[0];
   engine.clear();
@@ -451,7 +468,7 @@ test('live moves on a scene that holds the field are transient (scenes.adjust): 
   assert.equal(s2.slots[1].sends.reverb, 0.05);
   assert.equal(s2.slots[0].sends.delay, 1);
   assert.equal(s2.fx.delay.sync, '1/4');
-  assert.deepEqual(s2.drone.key, { pc: mod12(own.hearIn + 2), minor: true });
+  assert.deepEqual(s2.drone.keyShift, { semis: 2, minor: true });
   assert.equal(s2.drone.mode, 'files');
   assert.deepEqual(store.currentSong().scenes[0], saved, 'scene 1 untouched');
   // the next change drops the moves: scene 1 again exactly
@@ -621,9 +638,9 @@ test('store: migrate idempotent, export / import round trip, a 1.x library unaff
   assert.deepEqual(migrate(m), m);
   // a whole-scenes write with junk in the new fields: dropped, the rest kept
   store.set(`songs.${id}.scenes`, [{ slots: [{ gain: 0.5, sends: { reverb: 'x' } }], fx: { reverb: { size: -3 } },
-    drone: { mode: 'x', key: { pc: -1, minor: false } } }]);
+    drone: { mode: 'x', keyShift: { semis: -1, minor: false } } }]);
   assert.deepEqual(store.currentSong().scenes, [{ slots: [{ gain: 0.5 }, null, null, null],
-    fx: { reverb: { size: 0 } }, drone: { key: { pc: 11, minor: false } } }]);
+    fx: { reverb: { size: 0 } }, drone: { keyShift: { semis: 11, minor: false } } }]);
 });
 
 // ---------------------------------------------------------------------------------------------------- model
@@ -661,6 +678,10 @@ async () => {
       // a write that changes a field a scene holds (not a level: views move levels through scenes.adjust) is heard at
       // once. KNOWN GAP (report): a write equal to the song's own value changes nothing in the store, so the
       // controller never sees it; only a view calling scenes.adjust first makes that one heard.
+      // (the key: only while the snapshot has no chosen key of its own; with one, the song's key moves it along)
+      const st = ctl.scenes.state();
+      const keyed = st.n !== null && !!store.currentSong().scenes?.[st.n]?.drone?.keyShift;
+      if (p === 'drone.key' && keyed) return;
       if (changed && (!/gain$|muted$/.test(p) || /returnGain$/.test(p))) written.push([p, v]);
     };
     const written = [];
@@ -684,8 +705,15 @@ async () => {
       else if (op === 'save') {
         const n = Math.min(count, 2, Math.floor(rng.next() * (count + 1)));
         const heard = ctl.scenes.view(own0);
-        assert.equal(ctl.scenes.save(n), true);
-        const want = captureScene(heard);
+        const st0 = ctl.scenes.state();
+        const playingKey = st0.n !== null && !!own0.scenes?.[st0.n]?.drone?.keyShift;
+        // sometimes a key chosen in the dialog (D26.1a), sometimes "follows the song's key", mostly none given
+        const r = rng.next();
+        const o = r < 0.2 ? { keyShift: { semis: Math.floor(rng.next() * 12), minor: rng.next() < 0.5 } }
+          : r < 0.3 ? { keyShift: null } : {};
+        assert.equal(ctl.scenes.save(n, o), true);
+        const ks = 'keyShift' in o ? o.keyShift : playingKey ? keyShiftBetween(heard, own0) : null;
+        const want = captureScene(heard, { keyShift: ks });
         const got = store.currentSong().scenes[n];
         assert.deepEqual({ ...got, wheel: undefined, name: undefined }, { ...want, wheel: undefined, name: undefined },
           `seed ${seed} op ${k}: saved = what played`);
@@ -715,6 +743,11 @@ async () => {
       await tick();
       await tick();
       checkHeard();
+      // the drone's ON / sound / key are never glided: the engine has them after every op
+      const m = mirror(engine);
+      const lv = ctl.scenes.view(store.currentSong());
+      assert.deepEqual([m.drone.mode, m.drone.key], [lv.drone.mode, { pc: lv.hearIn, minor: !!lv.minor }],
+        `seed ${seed} op ${k} (${op}): the engine's drone = what plays`);
       if (rng.next() < 0.7) runSteps(timers); // sometimes the next op comes mid-glide
       if (op === 'go' || op === 'next' || op === 'prev') {
         const st = ctl.scenes.state();
