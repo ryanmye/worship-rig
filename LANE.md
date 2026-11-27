@@ -59,11 +59,12 @@ refused only past the restore cap 2,500,000); review doc native/docs/reviews/UI6
 - [x] O4 change (store, chart-store test, kept.test, migration-1x fixtures, CONTRACT_CHANGES, DECISIONS note,
       release notes) 9606281; shell-unit, unit, migration-1x PASS on it
 - [x] lazy load probes (both UIs, entry points, chart arrival, Off unloads): .probe/p1.mjs, p2.mjs — all held
-- [ ] migration / device-local / export-import / ?chart
+- [x] migration / device-local / export-import / ?chart (unit tests + code read; ?chart=1 on v6 boot doc fixed)
 - [x] O1 PANIC, O3, O7, v6 Edit header ≤1100 px: .probe/p3.mjs — all held (6 sizes, Esc off/on, Lock, off/swap)
-- [ ] iPad + themes placeholder
-- [ ] release notes line
-- [ ] gates
+- [x] iPad + themes placeholder (tour state chart-loading, 24b817f; p4 contrast probe)
+- [x] release notes line (2877800)
+- [ ] gates (running: UI6_PURITY_BASE=origin/v2-native, PLAYWRIGHT_BROWSERS_PATH=/root/.cache/rig-pw;
+      log .probe/gates2.out)
 - [ ] review doc
 
 ## Findings (before fixing)
@@ -73,3 +74,4 @@ refused only past the restore cap 2,500,000); review doc native/docs/reviews/UI6
   (notes edits, now adds). Not changed (outside the O4 call); for the orchestrator.
 - F1 (fixed): today's pressed Chart toggle under the mouse in Studio: dark cap hover under accent ink, 1.04–1.33 : 1
   (pre-existing in the hidden build, now on by default). styles.css hover/active rule; chart suite test fails first.
+- O-a also: addPackSong (bank Add) refuses at 2 MB, while + New / Duplicate now go to 2.5 MB.
