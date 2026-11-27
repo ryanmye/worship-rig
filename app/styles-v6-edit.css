@@ -64,7 +64,16 @@
   .v6.v6-edit .v6e-chart { padding-left: 10px; padding-right: 10px; }
   .v6.v6-edit .v6e-head .ev2-song-keychip { flex-shrink: .1; min-width: 0; overflow: hidden; }
   .v6.v6-edit .v6e-head .ev2-song-keychip > * { flex-shrink: 0; }
-  .v6.v6-edit .v6e-head .ev2-song-keychip > .ev2-song-muted { flex-shrink: 1; min-width: 0; overflow: hidden;
+  /* Skeptic FU2 F1: the chip shrank in proportion with the name (its .1 against the name's 1), so the played key
+     was under the ellipsis at every width up to 1100 while the name still had room. The name now takes (nearly)
+     all of the squeeze until its 6ch; in the chip the words "· you play" go before the key (one more key, the
+     octave word, can still ellipsize last: 1024 touch with the Chart button) */
+  .v6.v6-edit .v6e-head .ev2-song-name { flex-shrink: 1000; }
+  .v6.v6-edit .v6e-head .ev2-song-keychip > .ev2-song-muted { display: inline-flex; flex-shrink: 1; min-width: 0;
+    overflow: hidden; }
+  .v6.v6-edit .v6e-head .ev2-song-playw { flex: 0 1000 auto; min-width: 0; overflow: hidden; white-space: pre;
+    text-overflow: ellipsis; }
+  .v6.v6-edit .v6e-head .ev2-song-playk { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: pre;
     text-overflow: ellipsis; }
 }
 

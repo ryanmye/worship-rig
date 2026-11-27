@@ -159,9 +159,9 @@ Scratch / probes: /home/claude/scratch/fu2-sk, .probe/.
 
 ### Checklist
 - [x] 0 rebase onto origin/v2-native, conflicts resolved
-- [ ] 1 empty-library: fade only when held (key / pedal / MIDI), drone off once, next song not faded, F1 holds
-- [ ] 2 snapshot line reserved height: 0 px shift (3 sizes, both Edits), no-snapshot unchanged, ellipsis, role=status
-- [ ] 3 bank-trial root cause; app boot path on one transient fetch failure
+- [x] 1 empty-library: fade only when held (key / pedal / MIDI), drone off once, next song not faded, F1 holds
+- [x] 2 snapshot line reserved height: 0 px shift (3 sizes, both Edits), no-snapshot unchanged, ellipsis, role=status
+- [x] 3 bank-trial root cause; app boot path on one transient fetch failure
 - [ ] 4 layout: v6 Edit ≤1100 with chart + FU2; today's Edit ≤1024 only while visible; purity
 - [ ] 5 CVD2: placeBadges overlap (16 instruments, identical / one octave / clipped), Off writes nothing, observer
       leaks, tab dot vs 2-digit number, muted grey ≥ 4.5:1 in 8 themes, v6 muted bar colour (O-item + screenshot)
@@ -170,6 +170,21 @@ Scratch / probes: /home/claude/scratch/fu2-sk, .probe/.
 - [ ] review doc native/docs/reviews/UI6-fu2.md
 
 ### Next step
-1 (empty library).
+4 done with F1 (commit), then 5 (CVD2).
 
 ### Findings (as found)
+- 1 OK (.probe/probe-a.json, real web engine, flag off + v6): nothing held / a key played and released → empty:
+  drone off, faded false, fadeGain 1; restore previous library → drone synth sounding, not faded; Next → same. A key
+  held through the delete → faded (chip on), and it stays faded through restore + Next until a note: option (b)'s
+  accepted residue.
+- 2 OK: rig top 0 px shift over 3 footswitch steps (controller.scenes.next) at 1280/1024/820-touch, both Edits; idle
+  line absent from the AX tree (CDP getFullAXTree; renames while idle add nothing), playing = one role=status;
+  no-snapshot Edit identical to base (rect hash) except the intended today's 820 width and v6 ≤1100 header rules
+  (.probe/bare-headers.txt). Names are capped at 40 chars by the store, so the line fits at 820 without ellipsis.
+- 3 OK, no app defect: Node fetch with a same-process server blocked 6.5 s past keepAliveTimeout 5 s fails 3/6;
+  Chromium (the app) 0/6 under the same server block (.probe/ka-probe3.txt). Fix is test-only (bank-trial).
+- 4 F1 (defect, fixing): ≤1100 px the key chip shrank in proportion with the name, so "· you play C" lost the
+  played key itself at every width up to 1100 (1100 mouse: name 151 px, chip cut 4 px). Fix: name flex-shrink
+  1000 (gives way first, to 6ch), v6 chip text split into words + key, words go first. Test fails first
+  (.probe/f1-before.log), passes after (.probe/f1-after.log). Today's Edit min-width: 0 only while Edit shows <1024
+  (Perform 1024, Settings over Edit 0) — .probe/probe-layout.json.

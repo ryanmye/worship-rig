@@ -78,6 +78,82 @@ export async function layoutFu2Tests(x) {
       }
     });
 
+  // Skeptic FU2 F1: below 1100 px the key chip shrank in proportion with the song name (flex-shrink .1), so "· you
+  // play C" was cut, the played key itself under the ellipsis, at every width up to 1100 (1100 with a mouse: the
+  // name still 151 px wide). Now the name gives way first, to its 6ch, and inside the chip the words "· you play"
+  // give way before the key: the key is whole unless the words are already gone (1024 touch, the Chart button, a
+  // key with an octave word).
+  await T('FU2 skeptic F1: the v6 Edit key chip keeps the key you play (the name gives way first, then the words)',
+    async () => {
+      for (const touch of [false, true]) {
+        const { context, page } = await open(true, 1024, 700, touch);
+        try {
+          for (const [play, minor, oct] of [[0, false, 0], [6, true, -1]]) {
+            for (const chart of [true, false]) {
+              await page.evaluate(({ play, minor, oct, chart }) => {
+                const { store } = window.__rig;
+                const id = store.currentSong().id;
+                store.set(`songs.${id}.name`, 'How Great Is Our God (live)');
+                store.set(`songs.${id}.playIn`, play);
+                store.set(`songs.${id}.minor`, minor);
+                store.set(`songs.${id}.transposeOctave`, oct);
+                store.set('settings.chartView', chart);
+                window.__rig.ctx.setView('edit');
+              }, { play, minor, oct, chart });
+              await page.waitForFunction(() => document.body.dataset.view === 'edit');
+              for (const w of [1024, 1040, 1064, 1100]) {
+                await page.setViewportSize({ width: w, height: 700 });
+                await page.waitForTimeout(200);
+                const r = await page.evaluate(() => {
+                  const head = document.querySelector('[data-testid="v6e-head"]');
+                  const chip = head.querySelector('.ev2-song-keychip');
+                  const muted = chip.querySelector('.ev2-song-muted');
+                  const text = muted.textContent;
+                  // the played key: the text after "you play " (one text node or a span of its own)
+                  const walker = document.createTreeWalker(muted, NodeFilter.SHOW_TEXT);
+                  const start = text.indexOf('you play ') + 9;
+                  let acc = 0;
+                  let keyNode = null;
+                  let last = null;
+                  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+                    if (!keyNode && acc + n.data.length > start) keyNode = { n, from: Math.max(0, start - acc) };
+                    acc += n.data.length;
+                    last = n;
+                  }
+                  const rg = document.createRange();
+                  rg.setStart(keyNode.n, keyNode.from);
+                  rg.setEnd(last, last.data.length);
+                  const kr = rg.getBoundingClientRect();
+                  // every box from the key's text up to the chip that clips: the key whole inside it, and it not
+                  // overflowing (an overflowing box with an ellipsis draws "…" over its last characters)
+                  let cut = '';
+                  for (let el = keyNode.n.parentElement; el && el !== chip.parentElement; el = el.parentElement) {
+                    if (getComputedStyle(el).overflowX === 'visible') continue;
+                    const b = el.getBoundingClientRect();
+                    if (kr.right > b.right + 0.5 || el.scrollWidth > el.clientWidth) cut ||= el.className;
+                  }
+                  const words = muted.querySelector('.ev2-song-playw');
+                  const name = head.querySelector('.ev2-song-name');
+                  return { text, cut, wordsW: words ? words.getBoundingClientRect().width : null,
+                    nameW: name.getBoundingClientRect().width, nameMin: parseFloat(getComputedStyle(name).minWidth),
+                    chipCut: [...chip.querySelectorAll('*')].some((e) => e.scrollWidth > e.clientWidth + 0.5
+                      && getComputedStyle(e).overflowX !== 'visible') };
+                });
+                const at = `${w}${touch ? ' touch' : ''} chart ${chart ? 'on' : 'off'} "${r.text}"`;
+                assert.ok(!r.cut || r.wordsW === 0, `${at}: the played key is cut (${r.cut}; words ${r.wordsW} px)`);
+                if (r.nameW > r.nameMin + 1) {
+                  assert.equal(r.chipCut, false, `${at}: the chip gave way while the name had room (${r.nameW})`);
+                }
+              }
+            }
+          }
+        } finally {
+          await page.evaluate(() => window.__rig.store.set('settings.chartView', null)).catch(() => {});
+          await context.close();
+        }
+      }
+    });
+
   await T('UI6-fu: today’s Edit fits an 820 px window (no part past the edge; the top bar lamps apart)', async () => {
     for (const touch of [false, true]) {
       const { context, page } = await open(false, 820, 1180, touch);

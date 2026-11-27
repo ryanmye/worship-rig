@@ -110,7 +110,12 @@ export default {
       const play = keyName(s.playIn, s.minor);
       const oct = octaveWord(s);
       setText(keyVal, hear);
-      setText(keyPlay, `· you play ${play}${oct}`);
+      // Skeptic FU2 F1: in the v6 Edit the words and the key are spans of their own, so where the header is tight
+      // (≤ 1100 px, styles-v6-edit.css) the words give way before the key (today's Edit: one text, as before)
+      if (opts.v6) {
+        keyPlay.replaceChildren(h('span.ev2-song-playw', { text: '· you play ' }),
+          h('span.ev2-song-playk', { text: `${play}${oct}` }));
+      } else setText(keyPlay, `· you play ${play}${oct}`);
       keyChip.setAttribute('aria-label', `Key ${hear}, you play ${play}${oct}. Open Easy Transpose`);
     });
 
