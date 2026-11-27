@@ -359,14 +359,16 @@ export default {
     };
     const doOwn = () => scenes.go(null);
     const buildSnap = (text) => {
-      // the words come from shared/voice.js: the two [..] are the buttons, Update first, then Own levels
+      // the words come from shared/voice.js: the two [..] are the buttons, Update first, then Own levels.
+      // UI6-fu O2: one line whatever the name (its height is reserved while the song has snapshots, so a longer
+      // name must not wrap): the words before the first button give way (ellipsis), the rest keeps its width.
       const acts = [['update', doUpdate, say('sceneEditUpdateTitle', { noun })],
         ['own', doOwn, say('sceneEditOwnTitle', { noun })]];
       const parts = [];
       let k = 0;
       for (const [i, piece] of text.split(/\[([^\]]+)\]/).entries()) {
         if (i % 2 === 0) {
-          if (piece) parts.push(piece);
+          if (piece) parts.push(h(i === 0 ? 'span.ev2-song-snaplead' : 'span.ev2-song-snaptxt', {}, piece));
           continue;
         }
         const [act, fn, title] = acts[k++] || [];
@@ -381,21 +383,37 @@ export default {
       }
       return parts;
     };
+    // UI6-fu O2: while the shown song has a snapshot, the header keeps the line's room (`.ev2-snapres`; with none
+    // playing the line is `.ev2-snapidle`: laid out with its first snapshot's words, visibility hidden, so neither
+    // focusable nor read), so a footswitch snapshot change moves nothing: a tap aimed at the rig lands where it was
+    // aimed (the line pushed it 37–50 px on touch). A song without snapshots keeps today's header (the line
+    // `[hidden]`, or no element until a song has them: flag-off purity).
+    const firstScene = () => {
+      const list = scenesOf(song());
+      const n = list.findIndex(Boolean);
+      return n < 0 ? null : { n, name: (v6 && list[n].name) || say('sceneLabel', { n: n + 1 }) };
+    };
     const renderSnap = () => {
       const p = scenes ? playingScene() : null;
-      if (!p && !snap) return;
+      const shape = p || (scenes ? firstScene() : null);
+      if (!shape && !snap) return;
       if (!snap) {
         snap = { el: h('span.ev2-song-snap', { role: 'status', 'data-testid': 'edit-snapline' }), sig: '' };
-        el.append(snap.el); // a line of its own under the chips row (song-header.css .ev2-snapping)
+        el.append(snap.el); // a line of its own under the chips row (song-header.css .ev2-snapres)
       }
-      snap.el.hidden = !p;
+      snap.el.hidden = !shape;
+      snap.el.classList.toggle('ev2-snapidle', !p);
       el.classList.toggle('ev2-snapping', !!p);
+      el.classList.toggle('ev2-snapres', !!shape);
       liveHint.hidden = !!p; // "Changes are … saved with it" is not true of these controls meanwhile
-      if (!p) return;
-      const text = say('sceneEditLine', { noun, name: p.name });
-      if (text !== snap.sig) {
-        snap.sig = text;
+      if (!shape) return;
+      const text = say('sceneEditLine', { noun, name: shape.name });
+      // the idle words are a stand-in: a snapshot starting always writes its line afresh (role=status speaks it)
+      const sig = p ? text : `idle:${text}`;
+      if (sig !== snap.sig) {
+        snap.sig = sig;
         snap.el.replaceChildren(...buildSnap(text));
+        snap.el.title = p ? text.replace(/\[([^\]]+)\]/g, '$1') : ''; // the whole line, when the name gives way
       }
     };
     if (scenes) {
@@ -409,7 +427,7 @@ export default {
         close(false);
         binder.destroy();
         snap?.el.remove(); // the region host outlives this panel
-        el.classList.remove('ev2-snapping');
+        el.classList.remove('ev2-snapping', 'ev2-snapres');
       },
     };
   },

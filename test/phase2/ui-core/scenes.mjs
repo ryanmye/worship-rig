@@ -265,11 +265,17 @@ test('UI6-snap O1: today’s Edit header line while a scene plays; Update / Own 
   await until(() => !window.__rig.controller.status.loading);
   await ev(() => window.__rig.store.set('settings.view', 'edit'));
   await until(() => document.body.dataset.view === 'edit');
-  // (the element is made the first time a scene plays in Edit, the F3 test above; hidden since)
-  assert.equal(await ev(() => !!document.querySelector('[data-testid=edit-snapline]:not([hidden])')), false,
-    'no line while no scene plays');
+  // (the element is made the first time a scene plays in Edit, the F3 test above; UI6-fu O2: while the song has a
+  // scene its room is kept, the line invisible, .ev2-snapidle)
+  const shown = '[data-testid=edit-snapline]:not([hidden]):not(.ev2-snapidle)';
+  await until(() => !!document.querySelector('.ev2-head.ev2-snapres'));
+  assert.equal(await ev((q) => !!document.querySelector(q), shown), false, 'no line while no scene plays');
+  const rigTop = () => ev(() => Math.round(document.querySelector('#view-edit .ev2-rig').getBoundingClientRect().top
+    * 10) / 10);
+  const top0 = await rigTop();
   await ev(() => window.__rig.controller.scenes.go(0));
-  await until(() => !!document.querySelector('[data-testid=edit-snapline]:not([hidden])'));
+  await until((q) => !!document.querySelector(q), shown);
+  assert.equal(await rigTop(), top0, 'UI6-fu O2: a scene starting moves nothing');
   const l = await ev(() => {
     const el = document.querySelector('[data-testid=edit-snapline]');
     const head = el.closest('.ev2-head').getBoundingClientRect();
@@ -298,8 +304,13 @@ test('UI6-snap O1: today’s Edit header line while a scene plays; Update / Own 
     .test(t.textContent)));
   await page.click('[data-testid=edit-snap-own]');
   await until(() => window.__rig.controller.scenes.state().n === null);
-  await until(() => document.querySelector('[data-testid=edit-snapline]').hidden === true);
+  await until(() => document.querySelector('[data-testid=edit-snapline]').classList.contains('ev2-snapidle'));
   assert.equal(await ev(() => !!document.querySelector('.ev2-head.ev2-snapping')), false);
+  assert.equal(await rigTop(), top0, 'UI6-fu O2: back to the song\'s own levels moves nothing');
+  // no scenes left: today's header again (the line hidden, its room given back)
+  await ev(() => window.__rig.store.set(`songs.${window.__rig.store.currentSong().id}.scenes`, null));
+  await until(() => document.querySelector('[data-testid=edit-snapline]').hidden === true);
+  assert.equal(await ev(() => !!document.querySelector('.ev2-head.ev2-snapres')), false);
   await ev(() => {
     const { store } = window.__rig;
     store.set(`songs.${store.currentSong().id}.scenes`, null);

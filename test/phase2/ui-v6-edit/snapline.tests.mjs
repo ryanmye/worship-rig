@@ -16,7 +16,8 @@ export async function snaplineEditTests(x) {
     if (!el) return null;
     const b = el.getBoundingClientRect();
     const chips = el.parentElement.querySelector('.ev2-song-head').getBoundingClientRect();
-    return { shown: !el.hidden && b.height > 0, text: el.innerText.replace(/\s+/g, ' ').trim(),
+    // UI6-fu O2: an idle line (.ev2-snapidle) keeps its room but is not shown
+    return { shown: !el.hidden && !el.classList.contains('ev2-snapidle') && b.height > 0, text: el.innerText.replace(/\s+/g, ' ').trim(),
       below: b.top >= chips.bottom - 1, oneLine: b.height < 26, w: Math.round(b.width) };
   });
   const sum = (sel) => ev((s) => document.querySelector(s)?.innerText.replace(/\s+/g, ' ').trim() ?? null, sel);
@@ -51,7 +52,8 @@ export async function snaplineEditTests(x) {
       store.set(`songs.${s.id}.scenes`, [{ name: 'Hall keys', slots }]);
       controller.scenes.go(0);
     });
-    await until(() => !!document.querySelector('#view-edit [data-testid="edit-snapline"]:not([hidden])'));
+    await until(() => !!document.querySelector('#view-edit [data-testid="edit-snapline"]:not([hidden])'
+      + ':not(.ev2-snapidle)'));
     let l = await line();
     assert.equal(l.text, 'Changing snapshot “Hall keys” for now: Update keeps it, Own levels edits the song');
     assert.ok(l.shown && l.below && l.oneLine, `a line of its own under the chips at 1280: ${JSON.stringify(l)}`);
@@ -89,8 +91,9 @@ export async function snaplineEditTests(x) {
     // Own levels: back to the song's own; the line goes, the summaries read the song again
     await page.click(tid('edit-snap-own'));
     await until(() => window.__rig.controller.scenes.state().n === null);
-    await until(() => document.querySelector('#view-edit [data-testid="edit-snapline"]')?.hidden === true);
+    await until(() => !!document.querySelector('#view-edit [data-testid="edit-snapline"].ev2-snapidle'));
     assert.equal(await ev(() => document.querySelector('#view-edit').querySelector('.ev2-snapping')), null);
+    assert.equal((await line()).shown, false, 'UI6-fu O2: the line keeps its room, invisible');
     await until(() => /25%/.test(document.querySelector('[data-testid="v6e-cat-sends"]')?.innerText || ''));
     await ev(() => window.__rig.views.edit.editState.select('effects'));
     await until((f) => new RegExp(`${f} of ${f} in the Space`).test(document.querySelector(

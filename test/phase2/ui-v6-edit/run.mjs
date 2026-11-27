@@ -26,6 +26,7 @@ import { polish1EditTests } from './polish1.tests.mjs';
 import { editRangeTests } from './editrange.tests.mjs';
 import { polish2EditTests } from './polish2.tests.mjs';
 import { snaplineEditTests } from './snapline.tests.mjs';
+import { snapresEditTests } from './snapres.tests.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -1143,6 +1144,7 @@ try {
   await polish2EditTests({ T, page, ev, until, tid, toEdit, assert, settled });
   // ---------------------------------------------------------------- U-SNAP follow-up (snapline.tests.mjs, O1 / O2)
   await snaplineEditTests({ T, page, ev, until, tid, toEdit, assert, settled });
+  await snapresEditTests({ T, browser, origin, assert, MIDI_PERMISSIONS, waitRigReady, pinTheme, errors });
 
   await T('zero console.error, no HTTP ≥ 400', async () => {
     assert.deepEqual(errors, []);

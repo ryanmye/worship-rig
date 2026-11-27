@@ -12,7 +12,7 @@ Worktree /home/claude/wt-fu2, branch lane-fu2 from origin/v2-native ee5bcb9. Scr
 
 ## Checklist
 - [x] 1 FU2 O1 empty-library fade only when held (+ shell tests)
-- [ ] 2 FU2 O2 snapshot line height reserved (both Edits) + rect tests
+- [x] 2 FU2 O2 snapshot line height reserved (both Edits) + rect tests
 - [ ] 3 FU2 O3 bank-trial skeptic F1–F3 deterministic (5 full-file runs)
 - [ ] 4 FU2 ⋯ Song overflow 1024×700 coarse (v6) + today's Edit 1004 px at 820
 - [ ] 5 CVD2 O1 range-bar number placement in JS (v6 keyboard.js + perform.js)
@@ -23,8 +23,14 @@ Worktree /home/claude/wt-fu2, branch lane-fu2 from origin/v2-native ee5bcb9. Scr
 - [ ] final report in this file
 
 ## Next step
-2 (snapshot line height: find the snapline in v6 Edit + today's Edit). Browser tests for 1 (ui-core scenes, ui-v6-bank polish2) updated, not yet run.
+3 (bank-trial O3). Browser tests for 1 (ui-core scenes, ui-v6-bank polish2) and 2's ui-core edit updated, not yet
+run (gates will). Probe for 2: /home/claude/scratch/fu2/snapshift.mjs (+ summ.py), results base-shift.json /
+lane-shift.json.
 
 ## Findings
+- 2: base shift rest→snapshot: today's Edit 22 px mouse / 50 touch; v6 6 / 37 (1280, 1024), 22 / 49 (820). Lane: 0
+  everywhere (also snapshot→long-named snapshot and Own levels). Header without snapshots identical to base (52 / 48 /
+  58 / 98 / 112 px). The line is one line (words before Update ellipsize), so its reserved height never depends on a
+  name. Idle = `.ev2-snapidle` (visibility hidden), `hidden` = no snapshots.
 
 ## Open questions
