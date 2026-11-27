@@ -1,0 +1,335 @@
+name: release-native
+
+# Builds the 2.x native Worship Rig.app (macOS, Apple Silicon) as Worship-Rig-arm64.dmg + .zip, ad-hoc signed like 1.x
+# (not notarized), checks it and runs its self-test. Lane N10, MAC_CHECK.md "2.0 release checklist" B3 / steps 2-3.
+# UNVERIFIED until it runs on GitHub: written on a Linux box without macOS (actionlint + the unit test in
+# test/unit/release/ only).
+#
+# - push a tag v2.*                     → build + check + self-test, upload the files to the run. Never a release.
+# - Actions → release-native → Run      → the same, on the branch or tag picked in "Use workflow from" (the dry run).
+# - Run on a v2.* tag with publish ticked → also create the GitHub release (tier 1: Ryan only). It is a pre-release
+#   unless "latest" is ticked too: GitHub's /releases/latest skips pre-releases, so 1.1's update check (update-check.js)
+#   offers 2.0 to every 1.1 install, Intel ones included, only once a release is "latest" (U9 item 3).
+# A release can only come from workflow_dispatch AND publish == true AND a refs/tags/v2.* ref AND a green `mac` job.
+# A tag push or a branch run never publishes. Publishing a 2.x release from the web UI attaches nothing (this workflow
+# has no `release` trigger, and release.yml ignores non-v1 tags): tag, then dispatch with publish (MAC_CHECK step 8).
+#
+# Asset names: update-check.js pickAsset offers `Worship-Rig-<arch>.dmg`, else `.zip`. 2.0 has arm64 only, so an
+# Intel 1.1 install sees the release page, not a file. Releases stay non-draft (the API's "latest" skips drafts).
+
+on:
+  push:
+    tags: ['v2.*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Create the GitHub release (only on a v2.* tag; tier 1: Ryan). Off = build and upload to the run'
+        type: boolean
+        default: false
+      latest:
+        description: 'With publish: mark it the latest release (1.1 installs then offer it). Off = pre-release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-native-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  mac:
+    name: macOS app (Release, arm64)
+    runs-on: macos-15
+    timeout-minutes: 75
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Publish request on a non-v2 ref
+        if: ${{ inputs.publish && !startsWith(github.ref, 'refs/tags/v2.') }}
+        run: echo "::warning title=publish ignored::$GITHUB_REF is not a v2.* tag, so nothing will be published"
+
+      - name: Install xcodegen and ninja (cmake is on the image)
+        run: |
+          brew install xcodegen ninja
+          command -v cmake >/dev/null || brew install cmake
+          xcodebuild -version
+          xcodegen --version
+          cmake --version | head -n 1
+
+      # on a tag: the tag (minus v and any -pre) must equal project.yml's MARKETING_VERSION (MAC_CHECK step 7), checked
+      # here before a 20-minute build and again on the built bundle (package-release.sh --expect-version)
+      - name: Version
+        id: version
+        run: |
+          mv="$(sed -nE 's/^ *MARKETING_VERSION: *"?([0-9][0-9.]*)"?.*/\1/p' native/apple/project.yml | head -n 1)"
+          echo "project.yml MARKETING_VERSION: ${mv:-?}"
+          expect=""
+          tag="v$mv"
+          if [[ "$GITHUB_REF" == refs/tags/v2.* ]]; then
+            tag="$GITHUB_REF_NAME"
+            # vX.Y.Z[-pre] -> X.Y.Z (CFBundleShortVersionString is numeric; release-notes.mjs bundleVersionForTag)
+            if [[ "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then expect="${BASH_REMATCH[1]}"
+            else echo "::error title=version::tag $tag is not vX.Y.Z[-pre]"; exit 1; fi
+            if [ "$expect" != "$mv" ]; then
+              echo "::error title=version::tag $tag wants version $expect, project.yml MARKETING_VERSION is ${mv:-?}"
+              exit 1
+            fi
+          fi
+          echo "expect=$expect" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Build, sign and package (native/apple/scripts/package-release.sh)
+        id: package
+        env:
+          EXPECT: ${{ steps.version.outputs.expect }}
+        run: |
+          args=(--clean --out "$GITHUB_WORKSPACE/dist")
+          [ -z "$EXPECT" ] || args+=(--expect-version "$EXPECT")
+          bash native/apple/scripts/package-release.sh "${args[@]}"
+          echo "app=$(cat dist/app-path.txt)" >> "$GITHUB_OUTPUT"
+
+      # the Release app's first launch, UI-less (MAC_CHECK "Self-test"), as mac-check runs it on the Debug build
+      - name: Self-test the Release app (tools/mac/check.sh --stage selftest --app)
+        id: selftest
+        if: ${{ steps.package.outcome == 'success' }}
+        timeout-minutes: 5
+        env:
+          APP: ${{ steps.package.outputs.app }}
+        run: bash tools/mac/check.sh --rev HEAD --stage selftest --app "$APP" --out check-out/selftest
+
+      - name: Self-test result
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        env:
+          SELFTEST_OUTCOME: ${{ steps.selftest.outcome }}
+        run: |
+          d=check-out/selftest
+          echo "outcome: $SELFTEST_OUTCOME"
+          if [ -s "$d/selftest.json" ]; then cat "$d/selftest.json"
+          else echo "no selftest.json (see $d/selftest.log)"; fi
+          [ ! -f "$d/selftest.log" ] || tail -n 60 "$d/selftest.log"
+          if [ "$SELFTEST_OUTCOME" != success ] || [ ! -s "$d/selftest.json" ]; then
+            first="$(grep -m1 -E '^selftest: FAIL ' "$d/selftest.log" 2>/dev/null || true)"
+            why="${first:-the self-test did not pass or did not run; see the release-native-logs artifact}"
+            echo "::error title=Release app self-test::$why"
+            exit 1
+          fi
+
+      # what the release body would be; `final` = whether the publish job would accept the notes (not a draft)
+      - name: Release notes preview
+        id: notes
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if node tools/release/release-notes.mjs --tag "$TAG" --sums dist/SHA256SUMS > dist/release-notes-preview.md
+          then echo "notes preview: dist/release-notes-preview.md ($(wc -l < dist/release-notes-preview.md) lines)"
+          else echo "::warning title=release notes::no notes preview for $TAG (see the log above)"; fi
+          final=no
+          if node tools/release/release-notes.mjs --tag "$TAG" --require-final > /dev/null; then final=yes; fi
+          echo "final=$final" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        env:
+          SELFTEST_OUTCOME: ${{ steps.selftest.outcome }}
+          NOTES_FINAL: ${{ steps.notes.outputs.final }}
+        run: |
+          {
+            cat dist/release-summary.md
+            echo
+            echo "Self-test: **$SELFTEST_OUTCOME**"
+            if [ -s check-out/selftest/selftest.json ]; then
+              echo '```json'; cat check-out/selftest/selftest.json; echo '```'
+            fi
+            echo
+            if [ "$NOTES_FINAL" = yes ]; then echo "Release notes: final (the publish job would accept them)."
+            else echo "Release notes: still a draft or missing; publishing refuses them until MAC_CHECK step 7."; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload zip
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Worship-Rig-arm64.zip
+          path: dist/Worship-Rig-arm64.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload dmg
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Worship-Rig-arm64.dmg
+          path: dist/Worship-Rig-arm64.dmg
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload sizes, sha256 and notes preview
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-native-meta
+          path: |
+            dist/SHA256SUMS
+            dist/release.json
+            dist/release-summary.md
+            dist/release-notes-preview.md
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-native-logs
+          path: |
+            check-out
+            dist/xcodebuild-release.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # The iPad app's Release configuration, archived without signing (no team id in project.yml, no export, no .ipa):
+  # proof that it compiles and links for a device, nothing installable. Ryan installs from Xcode with his Personal Team
+  # (MAC_CHECK step 5). It never blocks the macOS release: continue-on-error, and `release` doesn't need it.
+  ipad:
+    name: iPad app (Release archive, unsigned)
+    runs-on: macos-15
+    timeout-minutes: 60
+    continue-on-error: true
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install xcodegen and ninja
+        run: |
+          brew install xcodegen ninja
+          command -v cmake >/dev/null || brew install cmake
+
+      - name: build-core.sh (macOS + iphoneos slices), xcodegen
+        working-directory: native/apple
+        run: |
+          RIG_CMAKE_GENERATOR=Ninja bash scripts/build-core.sh
+          xcodegen generate --spec project.yml
+
+      - name: xcodebuild archive WorshipRig-iPad (Release, generic iOS device, no signing)
+        working-directory: native/apple
+        run: |
+          rc=0
+          xcodebuild -project WorshipRig.xcodeproj -scheme WorshipRig-iPad -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/WorshipRig-iPad.xcarchive \
+            -derivedDataPath build/dd-ipad-release ARCHS=arm64 COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= DEVELOPMENT_TEAM= \
+            archive > build/ipad-archive.log 2>&1 || rc=$?
+          tail -n 40 build/ipad-archive.log
+          if [ "$rc" -ne 0 ]; then
+            if grep -q 'is not installed. To use with Xcode, first download and install the platform' \
+                build/ipad-archive.log; then
+              echo "::warning title=iPad archive::the iOS platform is not installed on this runner image"
+            else
+              grep -E ':[0-9]+:([0-9]+:)? (fatal )?error: |^ld: |^xcodebuild: error' build/ipad-archive.log \
+                | head -n 40 || true
+              echo "::warning title=iPad archive::xcodebuild archive failed (exit $rc); see the ipad log artifact"
+            fi
+            exit 1
+          fi
+          app="build/WorshipRig-iPad.xcarchive/Products/Applications/Worship Rig.app"
+          test -x "$app/Worship Rig"
+          lipo -archs "$app/Worship Rig"
+          echo "### iPad Release archive (unsigned, not installable): $(du -sh "$app" | cut -f1)" \
+            >> "$GITHUB_STEP_SUMMARY"
+          ditto -c -k --keepParent build/WorshipRig-iPad.xcarchive build/WorshipRig-iPad-unsigned.xcarchive.zip
+
+      - name: Upload the unsigned archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: WorshipRig-iPad-unsigned.xcarchive.zip
+          path: native/apple/build/WorshipRig-iPad-unsigned.xcarchive.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-native-ipad-log
+          path: native/apple/build/ipad-archive.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  release:
+    name: GitHub release (publish only)
+    needs: mac
+    # only a manual run, with publish ticked, on a v2.* tag; never a tag push, never a branch
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.publish == true &&
+      startsWith(github.ref, 'refs/tags/v2.')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download the dmg and the zip
+        uses: actions/download-artifact@v4
+        with:
+          pattern: Worship-Rig-arm64.*
+          path: assets
+          merge-multiple: true
+
+      - name: Download SHA256SUMS
+        uses: actions/download-artifact@v4
+        with:
+          name: release-native-meta
+          path: assets
+
+      - name: Check the files against the build's sha256
+        working-directory: assets
+        run: |
+          ls -la
+          grep -E ' (Worship-Rig-arm64\.dmg|Worship-Rig-arm64\.zip)$' SHA256SUMS | sha256sum -c -
+          test "$(grep -cE ' Worship-Rig-arm64\.(dmg|zip)$' SHA256SUMS)" = 2
+
+      - name: Release notes (refuses a draft, MAC_CHECK step 7)
+        run: |
+          node tools/release/release-notes.mjs --tag "$GITHUB_REF_NAME" --sums assets/SHA256SUMS --require-final \
+            > notes.md
+          wc -l notes.md
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LATEST: ${{ inputs.latest }}
+        run: |
+          files=(assets/Worship-Rig-arm64.dmg assets/Worship-Rig-arm64.zip assets/SHA256SUMS
+                 docs/starter/worship-rig-starter-library.json)
+          if [ "$LATEST" = true ]; then kind=(--prerelease=false --latest); else kind=(--prerelease); fi
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # made earlier (a re-run, or by hand in the web UI): attach the files and set the title, notes and kind
+            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --title "Worship Rig $GITHUB_REF_NAME" --notes-file notes.md --draft=false "${kind[@]}"
+          else
+            gh release create "$GITHUB_REF_NAME" "${files[@]}" --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "Worship Rig $GITHUB_REF_NAME" --notes-file notes.md "${kind[@]}"
+          fi
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json name,isPrerelease,assets \
+            --jq '"\(.name) prerelease=\(.isPrerelease) assets=\([.assets[].name] | join(", "))"'

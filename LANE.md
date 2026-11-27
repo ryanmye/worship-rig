@@ -13,13 +13,13 @@ Never tag, release or push.
 - [x] 1. read inputs (MAC_CHECK B3, LaneR F3, workflows, project.yml, check.sh, afterPack.js, update-check.js)
 - [x] 2. release.yml gated to v1.* (main's `release: published` + reuse-release folded in, gated)
 - [x] 3. package-release.sh (build Release + ad-hoc sign + gates + zip + dmg + sizes + sha256; shellcheck clean; stub-run on Linux)
-- [ ] 4. release-native.yml
+- [x] 4. release-native.yml (mac / ipad / release jobs; actionlint + shellcheck clean)
 - [ ] 5. MAC_CHECK steps 2/3/8 (+ README) docs
 - [ ] 6. local validation (actionlint / yaml parse, shellcheck, gate test)
 - [ ] 7. final report here
 
 ## Next step
-4. release-native.yml (check.sh --app and tools/release/release-notes.mjs done)
+6a. test/unit/release/release-workflows.test.mjs, then 5. docs
 
 ## Findings
 - main's release.yml (261ea8d) has a `release: published` trigger that v2-native lacks; the merge of v2-native into
