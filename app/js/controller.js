@@ -50,7 +50,7 @@ import { normalizeBank, packModeOf, validPackEntry } from './shared/patch-packs.
 import {
   SCENE_MAX, SCENE_GLIDE_SEC, SCENE_STEP_SEC, scenesOf, applyScene, captureScene, levelsOf, levelDiff, stepScene,
   withScene, withoutScene, tweakScene, sceneNameOf, mergeScene, mixOf, fxSettingsOf, paramDiff, sceneHolds,
-  absorbEdits,
+  absorbEdits, sceneFieldOf,
 } from './shared/scenes.js';
 
 /** Menu-bar modes (docs/menubar-mode.md): the popover shows at most this many. */
@@ -875,6 +875,27 @@ export function createController(o) {
     if (bus) publishState();
     return true;
   }
+  /**
+   * D26.1 (views): a view's store write, first offered to the playing scene. When the scene holds the field the
+   * address names (shared/scenes.js sceneFieldOf: a send, a Space / Echo row or whole unit, drone.mode) the move goes
+   * on top of the scene (adjustScene: heard, transient, kept by Save) and the view writes nothing; else false and
+   * the view writes the store as before. Views: `controller.scenes.take(addr, v) || store.set(addr, v)`.
+   * @param {string} addr  current-song grammar, 'song.<rel>' or 'songs.<id>.<rel>'
+   * @param {*} value
+   * @returns {boolean} true when the playing scene took it
+   */
+  function takeScene(addr, value) {
+    const f = sceneFieldOf(addr);
+    if (!f || (f.id && f.id !== appliedId)) return false;
+    if (!f.unit) return adjustScene(f.path, value);
+    const song = appliedId && targetId === appliedId ? store.getSong(appliedId) : null;
+    const sc = sceneFor(song);
+    const keys = value && typeof value === 'object' ? Object.keys(value) : [];
+    // a whole unit ("Song's own"): only when the scene holds every row it writes
+    if (!sc || !keys.length || !keys.every((k) => sceneHolds(sc, `fx.${f.unit}.${k}`))) return false;
+    for (const k of keys) adjustScene(`fx.${f.unit}.${k}`, value[k]);
+    return true;
+  }
   /** Delete scene `n` (the playing one glides back to the song's own levels first). @returns {boolean} */
   function removeScene(n) {
     const song = appliedId ? store.getSong(appliedId) : null;
@@ -897,6 +918,7 @@ export function createController(o) {
     view: (song) => live(song),
     go: goScene,
     adjust: adjustScene,
+    take: takeScene,
     next: () => stepSceneBy(1),
     prev: () => stepSceneBy(-1),
     save: saveScene,

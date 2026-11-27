@@ -734,3 +734,53 @@ async () => {
     ctl.dispose();
   }
 });
+
+test('scenes.take (the views’ funnel): a field the playing scene holds goes on top of it, transient; anything else '
+  + 'is the view’s own store write', async () => {
+  const { store, engine, ctl, timers } = await setup();
+  const id = sid(store);
+  // the song's own room Stage; scene 1 = Hall, drone off
+  applyPreset(SPACE_PRESETS.find((p) => p.id === 'stage'), (p, v) => store.set(p, v));
+  await tick();
+  const own = store.currentSong();
+  const hall = SPACE_PRESETS.find((p) => p.id === 'hall').params;
+  const sc = captureScene(own);
+  store.set(`songs.${id}.scenes`, [{ ...sc, fx: { ...sc.fx, reverb: { size: hall['fx.reverb.size'],
+    damp: hall['fx.reverb.damp'], predelay: hall['fx.reverb.predelay'], returnGain: hall['fx.reverb.returnGain'] } },
+  drone: { ...sc.drone, mode: 'off' } }]);
+  await tick();
+  ctl.scenes.go(0);
+  runSteps(timers);
+  const before = store.currentSong();
+  engine.clear();
+  // tapping Stage in the song bar (v6 applySpace / today's applyPreset: songs.<id>.patch.fx.reverb.<row>)
+  for (const [p, v] of Object.entries(SPACE_PRESETS.find((x) => x.id === 'stage').params)) {
+    assert.equal(ctl.scenes.take(`songs.${id}.patch.${p}`, v), true, p);
+  }
+  await tick();
+  assert.equal(store.currentSong(), before, 'the song is NOT written (its own room was Stage already)');
+  assert.ok(engine.of('setParam').some((c) => c[1] === 'fx.reverb.size' && c[2] === 0.42), 'heard');
+  assert.equal(ctl.scenes.view(store.currentSong()).patch.fx.reverb.size, 0.42);
+  // the other address forms; a whole unit ("Song's own"); drone.mode
+  assert.equal(ctl.scenes.take('fx.reverb.damp', 0.3), true);
+  assert.equal(ctl.scenes.take('song.drone.mode', 'synth'), true);
+  assert.equal(ctl.scenes.view(store.currentSong()).drone.mode, 'synth');
+  assert.equal(ctl.scenes.take(`songs.${id}.patch.fx.reverb`, { ...own.patch.fx.reverb }), true);
+  assert.deepEqual(ctl.scenes.view(store.currentSong()).patch.fx.reverb, own.patch.fx.reverb);
+  assert.equal(ctl.scenes.take(`songs.${id}.patch.slots.0.sends.reverb`, 0.33), true);
+  // not the scene's: the view writes the store itself
+  assert.equal(ctl.scenes.take('fx.chorus.rate', 1), false, 'not a scene field');
+  assert.equal(ctl.scenes.take(`songs.${id}.patch.slots.0.sends.chorus`, 0.1), false);
+  assert.equal(ctl.scenes.take(`songs.${id}.hearIn`, 3), false, 'the key goes through adjust(drone.key)');
+  assert.equal(ctl.scenes.take('songs.other.patch.fx.reverb.size', 0.1), false, 'another song');
+  assert.equal(store.currentSong(), before, 'still not written');
+  // Update keeps the taps; the next change drops them
+  ctl.scenes.save(0);
+  const saved = store.currentSong().scenes[0];
+  assert.equal(saved.slots[0].sends.reverb, 0.33);
+  assert.equal(saved.drone.mode, 'synth');
+  assert.deepEqual(saved.fx.reverb, own.patch.fx.reverb);
+  ctl.scenes.go(null);
+  assert.equal(ctl.scenes.take('fx.reverb.size', 0.1), false, 'no scene plays: the store write');
+  void id;
+});

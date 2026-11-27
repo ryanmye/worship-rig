@@ -474,6 +474,41 @@ export function sceneHolds(scene, path) {
   return !!m && SCENE_FX[m[1]].includes(m[2]) && scene.fx?.[m[1]]?.[m[2]] !== undefined;
 }
 
+const REL_SEND_RE = /^patch\.slots\.(0|[1-9]\d?)\.sends\.(reverb|delay)$/;
+const REL_FX_RE = /^patch\.fx\.(reverb|delay)(?:\.([A-Za-z]+))?$/;
+
+/**
+ * D26.1 (views): the scene field a store write names, for the views' "a scene first" funnel (controller.scenes.take).
+ * Address forms: the current-song grammar ('slots.<i>.sends.reverb', 'fx.reverb.size'), 'song.<rel>' and
+ * 'songs.<id>.<rel>' with rel 'patch.slots.<i>.sends.reverb' | 'patch.fx.<unit>[.<row>]' | 'drone.mode'. A whole
+ * unit ('patch.fx.reverb', an object: "Song's own") comes back as {unit}. The key is not here: hearIn / playIn are
+ * also Easy Transpose's song fields, so key grids call scenes.adjust('drone.key') themselves.
+ * @param {string} addr
+ * @returns {{id:string|null, path?:string, unit?:string}|null} null: not a scene field
+ */
+export function sceneFieldOf(addr) {
+  if (typeof addr !== 'string') return null;
+  let id = null;
+  let rel;
+  if (addr.startsWith('songs.')) {
+    const segs = addr.split('.');
+    id = segs[1] || null;
+    rel = segs.slice(2).join('.');
+  } else if (addr.startsWith('song.')) rel = addr.slice(5);
+  else if (SLOT_TWEAK_RE.test(addr) && addr.includes('.sends.')) return { id, path: addr };
+  else if (FX_RE.test(addr)) {
+    const m = FX_RE.exec(addr);
+    return SCENE_FX[m[1]].includes(m[2]) ? { id, path: addr } : null;
+  } else return null;
+  if (rel === 'drone.mode') return { id, path: 'drone.mode' };
+  let m = REL_SEND_RE.exec(rel);
+  if (m) return { id, path: `slots.${m[1]}.sends.${m[2]}` };
+  m = REL_FX_RE.exec(rel);
+  if (!m) return null;
+  if (!m[2]) return { id, unit: m[1] };
+  return SCENE_FX[m[1]].includes(m[2]) ? { id, path: `fx.${m[1]}.${m[2]}` } : null;
+}
+
 /**
  * A live move while a scene plays (Perform's faders and ON tiles, a learned MIDI fader). It is held on top of
  * the scene until the next scene change, and "Save as scene" keeps it; the song's own levels and the saved scene stay
