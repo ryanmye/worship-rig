@@ -17,8 +17,8 @@ Under review: lane-cvd 56b3b8e, 53385d2, 41b9774 and fcffe43, rebased by the orc
 fix was c320833. I then rebased the lane onto v2-native c10ad59 (lane-fu), which made the lane ace72a0, 12505d8,
 fc1fae6, 3e825d0 and fix 31b0f09; this file is the commit after them. CONTRACT_CHANGES conflicted, and I kept both
 sides: "U-SNAP follow-up" and "Empty-library silence" come first, then "U-CVD". lane-fu's changes to v6
-edit.js / effects.js / instrument.js (the snapshot-aware Space & Echo summaries) don't touch `slotColor`. The gates
-below ran on the rebased tip. `app/js/engine/` is untouched. The probe scripts ran against
+edit.js / effects.js / instrument.js (the snapshot-aware Space & Echo summaries) don't touch `slotColor`. After that I rebased
+onto 937a04a (tools/cloud only). The commits are now e08e711, f7cc8ce, c51127f and 0bd5d0a, plus the fix 6652b44. `app/js/engine/` is untouched. The probe scripts ran against
 lane-cvd and against a `git archive` copy of origin/v2-native in /tmp. They are not committed.
 
 **Rebase (36ef998, the orchestrator's).** CONTRACT_CHANGES keeps both sides: "## UI v6 polish batch 2" ends whole,
