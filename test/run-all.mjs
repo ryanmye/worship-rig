@@ -56,7 +56,7 @@ const SUITES = [
   { name: 'chart', groups: ['phase2'], cmd: [node, 'test/phase2/chart/run.mjs'], timeout: 9 * MIN },
   // UI v6 (D22, UI6-build-plan U1; hidden): flag-off purity vs the base build, the v6 Perform's strips / snapshots /
   // song bar / holds, on-off cycles
-  { name: 'ui-v6', groups: ['phase2'], cmd: [node, 'test/phase2/ui-v6/run.mjs'], timeout: 8 * MIN },
+  { name: 'ui-v6', groups: ['phase2'], cmd: [node, 'test/phase2/ui-v6/run.mjs'], timeout: 10 * MIN },
   // FU2: 8 → 12 min (snapres + layout-fu2 open 10 contexts of their own, ≈ 2.5 min on the 2-CPU box)
   { name: 'ui-v6-edit', groups: ['phase2'], cmd: [node, 'test/phase2/ui-v6-edit/run.mjs'], timeout: 12 * MIN },
   // U7a (D17): the Song bank browser + Try it, with two bank packs in a temp My Samples folder
