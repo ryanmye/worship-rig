@@ -74,6 +74,10 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 
 ## Queued small tasks
 
+- **C-SHIP (D33):** the chord chart ships in 2.0: default on with a Settings › Perform switch, placeholders gone,
+  chart-view review O1 (PANIC reachable over the chart dialogs), O3, O4, O7 fixed; purity probes re-based; iPad sizes
+  and all 8 themes with charts on. Builder + skeptic.
+
 - **Empty-library silence (UI6-er O1, tier 2: mine):** when no song is selected and no songs are left (delete the last
   song, or Back from an empty-library trial) the controller turns the drone off and fades the voices; PANIC must stop a
   sounding drone whatever `menuBarState` says. Today PANIC leaves such a drone sounding (pre-existing). Builder +

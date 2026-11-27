@@ -545,3 +545,18 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
   - It also adds a non-colour cue: each instrument's number on its range bar and strip tab, so no colour is the
     only way to tell two instruments apart.
   - Applies to the new UI and today's UI (themes are shared). Off = exactly today's colours (purity: no change).
+
+## D33: The chord chart ships in 2.0 (Ryan, 2026-11-27: "move chord chart to 2.0"; replaces D7's "2.1")
+- In 2.0: D7 step 1, the chord-chart view (paste / import ChordPro or plain chords, transpose follows Easy Transpose,
+  auto-scroll, text size in %, on the stage or in the sidebar per device: U7b). PDF attachments (D7 step 2) and real
+  notation stay after 2.0 unless Ryan moves them too.
+- Tier 2 (mine), how it ships (task C-SHIP):
+  - `settings.chartView` stops being hidden: absent = on, `false` = off. Settings › Perform gets "Chord charts"
+    (on / off). The v6 Chart sidebar module, Edit's Chart button and today's Chart toggle show by default; the
+    "Chart · coming in 2.1" placeholders go.
+  - Fix before shipping (chart-view review): O1 PANIC must stay reachable while the import / Edit chart dialog is
+    open (it is covered today; ⌘. works); O4 `duplicateSong` / `addSong` check `LIBRARY_MAX_CHARS`; O7 the over-1 MB
+    message; O3 the Chart toggle meets 44 px on touch.
+  - The flag-off purity probes change meaning: "chart off" is now an explicit `false`; with charts on, nothing
+    loads until a song has a chart or the Chart module is opened (lazy module load as today).
+  - The chart's look stays part of Ryan's Mac review (U9) with the rest of v6.
