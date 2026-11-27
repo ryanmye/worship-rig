@@ -55,8 +55,9 @@ refused only past the restore cap 2,500,000); review doc native/docs/reviews/UI6
 ## Checklist
 - [x] rebase onto origin/v2-native (ee5bcb9; conflicts CONTRACT_CHANGES, main.js applyCvd, ui-v6/ui-v6-edit purity
       filters: both sides kept)
-- [ ] read DECISIONS D7/D9/D16/D33, CONTRACT_CHANGES C-SHIP, reviews chart-view.md, UI6-U7b.md, diff
-- [ ] O4 change (store, chart-store test, kept.test, migration-1x fixtures, CONTRACT_CHANGES, DECISIONS note)
+- [x] read DECISIONS D7/D9/D16/D33, CONTRACT_CHANGES C-SHIP, reviews chart-view.md, UI6-U7b.md, diff
+- [x] O4 change (store, chart-store test, kept.test, migration-1x fixtures, CONTRACT_CHANGES, DECISIONS note,
+      release notes) 9606281; shell-unit, unit, migration-1x PASS on it
 - [ ] lazy load probes (both UIs, entry points, chart arrival, Off unloads)
 - [ ] migration / device-local / export-import / ?chart
 - [ ] O1 PANIC, O3, O7, v6 Edit header ≤1100 px
@@ -66,3 +67,7 @@ refused only past the restore cap 2,500,000); review doc native/docs/reviews/UI6
 - [ ] review doc
 
 ## Findings (before fixing)
+- Env: this box's Chromium is build 1243, Playwright 1.56 wants 1194: export
+  PLAYWRIGHT_BROWSERS_PATH=/root/.cache/rig-pw (tools/cloud/setup.sh mapping) for every browser run / gates.mjs.
+- O-a: chart writes (setChart / chartOverflows) are still refused past 2 MB, while D9 lets every other save pass it
+  (notes edits, now adds). Not changed (outside the O4 call); for the orchestrator.
