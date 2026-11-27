@@ -1,10 +1,15 @@
 name: release
 
-# Builds Worship Rig.app for Apple Silicon (arm64) and Intel (x64) as .dmg + .zip.
-# - push a tag v*            → build, upload the four files to the run, and create a GitHub release with them
+# Builds the 1.x Electron Worship Rig.app for Apple Silicon (arm64) and Intel (x64) as .dmg + .zip.
+# - push a tag v1.*          → build, upload the four files to the run, and create a GitHub release with them
+# - publish a release v1.* from the web UI → the same, attached to that release
 # - Actions → release → Run  → dry_run (default true): build + upload to the run only, never a release
-# A release is only created when the ref is a v* tag AND it's a tag push (or a manual run on a tag with dry_run off).
-# Dispatching on a branch (e.g. main) can never create a release.
+# A release is only created when the ref is a v1.* tag AND it's a tag push / release event (or a manual run on a v1.*
+# tag with dry_run off). Dispatching on a branch (e.g. main) can never create a release.
+# 1.x only (lane N10, MAC_CHECK "2.0 release checklist" B3): v2.* and later tags are the native app
+# (release-native.yml). `tags: ['v1.*']` keeps a 2.x tag push from starting this workflow at all; the `release` event
+# and workflow_dispatch can't be filtered by tag, so both jobs also check `refs/tags/v1.` themselves: a 2.x release
+# published from the web UI, or a run dispatched on a 2.x tag, builds and publishes no Electron app.
 # v11-electron: the app's "update available" check (update-check.js) reads GitHub's /releases/latest and offers
 # Worship-Rig-<arch>.dmg (else .zip) from it. So: keep the four asset names stable (package.json mac.artifactName),
 # keep releases non-draft / non-prerelease (the API's "latest" skips those), and tag v<package.json version>.
@@ -12,7 +17,11 @@ name: release
 
 on:
   push:
-    tags: ['v*']
+    tags: ['v1.*']
+  # A release published from the GitHub web UI (Releases > Draft a new release > new tag v1.* > Publish) creates the tag
+  # there, so no git push is needed: build and attach the files to that release. (From main's 261ea8d; gated to v1.)
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       dry_run:
@@ -30,6 +39,8 @@ concurrency:
 jobs:
   build:
     name: build (${{ matrix.arch }})
+    # any branch (dry run), or a v1.* tag; never a v2.*+ tag (the release event always has a tag ref)
+    if: ${{ !startsWith(github.ref, 'refs/tags/') || startsWith(github.ref, 'refs/tags/v1.') }}
     runs-on: macos-15
     timeout-minutes: 40
     strategy:
@@ -54,7 +65,7 @@ jobs:
         run: npm ci
 
       - name: Tag matches package.json version
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v1.')
         run: |
           v="$(node -p 'require("./package.json").version')"
           if [ "v$v" != "$GITHUB_REF_NAME" ]; then
@@ -103,8 +114,11 @@ jobs:
 
   release:
     needs: build
-    # tag push, or a manual run on a tag with dry_run unticked; never from a branch
-    if: startsWith(github.ref, 'refs/tags/v') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false))
+    # v1.* tag push or release event, or a manual run on a v1.* tag with dry_run unticked; never from a branch, never
+    # for a v2.*+ tag
+    if: >-
+      startsWith(github.ref, 'refs/tags/v1.') && (github.event_name == 'push' || github.event_name == 'release' ||
+      (github.event_name == 'workflow_dispatch' && inputs.dry_run == false))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -138,8 +152,16 @@ jobs:
           This build is **ad-hoc signed**, not notarized by Apple — see the README
           ("Running on your Mac → First open on another Mac") for the Gatekeeper steps.
           EOF
-          gh release create "$GITHUB_REF_NAME" assets/*.dmg assets/*.zip docs/starter/worship-rig-starter-library.json \
-            --repo "$GITHUB_REPOSITORY" \
-            --verify-tag \
-            --title "Worship Rig $GITHUB_REF_NAME" \
-            --notes-file notes.md
+          files=(assets/*.dmg assets/*.zip docs/starter/worship-rig-starter-library.json)
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # made in the web UI (release event), or a re-run: attach the files and set the standard title and notes
+            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --title "Worship Rig $GITHUB_REF_NAME" --notes-file notes.md --draft=false --prerelease=false
+          else
+            gh release create "$GITHUB_REF_NAME" "${files[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "Worship Rig $GITHUB_REF_NAME" \
+              --notes-file notes.md
+          fi

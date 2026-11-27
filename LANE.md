@@ -10,8 +10,8 @@ Never tag, release or push.
 
 ## Steps
 - [x] 0. worktree + LANE.md
-- [ ] 1. read inputs (MAC_CHECK B3, LaneR F3, workflows, project.yml, check.sh, afterPack.js, update-check.js)
-- [ ] 2. release.yml gated to v1.*
+- [x] 1. read inputs (MAC_CHECK B3, LaneR F3, workflows, project.yml, check.sh, afterPack.js, update-check.js)
+- [x] 2. release.yml gated to v1.* (main's `release: published` + reuse-release folded in, gated)
 - [ ] 3. package-release.sh (zip + dmg, sizes, sha256)
 - [ ] 4. release-native.yml
 - [ ] 5. MAC_CHECK steps 2/3/8 (+ README) docs
@@ -19,8 +19,12 @@ Never tag, release or push.
 - [ ] 7. final report here
 
 ## Next step
-1.
+3. package-release.sh
 
 ## Findings
+- main's release.yml (261ea8d) has a `release: published` trigger that v2-native lacks; the merge of v2-native into
+  main would have kept it un-gated. Folded into v2-native's copy with the v1 gate, so the merge takes ours cleanly.
+- XcodeGen's generated Info.plist may not carry MARKETING_VERSION (its default is a literal "1.0" in some versions,
+  unverified): project.yml now sets CFBundleShortVersionString / CFBundleVersion from the build settings explicitly.
 
 ## Open questions
