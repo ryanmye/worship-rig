@@ -95,8 +95,7 @@ body.v6-learning .v6-learnable input[type="range"] { pointer-events: none; }
 .v6 .v6-savesnap-key { min-height: 44px; min-width: 0; max-width: 100%; border-radius: 10px; border: 1px solid
   var(--v6-field-line, var(--line)); background: var(--well, var(--panel)); color: var(--text); font: inherit;
   padding: 0 10px; }
-.v6 .v6-savesnap-key:focus-visible { outline: none; box-shadow: 0 0 0 3px
-  color-mix(in srgb, var(--accent) 35%, transparent); }
+.v6 .v6-savesnap-key:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus); }
 .v6 .v6-keeps-not { margin: 2px 0 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
 .v6 .v6-dlg-btns { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .v6 .v6-dlg-btns .btn { padding: 0 16px; font-weight: 700; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
