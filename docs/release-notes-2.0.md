@@ -96,8 +96,9 @@ you set, and the text size goes up and down.
 - A song's chart travels with it in exports and backups.
 - **Settings › Look › Perform view › Chord charts** turns the Chart button off on this computer.
 - **New layout:** the chart is a tab in the right sidebar, or fills the stage with small faders for each sound
-  (**⇥ Sidebar** / **⤢ Stage**, remembered on this device). Text size goes in steps from 50 % to 200 % (tap the
-  percentage or ⌘0 for 100 %, **Fit** for the widest line, pinch or ⌘+ / ⌘−). Edit has a Chart button too.
+  (**⇥ Sidebar** / **⤢ Stage**, remembered on this device). Text size goes in steps from 50 % to 200 %: tap the
+  percentage or ⌘0 for 100 %, **Fit** picks the biggest size whose longest line fits, and pinch or ⌘+ / ⌘− work
+  too. Edit has a Chart button as well.
 - Not in 2.0: PDF charts and real notation.
 
 ### Your own patch packs and the Song bank
@@ -105,8 +106,8 @@ you set, and the text size goes up and down.
 Song files you put in a pack folder in **My Samples** (`<pack>/songs/*.json`) come into your library by themselves,
 once each, at the end of the library. A newer version of a pack song replaces your copy only if you haven't changed
 it, and a pack song you delete stays deleted. A pack marked as a bank (`pack.json`: `"mode": "bank"`) isn't added by
-itself: pick songs from **Settings › My Samples › Song bank** and press **Add to library**. The folder layout is in
-[docs/patch-packs.md](patch-packs.md). Pack songs are your own files: nothing is uploaded or shared.
+itself: pick songs from **Settings › Sounds & Samples › My Samples › Song bank** and press **Add to library**. The
+folder layout is in [docs/patch-packs.md](patch-packs.md). Pack songs are your own files: nothing is uploaded or shared.
 
 **New layout:** the Song bank opens over the stage (from **Setlist › + Add song › From the Song bank**, or from
 Settings) with search and Key, Tempo (under 80, 80–114, 115 and up), Feel and Pack filters. **Try it** plays a bank
