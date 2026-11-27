@@ -2396,8 +2396,11 @@ export function createController(o) {
     // old song's values over the new one. Re-send the applied song's level (the drone only if restorePads didn't);
     // a switch still loading applies its own on commit.
     if (applied) {
+      // UI6-er O1: with no song selected (an empty library) the drone was turned off: a restart doesn't bring the
+      // last song's drone back
       if (!droneReapplied) lastDroneKey = null;
-      applySongLevel(live(applied), null, true, { drone: !droneReapplied }); // v11-scenes: with the scene
+      const drone = !droneReapplied && !!store.currentSong();
+      applySongLevel(live(applied), null, true, { drone }); // v11-scenes: with the scene
     }
     setAudio(engine && engine.ctx && engine.ctx.state === 'running' ? 'running' : 'suspended');
   }
@@ -2412,7 +2415,8 @@ export function createController(o) {
     const kept = d && d.files instanceof Map && d.files.size > 0;
     if (kept) return false;
     droneCall('attachFiles', padList);
-    const heard = applied ? live(applied) : null; // D26.1: a playing scene may hold the drone's sound
+    // D26.1: a playing scene may hold the drone's sound; UI6-er O1: no song selected, no drone to re-apply
+    const heard = applied && store.currentSong() ? live(applied) : null;
     if (heard && heard.drone && heard.drone.mode === 'files') {
       lastDroneKey = null;
       droneCall('configure', { ...heard.drone, mode: 'off' });

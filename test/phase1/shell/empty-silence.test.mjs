@@ -215,3 +215,26 @@ test('UI6-er O1 over the native bridge: empty library and PANIC send only contra
     ctl.dispose();
   }
 });
+
+test('UI6-er O1: an audio restart in the empty library does not bring the last song\'s drone back', async () => {
+  const { store, engine, ctl, warns } = await setup();
+  try {
+    deleteAll(store);
+    await tick();
+    assert.deepEqual(engine.of('drone.configure').at(-1)[1], { mode: 'off' });
+    engine.clear();
+    assert.equal(await ctl.restartAudio(), true);
+    await tick();
+    const on = engine.of('drone.configure').filter((c) => c[1].mode !== 'off');
+    assert.deepEqual(on, [], 'no drone.configure turning it on again');
+    // a new song afterwards still gets its drone
+    const b = blankSong({ name: 'After the restart' });
+    store.addSong({ ...b, drone: { ...b.drone, mode: 'synth' } });
+    await tick();
+    await tick();
+    assert.equal(engine.of('drone.configure').at(-1)[1].mode, 'synth');
+    assert.deepEqual(warns, []);
+  } finally {
+    ctl.dispose();
+  }
+});

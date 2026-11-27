@@ -9632,7 +9632,9 @@ or view change.
   `'action'` `fadeOutAll` the views show as faded). Once per empty spell (reset when a song is selected again). Not
   when no song has played in this engine yet (a fresh engine is silent; the views do not show "Faded"). A song added
   afterwards is selected and its drone configured as any selection (`applySongLevel` force); as after Fade out, the
-  master comes back on the next note.
+  master comes back on the next note. An audio restart (`afterRestart` / `restorePads`) re-applies the applied song's
+  drone only while a song is selected, so a restart in the empty library no longer brings the last song's drone back
+  (the first cut of this lane missed that path; test below).
 - **PANIC and the drone: the root cause.** PANIC never touched the drone: `engine.allNotesOff` leaves it by contract
   (SPEC, ENGINE_CONTRACT; 1.1.0 release notes "The drone keeps going, as before"), and the controller's drone state
   was only the song's (`applied` / `live()`; `menuBarState().droneOn` reads the current song, so it is false with no
@@ -9650,6 +9652,6 @@ or view change.
 - Tests: shell `empty-silence.test.mjs` (delete: drone off then fade, once, and again after a new song; drone off: a
   fade only; an empty library at start: nothing; PANIC under a song's drone and a snapshot's drone: `[allNotesOff]`;
   PANIC with an orphaned drone (its off failed once): `[allNotesOff, drone.configure off]`, then today's again; the
-  bridge; 4 of 5 fail before), `bank-trial.test.mjs` "UI6-er O1" (Back); ui-v6-bank "polish2 U8a O1" (the web
-  engine's drone and fade after delete and after Back, the on-screen PANIC); ui-core scenes.mjs "UI6-er O1" (today's
-  Edit ⋯ Song › Delete on the last song, Perform's faded chip, Esc).
+  bridge; a restart in the empty library; 5 of 6 fail before), `bank-trial.test.mjs` "UI6-er O1" (Back); ui-v6-bank
+  "polish2 U8a O1" (the web engine's drone and fade after delete and after Back, the on-screen PANIC); ui-core
+  scenes.mjs "UI6-er O1" (today's Edit ⋯ Song › Delete on the last song, Perform's faded chip, Esc).
