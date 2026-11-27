@@ -92,6 +92,16 @@ class Engine final : public CommandSink {
   bool realtime() const { return cfg_.mode == RIG_MODE_REALTIME; }
   const rig_host *host() const { return cfg_.host ? &host_ : nullptr; }
   std::string statsJson();
+  /** core3f T3: one realtime control-loop iteration (from its wake to its flush) that took kLongIterationMs or more:
+   *  the loop was held by its own work (or a lock), as opposed to a tick gap from the thread not being scheduled. */
+  struct LongIteration {
+    std::chrono::steady_clock::time_point start;
+    double ms = 0;
+  };
+  static constexpr double kLongIterationMs = 10;
+  /** The long iterations recorded so far (the last kLongIterationsKept), any thread. Tests: a tick gap with no long
+   *  iteration in its window is the box (scheduling), not the engine. */
+  std::vector<LongIteration> longIterations() const;
   /** `audio start|restart|output`: asks the host on the device thread (never blocks the control thread; R25) and
    *  arms the 5 s watchdog. Emits `state` before the caller's reply (G9). "" = accepted, else an error code
    *  (`busy` while a start is pending for restart/output, `unsupported` when the host has no audio_start). */
@@ -184,6 +194,10 @@ class Engine final : public CommandSink {
   std::binary_semaphore wake_{0};
   std::atomic<bool> stop_{false};
   std::atomic<bool> wakePending_{false};
+  static constexpr std::size_t kLongIterationsKept = 256;
+  mutable std::mutex iterMu_;  // core3f T3: guards longIter_ / iterMaxMs_ (taken only for a long iteration or a read)
+  std::vector<LongIteration> longIter_;
+  double iterMaxMs_ = 0;
   std::thread control_;
   std::vector<std::string> outBatch_;
   std::mutex outMu_;

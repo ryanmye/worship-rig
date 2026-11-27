@@ -60,6 +60,10 @@ constexpr double kIdleLoopMs = 40;
  *  that from noise, and failing there is the honest answer. */
 constexpr double kGapK = 3.0;
 constexpr double kCapMs = kSanitized ? 1000.0 : 250.0;
+/** core3f T3: a tick gap past the bound while no control-loop iteration in its window ran long is the box not
+ *  running the process (macos-15 CI: an idle loop, nothing loading, showed a 242.8 ms gap in the job whose cold
+ *  salamander window failed at 301.5 ms against 156.1); reported, and failed only past this. */
+constexpr double kStallCapMs = kSanitized ? 3000.0 : 1000.0;
 
 /** The tick-gap (and input-latency) bound for a box whose idle loop showed `idleGapMs`. */
 double gapBound(double idleGapMs) {
@@ -164,6 +168,48 @@ struct Rt {
       if (v.at >= from && v.at <= to && v.text.find("\"ev\":\"tick\"") != std::string::npos) out.push_back(v.at);
     return out;
   }
+  /** Where the largest gap in [from, to] starts, in ms after `from` (core3f T3: tells a loop held at a known step,
+   *  e.g. the prepare's own work or its reply, from box noise anywhere in the window). */
+  double maxGapStartMs(Clock::time_point from, Clock::time_point to) {
+    const auto t = ticks(from, to);
+    double worst = -1, at = 0;
+    Clock::time_point prev = from;
+    for (const auto &x : t) {
+      if (const double g = std::chrono::duration<double, std::milli>(x - prev).count(); g > worst) {
+        worst = g;
+        at = std::chrono::duration<double, std::milli>(prev - from).count();
+      }
+      prev = x;
+    }
+    if (std::chrono::duration<double, std::milli>(to - prev).count() > worst)
+      at = std::chrono::duration<double, std::milli>(prev - from).count();
+    return at;
+  }
+  /** core3f T3: the longest control-loop iteration (its own work, from its wake to its flush; Engine records those
+   *  of 10 ms or more) that overlaps [from, to]; 0 when none did. */
+  double heldMs(Clock::time_point from, Clock::time_point to) {
+    double worst = 0;
+    for (const auto &it : impl(e).longIterations()) {
+      const auto end = it.start + std::chrono::duration_cast<Clock::duration>(
+                                      std::chrono::duration<double, std::milli>(it.ms));
+      if (end >= from && it.start <= to) worst = std::max(worst, it.ms);
+    }
+    return worst;
+  }
+  /** The live-loop check of every window here (CORE2A: decoding never blocks the thread that handles input and
+   *  ticks). The defect is the loop held by its own work or a lock: no iteration in the window may run `bound` or
+   *  longer (before CORE2A a cold preload held one iteration for the whole 1-3 s decode). Ticks must flow within
+   *  `bound` too, unless no iteration ran long: then the gap is the process not being scheduled (core3f T3: a
+   *  macos-15 runner stall; tick gaps alone cannot tell the two apart), reported and capped at kStallCapMs. */
+  void checkLive(Clock::time_point from, Clock::time_point to, const std::string &what) {
+    const double gap = maxGapMs(from, to), held = heldMs(from, to);
+    MESSAGE(what << ": largest tick gap " << gap << " ms (from " << maxGapStartMs(from, to)
+                 << " ms into the window); longest control-loop iteration " << held << " ms; bound " << bound << " ms");
+    CHECK(held < bound);
+    if (held < bound && gap >= bound)
+      MESSAGE(what << ": the tick gap is the box (no iteration ran long: the thread was not scheduled)");
+    CHECK(gap < kStallCapMs);  // a loop that stops ticking altogether still fails
+  }
   /** The largest gap (ms) between consecutive ticks in [from, to], counting the window edges. */
   double maxGapMs(Clock::time_point from, Clock::time_point to) {
     const auto t = ticks(from, to);
@@ -265,11 +311,10 @@ TEST_SUITE("runtime_preload") {
     CHECK(contains(done.second, "\"decodedMB\":"));
     CHECK(contains(done.second, "\"ok\":true"));
     const double loadMs = ms(t0, done.first);
-    const double gap = rt.maxGapMs(t0, done.first);
-    MESSAGE("preload of " << (g_loads.load() - before) << " samples took " << loadMs << " ms; largest tick gap "
-                          << gap << " ms over " << rt.ticks(t0, done.first).size() << " ticks");
+    MESSAGE("preload of " << (g_loads.load() - before) << " samples took " << loadMs << " ms over "
+                          << rt.ticks(t0, done.first).size() << " ticks");
     CHECK(loadMs > 1000);  // it really was slow
-    CHECK(gap < rt.bound);
+    rt.checkLive(t0, done.first, "cold preload");
     // the `load {phase:'preload'}` event comes with it, and the samples are there
     rt.post(R"({"v":1,"op":"get","what":"sampleStatus","id":12,"patches":[)" + patchOf("salamander-piano") + "]}");
     CHECK(contains(rt.reply(12).second, "\"loaded\":[true]"));
@@ -308,10 +353,9 @@ TEST_SUITE("runtime_preload") {
     const auto p1 = rt.reply(20, kSanitized ? 120000 : 30000);
     REQUIRE(tokenOf(p1.second) > 0);
     const double loadMs = ms(t0, p1.first);
-    const double gap = rt.maxGapMs(t0, p1.first);
-    MESSAGE("prepare of a cold salamander-piano answered after " << loadMs << " ms; largest tick gap " << gap << " ms");
+    MESSAGE("prepare of a cold salamander-piano answered after " << loadMs << " ms");
     CHECK(loadMs > 1000);
-    CHECK(gap < rt.bound);
+    rt.checkLive(t0, p1.first, "cold salamander prepare");  // macos-15 CI 6765126: 301.5 ms tick gap (core3f T3)
     // every sample is there when the reply comes (the commit lands on a complete instrument, as in 1.x)
     rt.post(R"({"v":1,"op":"get","what":"sampleStatus","id":22,"patches":[)" + patchOf("salamander-piano") + "]}");
     CHECK(contains(rt.reply(22).second, "\"loaded\":[true]"));
@@ -341,7 +385,7 @@ TEST_SUITE("runtime_preload") {
     const std::string st = rt.reply(12).second;
     MESSAGE("vibes ready " << ms(t1, b.first) << " ms after its prepare; status then " << st);
     CHECK(contains(st, "\"loaded\":[true,false]"));
-    CHECK(rt.maxGapMs(t0, b.first) < rt.bound);
+    rt.checkLive(t0, b.first, "superseded switch");
     rt.post(R"({"v":1,"op":"commit","id":13,"token":)" + std::to_string(tokenOf(a.second)) + "}");
     CHECK(contains(rt.reply(13).second, "\"ok\":false"));  // superseded token
     rt.post(R"({"v":1,"op":"commit","id":14,"token":)" + std::to_string(tokenOf(b.second)) + "}");
@@ -370,7 +414,7 @@ TEST_SUITE("runtime_preload") {
     rt.post(R"({"v":1,"op":"get","what":"sampleStatus","id":12,"patches":[)" + patchOf("celesta") + "," +
             patchOf("salamander-piano") + "]}");
     CHECK(contains(rt.reply(12).second, "\"loaded\":[true,true]"));
-    CHECK(rt.maxGapMs(t0, a.first) < rt.bound);
+    rt.checkLive(t0, a.first, "two preloads");
     MESSAGE("newer preload answered " << ms(t0, b.first) << " ms, older " << ms(t0, a.first) << " ms after the first");
   }
 
@@ -394,7 +438,7 @@ TEST_SUITE("runtime_preload") {
     REQUIRE(!a.second.empty());
     MESSAGE("prepare answered " << ms(t1, p.first) << " ms after it was sent; preload answered " << ms(t0, a.first)
                                 << " ms after its own");
-    CHECK(rt.maxGapMs(t0, a.first) < rt.bound);
+    rt.checkLive(t0, a.first, "switch during a big preload");
     rt.post(R"({"v":1,"op":"commit","id":12,"token":)" + std::to_string(tokenOf(p.second)) + "}");
     CHECK(contains(rt.reply(12).second, "\"committed\":true"));
   }
@@ -460,7 +504,7 @@ TEST_SUITE("runtime_preload") {
     rt.post(R"({"v":1,"op":"get","what":"sampleStatus","id":40,"patches":[)" + patchOf("salamander-piano") + "," +
             patchOf("vibes") + "," + patchOf("celesta") + "]}");
     CHECK(contains(rt.reply(40).second, "\"loaded\":[true,true,true]"));
-    CHECK(rt.maxGapMs(t0, Clock::now()) < rt.bound);  // emitting changed nothing on the control loop's cadence
+    rt.checkLive(t0, Clock::now(), "samples events");  // emitting changed nothing on the control loop's cadence
   }
 
   TEST_CASE("Lane F2: rig_host_memory_pressure and a rate change each send one samples event, changed ids only") {
@@ -545,6 +589,6 @@ TEST_SUITE("runtime_preload") {
     CHECK(contains(st, "\"loaded\":[true,false]"));
     CHECK(!rt.replied(10));
     REQUIRE(!rt.reply(10, kSanitized ? 120000 : 30000).second.empty());
-    CHECK(rt.maxGapMs(t0, Clock::now()) < rt.bound);
+    rt.checkLive(t0, Clock::now(), "joined keys");
   }
 }

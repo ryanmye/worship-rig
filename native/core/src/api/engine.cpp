@@ -319,6 +319,7 @@ void Engine::controlLoop() {
     // reset only after a release was consumed: every release follows a false -> true flip, so the binary
     // semaphore never exceeds 1 (release() past max() is UB; libc++ asserts it in hardened builds)
     if (wake_.try_acquire_for(std::chrono::milliseconds(4))) wakePending_ = false;
+    const auto iterStart = std::chrono::steady_clock::now();  // core3f T3: the iteration's own time, not the wait
     std::deque<std::string> batch;
     std::vector<std::string> hostEv;
     std::vector<std::function<void()>> calls;
@@ -342,7 +343,20 @@ void Engine::controlLoop() {
     if (cacheSvc_) cacheSvc_->emitSampleChanges();  // Lane F2: at most one eviction / trim / rate `samples` per tick
     emitTick();
     flush();
+    const double iterMs =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - iterStart).count();
+    if (iterMs >= kLongIterationMs) {
+      std::lock_guard<std::mutex> lk(iterMu_);
+      if (longIter_.size() >= kLongIterationsKept) longIter_.erase(longIter_.begin());
+      longIter_.push_back({iterStart, iterMs});
+      iterMaxMs_ = std::max(iterMaxMs_, iterMs);
+    }
   }
+}
+
+std::vector<Engine::LongIteration> Engine::longIterations() const {
+  std::lock_guard<std::mutex> lk(iterMu_);
+  return longIter_;
 }
 
 void Engine::drainMidi() {
@@ -772,7 +786,12 @@ std::string Engine::statsJson() {
   j.kv("voiceLimitSteals", g.limitSteals.load()).kv("voiceLimit", graph_.voiceLimitRequested());  // D4
   j.kv("cmdDropped", model_.stats().droppedCommands).kv("midiDropped", midiDropped_.load());
   j.kv("midiReceived", midiRecv_.load()).kv("prepares", model_.stats().prepares);
-  j.kv("commits", model_.stats().commits).kv("voicesEnded", model_.stats().voicesEnded).end();
+  j.kv("commits", model_.stats().commits).kv("voicesEnded", model_.stats().voicesEnded);
+  {
+    std::lock_guard<std::mutex> lk(iterMu_);  // core3f T3: the longest control-loop iteration of 10 ms or more
+    j.kv("loopIterMaxMs", iterMaxMs_);
+  }
+  j.end();
   std::string out = j.take();
   const std::string extra = model_.statsJson();
   if (!extra.empty()) out.insert(out.size() - 1, "," + extra);
