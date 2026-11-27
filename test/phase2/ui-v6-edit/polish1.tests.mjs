@@ -27,11 +27,23 @@ export async function polish1EditTests(x) {
 
   /**
    * Count the label's layout reads (offsetWidth on the tip, clientWidth on the bar area) made outside an animation
-   * frame callback, around one live range write of `slots.<i>.lowNote`. Then, two frames on, where the label is
-   * against its bar.
+   * frame callback, around one live range write of `slots.<i>.lowNote`, up to two frames after it. Then where the
+   * label is against its bar.
+   * Skeptic UI6-er (the "polish1 U5a P1" flake, pre-existing on 03293a3): a frame the label asked for before the
+   * probe wrapped requestAnimationFrame (the set-up's writes, a pick: `until` saw the label's text, set at once,
+   * before that frame ran) runs unwrapped, so its reads, inside a frame, counted as forced (2). On a loaded box that
+   * frame often lands in the window. The probe now first makes one such frame itself (`pre`, so the case is always
+   * there) and lets the frames already asked for run before it wraps requestAnimationFrame.
    */
-  const tipProbe = (o) => ev(async ({ prefix, i, note }) => {
+  const tipProbe = (o) => ev(async ({ prefix, i, note, pre }) => {
     const raf0 = window.requestAnimationFrame;
+    const twoFrames = () => new Promise((r) => raf0.call(window, () => raf0.call(window, r)));
+    {
+      const { store } = window.__rig;
+      store.set(`songs.${store.currentSong().id}.patch.slots.${i}.lowNote`, pre);
+      await Promise.resolve(); // the store's notification: the label asks for its frame
+      await twoFrames(); // …which runs here, before the wrap below
+    }
     let inRaf = false;
     window.requestAnimationFrame = (cb) => raf0.call(window, (t) => {
       inRaf = true;
@@ -64,8 +76,8 @@ export async function polish1EditTests(x) {
       store.set(`songs.${id}.patch.slots.${i}.lowNote`, note);
       await Promise.resolve();
       await new Promise((r) => setTimeout(r, 0));
+      await twoFrames(); // the label's own frame (wrapped) is in the window too: its reads are in a frame
       const during = forced;
-      await new Promise((r) => raf0.call(window, () => raf0.call(window, r)));
       const tip = document.querySelector(`[data-testid="${prefix}-tip"]`);
       const bar = document.querySelector(`[data-testid="${prefix}-bar-${i}"]`).getBoundingClientRect();
       const t = tip.getBoundingClientRect();
@@ -91,7 +103,7 @@ export async function polish1EditTests(x) {
       store.set(`songs.${id}.patch.slots.0.highNote`, 72);
     });
     await until(() => document.querySelector('[data-testid="v6e-range-kbd-tip"]')?.textContent.endsWith('C3–C5'));
-    const e = await tipProbe({ prefix: 'v6e-range-kbd', i: 0, note: 50 });
+    const e = await tipProbe({ prefix: 'v6e-range-kbd', i: 0, note: 50, pre: 49 });
     assert.equal(e.forced, 0, `Edit: layout reads outside a frame: ${e.forced}`);
     assert.deepEqual([e.shown, e.text.endsWith('D3–C5')], [true, true], e.text);
     assert.ok(e.off <= 2, `Edit: the label is ${e.off} px off its bar's centre`);
@@ -100,7 +112,7 @@ export async function polish1EditTests(x) {
     await until(() => document.body.dataset.view === 'perform');
     await ev(() => window.__rig.views.v6.kb.pick(0));
     await until(() => !document.querySelector('[data-testid="v6-kbd-tip"]').hidden);
-    const p = await tipProbe({ prefix: 'v6-kbd', i: 0, note: 52 });
+    const p = await tipProbe({ prefix: 'v6-kbd', i: 0, note: 52, pre: 51 });
     assert.equal(p.forced, 0, `Perform: layout reads outside a frame: ${p.forced}`);
     assert.deepEqual([p.shown, p.text.endsWith('E3–C5')], [true, true], p.text);
     assert.ok(p.off <= 2, `Perform: the label is ${p.off} px off its bar's centre`);
