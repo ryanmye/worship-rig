@@ -90,7 +90,7 @@ const rgb = (c) => `rgb(${c.map(Math.round).join(',')})`;
  * this way" ({sel, side, px}: the last px of each match on that side); a run centred in one is marked `faded` (it is
  * scrolled half out of view; scrolled in, it is audited like the rest).
  */
-function collectRuns(fades) {
+function collectRuns([fades, fields]) {
   const cv = document.createElement('canvas'); cv.width = cv.height = 1;
   const g = cv.getContext('2d', { willReadFrequently: true });
   const rgba = (c) => { g.clearRect(0, 0, 1, 1); g.fillStyle = '#000'; g.fillStyle = c; g.fillRect(0, 0, 1, 1); const d = g.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; };
@@ -118,12 +118,24 @@ function collectRuns(fades) {
     if (ext < 8) continue;
     const q = e.getBoundingClientRect();
     if (q.width < 20 || q.height < 20) continue;
+    e.dataset.audShade = '1';
     shades.push({ e, x0: q.left - ext, x1: q.right + ext, y0: q.top - ext, y1: q.bottom + ext, q });
   }
   const shaded = (el, q) => {
     const cx = q.left + q.width / 2, cy = q.top + q.height / 2;
     return shades.some((z) => !z.e.contains(el) && cx >= z.x0 && cx <= z.x1 && cy >= z.y0 && cy <= z.y1
       && !(cx >= z.q.left && cx <= z.q.right && cy >= z.q.top && cy <= z.q.bottom));
+  };
+  // of 15 points over the run's box (5 across × 3 down), 5 or more are hit by something that is not the run's: a
+  // third of it is under an overlay, whose edge then sits in the run's box and darkens its background median (a key's
+  // letter half under a popover's foot at 820 px read 4.4:1; the same letter in view is 6:1)
+  const covered = (el, q) => {
+    let n = 0;
+    for (const fy of [0.25, 0.5, 0.75]) for (const f of [0.1, 0.3, 0.5, 0.7, 0.9]) {
+      const h = document.elementFromPoint(Math.min(vw - 1, q.left + q.width * f), Math.min(vh - 1, q.top + q.height * fy));
+      if (h && !(el.contains(h) || h.contains(el))) n++;
+    }
+    return n >= 5;
   };
   // a run's box cut to what its scrolling / clipping ancestors show (null: clipped away)
   const clip = (el, q) => {
@@ -154,6 +166,9 @@ function collectRuns(fades) {
     if (!q || q.right < 0 || q.bottom < 0 || q.left > vw || q.top > vh) continue;
     const hit = document.elementFromPoint(Math.min(vw - 1, q.left + q.width / 2), Math.min(vh - 1, q.top + q.height / 2));
     if (hit && !(el.contains(hit) || hit.contains(el))) continue;
+    // skeptic UI6-U8b: partly under something else (a popover's edge over a strip's ON label at 820 px: its centre was
+    // a pixel outside the popover, the rest of the word under it): not shown whole, as a covered centre is
+    if (covered(el, q)) continue;
     let op = 1; let disabled = false; let a = el;
     while (a) { const s = getComputedStyle(a); op *= parseFloat(s.opacity); if (a.disabled || a.getAttribute?.('aria-disabled') === 'true') disabled = true; a = a.parentElement; }
     if (op < 0.05) continue;
@@ -181,6 +196,38 @@ function collectRuns(fades) {
       weight: parseInt(ps.fontWeight, 10), op, disabled, cls: String(el.className || '').slice(0, 60), tag: el.tagName.toLowerCase(),
       rect: { x: Math.max(0, q.left), y: Math.max(0, q.top), w: Math.min(q.width, vw - q.left), h: Math.min(q.height, vh - q.top) } });
   }
+  // skeptic UI6-U8b: what a field shows is not a text node (its value, its placeholder, a select's chosen option):
+  // audit them too, in the colour they are drawn in (::placeholder for an empty field)
+  for (const el of fields ? document.body.querySelectorAll('input, textarea, select') : []) {
+    const type = (el.type || '').toLowerCase();
+    if (el.tagName === 'INPUT' && !/^(text|search|number|email|url|password|tel)$/.test(type)) continue;
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility !== 'visible') continue;
+    if (el.closest('[hidden]') || (el.checkVisibility && !el.checkVisibility({ contentVisibilityAuto: true }))) continue;
+    const ph = el.tagName !== 'SELECT' && !el.value;
+    const text = el.tagName === 'SELECT' ? (el.selectedOptions[0]?.textContent || '') : (el.value || el.placeholder || '');
+    if (!text.trim()) continue;
+    const q0 = el.getBoundingClientRect();
+    // the text's box: the content box (inside padding and border), one line high for a single-line field
+    const pl = parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth);
+    const pr = parseFloat(cs.paddingRight) + parseFloat(cs.borderRightWidth);
+    const lh = Math.min(q0.height, parseFloat(cs.fontSize) * 1.3);
+    const top = el.tagName === 'TEXTAREA' ? q0.top + parseFloat(cs.paddingTop) + parseFloat(cs.borderTopWidth)
+      : q0.top + (q0.height - lh) / 2;
+    const q = clip(el, { left: q0.left + pl, top, right: q0.right - pr, bottom: top + lh, width: q0.width - pl - pr,
+      height: lh });
+    if (!q || q.right < 0 || q.bottom < 0 || q.left > vw || q.top > vh) continue;
+    const hit = document.elementFromPoint(Math.min(vw - 1, q.left + q.width / 2), Math.min(vh - 1, q.top + q.height / 2));
+    if (hit && !(el.contains(hit) || hit.contains(el))) continue;
+    let op = 1; let disabled = !!el.disabled; let a = el;
+    while (a) { const s2 = getComputedStyle(a); op *= parseFloat(s2.opacity); if (a.getAttribute?.('aria-disabled') === 'true') disabled = true; a = a.parentElement; }
+    if (op < 0.05) continue;
+    const color = ph ? getComputedStyle(el, '::placeholder').color : cs.color;
+    out.push({ id: id++, text: `${ph ? 'placeholder' : el.tagName === 'SELECT' ? 'select' : 'value'} ${text.trim().slice(0, 30)}`,
+      color, rgba: rgba(color), size: parseFloat(cs.fontSize), weight: parseInt(cs.fontWeight, 10), op, disabled,
+      faded: inFade(q), shaded: shaded(el, q), cls: String(el.className || '').slice(0, 60), tag: el.tagName.toLowerCase(),
+      rect: { x: Math.max(0, q.left), y: Math.max(0, q.top), w: Math.min(q.width, vw - q.left), h: Math.min(q.height, vh - q.top) } });
+  }
   return out;
 }
 
@@ -190,7 +237,7 @@ function collectRuns(fades) {
  * A textless field drawn by its wrapper (a search box: the input is bare, the wrapper has the border) is measured on
  * the wrapper. A switch is measured by its thumb against its track (the state is the thumb's place).
  */
-function collectControls([max, exempt]) {
+function collectControls([max, exempt, dedupe]) {
   const cv = document.createElement('canvas'); cv.width = cv.height = 1;
   const g = cv.getContext('2d', { willReadFrequently: true });
   const rgba = (c) => { g.clearRect(0, 0, 1, 1); g.fillStyle = '#000'; g.fillStyle = c; g.fillRect(0, 0, 1, 1); const d = g.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; };
@@ -202,13 +249,24 @@ function collectControls([max, exempt]) {
   let id = 0;
   const rectOf = (e) => { const q = e.getBoundingClientRect(); return { x: q.left, y: q.top, w: q.width, h: q.height }; };
   for (const el of document.querySelectorAll(SEL)) {
-    if (out.length >= max) break;
+    if (out.length >= max) { out.capped = true; break; }
     if (el.disabled || el.closest('[hidden], [inert], [aria-disabled="true"], fieldset[disabled]')) continue;
     const cs = getComputedStyle(el);
     if (cs.visibility !== 'visible' || cs.display === 'none') continue;
     if (el.checkVisibility && !el.checkVisibility({ contentVisibilityAuto: true })) continue;
     const q = el.getBoundingClientRect();
     if (q.width < 6 || q.height < 6 || q.left < 0 || q.top < 0 || q.right > vw || q.bottom > vh) continue;
+    // skeptic UI6-U8b: cut by its scrolling / clipping ancestors, as the text runs are. A row scrolled out of a list
+    // has nothing drawn at its centre, so the hit test met an ancestor (hit.contains(el)) and its ring was measured
+    // on whatever lay there (Edit's song list under the chooser at 1180 × 820: a false 2.6:1)
+    let cx0 = q.left, cy0 = q.top, cx1 = q.right, cy1 = q.bottom;
+    for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+      const c = getComputedStyle(a);
+      if (c.overflowX === 'visible' && c.overflowY === 'visible') continue;
+      const r = a.getBoundingClientRect();
+      cx0 = Math.max(cx0, r.left); cy0 = Math.max(cy0, r.top); cx1 = Math.min(cx1, r.right); cy1 = Math.min(cy1, r.bottom);
+    }
+    if ((cx1 - cx0) * (cy1 - cy0) < 0.5 * q.width * q.height || cx1 <= cx0 || cy1 <= cy0) continue;
     // a range input is drawn by the fader's own parts: its hit point may be a sibling; check the box centre is ours
     const hit = document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2);
     if (!hit || !(el.contains(hit) || hit.contains(el) || (el.parentElement && el.parentElement.contains(hit)))) continue;
@@ -217,7 +275,7 @@ function collectControls([max, exempt]) {
     if (op < 0.5) continue; // dimmed = shown as unavailable (empty strips, a picking keyboard's others)
     const on = el.classList.contains('on') || el.getAttribute('aria-checked') === 'true' || el.getAttribute('aria-selected') === 'true';
     const sig = `${el.tagName}|${String(el.className?.baseVal ?? el.className)}|${el.getAttribute('role') || ''}|${el.type || ''}|${on}`;
-    if (seen.has(sig)) continue;
+    if (dedupe !== false && seen.has(sig)) continue;
     seen.add(sig);
     const type = (el.type || '').toLowerCase();
     const field = (el.tagName === 'INPUT' && /^(text|search|number|email|url|password|)$/.test(type))
@@ -249,7 +307,7 @@ function collectControls([max, exempt]) {
       testid: el.dataset.testid || '', text: (el.textContent || el.getAttribute('aria-label') || el.placeholder || '').trim().slice(0, 30),
       rect: rectOf(el), edge });
   }
-  return out;
+  return { list: out, capped: !!out.capped };
 }
 
 /**
@@ -324,34 +382,59 @@ function ringOf(id) {
  */
 export async function audit(page, o) {
   const { out, label, shot } = o;
-  const runs = await page.evaluate(collectRuns, o.fades || []);
-  const controls = o.ui ? await page.evaluate(collectControls, [o.maxControls || 80, (o.boundaryExempt || []).join(', ') || null]) : [];
-  const hide = await page.addStyleTag({ content: '*, *::before, *::after { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; caret-color: transparent !important; }' });
+  const runs = await page.evaluate(collectRuns, [o.fades || [], o.fields !== false]);
+  const cc = o.ui ? await page.evaluate(collectControls, [o.maxControls || 80, (o.boundaryExempt || []).join(', ') || null,
+    o.dedupe]) : { list: [], capped: false };
+  const controls = cc.list;
+  const hide = await page.addStyleTag({ content: '*, *::before, *::after, *::placeholder { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; caret-color: transparent !important; }' });
   await page.waitForTimeout(120);
   const buf = await page.screenshot();
   await hide.evaluate((n) => n.remove());
   const img = decodePng(buf);
-  let shown = null; // the screenshot with the text, for runs under an overlay's shadow
+  // skeptic UI6-U8b: a shadow darkens the ink as much as its background. The builder's pass read the drawn ink only
+  // for a run that already failed on its computed colour, so light ink on a dark theme (which the shadow darkens
+  // while the computed colour does not change) always passed. Now every run under a shadow is judged on its drawn
+  // ink: the same screenshot with the casters' shadows off gives each glyph pixel's unshadowed value, the shadowed
+  // shot (with text) the drawn one; their ratio on the run's inkiest pixels is the shadow's darkening there, applied
+  // to the computed colour (so thin anti-aliased glyphs are judged on their colour, not their coverage)
+  let shown = null;
+  let bare = null;
+  if (runs.some((r) => r.shaded)) {
+    shown = decodePng(fs.readFileSync(shot));
+    const off = await page.addStyleTag({ content: '[data-aud-shade] { box-shadow: none !important; }' });
+    await page.waitForTimeout(120);
+    bare = decodePng(await page.screenshot());
+    await off.evaluate((n) => n.remove());
+  }
+  await page.evaluate(() => { for (const e of document.querySelectorAll('[data-aud-shade]')) delete e.dataset.audShade; });
   const results = [];
   for (const r of runs) {
     const med = medianIn(img, [r.rect]);
     if (!med) continue;
     let fg = blend(r.rgba, r.op, med);
     let cr = ratio(fg, med);
-    if (r.shaded && cr < 4.5) {
-      // under a drop shadow the text is darkened as much as its background: read the rendered ink (the 90th
-      // percentile of the run's pixels by contrast with the background) instead of the computed colour
-      shown ||= decodePng(fs.readFileSync(shot));
+    if (r.shaded && bare) {
+      const medN = medianIn(bare, [r.rect]) || med;
       const px = [];
       const x0 = Math.round(r.rect.x), y0 = Math.round(r.rect.y), x1 = Math.round(r.rect.x + r.rect.w), y1 = Math.round(r.rect.y + r.rect.h);
       for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
-        if (x < 0 || y < 0 || x >= shown.width || y >= shown.height) continue;
-        const i = (y * shown.width + x) * 4; const c = [shown.data[i], shown.data[i + 1], shown.data[i + 2]];
-        px.push([ratio(c, med), c]);
+        if (x < 0 || y < 0 || x >= bare.width || y >= bare.height) continue;
+        const i = (y * bare.width + x) * 4;
+        const n = [bare.data[i], bare.data[i + 1], bare.data[i + 2]];
+        px.push([ratio(n, medN), n, [shown.data[i], shown.data[i + 1], shown.data[i + 2]]]);
       }
-      px.sort((a, b) => a[0] - b[0]);
-      const ink = px.length ? px[Math.floor(px.length * 0.9)] : null;
-      if (ink) { cr = ink[0]; fg = ink[1]; }
+      px.sort((a, b) => b[0] - a[0]);
+      const top = px.slice(0, Math.max(3, Math.ceil(px.length * 0.03)));
+      // the darkening on the ink (per channel, encoded values: Chromium composites in sRGB), as a median
+      const k = [0, 1, 2].map((c) => {
+        const v = top.filter((t) => t[1][c] > 24).map((t) => t[2][c] / t[1][c]).sort((a, b) => a - b);
+        return v.length ? Math.min(1, v[Math.floor(v.length / 2)]) : 1;
+      });
+      const drawn = fg.map((v, c) => v * k[c]);
+      const crD = ratio(drawn, med);
+      r.via = `drawn under a shadow (x${k.map((v) => v.toFixed(2)).join('/')})`;
+      cr = crD;
+      fg = drawn;
     }
     const large = r.size >= 24 || (r.size >= 18.66 && r.weight >= 700);
     const need = large ? 3 : 4.5;
@@ -414,7 +497,7 @@ export async function audit(page, o) {
       document.activeElement?.blur?.();
       for (const el of document.querySelectorAll('[data-aud]')) delete el.dataset.aud;
     });
-    ui = { rings: rings.length, ringFails: rings.filter((r) => !r.pass), bounds: bounds.length,
+    ui = { capped: cc.capped, rings: rings.length, ringFails: rings.filter((r) => !r.pass), bounds: bounds.length,
       boundFails: bounds.filter((r) => !r.pass), lowestRings: rings.filter((r) => r.kind !== 'none')
         .sort((x, y) => x.cr - y.cr).slice(0, 5) };
     report.ui = ui;

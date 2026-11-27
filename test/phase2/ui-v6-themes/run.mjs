@@ -10,7 +10,11 @@
 //   focus rings     0 under 3 : 1 against what is behind them, 0 controls whose focus shows nothing
 //   boundaries      0 text fields / selects / v6 switches whose edge (or thumb vs track) is under 3 : 1
 //   every state     reached; 0 console.error, 0 HTTP ≥ 400
-//   node test/phase2/ui-v6-themes/run.mjs [--theme id,id] [--only perform,edit,...]
+// Skeptic UI6-U8b: also U8a's surfaces (the first-run Start here card, the empty library and its lock line), Effects'
+// Vibe menu, field hints (placeholders), selects' and fields' own words, text drawn under an overlay's shadow on every
+// theme (not only where the computed colour already failed), and the iPad sizes: 820 × 1180 and 1180 × 820 in a touch
+// context ((pointer: coarse), MIDI refused), the states in v6-tour.mjs IPAD_STATES (portrait: + Edit's song drawer).
+//   node test/phase2/ui-v6-themes/run.mjs [--theme id,id] [--only perform,edit,...] [--sizes mac,portrait,landscape]
 //   screenshots + audit JSON → ./screenshots/<theme>/ (git-ignored) or UI6T_SHOTS=<dir>; UI6T_SHEETS=<dir> also
 //   writes a contact sheet per theme (Perform, Edit, Settings, Song bank).
 import path from 'node:path';
@@ -26,7 +30,8 @@ fs.mkdirSync(OUT, { recursive: true });
 
 const t0 = Date.now();
 console.log('\n[ui-v6-themes] the v6 screens × the themes, contrast audit');
-const r = await shootV6({ themes: list('--theme'), only: list('--only'), out: OUT,
+const SIZES = list('--sizes').length ? list('--sizes') : ['mac', 'portrait', 'landscape'];
+const r = await shootV6({ themes: list('--theme'), only: list('--only'), out: OUT, sizes: SIZES,
   sheets: process.env.UI6T_SHEETS ? path.resolve(process.env.UI6T_SHEETS) : null,
   log: (s) => { if (/TEXT|RING|EDGE|not reached/.test(s) || process.env.VERBOSE) console.log(s); } });
 

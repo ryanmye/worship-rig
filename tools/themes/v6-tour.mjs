@@ -217,7 +217,23 @@ export const STATES = [
     await p.click(tid('v6e-effects-cat-sends'));
     await p.waitForTimeout(200);
   } },
-  { id: 'edit-master', enter: async (p, x) => x.toEdit('master'), leave: async (p, x) => x.toPerform() },
+  // skeptic UI6-U8b: Effects' Vibe menu (a v6e-imenu, its own 18 + 48 px shadow) was never open in the tour
+  { id: 'edit-vibe', enter: async (p, x) => {
+    await p.click(tid('v6e-fx-vibe'));
+    await x.until(() => !document.querySelector('[data-testid="v6e-fx-vibemenu"]').hidden);
+  }, leave: async (p, x) => {
+    await x.esc();
+    await x.until(() => document.querySelector('[data-testid="v6e-fx-vibemenu"]').hidden);
+  } },
+  { id: 'edit-master', enter: async (p, x) => x.toEdit('master') },
+  // skeptic UI6-U8b: iPad portrait's song drawer (styles-v6-edit.css .drawer-open .v6e-lib, a 20 + 56 px shadow)
+  { id: 'edit-drawer', sizes: ['portrait'], enter: async (p, x) => {
+    await x.ev(() => window.__rig.views.edit.editState.setDrawer(true));
+    await x.until(() => getComputedStyle(document.querySelector('#view-edit .v6e-lib')).position === 'absolute');
+  }, leave: async (p, x) => {
+    await x.ev(() => window.__rig.views.edit.editState.setDrawer(false));
+    await x.toPerform();
+  } },
   // ---- Settings: every category, then search ('settings-*' is expanded per category at run time)
   { id: 'settings-*' },
   { id: 'settings-search', enter: async (p, x) => {
@@ -257,6 +273,53 @@ export const STATES = [
     await x.until(() => !document.querySelector('[data-testid="v6-chart-editor"]'));
   } },
 ];
+/**
+ * Skeptic UI6-U8b: U8a's surfaces (rebased in after the builder's audit): the first-run Start here card (shown at
+ * boot in a fresh context, until the first song change), the empty library (its words, its buttons, the lock line
+ * under Perform lock). Visited first (the card) and last (the empty library deletes every song).
+ */
+export const U8A_FIRST = [
+  { id: 'start-card', enter: async (p, x) => {
+    await x.ev(() => {
+      const st = window.__rig.views.v6.start;
+      if (!st.shown) st.card.reset();
+    });
+    await x.until(() => !!document.querySelector('[data-testid="start-card"]:not([hidden])'));
+  } },
+];
+export const U8A_LAST = [
+  { id: 'empty-library', enter: async (p, x) => {
+    await x.toPerform();
+    await x.ev(() => {
+      const { store } = window.__rig;
+      for (const id of [...store.get().songOrder]) store.deleteSong(id);
+    });
+    await x.until(() => !!document.querySelector('[data-testid="v6-empty"]:not([hidden])'));
+  } },
+  { id: 'empty-library-locked', enter: async (p, x) => {
+    await x.ev(() => window.__rig.store.set('settings.performLock', true));
+    await x.until(() => !!document.querySelector('.v6-empty-lock:not([hidden])'));
+  }, leave: async (p, x) => x.ev(() => window.__rig.store.set('settings.performLock', false)) },
+];
+/**
+ * The window sizes (skeptic UI6-U8b): the Mac's 1280 × 800 and the iPad's 820 × 1180 / 1180 × 820 (U8a layouts,
+ * styles-v6-ipad.css). The iPad ones are a touch context ((pointer: coarse) matches: the 44 px rules) at scale 1 (the
+ * audit reads screenshot pixels by CSS px), with Web MIDI refused so the lamp shows "Not allowed yet" (the Mac run
+ * shows "No device").
+ */
+export const SIZES = {
+  mac: { width: 1280, height: 800 },
+  portrait: { width: 820, height: 1180, ipad: true, midi: 'blocked' },
+  landscape: { width: 1180, height: 820, ipad: true, midi: 'blocked' },
+};
+/**
+ * At the iPad sizes the suite enters only these (skeptic UI6-U8b: U8a's layouts with every overlay whose shadow or
+ * place changes there, the Trying banner, the drawer, U8a's surfaces), so 8 themes × 3 sizes fit the suite's budget.
+ * The CLI's --ipad-all enters every state (the skeptic's exploratory runs: no other failure at either iPad size).
+ */
+export const IPAD_STATES = ['start-card', 'perform-2', 'perform-7', 'quick', 'range-pick', 'more-menu', 'space-pop',
+  'add-song', 'learn', 'save-snapshot', 'song-menu', 'locked', 'bank', 'bank-trying', 'edit-sound', 'edit-chooser',
+  'edit-sends', 'edit-vibe', 'edit-master', 'edit-drawer', 'settings-search', 'empty-library', 'empty-library-locked'];
 /** The strips' "more this way" fade (styles-v6.css .v6-sfade::after, 48 px) over a strip scrolled half out. */
 const FADES = [{ sel: '.v6-stripsarea.scroll:not(.atend) .v6-sfade', side: 'right', px: 48 }];
 /** Fields found without a boundary: Edit's song name is a title with a ✎ beside it (views/v6/edit/edit.js). */
@@ -273,6 +336,13 @@ const SHEET = [['perform-2', 'Perform'], ['edit-sound', 'Edit · Sound'], ['sett
  * @param {string[]} [o.only]    state ids (prefix match: 'settings' = every Settings category)
  * @param {string} [o.sheets]    contact sheets → <sheets>/<id>.png
  * @param {boolean} [o.ui]       the non-text half (focus rings, boundaries); default true
+ * @param {string[]} [o.sizes]   SIZES keys (default ['mac']); a theme × size is one context, keyed '<id>@<size>'
+ *                               in the result (the Mac one: '<id>')
+ * @param {boolean} [o.u8a]      U8a's surfaces (U8A_FIRST / U8A_LAST); default true
+ * @param {number} [o.maxControls]  focusable controls measured per state (audit-lib's default 80)
+ * @param {object} [o.auditOpts] passed to audit() (skeptic probes)
+ * @param {boolean} [o.ipadAll]  every state at the iPad sizes too (default: IPAD_STATES)
+ * @param {string[]} [o.ipadStates]  the states entered at the iPad sizes (default IPAD_STATES)
  * @param {(s:string)=>void} [o.log]
  * @returns {Promise<{themes:object, totals:{text:number, rings:number, bounds:number, errors:number, missed:number}}>}
  */
@@ -282,6 +352,7 @@ export async function shootV6(o) {
   const themes = (o.themes && o.themes.length ? o.themes : THEMES.filter((t) => !t.coming).map((t) => t.id));
   for (const id of themes) if (!byId(id)) throw new Error(`unknown theme ${id}`);
   const want = (id) => !o.only || !o.only.length || o.only.some((k) => id === k || id.startsWith(k));
+  const sizes = o.sizes && o.sizes.length ? o.sizes : ['mac'];
   const { chromium } = require('playwright');
   const { createServer } = require(path.join(ROOT, 'server.js'));
   const fx = bankFixture();
@@ -293,114 +364,138 @@ export async function shootV6(o) {
   const totals = { text: 0, rings: 0, bounds: 0, errors: 0, missed: 0 };
   try {
     for (const id of themes) {
-      const out = path.join(o.out, id);
-      fs.mkdirSync(out, { recursive: true });
       const t = byId(id);
-      const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1,
-        colorScheme: t.mode });
-      await pinTheme(ctx, id);
-      await ctx.grantPermissions([...MIDI_PERMISSIONS], { origin });
-      await ctx.addInitScript(([chart]) => { window.__auditChart = chart; }, [CHART]);
-      const page = await ctx.newPage();
-      const errors = [];
-      page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-      page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-      page.on('response', (r) => { if (r.status() >= 400) errors.push(`${r.status()} ${r.url()}`); });
-      page.setDefaultTimeout(60000);
-      const x = mk(page);
-      const sum = { theme: id, size: '1280x800', shots: {}, missed: {} };
-      try {
-        await page.goto(`${url}?ui6=1`, { timeout: 120000 });
-        await page.waitForFunction(() => !!window.__rig?.views?.v6, null, { timeout: 120000 });
-        if (await page.isVisible('#overlay-start')) await page.click('#overlay-start');
-        await page.waitForFunction(() => window.__rig.engine.ctx?.state === 'running', null, { timeout: 120000 });
-        await x.ev(() => window.__rig.controller.packsReady);
-        await x.settled();
-        sum.shown = await x.ev(() => document.documentElement.dataset.theme);
-        await x.ev((n) => {
-          const { store } = window.__rig;
-          store.set(`songs.${store.currentSong().id}.notes`, n);
-        }, NOTES);
-        await x.ev(() => document.fonts.ready);
-        // stills only: this box runs at a few fps under load, so transitions would be caught mid-way
-        await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; '
-          + 'animation-duration: 0s !important; animation-delay: 0s !important; }' });
-        const list = [];
-        for (const s of STATES) {
-          if (s.id !== 'settings-*') {
-            list.push(s);
-            continue;
-          }
-          // today's categories, read from the mounted v6 Settings (one state per category)
-          await x.ev(() => window.__rig.ctx.openSettings());
-          await x.until(() => window.__rig.views.settings.isOpen && !!window.__rig.views.settings.v6);
-          const cats = await x.ev(() => [...document.querySelectorAll('#view-settings [role=tab]')]
-            .map((b) => b.dataset.cat));
-          await x.ev(() => window.__rig.ctx.closeSettings());
-          for (const c of cats) {
-            list.push({ id: `settings-${c}`, enter: async (p, xx) => {
-              await xx.ev(() => window.__rig.ctx.openSettings());
-              await xx.until(() => window.__rig.views.settings.isOpen);
-              await p.click(`#view-settings [role=tab][data-cat="${c}"]`);
-              await xx.until((cc) => !document.querySelector(`#view-settings [role=tabpanel][data-cat="${cc}"]`)
-                .hidden, c);
-              await xx.ev(() => { for (const b of document.querySelectorAll('.st-body')) b.scrollTop = 0; });
-            }, leave: async (p, xx) => {
-              await xx.ev(() => window.__rig.ctx.closeSettings());
-              await xx.until(() => document.getElementById('view-settings').hidden);
-            } });
-          }
+      for (const sz of sizes) {
+        const vp = SIZES[sz];
+        if (!vp) throw new Error(`unknown size ${sz}`);
+        const key = sz === 'mac' ? id : `${id}@${sz}`;
+        const out = path.join(o.out, id);
+        fs.mkdirSync(out, { recursive: true });
+        // the Mac run keeps the builder's file names (<state>.png, audit-<state>-1280.json)
+        const tag = sz === 'mac' ? '' : `-${sz}`;
+        const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1,
+          colorScheme: t.mode, ...(vp.ipad ? { hasTouch: true, isMobile: true } : {}) });
+        await pinTheme(ctx, id);
+        await ctx.grantPermissions([...MIDI_PERMISSIONS], { origin });
+        await ctx.addInitScript(([chart]) => { window.__auditChart = chart; }, [CHART]);
+        if (vp.midi === 'blocked') {
+          await ctx.addInitScript(() => {
+            navigator.requestMIDIAccess = async () => { throw new DOMException('no', 'NotAllowedError'); };
+          });
         }
-        for (const s of list) {
-          const run = want(s.id);
-          try {
-            // a skipped state is still entered when a later one builds on it (Edit categories, bank → trying)
-            await s.enter(page, x, fx);
-          } catch (err) {
-            sum.missed[s.id] = String(err.message || err).split('\n')[0];
-            totals.missed += run ? 1 : 0;
-            log(`  [${id}] ${s.id}: not reached (${sum.missed[s.id]})`);
-            await s.leave?.(page, x).catch(() => {});
-            continue;
-          }
-          if (run) {
-            await x.ev(() => {
-              document.getElementById('toasts')?.replaceChildren();
-              document.activeElement?.blur?.();
-            });
-            await page.mouse.move(640, 2);
-            await page.waitForTimeout(250);
-            const file = path.join(out, `${s.id}.png`);
-            await page.screenshot({ path: file });
-            const r = await audit(page, { out, label: `${s.id}-1280`, shot: file, ui, quiet: !o.verbose, fades: FADES,
-              boundaryExempt: BOUNDARY_EXEMPT });
-            const row = { count: r.count, fails: r.fails, lowest: r.lowest };
-            if (r.ui) Object.assign(row, { rings: r.ui.rings, ringFails: r.ui.ringFails.length, bounds: r.ui.bounds,
-              boundFails: r.ui.boundFails.length });
-            sum.shots[s.id] = row;
-            totals.text += r.fails;
-            totals.rings += r.ui ? r.ui.ringFails.length : 0;
-            totals.bounds += r.ui ? r.ui.boundFails.length : 0;
-            const bad = r.fails + (r.ui ? r.ui.ringFails.length + r.ui.boundFails.length : 0);
-            log(`  [${id}] ${s.id}: ${r.count} text, ${r.fails} fail` + (r.ui ? ` · rings ${r.ui.rings}/${r.ui.ringFails
-              .length} fail · edges ${r.ui.bounds}/${r.ui.boundFails.length} fail` : '') + (bad ? '' : ` · low ${r.lowest}`));
-            if (bad) {
-              for (const f of r.failRows) log(`      TEXT ${f.cr} < ${f.need} "${f.text}" .${f.cls} ${f.fg} on ${f.bg}`);
-              for (const f of r.ui?.ringFails || []) log(`      RING ${f.kind} ${f.cr} <${f.tag}> "${f.text}" .${f.cls} ${f.testid} ${f.ring || 'no visible change'} on ${f.bg || ''}`);
-              for (const f of r.ui?.boundFails || []) log(`      EDGE ${f.kind} ${f.cr} (${f.kind === 'field' ? `border ${f.border}, fill ${f.fill}` : `thumb ${f.thumb}`}) <${f.tag}> .${f.cls} ${f.testid} on ${f.bg}`);
+        const page = await ctx.newPage();
+        const errors = [];
+        page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+        page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+        page.on('response', (r) => { if (r.status() >= 400) errors.push(`${r.status()} ${r.url()}`); });
+        page.setDefaultTimeout(60000);
+        const x = mk(page);
+        const sum = { theme: id, size: `${vp.width}x${vp.height}`, shots: {}, missed: {} };
+        try {
+          await page.goto(`${url}?ui6=1`, { timeout: 120000 });
+          await page.waitForFunction(() => !!window.__rig?.views?.v6, null, { timeout: 120000 });
+          if (await page.isVisible('#overlay-start')) await page.click('#overlay-start');
+          await page.waitForFunction(() => window.__rig.engine.ctx?.state === 'running', null, { timeout: 120000 });
+          await x.ev(() => window.__rig.controller.packsReady);
+          await x.settled();
+          // skeptic UI6-U8b: every sound ready first. While the set was still preparing, the drone's ON tile was
+          // caught lit when the colours were read and unlit in the background shot (portrait perform-2: 1.4 : 1)
+          await x.until(() => document.getElementById('ready-status')?.classList.contains('on'), null, 240000);
+          sum.shown = await x.ev(() => document.documentElement.dataset.theme);
+          sum.coarse = await x.ev(() => matchMedia('(pointer: coarse)').matches);
+          await x.ev((n) => {
+            const { store } = window.__rig;
+            store.set(`songs.${store.currentSong().id}.notes`, n);
+          }, NOTES);
+          await x.ev(() => document.fonts.ready);
+          // stills only: this box runs at a few fps under load, so transitions would be caught mid-way
+          await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; '
+            + 'animation-duration: 0s !important; animation-delay: 0s !important; }' });
+          const list = [];
+          for (const s of [...(o.u8a === false ? [] : U8A_FIRST), ...STATES, ...(o.u8a === false ? [] : U8A_LAST)]) {
+            if (s.id !== 'settings-*' || (sz !== 'mac' && !o.ipadAll && !(o.ipadStates || []).some((k) => k.startsWith('settings-')))) {
+              list.push(s);
+              continue;
+            }
+            // today's categories, read from the mounted v6 Settings (one state per category)
+            await x.ev(() => window.__rig.ctx.openSettings());
+            await x.until(() => window.__rig.views.settings.isOpen && !!window.__rig.views.settings.v6);
+            const cats = await x.ev(() => [...document.querySelectorAll('#view-settings [role=tab]')]
+              .map((b) => b.dataset.cat));
+            await x.ev(() => window.__rig.ctx.closeSettings());
+            for (const c of cats) {
+              list.push({ id: `settings-${c}`, enter: async (p, xx) => {
+                await xx.ev(() => window.__rig.ctx.openSettings());
+                await xx.until(() => window.__rig.views.settings.isOpen);
+                // portrait Settings is a list, then one category (drilled in): the tab is in the list
+                await p.click(`#view-settings [role=tab][data-cat="${c}"]`);
+                await xx.until((cc) => !document.querySelector(`#view-settings [role=tabpanel][data-cat="${cc}"]`)
+                  .hidden, c);
+                await xx.ev(() => { for (const b of document.querySelectorAll('.st-body')) b.scrollTop = 0; });
+              }, leave: async (p, xx) => {
+                await xx.ev(() => window.__rig.ctx.closeSettings());
+                await xx.until(() => document.getElementById('view-settings').hidden);
+              } });
             }
           }
-          await s.leave?.(page, x);
-          await page.waitForTimeout(150);
+          const subset = sz === 'mac' || o.ipadAll ? null : new Set(o.ipadStates || IPAD_STATES);
+          for (const s of list) {
+            if (subset && !subset.has(s.id)) continue;
+            if (s.sizes && !s.sizes.includes(sz)) {
+              await s.leave?.(page, x); // (edit-drawer's leave goes back to Perform at every size)
+              continue;
+            }
+            const run = want(s.id);
+            try {
+              // a skipped state is still entered when a later one builds on it (Edit categories, bank → trying)
+              await s.enter(page, x, fx);
+            } catch (err) {
+              sum.missed[s.id] = String(err.message || err).split('\n')[0];
+              totals.missed += run ? 1 : 0;
+              log(`  [${key}] ${s.id}: not reached (${sum.missed[s.id]})`);
+              await s.leave?.(page, x).catch(() => {});
+              continue;
+            }
+            if (run) {
+              await x.ev(() => {
+                document.getElementById('toasts')?.replaceChildren();
+                document.activeElement?.blur?.();
+              });
+              await page.mouse.move(Math.round(vp.width / 2), 2);
+              await page.waitForTimeout(250);
+              const file = path.join(out, `${s.id}${tag}.png`);
+              await page.screenshot({ path: file });
+              const r = await audit(page, { out, label: `${s.id}-${sz === 'mac' ? 1280 : sz}`, shot: file, ui,
+                quiet: !o.verbose, fades: FADES, boundaryExempt: BOUNDARY_EXEMPT, maxControls: o.maxControls,
+                ...(o.auditOpts || {}) });
+              const row = { count: r.count, fails: r.fails, lowest: r.lowest };
+              if (r.ui) Object.assign(row, { rings: r.ui.rings, ringFails: r.ui.ringFails.length, bounds: r.ui.bounds,
+                boundFails: r.ui.boundFails.length });
+              sum.shots[s.id] = row;
+              totals.text += r.fails;
+              totals.rings += r.ui ? r.ui.ringFails.length : 0;
+              totals.bounds += r.ui ? r.ui.boundFails.length : 0;
+              const bad = r.fails + (r.ui ? r.ui.ringFails.length + r.ui.boundFails.length : 0);
+              log(`  [${key}] ${s.id}: ${r.count} text, ${r.fails} fail` + (r.ui ? ` · rings ${r.ui.rings}/${r.ui.ringFails
+                .length} fail · edges ${r.ui.bounds}/${r.ui.boundFails.length} fail` : '') + (bad ? '' : ` · low ${r.lowest}`));
+              if (bad) {
+                for (const f of r.failRows) log(`      TEXT ${f.cr} < ${f.need} "${f.text}" .${f.cls} ${f.fg} on ${f.bg}`);
+                for (const f of r.ui?.ringFails || []) log(`      RING ${f.kind} ${f.cr} <${f.tag}> "${f.text}" .${f.cls} ${f.testid} ${f.ring || 'no visible change'} on ${f.bg || ''}`);
+                for (const f of r.ui?.boundFails || []) log(`      EDGE ${f.kind} ${f.cr} (${f.kind === 'field' ? `border ${f.border}, fill ${f.fill}` : `thumb ${f.thumb}`}) <${f.tag}> .${f.cls} ${f.testid} on ${f.bg}`);
+              }
+            }
+            await s.leave?.(page, x);
+            await page.waitForTimeout(150);
+          }
+        } finally {
+          sum.errors = [...new Set(errors.filter((e) => !/MIDI|midi|requestMIDIAccess/.test(e)))];
+          totals.errors += sum.errors.length;
+          fs.writeFileSync(path.join(out, `summary${tag}.json`), JSON.stringify(sum, null, 1));
+          all[key] = sum;
+          await ctx.close();
         }
-      } finally {
-        sum.errors = [...new Set(errors.filter((e) => !/MIDI|midi|requestMIDIAccess/.test(e)))];
-        totals.errors += sum.errors.length;
-        fs.writeFileSync(path.join(out, 'summary.json'), JSON.stringify(sum, null, 1));
-        all[id] = sum;
-        await ctx.close();
+        if (o.sheets && sz === 'mac') await contactSheet(browser, out, path.join(o.sheets, `${id}.png`), t.name);
       }
-      if (o.sheets) await contactSheet(browser, out, path.join(o.sheets, `${id}.png`), t.name);
     }
   } finally {
     await browser.close();
