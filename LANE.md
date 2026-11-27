@@ -16,14 +16,18 @@ ui-v6-bank,settings. Don't push.
 - [ ] T1: loops: g++ 1000x running (.probe/loop-gcc1000/summary.txt); clang-20 1000x; ASan; taskset 1/2 CPUs;
       RIG_TEST_DECODE_THREADS 1..4
 - [ ] T1: native gates (ctest g++, clang-20 -Werror, ASan; fixtures byte-identical vs .probe/fx-base)
-- [ ] docs: CONTRACT_CHANGES "## core3f" + "## CAP", INTERFACE_LOG, docs/patch-packs.md
+- [x] docs: CONTRACT_CHANGES "## core3f" + "## CAP", INTERFACE_LOG, docs/patch-packs.md
 - [x] T2: refusal sites: store.js chartOverflows (setChart + validate), addPackSong, topUpPacks fits()
 - [x] T2: fix + shell unit tests (be247be)
-- [ ] T2: JS gates
+- [x] T2: JS gates (tree 036a06d): shell-unit 418/419 = pre-existing bank-trial "skeptic F1–F3" (fails on base
+      cae9f84 too; fixed on lane-fu2 e872443, stale keep-alive) -> 419/419 with that test hunk applied (not committed);
+      unit 689/0/12; chart 47/47 (first 2 runs: v6 contrast .v6-ts-n under load avg 19, passed with my loops paused);
+      migration-1x 115/0 (first run: D11 import 20 s timeout under load); ui-v6-bank 23/23; settings 118/118
 - [ ] final report here
 
 ## Next step
-Docs, then clang-20 build + loops, ASan, gates (one heavy thing at a time; g++ loop is running in background).
+Loops are SIGSTOPped (pkill -CONT to resume) while native gates run: fixtures, ctest g++ / clang20 / asan. Then resume
+loops (gcc1000 at ~240, clang1000 just started), then taskset 1-CPU + RIG_TEST_DECODE_THREADS 1..4 sweeps, ASan loop.
 
 ## Findings
 - CI: unit.core3 failed at :353 twice (run 45885049507 on f46bac4, 45963347960 on 2026-11-27 08:10Z), both
