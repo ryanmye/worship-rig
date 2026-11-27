@@ -9905,8 +9905,13 @@ quirks). `app/js/engine/` is untouched.
   wider than the header; with the Chart button (D33: on by default) 47 px with a mouse, 74 on touch. Below 1100 px
   (styles-v6-edit.css), beside C-SHIP's give-ways in the same media query (no "Time" caption, 6 px gaps; after the
   rebase onto C-SHIP the lane's own caption rule was dropped as a duplicate), the key chip's "· you play …" may
-  ellipsize (flex-shrink .1: the name gives way first, to its 6ch; title and
-  aria-label carry it whole). Measured: fits at 1024 (mouse, touch, chart on / off); at 1101 touch with the chart,
+  ellipsize (title and aria-label carry it whole). Skeptic FU2 F1: with flex-shrink .1 against the name's 1 the chip
+  shrank in proportion, so the played key itself was under the ellipsis at every width up to 1100 (1100 mouse: the
+  name still 151 px wide). Now the name takes the squeeze until its 6ch (`flex-shrink: 1000` ≤ 1100 px), and the v6
+  chip's text is two spans, `.ev2-song-playw` "· you play " and `.ev2-song-playk` (the key and octave word): the
+  words give way first, the key last (1024 touch with the Chart button and an octave word only). Today's Edit keeps
+  one text node. Test: ui-v6-edit "FU2 skeptic F1" (1024 / 1040 / 1064 / 1100, mouse / touch, chart on / off, C and
+  F#m −1 oct). Measured: fits at 1024 (mouse, touch, chart on / off); at 1101 touch with the chart,
   1 px spare. Above 1100 px nothing changes. Test: ui-v6-edit `layout-fu2.tests.mjs` "UI6-fu ⋯ Song" (1024, 1101,
   1180, 1280; mouse / touch; chart on / off; nothing gives way at 1280).
 - **Layout quirk: today's Edit in an 820 px window.** The body's 1024 px minimum made it 1004 px wide, its right side
@@ -9943,5 +9948,7 @@ quirks). `app/js/engine/` is untouched.
 - **O6: a muted instrument's number goes grey.** Today's keyboard: the bar's own grey (the themes' `.rbar.off`,
   inherited) with the theme's text colour. The v6 keyboard's muted bar keeps its lamp colour (pre-existing:
   `.v6 .v6-kbd .v6-rbar` out-ranks every `.rbar.off`; only its handles go grey), so there the number is `--muted`
-  with `--bg` on it. Measured ≥ 4.5 : 1 in all 8 themes (ui-v6 "CVD2 O6"); today's: the bar's grey, ≥ 4.5 : 1
-  (Sanctuary). The bar itself is unchanged (changing it would change cvd-Off pixels).
+  with `--bg` on it. Measured ≥ 4.5 : 1 in all 8 themes (ui-v6 "CVD2 O6"). The bar itself is unchanged (changing it
+  would change cvd-Off pixels). Skeptic FU2 F2: today's bar grey under `--text` was 3.60 : 1 in Daylight Stage (it
+  had been measured in Sanctuary only), so today's keyboard now uses the same `--muted` + `--bg` rule (≥ 4.5 : 1 in
+  all 8: ui-v6 "CVD2 O1: today's keyboard" loops the themes).
