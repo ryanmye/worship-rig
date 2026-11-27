@@ -9985,3 +9985,13 @@ Prepare only: nothing was tagged, dispatched or published, and none of it has ru
   into release.yml, release-native publishes only on dispatch + publish + v2 tag), asset names vs `pickAsset`, the
   project.yml version keys, the notes stripping. Mutation-checked: reverting release.yml to `v*` or dropping either
   half of release-native's publish guard fails it.
+- N10 skeptic fixes (native/docs/reviews/N10.md):
+  - F1: `release-notes.mjs` decides "run as a script" by realpath. The string compare of `import.meta.url` with
+    `argv[1]` skipped `main()` when reached through a symlink: empty stdout, exit 0, so `--require-final` passed a
+    draft. The release job also refuses a body without its "Files (sha256)" section.
+  - F2: `absoluteLink()` (exported): links resolve inside the repo at the tag (`/x` is repo-root-relative; `../` past
+    the root throws). WHATWG URL resolution had made `/x` → `github.com/x` and `../../x` → `github.com/<repo>/blob/x`.
+  - F3–F5: `package-release.sh` also bans Apple / pack audio and instrument types (`.caf .aif .m4a .wav .flac .sfz
+    .aupreset .band .logicx` …, `pack.json`) anywhere in the bundle and requires every file of `Resources/app` and
+    `Resources/docs` to be tracked in git (a GarageBand conversion is an `.m4a`/`.mp3`); the 480 MB gate compares KB
+    like build-lint (whole MB let 480.0–480.99 MB through); find / git errors fail with a message. Tests: 12.

@@ -444,9 +444,12 @@ bash tools/mac/check.sh --rev HEAD --stage selftest --app "$(cat native/apple/bu
 
 The script fails (exit 1) unless: the bundle id is `com.ryanmye.worshiprig.native` and the version is a number (and
 equals `--expect-version` when given; CI passes the tag's); the executable is arm64 only; `Resources/app/index.html`
-is in the bundle and no `user-samples` / `sound-packs` / `.exs` is; `codesign --verify --deep --strict` passes and
-`codesign -dv` says `Signature=adhoc` with that identifier; the app is at most 480 MB (the 500 MB rule's build-lint
-line; a warning above 400 MB); the app inside the zip and inside the mounted dmg verifies too.
+is in the bundle; no `user-samples` / `sound-packs` / `pack.json` and no Apple or pack audio / instrument file
+(`.exs .caf .aif(f/c) .m4a .wav .flac .ogg .sfz .aupreset .cst .pst .patch .band .logicx`) is anywhere in it, and every
+file in `Resources/app` and `Resources/docs` is tracked in git (so a GarageBand conversion or a pack copied into `app/`
+fails the build even as an `.mp3`; N10 skeptic F3); `codesign --verify --deep --strict` passes and `codesign -dv` says
+`Signature=adhoc` with that identifier; the app is at most 480 MB, counted in KB as build-lint does (the 500 MB rule;
+a warning above 400 MB); the app inside the zip and inside the mounted dmg verifies too.
 
 - [ ] The Release configuration has never been built: fix what it shows (the Debug build is what CI and `check.sh`
   compile).
