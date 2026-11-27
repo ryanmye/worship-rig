@@ -9813,6 +9813,10 @@ review O1, O3, O4 and O7 fixed. No engine change (`app/js/engine` untouched), no
   controller toasts like D8/D9's. Callers: the WorshipTools CSV placeholders stop at the first refusal and count what
   was added; the v6 song menu no longer adds its own "Could not duplicate" for a full library. The other callers
   already handled a null id.
+  - With D9 (saves past the cap warn and are kept): a library still grows past 2 MB by edits (notes, …), never by a
+    new song, as merges and pack songs already could not. The migration-1x fixtures that built over-cap libraries
+    with `addSong` (`d8-skeptic` `bigLib`, its D9 test, `quota.pw.mjs`) now build the part past the cap in JSON or
+    grow by notes edits, and D9's test also checks that an add / duplicate past the cap writes nothing.
 - **O7** `views/chart/import.js` `fileTooLargeMessage(bytes)`: "That file is too large (1.5 MB). A file can be at
   most 1 MB (a song list), and a chart at most 64 KB." (was "A chart can be at most 64 KB"), in both dialogs.
 - **Purity** (measured on the factory library, which has no charts; 1280 × 800):
@@ -9828,4 +9832,10 @@ review O1, O3, O4 and O7 fixed. No engine change (`app/js/engine` untouched), no
   dialog, O7 message, `?chart=` both ways, the lazy rules, v6 purity re-based); ui-v6 (the Chart module by default,
   unloaded; Notes' Chart; PANIC over the Edit chart dialog; purity both ways); ui-v6-edit (the Chart button; purity
   both ways); settings (the row in both UIs, the search words, live on / off); ui-core (the toggle by default, 36 px,
-  44 px on touch, a tap loads it).
+  44 px on touch, a tap loads it); migration-1x (fixtures above).
+- **v6 Edit header at 1024 × 700**: with the Chart button shown by default the header overflowed by ~35 px
+  (ui-v6-edit fit checks); at ≤ 1100 px wide the "Time" caption hides (the select keeps its aria-label) and the
+  header's gaps go 10 → 6 px (styles-v6-edit.css).
+- Gates (ba4dfbc, one at a time, `tools/cloud/gates.mjs`): shell unit 415/415, unit 685 pass / 0 fail / 12 skip,
+  chart 44/44, ui-v6 85/85, ui-v6-edit 44/44, ui-v6-ipad 29/29, ui-v6-bank 23/23, settings 114/114, ui-core 79/79,
+  edit-v2 14/14 files, ui-v6-themes 24/24 themes clean; migration-1x after the fixture fix (see the lane report).

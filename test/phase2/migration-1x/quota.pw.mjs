@@ -44,6 +44,21 @@ test('real Chromium quota: room comes only from earlier states of a kept library
       while (JSON.stringify(s.get()).length < to) s.set(`songs.${s.addSong(null, { name: tag })}.notes`, 'n'.repeat(10000));
       return JSON.stringify(s.get());
     };
+    // C-SHIP (chart-view O4): addSong refuses a song past LIBRARY_MAX_CHARS, so a library grows past the cap by edits
+    // (D9). `blanks` songs with no notes are added while it still fits; fill(s, k) then gives k of them 10 000
+    // characters each (an edit, saved past the cap)
+    const blanks = [];
+    const addBlanks = (s, k, tag) => {
+      for (let i = 0; i < k; i++) blanks.push(s.addSong(null, { name: `${tag} blank ${i}` }));
+    };
+    const fill = (s, k) => {
+      for (let i = 0; i < k; i++) {
+        const id = blanks.shift();
+        if (!id) return false;
+        s.set(`songs.${id}.notes`, 'f'.repeat(10000));
+      }
+      return true;
+    };
     // how much this origin holds (key + value characters)
     localStorage.clear();
     let quota = 0;
@@ -57,16 +72,17 @@ test('real Chromium quota: room comes only from earlier states of a kept library
     }
     localStorage.clear();
     const real = mem();
-    const realOld = grow(real, 1700000, 'Real');
+    const realOld = grow(real, 1600000, 'Real');
     const trivial = grow(mem(), 20000, 'Trivial');
     localStorage.setItem(`${K}1000.downgrade.s2`, realOld);
     localStorage.setItem(`${K}2000.downgrade.s2`, trivial);
-    // the main library: the real one, grown on (a later state of realOld)
-    localStorage.setItem(S.STORAGE_KEY, grow(real, 1900000, 'Real'));
+    // the main library: the real one, grown on (a later state of realOld): 150 more songs, notes still to come
+    addBlanks(real, 150, 'Real');
+    localStorage.setItem(S.STORAGE_KEY, JSON.stringify(real.get()));
     const s = S.createStore({ storage: localStorage, idGen: (p) => `${p}-${++n}`, requestIdle: null, warn: () => {}, autoFlush: false, debounceMs: 0 });
     const notices = [];
     s.onNotice((x) => notices.push(x.type));
-    grow(s, 2300000, 'Real'); // D9: past the cap, still saved
+    while (JSON.stringify(s.get()).length < 2300000 && fill(s, 1)) { /* D9: past the cap, still saved */ }
     const saved1 = s.persistNow();
     const keep1 = s.keepCurrent();
     const afterKeep1 = Object.keys(localStorage).filter((k) => k.startsWith(K)).sort();
@@ -77,7 +93,7 @@ test('real Chromium quota: room comes only from earlier states of a kept library
     let saved2 = true;
     for (let i = 0; i < 100 && saved2; i++) {
       mainBefore = localStorage.getItem(S.STORAGE_KEY);
-      for (let j = 0; j < 5; j++) s.set(`songs.${s.addSong(null, { name: 'more' })}.notes`, 'm'.repeat(10000));
+      if (!fill(s, 5)) return { outOfBlanks: true };
       saved2 = s.persistNow();
       if (saved2 && localStorage.getItem(S.STORAGE_KEY) !== JSON.stringify(s.get())) return { torn: true };
     }
@@ -117,10 +133,18 @@ test('real Chromium quota: restoring a 2.47 M copy over an edited library (kept 
     let n = 0;
     localStorage.clear();
     const big = S.createStore({ storage: S.memoryStorage(), seed: false, idGen: (p) => `${p}-${++n}`, requestIdle: null, warn: () => {}, autoFlush: false });
-    while (JSON.stringify(big.get()).length < S.LIBRARY_RESTORE_MAX_CHARS - 40000) {
+    // C-SHIP (chart-view O4): addSong stops at LIBRARY_MAX_CHARS; the rest of the 2.47 M copy is copies of its last
+    // song, in JSON (a library grown past the cap by edits, D9)
+    while (JSON.stringify(big.get()).length < S.LIBRARY_MAX_CHARS - 20000) {
       big.set(`songs.${big.addSong(null, { name: 'Near' })}.notes`, 'n'.repeat(10000));
     }
-    const near = JSON.stringify(big.get());
+    const lib = JSON.parse(JSON.stringify(big.get()));
+    const last = lib.songs[lib.songOrder[lib.songOrder.length - 1]];
+    for (let i = 0; JSON.stringify(lib).length < S.LIBRARY_RESTORE_MAX_CHARS - 40000; i++) {
+      lib.songs[`song-near${i}`] = { ...last, id: `song-near${i}`, name: `Near ${i}` };
+      lib.songOrder.push(`song-near${i}`);
+    }
+    const near = JSON.stringify(lib);
     localStorage.setItem(`${K}1.downgrade.s2`, near);
     const s = S.createStore({ storage: localStorage, idGen: (p) => `${p}-${++n}`, requestIdle: null, warn: () => {}, autoFlush: false, debounceMs: 0 });
     s.addSong(null, { name: 'Current work' });

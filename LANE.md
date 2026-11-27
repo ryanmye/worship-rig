@@ -17,9 +17,11 @@ LIBRARY_MAX_CHARS), O7 (over-1 MB message); docs (CONTRACT_CHANGES "C-SHIP (D33)
 - [x] tests: shell unit, chart suite, ui-v6, ui-v6-edit, settings, ui-core
 - [x] docs: CONTRACT_CHANGES, DECISIONS notes, release-notes draft, BUILD_PLAN, UI6-build-plan, mockups README
 - [x] fix: v6 Edit header overflowed at 1024×700 with the Chart button shown (styles-v6-edit.css ≤ 1100 px)
-- [ ] gates (gates.mjs, one at a time): shell-unit, unit, chart, ui-v6, ui-v6-edit, ui-v6-ipad, ui-v6-bank, settings,
-      ui-core, edit-v2, migration-1x, ui-v6-themes (last)
-- [ ] UI6-build-plan "C-SHIP status" section with gates; final report here
+- [x] gates on ba4dfbc (gates.mjs): all PASS except migration-1x (O4 broke fixtures that grew past 2 MB by addSong;
+      bigLib looped forever → 180 s / 480 s timeouts)
+- [x] migration-1x fixtures fixed (d8-skeptic bigLib + D9 test, quota.pw.mjs); d8 12/12 and quota.pw 2/2 alone
+- [ ] gates.mjs migration-1x on the new tip
+- [x] UI6-build-plan "C-SHIP status"; CONTRACT_CHANGES gates
 
 ## Gates so far (old runner, before the v6 Edit header CSS fix and the sidebar-test fix)
 shell unit 415/415 (one run hit the known bank-trial F1–F3 flake, FU2 O3; 3 + 3 reruns pass), unit 685/0/12 skip,
@@ -33,9 +35,13 @@ files, migration-1x running at the restart rule change.
 - v6: base ?chart=0 148 requests; branch charts on vs off: 148 requests, 19 store listeners, 3 intervals, same
   window / document listeners; +10 elements (Chart tab + rail icon).
 
+## Gates on ba4dfbc (gates.mjs)
+shell-unit, unit, chart 44/44, ui-v6 85/85, ui-v6-edit 44/44, ui-v6-ipad 29/29, ui-v6-bank 23/23, settings 114/114,
+ui-core 79/79, edit-v2 14/14 files, ui-v6-themes 24/24 clean: PASS. migration-1x FAIL (fixtures, fixed next commit).
+
 ## Next step
-Rerun all gates with `node tools/cloud/gates.mjs shell-unit,unit,chart,ui-v6,ui-v6-edit,ui-v6-ipad,ui-v6-bank,
-settings,ui-core,edit-v2,migration-1x,ui-v6-themes` on the committed tree.
+`node tools/cloud/gates.mjs migration-1x` on the new tip (the only change after ba4dfbc: migration-1x test files and
+docs), then hand back.
 
 ## Findings / risks
 - Lazy rule has no store listener of its own: a chart arriving on a non-current song loads nothing until used.

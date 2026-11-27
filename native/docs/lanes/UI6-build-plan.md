@@ -528,6 +528,17 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   unchanged. Screenshots: `/home/claude/design-out/u8a/`.
 - Not done (U8b): the 8-theme contrast audit (tools/themes/shoot.mjs), incl. UI6-U6 O3.
 
+## C-SHIP status (builder, 2026-11-27; lane-cship from v2-native c10ad59; skeptic pending)
+
+- Built (D33): chord charts on by default (`settings.chartView` absent = on, false = off, device-local), Settings ›
+  Perform › Chord charts in both Settings UIs, today's Chart toggle and the v6 Chart sidebar module shown by default
+  and loaded only when used, "coming in 2.1" gone, chart-view O1 / O3 / O4 / O7 fixed. CONTRACT_CHANGES "C-SHIP
+  (D33)".
+- Purity: charts off identical to the base build (today's UI and v6); charts on with no charts: the same requests,
+  listeners, intervals and store listeners, plus the entry only (Chart toggle; v6 Chart tab + rail icon).
+- Gates: see CONTRACT_CHANGES "C-SHIP (D33)".
+- Open: the skeptic pass; the chart's look stays part of U9 (Ryan's Mac review).
+
 ## Open questions carried into the build (decide, log in DECISIONS, tell Ryan)
 
 - **Snapshots vs today's scenes.** Today: up to 3 scenes per song, levels / ON / drone level / wheel only. The v6
