@@ -278,6 +278,12 @@ bool SongGraph::paramsMatch(const SlotPatch &have, const SlotPatch &want) const 
 
 std::uint32_t SongGraph::prepare(PatchSpec &&patch, std::uint32_t token) {
   latestToken_ = token;  // a new token supersedes every older one (only the latest can commit)
+  // core3f: the prebuild lane starts nothing new until every slot has taken its unit, so a prebuilt job of this song
+  // is adopted unless lane 1 was building it when the switch began (at most one); per-slot promotes let it pop the
+  // next one between two slots (macos-15 CI: 2 duplicates; a preempted control thread: up to all of them). The
+  // superseded plan's queued jobs (discard, below) cannot be started under it either: a unit both songs share is
+  // adopted, not duplicated.
+  BuildWorker::PrebuildHold hold(worker_.get());
   if (plan_) {
     discard(*plan_);
     plan_.reset();
@@ -670,6 +676,7 @@ void SongGraph::onRateChanged(double sampleRate, double oldRate) {
         f = static_cast<std::int64_t>(std::ceil(static_cast<double>(f) * sampleRate / oldRate - 1e-9));
   // T13 review: a pending plan's units were built at prepare for the old rate (synth.js wavetables, sampler / FX
   // state sized per rate) and nothing re-points an unattached unit: rebuild its fresh channels at the new rate
+  BuildWorker::PrebuildHold hold(worker_.get());  // core3f: as prepare (startFresh below)
   if (plan_ && sampleRate != oldRate)
     for (int i = 0; i < kMaxSlots; ++i) {
       PlanSlot &ps = plan_->slots[i];

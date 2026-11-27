@@ -40,6 +40,7 @@ void BuildJob::run() {
 }
 
 std::atomic<int> BuildWorker::testPrebuildDelayMs{0};
+std::atomic<int> BuildWorker::testSwitchSlotWaitMs{0};
 
 BuildWorker::BuildWorker(std::function<void()> wake) : wake_(std::move(wake)) {
   for (int l = 0; l < kLanes; ++l) threads_[l] = std::thread([this, l] { loop(l); });
@@ -110,6 +111,27 @@ void BuildWorker::finish(BuildJob &job) {
   doneCv_.wait(l, [&job] { return job.done(); });
 }
 
+void BuildWorker::holdPrebuilds() {
+  std::lock_guard<std::mutex> l(mu_);
+  ++held_;
+}
+
+void BuildWorker::releasePrebuilds() {
+  {
+    std::lock_guard<std::mutex> l(mu_);
+    if (--held_ > 0) return;
+    held_ = 0;
+  }
+  cv_[1].notify_all();
+}
+
+void BuildWorker::testWaitPrebuildStart(int ms) {
+  std::unique_lock<std::mutex> l(mu_);
+  const std::uint64_t from = lane1Starts_;
+  doneCv_.wait_for(l, std::chrono::milliseconds(ms),
+                   [&] { return stop_ || lane1Starts_ != from || q_[1].empty() || held_ > 0; });
+}
+
 std::size_t BuildWorker::pending() const {
   std::lock_guard<std::mutex> l(mu_);
   return q_[0].size() + q_[1].size() + running_;
@@ -121,13 +143,16 @@ void BuildWorker::loop(int lane) {
     std::shared_ptr<BuildJob> job;
     {
       std::unique_lock<std::mutex> l(mu_);
-      cv_[lane].wait(l, [this, lane] { return stop_ || !q_[lane].empty(); });
+      // core3f: lane 1 takes nothing new while a switch holds it (holdPrebuilds)
+      cv_[lane].wait(l, [this, lane] { return stop_ || (!q_[lane].empty() && (lane == 0 || held_ == 0)); });
       if (stop_) return;
       job = std::move(q_[lane].front());
       q_[lane].pop_front();
       job->runLane = lane;
       ++running_;
+      if (lane == 1) ++lane1Starts_;
     }
+    if (lane == 1 && testSwitchSlotWaitMs.load(std::memory_order_relaxed) > 0) doneCv_.notify_all();  // tests only
     int expected = BuildJob::Queued;
     const bool mine = !job->unwanted.load(std::memory_order_acquire) &&
                       job->state.compare_exchange_strong(expected, BuildJob::Running, std::memory_order_acq_rel);

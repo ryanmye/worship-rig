@@ -441,6 +441,51 @@ TEST_SUITE("core3") {
     CHECK(contains(rt.call("\"op\":\"commit\",\"token\":" + std::to_string(Rt::tokenOf(r))), "\"committed\":true"));
   }
 
+  TEST_CASE("core3f: a switch takes its prebuilt units in one step: the prebuild lane starts none of them meanwhile, "
+            "however slow the control thread is between two slots") {
+    // macos-15 CI (f46bac4, 2026-11-26; again 2026-11-27 08:10Z): "switch back to B: 8 adopted, 2 in the prebuild
+    // lane's hands". startFresh promoted one slot at a time, and lane 1 (one thread, FIFO) popped the song's next
+    // queued job whenever it finished one between two slots of the loop: a second duplicate build, unbounded on a
+    // preempted control thread. The hook makes every off-thread slot of a switch wait, after it took its unit, until
+    // the prebuild lane has started another job (as long as it can: queued work, not held), the worst case of a
+    // preempted control thread whatever the lane's speed (utility priority: starved on a loaded box, so a fixed
+    // sleep was not deterministic here). Before core3f: 9-10 of the 10 in the prebuild lane's hands.
+    struct SlotWait {
+      explicit SlotWait(int d) { rig::BuildWorker::testSwitchSlotWaitMs = d; }
+      ~SlotWait() { rig::BuildWorker::testSwitchSlotWaitMs = 0; }
+    };
+    Rt rt;
+    rt.boot();
+    rt.switchTo(lightSong());
+    REQUIRE(contains(rt.call(R"("op":"cache","action":"preload","pin":"replace","patches":[)" + heavySong(20, 10) + "]",
+                             30000),
+                     "\"ok\":true"));
+    const double hits0 = rt.stat("prebuildHits"), busy0 = rt.stat("prebuildBusy");
+    const double done0 = rt.stat("prebuiltDone");
+    REQUIRE(done0 < 9);  // most of the 10 are still queued in the prebuild lane (one organ: >= 20 ms anywhere)
+    double busy = 0, hits = 0;
+    {
+      SlotWait wait(kSanitized ? 120000 : 20000);
+      const std::string r = rt.call("\"op\":\"prepare\",\"patch\":" + heavySong(20, 10), kSanitized ? 300000 : 60000);
+      REQUIRE(Rt::tokenOf(r) > 0);
+      hits = rt.stat("prebuildHits") - hits0;
+      busy = rt.stat("prebuildBusy") - busy0;
+      MESSAGE("slow switch to the neighbour being prebuilt (" << done0 << " done at the switch): " << hits
+                                                              << " adopted, " << busy << " in the prebuild lane's hands");
+      REQUIRE(contains(rt.call("\"op\":\"commit\",\"token\":" + std::to_string(Rt::tokenOf(r))),
+                       "\"committed\":true"));
+    }
+    CHECK(hits + busy == 10);
+    CHECK(busy <= 1);  // only the job lane 1 was building when the switch began
+    // the hold ends with the switch's slot loop: the prebuild lane goes on (its busy copy is done and stays prebuilt)
+    for (const auto end = Clock::now() + std::chrono::seconds(kSanitized ? 120 : 20);
+         rt.stat("prebuiltDone") < busy && Clock::now() < end;)
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    CHECK(rt.stat("prebuilt") == busy);
+    CHECK(rt.stat("prebuiltDone") == busy);
+    CHECK(rt.stat("buildsPending") == 0);
+  }
+
   TEST_CASE("CORE3: a newer prepare without an id still answers the older one at once") {
     Rt rt;
     rt.boot();

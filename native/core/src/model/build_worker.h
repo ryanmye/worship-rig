@@ -97,12 +97,36 @@ class BuildWorker {
   /** Jobs queued or running (tests, stats). */
   std::size_t pending() const;
 
+  /** While held (control thread; nests), lane 1 starts no new job; the one it is building runs on. A switch holds the
+   *  worker over its whole slot loop, so the set of its jobs the prebuild lane has is fixed when the loop starts: at
+   *  most the one job lane 1 was building then (core3f: per-slot `promote` let lane 1 pop the switch's next job
+   *  between two slots, so the switch built a second duplicate; macos-15 CI, test_core3 "switch back to B" 8 + 2). */
+  void holdPrebuilds();
+  void releasePrebuilds();
+  /** RAII holdPrebuilds / releasePrebuilds; null worker = no-op (no worker yet: nothing is prebuilt). */
+  class PrebuildHold {
+   public:
+    explicit PrebuildHold(BuildWorker *w) : w_(w) {
+      if (w_) w_->holdPrebuilds();
+    }
+    ~PrebuildHold() {
+      if (w_) w_->releasePrebuilds();
+    }
+    PrebuildHold(const PrebuildHold &) = delete;
+    PrebuildHold &operator=(const PrebuildHold &) = delete;
+
+   private:
+    BuildWorker *w_;
+  };
+
  private:
   void loop(int lane);
   mutable std::mutex mu_;
   std::condition_variable cv_[kLanes], doneCv_;
   std::deque<std::shared_ptr<BuildJob>> q_[kLanes];
   std::size_t running_ = 0;
+  int held_ = 0;  // holdPrebuilds depth (under mu_): lane 1 pops nothing while > 0
+  std::uint64_t lane1Starts_ = 0;  // jobs lane 1 popped (under mu_; tests: testWaitPrebuildStart)
   bool stop_ = false;
   std::function<void()> wake_;
   std::thread threads_[kLanes];
@@ -111,6 +135,13 @@ class BuildWorker {
   /** Tests only (unit.core3): every lane-1 job sleeps this long after it is claimed and before it builds (a
    *  prebuild starved on a loaded box), interruptible by the destructor. 0 = off. */
   static std::atomic<int> testPrebuildDelayMs;
+  /** Tests only (unit.core3, core3f): after each off-thread slot of a switch has taken its unit (adopted or posted),
+   *  the control thread waits up to this long for the prebuild lane to start another job, for as long as it could
+   *  (queued work, not held): a control loop preempted mid-switch for as long as it takes, deterministically on a
+   *  starved utility-priority lane too. 0 = off. */
+  static std::atomic<int> testSwitchSlotWaitMs;
+  /** The wait above (control thread; tests only). */
+  void testWaitPrebuildStart(int ms);
 };
 
 }  // namespace rig

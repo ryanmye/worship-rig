@@ -177,6 +177,8 @@ void SongGraph::startFresh(Plan &plan, int slot) {
   ps.built.kind = ps.job->kind;
   ps.built.instSeq = ps.job->instSeq;
   ps.built.strip = buildStrip(plan.patch, slot, sr);  // < 1 ms (measured 0.1-0.6 ms)
+  if (const int d = BuildWorker::testSwitchSlotWaitMs.load(std::memory_order_relaxed); d > 0)
+    worker().testWaitPrebuildStart(d);  // tests only (core3f)
 }
 
 bool SongGraph::planBuilt() const {
