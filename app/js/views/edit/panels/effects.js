@@ -185,7 +185,13 @@ export default {
           mount: sphost,
           placement: 'auto',
           placementNeed: panelNeed,
-        }), { read: (s) => (s.patch.slots[i] ? Number(getIn(s, rel)) || 0 : 0) });
+        }), {
+          // UI6-snap F3: the send as it plays (a snapshot may hold it; ctx.view), as its write goes on top of it
+          read: (own) => {
+            const s = (ctx.view && ctx.view()) || own;
+            return s.patch.slots[i] ? Number(getIn(s, rel)) || 0 : 0;
+          },
+        });
         chip.el.classList.add('ev2-fx-mod');
         chip.el.dataset.slot = String(i);
         if (typeof C.eqMiniCurve === 'function') {

@@ -221,6 +221,34 @@ test('D26.1: under snapshot "Hall" (own room Stage) today’s Perform shows Hall
   await ev(() => window.__rig.controller.scenes.go(null));
 });
 
+// UI6-snap F3: Edit v2 › Effects' send chips read the song's own sends under a snapshot that holds them
+test('UI6-snap F3: Edit v2 › Effects under a snapshot holding Keys’ Space send shows the snapshot’s value',
+  async () => {
+    await ev(() => window.__rig.store.set('settings.view', 'perform'));
+    await ev(() => {
+      const { store, controller } = window.__rig;
+      const s = store.currentSong();
+      controller.scenes.go(null);
+      store.set(`songs.${s.id}.patch.slots.0.sends.reverb`, 0.25);
+      store.set(`songs.${s.id}.scenes`, [{ slots: [{ gain: s.patch.slots[0].gain, sends: { reverb: 0.9 } }] }]);
+    });
+    await until(() => !window.__rig.controller.status.loading);
+    await ev(() => window.__rig.controller.scenes.go(0));
+    await ev(() => window.__rig.store.set('settings.view', 'edit'));
+    await ev(() => window.__rig.views.edit.editState.select('effects'));
+    await page.waitForSelector('[data-testid=fx-reverb-0]', { state: 'attached', timeout: 10000 });
+    await until(() => /90%/.test(document.querySelector('[data-testid=fx-reverb-0]')?.getAttribute('aria-label')
+      || ''));
+    await ev(() => window.__rig.controller.scenes.go(null));
+    await until(() => /25%/.test(document.querySelector('[data-testid=fx-reverb-0]')?.getAttribute('aria-label')
+      || ''));
+    await ev(() => {
+      const { store } = window.__rig;
+      store.set(`songs.${store.currentSong().id}.scenes`, null);
+      store.set('settings.view', 'perform');
+    });
+  });
+
 test('no console errors', () => {
   assert.deepEqual(errors, [], errors.join('\n'));
 });

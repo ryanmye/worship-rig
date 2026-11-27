@@ -159,6 +159,50 @@ export async function snapTests(x) {
       await ev(() => window.__rig.controller.scenes.go(null));
     });
 
+  // UI6-snap F2 / F3: v6 Edit's own strip (the instrument block) wrote the song (bypassing controller.scenes.take),
+  // so a step equal to the song's own value was silent; Edit › Effects › Sends read the song's own sends.
+  await T('UI6-snap F2/F3: v6 Edit under a snapshot holding Keys’ Space send: the Sends cell shows it, the '
+    + 'instrument strip’s Space step (= the song’s own 25%) is heard and the song is not written', async () => {
+    await setup();
+    const own = await ev(() => {
+      const { store, controller } = window.__rig;
+      const s = store.currentSong();
+      store.set(`songs.${s.id}.patch.slots.0.sends.reverb`, 0.25);
+      store.set(`songs.${s.id}.scenes`, [{ ...s.scenes[0], slots: [{ gain: s.patch.slots[0].gain,
+        sends: { reverb: 0.9 } }] }]);
+      controller.scenes.go(null);
+      controller.scenes.go(0);
+      return s.patch.slots[0].sends.reverb;
+    });
+    void own;
+    await settled();
+    let h = await ev(HEARD);
+    assert.deepEqual([h.viewSend, h.ownSend], [0.9, 0.25]);
+    const before = h.json;
+    await ev(() => window.__rig.ctx.setView('edit'));
+    await until(() => document.body.dataset.view === 'edit');
+    // F3: Edit › Effects › Sends shows what plays
+    await ev(() => window.__rig.views.edit.editState.select('effects'));
+    await page.click(tid('v6e-effects-cat-sends'));
+    const cell = '[data-testid="v6e-fx-send-reverb-0"] input';
+    await page.waitForSelector(cell, { state: 'attached', timeout: 10000 });
+    await until((sel) => /90%/.test(document.querySelector(sel)?.getAttribute('aria-valuetext') || ''), cell);
+    // F2: the instrument block's strip, its Space step 25% (the song's own value)
+    await ev(() => window.__rig.views.edit.editState.select('slot:0'));
+    await until(() => !!document.querySelector('[data-testid="v6e-inst"]'));
+    const chip = page.locator('[data-testid="v6-space-0"]:visible');
+    await chip.waitFor({ timeout: 10000 });
+    await chip.click();
+    await page.locator('[role="radio"][data-value="0.25"]:visible').click();
+    await until(() => window.__rig.engine.getParam('slots.0.sends.reverb') === 0.25);
+    h = await ev(HEARD);
+    assert.equal(h.viewSend, 0.25, 'heard');
+    assert.equal(h.json, before, 'the song is NOT written');
+    await ev(() => window.__rig.ctx.setView('perform'));
+    await until(() => document.body.dataset.view === 'perform');
+    await ev(() => window.__rig.controller.scenes.go(null));
+  });
+
   await T('D26.1 name suggestion: only the Space / Echo / drone changed → "Hall", "Hall + Dotted Eighth", "Drone D"',
     async () => {
       const got = await ev(async () => {

@@ -151,7 +151,13 @@ export function mountEffects(host, ctx, opts, env) {
   const sendCell = (binder, i, unit, label, slot) => {
     const c = binder.ctl(`slots.${i}.sends.${unit}`, (onChange) => wordSlider({
       label: `${nameOf(slot, i)} ${label}`, min: 0, max: 1, default: 0, format: amount, onChange,
-    }), { read: (s) => (s.patch.slots[i] ? Number(getIn(s, `patch.slots.${i}.sends.${unit}`)) || 0 : 0) });
+    }), {
+      // UI6-snap F3: the send as it plays (a snapshot may hold it; ctx.view), as its write goes on top of it
+      read: (own) => {
+        const s = (ctx.view && ctx.view()) || own;
+        return s.patch.slots[i] ? Number(getIn(s, `patch.slots.${i}.sends.${unit}`)) || 0 : 0;
+      },
+    });
     c.el.classList.add('v6e-sendcell');
     c.el.dataset.testid = `v6e-fx-send-${unit}-${i}`;
     if (!slot) c.setDisabled(true);

@@ -143,7 +143,11 @@ export function mountEditV6(el, ctx) {
   const setSlot = (i, field, value) => {
     const id = shownId();
     if (!id || !store.getSong(id)?.patch.slots[i]) return;
-    store.set(`songs.${id}.patch.slots.${i}.${field}`, value);
+    const addr = `songs.${id}.patch.slots.${i}.${field}`;
+    // UI6-snap F2: the strip's Space / Echo steps go on top of a snapshot that holds them, as on v6 Perform
+    // (views/v6/perform.js setSlot): heard, transient, never written into the song
+    if (controller.scenes?.take?.(addr, value)) return;
+    store.set(addr, value);
   };
   const stripV = {
     store, controller, engine, ctx, toast, isLocked, host: root,
