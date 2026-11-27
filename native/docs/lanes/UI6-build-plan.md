@@ -491,7 +491,17 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
   stays open for Ryan.
 - Chart and song bank pieces already exist hidden (chart view D7, bank O-AW-PP); U7 reuses their logic.
 
-## U8b status (builder, 2026-11-26; lane-u8b from v2-native dcb2f06; awaiting the skeptic)
+## U8b status (builder, 2026-11-26; lane-u8b from v2-native dcb2f06; rebased onto 9217f7a; skeptic done)
+
+- **Skeptic (2026-11-26): VERIFIED after fixes** (`native/docs/reviews/UI6-U8b.md`).
+  - Fixed:
+    - F1: field placeholders were unaudited and failed in all 8 themes;
+    - F2: text beside a popover / Quick under its shadow failed as drawn on the dark themes;
+    - F3: at 820 px, Start here + Learn / Arrange left the faders no track (U8a layout).
+  - The audit and the tour now cover the iPad sizes, U8a's surfaces, field words and shadows; ui-v6-themes runs all
+    three sizes.
+  - For Ryan: O1 (the Quick sheet over the keys at 1280 × 800), O2 (design calls with before / after values) and
+    O3 (Bass lighter costs Extra / Bass luminance separation).
 
 - Built: the shared audit `tools/themes/audit-lib.mjs` (shoot.mjs now imports it; + clipping, scrim hit-test for
   `::after`, closed `<details>`, drop-shadow pixels, edge fades, and a WCAG 1.4.11 half: focus rings, field edges,

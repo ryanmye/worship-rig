@@ -9338,3 +9338,21 @@ Flag off: today's screens differ only by the three theme-file fixes below (each 
 - Gates: ui-v6-themes 8/8 themes clean (557 s on the shared 2-CPU box), themes 58/58 (coverage JSON: only Daylight's
   file changed, 2 new selectors, both matched), ui-v6 76/76 (flag-off purity vs dcb2f06), settings 111/111 (app,
   fixture, mac, bridge, v6). No engine file touched.
+- **Skeptic (2026-11-26, native/docs/reviews/UI6-U8b.md): VERIFIED after fixes.**
+  - F1: v6 field hints were the UA's `#757575` (2.7–4.5 : 1), so `:is(.v6, .v6-st) ::placeholder` is now
+    `--muted`.
+  - F2: popover / Quick shadows on the dark themes darkened the words beside them to 3.2–4.4 : 1, so there are new
+    tokens `--v6-pop-sh` / `--v6-qs-sh`:
+    - dark: `0 2px 6px`, 25 % of `--v6-sh`;
+    - paper: the builder's values.
+  - F3: the Start here card and a Learn / Arrange bar together left the faders a 61 px track (none with 7
+    instruments) at 820 × 1180. The card is now hidden while either mode is on, at every size.
+  - Audit (`audit-lib.mjs`):
+    - field words (placeholder, value, select) are read;
+    - every run under an overlay's shadow is judged on its drawn ink (a shadow-off frame gives the darkening);
+    - runs a third covered by another element and controls clipped out of their scroller are skipped.
+  - Tour (`v6-tour.mjs`):
+    - three sizes: 1280 × 800, and the iPad's 820 × 1180 / 1180 × 820 (touch, MIDI refused, `IPAD_STATES`);
+    - U8a's Start here card and empty library (with its lock line), Effects' Vibe menu and the portrait song drawer;
+    - waits for every sound to be ready.
+  - `ui-v6-themes` takes about 24 min; its run-all timeout is now 50 min.
