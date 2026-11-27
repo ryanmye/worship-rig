@@ -74,6 +74,11 @@ the top switch frames). They are the spec for layout and behaviour, not code to 
 
 ## Queued small tasks
 
+- **U-SNAP follow-up (UI6-snap O1/O2/O5, tier 2: mine):** while a snapshot plays, both Edit views show a line in the
+  header: "Changing snapshot “Hall” for now: Update keeps it, Own levels edits the song" (O1); v6 Edit's Effects
+  "Sends" and the instrument's "Space & Echo" summaries read the song as it plays (O2); the dialog's drone row copy
+  matches the key choice's default (O5).
+
 - **U-CVD (D32):** Settings › Look › Colour-blind colours (Off / Red–green / Blue–yellow), per device; slot palettes
   per theme checked by CVD simulation + the contrast audit; instrument numbers on range bars and strip tabs when on.
 
