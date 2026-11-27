@@ -146,3 +146,26 @@ without a theme rule, so Classic is unchanged.
 - **Light switch** (`LIGHT_SWITCH` in `themes.js`, Daylight only): Day · Stage · Auto in Settings › Appearance; Auto is
   per Mac (`localStorage['worship-rig.light']`), Lock shows the dark sibling while locked.
 
+
+## Colour-blind colours (U-CVD, DECISIONS D32)
+
+Settings › Look › Appearance › **Colour-blind colours: Off / Red–green / Blue–yellow** (`settings.cvd` = absent |
+`'rg'` | `'by'`, per device, not exported). main.js puts `html.cvd-rg` / `html.cvd-by` and mirrors the value to
+`localStorage['worship-rig.cvd']`; `boot.js` reads the mirror and sets the class before first paint. Off adds nothing.
+
+- The palettes live in **`app/styles.css`**, in the block between `cvd:palettes begin` / `cvd:palettes end`: one rule
+  per theme id × type, `html.cvd-<type>[data-theme="<id>"], … > body { --slot-0..7; --cvd-ink }`. Slots 8..15 repeat
+  0..7 (the number tells them apart). The rules are in styles.css, not in the theme files, so a theme file needs
+  nothing for this, but **a new theme needs its own two palettes** (the unit test fails without them).
+- They are designed by `node tools/themes/cvd-design.mjs [--theme id] [--type rg|by] [--seed n] --write` (a seeded
+  search; it keeps the other palettes) and checked by `node tools/themes/cvd-check.mjs`: under Machado 2009
+  simulation (severity 1.0; `rg` = deutan and protan, `by` = tritan) every pair of slots 0..7 differs by OKLab
+  ΔE×100 ≥ 10, neighbours (incl. 7–0) by OKLab L ≥ 0.08, and the theme's lamp ink is ≥ 4.5 : 1 on each colour, flat
+  and in the ON label's window. `test/unit/shared/cvd-palettes.test.mjs` runs it, and checks the ink / window values
+  in `cvd-check.mjs` `THEMES` still appear in the theme file. **If you change a theme's lamp ink or its ON window,
+  update `THEMES` there and re-run the design.**
+- The non-colour cue: each instrument's number on its range bar (`.rbar[data-slot]::before`, a badge in the lamp
+  colour with `--cvd-ink`) and before its name on the v6 strip and Edit tab. Today's strips and Edit tabs already
+  carry words (KEYS, PAD…, SOUND 5).
+- The browser audit with cvd on: `node test/phase2/ui-v6-themes/run.mjs --cvd only` (Sanctuary, Daylight Day,
+  Studio × rg, by; `--cvd-themes id,id` for others).

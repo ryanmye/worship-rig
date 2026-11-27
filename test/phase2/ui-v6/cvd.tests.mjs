@@ -15,7 +15,7 @@ const LOOK = () => {
     return [r.x, r.y, r.width, r.height].map((v) => Math.round(v * 10) / 10);
   };
   const strips = [...document.querySelectorAll('.v6-strip[data-slot]')];
-  const bars = [...document.querySelectorAll('[data-testid="v6-piano"] .v6-rbar')];
+  const bars = [...document.querySelectorAll('[data-testid="v6-kbd"] .v6-rbar')];
   return {
     cls: document.documentElement.className,
     mirror: localStorage.getItem('worship-rig.cvd'),
@@ -23,11 +23,12 @@ const LOOK = () => {
       const nm = s.querySelector('.v6-nm');
       return { i: Number(s.dataset.slot), ico: cs(s.querySelector('.v6-ico')).backgroundColor,
         n: cs(nm, '::before').content, nBg: cs(nm, '::before').backgroundColor, nInk: cs(nm, '::before').color,
-        box: rect(s), nm: rect(nm).slice(1) }; // the name's top / width / height (its x moves with scrolling)
+        // the name's top and height: its width grows by the number (a short name; a long one ellipsises sooner)
+        box: rect(s), nm: [rect(nm)[1], rect(nm)[3]], who: rect(s.querySelector('.v6-who')) };
     }),
     bars: bars.map((b) => ({ i: Number(b.dataset.slot), bg: cs(b).backgroundColor, n: cs(b, '::before').content,
       nBg: cs(b, '::before').backgroundColor, nInk: cs(b, '::before').color, box: rect(b) })),
-    piano: rect(document.querySelector('[data-testid="v6-piano"]')),
+    piano: rect(document.querySelector('[data-testid="v6-kbd"]')),
   };
 };
 const rgbOf = (s) => (s.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map((v) => Number(v) / 255);
@@ -47,9 +48,16 @@ export async function cvdTests(x) {
       window.__rig.store.set('settings.cvd', null);
     });
     assert.equal(await setSlots(8), 8);
+    await ev(() => { // the 8th gets a sound too (setSlots fills 7), so it has a range bar
+      const { store } = window.__rig;
+      const id = store.currentSong().id;
+      const ref = { type: 'synth', id: 'warm-pad' };
+      if (store.currentSong().patch.slots[7]) store.set(`songs.${id}.patch.slots.7.instrument`, ref);
+      else store.set(`songs.${id}.patch.slots.7`, { instrument: ref });
+    });
     await settled();
     await until(() => document.querySelectorAll('.v6-strip[data-slot]').length === 8
-      && document.querySelectorAll('[data-testid="v6-piano"] .v6-rbar').length === 8);
+      && document.querySelectorAll('[data-testid="v6-kbd"] .v6-rbar').length === 8);
     await page.waitForTimeout(300);
     const off = await ev(LOOK);
     assert.equal(off.cls.includes('cvd-'), false);
@@ -78,7 +86,8 @@ export async function cvdTests(x) {
       }
       assert.notEqual(on.strips[7].ico, on.strips[0].ico, `${type}: position 7 has its own colour`);
       // no layout shift: every strip, name, bar and the keyboard stay where they were
-      assert.deepEqual(on.strips.map((s) => [s.box, s.nm]), off.strips.map((s) => [s.box, s.nm]), 'strips / names');
+      assert.deepEqual(on.strips.map((s) => [s.box, s.nm, s.who]), off.strips.map((s) => [s.box, s.nm, s.who]),
+        'strips, their name rows and names’ line boxes');
       assert.deepEqual(on.bars.map((b) => b.box), off.bars.map((b) => b.box), 'range bars');
       assert.deepEqual(on.piano, off.piano, 'the keyboard');
     }

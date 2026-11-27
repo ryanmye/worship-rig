@@ -58,7 +58,7 @@ test('styles.css: the cvd rules only match under html.cvd-rg / html.cvd-by (Off 
   const css = fs.readFileSync(path.join(ROOT, 'app/styles.css'), 'utf8');
   const at = css.indexOf('U-CVD: colour-blind colours');
   assert.ok(at > 0);
-  const tail = css.slice(at).replace(/\/\*[\s\S]*?\*\//g, '');
+  const tail = css.slice(css.lastIndexOf('/*', at)).replace(/\/\*[\s\S]*?\*\//g, '');
   const selectors = [...tail.matchAll(/([^{}]+)\{[^}]*\}/g)].map((m) => m[1].trim());
   assert.ok(selectors.length > 20);
   for (const sel of selectors) {
