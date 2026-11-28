@@ -17,6 +17,11 @@ test('velocityDb: range 1 is the old formula; wider = quieter below the pivot, l
     }
   }
   assert.equal(velocityDb(1, 10, 3), 5); // pianos at 3×: +5 dB at the top
+  // 1.1.2: past 3× pianos widen downwards only (60 dB at 6×, the top stays +5 dB); single-layer spans stop at 3×
+  assert.equal(velocityDb(1, 10, 6), 5);
+  assert.ok(Math.abs(velocityDb(1, 10, 6) - velocityDb(0, 10, 6) - 60) < 1e-9);
+  assert.ok(velocityDb(0.15, 10, 6) < velocityDb(0.15, 10, 3), 'soft quieter past 3×');
+  for (const v of [0, 0.3, DYN_PIVOT, 1]) assert.equal(velocityDb(v, 24, 6), velocityDb(v, 24, 3));
   assert.equal(validDynRange(0.5), DYN_RANGE.min);
   assert.equal(validDynRange(9), DYN_RANGE.max);
   assert.equal(validDynRange(1.234), 1.23);
@@ -30,9 +35,9 @@ test('store: settings.dynamicRange is optional, device-local, clamped; 1 and nul
   s.set('settings.dynamicRange', 1.8);
   assert.equal(s.get().settings.dynamicRange, 1.8);
   s.set('settings.dynamicRange', 7);
-  assert.equal(s.get().settings.dynamicRange, 3);
+  assert.equal(s.get().settings.dynamicRange, 6, '1.1.2: up to 6×');
   s.set('settings.dynamicRange', 'loud');
-  assert.equal(s.get().settings.dynamicRange, 3, 'refused');
+  assert.equal(s.get().settings.dynamicRange, 6, 'refused');
   s.set('settings.dynamicRange', 1);
   assert.equal('dynamicRange' in s.get().settings, false, '1 = absent');
   s.set('settings.dynamicRange', 2);

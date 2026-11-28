@@ -141,12 +141,20 @@ const median = (a) => {
   const m = s.length >> 1;
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
+/** Share of the hard notes at or below the velocity that reaches full level (1.1.2; nearest rank). */
+export const FIT_TOP_PERCENTILE = 0.9;
+const percentile = (a, p) => {
+  const s = a.slice().sort((x, y) => x - y);
+  return s[Math.min(s.length - 1, Math.max(0, Math.ceil(p * s.length) - 1))];
+};
 const velocities = (a) => (Array.isArray(a) ? a : []).map(Number).filter((v) => v >= 1 && v <= 127);
 
 /**
- * Fit a curve to the player's touch: their hard playing (median) reaches the loudest output (top = that velocity),
- * and their soft playing (median) lands on FIT_SOFT_TARGET of the output range, by choosing the exponent. min / max
- * are kept from `base` (the curve being replaced), so a floor the player set survives a re-fit.
+ * Fit a curve to the player's touch: their hardest playing (the FIT_TOP_PERCENTILE of the hard notes) reaches the
+ * loudest output (top = that velocity), and their soft playing (median) lands on FIT_SOFT_TARGET of the output range,
+ * by choosing the exponent. min / max are kept from `base` (the curve being replaced), so a floor the player set
+ * survives a re-fit. 1.1.2 (Ryan, FP-10: "hard notes not getting louder"): top was the hard median, so about half of
+ * a player's hard notes already sat at full and playing harder changed nothing.
  * @param {number[]} soft  velocities of the "play softly" notes
  * @param {number[]} hard  velocities of the "play hard" notes
  * @param {object} [base]  current spec (min / max kept)
@@ -161,7 +169,7 @@ export function fitTouch(soft, hard, base) {
   if (s.length < FIT_MIN_NOTES || hd.length < FIT_MIN_NOTES) return { ok: false, reason: 'few', soft: sm, hard: hm };
   if (hm - sm < FIT_MIN_SPREAD) return { ok: false, reason: 'same', soft: sm, hard: hm };
   const b = normalizeTouch(base);
-  const top = Math.round(clampTo(hm, TOUCH_RANGE.top));
+  const top = Math.round(clampTo(Math.max(hm, percentile(hd, FIT_TOP_PERCENTILE)), TOUCH_RANGE.top));
   const x = Math.min(0.98, Math.max(0.02, sm / top));
   const lo = Math.min(b.min, b.max);
   const span = Math.max(b.min, b.max) - lo;
@@ -181,7 +189,15 @@ export function fitTouch(soft, hard, base) {
  * around DYN_PIVOT, so soft notes get quieter AND the hardest notes louder than today's full (the master ceiling
  * still catches peaks). Device-local: it is about this player's keyboard and room.
  */
-export const DYN_RANGE = Object.freeze({ min: 1, max: 3, default: 1, step: 0.05 });
+export const DYN_RANGE = Object.freeze({ min: 1, max: 6, default: 1, step: 0.05 });
+/**
+ * 1.1.2 (Ryan, FP-10: "soft notes too loud"): past this range the span only grows downwards (soft quieter, the
+ * hardest note stays where 3× put it), like Pianoteq's Dynamics; and only for the multi-layer span (pianos: 10 dB →
+ * 60 dB at 6×). The single-layer span (24 dB) is already 72 dB at 3× and stops there.
+ */
+export const DYN_UP_MAX = 3;
+/** Built-in spans at or above this (dB) don't widen past DYN_UP_MAX (the single-layer 24 dB span). */
+const DYN_WIDE_SPAN = 20;
 /** Touch level that keeps its loudness at any range: velocity ≈ 96 of 127, where the sampler trims are calibrated. */
 export const DYN_PIVOT = 0.75;
 
@@ -196,15 +212,20 @@ export function validDynRange(v) {
 
 /**
  * Note gain in dB for a touch level. range 1 = −spanDb · (1 − v) exactly (the pre-range formula); a wider range adds
- * spanDb · (range − 1) · (v − DYN_PIVOT): below the pivot quieter, above it louder.
+ * spanDb · (range − 1) · (v − DYN_PIVOT): below the pivot quieter, above it louder. Past DYN_UP_MAX (3×) the
+ * multi-layer span keeps widening downwards only (−spanDb · (range − 3) · (1 − v)); the single-layer span stops at 3×.
+ * Values up to 3 give exactly the 1.1.1 numbers.
  * @param {number} v01 touch level 0..1
  * @param {number} spanDb the instrument's built-in span (10 multi-layer, 24 single layer)
- * @param {number} [range] settings.dynamicRange (1..3)
+ * @param {number} [range] settings.dynamicRange (1..6)
  * @returns {number}
  */
 export function velocityDb(v01, spanDb, range = 1) {
-  const base = -spanDb * (1 - v01);
-  return range === 1 ? base : base + spanDb * (range - 1) * (v01 - DYN_PIVOT);
+  if (range === 1) return -spanDb * (1 - v01);
+  const r = Math.min(range, DYN_UP_MAX);
+  const base = -spanDb * (1 - v01) + spanDb * (r - 1) * (v01 - DYN_PIVOT);
+  if (range <= DYN_UP_MAX || spanDb >= DYN_WIDE_SPAN) return base;
+  return base - spanDb * (range - DYN_UP_MAX) * (1 - v01); // 1.1.2: downward only past 3×
 }
 
 // ---------------------------------------------------------------------------------------------------------------

@@ -84,11 +84,13 @@ test('fitTouch: soft playing lands on FIT_SOFT_TARGET (15 %), hard on full; ligh
   near(at(avg, avg.soft), T.FIT_SOFT_TARGET, 1e-3, 'average: soft notes land on the target');
   assert.ok(avg.touch.shape > 1.5 && avg.touch.shape < 1.8, `average player ≈ the hard preset (${avg.touch.shape})`);
   // light-touch board: soft ≈ 20, hard never past ≈ 90 → reaches full at 90, lighter than the average fit
+  // 1.1.2: full is reached at the hardest hard notes (90th percentile), not the median, so harder still gets louder
   const light = T.fitTouch([18, 20, 22, 21, 19, 20], [88, 90, 92, 91, 89, 90]);
-  assert.equal(light.touch.top, 90);
+  assert.equal(light.touch.top, 92);
   assert.ok(light.touch.shape < avg.touch.shape, JSON.stringify(light));
   near(at(light, light.soft), T.FIT_SOFT_TARGET, 1e-3, 'soft notes land on the target');
-  near(at(light, light.hard), 1, 1e-12, 'hard notes reach full');
+  near(at(light, 92), 1, 1e-12, 'the hardest hard notes reach full');
+  assert.ok(at(light, light.hard) < 1 && at(light, light.hard) > 0.95, 'the median hard note is just below full');
   // heavy hand: soft ≈ 60 → heavier than the average fit, still inside the shape range
   const heavy = T.fitTouch([58, 60, 62, 61, 59, 60], [127, 127, 126, 127, 127, 127]);
   assert.ok(heavy.touch.shape > avg.touch.shape && heavy.touch.shape <= T.TOUCH_RANGE.shape.max, JSON.stringify(heavy));
@@ -102,6 +104,18 @@ test('fitTouch: soft playing lands on FIT_SOFT_TARGET (15 %), hard on full; ligh
   const odd = T.fitTouch([40, 41, 39, 127, 40], [120, 121, 5, 122, 120]);
   assert.equal(odd.soft, 40);
   assert.equal(odd.hard, 120);
+});
+
+test('fitTouch 1.1.2: a spread of hard notes keeps headroom above the median (FP-10 "hard notes not louder")', () => {
+  assert.equal(T.FIT_TOP_PERCENTILE, 0.9);
+  const r = T.fitTouch([30, 32, 28, 31, 29, 30], [85, 95, 98, 100, 105, 110]);
+  assert.equal(r.hard, 99);
+  assert.equal(r.touch.top, 110, 'full at the hardest note, not the median 99');
+  const c = T.compileTouch(r.touch);
+  assert.ok(T.touchAt(c, 105) > T.touchAt(c, 99) && T.touchAt(c, 110) > T.touchAt(c, 105), 'harder is louder');
+  // never below the median (a set with one huge outlier low keeps the old behaviour)
+  const few = T.fitTouch([40, 40, 40], [120, 121, 122]);
+  assert.equal(few.touch.top, 122);
 });
 
 test('fitTouch: too few notes or soft = hard is refused with a reason', () => {

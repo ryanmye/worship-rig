@@ -6815,3 +6815,16 @@ slot…` (test 31): "Perform reads slot 3 once per clock frame or sleeps (0.25)"
 - Tests: `test/phase1/shell/device-settings.test.mjs` (5: block shape, defaults, the marker, import drops it,
   `backupNow` writes it with the origin tag); `browser.pw.mjs` 1 (the real Export library button, see DS4). The S3 test
   (`security.test.mjs`) is unchanged and passes: `exportJSON()` without `device` is still clean.
+
+## 1.1.2 touch (Ryan 2026-11-28, Roland FP-10: "soft notes too loud, hard notes not getting louder"; shared/touch-curve.js)
+- **fitTouch:** `top` (the velocity that reaches full) is now `max(hard median, FIT_TOP_PERCENTILE = 0.9 nearest-rank of
+  the hard notes)`, was the hard median. With 6 hard notes that is the hardest one, so a player's hard notes above
+  their median still get louder. Example: hard notes 85, 95, 98, 100, 105, 110 → top 110 (was 99). `soft` / `hard` in
+  the result stay medians (the UI shows them). Curves fitted before keep their stored `top` until re-fitted.
+- **settings.dynamicRange:** `DYN_RANGE.max` 3 → 6. `velocityDb` is bit-for-bit the 1.1.1 formula for range ≤ 3. Past
+  `DYN_UP_MAX` = 3 the multi-layer span (10 dB) widens downwards only: `− spanDb · (range − 3) · (1 − v)`, so pianos
+  reach 60 dB at 6× with the hardest note still at +5 dB (as at 3×; the master ceiling sees no new peak). Spans ≥ 20 dB
+  (the single-layer 24 dB) stop at 3× (72 dB, +12 dB top), as before.
+- No engine file changes (audio.js / sampler.js call the shared functions). Store clamp follows `validDynRange`.
+- 2.0 (v2-native) clamps `dynamicRange` to 1..3 in the native core until lane TOUCH (D43) lands; a 1.1.2 value above 3
+  plays at 3× there.
