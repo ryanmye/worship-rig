@@ -117,3 +117,22 @@ Done: handed back. Orchestrator: launch the skeptic; at merge, CONTRACT_CHANGES.
 - **Not verified:** on CI or the Mac (nothing pushed); real 3-4 core worker counts; the CAP UI paths in a browser,
   except through the bank / settings / chart suites.
 - Build dirs: native/core/build/{gcc,clang20,asan,tsan}. Probes, logs and loop summaries: `.probe/` (git-ignored).
+
+## Skeptic (lane-core3f, 2026-11-27)
+
+Brief: strong skeptic for T1 (PrebuildHold), T3 (longIterations / loopIterMaxMs, runtime_preload checkLive), T2 (CAP
+size rule). Try to break each, fix real defects with failing-first tests, write native/docs/reviews/core3f.md.
+
+### Checklist
+- [x] rebase onto origin/v2-native (5c7ed2d; CONTRACT_CHANGES conflict: kept both)
+- [ ] read docs + diff
+- [ ] T1 review + probes (deadlock, nesting, exceptions, dispose, rate change, hold duration, release build hook)
+- [ ] T1 TSan + ASan (new test + core3), 1000x loop on one compiler
+- [ ] T3 review + mutation repro (300 ms sleep), cost on loops, stats schema / bridge / MockNative
+- [ ] T2 review of every add path vs D9 + O4; double toast; views
+- [ ] native gates: g++, clang-20 -Werror, ASan+UBSan, TSan; fixtures byte-identical
+- [ ] JS gates via gates.mjs
+- [ ] review doc + final report
+
+### Findings so far
+(none yet)
