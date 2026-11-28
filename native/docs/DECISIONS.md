@@ -726,8 +726,10 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
 - Lane TOUCH2 (native/docs/lanes/IO-2.0.md) adds, on top of TOUCH:
   - shape sliders: Lighter/Heavier, Squeeze/Spread, Silent below, Loudest;
   - key balance: black/white, per-key offsets and an Even out assistant;
-  - a curve library, per keyboard and optionally per layer;
-  - an adjustable Fixed value.
+  - a curve library, per keyboard only;
+  - an adjustable Fixed value, per keyboard and per layer.
+- No per-layer library curves (Ryan, 2026-11-28: "realistically the only difference an instrument would need is a
+  flat curve"): a layer follows the keyboard or is Fixed.
 - It copies the SL88, MainStage's Velocity Processor, PianoTuner and Kawai VPC / VelPro.
 - It is controller-side, with no engine change. It runs after lane KBD.
 

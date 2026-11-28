@@ -136,14 +136,14 @@ Models it copies:
 
    The offset applies to the raw velocity before the curve. It works by MIDI note number, so it follows physical keys,
    not transposed notes.
-3. **Curve library:**
-   - Named curves saved on this device.
-   - Pick one per keyboard (today's default) and, optionally, per layer: a `slots.<i>.velocityCurve` value naming a
-     library curve.
-   - A per-layer curve must not apply twice with the keyboard curve: define and test the order (keyboard calibration,
-     then the layer curve).
+3. **Curve library, per keyboard only:**
+   - Named curves saved on this device; pick one per keyboard.
    - Export/import of a library curve as Pianoteq text.
-4. **Fixed:** a value from 1 to 127 (today it is fixed at 100/127).
+   - **No per-layer library curves** (Ryan, 2026-11-28: "realistically the only difference an instrument would need
+     is a flat curve"). A layer either follows the keyboard (Normal) or is Fixed.
+4. **Fixed:** a value from 1 to 127, both per keyboard and per layer (today it is fixed at 100/127). The per-layer
+   value goes on the existing `slots.<i>.velocityCurve = 'fixed'` path as an optional field, absent = 100, so old
+   songs don't change.
 
 Leave out release velocity: no Rig instrument uses note-off velocity (check and record the result).
 
@@ -152,7 +152,7 @@ Leave out release velocity: no Rig instrument uses note-off velocity (check and 
 - Sliders keep the curve monotone.
 - Key-balance offsets clamp to 1..127 and never turn a sounding note silent unless the cut-off says so.
 - The Even out assistant behaves on synthetic uneven boards.
-- The library curve per layer combines with the keyboard curve as intended.
+- A Fixed layer ignores the keyboard curve and plays at its own value.
 
 **Then:** UI in the old layout and v6, then Ryan's FP-10 check in MAC_CHECK step 4. **Estimate:** about 2 agent-days
 [E].
