@@ -20,13 +20,13 @@ Worktree /home/claude/wt-n0, branch lane-n0 from origin/v2-native c7bccec.
         panic + rec stop on every main-frame commit, self-test `shell` step
 - [x] 3. app edits: controller (menuOwnsShortcuts, keepsAwake, __rigShell merge), settings / v6 settings (Mac
         category, About, backups copy, Menu bar, MIDI text), main.js MIDI texts, pad gates
-- [ ] 4. native-midi.js: first-listen retry (backoff, then next `ports`) + unit tests
+- [x] 4. native-midi.js: first-listen retry (backoff, then next `ports`) + unit tests
 - [ ] 5. Playwright: native-shell suite (real app, bridge-mock, real polyfill files); migration-1x repointed
 - [ ] 6. docs: CONTRACT_CHANGES, SHELL.md, MAC_CHECK, NATIVE-GAPS note, release notes
 - [ ] 7. gates via tools/cloud/gates.mjs; final report here
 
 ## Next step
-4. native-midi listen retry; then 5 (Playwright).
+5. Playwright native-shell suite + migration-1x repoint.
 
 ## Findings / decisions so far
 - Files go under `app/js/native-shell/` (brief), not `native/apple/Resources/shell/` (plan): app/ is already a folder

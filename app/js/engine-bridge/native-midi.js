@@ -26,6 +26,15 @@
 
 /** A mapped timestamp older than this is a stale clock (engine asleep, no tick yet): the message gets now(). */
 const STALE_TS_MS = 1000;
+/**
+ * NMA review O3 (lane N0): a first `midi listen` that fails for one of these reasons (a link timeout, the core busy
+ * restarting or not started yet, an internal error) is retried after these delays, and after the last one at the next
+ * `ports` event (a hot-plug: what the "unplug and replug" hint asks for). Meanwhile requestMIDIAccess() stays pending,
+ * which the controller already shows as "MIDI starting" (L-3: a late answer still wires the inputs up). Any other
+ * error (protocol, bad-request, unsupported, closed: retrying cannot help) rejects at once, as before.
+ */
+export const LISTEN_RETRY_MS = Object.freeze([1000, 2000, 4000, 8000]);
+const RETRYABLE = new Set(['timeout', 'busy', 'not-started', 'internal']);
 
 const isByte = (b) => Number.isInteger(b) && b >= 0 && b <= 255;
 
@@ -178,12 +187,19 @@ export class NativeMidiAccess extends EventTarget {
    * @param {object} o.engine BridgeEngine: 'midi' events, `_req(op, args)` / `_send(op, args)`, `_clock` ({t, perf})
    * @param {() => number} [o.now] page clock, ms (default: the engine's)
    * @param {(cb:Function) => void} [o.defer] schedules the listen flush (default queueMicrotask)
+   * @param {{setTimeout:Function, clearTimeout:Function}} [o.timers] for the first-listen retry (default: the engine's)
+   * @param {number[]} [o.retryMs] the retry delays (default LISTEN_RETRY_MS)
    */
   constructor(o = {}) {
     super();
     this.engine = o.engine;
     this._now = o.now || (this.engine && this.engine._now) || (() => performance.now());
     this._defer = o.defer || ((cb) => queueMicrotask(cb));
+    this._timers = o.timers || (this.engine && this.engine._timers)
+      || { setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (h) => clearTimeout(h) };
+    this._retryMs = Array.isArray(o.retryMs) ? o.retryMs : LISTEN_RETRY_MS;
+    this._retry = null; // first listen failed, retryable: {n, timer, armed} (armed = the next `ports` event retries)
+    this._disposed = false;
     /** @type {Map<string, NativeMidiInput>} */
     this.inputs = new Map();
     /** @type {Map<string, NativeMidiOutput>} */
@@ -194,7 +210,7 @@ export class NativeMidiAccess extends EventTarget {
     this._sentIds = null; // the ids of the last `midi listen` sent (sorted, joined)
     this._flushQueued = false;
     this._portsSeq = 0; // `ports` events seen: an older reply snapshot never overwrites a newer event
-    this.stats = { messages: 0, dropped: 0, listens: 0, sends: 0, portReports: 0 };
+    this.stats = { messages: 0, dropped: 0, listens: 0, sends: 0, portReports: 0, listenRetries: 0 };
     this._onMidi = (e) => this._onEvent((e && e.detail) || {});
     if (this.engine && typeof this.engine.addEventListener === 'function') {
       this.engine.addEventListener('midi', this._onMidi);
@@ -211,30 +227,55 @@ export class NativeMidiAccess extends EventTarget {
 
   /**
    * The first `midi listen` (a request): its reply is the port snapshot. Resolves with this access; rejects with
-   * the bridge's error (midi.js reports 'failed'). Idempotent.
+   * the bridge's error (midi.js reports 'failed'), except a retryable one (LISTEN_RETRY_MS: retried with backoff,
+   * then on the next hot-plug, while this stays pending). Idempotent.
    * @returns {Promise<NativeMidiAccess>}
    */
   start() {
     if (this._ready) return this._ready;
-    const ids = this._wantIds();
-    this._sentIds = ids.join('\n');
-    const seq = this._portsSeq;
-    this.stats.listens += 1;
-    this._ready = Promise.resolve()
-      .then(() => this.engine._req('midi', { action: 'listen', ids }))
-      .then((r) => {
-        if (this._portsSeq === seq && r && Array.isArray(r.ports)) this._applyPorts(r.ports);
-        return this;
+    this._ready = new Promise((resolve, reject) => {
+      this._attempt(0, resolve, (err) => {
+        this._ready = null; // a later requestMIDIAccess() may try again
+        reject(err);
       });
-    this._ready.catch(() => {
-      this._ready = null; // a later requestMIDIAccess() may try again
-      this._sentIds = null;
     });
     return this._ready;
   }
 
-  /** Stop listening to every port and detach from the engine. */
+  /** One first-listen request (attempt `n`); a retryable failure schedules the next. */
+  _attempt(n, resolve, reject) {
+    const ids = this._wantIds();
+    this._sentIds = ids.join('\n');
+    const seq = this._portsSeq;
+    this.stats.listens += 1;
+    this._retry = null;
+    Promise.resolve()
+      .then(() => this.engine._req('midi', { action: 'listen', ids }))
+      .then((r) => {
+        if (this._disposed) return;
+        if (this._portsSeq === seq && r && Array.isArray(r.ports)) this._applyPorts(r.ports);
+        resolve(this);
+      }, (err) => {
+        this._sentIds = null;
+        if (this._disposed) return;
+        if (!RETRYABLE.has(err && err.code)) return reject(err);
+        this.stats.listenRetries += 1;
+        const again = () => {
+          if (!this._retry || this._disposed) return;
+          if (this._retry.timer !== null) this._timers.clearTimeout(this._retry.timer);
+          this._attempt(n + 1, resolve, reject);
+        };
+        const delay = this._retryMs[n];
+        const timer = Number.isFinite(delay) ? this._timers.setTimeout(again, delay) : null;
+        this._retry = { n, timer, again };
+      });
+  }
+
+  /** Stop listening to every port, stop a pending first-listen retry and detach from the engine. */
   dispose() {
+    this._disposed = true;
+    if (this._retry && this._retry.timer !== null) this._timers.clearTimeout(this._retry.timer);
+    this._retry = null;
     if (this.engine && typeof this.engine.removeEventListener === 'function') {
       this.engine.removeEventListener('midi', this._onMidi);
     }
@@ -245,6 +286,7 @@ export class NativeMidiAccess extends EventTarget {
     if (m.type === 'ports' && Array.isArray(m.ports)) {
       this._portsSeq += 1;
       this._applyPorts(m.ports);
+      if (this._retry) this._retry.again(); // O3: a hot-plug retries a failed first listen at once
     } else if (m.type === 'msg') this._onMsg(m);
   }
 
@@ -370,7 +412,8 @@ export function installNativeMidi(engine, { nav = globalThis.navigator } = {}) {
   requestMIDIAccess.nativeMidi = { access };
   Object.defineProperty(nav, 'requestMIDIAccess', { value: requestMIDIAccess, configurable: true, writable: true });
   // skeptic NMA F1: the core outlives the page. After a reload (Settings › My Samples "Reload" is a plain
-  // location.reload(); only a web-content crash makes the shell post a panic) it still sounds the notes and holds
+  // location.reload(); since lane N0 the shell also posts a panic on every main-frame commit, so this is the page's
+  // half of a belt and braces) it still sounds the notes and holds
   // the sustain of the previous page, whose key-ups and pedal lift now reach a controller that holds nothing, so
   // they are dropped and the notes / pedal stick. Release them before this page plays anything (right after
   // `hello`). On a first boot nothing sounds; the drone is left alone (allNotesOff's contract).
