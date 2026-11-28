@@ -102,3 +102,32 @@ CoreMIDI input and hot-plug with a real keyboard (B2 a, b), MIDI Learn / Program
 to a real receiver by name (d), adapter stats (e), reload with notes and pedal held (f, F1), 1.x names carrying over
 (g, O7), the listen set following Settings › MIDI with two keyboards (h), one-round-trip latency and evenness vs
 Chrome (a), the iPad with a USB keyboard (iPad note: a-c and f), Bluetooth MIDI only after pairing elsewhere.
+
+## Gates
+
+Tree b840f10 (clean), `node tools/cloud/gates.mjs`, UI6_PURITY_BASE=origin/v2-native,
+PLAYWRIGHT_BROWSERS_PATH=/root/.cache/rig-pw. The commit after it adds only this section and LANE.md.
+
+| suite | result | time | note |
+|---|---|---|---|
+| shell-unit | PASS | 31 s | |
+| unit | PASS | 26 s | 720 pass, 0 fail, 13 skip (native-midi.test.mjs: 13) |
+| native-midi | PASS | 3 s | 9 pass (hot-unplug now with the pedal held) |
+| engine | PASS | 445 s | 99/99, **0 console errors** (was 1 on base: the /__tests/api/health 404) |
+| ui-core | PASS | 375 s | |
+| ui-v6 | PASS | 278 s | flag-off purity vs origin/v2-native included |
+| settings | PASS | 128 s | |
+| migration-1x | PASS | 102 s | |
+| native ctest | not run | | nothing under native/ but docs changed (sources = origin/v2-native 030562e) |
+| opt-in devhost e2e | PASS | | native-midi-devhost.test.mjs against rig-devhost freshly built from this tree (-j1, Release, scratch dir): listen reply, listens / sends and the boot panic accepted, no warn |
+
+0 console.error and no HTTP >= 400 in the browser suites (each asserts it). `app/js/engine` untouched.
+
+## Commits (skeptic)
+
+- 9b94564 LANE.md skeptic section
+- 01f5cea F1: boot panic after hello (test first)
+- 67a3228 engine test server answers /__tests/api/health; browser hot-unplug with the pedal held
+- e308e4b MAC_CHECK B2 f-h; CONTRACT_CHANGES NMA skeptic addendum
+- 62d0ea2 this review; ENGINE_CONTRACT 5 note
+- b840f10 LANE.md before gates; then the gates-table commit (lane tip)

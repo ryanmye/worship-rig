@@ -133,8 +133,8 @@ native/docs/reviews/NMA.md; gates via tools/cloud/gates.mjs. Commit on lane-nma 
 - [x] S2. Probes: reload stuck-note path, surface edge cases, mock vs core (.probe/fuzz.mjs: 0 failures)
 - [x] S3. Fixes (tests first), one commit each (F1 01f5cea)
 - [x] S4. engine suite 404: pre-existing on 7e92df4; test server answers /__tests/api/health (67a3228)
-- [ ] S5. Gates
-- [ ] S6. native/docs/reviews/NMA.md + MAC_CHECK steps; final report
+- [x] S5. Gates (all 8 PASS on b840f10; devhost e2e PASS on a fresh build)
+- [x] S6. native/docs/reviews/NMA.md + MAC_CHECK steps; final report
 
 ### Findings so far (before fixing)
 - F1 (FIXED): page reload with notes / pedal held: the core keeps the old page's voices and sustain (only the
@@ -142,6 +142,4 @@ native/docs/reviews/NMA.md; gates via tools/cloud/gates.mjs. Commit on lane-nma 
   has empty heldBySrc / pedalDown=false, so key-ups are dropped and a pedal lift sends nothing → notes / sustain stuck.
 
 ### Next step
-S5 gates (node tools/cloud/gates.mjs shell-unit,unit,native-midi,engine,ui-core,ui-v6,settings,migration-1x),
-then the gates table into native/docs/reviews/NMA.md; optional fresh rig-devhost -j1 + opt-in devhost test.
-Rebased again onto origin/v2-native 030562e (N10 merge); O1-O8 in the review doc.
+None: skeptic handed back (verdict PASS after F1; native/docs/reviews/NMA.md).
